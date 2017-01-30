@@ -14,7 +14,9 @@ Tools used in development:
 * keyfile0.s: Keyfile generator
 * playergroup0.s: HippoPlayer.group data generator, this file includes the compressed binaries for replay routines
 * regtext.s: Possibly important file related to calculating checksums, see notes below
-* gadgets: Gadget's Editor files for the user interface. These are adjusted as needed in the code.
+* kpl14.s: Protracker replay routine source
+* kpl: Protracker replay routine binary
+* gadgets: Gadget's Editor files for the user interface
 * pl: Replay routines for different module types and compressed binaries for each
 * scopes: External scopes and related stuff
 * Include: Some needed include files.
@@ -31,8 +33,10 @@ the main binary.  It should start if you have _reqtools.library_ available.
 To build the player group file, read the _playergroup0.s_ and assemble, it will create a binary 
 bundle out of the files in the _pl_-dir.
 
-To build individual replay-routines, assemble one in the _pl_-directory, write out the binary
-and compress it with fimp.
+To build the Protracker replay routine, assemble the file _kpl14.s_ and write out the binary to _kpl_.
+
+To build individual replay routines, assemble one in the _pl_-directory, write out the binary
+and compress it with fimp, then re-create the group file.
 
 # Notes
 
