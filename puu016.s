@@ -35,6 +35,18 @@ TARK	= 0	* 1: tekstien tarkistus
 EFEKTI  = 0	* 1: efekti volumesliderill‰
 ANNOY	= 0     * 1: Unregistered version tekstej‰ ymp‰riins‰
 
+; Magic constants used with variables: 
+; playingmodule
+; chosenmodule
+PLAYING_MODULE_ERROR 	= -1
+PLAYING_MODULE_NONE	= $7fff
+MAX_MODULES		= $7ffe ; almost double compared to old $3fff
+
+; Random play related
+RANDOM_PLAY_TABLE_SIZE  = MAX_MODULES/8+1
+MAX_RANDOM_MASK 	= $7fff 	* output mask for the random generator
+	
+	
  ifne TARK
  ifeq asm
  printt "Onko CHECKSUMMI oikea? Molemmat!"
@@ -170,9 +182,8 @@ check	macro
 use = 0
 	include	player61.i
 
-	incdir
 
-	include	kpl_offsets.s
+	include	kpl_offsets.S
 
 *******************************************************************************
 *
@@ -965,7 +976,7 @@ filename	rs.b	108		* tiedoston nimi (reqtools)
 filename2	rs.b	108		* Load/Save program-rutiineille
 tempdir		rs.b	200		* ReqToolsin hakemistopolku 
 probebuffer	rs.b	2048		* tiedoston tutkimispuskuri
-randomtable	rs.b	1024		* Taulukko satunnaissoittoon
+randomtable	rs.b	RANDOM_PLAY_TABLE_SIZE	* Taulukko satunnaissoittoon
 ptsonglist	rs.b	64		* Protrackerin songlisti
 xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkki‰)
 findpattern	rs.b	30		* find pattern
@@ -2545,7 +2556,7 @@ msgloop
 	clr	chosenmodule(a5)
 	tst	playingmodule(a5)
 	bmi.b	.ee
-	move	#$7fff,playingmodule(a5)
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 .ee	bsr.w	rbutton1
 	movem.l	(sp)+,d0-a6
 	
@@ -5384,7 +5395,7 @@ signalreceived
 
 	cmp	#1,modamount(a5) * Jos vain yksi modi ja repeatti p‰‰ll‰,
 	bne.b	.notone		* jatketaan soittoa keskeytyksett‰.
-	cmp	#$7fff,playingmodule(a5) * Listassa yksi modi, joka on uusi.
+	cmp	#PLAYING_MODULE_NONE,playingmodule(a5) * Listassa yksi modi, joka on uusi.
 	bne.b	.oon			* Soitetaan se.
 	moveq	#0,d7			* ei lis‰t‰ eik‰ v‰hennet‰
 	bra.b	.notone
@@ -5434,7 +5445,7 @@ signalreceived
 	beq.w	.err
 
 .opg
-	cmp	#$7fff,playingmodule(a5) * Lista tyhj‰tty? Soitetaan eka modi.
+	cmp	#PLAYING_MODULE_NONE,playingmodule(a5) * Lista tyhj‰tty? Soitetaan eka modi.
 	bne.b	.eekk
 	moveq	#0,d7
 	clr	chosenmodule(a5)
@@ -5494,15 +5505,15 @@ signalreceived
 	rts
 
 .loader	
-	move	#-1,playingmodule(a5)	* latausvirhe
+	move	#PLAYING_MODULE_ERROR,playingmodule(a5)	* latausvirhe
 	bra.b	.reet
 
-.mododo	move	#-1,playingmodule(a5)	* initti virhe
+.mododo	move	#PLAYING_MODULE_ERROR,playingmodule(a5)	* initti virhe
 	bsr.w	init_error
 	bra.b	.reet
 
-.err	move	#-1,playingmodule(a5)	* ei modeja mit‰ soittaa
-	move	#-1,chosenmodule(a5)
+.err	move	#PLAYING_MODULE_ERROR,playingmodule(a5)	* ei modeja mit‰ soittaa
+	move	#PLAYING_MODULE_ERROR,chosenmodule(a5)
 	rts
 
 .stop  	bsr.w	rbutton3		* stop!
@@ -5510,7 +5521,7 @@ signalreceived
 
 
 * modit loppui, mit‰ tehd‰‰n?
-.erer	move	#-1,playingmodule(a5)
+.erer	move	#PLAYING_MODULE_ERROR,playingmodule(a5)
 
 	cmp.b	#pm_through,playmode(a5)
 	bne.b	.hm
@@ -5543,7 +5554,7 @@ satunnaismodi
 	clr	chosenmodule(a5)
 	rts
 .nof
-	cmp	#8192,d0		* jos liikaa, ei yll‰pidet‰ listaa
+	cmp	#MAX_MODULES,d0		* jos liikaa, ei yll‰pidet‰ listaa
 	bhi.b	.onviela
 
 	subq	#1,d0
@@ -5576,7 +5587,7 @@ clear_random
 
 ** taulukko tyhj‰ks
 	lea	randomtable(a5),a0
-	move	#1024/4-1,d0
+	move	#RANDOM_PLAY_TABLE_SIZE/4-1,d0
 .c	clr.l	(a0)+
 	dbf	d0,.c
 
@@ -5678,8 +5689,7 @@ getrandom
         move.l  d0,seed(a5)
         moveq   #$10,d1
         lsr.l   d1,d0
- ;       and.l   #$7fff,d0
-        and     #$fff,d0
+	and     #MAX_RANDOM_MASK,d0
 	move	d0,d1
 	pop	d0
         rts
@@ -5886,12 +5896,12 @@ umph
 	rts
 
 .loader	
-	move	#-1,playingmodule(a5)
+	move	#PLAYING_MODULE_ERROR,playingmodule(a5)
 	rts
 
 
 .inierr	
-	move	#-1,playingmodule(A5)	* initvirhe
+	move	#PLAYING_MODULE_ERROR,playingmodule(A5)	* initvirhe
 	bra.w	init_error
 ;	rts
 
@@ -6745,7 +6755,7 @@ rsort
 	bsr.w	clear_random
 	tst	playingmodule(a5)
 	bmi.b	.npl
-	move	#$7fff,playingmodule(a5)
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 .npl	clr	chosenmodule(a5)
 	st	hippoonbox(a5)
 	subq.b	#1,freezegads(a5)
@@ -6980,7 +6990,7 @@ rmove
 	bsr.w	clear_random
 	tst	playingmodule(a5)
 	bmi.b	.q
-	move	#$7fff,playingmodule(a5)
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 .q	st	hippoonbox(a5)
 	bsr.w	resh
 .qq	rts
@@ -8107,7 +8117,7 @@ filereq_code
 	beq.w	.errd
 
 
-.loopo	cmp	#$3fff,modamount(a5)	* Ei enemp‰‰ kuin ~16000
+.loopo	cmp	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
 	bhs.w	.errd
 
 	move.l	d6,d1
@@ -8294,7 +8304,7 @@ filereq_code
 
 ************* Reqtoollislta saadut tiedostot
 .file
-	cmp	#$3fff,modamount(a5)	* Ei enemp‰‰ kuin 16383
+	cmp	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin 16383
 	bhs.b	.overload
 
 	move.l	d4,d0			* listunit,polku,nimi pituus
@@ -8366,7 +8376,7 @@ filereq_code
 
 * addaa/inserttaa listaan a3:ssa olevan noden
 addfile	
-	cmp	#$3fff,modamount(a5)
+	cmp	#MAX_MODULES,modamount(a5)
 	bhs.b	.r
 
 	addq	#1,modamount(a5)
@@ -8685,7 +8695,7 @@ freelist
 	move	#-1,chosenmodule(a5)
 	tst	playingmodule(a5)
 	bmi.b	.ehe
-	move	#$7fff,playingmodule(a5)
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 .ehe
 	clr	firstname(a5)
 	bsr.w	reslider
@@ -9021,7 +9031,7 @@ rlpg	tst	filereq_prosessi(a5)
 	bsr.w	nimenalku
 .di	move.l	a0,l_nameaddr(a2)
 
-	cmp	#$3fff,modamount(a5)
+	cmp	#MAX_MODULES,modamount(a5)
 	bhs.b	.x2
 
 	move.l	a2,a1
@@ -9100,7 +9110,7 @@ rlpg	tst	filereq_prosessi(a5)
 .r	cmp.b	#pm_random,playmode(a5)
 	bne.b	.noran
 	move	modamount(a5),d0
-	cmp	#8192,d0
+	cmp	#MAX_MODULES,d0
 	bhi.b	.noran
 	
 	subq	#1,d0
@@ -14205,7 +14215,7 @@ elete
 
 	subq	#1,playingmodule(a5)
 	bpl.b	.huh
-.sama	move	#$7fff,playingmodule(a5)
+.sama	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 
 .huh	tst	modamount(a5)
 	beq.w	.erer
@@ -15206,7 +15216,7 @@ markline
 	cmp	chosenmodule(a5),d1
 	beq.b	.oo
 
-	cmp	#$7fff,chosenmodule(a5)
+	cmp	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	beq.b	.oo
 	pushm	d1/d2
 	bsr.b	unmarkit
@@ -18064,7 +18074,7 @@ rexxmessage
 .add	tst.b	d0
 	beq.w	rbutton7
 
-.add2	cmp	#$3fff,modamount(a5)	* Ei enemp‰‰ kuin ~16000
+.add2	cmp	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
 	bhs.b	.exit
 
 	move.l	a1,a2
@@ -18362,7 +18372,7 @@ rexxmessage
 .getcfil
 	move	chosenmodule(a5),d0
 	bmi.b	.getcfil0
-	cmp	#$7fff,d0
+	cmp	#PLAYING_MODULE_NONE,d0
 	beq.b	.getcfil0
 	addq	#1,d0
 	bra.w	i2amsg
@@ -18404,7 +18414,7 @@ rexxmessage
 	move	playingmodule(a5),d0
 	bmi.b	.getc0
 	addq	#1,d0
-	cmp	#$7fff+1,d0
+	cmp	#PLAYING_MODULE_NONE+1,d0
 	bne.w	i2amsg
 .getc0	moveq	#0,d0
 	bra.w	i2amsg
@@ -18420,7 +18430,7 @@ rexxmessage
 .fullname
 	move	playingmodule(a5),d0
 	bmi.b	.curr1
-	cmp	#$7fff,d0
+	cmp	#PLAYING_MODULE_NONE,d0
 	bne.b	.curr2
 .curr1	lea	.empty(pc),a2
 	bra.w	str2msg	
