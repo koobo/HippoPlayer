@@ -18,29 +18,38 @@ ver	macro
 ;	dc.b	"v2.42 (20.12.1997)"
 ;	dc.b	"v2.44 (16.8.1998)"
 ;	dc.b	"v2.44 (16.8.1998)"
-	dc.b	"v2.45 (10.1.2000)"
+;	dc.b	"v2.45 (10.1.2000)"
+	dc.b	"v2.46 (?.?.2021)"
 	endm	
 
 
 DEBUG	= 0
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
-asm	= 0	* 1: AsmOnesta ajettava versio
+asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
 
 zoom	= 0	* 1: zoomaava hippo
-fprog	= 0 	* 1: file add progress indicator, ei oikein toimi (kaataa)
+fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
 floadpr = 1	* 1: unpacked file load progress indicator
 PILA	= 0	* 1: pikku pila niille joilla on wRECin key muttei 060:aa
 TARK	= 0	* 1: tekstien tarkistus
 EFEKTI  = 0	* 1: efekti volumesliderillä
-ANNOY	= 0     * 1: Unregistered version tekstejä ympäriinsä
+ANNOY	= 0 * 1: Unregistered version tekstejä ympäriinsä
 
-; Magic constants used with variables: 
-; playingmodule
-; chosenmodule
-PLAYING_MODULE_ERROR 	= -1
-PLAYING_MODULE_NONE	= $7fff
-MAX_MODULES		= $7ffe ; almost double compared to old $3fff
+; Magic constants used with playingmodule and chosenmodule
+; Positive value:
+; - playingmodule: index of the module being played
+; - chosenmodule: index of the module that is selected
+; Negative value: 
+; - playingmodule: there is no module being played 
+; - chosenmodule: there is no module chosen in the list
+; Special value 0x7fff: 
+; - playingmodule: there is a module being played, but it is not in the list (deleted or list cleared)
+; - chosenmodule: TODO
+PLAYING_MODULE_NONE 	= -1	 * needs to be negative
+PLAYING_MODULE_REMOVED	= $7fff	 * needs to be positive
+MAX_MODULES		= $7ffe 		 * almost double compared to old $3fff
+CHOSEN_MODULE_NONE = -1
 
 ; Random play related
 RANDOM_PLAY_TABLE_SIZE  = MAX_MODULES/8+1
@@ -126,6 +135,7 @@ check	macro
 	include	exec/execbase.i
 	include	exec/memory.i
 	include	exec/lists.i
+	include exec/semaphores.i
 
 	include	graphics/gfxbase.i
 	include	graphics/graphics_lib.i
@@ -279,7 +289,7 @@ prefs_size		rs.b	0
 
 *******************************************************************************
 *
-* Scopejen muuttujat
+* Scope variables
 *
 
  	rsreset
@@ -295,7 +305,7 @@ ns_size		rs.b	0
 
 *******************************************************************************
 *
-* "HiP-Port":in rakenne
+* "HiP-Port" structure
 *
 
 	STRUCTURE	HippoPort,MP_SIZE
@@ -326,7 +336,7 @@ ns_size		rs.b	0
 	BYTE		hip_PTtrigger3
 	BYTE		hip_PTtrigger4
 
-	APTR		hip_listheader	* pointer to the listheader of modules
+	APTR		hip_moduleListHeader	* pointer to the moduleListHeader of modules
 	LONG		hip_playtime	* time played in secs
 	LONG		hip_colordiv	*
 	WORD		hip_ps3mrate	* ps3m mix rate
@@ -347,7 +357,7 @@ ns_size		rs.b	0
 
 *******************************************************************************
 *
-* Globaalit muuttujat ja työalueet
+* Global variables and work space
 *
 
 	rsreset
@@ -395,7 +405,7 @@ rastport2	rs.l	1		*
 userport2	rs.l	1		*
 rastport3	rs.l	1		* quadrascope
 userport3	rs.l	1		* 
-windowbase3	rs.l	1		*
+windowbase3	rs.l	1		* scopes window
 fontbase	rs.l	1
 topazbase	rs.l	1
 notifyhandle	rs.l	1		* Screennotifylle
@@ -481,11 +491,11 @@ prefs_signal	rs.b	1		* prefs-signaali
 prefs_signal2	rs.b	1		* prefs-signaali 2
 ownsignal1	rs.b	1	* Kappale soinut
 ownsignal2	rs.b	1	* positionin päivitys
-ownsignal3	rs.b	1	* lootan päivitys
+uiRefreshSignal	rs.b	1	* lootan päivitys
 ownsignal4	rs.b	1	* Sulje ja avaa ikkuna
-ownsignal5	rs.b	1	* AudioIO:n signaali
-ownsignal6	rs.b	1	* Filereqprosessin signaali
-ownsignal7	rs.b	1	* rawkey inputhandlerilta
+audioPortSignal	rs.b	1	* AudioIO:n signaali
+fileReqSignal	rs.b	1	* Filereqprosessin signaali
+rawKeySignal	rs.b	1	* rawkey inputhandlerilta
 info_signal	rs.b	1	* about signaali infojen päivitykseen
 info_signal2	rs.b	1	* about signaali infojen päivitykseen
 
@@ -506,7 +516,7 @@ mousex		rs	1		* hiiren paikka x,y
 mousey		rs	1
 
 
-******* Scopen muuttujia
+******* Scope variables
 
 draw1		rs.l	1
 draw2		rs.l	1
@@ -518,7 +528,7 @@ mtab		rs.l	1
 buffer0		rs.l	1
 buffer1		rs.l	1
 buffer2		rs.l	1
-wotta		rs.l	1
+scopeVerticalBarTable		rs.l	1
 deltab1		rs.l	1	
 deltab2		rs.l	1	
 deltab3		rs.l	1	
@@ -526,8 +536,6 @@ deltab4		rs.l	1
 omatrigger	rs.b	1	* kopio kplayerin usertrigistä
 		rs.b	1	
 multab		rs.b	512
-
-tempexec	rs.l	1
 
 ps3mchannels	rs.l	1	* Osoitin PS3M mixer channel blockeihin
 
@@ -648,12 +656,14 @@ ptmix		rs.b	1		* 0: normi ptreplay, 1:mixireplay
 xpkid		rs.b	1		* 0: ei xpktunnistusta, 1:joo
 fade		rs.b	1		* 0: ei feidausta
 boxsize		rs	1		* montako nimeä mahtuu fileboksiin
+						* size of the module name box
 boxsize_new	rs	1
 boxsizepot_new	rs	1
 boxy		rs	1		* 8-nimisen lootaan y-kokomuutos
-boxsize0	rs	1	
-boxsize00	rs	1	
+boxsize0	rs	1		* ?
+boxsize00	rs	1		* ?
 boxsizez	rs	1		* rmb + ? zoomausta varten
+						* alternative boxsize for RMB 
 doubleclick	rs.b	1		* <>0: tiedoston doubleclick-play
 tabularasa	rs.b	1		* aloitettiinko tyhjalla modilistalla?
 startuponoff	rs.b	1		* <>0: startupsoitto päällä
@@ -693,12 +703,16 @@ medrate		rs	1		* MED mixing rate
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
 
-lootamoodi	rs	1		* lootan moodi
+TITLEBAR_TIME_POSLEN_SONG 		= 0
+TITLEBAR_CLOCK_FREEMEM			= 1
+TITLEBAR_NAME					= 2
+TITLEBAR_TIMEDUR_POSLEN			= 3
+lootamoodi	rs	1		* lootan moodi, titlebar mode
+
 lootassa	rs	1		* viimeisin tieto lootassa
 colordiv	rs.l	1		* colorclock/vbtaajuus
 vertfreq	rs	1		* virkistystaajuudet
 horizfreq	rs	1
-
 
 clockconstant	rs.l	1		* Clock Constant PAL/NTSC
 
@@ -715,20 +729,25 @@ ticktack	rs	1	* vbcounteri
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
 
-markedline	rs	1	* merkitty rivi
 modamount	rs	1	* modien määrä
 divideramount	rs	1	* dividereitten määrä (info window)
-chosenmodule	rs	1	* valittu moduuli
 firstname	rs	1	* nimi ikkunan ekan nimen numero
 firstname2	rs	1	* 
-playingmodule	rs	1	* moduuli jota soitetaan
+
+
+markedline	rs	1	* merkitty rivi
+					* Highlighted line inside the box, range is from 0
+					* to current boxsize
+
+playingmodule	rs	1	* index of the module that is being played
+chosenmodule	rs	1	* index of the chosen module in the list
 
 groupmode	rs.b	1
 
 movenode	rs.b	1	* ~0: move päällä
 nodetomove	rs.l	1	* tätä nodea siirretään
 
-chosenmodule2	rs	1
+chosenmodule2	rs	1	* TODO: what is this
 hippoonbox	rs.b	1	* ~0: shownames päivittää koko näytön
 dontmark	rs.b	1	* ei merkata nimeä listassa
 
@@ -836,7 +855,7 @@ ahi_stereolevpot_new	rs	1
 ahi_name_new		rs.b	44
 
 
-listheader	rs.b	MLH_SIZE	* tiedostolistan headeri
+moduleListHeader	rs.b	MLH_SIZE	* tiedostolistan headeri
 filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 
 loading		rs.b	1		* ~0: lataus meneillään
@@ -988,6 +1007,11 @@ omabitmap3	rs.b	bm_SIZEOF-7*4	* 1
 omabitmap4	rs.b	bm_SIZEOF-6*4	* 2
 omabitmap5	rs.b	bm_SIZEOF-6*4	* 2
 
+							* Semaphore to protect access to the data of the module
+							* being played.
+moduleDataSemaphore		rs.B	SS_SIZE
+							* Semaphore to protect access to the module list
+moduleListSemaphore 	rs.b 	SS_SIZE
 
 ARGVSLOTS	=	16		* max. parametrejä
 sv_argvArray	rs.l	ARGVSLOTS	* parametrihommia
@@ -995,6 +1019,7 @@ sv_argvBuffer	rs.b	256		*
 
 kplbase	rs.b	k_sizeof		* KPlayerin muuttujat (ProTracker)
 
+* Size of global variables data. Must be even.
 size_var	rs.b	0
 
 	ifne	size_var&1
@@ -1063,14 +1088,19 @@ xpl_offs	=	49
 *********************************************************************************
 *
 * Tiedostolistan yhden yksikön rakenne
+* Mudule list element
 *
 
 	rsreset
 		rs.b	MLH_SIZE		* Minimal List Header
 l_nameaddr	rs.l	1			* osoitin pelkkään tied.nimeen
+								* address to filename without path
 l_rplay		rs.b	1			* randomplay-lippu: ~0=soitettu
 l_filename	rs.b	0			* tied.nimi ja polku alkaa tästä
-		rs.b	30			* turvallisuustekijä
+								* full path to filename begins at this point
+								* element size is dynamically calculated based on path length.
+			rs.b	30			* turvallisuustekijä
+								* safety buffer?
 l_size		rs.b	0
 
 
@@ -1149,7 +1179,10 @@ idcmpflags2 set idcmpflags2!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
 *********************************************************************************
 *
-* Aloituskoodi. Komentoriviparametrit, uusi prosessi, WB viesti.
+* Start up from CLI or Workbench
+* Handles command line parameters,
+* setting up a new process (detachment),
+* Workbench message
 *
 
  ifeq asm
@@ -1399,13 +1432,14 @@ parmExit:
 
 *********************************************************************************
 *
-* Pääohjelma
+* Main program section
 *
-
 
 	section	refridgerator,code
 
-* Segmentit uusille prosesseille. 4:llä jaollisissa osoitteissa.
+* Correctly aligned fake segments for new processes. 
+* Addresses must be divisible by 4.
+* These are user for CreateProc() calls.
 
 main0	jmp	main(pc)
 
@@ -1581,16 +1615,29 @@ PAH2	dc.b	"TUt",10,0
  even
  endc
 
+*
+* Main program entry point
+*
 main
+	* Global variables are in a5
 	lea	var_b,a5
 	move.l	4.w,a6
+	* Exec is accessed a lot so it's shortest to get it from offset 0.
 	move.l	a6,(a5)
+	* Copy of exec for use in level1 software interrupt
 	move.l	a6,exeksi
 
 	sub.l	a1,a1
 	lob	FindTask
 	move.l	d0,owntask(a5)
 
+	* Prepare a semaphore for module data access
+	lea	moduleDataSemaphore(a5),a0
+	lob	InitSemaphore
+
+	* Prepare a semaphore for module list access, which is a linked list
+	lea	moduleListSemaphore(a5),a0
+	lob	InitSemaphore
 
 	not.l	idopen(a5)		* -1 = input.devide ei avattu
 
@@ -1790,19 +1837,19 @@ main
 	move.b	d0,ownsignal2(a5)
 ;	bmi.w	exit
 	bsr.w	getsignal
-	move.b	d0,ownsignal3(a5)
+	move.b	d0,uiRefreshSignal(a5)
 ;	bmi.w	exit
 	bsr.w	getsignal
 	move.b	d0,ownsignal4(a5)
 ;	bmi.w	exit
 	bsr.w	getsignal
-	move.b	d0,ownsignal5(a5)
+	move.b	d0,audioPortSignal(a5)
 ;	bmi.w	exit
 	bsr.w	getsignal
-	move.b	d0,ownsignal6(a5)
+	move.b	d0,fileReqSignal(a5)
 ;	bmi.w	exit
 	bsr.w	getsignal
-	move.b	d0,ownsignal7(a5)
+	move.b	d0,rawKeySignal(a5)
 ;	bmi.w	exit
 
 
@@ -2042,15 +2089,13 @@ main
 	addq	#1,gg_TopEdge+juust0
 	addq	#1,gg_LeftEdge+slider4
 
-
-
-	move	#-1,chosenmodule2(a5)
+	move	#PLAYING_MODULE_NONE,chosenmodule2(a5)
 
 	bset	#1,$bfe001
 	sne	filterstore(a5)			* filtterin tila talteen
 	st	modulefilterstate(a5)
 
-	lea	listheader(a5),a0		* Uusi lista
+	lea	moduleListHeader(a5),a0		* Uusi lista
 	NEWLIST	a0
 
 	bsr.w	loadkeyfile		* ladataan key-file
@@ -2182,7 +2227,7 @@ main
 * ikkuna avattu.. katotaan pitääko olla pieni
 	tst.b	prefsdata+prefs_kokolippu(a5)
 	beq.b	.hid
-	bsr.w	zippowi
+	bsr.w	zipMainWindow
 .hid
 
 	bsr.w	inforivit_clear
@@ -2213,7 +2258,7 @@ main
 	pushpea	ch3(a5),hippoport+hip_PTch3(a5)
 	pushpea	ch4(a5),hippoport+hip_PTch4(a5)
 	pushpea	kplbase(a5),hippoport+hip_kplbase(a5)
-	pushpea	listheader(a5),hippoport+hip_listheader(a5)
+	pushpea	moduleListHeader(a5),hippoport+hip_moduleListHeader(a5)
 
 	move.l	colordiv(a5),hip_colordiv+hippoport(a5)
 
@@ -2229,6 +2274,7 @@ main
 
 	tst.b	quadon(a5)			* avataanko scope?
 	beq.b	.q
+	; TODO: semaphore error
 	jsr	start_quad
 .q
 	tst.b	infoon(a5)
@@ -2239,26 +2285,6 @@ main
 
 	bsr.w	inforivit_clear
 
- ifne asm!DEBUG!BETA
-	lea	.pah(pc),a0			* registered to..
-	moveq	#34+WINX,d0
-	moveq	#70+WINY,d1
-	bsr.w	print
-	bra.w	.vv
-.pah	
- if BETA=2
-	dc.b	"** For betatesters only **",10
-	dc.b	" No further distribution!",0
- endc
- if BETA=1
-	dc.b	"* This is a public beta. *",10
- 	dc.b	"** Use at your own risk! **",0
- endc
-	even
-.vv
-  endc
-
-
 	tst	boxsize(a5)
 	beq.b	.oohi
 
@@ -2266,7 +2292,6 @@ main
 	moveq	#11+WINX,d0
 	moveq	#18+WINY,d1
 	bsr.w	print
-
 
 	; ei annoytekstia vaikkei rekisteroity
 	cmp.b	#' ',keyfile(a5)
@@ -2352,15 +2377,15 @@ msgloop
 	bset	d1,d0
 	move.b	ownsignal2(a5),d1
 	bset	d1,d0
-	move.b	ownsignal3(a5),d1
+	move.b	uiRefreshSignal(a5),d1
 	bset	d1,d0
 	move.b	ownsignal4(a5),d1
 	bset	d1,d0
-	move.b	ownsignal5(a5),d1
+	move.b	audioPortSignal(a5),d1
 	bset	d1,d0
-	move.b	ownsignal6(a5),d1
+	move.b	fileReqSignal(a5),d1
 	bset	d1,d0
-	move.b	ownsignal7(a5),d1
+	move.b	rawKeySignal(a5),d1
 	bset	d1,d0
 	move.b	hippoport+MP_SIGBIT(a5),d1 * oman viestiportin bitti
 	bset	d1,d0
@@ -2499,7 +2524,7 @@ msgloop
 
 .nowow
 
-	move.b	ownsignal3(a5),d3	* päivitetään...
+	move.b	uiRefreshSignal(a5),d3	* päivitetään...
 	btst	d3,d0
 	beq.b	.wow
 	push	d0
@@ -2516,9 +2541,11 @@ msgloop
 *** poistuttiin filerequesterista
 
 	push	d0
-	move.b	ownsignal6(a5),d3
+	move.b	fileReqSignal(a5),d3
 	btst	d3,d0
 	beq.b	.nwww
+
+* this signal is set when the filerequester for adding files is ready
 
 	tst.b	autosort(a5)		* automaattinen sorttaus?
 	beq.b	.nas
@@ -2556,16 +2583,16 @@ msgloop
 	clr	chosenmodule(a5)
 	tst	playingmodule(a5)
 	bmi.b	.ee
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .ee	bsr.w	rbutton1
 	movem.l	(sp)+,d0-a6
 	
 .nwww	pop	d0
 
-	tst.b	freezegads(a5)		* gadgetit freezattu!?
+	bsr		areMainWindowGadgetsFrozen
 	bne.b	.nwwwq
 
-	move.b	ownsignal7(a5),d3	* rawkey inputhandlerilta
+	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
 	btst	d3,d0
 	beq.b	.nwwwq
 	moveq	#0,d4
@@ -2642,7 +2669,7 @@ getmoremsg
 
 	lob	ReplyMsg
 
-	tst.b	freezegads(a5)
+	bsr		areMainWindowGadgetsFrozen
 	bne.w	msgloop
 
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
@@ -2703,26 +2730,12 @@ exit
 .req	jsr	request
 	clr.b	exitmainprogram(a5)	* ei enää exittiä.	
 	bra.w	msgloop
-;.er2	lea	.cl(pc),a1
-;	bra.b	.req
-;.cl	dc.b	"Can't quit just yet!",0
 .clo	dc.b	"Close all requesters & external programs and try again!",0
  even
 
 .ex
 	bsr.w	freelist		* vapautetaan lista
-
-
 	bsr.w	rbutton4b		* eject /wo fade
-;	bsr	freeearly
-
-;	tst	playingmodule(a5)
-;	bmi.b	.uh00
-;	move.l	playerbase(a5),a0
-;	jsr	p_end(a0)
-;.uh00;	bsr.w	freemodule
-
-
 	jsr	rem_ciaint
 
 	tst.b	vbsaatu(a5)
@@ -2759,15 +2772,15 @@ exit
 	bsr.w	freesignal
 	move.b	ownsignal2(a5),d0
 	bsr.w	freesignal
-	move.b	ownsignal3(a5),d0
+	move.b	uiRefreshSignal(a5),d0
 	bsr.w	freesignal
 	move.b	ownsignal4(a5),d0
 	bsr.w	freesignal
-	move.b	ownsignal5(a5),d0
+	move.b	audioPortSignal(a5),d0
 	bsr.w	freesignal
-	move.b	ownsignal6(a5),d0
+	move.b	fileReqSignal(a5),d0
 	bsr.w	freesignal
-	move.b	ownsignal7(a5),d0
+	move.b	rawKeySignal(a5),d0
 	bsr.w	freesignal
 
 	move.l	fontbase(a5),d0
@@ -2838,34 +2851,37 @@ exit
 	bsr.b	closel
 	move.l	_ReqBase(a5),d0
 	bsr.b	closel
-	move.l	_DosBase(a5),d0
-	bsr.b	closel
 
 	bsr.w	tulostavirhe
 exit2
-
 	move.l	_IntuiBase(a5),d0
 	bsr.b	closel
 
  ifeq asm
-	move.l	lockhere(a5),d1		* vapautetaan kopioitu lukko
+	move.l	lockhere(a5),d1		* free CurrentDir lock
 	lore	Dos,UnLock
-	lore	Exec,Forbid		* kielletään moniajo
+	lore	Exec,Forbid			* forbid multitasking 
+	bsr.w	vastomaviesti		* reply to any message we may have received
 
-	bsr.w	vastomaviesti		* vastataan killeriviestiin
-
+	* Free program code hunk. After this the following code lines may become
+	* unavailable unless multitasking is disabled.
 	move.l	segment(a5),d1
-	lore	Dos,UnLoadSeg		* vapautetaan omat hunkit
+	move.l  _DosBase(a5),a6
+	jsr 	_LVOUnLoadSeg(a6)
  endc
+	move.l	_DosBase(a5),d0		* last library to be closed
+	bsr.b	closel
 
-	moveq	#0,d0
+	moveq	#0,d0				* end of transmission
 	rts
 
 
-closel	beq.b	.huh
+closel	
+	beq.b	.notopen
 	move.l	d0,a1
 	lore	Exec,CloseLibrary
-.huh	rts
+.notopen
+	rts
 
 freesignal
 	tst.b	d0
@@ -3170,7 +3186,7 @@ inputhandler
 	bmi.b	.cont				* vain jos nappula alhaalla
 	clr.b	ie_Class(a0)			* ieclass_null (syodaan pois)
 	move	d0,rawkeyinput(a1)		* a1 = var_b
-	move.b	ownsignal7(a1),d1
+	move.b	rawKeySignal(a1),d1
 	jsr	signalit
 	bra.b	.exhand
 	
@@ -4122,7 +4138,9 @@ sulje_ikkuna
 * WaitPointer
 **************
 
-pon1	pushm	all
+pon1
+setMainWindowWaitPointer	
+	pushm	all
 	move.l	windowbase(a5),d0
 	bra.b	pon0
 
@@ -4136,7 +4154,9 @@ pon0	beq.b	.q
 .q	popm	all
 	rts
 
-poff1	pushm	all
+clearMainWindowWaitPointer
+poff1
+	pushm	all
 	move.l	windowbase(a5),d0
 	bra.b	poff0
 
@@ -4148,6 +4168,58 @@ poff0	beq.b	.q
 	lore	Intui,ClearPointer
 .q	popm	all
 	rts
+
+freezeMainWindowGadgets
+	addq.b	#1,freezegads(a5)		* gadgetit jumiin!
+	rts
+
+unfreezeMainWindowGadgets
+	subq.b	#1,freezegads(a5)
+	bpl.b 	.ok
+	clr.b   freezegads(a5)
+.ok	rts
+
+areMainWindowGadgetsFrozen
+	tst.b	freezegads(a5)
+	rts
+
+******************************************************************************
+* Sanity functions
+**************
+
+* Semaphore functions preserve all registers except maybe A0
+
+obtainModuleList
+	pushm	a0/a6
+	lea 	moduleListSemaphore(a5),a0
+	lore    Exec,ObtainSemaphore
+	popm	a0/a6
+	rts
+
+releaseModuleList
+	pushm	a0/a6
+	lea 	moduleListSemaphore(a5),a0
+	lore    Exec,ReleaseSemaphore
+	popm	a0/a6
+	rts
+
+obtainModuleData
+	pushm	a0/a6
+	lea 	moduleDataSemaphore(a5),a0
+	lore    Exec,ObtainSemaphore
+	popm	a0/a6
+	rts
+
+releaseModuleData
+	pushm	a0/a6
+	lea 	moduleDataSemaphore(a5),a0
+	lore    Exec,ReleaseSemaphore
+	popm	a0/a6
+	rts
+
+showOutOfMemoryError
+	lea		memerror_t,a1
+	bra		request
 
 
 ******************************************************************************
@@ -4777,7 +4849,7 @@ poptofront
 	tst.b	win(a5)
 	beq.b	.now
 	clr	rawkeyinput(a5)
-.now	move.b	ownsignal7(a5),d1
+.now	move.b	rawKeySignal(a5),d1
 	bsr.w	signalit
 	movem.l	(sp)+,d0-a6
 	rts
@@ -4848,6 +4920,7 @@ freemem	movem.l	d0/d1/a0/a1/a6,-(sp)
 freemodule
 	movem.l	d0-a6,-(sp)
 
+	bsr		obtainModuleData
 
 	clr.b	modulename(a5)
 	clr.b	moduletype(a5)
@@ -4855,7 +4928,7 @@ freemodule
 	clr.b	do_early(a5)
 	clr.b	oldst(a5)
 	clr.b	sidflag(a5)
-	clr	ps3minitcount
+	clr		ps3minitcount
 	clr.b	ahi_use_nyt(a5)
 
 	clr	pos_maksimi(a5)
@@ -4865,7 +4938,6 @@ freemodule
 	clr	songnumber(a5)
 ;	bsr.w	lootaa
 	bsr.w	inforivit_clear
-
 
 	lea	ps3mroutines(a5),a0		* vapautetaan replayeri
 	jsr	freereplayer
@@ -4881,12 +4953,11 @@ freemodule
 	clr.l	moduleaddress(a5)
 	clr.l	modulelength(a5)
 
-	tst.l	keyfile+44(a5)	* datan väliltä 38-50 pitää olla nollia
-	beq.b	.zz
-	move.l	tempexec(a5),a0
-	addq.l	#1,IVVERTB+IV_DATA(a0)
-;	jsr	flash
-.zz
+;	tst.l	keyfile+44(a5)	* datan väliltä 38-50 pitää olla nollia
+;	beq.b	.zz
+;	move.l	tempexec(a5),a0
+;	addq.l	#1,IVVERTB+IV_DATA(a0)
+;.zz
 
 	bsr.w	sulje_foo	
 
@@ -4908,7 +4979,7 @@ freemodule
 	clr.b	lod_tfmx(a5)
 
 .eee	
-
+	bsr		releaseModuleData
 
 	movem.l	(sp)+,d0-a6
 	rts
@@ -5373,31 +5444,38 @@ vastomaviesti
 signalreceived
 
 	moveq	#1,d7			* mennään listassa eteenpäin
+							* step forward in the list
 
 	cmp.b	#pm_random,playmode(a5)	* Arvotaanko järjestys?
 	bne.b	.norand
 
 ** Onko subsongeja soiteltavaks?
+** Are there any subsongs to play next?
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d0
+	* See if this replayer supports subsongs
 	btst	#pb_song,d0
  	beq.b	.ran
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne.w	rbutton13		* next song!
 
-.ran	bra.w	.karumeininki
+.ran	
+	* no subsongs, randomize next one
+	bra.w	.karumeininki
+
 .norand
+	* Play mode is not random. 
 
-
-	cmp.b	#pm_repeatmodule,playmode(a5) * Jatketaanko soittoa?
-	beq.w	.reet
-
-	cmp	#1,modamount(a5) * Jos vain yksi modi ja repeatti päällä,
+	cmp.b	#pm_repeatmodule,playmode(a5) 	* Jatketaanko soittoa?
+	beq.w	.reet							* If module repeat on, just exit
+	
+	cmp	#1,modamount(a5) * Jos vain yksi modi,
 	bne.b	.notone		* jatketaan soittoa keskeytyksettä.
-	cmp	#PLAYING_MODULE_NONE,playingmodule(a5) * Listassa yksi modi, joka on uusi.
+	cmp	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Listassa yksi modi, joka on uusi.
 	bne.b	.oon			* Soitetaan se.
 	moveq	#0,d7			* ei lisätä eikä vähennetä
+							* no stepping in the list
 	bra.b	.notone
 .oon
 
@@ -5421,10 +5499,11 @@ signalreceived
 	tst	playingmodule(a5)	* soitettiinko edes mitään
 	bmi.w	.err
 
-	cmp.b	#pm_module,playmode(a5)
+	cmp.b	#pm_module,playmode(a5)		* Play mode was "module", stop after playing 
 	beq.w	.stop
 
 ** Onko subsongeja soiteltavaks?
+* Check for subsongs
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d0
 	btst	#pb_song,d0
@@ -5435,43 +5514,54 @@ signalreceived
 	
 
 .eipa
+	* Stopping playback 
+	lore  	Exec,Disable
 	clr.b	playing(a5)		* soitto seis
 	move.l	playerbase(a5),a0	* stop module
-	jsr	p_end(a0)
+	jsr	 	p_end(a0)
+	lore   	Exec,Enable
 
 	bsr.w	freemodule
 
 	tst	modamount(a5)		* onko modeja?
 	beq.w	.err
 
-.opg
-	cmp	#PLAYING_MODULE_NONE,playingmodule(a5) * Lista tyhjätty? Soitetaan eka modi.
+	cmp	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Lista tyhjätty? Soitetaan eka modi.
 	bne.b	.eekk
-	moveq	#0,d7
+	moveq	#0,d7				* no stepping in the list
 	clr	chosenmodule(a5)
 .eekk
-	add	d7,chosenmodule(a5)	* lisätään valittuun moduulin 1 tai -1
-	move	chosenmodule(a5),d0
-	bpl.b	.repea			* meni yli listan alkupäästä?
-	cmp	#-1,d0			* valitaan listan viimeinen
-	bne.w	.err
+	* select next module 
+	ext.l	d7 
+	moveq	#0,d0
+	move	chosenmodule(a5),d0 
+	add.l	d7,d0
+	bpl.b	.wasPositive			
+	* negative index, wrap to the last module
 	move	modamount(a5),chosenmodule(a5)
 	subq	#1,chosenmodule(a5)
+	bra.b	.repea
+.wasPositive
+	move	d0,chosenmodule(a5)
+	* Note that upper bound check is not here, it's done below when
+	* traversing the list nodes.
+.repea
 
-.repea	move	chosenmodule(a5),playingmodule(a5)
+	move	chosenmodule(a5),playingmodule(a5)
 	move	playingmodule(a5),d0
 
 	st	hippoonbox(a5)
 	bsr.w	resh
 
 * etsitään vastaava listasta tiedoston nimi
-
-	lea	listheader(a5),a4
+	bsr		obtainModuleList
+	lea		moduleListHeader(a5),a4
 .luuppo
 	TSTNODE	a4,a3
-	beq.b	.erer			* loppuivatko modit??
+	beq.b	.erer			* end of list reached?
 	move.l	a3,a4
-	dbf	d0,.luuppo
+	dbf		d0,.luuppo
+	bsr 	releaseModuleList
 
 	cmp.b	#'÷',l_filename(a3)	* onko divideri??
 	bne.b	.wasfile
@@ -5481,15 +5571,12 @@ signalreceived
 	bra.b	.eekk
 .wasfile
 
-
-
 	lea	l_filename(a3),a0	* ladataan
 	move.l	l_nameaddr(a3),solename(a5)
 	moveq	#0,d0			* no dbuf
 	jsr	loadmodule
 	tst.l	d0
 	bne.b	.loader
-
 
 	move.l	playerbase(a5),a0	* soitto päälle
 	jsr	p_init(a0)
@@ -5500,41 +5587,46 @@ signalreceived
 .reet0	st	playing(a5)
 	bsr.w	inforivit_play
 	bsr.w	start_info
-
 .reet
 	rts
 
 .loader	
-	move	#PLAYING_MODULE_ERROR,playingmodule(a5)	* latausvirhe
+	* load error, no module to play
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)	* latausvirhe
 	bra.b	.reet
 
-.mododo	move	#PLAYING_MODULE_ERROR,playingmodule(a5)	* initti virhe
+.mododo	
+	* init error, no module to play
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)	* initti virhe
 	bsr.w	init_error
 	bra.b	.reet
 
-.err	move	#PLAYING_MODULE_ERROR,playingmodule(a5)	* ei modeja mitä soittaa
-	move	#PLAYING_MODULE_ERROR,chosenmodule(a5)
+.err	
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)	* ei modeja mitä soittaa
+	move	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	rts
 
 .stop  	bsr.w	rbutton3		* stop!
 	bra.b	.reet
 
-
 * modit loppui, mitä tehdään?
-.erer	move	#PLAYING_MODULE_ERROR,playingmodule(a5)
+* No modules left to play
+.erer	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 
 	cmp.b	#pm_through,playmode(a5)
 	bne.b	.hm
+	* select last module
 	move	modamount(a5),chosenmodule(a5)
 	subq	#1,chosenmodule(a5)
 	bsr.w	resh
 	bra.b	.reet
 
-.hm	clr	playingmodule(a5)	* Alotetaan alusta
+.hm	
+	* In "pm_through" mode start over from the first module
+ 	clr	playingmodule(a5)	* Alotetaan alusta
+	* select first module
 	clr	chosenmodule(a5)
 	bra.w	.repea
-
-
 
 * Shuffle-soitto
 .karumeininki
@@ -5544,40 +5636,54 @@ signalreceived
 	beq.b	.reet
 	bra.w	soitamodi2
 
-
-
+* Randomize a module
+* out:
+*    chosenmodule(a5) will get the index of the randomized module
 satunnaismodi
 	move	modamount(a5),d0
-	
+	* Low bound check
 	cmp	#1,d0
 	bhi.b	.nof
 	clr	chosenmodule(a5)
 	rts
 .nof
+	* High bound check
 	cmp	#MAX_MODULES,d0		* jos liikaa, ei ylläpidetä listaa
 	bhi.b	.onviela
+	subq	#1,d0			* for dbf
 
-	subq	#1,d0
+	* Loop as much as we have modules and test if the random table 
+	* has free slots left.
 
-.h	bsr.b	testrandom
+.h	bsr.b	testRandomTableEntry
 	beq.b	.onviela
 	dbf	d0,.h
 
+	* All slots taken, clear it and start over.
+	* This means all modules have randomly played.
 	bsr.b	clear_random
 	bra.b	satunnaismodi
 
 .onviela
+	* There are free slots left in the random table.
+	* Next get a random value in the range [0, number of modules-1].
 	move	modamount(a5),d3
 	subq	#1,d3
-.a	bsr.w	getrandom
+.a	bsr.w	getRandomValue
+	* Function returns 0..MAX_RANDOM_MASK,
+	* which may be larger than modamount(a5). 
+	* Accept only random values in range.
 	cmp	d3,d1
 	bhi.b	.a
 
+	* Got a random value in proper range in d1
+	* Test if a slot is free. Try again if not.
 	move	d1,d0
-	bsr.b	testrandom
+	bsr.b	testRandomTableEntry
 	bne.b	.a
-	bsr.b	setrandom
-
+	* Was free. Take it.
+	bsr.b	setRandomTableEntry
+	* I choose you, module in index d1
 	move	d1,chosenmodule(a5)
 .reet	rts
 
@@ -5586,15 +5692,16 @@ clear_random
 	pushm	all
 
 ** taulukko tyhjäks
-	lea	randomtable(a5),a0
+	bsr	 	obtainModuleList
+	lea		randomtable(a5),a0
 	move	#RANDOM_PLAY_TABLE_SIZE/4-1,d0
 .c	clr.l	(a0)+
 	dbf	d0,.c
 
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.x
-
-	lea	listheader(a5),a4
+	
+	lea	moduleListHeader(a5),a4
 .l	TSTNODE	a4,a3
 	beq.b	.xx
 	move.l	a3,a4
@@ -5605,37 +5712,53 @@ clear_random
 	st	hippoonbox(a5)
 	bsr.w	shownames
 .x
-
+	bsr		releaseModuleList
 	popm	all
 	rts
 
-
-* d0 = numero
-testrandom
-	movem.l	d0/d1/a0,-(sp)
-	bsr.b	rando
-	btst	d1,(a0,d0)
-	movem.l	(sp)+,d0/d1/a0
+* Test if index given in d0 is taken in the random table
+* in:
+*      d0 = module index to test
+* out:
+*      Z is set if index is taken
+testRandomTableEntry
+	push	a0
+	bsr.b	getRandomValueTableEntry
+	btst	d0,(a0)
+	pop     a0
 	rts
 
-rando	move	d0,d1
-	lsr	#3,d0
-;	not	d1
-	lea	randomtable(a5),a0
+* Each index maps into one bit in the randomtable. 
+* It's much faster to use a bit table for this instead of doing list traversal.
+* in:
+*      d0 = module index to test
+* out:
+*      a0 = index in the ranom table that should be tested 
+getRandomValueTableEntry	
+	push 	d1
+	lea		randomtable(a5),a0
+	move	d0,d1
+	lsr		#3,d1 
+	add		d1,a0
+	pop 	d1
 	rts
 
-setrandom
+* Sets the random table entry as taken for given module index.
+* in:
+*   d0 = module index
+setRandomTableEntry
 	pushm	all
-	push	d0
-	bsr.b	rando
-	bset	d1,(a0,d0)
-
-	pop	d0
+	bsr		obtainModuleList
+	
+	* Set it in the table
+	bsr.b	getRandomValueTableEntry
+	bset	d0,(a0)
 
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.x
 
-	lea	listheader(a5),a4
+	* Set box indicator
+	lea	moduleListHeader(a5),a4
 .l	TSTNODE	a4,a3
 	beq.b	.x
 	move.l	a3,a4
@@ -5643,11 +5766,11 @@ setrandom
 	st	l_rplay(a3)
 	st	hippoonbox(a5)
 .x
-
+	bsr 	releaseModuleList
 	popm	all
 	rts
 
-
+* Get seed for random generator
 srand   
 	move.l	4.w,a6
 	moveq	#MEMF_PUBLIC,d1
@@ -5680,7 +5803,10 @@ srand
         move.l  d0,seed(a5)
         rts
 
-getrandom
+* Returns a pseudo random number
+* out:
+*    d1 = random number, range 0..MAX_RANDOM_MASK
+getRandomValue
 	push	d0
 	move.l  seed(a5),d0     ; Returns random number (result: d0 = 0-32767)
         move.l  #$41c64e6d,d1
@@ -5712,7 +5838,7 @@ mulu_32	movem.l	d2/d3,-(sp)
 	movem.l	(sp)+,d2/d3
 	rts	
 
-* divu_32 --- d0 = d0/d1, d1=jakojäännös
+* divu_32 --- d0 = d0/d1, d1=remainder
 divu_32	move.l	d3,-(a7)
 	swap	d1
 	tst	d1
@@ -5757,21 +5883,27 @@ divu_32	move.l	d3,-(a7)
 
 
 ******************************************************************************
-* Soitamoduuli *
+* Soitamoduuli 
+* Play a module
+* in:
+*    d7 = step to move in the list, -1 to play previous, +1 to play next. 
 ****************
 
 soitamodi_random
-	moveq	#1,d5
-	moveq	#0,d6
+	moveq	#1,d5 		* 1: force random
+	moveq	#0,d6		* 0: allow volume fade down before startig to play new module
 	bra.b	umph
-	
+
+* Called from "signalreceived". That is, when a module playback has ended.
 soitamodi2
-	moveq	#-1,d6
-	moveq	#0,d5
+	moveq	#-1,d6		* ~0: disable volume fade down before starting to play new module
+	moveq	#0,d5		* 0: no forced random
 	bra.b	umph
+
+* Called based on user input
 soitamodi
-	moveq	#0,d6
-	moveq	#0,d5
+	moveq	#0,d6		* 0: allow volume fade down
+	moveq	#0,d5		* 0: no forced random
 umph	
 ;	cmp.b	#$7f,do_early(a5)	* early load päällä? disable!
 ;	beq	.ags
@@ -5781,76 +5913,98 @@ umph
 
 	cmp.b	#pm_random,playmode(a5)	* onko satunnaissoitto?
 	bne.b	.bere
-.raaps	bsr.w	satunnaismodi
+.raaps	
+	* randomize a module in chosenmodule(a5)
+	bsr.w	satunnaismodi
+	* set step to zero
 	moveq	#0,d7
 .bere
+	* Calculate in long words to avoid possible word overflow.
+	ext.l	d7
+	moveq	#0,d1
+	move	modamount(a5),d1
 
-	add	d7,chosenmodule(a5)
-	bpl.b	.e			* meni yli listan alkupäästä?
-	move	modamount(a5),d0
-	add	d0,chosenmodule(a5)
+	* Calculate candidate for the next module
+	moveq	#0,d0 
+	move	chosenmodule(a5),d0
+	add.l	d7,d0
+	;add		d7,chosenmodule(a5)
+	bpl.b	.e					* meni yli listan alkupäästä?
+	* Result is negative. Wrap to the end of the list.
+	;move	modamount(a5),d0
+	;add		d0,chosenmodule(a5)
+	add.l	d1,d0
 .e
-	move	chosenmodule(a5),d0
-	cmp	modamount(a5),d0
+	;move	chosenmodule(a5),d0
+	;cmp		modamount(a5),d0
+	cmp.l	d1,d0
 	blt.b	.ee
-	sub	modamount(a5),d0
-	move	d0,chosenmodule(a5)
+	* Result is higher than the amount of modules. Wrap to the beginning.
+	;sub		modamount(a5),d0
+	sub.l	d1,d0
+	;move	d0,chosenmodule(a5)
 .ee
-
-	move	chosenmodule(a5),d0
-	move	d0,d2
-	bsr.w	setrandom		* Merkataan listaan..
+	* Valid chosenmodule index found
+	move	d0,chosenmodule(a5)
+	* Take a slot in the random table as well
+	move	d0,d2					* store copy for later
+	bsr.w	setRandomTableEntry		* Merkataan listaan..
 
 ;	st	hippoonbox(a5)
 	bsr.w	resh
 
-
 * etsitään listasta vastaava tiedosto
-	lea	listheader(a5),a4
+* find the corresponding file from the list
+
+	bsr		obtainModuleList
+	lea	moduleListHeader(a5),a4
 .luuppo
 	TSTNODE	a4,a3
 	beq.w	.erer
 	move.l	a3,a4
 	dbf	d0,.luuppo
+	bsr		releaseModuleList
 
+	* This might be a list divider. Try again in that case.
 	cmp.b	#'÷',l_filename(a3)	* onko divideri?
 	beq.b	umph			* kokeillaan edellistä/seuraavaa/rnd
 
 	cmp	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
 
+	* It was the same one which already was playing.
+	* Restart it from beginning.
+
 * on!
-
-
-
+	lore    Exec,Disable
 	bsr.w	halt			* soitetaan vaan alusta
 	move.l	playerbase(a5),a0
-	jsr	p_end(a0)
+	jsr 	p_end(a0)
+	lore    Exec,Enable
+
 	move.l	playerbase(a5),a0
-	jsr	p_init(a0)
+	jsr		p_init(a0)
 	tst.l	d0
 	bne.w	.inierr
-
 
 	st	playing(a5)		* Ei varmaan tuu initerroria
 	bsr.w	inforivit_play
 	bsr.w	settimestart
 	bsr.w	start_info
-.ags	rts
+	rts
 	
 .new
-	moveq	#0,d7
+	* New module to be played.
+
+	moveq	#0,d7			* flag for double buffering (0: no db)
 	tst	playingmodule(a5)	* Oliko soitettavana mitään?
+							* Was something being played?							
 	bmi.b	.nomod
+
+	* Yes. Stop and free it.
 
 	tst	d6			* ei fadea jos signalreceivedistä
 	bne.b	.hm1
-
-;	tst.b	do_early(a5)	
-;	beq.b	.norl
-;	tst.b	earlyload(a5)		* onko earlyload?
-;	bne.b	.early
-;.norl
 
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
 	bne.b	.nomod
@@ -5859,9 +6013,11 @@ umph
 	move	d0,-(sp)
 .hm1
 
+	lore    Exec,Disable
 	bsr.w	halt			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
-	jsr	p_end(a0)
+	jsr		p_end(a0)
+	lore    Exec,Enable
 	bsr.w	freemodule	
 
 	tst	d6
@@ -5870,16 +6026,18 @@ umph
 .hm2
 
 .nomod
+	* Store index of the new module being played
 	move	d2,playingmodule(a5)	* Uusi numero
 
+	* a3 contains the list elment
 	lea	l_filename(a3),a0	* Ladataan
 	move.l	l_nameaddr(a3),solename(a5)
 
+	* load it, d7 contains double buffering flag
 	move.b	d7,d0
 	jsr	loadmodule
 	tst.l	d0
 	bne.b	.loader
-
 
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
@@ -5887,7 +6045,7 @@ umph
 	bne.b	.inierr
 
 	bsr.w	settimestart
-.reet0	st	playing(a5)
+	st	playing(a5)
 	bsr.w	inforivit_play
 	bsr.w	start_info
 
@@ -5896,12 +6054,16 @@ umph
 	rts
 
 .loader	
-	move	#PLAYING_MODULE_ERROR,playingmodule(a5)
+	* Load failed.
+	* Did not get a module to play successfully.
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 	rts
 
 
 .inierr	
-	move	#PLAYING_MODULE_ERROR,playingmodule(A5)	* initvirhe
+	* Replay init failed.
+	* Did not get a module to play successfully.
+	move	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
 	bra.w	init_error
 ;	rts
 
@@ -6113,6 +6275,7 @@ nappilasku
 * d3 = rawkey
 * d4 = iequalifier
 
+handleRawKeyInput
 nappuloita
 	and	#$ff,d3
 
@@ -6436,7 +6599,7 @@ nappuloita
 .qui	st	exitmainprogram(a5)
 	rts
 
-.ocl	bra.w	zippowi
+.ocl	bra.w	zipMainWindow
 
 
 
@@ -6516,22 +6679,29 @@ stopcont
 
 
 lista_ylos				* shiftin kanssa nopeempi!
-	moveq	#1,d0
+	moveq	#1,d0		* lines to skip up
 	and	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.nsh
 	tst	boxsize(a5)
 	beq.b	.nsh
 	move	boxsize(a5),d0
-	lsr	#1,d0
+	lsr	#1,d0			* with shift, skip half of the box size
 .nsh
-	sub	d0,chosenmodule(a5)
-	bpl.b	.oe
+	ext.l	d0
+	moveq	#0,d1 
+	move	chosenmodule(a5),d1
+
+	sub.l	d0,d1
+	bpl.b	.wasOk
 	move	modamount(a5),chosenmodule(a5)
 	subq	#1,chosenmodule(a5)
-.oe	bra.w	resh
+	bra		resh
+.wasOk
+	move	d1,chosenmodule(a5)
+	bra.w	resh
 
 lista_alas
-	moveq	#1,d0
+	moveq	#1,d0		* lines to skip down
 	and	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.nsh
 	tst	boxsize(a5)
@@ -6539,22 +6709,30 @@ lista_alas
 	move	boxsize(a5),d0
 	lsr	#1,d0
 .nsh
-	add	d0,chosenmodule(a5)
+	ext.l	d0
+	moveq	#0,d1 
+	move	chosenmodule(a5),d1
+	add.l	d0,d1
+
+	moveq	#0,d0 
 	move	modamount(a5),d0
-	cmp	chosenmodule(a5),d0
+	;cmp	chosenmodule(a5),d0
+	cmp.l	d1,d0
 	bhi.b	.ee
-	clr	chosenmodule(a5)
-.ee	bra.w	resh
+	moveq	#0,d1
+	;clr	chosenmodule(a5)
+.ee	
+	move	d1,chosenmodule(a5)
+	bra.w	resh
 
 
 ********* Window zip
 
-zippowi	tst.b	uusikick(a5)
+zipMainWindow	tst.b	uusikick(a5)
 	bne.b	.newo
 	bsr.w	sulje_ikkuna		* Vaihdetaan ikkunan kokoa
 	bra.w	avaa_ikkuna
 .newo	move.l	windowbase(a5),a0	* Kick2.0+
-;	lore	Intui,ZipWindow
 	move.l	_IntuiBase(a5),a6
 	jmp	_LVOZipWindow(a6)
 
@@ -6586,7 +6764,7 @@ fkeyaction
 
 
 gadgetsup
-	tst.b	freezegads(a5)
+	bsr	    areMainWindowGadgetsFrozen
 	bne.w	returnmsg
 
 
@@ -6645,12 +6823,13 @@ printbox
 * Sortti
 *******
 rsort
+	* Let's not sort a list with 1 or 2 modules, that would be silly I guess.
 	cmp	#2,modamount(a5)
 	bhs.b	.so
 	rts
 .so
-	bsr.w	pon1
-	addq.b	#1,freezegads(a5)		* gadgetit jumiin!
+	bsr.w	setMainWindowWaitPointer
+	bsr		freezeMainWindowGadgets
 
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
@@ -6659,9 +6838,7 @@ rsort
 .t	dc.b	"Sorting...",0
  even
 
-
 .d
-
 	move	modamount(a5),d0
 	mulu	#4+24,d0		* noden osoite ja paino
 	addq.l	#8,d0			* tyhjää perään
@@ -6678,9 +6855,10 @@ rsort
 
 
 ** Lasketaan painot jokaiselle
+	bsr		obtainModuleList
 	move	modamount(a5),d7
 	subq	#1,d7
-	lea	listheader(a5),a3
+	lea	moduleListHeader(a5),a3
 
 * paino 24 bytee
 
@@ -6700,11 +6878,10 @@ rsort
 
 	move.l	a3,a1		* poistetaan node (a1)
 	REMOVE
-	
+
 	move.l	a4,a3
 	bra.b	.ploop
 .ep
-
 
 	move.l	sortbuf(a5),a3
 
@@ -6739,27 +6916,26 @@ rsort
 	beq.b	.r
 	move.l	(a3),a1
 
-	lea	listheader(a5),a0
+	lea	moduleListHeader(a5),a0
 	ADDTAIL			* lisätään node (a1)
 
-	lea	28(a3),a3
+	lea	28(a3),a3	* TODO: address + sort weight
 	bra.b	.er
 .r
-
 	move.l	sortbuf(a5),a0
 	bsr.w	freemem
 
 .error
 
-
 	bsr.w	clear_random
 	tst	playingmodule(a5)
 	bmi.b	.npl
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .npl	clr	chosenmodule(a5)
 	st	hippoonbox(a5)
-	subq.b	#1,freezegads(a5)
-	bsr.w	poff1
+	bsr		releaseModuleList
+	bsr  	unfreezeMainWindowGadgets
+	bsr.w	clearMainWindowWaitPointer
 	bra.w	resh
 
 * a3 = lista
@@ -6990,12 +7166,17 @@ rmove
 	bsr.w	clear_random
 	tst	playingmodule(a5)
 	bmi.b	.q
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .q	st	hippoonbox(a5)
 	bsr.w	resh
 .qq	rts
 
 
+* Gets the chosen module list element 
+* Out:
+*    d0 = 0 if not found
+*    d1 = 1 if data available
+*    a3 = list node pointer
 *** Chosenmodule node A3:een
 getcurrent
 	tst	modamount(a5)
@@ -7005,16 +7186,24 @@ getcurrent
 .q	moveq	#0,d0
 	rts
 
-* d0 = mikä moduuli
+* Gets the chosen module list element into a3
+* In:
+*   d0 = Module index
+* Out:
+*    d0 = 0 if not found
+*    d1 = 1 if data available
+*    a3 = list node pointer
 getcurrent2
 
 * etsitään listasta vastaava kohta
-	lea	listheader(a5),a4
+	bsr		obtainModuleList
+	lea	moduleListHeader(a5),a4
 .luuppo
 	TSTNODE	a4,a3
 	beq.b	.q
 	move.l	a3,a4
 	dbf	d0,.luuppo
+	bsr		releaseModuleList
 * a3 = valittu nimi
 	moveq	#1,d0
 	rts
@@ -7064,7 +7253,7 @@ comment_file
 	sub.l	a3,a3
 	lea	ftags(pc),a0
 	lea	.ti(pc),a2
-	bsr.w	pon1
+	bsr.w	setMainWindowWaitPointer
 	lob	rtGetStringA
 	tst.l	d0
 	beq.b	.xx
@@ -7073,7 +7262,7 @@ comment_file
 	move.l	sp,d2
 	lore	Dos,SetComment
 	
-.xx	bsr.w	poff1
+.xx	bsr.w	clearMainWindowWaitPointer
 	lea	90(sp),sp
 .x	rts
 
@@ -7097,9 +7286,9 @@ find_new
 	sub.l	a3,a3
 	lea	ftags(pc),a0
 	lea	.ti(pc),a2
-	bsr.w	pon1
+	bsr.w	setMainWindowWaitPointer
 	lob	rtGetStringA
-	bsr.w	poff1
+	bsr.w	clearMainWindowWaitPointer
 	tst.l	d0
 	bne.b	find_continue	
 	rts
@@ -7120,12 +7309,10 @@ find_continue
 	bhi.b	.ok
 	rts
 .ok
-	bsr.w	pon1
-	pea	poff1(pc)
-;	bsr.b	.o
-;	bsr.w	poff1
-;	rts
-;.o
+	bsr.w	setMainWindowWaitPointer
+	pea	clearMainWindowWaitPointer(pc)
+
+	bsr		obtainModuleList
 	bsr.w	getcurrent		* a3 => chosen module listnode
 
 	move	chosenmodule(a5),d7
@@ -7134,7 +7321,7 @@ find_continue
 
 	move	#$df,d2
 
-;	lea	listheader(a5),a4
+;	lea	moduleListHeader(a5),a4
 .luuppo
 	addq	#1,d7
 	TSTNODE	a4,a3
@@ -7142,12 +7329,12 @@ find_continue
 	move.l	a3,a4
 	bsr.b	.find
 	bne.b	.luuppo
-	rts
+	bra.b	.q
 .qq
 * lista läpi eikä löytyny. käydään alusta lähtökohtaan.
 
 	moveq	#-1,d7
-	lea	listheader(a5),a4
+	lea	moduleListHeader(a5),a4
 .luuppo2
 	addq	#1,d7
 	cmp	chosenmodule(a5),d7
@@ -7158,7 +7345,9 @@ find_continue
 	bsr.b	.find
 	bne.b	.luuppo2
 
-.q	rts
+.q	
+	bsr 	releaseModuleList
+	rts
 
 
 .find
@@ -7181,13 +7370,9 @@ find_continue
 	beq.b	.notfound
 	and.b	d2,d1
 	cmp.b	d0,d1
-;	bne.b	.flop1
-;	beq.b	.f
 	beq.b	.flop3
 	subq	#1,a0
 	bra.b	.flop1
-
-;.f	bra.b	.flop3
 
 .notfound
 	moveq	#-1,d0
@@ -7204,6 +7389,7 @@ find_continue
 *******************************************************************************
 * Kelaus
 *******
+forwardButtonAction
 rbutton_kela1
 	tst.b	playing(a5)
 	beq.b	.e
@@ -7339,6 +7525,7 @@ rbutton13
 ******************************************************************************
 * Stop
 *******
+actionStopButton
 rbutton3
 	tst	playingmodule(a5)
 	bpl.b	.hu
@@ -7354,9 +7541,14 @@ rbutton3
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
 
+	* The "playing" flags is polled in the interrupts, 
+	* so let's disable them for safety.
+	
+	lore    Exec,Disable
 	clr.b	playing(a5)
 	move.l	playerbase(a5),a0
 	jsr	p_stop(a0)
+	lore    Exec,Enable
 
 	move	(sp)+,mainvolume(a5)
 
@@ -7410,16 +7602,16 @@ rbutton4a
 
 .nofa	move	d0,-(sp)
 
+	lore    Exec,Disable
 	bsr.w	halt
 	move	#-1,playingmodule(a5)
 	move.l	playerbase(a5),a0
-	jsr	p_end(a0)
+	jsr		p_end(a0)
+	lore    Exec,Enable
 
 	bsr.w	freemodule
 	move	(sp)+,mainvolume(a5)
 	clr.b	movenode(a5)
-
-;	bsr	freeearly
 	rts
 
 
@@ -7525,6 +7717,7 @@ resh	pushm	all
 	popm	all
 	rts
 
+* Resizes the box slider gadget according to the amount of modules in it
 reslider
 	moveq	#0,d0
 	move	modamount(a5),d0
@@ -7657,6 +7850,10 @@ resetslider
 *******************************************************************************
 * Play module
 *******
+* TODO: obtainModuleList
+* TODO: most of this is duplicated elsewhere? in signalreceived?
+
+playButtonAction
 rbutton1
 
 	tst.b	movenode(a5)
@@ -7668,20 +7865,20 @@ rbutton1
 	bsr.w	getcurrent
 	beq.b	.nomove
 
-	lea	listheader(a5),a0	* Insertoidaan node...
+	bsr		obtainModuleList
+	lea	moduleListHeader(a5),a0	* Insertoidaan node...
 	move.l	nodetomove(a5),a1
 	move.l	a3,a2
 	lore	Exec,Insert
 	addq	#1,modamount(a5)
 	addq	#1,chosenmodule(a5)	* valitaan movetettu node
 	st	hippoonbox(a5)
+	bsr		releaseModuleList
 	bsr.w	clear_random
 	bra.w	resh
 
-
 .nomove
-	check	2		* reg check
-
+	;check	2		* reg check
 
 	tst.b	new(a5)			* onko New?
 	bne.b	.newoe
@@ -7697,9 +7894,6 @@ rbutton1
 	bpl.b	.ere
 	moveq	#0,d0			* jos ei, otetaan eka
 .ere	move	d0,d2
-
-
-
 
 	;move.b	new2(a5),d1
 	;clr.b	new2(a5)
@@ -7718,17 +7912,16 @@ rbutton1
 .xa
 
 	bsr.w	clear_random		* Tyhjäx
-	bsr.w	setrandom		* merkitään...
+	bsr.w	setRandomTableEntry		* merkitään...
 
 
 * etsitään listasta vastaava tiedosto
-	lea	listheader(a5),a4
+	lea	moduleListHeader(a5),a4
 .luuppo
 	TSTNODE	a4,a3
 	beq.w	.erer
 	move.l	a3,a4
 	dbf	d0,.luuppo
-
 
 .huo	cmp.b	#'÷',l_filename(a3)	* onko divideri??
 	bne.b	.je
@@ -7739,11 +7932,8 @@ rbutton1
 	bsr.w	resh
 	bra.b	.huh
 .je
-
-
 	cmp	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
-
 
 .early
 	bsr.w	fadevolumedown
@@ -7751,9 +7941,11 @@ rbutton1
 
 
 * Soitetaan vaan alusta
+	lore	Exec,Disable
 	bsr.w	halt
 	move.l	playerbase(a5),a0
-	jsr	p_end(a0)
+	jsr		p_end(a0)
+	lore    Exec,Enable
 	move	(sp)+,mainvolume(a5)
 
 
@@ -7761,7 +7953,7 @@ rbutton1
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
-	bne.b	.inierr
+	bne.w	.inierr
 
 	st	playing(a5)		* Ei varmaan tuu initerroria
 	bsr.w	settimestart
@@ -7778,10 +7970,12 @@ rbutton1
 
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
+	lore	Exec,Disable
 	bsr.b	halt			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
-	jsr	p_end(a0)
+	jsr		p_end(a0)
 	bsr.w	freemodule	
+	lore 	Exec,Enable
 	move	(sp)+,mainvolume(a5)
 .nomod
 
@@ -7807,14 +8001,14 @@ rbutton1
 	rts
 
 .loader	
-	move	#-1,playingmodule(a5)
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 	rts
 
 .inierr2
 	moveq	#ier_unknown,d0
 
 .inierr	
-	move	#-1,playingmodule(A5)	* initvirhe
+	move	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
 	bra.w	init_error
 ;	rts
 
@@ -7830,6 +8024,7 @@ halt	clr.b	playing(a5)
 *******************************************************************************
 * Insertti
 *******
+insertButtonAction
 rinsert
 	tst	modamount(a5)
 	beq.w	rbutton7
@@ -7837,10 +8032,11 @@ rinsert
 	bra.w	rbutton7
 
 rinsert2
+	bsr		obtainModuleList
 	move	chosenmodule(a5),d0
 
 * etsitään listasta vastaava kohta
-	lea	listheader(a5),a4
+	lea	moduleListHeader(a5),a4
 .luuppo
 	TSTNODE	a4,a3
 	beq.w	rbutton7
@@ -7848,7 +8044,7 @@ rinsert2
 	dbf	d0,.luuppo
 * a3 = valittu nimi
 	move.l	a3,fileinsert(a5)
-
+	bsr		releaseModuleList
 	st	filereqmode(a5)
 	rts
 	
@@ -7861,10 +8057,11 @@ rinsert2
 add_divider
 	tst	modamount(a5)
 	beq.b	.x
+	bsr		obtainModuleList
 	move	chosenmodule(a5),d0
 ;	subq	#1,d0			* valitun nimen edellinen node
 
-	lea	listheader(a5),a4
+	lea	moduleListHeader(a5),a4
 .luuppo	TSTNODE	a4,a3
 	beq.b	.x
 	move.l	a3,a4
@@ -7879,9 +8076,9 @@ add_divider
 	sub.l	a3,a3
 	lea	.tags(pc),a0
 	lea	.ti(pc),a2
-	bsr.w	pon1
+	bsr.w	setMainWindowWaitPointer
 	lob	rtGetStringA
-	bsr.w	poff1
+	bsr.w	clearMainWindowWaitPointer
 	pop	a3
 	tst.l	d0
 	beq.b	.x
@@ -7901,16 +8098,15 @@ add_divider
 .fe	move.b	(a0)+,(a2)+
 	bne.b	.fe
 	
-
 * a1 = insertattava nimi
-	lea	listheader(a5),a0
+	lea	moduleListHeader(a5),a0
 	move.l	a3,a2
 	lore	Exec,Insert
 	st	hippoonbox(a5)
 	bsr.w	resh
-
-.x	rts
-
+.x	
+	bsr		releaseModuleList
+	rts
 
 .ti	dc.b	"Add divider",0
  even
@@ -7920,18 +8116,16 @@ add_divider
 	dc.l	RT_TextAttr,text_attr
 otag17	dc.l	RT_PubScrName,pubscreen+var_b
 	dc.l	TAG_END
-	
 
 
 
 *******************************************************************************
-* Tiedostojen lisääminen listaan
-* Luodaan erillinen prosessi
+* Add files to list
+* Recursive scan (apparently only on kick2.0)
+* Uses a separate process
 *******
+addButtonAction
 rbutton7
-
-;	bra	filereq_code
-
 	clr.b	movenode(a5)
 	tst	filereq_prosessi(a5)
 	beq.b	.ook
@@ -7946,13 +8140,11 @@ rbutton7
 	pushpea	filereq_segment(pc),d3
 	lsr.l	#2,d3
 	move.l	#5000,d4		* saattaa tarvita, kun on rekursiivinen
-	lob	CreateProc
+	lob		CreateProc
 	tst.l	d0
 	beq.b	.error
 	addq	#1,filereq_prosessi(a5)
 .error	rts
-
-
 
 filereq_code
 	lea	var_b,a5
@@ -7966,9 +8158,15 @@ filereq_code
 					* otetaanko eka moduuli taysin 
 					* randomilla
 
+	bsr	setMainWindowWaitPointer
+	bsr		freezeMainWindowGadgets
+	bsr		obtainModuleList
 	bsr.b	.filer
+	bsr		releaseModuleList
+	bsr		unfreezeMainWindowGadgets
+	bsr		clearMainWindowWaitPointer
 
-	move.b	ownsignal6(a5),d1	* Signaali: Valmista tuli..
+	move.b	fileReqSignal(a5),d1	* Send signal, all done
 	bsr.w	signalit
 .n	
 	clr.b	filereqmode(a5)
@@ -7989,7 +8187,6 @@ filereq_code
 	lob	rtAllocRequestA
 	move.l	d0,req_file(a5)
 .onfi
-
 
 ** BUGI?!?
 
@@ -8027,10 +8224,7 @@ filereq_code
 	tst.b	new(a5)			* jos 'new', clearataan lista.
 	beq.b	.non1
 	bsr.w	clearlist
-
-
 .non1
-
 
  ifne fprog
 	bsr	openfilewin
@@ -8038,8 +8232,9 @@ filereq_code
 
 	bsr.w	parsereqdir		* Tehdään hakemistopolku..
 
-	move.l	filelistaddr(a5),a4	* Reqtoolsin tiedostolistan osoite
-
+	* contains the files from reqtools as per user selection
+	move.l	filelistaddr(a5),a4	
+	
 	moveq	#0,d4			* polun pituus
 	lea	tempdir(a5),a0
 .f	addq.l	#1,d4
@@ -8048,18 +8243,15 @@ filereq_code
 ;	subq.l	#1,d4			* -1, nolla pois perästä
 ;	add.l	#l_size,d4		* listayksikön koko
 	add.l	#l_size-1,d4
-
-	addq.b	#1,freezegads(a5)	* mainwindowin gadgetit pois päältä
-
+	;bsr	  	freezeMainWindowGadgets
 .buildlist
 
 ***** Käsitellään valitut hakemistot 
 	cmp.l	#-1,rtfl_StrLen(a4)	* onko hakemisto?????
-	bne.w	.file			* reqtools-listan file
+	bne.w	.file				* reqtools-listan file
 
 	move.l	rtfl_Name(a4),a0	* hakemiston nimi
 	bsr.w	adddivider
-
 
 * rtfl_Name(a4)	= hakemisto 2
 * tempdir(a5) = hakemisto 1
@@ -8131,8 +8323,6 @@ filereq_code
 	tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
 	beq.b	.loopo
 
-
-
 * otetaan kyseisen hakemiston nimi talteen myöhempää käyttöä varten
 
 	move.l	#200,d0
@@ -8146,8 +8336,9 @@ filereq_code
 .lc	move.b	(a0)+,(a1)+
 	bne.b	.lc
 	subq	#1,a1
-	lea	fib_FileName+fileinfoblock2(a5),a0
-.lc2	move.b	(a0)+,(a1)+
+	lea		fib_FileName+fileinfoblock2(a5),a0
+.lc2	
+	move.b	(a0)+,(a1)+
 	bne.b	.lc2
 
 	move.l	d7,a0
@@ -8158,12 +8349,8 @@ filereq_code
 .lc0
 	bra.b	.loopo
 
-
 **** skannattuamme yhden hakemiston tutkitaan siinä olleet muut hakemistot
-
-
 .dodirs
-
 	tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
 	beq.w	.errd
 
@@ -8231,9 +8418,6 @@ filereq_code
 .errd2	popm	all
 
 	bra.b	.errd
-
-
-
 
 
 .filetta
@@ -8347,15 +8531,12 @@ filereq_code
 	clr	chosenmodule(a5)	* moduuliksi eka jos ei ennestään
 .ee
 
-	subq.b	#1,freezegads(a5)
-	bpl.b	.e
-	clr.b	freezegads(a5)
-.e
 	clr.b	loading2(a5)
 
  ifne fprog
 	bsr	closefilewin
  endc
+	* all done!?
 	rts
 
 
@@ -8381,7 +8562,7 @@ addfile
 
 	addq	#1,modamount(a5)
 	move.l	(a5),a6
-	lea	listheader(a5),a0	* lisätään listaan
+	lea	moduleListHeader(a5),a0	* lisätään listaan
 	move.l	a3,a1
 	tst.b	filereqmode(a5)		* onko add vai insert?
 	bne.b	.insert
@@ -8413,7 +8594,7 @@ adddivider
 	move.l	a0,a2
 
 ** testataan onko dirdivideri? jos on, pistetään sen päälle
-	lea	listheader(a5),a3
+	lea	moduleListHeader(a5),a3
 	move.l	MLH_TAILPRED(a3),d0
 	beq.b	.pehe
 	move.l	d0,a3
@@ -8687,20 +8868,20 @@ winfile
 * Vapautetaan tiedostolista
 *******
 freelist
-	tst	modamount(a5)
+	bsr		obtainModuleList
+	tst		modamount(a5)
 	beq.b	.endlist
-
 	bsr.w	clear_random
-	clr	modamount(a5) 
-	move	#-1,chosenmodule(a5)
-	tst	playingmodule(a5)
+	clr		modamount(a5) 
+	move	#PLAYING_MODULE_NONE,chosenmodule(a5)
+	tst		playingmodule(a5)
 	bmi.b	.ehe
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .ehe
-	clr	firstname(a5)
+	clr		firstname(a5)
 	bsr.w	reslider
 .freeloop
-	lea	listheader(a5),a0
+	lea	moduleListHeader(a5),a0
 	lore	Exec,RemTail
 
 	tst.l	d0
@@ -8710,6 +8891,7 @@ freelist
 	bra.b	.freeloop
 
 .endlist
+	bsr		releaseModuleList
 	rts
 
 
@@ -8975,7 +9157,7 @@ rlpg	tst	filereq_prosessi(a5)
 	clr	modamount(a5)
 .yadd
 
-	lea	listheader(a5),a4
+	lea	moduleListHeader(a5),a4
 .ploop
 
 	tst	d6
@@ -9035,7 +9217,7 @@ rlpg	tst	filereq_prosessi(a5)
 	bhs.b	.x2
 
 	move.l	a2,a1
-	lea	listheader(a5),a0	* lisätään listan perään
+	lea	moduleListHeader(a5),a0	* lisätään listan perään
 	lore	Exec,AddTail
 	addq	#1,modamount(a5)
 
@@ -9114,12 +9296,12 @@ rlpg	tst	filereq_prosessi(a5)
 	bhi.b	.noran
 	
 	subq	#1,d0
-.b	bsr.w	getrandom
+.b	bsr.w	getRandomValue
 	cmp	d0,d1
 	bhi.b	.b
 		
 	move	d1,d0
-	bsr.w	setrandom
+	bsr.w	setRandomTableEntry
 
 	move	d1,chosenmodule(a5)
 	bra.b	.eh
@@ -9240,7 +9422,7 @@ rsaveprog
 
 	move	modamount(a5),d7
 	subq	#1,d7
-	lea	listheader(a5),a4
+	lea	moduleListHeader(a5),a4
 
 .saveloop
 	TSTNODE	a4,a3
@@ -9378,7 +9560,7 @@ komentojono
 	move.l	a0,l_nameaddr(a2)
 
 	move.l	a2,a1
-	lea	listheader(a5),a0	* lisätään listaan
+	lea	moduleListHeader(a5),a0	* lisätään listaan
 	lore	Exec,AddTail
 
 	addq	#1,modamount(a5)	* määrä++
@@ -9879,8 +10061,8 @@ defarc
 aseta_vakiot
 	bsr.w	nupit
 	move	#64,mainvolume(a5)
-	move	#-1,playingmodule(a5)
-	move	#-1,chosenmodule(a5)
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	move	#12,tfmxmixingrate(a5)
 	move.b	#pm_repeat,playmode(a5)		* lippu: toistetaan
 	move.l	#10000,mixirate(a5)
@@ -10579,7 +10761,7 @@ msgloop2
 	tst.b	d3
 	bmi.w	returnmsg2
 	move	d3,rawkeyinput(a5)
-	move.b	ownsignal7(a5),d1
+	move.b	rawKeySignal(a5),d1
 	bsr.w	signalit
 	bra.w	returnmsg2
 .nr
@@ -13854,8 +14036,10 @@ listselector
 
 *******
 * Kirjoitetaan näkyvät tiedoston nimet ikkunaan
+* Writes the filenames into the box
 *******
 
+* 
 shownames2
 	moveq	#1,d4
 	bra.b	shn
@@ -14032,18 +14216,14 @@ shn
 	move.b	#$c0,d6		* minterm: a->d
 	move.l	_GFXBase(a5),a6
 	jmp	_LVOClipBlit(a6)
-;	lore	GFX,ClipBlit
-;	rts
-
-
-
 
 * d0 = alkurivi
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien määrä
 
 .donames
-	lea	listheader(a5),a4	
+	bsr  obtainModuleList
+	lea	moduleListHeader(a5),a4	
 	subq	#1,d0
 	bmi.b	.baa
 .luuppo
@@ -14070,7 +14250,8 @@ shn
 
 	moveq	#0,d7
 
-	cmp.b	#'÷',(a1)
+
+	cmp.b	#'÷',(a1)		* list divider magic marker check?
 	bne.b	.nodi
 	addq	#1,a1
 	st	d7
@@ -14104,6 +14285,7 @@ shn
 
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.fu
+	* Random play mode magic check: Add a marker to the end to indicate module has been played?
 	tst.b	l_rplay(a3)
 	beq.b	.fu
 	move.b	#"®",-1(a2)
@@ -14128,7 +14310,10 @@ shn
 
 	lea	30(sp),sp
 	dbf	d5,.looppo
-.lop	rts
+.lop	
+	
+	bsr 	releaseModuleList
+	rts
 	
 
 .unmark
@@ -14199,7 +14384,7 @@ delete
 elete
 
 	clr.b	movenode(a5)
-	moveq	#-1,d0
+	moveq	#PLAYING_MODULE_NONE,d0
 	move	d0,chosenmodule2(a5)
 	st	hippoonbox(a5)
 	bsr.w	clear_random
@@ -14215,12 +14400,12 @@ elete
 
 	subq	#1,playingmodule(a5)
 	bpl.b	.huh
-.sama	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+.sama	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 
 .huh	tst	modamount(a5)
 	beq.w	.erer
 
-	lea	listheader(a5),a4
+	lea	moduleListHeader(a5),a4
 
 .luuppo	TSTNODE	a4,a3
 	beq.w	.erer
@@ -14287,7 +14472,7 @@ elete
 	subq	#1,modamount(a5)
 	bpl.b	.ak
 	bne.b	.ak
-	move	#-1,chosenmodule(a5)
+	move	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	bra.b	.ee
 .ak	
 	move	modamount(a5),d0
@@ -14512,14 +14697,13 @@ putinfo2
 	moveq	#26+WINY,d1
 	bra.b	bipb2	
 
-inforivit_load
+infolines_loadToChipMemory
 	lea	.1(pc),a0
 	bra.b	putinfo
 .1	dc.b	"Loading to chip memory...",0
  even
 
-inforivit_load2
-inforivit_load3
+infolines_loadToPublicMemory
 	lea	.1(pc),a0
 	bra.b	putinfo
 .1	dc.b	"Loading to public memory...",0
@@ -14809,7 +14993,7 @@ lootaan_aika
 	move	#$4e,rawkeyinput(a5)	* next song
 .nosongs
 
-	move.b	ownsignal7(a5),d1
+	move.b	rawKeySignal(a5),d1
 	bsr.w	signalit
 	pop	d0
 .ok0
@@ -14830,7 +15014,7 @@ lootaan_aika
 
 	st	do_early(a5)
 	move	#$28,rawkeyinput(a5)
-	move.b	ownsignal7(a5),d1
+	move.b	rawKeySignal(a5),d1
 	pushm	all
 	bsr.w	signalit
 	popm	all
@@ -15216,7 +15400,7 @@ markline
 	cmp	chosenmodule(a5),d1
 	beq.b	.oo
 
-	cmp	#PLAYING_MODULE_NONE,chosenmodule(a5)
+	cmp	#PLAYING_MODULE_REMOVED,chosenmodule(a5)
 	beq.b	.oo
 	pushm	d1/d2
 	bsr.b	unmarkit
@@ -15269,7 +15453,8 @@ markit
 	tst.b	win(a5)
 	beq.b	.outside
 
-	lea	listheader(a5),a4	
+	bsr	 obtainModuleList
+	lea	moduleListHeader(a5),a4	
 	move	chosenmodule(a5),d0	* etsitään kohta
 .luuppo
 	TSTNODE	a4,a3
@@ -15277,6 +15462,7 @@ markit
 	move.l	a3,a4
 	dbf	d0,.luuppo
 
+	bsr	 releaseModuleList
 
 	move	d5,d1
 	lsl	#3,d1		* mulu #8,d1
@@ -15343,9 +15529,10 @@ loadkeyfile
 
 
 *******************************************************************************
+*
 * Module info
+*
 *******
-
 
 sulje_foo
 	cmp	#33,info_prosessi(a5)
@@ -15378,8 +15565,6 @@ sulje_info
 
 	
 start_info
-	
-
 	tst.b	oli_infoa(a5)
 	bne.b	.j
 	tst	info_prosessi(a5)
@@ -15398,21 +15583,16 @@ start_info
 .x	clr.b	oli_infoa(a5)
 	rts
 
-
+infoWindowButtonAction
 rbutton10b
 	tst	info_prosessi(a5)
 	bne.b	sulje_info
 
-;	bra	infocode
-
-
 	movem.l	d0-a6,-(sp)
 	move.l	_DosBase(a5),a6
-	;pushpea	infoprocname(pc),d1
 	move.l	#infoprocname,d1
 	move.l	priority(a5),d2
 
-;	pushpea	info_segment(pc),d3
 	move.l	#info_segment,d3
 	lsr.l	#2,d3
 	move.l	#4000,d4
@@ -15423,7 +15603,6 @@ rbutton10b
 .n	movem.l	(sp)+,d0-a6
 .x	rts
 
-
 info_code
 	lea	var_b,a5
 	addq	#1,info_prosessi(a5)
@@ -15431,7 +15610,6 @@ info_code
 	sub.l	a1,a1
 	lore	Exec,FindTask
 	move.l	d0,info_task(a5)
-
 
 	moveq	#-1,d0
 	lob	AllocSignal
@@ -15452,19 +15630,13 @@ info_code
 	rts
 
 
-
-
-
 ************* Module info
-
 infocode
-
 
 *** Avataan ikkuna
 * 39 kirjainta mahtuu laatikkoon
 * Linefeedi ILF joka myöhemmin korvataan 10:llä. Sitävarten että voidaan
 * karsia ylimääräset linefeedit pois.
-
 
 ILF	=	$83
 ILF2	=	$03
@@ -15478,8 +15650,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	bne.b	.joo
 	bsr.w	getscreeninfo
 .joo
-
-
 
 .urk	lea	swinstruc,a0
 	move	nw_Height(a0),oldswinsiz(a5)
@@ -15539,7 +15709,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	swindowbase(a5),a0
 	bsr.w	setscrtitle
 
-
 	tst.b	uusikick(a5)		* uusi kick?
 	beq.b	.vanaha
 
@@ -15553,8 +15722,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	lsl	#3,d4
 	add	d4,d3
 	bsr.w	drawtexture
-
-
 
 .vanaha
 
@@ -15572,11 +15739,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	srastport(a5),a1
 	bsr.w	sliderlaatikko
 
-
 .nel
-
 .reprint
-
 
 	moveq	#29,plx1
 	move	#351-3,plx2
@@ -15592,7 +15756,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	add	windowtop(a5),ply2
 	move.l	srastport(a5),a1
 
-
 	lea	laatikko2(pc),a0
 	tst.b	infolag(a5)
 	bne.b	.a
@@ -15601,8 +15764,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	lea	laatikko1(pc),a0
 .a	jsr	(a0)
-
-
 
 	pushm	all
 	lea	gAD1,a0
@@ -15615,9 +15776,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	moveq	#0,d3
 	moveq	#0,d4
 	lore	Intui,ModifyProp
-
 	popm	all
-
 
 	moveq	#31-2+2,d0		* tyhjennetään
 	moveq	#15-1,d1
@@ -15641,16 +15800,16 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	clr.b	infolag(a5)
 	tst.b	d0
 	beq.b	.modinf
+	* Display generic about text
 
 ******** About- aiheet
 	move	#39,info_prosessi(a5)		* info-lippu
-;	lea	about_t(pc),a0
-	printt Ugh!
 	lea	about_t,a0
 	move.l	a0,infotaz(a5)
-	tst.b	keycheck(a5)
-	bne.w	.nox
-
+	* Displays some statistics with correct keyfile.
+	* tst.b	keycheck(a5)
+	* bne.w	.nox
+	
 	lea	(about_t1-about_t)(a0),a4
 	lea	(about_tt-about_t1)(a4),a0
 	lea	-200(sp),sp
@@ -15674,22 +15833,22 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.b	#'­',-1(a4)
 
 	lea	200(sp),sp
-
 	bra.w	.nox
 
-
-
 .modinf
-
-
+	* Display module specific information
 ******** Kehitellään infoa moduulista
 
 	clr	sfirstname(a5)
 	clr	sfirstname2(a5)
 	clr.l	infotaz(a5)
 
+	bsr	obtainModuleData
+
 	tst	playingmodule(a5)
 	bpl.b	.bah
+
+	* Nothing is being played. Display "No info available".
 
 	move	#35,info_prosessi(a5)		* lipbub
 
@@ -15701,11 +15860,12 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	infotaz(a5),a1
 .faz	move.b	(a0)+,(a1)+
 	bne.b	.faz
+
 	bra.w	.selvis
 
 .bah
-
-
+	* Something is being played.
+	* Check supported types.
 
 ******************* THX
 
@@ -15907,7 +16067,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
  even
-
 
 .huhe	dc.b	ILF,ILF2
 	dc.b	"          No info available.",0
@@ -16393,12 +16552,10 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	bsr.w	getmem
 	move.l	d0,infotaz(a5)
 	rts
-	
-
-
 
 .selvis
-
+** If we made this far the module information text has been built
+	bsr	releaseModuleData
 
 **  Karsitaan kummat merkit pois
 	move.l	infotaz(a5),a2
@@ -17025,13 +17182,14 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	
 
 
+	bsr		obtainModuleData
 	move.l	moduleaddress(a5),a1	* onko chipissä?
 	lore	Exec,TypeOfMem
+	bsr		releaseModuleData
 	btst	#MEMB_CHIP,d0
 	beq.w	.msgloop
 
-
-
+	bsr		obtainModuleData
 	move.l	moduleaddress(a5),a1
 
 	lea	952(a1),a0		* tutkitaan patternien määrä
@@ -17047,7 +17205,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	mulu	#1024,d1		* Eka sample patternien jälkeen
 	lea	1084(a1),a0
 	add.l	d1,a0
-
 
 	move	d7,d0
 	moveq	#0,d1
@@ -17069,28 +17226,25 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	dbf	d0,.l
 
 	tst	d1
-	beq.w	.msgloop
+	bne	.sampleLenOk
+	;* Something wrong with the data, go back to loop
+	bsr	releaseModuleData
+	bra	.msgloop
 
-
-
-
+.sampleLenOk
 
 * a0 = sampleaddr
 * d1 = samplelen
 * d2 = repeat point
 * d3 = repeat len
 
-
 ;	push	d5
 
 *** Onko sample fastissa?
 ;	bsr	freeinfosample
-
 ;	move.l	d1,d6
-
 ;	sub.l	a0,d2
 	
-
 ; ei taida toimia koska lev4 interruptit sotkevat
 
 ;	lea	foosample,a1
@@ -17139,12 +17293,12 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	tst.b	playing(a5)
 	beq.b	.s1
 	pushm	all
+	* Pause playback first
 	bsr.w	stopcont		* pausetaan
 	popm	all
 .s1
 
-
-
+	* Set up audio registers for playback
 
 	lea	$dff096,a3
 
@@ -17166,6 +17320,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move	d1,$c4-$96(a3)
 	move	d1,$d4-$96(a3)
 
+** Mouse coordinate defines the sample period
 ** perioidi mousen x-koordinaatista
 	sub	#31,d5			* d5 = 0-315
 	mulu	#36,d5
@@ -17180,7 +17335,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	lore	GFX,WaitTOF
 	move	#$800f,(a3)
-	lob	WaitTOF
+	lob		WaitTOF
 
 	move.l	d2,$a0-$96(a3)
 	move.l	d2,$b0-$96(a3)
@@ -17191,6 +17346,9 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move	d3,$c4-$96(a3)
 	move	d3,$d4-$96(a3)
 
+	* Sample is now playing
+	bsr		releaseModuleData
+
 	bra.w	.msgloop
 
 .periods
@@ -17198,7 +17356,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	dc	428,404,381,360,339,320,302,285,269,254,240,226
 	dc	214,202,190,180,170,160,151,143,135,127,120,113
 
-
+* NOT USED
 freeinfosample
 	tst.l	infosample(a5)
 	beq.b	.x
@@ -17214,13 +17372,14 @@ freeinfosample
 * About
 **
 
-
+aboutButtonAction
 rbutton10
 	movem.l	d0-a6,-(sp)
 
 * lasketaan dividereitten määrä
+	bsr		obtainModuleList
 	moveq	#0,d5
-	lea	listheader(a5),a4
+	lea	moduleListHeader(a5),a4
 .l	TSTNODE	a4,a3
 	beq.b	.e
 	move.l	a3,a4
@@ -17229,6 +17388,7 @@ rbutton10
 	addq	#1,d5
 	bra.b	.l
 .e	move	d5,divideramount(a5)
+	bsr		releaseModuleList
 
 	st	infolag(a5)
 
@@ -17248,11 +17408,6 @@ rbutton10
 
 .x	movem.l	(sp)+,d0-a6
 	rts
-
-
-
-
-
 
 
 *******************************************************************************
@@ -17304,9 +17459,9 @@ rawrequest
 	beq.b	.w
 	move.l	d7,a3
 	lea	inforeqtags0(pc),a0
-	bsr.w	pon1
+	bsr.w	setMainWindowWaitPointer
 	lob	rtEZRequestA
-	bsr.w	poff1
+	bsr.w	clearMainWindowWaitPointer
 	move.l	d0,-(sp)
 	move.l	d7,a1
 	lob	rtFreeRequest
@@ -17600,15 +17755,17 @@ rem_ciaint
 	rts
 
 
-
-*** VBlank keskeytys
+******************************************************************************
+*
+* Vertical blanking interrupt
+*
 
 intserver
 	dc.l	0,0
 	dc.b	2
-	dc.b	0	* prioriteetti
+	dc.b	0	* priority
 	dc.l	.intname
-	dc.l	var_b		* is_Data
+	dc.l	var_b		* is_Data passed in a1
 	dc.l	.vbinterrupt
 
 
@@ -17616,33 +17773,36 @@ intserver
  even
 
 .vbinterrupt
-;	movem.l	d2-d7/a0/a2-a4/a6,-(sp)
 	pushm	d2-d7/a2-a6
 	move.l	a1,a5			* a1 = is_Data = var_b
 
+	* Are we playing something?
 	tst.b	playing(a5)
-	beq.b	.huh
-;	beq	.eee
+	beq.b	.notPlaying
 
+	* Yes.
+	* Let's call the CIA-replay routine if user has opted
+	* for VBlank timing.
 
-*** Kutsutaan soittorutinin cia-rutiinia jos ajastus on vblankilla
 	push	a5
+	* Check for VBlank timing flag
 	tst.b	vbtimeruse(a5)
 	beq.b	.novb
+	* Play some music!
 	move.l	playerbase(a5),a0
-	jsr	p_ciaroutine(a0)
+	jsr		p_ciaroutine(a0)
 	move.l	(sp),a5
 .novb
-*** Kutsutaan soittorutinin vb-rutiinia
-
+	* Whatever happened above, let's call the VBlank-replay routine.
 	move.l	playerbase(a5),a0
 	jsr	p_vblankroutine(a0)
 	pop	a5
 
+	* Call scope interrupt code.
+	* This will keep track of sample playback positions for drawing.
 	bsr.w	scopeinterrupt
 
-
-*** Asetetaan filtteri
+	* Set filter 
 	move.b	filterstatus(a5),d0
 	bne.b	.oop
 	btst	#1,$bfe001
@@ -17654,83 +17814,91 @@ intserver
 	bra.b	.uup
 .eep	bclr	#1,$bfe001
 .uup
-		
-
-
-
+	
+	* Check if song has ended
 	tst.b	songover(a5)
 	beq.b	.huh
-.umb	clr.b	songover(a5)
-* Jos kappale on soinut läpi, lähetetään signaali Wait()ille.
-	tst	loading(a5)	* ei songenddiä jos lataus kesken
-	bne.b	.huh
+.songover	
+	clr.b	songover(a5)
+
+	* Trigger signal for the main application loop indicating song has ended.
+	* If there is a loading operation going on, let's not signal.
+	tst	loading(a5)	
+	bne.b	.wasLoading
 	move.b	ownsignal1(a5),d1
 	bsr.w	signalit
-
 .huh
+.notPlaying
+.wasLoading
+	* Another are we playing check?
 	tst.b	playing(a5)
-	beq.b	.eee
+	beq.b	.notPlaying2
 
-
-	move	pos_nykyinen(a5),d0	* onko position muuttunut?
-	move	positionmuutos(a5),d1
+	* Yes, we still are. Let's check if the playing position has changed
+	* since the last check.
+	move	pos_nykyinen(a5),d0	  	* current position
+	move	positionmuutos(a5),d1	* last known position
 	cmp	d1,d0
 	beq.b	.eee
-	move	d0,positionmuutos(a5)
+	move	d0,positionmuutos(a5)	* was different, store new changed position
 
-	tst.b	kelattiintaakse(a5)	* taaksepäinkelauksesta ei vaikutusta
-	beq.b	.jeh
-	clr.b	kelattiintaakse(a5)
-	bra.b	.pee
-.jeh
-
-	sub	d1,d0
-	bmi.b	.umb
-.pee
+	tst.b	kelattiintaakse(a5)		* check if there was some rewinding going on
+	beq.b	.norewind
+	clr.b	kelattiintaakse(a5)		* there was, let's not check for songend based 
+									* on positions
+	bra.b	.rewind
+.norewind
+	* If the last known position is higher than the current position,
+	* we deduce that the song has actually ended and may have restarted
+	* from the beginning.
+	sub	d1,d0	
+	bmi.b	.songover
+.rewind
+	* Send a signal indicating that playing position has changed
 	move.b	ownsignal2(a5),d1
 	bsr.w	signalit
 .eee
+.notPlaying2
 
-
-* Soitto päällä: päivityspyyntö joka 10/50 sekuntti
-* Ei soittoa: joka 50/50 sekuntti.
-
-	moveq	#0,d0
+	* UI refresh signal
+	* When playing: every 1/2th of second
+	* When not: every second
+	
 	move	vertfreq(a5),d0
 	tst.b	playing(a5)
-	beq.b	.npl
-	divu	#3,d0
-.npl
+	beq.b	.notPlaying3
+	lsr     #1,d0				
+.notPlaying3
 
-
-;	moveq	#50,d0
-;	tst.b	playing(a5)
-;	beq.b	.npl
-;	moveq	#10,d0
-;.npl
-	addq	#1,ticktack(a5)		* signaaloidaan päivityspyyntö
+	* Count if enough VBlanks have passed and then signal
+	addq	#1,ticktack(a5)		
 	cmp	ticktack(a5),d0
 	bhi.b	.nope
 	clr	ticktack(a5)
-	move.b	ownsignal3(a5),d1
+	move.b	uiRefreshSignal(a5),d1
 	bsr.w	signalit
 .nope
 
-
+	* YET ANOTHER TEST!
 	tst.b	playing(a5)	
-	beq.w	.eirr
+	beq.w	.notPlaying4
 	tst.b	vbtimeruse(a5)
 	bne.b	.eir
+	* Yes we are still playing and actually using CIA-timers
+	* Check if user wants to fast forward.
 
 	move.l	playerbase(a5),a0	* Kelaus CIA-ajastimella
 	move	p_liput(a0),d0
+	* Check if the replayer supports forwarding using timer
 	btst	#pb_ciakelaus,d0
 	bne.b	.joog
+	* Check if the replayers forwarding by skipping patterns
 	btst	#pb_ciakelaus2,d0
 	beq.b	.eir
-
+	
 	cmp	#pt_prot,playertype(a5)		* ProTracker??
 	bne.b	.joog
+	* Yes it was protracker. Some special handling here.
 	lea	kplbase(a5),a0
 	move	k_timerhi(a0),d0
 	move.b	k_whichtimer(a0),d1
@@ -17744,7 +17912,8 @@ intserver
 	lea	$200(a0),a0
 .aap	bra.b	.aa
 
-
+	* Timer based forward.
+	* Set a new timer delay into the CIA timer
 .joog
 	move	timerhi(a5),d0
 	tst.b	kelausnappi(a5)		* onko painettu kelausnappia?
@@ -17762,16 +17931,17 @@ intserver
 	ror	#8,d0
 	move.b	d0,$100(a0)
 .eir
+	* CIA timer based forwarding setup done.
 
+	* Next up, update HippoPort contents for any external users.
 
-
-*** Sysätään kamaa porttiin
 	move.b	mainvolume+1(a5),hippoport+hip_mainvolume(a5)
 	move.b	playertype+1(a5),hippoport+hip_playertype(a5)
 
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.por
 
+	* PS3M data update
 	move.l	ps3m_buff1(a5),a0
 	move.l	(a0),hippoport+hip_ps3mleft(a5)
 	move.l	ps3m_buff2(a5),a0
@@ -17782,24 +17952,18 @@ intserver
 	move.l	d0,hippoport+hip_ps3moffs(a5)
 	move.l	ps3m_buffSizeMask(a5),a0
 	move.l	(a0),hippoport+hip_ps3mmaxoffs(a5)
-
 .por
-
 .nop
-
-.eirr
+.notPlaying4
+	* Final piece of data
 	move.b	playing(a5),hippoport+hip_play(a5)
 
-;	popm	d1-a6
-;	movem.l	(sp)+,d2-d7/a0/a2-a4
 	popm	d2-d7/a2-a6
 	moveq	#0,d0
 	rts
 
 
-
-
-* d1 = päätaskille lähetettävä signaali
+* d1 = signal number sent to the main task
 signalit
 	move.l	owntask+var_b,a1
 	moveq	#0,d0
@@ -17808,7 +17972,7 @@ signalit
 	jmp	_LVOSignal(a6)
 
 
-dummyserver
+dummyserver_NOTUSED
 	dc.l	0,0
 	dc.b	2,0
 	dc.l	0
@@ -17816,64 +17980,73 @@ dummyserver
 	dc.l	0
 
 
+******************************************************************************
+*
+* CIA timer interrupt
+* Software interrupt
+*
+
 ciaserver
 	dc.l	0,0
 	dc.b	2
 	dc.b	0	* prioriteetti
-	dc.l	intname2
-	dc.l	softserver		* is_Data
+	dc.l	.intname2
+	dc.l	softserver		* is_Data passed in a1
 	dc.l	ciainterrupt
 
-intname2 dc.b	"HiP-CIA",0
+.intname2 dc.b	"HiP-CIA",0
  even
 
-;ciainterrupt			 * Potkaistaan SOFTINT liikkeelle.
-;	lob	Cause
-;dummyr	moveq	#0,d0
-;	rts
+* cdtv-compatible CIA interrupt driver
+* All this does is trigger the software interrupt so as not to disturb
+* level 5 stuff, such as serial transfers.
 
-
-* cdtv-yhteensopiva
-
-ciainterrupt			 * Potkaistaan SOFTINT liikkeelle.
+ciainterrupt	
 	push	a6
 ;	move.l	4.w,a6
-	move.l	exeksi(pc),a6
+	move.l	exeksi(pc),a6    * Probably faster compared to CHIP RAM access
 	lob	Cause
 	pop	a6
-dummyr	moveq	#0,d0
+	moveq	#0,d0
 	rts
-
 
 exeksi	dc.l	0
 
 softserver
 	dc.l	0,0
 	dc.b	2
-	dc.b	0	* prioriteetti
-	dc.l	0
-	dc.l	var_b		* is_Data
-	dc.l	softint
+	dc.b	0	* priority
+	dc.l	.softintname
+	dc.l	var_b		* is_Data passed in a1
+	dc.l	softint     * code entry point
+
+.softintname
+	dc.b "HiP-SoftInt",0
+ even
 
 softint	
+	* Do nothing if not playing
 	tst.b	playing(a1)
-	beq.b	.huh
+	beq.b	.exit
 	pushm	d2-d7/a0/a2-a4/a6
 	move.l	a1,a5
-	move.l	playerbase(a5),a0	* Kutsutaan CIA soittorutiinia
-					* jos se on ei-AHI rutiini tai
-					* AHI ei ole päällä
+	* Call the CIA replay routine if it's a non-AHI routine and AHI is not enabled
+	move.l	playerbase(a5),a0	
+	* AHI is active?
 	tst.b	ahi_use_nyt(a5)
-	beq.b	.eiahi
-	
+	beq.b	.noAHI
+	* AHI is active, check if player supports it.
 	move	p_liput(a0),d0
-;	btst	#pb_ahi,d0
-	and	#pf_ahi,d0
-	bne.b	.aa
-.eiahi
+	and		#pf_ahi,d0
+	bne.b	.yesAHI
+	* Player is not AHI player. Can play music here.
+.noAHI
+	* Play music!
 	jsr	p_play(a0)
-.aa	popm	d2-d7/a0/a2-a4/a6
-.huh	moveq	#0,d0
+.yesAHI
+	popm	d2-d7/a0/a2-a4/a6
+.exit	
+	moveq	#0,d0
 	rts
 
 
@@ -18180,7 +18353,7 @@ rexxmessage
 	rts
 .hide1	move	#$25,rawkeyinput(a5)
 .hide2
-	move.b	ownsignal7(a5),d1
+	move.b	rawKeySignal(a5),d1
 	bra.w	signalit
 
 
@@ -18372,7 +18545,7 @@ rexxmessage
 .getcfil
 	move	chosenmodule(a5),d0
 	bmi.b	.getcfil0
-	cmp	#PLAYING_MODULE_NONE,d0
+	cmp	#PLAYING_MODULE_REMOVED,d0
 	beq.b	.getcfil0
 	addq	#1,d0
 	bra.w	i2amsg
@@ -18414,7 +18587,7 @@ rexxmessage
 	move	playingmodule(a5),d0
 	bmi.b	.getc0
 	addq	#1,d0
-	cmp	#PLAYING_MODULE_NONE+1,d0
+	cmp	#PLAYING_MODULE_REMOVED+1,d0
 	bne.w	i2amsg
 .getc0	moveq	#0,d0
 	bra.w	i2amsg
@@ -18430,7 +18603,7 @@ rexxmessage
 .fullname
 	move	playingmodule(a5),d0
 	bmi.b	.curr1
-	cmp	#PLAYING_MODULE_NONE,d0
+	cmp	#PLAYING_MODULE_REMOVED,d0
 	bne.b	.curr2
 .curr1	lea	.empty(pc),a2
 	bra.w	str2msg	
@@ -18554,6 +18727,9 @@ quad_code
 	cmp.l	a1,a0
 	bne.b	.cl
 
+	* quadmode2 is copy of the quadmode which is user selected in prefs
+	
+	* TODO: what is this code doing?
 	move.b	quadmode(a5),d0
 	move.b	d0,d1
 	and	#$f,d1
@@ -18562,8 +18738,6 @@ quad_code
 	bpl.b	.e
 	addq.b	#1,d1
 .e	move.b	d1,quadmode2(a5)	* 0-9
-
-
 
 	moveq	#0,d0
 	move.b	quadmode2(a5),d0
@@ -18618,15 +18792,15 @@ quad_code
 .wo	move.l	#512,d0		* palkkitaulu
 	move.l	#MEMF_CLEAR,d1
 	bsr.w	getmem
-	move.l	d0,wotta(a5)
+	move.l	d0,scopeVerticalBarTable(a5)
 	beq.w	.memer
-	bsr.w	mwotta		* tehdään palkkitaulu
+	bsr.w	makeScopeVerticalBars		* tehdään palkkitaulu
 	bra.w	.cont
 
 
 .4	move.l	#64*256*2,d0	* volumetaulukko
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,mtab(a5)
 	beq.w	.memer
 	bsr.w	voltab2
@@ -18634,7 +18808,7 @@ quad_code
 
 .5	move.l	#64*256,d0	* volumetaulukko
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,mtab(a5)
 	beq.w	.memer
 	bsr.w	voltab3
@@ -18644,7 +18818,7 @@ quad_code
 
 .delt	move.l	#(256+32)*4,d0
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,deltab1(a5)
 	beq.b	.r
 	add.l	#256+32,d0
@@ -18658,12 +18832,12 @@ quad_code
 
 .6	move.l	#64*256,d0	* volumetaulukko
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,mtab(a5)
 	beq.w	.memer
 	bsr.w	voltab3
 	bsr.b	.delt
-	beq.b	.memer
+	beq.w	.memer
 	bra.w	.wo
 
 .cont
@@ -18690,7 +18864,7 @@ quad_code
 * Piirtoalueet
 	move.l	#320/8*72*2,d0
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	beq.b	.me
 	move.l	d0,buffer0(a5)
 	add.l	#320/8*2,d0		* yläälle 2 varariviä
@@ -18806,8 +18980,7 @@ quad_code
 	lore	Exec,SetTaskPri
 
 
-
-qloop
+scopeLoop
 	move.l	_GFXBase(a5),a6
 	lob	WaitTOF
 
@@ -18856,7 +19029,9 @@ qloop
 	move	playertype(a5),d6
 	bsr.b	.clear
 .noen	pushm	d6/d7
-	bsr.w	dung
+	jsr		obtainModuleData
+	bsr.w	drawScope
+	jsr 	releaseModuleData
 	popm	d6/d7
 	moveq	#-1,d7
 	bra.b	.m
@@ -18864,11 +19039,6 @@ qloop
 	tst.b	d7
 	beq.b	.m
 	moveq	#0,d7
-
-;	cmp	#pt_prot,playertype(a5)
-;	bne.b	.nm
-;	cmp.b	#6,quadmode2(a5)	* patternscope, jätetään näkyviin
-;	beq.b	.m
 
 .nm	bsr.b	.clear
 	jsr	printhippo2
@@ -18894,7 +19064,7 @@ qloop
 	move.l	userport3(a5),a0
 	lob	GetMsg
 	tst.l	d0
-	beq.w	qloop
+	beq.w	scopeLoop
 	move.l	d0,a1
 
 	move.l	im_Class(a1),d2		* luokka	
@@ -18905,7 +19075,7 @@ qloop
 	cmp	#MENUDOWN,d3
 	beq.b	.xq
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
-	bne.w	qloop
+	bne.w	scopeLoop
 
 .xq	clr.b	scopeflag(a5)
 	
@@ -18959,8 +19129,7 @@ qflush_messages
 .ex	rts
 
 
-
-***** Scopen oma keskeytys, päivittää protrackerin sampleinfoja
+*** Scope interrupt code, keeps track the play positions of protracker replayer samples
 scopeinterrupt				* a5 = var_b
 	cmp	#pt_prot,playertype(a5)
 	bne.w	.n
@@ -19153,14 +19322,14 @@ voltab3
 
 
 ***************** Piirretään
-dung
+drawScope
 
 	move.l	_GFXBase(a5),a6
 	lob	OwnBlitter
 	lob	WaitBlit
 
 	lea	$dff058,a0
-	move.l	draw2(a5),$54-$58(a0)	* tyhjennetään piirtoalue
+	move.l	draw2(a5),$54-$58(a0)	* clear draw area
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
 	move	#64*64+20,(a0)
@@ -19252,6 +19421,7 @@ dung
 	bsr.b	mirrorfill
 .cont
 
+	* double buffer
 	move.l	draw1(a5),d0
 	move.l	draw2(a5),d1
 	move.l	d1,draw1(a5)
@@ -20644,7 +20814,7 @@ dlever
 	bpl.b	.ojdo
 	moveq	#0,d0
 .ojdo
-	move.l	wotta(a5),a1
+	move.l	scopeVerticalBarTable(a5),a1
 	movem.l	(a1,d0),d0/d1
 
 	pushm	d2/d3
@@ -20673,8 +20843,8 @@ dlever
 
 ****** taulukkoon 1-64 pix leveitä palkkeja
 
-mwotta	
-	move.l	wotta(a5),a0
+makeScopeVerticalBars	
+	move.l	scopeVerticalBarTable(a5),a0
 	moveq	#64-1,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -20755,16 +20925,22 @@ samples0
 *******************************************************************************
 
 *******
+* Module loading
 * Moduulin lataus
-*******
-
+*
+* in:
+*  a0 = module file name with path
+*  d0 = ~0: Use double buffering
+*
 
 loadmodule
 	st	loading(a5)
-	move.l	(a5),tempexec(a5)
 
 	move.b	d0,d7
 	beq.w	.nodbf
+
+	* Load with double buffering.
+	* Module being played is preserved while new one is loaded.
 
 	move.l	a0,modulefilename(a5)
 
@@ -20777,20 +20953,18 @@ loadmodule
 	move.b	lod_tfmx(a5),(a2)
 
 ;	move.l	modulefilename(a5),a0
-	moveq	#MEMF_CHIP,d0
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	lea	moduleaddress2(a5),a1
 	lea	modulelength(a5),a2
 	moveq	#0,d1			* kommentti talteen
 	bsr.w	loadfile
 	move.l	d0,d7
 
-
 	clr.b	loading(a5)		* lataus loppu
 
 	clr	songnumber(a5)
 	clr	pos_maksimi(a5)
 	clr	pos_nykyinen(a5)
-
 
 	lea	20(sp),a2
 	move.l	modulelength(a5),(a2)+
@@ -20808,21 +20982,18 @@ loadmodule
 
 	jsr	fadevolumedown
 	move	d0,-(sp)
+	lore    Exec,Disable
 	bsr.w	halt			* Vapautetaan se jos on
-
 	move.l	modulefilename(a5),a0
-
 	move.l	playerbase(a5),a0
-	jsr	p_end(a0)
+	jsr		p_end(a0)
+	lore    Exec,Enable
 
 	move.l	modulefilename(a5),a0
-
-
 	jsr	freemodule	
 	move	(sp)+,mainvolume(a5)
 
 	pop	d7
-
 
 	lea	20(sp),a2
 ;	move.l	(a2)+,moduleaddress(a5)
@@ -20857,6 +21028,8 @@ loadmodule
 	move.l	modulefilename(a5),a0
 
 .nodbf
+	** Normal loading
+
 	jsr	freemodule		* Varmistetaan
 
 	clr	songnumber(a5)
@@ -20865,7 +21038,7 @@ loadmodule
 	move.l	a0,modulefilename(a5)
 
 ;	move.l	modulefilename(a5),a0
-	moveq	#MEMF_CHIP,d0
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	lea	moduleaddress(a5),a1
 	lea	modulelength(a5),a2
 	moveq	#0,d1			* kommentti talteen
@@ -20908,7 +21081,7 @@ loadmodule
 
 	jsr	freemodule
 	jsr	rbutton9		* lista tyhjäks
-	move	#-1,playingmodule(a5)
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 
 	move.l	sp,a0			* ohjelman nimi
 	moveq	#-1,d4			* lippu
@@ -20943,7 +21116,7 @@ loadmodule
 	moveq	#50,d1
 	lore	Dos,Delay
 
-	move	#-1,playingmodule(a5)
+	move	#PLAYING_MODULE_NONE,playingmodule(a5)
 	moveq	#1,d7			* seuraava piisi!
 	jsr	soitamodi
 	addq	#4,sp			* ei samaan paluuosoitteeseen!
@@ -21101,7 +21274,7 @@ lod_extract	=	-18
 loadfile
 	movem.l	d1-a6,-(sp)
 
-	jsr	pon1
+	jsr	setMainWindowWaitPointer
 
 	lea	lod_a(a5),a3
 	lea	lod_b(a5),a4
@@ -21458,7 +21631,7 @@ loadfile
 
 
 .nope
-
+	* Ordinary file load below, archive extraction above.
 
 	move.l	_DosBase(a5),a6
 	move.l	lod_filename(a5),d1
@@ -21540,9 +21713,6 @@ loadfile
 
 .nolha
 
-	
-
-
 ** Jos havaitaan file sampleks, ei ladata enempää
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
@@ -21552,10 +21722,6 @@ loadfile
 	bra.w	.exit
 
 .nosa	clr.b	sampleformat(a5)
-
-
-
-
 
 	lea	probebuffer(a5),a0	* Kannattaako ladata fastiin??
 	bsr.w	.checkm
@@ -21772,7 +21938,7 @@ loadfile
 	cmp.l	#"PP20",probebuffer(a5)
 	bne.b	.wasnt_pp
 
-	bsr.w	inforivit_load
+	bsr.w	infolines_loadToChipMemory
 	bsr.w	inforivit_ppload
 
 	bsr.w	get_pp
@@ -21794,7 +21960,7 @@ loadfile
 	cmp.l	#"IMP!",probebuffer(a5)
 	bne.b	.wasnt_fimp
 
-	bsr.w	inforivit_load
+	bsr.w	infolines_loadToChipMemory
 	bsr.w	inforivit_fimpload
 
 	move.l	lod_length(a5),d4
@@ -22028,16 +22194,13 @@ loadfile
 ;	bsr	freemodule
 	bra.b	.noko
 .okk
+	* Store results
 	move.l	lod_start(a5),a0
 	move.l	lod_address(a5),(a0)
 	move.l	lod_len(a5),a0
 	move.l	lod_length(a5),(a0)
-
-
-
 .noko
-
-	jsr	poff1
+	jsr	clearMainWindowWaitPointer
 
 	move	lod_error(a5),d0
 	ext.l	d0
@@ -22071,12 +22234,12 @@ loadfile
         cmp.b   #-1,d0
         beq.b   .nofast
 
-.publl  moveq   #MEMF_PUBLIC,d0
+.publl  move.l   #MEMF_PUBLIC!MEMF_CLEAR,d0
 
 .osd    move.l  d0,lod_memtype(a5)
 .nofast rts
 
-.nofas	moveq	#MEMF_CHIP,d0
+.nofas	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	bra.b	.osd
 
 
@@ -22143,13 +22306,11 @@ loadfile
 	blo.w	.publl
 	rts
 
-
-
-.infor	moveq	#MEMF_PUBLIC,d0
-	cmp.l	lod_memtype(a5),d0
-	beq.w	inforivit_load2
-	bra.w	inforivit_load
-
+.infor	
+	move.l	lod_memtype(a5),d0
+	btst	#MEMB_PUBLIC,d0
+	bne.w	infolines_loadToPublicMemory
+	bra.w	infolines_loadToChipMemory
 
 .nofile_err
 	move	#lod_notafile,lod_error(a5)
@@ -22573,11 +22734,11 @@ tutki_moduuli
 	move.l	modulelength(a5),d7
 
 
-	tst.b	keyfile+49(a5)	* datan väliltä 38-50 pitää olla nollia
-	beq.b	.zz
-	move.l	(a5),a2
-	addq.l	#1,IVSOFTINT+IV_CODE(a2)
-.zz
+;	tst.b	keyfile+49(a5)	* datan väliltä 38-50 pitää olla nollia
+;	beq.b	.zz
+;	move.l	(a5),a2
+;	addq.l	#1,IVSOFTINT+IV_CODE(a2)
+;.zz
 
 	tst.b	ahi_use(a5)
 	bne.b	.ohi
@@ -24414,12 +24575,11 @@ whag	tst.b	win(a5)
 	bsr.w	sulje_quad2
 .c
 
-	tst.l	keyfile+40(a5)	* datan väliltä 38-50 pitää olla nollia
-	beq.b	.zz
-	move.l	tempexec(a5),a1
-	addq.l	#1,IVVERTB+IV_DATA(a1)
-;	jsr	flash
-.zz
+;	tst.l	keyfile+40(a5)	* datan väliltä 38-50 pitää olla nollia
+;	beq.b	.zz
+;	move.l	tempexec(a5),a1
+;	addq.l	#1,IVVERTB+IV_DATA(a1)
+;.zz
 
 
 	cmp	#pt_prot,playertype(a5)
@@ -24615,7 +24775,7 @@ createport
 	cmp.l	a1,a0
 	bne.b	.clr
 	move.l	owntask(a5),MP_SIGTASK(a2)
-	move.b	ownsignal5(a5),MP_SIGBIT(a2)
+	move.b	audioPortSignal(a5),MP_SIGBIT(a2)
 	move.b	#NT_MSGPORT,LN_TYPE(a2)
 	clr.l	LN_NAME(a2)
 	move.b	#PA_SIGNAL,MP_FLAGS(a2)
@@ -29198,15 +29358,13 @@ p_sample
 *******************************************************************************
 * Playereitä
 
-
 		incdir
+* Protracker code
 kplayer		incbin	kpl
 		;incdir	asm:player/pl/
 
-
+* FImp decruncher code
 fimp_decr	incbin	fimp_dec.bin
-
-
 
 xpkname		dc.b	"xpkmaster.library",0
 ppname		dc.b	"powerpacker.library",0
@@ -29219,10 +29377,14 @@ xfdname		dc.b	"xfdmaster.library",0
 
 	section	plrs,data
 
+*******************************************************************************
+*
+* UI structures
+* - Font definitions
+* - Window structures
+* - Gadgets
+*
 
-*******
-* Fontti, ikkuna ja gadgetit
-*******
 text_attr
 	dc.l	topaz		* ta_Name
 	dc	8		* ta_YSize
@@ -29233,9 +29395,7 @@ topaz	dc.b	"topaz.font",0
  even
 
 
-
-
-* pää-ikkuna
+* Main window
 winstruc
 	dc	360	;vas.yläk.x-koord.
 	dc	23	;---""--- y-koord
@@ -29262,16 +29422,13 @@ idcmpmw	dc.l	idcmpflags
 	dc.l	WA_Zoom,windowpos2+var_b
 	dc.l	TAG_END
 
-
-
+* Main window gadgets
 gadgets
 	incdir
-;	include	gadgets/gadgets16_new2.s
 	include	gadgets/gadgets16_new3.s
 
 
-
-* prefs-ikkuna
+* Prefs-window
 winstruc2
 	dc	0,0
 prefssiz
@@ -29299,7 +29456,7 @@ wreg2
 
  even
 
-* quadrascope-ikkuna
+* Scope window
 winstruc3
 	dc	259
 	dc	157
@@ -29326,8 +29483,7 @@ wreg3
  endif
  even
 
-
-* prefs selector -ikkuna
+* Pop up selector window used in prefs
 winlistsel
 	dc	0,0	* paikka 
 winlistsiz
@@ -29346,22 +29502,18 @@ winlistsiz
 	dc	WBENCHSCREEN
 	dc.l	enw_tags
 
-
+* Prefs windows gadgets
 gadgets2	include gadgets/prefs_main2.s
 sivu0		include	gadgets/prefs_sivu0.s
 sivu1		include	gadgets/prefs_sivu1.s
 sivu2		include	gadgets/prefs_sivu2.s
-
- 
 sivu3		include	gadgets/prefs_sivu3.s
 sivu4		include	gadgets/prefs_sivu4.s
 sivu5		include	gadgets/prefs_sivu5.s
-
 sivu6		include	gadgets/prefs_sivu6.s
 
 
 *** Samplename ikkuna
-
 swinstruc
 	dc	0	;vas.yläk.x-koord.
 	dc	0	;---""--- y-koord
@@ -29445,8 +29597,7 @@ slim2b	dc	%1000000000000000
 slim3b	dc	%0000000000000000
 
 
-** PC -> Amiga taulukko, jonkinlainen
-
+** PC -> Amiga somekinda text conversion table
 asciitable
 	DC.B	$00,$01,$02,$03,$04,$05,$06,$07
 	DC.B	$08,$09,$0A,$0B,$0C,$0D,$0E,$0F
@@ -29481,14 +29632,10 @@ asciitable
 	DC.B	$3D,$B1,$3E,$3C,$66,$4A,$F7,$3D
 	DC.B	$B0,$B7,$B7,$56,$6E,$B2,$B7,$20
 
-
-
-
 	section	mini,data_c
 
 hippohead	incbin	gfx/hip.raw
 tickdata	dc	$001c,$0030,$0060,$70c0,$3980,$1f00,$0e00
-
 
 * 16x4 pixeliä
 
@@ -29519,7 +29666,6 @@ korvadata2
 	dc.b	%01001010,%00000000
 	dc.b	%01100101,%00000000
 	dc.b	%00000010,%00000000
-
 
 
 *** Slider2im
@@ -29659,7 +29805,10 @@ slim2	ds	410*2
 
 	section	udnm,bss_p
 
+* Global variables
 var_b		ds.b	size_var
+
+* Copy of Protracker module header data for the info window
 ptheader	ds.b	950
 
 

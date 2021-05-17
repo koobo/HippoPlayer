@@ -8,13 +8,6 @@ Tools used in development:
   * fimp file compressor, available here: http://aminet.net/util/pack/imploder-4.0.lzh
   * Gadget's Editor by Stefano Crimì (included without permission)
 
-## News
-
-  * 21.9.2019: Included a compiled binary built with Asm-Pro v1.17 in FS-UAE, _HiP-test_.  Changes:
-    * Removed the pop up requested when loading TFMX files.
-    * Play list max size changed from about 16000 to about 32000 files.
-    * Random play should work corretly with over 8000 files, previously it didn't.
-
 # Files and directories
 
 * puu016.s: The main very small and clearly structured source file 
@@ -50,5 +43,4 @@ and compress it with fimp, then re-create the group file.
 There is a checksum macro _check_ in the main source file which is called at certain points. 
 This checks if the application strings have been altered, making the app exit if
 the check fails. 
-There is a CRC checksum check in the file _Hippo_PS3M.s_ which does the same as the simpler check mentioned above. It will jump into a busy loop and display 
-colors on screen if the check fails.
+There is a CRC checksum check in the file _Hippo_PS3M.s_ which does the same as the simpler check mentioned above. It will jump into a busy loop and display colors on screen if the check fails.
