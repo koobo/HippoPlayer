@@ -4,7 +4,9 @@
 *******************************************************************************
 * Aloitettu 5.2.-94
 
-
+* Thing to test:
+* - load and save large programs
+* - load large: play, eject, out of memory, hang
 
 ver	macro
 ;	dc.b	"v2.30 (5.8.1996)"
@@ -43,17 +45,17 @@ ANNOY	= 0 * 1: Unregistered version tekstej‰ ymp‰riins‰
 ; Negative value: 
 ; - playingmodule: there is no module being played 
 ; - chosenmodule: there is no module chosen in the list
-; Special value 0x7fff: 
+; Special value 0x7fffffff: 
 ; - playingmodule: there is a module being played, but it is not in the list (deleted or list cleared)
-; - chosenmodule: TODO
-PLAYING_MODULE_NONE 	= -1	 * needs to be negative
-PLAYING_MODULE_REMOVED	= $7fff	 * needs to be positive
-MAX_MODULES		= $7ffe 		 * almost double compared to old $3fff
-CHOSEN_MODULE_NONE = -1
+; - chosenmodule: TODO, what is it
+PLAYING_MODULE_NONE 	= -1	 	* needs to be negative
+PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
+MAX_MODULES		= $1ffff 		    * this should be enough!
+
 
 ; Random play related
 RANDOM_PLAY_TABLE_SIZE  = MAX_MODULES/8+1
-MAX_RANDOM_MASK 	= $7fff 	* output mask for the random generator
+MAX_RANDOM_MASK 	= $1ffff 	* output mask for the random generator
 	
 	
  ifne TARK
@@ -729,29 +731,28 @@ ticktack	rs	1	* vbcounteri
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
 
-modamount	rs	1	* modien m‰‰r‰
-divideramount	rs	1	* dividereitten m‰‰r‰ (info window)
-firstname	rs	1	* nimi ikkunan ekan nimen numero
-firstname2	rs	1	* 
+modamount		rs.l	1	* modien m‰‰r‰
+divideramount	rs.l	1	* dividereitten m‰‰r‰ (info window)
+firstname		rs.l	1	* nimi ikkunan ekan nimen numero
+firstname2		rs.l	1	* 
 
-
-markedline	rs	1	* merkitty rivi
+markedline	rs.l	1	* merkitty rivi
 					* Highlighted line inside the box, range is from 0
 					* to current boxsize
 
-playingmodule	rs	1	* index of the module that is being played
-chosenmodule	rs	1	* index of the chosen module in the list
+playingmodule	rs.l	1	* index of the module that is being played
+chosenmodule	rs.l	1	* index of the chosen module in the list
 
 groupmode	rs.b	1
 
 movenode	rs.b	1	* ~0: move p‰‰ll‰
 nodetomove	rs.l	1	* t‰t‰ nodea siirret‰‰n
 
-chosenmodule2	rs	1	* TODO: what is this
+chosenmodule2	rs.l	1	* TODO: what is this
 hippoonbox	rs.b	1	* ~0: shownames p‰ivitt‰‰ koko n‰ytˆn
 dontmark	rs.b	1	* ei merkata nime‰ listassa
 
-clickmodule	rs	1	* doubleklikattumodule
+clickmodule	rs.l	1	* doubleklikattumodule
 clicksecs	rs.l	1	* aika CurrentTime()lt‰ DoubleClick()ille
 clickmicros	rs.l	1
 
@@ -995,7 +996,6 @@ filename	rs.b	108		* tiedoston nimi (reqtools)
 filename2	rs.b	108		* Load/Save program-rutiineille
 tempdir		rs.b	200		* ReqToolsin hakemistopolku 
 probebuffer	rs.b	2048		* tiedoston tutkimispuskuri
-randomtable	rs.b	RANDOM_PLAY_TABLE_SIZE	* Taulukko satunnaissoittoon
 ptsonglist	rs.b	64		* Protrackerin songlisti
 xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkki‰)
 findpattern	rs.b	30		* find pattern
@@ -1016,6 +1016,8 @@ moduleListSemaphore 	rs.b 	SS_SIZE
 ARGVSLOTS	=	16		* max. parametrej‰
 sv_argvArray	rs.l	ARGVSLOTS	* parametrihommia
 sv_argvBuffer	rs.b	256		*
+
+randomtable	rs.b	RANDOM_PLAY_TABLE_SIZE	* Taulukko satunnaissoittoon
 
 kplbase	rs.b	k_sizeof		* KPlayerin muuttujat (ProTracker)
 
@@ -1506,7 +1508,7 @@ about_tt
  dc.b 0
 
 
-scrtit	dc.b	"HippoPlayer - Copyright © 1994-2000 K-P Koljonen",0
+scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -1519,7 +1521,7 @@ no_one	 dc.b	"   no-one",0
 
 about_t
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
- dc.b "≠≠≠  HippoPlayer v2.45  (10.1.2000) ≠≠≠",10,3
+ dc.b "≠≠≠  HippoPlayer v2.46 (?.?.2021) ≠≠≠",10,3
  dc.b "≠≠          by K-P Koljonen          ≠≠",10,3
  dc.b "≠≠≠       Hippopotamus Design       ≠≠≠",10,3
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
@@ -1535,19 +1537,20 @@ about_t1
  dc.b " as long as all the files are included",10,3
  dc.b "   unaltered. Not for commercial use",10,3
  dc.b " without a permission from the author.",10,3
- dc.b " Copyright © 1994-2000 by K-P Koljonen",10,3
- dc.b "           *** SHAREWARE ***",10,3
+ dc.b " Copyright © 1994-2021 by K-P Koljonen",10,3
+ dc.b "           *** FREEWARE ***",10,3
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
- dc.b "Snail mail: Kari-Pekka Koljonen",10,3
- dc.b "            Torikatu 31",10,3
- dc.b "            FIN-40900 S‰yn‰tsalo",10,3
- dc.b "            Finland",10,3
- dc.b 10,3
- dc.b "E-mail:     kpk@cc.tut.fi",10,3
- dc.b "            k-p@s2.org",10,3
- dc.b 10,3
- dc.b "WWW:        www.students.tut.fi/~kpk",10,3
- dc.b "IRC:        K-P",10,3,10,3
+ ;dc.b "Snail mail: Kari-Pekka Koljonen",10,3
+ ;dc.b "            Torikatu 31",10,3
+ ;dc.b "            FIN-40900 S‰yn‰tsalo",10,3
+ ;dc.b "            Finland",10,3
+ ;dc.b 10,3
+ ;dc.b "E-mail:     kpk@cc.tut.fi",10,3
+  dc.b "E-mail:     kpk@iki.fi",10,3
+ ;dc.b "            k-p@s2.org",10,3
+ ;dc.b 10,3
+ ;dc.b "WWW:        www.students.tut.fi/~kpk",10,3
+ ;dc.b "IRC:        K-P",10,3,10,3
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
  dc.b "    Hippopothamos the river-horse",10,3
  dc.b "    Hippopotamus  amphibius:   a  large",10,3
@@ -2089,7 +2092,7 @@ main
 	addq	#1,gg_TopEdge+juust0
 	addq	#1,gg_LeftEdge+slider4
 
-	move	#PLAYING_MODULE_NONE,chosenmodule2(a5)
+	move.l	#PLAYING_MODULE_NONE,chosenmodule2(a5)
 
 	bset	#1,$bfe001
 	sne	filterstore(a5)			* filtterin tila talteen
@@ -2575,15 +2578,15 @@ msgloop
 * T‰nne tullaan sillon, kun on painettu playt‰ eik‰ ollut modeja,
 * filereq-prosessin signaalista. Eli aletaan soittaa ekaa valittua modia.
 
-	tst	modamount(a5)		* Ei modeja edelleenk‰‰n
+	tst.l	modamount(a5)		* Ei modeja edelleenk‰‰n
 	beq.b	.nwww
 
 	movem.l	d0-a6,-(sp)
-	clr	firstname(a5)		* valitaan eka
-	clr	chosenmodule(a5)
-	tst	playingmodule(a5)
+	clr.l	firstname(a5)		* valitaan eka
+	clr.l	chosenmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.ee
-	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
+	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .ee	bsr.w	rbutton1
 	movem.l	(sp)+,d0-a6
 	
@@ -3997,7 +4000,7 @@ wrender
 
 
 
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.npl
 	bsr.w	inforivit_play
 
@@ -4996,7 +4999,7 @@ fadevolumedown
 
 	tst.b	fade(a5)
 	beq.b	.nop
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.nop
 	tst.b	playing(a5)
 	beq.b	.nop
@@ -5043,7 +5046,7 @@ fadevolumeup
 
 	tst.b	fade(a5)
 	beq.b	.nop
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.nop
 	tst.b	playing(a5)
 	beq.b	.nop
@@ -5470,9 +5473,9 @@ signalreceived
 	cmp.b	#pm_repeatmodule,playmode(a5) 	* Jatketaanko soittoa?
 	beq.w	.reet							* If module repeat on, just exit
 	
-	cmp	#1,modamount(a5) * Jos vain yksi modi,
+	cmp.l	#1,modamount(a5) * Jos vain yksi modi,
 	bne.b	.notone		* jatketaan soittoa keskeytyksett‰.
-	cmp	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Listassa yksi modi, joka on uusi.
+	cmp.l	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Listassa yksi modi, joka on uusi.
 	bne.b	.oon			* Soitetaan se.
 	moveq	#0,d7			* ei lis‰t‰ eik‰ v‰hennet‰
 							* no stepping in the list
@@ -5496,7 +5499,7 @@ signalreceived
 
 .notone
 
-	tst	playingmodule(a5)	* soitettiinko edes mit‰‰n
+	tst.l	playingmodule(a5)	* soitettiinko edes mit‰‰n
 	bmi.w	.err
 
 	cmp.b	#pm_module,playmode(a5)		* Play mode was "module", stop after playing 
@@ -5523,32 +5526,31 @@ signalreceived
 
 	bsr.w	freemodule
 
-	tst	modamount(a5)		* onko modeja?
+	tst.l	modamount(a5)		* onko modeja?
 	beq.w	.err
 
-	cmp	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Lista tyhj‰tty? Soitetaan eka modi.
+	cmp.l	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Lista tyhj‰tty? Soitetaan eka modi.
 	bne.b	.eekk
 	moveq	#0,d7				* no stepping in the list
-	clr	chosenmodule(a5)
+	clr.l	chosenmodule(a5)
 .eekk
 	* select next module 
 	ext.l	d7 
-	moveq	#0,d0
-	move	chosenmodule(a5),d0 
+	move.l	chosenmodule(a5),d0 
 	add.l	d7,d0
 	bpl.b	.wasPositive			
 	* negative index, wrap to the last module
-	move	modamount(a5),chosenmodule(a5)
-	subq	#1,chosenmodule(a5)
+	move.l	modamount(a5),chosenmodule(a5)
+	subq.l	#1,chosenmodule(a5)
 	bra.b	.repea
 .wasPositive
-	move	d0,chosenmodule(a5)
+	move.l	d0,chosenmodule(a5)
 	* Note that upper bound check is not here, it's done below when
 	* traversing the list nodes.
 .repea
 
-	move	chosenmodule(a5),playingmodule(a5)
-	move	playingmodule(a5),d0
+	move.l	chosenmodule(a5),playingmodule(a5)
+	move.l	playingmodule(a5),d0
 
 	st	hippoonbox(a5)
 	bsr.w	resh
@@ -5560,7 +5562,9 @@ signalreceived
 	TSTNODE	a4,a3
 	beq.b	.erer			* end of list reached?
 	move.l	a3,a4
-	dbf		d0,.luuppo
+	;dbf		d0,.luuppo
+	subq.l	#1,d0 
+	bpl.b	.luuppo
 	bsr 	releaseModuleList
 
 	cmp.b	#'˜',l_filename(a3)	* onko divideri??
@@ -5592,18 +5596,18 @@ signalreceived
 
 .loader	
 	* load error, no module to play
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)	* latausvirhe
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* latausvirhe
 	bra.b	.reet
 
 .mododo	
 	* init error, no module to play
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)	* initti virhe
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* initti virhe
 	bsr.w	init_error
 	bra.b	.reet
 
 .err	
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)	* ei modeja mit‰ soittaa
-	move	#PLAYING_MODULE_NONE,chosenmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* ei modeja mit‰ soittaa
+	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	rts
 
 .stop  	bsr.w	rbutton3		* stop!
@@ -5611,28 +5615,28 @@ signalreceived
 
 * modit loppui, mit‰ tehd‰‰n?
 * No modules left to play
-.erer	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+.erer	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 
 	cmp.b	#pm_through,playmode(a5)
 	bne.b	.hm
 	* select last module
-	move	modamount(a5),chosenmodule(a5)
-	subq	#1,chosenmodule(a5)
+	move.l	modamount(a5),chosenmodule(a5)
+	subq.l	#1,chosenmodule(a5)
 	bsr.w	resh
 	bra.b	.reet
 
 .hm	
 	* In "pm_through" mode start over from the first module
- 	clr	playingmodule(a5)	* Alotetaan alusta
+ 	clr.l	playingmodule(a5)	* Alotetaan alusta
 	* select first module
-	clr	chosenmodule(a5)
+	clr.l	chosenmodule(a5)
 	bra.w	.repea
 
 * Shuffle-soitto
 .karumeininki
-	move	modamount(a5),d0
+	move.l	modamount(a5),d0
 	beq.b	.reet		* jos ei yht‰‰n, jatketaan entisen soittoa
-	cmp	#1,d0		* Jos vain yksi, jatketaan soittoa
+	cmp.l	#1,d0		* Jos vain yksi, jatketaan soittoa
 	beq.b	.reet
 	bra.w	soitamodi2
 
@@ -5640,24 +5644,26 @@ signalreceived
 * out:
 *    chosenmodule(a5) will get the index of the randomized module
 satunnaismodi
-	move	modamount(a5),d0
+	move.l	modamount(a5),d0
 	* Low bound check
-	cmp	#1,d0
+	cmp.l	#1,d0
 	bhi.b	.nof
-	clr	chosenmodule(a5)
+	clr.l	chosenmodule(a5)
 	rts
 .nof
 	* High bound check
-	cmp	#MAX_MODULES,d0		* jos liikaa, ei yll‰pidet‰ listaa
+	cmp.l	#MAX_MODULES,d0		* jos liikaa, ei yll‰pidet‰ listaa
 	bhi.b	.onviela
-	subq	#1,d0			* for dbf
+	subq.l	#1,d0			* for dbf
 
 	* Loop as much as we have modules and test if the random table 
 	* has free slots left.
 
 .h	bsr.b	testRandomTableEntry
 	beq.b	.onviela
-	dbf	d0,.h
+	;dbf	d0,.h
+	subq.l	#1,d0 
+	bpl.b	.h
 
 	* All slots taken, clear it and start over.
 	* This means all modules have randomly played.
@@ -5667,24 +5673,24 @@ satunnaismodi
 .onviela
 	* There are free slots left in the random table.
 	* Next get a random value in the range [0, number of modules-1].
-	move	modamount(a5),d3
-	subq	#1,d3
+	move.l	modamount(a5),d3
+	subq.l	#1,d3
 .a	bsr.w	getRandomValue
 	* Function returns 0..MAX_RANDOM_MASK,
 	* which may be larger than modamount(a5). 
 	* Accept only random values in range.
-	cmp	d3,d1
+	cmp.l	d3,d1
 	bhi.b	.a
 
 	* Got a random value in proper range in d1
 	* Test if a slot is free. Try again if not.
-	move	d1,d0
+	move.l	d1,d0
 	bsr.b	testRandomTableEntry
 	bne.b	.a
 	* Was free. Take it.
 	bsr.b	setRandomTableEntry
 	* I choose you, module in index d1
-	move	d1,chosenmodule(a5)
+	move.l	d1,chosenmodule(a5)
 .reet	rts
 
 
@@ -5737,9 +5743,9 @@ testRandomTableEntry
 getRandomValueTableEntry	
 	push 	d1
 	lea		randomtable(a5),a0
-	move	d0,d1
-	lsr		#3,d1 
-	add		d1,a0
+	move.l	d0,d1
+	lsr.l	#3,d1 
+	add.l	d1,a0
 	pop 	d1
 	rts
 
@@ -5762,7 +5768,9 @@ setRandomTableEntry
 .l	TSTNODE	a4,a3
 	beq.b	.x
 	move.l	a3,a4
-	dbf	d0,.l
+	;dbf	d0,.l
+	subq.l	#1,d0 
+	bpl.b	.l
 	st	l_rplay(a3)
 	st	hippoonbox(a5)
 .x
@@ -5815,8 +5823,8 @@ getRandomValue
         move.l  d0,seed(a5)
         moveq   #$10,d1
         lsr.l   d1,d0
-	and     #MAX_RANDOM_MASK,d0
-	move	d0,d1
+	and.l     #MAX_RANDOM_MASK,d0
+	move.l	d0,d1
 	pop	d0
         rts
 
@@ -5921,12 +5929,10 @@ umph
 .bere
 	* Calculate in long words to avoid possible word overflow.
 	ext.l	d7
-	moveq	#0,d1
-	move	modamount(a5),d1
+	move.l	modamount(a5),d1
 
 	* Calculate candidate for the next module
-	moveq	#0,d0 
-	move	chosenmodule(a5),d0
+	move.l	chosenmodule(a5),d0
 	add.l	d7,d0
 	;add		d7,chosenmodule(a5)
 	bpl.b	.e					* meni yli listan alkup‰‰st‰?
@@ -5945,9 +5951,9 @@ umph
 	;move	d0,chosenmodule(a5)
 .ee
 	* Valid chosenmodule index found
-	move	d0,chosenmodule(a5)
+	move.l	d0,chosenmodule(a5)
 	* Take a slot in the random table as well
-	move	d0,d2					* store copy for later
+	move.l	d0,d2					* store copy for later
 	bsr.w	setRandomTableEntry		* Merkataan listaan..
 
 ;	st	hippoonbox(a5)
@@ -5962,14 +5968,16 @@ umph
 	TSTNODE	a4,a3
 	beq.w	.erer
 	move.l	a3,a4
-	dbf	d0,.luuppo
+	;dbf	d0,.luuppo
+	subq.l	#1,d0 
+	bpl.b  .luuppo
 	bsr		releaseModuleList
 
 	* This might be a list divider. Try again in that case.
 	cmp.b	#'˜',l_filename(a3)	* onko divideri?
 	beq.b	umph			* kokeillaan edellist‰/seuraavaa/rnd
 
-	cmp	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
+	cmp.l	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
 
 	* It was the same one which already was playing.
@@ -5997,7 +6005,7 @@ umph
 	* New module to be played.
 
 	moveq	#0,d7			* flag for double buffering (0: no db)
-	tst	playingmodule(a5)	* Oliko soitettavana mit‰‰n?
+	tst.l	playingmodule(a5)	* Oliko soitettavana mit‰‰n?
 							* Was something being played?							
 	bmi.b	.nomod
 
@@ -6027,7 +6035,7 @@ umph
 
 .nomod
 	* Store index of the new module being played
-	move	d2,playingmodule(a5)	* Uusi numero
+	move.l	d2,playingmodule(a5)	* Uusi numero
 
 	* a3 contains the list elment
 	lea	l_filename(a3),a0	* Ladataan
@@ -6056,14 +6064,14 @@ umph
 .loader	
 	* Load failed.
 	* Did not get a module to play successfully.
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	rts
 
 
 .inierr	
 	* Replay init failed.
 	* Did not get a module to play successfully.
-	move	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
+	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
 	bra.w	init_error
 ;	rts
 
@@ -6688,16 +6696,15 @@ lista_ylos				* shiftin kanssa nopeempi!
 	lsr	#1,d0			* with shift, skip half of the box size
 .nsh
 	ext.l	d0
-	moveq	#0,d1 
-	move	chosenmodule(a5),d1
+	move.l	chosenmodule(a5),d1
 
 	sub.l	d0,d1
 	bpl.b	.wasOk
-	move	modamount(a5),chosenmodule(a5)
-	subq	#1,chosenmodule(a5)
+	move.l	modamount(a5),chosenmodule(a5)
+	subq.l	#1,chosenmodule(a5)
 	bra		resh
 .wasOk
-	move	d1,chosenmodule(a5)
+	move.l	d1,chosenmodule(a5)
 	bra.w	resh
 
 lista_alas
@@ -6710,19 +6717,17 @@ lista_alas
 	lsr	#1,d0
 .nsh
 	ext.l	d0
-	moveq	#0,d1 
-	move	chosenmodule(a5),d1
+	move.l	chosenmodule(a5),d1
 	add.l	d0,d1
 
-	moveq	#0,d0 
-	move	modamount(a5),d0
+	move.l	modamount(a5),d0
 	;cmp	chosenmodule(a5),d0
 	cmp.l	d1,d0
 	bhi.b	.ee
 	moveq	#0,d1
 	;clr	chosenmodule(a5)
 .ee	
-	move	d1,chosenmodule(a5)
+	move.l	d1,chosenmodule(a5)
 	bra.w	resh
 
 
@@ -6822,9 +6827,10 @@ printbox
 *******************************************************************************
 * Sortti
 *******
+* TODO
 rsort
 	* Let's not sort a list with 1 or 2 modules, that would be silly I guess.
-	cmp	#2,modamount(a5)
+	cmp.l	#2,modamount(a5)
 	bhs.b	.so
 	rts
 .so
@@ -6839,8 +6845,9 @@ rsort
  even
 
 .d
-	move	modamount(a5),d0
-	mulu	#4+24,d0		* noden osoite ja paino
+	move.l	modamount(a5),d0
+	moveq	#4+24,d0		* node address and weight
+	bsr		mulu_32
 	addq.l	#8,d0			* tyhj‰‰ per‰‰n
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
@@ -6856,8 +6863,8 @@ rsort
 
 ** Lasketaan painot jokaiselle
 	bsr		obtainModuleList
-	move	modamount(a5),d7
-	subq	#1,d7
+	move.l	modamount(a5),d7
+	subq.l	#1,d7
 	lea	moduleListHeader(a5),a3
 
 * paino 24 bytee
@@ -6898,6 +6905,7 @@ rsort
 	move.l	a3,d7
 	sub.l	d5,d7		* montako nodea sortataan
 	divu	#28,d7
+	* TODO: divu32
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
 	cmp	#2,d7		* v‰h 2 kpl
@@ -6928,10 +6936,10 @@ rsort
 .error
 
 	bsr.w	clear_random
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.npl
-	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
-.npl	clr	chosenmodule(a5)
+	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
+.npl	clr.l	chosenmodule(a5)
 	st	hippoonbox(a5)
 	bsr		releaseModuleList
 	bsr  	unfreezeMainWindowGadgets
@@ -6989,6 +6997,7 @@ rsort
 	moveq	#1,d4
 
 ; Comb sort the array.
+; TODO: replace this
 
 ;	Lea.l	List(Pc),a0
 ;	Move.l	#ListSize,d7	; Number of values
@@ -7154,7 +7163,7 @@ rmove
 	tst.b	movenode(a5)	* Jos toistamiseen painetaan, menn‰‰n "play"hin
 	bne.w	rbutton1
 
-	cmp	#2,modamount(a5)
+	cmp.l	#2,modamount(a5)
 	blo.b	.qq
 	bsr.b	getcurrent
 	beq.b	.q
@@ -7162,11 +7171,11 @@ rmove
 	st	movenode(a5)
 	move.l	a3,a1
 	lore	Exec,Remove
-	subq	#1,modamount(a5)
+	subq.l	#1,modamount(a5)
 	bsr.w	clear_random
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.q
-	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
+	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .q	st	hippoonbox(a5)
 	bsr.w	resh
 .qq	rts
@@ -7179,9 +7188,9 @@ rmove
 *    a3 = list node pointer
 *** Chosenmodule node A3:een
 getcurrent
-	tst	modamount(a5)
+	tst.l	modamount(a5)
 	beq.b	.q
-	move	chosenmodule(a5),d0
+	move.l	chosenmodule(a5),d0
 	bpl.b	getcurrent2
 .q	moveq	#0,d0
 	rts
@@ -7202,7 +7211,9 @@ getcurrent2
 	TSTNODE	a4,a3
 	beq.b	.q
 	move.l	a3,a4
-	dbf	d0,.luuppo
+	;dbf	d0,.luuppo
+	subq.l	#1,d0 
+	bpl.b  .luuppo
 	bsr		releaseModuleList
 * a3 = valittu nimi
 	moveq	#1,d0
@@ -7276,7 +7287,7 @@ comment_file
 *******
 
 find_new
-	cmp	#3,modamount(a5)
+	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
 	rts
 .ok
@@ -7305,7 +7316,7 @@ otag15	dc.l	RT_PubScrName,pubscreen+var_b
 
 
 find_continue
-	cmp	#3,modamount(a5)
+	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
 	rts
 .ok
@@ -7315,7 +7326,7 @@ find_continue
 	bsr		obtainModuleList
 	bsr.w	getcurrent		* a3 => chosen module listnode
 
-	move	chosenmodule(a5),d7
+	move.l	chosenmodule(a5),d7
 ;	subq	#1,d7
 
 
@@ -7323,7 +7334,7 @@ find_continue
 
 ;	lea	moduleListHeader(a5),a4
 .luuppo
-	addq	#1,d7
+	addq.l	#1,d7
 	TSTNODE	a4,a3
 	beq.b	.qq
 	move.l	a3,a4
@@ -7336,8 +7347,8 @@ find_continue
 	moveq	#-1,d7
 	lea	moduleListHeader(a5),a4
 .luuppo2
-	addq	#1,d7
-	cmp	chosenmodule(a5),d7
+	addq.l	#1,d7
+	cmp.l	chosenmodule(a5),d7
 	beq.b	.q
 	TSTNODE	a4,a3
 	beq.b	.q
@@ -7379,7 +7390,7 @@ find_continue
 	rts
 
 .found	
-	move	d7,chosenmodule(a5)
+	move.l	d7,chosenmodule(a5)
 	st	hippoonbox(a5)
 	bsr.w	resh
 	moveq	#0,d0
@@ -7393,7 +7404,7 @@ forwardButtonAction
 rbutton_kela1
 	tst.b	playing(a5)
 	beq.b	.e
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.e
 	move.l	playerbase(a5),a0
 	jsr	p_taakse(a0)	
@@ -7404,7 +7415,7 @@ rbutton_kela2_turbo
 	move.b	#1,kelausvauhti(a5)
 	tst.b	playing(a5)
 	beq.b	.e
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.e
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d0
@@ -7425,7 +7436,7 @@ rkelr
 
 	tst.b	playing(a5)
 	beq.b	.e
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.e
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d0
@@ -7497,7 +7508,7 @@ songo
 	move	d0,songnumber(a5)
 
 
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.err
 
 	st	kelattiintaakse(a5)
@@ -7527,7 +7538,7 @@ rbutton13
 *******
 actionStopButton
 rbutton3
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bpl.b	.hu
 .hehe	rts
 .hu	
@@ -7559,7 +7570,7 @@ rbutton3
 * Cont
 *******
 rbutton2
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bpl.b	.hu
 .hehe	rts
 .hu	
@@ -7591,7 +7602,7 @@ rbutton4
 rbutton4a
 	clr.b	kelausnappi(a5)
 
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bpl.b	.hu
 	bra.w	freemodule
 .hu	
@@ -7604,7 +7615,7 @@ rbutton4a
 
 	lore    Exec,Disable
 	bsr.w	halt
-	move	#-1,playingmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
 	lore    Exec,Enable
@@ -7638,7 +7649,7 @@ rslider1
 	bsr.w	nappilasku
 	move	d0,mainvolume(a5)
 
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.ee
 	move.l	playerbase(a5),a0
 	jsr	p_volume(a0)
@@ -7693,17 +7704,22 @@ rslider4
 .q	rts
 .new	move	d0,slider4old(a5)
 
-	move	modamount(a5),d1
-	sub	boxsize(a5),d1
+	and.l	#$ffff,d0
+	move.l	modamount(a5),d1
+	moveq	#0,d2
+	move	boxsize(a5),d2
+	sub.l	d2,d1
 	bpl.b	.e
 	moveq	#0,d1
-.e	mulu	d1,d0
+.e
+	bsr 	mulu_32
 	add.l	#32767,d0
-	divu	#65535,d0
+	move.l	#65535,d1 
+	bsr	divu_32
 
-	cmp	firstname(a5),d0
+	cmp.l	firstname(a5),d0
 	beq.b	.q
-	move	d0,firstname(a5)
+	move.l	d0,firstname(a5)
 	bra.w	shownames2
 
 *******************************************************************************
@@ -7719,8 +7735,7 @@ resh	pushm	all
 
 * Resizes the box slider gadget according to the amount of modules in it
 reslider
-	moveq	#0,d0
-	move	modamount(a5),d0
+	move.l	modamount(a5),d0
 	bne.b	.e
 	moveq	#1,d0
 .e
@@ -7728,9 +7743,9 @@ reslider
 	move	boxsize(a5),d1
 	beq.w	.eiup
 
-	cmp	d1,d0		* v‰h boxsize
+	cmp.l	d1,d0		* v‰h boxsize
 	bhs.b	.ok
-	move	d1,d0
+	move.l	d1,d0
 .ok
 	lsl.l	#8,d0
 	bsr.w	divu_32
@@ -7749,15 +7764,20 @@ reslider
 	move	d0,pi_VertBody(a1)
 
 *** Toimii vihdoinkin!
-	move	modamount(a5),d1
-	sub	boxsize(a5),d1
+	move.l	modamount(a5),d1
+	moveq	#0,d0
+	move	boxsize(a5),d0 
+	sub.l	d0,d1
 	beq.b	.pp
 	bpl.b	.p
 .pp	moveq	#1,d1
-.p	ext.l	d1
-
-	move	firstname(a5),d0
-	mulu	#65535,d0
+.p	
+	move.l	firstname(a5),d0
+	;mulu	#65535,d0
+	push	d1 
+	move.l	#65535,d1 
+	bsr		mulu_32
+	pop 	d1
 	bsr.w	divu_32
 	bsr.w	.ch
 	move.l	d0,d1
@@ -7870,8 +7890,8 @@ rbutton1
 	move.l	nodetomove(a5),a1
 	move.l	a3,a2
 	lore	Exec,Insert
-	addq	#1,modamount(a5)
-	addq	#1,chosenmodule(a5)	* valitaan movetettu node
+	addq.l	#1,modamount(a5)
+	addq.l	#1,chosenmodule(a5)	* valitaan movetettu node
 	st	hippoonbox(a5)
 	bsr		releaseModuleList
 	bsr.w	clear_random
@@ -7883,14 +7903,14 @@ rbutton1
 	tst.b	new(a5)			* onko New?
 	bne.b	.newoe
 
-	tst	modamount(a5)		* onko modeja
+	tst.l	modamount(a5)		* onko modeja
 	bne.b	.huh
 
 .newoe	;st	new2(a5)
 	st	haluttiinuusimodi(a5)
 	bra.w	rbutton7		* jos ei, ladataan...
 
-.huh	move	chosenmodule(a5),d0	* onko valittua nime‰
+.huh	move.l	chosenmodule(a5),d0	* onko valittua nime‰
 	bpl.b	.ere
 	moveq	#0,d0			* jos ei, otetaan eka
 .ere	move	d0,d2
@@ -7921,18 +7941,20 @@ rbutton1
 	TSTNODE	a4,a3
 	beq.w	.erer
 	move.l	a3,a4
-	dbf	d0,.luuppo
+	;dbf	d0,.luuppo
+	subq.l	#1,d0 
+	bpl.b  .luuppo
 
 .huo	cmp.b	#'˜',l_filename(a3)	* onko divideri??
 	bne.b	.je
 	TSTNODE	a4,a3
 	beq.w	.erer			* loppuivatko modit??
 	move.l	a3,a4
-	addq	#1,chosenmodule(a5)
+	addq.l	#1,chosenmodule(a5)
 	bsr.w	resh
 	bra.b	.huh
 .je
-	cmp	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
+	cmp.l 	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
 
 .early
@@ -7962,7 +7984,7 @@ rbutton1
 	;rts
 
 .new	moveq	#0,d7
-	tst	playingmodule(a5)	* Onko soitettavana mit‰‰n?
+	tst.l	playingmodule(a5)	* Onko soitettavana mit‰‰n?
 	bmi.b	.nomod
 
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki p‰‰ll‰?
@@ -7979,7 +8001,7 @@ rbutton1
 	move	(sp)+,mainvolume(a5)
 .nomod
 
-	move	d2,playingmodule(a5)	* Uusi numero
+	move.l	d2,playingmodule(a5)	* Uusi numero
 
 	lea	l_filename(a3),a0	* Ladataan
 	move.l	l_nameaddr(a3),solename(a5)
@@ -8001,14 +8023,14 @@ rbutton1
 	rts
 
 .loader	
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	rts
 
 .inierr2
 	moveq	#ier_unknown,d0
 
 .inierr	
-	move	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
+	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
 	bra.w	init_error
 ;	rts
 
@@ -8026,14 +8048,14 @@ halt	clr.b	playing(a5)
 *******
 insertButtonAction
 rinsert
-	tst	modamount(a5)
+	tst.l	modamount(a5)
 	beq.w	rbutton7
 	bsr.b	rinsert2
 	bra.w	rbutton7
 
 rinsert2
 	bsr		obtainModuleList
-	move	chosenmodule(a5),d0
+	move.l	chosenmodule(a5),d0
 
 * etsit‰‰n listasta vastaava kohta
 	lea	moduleListHeader(a5),a4
@@ -8041,7 +8063,9 @@ rinsert2
 	TSTNODE	a4,a3
 	beq.w	rbutton7
 	move.l	a3,a4
-	dbf	d0,.luuppo
+	;dbf	d0,.luuppo
+	subq.l #1,d0 
+	bpl.b  .luuppo
 * a3 = valittu nimi
 	move.l	a3,fileinsert(a5)
 	bsr		releaseModuleList
@@ -8055,18 +8079,19 @@ rinsert2
 * Add divider
 *******
 add_divider
-	tst	modamount(a5)
+	tst.l	modamount(a5)
 	beq.b	.x
 	bsr		obtainModuleList
-	move	chosenmodule(a5),d0
+	move.l	chosenmodule(a5),d0
 ;	subq	#1,d0			* valitun nimen edellinen node
 
 	lea	moduleListHeader(a5),a4
 .luuppo	TSTNODE	a4,a3
 	beq.b	.x
 	move.l	a3,a4
-	dbf	d0,.luuppo
-
+	;dbf	d0,.luuppo
+	subq.l #1,d0 
+	bpl.b  .luuppo
 
 	bsr.w	get_rt
 
@@ -8083,7 +8108,7 @@ add_divider
 	tst.l	d0
 	beq.b	.x
 
-	addq	#1,modamount(a5)
+	addq.l	#1,modamount(a5)
 
 	moveq	#l_size+30,d0
 	move.l	#MEMF_CLEAR,d1
@@ -8151,7 +8176,7 @@ filereq_code
 	addq	#1,filereq_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 	moveq	#0,d7
 
-	tst	modamount(a5)
+	tst.l	modamount(a5)
 	sne	tabularasa(a5)		* pistetaan lippu jos aluks 
 					* ei moduuleja. tata kaytetaan
 					* randomplayn kanssa, eli katotaan
@@ -8309,7 +8334,7 @@ filereq_code
 	beq.w	.errd
 
 
-.loopo	cmp	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
+.loopo	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
 	bhs.w	.errd
 
 	move.l	d6,d1
@@ -8488,7 +8513,7 @@ filereq_code
 
 ************* Reqtoollislta saadut tiedostot
 .file
-	cmp	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin 16383
+	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin 16383
 	bhs.b	.overload
 
 	move.l	d4,d0			* listunit,polku,nimi pituus
@@ -8526,9 +8551,9 @@ filereq_code
 .whoops	
 .whoops3	
 
-	tst	chosenmodule(a5)
+	tst.l	chosenmodule(a5)
 	bpl.b	.ee
-	clr	chosenmodule(a5)	* moduuliksi eka jos ei ennest‰‰n
+	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennest‰‰n
 .ee
 
 	clr.b	loading2(a5)
@@ -8557,16 +8582,15 @@ filereq_code
 
 * addaa/inserttaa listaan a3:ssa olevan noden
 addfile	
-	cmp	#MAX_MODULES,modamount(a5)
+	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.r
 
-	addq	#1,modamount(a5)
+	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
 	lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
 	move.l	a3,a1
 	tst.b	filereqmode(a5)		* onko add vai insert?
 	bne.b	.insert
-
 
  ifeq fprog
 	jmp	_LVOAddTail(a6)
@@ -8718,6 +8742,7 @@ filereqtitle
 
 
  ifne fprog
+fail not used 
 
 *********************************
 * File add progress indicator
@@ -8824,7 +8849,7 @@ printfilewin
 
 filewin		dc.l	0
 filerastport	dc.l	0
-fileamount	dc	0
+fileamount	dc.l	0
 
 closefilewin
 	pushm	all
@@ -8869,16 +8894,16 @@ winfile
 *******
 freelist
 	bsr		obtainModuleList
-	tst		modamount(a5)
+	tst.l		modamount(a5)
 	beq.b	.endlist
 	bsr.w	clear_random
-	clr		modamount(a5) 
-	move	#PLAYING_MODULE_NONE,chosenmodule(a5)
-	tst		playingmodule(a5)
+	clr.l		modamount(a5) 
+	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
+	tst.l		playingmodule(a5)
 	bmi.b	.ehe
-	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
+	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .ehe
-	clr		firstname(a5)
+	clr.l	firstname(a5)
 	bsr.w	reslider
 .freeloop
 	lea	moduleListHeader(a5),a0
@@ -9041,6 +9066,7 @@ rlpg	tst	filereq_prosessi(a5)
 	move.l	d5,d0		* muistia listalle
 	moveq	#MEMF_PUBLIC,d1
 	bsr.w	getmem
+	* TODO: error check missing
 	move.l	d0,a3
 
 	move.l	d6,d1		* file
@@ -9130,10 +9156,11 @@ rlpg	tst	filereq_prosessi(a5)
 
 ***************** ALoitetaan k‰sittely
 
+	bsr	obtainModuleList
+	bsr setMainWindowWaitPointer
+
 	move.l	a3,d5		* muistialue talteen d5:een
-
 	moveq	#0,d6		* 0 = vanha formaatti
-
 
 	cmp.l	#"HiPP",(a3)
 	bne.b	.rr
@@ -9154,7 +9181,7 @@ rlpg	tst	filereq_prosessi(a5)
 
 	tst.b	d7			* addi??
 	bne.b	.yadd
-	clr	modamount(a5)
+	clr.l	modamount(a5)
 .yadd
 
 	lea	moduleListHeader(a5),a4
@@ -9213,13 +9240,13 @@ rlpg	tst	filereq_prosessi(a5)
 	bsr.w	nimenalku
 .di	move.l	a0,l_nameaddr(a2)
 
-	cmp	#MAX_MODULES,modamount(a5)
+	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.x2
 
 	move.l	a2,a1
 	lea	moduleListHeader(a5),a0	* lis‰t‰‰n listan per‰‰n
 	lore	Exec,AddTail
-	addq	#1,modamount(a5)
+	addq.l	#1,modamount(a5)
 
 	cmp.l	.loppu(pc),a3
 	blo.w	.ploop
@@ -9253,8 +9280,10 @@ rlpg	tst	filereq_prosessi(a5)
 	lob	rtFreeRequest
 
 .ex
+	bsr clearMainWindowWaitPointer
+	bsr	releaseModuleList
 
-	clr	chosenmodule(a5)	* moduuliksi eka
+	clr.l	chosenmodule(a5)	* moduuliksi eka
 .kex	bsr.w	clear_random
 	st	hippoonbox(a5)
 	bra.w	resh
@@ -9291,22 +9320,22 @@ rlpg	tst	filereq_prosessi(a5)
 
 .r	cmp.b	#pm_random,playmode(a5)
 	bne.b	.noran
-	move	modamount(a5),d0
-	cmp	#MAX_MODULES,d0
+	move.l	modamount(a5),d0
+	cmp.l	#MAX_MODULES,d0
 	bhi.b	.noran
 	
-	subq	#1,d0
+	subq.l	#1,d0
 .b	bsr.w	getRandomValue
-	cmp	d0,d1
+	cmp.l	d0,d1
 	bhi.b	.b
 		
-	move	d1,d0
+	move.l	d1,d0
 	bsr.w	setRandomTableEntry
 
-	move	d1,chosenmodule(a5)
+	move.l	d1,chosenmodule(a5)
 	bra.b	.eh
 
-.noran	clr	chosenmodule(a5)
+.noran	clr.l	chosenmodule(a5)
 
 .eh	st	hippoonbox(a5)
 	bsr.w	resh
@@ -9350,7 +9379,7 @@ rsaveprog
 	tst	filereq_prosessi(a5)
 	bne.w	.ex
 
-	tst	modamount(a5)
+	tst.l	modamount(a5)
 	beq.w	.nomods
 
 	bsr.w	get_rt
@@ -9412,7 +9441,10 @@ rsaveprog
 	lob	Open
 
 	move.l	d0,d6
-	beq.b	.openerr	
+	beq.w	.openerr	
+
+	bsr obtainModuleList
+	bsr setMainWindowWaitPointer
 
 	move.l	d6,d1
 	lea	prgheader(pc),a0
@@ -9420,8 +9452,8 @@ rsaveprog
 	moveq	#headere-prgheader,d3
 	lob	Write
 
-	move	modamount(a5),d7
-	subq	#1,d7
+	move.l	modamount(a5),d7
+	subq.l	#1,d7
 	lea	moduleListHeader(a5),a4
 
 .saveloop
@@ -9449,12 +9481,17 @@ rsaveprog
 	cmp.l	d3,d0
 	bne.b	.ERROR
 
-	dbf	d7,.saveloop
+	;dbf	d7,.saveloop
+	subq.l	#1,d7 
+	bpl.b	.saveloop
 
 .loppu
 	move.l	d6,d1
 	beq.b	.x1
 	lob	Close
+
+	bsr clearMainWindowWaitPointer
+	bsr releaseModuleList
 
 .x1	move.l	req_file2(a5),d0
 	beq.b	.ex
@@ -9515,7 +9552,7 @@ filereqtitle3
 komentojono
 	lea	sv_argvArray+4(a5),a3	* ei ekaa
 	moveq	#ARGVSLOTS-1-1,d7
-	move	modamount(a5),d6	* vanha m‰‰r‰ talteen
+	move.l	modamount(a5),d6	* vanha m‰‰r‰ talteen
 
 * HIDEst‰ ja QUITista ei v‰litet‰!
 
@@ -9563,16 +9600,16 @@ komentojono
 	lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
 	lore	Exec,AddTail
 
-	addq	#1,modamount(a5)	* m‰‰r‰++
+	addq.l	#1,modamount(a5)	* m‰‰r‰++
 
 .skip	dbf	d7,.alp
 
 .end
 	bsr.w	vastomaviesti
 
-	tst	modamount(a5)
+	tst.l	modamount(a5)
 	beq.b	.x
-	move	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
+	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
 
 	st	hippoonbox(a5)
 	bsr.w	resh
@@ -10061,8 +10098,8 @@ defarc
 aseta_vakiot
 	bsr.w	nupit
 	move	#64,mainvolume(a5)
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
-	move	#PLAYING_MODULE_NONE,chosenmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	move	#12,tfmxmixingrate(a5)
 	move.b	#pm_repeat,playmode(a5)		* lippu: toistetaan
 	move.l	#10000,mixirate(a5)
@@ -12322,7 +12359,7 @@ updateps3m2
 	bne.b	.nd
 
 	lea	var_b,a5
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.nd
 	tst.b	playing(a5)
 	beq.b	.nd
@@ -12340,7 +12377,7 @@ updateps3m
 	tst.b	ahi_use_nyt(a5)
 	bne.b	.nd
 
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.nd
 	tst.b	playing(a5)
 	beq.b	.nd
@@ -13843,7 +13880,7 @@ updateahi
 	tst.b	ahi_use_nyt(a5)
 	beq.b	.nd
 
-.d	tst	playingmodule(a5)
+.d	tst.l	playingmodule(a5)
 	bmi.b	.nd
 	tst.b	playing(a5)
 	beq.b	.nd
@@ -14041,7 +14078,7 @@ listselector
 
 * 
 shownames2
-	moveq	#1,d4
+	moveq	#1,d4		* flag: do not center
 	bra.b	shn
 
 clearbox
@@ -14058,7 +14095,7 @@ clearbox
 	bra.w	tyhjays
 
 shownames
-	moveq	#0,d4
+	moveq	#0,d4	 	* flag: center
 shn
 	tst	boxsize(a5)
 	beq.b	.bx
@@ -14070,8 +14107,7 @@ shn
 
 	pushm	all
 
-
-	tst	modamount(a5)
+	tst.l	modamount(a5)
 	bne.b	.eper
 
 	bsr.b	clearbox
@@ -14084,23 +14120,25 @@ shn
 	tst	d4		* ei mink‰‰nlaista uudelleensijoitusta
 	bne.b	.nob
 
+	moveq	#0,d2
 	move	boxsize(a5),d2
-	move	d2,d3
-	lsr	#1,d2
+	move.l	d2,d3
+	lsr	#1,d2		* center chosenmodule in the middle of the box
 	
-	moveq	#0,d0
-	move	chosenmodule(a5),d0
-	sub	d2,d0
+	move.l	chosenmodule(a5),d0
+	sub.l	d2,d0
 	bmi.b	.nok
-	move	modamount(a5),d1
-	sub	d3,d1
+	move.l	modamount(a5),d1
+	sub.l	d3,d1
 	bmi.b	.nok
-	cmp	d1,d0
+	cmp.l	d1,d0
 	blo.b	.ok
-	move	d1,d0
+	move.l	d1,d0
 	bra.b	.ok
-.nok	moveq	#0,d0	
-.ok	move	d0,firstname(a5)
+.nok	
+	moveq	#0,d0	
+.ok	
+	move.l	d0,firstname(a5)
 
 .nob
 	tst.b	hippoonbox(a5)
@@ -14108,20 +14146,20 @@ shn
 	clr.b	hippoonbox(a5)
 	bra.w	.neen
 .eh
-
-	
-
-	move	firstname(a5),d0
-	move	firstname2(a5),d7
-	move	d0,firstname2(a5)
-	cmp	d0,d7
+	move.l	firstname(a5),d0
+	move.l	firstname2(a5),d7
+	move.l	d0,firstname2(a5)
+	cmp.l	d0,d7
 	beq.b	.nomods
-	sub	d0,d7
+	sub.l	d0,d7		* d7 should be in range 0..boxsize
 	bmi.b	.alas
 
-
-.ylos	cmp	boxsize(a5),d7
-	bhs.b	.all
+.ylos
+	moveq	#0,d1 
+	move	boxsize(a5),d1
+	cmp.l	d1,d7
+	;cmp	boxsize(a5),d7
+	bhs.w	.all
 
 	bsr.w	.unmark
 
@@ -14129,21 +14167,26 @@ shn
 * kopioidaan rivit 0 -> d7 (koko: boxsize-d7 r) kohtaan 0 ja printataan
 * kohtaan 0 d7 kpl uusia rivej‰
 
-
 	moveq	#63+WINY,d1		* source y
 	move	d7,d3
 	lsl	#3,d3
 	add	#63+WINY,d3		* dest y
-	bsr.b	.copy
-	move	firstname(a5),d0
+	bsr.w	.copy
+	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	d7,d2
 	bra.b	.rcr
 
 
-.alas	neg	d7		
-	cmp	boxsize(a5),d7
+.alas	
+	moveq	#0,d1 
+	move	boxsize(a5),d1
+	neg.l  	d7 
+	cmp.l	d1,d7 
 	bhs.b	.all
+	;neg	d7		
+	;cmp	boxsize(a5),d7
+	;bhs.b	.all
 
 	bsr.w	.unmark
 
@@ -14156,13 +14199,16 @@ shn
 	add	#63+WINY,d1		* source y	
 	moveq	#63+WINY,d3	* dest y
 	bsr.b	.copy
-	move	firstname(a5),d0
-	add	boxsize(a5),d0
-	sub	d7,d0
+	moveq	#0,d0 
+	move 	boxsize(a5),d0 
+	add.l 	firstname(a5),d0
+	;move.l	firstname(a5),d0
+	;add	boxsize(a5),d0
+	sub.l	d7,d0
+	moveq	#0,d1 
 	move	boxsize(a5),d1
-	sub	d7,d1
-	move	d7,d2
-
+	sub.l   d7,d1
+	move.l	d7,d2
 
 .rcr	bsr.b	.donames
 	bra.b	.huh2
@@ -14171,16 +14217,16 @@ shn
 	bsr.w	.unmark
 .huh2
 .xx
-	move	#-1,markedline(a5)
-	move	chosenmodule(a5),d0
+	move.l	#-1,markedline(a5)
+	move.l	chosenmodule(a5),d0
 	bmi.b	.huh
-	sub	firstname(a5),d0
+	sub.l	firstname(a5),d0
 	bmi.b	.huh
-	move	d0,markedline(a5)		* merkit‰‰n valittu nimi
+	move.l	d0,markedline(a5)		* merkit‰‰n valittu nimi
 	bsr.w	markit
 .huh
-	move	chosenmodule(a5),chosenmodule2(a5)
-	move	firstname(a5),firstname2(a5)
+	move.l	chosenmodule(a5),chosenmodule2(a5)
+	move.l	firstname(a5),firstname2(a5)
 	clr.b	dontmark(a5)
 
 	popm	all
@@ -14190,7 +14236,7 @@ shn
 .neen
 	bsr.w	clearbox
 
-	move	firstname(a5),d0
+	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	boxsize(a5),d2
 	bsr.b	.donames
@@ -14220,17 +14266,18 @@ shn
 * d0 = alkurivi
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien m‰‰r‰
-
 .donames
 	bsr  obtainModuleList
 	lea	moduleListHeader(a5),a4	
-	subq	#1,d0
+	subq.l	#1,d0
 	bmi.b	.baa
 .luuppo
 	TSTNODE	a4,a3
 	beq.w	.lop
 	move.l	a3,a4
-	dbf	d0,.luuppo
+	;dbf	d0,.luuppo
+	subq.l #1,d0 
+	bpl.b  .luuppo
 .baa
 	move	d2,d5
 	subq	#1,d5
@@ -14249,7 +14296,6 @@ shn
 	move.l	a0,a1
 
 	moveq	#0,d7
-
 
 	cmp.b	#'˜',(a1)		* list divider magic marker check?
 	bne.b	.nodi
@@ -14290,9 +14336,6 @@ shn
 	beq.b	.fu
 	move.b	#"Æ",-1(a2)
 .fu
-
-
-
 	moveq	#33+WINX,d0
 	move.l	d6,d1
 	addq.l	#8,d6
@@ -14320,15 +14363,15 @@ shn
 	tst.b	dontmark(a5)
 	bne.b	.huh22
 
-	move	chosenmodule2(a5),d0
+	move.l	chosenmodule2(a5),d0
 	bmi.b	.huh22
-	sub	firstname2(a5),d0
+	sub.l	firstname2(a5),d0
 	bmi.b	.huh22
 	push	d7
-	move	chosenmodule(a5),-(sp)
-	move	chosenmodule2(a5),chosenmodule(a5)
+	move.l	chosenmodule(a5),-(sp)
+	move.l	chosenmodule2(a5),chosenmodule(a5)
 	bsr.w	unmarkit
-	move	(sp)+,chosenmodule(a5)
+	move.l	(sp)+,chosenmodule(a5)
 	pop	d7
 .huh22	rts
 
@@ -14385,24 +14428,24 @@ elete
 
 	clr.b	movenode(a5)
 	moveq	#PLAYING_MODULE_NONE,d0
-	move	d0,chosenmodule2(a5)
+	move.l	d0,chosenmodule2(a5)
 	st	hippoonbox(a5)
 	bsr.w	clear_random
 
-	move	chosenmodule(a5),d0
+	move.l	chosenmodule(a5),d0
 	bmi.w	.erer
 
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.huh	
 
-	cmp	playingmodule(a5),d0	* onko dellattava sama kuin soitettava?
+	cmp.l	playingmodule(a5),d0	* onko dellattava sama kuin soitettava?
 	beq.b	.sama
 
-	subq	#1,playingmodule(a5)
+	subq.l	#1,playingmodule(a5)
 	bpl.b	.huh
-.sama	move	#PLAYING_MODULE_REMOVED,playingmodule(a5)
+.sama	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 
-.huh	tst	modamount(a5)
+.huh	tst.l	modamount(a5)
 	beq.w	.erer
 
 	lea	moduleListHeader(a5),a4
@@ -14410,7 +14453,10 @@ elete
 .luuppo	TSTNODE	a4,a3
 	beq.w	.erer
 	move.l	a3,a4
-	dbf	d0,.luuppo
+	;dbf	d0,.luuppo
+	subq.l #1,d0 
+	bpl.b  .luuppo
+
 	move.l	a3,d0
 	beq.w	.erer
 
@@ -14457,9 +14503,9 @@ elete
 
 .ni
 ** onko toisiks viimenen dellattava?
-	move	modamount(a5),d0
-	subq	#1,d0
-	cmp	chosenmodule(a5),d0
+	move.l	modamount(a5),d0
+	subq.l	#1,d0
+	cmp.l	chosenmodule(a5),d0
 	bne.b	.nmod
 	clr.b	deleteflag(a5)
 
@@ -14469,17 +14515,17 @@ elete
 	move.l	a3,a0
 	bsr.w	freemem
 
-	subq	#1,modamount(a5)
+	subq.l	#1,modamount(a5)
 	bpl.b	.ak
 	bne.b	.ak
-	move	#PLAYING_MODULE_NONE,chosenmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	bra.b	.ee
 .ak	
-	move	modamount(a5),d0
-	cmp	chosenmodule(a5),d0
+	move.l	modamount(a5),d0
+	cmp.l	chosenmodule(a5),d0
 	bne.b	.ee
-	subq	#1,d0
-	move	d0,chosenmodule(a5)
+	subq.l	#1,d0
+	move.l	d0,chosenmodule(a5)
 .ee
 .nmodo
 	st	hippoonbox(a5)
@@ -14575,7 +14621,7 @@ inforivit_killerps3m
 	lea	var_b,a5
 inforivit_play
 	bsr.b	inforivit_clear
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bpl.b	.huh
 	bra.w	bopb
 	
@@ -14966,7 +15012,7 @@ lootaan_aika
 	cmp.l	d1,d0
 	blo.b	.ok0
 
-	cmp	#1,modamount(a5)	* 0 tai 1 modia -> ei timeouttia
+	cmp.l	#1,modamount(a5)	* 0 tai 1 modia -> ei timeouttia
 	bls.b	.ok0
 
 	tst.b	timeoutmode(a5)		* timeout-moodi
@@ -15094,7 +15140,7 @@ lootaan_aika
 .oai
 
 *****
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.w	.jaa
 
 	move.l	playerbase(a5),a1
@@ -15388,35 +15434,34 @@ markline
 	bhi.w	.out
 
 	sub	#63+WINY,d1
-	lsr	#3,d1
+	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
 
-	tst	modamount(a5)
+	tst.l	modamount(a5)
 	bne.b	.ona
 	moveq	#0,d1		* ei oo modeja, otetaan eka
 .ona
-
-	move	d1,d2
-	add	firstname(a5),d1
-	cmp	chosenmodule(a5),d1
+	ext.l	d1
+	move.l	d1,d2
+	add.l	firstname(a5),d1
+	cmp.l	chosenmodule(a5),d1
 	beq.b	.oo
 
-	cmp	#PLAYING_MODULE_REMOVED,chosenmodule(a5)
+	cmp.l	#PLAYING_MODULE_REMOVED,chosenmodule(a5)
 	beq.b	.oo
 	pushm	d1/d2
 	bsr.b	unmarkit
 	popm	d1/d2
 .u	st	dontmark(a5)
 .oo	
-	move	d1,chosenmodule(a5)
-	move	d2,markedline(a5)
+	move.l	d1,chosenmodule(a5)
+	move.l	d2,markedline(a5)
 
-	move	clickmodule(a5),d3
-	move	d1,clickmodule(a5)
+	move.l	clickmodule(a5),d3
+	move.l	d1,clickmodule(a5)
 
-
-	cmp	d1,d3
+	cmp.l	d1,d3
 	bne.b	.nodouble
-	move	#-1,clickmodule(a5)	
+	move.l	#-1,clickmodule(a5)	
 
 	subq.l	#8,sp
 	lea	(sp),a0
@@ -15446,21 +15491,26 @@ markline
 
 unmarkit			* pyyhitaan merkkaus pois
 markit
-	move	markedline(a5),d5
+	move.l	markedline(a5),d5
 	bmi.b	.outside
-	cmp	boxsize(a5),d5
+	moveq	#0,d0
+	move	boxsize(a5),d0
+	;cmp	boxsize(a5),d5
+	cmp.l	d0,d5
 	bhs.b	.outside
 	tst.b	win(a5)
 	beq.b	.outside
 
 	bsr	 obtainModuleList
 	lea	moduleListHeader(a5),a4	
-	move	chosenmodule(a5),d0	* etsit‰‰n kohta
+	move.l	chosenmodule(a5),d0	* etsit‰‰n kohta
 .luuppo
 	TSTNODE	a4,a3
 	beq.b	.nomods
 	move.l	a3,a4
-	dbf	d0,.luuppo
+	;dbf	d0,.luuppo
+	subq.l #1,d0 
+	bpl.b  .luuppo
 
 	bsr	 releaseModuleList
 
@@ -15815,11 +15865,9 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	lea	-200(sp),sp
 	move.l	sp,a3
 
-	moveq	#0,d0
-	move	modamount(a5),d0
-	moveq	#0,d1
-	move	divideramount(a5),d1
-	sub	d1,d0
+	move.l	modamount(a5),d0
+	move.l	divideramount(a5),d1
+	sub.l	d1,d0
 	movem.l	d0/d1,-(sp)
 	pea	keyfile(a5)
 	move.l	sp,a1
@@ -15845,7 +15893,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	bsr	obtainModuleData
 
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bpl.b	.bah
 
 	* Nothing is being played. Display "No info available".
@@ -17140,7 +17188,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	cmp	#pt_prot,playertype(a5)
 	bne.w	.msgloop
-	tst	playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.w	.msgloop
 
 
@@ -17385,9 +17433,9 @@ rbutton10
 	move.l	a3,a4
 	cmp.b	#'˜',l_filename(a3)	* onko divideri??
 	bne.b	.l
-	addq	#1,d5
+	addq.l	#1,d5
 	bra.b	.l
-.e	move	d5,divideramount(a5)
+.e	move.l	d5,divideramount(a5)
 	bsr		releaseModuleList
 
 	st	infolag(a5)
@@ -18247,7 +18295,7 @@ rexxmessage
 .add	tst.b	d0
 	beq.w	rbutton7
 
-.add2	cmp	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
+.add2	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
 	bhs.b	.exit
 
 	move.l	a1,a2
@@ -18275,9 +18323,9 @@ rexxmessage
 	bsr.w	addfile
 	bsr.w	clear_random
 	st	hippoonbox(a5)
-	tst	chosenmodule(a5)
+	tst.l	chosenmodule(a5)
 	bpl.b	.ee
-	clr	chosenmodule(a5)	* moduuliksi eka jos ei ennest‰‰n
+	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennest‰‰n
 .ee	bra.w	resh
 
 
@@ -18306,16 +18354,16 @@ rexxmessage
 *** CHOOSE
 .choose
 	bsr.w	a2i
-	subq	#1,d0
+	subq.l	#1,d0
 	bsr.b	.choo
 	bra.w	resh
 
 *** valitaan d0:ssa olevan numeron tiedosto
-.choo	move	d0,chosenmodule(a5)
-	cmp	modamount(a5),d0
+.choo	move.l	d0,chosenmodule(a5)
+	cmp.l	modamount(a5),d0
 	blo.b	.em
-	move	modamount(a5),chosenmodule(a5)
-	subq	#1,chosenmodule(a5)
+	move.l	modamount(a5),chosenmodule(a5)
+	subq.l	#1,chosenmodule(a5)
 .em	rts
 
 *** VOLUME
@@ -18543,9 +18591,9 @@ rexxmessage
 	bra.w	i2amsg
 
 .getcfil
-	move	chosenmodule(a5),d0
+	move.l	chosenmodule(a5),d0
 	bmi.b	.getcfil0
-	cmp	#PLAYING_MODULE_REMOVED,d0
+	cmp.l	#PLAYING_MODULE_REMOVED,d0
 	beq.b	.getcfil0
 	addq	#1,d0
 	bra.w	i2amsg
@@ -18554,8 +18602,8 @@ rexxmessage
 	bra.w	i2amsg
 
 .getnfil
-	move	modamount(a5),d0
-	bra.w	i2amsg
+	move.l	modamount(a5),d0
+	bra.w	i2amsg2
 
 .getcsng
 	move	songnumber(a5),d0
@@ -18584,10 +18632,10 @@ rexxmessage
 	bra.w	str2msg
 
 .getcurrent
-	move	playingmodule(a5),d0
+	move.l	playingmodule(a5),d0
 	bmi.b	.getc0
-	addq	#1,d0
-	cmp	#PLAYING_MODULE_REMOVED+1,d0
+	addq.l	#1,d0
+	cmp.l	#PLAYING_MODULE_REMOVED+1,d0
 	bne.w	i2amsg
 .getc0	moveq	#0,d0
 	bra.w	i2amsg
@@ -18601,9 +18649,9 @@ rexxmessage
 	bra.w	str2msg
 
 .fullname
-	move	playingmodule(a5),d0
+	move.l	playingmodule(a5),d0
 	bmi.b	.curr1
-	cmp	#PLAYING_MODULE_REMOVED,d0
+	cmp.l	#PLAYING_MODULE_REMOVED,d0
 	bne.b	.curr2
 .curr1	lea	.empty(pc),a2
 	bra.w	str2msg	
@@ -18765,7 +18813,7 @@ quad_code
 .1	moveq	#0,d7
 .11	move.l	#64*256*2,d0	* volumetaulukko
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,mtab(a5)
 	beq.w	.memer
 	bsr.w	voltab
@@ -18775,7 +18823,7 @@ quad_code
 .2
 	move.l	#64*256*2,d0
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,mtab(a5)
 	beq.w	.memer
 	bsr.w	voltab2
@@ -18785,13 +18833,13 @@ quad_code
 .3	moveq	#0,d7
 .33	move.l	#64*256*2,d0	* volumetaulukko
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,mtab(a5)
 	beq.w	.memer
 	bsr.w	voltab
 .wo	move.l	#512,d0		* palkkitaulu
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,scopeVerticalBarTable(a5)
 	beq.w	.memer
 	bsr.w	makeScopeVerticalBars		* tehd‰‰n palkkitaulu
@@ -21081,7 +21129,7 @@ loadmodule
 
 	jsr	freemodule
 	jsr	rbutton9		* lista tyhj‰ks
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 
 	move.l	sp,a0			* ohjelman nimi
 	moveq	#-1,d4			* lippu
@@ -21102,7 +21150,7 @@ loadmodule
 
 **** Virhe, ja pit‰isi ladata toinen moduuli.
 .iik
-	cmp	#1,modamount(a5)
+	cmp.l	#1,modamount(a5)
 	beq.b	loaderr
 
 	addq.b	#1,contonerr_laskuri(a5) 	* jos sattuu viisi per‰kk‰ist‰ 
@@ -21116,7 +21164,7 @@ loadmodule
 	moveq	#50,d1
 	lore	Dos,Delay
 
-	move	#PLAYING_MODULE_NONE,playingmodule(a5)
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	moveq	#1,d7			* seuraava piisi!
 	jsr	soitamodi
 	addq	#4,sp			* ei samaan paluuosoitteeseen!
