@@ -398,6 +398,7 @@ fileinfoblock	rs.b	260		* 4:ll‰ jaollisessa osoitteessa!
 fileinfoblock2	rs.b	260		
 filecomment	rs.b	80+4		* tiedoston kommentti
 windowbase	rs.l	1		* p‰‰ohjelma
+mainWindowLock rs.l 1
 appwindow	rs.l	1		* appwindowbase
 screenlock	rs.l	1
 rastport	rs.l	1		*
@@ -1102,6 +1103,7 @@ l_filename	rs.b	0			* tied.nimi ja polku alkaa t‰st‰
 								* full path to filename begins at this point
 								* element size is dynamically calculated based on path length.
 			rs.b	30			* turvallisuustekij‰
+								* TODO: remove this?
 								* safety buffer?
 l_size		rs.b	0
 
@@ -2277,7 +2279,6 @@ main
 
 	tst.b	quadon(a5)			* avataanko scope?
 	beq.b	.q
-	; TODO: semaphore error
 	jsr	start_quad
 .q
 	tst.b	infoon(a5)
@@ -4141,6 +4142,8 @@ sulje_ikkuna
 * WaitPointer
 **************
 
+* TODO: Could use rtLockWindow to replace freezegads and set wait pointer
+
 pon1
 setMainWindowWaitPointer	
 	pushm	all
@@ -4223,6 +4226,26 @@ releaseModuleData
 showOutOfMemoryError
 	lea		memerror_t,a1
 	bra		request
+
+lockMainWindow 
+	tst.l	windowbase(a5)
+	beq.b	.x
+	bsr.w	get_rt
+	move.l	windowbase(a5),a0
+	lob    	rtLockWindow
+	move.l	d0,mainWindowLock(a5)
+.x	rts
+
+unlockMainWindow
+	tst.l	mainWindowLock(a5)
+	beq.b	.x 
+	bsr	 	get_rt
+	move.l	windowbase(a5),a0
+	move.l	mainWindowLock(a5),a1
+	lob 	rtUnlockWindow
+	clr.l	mainWindowLock(a5)
+.x	rts
+
 
 
 ******************************************************************************
@@ -6827,15 +6850,23 @@ printbox
 *******************************************************************************
 * Sortti
 *******
-* TODO
+
+* This creates an array of
+* 4 bytes  = node pointer to the module entry
+* 24 bytes = calculated weight based on module name
+* sorts that, and recreates the module list.
+
+SORT_ELEMENT_LENGTH = 4+24
+
 rsort
+
+
 	* Let's not sort a list with 1 or 2 modules, that would be silly I guess.
 	cmp.l	#2,modamount(a5)
 	bhs.b	.so
 	rts
 .so
-	bsr.w	setMainWindowWaitPointer
-	bsr		freezeMainWindowGadgets
+	bsr		lockMainWindow
 
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
@@ -6846,15 +6877,15 @@ rsort
 
 .d
 	move.l	modamount(a5),d0
-	moveq	#4+24,d0		* node address and weight
+	moveq	#4+24,d1		* node address and weight
 	bsr		mulu_32
-	addq.l	#8,d0			* tyhj‰‰ per‰‰n
+	addq.l	#8,d0			* add some empty space, this is needed when rebuilding the list
+							* to check if end is reached.
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
 	move.l	d0,sortbuf(a5)
 	bne.b	.okr
-	lea	memerror_t,a1
-	bsr.w	request
+	bsr 	showOutOfMemoryError
 	bra.w	.error
 .okr
 
@@ -6863,8 +6894,8 @@ rsort
 
 ** Lasketaan painot jokaiselle
 	bsr		obtainModuleList
-	move.l	modamount(a5),d7
-	subq.l	#1,d7
+	;move.l	modamount(a5),d7
+	;subq.l	#1,d7
 	lea	moduleListHeader(a5),a3
 
 * paino 24 bytee
@@ -6904,30 +6935,32 @@ rsort
 
 	move.l	a3,d7
 	sub.l	d5,d7		* montako nodea sortataan
-	divu	#28,d7
-	* TODO: divu32
+
+	move.l	d7,d0 
+	moveq	#SORT_ELEMENT_LENGTH,d1
+	bsr		divu_32
+	move.l	d0,d7
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
-	cmp	#2,d7		* v‰h 2 kpl
+	cmp.l	#2,d7		* v‰h 2 kpl
 	blo.b	.ml
 
 	move.l	d5,a2
 	bsr.w	.sort
 	bra.b	.ml
 
-
 .loph
+	* Start rebuilding the list with sorted nodes
 	move.l	sortbuf(a5),a3
-
 .er
 	tst.l	(a3)
-	beq.b	.r
-	move.l	(a3),a1
+	beq.b	.r			* end reached? this is the extra space mentioned above
+	move.l	(a3),a1  	* grab node address
 
 	lea	moduleListHeader(a5),a0
 	ADDTAIL			* lis‰t‰‰n node (a1)
 
-	lea	28(a3),a3	* TODO: address + sort weight
+	lea SORT_ELEMENT_LENGTH(a3),a3	
 	bra.b	.er
 .r
 	move.l	sortbuf(a5),a0
@@ -6942,8 +6975,7 @@ rsort
 .npl	clr.l	chosenmodule(a5)
 	st	hippoonbox(a5)
 	bsr		releaseModuleList
-	bsr  	unfreezeMainWindowGadgets
-	bsr.w	clearMainWindowWaitPointer
+	bsr		unlockMainWindow
 	bra.w	resh
 
 * a3 = lista
@@ -6990,27 +7022,30 @@ rsort
 	rts
 
 .sort0
-
 	move.l	a2,a0
-	ext.l	d7
-	moveq	#28,d5
+	moveq	#SORT_ELEMENT_LENGTH,d5		* element length
 	moveq	#1,d4
 
 ; Comb sort the array.
-; TODO: replace this
 
 ;	Lea.l	List(Pc),a0
 ;	Move.l	#ListSize,d7	; Number of values
 
 	Move.l	d7,d1		; d1=Gap
 .MoreSort
-	MoveQ	#0,d0		; d0=Switch
-	lsl.l	#8,d1
-	Divu.w	#333,d1		; 1.3*256 = 332.8
-;	And.l	#$ffff,d1	; gap=gap/1.3
-	ext.l	d1
+;	lsl.l	#8,d1
+;	Divu.w	#333,d1		; 1.3*256 = 332.8
+;	ext.l	d1
 
-	Cmp.w	d4,d1		; if gap<1 then gap:=1
+	move.l	d1,d0 
+	lsl.l	#8,d0 
+	move.l	#333,d1
+	bsr 	divu_32
+	move.l	d0,d1
+
+	MoveQ	#0,d0		; d0=Switch
+
+	Cmp.l	d4,d1		; if gap<1 then gap:=1
 	Bpl.b	.okgap
 	Moveq	#1,d1
 .okgap:
@@ -7018,14 +7053,26 @@ rsort
 	Sub.l	d1,d2		; D2=NMAX-gap
 	Move.l	a0,a1
 
-;	Lea.l	(a1,d1.w*2),a2	; a2=a1+gap
-	move	d1,d6
-	mulu	d5,d6
-	lea	(a1,d6.l),a2
+ ;     Lea.l   (a1,d1.w*2),a2  ; a2=a1+gap
+ ;   move    d1,d6
+ ;   mulu    d5,d6
+ ;   lea     (a1,d6.l),a2
 
-	Subq.w	#1,d2
+	* do a trick 32-bit multiply by 28
+	ifne SORT_ELEMENT_LENGTH-28
+		fail
+	endc
+	move.l	d1,d6 
+	lsl.l	#2,d6   * mul by 4
+	move.l	a1,a2
+	sub.l	d6,a2	* addr - 4*28
+	lsl.l	#3,d6 	* mul by 32
+	add.l	d6,a2	* addr + 32*28
+
+	;Subq.w	#1,d2
 .Loop:	
-
+	* Compare. 
+	* It's likely the compares after the 1st one are not often hit.
 	move.l	4(a1),d3
 	cmp.l	4(a2),d3
 	bne.b	.notokval
@@ -7056,36 +7103,47 @@ rsort
 ;	Move.w	-2(a2),-2(a1)
 ;	Move.w	d3,-2(a2)
 
+** swap 28 bytes
 
-** vaihto
+	* free:
+	* d0, d3, d6, a3, a4, a5, a6
+	movem.l		(a1),d0/d3/d6/a3/a4/a5/a6
+	move.l		(a2)+,(a1)+
+	move.l		(a2)+,(a1)+
+	move.l		(a2)+,(a1)+
+	move.l		(a2)+,(a1)+
+	move.l		(a2)+,(a1)+
+	move.l		(a2)+,(a1)+
+	move.l		(a2)+,(a1)+
+	movem.l		d0/d3/d6/a3/a4/a5/a6,-28(a2)
 
-	move.l	(a1),d6
-	move.l	(a2),(a1)+
-	move.l	d6,(a2)+
+	; move.l	(a1),d6
+	; move.l	(a2),(a1)+
+	; move.l	d6,(a2)+
 
-	move.l	(a1),d6
-	move.l	(a2),(a1)+
-	move.l	d6,(a2)+
+	; move.l	(a1),d6
+	; move.l	(a2),(a1)+
+	; move.l	d6,(a2)+
 
-	move.l	(a1),d6
-	move.l	(a2),(a1)+
-	move.l	d6,(a2)+
+	; move.l	(a1),d6
+	; move.l	(a2),(a1)+
+	; move.l	d6,(a2)+
 
-	move.l	(a1),d6
-	move.l	(a2),(a1)+
-	move.l	d6,(a2)+
+	; move.l	(a1),d6
+	; move.l	(a2),(a1)+
+	; move.l	d6,(a2)+
 
-	move.l	(a1),d6
-	move.l	(a2),(a1)+
-	move.l	d6,(a2)+
+	; move.l	(a1),d6
+	; move.l	(a2),(a1)+
+	; move.l	d6,(a2)+
 
-	move.l	(a1),d6
-	move.l	(a2),(a1)+
-	move.l	d6,(a2)+
+	; move.l	(a1),d6
+	; move.l	(a2),(a1)+
+	; move.l	d6,(a2)+
 
-	move.l	(a1),d6
-	move.l	(a2),(a1)+
-	move.l	d6,(a2)+
+	; move.l	(a1),d6
+	; move.l	(a2),(a1)+
+	; move.l	d6,(a2)+
 
 	Moveq	#1,d0
 	bra.b	.ok1
@@ -7095,19 +7153,19 @@ rsort
 	add.l	d5,a2
 .ok1
 
-	Dbf	d2,.Loop
+	;Dbf	d2,.Loop
+	subq.l	#1,d2 
+	bne.b	.Loop
 
-	Cmp.w	d4,d1		; gap < 1 ?
+	Cmp.l	d4,d1		; gap < 1 ?
 	Bne.w	.MoreSort
 	Tst.w	d0		; Any entries swapped ?
 	Bne.w	.MoreSort
 	Rts
 
-
-
-
 *-------------------
 
+* Lower case and strip prefix so that string is usable for sorting
 .getv	
 	moveq	#0,d0
 	moveq	#0,d1
@@ -7632,7 +7690,9 @@ rbutton4a
 clearlist
 rbutton9
 	clr.b	movenode(a5)
+	bsr		setMainWindowWaitPointer
 	bsr.w	freelist
+	bsr		clearMainWindowWaitPointer
 	bra.w	shownames
 
 *******************************************************************************
@@ -7778,10 +7838,12 @@ reslider
 	move.l	#65535,d1 
 	bsr		mulu_32
 	pop 	d1
-	bsr.w	divu_32
+	
+	bsr.w	divu_32  * d0=d0/d1
 	bsr.w	.ch
 	move.l	d0,d1
 
+	; VertPot should be in range 0..$ffff
 	cmp	pi_VertPot(a1),d1
 	sne	d2
 	move	d1,pi_VertPot(a1)
@@ -8097,7 +8159,7 @@ add_divider
 
 	push	a3
 	lea	divider(a5),a1	
-	moveq	#27-1,d0
+	moveq	#27-1,d0			* Request 27 bytes?
 	sub.l	a3,a3
 	lea	.tags(pc),a0
 	lea	.ti(pc),a2
@@ -8110,6 +8172,7 @@ add_divider
 
 	addq.l	#1,modamount(a5)
 
+	* Divider, reserve 30 bytes for the name. 27 bytes from above, one char from below
 	moveq	#l_size+30,d0
 	move.l	#MEMF_CLEAR,d1
 	bsr.w	getmem
@@ -8183,7 +8246,7 @@ filereq_code
 					* otetaanko eka moduuli taysin 
 					* randomilla
 
-	bsr	setMainWindowWaitPointer
+	bsr		setMainWindowWaitPointer
 	bsr		freezeMainWindowGadgets
 	bsr		obtainModuleList
 	bsr.b	.filer
@@ -8635,7 +8698,6 @@ adddivider
 	bra.b	.hue
 .pehe
 
-
 	move.l	#l_size+30+2,d0
 	move.l	#MEMF_CLEAR,d1
 	bsr.w	getmem
@@ -8954,14 +9016,22 @@ parsereqdir2
 rloadprog2
 	bra.b	rlpg
 
-
 rloadprog0		* LoadProgram joka AddTailaa vanhan listan per‰‰n.
 	st	lprgadd(a5)
 
 rloadprog
 	moveq	#0,d7
 
-rlpg	tst	filereq_prosessi(a5)
+rlpg
+	bsr setMainWindowWaitPointer
+	bsr	obtainModuleList
+	bsr .doLoadProgram
+	bsr clearMainWindowWaitPointer
+	bsr	releaseModuleList
+	rts
+
+.doLoadProgram
+	tst	filereq_prosessi(a5)
 	bne.w	.kex
 
 	bsr.b	.mop
@@ -9156,9 +9226,6 @@ rlpg	tst	filereq_prosessi(a5)
 
 ***************** ALoitetaan k‰sittely
 
-	bsr	obtainModuleList
-	bsr setMainWindowWaitPointer
-
 	move.l	a3,d5		* muistialue talteen d5:een
 	moveq	#0,d6		* 0 = vanha formaatti
 
@@ -9186,7 +9253,6 @@ rlpg	tst	filereq_prosessi(a5)
 
 	lea	moduleListHeader(a5),a4
 .ploop
-
 	tst	d6
 	bne.b	.new1
 	moveq	#0,d0
@@ -9280,8 +9346,6 @@ rlpg	tst	filereq_prosessi(a5)
 	lob	rtFreeRequest
 
 .ex
-	bsr clearMainWindowWaitPointer
-	bsr	releaseModuleList
 
 	clr.l	chosenmodule(a5)	* moduuliksi eka
 .kex	bsr.w	clear_random
@@ -9298,9 +9362,6 @@ rlpg	tst	filereq_prosessi(a5)
 	lea	openerror_t(pc),a1
 	bsr.w	request
 	bra.b	.x1
-
-
-
 
 
 .uerr	dc.b	"Not a module program!",0
@@ -9372,8 +9433,15 @@ nimenalku
 .fof	rts
 
 
-
 rsaveprog
+	bsr obtainModuleList
+	bsr setMainWindowWaitPointer
+	bsr.b	.doSaveProg
+	bsr clearMainWindowWaitPointer
+	bsr releaseModuleList
+	rts
+
+.doSaveProg
 	clr.b	movenode(a5)
 
 	tst	filereq_prosessi(a5)
@@ -9443,9 +9511,6 @@ rsaveprog
 	move.l	d0,d6
 	beq.w	.openerr	
 
-	bsr obtainModuleList
-	bsr setMainWindowWaitPointer
-
 	move.l	d6,d1
 	lea	prgheader(pc),a0
 	move.l	a0,d2
@@ -9489,9 +9554,6 @@ rsaveprog
 	move.l	d6,d1
 	beq.b	.x1
 	lob	Close
-
-	bsr clearMainWindowWaitPointer
-	bsr releaseModuleList
 
 .x1	move.l	req_file2(a5),d0
 	beq.b	.ex
@@ -18595,8 +18657,8 @@ rexxmessage
 	bmi.b	.getcfil0
 	cmp.l	#PLAYING_MODULE_REMOVED,d0
 	beq.b	.getcfil0
-	addq	#1,d0
-	bra.w	i2amsg
+	addq.l	#1,d0
+	bra.w	i2amsg2
 .getcfil0
 	moveq	#0,d0
 	bra.w	i2amsg
@@ -18636,7 +18698,7 @@ rexxmessage
 	bmi.b	.getc0
 	addq.l	#1,d0
 	cmp.l	#PLAYING_MODULE_REMOVED+1,d0
-	bne.w	i2amsg
+	bne.w	i2amsg2
 .getc0	moveq	#0,d0
 	bra.w	i2amsg
 
