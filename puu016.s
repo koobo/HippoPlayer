@@ -4,9 +4,46 @@
 *******************************************************************************
 * Aloitettu 5.2.-94
 
+; MEM corruption
+; - start 
+; - add Authors.A-Z
+; - play
+; - exit
+; to fix: add buffer to l_filename
+; somewhere: l_filename buffer is overwritten
+
 * Thing to test:
 * - load and save large programs
 * - load large: play, eject, out of memory, hang
+* bug:
+* - load prg
+* - clear list
+* - add
+* --> semaphore hang
+* bug:
+* - new
+* - add moduleprg
+* -> permanent waitpointer
+* bug:
+* - load prog
+* - play
+* - clear
+* - add
+* -> sem hang
+* bug:
+* - add XTD
+* - sort
+* - väärä järjestys
+* bug:
+* -add
+* - cancel
+* - add again
+* -> sem hang
+* enforcer hit:
+* - add
+* - close app
+* - close "warning dialog"
+* - exit app
 
 ver	macro
 ;	dc.b	"v2.30 (5.8.1996)"
@@ -25,7 +62,7 @@ ver	macro
 	endm	
 
 
-DEBUG	= 0
+DEBUG	= 1
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
 asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
@@ -862,6 +899,7 @@ filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 
 loading		rs.b	1		* ~0: lataus meneillään
 loading2	rs.b	1		* ~0: filejen addaus meneillään
+							* TODO: not used, remove?
 
 ** InfoWindow kamaa
 infosample	rs.l	1		* samplesoittajan väliaikaisalue
@@ -1102,9 +1140,10 @@ l_rplay		rs.b	1			* randomplay-lippu: ~0=soitettu
 l_filename	rs.b	0			* tied.nimi ja polku alkaa tästä
 								* full path to filename begins at this point
 								* element size is dynamically calculated based on path length.
-			rs.b	30			* turvallisuustekijä
+			;rs.b	4			* turvallisuustekijä
 								* TODO: remove this?
 								* safety buffer?
+			;rs.b	26
 l_size		rs.b	0
 
 
@@ -1583,9 +1622,21 @@ about_t1
 PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
 	lea	var_b,a5
-	move.l	32+4(sp),a0
 	move.l	output(a5),d1
-	beq.b	.x
+	bne.b	.open
+
+	move.l	#.bmb,d1
+	move.l	#MODE_NEWFILE,d2
+	lore	Dos,Open
+	move.l	d0,output(a5)
+	move.l	d0,d1
+	bra.b	.open
+.bmb	
+	dc.b	"CON:0/0/350/500/HiP debug window",0
+    even
+.open
+	move.l	32+4(sp),a0
+
 	moveq	#0,d3
 	move.l	a0,d2
 .p	addq	#1,d3
@@ -1601,6 +1652,30 @@ DEBU	macro
 	ifne	DEBUG
 	pea	\1
 	jsr	PRINTOUT
+	endc
+	endm
+
+DPRINT macro
+	ifne DEBUG
+	pea	.DD\2(pc)
+	jsr	PRINTOUT
+	bra.b	.D\2
+.DD\2
+ 	dc.b 	\1,10,0
+ 	even
+.D\2
+	endc
+	endm
+
+DPRINT2 macro
+	ifne DEBUG
+	pea	.LDD\2(pc)
+	jsr	PRINTOUT
+	bra.b	.LD\2
+.LDD\2
+ 	dc.b 	\1,0
+ 	even
+.LD\2
 	endc
 	endm
 
@@ -1696,19 +1771,24 @@ main
 	or.l	#IDCMP_CHANGEWINDOW,idcmpmw	
 
 .vanha
+lelp
 
-
-
+	* Dos has been opened in the startup code
+	
  ifeq asm				* uusi nykyinen hakemisto
 	move.l	lockhere(a5),d1
 	lore	Dos,CurrentDir
  endc
 
+	* In asm mode startup code is skipped
  ifne asm
 	lea	dosname(pc),a1
 	lore	Exec,OldOpenLibrary
 	move.l	d0,_DosBase(a5)
  endc
+
+
+
 
 	lea	intuiname(pc),a1
 	lore	Exec,OldOpenLibrary
@@ -1746,17 +1826,6 @@ main
 	lore	Dos,Open
 	move.l	d0,nilfile(a5)
 
- ifne DEBUG
-	move.l	#.bmb,d1
-	move.l	#MODE_NEWFILE,d2
-	lob	Open
-	move.l	d0,output(a5)
-	bra.b	.tr
-.bmb	dc.b	"CON:0/0/300/150/HiP debug window",0
- even
-.tr
- endc
-
 	lea	cianame,a1
 	push	a1
 	move.b	#'a',3(a1)
@@ -1785,6 +1854,7 @@ main
 	lore	GFX,OpenFont
 	move.l	d0,topazbase(a5)
 
+	
 
 	pushm	all
 	bsr.w	loadprefs
@@ -2358,6 +2428,7 @@ main
 
 	bra.b	msgloop
 returnmsg
+	;DPRINT	"return msg",1
 	bsr.w	flush_messages
 msgloop	
 	tst.b	exitmainprogram(a5)
@@ -2593,7 +2664,7 @@ msgloop
 	
 .nwww	pop	d0
 
-	bsr		areMainWindowGadgetsFrozen
+	bsr.w		areMainWindowGadgetsFrozen
 	bne.b	.nwwwq
 
 	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
@@ -2673,7 +2744,7 @@ getmoremsg
 
 	lob	ReplyMsg
 
-	bsr		areMainWindowGadgetsFrozen
+	bsr.w		areMainWindowGadgetsFrozen
 	bne.w	msgloop
 
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
@@ -2814,6 +2885,10 @@ exit
 	lore	Dos,Close
 
  ifne DEBUG
+ 	DPRINT  "Exiting",1
+	move.l	#1*50,d1
+	lore	Dos,Delay
+
  	move.l	output(a5),d1
  	beq.b	.xef
 	lob	Close
@@ -2827,7 +2902,7 @@ exit
 	lore	Exec,CloseLibrary
 .nahf	
 	move.l	_MedPlayerBase1(a5),d0
-	bsr.w	closel
+	bsr.b	closel
 	move.l	_MedPlayerBase2(a5),d0
 	bsr.b	closel
 	move.l	_MedPlayerBase3(a5),d0
@@ -2873,6 +2948,8 @@ exit2
 	move.l  _DosBase(a5),a6
 	jsr 	_LVOUnLoadSeg(a6)
  endc
+
+
 	move.l	_DosBase(a5),d0		* last library to be closed
 	bsr.b	closel
 
@@ -4225,7 +4302,7 @@ releaseModuleData
 
 showOutOfMemoryError
 	lea		memerror_t,a1
-	bra		request
+	bra.w		request
 
 lockMainWindow 
 	tst.l	windowbase(a5)
@@ -4239,7 +4316,7 @@ lockMainWindow
 unlockMainWindow
 	tst.l	mainWindowLock(a5)
 	beq.b	.x 
-	bsr	 	get_rt
+	bsr.w	 	get_rt
 	move.l	windowbase(a5),a0
 	move.l	mainWindowLock(a5),a1
 	lob 	rtUnlockWindow
@@ -4946,7 +5023,8 @@ freemem	movem.l	d0/d1/a0/a1/a6,-(sp)
 freemodule
 	movem.l	d0-a6,-(sp)
 
-	bsr		obtainModuleData
+	DPRINT	"freemodule obtain data",1
+	bsr.w		obtainModuleData
 
 	clr.b	modulename(a5)
 	clr.b	moduletype(a5)
@@ -5005,7 +5083,7 @@ freemodule
 	clr.b	lod_tfmx(a5)
 
 .eee	
-	bsr		releaseModuleData
+	bsr.w		releaseModuleData
 
 	movem.l	(sp)+,d0-a6
 	rts
@@ -5579,23 +5657,25 @@ signalreceived
 	bsr.w	resh
 
 * etsitään vastaava listasta tiedoston nimi
-	bsr		obtainModuleList
+	DPRINT  "signalreceived obtain list",1
+	bsr.w		obtainModuleList
 	lea		moduleListHeader(a5),a4
 .luuppo
 	TSTNODE	a4,a3
-	beq.b	.erer			* end of list reached?
+	beq.w	.erer			* end of list reached?
 	move.l	a3,a4
 	;dbf		d0,.luuppo
 	subq.l	#1,d0 
 	bpl.b	.luuppo
-	bsr 	releaseModuleList
+	DPRINT  "signalreceived release list",2
+	bsr.w 	releaseModuleList
 
 	cmp.b	#'÷',l_filename(a3)	* onko divideri??
 	bne.b	.wasfile
 	tst	d7			* pitää olla jotain että ei jää 
-	bne.b	.eekk			* jummaamaan dividerin kohdalle
+	bne.w	.eekk			* jummaamaan dividerin kohdalle
 	moveq	#1,d7
-	bra.b	.eekk
+	bra.w	.eekk
 .wasfile
 
 	lea	l_filename(a3),a0	* ladataan
@@ -5682,7 +5762,7 @@ satunnaismodi
 	* Loop as much as we have modules and test if the random table 
 	* has free slots left.
 
-.h	bsr.b	testRandomTableEntry
+.h	bsr.w	testRandomTableEntry
 	beq.b	.onviela
 	;dbf	d0,.h
 	subq.l	#1,d0 
@@ -5708,10 +5788,10 @@ satunnaismodi
 	* Got a random value in proper range in d1
 	* Test if a slot is free. Try again if not.
 	move.l	d1,d0
-	bsr.b	testRandomTableEntry
+	bsr.w	testRandomTableEntry
 	bne.b	.a
 	* Was free. Take it.
-	bsr.b	setRandomTableEntry
+	bsr.w	setRandomTableEntry
 	* I choose you, module in index d1
 	move.l	d1,chosenmodule(a5)
 .reet	rts
@@ -5721,7 +5801,8 @@ clear_random
 	pushm	all
 
 ** taulukko tyhjäks
-	bsr	 	obtainModuleList
+	DPRINT  "satunnaismodi obtain list",1
+	bsr.w	 	obtainModuleList
 	lea		randomtable(a5),a0
 	move	#RANDOM_PLAY_TABLE_SIZE/4-1,d0
 .c	clr.l	(a0)+
@@ -5741,7 +5822,8 @@ clear_random
 	st	hippoonbox(a5)
 	bsr.w	shownames
 .x
-	bsr		releaseModuleList
+	DPRINT  "satunnaismodi release list",2
+	bsr.w		releaseModuleList
 	popm	all
 	rts
 
@@ -5777,7 +5859,8 @@ getRandomValueTableEntry
 *   d0 = module index
 setRandomTableEntry
 	pushm	all
-	bsr		obtainModuleList
+	DPRINT  "setRandomTableEntry obtain list",1
+	bsr.w		obtainModuleList
 	
 	* Set it in the table
 	bsr.b	getRandomValueTableEntry
@@ -5797,7 +5880,8 @@ setRandomTableEntry
 	st	l_rplay(a3)
 	st	hippoonbox(a5)
 .x
-	bsr 	releaseModuleList
+	DPRINT  "setRandomTableEntry release list",2
+	bsr.w 	releaseModuleList
 	popm	all
 	rts
 
@@ -5985,7 +6069,8 @@ umph
 * etsitään listasta vastaava tiedosto
 * find the corresponding file from the list
 
-	bsr		obtainModuleList
+	DPRINT  "soitamodi obtain list",1
+	bsr.w		obtainModuleList
 	lea	moduleListHeader(a5),a4
 .luuppo
 	TSTNODE	a4,a3
@@ -5994,11 +6079,12 @@ umph
 	;dbf	d0,.luuppo
 	subq.l	#1,d0 
 	bpl.b  .luuppo
-	bsr		releaseModuleList
+	DPRINT  "soitamodi release list",2
+	bsr.w		releaseModuleList
 
 	* This might be a list divider. Try again in that case.
 	cmp.b	#'÷',l_filename(a3)	* onko divideri?
-	beq.b	umph			* kokeillaan edellistä/seuraavaa/rnd
+	beq.w	umph			* kokeillaan edellistä/seuraavaa/rnd
 
 	cmp.l	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
@@ -6725,7 +6811,7 @@ lista_ylos				* shiftin kanssa nopeempi!
 	bpl.b	.wasOk
 	move.l	modamount(a5),chosenmodule(a5)
 	subq.l	#1,chosenmodule(a5)
-	bra		resh
+	bra.w		resh
 .wasOk
 	move.l	d1,chosenmodule(a5)
 	bra.w	resh
@@ -6792,7 +6878,7 @@ fkeyaction
 
 
 gadgetsup
-	bsr	    areMainWindowGadgetsFrozen
+	bsr.w	    areMainWindowGadgetsFrozen
 	bne.w	returnmsg
 
 
@@ -6866,7 +6952,7 @@ rsort
 	bhs.b	.so
 	rts
 .so
-	bsr		lockMainWindow
+	bsr.w		lockMainWindow
 
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
@@ -6878,14 +6964,14 @@ rsort
 .d
 	move.l	modamount(a5),d0
 	moveq	#4+24,d1		* node address and weight
-	bsr		mulu_32
+	bsr.w		mulu_32
 	addq.l	#8,d0			* add some empty space, this is needed when rebuilding the list
 							* to check if end is reached.
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
 	move.l	d0,sortbuf(a5)
 	bne.b	.okr
-	bsr 	showOutOfMemoryError
+	bsr.w 	showOutOfMemoryError
 	bra.w	.error
 .okr
 
@@ -6893,7 +6979,8 @@ rsort
 
 
 ** Lasketaan painot jokaiselle
-	bsr		obtainModuleList
+	DPRINT  "rsort obtain list",1
+	bsr.w		obtainModuleList
 	;move.l	modamount(a5),d7
 	;subq.l	#1,d7
 	lea	moduleListHeader(a5),a3
@@ -6926,7 +7013,7 @@ rsort
 .ml	moveq	#0,d5		* 1. sortattava node
 	moveq	#0,d6		* viimeinen sortattava node
 
-	bsr.b	.eka
+	bsr.w	.eka
 	bne.b	.loph
 
 	move.l	a3,d5
@@ -6938,7 +7025,7 @@ rsort
 
 	move.l	d7,d0 
 	moveq	#SORT_ELEMENT_LENGTH,d1
-	bsr		divu_32
+	bsr.w		divu_32
 	move.l	d0,d7
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
@@ -6974,8 +7061,9 @@ rsort
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .npl	clr.l	chosenmodule(a5)
 	st	hippoonbox(a5)
-	bsr		releaseModuleList
-	bsr		unlockMainWindow
+	DPRINT  "rsort release list",2
+	bsr.w		releaseModuleList
+	bsr.w		unlockMainWindow
 	bra.w	resh
 
 * a3 = lista
@@ -7040,7 +7128,7 @@ rsort
 	move.l	d1,d0 
 	lsl.l	#8,d0 
 	move.l	#333,d1
-	bsr 	divu_32
+	bsr.w 	divu_32
 	move.l	d0,d1
 
 	MoveQ	#0,d0		; d0=Switch
@@ -7263,7 +7351,8 @@ getcurrent
 getcurrent2
 
 * etsitään listasta vastaava kohta
-	bsr		obtainModuleList
+	DPRINT  "getcurrent obtain list",1
+	bsr.w		obtainModuleList
 	lea	moduleListHeader(a5),a4
 .luuppo
 	TSTNODE	a4,a3
@@ -7272,11 +7361,15 @@ getcurrent2
 	;dbf	d0,.luuppo
 	subq.l	#1,d0 
 	bpl.b  .luuppo
-	bsr		releaseModuleList
+	DPRINT  "getcurrent release list 1",2
+	bsr.w		releaseModuleList
 * a3 = valittu nimi
 	moveq	#1,d0
 	rts
-.q	moveq	#0,d0
+.q	
+	DPRINT  "getcurrent release list 2",3
+	bsr.w		releaseModuleList
+	moveq	#0,d0
 	rts
 
 
@@ -7286,7 +7379,7 @@ getcurrent2
 *******
 
 comment_file
-	bsr.b	getcurrent
+	bsr.w	getcurrent
 	beq.b	.x
 	move.l	a3,a4
 
@@ -7381,7 +7474,8 @@ find_continue
 	bsr.w	setMainWindowWaitPointer
 	pea	clearMainWindowWaitPointer(pc)
 
-	bsr		obtainModuleList
+	DPRINT  "find_continue obtain list",1
+	bsr.w		obtainModuleList
 	bsr.w	getcurrent		* a3 => chosen module listnode
 
 	move.l	chosenmodule(a5),d7
@@ -7415,7 +7509,8 @@ find_continue
 	bne.b	.luuppo2
 
 .q	
-	bsr 	releaseModuleList
+	DPRINT  "find_continue release list",2
+	bsr.w 	releaseModuleList
 	rts
 
 
@@ -7576,7 +7671,7 @@ songo
 	st	kelattiintaakse(a5)
 	bsr.w	settimestart
 
-	bsr	inforivit_play
+	bsr.w	inforivit_play
 .err	
 	bsr.w	lootaan_aika
 .nosong
@@ -7690,9 +7785,9 @@ rbutton4a
 clearlist
 rbutton9
 	clr.b	movenode(a5)
-	bsr		setMainWindowWaitPointer
+	bsr.w		setMainWindowWaitPointer
 	bsr.w	freelist
-	bsr		clearMainWindowWaitPointer
+	bsr.w		clearMainWindowWaitPointer
 	bra.w	shownames
 
 *******************************************************************************
@@ -7772,10 +7867,10 @@ rslider4
 	bpl.b	.e
 	moveq	#0,d1
 .e
-	bsr 	mulu_32
+	bsr.w 	mulu_32
 	add.l	#32767,d0
 	move.l	#65535,d1 
-	bsr	divu_32
+	bsr.w	divu_32
 
 	cmp.l	firstname(a5),d0
 	beq.b	.q
@@ -7836,7 +7931,7 @@ reslider
 	;mulu	#65535,d0
 	push	d1 
 	move.l	#65535,d1 
-	bsr		mulu_32
+	bsr.w		mulu_32
 	pop 	d1
 	
 	bsr.w	divu_32  * d0=d0/d1
@@ -7939,15 +8034,16 @@ playButtonAction
 rbutton1
 
 	tst.b	movenode(a5)
-	beq.b	.nomove
+	beq.w	.nomove
 
 **** Onko move päällä?
 	clr.b	movenode(a5)
 
 	bsr.w	getcurrent
-	beq.b	.nomove
+	beq.w	.nomove
 
-	bsr		obtainModuleList
+	DPRINT  "playButtonAction obtain list",1
+	bsr.w		obtainModuleList
 	lea	moduleListHeader(a5),a0	* Insertoidaan node...
 	move.l	nodetomove(a5),a1
 	move.l	a3,a2
@@ -7955,7 +8051,8 @@ rbutton1
 	addq.l	#1,modamount(a5)
 	addq.l	#1,chosenmodule(a5)	* valitaan movetettu node
 	st	hippoonbox(a5)
-	bsr		releaseModuleList
+	DPRINT  "playButtonAction release list",2
+	bsr.w		releaseModuleList
 	bsr.w	clear_random
 	bra.w	resh
 
@@ -8068,7 +8165,7 @@ rbutton1
 	lea	l_filename(a3),a0	* Ladataan
 	move.l	l_nameaddr(a3),solename(a5)
 	move.b	d7,d0
-	bsr.w	loadmodule
+	jsr	loadmodule
 	tst.l	d0
 	bne.b	.loader
 
@@ -8116,7 +8213,8 @@ rinsert
 	bra.w	rbutton7
 
 rinsert2
-	bsr		obtainModuleList
+	DPRINT  "insertButtonAction obtain list",1
+	bsr.w		obtainModuleList
 	move.l	chosenmodule(a5),d0
 
 * etsitään listasta vastaava kohta
@@ -8130,7 +8228,8 @@ rinsert2
 	bpl.b  .luuppo
 * a3 = valittu nimi
 	move.l	a3,fileinsert(a5)
-	bsr		releaseModuleList
+	DPRINT  "insertButtonAction release list",2
+	bsr.w		releaseModuleList
 	st	filereqmode(a5)
 	rts
 	
@@ -8142,8 +8241,9 @@ rinsert2
 *******
 add_divider
 	tst.l	modamount(a5)
-	beq.b	.x
-	bsr		obtainModuleList
+	beq.w	.x
+	DPRINT  "add_divider obtain list",1
+	bsr.w		obtainModuleList
 	move.l	chosenmodule(a5),d0
 ;	subq	#1,d0			* valitun nimen edellinen node
 
@@ -8193,7 +8293,8 @@ add_divider
 	st	hippoonbox(a5)
 	bsr.w	resh
 .x	
-	bsr		releaseModuleList
+	DPRINT  "add_divider release list",2
+	bsr.w		releaseModuleList
 	rts
 
 .ti	dc.b	"Add divider",0
@@ -8246,17 +8347,17 @@ filereq_code
 					* otetaanko eka moduuli taysin 
 					* randomilla
 
-	bsr		setMainWindowWaitPointer
-	bsr		freezeMainWindowGadgets
-	bsr		obtainModuleList
+	DPRINT  "filereq_code obtain list",1
+	bsr.w		obtainModuleList
+	bsr.w		lockMainWindow
 	bsr.b	.filer
-	bsr		releaseModuleList
-	bsr		unfreezeMainWindowGadgets
-	bsr		clearMainWindowWaitPointer
+	DPRINT  "filereq_code release list",2
+	bsr.w		releaseModuleList
+	bsr.w		unlockMainWindow
 
 	move.b	fileReqSignal(a5),d1	* Send signal, all done
 	bsr.w	signalit
-.n	
+;.n	
 	clr.b	filereqmode(a5)
 
 	lore	Exec,Forbid
@@ -8294,7 +8395,7 @@ filereq_code
 	lea	matchp_tags(pc),a0
 	lore	Req,rtChangeReqAttrA
 
-	st	loading2(a5)
+	st	loading2(a5)			* nobody checks this! killl
 
 	lea	filereqtags(pc),a0
 	move.l	req_file(a5),a1
@@ -8331,7 +8432,6 @@ filereq_code
 ;	subq.l	#1,d4			* -1, nolla pois perästä
 ;	add.l	#l_size,d4		* listayksikön koko
 	add.l	#l_size-1,d4
-	;bsr	  	freezeMainWindowGadgets
 .buildlist
 
 ***** Käsitellään valitut hakemistot 
@@ -8356,6 +8456,11 @@ filereq_code
 	subq.l	#1,a3
 	move.b	#'/',(a3)+
 	clr.b	(a3)
+
+	DPRINT2	"Dir  ->",3
+	DEBU	(sp)
+	DPRINT	"<-",4
+	
 	move.l	a3,d3			* hakemiston pituus
 	sub.l	sp,d3
 	add.l	#l_size,d3		* listayksikön koko
@@ -8505,7 +8610,7 @@ filereq_code
 
 .errd2	popm	all
 
-	bra.b	.errd
+	bra.w	.errd
 
 
 .filetta
@@ -8530,22 +8635,47 @@ filereq_code
 
 	move.l	d3,d0		* hakemisto + nimi (pituus)
 	add.l	a1,d0
+	move.l	d0,d2
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
-	beq.b	.errd
+	beq.w	.errd
 	move.l	d0,a3		* a3 = listunit
+	add.l	d2,d0		* end of memory region
+
+	ifne DEBUG
+	pushm	all
+	;move.l	d0,d2
+	move.l	a1,d0
+	move.l	d3,d1
+	move.l a4,d3
+	lea	fib_FileName+fileinfoblock2(a5),a0
+	move.l	a0,d4
+	lea	.msg(pc),a0
+	bsr.w	desmsg
+	DEBU  desbuf(a5)
+	popm	all
+	bra.b	.d1
+.msg dc.b "%ld+%ld=%ld -> %s+%s",10,0
+.d1
+	endc
 
 	lea	l_filename(a3),a1
 	move.l	a4,a0
-.c2	move.b	(a0)+,(a1)+	* kopioidaan hakemisto
+.c2	
+	move.b	(a0)+,(a1)+	* kopioidaan hakemisto
 	bne.b	.c2
 	subq.l	#1,a1
 	move.l	a1,l_nameaddr(a3)	* ja tiedosto
 	lea	fib_FileName+fileinfoblock2(a5),a0
-.c3	move.b	(a0)+,(a1)+
+.c3	
+	move.b	(a0)+,(a1)+
 	bne.b	.c3
 
 	bsr.w	addfile
+	bra.w	.loopo
+
+.overflow
+	DPRINT	"Overflow",12
 	bra.w	.loopo
 
 .errd	
@@ -8601,8 +8731,6 @@ filereq_code
 
 	bsr.b	addfile
 
-
-
 .skip
 	move.l	rtfl_Next(a4),d0	* Joko loppui?
 	beq.b	.whoops3
@@ -8636,9 +8764,10 @@ filereq_code
 
 .dirdiv
 	lea	.barf(pc),a0
-	bra.b	adddivider
+	bra.w	adddivider
 
 .t	dc.b	"My stomach feels content.",0
+	* This must not be changed, content checked in adddivider below.
 .barf	dc.b	"/\/\/\/\/\/\/\",0
 	even
 
@@ -8648,6 +8777,11 @@ addfile
 	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.r
 
+ ifne DEBUG
+	DPRINT2 "Adding->",1
+	DEBU	l_filename(a3)
+	DPRINT  "<-",2
+ endif
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
 	lea	moduleListHeader(a5),a0	* lisätään listaan
@@ -8670,19 +8804,20 @@ addfile
 
 *** Lisätään divideri hakemistolle
 * a0 = hakemiston nimi
+*      directory name
 
 adddivider
 	pushm	all
 	moveq	#0,d7
 
-
+	* Check configuration flag for automatically added dividers
 	tst.b	divdir(a5)
 	beq.w	.meek
 	move.l	a0,a2
 
 ** testataan onko dirdivideri? jos on, pistetään sen päälle
 	lea	moduleListHeader(a5),a3
-	move.l	MLH_TAILPRED(a3),d0
+	move.l	MLH_TAILPRED(a3),d0    * this points to the last element of the list
 	beq.b	.pehe
 	move.l	d0,a3
 
@@ -8690,77 +8825,92 @@ adddivider
 	beq.b	.pehe
 	move.l	d0,a0
 
-	cmp.b	#'÷',(a0)
+	cmp.b	#'÷',(a0)    * Magic divider character
 	bne.b	.pehe
-	cmp.b	#'/',7(a0)
+	cmp.b	#'/',7(a0)	 * Another magic divider character
 	bne.b	.pehe
-	moveq	#1,d7
+	moveq	#1,d7		 * set a magic flag: overwrite existing divider
 	bra.b	.hue
 .pehe
 
-	move.l	#l_size+30+2,d0
+
+	; List can display 27 characters per line.
+.MAX_WIDTH = 27
+
+	; There is no path information, only the file name on its own.
+	; There will be an invisible char first, the divider magic marker.
+	; There will be a terminating zero last.
+	; Therefore a buffer of 27+1+1 on top of l_size should be ok.
+
+	; Reserve this much chars for the actual name
+.MAX_NAME = 21
+
+	move.l	#l_size+30,d0
 	move.l	#MEMF_CLEAR,d1
 	bsr.w	getmem
 	beq.b	.meek
 
 	move.l	d0,a3
-.hue	move.l	a2,a0
-
+.hue	
+	move.l	a2,a0
 
 	lea	l_filename(a3),a2
 	move.l	a2,l_nameaddr(a3)
+
+	* first insert divider magic marker
 	move.b	#'÷',(a2)+		* divider merkintä
-
-					* a0 = hakemiston nimi
-	lea	-32(sp),sp
-	move.l	sp,a1
-	moveq	#21-1,d0
-.bar	move.b	(a0)+,(a1)+
-	dbeq	d0,.bar
-	clr.b	(a1)
-
-	move.l	sp,a0
-
+							* a0 = directory name
+	* find out length of the name,
+	* max allowed is 21	
 	move.l	a0,a1
-.foo	tst.b	(a1)+
-	bne.b	.foo
+.findLength
+	tst.b	(a1)+
+	bne.b	.findLength
+	* discard null termination
 	subq	#1,a1
-	sub.l	a0,a1
-	move	a1,d0
-	cmp	#27,d0
-	bls.b	.ok
-	moveq	#27,d0
-.ok
-	moveq	#27,d1
+	move.l	a1,d0
+	sub.l	a0,d0
+	cmp	#.MAX_NAME,d0
+	bls.b	.lengthOk
+	moveq	#.MAX_NAME,d0
+.lengthOk
+
+	* this is the high bound that should not be written to
+	lea	.MAX_WIDTH(a2),a1
+
+	* length of name is now in d0.
+	* how much is left for padding stars?
+	moveq	#.MAX_WIDTH,d1
 	sub	d0,d1
+	* how about on either side?
 	lsr	#1,d1
+	* reserve one byte for space on both sides
 	subq	#1,d1
-	bmi.b	.boo
-.fii	move.b	#'*',(a2)+
-	dbf	d1,.fii
-	move.b	#' ',-1(a2)
-.boo
-
-	moveq	#27-1,d0
-.fe	move.b	(a0)+,(a2)+
-	dbeq	d0,.fe
-	tst	d0
-	bmi.b	.fo
-	subq	#1,a2
+	* do left padding
+.leftPad
+	move.b	#'*',(a2)+
+	subq	#1,d1
+	bne.b	.leftPad
 	move.b	#' ',(a2)+
+	* then fill in the name
+.copyName
+	move.b	(a0)+,(a2)+
 	subq	#1,d0
-	bmi.b	.fo
-.fi	move.b	#'*',(a2)+
-	dbf	d0,.fi
-.fo
+	bne.b	.copyName
+	* right pad
+	move.b	#' ',(a2)+
+	* fill until right bound is reached
+.rightPad
+	move.b	#'*',(a2)+
+	cmp.l	a1,a2
+	bne.b	.rightPad
+
 	clr.b	(a2)
+	tst.b	d7		* did we overwrite an old one? 
+	bne.b	.noAdd
+	bsr.w	addfile		* no, let's add
+.noAdd
 
-	tst	d7
-	bne.b	.pad
-	bsr.w	addfile
-.pad
-
-	lea	32(sp),sp
 .meek	popm	all
 	rts
 
@@ -8955,9 +9105,10 @@ winfile
 * Vapautetaan tiedostolista
 *******
 freelist
-	bsr		obtainModuleList
+	DPRINT  "freelist obtain list",1
+	bsr.w		obtainModuleList
 	tst.l		modamount(a5)
-	beq.b	.endlist
+	beq.b	.freelist_end
 	bsr.w	clear_random
 	clr.l		modamount(a5) 
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
@@ -8967,18 +9118,25 @@ freelist
 .ehe
 	clr.l	firstname(a5)
 	bsr.w	reslider
-.freeloop
+	move.l	(a5),a6
+.freelist_loop
+	* a0: list, a1: destroyed, d0: node, or zero
 	lea	moduleListHeader(a5),a0
-	lore	Exec,RemTail
-
+	lob	RemTail
 	tst.l	d0
-	beq.b	.endlist
+	beq.b	.freelist_end
 	move.l	d0,a0
-	bsr.w	freemem
-	bra.b	.freeloop
 
-.endlist
-	bsr		releaseModuleList
+	DPRINT2 "Freeing->",11
+	DEBU	l_filename(a0)
+	DPRINT  "<-",12
+
+	bsr.w	freemem
+	bra.b	.freelist_loop
+
+.freelist_end
+	DPRINT  "freelist release list",2
+	bsr.w		releaseModuleList
 	rts
 
 
@@ -9023,11 +9181,13 @@ rloadprog
 	moveq	#0,d7
 
 rlpg
-	bsr setMainWindowWaitPointer
-	bsr	obtainModuleList
-	bsr .doLoadProgram
-	bsr clearMainWindowWaitPointer
-	bsr	releaseModuleList
+	bsr.w setMainWindowWaitPointer
+	DPRINT  "rloadprog obtain list",1
+	bsr.w	obtainModuleList
+	bsr.b .doLoadProgram
+	bsr.w clearMainWindowWaitPointer
+	DPRINT  "rloadprog release list",2
+	bsr.w	releaseModuleList
 	rts
 
 .doLoadProgram
@@ -9434,11 +9594,13 @@ nimenalku
 
 
 rsaveprog
-	bsr obtainModuleList
-	bsr setMainWindowWaitPointer
+	DPRINT  "rsaveprog obtain list",1
+	bsr.w obtainModuleList
+	bsr.w setMainWindowWaitPointer
 	bsr.b	.doSaveProg
-	bsr clearMainWindowWaitPointer
-	bsr releaseModuleList
+	bsr.w clearMainWindowWaitPointer
+	DPRINT  "rloadprog release list",2
+	bsr.w releaseModuleList
 	rts
 
 .doSaveProg
@@ -9509,7 +9671,7 @@ rsaveprog
 	lob	Open
 
 	move.l	d0,d6
-	beq.w	.openerr	
+	beq.b	.openerr	
 
 	move.l	d6,d1
 	lea	prgheader(pc),a0
@@ -9964,7 +10126,7 @@ sliderit
 	divu	#100,d0
 
 	lea	ahiG6-ahiG5(a0),a0
-	bsr	setknob2
+	bsr.w	setknob2
 
 * mixingrate med
 
@@ -11047,7 +11209,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	bsr.w	.copy
 	lea	pattern_new(a5),a0
 	lea	pattern(a5),a1
-	bsr.w	.copy
+	bsr.b	.copy
 
 	lea	pubscreen_new(a5),a0
 	lea	pubscreen(a5),a1
@@ -14329,7 +14491,8 @@ shn
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien määrä
 .donames
-	bsr  obtainModuleList
+	DPRINT  "shownames obtain list",1
+	bsr.w  obtainModuleList
 	lea	moduleListHeader(a5),a4	
 	subq.l	#1,d0
 	bmi.b	.baa
@@ -14417,7 +14580,8 @@ shn
 	dbf	d5,.looppo
 .lop	
 	
-	bsr 	releaseModuleList
+	DPRINT  "shownames release list",2
+	bsr.w 	releaseModuleList
 	rts
 	
 
@@ -14575,6 +14739,13 @@ elete
 	move.l	a3,a1
 	lore	Exec,Remove
 	move.l	a3,a0
+ ifne DEBUG
+	DPRINT2 "Deleting->",1
+	DEBU	l_filename(a0)
+	DPRINT  "<-",2
+ endc
+
+
 	bsr.w	freemem
 
 	subq.l	#1,modamount(a5)
@@ -15554,16 +15725,17 @@ markline
 unmarkit			* pyyhitaan merkkaus pois
 markit
 	move.l	markedline(a5),d5
-	bmi.b	.outside
+	bmi.w	.outside
 	moveq	#0,d0
 	move	boxsize(a5),d0
 	;cmp	boxsize(a5),d5
 	cmp.l	d0,d5
-	bhs.b	.outside
+	bhs.w	.outside
 	tst.b	win(a5)
-	beq.b	.outside
+	beq.w	.outside
 
-	bsr	 obtainModuleList
+	DPRINT  "markit obtain list",1
+	bsr.w	 obtainModuleList
 	lea	moduleListHeader(a5),a4	
 	move.l	chosenmodule(a5),d0	* etsitään kohta
 .luuppo
@@ -15573,8 +15745,6 @@ markit
 	;dbf	d0,.luuppo
 	subq.l #1,d0 
 	bpl.b  .luuppo
-
-	bsr	 releaseModuleList
 
 	move	d5,d1
 	lsl	#3,d1		* mulu #8,d1
@@ -15598,6 +15768,9 @@ markit
 	move.b	d7,rp_Mask(a1)
 
 .nomods
+	DPRINT  "markit release list",2
+	bsr.w	 releaseModuleList
+
 .outside	
 	rts
 
@@ -15953,7 +16126,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	clr	sfirstname2(a5)
 	clr.l	infotaz(a5)
 
-	bsr	obtainModuleData
+	bsr.w	obtainModuleData
 
 	tst.l	playingmodule(a5)
 	bpl.b	.bah
@@ -16665,7 +16838,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .selvis
 ** If we made this far the module information text has been built
-	bsr	releaseModuleData
+	bsr.w	releaseModuleData
 
 **  Karsitaan kummat merkit pois
 	move.l	infotaz(a5),a2
@@ -17180,7 +17353,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	moveq	#35-2,d0
 	move	d7,d1
-	bsr.w	sprint
+	jsr	sprint
 
 .xw	addq	#8,d7
 	lea	50(sp),sp
@@ -17292,14 +17465,14 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	
 
 
-	bsr		obtainModuleData
+	bsr.w		obtainModuleData
 	move.l	moduleaddress(a5),a1	* onko chipissä?
 	lore	Exec,TypeOfMem
-	bsr		releaseModuleData
+	bsr.w		releaseModuleData
 	btst	#MEMB_CHIP,d0
 	beq.w	.msgloop
 
-	bsr		obtainModuleData
+	bsr.w		obtainModuleData
 	move.l	moduleaddress(a5),a1
 
 	lea	952(a1),a0		* tutkitaan patternien määrä
@@ -17336,10 +17509,10 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	dbf	d0,.l
 
 	tst	d1
-	bne	.sampleLenOk
+	bne.b	.sampleLenOk
 	;* Something wrong with the data, go back to loop
-	bsr	releaseModuleData
-	bra	.msgloop
+	bsr.w	releaseModuleData
+	bra.w	.msgloop
 
 .sampleLenOk
 
@@ -17457,7 +17630,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move	d3,$d4-$96(a3)
 
 	* Sample is now playing
-	bsr		releaseModuleData
+	bsr.w		releaseModuleData
 
 	bra.w	.msgloop
 
@@ -17487,7 +17660,8 @@ rbutton10
 	movem.l	d0-a6,-(sp)
 
 * lasketaan dividereitten määrä
-	bsr		obtainModuleList
+	DPRINT  "aboutButtonAction obtain list",1
+	bsr.w		obtainModuleList
 	moveq	#0,d5
 	lea	moduleListHeader(a5),a4
 .l	TSTNODE	a4,a3
@@ -17498,7 +17672,8 @@ rbutton10
 	addq.l	#1,d5
 	bra.b	.l
 .e	move.l	d5,divideramount(a5)
-	bsr		releaseModuleList
+	DPRINT  "aboutButtonAction release list",2
+	bsr.w		releaseModuleList
 
 	st	infolag(a5)
 
@@ -18368,7 +18543,7 @@ rexxmessage
 	move.l	a2,d0			* nimen pituus
 
 	move.l	#MEMF_CLEAR,d1		* varataan muistia
-	bsr.w	getmem
+	jsr	getmem
 	beq.b	.exit
 	move.l	d0,a3
 
@@ -21093,7 +21268,7 @@ loadmodule
 	jsr	fadevolumedown
 	move	d0,-(sp)
 	lore    Exec,Disable
-	bsr.w	halt			* Vapautetaan se jos on
+	jsr	halt			* Vapautetaan se jos on
 	move.l	modulefilename(a5),a0
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
@@ -23278,9 +23453,9 @@ tutki_moduuli
 	move.b	-(a0),d0
 	and.l	#$dfdfdfdf,d0
 	cmp.l	#'TADM',d0	* MDAT nurinpäi
-	bne	.er
+	bne.w	.er
 	cmp.b	#'.',-(a0)
-	bne	.er
+	bne.w	.er
 
 .ook
 	
@@ -28633,7 +28808,7 @@ p_thx
 	lea	thxroutines(a5),a0
 	bsr.w	allocreplayer
 ;	bne.w	vapauta_kanavat
-	beq	.ok3
+	beq.b	.ok3
 	rts
 
 ;	beq.b	.ok3
