@@ -8347,20 +8347,16 @@ filereq_code
 					* otetaanko eka moduuli taysin 
 					* randomilla
 
-	DPRINT  "filereq_code obtain list",1
-	bsr.w		obtainModuleList
-	bsr.w		lockMainWindow
 	bsr.b	.filer
-	DPRINT  "filereq_code release list",2
-	bsr.w		releaseModuleList
-	bsr.w		unlockMainWindow
+
+	* Now exiting this process
+
+	lore	Exec,Forbid
 
 	move.b	fileReqSignal(a5),d1	* Send signal, all done
 	bsr.w	signalit
-;.n	
 	clr.b	filereqmode(a5)
 
-	lore	Exec,Forbid
 	clr	filereq_prosessi(a5)	* Lippu: prosessi poistettu
 	rts
 	
@@ -8397,17 +8393,45 @@ filereq_code
 
 	st	loading2(a5)			* nobody checks this! killl
 
-	lea	filereqtags(pc),a0
-	move.l	req_file(a5),a1
-	lea	filename(a5),a2
-	lea	filereqtitle(pc),a3
-	lore	Req,rtFileRequestA	* ReqToolsin tiedostovalikko
+	* launch file requester
+	lea	filereqtags(pc),a0		* tags for configuration
+	move.l	req_file(a5),a1		* requester structure
+	lea	filename(a5),a2			* selected filename (must be 108 bytes)
+	lea	filereqtitle(pc),a3		* requester title
+	lore	Req,rtFileRequestA	* ReqToolsin tiedostovalikko	
+	push	d0					* Result is in d0, 
+								* FALSE or a pointer to rtFileList
 
+	* During processing of data lock window and reserve
+	* the list structure.
+
+	DPRINT  "filereq_code obtain list",1
+	bsr.w		obtainModuleList
+	bsr.w		lockMainWindow
+	pop 	d0
+	bsr.b	.processResult
+
+	move.l	filelistaddr(a5),d0
+	beq.b	.noFileList
+	move.l	d0,a0
+	* This was never done previously. A memory leak possibly?
+	lore	Req,rtFreeFileList
+	clr.l	filelistaddr(a5)
+.noFileList
+
+	DPRINT  "filereq_code release list",2
+	bsr.w		releaseModuleList
+	bsr.w		unlockMainWindow
+	rts
+
+.processResult
+
+	* Test if user selected anything or canceled
 	move.l	d0,filelistaddr(a5)
 	bne.b	.val
 
 	move.b	#$7f,new(a5)		* new-lippu: cancel
-	bra.w	.whoops3		* Valittiinko mit‰‰n?
+	bra	.fileReqCancelled
 .val
 
 	tst.b	new(a5)			* jos 'new', clearataan lista.
@@ -8424,6 +8448,9 @@ filereq_code
 	* contains the files from reqtools as per user selection
 	move.l	filelistaddr(a5),a4	
 	
+	* let's calculate how much space is needed to store
+	* path in d4.
+
 	moveq	#0,d4			* polun pituus
 	lea	tempdir(a5),a0
 .f	addq.l	#1,d4
@@ -8435,6 +8462,7 @@ filereq_code
 .buildlist
 
 ***** K‰sitell‰‰n valitut hakemistot 
+
 	cmp.l	#-1,rtfl_StrLen(a4)	* onko hakemisto?????
 	bne.w	.file				* reqtools-listan file
 
@@ -8449,7 +8477,7 @@ filereq_code
 	lea	tempdir(a5),a0
 .c0	move.b	(a0)+,(a3)+
 	bne.b	.c0
-	subq.l	#1,a3
+	subq.l	#1,a3				* null 
 	move.l	rtfl_Name(a4),a0
 .c1	move.b	(a0)+,(a3)+
 	bne.b	.c1
@@ -8612,7 +8640,9 @@ filereq_code
 
 	bra.w	.errd
 
-
+* in: 
+*   a4="dir 1/dir 2/",0
+*   d3=list element length based on this path
 .filetta
 
 ** Patternmatchaus
@@ -8626,6 +8656,8 @@ filereq_code
 	tst.l	d0			* kelpaako vaiko eik¯?
 	beq.w	.loopo
 .yas
+
+	DPRINT	"Adding file at .filetta",1112
 
 	lea	fib_FileName+fileinfoblock2(a5),a0	* filename
 	move.l	a0,a1
@@ -8705,42 +8737,50 @@ filereq_code
 
 
 ************* Reqtoollislta saadut tiedostot
+* d4=path length
 .file
+	DPRINT 	"Adding file at .file",111
+
 	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin 16383
 	bhs.b	.overload
 
-	move.l	d4,d0			* listunit,polku,nimi pituus
-	add.l	rtfl_StrLen(a4),d0
+	move.l	d4,d0				* listunit,polku,nimi pituus
+	add.l	rtfl_StrLen(a4),d0	* incoming string length
+	addq.l	#1,d0				* space for terminating zero
+	move.l	d0,d2
 
-	move.l	#MEMF_CLEAR,d1		* varataan muistia
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1		* varataan muistia
 	bsr.w	getmem
 	beq.b	.whoops2	
 	move.l	d0,a3
 
 	lea	l_filename(a3),a1
 	lea	tempdir(a5),a0
-.copy	move.b	(a0)+,(a1)+		* kopioidaan polku
+.copy	
+	move.b	(a0)+,(a1)+		* kopioidaan polku
 	bne.b	.copy
-	subq.l	#1,a1
+	subq.l	#1,a1			* remove zero
 	move.l	a1,l_nameaddr(a3)	* pelk‰n nimen osoite
 	movem.l	rtfl_StrLen(a4),d0/a0	* StrLen/Name
 	subq	#1,d0
-.copy2	move.b	(a0)+,(a1)+		* kopioidaan tiedoston nimi
+.copy2
+	move.b	(a0)+,(a1)+		* kopioidaan tiedoston nimi
 	dbf	d0,.copy2
-	clr.b	(a1)
+	clr.b	(a1)	
 
 	bsr.b	addfile
 
 .skip
+								* Check for next entry in rtFileList
 	move.l	rtfl_Next(a4),d0	* Joko loppui?
 	beq.b	.whoops3
 	move.l	d0,a4
 	bra.w	.buildlist
-	
 
 .whoops2
 .whoops	
 .whoops3	
+.fileReqCancelled
 
 	tst.l	chosenmodule(a5)
 	bpl.b	.ee
