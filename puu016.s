@@ -4,6 +4,10 @@
 *******************************************************************************
 * Aloitettu 5.2.-94
 
+; open error hang
+; - load module that leads to open error
+; - semaphore hang?
+
 ; MEM corruption
 ; - start 
 ; - add Authors.A-Z
@@ -1056,7 +1060,8 @@ ARGVSLOTS	=	16		* max. parametrejä
 sv_argvArray	rs.l	ARGVSLOTS	* parametrihommia
 sv_argvBuffer	rs.b	256		*
 
-randomtable	rs.b	RANDOM_PLAY_TABLE_SIZE	* Taulukko satunnaissoittoon
+randomValueMask  	rs.l		1 * mask to quickly cull too big random numbers based on modamount
+randomtable		rs.l		1 * pointer to random table, allocated when needed
 
 kplbase	rs.b	k_sizeof		* KPlayerin muuttujat (ProTracker)
 
@@ -1136,14 +1141,9 @@ xpl_offs	=	49
 		rs.b	MLH_SIZE		* Minimal List Header
 l_nameaddr	rs.l	1			* osoitin pelkkään tied.nimeen
 								* address to filename without path
-l_rplay		rs.b	1			* randomplay-lippu: ~0=soitettu
 l_filename	rs.b	0			* tied.nimi ja polku alkaa tästä
 								* full path to filename begins at this point
 								* element size is dynamically calculated based on path length.
-			;rs.b	4			* turvallisuustekijä
-								* TODO: remove this?
-								* safety buffer?
-			;rs.b	26
 l_size		rs.b	0
 
 
@@ -1648,6 +1648,7 @@ PRINTOUT
 	rts
  endc
 
+* Print to debug console
 DEBU	macro
 	ifne	DEBUG
 	pea	\1
@@ -1655,9 +1656,17 @@ DEBU	macro
 	endc
 	endm
 
+* Print to debug console
+* Param 1: string
+* Param 2: label,  for some reason \@ doesn't work
+* d0-d7:    formatting parameters
 DPRINT macro
 	ifne DEBUG
-	pea	.DD\2(pc)
+	push a0
+	lea .DD\2(pc),a0
+	jsr	desmsg
+	pop a0
+	pea	desbuf(a5)
 	jsr	PRINTOUT
 	bra.b	.D\2
 .DD\2
@@ -1667,6 +1676,7 @@ DPRINT macro
 	endc
 	endm
 
+* No auto line feed
 DPRINT2 macro
 	ifne DEBUG
 	pea	.LDD\2(pc)
@@ -1679,6 +1689,15 @@ DPRINT2 macro
 	endc
 	endm
 
+* delay
+DDELAY macro
+	ifne DEBUG
+	pushm	all
+	move.l	#\1*50,d1
+	lore	Dos,Delay
+	popm	all
+	endc
+	endm
 
  ifne asm
 flash	
@@ -1686,13 +1705,6 @@ flash
 	btst	#6,$bfe001
 	bne.b	.p
 	rts
- endc
-
-
- ifne DEBUG
-PAH1	dc.b	"Loa",10,0
-PAH2	dc.b	"TUt",10,0
- even
  endc
 
 *
@@ -2173,7 +2185,7 @@ lelp
 	lea	moduleListHeader(a5),a0		* Uusi lista
 	NEWLIST	a0
 
-	bsr.w	loadkeyfile		* ladataan key-file
+	jsr	loadkeyfile		* ladataan key-file
 
 
 ******* Vanha kick: otsikkopalkin ja WB-nayton koko
@@ -2354,7 +2366,7 @@ lelp
 	tst.b	infoon(a5)
 	beq.b	.qq
 ;	st	oli_infoa(a5)
-	bsr.w	rbutton10b
+	jsr	rbutton10b
 .qq
 
 	bsr.w	inforivit_clear
@@ -2428,7 +2440,6 @@ lelp
 
 	bra.b	msgloop
 returnmsg
-	;DPRINT	"return msg",1
 	bsr.w	flush_messages
 msgloop	
 	tst.b	exitmainprogram(a5)
@@ -2839,6 +2850,8 @@ exit
 	bsr.w	freemem
 	move.l	calibrationaddr(a5),a0
 	bsr.w	freemem
+	move.l	randomtable(a5),a0
+	bsr 	freemem
 
 	bsr.w	flush_messages
 	bsr.w	sulje_ikkuna
@@ -4302,7 +4315,7 @@ releaseModuleData
 
 showOutOfMemoryError
 	lea		memerror_t,a1
-	bra.w		request
+	jmp		request
 
 lockMainWindow 
 	tst.l	windowbase(a5)
@@ -4953,7 +4966,7 @@ poptofront
 	beq.b	.now
 	clr	rawkeyinput(a5)
 .now	move.b	rawKeySignal(a5),d1
-	bsr.w	signalit
+	jsr	signalit
 	movem.l	(sp)+,d0-a6
 	rts
 
@@ -5232,9 +5245,9 @@ buttonspressed
 
 	tst	quad_prosessi(a5)	* jos ei ollu, päälle
 	bne.b	.rew
-	bsr.w	start_quad		
+	jsr	start_quad		
 	bra.w	returnmsg
-.rew	bsr.w	sulje_quad		* suljetaan jos oli auki
+.rew	jsr	sulje_quad		* suljetaan jos oli auki
 	bra.w	returnmsg
 .y
 
@@ -5743,6 +5756,13 @@ signalreceived
 	beq.b	.reet
 	bra.w	soitamodi2
 
+
+******************************************************************************
+*
+* Random stuff
+*
+****************
+
 * Randomize a module
 * out:
 *    chosenmodule(a5) will get the index of the randomized module
@@ -5768,6 +5788,8 @@ satunnaismodi
 	subq.l	#1,d0 
 	bpl.b	.h
 
+	DPRINT 	"all random table slots taken",1
+
 	* All slots taken, clear it and start over.
 	* This means all modules have randomly played.
 	bsr.b	clear_random
@@ -5792,6 +5814,7 @@ satunnaismodi
 	bne.b	.a
 	* Was free. Take it.
 	bsr.w	setRandomTableEntry
+
 	* I choose you, module in index d1
 	move.l	d1,chosenmodule(a5)
 .reet	rts
@@ -5799,30 +5822,24 @@ satunnaismodi
 
 clear_random
 	pushm	all
-
+	
 ** taulukko tyhjäks
-	DPRINT  "satunnaismodi obtain list",1
+	DPRINT  "clear_random",1
 	bsr.w	 	obtainModuleList
-	lea		randomtable(a5),a0
-	move	#RANDOM_PLAY_TABLE_SIZE/4-1,d0
-.c	clr.l	(a0)+
-	dbf	d0,.c
-
+	clr.l	randomValueMask(a5)
+	tst.l	randomtable(a5)
+	beq.b	.noList
+	move.l	randomtable(a5),a0 
+	bsr 	freemem 
+	move.l	randomtable(a5),d0
+	clr.l	randomtable(a5)
+.noList
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.x
-	
-	lea	moduleListHeader(a5),a4
-.l	TSTNODE	a4,a3
-	beq.b	.xx
-	move.l	a3,a4
-	clr.b	l_rplay(a3)
-	bra.b	.l
-
-.xx
+	* Request refresh to clear out random pöay indicators
 	st	hippoonbox(a5)
 	bsr.w	shownames
 .x
-	DPRINT  "satunnaismodi release list",2
 	bsr.w		releaseModuleList
 	popm	all
 	rts
@@ -5835,11 +5852,15 @@ clear_random
 testRandomTableEntry
 	push	a0
 	bsr.b	getRandomValueTableEntry
+	beq.b	.error
 	btst	d0,(a0)
+.error
 	pop     a0
 	rts
 
+
 * Each index maps into one bit in the randomtable. 
+* It is created here if not available.
 * It's much faster to use a bit table for this instead of doing list traversal.
 * in:
 *      d0 = module index to test
@@ -5847,11 +5868,38 @@ testRandomTableEntry
 *      a0 = index in the ranom table that should be tested 
 getRandomValueTableEntry	
 	push 	d1
-	lea		randomtable(a5),a0
+	tst.l	randomtable(a5) 
+	bne.w	.yesTable
+
+	* Each byte can hold a slot for 8 modules.
+	* A bit silly dynamic allocation as probably
+	* the amount is a very few bytes.
+	push	d0
+	move.l	modamount(a5),d0 
+	lsr.l	#3,d0
+	addq.l	#1,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	bsr	getmem
+	
+	move.l	d0,randomtable(a5)
+	bne.b	.ok
+	bsr	showOutOfMemoryError
+.ok
+	pop     d0
+		
+	tst.l	randomtable(a5)
+	beq.b	.problem
+.yesTable
+	move.l	randomtable(a5),a0
 	move.l	d0,d1
 	lsr.l	#3,d1 
 	add.l	d1,a0
+	* Restoring d1 with pop (which is a move.l (sp)+) alters the Z-flag.
+	* movem.l (sp)+,d1 would not do this,
+	* for fun clear the Z-flag manually!
 	pop 	d1
+	and.b	#~(1<<2),ccr
+.problem
 	rts
 
 * Sets the random table entry as taken for given module index.
@@ -5859,29 +5907,20 @@ getRandomValueTableEntry
 *   d0 = module index
 setRandomTableEntry
 	pushm	all
-	DPRINT  "setRandomTableEntry obtain list",1
-	bsr.w		obtainModuleList
+	DPRINT  "setRandomTableEntry %ld",1
 	
 	* Set it in the table
-	bsr.b	getRandomValueTableEntry
+	bsr.w	getRandomValueTableEntry
+	beq.b	.error
 	bset	d0,(a0)
+.error
 
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.x
 
-	* Set box indicator
-	lea	moduleListHeader(a5),a4
-.l	TSTNODE	a4,a3
-	beq.b	.x
-	move.l	a3,a4
-	;dbf	d0,.l
-	subq.l	#1,d0 
-	bpl.b	.l
-	st	l_rplay(a3)
+	* This requests refresh of list contents. Possibly not reasonable.
 	st	hippoonbox(a5)
 .x
-	DPRINT  "setRandomTableEntry release list",2
-	bsr.w 	releaseModuleList
 	popm	all
 	rts
 
@@ -5930,9 +5969,12 @@ getRandomValue
         move.l  d0,seed(a5)
         moveq   #$10,d1
         lsr.l   d1,d0
-	and.l     #MAX_RANDOM_MASK,d0
-	move.l	d0,d1
-	pop	d0
+		
+		move.l	d0,d1 
+		bsr	getRandomValueMask
+		and.l	d0,d1
+		
+		pop	d0
         rts
 
 
@@ -5995,6 +6037,55 @@ divu_32	move.l	d3,-(a7)
 	move.l	(a7)+,d3
 	rts	
 
+* To discard too big random values quickly, "and" the value with a suitable mask,
+* based on amount of modules. Calculate the mask here.
+getRandomValueMask
+	move.l	randomValueMask(a5),d0 
+	bne.b	.x
+	move.l 	modamount(a5),d0 
+	bsr.b	findHighestBit 
+	add.l	d0,d0
+	subq.l 	#1,d0
+	move.l	d0,randomValueMask(a5)
+.x	rts
+
+* Find highest bit set in value
+*
+* in: 
+*   d0 = value to check
+* out: 
+*   d0 = highest bit in value set
+* destroy:
+*   d1
+* example: 0x7f -> 0x40
+
+findHighestBit
+	move.l	d0,d1
+	lsr.l	#1,d1
+	or.l	d1,d0
+
+	move.l	d0,d1
+	lsr.l	#2,d1
+	or.l	d1,d0
+
+	move.l	d0,d1
+	lsr.l	#4,d1
+	or.l	d1,d0
+
+	move.l	d0,d1
+	lsr.l	#8,d1
+	or.l	d1,d0
+
+	move.l	d0,d1
+	clr	d1
+	swap	d1
+	or.l	d1,d0
+
+	move.l	d0,d1
+	lsr.l	#1,d1
+	sub.l	d1,d0
+	rts	
+
 
 
 ******************************************************************************
@@ -6017,6 +6108,7 @@ soitamodi2
 
 * Called based on user input
 soitamodi
+	DPRINT  "Soitamodi",1
 	moveq	#0,d6		* 0: allow volume fade down
 	moveq	#0,d5		* 0: no forced random
 umph	
@@ -6059,6 +6151,7 @@ umph
 .ee
 	* Valid chosenmodule index found
 	move.l	d0,chosenmodule(a5)
+	DPRINT "->chosenmodule %ld",12112
 	* Take a slot in the random table as well
 	move.l	d0,d2					* store copy for later
 	bsr.w	setRandomTableEntry		* Merkataan listaan..
@@ -7346,7 +7439,7 @@ getcurrent
 *   d0 = Module index
 * Out:
 *    d0 = 0 if not found
-*    d1 = 1 if data available
+*    d0 = 1 if data available
 *    a3 = list node pointer
 getcurrent2
 
@@ -8032,6 +8125,7 @@ resetslider
 
 playButtonAction
 rbutton1
+	DPRINT  "playButtonAction",1
 
 	tst.b	movenode(a5)
 	beq.w	.nomove
@@ -8042,7 +8136,7 @@ rbutton1
 	bsr.w	getcurrent
 	beq.w	.nomove
 
-	DPRINT  "playButtonAction obtain list",1
+	DPRINT  "playButtonAction obtain list",11
 	bsr.w		obtainModuleList
 	lea	moduleListHeader(a5),a0	* Insertoidaan node...
 	move.l	nodetomove(a5),a1
@@ -8073,6 +8167,8 @@ rbutton1
 	bpl.b	.ere
 	moveq	#0,d0			* jos ei, otetaan eka
 .ere	move	d0,d2
+
+	DPRINT	"->chosen module %ld",2313
 
 	;move.b	new2(a5),d1
 	;clr.b	new2(a5)
@@ -8111,7 +8207,7 @@ rbutton1
 	move.l	a3,a4
 	addq.l	#1,chosenmodule(a5)
 	bsr.w	resh
-	bra.b	.huh
+	bra.w	.huh
 .je
 	cmp.l 	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
@@ -8657,7 +8753,7 @@ filereq_code
 	beq.w	.loopo
 .yas
 
-	DPRINT	"Adding file at .filetta",1112
+	* DPRINT	"Adding file at .filetta",1112
 
 	lea	fib_FileName+fileinfoblock2(a5),a0	* filename
 	move.l	a0,a1
@@ -8672,25 +8768,7 @@ filereq_code
 	bsr.w	getmem
 	beq.w	.errd
 	move.l	d0,a3		* a3 = listunit
-	add.l	d2,d0		* end of memory region
-
-	ifne DEBUG
-	pushm	all
-	;move.l	d0,d2
-	move.l	a1,d0
-	move.l	d3,d1
-	move.l a4,d3
-	lea	fib_FileName+fileinfoblock2(a5),a0
-	move.l	a0,d4
-	lea	.msg(pc),a0
-	bsr.w	desmsg
-	DEBU  desbuf(a5)
-	popm	all
-	bra.b	.d1
-.msg dc.b "%ld+%ld=%ld -> %s+%s",10,0
-.d1
-	endc
-
+	
 	lea	l_filename(a3),a1
 	move.l	a4,a0
 .c2	
@@ -8706,12 +8784,7 @@ filereq_code
 	bsr.w	addfile
 	bra.w	.loopo
 
-.overflow
-	DPRINT	"Overflow",12
-	bra.w	.loopo
-
 .errd	
-
 	move.l	d6,d1
 	beq.b	.erde
 	lore	Dos,UnLock
@@ -8817,11 +8890,12 @@ addfile
 	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.r
 
- ifne DEBUG
-	DPRINT2 "Adding->",1
-	DEBU	l_filename(a3)
-	DPRINT  "<-",2
- endif
+;  ifne DEBUG
+; 	DPRINT2 "Adding->",1
+; 	DEBU	l_filename(a3)
+; 	DPRINT  "<-",2
+;  endif
+
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
 	lea	moduleListHeader(a5),a0	* lisätään listaan
@@ -9148,33 +9222,35 @@ freelist
 	DPRINT  "freelist obtain list",1
 	bsr.w		obtainModuleList
 	tst.l		modamount(a5)
-	beq.b	.freelist_end
-	bsr.w	clear_random
-	clr.l		modamount(a5) 
+	beq.w	.listEmpty
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
-	tst.l		playingmodule(a5)
+	tst.l	playingmodule(a5)
 	bmi.b	.ehe
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .ehe
-	clr.l	firstname(a5)
-	bsr.w	reslider
 	move.l	(a5),a6
 .freelist_loop
 	* a0: list, a1: destroyed, d0: node, or zero
 	lea	moduleListHeader(a5),a0
 	lob	RemTail
 	tst.l	d0
-	beq.b	.freelist_end
+	beq.b	.listFreed
 	move.l	d0,a0
-
-	DPRINT2 "Freeing->",11
-	DEBU	l_filename(a0)
-	DPRINT  "<-",12
 
 	bsr.w	freemem
 	bra.b	.freelist_loop
 
-.freelist_end
+.listFreed
+	* no longer modules in list, at all
+	clr.l	modamount(a5) 
+	* need to reset random table to nothingness as well
+	bsr.w	clear_random
+
+	* reset list slider and list box 
+	clr.l	firstname(a5)	
+	bsr.w	reslider
+
+.listEmpty
 	DPRINT  "freelist release list",2
 	bsr.w		releaseModuleList
 	rts
@@ -14534,6 +14610,10 @@ shn
 	DPRINT  "shownames obtain list",1
 	bsr.w  obtainModuleList
 	lea	moduleListHeader(a5),a4	
+
+	* d0 = module index
+	* find out the corresponding list entry
+	move.l	d0,d3 		* keep track of the module index as well here
 	subq.l	#1,d0
 	bmi.b	.baa
 .luuppo
@@ -14552,6 +14632,9 @@ shn
 	add	#83+WINY-14,d6		* Y
 
 .looppo
+	* a4=current node
+	* a3=next node
+	* test if at end
 	TSTNODE	a4,a3
 	beq.w	.lop			* joko loppui
 	move.l	a3,a4
@@ -14560,13 +14643,13 @@ shn
 	bsr.w	cut_prefix
 	move.l	a0,a1
 
-	moveq	#0,d7
+	moveq	#0,d7			* clear divider flag
 
 	cmp.b	#'÷',(a1)		* list divider magic marker check?
 	bne.b	.nodi
-	addq	#1,a1
-	st	d7
-
+	addq	#1,a1			* skip to avoid displaying marker
+	st		d7				* set flag: divider being handled
+	* Set color for list divider
 	push	a1
 	move.l	pen_2(a5),d0
 	move.l	rastport(a5),a1
@@ -14576,28 +14659,31 @@ shn
 	lob	SetAPen
 	pop	a1
 .nodi
-
+	* copy name into temporary stack buffer
 	lea	-30(sp),sp
 	move.l	sp,a2
 	move.l	a2,a0
 	moveq	#27-1,d0		* max kirjainten määrä nimessä
 .ff	move.b	(a1)+,(a2)+
 	dbeq	d0,.ff
+	* test if buffer exhausted already
 	tst	d0
 	bmi.b	.fo
+	* all of the name was copied, remove trailing zero and fill with empty
 	subq	#1,a2
 .fi	move.b	#' ',(a2)+
 	dbf	d0,.fi
-.fo	clr.b	(a2)
+.fo	clr.b	(a2)			* terminate
 
-
-	tst.b	d7
+	tst.b	d7			* divider will not have a random play marker
 	bne.b	.fu
 
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.fu
 	* Random play mode magic check: Add a marker to the end to indicate module has been played?
-	tst.b	l_rplay(a3)
+	* Here the module index is needed
+	move.l 	d3,d0 
+	bsr		testRandomTableEntry
 	beq.b	.fu
 	move.b	#"®",-1(a2)
 .fu
@@ -14606,6 +14692,7 @@ shn
 	addq.l	#8,d6
 	bsr.w	print
 
+	* Set ordinary colors if divider was previously printed
 	tst.b	d7
 	beq.b	.nodiv
 	move.l	pen_0(a5),d0
@@ -14616,7 +14703,9 @@ shn
 	lob	SetAPen
 .nodiv
 
+	* loop until all names printed
 	lea	30(sp),sp
+	addq.l	#1,d3 	 	* next module index
 	dbf	d5,.looppo
 .lop	
 	
@@ -15779,6 +15868,9 @@ markit
 	lea	moduleListHeader(a5),a4	
 	move.l	chosenmodule(a5),d0	* etsitään kohta
 .luuppo
+	* a4=current node
+	* a3=next node
+	* test if at end
 	TSTNODE	a4,a3
 	beq.b	.nomods
 	move.l	a3,a4
@@ -17505,14 +17597,14 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	
 
 
-	bsr.w		obtainModuleData
+	jsr		obtainModuleData
 	move.l	moduleaddress(a5),a1	* onko chipissä?
 	lore	Exec,TypeOfMem
-	bsr.w		releaseModuleData
+	jsr		releaseModuleData
 	btst	#MEMB_CHIP,d0
 	beq.w	.msgloop
 
-	bsr.w		obtainModuleData
+	jsr		obtainModuleData
 	move.l	moduleaddress(a5),a1
 
 	lea	952(a1),a0		* tutkitaan patternien määrä
@@ -17551,7 +17643,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	tst	d1
 	bne.b	.sampleLenOk
 	;* Something wrong with the data, go back to loop
-	bsr.w	releaseModuleData
+	jsr	releaseModuleData
 	bra.w	.msgloop
 
 .sampleLenOk
@@ -17670,7 +17762,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move	d3,$d4-$96(a3)
 
 	* Sample is now playing
-	bsr.w		releaseModuleData
+	jsr		releaseModuleData
 
 	bra.w	.msgloop
 
@@ -17701,7 +17793,7 @@ rbutton10
 
 * lasketaan dividereitten määrä
 	DPRINT  "aboutButtonAction obtain list",1
-	bsr.w		obtainModuleList
+	jsr		obtainModuleList
 	moveq	#0,d5
 	lea	moduleListHeader(a5),a4
 .l	TSTNODE	a4,a3
@@ -17713,7 +17805,7 @@ rbutton10
 	bra.b	.l
 .e	move.l	d5,divideramount(a5)
 	DPRINT  "aboutButtonAction release list",2
-	bsr.w		releaseModuleList
+	jsr		releaseModuleList
 
 	st	infolag(a5)
 
@@ -17784,9 +17876,9 @@ rawrequest
 	beq.b	.w
 	move.l	d7,a3
 	lea	inforeqtags0(pc),a0
-	bsr.w	setMainWindowWaitPointer
+	jsr	setMainWindowWaitPointer
 	lob	rtEZRequestA
-	bsr.w	clearMainWindowWaitPointer
+	jsr	clearMainWindowWaitPointer
 	move.l	d0,-(sp)
 	move.l	d7,a1
 	lob	rtFreeRequest
@@ -21355,6 +21447,11 @@ loadmodule
 .nodbf
 	** Normal loading
 
+ ifne DEBUG
+	move.l	a0,d0
+	DPRINT	 "Loading: %s",1
+ endif
+
 	jsr	freemodule		* Varmistetaan
 
 	clr	songnumber(a5)
@@ -21372,8 +21469,6 @@ loadmodule
 	clr.b	loading(a5)		* lataus loppu
 
 	clr.b	songover(a5)	* varmistuksia, hölmöo
-
-	DEBU	PAH1
 
 
 .diddbf	bsr.w	inforivit_clear
@@ -21415,8 +21510,6 @@ loadmodule
 ;	addq	#4,sp			* ei palata samaan aliohjelmaan!
 	rts
 .nip
-
-	DEBU	PAH2
 
 	bsr.w	tutki_moduuli
 	tst.l	d0
