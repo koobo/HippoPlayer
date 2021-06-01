@@ -4,6 +4,16 @@
 *******************************************************************************
 * Aloitettu 5.2.-94
 
+; startissa a500:lla aika hidasta? mihk‰ aika menee
+
+; 68040
+; MusicAss
+; - ei soi
+; JamCracker
+; - piippailee
+
+; DeltaMusic?
+
 ; open error hang
 ; - load module that leads to open error
 ; - semaphore hang?
@@ -1799,8 +1809,7 @@ lelp
 	move.l	d0,_DosBase(a5)
  endc
 
-
-
+	DPRINT	"Hippo is alive"
 
 	lea	intuiname(pc),a1
 	lore	Exec,OldOpenLibrary
@@ -2319,21 +2328,25 @@ lelp
 
 	bsr.w	inforivit_clear
 
+	DPRINT	"Loading group",1
 
 	tst.b	groupmode(a5)			* ladataanko playergrouppi?
-	bne.b	.purr
+	bne.w	.purr
 	jsr	loadplayergroup
 	move.l	d0,externalplayers(a5)
 ;	bne.b	.purr
 ;	lea	grouperror_t,a1		* ei valiteta vaikka ei lˆydykk‰‰n
 ;	bsr.w	request
 
+
 * ladataan playerlibitkin samantien
-	jsr	get_sid
-	jsr	get_med1
-	jsr	get_med2
-	jsr	get_med3
-	jsr	get_mline
+* these were previously loaded at start up. not a very good idea,
+* slows down and uses extra mem for nothing.
+	;jsr	get_sid
+	;jsr	get_med1
+	;jsr	get_med2
+	;jsr	get_med3
+	;jsr	get_mline
 
 .purr
 
@@ -2361,11 +2374,13 @@ lelp
 
 	tst.b	quadon(a5)			* avataanko scope?
 	beq.b	.q
+	DPRINT	"Starting scope",7
 	jsr	start_quad
 .q
 	tst.b	infoon(a5)
 	beq.b	.qq
 ;	st	oli_infoa(a5)
+	DPRINT	"Starting info",8	
 	jsr	rbutton10b
 .qq
 
@@ -2437,6 +2452,8 @@ lelp
 *
 * P‰‰silmukka
 *	
+
+	DPRINT	"Entering msgloop",10
 
 	bra.b	msgloop
 returnmsg
@@ -2777,6 +2794,8 @@ getmoremsg
 exit	
 	lea	var_b,a5
 
+	DPRINT "Hippo is exiting",666
+
 * poistetaan loput prosessit...
 
 
@@ -2797,6 +2816,7 @@ exit
 
 ** k‰sket‰‰n niit‰ sammumaan.
 	st	hippoport+hip_quit(a5)
+
 
 	moveq	#3*25-1,d7		* odotetaan max 2 sekkaa
 .jorl	tst.b	hippoport+hip_opencount(a5)
@@ -2820,8 +2840,8 @@ exit
  even
 
 .ex
-	bsr.w	freelist		* vapautetaan lista
 	bsr.w	rbutton4b		* eject /wo fade
+	bsr.w	freelist		* vapautetaan lista
 	jsr	rem_ciaint
 
 	tst.b	vbsaatu(a5)
@@ -2897,17 +2917,6 @@ exit
 	move.l	nilfile(a5),d1
 	lore	Dos,Close
 
- ifne DEBUG
- 	DPRINT  "Exiting",1
-	move.l	#1*50,d1
-	lore	Dos,Delay
-
- 	move.l	output(a5),d1
- 	beq.b	.xef
-	lob	Close
-.xef
- endc
-
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
 	jsr	rem_sidpatch		* patchi kanssa
@@ -2915,18 +2924,18 @@ exit
 	lore	Exec,CloseLibrary
 .nahf	
 	move.l	_MedPlayerBase1(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_MedPlayerBase2(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_MedPlayerBase3(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_MlineBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 
 	move.l	_PPBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_XPKBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_XFDBase(a5),d0
 	bsr.b	closel
 	move.l	_ScrNotifyBase(a5),d0
@@ -2962,6 +2971,16 @@ exit2
 	jsr 	_LVOUnLoadSeg(a6)
  endc
 
+ ifne DEBUG
+ 	DPRINT  "Exiting",667
+	move.l	#1*50,d1
+	lore	Dos,Delay
+
+ 	move.l	output(a5),d1
+ 	beq.b	.xef
+	lob	Close
+.xef
+ endc
 
 	move.l	_DosBase(a5),d0		* last library to be closed
 	bsr.b	closel
