@@ -104,9 +104,9 @@ PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
 MAX_MODULES		= $1ffff 		    * this should be enough!
 
 
-; Random play related
-RANDOM_PLAY_TABLE_SIZE  = MAX_MODULES/8+1
-MAX_RANDOM_MASK 	= $1ffff 	* output mask for the random generator
+;; Random play related
+;;RANDOM_PLAY_TABLE_SIZE  = MAX_MODULES/8+1
+;;MAX_RANDOM_MASK 	= $ffff 	* output mask for the random generator
 	
 	
  ifne TARK
@@ -7076,7 +7076,7 @@ rsort
 .d
 	move.l	modamount(a5),d0
 	moveq	#4+24,d1		* node address and weight
-	bsr.w		mulu_32
+	bsr.w		mulu_32		* 
 	addq.l	#8,d0			* add some empty space, this is needed when rebuilding the list
 							* to check if end is reached.
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -7963,6 +7963,8 @@ volumerefresh
 *******************************************************************************
 * Fileselectorgadgetti
 *******
+* Calculates the first visible filename baed on slider position
+
 rslider4
 	move.l	gg_SpecialInfo(a2),a0
 	move	pi_VertPot(a0),d0
@@ -7971,7 +7973,13 @@ rslider4
 .q	rts
 .new	move	d0,slider4old(a5)
 
+	* This calculation will not fit into 32 bits if modamount is 0x1ffff.
+	* Will be ok if we scale VertPot down one bit.
+	* Take scaling into account later below as well.
+
 	and.l	#$ffff,d0
+	lsr.l	#1,d0
+
 	move.l	modamount(a5),d1
 	moveq	#0,d2
 	move	boxsize(a5),d2
@@ -7980,8 +7988,8 @@ rslider4
 	moveq	#0,d1
 .e
 	bsr.w 	mulu_32
-	add.l	#32767,d0
-	move.l	#65535,d1 
+	add.l	#32767>>1,d0		* round upwards
+	move.l	#65535>>1,d1 
 	bsr.w	divu_32
 
 	cmp.l	firstname(a5),d0
@@ -8002,6 +8010,9 @@ resh	pushm	all
 
 * Resizes the box slider gadget according to the amount of modules in it
 reslider
+
+	* Calculate pi_vertBody, the vertical size of the prop gadget.
+
 	move.l	modamount(a5),d0
 	bne.b	.e
 	moveq	#1,d0
@@ -8026,9 +8037,11 @@ reslider
 	lea	slider4,a0
 	move.l	gg_SpecialInfo(a0),a1
 	cmp	pi_VertBody(a1),d0
-	sne	d2
+	sne	d2		* did it change compared to previous?
 	lsl	#8,d2
 	move	d0,pi_VertBody(a1)
+
+	* Calculate pi_vertPot, the vertical position of the prop gadget.
 
 *** Toimii vihdoinkin!
 	move.l	modamount(a5),d1
@@ -8037,22 +8050,34 @@ reslider
 	sub.l	d0,d1
 	beq.b	.pp
 	bpl.b	.p
-.pp	moveq	#1,d1
+.pp	moveq	#1+1,d1		; Minimum, must not be zero
 .p	
+
+	* calculations will not fit into 32-bits if firstname is over 0xffff.
+	* scale calculations down with 1 bit.
+
+	* Scale
+	lsr.l	#1,d1
+	
 	move.l	firstname(a5),d0
-	;mulu	#65535,d0
 	push	d1 
-	move.l	#65535,d1 
-	bsr.w		mulu_32
+	move.l	#65535>>1,d1  * scale 
+	bsr.w	mulu_32
 	pop 	d1
 	
+	* vertpot = (first name index) * 65535 / (modamount-boxsize)
+	*
+	*   idx * a * 0.5
+	*   ------------- = 
+	*      b * 0.5
+
 	bsr.w	divu_32  * d0=d0/d1
 	bsr.w	.ch
 	move.l	d0,d1
 
 	; VertPot should be in range 0..$ffff
 	cmp	pi_VertPot(a1),d1
-	sne	d2
+	sne	d2		* did it change compared to previous?
 	move	d1,pi_VertPot(a1)
 
 	move	gg_Height(a0),d0
@@ -8063,7 +8088,7 @@ reslider
 	cmp	slider4oldheight(a5),d0
 	bne.b	.fea
 
-	tst	d2
+	tst	d2		* was there a change?
 	beq.b	.eiup
 
 .fea	tst.b	win(a5)
@@ -8102,10 +8127,12 @@ reslider
 	move	2(a1),(a0)
 
 .bar
+
+	* Refresh one gadget
 	lea	slider4,a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
-	moveq	#1,d0
+	moveq	#1,d0			 	* number of gadgets to refresh
 	lore	Intui,RefreshGList
 
 ;	lea	slider4,a0
@@ -8831,7 +8858,7 @@ filereq_code
 ************* Reqtoollislta saadut tiedostot
 * d4=path length
 .file
-	DPRINT 	"Adding file at .file",111
+	;DPRINT 	"Adding file at .file",111
 
 	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin 16383
 	bhs.b	.overload
