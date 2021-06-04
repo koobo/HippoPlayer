@@ -1062,7 +1062,7 @@ omabitmap5	rs.b	bm_SIZEOF-6*4	* 2
 
 							* Semaphore to protect access to the data of the module
 							* being played.
-moduleDataSemaphore		rs.B	SS_SIZE
+moduleDataSemaphore		rs.b	SS_SIZE
 							* Semaphore to protect access to the module list
 moduleListSemaphore 	rs.b 	SS_SIZE
 
@@ -1708,6 +1708,12 @@ DDELAY macro
 	popm	all
 	endc
 	endm
+
+ ifne DEBUG
+getmemCount 	dc.l	0
+freememCount	dc.l	0
+getmemTotal		dc.l	0
+ endc
 
  ifne asm
 flash	
@@ -2937,26 +2943,26 @@ exit
 	move.l	_XPKBase(a5),d0
 	bsr.w	closel
 	move.l	_XFDBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_ScrNotifyBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_RexxBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_DiskFontBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_WBBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_IntuiBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_GFXBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 	move.l	_ReqBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 
 	bsr.w	tulostavirhe
 exit2
 	move.l	_IntuiBase(a5),d0
-	bsr.b	closel
+	bsr.w	closel
 
  ifeq asm
 	move.l	lockhere(a5),d1		* free CurrentDir lock
@@ -2973,7 +2979,21 @@ exit2
 
  ifne DEBUG
  	DPRINT  "Exiting",667
-	move.l	#1*50,d1
+
+	move.l	getmemCount(pc),d0
+	DPRINT "Getmem count: %ld",668
+	move.l	freememCount(pc),d1
+	DPRINT "Freememcount: %ld",669
+	move.l	getmemTotal(pc),d0 
+	lsr.l	#8,d0 
+	lsr.l	#2,d0 
+	DPRINT "Getmem total: %ld kilobytes",670
+	move.l	getmemTotal(pc),d0
+	move.l	getmemCount(pc),d1
+	bsr		divu_32
+	DPRINT "Getmem avg: %ld bytes",671
+
+	move.l	#(1)*50,d1
 	lore	Dos,Delay
 
  	move.l	output(a5),d1
@@ -4993,9 +5013,14 @@ poptofront
 *******************************************************************************
 * Muistin käsittelyä
 *******
+
 * d0=koko
 * d1=tyyppi
 getmem	movem.l	d1/d3/a0/a1/a6,-(sp)
+ ifne DEBUG
+	add.l	d0,getmemTotal
+	addq.l	#1,getmemCount
+ endc
 	addq.l	#4,d0
 	move.l	d0,d3
 	move.l	4.w,a6
@@ -5010,6 +5035,9 @@ getmem	movem.l	d1/d3/a0/a1/a6,-(sp)
 
 * a0=osoite
 freemem	movem.l	d0/d1/a0/a1/a6,-(sp)
+ ifne DEBUG
+	addq.l	#1,freememCount
+ endc
 	move.l	a0,d0
 	beq.b	.n
 	move.l	-(a0),d0
