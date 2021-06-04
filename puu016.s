@@ -816,7 +816,10 @@ songover	rs.b	1	* kappale soinut loppuun
 uusikick	rs.b	1	* ~0 jos kickstart 2.0+
 win		rs.b 	1	* ~0: ikkuna auki, 0: EI IKKUNAA, hide!
 
-
+* Contains gadget address which was selected with RMB, or null if none.
+rightButtonSelectedGadget 		rs.l 	1	
+* Routine to run after RMB is raised, while still on top of said gadget
+rightButtonSelectedGadgetRoutine	rs.l	1
 
 playing		rs.b	1	* 0: ei soiteta, ei-0: soitetaan
 playmode	rs.b	1	* kuinka soitetaan listaa
@@ -5261,14 +5264,31 @@ mainpriority
 * Hiiren nappeja painettiin
 *******
 
+* SELECTDOWN: left button down
+* SELECTUP: left button up
+* MENUDOWN: right button down
+* MENUUP: right button up
+
 buttonspressed
 	tst.b	win(a5)			* onko ikkuna auki?
 	beq.w	.nowindow
 
-	cmp	#SELECTDOWN,d3		* vasen nappula
-	beq.w	.left
-	cmp	#MENUDOWN,d3		* oikea
-	bne.w	returnmsg
+	cmp	#SELECTDOWN,d3		* left button down
+	bne.b	.test1
+	bsr	.leftButtonDownAction
+	bra	returnmsg
+.test1
+	cmp	#MENUUP,d3
+	bne.b	.test2
+	bsr	.rightButtonUpAction		* right button up
+	bra	returnmsg
+	
+.test2	cmp	#MENUDOWN,d3			* right button down
+	bne.w 	returnmsg
+	bsr	.rightButtonDownAction
+	bra	returnmsg
+
+.rightButtonDownAction
 
 * Oikeata nappulaa painettu. Tutkitaan oliko rmbfunktio-nappuloiden p‰‰ll‰
 
@@ -5276,6 +5296,7 @@ buttonspressed
 	beq.w	.nowindow
 
 ** onko lootan p‰‰ll‰
+** on top of the filebox?
 	move	mousex(a5),d0
 	move	mousey(a5),d1
 	sub	windowleft(a5),d0
@@ -5290,86 +5311,82 @@ buttonspressed
 	cmp	#30+WINY,d1
 	bhi.b	.y
 
+** toggle scope with rmb when on top of suitable place
+
 	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
 	bne.b	.rew
 	jsr	start_quad		
-	bra.w	returnmsg
+	rts
 .rew	jsr	sulje_quad		* suljetaan jos oli auki
-	bra.w	returnmsg
+.handled
+	rts
 .y
 
+** check buttons with RMB functions defined and trigger those
 
-	movem	button11+4,d0-d3	* new
-	bsr.w	.namiska
-	bne.b	.eipa2
-	bsr.w	rbutton9	* clr list
-	bra.w	returnmsg
-.eipa2
+	DPRINT		"RMB DOWN check",1
 
-	movem	button20+4,d0-d3	* prefs
-	bsr.w	.namiska
-	bne.b	.eipa1
-	bsr.w	zoomfilebox	* fileboxi pois/p‰‰lle
-	bra.w	returnmsg
-.eipa1
+	* New
+	lea	button11,a0
+	lea	rbutton9(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.b	.handled
 
+	* Prefs
+	lea	button20,a0
+	lea	zoomfilebox(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.b	.handled
 
-	movem	lilb2+4,d0-d3		* sort-gadgetti
-	bsr.w	.namiska
-	bne.b	.eip
-	bsr.w	find_new	* search
-	bra.w	returnmsg
-.eip
-	movem	lilb1+4,d0-d3		* move-gadgetti
-	bsr.w	.namiska
-	bne.b	.eip1
-	bsr.w	add_divider	* add divider
-	bra.w	returnmsg	
-.eip1
+	* Sort
+ 	lea	lilb2,a0
+	lea 	find_new(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.b	.handled
+	
+	* Move
+ 	lea	lilb1,a0
+	lea 	add_divider(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.b	.handled
 
-	movem	button7+4,d0-d3		* add-gadgetti
-	bsr.w	.namiska
-	bne.b	.eip3
-	bsr.w	rinsert		* insert
-	bra.w	returnmsg
-.eip3
+	* Add
+ 	lea	button7,a0
+	lea 	rinsert(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.b	.handled
 
-	movem	plg+4,d0-d3		* load prg
-	bsr.w	.namiska
-	bne.b	.eip2
-	bsr.w	rsaveprog	* load prg
-	bra.w	returnmsg
-.eip2
+	* Load Prg
+ 	lea	plg,a0
+	lea 	rsaveprog(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.w	.handled
 
+	* >
+ 	lea	kela2,a0
+	lea 	rbutton_kela2_turbo(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.w	.handled
 
-	movem	kela2+4,d0-d3		* >
-	bsr.w	.namiska
-	bne.b	.eip4
-	bsr.w	rbutton_kela2_turbo
-	bra.w	returnmsg
-.eip4
+	* Del
+ 	lea	button8,a0
+ 	* nuke file
+	lea 	hiiridelete(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.w	.handled
 
-	movem	button8+4,d0-d3		* del
-	bsr.w	.namiska
-	bne.b	.eip5
-	bsr.w	hiiridelete	* nuke file
-	bra.w	returnmsg
-.eip5
+	* i
+ 	lea	button2,a0
+ 	* toggle about
+	lea 	rbutton10(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.w	.handled
 
-	movem	button2+4,d0-d3		* i
-	bsr.b	.namiska
-	bne.b	.eip6
-	bsr.w	rbutton10	* toggle about
-	bra.w	returnmsg
-.eip6
-
-	movem	button1+4,d0-d3		* play
-	bsr.b	.namiska
-	bne.b	.eip7
-	bsr.w	soitamodi_random * soita randomi
-	bra.w	returnmsg
-.eip7
-
+	* Play
+ 	lea	button1,a0
+	lea 	soitamodi_random(pc),a1
+	bsr	.rightButtonDownCheck
+	beq.w	.handled
 
 .nowindow
 
@@ -5377,13 +5394,13 @@ buttonspressed
 	bne.b	.new
 	bsr.w	sulje_ikkuna		* Vaihdetaan ikkunan kokoa (kick1.3)
 	bsr.w	avaa_ikkuna
-	bra.w	returnmsg
+	rts
 
 .new	move.l	windowbase(a5),a0	* Kick2.0+
 	lore	Intui,ZipWindow
-	bra.w	returnmsg
+	rts
 
-.left	
+.leftButtonDownAction
 
 ;	tst	modamount(a5)
 ;	beq.w	returnmsg
@@ -5404,13 +5421,13 @@ buttonspressed
 	blo.b	.yea
 
 .x	bsr.w	markline		* merkit‰‰n modulenimi
-	bra.w	returnmsg
+	rts
 
 .yea
 
 ** modinfon infon avaus
-	bsr.b	modinfoaaa
-	bra.w	returnmsg
+	bsr.w	modinfoaaa
+	rts
 
 
 *** tutkitaan hiiren napin painamista gadgetin p‰‰llÊ
@@ -5433,9 +5450,62 @@ buttonspressed
 .xx	moveq	#-1,d0
 	rts
 
+* in:
+*   a0=gadget
+*   a1=gadget function to run
+.rightButtonDownCheck
+	movem	gg_LeftEdge(a0),d0-d3
+	bsr.b	.namiska
+	bne.b	.mouseNotOn
+	move.l	a0,rightButtonSelectedGadget(a5)
+	move.l	a1,rightButtonSelectedGadgetRoutine(a5)
+	bsr	forceSelectGadget
+	moveq	#0,d0
+.mouseNotOn
+	rts
+
+* Right button has been released.
+* Check if there was a right button activation on a gadget.
+* If the pointer is still on that gadget, run the routine.
+.rightButtonUpAction
+	move.l	rightButtonSelectedGadget(a5),d2
+	beq.w	.noGadget
+
+	DPRINT	"RMB UP",123
+
+	* In any case RMB selected gadgets should be deselected when now.
+	*
+	* There seems to be some internal state that retains the
+	* complement view even if select flag is cleared and gadget
+	* is refreshed.
+	* Toggling select and deselect again results in a neutral
+	* toggle button look.
+	move.l	d2,a0
+	bsr	forceDeselectGadget
+	move.l	d2,a0
+	bsr	forceSelectGadget
+	move.l	d2,a0
+	bsr	forceDeselectGadget
+	
+	move.l	d2,a0
+	movem	gg_LeftEdge(a0),d0-d3
+	bsr.w	.namiska
+	bne.b	.xy	
+
+	* Pointer was on top, run the routine
+	move.l	rightButtonSelectedGadgetRoutine(a5),d0
+	beq.b	.xy
+	move.l	d0,a0
+	DPRINT	"Execute routine",125
+	jsr		(a0)
+.xy
+	clr.l	rightButtonSelectedGadget(a5)
+	clr.l	rightButtonSelectedGadgetRoutine(a5)
+.noGadget
+	rts
 
 *** Zoomataan fileboxi pois tai takasin
-
+*** Switch filebox size
 zoomfilebox
 	move	boxsize(a5),d0
 	beq.b	.z
@@ -5450,6 +5520,7 @@ zoomfilebox
 	bra.w	signalit		* prefsp‰ivitys-signaali
 	
 
+*** Open module info window
 modinfoaaa
 	tst	info_prosessi(a5)
 	beq.b	.zz
@@ -5465,6 +5536,57 @@ modinfoaaa
 .zz	clr.b	infolag(a5)
 	bsr.w	rbutton10b
 .xz	rts
+
+* Forces a boolean gadget to show the selected status
+* in:
+*   a0=gadget
+forceSelectGadget
+	move.l	a0,d2
+	move.l	windowbase(a5),a0
+	move.l	d2,a1 
+	lore	Intui,RemoveGadget
+
+	move.l	d2,a1
+	or	#GFLG_SELECTED,gg_Flags(a1)
+
+	move.l	windowbase(a5),a0
+	moveq	#-1,d0 
+	lob		AddGadget
+
+	move.l	d2,a0	
+	bsr	refreshGadget
+	rts
+
+* Forces a boolean gadget to show the deselected status
+* in:
+*   a0=gadget
+forceDeselectGadget
+
+	move.l	a0,d2
+	move.l	windowbase(a5),a0
+	move.l	d2,a1 
+	lore	Intui,RemoveGadget
+
+	move.l	d2,a1
+	and	#~GFLG_SELECTED,gg_Flags(a1)
+
+	move.l	windowbase(a5),a0
+	moveq	#-1,d0 
+	lob		AddGadget
+
+	move.l	d2,a0	
+	bsr	refreshGadget
+	rts
+
+* Redraws gadget
+* in:
+*   a0=gadget
+refreshGadget
+	move.l	windowbase(a5),a1
+	sub.l	a2,a2
+	moveq	#1,d0	
+	lore	Intui,RefreshGList
+	rts
 
 
 *******************************************************************************
@@ -7297,7 +7419,7 @@ rsort
 	lsl.l	#3,d6 	* mul by 32
 	add.l	d6,a2	* addr + 32*28
 
-	;Subq.w	#1,d2
+	;Subq.w	#1,d2	* dbf subtract, no not used anymore
 .Loop:	
 	* Compare. 
 	* It's likely the compares after the 1st one are not often hit.
@@ -14857,7 +14979,6 @@ delete
 	clr.b	deleteflag(a5)
 	rts
 elete
-
 	clr.b	movenode(a5)
 	moveq	#PLAYING_MODULE_NONE,d0
 	move.l	d0,chosenmodule2(a5)
