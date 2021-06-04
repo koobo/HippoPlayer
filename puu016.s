@@ -14805,9 +14805,12 @@ cut_prefix
 *******
 
 hiiridelete
+	tst.l	chosenmodule(a5)
+	bmi.b	.noChosen
 	bsr.w	areyousure_delete
 	tst.l	d0
 	bne.b	rbutton8b
+.noChosen
 	rts
 
 rbutton8b
