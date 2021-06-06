@@ -5268,7 +5268,10 @@ mainpriority
 
 ******************************************************************************
 * Hiiren nappeja painettiin
+* Mouse button handler
 *******
+* in:
+*   d3=im_Code
 
 * SELECTDOWN: left button down
 * SELECTUP: left button up
@@ -5332,67 +5335,13 @@ buttonspressed
 
 	DPRINT		"RMB DOWN check",1
 
-	* New
-	lea	button11,a0
-	lea	rbutton9(pc),a1
+	lea		rightButtonActionsList,a2
+.actionLoop
+	movem.l	(a2)+,a0/a1
 	bsr	.rightButtonDownCheck
 	beq.b	.handled
-
-	* Prefs
-	lea	button20,a0
-	lea	zoomfilebox(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.b	.handled
-
-	* Sort
- 	lea	lilb2,a0
-	lea 	find_new(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.b	.handled
-	
-	* Move
- 	lea	lilb1,a0
-	lea 	add_divider(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.b	.handled
-
-	* Add
- 	lea	button7,a0
-	lea 	rinsert(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.b	.handled
-
-	* Load Prg
- 	lea	plg,a0
-	lea 	rsaveprog(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.w	.handled
-
-	* >
- 	lea	kela2,a0
-	lea 	rbutton_kela2_turbo(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.w	.handled
-
-	* Del
- 	lea	button8,a0
- 	* nuke file
-	lea 	hiiridelete(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.w	.handled
-
-	* i
- 	lea	button2,a0
- 	* toggle about
-	lea 	rbutton10(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.w	.handled
-
-	* Play
- 	lea	button1,a0
-	lea 	soitamodi_random(pc),a1
-	bsr	.rightButtonDownCheck
-	beq.w	.handled
+	tst.l	(a2) 
+	bne.b	.actionLoop
 
 .nowindow
 
@@ -5435,33 +5384,11 @@ buttonspressed
 	bsr.w	modinfoaaa
 	rts
 
-
-*** tutkitaan hiiren napin painamista gadgetin päällæ
-.namiska
-	move	mousex(a5),d6
-	move	mousey(a5),d7
-	subq	#1,d3
-	add	d0,d2
-	add	d1,d3
-	cmp	d0,d6
-	blo.b	.xx
-	cmp	d2,d6
-	bhi.b	.xx
-	cmp	d1,d7
-	blo.b	.xx
-	cmp	d3,d7
-	bhi.b	.xx
-	moveq	#0,d0			* kelpaa
-	rts
-.xx	moveq	#-1,d0
-	rts
-
 * in:
 *   a0=gadget
 *   a1=gadget function to run
 .rightButtonDownCheck
-	movem	gg_LeftEdge(a0),d0-d3
-	bsr.b	.namiska
+	bsr		checkMouseOnGadget
 	bne.b	.mouseNotOn
 	move.l	a0,rightButtonSelectedGadget(a5)
 	move.l	a1,rightButtonSelectedGadgetRoutine(a5)
@@ -5481,9 +5408,8 @@ buttonspressed
 
 	* In any case RMB selected gadgets should be deselected when now.
 	*
-	* There seems to be some internal state that retains the
-	* complement view even if select flag is cleared and gadget
-	* is refreshed.
+	* The display memory gets XORred and acts as internal state
+	* even if select flag is cleared and gadget is refreshed.
 	* Toggling select and deselect again results in a neutral
 	* toggle button look.
 	move.l	d2,a0
@@ -5494,8 +5420,7 @@ buttonspressed
 	bsr	forceDeselectGadget
 	
 	move.l	d2,a0
-	movem	gg_LeftEdge(a0),d0-d3
-	bsr.w	.namiska
+	bsr 	checkMouseOnGadget
 	bne.b	.xy	
 
 	* Pointer was on top, run the routine
@@ -5595,6 +5520,34 @@ refreshGadget
 	rts
 
 
+
+* Checks if mouse pointer is within given gadget in main window
+* in: 
+*   a0=gadget
+* destroys:
+*   d0-d3, d6, d7
+* out:
+*   d0 = 0  was inside
+*   d0 = -1 was not inside
+checkMouseOnGadget
+	movem	gg_LeftEdge(a0),d0-d3
+	move	mousex(a5),d6
+	move	mousey(a5),d7
+	subq	#1,d3
+	add	d0,d2
+	add	d1,d3
+	cmp	d0,d6
+	blo.b	.xx
+	cmp	d2,d6
+	bhi.b	.xx
+	cmp	d1,d7
+	blo.b	.xx
+	cmp	d3,d7
+	bhi.b	.xx
+	moveq	#0,d0			* kelpaa
+	rts
+.xx	moveq	#-1,d0
+	rts
 *******************************************************************************
 * Omaan viestiporttiin tuli viesti
 ******
@@ -30172,6 +30125,47 @@ sivu3		include	gadgets/prefs_sivu3.s
 sivu4		include	gadgets/prefs_sivu4.s
 sivu5		include	gadgets/prefs_sivu5.s
 sivu6		include	gadgets/prefs_sivu6.s
+
+* Rename the gadgets defined above to something not crazy
+gadgetPlayButton	  	EQU  button1
+gadgetInfoButton		EQU  button2
+gadgetStopButton		EQU  button3
+gadgetEjectButton		EQU  button4
+gadgetNewButton   		EQU  button11
+gadgetPrefsButton		EQU  button20
+gadgetSortButton        EQU  lilb2
+gadgetMoveButton        EQU  lilb1 
+gadgetAddButton         EQU  button7 
+gadgetPrgButton         EQU  plg
+gadgetForwardButton     EQU  kela2
+gadgetDelButton         EQU  button8
+
+
+* Contains gadget-routine pairs that determine
+* the right mouse button actions when button is released
+rightButtonActionsList	
+	* New -> Clear
+	dc.l	gadgetNewButton,rbutton9
+	* Prefs -> zoom file box
+	dc.l	gadgetPrefsButton,zoomfilebox
+	* Sort -> Find
+	dc.l	gadgetSortButton,find_new
+	* Move -> Add divider
+	dc.l	gadgetMoveButton,add_divider
+	* Add -> Insert
+	dc.l 	gadgetAddButton,rinsert
+	* Load Prg -> Save Prg
+	dc.l	gadgetPrgButton,rsaveprog
+	* > -> Fast forward
+	dc.l 	gadgetForwardButton,rbutton_kela2_turbo
+	* Del -> Nuke file
+	dc.l	gadgetDelButton,hiiridelete  
+	* i -> About
+	dc.l 	gadgetInfoButton,aboutButtonAction
+	* Play -> Random play
+	dc.l	gadgetPlayButton,soitamodi_random
+	dc.l	0 ; END
+ 
 
 
 *** Samplename ikkuna
