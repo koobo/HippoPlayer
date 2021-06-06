@@ -9778,18 +9778,20 @@ rlpg
 	move.l	a3,a0
 	bsr.w	freemem
 
-
 	lea	.tagz(pc),a0
 	clr.l	.len-.tagz(a0)
-
 	lore	XPK,XpkUnpack
 
 	tst.l	d0
-	bne.w	.what		* err
+	beq.b  .xpkOk
+	* no freeing later:
+	moveq	#0,d5
+	lea	.xpkerr(pc),a1
+	bsr.w	request
+	bra	.x2
+.xpkOk
 
 	move.l	.addr(pc),a3
-
-
 	move.l	a3,d0
 	add.l	.oiklen(pc),d0
 	move.l	d0,.loppu
@@ -9964,6 +9966,7 @@ rlpg
 
 
 .uerr	dc.b	"Not a module program!",0
+.xpkerr dc.b	"XPK couldn't load the file!",0
  even
 
 .ext
