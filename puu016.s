@@ -2262,6 +2262,8 @@ lelp
 	clr.l	otag16-otag1(a0)
 	clr.l	otag17-otag1(a0)
 	
+	* Opens a 1x1 pixel sized window to fetch some Workbench attributes
+	* Then immediately closes it!
 
 	lea	winstruc,a0
 	move.l	#$00010001,wsizex-winstruc(a0)	* koko 1x1
@@ -2804,6 +2806,7 @@ exit
 	lea	var_b,a5
 
 	DPRINT "Hippo is exiting",666
+	bsr	setMainWindowWaitPointer
 
 * poistetaan loput prosessit...
 
@@ -4356,8 +4359,11 @@ releaseModuleData
 	rts
 
 showOutOfMemoryError
+	push	a1
 	lea		memerror_t,a1
-	jmp		request
+	jsr		request
+	pop 	a1 
+	rts
 
 lockMainWindow 
 	tst.l	windowbase(a5)
@@ -8047,8 +8053,10 @@ rbutton4a
 clearlist
 rbutton9
 	clr.b	movenode(a5)
+	DPRINT  "clearlist",1
 	bsr.w		setMainWindowWaitPointer
 	bsr.w	freelist
+	DPRINT "clearlist done",2
 	bsr.w		clearMainWindowWaitPointer
 	bra.w	shownames
 
@@ -8777,7 +8785,7 @@ filereq_code
 	move.b	#'/',(a3)+
 	clr.b	(a3)
 
-	DPRINT2	"Dir  ->",3
+	DPRINT2	"Dir->",3
 	DEBU	(sp)
 	DPRINT	"<-",4
 	
@@ -8841,6 +8849,7 @@ filereq_code
 	move.l	#200,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
+	* TODO: no error check
 	move.l	d0,a1
 	tst.l	d0
 	beq.b	.lc0
@@ -8962,7 +8971,10 @@ filereq_code
 	move.l	d0,d2
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
-	beq.w	.errd
+	bne.b	.gotMem2
+	bsr	showOutOfMemoryError
+	bra	.errd
+.gotMem2
 	move.l	d0,a3		* a3 = listunit
 	
 	lea	l_filename(a3),a1
@@ -9020,7 +9032,10 @@ filereq_code
 
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1		* varataan muistia
 	bsr.w	getmem
-	beq.b	.whoops2	
+	bne.b	.gotMem
+	bsr	showOutOfMemoryError
+	bra.b	.whoops2
+.gotMem
 	move.l	d0,a3
 
 	lea	l_filename(a3),a1
@@ -9606,11 +9621,37 @@ rlpg
 	lob	Seek		* alkuun
 
 	move.l	d5,d0		* muistia listalle
+	DPRINT	"Allocating %ld for list",10
 	moveq	#MEMF_PUBLIC,d1
 	bsr.w	getmem
-	* TODO: error check missing
 	move.l	d0,a3
+	bne.b	.gotMem
 
+	* bail out!
+.bailOut
+	moveq	#0,d5	* memory address for freemem 
+.bailOut2
+	bsr	showOutOfMemoryError
+	move.l	d6,d1
+	lob	Close
+	bra.w	.x2
+.gotMem
+	* We will need at least another d5 since
+	* the list needs to be created.
+	push	a6
+	moveq	#MEMF_ANY,d1
+	lore	Exec,AvailMem
+	pop  	a6
+	DPRINT	"Mem left   %ld",12
+	* Arbitrary 100 kB safety margin
+	sub.l	#100*1024,d0
+	cmp.l	d0,d5
+	ble.b	.yesMem
+	* address in d5 gets freed later
+	move.l	a3,d5
+	bra.b	.bailOut2
+.yesMem
+	
 	move.l	d6,d1		* file
 	move.l	a3,d2		* destination
 	move.l	d5,d3		* pituus
@@ -9745,7 +9786,10 @@ rlpg
 	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
-	beq.b	.x2
+	bne.b	.gotMem2
+	bsr	showOutOfMemoryError
+	bra	.x2	
+.gotMem2
 	move.l	d0,a2
 
 	lea	l_filename(a2),a0
@@ -9884,6 +9928,7 @@ rlpg
 	dc.l	RTFI_Flags,FREQF_PATGAD
 otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
 
+* UGH! Evil hackery:
 loadprog
 	bra.b	*-22		* bra.b -> bra.b .blob
 
