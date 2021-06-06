@@ -8623,11 +8623,12 @@ rinsert2
 * Add divider
 *******
 add_divider
-	tst.l	modamount(a5)
-	beq.w	.x
 	DPRINT  "add_divider obtain list",1
 	bsr.w		obtainModuleList
+	tst.l	modamount(a5)
+	beq.w	.x
 	move.l	chosenmodule(a5),d0
+	bmi.b	.x
 ;	subq	#1,d0			* valitun nimen edellinen node
 
 	lea	moduleListHeader(a5),a4
