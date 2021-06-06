@@ -5854,7 +5854,7 @@ signalreceived
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	rts
 
-.stop  	bsr.w	rbutton3		* stop!
+.stop  	bsr.w	actionStopButton		* stop!
 	bra.b	.reet
 
 * modit loppui, mit‰ tehd‰‰n?
@@ -7012,8 +7012,8 @@ nappuloita
 
 stopcont
 	tst.b	playing(a5)
-	beq.w	rbutton2
-	bra.w	rbutton3
+	beq.w	actionContinue
+	bra.w	actionStopButton
 
 
 lista_ylos				* shiftin kanssa nopeempi!
@@ -7943,7 +7943,7 @@ rbutton3
 *******************************************************************************
 * Cont
 *******
-rbutton2
+actionContinue
 	tst.l	playingmodule(a5)
 	bpl.b	.hu
 .hehe	rts
@@ -18776,8 +18776,8 @@ rexxmessage
 .komennot
 	dr	.playt,.playr
 	dr	.cleart,clearlist
-	dr	.contt,rbutton2
-	dr	.stopt,rbutton3
+	dr	.contt,actionContinue
+	dr	.stopt,actionStopButton
 	dr	.ejectt,rbutton4
 	dr	.lprgt,.loadprg
 	dr	.addt,.add
@@ -30131,14 +30131,21 @@ gadgetPlayButton	  	EQU  button1
 gadgetInfoButton		EQU  button2
 gadgetStopButton		EQU  button3
 gadgetEjectButton		EQU  button4
+gadgetNextButton		EQU  button5
+gadgetPrevButton        EQU  button6
+gadgetAddButton         EQU  button7
+gadgetDelButton         EQU  button8
 gadgetNewButton   		EQU  button11
+gadgetNextSongButton    EQU  button12
+gadgetPrevSongButton    EQU  button13
 gadgetPrefsButton		EQU  button20
+gadgetVolumeSlider		EQU  rslider1
+gadgetFileSlider        EQU  rslider4
 gadgetSortButton        EQU  lilb2
 gadgetMoveButton        EQU  lilb1 
-gadgetAddButton         EQU  button7 
 gadgetPrgButton         EQU  plg
 gadgetForwardButton     EQU  kela2
-gadgetDelButton         EQU  button8
+gadgetRewindButton      EQU  kela1
 
 
 * Contains gadget-routine pairs that determine
