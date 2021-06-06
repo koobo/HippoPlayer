@@ -433,7 +433,6 @@ _MedPlayerBase3	rs.l	1
 _MlineBase	rs.l	1
 _XFDBase	rs.l	1
 
-
  ifne DEBUG
 output		rs.l	1
  endc
@@ -552,6 +551,8 @@ fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
 info_signal	rs.b	1	* about signaali infojen p‰ivitykseen
 info_signal2	rs.b	1	* about signaali infojen p‰ivitykseen
+tooltipSignal	rs.b  	1	* signal for opening tooltip popup
+				rs.b  	1	* pad
 
 oli_infoa	rs.b	1	* freemodulea ennen inforequn tila (0:eip‰‰ll‰)
 
@@ -779,7 +780,8 @@ datestamp2	rs.l	3
 aika1		rs.l	1
 aika2		rs.l	1
 vanhaaika	rs	1
-ticktack	rs	1	* vbcounteri
+ticktack	rs	1	* vb tick count for titlebar refresh
+tooltipTick	rs 	1	* vb tick count for tooltips, counts from positive to 0
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
 
@@ -817,9 +819,17 @@ uusikick	rs.b	1	* ~0 jos kickstart 2.0+
 win		rs.b 	1	* ~0: ikkuna auki, 0: EI IKKUNAA, hide!
 
 * Contains gadget address which was selected with RMB, or null if none.
-rightButtonSelectedGadget 		rs.l 	1	
+rightButtonSelectedGadget 	rs.l 	1	
 * Routine to run after RMB is raised, while still on top of said gadget
 rightButtonSelectedGadgetRoutine	rs.l	1
+* Tooltip that has been activated and will be shown
+activeTooltip				rs.l	1	
+* Gadget for which tooltips shall be disabled.
+* This is set when a gadget has been pressed by the user
+* so that tooltip is not unnecessarily shown.
+disableTooltipForGadget  	rs.l 	1
+* Tooltip intuition window, if open	
+tooltipPopupWindow			rs.l 	1
 
 playing		rs.b	1	* 0: ei soiteta, ei-0: soitetaan
 playmode	rs.b	1	* kuinka soitetaan listaa
@@ -1224,7 +1234,7 @@ sm_stereo14	=	5
 *
 
 wflags set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
-wflags set wflags!WFLG_SMART_REFRESH!WFLG_RMBTRAP
+wflags set wflags!WFLG_SMART_REFRESH!WFLG_RMBTRAP!WFLG_REPORTMOUSE
 idcmpflags set IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_CLOSEWINDOW
 idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
 
@@ -1937,25 +1947,20 @@ lelp
 
 	bsr.w	getsignal
 	move.b	d0,ownsignal1(a5)
-;	bmi.w	exit
 	bsr.w	getsignal
 	move.b	d0,ownsignal2(a5)
-;	bmi.w	exit
 	bsr.w	getsignal
 	move.b	d0,uiRefreshSignal(a5)
-;	bmi.w	exit
 	bsr.w	getsignal
 	move.b	d0,ownsignal4(a5)
-;	bmi.w	exit
 	bsr.w	getsignal
 	move.b	d0,audioPortSignal(a5)
-;	bmi.w	exit
 	bsr.w	getsignal
 	move.b	d0,fileReqSignal(a5)
-;	bmi.w	exit
 	bsr.w	getsignal
 	move.b	d0,rawKeySignal(a5)
-;	bmi.w	exit
+	bsr.w	getsignal
+	move.b	d0,tooltipSignal(a5)
 
 
 	lea	sivu0,a0		* Kaikkia pageja 3pix ylˆsp‰in!
@@ -2501,6 +2506,8 @@ msgloop
 	bset	d1,d0
 	move.b	rawKeySignal(a5),d1
 	bset	d1,d0
+	move.b	tooltipSignal(a5),d1
+	bset	d1,d0
 	move.b	hippoport+MP_SIGBIT(a5),d1 * oman viestiportin bitti
 	bset	d1,d0
 
@@ -2623,11 +2630,11 @@ msgloop
 	jsr	start_quad
 .qer	tst	info_prosessi(a5)
 	beq.w	returnmsg
-	bsr.w	sulje_info
+	jsr	sulje_info
 	move.b	oli_infoa(a5),d0
 	st	oli_infoa(a5)
 	push	d0
-	bsr.w	start_info
+	jsr	start_info
 	pop	d0
 	move.b	d0,oli_infoa(a5)
 
@@ -2761,6 +2768,14 @@ msgloop
 	bra.w	returnmsg
 
 .nowww	
+	
+	* Tooltip display signal check
+	move.b	tooltipSignal(a5),d3 
+	btst	d3,d0 
+	beq.b	.noTooltipSignal
+	bsr		tooltipDisplayHandler
+.noTooltipSignal
+
 * Vastataan IDCMP:n viestiin
 
 getmoremsg
@@ -2821,7 +2836,7 @@ exit
 
 	bsr.w	sulje_prefs
 	jsr	sulje_quad
-	bsr.w	sulje_info
+	jsr	sulje_info
 
 	tst.b	hippoport+hip_opencount(a5)	* onko portilla
 	beq.b	.joer				* k‰ytt‰ji‰?
@@ -2901,6 +2916,8 @@ exit
 	move.b	fileReqSignal(a5),d0
 	bsr.w	freesignal
 	move.b	rawKeySignal(a5),d0
+	bsr.w	freesignal
+	move.b	tooltipSignal(a5),d0
 	bsr.w	freesignal
 
 	move.l	fontbase(a5),d0
@@ -3121,35 +3138,27 @@ i_nowindow	=	3
 
 
 *******
-* Flushataan ikkunan viestit puis
+* Flush main window messages
 *******
 flush_messages
 	bsr.b	.fl
-	tst.l	windowbase(a5)
-	bne.b	.e
-	rts
-.e	move.l	(a5),a6
-	move.l	userport(a5),a0	* flushataan pois kaikki messaget
-	lob	GetMsg
-	tst.l	d0
-	beq.b	.ex
-	move.l	d0,a1
-	lob	ReplyMsg
-	bra.b	flush_messages
-.ex	rts
+	move.l	windowbase(a5),a0 
+	bra		flushWindowMessages
 
+* Flush port messages too
 * Hippoportin messaget pois
 .fl	tst.b	hippoporton(a5)
-	beq.b	.ex
+	beq.b	.exit
 	move.l	(a5),a6
 	lea	hippoport(a5),a0
 	lob	GetMsg
 	tst.l	d0
-	beq.b	.ex
+	beq.b	.exit
 	move.l	d0,a1
 	lob	ReplyMsg
 	bra.b	.fl
-
+.exit 	rts
+		
 
 
 createrexxport	pushm	all
@@ -5282,6 +5291,9 @@ buttonspressed
 	tst.b	win(a5)			* onko ikkuna auki?
 	beq.w	.nowindow
 
+	* Any button activity should first close any active tooltip
+	bsr	closeTooltipPopup
+
 	cmp	#SELECTDOWN,d3		* left button down
 	bne.b	.test1
 	bsr	.leftButtonDownAction
@@ -5435,6 +5447,7 @@ buttonspressed
 .noGadget
 	rts
 
+
 *** Zoomataan fileboxi pois tai takasin
 *** Switch filebox size
 zoomfilebox
@@ -5448,7 +5461,7 @@ zoomfilebox
 .x
 	bsr.w	setprefsbox
 	move.b	ownsignal2(a5),d1
-	bra.w	signalit		* prefsp‰ivitys-signaali
+	jmp	signalit		* prefsp‰ivitys-signaali
 	
 
 *** Open module info window
@@ -5483,7 +5496,6 @@ forceSelectGadget
 	move.l	windowbase(a5),a0
 	moveq	#-1,d0 
 	lob		AddGadget
-
 	move.l	d2,a0	
 	bsr	refreshGadget
 	rts
@@ -5548,6 +5560,114 @@ checkMouseOnGadget
 	rts
 .xx	moveq	#-1,d0
 	rts
+
+
+******************************************************************************
+* Tooltip handling
+*******
+
+ STRUCTURE TooltipListEntry,0
+    APTR ttle_gadget
+    APTR ttle_tooltip
+ LABEL  ttle_SIZEOF
+
+ STRUCTURE ToolTip,0
+    UBYTE tt_width
+	UBYTE tt_height
+	APTR  tt_text
+ LABEL  tt_SIZEOF
+
+* Tooltip handler
+* Called when a mouse move event is received.
+* It will close any existing tooltip and set up a new one if needed.
+tooltipHandler
+	;DPRINT	"tooltiphandler",1
+
+	* First, inactivate incoming tooltip
+	bsr	deactivateTooltip
+	
+	* Close any tooltip that may be showing since mouse was moving.
+	bsr	closeTooltipPopup
+
+	* If some lengthy operation is going on lets not
+	* try to display tooltips.
+	bsr	areMainWindowGadgetsFrozen
+	bne.w	.exit
+
+	* Skip further checks if mouse is not over the main button area
+	move	mousey(a5),d1
+
+	* Check if above "Play" button
+	lea	gadgetPlayButton,a0
+	move	gg_TopEdge(a0),d2
+	cmp	d1,d2
+	blo.b	.under
+	* Mouse is over the "Play" button, exit	
+	rts
+.under		
+	* Check if below the "New" button
+	lea	gadgetNewButton,a0
+	move	gg_TopEdge(a0),d2
+	add	gg_Height(a0),d2
+	cmp	d1,d2
+	bhi.b	.below
+	* Mouse is below the "New" button, exit
+	rts
+.below
+
+	* Then check if pointer is on top of some gadget
+	lea tooltipList,a3
+.loop 
+	move.l	ttle_gadget(a3),a0
+
+	* Check if gadget is disabled, no tooltips for those
+	move	gg_Flags(a0),d0
+	and	#GFLG_DISABLED,d0
+	bne.b	.disabled
+
+	bsr	checkMouseOnGadget
+	bne.b	.no
+	* Yes it was.
+	* Check if this gadget was not allowed to have tooltips for now
+	move.l	ttle_gadget(a3),d0
+	move.l	disableTooltipForGadget(a5),d1
+	;DPRINT	"found gadget=%lx dis=%lx",22
+	cmp.l  d1,d0
+	beq.b	.disabled
+	* Store tooltip to be displayed and activate
+	move.l	ttle_tooltip(a3),activeTooltip(a5)
+	* Count down this many ticks before attempting to show tooltip
+	move	#1*50,tooltipTick(a5)	
+	rts
+.disabled
+	;DPRINT	"was disabled",3
+.no 
+	addq.l	#ttle_SIZEOF,a3
+	tst.l	(a3)
+	bne.w	.loop
+.exit	rts
+
+* Displays tooltip if needed
+tooltipDisplayHandler	
+	pushm	all 
+	move.l	activeTooltip(a5),d0 
+	beq.b	.exit 
+	clr.l	activeTooltip(a5)
+	clr.l	disableTooltipForGadget(a5)
+	move.l	d0,a0 
+	jsr	showTooltipPopup
+.exit
+	popm all
+	rts
+
+* Clears any previous tooltip activation so it will not be shown
+* after the timeout
+deactivateTooltip
+	clr	tooltipTick(a5)
+	clr.l	activeTooltip(a5)
+	rts
+
+
 *******************************************************************************
 * Omaan viestiporttiin tuli viesti
 ******
@@ -7094,21 +7214,29 @@ fkeyaction
 
 *******************************************************************************
 * Jotain gadgettia painettu, tehd‰‰n vastaava toiminto
+* Gadget activated
 *******
-
-
+* in:
+*   a2 = intuition gadget
 
 gadgetsup
 	bsr.w	    areMainWindowGadgetsFrozen
 	bne.w	returnmsg
 
-
 	movem.l	d0-a6,-(sp)
+
+	* Deactivate tooltips for the gadget that was activated
+	* until some other gadget tooltip gets shown.
+	move.l	a2,disableTooltipForGadget(a5)
+	* Any button activity should first close any active tooltip
+	bsr	closeTooltipPopup
+
 	move	gg_GadgetID(a2),d0
-gups	add	d0,d0
+	add	d0,d0
 	lea	.gadlist-2(pc,d0),a0
 	add	(a0),a0
 	jsr	(a0)
+
 	movem.l	(sp)+,d0-a6
 	bra.w	returnmsg
 
@@ -7836,10 +7964,12 @@ rbutton11
 *******
 mousemoving
 	movem.l	d0-a6,-(sp)
+;	DPRINT	"mousemove",1
 	lea	slider1,a2
 	bsr.w	rslider1
 	lea	slider4,a2
 	bsr.w	rslider4
+	bsr		tooltipHandler
 	movem.l	(sp)+,d0-a6
 	bra.w	returnmsg
 
@@ -9622,9 +9752,7 @@ rlpg
 	cmp.l	(sp)+,d5	* read error?
 	bne.w	.x2
 
-
 ** A3:ssa moduulilista
-
 ** jos on xpk pakattu, pit‰‰ purkaakkin.
 
 	cmp.l	#"XPKF",(a3)
@@ -9789,7 +9917,7 @@ rlpg
 
 .x2
 	tst.l	d5
-	beq.b	.xxx
+	beq.w	.xxx
 
 	tst.l	.len
 	beq.b	.xx0
@@ -9800,6 +9928,7 @@ rlpg
 	clr.l	.len
 	bra.b	.xxx
 .xx0
+	
 	move.l	d5,a0
 	bsr.w	freemem
 .xxx
@@ -9824,7 +9953,7 @@ rlpg
 .what
 	lea	.uerr(pc),a1
 	bsr.w	request
-	bra.b	.x2
+	bra.w	.x2
 
 .openerr
 	move	#1,a4			* lippu
@@ -11658,15 +11787,8 @@ exprefs	move.l	_IntuiBase(a5),a6
 	rts
 
 flush_messages2
-	move.l	(a5),a6
-	move.l	userport2(a5),a0	* flushataan pois kaikki messaget
-	lob	GetMsg
-	tst.l	d0
-	beq.b	.ex
-	move.l	d0,a1
-	lob	ReplyMsg
-	bra.b	flush_messages2
-.ex	rts
+	move.l	windowbase2(a5),a0 
+	bra		flushWindowMessages
 
 
 
@@ -14585,6 +14707,10 @@ listselector
 
 
 .ox
+
+	move.l	d5,a0
+	bsr		flushWindowMessages
+
 	move.l	d5,d0
 	beq.b	.eek
 	move.l	d0,a0
@@ -14594,8 +14720,6 @@ listselector
 	move	d7,d0
 	popm	d1-a6
 	rts
-
-
 
 .print	pushm	all
 	move.l	d7,a4
@@ -16103,9 +16227,184 @@ markit
 	rts
 
 
+*********************************
+* Tooltip popup
+********************************
 
+* in: 
+*   a0=structure of
+*       dc.b <width in characters>
+*       dc.b <height in characters>
+*       dc.b "string",0
+showTooltipPopup
+
+.wflags = WFLG_SIMPLE_REFRESH!WFLG_BORDERLESS
+.idcmpflags = 0
+
+	pushm	all
+	move.l	a0,a4
+
+	* where is the mouse?
+	move	mousex(a5),d6 
+	move	mousey(a5),d7
+
+	move.l	windowbase(a5),a0	* main window
+	add	wd_LeftEdge(a0),d6	* relative mouse position
+	add	wd_TopEdge(a0),d7
+
+	lea	.tooltipPopup(pc),a0		
+
+	* set width based from given parameters
+	* which provide width and height in chars
+	moveq	#0,d5
+	move.b	(a4),d5
+	mulu	#8,d5
+	add	#16,d5
+	move	d5,nw_Width(a0)
+
+	* center horizontally around the pointer
+	lsr	#1,d5
+	sub	d5,d6
+	bpl.b	.oe
+	moveq	#0,d6
+.oe	move	d6,nw_LeftEdge(a0)
+
+	* height
+	moveq	#0,d5
+	move.b	1(a4),d5
+	mulu	#8,d5
+	addq	#7,d5
+	move	d5,nw_Height(a0)
+
+	* place above pointer a bit
+	sub	d5,d7
+	subq	#8,d7
+	move	d7,nw_TopEdge(a0)
+
+	* see if it fits on screen and adjust
+	bsr.w	tark_mahtu
+
+	lore	Intui,OpenWindow
+	move.l	d0,d5
+	beq.w	.x
+	DPRINT	"Tooltip opened %lx",1
+	move.l	d0,a0
+	move.l	wd_RPort(a0),d7		* rastport
+	move.l	a0,tooltipPopupWindow(a5)
+
+	* set pens and font
+	move.l	d7,a1
+	move.l	pen_1(a5),d0
+	lore	GFX,SetAPen
+	move.l	d7,a1
+	move.l	pen_0(a5),d0
+	lob	SetBPen
+	move.l	d7,a1
+	move.l	fontbase(a5),a0
+	lob	SetFont	
+
+	moveq	#0,d4
+	move.b	(a4)+,d4	* max leveys
+	lsl	#3,d4
+
+	moveq	#0,d5
+	move.b	(a4)+,d5	* vaakarivej‰
+	subq	#1,d5
+	move.l	a4,a0
+
+	* initial y-coordinate for the rows
+	moveq	#10,d3
+.prl	
+	move	d3,d1
+	moveq	#8,d0	* x-coord
+	bsr.w	.print
+	* next y
+	addq	#8,d3
+	* find next line
+.eol
+	tst.b 	(a0)+
+	bne.b	.eol
+	addq	#1,a0 	* skip zero
+	dbf	d5,.prl
+
+	* d7 = rastport
+	* draw a bordaer
+	move.l	d7,a1
+	lea		.tooltipPopup(pc),a0
+	moveq	#0,plx1
+	move	nw_Width(a0),plx2
+	moveq	#0,ply1
+	move	nw_Height(a0),ply2
+	subq	#1,ply2
+	subq	#1,plx2
+	bsr.w	laatikko1
+.x
+	popm	all
+	rts
+
+
+.print	pushm	all
+	move.l	d7,a4
+	bra.w	uup	
+
+* Tooltip window structure
+.tooltipPopup
+	dc	0,0	* paikka 
+	dc	0,0	* koko
+	dc.b	0,0	;palkin v‰rit
+	dc.l	.idcmpflags
+	dc.l	.wflags
+	dc.l	0
+	dc.l	0	
+	dc.l	0	; title
+	dc.l	0
+	dc.l	0	
+	dc	0,0	 * min x,y
+	dc	1000,1000 * max x,y
+	dc	WBENCHSCREEN
+	dc.l	enw_tags
+
+* Closes the tooltip popup if open.
+* Also deactivates any tooltip that is about to open.
+closeTooltipPopup
+	bsr	deactivateTooltip
+	move.l	tooltipPopupWindow(a5),d0
+	beq.b	.exit
+	move.l	d0,a0
+	bsr.b	flushWindowMessages
+	move.l	tooltipPopupWindow(a5),a0
+	lore	Intui,CloseWindow
+	clr.l	tooltipPopupWindow(a5)
+.exit 	rts
+
+
+* Flush the window message queue. This should be done before closing window.
+* This way the message sender can free the message data, if it was dynamically created.
+* in:
+*   a0 = intuition window
+flushWindowMessages
+	pushm 	d2/a6
+	move.l	a0,d2
+	bne.b	.loop
+.exit
+	popm    d2/a6
+	rts
+.loop
+	move.l	d2,a0
+	* Window may now have an user port, eg. if no IDCMP set 	
+	move.l	wd_UserPort(a0),d0
+	beq.b	.exit
+	move.l	d0,a0
+	lore	Exec,GetMsg
+	tst.l	d0
+	beq.b	.exit
+	move.l	d0,a1
+	lob	ReplyMsg
+	bra.b	.loop
 
 *******************************************************************************
+
+.ex	rts
 * Lataa keyfilen
 *******
 
@@ -16234,9 +16533,9 @@ info_code
 	bsr.b	infocode
 
 	move.b	info_signal(a5),d0
-	bsr.w	freesignal
+	jsr	freesignal
 	move.b	info_signal2(a5),d0
-	bsr.w	freesignal
+	jsr	freesignal
 
 	lore	Exec,Forbid
 	clr	info_prosessi(a5)
@@ -17340,20 +17639,9 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 
 .flush_messages
-	tst.l	swindowbase(a5)
-	bne.b	.fmsgoop
-	rts
-.fmsgoop	
-	move.l	(a5),a6
-	move.l	suserport(a5),a0	
-	lob	GetMsg
-	tst.l	d0
-	beq.b	.ex
-	move.l	d0,a1
-	lob	ReplyMsg
-	bra.b	.fmsgoop
-.ex	rts
-
+	move.l	swindowbase(a5),a0
+	bra  flushWindowMessages
+	
 
 
 
@@ -17974,7 +18262,7 @@ freeinfosample
 	pushm	all
 	move.l	infosample(a5),a0
 	clr.l	infosample(a5)
-	bsr.w	freemem
+	jsr	freemem
 	popm	all
 .x	rts
 
@@ -18107,7 +18395,7 @@ init_error
 	bsr.w	request
 
 * vapautetaan moduuli
-	bsr.w	freemodule
+	jsr	freemodule
 * printataan infoa
 	bra.w	inforivit_initerror
 
@@ -18388,6 +18676,16 @@ intserver
 .vbinterrupt
 	pushm	d2-d7/a2-a6
 	move.l	a1,a5			* a1 = is_Data = var_b
+
+	* Check if tooltip tick count is active.
+	* It it expires, trigger a signal
+	tst		tooltipTick(a5)
+	beq.b	.notActive
+	subq	#1,tooltipTick(a5)
+	bne.b	.notActive
+	move.b	tooltipSignal(a5),d1
+	bsr.w	signalit
+.notActive
 
 	* Are we playing something?
 	tst.b	playing(a5)
@@ -18886,7 +19184,7 @@ rexxmessage
 	move.l	a0,l_nameaddr(a3)	* pelk‰n nimen osoite
 
 	bsr.w	addfile
-	bsr.w	clear_random
+	jsr	clear_random
 	st	hippoonbox(a5)
 	tst.l	chosenmodule(a5)
 	bpl.b	.ee
@@ -19729,17 +20027,8 @@ qexit	bsr.b	qflush_messages
 
 
 qflush_messages
-	tst.l	windowbase3(a5)
-	beq.b	.ex
-.m	move.l	(a5),a6
-	move.l	userport3(a5),a0	* flushataan pois kaikki messaget
-	lob	GetMsg
-	tst.l	d0
-	beq.b	.ex
-	move.l	d0,a1
-	lob	ReplyMsg
-	bra.b	.m
-.ex	rts
+	move.l	windowbase3(a5),a0 
+	bra		flushWindowMessages
 
 
 *** Scope interrupt code, keeps track the play positions of protracker replayer samples
@@ -30174,6 +30463,93 @@ rightButtonActionsList
 	dc.l	0 ; END
  
 
+* Contains tooltip data for mainwindow gadgets
+tooltipList
+	dc.l 	gadgetPlayButton,.play
+	dc.l	gadgetInfoButton,.info
+	dc.l	gadgetStopButton,.stop
+	dc.l	gadgetEjectButton,.eject 
+	dc.l	gadgetNextButton,.next
+	dc.l	gadgetPrevButton,.prev
+	dc.l	gadgetAddButton,.add
+	dc.l	gadgetDelButton,.del
+	dc.l 	gadgetNewButton,.new
+	dc.l	gadgetNextSongButton,.nextSong
+	dc.l	gadgetPrevSongButton,.prevSong
+	dc.l	gadgetPrefsButton,.prefs
+	dc.l	gadgetSortButton,.sort
+	dc.l 	gadgetMoveButton,.move
+	dc.l	gadgetPrgButton,.prg 
+	dc.l	gadgetForwardButton,.forward
+	dc.l	gadgetRewindButton,.rewind
+	dc.l	0 ; END
+
+.play
+	dc.b	34,2
+	dc.b	"LMB: Play or restart chosen module",0
+	dc.b	"RMB: Play a random module",0
+.info
+	dc.b	21,2
+	dc.b	"LMB: Show module info",0
+	dc.b	"RMB: Show about info",0
+.stop
+	dc.b	25,1
+	dc.b	"Stop or continue playback",0
+.eject
+	dc.b	29,1
+	dc.b	"Stop and eject current module",0
+.next
+	dc.b	16,1
+	dc.b	"Play next module",0
+.prev
+	dc.b	20,1
+	dc.b	"Play previous module",0
+.add
+	dc.b	47,2
+	dc.b	"LMB: Add new modules to the list",0
+	dc.b	"RMB: Insert new modules after the chosen module",0
+.del
+	dc.b	35,2
+	dc.b	"LMB: Remove chosen module",0
+	dc.b	"RMB: Remove from list and from disk",0
+.new
+	dc.b	29,2
+	dc.b	"LMB: Clear list and add files",0
+	dc.b	"RMB: Clear list",0
+.nextSong
+	dc.b	17,1
+	dc.b	"Play next subsong",0
+.prevSong
+	dc.b	21,1
+	dc.b	"Play previous subsong",0
+.prefs
+	dc.b	16,1
+	dc.b	"Open preferences",0
+.sort
+	dc.b	16,2
+	dc.b	"LMB: Sort list",0
+	dc.b	"RMB: Find module",0
+.move
+	dc.b	26,4
+	dc.b	"LMB: Move chosen module,",0
+	dc.b    "     press again to insert",0
+	dc.b    "     the moved module",0
+	dc.b	"RMB: Add divider",0
+.prg
+	dc.b	24,2
+	dc.b	"LMB: Load module program",0
+	dc.b	"RMB: Save module program",0
+.forward
+	dc.b	36,4
+	dc.b	"LMB: Skip module forward",0
+	dc.b    "     or play faster if can't skip",0
+	dc.b	"RMB: Play even faster!",0
+	dc.b    "Stop fast playback by pressing again",0
+.rewind
+	dc.b	20,1
+	dc.b	"Skip module backward",0
+
+  even
 
 *** Samplename ikkuna
 swinstruc
