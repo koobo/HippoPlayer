@@ -570,6 +570,8 @@ kelattiintaakse	rs.b	1	* <>0: kelattiin taakkepp‰in
 mousex		rs	1		* hiiren paikka x,y
 mousey		rs	1
 
+ignoreMouseMoveMessage 	rs.b  	1
+			rs.b	1	 * pad
 
 ******* Scope variables
 
@@ -2522,18 +2524,16 @@ msgloop
 	move.b	rexxport+MP_SIGBIT(a5),d1	* ARexx-portin signalibitti
 	bset	d1,d0
 .nre
-
+	* We get signal?
 	lore	Exec,Wait		* Odotellaan...
-
-
 
 	tst.b	rexxon(a5)
 	beq.b	.nrexm
 	move.b	rexxport+MP_SIGBIT(a5),d3	* Tuliko ARexx viesti?
 	btst	d3,d0
-;	bne.w	rexxmessage
 	beq.b	.nrexm
-	jmp	rexxmessage
+	jsr	rexxmessage
+	bra		returnmsg
 
 .nrexm
 * Tuliko viesti‰ porttiin?
@@ -2778,13 +2778,23 @@ msgloop
 
 * Vastataan IDCMP:n viestiin
 
-getmoremsg
+	
+;getmoremsg
 	tst.b	win(a5)
 	beq.w	msgloop
 
+	* Ignore any ui actions if window is frozen
+	* Flush any remaining messages 
+	bsr.w	areMainWindowGadgetsFrozen
+	bne		returnmsg		
+
+* Process IDCMP messages if any
+	clr.b	ignoreMouseMoveMessage(a5)
+.idcmpLoop
 	move.l	userport(a5),a4
 	move.l	a4,a0
-	lob	GetMsg
+	lore Exec,GetMsg
+	* Go back to mainloop if no more messages left
 	tst.l	d0
 	beq.w	msgloop
 
@@ -2798,25 +2808,45 @@ getmoremsg
 
 	lob	ReplyMsg
 
-	bsr.w		areMainWindowGadgetsFrozen
-	bne.w	msgloop
-
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
-	bne.b	.nz
+	bne.b	.noChangeWindow
 	bsr.w	zipwindow
-.nz
-
+	bra.b	.idcmpLoop
+.noChangeWindow
 	cmp.l	#IDCMP_RAWKEY,d2
-	beq.w	nappuloita
+	bne.b	.noRawKey
+	bsr	nappuloita
+	bra.b	.idcmpLoop
+.noRawKey	
+	* There will be a lot of mousemove messages.
+	* To keep the load light only take the first one and filter out the
+	* rest during this message loop.
+	* Prop gadgets and tooltips will work with fewer events, too.
 	cmp.l	#IDCMP_MOUSEMOVE,d2
-	beq.w	mousemoving
-	cmp.l	#IDCMP_GADGETUP,d2
-	beq.w	gadgetsup
-	cmp.l	#IDCMP_MOUSEBUTTONS,d2
-	beq.w	buttonspressed
-	cmp.l	#IDCMP_CLOSEWINDOW,d2
-	bne.w	msgloop
+	bne.b	.noMouseMove
+	tst.b	ignoreMouseMoveMessage(a5) 
+	bne.w  	.idcmpLoop
+	st	ignoreMouseMoveMessage(a5)
+	bsr	mousemoving
+	bra.w	.idcmpLoop
 
+.noMouseMove
+	cmp.l	#IDCMP_GADGETUP,d2
+	bne.b	.noGadgetUp
+	bsr	gadgetsup
+	bra.w	.idcmpLoop
+.noGadgetUp
+	cmp.l	#IDCMP_MOUSEBUTTONS,d2
+	bne.b	.noMouseButtons
+	bsr	buttonspressed
+	bra.w	.idcmpLoop
+.noMouseButtons	
+	cmp.l	#IDCMP_CLOSEWINDOW,d2
+	bne.b	.noClose
+	bra.b	exit
+.noClose
+	bra.w	.idcmpLoop
+	
 exit	
 	lea	var_b,a5
 
@@ -5297,18 +5327,20 @@ buttonspressed
 	cmp	#SELECTDOWN,d3		* left button down
 	bne.b	.test1
 	bsr	.leftButtonDownAction
-	bra	returnmsg
+	rts
+
 .test1
 	cmp	#MENUUP,d3
 	bne.b	.test2
 	bsr	.rightButtonUpAction		* right button up
-	bra	returnmsg
-	
-.test2	cmp	#MENUDOWN,d3			* right button down
-	bne.w 	returnmsg
-	bsr	.rightButtonDownAction
-	bra	returnmsg
+	rts 
 
+.test2	cmp	#MENUDOWN,d3			* right button down
+	bne.b .exit
+	bsr	.rightButtonDownAction
+.exit 
+	rts
+	
 .rightButtonDownAction
 
 * Oikeata nappulaa painettu. Tutkitaan oliko rmbfunktio-nappuloiden p‰‰ll‰
@@ -6737,8 +6769,9 @@ handleRawKeyInput
 nappuloita
 	and	#$ff,d3
 
+	* react only if button is down
 	tst.b	d3
-	bmi.w	returnmsg		* vain jos nappula alhaalla
+	bmi.w	.exit	* vain jos nappula alhaalla
 	movem.l	d0-a6,-(sp)
 
 	and.b	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
@@ -6795,7 +6828,9 @@ nappuloita
 	cmp.l	#.nabse,a0
 	bne.b	.checke
 .ee	movem.l	(sp)+,d0-a6
-.sd	bra.w	returnmsg
+.sd	
+.exit
+	rts
 .jee	
 	move	(a0),d0
 	add	d0,a0
@@ -7221,7 +7256,7 @@ fkeyaction
 
 gadgetsup
 	bsr.w	    areMainWindowGadgetsFrozen
-	bne.w	returnmsg
+	bne.b 	.exit
 
 	movem.l	d0-a6,-(sp)
 
@@ -7238,8 +7273,9 @@ gadgetsup
 	jsr	(a0)
 
 	movem.l	(sp)+,d0-a6
-	bra.w	returnmsg
-
+.exit 
+	rts
+	
 .gadlist	
 	dr	rbutton1	* play
 	dr	modinfoaaa	* modinfo toggle
@@ -7971,7 +8007,7 @@ mousemoving
 	bsr.w	rslider4
 	bsr		tooltipHandler
 	movem.l	(sp)+,d0-a6
-	bra.w	returnmsg
+	rts
 
 
 *******************************************************************************
@@ -9761,8 +9797,6 @@ rlpg
 
 	jsr	get_xpk
 	beq.w	.what
-
-
 
 	cmp.l	#"HiPP",16(a3)	* uusi formaatti?
 	bne.b	.nu
@@ -19072,7 +19106,7 @@ rexxmessage
 	lore	Exec,ReplyMsg
 .nomsg
 	popm	all
-	jmp	returnmsg
+	rts	returnmsg
 
 .komennot
 	dr	.playt,.playr
