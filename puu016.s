@@ -16328,7 +16328,6 @@ showTooltipPopup
 .eol
 	tst.b 	(a0)+
 	bne.b	.eol
-	addq	#1,a0 	* skip zero
 	dbf	d5,.prl
 
 	* d7 = rastport
