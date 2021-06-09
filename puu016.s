@@ -552,7 +552,9 @@ rawKeySignal	rs.b	1	* rawkey inputhandlerilta
 info_signal	rs.b	1	* about signaali infojen p‰ivitykseen
 info_signal2	rs.b	1	* about signaali infojen p‰ivitykseen
 tooltipSignal	rs.b  	1	* signal for opening tooltip popup
-				rs.b  	1	* pad
+
+* Flag used to discard unnecessary mousemove IDCMP-messages
+ignoreMouseMoveMessage 	rs.b  	1
 
 oli_infoa	rs.b	1	* freemodulea ennen inforequn tila (0:eip‰‰ll‰)
 
@@ -569,9 +571,6 @@ kelattiintaakse	rs.b	1	* <>0: kelattiin taakkepp‰in
 
 mousex		rs	1		* hiiren paikka x,y
 mousey		rs	1
-
-ignoreMouseMoveMessage 	rs.b  	1
-			rs.b	1	 * pad
 
 ******* Scope variables
 
