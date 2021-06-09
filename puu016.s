@@ -6316,6 +6316,59 @@ divu_32	move.l	d3,-(a7)
 	move.l	(a7)+,d3
 	rts	
 
+;umult64 - mulu.l d0,d0:d1
+;by Meynaf/English Amiga Board
+mulu_64
+     move.l d2,-(a7)
+     move.w d0,d2
+     mulu d1,d2
+     move.l d2,-(a7)
+     move.l d1,d2
+     swap d2
+     move.w d2,-(a7)
+     mulu d0,d2
+     swap d0
+     mulu d0,d1
+     mulu (a7)+,d0
+     add.l d2,d1
+     moveq #0,d2
+     addx.w d2,d2
+     swap d2
+     swap d1
+     move.w d1,d2
+     clr.w d1
+     add.l (a7)+,d1
+     addx.l d2,d0
+     move.l (a7)+,d2
+ 	rts
+
+; udivmod64 - divu.l d2,d0:d1
+; by Meynaf/English Amiga Board
+divu_64
+	move.l d3,-(a7)
+ 	moveq #31,d3
+.loop
+	 add.l d1,d1
+	 addx.l d0,d0
+ 	bcs.s .over
+ 	cmp.l d2,d0
+ 	bcs.s .sui
+ 	sub.l d2,d0
+.re
+ 	addq.b #1,d1
+.sui
+ 	dbf d3,.loop
+ 	move.l (a7)+,d3	; v=0
+ 	rts
+.over
+ 	sub.l d2,d0
+ 	bcs.s .re
+ 	move.l (a7)+,d3
+ 	or.b #4,ccr		; v=1
+ 	rts
+
+
+
 * To discard too big random values quickly, "and" the value with a suitable mask,
 * based on amount of modules. Calculate the mask here.
 getRandomValueMask
@@ -8249,12 +8302,13 @@ rslider4
 .q	rts
 .new	move	d0,slider4old(a5)
 
+	* Map VertPot [0..$ffff] to [0..modamount-boxsize].
 	* This calculation will not fit into 32 bits if modamount is 0x1ffff.
 	* Will be ok if we scale VertPot down one bit.
 	* Take scaling into account later below as well.
 
 	and.l	#$ffff,d0
-	lsr.l	#1,d0
+	lsr.l	#1,d0		* [0..$7fff]
 
 	move.l	modamount(a5),d1
 	moveq	#0,d2
@@ -8313,48 +8367,52 @@ reslider
 	lea	slider4,a0
 	move.l	gg_SpecialInfo(a0),a1
 	cmp	pi_VertBody(a1),d0
-	sne	d2		* did it change compared to previous?
-	lsl	#8,d2
+	sne	d4		* did it change compared to previous?
+	lsl	#8,d4
 	move	d0,pi_VertBody(a1)
 
-	* Calculate pi_vertPot, the vertical position of the prop gadget.
-
 *** Toimii vihdoinkin!
-	move.l	modamount(a5),d1
-	moveq	#0,d0
-	move	boxsize(a5),d0 
-	sub.l	d0,d1
-	beq.b	.pp
-	bpl.b	.p
-.pp	moveq	#1+1,d1		; Minimum, must not be zero
-.p	
 
+	* Calculate pi_vertPot, the vertical position of the prop gadget.
 	* calculations will not fit into 32-bits if firstname is over 0xffff.
 	* scale calculations down with 1 bit.
 
-	* Scale
-	lsr.l	#1,d1
-	
-	move.l	firstname(a5),d0
-	push	d1 
-	move.l	#65535>>1,d1  * scale 
-	bsr.w	mulu_32
-	pop 	d1
-	
 	* vertpot = (first name index) * 65535 / (modamount-boxsize)
-	*
-	*   idx * a * 0.5
-	*   ------------- = 
-	*      b * 0.5
+	* modamount: 10000
+	* boxsize: 20
+	* firstname: 10000-20
+	* ->
+	* (10000-20)*(65535/2)/((10000/2)-20/2) = 0xffff
 
-	bsr.w	divu_32  * d0=d0/d1
+	move.l	firstname(a5),d0
+	* scale down, +1 is needed to round upwards
+	* as the fractions get floored off
+	move.l	#65535,d1  * scale 
+	;bsr.w	mulu_32
+	bsr	mulu_64
+	* d0:d1 now has a 64-bit value 
+
+	move.l	modamount(a5),d2
+	moveq	#0,d3
+	move	boxsize(a5),d3 
+	sub.l	d3,d2
+	bgt.b	.positive	* check if over 0
+	moveq	#1,d2	 	* avoid zero division
+.positive
+
+;	bsr.w	divu_32  * d0=d0/d1
+	bsr	divu_64	 
+	* d0:d1 is now d0:d1/d2
+	* take the lower 32 bits
+	move.l	d1,d0	
+
 	bsr.w	.ch
-	move.l	d0,d1
-
+	
+	
 	; VertPot should be in range 0..$ffff
-	cmp	pi_VertPot(a1),d1
-	sne	d2		* did it change compared to previous?
-	move	d1,pi_VertPot(a1)
+	cmp	pi_VertPot(a1),d0
+	sne	d4		* did it change compared to previous?
+	move	d0,pi_VertPot(a1)
 
 	move	gg_Height(a0),d0
 
@@ -8364,7 +8422,7 @@ reslider
 	cmp	slider4oldheight(a5),d0
 	bne.b	.fea
 
-	tst	d2		* was there a change?
+	tst	d4		* was there a change?
 	beq.b	.eiup
 
 .fea	tst.b	win(a5)
@@ -14853,7 +14911,6 @@ shn
 	moveq	#0,d1 
 	move	boxsize(a5),d1
 	cmp.l	d1,d7
-	;cmp	boxsize(a5),d7
 	bhs.w	.all
 
 	bsr.w	.unmark
@@ -14879,9 +14936,6 @@ shn
 	neg.l  	d7 
 	cmp.l	d1,d7 
 	bhs.b	.all
-	;neg	d7		
-	;cmp	boxsize(a5),d7
-	;bhs.b	.all
 
 	bsr.w	.unmark
 
@@ -14897,8 +14951,6 @@ shn
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
 	add.l 	firstname(a5),d0
-	;move.l	firstname(a5),d0
-	;add	boxsize(a5),d0
 	sub.l	d7,d0
 	moveq	#0,d1 
 	move	boxsize(a5),d1
