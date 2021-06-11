@@ -7013,9 +7013,9 @@ nappuloita
 	dc	$28
 	dr	rbutton5	* next
 	dc	$4f
-	dr	.pso		* prev song
+	dr	rbutton12	* prev song
 	dc	$4e
-	dr	.nso		* next song
+	dr	rbutton13	* next song
 
 	dc	7
 	dr	.showtime
@@ -7086,9 +7086,9 @@ nappuloita
 
 
 	dc	$2d
-	dr	.pso		* prev song
+	dr	rbutton12		* prev song
 	dc	$2f
-	dr	.nso		* next song
+	dr	rbutton13		* next song
 	dc	$3e
 	dr	lista_ylos	* select prev
 	dc	$1e
@@ -7121,21 +7121,7 @@ nappuloita
 	dr	rmove		* move mod
 	dc	$5c
 	dr	rinsert		* insert mods
-
-
 .nabse
-
-.pso	move.l	playerbase(a5),a0
-	move	p_liput(a0),d0
-	btst	#pb_song,d0
-	bne.w	rbutton12
-	rts
-
-.nso	move.l	playerbase(a5),a0
-	move	p_liput(a0),d0
-	btst	#pb_song,d0
-	bne.w	rbutton13
-	rts
 
 
 .rand	bra.w	soitamodi_random
@@ -8084,6 +8070,9 @@ rbutton12
 	moveq	#1,d1		* lis‰t‰‰n songnumberia
 
 songo
+	tst.l	playingmodule(a5)
+	bmi.b	.nosong
+
 	clr.b	kelausnappi(a5)
 
 	move.l	playerbase(a5),a0
@@ -8098,10 +8087,6 @@ songo
 	move	maxsongs(a5),d0
 .jep
 	move	d0,songnumber(a5)
-
-
-	tst.l	playingmodule(a5)
-	bmi.b	.err
 
 	st	kelattiintaakse(a5)
 	clr.b	playing(a5)
