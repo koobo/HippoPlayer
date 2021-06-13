@@ -17,10 +17,16 @@
 ; RMB+Add ei fudaa (insert)
 
 ; TODO
+; iso lista
 ; select module and play: ei j‰‰ ihan keskelle
 ; heiluta hiirt‰, soitettava kappale pyk‰l‰ keskelt‰ alemmas?
 ; joku eventti j‰‰nyt k‰sittelem‰tt‰, esim. nuoli ylˆs, tulee
 ; k‰sitelt‰v‰ksi sitten kun seuraava mousemove event tulee?
+; 
+; ongelma lienee se, ett‰ "firstname" ja sliderin vertpot
+; ei vastaa toisiaan, kun uusi firstname lasketaan mousemoven
+; j‰lkeen vertpotista, on niiss‰ pieni ero, ja n‰kyy hypp‰yksen‰
+; ehk‰ 1-bit scale pit‰‰ poistaa? -> rslider4
 
 ; TODO
 ; saatu r‰pl‰tty‰ aikaan niin ett‰ ei voi sammuttaa,
@@ -742,8 +748,8 @@ prefs_exit	rs.b	1		* Prefs exit-flaggi
 
 
 slider4oldheight rs	1
-slider1old	rs	1
-slider4old	rs	1
+slider1old	rs	1		* previous VertPot value to detect changes
+slider4old	rs	1		* previous VertPot value to detect changes
 mainvolume	rs	1		* p‰‰-‰‰nenvoimakkuus
 mixirate	rs.l	1		* miksaustaajuus S3M:‰lle
 textchecksum	rs	1
@@ -2773,7 +2779,7 @@ msgloop
 
 	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
 	btst	d3,d0
-	beq.b	.nwwwq
+	beq.w	.nwwwq
 	DPRINT	"rawkey from input handler",9
 	moveq	#0,d4
 	move	rawkeyinput(a5),d3
@@ -2849,7 +2855,7 @@ msgloop
 	* Ignore any ui actions if window is frozen
 	* Flush any remaining messages 
 	bsr.w	areMainWindowGadgetsFrozen
-	bne		returnmsg		
+	bne	returnmsg		
 
 * Process IDCMP messages if any
 	clr.b	ignoreMouseMoveMessage(a5)
@@ -2870,6 +2876,9 @@ msgloop
 	move	im_MouseY(a1),mousey(a5)
 
 	lob	ReplyMsg
+
+	;move.l	d2,d0
+	;DPRINT	"IDCMP=%ld",91
 
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
 	bne.b	.noChangeWindow
@@ -5254,6 +5263,7 @@ freemodule
 	clr.b	lod_tfmx(a5)
 
 .eee	
+	DPRINT	"freemodule release data",2
 	bsr.w		releaseModuleData
 
 	movem.l	(sp)+,d0-a6
@@ -8470,6 +8480,14 @@ reslider
 	cmp	pi_VertPot(a1),d0
 	sne	d4		* did it change compared to previous?
 	move	d0,pi_VertPot(a1)
+
+	DPRINT	"slider4 VertPot=%lx",101
+	* subsequent mousemoves will call rslider4 to update
+	* firstname according to VertPot, but that is not needed
+	* since we did that already. It seems to cause
+	* a jump of one row in sometimes. Prevent that
+	* by setting the cached compare value to match.
+	move	d0,slider4old(a5)
 
 	move	gg_Height(a0),d0
 
