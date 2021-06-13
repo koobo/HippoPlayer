@@ -6893,13 +6893,13 @@ nappilasku
 
 handleRawKeyInput
 nappuloita
- if DEBUG
-	moveq   #0,d0
-	move.b	d3,d0
-	moveq	#0,d1
-	move	d3,d1
-	DPRINT	"Raw key=%lx qual=%lx",1
-endc 
+;  if DEBUG
+; 	moveq   #0,d0
+; 	move.b	d3,d0
+; 	moveq	#0,d1
+; 	move	d3,d1
+; 	DPRINT	"Raw key=%lx qual=%lx",1
+;  endc 
 
 	and	#$ff,d3
 
@@ -8375,6 +8375,8 @@ rslider4
 	* Take scaling into account later below as well.
 
 	and.l	#$ffff,d0
+	;DPRINT "slider4 mouse, VertPot=%lx",13
+
 	lsr.l	#1,d0		* [0..$7fff]
 
 	move.l	modamount(a5),d1
@@ -8390,7 +8392,7 @@ rslider4
 	bsr.w	divu_32
 
 	cmp.l	firstname(a5),d0
-	beq.b	.q
+	beq.w	.q
 	move.l	d0,firstname(a5)
 	bra.w	showNamesNoCentering
 
@@ -8481,12 +8483,15 @@ reslider
 	sne	d4		* did it change compared to previous?
 	move	d0,pi_VertPot(a1)
 
-	DPRINT	"slider4 VertPot=%lx",101
-	* subsequent mousemoves will call rslider4 to update
+
+	;move.l	firstname(a5),d1
+	;DPRINT	"slider4 VertPot=%lx firstname=%ld",101
+	
+	* Subsequent mousemoves will call rslider4 to update
 	* firstname according to VertPot, but that is not needed
-	* since we did that already. It seems to cause
-	* a jump of one row in sometimes. Prevent that
-	* by setting the cached compare value to match.
+	* since we did that already here. There would also be
+	* jumps because the VertPot range 0..0xffff is not
+	* very accurate for large amount of modules.
 	move	d0,slider4old(a5)
 
 	move	gg_Height(a0),d0
