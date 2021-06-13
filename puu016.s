@@ -16437,6 +16437,10 @@ listChanged
 	bsr	clear_random	
 	rts
 
+; TODO: list traversal end check should not be needed,
+; unless for some reason listamount and list ocntents are
+; not in sync
+
 * Node getter
 * in:
 *   d0=index, 32-bit
@@ -16485,10 +16489,13 @@ getListNodeCached
 	move.l	cachedNode(a5),a0
 
 	sub.l	d1,d0
-	DPRINT	"Stepping to=%ld",2
+	DPRINT	"->step %ld",2
 	tst.l	d0
 	beq.b   .x
-	bpl.b  	.forward
+	bpl.b  	.forward2
+	bra.b	.backward2
+
+
 .backward
 	PRED   a0,a0
 	tst.l	LN_PRED(a0)
