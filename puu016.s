@@ -4,7 +4,59 @@
 *******************************************************************************
 * Aloitettu 5.2.-94
 
+; TODO
+; press key 1 to zip window
+; -> cant unzip anymore
+
+; FIXED
+; add stuff to list
+; press keys: left, right
+; -> enforcer hit
+
+; TODO
+; RMB+Add ei fudaa (insert)
+
+; TODO
+; select module and play: ei j‰‰ ihan keskelle
+; heiluta hiirt‰, soitettava kappale pyk‰l‰ keskelt‰ alemmas?
+; joku eventti j‰‰nyt k‰sittelem‰tt‰, esim. nuoli ylˆs, tulee
+; k‰sitelt‰v‰ksi sitten kun seuraava mousemove event tulee?
+
+; TODO
+; saatu r‰pl‰tty‰ aikaan niin ett‰ ei voi sammuttaa,
+; valittaa ett‰ filereq on muka p‰‰ll‰?
+
+; FIXED
 ; startissa a500:lla aika hidasta? mihk‰ aika menee
+
+; FIXED
+; Filebox prop gadget ei toimi "mediumlista":lla, loppup‰‰st‰;
+
+; IN PROGRESS
+; Aika hidasta nuolin‰ppisselailu mediumlistalla puolen v‰lin paikkeilta alasp‰in; 68000
+
+; TODO
+; Poista WA_ReportMouse, sen sijaan IDCMP_INTUITICKS
+; hiiren vahtimiseen? luultavasti kevyempi
+; toinen on vaikka kerran sekuntiin oma signaali
+
+; Press Q
+; -> boom
+; Add diivider + empty list: not good
+
+; TODO
+; Open prefs
+; press Ctrl
+; --> BOOM
+
+; TODO
+; Open prefs
+; - change title bar display mode with RMB list selector
+; -> boom
+
+; a1200 with 2+8M
+; Load mediumlist-xpk
+; -> boom!
 
 ; 68040
 ; MusicAss
@@ -72,7 +124,7 @@ ver	macro
 ;	dc.b	"v2.44 (16.8.1998)"
 ;	dc.b	"v2.44 (16.8.1998)"
 ;	dc.b	"v2.45 (10.1.2000)"
-	dc.b	"v2.46 (?.?.2021)"
+	dc.b	"v2.46ﬂ (?.6.2021)"
 	endm	
 
 
@@ -2721,7 +2773,7 @@ msgloop
 
 	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
 	btst	d3,d0
-	beq.w	.nwwwq
+	beq.b	.nwwwq
 	DPRINT	"rawkey from input handler",9
 	moveq	#0,d4
 	move	rawkeyinput(a5),d3
@@ -6846,6 +6898,7 @@ endc
 	bmi.w	.exit	* vain jos nappula alhaalla
 	movem.l	d0-a6,-(sp)
 
+
 	and.b	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.noshifts
 
@@ -6854,7 +6907,7 @@ endc
 	bne.b	.f0
 	or.l	#WFLG_ACTIVATE,sflags
 	bsr.w	rbutton10b
-	bra.b	.ee
+	bra.w	.ee
 .f0
 	cmp.b	#$41,d3		* backspace + shift?
 	beq.b	.fid
@@ -7389,8 +7442,6 @@ printbox
 SORT_ELEMENT_LENGTH = 4+24
 
 rsort
-
-
 	* Let's not sort a list with 1 or 2 modules, that would be silly I guess.
 	cmp.l	#2,modamount(a5)
 	bhs.b	.so
@@ -7435,7 +7486,7 @@ rsort
 .ploop
 	tst.l	(a3)		* Oliko viimeinen
 	beq.b	.ep
-	move.l	(a3),a4
+	move.l	(a3),a4		* SUCC
 	move.l	a3,(a2)+	* noden osoite taulukkoon
 
 	push	a2
@@ -7499,7 +7550,7 @@ rsort
 
 .error
 
-	bsr.w	clear_random
+	bsr.w	listChanged
 	tst.l	playingmodule(a5)
 	bmi.b	.npl
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
@@ -7762,7 +7813,7 @@ rmove
 	move.l	a3,a1
 	lore	Exec,Remove
 	subq.l	#1,modamount(a5)
-	bsr.w	clear_random
+	bsr.w	listChanged
 	tst.l	playingmodule(a5)
 	bmi.b	.q
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
@@ -8331,7 +8382,7 @@ rslider4
 	cmp.l	firstname(a5),d0
 	beq.b	.q
 	move.l	d0,firstname(a5)
-	bra.w	shownames2
+	bra.w	showNamesNoCentering
 
 *******************************************************************************
 * Suhteutetaan nuppi tiedostojen m‰‰r‰‰n
@@ -8533,7 +8584,7 @@ rbutton1
 	st	hippoonbox(a5)
 	DPRINT  "playButtonAction release list",2
 	bsr.w		releaseModuleList
-	bsr.w	clear_random
+	bsr		listChanged
 	bra.w	resh
 
 .nomove
@@ -8773,6 +8824,7 @@ add_divider
 	lea	moduleListHeader(a5),a0
 	move.l	a3,a2
 	lore	Exec,Insert
+	bsr	listChanged
 	st	hippoonbox(a5)
 	bsr.w	resh
 .x	
@@ -9639,6 +9691,7 @@ freelist
 	clr.l	modamount(a5) 
 	* need to reset random table to nothingness as well
 	bsr.w	clear_random
+	bsr		clearCachedNode
 
 	* reset list slider and list box 
 	clr.l	firstname(a5)	
@@ -10046,7 +10099,7 @@ rlpg
 .ex
 
 	clr.l	chosenmodule(a5)	* moduuliksi eka
-.kex	bsr.w	clear_random
+.kex	bsr.w	listChanged
 	st	hippoonbox(a5)
 	bra.w	resh
 
@@ -10376,6 +10429,7 @@ komentojono
 	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
 
 	st	hippoonbox(a5)
+	bsr		listChanged
 	bsr.w	resh
 	bsr.w	rbutton1		* soitetaan 
 .x	rts
@@ -14836,6 +14890,7 @@ listselector
 *******
 
 * 
+showNamesNoCentering
 shownames2
 	moveq	#1,d4		* flag: do not center
 	bra.b	shn
@@ -15020,27 +15075,40 @@ shn
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien m‰‰r‰
 .donames
-	DPRINT  "shownames obtain list",1
+;	DPRINT  "shownames obtain list",1
 	bsr.w  obtainModuleList
 	lea	moduleListHeader(a5),a4	
+
+	DPRINT	".doNames %ld",31
+* TODO
 
 	* d0 = module index
 	* find out the corresponding list entry
 	move.l	d0,d3 		* keep track of the module index as well here
+	move.l	d1,d4		* move this out of the way
 	subq.l	#1,d0
 	bmi.b	.baa
 .luuppo
-	TSTNODE	a4,a3
-	beq.w	.lop
-	move.l	a3,a4
-	;dbf	d0,.luuppo
-	subq.l #1,d0 
-	bpl.b  .luuppo
+;	TSTNODE	a4,a3
+;	beq.w	.lop
+;	move.l	a3,a4
+;	subq.l #1,d0 
+;	bpl.b  .luuppo
+
+;	bsr	clearCachedNode
+;	move.l	d3,d0
+
+	bsr	getListNodeCached
+	tst.l	(a0)
+	beq	.lop
+	move.l	a0,a3
+	move.l	a0,a4
 .baa
+
 	move	d2,d5
 	subq	#1,d5
 
-	move	d1,d6
+	move	d4,d6
 	lsl	#3,d6
 	add	#83+WINY-14,d6		* Y
 
@@ -15122,7 +15190,7 @@ shn
 	dbf	d5,.looppo
 .lop	
 	
-	DPRINT  "shownames release list",2
+;	DPRINT  "shownames release list",2
 	bsr.w 	releaseModuleList
 	rts
 	
@@ -15200,7 +15268,7 @@ elete
 	moveq	#PLAYING_MODULE_NONE,d0
 	move.l	d0,chosenmodule2(a5)
 	st	hippoonbox(a5)
-	bsr.w	clear_random
+	bsr.w	listChanged
 
 	move.l	chosenmodule(a5),d0
 	bmi.w	.erer
@@ -16189,6 +16257,9 @@ putnu	ext.l	d0
 * ja pistet‰‰n palkki
 *******
 
+* Calculates chosenmodule, which is an index of the selected item.
+* Chosen line is highlighted and previously chosen line highlight removed.
+
 markline
 	tst	boxsize(a5)
 	bne.b	.m
@@ -16213,6 +16284,8 @@ markline
 	sub	#63+WINY,d1
 	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
 
+	* list is empty
+	; this may allow doubleclicking of empty list to open file req
 	tst.l	modamount(a5)
 	bne.b	.ona
 	moveq	#0,d1		* ei oo modeja, otetaan eka
@@ -16220,22 +16293,26 @@ markline
 	ext.l	d1
 	move.l	d1,d2
 	add.l	firstname(a5),d1
+	* See if clicking on an already chosen module
 	cmp.l	chosenmodule(a5),d1
-	beq.b	.oo
-
+	beq.w	.oo
+	* This does not seem to happen ever?
 	cmp.l	#PLAYING_MODULE_REMOVED,chosenmodule(a5)
-	beq.b	.oo
+	beq.b	.oo2
 	pushm	d1/d2
-	bsr.b	unmarkit
+	bsr.w	unmarkit
 	popm	d1/d2
 .u	st	dontmark(a5)
-.oo	
+.oo2	
+.oo
+.continue
 	move.l	d1,chosenmodule(a5)
 	move.l	d2,markedline(a5)
 
 	move.l	clickmodule(a5),d3
 	move.l	d1,clickmodule(a5)
 
+	* double click test
 	cmp.l	d1,d3
 	bne.b	.nodouble
 	move.l	#-1,clickmodule(a5)	
@@ -16250,7 +16327,7 @@ markline
 	tst.l	d0
 	beq.b	.double
 * Tiedostoa doubleclickattu! Soitetaan...
-
+* Double click detected
 	tst.b	doubleclick(a5)		* onko sallittua?
 	bne.w	rbutton1		* Play!
 	rts
@@ -16260,38 +16337,46 @@ markline
 	lea	clickmicros(a5),a1
 	lore	Intui,CurrentTime
 .double
-	bsr.w	shownames2
+	bsr.w	showNamesNoCentering
 	bsr.w	reslider
 .out	rts
 
-
-
+* Highlight line by xorring/complementing it
+* Highlight is cleared by doing the same operation again on the same line.
 unmarkit			* pyyhitaan merkkaus pois
 markit
+	move.l	chosenmodule(a5),d0
+
+	* Bounds check
+	cmp.l	modamount(a5),d0
+	bhs.b	.outside
+
 	move.l	markedline(a5),d5
 	bmi.w	.outside
 	moveq	#0,d0
 	move	boxsize(a5),d0
-	;cmp	boxsize(a5),d5
 	cmp.l	d0,d5
 	bhs.w	.outside
 	tst.b	win(a5)
 	beq.w	.outside
 
-	DPRINT  "markit obtain list",1
-	bsr.w	 obtainModuleList
-	lea	moduleListHeader(a5),a4	
-	move.l	chosenmodule(a5),d0	* etsit‰‰n kohta
-.luuppo
+; TODO: this probably prevents clicking on empty parts of the list
+;       to highlight lines
+	; Why is the above done? remove?
+;	move.l	d5,d1
+;	bsr.w	 obtainModuleList
+;	lea	moduleListHeader(a5),a4	
+;	move.l	chosenmodule(a5),d0	* etsit‰‰n kohta
+;.luuppo
 	* a4=current node
 	* a3=next node
 	* test if at end
-	TSTNODE	a4,a3
-	beq.b	.nomods
-	move.l	a3,a4
-	;dbf	d0,.luuppo
-	subq.l #1,d0 
-	bpl.b  .luuppo
+;	TSTNODE	a4,a3
+;	beq.b	.nomods
+;	move.l	a3,a4
+;	;dbf	d0,.luuppo
+;	subq.l #1,d0 
+;	bpl.b  .luuppo
 
 	move	d5,d1
 	lsl	#3,d1		* mulu #8,d1
@@ -16315,10 +16400,120 @@ markit
 	move.b	d7,rp_Mask(a1)
 
 .nomods
-	DPRINT  "markit release list",2
-	bsr.w	 releaseModuleList
+;	bsr.w	 releaseModuleList
 
 .outside	
+	rts
+
+*********************************
+* List node utilities
+********************************
+
+* When an element is moved, added, inserted, deleted,
+* random bookkeeping must be reset,
+* and cached node as well. They would otherwise
+* no longer represent the list state correctly.
+listChanged
+	DPRINT "List changed",1
+	bsr	clearCachedNode
+	bsr	clear_random	
+	rts
+
+* Node getter
+* in:
+*   d0=index, 32-bit
+* out:
+*   a0=list node
+*   Z=set if last node reached
+getListNode
+	lea	moduleListHeader(a5),a0
+	subq.l	#1,d0
+	move.l	d0,d1
+	swap	d0
+.loop
+	TSTNODE   a0,a0
+	beq.b	.end
+	dbf	 	d1,.loop
+	dbf		d0,.loop
+	moveq	#1,d0 	* found
+.end
+	rts
+
+* Cached getter
+* in:
+*   d0=index
+* out:
+*   a0=list node
+getListNodeCached
+
+
+* algo:
+* - if index is nearer head than cached node
+*   - use head as cached reference node
+* - else if index is nearer tail than cached node
+*   - use tail as cached reference node
+* - else
+*   - use cached node as reference node
+
+	tst.l	cachedNode(a5)
+	bne.b	.n
+	move.l	moduleListHeader(a5),cachedNode(a5)
+	clr.l	cachedNodeIndex(a5)
+.n
+	move.l	cachedNodeIndex(a5),d1
+	* New cached index
+	move.l	d0,cachedNodeIndex(a5)
+	DPRINT	"Getlistnode to=%ld cached=%ld",1
+	move.l	cachedNode(a5),a0
+
+	sub.l	d1,d0
+	DPRINT	"Stepping to=%ld",2
+	tst.l	d0
+	beq.b   .x
+	bpl.b  	.forward
+.backward
+	PRED   a0,a0
+	tst.l	LN_PRED(a0)
+	beq.b	.x1
+	addq.l 	#1,d0
+	bne.b 	.backward
+	move.l a0,cachedNode(a5)
+.x	rts
+
+.forward 
+	SUCC    a0,a0
+	tst.l	(a0)
+	beq.b	.x1
+	subq.l	#1,d0
+	bne.b	.forward
+.x1	move.l 	a0,cachedNode(a5)
+	rts
+
+.backward2 
+	neg.l 	d0
+	subq.l	#1,d0
+	move.l	d0,d1
+	swap 	d0
+.bloop
+	PRED   a0,a0
+	dbf 	d1,.bloop 
+	dbf		d0,.bloop
+	move.l a0,cachedNode(a5)
+	rts 
+
+.forward2
+	subq.l	#1,d0
+	move.l	d0,d1
+	swap 	d0
+.floop
+	SUCC    a0,a0
+	dbf 	d1,.floop 
+	dbf		d0,.floop
+	move.l 	a0,cachedNode(a5)
+	rts
+
+clearCachedNode
+	clr.l	cachedNode(a5)	
 	rts
 
 
@@ -19278,7 +19473,8 @@ rexxmessage
 	move.l	a0,l_nameaddr(a3)	* pelk‰n nimen osoite
 
 	bsr.w	addfile
-	jsr	clear_random
+	bsr	listChanged
+
 	st	hippoonbox(a5)
 	tst.l	chosenmodule(a5)
 	bpl.b	.ee
