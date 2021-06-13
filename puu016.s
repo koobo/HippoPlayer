@@ -512,7 +512,7 @@ filereq_prosessi rs	1		* ei-0: Files-prosessi päällä
 quad_prosessi	rs	1		* ...
 info_prosessi	rs	1		* ...
 about_moodi	rs.b	1		* 0: normaali, 1: moduleinfo
-filereqmode	rs.b	1		* onko add vai insert
+filereqmode	rs.b	1		* 0: add mode, ~0: insert mode 
 fileinsert	rs.l	1		* node jonka jälkeen insertti
 haluttiinuusimodi rs	1		* new-nappulaa ja play:tä varten
 quad_task	rs.l	1		* Scopen taski
@@ -791,6 +791,12 @@ divideramount	rs.l	1	* dividereitten määrä (info window)
 firstname		rs.l	1	* nimi ikkunan ekan nimen numero
 firstname2		rs.l	1	* 
 
+* List node represeneting an index
+* Should be zeroed if list structure
+* changes above the node.
+cachedNodeIndex	rs.l	1
+cachedNode	rs.l	1	
+
 markedline	rs.l	1	* merkitty rivi
 					* Highlighted line inside the box, range is from 0
 					* to current boxsize
@@ -922,6 +928,7 @@ ahi_stereolevpot_new	rs	1
 ahi_name_new		rs.b	44
 
 
+* file list header, Minimal List Header
 moduleListHeader	rs.b	MLH_SIZE	* tiedostolistan headeri
 filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 
@@ -1162,7 +1169,7 @@ xpl_offs	=	49
 *
 
 	rsreset
-		rs.b	MLH_SIZE		* Minimal List Header
+			rs.b	MLN_SIZE	* Minimal node 
 l_nameaddr	rs.l	1			* osoitin pelkkään tied.nimeen
 								* address to filename without path
 l_filename	rs.b	0			* tied.nimi ja polku alkaa tästä
@@ -2672,7 +2679,7 @@ msgloop
 	bsr.w	rsort
 .nas
 
-	bsr.w	clear_random
+		jsr	listChanged
 	st	hippoonbox(a5)
 	bsr.w	resh
 
@@ -2710,11 +2717,12 @@ msgloop
 .nwww	pop	d0
 
 	bsr.w		areMainWindowGadgetsFrozen
-	bne.b	.nwwwq
+	bne.w	.nwwwq
 
 	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
 	btst	d3,d0
-	beq.b	.nwwwq
+	beq.w	.nwwwq
+	DPRINT	"rawkey from input handler",9
 	moveq	#0,d4
 	move	rawkeyinput(a5),d3
 	cmp	#$25,d3			* oliko 'h'?
@@ -2722,11 +2730,15 @@ msgloop
 	cmp	#$01,d3			* '1'? -> iconify
 	bne.b	.nico
 	moveq	#0,d3			* muutetaan -> ~`
-	bra.w	nappuloita
+	bsr	nappuloita
+	bra	returnmsg
 .nico
 
 	tst	d3
-	bne.w	nappuloita
+	beq.b  .noKeys
+	bsr nappuloita
+	bra	returnmsg
+.noKeys
 
 	tst.b	win(a5)
 	bne.b	.obh
@@ -6115,7 +6127,7 @@ clear_random
 .noList
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.x
-	* Request refresh to clear out random pöay indicators
+	* Request refresh to clear out random play indicators
 	st	hippoonbox(a5)
 	bsr.w	shownames
 .x
@@ -6819,6 +6831,14 @@ nappilasku
 
 handleRawKeyInput
 nappuloita
+ if DEBUG
+	moveq   #0,d0
+	move.b	d3,d0
+	moveq	#0,d1
+	move	d3,d1
+	DPRINT	"Raw key=%lx qual=%lx",1
+endc 
+
 	and	#$ff,d3
 
 	* react only if button is down
@@ -6879,6 +6899,7 @@ nappuloita
 	addq.l	#2,a0
 	cmp.l	#.nabse,a0
 	bne.b	.checke
+	DPRINT	"No action for key",2
 .ee	movem.l	(sp)+,d0-a6
 .sd	
 .exit
