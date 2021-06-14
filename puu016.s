@@ -4,7 +4,13 @@
 *******************************************************************************
 * Aloitettu 5.2.-94
 
-; TODO
+; FIXEO
+; add file
+; add divider
+; press play on divider
+; -> hit
+
+; FIXED
 ; press key 1 to zip window
 ; -> cant unzip anymore
 
@@ -13,7 +19,7 @@
 ; press keys: left, right
 ; -> enforcer hit
 
-; TODO
+; FIXED
 ; RMB+Add ei fudaa (insert)
 
 ; TODO
@@ -178,7 +184,12 @@ MAX_MODULES		= $1ffff 		    * this should be enough!
 WINX	= 2	* X ja Y lisäykset pääikkunan grafiikkaan
 WINY	= 3
 
+* This char as the first char in filename indicates a list divider
+DIVIDER_MAGIC = '÷'
 
+isListDivider macro 
+	cmp.b 	#DIVIDER_MAGIC,\1
+	endm
 
 iword	macro
 	ror	#8,\1
@@ -6023,20 +6034,25 @@ signalreceived
 	bsr.w	resh
 
 * etsitään vastaava listasta tiedoston nimi
-	DPRINT  "signalreceived obtain list",1
-	bsr.w		obtainModuleList
-	lea		moduleListHeader(a5),a4
-.luuppo
-	TSTNODE	a4,a3
-	beq.w	.erer			* end of list reached?
-	move.l	a3,a4
-	;dbf		d0,.luuppo
-	subq.l	#1,d0 
-	bpl.b	.luuppo
-	DPRINT  "signalreceived release list",2
-	bsr.w 	releaseModuleList
+;	DPRINT  "signalreceived obtain list",1
+; 	bsr.w		obtainModuleList
+; 	lea		moduleListHeader(a5),a4
+; .luuppo
+; 	TSTNODE	a4,a3
+; 	beq.w	.erer			* end of list reached?
+; 	move.l	a3,a4
+; 	;dbf		d0,.luuppo
+; 	subq.l	#1,d0 
+; 	bpl.b	.luuppo
+; 	bsr.w 	releaseModuleList
+	DPRINT	"signalreceived getListNode",1
+	bsr		getListNode
+	beq		.erer 
+	move.l	a0,a3
 
-	cmp.b	#'÷',l_filename(a3)	* onko divideri??
+;	DPRINT  "signalreceived release list",2
+
+	isListDivider	l_filename(a3)	* onko divideri??
 	bne.b	.wasfile
 	tst	d7			* pitää olla jotain että ei jää 
 	bne.w	.eekk			* jummaamaan dividerin kohdalle
@@ -6568,21 +6584,26 @@ umph
 * etsitään listasta vastaava tiedosto
 * find the corresponding file from the list
 
-	DPRINT  "soitamodi obtain list",1
-	bsr.w		obtainModuleList
-	lea	moduleListHeader(a5),a4
-.luuppo
-	TSTNODE	a4,a3
+; 	DPRINT  "soitamodi obtain list",1
+; 	bsr.w		obtainModuleList
+; 	lea	moduleListHeader(a5),a4
+; .luuppo
+; 	TSTNODE	a4,a3
+; 	beq.w	.erer
+; 	move.l	a3,a4
+; 	;dbf	d0,.luuppo
+; 	subq.l	#1,d0 
+; 	bpl.b  .luuppo
+; 	DPRINT  "soitamodi release list",2
+; 	bsr.w		releaseModuleList
+
+	DPRINT	"soitamodi getListNode",1
+	bsr		getListNode
 	beq.w	.erer
-	move.l	a3,a4
-	;dbf	d0,.luuppo
-	subq.l	#1,d0 
-	bpl.b  .luuppo
-	DPRINT  "soitamodi release list",2
-	bsr.w		releaseModuleList
+	move.l	a0,a3
 
 	* This might be a list divider. Try again in that case.
-	cmp.b	#'÷',l_filename(a3)	* onko divideri?
+	isListDivider l_filename(a3)	* onko divideri?
 	beq.w	umph			* kokeillaan edellistä/seuraavaa/rnd
 
 	cmp.l	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
@@ -7494,9 +7515,9 @@ rsort
 
 	move.l	(a3),a3		* MLH_HEAD
 .ploop
-	tst.l	(a3)		* Oliko viimeinen
+	tst.l	(a3)		* check if last node?
 	beq.b	.ep
-	move.l	(a3),a4		* SUCC
+	SUCC	a3,a4		* SUCC
 	move.l	a3,(a2)+	* noden osoite taulukkoon
 
 	push	a2
@@ -7582,7 +7603,7 @@ rsort
 	beq.b	.ep2
 	move.l	(a3),a0
 	move.l	l_nameaddr(a0),a0	
-	cmp.b	#'÷',(a0)		* eka hitti
+	isListDivider  (a0)		* eka hitti
 	bne.b	.jep1
 	lea	28(a3),a3
 	bra.b	.ploop2
@@ -7600,7 +7621,7 @@ rsort
 	beq.b	.jep1
 	move.l	(a3),a0
 	move.l	l_nameaddr(a0),a0
-	cmp.b	#'÷',(a0)		* toka hitti
+	isListDivider (a0)		* toka hitti
 	beq.b	.jep1
 	lea	28(a3),a3
 	bra.b	.ploop3
@@ -7764,7 +7785,7 @@ rsort
 	moveq	#0,d1
 	moveq	#0,d2
 
-	cmp.b	#'÷',(a2)
+	isListDivider  (a2)
 	bne.b	.boobo
 	rts
 .boobo
@@ -7811,6 +7832,7 @@ rsort
 * Move
 *******
 rmove
+
 	tst.b	movenode(a5)	* Jos toistamiseen painetaan, mennään "play"hin
 	bne.w	rbutton1
 
@@ -7819,6 +7841,10 @@ rmove
 	bsr.b	getcurrent
 	beq.b	.q
 	move.l	a3,nodetomove(a5)
+ if DEBUG
+	move.l	l_nameaddr(a3),d0
+	DPRINT	"moving %s",1
+ endc
 	st	movenode(a5)
 	move.l	a3,a1
 	lore	Exec,Remove
@@ -7835,7 +7861,7 @@ rmove
 * Gets the chosen module list element 
 * Out:
 *    d0 = 0 if not found
-*    d1 = 1 if data available
+*    d0 = 1 if data available
 *    a3 = list node pointer
 *** Chosenmodule node A3:een
 getcurrent
@@ -7854,28 +7880,32 @@ getcurrent
 *    d0 = 1 if data available
 *    a3 = list node pointer
 getcurrent2
+;XAX
+	bsr getListNode
+	move.l	a0,a3
+	rts
 
 * etsitään listasta vastaava kohta
-	DPRINT  "getcurrent obtain list",1
-	bsr.w		obtainModuleList
-	lea	moduleListHeader(a5),a4
-.luuppo
-	TSTNODE	a4,a3
-	beq.b	.q
-	move.l	a3,a4
-	;dbf	d0,.luuppo
-	subq.l	#1,d0 
-	bpl.b  .luuppo
-	DPRINT  "getcurrent release list 1",2
-	bsr.w		releaseModuleList
+;	DPRINT  "getcurrent obtain list",1
+; 	bsr.w		obtainModuleList
+; 	lea	er(a5),a4
+; .luuppo
+; 	TSTNODE	a4,a3
+; 	beq.b	.q
+; 	move.l	a3,a4
+; 	;dbf	d0,.luuppo
+; 	subq.l	#1,d0 
+; 	bpl.b  .luuppo
+; 	DPRINT  "getcurrent release list 1",2
+; 	bsr.w		releaseModuleList
 * a3 = valittu nimi
-	moveq	#1,d0
-	rts
-.q	
-	DPRINT  "getcurrent release list 2",3
-	bsr.w		releaseModuleList
-	moveq	#0,d0
-	rts
+; 	moveq	#1,d0
+; 	rts
+; .q	
+; 	DPRINT  "getcurrent release list 2",3
+; ;	bsr.w		releaseModuleList
+; 	moveq	#0,d0
+; 	rts
 
 
 
@@ -7979,13 +8009,16 @@ find_continue
 	bsr.w	setMainWindowWaitPointer
 	pea	clearMainWindowWaitPointer(pc)
 
+	; Use chosen module as starting point of seardh
+
 	DPRINT  "find_continue obtain list",1
 	bsr.w		obtainModuleList
-	bsr.w	getcurrent		* a3 => chosen module listnode
+	bsr.w	getcurrent		* a0 => chosen module listnode
+	move.l	a0,a3
+	move.l	a3,a4
 
 	move.l	chosenmodule(a5),d7
 ;	subq	#1,d7
-
 
 	move	#$df,d2
 
@@ -8049,6 +8082,10 @@ find_continue
 
 .found	
 	move.l	d7,chosenmodule(a5)
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"Found module at %ld",3
+ endc
 	st	hippoonbox(a5)
 	bsr.w	resh
 	moveq	#0,d0
@@ -8596,11 +8633,17 @@ rbutton1
 	bsr.w	getcurrent
 	beq.w	.nomove
 
+ if DEBUG
+ 	move.l	l_nameaddr(a3),d0
+	DPRINT	"move, inserting after %s",99
+ endc
+
 	DPRINT  "playButtonAction obtain list",11
 	bsr.w		obtainModuleList
 	lea	moduleListHeader(a5),a0	* Insertoidaan node...
 	move.l	nodetomove(a5),a1
 	move.l	a3,a2
+	
 	lore	Exec,Insert
 	addq.l	#1,modamount(a5)
 	addq.l	#1,chosenmodule(a5)	* valitaan movetettu node
@@ -8651,20 +8694,26 @@ rbutton1
 
 
 * etsitään listasta vastaava tiedosto
-	lea	moduleListHeader(a5),a4
-.luuppo
-	TSTNODE	a4,a3
-	beq.w	.erer
-	move.l	a3,a4
-	;dbf	d0,.luuppo
-	subq.l	#1,d0 
-	bpl.b  .luuppo
+; 	lea	moduleListHeader(a5),a4
+; .luuppo
+; 	TSTNODE	a4,a3
+; 	beq.w	.erer
+; 	move.l	a3,a4
+; 	;dbf	d0,.luuppo
+; 	subq.l	#1,d0 
+; 	bpl.b  .luuppo
 
-.huo	cmp.b	#'÷',l_filename(a3)	* onko divideri??
+	DPRINT	"playbutton getListNode",111
+	bsr		getListNode
+	beq.w	.erer
+	move.l 	a0,a3
+
+	isListDivider l_filename(a3)
 	bne.b	.je
-	TSTNODE	a4,a3
-	beq.w	.erer			* loppuivatko modit??
-	move.l	a3,a4
+	* skip over to the next module if this was a divider
+	TSTNODE	a3,a3
+	beq.w	.erer			* end of list reached?
+							* try the next one
 	addq.l	#1,chosenmodule(a5)
 	bsr.w	resh
 	bra.w	.huh
@@ -8769,23 +8818,28 @@ rinsert
 	bra.w	rbutton7
 
 rinsert2
-	DPRINT  "insertButtonAction obtain list",1
-	bsr.w		obtainModuleList
+	; DPRINT  "insertButtonAction obtain list",1
+	; bsr.w		obtainModuleList
 	move.l	chosenmodule(a5),d0
 
 * etsitään listasta vastaava kohta
-	lea	moduleListHeader(a5),a4
-.luuppo
-	TSTNODE	a4,a3
-	beq.w	rbutton7
-	move.l	a3,a4
-	;dbf	d0,.luuppo
-	subq.l #1,d0 
-	bpl.b  .luuppo
-* a3 = valittu nimi
-	move.l	a3,fileinsert(a5)
-	DPRINT  "insertButtonAction release list",2
-	bsr.w		releaseModuleList
+; 	lea	moduleListHeader(a5),a4
+; .luuppo
+; 	TSTNODE	a4,a3
+; 	beq.w	rbutton7
+; 	move.l	a3,a4
+; 	;dbf	d0,.luuppo
+; 	subq.l #1,d0 
+; 	bpl.b  .luuppo
+
+	DPRINT	"insert getListNode",1
+	bsr		getListNode
+	beq		rbutton7		* go to "add"
+
+* a0 = valittu nimi
+	move.l	a0,fileinsert(a5)
+	; DPRINT  "insertButtonAction release list",2
+	; bsr.w		releaseModuleList
 	st	filereqmode(a5)
 	rts
 	
@@ -8801,16 +8855,20 @@ add_divider
 	tst.l	modamount(a5)
 	beq.w	.x
 	move.l	chosenmodule(a5),d0
-	bmi.b	.x
+	bmi.w	.x
 ;	subq	#1,d0			* valitun nimen edellinen node
 
-	lea	moduleListHeader(a5),a4
-.luuppo	TSTNODE	a4,a3
-	beq.b	.x
-	move.l	a3,a4
-	;dbf	d0,.luuppo
-	subq.l #1,d0 
-	bpl.b  .luuppo
+; 	lea	moduleListHeader(a5),a4
+; .luuppo	TSTNODE	a4,a3
+; 	beq.b	.x
+; 	move.l	a3,a4
+; 	;dbf	d0,.luuppo
+; 	subq.l #1,d0 
+; 	bpl.b  .luuppo
+	DPRINT	"addDivider getListNode",2
+	bsr		getListNode
+	beq.b		.x
+	move.l	a0,a3
 
 	bsr.w	get_rt
 
@@ -8839,7 +8897,7 @@ add_divider
 	lea	divider(a5),a0
 	lea	l_filename(a1),a2
 	move.l	a2,l_nameaddr(a1)
-	move.b	#'÷',(a2)+		* divider merkintä
+	move.b	#DIVIDER_MAGIC,(a2)+		* divider merkintä
 .fe	move.b	(a0)+,(a2)+
 	bne.b	.fe
 	
@@ -8851,7 +8909,7 @@ add_divider
 	st	hippoonbox(a5)
 	bsr.w	resh
 .x	
-	DPRINT  "add_divider release list",2
+	DPRINT  "add_divider release list",21
 	bsr.w		releaseModuleList
 	rts
 
@@ -9408,7 +9466,7 @@ adddivider
 	beq.b	.pehe
 	move.l	d0,a0
 
-	cmp.b	#'÷',(a0)    * Magic divider character
+	isListDivider (a0)    * Magic divider character
 	bne.b	.pehe
 	cmp.b	#'/',7(a0)	 * Another magic divider character
 	bne.b	.pehe
@@ -9441,7 +9499,7 @@ adddivider
 	move.l	a2,l_nameaddr(a3)
 
 	* first insert divider magic marker
-	move.b	#'÷',(a2)+		* divider merkintä
+	move.b	#DIVIDER_MAGIC,(a2)+		* divider merkintä
 							* a0 = directory name
 	* find out length of the name,
 	* max allowed is 21	
@@ -9697,12 +9755,13 @@ freelist
 	bmi.b	.ehe
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .ehe
-	move.l	(a5),a6
+	move.l	(a5),a6		* execbase
+	lea	moduleListHeader(a5),a2
 .freelist_loop
 	* a0: list, a1: destroyed, d0: node, or zero
-	lea	moduleListHeader(a5),a0
-	lob	RemTail
-	tst.l	d0
+	; TODO: Use MACRO
+	move.l	a2,a0
+	lob	RemHead
 	beq.b	.listFreed
 	move.l	d0,a0
 
@@ -10071,7 +10130,7 @@ rlpg
 .old2
 
 	lea	l_filename(a2),a1
-	cmp.b	#'÷',(a1)		* divideri
+	isListDivider (a1)		* divideri
 	bne.b	.nd
 	move.l	a1,a0
 	bra.b	.di
@@ -14955,7 +15014,7 @@ shn
 .eper
 
 	tst	d4		* ei minkäänlaista uudelleensijoitusta
-	bne.b	.nob
+	bne.w	.nob
 
 	moveq	#0,d2
 	move	boxsize(a5),d2
@@ -14963,6 +15022,8 @@ shn
 	lsr	#1,d2		* center chosenmodule in the middle of the box
 	
 	move.l	chosenmodule(a5),d0
+	DPRINT "Shownames center index %ld",10
+
 	sub.l	d2,d0
 	bmi.b	.nok
 	move.l	modamount(a5),d1
@@ -14976,6 +15037,7 @@ shn
 	moveq	#0,d0	
 .ok	
 	move.l	d0,firstname(a5)
+	DPRINT "->first name %ld",12
 
 .nob
 	tst.b	hippoonbox(a5)
@@ -15149,7 +15211,7 @@ shn
 
 	moveq	#0,d7			* clear divider flag
 
-	cmp.b	#'÷',(a1)		* list divider magic marker check?
+	isListDivider (a1)		* list divider magic marker check?
 	bne.b	.nodi
 	addq	#1,a1			* skip to avoid displaying marker
 	st		d7				* set flag: divider being handled
@@ -15238,7 +15300,7 @@ shn
 ***** Katkaisee prefixin nimestä a0:ssa
 
 cut_prefix
-	cmp.b	#'÷',(a0)		* onko divideri?
+	isListDivider (a0)		* onko divideri?
 	beq.b	.xx
 
 	pushm	d0/a1
@@ -15311,20 +15373,21 @@ elete
 
 	lea	moduleListHeader(a5),a4
 
-.luuppo	TSTNODE	a4,a3
-	beq.w	.erer
-	move.l	a3,a4
-	;dbf	d0,.luuppo
-	subq.l #1,d0 
-	bpl.b  .luuppo
-
-	move.l	a3,d0
-	beq.w	.erer
-
+; .luuppo	TSTNODE	a4,a3
+; 	beq.w	.erer
+; 	move.l	a3,a4
+; 	;dbf	d0,.luuppo
+; 	subq.l #1,d0 
+; 	bpl.b  .luuppo
+	DPRINT	"delete getListNode",1
+	bsr		getListNode
+	beq		.erer
+	move.l	a0,a3
+	
 	tst.l	d7
 	beq.b	.nmod
 
-	cmp.b	#"÷",l_filename(a3)
+	isListDivider l_filename(a3)
 	bne.b	.de
 	not.b	deleteflag(a5)
 	beq.w	.nmodo
@@ -16451,20 +16514,42 @@ listChanged
 *   d0=index, 32-bit
 * out:
 *   a0=list node
-*   Z=set if last node reached
+*   Z=set if index is out of bounds
 getListNode
+	DPRINT	"getListNode %ld",1
+
+	* TODO: bounds check
+	;XEX
+	tst.l	modamount(a5)
+	beq.b	.out
+	cmp.l 	modamount(a5),d0
+	bhs.b	.out
+
+	bsr	obtainModuleList
 	lea	moduleListHeader(a5),a0
-	subq.l	#1,d0
+
+	* When using dbf loop usually subtract 1, but here
+	* one SUCC is needed to get to the head element
+	* so don't subtract
 	move.l	d0,d1
 	swap	d0
 .loop
-	TSTNODE   a0,a0
-	beq.b	.end
+	SUCC    a0,a0
 	dbf	 	d1,.loop
 	dbf		d0,.loop
+	bsr	releaseModuleList
+
+ if DEBUG
+ 	move.l	l_nameaddr(a0),d0
+	DPRINT	"->found=%s",2
+ endc
 	moveq	#1,d0 	* found
-.end
 	rts
+.out
+	moveq	#0,d0
+	rts
+
+
 
 * Cached getter
 * in:
@@ -16484,7 +16569,8 @@ getListNodeCached
 
 	tst.l	cachedNode(a5)
 	bne.b	.n
-	move.l	moduleListHeader(a5),cachedNode(a5)
+	* Get head node from the minimal list header
+	move.l	moduleListHeader+MLH_HEAD(a5),cachedNode(a5)
 	clr.l	cachedNodeIndex(a5)
 .n
 	move.l	cachedNodeIndex(a5),d1
@@ -18598,11 +18684,12 @@ rbutton10
 	DPRINT  "aboutButtonAction obtain list",1
 	jsr		obtainModuleList
 	moveq	#0,d5
+	* calculate the amount of list dividers in the list
 	lea	moduleListHeader(a5),a4
 .l	TSTNODE	a4,a3
 	beq.b	.e
 	move.l	a3,a4
-	cmp.b	#'÷',l_filename(a3)	* onko divideri??
+	isListDivider  l_filename(a3)	* onko divideri??
 	bne.b	.l
 	addq.l	#1,d5
 	bra.b	.l
