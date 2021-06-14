@@ -22,7 +22,7 @@
 ; FIXED
 ; RMB+Add ei fudaa (insert)
 
-; TODO
+; FIXED
 ; iso lista
 ; select module and play: ei jää ihan keskelle
 ; heiluta hiirtä, soitettava kappale pykälä keskeltä alemmas?
@@ -44,24 +44,25 @@
 ; FIXED
 ; Filebox prop gadget ei toimi "mediumlista":lla, loppupäästä;
 
-; IN PROGRESS
+; FIXED
 ; Aika hidasta nuolinäppisselailu mediumlistalla puolen välin paikkeilta alaspäin; 68000
 
-; TODO
+; WONTFIX
 ; Poista WA_ReportMouse, sen sijaan IDCMP_INTUITICKS
 ; hiiren vahtimiseen? luultavasti kevyempi
 ; toinen on vaikka kerran sekuntiin oma signaali
 
+; FIXED
 ; Press Q
 ; -> boom
 ; Add diivider + empty list: not good
 
-; TODO
+; FIXED
 ; Open prefs
 ; press Ctrl
 ; --> BOOM
 
-; TODO
+; FIXED
 ; Open prefs
 ; - change title bar display mode with RMB list selector
 ; -> boom
@@ -82,6 +83,7 @@
 ; - load module that leads to open error
 ; - semaphore hang?
 
+; FIXED
 ; MEM corruption
 ; - start 
 ; - add Authors.A-Z
@@ -93,30 +95,37 @@
 * Thing to test:
 * - load and save large programs
 * - load large: play, eject, out of memory, hang
+
 * bug:
 * - load prg
 * - clear list
 * - add
 * --> semaphore hang
+
 * bug:
 * - new
 * - add moduleprg
 * -> permanent waitpointer
+
 * bug:
 * - load prog
 * - play
 * - clear
 * - add
 * -> sem hang
+
 * bug:
 * - add XTD
 * - sort
 * - väärä järjestys
+
 * bug:
 * -add
 * - cancel
 * - add again
 * -> sem hang
+
+
 * enforcer hit:
 * - add
 * - close app
@@ -8162,7 +8171,7 @@ mousemoving
 	bsr.w	rslider1
 	lea	slider4,a2
 	bsr.w	rslider4
-	bsr		tooltipHandler
+	bsr	tooltipHandler
 	movem.l	(sp)+,d0-a6
 	rts
 
@@ -8448,7 +8457,6 @@ resh	pushm	all
 reslider
 
 	* Calculate pi_vertBody, the vertical size of the prop gadget.
-
 	move.l	modamount(a5),d0
 	bne.b	.e
 	moveq	#1,d0
@@ -8470,12 +8478,16 @@ reslider
 	move.l	d0,d1
 	bsr.w	.ch
 
+ 	; VertPot should be in range 0..$ffff
+
 	lea	slider4,a0
 	move.l	gg_SpecialInfo(a0),a1
 	cmp	pi_VertBody(a1),d0
 	sne	d4		* did it change compared to previous?
 	lsl	#8,d4
 	move	d0,pi_VertBody(a1)
+
+* Below a historical comment line expressing joy:
 
 *** Toimii vihdoinkin!
 
@@ -8511,19 +8523,12 @@ reslider
 	* d0:d1 is now d0:d1/d2
 	* take the lower 32 bits
 	move.l	d1,d0	
-
 	bsr.w	.ch
-	
-	
-	; VertPot should be in range 0..$ffff
+
 	cmp	pi_VertPot(a1),d0
 	sne	d4		* did it change compared to previous?
 	move	d0,pi_VertPot(a1)
 
-
-	;move.l	firstname(a5),d1
-	;DPRINT	"slider4 VertPot=%lx firstname=%ld",101
-	
 	* Subsequent mousemoves will call rslider4 to update
 	* firstname according to VertPot, but that is not needed
 	* since we did that already here. There would also be
@@ -8580,6 +8585,7 @@ reslider
 .bar
 
 	* Refresh one gadget
+	;DPRINT "Updating slider",86
 	lea	slider4,a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
@@ -15022,7 +15028,7 @@ shn
 	lsr	#1,d2		* center chosenmodule in the middle of the box
 	
 	move.l	chosenmodule(a5),d0
-	DPRINT "Shownames center index %ld",10
+	;DPRINT "Shownames center index %ld",10
 
 	sub.l	d2,d0
 	bmi.b	.nok
@@ -15037,7 +15043,7 @@ shn
 	moveq	#0,d0	
 .ok	
 	move.l	d0,firstname(a5)
-	DPRINT "->first name %ld",12
+	;DPRINT "->first name %ld",12
 
 .nob
 	tst.b	hippoonbox(a5)
@@ -15164,8 +15170,7 @@ shn
 	bsr.w  obtainModuleList
 	lea	moduleListHeader(a5),a4	
 
-	DPRINT	".doNames %ld",31
-* TODO
+;	DPRINT	".doNames %ld",31
 
 	* d0 = module index
 	* find out the corresponding list entry
@@ -16576,11 +16581,11 @@ getListNodeCached
 	move.l	cachedNodeIndex(a5),d1
 	* New cached index
 	move.l	d0,cachedNodeIndex(a5)
-	DPRINT	"Getlistnode to=%ld cached=%ld",1
+	;DPRINT	"Getlistnode to=%ld cached=%ld",1
 	move.l	cachedNode(a5),a0
 
 	sub.l	d1,d0
-	DPRINT	"->step %ld",2
+	;DPRINT	"->step %ld",2
 	tst.l	d0
 	beq.b   .x
 	bpl.b  	.forward2
@@ -19654,7 +19659,7 @@ rexxmessage
 
 *** PLAYRAND
 .playrand
-	bra.w	soitamodi_random
+	bra	soitamodi_random
 	
 
 *** HIDE
