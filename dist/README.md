@@ -12,9 +12,8 @@ then run HiP. That should work if you have the
 reqtools.library installed.
 
 
-
-Changes from v2.45 (10.1.2000) to v2.46? (x.6.2021)
----------------------------------------------------
+Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
+----------------------------------------------------
 
 There was an actual user request (by daxb) in the English Amiga Board 
 a few years back to remove the module list size restriction.
