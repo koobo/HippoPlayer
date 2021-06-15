@@ -2,6 +2,7 @@
 
 This repository contains the source code for HippoPlayer, a module player for the classic Amigas with OS 1.2 or higher. 
 Binary distribution is available here: http://aminet.net/mus/play/hippoplayer.lha
+
 Later binaries available in _dist_ directory.
 
 Tools used in development:
