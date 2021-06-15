@@ -79,6 +79,7 @@
 
 ; DeltaMusic?
 
+; FIXED
 ; open error hang
 ; - load module that leads to open error
 ; - semaphore hang?
@@ -92,21 +93,25 @@
 ; to fix: add buffer to l_filename
 ; somewhere: l_filename buffer is overwritten
 
+* TODO
 * Thing to test:
 * - load and save large programs
 * - load large: play, eject, out of memory, hang
 
+* FIXED
 * bug:
 * - load prg
 * - clear list
 * - add
 * --> semaphore hang
 
+* FIXED
 * bug:
 * - new
 * - add moduleprg
 * -> permanent waitpointer
 
+* FIXED
 * bug:
 * - load prog
 * - play
@@ -114,18 +119,20 @@
 * - add
 * -> sem hang
 
+* FIXED
 * bug:
 * - add XTD
 * - sort
 * - väärä järjestys
 
+* FIXED
 * bug:
 * -add
 * - cancel
 * - add again
 * -> sem hang
 
-
+* FIXED
 * enforcer hit:
 * - add
 * - close app
@@ -145,7 +152,7 @@ ver	macro
 ;	dc.b	"v2.44 (16.8.1998)"
 ;	dc.b	"v2.44 (16.8.1998)"
 ;	dc.b	"v2.45 (10.1.2000)"
-	dc.b	"v2.46ß (?.6.2021)"
+	dc.b	"v2.46ß (15.6.2021)"
 	endm	
 
 
