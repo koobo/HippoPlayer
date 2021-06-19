@@ -11005,6 +11005,11 @@ defarc
 * qq	be very quiet
 
 .lzx	dc.b 'c:lzx >nil: -m -q x "%s"',0
+
+* decompress %s to stdout and redirect to current dir data file
+gzipDecompressCommand
+	dc.b	'gzip -d -c "%s" >gzData',0	
+
  even
 	
 
@@ -22629,16 +22634,25 @@ loadfile
 	ror.l	#8,d0
 	move.b	-(a0),d0
 
-	and.l	#$dfdfdfff,d0	
-	cmp.l	#'LHA.',d0
+	move.l	d0,d1
+	* upper case conversion for easy matching
+	and.l	#$dfdfdfff,d1
+	cmp.l	#'LHA.',d1
 	beq.b	.lha
-	cmp.l	#'LZH.',d0
+	cmp.l	#'LZH.',d1
 	beq.b	.lha
-	cmp.l	#'LZX.',d0
+	cmp.l	#'LZX.',d1
 	beq.b	.lzx
-	cmp.l	#'ZIP.',d0
+	cmp.l	#'ZIP.',d1
 	beq.b	.zip
-	bra.w	.nope
+	* gzip test
+	* ".gzX"
+	and.l	#$ffdfdf00,d0
+	cmp.l	#'.GZ'<<8,d0
+	bne.w	.nope
+	lea	gzipDecompressCommand(pc),a0
+	moveq	#1,d6	* "Unzipping" message
+	bra.w	.unp
 
 .lha	lea	arclha(a5),a0
 	moveq	#0,d6
@@ -22652,9 +22666,13 @@ loadfile
 .unp	
 
 	pushm	all
+	* takes type in d6
 	bsr.w	inforivit_extracting
 	bsr.w	remarctemp	* varmuuden vuoksi poistetan tempdirri jos on
 	popm	all
+
+	* lod_buf will contain the command line to Execute
+	* unarchive into current dir, which will be a temp dir created here
 
 	move.l	lod_filename(a5),d0
 	lea	lod_buf(a5),a3
@@ -22676,7 +22694,6 @@ loadfile
 	lea	tdir(pc),a0
 	bsr.w	copyb
 
-
 ** vanha kick: kopioidaan parametrin perään RAM:°HiP°/
 	tst.b	uusikick(a5)
 	bne.b	.nu
@@ -22694,8 +22711,6 @@ loadfile
 .na0	clr.b	(a1)
 
 .nu
-
-
 
 	move.l	sp,a4
 
@@ -22729,12 +22744,12 @@ loadfile
 
 *** Ajetaan kamat
 
-
 	pushpea	lod_buf(a5),d1
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3		* output
 	lob	Execute
 
+	* back to old current dir
 	move.l	d7,d1
 	lob	CurrentDir
 
