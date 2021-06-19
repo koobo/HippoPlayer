@@ -1774,7 +1774,9 @@ no_one	 dc.b	"   no-one",0
 
 about_t
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
- dc.b "ญญญ  HippoPlayer v2.46 (?.?.2021) ญญญ",10,3
+ dc.b "ญญญ  HippoPlayer "
+ ver
+ dc.b " ญญญ",10,3
  dc.b "ญญ          by K-P Koljonen          ญญ",10,3
  dc.b "ญญญ       Hippopotamus Design       ญญญ",10,3
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
@@ -3238,6 +3240,9 @@ exit2
 	DPRINT "Getmem total: %ld kilobytes",670
 	move.l	getmemTotal(pc),d0
 	move.l	getmemCount(pc),d1
+	bne.b	.nz
+	moveq	#1,d1
+.nz
 	bsr		divu_32
 	DPRINT "Getmem avg: %ld bytes",671
 
@@ -3822,10 +3827,16 @@ avaa_ikkuna
 	move.l	wd_UserPort(a0),userport(a5)
 	move	wd_Height(a0),wkork(a5)
 
+ if DEBUG
+	moveq	#0,d0
+	moveq	#0,d1
+	move	wd_Width(a0),d0
+	move	wd_Height(a0),d1
+	DPRINT	"Open window %ldx%ld",1
+ endif
 	move.l	rastport(a5),a1
 	move.l	fontbase(a5),a0
 	lore	GFX,SetFont	
-
 
 	tst.b	uusikick(a5)	* jos kickstart 2.0+, pistetไไn ikkuna
 	beq.b	.elderly	* appwindowiksi.
@@ -4143,9 +4154,6 @@ wrender
 	sub	windowbottom(a5),d3
 	bsr.w	drawtexture
 
-.ohih
-
-
 
 * tyhjennetไไn...
 * laatikoitten alueet
@@ -4176,8 +4184,6 @@ wrender
 	moveq	#$0a,d6
 	move.l	_GFXBase(a5),a6
 	jmp	_LVOClipBlit(a6)
-;	lore	GFX,ClipBlit
-;	rts
 .oru
 .vanaha
 
@@ -4392,6 +4398,8 @@ wrender
 	bsr.b	setscrtitle
 	move.l	keycheckroutine(a5),-(sp)
 	rts
+
+
 	
 
 setboxy	move	boxsize(a5),d0
@@ -15514,7 +15522,7 @@ elete
 
 	isListDivider l_filename(a3)
 	bne.b	.de
-	not.b	deleteflag(a5)
+	not.b	deleteflag(a5)		 * Deleting a divider! Special action
 	beq.w	.nmodo
 	bra.b	.ni
 
@@ -30841,21 +30849,37 @@ topaz	dc.b	"topaz.font",0
 
 
 * Main window
+* STRUCTURE NewWindow
 winstruc
+	* nw_LeftEdge
 	dc	360	;vas.ylไk.x-koord.
+	* nw_TopEdge
 	dc	23	;---""--- y-koord
+	* nw_Width
 wsizex	dc	0	* sizex
+	* nw_Height
 wsizey	dc	0	* 181+25 ja 11
+	* nw_DetailPen, nw_BlockPen
 colors	dc.b	2,1	;palkin vไrit
+	* nw_IDCMPFlags
 idcmpmw	dc.l	idcmpflags
+	* nw_Flags
 	dc.l	wflags
+	* nw_FirstGadget
  	dc.l	0		* gadgets
+	* nw_CheckMark
 	dc.l	0	
+	* nw_Title
 	dc.l	windowname1
+	* nw_Screen
 	dc.l	0	;screen struc
+	* bw_BitMap
 	dc.l	0	;bitmap struc
+	* nw_MinWidth, nw_MinHeight
 	dc	0,0		* min x,y
-	dc	1000,1000	* max x,y
+	* nw_MaxWidth, nw_MaxHeight
+	dc	0,512
+	* nw_Type
 	dc	WBENCHSCREEN
 	dc.l	.t
 
@@ -31054,6 +31078,8 @@ tooltipList
 	dc.b	35,2
 	dc.b	"LMB: Remove chosen module",0
 	dc.b	"RMB: Remove from list and from disk",0
+	dc.b    "     On a divider will remove the divided",0
+	dc.b    "     section",0
 .new
 	dc.b	29,2
 	dc.b	"LMB: Clear list and add files",0
