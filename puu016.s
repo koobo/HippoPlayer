@@ -443,6 +443,21 @@ ns_size		rs.b	0
 
 *******************************************************************************
 *
+* Message sent to HippoPort by another instances of Hippo
+*
+
+MESSAGE_MAGIC_ID = "K-P!"
+MESSAGE_COMMAND_HIDE = "HIDE"
+MESSAGE_COMMAND_QUIT = "QUIT"
+MESSAGE_COMMAND_PRG = "PRGM"
+
+	STRUCTURE 	HippoMessage,MN_SIZE
+	LONG		HM_Identifier	* "K-P!"
+	APTR		HM_Arguments	* sv_argvArray. May contain above commands
+	LABEL		HippoMessage_SIZEOF 
+
+*******************************************************************************
+*
 * "HiP-Port" structure
 *
 
@@ -1149,7 +1164,7 @@ modulename	rs.b	40		* moduulin nimi
 		rs.b	4
 moduletype	rs.b	40		* tyyppi tekstinä
 req_array	rs.b	0		* reqtoolsin muotoiluparametrit
-desbuf		rs.b	200		* muotoilupuskuri
+desbuf		rs.b	200		* muotoilupuskuri, temporary buffer
 desbuf2		rs.b	200		* muotoilupuskuri prefssille
 filename	rs.b	108		* tiedoston nimi (reqtools)
 filename2	rs.b	108		* Load/Save program-rutiineille
@@ -1173,8 +1188,8 @@ moduleDataSemaphore		rs.b	SS_SIZE
 moduleListSemaphore 	rs.b 	SS_SIZE
 
 ARGVSLOTS	=	16		* max. parametrejä
-sv_argvArray	rs.l	ARGVSLOTS	* parametrihommia
-sv_argvBuffer	rs.b	256		*
+sv_argvArray	rs.l	ARGVSLOTS	* pointers to zero terminated strings
+sv_argvBuffer	rs.b	256			* strings are here
 
 randomValueMask  	rs.l		1 * mask to quickly cull too big random numbers based on modamount
 randomtable		rs.l		1 * pointer to random table, allocated when needed
@@ -1339,9 +1354,11 @@ idcmpflags2 set idcmpflags2!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 *********************************************************************************
 *
 * Start up from CLI or Workbench
-* Handles command line parameters,
-* setting up a new process (detachment),
-* Workbench message
+* - Handles command line parameters,
+* - setting up a new process (detachment),
+* - Workbench message,
+* - Passing parameters to already existing hippo instance.
+* - Can't be used when running from AsmOne.
 *
 
  ifeq asm
@@ -1424,11 +1441,14 @@ progstart
 
 	move.l	d0,a0
 	move.l	poptofrontr-hippoport(a0),a0	* pullautusrutiini
-	jsr	(a0)
+	jsr	(a0)								* what is this evil magic?
 	bra.b	.eien
 
 * Oli! Lähetetään hipille!
 .huh
+	* Let us send a message to an already existing hippo with command line marguments passed
+	* here.
+
 	move.l	d0,a3			* päälläolevan hipin portti
 
 	sub.l	a1,a1
@@ -1437,17 +1457,23 @@ progstart
 
 	jsr	createport0		* luodaan oma portti!
 
+	* Use this buffer to construct a Message structure
 	lea	desbuf(a5),a0		* portti desbufiin
 	NEWLIST	a0
 
 	move.l	a3,a0			* kohdeportti
 	lea	desbuf(a5),a1		* viesti
 
-	pushpea	sv_argvArray(a5),MN_LENGTH(a1) * uudet parametrit viestiin
-	move.l	#"K-P!",MN_LENGTH+4(a1) * tunnistin!
+	;pushpea	sv_argvArray(a5),MN_LENGTH(a1) * uudet parametrit viestiin
+	;move.l	#"K-P!",MN_LENGTH+4(a1) * tunnistin!
+
+	bsr.b	.preparePaths
+
+	move.l	#MESSAGE_MAGIC_ID,HM_Identifier(a1) 			* magic identifier
+	pushpea	sv_argvArray(a5),HM_Arguments(a1) 		  * cmdline parameter array
+	* MN_SIZE is left unset
 
 	pushpea	hippoport(a5),MN_REPLYPORT(a1)	* tähän porttiin vastaus
-
 	lob	PutMsg
 
 	lea	hippoport(a5),a0	* odotellaan vastausta
@@ -1457,6 +1483,76 @@ progstart
 
 	bra.b	.eien
 
+* This checks the command line parameters and adds a fully qualified path 
+* to filenames if possible. Uses V36 DOS functions as it would be quite
+* painful, yet still doable, otherwise.
+.preparePaths
+	pushm	all
+	move.l	(a5),a0
+	cmp	#34,LIB_VERSION(a0)	
+	ble.b	.done			* Kickstart 1.3 or earlier? GETOUTTAHERE
+	
+	* Grab the prepared arguments array
+	lea	sv_argvArray(a5),a3
+	* Construct any new path strings here, plenty of space
+	lea	probebuffer(a5),a4
+.loop
+	* Take one and see if it was the last one
+	move.l	(a3),d3
+	beq		.done
+	* See if it was one of the four letter commands
+	move.l	d3,a0 
+	jsr		kirjainta4
+* skip commands
+	cmp.l	#MESSAGE_COMMAND_HIDE,d0
+	beq.b	.wasCommand 
+	cmp.l	#MESSAGE_COMMAND_QUIT,d0
+	beq.b	.wasCommand 
+	cmp.l	#MESSAGE_COMMAND_PRG,d0
+	beq.b	.wasCommand 
+
+* consider this a file. let's try to get a lock on it.
+	move.l 	d3,d1
+	move.l	#ACCESS_READ,d2
+	lore  	Dos,Lock
+	move.l	d0,d4
+	beq.b	.noLock
+
+	* DOS will now provide us with a full path from the lock, conveniently.
+	move.l	d4,d1
+ 	pushpea tempdir(a5),d2  		* this space can be used
+ 	move.l	#200,d3 
+ 	lob 	NameFromLock			* V36
+	* store return status for a little while so we can UnLock first
+	move.l	d0,d3
+
+	move.l	d4,d1
+	lob    	UnLock
+
+ 	* If something went wrong, skip
+ 	tst.l	d3
+ 	beq.b	.error
+
+	* Copy the path to the destination buffer
+ 	lea	tempdir(a5),a0 
+ 	move.l	a4,a1
+.copy
+ 	move.b	(a0)+,(a1)+
+ 	bne.b	.copy
+ 	* Overwrite arg slot with the new fully qualified path + filename entry
+ 	move.l	a4,(a3)
+ 	* Temp buffer position to hold the next possible path+filename
+ 	move.l	a1,a4
+
+.wasCommand
+.noLock
+.error
+	* go to next argv slot
+	addq.l	#4,a3
+	bra.b	.loop
+.done 
+	popm	all
+	rts
 
 CLIparms
 ;=======================================================================
@@ -2413,7 +2509,7 @@ lelp
 	beq.b	.nohide
 	move.l	(a3),a0
 	bsr.w	kirjainta4
-	cmp.l	#"HIDE",d0		* oliko komento 'HIDE'??
+	cmp.l	#MESSAGE_COMMAND_HIDE,d0		* oliko komento 'HIDE'??
 	bne.b	.nohide
 	clr.b	win(a5)
 	bra.b	.hid
@@ -5812,16 +5908,20 @@ omaviesti
 	move.l	d0,a1
 	move.l	a1,omaviesti0(a5)
 
-	cmp.l	#"KILL",MN_LENGTH+2(a1)	* ????????
-	beq.w	.killeri
+	;cmp.l	#"KILL",MN_LENGTH+2(a1)	* ????????
+	;beq.w	.killeri
 
-	cmp.l	#"K-P!",MN_LENGTH+4(a1)
+	* What kind of a message is this?
+
+	* Sent by another hippo?
+	cmp.l	#MESSAGE_MAGIC_ID,HM_Identifier(a1)
 	beq.w	.oma
 
+	* App window message?
 	cmp.l	#'AppW',am_UserData(a1)		* Onko AppWindow-viesti?
 	beq.b	.appw
 
-** Screennotify-viesti.
+	* Screen notify message?
 	movem.l	snm_Type(a1),d3/d4
 	cmp.l	#SCREENNOTIFY_TYPE_WORKBENCH,d3
 	bne.w	.huh
@@ -5868,7 +5968,7 @@ omaviesti
 	move.l	a2,d2
 	moveq	#100,d3			* max pituus
 	push	a2
-	lore	Dos,NameFromLock
+	lore	Dos,NameFromLock			* V36
 	pop	a2
 	tst.l	d0
 	beq.b	.error
@@ -5895,14 +5995,16 @@ omaviesti
 
 * oma viesti saapui!
 .oma
-	move.l	MN_LENGTH(a1),a0	* uudet parametrit
+	* Copy commandline arguments from the message to local buffer
+	move.l	HM_Arguments(a1),a0
 	lea	sv_argvArray(a5),a2
 .c	move.l	(a0)+,(a2)+
 	bne.b	.c
 
+	* Check out the first parameter 
 	move.l	sv_argvArray+4(a5),a0
 	bsr.w	kirjainta4
-	cmp.l	#"QUIT",d0
+	cmp.l	#MESSAGE_COMMAND_QUIT,d0
 	bne.b	.app
 	st	exitmainprogram(a5)
 	bra.b	.huh
@@ -9234,7 +9336,7 @@ filereq_code
 	move.l	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3			* max pituus hakemistolle
-	lob	NameFromLock
+	lob	NameFromLock		* V36
 	push	d0
 	
 	move.l	d4,d1
@@ -10462,6 +10564,7 @@ filereqtitle3
 *******
 
 komentojono
+	DPRINT	"Processing command line parameters",1
 	lea	sv_argvArray+4(a5),a3	* ei ekaa
 	moveq	#ARGVSLOTS-1-1,d7
 	move.l	modamount(a5),d6	* vanha määrä talteen
@@ -10471,15 +10574,20 @@ komentojono
 *** Silmukka
 .alp
 	move.l	(a3)+,d5
-	beq.b	.end
+	beq.w	.end
+
+ if DEBUG
+	move.l	d5,d0
+	DPRINT	"->%ls",0
+ endif
 
 	move.l	d5,a0
 	bsr.w	kirjainta4
-	cmp.l	#"HIDE",d0
+	cmp.l	#MESSAGE_COMMAND_HIDE,d0
 	beq.b	.skip
-	cmp.l	#"QUIT",d0
+	cmp.l	#MESSAGE_COMMAND_QUIT,d0
 	beq.b	.skip
-	cmp.l	#"PRGM",d0
+	cmp.l	#MESSAGE_COMMAND_PRG,d0
 	bne.b	.hmm
 	move.l	(a3),a0			* ohjelman nimi
 	moveq	#-1,d4			* lippu
@@ -15510,7 +15618,7 @@ execuutti
 	move.l	lockhere(a5),d1
 	pushpea	200(sp),d2
 	moveq	#100,d3
-	lore	Dos,NameFromLock
+	lore	Dos,NameFromLock 			* V36
 	lea	.tagz(pc),a0
 	move.l	d7,a1
 	pushpea	200(sp),4(a0)
