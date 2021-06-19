@@ -31091,8 +31091,9 @@ tooltipList
 	dc.b	21,1
 	dc.b	"Play previous subsong",0
 .prefs
-	dc.b	16,1
-	dc.b	"Open preferences",0
+	dc.b	21,2
+	dc.b	"LMB: Open preferences",0
+	dc.b    "RMB: Zoom file box",0
 .sort
 	dc.b	16,2
 	dc.b	"LMB: Sort list",0
