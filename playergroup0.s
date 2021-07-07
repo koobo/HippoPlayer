@@ -58,17 +58,17 @@
 
 	moveq	#0,d3
 
-	lea	main(pc),a2
-	lea	maine(pc),a3
-f	move.l	(a2),d2
-	beq.b	.bah
-	ror.l	d3,d2
-	swap	d2
-	add.l	#$a370,d2
-.bah	move.l	d2,(a2)+
-	addq	#1,d3
-	cmp.l	a3,a2
-	bne.b	f
+;	lea	main(pc),a2
+;	lea	maine(pc),a3
+;f	move.l	(a2),d2
+;	beq.b	.bah
+;	ror.l	d3,d2
+;	swap	d2
+;	add.l	#$a370,d2
+;.bah	move.l	d2,(a2)+
+;	addq	#1,d3
+;	cmp.l	a3,a2
+;	bne.b	f
 	
 
 
@@ -78,7 +78,7 @@ f	move.l	(a2),d2
 
 	incdir	pl/
 
-start	dc.b	"HiPxPla",20	* Tunnistus ja versio
+start	dc.b	"HiPxPla",21	* Tunnistus ja versio
 
 main	
 	dc.l	ps3mdata-main,tfmxdata-ps3mdata
@@ -103,11 +103,13 @@ main
 
 * Hämäystä
 
-mulu_32	movem.l	d2/d3,-(sp)
-	move.l	d0,d2
-	move.l	d1,d3
-	swap	d2
-	swap	d3
+; mulu_32	movem.l	d2/d3,-(sp)
+; 	move.l	d0,d2
+; 	move.l	d1,d3
+; 	swap	d2
+; 	swap	d3
+
+
 ;	mulu	d1,d2
 ;	mulu	d0,d3
 ;	mulu	d1,d0
@@ -121,7 +123,7 @@ mulu_32	movem.l	d2/d3,-(sp)
 
 maine
 
-	dc.b	"$VER: 20",0
+	dc.b	"$VER: 21",0
 	even
 	
 ps3mdata	incbin	ps3m.im

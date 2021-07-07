@@ -1225,7 +1225,8 @@ p_liput		rs	1	* ominaisuudet
 p_name		rs.l	1
 
 * Playerit
-	rsset	33
+pt_internal_start = 33
+	rsset	pt_internal_start
 pt_prot		rs.b	1
 pt_sid		rs.b	1
 pt_delta2	rs.b	1
@@ -1240,8 +1241,9 @@ pt_dw		rs.b	1
 pt_hippel	rs.b	1
 pt_mline	rs.b	1
 
-	rsset	49		* Ulkoiset
-pt_multi	rs.b	1	* PS3M (mod,ftm,mtm,s3m)
+pt_group_start = 49
+	rsset	pt_group_start		* Ulkoiset
+pt_multi	rs.b	1		* PS3M (mod,ftm,mtm,s3m)
 pt_tfmx		rs.b	1
 pt_tfmx7	rs.b	1
 pt_jamcracker	rs.b	1
@@ -1258,8 +1260,13 @@ pt_sample	rs.b	1
 pt_aon		rs.b	1
 pt_digiboosterpro rs.b	1
 
-xpl_versio	=	20	* playergroupin versio
-xpl_offs	=	49
+* player group version
+xpl_versio	=	21
+* convert player ids to start from zero to access table in player group
+xpl_offs	=	pt_group_start
+
+
+
 
 
 *********************************************************************************
@@ -23974,9 +23981,10 @@ get_mline
 search
 	move.l	#2048,d2
 	cmp.l	d7,d2
-	blo.b	sea
+	blo.b	.sea
 	move.l	d7,d2		
-sea	lea	(a4,d2.l),a3	 * Etsit‰‰n kaksi kilotavua tai modin pituus
+.sea	
+	lea	(a4,d2.l),a3	 * Etsit‰‰n kaksi kilotavua tai modin pituus
 
 	move	d0,d2
 	subq	#2,d2
@@ -25925,15 +25933,15 @@ loadreplayer
 	beq.b	.error		* Onko koko playeri‰ filess‰?
 
 * d3k0dez!
-	sub.l	#$a370,d2
-	swap	d2
-	rol.l	d1,d2	
-	addq	#1,d1
-	sub.l	#$a370,d6
-	swap	d6	
-	rol.l	d1,d6
+	; sub.l	#$a370,d2
+	; swap	d2
+	; rol.l	d1,d2	
+	; addq	#1,d1
+	; sub.l	#$a370,d6
+	; swap	d6	
+	; rol.l	d1,d6
 
-	addq	#8,d2		* headerin ohi
+	addq.l	#8,d2		* skip player group header data
 
 	move.l	d6,xlen(a5)	* pituus talteen
 
@@ -26308,13 +26316,13 @@ are
 	beq.b	.xab
 
 * d3k0dez!
-	sub.l	#$a370,d0
-	swap	d0
-	rol.l	d1,d0
-	addq	#1,d1
-	sub.l	#$a370,d7
-	swap	d7
-	rol.l	d1,d7
+;	sub.l	#$a370,d0
+;	swap	d0
+;	rol.l	d1,d0
+;	addq	#1,d1
+;	sub.l	#$a370,d7
+;	swap	d7
+;	rol.l	d1,d7
 
 
 	lea     (a4,d0.l),a1
