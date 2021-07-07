@@ -996,6 +996,7 @@ fc14routines	rs.l	0
 fc10routines	rs.l	0
 jamroutines	rs.l	0
 p60routines	rs.l	0
+pumatrackerroutines 	rs.l 0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1259,6 +1260,7 @@ pt_thx		rs.b	1
 pt_sample	rs.b	1
 pt_aon		rs.b	1
 pt_digiboosterpro rs.b	1
+pt_pumatracker	rs.b 	1
 
 * player group version
 xpl_versio	=	21
@@ -23030,6 +23032,9 @@ loadfile
 	bsr.w	id_player
 	beq.b	.on
 
+	bsr.w	id_pumatracker
+	beq.b	.on
+
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
 	beq.b	.on
@@ -23990,10 +23995,15 @@ get_mline
 *******
 * Search
 *******
-* a1 = etsitt‰v‰
-* a4 = mist‰ etsit‰‰n
-* d0 = etsitt‰v‰n pituus
-* d7 = modin pituus
+* in:
+*   a1 = etsitt‰v‰
+*   a4 = mist‰ etsit‰‰n
+*   d0 = etsitt‰v‰n pituus
+*   d7 = modin pituus
+* out:
+*   d0 =  0: found
+*   d0 = -1: not found
+*   a0 = end of last match
 
 search
 	move.l	#2048,d2
@@ -24280,8 +24290,6 @@ tutki_moduuli
 	beq.w	.oldst
 .noop
 
-
-
 	tst.l	externalplayers(a5)	* ladataan playerit
 	bne.b	.rite
 	cmp.b	#2,groupmode(a5)	* onko disabled
@@ -24298,8 +24306,8 @@ tutki_moduuli
 	moveq	#lod_grouperror,d0
 	rts
 
-.aag_id	dc.b	"AAG9"
- even
+;.aag_id	dc.b	"AAG9"
+; even
 
 .rite
 
@@ -24318,6 +24326,9 @@ tutki_moduuli
 
 	bsr.w	id_jamcracker
 	beq.w	.jam
+
+	bsr.w	id_pumatracker
+	beq.w	.pumatracker
 
 	bsr.w	id_futurecomposer13
 	beq.w	.future13
@@ -24593,6 +24604,11 @@ tutki_moduuli
 	move	#pt_aon,playertype(a5)
 	bra.w	.ex
 
+.pumatracker
+	pushpea	p_pumatracker(pc),playerbase(a5)
+	move	#pt_pumatracker,playertype(a5)
+	moveq	#12-1,d0
+	bra.w	.nimitalteen
 
 
 **** Oliko  sample??
@@ -25554,6 +25570,53 @@ id_TFMX7V
 keyfilename	dc.b	"L:HippoPlayer.Key",0
  even
 
+
+id_pumatracker
+	* test some attributes
+	* positive song length
+	tst		$c(a4)
+	bmi.b	.notPuma
+	* positive num of patterns
+	tst		$e(a4)
+	bmi.b	.notPuma
+	* positive num of sound data
+	tst		$10(a4)
+	bmi.b	.notPuma
+
+	* sample 1 start offset
+	tst.l	$14(a4)
+	bmi.b	.notPuma
+
+	* sample 2 start offset
+	tst.l	$18(a4)
+	bmi.b	.notPuma
+
+	* Find some magic words that should be there
+	lea		.patt(pc),a1
+	moveq	#.patte-.patt,d0
+	bsr.w	search
+	bne.b	.notPuma
+
+	* search "patt" again after the first instance
+	push	a4
+	move.l	a0,a4
+	lea		.patt(pc),a1
+	moveq	#.patte-.patt,d0
+	bsr.w	search
+	pop 	a4
+	tst.l	d0 
+	bne.b	.notPuma
+
+	moveq	#0,d0
+	rts
+.notPuma	
+	moveq	#-1,d0 
+	rts
+
+.patt 	dc.b	"patt"
+.patte
+ even
+
 *******
 * Tunnistetaan SID piisit
 *******
@@ -25816,7 +25879,9 @@ tee_modnimi
 *******
 
 loadplayergroup
+	DPRINT	"Load player group",1
 	pushm	d1-a6
+
 
 	bsr.w	inforivit_group
 
@@ -25827,7 +25892,7 @@ loadplayergroup
 	move.l	#1005,d2
 	lob	Open
 	move.l	d0,d4
-	beq.b	.error
+	beq.w	.error
 
 	move.l	d4,d1		* selvitet‰‰n filen pituus
 	moveq	#0,d2	
@@ -25894,6 +25959,7 @@ loadplayergroup
 * d1 = muistin tyyppi
 
 loadreplayer
+	DPRINT	"Load replayer",1
 	pushm	d1-d6/a0/a2-a6
 	move.l	d6,a4				* muistin tyyppi!
 
@@ -26302,6 +26368,7 @@ allocreplayer
 	pushm	d1-a6
 	moveq	#MEMF_PUBLIC,d6
 are	
+	DPRINT	"Alloc replayer",1
 
 	tst.l	(a0)			* onko jo ennest‰‰n?
 	bne.w	.vanha
@@ -26349,7 +26416,7 @@ are
 	move.l	a1,a4
 	move.l	a0,a3
 	move.l	4(a4),d0
-	sub.l	#$5371a26,d0
+	;sub.l	#$5371a26,d0
 	move.l	d6,d1			* mem type
 	jsr	getmem
 	move.l	d0,(a3)
@@ -26363,9 +26430,9 @@ are
 	move.l	d7,d0
 	lore	Exec,CopyMem	
 	move.l	(a3),a0
-	move.l	#$5371a26,d0
-	add.l	d0,(a0)
-	sub.l	d0,4(a0)
+	;move.l	#$5371a26,d0
+	;add.l	d0,(a0)
+	;sub.l	d0,4(a0)
 	bsr.w	fimp_decr
 
 	move.l	(a3),a0
@@ -30833,6 +30900,70 @@ p_sample
 
 .ahiup	move.l	sampleroutines(a5),a0
 	jmp	.s_ahiup(a0)
+
+
+
+******************************************************************************
+* PumaTracker
+******************************************************************************
+
+p_pumatracker
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus
+	dc.b	"PumaTracker",0
+ even
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	pumatrackerroutines(a5),a0
+	* allocate into chip mem
+	bsr.w	allocreplayer2
+	beq.b	.ok3
+	bsr.w	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	all
+	move.l	moduleaddress(a5),a0
+	move.l	pumatrackerroutines(a5),a3
+	jsr	$20+0(a3)
+	popm	all
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	pumatrackerroutines(a5),a0
+	jmp	$20+4(a0)
+	rts
+.end
+	bsr.w	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+.stop
+	bra.w	clearsound
+
+
 
 *******************************************************************************
 * Playereit‰

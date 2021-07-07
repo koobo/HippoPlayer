@@ -8,55 +8,55 @@
 	lea	start(pc),a0
 	lea	pend,a1
 
-	sub.l	#$5371a26,tfmxdata
-	add.l	#$5371a26,tfmxdata+4
+;	sub.l	#$5371a26,tfmxdata
+;	add.l	#$5371a26,tfmxdata+4
 
-	sub.l	#$5371a26,tfmx7data
-	add.l	#$5371a26,tfmx7data+4
+;	sub.l	#$5371a26,tfmx7data
+;	add.l	#$5371a26,tfmx7data+4
 
-	sub.l	#$5371a26,jamdata
-	add.l	#$5371a26,jamdata+4
+;	sub.l	#$5371a26,jamdata
+;	add.l	#$5371a26,jamdata+4
 
-	sub.l	#$5371a26,fc10data
-	add.l	#$5371a26,fc10data+4
+;	sub.l	#$5371a26,fc10data
+;	add.l	#$5371a26,fc10data+4
 
-	sub.l	#$5371a26,fc14data
-	add.l	#$5371a26,fc14data+4
+;	sub.l	#$5371a26,fc14data
+;	add.l	#$5371a26,fc14data+4
 
-	sub.l	#$5371a26,bpsmdata
-	add.l	#$5371a26,bpsmdata+4
+;	sub.l	#$5371a26,bpsmdata
+;	add.l	#$5371a26,bpsmdata+4
 
-	sub.l	#$5371a26,soundmon3data
-	add.l	#$5371a26,soundmon3data+4
+;	sub.l	#$5371a26,soundmon3data
+;	add.l	#$5371a26,soundmon3data+4
 
-	sub.l	#$5371a26,oktadata
-	add.l	#$5371a26,oktadata+4
+;	sub.l	#$5371a26,oktadata
+;	add.l	#$5371a26,oktadata+4
 
-	sub.l	#$5371a26,p60data
-	add.l	#$5371a26,p60data+4
+;	sub.l	#$5371a26,p60data
+;	add.l	#$5371a26,p60data+4
 
-	sub.l	#$5371a26,ps3mdata
-	add.l	#$5371a26,ps3mdata+4
+;	sub.l	#$5371a26,ps3mdata
+;	add.l	#$5371a26,ps3mdata+4
 
-	sub.l	#$5371a26,hippelcosodata
-	add.l	#$5371a26,hippelcosodata+4
+;	sub.l	#$5371a26,hippelcosodata
+;	add.l	#$5371a26,hippelcosodata+4
 
-	sub.l	#$5371a26,digidata
-	add.l	#$5371a26,digidata+4
+;	sub.l	#$5371a26,digidata
+;	add.l	#$5371a26,digidata+4
 
-	sub.l	#$5371a26,thxdata
-	add.l	#$5371a26,thxdata+4
+;	sub.l	#$5371a26,thxdata
+;	add.l	#$5371a26,thxdata+4
 
-	sub.l	#$5371a26,sampledata
-	add.l	#$5371a26,sampledata+4
+;	sub.l	#$5371a26,sampledata
+;	add.l	#$5371a26,sampledata+4
 
-	sub.l	#$5371a26,aondata
-	add.l	#$5371a26,aondata+4
+;	sub.l	#$5371a26,aondata
+;	add.l	#$5371a26,aondata+4
 
-	sub.l	#$5371a26,dbprodata
-	add.l	#$5371a26,dbprodata+4
+;	sub.l	#$5371a26,dbprodata
+;	add.l	#$5371a26,dbprodata+4
 
-	moveq	#0,d3
+;	moveq	#0,d3
 
 ;	lea	main(pc),a2
 ;	lea	maine(pc),a3
@@ -96,7 +96,8 @@ main
 	dc.l	thxdata-main,sampledata-thxdata
 	dc.l	sampledata-main,aondata-sampledata
 	dc.l	aondata-main,dbprodata-aondata
-	dc.l	dbprodata-main,pend-dbprodata
+	dc.l	dbprodata-main,pumatrackerdata-dbprodata
+	dc.l	pumatrackerdata-main,pend-pumatrackerdata
 
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -142,5 +143,6 @@ thxdata		incbin	thx.im
 sampledata	incbin	sampleplay.im
 aondata		incbin	aon4.im
 dbprodata	incbin	dbpro.im
+pumatrackerdata	incbin	pumatracker.im
 pend
 
