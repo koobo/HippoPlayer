@@ -4670,10 +4670,13 @@ printhippo1
 	move.b	reghippo(a5),d7
 	clr.b	reghippo(a5)
 
-;	cmp.b	#' ',keyfile(a5)
-;	bne.b	.az
-;	moveq	#0,d7
-;.az
+	* no registered name? 
+	tst.b	keyfile(a5)
+;	beq.b	.noreg
+	cmp.b	#' ',keyfile(a5)
+	bne.b	.az
+.noreg	moveq	#0,d7
+.az
 
 
 	moveq	#0,d0		* lähde x,y
@@ -4697,7 +4700,7 @@ printhippo1
 	moveq	#92,d2		* kohde x
 	tst.b	d7
 	beq.b	.e
-	move	#150,d2
+	move	#150,d2		* position when registered
 .e
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
