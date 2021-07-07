@@ -11124,10 +11124,15 @@ defarc
 * I	ignore LHAOPTS variable
 * Qw	disable wildcards
 
-.zip	dc.b	'c:unzip >nil: -qq "%s"',0
-* qq	be very quiet
 
 .lzx	dc.b 'c:lzx >nil: -m -q x "%s"',0
+
+.zip
+zipDecompressCommand
+	dc.b	'c:unzip >nil: -jo "%s"',0
+* j: do not create folders
+* o: overwrite without asking
+* qq	be very quiet
 
 * decompress %s to stdout and redirect to current dir data file
 gzipDecompressCommand
@@ -22885,6 +22890,11 @@ loadfile
 	lob	Examine
 	tst.l	d0
 	beq.w	 .x
+
+ if DEBUG
+	pushpea	fib_FileName+fileinfoblock(a5),d0
+	DPRINT  "Scanning: %s",0
+ endif
 	
 .loop	
 	move.l	d7,d1
@@ -22894,6 +22904,10 @@ loadfile
 
 	pushm	all
 
+ if DEBUG
+	pushpea	fib_FileName+fileinfoblock(a5),d0
+	DPRINT  "->%s",1
+ endif
 	pushpea	fib_FileName+fileinfoblock(a5),d1
 	move.l	#MODE_OLDFILE,d2
 	lob	Open
