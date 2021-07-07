@@ -15457,6 +15457,7 @@ cut_prefix
 * Deletoidaan yksi tiedosto listasta
 *******
 
+* right mouse button + Del button
 hiiridelete
 	tst.l	chosenmodule(a5)
 	bmi.b	.noChosen
@@ -18882,7 +18883,7 @@ areyousure_delete
 	tst.l	d0
 	rts
 
-.z	dc.b	"Delete this file?",0
+.z	dc.b	"Delete this file (or divider section)?",0
 .y	dc.b	"_Yes|_No",0
  even
 
@@ -31075,11 +31076,11 @@ tooltipList
 	dc.b	"LMB: Add new modules to the list",0
 	dc.b	"RMB: Insert new modules after the chosen module",0
 .del
-	dc.b	35,2
+	dc.b	35,4
 	dc.b	"LMB: Remove chosen module",0
 	dc.b	"RMB: Remove from list and from disk",0
-	dc.b    "     On a divider will remove the divided",0
-	dc.b    "     section",0
+	dc.b	"     RMB on a divider will remove",0
+	dc.b    "     the divided list section",0
 .new
 	dc.b	29,2
 	dc.b	"LMB: Clear list and add files",0
