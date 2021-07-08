@@ -1261,6 +1261,7 @@ pt_sample	rs.b	1
 pt_aon		rs.b	1
 pt_digiboosterpro rs.b	1
 pt_pumatracker	rs.b 	1
+pt_beathoven	rs.b	1
 
 * player group version
 xpl_versio	=	21
@@ -22988,10 +22989,10 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_musicassembler
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_sid1
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_sonic
 	beq.b	.on
@@ -23033,6 +23034,9 @@ loadfile
 	beq.b	.on
 
 	bsr.w	id_pumatracker
+	beq.b	.on
+
+	bsr		id_beathoven
 	beq.b	.on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
@@ -24247,6 +24251,8 @@ tutki_moduuli
 	tst.b	ahi_muutpois(a5)	
 	bne.b	.noop
 
+	* These do not require player group:
+
 	bsr.w	id_med
 	beq.w	.med
 
@@ -24279,6 +24285,9 @@ tutki_moduuli
 
 	bsr.w	id_hippel
 	beq.w	.hippel
+
+	bsr		id_beathoven
+	beq.w	.beathoven
 
 	tst.l	externalplayers(a5)
 	bne.b	.noop
@@ -24610,6 +24619,13 @@ tutki_moduuli
 	moveq	#12-1,d0
 	bra.w	.nimitalteen
 
+.beathoven
+	pushpea	p_beathoven(pc),playerbase(a5)
+	move	#pt_beathoven,playertype(a5)
+	move.l	moduleaddress(a5),a1
+	move.l	$20+36(a1),a1
+	moveq	#30-1,d0
+	bra.w	.nimitalteen2
 
 **** Oliko  sample??
 .sample
@@ -24830,7 +24846,7 @@ id_oktalyzer
 	cmp.l	#'OKTA',(a4)		* Oktalyzer
 	bne.b	.nok
 	cmp.l	#'SONG',4(a4)
-	bra.b	idtest
+	bra.w	idtest
 
 .nok	moveq	#-1,d0
 	rts
@@ -25570,52 +25586,6 @@ id_TFMX7V
 keyfilename	dc.b	"L:HippoPlayer.Key",0
  even
 
-
-id_pumatracker
-	* test some attributes
-	* positive song length
-	tst		$c(a4)
-	bmi.b	.notPuma
-	* positive num of patterns
-	tst		$e(a4)
-	bmi.b	.notPuma
-	* positive num of sound data
-	tst		$10(a4)
-	bmi.b	.notPuma
-
-	* sample 1 start offset
-	tst.l	$14(a4)
-	bmi.b	.notPuma
-
-	* sample 2 start offset
-	tst.l	$18(a4)
-	bmi.b	.notPuma
-
-	* Find some magic words that should be there
-	lea		.patt(pc),a1
-	moveq	#.patte-.patt,d0
-	bsr.w	search
-	bne.b	.notPuma
-
-	* search "patt" again after the first instance
-	push	a4
-	move.l	a0,a4
-	lea		.patt(pc),a1
-	moveq	#.patte-.patt,d0
-	bsr.w	search
-	pop 	a4
-	tst.l	d0 
-	bne.b	.notPuma
-
-	moveq	#0,d0
-	rts
-.notPuma	
-	moveq	#-1,d0 
-	rts
-
-.patt 	dc.b	"patt"
-.patte
- even
 
 *******
 * Tunnistetaan SID piisit
@@ -26371,7 +26341,7 @@ are
 	DPRINT	"Alloc replayer",1
 
 	tst.l	(a0)			* onko jo ennest‰‰n?
-	bne.w	.vanha
+	bne.w	.x
 
 	cmp.b	#3,groupmode(a5)
 	bne.b	.nah
@@ -26441,13 +26411,17 @@ are
 	bsr.b	reloc
 
 .ok
+	bsr	clearCpuCaches
+	popm	d1-a6
+	moveq	#0,d0
+.x	rts
+
+clearCpuCaches
 	move.l	(a5),a6
 	cmp	#37,LIB_VERSION(a6)
 	blo.b	.vanha
 	lob	CacheClearU	* cachet tyhjix, ei gurua 68040:ll‰!
 .vanha
-	popm	d1-a6
-	moveq	#0,d0
 	rts
 
 **
@@ -30923,6 +30897,7 @@ p_pumatracker
 	dc.b	"PumaTracker",0
  even
 
+
 .init
 	bsr.w	varaa_kanavat
 	beq.b	.ok
@@ -30964,6 +30939,185 @@ p_pumatracker
 	bra.w	clearsound
 
 
+id_pumatracker
+	* test some attributes
+	* positive song length
+	tst		$c(a4)
+	bmi.b	.notPuma
+	* positive num of patterns
+	tst		$e(a4)
+	bmi.b	.notPuma
+	* positive num of sound data
+	tst		$10(a4)
+	bmi.b	.notPuma
+
+	* sample 1 start offset
+	tst.l	$14(a4)
+	bmi.b	.notPuma
+
+	* sample 2 start offset
+	tst.l	$18(a4)
+	bmi.b	.notPuma
+
+	* Find some magic words that should be there
+	lea		.patt(pc),a1
+	moveq	#.patte-.patt,d0
+	bsr.w	search
+	bne.b	.notPuma
+
+	* search "patt" again after the first instance
+	push	a4
+	move.l	a0,a4
+	lea		.patt(pc),a1
+	moveq	#.patte-.patt,d0
+	bsr.w	search
+	pop 	a4
+	tst.l	d0 
+	bne.b	.notPuma
+
+	moveq	#0,d0
+	rts
+.notPuma	
+	moveq	#-1,d0 
+	rts
+
+.patt 	dc.b	"patt"
+.patte
+ even
+
+
+******************************************************************************
+* Beathoven Synthesizer
+******************************************************************************
+
+* play
+BEAT_PLAY = 16
+* init, song in d0
+BEAT_INIT = 20
+* num of subsongs
+BEAT_SUBSONGS = 24 
+* optional end 
+BEAT_END = 28
+* optional init player
+BEAT_OPT_INIT = 32
+* module name
+BEAT_NAME = 36
+* author name
+BEAT_AUTHOR = 40
+
+p_beathoven
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	jmp	.song(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_cont!pf_stop!pf_ciakelaus!pf_song
+	dc.b	"Beathoven Synthesizer",0
+ even
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+
+	bsr.b 	.doInit
+	moveq	#0,d0
+	rts
+
+.doInit
+	pushm	all
+	move.l	moduleaddress(a5),a2
+	lea 	$20(a2),a2
+	move.l	BEAT_SUBSONGS(a2),d0 
+	DPRINT	"Beathoven init, subsongs=%ld",1
+	subq	#1,d0
+	move	d0,maxsongs(a5)
+	push 	a2
+	move.l	BEAT_INIT(a2),a0
+	moveq	#0,d0	* subsong
+	move	songnumber(a5),d0	
+	DPRINT	"Subsong=%ld",2
+	jsr		(a0)
+	pop 	a2
+	move.l	BEAT_OPT_INIT(a2),d0 
+	beq.b  .noOpt
+	move.l	d0,a0
+	jsr		(a0)
+.noOpt	popm	all
+	rts	
+
+.deInit
+	pushm	all
+	move.l	moduleaddress(a5),a0
+	lea 	$20(a0),a0
+	move.l	BEAT_END(a0),d0
+	beq.b	.noEnd
+	move.l	d0,a0
+	jsr	(a0)
+.noEnd	popm	all
+	rts
+
+.play
+	move.l	moduleaddress(a5),a0
+	lea 	$20(a0),a0
+	move.l	BEAT_PLAY(a0),a0
+	jmp		(a0)
+	
+
+.end
+	bsr.w	rem_ciaint
+	bsr.b	.deInit
+	bra.w	vapauta_kanavat
+
+.stop
+	bra.w	clearsound
+
+.song
+	bsr.b	.deInit
+	bsr.w	.doInit
+	rts
+
+* in: a4 = module
+* out: 
+*   d0 = 0, is beathoven
+*   do = -1, is not beathoven
+id_beathoven
+    * these seem to be executables, so check for hunk
+    cmp.l   #$3f3,(a4)
+    bne.b   .notBeat
+    * skip hunk header
+    lea     $20(a4),a0
+    cmp.l   #$70ff4e75,(a0)
+    bne.b   .notBeat
+    cmp.l   #'BEAT',4(a0)
+    bne.b   .notBeat
+    cmp.l   #'HOVE',8(a0)
+    bne.b   .notBeat
+    * looks good, relocate it
+    move.l  a4,a0
+    bsr reloc
+	* clear the hunk id for safety to avoid reloccing again
+	clr.l	(a4)
+	bsr	clearCpuCaches
+    moveq   #0,d0
+    rts
+.notBeat    
+    moveq   #-1,d0 
+    rts
 
 *******************************************************************************
 * Playereit‰
