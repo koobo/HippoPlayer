@@ -81,6 +81,7 @@
 start	dc.b	"HiPxPla",21	* Tunnistus ja versio
 
 main	
+	* start offset + lenght -pairs
 	dc.l	ps3mdata-main,tfmxdata-ps3mdata
 	dc.l	tfmxdata-main,tfmx7data-tfmxdata
 	dc.l	tfmx7data-main,jamdata-tfmx7data
@@ -97,7 +98,8 @@ main
 	dc.l	sampledata-main,aondata-sampledata
 	dc.l	aondata-main,dbprodata-aondata
 	dc.l	dbprodata-main,pumatrackerdata-dbprodata
-	dc.l	pumatrackerdata-main,pend-pumatrackerdata
+	dc.l	pumatrackerdata-main,gamemusiccreatordata-pumatrackerdata
+	dc.l	gamemusiccreatordata-main,pend-gamemusiccreatordata
 
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -144,5 +146,8 @@ sampledata	incbin	sampleplay.im
 aondata		incbin	aon4.im
 dbprodata	incbin	dbpro.im
 pumatrackerdata	incbin	pumatracker.im
+gamemusiccreatordata incbin gamemusiccreator.im
+
+
 pend
 
