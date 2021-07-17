@@ -997,6 +997,7 @@ fc10routines	rs.l	0
 jamroutines	rs.l	0
 p60routines	rs.l	0
 pumatrackerroutines 	rs.l 0
+gamemusiccreatorroutines rs.l 0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1225,7 +1226,8 @@ p_ahiupdate	rs.l	1
 p_liput		rs	1	* ominaisuudet
 p_name		rs.l	1
 
-* Playerit
+* Player ids
+* These are self contained, replayer code inside the module
 pt_internal_start = 33
 	rsset	pt_internal_start
 pt_prot		rs.b	1
@@ -1241,7 +1243,9 @@ pt_mon		rs.b	1
 pt_dw		rs.b	1
 pt_hippel	rs.b	1
 pt_mline	rs.b	1
+pt_beathoven	rs.b	1
 
+* These need a replayer from the group file
 pt_group_start = 49
 	rsset	pt_group_start		* Ulkoiset
 pt_multi	rs.b	1		* PS3M (mod,ftm,mtm,s3m)
@@ -1261,7 +1265,7 @@ pt_sample	rs.b	1
 pt_aon		rs.b	1
 pt_digiboosterpro rs.b	1
 pt_pumatracker	rs.b 	1
-pt_beathoven	rs.b	1
+pt_gamemusiccreator  rs.b  1
 
 * player group version
 xpl_versio	=	21
@@ -23039,6 +23043,9 @@ loadfile
 	bsr		id_beathoven
 	beq.b	.on
 
+	bsr		id_gamemusiccreator
+	beq.b	.on
+
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
 	beq.b	.on
@@ -24383,6 +24390,9 @@ tutki_moduuli
 	bsr.w	id_aon
 	beq.w	.aon
 
+	bsr.w	id_gamemusiccreator
+	beq.w	.gamemusiccreator
+
 	bsr.w	id_player
 	beq.w	.player
 
@@ -24626,6 +24636,11 @@ tutki_moduuli
 	move.l	$20+36(a1),a1
 	moveq	#30-1,d0
 	bra.w	.nimitalteen2
+
+.gamemusiccreator
+	pushpea	p_gamemusiccreator(pc),playerbase(a5)
+	move	#pt_gamemusiccreator,playertype(a5)
+	bra.w	.ex
 
 **** Oliko  sample??
 .sample
@@ -26359,15 +26374,13 @@ are
 
 	move	playertype(a5),d0
 	sub	#xpl_offs,d0
-	move	d0,d1
-	add	d1,d1
-	
+
+	* map player type into a position in the group header
+	* table
 	move.l	externalplayers(a5),a4
-	addq	#8,a4
+	addq	#8,a4			* skip header
 	lsl	#3,d0
 	movem.l (a4,d0),d0/d7		* offset, length
-	tst.l	d0			* onko playeriä?
-	beq.b	.xab
 
 * d3k0dez!
 ;	sub.l	#$a370,d0
@@ -26379,8 +26392,8 @@ are
 ;	rol.l	d1,d7
 
 
+	* get actual data address
 	lea     (a4,d0.l),a1
-
 .contti
 
 	move.l	a1,a4
@@ -26405,6 +26418,7 @@ are
 	;sub.l	d0,4(a0)
 	bsr.w	fimp_decr
 
+	* see if it needs to be relocated
 	move.l	(a3),a0
 	cmp.l	#$000003f3,(a0)
 	bne.b	.ok
@@ -31118,6 +31132,226 @@ id_beathoven
 .notBeat    
     moveq   #-1,d0 
     rts
+
+
+
+
+******************************************************************************
+* Game Music Creator
+******************************************************************************
+
+p_gamemusiccreator
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume
+	dc.b	"Game Music Creator",0
+ even
+
+.GMC_INIT  = $20+0
+.GMC_PLAY  = $20+4
+.GMC_END   = $20+8
+
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	gamemusiccreatorroutines(a5),a0
+	* allocate into chip mem
+	bsr.w	allocreplayer2
+	beq.b	.ok3
+	bsr.w	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	all
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	songover(a5),a2
+	lea	pos_nykyinen(a5),a3
+	lea	pos_maksimi(a5),a4
+	move.l	gamemusiccreatorroutines(a5),a6
+	jsr	.GMC_INIT(a6)
+	popm	all
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	gamemusiccreatorroutines(a5),a0
+	jmp	.GMC_PLAY(a0)
+
+.end
+	bsr.w	rem_ciaint
+	move.l	gamemusiccreatorroutines(a5),a0
+	jsr	.GMC_END(a0)
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+.stop
+	bra.w	clearsound
+
+; in: a4 = module
+; out: d0 = 0, valid GMC
+;      d0 = -1, not GMC
+id_gamemusiccreator
+	push	a4	 	* save this, needed by other identifiers
+    moveq   #15-1,d0
+    move.l  a4,a0
+.sampleLoop
+	* sample vol check probably
+    cmp.b   #$40,7(a0)
+    bhi.w   .notGmc
+	DPRINT2	"1 ",1
+
+    * sample len
+    move    4(a0),d1 
+    cmp     #$7fff,d1
+    bhi.w   .notGmc
+	DPRINT2	"2 ",2
+
+    add     d1,d1
+    * loop length (?), must be less than total length
+    move    12(a0),d2 
+    cmp     d1,d2
+    bhi.w   .notGmc
+	DPRINT2	"3 ",3
+
+    add     #16,a0
+    dbf d0,.sampleLoop
+
+    * pattern table size
+    cmp.b   #$64,243(a4)
+    bhi.w   .notGmc
+ 	DPRINT2	"4 ",4
+    tst.b   243(a4)
+    beq.w   .notGmc
+	DPRINT2	"5 ",5
+
+    * pattern order table
+    moveq   #100-1,d0
+    lea     244(a4),a0
+    moveq   #0,d2 * numpat
+.pattLoop
+    move    (a0),d1
+    and     #$3ff,d1
+    bne.w   .notGmc
+	DPRINT2	"6 ",6
+
+    move    (a0),d1
+    lsr     #8,d1
+    lsr     #2,d1
+    cmp     d2,d1
+    blo.b   .numpat
+    move    d1,d2
+.numpat
+
+    addq    #2,a0
+    dbf d0,.pattLoop
+    
+    addq    #1,d2
+    cmp     #1,d2
+    beq.w   .notGmc
+
+* not reaching "7":
+* - knights of the sky 4
+	
+	DPRINT2	"7 ",7
+
+    cmp     #100,d2
+    bhi.w   .notGmc
+	DPRINT2	"8 ",8
+
+ * validate  patterns
+    move    d2,d7
+    subq    #1,d7
+
+    move.b  243(a4),d6
+    addq.b  #1,d6
+    
+.patterns
+    lea     444(a4),a0
+    move    #256-1,d0
+.rows  
+    move.b  2(a0),d1
+    and.b   #$0f,d1
+    
+    cmp.b   #3,d1
+    bne.b   .c3
+    cmp.b   #$40,3(a0)
+    bhi.w   .notGmc
+.c3
+* not reaching "9":
+* - fatal mission - che bang
+
+	DPRINT2	"9 ",9
+
+    cmp.b  #4,d1
+    bne.b   .c4
+    cmp.b  #$63,3(a0)
+    bhi.w   .notGmc   
+.c4
+	DPRINT2	"10 ",10
+
+    cmp.b   #5,d1
+    bne.b   .c5
+    cmp.b   3(a0),d6
+	* BAD
+    ;bhi.b   .notGmc
+    bls.w   .notGmc
+.c5
+* not reaching "11":
+* - jet set willy 2 title
+* - deuteros-ingame 1
+
+	DPRINT2	"11 ",11
+
+    cmp.b   #6,d1
+    bne.b   .c6
+    cmp.b   #2,3(a0)
+    bhi.b   .notGmc
+.c6
+* not reaching "12":
+* - covert action - finalmusic
+* - covert action - thememusic
+
+	DPRINT2	"12 ",12
+
+    cmp.b   #7,d1
+    bne.B   .c7
+    cmp.b   #2,3(a0)
+    bhs.b   .notGmc
+.c7
+	DPRINT2	"13 ",13
+
+    addq    #4,a0
+    dbf     d0,.rows
+
+    add	    #1024,a4
+    dbf	    d7,.patterns
+	pop     a4
+    moveq   #0,d0
+    rts
+.notGmc
+	pop     a4
+    moveq  #-1,d0 
+	rts
 
 *******************************************************************************
 * Playereitä
