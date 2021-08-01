@@ -18786,7 +18786,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	mulu	#36,d5
 	divu	#315,d5
 	add	d5,d5
-	move	.periods(pc,d5),d5
+	move	periods(pc,d5),d5
 
 	move	d5,$a6-$96(a3)
 	move	d5,$b6-$96(a3)
@@ -18811,10 +18811,11 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	bra.w	.msgloop
 
-.periods
+periods
 	dc	856,808,762,720,678,640,604,570,538,508,480,453
 	dc	428,404,381,360,339,320,302,285,269,254,240,226
 	dc	214,202,190,180,170,160,151,143,135,127,120,113
+periodsEnd
 
 * NOT USED
 freeinfosample
@@ -31218,20 +31219,17 @@ id_gamemusiccreator
 	* sample vol check probably
     cmp.b   #$40,7(a0)
     bhi.w   .notGmc
-	DPRINT2	"1 ",1
 
     * sample len
     move    4(a0),d1 
     cmp     #$7fff,d1
     bhi.w   .notGmc
-	DPRINT2	"2 ",2
 
     add     d1,d1
     * loop length (?), must be less than total length
     move    12(a0),d2 
     cmp     d1,d2
     bhi.w   .notGmc
-	DPRINT2	"3 ",3
 
     add     #16,a0
     dbf d0,.sampleLoop
@@ -31239,112 +31237,106 @@ id_gamemusiccreator
     * pattern table size
     cmp.b   #$64,243(a4)
     bhi.w   .notGmc
- 	DPRINT2	"4 ",4
     tst.b   243(a4)
     beq.w   .notGmc
-	DPRINT2	"5 ",5
 
     * pattern order table
-    moveq   #100-1,d0
-    lea     244(a4),a0
+	* contains offsets to patterns, each pattern is $400 bytes long,
+	* 4 channels * 64 rows * 4 bytes
+	* Possible to have 100 individual patterns
+ 	moveq   #100-1,d7
+	lea     244(a4),a0
     moveq   #0,d2 * numpat
 .pattLoop
-    move    (a0),d1
-    and     #$3ff,d1
+	* offsets should be divisible by $400
+    move    (a0),d0
+    and     #$3ff,d0
     bne.w   .notGmc
-	DPRINT2	"6 ",6
 
-    move    (a0),d1
-    lsr     #8,d1
-    lsr     #2,d1
-    cmp     d2,d1
+	* store the highest pattern index	
+	move    (a0),d0
+	lsr     #8,d0
+    lsr     #2,d0
+    cmp     d2,d0
     blo.b   .numpat
-    move    d1,d2
+    move    d0,d2
 .numpat
+    addq.l    #2,a0
+    dbf d7,.pattLoop
 
-    addq    #2,a0
-    dbf d0,.pattLoop
-    
+	; check how many patterns are there
     addq    #1,d2
-    cmp     #1,d2
-    beq.w   .notGmc
 
-* not reaching "7":
-* - knights of the sky 4
-	
-	DPRINT2	"7 ",7
-
+	; high bound
     cmp     #100,d2
     bhi.w   .notGmc
-	DPRINT2	"8 ",8
+	
+ * validate the first pattern, it's apparently
+ * a bit difficult to correctly determine the real amount
+ * of patterns in a module. Thre should at least be one!
 
- * validate  patterns
-    move    d2,d7
-    subq    #1,d7
-
-    move.b  243(a4),d6
-    addq.b  #1,d6
-    
 .patterns
     lea     444(a4),a0
-    move    #256-1,d0
+     * traverse a pattern
+    * four bytes per channel per row,
+    * so 16 bytes per row
+    * pattern lenght is then 64 rows.
+    * go through all 4 byte note slots in one pattern.
+
+    move    #256-1,d5		* 64 rows x 4 channels
 .rows  
-    move.b  2(a0),d1
-    and.b   #$0f,d1
-    
-    cmp.b   #3,d1
-    bne.b   .c3
-    cmp.b   #$40,3(a0)
-    bhi.w   .notGmc
-.c3
-* not reaching "9":
-* - fatal mission - che bang
+    * first two bytes are contain note
+    * and sample info.
+    * 3rd is command
+    * 4th is command parameter
 
-	DPRINT2	"9 ",9
+    * get command code.
+    * 0 = no command
+    * 1 = slide up
+    * 2 = slide down
+    * 3 = set volume
+    * 4 = pattern break 
+    * 5 = pos jump
+    * 6 = filter clear
+    * 7 = filter set 
+    * 8 = song step
+    *   = rest are ignored
 
-    cmp.b  #4,d1
-    bne.b   .c4
-    cmp.b  #$63,3(a0)
-    bhi.w   .notGmc   
-.c4
-	DPRINT2	"10 ",10
+	moveq	#$f,d0
+	and.b	2(a0),d0
 
-    cmp.b   #5,d1
-    bne.b   .c5
-    cmp.b   3(a0),d6
-	* BAD
-    ;bhi.b   .notGmc
-    bls.w   .notGmc
-.c5
-* not reaching "11":
-* - jet set willy 2 title
-* - deuteros-ingame 1
+    * set volume. could check for max volume
+	* but some modules have over the max of 64 here
+	* check for max volume parameter
+;    cmp.b   #3,d0
+;    bne.b   .c3
+;    cmp.b   #$40,3(a0)
+;	bhi.w   .notGmc3
+;.c3
 
-	DPRINT2	"11 ",11
+	move.l  (a0),d0
+    and     #$f000,d0
+    beq.b   .noSample
+	clr		d0
+	swap    d0
+	tst		d0
+	beq.b	.ok
+	* d0 is now the period
+	* 0 is allowed
+	lea		periods(pc),a1
+	moveq	#(periodsEnd-periods)/2-1,d1
+.perLoop
+	cmp		(a1)+,d0
+	beq.b	.ok
+	dbf		d1,.perLoop
+	* BAD PERIOD, BAD!
+	bra.b	.notGmc
+.ok
+.noSample
 
-    cmp.b   #6,d1
-    bne.b   .c6
-    cmp.b   #2,3(a0)
-    bhi.b   .notGmc
-.c6
-* not reaching "12":
-* - covert action - finalmusic
-* - covert action - thememusic
+    addq.l  #4,a0
+    dbf     d5,.rows
 
-	DPRINT2	"12 ",12
-
-    cmp.b   #7,d1
-    bne.B   .c7
-    cmp.b   #2,3(a0)
-    bhs.b   .notGmc
-.c7
-	DPRINT2	"13 ",13
-
-    addq    #4,a0
-    dbf     d0,.rows
-
-    add	    #1024,a4
-    dbf	    d7,.patterns
 	pop     a4
     moveq   #0,d0
     rts
