@@ -23000,7 +23000,7 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_sonic
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_fred			* Fred
 	beq.b	.on
@@ -24822,6 +24822,17 @@ id_musicassembler
  even
 
 id_sonic
+	* Two ways to ID
+
+	; this one does not have a replay code in it
+	; "not packed"
+	;movem.l	(a4),d0/d1 
+	;cmp.l 	#'SOAR',d0
+	;bne.b  .test2
+	;cmp.l 	#'V1.0',d1
+	;beq.b	idtest
+
+.test2 
 	lea	.sonicid(pc),a1		* SonicArranger
 	moveq	#.sonice-.sonicid,d0
 	bsr.w	search
@@ -28182,21 +28193,44 @@ p_fred
 * SonicArranger
 ******************************************************************************
 
+* init_ciaint
+
 p_sonicarranger
 	jmp	.soninit(pc)
-	dc.l	$4e754e75
+	jmp	.sonplay(pc)
 	dc.l	$4e754e75
 	jmp	.sonend(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	jmp	.sonstop(pc)
+	jmp $4e754e75
+	jmp .sonvolume(pc)
 	jmp	.sonsong(pc)
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc.l	$4e754e75
-	dc	pf_song
+	dc	pf_song!pf_stop!pf_cont!pf_ciakelaus!pf_volume
 	dc.b	"Sonic Arranger",0
  even
+
+* routine offsets:
+* calculate some pointers:
+.sa_init 					=	0
+* set CIAB timer B
+.sa_set_irq_handler		=	4
+.sa_remove_irq_handler 	=	8
+* start song, number in d0
+.sa_start_song			= 	12
+.sa_stop_song			= 	16
+.sa_insert_synth_effect	= 	20
+.sa_interrupt_routine	= 	24
+.sa_volume_1			= 	28  ; w
+.sa_volume_2			= 	30  ; w
+.sa_volume_3			= 	32  ; w
+.sa_volume_4			= 	34  ; w
+.sa_voice_control_flags_offset = 	36  ; w
+.sa_version_number		= 	38  ; w
+.sa_sync_value			=  	40  ; w
+.sa_master_volume_offset = 	42  ; w
+
 
 .soninit
 	bsr.w	varaa_kanavat
@@ -28204,32 +28238,67 @@ p_sonicarranger
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	DPRINT	"SonicArranger init 1",0
 	movem.l	d0-a6,-(sp)
 	move.l	moduleaddress(a5),a0
-	jsr	(a0)
-	move.l	moduleaddress(a5),a0
-	jsr	4(a0)
+	jsr	.sa_init(a0)
+	;move.l	moduleaddress(a5),a0
+	;jsr	4(a0)
+	DPRINT	"SonicArranger init 2",2
 	moveq	#0,d0
 	move	songnumber(a5),d0
 	move.l	moduleaddress(a5),a0
-	jsr	12(a0)	
+	jsr	.sa_start_song(a0)	
+	bsr		.sonvolume
+		DPRINT	"SonicArranger init 3",3
+
 	move	#10,maxsongs(a5)
 	movem.l	(sp)+,d0-a6
 	moveq	#0,d0
 	rts	
 
+.sonplay
+	move.l	moduleaddress(a5),a0 
+	jmp		.sa_interrupt_routine(a0)
+
+.sonstop
+	move.l	moduleaddress(a5),a0
+	jsr	.sa_stop_song(a0)
+	rts
+
+.soncont
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	move.l	moduleaddress(a5),a0
+	jsr	.sa_start_song(a0)	
+	rts
+
+
 .sonend
 	movem.l	d0-a6,-(sp)
+	bsr.w	rem_ciaint
 	move.l	moduleaddress(a5),a0
-	jsr	16(a0)
-	move.l	moduleaddress(a5),a0
-	jsr	8(a0)
+	jsr	.sa_stop_song(a0)
+	;move.l	moduleaddress(a5),a0
+	;jsr	8(a0)
 	movem.l	(sp)+,d0-a6
 	bra.w	vapauta_kanavat
 
 .sonsong
 	bsr.b	.sonend	
-	bra.b	.soninit
+	bra.w	.soninit
+
+.sonvolume
+	move.l	moduleaddress(a5),a0 
+	add		.sa_master_volume_offset(a0),a0 
+	move	mainvolume(a5),(a0)
+	rts
 
 ******************************************************************************
 * SidMon 1.0
