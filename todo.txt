@@ -1,0 +1,193 @@
+WISHLISH
+- DONE: .gz support
+- UGLY: window size gadget
+- favorites list
+ -- button to favorite, send to another list, save list to a certain place
+ -- list will show if file is favorited by checking the list
+ -- user can open the favorite program with "Prg", maybe some shortcut for this
+- logon keskitys
+- keyshortcutit tooltippeihin?
+Formats
++ Beathoven
+- Deltamusic1
+- Digital mugician
+- earache
+- face the music
+- digital mugician 2
++ game music creator
++ mark ii sound system
++ puma tracker
+
+TODO
+- VisualPrefs
+-- Set window title bar height to 8
+-- Set bottom border to maximum
+--> RMB window folding does not center text properly?
+
+TODO
+- cräshäsi joku moduuli zipattu: HeHasNoFace, DataJack
+- RMB window fold: ei toimi enää?
+- Hippon keskitys ei pela 
+- WindowPrefs: jos titlebarin korkeutta säätää, RMB fold ei keskitä?
+-- Toimiiko enää mitkään napit?
+
+MODS ANTHOLOGY synth not supported formats
+- aprosys
+ - sidmon2
+- sonicarranger:tämän pitäisi olla tuettu, ei toimi?
+- "ST11";
+- SidMon2
+-- tunnistus, etsitään "SIDMON II" stringi
+- PUMA tracker
+-- etsitään taikasanoja 
+
+BUG
+- Prefs zip-komento; jos editoi, ei tallennu, ei vaikutusta muutenkaan
+
+FRED
+- FuzzBall-InGame, Fuzzball-Title -> enforcer hittejä
+- Saattaa olla KingCon-probleemakin
+
+SonicArranger
+- amber14.sa
+-> crash
+
+FIXED
+- "not possible to use as a default tool for module files via DefIcons. If it is still valid, it would be cool to fix that..."
+- commandline launch: find out current directory and append that to the filename?
+-- would fix DefIcons case
+
+FIXED
+- add file
+- add divider
+- press play on divider
+-> hit
+
+FIXED
+- press key 1 to zip window
+-> cant unzip anymore
+
+FIXED
+- add stuff to list
+-press keys: left, right
+ -> enforcer hit
+
+FIXED
+- RMB+Add ei fudaa (insert)
+
+; FIXED
+; iso lista
+; select module and play: ei jää ihan keskelle
+; heiluta hiirtä, soitettava kappale pykälä keskeltä alemmas?
+; joku eventti jäänyt käsittelemättä, esim. nuoli ylös, tulee
+; käsiteltäväksi sitten kun seuraava mousemove event tulee?
+; 
+; ongelma lienee se, että "firstname" ja sliderin vertpot
+; ei vastaa toisiaan, kun uusi firstname lasketaan mousemoven
+; jälkeen vertpotista, on niissä pieni ero, ja näkyy hyppäyksenä
+; ehkä 1-bit scale pitää poistaa? -> rslider4
+
+; TODO
+; saatu räplättyä aikaan niin että ei voi sammuttaa,
+; valittaa että filereq on muka päällä?
+
+; FIXED
+; startissa a500:lla aika hidasta? mihkä aika menee
+
+; FIXED
+; Filebox prop gadget ei toimi "mediumlista":lla, loppupäästä;
+
+; FIXED
+; Aika hidasta nuolinäppisselailu mediumlistalla puolen välin paikkeilta alaspäin; 68000
+
+; WONTFIX
+; Poista WA_ReportMouse, sen sijaan IDCMP_INTUITICKS
+; hiiren vahtimiseen? luultavasti kevyempi
+; toinen on vaikka kerran sekuntiin oma signaali
+
+; FIXED
+; Press Q
+; -> boom
+; Add diivider + empty list: not good
+
+; FIXED
+; Open prefs
+; press Ctrl
+; --> BOOM
+
+; FIXED
+; Open prefs
+; - change title bar display mode with RMB list selector
+; -> boom
+
+; a1200 with 2+8M
+; Load mediumlist-xpk
+; -> boom!
+
+; 68040
+; MusicAss
+; - ei soi
+; JamCracker
+; - piippailee
+
+; DeltaMusic?
+
+; FIXED
+; open error hang
+; - load module that leads to open error
+; - semaphore hang?
+
+; FIXED
+; MEM corruption
+; - start 
+; - add Authors.A-Z
+; - play
+; - exit
+; to fix: add buffer to l_filename
+; somewhere: l_filename buffer is overwritten
+
+* TODO
+* Thing to test:
+* - load and save large programs
+* - load large: play, eject, out of memory, hang
+
+* FIXED
+* bug:
+* - load prg
+* - clear list
+* - add
+* --> semaphore hang
+
+* FIXED
+* bug:
+* - new
+* - add moduleprg
+* -> permanent waitpointer
+
+* FIXED
+* bug:
+* - load prog
+* - play
+* - clear
+* - add
+* -> sem hang
+
+* FIXED
+* bug:
+* - add XTD
+* - sort
+* - väärä järjestys
+
+* FIXED
+* bug:
+* -add
+* - cancel
+* - add again
+* -> sem hang
+
+* FIXED
+* enforcer hit:
+* - add
+* - close app
+* - close "warning dialog"
+* - exit app
