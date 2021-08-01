@@ -1357,8 +1357,10 @@ sm_stereo14	=	5
 
 wflags set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags set wflags!WFLG_SMART_REFRESH!WFLG_RMBTRAP!WFLG_REPORTMOUSE
+wflags set wflags!WFLG_SIZEGADGET!WFLG_SIZEBBOTTOM
 idcmpflags set IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_CLOSEWINDOW
-idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
+idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY!IDCMP_NEWSIZE
+
 
 wflags2	set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags2 set wflags2!WFLG_SMART_REFRESH!WFLG_RMBTRAP
@@ -3014,7 +3016,9 @@ msgloop
 	move	im_MouseX(a1),mousex(a5)
 	move	im_MouseY(a1),mousey(a5)
 
+	push a1
 	lob	ReplyMsg
+	pop a1 
 
 	;move.l	d2,d0
 	;DPRINT	"IDCMP=%ld",91
@@ -3056,6 +3060,18 @@ msgloop
 	bne.b	.noClose
 	bra.b	exit
 .noClose
+	cmp.l	#IDCMP_NEWSIZE,d2
+	bne.b	.noNewSize
+	move.l	windowbase(a5),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	move  wd_Width(a0),d0 
+	move  wd_Height(a0),d1 
+	move	boxy(a5),d2 
+	DPRINT  "NewSize %ldx%ld boxy=%ld",665
+	
+.noNewSize
 	bra.w	.idcmpLoop
 	
 exit	
@@ -15128,6 +15144,12 @@ listselector
 *******
 
 * 
+
+FILEBOX_X1 = 30+WINX
+FILEBOX_Y1 = 62+WINY
+FILEBOX_X2 = 251+WINX
+FILEBOX_Y2 = 127+WINY
+
 showNamesNoCentering
 shownames2
 	moveq	#1,d4		* flag: do not center
@@ -16800,7 +16822,7 @@ clearCachedNode
 *       dc.b "string",0
 showTooltipPopup
 
-.wflags = WFLG_SIMPLE_REFRESH!WFLG_BORDERLESS
+.wflags = WFLG_BORDERLESS!WFLG_NOCAREREFRESH
 .idcmpflags = 0
 
 	pushm	all
