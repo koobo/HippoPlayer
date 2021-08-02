@@ -463,7 +463,7 @@ req_file3	rs.l	1		* prefs
 kokolippu	rs	1		* 0: pieni
 wkork		rs	1		* korkeus-vertailu zipwindowille
 windowpos	rs	2		* Ison ikkunan paikka
-windowpos2	rs	2		* Pienen ikkunan paikka
+windowpos2	rs	2		* Pienen ikkunan paikka (ZipWindow). Must be together
 windowpos22	rs	2		* ja koko
 infopos2	rs	2		* sampleikkunan ja sidinfon paikka
 
@@ -1877,8 +1877,11 @@ main
 	rts
 
 .ohib
+	* Zipped window width
 	move	WINSIZX(a5),windowpos22(a5)	* Pienen koko ZipWindowille
+	* zipped window height
 	move	#11,windowpos22+2(a5)
+	* Request events
 	or.l	#IDCMP_CHANGEWINDOW,idcmpmw	
 
 .vanha
@@ -2721,7 +2724,9 @@ msgloop
 	bsr.w	lootaan_kello
 ;	bsr.w	lootaan_muisti
 	bsr.w	lootaan_nimi
-	bsr.w	zipwindow
+	; No need to call this every refresh signal, it is handled via RMB 
+	; and IDCMP-event handlers anyway:
+	;bsr.w	zipwindow
 	pop	d0
 
 .wow
@@ -3569,6 +3574,7 @@ ply2	equr	d7
 *** Päivitetään ikkunan sisältö
 
 zipwindow
+	DPRINT	"ZipWindow refresh",1
 	tst.b	win(a5)
 	bne.b	.onw	
 	rts
@@ -5481,7 +5487,9 @@ buttonspressed
 	bsr.w	avaa_ikkuna
 	rts
 
-.new	move.l	windowbase(a5),a0	* Kick2.0+
+.new	
+	DPRINT	"ZipWindow Intuition",2
+	move.l	windowbase(a5),a0	* Kick2.0+
 	lore	Intui,ZipWindow
 	rts
 
@@ -31290,7 +31298,9 @@ idcmpmw	dc.l	idcmpflags
 
 .t	dc.l	WA_PubScreenName,pubscreen+var_b	
 	dc.l	WA_PubScreenFallBack,TRUE
-	dc.l	WA_Zoom,windowpos2+var_b
+	* Needed by ZipWindow (kick2.0)
+	* Pointer to four words, LeftEdge, TopEdge, Width, Height
+	dc.l	WA_Zoom,windowpos2+var_b 	
 	dc.l	TAG_END
 
 * Main window gadgets
