@@ -99,7 +99,8 @@ main
 	dc.l	aondata-main,dbprodata-aondata
 	dc.l	dbprodata-main,pumatrackerdata-dbprodata
 	dc.l	pumatrackerdata-main,gamemusiccreatordata-pumatrackerdata
-	dc.l	gamemusiccreatordata-main,pend-gamemusiccreatordata
+	dc.l	gamemusiccreatordata-main,digitalmugiciandata-gamemusiccreatordata
+	dc.l	digitalmugiciandata-main,pend-digitalmugiciandata
 
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -147,6 +148,7 @@ aondata		incbin	aon4.im
 dbprodata	incbin	dbpro.im
 pumatrackerdata	incbin	pumatracker.im
 gamemusiccreatordata incbin gamemusiccreator.im
+digitalmugiciandata incbin  mugiplayer.im
 
 
 pend
