@@ -4544,7 +4544,7 @@ printhippo1
 
 	* no registered name? 
 	tst.b	keyfile(a5)
-;	beq.b	.noreg
+	beq.b	.noreg
 	cmp.b	#' ',keyfile(a5)
 	bne.b	.az
 .noreg	moveq	#0,d7
