@@ -863,6 +863,7 @@ jamroutines	rs.l	0
 p60routines	rs.l	0
 pumatrackerroutines 	rs.l 0
 gamemusiccreatorroutines rs.l 0
+digitalmugicianroutines	rs.l 0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1131,6 +1132,7 @@ pt_aon		rs.b	1
 pt_digiboosterpro rs.b	1
 pt_pumatracker	rs.b 	1
 pt_gamemusiccreator  rs.b  1
+pt_digitalmugician 	 rs.b  1
 
 * player group version
 xpl_versio	=	21
@@ -22873,10 +22875,10 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_sonic
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_fred			* Fred
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_sidmon1		* Sidmon1
 	beq.b	.on
@@ -22915,6 +22917,9 @@ loadfile
 	beq.b	.on
 
 	bsr		id_beathoven
+	beq.b	.on
+
+	bsr		id_digitalmugician
 	beq.b	.on
 
 	bsr		id_gamemusiccreator
@@ -24264,6 +24269,9 @@ tutki_moduuli
 	bsr.w	id_aon
 	beq.w	.aon
 
+	bsr		id_digitalmugician
+	beq.w	.digitalmugician
+
 	bsr.w	id_gamemusiccreator
 	beq.w	.gamemusiccreator
 
@@ -24514,6 +24522,11 @@ tutki_moduuli
 .gamemusiccreator
 	pushpea	p_gamemusiccreator(pc),playerbase(a5)
 	move	#pt_gamemusiccreator,playertype(a5)
+	bra.w	.ex
+
+.digitalmugician
+	pushpea	p_digitalmugician(pc),playerbase(a5)
+	move	#pt_digitalmugician,playertype(a5)
 	bra.w	.ex
 
 **** Oliko  sample??
@@ -30878,21 +30891,6 @@ id_pumatracker
 * Beathoven Synthesizer
 ******************************************************************************
 
-* play
-BEAT_PLAY = 16
-* init, song in d0
-BEAT_INIT = 20
-* num of subsongs
-BEAT_SUBSONGS = 24 
-* optional end 
-BEAT_END = 28
-* optional init player
-BEAT_OPT_INIT = 32
-* module name
-BEAT_NAME = 36
-* author name
-BEAT_AUTHOR = 40
-
 p_beathoven
 	jmp	.init(pc)
 	jmp	.play(pc)
@@ -30908,6 +30906,22 @@ p_beathoven
 	dc	pf_cont!pf_stop!pf_ciakelaus!pf_song
 	dc.b	"Beathoven Synthesizer",0
  even
+
+
+* play
+.BEAT_PLAY = 16+$20
+* init, song in d0
+.BEAT_INIT = 20+$20
+* num of subsongs
+.BEAT_SUBSONGS = 24+$20 
+* optional end 
+.BEAT_END = 28+$20
+* optional init player
+.BEAT_OPT_INIT = 32+$20
+* module name
+.BEAT_NAME = 36+$20
+* author name
+.BEAT_AUTHOR = 40+$20
 
 .init
 	bsr.w	varaa_kanavat
@@ -30929,19 +30943,18 @@ p_beathoven
 .doInit
 	pushm	all
 	move.l	moduleaddress(a5),a2
-	lea 	$20(a2),a2
-	move.l	BEAT_SUBSONGS(a2),d0 
+	move.l	.BEAT_SUBSONGS(a2),d0 
 	DPRINT	"Beathoven init, subsongs=%ld",1
 	subq	#1,d0
 	move	d0,maxsongs(a5)
 	push 	a2
-	move.l	BEAT_INIT(a2),a0
+	move.l	.BEAT_INIT(a2),a0
 	moveq	#0,d0	* subsong
 	move	songnumber(a5),d0	
 	DPRINT	"Subsong=%ld",2
 	jsr		(a0)
 	pop 	a2
-	move.l	BEAT_OPT_INIT(a2),d0 
+	move.l	.BEAT_OPT_INIT(a2),d0 
 	beq.b  .noOpt
 	move.l	d0,a0
 	jsr		(a0)
@@ -30951,8 +30964,7 @@ p_beathoven
 .deInit
 	pushm	all
 	move.l	moduleaddress(a5),a0
-	lea 	$20(a0),a0
-	move.l	BEAT_END(a0),d0
+	move.l	.BEAT_END(a0),d0
 	beq.b	.noEnd
 	move.l	d0,a0
 	jsr	(a0)
@@ -30961,8 +30973,7 @@ p_beathoven
 
 .play
 	move.l	moduleaddress(a5),a0
-	lea 	$20(a0),a0
-	move.l	BEAT_PLAY(a0),a0
+	move.l	.BEAT_PLAY(a0),a0
 	jmp		(a0)
 	
 
@@ -31217,6 +31228,94 @@ id_gamemusiccreator
 	pop     a4
     moveq  #-1,d0 
 	rts
+
+
+******************************************************************************
+* Digital Mugician
+******************************************************************************
+
+p_digitalmugician
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
+	dc.b	"Digital Mugician",0
+ even
+
+.DMU_INIT  = 0
+.DMU_PLAY  = 4
+.DMU_END   = 8
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	digitalmugicianroutines(a5),a0
+	* allocate into chip mem, uses empty sample data 
+	bsr.w	allocreplayer2
+	beq.b	.ok3
+	bsr.w	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	moveq	#0,d0 	* song number
+	move.l	digitalmugicianroutines(a5),a2
+	jsr	.DMU_INIT(a2)
+	popm	d1-a6
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	digitalmugicianroutines(a5),a0
+	jmp	.DMU_PLAY(a0)
+
+
+.stop
+	bra.w	clearsound
+
+.end
+	bsr.w	rem_ciaint
+	pushm	all
+	move.l	digitalmugicianroutines(a5),a0
+	jsr	.DMU_END(a0)
+	popm	all
+	bsr.w	clearsound
+
+	bra.w	vapauta_kanavat
+
+; in: a4 = module
+; out: d0 = 0, valid DMU
+;      d0 = -1, not DMU
+id_digitalmugician
+	lea	.id_start(pc),a1	
+	moveq	#.id_end-.id_start,d0
+	bsr.w	search
+	bra	idtest
+
+.id_start
+	dc.b	' MUGICIAN/SOFTEYES 1990 '
+.id_end
+ even
+
 
 *******************************************************************************
 * Playereitä
