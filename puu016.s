@@ -5514,7 +5514,7 @@ buttonspressed
 	* no RMB actions found
 
 	* Experimental RMB markline
-	bsr	markline
+	bsr	marklineRightMouseButton
 	beq.b	.nothingMarked
 	rts
 
@@ -16416,10 +16416,10 @@ putnu	ext.l	d0
 * ja pistet‰‰n palkki
 *******
 
-* Calculates chosenmodule, which is an index of the selected item.
-* Chosen line is highlighted and previously chosen line highlight removed.
-
-markline
+* Out:
+*   d0 = zero if no files hit under mouse, 1 otherwise
+*   d1 = Index of selected file
+getFileBoxIndexFromMousePosition
 	tst	boxsize(a5)
 	beq.b	.out
 
@@ -16438,6 +16438,22 @@ markline
 	add	boxy(a5),d2
 	cmp	d2,d1
 	bhi.b	.out
+	sub	#63+WINY,d1
+	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
+	moveq	#1,d0
+	rts
+.out  
+	* nothing marked
+	moveq	#0,d0 
+	rts
+
+
+* Calculates chosenmodule, which is an index of the selected item.
+* Chosen line is highlighted and previously chosen line highlight removed.
+
+markline
+	bsr getFileBoxIndexFromMousePosition
+	beq.b  .out
 	bsr.b	.doMark
 	* something marked
 	moveq	#1,d0
@@ -16447,10 +16463,8 @@ markline
 	moveq	#0,d0 
 	rts
 
+* filebox line number in d1
 .doMark
-
-	sub	#63+WINY,d1
-	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
 
 	* list is empty
 	; this may allow doubleclicking of empty list to open file req
@@ -16571,6 +16585,24 @@ markit
 ;	bsr.w	 releaseModuleList
 
 .outside	
+	rts
+
+marklineRightMouseButton
+	bsr	 getFileBoxIndexFromMousePosition
+	beq.b  .out
+	bsr.b	.doMark
+	* something marked
+	moveq	#1,d0
+	rts
+.out  
+	* nothing marked
+	moveq	#0,d0 
+	rts
+
+.doMark
+	moveq	#0,d0
+	move	d1,d0
+	DPRINT	"RMB mark on line %ld",1
 	rts
 
 *********************************
