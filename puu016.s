@@ -10079,7 +10079,7 @@ rlpg
 	beq.b  .xpkOk
 	* no freeing later:
 	moveq	#0,d5
-	lea	.xpkerr(pc),a1
+	lea	xpk_module_program_error(pc),a1
 	bsr.w	request
 	bra	.x2
 .xpkOk
@@ -10116,99 +10116,27 @@ rlpg
 
 ***************** ALoitetaan käsittely
 
+
+
 	move.l	a3,d5		* muistialue talteen d5:een
-	moveq	#0,d6		* 0 = vanha formaatti
 
-	cmp.l	#"HiPP",(a3)
-	bne.b	.rr
-	cmp	#"rg",4(a3)
-	bne.b	.rr
-.r2	cmp.b	#10,(a3)+	* skipataan kaks rivinvaihtoa
-	bne.b	.r2
-	addq	#1,a3
-	moveq	#1,d6		* uusi formaatti
-	bra.b	.r1
-.rr
-	cmp.l	#"HIPP",(a3)+
-	bne.w	.what
-	cmp	#"RO",(a3)+
-	bne.w	.what
-	addq	#2,a3		* skip: moduulien määrä
-.r1
+	* read stuff from a3 until a4, into list in a2
+	pushm 	d1-a6
+	lea		moduleListHeader(a5),a2
+	move.l	.loppu(pc),a4 
+	bsr	importModuleProgramFromData
+	DPRINT 	"Imported %ld files",110
+	popm	d1-a6
 
-	tst.b	d7			* addi??
-	bne.b	.yadd
-	clr.l	modamount(a5)
-.yadd
+	move.l	d0,modamount(a5)
 
-	lea	moduleListHeader(a5),a4
-.ploop
-	tst	d6
-	bne.b	.new1
-	moveq	#0,d0
-	move.b	(a3)+,d0	* seuraavan pituus
-	lsl	#8,d0
-	move.b	(a3)+,d0
-	bra.b	.old1
-.new1
-
-	move.l	a3,a0
-.r23	cmp.b	#10,(a0)+
-	bne.b	.r23
-	move.l	a0,d0
-	sub.l	a3,d0	* pituus
-
-.old1
-
-	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
-	bne.b	.gotMem2
-	bsr	showOutOfMemoryError
-	bra	.x2	
-.gotMem2
-	move.l	d0,a2
-
-	lea	l_filename(a2),a0
-
-	tst	d6
-	bne.b	.new2
-;	move	(a3)+,d0
-	move.b	(a3)+,d0
-	lsl	#8,d0
-	move.b	(a3)+,d0
-
-	subq	#1,d0
-.cy	move.b	(a3)+,(a0)+
-	dbf	d0,.cy
-	clr.b	(a0)
-	bra.b	.old2
-.new2
-.le	move.b	(a3),(a0)+
-	cmp.b	#10,(a3)+
-	bne.b	.le
-	clr.b	-(a0)
-.old2
-
-	lea	l_filename(a2),a1
-	isListDivider (a1)		* divideri
-	bne.b	.nd
-	move.l	a1,a0
-	bra.b	.di
-.nd
-	bsr.w	nimenalku
-.di	move.l	a0,l_nameaddr(a2)
-
-	cmp.l	#MAX_MODULES,modamount(a5)
-	bhs.b	.x2
-
-	move.l	a2,a1
-	lea	moduleListHeader(a5),a0	* lisätään listan perään
-	lore	Exec,AddTail
-	addq.l	#1,modamount(a5)
-
-	cmp.l	.loppu(pc),a3
-	blo.w	.ploop
+	tst.b	d7
+	bne.b	.append
+	move.l	d0,modamount(a5)
+	bra.b	.noAppend
+.append
+	add.l	d0,modamount(a5)
+.noAppend	
 
 
 .x2
@@ -10247,7 +10175,7 @@ rlpg
 	bra.w	resh
 
 .what
-	lea	.uerr(pc),a1
+	lea	unknown_module_program_error(pc),a1
 	bsr.w	request
 	bra.w	.x2
 
@@ -10258,9 +10186,6 @@ rlpg
 	bra.b	.x1
 
 
-.uerr	dc.b	"Not a module program!",0
-.xpkerr dc.b	"XPK couldn't load the file!",0
- even
 
 .ext
 * ladattiin ohjelma komentojonon kautta, soitetaan eka tai satunnainen
@@ -10310,6 +10235,128 @@ otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
 * UGH! Evil hackery:
 loadprog
 	bra.b	*-22		* bra.b -> bra.b .blob
+
+
+* in:
+*   a2 = list header
+*   a3 = data read from file
+*   a4 = end address of buffer
+* out:
+*   d0 = number of modules  
+
+importModuleProgramFromData
+	pushm	d1-a6
+	moveq	#0,d7 		* count
+	
+	move.l	a3,d0
+	beq.w	.x2
+
+	move.l	a4,d5		* use this register
+	move.l	a2,a4 		* list header here
+
+	moveq	#0,d6		* 0 = vanha formaatti
+
+	cmp.l	#"HiPP",(a3)
+	bne.b	.rr
+	cmp	#"rg",4(a3)
+	bne.b	.rr
+.r2	cmp.b	#10,(a3)+	* skipataan kaks rivinvaihtoa
+	bne.b	.r2
+	addq	#1,a3
+	moveq	#1,d6		* uusi formaatti
+	bra.b	.r1
+.rr
+	cmp.l	#"HIPP",(a3)+
+	bne.w	.what
+	cmp	#"RO",(a3)+
+	bne.w	.what
+	addq	#2,a3		* skip: moduulien määrä
+.r1
+
+;	lea	moduleListHeader(a5),a4
+;	move.l	a5,a4
+.ploop
+	tst	d6
+	bne.b	.new1
+	moveq	#0,d0
+	move.b	(a3)+,d0	* seuraavan pituus
+	lsl	#8,d0
+	move.b	(a3)+,d0
+	bra.b	.old1
+.new1
+
+	move.l	a3,a0
+.r23	cmp.b	#10,(a0)+
+	bne.b	.r23
+	move.l	a0,d0
+	sub.l	a3,d0	* pituus
+
+.old1
+
+	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	bsr.w	getmem
+	bne.b	.gotMem2
+	bsr	showOutOfMemoryError
+	bra	.x2	
+.gotMem2
+	move.l	d0,a2
+
+	lea	l_filename(a2),a0
+
+	tst	d6
+	bne.b	.new2
+	move.b	(a3)+,d0
+	lsl	#8,d0
+	move.b	(a3)+,d0
+
+	subq	#1,d0
+.cy	move.b	(a3)+,(a0)+
+	dbf	d0,.cy
+	clr.b	(a0)
+	bra.b	.old2
+.new2
+.le	move.b	(a3),(a0)+
+	cmp.b	#10,(a3)+
+	bne.b	.le
+	clr.b	-(a0)
+.old2
+
+	lea	l_filename(a2),a1
+	isListDivider (a1)		* divideri
+	bne.b	.nd
+	move.l	a1,a0
+	bra.b	.di
+.nd
+	bsr.w	nimenalku
+.di	move.l	a0,l_nameaddr(a2)
+
+	* add node a1 to list a0	
+	move.l	a2,a1
+	move.l	a4,a0
+	lore	Exec,AddTail
+	addq.l	#1,d7
+
+	cmp.l	#MAX_MODULES,d7
+	bhs.b	.x2
+
+	* Go until at the end of given buffer
+	cmp.l	d5,a3
+	blo.w	.ploop
+.x2
+	move.l	d7,d0
+	popm	d1-a6
+	rts
+
+* unknown format
+.what
+	lea	unknown_module_program_error(pc),a1
+	bsr.w	request
+	rts
+
+unknown_module_program_error  dc.b	"Not a module program!",0
+xpk_module_program_error	 dc.b	"Could not load XPK compressed module program!",0
+ even
 
 
 *** Etsii tiedoston nimestä (polku/nimi) pelkän tiedoston nimen alun
@@ -10400,14 +10447,57 @@ rsaveprog
 .cpe2	move.b	(a0)+,(a1)+
 	bne.b	.cpe2
 
-	move.l	_DosBase(a5),a6
 	lea	filename2(a5),a0
+	lea	moduleListHeader(a5),a1
+	bsr exportListToFile
+
+	move.l	req_file2(a5),d0
+	beq.b	.ex
+	move.l	d0,a1
+	move.l	_ReqBase(a5),a6
+	lob	rtFreeRequest
+.ex
+
+	st	hippoonbox(a5)
+	bra.w	resh
+
+.nomods	lea	.lerr(pc),a1
+	bra.w	request
+
+.lerr	dc.b	"No program to save!",0
+ even
+
+
+.tags	dc.l	RTFI_Flags,FREQF_PATGAD
+otag16	dc.l	RT_PubScrName,pubscreen+var_b,0
+
+
+prgheader	dc.b	"HiPPrg",10,10	* headeri
+headere
+
+
+filereqtitle2
+	dc.b	"Load module program",0
+filereqtitle3
+	dc.b	"Save module program",0
+ even
+
+* in:
+*  a0 = filename
+*  a1 = list
+exportListToFile
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"Exporting module list to %s",0
+ endif
+	move.l	a1,a4
+	move.l	_DosBase(a5),a6
 	move.l	#1006,d2
 	move.l	a0,d1
 	lob	Open
 
 	move.l	d0,d6
-	beq.b	.openerr	
+	beq.b	.openError	
 
 	move.l	d6,d1
 	lea	prgheader(pc),a0
@@ -10415,13 +10505,10 @@ rsaveprog
 	moveq	#headere-prgheader,d3
 	lob	Write
 
-	move.l	modamount(a5),d7
-	subq.l	#1,d7
-	lea	moduleListHeader(a5),a4
-
 .saveloop
+	* Get next and test for end
 	TSTNODE	a4,a3
-	beq.b	.loppu			* loppuivatko modit??
+	beq.b	.exit
 	move.l	a3,a4
 
 	lea	-200(sp),sp
@@ -10442,68 +10529,28 @@ rsaveprog
 	lea	200(sp),sp
 
 	cmp.l	d3,d0
-	bne.b	.ERROR
-
-	;dbf	d7,.saveloop
-	subq.l	#1,d7 
-	bpl.b	.saveloop
-
-.loppu
+	bne.b	.writeError
+	bra.b	.saveloop
+	
+.exit
 	move.l	d6,d1
-	beq.b	.x1
+	beq.b	.x
 	lob	Close
+.x	
+	rts
 
-.x1	move.l	req_file2(a5),d0
-	beq.b	.ex
-	move.l	d0,a1
-	move.l	_ReqBase(a5),a6
-	lob	rtFreeRequest
-
-.ex
-	st	hippoonbox(a5)
-	bra.w	resh
-
-
-.ERROR
+.writeError
 	lea	.err(pc),a1
 	bsr.w	request
-	bra.b	.loppu
+	bra.b	.exit
 
-	
-
-.openerr
+.openError
 	lea	openerror_t(pc),a1
 	bsr.w	request
-	bra.b	.x1
+	bra.b	.exit
 
-.nomods	lea	.lerr(pc),a1
-	bra.w	request
-
-.lerr	dc.b	"No program to save!",0
-.err	dc.b	"Write error!",0
+.err	dc.b	"Error while writing module program!",0
  even
-
-.tags	dc.l	RTFI_Flags,FREQF_PATGAD
-otag16	dc.l	RT_PubScrName,pubscreen+var_b,0
-
-
-prgheader	dc.b	"HiPPrg",10,10	* headeri
-headere
-
-
-filereqtitle2
-	dc.b	"Load module program",0
-filereqtitle3
-	dc.b	"Save module program",0
- even
-
-
-
-
-
-
-
-
 
 *******************************************************************************
 * Komentojono
