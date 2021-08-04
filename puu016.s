@@ -2941,6 +2941,14 @@ exit
 	DPRINT "Hippo is exiting",666
 	bsr	setMainWindowWaitPointer
 
+	lea	.exmsg(pc),a0
+	moveq	#102+WINX,d0
+	bsr.w	printbox
+	bra.b	.exmsg2
+.exmsg dc.b	"Exiting...",0
+ even
+.exmsg2
+
 * poistetaan loput prosessit...
 
 
