@@ -5511,6 +5511,16 @@ buttonspressed
 	tst.l	(a2) 
 	bne.b	.actionLoop
 
+	* no RMB actions found
+
+	* Experimental RMB markline
+	bsr	markline
+	beq.b	.nothingMarked
+	rts
+
+.nothingMarked
+	* Zip Window is next
+
 .nowindow
 
 	tst.b	uusikick(a5)
@@ -5527,9 +5537,6 @@ buttonspressed
 
 .leftButtonDownAction
 
-;	tst	modamount(a5)
-;	beq.w	returnmsg
-
 * jos oli lootan p‰‰ll‰ niin avataan info ikkuna!
 	move	mousex(a5),d0
 	move	mousey(a5),d1
@@ -5544,6 +5551,8 @@ buttonspressed
 	blo.b	.x
 	cmp	#30+WINY,d1
 	blo.b	.yea
+
+	* mouse not on top of info box, try marking files
 
 .x	bsr.w	markline		* merkit‰‰n modulenimi
 	rts
@@ -16412,24 +16421,33 @@ putnu	ext.l	d0
 
 markline
 	tst	boxsize(a5)
-	bne.b	.m
-	rts
-.m
+	beq.b	.out
+
 	move	mousex(a5),d0
 	move	mousey(a5),d1
 	sub	windowleft(a5),d0
 	sub	windowtop(a5),d1	* suhteutus fonttiin
 	
 	cmp	#30+WINX,d0		* onko tiedostolistan p‰‰ll‰?
-	blo.w	.out
+	blo.b	.out
 	cmp	#251+WINX,d0
-	bhi.w	.out
+	bhi.b	.out
 	cmp	#63+WINY,d1
-	blo.w	.out
+	blo.b	.out
 	move	#126+WINY,d2
 	add	boxy(a5),d2
 	cmp	d2,d1
-	bhi.w	.out
+	bhi.b	.out
+	bsr.b	.doMark
+	* something marked
+	moveq	#1,d0
+	rts
+.out  
+	* nothing marked
+	moveq	#0,d0 
+	rts
+
+.doMark
 
 	sub	#63+WINY,d1
 	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
@@ -16489,7 +16507,7 @@ markline
 .double
 	bsr.w	showNamesNoCentering
 	bsr.w	reslider
-.out	rts
+	rts
 
 * Highlight line by xorring/complementing it
 * Highlight is cleared by doing the same operation again on the same line.
