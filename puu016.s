@@ -2142,9 +2142,6 @@ lelp
 
 
 
-
-
-
 	tst.b	uusikick(a5)
 	beq.w	.ropp
 
@@ -2292,6 +2289,16 @@ lelp
 	lea	starredListHeader(a5),a0
 	NEWLIST a0
 
+	lea	.startingMsg(pc),a0
+	moveq	#102+WINX,d0
+	bsr.w	printbox
+	bra.b	.startingMsg2
+.startingMsg dc.b "Starting...",0
+ even
+.startingMsg2
+
+
+
 	jsr	loadkeyfile		* ladataan key-file
 
 
@@ -2428,6 +2435,9 @@ lelp
 
 	bsr.w	inforivit_clear
 
+
+	jsr		importStarredModulesFromDisk
+
 	DPRINT	"Loading group",1
 
 	tst.b	groupmode(a5)			* ladataanko playergrouppi?
@@ -2449,8 +2459,6 @@ lelp
 	;jsr	get_mline
 
 .purr
-
-
 
 
 	pushpea	ch1(a5),hippoport+hip_PTch1(a5)
@@ -2945,6 +2953,8 @@ exit
 	DPRINT "Hippo is exiting",666
 	bsr	setMainWindowWaitPointer
 
+	
+
 	lea	.exmsg(pc),a0
 	moveq	#102+WINX,d0
 	bsr.w	printbox
@@ -2952,6 +2962,8 @@ exit
 .exmsg dc.b	"Exiting...",0
  even
 .exmsg2
+
+	jsr		exportStarredModulesToDisk
 
 * poistetaan loput prosessit...
 
@@ -10185,7 +10197,7 @@ rlpg
 
 .openerr
 	move	#1,a4			* lippu
-	lea	openerror_t(pc),a1
+	lea	openerror_t,a1
 	bsr.w	request
 	bra.b	.x1
 
@@ -10453,7 +10465,7 @@ rsaveprog
 
 	lea	filename2(a5),a0
 	lea	moduleListHeader(a5),a1
-	bsr exportListToFile
+	bsr exportModuleProgramToFile
 
 	move.l	req_file2(a5),d0
 	beq.b	.ex
@@ -10489,7 +10501,7 @@ filereqtitle3
 * in:
 *  a0 = filename
 *  a1 = list
-exportListToFile
+exportModuleProgramToFile
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"Exporting module list to %s",0
@@ -16971,6 +16983,78 @@ freeStarredList
 
 .listFreed
 	rts
+
+importStarredModulesFromDisk
+	DPRINT	"importStarredModulesFromDiskStarred",1
+
+	lea	starredModuleFileName(pc),a0
+	move.l	a0,d1
+	move.l	#1005,d2
+	lore 	Dos,Open
+	move.l	d0,d4
+	beq.b	.error
+
+	move.l	d4,d1		* figure out file length
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d4,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* which is this
+
+	move.l	d4,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek	
+
+	move.l	d5,d0		* get some mem
+	moveq	#MEMF_PUBLIC,d1
+	bsr.w	getmem
+	move.l	d0,d6
+	beq.b	.error 
+
+	move.l	d4,d1		* file
+	move.l	d6,d2		* destination
+	move.l	d5,d3		* pituus
+	lob	Read
+	* ignore errors here
+
+.error
+	move.l	d4,d1
+	beq.b	.noClose
+	lore	Dos,Close
+.noClose
+	tst.l	d6
+	beq.b	.noData
+
+	lea starredListHeader(a5),a2
+	move.l	d6,a3			* start of buffer	
+	lea	(a3,d5.l),a4	* end of buffer
+	bsr	importModuleProgramFromData
+	DPRINT 	"Imported %ld starred files",12
+
+	move.l	d6,a0
+	bsr	freemem
+.noData
+
+	rts
+
+exportStarredModulesToDisk
+	DPRINT	"exportStarredModulesToDisk",1
+	lea	starredListHeader(a5),a0
+	IFEMPTY a0,.isEmpty
+
+	lea	starredModuleFileName(pc),a0
+	lea	starredListHeader(a5),a1
+	bsr exportModuleProgramToFile
+.isEmpty
+	rts
+
+starredModuleFileName
+	dc.b	"S:HippoStarredModules.prg",0
+ even
 
 logStarredList
  if DEBUG
@@ -24064,21 +24148,21 @@ remarctemp
 	lea	-200(sp),sp
 	move.l	sp,a1
 	lea	.del1(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 
 	lea	arcdir(a5),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	cmp.b	#':',-1(a1)
 	beq.b	.nar
 	move.b	#'/',(a1)+
 .nar	
 	lea	tdir(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	lea	.del2(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 
 	move.l	sp,d1
 	moveq	#0,d2
