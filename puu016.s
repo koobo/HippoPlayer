@@ -3494,14 +3494,14 @@ print3	pushm	all
 printBold
 	pushm	d0-d2/a0-a2/a6
 	move.l	rastport(a5),a1
-	moveq	#FSF_BOLD,d0		* enable bold bit
-	moveq	#FSF_BOLD,d1		* mask of bits to change
+	moveq	#FSF_BOLD|FSF_ITALIC,d0		* enable bold bit
+	moveq	#FSF_BOLD|FSF_ITALIC,d1		* mask of bits to change
 	lore	GFX,SetSoftStyle
 	popm	d0-d2/a0-a2/a6
 	bsr.b	print
 	move.l	rastport(a5),a1
 	moveq	#0,d0			* disable bold bit
-	moveq	#FSF_BOLD,d1		* mask of bits to change
+	moveq	#FSF_BOLD|FSF_ITALIC,d1		* mask of bits to change
 	lore	GFX,SetSoftStyle
 	 
 	rts
@@ -15175,7 +15175,7 @@ shn
 	sub.l   d7,d1
 	move.l	d7,d2
 
-.rcr	bsr.b	.donames
+.rcr	bsr.w	doPrintNames
 	bra.b	.huh2
 
 .nomods	
@@ -15199,12 +15199,13 @@ shn
 
 .all
 .neen
+	* clear and print all names
 	bsr.w	clearbox
 
 	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	boxsize(a5),d2
-	bsr.b	.donames
+	bsr.b	doPrintNames
 	bra.b	.huh2
 
 
@@ -15228,10 +15229,28 @@ shn
 	move.l	_GFXBase(a5),a6
 	jmp	_LVOClipBlit(a6)
 
+
+
+.unmark
+	tst.b	dontmark(a5)
+	bne.b	.huh22
+
+	move.l	chosenmodule2(a5),d0
+	bmi.b	.huh22
+	sub.l	firstname2(a5),d0
+	bmi.b	.huh22
+	push	d7
+	move.l	chosenmodule(a5),-(sp)
+	move.l	chosenmodule2(a5),chosenmodule(a5)
+	bsr.w	unmarkit
+	move.l	(sp)+,chosenmodule(a5)
+	pop	d7
+.huh22	rts
+
 * d0 = alkurivi
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien m‰‰r‰
-.donames
+doPrintNames
 ;	DPRINT  "shownames obtain list",1
 	bsr.w  obtainModuleList
 	lea	moduleListHeader(a5),a4	
@@ -15239,12 +15258,14 @@ shn
 ;	DPRINT	".doNames %ld",31
 
 	* d0 = module index
+	* d1 = line number to print to
+	* d2 = number of lines to print
 	* find out the corresponding list entry
 	move.l	d0,d3 		* keep track of the module index as well here
 	move.l	d1,d4		* move this out of the way
 	subq.l	#1,d0
 	bmi.b	.baa
-.luuppo
+;.luuppo
 ;	TSTNODE	a4,a3
 ;	beq.w	.lop
 ;	move.l	a3,a4
@@ -15266,8 +15287,9 @@ shn
 
 	move	d4,d6
 	lsl	#3,d6
-	add	#83+WINY-14,d6		* Y
+	add	#83+WINY-14,d6		* turn line number into a Y-coordinate
 
+	* loop to print d5 lines 
 .looppo
 	* a4=current node
 	* a3=next node
@@ -15327,8 +15349,14 @@ shn
 	moveq	#33+WINX,d0
 	move.l	d6,d1
 	addq.l	#8,d6
-	;bsr.w	print
+
+	tst.b	l_star(a3)
+	bne.b	.starred
+	bsr.w	print
+	bra.b	.notStarred
+.starred
 	bsr		printBold
+.notStarred
 
 	* Set ordinary colors if divider was previously printed
 	tst.b	d7
@@ -15351,22 +15379,6 @@ shn
 	bsr.w 	releaseModuleList
 	rts
 	
-
-.unmark
-	tst.b	dontmark(a5)
-	bne.b	.huh22
-
-	move.l	chosenmodule2(a5),d0
-	bmi.b	.huh22
-	sub.l	firstname2(a5),d0
-	bmi.b	.huh22
-	push	d7
-	move.l	chosenmodule(a5),-(sp)
-	move.l	chosenmodule2(a5),chosenmodule(a5)
-	bsr.w	unmarkit
-	move.l	(sp)+,chosenmodule(a5)
-	pop	d7
-.huh22	rts
 
 
 ***** Katkaisee prefixin nimest‰ a0:ssa
@@ -16602,7 +16614,38 @@ marklineRightMouseButton
 .doMark
 	moveq	#0,d0
 	move	d1,d0
+	move.l	d0,d3
 	DPRINT	"RMB mark on line %ld",1
+
+	* To get node index add index of the first visible
+	* item
+	add.l	firstname(a5),d0
+	move.l	d0,d4
+	* Get the actual node into a0
+	bsr	getListNode
+	beq.b	.notFound
+
+	* Toggle star status
+	eor.b	#1,l_star(a0)
+ 
+	move.l	d4,d0
+	* d0 contains the node index
+	move	d3,d1 	* target y-line
+	moveq	#1,d2   * just do one line
+	push 	d3
+	bsr	doPrintNames
+	pop 	d3
+
+	* see if this line happened to be chosen already.
+	* in this case the highlight should be restored.
+	cmp.l	 markedline(a5),d3	
+	bne.b	.different
+	bsr	markit
+.different
+	rts	
+
+.notFound
+	DPRINT	"No node found here",2
 	rts
 
 *********************************
@@ -16632,8 +16675,6 @@ listChanged
 getListNode
 	DPRINT	"getListNode %ld",1
 
-	* TODO: bounds check
-	;XEX
 	tst.l	modamount(a5)
 	beq.b	.out
 	cmp.l 	modamount(a5),d0
