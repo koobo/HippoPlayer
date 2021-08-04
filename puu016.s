@@ -431,13 +431,13 @@ windowtop	rs	1		* ikkunoiden eisysteemialueen yl‰reuna
 windowright	rs	1
 windowleft	rs	1
 windowbottom	rs	1
-windowtopb	rs	1
+windowtopb	rs	1		* sc_BorTop
 gotscreeninfo	rs.b	1
 infolag		rs.b	1 * mit‰ n‰ytet‰‰n infoikkunassa: 0=sample, ~0=about
 
 infotaz		rs.l	1 * infoikkunan datan osoite
 
-windowtop2	rs	1
+;windowtop2	rs	1
 windowleft2	rs	1
 windowbottom2	rs	1
 
@@ -1995,7 +1995,7 @@ lelp
 	clr	(a0)
 	move.l	topazbase(a5),fontbase(a5)
 
-	bra.b	.koh
+	bra.w	.koh
 
 .poh
 
@@ -3559,7 +3559,7 @@ openw
 	bne.b	.x
 	st	win(a5)
 	clr.b	kokolippu(a5)		* pieni -> iso
-	bsr.b	avaa_ikkuna
+	bsr.w	avaa_ikkuna
 	bne.b	.x
 	jsr	whatgadgets2
 	moveq	#0,d0
@@ -3779,6 +3779,12 @@ getscreeninfo
 	move.b	sc_WBorLeft(a0),windowleft+1(a5)
 	move.b	sc_WBorRight(a0),windowright+1(a5)
 
+	moveq	#0,d0
+	move.b	sc_BarHeight(a0),d0
+	moveq	#0,d1
+	move.b	sc_WBorTop(a0),d1
+	DPRINT	"sc_BarHeight=%ld sc_WBorTop=%ld",30
+
 	move	windowtopb(a5),d0
 	add	d0,windowtop(a5)
 
@@ -3933,10 +3939,11 @@ getscreeninfo
 *** S‰‰det‰‰n ikkunat ja gadgetit otsikkopalkin koon mukaan
 
 .olde
+	; windowtop2(a5) is never set anywhere	
 	move	windowtop(a5),d0
-	move	windowtop2(a5),d1
-	move	d0,windowtop2(a5)
-	sub	d1,d0			* ERO!
+	;move	windowtop2(a5),d1
+	;move	d0,windowtop2(a5)
+	;sub	d1,d0			* ERO!
 
 * nw_TopEdge = 2
 * nw_Width   = 4
@@ -7491,7 +7498,7 @@ printbox
 SORT_ELEMENT_LENGTH = 4+24
 
 rsort
-	* Let's not sort a list with 1 or 2 modules, that would be silly I guess.
+	* Let's not sort a list with 1 module, that would be silly I guess.
 	cmp.l	#2,modamount(a5)
 	bhs.b	.so
 	rts
@@ -7898,7 +7905,6 @@ getcurrent
 *    d0 = 1 if data available
 *    a3 = list node pointer
 getcurrent2
-;XAX
 	bsr getListNode
 	move.l	a0,a3
 	rts
@@ -16827,7 +16833,7 @@ flushWindowMessages
 	rts
 .loop
 	move.l	d2,a0
-	* Window may now have an user port, eg. if no IDCMP set 	
+	* Window may not have a user port, eg. if no IDCMP set 	
 	move.l	wd_UserPort(a0),d0
 	beq.b	.exit
 	move.l	d0,a0
@@ -16838,9 +16844,8 @@ flushWindowMessages
 	lob	ReplyMsg
 	bra.b	.loop
 
-*******************************************************************************
 
-.ex	rts
+*******************************************************************************
 * Lataa keyfilen
 *******
 
