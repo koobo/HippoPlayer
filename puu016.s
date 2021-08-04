@@ -16700,25 +16700,26 @@ getListNodeCached
 	bpl.b  	.forward2
 	bra.b	.backward2
 
-
-.backward
-	PRED   a0,a0
-	tst.l	LN_PRED(a0)
-	beq.b	.x1
-	addq.l 	#1,d0
-	bne.b 	.backward
-	move.l a0,cachedNode(a5)
+; These versions support 16-bit jumps
+;.backward
+;	PRED   a0,a0
+;	tst.l	LN_PRED(a0)
+;	beq.b	.x1
+;	addq.l 	#1,d0
+;	bne.b 	.backward
+;	move.l a0,cachedNode(a5)
 .x	rts
+;
+;.forward 
+;	SUCC    a0,a0
+;	tst.l	(a0)
+;	beq.b	.x1
+;	subq.l	#1,d0
+;	bne.b	.forward
+;.x1	move.l 	a0,cachedNode(a5)
+;	rts
 
-.forward 
-	SUCC    a0,a0
-	tst.l	(a0)
-	beq.b	.x1
-	subq.l	#1,d0
-	bne.b	.forward
-.x1	move.l 	a0,cachedNode(a5)
-	rts
-
+; These allow jump to be over 16 bits
 .backward2 
 	neg.l 	d0
 	subq.l	#1,d0
