@@ -2740,7 +2740,7 @@ msgloop
 	beq.b	.wow
 	push	d0
 	bsr.w	lootaan_aika
-	bsr.w	lootaan_kello
+	jsr	lootaan_kello
 ;	bsr.w	lootaan_muisti
 	jsr	lootaan_nimi
 	; No need to call this every refresh signal, it is handled via RMB 
@@ -9493,7 +9493,7 @@ filereq_code
 * addaa/inserttaa listaan a3:ssa olevan noden
 addfile	
 	cmp.l	#MAX_MODULES,modamount(a5)
-	bhs.b	.r
+	bhs.b	.exit
 
 ;  ifne DEBUG
 ; 	DPRINT2 "Adding->",1
@@ -9505,19 +9505,23 @@ addfile
 	move.l	(a5),a6
 	lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
 	move.l	a3,a1
+
 	tst.b	filereqmode(a5)		* onko add vai insert?
 	bne.b	.insert
 
- ifeq fprog
-	jmp	_LVOAddTail(a6)
- else
-	lob	AddTail
-	bra	printfilewin
- endc
+ 	jsr	_LVOAddTail(a6)
 
+	move.l	a3,a0
+	bsr	updateStarredStatus
+	rts
+ 
 .insert	move.l	fileinsert(a5),a2	* mink‰ filen per‰‰n insertataan
 	lob	Insert
-.r	rts
+
+	move.l	a3,a0
+	bsr	updateStarredStatus
+.exit
+	rts
 
 
 
@@ -10262,6 +10266,12 @@ loadprog
 
 importModuleProgramFromData
 	pushm	d1-a6
+ if DEBUG
+	move.l	a3,d0 
+	move.l	a4,d1
+	DPRINT	"importModuleProgramFromData %lx %lx",1
+ endif
+
 	moveq	#0,d7 		* count
 	
 	move.l	a3,d0
@@ -10302,7 +10312,10 @@ importModuleProgramFromData
 .new1
 
 	move.l	a3,a0
-.r23	cmp.b	#10,(a0)+
+.r23	
+	cmp.l	d5,a0
+	bhs.w	.x2		* upper bound check
+	cmp.b	#10,(a0)+
 	bne.b	.r23
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
@@ -10352,6 +10365,13 @@ importModuleProgramFromData
 	move.l	a4,a0
 	lore	Exec,AddTail
 	addq.l	#1,d7
+
+	move.l	a2,a0
+
+	* protect a3, which is killed here
+	push	a3
+	bsr	updateStarredStatus
+	pop 	a3
 
 	cmp.l	#MAX_MODULES,d7
 	bhs.b	.x2
@@ -10628,6 +10648,9 @@ komentojono
 	move.l	a2,a1
 	lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
 	lore	Exec,AddTail
+
+	move.l	a2,a0
+	bsr	updateStarredStatus
 
 	addq.l	#1,modamount(a5)	* m‰‰r‰++
 
@@ -16893,7 +16916,7 @@ addStarredModule
 
 	move.l	a0,a3
 	* set star flag
-	move.b	#1,l_star(a3)
+	st		l_star(a3)
 	* copy this node and add to star list
 
 	* get length of memory region, it's before the actual data
@@ -16920,8 +16943,8 @@ addStarredModule
 	* Append to list
 	move.l	a4,a1
 	lea	starredListHeader(a5),a0
-	lob		AddTail
-	bsr		logStarredList
+	lob	AddTail
+	bsr	logStarredList
 .noMem
 .exit
 	rts
@@ -16938,20 +16961,9 @@ removeStarredModule
 	pop  d0
 	DPRINT	"removeStarredModule %s",1
  endif
-
 	* Find matching l_filename from star list
-	lea	starredListHeader(a5),a1
-.loop
-	TSTNODE	a1,a1
+	bsr	findStarredModule
 	beq.b	.exit
-	lea		l_filename(a0),a2
-	lea		l_filename(a1),a3
-.compare
-	cmpm.b	(a2)+,(a3)+
-	bne.b	.different
-	* matches so far, loop until zero termination
-	tst.b	(a2)
-	bne.b	.compare
 * no differences found
 	move.l	a1,d2
 	* Remove a1 from list 
@@ -16960,13 +16972,35 @@ removeStarredModule
 	* Free associated memory
 	move.l	d2,a0
 	bsr 	freemem
-	bra.b	.exit
-
-.different
-	* this one is not a match, grab the next one
-	bra.b	.loop
 .exit
 	bsr	logStarredList
+	rts
+
+* in:
+*   a0 = node to find by matching filename
+* out:
+*   a1 = starred node that matches
+*   d0 = 1 when match, 0, when no match
+* destroys:
+*   d0,a2,a3
+findStarredModule
+	* Find matching l_filename from star list
+	lea	starredListHeader(a5),a1
+.loop
+	TSTNODE	a1,a1
+	beq.b	.notFound
+	lea	l_filename(a0),a2
+	lea	l_filename(a1),a3
+.compare
+	* if name differs get the next one
+	cmpm.b	(a2)+,(a3)+
+	bne.b	.loop
+	* matches so far, loop until zero termination
+	tst.b	(a2)
+	bne.b	.compare
+* no differences found, it is a match
+	moveq	#1,d0
+.notFound
 	rts
 
 freeStarredList
@@ -16986,6 +17020,8 @@ freeStarredList
 
 importStarredModulesFromDisk
 	DPRINT	"importStarredModulesFromDiskStarred",1
+	
+	moveq	#0,d6
 
 	lea	starredModuleFileName(pc),a0
 	move.l	a0,d1
@@ -17038,23 +17074,29 @@ importStarredModulesFromDisk
 	move.l	d6,a0
 	bsr	freemem
 .noData
-
+	bsr	logStarredList
 	rts
 
 exportStarredModulesToDisk
 	DPRINT	"exportStarredModulesToDisk",1
-	lea	starredListHeader(a5),a0
-	IFEMPTY a0,.isEmpty
-
 	lea	starredModuleFileName(pc),a0
 	lea	starredListHeader(a5),a1
 	bsr exportModuleProgramToFile
-.isEmpty
 	rts
 
 starredModuleFileName
 	dc.b	"S:HippoStarredModules.prg",0
  even
+
+* in:
+*  a0 = list node
+updateStarredStatus
+	bsr	findStarredModule
+	beq.b	.exit
+	* a matching starred module was found, set flag 
+	st	l_star(a0)
+.exit
+	rts
 
 logStarredList
  if DEBUG
@@ -18268,7 +18310,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	32(sp),sp
 
 	bsr.w	.putcomment2
@@ -18474,7 +18516,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .fraz	move.l	infotaz(a5),a0
 	cmp.l	#about_t,a0
 	beq.b	.fr0z
-	bsr.w	freemem
+	jsr	freemem
 .fr0z	clr.l	infotaz(a5)
 	rts
 
