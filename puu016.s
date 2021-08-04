@@ -904,6 +904,8 @@ filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 loading		rs.b	1		* ~0: lataus meneill‰‰n
 loading2	rs.b	1		* ~0: filejen addaus meneill‰‰n
 							* TODO: not used, remove?
+* List of starred modules
+starredListHeader	rs.b 	MLH_SIZE
 
 ** InfoWindow kamaa
 infosample	rs.l	1		* samplesoittajan v‰liaikaisalue
@@ -2287,6 +2289,8 @@ lelp
 
 	lea	moduleListHeader(a5),a0		* Uusi lista
 	NEWLIST	a0
+	lea	starredListHeader(a5),a0
+	NEWLIST a0
 
 	jsr	loadkeyfile		* ladataan key-file
 
@@ -2730,7 +2734,7 @@ msgloop
 	bsr.w	lootaan_aika
 	bsr.w	lootaan_kello
 ;	bsr.w	lootaan_muisti
-	bsr.w	lootaan_nimi
+	jsr	lootaan_nimi
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
 	;bsr.w	zipwindow
@@ -2996,6 +3000,8 @@ exit
 	bsr.w	rbutton4b		* eject /wo fade
 	bsr.w	freelist		* vapautetaan lista
 	jsr	rem_ciaint
+
+	jsr	freeStarredList
 
 	tst.b	vbsaatu(a5)
 	beq.b	.nbv
@@ -3272,7 +3278,7 @@ i_nowindow	=	3
 flush_messages
 	bsr.b	.fl
 	move.l	windowbase(a5),a0 
-	bra		flushWindowMessages
+	jmp		flushWindowMessages
 
 * Flush port messages too
 * Hippoportin messaget pois
@@ -3502,14 +3508,14 @@ print3	pushm	all
 printBold
 	pushm	d0-d2/a0-a2/a6
 	move.l	rastport(a5),a1
-	moveq	#FSF_BOLD|FSF_ITALIC,d0		* enable bold bit
-	moveq	#FSF_BOLD|FSF_ITALIC,d1		* mask of bits to change
+	moveq	#FSF_BOLD,d0	* enable bold bit
+	moveq	#FSF_BOLD,d1	* mask of bits to change
 	lore	GFX,SetSoftStyle
 	popm	d0-d2/a0-a2/a6
 	bsr.b	print
 	move.l	rastport(a5),a1
-	moveq	#0,d0			* disable bold bit
-	moveq	#FSF_BOLD|FSF_ITALIC,d1		* mask of bits to change
+	moveq	#0,d0		* disable bold bit
+	moveq	#FSF_BOLD,d1	* mask of bits to change
 	lore	GFX,SetSoftStyle
 	 
 	rts
@@ -5520,15 +5526,14 @@ buttonspressed
 	bne.b	.actionLoop
 
 	* no RMB actions found
-
-	* Experimental RMB markline
+	* try line marking
 	bsr	marklineRightMouseButton
 	beq.b	.nothingMarked
 	rts
 
 .nothingMarked
-	* Zip Window is next
-
+	* Last RMB action,
+	* Zip Window 
 .nowindow
 
 	tst.b	uusikick(a5)
@@ -7506,7 +7511,7 @@ gadgetsup
 	dr	rsort		* sort
 
 
-
+* Print some text into the filebox
 ** a0 = teksti, d0 = x-koordinaatti
 printbox
 	tst.b	win(a5)
@@ -9844,7 +9849,6 @@ freelist
 	DPRINT  "freelist release list",2
 	bsr.w		releaseModuleList
 	rts
-
 
 
 *******************************************************************************
@@ -16680,9 +16684,18 @@ marklineRightMouseButton
 	bsr	getListNode
 	beq.b	.notFound
 
+	isListDivider  l_filename(a0)
+	beq.b	.notFile
+
 	* Toggle star status
-	eor.b	#1,l_star(a0)
- 
+	bsr	isStarredModule
+	bne.b	.wasStarred
+	bsr	addStarredModule
+	bra.b	.wasNotStarred
+.wasStarred
+	bsr	removeStarredModule
+.wasNotStarred
+
 	move.l	d4,d0
 	* d0 contains the node index
 	move	d3,d1 	* target y-line
@@ -16698,9 +16711,9 @@ marklineRightMouseButton
 	bsr	markit
 .different
 	rts	
-
+.notFile
 .notFound
-	DPRINT	"No node found here",2
+	DPRINT	"Not starring this line",2
 	rts
 
 *********************************
@@ -16843,6 +16856,135 @@ clearCachedNode
 	clr.l	cachedNode(a5)	
 	rts
 
+
+********************************
+* Starred module list handling
+********************************
+
+* in:
+*  a0 = module list node
+isStarredModule
+	tst.b	l_star(a0)
+	rts
+
+* in:
+*  a0 = module list node
+addStarredModule
+	bsr	isStarredModule
+	bne.b .exit
+
+ if DEBUG
+	pea	l_filename(a0)
+	pop  d0
+	DPRINT	"addStarredModule %s",1
+ endif
+
+	move.l	a0,a3
+	* set star flag
+	move.b	#1,l_star(a3)
+	* copy this node and add to star list
+
+	* get length of memory region, it's before the actual data
+	move.l	-4(a3),d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	bsr.w	getmem
+	beq.b	.noMem
+	move.l	d0,a4
+
+	* Copy node contents
+	move.l	a3,a0
+	move.l	a4,a1
+	move.l	-4(a3),d0
+	lore 	Exec,CopyMem
+
+	* Need to modify l_nameaddr pointer to point to the newly copied path.
+	* Figure out the index to the name-without-path using the original node
+	lea		l_filename(a3),a0
+	sub.l	l_nameaddr(a3),a0
+	
+	add.l	l_filename(a4),a0
+	move.l	a0,l_nameaddr(a4)
+
+	* Append to list
+	move.l	a4,a1
+	lea	starredListHeader(a5),a0
+	lob		AddTail
+	bsr		logStarredList
+.noMem
+.exit
+	rts
+
+* in:
+*  a0 = module list node
+removeStarredModule
+	bsr	isStarredModule
+	beq.w	.exit
+	clr.b	l_star(a0)
+
+ if DEBUG
+	pea	l_filename(a0)
+	pop  d0
+	DPRINT	"removeStarredModule %s",1
+ endif
+
+	* Find matching l_filename from star list
+	lea	starredListHeader(a5),a1
+.loop
+	TSTNODE	a1,a1
+	beq.b	.exit
+	lea		l_filename(a0),a2
+	lea		l_filename(a1),a3
+.compare
+	cmpm.b	(a2)+,(a3)+
+	bne.b	.different
+	* matches so far, loop until zero termination
+	tst.b	(a2)
+	bne.b	.compare
+* no differences found
+	move.l	a1,d2
+	* Remove a1 from list 
+	* Destroys a0, a1
+	REMOVE
+	* Free associated memory
+	move.l	d2,a0
+	bsr 	freemem
+	bra.b	.exit
+
+.different
+	* this one is not a match, grab the next one
+	bra.b	.loop
+.exit
+	bsr	logStarredList
+	rts
+
+freeStarredList
+	move.l	(a5),a6		* execbase
+	lea	starredListHeader(a5),a2
+.loop
+	* a0: list, a1: destroyed, d0: node, or zero
+	move.l	a2,a0
+	lob	RemHead
+	beq.b	.listFreed
+	move.l	d0,a0
+	bsr.w	freemem
+	bra.b	.loop
+
+.listFreed
+	rts
+
+logStarredList
+ if DEBUG
+	DPRINT	"Starred modules:",2
+	lea	starredListHeader(a5),a0
+.l	TSTNODE	a0,a0
+	beq.b	.x
+	lea	l_filename(a0),a1
+	move.l	a1,d0
+	DPRINT	"%s",1
+	bra.b	.l
+.x
+ endif
+	rts
 
 *********************************
 * Tooltip popup
@@ -17083,7 +17225,7 @@ sulje_info
 
 .t	tst	info_prosessi(a5)	* odotellaan
 	beq.b	.tt
-	bsr.w	dela
+	jsr	dela
 	bra.b	.t
 .tt
 	popm	d0/d1/a0/a1/a6
@@ -18080,7 +18222,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .selvis
 ** If we made this far the module information text has been built
-	bsr.w	releaseModuleData
+	jsr	releaseModuleData
 
 **  Karsitaan kummat merkit pois
 	move.l	infotaz(a5),a2
@@ -19865,7 +20007,7 @@ rexxmessage
 
 *** PLAYRAND
 .playrand
-	bra	soitamodi_random
+	jmp	soitamodi_random
 	
 
 *** HIDE
