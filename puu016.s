@@ -144,6 +144,7 @@ check	macro
 	include	graphics/graphics_lib.i
 	include	graphics/rastport.i
 	include graphics/scale.i
+	include	graphics/text.i
 
 ;	include	graphics/rpattr.i
 
@@ -424,7 +425,7 @@ userport2	rs.l	1		*
 rastport3	rs.l	1		* quadrascope
 userport3	rs.l	1		* 
 windowbase3	rs.l	1		* scopes window
-fontbase	rs.l	1
+fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 notifyhandle	rs.l	1		* Screennotifylle
 windowtop	rs	1		* ikkunoiden eisysteemialueen yläreuna
@@ -1146,13 +1147,14 @@ xpl_offs	=	pt_group_start
 *********************************************************************************
 *
 * Tiedostolistan yhden yksikön rakenne
-* Mudule list element
+* Mudule list node element
 *
 
 	rsreset
 			rs.b	MLN_SIZE	* Minimal node 
 l_nameaddr	rs.l	1			* osoitin pelkkään tied.nimeen
 								* address to filename without path
+l_star		rs.b 	1			* star status for this file
 l_filename	rs.b	0			* tied.nimi ja polku alkaa tästä
 								* full path to filename begins at this point
 								* element size is dynamically calculated based on path length.
@@ -2003,7 +2005,10 @@ lelp
 	tst.l	_DiskFontBase(a5)	* onko libbiä?
 	beq.b	.qer
 
-
+ if DEBUG
+	move.l	ta_Name(a0),d0 
+	DPRINT	"Opening font %s",544
+ endif 
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
 	beq.b	.qer		* error?
@@ -3466,6 +3471,8 @@ inputhandler
 
 *******
 * Printti rutiini
+* Text printing. Variants for different target windows.
+* Supports line changes.
 *******
 
 * sPrint = Info-ikkunaan
@@ -3473,7 +3480,7 @@ sprint  pushm	all
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	move.l	srastport(a5),a4
-	bra.b	uup	
+	bra.b	doPrint	
 
 
 * Print3 = Prefs-ikkunaan
@@ -3481,7 +3488,23 @@ print3	pushm	all
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	move.l	rastport2(a5),a4
-	bra.b	uup	
+	bra.b	doPrint	
+
+* Print to mainwindow with bold font style.
+printBold
+	pushm	d0-d2/a0-a2/a6
+	move.l	rastport(a5),a1
+	moveq	#FSF_BOLD,d0		* enable bold bit
+	moveq	#FSF_BOLD,d1		* mask of bits to change
+	lore	GFX,SetSoftStyle
+	popm	d0-d2/a0-a2/a6
+	bsr.b	print
+	move.l	rastport(a5),a1
+	moveq	#0,d0			* disable bold bit
+	moveq	#FSF_BOLD,d1		* mask of bits to change
+	lore	GFX,SetSoftStyle
+	 
+	rts
 
 * Pääikkunaan
 * d0/d1 = x,y
@@ -3496,8 +3519,8 @@ print	add	windowleft(a5),d0
 .e
 	pushm	all
 	move.l	rastport(a5),a4
-uup	
-
+;uup
+doPrint	
 
 	move.l	_GFXBase(a5),a6
 	move.l	a0,a2
@@ -3509,16 +3532,16 @@ uup
 	move	d5,d1
 
 	move.l	a4,a1
-	lob	Move
+	lob	Move			* move drawing point
 	move.l	a4,a1
 	move.l	a2,a0
 
 	moveq	#0,d7
 	moveq	#0,d0
-.plah	addq	#1,d0
+.plah	addq	#1,d0	* find out number of chars to output
 	tst.b	(a2)
 	beq.b	.pog
-	cmp.b	#10,(a2)+
+	cmp.b	#10,(a2)+	* check for line changes
 	bne.b	.plah
 	moveq	#1,d7
 .pog
@@ -3527,7 +3550,7 @@ uup
 
 	tst	d7
 	beq.b	.x
-	addq	#8,d5
+	addq	#8,d5		* next vertical line
 	bra.b	.luup		
 
 .x	popm	all
@@ -12577,7 +12600,7 @@ pru0
 .pr	pushm	all
 	addq	#8,d1
 	move.l	rastport2(a5),a4
-	bra.w	uup	
+	bra.w	doPrint
 
 
 ** Suoritetaan gadgettia vastaava toiminto
@@ -13851,7 +13874,7 @@ purealarm
 
 print3b	pushm	all			* Sitävarten että windowtop/left
 	move.l	rastport2(a5),a4	* arvoja ei lisättäisi kun
-	bra.w	uup			* teksti on jo suhteessa gadgettiin
+	bra.w	doPrint			* teksti on jo suhteessa gadgettiin
 
 
 ******* FKeys
@@ -14997,7 +15020,7 @@ listselector
 
 .print	pushm	all
 	move.l	d7,a4
-	bra.w	uup	
+	bra.w	doPrint	
 
 
 
@@ -15008,7 +15031,10 @@ listselector
 * Writes the filenames into the box
 *******
 
-* 
+* hippoonbox(a5) is a flag that requests the whole list to be redrawn instead
+* of some clever partial refresh that is used when scrolling up and down.
+
+
 showNamesNoCentering
 shownames2
 	moveq	#1,d4		* flag: do not center
@@ -15292,7 +15318,8 @@ shn
 	moveq	#33+WINX,d0
 	move.l	d6,d1
 	addq.l	#8,d6
-	bsr.w	print
+	;bsr.w	print
+	bsr		printBold
 
 	* Set ordinary colors if divider was previously printed
 	tst.b	d7
@@ -16787,7 +16814,7 @@ showTooltipPopup
 
 .print	pushm	all
 	move.l	d7,a4
-	bra.w	uup	
+	bra.w	doPrint
 
 * Tooltip window structure
 .tooltipPopup
