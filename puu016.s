@@ -750,6 +750,7 @@ aika2		rs.l	1
 vanhaaika	rs	1
 ticktack	rs	1	* vb tick count for titlebar refresh
 tooltipTick	rs 	1	* vb tick count for tooltips, counts from positive to 0
+userIdleTick rs  1	* refresh counter updated each ui refresh tick, cleared on mouse
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
 
@@ -2758,6 +2759,7 @@ msgloop
 	move.b	uiRefreshSignal(a5),d3	* p‰ivitet‰‰n...
 	btst	d3,d0
 	beq.b	.wow
+	addq	#1,userIdleTick(a5)
 	push	d0
 	bsr.w	lootaan_aika
 	jsr	lootaan_kello
@@ -2766,6 +2768,15 @@ msgloop
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
 	;bsr.w	zipwindow
+
+	* Try to save starred modules when user has been idle for a while
+	moveq	#0,d0 
+	move	userIdleTick(a5),d0 
+	cmp	#7,d0
+	blo.b	.notIdleEnough
+	jsr	exportStarredModulesWithMessage
+.notIdleEnough
+
 	pop	d0
 
 .wow
@@ -2934,6 +2945,7 @@ msgloop
 .noChangeWindow
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.noRawKey
+	clr	userIdleTick(a5)	
 	bsr	nappuloita
 	bra.b	.idcmpLoop
 .noRawKey	
@@ -2943,6 +2955,7 @@ msgloop
 	* Prop gadgets and tooltips will work with fewer events, too.
 	cmp.l	#IDCMP_MOUSEMOVE,d2
 	bne.b	.noMouseMove
+	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
 	bne.w  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
@@ -2952,11 +2965,13 @@ msgloop
 .noMouseMove
 	cmp.l	#IDCMP_GADGETUP,d2
 	bne.b	.noGadgetUp
+	clr	userIdleTick(a5)	
 	bsr	gadgetsup
 	bra.w	.idcmpLoop
 .noGadgetUp
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.noMouseButtons
+	clr	userIdleTick(a5)	
 	bsr	buttonspressed
 	bra.w	.idcmpLoop
 .noMouseButtons	
@@ -2970,9 +2985,7 @@ exit
 	lea	var_b,a5
 
 	DPRINT "Hippo is exiting",666
-	bsr	setMainWindowWaitPointer
-
-	
+	bsr	setMainWindowWaitPointer	
 
 	lea	.exmsg(pc),a0
 	moveq	#102+WINX,d0
@@ -2981,8 +2994,7 @@ exit
 .exmsg dc.b	"Exiting...",0
  even
 .exmsg2
-
-	jsr		exportStarredModulesToDisk
+	jsr	exportStarredModulesToDisk
 
 * poistetaan loput prosessit...
 
@@ -17005,7 +17017,7 @@ addStarredModule
  endif
 .noMem
 .exit
-	bsr exportStarredModulesWithMessage
+	;bsr exportStarredModulesWithMessage
 	rts
 
 * in:
@@ -17043,7 +17055,7 @@ removeStarredModule
  if DEBUG
 	bsr	logStarredList
  endif
-	bsr exportStarredModulesWithMessage
+	;bsr exportStarredModulesWithMessage
 	rts
 
 * in:
@@ -17156,25 +17168,49 @@ importStarredModulesFromDisk
 
 
 exportStarredModulesWithMessage
+	pushm	all
 	tst.b	favorites(a5)
-	beq.b	.x
+	beq.w	.x
 	tst.b	starredListChanged(a5)
 	beq.b	.x
+
+	* storage for two intuitimes
+	lea	-16(sp),sp
+	lea	(sp),a0 		* secs
+	lea	4(sp),a1		* micros
+	lore	Intui,CurrentTime
+
 	bsr	setMainWindowWaitPointer
 	bsr	freezeMainWindowGadgets
 	lea	.msg(pc),a0
-	moveq	#102+WINX,d0
+	moveq	#68+WINX,d0
 	bsr.w	printbox
 	bra.b	.c
 .msg dc.b	"Saving favorites...",0
  even
 .c	bsr.b	exportStarredModulesToDisk
+	* Wait a while so that user can see something happened
+.wait
+	lea	8(sp),a0		* secs
+	lea	12(sp),a1		* micros
+	lore	Intui,CurrentTime
+	move.l	8(sp),d0
+	sub.l	(sp),d0			* secs elapsed
+	cmp.l	#3,d0			* this many secs at least
+	bhs.b	.done
+	moveq	#10,d1			* wait a bit
+	lore	Dos,Delay
+	bra.b	.wait
+.done
+	lea	16(sp),sp
+
 	bsr	unfreezeMainWindowGadgets
 	bsr	clearMainWindowWaitPointer
 	* request full refresh of filebox:
 	st	hippoonbox(a5)
 	bsr	resh
-.x	rts
+.x	popm	all
+	rts
 	
 exportStarredModulesToDisk
 	DPRINT	"exportStarredModulesToDisk",1
