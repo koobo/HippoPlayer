@@ -17184,7 +17184,7 @@ exportStarredModulesWithMessage
 	tst.b	favorites(a5)
 	beq.w	.x
 	tst.b	starredListChanged(a5)
-	beq.b	.x
+	beq.w	.x
 
 	* storage for two intuitimes
 	lea	-16(sp),sp
@@ -17195,10 +17195,11 @@ exportStarredModulesWithMessage
 	bsr	setMainWindowWaitPointer
 	bsr	freezeMainWindowGadgets
 	lea	.msg(pc),a0
-	moveq	#68+WINX,d0
+	moveq	#68+WINX-20,d0
 	bsr.w	printbox
 	bra.b	.c
-.msg dc.b	"Saving favorites...",0
+.msg 	dc.b  	"Saving favorites to:",10
+	dc.b	"S:HippoFavorites.prg",0
  even
 .c	bsr.b	exportStarredModulesToDisk
 	* Wait a while so that user can see something happened
@@ -18258,7 +18259,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	16(sp),sp
 	popm	d0-a2/a4-a6
 	bsr.w	.lloppu
@@ -32304,9 +32305,11 @@ tooltipList
 	dc.b    "     the moved module",0
 	dc.b	"RMB: Add divider",0
 .prg
-	dc.b	24,2
+	dc.b	24+5,4
 	dc.b	"LMB: Load module program",0
 	dc.b	"RMB: Save module program",0
+	dc.b	"Favorite modules are saved to",0
+	dc.b	34,"S:HippoFavorites.prg",34,0
 .forward
 	dc.b	36,4
 	dc.b	"LMB: Skip module forward",0
