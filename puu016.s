@@ -72,6 +72,10 @@ isListDivider macro
 	cmp.b 	#DIVIDER_MAGIC,\1
 	endm
 
+isStarredModule macro 
+	tst.b 	l_star(\1)
+	endm
+
 iword	macro
 	ror	#8,\1
 	endm
@@ -2667,6 +2671,7 @@ msgloop
 	btst	d3,d0
 	beq.w	.nowow
 	
+
 	* Update title bar with position information
 	push	d0
 	bsr.w	lootaan_pos
@@ -2675,6 +2680,8 @@ msgloop
 	tst.b	prefsexit(a5)		* see if prefs window was just closed
 	beq.b	.noe
 	clr.b	prefsexit(a5)
+
+	jsr	handleStarredModuleConfigChange
 
 	* update filebox size and contents if it has changed
 
@@ -15501,13 +15508,16 @@ doPrintNames
 	move.l	d6,d1
 	addq.l	#8,d6
 
-	tst.b	l_star(a3)
-	bne.b	.starred
-	bsr.w	print
-	bra.b	.notStarred
-.starred
+	* Favorites are bolded, skip this if feature disabled
+	tst.b	favorites(a5)
+	beq.b	.noFav
+	isStarredModule a3
+	beq.b	.noFav
 	bsr		printBold
-.notStarred
+	bra.b	.wasFav
+.noFav
+	bsr.w	print
+.wasFav
 
 	* Set ordinary colors if divider was previously printed
 	tst.b	d7
@@ -16783,7 +16793,7 @@ marklineRightMouseButton
 	beq.b	.notFile
 
 	* Toggle star status
-	bsr	isStarredModule
+	isStarredModule a0 
 	bne.b	.wasStarred
 	bsr	addStarredModule
 	bra.b	.wasNotStarred
@@ -16959,14 +16969,15 @@ clearCachedNode
 
 * in:
 *  a0 = module list node
-isStarredModule
-	tst.b	l_star(a0)
-	rts
+;isStarredModule
+;	tst.b	l_star(a0)
+;	rts
 
 * in:
 *  a0 = module list node
 addStarredModule
-	bsr	isStarredModule
+	;bsr	isStarredModule
+	isStarredModule a0
 	bne.w .exit
 
  if DEBUG
@@ -17023,7 +17034,8 @@ addStarredModule
 * in:
 *  a0 = module list node
 removeStarredModule
-	bsr	isStarredModule
+	;bsr	isStarredModule
+	isStarredModule a0
 	beq.w	.exit
 	clr.b	l_star(a0)
 
@@ -17251,6 +17263,59 @@ logStarredList
 .x
  endif
 	rts
+
+handleStarredModuleConfigChange
+	pushm	all
+
+	tst.b	favorites(a5)
+	beq.w	.noFavs
+	DPRINT	"handleStarredModuleConfigChange: enabled",1
+
+* favorites are enabled.
+* - they may have been enabled ealier, or
+* - they became enabled just now
+
+* if the list is not empty, this likely means favorites was enabled
+* and there is stuff in the list, do nothing
+	lea	starredListHeader(a5),a0
+	IFNOTEMPTY a0,.exit
+
+	DPRINT	"->populating",3
+
+* if list is empty, try importing data
+	bsr	importStarredModulesFromDisk
+* then the current list should be updated to contain star statuses
+	lea	moduleListHeader(a5),a0
+.loop
+	TSTNODE	a0,a0
+	beq.b	.end
+	* find if node a0 is in starred module list
+	bsr.w	findStarredModule
+	* Use the return status to update star status for this node 
+	move.b	d0,l_star(a0)
+	bra.b	.loop
+.end
+	* refresh list
+	bra.w	.refresh
+
+.noFavs
+	DPRINT	"handleStarredModuleConfigChange: disabled",2
+
+	* favorites are not enabled
+	lea	starredListHeader(a5),a0
+	IFEMPTY a0,.exit
+	DPRINT	"->cleaning up",4
+	* there's some stuff in the list, free it and refresh view
+	* l_star need not be cleaned since they won't be displayed
+	* anyway if feature is disabled
+	bsr	freeStarredList
+.refresh
+	st	hippoonbox(a5)
+	bsr	resh
+.exit
+	popm	all 
+	rts
+
 
 *********************************
 * Tooltip popup
@@ -18241,7 +18306,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 
