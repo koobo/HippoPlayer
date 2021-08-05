@@ -508,10 +508,11 @@ prefs_task	rs.l	1		* prefs-prosessi
 
 prefs_signal	rs.b	1		* prefs-signaali
 prefs_signal2	rs.b	1		* prefs-signaali 2
-ownsignal1	rs.b	1	* Kappale soinut
-ownsignal2	rs.b	1	* positionin päivitys
+songHasEndedSignal	rs.b	1	* Kappale soinut
+ownsignal2	rs.b	1	* position update in title bar, prefs update 
 uiRefreshSignal	rs.b	1	* lootan päivitys
 ownsignal4	rs.b	1	* Sulje ja avaa ikkuna
+						* NOTE: this does not seem be used!
 audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
@@ -906,6 +907,9 @@ loading2	rs.b	1		* ~0: filejen addaus meneillään
 							* TODO: not used, remove?
 * List of starred modules
 starredListHeader	rs.b 	MLH_SIZE
+* Flag indicates the list has changed before last save
+starredListChanged	rs.b	1
+			rs.b	1	* pad
 
 ** InfoWindow kamaa
 infosample	rs.l	1		* samplesoittajan väliaikaisalue
@@ -2028,7 +2032,7 @@ lelp
 
 
 	bsr.w	getsignal
-	move.b	d0,ownsignal1(a5)
+	move.b	d0,songHasEndedSignal(a5)
 	bsr.w	getsignal
 	move.b	d0,ownsignal2(a5)
 	bsr.w	getsignal
@@ -2044,6 +2048,11 @@ lelp
 	bsr.w	getsignal
 	move.b	d0,tooltipSignal(a5)
 
+	* Do all kinds of adjustments to gadgets
+
+	* Add the latest "favorites" prefs button to the end of the
+	* list of first page of prefs gadgets
+	move.l	#prefsFavorites,bUu22
 
 	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
 	bsr.b	.hum
@@ -2131,15 +2140,12 @@ lelp
 .nobo1	tst.l	gg_GadgetText(a0)
 	beq.b	.nt2
 
-
 	move.l	gg_GadgetText(a0),a2	* IntuiText
-
- if DEBUG
-	ext.l	d0
-	move.l	it_IText(a2),d1
-	DPRINT	"Gadget id=%ld Text=%s",111	
- endif
-
+;if DEBUG
+;	ext.l	d0
+;	move.l	it_IText(a2),d1
+;	DPRINT	"Gadget id=%ld Text=%s",111	
+;endif
 
 	move.l	#text_attr,it_ITextFont(a2)	* fontti
 	tst.l	it_NextText(a2)
@@ -2149,14 +2155,10 @@ lelp
 .nt2	rts
 
 .eer2
-
-
-
 	tst.b	uusikick(a5)
 	beq.w	.ropp
 
 ** kick 2.0+ asetuksia
-
 
 	lea	slider4,a0			* filebox-slideriin image
 	move.l	#slimage,gg_GadgetRender(a0)
@@ -2445,7 +2447,6 @@ lelp
 
 	bsr.w	inforivit_clear
 
-
 	jsr		importStarredModulesFromDisk
 
 	DPRINT	"Loading group",1
@@ -2594,7 +2595,7 @@ msgloop
 
 
 	moveq	#0,d0
-	move.b	ownsignal1(a5),d1
+	move.b	songHasEndedSignal(a5),d1
 	bset	d1,d0
 	move.b	ownsignal2(a5),d1
 	bset	d1,d0
@@ -2646,7 +2647,7 @@ msgloop
 .ow
 
 * Tuliko omia signaaleja??
-	move.b	ownsignal1(a5),d3
+	move.b	songHasEndedSignal(a5),d3
 	btst	d3,d0
 	beq.b	.nowo
 	pushm	all
@@ -2654,18 +2655,27 @@ msgloop
 	popm	all
 
 
-*** Poituttiinko preffsistä?
+*** Poistuttiinko preffsistä?
+* Prefs window was just closed? Do stuff!
+* Probably this bit handles things like:
+* - move windows to a newly set public screen
+* - update filebox size according to prefs changes
+* - update titlebar information
+* - quite ugly!
 .nowo	move.b	ownsignal2(a5),d3	* päivitetään positionia
 	btst	d3,d0
 	beq.w	.nowow
+	
+	* Update title bar with position information
 	push	d0
 	bsr.w	lootaan_pos
 	pop	d0
 
-
-	tst.b	prefsexit(a5)
+	tst.b	prefsexit(a5)		* see if prefs window was just closed
 	beq.b	.noe
 	clr.b	prefsexit(a5)
+
+	* update filebox size and contents if it has changed
 
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
@@ -2864,8 +2874,7 @@ msgloop
 
 .nwwwq
 
-
-
+	* Note: signal4 does not seem to be triggered anywhere!
 	move.b	ownsignal4(a5),d3
 	btst	d3,d0
 	beq.b	.nowww
@@ -3057,7 +3066,7 @@ exit
 	bsr.w	flush_messages
 	bsr.w	sulje_ikkuna
 
-	move.b	ownsignal1(a5),d0
+	move.b	songHasEndedSignal(a5),d0
 	bsr.w	freesignal
 	move.b	ownsignal2(a5),d0
 	bsr.w	freesignal
@@ -6179,7 +6188,7 @@ signalreceived
 .mododo	
 	* init error, no module to play
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* initti virhe
-	bsr.w	init_error
+	jsr	init_error
 	bra.b	.reet
 
 .err	
@@ -10528,6 +10537,8 @@ filereqtitle3
 	dc.b	"Save module program",0
  even
 
+
+
 * in:
 *  a0 = filename
 *  a1 = list
@@ -10597,6 +10608,7 @@ exportModuleProgramToFile
 
 .err	dc.b	"Error while writing module program!",0
  even
+
 
 *******************************************************************************
 * Komentojono
@@ -10993,6 +11005,7 @@ setprefsbox
 
 
 saveprefs
+	DPRINT	"Prefs save",1
 	move.l	windowbase(a5),d0
 	beq.b	.h
 	move.l	d0,a0
@@ -11421,6 +11434,7 @@ drawtexture
 *******
 
 updateprefs
+	DPRINT	"Update prefs",1
 	pushm	all
 	tst	prefs_prosessi(a5)
 	beq.b	.x
@@ -11930,6 +11944,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	beq.w	.cancelled
 
 ** USE
+	DPRINT	"Prefs use",2
 
 	move.l	mixingrate_new(a5),mixirate(a5)
 	move	tfmxmixingrate_new(a5),tfmxmixingrate(a5)
@@ -12119,6 +12134,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	rts
 
 .cancelled
+	DPRINT	"Prefs cancel",3
 * Pistetään vanhat asennot propgadgetteihin
 ;	move.l	pslider1+gg_SpecialInfo,a0
 ;	move	s3mmixpot_new(a5),pi_HorizPot(a0)
@@ -12725,10 +12741,10 @@ gadgetsup2
 	movem.l	d0-a6,-(sp)
 	move	gg_GadgetID(a2),d0
 
- if DEBUG
-	ext.l	d0
-	DPRINT	"Gadget id=%ld",1
- endif
+ ;if DEBUG
+;	ext.l	d0
+;	DPRINT	"Gadget id=%ld",1
+ ;endif
 
 	add	d0,d0
 	cmp	#20*2,d0
@@ -13843,10 +13859,6 @@ rfavorites
 	not.b	favorites_new(a5)
 pfavorites
 	move.b	favorites_new(a5),d0
- if DEBUG
-	and.l	#$ff,d0
-	DPRINT	"Favorites=%ld",1
- endif 
 	lea	prefsFavorites,a0
 	bra.w	tickaa
 
@@ -16727,6 +16739,9 @@ markit
 	rts
 
 marklineRightMouseButton
+	* Check if feature is enabled in prefs
+	tst.b	favorites(a5)
+	beq.b	.out
 	bsr	 getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
@@ -16773,7 +16788,8 @@ marklineRightMouseButton
 	pop 	d3
 
 	* see if this line happened to be chosen already.
-	* in this case the highlight should be restored.
+	* in this case the highlight should be restored as it was just
+	* wiped away above.
 	cmp.l	 markedline(a5),d3	
 	bne.b	.different
 	bsr	markit
@@ -16939,19 +16955,24 @@ isStarredModule
 *  a0 = module list node
 addStarredModule
 	bsr	isStarredModule
-	bne.b .exit
+	bne.w .exit
 
  if DEBUG
 	pea	l_filename(a0)
 	pop  d0
 	DPRINT	"addStarredModule %s",1
  endif
+	* set star flag
+	st	l_star(a0)
+	
+	* see if for some reason a0 is already in the star list
+	bsr.w	findStarredModule
+	tst.l	d0
+	bne.b	.exit	* bail out if so
 
 	move.l	a0,a3
-	* set star flag
-	st		l_star(a3)
-	* copy this node and add to star list
 
+	* copy this node and add to star list
 	* get length of memory region, it's before the actual data
 	move.l	-4(a3),d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -16967,7 +16988,7 @@ addStarredModule
 
 	* Need to modify l_nameaddr pointer to point to the newly copied path.
 	* Figure out the index to the name-without-path using the original node
-	lea		l_filename(a3),a0
+	lea	l_filename(a3),a0
 	sub.l	l_nameaddr(a3),a0
 	
 	add.l	l_filename(a4),a0
@@ -16977,9 +16998,14 @@ addStarredModule
 	move.l	a4,a1
 	lea	starredListHeader(a5),a0
 	lob	AddTail
+
+	st	starredListChanged(a5)
+ if DEBUG
 	bsr	logStarredList
+ endif
 .noMem
 .exit
+	bsr exportStarredModulesWithMessage
 	rts
 
 * in:
@@ -16994,26 +17020,37 @@ removeStarredModule
 	pop  d0
 	DPRINT	"removeStarredModule %s",1
  endif
+
+.loop
 	* Find matching l_filename from star list
+	* node is in a0
 	bsr	findStarredModule
 	beq.b	.exit
-* no differences found
+	* found matching one, in a1
 	move.l	a1,d2
 	* Remove a1 from list 
 	* Destroys a0, a1
+	push	a0
 	REMOVE
 	* Free associated memory
 	move.l	d2,a0
 	bsr 	freemem
+	pop	a0
+	st	starredListChanged(a5)
+	* search again to find duplicates, although there shouldn't be 
+	bra.b	.loop
 .exit
+ if DEBUG
 	bsr	logStarredList
+ endif
+	bsr exportStarredModulesWithMessage
 	rts
 
 * in:
 *   a0 = node to find by matching filename
 * out:
 *   a1 = starred node that matches
-*   d0 = 1 when match, 0, when no match
+*   d0 = 1 when match, 0 when no match
 * destroys:
 *   d0,a2,a3
 findStarredModule
@@ -17033,7 +17070,9 @@ findStarredModule
 	bne.b	.compare
 * no differences found, it is a match
 	moveq	#1,d0
+	rts
 .notFound
+	moveq	#0,d0
 	rts
 
 freeStarredList
@@ -17052,8 +17091,13 @@ freeStarredList
 	rts
 
 importStarredModulesFromDisk
-	DPRINT	"importStarredModulesFromDiskStarred",1
-	
+	DPRINT	"importStarredModulesFromDisk",1
+	tst.b	favorites(a5)
+	bne.b	.enabled
+	DPRINT	"->disabled in prefs",2
+	rts
+.enabled
+
 	moveq	#0,d6
 
 	lea	starredModuleFileName(pc),a0
@@ -17102,7 +17146,7 @@ importStarredModulesFromDisk
 	move.l	d6,a3			* start of buffer	
 	lea	(a3,d5.l),a4	* end of buffer
 	bsr	importModuleProgramFromData
-	DPRINT 	"Imported %ld starred files",12
+	DPRINT 	"Imported %ld starred files",3
 
 	move.l	d6,a0
 	bsr	freemem
@@ -17110,15 +17154,42 @@ importStarredModulesFromDisk
 	bsr	logStarredList
 	rts
 
+
+exportStarredModulesWithMessage
+	tst.b	favorites(a5)
+	beq.b	.x
+	tst.b	starredListChanged(a5)
+	beq.b	.x
+	bsr	setMainWindowWaitPointer
+	bsr	freezeMainWindowGadgets
+	lea	.msg(pc),a0
+	moveq	#102+WINX,d0
+	bsr.w	printbox
+	bra.b	.c
+.msg dc.b	"Saving favorites...",0
+ even
+.c	bsr.b	exportStarredModulesToDisk
+	bsr	unfreezeMainWindowGadgets
+	bsr	clearMainWindowWaitPointer
+	* request full refresh of filebox:
+	st	hippoonbox(a5)
+	bsr	resh
+.x	rts
+	
 exportStarredModulesToDisk
 	DPRINT	"exportStarredModulesToDisk",1
+	tst.b	favorites(a5)
+	beq.b	.x
+	tst.b	starredListChanged(a5)
+	beq.b	.x
 	lea	starredModuleFileName(pc),a0
 	lea	starredListHeader(a5),a1
-	bsr exportModuleProgramToFile
-	rts
+	bsr 	exportModuleProgramToFile
+	clr.b	starredListChanged(a5)
+.x	rts
 
 starredModuleFileName
-	dc.b	"S:HippoStarredModules.prg",0
+	dc.b	"S:HippoFavorites.prg",0
  even
 
 * in:
@@ -17262,7 +17333,7 @@ showTooltipPopup
 
 .print	pushm	all
 	move.l	d7,a4
-	bra.w	doPrint
+	jmp	doPrint
 
 * Tooltip window structure
 .tooltipPopup
@@ -17476,7 +17547,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	tst.b	gotscreeninfo(a5)
 	bne.b	.joo
-	bsr.w	getscreeninfo
+	jsr	getscreeninfo
 .joo
 
 .urk	lea	swinstruc,a0
@@ -18195,7 +18266,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .jee9a
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	bsr.w	desmsg4
+	jsr	desmsg4
 	bsr.b	.putcomment
 	lea	32(sp),sp
 	bra.w	.selvis
@@ -18375,7 +18446,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	add	#20,d0		* 20 varariviä varalle
 	mulu	#40,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,infotaz(a5)
 	rts
 
@@ -19654,7 +19725,7 @@ intserver
 	* If there is a loading operation going on, let's not signal.
 	tst	loading(a5)	
 	bne.b	.wasLoading
-	move.b	ownsignal1(a5),d1
+	move.b	songHasEndedSignal(a5),d1
 	bsr.w	signalit
 .huh
 .notPlaying
@@ -31972,6 +32043,42 @@ sivu4		include	gadgets/prefs_sivu4.s
 sivu5		include	gadgets/prefs_sivu5.s
 sivu6		include	gadgets/prefs_sivu6.s
 
+* This is the "Favorites" button that belongs to prefs "sivu0" page.
+* It should be the "next gadget" for gadget "bUu22", which is the "autosort" 
+* button :-)
+* I drew the button using the GadEdit tool but after exporting as source
+* the data was not exactly same as the original, creating extra stuff
+* and other odd things, so I copy-pasted the new bit here.
+
+prefsFavorites dc.l 0
+       dc.w 406,121,28,12,3,1,1
+       dc.l prefsFavoritesgr,0,prefsFavoritest,0,0
+       dc.w 0
+       dc.l 0
+prefsFavoritesgr       dc.w 0,0
+       dc.b 2,0,1,3
+       dc.l prefsFavoritesxy,prefsFavoritesgr2
+prefsFavoritesxy       dc.w 0,11
+       dc.w 0,0
+       dc.w 27,0
+prefsFavoritesgr2      dc.w 0,0
+       dc.b 1,0,1,3
+       dc.l prefsFavoritesxy2,0
+prefsFavoritesxy2      dc.w 27,1
+       dc.w 27,11
+       dc.w 1,11
+prefsFavoritest        dc.b 1,0,1,0
+       dc.w -146,2
+       dc.l 0,prefsFavoritestx,prefsFavoritest2
+prefsFavoritestx       dc.b "Favorite modules..",0
+       even
+prefsFavoritest2       dc.b 1,0,1,0
+       dc.w 0,0
+;       dc.l 0,prefsFavoritestx2,0
+       dc.l 0,0,0
+;prefsFavoritestx2      dc.b "",0
+;       even
+
 * Rename the gadgets defined above to something not crazy
 gadgetPlayButton	  	EQU  button1
 gadgetInfoButton		EQU  button2
@@ -32137,6 +32244,7 @@ wreg1
 
  even
 
+* Slider for the module info window, I guess
 gAD1	dc.l 0
 	dc.w 9,14,16,127-13*8,GFLG_GADGHNONE,9,3
 	dc.l gAD1gr,0,0,0,gAD1s
