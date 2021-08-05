@@ -284,7 +284,7 @@ prefs_samplecyber	rs.b	1
 prefs_mpegaqua		rs.b	1
 prefs_mpegadiv		rs.b	1
 prefs_medmode		rs.b	1
-			rs.b	1
+prefs_favorites		rs.b	1
 
 prefs_medrate		rs	1
 
@@ -633,7 +633,7 @@ fontname_new	rs.b	20+1
 early_new	rs.b	1
 prefix_new	rs.b	1
 autosort_new	rs.b	1
-		rs.b	1
+favorites_new	rs.b	1	
 
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -959,7 +959,7 @@ ahi_name	= prefsdata+prefs_ahi_name
 ahi_use		= prefsdata+prefs_ahi_use
 ahi_muutpois	= prefsdata+prefs_ahi_muutpois
 ahi_use_nyt	rs.b	1
-		rs.b	1
+favorites	rs.b	1
 autosort	= prefsdata+prefs_autosort
 
 * audio homman muuttujat
@@ -2106,7 +2106,7 @@ lelp
 	lea	sivu6-sivu5(a1),a1
 	bsr.b	.num
 
-	bra.b	.eer2
+	bra.w	.eer2
 
 
 .num
@@ -2130,7 +2130,17 @@ lelp
 	or	#GFLG_GADGHNONE,gg_Flags(a0)
 .nobo1	tst.l	gg_GadgetText(a0)
 	beq.b	.nt2
+
+
 	move.l	gg_GadgetText(a0),a2	* IntuiText
+
+ if DEBUG
+	ext.l	d0
+	move.l	it_IText(a2),d1
+	DPRINT	"Gadget id=%ld Text=%s",111	
+ endif
+
+
 	move.l	#text_attr,it_ITextFont(a2)	* fontti
 	tst.l	it_NextText(a2)
 	beq.b	.nt2
@@ -10809,7 +10819,7 @@ loadprefs2
 	move.b	prefs_mpegadiv(a0),mpegadiv(a5)
 	move.b	prefs_medmode(a0),medmode(a5)
 	move	prefs_medrate(a0),medrate(a5)
-
+	move.b	prefs_favorites(a0),favorites(a5)
 
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
@@ -11073,6 +11083,7 @@ saveprefs
 	move.b	mpegadiv(a5),prefs_mpegadiv(a0)
 	move.b	medmode(a5),prefs_medmode(a0)
 	move	medrate(a5),prefs_medrate(a0)
+	move.b	favorites(a5),prefs_favorites(a0)
 
 
 	move.l	text_attr+4,prefs_textattr(a0)
@@ -11524,6 +11535,7 @@ prefs_code
 	move.b	mpegadiv(a5),mpegadiv_new(a5)
 	move.b	medmode(a5),medmode_new(a5)
 	move	medrate(a5),medrate_new(a5)
+	move.b	favorites(a5),favorites_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -11972,6 +11984,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	ahi_use_new(a5),ahi_use(a5)
 	move.b	ahi_muutpois_new(a5),ahi_muutpois(a5)
 
+	move.b	favorites_new(a5),favorites(a5)
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
@@ -12540,6 +12553,7 @@ pupdate				* Ikkuna päivitys
 	bsr.w	pearly			* early load
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
+	bsr		pfavorites		* favorites
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -12710,6 +12724,12 @@ pru0
 gadgetsup2
 	movem.l	d0-a6,-(sp)
 	move	gg_GadgetID(a2),d0
+
+ if DEBUG
+	ext.l	d0
+	DPRINT	"Gadget id=%ld",1
+ endif
+
 	add	d0,d0
 	cmp	#20*2,d0
 	bhs.b	.pag
@@ -12772,6 +12792,7 @@ gadgetsup2
 	dr	rearly		* early load
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
+	dr	rfavorites	* favorites
 
 .s1
 *** Sivu1
@@ -13815,6 +13836,18 @@ pdclick
 	;sne	d0
 	move.b	dclick_new(a5),d0
 	lea	eins2,a0
+	bra.w	tickaa
+
+********* Favorite
+rfavorites
+	not.b	favorites_new(a5)
+pfavorites
+	move.b	favorites_new(a5),d0
+ if DEBUG
+	and.l	#$ff,d0
+	DPRINT	"Favorites=%ld",1
+ endif 
+	lea	prefsFavorites,a0
 	bra.w	tickaa
 
 ********* Autosort
@@ -22876,7 +22909,7 @@ loadmodule
 
 	move.l	sp,a0			* ohjelman nimi
 	moveq	#-1,d4			* lippu
-	bsr.w	loadprog		* ladataan moduuliohjelma
+	jsr	loadprog		* ladataan moduuliohjelma
 	lea	150+4(sp),sp
 ;	addq	#4,sp			* ei palata samaan aliohjelmaan!
 	rts
