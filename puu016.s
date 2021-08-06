@@ -9185,6 +9185,51 @@ filereq_code
 
 	bsr.w	parsereqdir		* Tehdään hakemistopolku..
 
+* We will now normalize the directory given to us by ReqTools
+* This will transform assigns and logical names such as "SYS:"
+* into drive names. This creates consistent paths everytime,
+* and allows favorites logic path matching to work.
+
+ 	pushm	all
+ if DEBUG
+	pushpea	tempdir(a5),d0
+	DPRINT	"Normalizing: %s",1101
+ endif
+	
+ 	pushpea	tempdir(a5),d1
+	move.l	#ACCESS_READ,d2
+	lore  	Dos,Lock
+	move.l	d0,d4
+	beq.w	.noLock1
+	lea	-200(sp),sp
+	move.l	d4,d1
+	move.l	sp,d2
+	move.l	#200,d3
+	jsr  	getNameFromLock
+	tst.l	d0 
+	beq.b	.noName
+	move.l	sp,a0
+	lea		tempdir(a5),a1
+.copyPath
+	move.b	(a0)+,(a1)+
+	bne.b	.copyPath
+	cmp.b	#':',-2(a1)
+	beq.b	.isDrive
+	move.b	#'/',-1(a1)
+	clr.b	(a1)
+.isDrive
+.noName
+	lea	200(sp),sp
+	move.l	d4,d1
+	lob 	UnLock
+ if DEBUG
+	pushpea	tempdir(a5),d0
+	DPRINT	"to: %s",1102
+ endif
+.noLock1
+	popm	all
+ 
+
 	* contains the files from reqtools as per user selection
 	move.l	filelistaddr(a5),a4	
 	
@@ -9313,18 +9358,24 @@ filereq_code
 
 **** skannattuamme yhden hakemiston tutkitaan siinä olleet muut hakemistot
 .dodirs
-	tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
-	beq.w	.errd
+	
+	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
+	;beq.w	.errd
+	* Allow recursion into directories with kick1.3 too!
 
 	pushm	all
-
 	move.l	d7,a3
 	move	(a3)+,d5
-	beq.b	.errd2
+	beq.w	.errd2
 	subq	#1,d5
 
 .dodirsl
 	move.l	(a3)+,d6
+
+ if DEBUG
+	move.l	d6,d0
+	DPRINT	"Scanning %s",11
+ endif
 
 	move.l	d6,d1
 	moveq	#ACCESS_READ,d2
@@ -9345,7 +9396,7 @@ filereq_code
 	move.l	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3			* max pituus hakemistolle
-	lob	NameFromLock		* V36
+	jsr		getNameFromLock
 	push	d0
 	
 	move.l	d4,d1
@@ -15747,7 +15798,7 @@ execuutti
 	move.l	lockhere(a5),d1
 	pushpea	200(sp),d2
 	moveq	#100,d3
-	lore	Dos,NameFromLock 			* V36
+	jsr		getNameFromLock
 	lea	.tagz(pc),a0
 	move.l	d7,a1
 	pushpea	200(sp),4(a0)
@@ -26887,47 +26938,45 @@ createio
 * in:
 *   d1 = lock
 *   d2 = output buffer
-*   d3 = max length of output buffer. Not used!
+*   d3 = max length of output buffer, will fail if not enough
 * out:
 *   d0 = 1 success, 0 failure
 *******
 getNameFromLock 
-.bufferLength equ 	256
 .true		equ		1
 .false		equ		0
 .return		equr	d5
 .fl_lock	equr	d6
 .fl_lock2	equr	d7
+.fib		equr	d4
+.debug      	equ    0
 
 	pushm 	d1-a6
+ ifne .debug
+	DPRINT	"getNameFromLock!",10
+ endif
 	* It's all DOS, baby
 	move.l	_DosBase(a5),a6
-	
-	* allocate space from stack
-	* ensure divisible by 4
-	lea		-(fib_SIZEOF+4)(sp),sp
-	move.l	sp,d0
-	* make d0 divisible by 4
-	and.l	#~%11,d0
-	* above could have rounded down,
-	* so round up to next proper address
-	addq.l	#4,d0
-	move.l	d0,a5		* usable fib address
 
-	* save output buffer to a3 for later
+	pushpea	fileinfoblock2(a5),.fib
+
+;	* allocate space from stack
+;	* ensure divisible by 4
+;	lea		-(fib_SIZEOF+4)(sp),sp
+;	move.l	sp,d0
+;	* make d0 divisible by 4
+;	and.l	#~%11,d0
+;	* above could have rounded down,
+;	* so round up to next proper address
+;	addq.l	#4,d0
+;	move.l	d0,.fib		* usable fib address
+;
+
+	* save start of output buffer to a3 for later
 	move.l	d2,a3	
 
 	* initial return code status: false
 	moveq	#.false,.return
-
-	* ensure the work buffer is zero terminated
-;	lea	.buffer(pc),a0
-;	lea	.bufferLength(a0),a4
-;.clr	
-;	clr.b	(a0)+
-;	cmp.l	a0,a4
-;	bne.b	.clr
-;	subq.l	#1,d4	* leave one zero at the end for safety
 
 	* clear output buffer
 	move.l	d3,d0			
@@ -26936,7 +26985,9 @@ getNameFromLock
 .clr
 	clr.b	(a4)+
 	dbf	d0,.clr
-	subq.l	#1,d4	* leave one zero at the end for safety
+	subq.l	#1,a4	* leave one zero at the end for safety
+
+	* start filling a4 from the end
 
 	* First, copy the lock
 	lob 	DupLock
@@ -26948,25 +26999,26 @@ getNameFromLock
 	beq.b	.loopEnd
 
 	move.l	.fl_lock,d1
-	;pushpea	.fib(pc),d2
-	move.l	a5,d2
+	move.l	.fib,d2
 	lob 	Examine
 	tst.l	d0
-	beq.b	.cleanup
-	
+	beq.w	.cleanup
+
 	* add separator if needed
 	tst.b	(a4)
 	beq.b	.noSep
 	move.b	#'/',-(a4)
 .noSep
-	;lea	.fib+fib_FileName(pc),a0
-	lea		fib_FileName(a5),a0
+	move.l	.fib,a0
+	lea	fib_FileName(a0),a0
 	move.l	a0,a1
 .findEnd
 	tst.b	(a0)+
 	bne.b	.findEnd
 	subq.l	#1,a0	* backtrack to NULL
 .copyPart
+	cmp.l	a3,a4
+	beq.b	.noSpace
 	move.b	-(a0),-(a4)
 	cmp.l	a0,a1
 	bne.b	.copyPart
@@ -27004,30 +27056,45 @@ getNameFromLock
 	add.l	d0,a0
 
 .copyPart2
+	cmp.l	a3,a4
+	beq.b	.noSpace
 	move.b	-(a0),-(a4)
 	cmp.l	a0,a1
 	bne.b	.copyPart2	
 
-	* all done?!
-	* copy result to output buffer
+	* all done!
+	* move the resulting string to the front of the buffer
+	* here a3 and a4 point to the same buffer 
+	move.l	a3,d0
 .move
 	move.b	(a4)+,(a3)+
 	bne.b	.move
 
+ ifne .debug
+	DPRINT	"->name=%s",2
+ endif 
+
 	* indicate success
 	moveq 	#.true,.return
+.noSpace
 .cleanup
 	move.l	.fl_lock,d1
 	lob UnLock
 	
-	lea		(fib_SIZEOF+4)(sp),sp
+	;lea		(fib_SIZEOF+4)(sp),sp
 
-	* true or false
+	* return status
 	move.l	.return,d0
+ if DEBUG
+	bne.b	.ok 
+	DPRINT	"GetNameFromLock FAILED!",100
+.ok
+ endif	
+ ifne .debug
+	DPRINT	"->success=%ld",3
+ endif
 	popm 	d1-a6
 	rts
-
-;.buffer	ds.b	.bufferLength
 
 *******************************************************************************
 *                                Soittorutiinit
