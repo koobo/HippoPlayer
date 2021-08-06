@@ -5772,7 +5772,7 @@ tooltipHandler
 	* Store tooltip to be displayed and activate
 	move.l	ttle_tooltip(a3),activeTooltip(a5)
 	* Count down this many ticks before attempting to show tooltip
-	move	#1*50,tooltipTick(a5)	
+	move	#1*50+25,tooltipTick(a5) * about 1.5 seconds	
 	rts
 .disabled
 	;DPRINT	"was disabled",3
