@@ -11,9 +11,51 @@ Or, just copy HiP somewhere and HippoPlayer.group to S:,
 then run HiP. That should work if you have the 
 reqtools.library installed.
 
+# Changes from v2.46b (15.6.2021) to v2.47b (?.?.2021)
 
-Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
-----------------------------------------------------
+## Fixes:
+- Tooltip fixes for buttons "Del", "Pr". Also increase tooltip delay a little bit.
+- Fix the case where HiP is given modules without absolute path via command line
+  or via icon launch (eg. *DefIcons*), and the added files can't be opened.
+  Absolute path is now determined for these files before they are sent
+  to the already running HiP instance, fixing the issue.
+- The default unzip command in prefs was changed to *c:unzip >nil: -jo "%s"*, 
+  this allows opening zipped modules where the module is within a subdirectory.
+  Previously such modules would not be found from the zip file.
+
+## Supported music formats:
+- Beathoven Synthesizer
+- Game Music Creator (*Jumping Jack'Son!*)
+- Digital Mugician
+- PumaTracker
+
+## Features:
+
+- Support for gzipped archives. (This was once supported but was removed at some point.)
+
+- Recursive subdirectory scan when adding modules is now supported also on kickstart 1.3.
+  
+  It has been possible to select directories in the filerequester when adding files.
+  These directories would be scanned recursively to add all files inside.
+  This has only worked on kickstart 2.0 or newer until now, due to the usage of a kickstart 2.0 DOS-library specific function.
+  
+  Previously on older kickstarts only 
+  the top level files of the selected directories were added.
+
+- Favorite modules! You can now right click on a module to favorite it. Favorite
+  modules are displayed in **bold font**.
+
+  These modules will be stored in a separate playlist (or a module program in Hippo terms)
+  which you can open by pressing the *Prg* button and selecting the file
+  "**S:HippoFavorites.prg**".
+
+  To enable this feature toggle the _Favorite modules_ switch on the
+  _General_ subpage in prefs. 
+  
+  Favorites will be automatically saved after the user has been idle for a while,
+  or when exiting the program. This feature probably doesn't make any sense if you are using floppies.
+
+# Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
 
 There was an actual user request (by daxb) in the English Amiga Board 
 a few years back to remove the module list size restriction.
@@ -35,7 +77,7 @@ I decided to challenge myself with some UI changes. The main window
 buttons are quite cryptic with both left and right mouse button actions,
 which I have conveniently forgot about. I implemented a modern feeling
 tooltip which will pop up a helpful text for each button. 
-Maybe this is a first tooltip on kick1.3?
+Maybe this is the first tooltip on kick1.3?
 
 Right clicks on the buttons don't really work like
 left clicks. I don't know why the past-me left them like that, 
@@ -54,7 +96,7 @@ so these were added to a lot of places. Some safety regarging
 interrupts relying on some data was also added. 
 External applications using the HippoPort still use all data freely.
 
-Fixes:
+## Fixes:
 - Extraneous requester pop up removed when loading TFMX modules.
 - Fixed a case where unpacked modules were not identified as modules, or 
   a non-module file was identified as a valid module (due to badly initialized
