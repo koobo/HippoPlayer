@@ -416,6 +416,14 @@ cli		rs.l	1
 segment		rs.l	1	* Toisiks ekan hunkin segmentti
 fileinfoblock	rs.b	260		* 4:ll‰ jaollisessa osoitteessa!
 fileinfoblock2	rs.b	260		
+
+ if fileinfoblock&%11
+	fail Not divisible by 4
+ endif
+ if fileinfoblock2&%11
+	fail Not divisible by 4
+ endif
+
 filecomment	rs.b	80+4		* tiedoston kommentti
 windowbase	rs.l	1		* p‰‰ohjelma
 mainWindowLock rs.l 1
@@ -26872,7 +26880,154 @@ createio
 	movem.l	(sp)+,a0-a2
 	rts
 
+*******
+* getNameFromLock
+* This is originally a V36 function. Here's a port 
+* of V40 implementation that works on older kickstarts.
+* in:
+*   d1 = lock
+*   d2 = output buffer
+*   d3 = max length of output buffer. Not used!
+* out:
+*   d0 = 1 success, 0 failure
+*******
+getNameFromLock 
+.bufferLength equ 	256
+.true		equ		1
+.false		equ		0
+.return		equr	d5
+.fl_lock	equr	d6
+.fl_lock2	equr	d7
 
+	pushm 	d1-a6
+	* It's all DOS, baby
+	move.l	_DosBase(a5),a6
+	
+	* allocate space from stack
+	* ensure divisible by 4
+	lea		-(fib_SIZEOF+4)(sp),sp
+	move.l	sp,d0
+	* make d0 divisible by 4
+	and.l	#~%11,d0
+	* above could have rounded down,
+	* so round up to next proper address
+	addq.l	#4,d0
+	move.l	d0,a5		* usable fib address
+
+	* save output buffer to a3 for later
+	move.l	d2,a3	
+
+	* initial return code status: false
+	moveq	#.false,.return
+
+	* ensure the work buffer is zero terminated
+;	lea	.buffer(pc),a0
+;	lea	.bufferLength(a0),a4
+;.clr	
+;	clr.b	(a0)+
+;	cmp.l	a0,a4
+;	bne.b	.clr
+;	subq.l	#1,d4	* leave one zero at the end for safety
+
+	* clear output buffer
+	move.l	d3,d0			
+	subq.l	#1,d0	* dbf length
+	move.l	a3,a4	
+.clr
+	clr.b	(a4)+
+	dbf	d0,.clr
+	subq.l	#1,d4	* leave one zero at the end for safety
+
+	* First, copy the lock
+	lob 	DupLock
+	move.l	d0,.fl_lock
+.loop	
+	move.l	.fl_lock,d1
+	lob  	ParentDir
+	move.l	d0,.fl_lock2
+	beq.b	.loopEnd
+
+	move.l	.fl_lock,d1
+	;pushpea	.fib(pc),d2
+	move.l	a5,d2
+	lob 	Examine
+	tst.l	d0
+	beq.b	.cleanup
+	
+	* add separator if needed
+	tst.b	(a4)
+	beq.b	.noSep
+	move.b	#'/',-(a4)
+.noSep
+	;lea	.fib+fib_FileName(pc),a0
+	lea		fib_FileName(a5),a0
+	move.l	a0,a1
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+	subq.l	#1,a0	* backtrack to NULL
+.copyPart
+	move.b	-(a0),-(a4)
+	cmp.l	a0,a1
+	bne.b	.copyPart
+	
+	* done with this lock, go looping
+	move.l	.fl_lock,d1
+	lob UnLock
+
+	move.l .fl_lock2,.fl_lock
+	bra.b	.loop
+.loopEnd
+	* next comes the name for the device
+	move.b	#':',-(a4)
+
+	* dig into the lock, first convert BPTR to APTR
+	move.l	.fl_lock,a0
+	add.l	a0,a0 
+	add.l 	a0,a0
+	move.l 	fl_Volume(a0),a0
+	* a0 = BPTR to DevList
+	add.l	a0,a0 
+	add.l 	a0,a0
+	move.l	dl_Name(a0),a0
+	* a0 = BPTR to name, should be null terminated.
+	* Check if true also on V34? Use the BCPL
+	* string length, that should be good.
+	add.l	a0,a0 
+	add.l 	a0,a0
+	
+	moveq	#0,d0
+	move.b	(a0)+,d0 * read BCPL string length
+	move.l	a0,a1 	* keep the start address for loop
+
+	* Skip to end of string
+	add.l	d0,a0
+
+.copyPart2
+	move.b	-(a0),-(a4)
+	cmp.l	a0,a1
+	bne.b	.copyPart2	
+
+	* all done?!
+	* copy result to output buffer
+.move
+	move.b	(a4)+,(a3)+
+	bne.b	.move
+
+	* indicate success
+	moveq 	#.true,.return
+.cleanup
+	move.l	.fl_lock,d1
+	lob UnLock
+	
+	lea		(fib_SIZEOF+4)(sp),sp
+
+	* true or false
+	move.l	.return,d0
+	popm 	d1-a6
+	rts
+
+;.buffer	ds.b	.bufferLength
 
 *******************************************************************************
 *                                Soittorutiinit
@@ -32615,11 +32770,11 @@ slim2	ds	410*2
 
 	section	udnm,bss_p
 
+		cnop 0,4
 * Global variables
 var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
-
 
  end
