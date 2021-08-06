@@ -1,16 +1,16 @@
 WISHLISH
-- DONE: .gz support
++ DONE: .gz support
 - UGLY: window size gadget
-- favorites list
++ favorites list
  -- button to favorite, send to another list, save list to a certain place
  -- list will show if file is favorited by checking the list
  -- user can open the favorite program with "Prg", maybe some shortcut for this
-- logon keskitys
++ logon keskitys
 - keyshortcutit tooltippeihin?
 Formats
 + Beathoven
 - Deltamusic1
-- Digital mugician
++ Digital mugician
 - earache
 - face the music
 - digital mugician 2
@@ -20,9 +20,9 @@ Formats
 
 TODO
 - VisualPrefs
--- Set window title bar height to 8
--- Set bottom border to maximum
---> RMB window folding does not center text properly?
+-- Set Screen title bar height to max
+-- Hippo draws top part of window bad
+-- Set large bottom border 
 
 TODO
 - cräshäsi joku moduuli zipattu: HeHasNoFace, DataJack
