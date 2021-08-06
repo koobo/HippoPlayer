@@ -1739,16 +1739,31 @@ PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
 	lea	var_b,a5
 	move.l	output(a5),d1
-	bne.b	.open
+	bne.w	.open
 
 	move.l	#.bmb,d1
 	move.l	#MODE_NEWFILE,d2
 	lore	Dos,Open
 	move.l	d0,output(a5)
+	bne.b	.isOpen
+	* show alert once if cant open debug console
+	lea	.openErr(pc),a0
+	moveq	#0,d0		* recovery
+	moveq	#19,d1		* korkeus
+	tst.b	.alertShown(pc)
+	bne.w	.x
+	lore	Intui,DisplayAlert
+	st	.alertShown
+	bra.b	.x
+.isOpen
 	move.l	d0,d1
 	bra.b	.open
-.bmb	
-	dc.b	"CON:0/0/350/500/HiP debug window",0
+.openErr
+	dc	110
+	dc.b	11
+	dc.b	"Error opening debug console, increase screen height!",0,0
+.alertShown	dc.b 0
+.bmb	dc.b	"CON:0/0/350/500/HiP debug window",0
     even
 .open
 	move.l	32+4(sp),a0
@@ -1924,11 +1939,13 @@ lelp
 	move.l	d0,_DosBase(a5)
  endc
 
-	DPRINT	"Hippo is alive"
-
 	lea	intuiname(pc),a1
 	lore	Exec,OldOpenLibrary
 	move.l	d0,_IntuiBase(a5)
+
+	* The first debug print should be after opening
+	* intuition since it may use the alert box.	
+	DPRINT	"Hippo is alive"
 
 	tst.b	uusikick(a5)
 	beq.b	.olld
