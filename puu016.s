@@ -9205,49 +9205,11 @@ filereq_code
 	bsr.w	parsereqdir		* Tehdään hakemistopolku..
 
 * We will now normalize the directory given to us by ReqTools
-* This will transform assigns and logical names such as "SYS:"
-* into drive names. This creates consistent paths everytime,
+* This creates consistent paths everytime,
 * and allows favorites logic path matching to work.
 
- 	pushm	all
- if DEBUG
-	pushpea	tempdir(a5),d0
-	DPRINT	"Normalizing: %s",1101
- endif
-	
- 	pushpea	tempdir(a5),d1
-	move.l	#ACCESS_READ,d2
-	lore  	Dos,Lock
-	move.l	d0,d4
-	beq.w	.noLock1
-	lea	-200(sp),sp
-	move.l	d4,d1
-	move.l	sp,d2
-	move.l	#200,d3
-	jsr  	getNameFromLock
-	tst.l	d0 
-	beq.b	.noName
-	move.l	sp,a0
-	lea		tempdir(a5),a1
-.copyPath
-	move.b	(a0)+,(a1)+
-	bne.b	.copyPath
-	cmp.b	#':',-2(a1)
-	beq.b	.isDrive
-	move.b	#'/',-1(a1)
-	clr.b	(a1)
-.isDrive
-.noName
-	lea	200(sp),sp
-	move.l	d4,d1
-	lob 	UnLock
- if DEBUG
-	pushpea	tempdir(a5),d0
-	DPRINT	"to: %s",1102
- endif
-.noLock1
-	popm	all
- 
+	pushpea	tempdir(a5),d1
+	jsr	normalizeFilePath
 
 	* contains the files from reqtools as per user selection
 	move.l	filelistaddr(a5),a4	
@@ -26954,8 +26916,9 @@ createio
 
 *******
 * getNameFromLock
-* This is originally a V36 function. Here's a port 
-* of V40 implementation that works on older kickstarts.
+* DOS library NameFromLock is originally a V36 function. 
+* Here's a port ofthe  V40 implementation that works on older 
+* kickstarts.
 * in:
 *   d1 = lock
 *   d2 = output buffer
@@ -26979,6 +26942,7 @@ getNameFromLock
 	* It's all DOS, baby
 	move.l	_DosBase(a5),a6
 
+	* Use this one as the working fib, probably fine.
 	pushpea	fileinfoblock2(a5),.fib
 
 ;	* allocate space from stack
@@ -26992,7 +26956,6 @@ getNameFromLock
 ;	addq.l	#4,d0
 ;	move.l	d0,.fib		* usable fib address
 ;
-
 	* save start of output buffer to a3 for later
 	move.l	d2,a3	
 
@@ -27054,7 +27017,7 @@ getNameFromLock
 	* next comes the name for the device
 	move.b	#':',-(a4)
 
-	* dig into the lock, first convert BPTR to APTR
+	* Dig into the lock, first convert BPTR to APTR.
 	move.l	.fl_lock,a0
 	add.l	a0,a0 
 	add.l 	a0,a0
@@ -27084,7 +27047,7 @@ getNameFromLock
 	bne.b	.copyPart2	
 
 	* all done!
-	* move the resulting string to the front of the buffer
+	* move the resulting string to the front of the buffer.
 	* here a3 and a4 point to the same buffer 
 	move.l	a3,d0
 .move
@@ -27115,6 +27078,60 @@ getNameFromLock
 	DPRINT	"->success=%ld",3
  endif
 	popm 	d1-a6
+	rts
+
+
+* Takes a file path and normalizes it by replacing
+* logical names/assigns with actual drive names.
+* It will transform path parts such as "SYS:"
+* into drive names like "A500-HD:".
+* In case of error original path remains untouched. 
+* in:
+*   d1 = pointer to path
+* out:
+*   path given in d1 is replaced, should contain space for growing
+
+normalizeFilePath
+ 	pushm	all
+ if DEBUG
+	move.l	d1,d0
+	DPRINT	"Normalizing: %s",1101
+ endif
+	move.l	d1,d7
+
+ 	;pushpea	tempdir(a5),d1
+	move.l	#ACCESS_READ,d2
+	lore  	Dos,Lock
+	move.l	d0,d4
+	beq.w	.noLock1
+	lea	-200(sp),sp
+	move.l	d4,d1
+	move.l	sp,d2
+	move.l	#200,d3
+	bsr  	getNameFromLock
+	tst.l	d0 
+	beq.b	.noName
+	move.l	sp,a0
+	;lea		tempdir(a5),a1
+	move.l	d7,a1
+.copyPath
+	move.b	(a0)+,(a1)+
+	bne.b	.copyPath
+	cmp.b	#':',-2(a1)
+	beq.b	.isDrive
+	move.b	#'/',-1(a1)
+	clr.b	(a1)
+.isDrive
+.noName
+	lea	200(sp),sp
+	move.l	d4,d1
+	lob 	UnLock
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"to: %s",1102
+ endif
+.noLock1
+	popm	all
 	rts
 
 *******************************************************************************
