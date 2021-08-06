@@ -187,6 +187,8 @@ check	macro
 	include	devices/ahi.i
 	include	devices/ahi_lib.i
 
+	include	misc/deliplayer.i
+
 	incdir include/
 	include	mucro.i
 	include	med.i
@@ -575,9 +577,14 @@ samplefollow		rs.l	1
 samplepointer		rs.l	1
 samplepointer2		rs.l	1
 samplestereo		rs.b	1
-sampleinit		rs.b	1
+* This is set in loadfile() to indicate a sample is found.
+* Actual loading is then skipped.
+sampleinit		rs.b	1			
 sampleformat		rs.b	1
-			rs.b	1
+
+* This is set in loadfile() to indicate a DeliTracker CUSTOM
+* module is found. Loading is then done using LoadSeg().
+delicustominit			rs.b	1
 
 ****** Prefs asetukset, joita k‰sitell‰‰n
 
@@ -1110,6 +1117,7 @@ pt_dw		rs.b	1
 pt_hippel	rs.b	1
 pt_mline	rs.b	1
 pt_beathoven	rs.b	1
+pt_delicustom	rs.b 	1
 
 * These need a replayer from the group file
 pt_group_start = 49
@@ -5234,6 +5242,10 @@ freemodule
 	DPRINT	"freemodule obtain data",1
 	bsr.w		obtainModuleData
 
+	* Check if need to do UnLoadSeg
+	cmp	#pt_delicustom,playertype(a5)
+	seq	d7
+
 	clr.b	modulename(a5)
 	clr.b	moduletype(a5)
 	clr.b	kelausnappi(a5)
@@ -5251,6 +5263,9 @@ freemodule
 ;	bsr.w	lootaa
 	bsr.w	inforivit_clear
 
+	* free replay code, this label here is silly
+	* all of them are in the same address
+	* with different labels
 	lea	ps3mroutines(a5),a0		* vapautetaan replayeri
 	jsr	freereplayer
 
@@ -5258,10 +5273,20 @@ freemodule
 	move.l	moduleaddress(a5),d0
 	beq.b	.ee
 	move.l	d0,a1
+
+	tst.b	d7
+	beq.b	.normal
+	move.l 	a1,d1
+	lore	Dos,UnLoadSeg
+	DPRINT	"UnLoadSeg!",3
+	bra.b	.deliCustom
+.normal
+
 	move.l	modulelength(a5),d0
 	beq.b	.ee
-
 	lob	FreeMem				* hit!
+.deliCustom	
+
 	clr.l	moduleaddress(a5)
 	clr.l	modulelength(a5)
 
@@ -5291,8 +5316,8 @@ freemodule
 	clr.b	lod_tfmx(a5)
 
 .eee	
-	DPRINT	"freemodule release data",2
-	bsr.w		releaseModuleData
+	DPRINT	"freemodule release data",4
+	bsr.w	releaseModuleData
 
 	movem.l	(sp)+,d0-a6
 	rts
@@ -22407,7 +22432,10 @@ loadmodule
 	tst	d0
 	bne.w	.err			* virhe lataamisessa
 
+	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
+	bne.b	.nip
+	tst.b	delicustominit(a5)
 	bne.b	.nip
 
 	move.l	moduleaddress(a5),a0	* Oliko moduleprogram??
@@ -22439,7 +22467,6 @@ loadmodule
 ;	addq	#4,sp			* ei palata samaan aliohjelmaan!
 	rts
 .nip
-
 	bsr.w	tutki_moduuli
 	tst.l	d0
 	bne.b	.unk_err		* ep‰m‰‰r‰inen tiedosto
@@ -22886,7 +22913,7 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_sidmon1		* Sidmon1
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_deltamusic
 	beq.b	.on
@@ -22929,6 +22956,9 @@ loadfile
 
 	bsr		id_gamemusiccreator
 	beq.b	.on
+
+	;bsr		id_delicustom
+	;beq.b	.on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
@@ -23020,7 +23050,7 @@ loadfile
 	move.l	d0,d1
 	lea	fileinfoblock(a5),a3
 	move.l	a3,d2
-	lob	Examine
+	lob	Examine			* Nasty! Error is not checked
 	move.l	d3,d1
 	lob	UnLock
 
@@ -23039,7 +23069,9 @@ loadfile
 	dbeq	d0,.cece
 	clr.b	(a1)
 .noc
+	* Read some bytes of data into the probebuffer
 
+	DPRINT	"Probing",4
 
 	move.l	#1005,d2
 	move.l	lod_filename(a5),d1
@@ -23055,6 +23087,7 @@ loadfile
 ;	cmp.l	#1084,d0
 ;	bne.w	.read_error
 
+* Check if this is an archive file
 *** onko lha, lzx, zip?
 
 	cmp	#'PK',probebuffer(a5)
@@ -23091,6 +23124,8 @@ loadfile
 
 .nolha
 
+** Is this a sample file, stop loading if so.
+
 ** Jos havaitaan file sampleks, ei ladata enemp‰‰
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
@@ -23101,19 +23136,18 @@ loadfile
 
 .nosa	clr.b	sampleformat(a5)
 
+	* This checks whether the file should be loaded into FAST ram
+
 	lea	probebuffer(a5),a0	* Kannattaako ladata fastiin??
 	bsr.w	.checkm
 
-;.nocheck
+	* XPK compressed file check
 
 	cmp.l	#"XPKF",probebuffer(a5)
 	bne.w	.wasnt_xpk
 
-
 	bsr.w	get_xpk
 	beq.w	.lib_error1
-
-
 
 ** file on xpk, katsotaan jos se on sample:
 	lea	probebuffer+16(a5),a0
@@ -23313,6 +23347,8 @@ loadfile
 
 .wasnt_xpk
 
+	* Was not XPK compressed. Is it powerpacker compressed?
+
 	cmp.l	#"PP20",probebuffer(a5)
 	bne.b	.wasnt_pp
 
@@ -23334,6 +23370,8 @@ loadfile
 	beq.w	.exit
 	bra.w	.pp_error	
 .wasnt_pp
+
+	* FImp compressed file?
 
 	cmp.l	#"IMP!",probebuffer(a5)
 	bne.b	.wasnt_fimp
@@ -23366,7 +23404,9 @@ loadfile
 
 .wasnt_fimp
 
+*	Next up, try loading with XFDMaster if it is enabled
 ********* Lataus XFDmaster.libill‰
+
 	tst.b	xfd(a5)
 	beq.w	.wasnt_xfd
 
@@ -23438,19 +23478,50 @@ loadfile
 	bra.w	.exit
 
 
-****** Ihan Tavallinen Lataus
-
 .wasnt_xfd
 
+* Finally here we just do an ordinary read.
+****** Ihan Tavallinen Lataus
+
+; xax
+	* Probebuffer now has 1084 of data we can check
+	* for Delitracker CUSTOM format, as it has to be loaded
+	* with LoadSeg(), being an exe file.
+	* Status: no DeliCustom
+	pushm 	d1-a6
+	clr.b	delicustominit(a5)
+	lea	probebuffer(a5),a4
+	move.l	#1084,d7
+	bsr	id_delicustom
+	bne.b	.notDeliCustom
+	move.l	#MEMF_PUBLIC,lod_memtype(a5)
+	bsr.w	.infor
+	move.l	lod_filename(a5),d1
+	lore	Dos,LoadSeg
+	tst.l	d0
+	beq.b	.loadSegErr
+	DPRINT	"DeliCustom LoadSeg ok",7
+	st	delicustominit(a5)
+	move.l	d0,lod_address(a5)
+	clr.l	lod_length(a5)
+.loadSegErr
+.notDeliCustom
+	popm 	d1-a6
+
+	tst.b	delicustominit(a5)
+	bne.w	.exit
+
+ if DEBUG
+	move.l	lod_length(a5),d0
+	DPRINT	"Normal load %ld",5
+ endif
+ 
 	bsr.w	.alloc
 	move.l	d0,lod_address(a5)
 	beq.w	.error
 
 	bsr.w	.infor
-
 	bsr.w	.seekstart
-
-
 
  ifeq floadpr
 	move.l	lod_filehandle(a5),d1
@@ -23543,12 +23614,7 @@ loadfile
 	rts
 .don
 
-
  endc
-
-	
-
-
 
 .exit	
 
@@ -23563,7 +23629,6 @@ loadfile
 
 	tst	lod_error(a5)
 	beq.b	.okk
-
 
 	bsr.w	.free
 
@@ -24084,6 +24149,7 @@ tutki_moduuli2
 
 
 tutki_moduuli
+	DPRINT	"Identify module",1
 
  ifne PILA
 
@@ -24124,6 +24190,11 @@ tutki_moduuli
 ;	addq.l	#1,IVSOFTINT+IV_CODE(a2)
 ;.zz
 
+	* Check this first since moduleaddress(a5) can't be used for anything 
+	* if true.
+	tst.b	delicustominit(a5)
+	bne		.delicustom
+	
 	tst.b	ahi_use(a5)
 	bne.b	.ohi
 	cmp.b	#2,ptmix(a5)	* Normaali vai miksaava PT replayeri?
@@ -24132,12 +24203,10 @@ tutki_moduuli
 	beq.w	.pro
 
 .ohi
-
-
 	clr.b	external(a5)		* Lippu: ei tartte player grouppia 
 
 	tst.b	sampleinit(a5)
-	bne.b	.noop
+	bne.w	.noop
 
 	tst.b	ahi_muutpois(a5)	
 	bne.b	.noop
@@ -24179,6 +24248,9 @@ tutki_moduuli
 
 	bsr		id_beathoven
 	beq.w	.beathoven
+
+	;bsr		id_delicustom
+	;beq		.delicustom
 
 	tst.l	externalplayers(a5)
 	bne.b	.noop
@@ -24290,7 +24362,7 @@ tutki_moduuli
 .mp
 	bsr.w	id_ps3m		
 	tst.l	d0
-	beq.b	.multi
+	beq.w	.multi
 
 	clr.b	external(a5)
 .nope
@@ -24303,10 +24375,12 @@ tutki_moduuli
 	beq.w	.sid
 
 	bsr.w	id_oldst
-	beq.b	.oldst
+	beq.w	.oldst
 
 
-.er	moveq	#lod_tuntematon,d0
+.er	
+	DPRINT 	"Unknown format",2
+	moveq	#lod_tuntematon,d0
 	rts	
 
 .ex	bsr.w	tee_modnimi
@@ -24316,7 +24390,13 @@ tutki_moduuli
 	cmp	#pt_med,playertype(a5)
 	beq.b	.wew
 	bsr.w	whatgadgets
-.wew	moveq	#0,d0
+.wew
+ if DEBUG
+	moveq	#0,d0
+	move	playertype(a5),d0
+	DPRINT 	"Detected %ld",3
+ endif
+	moveq	#0,d0
 	rts
 
 
@@ -24348,7 +24428,7 @@ tutki_moduuli
 	move.l	moduleaddress(a5),a1	* tutkaillaan onko miss‰ muistissa
 	lore	Exec,TypeOfMem
 	and.l	#MEMF_CHIP,d0
-	beq.b	.ex2
+	beq.w	.ex2
 
 ** Arf! Ladattiin chippiin!
 ** Onko vehkeess‰ fastia laisinkaan? Jos on, pistet‰‰n warn-tekstinp‰tk‰.
@@ -24356,7 +24436,7 @@ tutki_moduuli
 	moveq	#MEMF_FAST,d1
 	lob	AvailMem
 	tst.l	d0
-	beq.b	.ex2
+	beq.w	.ex2
 
 	bsr.w	inforivit_warn
 	moveq	#65,d1
@@ -24532,6 +24612,11 @@ tutki_moduuli
 .digitalmugician
 	pushpea	p_digitalmugician(pc),playerbase(a5)
 	move	#pt_digitalmugician,playertype(a5)
+	bra.w	.ex
+
+.delicustom
+	pushpea	p_delicustom(pc),playerbase(a5)
+	move	#pt_delicustom,playertype(a5)
 	bra.w	.ex
 
 **** Oliko  sample??
@@ -31321,6 +31406,69 @@ id_digitalmugician
 .id_end
  even
 
+******************************************************************************
+* Delitracker CUSTOM
+******************************************************************************
+
+p_delicustom
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
+	dc.b	"DeliTracker CUSTOM",0
+ even
+
+.init
+	moveq	#0,d0
+	rts
+.play
+	rts
+.end
+	rts
+.stop
+	rts
+
+id_delicustom
+	lea	.id1_start(pc),a1	
+	moveq	#.id1_end-.id1_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+	lea	.id2_start(pc),a1	
+	moveq	#.id2_end-.id2_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+	lea	.id3_start(pc),a1	
+	moveq	#.id3_end-.id3_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+
+	moveq	#0,d0
+	rts
+	
+.notDeli
+	moveq	#-1,d0 
+	rts
+
+.id1_start
+	moveq	#-1,d0
+	rts
+.id1_end
+
+.id2_start
+	dc.b	"DELIRIUM"
+.id2_end
+
+.id3_start
+	dc.l DTP_CustomPlayer,1
+.id3_end
 
 *******************************************************************************
 * Playereit‰
