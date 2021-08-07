@@ -5246,6 +5246,7 @@ freemodule
 	cmp	#pt_delicustom,playertype(a5)
 	seq	d7
 
+	clr		playertype(a5)
 	clr.b	modulename(a5)
 	clr.b	moduletype(a5)
 	clr.b	kelausnappi(a5)
@@ -31438,11 +31439,11 @@ p_delicustom
 	jmp	.stop(pc)
 	jmp	.cont(pc)
 	dc.l	$4e754e75
+	jmp	.song(pc)
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"DeliTracker Custom",0
  even
 
@@ -31477,17 +31478,18 @@ p_delicustom
 	tst.l	d0 
 	beq.b	.noFunc
 	DPRINT	"Call %lx",101
-	pushm 	d1-a6
+	pushm 	d2-a6
 	lea	.deliBase(pc),a5
 	move.l	d0,a0
 	jsr	(a0)
-	popm	d1-a6
+	popm	d2-a6
 .noFunc rts
 
 .init
 	pushm	d1-a6	
 	DPRINT	"deliInit",10
 	bsr.w	.buildDeliBase
+
  if DEBUG
 	 bsr	.showTags
  endif
@@ -31501,31 +31503,27 @@ p_delicustom
 	* InitSound (dtg_SndNum=1)
 	* SubSongRange	
 
+	move.l	#DTP_DeliBase,d0
+	bsr	.getTag
+	beq.b	.noDBTag
+	move.l	d0,a0 
+	lea	.deliBase(pc),a1
+	move.l	a1,(a0)
+.noDBTag
+
 	move.l	#DTP_InitPlayer,d0  
 	bsr.w	.getTag
 	bsr.w	.callFunc	
 	bne.w	.error
 	DPRINT	"initPlayer ok",11
-	
-	move.l	#DTP_SubSongRange,d0  
-	bsr.w	.getTag
-	beq.b	.noSubSongs1
-	bsr	.callFunc
-	and.l	#$ff,d0
-	and.l	#$ff,d1
-	DPRINT	"Subsong min=%ld max=%ld",111
+
+	* set default song number
+	* d0 = def, d1 = min, d2 = max	
+	bsr	.getSongInfo
 	move	d0,.deliBase+dtg_SndNum
-.noSubSongs1
-	move.l	#DTP_NewSubSongRange,d0  
-	bsr.w	.getTag
-	beq.b	.noSubSongs2
-	;bsr	.callFunc
-	move.l	d0,a0
-	movem	(a0),d0/d1/d2
-	DPRINT	"NewSubSongs default=%ld min=%ld max=%ld",112
-	move	d0,.deliBase+dtg_SndNum
-.noSubSongs2
-		
+	move	d0,songnumber(a5)
+	move	d2,maxsongs(a5)	
+
 	move.l	#DTP_Volume,d0  
 	bsr.w	.getTag
 	move.l	d0,.storedSetVolume
@@ -31553,18 +31551,19 @@ p_delicustom
 	bra.b	.error
 .gotCia
 .noInt
-
+	* try to start module provided int handler
 	move.l	#DTP_StartInt,d0
 	bsr	.getTag
 	bsr	.callFunc
 
-
+.skip
 	DPRINT	"init ok",55
 	* ok
 	moveq	#0,d0
 .error	popm	d1-a6
 	rts
 
+* Interrupt play routine, use cached pointers to avoid tag searches
 .play
 	move.l	.storedInterrupt(pc),d0
 	beq.b	.nope
@@ -31609,6 +31608,63 @@ p_delicustom
 	popm	d1-a6
 	rts
 
+
+* out:
+*  d0=default song
+*  d1=min song
+*  d2=max song
+.getSongInfo
+	moveq	#0,d0 
+	moveq	#0,d1 
+	moveq	#0,d2
+	
+	move.l	#DTP_SubSongRange,d0  
+	bsr.w	.getTag
+	beq.b	.noSubSongs1
+	bsr	.callFunc
+	move.l	d1,d2
+	move.l	d0,d1
+	DPRINT	"Subsong def=%ld min=%ld max=%ld",111
+	rts
+
+.noSubSongs1
+	move.l	#DTP_NewSubSongRange,d0  
+	bsr.w	.getTag
+	beq.b	.noSubSongs2
+	move.l	d0,a0
+	movem	(a0),d0/d1/d2
+	DPRINT	"NewSubSongs defa=%ld min=%ld max=%ld",112
+.noSubSongs2
+	rts	
+
+.song
+	DPRINT	"deliSong",114
+	bsr	.stop
+
+	bsr	.getSongInfo
+
+	* low bound check
+	cmp	songnumber(a5),d1
+	blo.b	.ok1
+	move	d1,songnumber(a5)
+.ok1
+	* upper bound check
+	cmp	songnumber(a5),d2
+	bhi.b .ok2
+	move d2,songnumber(a5)
+.ok2
+	* Put it
+	move	songnumber(a5),.deliBase+dtg_SndNum
+
+	move.l	#DTP_InitSound,d0
+	bsr	.getTag
+	bsr	.callFunc
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	rts
+
+
 .stop
 	DPRINT	"deliStop",14
 	move.l	#DTP_EndSound,d0
@@ -31630,7 +31686,6 @@ p_delicustom
 	bsr	.getTag
 	bsr	.callFunc
 	move	#$800f,$dff096
-	
 	rts
 
 .buildDeliBase
@@ -31672,6 +31727,10 @@ p_delicustom
 	move.l	(sp)+,dtg_SongEnd(a0)
 	pea	.setTimer(pc)
 	move.l	(sp)+,dtg_SetTimer(a0)
+
+	* Lemmings called f8 and f6
+	* RCop2_CheatMode: not identified
+	* The_Pawn crash, ok on DT
 
 	pea	.f1(pc)
 	move.l	(sp)+,dtg_LockScreen(a0)
@@ -31759,15 +31818,11 @@ p_delicustom
 	moveq	#0,d0
 	rts
 
-
 * Build a fake delibase here
 .deliBase
 	ds.b	dtg_Reserved3
 .deliBaseEnd
  even
-
-
-
 
  if DEBUG
 .showTags
@@ -31850,7 +31905,6 @@ tagsTable
  dc.l EDTP_AuthorName   
  dc.l EDTP_InitNote  
 tagsTableEnd
-
  
 EDTP_InternalPlayer   	dc.b "DTP_InternalPlayer",0 ; obsolete
 EDTP_CustomPlayer   	dc.b "DTP_CustomPlayer",0 ; player is a customplayer
@@ -31920,6 +31974,13 @@ id_delicustom
 	bsr.w	search
 	bne.b	.notDeli
 
+	* search() leaves with a0 pointing
+	* to the next byte to be searched,
+	* get the value for DTP_CustomPlayer,
+	* it must be non-zero
+	tst.l	(a0)
+	beq.b	.notDeli
+
 	moveq	#0,d0
 	rts
 	
@@ -31936,8 +31997,9 @@ id_delicustom
 	dc.b	"DELIRIUM"
 .id2_end
 
+; Seems that the parameter for this that can be anything but 0
 .id3_start
-	dc.l DTP_CustomPlayer,1
+	dc.l DTP_CustomPlayer
 .id3_end
 
 *******************************************************************************
