@@ -31436,7 +31436,7 @@ p_delicustom
 	dc.l	$4e754e75
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
+	jmp	.cont(pc)
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc.l	$4e754e75
@@ -31491,24 +31491,50 @@ p_delicustom
  if DEBUG
 	 bsr	.showTags
  endif
+
+	* Order in DT
+	* InitPlayer
+	* SubSongRange
+	* SubSongRange
+	* Volume
+	* Volume
+	* InitSound (dtg_SndNum=1)
+	* SubSongRange	
+
 	move.l	#DTP_InitPlayer,d0  
 	bsr.w	.getTag
 	bsr.w	.callFunc	
 	bne.w	.error
-
 	DPRINT	"initPlayer ok",11
+	
+	move.l	#DTP_SubSongRange,d0  
+	bsr.w	.getTag
+	beq.b	.noSubSongs1
+	bsr	.callFunc
+	and.l	#$ff,d0
+	and.l	#$ff,d1
+	DPRINT	"Subsong min=%ld max=%ld",111
+	move	d0,.deliBase+dtg_SndNum
+.noSubSongs1
+	move.l	#DTP_NewSubSongRange,d0  
+	bsr.w	.getTag
+	beq.b	.noSubSongs2
+	;bsr	.callFunc
+	move.l	d0,a0
+	movem	(a0),d0/d1/d2
+	DPRINT	"NewSubSongs default=%ld min=%ld max=%ld",112
+	move	d0,.deliBase+dtg_SndNum
+.noSubSongs2
+		
+	move.l	#DTP_Volume,d0  
+	bsr.w	.getTag
+	move.l	d0,.storedSetVolume
 
 	move.l	#DTP_InitSound,d0  
 	bsr.w	.getTag
 	bsr.w	.callFunc	
 
 	DPRINT	"InitSound ok",12
-
-	move.l	#DTP_Volume,d0  
-	bsr.w	.getTag
-	move.l	d0,.storedSetVolume
-	
-	DPRINT "VOL %lx",666
 
 	* see if an interrupt routine is provided.
 	* if so, set up a cia interrupt to drive it.
@@ -31517,7 +31543,7 @@ p_delicustom
 	bsr.w	.getTag
 	move.l	d0,.storedInterrupt
 	beq.b	.noInt
-	DPRINT	"has interrupt",33
+	DPRINT	"has interrupt, using cia",33
  
 	* interrupt routine provided, set up an interrupt
 	bsr	init_ciaint
@@ -31527,6 +31553,12 @@ p_delicustom
 	bra.b	.error
 .gotCia
 .noInt
+
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+
+
 	DPRINT	"init ok",55
 	* ok
 	moveq	#0,d0
@@ -31556,6 +31588,15 @@ p_delicustom
 	pushm	d1-a6
 	DPRINT	"deliEnd",13
 	
+	move.l	.storedInterrupt(pc),d0
+	beq.b	.noIntUsed
+	bsr.w	rem_ciaint
+.noIntUsed
+
+	move.l	#DTP_StopInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+
 	move.l	#DTP_EndSound,d0  
 	bsr.w	.getTag
 	bsr.w	.callFunc	
@@ -31570,13 +31611,46 @@ p_delicustom
 
 .stop
 	DPRINT	"deliStop",14
-	bsr	clearsound
+	move.l	#DTP_EndSound,d0
+	bsr	.getTag
+	;bsr	.callFunc
+	move.l	#DTP_StopInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	;bsr	clearsound
+	move	#$f,$dff096
+	rts
+
+.cont
+	DPRINT	"deliCont",144
+	move.l	#DTP_InitSound,d0
+	bsr	.getTag
+	;bsr	.callFunc
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	move	#$800f,$dff096
+	
 	rts
 
 .buildDeliBase
 	lea	.deliBase(pc),a0
+	lea	.deliBaseEnd(pc),a1
+.clrBase
+	clr.b	(a0)+
+	cmp.l	a0,a1 
+	bne.b .clrBase
+	lea	.deliBase(pc),a0
 
-	clr	dtg_SndNum(a0) 
+	move.l	_DosBase(a5),dtg_DOSBase(a0)
+	move.l	_IntuiBase(a5),dtg_IntuitionBase(a0)
+	move.l	_GFXBase(a5),dtg_GfxBase(a0)
+	
+	; Illegal address for enforcer
+	move.l	#$10000000,dtg_GadToolsBase(a0)
+	move.l	#$10000000,dtg_AslBase(a0)
+
+	clr	dtg_SndNum(a0) * this must be correct 
 	move	#64,dtg_SndVol(a0)
 	move	#64,dtg_SndLBal(a0)
 	move	#64,dtg_SndRBal(a0)
@@ -31689,6 +31763,7 @@ p_delicustom
 * Build a fake delibase here
 .deliBase
 	ds.b	dtg_Reserved3
+.deliBaseEnd
  even
 
 
@@ -31702,21 +31777,24 @@ p_delicustom
 	move.l	16(a0),a0
 .tloop
 	movem.l	(a0)+,d0/d1
+	
 	sub.l	#DTP_TagBase,d0
 	lsl.l	#2,d0
 	lea		tagsTable(pc,d0.l),a1
-	cmp.l	#tagsTableEnd,a1
-	blo.b 	.okTag
 	lsr.l	#2,d0
 	add.l	#DTP_TagBase,d0
+	
+	cmp.l	#tagsTableEnd,a1
+	blo.b 	.okTag
 	DPRINT  "Tag %lx: %lx",2002
 	bra.b	.oddTag
 .okTag
-	move.l	(a1),d0
-	DPRINT  "Tag %ls: %lx",2001
+	move.l	d1,d2
+	move.l	(a1),d1
+	DPRINT  "Tag %lx %s: %lx",2001
 .oddTag
 	tst.l	(a0) 
-	bne.b	.tloop
+	bne.w	.tloop
 	rts
 
 tagsTable
