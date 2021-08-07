@@ -31410,6 +31410,26 @@ id_digitalmugician
 * Delitracker CUSTOM
 ******************************************************************************
 
+* Another version that initializes a5.
+* Deli calls have another base in a5.
+DELIDPRINT  macro
+	ifne DEBUG
+	pushm a0/a5
+	lea	var_b,a5
+	lea .DD\2(pc),a0
+	jsr	desmsg
+	pea	desbuf(a5)
+	jsr	PRINTOUT
+	popm	a0/a5
+	bra.b	.D\2
+.DD\2
+ 	dc.b 	\1,10,0
+ 	even
+.D\2
+	endc
+	endm
+
+
 p_delicustom
 	jmp	.init(pc)
 	jmp	.play(pc)
@@ -31423,18 +31443,390 @@ p_delicustom
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
-	dc.b	"DeliTracker CUSTOM",0
+	dc.b	"DeliTracker Custom",0
  even
 
-.init
+
+* in:
+*   d0 = tag to find
+* out:
+*   d0 = tag data or NULL if not found
+.getTag
+	* This is a BPTR to a seglist, loaded with LoadSeg()
+	move.l	moduleaddress(a5),a0
+	add.l	a0,a0
+	add.l	a0,a0
+	* tag item array
+	move.l	16(a0),a0
+.loop
+	;cmp.l	#TAG_END,(a0)
+	tst.l	(a0)		* TAG_END is NULL
+	beq.b	.notFound
+	cmp.l	(a0),d0
+	bne.b	.notThis
+	move.l	4(a0),d0
+	rts
+.notFound
 	moveq	#0,d0
 	rts
+.notThis
+	addq.l	#8,a0
+	bra.b	.loop
+
+.callFunc	
+	tst.l	d0 
+	beq.b	.noFunc
+	DPRINT	"Call %lx",101
+	pushm 	d1-a6
+	lea	.deliBase(pc),a5
+	move.l	d0,a0
+	jsr	(a0)
+	popm	d1-a6
+.noFunc rts
+
+.init
+	pushm	d1-a6	
+	DPRINT	"deliInit",10
+	bsr.w	.buildDeliBase
+ if DEBUG
+	 bsr	.showTags
+ endif
+	move.l	#DTP_InitPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+	bne.w	.error
+
+	DPRINT	"initPlayer ok",11
+
+	move.l	#DTP_InitSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	DPRINT	"InitSound ok",12
+
+	move.l	#DTP_Volume,d0  
+	bsr.w	.getTag
+	move.l	d0,.storedSetVolume
+	
+	DPRINT "VOL %lx",666
+
+	* see if an interrupt routine is provided.
+	* if so, set up a cia interrupt to drive it.
+	* otherwise assume the module handles it.
+	move.l	#DTP_Interrupt,d0  
+	bsr.w	.getTag
+	move.l	d0,.storedInterrupt
+	beq.b	.noInt
+	DPRINT	"has interrupt",33
+ 
+	* interrupt routine provided, set up an interrupt
+	bsr	init_ciaint
+	beq.b	.gotCia
+	DPRINT	"cia error",44
+	moveq	#ier_nociaints,d0
+	bra.b	.error
+.gotCia
+.noInt
+	DPRINT	"init ok",55
+	* ok
+	moveq	#0,d0
+.error	popm	d1-a6
+	rts
+
 .play
+	move.l	.storedInterrupt(pc),d0
+	beq.b	.nope
+	lea	.deliBase(pc),a5
+	move	var_b+mainvolume,dtg_SndVol(a5)
+	move.l	d0,a0
+	jsr	(a0)
+	move.l	.storedSetVolume(pc),d0
+	beq.b	.noVol
+	lea	.deliBase(pc),a5
+	move.l 	d0,a0
+	jsr	(a0)
+.noVol
+.nope
 	rts
+
+.storedInterrupt	dc.l	0
+.storedSetVolume	dc.l 	0
+
 .end
+	pushm	d1-a6
+	DPRINT	"deliEnd",13
+	
+	move.l	#DTP_EndSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	move.l	#DTP_EndPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	moveq	#0,d0
+	popm	d1-a6
 	rts
+
 .stop
+	DPRINT	"deliStop",14
+	bsr	clearsound
 	rts
+
+.buildDeliBase
+	lea	.deliBase(pc),a0
+
+	clr	dtg_SndNum(a0) 
+	move	#64,dtg_SndVol(a0)
+	move	#64,dtg_SndLBal(a0)
+	move	#64,dtg_SndRBal(a0)
+	clr	dtg_LED(a0)
+	move	#50,dtg_Timer(a0)
+
+	pea	.allocAudio(pc)
+	move.l	(sp)+,dtg_AudioAlloc(a0)
+	pea	.freeAudio(pc)
+	move.l	(sp)+,dtg_AudioFree(a0)
+	pea	dmawait(pc)
+	move.l	(sp)+,dtg_WaitAudioDMA(a0)
+
+	pea	.startInt(pc)
+	move.l	(sp)+,dtg_StartInt(a0)
+	pea	.stopInt(pc)
+	move.l	(sp)+,dtg_StopInt(a0)
+	pea	.songEnd(pc)
+	move.l	(sp)+,dtg_SongEnd(a0)
+	pea	.setTimer(pc)
+	move.l	(sp)+,dtg_SetTimer(a0)
+
+	pea	.f1(pc)
+	move.l	(sp)+,dtg_LockScreen(a0)
+	pea	.f2(pc)
+	move.l	(sp)+,dtg_UnlockScreen(a0)
+	pea	.f3(pc)
+	move.l	(sp)+,dtg_NotePlayer(a0)
+	pea	.f4(pc)
+	move.l	(sp)+,dtg_AllocListData(a0)
+	pea	.f5(pc)
+	move.l	(sp)+,dtg_FreeListData(a0)
+	pea	.f6(pc)
+	move.l	(sp)+,dtg_CopyString(a0)
+	pea	.f7(pc)
+	move.l	(sp)+,dtg_CopyFile(a0)
+	pea	.f8(pc)
+	move.l	(sp)+,dtg_CopyDir(a0)
+	pea	.f9(pc)
+	move.l	(sp)+,dtg_LoadFile(a0)
+	pea	.f10(pc)
+	move.l	(sp)+,dtg_GetListData(a0)
+	rts
+
+.allocAudio 
+	DELIDPRINT	"deliAudioAlloc",1102
+	pushm	d1-a6
+	lea	var_b,a5
+	bsr	varaa_kanavat
+	popm	d1-a6
+	rts
+
+
+.freeAudio 
+	DELIDPRINT	"deliAudioFree",1103
+	pushm	d1-a6
+	lea	var_b,a5
+	bsr	vapauta_kanavat
+	popm	d1-a6
+	rts
+
+.f1 DELIDPRINT	"f1",1101
+	moveq	#0,d0
+	rts
+.f2 DELIDPRINT	"f2",102
+	moveq	#0,d0
+	rts
+.f3 DELIDPRINT	"f3",103
+	moveq	#0,d0
+	rts
+.f4 DELIDPRINT	"f4",104
+	moveq	#0,d0
+	rts
+.f5 DELIDPRINT	"f5",105
+	moveq	#0,d0
+	rts
+.f6 DELIDPRINT	"f6",106
+	moveq	#0,d0
+	rts
+.f7 DELIDPRINT	"f7",107
+	moveq	#0,d0
+	rts
+.f8 DELIDPRINT	"f8",108
+	moveq	#0,d0
+	rts
+.f9 DELIDPRINT	"f9",109
+	moveq	#0,d0
+	rts
+.f10 DELIDPRINT	"f10",110
+	moveq	#0,d0
+	rts
+.startInt	
+	DELIDPRINT	"deliStartInt",1
+	moveq	#0,d0
+	rts
+.stopInt 
+	DELIDPRINT	"deliStopInt",2
+	moveq	#0,d0
+	rts
+.songEnd
+	DELIDPRINT	"deliSongEnd",3
+	moveq	#0,d0
+	rts
+.setTimer
+	DELIDPRINT	"deliSetTimer",15
+	moveq	#0,d0
+	rts
+
+
+* Build a fake delibase here
+.deliBase
+	ds.b	dtg_Reserved3
+ even
+
+
+
+
+ if DEBUG
+.showTags
+	move.l	moduleaddress(a5),a0
+	add.l	a0,a0
+	add.l	a0,a0
+	move.l	16(a0),a0
+.tloop
+	movem.l	(a0)+,d0/d1
+	sub.l	#DTP_TagBase,d0
+	lsl.l	#2,d0
+	lea		tagsTable(pc,d0.l),a1
+	cmp.l	#tagsTableEnd,a1
+	blo.b 	.okTag
+	lsr.l	#2,d0
+	add.l	#DTP_TagBase,d0
+	DPRINT  "Tag %lx: %lx",2002
+	bra.b	.oddTag
+.okTag
+	move.l	(a1),d0
+	DPRINT  "Tag %ls: %lx",2001
+.oddTag
+	tst.l	(a0) 
+	bne.b	.tloop
+	rts
+
+tagsTable
+ dc.l EDTP_InternalPlayer
+ dc.l EDTP_CustomPlayer 
+ dc.l EDTP_RequestDTVersion
+ dc.l EDTP_RequestKickVersion
+ dc.l EDTP_PlayerVersion
+ dc.l EDTP_PlayerName   
+ dc.l EDTP_Creator    	
+ dc.l EDTP_Check1   
+ dc.l EDTP_Check2   
+ dc.l EDTP_ExtLoad    	
+ dc.l EDTP_Interrupt    
+ dc.l EDTP_Stop   	 
+ dc.l EDTP_Config   	
+ dc.l EDTP_UserConfig   
+ dc.l EDTP_SubSongRange 
+ dc.l EDTP_InitPlayer   
+ dc.l EDTP_EndPlayer    
+ dc.l EDTP_InitSound    
+ dc.l EDTP_EndSound   	
+ dc.l EDTP_StartInt   	
+ dc.l EDTP_StopInt    	
+ dc.l EDTP_Volume   	
+ dc.l EDTP_Balance    	
+ dc.l EDTP_Faster   	
+ dc.l EDTP_Slower   
+ dc.l EDTP_NextPatt   
+ dc.l EDTP_PrevPatt   
+ dc.l EDTP_NextSong   	
+ dc.l EDTP_PrevSong   
+ dc.l EDTP_SubSongTest  
+ dc.l EDTP_NewSubSongRange
+ dc.l EDTP_DeliBase  	
+ dc.l EDTP_Flags   	
+ dc.l EDTP_CheckLen   	
+ dc.l EDTP_Description  
+ dc.l EDTP_Decrunch   	
+ dc.l EDTP_Convert    	
+ dc.l EDTP_NotePlayer   
+ dc.l EDTP_NoteStruct   
+ dc.l EDTP_NoteInfo   	
+ dc.l EDTP_NoteSignal   
+ dc.l EDTP_Process    	
+ dc.l EDTP_Priority   	
+ dc.l EDTP_StackSize    
+ dc.l EDTP_MsgPort    	
+ dc.l EDTP_Appear   	
+ dc.l EDTP_Disappear   	
+ dc.l EDTP_ModuleName   
+ dc.l EDTP_FormatName   
+ dc.l EDTP_AuthorName   
+ dc.l EDTP_InitNote  
+tagsTableEnd
+
+ 
+EDTP_InternalPlayer   	dc.b "DTP_InternalPlayer",0 ; obsolete
+EDTP_CustomPlayer   	dc.b "DTP_CustomPlayer",0 ; player is a customplayer
+EDTP_RequestDTVersion   	dc.b "DTP_RequestDTVersion",0 ; minimum DeliTracker version needed
+EDTP_RequestKickVersion   	dc.b "DTP_RequestKickVersion",0 ; minimum KickStart version needed
+EDTP_PlayerVersion   	dc.b "DTP_PlayerVersion",0 ; actual player version & revision
+EDTP_PlayerName   	dc.b "DTP_PlayerName",0 ; name of this player
+EDTP_Creator    	dc.b "DTP_Creator",0 ; misc string
+EDTP_Check1   	dc.b "DTP_Check1",0 ; Check Format before loading
+EDTP_Check2   	dc.b "DTP_Check2",0 ; Check Format after file is loaded
+EDTP_ExtLoad    	dc.b "DTP_ExtLoad",0 ; Load additional files
+EDTP_Interrupt    	dc.b "DTP_Interrupt",0 ; Interrupt routine
+EDTP_Stop   	dc.b "DTP_Stop",0 ; Clear Patterncounter
+EDTP_Config   	dc.b "DTP_Config",0 ; Config Player
+EDTP_UserConfig   	dc.b "DTP_UserConfig",0 ; User-Configroutine
+EDTP_SubSongRange   	dc.b "DTP_SubSongRange",0 ; Get min&max subsong number
+EDTP_InitPlayer   	dc.b "DTP_InitPlayer",0 ; Initialisize the Player
+EDTP_EndPlayer    	dc.b "DTP_EndPlayer",0 ; Player clean up
+EDTP_InitSound    	dc.b "DTP_InitSound",0 ; Soundinitialisation routine
+EDTP_EndSound   	dc.b "DTP_EndSound",0 ; End sound
+EDTP_StartInt   	dc.b "DTP_StartInt",0 ; Start interrupt
+EDTP_StopInt    	dc.b "DTP_StopInt",0 ; Stop interrupt
+EDTP_Volume   	dc.b "DTP_Volume",0 ; Set Volume
+EDTP_Balance    	dc.b "DTP_Balance",0 ; Set Balance
+EDTP_Faster   	dc.b "DTP_Faster",0 ; Incease playspeed
+EDTP_Slower   	dc.b "DTP_Slower",0 ; Decrease playspeed
+EDTP_NextPatt   	dc.b "DTP_NextPatt",0 ; Jump to next pattern
+EDTP_PrevPatt   	dc.b "DTP_PrevPatt",0 ; Jump to previous pattern
+EDTP_NextSong   	dc.b "DTP_NextSong",0 ; Play next subsong
+EDTP_PrevSong   	dc.b "DTP_PrevSong",0 ; Play previous subsong
+EDTP_SubSongTest   	dc.b "DTP_SubSongTest",0 ; Test, if given subsong is vaild
+EDTP_NewSubSongRange   	dc.b "DTP_NewSubSongRange",0 ; enhanced replacement for EDTP_SubSongRange
+EDTP_DeliBase  	dc.b "DTP_DeliBase",0 ; the address of a pointer where DT
+EDTP_Flags   	dc.b "DTP_Flags",0 ; misc Flags (see below)
+EDTP_CheckLen   	dc.b "DTP_CheckLen",0 ; Length of the Check Code
+EDTP_Description   	dc.b "DTP_Description",0 ; misc string
+EDTP_Decrunch   	dc.b "DTP_Decrunch",0 ; pointer to Decrunch Code
+EDTP_Convert    	dc.b "DTP_Convert",0 ; pointer to Converter Code
+EDTP_NotePlayer   	dc.b "DTP_NotePlayer",0 ; pointer to a NotePlayer Structure
+EDTP_NoteStruct   	dc.b "DTP_NoteStruct",0 ; the address of a pointer to the
+EDTP_NoteInfo   	dc.b "DTP_NoteInfo",0 ; a pointer where DT stores a pointer
+EDTP_NoteSignal   	dc.b "DTP_NoteSignal",0 ; pointer to NoteSignal code
+EDTP_Process    	dc.b "DTP_Process",0 ; pointer to process entry code
+EDTP_Priority   	dc.b "DTP_Priority",0 ; priority of the process
+EDTP_StackSize    	dc.b "DTP_StackSize",0 ; stack size of the process
+EDTP_MsgPort    	dc.b "DTP_MsgPort",0 ; a pointer where DT stores a pointer
+EDTP_Appear   	dc.b "DTP_Appear",0 ; open your window, if you can
+EDTP_Disappear   	dc.b "DTP_Disappear",0 ; go dormant
+EDTP_ModuleName   	dc.b "DTP_ModuleName",0 ; get the name of the current module
+EDTP_FormatName   	dc.b "DTP_FormatName",0 ; get the name of the module format
+EDTP_AuthorName   	dc.b "DTP_AuthorName",0 ; not implemented yet
+EDTP_InitNote   	dc.b "DTP_InitNote",0 ; NoteStruct initialization
+ even
+ endif
 
 id_delicustom
 	lea	.id1_start(pc),a1	
