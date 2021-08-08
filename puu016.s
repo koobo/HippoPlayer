@@ -31563,7 +31563,8 @@ p_delicustom
 .gotCia
 .noInt
 
-	tst.l	.storedInterrupt(pc)
+	 * tst.l xyz(pc) is 020 instruction
+	move.l	.storedInterrupt(pc),d0  
 	bne.b	.intSet
 	* try to start module provided int handler
 	move.l	#DTP_StartInt,d0
