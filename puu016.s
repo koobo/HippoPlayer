@@ -72,8 +72,8 @@ isListDivider macro
 	cmp.b 	#DIVIDER_MAGIC,\1
 	endm
 
-isStarredModule macro 
-	tst.b 	l_star(\1)
+isFavoriteModule macro 
+	tst.b 	l_favorite(\1)
 	endm
 
 iword	macro
@@ -918,10 +918,10 @@ filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 loading		rs.b	1		* ~0: lataus meneillään
 loading2	rs.b	1		* ~0: filejen addaus meneillään
 							* TODO: not used, remove?
-* List of starred modules
-starredListHeader	rs.b 	MLH_SIZE
+* List of favorite modules
+favoriteListHeader	rs.b 	MLH_SIZE
 * Flag indicates the list has changed before last save
-starredListChanged	rs.b	1
+favoriteListChanged	rs.b	1
 			rs.b	1	* pad
 
 ** InfoWindow kamaa
@@ -1173,7 +1173,7 @@ xpl_offs	=	pt_group_start
 			rs.b	MLN_SIZE	* Minimal node 
 l_nameaddr	rs.l	1			* osoitin pelkkään tied.nimeen
 								* address to filename without path
-l_star		rs.b 	1			* star status for this file
+l_favorite		rs.b 	1			* favorite status for this file
 l_filename	rs.b	0			* tied.nimi ja polku alkaa tästä
 								* full path to filename begins at this point
 								* element size is dynamically calculated based on path length.
@@ -2328,7 +2328,7 @@ lelp
 
 	lea	moduleListHeader(a5),a0		* Uusi lista
 	NEWLIST	a0
-	lea	starredListHeader(a5),a0
+	lea	favoriteListHeader(a5),a0
 	NEWLIST a0
 
 	lea	.startingMsg(pc),a0
@@ -2477,7 +2477,7 @@ lelp
 
 	bsr.w	inforivit_clear
 
-	jsr		importStarredModulesFromDisk
+	jsr		importFavoriteModulesFromDisk
 
 	DPRINT	"Loading group",1
 
@@ -2706,7 +2706,7 @@ msgloop
 	beq.b	.noe
 	clr.b	prefsexit(a5)
 
-	jsr	handleStarredModuleConfigChange
+	jsr	handleFavoriteModuleConfigChange
 
 	* update filebox size and contents if it has changed
 
@@ -2801,12 +2801,12 @@ msgloop
 	; and IDCMP-event handlers anyway:
 	;bsr.w	zipwindow
 
-	* Try to save starred modules when user has been idle for a while
+	* Try to save favorite modules when user has been idle for a while
 	moveq	#0,d0 
 	move	userIdleTick(a5),d0 
 	cmp	#7,d0
 	blo.b	.notIdleEnough
-	jsr	exportStarredModulesWithMessage
+	jsr	exportFavoriteModulesWithMessage
 .notIdleEnough
 
 	pop	d0
@@ -3026,7 +3026,7 @@ exit
 .exmsg dc.b	"Exiting...",0
  even
 .exmsg2
-	jsr	exportStarredModulesToDisk
+	jsr	exportFavoriteModulesToDisk
 
 * poistetaan loput prosessit...
 
@@ -3076,7 +3076,7 @@ exit
 	bsr.w	freelist		* vapautetaan lista
 	jsr	rem_ciaint
 
-	jsr	freeStarredList
+	jsr	freeFavoriteList
 
 	tst.b	vbsaatu(a5)
 	beq.b	.nbv
@@ -9590,14 +9590,14 @@ addfile
  	jsr	_LVOAddTail(a6)
 
 	move.l	a3,a0
-	jsr	updateStarredStatus
+	jsr	updateFavoriteStatus
 	rts
  
 .insert	move.l	fileinsert(a5),a2	* minkä filen perään insertataan
 	lob	Insert
 
 	move.l	a3,a0
-	jsr	updateStarredStatus
+	jsr	updateFavoriteStatus
 .exit
 	rts
 
@@ -10448,7 +10448,7 @@ importModuleProgramFromData
 
 	* protect a3, which is killed here
 	push	a3
-	jsr	updateStarredStatus
+	jsr	updateFavoriteStatus
 	pop 	a3
 
 	cmp.l	#MAX_MODULES,d7
@@ -10731,7 +10731,7 @@ komentojono
 	lore	Exec,AddTail
 
 	move.l	a2,a0
-	jsr	updateStarredStatus
+	jsr	updateFavoriteStatus
 
 	addq.l	#1,modamount(a5)	* määrä++
 
@@ -15551,7 +15551,7 @@ doPrintNames
 	* Favorites are bolded, skip this if feature disabled
 	tst.b	favorites(a5)
 	beq.b	.noFav
-	isStarredModule a3
+	isFavoriteModule a3
 	beq.b	.noFav
 	bsr		printBold
 	bra.b	.wasFav
@@ -16832,14 +16832,14 @@ marklineRightMouseButton
 	isListDivider  l_filename(a0)
 	beq.b	.notFile
 
-	* Toggle star status
-	isStarredModule a0 
-	bne.b	.wasStarred
-	bsr	addStarredModule
-	bra.b	.wasNotStarred
-.wasStarred
-	bsr	removeStarredModule
-.wasNotStarred
+	* Toggle favorite status
+	isFavoriteModule a0 
+	bne.b	.wasFavorite
+	bsr	addFavoriteModule
+	bra.b	.wasNotFavorite
+.wasFavorite
+	bsr	removeFavoriteModule
+.wasNotFavorite
 
 	move.l	d4,d0
 	* d0 contains the node index
@@ -16859,7 +16859,7 @@ marklineRightMouseButton
 	rts	
 .notFile
 .notFound
-	DPRINT	"Not starring this line",2
+	DPRINT	"Not favoriting this line",2
 	rts
 
 *********************************
@@ -26520,38 +26520,38 @@ acouscll
 
 
 ********************************
-* Starred module list handling
+* Favorite module list handling
 ********************************
 
 * in:
 *  a0 = module list node
-;isStarredModule
-;	tst.b	l_star(a0)
+;isFavoriteModule
+;	tst.b	l_favorite(a0)
 ;	rts
 
 * in:
 *  a0 = module list node
-addStarredModule
-	;bsr	isStarredModule
-	isStarredModule a0
+addFavoriteModule
+	;bsr	isFavoriteModule
+	isFavoriteModule a0
 	bne.w .exit
 
  if DEBUG
 	pea	l_filename(a0)
 	pop  d0
-	DPRINT	"addStarredModule %s",1
+	DPRINT	"addFavoriteModule %s",1
  endif
-	* set star flag
-	st	l_star(a0)
+	* set favorite flag
+	st	l_favorite(a0)
 	
-	* see if for some reason a0 is already in the star list
-	bsr.w	findStarredModule
+	* see if for some reason a0 is already in the favorite list
+	bsr.w	findFavoriteModule
 	tst.l	d0
 	bne.w	.exit	* bail out if so
 
 	move.l	a0,a3
 
-	* copy this node and add to star list
+	* copy this node and add to favorite list
 	* get length of memory region, it's before the actual data
 	move.l	-4(a3),d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -26578,36 +26578,36 @@ addStarredModule
 
 	* Append to list
 	move.l	a4,a1
-	lea	starredListHeader(a5),a0
+	lea	favoriteListHeader(a5),a0
 	lob	AddTail
 
-	st	starredListChanged(a5)
+	st	favoriteListChanged(a5)
  if DEBUG
-	bsr	logStarredList
+	bsr	logFavoriteList
  endif
 .noMem
 .exit
-	;bsr exportStarredModulesWithMessage
+	;bsr exportFavoriteModulesWithMessage
 	rts
 
 * in:
 *  a0 = module list node
-removeStarredModule
-	;bsr	isStarredModule
-	isStarredModule a0
+removeFavoriteModule
+	;bsr	isFavoriteModule
+	isFavoriteModule a0
 	beq.w	.exit
-	clr.b	l_star(a0)
+	clr.b	l_favorite(a0)
 
  if DEBUG
 	pea	l_filename(a0)
 	pop  d0
-	DPRINT	"removeStarredModule %s",1
+	DPRINT	"removeFavoriteModule %s",1
 	 endif
 
 .loop
-	* Find matching l_filename from star list
+	* Find matching l_filename from favorite list
 	* node is in a0
-	bsr	findStarredModule
+	bsr	findFavoriteModule
 	beq.b	.exit
 	* found matching one, in a1
 	move.l	a1,d2
@@ -26619,26 +26619,26 @@ removeStarredModule
 	move.l	d2,a0
 	jsr 	freemem
 	pop	a0
-	st	starredListChanged(a5)
+	st	favoriteListChanged(a5)
 	* search again to find duplicates, although there shouldn't be 
 	bra.b	.loop
 .exit
  if DEBUG
-	bsr	logStarredList
+	bsr	logFavoriteList
  endif
-	;bsr exportStarredModulesWithMessage
+	;bsr exportFavoriteModulesWithMessage
 	rts
 
 * in:
 *   a0 = node to find by matching filename
 * out:
-*   a1 = starred node that matches
+*   a1 = favorite node that matches
 *   d0 = 1 when match, 0 when no match
 * destroys:
 *   d0,a2,a3
-findStarredModule
-	* Find matching l_filename from star list
-	lea	starredListHeader(a5),a1
+findFavoriteModule
+	* Find matching l_filename from favorite list
+	lea	favoriteListHeader(a5),a1
 .loop
 	TSTNODE	a1,a1
 	beq.b	.notFound
@@ -26658,9 +26658,9 @@ findStarredModule
 	moveq	#0,d0
 	rts
 
-freeStarredList
+freeFavoriteList
 	move.l	(a5),a6		* execbase
-	lea	starredListHeader(a5),a2
+	lea	favoriteListHeader(a5),a2
 .loop
 	* a0: list, a1: destroyed, d0: node, or zero
 	move.l	a2,a0
@@ -26673,8 +26673,8 @@ freeStarredList
 .listFreed
 	rts
 
-importStarredModulesFromDisk
-	DPRINT	"importStarredModulesFromDisk",1
+importFavoriteModulesFromDisk
+	DPRINT	"importFavoriteModulesFromDisk",1
 	tst.b	favorites(a5)
 	bne.b	.enabled
 	DPRINT	"->disabled in prefs",2
@@ -26683,7 +26683,7 @@ importStarredModulesFromDisk
 
 	moveq	#0,d6
 
-	lea	starredModuleFileName(pc),a0
+	lea	favoriteModuleFileName(pc),a0
 	move.l	a0,d1
 	move.l	#1005,d2
 	lore 	Dos,Open
@@ -26725,24 +26725,24 @@ importStarredModulesFromDisk
 	tst.l	d6
 	beq.b	.noData
 
-	lea starredListHeader(a5),a2
+	lea favoriteListHeader(a5),a2
 	move.l	d6,a3			* start of buffer	
 	lea	(a3,d5.l),a4	* end of buffer
 	jsr	importModuleProgramFromData
-	DPRINT 	"Imported %ld starred files",3
+	DPRINT 	"Imported %ld favorite files",3
 
 	move.l	d6,a0
 	jsr	freemem
 .noData
-	bsr	logStarredList
+	bsr	logFavoriteList
 	rts
 
 
-exportStarredModulesWithMessage
+exportFavoriteModulesWithMessage
 	pushm	all
 	tst.b	favorites(a5)
 	beq.w	.x
-	tst.b	starredListChanged(a5)
+	tst.b	favoriteListChanged(a5)
 	beq.w	.x
 
 	* storage for two intuitimes
@@ -26759,7 +26759,7 @@ exportStarredModulesWithMessage
 	bra.b	.c
 .msg 	dc.b  	"Saving favorites...",0
  even
-.c	bsr.b	exportStarredModulesToDisk
+.c	bsr.b	exportFavoriteModulesToDisk
 	* Wait a while so that user can see something happened
 .wait
 	lea	8(sp),a0		* secs
@@ -26783,36 +26783,36 @@ exportStarredModulesWithMessage
 .x	popm	all
 	rts
 	
-exportStarredModulesToDisk
-	DPRINT	"exportStarredModulesToDisk",1
+exportFavoriteModulesToDisk
+	DPRINT	"exportFavoriteModulesToDisk",1
 	tst.b	favorites(a5)
 	beq.b	.x
-	tst.b	starredListChanged(a5)
+	tst.b	favoriteListChanged(a5)
 	beq.b	.x
-	lea	starredModuleFileName(pc),a0
-	lea	starredListHeader(a5),a1
+	lea	favoriteModuleFileName(pc),a0
+	lea	favoriteListHeader(a5),a1
 	jsr 	exportModuleProgramToFile
-	clr.b	starredListChanged(a5)
+	clr.b	favoriteListChanged(a5)
 .x	rts
 
-starredModuleFileName
+favoriteModuleFileName
 	dc.b	"S:HippoFavorites.prg",0
  even
 
 * in:
 *  a0 = list node
-updateStarredStatus
-	bsr	findStarredModule
+updateFavoriteStatus
+	bsr	findFavoriteModule
 	beq.b	.exit
-	* a matching starred module was found, set flag 
-	st	l_star(a0)
+	* a matching favorite module was found, set flag 
+	st	l_favorite(a0)
 .exit
 	rts
 
-logStarredList
+logFavoriteList
  if DEBUG
-	DPRINT	"Starred modules:",2
-	lea	starredListHeader(a5),a0
+	DPRINT	"Favorite modules:",2
+	lea	favoriteListHeader(a5),a0
 .l	TSTNODE	a0,a0
 	beq.b	.x
 	lea	l_filename(a0),a1
@@ -26823,12 +26823,12 @@ logStarredList
  endif
 	rts
 
-handleStarredModuleConfigChange
+handleFavoriteModuleConfigChange
 	pushm	all
 
 	tst.b	favorites(a5)
 	beq.w	.noFavs
-	DPRINT	"handleStarredModuleConfigChange: enabled",1
+	DPRINT	"handleFavoriteModuleConfigChange: enabled",1
 
 * favorites are enabled.
 * - they may have been enabled ealier, or
@@ -26836,38 +26836,38 @@ handleStarredModuleConfigChange
 
 * if the list is not empty, this likely means favorites was enabled
 * and there is stuff in the list, do nothing
-	lea	starredListHeader(a5),a0
+	lea	favoriteListHeader(a5),a0
 	IFNOTEMPTY a0,.exit
 
 	DPRINT	"->populating",3
 
 * if list is empty, try importing data
-	bsr	importStarredModulesFromDisk
-* then the current list should be updated to contain star statuses
+	bsr	importFavoriteModulesFromDisk
+* then the current list should be updated to contain favorite statuses
 	lea	moduleListHeader(a5),a0
 .loop
 	TSTNODE	a0,a0
 	beq.b	.end
-	* find if node a0 is in starred module list
-	bsr.w	findStarredModule
-	* Use the return status to update star status for this node 
-	move.b	d0,l_star(a0)
+	* find if node a0 is in favorite module list
+	bsr.w	findFavoriteModule
+	* Use the return status to update favorite status for this node 
+	move.b	d0,l_favorite(a0)
 	bra.b	.loop
 .end
 	* refresh list
 	bra.w	.refresh
 
 .noFavs
-	DPRINT	"handleStarredModuleConfigChange: disabled",2
+	DPRINT	"handleFavoriteModuleConfigChange: disabled",2
 
 	* favorites are not enabled
-	lea	starredListHeader(a5),a0
+	lea	favoriteListHeader(a5),a0
 	IFEMPTY a0,.exit
 	DPRINT	"->cleaning up",4
 	* there's some stuff in the list, free it and refresh view
-	* l_star need not be cleaned since they won't be displayed
+	* l_favorite need not be cleaned since they won't be displayed
 	* anyway if feature is disabled
-	bsr	freeStarredList
+	bsr	freeFavoriteList
 .refresh
 	st	hippoonbox(a5)
 	jsr	resh
