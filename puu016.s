@@ -187,6 +187,8 @@ check	macro
 	include	devices/ahi.i
 	include	devices/ahi_lib.i
 
+	include	misc/deliplayer.i
+
 	incdir include/
 	include	mucro.i
 	include	med.i
@@ -575,9 +577,14 @@ samplefollow		rs.l	1
 samplepointer		rs.l	1
 samplepointer2		rs.l	1
 samplestereo		rs.b	1
-sampleinit		rs.b	1
+* This is set in loadfile() to indicate a sample is found.
+* Actual loading is then skipped.
+sampleinit		rs.b	1			
 sampleformat		rs.b	1
-			rs.b	1
+
+* This is set in loadfile() to indicate a DeliTracker CUSTOM
+* module is found. Loading is then done using LoadSeg().
+delicustominit			rs.b	1
 
 ****** Prefs asetukset, joita k‰sitell‰‰n
 
@@ -1110,6 +1117,7 @@ pt_dw		rs.b	1
 pt_hippel	rs.b	1
 pt_mline	rs.b	1
 pt_beathoven	rs.b	1
+pt_delicustom	rs.b 	1
 
 * These need a replayer from the group file
 pt_group_start = 49
@@ -5234,6 +5242,11 @@ freemodule
 	DPRINT	"freemodule obtain data",1
 	bsr.w		obtainModuleData
 
+	* Check if need to do UnLoadSeg
+	cmp	#pt_delicustom,playertype(a5)
+	seq	d7
+
+	clr		playertype(a5)
 	clr.b	modulename(a5)
 	clr.b	moduletype(a5)
 	clr.b	kelausnappi(a5)
@@ -5251,6 +5264,9 @@ freemodule
 ;	bsr.w	lootaa
 	bsr.w	inforivit_clear
 
+	* free replay code, this label here is silly
+	* all of them are in the same address
+	* with different labels
 	lea	ps3mroutines(a5),a0		* vapautetaan replayeri
 	jsr	freereplayer
 
@@ -5258,10 +5274,20 @@ freemodule
 	move.l	moduleaddress(a5),d0
 	beq.b	.ee
 	move.l	d0,a1
+
+	tst.b	d7
+	beq.b	.normal
+	move.l 	a1,d1
+	lore	Dos,UnLoadSeg
+	DPRINT	"UnLoadSeg!",3
+	bra.b	.deliCustom
+.normal
+
 	move.l	modulelength(a5),d0
 	beq.b	.ee
-
 	lob	FreeMem				* hit!
+.deliCustom	
+
 	clr.l	moduleaddress(a5)
 	clr.l	modulelength(a5)
 
@@ -5291,8 +5317,8 @@ freemodule
 	clr.b	lod_tfmx(a5)
 
 .eee	
-	DPRINT	"freemodule release data",2
-	bsr.w		releaseModuleData
+	DPRINT	"freemodule release data",4
+	bsr.w	releaseModuleData
 
 	movem.l	(sp)+,d0-a6
 	rts
@@ -22407,7 +22433,10 @@ loadmodule
 	tst	d0
 	bne.w	.err			* virhe lataamisessa
 
+	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
+	bne.b	.nip
+	tst.b	delicustominit(a5)
 	bne.b	.nip
 
 	move.l	moduleaddress(a5),a0	* Oliko moduleprogram??
@@ -22439,7 +22468,6 @@ loadmodule
 ;	addq	#4,sp			* ei palata samaan aliohjelmaan!
 	rts
 .nip
-
 	bsr.w	tutki_moduuli
 	tst.l	d0
 	bne.b	.unk_err		* ep‰m‰‰r‰inen tiedosto
@@ -22886,7 +22914,7 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_sidmon1		* Sidmon1
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_deltamusic
 	beq.b	.on
@@ -22929,6 +22957,9 @@ loadfile
 
 	bsr		id_gamemusiccreator
 	beq.b	.on
+
+	;bsr		id_delicustom
+	;beq.b	.on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
@@ -23020,7 +23051,7 @@ loadfile
 	move.l	d0,d1
 	lea	fileinfoblock(a5),a3
 	move.l	a3,d2
-	lob	Examine
+	lob	Examine			* Nasty! Error is not checked
 	move.l	d3,d1
 	lob	UnLock
 
@@ -23039,7 +23070,9 @@ loadfile
 	dbeq	d0,.cece
 	clr.b	(a1)
 .noc
+	* Read some bytes of data into the probebuffer
 
+	DPRINT	"Probing",4
 
 	move.l	#1005,d2
 	move.l	lod_filename(a5),d1
@@ -23055,6 +23088,7 @@ loadfile
 ;	cmp.l	#1084,d0
 ;	bne.w	.read_error
 
+* Check if this is an archive file
 *** onko lha, lzx, zip?
 
 	cmp	#'PK',probebuffer(a5)
@@ -23091,6 +23125,8 @@ loadfile
 
 .nolha
 
+** Is this a sample file, stop loading if so.
+
 ** Jos havaitaan file sampleks, ei ladata enemp‰‰
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
@@ -23101,19 +23137,18 @@ loadfile
 
 .nosa	clr.b	sampleformat(a5)
 
+	* This checks whether the file should be loaded into FAST ram
+
 	lea	probebuffer(a5),a0	* Kannattaako ladata fastiin??
 	bsr.w	.checkm
 
-;.nocheck
+	* XPK compressed file check
 
 	cmp.l	#"XPKF",probebuffer(a5)
 	bne.w	.wasnt_xpk
 
-
 	bsr.w	get_xpk
 	beq.w	.lib_error1
-
-
 
 ** file on xpk, katsotaan jos se on sample:
 	lea	probebuffer+16(a5),a0
@@ -23313,6 +23348,8 @@ loadfile
 
 .wasnt_xpk
 
+	* Was not XPK compressed. Is it powerpacker compressed?
+
 	cmp.l	#"PP20",probebuffer(a5)
 	bne.b	.wasnt_pp
 
@@ -23334,6 +23371,8 @@ loadfile
 	beq.w	.exit
 	bra.w	.pp_error	
 .wasnt_pp
+
+	* FImp compressed file?
 
 	cmp.l	#"IMP!",probebuffer(a5)
 	bne.b	.wasnt_fimp
@@ -23366,7 +23405,9 @@ loadfile
 
 .wasnt_fimp
 
+*	Next up, try loading with XFDMaster if it is enabled
 ********* Lataus XFDmaster.libill‰
+
 	tst.b	xfd(a5)
 	beq.w	.wasnt_xfd
 
@@ -23438,19 +23479,50 @@ loadfile
 	bra.w	.exit
 
 
-****** Ihan Tavallinen Lataus
-
 .wasnt_xfd
 
+* Finally here we just do an ordinary read.
+****** Ihan Tavallinen Lataus
+
+
+	* Probebuffer now has 1084 of data we can check
+	* for Delitracker CUSTOM format, as it has to be loaded
+	* with LoadSeg(), being an exe file.
+	pushm 	d1-a6
+	clr.b	delicustominit(a5)
+	lea	probebuffer(a5),a4
+	move.l	#1084,d7
+	bsr	id_delicustom
+	bne.b	.notDeliCustom
+	move.l	#MEMF_PUBLIC,lod_memtype(a5)
+	bsr.w	.infor
+	move.l	lod_filename(a5),d1
+	lore	Dos,LoadSeg
+	tst.l	d0
+	beq.b	.loadSegErr
+	DPRINT	"DeliCustom LoadSeg ok",7
+	st	delicustominit(a5)
+	move.l	d0,lod_address(a5)
+	clr.l	lod_length(a5)
+.loadSegErr
+.notDeliCustom
+	popm 	d1-a6
+
+	* Skip the rest if LoadSeg went fine
+	tst.b	delicustominit(a5)
+	bne.w	.exit
+
+ if DEBUG
+	move.l	lod_length(a5),d0
+	DPRINT	"Normal load %ld",5
+ endif
+ 
 	bsr.w	.alloc
 	move.l	d0,lod_address(a5)
 	beq.w	.error
 
 	bsr.w	.infor
-
 	bsr.w	.seekstart
-
-
 
  ifeq floadpr
 	move.l	lod_filehandle(a5),d1
@@ -23543,12 +23615,7 @@ loadfile
 	rts
 .don
 
-
  endc
-
-	
-
-
 
 .exit	
 
@@ -23563,7 +23630,6 @@ loadfile
 
 	tst	lod_error(a5)
 	beq.b	.okk
-
 
 	bsr.w	.free
 
@@ -24084,6 +24150,7 @@ tutki_moduuli2
 
 
 tutki_moduuli
+	DPRINT	"Identify module",1
 
  ifne PILA
 
@@ -24124,6 +24191,11 @@ tutki_moduuli
 ;	addq.l	#1,IVSOFTINT+IV_CODE(a2)
 ;.zz
 
+	* Check this first since moduleaddress(a5) can't be used for anything 
+	* if true.
+	tst.b	delicustominit(a5)
+	bne		.delicustom
+	
 	tst.b	ahi_use(a5)
 	bne.b	.ohi
 	cmp.b	#2,ptmix(a5)	* Normaali vai miksaava PT replayeri?
@@ -24132,12 +24204,10 @@ tutki_moduuli
 	beq.w	.pro
 
 .ohi
-
-
 	clr.b	external(a5)		* Lippu: ei tartte player grouppia 
 
 	tst.b	sampleinit(a5)
-	bne.b	.noop
+	bne.w	.noop
 
 	tst.b	ahi_muutpois(a5)	
 	bne.b	.noop
@@ -24179,6 +24249,9 @@ tutki_moduuli
 
 	bsr		id_beathoven
 	beq.w	.beathoven
+
+	;bsr		id_delicustom
+	;beq		.delicustom
 
 	tst.l	externalplayers(a5)
 	bne.b	.noop
@@ -24290,7 +24363,7 @@ tutki_moduuli
 .mp
 	bsr.w	id_ps3m		
 	tst.l	d0
-	beq.b	.multi
+	beq.w	.multi
 
 	clr.b	external(a5)
 .nope
@@ -24303,10 +24376,12 @@ tutki_moduuli
 	beq.w	.sid
 
 	bsr.w	id_oldst
-	beq.b	.oldst
+	beq.w	.oldst
 
 
-.er	moveq	#lod_tuntematon,d0
+.er	
+	DPRINT 	"Unknown format",2
+	moveq	#lod_tuntematon,d0
 	rts	
 
 .ex	bsr.w	tee_modnimi
@@ -24316,7 +24391,13 @@ tutki_moduuli
 	cmp	#pt_med,playertype(a5)
 	beq.b	.wew
 	bsr.w	whatgadgets
-.wew	moveq	#0,d0
+.wew
+ if DEBUG
+	moveq	#0,d0
+	move	playertype(a5),d0
+	DPRINT 	"Detected %ld",3
+ endif
+	moveq	#0,d0
 	rts
 
 
@@ -24348,7 +24429,7 @@ tutki_moduuli
 	move.l	moduleaddress(a5),a1	* tutkaillaan onko miss‰ muistissa
 	lore	Exec,TypeOfMem
 	and.l	#MEMF_CHIP,d0
-	beq.b	.ex2
+	beq.w	.ex2
 
 ** Arf! Ladattiin chippiin!
 ** Onko vehkeess‰ fastia laisinkaan? Jos on, pistet‰‰n warn-tekstinp‰tk‰.
@@ -24356,7 +24437,7 @@ tutki_moduuli
 	moveq	#MEMF_FAST,d1
 	lob	AvailMem
 	tst.l	d0
-	beq.b	.ex2
+	beq.w	.ex2
 
 	bsr.w	inforivit_warn
 	moveq	#65,d1
@@ -24532,6 +24613,11 @@ tutki_moduuli
 .digitalmugician
 	pushpea	p_digitalmugician(pc),playerbase(a5)
 	move	#pt_digitalmugician,playertype(a5)
+	bra.w	.ex
+
+.delicustom
+	pushpea	p_delicustom(pc),playerbase(a5)
+	move	#pt_delicustom,playertype(a5)
 	bra.w	.ex
 
 **** Oliko  sample??
@@ -31321,6 +31407,649 @@ id_digitalmugician
 .id_end
  even
 
+******************************************************************************
+* Delitracker CUSTOM
+******************************************************************************
+
+* Another version that initializes a5.
+* Deli calls have another base in a5.
+DELIDPRINT  macro
+	ifne DEBUG
+	pushm a0/a5
+	lea	var_b,a5
+	lea .DD\2(pc),a0
+	jsr	desmsg
+	pea	desbuf(a5)
+	jsr	PRINTOUT
+	popm	a0/a5
+	bra.b	.D\2
+.DD\2
+ 	dc.b 	\1,10,0
+ 	even
+.D\2
+	endc
+	endm
+
+p_delicustom
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	jmp	.cont(pc)
+	dc.l	$4e754e75
+	jmp	.song(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"DeliTracker Custom",0
+ even
+
+
+* in:
+*   d0 = tag to find
+* out:
+*   d0 = tag data or NULL if not found
+.getTag
+	* This is a BPTR to a seglist, loaded with LoadSeg()
+	move.l	moduleaddress(a5),a0
+	add.l	a0,a0
+	add.l	a0,a0
+	* tag item array
+	move.l	16(a0),a0
+.loop
+    ;cmp.l  #TAG_END,(a0)
+    tst.l   (a0)            * TAG_END is NULL
+    beq.b   .notFound
+    cmp.l   (a0),d0
+    bne.b   .notThis
+    move.l  4(a0),d0
+    rts
+.notFound
+	moveq   #0,d0
+	rts
+.notThis
+    addq.l  #8,a0
+    bra.b   .loop
+
+.callFunc	
+	tst.l	d0 
+	beq.b	.noFunc
+	DPRINT	"Call %lx",101
+	pushm 	d2-a6
+	lea	.deliBase(pc),a5
+	move.l	d0,a0
+	jsr	(a0)
+	popm	d2-a6
+.noFunc rts
+
+.init
+	pushm	d1-a6	
+	DPRINT	"deliInit",10
+	bsr.w	.buildDeliBase
+
+ if DEBUG
+	 bsr	.showTags
+ endif
+
+	* Order in DT
+	* InitPlayer
+	* SubSongRange
+	* SubSongRange
+	* Volume
+	* Volume
+	* InitSound (dtg_SndNum=1)
+	* SubSongRange	
+
+	move.l	#DTP_DeliBase,d0
+	bsr	.getTag
+	beq.b	.noDBTag
+	move.l	d0,a0 
+	lea	.deliBase(pc),a1
+	move.l	a1,(a0)
+.noDBTag
+
+	move.l	#DTP_InitPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+	* Status is returned in d0, can't rely on status flags
+	* here. d0=0 if ok, else not ok
+	tst.l	d0
+	bne.w	.error
+	DPRINT	"initPlayer ok",11
+
+	* set default song number
+	bsr	.getSongInfo
+	* d0 = def, d1 = min, d2 = max	
+	move	d0,.deliBase+dtg_SndNum
+	move	d0,songnumber(a5)
+	move	d2,maxsongs(a5)	
+
+	move.l	#DTP_Volume,d0  
+	bsr.w	.getTag
+	move.l	d0,.storedSetVolume
+
+	move.l	#DTP_InitSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	DPRINT	"InitSound ok",12
+
+	* see if an interrupt routine is provided.
+	* if so, set up a cia interrupt to drive it.
+	* otherwise assume the module handles it.
+	move.l	#DTP_Interrupt,d0  
+	bsr.w	.getTag
+	move.l	d0,.storedInterrupt
+	beq.b	.noInt
+	DPRINT	"using hippo interrupt",33
+ 
+	* interrupt routine provided, set up an interrupt
+	bsr	init_ciaint
+	beq.b	.gotCia
+	DPRINT	"cia error",44
+
+	* try to clean up
+	move.l	#DTP_EndSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+	move.l	#DTP_EndPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	moveq	#ier_nociaints,d0
+	bra.b	.error
+.gotCia
+.noInt
+
+	 * tst.l xyz(pc) is 020 instruction
+	move.l	.storedInterrupt(pc),d0  
+	bne.b	.intSet
+	* try to start module provided int handler
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	beq.b	.noStartInt
+	bsr	.callFunc
+	DPRINT	"using module interrupt",34
+.noStartInt
+.intSet
+
+.skip
+	DPRINT	"init ok",55
+	* ok
+	moveq	#0,d0
+.exit
+	popm	d1-a6
+	rts
+
+.error
+	DPRINT	"init FAIL",56
+	moveq	#-1,d0 
+	bra.b	.exit
+	
+
+* Interrupt play routine, use cached pointers to avoid tag searches
+.play
+	move.l	.storedInterrupt(pc),d0
+	beq.b	.nope
+	lea	.deliBase(pc),a5
+	move	var_b+mainvolume,dtg_SndVol(a5)
+	move.l	d0,a0
+	jsr	(a0)
+	move.l	.storedSetVolume(pc),d0
+	beq.b	.noVol
+	lea	.deliBase(pc),a5
+	move.l 	d0,a0
+	jsr	(a0)
+.noVol
+.nope
+	rts
+
+.storedInterrupt	dc.l	0
+.storedSetVolume	dc.l 	0
+
+.end
+	pushm	d1-a6
+	DPRINT	"deliEnd",13
+	
+	move.l	.storedInterrupt(pc),d0
+	beq.b	.noIntUsed
+	bsr.w	rem_ciaint
+.noIntUsed
+
+	move.l	#DTP_StopInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+
+	move.l	#DTP_EndSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	move.l	#DTP_EndPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	moveq	#0,d0
+	popm	d1-a6
+	rts
+
+
+* out:
+*  d0=default song
+*  d1=min song
+*  d2=max song
+.getSongInfo
+	moveq	#0,d0 
+	moveq	#0,d1 
+	moveq	#0,d2
+	
+	move.l	#DTP_SubSongRange,d0  
+	bsr.w	.getTag
+	beq.b	.noSubSongs1
+	bsr	.callFunc
+	move.l	d1,d2
+	move.l	d0,d1
+	DPRINT	"Subsong def=%ld min=%ld max=%ld",111
+	rts
+
+.noSubSongs1
+	move.l	#DTP_NewSubSongRange,d0  
+	bsr.w	.getTag
+	beq.b	.noSubSongs2
+	move.l	d0,a0
+	movem	(a0),d0/d1/d2
+	DPRINT	"NewSubSongs defa=%ld min=%ld max=%ld",112
+.noSubSongs2
+	rts	
+
+.song
+	DPRINT	"deliSong",114
+	bsr	.stop
+
+	bsr	.getSongInfo
+
+	* low bound check
+	cmp	songnumber(a5),d1
+	blo.b	.ok1
+	move	d1,songnumber(a5)
+.ok1
+	* upper bound check
+	cmp	songnumber(a5),d2
+	bhi.b .ok2
+	move d2,songnumber(a5)
+.ok2
+	* Put it, wrong number may crash some players
+	move	songnumber(a5),.deliBase+dtg_SndNum
+
+	move.l	#DTP_InitSound,d0
+	bsr	.getTag
+	bsr	.callFunc
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	rts
+
+* Not sure what exactly should be done with these two.
+* Seems to work more or less.
+.stop
+	DPRINT	"deliStop",14
+	move.l	#DTP_EndSound,d0
+	bsr	.getTag
+	;bsr	.callFunc
+	move.l	#DTP_StopInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	;bsr	clearsound
+	move	#$f,$dff096
+	rts
+
+.cont
+	DPRINT	"deliCont",144
+	move.l	#DTP_InitSound,d0
+	bsr	.getTag
+	;bsr	.callFunc
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	move	#$800f,$dff096
+	rts
+
+* Build the DeliBase structure, this is not a complete version.
+
+.deliBase
+	ds.b	dtg_Reserved3
+.deliBaseEnd
+ even
+
+.buildDeliBase
+	lea	.deliBase(pc),a0
+	lea	.deliBaseEnd(pc),a1
+.clrBase
+	clr.b	(a0)+
+	cmp.l	a0,a1 
+	bne.b .clrBase
+	lea	.deliBase(pc),a0
+
+	move.l	_DosBase(a5),dtg_DOSBase(a0)
+	move.l	_IntuiBase(a5),dtg_IntuitionBase(a0)
+	move.l	_GFXBase(a5),dtg_GfxBase(a0)
+	
+	; Illegal address for enforcer
+	move.l	#$10000000,dtg_GadToolsBase(a0)
+	move.l	#$10000000,dtg_AslBase(a0)
+
+	clr	dtg_SndNum(a0) * this must be correct 
+	move	#64,dtg_SndVol(a0)
+	move	#64,dtg_SndLBal(a0)
+	move	#64,dtg_SndRBal(a0)
+	clr	dtg_LED(a0)
+	move	#50,dtg_Timer(a0)
+
+	pea	.allocAudio(pc)
+	move.l	(sp)+,dtg_AudioAlloc(a0)
+	pea	.freeAudio(pc)
+	move.l	(sp)+,dtg_AudioFree(a0)
+	pea	dmawait(pc)
+	move.l	(sp)+,dtg_WaitAudioDMA(a0)
+
+	pea	.startInt(pc)
+	move.l	(sp)+,dtg_StartInt(a0)
+	pea	.stopInt(pc)
+	move.l	(sp)+,dtg_StopInt(a0)
+	pea	.songEnd(pc)
+	move.l	(sp)+,dtg_SongEnd(a0)	* may be called from interrupt
+	pea	.setTimer(pc)
+	move.l	(sp)+,dtg_SetTimer(a0)	* may be called from interrupt
+
+	* Lemmings uses CopyString and CopyFile. Not supported!
+
+	* Stub the rest
+ if DEBUG
+	pea	.f1(pc)
+	move.l	(sp)+,dtg_LockScreen(a0)
+	pea	.f2(pc)
+	move.l	(sp)+,dtg_UnlockScreen(a0)
+	pea	.f3(pc)
+	move.l	(sp)+,dtg_NotePlayer(a0) 	* may be called from interrupt
+	pea	.f4(pc)
+	move.l	(sp)+,dtg_AllocListData(a0)
+	pea	.f5(pc)
+	move.l	(sp)+,dtg_FreeListData(a0)
+	pea	.f6(pc)
+	move.l	(sp)+,dtg_CopyString(a0)
+	pea	.f7(pc)
+	move.l	(sp)+,dtg_CopyFile(a0)
+	pea	.f8(pc)
+	move.l	(sp)+,dtg_CopyDir(a0)
+	pea	.f9(pc)
+	move.l	(sp)+,dtg_LoadFile(a0)
+	pea	.f10(pc)
+	move.l	(sp)+,dtg_GetListData(a0)
+ else 
+	lea	.stub(pc),a1
+	move.l	a1,dtg_LockScreen(a0)
+	move.l	a1,dtg_UnlockScreen(a0)
+	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
+	move.l	a1,dtg_AllocListData(a0)
+	move.l	a1,dtg_FreeListData(a0)
+	move.l	a1,dtg_CopyString(a0)
+	move.l	a1,dtg_CopyFile(a0)
+	move.l	a1,dtg_CopyDir(a0)
+	move.l	a1,dtg_LoadFile(a0)
+	move.l	a1,dtg_GetListData(a0)
+ endif
+	rts
+
+.allocAudio 
+	DELIDPRINT	"deliAudioAlloc",1102
+	pushm	d1-a6
+	lea	var_b,a5
+	* returns d0=0 on success:
+	bsr	varaa_kanavat 
+	popm	d1-a6
+	rts
+
+.freeAudio 
+	DELIDPRINT	"deliAudioFree",1103
+	pushm	d1-a6
+	lea	var_b,a5
+	bsr	vapauta_kanavat
+	popm	d1-a6
+	rts
+
+.songEnd
+	* May be called from interrupt, no logging allowed
+	;DELIDPRINT	"deliSongEnd",3
+	;st		var_b+songover
+	rts
+.setTimer
+	* May be called from interrupt, no logging allowed
+	;DELIDPRINT	"deliSetTimer",15
+.stub
+	moveq	#0,d0
+	rts
+
+.startInt	
+	DELIDPRINT	"deliStartInt",1
+	moveq	#0,d0
+	rts
+.stopInt 
+	DELIDPRINT	"deliStopInt",2
+	moveq	#0,d0
+	rts
+
+ if DEBUG
+.f1 DELIDPRINT	"f1",1101
+	moveq	#0,d0
+	rts
+.f2 DELIDPRINT	"f2",102
+	moveq	#0,d0
+	rts
+.f3 DELIDPRINT	"f3",103
+	moveq	#0,d0
+	rts
+.f4 DELIDPRINT	"f4",104
+	moveq	#0,d0
+	rts
+.f5 DELIDPRINT	"f5",105
+	moveq	#0,d0
+	rts
+.f6 DELIDPRINT	"f6",106
+	moveq	#0,d0
+	rts
+.f7 DELIDPRINT	"f7",107
+	moveq	#0,d0
+	rts
+.f8 DELIDPRINT	"f8",108
+	moveq	#0,d0
+	rts
+.f9 DELIDPRINT	"f9",109
+	moveq	#0,d0
+	rts
+.f10 DELIDPRINT	"f10",110
+	moveq	#0,d0
+	rts
+ endif
+
+
+ if DEBUG
+.showTags
+	move.l	moduleaddress(a5),a0
+	add.l	a0,a0
+	add.l	a0,a0
+	move.l	16(a0),a0
+.tloop
+	movem.l	(a0)+,d0/d1
+	
+	sub.l	#DTP_TagBase,d0
+	lsl.l	#2,d0
+	lea		tagsTable(pc,d0.l),a1
+	lsr.l	#2,d0
+	add.l	#DTP_TagBase,d0
+	
+	cmp.l	#tagsTableEnd,a1
+	blo.b 	.okTag
+	DPRINT  "Tag %lx: %lx",2002
+	bra.b	.oddTag
+.okTag
+	move.l	d1,d2
+	move.l	(a1),d1
+	DPRINT  "Tag %lx %s: %lx",2001
+.oddTag
+	tst.l	(a0) 
+	bne.w	.tloop
+	rts
+
+tagsTable
+ dc.l EDTP_InternalPlayer
+ dc.l EDTP_CustomPlayer 
+ dc.l EDTP_RequestDTVersion
+ dc.l EDTP_RequestKickVersion
+ dc.l EDTP_PlayerVersion
+ dc.l EDTP_PlayerName   
+ dc.l EDTP_Creator    	
+ dc.l EDTP_Check1   
+ dc.l EDTP_Check2   
+ dc.l EDTP_ExtLoad    	
+ dc.l EDTP_Interrupt    
+ dc.l EDTP_Stop   	 
+ dc.l EDTP_Config   	
+ dc.l EDTP_UserConfig   
+ dc.l EDTP_SubSongRange 
+ dc.l EDTP_InitPlayer   
+ dc.l EDTP_EndPlayer    
+ dc.l EDTP_InitSound    
+ dc.l EDTP_EndSound   	
+ dc.l EDTP_StartInt   	
+ dc.l EDTP_StopInt    	
+ dc.l EDTP_Volume   	
+ dc.l EDTP_Balance    	
+ dc.l EDTP_Faster   	
+ dc.l EDTP_Slower   
+ dc.l EDTP_NextPatt   
+ dc.l EDTP_PrevPatt   
+ dc.l EDTP_NextSong   	
+ dc.l EDTP_PrevSong   
+ dc.l EDTP_SubSongTest  
+ dc.l EDTP_NewSubSongRange
+ dc.l EDTP_DeliBase  	
+ dc.l EDTP_Flags   	
+ dc.l EDTP_CheckLen   	
+ dc.l EDTP_Description  
+ dc.l EDTP_Decrunch   	
+ dc.l EDTP_Convert    	
+ dc.l EDTP_NotePlayer   
+ dc.l EDTP_NoteStruct   
+ dc.l EDTP_NoteInfo   	
+ dc.l EDTP_NoteSignal   
+ dc.l EDTP_Process    	
+ dc.l EDTP_Priority   	
+ dc.l EDTP_StackSize    
+ dc.l EDTP_MsgPort    	
+ dc.l EDTP_Appear   	
+ dc.l EDTP_Disappear   	
+ dc.l EDTP_ModuleName   
+ dc.l EDTP_FormatName   
+ dc.l EDTP_AuthorName   
+ dc.l EDTP_InitNote  
+tagsTableEnd
+ 
+EDTP_InternalPlayer   	dc.b "DTP_InternalPlayer",0 ; obsolete
+EDTP_CustomPlayer   	dc.b "DTP_CustomPlayer",0 ; player is a customplayer
+EDTP_RequestDTVersion   	dc.b "DTP_RequestDTVersion",0 ; minimum DeliTracker version needed
+EDTP_RequestKickVersion   	dc.b "DTP_RequestKickVersion",0 ; minimum KickStart version needed
+EDTP_PlayerVersion   	dc.b "DTP_PlayerVersion",0 ; actual player version & revision
+EDTP_PlayerName   	dc.b "DTP_PlayerName",0 ; name of this player
+EDTP_Creator    	dc.b "DTP_Creator",0 ; misc string
+EDTP_Check1   	dc.b "DTP_Check1",0 ; Check Format before loading
+EDTP_Check2   	dc.b "DTP_Check2",0 ; Check Format after file is loaded
+EDTP_ExtLoad    	dc.b "DTP_ExtLoad",0 ; Load additional files
+EDTP_Interrupt    	dc.b "DTP_Interrupt",0 ; Interrupt routine
+EDTP_Stop   	dc.b "DTP_Stop",0 ; Clear Patterncounter
+EDTP_Config   	dc.b "DTP_Config",0 ; Config Player
+EDTP_UserConfig   	dc.b "DTP_UserConfig",0 ; User-Configroutine
+EDTP_SubSongRange   	dc.b "DTP_SubSongRange",0 ; Get min&max subsong number
+EDTP_InitPlayer   	dc.b "DTP_InitPlayer",0 ; Initialisize the Player
+EDTP_EndPlayer    	dc.b "DTP_EndPlayer",0 ; Player clean up
+EDTP_InitSound    	dc.b "DTP_InitSound",0 ; Soundinitialisation routine
+EDTP_EndSound   	dc.b "DTP_EndSound",0 ; End sound
+EDTP_StartInt   	dc.b "DTP_StartInt",0 ; Start interrupt
+EDTP_StopInt    	dc.b "DTP_StopInt",0 ; Stop interrupt
+EDTP_Volume   	dc.b "DTP_Volume",0 ; Set Volume
+EDTP_Balance    	dc.b "DTP_Balance",0 ; Set Balance
+EDTP_Faster   	dc.b "DTP_Faster",0 ; Incease playspeed
+EDTP_Slower   	dc.b "DTP_Slower",0 ; Decrease playspeed
+EDTP_NextPatt   	dc.b "DTP_NextPatt",0 ; Jump to next pattern
+EDTP_PrevPatt   	dc.b "DTP_PrevPatt",0 ; Jump to previous pattern
+EDTP_NextSong   	dc.b "DTP_NextSong",0 ; Play next subsong
+EDTP_PrevSong   	dc.b "DTP_PrevSong",0 ; Play previous subsong
+EDTP_SubSongTest   	dc.b "DTP_SubSongTest",0 ; Test, if given subsong is vaild
+EDTP_NewSubSongRange   	dc.b "DTP_NewSubSongRange",0 ; enhanced replacement for EDTP_SubSongRange
+EDTP_DeliBase  	dc.b "DTP_DeliBase",0 ; the address of a pointer where DT
+EDTP_Flags   	dc.b "DTP_Flags",0 ; misc Flags (see below)
+EDTP_CheckLen   	dc.b "DTP_CheckLen",0 ; Length of the Check Code
+EDTP_Description   	dc.b "DTP_Description",0 ; misc string
+EDTP_Decrunch   	dc.b "DTP_Decrunch",0 ; pointer to Decrunch Code
+EDTP_Convert    	dc.b "DTP_Convert",0 ; pointer to Converter Code
+EDTP_NotePlayer   	dc.b "DTP_NotePlayer",0 ; pointer to a NotePlayer Structure
+EDTP_NoteStruct   	dc.b "DTP_NoteStruct",0 ; the address of a pointer to the
+EDTP_NoteInfo   	dc.b "DTP_NoteInfo",0 ; a pointer where DT stores a pointer
+EDTP_NoteSignal   	dc.b "DTP_NoteSignal",0 ; pointer to NoteSignal code
+EDTP_Process    	dc.b "DTP_Process",0 ; pointer to process entry code
+EDTP_Priority   	dc.b "DTP_Priority",0 ; priority of the process
+EDTP_StackSize    	dc.b "DTP_StackSize",0 ; stack size of the process
+EDTP_MsgPort    	dc.b "DTP_MsgPort",0 ; a pointer where DT stores a pointer
+EDTP_Appear   	dc.b "DTP_Appear",0 ; open your window, if you can
+EDTP_Disappear   	dc.b "DTP_Disappear",0 ; go dormant
+EDTP_ModuleName   	dc.b "DTP_ModuleName",0 ; get the name of the current module
+EDTP_FormatName   	dc.b "DTP_FormatName",0 ; get the name of the module format
+EDTP_AuthorName   	dc.b "DTP_AuthorName",0 ; not implemented yet
+EDTP_InitNote   	dc.b "DTP_InitNote",0 ; NoteStruct initialization
+ even
+ endif
+
+id_delicustom
+	lea	.id1_start(pc),a1	
+	moveq	#.id1_end-.id1_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+	lea	.id2_start(pc),a1	
+	moveq	#.id2_end-.id2_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+	lea	.id3_start(pc),a1	
+	moveq	#.id3_end-.id3_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+
+	* search() leaves with a0 pointing
+	* to the next byte to be searched,
+	* get the value for DTP_CustomPlayer,
+	* it must be non-zero
+	tst.l	(a0)
+	beq.b	.notDeli
+
+	moveq	#0,d0
+	rts
+	
+.notDeli
+	moveq	#-1,d0 
+	rts
+
+.id1_start
+	moveq	#-1,d0
+	rts
+.id1_end
+
+.id2_start
+	dc.b	"DELIRIUM"
+.id2_end
+
+; Seems that the parameter for this that can be anything but 0
+.id3_start
+	dc.l DTP_CustomPlayer
+.id3_end
 
 *******************************************************************************
 * Playereit‰
