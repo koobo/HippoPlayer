@@ -72,6 +72,10 @@ isListDivider macro
 	cmp.b 	#DIVIDER_MAGIC,\1
 	endm
 
+isFavoriteModule macro 
+	tst.b 	l_favorite(\1)
+	endm
+
 iword	macro
 	ror	#8,\1
 	endm
@@ -144,6 +148,7 @@ check	macro
 	include	graphics/graphics_lib.i
 	include	graphics/rastport.i
 	include graphics/scale.i
+	include	graphics/text.i
 
 ;	include	graphics/rpattr.i
 
@@ -285,7 +290,7 @@ prefs_samplecyber	rs.b	1
 prefs_mpegaqua		rs.b	1
 prefs_mpegadiv		rs.b	1
 prefs_medmode		rs.b	1
-			rs.b	1
+prefs_favorites		rs.b	1
 
 prefs_medrate		rs	1
 
@@ -413,6 +418,14 @@ cli		rs.l	1
 segment		rs.l	1	* Toisiks ekan hunkin segmentti
 fileinfoblock	rs.b	260		* 4:llä jaollisessa osoitteessa!
 fileinfoblock2	rs.b	260		
+
+ if fileinfoblock&%11
+	fail Not divisible by 4
+ endif
+ if fileinfoblock2&%11
+	fail Not divisible by 4
+ endif
+
 filecomment	rs.b	80+4		* tiedoston kommentti
 windowbase	rs.l	1		* pääohjelma
 mainWindowLock rs.l 1
@@ -426,7 +439,7 @@ userport2	rs.l	1		*
 rastport3	rs.l	1		* quadrascope
 userport3	rs.l	1		* 
 windowbase3	rs.l	1		* scopes window
-fontbase	rs.l	1
+fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 notifyhandle	rs.l	1		* Screennotifylle
 windowtop	rs	1		* ikkunoiden eisysteemialueen yläreuna
@@ -509,10 +522,11 @@ prefs_task	rs.l	1		* prefs-prosessi
 
 prefs_signal	rs.b	1		* prefs-signaali
 prefs_signal2	rs.b	1		* prefs-signaali 2
-ownsignal1	rs.b	1	* Kappale soinut
-ownsignal2	rs.b	1	* positionin päivitys
+songHasEndedSignal	rs.b	1	* Kappale soinut
+ownsignal2	rs.b	1	* position update in title bar, prefs update 
 uiRefreshSignal	rs.b	1	* lootan päivitys
 ownsignal4	rs.b	1	* Sulje ja avaa ikkuna
+						* NOTE: this does not seem be used!
 audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
@@ -639,7 +653,7 @@ fontname_new	rs.b	20+1
 early_new	rs.b	1
 prefix_new	rs.b	1
 autosort_new	rs.b	1
-		rs.b	1
+favorites_new	rs.b	1	
 
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -755,6 +769,7 @@ aika2		rs.l	1
 vanhaaika	rs	1
 ticktack	rs	1	* vb tick count for titlebar refresh
 tooltipTick	rs 	1	* vb tick count for tooltips, counts from positive to 0
+userIdleTick rs  1	* refresh counter updated each ui refresh tick, cleared on mouse
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
 
@@ -910,6 +925,11 @@ filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 loading		rs.b	1		* ~0: lataus meneillään
 loading2	rs.b	1		* ~0: filejen addaus meneillään
 							* TODO: not used, remove?
+* List of favorite modules
+favoriteListHeader	rs.b 	MLH_SIZE
+* Flag indicates the list has changed before last save
+favoriteListChanged	rs.b	1
+			rs.b	1	* pad
 
 ** InfoWindow kamaa
 infosample	rs.l	1		* samplesoittajan väliaikaisalue
@@ -963,7 +983,7 @@ ahi_name	= prefsdata+prefs_ahi_name
 ahi_use		= prefsdata+prefs_ahi_use
 ahi_muutpois	= prefsdata+prefs_ahi_muutpois
 ahi_use_nyt	rs.b	1
-		rs.b	1
+favorites	rs.b	1
 autosort	= prefsdata+prefs_autosort
 
 * audio homman muuttujat
@@ -1154,13 +1174,14 @@ xpl_offs	=	pt_group_start
 *********************************************************************************
 *
 * Tiedostolistan yhden yksikön rakenne
-* Mudule list element
+* Mudule list node element
 *
 
 	rsreset
 			rs.b	MLN_SIZE	* Minimal node 
 l_nameaddr	rs.l	1			* osoitin pelkkään tied.nimeen
 								* address to filename without path
+l_favorite		rs.b 	1			* favorite status for this file
 l_filename	rs.b	0			* tied.nimi ja polku alkaa tästä
 								* full path to filename begins at this point
 								* element size is dynamically calculated based on path length.
@@ -1377,9 +1398,9 @@ progstart
 * painful, yet still doable, otherwise.
 .preparePaths
 	pushm	all
-	move.l	(a5),a0
-	cmp	#34,LIB_VERSION(a0)	
-	ble.b	.done			* Kickstart 1.3 or earlier? GETOUTTAHERE
+	;move.l	(a5),a0
+	;cmp	#34,LIB_VERSION(a0)	
+	;ble.b	.done			* Kickstart 1.3 or earlier? GETOUTTAHERE
 	
 	* Grab the prepared arguments array
 	lea	sv_argvArray(a5),a3
@@ -1411,7 +1432,7 @@ progstart
 	move.l	d4,d1
  	pushpea tempdir(a5),d2  		* this space can be used
  	move.l	#200,d3 
- 	lob 	NameFromLock			* V36
+ 	jsr		getNameFromLock
 	* store return status for a little while so we can UnLock first
 	move.l	d0,d3
 
@@ -1726,16 +1747,31 @@ PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
 	lea	var_b,a5
 	move.l	output(a5),d1
-	bne.b	.open
+	bne.w	.open
 
 	move.l	#.bmb,d1
 	move.l	#MODE_NEWFILE,d2
 	lore	Dos,Open
 	move.l	d0,output(a5)
+	bne.b	.isOpen
+	* show alert once if cant open debug console
+	lea	.openErr(pc),a0
+	moveq	#0,d0		* recovery
+	moveq	#19,d1		* korkeus
+	tst.b	.alertShown(pc)
+	bne.w	.x
+	lore	Intui,DisplayAlert
+	st	.alertShown
+	bra.b	.x
+.isOpen
 	move.l	d0,d1
 	bra.b	.open
-.bmb	
-	dc.b	"CON:0/0/350/500/HiP debug window",0
+.openErr
+	dc	110
+	dc.b	11
+	dc.b	"Error opening debug console, increase screen height!",0,0
+.alertShown	dc.b 0
+.bmb	dc.b	"CON:0/0/350/500/HiP debug window",0
     even
 .open
 	move.l	32+4(sp),a0
@@ -1911,11 +1947,13 @@ lelp
 	move.l	d0,_DosBase(a5)
  endc
 
-	DPRINT	"Hippo is alive"
-
 	lea	intuiname(pc),a1
 	lore	Exec,OldOpenLibrary
 	move.l	d0,_IntuiBase(a5)
+
+	* The first debug print should be after opening
+	* intuition since it may use the alert box.	
+	DPRINT	"Hippo is alive"
 
 	tst.b	uusikick(a5)
 	beq.b	.olld
@@ -2011,7 +2049,10 @@ lelp
 	tst.l	_DiskFontBase(a5)	* onko libbiä?
 	beq.b	.qer
 
-
+ if DEBUG
+	move.l	ta_Name(a0),d0 
+	DPRINT	"Opening font %s",544
+ endif 
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
 	beq.b	.qer		* error?
@@ -2029,7 +2070,7 @@ lelp
 
 
 	bsr.w	getsignal
-	move.b	d0,ownsignal1(a5)
+	move.b	d0,songHasEndedSignal(a5)
 	bsr.w	getsignal
 	move.b	d0,ownsignal2(a5)
 	bsr.w	getsignal
@@ -2045,6 +2086,11 @@ lelp
 	bsr.w	getsignal
 	move.b	d0,tooltipSignal(a5)
 
+	* Do all kinds of adjustments to gadgets
+
+	* Add the latest "favorites" prefs button to the end of the
+	* list of first page of prefs gadgets
+	move.l	#prefsFavorites,bUu22
 
 	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
 	bsr.b	.hum
@@ -2107,7 +2153,7 @@ lelp
 	lea	sivu6-sivu5(a1),a1
 	bsr.b	.num
 
-	bra.b	.eer2
+	bra.w	.eer2
 
 
 .num
@@ -2131,7 +2177,14 @@ lelp
 	or	#GFLG_GADGHNONE,gg_Flags(a0)
 .nobo1	tst.l	gg_GadgetText(a0)
 	beq.b	.nt2
+
 	move.l	gg_GadgetText(a0),a2	* IntuiText
+;if DEBUG
+;	ext.l	d0
+;	move.l	it_IText(a2),d1
+;	DPRINT	"Gadget id=%ld Text=%s",111	
+;endif
+
 	move.l	#text_attr,it_ITextFont(a2)	* fontti
 	tst.l	it_NextText(a2)
 	beq.b	.nt2
@@ -2140,17 +2193,10 @@ lelp
 .nt2	rts
 
 .eer2
-
-
-
-
-
-
 	tst.b	uusikick(a5)
 	beq.w	.ropp
 
 ** kick 2.0+ asetuksia
-
 
 	lea	slider4,a0			* filebox-slideriin image
 	move.l	#slimage,gg_GadgetRender(a0)
@@ -2290,6 +2336,18 @@ lelp
 
 	lea	moduleListHeader(a5),a0		* Uusi lista
 	NEWLIST	a0
+	lea	favoriteListHeader(a5),a0
+	NEWLIST a0
+
+	lea	.startingMsg(pc),a0
+	moveq	#102+WINX,d0
+	bsr.w	printbox
+	bra.b	.startingMsg2
+.startingMsg dc.b "Starting...",0
+ even
+.startingMsg2
+
+
 
 	jsr	loadkeyfile		* ladataan key-file
 
@@ -2427,6 +2485,8 @@ lelp
 
 	bsr.w	inforivit_clear
 
+	jsr		importFavoriteModulesFromDisk
+
 	DPRINT	"Loading group",1
 
 	tst.b	groupmode(a5)			* ladataanko playergrouppi?
@@ -2448,8 +2508,6 @@ lelp
 	;jsr	get_mline
 
 .purr
-
-
 
 
 	pushpea	ch1(a5),hippoport+hip_PTch1(a5)
@@ -2575,7 +2633,7 @@ msgloop
 
 
 	moveq	#0,d0
-	move.b	ownsignal1(a5),d1
+	move.b	songHasEndedSignal(a5),d1
 	bset	d1,d0
 	move.b	ownsignal2(a5),d1
 	bset	d1,d0
@@ -2627,7 +2685,7 @@ msgloop
 .ow
 
 * Tuliko omia signaaleja??
-	move.b	ownsignal1(a5),d3
+	move.b	songHasEndedSignal(a5),d3
 	btst	d3,d0
 	beq.b	.nowo
 	pushm	all
@@ -2635,18 +2693,30 @@ msgloop
 	popm	all
 
 
-*** Poituttiinko preffsistä?
+*** Poistuttiinko preffsistä?
+* Prefs window was just closed? Do stuff!
+* Probably this bit handles things like:
+* - move windows to a newly set public screen
+* - update filebox size according to prefs changes
+* - update titlebar information
+* - quite ugly!
 .nowo	move.b	ownsignal2(a5),d3	* päivitetään positionia
 	btst	d3,d0
 	beq.w	.nowow
+	
+
+	* Update title bar with position information
 	push	d0
-	bsr.w	lootaan_pos
+	jsr	lootaan_pos
 	pop	d0
 
-
-	tst.b	prefsexit(a5)
+	tst.b	prefsexit(a5)		* see if prefs window was just closed
 	beq.b	.noe
 	clr.b	prefsexit(a5)
+
+	jsr	handleFavoriteModuleConfigChange
+
+	* update filebox size and contents if it has changed
 
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
@@ -2729,14 +2799,24 @@ msgloop
 	move.b	uiRefreshSignal(a5),d3	* päivitetään...
 	btst	d3,d0
 	beq.b	.wow
+	addq	#1,userIdleTick(a5)
 	push	d0
 	bsr.w	lootaan_aika
-	bsr.w	lootaan_kello
+	jsr	lootaan_kello
 ;	bsr.w	lootaan_muisti
-	bsr.w	lootaan_nimi
+	jsr	lootaan_nimi
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
 	;bsr.w	zipwindow
+
+	* Try to save favorite modules when user has been idle for a while
+	moveq	#0,d0 
+	move	userIdleTick(a5),d0 
+	cmp	#7,d0
+	blo.b	.notIdleEnough
+	jsr	exportFavoriteModulesWithMessage
+.notIdleEnough
+
 	pop	d0
 
 .wow
@@ -2845,8 +2925,7 @@ msgloop
 
 .nwwwq
 
-
-
+	* Note: signal4 does not seem to be triggered anywhere!
 	move.b	ownsignal4(a5),d3
 	btst	d3,d0
 	beq.b	.nowww
@@ -2906,6 +2985,7 @@ msgloop
 .noChangeWindow
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.noRawKey
+	clr	userIdleTick(a5)	
 	bsr	nappuloita
 	bra.b	.idcmpLoop
 .noRawKey	
@@ -2915,6 +2995,7 @@ msgloop
 	* Prop gadgets and tooltips will work with fewer events, too.
 	cmp.l	#IDCMP_MOUSEMOVE,d2
 	bne.b	.noMouseMove
+	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
 	bne.w  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
@@ -2924,11 +3005,13 @@ msgloop
 .noMouseMove
 	cmp.l	#IDCMP_GADGETUP,d2
 	bne.b	.noGadgetUp
+	clr	userIdleTick(a5)	
 	bsr	gadgetsup
 	bra.w	.idcmpLoop
 .noGadgetUp
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.noMouseButtons
+	clr	userIdleTick(a5)	
 	bsr	buttonspressed
 	bra.w	.idcmpLoop
 .noMouseButtons	
@@ -2942,7 +3025,16 @@ exit
 	lea	var_b,a5
 
 	DPRINT "Hippo is exiting",666
-	bsr	setMainWindowWaitPointer
+	bsr	setMainWindowWaitPointer	
+
+	lea	.exmsg(pc),a0
+	moveq	#102+WINX,d0
+	bsr.w	printbox
+	bra.b	.exmsg2
+.exmsg dc.b	"Exiting...",0
+ even
+.exmsg2
+	jsr	exportFavoriteModulesToDisk
 
 * poistetaan loput prosessit...
 
@@ -2992,6 +3084,8 @@ exit
 	bsr.w	freelist		* vapautetaan lista
 	jsr	rem_ciaint
 
+	jsr	freeFavoriteList
+
 	tst.b	vbsaatu(a5)
 	beq.b	.nbv
 	moveq	#INTB_VERTB,d0
@@ -3024,7 +3118,7 @@ exit
 	bsr.w	flush_messages
 	bsr.w	sulje_ikkuna
 
-	move.b	ownsignal1(a5),d0
+	move.b	songHasEndedSignal(a5),d0
 	bsr.w	freesignal
 	move.b	ownsignal2(a5),d0
 	bsr.w	freesignal
@@ -3267,7 +3361,7 @@ i_nowindow	=	3
 flush_messages
 	bsr.b	.fl
 	move.l	windowbase(a5),a0 
-	bra		flushWindowMessages
+	jmp		flushWindowMessages
 
 * Flush port messages too
 * Hippoportin messaget pois
@@ -3474,6 +3568,8 @@ inputhandler
 
 *******
 * Printti rutiini
+* Text printing. Variants for different target windows.
+* Supports line changes.
 *******
 
 * sPrint = Info-ikkunaan
@@ -3481,7 +3577,7 @@ sprint  pushm	all
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	move.l	srastport(a5),a4
-	bra.b	uup	
+	bra.b	doPrint	
 
 
 * Print3 = Prefs-ikkunaan
@@ -3489,7 +3585,23 @@ print3	pushm	all
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	move.l	rastport2(a5),a4
-	bra.b	uup	
+	bra.b	doPrint	
+
+* Print to mainwindow with bold font style.
+printBold
+	pushm	d0-d2/a0-a2/a6
+	move.l	rastport(a5),a1
+	moveq	#FSF_BOLD,d0	* enable bold bit
+	moveq	#FSF_BOLD,d1	* mask of bits to change
+	lore	GFX,SetSoftStyle
+	popm	d0-d2/a0-a2/a6
+	bsr.b	print
+	move.l	rastport(a5),a1
+	moveq	#0,d0		* disable bold bit
+	moveq	#FSF_BOLD,d1	* mask of bits to change
+	lore	GFX,SetSoftStyle
+	 
+	rts
 
 * Pääikkunaan
 * d0/d1 = x,y
@@ -3504,8 +3616,8 @@ print	add	windowleft(a5),d0
 .e
 	pushm	all
 	move.l	rastport(a5),a4
-uup	
-
+;uup
+doPrint	
 
 	move.l	_GFXBase(a5),a6
 	move.l	a0,a2
@@ -3517,16 +3629,16 @@ uup
 	move	d5,d1
 
 	move.l	a4,a1
-	lob	Move
+	lob	Move			* move drawing point
 	move.l	a4,a1
 	move.l	a2,a0
 
 	moveq	#0,d7
 	moveq	#0,d0
-.plah	addq	#1,d0
+.plah	addq	#1,d0	* find out number of chars to output
 	tst.b	(a2)
 	beq.b	.pog
-	cmp.b	#10,(a2)+
+	cmp.b	#10,(a2)+	* check for line changes
 	bne.b	.plah
 	moveq	#1,d7
 .pog
@@ -3535,7 +3647,7 @@ uup
 
 	tst	d7
 	beq.b	.x
-	addq	#8,d5
+	addq	#8,d5		* next vertical line
 	bra.b	.luup		
 
 .x	popm	all
@@ -5514,6 +5626,15 @@ buttonspressed
 	tst.l	(a2) 
 	bne.b	.actionLoop
 
+	* no RMB actions found
+	* try line marking
+	bsr	marklineRightMouseButton
+	beq.b	.nothingMarked
+	rts
+
+.nothingMarked
+	* Last RMB action,
+	* Zip Window 
 .nowindow
 
 	tst.b	uusikick(a5)
@@ -5530,9 +5651,6 @@ buttonspressed
 
 .leftButtonDownAction
 
-;	tst	modamount(a5)
-;	beq.w	returnmsg
-
 * jos oli lootan päällä niin avataan info ikkuna!
 	move	mousex(a5),d0
 	move	mousey(a5),d1
@@ -5547,6 +5665,8 @@ buttonspressed
 	blo.b	.x
 	cmp	#30+WINY,d1
 	blo.b	.yea
+
+	* mouse not on top of info box, try marking files
 
 .x	bsr.w	markline		* merkitään modulenimi
 	rts
@@ -5851,6 +5971,8 @@ omaviesti
 	beq.w	.oma
 
 	* App window message?
+	* This is likely kick2.0 feature, dropping icons
+	* on top of windows.
 	cmp.l	#'AppW',am_UserData(a1)		* Onko AppWindow-viesti?
 	beq.b	.appw
 
@@ -6138,7 +6260,7 @@ signalreceived
 .mododo	
 	* init error, no module to play
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* initti virhe
-	bsr.w	init_error
+	jsr	init_error
 	bra.b	.reet
 
 .err	
@@ -7307,8 +7429,7 @@ nappuloita
 .scopetoggle
 	tst	quad_prosessi(a5)	* jos ei ollu, päälle
 	beq.w	start_quad		
-	bra.w	sulje_quad		* suljetaan jos oli auki
-
+	jmp	sulje_quad		* suljetaan jos oli auki
 
 .pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikanäppäimet
 .pm0	st	hippoonbox(a5)
@@ -7492,7 +7613,7 @@ gadgetsup
 	dr	rsort		* sort
 
 
-
+* Print some text into the filebox
 ** a0 = teksti, d0 = x-koordinaatti
 printbox
 	tst.b	win(a5)
@@ -9108,6 +9229,13 @@ filereq_code
 
 	bsr.w	parsereqdir		* Tehdään hakemistopolku..
 
+* We will now normalize the directory given to us by ReqTools
+* This creates consistent paths everytime,
+* and allows favorites logic path matching to work.
+
+	pushpea	tempdir(a5),d1
+	jsr	normalizeFilePath
+
 	* contains the files from reqtools as per user selection
 	move.l	filelistaddr(a5),a4	
 	
@@ -9204,8 +9332,8 @@ filereq_code
 	tst.l	fib_DirEntryType+fileinfoblock2(a5)
 	bmi.w	.filetta		* Onko tiedosto vai hakemisto?
 
-	tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
-	beq.b	.loopo
+	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
+	;beq.b	.loopo
 
 * otetaan kyseisen hakemiston nimi talteen myöhempää käyttöä varten
 
@@ -9236,18 +9364,24 @@ filereq_code
 
 **** skannattuamme yhden hakemiston tutkitaan siinä olleet muut hakemistot
 .dodirs
-	tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
-	beq.w	.errd
+	
+	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
+	;beq.w	.errd
+	* Allow recursion into directories with kick1.3 too!
 
 	pushm	all
-
 	move.l	d7,a3
 	move	(a3)+,d5
-	beq.b	.errd2
+	beq.w	.errd2
 	subq	#1,d5
 
 .dodirsl
 	move.l	(a3)+,d6
+
+ if DEBUG
+	move.l	d6,d0
+	DPRINT	"Scanning %s",11
+ endif
 
 	move.l	d6,d1
 	moveq	#ACCESS_READ,d2
@@ -9268,7 +9402,7 @@ filereq_code
 	move.l	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3			* max pituus hakemistolle
-	lob	NameFromLock		* V36
+	jsr		getNameFromLock
 	push	d0
 	
 	move.l	d4,d1
@@ -9462,7 +9596,7 @@ filereq_code
 * addaa/inserttaa listaan a3:ssa olevan noden
 addfile	
 	cmp.l	#MAX_MODULES,modamount(a5)
-	bhs.b	.r
+	bhs.b	.exit
 
 ;  ifne DEBUG
 ; 	DPRINT2 "Adding->",1
@@ -9474,19 +9608,23 @@ addfile
 	move.l	(a5),a6
 	lea	moduleListHeader(a5),a0	* lisätään listaan
 	move.l	a3,a1
+
 	tst.b	filereqmode(a5)		* onko add vai insert?
 	bne.b	.insert
 
- ifeq fprog
-	jmp	_LVOAddTail(a6)
- else
-	lob	AddTail
-	bra	printfilewin
- endc
+ 	jsr	_LVOAddTail(a6)
 
+	move.l	a3,a0
+	jsr	updateFavoriteStatus
+	rts
+ 
 .insert	move.l	fileinsert(a5),a2	* minkä filen perään insertataan
 	lob	Insert
-.r	rts
+
+	move.l	a3,a0
+	jsr	updateFavoriteStatus
+.exit
+	rts
 
 
 
@@ -9832,7 +9970,6 @@ freelist
 	rts
 
 
-
 *******************************************************************************
 * Parsetaan reqtoolsilta saatu hakemistopolku
 *******
@@ -10065,7 +10202,7 @@ rlpg
 	beq.b  .xpkOk
 	* no freeing later:
 	moveq	#0,d5
-	lea	.xpkerr(pc),a1
+	lea	xpk_module_program_error(pc),a1
 	bsr.w	request
 	bra	.x2
 .xpkOk
@@ -10102,99 +10239,27 @@ rlpg
 
 ***************** ALoitetaan käsittely
 
+
+
 	move.l	a3,d5		* muistialue talteen d5:een
-	moveq	#0,d6		* 0 = vanha formaatti
 
-	cmp.l	#"HiPP",(a3)
-	bne.b	.rr
-	cmp	#"rg",4(a3)
-	bne.b	.rr
-.r2	cmp.b	#10,(a3)+	* skipataan kaks rivinvaihtoa
-	bne.b	.r2
-	addq	#1,a3
-	moveq	#1,d6		* uusi formaatti
-	bra.b	.r1
-.rr
-	cmp.l	#"HIPP",(a3)+
-	bne.w	.what
-	cmp	#"RO",(a3)+
-	bne.w	.what
-	addq	#2,a3		* skip: moduulien määrä
-.r1
+	* read stuff from a3 until a4, into list in a2
+	pushm 	d1-a6
+	lea		moduleListHeader(a5),a2
+	move.l	.loppu(pc),a4 
+	bsr	importModuleProgramFromData
+	DPRINT 	"Imported %ld files",110
+	popm	d1-a6
 
-	tst.b	d7			* addi??
-	bne.b	.yadd
-	clr.l	modamount(a5)
-.yadd
+	move.l	d0,modamount(a5)
 
-	lea	moduleListHeader(a5),a4
-.ploop
-	tst	d6
-	bne.b	.new1
-	moveq	#0,d0
-	move.b	(a3)+,d0	* seuraavan pituus
-	lsl	#8,d0
-	move.b	(a3)+,d0
-	bra.b	.old1
-.new1
-
-	move.l	a3,a0
-.r23	cmp.b	#10,(a0)+
-	bne.b	.r23
-	move.l	a0,d0
-	sub.l	a3,d0	* pituus
-
-.old1
-
-	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
-	bne.b	.gotMem2
-	bsr	showOutOfMemoryError
-	bra	.x2	
-.gotMem2
-	move.l	d0,a2
-
-	lea	l_filename(a2),a0
-
-	tst	d6
-	bne.b	.new2
-;	move	(a3)+,d0
-	move.b	(a3)+,d0
-	lsl	#8,d0
-	move.b	(a3)+,d0
-
-	subq	#1,d0
-.cy	move.b	(a3)+,(a0)+
-	dbf	d0,.cy
-	clr.b	(a0)
-	bra.b	.old2
-.new2
-.le	move.b	(a3),(a0)+
-	cmp.b	#10,(a3)+
-	bne.b	.le
-	clr.b	-(a0)
-.old2
-
-	lea	l_filename(a2),a1
-	isListDivider (a1)		* divideri
-	bne.b	.nd
-	move.l	a1,a0
-	bra.b	.di
-.nd
-	bsr.w	nimenalku
-.di	move.l	a0,l_nameaddr(a2)
-
-	cmp.l	#MAX_MODULES,modamount(a5)
-	bhs.b	.x2
-
-	move.l	a2,a1
-	lea	moduleListHeader(a5),a0	* lisätään listan perään
-	lore	Exec,AddTail
-	addq.l	#1,modamount(a5)
-
-	cmp.l	.loppu(pc),a3
-	blo.w	.ploop
+	tst.b	d7
+	bne.b	.append
+	move.l	d0,modamount(a5)
+	bra.b	.noAppend
+.append
+	add.l	d0,modamount(a5)
+.noAppend	
 
 
 .x2
@@ -10233,20 +10298,17 @@ rlpg
 	bra.w	resh
 
 .what
-	lea	.uerr(pc),a1
+	lea	unknown_module_program_error(pc),a1
 	bsr.w	request
 	bra.w	.x2
 
 .openerr
 	move	#1,a4			* lippu
-	lea	openerror_t(pc),a1
+	lea	openerror_t,a1
 	bsr.w	request
 	bra.b	.x1
 
 
-.uerr	dc.b	"Not a module program!",0
-.xpkerr dc.b	"XPK couldn't load the file!",0
- even
 
 .ext
 * ladattiin ohjelma komentojonon kautta, soitetaan eka tai satunnainen
@@ -10296,6 +10358,144 @@ otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
 * UGH! Evil hackery:
 loadprog
 	bra.b	*-22		* bra.b -> bra.b .blob
+
+
+* in:
+*   a2 = list header
+*   a3 = data read from file
+*   a4 = end address of buffer
+* out:
+*   d0 = number of modules  
+
+importModuleProgramFromData
+	pushm	d1-a6
+ if DEBUG
+	move.l	a3,d0 
+	move.l	a4,d1
+	DPRINT	"importModuleProgramFromData %lx %lx",1
+ endif
+
+	moveq	#0,d7 		* count
+	
+	move.l	a3,d0
+	beq.w	.x2
+
+	move.l	a4,d5		* use this register
+	move.l	a2,a4 		* list header here
+
+	moveq	#0,d6		* 0 = vanha formaatti
+
+	cmp.l	#"HiPP",(a3)
+	bne.b	.rr
+	cmp	#"rg",4(a3)
+	bne.b	.rr
+.r2	cmp.b	#10,(a3)+	* skipataan kaks rivinvaihtoa
+	bne.b	.r2
+	addq	#1,a3
+	moveq	#1,d6		* uusi formaatti
+	bra.b	.r1
+.rr
+	cmp.l	#"HIPP",(a3)+
+	bne.w	.what
+	cmp	#"RO",(a3)+
+	bne.w	.what
+	addq	#2,a3		* skip: moduulien määrä
+.r1
+
+;	lea	moduleListHeader(a5),a4
+;	move.l	a5,a4
+.ploop
+	tst	d6
+	bne.b	.new1
+	moveq	#0,d0
+	move.b	(a3)+,d0	* seuraavan pituus
+	lsl	#8,d0
+	move.b	(a3)+,d0
+	bra.b	.old1
+.new1
+
+	move.l	a3,a0
+.r23	
+	cmp.l	d5,a0
+	bhs.w	.x2		* upper bound check
+	cmp.b	#10,(a0)+
+	bne.b	.r23
+	move.l	a0,d0
+	sub.l	a3,d0	* pituus
+
+.old1
+
+	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	bsr.w	getmem
+	bne.b	.gotMem2
+	bsr	showOutOfMemoryError
+	bra	.x2	
+.gotMem2
+	move.l	d0,a2
+
+	lea	l_filename(a2),a0
+
+	tst	d6
+	bne.b	.new2
+	move.b	(a3)+,d0
+	lsl	#8,d0
+	move.b	(a3)+,d0
+
+	subq	#1,d0
+.cy	move.b	(a3)+,(a0)+
+	dbf	d0,.cy
+	clr.b	(a0)
+	bra.b	.old2
+.new2
+.le	move.b	(a3),(a0)+
+	cmp.b	#10,(a3)+
+	bne.b	.le
+	clr.b	-(a0)
+.old2
+
+	lea	l_filename(a2),a1
+	isListDivider (a1)		* divideri
+	bne.b	.nd
+	move.l	a1,a0
+	bra.b	.di
+.nd
+	bsr.w	nimenalku
+.di	move.l	a0,l_nameaddr(a2)
+
+	* add node a1 to list a0	
+	move.l	a2,a1
+	move.l	a4,a0
+	lore	Exec,AddTail
+	addq.l	#1,d7
+
+	move.l	a2,a0
+
+	* protect a3, which is killed here
+	push	a3
+	jsr	updateFavoriteStatus
+	pop 	a3
+
+	cmp.l	#MAX_MODULES,d7
+	bhs.b	.x2
+
+	* Go until at the end of given buffer
+	cmp.l	d5,a3
+	blo.w	.ploop
+.x2
+	move.l	d7,d0
+	popm	d1-a6
+	rts
+
+* unknown format
+.what
+	lea	unknown_module_program_error(pc),a1
+	bsr.w	request
+	rts
+
+unknown_module_program_error  dc.b	"Not a module program!",0
+xpk_module_program_error	 dc.b	"Could not load XPK compressed module program!",0
+ even
 
 
 *** Etsii tiedoston nimestä (polku/nimi) pelkän tiedoston nimen alun
@@ -10386,14 +10586,59 @@ rsaveprog
 .cpe2	move.b	(a0)+,(a1)+
 	bne.b	.cpe2
 
-	move.l	_DosBase(a5),a6
 	lea	filename2(a5),a0
+	lea	moduleListHeader(a5),a1
+	bsr exportModuleProgramToFile
+
+	move.l	req_file2(a5),d0
+	beq.b	.ex
+	move.l	d0,a1
+	move.l	_ReqBase(a5),a6
+	lob	rtFreeRequest
+.ex
+
+	st	hippoonbox(a5)
+	bra.w	resh
+
+.nomods	lea	.lerr(pc),a1
+	bra.w	request
+
+.lerr	dc.b	"No program to save!",0
+ even
+
+
+.tags	dc.l	RTFI_Flags,FREQF_PATGAD
+otag16	dc.l	RT_PubScrName,pubscreen+var_b,0
+
+
+prgheader	dc.b	"HiPPrg",10,10	* headeri
+headere
+
+
+filereqtitle2
+	dc.b	"Load module program",0
+filereqtitle3
+	dc.b	"Save module program",0
+ even
+
+
+
+* in:
+*  a0 = filename
+*  a1 = list
+exportModuleProgramToFile
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"Exporting module list to %s",0
+ endif
+	move.l	a1,a4
+	move.l	_DosBase(a5),a6
 	move.l	#1006,d2
 	move.l	a0,d1
 	lob	Open
 
 	move.l	d0,d6
-	beq.b	.openerr	
+	beq.b	.openError	
 
 	move.l	d6,d1
 	lea	prgheader(pc),a0
@@ -10401,13 +10646,10 @@ rsaveprog
 	moveq	#headere-prgheader,d3
 	lob	Write
 
-	move.l	modamount(a5),d7
-	subq.l	#1,d7
-	lea	moduleListHeader(a5),a4
-
 .saveloop
+	* Get next and test for end
 	TSTNODE	a4,a3
-	beq.b	.loppu			* loppuivatko modit??
+	beq.b	.exit
 	move.l	a3,a4
 
 	lea	-200(sp),sp
@@ -10428,67 +10670,28 @@ rsaveprog
 	lea	200(sp),sp
 
 	cmp.l	d3,d0
-	bne.b	.ERROR
-
-	;dbf	d7,.saveloop
-	subq.l	#1,d7 
-	bpl.b	.saveloop
-
-.loppu
+	bne.b	.writeError
+	bra.b	.saveloop
+	
+.exit
 	move.l	d6,d1
-	beq.b	.x1
+	beq.b	.x
 	lob	Close
+.x	
+	rts
 
-.x1	move.l	req_file2(a5),d0
-	beq.b	.ex
-	move.l	d0,a1
-	move.l	_ReqBase(a5),a6
-	lob	rtFreeRequest
-
-.ex
-	st	hippoonbox(a5)
-	bra.w	resh
-
-
-.ERROR
+.writeError
 	lea	.err(pc),a1
 	bsr.w	request
-	bra.b	.loppu
+	bra.b	.exit
 
-	
-
-.openerr
+.openError
 	lea	openerror_t(pc),a1
 	bsr.w	request
-	bra.b	.x1
+	bra.b	.exit
 
-.nomods	lea	.lerr(pc),a1
-	bra.w	request
-
-.lerr	dc.b	"No program to save!",0
-.err	dc.b	"Write error!",0
+.err	dc.b	"Error while writing module program!",0
  even
-
-.tags	dc.l	RTFI_Flags,FREQF_PATGAD
-otag16	dc.l	RT_PubScrName,pubscreen+var_b,0
-
-
-prgheader	dc.b	"HiPPrg",10,10	* headeri
-headere
-
-
-filereqtitle2
-	dc.b	"Load module program",0
-filereqtitle3
-	dc.b	"Save module program",0
- even
-
-
-
-
-
-
-
 
 
 *******************************************************************************
@@ -10551,6 +10754,9 @@ komentojono
 	move.l	a2,a1
 	lea	moduleListHeader(a5),a0	* lisätään listaan
 	lore	Exec,AddTail
+
+	move.l	a2,a0
+	jsr	updateFavoriteStatus
 
 	addq.l	#1,modamount(a5)	* määrä++
 
@@ -10709,7 +10915,7 @@ loadprefs2
 	move.b	prefs_mpegadiv(a0),mpegadiv(a5)
 	move.b	prefs_medmode(a0),medmode(a5)
 	move	prefs_medrate(a0),medrate(a5)
-
+	move.b	prefs_favorites(a0),favorites(a5)
 
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
@@ -10883,6 +11089,7 @@ setprefsbox
 
 
 saveprefs
+	DPRINT	"Prefs save",1
 	move.l	windowbase(a5),d0
 	beq.b	.h
 	move.l	d0,a0
@@ -10973,6 +11180,7 @@ saveprefs
 	move.b	mpegadiv(a5),prefs_mpegadiv(a0)
 	move.b	medmode(a5),prefs_medmode(a0)
 	move	medrate(a5),prefs_medrate(a0)
+	move.b	favorites(a5),prefs_favorites(a0)
 
 
 	move.l	text_attr+4,prefs_textattr(a0)
@@ -11310,6 +11518,7 @@ drawtexture
 *******
 
 updateprefs
+	DPRINT	"Update prefs",1
 	pushm	all
 	tst	prefs_prosessi(a5)
 	beq.b	.x
@@ -11424,6 +11633,7 @@ prefs_code
 	move.b	mpegadiv(a5),mpegadiv_new(a5)
 	move.b	medmode(a5),medmode_new(a5)
 	move	medrate(a5),medrate_new(a5)
+	move.b	favorites(a5),favorites_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -11818,6 +12028,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	beq.w	.cancelled
 
 ** USE
+	DPRINT	"Prefs use",2
 
 	move.l	mixingrate_new(a5),mixirate(a5)
 	move	tfmxmixingrate_new(a5),tfmxmixingrate(a5)
@@ -11872,6 +12083,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	ahi_use_new(a5),ahi_use(a5)
 	move.b	ahi_muutpois_new(a5),ahi_muutpois(a5)
 
+	move.b	favorites_new(a5),favorites(a5)
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
@@ -12006,6 +12218,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	rts
 
 .cancelled
+	DPRINT	"Prefs cancel",3
 * Pistetään vanhat asennot propgadgetteihin
 ;	move.l	pslider1+gg_SpecialInfo,a0
 ;	move	s3mmixpot_new(a5),pi_HorizPot(a0)
@@ -12440,6 +12653,7 @@ pupdate				* Ikkuna päivitys
 	bsr.w	pearly			* early load
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
+	bsr		pfavorites		* favorites
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -12603,13 +12817,19 @@ pru0
 .pr	pushm	all
 	addq	#8,d1
 	move.l	rastport2(a5),a4
-	bra.w	uup	
+	bra.w	doPrint
 
 
 ** Suoritetaan gadgettia vastaava toiminto
 gadgetsup2
 	movem.l	d0-a6,-(sp)
 	move	gg_GadgetID(a2),d0
+
+ ;if DEBUG
+;	ext.l	d0
+;	DPRINT	"Gadget id=%ld",1
+ ;endif
+
 	add	d0,d0
 	cmp	#20*2,d0
 	bhs.b	.pag
@@ -12672,6 +12892,7 @@ gadgetsup2
 	dr	rearly		* early load
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
+	dr	rfavorites	* favorites
 
 .s1
 *** Sivu1
@@ -13717,6 +13938,14 @@ pdclick
 	lea	eins2,a0
 	bra.w	tickaa
 
+********* Favorite
+rfavorites
+	not.b	favorites_new(a5)
+pfavorites
+	move.b	favorites_new(a5),d0
+	lea	prefsFavorites,a0
+	bra.w	tickaa
+
 ********* Autosort
 rautosort
 	not.b	autosort_new(a5)
@@ -13877,7 +14106,7 @@ purealarm
 
 print3b	pushm	all			* Sitävarten että windowtop/left
 	move.l	rastport2(a5),a4	* arvoja ei lisättäisi kun
-	bra.w	uup			* teksti on jo suhteessa gadgettiin
+	bra.w	doPrint			* teksti on jo suhteessa gadgettiin
 
 
 ******* FKeys
@@ -15023,7 +15252,7 @@ listselector
 
 .print	pushm	all
 	move.l	d7,a4
-	bra.w	uup	
+	bra.w	doPrint	
 
 
 
@@ -15034,7 +15263,10 @@ listselector
 * Writes the filenames into the box
 *******
 
-* 
+* hippoonbox(a5) is a flag that requests the whole list to be redrawn instead
+* of some clever partial refresh that is used when scrolling up and down.
+
+
 showNamesNoCentering
 shownames2
 	moveq	#1,d4		* flag: do not center
@@ -15166,7 +15398,7 @@ shn
 	sub.l   d7,d1
 	move.l	d7,d2
 
-.rcr	bsr.b	.donames
+.rcr	bsr.w	doPrintNames
 	bra.b	.huh2
 
 .nomods	
@@ -15190,12 +15422,13 @@ shn
 
 .all
 .neen
+	* clear and print all names
 	bsr.w	clearbox
 
 	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	boxsize(a5),d2
-	bsr.b	.donames
+	bsr.b	doPrintNames
 	bra.b	.huh2
 
 
@@ -15219,10 +15452,28 @@ shn
 	move.l	_GFXBase(a5),a6
 	jmp	_LVOClipBlit(a6)
 
+
+
+.unmark
+	tst.b	dontmark(a5)
+	bne.b	.huh22
+
+	move.l	chosenmodule2(a5),d0
+	bmi.b	.huh22
+	sub.l	firstname2(a5),d0
+	bmi.b	.huh22
+	push	d7
+	move.l	chosenmodule(a5),-(sp)
+	move.l	chosenmodule2(a5),chosenmodule(a5)
+	bsr.w	unmarkit
+	move.l	(sp)+,chosenmodule(a5)
+	pop	d7
+.huh22	rts
+
 * d0 = alkurivi
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien määrä
-.donames
+doPrintNames
 ;	DPRINT  "shownames obtain list",1
 	bsr.w  obtainModuleList
 	lea	moduleListHeader(a5),a4	
@@ -15230,12 +15481,14 @@ shn
 ;	DPRINT	".doNames %ld",31
 
 	* d0 = module index
+	* d1 = line number to print to
+	* d2 = number of lines to print
 	* find out the corresponding list entry
 	move.l	d0,d3 		* keep track of the module index as well here
 	move.l	d1,d4		* move this out of the way
 	subq.l	#1,d0
 	bmi.b	.baa
-.luuppo
+;.luuppo
 ;	TSTNODE	a4,a3
 ;	beq.w	.lop
 ;	move.l	a3,a4
@@ -15257,8 +15510,9 @@ shn
 
 	move	d4,d6
 	lsl	#3,d6
-	add	#83+WINY-14,d6		* Y
+	add	#83+WINY-14,d6		* turn line number into a Y-coordinate
 
+	* loop to print d5 lines 
 .looppo
 	* a4=current node
 	* a3=next node
@@ -15318,7 +15572,17 @@ shn
 	moveq	#33+WINX,d0
 	move.l	d6,d1
 	addq.l	#8,d6
+
+	* Favorites are bolded, skip this if feature disabled
+	tst.b	favorites(a5)
+	beq.b	.noFav
+	isFavoriteModule a3
+	beq.b	.noFav
+	bsr		printBold
+	bra.b	.wasFav
+.noFav
 	bsr.w	print
+.wasFav
 
 	* Set ordinary colors if divider was previously printed
 	tst.b	d7
@@ -15341,22 +15605,6 @@ shn
 	bsr.w 	releaseModuleList
 	rts
 	
-
-.unmark
-	tst.b	dontmark(a5)
-	bne.b	.huh22
-
-	move.l	chosenmodule2(a5),d0
-	bmi.b	.huh22
-	sub.l	firstname2(a5),d0
-	bmi.b	.huh22
-	push	d7
-	move.l	chosenmodule(a5),-(sp)
-	move.l	chosenmodule2(a5),chosenmodule(a5)
-	bsr.w	unmarkit
-	move.l	(sp)+,chosenmodule(a5)
-	pop	d7
-.huh22	rts
 
 
 ***** Katkaisee prefixin nimestä a0:ssa
@@ -15556,7 +15804,7 @@ execuutti
 	move.l	lockhere(a5),d1
 	pushpea	200(sp),d2
 	moveq	#100,d3
-	lore	Dos,NameFromLock 			* V36
+	jsr		getNameFromLock
 	lea	.tagz(pc),a0
 	move.l	d7,a1
 	pushpea	200(sp),4(a0)
@@ -16406,32 +16654,55 @@ putnu	ext.l	d0
 * ja pistetään palkki
 *******
 
-* Calculates chosenmodule, which is an index of the selected item.
-* Chosen line is highlighted and previously chosen line highlight removed.
-
-markline
+* Out:
+*   d0 = zero if no files hit under mouse, 1 otherwise
+*   d1 = Index of selected file
+getFileBoxIndexFromMousePosition
 	tst	boxsize(a5)
-	bne.b	.m
-	rts
-.m
+	beq.b	.out
+
 	move	mousex(a5),d0
 	move	mousey(a5),d1
 	sub	windowleft(a5),d0
 	sub	windowtop(a5),d1	* suhteutus fonttiin
 	
 	cmp	#30+WINX,d0		* onko tiedostolistan päällä?
-	blo.w	.out
+	blo.b	.out
 	cmp	#251+WINX,d0
-	bhi.w	.out
+	bhi.b	.out
 	cmp	#63+WINY,d1
-	blo.w	.out
+	blo.b	.out
 	move	#126+WINY,d2
 	add	boxy(a5),d2
 	cmp	d2,d1
-	bhi.w	.out
-
+	bhi.b	.out
 	sub	#63+WINY,d1
 	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
+	moveq	#1,d0
+	rts
+.out  
+	* nothing marked
+	moveq	#0,d0 
+	rts
+
+
+* Calculates chosenmodule, which is an index of the selected item.
+* Chosen line is highlighted and previously chosen line highlight removed.
+
+markline
+	bsr getFileBoxIndexFromMousePosition
+	beq.b  .out
+	bsr.b	.doMark
+	* something marked
+	moveq	#1,d0
+	rts
+.out  
+	* nothing marked
+	moveq	#0,d0 
+	rts
+
+* filebox line number in d1
+.doMark
 
 	* list is empty
 	; this may allow doubleclicking of empty list to open file req
@@ -16488,7 +16759,7 @@ markline
 .double
 	bsr.w	showNamesNoCentering
 	bsr.w	reslider
-.out	rts
+	rts
 
 * Highlight line by xorring/complementing it
 * Highlight is cleared by doing the same operation again on the same line.
@@ -16554,6 +16825,68 @@ markit
 .outside	
 	rts
 
+marklineRightMouseButton
+	* Check if feature is enabled in prefs
+	tst.b	favorites(a5)
+	beq.b	.out
+	bsr	 getFileBoxIndexFromMousePosition
+	beq.b  .out
+	bsr.b	.doMark
+	* something marked
+	moveq	#1,d0
+	rts
+.out  
+	* nothing marked
+	moveq	#0,d0 
+	rts
+
+.doMark
+	moveq	#0,d0
+	move	d1,d0
+	move.l	d0,d3
+	DPRINT	"RMB mark on line %ld",1
+
+	* To get node index add index of the first visible
+	* item
+	add.l	firstname(a5),d0
+	move.l	d0,d4
+	* Get the actual node into a0
+	bsr	getListNode
+	beq.b	.notFound
+
+	isListDivider  l_filename(a0)
+	beq.b	.notFile
+
+	* Toggle favorite status
+	isFavoriteModule a0 
+	bne.b	.wasFavorite
+	bsr	addFavoriteModule
+	bra.b	.wasNotFavorite
+.wasFavorite
+	bsr	removeFavoriteModule
+.wasNotFavorite
+
+	move.l	d4,d0
+	* d0 contains the node index
+	move	d3,d1 	* target y-line
+	moveq	#1,d2   * just do one line
+	push 	d3
+	bsr	doPrintNames
+	pop 	d3
+
+	* see if this line happened to be chosen already.
+	* in this case the highlight should be restored as it was just
+	* wiped away above.
+	cmp.l	 markedline(a5),d3	
+	bne.b	.different
+	bsr	markit
+.different
+	rts	
+.notFile
+.notFound
+	DPRINT	"Not favoriting this line",2
+	rts
+
 *********************************
 * List node utilities
 ********************************
@@ -16581,8 +16914,6 @@ listChanged
 getListNode
 	DPRINT	"getListNode %ld",1
 
-	* TODO: bounds check
-	;XEX
 	tst.l	modamount(a5)
 	beq.b	.out
 	cmp.l 	modamount(a5),d0
@@ -16649,25 +16980,26 @@ getListNodeCached
 	bpl.b  	.forward2
 	bra.b	.backward2
 
-
-.backward
-	PRED   a0,a0
-	tst.l	LN_PRED(a0)
-	beq.b	.x1
-	addq.l 	#1,d0
-	bne.b 	.backward
-	move.l a0,cachedNode(a5)
+; These versions support 16-bit jumps
+;.backward
+;	PRED   a0,a0
+;	tst.l	LN_PRED(a0)
+;	beq.b	.x1
+;	addq.l 	#1,d0
+;	bne.b 	.backward
+;	move.l a0,cachedNode(a5)
 .x	rts
+;
+;.forward 
+;	SUCC    a0,a0
+;	tst.l	(a0)
+;	beq.b	.x1
+;	subq.l	#1,d0
+;	bne.b	.forward
+;.x1	move.l 	a0,cachedNode(a5)
+;	rts
 
-.forward 
-	SUCC    a0,a0
-	tst.l	(a0)
-	beq.b	.x1
-	subq.l	#1,d0
-	bne.b	.forward
-.x1	move.l 	a0,cachedNode(a5)
-	rts
-
+; These allow jump to be over 16 bits
 .backward2 
 	neg.l 	d0
 	subq.l	#1,d0
@@ -16694,6 +17026,7 @@ getListNodeCached
 clearCachedNode
 	clr.l	cachedNode(a5)	
 	rts
+
 
 
 *********************************
@@ -16813,7 +17146,7 @@ showTooltipPopup
 
 .print	pushm	all
 	move.l	d7,a4
-	bra.w	uup	
+	jmp	doPrint
 
 * Tooltip window structure
 .tooltipPopup
@@ -16935,7 +17268,7 @@ sulje_info
 
 .t	tst	info_prosessi(a5)	* odotellaan
 	beq.b	.tt
-	bsr.w	dela
+	jsr	dela
 	bra.b	.t
 .tt
 	popm	d0/d1/a0/a1/a6
@@ -17027,7 +17360,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	tst.b	gotscreeninfo(a5)
 	bne.b	.joo
-	bsr.w	getscreeninfo
+	jsr	getscreeninfo
 .joo
 
 .urk	lea	swinstruc,a0
@@ -17522,7 +17855,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form0(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 
@@ -17576,7 +17909,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 
@@ -17637,7 +17970,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	16(sp),sp
 	popm	d0-a2/a4-a6
 	bsr.w	.lloppu
@@ -17685,7 +18018,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 
@@ -17746,7 +18079,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .jee9a
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	bsr.w	desmsg4
+	jsr	desmsg4
 	bsr.b	.putcomment
 	lea	32(sp),sp
 	bra.w	.selvis
@@ -17894,7 +18227,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	32(sp),sp
 
 	bsr.w	.putcomment2
@@ -17926,13 +18259,13 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	add	#20,d0		* 20 varariviä varalle
 	mulu	#40,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	jsr	getmem
 	move.l	d0,infotaz(a5)
 	rts
 
 .selvis
 ** If we made this far the module information text has been built
-	bsr.w	releaseModuleData
+	jsr	releaseModuleData
 
 **  Karsitaan kummat merkit pois
 	move.l	infotaz(a5),a2
@@ -18100,7 +18433,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .fraz	move.l	infotaz(a5),a0
 	cmp.l	#about_t,a0
 	beq.b	.fr0z
-	bsr.w	freemem
+	jsr	freemem
 .fr0z	clr.l	infotaz(a5)
 	rts
 
@@ -19205,7 +19538,7 @@ intserver
 	* If there is a loading operation going on, let's not signal.
 	tst	loading(a5)	
 	bne.b	.wasLoading
-	move.b	ownsignal1(a5),d1
+	move.b	songHasEndedSignal(a5),d1
 	bsr.w	signalit
 .huh
 .notPlaying
@@ -19717,7 +20050,7 @@ rexxmessage
 
 *** PLAYRAND
 .playrand
-	bra	soitamodi_random
+	jmp	soitamodi_random
 	
 
 *** HIDE
@@ -19974,7 +20307,7 @@ rexxmessage
 	bra.w	i2amsg
 
 .currname
-	bsr.w	getcurrent
+	jsr	getcurrent
 	bne.b	.curr0
 	lea	.empty(pc),a2
 	bra.w	str2msg
@@ -19988,7 +20321,7 @@ rexxmessage
 	bne.b	.curr2
 .curr1	lea	.empty(pc),a2
 	bra.w	str2msg	
-.curr2	bsr.w	getcurrent2
+.curr2	jsr	getcurrent2
 	lea	l_filename(a3),a2
 	bra.b	str2msg
 
@@ -22463,7 +22796,7 @@ loadmodule
 
 	move.l	sp,a0			* ohjelman nimi
 	moveq	#-1,d4			* lippu
-	bsr.w	loadprog		* ladataan moduuliohjelma
+	jsr	loadprog		* ladataan moduuliohjelma
 	lea	150+4(sp),sp
 ;	addq	#4,sp			* ei palata samaan aliohjelmaan!
 	rts
@@ -23814,21 +24147,21 @@ remarctemp
 	lea	-200(sp),sp
 	move.l	sp,a1
 	lea	.del1(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 
 	lea	arcdir(a5),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	cmp.b	#':',-1(a1)
 	beq.b	.nar
 	move.b	#'/',(a1)+
 .nar	
 	lea	tdir(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	lea	.del2(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 
 	move.l	sp,d1
 	moveq	#0,d2
@@ -26271,6 +26604,362 @@ acouscll
 
 
 
+********************************
+* Favorite module list handling
+********************************
+
+* in:
+*  a0 = module list node
+;isFavoriteModule
+;	tst.b	l_favorite(a0)
+;	rts
+
+* in:
+*  a0 = module list node
+addFavoriteModule
+	;bsr	isFavoriteModule
+	isFavoriteModule a0
+	bne.w .exit
+
+ if DEBUG
+	pea	l_filename(a0)
+	pop  d0
+	DPRINT	"addFavoriteModule %s",1
+ endif
+	* set favorite flag
+	st	l_favorite(a0)
+	
+	* see if for some reason a0 is already in the favorite list
+	bsr.w	findFavoriteModule
+	tst.l	d0
+	bne.w	.exit	* bail out if so
+
+	move.l	a0,a3
+
+	* copy this node and add to favorite list
+	* get length of memory region, it's before the actual data
+	move.l	-4(a3),d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	jsr	getmem
+	beq.w	.noMem
+	move.l	d0,a4
+
+	* Copy node contents
+	move.l	a3,a0
+	move.l	a4,a1
+	move.l	-4(a3),d0
+	lore 	Exec,CopyMem
+
+	* Need to modify l_nameaddr pointer to point to the newly copied path.
+	* Figure out the index to the name-without-path using the original node
+	
+	lea	l_filename(a3),a0	* this ptr is lower than
+	move.l	l_nameaddr(a3),d0 	* ... this ptr
+	sub.l	a0,d0	 * d0 is now an index 	
+
+	* apply index to the new node
+	lea	l_filename(a4,d0.l),a0
+	move.l	a0,l_nameaddr(a4)
+
+	* Append to list
+	move.l	a4,a1
+	lea	favoriteListHeader(a5),a0
+	lob	AddTail
+
+	st	favoriteListChanged(a5)
+ if DEBUG
+	bsr	logFavoriteList
+ endif
+.noMem
+.exit
+	;bsr exportFavoriteModulesWithMessage
+	rts
+
+* in:
+*  a0 = module list node
+removeFavoriteModule
+	;bsr	isFavoriteModule
+	isFavoriteModule a0
+	beq.w	.exit
+	clr.b	l_favorite(a0)
+
+ if DEBUG
+	pea	l_filename(a0)
+	pop  d0
+	DPRINT	"removeFavoriteModule %s",1
+	 endif
+
+.loop
+	* Find matching l_filename from favorite list
+	* node is in a0
+	bsr	findFavoriteModule
+	beq.b	.exit
+	* found matching one, in a1
+	move.l	a1,d2
+	* Remove a1 from list 
+	* Destroys a0, a1
+	push	a0
+	REMOVE
+	* Free associated memory
+	move.l	d2,a0
+	jsr 	freemem
+	pop	a0
+	st	favoriteListChanged(a5)
+	* search again to find duplicates, although there shouldn't be 
+	bra.b	.loop
+.exit
+ if DEBUG
+	bsr	logFavoriteList
+ endif
+	;bsr exportFavoriteModulesWithMessage
+	rts
+
+* in:
+*   a0 = node to find by matching filename
+* out:
+*   a1 = favorite node that matches
+*   d0 = 1 when match, 0 when no match
+* destroys:
+*   d0,a2,a3
+findFavoriteModule
+	* Find matching l_filename from favorite list
+	lea	favoriteListHeader(a5),a1
+.loop
+	TSTNODE	a1,a1
+	beq.b	.notFound
+	lea	l_filename(a0),a2
+	lea	l_filename(a1),a3
+.compare
+	* if name differs get the next one
+	cmpm.b	(a2)+,(a3)+
+	bne.b	.loop
+	* matches so far, loop until zero termination
+	tst.b	(a2)
+	bne.b	.compare
+* no differences found, it is a match
+	moveq	#1,d0
+	rts
+.notFound
+	moveq	#0,d0
+	rts
+
+freeFavoriteList
+	move.l	(a5),a6		* execbase
+	lea	favoriteListHeader(a5),a2
+.loop
+	* a0: list, a1: destroyed, d0: node, or zero
+	move.l	a2,a0
+	lob	RemHead
+	beq.b	.listFreed
+	move.l	d0,a0
+	jsr	freemem
+	bra.b	.loop
+
+.listFreed
+	rts
+
+importFavoriteModulesFromDisk
+	DPRINT	"importFavoriteModulesFromDisk",1
+	tst.b	favorites(a5)
+	bne.b	.enabled
+	DPRINT	"->disabled in prefs",2
+	rts
+.enabled
+
+	moveq	#0,d6
+
+	lea	favoriteModuleFileName(pc),a0
+	move.l	a0,d1
+	move.l	#1005,d2
+	lore 	Dos,Open
+	move.l	d0,d4
+	beq.b	.error
+
+	move.l	d4,d1		* figure out file length
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d4,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* which is this
+
+	move.l	d4,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek	
+
+	move.l	d5,d0		* get some mem
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,d6
+	beq.b	.error 
+
+	move.l	d4,d1		* file
+	move.l	d6,d2		* destination
+	move.l	d5,d3		* pituus
+	lob	Read
+	* ignore errors here
+
+.error
+	move.l	d4,d1
+	beq.b	.noClose
+	lore	Dos,Close
+.noClose
+	tst.l	d6
+	beq.b	.noData
+
+	lea favoriteListHeader(a5),a2
+	move.l	d6,a3			* start of buffer	
+	lea	(a3,d5.l),a4	* end of buffer
+	jsr	importModuleProgramFromData
+	DPRINT 	"Imported %ld favorite files",3
+
+	move.l	d6,a0
+	jsr	freemem
+.noData
+	bsr	logFavoriteList
+	rts
+
+
+exportFavoriteModulesWithMessage
+	pushm	all
+	tst.b	favorites(a5)
+	beq.w	.x
+	tst.b	favoriteListChanged(a5)
+	beq.w	.x
+
+	* storage for two intuitimes
+	lea	-16(sp),sp
+	lea	(sp),a0 		* secs
+	lea	4(sp),a1		* micros
+	lore	Intui,CurrentTime
+
+	jsr	setMainWindowWaitPointer
+	jsr	freezeMainWindowGadgets
+	lea	.msg(pc),a0
+	moveq	#68+WINX,d0
+	jsr	printbox
+	bra.b	.c
+.msg 	dc.b  	"Saving favorites...",0
+ even
+.c	bsr.b	exportFavoriteModulesToDisk
+	* Wait a while so that user can see something happened
+.wait
+	lea	8(sp),a0		* secs
+	lea	12(sp),a1		* micros
+	lore	Intui,CurrentTime
+	move.l	8(sp),d0
+	sub.l	(sp),d0			* secs elapsed
+	cmp.l	#3,d0			* this many secs at least
+	bhs.b	.done
+	moveq	#10,d1			* wait a bit
+	lore	Dos,Delay
+	bra.b	.wait
+.done
+	lea	16(sp),sp
+
+	jsr	unfreezeMainWindowGadgets
+	jsr	clearMainWindowWaitPointer
+	* request full refresh of filebox:
+	st	hippoonbox(a5)
+	jsr	resh
+.x	popm	all
+	rts
+	
+exportFavoriteModulesToDisk
+	DPRINT	"exportFavoriteModulesToDisk",1
+	tst.b	favorites(a5)
+	beq.b	.x
+	tst.b	favoriteListChanged(a5)
+	beq.b	.x
+	lea	favoriteModuleFileName(pc),a0
+	lea	favoriteListHeader(a5),a1
+	jsr 	exportModuleProgramToFile
+	clr.b	favoriteListChanged(a5)
+.x	rts
+
+favoriteModuleFileName
+	dc.b	"S:HippoFavorites.prg",0
+ even
+
+* in:
+*  a0 = list node
+updateFavoriteStatus
+	bsr	findFavoriteModule
+	beq.b	.exit
+	* a matching favorite module was found, set flag 
+	st	l_favorite(a0)
+.exit
+	rts
+
+logFavoriteList
+ if DEBUG
+	DPRINT	"Favorite modules:",2
+	lea	favoriteListHeader(a5),a0
+.l	TSTNODE	a0,a0
+	beq.b	.x
+	lea	l_filename(a0),a1
+	move.l	a1,d0
+	DPRINT	"%s",1
+	bra.b	.l
+.x
+ endif
+	rts
+
+handleFavoriteModuleConfigChange
+	pushm	all
+
+	tst.b	favorites(a5)
+	beq.w	.noFavs
+	DPRINT	"handleFavoriteModuleConfigChange: enabled",1
+
+* favorites are enabled.
+* - they may have been enabled ealier, or
+* - they became enabled just now
+
+* if the list is not empty, this likely means favorites was enabled
+* and there is stuff in the list, do nothing
+	lea	favoriteListHeader(a5),a0
+	IFNOTEMPTY a0,.exit
+
+	DPRINT	"->populating",3
+
+* if list is empty, try importing data
+	bsr	importFavoriteModulesFromDisk
+* then the current list should be updated to contain favorite statuses
+	lea	moduleListHeader(a5),a0
+.loop
+	TSTNODE	a0,a0
+	beq.b	.end
+	* find if node a0 is in favorite module list
+	bsr.w	findFavoriteModule
+	* Use the return status to update favorite status for this node 
+	move.b	d0,l_favorite(a0)
+	bra.b	.loop
+.end
+	* refresh list
+	bra.w	.refresh
+
+.noFavs
+	DPRINT	"handleFavoriteModuleConfigChange: disabled",2
+
+	* favorites are not enabled
+	lea	favoriteListHeader(a5),a0
+	IFEMPTY a0,.exit
+	DPRINT	"->cleaning up",4
+	* there's some stuff in the list, free it and refresh view
+	* l_favorite need not be cleaned since they won't be displayed
+	* anyway if feature is disabled
+	bsr	freeFavoriteList
+.refresh
+	st	hippoonbox(a5)
+	jsr	resh
+.exit
+	popm	all 
+	rts
+
 *******************************************************************************
 * CreatePort
 *******
@@ -26310,7 +26999,225 @@ createio
 	movem.l	(sp)+,a0-a2
 	rts
 
+*******
+* getNameFromLock
+* DOS library NameFromLock is originally a V36 function. 
+* Here's a port ofthe  V40 implementation that works on older 
+* kickstarts.
+* in:
+*   d1 = lock
+*   d2 = output buffer
+*   d3 = max length of output buffer, will fail if not enough
+* out:
+*   d0 = 1 success, 0 failure
+*******
+getNameFromLock 
+.true		equ		1
+.false		equ		0
+.return		equr	d5
+.fl_lock	equr	d6
+.fl_lock2	equr	d7
+.fib		equr	d4
+.debug      	equ    0
 
+	pushm 	d1-a6
+ ifne .debug
+	DPRINT	"getNameFromLock!",10
+ endif
+	* It's all DOS, baby
+	move.l	_DosBase(a5),a6
+
+	* Use this one as the working fib, probably fine.
+	pushpea	fileinfoblock2(a5),.fib
+
+;	* allocate space from stack
+;	* ensure divisible by 4
+;	lea		-(fib_SIZEOF+4)(sp),sp
+;	move.l	sp,d0
+;	* make d0 divisible by 4
+;	and.l	#~%11,d0
+;	* above could have rounded down,
+;	* so round up to next proper address
+;	addq.l	#4,d0
+;	move.l	d0,.fib		* usable fib address
+;
+	* save start of output buffer to a3 for later
+	move.l	d2,a3	
+
+	* initial return code status: false
+	moveq	#.false,.return
+
+	* clear output buffer
+	move.l	d3,d0			
+	subq.l	#1,d0	* dbf length
+	move.l	a3,a4	
+.clr
+	clr.b	(a4)+
+	dbf	d0,.clr
+	subq.l	#1,a4	* leave one zero at the end for safety
+
+	* start filling a4 from the end
+
+	* First, copy the lock
+	lob 	DupLock
+	move.l	d0,.fl_lock
+.loop	
+	move.l	.fl_lock,d1
+	lob  	ParentDir
+	move.l	d0,.fl_lock2
+	beq.b	.loopEnd
+
+	move.l	.fl_lock,d1
+	move.l	.fib,d2
+	lob 	Examine
+	tst.l	d0
+	beq.w	.cleanup
+
+	* add separator if needed
+	tst.b	(a4)
+	beq.b	.noSep
+	move.b	#'/',-(a4)
+.noSep
+	move.l	.fib,a0
+	lea	fib_FileName(a0),a0
+	move.l	a0,a1
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+	subq.l	#1,a0	* backtrack to NULL
+.copyPart
+	cmp.l	a3,a4
+	beq.b	.noSpace
+	move.b	-(a0),-(a4)
+	cmp.l	a0,a1
+	bne.b	.copyPart
+	
+	* done with this lock, go looping
+	move.l	.fl_lock,d1
+	lob UnLock
+
+	move.l .fl_lock2,.fl_lock
+	bra.b	.loop
+.loopEnd
+	* next comes the name for the device
+	move.b	#':',-(a4)
+
+	* Dig into the lock, first convert BPTR to APTR.
+	move.l	.fl_lock,a0
+	add.l	a0,a0 
+	add.l 	a0,a0
+	move.l 	fl_Volume(a0),a0
+	* a0 = BPTR to DevList
+	add.l	a0,a0 
+	add.l 	a0,a0
+	move.l	dl_Name(a0),a0
+	* a0 = BPTR to name, should be null terminated.
+	* Check if true also on V34? Use the BCPL
+	* string length, that should be good.
+	add.l	a0,a0 
+	add.l 	a0,a0
+	
+	moveq	#0,d0
+	move.b	(a0)+,d0 * read BCPL string length
+	move.l	a0,a1 	* keep the start address for loop
+
+	* Skip to end of string
+	add.l	d0,a0
+
+.copyPart2
+	cmp.l	a3,a4
+	beq.b	.noSpace
+	move.b	-(a0),-(a4)
+	cmp.l	a0,a1
+	bne.b	.copyPart2	
+
+	* all done!
+	* move the resulting string to the front of the buffer.
+	* here a3 and a4 point to the same buffer 
+	move.l	a3,d0
+.move
+	move.b	(a4)+,(a3)+
+	bne.b	.move
+
+ ifne .debug
+	DPRINT	"->name=%s",2
+ endif 
+
+	* indicate success
+	moveq 	#.true,.return
+.noSpace
+.cleanup
+	move.l	.fl_lock,d1
+	lob UnLock
+	
+	;lea		(fib_SIZEOF+4)(sp),sp
+
+	* return status
+	move.l	.return,d0
+ if DEBUG
+	bne.b	.ok 
+	DPRINT	"GetNameFromLock FAILED!",100
+.ok
+ endif	
+ ifne .debug
+	DPRINT	"->success=%ld",3
+ endif
+	popm 	d1-a6
+	rts
+
+
+* Takes a file path and normalizes it by replacing
+* logical names/assigns with actual drive names.
+* It will transform path parts such as "SYS:"
+* into drive names like "A500-HD:".
+* In case of error original path remains untouched. 
+* in:
+*   d1 = pointer to path
+* out:
+*   path given in d1 is replaced, should contain space for growing
+
+normalizeFilePath
+ 	pushm	all
+ if DEBUG
+	move.l	d1,d0
+	DPRINT	"Normalizing: %s",1101
+ endif
+	move.l	d1,d7
+
+ 	;pushpea	tempdir(a5),d1
+	move.l	#ACCESS_READ,d2
+	lore  	Dos,Lock
+	move.l	d0,d4
+	beq.w	.noLock1
+	lea	-200(sp),sp
+	move.l	d4,d1
+	move.l	sp,d2
+	move.l	#200,d3
+	bsr  	getNameFromLock
+	tst.l	d0 
+	beq.b	.noName
+	move.l	sp,a0
+	;lea		tempdir(a5),a1
+	move.l	d7,a1
+.copyPath
+	move.b	(a0)+,(a1)+
+	bne.b	.copyPath
+	cmp.b	#':',-2(a1)
+	beq.b	.isDrive
+	move.b	#'/',-1(a1)
+	clr.b	(a1)
+.isDrive
+.noName
+	lea	200(sp),sp
+	move.l	d4,d1
+	lob 	UnLock
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"to: %s",1102
+ endif
+.noLock1
+	popm	all
+	rts
 
 *******************************************************************************
 *                                Soittorutiinit
@@ -32226,6 +33133,42 @@ sivu4		include	gadgets/prefs_sivu4.s
 sivu5		include	gadgets/prefs_sivu5.s
 sivu6		include	gadgets/prefs_sivu6.s
 
+* This is the "Favorites" button that belongs to prefs "sivu0" page.
+* It should be the "next gadget" for gadget "bUu22", which is the "autosort" 
+* button :-)
+* I drew the button using the GadEdit tool but after exporting as source
+* the data was not exactly same as the original, creating extra stuff
+* and other odd things, so I copy-pasted the new bit here.
+
+prefsFavorites dc.l 0
+       dc.w 406,121,28,12,3,1,1
+       dc.l prefsFavoritesgr,0,prefsFavoritest,0,0
+       dc.w 0
+       dc.l 0
+prefsFavoritesgr       dc.w 0,0
+       dc.b 2,0,1,3
+       dc.l prefsFavoritesxy,prefsFavoritesgr2
+prefsFavoritesxy       dc.w 0,11
+       dc.w 0,0
+       dc.w 27,0
+prefsFavoritesgr2      dc.w 0,0
+       dc.b 1,0,1,3
+       dc.l prefsFavoritesxy2,0
+prefsFavoritesxy2      dc.w 27,1
+       dc.w 27,11
+       dc.w 1,11
+prefsFavoritest        dc.b 1,0,1,0
+       dc.w -146,2
+       dc.l 0,prefsFavoritestx,prefsFavoritest2
+prefsFavoritestx       dc.b "Favorite modules..",0
+       even
+prefsFavoritest2       dc.b 1,0,1,0
+       dc.w 0,0
+;       dc.l 0,prefsFavoritestx2,0
+       dc.l 0,0,0
+;prefsFavoritestx2      dc.b "",0
+;       even
+
 * Rename the gadgets defined above to something not crazy
 gadgetPlayButton	  	EQU  button1
 gadgetInfoButton		EQU  button2
@@ -32350,9 +33293,11 @@ tooltipList
 	dc.b    "     the moved module",0
 	dc.b	"RMB: Add divider",0
 .prg
-	dc.b	24,2
+	dc.b	24+5,4
 	dc.b	"LMB: Load module program",0
 	dc.b	"RMB: Save module program",0
+	dc.b	"Favorite modules are saved to",0
+	dc.b	34,"S:HippoFavorites.prg",34,0
 .forward
 	dc.b	36,4
 	dc.b	"LMB: Skip module forward",0
@@ -32391,6 +33336,7 @@ wreg1
 
  even
 
+* Slider for the module info window, I guess
 gAD1	dc.l 0
 	dc.w 9,14,16,127-13*8,GFLG_GADGHNONE,9,3
 	dc.l gAD1gr,0,0,0,gAD1s
@@ -32657,11 +33603,11 @@ slim2	ds	410*2
 
 	section	udnm,bss_p
 
+		cnop 0,4
 * Global variables
 var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
-
 
  end
