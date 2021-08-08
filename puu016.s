@@ -23484,11 +23484,10 @@ loadfile
 * Finally here we just do an ordinary read.
 ****** Ihan Tavallinen Lataus
 
-; xax
+
 	* Probebuffer now has 1084 of data we can check
 	* for Delitracker CUSTOM format, as it has to be loaded
 	* with LoadSeg(), being an exe file.
-	* Status: no DeliCustom
 	pushm 	d1-a6
 	clr.b	delicustominit(a5)
 	lea	probebuffer(a5),a4
@@ -23509,6 +23508,7 @@ loadfile
 .notDeliCustom
 	popm 	d1-a6
 
+	* Skip the rest if LoadSeg went fine
 	tst.b	delicustominit(a5)
 	bne.w	.exit
 
@@ -31430,7 +31430,6 @@ DELIDPRINT  macro
 	endc
 	endm
 
-
 p_delicustom
 	jmp	.init(pc)
 	jmp	.play(pc)
@@ -31460,19 +31459,19 @@ p_delicustom
 	* tag item array
 	move.l	16(a0),a0
 .loop
-	;cmp.l	#TAG_END,(a0)
-	tst.l	(a0)		* TAG_END is NULL
-	beq.b	.notFound
-	cmp.l	(a0),d0
-	bne.b	.notThis
-	move.l	4(a0),d0
-	rts
+    ;cmp.l  #TAG_END,(a0)
+    tst.l   (a0)            * TAG_END is NULL
+    beq.b   .notFound
+    cmp.l   (a0),d0
+    bne.b   .notThis
+    move.l  4(a0),d0
+    rts
 .notFound
-	moveq	#0,d0
+	moveq   #0,d0
 	rts
 .notThis
-	addq.l	#8,a0
-	bra.b	.loop
+    addq.l  #8,a0
+    bra.b   .loop
 
 .callFunc	
 	tst.l	d0 
@@ -31514,12 +31513,15 @@ p_delicustom
 	move.l	#DTP_InitPlayer,d0  
 	bsr.w	.getTag
 	bsr.w	.callFunc	
+	* Status is returned in d0, can't rely on status flags
+	* here. d0=0 if ok, else not ok
+	tst.l	d0
 	bne.w	.error
 	DPRINT	"initPlayer ok",11
 
 	* set default song number
-	* d0 = def, d1 = min, d2 = max	
 	bsr	.getSongInfo
+	* d0 = def, d1 = min, d2 = max	
 	move	d0,.deliBase+dtg_SndNum
 	move	d0,songnumber(a5)
 	move	d2,maxsongs(a5)	
@@ -31541,27 +31543,50 @@ p_delicustom
 	bsr.w	.getTag
 	move.l	d0,.storedInterrupt
 	beq.b	.noInt
-	DPRINT	"has interrupt, using cia",33
+	DPRINT	"using hippo interrupt",33
  
 	* interrupt routine provided, set up an interrupt
 	bsr	init_ciaint
 	beq.b	.gotCia
 	DPRINT	"cia error",44
+
+	* try to clean up
+	move.l	#DTP_EndSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+	move.l	#DTP_EndPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
 	moveq	#ier_nociaints,d0
 	bra.b	.error
 .gotCia
 .noInt
+
+	tst.l	.storedInterrupt(pc)
+	bne.b	.intSet
 	* try to start module provided int handler
 	move.l	#DTP_StartInt,d0
 	bsr	.getTag
+	beq.b	.noStartInt
 	bsr	.callFunc
+	DPRINT	"using module interrupt",34
+.noStartInt
+.intSet
 
 .skip
 	DPRINT	"init ok",55
 	* ok
 	moveq	#0,d0
-.error	popm	d1-a6
+.exit
+	popm	d1-a6
 	rts
+
+.error
+	DPRINT	"init FAIL",56
+	moveq	#-1,d0 
+	bra.b	.exit
+	
 
 * Interrupt play routine, use cached pointers to avoid tag searches
 .play
@@ -31653,7 +31678,7 @@ p_delicustom
 	bhi.b .ok2
 	move d2,songnumber(a5)
 .ok2
-	* Put it
+	* Put it, wrong number may crash some players
 	move	songnumber(a5),.deliBase+dtg_SndNum
 
 	move.l	#DTP_InitSound,d0
@@ -31664,7 +31689,8 @@ p_delicustom
 	bsr	.callFunc
 	rts
 
-
+* Not sure what exactly should be done with these two.
+* Seems to work more or less.
 .stop
 	DPRINT	"deliStop",14
 	move.l	#DTP_EndSound,d0
@@ -31687,6 +31713,13 @@ p_delicustom
 	bsr	.callFunc
 	move	#$800f,$dff096
 	rts
+
+* Build the DeliBase structure, this is not a complete version.
+
+.deliBase
+	ds.b	dtg_Reserved3
+.deliBaseEnd
+ even
 
 .buildDeliBase
 	lea	.deliBase(pc),a0
@@ -31724,20 +31757,20 @@ p_delicustom
 	pea	.stopInt(pc)
 	move.l	(sp)+,dtg_StopInt(a0)
 	pea	.songEnd(pc)
-	move.l	(sp)+,dtg_SongEnd(a0)
+	move.l	(sp)+,dtg_SongEnd(a0)	* may be called from interrupt
 	pea	.setTimer(pc)
-	move.l	(sp)+,dtg_SetTimer(a0)
+	move.l	(sp)+,dtg_SetTimer(a0)	* may be called from interrupt
 
-	* Lemmings called f8 and f6
-	* RCop2_CheatMode: not identified
-	* The_Pawn crash, ok on DT
+	* Lemmings uses CopyString and CopyFile. Not supported!
 
+	* Stub the rest
+ if DEBUG
 	pea	.f1(pc)
 	move.l	(sp)+,dtg_LockScreen(a0)
 	pea	.f2(pc)
 	move.l	(sp)+,dtg_UnlockScreen(a0)
 	pea	.f3(pc)
-	move.l	(sp)+,dtg_NotePlayer(a0)
+	move.l	(sp)+,dtg_NotePlayer(a0) 	* may be called from interrupt
 	pea	.f4(pc)
 	move.l	(sp)+,dtg_AllocListData(a0)
 	pea	.f5(pc)
@@ -31752,16 +31785,29 @@ p_delicustom
 	move.l	(sp)+,dtg_LoadFile(a0)
 	pea	.f10(pc)
 	move.l	(sp)+,dtg_GetListData(a0)
+ else 
+	lea	.stub(pc),a1
+	move.l	a1,dtg_LockScreen(a0)
+	move.l	a1,dtg_UnlockScreen(a0)
+	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
+	move.l	a1,dtg_AllocListData(a0)
+	move.l	a1,dtg_FreeListData(a0)
+	move.l	a1,dtg_CopyString(a0)
+	move.l	a1,dtg_CopyFile(a0)
+	move.l	a1,dtg_CopyDir(a0)
+	move.l	a1,dtg_LoadFile(a0)
+	move.l	a1,dtg_GetListData(a0)
+ endif
 	rts
 
 .allocAudio 
 	DELIDPRINT	"deliAudioAlloc",1102
 	pushm	d1-a6
 	lea	var_b,a5
-	bsr	varaa_kanavat
+	* returns d0=0 on success:
+	bsr	varaa_kanavat 
 	popm	d1-a6
 	rts
-
 
 .freeAudio 
 	DELIDPRINT	"deliAudioFree",1103
@@ -31771,6 +31817,28 @@ p_delicustom
 	popm	d1-a6
 	rts
 
+.songEnd
+	* May be called from interrupt, no logging allowed
+	;DELIDPRINT	"deliSongEnd",3
+	;st		var_b+songover
+	rts
+.setTimer
+	* May be called from interrupt, no logging allowed
+	;DELIDPRINT	"deliSetTimer",15
+.stub
+	moveq	#0,d0
+	rts
+
+.startInt	
+	DELIDPRINT	"deliStartInt",1
+	moveq	#0,d0
+	rts
+.stopInt 
+	DELIDPRINT	"deliStopInt",2
+	moveq	#0,d0
+	rts
+
+ if DEBUG
 .f1 DELIDPRINT	"f1",1101
 	moveq	#0,d0
 	rts
@@ -31801,28 +31869,8 @@ p_delicustom
 .f10 DELIDPRINT	"f10",110
 	moveq	#0,d0
 	rts
-.startInt	
-	DELIDPRINT	"deliStartInt",1
-	moveq	#0,d0
-	rts
-.stopInt 
-	DELIDPRINT	"deliStopInt",2
-	moveq	#0,d0
-	rts
-.songEnd
-	DELIDPRINT	"deliSongEnd",3
-	moveq	#0,d0
-	rts
-.setTimer
-	DELIDPRINT	"deliSetTimer",15
-	moveq	#0,d0
-	rts
+ endif
 
-* Build a fake delibase here
-.deliBase
-	ds.b	dtg_Reserved3
-.deliBaseEnd
- even
 
  if DEBUG
 .showTags
