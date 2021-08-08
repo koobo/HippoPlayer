@@ -24,8 +24,8 @@ reqtools.library installed.
   Previously such modules would not be found from the zip file.
 
 ## New (very old) known bugs:
-- _VisualPrefs_ tool can be used to adjust window bottom and top borders, and window and screen title bar heights. Hippo can get confused and displays window visuals strangely, eg. when window is folded (with RMB).
-
+- _VisualPrefs_ tool can be used to adjust window bottom and top border, and window and screen title bar heights. Hippo can get confused and displays some extra vertical space below the window title bar when these are adjusted. 
+  
 ## New supported music formats:
 - Beathoven Synthesizer
 - Game Music Creator (*Jumping Jack'Son!*)
@@ -38,7 +38,7 @@ reqtools.library installed.
   - Minor issue: Some modules display the subsong range in the titlebar so that the first song is #2 instead of #1. 
   - Tested with 461 modules :-)
 
-## Features:
+## New features:
 
 - Support for _gzipped_ archives. (This was once supported but was removed at some point.)
 
@@ -50,6 +50,7 @@ reqtools.library installed.
   
   Previously on older kickstarts only 
   the top level files of the selected directories were added.
+  Subdirectories were ignored.
 
 - Favorite modules! You can now right click on a module to favorite it. Favorite
   modules are displayed in **bold font**.
@@ -62,7 +63,7 @@ reqtools.library installed.
   _General_ subpage in prefs. 
   
   Favorites will be automatically saved after the user has been idle for a while,
-  or when exiting the program. This feature probably doesn't make any sense if you are using floppies to store modules.
+  or when exiting the program. This feature probably doesn't make any sense if you are using floppies.
 
 # Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
 
