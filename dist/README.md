@@ -13,8 +13,8 @@ reqtools.library installed.
 
 # Changes from v2.46b (15.6.2021) to v2.47b (?.?.2021)
 
-## Fixes:
-- Tooltip fixes for buttons "Del", "Pr". Also increase tooltip delay a little bit.
+## New fixes:
+- Tooltip fixes for buttons *Del*, *Pr*. Also increase tooltip delay a little bit.
 - Fix the case where HiP is given modules without absolute path via command line
   or via icon launch (eg. *DefIcons*), and the added files can't be opened.
   Absolute path is now determined for these files before they are sent
@@ -23,15 +23,24 @@ reqtools.library installed.
   this allows opening zipped modules where the module is within a subdirectory.
   Previously such modules would not be found from the zip file.
 
-## Supported music formats:
+## New (very old) known bugs:
+- _VisualPrefs_ tool can be used to adjust window bottom and top borders, and window and screen title bar heights. Hippo can get confused and displays window visuals strangely, eg. when window is folded (with RMB).
+
+## New supported music formats:
 - Beathoven Synthesizer
 - Game Music Creator (*Jumping Jack'Son!*)
 - Digital Mugician
 - PumaTracker
+- DeliTracker Custom
+  - Many modules work fine but some behave badly. They may do illegal memory accesses or crash spectacularly. The same happens also when played with DeliTracker. 
+  - One version of _Lemmings_ tries to do file accesses to load separate sample files, this is not supported and will probably crash.
+  - A few lonely modules do not get recognized as the important bits are not close enough to the start of the file.
+  - Minor issue: Some modules display the subsong range in the titlebar so that the first song is #2 instead of #1. 
+  - Tested with 461 modules :-)
 
 ## Features:
 
-- Support for gzipped archives. (This was once supported but was removed at some point.)
+- Support for _gzipped_ archives. (This was once supported but was removed at some point.)
 
 - Recursive subdirectory scan when adding modules is now supported also on kickstart 1.3.
   
@@ -45,7 +54,7 @@ reqtools.library installed.
 - Favorite modules! You can now right click on a module to favorite it. Favorite
   modules are displayed in **bold font**.
 
-  These modules will be stored in a separate playlist (or a module program in Hippo terms)
+  These modules will be stored in a separate playlist (or a _module program_ in Hippo terms)
   which you can open by pressing the *Prg* button and selecting the file
   "**S:HippoFavorites.prg**".
 
@@ -53,7 +62,7 @@ reqtools.library installed.
   _General_ subpage in prefs. 
   
   Favorites will be automatically saved after the user has been idle for a while,
-  or when exiting the program. This feature probably doesn't make any sense if you are using floppies.
+  or when exiting the program. This feature probably doesn't make any sense if you are using floppies to store modules.
 
 # Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
 
