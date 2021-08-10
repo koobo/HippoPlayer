@@ -291,9 +291,10 @@ prefs_mpegaqua		rs.b	1
 prefs_mpegadiv		rs.b	1
 prefs_medmode		rs.b	1
 prefs_favorites		rs.b	1
-
 prefs_medrate		rs	1
 
+prefs_tooltips		rs.b 	1
+			rs.b 	1 * pad
 
 prefs_size		rs.b	0
 
@@ -654,6 +655,8 @@ early_new	rs.b	1
 prefix_new	rs.b	1
 autosort_new	rs.b	1
 favorites_new	rs.b	1	
+tooltips_new	rs.b  1	
+				rs.b  1 * pad
 
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -984,6 +987,8 @@ ahi_use		= prefsdata+prefs_ahi_use
 ahi_muutpois	= prefsdata+prefs_ahi_muutpois
 ahi_use_nyt	rs.b	1
 favorites	rs.b	1
+tooltips	rs.b  	1
+			rs.b    1 * pad
 autosort	= prefsdata+prefs_autosort
 
 * audio homman muuttujat
@@ -2940,7 +2945,7 @@ msgloop
 	move.b	tooltipSignal(a5),d3 
 	btst	d3,d0 
 	beq.b	.noTooltipSignal
-	bsr		tooltipDisplayHandler
+	bsr	tooltipDisplayHandler
 .noTooltipSignal
 
 * Vastataan IDCMP:n viestiin
@@ -5935,6 +5940,9 @@ tooltipDisplayHandler
 	beq.b	.exit 
 	clr.l	activeTooltip(a5)
 	clr.l	disableTooltipForGadget(a5)
+	* skip display if not enabled in prefs
+	tst.b	tooltips(a5)
+	beq.b	.exit
 	move.l	d0,a0 
 	jsr	showTooltipPopup
 .exit
@@ -10803,6 +10811,7 @@ tokenizepattern
 ***************************
 
 loadprefs
+	DPRINT 	"Load prefs",1
 	pushpea	prefsfilename(pc),d7
 
 ;	move.l	(a5),a0			* Kokeillaan ladata preffsi
@@ -10850,6 +10859,7 @@ loadprefs2
 
 	cmp.b	#prefsversio,prefsdata(a5)	* Onko oikea versio?
 	beq.b	.q
+
 * Vanha prefssi?
 * Laitetaan defaultti archivejutut 
 	bsr.w	defarc
@@ -10916,6 +10926,7 @@ loadprefs2
 	move.b	prefs_medmode(a0),medmode(a5)
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
+	move.b	prefs_tooltips(a0),tooltips(a5)
 
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
@@ -10925,7 +10936,7 @@ loadprefs2
 
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
-	bsr.b	sliderit
+	bsr.w	sliderit
 	bsr.w	setprefsbox
 	bsr.w	mainpriority
 
@@ -11634,6 +11645,7 @@ prefs_code
 	move.b	medmode(a5),medmode_new(a5)
 	move	medrate(a5),medrate_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
+	move.b	tooltips(a5),tooltips_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -12084,6 +12096,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	ahi_muutpois_new(a5),ahi_muutpois(a5)
 
 	move.b	favorites_new(a5),favorites(a5)
+	move.b	tooltips_new(a5),tooltips(a5)
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
@@ -12654,6 +12667,7 @@ pupdate				* Ikkuna päivitys
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
 	bsr		pfavorites		* favorites
+	bsr		ptooltips       * tooltips
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -12893,6 +12907,7 @@ gadgetsup2
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
 	dr	rfavorites	* favorites
+	dr      rtooltips   * tooltips
 
 .s1
 *** Sivu1
@@ -13944,6 +13959,14 @@ rfavorites
 pfavorites
 	move.b	favorites_new(a5),d0
 	lea	prefsFavorites,a0
+	bra.w	tickaa
+
+********* Tooltips
+rtooltips
+	not.b	tooltips_new(a5)
+ptooltips
+	move.b	tooltips_new(a5),d0
+	lea	prefsTooltips,a0
 	bra.w	tickaa
 
 ********* Autosort
@@ -33149,7 +33172,7 @@ sivu6		include	gadgets/prefs_sivu6.s
 * the data was not exactly same as the original, creating extra stuff
 * and other odd things, so I copy-pasted the new bit here.
 
-prefsFavorites dc.l 0
+prefsFavorites dc.l prefsTooltips
        dc.w 406,121,28,12,3,1,1
        dc.l prefsFavoritesgr,0,prefsFavoritest,0,0
        dc.w 0
@@ -33173,10 +33196,36 @@ prefsFavoritestx       dc.b "Favorite modules..",0
        even
 prefsFavoritest2       dc.b 1,0,1,0
        dc.w 0,0
-;       dc.l 0,prefsFavoritestx2,0
        dc.l 0,0,0
-;prefsFavoritestx2      dc.b "",0
-;       even
+
+* "Button tooltips" button copypasted from above, 
+* x-coordinates adjusted manually.
+prefsTooltips dc.l 0
+       dc.w 406-192,121,28,12,3,1,1
+       dc.l prefsTooltipsgr,0,prefsTooltipst,0,0
+       dc.w 0
+       dc.l 0
+prefsTooltipsgr       dc.w 0,0
+       dc.b 2,0,1,3
+       dc.l prefsTooltipsxy,prefsTooltipsgr2
+prefsTooltipsxy       dc.w 0,11
+       dc.w 0,0
+       dc.w 27,0
+prefsTooltipsgr2      dc.w 0,0
+       dc.b 1,0,1,3
+       dc.l prefsTooltipsxy2,0
+prefsTooltipsxy2      dc.w 27,1
+       dc.w 27,11
+       dc.w 1,11
+prefsTooltipst        dc.b 1,0,1,0
+       dc.w -146-52,2
+       dc.l 0,prefsTooltipstx,prefsTooltipst2
+prefsTooltipstx       dc.b "Button tooltips.........",0
+       even
+prefsTooltipst2       dc.b 1,0,1,0
+       dc.w 0,0
+       dc.l 0,0,0
+
 
 * Rename the gadgets defined above to something not crazy
 gadgetPlayButton	  	EQU  button1
