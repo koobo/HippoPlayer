@@ -22890,6 +22890,10 @@ nopperror_t
 	dc.b	"No powerpacker.library!",0
 unknown_t
 	dc.b	"Unknown file format!",0
+unknownDueToAhi_t
+	dc.b	"Unknown file format!",10
+	dc.b	"This may be because non-AHI replayers",10
+	dc.b	"are disabled.",0
 nofast_t
 memerror_t	
 	dc.b	"Not enough memory!",0
@@ -22940,6 +22944,11 @@ xfdvirhe			* N‰ytet‰‰n XFD:n oma virheilmoitus.
 tuntematonvirhe
 	movem.l	d0-a6,-(sp)
 	lea	unknown_t(pc),a1
+	tst.b ahi_muutpois(a5)
+	beq.b	.noAhiSkip
+	lea	unknownDueToAhi_t(pc),a1
+.noAhiSkip
+
 	lea	.g(pc),a2
 	bsr.w	rawrequest
 	tst.l	d0
