@@ -23853,6 +23853,8 @@ loadfile
 	* Probebuffer now has 1084 of data we can check
 	* for Delitracker CUSTOM format, as it has to be loaded
 	* with LoadSeg(), being an exe file.
+	tst.b	ahi_muutpois(a5)
+	bne.b	.ahiSkip
 	pushm 	d1-a6
 	clr.b	delicustominit(a5)
 	lea	probebuffer(a5),a4
@@ -23872,6 +23874,7 @@ loadfile
 .loadSegErr
 .notDeliCustom
 	popm 	d1-a6
+.ahiSkip
 
 	* Skip the rest if LoadSeg went fine
 	tst.b	delicustominit(a5)
@@ -24557,7 +24560,7 @@ tutki_moduuli
 ;.zz
 
 	* Check this first since moduleaddress(a5) can't be used for anything 
-	* if true.
+	* if true.	
 	tst.b	delicustominit(a5)
 	bne		.delicustom
 	
@@ -32417,7 +32420,7 @@ p_delicustom
 	beq.b	.noFunc
 	DPRINT	"Call %lx",101
 	pushm 	d2-a6
-	lea	.deliBase(pc),a5
+	lea	deliBase,a5
 	move.l	d0,a0
 	jsr	(a0)
 	popm	d2-a6
@@ -32445,7 +32448,7 @@ p_delicustom
 	bsr	.getTag
 	beq.b	.noDBTag
 	move.l	d0,a0 
-	lea	.deliBase(pc),a1
+	lea	deliBase,a1
 	move.l	a1,(a0)
 .noDBTag
 
@@ -32461,7 +32464,7 @@ p_delicustom
 	* set default song number
 	bsr	.getSongInfo
 	* d0 = def, d1 = min, d2 = max	
-	move	d0,.deliBase+dtg_SndNum
+	move	d0,deliBase+dtg_SndNum
 	move	d0,songnumber(a5)
 	move	d2,maxsongs(a5)	
 
@@ -32532,13 +32535,13 @@ p_delicustom
 .play
 	move.l	.storedInterrupt(pc),d0
 	beq.b	.nope
-	lea	.deliBase(pc),a5
+	lea	deliBase,a5
 	move	var_b+mainvolume,dtg_SndVol(a5)
 	move.l	d0,a0
 	jsr	(a0)
 	move.l	.storedSetVolume(pc),d0
 	beq.b	.noVol
-	lea	.deliBase(pc),a5
+	lea	deliBase,a5
 	move.l 	d0,a0
 	jsr	(a0)
 .noVol
@@ -32619,7 +32622,7 @@ p_delicustom
 	move d2,songnumber(a5)
 .ok2
 	* Put it, wrong number may crash some players
-	move	songnumber(a5),.deliBase+dtg_SndNum
+	move	songnumber(a5),deliBase+dtg_SndNum
 
 	move.l	#DTP_InitSound,d0
 	bsr	.getTag
@@ -32656,19 +32659,14 @@ p_delicustom
 
 * Build the DeliBase structure, this is not a complete version.
 
-.deliBase
-	ds.b	dtg_Reserved3
-.deliBaseEnd
- even
-
 .buildDeliBase
-	lea	.deliBase(pc),a0
-	lea	.deliBaseEnd(pc),a1
+	lea	deliBase,a0
+	lea	deliBaseLength(a0),a1
 .clrBase
 	clr.b	(a0)+
 	cmp.l	a0,a1 
 	bne.b .clrBase
-	lea	.deliBase(pc),a0
+	lea	deliBase,a0
 
 	move.l	_DosBase(a5),dtg_DOSBase(a0)
 	move.l	_IntuiBase(a5),dtg_IntuitionBase(a0)
@@ -33667,5 +33665,9 @@ var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
+* Use the same buffer in p_delicustom to store thedeliBase
+deliBase	= ptheader
+deliBaseLength	= dtg_Reserved3
+
 
  end
