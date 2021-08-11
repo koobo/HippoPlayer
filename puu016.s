@@ -1268,6 +1268,64 @@ idcmpflags2 set idcmpflags2!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
 *********************************************************************************
 *
+* Debug macros
+*
+
+ ifne DEBUG
+
+* Print to debug console
+DEBU	macro
+	ifne	DEBUG
+	pea	\1
+	jsr	PRINTOUT
+	endc
+	endm
+
+* Print to debug console
+* Param 1: string
+* Param 2: label,  for some reason \@ doesn't work
+* d0-d7:    formatting parameters
+DPRINT macro
+	ifne DEBUG
+	push a0
+	lea .DD\2(pc),a0
+	jsr	desmsg
+	pop a0
+	pea	desbuf(a5)
+	jsr	PRINTOUT
+	bra.b	.D\2
+.DD\2
+ 	dc.b 	\1,10,0
+ 	even
+.D\2
+	endc
+	endm
+
+* No auto line feed
+DPRINT2 macro
+	ifne DEBUG
+	pea	.LDD\2(pc)
+	jsr	PRINTOUT
+	bra.b	.LD\2
+.LDD\2
+ 	dc.b 	\1,0
+ 	even
+.LD\2
+	endc
+	endm
+
+* delay
+DDELAY macro
+	ifne DEBUG
+	pushm	all
+	move.l	#\1*50,d1
+	lore	Dos,Delay
+	popm	all
+	endc
+	endm
+
+*********************************************************************************
+*
 * Start up from CLI or Workbench
 * - Handles command line parameters,
 * - setting up a new process (detachment),
@@ -1278,7 +1336,6 @@ idcmpflags2 set idcmpflags2!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
  ifeq asm
 
-
 	section	detach,code_p
 
 progstart
@@ -1286,13 +1343,14 @@ progstart
 	move.l	a0,d6
 	move.l	d0,d7
 
-
 	move.l	4.w,a6
 	move.l	a6,(a5)
 	lea	dosname,a1
 	lob	OldOpenLibrary
 	move.l	d0,a4
 	move.l	d0,_DosBase(a5)
+
+	DPRINT	"Start",1
 
 	sub.l	a1,a1
 	lob	FindTask
@@ -1324,6 +1382,8 @@ progstart
 	tst.l	d0
 	bne.b	.poptofront
 
+	* There was no hip already running, launch a new one
+
 	move.l	a4,a6			* hankitaan kopio lukosta
 	move.l	lockhere(a5),d1
 	lob	DupLock
@@ -1338,9 +1398,28 @@ progstart
 ;	move.l	#4000,d4		* stacksize
 	move.l	#5000,d4		* stacksize
 	move.l	a4,a6
-	lob	CreateProc
+	lob	CreateProc	
 
-.eien	move.l	(a5),a6			* vastataan WB:n viestiin
+.eien	
+
+	* if new HiP was NOT launched close the debug window
+ if DEBUG
+	tst.l	segment(a5)
+	bne.b	.launched
+	move.l	output(a5),d1
+	beq.b	.out
+	move.l	_DosBase(a5),a6
+	move.l	#3*50,d1
+	lob	Delay
+	move.l	output(a5),d1
+	beq.b	.out
+	lob 	Close
+.out
+ endif
+
+.launched
+
+	move.l	(a5),a6			* vastataan WB:n viestiin
 	tst.l	d5
 	beq.b	.nomsg
 	lob	Forbid
@@ -1382,12 +1461,26 @@ progstart
 	;pushpea	sv_argvArray(a5),MN_LENGTH(a1) * uudet parametrit viestiin
 	;move.l	#"K-P!",MN_LENGTH+4(a1) * tunnistin!
 
-	bsr.b	.preparePaths
+	bsr.w	.preparePaths
+
+ if DEBUG
+	push	a0
+	lea	sv_argvArray(a5),a0
+	moveq	#0,d0
+.bob
+	tst.l	(a0)
+	beq.b	.bob2
+	move.l	(a0)+,d1
+	DPRINT	"%ld: %s",3
+	addq	#1,d0
+	bra.b	.bob
+.bob2
+	pop 	a0
+ endif
 
 	move.l	#MESSAGE_MAGIC_ID,HM_Identifier(a1) 			* magic identifier
 	pushpea	sv_argvArray(a5),HM_Arguments(a1) 		  * cmdline parameter array
 	* MN_SIZE is left unset
-
 	pushpea	hippoport(a5),MN_REPLYPORT(a1)	* t‰h‰n porttiin vastaus
 	lob	PutMsg
 
@@ -1396,7 +1489,7 @@ progstart
 
 	jsr	deleteport0
 
-	bra.b	.eien
+	bra.w	.eien
 
 * This checks the command line parameters and adds a fully qualified path 
 * to filenames if possible. Uses V36 DOS functions as it would be quite
@@ -1414,7 +1507,8 @@ progstart
 .loop
 	* Take one and see if it was the last one
 	move.l	(a3),d3
-	beq		.done
+	beq	.done
+
 	* See if it was one of the four letter commands
 	move.l	d3,a0 
 	jsr		kirjainta4
@@ -1464,7 +1558,7 @@ progstart
 .error
 	* go to next argv slot
 	addq.l	#4,a3
-	bra.b	.loop
+	bra.w	.loop
 .done 
 	popm	all
 	rts
@@ -1640,6 +1734,59 @@ quad_segment
 ;	dc	0	* pad
 
 
+ ifne DEBUG
+PRINTOUT
+	pushm	d0-d3/a0/a1/a5/a6
+	lea	var_b,a5
+	move.l	output(a5),d1
+	bne.w	.open
+
+	move.l	#.bmb,d1
+	move.l	#MODE_NEWFILE,d2
+	lore	Dos,Open
+	move.l	d0,output(a5)
+	bne.b	.isOpen
+	* show alert once if cant open debug console
+	lea	.openErr(pc),a0
+	moveq	#0,d0		* recovery
+	moveq	#19,d1		* korkeus
+	tst.b	.alertShown(pc)
+	bne.w	.x
+	tst.l	_IntuiBase(a5)
+	beq.w	.x
+	lore	Intui,DisplayAlert
+	st	.alertShown
+	bra.b	.x
+.isOpen
+	move.l	d0,d1
+	bra.b	.open
+.openErr
+	dc	110
+	dc.b	11
+	dc.b	"Error opening debug console, increase screen height!",0,0
+.alertShown	dc.b 0
+.bmb	dc.b	"CON:0/0/350/500/HiP debug window",0
+    even
+.open
+	move.l	32+4(sp),a0
+
+	moveq	#0,d3
+	move.l	a0,d2
+.p	addq	#1,d3
+	tst.b	(a0)+
+	bne.b	.p
+ 	lore	Dos,Write
+.x	popm	d0-d3/a0/a1/a5/a6
+	move.l	(sp)+,(sp)
+	rts
+ endc
+
+ ifne DEBUG
+getmemCount 	dc.l	0
+freememCount	dc.l	0
+getmemTotal		dc.l	0
+ endc
+
 
 intuiname	dc.b	"intuition.library",0
 gfxname		dc.b	"graphics.library",0
@@ -1746,108 +1893,6 @@ about_t1
  dc.b $ff
  even
 
-
- ifne DEBUG
-PRINTOUT
-	pushm	d0-d3/a0/a1/a5/a6
-	lea	var_b,a5
-	move.l	output(a5),d1
-	bne.w	.open
-
-	move.l	#.bmb,d1
-	move.l	#MODE_NEWFILE,d2
-	lore	Dos,Open
-	move.l	d0,output(a5)
-	bne.b	.isOpen
-	* show alert once if cant open debug console
-	lea	.openErr(pc),a0
-	moveq	#0,d0		* recovery
-	moveq	#19,d1		* korkeus
-	tst.b	.alertShown(pc)
-	bne.w	.x
-	lore	Intui,DisplayAlert
-	st	.alertShown
-	bra.b	.x
-.isOpen
-	move.l	d0,d1
-	bra.b	.open
-.openErr
-	dc	110
-	dc.b	11
-	dc.b	"Error opening debug console, increase screen height!",0,0
-.alertShown	dc.b 0
-.bmb	dc.b	"CON:0/0/350/500/HiP debug window",0
-    even
-.open
-	move.l	32+4(sp),a0
-
-	moveq	#0,d3
-	move.l	a0,d2
-.p	addq	#1,d3
-	tst.b	(a0)+
-	bne.b	.p
- 	lore	Dos,Write
-.x	popm	d0-d3/a0/a1/a5/a6
-	move.l	(sp)+,(sp)
-	rts
- endc
-
-* Print to debug console
-DEBU	macro
-	ifne	DEBUG
-	pea	\1
-	jsr	PRINTOUT
-	endc
-	endm
-
-* Print to debug console
-* Param 1: string
-* Param 2: label,  for some reason \@ doesn't work
-* d0-d7:    formatting parameters
-DPRINT macro
-	ifne DEBUG
-	push a0
-	lea .DD\2(pc),a0
-	jsr	desmsg
-	pop a0
-	pea	desbuf(a5)
-	jsr	PRINTOUT
-	bra.b	.D\2
-.DD\2
- 	dc.b 	\1,10,0
- 	even
-.D\2
-	endc
-	endm
-
-* No auto line feed
-DPRINT2 macro
-	ifne DEBUG
-	pea	.LDD\2(pc)
-	jsr	PRINTOUT
-	bra.b	.LD\2
-.LDD\2
- 	dc.b 	\1,0
- 	even
-.LD\2
-	endc
-	endm
-
-* delay
-DDELAY macro
-	ifne DEBUG
-	pushm	all
-	move.l	#\1*50,d1
-	lore	Dos,Delay
-	popm	all
-	endc
-	endm
-
- ifne DEBUG
-getmemCount 	dc.l	0
-freememCount	dc.l	0
-getmemTotal		dc.l	0
- endc
 
  ifne asm
 flash	
@@ -3207,22 +3252,8 @@ exit2
 	move.l	_IntuiBase(a5),d0
 	bsr.w	closel
 
- ifeq asm
-	move.l	lockhere(a5),d1		* free CurrentDir lock
-	lore	Dos,UnLock
-	lore	Exec,Forbid			* forbid multitasking 
-	bsr.w	vastomaviesti		* reply to any message we may have received
-
-	* Free program code hunk. After this the following code lines may become
-	* unavailable unless multitasking is disabled.
-	move.l	segment(a5),d1
-	move.l  _DosBase(a5),a6
-	jsr 	_LVOUnLoadSeg(a6)
- endc
 
  ifne DEBUG
- 	DPRINT  "Exiting",667
-
 	move.l	getmemCount(pc),d0
 	DPRINT "Getmem count: %ld",668
 	move.l	freememCount(pc),d1
@@ -3246,6 +3277,19 @@ exit2
  	beq.b	.xef
 	lob	Close
 .xef
+ endc
+
+ ifeq asm
+	move.l	lockhere(a5),d1		* free CurrentDir lock
+	lore	Dos,UnLock
+	lore	Exec,Forbid			* forbid multitasking 
+	bsr.w	vastomaviesti		* reply to any message we may have received
+
+	* Free program code hunk. After this the following code lines may become
+	* unavailable unless multitasking is disabled.
+	move.l	segment(a5),d1
+	move.l  _DosBase(a5),a6
+	jsr 	_LVOUnLoadSeg(a6)
  endc
 
 	move.l	_DosBase(a5),d0		* last library to be closed
@@ -6022,7 +6066,7 @@ omaviesti
 	moveq	#MEMF_PUBLIC,d1		* varataan muistia
 	bsr.w	getmem
 	move.l	d0,appnamebuf(a5)
-	beq.b	.huh			* ERROR!
+	beq.w	.huh			* ERROR!
 	move.l	d0,a2
 
 .addfiles
@@ -10737,7 +10781,6 @@ komentojono
 	bra.w	loadprog
 .hmm
 
-
 	move.l	d5,a0
 .f	tst.b	(a0)+
 	bne.b	.f
@@ -10763,8 +10806,12 @@ komentojono
 	lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
 	lore	Exec,AddTail
 
+	pushm	a2/a3
+	* update favorite status for node a0
 	move.l	a2,a0
+	* destroys a2/a3 (no stack saving for speed there)
 	jsr	updateFavoriteStatus
+	popm	a2/a3
 
 	addq.l	#1,modamount(a5)	* m‰‰r‰++
 
