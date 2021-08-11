@@ -19491,12 +19491,13 @@ init_ciaint_withTempo
 	move.l	a6,ciabase(a5)
 	move.b	d6,whichtimer(a5)	* 0: timer a, 1:timer b
 
-	lea	ciatalo(a3),a2
-	tst.b	d6
-	beq.b	.timera
-	lea	ciatblo(a3),a2
-.timera	move.b	timerlo(a5),(a2)
-	move.b	timerhi(a5),$100(a2)
+ if DEBUG
+	move.l a3,d0
+	moveq	#0,d1
+	move.b whichtimer(a5),d1
+	DPRINT	"CIA Timer %lx %ld",1
+ endif
+	bsr	ciaint_setTempo
 
 	lea	ciacra(a3),a2
 	tst.b	d6
@@ -19508,6 +19509,21 @@ init_ciaint_withTempo
 	move.b	#%00010001,(a2)		* Continuous, force load
 	popm	d1-a6
 	moveq	#0,d0
+	rts
+
+* Sets tempo value word from timerhi(a5) into currently
+* active CIA timer.
+ciaint_setTempo
+	pushm	a2/a3
+	move.l 	ciaddr(a5),a3
+	lea	ciatalo(a3),a2
+	tst.b	whichtimer(a5)
+	beq.b	.timera
+	lea	ciatblo(a3),a2
+.timera	
+	move.b	timerlo(a5),(a2)
+	move.b	timerhi(a5),$100(a2)
+	popm	a2/a3
 	rts
 
 
