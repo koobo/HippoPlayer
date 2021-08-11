@@ -19416,9 +19416,12 @@ _ciab	=	$bfd000
 cianame	dc.b	"ciaa.resource",0
  even
 
-
- 
+	
+* init with default tempo 
 init_ciaint
+	moveq	#0,d0
+* init with specified tempo in d0. 0 = default
+init_ciaint_withTempo
 	tst.b	ciasaatu(a5)
 	bne.b	.hm
 .c	moveq	#0,d0
@@ -19432,7 +19435,12 @@ init_ciaint
 .ci
 	pushm	d1-a6
 
-	move	#28419/2,timerhi(a5)
+	move	#28419/2,d1
+	tst	d0
+	beq.b	.default
+	move	d0,d1
+.default
+	move	d1,timerhi(a5)
 
 ** CIAA
 	lea	_ciaa,a3
@@ -19501,7 +19509,6 @@ init_ciaint
 	popm	d1-a6
 	moveq	#0,d0
 	rts
-
 
 
 rem_ciaint
@@ -32531,11 +32538,12 @@ p_delicustom
 	move.l	#DTP_Interrupt,d0  
 	bsr.w	.getTag
 	move.l	d0,.storedInterrupt
-	beq.b	.noInt
+	beq.w	.noInt
 	DPRINT	"using hippo interrupt",33
  
 	* interrupt routine provided, set up an interrupt
-	bsr	init_ciaint
+	move	deliBase+dtg_Timer,d0
+	bsr	init_ciaint_withTempo
 	beq.b	.gotCia
 	DPRINT	"cia error",44
 
@@ -32548,7 +32556,7 @@ p_delicustom
 	bsr.w	.callFunc	
 
 	moveq	#ier_nociaints,d0
-	bra.b	.error
+	bra.w	.error
 .gotCia
 .noInt
 
@@ -32565,7 +32573,11 @@ p_delicustom
 .intSet
 
 .skip
-	DPRINT	"init ok",55
+ if DEBUG
+	moveq	#0,d0
+	move	deliBase+dtg_Timer,d0
+	DPRINT	"init ok, dtg_Timer=%ld",55
+ endif
 	* ok
 	moveq	#0,d0
 .exit
@@ -32728,7 +32740,6 @@ p_delicustom
 	move	#64,dtg_SndLBal(a0)
 	move	#64,dtg_SndRBal(a0)
 	clr	dtg_LED(a0)
-	move	#50,dtg_Timer(a0)
 
 	pea	.allocAudio(pc)
 	move.l	(sp)+,dtg_AudioAlloc(a0)
