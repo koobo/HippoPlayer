@@ -100,8 +100,9 @@ main
 	dc.l	dbprodata-main,pumatrackerdata-dbprodata
 	dc.l	pumatrackerdata-main,gamemusiccreatordata-pumatrackerdata
 	dc.l	gamemusiccreatordata-main,digitalmugiciandata-gamemusiccreatordata
-	dc.l	digitalmugiciandata-main,pend-digitalmugiciandata
-
+	dc.l	digitalmugiciandata-main,medleydata-digitalmugiciandata
+	dc.l	medleydata-main,pend-medleydata
+	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
 
@@ -149,6 +150,7 @@ dbprodata	incbin	dbpro.im
 pumatrackerdata	incbin	pumatracker.im
 gamemusiccreatordata incbin gamemusiccreator.im
 digitalmugiciandata incbin  mugiplayer.im
+medleydata incbin  imploder.im
 
 
 pend
