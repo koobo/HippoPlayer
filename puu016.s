@@ -889,6 +889,7 @@ p60routines	rs.l	0
 pumatrackerroutines 	rs.l 0
 gamemusiccreatorroutines rs.l 0
 digitalmugicianroutines	rs.l 0
+medleyroutines rs.l 0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1166,6 +1167,7 @@ pt_digiboosterpro rs.b	1
 pt_pumatracker	rs.b 	1
 pt_gamemusiccreator  rs.b  1
 pt_digitalmugician 	 rs.b  1
+pt_medley 	 rs.b  1
 
 * player group version
 xpl_versio	=	21
@@ -19443,6 +19445,7 @@ init_ciaint_withTempo
 	move	d1,timerhi(a5)
 
 ** CIAA
+
 	lea	_ciaa,a3
 	lea	ciaserver(pc),a4
 	moveq	#0,d6			* timer a
@@ -19463,6 +19466,7 @@ init_ciaint_withTempo
 	beq.b	.gottimer
 .noa
 ** CIAB
+
 	lea	_ciab,a3
 	lea	ciaserver(pc),a4
 	moveq	#0,d6			* timer a
@@ -19523,8 +19527,14 @@ ciaint_setTempo
 .timera	
 	move.b	timerlo(a5),(a2)
 	move.b	timerhi(a5),$100(a2)
+; Probaly not good idea to debug print here,
+; can be called from interrupt (in case of DeliCustom).
 	popm	a2/a3
 	rts
+
+ciaint_setTempoFromD0
+	move	d0,timerhi(a5)
+	bra.b	ciaint_setTempo
 
 
 rem_ciaint
@@ -23393,8 +23403,8 @@ loadfile
 	bsr		id_gamemusiccreator
 	beq.b	.on
 
-	;bsr		id_delicustom
-	;beq.b	.on
+	bsr		id_medley
+	beq.b	.on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
@@ -24791,6 +24801,9 @@ tutki_moduuli
 	bsr.w	id_gamemusiccreator
 	beq.w	.gamemusiccreator
 
+	bsr		id_medley
+	beq.w	.medley
+
 	bsr.w	id_player
 	beq.w	.player
 
@@ -25051,6 +25064,11 @@ tutki_moduuli
 .digitalmugician
 	pushpea	p_digitalmugician(pc),playerbase(a5)
 	move	#pt_digitalmugician,playertype(a5)
+	bra.w	.ex
+
+.medley
+	pushpea	p_medley(pc),playerbase(a5)
+	move	#pt_medley,playertype(a5)
 	bra.w	.ex
 
 .delicustom
@@ -27412,6 +27430,7 @@ are
 	move.l	(a3),a0
 	cmp.l	#$000003f3,(a0)
 	bne.b	.ok
+	DPRINT	"Relocating",2
 	bsr.b	reloc
 
 .ok
@@ -29875,7 +29894,7 @@ p_med	jmp	.medinit(pc)
 .co	move.b	(a0)+,(a1)+
 	dbeq	d0,.co
 	clr.b	(a1)
-	bsr.w	lootaan_nimi	
+	jsr	lootaan_nimi	
 .nonam
 	
 
@@ -33061,6 +33080,131 @@ id_delicustom
 .id3_start
 	dc.l DTP_CustomPlayer
 .id3_end
+
+
+
+******************************************************************************
+* Medley Sound System
+******************************************************************************
+
+p_medley
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75 	
+	dc.l	$4e754e75
+	jmp	.song(pc) 
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"Medley Sound",0
+ even
+
+.MEDLEY_INIT  = 0+$20
+.MEDLEY_PLAY  = 4+$20
+.MEDLEY_END   = 8+$20
+.MEDLEY_SONG  = 12+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	medleyroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	maxsongs(a5),a2
+	lea	ciaint_setTempoFromD0,a3
+	move	songnumber(a5),d0 	* song number
+	;moveq	#8,d0
+	addq	#1,d0
+	move.l	medleyroutines(a5),a6
+	jsr	.MEDLEY_INIT(a6)
+	popm	d1-a6
+	* INIT returns 0 on success
+	rts	
+
+.play
+	move.l	medleyroutines(a5),a0
+	jmp	.MEDLEY_PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Song %ld",1
+ endif
+ 	move.l	medleyroutines(a5),a0
+	jsr	.MEDLEY_SONG(a0)
+	rts
+
+.end
+	jsr	rem_ciaint
+	pushm	all
+	move.l	medleyroutines(a5),a0
+	jsr	.MEDLEY_END(a0)
+	popm	all
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+
+; in: a4 = module
+;     d7 = module lenght
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_medley
+	cmp.l 	#"MSOB",(a4)
+	bne.b	.invalid
+	* next, three offsets, should point to inside module
+	* first byte should be zero since mods are small
+	tst.b	4(a4)
+	bne.b	.invalid
+	tst.b	8(a4)
+	bne.b	.invalid
+	tst.b	12(a4)
+	bne.b	.invalid
+
+	move.l	4(a4),d0
+	add.l	a4,d0
+	cmp.l	d0,a4
+	bhs.b	.invalid
+	move.l	8(a4),d0
+	add.l	a4,d0
+	cmp.l	d0,a4
+	bhs.b	.invalid
+	move.l	12(a4),d0
+	add.l	a4,d0
+	cmp.l	d0,a4
+	bhs.b	.invalid
+
+	moveq	#0,d0
+	rts
+
+.invalid
+	moveq	#-1,d0
+	rts
+
 
 *******************************************************************************
 * Playereitä
