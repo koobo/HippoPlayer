@@ -1273,8 +1273,6 @@ idcmpflags2 set idcmpflags2!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 * Debug macros
 *
 
- ifne DEBUG
-
 * Print to debug console
 DEBU	macro
 	ifne	DEBUG
@@ -1325,6 +1323,7 @@ DDELAY macro
 	popm	all
 	endc
 	endm
+
 
 *********************************************************************************
 *
