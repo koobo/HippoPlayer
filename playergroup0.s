@@ -101,7 +101,8 @@ main
 	dc.l	pumatrackerdata-main,gamemusiccreatordata-pumatrackerdata
 	dc.l	gamemusiccreatordata-main,digitalmugiciandata-gamemusiccreatordata
 	dc.l	digitalmugiciandata-main,medleydata-digitalmugiciandata
-	dc.l	medleydata-main,pend-medleydata
+	dc.l	medleydata-main,futureplayerdata-medleydata
+	dc.l	futureplayerdata-main,pend-futureplayerdata
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -148,10 +149,10 @@ sampledata	incbin	sampleplay.im
 aondata		incbin	aon4.im
 dbprodata	incbin	dbpro.im
 pumatrackerdata	incbin	pumatracker.im
-gamemusiccreatordata incbin gamemusiccreator.im
-digitalmugiciandata incbin  mugiplayer.im
-medleydata incbin  imploder.im
-
+gamemusiccreatordata 	incbin gamemusiccreator.im
+digitalmugiciandata 	incbin mugiplayer.im
+medleydata 		incbin imploder.im
+futureplayerdata 	incbin future_player.im
 
 pend
 
