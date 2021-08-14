@@ -597,9 +597,10 @@ samplestereo		rs.b	1
 sampleinit		rs.b	1			
 sampleformat		rs.b	1
 
-* This is set in loadfile() to indicate a DeliTracker CUSTOM
-* module is found. Loading is then done using LoadSeg().
-delicustominit			rs.b	1
+* This is set in loadfile() to indicate an executable module has been 
+* loaded with LoadSeg(). Value can be 0 for normal processing,
+* or p_delicustom or p_futureplayer.
+executablemoduleinit		rs.b	1
 
 ****** Prefs asetukset, joita k‰sitell‰‰n
 
@@ -890,6 +891,7 @@ pumatrackerroutines 	rs.l 0
 gamemusiccreatorroutines rs.l 0
 digitalmugicianroutines	rs.l 0
 medleyroutines rs.l 0
+futureplayerroutines rs.l 0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1168,6 +1170,7 @@ pt_pumatracker	rs.b 	1
 pt_gamemusiccreator  rs.b  1
 pt_digitalmugician 	 rs.b  1
 pt_medley 	 rs.b  1
+pt_futureplayer 	rs.b 	1
 
 * player group version
 xpl_versio	=	21
@@ -5407,6 +5410,9 @@ freemodule
 	* Check if need to do UnLoadSeg
 	cmp	#pt_delicustom,playertype(a5)
 	seq	d7
+	cmp	#pt_futureplayer,playertype(a5)
+	seq	d6
+	or.b	d6,d7
 
 	clr		playertype(a5)
 	clr.b	modulename(a5)
@@ -19514,10 +19520,13 @@ init_ciaint_withTempo
 	moveq	#0,d0
 	rts
 
+
 * Sets tempo value word from timerhi(a5) into currently
 * active CIA timer.
+* May be called from interrupt.
 ciaint_setTempo
-	pushm	a2/a3
+	pushm	a2/a3/a5
+	lea		var_b,a5
 	move.l 	ciaddr(a5),a3
 	lea	ciatalo(a3),a2
 	tst.b	whichtimer(a5)
@@ -19528,11 +19537,11 @@ ciaint_setTempo
 	move.b	timerhi(a5),$100(a2)
 ; Probaly not good idea to debug print here,
 ; can be called from interrupt (in case of DeliCustom).
-	popm	a2/a3
+	popm	a2/a3/a5
 	rts
 
 ciaint_setTempoFromD0
-	move	d0,timerhi(a5)
+	move	d0,timerhi+var_b
 	bra.b	ciaint_setTempo
 
 
@@ -22871,7 +22880,7 @@ loadmodule
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
 	bne.b	.nip
-	tst.b	delicustominit(a5)
+	tst.b	executablemoduleinit(a5)
 	bne.b	.nip
 
 	move.l	moduleaddress(a5),a0	* Oliko moduleprogram??
@@ -23933,30 +23942,41 @@ loadfile
 	* for Delitracker CUSTOM format, as it has to be loaded
 	* with LoadSeg(), being an exe file.
 	tst.b	ahi_muutpois(a5)
-	bne.b	.ahiSkip
+	bne.w	.ahiSkip
 	pushm 	d1-a6
-	clr.b	delicustominit(a5)
+	clr.b	executablemoduleinit(a5)
 	lea	probebuffer(a5),a4
 	move.l	#1084,d7
-	bsr	id_delicustom
+	bsr		id_futureplayer
+	bne.b	.notFuturePlayer
+	moveq	#pt_futureplayer,d7
+	bra.b	.wasFuturePlayer
+.notFuturePlayer
+	bsr		id_delicustom
 	bne.b	.notDeliCustom
+	moveq	#pt_delicustom,d7
+.wasFuturePlayer
 	move.l	#MEMF_PUBLIC,lod_memtype(a5)
 	bsr.w	.infor
 	move.l	lod_filename(a5),d1
 	lore	Dos,LoadSeg
 	tst.l	d0
 	beq.b	.loadSegErr
-	DPRINT	"DeliCustom LoadSeg ok",7
-	st	delicustominit(a5)
+	* set type of loadsegged module
+	move.b	d7,executablemoduleinit(a5)
 	move.l	d0,lod_address(a5)
 	clr.l	lod_length(a5)
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"Module LoadSeg ok for type %ld",7
+ endif
 .loadSegErr
 .notDeliCustom
 	popm 	d1-a6
 .ahiSkip
 
 	* Skip the rest if LoadSeg went fine
-	tst.b	delicustominit(a5)
+	tst.b	executablemoduleinit(a5)
 	bne.w	.exit
 
  if DEBUG
@@ -24638,25 +24658,37 @@ tutki_moduuli
 ;	addq.l	#1,IVSOFTINT+IV_CODE(a2)
 ;.zz
 
-	* Check this first since moduleaddress(a5) can't be used for anything 
-	* if true.	
-	tst.b	delicustominit(a5)
-	bne		.delicustom
 	
 	tst.b	ahi_use(a5)
 	bne.b	.ohi
 	cmp.b	#2,ptmix(a5)	* Normaali vai miksaava PT replayeri?
 	beq.b	.ohi
+	
+	* Ensure no id funcs are ran on executables
+	tst.b	executablemoduleinit(a5)
+	bne.b	.ohi
+	
 	bsr.w	id_protracker
 	beq.w	.pro
 
 .ohi
+	* Test for formats that do not require an external
+	* replay code.
 	clr.b	external(a5)		* Lippu: ei tartte player grouppia 
+
+	* First test for exe modules, skip the rest
+	* of the checks since moduledata is a seglist
+	cmp.b	#pt_delicustom,executablemoduleinit(a5)
+	beq.w	.delicustom
 
 	tst.b	sampleinit(a5)
 	bne.w	.noop
 
 	tst.b	ahi_muutpois(a5)	
+	bne.b	.noop
+
+	* Ensure no id funcs are ran on executables
+	tst.b	executablemoduleinit(a5)
 	bne.b	.noop
 
 	* These do not require player group:
@@ -24697,9 +24729,6 @@ tutki_moduuli
 	bsr		id_beathoven
 	beq.w	.beathoven
 
-	;bsr		id_delicustom
-	;beq		.delicustom
-
 	tst.l	externalplayers(a5)
 	bne.b	.noop
 
@@ -24733,6 +24762,8 @@ tutki_moduuli
 
 	tst.b	ahi_muutpois(a5)
 	beq.b	.mpa
+	tst.b	executablemoduleinit(a5)
+	bne.b	.mpa
 
 ** AHIa tukevat replayerit
 	bsr.w	id_hippelcoso
@@ -24740,6 +24771,10 @@ tutki_moduuli
 
 	bra.w	.mp
 .mpa
+	* First test for exe modules, skip the rest
+	* of the checks since moduledata is a seglist
+	cmp.b	#pt_futureplayer,executablemoduleinit(a5)
+	beq.w	.futureplayer
 
 	tst.b	sampleinit(a5)		* sample??
 	bne.w	.sample
@@ -25073,6 +25108,11 @@ tutki_moduuli
 .delicustom
 	pushpea	p_delicustom(pc),playerbase(a5)
 	move	#pt_delicustom,playertype(a5)
+	bra.w	.ex
+
+.futureplayer
+	pushpea	p_futureplayer(pc),playerbase(a5)
+	move	#pt_futureplayer,playertype(a5)
 	bra.w	.ex
 
 **** Oliko  sample??
@@ -27353,17 +27393,18 @@ normalizeFilePath
 
 allocreplayer2
 	pushm	d1-a6
+	DPRINT	"Alloc replayer to chip",1
 	moveq	#MEMF_CHIP,d6
 	bra.b	are
 
 allocreplayer
 	pushm	d1-a6
+	DPRINT	"Alloc replayer to public mem",1
 	moveq	#MEMF_PUBLIC,d6
 are	
-	DPRINT	"Alloc replayer",1
 
 	tst.l	(a0)			* onko jo ennest‰‰n?
-	bne.w	.x
+	bne.w	.alreadyHaveIt
 
 	cmp.b	#3,groupmode(a5)
 	bne.b	.nah
@@ -27378,7 +27419,6 @@ are
 	rts
 
 .nah
-
 	move	playertype(a5),d0
 	sub	#xpl_offs,d0
 
@@ -27434,9 +27474,18 @@ are
 
 .ok
 	bsr	clearCpuCaches
-	popm	d1-a6
-	moveq	#0,d0
-.x	rts
+
+ if DEBUG
+	move.l	(a3),d0
+	DPRINT	"Address: %lx",4
+ endif
+ 
+.x	popm	d1-a6
+	moveq	#0,d0	
+	rts
+
+.alreadyHaveIt
+	bra.b	.x
 
 clearCpuCaches
 	move.l	(a5),a6
@@ -33204,6 +33253,130 @@ id_medley
 	moveq	#-1,d0
 	rts
 
+
+******************************************************************************
+* Future Player
+******************************************************************************
+
+p_futureplayer
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75 	
+	dc.l	$4e754e75
+	jmp	.song(pc) 
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"Future Player",0
+ even
+
+.FP_INIT  = 0+$20
+.FP_PLAY  = 4+$20
+.FP_END   = 8+$20
+.FP_SONG  = 12+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	futureplayerroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),d0
+	lea	nullsample,a1
+	lea	mainvolume(a5),a2
+	lea	maxsongs(a5),a3
+	lea	ciaint_setTempoFromD0,a4
+	move	songnumber(a5),d1 	* song number, starts from 0
+	move.l	futureplayerroutines(a5),a6
+	push	a5
+	jsr	.FP_INIT(a6)
+	pop	a5
+	tst.l	d0
+	bne.b	.fail
+	* song name is in a0
+ if DEBUG
+	move.l 	a0,d0
+	DPRINT	"Song name: %s",3
+ endif
+	lea	modulename(a5),a1
+.c	move.b	(a0)+,(a1)+
+	bne.b	.c
+
+	moveq	#0,d0
+.fail
+	popm	d1-a6
+	* INIT returns 0 on success
+	rts	
+
+.play
+	move.l	futureplayerroutines(a5),a0
+	jmp	.FP_PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Song %ld",1
+ endif
+	move.l	futureplayerroutines(a5),a0
+	jsr	.FP_SONG(a0)
+	rts
+
+.end
+	jsr	rem_ciaint
+	pushm	all
+	move.l	futureplayerroutines(a5),a0
+	jsr	.FP_END(a0)
+	popm	all
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_futureplayer
+	cmp.l	#$000003F3,(A4)
+	bne.b	.fail
+	tst.b	20(A4)				; loading into chip check
+	beq.b	.fail
+	lea	32(A4),A0
+	cmp.l	#$70FF4E75,(A0)+
+	bne.b	.fail
+	cmp.l	#'F.PL',(A0)+
+	bne.b	.fail
+	cmp.l	#'AYER',(A0)+
+	bne.b	.fail
+	tst.l	20(A0)				; Song pointer check
+	beq.b	.fail
+
+	moveq	#0,D0
+	rts
+.fail
+	moveq	#-1,D0
+	rts
 
 *******************************************************************************
 * Playereit‰
