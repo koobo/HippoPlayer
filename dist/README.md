@@ -27,6 +27,10 @@ reqtools.library installed.
 - _VisualPrefs_ tool can be used to adjust window bottom and top border, and window and screen title bar heights. Hippo can get confused and displays some extra vertical space below the window title bar when these are adjusted. 
   
 ## New supported music formats:
+
+- Medley Sound and Future Player
+  - The author of these and the superb Imploder themes Paul van der Valk has recently passed away. His sound was truly unique!
+  - Future Player replayer adapted from the sources by Wanted Team, Medley Sound replayer ripped from Imploder 4. 
 - Beathoven Synthesizer
 - Game Music Creator (*Jumping Jack'Son!*)
 - Digital Mugician
@@ -36,9 +40,10 @@ reqtools.library installed.
   - One version of _Lemmings_ tries to do file accesses to load separate sample files, this is not supported and will probably crash.
   - A few lonely modules do not get recognized as the important bits are not close enough to the start of the file.
   - Minor issue: Some modules display the subsong range in the titlebar so that the first song is #2 instead of #1. 
-  - Tested with 461 modules :-)
-
+ 
 ## New features:
+
+- _Prefs_ option for toggling button tooltips on and off.
 
 - Support for _gzipped_ archives. (This was once supported but was removed at some point.)
 
@@ -51,6 +56,8 @@ reqtools.library installed.
   Previously on older kickstarts only 
   the top level files of the selected directories were added.
   Subdirectories were ignored.
+
+- Two new ARexx commands: *CHOOSEPREV* and *CHOOSENEXT*. These work similarly as when the user presses arrow up and down to choose a module in the list. 
 
 - Favorite modules! You can now right click on a module to favorite it. Favorite
   modules are displayed in **bold font**.
