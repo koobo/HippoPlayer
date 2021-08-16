@@ -19937,11 +19937,10 @@ sulje_quad2
 
 rexxmessage
 	pushm	all
-
 	lea	rexxport(a5),a0
 	lore	Exec,GetMsg
 	move.l	d0,rexxmsg(a5)
-	beq.b	.nomsg
+	beq.w	.nomsg
 
 	move.l	rexxmsg(a5),a1
 	clr.l	rm_Result1(a5)
@@ -19951,6 +19950,12 @@ rexxmessage
 	lea	rm_Args(a1),a4
 	tst.l	(a4)
 	beq.b	.end
+
+ if DEBUG
+	move.l	(a4),d0
+	DPRINT	"ARexx: %s",1
+ endif
+
 	lea	.komennot-4(pc),a3
 .loop	addq.l	#4,a3
 	tst	(a3)
@@ -20000,6 +20005,10 @@ rexxmessage
 	dr	.sortt,rsort
 	dr	.insertt,.insert
 	dr	.quitt,.quit
+	; Put these before "CHOOSE" since matcher will 
+	; get the shorter one otherwise
+	dr	.chooseNextT,.chooseNext
+	dr	.choosePrevT,.choosePrev
 	dr	.chooset,.choose
 	dr	.psongt,.playsong
 	dr	.gett,.get
@@ -20031,6 +20040,8 @@ rexxmessage
 .insertt dc.b	"INSERT",0
 .quitt	dc.b	"QUIT",0
 .chooset dc.b	"CHOOSE",0
+.chooseNextT dc.b "CHOOSENEXT",0
+.choosePrevT dc.b "CHOOSEPREV",0
 .psongt	dc.b	"SONGPLAY",0
 .gett	dc.b	"GET",0
 .randt	dc.b	"RANDPLAY",0
@@ -20136,13 +20147,24 @@ rexxmessage
 	bra.w	resh
 
 *** valitaan d0:ssa olevan numeron tiedosto
-.choo	move.l	d0,chosenmodule(a5)
+.choo
+	move.l	d0,chosenmodule(a5)
 	cmp.l	modamount(a5),d0
-	blo.b	.em
+	blo.b	.chosenOk
 	move.l	modamount(a5),chosenmodule(a5)
 	subq.l	#1,chosenmodule(a5)
-.em	rts
+	bpl.b	.chosenOk
+	clr.l	chosenmodule(a5)
+.chosenOk
+	rts
 
+.chooseNext
+	moveq	#0,d4	* rawkey modifier, no shift
+	bra	lista_alas
+.choosePrev	
+	moveq	#0,d4	* rawkey modifier, no shift
+	bra	lista_ylos
+	
 *** VOLUME
 .volume
 	bsr.w	a2i
