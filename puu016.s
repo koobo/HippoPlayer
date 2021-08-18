@@ -210,7 +210,7 @@ use = 0
 * Prefs tiedoston rakenne
 *
 
-prefsversio	=	20	* Prefs-tiedoston versio
+prefsversio	=	21	* Prefs-tiedoston versio
 		rsreset
 prefs_versio		rs.b	1
 prefs_play		rs.b	1
@@ -10907,12 +10907,19 @@ loadprefs2
 	cmp.b	#prefsversio,prefsdata(a5)	* Onko oikea versio?
 	beq.b	.q
 
+	DPRINT	"Old prefs, set some defaults",2
+
 * Vanha prefssi?
 * Laitetaan defaultti archivejutut 
 	bsr.w	defarc
+* when migrating to a new prefs version I want the tooltips
+* to be on by default!
+	st	prefs_tooltips+prefsdata(a5)
 .q
 	cmp.l	#prefs_size,d0
 	bhi.w	.eeee
+
+	DPRINT	"Set values",3
 
 * Pistet‰‰n ladatut arvot yms. paikoilleen
 	lea	prefsdata(a5),a0
