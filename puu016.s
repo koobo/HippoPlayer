@@ -1824,7 +1824,9 @@ scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
+versionStringStart
 	ver
+versionStringEnd
 	dc.b	10,"Programmed by K-P Koljonen",0
 
 regtext_t dc.b	"Registered to",0
@@ -20326,6 +20328,7 @@ rexxmessage
 *	moduletype
 *	duration
 *	hide status
+*	app version
 
 
 .get	move.b	(a1)+,d0
@@ -20382,6 +20385,8 @@ rexxmessage
 	dr	.duration
 	dc.l	"FILT"
 	dr	.filter
+	dc.l	"VERS"
+	dr	.version
 	dc.l	0
 
 .getplay
@@ -20456,11 +20461,11 @@ rexxmessage
 	bra.w	str2msg	
 .curr2	jsr	getcurrent2
 	lea	l_filename(a3),a2
-	bra.b	str2msg
+	bra.w	str2msg
 
 .getcomment
 	lea	filecomment(a5),a2
-	bra.b	str2msg
+	bra.w	str2msg
 
 .getsize
 	move.l	modulelength(a5),d0
@@ -20490,7 +20495,21 @@ rexxmessage
 	and.l	#%1,d0
 	bra.b	i2amsg
 
-
+* provide version string
+.version
+	lea	-30(sp),sp
+	lea	versionStringStart,a0
+	lea	versionStringEnd-versionStringStart(a0),a1
+	move.l 	sp,a2
+.copy
+	move.b	(a0)+,(a2)+
+	cmp.l	a0,a1
+	bne.b	.copy
+	clr.b	(a2)
+	move.l	sp,a2
+	bsr.b	str2msg
+	lea	30(sp),sp
+	rts
 
 .empty	dc	0
 
