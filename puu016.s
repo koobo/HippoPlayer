@@ -1745,31 +1745,24 @@ PRINTOUT
 	move.l	output(a5),d1
 	bne.w	.open
 
+	* try tall window firsr
 	move.l	#.bmb,d1
 	move.l	#MODE_NEWFILE,d2
 	lore	Dos,Open
 	move.l	d0,output(a5)
-	bne.b	.isOpen
-	* show alert once if cant open debug console
-	lea	.openErr(pc),a0
-	moveq	#0,d0		* recovery
-	moveq	#19,d1		* korkeus
-	tst.b	.alertShown(pc)
-	bne.w	.x
-	tst.l	_IntuiBase(a5)
-	beq.w	.x
-	lore	Intui,DisplayAlert
-	st	.alertShown
-	bra.b	.x
-.isOpen
-	move.l	d0,d1
-	bra.b	.open
-.openErr
-	dc	110
-	dc.b	11
-	dc.b	"Error opening debug console, increase screen height!",0,0
-.alertShown	dc.b 0
-.bmb	dc.b	"CON:0/0/350/500/HiP debug window",0
+	bne.b	.open
+	* smaller next
+	move.l	#.bmbSmall,d1
+	move.l	#MODE_NEWFILE,d2
+	lob	Open
+	move.l	d0,output(a5)
+	bne.b	.open
+	* still not open! exit
+	bra.w	.x
+
+.bmb	dc.b	"CON:0/0/350/500/HiP debug",0
+.bmbSmall
+	dc.b	"CON:0/0/350/200/HiP debug",0
     even
 .open
 	move.l	32+4(sp),a0
