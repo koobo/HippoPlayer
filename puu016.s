@@ -8983,8 +8983,8 @@ rbutton1
 	bsr.b	halt			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
-	bsr.w	freemodule	
 	lore 	Exec,Enable
+	bsr.w	freemodule	
 	move	(sp)+,mainvolume(a5)
 .nomod
 
