@@ -8891,7 +8891,8 @@ rbutton1
 .huh	move.l	chosenmodule(a5),d0	* onko valittua nimeä
 	bpl.b	.ere
 	moveq	#0,d0			* jos ei, otetaan eka
-.ere	move	d0,d2
+.ere	
+	move.l	d0,d2
 
 	DPRINT	"->chosen module %ld",2313
 
