@@ -5409,6 +5409,10 @@ freemodule
 	seq	d6
 	or.b	d6,d7
 
+	* Need to clear playertype(a5) to avoid
+    * following freemodules to maybe mistakenly thing
+    * that UnLoadSeg() is needed.
+
 	clr		playertype(a5)
 	clr.b	modulename(a5)
 	clr.b	moduletype(a5)
@@ -5463,23 +5467,18 @@ freemodule
 	bsr.w	sulje_foo	
 
 .ee	
+
+	* See if there are TFMX samples that can be freed
 	move.l	tfmxsamplesaddr(a5),d0
-	beq.b	.eee
-
-	cmp	#pt_tfmx,playertype(a5)
-	beq.b	.na
-	cmp	#pt_tfmx7,playertype(a5)
-	bne.b	.naw
-.na
-
+	beq.b	.noTFMX
 	move.l	d0,a1
 	move.l	tfmxsampleslen(a5),d0
 	lob	FreeMem
-.naw	clr.l	tfmxsamplesaddr(a5)
+.noTFMX
+	clr.l	tfmxsamplesaddr(a5)
 	clr.l	tfmxsampleslen(a5)
 	clr.b	lod_tfmx(a5)
 
-.eee	
 	DPRINT	"freemodule release data",4
 	bsr.w	releaseModuleData
 
