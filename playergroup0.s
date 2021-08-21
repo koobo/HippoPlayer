@@ -102,7 +102,8 @@ main
 	dc.l	gamemusiccreatordata-main,digitalmugiciandata-gamemusiccreatordata
 	dc.l	digitalmugiciandata-main,medleydata-digitalmugiciandata
 	dc.l	medleydata-main,futureplayerdata-medleydata
-	dc.l	futureplayerdata-main,pend-futureplayerdata
+	dc.l	futureplayerdata-main,bendaglishdata-futureplayerdata
+	dc.l	bendaglishdata-main,pend-bendaglishdata
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -153,6 +154,6 @@ gamemusiccreatordata 	incbin gamemusiccreator.im
 digitalmugiciandata 	incbin mugiplayer.im
 medleydata 		incbin imploder.im
 futureplayerdata 	incbin future_player.im
-
+bendaglishdata		incbin bendaglish.im
 pend
 
