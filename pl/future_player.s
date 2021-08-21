@@ -72,8 +72,8 @@ dosbase dc.l 0
 dosname dc.b "dos.library",0 
 	section d,data_c
 
-mod   		incbin	"sys:music/future player/imploder.fp"
-modulePath	dc.b	"sys:music/future player/imploder.fp",0
+mod   		incbin	"sys:music/paulvandervalk/imploder.fp"
+modulePath	dc.b	"sys:music/paulvandervalk/imploder.fp",0
 ;mod   		incbin	"sys:music/future player/hybris title.fp"
 ;modulePath	dc.b	"sys:music/future player/hybris title.fp",0
 ;mod   		incbin	"sys:music/future player/hybris ingame.fp"
@@ -124,17 +124,17 @@ init
 	move	d1,songNumber
 
 	* d0 = seglist goes in
-	bsr	InitPlayer
+	bsr.w	InitPlayer
 	bne.b	.er
 
-	bsr	SubSongRange
+	bsr.w	SubSongRange
 	* d1 = subsongs starting from 0
 	move.l	songCountAddress(pc),a0
 	move	d1,(a0)
 
-	bsr	InitSound
+	bsr.w	InitSound
 
-	bsr	GetSongName
+	bsr.w	GetSongName
 	* a0 = SongName
 	moveq	#0,d0	* ok
 .er
@@ -143,17 +143,17 @@ init
 play
 	move.l	masterVolumeAddress(pc),a0 
 	move	(a0),masterVolume
-	bra		Interrupt
+	bra.w		Interrupt
 	
 end 
-	bsr	EndSound
-	bsr	EndPlayer
+	bsr.w	EndSound
+	bsr.w	EndPlayer
 	rts
 
 song
 	move	d0,songNumber
-	bsr	EndSound
-	bsr	InitSound
+	bsr.w	EndSound
+	bsr.w	InitSound
 	rts
 
 ; timer value in d0
@@ -581,7 +581,7 @@ SubSongRange
 
 GetSongName
 	move.l	InfoBuffer+SongName(PC),a0
-	move.l	(a0),a0
+;	move.l	(a0),a0
 	rts
 
 ***************************************************************************
@@ -595,7 +595,7 @@ InitPlayer
 ;	move.l	#modulePath,d1
 ;	jsr	_LVOLoadSeg(A6)
 	lsl.l	#2,D0
-	beq.w	InitFail
+	beq.b	InitFail
 	addq.l	#4,D0
 
 	move.l	D0,A0				; module address
@@ -668,7 +668,7 @@ Clear
 	cmp.l	A0,A1
 	bne.b	Clear
 
-	bsr.w	Init_1
+	bsr.b	Init_1
 	;move.w	dtg_SndNum(A5),D1
 	move	songNumber(pc),d1
 	lsl.w	#3,D1
@@ -787,7 +787,7 @@ lbC002B2E	CLR.B	lbB003664
 	MOVEQ	#0,D0
 	BSR.W	lbC0034E8
 	BSR.W	lbC0033FC
-	BRA.W	lbC002BB6
+	BRA.B	lbC002BB6
 
 lbC002B42	MOVEQ	#-1,D0
 	CLR.B	lbB003664
@@ -797,13 +797,13 @@ lbC002B4E	SUBQ.B	#1,lbB00366E
 	MOVE.B	lbB00366D(pc),lbB00366E
 ;	ADDQ.L	#1,lbL00369C
 	LEA	lbL003858,A0
-	BSR.W	lbC002C4A
+	BSR.B	lbC002C4A
 	LEA	lbL003916,A0
-	BSR.W	lbC002C4A
+	BSR.B	lbC002C4A
 	LEA	lbL0039D4,A0
-	BSR.W	lbC002C4A
+	BSR.B	lbC002C4A
 	LEA	lbL003A92,A0
-	BSR.W	lbC002C4A
+	BSR.B	lbC002C4A
 lbC002B8E	LEA	lbL003858,A0
 	BSR.W	lbC002E00
 	LEA	lbL003916,A0
@@ -850,11 +850,11 @@ lbC002BB6
 ;	BRA.L	lbC002B4E
 
 lbC002C4A	TST.B	1(A0)
-	BNE.L	lbC0032EE
+	BNE.W	lbC0032EE
 	CLR.B	$A5(A0)
 	CLR.B	lbB00366F
 	SUBQ.B	#1,$9F(A0)
-	BNE.L	lbC0032EE
+	BNE.W	lbC0032EE
 	MOVEA.L	$A6(A0),A1
 lbC002C68	MOVE.B	(A1)+,D0
 	BMI.S	lbC002C9A
@@ -892,7 +892,7 @@ lbC002CC2	TST.B	lbB00366A
 	RTS
 
 lbC002CCC	TST.W	4(A0)
-	BNE.L	lbC002DE2
+	BNE.W	lbC002DE2
 lbC002CD4	TST.L	(SP)+
 	MOVE.B	#$80,1(A0)
 	TST.B	0(A0)
@@ -998,7 +998,7 @@ lbC002DF6
 lbC002E00	MOVEA.L	$78(A0),A1
 	MOVEA.L	$68(A0),A2
 	MOVE.B	0(A0),D0
-	BMI.L	lbC0032EE
+	BMI.W	lbC0032EE
 	BEQ.S	lbC002E4E
 	MOVEA.L	$6C(A0),A2
 	TST.W	$9C(A0)
@@ -1019,7 +1019,7 @@ lbC002E38	TST.B	$A5(A0)
 lbC002E46	CLR.B	0(A0)
 	MOVEA.L	$68(A0),A2
 lbC002E4E	TST.B	$A5(A0)
-	BEQ.L	lbC002ECC
+	BEQ.B	lbC002ECC
 	MOVE.W	$7C(A0),$DFF096
 	CLR.W	$74(A0)
 	CLR.B	$B0(A0)
@@ -1195,12 +1195,12 @@ lbC00307A	MOVEA.L	10(A3),A3
 	TST.B	$A5(A0)
 	BNE.S	lbC00308E
 	BTST	#0,$10(A3)
-	BEQ.L	lbC00314A
+	BEQ.W	lbC00314A
 lbC00308E	MOVE.L	8(A3),D2
 	MOVE.W	12(A3),D0
 	LSR.W	#1,D0
 	BTST	#0,$10(A3)
-	BEQ.L	lbC003144
+	BEQ.W	lbC003144
 	LSR.W	#1,D0
 	MOVEA.L	12(A2),A4
 	TST.L	$2A(A4)
@@ -1283,7 +1283,7 @@ lbC00314A	MOVEA.L	12(A2),A4
 
 lbC003186	MOVE.B	$18(A4),D0
 	SUB.B	D0,$83(A0)
-	BCC.L	lbC00322A
+	BCC.W	lbC00322A
 	CLR.B	$83(A0)
 	BRA.W	lbC00322A
 
@@ -1294,7 +1294,7 @@ lbC00319A	MOVE.B	$12(A4),D0
 	BCS.S	lbC0031B6
 	MOVE.B	$83(A0),D0
 	CMP.B	$13(A4),D0
-	BCS.L	lbC00322A
+	BCS.B	lbC00322A
 lbC0031B6	MOVE.B	$13(A4),$83(A0)
 	MOVE.B	#1,$84(A0)
 	BRA.S	lbC00322A
@@ -1414,7 +1414,7 @@ lbC00333A	MOVE.B	D0,lbB00366D
 	move.b	$19(A1),D0
 	;lsl.w	#8,D0
 	;move.w	D0,dtg_Timer(A5)
-	bsr	setTempo
+	bsr.w	setTempo
 
 	MOVE.L	8(A1),D0
 	BEQ.S	lbC00336E
@@ -1468,7 +1468,7 @@ lbC0033FC
 ;	BSR.L	lbC0034D4
 ;	CLR.L	lbL00367C
 	CLR.B	lbB003664
-	BSR.W	lbC003424
+	BSR.B	lbC003424
 ;	BSR.L	lbC0034B6
 ;	TST.B	lbB003668
 ;	BEQ.S	lbC003422
@@ -1520,7 +1520,7 @@ lbC0034AE	CLR.B	lbB00366A
 lbC0034BE	TST.B	lbB003664
 	BNE.S	lbC0034CC
 	MOVEQ	#-1,D0
-	BSR.W	lbC0034E8
+	BSR.B	lbC0034E8
 lbC0034CC
 ;	CLR.B	lbB00366C
 	RTS
@@ -1574,7 +1574,7 @@ lbC00353E	MOVEM.L	D0/A0,-(SP)
 	BSR.W	lbC003468
 ;	MOVE.L	lbL003680,lbL00369C
 ;	MOVE.B	#$FF,lbB003668
-	BRA.W	lbC0034BE
+	BRA.B	lbC0034BE
 
 ;lbC003578	TST.B	lbB003664
 ;	BEQ.S	lbC0035A0
