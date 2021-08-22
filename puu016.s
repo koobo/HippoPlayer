@@ -1098,6 +1098,14 @@ sv_argvBuffer	rs.b	256			* strings are here
 randomValueMask  	rs.l		1 * mask to quickly cull too big random numbers based on modamount
 randomtable		rs.l		1 * pointer to random table, allocated when needed
 
+* Indicates which mode the list is in, either normal list 
+* or favorites
+LISTMODE_NORMAL = 0
+LISTMODE_FAVORITES = 1
+listMode		rs.b		1
+* This is set each time list has been edited by user in some way.
+moduleListChanged	rs.b		1
+
 kplbase	rs.b	k_sizeof		* KPlayerin muuttujat (ProTracker)
 
 * Size of global variables data. Must be even.
@@ -2160,7 +2168,7 @@ lelp
 	bra.b	.him
 .hum
 	move.l	a0,a1
-.lop0	subq	#3,6(a1)
+.lop0	subq	#3,gg_TopEdge(a1)
 	tst.l	(a1)
 	beq.b	.e0
 	move.l	(a1),a1
@@ -2168,10 +2176,19 @@ lelp
 .e0	rts
 
 .him
+	; Mmake space for list mode change button
+	lea	gadgetFileSlider,a0
+	lea	gadgetListModeChangeButton,a1
+	add	#14,gg_TopEdge(a0)
+	sub	#18,gg_Height(a0)
+
+	; last main button is "gadgetSortButton",
+	; add new button as the new last one
+	move.l	a1,gadgetSortButton+gg_NextGadget
 
 	move.l	_IntuiBase(a5),a6
-
-
+	* Give each gadget a gg_GadgetID,
+	* set proper text attr for ones which have text.
 
 	moveq	#1,d0
 	lea	gadgets,a1
@@ -2248,6 +2265,7 @@ lelp
 	beq.w	.ropp
 
 ** kick 2.0+ asetuksia
+** Add prop gadget slider images for kick2.0
 
 	lea	slider4,a0			* filebox-slideriin image
 	move.l	#slimage,gg_GadgetRender(a0)
@@ -2259,8 +2277,8 @@ lelp
 	move.l	gg_SpecialInfo(a0),a1
 	and	#~AUTOKNOB,pi_Flags(a1)
 
-
 ** s‰‰det‰‰n propgadgetteja
+** Manually adjust prop gadget width and height
 
 	lea	kelloke+gg_Height,a0
 	lea	gg_Width-gg_Height(a0),a1
@@ -2303,12 +2321,12 @@ lelp
 
 .nova0
 
-
-
 	move.l	(a5),a0
 	cmp	#37,LIB_VERSION(a0)
 	blo.b	.faef
 	
+	* make string gadgets tab cyclable
+
 	move	#GFLG_TABCYCLE,d0	* string-gadgetit cyclattaviks tabilla
 	lea	gg_Flags+ack2,a0
 	or	d0,(a0)
@@ -2320,6 +2338,7 @@ lelp
 
 
 ** s‰‰det‰‰n slidereit‰ edelleen
+** Even more prop gadget visual adjustments
 
 	lea	slider1,a0
 	bsr.b	.rop
@@ -2360,7 +2379,7 @@ lelp
 
 	bra.b	.ropp
 
-
+* proportional gadget visual look depending on kickstart version
 .rop
 	move.l	gg_SpecialInfo(a0),a1
 
@@ -2375,9 +2394,11 @@ lelp
 	rts
 .ropp
 
-
+	* Nudge these two a bit!
 	addq	#1,gg_TopEdge+juust0
 	addq	#1,gg_LeftEdge+slider4
+
+
 
 	move.l	#PLAYING_MODULE_NONE,chosenmodule2(a5)
 
@@ -2887,7 +2908,7 @@ msgloop
 	bsr.w	rsort
 .nas
 
-		jsr	listChanged
+	jsr	listChanged
 	st	hippoonbox(a5)
 	bsr.w	resh
 
@@ -3847,7 +3868,7 @@ avaa_ikkuna
 
 .small	
 	lea	slider4,a3		* fileboxin slideri
-	moveq	#67,d3			* y-koko
+	moveq	#gadgetFileSliderInitialHeight,d3		* y-koko
 	and	#~$80,gg_TopEdge(a3)
 	add	boxy(a5),d3
 	bpl.b	.r
@@ -4943,12 +4964,15 @@ initkorva2
 * d2 = x
 * d3 = y
 
+* a0 = Gadget
 printkorva2
 	pushm	d0-d7/a0-a2/a6
 	move.l	rastport2(a5),a1	* prefs
 	lea	omabitmap4(a5),a2
 	bra.b	pkor
 
+* Draw the RMB ear symbol 
+* a0 = Gadget
 printkorva
 	tst.b	win(a5)
 	bne.b	.q
@@ -5939,7 +5963,8 @@ tooltipHandler
 	rts
 .under		
 	* Check if below the "New" button
-	lea	gadgetNewButton,a0
+	;lea	gadgetNewButton,a0
+	lea	gadgetListModeChangeButton,a0
 	move	gg_TopEdge(a0),d2
 	add	gg_Height(a0),d2
 	cmp	d1,d2
@@ -6261,24 +6286,10 @@ signalreceived
 	st	hippoonbox(a5)
 	bsr.w	resh
 
-* etsit‰‰n vastaava listasta tiedoston nimi
-;	DPRINT  "signalreceived obtain list",1
-; 	bsr.w		obtainModuleList
-; 	lea		moduleListHeader(a5),a4
-; .luuppo
-; 	TSTNODE	a4,a3
-; 	beq.w	.erer			* end of list reached?
-; 	move.l	a3,a4
-; 	;dbf		d0,.luuppo
-; 	subq.l	#1,d0 
-; 	bpl.b	.luuppo
-; 	bsr.w 	releaseModuleList
 	DPRINT	"signalreceived getListNode",1
 	bsr		getListNode
 	beq		.erer 
 	move.l	a0,a3
-
-;	DPRINT  "signalreceived release list",2
 
 	isListDivider	l_filename(a3)	* onko divideri??
 	bne.b	.wasfile
@@ -6812,19 +6823,6 @@ umph
 * etsit‰‰n listasta vastaava tiedosto
 * find the corresponding file from the list
 
-; 	DPRINT  "soitamodi obtain list",1
-; 	bsr.w		obtainModuleList
-; 	lea	moduleListHeader(a5),a4
-; .luuppo
-; 	TSTNODE	a4,a3
-; 	beq.w	.erer
-; 	move.l	a3,a4
-; 	;dbf	d0,.luuppo
-; 	subq.l	#1,d0 
-; 	bpl.b  .luuppo
-; 	DPRINT  "soitamodi release list",2
-; 	bsr.w		releaseModuleList
-
 	DPRINT	"soitamodi getListNode",1
 	bsr		getListNode
 	beq.w	.erer
@@ -7270,7 +7268,7 @@ nappuloita
 * t $14		insert
 * s $21		sort
 
-* z $31		scope toggle
+* z $31		scope Ltoggle
 
 * f $23		find module
 
@@ -7666,7 +7664,7 @@ gadgetsup
 	dr	rloadprog	* ohjelman lataus
 	dr	rmove		* move
 	dr	rsort		* sort
-
+	dr	rlistmode	* listmode change
 
 * Print some text into the filebox
 ** a0 = teksti, d0 = x-koordinaatti
@@ -7686,6 +7684,10 @@ printbox
 	lsl	#3,d2
 	add	d2,d1
 	bra.w	print
+
+rlistmode
+	jmp	toggleListMode
+
 
 
 *******************************************************************************
@@ -7709,7 +7711,7 @@ rsort
 
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
-	bsr.b	printbox
+	bsr.w	printbox
 	bra.b	.d
 .t	dc.b	"Sorting...",0
  even
@@ -7734,9 +7736,9 @@ rsort
 ** Lasketaan painot jokaiselle
 	DPRINT  "rsort obtain list",1
 	bsr.w		obtainModuleList
-	;move.l	modamount(a5),d7
-	;subq.l	#1,d7
-	lea	moduleListHeader(a5),a3
+	;lea	moduleListHeader(a5),a3
+	bsr	getVisibleModuleListHeader
+	move.l	a0,a3
 
 * paino 24 bytee
 
@@ -7797,7 +7799,8 @@ rsort
 	beq.b	.r			* end reached? this is the extra space mentioned above
 	move.l	(a3),a1  	* grab node address
 
-	lea	moduleListHeader(a5),a0
+	;lea	moduleListHeader(a5),a0
+	bsr	getVisibleModuleListHeader
 	ADDTAIL			* lis‰t‰‰n node (a1)
 
 	lea SORT_ELEMENT_LENGTH(a3),a3	
@@ -8248,7 +8251,6 @@ find_continue
 
 	move	#$df,d2
 
-;	lea	moduleListHeader(a5),a4
 .luuppo
 	addq.l	#1,d7
 	TSTNODE	a4,a3
@@ -8261,7 +8263,8 @@ find_continue
 * lista l‰pi eik‰ lˆytyny. k‰yd‰‰n alusta l‰htˆkohtaan.
 
 	moveq	#-1,d7
-	lea	moduleListHeader(a5),a4
+	bsr	getVisibleModuleListHeader
+	move.l	a0,a4
 .luuppo2
 	addq.l	#1,d7
 	cmp.l	chosenmodule(a5),d7
@@ -8622,7 +8625,7 @@ volumerefresh
 *******************************************************************************
 * Fileselectorgadgetti
 *******
-* Calculates the first visible filename baed on slider position
+* Calculates the first visible filename based on slider position
 
 rslider4
 	move.l	gg_SpecialInfo(a2),a0
@@ -8863,7 +8866,8 @@ rbutton1
 
 	DPRINT  "playButtonAction obtain list",11
 	bsr.w		obtainModuleList
-	lea	moduleListHeader(a5),a0	* Insertoidaan node...
+	;lea	moduleListHeader(a5),a0	* Insertoidaan node...
+	bsr	getVisibleModuleListHeader
 	move.l	nodetomove(a5),a1
 	move.l	a3,a2
 	
@@ -8918,14 +8922,6 @@ rbutton1
 
 
 * etsit‰‰n listasta vastaava tiedosto
-; 	lea	moduleListHeader(a5),a4
-; .luuppo
-; 	TSTNODE	a4,a3
-; 	beq.w	.erer
-; 	move.l	a3,a4
-; 	;dbf	d0,.luuppo
-; 	subq.l	#1,d0 
-; 	bpl.b  .luuppo
 
 	DPRINT	"playbutton getListNode",111
 	bsr		getListNode
@@ -9042,28 +9038,15 @@ rinsert
 	bra.w	rbutton7
 
 rinsert2
-	; DPRINT  "insertButtonAction obtain list",1
-	; bsr.w		obtainModuleList
 	move.l	chosenmodule(a5),d0
 
 * etsit‰‰n listasta vastaava kohta
-; 	lea	moduleListHeader(a5),a4
-; .luuppo
-; 	TSTNODE	a4,a3
-; 	beq.w	rbutton7
-; 	move.l	a3,a4
-; 	;dbf	d0,.luuppo
-; 	subq.l #1,d0 
-; 	bpl.b  .luuppo
-
 	DPRINT	"insert getListNode",1
 	bsr		getListNode
 	beq		rbutton7		* go to "add"
 
 * a0 = valittu nimi
 	move.l	a0,fileinsert(a5)
-	; DPRINT  "insertButtonAction release list",2
-	; bsr.w		releaseModuleList
 	st	filereqmode(a5)
 	rts
 	
@@ -9082,13 +9065,7 @@ add_divider
 	bmi.w	.x
 ;	subq	#1,d0			* valitun nimen edellinen node
 
-; 	lea	moduleListHeader(a5),a4
-; .luuppo	TSTNODE	a4,a3
-; 	beq.b	.x
-; 	move.l	a3,a4
-; 	;dbf	d0,.luuppo
-; 	subq.l #1,d0 
-; 	bpl.b  .luuppo
+
 	DPRINT	"addDivider getListNode",2
 	bsr		getListNode
 	beq.b		.x
@@ -9126,7 +9103,8 @@ add_divider
 	bne.b	.fe
 	
 * a1 = insertattava nimi
-	lea	moduleListHeader(a5),a0
+;	lea	moduleListHeader(a5),a0
+	bsr	getVisibleModuleListHeader
 	move.l	a3,a2
 	lore	Exec,Insert
 	bsr	listChanged
@@ -9662,7 +9640,8 @@ addfile
 
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
-	lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
+	;lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
+	bsr		getVisibleModuleListHeader
 	move.l	a3,a1
 
 	tst.b	filereqmode(a5)		* onko add vai insert?
@@ -9698,7 +9677,9 @@ adddivider
 	move.l	a0,a2
 
 ** testataan onko dirdivideri? jos on, pistet‰‰n sen p‰‰lle
-	lea	moduleListHeader(a5),a3
+	;lea	moduleListHeader(a5),a3
+	bsr	getVisibleModuleListHeader
+	move.l	a0,a3
 	move.l	MLH_TAILPRED(a3),d0    * this points to the last element of the list
 	beq.b	.pehe
 	move.l	d0,a3
@@ -10807,7 +10788,8 @@ komentojono
 	move.l	a0,l_nameaddr(a2)
 
 	move.l	a2,a1
-	lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
+	;lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
+	bsr		getVisibleModuleListHeader
 	lore	Exec,AddTail
 
 	pushm	a2/a3
@@ -15384,7 +15366,16 @@ shn
 
 	bsr.b	clearbox
 
+	bsr	isListInFavoriteMode
+	beq.b	.doHippo
+	lea	.noFavs(pc),a0
+	moveq	#90+WINX,d0
+	bsr.w	printbox
+	bra.b	.wasFav
+.noFavs dc.b "No favorites!",0
+.doHippo
 	bsr.w	printhippo1
+.wasFav	
 	st	hippoonbox(a5)		* koko hˆsk‰n tulostus
 	bra.w	.nomods
 .eper
@@ -15557,7 +15548,9 @@ shn
 doPrintNames
 ;	DPRINT  "shownames obtain list",1
 	bsr.w  obtainModuleList
-	lea	moduleListHeader(a5),a4	
+	;lea	moduleListHeader(a5),a4	
+	bsr	getVisibleModuleListHeader
+	move.l	a0,a4
 
 ;	DPRINT	".doNames %ld",31
 
@@ -15659,9 +15652,12 @@ doPrintNames
 	beq.b	.noFav
 	isFavoriteModule a3
 	beq.b	.noFav
-	bsr		printBold
+	bsr	isListInFavoriteMode
+	bne.b	.noBold
+	bsr	printBold
 	bra.b	.wasFav
 .noFav
+.noBold
 	bsr.w	print
 .wasFav
 
@@ -15763,7 +15759,9 @@ elete
 .huh	tst.l	modamount(a5)
 	beq.w	.erer
 
-	lea	moduleListHeader(a5),a4
+	;lea	moduleListHeader(a5),a4
+	bsr		getVisibleModuleListHeader
+	move.l	a0,a4
 
 ; .luuppo	TSTNODE	a4,a3
 ; 	beq.w	.erer
@@ -16972,6 +16970,15 @@ marklineRightMouseButton
 * List node utilities
 ********************************
 
+getVisibleModuleListHeader
+	bsr	isListInFavoriteMode
+	bne.b	.isFav
+	lea	moduleListHeader(a5),a0
+	rts
+.isFav
+	lea	favoriteListHeader(a5),a0
+	rts
+
 * When an element is moved, added, inserted, deleted,
 * random bookkeeping must be reset,
 * and cached node as well. They would otherwise
@@ -16980,6 +16987,7 @@ listChanged
 	DPRINT "List changed",1
 	bsr	clearCachedNode
 	bsr	clear_random	
+	st	moduleListChanged(a5)
 	rts
 
 ; TODO: list traversal end check should not be needed,
@@ -17001,7 +17009,8 @@ getListNode
 	bhs.b	.out
 
 	bsr	obtainModuleList
-	lea	moduleListHeader(a5),a0
+	;lea	moduleListHeader(a5),a0
+	bsr	getVisibleModuleListHeader
 
 	* When using dbf loop usually subtract 1, but here
 	* one SUCC is needed to get to the head element
@@ -17045,7 +17054,9 @@ getListNodeCached
 	tst.l	cachedNode(a5)
 	bne.b	.n
 	* Get head node from the minimal list header
-	move.l	moduleListHeader+MLH_HEAD(a5),cachedNode(a5)
+	bsr	getVisibleModuleListHeader
+	move.l	MLH_HEAD(a0),cachedNode(a5)
+	;move.l	moduleListHeader+MLH_HEAD(a5),cachedNode(a5)
 	clr.l	cachedNodeIndex(a5)
 .n
 	move.l	cachedNodeIndex(a5),d1
@@ -26664,27 +26675,8 @@ whag	tst.b	win(a5)
 	bne.b	.on
 
 	move.l	a0,a3
-
-	movem	4(a3),d0/d1	* putsataan gadgetin alue..
-	move	d0,d2
-	move	d1,d3
-	movem	8(a3),d4/d5
-	move.l	rastport(a5),a0
-	move.l	a0,a1
-	push	d6
-	moveq	#$0a,d6
-	lore	GFX,ClipBlit
-	pop	d6
-
-
-	move.l	a3,a0
-	move.l	windowbase(a5),a1
-	sub.l	a2,a2
-
 	and	#~GFLG_DISABLED,gg_Flags(a3)
-	moveq	#1,d0
-	lore	Intui,RefreshGList
-	bsr.b	.keh
+	bsr	redrawButtonGadget
 
 	lea	kela2,a0
 	cmp.l	a0,a3
@@ -26703,7 +26695,7 @@ whag	tst.b	win(a5)
 	or	#GFLG_DISABLED,gg_Flags(a3)
 	moveq	#1,d0
 	lore	Intui,RefreshGList
-	bsr.b	.keh
+	bsr.b	drawButtonFrame
 
 .on
 	tst	2(a4)		* enemm‰n kuin yksi kerrallaan?
@@ -26716,9 +26708,8 @@ whag	tst.b	win(a5)
 	popm	all
 	rts
 
-
-.keh	
-
+* Gadget in a3
+drawButtonFrame
 	pushm	all				* varjostus kuntoon taas
 	movem	4(a3),plx1/ply1/plx2/ply2
 	cmp.l	#slider1,a3
@@ -26730,7 +26721,29 @@ whag	tst.b	win(a5)
 	move.l	rastport(a5),a1
 	jsr	laatikko1
 .kex	popm	all
+	rts
 
+
+* Gadget in a3
+redrawButtonGadget
+	movem	4(a3),d0/d1	* putsataan gadgetin alue..
+	move	d0,d2
+	move	d1,d3
+	movem	8(a3),d4/d5
+	move.l	rastport(a5),a0
+	move.l	a0,a1
+	push	d6
+	moveq	#$0a,d6
+	lore	GFX,ClipBlit
+	pop	d6
+
+	move.l	a3,a0
+	move.l	windowbase(a5),a1
+	sub.l	a2,a2
+
+	moveq	#1,d0
+	lore	Intui,RefreshGList
+	bsr.b	drawButtonFrame
 	rts
 
 
@@ -27104,11 +27117,9 @@ favoriteModuleFileName
 * in:
 *  a0 = list node
 updateFavoriteStatus
-	bsr	findFavoriteModule
-	beq.b	.exit
-	* a matching favorite module was found, set flag 
-	st	l_favorite(a0)
-.exit
+	bsr.w	findFavoriteModule
+	* a matching favorite module was found? set flag 
+	sne	l_favorite(a0)
 	rts
 
 logFavoriteList
@@ -27176,6 +27187,119 @@ handleFavoriteModuleConfigChange
 .exit
 	popm	all 
 	rts
+
+********************************
+* Favorite list ui operations
+********************************
+
+* Checks if list is in favorite mode
+* Z is set if in normal mode, otherwise favorite mode
+isListInFavoriteMode
+	tst.b	listMode(a5)
+	rts
+
+toggleListMode
+	DPRINT	"list mode",1
+
+	bsr	isListInFavoriteMode
+	beq.b	.wasNormal
+	* List was in favorite mode
+	* Copy list changed status, so changes will be saved.
+	move.b	moduleListChanged(a5),favoriteListChanged(a5)
+	clr.b	moduleListChanged(a5)
+	move.b	#LISTMODE_NORMAL,listMode(a5)
+	bra.b	.set
+.wasNormal
+	move.b	#LISTMODE_FAVORITES,listMode(a5)
+.set
+	bsr.b	.setButtonStates
+	bsr.b	.setListState
+	rts
+
+.setButtonStates
+	lea	listImage,a0
+	tst.b	listMode(a5)
+	beq.b	.isNormal
+	lea	favoriteImage,a0
+.isNormal
+	* Toggle listmode button icon
+	move.l	a0,gadgetListModeChangeButtonImagePtr
+	lea	gadgetListModeChangeButton,a0
+	move.l	windowbase(a5),a1
+	sub.l	a2,a2
+	moveq	#1,d0			 	* number of gadgets to refresh
+	lore	Intui,RefreshGList
+
+	* Enable/disable "Prg" button
+
+	lea	gadgetPrgButton,a0
+	tst.b	listMode(a5)
+	bne.b	.disable
+	and	 #~GFLG_DISABLED,gg_Flags(a0)
+	* When re-enabling, need to draw the frame and clear
+	* the disabled shadow
+	move.l	a0,a3
+	push	a0
+	bsr	redrawButtonGadget	
+	bsr.b	.refresh
+	pop	a0
+	jsr	printkorva
+	rts
+.disable	
+	or	#GFLG_DISABLED,gg_Flags(a0)
+.refresh
+	lea	gadgetPrgButton,a0
+	move.l	windowbase(a5),a1
+	sub.l	a2,a2
+	moveq	#1,d0			 	* number of gadgets to refresh
+	lore	Intui,RefreshGList
+	rts
+
+.setListState
+	* Remove previous list selection
+	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)		
+	jsr	obtainModuleList
+
+	jsr	clear_random
+	bsr	clearCachedNode
+	bsr	getVisibleModuleListHeader
+	move.l	a0,a4
+
+	* set d1 to FF if list is in normal mode
+	bsr	isListInFavoriteMode
+	seq	d1
+	* set d2 to FF if favorites changed
+	tst.b	favoriteListChanged(a5)
+	sne	d2
+	and.b	d1,d2
+	* d2 is now FF is both are true:
+	* - list in normal mode
+	* - favorites were changed
+	* in this case, we must update the favorite status
+	* of each list node
+
+	moveq	#0,d3
+.count
+	TSTNODE a4,a4
+	beq.b	.end
+	tst.b	d2
+	beq.b	.noChange
+	move.l	a4,a0
+	bsr.w	updateFavoriteStatus
+.noChange
+	addq.l	#1,d3
+	bra.b	.count
+.end
+	move.l	d3,modamount(a5)
+ if DEBUG
+	move.l	d3,d0
+	DPRINT	"Modamount=%ld",2
+ endif
+	jsr	releaseModuleList
+	st	hippoonbox(a5)
+	jsr	resh
+	rts
+
 
 *******************************************************************************
 * CreatePort
@@ -32432,7 +32556,7 @@ id_gamemusiccreator
 	beq.b	.ok
 	* d0 is now the period
 	* 0 is allowed
-	lea		periods(pc),a1
+	lea		periods,a1
 	moveq	#(periodsEnd-periods)/2-1,d1
 .perLoop
 	cmp		(a1)+,d0
@@ -33744,7 +33868,7 @@ sivu6		include	gadgets/prefs_sivu6.s
 * and other odd things, so I copy-pasted the new bit here.
 
 prefsFavorites dc.l prefsTooltips
-       dc.w 406,121,28,12,3,1,1
+       dc.w 406,121,28,12,3|GFLG_DISABLED,1,1
        dc.l prefsFavoritesgr,0,prefsFavoritest,0,0
        dc.w 0
        dc.l 0
@@ -33797,28 +33921,84 @@ prefsTooltipst2       dc.b 1,0,1,0
        dc.w 0,0
        dc.l 0,0,0
 
+; Gadget
+gadgetListModeChangeButton
+	; gg_NextGadget
+	dc.l 0	
+	; gg_LeftEdge
+	dc 9
+	; gg_TopEdge
+	dc 64
+	; gg_Width
+	dc 18
+	; gg_Height
+	dc 13
+	; gg_Flags
+	dc GFLG_GADGIMAGE
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+	; gg_GadgetRender
+	dc.l gadgetListModeChangeButtonImage
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+	; gg_GadgetId
+	dc.w 0
+	; gg_UserData
+	dc.l 0
+
+
+; Image
+gadgetListModeChangeButtonImage
+	; ig_LeftEdge
+	dc 4
+	; ig_TopEdge
+	dc 3
+	; ig_Width
+	dc 9
+	; ig_Height
+	dc 7
+	; ig_Depth
+	dc 1
+	; ig_ImageData
+gadgetListModeChangeButtonImagePtr
+	dc.l	listImage
+	; ig_PlanePick
+	dc.b 1
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
 
 * Rename the gadgets defined above to something not crazy
-gadgetPlayButton	  	EQU  button1
-gadgetInfoButton		EQU  button2
-gadgetStopButton		EQU  button3
-gadgetEjectButton		EQU  button4
-gadgetNextButton		EQU  button5
+gadgetPlayButton 	EQU  button1
+gadgetInfoButton	EQU  button2
+gadgetStopButton	EQU  button3
+gadgetEjectButton	EQU  button4
+gadgetNextButton	EQU  button5
 gadgetPrevButton        EQU  button6
 gadgetAddButton         EQU  button7
 gadgetDelButton         EQU  button8
-gadgetNewButton   		EQU  button11
+gadgetNewButton   	EQU  button11
 gadgetNextSongButton    EQU  button12
 gadgetPrevSongButton    EQU  button13
-gadgetPrefsButton		EQU  button20
-gadgetVolumeSlider		EQU  rslider1
-gadgetFileSlider        EQU  rslider4
+gadgetPrefsButton	EQU  button20
+gadgetVolumeSlider	EQU  slider1
+gadgetFileSlider        EQU  slider4
 gadgetSortButton        EQU  lilb2
 gadgetMoveButton        EQU  lilb1 
 gadgetPrgButton         EQU  plg
 gadgetForwardButton     EQU  kela2
 gadgetRewindButton      EQU  kela1
 
+gadgetFileSliderInitialHeight = 67-16+2
 
 * Contains gadget-routine pairs that determine
 * the right mouse button actions when button is released
@@ -33865,6 +34045,7 @@ tooltipList
 	dc.l	gadgetPrgButton,.prg 
 	dc.l	gadgetForwardButton,.forward
 	dc.l	gadgetRewindButton,.rewind
+	dc.l	gadgetListModeChangeButton,.listModeChange
 	dc.l	0 ; END
 
 .play
@@ -33936,7 +34117,9 @@ tooltipList
 .rewind
 	dc.b	20,1
 	dc.b	"Skip module backward",0
-
+.listModeChange
+	dc.b	37,1
+	dc.b	"Switch between playlist and favorites",0
   even
 
 *** Samplename ikkuna
@@ -34216,6 +34399,30 @@ kela2im
 	dc	%1111000111100000
 	dc	%1100000110000000
 	dc	%0000000000000000				
+
+
+* height 8
+* width 16
+
+favoriteImage
+	dc	%0111011100000000				
+	dc	%1111111110000000				
+	dc	%1111111110000000				
+	dc	%0111111100000000				
+	dc	%0011111000000000				
+	dc	%0001110000000000				
+	dc	%0000100000000000				
+
+
+listImage
+	dc	%1101111110000000
+	dc	%0000000000000000				
+	dc	%1101111110000000
+	dc	%0000000000000000
+	dc	%1101111110000000
+	dc	%0000000000000000
+	dc	%1101111110000000
+
 
 	section	mah,bss_c
 
