@@ -20342,7 +20342,7 @@ rexxmessage
 *	duration
 *	hide status
 *	app version
-
+*	volume
 
 .get	move.b	(a1)+,d0
 	lsl.l	#8,d0
@@ -20400,6 +20400,8 @@ rexxmessage
 	dr	.filter
 	dc.l	"VERS"
 	dr	.version
+	dc.l	"VOLU"
+	dr	.getVolume
 	dc.l	0
 
 .getplay
@@ -20506,6 +20508,11 @@ rexxmessage
 	btst	#1,$bfe001
 	seq	d0
 	and.l	#%1,d0
+	bra.b	i2amsg
+
+.getVolume
+	moveq	#0,d0
+	move	mainvolume(a5),d0
 	bra.b	i2amsg
 
 * provide version string
