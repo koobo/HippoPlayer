@@ -27108,7 +27108,7 @@ exportFavoriteModulesWithMessage
 	lore	Intui,CurrentTime
 	move.l	8(sp),d0
 	sub.l	(sp),d0			* secs elapsed
-	cmp.l	#2,d0			* this many secs at least
+	cmp.l	#1,d0			* this many secs at least
 	bhs.b	.done
 	moveq	#10,d1			* wait a bit
 	lore	Dos,Delay
