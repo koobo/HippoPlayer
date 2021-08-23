@@ -76,6 +76,14 @@ isFavoriteModule macro
 	tst.b 	l_favorite(\1)
 	endm
 
+
+* Checks if list is in favorite mode
+* Z is set if in normal mode, otherwise favorite mode
+isListInFavoriteMode macro
+	tst.b	listMode(a5)
+	endm
+
+
 iword	macro
 	ror	#8,\1
 	endm
@@ -2176,15 +2184,14 @@ lelp
 .e0	rts
 
 .him
-	; Mmake space for list mode change button
+	; Make space for list mode change button
 	lea	gadgetFileSlider,a0
-	lea	gadgetListModeChangeButton,a1
 	add	#14,gg_TopEdge(a0)
 	sub	#18,gg_Height(a0)
 
-	; last main button is "gadgetSortButton",
-	; add new button as the new last one
-	move.l	a1,gadgetSortButton+gg_NextGadget
+	; The last main window button is "gadgetSortButton",
+	; add another button as the new last one
+	move.l	#gadgetListModeChangeButton,gadgetSortButton+gg_NextGadget
 
 	move.l	_IntuiBase(a5),a6
 	* Give each gadget a gg_GadgetID,
@@ -15366,7 +15373,7 @@ shn
 
 	bsr.b	clearbox
 
-	bsr	isListInFavoriteMode
+	isListInFavoriteMode
 	beq.b	.doHippo
 	lea	.noFavs(pc),a0
 	moveq	#90+WINX,d0
@@ -15652,7 +15659,7 @@ doPrintNames
 	beq.b	.noFav
 	isFavoriteModule a3
 	beq.b	.noFav
-	bsr	isListInFavoriteMode
+	isListInFavoriteMode
 	bne.b	.noBold
 	bsr	printBold
 	bra.b	.wasFav
@@ -16908,11 +16915,16 @@ marklineRightMouseButton
 	* Check if feature is enabled in prefs
 	tst.b	favorites(a5)
 	beq.b	.out
+	* No RMB marking if list is in fav mode
+	* Lets not ro RMB window folding however, seems
+	* distracting
+	isListInFavoriteMode
+	bne.b	.ou
 	bsr	 getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
 	* something marked
-	moveq	#1,d0
+.ou	moveq	#1,d0
 	rts
 .out  
 	* nothing marked
@@ -16970,8 +16982,12 @@ marklineRightMouseButton
 * List node utilities
 ********************************
 
+* Gets the list header that corresponds to the current list mode,
+* either normal, or favorites list. 
+* Out:
+*  a0 = list header address
 getVisibleModuleListHeader
-	bsr	isListInFavoriteMode
+	isListInFavoriteMode
 	bne.b	.isFav
 	lea	moduleListHeader(a5),a0
 	rts
@@ -16983,6 +16999,8 @@ getVisibleModuleListHeader
 * random bookkeeping must be reset,
 * and cached node as well. They would otherwise
 * no longer represent the list state correctly.
+* Also set a flag, this is used to detect chnages in favorites
+* content.
 listChanged
 	DPRINT "List changed",1
 	bsr	clearCachedNode
@@ -27130,17 +27148,17 @@ updateFavoriteStatus
 	rts
 
 logFavoriteList
- if DEBUG
-	DPRINT	"Favorite modules:",2
-	lea	favoriteListHeader(a5),a0
-.l	TSTNODE	a0,a0
-	beq.b	.x
-	lea	l_filename(a0),a1
-	move.l	a1,d0
-	DPRINT	"%s",1
-	bra.b	.l
-.x
- endif
+; if DEBUG
+;	DPRINT	"Favorite modules:",2
+;	lea	favoriteListHeader(a5),a0
+;.l	TSTNODE	a0,a0
+;	beq.b	.x
+;	lea	l_filename(a0),a1
+;	move.l	a1,d0
+;	DPRINT	"%s",1
+;	bra.b	.l
+;.x
+; endif
 	rts
 
 handleFavoriteModuleConfigChange
@@ -27201,22 +27219,29 @@ handleFavoriteModuleConfigChange
 
 * Checks if list is in favorite mode
 * Z is set if in normal mode, otherwise favorite mode
-isListInFavoriteMode
-	tst.b	listMode(a5)
-	rts
+;isListInFavoriteMode
+;	tst.b	listMode(a5)
+;	rts
 
 toggleListMode
-	DPRINT	"list mode",1
+	DPRINT	"toggleListMode",1
 
-	bsr	isListInFavoriteMode
+	isListInFavoriteMode
 	beq.b	.wasNormal
-	* List was in favorite mode
-	* Copy list changed status, so changes will be saved.
-	move.b	moduleListChanged(a5),favoriteListChanged(a5)
+	* List was in favorite mode.
+	* Store list changed status, so changes will be saved.
+	* Combine with favoritesListChanged, since that may also
+	* indicate save status from edits in normal listview.
+	move.b	moduleListChanged(a5),d0
+	or.b	d0,favoriteListChanged(a5)
 	clr.b	moduleListChanged(a5)
 	move.b	#LISTMODE_NORMAL,listMode(a5)
 	bra.b	.set
 .wasNormal
+	* Moving to favorite mode
+	* moduleListChanged must be cleared initially to catch
+	* any subsequent user edits.
+	clr.b	moduleListChanged(a5)
 	move.b	#LISTMODE_FAVORITES,listMode(a5)
 .set
 	bsr.b	.setButtonStates
@@ -27225,7 +27250,7 @@ toggleListMode
 
 .setButtonStates
 	lea	listImage,a0
-	tst.b	listMode(a5)
+	isListInFavoriteMode
 	beq.b	.isNormal
 	lea	favoriteImage,a0
 .isNormal
@@ -27240,7 +27265,7 @@ toggleListMode
 	* Enable/disable "Prg" button
 
 	lea	gadgetPrgButton,a0
-	tst.b	listMode(a5)
+	isListInFavoriteMode
 	bne.b	.disable
 	and	 #~GFLG_DISABLED,gg_Flags(a0)
 	* When re-enabling, need to draw the frame and clear
@@ -27273,7 +27298,7 @@ toggleListMode
 	move.l	a0,a4
 
 	* set d1 to FF if list is in normal mode
-	bsr	isListInFavoriteMode
+	isListInFavoriteMode
 	seq	d1
 	* set d2 to FF if favorites changed
 	tst.b	favoriteListChanged(a5)
@@ -27285,6 +27310,15 @@ toggleListMode
 	* in this case, we must update the favorite status
 	* of each list node
 
+	;XAX
+	* TODO: kick13 slider4 height is bad
+	* TODO: profiling
+
+	* Need to update modamount(a5) and check
+	* favourite status if user has edited
+	* favorites. Can take a while!
+	jsr	setMainWindowWaitPointer
+	
 	moveq	#0,d3
 .count
 	TSTNODE a4,a4
@@ -27303,6 +27337,7 @@ toggleListMode
 	DPRINT	"Modamount=%ld",2
  endif
 	jsr	releaseModuleList
+	jsr	clearMainWindowWaitPointer
 	st	hippoonbox(a5)
 	jsr	resh
 	rts
