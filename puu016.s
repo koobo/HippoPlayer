@@ -461,7 +461,7 @@ infolag		rs.b	1 * mit‰ n‰ytet‰‰n infoikkunassa: 0=sample, ~0=about
 
 infotaz		rs.l	1 * infoikkunan datan osoite
 
-;windowtop2	rs	1
+windowtop2	rs	1
 windowleft2	rs	1
 windowbottom2	rs	1
 
@@ -1970,8 +1970,6 @@ main
 	move	d0,(a0)			* Ikkunoiden v‰rit sen mukaan
 	move	d0,colors2-colors(a0)
 	move	d0,colors3-colors(a0)
-
-
 
 	lea	winstruc,a0		* Ikkunat avautuu publiscreeneille
 	bsr.b	.boob
@@ -4137,11 +4135,12 @@ getscreeninfo
 *** S‰‰det‰‰n ikkunat ja gadgetit otsikkopalkin koon mukaan
 
 .olde
-	; windowtop2(a5) is never set anywhere	
+	; This does some magic that is needed for the layout.
+	; Otherwise after zip window layout will start to break
 	move	windowtop(a5),d0
-	;move	windowtop2(a5),d1
-	;move	d0,windowtop2(a5)
-	;sub	d1,d0			* ERO!
+	move	windowtop2(a5),d1
+	move	d0,windowtop2(a5)
+	sub	d1,d0			* ERO!
 
 * nw_TopEdge = 2
 * nw_Width   = 4
