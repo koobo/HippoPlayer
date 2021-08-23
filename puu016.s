@@ -14827,8 +14827,8 @@ rmpegaqua
 	bne.b	pmpegaqua
 	clr.b	mpegaqua_new(a5)
 pmpegaqua
-	moveq	#0,d0
-	move.b	mpegaqua_new(a5),d0
+	moveq	#3,d0
+	and.b	mpegaqua_new(a5),d0
 	add	d0,d0
 	lea	ls501(pc,d0),a0
 	lea	nAMISKA2,a1
@@ -14838,9 +14838,6 @@ ls501	dc.b	"0",0
 ls502	dc.b	"1",0
 ls503	dc.b	"2",0
  even
-
-
-
 
 ** MPEGA quality
 
