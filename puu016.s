@@ -10053,6 +10053,8 @@ rloadprog
 	moveq	#0,d7
 
 rlpg
+	isListInFavoriteMode
+	bne.b	.isFav
 	bsr.w setMainWindowWaitPointer
 	DPRINT  "rloadprog obtain list",1
 	bsr.w	obtainModuleList
@@ -10060,6 +10062,7 @@ rlpg
 	bsr.w clearMainWindowWaitPointer
 	DPRINT  "rloadprog release list",2
 	bsr.w	releaseModuleList
+.isFav
 	rts
 
 .doLoadProgram
@@ -10559,6 +10562,8 @@ nimenalku
 
 
 rsaveprog
+	isListInFavoriteMode
+	bne.b	.x
 	DPRINT  "rsaveprog obtain list",1
 	bsr.w obtainModuleList
 	bsr.w setMainWindowWaitPointer
@@ -10566,7 +10571,7 @@ rsaveprog
 	bsr.w clearMainWindowWaitPointer
 	DPRINT  "rloadprog release list",2
 	bsr.w releaseModuleList
-	rts
+.x	rts
 
 .doSaveProg
 	clr.b	movenode(a5)
