@@ -2878,7 +2878,7 @@ msgloop
 	beq.b	.wow
 	addq	#1,userIdleTick(a5)
 	push	d0
-	bsr.w	lootaan_aika
+	jsr	lootaan_aika
 	jsr	lootaan_kello
 ;	bsr.w	lootaan_muisti
 	jsr	lootaan_nimi
@@ -10972,8 +10972,18 @@ loadprefs2
 	move	prefs_forcerate(a0),sampleforcerate(a5)
 
 	move.b	prefs_samplecyber(a0),samplecyber(a5)
-	move.b	prefs_mpegaqua(a0),mpegaqua(a5)
-	move.b	prefs_mpegadiv(a0),mpegadiv(a5)
+	
+	moveq	#0,d0 
+	move.b	prefs_mpegaqua(a0),d0
+	moveq	#0,d1
+	moveq	#2,d2
+	bsr.w	clamp
+	move.b	d0,mpegaqua(a0)
+	
+	move.b	prefs_mpegadiv(a0),d0 
+	bsr.w	clamp
+	move.b	d0,mpegadiv(a5)
+
 	move.b	prefs_medmode(a0),medmode(a5)
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
@@ -11013,6 +11023,24 @@ loadprefs2
 
 .err	dc.b	"Trouble with the prefs file (wrong version?).",0
  even
+
+* in:
+*  d0 = value
+*  d1 = low bound
+*  d2 = high bound
+* out:
+*  d0 = value within bounds
+clamp
+	cmp.l	d1,d0
+	blo.b	.low
+	cmp.l	d2,d0
+	bhi.b	.high
+	rts
+.low	move.l	d1,d0
+	rts
+.high	move.l	d2,d0
+	rts
+	
 
 sliderit
 * mixingrate s3m
@@ -14832,16 +14860,16 @@ rmpegaqua
 	bne.b	pmpegaqua
 	clr.b	mpegaqua_new(a5)
 pmpegaqua
-	moveq	#3,d0
-	and.b	mpegaqua_new(a5),d0
-	add	d0,d0
+	moveq	#0,d0
+	move.b	mpegaqua_new(a5),d0
+	lsl	#2,d0
 	lea	ls501(pc,d0),a0
 	lea	nAMISKA2,a1
 	bra.w	prunt
-ls500	dc.b	2,3
-ls501	dc.b	"0",0
-ls502	dc.b	"1",0
-ls503	dc.b	"2",0
+ls500	dc.b	4,3
+ls501	dc.b	"Low",0
+ls502	dc.b	"Med",0
+ls503	dc.b	"Hi ",0
  even
 
 ** MPEGA quality
