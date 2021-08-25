@@ -11,14 +11,19 @@ Or, just copy HiP somewhere and HippoPlayer.group to S:,
 then run HiP. That should work if you have the 
 reqtools.library installed.
 
-# Changes from v2.46b (15.6.2021) to v2.47b (?.?.2021)
+# Changes from v2.46b (15.6.2021) to v2.47b (?.?.2021) *NOT AVAILABLE YET*
+
+Here's another version, since Amiga is fun :-)
+In this one: new exotic music formats, favorite modules feature,
+enhanced kickstart 1.3 support. Check out the details below.
 
 ## New fixes:
+- Fixed two serious crash bugs introduced in v2.46b. When starting to play the next
+  module (especially by double clicking) Hippo could get confused and crash.
+  These problems were very likely to happen especially on OS 3.2.
 - Tooltip fixes for buttons *Del*, *Pr*. Also increase tooltip delay a little bit.
 - Fix the case where HiP is given modules without absolute path via command line
-  or via icon launch (eg. *DefIcons*), and the added files can't be opened.
-  Absolute path is now determined for these files before they are sent
-  to the already running HiP instance, fixing the issue.
+  or via icon launch (eg. *DefIcons*), and the added files can't be opened. Now works.
 - The default unzip command in prefs was changed to *c:unzip >nil: -jo "%s"*, 
   this allows opening zipped modules where the module is within a subdirectory.
   Previously such modules would not be found from the zip file.
@@ -30,48 +35,48 @@ reqtools.library installed.
 
 - Medley Sound and Future Player
   - The author of these and the superb Imploder themes Paul van der Valk has recently passed away. His sound was truly unique!
-  - Future Player replayer adapted from the sources by Wanted Team, Medley Sound replayer ripped from Imploder 4. 
+  - Future Player replayer adapted from Wanted Team EaglePlayer sources.
+  - Medley Sound replayer ripped from Imploder 4.
+- Ben Daglish
+  - Also adapted from EaglePlayer sources by Wanted Team.
+- DeliTracker Custom
+  - There are hundreds of these modules available, with varying quality. Many modules work fine but some behave badly. They may do illegal memory accesses or crash spectacularly. The same happens also when played with DeliTracker. 
+  - One version of _Lemmings_ tries to do file accesses to load separate sample files, this is not supported by Hippo and will probably crash.
+  - A few modules do not get recognized as the important bits are not close enough to the start of the file.
+  - Minor issue: Some modules display the subsong range in the titlebar so that the first song is #2 instead of #1. 
 - Beathoven Synthesizer
 - Game Music Creator (*Jumping Jack'Son!*)
 - Digital Mugician
 - PumaTracker
-- DeliTracker Custom
-  - Many modules work fine but some behave badly. They may do illegal memory accesses or crash spectacularly. The same happens also when played with DeliTracker. 
-  - One version of _Lemmings_ tries to do file accesses to load separate sample files, this is not supported and will probably crash.
-  - A few lonely modules do not get recognized as the important bits are not close enough to the start of the file.
-  - Minor issue: Some modules display the subsong range in the titlebar so that the first song is #2 instead of #1. 
  
 ## New features:
 
-- _Prefs_ option for toggling button tooltips on and off.
+- _Prefs_ option for toggling button tooltips on and off. By default it is on.
 
 - Support for _gzipped_ archives. (This was once supported but was removed at some point.)
 
-- Recursive subdirectory scan when adding modules is now supported also on kickstart 1.3.
+- Recursive subdirectory scan when adding modules is now supported on kickstart 1.3.
   
   It has been possible to select directories in the filerequester when adding files.
-  These directories would be scanned recursively to add all files inside.
+  These directories would be scanned recursively to add all the files inside.
   This has only worked on kickstart 2.0 or newer until now, due to the usage of a kickstart 2.0 DOS-library specific function.
   
-  Previously on older kickstarts only 
-  the top level files of the selected directories were added.
-  Subdirectories were ignored.
-
-- Two new ARexx commands: *CHOOSEPREV* and *CHOOSENEXT*. These work similarly as when the user presses arrow up and down to choose a module in the list. 
+  Previously on older kickstarts only the top level files of the selected directories were added.
+  
+- New ARexx commands *CHOOSEPREV* and *CHOOSENEXT*. These work similarly as when the user presses arrow up and down to choose a module in the list. *GET VERS* command returns the app version. *GET VOLU* returns the current volume setting.
 
 - Favorite modules! You can now right click on a module to favorite it. Favorite
-  modules are displayed in **bold font**.
+  modules are displayed in **bold font**. To view the favorites, there's a new button
+  on top of the filebox slider gadget to click. It switches between normal listview
+  and favorites view.
 
-  These modules will be stored in a separate playlist (or a _module program_ in Hippo terms)
-  which you can open by pressing the *Prg* button and selecting the file
-  "**S:HippoFavorites.prg**".
+  Favorites are automatically saved after the user has been idle for a while,
+  or when exiting the program, to file "**S:HippoFavorites.prg**".
 
   To enable this feature toggle the _Favorite modules_ switch on the
-  _General_ subpage in prefs. 
+  _General_ subpage in prefs. This feature probably doesn't make any sense if you are using floppies.
   
-  Favorites will be automatically saved after the user has been idle for a while,
-  or when exiting the program. This feature probably doesn't make any sense if you are using floppies.
-
+  
 # Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
 
 There was an actual user request (by daxb) in the English Amiga Board 
