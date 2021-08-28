@@ -104,7 +104,8 @@ main
 	dc.l	medleydata-main,futureplayerdata-medleydata
 	dc.l	futureplayerdata-main,bendaglishdata-futureplayerdata
 	dc.l	bendaglishdata-main,sidmon2data-bendaglishdata
-	dc.l	sidmon2data-main,pend-sidmon2data
+	dc.l	sidmon2data-deltamusic1data,deltamusic1data-sidmon2data
+	dc.l	deltamusic1data-main,pend-deltamusic1data
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -157,6 +158,6 @@ medleydata 		incbin imploder.im
 futureplayerdata 	incbin future_player.im
 bendaglishdata		incbin bendaglish.im
 sidmon2data		incbin sidmon_v2.im
-
+deltamusic1data		incbin delta1.im
 pend
 
