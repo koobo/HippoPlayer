@@ -901,6 +901,7 @@ digitalmugicianroutines	rs.l 0
 medleyroutines rs.l 0
 futureplayerroutines rs.l 0
 bendaglishroutines	rs.l	0
+sidmon2routines 	rs.l 	0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1189,6 +1190,7 @@ pt_digitalmugician 	 rs.b  1
 pt_medley 	 rs.b  1
 pt_futureplayer 	rs.b 	1
 pt_bendaglish	rs.b 	1
+pt_sidmon2		rs.B	1
 
 * player group version
 xpl_versio	=	21
@@ -23481,7 +23483,7 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_markii
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_maniacsofnoise
 	beq.b	.on
@@ -23523,6 +23525,9 @@ loadfile
 	beq.b	.on
 
 	bsr	id_bendaglish
+	beq.b	.on
+
+	bsr	id_sidmon2
 	beq.b	.on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
@@ -24952,6 +24957,9 @@ tutki_moduuli
 	bsr	id_bendaglish
 	beq.w	.bendaglish
 
+	bsr	id_sidmon2
+	beq.w	.sidmon2
+
 	bsr.w	id_player
 	beq.w	.player
 
@@ -25233,6 +25241,11 @@ tutki_moduuli
 .bendaglish
 	pushpea	p_bendaglish(pc),playerbase(a5)
 	move	#pt_bendaglish,playertype(a5)
+	bra.w	.ex
+
+.sidmon2
+	pushpea	p_sidmon2(pc),playerbase(a5)
+	move	#pt_sidmon2,playertype(a5)
 	bra.w	.ex
 
 **** Oliko  sample??
@@ -29554,7 +29567,7 @@ p_sidmon1
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc	pf_stop!pf_cont!pf_ciakelaus
-	dc.b	"SIDMon v1.0",0
+	dc.b	"SidMon 1",0
  even
 
 .sm10init
@@ -33631,7 +33644,7 @@ id_futureplayer
 
 
 ******************************************************************************
-* Ben Daghlis
+* Ben Daglish
 ******************************************************************************
 
 p_bendaglish
@@ -33756,6 +33769,84 @@ id_bendaglish
 .fail	moveq	#-1,d0
 	rts
 
+
+******************************************************************************
+* Sidmon v2
+******************************************************************************
+
+p_sidmon2
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75 	
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc.b	"SidMon 2",0
+ even
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	sidmon2routines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	dmawait(pc),a2
+	move.l	sidmon2routines(a5),a6
+	jsr	.INIT(a6)
+	popm	d1-a6
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	sidmon2routines(a5),a0
+	jmp	.PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.end
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_sidmon2
+	lea		.idStart(pc),a1
+	moveq	#.idEnd-.idStart,d0
+	bra 	search
+
+.idStart	dc.b	'SIDMON II - THE MIDI VERSION'
+.idEnd 
+ even 
 *******************************************************************************
 * Playereitä
 

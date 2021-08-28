@@ -103,7 +103,8 @@ main
 	dc.l	digitalmugiciandata-main,medleydata-digitalmugiciandata
 	dc.l	medleydata-main,futureplayerdata-medleydata
 	dc.l	futureplayerdata-main,bendaglishdata-futureplayerdata
-	dc.l	bendaglishdata-main,pend-bendaglishdata
+	dc.l	bendaglishdata-main,sidmon2data-bendaglishdata
+	dc.l	sidmon2data-main,pend-sidmon2data
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -155,5 +156,7 @@ digitalmugiciandata 	incbin mugiplayer.im
 medleydata 		incbin imploder.im
 futureplayerdata 	incbin future_player.im
 bendaglishdata		incbin bendaglish.im
+sidmon2data		incbin sidmon_v2.im
+
 pend
 

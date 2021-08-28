@@ -48,6 +48,7 @@ enhanced kickstart 1.3 support. Check out the details below.
 - Game Music Creator (*Jumping Jack'Son!*)
 - Digital Mugician
 - PumaTracker
+- SidMon 2 (SidMon 1 is already supported)
  
 ## New features:
 
