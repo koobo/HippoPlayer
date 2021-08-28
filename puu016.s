@@ -1163,6 +1163,8 @@ pt_hippel	rs.b	1
 pt_mline	rs.b	1
 pt_beathoven	rs.b	1
 pt_delicustom	rs.b 	1
+* DELI
+pt_facethemusic rs.b 1
 
 * These need a replayer from the group file
 pt_group_start = 49
@@ -23481,7 +23483,7 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_markii
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_maniacsofnoise
 	beq.b	.on
@@ -23523,6 +23525,9 @@ loadfile
 	beq.b	.on
 
 	bsr	id_bendaglish
+	beq.b	.on
+
+	bsr	id_facethemusic
 	beq.b	.on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
@@ -23964,7 +23969,7 @@ loadfile
 	bsr.w	inforivit_fimpdecr
 
 	move.l	lod_address(a5),a0
-	bsr.w	fimp_decr	
+	jsr	fimp_decr	
 	bra.w	.exit
 
 .wasnt_fimp
@@ -24796,7 +24801,7 @@ tutki_moduuli
 	bne.w	.noop
 
 	tst.b	ahi_muutpois(a5)	
-	bne.b	.noop
+	bne.w	.noop
 
 	* Ensure no id funcs are ran on executables
 	tst.b	executablemoduleinit(a5)
@@ -24839,6 +24844,10 @@ tutki_moduuli
 
 	bsr	id_beathoven
 	beq.w	.beathoven
+
+		bsr	id_facethemusic
+	beq	.facethemusic
+
 
 	tst.l	externalplayers(a5)
 	bne.b	.noop
@@ -24951,6 +24960,7 @@ tutki_moduuli
 
 	bsr	id_bendaglish
 	beq.w	.bendaglish
+
 
 	bsr.w	id_player
 	beq.w	.player
@@ -25233,6 +25243,12 @@ tutki_moduuli
 .bendaglish
 	pushpea	p_bendaglish(pc),playerbase(a5)
 	move	#pt_bendaglish,playertype(a5)
+	bra.w	.ex
+
+
+.facethemusic
+	pushpea	p_facethemusic(pc),playerbase(a5)
+	move	#pt_facethemusic,playertype(a5)
 	bra.w	.ex
 
 **** Oliko  sample??
@@ -25626,7 +25642,8 @@ id_sidmon1
 	add.l	a0,d1		* init
 	add.l	a0,d2		* music
 ;	movem.l	d1/d2,sid10init
-.l_f278	tst.l	d0
+.l_f278
+	tst.l	d0
 	rts	
 
 
@@ -29570,6 +29587,10 @@ p_sidmon1
 	rts
 .ok2
 	movem.l	d0-a6,-(sp)
+	; The id routine does code modification to the module
+	; provided replay routine, for safety clear caches.
+	bsr	clearCpuCaches
+	
 	move.l	sid10init(pc),a0
 	jsr	(a0)
 	movem.l	(sp)+,d0-a6
@@ -33089,7 +33110,9 @@ p_delicustom
 	move.l	(sp)+,dtg_SongEnd(a0)	* may be called from interrupt
 	pea	.setTimer(pc)
 	move.l	(sp)+,dtg_SetTimer(a0)	* may be called from interrupt
-
+	pea	.getListData(pc)
+	move.l	(sp)+,dtg_GetListData(a0)	
+	
 	* Lemmings uses CopyString and CopyFile. Not supported!
 
 	* Stub the rest
@@ -33112,8 +33135,7 @@ p_delicustom
 	move.l	(sp)+,dtg_CopyDir(a0)
 	pea	.f9(pc)
 	move.l	(sp)+,dtg_LoadFile(a0)
-	pea	.f10(pc)
-	move.l	(sp)+,dtg_GetListData(a0)
+
  else 
 	lea	.stub(pc),a1
 	move.l	a1,dtg_LockScreen(a0)
@@ -33125,7 +33147,6 @@ p_delicustom
 	move.l	a1,dtg_CopyFile(a0)
 	move.l	a1,dtg_CopyDir(a0)
 	move.l	a1,dtg_LoadFile(a0)
-	move.l	a1,dtg_GetListData(a0)
  endif
 	rts
 
@@ -33144,6 +33165,12 @@ p_delicustom
 	lea	var_b,a5
 	bsr	vapauta_kanavat
 	popm	d1-a6
+	rts
+
+* Method for DeliPlayers to access module data
+.getListData
+	move.l	moduleaddress+var_b,a0
+	move.l	modulelength+var_b,d0
 	rts
 
 .songEnd
@@ -33378,6 +33405,518 @@ id_delicustom
 .id3_start
 	dc.l DTP_CustomPlayer
 .id3_end
+
+
+
+******************************************************************************
+* Deliplayer Face The Music
+******************************************************************************
+
+p_facethemusic
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	jmp	.cont(pc)
+	dc.l	$4e754e75
+	jmp	.song(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"Deli FTM",0
+ even
+;.path dc.b 	"sys:c/delitracker_ii/deliplayers/ftm",0
+.path dc.b 	"sys:c/eagleplayer2/eagleplayers/face the music",0
+ even
+.dp		dc.l	0
+
+* in:
+*   d0 = tag to find
+* out:
+*   d0 = tag data or NULL if not found
+.getTag
+	* This is a BPTR to a seglist, loaded with LoadSeg()
+	move.l	.dp(pc),a0
+	add.l	a0,a0
+	add.l	a0,a0
+	* tag item array
+	move.l	16(a0),a0
+.loop
+    ;cmp.l  #TAG_END,(a0)
+    tst.l   (a0)            * TAG_END is NULL
+    beq.b   .notFound
+    cmp.l   (a0),d0
+    bne.b   .notThis
+    move.l  4(a0),d0
+    rts
+.notFound
+	moveq   #0,d0
+	rts
+.notThis
+    addq.l  #8,a0
+    bra.b   .loop
+
+.callFunc	
+	tst.l	d0 
+	beq.b	.noFunc
+	DPRINT	"Call %lx",101
+	pushm 	d2-a6
+	lea	deliBase,a5
+	move.l	d0,a0
+	jsr	(a0)
+	popm	d2-a6
+.noFunc rts
+
+.init
+	pushm	d1-a6	
+
+	tst.l	.dp 
+	bne.b	.loaded
+	move.l	#.path,d1
+	lore 	Dos,LoadSeg
+	move.l	d0,.dp
+	bne.b	.loaded
+	moveq	#ier_unknown,d0
+	bra		.loadSegError
+.loaded
+
+	DPRINT	"deliInit",10
+	bsr.w	.buildDeliBase
+
+ if DEBUG
+	 bsr	.showTags
+ endif
+
+	* Order in DT
+	* InitPlayer
+	* SubSongRange
+	* SubSongRange
+	* Volume
+	* Volume
+	* InitSound (dtg_SndNum=1)
+	* SubSongRange	
+
+	move.l	#DTP_DeliBase,d0
+	bsr	.getTag
+	beq.b	.noDBTag
+	move.l	d0,a0 
+	lea	deliBase,a1
+	move.l	a1,(a0)
+.noDBTag
+
+	move.l	#DTP_InitPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+	* Status is returned in d0, can't rely on status flags
+	* here. d0=0 if ok, else not ok
+	tst.l	d0
+	bne.w	.error
+	DPRINT	"initPlayer ok",11
+
+	* set default song number
+	bsr	.getSongInfo
+	* d0 = def, d1 = min, d2 = max	
+	move	d0,deliBase+dtg_SndNum
+	move	d0,songnumber(a5)
+	move	d2,maxsongs(a5)	
+
+	move.l	#DTP_Volume,d0  
+	bsr.w	.getTag
+	move.l	d0,.storedSetVolume
+
+	move.l	#DTP_InitSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	DPRINT	"InitSound ok",12
+
+	* see if an interrupt routine is provided.
+	* if so, set up a cia interrupt to drive it.
+	* otherwise assume the module handles it.
+	move.l	#DTP_Interrupt,d0  
+	bsr.w	.getTag
+	move.l	d0,.storedInterrupt
+	beq.w	.noInt
+	DPRINT	"using hippo interrupt",33
+ 
+	* interrupt routine provided, set up an interrupt
+	move	deliBase+dtg_Timer,d0
+	jsr	init_ciaint_withTempo
+	beq.b	.gotCia
+	DPRINT	"cia error",44
+
+	* try to clean up
+	move.l	#DTP_EndSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+	move.l	#DTP_EndPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	moveq	#ier_nociaints,d0
+	bra.w	.error
+.gotCia
+.noInt
+
+	 * tst.l xyz(pc) is 020 instruction
+	move.l	.storedInterrupt(pc),d0  
+	bne.b	.intSet
+	* try to start module provided int handler
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	beq.b	.noStartInt
+	bsr	.callFunc
+	DPRINT	"using module interrupt",34
+.noStartInt
+.intSet
+
+.skip
+ if DEBUG
+	moveq	#0,d0
+	move	deliBase+dtg_Timer,d0
+	DPRINT	"init ok, dtg_Timer=%ld",55
+ endif
+	* ok
+	moveq	#0,d0
+.exit
+.loadSegError
+	popm	d1-a6
+	rts
+
+.error
+	DPRINT	"init FAIL",56
+	moveq	#-1,d0 
+	bra.b	.exit
+	
+
+* Interrupt play routine, use cached pointers to avoid tag searches
+.play
+	move.l	.storedInterrupt(pc),d0
+	beq.b	.nope
+	lea	deliBase,a5
+	move	var_b+mainvolume,dtg_SndVol(a5)
+	move.l	d0,a0
+	jsr	(a0)
+	move.l	.storedSetVolume(pc),d0
+	beq.b	.noVol
+	lea	deliBase,a5
+	move.l 	d0,a0
+	jsr	(a0)
+.noVol
+.nope
+	rts
+
+.storedInterrupt	dc.l	0
+.storedSetVolume	dc.l 	0
+
+.end
+	pushm	d1-a6
+	DPRINT	"deliEnd",13
+	
+	move.l	.storedInterrupt(pc),d0
+	beq.b	.noIntUsed
+	jsr	rem_ciaint
+.noIntUsed
+
+	move.l	#DTP_StopInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+
+	move.l	#DTP_EndSound,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	move.l	#DTP_EndPlayer,d0  
+	bsr.w	.getTag
+	bsr.w	.callFunc	
+
+	moveq	#0,d0
+	popm	d1-a6
+	rts
+
+
+* out:
+*  d0=default song
+*  d1=min song
+*  d2=max song
+.getSongInfo
+	moveq	#0,d0 
+	moveq	#0,d1 
+	moveq	#0,d2
+	
+	move.l	#DTP_SubSongRange,d0  
+	bsr.w	.getTag
+	beq.b	.noSubSongs1
+	bsr	.callFunc
+	move.l	d1,d2
+	move.l	d0,d1
+	DPRINT	"Subsong def=%ld min=%ld max=%ld",111
+	rts
+
+.noSubSongs1
+	move.l	#DTP_NewSubSongRange,d0  
+	bsr.w	.getTag
+	beq.b	.noSubSongs2
+	move.l	d0,a0
+	movem	(a0),d0/d1/d2
+	DPRINT	"NewSubSongs defa=%ld min=%ld max=%ld",112
+.noSubSongs2
+	rts	
+
+.song
+	DPRINT	"deliSong",114
+	bsr	.stop
+
+	bsr	.getSongInfo
+
+	* low bound check
+	cmp	songnumber(a5),d1
+	blo.b	.ok1
+	move	d1,songnumber(a5)
+.ok1
+	* upper bound check
+	cmp	songnumber(a5),d2
+	bhi.b .ok2
+	move d2,songnumber(a5)
+.ok2
+	* Put it, wrong number may crash some players
+	move	songnumber(a5),deliBase+dtg_SndNum
+
+	move.l	#DTP_InitSound,d0
+	bsr	.getTag
+	bsr	.callFunc
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	rts
+
+* Not sure what exactly should be done with these two.
+* Seems to work more or less.
+.stop
+	DPRINT	"deliStop",14
+	move.l	#DTP_EndSound,d0
+	bsr	.getTag
+	;bsr	.callFunc
+	move.l	#DTP_StopInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	;bsr	clearsound
+	move	#$f,$dff096
+	rts
+
+.cont
+	DPRINT	"deliCont",144
+	move.l	#DTP_InitSound,d0
+	bsr	.getTag
+	;bsr	.callFunc
+	move.l	#DTP_StartInt,d0
+	bsr	.getTag
+	bsr	.callFunc
+	move	#$800f,$dff096
+	rts
+
+* Build the DeliBase structure, this is not a complete version.
+
+.buildDeliBase
+	lea	deliBase,a0
+	lea	deliBaseLength(a0),a1
+.clrBase
+	clr.b	(a0)+
+	cmp.l	a0,a1 
+	bne.b .clrBase
+	lea	deliBase,a0
+
+	move.l	_DosBase(a5),dtg_DOSBase(a0)
+	move.l	_IntuiBase(a5),dtg_IntuitionBase(a0)
+	move.l	_GFXBase(a5),dtg_GfxBase(a0)
+	
+	; Illegal address for enforcer
+	move.l	#$10000000,dtg_GadToolsBase(a0)
+	move.l	#$10000000,dtg_AslBase(a0)
+
+	clr	dtg_SndNum(a0) * this must be correct 
+	move	#64,dtg_SndVol(a0)
+	move	#64,dtg_SndLBal(a0)
+	move	#64,dtg_SndRBal(a0)
+	clr	dtg_LED(a0)
+
+	pea	.allocAudio(pc)
+	move.l	(sp)+,dtg_AudioAlloc(a0)
+	pea	.freeAudio(pc)
+	move.l	(sp)+,dtg_AudioFree(a0)
+	pea	dmawait(pc)
+	move.l	(sp)+,dtg_WaitAudioDMA(a0)
+
+	pea	.startInt(pc)
+	move.l	(sp)+,dtg_StartInt(a0)
+	pea	.stopInt(pc)
+	move.l	(sp)+,dtg_StopInt(a0)
+	pea	.songEnd(pc)
+	move.l	(sp)+,dtg_SongEnd(a0)	* may be called from interrupt
+	pea	.setTimer(pc)
+	move.l	(sp)+,dtg_SetTimer(a0)	* may be called from interrupt
+	pea	.getListData(pc)
+	move.l	(sp)+,dtg_GetListData(a0)	
+	
+	* Lemmings uses CopyString and CopyFile. Not supported!
+
+	* Stub the rest
+ if DEBUG
+	pea	.f1(pc)
+	move.l	(sp)+,dtg_LockScreen(a0)
+	pea	.f2(pc)
+	move.l	(sp)+,dtg_UnlockScreen(a0)
+	pea	.f3(pc)
+	move.l	(sp)+,dtg_NotePlayer(a0) 	* may be called from interrupt
+	pea	.f4(pc)
+	move.l	(sp)+,dtg_AllocListData(a0)
+	pea	.f5(pc)
+	move.l	(sp)+,dtg_FreeListData(a0)
+	pea	.f6(pc)
+	move.l	(sp)+,dtg_CopyString(a0)
+	pea	.f7(pc)
+	move.l	(sp)+,dtg_CopyFile(a0)
+	pea	.f8(pc)
+	move.l	(sp)+,dtg_CopyDir(a0)
+	pea	.f9(pc)
+	move.l	(sp)+,dtg_LoadFile(a0)
+
+ else 
+	lea	.stub(pc),a1
+	move.l	a1,dtg_LockScreen(a0)
+	move.l	a1,dtg_UnlockScreen(a0)
+	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
+	move.l	a1,dtg_AllocListData(a0)
+	move.l	a1,dtg_FreeListData(a0)
+	move.l	a1,dtg_CopyString(a0)
+	move.l	a1,dtg_CopyFile(a0)
+	move.l	a1,dtg_CopyDir(a0)
+	move.l	a1,dtg_LoadFile(a0)
+ endif
+	rts
+
+.allocAudio 
+	DELIDPRINT	"deliAudioAlloc",1102
+	pushm	d1-a6
+	lea	var_b,a5
+	* returns d0=0 on success:
+	bsr	varaa_kanavat 
+	popm	d1-a6
+	rts
+
+.freeAudio 
+	DELIDPRINT	"deliAudioFree",1103
+	pushm	d1-a6
+	lea	var_b,a5
+	bsr	vapauta_kanavat
+	popm	d1-a6
+	rts
+
+* Method for DeliPlayers to access module data
+.getListData
+	move.l	moduleaddress+var_b,a0
+	move.l	modulelength+var_b,d0
+	rts
+
+.songEnd
+	* May be called from interrupt, no logging allowed
+	st		var_b+songover
+	rts
+.setTimer
+	* May be called from interrupt, no logging allowed
+	;DELIDPRINT	"deliSetTimer",15
+.stub
+	moveq	#0,d0
+	rts
+
+.startInt	
+	DELIDPRINT	"deliStartInt",1
+	moveq	#0,d0
+	rts
+.stopInt 
+	DELIDPRINT	"deliStopInt",2
+	moveq	#0,d0
+	rts
+
+ if DEBUG
+.f1 DELIDPRINT	"f1",1101
+	moveq	#0,d0
+	rts
+.f2 DELIDPRINT	"f2",102
+	moveq	#0,d0
+	rts
+.f3 DELIDPRINT	"f3",103
+	moveq	#0,d0
+	rts
+.f4 DELIDPRINT	"f4",104
+	moveq	#0,d0
+	rts
+.f5 DELIDPRINT	"f5",105
+	moveq	#0,d0
+	rts
+.f6 DELIDPRINT	"f6",106
+	moveq	#0,d0
+	rts
+.f7 DELIDPRINT	"f7",107
+	moveq	#0,d0
+	rts
+.f8 DELIDPRINT	"f8",108
+	moveq	#0,d0
+	rts
+.f9 DELIDPRINT	"f9",109
+	moveq	#0,d0
+	rts
+.f10 DELIDPRINT	"f10",110
+	moveq	#0,d0
+	rts
+ endif
+
+
+ if DEBUG
+.showTags
+	move.l	moduleaddress(a5),a0
+	add.l	a0,a0
+	add.l	a0,a0
+	move.l	16(a0),a0
+.tloop
+	movem.l	(a0)+,d0/d1
+	
+	sub.l	#DTP_TagBase,d0
+	lsl.l	#2,d0
+	lea	tagsTable,a1
+	add.l	d0,a1
+	;lea		tagsTable(pc,d0.l),a1
+	lsr.l	#2,d0
+	add.l	#DTP_TagBase,d0
+	
+	cmp.l	#tagsTableEnd,a1
+	blo.b 	.okTag
+	DPRINT  "Tag %lx: %lx",2002
+	bra.b	.oddTag
+.okTag
+	move.l	d1,d2
+	move.l	(a1),d1
+	DPRINT  "Tag %lx %s: %lx",2001
+.oddTag
+	tst.l	(a0) 
+	bne.w	.tloop
+	rts
+
+ endif
+
+id_facethemusic
+	MOVEQ	#0,D0
+	MOVE.L	(A4),D1
+	AND.L	#$FFFFFF00,D1
+	CMP.L	#$46544D00,D1
+	bne.b	.no
+	moveq	#0,d0
+	rts
+.no
+	moveq	#-1,d0 
+	rts
 
 
 
@@ -33631,7 +34170,7 @@ id_futureplayer
 
 
 ******************************************************************************
-* Ben Daghlis
+* Ben Daghlish
 ******************************************************************************
 
 p_bendaglish
