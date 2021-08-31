@@ -1,15 +1,16 @@
 # HippoPlayer
 
 This repository contains the source code for HippoPlayer, a module player for the classic Amigas with OS 1.2 or higher. 
-Binary distribution is available here: http://aminet.net/mus/play/hippoplayer.lha
 
-Later binaries available in _dist_ directory.
+Original distribution is available here: http://aminet.net/mus/play/hippoplayer.lha
+
+Updated version developed later: http://aminet.net/mus/play/hippoplayerupdate.lha
 
 Tools used in development:
   * Amiga 1200 with kickstart 3.0, Amiga 500 with kickstart 1.2 and 1.3.
   * ASM-One v1.28
   * fimp file compressor, available here: http://aminet.net/util/pack/imploder-4.0.lzh
-  * Gadget's Editor by Stefano Crimì (included without permission)
+  * Gadget's Editor by Stefano Crimi (included without permission)
   * FS-UAE and ASM-Pro v1.17
 
 # Files and directories

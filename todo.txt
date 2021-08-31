@@ -13,10 +13,40 @@ Formats
 + Digital mugician
 - earache
 - face the music
++ sidmon2
+- JamCracker FIXES (check EP/DT)
 - digital mugician 2
 + game music creator
 + mark ii sound system
 + puma tracker
++ medley
++ future player
++ ben daglish
+
+ONLY ON ASM only build
++ Press E -> enforcer hits
+
+BUG:
+- open DeltaMusic_v2.0.s 
+-> bomb -> thinks it is a module and calls code from within text file
+
+FIXED
++ RMB+Pr: broken layout
+
+FIXED: BIG memory leak
++ play xpk packed TFMX modules -> all chip mem goes
+
+
+
+- play modules and see memory run out:
+- david whittaker
+- delta music
+- fredmon
+- hippel
+- mark ii
+- sidmon1 
+- oktalyzer
+- tfmx -> mem runs out
 
 TODO
 - VisualPrefs

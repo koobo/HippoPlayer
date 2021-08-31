@@ -104,7 +104,7 @@ main
 	dc.l	medleydata-main,futureplayerdata-medleydata
 	dc.l	futureplayerdata-main,bendaglishdata-futureplayerdata
 	dc.l	bendaglishdata-main,sidmon2data-bendaglishdata
-	dc.l	sidmon2data-deltamusic1data,deltamusic1data-sidmon2data
+	dc.l	sidmon2data-main,deltamusic1data-sidmon2data
 	dc.l	deltamusic1data-main,pend-deltamusic1data
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
