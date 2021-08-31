@@ -5892,12 +5892,12 @@ forceDeselectGadget
 * in:
 *   a0=gadget
 refreshGadget
+refreshGadgetInA0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	moveq	#1,d0	
 	lore	Intui,RefreshGList
 	rts
-
 
 
 * Checks if mouse pointer is within given gadget in main window
@@ -27073,8 +27073,10 @@ importFavoriteModulesFromDisk
 	tst.b	favorites(a5)
 	bne.b	.enabled
 	DPRINT	"->disabled in prefs",2
+	bsr.w		disableListModeChangeButton
 	rts
 .enabled
+	bsr.w	enableListModeChangeButton
 
 	moveq	#0,d6
 
@@ -27222,6 +27224,7 @@ handleFavoriteModuleConfigChange
 	tst.b	favorites(a5)
 	beq.w	.noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: enabled",1
+	bsr.w	enableListModeChangeButton
 
 * favorites are enabled.
 * - they may have been enabled ealier, or
@@ -27252,7 +27255,13 @@ handleFavoriteModuleConfigChange
 
 .noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: disabled",2
-
+	bsr	disableListModeChangeButton
+	isListInFavoriteMode
+	beq.b	.noFav
+	* If disabled from prefs must toggle to normal mode
+	bsr.b	toggleListMode
+.noFav
+	
 	* favorites are not enabled
 	lea	favoriteListHeader(a5),a0
 	IFEMPTY a0,.exit
@@ -27397,6 +27406,25 @@ toggleListMode
 	jsr	resh
 	rts
 
+enableListModeChangeButton
+	lea 	gadgetListModeChangeButton,a3
+	move	#GFLG_DISABLED,d0
+	and	gg_Flags(a3),d0
+	beq.b	.x
+	and	 #~GFLG_DISABLED,gg_Flags(a3)
+	move.l 	a3,a0
+	jsr	refreshGadgetInA0
+	bsr 	redrawButtonGadget
+.x	rts 
+
+disableListModeChangeButton
+	lea 	gadgetListModeChangeButton,a0
+	move	#GFLG_DISABLED,d0
+	and	gg_Flags(a0),d0
+	bne.b	.x
+	or	#GFLG_DISABLED,gg_Flags(a0)
+	jsr	refreshGadgetInA0
+.x	rts
 
 *******************************************************************************
 * CreatePort
@@ -34131,7 +34159,7 @@ sivu6		include	gadgets/prefs_sivu6.s
 * and other odd things, so I copy-pasted the new bit here.
 
 prefsFavorites dc.l prefsTooltips
-       dc.w 406,121,28,12,3|GFLG_DISABLED,1,1
+       dc.w 406,121,28,12,3,1,1
        dc.l prefsFavoritesgr,0,prefsFavoritest,0,0
        dc.w 0
        dc.l 0
