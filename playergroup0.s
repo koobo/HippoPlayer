@@ -105,7 +105,8 @@ main
 	dc.l	futureplayerdata-main,bendaglishdata-futureplayerdata
 	dc.l	bendaglishdata-main,sidmon2data-bendaglishdata
 	dc.l	sidmon2data-main,deltamusic1data-sidmon2data
-	dc.l	deltamusic1data-main,pend-deltamusic1data
+	dc.l	deltamusic1data-main,soundfxdata-deltamusic1data
+	dc.l	soundfxdata-main,pend-soundfxdata
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -135,23 +136,23 @@ maine
 	dc.b	"$VER: 21",0
 	even
 	
-ps3mdata	incbin	ps3m.im
-tfmxdata	incbin	tfmx.im
-tfmx7data	incbin	tfmx7c.im
-jamdata		incbin	jamc.im
-fc10data	incbin	fc10.im
-fc14data	incbin	fc14.im
-bpsmdata	incbin	bpsm.im
-soundmon3data	incbin	soundmon3.im
-oktadata	incbin	okta.im
-p60data		incbin	p61a.im
-hippelcosodata	incbin	hippelcoso.im
-digidata	incbin	digi.im
-thxdata		incbin	thx.im
-sampledata	incbin	sampleplay.im
-aondata		incbin	aon4.im
-dbprodata	incbin	dbpro.im
-pumatrackerdata	incbin	pumatracker.im
+ps3mdata		incbin ps3m.im
+tfmxdata		incbin tfmx.im
+tfmx7data		incbin tfmx7c.im
+jamdata			incbin jamc.im
+fc10data		incbin fc10.im
+fc14data		incbin fc14.im
+bpsmdata		incbin bpsm.im
+soundmon3data		incbin soundmon3.im
+oktadata		incbin okta.im
+p60data			incbin p61a.im
+hippelcosodata		incbin hippelcoso.im
+digidata		incbin digi.im
+thxdata			incbin thx.im
+sampledata		incbin sampleplay.im
+aondata			incbin aon4.im
+dbprodata		incbin dbpro.im
+pumatrackerdata		incbin pumatracker.im
 gamemusiccreatordata 	incbin gamemusiccreator.im
 digitalmugiciandata 	incbin mugiplayer.im
 medleydata 		incbin imploder.im
@@ -159,5 +160,6 @@ futureplayerdata 	incbin future_player.im
 bendaglishdata		incbin bendaglish.im
 sidmon2data		incbin sidmon_v2.im
 deltamusic1data		incbin delta1.im
+soundfxdata		incbin soundfx.im
 pend
 
