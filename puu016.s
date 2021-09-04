@@ -531,8 +531,12 @@ vbsaatu		rs.b	1		* 1: saatiin vb intti
 
 prefs_task	rs.l	1		* prefs-prosessi
 
+* Prefs window will close if it receives this signal
 prefs_signal	rs.b	1		* prefs-signaali
+
+* Prefs window will update contents when receiving this
 prefs_signal2	rs.b	1		* prefs-signaali 2
+
 songHasEndedSignal	rs.b	1	* Kappale soinut
 ownsignal2	rs.b	1	* position update in title bar, prefs update 
 uiRefreshSignal	rs.b	1	* lootan p‰ivitys
@@ -4938,7 +4942,7 @@ printhippo2
 	moveq	#0,d0	
 	moveq	#0,d1
 	moveq	#126,d2
-	moveq	#14,d3
+	move	#14+(64/2),d3
 	moveq	#96,d4	
 	moveq	#66,d5
 
@@ -19953,7 +19957,6 @@ softint
 start_quad
 	st	scopeflag(a5)
 start_quad2
-;	bra	quad_code
 
 	move.l	a6,-(sp)
 	move.l	_DosBase(a5),a6
@@ -20803,14 +20806,14 @@ quad_code
 
 
 * Piirtoalueet
-	move.l	#320/8*72*2,d0
+	move.l	#320/8*(72+64)*2,d0
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
 	jsr	getmem
 	beq.b	.me
 	move.l	d0,buffer0(a5)
 	add.l	#320/8*2,d0		* yl‰‰lle 2 vararivi‰
 	move.l	d0,buffer1(a5)
-	add.l	#320/8*70,d0
+	add.l	#320/8*(70+64),d0
 	move.l	d0,buffer2(a5)		* alaalle 4 
 
 
@@ -20866,13 +20869,13 @@ quad_code
 	moveq	#4,d0
 	moveq	#11,d1
 	move	#335,d2
-	moveq	#82,d3
+	move	#82+64,d3
 	bsr.w	drawtexture
 
 	moveq	#8,d0
 	moveq	#13,d1
 	move	#323,d4
-	moveq	#67,d5
+	move	#67+64,d5
 	moveq	#$0a,d6
 	move.l	rastport3(a5),a0
 	move.l	a0,a1
@@ -20889,14 +20892,14 @@ quad_code
 	lea	omabitmap(a5),a0
 	moveq	#1,d0
 	move	#320,d1
-	moveq	#66,d2
+	move	#66+64,d2
 	lore	GFX,InitBitMap
 	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
  
 	moveq	#7,plx1
 	move	#332,plx2
 	moveq	#13,ply1
-	moveq	#80,ply2
+	move	#80+64,ply2
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -20906,7 +20909,7 @@ quad_code
 
 	move.l	buffer1(a5),draw1(a5)
 	move.l	buffer2(a5),draw2(a5)
-	moveq	#3*40,d0
+	moveq	#3*40,d0 	* 3 vertical lines
 	add.l	d0,draw1(a5)
 	add.l	d0,draw2(a5)
 
@@ -20993,7 +20996,7 @@ scopeLoop
 	moveq	#10,d0
 	moveq	#14,d1
 	move	#330,d2
-	moveq	#79,d3
+	move	#79+64,d3
 	add	windowleft(a5),d0
 	add	windowleft(a5),d2
 	add	windowtop(a5),d1
@@ -21264,7 +21267,7 @@ drawScope
 	move.l	draw2(a5),$54-$58(a0)	* clear draw area
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
-	move	#64*64+20,(a0)
+	move	#(64+64)*64+20,(a0)
 
 	lob	DisownBlitter
 
@@ -21350,7 +21353,7 @@ drawScope
 .33	bsr.w	freqscope
 	bra.b	.cont
 .44	bsr.w	multiscopefilled
-	bsr.b	mirrorfill
+	bsr.w	mirrorfill
 .cont
 
 	* double buffer
@@ -21372,7 +21375,7 @@ drawScope
 	add	windowtop(a5),d3
 	move	#$c0,d6		* minterm, suora kopio a->d
 	move	#320,d4		* x-koko
-	moveq	#64,d5		* y-koko
+	move	#64+64,d5	* y-koko
 
 
 	cmp	#pt_sample,playertype(a5)
@@ -22147,10 +22150,17 @@ notescroller
 
 *** viiva
 	move.l	draw1(a5),a0
-	lea	7*40+2*8*40(a0),a0
+	* two vertical positions
+	lea	23*40(a0),a0
+	lea	(4*8)*40(a0),a0
+	* 19 times 16 pixels horizontally
 	moveq	#19-1,d0
-.raita	or	#$aaaa,(a0)+
-	or	#$aaaa,8*40-2(a0)
+	move	#$aaaa,d1
+.raita	
+	* put 16 pixels here
+	or	d1,(a0)+
+	* ...and 8 pixels below
+	or	d1,8*40-2(a0)
 	dbf	d0,.raita
 
 
@@ -22172,19 +22182,15 @@ notescroller
 
 
 	move	ch1+ns_tempvol(a5),d0	
-;	move.l	ch1+ns_start(a5),a0
 	moveq	#2,d1
 	bsr.b	.palkki
 	move	ch2+ns_tempvol(a5),d0	
-;	move.l	ch2+ns_start(a5),a0
 	moveq	#11,d1
 	bsr.b	.palkki
 	move	ch3+ns_tempvol(a5),d0	
-;	move.l	ch3+ns_start(a5),a0
 	moveq	#20,d1
 	bsr.b	.palkki
 	move	ch4+ns_tempvol(a5),d0	
-;	move.l	ch4+ns_start(a5),a0
 	moveq	#29,d1
 	bsr.b	.palkki
 
@@ -22206,6 +22212,7 @@ notescroller
 	bsr.b	.palkki2
 
 .ohi
+	* animate the volume bars towards bottom
 	lea	ch1(a5),a0
 	moveq	#4-1,d0
 .orl	tst	ns_tempvol(a0)
@@ -22222,20 +22229,19 @@ notescroller
 ***** Volumepalkgi
 
 .palkki
-;	move.b	(a0),d0
-;	sub.b	#$80,d0
-;	and	#$ff,d0
-;	mulu	kplbase+k_mastervolume(a5),d0
-;	lsr	#8,d0
-
 	mulu	kplbase+k_mastervolume(a5),d0
 	lsr	#6,d0
 
 	move.l	draw1(a5),a0
-	lea	64*40(a0),a0
+	* horizontal position
 	add	d1,a0
-	lea	.paldata(pC),a1
+	* move to bottom
+	move	.noteScrollerLines(pc),d1
+	lsl	#3,d1
+	mulu	#40,d1
+	add.l	d1,a0
 
+	lea	.paldata(pC),a1
 	moveq	#-2,d2
 	subq	#1,d0
 	bmi.b	.yg
@@ -22256,9 +22262,15 @@ notescroller
 	moveq	#0,d0
 	move	ns_period(a3),d0
 	beq.b	.h
+	* range is 108 - 907
 	sub	#108,d0
-	lsl	#1,d0
-	divu	#27,d0		* lukualueeksi 0-59
+
+	* this many vertical pixels
+	move	.noteScrollerLines(pc),d3
+	lsl	#3,d3
+	subq	#5,d3
+	mulu	d3,d0
+	divu	#907-108,d0
 
 	move.l	draw1(a5),a0
 	lea	multab(a5),a1
@@ -22300,7 +22312,11 @@ notescroller
 
 **************** Piirret‰‰n patterndata
 
+.noteScrollerLines	dc	16
+.noteScrollerLinesHalf	dc	8
+ 
 .notescr
+	pushm	a5/a6
 
 	lea	kplbase(a5),a0
 	move.l	k_songdataptr(a0),a3
@@ -22316,33 +22332,46 @@ notescroller
 	move.l	draw1(a5),a4
 	addq	#3,a4
 
-	moveq	#8-1,d7
+	* draw this many lines
+	move	.noteScrollerLines(pc),d7
+	subq	#1,d7 * dbf
 	move	k_patternpos(a0),d6	* eka rivi?
 
+	* figure out where to place the first line
 	move	d6,d0
-	subq	#4,d0
+	; move the cursor in the middle
+	sub	.noteScrollerLinesHalf(pc),d0
 	bpl.b	.ok
 	neg	d0
 	sub	d0,d7
 
-	moveq	#4,d1
+	move	.noteScrollerLinesHalf(pc),d1
 	sub	d0,d1
 	sub	d1,d6
 	lsl	#4,d1
 	sub	d1,a3
 
+	; vertical position in target 
 	mulu	#8*40,d0
 	add.l	d0,a4
 
 	bra.b	.ok2
 .ok
-	lea	-4*16(a3),a3
-	subq	#4,d6
+	move	.noteScrollerLinesHalf(pc),d0
+	lsl	#4,d0
+	sub	d0,a3
+	sub	.noteScrollerLinesHalf(pc),d6
 .ok2
 
+	* store font data into a2 and d4 for fast access later
+	move.l	topazbase(a5),a2
+	move	38(a2),d4		* font modulo
+	move.l	34(a2),a2		* data
 
-
+	* vertical loop
+	* line loop
 .plorl
+	* print linenumber
 	lea	.pos(pc),a0		* rivinumero
 	move	d6,d0
 	divu	#10,d0
@@ -22357,90 +22386,23 @@ notescroller
 	moveq	#2-1,d1
 	bsr.w	.print
 
+	* horizontal loop
+	* print 4 horizontal notes	
 	moveq	#4-1,d5
 .plorl2
-
-	lea	.note(pc),a2
+	* builds a one note text here
+	lea	.note(pc),a0
 
 	moveq	#0,d0
 	move.b	2(a3),d0
 	bne.b	.jee
-	move.b	#' ',(a2)+
-	move.b	#' ',(a2)+
-	move.b	#' ',(a2)+
+	* empty note
+	move	#'  ',(a0)+
+	move.b	#' ',(a0)+
 	bra.b	.nonote
-.jee
-	subq	#1,d0
-	divu	#12*2,d0
-	addq	#1,d0
-	or.b	#'0',d0
-	move.b	d0,2(a2)
-	swap	d0
-	lea	.notes(pc),a1
-	lea	(a1,d0),a0
-	move.b	(a0)+,(a2)+		* Nuotti
-	move.b	(a0)+,(a2)+
-	addq	#1,a2
-.nonote
 
-	moveq	#0,d0			* samplenumero
-	move.b	3(a3),d0
-	bne.b	.onh
-	move.b	#' ',(a2)+
-	move.b	#' ',(a2)+
-	bra.b	.eihn
-.onh
-
-	lsr	#2,d0
-	divu	#$10,d0
-	bne.b	.onh2
-	move.b	#' ',(a2)+
-	bra.b	.eihn2
-.onh2	or.b	#'0',d0
-	move.b	d0,(a2)+
-.eihn2	swap	d0
-	bsr.b	.hegs
-.eihn
-
-	move.b	(a3),d0			* komento
-	lsr.b	#2,d0
-	bsr.b	.hegs
-	moveq	#0,d0
-	move.b	1(a3),d0
-	divu	#$10,d0
-	bsr.b	.hegs
-	swap	d0
-	bsr.b	.hegs
-
-
-	move.l	a4,a1
-	lea	.note(pc),a0
-	moveq	#8-1,d1
-	bsr.b	.print
-
-
-	addq	#4,a3
-	add	#9,a4
-	dbf	d5,.plorl2
-
-	add	#8*40-4*9,a4
-	addq	#1,d6
-	cmp	#64,d6
-	beq.b	.lorl
-	dbf	d7,.plorl
-.lorl
-	rts
-
-
-.hegs	cmp.b	#9,d0
-	bhi.b	.high1
-	or.b	#'0',d0
-	bra.b	.hge
-.high1	sub.b	#10,d0
-	add.b	#'A',d0
-.hge	move.b	d0,(a2)+
-	rts
-
+* notes table is here so that a shorter
+* access can be used below
 .notes	dc.b	"C-"
 	dc.b	"C#"
 	dc.b	"D-"
@@ -22453,36 +22415,134 @@ notescroller
 	dc.b	"A-"
 	dc.b	"A#"
 	dc.b	"B-"
+ 	even
+
+.jee
+	* calculate octave number
+	subq	#1,d0
+	divu	#12*2,d0
+	addq	#1,d0
+	or.b	#'0',d0
+	move.b	d0,2(a0)
+	* figure out note text
+	swap	d0
+	* two chars
+	move	.notes(pc,d0.w),(a0)+
+	* skip over octave number 
+	addq	#1,a0
+.nonote
+
+	moveq	#0,d0			* samplenumero
+	move.b	3(a3),d0
+	bne.b	.onh
+	* a0 is odd here
+	move.b	#' ',(a0)+
+	move.b	#' ',(a0)+
+	bra.b	.eihn
+.onh
+	* sample number pre-multiplied by 4
+	lsr	#2,d0
+	move	d0,d1
+	* get the upper digit
+	lsr	#4,d1
+	bne.b	.onh2
+	move.b	#' ',(a0)+
+	bra.b	.eihn2
+.onh2	or.b	#'0',d1
+	move.b	d1,(a0)+
+.eihn2	
+	* lower digit
+	and.b	#$f,d0
+	bsr.b	.hegs
+.eihn
+
+	move.b	(a3),d0	* command, premultiplied
+	lsr.b	#2,d0
+	bsr.b	.hegs
+	move.b	1(a3),d0 * command parameter
+	move.b	d0,d1
+	lsr.b	#4,d0	* upper char
+	bsr.b	.hegs
+	moveq	#$f,d0	* lower char
+	and.b	d1,d0
+	bsr.b	.hegs
+
+	* print 8 chars
+	* a4 = destination bufer
+	move.l	a4,a1
+	lea	.note(pc),a0
+	moveq	#8-1,d1
+	bsr.b	.print
+
+	* next note
+	addq	#4,a3
+	* next horizontal position
+	add	#9,a4
+	dbf	d5,.plorl2
+
+	* next vertical position
+	add	#8*40-4*9,a4
+	* next pattern line, check if at the end
+	addq	#1,d6
+	cmp	#64,d6
+	dbeq d7,.plorl
+
+	popm	a5/a6
+	
+	rts
+
+* convert decimal number 0-9 into ASCII char
+.hegs	cmp.b	#9,d0
+	bhi.b	.high1
+	or.b	#'0',d0
+	move.b	d0,(a0)+
+	rts
+.high1	sub.b	#10,d0
+	add.b	#'A',d0
+	move.b	d0,(a0)+
+	rts
 
 .note	dc.b	"00000000"
 .pos	dc.b	"00"
  even
 
 .print
-	pushm	a3-a4
-	move.l	topazbase(a5),a2
-	;move.l	fontbase(a5),a2
-	move	38(a2),d2		* font modulo
-	move.l	34(a2),a2		* data
-
-	moveq	#40,d4
+	* a2 contains font data
+	* d4 contains font modulo
 	
-.ooe	moveq	#0,d0
+	* space char
+	moveq	#$20,d3
+
+	* get one char to print
+	moveq	#0,d0
+.ooe	
 	move.b	(a0)+,d0
-	cmp.b	#$20,d0
+	cmp.b	d3,d0
 	beq.b	.space
-	lea	-$20(a2,d0),a3
-	move.l	a1,a4
+	* get char pixels
+	lea	-$20(a2,d0),a6
 
-	moveq	#8-1,d3
-.lin	move.b	(a3),(a4)	
-	add	d2,a3
-	add	d4,a4
-	dbf	d3,.lin
-
-.space	addq	#1,a1
+	* do 8 pixels height
+ 	move.b	(a6),(a1)	
+	add	d4,a6
+	move.b	(a6),1*40(a1)	
+	add	d4,a6
+	move.b	(a6),2*40(a1)	
+	add	d4,a6
+	move.b	(a6),3*40(a1)	
+	add	d4,a6
+	move.b	(a6),4*40(a1)	
+	add	d4,a6
+	move.b	(a6),5*40(a1)	
+	add	d4,a6
+	move.b	(a6),6*40(a1)	
+	add	d4,a6
+	move.b	(a6),7*40(a1)	
+ 
+.space	
+	* go to next horiz position
+	addq	#1,a1
 	dbf	d1,.ooe
-	popm	a3-a4
 	rts
 
 	
@@ -34193,7 +34253,7 @@ wreg2
 winstruc3
 	dc	259
 	dc	157
-quadsiz	dc	340,85
+quadsiz	dc	340,85+64
 	dc.b	2,1	;palkin v‰rit
 	dc.l	idcmpflags3
 	dc.l	wflags3
