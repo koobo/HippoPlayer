@@ -27272,6 +27272,15 @@ exportFavoriteModulesToDisk
 	DPRINT	"exportFavoriteModulesToDisk",1
 	tst.b	favorites(a5)
 	beq.b	.x
+
+	* User is exiting while in fav mode?
+	isListInFavoriteMode
+	beq.b	.normalMode
+	move.b	moduleListChanged(a5),d0 
+	clr.b	moduleListChanged(a5)
+	or.b	d0,favoriteListChanged(a5)
+.normalMode
+
 	tst.b	favoriteListChanged(a5)
 	beq.b	.x
 	lea	favoriteModuleFileName(pc),a0
