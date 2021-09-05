@@ -707,7 +707,6 @@ s3mmode3	rs.b	1		* Volume boost
 stereofactor	rs.b	1		* stereofactor
 xfd		rs.b	1		* ~0: k‰ytet‰‰n xfdmaster.libb°‰
 ps3mb		rs.b	1
-timeoutmode	rs.b	1
 
 QUADMODE_QUADRASCOPE = 0
 QUADMODE_HIPPOSCOPE = 1
@@ -728,6 +727,7 @@ quadWindowHeightOriginal	rs.l	1
 quadNoteScrollerLinesHalf	rs.w	1
 quadNoteScrollerLines		rs.l	1
 
+timeoutmode	rs.b	1
 filterstatus	rs.b	1		* filtterin 
 modulefilterstate rs.b	1		* ..
 ptmix		rs.b	1		* 0: normi ptreplay, 1:mixireplay
