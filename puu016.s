@@ -708,8 +708,26 @@ stereofactor	rs.b	1		* stereofactor
 xfd		rs.b	1		* ~0: k‰ytet‰‰n xfdmaster.libb°‰
 ps3mb		rs.b	1
 timeoutmode	rs.b	1
+
+QUADMODE_QUADRASCOPE = 0
+QUADMODE_HIPPOSCOPE = 1
+QUADMODE_FREQANALYZER = 2
+QUADMODE_PATTERNSCOPE = 3
+QUADMODE_FQUADRASCOPE = 4
+QUADMODE_PATTERNSCOPEXL = 5
+
+* Scope mode
 quadmode	rs.b	1		* scopemoodi
+* Modified scope mode internally used in scopes for jumptables
 quadmode2	rs.b	1		
+
+* Store the original window height to switch between
+* large and normal height mode
+quadWindowHeightOriginal	rs.l	1
+* Pattern scope configuration parameters for normal and large mode
+quadNoteScrollerLinesHalf	rs.w	1
+quadNoteScrollerLines		rs.l	1
+
 filterstatus	rs.b	1		* filtterin 
 modulefilterstate rs.b	1		* ..
 ptmix		rs.b	1		* 0: normi ptreplay, 1:mixireplay
@@ -4185,6 +4203,7 @@ getscreeninfo
 	add	d3,prefssiz+2
 	add	d3,quadsiz+2
 	add	d3,swinsiz+2
+	move	quadsiz+2,quadWindowHeightOriginal(a5)
 
 	move	WINSIZX(a5),wsizex
 	move	WINSIZY(a5),wsizey
@@ -4944,7 +4963,11 @@ printhippo2
 	moveq	#0,d0	
 	moveq	#0,d1
 	moveq	#126,d2
-	move	#14+(64/2),d3
+	move	#14,d3
+	jsr	scopeIsNormal
+	bne.b	.normal
+	add	#64/2,d3
+.normal
 	moveq	#96,d4	
 	moveq	#66,d5
 
@@ -13129,7 +13152,7 @@ rquadm
 	and.b	#$80,d1
 
 	addq.b	#1,d0
-	cmp.b	#4,d0
+	cmp.b	#5,d0
 	ble.b	.k
 	clr.b	d0
 .k	or.b	d1,d0
@@ -13151,18 +13174,22 @@ psup3
 	subq.b	#1,d0
 	beq.b	.q
 	lea	ls05(pc),a0
+	subq.b	#1,d0
+	beq.b	.q
+	lea	ls06(pc),a0
 .q
 	lea	pout3,a1
 	bsr.w	prunt
 	bra.b	quadu
 
 
-ls00	dc.b	14,5
+ls00	dc.b	14,6
 ls01	dc.b	"Quadrascope",0
 ls02	dc.b	"Hipposcope",0
 ls03	dc.b	"Freq. analyzer",0
 ls04	dc.b	"Patternscope",0
 ls05	dc.b	"F. Quadrascope",0
+ls06	dc.b	"PatternscopeXL",0
  even
 
 rscopebar
@@ -20655,6 +20682,19 @@ wflags3 set WFLG_SMART_REFRESH!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags3 set wflags3!WFLG_RMBTRAP
 idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS
 
+QUADMODE2_QUADRASCOPE = 0
+QUADMODE2_QUADRASCOPE_BARS = 1
+QUADMODE2_HIPPOSCOPE = 2
+QUADMODE2_HIPPOSCOPE_BARS = 3
+QUADMODE2_FREQANALYZER = 4
+QUADMODE2_FREQANALYZER_BARS = 5
+QUADMODE2_PATTERNSCOPE = 6
+QUADMODE2_PATTERNSCOPE_BARS = 7
+QUADMODE2_FQUADRASCOPE = 8
+QUADMODE2_FQUADRASCOPE_BARS = 9
+QUADMODE2_PATTERNSCOPEXL = 10
+QUADMODE2_PATTERNSCOPEXL_BARS = 11
+
 quad_code
 	lea	var_b,a5
 	clr.l	mtab(a5)
@@ -20673,9 +20713,13 @@ quad_code
 	cmp.l	a1,a0
 	bne.b	.cl
 
-	* quadmode2 is copy of the quadmode which is user selected in prefs
-	
-	* TODO: what is this code doing?
+ if DEBUG
+	moveq	#0,d0 
+	move.b	quadmode(a5),d0
+	DPRINT	"Quad mode: %lx",1
+ endif
+	* This creates a jumptable compatible value out of quadmode,
+	* where bit 8 indicates "bars enabled"
 	move.b	quadmode(a5),d0
 	move.b	d0,d1
 	and	#$f,d1
@@ -20696,10 +20740,12 @@ quad_code
 	jmp	.4(pc)		* hipposcope bars
 	jmp	.5(pc)		* freq. analyzer
 	jmp	.6(pc)		* freq. analyzer bars
-	jmp	.cont(pc)	* patternscope
-	jmp	.cont(pc)	* patternscope bars (ei oo!)
+	jmp	.patternScopeNormal(pc)	* patternscope
+	jmp	.patternScopeNormal(pc)	* patternscope bars (ei oo!)
 	jmp	.7(pc)		* filled quadrascope
 	jmp	.8(pc)		* filled quadrascope & bars
+	jmp	.patternScopeXL(pc)	* patternscope xl
+	jmp	.patternScopeXL(pc)	* patternscope xl bars (no bars available though)
 
 
 .7	moveq	#-1,d7
@@ -20760,7 +20806,7 @@ quad_code
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
-	bra.b	.cont
+	bra.w	.cont
 
 .delt	move.l	#(256+32)*4,d0
 	move.l	#MEMF_CLEAR,d1
@@ -20786,44 +20832,51 @@ quad_code
 	beq.w	.memer
 	bra.w	.wo
 
-.cont
-	
-;	lea	ls01(pc),a0
-;	move.b	quadmode2(a5),d0
-;	lsr.b	#1,d0
-;	beq.b	.ti
-;	lea	ls02(pc),a0
-;	subq.b	#1,d0
-;	beq.b	.ti
-;	lea	ls03(pc),a0
-;	subq.b	#1,d0
-;	beq.b	.ti
-;	lea	ls04(pc),a0	
-;	subq.b	#1,d0
-;	beq.b	.ti
-;	lea	ls05(pc),a0	
-;.ti	move.l	a0,quadtitl
+.patternScopeNormal
+	move	#8,quadNoteScrollerLines(a5)
+	move	#4,quadNoteScrollerLinesHalf(a5)
+	bra.b	.cont
+.patternScopeXL
+	move	#16,quadNoteScrollerLines(a5)
+	move	#8,quadNoteScrollerLinesHalf(a5)
+	;bra.b	.cont
 
-	
+.cont
+		
 
 
 * Piirtoalueet
+	move.l	#320/8*(72)*2,d0
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge
 	move.l	#320/8*(72+64)*2,d0
+.notLarge
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
 	jsr	getmem
 	beq.b	.me
 	move.l	d0,buffer0(a5)
 	add.l	#320/8*2,d0		* yl‰‰lle 2 vararivi‰
 	move.l	d0,buffer1(a5)
-	add.l	#320/8*(70+64),d0
+	add.l	#320/8*(70),d0
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge2
+	add.l	#320/8*(64),d0
+.notLarge2
 	move.l	d0,buffer2(a5)		* alaalle 4 
-
 
 .gurgle
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc3,a0
+	* Restore top/left to some previous used value
 	move.l	quadpos(a5),(a0)
+
+	move	quadWindowHeightOriginal(a5),d0
+	bsr.w	scopeIsNormal
+	bne.b	.normSize
+	add	#64,d0
+.normSize
+	move	d0,nw_Height(a0)
 
 	move	wbleveys(a5),d0		* WB:n leveys
 	move	(a0),d1			* Ikkunan x-paikka
@@ -20871,13 +20924,21 @@ quad_code
 	moveq	#4,d0
 	moveq	#11,d1
 	move	#335,d2
-	move	#82+64,d3
+	move	#82,d3
+	bsr	scopeIsNormal
+	bne.b	.notLarge3
+	add	#64,d3
+.notLarge3
 	bsr.w	drawtexture
 
 	moveq	#8,d0
 	moveq	#13,d1
 	move	#323,d4
-	move	#67+64,d5
+	move	#67,d5
+	bsr	scopeIsNormal
+	bne.b	.notLarge4
+	add	#64,d5
+.notLarge4
 	moveq	#$0a,d6
 	move.l	rastport3(a5),a0
 	move.l	a0,a1
@@ -20894,14 +20955,22 @@ quad_code
 	lea	omabitmap(a5),a0
 	moveq	#1,d0
 	move	#320,d1
-	move	#66+64,d2
+	move	#66,d2
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge5
+	add	#64,d2
+.notLarge5
 	lore	GFX,InitBitMap
 	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
  
 	moveq	#7,plx1
 	move	#332,plx2
 	moveq	#13,ply1
-	move	#80+64,ply2
+	move	#80,ply2
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge6
+	add 	#64,ply2
+.notLarge6
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -20998,7 +21067,11 @@ scopeLoop
 	moveq	#10,d0
 	moveq	#14,d1
 	move	#330,d2
-	move	#79+64,d3
+	move	#79,d3
+	bsr.w 	scopeIsNormal
+	bne.b	.notLarge7
+	add 	#64,d3
+.notLarge7
 	add	windowleft(a5),d0
 	add	windowleft(a5),d2
 	add	windowtop(a5),d1
@@ -21093,11 +21166,15 @@ scopeinterrupt				* a5 = var_b
 	move	n_tempvol(a2),ns_tempvol2(a0)
 	addq	#1,a3
 
-	cmp.b	#6,quadmode2(a5)	* Patternscope?
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)	
 	beq.b	.eq
-	cmp.b	#7,quadmode2(a5)	* Patternscope??
+	cmp.b	#QUADMODE2_PATTERNSCOPE_BARS,quadmode2(a5)
 	beq.b	.eq
-
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)	
+	beq.b	.eq
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
+	beq.b	.eq
+	
 	move	n_tempvol(a2),ns_tempvol(a0)
 
 .eq	lea	n_sizeof(a2),a2
@@ -21131,7 +21208,18 @@ scopeinterrupt				* a5 = var_b
 	add.l	d0,(a0)
 .nn
 	rts
-	
+
+* Check if scope is in normal sized mode.
+* Z is clear it true, Z set if false
+* 1: true
+* 0: false
+scopeIsNormal
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	beq.b	.large
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
+	;beq.b	.large
+.large
+	rts
 
 
 
@@ -21269,14 +21357,22 @@ drawScope
 	move.l	draw2(a5),$54-$58(a0)	* clear draw area
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge
 	move	#(64+64)*64+20,(a0)
+	bra.b	.large
+.notLarge
+	move	#(64+0)*64+20,(a0)
+.large
 
 	lob	DisownBlitter
 
 	cmp	#pt_sample,playertype(a5)
 	bne.b	.toot
-	cmp.b	#8,quadmode2(a5)	* filled? 8 tai 9
-	bhs.b	.fil
+	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
+	beq.b	.fil
+	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,quadmode2(a5)	
+	beq.b	.fil
 	bsr.w	samplescope
 	bra.w	.cont
 .fil
@@ -21294,17 +21390,19 @@ drawScope
 	beq.b	.ttt
 	jmp	.t(pc,d0)
 
-.t	bra.b	.1
+* protracker jump table
+.t	bra.b	.1 * quad
 	bra.b	.3
-	bra.b	.2
+	bra.b	.2 * hippo
 	bra.b	.4
-	bra.b	.5
+	bra.b	.5 * freq
 	bra.b	.6
+	bra.b	.7 * pattern
 	bra.b	.7
-	bra.b	.7
-	bra.b	.8
+	bra.b	.8 * fquad
 	bra.b	.9
-
+	bra.b	.7 * pattern xl
+	bra.b	.7
 
 .1	bsr.w	quadrascope
 	bra.w	.cont
@@ -21336,17 +21434,20 @@ drawScope
 	bsr.w	lever
 	bra.b	.cont
 
+* multichannel jump table
 .ttt	jmp	.tt(pc,d0)
-.tt	bra.b	.11
+.tt	bra.b	.11 * quad
 	bra.b	.11
+	bra.b	.22 * hipp
 	bra.b	.22
-	bra.b	.22
+	bra.b	.33 * freq
 	bra.b	.33
-	bra.b	.33
+	bra.b	.11 * patt
 	bra.b	.11
+	bra.b	.44 * fquad
+	bra.b	.44
+	bra.b	.11 * patt
 	bra.b	.11
-	bra.b	.44
-	bra.b	.44
 
 .22	bsr.w	multihipposcope
 	bra.b	.cont
@@ -21377,17 +21478,20 @@ drawScope
 	add	windowtop(a5),d3
 	move	#$c0,d6		* minterm, suora kopio a->d
 	move	#320,d4		* x-koko
-	move	#64+64,d5	* y-koko
-
+	move	#64,d5	* y-koko
+	bsr.w	scopeIsNormal
+	bne.w	.notLarge0
+	add	#64,d5
+.notLarge0
 
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.joa
 
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.jaa
-	cmp.b	#1,quadmode2(a5)
+	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
 	bls.b	.joa
-	cmp.b	#6,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
 	blo.b	.jaa
 .joa	addq	#4,d0
 	subq	#4,d4
@@ -21395,11 +21499,13 @@ drawScope
 .jaa
 
 
-	cmp.b	#8,quadmode2(a5)
+	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
 	bhs.b	.jaoww
-	cmp.b	#6,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
 	blo.b	.jaow
-.jaoww	addq	#1,d2
+.jaoww
+	* TODO: MAGIC adjustments?	
+	addq	#1,d2
 	subq	#1,d4
 .jaow
 
@@ -22154,7 +22260,10 @@ notescroller
 	move.l	draw1(a5),a0
 	* two vertical positions
 	lea	23*40(a0),a0
+	bsr 	scopeIsNormal
+	bne.b	.normal
 	lea	(4*8)*40(a0),a0
+.normal
 	* 19 times 16 pixels horizontally
 	moveq	#19-1,d0
 	move	#$aaaa,d1
@@ -22238,7 +22347,7 @@ notescroller
 	* horizontal position
 	add	d1,a0
 	* move to bottom
-	move	.noteScrollerLines(pc),d1
+	move	quadNoteScrollerLines(a5),d1
 	lsl	#3,d1
 	mulu	#40,d1
 	add.l	d1,a0
@@ -22268,7 +22377,7 @@ notescroller
 	sub	#108,d0
 
 	* this many vertical pixels
-	move	.noteScrollerLines(pc),d3
+	move	quadNoteScrollerLines(a5),d3
 	lsl	#3,d3
 	subq	#5,d3
 	mulu	d3,d0
@@ -22314,8 +22423,6 @@ notescroller
 
 **************** Piirret‰‰n patterndata
 
-.noteScrollerLines	dc	16
-.noteScrollerLinesHalf	dc	8
  
 .notescr
 	pushm	a5/a6
@@ -22335,19 +22442,19 @@ notescroller
 	addq	#3,a4
 
 	* draw this many lines
-	move	.noteScrollerLines(pc),d7
+	move	quadNoteScrollerLines(a5),d7
 	subq	#1,d7 * dbf
 	move	k_patternpos(a0),d6	* eka rivi?
 
 	* figure out where to place the first line
 	move	d6,d0
 	; move the cursor in the middle
-	sub	.noteScrollerLinesHalf(pc),d0
+	sub	quadNoteScrollerLinesHalf(a5),d0
 	bpl.b	.ok
 	neg	d0
 	sub	d0,d7
 
-	move	.noteScrollerLinesHalf(pc),d1
+	move	quadNoteScrollerLinesHalf(a5),d1
 	sub	d0,d1
 	sub	d1,d6
 	lsl	#4,d1
@@ -22359,10 +22466,10 @@ notescroller
 
 	bra.b	.ok2
 .ok
-	move	.noteScrollerLinesHalf(pc),d0
+	move	quadNoteScrollerLinesHalf(a5),d0
 	lsl	#4,d0
 	sub	d0,a3
-	sub	.noteScrollerLinesHalf(pc),d6
+	sub	quadNoteScrollerLinesHalf(a5),d6
 .ok2
 
 	* store font data into a2 and d4 for fast access later
@@ -34366,7 +34473,7 @@ wreg2
 winstruc3
 	dc	259
 	dc	157
-quadsiz	dc	340,85+64
+quadsiz	dc	340,85
 	dc.b	2,1	;palkin v‰rit
 	dc.l	idcmpflags3
 	dc.l	wflags3
