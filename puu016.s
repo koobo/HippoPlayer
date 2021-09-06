@@ -8989,7 +8989,11 @@ rbutton1
 .je
 	cmp.l 	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
-
+	* special case: some delicustoms, SUNTronic modules,
+	* can't handle being started over, to be save
+	* load these modules again before restarting.
+	cmp	    #pt_delicustom,playertype(a5)
+	beq.b	.new
 .early
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
@@ -8999,7 +9003,7 @@ rbutton1
 	lore	Exec,Disable
 	bsr.w	halt
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
+	jsr	p_end(a0)
 	lore    Exec,Enable
 	move	(sp)+,mainvolume(a5)
 
@@ -24162,7 +24166,7 @@ loadfile
 	bsr.w	inforivit_fimpdecr
 
 	move.l	lod_address(a5),a0
-	bsr.w	fimp_decr	
+	jsr	fimp_decr	
 	bra.w	.exit
 
 .wasnt_fimp
@@ -24455,7 +24459,7 @@ loadfile
         beq.b   .nofast
 
 .publl  move.l   #MEMF_PUBLIC!MEMF_CLEAR,d0
-		DPRINT	"Loading to PUBLIC memory",1
+	DPRINT	"Loading to PUBLIC memory",11
 
 .osd    move.l  d0,lod_memtype(a5)
 .nofast rts
@@ -33326,7 +33330,7 @@ p_delicustom
 	rts
 
 * Build the DeliBase structure, this is not a complete version.
-
+ 
 .buildDeliBase
 	lea	deliBase,a0
 	lea	deliBaseLength(a0),a1
@@ -33335,6 +33339,37 @@ p_delicustom
 	cmp.l	a0,a1 
 	bne.b .clrBase
 	lea	deliBase,a0
+
+	push a0
+	jsr	getcurrent 
+	pop a0
+	
+	* a3 = node
+	* Grab path and file parts
+	move.l	l_nameaddr(a3),a1
+	move.l	a1,dtg_FileArrayPtr(a0)
+	lea	l_filename(a3),a2
+	lea	deliPath,a3
+	move.l	a3,dtg_DirArrayPtr(a0)
+.copy	move.b	(a2)+,(a3)+
+	cmp.l	a2,a1
+	bne.b	.copy
+	clr.b	(a3)		
+
+	lea	deliPathArray,a1
+	move.l	a1,dtg_PathArrayPtr(a0)
+	clr.b	(a1)
+	lea	deliPathArrayLength(a1),a2
+.clr	clr.b	(a1)+
+	cmp.l 	a2,a1
+	bne.b	.clr
+
+ if DEBUG
+	move.l	dtg_FileArrayPtr(a0),d0
+	DPRINT	"File %s",501
+	move.l	dtg_DirArrayPtr(a0),d0
+	DPRINT	"Dir %s",502
+ endif
 
 	move.l	_DosBase(a5),dtg_DOSBase(a0)
 	move.l	_IntuiBase(a5),dtg_IntuitionBase(a0)
@@ -33356,7 +33391,6 @@ p_delicustom
 	move.l	(sp)+,dtg_AudioFree(a0)
 	pea	dmawait(pc)
 	move.l	(sp)+,dtg_WaitAudioDMA(a0)
-
 	pea	.startInt(pc)
 	move.l	(sp)+,dtg_StartInt(a0)
 	pea	.stopInt(pc)
@@ -33365,45 +33399,30 @@ p_delicustom
 	move.l	(sp)+,dtg_SongEnd(a0)	* may be called from interrupt
 	pea	.setTimer(pc)
 	move.l	(sp)+,dtg_SetTimer(a0)	* may be called from interrupt
+	pea	.allocListData(pc)
+	move.l	(sp)+,dtg_AllocListData(a0)
+	pea	.freeListData(pc)
+	move.l	(sp)+,dtg_FreeListData(a0)
+	pea	.copyString(pc)
+	move.l	(sp)+,dtg_CopyString(a0)
+	pea	.copyFile(pc)
+	move.l	(sp)+,dtg_CopyFile(a0)
+	pea	.copyDir(pc)
+	move.l	(sp)+,dtg_CopyDir(a0)
+	pea	.loadFile(pc)
+	move.l	(sp)+,dtg_LoadFile(a0)
+	pea	.getListData(pc)
+	move.l	(sp)+,dtg_GetListData(a0)
+	pea	.cutSuffix(pc)
+	move.l	(sp)+,dtg_CutSuffix(a0)
 
-	* Lemmings uses CopyString and CopyFile. Not supported!
 
 	* Stub the rest
- if DEBUG
-	pea	.f1(pc)
-	move.l	(sp)+,dtg_LockScreen(a0)
-	pea	.f2(pc)
-	move.l	(sp)+,dtg_UnlockScreen(a0)
-	pea	.f3(pc)
-	move.l	(sp)+,dtg_NotePlayer(a0) 	* may be called from interrupt
-	pea	.f4(pc)
-	move.l	(sp)+,dtg_AllocListData(a0)
-	pea	.f5(pc)
-	move.l	(sp)+,dtg_FreeListData(a0)
-	pea	.f6(pc)
-	move.l	(sp)+,dtg_CopyString(a0)
-	pea	.f7(pc)
-	move.l	(sp)+,dtg_CopyFile(a0)
-	pea	.f8(pc)
-	move.l	(sp)+,dtg_CopyDir(a0)
-	pea	.f9(pc)
-	move.l	(sp)+,dtg_LoadFile(a0)
-	pea	.f10(pc)
-	move.l	(sp)+,dtg_GetListData(a0)
- else 
-	lea	.stub(pc),a1
+ 	lea	.stub(pc),a1
 	move.l	a1,dtg_LockScreen(a0)
 	move.l	a1,dtg_UnlockScreen(a0)
 	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
-	move.l	a1,dtg_AllocListData(a0)
-	move.l	a1,dtg_FreeListData(a0)
-	move.l	a1,dtg_CopyString(a0)
-	move.l	a1,dtg_CopyFile(a0)
-	move.l	a1,dtg_CopyDir(a0)
-	move.l	a1,dtg_LoadFile(a0)
-	move.l	a1,dtg_GetListData(a0)
- endif
-	rts
+ 	rts
 
 .allocAudio 
 	DELIDPRINT	"deliAudioAlloc",1102
@@ -33424,8 +33443,7 @@ p_delicustom
 
 .songEnd
 	* May be called from interrupt, no logging allowed
-	;DELIDPRINT	"deliSongEnd",3
-	;st		var_b+songover
+	st	var_b+songover
 	rts
 .setTimer
 	* May be called from interrupt, no logging allowed
@@ -33435,47 +33453,70 @@ p_delicustom
 	rts
 
 .startInt	
-	DELIDPRINT	"deliStartInt",1
+	DELIDPRINT 	"deliStartInt",1
 	moveq	#0,d0
 	rts
 .stopInt 
 	DELIDPRINT	"deliStopInt",2
 	moveq	#0,d0
 	rts
-
+.copyString move.l a0,d0
+	bsr.w	.appendStr
  if DEBUG
-.f1 DELIDPRINT	"f1",1101
-	moveq	#0,d0
-	rts
-.f2 DELIDPRINT	"f2",102
-	moveq	#0,d0
-	rts
-.f3 DELIDPRINT	"f3",103
-	moveq	#0,d0
-	rts
-.f4 DELIDPRINT	"f4",104
-	moveq	#0,d0
-	rts
-.f5 DELIDPRINT	"f5",105
-	moveq	#0,d0
-	rts
-.f6 DELIDPRINT	"f6",106
-	moveq	#0,d0
-	rts
-.f7 DELIDPRINT	"f7",107
-	moveq	#0,d0
-	rts
-.f8 DELIDPRINT	"f8",108
-	moveq	#0,d0
-	rts
-.f9 DELIDPRINT	"f9",109
-	moveq	#0,d0
-	rts
-.f10 DELIDPRINT	"f10",110
-	moveq	#0,d0
-	rts
+	move.l	#deliPathArray,d1
+	DELIDPRINT	"copyString %s path=%s",106
  endif
+	moveq	#0,d0
+	rts
+.copyFile 
+	move.l	dtg_FileArrayPtr(a5),a0
+	bsr.w	.appendStr
+ if DEBUG
+	move.l	#deliPathArray,d0
+	DELIDPRINT	"copyFile path=%s",107
+ endif
+	moveq	#0,d0
+	rts
+.copyDir 
+	move.l	dtg_DirArrayPtr(a5),a0
+	bsr.w	.appendStr
+ if DEBUG
+	move.l	#deliPathArray,d0
+	DELIDPRINT	"copyDir path=%s",108
+ endif
+	moveq	#0,d0
+	rts
+.loadFile move.l  a0,d0
+ if DEBUG
+	move.l	#deliPathArray,d1
+	DELIDPRINT	"loadFile %s path=%s",109
+ endif
+	moveq	#0,d0
+	rts
+.getListData DELIDPRINT	"getListData %d",110
+	moveq	#0,d0
+	rts
+.cutSuffix 
+	DELIDPRINT	"cutSuffix",201
+	moveq	#0,d0
+	rts
+.allocListData
+	DELIDPRINT	"allocListData",202
+	moveq	#0,d0
+	rts
+.freeListData
+	DELIDPRINT	"freeListData",203
+	moveq	#0,d0
+	rts
 
+.appendStr
+	move.l 	dtg_PathArrayPtr(a5),a1 
+.1	tst.b 	(a1)+
+	bne.b 	.1
+	subq	#1,a1
+.2	move.b 	(a0)+,(a1)+
+	bne.b 	.2
+	rts
 
  if DEBUG
 .showTags
@@ -35337,9 +35378,13 @@ var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
-* Use the same buffer in p_delicustom to store thedeliBase
+* Use the same buffer in p_delicustom to store the delibase
 deliBase	= ptheader
 deliBaseLength	= dtg_Reserved3
-
-
+* Also store the deli path stuff here
+* 100 bytes for module path
+deliPath	= ptheader+deliBaseLength 
+* Path manipuation array
+deliPathArray	= deliPath+100
+deliPathArrayLength = 200
  end
