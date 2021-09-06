@@ -827,7 +827,11 @@ markedline	rs.l	1	* merkitty rivi
 playingmodule	rs.l	1	* index of the module that is being played
 chosenmodule	rs.l	1	* index of the chosen module in the list
 
-groupmode	rs.b	1
+GROUPMODE_ALL_ON_STARTUP = 0
+GROUPMODE_ALL_ON_DEMAND = 1
+GROUPMODE_DISABLE = 2
+GROUPMODE_LOAD_SINGLE = 3
+groupmode	rs.b	1	* player group handling mode
 
 movenode	rs.b	1	* ~0: move p‰‰ll‰
 nodetomove	rs.l	1	* t‰t‰ nodea siirret‰‰n
@@ -24451,6 +24455,7 @@ loadfile
         beq.b   .nofast
 
 .publl  move.l   #MEMF_PUBLIC!MEMF_CLEAR,d0
+		DPRINT	"Loading to PUBLIC memory",1
 
 .osd    move.l  d0,lod_memtype(a5)
 .nofast rts
@@ -25046,10 +25051,10 @@ tutki_moduuli
 
 	tst.l	externalplayers(a5)	* ladataan playerit
 	bne.b	.rite
-	cmp.b	#2,groupmode(a5)	* onko disabled
+	cmp.b	#GROUPMODE_DISABLE,groupmode(a5)	* onko disabled
 	beq.w	.nopl
 
-	cmp.b	#3,groupmode(a5)	* tarpeen vaatiessa 1 replayeri?
+	cmp.b	#GROUPMODE_LOAD_SINGLE,groupmode(a5)	* tarpeen vaatiessa 1 replayeri?
 	bne.b	.rote
 	st	external(a5)		* Lippu!
 	bra.b	.rite
@@ -26774,7 +26779,7 @@ loadplayergroup
 * d1 = muistin tyyppi
 
 loadreplayer
-	DPRINT	"Load replayer",1
+	DPRINT	"Load single replayer",1
 	pushm	d1-d6/a0/a2-a6
 	move.l	d6,a4				* muistin tyyppi!
 
@@ -26785,6 +26790,7 @@ loadreplayer
 	move	playertype(a5),d0		* onko jo sama ladattuna?
 	cmp.b	xtype(a5),d0
 	bne.b	.jou
+	DPRINT	"Using already loaded",2
 	move.l	xplayer(a5),a1			* osoite a1:een
 	move.l	xlen(a5),d7
 	moveq	#1,d0
@@ -27930,7 +27936,7 @@ are
 	tst.l	(a0)			* onko jo ennest‰‰n?
 	bne.w	.alreadyHaveIt
 
-	cmp.b	#3,groupmode(a5)
+	cmp.b	#GROUPMODE_LOAD_SINGLE,groupmode(a5)
 	bne.b	.nah
 
 ** Ladataan yksi kipale replayereit‰ groupista
@@ -27999,10 +28005,6 @@ are
 .ok
 	bsr	clearCpuCaches
 
- if DEBUG
-	move.l	(a3),d0
-	DPRINT	"Address: %lx",4
- endif
  
 .x	popm	d1-a6
 	moveq	#0,d0	
@@ -28055,7 +28057,7 @@ freereplayer
 	pop	a0
 	clr.l	(a0)
 .x
-	cmp.b	#2,groupmode(a5)	* jos playerfile disabloitu,
+	cmp.b	#GROUPMODE_DISABLE,groupmode(a5)	* jos playerfile disabloitu,
 	blo.b	.xx			* vapautetaan se ejectin yhteydess‰
 					* tai load single moodina
 	move.l	externalplayers(a5),a0		
@@ -33150,7 +33152,7 @@ p_delicustom
  
 	* interrupt routine provided, set up an interrupt
 	move	deliBase+dtg_Timer,d0
-	bsr	init_ciaint_withTempo
+	jsr	init_ciaint_withTempo
 	beq.b	.gotCia
 	DPRINT	"cia error",44
 
@@ -33223,7 +33225,7 @@ p_delicustom
 	
 	move.l	.storedInterrupt(pc),d0
 	beq.b	.noIntUsed
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 .noIntUsed
 
 	move.l	#DTP_StopInt,d0
