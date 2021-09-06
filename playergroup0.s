@@ -107,7 +107,8 @@ main
 	dc.l	sidmon2data-main,deltamusic1data-sidmon2data
 	dc.l	deltamusic1data-main,soundfxdata-deltamusic1data
 	dc.l	soundfxdata-main,gluemondata-soundfxdata
-	dc.l	gluemondata-main,pend-gluemondata
+	dc.l	gluemondata-main,pretrackerdata-gluemondata
+	dc.l	pretrackerdata-main,pend-pretrackerdata
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -163,5 +164,6 @@ sidmon2data		incbin sidmon_v2.im
 deltamusic1data		incbin delta1.im
 soundfxdata		incbin soundfx.im
 gluemondata		incbin gluemon13.im
+pretrackerdata		incbin pretracker.bin.im
 pend
 

@@ -929,6 +929,7 @@ sidmon2routines 	rs.l 	0
 deltamusic1routines rs.l 	0
 soundfxroutines	rs.l	0
 gluemonroutines	rs.l	0
+pretrackerroutines rs.l	0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1221,6 +1222,7 @@ pt_sidmon2		rs.b	1
 pt_deltamusic1 		rs.b 	1
 pt_soundfx		rs.b	1
 pt_gluemon		rs.b	1
+pt_pretracker		rs.b	1
 
 * player group version
 xpl_versio	=	21
@@ -23670,7 +23672,7 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_digibooster
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_thx
 	beq.b	.on
@@ -23712,6 +23714,9 @@ loadfile
 	beq.b .on 
 
 	bsr.w id_gluemon
+	beq.b .on 
+
+	bsr.w id_pretracker
 	beq.b .on 
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
@@ -25153,6 +25158,9 @@ tutki_moduuli
 	bsr	id_gluemon
 	beq.w	.gluemon
 
+	bsr	id_pretracker
+	beq.w	.pretracker
+
 	bsr.w	id_player
 	beq.w	.player
 
@@ -25455,6 +25463,14 @@ tutki_moduuli
 	pushpea	p_gluemon(pc),playerbase(a5)
 	move	#pt_gluemon,playertype(a5)
 	bra.w	.ex
+
+.pretracker
+	pushpea	p_pretracker(pc),playerbase(a5)
+	move	#pt_pretracker,playertype(a5)
+	lea	$14(a4),a1
+	moveq	#20-1,d0
+	bra.w	.nimitalteen2
+
 
 **** Oliko  sample??
 .sample
@@ -34345,6 +34361,215 @@ id_gluemon
 	bne.b	.no
 	cmp.l	#~"GLUE",4(a4)
 	bne.b	.no
+	moveq	#0,d0
+	rts
+.no	moveq	#-1,d0 
+	rts
+
+******************************************************************************
+* PreTracker
+******************************************************************************
+
+p_pretracker
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75 	
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc.b	"PreTracker by Pink/aBYSs",0
+ even
+
+.mySong		dc.l  0
+.myPlayer	dc.l  0
+.chipMem	dc.l  0
+
+.setVol1
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0a8
+	pop 	d0
+	rts
+.setVol2
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0b8
+	pop 	d0
+	rts
+.setVol3
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0c8
+	pop 	d0
+	rts
+.setVol4
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0d8
+	pop 	d0
+	rts
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea 	pretrackerroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	move.l #16*1024,d0
+	move.l	#MEMF_PUBLIC|MEMF_CLEAR,d1 
+	jsr getmem
+	move.l d0,.mySong
+	beq.w .noMem
+	move.l #16*1024,d0
+	move.l	#MEMF_PUBLIC|MEMF_CLEAR,d1 
+	jsr getmem
+	move.l d0,.myPlayer
+	beq.w .noMem
+
+
+	pushm	d1-a6
+
+	move.l pretrackerroutines(a5),a0
+	move.l	a0,a4
+	add.l	-4(a4),a4 	* end of memory region
+.patchLoop
+* 33C0 xxxxxxxx = MOVE.L d0,xxxxxxxx
+* 4EB9 xxxxxxxx = JSR xxxxxxxx
+
+	move	(a0),d0
+	cmp		#$33c0,d0 
+	bne.b  .next 
+	cmp.l	#$dff0a8,2(a0)
+	beq.b	.1
+	cmp.l	#$dff0b8,2(a0)
+	beq.b	.2
+	cmp.l	#$dff0c8,2(a0)
+	beq.b	.3
+	cmp.l	#$dff0d8,2(a0)
+	beq.b	.4
+	bra.b 	.next
+.1	move	#$4eb9,(a0)
+	move.l	#.setVol1,2(a0)
+	bra.b 	.next
+.2	move	#$4eb9,(a0)
+	move.l	#.setVol2,2(a0)
+	bra.b 	.next
+.3	move	#$4eb9,(a0)
+	move.l	#.setVol3,2(a0)
+	bra.b 	.next
+.4	move	#$4eb9,(a0)
+	move.l	#.setVol4,2(a0)
+	;bra.b 	.next
+.next
+	addq	#2,a0
+	cmp.l	a4,a0
+	blo	.patchLoop
+
+	bsr		clearCpuCaches
+
+	move.l .myPlayer(pc),a0
+	move.l .mySong(pc),a1
+	move.l moduleaddress(a5),a2
+	move.l pretrackerroutines(a5),a3	
+	add.l	 (a3),a3
+	jsr		(a3) ; songInit
+	* in D0 returns the needed chipbuffer size
+
+	DPRINT	"Chip: %ld",1
+
+	move.l	#MEMF_CHIP|MEMF_CLEAR,d1 
+	jsr getmem
+	move.l d0,.chipMem
+	beq.b .noMem
+
+	* May be slow, instrument generation 
+	jsr	setMainWindowWaitPointer
+
+	move.l pretrackerroutines(a5),a3
+	move.l	.myPlayer(pc),a0 
+	move.l  .chipMem(pc),a1 
+	move.l  .mySong(pc),a2	
+	add.l	4(a3),a3
+	jsr 	(a3)  ; playerInit
+
+	popm	d1-a6
+	jsr	clearMainWindowWaitPointer
+	moveq	#0,d0
+	rts	
+
+.noMem
+	bsr.b .free
+	popm	d1-a6
+	moveq #ier_nomem,d0
+	rts
+
+.free 
+	move.l .mySong(pc),a0
+	jsr	freemem 
+	clr.l .mySong
+	move.l .myPlayer(pc),a0
+	jsr	freemem 
+	clr.l .myPlayer 
+	move.l .chipMem(pc),a0 
+	jsr	freemem 
+	clr.l .chipMem
+	rts
+
+.play
+	move.l pretrackerroutines(a5),a1
+	move.l	.myPlayer(pc),a0 
+	add.l	8(a1),a1
+	jmp	(a1)		; playerTick
+	
+.stop
+	bra.w	clearsound
+
+.end
+	bsr.b .free
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_pretracker
+	move.l	(a4),d0
+	lsr.l	#8,d0
+	cmp.l	#"PRT",d0
+	bne.b	.no
+	tst	4(a0)
+	bne.b	.no
+	tst	8(a0)
+	bne.b	.no
+	tst	$c(a0)
+	bne.b	.no
+	
 	moveq	#0,d0
 	rts
 .no	moveq	#-1,d0 
