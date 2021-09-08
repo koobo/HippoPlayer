@@ -14,10 +14,43 @@ To use, copy the files over the files that you have from an existing
 installation. Check out aminet for the original package:
 https://aminet.net/mus/play/hippoplayer.lha
 
-Or, just copy HiP somewhere and HippoPlayer.group to S:, then run
-HiP. That should work if you have the reqtools.library installed. 
+Or, just copy HiP somewhere and "HippoPlayer.group" to S:, then run
+HiP. That should work if you have the "reqtools.library" installed. 
 
+NOTE 1: The original archive is in its original state. There is no
+updated documentation. Please read the change history below.
 
+NOTE 2: Ensure that "HippoPlayer.group" gets updated, as old versions will
+not work. The default placement is the S: directory, which is a bit silly
+(location can be changed in Prefs).
+
+NOTE 3: If you get errors where some module is not recognized even 
+if it should be, try removing "S:HippoPlayer.prefs" first.
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+# Changes from v2.47 (31.8.2021) to v2.48 (?.?.2021)
+
+## New fixes:
+- Fixed the case where favorites were not saved if the user exited while 
+  being in the favorites view. 
+
+## New music formats:
+- PreTracker by Pink/aBYSs. Noice!
+- GlueMon (properly retro sound)
+- SoundFX
+- DeliTracker Custom format improvements, adds support for modules 
+  with external samples:
+ - SUNTronic modules (from SUNTronicTunes.lha)
+ - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too
+ 
+## New features:
+- Patternscope XL, with twice the amount of rows. 
+  Patternscope implementation was optimized to lessen CPU load.
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 # Changes from v2.46b (15.6.2021) to v2.47 (31.8.2021)
 
@@ -114,7 +147,8 @@ support, some fixes. Check out the details below.
   _General_ subpage in prefs. This feature probably doesn't make any
   sense if you are using floppies. 
   
-
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 # Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
 
