@@ -23050,6 +23050,8 @@ loadmodule
 	move.b	d0,d7
 	beq.w	.nodbf
 
+	DPRINT	"Double buffer load",10
+
 	* Load with double buffering.
 	* Module being played is preserved while new one is loaded.
 
@@ -23419,6 +23421,10 @@ loadfile
 	bne.b	.fe
 	subq	#1,a0
 
+	* Clear flag that indicates that the module that was loaded
+	* was in fact an executable. If this is not done,
+	* XPK packed modules are thought to be DeliCustoms and mayhem ensues.
+	clr.b	executablemoduleinit(a5)
 
 ** Archiven purku
 
@@ -23950,7 +23956,7 @@ loadfile
 
 	move.l	.xfhpointerp(pc),a0	* Varataan ekalle hunkille muistia.
 	move.l	xf_NLen(a0),d0
-	moveq	#MEMF_PUBLIC,d1
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
 	move.l	d0,d4
 	bne.b	.ok
@@ -25212,7 +25218,9 @@ tutki_moduuli
  if DEBUG
 	moveq	#0,d0
 	move	playertype(a5),d0
-	DPRINT 	"Detected %ld",3
+	moveq	#p_name,d1
+	add.l	playerbase(a5),d1 
+	DPRINT 	"Detected %ld %s",3
  endif
 	moveq	#0,d0
 	rts
