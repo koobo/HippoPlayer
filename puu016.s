@@ -9363,10 +9363,11 @@ filereq_code
 	move.b	#'/',(a3)+
 	clr.b	(a3)
 
-	DPRINT2	"Dir->",3
-	DEBU	(sp)
-	DPRINT	"<-",4
-	
+ if DEBUG 
+	move.l	sp,d0
+	DPRINT	"ReqTools dir: %s",3
+ endif 
+
 	move.l	a3,d3			* hakemiston pituus
 	sub.l	sp,d3
 	add.l	#l_size,d3		* listayksikön koko
@@ -9384,23 +9385,32 @@ filereq_code
 	bra.w	.skip
 
 
-
+* recursively scan directory given by reqtools
+* in: 
+*  d2 = path to directory to be scanned
+*  d3 = path length + l_size. d3 should not be destroyed
 .scanni
 	move.l	d2,a4		* hakemisto
-	moveq	#0,d6
+	moveq	#0,d6		* lock for dir scan
 
-	move.l	#250*4+2,d0	* tilaa 250:lle hakemistolukolle	
+	* Have a buffer that stores pointers to subdirectory names within this subdirectory.
+.MAX_SUBDIRS_TO_SCAN = 250
+
+	* tilaa 250:lle hakemistolle	
+	move.l	#.MAX_SUBDIRS_TO_SCAN*4+2,d0	
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
 	move.l	d0,d7
 	beq.w	.errd
 
+	* Get a lock on dir
 	move.l	a4,d1
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
 	move.l	d0,d6			* d6 = hakemiston lukko
 	beq.w	.errd
 
+	* Examine it
 	move.l	d6,d1
 	pushpea	fileinfoblock2(a5),d2
 	lob	Examine
@@ -9414,20 +9424,25 @@ filereq_code
 	move.l	d6,d1
 	pushpea	fileinfoblock2(a5),d2
 	lore	Dos,ExNext
+	* No more items to check in directory?
 	tst.l	d0
-	beq.b	.dodirs
+	beq.w	.dodirs
 	tst.l	fib_DirEntryType+fileinfoblock2(a5)
 	bmi.w	.filetta		* Onko tiedosto vai hakemisto?
+
+	* It was a directory. Store it for later, this way
+	* files in the directory get placed first in the list,
+	* then after that the subdir contents.
 
 	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
 	;beq.b	.loopo
 
 * otetaan kyseisen hakemiston nimi talteen myöhempää käyttöä varten
+* build a full path for this dir entry
 
 	move.l	#200,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
-	* TODO: no error check
 	move.l	d0,a1
 	tst.l	d0
 	beq.b	.lc0
@@ -9436,20 +9451,32 @@ filereq_code
 .lc	move.b	(a0)+,(a1)+
 	bne.b	.lc
 	subq	#1,a1
-	lea		fib_FileName+fileinfoblock2(a5),a0
+	lea	fib_FileName+fileinfoblock2(a5),a0
 .lc2	
 	move.b	(a0)+,(a1)+
 	bne.b	.lc2
 
 	move.l	d7,a0
 	move	(a0),d1
+
+ if DEBUG
+	cmp	#.MAX_SUBDIRS_TO_SCAN,d1
+	blo.b	.BOB
+	DPRINT	"XXXXXX %ls",553
+.BOB
+ endif
+
+	* check if subdir buffer limit is reached
+	cmp	#.MAX_SUBDIRS_TO_SCAN,d1
+	bhs.w	.loopo
 	addq	#1,(a0)+
 	lsl	#2,d1
 	move.l	d0,(a0,d1)
 .lc0
-	bra.b	.loopo
+	bra.w	.loopo
 
 **** skannattuamme yhden hakemiston tutkitaan siinä olleet muut hakemistot
+* Files scanned, now check the subdirs.
 .dodirs
 	
 	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
@@ -9457,17 +9484,20 @@ filereq_code
 	* Allow recursion into directories with kick1.3 too!
 
 	pushm	all
+	* the first word in the memory contains the subdir count
 	move.l	d7,a3
 	move	(a3)+,d5
 	beq.w	.errd2
+	* some subdirs were stored
 	subq	#1,d5
 
-.dodirsl
+.dodirsLoop
+	* subdir path
 	move.l	(a3)+,d6
 
  if DEBUG
 	move.l	d6,d0
-	DPRINT	"Scanning %s",11
+	DPRINT	"Scan: %s",91
  endif
 
 	move.l	d6,d1
@@ -9479,6 +9509,12 @@ filereq_code
 	move.l	d4,d1
 	pushpea	fileinfoblock2(a5),d2
 	lob	Examine
+	tst.l	d0 
+	bne.b	.exOk
+	move.l	d4,d1
+	lob	UnLock
+	bra.b	.porre
+.exOk
 
 	lea	fib_FileName+fileinfoblock2(a5),a0	* hakemiston nimi
 	bsr.w	adddivider
@@ -9489,14 +9525,16 @@ filereq_code
 	move.l	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3			* max pituus hakemistolle
-	jsr		getNameFromLock
+	jsr	getNameFromLock
 	push	d0
 	
 	move.l	d4,d1
 	lob	UnLock
 
-	tst.l	(sp)+
+	tst.l	(sp)+		* NameFromLock error check
 	beq.b	.porrer
+
+	* process path from getNameFromLock, add dir divider
 	move.l	sp,a2
 .fe0	tst.b	(a2)+
 	bne.b	.fe0
@@ -9507,10 +9545,12 @@ filereq_code
 	move.b	#'/',(a2)+
 .na0	clr.b	(a2)
 
+	* calculate required list node size
 	sub.l	sp,a2
 	lea	l_size(a2),a2
 	move.l	a2,d3
 	move.l	sp,d2
+	* go deeper one level
 	bsr.w	.scanni
 
 	bsr.w	.dirdiv
@@ -9519,7 +9559,7 @@ filereq_code
 	lea	200(sp),sp
 	popm	all
 
-.porre	dbf	d5,.dodirsl
+.porre	dbf	d5,.dodirsLoop
 
 .errd2	popm	all
 
@@ -9542,7 +9582,7 @@ filereq_code
 	beq.w	.loopo
 .yas
 
-	* DPRINT	"Adding file at .filetta",1112
+	* allocate memory for list node
 
 	lea	fib_FileName+fileinfoblock2(a5),a0	* filename
 	move.l	a0,a1
@@ -9612,7 +9652,6 @@ filereq_code
 	move.l	d4,d0				* listunit,polku,nimi pituus
 	add.l	rtfl_StrLen(a4),d0	* incoming string length
 	addq.l	#1,d0				* space for terminating zero
-	move.l	d0,d2
 
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1		* varataan muistia
 	bsr.w	getmem
