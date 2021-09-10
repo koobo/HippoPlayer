@@ -1591,7 +1591,7 @@ progstart
 	move.l	d4,d1
  	pushpea tempdir(a5),d2  		* this space can be used
  	move.l	#200,d3 
- 	jsr		getNameFromLock
+ 	jsr	getNameFromLock
 	* store return status for a little while so we can UnLock first
 	move.l	d0,d3
 
@@ -9199,8 +9199,11 @@ rbutton7
 
 	pushpea	filereq_segment(pc),d3
 	lsr.l	#2,d3
-	move.l	#5000,d4		* saattaa tarvita, kun on rekursiivinen
-	lob		CreateProc
+	* stack size needs to be large.  needed for recursive dir scan,
+	* it seems that kick1.3 needs more than kick3.0 for 10 levels of 
+	* sub dirs.
+	move.l	#7000,d4	
+	lob	CreateProc
 	tst.l	d0
 	beq.b	.error
 	addq	#1,filereq_prosessi(a5)
@@ -9525,9 +9528,10 @@ filereq_code
 	move.l	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3			* max pituus hakemistolle
+; TEST 50 here
 	jsr	getNameFromLock
 	push	d0
-	
+
 	move.l	d4,d1
 	lob	UnLock
 
@@ -16009,7 +16013,7 @@ execuutti
 	move.l	lockhere(a5),d1
 	pushpea	200(sp),d2
 	moveq	#100,d3
-	jsr		getNameFromLock
+	jsr	getNameFromLock
 	lea	.tagz(pc),a0
 	move.l	d7,a1
 	pushpea	200(sp),4(a0)
@@ -27769,21 +27773,16 @@ getNameFromLock
  endif
 	* It's all DOS, baby
 	move.l	_DosBase(a5),a6
+	tst.b	uusikick(a5)
+	beq.b	.old
+	lob     NameFromLock
+	popm	d1-a6
+	rts
+.old
 
 	* Use this one as the working fib, probably fine.
 	pushpea	fileinfoblock2(a5),.fib
 
-;	* allocate space from stack
-;	* ensure divisible by 4
-;	lea		-(fib_SIZEOF+4)(sp),sp
-;	move.l	sp,d0
-;	* make d0 divisible by 4
-;	and.l	#~%11,d0
-;	* above could have rounded down,
-;	* so round up to next proper address
-;	addq.l	#4,d0
-;	move.l	d0,.fib		* usable fib address
-;
 	* save start of output buffer to a3 for later
 	move.l	d2,a3	
 
@@ -27815,10 +27814,12 @@ getNameFromLock
 	lob 	Examine
 	tst.l	d0
 	beq.w	.cleanup
-
+	
 	* add separator if needed
 	tst.b	(a4)
 	beq.b	.noSep
+	cmp.l	a3,a4		* space check!
+	beq.b	.noSpace
 	move.b	#'/',-(a4)
 .noSep
 	move.l	.fib,a0
@@ -27829,7 +27830,7 @@ getNameFromLock
 	bne.b	.findEnd
 	subq.l	#1,a0	* backtrack to NULL
 .copyPart
-	cmp.l	a3,a4
+	cmp.l	a3,a4		* space check!
 	beq.b	.noSpace
 	move.b	-(a0),-(a4)
 	cmp.l	a0,a1
@@ -27843,6 +27844,8 @@ getNameFromLock
 	bra.b	.loop
 .loopEnd
 	* next comes the name for the device
+	cmp.l	a3,a4		* space check!
+	beq.b	.noSpace
 	move.b	#':',-(a4)
 
 	* Dig into the lock, first convert BPTR to APTR.
@@ -27868,7 +27871,7 @@ getNameFromLock
 	add.l	d0,a0
 
 .copyPart2
-	cmp.l	a3,a4
+	cmp.l	a3,a4		* space check!
 	beq.b	.noSpace
 	move.b	-(a0),-(a4)
 	cmp.l	a0,a1
@@ -27877,7 +27880,10 @@ getNameFromLock
 	* all done!
 	* move the resulting string to the front of the buffer.
 	* here a3 and a4 point to the same buffer 
+ if DEBUG
 	move.l	a3,d0
+ endif 
+
 .move
 	move.b	(a4)+,(a3)+
 	bne.b	.move
@@ -27893,8 +27899,6 @@ getNameFromLock
 	move.l	.fl_lock,d1
 	lob UnLock
 	
-	;lea		(fib_SIZEOF+4)(sp),sp
-
 	* return status
 	move.l	.return,d0
  if DEBUG
@@ -27906,6 +27910,7 @@ getNameFromLock
 	DPRINT	"->success=%ld",3
  endif
 	popm 	d1-a6
+	tst.l 	d0
 	rts
 
 
