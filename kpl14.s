@@ -1,4 +1,4 @@
-;APS0000422B000000000000000000000000000000000000000000000000000000000000000000000000
+;APS00004234000000000000000000000000000000000000000000000000000000000000000000000000
 
 	incdir	include:
 	include	exec/exec_lib.i
@@ -215,7 +215,7 @@ main
 
 	lea	k_base,a0
 	lea	module,a1
-	moveq	#0,d0
+	moveq	#8,d0
 	moveq	#0,d1		* Mode
 ;	moveq	#1,d1		* Mode
 ;	moveq	#%11,d2		* flags, fastramyes, tempoyes
@@ -282,6 +282,7 @@ ss_volume	=	45-42
 ss_repeat	=	46-42
 ss_replen	=	48-42
 
+binstart
 kplayer
 	bra.b	k_init
 	rts
@@ -2349,12 +2350,16 @@ k_funkit
 	move.b	d0,n_funkspeed(a4)
 	rts
 k_funkit2
+	* is there any sample data?
+	tst.l	n_wavestart(a4)
+	beq.b	k_funkend
 ;	move.b	n_funkspeed(a4),d0
 ;	beq.b	k_funkend
 	ext	d0
 	move.b	k_funktable(pc,d0),d0
 	add.b	d0,n_funkoffset(a4)
-	bpl.b	k_funkend
+	btst	#7,n_funkoffset(a4)
+	beq.b	k_funkend
 	clr.b	n_funkoffset(a4)
 
 	move.l	n_loopstart(a4),d1
@@ -2444,4 +2449,4 @@ k_base	ds.b	k_sizeof
 	section	po,data_c
 
 ;module	incbin	music:mod.figure
-module	incbin	sys:music/authors.a-f/4mat/zapped_out.mod
+module	incbin	sys:music/mod.sundayhangover
