@@ -21144,8 +21144,10 @@ scopeLoop
 	lob	ReplyMsg
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.qx
+	* RMB closes window
 	cmp	#MENUDOWN,d3
 	beq.b	.xq
+	;cmp	#SELECTDOWN,d3 
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.w	scopeLoop
 
@@ -23343,8 +23345,12 @@ unknown_t
 	dc.b	"Unknown file format!",0
 unknownDueToAhi_t
 	dc.b	"Unknown file format!",10
-	dc.b	"This may be because non-AHI replayers",10
-	dc.b	"are disabled.",0
+	dc.b	"This may be because non-AHI",10
+	dc.b	"replayers are disabled.",0
+unknownDueToGroupDisabled_t
+	dc.b	"Unknown file format!",10
+	dc.b	"This may be because the",10
+	dc.b	"player group is disabled.",0
 nofast_t
 memerror_t	
 	dc.b	"Not enough memory!",0
@@ -23399,6 +23405,10 @@ tuntematonvirhe
 	beq.b	.noAhiSkip
 	lea	unknownDueToAhi_t(pc),a1
 .noAhiSkip
+	cmp.b	#GROUPMODE_DISABLE,groupmode(a5)
+	bne.b	.groupSkip
+	lea	unknownDueToGroupDisabled_t(pc),a1
+.groupSkip
 
 	lea	.g(pc),a2
 	bsr.w	rawrequest
