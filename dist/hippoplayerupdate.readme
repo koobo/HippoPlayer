@@ -33,11 +33,19 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 # Changes from v2.47 (31.8.2021) to v2.48 (?.?.2021)
 
 ## New fixes:
+- Fix crash caused by a devious ProTracker module Sunday Hangover by 
+  Skope/Up Rough!. This also crashes ProTracker v2.3 :-)
+- After playing a DeliCustom type module and then trying to play a 
+  XPK/PP/FImp/XFD compressed module lead to the new module being recognized 
+  as DeliCustom even if it wasn't, which lead to all kinds of bad things.
+- Fixed a possible memory corruption/crash when adding a subdirectory
+  which contains more than 250 subdirectories.
 - Fixed the case where favorites were not saved if the user exited while 
   being in the favorites view. 
 
 ## New music formats:
-- PreTracker by Pink/aBYSs. Noice!
+- PreTracker by Pink/aBYSs. Very noice! Samples are generated during 
+  initialization which may take some time especially on slow CPUs.
 - GlueMon (properly retro sound)
 - SoundFX
 - DeliTracker Custom format improvements, adds support for modules 
