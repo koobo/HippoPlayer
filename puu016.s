@@ -21200,9 +21200,8 @@ scopeinterrupt				* a5 = var_b
 	bne.w	.n
 
 	lea	kplbase(a5),a0
-	moveq	#0,d0
 	move.b	k_usertrig(a0),d0
-	move.b	d0,omatrigger(a5)
+	or.b	d0,omatrigger(a5)
 	clr.b	k_usertrig(a0)
 
 	lea	k_chan1temp(a0),a2
@@ -22331,18 +22330,25 @@ notescroller
 
 
 	lea	kplbase(a5),a0
-	moveq	#0,d0
-	move.b	omatrigger(a5),d0
-	clr.b	omatrigger(a5)
-
 	lea	k_chan1temp(a0),a1
 	lea	ch1(a5),a0
+	* channel bitmask
+	moveq	#1,d2
 	moveq	#4-1,d1
-.setscope
-	ror.b	#1,d0
-	bpl.b	.e
+.setscope	
+	* see if channel bit is on
+	move.b	omatrigger(a5),d0
+	and.b	d2,d0
+	beq.b	.e	
+	* was on, clear it, and copy the volume value
+	move.b  d2,d0 	
+	not.b   d0
+	and.b  	d0,omatrigger(a5)
 	move	n_tempvol(a1),ns_tempvol(a0)
-.e	lea	ns_size(a0),a0
+.e	
+	* next bit
+	add.b	d2,d2
+	lea	ns_size(a0),a0
 	lea	n_sizeof(a1),a1
 	dbf	d1,.setscope
 
