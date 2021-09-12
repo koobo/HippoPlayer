@@ -28900,34 +28900,22 @@ modlen
 .mt_chan4temp	ds.b	8
  even
 
-.mt_SongDataPtr	dc.l 0
-.mt_speed	dc.b 6
- even
-.mt_counter	dc.b 0
- even
-.mt_SongPos	dc.b 0
- even
-.mt_PBreakPos	dc.b 0
- even
-.mt_PosJumpFlag	dc.b 0
- even
-.mt_PBreakFlag	dc.b 0
- even
-.mt_PattDelTime	dc.b 0
- even
-.mt_PattDelTime2 dc.b 0
- even
-.mt_PatternPos	dc.w 0
- even
 .varmistus	dc	0
-
+.mt_SongDataPtr	dc.l 0
+.mt_PatternPos	dc.w 0
+.mt_speed	dc.b 6
+.mt_counter	dc.b 0
+.mt_SongPos	dc.b 0
+.mt_PBreakPos	dc.b 0
+.mt_PosJumpFlag	dc.b 0
+.mt_PBreakFlag	dc.b 0
+.mt_PattDelTime	dc.b 0
+.mt_PattDelTime2 dc.b 0
  even
 
 .dataend
 
  endb	a5
-
-
 
 
 ******************************************************************************
