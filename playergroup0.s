@@ -108,7 +108,8 @@ main
 	dc.l	deltamusic1data-main,soundfxdata-deltamusic1data
 	dc.l	soundfxdata-main,gluemondata-soundfxdata
 	dc.l	gluemondata-main,pretrackerdata-gluemondata
-	dc.l	pretrackerdata-main,pend-pretrackerdata
+	dc.l	pretrackerdata-main,custommadedata-pretrackerdata
+	dc.l	custommadedata-main,pend-custommadedata
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -165,5 +166,6 @@ deltamusic1data		incbin delta1.im
 soundfxdata		incbin soundfx.im
 gluemondata		incbin gluemon13.im
 pretrackerdata		incbin pretracker.bin.im
+custommadedata		incbin custommade_v1.im
 pend
 

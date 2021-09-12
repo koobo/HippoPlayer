@@ -934,6 +934,7 @@ deltamusic1routines rs.l 	0
 soundfxroutines	rs.l	0
 gluemonroutines	rs.l	0
 pretrackerroutines rs.l	0
+custommaderoutines rs.l 0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1227,6 +1228,7 @@ pt_deltamusic1 		rs.b 	1
 pt_soundfx		rs.b	1
 pt_gluemon		rs.b	1
 pt_pretracker		rs.b	1
+pt_custommade	rs.b 	1
 
 * player group version
 xpl_versio	=	21
@@ -23748,7 +23750,7 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_thx
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_mline
 	beq.b	.on
@@ -23790,6 +23792,9 @@ loadfile
 	beq.b .on 
 
 	bsr.w id_pretracker
+	beq.b .on 
+
+	bsr.w id_custommade
 	beq.b .on 
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
@@ -25235,6 +25240,9 @@ tutki_moduuli
 	bsr	id_pretracker
 	beq.w	.pretracker
 
+	bsr	id_custommade
+	beq.w	.custommade
+
 	bsr.w	id_player
 	beq.w	.player
 
@@ -25547,6 +25555,10 @@ tutki_moduuli
 	moveq	#20-1,d0
 	bra.w	.nimitalteen2
 
+.custommade
+	pushpea	p_custommade(pc),playerbase(a5)
+	move	#pt_custommade,playertype(a5)
+	bra.w	.ex
 
 **** Oliko  sample??
 .sample
@@ -33016,7 +33028,7 @@ p_digitalmugician
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -34673,6 +34685,144 @@ id_pretracker
 	rts
 .no	moveq	#-1,d0 
 	rts
+
+******************************************************************************
+* CustomMade
+******************************************************************************
+
+p_custommade
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75 	
+	dc.l	$4e754e75
+	jmp	.song(pc) 
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"CustomMade",0
+ even
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.SONG  = 8+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	custommaderoutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea 	songover(a5),a2
+	move.l	custommaderoutines(a5),a3
+	jsr	.INIT(a3)
+
+*   d1 = min song, always 1
+*   d2 = max song
+*   d3 = timer value
+
+	subq	#1,d2 
+	clr	songnumber(a5)
+	move	d2,maxsongs(a5)
+
+	move	d3,d0 
+	jsr	ciaint_setTempoFromD0
+
+	popm	d1-a6
+	* INIT returns 0 on success
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	custommaderoutines(a5),a0
+	jmp	.PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Song %ld",1
+ endif
+	* starts from 1, not 0
+	addq	#1,d0
+	move.l	custommaderoutines(a5),a0
+	jsr	.SONG(a0)
+	rts
+
+.end
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_custommade
+	bsr.b	.do
+	tst.l	d0
+	rts 
+.do
+	move.l	a4,a0
+	moveq	#-1,D0
+	
+	cmp.w	#$4EF9,(A0)		; jmp
+	beq.b	.Later
+	cmp.w	#$4EB9,(A0)		; jsr
+	beq.b	.Later
+	cmp.w	#$6000,(A0)		; bra.w
+	bne.b	.Fault
+	cmp.w	#$6000,4(A0)
+	beq.b	.More
+.Fault
+	rts
+.Later
+	cmp.w	#$4EF9,6(A0)
+	bne.b	.Fault
+.More
+	lea	8(A0),A1
+	lea	400(A1),A2
+.Last
+	cmp.l	#$42280030,(A1)
+	bne.b	.NOM
+	cmp.l	#$42280031,4(A1)
+	bne.b	.NOM
+	cmp.l	#$42280032,8(A1)
+	beq.b	.Found
+.NOM
+	addq.l	#2,A1
+	cmp.l	A1,A2
+	bne.b	.Last
+	rts
+.Found
+	moveq	#0,D0
+	rts
+
+
+
 
 *******************************************************************************
 * Playereitä
