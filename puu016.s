@@ -1150,6 +1150,10 @@ moduleListChanged	rs.b		1
 
 kplbase	rs.b	k_sizeof		* KPlayerin muuttujat (ProTracker)
 
+ if DEBUG
+debugDesBuf		rs.b	1000
+ endif
+
 * Size of global variables data. Must be even.
 size_var	rs.b	0
 
@@ -1348,11 +1352,11 @@ DEBU	macro
 * d0-d7:    formatting parameters
 DPRINT macro
 	ifne DEBUG
-	push a0
-	lea .DD\2(pc),a0
-	jsr	desmsg
-	pop a0
-	pea	desbuf(a5)
+	push 	a0
+	lea 	.DD\2(pc),a0
+	jsr	desmsgDebug
+	pop 	a0
+	pea	debugDesBuf(a5)
 	jsr	PRINTOUT
 	bra.b	.D\2
 .DD\2
@@ -5123,7 +5127,14 @@ desmsg3	movem.l	d0-d7/a0-a3/a6,-(sp)
 * a1 = parametrit
 desmsg4	movem.l	d0-d7/a0-a3/a6,-(sp)
 	bra.b	pulppa
+* a3 = desbuf
 
+ if DEBUG 
+desmsgDebug
+	movem.l	d0-d7/a0-a3/a6,-(sp)
+	lea	debugDesBuf(a5),a3
+	bra.b	ulppa
+ endif
 
 *******************************************************************************
 * Laatikoiden piirto
