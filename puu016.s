@@ -425,7 +425,8 @@ sidlibstore2	rs.l	2
 
 owntask		rs.l	1
 lockhere	rs.l	1		* currentdir-lock
-cli		rs.l	1
+homelock	rs.l 	1		* homedir-lock (V36)
+cli			rs.l	1
 segment		rs.l	1	* Toisiks ekan hunkin segmentti
 fileinfoblock	rs.b	260		* 4:llä jaollisessa osoitteessa!
 fileinfoblock2	rs.b	260		
@@ -1432,12 +1433,39 @@ progstart
 	move.l	d0,d5
 	move.l	d0,a0
 	move.l	sm_ArgList(a0),d0	* nykyisen hakemiston lukko
-	beq.b	.waswb			* workbenchiltä
+	beq.w	.waswb			* workbenchiltä
 	move.l	d0,a0
 	move.l	(a0),lockhere(a5)
-	bra.b	.waswb
+	bra.w	.waswb
 .nowb	
 	move.l	pr_CurrentDir(a3),lockhere(a5) * nykyinen hakemisto CLI:ltä
+
+	cmp	#36,LIB_VERSION(a6)
+	blo.b	.noo	
+	move.l 	pr_HomeDir(a3),d1
+	beq.b	.noo
+	lore	Dos,DupLock
+	move.l	d0,homelock(a5)
+.noo
+
+ if DEBUG
+	move.l 	pr_CurrentDir(a3),d1
+	move.l	#ptheader,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	move.l	#ptheader,d0
+	DPRINT	"Current dir: %s",11
+	move.l	4.w,a6
+	cmp	#36,LIB_VERSION(a6)
+	blo.b	.ooold	
+	move.l 	pr_HomeDir(a3),d1
+	move.l	#ptheader,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	move.l	#ptheader,d0
+	DPRINT	"Home dir: %s",12
+.ooold
+ endif 
 
 	bsr.w	CLIparms
 
@@ -3353,6 +3381,10 @@ exit2
  ifeq asm
 	move.l	lockhere(a5),d1		* free CurrentDir lock
 	lore	Dos,UnLock
+	move.l	homelock(a5),d1
+	beq.b	.noHome
+	lob     UnLock
+.noHome
 	lore	Exec,Forbid			* forbid multitasking 
 	bsr.w	vastomaviesti		* reply to any message we may have received
 
@@ -26802,6 +26834,14 @@ loadplayergroup
 	moveq	#0,d7
 
 	move.l	_DosBase(a5),a6
+
+;	move.l	homelock(a5),d1
+;	beq.b	.noHome
+;\,	pushpea desbuf(a5),d2
+;	moveq	#100,d3
+;	jsr	getNameFromLock
+;.noHome
+
 	pushpea	groupname(a5),d1
 	move.l	#1005,d2
 	lob	Open
