@@ -447,9 +447,9 @@ userport	rs.l	1		*
 windowbase2	rs.l	1		* prefs
 rastport2	rs.l	1		* 
 userport2	rs.l	1		*
-rastport3	rs.l	1		* quadrascope
-userport3	rs.l	1		* 
-windowbase3	rs.l	1		* scopes window
+rastportScope	rs.l	1		* quadrascope
+userportScope	rs.l	1		* 
+windowBaseScope	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 notifyhandle	rs.l	1		* Screennotifylle
@@ -586,7 +586,7 @@ deltab2		rs.l	1
 deltab3		rs.l	1	
 deltab4		rs.l	1	
 omatrigger	rs.b	1	* kopio kplayerin usertrigist‰
-		rs.b	1	
+		rs.b	1		* pad
 multab		rs.b	512
 
 ps3mchannels	rs.l	1	* Osoitin PS3M mixer channel blockeihin
@@ -3707,6 +3707,13 @@ print3	pushm	all
 	move.l	rastport2(a5),a4
 	bra.b	doPrint	
 
+printScopeWindow
+	pushm	all
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
+	move.l	rastportScope(a5),a4
+	bra.b	doPrint	
+
 * Print to mainwindow with bold font style.
 printBold
 	pushm	d0-d2/a0-a2/a6
@@ -4971,7 +4978,7 @@ printhippo2
 	rts
 .yep	pushm	d0-d6/a0-a2/a6
 	lea	omabitmap2(a5),a0
-	move.l	rastport3(a5),a1		* quad
+	move.l	rastportScope(a5),a1		* quad
 	moveq	#0,d0	
 	moveq	#0,d1
 	moveq	#126,d2
@@ -9541,7 +9548,6 @@ filereq_code
 	move.l	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3			* max pituus hakemistolle
-; TEST 50 here
 	jsr	getNameFromLock
 	push	d0
 
@@ -11308,7 +11314,7 @@ saveprefs
 	sne	prefs_infoon+prefsdata(a5)
 
 
-	move.l	windowbase3(a5),d0
+	move.l	windowBaseScope(a5),d0
 	beq.b	.k
 	move.l	d0,a0
 	move.l	4(a0),quadpos(a5)
@@ -20961,7 +20967,7 @@ quad_code
 .ok2
 
 	lob	OpenWindow
-	move.l	d0,windowbase3(a5)
+	move.l	d0,windowBaseScope(a5)
 	bne.b	.ok3
 	lea	windowerr_t(pc),a1
 .me	bsr.w	request
@@ -20972,21 +20978,21 @@ quad_code
 
 .ok3
 	move.l	d0,a0
-	move.l	wd_RPort(a0),rastport3(a5)
-	move.l	wd_UserPort(a0),userport3(a5)
+	move.l	wd_RPort(a0),rastportScope(a5)
+	move.l	wd_UserPort(a0),userportScope(a5)
 
 	jsr	setscrtitle
 
 
 	move.l	_GFXBase(a5),a6
-	move.l	rastport3(a5),a1
+	move.l	rastportScope(a5),a1
 	move.l	pen_1(a5),d0
 	lob	SetAPen
 
 	tst.b	uusikick(a5)		* uusi kick?
 	beq.b	.vanaha
 
-	move.l	rastport3(a5),a2
+	move.l	rastportScope(a5),a2
 	moveq	#4,d0
 	moveq	#11,d1
 	move	#335,d2
@@ -21006,7 +21012,7 @@ quad_code
 	add	#64,d5
 .notLarge4
 	moveq	#$0a,d6
-	move.l	rastport3(a5),a0
+	move.l	rastportScope(a5),a0
 	move.l	a0,a1
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -21041,7 +21047,7 @@ quad_code
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
 	add	windowtop(a5),ply2
-	move.l	rastport3(a5),a1
+	move.l	rastportScope(a5),a1
 	jsr	laatikko2
 
 	move.l	buffer1(a5),draw1(a5)
@@ -21050,16 +21056,25 @@ quad_code
 	add.l	d0,draw1(a5)
 	add.l	d0,draw2(a5)
 
-
+	* global states:
+	* flag to determine whether hippo was printed to avoid
+	* printing it more than once, probably
 	moveq	#0,d7
+	* which player the scope was launched with
 	move	playertype(a5),d6
-	jsr	printhippo2	
+	* This indicates whether LMB press has "activated" 
+	* Scope gets inactive when another screen is on top
+	* of scope screen.
+	* 0: normal mode
+	* positive: manually active
+	*
+	moveq	#0,d5		
 
+	jsr	printhippo2	
 
 	move.l	quad_task(a5),a1
 	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
 	lore	Exec,SetTaskPri
-
 
 scopeLoop
 	move.l	_GFXBase(a5),a6
@@ -21070,11 +21085,19 @@ scopeLoop
 
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
-	move.l	windowbase3(a5),a0	* ollaanko p‰‰llimm‰isen‰?
+	move.l	windowBaseScope(a5),a0	* ollaanko p‰‰llimm‰isen‰?
+
+	* check manual activation flag
+	tst.b	d5
+	bne.b	.joo
+	bra.b	.scopeNotVisible
+
 	cmp.l	wd_WScreen(a0),a1
 	beq.b	.joo
+	* Scope window is not the first screen.
+	* It may be partially visible if top screen is not at the top position.
 	tst	sc_TopEdge(a1)
-	beq.w	.m
+	beq.b	.scopeNotVisible
 .joo
 
 ** jos AHI, ei scopeja
@@ -21086,7 +21109,6 @@ scopeLoop
 	bra.b	.nn
 
 .nnq	cmp	#pt_sample,playertype(a5)	 * ja sampleplayerill‰
-;	beq.b	.nn
 	beq.b	.nna
 	cmp	#pt_multi,playertype(a5) 	* ja PS3M:ll‰
 	bne.b	.n
@@ -21109,11 +21131,11 @@ scopeLoop
 	beq.b	.noen
 	move	playertype(a5),d6
 	bsr.b	.clear
-.noen	pushm	d6/d7
+.noen	pushm	d4/d5/d6/d7
 	jsr		obtainModuleData
 	bsr.w	drawScope
 	jsr 	releaseModuleData
-	popm	d6/d7
+	popm	d4/d5/d6/d7
 	moveq	#-1,d7
 	bra.b	.m
 .n	
@@ -21125,11 +21147,18 @@ scopeLoop
 	jsr	printhippo2
 	bra.b	.m
 
+.scopeNotVisible	
+	moveq	#10,d0
+	moveq	#75,d1
+	lea	scopeNotVisibleText(pc),a0
+	jsr	printScopeWindow
+	bra.b	.m
+
 .clear
-	move.l	rastport3(a5),a1
+	move.l	rastportScope(a5),a1
 	move.l	pen_0(a5),d0
 	lore	GFX,SetAPen
-	move.l	rastport3(a5),a1
+	move.l	rastportScope(a5),a1
 	moveq	#10,d0
 	moveq	#14,d1
 	move	#330,d2
@@ -21146,7 +21175,7 @@ scopeLoop
 
 .m
 	move.l	(a5),a6
-	move.l	userport3(a5),a0
+	move.l	userportScope(a5),a0
 	lob	GetMsg
 	tst.l	d0
 	beq.w	scopeLoop
@@ -21160,13 +21189,16 @@ scopeLoop
 	* RMB closes window
 	cmp	#MENUDOWN,d3
 	beq.b	.xq
-	;cmp	#SELECTDOWN,d3 
+	cmp	#SELECTDOWN,d3
+	bne.b	.qx
+	* set activate flag with LMB
+	st	d5
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.w	scopeLoop
 
 .xq	clr.b	scopeflag(a5)
 	
-qexit	bsr.b	qflush_messages
+qexit	bsr.w	qflush_messages
 
 
 	move.l	mtab(a5),a0
@@ -21180,12 +21212,12 @@ qexit	bsr.b	qflush_messages
 	clr.l	deltab1(a5)
 
 	move.l	_IntuiBase(a5),a6		
-	move.l	windowbase3(a5),d0
+	move.l	windowBaseScope(a5),d0
 	beq.b	.uh1
 	move.l	d0,a0
 	move.l	4(a0),quadpos(a5)	* koordinaatit talteen
 	lob	CloseWindow
-	clr.l	windowbase3(a5)
+	clr.l	windowBaseScope(a5)
 .uh1
 
 
@@ -21200,10 +21232,13 @@ qexit	bsr.b	qflush_messages
 	clr	quad_prosessi(a5)	* lippu: lopetettiin
 	rts
 
+scopeNotVisibleText
+	dc.b	"Scope inactive, press LMB to activate",0
+	even 
 
 
 qflush_messages
-	move.l	windowbase3(a5),a0 
+	move.l	windowBaseScope(a5),a0 
 	bra		flushWindowMessages
 
 
@@ -21275,6 +21310,9 @@ scopeinterrupt				* a5 = var_b
 	add.l	d0,(a0)
 .nn
 	rts
+
+
+
 
 * Check if scope is in normal sized mode.
 * Z is clear it true, Z set if false
@@ -21536,7 +21574,7 @@ drawScope
 	move.l	d0,bm_Planes(a0)
 
 	move.l	_GFXBase(a5),a6	* kopioidaan kamat ikkunaan
-	move.l	rastport3(a5),a1
+	move.l	rastportScope(a5),a1
 	moveq	#0,d0		* l‰hde x,y
 	moveq	#0,d1
 	moveq	#10,d2		* kohde x,y
