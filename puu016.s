@@ -22712,8 +22712,10 @@ notescroller
 	or.b	#'0',d0
 	move.b	d0,(a0)+
 	rts
-.high1	sub.b	#10,d0
-	add.b	#'A',d0
+.high1	
+	;sub.b	#10,d0
+	;add.b	#'A',d0
+	add.b	#-10+'A',d0
 	move.b	d0,(a0)+
 	rts
 
