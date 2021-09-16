@@ -2632,9 +2632,8 @@ lelp
 	bsr.w	zipMainWindow
 .hid
 
-	bsr.w	inforivit_clear
-
-	jsr		importFavoriteModulesFromDisk
+	jsr	inforivit_clear
+	jsr	importFavoriteModulesFromDisk
 
 	DPRINT	"Loading group",1
 
@@ -9237,6 +9236,8 @@ rbutton7
 	rts
 .ook	move.l	_DosBase(a5),a6
 
+	;bra	filereq_code
+
 	pushpea	fileprocname(pc),d1
 
 	move.l	priority(a5),d2
@@ -9433,31 +9434,46 @@ filereq_code
 	bra.w	.skip
 
 
-* recursively scan directory given by reqtools
+* recursively scan directory
 * in: 
-*  d2 = path to directory to be scanned
+*  d2 = path to directory to be scanned, with separator
 *  d3 = path length + l_size. d3 should not be destroyed
 .scanni
+
+ if DEBUG
+	move.l	d2,d0
+	DPRINT	"Scan: %s",91
+ endif
 	move.l	d2,a4		* hakemisto
 	moveq	#0,d6		* lock for dir scan
 
 	* Have a buffer that stores pointers to subdirectory names within this subdirectory.
 .MAX_SUBDIRS_TO_SCAN = 250
 
-	* tilaa 250:lle hakemistolle	
+	* space for counter and path pointers	
 	move.l	#.MAX_SUBDIRS_TO_SCAN*4+2,d0	
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
 	move.l	d0,d7
 	beq.w	.errd
 
-	* Get a lock on dir
+	* Get a lock on dir.
+	* This will succeed even on an empty string, it will then
+	* be a lock on SYS:. Add a paranoia check for that.
+	tst.b	(a4)
+	beq.w	.errd
 	move.l	a4,d1
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
 	move.l	d0,d6			* d6 = hakemiston lukko
+  if DEBUG
+	bne.b	.lockOk
+	DPRINT	"Lock failed!",554
+	bra.w 	.errd
+  else 
 	beq.w	.errd
-
+  endif
+.lockOk
 	* Examine it
 	move.l	d6,d1
 	pushpea	fileinfoblock2(a5),d2
@@ -9474,9 +9490,24 @@ filereq_code
 	lore	Dos,ExNext
 	* No more items to check in directory?
 	tst.l	d0
-	beq.w	.dodirs
-	tst.l	fib_DirEntryType+fileinfoblock2(a5)
-	bmi.w	.filetta		* Onko tiedosto vai hakemisto?
+	beq.w	.dodirs	
+
+	* Success! What is it?
+	* ST_ROOT=1
+	* ST_USERDIR=2
+	* ST_SOFTLINK=3
+	* ST_LINKDIR=4
+	* ST_FILE=-3
+	* ST_LINKFILE=-4
+	* ST_PIPEFILE=-5
+
+	move.l	fib_DirEntryType+fileinfoblock2(a5),d0
+	cmp.l	#ST_FILE,d0
+	beq	.filetta
+	cmp.l	#ST_LINKFILE,d0
+	beq	.filetta
+	cmp.l	#ST_USERDIR,d0
+	bne.w	.unsupportedEntry
 
 	* It was a directory. Store it for later, this way
 	* files in the directory get placed first in the list,
@@ -9487,46 +9518,74 @@ filereq_code
 
 * otetaan kyseisen hakemiston nimi talteen myöhempää käyttöä varten
 * build a full path for this dir entry
-
-	move.l	#200,d0
+.MAX_PATH_LEN = 200
+	move.l	#.MAX_PATH_LEN,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
 	move.l	d0,a1
 	tst.l	d0
 	beq.b	.lc0
+	* high bound
+	lea	.MAX_PATH_LEN-1(a1),a2
 
 	move.l	a4,a0
-.lc	move.b	(a0)+,(a1)+
+.lc	cmp.l   a1,a2
+	beq.b	.pathOverflow
+	move.b	(a0)+,(a1)+
 	bne.b	.lc
 	subq	#1,a1
 	lea	fib_FileName+fileinfoblock2(a5),a0
-.lc2	
+.lc2	cmp.l   a1,a2
+	beq.b	.pathOverflow
 	move.b	(a0)+,(a1)+
 	bne.b	.lc2
 
+	* Add path separator
+	subq	#1,a1		* NULL
+	cmp.b	#':',-1(a1)
+	beq.b	.dd
+	move.b	#'/',(a1)+
+.dd	clr.b	(a1)
+
+	* check if subdir buffer limit is reached
 	move.l	d7,a0
 	move	(a0),d1
 
  if DEBUG
 	cmp	#.MAX_SUBDIRS_TO_SCAN,d1
 	blo.b	.BOB
-	DPRINT	"XXXXXX %ls",553
+	DPRINT	"Subdir limit!",553
 .BOB
  endif
 
-	* check if subdir buffer limit is reached
 	cmp	#.MAX_SUBDIRS_TO_SCAN,d1
 	bhs.w	.loopo
+	* add one path pointer and increment counter
 	addq	#1,(a0)+
 	lsl	#2,d1
 	move.l	d0,(a0,d1)
 .lc0
 	bra.w	.loopo
 
+.pathOverflow
+	DPRINT	"Path name overflow!",555
+	bra	.loopo
+.unsupportedEntry
+	DPRINT	"Unsupported entry: %ld",556
+	bra	.loopo
+
 **** skannattuamme yhden hakemiston tutkitaan siinä olleet muut hakemistot
 * Files scanned, now check the subdirs.
 .dodirs
-	
+	* ExNext failed, then we come here.
+	* ERROR_NO_MORE_ENTRIES = 232 should be the normal case.
+ if DEBUG
+	lore	Dos,IoErr
+	cmp.l	#ERROR_NO_MORE_ENTRIES,d0
+	beq.b	.io
+	DPRINT	"IoErr=%ld",545
+.io
+ endif
 	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
 	;beq.w	.errd
 	* Allow recursion into directories with kick1.3 too!
@@ -9543,76 +9602,39 @@ filereq_code
 	* subdir path
 	move.l	(a3)+,d6
 
- if DEBUG
-	move.l	d6,d0
-	DPRINT	"Scan: %s",91
- endif
+	move.l	d6,a0
+.findDirEnd
+	tst.b	(a0)+
+	bne.b	.findDirEnd
+	move.l	a0,d3	* store this for later
+	move.l	d6,a1
+	subq	#2,a0	* skip last NULL and separator
+	bsr	nimenalku
+	* a0 = last part of the path
 
-	move.l	d6,d1
-	moveq	#ACCESS_READ,d2
-	lore	Dos,Lock
-	move.l	d0,d4
-	beq.b	.porre
-
-	move.l	d4,d1
-	pushpea	fileinfoblock2(a5),d2
-	lob	Examine
-	tst.l	d0 
-	bne.b	.exOk
-	move.l	d4,d1
-	lob	UnLock
-	bra.b	.porre
-.exOk
-
-	lea	fib_FileName+fileinfoblock2(a5),a0	* hakemiston nimi
-	bsr.w	adddivider
+	* Add a named divider from a0
+	* Remove separator temporarily
+	move.l	d3,a1
+	move.b	-2(a1),d0
+	clr.b	-2(a1)
+	bsr.w	adddivider	* all regs preserved
+	move.b	d0,-2(a1)
 
 	pushm	all
-	lea	-200(sp),sp
-
-	move.l	d4,d1
-	move.l	sp,d2
-	moveq	#100,d3			* max pituus hakemistolle
-; TEST 50 here
-	jsr	getNameFromLock
-	push	d0
-
-	move.l	d4,d1
-	lob	UnLock
-
-	tst.l	(sp)+		* NameFromLock error check
-	beq.b	.porrer
-
-	* process path from getNameFromLock, add dir divider
-	move.l	sp,a2
-.fe0	tst.b	(a2)+
-	bne.b	.fe0
-
-	subq	#1,a2
-	cmp.b	#':',-1(a2)
-	beq.b	.na0
-	move.b	#'/',(a2)+
-.na0	clr.b	(a2)
-
-	* calculate required list node size
-	sub.l	sp,a2
-	lea	l_size(a2),a2
-	move.l	a2,d3
-	move.l	sp,d2
-	* go deeper one level
+	* path length
+	sub.l	d6,d3
+	add.l	#l_size,d3
+	* path to scan
+	move.l	d6,d2
+	* scan it
 	bsr.w	.scanni
-
+	; Add end-of-directory divider
 	bsr.w	.dirdiv
-
-.porrer
-	lea	200(sp),sp
 	popm	all
-
-.porre	dbf	d5,.dodirsLoop
+	dbf	d5,.dodirsLoop
 
 .errd2	popm	all
-
-	bra.w	.errd
+	bra.b	.errd
 
 * in: 
 *   a4="dir 1/dir 2/",0
@@ -9634,6 +9656,7 @@ filereq_code
 	* allocate memory for list node
 
 	lea	fib_FileName+fileinfoblock2(a5),a0	* filename
+
 	move.l	a0,a1
 .fie	tst.b	(a1)+
 	bne.b	.fie
@@ -9641,7 +9664,7 @@ filereq_code
 
 	move.l	d3,d0		* hakemisto + nimi (pituus)
 	add.l	a1,d0
-	move.l	d0,d2
+	move.l	d0,d2		* TODO: whats this
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
 	bne.b	.gotMem2
@@ -9773,11 +9796,11 @@ addfile
 	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.exit
 
-;  ifne DEBUG
-; 	DPRINT2 "Adding->",1
-; 	DEBU	l_filename(a3)
-; 	DPRINT  "<-",2
-;  endif
+ ; ifne DEBUG
+ ;	DPRINT2 "Adding->",1
+ ;	DEBU	l_filename(a3)
+ ;	DPRINT  "<-",2
+ ; endif
 
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
@@ -27840,23 +27863,34 @@ createio
 *   d0 = 1 success, 0 failure
 *******
 getNameFromLock 
-.true		equ		1
-.false		equ		0
+.true		equ	1
+.false		equ	0
 .return		equr	d5
 .fl_lock	equr	d6
 .fl_lock2	equr	d7
 .fib		equr	d4
-.debug      	equ    0
+
+	tst.l 	d1
+	bne.b	.lockOk
+	DPRINT	"NULL lock!",1
+	* A NULL lock is valid and will return "SYS:" or similar, but
+	* it is not ok in Hippo context.
+	moveq	#.false,d0
+	rts
+.lockOk
 
 	pushm 	d1-a6
- ifne .debug
-	DPRINT	"getNameFromLock!",10
- endif
 	* It's all DOS, baby
 	move.l	_DosBase(a5),a6
 	tst.b	uusikick(a5)
 	beq.b	.old
 	lob     NameFromLock
+ if DEBUG
+	bne.b	.ok_
+	DPRINT	"NameFromLock FAILED!",2
+.ok_
+ 	tst.l	d0
+ endif	
 	popm	d1-a6
 	rts
 .old
@@ -27961,17 +27995,11 @@ getNameFromLock
 	* all done!
 	* move the resulting string to the front of the buffer.
 	* here a3 and a4 point to the same buffer 
- if DEBUG
-	move.l	a3,d0
- endif 
 
 .move
 	move.b	(a4)+,(a3)+
 	bne.b	.move
 
- ifne .debug
-	DPRINT	"->name=%s",2
- endif 
 
 	* indicate success
 	moveq 	#.true,.return
@@ -27984,12 +28012,10 @@ getNameFromLock
 	move.l	.return,d0
  if DEBUG
 	bne.b	.ok 
-	DPRINT	"GetNameFromLock FAILED!",100
+	DPRINT	"GetNameFromLock FAILED!",3
 .ok
  endif	
- ifne .debug
-	DPRINT	"->success=%ld",3
- endif
+
 	popm 	d1-a6
 	tst.l 	d0
 	rts
@@ -28017,7 +28043,7 @@ normalizeFilePath
 	move.l	#ACCESS_READ,d2
 	lore  	Dos,Lock
 	move.l	d0,d4
-	beq.w	.noLock1
+	beq.b	.noLock1
 	lea	-200(sp),sp
 	move.l	d4,d1
 	move.l	sp,d2
