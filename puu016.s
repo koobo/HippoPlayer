@@ -9589,8 +9589,13 @@ filereq_code
 	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
 	;beq.w	.errd
 	* Allow recursion into directories with kick1.3 too!
-
 	pushm	all
+
+	* sort subdirs to get them in nice order
+	move.l 	d7,a0 		
+	move	(a0)+,d0
+	jsr	sortStringPtrArray
+
 	* the first word in the memory contains the subdir count
 	move.l	d7,a3
 	move	(a3)+,d5
@@ -9789,7 +9794,6 @@ filereq_code
 	* This must not be changed, content checked in adddivider below.
 .barf	dc.b	"/\/\/\/\/\/\/\",0
 	even
-
 
 * addaa/inserttaa listaan a3:ssa olevan noden
 addfile	
@@ -27850,7 +27854,7 @@ createio
 	movem.l	(sp)+,a0-a2
 	rts
 
-*******
+***************************************************************************
 * getNameFromLock
 * DOS library NameFromLock is originally a V36 function. 
 * Here's a port ofthe  V40 implementation that works on older 
@@ -28021,6 +28025,7 @@ getNameFromLock
 	rts
 
 
+***************************************************************************
 * Takes a file path and normalizes it by replacing
 * logical names/assigns with actual drive names.
 * It will transform path parts such as "SYS:"
@@ -28073,6 +28078,54 @@ normalizeFilePath
 .noLock1
 	popm	all
 	rts
+
+***************************************************************************
+* Insertion sort of string pointer array 
+*
+* in:
+*  a0 = array of string pointers
+*  d0 = length of the array, unsigned 16-bit
+* out:
+*  a0 = sorted array
+sortStringPtrArray
+	cmp	#1,d0
+	bls.b	.x
+	pushm	d1/d2/d3/d6/d7/a1/a2
+	moveq	#1,d1 
+.sortLoopOuter
+	move	d1,d2
+.sortLoopInner
+	move	d2,d3
+	lsl	#2,d3
+	movem.l	-4(a0,d3),a1/a2
+.strCmp 
+	move.b	(a1)+,d6
+	move.b	(a2)+,d7
+	cmp.b	d6,d7
+	blo.b	.swap
+	tst.b	d6
+	beq.b	.exitLoop
+	tst.b	d7
+	beq.b	.exitLoop
+	cmp.b	d6,d7
+	beq.b	.strCmp
+	cmp.b	d6,d7
+	bhi.b	.exitLoop
+.swap
+	movem.l	-4(a0,d3),a1/a2
+	exg	a1,a2
+	movem.l	a1/a2,-4(a0,d3)
+	
+	subq	#1,d2
+;	bra.b 	.sortLoopInner
+	bne.b	.sortLoopInner	
+.exitLoop
+	addq	#1,d1
+	cmp 	d0,d1
+	bne.b 	.sortLoopOuter
+	popm	d1/d2/d3/d6/d7/a1/a2
+.x	rts
+
 
 *******************************************************************************
 *                                Soittorutiinit
@@ -35672,4 +35725,6 @@ deliPath	= ptheader+deliBaseLength
 * Path manipuation array
 deliPathArray	= deliPath+100
 deliPathArrayLength = 200
+
+
  end
