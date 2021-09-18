@@ -24044,8 +24044,50 @@ loadfile
 
 .nolha
 
-** Is this a sample file, stop loading if so.
 
+	* Probebuffer now has 1084 of data we can check
+	* for Delitracker CUSTOM format, as it has to be loaded
+	* with LoadSeg(), being an exe file.
+	tst.b	ahi_muutpois(a5)
+	bne.w	.ahiSkip
+	pushm 	d1-a6
+	clr.b	executablemoduleinit(a5)
+	lea	probebuffer(a5),a4
+	move.l	#1084,d7
+	bsr	id_futureplayer
+	bne.b	.notFuturePlayer
+	moveq	#pt_futureplayer,d7
+	bra.b	.wasFuturePlayer
+.notFuturePlayer
+	bsr	id_delicustom
+	bne.b	.notDeliCustom
+	moveq	#pt_delicustom,d7
+.wasFuturePlayer
+	move.l	#MEMF_PUBLIC,lod_memtype(a5)
+	bsr.w	.infor
+	move.l	lod_filename(a5),d1
+	lore	Dos,LoadSeg
+	tst.l	d0
+	beq.b	.loadSegErr
+	* set type of loadsegged module
+	move.b	d7,executablemoduleinit(a5)
+	move.l	d0,lod_address(a5)
+	clr.l	lod_length(a5)
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"Module LoadSeg ok for type %ld",7
+ endif
+.loadSegErr
+.notDeliCustom
+	popm 	d1-a6
+.ahiSkip
+	* Skip the rest if LoadSeg went fine
+	tst.b	executablemoduleinit(a5)
+	bne.w	.exit
+
+
+
+** Is this a sample file, stop loading if so.
 ** Jos havaitaan file sampleks, ei ladata enemp‰‰
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
@@ -24404,46 +24446,6 @@ loadfile
 ****** Ihan Tavallinen Lataus
 
 
-	* Probebuffer now has 1084 of data we can check
-	* for Delitracker CUSTOM format, as it has to be loaded
-	* with LoadSeg(), being an exe file.
-	tst.b	ahi_muutpois(a5)
-	bne.w	.ahiSkip
-	pushm 	d1-a6
-	clr.b	executablemoduleinit(a5)
-	lea	probebuffer(a5),a4
-	move.l	#1084,d7
-	bsr		id_futureplayer
-	bne.b	.notFuturePlayer
-	moveq	#pt_futureplayer,d7
-	bra.b	.wasFuturePlayer
-.notFuturePlayer
-	bsr		id_delicustom
-	bne.b	.notDeliCustom
-	moveq	#pt_delicustom,d7
-.wasFuturePlayer
-	move.l	#MEMF_PUBLIC,lod_memtype(a5)
-	bsr.w	.infor
-	move.l	lod_filename(a5),d1
-	lore	Dos,LoadSeg
-	tst.l	d0
-	beq.b	.loadSegErr
-	* set type of loadsegged module
-	move.b	d7,executablemoduleinit(a5)
-	move.l	d0,lod_address(a5)
-	clr.l	lod_length(a5)
- if DEBUG
-	move.l	d7,d0
-	DPRINT	"Module LoadSeg ok for type %ld",7
- endif
-.loadSegErr
-.notDeliCustom
-	popm 	d1-a6
-.ahiSkip
-
-	* Skip the rest if LoadSeg went fine
-	tst.b	executablemoduleinit(a5)
-	bne.w	.exit
 
  if DEBUG
 	move.l	lod_length(a5),d0
