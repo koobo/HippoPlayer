@@ -9035,11 +9035,23 @@ rbutton1
 	cmp.l 	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
 	* special case: some delicustoms, SUNTronic modules,
-	* can't handle being started over, to be save
+	* can't handle being started over, to be safe
 	* load these modules again before restarting.
-	cmp	    #pt_delicustom,playertype(a5)
+	cmp	#pt_delicustom,playertype(a5)
 	beq.b	.new
-.early
+	* similar case with SonicArranger with built-in
+	* replayer code. Data is modified upon init so that
+	* subsequent inits with same data will fail as
+	* unsupported module.
+	cmp	#pt_sonicarr,playertype(a5)
+	bne.b	.notSoar
+	* Check for "compact" SA module
+	move.l  moduleaddress(a5),a0 
+	cmp.l	#'SOAR',(a0)
+	bne.b 	.new
+.notSoar
+
+;.early
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
 
@@ -30011,7 +30023,6 @@ p_sonicarranger
 	beq.b	.memErr
 	cmp.b	#-2,d0
 	beq.b	.formatErr
-	
 	move	d1,pos_maksimi(a5)
 	move	d3,maxsongs(a5)
 
@@ -30044,8 +30055,6 @@ p_sonicarranger
 	jsr	.offset_song(a0)
 	pop	a5
 	move	d0,pos_maksimi(a5)
-	and.l	#$ffff,d0
-	DPRINT	"bob %ld",121
 	rts
 
 .forward
