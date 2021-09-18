@@ -936,6 +936,7 @@ soundfxroutines	rs.l	0
 gluemonroutines	rs.l	0
 pretrackerroutines rs.l	0
 custommaderoutines rs.l 0
+sonicroutines	rs.l	0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
@@ -1192,7 +1193,6 @@ pt_sid		rs.b	1
 pt_delta2	rs.b	1
 pt_musicass	rs.b	1
 pt_fred		rs.b	1
-pt_sonicarr	rs.b	1
 pt_sidmon1	rs.b	1
 pt_med		rs.b	1
 pt_markii	rs.b	1
@@ -1233,7 +1233,8 @@ pt_deltamusic1 		rs.b 	1
 pt_soundfx		rs.b	1
 pt_gluemon		rs.b	1
 pt_pretracker		rs.b	1
-pt_custommade	rs.b 	1
+pt_custommade		rs.b 	1
+pt_sonicarr		rs.b	1
 
 * player group version
 xpl_versio	=	21
@@ -16708,16 +16709,11 @@ lootaan_aika
 	bne.b	.ql
 	bra.b	.jaa
 .nptr
-	cmp	#pt_sonicarr,playertype(a5)
-	beq.b	.jaa
-
 	move.b	#"/",(a0)+
 	moveq	#0,d0
 	move	maxsongs(a5),d0
 	addq	#1,d0
 	bsr.w	putnumber
-
-
 .jaa	
 
 ;	tst.b	uusikick(a5)	
@@ -19528,6 +19524,7 @@ init_error
 	dr	ahi_t
 	dr	ier_nomled_t
 	dr	ier_mlederr_t
+	dr	ier_not_compatible_t
 
 ier_error	=	-1
 ier_nochannels	=	-2
@@ -19550,6 +19547,7 @@ ier_hardware	=	-18
 ier_ahi		=	-19
 ier_nomled	=	-20
 ier_mlederr	=	-21
+ier_not_compatible = 	-22
 
 ;hardware_t
 ier_playererr_t
@@ -19582,7 +19580,8 @@ nochip_t dc.b	"Not enough chip memory!",0
 filerr_t	dc.b	"File error!",0
 hardware_t	dc.b "68020 or better required!",0
 ahi_t	dc.b	"AHI device error!",0
-
+ier_not_compatible_t
+	dc.b	"Unsupported module type!",0
  even
 
 
@@ -24771,7 +24770,7 @@ tdir	dc.b	"°HiP°",0
 get_xpk	move.l	_XPKBase(a5),d0
 	beq.b	.noep
 	rts
-.noep	lea 	xpkname(pc),a1		
+.noep	lea 	xpkname,a1		
 	move.l	a6,-(sp)
 	move.l	(a5),a6
 	lob	OldOpenLibrary
@@ -24782,7 +24781,7 @@ get_xpk	move.l	_XPKBase(a5),d0
 get_pp	move.l	_PPBase(a5),d0
 	beq.b	.noep
 	rts
-.noep	lea 	ppname(pc),a1		
+.noep	lea 	ppname,a1		
 	move.l	a6,-(sp)
 	move.l	(a5),a6
 	lob	OldOpenLibrary
@@ -24793,7 +24792,7 @@ get_pp	move.l	_PPBase(a5),d0
 get_sid	move.l	_SIDBase(a5),d0
 	beq.b	.noep
 	rts
-.noep	lea 	sidname(pc),a1		
+.noep	lea 	sidname,a1		
 	move.l	a6,-(sp)
 	move.l	(a5),a6
 	lob	OldOpenLibrary
@@ -24808,7 +24807,7 @@ get_xfd
 	move.l	_XFDBase(a5),d0
 	beq.b	.x
 	rts
-.x	lea	xfdname(pc),a1
+.x	lea	xfdname,a1
 	push	a6
 	lore	Exec,OldOpenLibrary
 	pop	a6
@@ -24819,7 +24818,7 @@ get_med1
 	move.l	_MedPlayerBase1(a5),d0
 	beq.b	.q
 	rts
-.q	lea	medplayername1(pc),a1
+.q	lea	medplayername1,a1
 ;	moveq	#6,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -24832,7 +24831,7 @@ get_med2
 	move.l	_MedPlayerBase2(a5),d0
 	beq.b	.q
 	rts
-.q	lea	medplayername2(pc),a1
+.q	lea	medplayername2,a1
 ;	moveq	#6,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -24845,7 +24844,7 @@ get_med3
 	move.l	_MedPlayerBase3(a5),d0
 	beq.b	.q
 	rts
-.q	lea	medplayername3(pc),a1
+.q	lea	medplayername3,a1
 ;	moveq	#7,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -24859,7 +24858,7 @@ get_mline
 	move.l	_MlineBase(a5),d0
 	beq.b	.q
 	rts
-.q	lea	mlinename(pc),a1
+.q	lea	mlinename,a1
 	push	a6
 	lore	Exec,OldOpenLibrary
 	pop	a6
@@ -25158,9 +25157,6 @@ tutki_moduuli
 	bsr.w	id_musicassembler
 	beq.w	.musicassembler
 
-	bsr.w	id_sonic
-	beq.w	.sonicarranger
-
 	bsr.w	id_fred			* Fred
 	beq.w	.fred
 
@@ -25314,6 +25310,9 @@ tutki_moduuli
 
 	bsr	id_custommade
 	beq.w	.custommade
+
+	bsr.w	id_sonic
+	beq.w	.sonicarranger
 
 	bsr.w	id_player
 	beq.w	.player
@@ -25808,18 +25807,6 @@ id_musicassembler
 .muass_id
 	dc.b	"usa-team 89"
 .muassend
- even
-
-id_sonic
-	lea	.sonicid(pc),a1		* SonicArranger
-	moveq	#.sonice-.sonicid,d0
-	bsr.w	search
-	bra.b	idtest
-
-
-.sonicid
-	dc.b	"musicirq",0
-.sonice
  even
 
 
@@ -29969,53 +29956,201 @@ p_fred
 ******************************************************************************
 
 p_sonicarranger
-	jmp	.soninit(pc)
+	jmp	.init(pc)
+	jmp	 .play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	 .stop(pc)
 	dc.l	$4e754e75
 	dc.l	$4e754e75
-	jmp	.sonend(pc)
+	jmp 	.song(pc)
+	jmp 	.forward(pc)
+	jmp 	.backward(pc)
 	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	jmp	.sonsong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_song
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song
 	dc.b	"Sonic Arranger",0
  even
 
-.soninit
+.offset_init 		= $20+0
+.offset_play 		= $20+4
+.offset_end		= $20+8
+.offset_song 		= $20+12
+.offset_forward 	= $20+16
+.offset_backward 	= $20+20
+
+.init
 	bsr.w	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
-.ok	
-	movem.l	d0-a6,-(sp)
+.ok
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	sonicroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	bsr.w	rem_ciaint
+	bra.w	vapauta_kanavat
+.ok3
+	;bra	.skip
+
 	move.l	moduleaddress(a5),a0
-	jsr	(a0)
-	move.l	moduleaddress(a5),a0
-	jsr	4(a0)
-	moveq	#0,d0
-	move	songnumber(a5),d0
-	move.l	moduleaddress(a5),a0
-	jsr	12(a0)	
-	move	#10,maxsongs(a5)
-	movem.l	(sp)+,d0-a6
+	move.l	modulelength(a5),d0
+	lea	mainvolume(a5),a1
+	lea	songover(a5),a2
+	lea	pos_nykyinen(a5),a3
+	move.l	sonicroutines(a5),a4
+	push	a5
+	jsr	.offset_init(a4)
+	pop	a5
+	cmp.b	#-1,d0
+	beq.b	.memErr
+	cmp.b	#-2,d0
+	beq.b	.formatErr
+	
+	move	d1,pos_maksimi(a5)
+	move	d3,maxsongs(a5)
+
+	move	d2,d0
+	bsr	ciaint_setTempoFromD0
+.skip
 	moveq	#0,d0
 	rts	
 
-.sonend
-	movem.l	d0-a6,-(sp)
-	move.l	moduleaddress(a5),a0
-	jsr	16(a0)
-	move.l	moduleaddress(a5),a0
-	jsr	8(a0)
-	movem.l	(sp)+,d0-a6
+.memErr	moveq	#ier_nomem,d0
+	rts
+.formatErr
+	moveq	#ier_not_compatible,d0
+	rts
+
+.end
+	bsr.w	rem_ciaint
+	move.l	sonicroutines(a5),a0
+	jsr	.offset_end(a0)
+	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
-.sonsong
-	bsr.b	.sonend	
-	bra.b	.soninit
+.stop
+	bra	clearsound
+	
+.song
+	move	songnumber(a5),d0
+	move.l	sonicroutines(a5),a0
+	push	a5
+	jsr	.offset_song(a0)
+	pop	a5
+	move	d0,pos_maksimi(a5)
+	and.l	#$ffff,d0
+	DPRINT	"bob %ld",121
+	rts
+
+.forward
+	move.l	sonicroutines(a5),a0
+	push	a5
+	jsr	.offset_forward(a0)
+	pop	a5
+	rts
+.backward
+	move.l	sonicroutines(a5),a0
+	push	a5
+	jsr	.offset_backward(a0)
+	pop	a5
+	rts
+
+.play	
+	move.l	sonicroutines(a5),a0
+	jmp	.offset_play(a0)
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_sonic
+	move.l	a4,a0
+	move.l	d7,d3
+	moveq	#-1,D0
+
+	cmp.l	#'SOAR',(A0)
+	bne.b	.NoSong
+	addq.l	#4,A0
+	cmp.l	#'V1.0',(A0)+
+	bne.w	.Fault
+	cmp.l	#'STBL',(A0)
+	bne.w	.Fault
+	bra.w	.Found
+.NoSong
+	cmp.w	#$4EFA,(A0)
+	bne.b	.NoRepa
+	move.w	2(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	lea	6(A0,D1.W),A1
+	cmp.w	#$41FA,(A1)+
+	bne.b	.Fault
+	moveq	#0,D1
+	move.w	(A1),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	add.w	D1,A1
+	subq.l	#8,D3
+	sub.l	D1,D3
+	bmi.b	.Fault
+	move.l	A1,A0
+.NoRepa
+	move.l	A0,A1
+	moveq	#$28,D1
+	sub.l	D1,D3
+	bmi.b	.Fault
+	cmp.l	(A1)+,D1
+	bne.b	.Fault
+	moveq	#6,D1
+.NextLong
+	move.l	(A1)+,D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+	dbf	D1,.NextLong
+	sub.l	D2,D3
+	bmi.b	.Fault
+	lea	(A0,D2.L),A1
+	move.l	(A1)+,D1
+	beq.b	.SynthOnly
+	move.l	A1,A0
+.NextSize
+	sub.l	(A0),D3
+	bmi.b	.Fault
+	add.l	(A0)+,A1
+	addq.l	#4,A1
+	subq.l	#1,D1
+	bne.b	.NextSize
+.SynthOnly
+	moveq	#12,D1
+	sub.l	D1,D3
+	bmi.b	.Fault
+	lea	.Text(PC),A0
+.CheckString
+	cmpm.b	(A0)+,(A1)+
+	bne.b	.Fault
+	dbeq	D1,.CheckString
+.Found
+	moveq	#0,D0
+.Fault
+	tst.l	d0
+	rts
+.Text
+	dc.b	'deadbeef'
+	dc.l	0
+
 
 ******************************************************************************
 * SidMon 1.0
@@ -32952,7 +33087,7 @@ p_gamemusiccreator
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -33170,7 +33305,7 @@ p_digitalmugician
 	* allocate into chip mem, uses empty sample data 
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -33193,7 +33328,7 @@ p_digitalmugician
 	bra.w	clearsound
 
 .end
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	pushm	all
 	move.l	digitalmugicianroutines(a5),a0
 	jsr	.DMU_END(a0)
@@ -34975,6 +35110,7 @@ medplayername3	dc.b	"octamixplayer.library",0
 sidname		dc.b	"playsid.library",0
 mlinename	dc.b	"mline.library",0
 xfdname		dc.b	"xfdmaster.library",0
+ even
 
 	section	plrs,data
 
