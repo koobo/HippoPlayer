@@ -29791,7 +29791,7 @@ p_jamcracker
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc.l	$4e754e75
-	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus
+	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
 	dc.b	"JamCracker",0
  even
 
@@ -29815,17 +29815,24 @@ p_jamcracker
 ;	rts
 
 .ok3	
+	pushm a5/a6
 	move.l	moduleaddress(a5),a0
 	lea	dmawait(pc),a1
 	lea	songover(a5),a2
-	move.l	jamroutines(a5),a3
-	jsr	(a3)
+	lea mainvolume(a5),a3 
+	lea nullsample,a4
+	move.l	jamroutines(a5),a6
+	jsr	(a6)
+	popm a5/a6
+	move	d0,pos_maksimi(a5)
 	moveq	#0,d0
 	rts	
 
 .jamplay
 	move.l	jamroutines(a5),a0
-	jmp	304(a0)
+	jsr 4(a0)
+	move	d0,pos_nykyinen(a5)
+	rts
 
 .jamend
 	bsr.w	rem_ciaint

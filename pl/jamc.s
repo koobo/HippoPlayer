@@ -1,17 +1,27 @@
-testi	=	0
+;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
+testi	=	1
 
  ifne testi
 
+	incdir	include:
+	include mucro.i
+
 	lea	mod,a0
 	lea	w(pc),a1
-	bsr.b	jam+0
+	lea	songend_(pc),a2
+	lea	vol(pc),a3
+	lea	nullsample,a4
+	jsr	init
 
-
-loop	cmp.b	#$80,$dff006
+	
+loop
+	cmp.b	#$80,$dff006
 	bne.b	loop
+.x	cmp.b	#$80,$dff006
+	beq.b	.x
 
 	move	#$ff0,$dff180
-	bsr.w	jam+300
+	jsr	play
 	clr	$dff180
 
 	btst	#6,$bfe001
@@ -20,22 +30,71 @@ loop	cmp.b	#$80,$dff006
 	move	#$f,$dff096
 	rts
 
-w	move	#300-1,d0
-.w	dbf	d0,.w
-	rts
- endc
+vol	dc	$40
 
-* init: 0
-* music: 304
+w
+dmawait
+	pushm	d0/d1
+	moveq	#12-1,d1
+.d	move.b	$dff006,d0
+.k	cmp.b	$dff006,d0
+	beq.b	.k
+	dbf	d1,.d
+	popm	d0/d1
+	rts 
+songend_	dc	0
+
+endc
 
 
-jam
+
 	basereg	jam,a6
+jam
+	jmp	init(pc)
+	jmp	play(pc)
+
+* in:
+*   a0 = mod
+*   a1 = dmawait
+*   a2 = songover
+*   a3 = main volume
+* out:
+*   d0 = max song pos
+
+init
+	pushm	a5/a6
+	lea	jam(pc),a6
+	move.l	a0,moduleAddr(a6)
+	move.l	a1,dmaWaitAddr(a6)
+	move.l	a2,songOverAddr(a6)
+	move.l	a3,mainVolAddr(a6)
+	move.l	a4,nullSampleAddr(a6)
+	bsr.b	jamc_init
+	move	SongLength(pc),d0
+	popm	a5/a6
+	rts
+
+play
+	pushm	a5/a6
+	lea	jam(pc),a6
+	move.l	mainVolAddr(a6),a0
+	move	(a0),mainVol(a6)
+	bsr.w	jamc_music
+	move	SongLength(a6),d0
+	sub	CurPos(a6),d0
+	popm	a5/a6
+	rts
+
+
+moduleAddr		dc.l	0
+dmaWaitAddr		dc.l	0
+songOverAddr		dc.l	0
+mainVolAddr		dc.l	0
+mainVol			dc.w	0
+nullSampleAddr		dc.l	0
+
 jamc_init
 JAMCC000170	movem.l	D2-D7/A2-A6,-(SP)
-	lea	jam(pc),a6
-	move.l	a1,wait(a6)
-	move.l	a2,songend(a6)
 	addq.w	#4,A0
 	move.w	(A0)+,D0
 	move.w	D0,D1
@@ -81,14 +140,16 @@ JAMCC0001CE	move.l	A0,$24(A1)
 	move.l	2(A0),JAMCL0007CC(a6)
 	move.b	#6,JAMCB0007C8(a6)
 	move.b	#1,JAMCB0007C9(a6)
-	clr.w	JAMCW00089C(a6)
+	move.l	nullSampleAddr(a6),a0
+	clr.w	(a0)
 	move.w	#15,$DFF096
 	lea	JAMCL0007DC(a6),A0
 	lea	$DFF0A0,A1
 	moveq	#1,D1
 	move.w	#$80,D2
 	moveq	#3,D0
-JAMCC000250	move.w	#0,8(A1)
+JAMCC000250	
+	move.w	#0,8(A1)
 	move.w	D2,(A0)
 	move.w	D1,2(A0)
 	move.l	A1,4(A0)
@@ -181,7 +242,13 @@ JAMCC000372	tst.b	$2C(A1)
 	neg.w	$20(A1)
 	move.b	$2D(A1),$2C(A1)
 JAMCC000390	move.w	2(A1),D0
-	move.w	$22(A1),8(A0)
+	* vol
+	;move.w	$22(A1),8(A0)
+	move.w	$22(A1),d0
+	mulu	mainVol(pc),d0
+	lsr	#6,d0
+	move	d0,8(a0)
+
 	move.w	$24(A1),D0
 	add.w	D0,$22(A1)
 	tst.w	$22(A1)
@@ -238,7 +305,7 @@ JAMCC000428	move.l	JAMCL0007CC(a6),A0
 	move.l	JAMCL0007BC(a6),JAMCL0007D0(a6)
 	move.w	JAMCW0007BA(a6),JAMCW0007D4(a6)
 
-	move.l	songend(pc),a1		* SONGEND!!!!
+	move.l	songOverAddr(pc),a1		* SONGEND!!!!
 	st	(a1)
 
 JAMCC000462	move.l	JAMCL0007D0(a6),A1
@@ -264,24 +331,24 @@ JAMCC000486	clr.w	JAMCW0007DA(a6)
 
 ;	move.w	#$12B,D0
 ;JAMCC0004C6	dbra	D0,JAMCC0004C6
-	move.l	wait(a6),a1
+	move.l	dmaWaitAddr(pc),a1
 	jsr	(a1)
 
 	lea	JAMCL0007DC(a6),A1
-	bsr.s	JAMCC000544
+	bsr.b	JAMCC000544
 	lea	JAMCL00080C(a6),A1
-	bsr.s	JAMCC000544
+	bsr.b	JAMCC000544
 	lea	JAMCL00083C(a6),A1
-	bsr.s	JAMCC000544
+	bsr.b	JAMCC000544
 	lea	JAMCL00086C(a6),A1
-	bsr.s	JAMCC000544
+	bsr.b	JAMCC000544
 	bset	#7,JAMCW0007DA(a6)
 	move.w	JAMCW0007DA(a6),$dff096
 
 ;	move.w	#$12B,D0
 ;JAMCC0004FE	dbra	D0,JAMCC0004FE
 
-	move.l	wait(a6),a1
+	move.l	dmaWaitAddr(pc),a1
 	jsr	(a1)
 
 	move.l	JAMCL0007E6(a6),$dff0A0
@@ -303,8 +370,7 @@ JAMCC000544	move.w	JAMCW0007DA(a6),D0
 	move.w	$12(A1),6(A0)
 	btst	#0,$2E(A1)
 	bne.s	JAMCC00057A
-	pea	JAMCW00089C(a6)
-	move.l	(sp)+,10(A1)
+	move.l	nullSampleAddr(a6),10(A1)
 	move.w	#1,8(A1)
 JAMCC00057A	rts
 
@@ -313,11 +379,9 @@ JAMCC00057C	move.b	(A0),D1
 	and.l	#$FF,D1
 	add.w	D1,D1
 
-	move.l	a0,-(sp)
-	lea	JAMCB000752(a6),a0
-	add.l	a0,d1
-	move.l	(sp)+,a0
-
+	pea	JAMCB000752(a6)
+	add.l	(sp)+,d1
+	
 	move.l	D1,A2
 	btst	#6,2(A0)
 	beq.s	JAMCC0005A0
@@ -338,8 +402,7 @@ JAMCC0005A0	move.w	2(A1),D0
 	move.l	D0,A2
 	tst.l	$24(A2)
 	bne.s	JAMCC0005EA
-	pea	JAMCW00089C(a6)
-	move.l	(sp)+,10(A1)
+	move.l	nullSampleAddr(a6),10(A1)
 	move.w	#1,8(A1)
 	clr.b	$2E(A1)
 	bra.s	JAMCC00061C
@@ -470,6 +533,7 @@ JAMCL000754	dc.l	$3FB03C2,$38C0359,$32902FB,$2D002A8,$282025E
 	dc.l	$A00097,$8F0087,$870087,$870087,$870087,$870087
 	dcb.l	$3,$870087
 	dc.w	$87
+SongLength
 JAMCW0007BA	dc.w	0
 JAMCL0007BC	dc.l	0
 JAMCL0007C0	dc.l	0
@@ -479,34 +543,43 @@ JAMCB0007C9	dc.b	0
 JAMCB0007CA	dcb.b	$2,0
 JAMCL0007CC	dc.l	0
 JAMCL0007D0	dc.l	0
+* Current position (decreasing)
+CurPos
 JAMCW0007D4	dc.w	0
 JAMCL0007D6	dc.l	0
 JAMCW0007DA	dc.w	0
+
+Channel1 ; $30 bytes
 JAMCL0007DC	dcb.l	$2,0
+Ch1SampleLen
 JAMCW0007E4	dc.w	0
+Ch1SampleAddress
 JAMCL0007E6	dcb.l	$9,0
 	dc.w	0
+Channel2
 JAMCL00080C	dcb.l	$2,0
 JAMCW000814	dc.w	0
 JAMCL000816	dcb.l	$9,0
 	dc.w	0
+Channel3
 JAMCL00083C	dcb.l	$2,0
 JAMCW000844	dc.w	0
 JAMCL000846	dcb.l	$9,0
 	dc.w	0
+Channel4
 JAMCL00086C	dcb.l	$2,0
 JAMCW000874	dc.w	0
 JAMCL000876	dcb.l	$9,0
 	dc.w	0
-JAMCW00089C	dcb.w	$2,0
-wait	dc.l	0	* wait6-rutiinin osoite
-songend	dc.l	0
+	* nullsample!
+
+;JAMCW00089C	dcb.w	$2,0
 jame
  endb	a6
 
  ifne testi
 
 	section	cc,data_c
-
-mod	incbin	music:misc/jam.crusaders1
+nullsample	ds.l	1
+mod	incbin	sys:music/modsanthology/synth/jamcrack/jam.dr-awesome-3
  endc
