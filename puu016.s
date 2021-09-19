@@ -6924,7 +6924,14 @@ umph
 
 	* This might be a list divider. Try again in that case.
 	isListDivider l_filename(a3)	* onko divideri?
-	beq.w	umph			* kokeillaan edellistä/seuraavaa/rnd
+	bne.b	.noDiv		* kokeillaan edellistä/seuraavaa/rnd
+
+	* try next one until at end of the list
+	TSTNODE	a3,a0
+	bne.w	umph
+	bra.w	.erer
+
+.noDiv
 
 	cmp.l	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
@@ -10176,7 +10183,7 @@ freelist
 	clr.l	modamount(a5) 
 	* need to reset random table to nothingness as well
 	bsr.w	clear_random
-	bsr		clearCachedNode
+	bsr	clearCachedNode
 
 	* reset list slider and list box 
 	clr.l	firstname(a5)	
