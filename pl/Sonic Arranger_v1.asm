@@ -1,12 +1,13 @@
 ;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
 
-test	=	0
+test	=	1
 
 	incdir	include:
 	include	mucro.i
 	include	misc/eagleplayer.i
 	include	hardware/custom.i
 	include	exec/exec_lib.i
+	include	exec/exec.i
 	include	exec/memory.i
 
  ifne test
@@ -83,6 +84,14 @@ modend
 	jmp	forward(pc)
 	jmp	backward(pc)
 
+flushCaches
+	move.l	4.w,a6
+	cmp	#37,LIB_VERSION(a6)
+	blo.b	.old
+	jsr	_LVOCacheClearU(a6)
+.old
+	rts
+
 * in:
 *   a0 = module address
 *   a1 = main volume address
@@ -109,6 +118,7 @@ init
 	bsr.w	InitPlayer
 	tst.l	d0
 	bne.b	.initErr
+	bsr.b	flushCaches
 	bsr.w	InitSound
 
 	bsr.w	SubSongRange
