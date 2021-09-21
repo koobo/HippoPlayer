@@ -929,6 +929,7 @@ gamemusiccreatorroutines rs.l 0
 digitalmugicianroutines	rs.l 0
 medleyroutines rs.l 0
 futureplayerroutines rs.l 0
+daveloweroutines	rs.l 	0
 bendaglishroutines	rs.l	0
 sidmon2routines 	rs.l 	0
 deltamusic1routines rs.l 	0
@@ -1235,6 +1236,7 @@ pt_gluemon		rs.b	1
 pt_pretracker		rs.b	1
 pt_custommade		rs.b 	1
 pt_sonicarr		rs.b	1
+pt_davelowe		rs.b	1
 
 * player group version
 xpl_versio	=	21
@@ -5523,12 +5525,9 @@ freemodule
 	bsr.w		obtainModuleData
 
 	* Check if need to do UnLoadSeg
-	cmp	#pt_delicustom,playertype(a5)
-	seq	d7
-	cmp	#pt_futureplayer,playertype(a5)
-	seq	d6
-	or.b	d6,d7
-
+	bsr		moduleIsExecutable
+	move.b	d0,d7
+	
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
     * that UnLoadSeg() is needed.
@@ -5567,13 +5566,13 @@ freemodule
 	move.l 	a1,d1
 	lore	Dos,UnLoadSeg
 	DPRINT	"UnLoadSeg!",3
-	bra.b	.deliCustom
+	bra.b	.exe
 .normal
 
 	move.l	modulelength(a5),d0
 	beq.b	.ee
 	lob	FreeMem				* hit!
-.deliCustom	
+.exe
 
 	clr.l	moduleaddress(a5)
 	clr.l	modulelength(a5)
@@ -5605,7 +5604,21 @@ freemodule
 	movem.l	(sp)+,d0-a6
 	rts
 
-	
+
+* out:
+*  d0 = non-zero if loaded module is an LoadSeg() loaded exe	
+moduleIsExecutable
+	cmp	#pt_delicustom,playertype(a5)
+	beq.b	.isExe
+	cmp	#pt_futureplayer,playertype(a5)
+	beq.b	.isExe
+	cmp	#pt_davelowe,playertype(a5)
+	beq.b	.isExe
+	moveq	#0,d0
+	rts
+.isExe 
+	moveq	#1,d0 
+	rts
 
 *******************************************************************************
 * Volumen feidaus
@@ -23423,6 +23436,7 @@ loaderr
 	dr	openerror_t
 	dr	error_t
 	dr	extract_t
+	dr  readerror_t  * loadseg failure 
 
 cryptederror_t
 ;	dc.b	"File is encrypted!",0
@@ -23546,6 +23560,7 @@ lod_notafile	=	-15
 lod_openerr2	=	-16
 lod_xfderr	=	-17
 lod_extract	=	-18
+lod_loadsegfail = -19
 
 loadfile
 	movem.l	d1-a6,-(sp)
@@ -24051,47 +24066,10 @@ loadfile
 
 .nolha
 
-
-	* Probebuffer now has 1084 of data we can check
-	* for Delitracker CUSTOM format, as it has to be loaded
-	* with LoadSeg(), being an exe file.
-	tst.b	ahi_muutpois(a5)
-	bne.w	.ahiSkip
-	pushm 	d1-a6
-	clr.b	executablemoduleinit(a5)
-	lea	probebuffer(a5),a4
-	move.l	#1084,d7
-	bsr	id_futureplayer
-	bne.b	.notFuturePlayer
-	moveq	#pt_futureplayer,d7
-	bra.b	.wasFuturePlayer
-.notFuturePlayer
-	bsr	id_delicustom
-	bne.b	.notDeliCustom
-	moveq	#pt_delicustom,d7
-.wasFuturePlayer
-	move.l	#MEMF_PUBLIC,lod_memtype(a5)
-	bsr.w	.infor
-	move.l	lod_filename(a5),d1
-	lore	Dos,LoadSeg
-	tst.l	d0
-	beq.b	.loadSegErr
-	* set type of loadsegged module
-	move.b	d7,executablemoduleinit(a5)
-	move.l	d0,lod_address(a5)
-	clr.l	lod_length(a5)
- if DEBUG
-	move.l	d7,d0
-	DPRINT	"Module LoadSeg ok for type %ld",7
- endif
-.loadSegErr
-.notDeliCustom
-	popm 	d1-a6
-.ahiSkip
-	* Skip the rest if LoadSeg went fine
+	bsr	.handleExecutableModuleLoading
+	* Skip the rest if LoadSeg above went fine
 	tst.b	executablemoduleinit(a5)
 	bne.w	.exit
-
 
 
 ** Is this a sample file, stop loading if so.
@@ -24752,6 +24730,66 @@ loadfile
 .eee	rts
 
 
+
+.handleExecutableModuleLoading
+	* Probebuffer now has 1084 of data we can check
+	* for Delitracker CUSTOM format, as it has to be loaded
+	* with LoadSeg(), being an exe file.
+	* Clear the flag that indicates exe module load status.
+	clr.b	executablemoduleinit(a5)
+	* There are no AHI supported exe type modules
+	tst.b	ahi_muutpois(a5)
+	bne.w	.ahiSkip
+	pushm 	d1-a6
+	lea	probebuffer(a5),a4
+	move.l	#1084,d7
+
+	* Test for known exe formats
+
+	bsr	id_futureplayer
+	bne.b	.notFuturePlayer
+	moveq	#pt_futureplayer,d7
+	bra.b	.exeOk
+
+.notFuturePlayer
+	bsr	id_delicustom
+	bne.b	.notDeliCustom
+	moveq	#pt_delicustom,d7
+	bra.b	.exeOk 
+
+.notDeliCustom 
+	bsr	id_davelowe
+	bne.b	.notDl
+	moveq	#pt_davelowe,d7
+	bra.b	.exeOk
+.notDl
+	bra.b	.notKnown
+.exeOk
+	move.l	#MEMF_PUBLIC,lod_memtype(a5)
+	bsr.w	.infor
+	move.l	lod_filename(a5),d1
+	lore	Dos,LoadSeg
+	tst.l	d0
+	beq.b	.loadSegErr
+	* set type of loadsegged module
+	move.b	d7,executablemoduleinit(a5)
+	move.l	d0,lod_address(a5)
+	* length is not readily available for these, so clear it
+	clr.l	lod_length(a5)
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"Module LoadSeg ok for type %ld",7
+ endif
+.loadExit
+.notKnown
+	popm 	d1-a6
+.ahiSkip
+	rts
+.loadSegErr
+	move	#lod_loadsegfail,lod_error(a5)
+	bra.b 	.loadExit
+
+* Removes the temp directory used for unarchiving lha etc
 remarctemp
 	pushm	all
 	lea	-200(sp),sp
@@ -25248,6 +25286,8 @@ tutki_moduuli
 	* of the checks since moduledata is a seglist
 	cmp.b	#pt_futureplayer,executablemoduleinit(a5)
 	beq.w	.futureplayer
+	cmp.b	#pt_davelowe,executablemoduleinit(a5)
+	beq.w	.davelowe
 
 	tst.b	sampleinit(a5)		* sample??
 	bne.w	.sample
@@ -25614,6 +25654,10 @@ tutki_moduuli
 	move	#pt_futureplayer,playertype(a5)
 	bra.w	.ex
 
+.davelowe
+	pushpea	p_davelowe(pc),playerbase(a5)
+	move	#pt_davelowe,playertype(a5)
+	bra.w	.ex
 
 .bendaglish
 	pushpea	p_bendaglish(pc),playerbase(a5)
@@ -35113,6 +35157,140 @@ id_custommade
 	moveq	#0,D0
 	rts
 
+
+
+******************************************************************************
+* Dave Lowe
+******************************************************************************
+
+p_davelowe
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	dc.l	$4e754e75 	
+	dc.l	$4e754e75
+	jmp	.song(pc) 
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song!pf_end
+	dc.b	"Dave Lowe",0
+ even
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.END   = 8+$20
+.SONG  = 12+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	daveloweroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0 
+	* LoadSeg BPTR->APTR
+	add.l	a0,a0
+	add.l	a0,a0
+	lea	mainvolume(a5),a1 
+	lea	songover(a5),a2
+	move.l	daveloweroutines(a5),a3
+	jsr	.INIT(a3)
+	subq	#1,d2
+	move	d2,maxsongs(a5)
+
+ if DEBUG
+ 	push	d0
+	move.l	d1,d0
+	move.l	d2,d1
+	move.l	d3,d2
+	DPRINT	"Range %ld-%ld %s",1
+	pop	d0
+ endif
+	tst.l	d3
+	beq.b	.x
+	move.l	d3,a0
+	lea	modulename(a5),a1
+.c	move.b	(a0)+,(a1)+
+	bne.b	.c
+.x
+	popm	d1-a6
+	* INIT returns 0 on success
+	rts	
+
+.play
+	move.l	daveloweroutines(a5),a0
+	jsr	.PLAY(a0)
+	rts
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	addq	#1,d0
+	DPRINT	"Song %ld",2
+ endif
+	move.l	daveloweroutines(a5),a0
+	jmp .SONG(a0)
+
+.end
+	jsr	rem_ciaint
+	pushm	all
+	move.l	daveloweroutines(a5),a0
+	jsr	.END(a0)
+	popm	all
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_davelowe
+	move.l	a4,a0
+	cmp.l	#$000003F3,(A0)
+	bne.b	.fail
+	tst.b	20(A0)				; loading into chip check
+	beq.b	.fail
+	lea	32(A0),A0
+	cmp.l	#$70FF4E75,(A0)+
+	bne.b	.fail
+	cmp.l	#'UNCL',(A0)+
+	bne.b	.fail
+	cmp.l	#'EART',(A0)+
+	bne.b	.fail
+	tst.l	(A0)+				; InitSound pointer check
+	beq.b	.fail
+	tst.l	(A0)+				; Interrupt pointer check
+	beq.b	.fail
+	addq.l	#4,A0
+	tst.l	(A0)				; Subsong Counter label check
+	beq.b	.fail
+	moveq	#0,D0
+	rts
+.fail
+	moveq	#-1,D0
+	rts
 
 
 

@@ -110,7 +110,8 @@ main
 	dc.l	gluemondata-main,pretrackerdata-gluemondata
 	dc.l	pretrackerdata-main,custommadedata-pretrackerdata
 	dc.l	custommadedata-main,sonicarrangerdata-custommadedata
-	dc.l	sonicarrangerdata-main,pend-sonicarrangerdata
+	dc.l	sonicarrangerdata-main,davelowedata-sonicarrangerdata
+	dc.l	davelowedata-main,pend-davelowedata
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -169,5 +170,6 @@ gluemondata		incbin gluemon13.im
 pretrackerdata		incbin pretracker.bin.im
 custommadedata		incbin custommade_v1.im
 sonicarrangerdata	incbin sonicarranger.im
+davelowedata		incbin davelowe.im
 pend
 
