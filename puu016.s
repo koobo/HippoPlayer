@@ -30254,6 +30254,10 @@ p_sidmon1
 	rts
 .ok2
 	movem.l	d0-a6,-(sp)
+	; The id routine does code modification to the module
+	; provided replay routine, for safety clear caches
+	; before calling.
+	bsr	clearCpuCaches
 	move.l	sid10init(pc),a0
 	jsr	(a0)
 	movem.l	(sp)+,d0-a6
