@@ -9,12 +9,12 @@ WISHLISH
 - keyshortcutit tooltippeihin?
 Formats
 + Beathoven
-- Deltamusic1
++ Deltamusic1
 + Digital mugician
 - earache
 - face the music
 + sidmon2
-- JamCracker FIXES (check EP/DT)
++ JamCracker FIXES 
 - digital mugician 2
 + game music creator
 + mark ii sound system
@@ -22,15 +22,28 @@ Formats
 + medley
 + future player
 + ben daglish
-
-- SonicArranger, all three variants
++ SonicArranger, all three variants
 - MusicMaker
 + SoundFX 1.x
 - Synthesis
 - FTM
-+ InStereo
+- InStereo
 + Ron Klaren + CustomMade
-+ MusicMakerV8
+- MusicMakerV8
+- Syntracker
+- RichardJoseph
+- TCBTracker
+- Quartet
+
+
+FIXED
+- have list with two dividers
+- try to play
+-> list will animate between two dividers
+
+FIXED
+- enable XFD
+-> delicustom stops working
 
 FEATURE
 - Now that we have multiple monitor support with P96 libraries it is possible to have HippoPlayer playing in its own Native screen and have RTG Workbench active at the same time on the other monitor. But as soon as the Screen on which HippoPlayer is placed is not active anymore the Scopes stop updating, only the timer updates.

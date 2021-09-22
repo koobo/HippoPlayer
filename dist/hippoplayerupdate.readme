@@ -2,7 +2,7 @@ Short: Updated HippoPlayer, a module player for classic Amigas
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.47 
+Version: 2.48
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -33,29 +33,55 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 # Changes from v2.47 (31.8.2021) to v2.48 (?.?.2021)
 
 ## New fixes:
-- Fix crash caused by a devious ProTracker module Sunday Hangover by 
-  Skope/Up Rough!. This also crashes ProTracker v2.3 :-)
+- File and directory scan was refactored and is now much more robust.
+  This fixes some bugs caused by very long path names and
+  some other corner cases, such as uncommon directory types.
+  Subdirectories will also be added in alphabetical order.
+  Thanks to Zoltar of the English Amiga Board for reporting 
+  a nasty bug and testing a bunch of desperate fixes. 
+- Fix crash caused by a devious ProTracker module "Sunday Hangover" by 
+  Skope/UpRough. The modules uses the "EFF" command without a sample,
+  which is unexpected. Also crashes ProTracker v2.3d and other apps.
 - After playing a DeliCustom type module and then trying to play a 
   XPK/PP/FImp/XFD compressed module lead to the new module being recognized 
   as DeliCustom even if it wasn't, which lead to all kinds of bad things.
-- Fixed a possible memory corruption/crash when adding a subdirectory
-  which contains more than 250 subdirectories.
 - Fixed the case where favorites were not saved if the user exited while 
   being in the favorites view. 
+- If the XFDMaster library was enabled, DeliCustom modules were not
+  recognized. 
+- For lists with only list dividers the selection would sometimes 
+  go looping around the list and never stopping.
+- JamCracker had an annoying audible *BEEP* once in a while. Fixed it.
+  (Empty sample data was not in chip mem.)
 
 ## New music formats:
-- PreTracker by Pink/aBYSs. Very noice! Samples are generated during 
+- PreTracker by Pink/aBYSs. Noice! Samples are generated during 
   initialization which may take some time especially on slow CPUs.
-- GlueMon (properly retro sound)
-- SoundFX
+- SonicArranger
+  - Now supports more variants, previously only the compact form was 
+    supported. Adaptation based on Wanted Team sources.
+- CustomMade
+  - Battle Squadron! Format by Ivo Zoer, songs composed by Ron Klaren. 
+    Adaptation based on Wanted Team sources.
+- Dave Love
+  - Just wanted to hear Hippo play the International Karate + title music. 
+    Adaptation based on Wanted Team sources.
 - DeliTracker Custom format improvements, adds support for modules 
   with external samples:
- - SUNTronic modules (from SUNTronicTunes.lha)
- - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too
+  - SUNTronic modules (from SUNTronicTunes.lha). Smooth!
+  - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too
+- GlueMon (properly retro sound)
+- SoundFX (some nice ones in there)
  
 ## New features:
 - Patternscope XL, with twice the amount of rows. 
-  Patternscope implementation was optimized to lessen CPU load.
+  Implementation was also optimized quite a bit.
+- Improved JamCracker support: added volume control and position/length info.
+
+## Thanks and greetings to:
+- Spot/UpRough for beta testing and music format related assistance.
+- Marek Hac for beta testing.
+
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
