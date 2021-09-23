@@ -1362,7 +1362,9 @@ DPRINT macro
 	ifne DEBUG
 	push 	a0
 	lea 	.DD\2(pc),a0
+	;pea		.DD\2(pc)
 	jsr	desmsgDebugAndPrint
+	;addq.l	#4,sp
 	pop 	a0
 	bra.b	.D\2
 .DD\2
@@ -33471,25 +33473,6 @@ id_digitalmugician
 * Delitracker CUSTOM
 ******************************************************************************
 
-* Another version that initializes a5.
-* Deli calls have another base in a5.
-DELIDPRINT  macro
-	ifne DEBUG
-	pushm a0/a5
-	lea	var_b,a5
-	lea .DD\2(pc),a0
-	jsr	desmsg
-	pea	desbuf(a5)
-	jsr	PRINTOUT
-	popm	a0/a5
-	bra.b	.D\2
-.DD\2
- 	dc.b 	\1,10,0
- 	even
-.D\2
-	endc
-	endm
-
 p_delicustom
 	jmp	.init(pc)
 	jmp	.play(pc)
@@ -35515,34 +35498,34 @@ buildDeliBase
 	rts
 .setTimer
 	* May be called from interrupt, no logging allowed
-	;DELIDPRINT	"deliSetTimer",15
+	;DPRINT	"deliSetTimer",15
 .stub
 	moveq	#0,d0
 	rts
 
 .startInt	
-	DELIDPRINT 	"deliStartInt",1
+	DPRINT 	"deliStartInt",1
 	moveq	#0,d0
 	rts
 .stopInt 
-	DELIDPRINT	"deliStopInt",2
+	DPRINT	"deliStopInt",2
 	moveq	#0,d0
 	rts
 .cutSuffix 
-	DELIDPRINT	"cutSuffix",201
+	DPRINT	"cutSuffix",201
 	moveq	#0,d0
 	rts
 .allocListData
-	DELIDPRINT	"allocListData",202
+	DPRINT	"allocListData",202
 	moveq	#0,d0
 	rts
 .freeListData
-	DELIDPRINT	"freeListData",203
+	DPRINT	"freeListData",203
 	moveq	#0,d0
 	rts
 
 deliAllocAudio 
-	DELIDPRINT	"deliAudioAlloc",1102
+	DPRINT	"deliAudioAlloc",1102
 	pushm	d1-a6
 	lea	var_b,a5
 	* returns d0=0 on success:
@@ -35551,7 +35534,7 @@ deliAllocAudio
 	rts
 
 deliFreeAudio 
-	DELIDPRINT	"deliAudioFree",1103
+	DPRINT	"deliAudioFree",1103
 	pushm	d1-a6
 	lea	var_b,a5
 	bsr	vapauta_kanavat
@@ -35562,7 +35545,7 @@ deliCopyString move.l a0,d0
 	bsr.w	deliAppendStr
  if DEBUG
 	move.l	#deliPathArray,d1
-	DELIDPRINT	"copyString %s path=%s",106
+	DPRINT	"copyString %s path=%s",106
  endif
 	moveq	#0,d0
 	rts
@@ -35571,7 +35554,7 @@ deliCopyFile
 	bsr.w	deliAppendStr
  if DEBUG
 	move.l	#deliPathArray,d0
-	DELIDPRINT	"copyFile path=%s",107
+	DPRINT	"copyFile path=%s",107
  endif
 	moveq	#0,d0
 	rts
@@ -35580,18 +35563,18 @@ deliCopyDir
 	bsr.w	deliAppendStr
  if DEBUG
 	move.l	#deliPathArray,d0
-	DELIDPRINT	"copyDir path=%s",108
+	DPRINT	"copyDir path=%s",108
  endif
 	moveq	#0,d0
 	rts
 deliLoadFile move.l  a0,d0
  if DEBUG
 	move.l	#deliPathArray,d1
-	DELIDPRINT	"loadFile %s path=%s",109
+	DPRINT	"loadFile %s path=%s",109
  endif
 	moveq	#0,d0
 	rts
-deliGetListData DELIDPRINT	"getListData %d",110
+deliGetListData DPRINT	"getListData %d",110
 	move.l	moduleaddress+var_b,a0
 	move.l	modulelength+var_b,d0
 	rts
