@@ -203,6 +203,7 @@ check	macro
 	include	devices/ahi_lib.i
 
 	include	misc/deliplayer.i
+	include	misc/eagleplayer.i
 
 	incdir include/
 	include	mucro.i
@@ -1237,6 +1238,9 @@ pt_pretracker		rs.b	1
 pt_custommade		rs.b 	1
 pt_sonicarr		rs.b	1
 pt_davelowe		rs.b	1
+pt_synthesis	rs.b 	1
+pt_syntracker	rs.b  	1
+pt_robhubbard2 	rs.b 	1
 
 * player group version
 xpl_versio	=	21
@@ -1358,10 +1362,8 @@ DPRINT macro
 	ifne DEBUG
 	push 	a0
 	lea 	.DD\2(pc),a0
-	jsr	desmsgDebug
+	jsr	desmsgDebugAndPrint
 	pop 	a0
-	pea	debugDesBuf(a5)
-	jsr	PRINTOUT
 	bra.b	.D\2
 .DD\2
  	dc.b 	\1,10,0
@@ -1832,6 +1834,11 @@ quad_segment
 
 
  ifne DEBUG
+PRINTOUT_DEBUGBUFFER
+	pea	debugDesBuf+var_b 
+	bsr.b PRINTOUT
+	rts
+
 PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
 	lea	var_b,a5
@@ -5164,10 +5171,15 @@ desmsg4	movem.l	d0-d7/a0-a3/a6,-(sp)
 * a3 = desbuf
 
  if DEBUG 
-desmsgDebug
+desmsgDebugAndPrint
 	movem.l	d0-d7/a0-a3/a6,-(sp)
-	lea	debugDesBuf(a5),a3
-	bra.b	ulppa
+	lea	debugDesBuf+var_b,a3
+	move.l	sp,a1	
+	lea	putc(pc),a2	
+	move.l	4.w,a6
+	lob	RawDoFmt
+	movem.l	(sp)+,d0-d7/a0-a3/a6
+	bra	PRINTOUT_DEBUGBUFFER
  endif
 
 *******************************************************************************
@@ -23858,10 +23870,10 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_mline
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_aon
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_player
 	beq.b	.on
@@ -23901,6 +23913,11 @@ loadfile
 
 	bsr.w id_custommade
 	beq.b .on 
+
+	bsr	id_synthesis 
+	beq.b .on
+	bsr	id_syntracker 
+	beq.b .on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
@@ -25199,11 +25216,11 @@ tutki_moduuli
 	bne.w	.noop
 
 	tst.b	ahi_muutpois(a5)	
-	bne.b	.noop
+	bne.w	.noop
 
 	* Ensure no id funcs are ran on executables
 	tst.b	executablemoduleinit(a5)
-	bne.b	.noop
+	bne.w	.noop
 
 	* These do not require player group:
 
@@ -25239,6 +25256,16 @@ tutki_moduuli
 
 	bsr	id_beathoven
 	beq.w	.beathoven
+
+	***************************************************
+	* Eagle players
+	bsr id_synthesis
+	beq .synthesis
+	bsr id_syntracker
+	beq .syntracker
+	bsr id_robhubbard2
+	beq .robhubbard2
+	***********************************
 
 	tst.l	externalplayers(a5)
 	bne.b	.noop
@@ -25695,6 +25722,22 @@ tutki_moduuli
 	pushpea	p_custommade(pc),playerbase(a5)
 	move	#pt_custommade,playertype(a5)
 	bra.w	.ex
+
+.synthesis
+	pushpea	p_synthesis(pc),playerbase(a5)
+	move	#pt_synthesis,playertype(a5)
+	bra.w	.ex
+
+.syntracker
+	pushpea	p_syntracker(pc),playerbase(a5)
+	move	#pt_syntracker,playertype(a5)
+	bra.w	.ex
+
+.robhubbard2
+	pushpea	p_robhubbard2(pc),playerbase(a5)
+	move	#pt_robhubbard2,playertype(a5)
+	bra.w	.ex
+
 
 **** Oliko  sample??
 .sample
@@ -33463,604 +33506,36 @@ p_delicustom
 	dc.b	"DeliTracker Custom",0
  even
 
-
-* in:
-*   d0 = tag to find
-* out:
-*   d0 = tag data or NULL if not found
-.getTag
-	* This is a BPTR to a seglist, loaded with LoadSeg()
-	move.l	moduleaddress(a5),a0
-	add.l	a0,a0
-	add.l	a0,a0
-	* tag item array
-	move.l	16(a0),a0
-.loop
-    ;cmp.l  #TAG_END,(a0)
-    tst.l   (a0)            * TAG_END is NULL
-    beq.b   .notFound
-    cmp.l   (a0),d0
-    bne.b   .notThis
-    move.l  4(a0),d0
-    rts
-.notFound
-	moveq   #0,d0
-	rts
-.notThis
-    addq.l  #8,a0
-    bra.b   .loop
-
-.callFunc	
-	tst.l	d0 
-	beq.b	.noFunc
-	DPRINT	"Call %lx",101
-	pushm 	d2-a6
-	lea	deliBase,a5
-	move.l	d0,a0
-	jsr	(a0)
-	popm	d2-a6
-.noFunc rts
-
 .init
 	pushm	d1-a6	
-	DPRINT	"deliInit",10
-	bsr.w	.buildDeliBase
-
- if DEBUG
-	 bsr	.showTags
- endif
-
-	* Order in DT
-	* InitPlayer
-	* SubSongRange
-	* SubSongRange
-	* Volume
-	* Volume
-	* InitSound (dtg_SndNum=1)
-	* SubSongRange	
-
-	move.l	#DTP_DeliBase,d0
-	bsr	.getTag
-	beq.b	.noDBTag
-	move.l	d0,a0 
-	lea	deliBase,a1
-	move.l	a1,(a0)
-.noDBTag
-
-	move.l	#DTP_InitPlayer,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
-	* Status is returned in d0, can't rely on status flags
-	* here. d0=0 if ok, else not ok
-	tst.l	d0
-	bne.w	.error
-	DPRINT	"initPlayer ok",11
-
-	* set default song number
-	bsr	.getSongInfo
-	* d0 = def, d1 = min, d2 = max	
-	move	d0,deliBase+dtg_SndNum
-	move	d0,songnumber(a5)
-	move	d2,maxsongs(a5)	
-
-	move.l	#DTP_Volume,d0  
-	bsr.w	.getTag
-	move.l	d0,.storedSetVolume
-
-	move.l	#DTP_InitSound,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
-
-	DPRINT	"InitSound ok",12
-
-	* see if an interrupt routine is provided.
-	* if so, set up a cia interrupt to drive it.
-	* otherwise assume the module handles it.
-	move.l	#DTP_Interrupt,d0  
-	bsr.w	.getTag
-	move.l	d0,.storedInterrupt
-	beq.w	.noInt
-	DPRINT	"using hippo interrupt",33
- 
-	* interrupt routine provided, set up an interrupt
-	move	deliBase+dtg_Timer,d0
-	jsr	init_ciaint_withTempo
-	beq.b	.gotCia
-	DPRINT	"cia error",44
-
-	* try to clean up
-	move.l	#DTP_EndSound,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
-	move.l	#DTP_EndPlayer,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
-
-	moveq	#ier_nociaints,d0
-	bra.w	.error
-.gotCia
-.noInt
-
-	 * tst.l xyz(pc) is 020 instruction
-	move.l	.storedInterrupt(pc),d0  
-	bne.b	.intSet
-	* try to start module provided int handler
-	move.l	#DTP_StartInt,d0
-	bsr	.getTag
-	beq.b	.noStartInt
-	bsr	.callFunc
-	DPRINT	"using module interrupt",34
-.noStartInt
-.intSet
-
-.skip
- if DEBUG
-	moveq	#0,d0
-	move	deliBase+dtg_Timer,d0
-	DPRINT	"init ok, dtg_Timer=%ld",55
- endif
-	* ok
-	moveq	#0,d0
-.exit
+	move.l	moduleaddress(a5),a0
+	add.l	a0,a0
+	add.l 	a0,a0
+	bsr	deliInit
 	popm	d1-a6
 	rts
 
-.error
-	DPRINT	"init FAIL",56
-	moveq	#-1,d0 
-	bra.b	.exit
-	
 
 * Interrupt play routine, use cached pointers to avoid tag searches
 .play
-	move.l	.storedInterrupt(pc),d0
-	beq.b	.nope
-	lea	deliBase,a5
-	move	var_b+mainvolume,dtg_SndVol(a5)
-	move.l	d0,a0
-	jsr	(a0)
-	move.l	.storedSetVolume(pc),d0
-	beq.b	.noVol
-	lea	deliBase,a5
-	move.l 	d0,a0
-	jsr	(a0)
-.noVol
-.nope
+	bsr	deliPlay
 	rts
-
-.storedInterrupt	dc.l	0
-.storedSetVolume	dc.l 	0
-
 .end
-	pushm	d1-a6
-	DPRINT	"deliEnd",13
-	
-	move.l	.storedInterrupt(pc),d0
-	beq.b	.noIntUsed
-	jsr	rem_ciaint
-.noIntUsed
-
-	move.l	#DTP_StopInt,d0
-	bsr	.getTag
-	bsr	.callFunc
-
-	move.l	#DTP_EndSound,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
-
-	move.l	#DTP_EndPlayer,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
-
-	moveq	#0,d0
-	popm	d1-a6
+	bsr	deliEnd
 	rts
-
-
-* out:
-*  d0=default song
-*  d1=min song
-*  d2=max song
-.getSongInfo
-	moveq	#0,d0 
-	moveq	#0,d1 
-	moveq	#0,d2
-	
-	move.l	#DTP_SubSongRange,d0  
-	bsr.w	.getTag
-	beq.b	.noSubSongs1
-	bsr	.callFunc
-	move.l	d1,d2
-	move.l	d0,d1
-	DPRINT	"Subsong def=%ld min=%ld max=%ld",111
-	rts
-
-.noSubSongs1
-	move.l	#DTP_NewSubSongRange,d0  
-	bsr.w	.getTag
-	beq.b	.noSubSongs2
-	move.l	d0,a0
-	movem	(a0),d0/d1/d2
-	DPRINT	"NewSubSongs defa=%ld min=%ld max=%ld",112
-.noSubSongs2
-	rts	
-
 .song
-	DPRINT	"deliSong",114
-	bsr	.stop
-
-	bsr	.getSongInfo
-
-	* low bound check
-	cmp	songnumber(a5),d1
-	blo.b	.ok1
-	move	d1,songnumber(a5)
-.ok1
-	* upper bound check
-	cmp	songnumber(a5),d2
-	bhi.b .ok2
-	move d2,songnumber(a5)
-.ok2
-	* Put it, wrong number may crash some players
-	move	songnumber(a5),deliBase+dtg_SndNum
-
-	move.l	#DTP_InitSound,d0
-	bsr	.getTag
-	bsr	.callFunc
-	move.l	#DTP_StartInt,d0
-	bsr	.getTag
-	bsr	.callFunc
+	bsr	deliSong
 	rts
 
 * Not sure what exactly should be done with these two.
 * Seems to work more or less.
 .stop
-	DPRINT	"deliStop",14
-	move.l	#DTP_EndSound,d0
-	bsr	.getTag
-	;bsr	.callFunc
-	move.l	#DTP_StopInt,d0
-	bsr	.getTag
-	bsr	.callFunc
-	;bsr	clearsound
-	move	#$f,$dff096
+	bsr	deliStop
 	rts
 
 .cont
-	DPRINT	"deliCont",144
-	move.l	#DTP_InitSound,d0
-	bsr	.getTag
-	;bsr	.callFunc
-	move.l	#DTP_StartInt,d0
-	bsr	.getTag
-	bsr	.callFunc
-	move	#$800f,$dff096
+	bsr	deliCont
 	rts
-
-* Build the DeliBase structure, this is not a complete version.
- 
-.buildDeliBase
-	lea	deliBase,a0
-	lea	deliBaseLength(a0),a1
-.clrBase
-	clr.b	(a0)+
-	cmp.l	a0,a1 
-	bne.b .clrBase
-	lea	deliBase,a0
-
-	push a0
-	jsr	getcurrent 
-	pop a0
-	
-	* a3 = node
-	* Grab path and file parts
-	move.l	l_nameaddr(a3),a1
-	move.l	a1,dtg_FileArrayPtr(a0)
-	lea	l_filename(a3),a2
-	lea	deliPath,a3
-	move.l	a3,dtg_DirArrayPtr(a0)
-.copy	move.b	(a2)+,(a3)+
-	cmp.l	a2,a1
-	bne.b	.copy
-	clr.b	(a3)		
-
-	lea	deliPathArray,a1
-	move.l	a1,dtg_PathArrayPtr(a0)
-	clr.b	(a1)
-	lea	deliPathArrayLength(a1),a2
-.clr	clr.b	(a1)+
-	cmp.l 	a2,a1
-	bne.b	.clr
-
- if DEBUG
-	move.l	dtg_FileArrayPtr(a0),d0
-	DPRINT	"File %s",501
-	move.l	dtg_DirArrayPtr(a0),d0
-	DPRINT	"Dir %s",502
- endif
-
-	move.l	_DosBase(a5),dtg_DOSBase(a0)
-	move.l	_IntuiBase(a5),dtg_IntuitionBase(a0)
-	move.l	_GFXBase(a5),dtg_GfxBase(a0)
-	
-	; Illegal address for enforcer
-	move.l	#$10000000,dtg_GadToolsBase(a0)
-	move.l	#$10000000,dtg_AslBase(a0)
-
-	clr	dtg_SndNum(a0) * this must be correct 
-	move	#64,dtg_SndVol(a0)
-	move	#64,dtg_SndLBal(a0)
-	move	#64,dtg_SndRBal(a0)
-	clr	dtg_LED(a0)
-
-	pea	.allocAudio(pc)
-	move.l	(sp)+,dtg_AudioAlloc(a0)
-	pea	.freeAudio(pc)
-	move.l	(sp)+,dtg_AudioFree(a0)
-	pea	dmawait(pc)
-	move.l	(sp)+,dtg_WaitAudioDMA(a0)
-	pea	.startInt(pc)
-	move.l	(sp)+,dtg_StartInt(a0)
-	pea	.stopInt(pc)
-	move.l	(sp)+,dtg_StopInt(a0)
-	pea	.songEnd(pc)
-	move.l	(sp)+,dtg_SongEnd(a0)	* may be called from interrupt
-	pea	.setTimer(pc)
-	move.l	(sp)+,dtg_SetTimer(a0)	* may be called from interrupt
-	pea	.allocListData(pc)
-	move.l	(sp)+,dtg_AllocListData(a0)
-	pea	.freeListData(pc)
-	move.l	(sp)+,dtg_FreeListData(a0)
-	pea	.copyString(pc)
-	move.l	(sp)+,dtg_CopyString(a0)
-	pea	.copyFile(pc)
-	move.l	(sp)+,dtg_CopyFile(a0)
-	pea	.copyDir(pc)
-	move.l	(sp)+,dtg_CopyDir(a0)
-	pea	.loadFile(pc)
-	move.l	(sp)+,dtg_LoadFile(a0)
-	pea	.getListData(pc)
-	move.l	(sp)+,dtg_GetListData(a0)
-	pea	.cutSuffix(pc)
-	move.l	(sp)+,dtg_CutSuffix(a0)
-
-
-	* Stub the rest
- 	lea	.stub(pc),a1
-	move.l	a1,dtg_LockScreen(a0)
-	move.l	a1,dtg_UnlockScreen(a0)
-	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
- 	rts
-
-.allocAudio 
-	DELIDPRINT	"deliAudioAlloc",1102
-	pushm	d1-a6
-	lea	var_b,a5
-	* returns d0=0 on success:
-	bsr	varaa_kanavat 
-	popm	d1-a6
-	rts
-
-.freeAudio 
-	DELIDPRINT	"deliAudioFree",1103
-	pushm	d1-a6
-	lea	var_b,a5
-	bsr	vapauta_kanavat
-	popm	d1-a6
-	rts
-
-.songEnd
-	* May be called from interrupt, no logging allowed
-	st	var_b+songover
-	rts
-.setTimer
-	* May be called from interrupt, no logging allowed
-	;DELIDPRINT	"deliSetTimer",15
-.stub
-	moveq	#0,d0
-	rts
-
-.startInt	
-	DELIDPRINT 	"deliStartInt",1
-	moveq	#0,d0
-	rts
-.stopInt 
-	DELIDPRINT	"deliStopInt",2
-	moveq	#0,d0
-	rts
-.copyString move.l a0,d0
-	bsr.w	.appendStr
- if DEBUG
-	move.l	#deliPathArray,d1
-	DELIDPRINT	"copyString %s path=%s",106
- endif
-	moveq	#0,d0
-	rts
-.copyFile 
-	move.l	dtg_FileArrayPtr(a5),a0
-	bsr.w	.appendStr
- if DEBUG
-	move.l	#deliPathArray,d0
-	DELIDPRINT	"copyFile path=%s",107
- endif
-	moveq	#0,d0
-	rts
-.copyDir 
-	move.l	dtg_DirArrayPtr(a5),a0
-	bsr.w	.appendStr
- if DEBUG
-	move.l	#deliPathArray,d0
-	DELIDPRINT	"copyDir path=%s",108
- endif
-	moveq	#0,d0
-	rts
-.loadFile move.l  a0,d0
- if DEBUG
-	move.l	#deliPathArray,d1
-	DELIDPRINT	"loadFile %s path=%s",109
- endif
-	moveq	#0,d0
-	rts
-.getListData DELIDPRINT	"getListData %d",110
-	moveq	#0,d0
-	rts
-.cutSuffix 
-	DELIDPRINT	"cutSuffix",201
-	moveq	#0,d0
-	rts
-.allocListData
-	DELIDPRINT	"allocListData",202
-	moveq	#0,d0
-	rts
-.freeListData
-	DELIDPRINT	"freeListData",203
-	moveq	#0,d0
-	rts
-
-.appendStr
-	move.l 	dtg_PathArrayPtr(a5),a1 
-.1	tst.b 	(a1)+
-	bne.b 	.1
-	subq	#1,a1
-.2	move.b 	(a0)+,(a1)+
-	bne.b 	.2
-	rts
-
- if DEBUG
-.showTags
-	move.l	moduleaddress(a5),a0
-	add.l	a0,a0
-	add.l	a0,a0
-	move.l	16(a0),a0
-.tloop
-	movem.l	(a0)+,d0/d1
-	
-	sub.l	#DTP_TagBase,d0
-	lsl.l	#2,d0
-	lea		tagsTable(pc,d0.l),a1
-	lsr.l	#2,d0
-	add.l	#DTP_TagBase,d0
-	
-	cmp.l	#tagsTableEnd,a1
-	blo.b 	.okTag
-	DPRINT  "Tag %lx: %lx",2002
-	bra.b	.oddTag
-.okTag
-	move.l	d1,d2
-	move.l	(a1),d1
-	DPRINT  "Tag %lx %s: %lx",2001
-.oddTag
-	tst.l	(a0) 
-	bne.w	.tloop
-	rts
-
-tagsTable
- dc.l EDTP_InternalPlayer
- dc.l EDTP_CustomPlayer 
- dc.l EDTP_RequestDTVersion
- dc.l EDTP_RequestKickVersion
- dc.l EDTP_PlayerVersion
- dc.l EDTP_PlayerName   
- dc.l EDTP_Creator    	
- dc.l EDTP_Check1   
- dc.l EDTP_Check2   
- dc.l EDTP_ExtLoad    	
- dc.l EDTP_Interrupt    
- dc.l EDTP_Stop   	 
- dc.l EDTP_Config   	
- dc.l EDTP_UserConfig   
- dc.l EDTP_SubSongRange 
- dc.l EDTP_InitPlayer   
- dc.l EDTP_EndPlayer    
- dc.l EDTP_InitSound    
- dc.l EDTP_EndSound   	
- dc.l EDTP_StartInt   	
- dc.l EDTP_StopInt    	
- dc.l EDTP_Volume   	
- dc.l EDTP_Balance    	
- dc.l EDTP_Faster   	
- dc.l EDTP_Slower   
- dc.l EDTP_NextPatt   
- dc.l EDTP_PrevPatt   
- dc.l EDTP_NextSong   	
- dc.l EDTP_PrevSong   
- dc.l EDTP_SubSongTest  
- dc.l EDTP_NewSubSongRange
- dc.l EDTP_DeliBase  	
- dc.l EDTP_Flags   	
- dc.l EDTP_CheckLen   	
- dc.l EDTP_Description  
- dc.l EDTP_Decrunch   	
- dc.l EDTP_Convert    	
- dc.l EDTP_NotePlayer   
- dc.l EDTP_NoteStruct   
- dc.l EDTP_NoteInfo   	
- dc.l EDTP_NoteSignal   
- dc.l EDTP_Process    	
- dc.l EDTP_Priority   	
- dc.l EDTP_StackSize    
- dc.l EDTP_MsgPort    	
- dc.l EDTP_Appear   	
- dc.l EDTP_Disappear   	
- dc.l EDTP_ModuleName   
- dc.l EDTP_FormatName   
- dc.l EDTP_AuthorName   
- dc.l EDTP_InitNote  
-tagsTableEnd
- 
-EDTP_InternalPlayer   	dc.b "DTP_InternalPlayer",0 ; obsolete
-EDTP_CustomPlayer   	dc.b "DTP_CustomPlayer",0 ; player is a customplayer
-EDTP_RequestDTVersion   	dc.b "DTP_RequestDTVersion",0 ; minimum DeliTracker version needed
-EDTP_RequestKickVersion   	dc.b "DTP_RequestKickVersion",0 ; minimum KickStart version needed
-EDTP_PlayerVersion   	dc.b "DTP_PlayerVersion",0 ; actual player version & revision
-EDTP_PlayerName   	dc.b "DTP_PlayerName",0 ; name of this player
-EDTP_Creator    	dc.b "DTP_Creator",0 ; misc string
-EDTP_Check1   	dc.b "DTP_Check1",0 ; Check Format before loading
-EDTP_Check2   	dc.b "DTP_Check2",0 ; Check Format after file is loaded
-EDTP_ExtLoad    	dc.b "DTP_ExtLoad",0 ; Load additional files
-EDTP_Interrupt    	dc.b "DTP_Interrupt",0 ; Interrupt routine
-EDTP_Stop   	dc.b "DTP_Stop",0 ; Clear Patterncounter
-EDTP_Config   	dc.b "DTP_Config",0 ; Config Player
-EDTP_UserConfig   	dc.b "DTP_UserConfig",0 ; User-Configroutine
-EDTP_SubSongRange   	dc.b "DTP_SubSongRange",0 ; Get min&max subsong number
-EDTP_InitPlayer   	dc.b "DTP_InitPlayer",0 ; Initialisize the Player
-EDTP_EndPlayer    	dc.b "DTP_EndPlayer",0 ; Player clean up
-EDTP_InitSound    	dc.b "DTP_InitSound",0 ; Soundinitialisation routine
-EDTP_EndSound   	dc.b "DTP_EndSound",0 ; End sound
-EDTP_StartInt   	dc.b "DTP_StartInt",0 ; Start interrupt
-EDTP_StopInt    	dc.b "DTP_StopInt",0 ; Stop interrupt
-EDTP_Volume   	dc.b "DTP_Volume",0 ; Set Volume
-EDTP_Balance    	dc.b "DTP_Balance",0 ; Set Balance
-EDTP_Faster   	dc.b "DTP_Faster",0 ; Incease playspeed
-EDTP_Slower   	dc.b "DTP_Slower",0 ; Decrease playspeed
-EDTP_NextPatt   	dc.b "DTP_NextPatt",0 ; Jump to next pattern
-EDTP_PrevPatt   	dc.b "DTP_PrevPatt",0 ; Jump to previous pattern
-EDTP_NextSong   	dc.b "DTP_NextSong",0 ; Play next subsong
-EDTP_PrevSong   	dc.b "DTP_PrevSong",0 ; Play previous subsong
-EDTP_SubSongTest   	dc.b "DTP_SubSongTest",0 ; Test, if given subsong is vaild
-EDTP_NewSubSongRange   	dc.b "DTP_NewSubSongRange",0 ; enhanced replacement for EDTP_SubSongRange
-EDTP_DeliBase  	dc.b "DTP_DeliBase",0 ; the address of a pointer where DT
-EDTP_Flags   	dc.b "DTP_Flags",0 ; misc Flags (see below)
-EDTP_CheckLen   	dc.b "DTP_CheckLen",0 ; Length of the Check Code
-EDTP_Description   	dc.b "DTP_Description",0 ; misc string
-EDTP_Decrunch   	dc.b "DTP_Decrunch",0 ; pointer to Decrunch Code
-EDTP_Convert    	dc.b "DTP_Convert",0 ; pointer to Converter Code
-EDTP_NotePlayer   	dc.b "DTP_NotePlayer",0 ; pointer to a NotePlayer Structure
-EDTP_NoteStruct   	dc.b "DTP_NoteStruct",0 ; the address of a pointer to the
-EDTP_NoteInfo   	dc.b "DTP_NoteInfo",0 ; a pointer where DT stores a pointer
-EDTP_NoteSignal   	dc.b "DTP_NoteSignal",0 ; pointer to NoteSignal code
-EDTP_Process    	dc.b "DTP_Process",0 ; pointer to process entry code
-EDTP_Priority   	dc.b "DTP_Priority",0 ; priority of the process
-EDTP_StackSize    	dc.b "DTP_StackSize",0 ; stack size of the process
-EDTP_MsgPort    	dc.b "DTP_MsgPort",0 ; a pointer where DT stores a pointer
-EDTP_Appear   	dc.b "DTP_Appear",0 ; open your window, if you can
-EDTP_Disappear   	dc.b "DTP_Disappear",0 ; go dormant
-EDTP_ModuleName   	dc.b "DTP_ModuleName",0 ; get the name of the current module
-EDTP_FormatName   	dc.b "DTP_FormatName",0 ; get the name of the module format
-EDTP_AuthorName   	dc.b "DTP_AuthorName",0 ; not implemented yet
-EDTP_InitNote   	dc.b "DTP_InitNote",0 ; NoteStruct initialization
- even
- endif
 
 id_delicustom
 	lea	.id1_start(pc),a1	
@@ -34104,6 +33579,282 @@ id_delicustom
 	dc.l DTP_CustomPlayer
 .id3_end
 
+
+
+******************************************************************************
+* Synthesis
+******************************************************************************
+
+p_synthesis
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	jmp	.cont(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc.b	"Synthesis",0
+ even
+.path dc.b "sys:c/eagleplayer2/eagleplayers/synth 4.0",0
+ even
+.dp 	dc.l 	0
+
+.init
+	pushm	d1-a6	
+
+	tst.l	.dp 
+	bne.b	.loaded
+	move.l	#.path,d1
+	lore 	Dos,LoadSeg
+	move.l	d0,.dp
+	bne.b	.loaded
+	moveq	#ier_unknown,d0
+	bra	.error
+.loaded
+	move.l	.dp(pc),d0
+	lsl.l	#2,d0
+	move.l	d0,a0
+	bsr	deliInit
+	tst.l	d0
+	beq.b	.error
+	bsr	deliPlay
+.error
+	popm	d1-a6
+	rts
+
+* Interrupt play routine, use cached pointers to avoid tag searches
+.play
+	bsr	deliPlay
+	rts
+.end	
+	bsr	deliStop
+	bsr	deliEnd
+	rts
+.stop
+	bsr	deliStop
+	rts
+.cont
+	bsr	deliCont
+	rts
+
+id_synthesis
+	bsr.b  .c 
+	tst.l 	d0 
+	rts
+.c
+.lbC0003C8	
+	;MOVE.L	$24(A5),A0
+	move.l	a4,a0 
+	MOVEQ	#1,D0
+	CMP.L	#$53796E74,(A0)
+	BNE.S	.lbC000436
+	MOVE.L	4(A0),D0
+	LSR.L	#8,D0
+	CMP.L	#$68342E,D0
+	BEQ.S	.lbC000424
+	CMP.L	#$682E5063,4(A0)
+	BNE.S	.lbC000436
+	MOVEQ	#$64,D0
+.lbC0003F0	CMP.L	#$D1FC0000,(A0)
+	BNE.S	.lbC00040C
+	CMP.L	#$CC22C8,4(A0)
+	BNE.S	.lbC00040C
+	CMP.L	#$7200123A,8(A0)
+	BEQ.S	.lbC000414
+.lbC00040C	ADDQ.L	#4,A0
+	DBRA	D0,.lbC0003F0
+	RTS
+
+.lbC000414	MOVEQ	#-1,D0
+	SUBQ.L	#4,A0
+	CMP.W	#$41FA,(A0)+
+	BNE.S	.lbC000436
+	MOVEQ	#0,D1
+	MOVE.W	(A0),D1
+	ADD.L	D1,A0
+.lbC000424	
+	MOVEQ	#0,D0
+.lbC000436	
+	rts
+
+
+******************************************************************************
+* SynTracker
+******************************************************************************
+
+p_syntracker
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	jmp	.cont(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc.b	"SynTracker",0
+ even
+.path dc.b "sys:c/eagleplayer2/eagleplayers/syntracker",0
+ even
+.dp 	dc.l 	0
+
+.init
+	pushm	d1-a6	
+
+	tst.l	.dp 
+	bne.b	.loaded
+	move.l	#.path,d1
+	lore 	Dos,LoadSeg
+	move.l	d0,.dp
+	bne.b	.loaded
+	moveq	#ier_unknown,d0
+	bra	.error
+.loaded
+	move.l	.dp(pc),d0
+	lsl.l	#2,d0
+	move.l	d0,a0
+
+	lea	ProgStart-4,a0
+	bsr	deliInit
+.error	DPRINT	"Syntracker init %ld",1
+	popm	d1-a6
+	rts
+
+* Interrupt play routine, use cached pointers to avoid tag searches
+.play
+	bsr	deliPlay
+	rts
+.end	
+	bsr	deliStop
+	bsr	deliEnd
+	rts
+.stop
+	bsr	deliStop
+	rts
+.cont
+	bsr	deliCont
+	rts
+
+id_syntracker
+	move.l 	a4,a0
+	LEA	.SYNTRACKERSON.MSG(PC),A1
+	MOVEQ	#-1,D0
+	MOVEQ	#15,D1
+.lbC0001E0	CMPM.B	(A1)+,(A0)+
+	BNE.S	.lbC0001EA
+	DBRA	D1,.lbC0001E0
+	MOVEQ	#0,D0
+.lbC0001EA	
+	tst.l	d0
+	RTS
+
+.SYNTRACKERSON.MSG	dc.b	'SYNTRACKER-SONG:',0,0
+
+
+******************************************************************************
+* Rob Hubbard 2
+******************************************************************************
+
+p_robhubbard2
+	jmp	.init(pc)
+	jmp	.play(pc)
+	dc.l	$4e754e75
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	jmp	.cont(pc)
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc.l	$4e754e75
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc.b	"Rob Hubbard 2",0
+ even
+.path dc.b "sys:c/eagleplayer2/eagleplayers/rob hubbard 2",0
+ even
+.dp 	dc.l 	0
+
+.init
+	pushm	d1-a6	
+
+	tst.l	.dp 
+	bne.b	.loaded
+	move.l	#.path,d1
+	lore 	Dos,LoadSeg
+	move.l	d0,.dp
+	bne.b	.loaded
+	moveq	#ier_unknown,d0
+	bra	.error
+.loaded
+	move.l	.dp(pc),d0
+	lsl.l	#2,d0
+	move.l	d0,a0
+	bsr	deliInit
+.error	DPRINT	"RH2 init %ld",1
+	popm	d1-a6
+	rts
+
+* Interrupt play routine, use cached pointers to avoid tag searches
+.play
+	bsr	deliPlay
+	rts
+.end	
+	bsr	deliStop
+	bsr	deliEnd
+	rts
+.stop
+	bsr	deliStop
+	rts
+.cont
+	bsr	deliCont
+	rts
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_robhubbard2
+	pushm	d1-a4
+	move.l	a4,a0 
+	bsr.b 	.c 
+	popm  	d1-a4
+	tst.l d0 
+	rts 
+.c	;MOVE.L	$24(A5),A0
+	;MOVE.L	$28(A5),D7
+	SUB.W	$10(A0),D7
+	SUBQ.L	#2,D7
+	BNE.S	.lbC000336
+	MOVE.W	(A0),D0
+	LEA	0(A0,D0.W),A0
+	TST.W	(A0)
+	BMI.S	.lbC000336
+	MOVEQ	#0,D0
+	MOVEQ	#0,D1
+	MOVE.W	2(A0),D1
+	MOVE.W	12(A0),D2
+	MOVE.W	6(A0),D3
+	MOVEQ	#$10,D4
+.lbC000320	MOVE.W	0(A0,D4.W),D0
+	CMP.W	D1,D0
+	BGT.S	.lbC000336
+	CMP.W	D2,D0
+	BLT.S	.lbC000336
+	ADDQ.W	#2,D4
+	CMP.W	D4,D3
+	BLT.S	.lbC000320
+	MOVEQ	#0,D0
+	RTS
+.lbC000336	MOVEQ	#-1,D0
+	RTS
 
 
 ******************************************************************************
@@ -35297,6 +35048,1183 @@ id_davelowe
 	rts
 
 
+******************************************************************************
+* Deli support
+******************************************************************************
+
+* Local data
+* - loadseg player code
+* - player type, to avoid reloading
+* - free player when exiting
+
+
+* - todo: dtg_getlistdata
+
+
+storedInterrupt	dc.l	0
+storedSetVolume	dc.l 	0
+storedSetVoices dc.l	0
+deliPlayer	dc.l	0
+deliPlayerType	dc.w	0
+
+* in:
+*   d0 = tag to find
+* out:
+*   d0 = tag data or NULL if not found
+deliGetTag
+	* This is a BPTR to a seglist, loaded with LoadSeg()
+	move.l	deliPlayer(pc),a0
+	;add.l	a0,a0
+	;add.l	a0,a0
+	* tag item array
+	move.l	16(a0),a0
+.loop
+    ;cmp.l  #TAG_END,(a0)
+    tst.l   (a0)            * TAG_END is NULL
+    beq.b   .notFound
+    cmp.l   (a0),d0
+    bne.b   .notThis
+    move.l  4(a0),d0
+    rts
+.notFound
+	moveq   #0,d0
+	rts
+.notThis
+    addq.l  #8,a0
+    bra.b   .loop
+
+deliCallFunc	
+	tst.l	d0 
+	beq.b	.noFunc
+	DPRINT	"Call %lx",101
+	pushm 	d2-a6
+	lea	deliBase,a5
+	move.l	d0,a0
+	jsr	(a0)
+	popm	d2-a6
+.noFunc rts
+
+* in:
+*  a0 = deliplayer or delucustom address from loadseg
+deliInit
+	pushm	d1-a6	
+	DPRINT	"deliInit",10
+	move.l	a0,deliPlayer
+	move	moduletype(a5),deliPlayerType
+	bsr.w	buildDeliBase
+
+ if DEBUG
+	 bsr	deliShowTags
+ endif
+
+	* Order in DT
+	* InitPlayer
+	* SubSongRange
+	* SubSongRange
+	* Volume
+	* Volume
+	* InitSound (dtg_SndNum=1)
+	* SubSongRange	
+
+	move.l	#DTP_DeliBase,d0
+	bsr	deliGetTag
+	beq.b	.noDBTag
+	move.l	d0,a0 
+	lea	deliBase,a1
+	move.l	a1,(a0)
+.noDBTag
+	move.l	#EP_EagleBase,d0
+	bsr	deliGetTag
+	beq.b	.noEBTag
+	move.l	d0,a0 
+	lea	deliBase,a1
+	move.l	a1,(a0)
+.noEBTag
+
+	* Not really needed:
+	move.l	#DTP_Check2,d0  
+	bsr.w	deliGetTag
+	beq.b	.noCheck2
+	bsr.w	deliCallFunc
+	DPRINT	"DTP_Check2: %ld",9
+	tst.l	d0
+	bne.w	.error
+.noCheck2	
+	move.l	#EP_Check5,d0  
+	bsr.w	deliGetTag
+	beq.b	.noCheck5
+	bsr.w	deliCallFunc
+	DPRINT	"EP_Check5: %ld",8
+	tst.l	d0
+	bne.w	.error
+.noCheck5
+
+	move.l	#DTP_ExtLoad,d0  
+	bsr.w	deliGetTag
+	beq.b	.noExtLoad
+	bsr.w	deliCallFunc
+	DPRINT	"DTP_ExtLoad: %ld",81
+	tst.l	d0
+	bne.w	.error
+.noExtLoad
+
+
+	move.l	#DTP_InitPlayer,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
+	* Status is returned in d0, can't rely on status flags
+	* here. d0=0 if ok, else not ok
+	tst.l	d0
+	bne.w	.error
+	DPRINT	"initPlayer ok",11
+
+	* set default song number
+	bsr	deliGetSongInfo
+	* d0 = def, d1 = min, d2 = max	
+	move	d0,deliBase+dtg_SndNum
+	move	d0,songnumber(a5)
+	move	d2,maxsongs(a5)	
+
+	move.l	#DTP_Volume,d0  
+	bsr.w	deliGetTag
+	move.l	d0,storedSetVolume
+
+	move.l	#EP_Voices,d0  
+	bsr.w	deliGetTag
+	move.l	d0,storedSetVoices
+
+	move.l	#DTP_InitSound,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
+;	tst.l	d0
+;	bne.w	.error
+
+	DPRINT	"InitSound ok",12
+
+	* see if an interrupt routine is provided.
+	* if so, set up a cia interrupt to drive it.
+	* otherwise assume the module handles it.
+	move.l	#DTP_Interrupt,d0  
+	bsr.w	deliGetTag
+	move.l	d0,storedInterrupt
+	beq.w	.noInt
+	DPRINT	"using hippo interrupt",33
+ 
+	* interrupt routine provided, set up an interrupt
+	move	deliBase+dtg_Timer,d0
+	jsr	init_ciaint_withTempo
+	beq.b	.gotCia
+	DPRINT	"cia error",44
+
+	* try to clean up
+	move.l	#DTP_EndSound,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
+	move.l	#DTP_EndPlayer,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
+
+	moveq	#ier_nociaints,d0
+	bra.w	.error
+.gotCia
+.noInt
+
+	 * tst.l xyz(pc) is 020 instruction
+	move.l	storedInterrupt(pc),d0  
+	bne.b	.intSet
+	* try to start module provided int handler
+	move.l	#DTP_StartInt,d0
+	bsr	deliGetTag
+	beq.b	.noStartInt
+	bsr	deliCallFunc
+	DPRINT	"using module interrupt",34
+.noStartInt
+.intSet
+
+.skip
+ if DEBUG
+	moveq	#0,d0
+	move	deliBase+dtg_Timer,d0
+	DPRINT	"init ok, dtg_Timer=%ld",55
+ endif
+	* ok
+	moveq	#0,d0
+.exit
+	popm	d1-a6
+	rts
+
+.error
+	DPRINT	"init FAIL",56
+	moveq	#ier_error,d0 
+	bra.b	.exit
+	
+* out:
+*  d0=default song
+*  d1=min song
+*  d2=max song
+deliGetSongInfo
+	moveq	#0,d0 
+	moveq	#0,d1 
+	moveq	#0,d2
+	
+	move.l	#DTP_SubSongRange,d0  
+	bsr.w	deliGetTag
+	beq.b	.noSubSongs1
+	bsr	deliCallFunc
+	move.l	d1,d2
+	move.l	d0,d1
+	DPRINT	"Subsong def=%ld min=%ld max=%ld",111
+	rts
+
+.noSubSongs1
+	move.l	#DTP_NewSubSongRange,d0  
+	bsr.w	deliGetTag
+	beq.b	.noSubSongs2
+	move.l	d0,a0
+	movem	(a0),d0/d1/d2
+	DPRINT	"NewSubSongs defa=%ld min=%ld max=%ld",112
+.noSubSongs2
+	rts	
+
+* Interrupt play routine, use cached pointers to avoid tag searches
+deliPlay
+	move.l	storedSetVoices(pc),d0 
+	beq.b 	.noSetVoices
+	move.l	d0,a0
+	* Enable all channels
+	moveq	#%1111,d0
+	jsr 	(a0)
+.noSetVoices
+	move.l	storedInterrupt(pc),d0
+	beq.b	.noInt
+	lea	deliBase,a5
+	move	var_b+mainvolume,dtg_SndVol(a5)
+	move.l	d0,a0
+	jsr	(a0)
+.noInt
+	move.l	storedSetVolume(pc),d0
+	beq.b	.noVol
+	lea	deliBase,a5
+	move.l 	d0,a0
+	jsr	(a0)
+.noVol
+	rts
+
+deliEnd
+	pushm	d1-a6
+	DPRINT	"deliEnd",13
+	
+	move.l	storedInterrupt(pc),d0
+	beq.b	.noIntUsed
+	jsr	rem_ciaint
+.noIntUsed
+
+	move.l	#DTP_StopInt,d0
+	bsr	deliGetTag
+	bsr	deliCallFunc
+
+	move.l	#DTP_EndSound,d0  
+	bsr	deliGetTag
+	bsr	deliCallFunc
+
+	move.l	#DTP_EndPlayer,d0  
+	bsr	deliGetTag
+	bsr	deliCallFunc
+
+	moveq	#0,d0
+	popm	d1-a6
+	rts
+
+
+
+deliSong
+	DPRINT	"deliSong",114
+	bsr	deliStop
+
+	bsr	deliGetSongInfo
+
+	* low bound check
+	cmp	songnumber(a5),d1
+	blo.b	.ok1
+	move	d1,songnumber(a5)
+.ok1
+	* upper bound check
+	cmp	songnumber(a5),d2
+	bhi.b .ok2
+	move d2,songnumber(a5)
+.ok2
+	* Put it, wrong number may crash some players
+	move	songnumber(a5),deliBase+dtg_SndNum
+
+	move.l	#DTP_InitSound,d0
+	bsr	deliGetTag
+	bsr	deliCallFunc
+	move.l	#DTP_StartInt,d0
+	bsr	deliGetTag
+	bsr	deliCallFunc
+	rts
+
+* Not sure what exactly should be done with these two.
+* Seems to work more or less.
+deliStop
+	DPRINT	"deliStop",14
+	move.l	#DTP_EndSound,d0
+	bsr	deliGetTag
+	;bsr	deliCallFunc	;;**
+	move.l	#DTP_StopInt,d0
+	bsr	deliGetTag
+	bsr	deliCallFunc
+	bsr	clearsound
+	;move	#$f,$dff096
+	rts
+
+deliCont
+	DPRINT	"deliCont",144
+	move.l	#DTP_InitSound,d0
+	bsr	deliGetTag
+	;bsr	.callFunc
+	move.l	#DTP_StartInt,d0
+	bsr	deliGetTag
+	bsr	deliCallFunc
+	move	#$800f,$dff096
+	rts
+
+* Build the DeliBase structure, this is not a complete version.
+ 
+buildDeliBase
+	lea	deliBase,a0
+	lea	deliBaseLength(a0),a1
+.clrBase
+	clr.b	(a0)+
+	cmp.l	a0,a1 
+	bne.b .clrBase
+	lea	deliBase,a0
+
+	push a0
+	jsr	getcurrent 
+	pop a0
+	
+	* a3 = node
+	* Grab path and file parts
+	move.l	l_nameaddr(a3),a1
+	move.l	a1,dtg_FileArrayPtr(a0)
+	lea	l_filename(a3),a2
+	lea	deliPath,a3
+	move.l	a3,dtg_DirArrayPtr(a0)
+.copy	move.b	(a2)+,(a3)+
+	cmp.l	a2,a1
+	bne.b	.copy
+	clr.b	(a3)		
+
+	lea	deliPathArray,a1
+	move.l	a1,dtg_PathArrayPtr(a0)
+	clr.b	(a1)
+	lea	deliPathArrayLength(a1),a2
+.clr	clr.b	(a1)+
+	cmp.l 	a2,a1
+	bne.b	.clr
+
+ if DEBUG
+	move.l	dtg_FileArrayPtr(a0),d0
+	DPRINT	"File %s",501
+	move.l	dtg_DirArrayPtr(a0),d0
+	DPRINT	"Dir %s",502
+ endif
+
+	move.l	_DosBase(a5),dtg_DOSBase(a0)
+	move.l	_IntuiBase(a5),dtg_IntuitionBase(a0)
+	move.l	_GFXBase(a5),dtg_GfxBase(a0)
+	
+	; Illegal address for enforcer
+	move.l	#$10000000,dtg_GadToolsBase(a0)
+	move.l	#$10000000,dtg_AslBase(a0)
+
+	clr	dtg_SndNum(a0) * this must be correct 
+	move	#64,dtg_SndVol(a0)
+	move	#64,dtg_SndLBal(a0)
+	move	#64,dtg_SndRBal(a0)
+	clr	dtg_LED(a0)
+
+	move	#%1111,EPG_Voices(a0)
+	move	#64,EPG_Voice1Vol(a0)
+	move	#64,EPG_Voice2Vol(a0)
+	move	#64,EPG_Voice3Vol(a0)
+	move	#64,EPG_Voice4Vol(a0)
+	move	#255,EPG_Volume(a0)
+	move	#255,EPG_Balance(a0)
+	move	#255,EPG_LeftBalance(a0)
+	move	#255,EPG_RightBalance(a0)
+
+	move.l	moduleaddress(a5),dtg_ChkData(a0) 
+	move.l	modulelength(a5),dtg_ChkSize(a0)
+
+	pea	deliAllocAudio(pc)
+	move.l	(sp)+,dtg_AudioAlloc(a0)
+	pea	deliFreeAudio(pc)
+	move.l	(sp)+,dtg_AudioFree(a0)
+	pea	dmawait(pc)
+	move.l	(sp)+,dtg_WaitAudioDMA(a0)
+	pea	.startInt(pc)
+	move.l	(sp)+,dtg_StartInt(a0)
+	pea	.stopInt(pc)
+	move.l	(sp)+,dtg_StopInt(a0)
+	pea	.songEnd(pc)
+	move.l	(sp)+,dtg_SongEnd(a0)	* may be called from interrupt
+	pea	.setTimer(pc)
+	move.l	(sp)+,dtg_SetTimer(a0)	* may be called from interrupt
+	pea	.allocListData(pc)
+	move.l	(sp)+,dtg_AllocListData(a0)
+	pea	.freeListData(pc)
+	move.l	(sp)+,dtg_FreeListData(a0)
+	pea	deliCopyString(pc)
+	move.l	(sp)+,dtg_CopyString(a0)
+	pea	deliCopyFile(pc)
+	move.l	(sp)+,dtg_CopyFile(a0)
+	pea	deliCopyDir(pc)
+	move.l	(sp)+,dtg_CopyDir(a0)
+	pea	deliLoadFile(pc)
+	move.l	(sp)+,dtg_LoadFile(a0)
+	pea	deliGetListData(pc)
+	move.l	(sp)+,dtg_GetListData(a0)
+	pea	.cutSuffix(pc)
+	move.l	(sp)+,dtg_CutSuffix(a0)
+
+	* Stub the rest
+ 	lea	.stub(pc),a1
+	move.l	a1,dtg_LockScreen(a0)
+	move.l	a1,dtg_UnlockScreen(a0)
+	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
+
+	* EaglePlayer negative offset jump table
+	lea	eagleJumpTableStart(pc),a1
+	lea eagleJumpTableEnd(pc),a2	
+.jumps	
+	subq.l	#6,a0
+	move.w	(a1)+,(a0)
+	move.l	(a1)+,2(a0)
+	cmp.l	a1,a2
+	bne.b	.jumps
+ 	rts
+
+.dummyEagleFunc
+	rts
+
+.songEnd
+	* May be called from interrupt, no logging allowed
+	st	var_b+songover
+	rts
+.setTimer
+	* May be called from interrupt, no logging allowed
+	;DELIDPRINT	"deliSetTimer",15
+.stub
+	moveq	#0,d0
+	rts
+
+.startInt	
+	DELIDPRINT 	"deliStartInt",1
+	moveq	#0,d0
+	rts
+.stopInt 
+	DELIDPRINT	"deliStopInt",2
+	moveq	#0,d0
+	rts
+.cutSuffix 
+	DELIDPRINT	"cutSuffix",201
+	moveq	#0,d0
+	rts
+.allocListData
+	DELIDPRINT	"allocListData",202
+	moveq	#0,d0
+	rts
+.freeListData
+	DELIDPRINT	"freeListData",203
+	moveq	#0,d0
+	rts
+
+deliAllocAudio 
+	DELIDPRINT	"deliAudioAlloc",1102
+	pushm	d1-a6
+	lea	var_b,a5
+	* returns d0=0 on success:
+	bsr	varaa_kanavat 
+	popm	d1-a6
+	rts
+
+deliFreeAudio 
+	DELIDPRINT	"deliAudioFree",1103
+	pushm	d1-a6
+	lea	var_b,a5
+	bsr	vapauta_kanavat
+	popm	d1-a6
+	rts
+
+deliCopyString move.l a0,d0
+	bsr.w	deliAppendStr
+ if DEBUG
+	move.l	#deliPathArray,d1
+	DELIDPRINT	"copyString %s path=%s",106
+ endif
+	moveq	#0,d0
+	rts
+deliCopyFile 
+	move.l	dtg_FileArrayPtr(a5),a0
+	bsr.w	deliAppendStr
+ if DEBUG
+	move.l	#deliPathArray,d0
+	DELIDPRINT	"copyFile path=%s",107
+ endif
+	moveq	#0,d0
+	rts
+deliCopyDir 
+	move.l	dtg_DirArrayPtr(a5),a0
+	bsr.w	deliAppendStr
+ if DEBUG
+	move.l	#deliPathArray,d0
+	DELIDPRINT	"copyDir path=%s",108
+ endif
+	moveq	#0,d0
+	rts
+deliLoadFile move.l  a0,d0
+ if DEBUG
+	move.l	#deliPathArray,d1
+	DELIDPRINT	"loadFile %s path=%s",109
+ endif
+	moveq	#0,d0
+	rts
+deliGetListData DELIDPRINT	"getListData %d",110
+	move.l	moduleaddress+var_b,a0
+	move.l	modulelength+var_b,d0
+	rts
+
+deliAppendStr
+	move.l 	dtg_PathArrayPtr(a5),a1 
+.1	tst.b 	(a1)+
+	bne.b 	.1
+	subq	#1,a1
+.2	move.b 	(a0)+,(a1)+
+	bne.b 	.2
+	rts
+
+* First negative offset is first, -6
+eagleJumpTableStart
+		jmp funcENPP_AllocSampleStruct
+		jmp funcENPP_NewLoadFile2
+		jmp funcENPP_MakeDirCorrect
+		jmp funcENPP_TestAufHide
+		jmp funcENPP_ClearCache
+		jmp funcENPP_CopyMemQuick
+		jmp funcENPP_GetPassword
+		jmp funcENPP_StringCopy2
+		jmp funcENPP_ScreenToFront
+		jmp funcENPP_WindowToFront
+		jmp funcENPP_GetListData
+		jmp funcENPP_LoadFile    **
+		jmp funcENPP_CopyDir 	 **
+		jmp funcENPP_CopyFile    **
+		jmp funcENPP_CopyString
+		jmp funcENPP_AllocAudio
+		jmp funcENPP_FreeAudio
+		jmp funcENPP_StartInterrupt
+		jmp funcENPP_StopInterrupt
+		jmp funcENPP_SongEnd
+		jmp funcENPP_CutSuffix
+		jmp funcENPP_SetTimer
+		jmp funcENPP_WaitAudioDMA
+		jmp funcENPP_SaveMem
+		jmp funcENPP_FileReq
+		jmp funcENPP_TextRequest
+		jmp funcENPP_LoadExecutable
+		jmp funcENPP_NewLoadFile
+		jmp funcENPP_ScrollText
+		jmp funcENPP_LoadPlConfig
+		jmp funcENPP_SavePlConfig
+		jmp funcENPP_FindTag
+		jmp funcENPP_FindAuthor
+		jmp funcENPP_Hexdez
+		jmp funcENPP_TypeText
+		jmp funcENPP_ModuleChange
+		jmp funcENPP_ModuleRestore
+		jmp funcENPP_StringCopy
+		jmp funcENPP_CalcStringSize
+		jmp funcENPP_StringCMP
+		jmp funcENPP_DMAMask	 	*
+		jmp funcENPP_PokeAdr		*	 
+		jmp funcENPP_PokeLen		*
+		jmp funcENPP_PokePer		*
+		jmp funcENPP_PokeVol		*
+		jmp funcENPP_PokeCommand	* filter toggle
+		jmp funcENPP_Amplifier
+		jmp funcENPP_TestAbortGadget
+		jmp funcENPP_GetEPNrfromMessage
+		jmp funcENPP_InitDisplay
+		jmp funcENPP_FillDisplay
+		jmp funcENPP_RemoveDisplay
+		jmp funcENPP_GetLocaleString
+		jmp funcENPP_SetWaitPointer
+		jmp funcENPP_ClearWaitPointer
+		jmp funcENPP_OpenCatalog
+		jmp funcENPP_CloseCatalog
+		jmp funcENPP_AllocAmigaAudio
+		jmp funcENPP_FreeAmigaAudio
+		jmp funcENPP_RawToFormat
+		jmp funcENPP_FindAmplifier
+		jmp funcENPP_UserCallup5
+		jmp funcENPP_GetLoadListData
+		jmp funcENPP_SetListData
+		jmp funcENPP_GetHardwareType
+eagleJumpTableEnd
+
+funcENPP_AllocSampleStruct
+	DPRINT "ENPP_AllocSampleStruct",1
+	rts
+funcENPP_NewLoadFile2
+	DPRINT "ENPP_NewLoadFile2",1
+	rts
+funcENPP_MakeDirCorrect
+	DPRINT "ENPP_MakeDirCorrect",1
+	rts
+funcENPP_TestAufHide
+	DPRINT "ENPP_TestAufHide",1
+	rts
+funcENPP_ClearCache
+	DPRINT "ENPP_ClearCache",1
+	rts
+funcENPP_CopyMemQuick
+	DPRINT "ENPP_CopyMemQuick",1
+	rts
+funcENPP_GetPassword
+	DPRINT "ENPP_GetPassword",1
+	rts
+funcENPP_StringCopy2
+	DPRINT "ENPP_StringCopy2",1
+	rts
+funcENPP_ScreenToFront
+	DPRINT "ENPP_ScreenToFront",1
+	rts
+funcENPP_WindowToFront
+	DPRINT "ENPP_WindowToFront",1EP_
+	rts
+funcENPP_GetListData
+	DPRINT "ENPP_GetListData %d",1
+	tst.l d0 
+	beq.b 	.err
+	move.l	moduleaddress+var_b,a0 
+	move.l modulelength+var_b,d0
+	rts
+.err 
+	sub.l a0,a0
+	moveq	#0,d0 
+	rts
+
+funcENPP_LoadFile
+	DPRINT "ENPP_LoadFile",1
+	bra	deliLoadFile
+funcENPP_CopyDir
+	DPRINT "ENPP_CopyDir",1
+	bra	deliCopyDir
+funcENPP_CopyFile
+	DPRINT "ENPP_CopyFile",1
+	bra	 deliCopyFile
+funcENPP_CopyString
+	DPRINT "ENPP_CopyString",1
+	bra	deliCopyString
+funcENPP_AllocAudio
+	DPRINT "ENPP_AllocAudio",1
+	bra deliAllocAudio
+funcENPP_FreeAudio
+	DPRINT "ENPP_FreeAudio",1
+	bra deliFreeAudio
+funcENPP_StartInterrupt
+	DPRINT "ENPP_StartInterrupt",1
+	rts
+funcENPP_StopInterrupt
+	DPRINT "ENPP_StopInterrupt",1
+	rts
+funcENPP_SongEnd
+	DPRINT "ENPP_SongEnd",1
+	rts
+funcENPP_CutSuffix
+	DPRINT "ENPP_CutSuffix",1
+	rts
+funcENPP_SetTimer
+	DPRINT "ENPP_SetTimer",1
+	rts
+funcENPP_WaitAudioDMA
+	DPRINT "ENPP_WaitAudioDMA",1
+	rts
+funcENPP_SaveMem
+	DPRINT "ENPP_SaveMem",1
+	rts
+funcENPP_FileReq
+	DPRINT "ENPP_FileReq",1
+	rts
+funcENPP_TextRequest
+	DPRINT "ENPP_TextRequest",1
+	rts
+funcENPP_LoadExecutable
+	DPRINT "ENPP_LoadExecutable",1
+	rts
+funcENPP_NewLoadFile
+	DPRINT "ENPP_NewLoadFile",1
+	rts
+funcENPP_ScrollText
+	DPRINT "ENPP_ScrollText",1
+	rts
+funcENPP_LoadPlConfig
+	DPRINT "ENPP_LoadPlConfig",1
+	rts
+funcENPP_SavePlConfig
+	DPRINT "ENPP_SavePlConfig",1
+	rts
+funcENPP_FindTag
+	DPRINT "ENPP_FindTag",1
+	rts
+funcENPP_FindAuthor
+	DPRINT "ENPP_FindAuthor",1
+	rts
+funcENPP_Hexdez
+	DPRINT "ENPP_Hexdez",1
+	rts
+funcENPP_TypeText
+	DPRINT "ENPP_TypeText",1
+	rts
+funcENPP_ModuleChange
+	DPRINT "ENPP_ModuleChange",1
+	rts
+funcENPP_ModuleRestore
+	DPRINT "ENPP_ModuleRestore",1
+	rts
+funcENPP_StringCopy
+	DPRINT "ENPP_StringCopy",1
+	rts
+funcENPP_CalcStringSize
+	DPRINT "ENPP_CalcStringSize",1
+	rts
+funcENPP_StringCMP
+	DPRINT "ENPP_StringCMP",1
+	rts
+funcENPP_DMAMask
+	;DPRINT "ENPP_DMAMask",1
+	* d0 = negative -> enable, positive -> disable
+	* d1 = DMA bits
+	tst d0 
+	bmi.b	.enable
+	move	d1,$dff096
+	jsr	dmawait
+	rts
+.enable
+	jsr	dmawait
+	push	d1
+	or		#$8000,d1
+	move	d1,$dff096
+	pop 	d1
+	jsr	dmawait
+	rts
+
+funcENPP_PokeAdr
+	;DPRINT "ENPP_PokeAdr",1
+	tst.b	d1
+	beq.b .1
+	cmp.b	#1,d1
+	beq.b .2
+	cmp.b	#2,d1
+	beq.b .3
+	cmp.b	#3,d1
+	beq.b .4
+	rts
+.1	move.l d0,$dff0a0
+	rts
+.2	move.l d0,$dff0b0
+	rts
+.3	move.l d0,$dff0c0
+	rts
+.4	move.l d0,$dff0d0
+	rts
+funcENPP_PokeLen
+	;DPRINT "ENPP_PokeLen",1
+	tst.b	d1
+	beq.b .1
+	cmp.b	#1,d1
+	beq.b .2
+	cmp.b	#2,d1
+	beq.b .3
+	cmp.b	#3,d1
+	beq.b .4
+	rts
+.1	move d0,$dff0a4
+	rts
+.2	move d0,$dff0b4
+	rts
+.3	move d0,$dff0c4
+	rts
+.4	move d0,$dff0d4
+	rts
+funcENPP_PokePer
+	;DPRINT "ENPP_PokePer",1
+* d0: period value
+* d1: channel number
+	tst.b	d1
+	beq.b .1
+	cmp.b	#1,d1
+	beq.b .2
+	cmp.b	#2,d1
+	beq.b .3
+	cmp.b	#3,d1
+	beq.b .4
+	rts
+.1	move d0,$dff0a6
+	rts
+.2	move d0,$dff0b6
+	rts
+.3	move d0,$dff0c6
+	rts
+.4	move d0,$dff0d6
+	rts
+
+funcENPP_PokeVol
+	;DPRINT "ENPP_PokeVol",1
+* d0: period value
+* d1: channel number
+* todo: main vol
+	tst.b	d1
+	beq.b .1
+	cmp.b	#1,d1
+	beq.b .2
+	cmp.b	#2,d1
+	beq.b .3
+	cmp.b	#3,d1
+	beq.b .4
+	rts
+.1	move d0,$dff0a8
+	rts
+.2	move d0,$dff0b8
+	rts
+.3	move d0,$dff0c8
+	rts
+.4	move d0,$dff0d8
+	rts
+
+funcENPP_PokeCommand
+	DPRINT "ENPP_PokeCommand",1
+	cmp.b	#1,d0 
+	bne.b 	.unknown
+	* d1=0 -> led off
+	* d1=1 -> led on
+	tst.b 	d1
+	beq.b .off
+	bclr	#1,$bfe001
+.unknown
+	rts
+.off 
+	bset	#1,$bfe001
+	rts
+
+funcENPP_Amplifier
+	DPRINT "ENPP_Amplifier",1
+	rts
+funcENPP_TestAbortGadget
+	DPRINT "ENPP_TestAbortGadget",1
+	rts
+funcENPP_GetEPNrfromMessage
+	DPRINT "ENPP_GetEPNrfromMessage",1
+	rts
+funcENPP_InitDisplay
+	DPRINT "ENPP_InitDisplay",1
+	rts
+funcENPP_FillDisplay
+	DPRINT "ENPP_FillDisplay",1
+	rts
+funcENPP_RemoveDisplay
+	DPRINT "ENPP_RemoveDisplay",1
+	rts
+funcENPP_GetLocaleString
+	DPRINT "ENPP_GetLocaleString",1
+	rts
+funcENPP_SetWaitPointer
+	DPRINT "ENPP_SetWaitPointer",1
+	rts
+funcENPP_ClearWaitPointer
+	DPRINT "ENPP_ClearWaitPointer",1
+	rts
+funcENPP_OpenCatalog
+	DPRINT "ENPP_OpenCatalog",1
+	rts
+funcENPP_CloseCatalog
+	DPRINT "ENPP_CloseCatalog",1
+	rts
+funcENPP_AllocAmigaAudio
+	DPRINT "ENPP_AllocAmigaAudio",1
+	rts
+funcENPP_FreeAmigaAudio
+	DPRINT "ENPP_FreeAmigaAudio",1
+	rts
+funcENPP_RawToFormat
+	DPRINT "ENPP_RawToFormat",1
+	rts
+funcENPP_FindAmplifier
+	DPRINT "ENPP_FindAmplifier",1
+	rts
+funcENPP_UserCallup5
+	DPRINT "ENPP_UserCallup5",1
+	rts
+funcENPP_GetLoadListData
+	DPRINT "ENPP_GetLoadListData",1
+	rts
+funcENPP_SetListData
+	DPRINT "ENPP_SetListData",1
+	rts
+funcENPP_GetHardwareType
+	DPRINT "ENPP_GetHardwareType",1
+	rts
+
+
+ if DEBUG
+deliShowTags
+	move.l	deliPlayer(pc),a0
+	;add.l	a0,a0
+	;add.l	a0,a0
+	move.l	16(a0),a0
+.tloop
+	movem.l	(a0)+,d0/d1
+	
+	sub.l	#DTP_TagBase,d0
+	lsl.l	#2,d0
+	lea	tagsTable(pc),a1
+	add.l	d0,a1
+	lsr.l	#2,d0
+	add.l	#DTP_TagBase,d0
+	
+	cmp.l	#tagsTableEnd,a1
+	blo.b 	.okTag
+
+	sub.l	#EP_TagBase,d0
+	lsl.l	#2,d0
+	lea	tagsTable2(pc),a1
+	add.l	d0,a1
+	lsr.l	#2,d0
+	add.l	#EP_TagBase,d0
+	
+	cmp.l	#tagsTable2End,a1
+	blo.b 	.okTag
+
+	DPRINT  "Tag %lx: %lx",2002
+	bra.b	.oddTag
+.okTag
+	move.l	d1,d2
+	move.l	(a1),d1
+	DPRINT  "Tag %lx %s: %lx",2001
+.oddTag
+	tst.l	(a0) 
+	bne.w	.tloop
+	rts
+
+tagsTable
+ dc.l EDTP_InternalPlayer
+ dc.l EDTP_CustomPlayer 
+ dc.l EDTP_RequestDTVersion
+ dc.l EDTP_RequestKickVersion
+ dc.l EDTP_PlayerVersion
+ dc.l EDTP_PlayerName   
+ dc.l EDTP_Creator    	
+ dc.l EDTP_Check1   
+ dc.l EDTP_Check2   
+ dc.l EDTP_ExtLoad    	
+ dc.l EDTP_Interrupt    
+ dc.l EDTP_Stop   	 
+ dc.l EDTP_Config   	
+ dc.l EDTP_UserConfig   
+ dc.l EDTP_SubSongRange 
+ dc.l EDTP_InitPlayer   
+ dc.l EDTP_EndPlayer    
+ dc.l EDTP_InitSound    
+ dc.l EDTP_EndSound   	
+ dc.l EDTP_StartInt   	
+ dc.l EDTP_StopInt    	
+ dc.l EDTP_Volume   	
+ dc.l EDTP_Balance    	
+ dc.l EDTP_Faster   	
+ dc.l EDTP_Slower   
+ dc.l EDTP_NextPatt   
+ dc.l EDTP_PrevPatt   
+ dc.l EDTP_NextSong   	
+ dc.l EDTP_PrevSong   
+ dc.l EDTP_SubSongTest  
+ dc.l EDTP_NewSubSongRange
+ dc.l EDTP_DeliBase  	
+ dc.l EDTP_Flags   	
+ dc.l EDTP_CheckLen   	
+ dc.l EDTP_Description  
+ dc.l EDTP_Decrunch   	
+ dc.l EDTP_Convert    	
+ dc.l EDTP_NotePlayer   
+ dc.l EDTP_NoteStruct   
+ dc.l EDTP_NoteInfo   	
+ dc.l EDTP_NoteSignal   
+ dc.l EDTP_Process    	
+ dc.l EDTP_Priority   	
+ dc.l EDTP_StackSize    
+ dc.l EDTP_MsgPort    	
+ dc.l EDTP_Appear   	
+ dc.l EDTP_Disappear   	
+ dc.l EDTP_ModuleName   
+ dc.l EDTP_FormatName   
+ dc.l EDTP_AuthorName   
+ dc.l EDTP_InitNote  
+tagsTableEnd
+ 
+tagsTable2
+	dc.l EEP_Get_ModuleInfo	
+	dc.l EEP_Free_ModuleInfo	
+	dc.l EEP_Voices		
+	dc.l EEP_SampleInit		
+	dc.l EEP_SampleEnd		
+	dc.l EEP_Save
+	dc.l EEP_ModuleChange		
+	dc.l EEP_ModuleRestore	
+	dc.l EEP_StructInit		
+	dc.l EEP_StructEnd		
+	dc.l EEP_LoadPlConfig		
+	dc.l EEP_SavePlConfig		
+	dc.l EEP_GetPositionNr	
+	dc.l EEP_SetSpeed		
+	dc.l EEP_Flags		
+	dc.l EEP_KickVersion		
+	dc.l EEP_PlayerVersion	
+	dc.l EEP_CheckModule		
+	dc.l EEP_EjectPlayer
+	dc.l EEP_Date			
+	dc.l EEP_Check3
+	dc.l EEP_SaveAsPT		
+	dc.l EEP_NewModuleInfo	
+	dc.l EEP_FreeExtLoad
+	dc.l EEP_PlaySample		
+	dc.l EEP_PatternInit		
+	dc.l EEP_PatternEnd		
+	dc.l EEP_Check4
+	dc.l EEP_Check5
+	dc.l EEP_Check6
+	dc.l EEP_CreatorLNr
+	dc.l EEP_PlayerNameLNr
+	dc.l EEP_PlayerInfo		
+	dc.l EEP_PlaySampleInit
+	dc.l EEP_PlaySampleEnd
+	dc.l EEP_InitAmplifier	
+	dc.l EEP_CheckSegment
+	dc.l EEP_Show
+	dc.l EEP_Hide
+	dc.l EEP_LocaleTable
+	dc.l EEP_Helpnodename
+	dc.l EEP_AttnFlags
+	dc.l EEP_EagleBase
+	dc.l EEP_Check7		
+	dc.l EEP_Check8		
+	dc.l EEP_SetPlayFrequency
+	dc.l EEP_SamplePlayer
+tagsTable2End
+
+EDTP_InternalPlayer   	dc.b "DTP_InternalPlayer",0 ; obsolete
+EDTP_CustomPlayer   	dc.b "DTP_CustomPlayer",0 ; player is a customplayer
+EDTP_RequestDTVersion   	dc.b "DTP_RequestDTVersion",0 ; minimum DeliTracker version needed
+EDTP_RequestKickVersion   	dc.b "DTP_RequestKickVersion",0 ; minimum KickStart version needed
+EDTP_PlayerVersion   	dc.b "DTP_PlayerVersion",0 ; actual player version & revision
+EDTP_PlayerName   	dc.b "DTP_PlayerName",0 ; name of this player
+EDTP_Creator    	dc.b "DTP_Creator",0 ; misc string
+EDTP_Check1   	dc.b "DTP_Check1",0 ; Check Format before loading
+EDTP_Check2   	dc.b "DTP_Check2",0 ; Check Format after file is loaded
+EDTP_ExtLoad    	dc.b "DTP_ExtLoad",0 ; Load additional files
+EDTP_Interrupt    	dc.b "DTP_Interrupt",0 ; Interrupt routine
+EDTP_Stop   	dc.b "DTP_Stop",0 ; Clear Patterncounter
+EDTP_Config   	dc.b "DTP_Config",0 ; Config Player
+EDTP_UserConfig   	dc.b "DTP_UserConfig",0 ; User-Configroutine
+EDTP_SubSongRange   	dc.b "DTP_SubSongRange",0 ; Get min&max subsong number
+EDTP_InitPlayer   	dc.b "DTP_InitPlayer",0 ; Initialisize the Player
+EDTP_EndPlayer    	dc.b "DTP_EndPlayer",0 ; Player clean up
+EDTP_InitSound    	dc.b "DTP_InitSound",0 ; Soundinitialisation routine
+EDTP_EndSound   	dc.b "DTP_EndSound",0 ; End sound
+EDTP_StartInt   	dc.b "DTP_StartInt",0 ; Start interrupt
+EDTP_StopInt    	dc.b "DTP_StopInt",0 ; Stop interrupt
+EDTP_Volume   	dc.b "DTP_Volume",0 ; Set Volume
+EDTP_Balance    	dc.b "DTP_Balance",0 ; Set Balance
+EDTP_Faster   	dc.b "DTP_Faster",0 ; Incease playspeed
+EDTP_Slower   	dc.b "DTP_Slower",0 ; Decrease playspeed
+EDTP_NextPatt   	dc.b "DTP_NextPatt",0 ; Jump to next pattern
+EDTP_PrevPatt   	dc.b "DTP_PrevPatt",0 ; Jump to previous pattern
+EDTP_NextSong   	dc.b "DTP_NextSong",0 ; Play next subsong
+EDTP_PrevSong   	dc.b "DTP_PrevSong",0 ; Play previous subsong
+EDTP_SubSongTest   	dc.b "DTP_SubSongTest",0 ; Test, if given subsong is vaild
+EDTP_NewSubSongRange   	dc.b "DTP_NewSubSongRange",0 ; enhanced replacement for EDTP_SubSongRange
+EDTP_DeliBase  	dc.b "DTP_DeliBase",0 ; the address of a pointer where DT
+EDTP_Flags   	dc.b "DTP_Flags",0 ; misc Flags (see below)
+EDTP_CheckLen   	dc.b "DTP_CheckLen",0 ; Length of the Check Code
+EDTP_Description   	dc.b "DTP_Description",0 ; misc string
+EDTP_Decrunch   	dc.b "DTP_Decrunch",0 ; pointer to Decrunch Code
+EDTP_Convert    	dc.b "DTP_Convert",0 ; pointer to Converter Code
+EDTP_NotePlayer   	dc.b "DTP_NotePlayer",0 ; pointer to a NotePlayer Structure
+EDTP_NoteStruct   	dc.b "DTP_NoteStruct",0 ; the address of a pointer to the
+EDTP_NoteInfo   	dc.b "DTP_NoteInfo",0 ; a pointer where DT stores a pointer
+EDTP_NoteSignal   	dc.b "DTP_NoteSignal",0 ; pointer to NoteSignal code
+EDTP_Process    	dc.b "DTP_Process",0 ; pointer to process entry code
+EDTP_Priority   	dc.b "DTP_Priority",0 ; priority of the process
+EDTP_StackSize    	dc.b "DTP_StackSize",0 ; stack size of the process
+EDTP_MsgPort    	dc.b "DTP_MsgPort",0 ; a pointer where DT stores a pointer
+EDTP_Appear   	dc.b "DTP_Appear",0 ; open your window, if you can
+EDTP_Disappear   	dc.b "DTP_Disappear",0 ; go dormant
+EDTP_ModuleName   	dc.b "DTP_ModuleName",0 ; get the name of the current module
+EDTP_FormatName   	dc.b "DTP_FormatName",0 ; get the name of the module format
+EDTP_AuthorName   	dc.b "DTP_AuthorName",0 ; not implemented yet
+EDTP_InitNote   	dc.b "DTP_InitNote",0 ; NoteStruct initialization
+
+
+EEP_Get_ModuleInfo	dc.b "EP_Get_ModuleInfo",0
+EEP_Free_ModuleInfo	dc.b "EP_Free_ModuleInfo",0
+EEP_Voices			dc.b "EP_Voices",0
+EEP_SampleInit		dc.b "EP_SampleInit",0
+EEP_SampleEnd		dc.b "EP_SampleEnd",0
+EEP_Save	    	dc.b "EP_Save",0
+EEP_ModuleChange	dc.b "EP_ModuleChange",0
+EEP_ModuleRestore	dc.b "EP_ModuleRestore",0
+EEP_StructInit		dc.b "EP_StructInit",0
+EEP_StructEnd		dc.b "EP_StructEnd",0
+EEP_LoadPlConfig	dc.b "EP_LoadPlConfig",0
+EEP_SavePlConfig	dc.b "EP_SavePlConfig",0
+EEP_GetPositionNr	dc.b "EP_GetPositionNr",0
+EEP_SetSpeed		dc.b "EP_SetSpeed",0
+EEP_Flags		    dc.b "EP_Flags",0
+EEP_KickVersion		dc.b "EP_KickVersion",0
+EEP_PlayerVersion	dc.b "EP_PlayerVersion",0
+EEP_CheckModule		dc.b "EP_CheckModule",0
+EEP_EjectPlayer		dc.b "EP_EjectPlayer",0
+EEP_Date		    dc.b "EP_Date",0
+EEP_Check3		    dc.b "EP_Check3",0
+EEP_SaveAsPT		dc.b "EP_SaveAsPT",0
+EEP_NewModuleInfo	dc.b "EP_NewModuleInfo",0
+EEP_FreeExtLoad		dc.b "EP_FreeExtLoad",0
+EEP_PlaySample		dc.b "EP_PlaySample",0
+EEP_PatternInit		dc.b "EP_PatternInit",0
+EEP_PatternEnd		dc.b "EP_PatternEnd",0
+EEP_Check4	     	dc.b "EP_Check4",0
+EEP_Check5		    dc.b "EP_Check5",0
+EEP_Check6		    dc.b "EP_Check6",0
+EEP_CreatorLNr		dc.b "EP_CreatorLNr",0
+EEP_PlayerNameLNr	dc.b "EP_PlayerNameLNr",0
+EEP_PlayerInfo		dc.b "EP_PlayerInfo",0
+EEP_PlaySampleInit	dc.b "EP_PlaySampleInit",0
+EEP_PlaySampleEnd	dc.b "EP_PlaySampleEnd",0
+EEP_InitAmplifier	dc.b "EP_InitAmplifier",0
+EEP_CheckSegment	dc.b "EP_CheckSegment",0
+EEP_Show	     	dc.b "EP_Show",0
+EEP_Hide		    dc.b "EP_Hide",0
+EEP_LocaleTable		dc.b "EP_LocaleTable",0
+EEP_Helpnodename	dc.b "EP_Helpnodename",0
+EEP_AttnFlags		dc.b "EP_AttnFlags",0
+EEP_EagleBase		dc.b "EP_EagleBase",0
+EEP_Check7	    	dc.b "EP_Check7",0
+EEP_Check8		    dc.b "EP_Check8",0
+EEP_SetPlayFrequency dc.b "EP_SetPlayFrequency",0
+EEP_SamplePlayer    dc.b "EP_SamplePlayer",0
+                           
+ even
+ endif
 
 *******************************************************************************
 * Playereitä
@@ -36060,14 +36988,1254 @@ var_b		ds.b	size_var
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
 * Use the same buffer in p_delicustom to store the delibase
-deliBase	= ptheader
-deliBaseLength	= dtg_Reserved3
+deliBase	= ptheader+(-ENPP_SizeOf)
+deliBaseLength	= EPG_SizeOf  ;dtg_Reserved3
 * Also store the deli path stuff here
 * 100 bytes for module path
-deliPath	= ptheader+deliBaseLength 
+deliPath	= ptheader+ENPP_SizeOf+deliBaseLength 
 * Path manipuation array
 deliPathArray	= deliPath+100
 deliPathArrayLength = 200
+	ds.b	1000
+
+* TODO: dynamic alloc
+
+* Eagle/Delibase
+* negative size:  ENPP_SizeOf = -396
+* positive size:  dtg_Reserved3 = 136
+* total 532 bytes
 
 
- end
+
+****************************************************************************
+	SECTION	syntracker000000,CODE
+ProgStart
+	MOVEQ	#-1,D0
+	RTS
+
+	dc.b	'EPPLAYER'
+	dc.l	lbL000048
+	dc.b	'$VER: Syntracker V1.70 Replayer-Module 1.0 ('
+	dc.b	'18.07.1993)',0
+lbL000048	dc.l	$80004560
+	dc.l	4
+	dc.l	DTP_PlayerVersion
+	dc.l	2
+	dc.l	DTP_PlayerName
+	dc.l	Syntracker.MSG
+	dc.l	DTP_Creator
+	dc.l	TwiceRAVEadap.MSG
+	dc.l	DTP_Check2
+	dc.l	lbC0001D4
+	dc.l	DTP_InitPlayer
+	dc.l	lbC000204
+	dc.l	DTP_InitSound
+	dc.l	lbC000304
+	dc.l	DTP_EndSound
+	dc.l	lbL000400
+	dc.l	DTP_Interrupt
+	dc.l	lbC000496
+	dc.l	DTP_Volume
+	dc.l	lbC00027C
+	dc.l	DTP_Balance
+	dc.l	lbC00027C
+	dc.l	DTP_PrevPatt
+	dc.l	lbC000250
+	dc.l	DTP_NextPatt
+	dc.l	lbC000232
+	dc.l	$80004552
+	dc.l	lbC00027C
+	dc.l	$80004558
+	dc.l	lbC0001FE
+	dc.l	$80004550
+	dc.l	lbC0001CE
+	dc.l	$8000455C
+	dc.l	lbC000274
+	dc.l	$8000455E
+	dc.l	$13FC6
+	dc.l	0
+Syntracker.MSG	dc.b	'Syntracker',0
+TwiceRAVEadap.MSG	dc.b	'Twice / RAVE,',$A
+	dc.b	'adapted by Eagleeye of DEFECT',0
+SYNT.MSG	dc.b	'SYNT.',0,0
+lbL00011A	dc.l	0
+lbL00011E	dc.l	0
+lbB000122	dc.b	0
+	dc.b	$40
+lbW000124	dc.w	$40
+lbW000126	dc.w	$40
+lbW000128	dc.w	$40
+lbL00012A	dc.l	0
+	dc.l	0
+lbL000132	dc.l	0
+	dc.l	0
+	dc.w	0
+lbL00013C	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.w	0
+lbL00014E	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.w	0
+lbL000160	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.w	0
+lbL000172	dc.l	0
+	dc.l	0
+lbL00017A	dc.l	$80004D53
+	dc.w	0
+	dc.w	$20
+	dc.l	$80004D4E
+	dc.l	0
+	dc.l	$80004D4C
+	dc.l	0
+	dc.l	$80004D52
+	dc.l	0
+	dc.l	$80004D56
+	dc.l	0
+	dc.l	$80004D57
+	dc.l	0
+	dc.l	$80004D5A
+	dc.l	0
+	dc.l	$80004D4F
+	dc.l	$7F
+	dc.l	$80004D5F
+	dc.l	SYNT.MSG
+	dc.l	$80004D49
+	dc.l	0
+	dc.l	0
+
+lbC0001CE	LEA	lbL00017A(PC),A0
+	RTS
+
+lbC0001D4	MOVE.L	$24(A5),A0
+	LEA	SYNTRACKERSON.MSG(PC),A1
+	MOVEQ	#-1,D0
+	MOVEQ	#15,D1
+lbC0001E0	CMPM.B	(A1)+,(A0)+
+	BNE.S	lbC0001EA
+	DBRA	D1,lbC0001E0
+	MOVEQ	#0,D0
+lbC0001EA	RTS
+
+SYNTRACKERSON.MSG	dc.b	'SYNTRACKER-SONG:',0,0
+
+lbC0001FE	LEA	lbL00012A(PC),A0
+	RTS
+
+lbC000204	LEA	lbL00012A(PC),A0
+	CLR.W	8(A0)
+	CLR.W	$1A(A0)
+	CLR.W	$2C(A0)
+	CLR.W	$3E(A0)
+	MOVEQ	#0,D0
+	MOVE.L	$38(A5),A0
+	JSR	(A0)
+	LEA	lbL00011A(PC),A1
+	MOVE.L	A0,(A1)
+	MOVE.L	$5C(A5),4(A1)
+	MOVE.L	$4C(A5),A0
+	JMP	(A0)
+
+lbC000232	LEA	lbW000E88(PC),A2
+	CLR.W	(A2)
+	ADDQ.W	#1,-2(A2)
+	MOVE.W	lbW000E7A(PC),D0
+	CMP.W	lbW000E86(PC),D0
+	BNE.S	lbC00027A
+	CLR.W	-2(A2)
+	MOVE.L	lbL00011E(PC),A0
+	JMP	(A0)
+
+lbC000250	LEA	lbW000E88(PC),A2
+	CLR.W	(A2)
+	TST.W	-2(A2)
+	BEQ.S	lbC00026A
+	SUBQ.W	#1,-2(A2)
+	MOVE.W	lbW000E7A(PC),D0
+	CMP.W	lbW000E86(PC),D0
+	BNE.S	lbC00027A
+lbC00026A	MOVE.W	lbW000E7A(PC),D0
+	MOVE.W	D0,-2(A2)
+	RTS
+
+lbC000274	MOVEQ	#0,D0
+	MOVE.W	lbW000E86(PC),D0
+lbC00027A	RTS
+
+lbC00027C	LEA	lbL000172(PC),A0
+	MOVE.W	$146(A5),(A0) *EPG_Voices
+	LEA	lbB000122(PC),A1
+	MOVE.L	$148(A5),(A1) *EPG_Voice1Vol, ..2Vol
+	MOVE.L	$14C(A5),4(A1) *3Vol, 4Vol
+	LEA	lbL000132(PC),A0
+	LEA	$DFF0A0,A3
+	MOVEQ	#3,D1
+lbC00029E	MOVEQ	#0,D0
+	MOVE.W	(A0),D0
+	BSR.S	lbC0002B2
+	MOVEQ	#$12,D0
+	ADD.L	D0,A0
+	ADDQ.L	#8,A3
+	ADDQ.L	#8,A3
+	DBRA	D1,lbC00029E
+	RTS
+
+lbC0002B2	MOVEM.L	D0/A0,-(SP)
+	LEA	lbL00012A(PC),A0
+	CMP.L	#$DFF0A0,A3
+	BNE.S	lbC0002CC
+	MOVE.W	D0,8(A0)
+	MULU	lbB000122(PC),D0
+	BRA.S	lbC0002F8
+
+lbC0002CC	CMP.L	#$DFF0B0,A3
+	BNE.S	lbC0002DE
+	MOVE.W	D0,$1A(A0)
+	MULU	lbW000124(PC),D0
+	BRA.S	lbC0002F8
+
+lbC0002DE	CMP.L	#$DFF0C0,A3
+	BNE.S	lbC0002F0
+	MOVE.W	D0,$2C(A0)
+	MULU	lbW000126(PC),D0
+	BRA.S	lbC0002F8
+
+lbC0002F0	MOVE.W	D0,$3E(A0)
+	MULU	lbW000128(PC),D0
+lbC0002F8	LSR.W	#6,D0
+	MOVE.W	D0,8(A3)
+	MOVEM.L	(SP)+,D0/A0
+	RTS
+
+lbC000304	LEA	lbL001068,A0
+	MOVE.W	#$11F,D0
+lbC00030E	CLR.B	(A0)+
+	DBRA	D0,lbC00030E
+	MOVE.W	#$4000,$DFF09A
+	MOVE.L	lbL00011A(PC),A0
+	LEA	lbL00017A(PC),A3
+	LEA	lbW000E7A(PC),A2
+	MOVE.W	$10(A0),0(A2)
+	MOVE.W	$10(A0),14(A3)
+	LEA	$14(A0),A1
+	MOVE.L	A1,$4C(A3)
+	LEA	$414(A0),A1
+	MOVE.L	A1,-8(A2)
+	MOVEQ	#$1F,D0
+	MOVEQ	#-1,D2
+lbC000348	MOVE.L	(A1),D1
+	LEA	$10(A1),A1
+	CMP.L	D1,D2
+	BEQ.S	lbC000356
+	DBRA	D0,lbC000348
+lbC000356	MOVE.L	D1,$2C(A3)
+	MOVE.L	#$1614,D0
+	MOVE.L	D0,$24(A3)
+	ADD.L	D0,D1
+	MOVE.L	D1,$34(A3)
+	LEA	$614(A0),A1
+	MOVE.L	A1,-12(A2)
+	LEA	$A14(A0),A1
+	MOVE.L	A1,-$10(A2)
+	LEA	$A14(A0),A1
+	MOVEQ	#0,D0
+	MOVE.W	$12(A0),D0
+	ADDQ.W	#1,D0
+	LSL.L	#7,D0
+	ADD.L	D0,A1
+	MOVE.L	A1,-4(A2)
+	LEA	$614(A0),A1
+	MOVEQ	#0,D2
+	MOVE.W	$10(A0),D1
+lbC000398	MOVE.B	(A1)+,D0
+	CMP.B	D0,D2
+	BHI.S	lbC0003A0
+	MOVE.B	D0,D2
+lbC0003A0	DBRA	D1,lbC000398
+	MOVE.B	D2,$17(A3)
+	LEA	lbW000E7C(PC),A0
+	LEA	$13A(A0),A1
+lbC0003B0	CLR.B	(A0)+
+	CMP.L	A1,A0
+	BNE.S	lbC0003B0
+	MOVEQ	#1,D0
+	LEA	lbL000EB0(PC),A0
+	MOVE.W	#6,-$2C(A0)
+	MOVE.W	D0,(A0)
+	MOVE.W	D0,$4A(A0)
+	MOVE.W	D0,$94(A0)
+	MOVE.W	D0,$DE(A0)
+	MOVE.W	#$FF,-$34(A0)
+	MOVE.W	#15,$DFF096
+	BSR	lbC000412
+	BSR	lbC00047E
+	MOVE.W	#$800F,$DFF096
+	MOVE.W	#$FF,$DFF09E
+	BSET	#1,$BFE001
+	RTS
+
+lbL000400	dc.l	$41FA0A8C
+	dc.l	$42504268
+	dc.l	$4A4268
+	dc.l	$944268
+	dc.w	$DE
+
+lbC000412	MOVE.W	#15,$DFF096
+	BSR	lbC00047E
+	LEA	lbL001068,A0
+	MOVE.L	A0,$DFF0A0
+	MOVE.L	#$1003E8,$DFF0A4
+	CLR.W	$DFF0A8
+	MOVE.L	A0,$DFF0B0
+	MOVE.L	#$1003E8,$DFF0B4
+	CLR.W	$DFF0B8
+	MOVE.L	A0,$DFF0C0
+	MOVE.L	#$1003E8,$DFF0C4
+	CLR.W	$DFF0C8
+	MOVE.L	A0,$DFF0D0
+	MOVE.L	#$1003E8,$DFF0D4
+	CLR.W	$DFF0D8
+	RTS
+
+lbC00047E	MOVEQ	#4,D0
+lbC000480	MOVE.B	$DFF006,D1
+lbC000486	CMP.B	$DFF006,D1
+	BEQ	lbC000486
+	DBRA	D0,lbC000480
+	RTS
+
+lbC000496	MOVEM.L	D1-D7/A0-A6,-(SP)
+	LEA	lbL00012A(PC),A1
+	MOVE.W	#1,$4C(A1)
+	MOVE.W	#$8F,D0
+	MOVE.W	D0,$4A(A1)
+	CLR.W	6(A1)
+	CLR.W	$18(A1)
+	CLR.W	$2A(A1)
+	CLR.W	$3C(A1)
+	BSR.S	lbC0004CE
+	LEA	lbL00012A(PC),A1
+	CLR.W	$4C(A1)
+	MOVEM.L	(SP)+,D1-D7/A0-A6
+	MOVEQ	#0,D0
+	RTS
+
+lbC0004CE	LEA	lbW000E82(PC),A0
+	ADDQ.W	#1,(A0)
+	MOVE.W	lbB000E84(PC),D0
+	CMP.W	lbW000E82(PC),D0
+	BNE	lbC000598
+	CLR.W	(A0)
+	CMP.W	#$FFFF,-2(A0)
+	BEQ.S	lbC0004FA
+	MOVE.W	lbB000E80(PC),4(A0)
+	CLR.W	6(A0)
+	MOVE.W	#$FFFF,-2(A0)
+lbC0004FA	LEA	$DFF0A0,A4
+	LEA	lbL001108,A5
+	LEA	lbL000E8E(PC),A2
+	MOVE.L	lbL000E6E(PC),A0
+	MOVE.W	#1,-2(A2)
+	BSR	lbC000A20
+	LEA	$10(A4),A4
+	LEA	$20(A5),A5
+	LEA	lbL000ED8(PC),A2
+	MOVE.L	lbL000E6E(PC),A0
+	LEA	$80(A0),A0
+	MOVE.W	#2,-$4C(A2)
+	BSR	lbC000A20
+	LEA	$10(A4),A4
+	LEA	$20(A5),A5
+	LEA	lbL000F22(PC),A2
+	MOVE.L	lbL000E6E(PC),A0
+	LEA	$100(A0),A0
+	MOVE.W	#4,-$96(A2)
+	BSR	lbC000A20
+	LEA	$10(A4),A4
+	LEA	$20(A5),A5
+	LEA	lbL000F6C(PC),A2
+	MOVE.L	lbL000E6E(PC),A0
+	LEA	$180(A0),A0
+	MOVE.W	#8,-$E0(A2)
+	BSR	lbC000A20
+	LEA	lbW000E88(PC),A2
+	ADDQ.W	#4,(A2)
+	CMP.W	#$80,(A2)
+	BNE.S	lbC000598
+	CLR.W	(A2)
+	ADDQ.W	#1,-2(A2)
+	MOVE.W	lbW000E7A(PC),D0
+	CMP.W	lbW000E86(PC),D0
+	BNE.S	lbC000598
+	CLR.W	-2(A2)
+	MOVE.L	lbL00011E(PC),A2
+	JSR	(A2)
+lbC000598	LEA	lbL000E8E(PC),A2
+	LEA	$DFF0A0,A1
+	BSR	lbC000932
+	LEA	lbL000ED8(PC),A2
+	LEA	$10(A1),A1
+	BSR	lbC000932
+	LEA	lbL000F22(PC),A2
+	LEA	$10(A1),A1
+	BSR	lbC000932
+	LEA	lbL000F6C(PC),A2
+	LEA	$10(A1),A1
+	BSR	lbC000932
+	LEA	lbL000E8E(PC),A3
+	LEA	$DFF0A8,A4
+	BSR	lbC000920
+	LEA	lbL000ED8(PC),A3
+	LEA	$10(A4),A4
+	BSR	lbC000920
+	LEA	lbL000F22(PC),A3
+	LEA	$10(A4),A4
+	BSR	lbC000920
+	LEA	lbL000F6C(PC),A3
+	LEA	$10(A4),A4
+	BSR	lbC000920
+	LEA	lbL000E8E(PC),A3
+	BSR	lbC0008A8
+	MOVE.W	D1,-$D5C(A3)
+	MULU	lbB000122(PC),D1
+	LSR.W	#6,D1
+	MOVE.W	D1,$DFF0A8
+	LEA	lbL000ED8(PC),A3
+	BSR	lbC0008A8
+	MOVE.W	D1,-$D94(A3)
+	MULU	lbW000124(PC),D1
+	LSR.W	#6,D1
+	MOVE.W	D1,$DFF0B8
+	LEA	lbL000F22(PC),A3
+	BSR	lbC0008A8
+	MOVE.W	D1,-$DCC(A3)
+	MULU	lbW000126(PC),D1
+	LSR.W	#6,D1
+	MOVE.W	D1,$DFF0C8
+	LEA	lbL000F6C(PC),A3
+	BSR	lbC0008A8
+	MOVE.W	D1,-$E04(A3)
+	MULU	lbW000128(PC),D1
+	LSR.W	#6,D1
+	MOVE.W	D1,$DFF0D8
+	LEA	lbL000E8E(PC),A3
+	LEA	lbL001088,A4
+	BSR	lbC000852
+	LEA	lbL000ED8(PC),A3
+	LEA	$20(A4),A4
+	BSR	lbC000852
+	LEA	lbL000F22(PC),A3
+	LEA	$20(A4),A4
+	BSR	lbC000852
+	LEA	lbL000F6C(PC),A3
+	LEA	$20(A4),A4
+	BSR	lbC000852
+	LEA	lbL001088,A4
+	LEA	lbL000E8E(PC),A3
+	BSR	lbC000794
+	LEA	$20(A4),A4
+	LEA	lbL000ED8(PC),A3
+	BSR	lbC000794
+	LEA	$20(A4),A4
+	LEA	lbL000F22(PC),A3
+	BSR	lbC000794
+	LEA	$20(A4),A4
+	LEA	lbL000F6C(PC),A3
+	BSR	lbC000794
+	LEA	lbL00012A(PC),A1
+	LEA	lbL000E8E(PC),A2
+	LEA	$DFF0A0,A4
+	MOVEQ	#3,D7
+lbC0006D0	TST.W	$42(A2)
+	BEQ.S	lbC0006F0
+	MOVE.L	$3E(A2),(A4)
+	MOVE.L	$3E(A2),0(A1)
+	MOVE.W	$42(A2),4(A4)
+	MOVE.W	$42(A2),4(A1)
+	CLR.W	$42(A2)
+lbC0006F0	LEA	$4A(A2),A2
+	LEA	$10(A4),A4
+	LEA	$12(A1),A1
+	DBRA	D7,lbC0006D0
+	MOVE.W	#$800F,$DFF096
+	LEA	lbL001088,A0
+	LEA	$80(A0),A1
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	MOVE.L	(A0)+,(A1)+
+	LEA	lbL00012A(PC),A1
+	LEA	lbL000E8E(PC),A2
+	LEA	$DFF0A0,A4
+	MOVEQ	#3,D7
+lbC000762	TST.W	$48(A2)
+	BEQ.S	lbC000782
+	MOVE.L	$44(A2),(A4)
+	MOVE.L	$44(A2),0(A1)
+	MOVE.W	$48(A2),4(A4)
+	MOVE.W	$48(A2),4(A1)
+	CLR.W	$48(A2)
+lbC000782	LEA	$4A(A2),A2
+	LEA	$10(A4),A4
+	LEA	$12(A1),A1
+	DBRA	D7,lbC000762
+	RTS
+
+lbC000794	MOVE.L	14(A3),A0
+	MOVEQ	#0,D0
+	CMP.L	A0,D0
+	BEQ	lbC000836
+	LEA	-$20(A0),A6
+	MOVE.B	$33(A3),D0
+	BEQ	lbC000838
+	CLR.B	$39(A3)
+	ADDQ.B	#1,$35(A3)
+	CMP.B	$35(A3),D0
+	BGE	lbC000836
+	CLR.B	$35(A3)
+	MOVE.B	$31(A3),D0
+	ADD.B	D0,$37(A3)
+	AND.W	#$1F,$36(A3)
+	MOVE.B	$14(A0),D0
+	CMP.B	$37(A3),D0
+	BNE.S	lbC0007E6
+	TST.B	$16(A0)
+	BPL.S	lbC0007E6
+	MOVE.B	#1,$31(A3)
+	BRA.S	lbC000808
+
+lbC0007E6	MOVE.B	$15(A0),D0
+	CMP.B	$37(A3),D0
+	BNE.S	lbC000808
+	MOVE.B	$16(A0),D0
+	BPL.S	lbC0007FE
+	MOVE.B	#$FF,$31(A3)
+	BRA.S	lbC000808
+
+lbC0007FE	ADD.B	D0,$37(A3)
+	AND.W	#$1F,$36(A3)
+lbC000808	MOVE.B	$18(A0),D0
+	LSL.L	#6,D0
+	MOVE.L	lbL000E76(PC),A1
+	ADD.L	D0,A1
+	MOVE.L	A1,D2
+	MOVE.L	D2,D0
+	ADD.W	#$20,D2
+	ADD.W	$36(A3),A1
+	MOVEQ	#$1F,D6
+lbC000822	CMP.L	D2,A1
+	BNE.S	lbC000828
+	MOVE.L	D0,A1
+lbC000828	MOVE.B	(A6)+,D4
+	MOVE.B	(A1)+,D5
+	BMI.S	lbC000830
+	MOVE.B	D5,D4
+lbC000830	MOVE.B	D4,(A4)+
+	DBRA	D6,lbC000822
+lbC000836	RTS
+
+lbC000838	CMP.B	#1,$39(A3)
+	BNE	lbC000836
+	CLR.W	$38(A3)
+	MOVEQ	#$1F,D6
+lbC000848	MOVE.B	(A6)+,(A4)+
+	DBRA	D6,lbC000848
+	BRA	lbC000836
+
+lbC000852	CMP.W	#8,$2C(A3)
+	BEQ.S	lbC0008A6
+	MOVE.L	14(A3),D0
+	BEQ.S	lbC0008A6
+	MOVE.L	D0,A0
+	ADDQ.L	#8,A0
+	ADD.W	$2C(A3),A0
+	MOVE.W	$2E(A3),D0
+	CMP.B	(A0),D0
+	BNE.S	lbC00087A
+	CLR.W	$2E(A3)
+	ADDQ.W	#2,$2C(A3)
+	BRA.S	lbC000852
+
+lbC00087A	ADDQ.W	#1,$2E(A3)
+	MOVEQ	#0,D0
+	MOVEQ	#0,D2
+	MOVE.B	1(A0),D0
+	MOVE.B	$1F(A4),D2
+	MOVEQ	#0,D6
+lbC00088C	MOVE.B	0(A4,D6.W),D1
+	EXT.W	D1
+	SUB.W	D1,D2
+	MULS	D0,D2
+	ASR.W	#7,D2
+	ADD.W	D1,D2
+	MOVE.B	D2,0(A4,D6.W)
+	ADDQ.W	#1,D6
+	CMP.W	#$20,D6
+	BNE.S	lbC00088C
+lbC0008A6	RTS
+
+lbC0008A8	TST.L	14(A3)
+	BEQ	lbC000918
+	CMP.W	#8,$12(A3)
+	BEQ.S	lbC000906
+	MOVE.L	14(A3),A0
+	ADD.W	$12(A3),A0
+	MOVE.B	(A0),D0
+	CMP.B	$15(A3),D0
+	BNE.S	lbC0008D2
+	CLR.W	$14(A3)
+	ADDQ.W	#2,$12(A3)
+	BRA.S	lbC0008A8
+
+lbC0008D2	ADDQ.W	#1,$14(A3)
+	MOVE.B	$17(A3),D1
+	MOVE.B	1(A0),D0
+	CMP.W	#2,$12(A3)
+	BEQ.S	lbC0008FC
+	CMP.W	#6,$12(A3)
+	BEQ.S	lbC0008FC
+	ADD.B	D0,D1
+	CMP.B	#$3F,D1
+	BLE.S	lbC000902
+	MOVE.B	#$3F,D1
+	BRA.S	lbC000902
+
+lbC0008FC	SUB.B	D0,D1
+	BPL.S	lbC000902
+	CLR.B	D1
+lbC000902	MOVE.B	D1,$17(A3)
+lbC000906	MOVE.W	0(A3),D0
+	MOVE.W	$16(A3),D1
+	AND.W	#$3F,D1
+	MULU	D0,D1
+	LSR.W	#6,D1
+lbC000916	RTS
+
+lbC000918	MOVE.W	0(A3),D1
+	BRA	lbC000916
+
+lbC000920	MOVE.W	0(A3),D0
+	SUB.W	$3A(A3),D0
+	BPL.S	lbC00092C
+	MOVEQ	#0,D0
+lbC00092C	MOVE.W	D0,0(A3)
+	RTS
+
+lbC000932	MOVE.L	8(A2),A0
+	ADD.W	12(A2),A0
+	ADDQ.W	#1,$24(A2)
+	MOVE.B	$23(A2),D0
+	CMP.B	$25(A2),D0
+	BNE.S	lbC00097C
+	CLR.B	$25(A2)
+	MOVE.W	$20(A2),D0
+	BEQ.S	lbC00096E
+	CMP.W	#1,D0
+	BEQ.S	lbC000962
+	MOVE.W	$1E(A2),D0
+	CLR.W	$20(A2)
+	BRA.S	lbC000978
+
+lbC000962	MOVE.W	$1C(A2),D0
+	MOVE.W	#2,$20(A2)
+	BRA.S	lbC000978
+
+lbC00096E	MOVE.W	$1A(A2),D0
+	MOVE.W	#1,$20(A2)
+lbC000978	MOVE.W	D0,$26(A2)
+lbC00097C	MOVE.W	$26(A2),D0
+	MOVE.W	4(A2),D1
+	BEQ.S	lbC0009D2
+	LEA	lbW000FB6(PC),A3
+	MOVEQ	#0,D2
+	MOVE.W	$28(A2),D2
+	ADD.W	D2,D2
+	ADD.L	D2,A3
+lbC000994	CMP.W	(A3)+,D0
+	BNE.S	lbC000994
+	MOVEQ	#0,D2
+	MOVE.B	(A0),D2
+	BPL.S	lbC0009B4
+	NEG.B	D2
+	MULU	D1,D2
+	LSR.W	#7,D2
+	MOVE.W	-4(A3),D3
+	MOVE.W	D3,D4
+	SUB.W	D0,D4
+	MULU	D2,D4
+	LSR.W	#5,D4
+	ADD.W	D4,D0
+	BRA.S	lbC0009C4
+
+lbC0009B4	MULU	D1,D2
+	LSR.W	#7,D2
+	MOVE.W	(A3),D3
+	MOVE.W	D0,D4
+	SUB.W	D3,D4
+	MULU	D2,D4
+	LSR.W	#5,D4
+	SUB.W	D4,D0
+lbC0009C4	MOVE.W	6(A2),D1
+	ADD.W	D1,12(A2)
+	AND.W	#$1F,12(A2)
+lbC0009D2	MOVE.W	$3C(A2),D1
+	ADD.W	D1,$2A(A2)
+	ADD.W	$2A(A2),D0
+	MOVE.W	D0,6(A1)
+	MOVEM.L	D1/A2,-(SP)
+	LEA	lbL00012A(PC),A2
+	CMP.L	#$DFF0A0,A1
+	BEQ.S	lbC000A0E
+	LEA	lbL00013C(PC),A2
+	CMP.L	#$DFF0B0,A1
+	BEQ.S	lbC000A0E
+	LEA	lbL00014E(PC),A2
+	CMP.L	#$DFF0C0,A1
+	BEQ.S	lbC000A0E
+	LEA	lbL000160(PC),A2
+lbC000A0E	MOVE.W	D0,6(A2)
+	MOVEM.L	(SP)+,D1/A2
+	RTS
+
+lbC000A18	MOVE.B	$19(A2),D1
+	BRA	lbC000AF6
+
+lbC000A20	MOVEQ	#0,D0
+	ADD.W	lbW000E86(PC),A0
+	MOVE.B	$200(A0),D1
+	MOVE.B	D1,lbB000E7F
+	MOVE.B	(A0),D0
+	LSL.W	#7,D0
+	MOVE.L	lbL000E6A(PC),A0
+	ADD.W	D0,A0
+	ADD.W	lbW000E88(PC),A0
+	CMP.B	#$40,1(A0)
+	BGE.S	lbC000A9A
+	MOVEQ	#0,D0
+	MOVE.B	(A0),D0
+	BEQ	lbC000C3C
+	ADD.B	D1,D0
+	SUBQ.B	#1,D0
+	TST.B	D0
+	BGE.S	lbC000A58
+	MOVEQ	#0,D0
+lbC000A58	MOVE.W	D0,$28(A2)
+	ADD.W	D0,D0
+	LEA	lbW000FB6(PC),A1
+	MOVE.W	0(A1,D0.W),D0
+	MOVE.W	D0,$1A(A2)
+	MOVE.W	D0,$1C(A2)
+	MOVE.W	D0,$1E(A2)
+	MOVE.W	D0,$26(A2)
+	CLR.W	$3C(A2)
+	CLR.W	$2A(A2)
+	MOVEQ	#0,D1
+	TST.B	1(A0)
+	BEQ	lbC000A18
+	CMP.B	#$FF,1(A0)
+	BEQ	lbC000C3C
+	CMP.B	#$40,1(A0)
+	BLT.S	lbC000AD4
+lbC000A9A	CMP.B	#$4F,1(A0)
+	BGT	lbC000C3C
+	MOVEQ	#0,D0
+	MOVE.B	1(A0),D0
+	SUB.B	#$40,D0
+	MOVE.L	lbL000E72(PC),A1
+	LSL.L	#4,D0
+	ADD.L	D0,A1
+	MOVE.L	(A1),A1
+	ADD.L	lbL000E76,A1
+	LEA	$20(A1),A1
+	MOVE.L	A1,14(A2)
+	MOVE.W	#1,$38(A2)
+	MOVE.L	A5,$3E(A2)
+	BRA	lbC000C3C
+
+lbC000AD4	CMP.B	#$20,1(A0)
+	BGT	lbC000C3C
+	MOVE.L	#lbW001046,8(A2)
+	CLR.W	12(A2)
+	CLR.B	5(A2)
+	MOVE.B	1(A0),D1
+	MOVE.B	D1,$19(A2)
+lbC000AF6	SUBQ.B	#1,D1
+	MOVE.L	lbL000E72(PC),A1
+	CMP.W	#$10,D1
+	BGE	lbC000B9A
+	LSL.L	#4,D1
+	MOVE.W	lbW000E8C(PC),D2
+	MOVE.W	D2,$DFF096
+	MOVE.L	A5,$3E(A2)
+	MOVE.B	#1,$39(A2)
+	MOVE.W	4(A1,D1.W),$42(A2)
+	MOVE.W	6(A1,D1.W),2(A2)
+	MOVE.W	#$3F,D0
+	MULU	2(A2),D0
+	LSR.W	#6,D0
+	MOVE.W	D0,0(A2)
+	MOVE.L	0(A1,D1.W),A1
+	ADD.L	lbL000E76,A1
+	LEA	$20(A1),A1
+	MOVE.L	A1,14(A2)
+	MOVE.B	$10(A1),D0
+	MOVE.B	D0,D1
+	AND.B	#$F0,D0
+	LSR.B	#4,D0
+	MOVE.B	D0,7(A2)
+	AND.B	#15,D1
+	MOVE.B	D1,5(A2)
+	MOVEQ	#0,D1
+	MOVE.B	$12(A1),D1
+	LSL.L	#6,D1
+	ADD.L	lbL000E76,D1
+	MOVE.L	D1,8(A2)
+	MOVE.B	#1,$31(A2)
+	MOVE.B	$14(A1),$37(A2)
+	MOVE.B	$11(A1),$33(A2)
+	MOVE.B	$11(A1),$35(A2)
+	BEQ.S	lbC000B8E
+	SUBQ.W	#1,$34(A2)
+lbC000B8E	CLR.B	$13(A2)
+	CLR.B	$2D(A2)
+	BRA	lbC000C30
+
+lbC000B9A	MOVE.W	lbW000E8C(PC),D2
+	MOVE.W	D2,$DFF096
+	LSL.L	#4,D1
+	MOVE.W	4(A1,D1.W),D0
+	BNE.S	lbC000BC0
+	MOVE.L	#lbL001068,$3E(A2)
+	MOVE.W	#1,$42(A2)
+	CLR.W	8(A4)
+	BRA.S	lbC000C18
+
+lbC000BC0	MOVE.W	D0,$42(A2)
+	MOVE.L	0(A1,D1.W),D0
+	ADD.L	lbL000E76,D0
+	ADD.W	8(A1,D1.W),D0
+	MOVE.L	D0,$3E(A2)
+	MOVE.W	6(A1,D1.W),2(A2)
+	MOVE.W	#$3F,D0
+	MULU	2(A2),D0
+	LSR.W	#6,D0
+	MOVE.W	D0,0(A2)
+	MOVE.W	12(A1,D1.W),D0
+	BNE.S	lbC000C02
+	MOVE.L	#lbL001068,$44(A2)
+	MOVE.W	#1,$48(A2)
+	BRA	lbC000C18
+
+lbC000C02	MOVE.W	D0,$48(A2)
+	MOVE.L	0(A1,D1.W),D0
+	ADD.L	lbL000E76,D0
+	ADD.W	10(A1,D1.W),D0
+	MOVE.L	D0,$44(A2)
+lbC000C18	CLR.L	14(A2)
+	CLR.L	4(A2)
+	MOVE.B	#8,$2D(A2)
+	MOVE.B	#8,$13(A2)
+	CLR.B	$33(A2)
+lbC000C30	CLR.B	$3B(A2)
+	CLR.B	$2F(A2)
+	CLR.L	$14(A2)
+lbC000C3C	CMP.B	#$41,2(A0)
+	BNE.S	lbC000C7E
+	MOVEQ	#0,D1
+	LEA	lbW000FB6(PC),A1
+	MOVE.W	$28(A2),D2
+	BEQ	lbC000E68
+	MOVE.W	D2,D0
+	MOVE.B	3(A0),D1
+	AND.B	#15,D1
+	ADD.W	D1,D0
+	ADD.W	D0,D0
+	MOVE.W	0(A1,D0.W),$1C(A2)
+	MOVE.W	D2,D0
+	MOVE.B	3(A0),D1
+	AND.B	#$F0,D1
+	LSR.B	#4,D1
+	ADD.W	D1,D0
+	ADD.W	D0,D0
+	MOVE.W	0(A1,D0.W),$1E(A2)
+	RTS
+
+lbC000C7E	CMP.B	#$4C,2(A0)
+	BNE.S	lbC000C98
+	MOVEQ	#0,D0
+	MOVE.B	3(A0),D0
+	MULU	2(A2),D0
+	LSR.W	#6,D0
+	MOVE.W	D0,0(A2)
+	RTS
+
+lbC000C98	CMP.B	#$4D,2(A0)
+	BNE.S	lbC000CA8
+	MOVE.B	3(A0),$33(A2)
+	RTS
+
+lbC000CA8	CMP.B	#$56,2(A0)
+	BNE.S	lbC000CD2
+	MOVE.B	3(A0),D0
+	MOVE.B	D0,D1
+	AND.B	#$F0,D0
+	LSR.B	#4,D0
+	MOVE.B	D0,7(A2)
+	AND.B	#15,D1
+	MOVE.B	D1,5(A2)
+	MOVE.L	#lbW001046,8(A2)
+	RTS
+
+lbC000CD2	CMP.B	#$46,2(A0)
+	BNE.S	lbC000CF4
+	TST.B	3(A0)
+	BNE.S	lbC000CEA
+	BSET	#1,$BFE001
+	RTS
+
+lbC000CEA	BCLR	#1,$BFE001
+	RTS
+
+lbC000CF4	CMP.B	#$53,2(A0)
+	BNE.S	lbC000D0E
+	TST.B	3(A0)
+	BEQ	lbC000E68
+	MOVE.B	3(A0),lbB000E85
+	RTS
+
+lbC000D0E	CMP.B	#$4F,2(A0)
+	BNE.S	lbC000D2A
+	TST.B	3(A0)
+	BEQ	lbC000E68
+	MOVE.B	3(A0),$23(A2)
+	CLR.W	$24(A2)
+	RTS
+
+lbC000D2A	CMP.B	#$42,2(A0)
+	BNE.S	lbC000D80
+	TST.B	3(A0)
+	BNE.S	lbC000D5E
+	MOVE.W	lbW000E86,lbB000E80
+	ADDQ.W	#1,lbB000E80
+	MOVE.W	lbW000E7A,D0
+	CMP.W	lbB000E80,D0
+	BGT.S	lbC000D80
+	CLR.W	lbB000E80
+	RTS
+
+lbC000D5E	CLR.W	lbB000E80
+	MOVE.B	3(A0),lbB000E81
+	MOVE.W	lbW000E7A(PC),D0
+	CMP.W	lbB000E80(PC),D0
+	BGT.S	lbC000D80
+	MOVE.W	#$FFFF,lbB000E80
+	RTS
+
+lbC000D80	CMP.B	#$55,2(A0)
+	BNE.S	lbC000DA2
+	MOVEQ	#0,D0
+	MOVE.B	3(A0),D0
+	MOVE.W	$1E(A2),D1
+	SUB.W	D0,D1
+	CMP.W	#$39,D1
+	BLT	lbC000E68
+	SUB.W	D0,$2A(A2)
+	RTS
+
+lbC000DA2	CMP.B	#$44,2(A0)
+	BNE.S	lbC000DC4
+	MOVEQ	#0,D0
+	MOVE.B	3(A0),D0
+	MOVE.W	$1A(A2),D1
+	ADD.W	D0,D1
+	CMP.W	#$1AB0,D1
+	BGT	lbC000E68
+	ADD.W	D0,$2A(A2)
+	RTS
+
+lbC000DC4	CMP.B	#$47,2(A0)
+	BNE.S	lbC000DF2
+	TST.B	1(A0)
+	BNE.S	lbC000DE0
+	MOVE.W	#$3F,D0
+	MULU	2(A2),D0
+	LSR.W	#6,D0
+	MOVE.W	D0,0(A2)
+lbC000DE0	MOVEQ	#0,D0
+	MOVE.B	3(A0),D0
+	MULU	2(A2),D0
+	LSR.W	#6,D0
+	MOVE.W	D0,$3A(A2)
+	RTS
+
+lbC000DF2	CMP.B	#$45,2(A0)
+	BNE.S	lbC000E68
+	TST.B	(A0)
+	BEQ.S	lbC000E68
+	ADDQ.L	#4,A0
+	MOVEQ	#1,D0
+	MOVE.L	D7,-(SP)
+	MOVEQ	#$7C,D7
+	SUB.W	lbW000E88(PC),D7
+	LSR.W	#2,D7
+	SUBQ.W	#1,D7
+	BMI.S	lbC000E66
+lbC000E10	TST.B	(A0)
+	BNE.S	lbC000E1E
+	ADDQ.L	#4,A0
+	ADDQ.W	#1,D0
+	DBRA	D7,lbC000E10
+	BRA.S	lbC000E66
+
+lbC000E1E	LEA	lbW000FB6(PC),A1
+	MOVEQ	#0,D1
+	MOVE.B	(A0),D1
+	ADD.B	lbB000E7F(PC),D1
+	ADD.W	D1,D1
+	SUBQ.W	#2,D1
+	MOVE.W	0(A1,D1.W),D1
+	MOVE.W	$1A(A2),D2
+	MULU	lbB000E84(PC),D0
+	CMP.W	D1,D2
+	BGT.S	lbC000E52
+	SUB.W	D2,D1
+	DIVU	D0,D1
+	CMP.L	#$FFFF,D1
+	BLE.S	lbC000E4C
+	ADDQ.W	#1,D1
+lbC000E4C	MOVE.W	D1,$3C(A2)
+	BRA.S	lbC000E66
+
+lbC000E52	SUB.W	D1,D2
+	DIVU	D0,D2
+	CMP.L	#$FFFF,D2
+	BLE.S	lbC000E60
+	ADDQ.W	#1,D2
+lbC000E60	NEG.W	D2
+	MOVE.W	D2,$3C(A2)
+lbC000E66	MOVE.L	(SP)+,D7
+lbC000E68	RTS
+
+lbL000E6A	dc.l	0
+lbL000E6E	dc.l	0
+lbL000E72	dc.l	0
+lbL000E76	dc.l	0
+lbW000E7A	dc.w	0
+lbW000E7C	dc.w	0
+	dc.b	0
+lbB000E7F	dc.b	0
+lbB000E80	dc.b	$FF
+lbB000E81	dc.b	$FF
+lbW000E82	dc.w	0
+lbB000E84	dc.b	0
+lbB000E85	dc.b	6
+lbW000E86	dc.w	0
+lbW000E88	dc.w	0
+	dc.w	0
+lbW000E8C	dc.w	0
+lbL000E8E	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.w	0
+lbL000EB0	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+lbL000ED8	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.w	0
+lbL000F22	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.w	0
+lbL000F6C	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.l	0
+	dc.w	0
+lbW000FB6	dc.w	$1AB0
+	dc.w	$1940
+	dc.w	$17D0
+	dc.w	$1670
+	dc.w	$1530
+	dc.w	$1400
+	dc.w	$12E0
+	dc.w	$11D0
+	dc.w	$10D0
+	dc.w	$FE0
+	dc.w	$F00
+	dc.w	$E20
+	dc.w	$D58
+	dc.w	$CA0
+	dc.w	$BE8
+	dc.w	$B38
+	dc.w	$A98
+	dc.w	$A00
+	dc.w	$970
+	dc.w	$8E8
+	dc.w	$868
+	dc.w	$7F0
+	dc.w	$780
+	dc.w	$710
+	dc.w	$6AC
+	dc.w	$650
+	dc.w	$5F4
+	dc.w	$59C
+	dc.w	$54C
+	dc.w	$500
+	dc.w	$4B8
+	dc.w	$474
+	dc.w	$434
+	dc.w	$3F8
+	dc.w	$3C0
+	dc.w	$388
+	dc.w	$356
+	dc.w	$328
+	dc.w	$2FA
+	dc.w	$2CE
+	dc.w	$2A6
+	dc.w	$280
+	dc.w	$25C
+	dc.w	$23A
+	dc.w	$21A
+	dc.w	$1FC
+	dc.w	$1E0
+	dc.w	$1C4
+	dc.w	$1AB
+	dc.w	$194
+	dc.w	$17D
+	dc.w	$167
+	dc.w	$153
+	dc.w	$140
+	dc.w	$12E
+	dc.w	$11D
+	dc.w	$10D
+	dc.w	$FE
+	dc.w	$F0
+	dc.w	$E2
+	dc.w	$D6
+	dc.w	$CA
+	dc.w	$BE
+	dc.w	$B4
+	dc.w	$A9
+	dc.w	$A0
+	dc.w	$97
+	dc.w	$8F
+	dc.w	$86
+	dc.w	$7F
+	dc.w	$78
+	dc.w	$71
+lbW001046	dc.w	$18
+	dc.w	$2F45
+	dc.w	$5868
+	dc.w	$747B
+	dc.w	$7E7D
+	dc.w	$776C
+	dc.w	$5E4C
+	dc.w	$3720
+	dc.w	$8F1
+	dc.w	$D9C3
+	dc.w	$AF9E
+	dc.w	$9087
+	dc.w	$8282
+	dc.w	$868F
+	dc.w	$9CAD
+	dc.w	$C1D7
+	dc.w	$9CAD
+
+	SECTION	syntracker001068,BSS_c
+lbL001068	ds.l	8
+lbL001088	ds.l	$20
+lbL001108	ds.l	$20
+
+	end
