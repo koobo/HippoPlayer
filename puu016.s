@@ -35409,9 +35409,9 @@ buildDeliBase
 
  if DEBUG
 	move.l	dtg_FileArrayPtr(a0),d0
-	DPRINT	"File %s",501
+	DPRINT	"File: %s",501
 	move.l	dtg_DirArrayPtr(a0),d0
-	DPRINT	"Dir %s",502
+	DPRINT	"Dir: %s",502
  endif
 
 	move.l	_DosBase(a5),dtg_DOSBase(a0)
@@ -36971,15 +36971,28 @@ var_b		ds.b	size_var
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
 * Use the same buffer in p_delicustom to store the delibase
-deliBase	= ptheader+(-ENPP_SizeOf)
-deliBaseLength	= EPG_SizeOf  ;dtg_Reserved3
+;deliBase	= ptheader+(-ENPP_SizeOf)
+;deliBaseLength	= EPG_SizeOf  ;dtg_Reserved3
 * Also store the deli path stuff here
 * 100 bytes for module path
-deliPath	= ptheader+ENPP_SizeOf+deliBaseLength 
+;deliPath	= ptheader+ENPP_SizeOf+deliBaseLength 
 * Path manipuation array
-deliPathArray	= deliPath+100
+;deliPathArray	= deliPath+100
+;deliPathArrayLength = 200
+;	ds.b	1000
+
+	ds.b	32
+	ds.b	-ENPP_SizeOf
+deliBaseLength = EPG_SizeOf
+deliBase
+	ds.b	deliBaseLength
+	ds.b	32
+deliPath
+	ds.b	200
 deliPathArrayLength = 200
-	ds.b	1000
+deliPathArray
+	ds.b	deliPathArrayLength
+
 
 * TODO: dynamic alloc
 
