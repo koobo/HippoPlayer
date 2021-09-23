@@ -24011,12 +24011,23 @@ loadfile
 	move.l	d0,d1
 	lea	fileinfoblock(a5),a3
 	move.l	a3,d2
-	lob	Examine			* Nasty! Error is not checked
+	lob	Examine
+	tst.l	d0 
+	bne.b 	.exOk
+	move.l	d3,d1
+	lob	UnLock
+	bra	.open_error
+.exOk
 	move.l	d3,d1
 	lob	UnLock
 
-	tst.l	fib_DirEntryType(a3)	* onko tiedosto vai hakemisto?
-	bpl.w	.nofile_err
+	;tst.l	fib_DirEntryType(a3)	* onko tiedosto vai hakemisto?
+	;bpl.w	.nofile_err
+	cmp.l	#ST_FILE,fib_DirEntryType(a3)
+	beq.b	.isFile
+	cmp.l	#ST_LINKFILE,fib_DirEntryType(a3)
+	bne.w	.nofile_err
+.isFile
 
 	move.l	124(a3),lod_length(a5)	* tiedoston pituus
 	beq.w	.open_error		* jos 0 -> errori
@@ -33705,7 +33716,6 @@ p_syntracker
 	lsl.l	#2,d0
 	move.l	d0,a0
 
-	lea	ProgStart-4,a0
 	bsr	deliInit
 .error	DPRINT	"Syntracker init %ld",1
 	popm	d1-a6
@@ -33780,7 +33790,15 @@ p_robhubbard2
 	move.l	.dp(pc),d0
 	lsl.l	#2,d0
 	move.l	d0,a0
+	
+	;lea	ProgStart-4,a0
+	
 	bsr	deliInit
+	tst.l	d0
+	bne.b .error
+		
+	nop
+
 .error	DPRINT	"RH2 init %ld",1
 	popm	d1-a6
 	rts
@@ -35043,12 +35061,86 @@ id_davelowe
 
 * - todo: dtg_getlistdata
 
+ STRUCTURE DTN_NoteStruct,0
+	APTR	nst_Channels		;pointer to a list of notechannels */
+	ULONG	nst_Flags		;misc flags (see below) */
+	ULONG	nst_MaxFrequency	;max. frequency of this player (28,867 Hz in DMA mode) */
+	UWORD	nst_MaxVolume		;max. volume of this player (in most cases 64) */
+	STRUCT	nst_Reserved,18		;reserved for future use (must be 0 for now) */
+	LABEL	DTN_NoteStruct_SIZEOF
+
+
+ STRUCTURE DTN_NoteChannel,0
+	APTR	nch_NextChannel		;next channel in the list (NULL if last) */
+	ULONG	nch_NotePlayer		;for use by the noteplayer (the deliplayer must ignore this) */
+	WORD	nch_Reserved0		;reserved for future use (must be 0 for now) */
+	UBYTE	nch_Private		;just what it says */
+	UBYTE	nch_Changed		;what has changed since last call */
+	WORD	nch_StereoPos		;set this field when the InitNote function is called */
+	WORD	nch_Stereo		;describes "where" this channel is supposed to play */
+	APTR	nch_SampleStart		;^sampledata */
+	ULONG	nch_SampleLength	;size of sample */
+	APTR	nch_RepeatStart		;^repeat part of sample */
+	ULONG	nch_RepeatLength	;size of repeat part */
+	ULONG	nch_Frequency		;frequency (or period) of sample */
+	UWORD	nch_Volume		;volume of sample */
+	STRUCT	nch_Reserved1,26	;reserved for future use (must be 0 for now) */
+	LABEL	DTN_NoteChannel_SIZEOF
+
+
+NSTB_Dummy	EQU	0	; only a dummy-NoteStruct (no NotePlayer
+				; needed)
+NSTF_Dummy	EQU	1<<0
+NSTB_Period	EQU	1	; Amiga period supplied instead of frequency
+NSTF_Period	EQU	1<<1
+NSTB_ExtPeriod 	EQU	2	; Extended period (period*4) supplied instead
+				; of frequency 
+NSTF_ExtPeriod	EQU	1<<2
+NSTB_NTSCTiming EQU	3	; Period/ExtPeriod supplied in NTSC instead of
+				; PAL 
+NSTF_NTSCTiming EQU	1<<3
+NSTB_EvenLength EQU	4	; Samplelength supplied as WORD instead of
+				; LONG 
+NSTF_EvenLength EQU	1<<4
+NSTB_AllRepeats EQU	5	; play Repeats even if no One-Shot part was
+				; played yet 
+NSTF_AllRepeats EQU	1<<5
+
+NSTB_Reverse 	EQU	8	; little endian byte ordering 
+NSTF_Reverse 	EQU	1<<8
+NSTB_Signed 	EQU	9	; sample data is signed linear
+				; (2's complement) 
+NSTF_Signed 	EQU	1<<9
+NSTB_Unsigned 	EQU	10	;       -"-      unsigned linear 
+NSTF_Unsigned 	EQU	1<<10
+NSTB_Ulaw 	EQU	11	;       -"-      U-law (logarithmic) 
+NSTF_Ulaw 	EQU	1<<11
+NSTB_Alaw 	EQU	12	;       -"-      A-law (logarithmic) 
+NSTF_Alaw 	EQU	1<<12
+NSTB_Float 	EQU	13	;       -"-      IEEE floats 
+NSTF_Float 	EQU	1<<13
+
+NSTB_7Bit 	EQU	16	; sample data is in 7-bit format 
+NSTF_7Bit 	EQU	1<<16
+NSTB_8Bit 	EQU	17	;        -"-        bytes 
+NSTF_8Bit 	EQU	1<<17
+NSTB_16Bit 	EQU	18	;        -"-        16-bit words 
+NSTF_16Bit 	EQU	1<<18
+NSTB_24Bit 	EQU	19	;        -"-        24-bit data 
+NSTF_24Bit 	EQU	1<<19
+NSTB_32Bit 	EQU	20	;        -"-        longwords 
+NSTF_32Bit 	EQU	1<<20
+NSTB_64Bit 	EQU	21	;        -"-        quadwords 
+NSTF_64Bit 	EQU	1<<21
 
 storedInterrupt	dc.l	0
 storedSetVolume	dc.l 	0
 storedSetVoices dc.l	0
+storedNoteStruct dc.l 	0
 deliPlayer	dc.l	0
 deliPlayerType	dc.w	0
+deliGetListDataData	dc.l 0
+deliGetListDataLength 	dc.l 0
 
 * in:
 *   d0 = tag to find
@@ -35123,6 +35215,9 @@ deliInit
 	lea	deliBase,a1
 	move.l	a1,(a0)
 .noEBTag
+	move.l	#DTP_Config,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 
 	* Not really needed:
 	move.l	#DTP_Check2,d0  
@@ -35146,7 +35241,7 @@ deliInit
 	bsr.w	deliGetTag
 	beq.b	.noExtLoad
 	bsr.w	deliCallFunc
-	DPRINT	"DTP_ExtLoad: %ld",81
+	DPRINT	"DTP_ExtLoad: %lx",81
 	tst.l	d0
 	bne.w	.error
 .noExtLoad
@@ -35175,6 +35270,62 @@ deliInit
 	move.l	#EP_Voices,d0  
 	bsr.w	deliGetTag
 	move.l	d0,storedSetVoices
+
+	move.l	#DTP_NoteStruct,d0  
+	bsr.w	deliGetTag
+	tst.l	d0
+	beq.w 	.noNoteStruct
+	* This is an address to the struct
+	move.l	d0,a0
+	move.l	(a0),a0
+	move.l	a0,storedNoteStruct
+ if DEBUG 
+	DPRINT	"NoteStruct: %lx",64
+
+	move.l	nst_MaxFrequency(a0),d0 
+	DPRINT	"MaxFreq: %ld",67
+	moveq	#0,d0
+	move	nst_MaxVolume(a0),d0 
+	DPRINT	"MaxVol: %ld",68
+
+	move.l	nst_Flags(a0),d1 
+	move.l	d1,d0 
+	DPRINT	"Flags: %lx",66
+	
+	moveq	#0,d0
+	btst	#NSTB_Period,d1
+	sne		d0
+	DPRINT	"NSTB_Period: %lx",69
+
+	btst	#NSTB_ExtPeriod,d1
+	sne		d0
+	DPRINT	"NSTB_ExtPeriod: %lx",70
+
+	btst	#NSTB_NTSCTiming,d1
+	sne		d0
+	DPRINT	"NSTB_NTSCTiming: %lx",71
+
+	btst	#NSTB_EvenLength,d1
+	sne		d0
+	DPRINT	"NSTB_EvenLength %lx",72
+
+	btst	#NSTB_AllRepeats,d1
+	sne		d0
+	DPRINT	"NSTB_AllRepeats %lx",73
+
+	btst	#NSTB_Reverse,d1
+	sne		d0
+	DPRINT	"NSTB_Reverse %lx",74
+
+	btst	#NSTB_Signed,d1
+	sne		d0
+	DPRINT	"NSTB_Signed %lx",75
+
+	btst	#NSTB_Unsigned,d1
+	sne		d0
+	DPRINT	"NSTB_Unsigned %lx",76
+ endif 
+.noNoteStruct
 
 	move.l	#DTP_InitSound,d0  
 	bsr.w	deliGetTag
@@ -35291,6 +35442,9 @@ deliPlay
 	move.l 	d0,a0
 	jsr	(a0)
 .noVol
+	pushm	a5/a6
+	bsr	deliNotePlayer
+	popm	a5/a6
 	rts
 
 deliEnd
@@ -35386,7 +35540,7 @@ buildDeliBase
 	push a0
 	jsr	getcurrent 
 	pop a0
-	
+
 	* a3 = node
 	* Grab path and file parts
 	move.l	l_nameaddr(a3),a1
@@ -35499,6 +35653,11 @@ buildDeliBase
 .setTimer
 	* May be called from interrupt, no logging allowed
 	;DPRINT	"deliSetTimer",15
+	move	dtg_Timer(a5),d0
+	jsr ciaint_setTempoFromD0
+	rts
+
+
 .stub
 	moveq	#0,d0
 	rts
@@ -35570,13 +35729,32 @@ deliCopyDir
 deliLoadFile move.l  a0,d0
  if DEBUG
 	move.l	#deliPathArray,d1
-	DPRINT	"loadFile %s path=%s",109
+	DPRINT	"loadFile '%s' path='%s'",109
  endif
-	moveq	#0,d0
+	pushm	d1-a6
+	lea 	var_b,a5
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
+	lea	deliGetListDataData(pc),a1 
+	lea 	deliGetListDataLength(pc),a2
+	bsr	loadfile
+ if DEBUG
+	move.l	deliGetListDataData(pc),d1
+	move.l	deliGetListDataLength(pc),d2
+	DPRINT "deliLoadfile: %ld %lx %ld",2
+ endif
+	popm	d1-a6
+	
+ * 0 = success, non-0: fail
 	rts
-deliGetListData DPRINT	"getListData %d",110
+
+* Returns the last loaded file,
+* eg with dtg_LoadFile
+deliGetListData 
+	DPRINT	"getListData %d",110
 	move.l	moduleaddress+var_b,a0
 	move.l	modulelength+var_b,d0
+	;move.l	deliGetListDataData(pc),a0 
+	;move.l	deliGetListDataLength(pc),d0
 	rts
 
 deliAppendStr
@@ -35688,19 +35866,25 @@ funcENPP_WindowToFront
 	DPRINT "ENPP_WindowToFront",1EP_
 	rts
 funcENPP_GetListData
-	DPRINT "ENPP_GetListData %d",1
-	tst.l d0 
-	beq.b 	.err
-	move.l	moduleaddress+var_b,a0 
-	move.l modulelength+var_b,d0
+	DPRINT "ENPP_GetListData %ld",1
+	tst.l	d0
+	beq.b	.first
+	cmp.l	#1,d0
+	beq.b	.second
+	moveq	#0,d0
 	rts
-.err 
-	sub.l a0,a0
-	moveq	#0,d0 
+.second
+	move.l	deliGetListDataData(pc),a0
+	move.l	deliGetListDataLength(pc),d0
+	rts
+.first	
+	move.l	moduleaddress+var_b,a0 
+	move.l	modulelength+var_b,d0
 	rts
 
 funcENPP_LoadFile
 	DPRINT "ENPP_LoadFile",1
+	lea	deliPathArray,a0
 	bra	deliLoadFile
 funcENPP_CopyDir
 	DPRINT "ENPP_CopyDir",1
@@ -35787,104 +35971,88 @@ funcENPP_StringCMP
 	DPRINT "ENPP_StringCMP",1
 	rts
 funcENPP_DMAMask
-	;DPRINT "ENPP_DMAMask",1
-	* d0 = negative -> enable, positive -> disable
-	* d1 = DMA bits
-	tst d0 
-	bmi.b	.enable
-	move	d1,$dff096
-	jsr	dmawait
-	rts
-.enable
-	jsr	dmawait
 	push	d1
-	or		#$8000,d1
-	move	d1,$dff096
-	pop 	d1
+;	;DPRINT "ENPP_DMAMask",1
+;	* d0 = negative -> enable, positive -> disable
+;	* d1 = DMA bits
+;	tst d0 
+;	bmi.b	.enable
+;	move	d1,$dff096
+;	jsr	dmawait
+;	rts
+;.enable
+;	jsr	dmawait
+;	push	d1
+;	or		#$8000,d1
+;	move	d1,$dff096
+;	pop 	d1
+;	jsr	dmawait
+;	rts
+
+	tst.w	d0
+	bpl.s	.set2
+	or.w	#$8000,d1
+.set2
+	move.w	d1,$dff096
 	jsr	dmawait
+	pop 	d1
 	rts
 
 funcENPP_PokeAdr
-	;DPRINT "ENPP_PokeAdr",1
-	tst.b	d1
-	beq.b .1
-	cmp.b	#1,d1
-	beq.b .2
-	cmp.b	#2,d1
-	beq.b .3
-	cmp.b	#3,d1
-	beq.b .4
+	pushm	d2/a0
+	lea	$dff0a0,a0
+	moveq	#3,d2
+	and.w	d1,d2
+	lsl.w	#4,d2
+	add.w	d2,a0
+	move.l	d0,(a0)
+	popm	d2/a0
 	rts
-.1	move.l d0,$dff0a0
-	rts
-.2	move.l d0,$dff0b0
-	rts
-.3	move.l d0,$dff0c0
-	rts
-.4	move.l d0,$dff0d0
-	rts
+
 funcENPP_PokeLen
-	;DPRINT "ENPP_PokeLen",1
-	tst.b	d1
-	beq.b .1
-	cmp.b	#1,d1
-	beq.b .2
-	cmp.b	#2,d1
-	beq.b .3
-	cmp.b	#3,d1
-	beq.b .4
+	pushm	d2/a0
+	lea	$dff0a0,a0
+	moveq	#3,d2
+	and.w	d1,d2
+	lsl.w	#4,d2
+	add.w	d2,a0
+	tst.w	d0
+	bne.s	.nozero
+	moveq	#1,d0
+.nozero
+	move.w	d0,4(a0)
+	popm	d2/a0
 	rts
-.1	move d0,$dff0a4
-	rts
-.2	move d0,$dff0b4
-	rts
-.3	move d0,$dff0c4
-	rts
-.4	move d0,$dff0d4
-	rts
+
 funcENPP_PokePer
-	;DPRINT "ENPP_PokePer",1
-* d0: period value
-* d1: channel number
-	tst.b	d1
-	beq.b .1
-	cmp.b	#1,d1
-	beq.b .2
-	cmp.b	#2,d1
-	beq.b .3
-	cmp.b	#3,d1
-	beq.b .4
-	rts
-.1	move d0,$dff0a6
-	rts
-.2	move d0,$dff0b6
-	rts
-.3	move d0,$dff0c6
-	rts
-.4	move d0,$dff0d6
+	pushm	d2/a0
+	lea	$dff0a0,a0
+	moveq	#3,d2
+	and.w	d1,d2
+	lsl.w	#4,d2
+	add.w	d2,a0
+	; O_o	
+	;lsr	#2,d0
+	move.w	d0,6(a0)
+	popm	d2/a0
 	rts
 
 funcENPP_PokeVol
-	;DPRINT "ENPP_PokeVol",1
-* d0: period value
-* d1: channel number
-* todo: main vol
-	tst.b	d1
-	beq.b .1
-	cmp.b	#1,d1
-	beq.b .2
-	cmp.b	#2,d1
-	beq.b .3
-	cmp.b	#3,d1
-	beq.b .4
-	rts
-.1	move d0,$dff0a8
-	rts
-.2	move d0,$dff0b8
-	rts
-.3	move d0,$dff0c8
-	rts
-.4	move d0,$dff0d8
+	pushm	d2/a0
+	lea	$dff0a0,a0
+	moveq	#3,d2
+	and.w	d1,d2
+	;add.w	d2,d2			;mal 2
+	;move.w	d2,d3
+	;add.w	#EPG_Voice1Vol,d3
+	;lsl.w	#3,d2			;mal 16/2
+	;mulu	(a5,d3.w),d0
+	;lsr.w	#6,d0
+
+	lsl.w	#4,d2
+	add.w	d2,a0
+	move.w	d0,8(a0)
+	popm	d2/a0
 	rts
 
 funcENPP_PokeCommand
@@ -35959,6 +36127,189 @@ funcENPP_SetListData
 funcENPP_GetHardwareType
 	DPRINT "ENPP_GetHardwareType",1
 	rts
+
+* NotePlayer implementation from EaglePlayer sources
+deliNotePlayer
+	move.l	storedNoteStruct(pc),d0 
+	beq.b 	.exit
+	lea	deliBase,a5
+	bsr.b 	.DT_NotePlayer
+.exit 
+	rts
+.DT_NotePlayer:	
+;NSTB_Period	EQU 1		;* Amiga period supplied instead of frequency
+;NSTF_Period	EQU 1<<1
+;NSTB_ExtPeriod	EQU 2		;* Extended period (period*4) supplied instead of frequency
+;NSTF_ExtPeriod	EQU 1<<2
+;NSTB_EvenLength EQU 4		;* Samplelength supplied as WORD instead of LONG
+;NSTF_EvenLength EQU 1<<4
+		movem.l	d0-a6,-(a7)
+		;move.l	PufferAdr(pc),a5
+		;move.l	DT_NoteStruct(a5),d0
+		;beq.w	.Return
+		move.l	d0,a4
+		move.l	4(a4),d7	;Flags
+;		move.l	d7,0
+		
+		move.l	(a4),d0
+		beq.w	.Return
+		move.l	d0,a4
+
+		*--------- neue Note (= DMA off) ---------*
+		move.l	a4,a0
+		;move.w	DT_AudTagliste+6(pc),d2
+		;subq.w	#1,d2
+		moveq	#4-1,d2
+		moveq	#0,d1
+		moveq	#1,d3
+.pass1		move.b	11(a0),d0
+		and.b	#2,d0		;NCHF_Sample
+		beq.s	.skip
+		or.l	d3,d1		;DMA Mask
+.skip		lsl.l	#1,d3
+		move.l	(a0),d0
+		beq.s	.Last1
+		move.l	d0,a0		*add #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass1
+.Last1:
+		tst.l	d1
+		beq.s	.nostopDMA
+		moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
+					;D1 = Maske (LONG !!)
+		jsr	ENPP_DMAMask(a5)
+		moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
+.nostopDMA:	move.l	d1,-(a7)
+
+		*---------- Neue Note setzen -------------*
+		move.l	a4,a0
+;		move.w	DT_AudTagliste+6(pc),d2		;num Channels
+;		subq.w	#1,d2
+		moveq	#4-1,d2
+		moveq	#0,d1
+.pass2		move.b	11(a0),d0
+		and.b	#2,d0				;NCHF_Sample
+		beq.s	.skip2
+
+		move.l	$10(A0),d0			;SampleStart
+;		move.l	d0,0			;!!
+		jsr	ENPP_PokeAdr(A5)
+
+		moveq	#0,d0
+		move.w	nch_SampleLength(a0),d0
+		btst	#4,d7
+		bne.s	.pokeword1
+		move.l	nch_SampleLength(A0),d0		;NCH_SampleLength ;SampleLen
+		lsr.l	#1,d0				;Bytes -> Words
+.pokeword1:
+		jsr	ENPP_PokeLen(a5)
+.skip2:		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last2
+		move.l	d0,a0		;add #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass2
+.Last2:
+
+		*-------- Volume/Period neu setzen -------*
+		move.l	a4,a0
+;		move.w	DT_AudTagliste+6(pc),d2		;num Channels
+;		subq.w	#1,d2
+		moveq	#4-1,d2
+		moveq	#0,d1
+.pass3
+		move.b	11(a0),d0
+		and.b	#$10,d0				;NCHF_Volume
+		beq.s	.skip3
+
+		move	nch_Volume(a0),d0			;Volume
+		jsr	ENPP_PokeVol(a5)
+.skip3:		move.b	11(a0),d0
+		and.b	#8,d0				;NCHF_Frequency
+		beq.s	.skip4
+
+; Only Amiga periods suppored in Hippo
+
+;		moveq	#0,d0
+;		move.w	$20(A0),d0			;Period (or Frequency)
+;		btst	#2,d7
+;		bne.s	.extper				;4*Period ?
+;		btst	#1,d7				
+;		bne.s	.per				;1*Period ?
+;							;Frequenz in Period umrechnen
+;		moveq	#0,d0
+;		move.l	$20(a0),d3			;Frequenz
+;		beq	.per				;== 0 ? -> weiter
+;		lsr.l	#1,d3
+;		move.l	#3546895/2,d0		;Amiga Audiorate
+;		divu	d3,d0			;
+;		and.l	#$ffff,d0
+;		bra.s	.per
+;.extper
+;		lsr	#2,d0				;noch ersetzen durch DirektWrite bei 4*Per
+;.per
+		move.w	nch_Frequency(A0),d0		;Period (or Frequency)
+		jsr	ENPP_PokePer(a5)
+.skip4:		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last3
+		move.l	d0,a0		;add.w #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass3
+.Last3:
+
+		*----- DMA starten (wenn erforderlich) ----*
+		move.l	(a7)+,d1
+		tst.l	d1
+		beq.s	.NostartDMA
+		move	#$8000,d0	;D0.w neg=enable ; 0/pos=disable
+					;D1 = Maske (LONG !!)
+		jsr	ENPP_DMAMask(a5)
+
+		*------ Repeatadr/Repeatlen poken --------*
+.NostartDMA:	move.l	a4,a0
+;		move.w	DT_AudTagliste+6(pc),d2		;num Channels
+;		subq.w	#1,d2
+		moveq	#4-1,d2
+		moveq	#0,d1
+.pass4		move.b	11(a0),d0
+		and.b	#4!32!64,d0			;NCHF_Repeat
+		beq.s	.skip5
+;		bra.s	.skip5
+
+		move.l	nch_RepeatStart(a0),d0		;RepeatStart
+		jsr	ENPP_PokeAdr(A5)
+
+		moveq	#0,d0
+		move.w	nch_RepeatLength(a0),d0		;Repeatlen
+		btst	#4,d7
+		bne.s	.pokeword2
+		move.l	nch_RepeatLength(A0),d0		;NCH_SampleLength ;SampleLen
+		lsr.l	#1,d0				;Bytes -> Words
+.pokeword2:
+		jsr	ENPP_PokeLen(a5)
+;		bra.s	.next5
+.skip5:
+;		move.b	11(a0),d0
+;		and.b	#2!4,d0				;NCHF_Sample
+;;		beq.s	.next5
+;		moveq	#0,d0
+;		jsr	ENPP_PokeAdr(a5)
+;		jsr	ENPP_PokeLen(a5)
+;.next5
+		clr.b	11(a0)
+		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last
+		move.l	d0,a0		*add #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass4
+.Last:
+
+.Return:
+;		jsr	ENPP_Amplifier(a5)
+
+		*moveq	#0,d1
+		*moveq	#0,d0
+		movem.l	(a7)+,d0-a6
+		rts
+
 
 
  if DEBUG
@@ -36993,7 +37344,6 @@ deliPathArrayLength = 200
 deliPathArray
 	ds.b	deliPathArrayLength
 
-
 * TODO: dynamic alloc
 
 * Eagle/Delibase
@@ -37001,1237 +37351,4 @@ deliPathArray
 * positive size:  dtg_Reserved3 = 136
 * total 532 bytes
 
-
-
-****************************************************************************
-	SECTION	syntracker000000,CODE
-ProgStart
-	MOVEQ	#-1,D0
-	RTS
-
-	dc.b	'EPPLAYER'
-	dc.l	lbL000048
-	dc.b	'$VER: Syntracker V1.70 Replayer-Module 1.0 ('
-	dc.b	'18.07.1993)',0
-lbL000048	dc.l	$80004560
-	dc.l	4
-	dc.l	DTP_PlayerVersion
-	dc.l	2
-	dc.l	DTP_PlayerName
-	dc.l	Syntracker.MSG
-	dc.l	DTP_Creator
-	dc.l	TwiceRAVEadap.MSG
-	dc.l	DTP_Check2
-	dc.l	lbC0001D4
-	dc.l	DTP_InitPlayer
-	dc.l	lbC000204
-	dc.l	DTP_InitSound
-	dc.l	lbC000304
-	dc.l	DTP_EndSound
-	dc.l	lbL000400
-	dc.l	DTP_Interrupt
-	dc.l	lbC000496
-	dc.l	DTP_Volume
-	dc.l	lbC00027C
-	dc.l	DTP_Balance
-	dc.l	lbC00027C
-	dc.l	DTP_PrevPatt
-	dc.l	lbC000250
-	dc.l	DTP_NextPatt
-	dc.l	lbC000232
-	dc.l	$80004552
-	dc.l	lbC00027C
-	dc.l	$80004558
-	dc.l	lbC0001FE
-	dc.l	$80004550
-	dc.l	lbC0001CE
-	dc.l	$8000455C
-	dc.l	lbC000274
-	dc.l	$8000455E
-	dc.l	$13FC6
-	dc.l	0
-Syntracker.MSG	dc.b	'Syntracker',0
-TwiceRAVEadap.MSG	dc.b	'Twice / RAVE,',$A
-	dc.b	'adapted by Eagleeye of DEFECT',0
-SYNT.MSG	dc.b	'SYNT.',0,0
-lbL00011A	dc.l	0
-lbL00011E	dc.l	0
-lbB000122	dc.b	0
-	dc.b	$40
-lbW000124	dc.w	$40
-lbW000126	dc.w	$40
-lbW000128	dc.w	$40
-lbL00012A	dc.l	0
-	dc.l	0
-lbL000132	dc.l	0
-	dc.l	0
-	dc.w	0
-lbL00013C	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.w	0
-lbL00014E	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.w	0
-lbL000160	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.w	0
-lbL000172	dc.l	0
-	dc.l	0
-lbL00017A	dc.l	$80004D53
-	dc.w	0
-	dc.w	$20
-	dc.l	$80004D4E
-	dc.l	0
-	dc.l	$80004D4C
-	dc.l	0
-	dc.l	$80004D52
-	dc.l	0
-	dc.l	$80004D56
-	dc.l	0
-	dc.l	$80004D57
-	dc.l	0
-	dc.l	$80004D5A
-	dc.l	0
-	dc.l	$80004D4F
-	dc.l	$7F
-	dc.l	$80004D5F
-	dc.l	SYNT.MSG
-	dc.l	$80004D49
-	dc.l	0
-	dc.l	0
-
-lbC0001CE	LEA	lbL00017A(PC),A0
-	RTS
-
-lbC0001D4	MOVE.L	$24(A5),A0
-	LEA	SYNTRACKERSON.MSG(PC),A1
-	MOVEQ	#-1,D0
-	MOVEQ	#15,D1
-lbC0001E0	CMPM.B	(A1)+,(A0)+
-	BNE.S	lbC0001EA
-	DBRA	D1,lbC0001E0
-	MOVEQ	#0,D0
-lbC0001EA	RTS
-
-SYNTRACKERSON.MSG	dc.b	'SYNTRACKER-SONG:',0,0
-
-lbC0001FE	LEA	lbL00012A(PC),A0
-	RTS
-
-lbC000204	LEA	lbL00012A(PC),A0
-	CLR.W	8(A0)
-	CLR.W	$1A(A0)
-	CLR.W	$2C(A0)
-	CLR.W	$3E(A0)
-	MOVEQ	#0,D0
-	MOVE.L	$38(A5),A0
-	JSR	(A0)
-	LEA	lbL00011A(PC),A1
-	MOVE.L	A0,(A1)
-	MOVE.L	$5C(A5),4(A1)
-	MOVE.L	$4C(A5),A0
-	JMP	(A0)
-
-lbC000232	LEA	lbW000E88(PC),A2
-	CLR.W	(A2)
-	ADDQ.W	#1,-2(A2)
-	MOVE.W	lbW000E7A(PC),D0
-	CMP.W	lbW000E86(PC),D0
-	BNE.S	lbC00027A
-	CLR.W	-2(A2)
-	MOVE.L	lbL00011E(PC),A0
-	JMP	(A0)
-
-lbC000250	LEA	lbW000E88(PC),A2
-	CLR.W	(A2)
-	TST.W	-2(A2)
-	BEQ.S	lbC00026A
-	SUBQ.W	#1,-2(A2)
-	MOVE.W	lbW000E7A(PC),D0
-	CMP.W	lbW000E86(PC),D0
-	BNE.S	lbC00027A
-lbC00026A	MOVE.W	lbW000E7A(PC),D0
-	MOVE.W	D0,-2(A2)
-	RTS
-
-lbC000274	MOVEQ	#0,D0
-	MOVE.W	lbW000E86(PC),D0
-lbC00027A	RTS
-
-lbC00027C	LEA	lbL000172(PC),A0
-	MOVE.W	$146(A5),(A0) *EPG_Voices
-	LEA	lbB000122(PC),A1
-	MOVE.L	$148(A5),(A1) *EPG_Voice1Vol, ..2Vol
-	MOVE.L	$14C(A5),4(A1) *3Vol, 4Vol
-	LEA	lbL000132(PC),A0
-	LEA	$DFF0A0,A3
-	MOVEQ	#3,D1
-lbC00029E	MOVEQ	#0,D0
-	MOVE.W	(A0),D0
-	BSR.S	lbC0002B2
-	MOVEQ	#$12,D0
-	ADD.L	D0,A0
-	ADDQ.L	#8,A3
-	ADDQ.L	#8,A3
-	DBRA	D1,lbC00029E
-	RTS
-
-lbC0002B2	MOVEM.L	D0/A0,-(SP)
-	LEA	lbL00012A(PC),A0
-	CMP.L	#$DFF0A0,A3
-	BNE.S	lbC0002CC
-	MOVE.W	D0,8(A0)
-	MULU	lbB000122(PC),D0
-	BRA.S	lbC0002F8
-
-lbC0002CC	CMP.L	#$DFF0B0,A3
-	BNE.S	lbC0002DE
-	MOVE.W	D0,$1A(A0)
-	MULU	lbW000124(PC),D0
-	BRA.S	lbC0002F8
-
-lbC0002DE	CMP.L	#$DFF0C0,A3
-	BNE.S	lbC0002F0
-	MOVE.W	D0,$2C(A0)
-	MULU	lbW000126(PC),D0
-	BRA.S	lbC0002F8
-
-lbC0002F0	MOVE.W	D0,$3E(A0)
-	MULU	lbW000128(PC),D0
-lbC0002F8	LSR.W	#6,D0
-	MOVE.W	D0,8(A3)
-	MOVEM.L	(SP)+,D0/A0
-	RTS
-
-lbC000304	LEA	lbL001068,A0
-	MOVE.W	#$11F,D0
-lbC00030E	CLR.B	(A0)+
-	DBRA	D0,lbC00030E
-	MOVE.W	#$4000,$DFF09A
-	MOVE.L	lbL00011A(PC),A0
-	LEA	lbL00017A(PC),A3
-	LEA	lbW000E7A(PC),A2
-	MOVE.W	$10(A0),0(A2)
-	MOVE.W	$10(A0),14(A3)
-	LEA	$14(A0),A1
-	MOVE.L	A1,$4C(A3)
-	LEA	$414(A0),A1
-	MOVE.L	A1,-8(A2)
-	MOVEQ	#$1F,D0
-	MOVEQ	#-1,D2
-lbC000348	MOVE.L	(A1),D1
-	LEA	$10(A1),A1
-	CMP.L	D1,D2
-	BEQ.S	lbC000356
-	DBRA	D0,lbC000348
-lbC000356	MOVE.L	D1,$2C(A3)
-	MOVE.L	#$1614,D0
-	MOVE.L	D0,$24(A3)
-	ADD.L	D0,D1
-	MOVE.L	D1,$34(A3)
-	LEA	$614(A0),A1
-	MOVE.L	A1,-12(A2)
-	LEA	$A14(A0),A1
-	MOVE.L	A1,-$10(A2)
-	LEA	$A14(A0),A1
-	MOVEQ	#0,D0
-	MOVE.W	$12(A0),D0
-	ADDQ.W	#1,D0
-	LSL.L	#7,D0
-	ADD.L	D0,A1
-	MOVE.L	A1,-4(A2)
-	LEA	$614(A0),A1
-	MOVEQ	#0,D2
-	MOVE.W	$10(A0),D1
-lbC000398	MOVE.B	(A1)+,D0
-	CMP.B	D0,D2
-	BHI.S	lbC0003A0
-	MOVE.B	D0,D2
-lbC0003A0	DBRA	D1,lbC000398
-	MOVE.B	D2,$17(A3)
-	LEA	lbW000E7C(PC),A0
-	LEA	$13A(A0),A1
-lbC0003B0	CLR.B	(A0)+
-	CMP.L	A1,A0
-	BNE.S	lbC0003B0
-	MOVEQ	#1,D0
-	LEA	lbL000EB0(PC),A0
-	MOVE.W	#6,-$2C(A0)
-	MOVE.W	D0,(A0)
-	MOVE.W	D0,$4A(A0)
-	MOVE.W	D0,$94(A0)
-	MOVE.W	D0,$DE(A0)
-	MOVE.W	#$FF,-$34(A0)
-	MOVE.W	#15,$DFF096
-	BSR	lbC000412
-	BSR	lbC00047E
-	MOVE.W	#$800F,$DFF096
-	MOVE.W	#$FF,$DFF09E
-	BSET	#1,$BFE001
-	RTS
-
-lbL000400	dc.l	$41FA0A8C
-	dc.l	$42504268
-	dc.l	$4A4268
-	dc.l	$944268
-	dc.w	$DE
-
-lbC000412	MOVE.W	#15,$DFF096
-	BSR	lbC00047E
-	LEA	lbL001068,A0
-	MOVE.L	A0,$DFF0A0
-	MOVE.L	#$1003E8,$DFF0A4
-	CLR.W	$DFF0A8
-	MOVE.L	A0,$DFF0B0
-	MOVE.L	#$1003E8,$DFF0B4
-	CLR.W	$DFF0B8
-	MOVE.L	A0,$DFF0C0
-	MOVE.L	#$1003E8,$DFF0C4
-	CLR.W	$DFF0C8
-	MOVE.L	A0,$DFF0D0
-	MOVE.L	#$1003E8,$DFF0D4
-	CLR.W	$DFF0D8
-	RTS
-
-lbC00047E	MOVEQ	#4,D0
-lbC000480	MOVE.B	$DFF006,D1
-lbC000486	CMP.B	$DFF006,D1
-	BEQ	lbC000486
-	DBRA	D0,lbC000480
-	RTS
-
-lbC000496	MOVEM.L	D1-D7/A0-A6,-(SP)
-	LEA	lbL00012A(PC),A1
-	MOVE.W	#1,$4C(A1)
-	MOVE.W	#$8F,D0
-	MOVE.W	D0,$4A(A1)
-	CLR.W	6(A1)
-	CLR.W	$18(A1)
-	CLR.W	$2A(A1)
-	CLR.W	$3C(A1)
-	BSR.S	lbC0004CE
-	LEA	lbL00012A(PC),A1
-	CLR.W	$4C(A1)
-	MOVEM.L	(SP)+,D1-D7/A0-A6
-	MOVEQ	#0,D0
-	RTS
-
-lbC0004CE	LEA	lbW000E82(PC),A0
-	ADDQ.W	#1,(A0)
-	MOVE.W	lbB000E84(PC),D0
-	CMP.W	lbW000E82(PC),D0
-	BNE	lbC000598
-	CLR.W	(A0)
-	CMP.W	#$FFFF,-2(A0)
-	BEQ.S	lbC0004FA
-	MOVE.W	lbB000E80(PC),4(A0)
-	CLR.W	6(A0)
-	MOVE.W	#$FFFF,-2(A0)
-lbC0004FA	LEA	$DFF0A0,A4
-	LEA	lbL001108,A5
-	LEA	lbL000E8E(PC),A2
-	MOVE.L	lbL000E6E(PC),A0
-	MOVE.W	#1,-2(A2)
-	BSR	lbC000A20
-	LEA	$10(A4),A4
-	LEA	$20(A5),A5
-	LEA	lbL000ED8(PC),A2
-	MOVE.L	lbL000E6E(PC),A0
-	LEA	$80(A0),A0
-	MOVE.W	#2,-$4C(A2)
-	BSR	lbC000A20
-	LEA	$10(A4),A4
-	LEA	$20(A5),A5
-	LEA	lbL000F22(PC),A2
-	MOVE.L	lbL000E6E(PC),A0
-	LEA	$100(A0),A0
-	MOVE.W	#4,-$96(A2)
-	BSR	lbC000A20
-	LEA	$10(A4),A4
-	LEA	$20(A5),A5
-	LEA	lbL000F6C(PC),A2
-	MOVE.L	lbL000E6E(PC),A0
-	LEA	$180(A0),A0
-	MOVE.W	#8,-$E0(A2)
-	BSR	lbC000A20
-	LEA	lbW000E88(PC),A2
-	ADDQ.W	#4,(A2)
-	CMP.W	#$80,(A2)
-	BNE.S	lbC000598
-	CLR.W	(A2)
-	ADDQ.W	#1,-2(A2)
-	MOVE.W	lbW000E7A(PC),D0
-	CMP.W	lbW000E86(PC),D0
-	BNE.S	lbC000598
-	CLR.W	-2(A2)
-	MOVE.L	lbL00011E(PC),A2
-	JSR	(A2)
-lbC000598	LEA	lbL000E8E(PC),A2
-	LEA	$DFF0A0,A1
-	BSR	lbC000932
-	LEA	lbL000ED8(PC),A2
-	LEA	$10(A1),A1
-	BSR	lbC000932
-	LEA	lbL000F22(PC),A2
-	LEA	$10(A1),A1
-	BSR	lbC000932
-	LEA	lbL000F6C(PC),A2
-	LEA	$10(A1),A1
-	BSR	lbC000932
-	LEA	lbL000E8E(PC),A3
-	LEA	$DFF0A8,A4
-	BSR	lbC000920
-	LEA	lbL000ED8(PC),A3
-	LEA	$10(A4),A4
-	BSR	lbC000920
-	LEA	lbL000F22(PC),A3
-	LEA	$10(A4),A4
-	BSR	lbC000920
-	LEA	lbL000F6C(PC),A3
-	LEA	$10(A4),A4
-	BSR	lbC000920
-	LEA	lbL000E8E(PC),A3
-	BSR	lbC0008A8
-	MOVE.W	D1,-$D5C(A3)
-	MULU	lbB000122(PC),D1
-	LSR.W	#6,D1
-	MOVE.W	D1,$DFF0A8
-	LEA	lbL000ED8(PC),A3
-	BSR	lbC0008A8
-	MOVE.W	D1,-$D94(A3)
-	MULU	lbW000124(PC),D1
-	LSR.W	#6,D1
-	MOVE.W	D1,$DFF0B8
-	LEA	lbL000F22(PC),A3
-	BSR	lbC0008A8
-	MOVE.W	D1,-$DCC(A3)
-	MULU	lbW000126(PC),D1
-	LSR.W	#6,D1
-	MOVE.W	D1,$DFF0C8
-	LEA	lbL000F6C(PC),A3
-	BSR	lbC0008A8
-	MOVE.W	D1,-$E04(A3)
-	MULU	lbW000128(PC),D1
-	LSR.W	#6,D1
-	MOVE.W	D1,$DFF0D8
-	LEA	lbL000E8E(PC),A3
-	LEA	lbL001088,A4
-	BSR	lbC000852
-	LEA	lbL000ED8(PC),A3
-	LEA	$20(A4),A4
-	BSR	lbC000852
-	LEA	lbL000F22(PC),A3
-	LEA	$20(A4),A4
-	BSR	lbC000852
-	LEA	lbL000F6C(PC),A3
-	LEA	$20(A4),A4
-	BSR	lbC000852
-	LEA	lbL001088,A4
-	LEA	lbL000E8E(PC),A3
-	BSR	lbC000794
-	LEA	$20(A4),A4
-	LEA	lbL000ED8(PC),A3
-	BSR	lbC000794
-	LEA	$20(A4),A4
-	LEA	lbL000F22(PC),A3
-	BSR	lbC000794
-	LEA	$20(A4),A4
-	LEA	lbL000F6C(PC),A3
-	BSR	lbC000794
-	LEA	lbL00012A(PC),A1
-	LEA	lbL000E8E(PC),A2
-	LEA	$DFF0A0,A4
-	MOVEQ	#3,D7
-lbC0006D0	TST.W	$42(A2)
-	BEQ.S	lbC0006F0
-	MOVE.L	$3E(A2),(A4)
-	MOVE.L	$3E(A2),0(A1)
-	MOVE.W	$42(A2),4(A4)
-	MOVE.W	$42(A2),4(A1)
-	CLR.W	$42(A2)
-lbC0006F0	LEA	$4A(A2),A2
-	LEA	$10(A4),A4
-	LEA	$12(A1),A1
-	DBRA	D7,lbC0006D0
-	MOVE.W	#$800F,$DFF096
-	LEA	lbL001088,A0
-	LEA	$80(A0),A1
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	MOVE.L	(A0)+,(A1)+
-	LEA	lbL00012A(PC),A1
-	LEA	lbL000E8E(PC),A2
-	LEA	$DFF0A0,A4
-	MOVEQ	#3,D7
-lbC000762	TST.W	$48(A2)
-	BEQ.S	lbC000782
-	MOVE.L	$44(A2),(A4)
-	MOVE.L	$44(A2),0(A1)
-	MOVE.W	$48(A2),4(A4)
-	MOVE.W	$48(A2),4(A1)
-	CLR.W	$48(A2)
-lbC000782	LEA	$4A(A2),A2
-	LEA	$10(A4),A4
-	LEA	$12(A1),A1
-	DBRA	D7,lbC000762
-	RTS
-
-lbC000794	MOVE.L	14(A3),A0
-	MOVEQ	#0,D0
-	CMP.L	A0,D0
-	BEQ	lbC000836
-	LEA	-$20(A0),A6
-	MOVE.B	$33(A3),D0
-	BEQ	lbC000838
-	CLR.B	$39(A3)
-	ADDQ.B	#1,$35(A3)
-	CMP.B	$35(A3),D0
-	BGE	lbC000836
-	CLR.B	$35(A3)
-	MOVE.B	$31(A3),D0
-	ADD.B	D0,$37(A3)
-	AND.W	#$1F,$36(A3)
-	MOVE.B	$14(A0),D0
-	CMP.B	$37(A3),D0
-	BNE.S	lbC0007E6
-	TST.B	$16(A0)
-	BPL.S	lbC0007E6
-	MOVE.B	#1,$31(A3)
-	BRA.S	lbC000808
-
-lbC0007E6	MOVE.B	$15(A0),D0
-	CMP.B	$37(A3),D0
-	BNE.S	lbC000808
-	MOVE.B	$16(A0),D0
-	BPL.S	lbC0007FE
-	MOVE.B	#$FF,$31(A3)
-	BRA.S	lbC000808
-
-lbC0007FE	ADD.B	D0,$37(A3)
-	AND.W	#$1F,$36(A3)
-lbC000808	MOVE.B	$18(A0),D0
-	LSL.L	#6,D0
-	MOVE.L	lbL000E76(PC),A1
-	ADD.L	D0,A1
-	MOVE.L	A1,D2
-	MOVE.L	D2,D0
-	ADD.W	#$20,D2
-	ADD.W	$36(A3),A1
-	MOVEQ	#$1F,D6
-lbC000822	CMP.L	D2,A1
-	BNE.S	lbC000828
-	MOVE.L	D0,A1
-lbC000828	MOVE.B	(A6)+,D4
-	MOVE.B	(A1)+,D5
-	BMI.S	lbC000830
-	MOVE.B	D5,D4
-lbC000830	MOVE.B	D4,(A4)+
-	DBRA	D6,lbC000822
-lbC000836	RTS
-
-lbC000838	CMP.B	#1,$39(A3)
-	BNE	lbC000836
-	CLR.W	$38(A3)
-	MOVEQ	#$1F,D6
-lbC000848	MOVE.B	(A6)+,(A4)+
-	DBRA	D6,lbC000848
-	BRA	lbC000836
-
-lbC000852	CMP.W	#8,$2C(A3)
-	BEQ.S	lbC0008A6
-	MOVE.L	14(A3),D0
-	BEQ.S	lbC0008A6
-	MOVE.L	D0,A0
-	ADDQ.L	#8,A0
-	ADD.W	$2C(A3),A0
-	MOVE.W	$2E(A3),D0
-	CMP.B	(A0),D0
-	BNE.S	lbC00087A
-	CLR.W	$2E(A3)
-	ADDQ.W	#2,$2C(A3)
-	BRA.S	lbC000852
-
-lbC00087A	ADDQ.W	#1,$2E(A3)
-	MOVEQ	#0,D0
-	MOVEQ	#0,D2
-	MOVE.B	1(A0),D0
-	MOVE.B	$1F(A4),D2
-	MOVEQ	#0,D6
-lbC00088C	MOVE.B	0(A4,D6.W),D1
-	EXT.W	D1
-	SUB.W	D1,D2
-	MULS	D0,D2
-	ASR.W	#7,D2
-	ADD.W	D1,D2
-	MOVE.B	D2,0(A4,D6.W)
-	ADDQ.W	#1,D6
-	CMP.W	#$20,D6
-	BNE.S	lbC00088C
-lbC0008A6	RTS
-
-lbC0008A8	TST.L	14(A3)
-	BEQ	lbC000918
-	CMP.W	#8,$12(A3)
-	BEQ.S	lbC000906
-	MOVE.L	14(A3),A0
-	ADD.W	$12(A3),A0
-	MOVE.B	(A0),D0
-	CMP.B	$15(A3),D0
-	BNE.S	lbC0008D2
-	CLR.W	$14(A3)
-	ADDQ.W	#2,$12(A3)
-	BRA.S	lbC0008A8
-
-lbC0008D2	ADDQ.W	#1,$14(A3)
-	MOVE.B	$17(A3),D1
-	MOVE.B	1(A0),D0
-	CMP.W	#2,$12(A3)
-	BEQ.S	lbC0008FC
-	CMP.W	#6,$12(A3)
-	BEQ.S	lbC0008FC
-	ADD.B	D0,D1
-	CMP.B	#$3F,D1
-	BLE.S	lbC000902
-	MOVE.B	#$3F,D1
-	BRA.S	lbC000902
-
-lbC0008FC	SUB.B	D0,D1
-	BPL.S	lbC000902
-	CLR.B	D1
-lbC000902	MOVE.B	D1,$17(A3)
-lbC000906	MOVE.W	0(A3),D0
-	MOVE.W	$16(A3),D1
-	AND.W	#$3F,D1
-	MULU	D0,D1
-	LSR.W	#6,D1
-lbC000916	RTS
-
-lbC000918	MOVE.W	0(A3),D1
-	BRA	lbC000916
-
-lbC000920	MOVE.W	0(A3),D0
-	SUB.W	$3A(A3),D0
-	BPL.S	lbC00092C
-	MOVEQ	#0,D0
-lbC00092C	MOVE.W	D0,0(A3)
-	RTS
-
-lbC000932	MOVE.L	8(A2),A0
-	ADD.W	12(A2),A0
-	ADDQ.W	#1,$24(A2)
-	MOVE.B	$23(A2),D0
-	CMP.B	$25(A2),D0
-	BNE.S	lbC00097C
-	CLR.B	$25(A2)
-	MOVE.W	$20(A2),D0
-	BEQ.S	lbC00096E
-	CMP.W	#1,D0
-	BEQ.S	lbC000962
-	MOVE.W	$1E(A2),D0
-	CLR.W	$20(A2)
-	BRA.S	lbC000978
-
-lbC000962	MOVE.W	$1C(A2),D0
-	MOVE.W	#2,$20(A2)
-	BRA.S	lbC000978
-
-lbC00096E	MOVE.W	$1A(A2),D0
-	MOVE.W	#1,$20(A2)
-lbC000978	MOVE.W	D0,$26(A2)
-lbC00097C	MOVE.W	$26(A2),D0
-	MOVE.W	4(A2),D1
-	BEQ.S	lbC0009D2
-	LEA	lbW000FB6(PC),A3
-	MOVEQ	#0,D2
-	MOVE.W	$28(A2),D2
-	ADD.W	D2,D2
-	ADD.L	D2,A3
-lbC000994	CMP.W	(A3)+,D0
-	BNE.S	lbC000994
-	MOVEQ	#0,D2
-	MOVE.B	(A0),D2
-	BPL.S	lbC0009B4
-	NEG.B	D2
-	MULU	D1,D2
-	LSR.W	#7,D2
-	MOVE.W	-4(A3),D3
-	MOVE.W	D3,D4
-	SUB.W	D0,D4
-	MULU	D2,D4
-	LSR.W	#5,D4
-	ADD.W	D4,D0
-	BRA.S	lbC0009C4
-
-lbC0009B4	MULU	D1,D2
-	LSR.W	#7,D2
-	MOVE.W	(A3),D3
-	MOVE.W	D0,D4
-	SUB.W	D3,D4
-	MULU	D2,D4
-	LSR.W	#5,D4
-	SUB.W	D4,D0
-lbC0009C4	MOVE.W	6(A2),D1
-	ADD.W	D1,12(A2)
-	AND.W	#$1F,12(A2)
-lbC0009D2	MOVE.W	$3C(A2),D1
-	ADD.W	D1,$2A(A2)
-	ADD.W	$2A(A2),D0
-	MOVE.W	D0,6(A1)
-	MOVEM.L	D1/A2,-(SP)
-	LEA	lbL00012A(PC),A2
-	CMP.L	#$DFF0A0,A1
-	BEQ.S	lbC000A0E
-	LEA	lbL00013C(PC),A2
-	CMP.L	#$DFF0B0,A1
-	BEQ.S	lbC000A0E
-	LEA	lbL00014E(PC),A2
-	CMP.L	#$DFF0C0,A1
-	BEQ.S	lbC000A0E
-	LEA	lbL000160(PC),A2
-lbC000A0E	MOVE.W	D0,6(A2)
-	MOVEM.L	(SP)+,D1/A2
-	RTS
-
-lbC000A18	MOVE.B	$19(A2),D1
-	BRA	lbC000AF6
-
-lbC000A20	MOVEQ	#0,D0
-	ADD.W	lbW000E86(PC),A0
-	MOVE.B	$200(A0),D1
-	MOVE.B	D1,lbB000E7F
-	MOVE.B	(A0),D0
-	LSL.W	#7,D0
-	MOVE.L	lbL000E6A(PC),A0
-	ADD.W	D0,A0
-	ADD.W	lbW000E88(PC),A0
-	CMP.B	#$40,1(A0)
-	BGE.S	lbC000A9A
-	MOVEQ	#0,D0
-	MOVE.B	(A0),D0
-	BEQ	lbC000C3C
-	ADD.B	D1,D0
-	SUBQ.B	#1,D0
-	TST.B	D0
-	BGE.S	lbC000A58
-	MOVEQ	#0,D0
-lbC000A58	MOVE.W	D0,$28(A2)
-	ADD.W	D0,D0
-	LEA	lbW000FB6(PC),A1
-	MOVE.W	0(A1,D0.W),D0
-	MOVE.W	D0,$1A(A2)
-	MOVE.W	D0,$1C(A2)
-	MOVE.W	D0,$1E(A2)
-	MOVE.W	D0,$26(A2)
-	CLR.W	$3C(A2)
-	CLR.W	$2A(A2)
-	MOVEQ	#0,D1
-	TST.B	1(A0)
-	BEQ	lbC000A18
-	CMP.B	#$FF,1(A0)
-	BEQ	lbC000C3C
-	CMP.B	#$40,1(A0)
-	BLT.S	lbC000AD4
-lbC000A9A	CMP.B	#$4F,1(A0)
-	BGT	lbC000C3C
-	MOVEQ	#0,D0
-	MOVE.B	1(A0),D0
-	SUB.B	#$40,D0
-	MOVE.L	lbL000E72(PC),A1
-	LSL.L	#4,D0
-	ADD.L	D0,A1
-	MOVE.L	(A1),A1
-	ADD.L	lbL000E76,A1
-	LEA	$20(A1),A1
-	MOVE.L	A1,14(A2)
-	MOVE.W	#1,$38(A2)
-	MOVE.L	A5,$3E(A2)
-	BRA	lbC000C3C
-
-lbC000AD4	CMP.B	#$20,1(A0)
-	BGT	lbC000C3C
-	MOVE.L	#lbW001046,8(A2)
-	CLR.W	12(A2)
-	CLR.B	5(A2)
-	MOVE.B	1(A0),D1
-	MOVE.B	D1,$19(A2)
-lbC000AF6	SUBQ.B	#1,D1
-	MOVE.L	lbL000E72(PC),A1
-	CMP.W	#$10,D1
-	BGE	lbC000B9A
-	LSL.L	#4,D1
-	MOVE.W	lbW000E8C(PC),D2
-	MOVE.W	D2,$DFF096
-	MOVE.L	A5,$3E(A2)
-	MOVE.B	#1,$39(A2)
-	MOVE.W	4(A1,D1.W),$42(A2)
-	MOVE.W	6(A1,D1.W),2(A2)
-	MOVE.W	#$3F,D0
-	MULU	2(A2),D0
-	LSR.W	#6,D0
-	MOVE.W	D0,0(A2)
-	MOVE.L	0(A1,D1.W),A1
-	ADD.L	lbL000E76,A1
-	LEA	$20(A1),A1
-	MOVE.L	A1,14(A2)
-	MOVE.B	$10(A1),D0
-	MOVE.B	D0,D1
-	AND.B	#$F0,D0
-	LSR.B	#4,D0
-	MOVE.B	D0,7(A2)
-	AND.B	#15,D1
-	MOVE.B	D1,5(A2)
-	MOVEQ	#0,D1
-	MOVE.B	$12(A1),D1
-	LSL.L	#6,D1
-	ADD.L	lbL000E76,D1
-	MOVE.L	D1,8(A2)
-	MOVE.B	#1,$31(A2)
-	MOVE.B	$14(A1),$37(A2)
-	MOVE.B	$11(A1),$33(A2)
-	MOVE.B	$11(A1),$35(A2)
-	BEQ.S	lbC000B8E
-	SUBQ.W	#1,$34(A2)
-lbC000B8E	CLR.B	$13(A2)
-	CLR.B	$2D(A2)
-	BRA	lbC000C30
-
-lbC000B9A	MOVE.W	lbW000E8C(PC),D2
-	MOVE.W	D2,$DFF096
-	LSL.L	#4,D1
-	MOVE.W	4(A1,D1.W),D0
-	BNE.S	lbC000BC0
-	MOVE.L	#lbL001068,$3E(A2)
-	MOVE.W	#1,$42(A2)
-	CLR.W	8(A4)
-	BRA.S	lbC000C18
-
-lbC000BC0	MOVE.W	D0,$42(A2)
-	MOVE.L	0(A1,D1.W),D0
-	ADD.L	lbL000E76,D0
-	ADD.W	8(A1,D1.W),D0
-	MOVE.L	D0,$3E(A2)
-	MOVE.W	6(A1,D1.W),2(A2)
-	MOVE.W	#$3F,D0
-	MULU	2(A2),D0
-	LSR.W	#6,D0
-	MOVE.W	D0,0(A2)
-	MOVE.W	12(A1,D1.W),D0
-	BNE.S	lbC000C02
-	MOVE.L	#lbL001068,$44(A2)
-	MOVE.W	#1,$48(A2)
-	BRA	lbC000C18
-
-lbC000C02	MOVE.W	D0,$48(A2)
-	MOVE.L	0(A1,D1.W),D0
-	ADD.L	lbL000E76,D0
-	ADD.W	10(A1,D1.W),D0
-	MOVE.L	D0,$44(A2)
-lbC000C18	CLR.L	14(A2)
-	CLR.L	4(A2)
-	MOVE.B	#8,$2D(A2)
-	MOVE.B	#8,$13(A2)
-	CLR.B	$33(A2)
-lbC000C30	CLR.B	$3B(A2)
-	CLR.B	$2F(A2)
-	CLR.L	$14(A2)
-lbC000C3C	CMP.B	#$41,2(A0)
-	BNE.S	lbC000C7E
-	MOVEQ	#0,D1
-	LEA	lbW000FB6(PC),A1
-	MOVE.W	$28(A2),D2
-	BEQ	lbC000E68
-	MOVE.W	D2,D0
-	MOVE.B	3(A0),D1
-	AND.B	#15,D1
-	ADD.W	D1,D0
-	ADD.W	D0,D0
-	MOVE.W	0(A1,D0.W),$1C(A2)
-	MOVE.W	D2,D0
-	MOVE.B	3(A0),D1
-	AND.B	#$F0,D1
-	LSR.B	#4,D1
-	ADD.W	D1,D0
-	ADD.W	D0,D0
-	MOVE.W	0(A1,D0.W),$1E(A2)
-	RTS
-
-lbC000C7E	CMP.B	#$4C,2(A0)
-	BNE.S	lbC000C98
-	MOVEQ	#0,D0
-	MOVE.B	3(A0),D0
-	MULU	2(A2),D0
-	LSR.W	#6,D0
-	MOVE.W	D0,0(A2)
-	RTS
-
-lbC000C98	CMP.B	#$4D,2(A0)
-	BNE.S	lbC000CA8
-	MOVE.B	3(A0),$33(A2)
-	RTS
-
-lbC000CA8	CMP.B	#$56,2(A0)
-	BNE.S	lbC000CD2
-	MOVE.B	3(A0),D0
-	MOVE.B	D0,D1
-	AND.B	#$F0,D0
-	LSR.B	#4,D0
-	MOVE.B	D0,7(A2)
-	AND.B	#15,D1
-	MOVE.B	D1,5(A2)
-	MOVE.L	#lbW001046,8(A2)
-	RTS
-
-lbC000CD2	CMP.B	#$46,2(A0)
-	BNE.S	lbC000CF4
-	TST.B	3(A0)
-	BNE.S	lbC000CEA
-	BSET	#1,$BFE001
-	RTS
-
-lbC000CEA	BCLR	#1,$BFE001
-	RTS
-
-lbC000CF4	CMP.B	#$53,2(A0)
-	BNE.S	lbC000D0E
-	TST.B	3(A0)
-	BEQ	lbC000E68
-	MOVE.B	3(A0),lbB000E85
-	RTS
-
-lbC000D0E	CMP.B	#$4F,2(A0)
-	BNE.S	lbC000D2A
-	TST.B	3(A0)
-	BEQ	lbC000E68
-	MOVE.B	3(A0),$23(A2)
-	CLR.W	$24(A2)
-	RTS
-
-lbC000D2A	CMP.B	#$42,2(A0)
-	BNE.S	lbC000D80
-	TST.B	3(A0)
-	BNE.S	lbC000D5E
-	MOVE.W	lbW000E86,lbB000E80
-	ADDQ.W	#1,lbB000E80
-	MOVE.W	lbW000E7A,D0
-	CMP.W	lbB000E80,D0
-	BGT.S	lbC000D80
-	CLR.W	lbB000E80
-	RTS
-
-lbC000D5E	CLR.W	lbB000E80
-	MOVE.B	3(A0),lbB000E81
-	MOVE.W	lbW000E7A(PC),D0
-	CMP.W	lbB000E80(PC),D0
-	BGT.S	lbC000D80
-	MOVE.W	#$FFFF,lbB000E80
-	RTS
-
-lbC000D80	CMP.B	#$55,2(A0)
-	BNE.S	lbC000DA2
-	MOVEQ	#0,D0
-	MOVE.B	3(A0),D0
-	MOVE.W	$1E(A2),D1
-	SUB.W	D0,D1
-	CMP.W	#$39,D1
-	BLT	lbC000E68
-	SUB.W	D0,$2A(A2)
-	RTS
-
-lbC000DA2	CMP.B	#$44,2(A0)
-	BNE.S	lbC000DC4
-	MOVEQ	#0,D0
-	MOVE.B	3(A0),D0
-	MOVE.W	$1A(A2),D1
-	ADD.W	D0,D1
-	CMP.W	#$1AB0,D1
-	BGT	lbC000E68
-	ADD.W	D0,$2A(A2)
-	RTS
-
-lbC000DC4	CMP.B	#$47,2(A0)
-	BNE.S	lbC000DF2
-	TST.B	1(A0)
-	BNE.S	lbC000DE0
-	MOVE.W	#$3F,D0
-	MULU	2(A2),D0
-	LSR.W	#6,D0
-	MOVE.W	D0,0(A2)
-lbC000DE0	MOVEQ	#0,D0
-	MOVE.B	3(A0),D0
-	MULU	2(A2),D0
-	LSR.W	#6,D0
-	MOVE.W	D0,$3A(A2)
-	RTS
-
-lbC000DF2	CMP.B	#$45,2(A0)
-	BNE.S	lbC000E68
-	TST.B	(A0)
-	BEQ.S	lbC000E68
-	ADDQ.L	#4,A0
-	MOVEQ	#1,D0
-	MOVE.L	D7,-(SP)
-	MOVEQ	#$7C,D7
-	SUB.W	lbW000E88(PC),D7
-	LSR.W	#2,D7
-	SUBQ.W	#1,D7
-	BMI.S	lbC000E66
-lbC000E10	TST.B	(A0)
-	BNE.S	lbC000E1E
-	ADDQ.L	#4,A0
-	ADDQ.W	#1,D0
-	DBRA	D7,lbC000E10
-	BRA.S	lbC000E66
-
-lbC000E1E	LEA	lbW000FB6(PC),A1
-	MOVEQ	#0,D1
-	MOVE.B	(A0),D1
-	ADD.B	lbB000E7F(PC),D1
-	ADD.W	D1,D1
-	SUBQ.W	#2,D1
-	MOVE.W	0(A1,D1.W),D1
-	MOVE.W	$1A(A2),D2
-	MULU	lbB000E84(PC),D0
-	CMP.W	D1,D2
-	BGT.S	lbC000E52
-	SUB.W	D2,D1
-	DIVU	D0,D1
-	CMP.L	#$FFFF,D1
-	BLE.S	lbC000E4C
-	ADDQ.W	#1,D1
-lbC000E4C	MOVE.W	D1,$3C(A2)
-	BRA.S	lbC000E66
-
-lbC000E52	SUB.W	D1,D2
-	DIVU	D0,D2
-	CMP.L	#$FFFF,D2
-	BLE.S	lbC000E60
-	ADDQ.W	#1,D2
-lbC000E60	NEG.W	D2
-	MOVE.W	D2,$3C(A2)
-lbC000E66	MOVE.L	(SP)+,D7
-lbC000E68	RTS
-
-lbL000E6A	dc.l	0
-lbL000E6E	dc.l	0
-lbL000E72	dc.l	0
-lbL000E76	dc.l	0
-lbW000E7A	dc.w	0
-lbW000E7C	dc.w	0
-	dc.b	0
-lbB000E7F	dc.b	0
-lbB000E80	dc.b	$FF
-lbB000E81	dc.b	$FF
-lbW000E82	dc.w	0
-lbB000E84	dc.b	0
-lbB000E85	dc.b	6
-lbW000E86	dc.w	0
-lbW000E88	dc.w	0
-	dc.w	0
-lbW000E8C	dc.w	0
-lbL000E8E	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.w	0
-lbL000EB0	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-lbL000ED8	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.w	0
-lbL000F22	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.w	0
-lbL000F6C	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.l	0
-	dc.w	0
-lbW000FB6	dc.w	$1AB0
-	dc.w	$1940
-	dc.w	$17D0
-	dc.w	$1670
-	dc.w	$1530
-	dc.w	$1400
-	dc.w	$12E0
-	dc.w	$11D0
-	dc.w	$10D0
-	dc.w	$FE0
-	dc.w	$F00
-	dc.w	$E20
-	dc.w	$D58
-	dc.w	$CA0
-	dc.w	$BE8
-	dc.w	$B38
-	dc.w	$A98
-	dc.w	$A00
-	dc.w	$970
-	dc.w	$8E8
-	dc.w	$868
-	dc.w	$7F0
-	dc.w	$780
-	dc.w	$710
-	dc.w	$6AC
-	dc.w	$650
-	dc.w	$5F4
-	dc.w	$59C
-	dc.w	$54C
-	dc.w	$500
-	dc.w	$4B8
-	dc.w	$474
-	dc.w	$434
-	dc.w	$3F8
-	dc.w	$3C0
-	dc.w	$388
-	dc.w	$356
-	dc.w	$328
-	dc.w	$2FA
-	dc.w	$2CE
-	dc.w	$2A6
-	dc.w	$280
-	dc.w	$25C
-	dc.w	$23A
-	dc.w	$21A
-	dc.w	$1FC
-	dc.w	$1E0
-	dc.w	$1C4
-	dc.w	$1AB
-	dc.w	$194
-	dc.w	$17D
-	dc.w	$167
-	dc.w	$153
-	dc.w	$140
-	dc.w	$12E
-	dc.w	$11D
-	dc.w	$10D
-	dc.w	$FE
-	dc.w	$F0
-	dc.w	$E2
-	dc.w	$D6
-	dc.w	$CA
-	dc.w	$BE
-	dc.w	$B4
-	dc.w	$A9
-	dc.w	$A0
-	dc.w	$97
-	dc.w	$8F
-	dc.w	$86
-	dc.w	$7F
-	dc.w	$78
-	dc.w	$71
-lbW001046	dc.w	$18
-	dc.w	$2F45
-	dc.w	$5868
-	dc.w	$747B
-	dc.w	$7E7D
-	dc.w	$776C
-	dc.w	$5E4C
-	dc.w	$3720
-	dc.w	$8F1
-	dc.w	$D9C3
-	dc.w	$AF9E
-	dc.w	$9087
-	dc.w	$8282
-	dc.w	$868F
-	dc.w	$9CAD
-	dc.w	$C1D7
-	dc.w	$9CAD
-
-	SECTION	syntracker001068,BSS_c
-lbL001068	ds.l	8
-lbL001088	ds.l	$20
-lbL001108	ds.l	$20
-
-	end
+ end
