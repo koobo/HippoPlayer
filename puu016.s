@@ -25269,12 +25269,12 @@ tutki_moduuli
 	DPRINT	"Internal",303
 	lea	internalFormats(pc),a3 
 	bsr	identifyFormats
-	beq.w 	.ex
+	beq.w 	.ex2
 
 	DPRINT	"Eagle",404
 	lea	eagleFormats(pc),a3
 	bsr 	identifyFormats 
-	beq.w 	.ex
+	beq.w 	.ex2
 
 	***********************************
 
@@ -25347,7 +25347,7 @@ tutki_moduuli
 	DPRINT	"Group",505
 	lea	groupFormats(pc),a3 
 	bsr	identifyFormats
-	beq.b .ex
+	beq.b .ex2
 
 ;	bsr.w	id_jamcracker
 ;	beq.w	.jam
@@ -25450,7 +25450,7 @@ tutki_moduuli
 	rts	
 
 .ex	
-; bsr.w	tee_modnimi
+	 bsr.w	tee_modnimi
 .ex2	
 	cmp	#pt_prot,playertype(a5)
 	beq.b	.wew
@@ -33746,9 +33746,8 @@ p_delicustom
  even
 
 .init
-	move.l	moduleaddress(a5),a0
-	add.l	a0,a0
-	add.l 	a0,a0
+	move.l	moduleaddress(a5),d0
+	lsl.l	#2,d0
 	bsr	deliInit
 	rts
 
@@ -35386,11 +35385,15 @@ freeDeliPlayer
 	pushm	all
 	move.l	deliPlayer(a5),d1
 	beq.b	.x
+	* DeliCustom is UnloadSegged elsewhere
+	cmp		#pt_delicustom,deliPlayerType(a5)
+	beq.b 	.skip
 	lsr.l	#2,d1
-	clr.l	deliPlayer(a5)
-	clr	deliPlayerType(a5)
 	lore	Dos,UnLoadSeg
 	DPRINT	"freeDeliPlayer",1
+.skip
+	clr.l	deliPlayer(a5)
+	clr	deliPlayerType(a5)
 .x	bsr.w	freeDeliBase
 	popm	all
 	rts
@@ -35448,7 +35451,7 @@ deliCallFunc
 *   d0: 0=all ok, negative ier_-code otherwise
 deliInit
 	pushm	d1-a6	
-	DPRINT	"deliInit",10
+	DPRINT	"deliInit 0x%lx",10
 	move.l	d0,deliPlayer(a5)
 	move	playertype(a5),deliPlayerType(a5)
 	bsr.w	buildDeliBase
