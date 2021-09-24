@@ -1260,7 +1260,7 @@ pt_soundfx		rs.b	1
 pt_gluemon		rs.b	1
 pt_pretracker		rs.b	1
 pt_custommade		rs.b 	1
-pt_sonicarr		rs.b	1
+pt_sonicarranger	rs.b	1
 pt_davelowe		rs.b	1
 pt_synthesis	rs.b 	1
 pt_syntracker	rs.b  	1
@@ -9105,7 +9105,7 @@ rbutton1
 	* replayer code. Data is modified upon init so that
 	* subsequent inits with same data will fail as
 	* unsupported module.
-	cmp	#pt_sonicarr,playertype(a5)
+	cmp	#pt_sonicarranger,playertype(a5)
 	bne.b	.notSoar
 	* Check for "compact" SA module
 	move.l  moduleaddress(a5),a0 
@@ -23873,7 +23873,7 @@ loadfile
 	bsr.w	id_sid1
 	beq.w	.on
 
-	bsr.w	id_sonic
+	bsr.w	id_sonicarranger
 	beq.w	.on
 
 	bsr.w	id_fred			* Fred
@@ -25463,7 +25463,7 @@ tutki_moduuli
 	bsr	id_custommade
 	beq.w	.custommade
 
-	bsr.w	id_sonic
+	bsr.w	id_sonicarranger
 	beq.w	.sonicarranger
 
 	bsr.w	id_player
@@ -25613,7 +25613,7 @@ tutki_moduuli
 
 .sonicarranger
 	pushpea	p_sonicarranger(pc),playerbase(a5)
-	move	#pt_sonicarr,playertype(a5)
+	move	#pt_sonicarranger,playertype(a5)
 	bra.w	.ex
 
 .sidmon1
@@ -25963,1024 +25963,8 @@ tutki_moduuli
 *
  
 
-
-
-id_med	move.l	(a4),d0			* MED
-	lsr.l	#8,d0
-	cmp.l	#'MMD',d0
-
-idtest	beq.b	.y
-	moveq	#-1,d0
-	rts
-.y	moveq	#0,d0
-	rts
-
-id_musicassembler
-	lea	.muass_id(pc),a1	* Music Assembler
-	moveq	#.muassend-.muass_id,d0
-	bsr.w	search
-	bra.b	idtest
-
-
-.muass_id
-	dc.b	"usa-team 89"
-.muassend
- even
-
-
-id_deltamusic
-	lea	.delta_id(pc),a1	* Delta Music 2
-	moveq	#.delend-.delta_id,d0
-	bsr.w	search
-	bra.b	idtest
-
-.delta_id
-	dc.b	"DELTA MUSIC"
-.delend
- even
-
-
-id_jamcracker
-	cmp.l	#'BeEp',(a4)		* JamCracker
-	bra.b	idtest
-
-id_futurecomposer13
-	cmp.l	#'SMOD',(a4)		* Futurecomposer 1.0-1.3
-	bra.b	idtest
-
-id_futurecomposer14
-	cmp.l	#'FC14',(a4)		* Futurecomposer 1.4
-	bra.b	idtest
-
-id_oktalyzer
-	cmp.l	#'OKTA',(a4)		* Oktalyzer
-	bne.b	.nok
-	cmp.l	#'SONG',4(a4)
-	bra.w	idtest
-
-.nok	moveq	#-1,d0
-	rts
-
-
-id_tfmxunion
-	cmp.l	#'TFHD',(a4)		* Yhdistetty TFMX formaatti
-	bra.w	idtest
-
-
-id_tfmx
-	cmp.l	#"TFMX",(a4)
-	beq.b	.y
-	cmp.l	#"tfmx",(a4)
-	bra.w	idtest
-
-.y	moveq	#0,d0
-	rts
-	
-
-id_soundmon
-	move.l	26(a4),d0		* Soundmon
-	lsr.l	#8,d0
-	cmp.l	#'V.2',d0
-	bra.w	idtest
-
-
-id_soundmon3
-	move.l	26(a4),d0		* Soundmon
-	lsr.l	#8,d0
-	cmp.l	#'V.3',d0
-	beq.b	.y
-	cmp.l	#'BPS',d0
-	bra.w	idtest
-
-.y	moveq	#0,d0
-	rts
-
-
-id_digibooster
-	cmp.l	#'DIGI',(a4)
-	bne.b	.nd
-	cmp.l	#' Boo',4(a4)
-	bne.b	.nd
-	cmp.l	#'ster',8(a4)
-	bra.w	idtest
-
-.nd	moveq	#-1,d0
-	rts
-
-id_digiboosterpro
-	cmp.l	#'DBM0',(a4)
-	bra.w	idtest
-
-id_thx
-	move.l	(a4),d0			* THX
-	lsr.l	#8,d0
-	cmp.l	#"THX",d0
-	bra.w	idtest
-
-id_aon
-	cmp.l	#"AON4",(a4)		* aon 4 channel
-	bra.w	idtest
-
-id_mline
-	cmp.l	#"MLED",(a4)		* musicline editor
-	bne.b	.nd
-	cmp.l	#"MODL",4(a4)
-	bra.w	idtest
-
-.nd	moveq	#-1,d0
-	rts
-	
-
-
-id_player
- 	cmp.l	#'P61A',(a4)		* The player 6.1a
-	bra.w	idtest
-
-id_player2				* filename <= D0
-	and.l	#$dfffffff,d0
-	cmp.l	#'P61.',d0
-	bra.w	idtest
-	
-
-
-id_protracker
-	cmp.l	#'M.K.',1080(a4)	* Protracker
-	beq.b	.p	
-	cmp.l	#'M!K!',1080(a4)	* Protracker 100 patterns
-	beq.b	.p	
-	cmp.l	#'FLT4',1080(a4)	* Startrekker
-	bra.w	idtest
-
-.p	moveq	#0,d0
-	rts
-
-
-id_fred
-* d5 => maxsongs
-	move.l	a4,a0
-	moveq	#-1,d0				; Modul nicht erkannt (default)
-	cmpi.w	#$4efa,(a0)
-	bne.s	.ChkEnd
-	cmpi.w	#$4efa,$04(a0)
-	bne.s	.ChkEnd
-	cmpi.w	#$4efa,$08(a0)
-	bne.s	.ChkEnd
-	cmpi.w	#$4efa,$0c(a0)
-	bne.s	.ChkEnd
-	add.w	2(a0),a0
-	moveq	#4-1,d1
-.ChkLoop cmpi.w	#$123a,2(a0)
-	bne.s	.ChkNext
-	cmpi.w	#$b001,6(a0)
-	beq.s	.ChkSong
-.ChkNext addq.l	#2,a0
-	dbra	d1,.ChkLoop
-	bra.s	.ChkEnd				; Modul nicht erkannt
-.ChkSong add.w	4(a0),a0
-	moveq	#0,d5
-	move.b	4(a0),d5
-	moveq	#0,d0				; Modul erkannt
-.ChkEnd	tst.l	d0
-	rts
-
-
-
-
-id_sidmon1
-* d1 => sid10init
-* d2 => sid10music
-
-	move.l	a4,a0
-
-	moveq	#-$01,d0
-	cmpi.l	#$08f90001,(a0)
-	bne.b	.l_f218
-	cmpi.l	#$00bfe001,$0004(a0)
-.l_f1f6	bne.b	.l_f218
-	cmpi.w	#$4e75,$025c(a0)
-	beq.b	.l_f20e
-	cmpi.w	#$4ef9,$025c(a0)
-	bne.b	.l_f218
-	move.w	#$4e75,$025c(a0)
-.l_f20e	moveq	#$2c,d1
-	move.l	#$0000016a,d2
-	bra.b	.l_f266
-.l_f218	cmpi.w	#$41fa,(a0)
-	bne.b	.l_f278
-	cmpi.w	#$d1e8,$0004(a0)
-	bne.b	.l_f278
-	cmpi.w	#$4e75,$0230(a0)
-	beq.b	.l_f23e
-	cmpi.w	#$4ef9,$0230(a0)
-	bne.b	.l_f248
-	move.w	#$4e75,$0230(a0)
-.l_f23e	moveq	#$00,d1
-	move.l	#$0000013e,d2
-	bra.b	.l_f266
-.l_f248	cmpi.w	#$4e75,$029c(a0)
-	beq.b	.l_f25e
-	cmpi.w	#$4ef9,$029c(a0)
-	bne.b	.l_f278
-	move.w	#$4e75,$029c(a0)
-.l_f25e	moveq	#$00,d1
-	move.l	#$0000016a,d2
-.l_f266	moveq	#$00,d0
-	add.l	a0,d1		* init
-	add.l	a0,d2		* music
-;	movem.l	d1/d2,sid10init
-.l_f278	tst.l	d0
-	rts	
-
-
-id_markii
-	moveq.l	#-1,d0
-
-	cmp	#$48e7,(a4)
-	bne.b	.eim
-	cmp	#$41fa,4(a4)	
-	bne.b	.eim
-	cmp	#$4cd8,8(a4)
-	bne.b	.eim
-	cmp.l	#$0c0000ff,12(a4)
-	beq.b	.joom
-.eim
-
-	lea	.lbw000106(pc),a1
-.lbc0000ea
-	move.w	(a1)+,d1
-	beq.s	.lbc000104
-	cmp.l	#$2e5a4144,$0000(a4,d1.w)
-	bne.s	.lbc0000ea
-	cmp.l	#$5338392e,$0004(a4,d1.w)
-	bne.s	.lbc0000ea
-.joom	moveq.l	#0,d0
-.lbc000104
-	tst.l	d0
-	rts	
-.lbw000106	dc.w	$02a0,$033c,$0348,0
-
-
-id_maniacsofnoise
-* d5 => max songs
-
-	move.l	a4,a0
-;	move.l	modulelength(a5),d1
-	move.l	d7,d1
-
-	moveq.l	#-1,d0
-	cmp.w	#$4efa,(a0)
-	bne.s	.o0001a8
-	cmp.w	#$4efa,4(a0)
-	bne.s	.o0001a8
-	cmp.w	#$4efa,8(a0)
-	bne.s	.o0001a8
-	cmp.w	#$4efa,12(a0)
-	beq.s	.o0001a8
-.o00015e	cmp.w	#$4bfa,0(a0)
-	bne.s	.o000182
-	cmp.w	#$0280,4(a0)
-	bne.s	.o000182
-	cmp.l	#$000000ff,6(a0)
-	bne.s	.o000182
-	cmp.l	#$5300b02d,$0014(a0)
-	beq.s	.o00018a
-.o000182	addq.l	#2,a0
-	subq.l	#2,d1
-	bpl.s	.o00015e
-	bra.s	.o0001a8
- 
-.o00018a	move.w	2(a0),d1
-	lea	0(a0,d1.w),a1
-	move.w	$0018(a0),d1
-	lea	0(a1,d1.w),a1
-	moveq.l	#0,d0
-	move.b	2(a1),d0
-	subq	#1,d0
-	move.w	d0,d5
-	moveq.l	#0,d0
-.o0001a8
-	tst.l	d0
-	rts	
-
-
-id_davidwhittaker
-* d5 => maxsongs
-* d6 => whittaker_end
-
-	move.l	a4,a0
-;	move.l	moduleaddress(a5),d0
-	move.l	a0,d0
-
-	cmp.w	#$48e7,(a0)
-	bne.s	.wc000130
-	cmp.w	#$6100,4(a0)
-	bne.s	.wc000130
-	cmp.w	#$4cdf,8(a0)
-	bne.s	.wc000130
-	cmp.w	#$4e75,12(a0)
-	bne.s	.wc000130
-	cmp.w	#$48e7,14(a0)
-	bne.s	.wc000130
-	cmp.w	#$6100,$0012(a0)
-	bne.s	.wc000130
-	cmp.w	#$4cdf,$0016(a0)
-	bne.s	.wc000130
-	cmp.w	#$4e75,$001a(a0)
-	beq.s	.wc000136
-.wc000130	moveq.l	#-1,d0
-	bra.w	.wc0001de
- 
-.wc000136	moveq.l	#$1c,d1
-	add.l	d1,a0
-	sub.l	d1,d0
-.wc00013c	cmp.w	#$43fa,(a0)
-	bne.s	.wc000154
-	cmp.l	#$4880c0fc,4(a0)
-	bne.s	.wc000154
-	cmp.w	#$41fa,10(a0)
-	beq.s	.wc00015c
-.wc000154	addq.l	#2,a0
-	subq.l	#2,d0
-	bpl.s	.wc00013c
-	bra.s	.wc000130
- 
-.wc00015c	move.l	a0,a1
-	move.l	d0,d1
-.wc000160	cmp.w	#$47fa,(a1)
-	bne.s	.wc000186
-	cmp.w	#$51eb,4(a1)
-	bne.s	.wc000186
-	cmp.w	#$51eb,8(a1)
-	beq.s	.wc00018e
-	cmp.w	#$33fc,8(a1)
-	beq.s	.wc00018e
-	cmp.w	#$426b,8(a1)
-	beq.s	.wc00018e
-.wc000186	addq.l	#2,a1
-	subq.l	#2,d1
-	bpl.s	.wc000160
-	bra.s	.wc000130
- 
-.wc00018e	move.l	a1,d6
-	move.w	2(a1),d1
-	lea	-10(a1,d1.w),a1
-	move.l	a0,d1
-	sub.l	a1,d1
-	move.w	12(a0),d2
-	moveq.l	#0,d3
-	move.w	#$7fff,d4
-	moveq.l	#-1,d5
-.wc0001ac	move.w	8(a0),d0
-	lsr.w	#1,d0
-	subq.w	#1,d0
-	addq.w	#2,d2
-.wc0001b6	move.w	12(a0,d2.w),d3
-	btst	#0,d3
-	bne.s	.wc0001d6
-	sub.w	d1,d3
-	cmp.w	d4,d3
-	bge.s	.wc0001c8
-	move.w	d3,d4
-.wc0001c8	cmp.w	d4,d2
-	bge.s	.wc0001d6
-	addq.w	#2,d2
-	subq.w	#1,d0
-	bne.s	.wc0001b6
-	addq.l	#1,d5
-	bra.s	.wc0001ac
- 
-.wc0001d6	
-	;move.w	d5,maxsongs(a5)	* songit
-	moveq.l	#0,d0
-.wc0001de
-	tst.l	d0
-	rts	
- 
-
-
-
-; Testet, ob es sich um ein Hippel-COSO-Modul handelt
-
-id_hippelcoso
-* d5 => max songs
-
-;	move.l	dtg_ChkData(a5),a0		; ^module
-	move.l	a4,a0
-
-	cmpi.l	#"COSO",$00(a0)			; test ID
-	bne.b	.ChkFail
-	cmpi.l	#"TFMX",$20(a0)			; test ID
-	bne.s	.ChkFail
-
-	move.l	$1c(a0),d0
-	sub.l	$18(a0),d0
-	bmi.s	.ChkFail				; table corrupt !
-	divu	#10,d0
-	swap	d0
-	tst.w	d0				; multiple of 10 ?
-	bne.s	.ChkFail				; no !
-	swap	d0
-	subq.w	#1,d0
-	beq.s	.ChkFail				; sampletable is empty !
-	move.l	a0,a1
-	add.l	$18(a0),a1			; ^sampletable
-	move.l	a1,a2
-	moveq	#0,d2
-.Chkoop move.l	(a1),d1				; ^samplestart
-	cmp.l	d2,d1
-	ble.b	.Chkext
-	move.l	d1,d2
-	move.l	a1,a2
-.Chkext add.w	#10,a1				; next sample
-	subq.l	#1,d0
-	bne.s	.Chkoop
-
-	move.l	$1c(a0),d0			; ^samples
-	move.l	d0,d1
-	add.l	(a2)+,d1			; get samplestart
-	moveq	#0,d2
-	move.w	(a2)+,d2			; get samplelength
-	add.l	d2,d2
-	add.l	d2,d1
-	addq.l	#4,d1				; 4 bytes null-sample
-
-
-;	move.l	modulelength(a5),d2
-
-;	cmp.l	d1,d2
-;;	slt	LoadSamp			; set load-samples flag
-;	blt.b	.ChkFail		* ei hyv‰ksyt‰ modeja joissa erilliset samplet
-
-
-;	add.l	#1024,d1
-;	cmp.l	d0,d2				; test size of module
-;	blt.s	.ChkFail				; too small
-;	cmp.l	d1,d2				; test size of module
-;	bgt.s	.ChkFail				; too big
-
-	move.l	$18(a4),d0
-	sub.l	$14(a4),d0
-	divu	#6,d0
-	subq.w	#2,d0
-	move.w	d0,d5				; store MaxSong
-	moveq	#0,d0				; Modul erkannt
-
-	bra.s	.Chknd
-.ChkFail
-	moveq	#-1,d0				; Modul nicht erkannt
-.Chknd
-	tst.l	d0
-	rts
-
-
-id_hippel
-* d7 <= modlen
-* a4 <= mod
-* d4 => hippel music 
-* d5 => max songs
-	move.l	d7,d0
-
-	cmp.l	#100,d0
-	blo.w	.lbC000288
-
-	move.l	a4,a0
-	move.l	a4,a1
-	add.l	d0,a1
-	lea	$10(a0),a0
-.loop	addq	#1,a0	
-	cmp.l	a0,a1
-	beq.w	.ChkFail
-	cmp.b	#"T",(a0)
-	bne.b	.loop
-	cmp.b	#"F",1(a0)
-	bne.b	.loop
-	cmp.b	#"M",2(a0)
-	bne.b	.loop
-	cmp.b	#"X",3(a0)
-	bne.b	.loop
-
-	move.l	a4,a1
-	move.l	a1,a0
-	move.l	d7,d0
-
-	cmp.w	#$6000,(a1)
-	bne.s	.lbC000156
-	addq.w	#2,a1
-	move.w	(a1),d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	bra.s	.lbC00016E
- 
-.lbC000156	cmp.b	#$60,(a1)
-	bne.s	.lbC0001B6
-	move.b	1(a1),d1
-	ext.w	d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	addq.w	#2,a1
-.lbC00016E	addq.w	#4,a1
-	cmp.w	#$6100,(a1)
-	bne.s	.lbC000186
-	addq.w	#2,a1
-	move.w	(a1),d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	bra.s	.lbC00018E
- 
-.lbC000186	cmp.w	#$41FA,(a1)
-	bne.s	.lbC0001B6
-	addq.w	#4,a1
-.lbC00018E	addq.w	#2,a1
-	cmp.w	#$6100,(a1)+
-	bne.s	.lbC0001B6
-	move.w	(a1),d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	cmp.w	#$41FA,(a1)+
-	bne.s	.lbC0001B6
-	move.w	(a1),d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	clr.w	(a1)
-.lbC0001B6	cmp.b	#$60,(a0)
-	bne.s	.lbC0001D0
-	cmp.b	#$60,2(a0)
-	bne.s	.lbC0001D0
-	cmp.w	#$48E7,4(a0)
-	bne.s	.lbC0001D0
-	addq.l	#2,a0
-	bra.s	.lbC00022C
- 
-.lbC0001D0	cmp.b	#$60,(a0)
-	bne.s	.lbC0001EA
-	cmp.b	#$60,2(a0)
-	bne.s	.lbC0001EA
-	cmp.w	#$41FA,4(a0)
-	bne.s	.lbC0001EA
-	addq.l	#2,a0
-	bra.s	.lbC00022C
- 
-.lbC0001EA	cmp.w	#$6000,(a0)
-	bne.s	.lbC000204
-	cmp.w	#$6000,4(a0)
-	bne.s	.lbC000204
-	cmp.w	#$48E7,8(a0)
-	bne.s	.lbC000204
-	addq.l	#4,a0
-	bra.s	.lbC00022C
- 
-.lbC000204	cmp.w	#$6000,(a0)
-	bne.s	.lbC000288
-	cmp.w	#$6000,4(a0)
-	bne.s	.lbC000288
-	cmp.w	#$6000,8(a0)
-	bne.s	.lbC000288
-	cmp.w	#$6000,12(a0)
-	bne.s	.lbC000288
-	cmp.w	#$48E7,$0010(a0)
-	bne.s	.lbC000288
-	addq.l	#4,a0
-.lbC00022C	move.l	a0,d4
-	move.w	#$007F,d1
-.lbC000236	cmp.w	#$41FA,(a0)+
-	bne.s	.lbC00026C
-	move.w	(a0),d2
-	bmi.s	.lbC00026C
-	btst	#0,d2
-	bne.s	.lbC00026C
-	cmp.w	#$4000,d2
-	bcc.s	.lbC00026C
-	cmp.l	#'TFMX',$0000(a0,d2.w)
-	bne.s	.lbC00025C
-	move.w	$0010(a0,d2.w),d3
-	bra.s	.lbC000274
- 
-.lbC00025C	cmp.l	#'COSO',$0000(a0,d2.w)
-	bne.s	.lbC00026C
-	move.w	#$00FF,d3
-	bra.s	.lbC000274
- 
-.lbC00026C	subq.l	#2,d0
-	dbmi	d1,.lbC000236
-	bra.s	.lbC000288
- 
-.lbC000274
-	subq.b	#1,d3
-	move.w	d3,d5
-	moveq	#0,d0
-	rts	
-
-.lbC000288
-.ChkFail
-	moveq.l	#-1,d0
-	rts	
-
-
-
-
-id_TFMX_PRO	
-	move.l	a4,a1
-	lea	TFMX_IDs(pc),a0
-.id_loop
-	tst.b	(a0)
-	beq.b	.Not_TFMX_PRO
-	move.l	a4,a1		;Module
-.strloop
-	tst.b	(a0)
-	beq.s	.found
-	cmpm.b	(a0)+,(a1)+
-	beq.s	.strloop
-.skiploop
-	tst.b	(a0)+
-	bne.s	.skiploop
-	bra.s	.id_loop
-.found
-	move.l	a4,a0	;Module
-	move.w	$100(a0),d0
-	move.l	$1D0(a0),d1
-	bne.s	.valid
-	move.l	#$800,d1
-.valid
-	add.l	d1,a0	;Channel table
-	moveq	#0,d1
-	moveq	#0,d3	;Start as TFMX Pro
-.chanloop
-	move.w	d0,d2	;Channel number
-	lsl.w	#4,d2
-	move.l	a0,a2
-	add.w	d2,a2	;Channel pointer
-	move.w	(a2)+,d2	;Channel number
-	cmp.w	#$EFFE,d2	;End mark
-	bne.s	.done
-	move.w	(a2)+,d2	;Channel type
-	add.w	d2,d2
-	cmp.w	#10,d2
-	blo.s	.notover10
-	moveq	#0,d2
-	moveq	#0,d3	;Is TFMX Pro
-.notover10
-	jmp	.JTab(pc,d2.w)
-.JTab
-	bra.s	.done
-	bra.s	.test
-	bra.s	.next
-	bra.s	.probably_not
-	bra.s	.next
-.test
-	tst.w	d1	;Flip-flop?
-	beq.s	.start
-	bmi.s	.channum
-	bra.s	.chan
-.start
-	move.w	#$FFFF,d1
-	addq.w	#1,d0	;Next channel
-	bra.s	.chanloop
-.channum
-	move.w	2(a2),d1
-.chan
-	subq.w	#1,d1
-	move.w	(a2),d0	;Paired channel?
-	bra.s	.chanloop
-.probably_not
-	moveq	#-1,d3
-.next
-	addq.w	#1,d0	;Next Channel
-	bra.s	.chanloop
-.done
-	tst.l	d3
-	bne.s	.Not_TFMX_PRO
-	moveq	#0,d0	;Identified!
-	bra.s	.exit
-.Not_TFMX_PRO
-	moveq	#-1,d0
-.exit
-	rts
-
-TFMX_IDs
-	dc.b	'tfmxsong',0
-	dc.b	'TFMX-SONG',0
-	dc.b	'TFMX_SONG',0,0
-
-
-
-id_TFMX7V
-	move.l	a4,a1
-	lea	TFMX_IDs(pc),a0
-.idloop
-	tst.b	(a0)
-	beq.b	.Not_TFMX7V
-	move.l	a4,a1
-.strloop
-	tst.b	(a0)
-	beq.s	.validID
-	cmpm.b	(a0)+,(a1)+
-	beq.s	.strloop
-.skiploop
-	tst.b	(a0)+
-	bne.s	.skiploop
-	bra.s	.idloop
-.validID
-	move.l	a4,a0
-	move.w	$100(a0),d0
-	move.l	$1D0(a0),d1
-	bne.s	.valid
-	move.l	#$800,d1
-.valid
-	add.l	d1,a0
-	moveq	#0,d1
-	moveq	#0,d3
-.chanloop
-	move.w	d0,d2
-	lsl.w	#4,d2
-	move.l	a0,a2
-	add.w	d2,a2
-	move.w	(a2)+,d2
-	cmp.w	#$EFFE,d2
-	bne.s	.done
-	move.w	(a2)+,d2
-	add.w	d2,d2
-	cmp.w	#10,d2
-	blo.s	.intable
-	moveq	#0,d2
-	moveq	#0,d3
-.intable
-	jmp	.JTab(pc,d2.w)
-.JTab
-	bra.s	.done
-	bra.s	.check
-	bra.s	.next
-	bra.s	.probably_not
-	bra.s	.next
-.check
-	tst.w	d1
-	beq.s	.norm
-	bmi.s	.paired
-	bra.s	.chan
-.norm
-	move.w	#$FFFF,d1
-	addq.w	#1,d0
-	bra.s	.chanloop
-.paired
-	move.w	2(a2),d1
-.chan
-	subq.w	#1,d1
-	move.w	(a2),d0
-	bra.s	.chanloop
-.probably_not
-	moveq	#-1,d3
-.next
-	addq.w	#1,d0
-	bra.s	.chanloop
-.done
-	tst.l	d3
-	beq.s	.Not_TFMX7V
-	moveq	#0,d0	;Identified!
-	bra.s	.exit
-.Not_TFMX7V
-	moveq	#-1,d0
-.exit
-	rts
-
-
-
 keyfilename	dc.b	"L:HippoPlayer.Key",0
  even
-
-
-*******
-* Tunnistetaan SID piisit
-*******
-
-id_sid1
-	cmp.l	#"PSID",(a4)
-	beq.b	.q
-	moveq	#-1,d0
-	rts
-.q	moveq	#0,d0
-	rts
-
-id_sid
-	bsr.b	id_sid1
-	beq.w	.yea
-
-	move.l	modulefilename(a5),a0
-	lea	desbuf(a5),a1
-	move.l	a1,a2
-.c	move.b	(a0)+,(a1)+
-	bne.b	.c
-	subq.l	#1,a1
-	move.b	#'.',(a1)+
-	move.b	#'i',(a1)+
-	move.b	#'n',(a1)+
-	move.b	#'f',(a1)+
-	move.b	#'o',(a1)+
-	clr.b	(a1)
-
-	move.l	a2,d1			* avataan_ikoni
-	move.l	#1005,d2
-	lore	Dos,Open
-	move.l	d0,d5
-	beq.b	.no
-
-	lea	probebuffer(a5),a0	* luetaan ikoni
-	move.l	a0,d2
-	move.l	#1000,d3			* 1000 bytee
-	move.l	d5,d1
-	lob	Read
-	move.l	d5,d1
-	lob	Close
-
-* tutkitaan onko playsidin ikoni.
-
-	lea	probebuffer(a5),a0
-	move	#1000,d2
-
-.leep	lea	.id1(pc),a1
-.luup	move.b	(a1)+,d1
-	beq.b	.yea
-	move.b	(a0)+,d0
-	subq	#1,d2
-	beq.b	.no
-	btst	#5,d1
-	beq.b	.cl
-	bset	#5,d0
-	bra.b	.cll
-.cl	bclr	#5,d0
-.cll	cmp.b	d1,d0
-	bne.b	.leep
-	bra.b	.luup
-
-.no	moveq	#-1,d0
-	rts
-.yea	moveq	#0,d0
-	rts
-
-.id1	dc.b	"PLAYSID",0
-.ide1
- even
-
-
-*******
-* Tunnistetaan Old Soundtracker piisit (15 samplea). Tarttee n. 1700 byte‰
-*******
-id_oldst
-
-*** Tarkistetaan onko samplejen arvot moduulille sopivat
-	lea	20(a4),a0
-	moveq	#0,d0
-	move	#$7fff,d2
-	moveq	#15-1,d1
-.l1
-	cmp	22(a0),d2	* samplelen
-	blo.w	.fail
-	cmp	#1,22(a0)
-	bhi.b	.f0
-	addq	#1,d0
-.f0
-	cmp.b	#64,25(a0)	* volume
-	bhi.w	.fail	
-	cmp	26(a0),d2	* repeat point
-	blo.b	.fail
-	cmp	28(a0),d2	* repeat length
-	blo.b	.fail
-	lea	30(a0),a0
-	dbf	d1,.l1
-	
-	cmp	#15,d0
-	beq.b	.fail
-
-
-* a0 = songlen
-	tst.b	(a0)
-	beq.b	.fail
-	cmp.b	#$7f,(a0)
-	bhi.b	.fail
-	addq	#2,a0	
-
-***** Ovatko postablen arvot oikeita (0-63)?
-
-	moveq	#128-1,d0
-	moveq	#0,d1
-.l2	tst.b	(a0)
-	beq.b	.l22
-	addq	#1,d1
-.l22	cmp.b	#63,(a0)+
-	bhi.b	.fail
-	dbf	d0,.l2
-
-	tst	d1
-	beq.b	.fail
-
-
-* a0 = patterndata
-
-*** Tarkistetaan eka patterni
-
-	move	#4*64-1,d3
-.l3
-	move	(a0)+,d0
-	move	(a0)+,d1
-
-	move	d0,d2
-	and	#$f000,d2		* pit‰s olla tyhj‰‰
-	bne.b	.fail
-
-	move	d1,d2			* tutkaillaan komentoa
-	and	#$0f00,d2		* sallittuja: 0-4, a-f
-	cmp	#$0400,d2
-	bls.b	.oks
-	cmp	#$0a00,d2
-	blo.b	.fail
-
-.oks
-
-	move	d1,d2			* onko samplea?
-	and	#$f000,d2
-	beq.b	.noper
-
-
-	and	#$fff,d0		* period
-	beq.b	.noper
-	cmp	#856,d0
-	bhi.b	.fail
-	cmp	#113,d0
-	blo.b	.fail	
-.noper
-	dbf	d3,.l3
-
-	moveq	#0,d0
-	rts
-
-.fail	moveq	#-1,d0
-	rts
-
-convert_oldst
-
-*******
-* Muutetaan PT-formaattiin
-* a4 <= moduuli
-
-	move.l	modulelength(a5),d0
-	add.l	#484,d0
-	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
-	lore	Exec,AllocMem
-	tst.l	d0
-	beq.b	.fail
-	move.l	d0,a3
-
-	lea	(a4),a0
-	lea	(a3),a1
-	move	#470/2-1,d0
-.c1	move	(a0)+,(a1)+
-	dbf	d0,.c1
-
-	lea	16*30(a1),a1		* 16 tyhj‰‰ samplee
-
-	moveq	#(128+1+1)/2-1,d0
-.c2	move	(a0)+,(a1)+
-	dbf	d0,.c2
-	move.l	#"M.K.",(a1)+
-
-	move.l	a4,a2
-	add.l	modulelength(a5),a2
-.c3	move.b	(a0)+,(a1)+
-	cmp.l	a2,a0
-	bne.b	.c3
-
-	move.b	#$7f,951(a3)
-
-	lea	20(a3),a0		* repeat pointer jaetaan kahdella
-	moveq	#$f-1,d0
-.f	lsr	#1,26(a0)
-	lea	30(a0),a0
-	dbf	d0,.f
-
-	move.l	moduleaddress(a5),a1
-	move.l	modulelength(a5),d0
-	lore	Exec,FreeMem
-
-	move.l	a3,moduleaddress(a5)
-	add.l	#484,modulelength(a5)
-
-	moveq	#0,d0			* on oikee moduuli
-	rts
-
-.fail	moveq	#-1,d0
-	rts
-
-
-
-
 
 
 *******
@@ -28563,7 +27547,7 @@ clearsound
 
 p_protracker
 	jmp	.proinit(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.provb(pc)
 	jmp	.proend(pc)
 	jmp	.prostop(pc)
@@ -28572,7 +27556,9 @@ p_protracker
 	jmp	.prosong(pc)		* Song
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_protracker(pc)
+	dc.w pt_prot 				* type
 .flags	
  dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2
 
@@ -29226,22 +28212,187 @@ modlen
 
  endb	a5
 
+* TODO: also run id_oldst 
+id_protracker
+	cmp.l	#'M.K.',1080(a4)	* Protracker
+	beq.b	.p	
+	cmp.l	#'M!K!',1080(a4)	* Protracker 100 patterns
+	beq.b	.p	
+	cmp.l	#'FLT4',1080(a4)	* Startrekker
+	bra.w	idtest
+
+.p	moveq	#0,d0
+	rts
+
+
+*******
+* Tunnistetaan Old Soundtracker piisit (15 samplea). Tarttee n. 1700 byte‰
+*******
+id_oldst
+
+*** Tarkistetaan onko samplejen arvot moduulille sopivat
+	lea	20(a4),a0
+	moveq	#0,d0
+	move	#$7fff,d2
+	moveq	#15-1,d1
+.l1
+	cmp	22(a0),d2	* samplelen
+	blo.w	.fail
+	cmp	#1,22(a0)
+	bhi.b	.f0
+	addq	#1,d0
+.f0
+	cmp.b	#64,25(a0)	* volume
+	bhi.w	.fail	
+	cmp	26(a0),d2	* repeat point
+	blo.b	.fail
+	cmp	28(a0),d2	* repeat length
+	blo.b	.fail
+	lea	30(a0),a0
+	dbf	d1,.l1
+	
+	cmp	#15,d0
+	beq.b	.fail
+
+
+* a0 = songlen
+	tst.b	(a0)
+	beq.b	.fail
+	cmp.b	#$7f,(a0)
+	bhi.b	.fail
+	addq	#2,a0	
+
+***** Ovatko postablen arvot oikeita (0-63)?
+
+	moveq	#128-1,d0
+	moveq	#0,d1
+.l2	tst.b	(a0)
+	beq.b	.l22
+	addq	#1,d1
+.l22	cmp.b	#63,(a0)+
+	bhi.b	.fail
+	dbf	d0,.l2
+
+	tst	d1
+	beq.b	.fail
+
+
+* a0 = patterndata
+
+*** Tarkistetaan eka patterni
+
+	move	#4*64-1,d3
+.l3
+	move	(a0)+,d0
+	move	(a0)+,d1
+
+	move	d0,d2
+	and	#$f000,d2		* pit‰s olla tyhj‰‰
+	bne.b	.fail
+
+	move	d1,d2			* tutkaillaan komentoa
+	and	#$0f00,d2		* sallittuja: 0-4, a-f
+	cmp	#$0400,d2
+	bls.b	.oks
+	cmp	#$0a00,d2
+	blo.b	.fail
+
+.oks
+
+	move	d1,d2			* onko samplea?
+	and	#$f000,d2
+	beq.b	.noper
+
+
+	and	#$fff,d0		* period
+	beq.b	.noper
+	cmp	#856,d0
+	bhi.b	.fail
+	cmp	#113,d0
+	blo.b	.fail	
+.noper
+	dbf	d3,.l3
+
+	moveq	#0,d0
+	rts
+
+.fail	moveq	#-1,d0
+	rts
+
+convert_oldst
+
+*******
+* Muutetaan PT-formaattiin
+* a4 <= moduuli
+
+	move.l	modulelength(a5),d0
+	add.l	#484,d0
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
+	lore	Exec,AllocMem
+	tst.l	d0
+	beq.b	.fail
+	move.l	d0,a3
+
+	lea	(a4),a0
+	lea	(a3),a1
+	move	#470/2-1,d0
+.c1	move	(a0)+,(a1)+
+	dbf	d0,.c1
+
+	lea	16*30(a1),a1		* 16 tyhj‰‰ samplee
+
+	moveq	#(128+1+1)/2-1,d0
+.c2	move	(a0)+,(a1)+
+	dbf	d0,.c2
+	move.l	#"M.K.",(a1)+
+
+	move.l	a4,a2
+	add.l	modulelength(a5),a2
+.c3	move.b	(a0)+,(a1)+
+	cmp.l	a2,a0
+	bne.b	.c3
+
+	move.b	#$7f,951(a3)
+
+	lea	20(a3),a0		* repeat pointer jaetaan kahdella
+	moveq	#$f-1,d0
+.f	lsr	#1,26(a0)
+	lea	30(a0),a0
+	dbf	d0,.f
+
+	move.l	moduleaddress(a5),a1
+	move.l	modulelength(a5),d0
+	lore	Exec,FreeMem
+
+	move.l	a3,moduleaddress(a5)
+	add.l	#484,modulelength(a5)
+
+	moveq	#0,d0			* on oikee moduuli
+	rts
+
+.fail	moveq	#-1,d0
+	rts
+
+
+
 
 ******************************************************************************
 * SID
 ******************************************************************************
 
 p_sid	jmp	.init(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.song(pc)
 	jmp	.eteen(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	jmp id_sid1(pc)
+	dc.w pt_sid 				* type
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen
 	dc.b	"PSID",0
 .flag	dc.b	0
@@ -29506,6 +28657,79 @@ init_sidpatch
 	RTS	
 
 
+
+*******
+* Tunnistetaan SID piisit
+*******
+
+id_sid1
+	cmp.l	#"PSID",(a4)
+	beq.b	.q
+	moveq	#-1,d0
+	rts
+.q	moveq	#0,d0
+	rts
+
+id_sid
+	bsr.b	id_sid1
+	beq.w	.yea
+
+	move.l	modulefilename(a5),a0
+	lea	desbuf(a5),a1
+	move.l	a1,a2
+.c	move.b	(a0)+,(a1)+
+	bne.b	.c
+	subq.l	#1,a1
+	move.b	#'.',(a1)+
+	move.b	#'i',(a1)+
+	move.b	#'n',(a1)+
+	move.b	#'f',(a1)+
+	move.b	#'o',(a1)+
+	clr.b	(a1)
+
+	move.l	a2,d1			* avataan_ikoni
+	move.l	#1005,d2
+	lore	Dos,Open
+	move.l	d0,d5
+	beq.b	.no
+
+	lea	probebuffer(a5),a0	* luetaan ikoni
+	move.l	a0,d2
+	move.l	#1000,d3			* 1000 bytee
+	move.l	d5,d1
+	lob	Read
+	move.l	d5,d1
+	lob	Close
+
+* tutkitaan onko playsidin ikoni.
+
+	lea	probebuffer(a5),a0
+	move	#1000,d2
+
+.leep	lea	.id1(pc),a1
+.luup	move.b	(a1)+,d1
+	beq.b	.yea
+	move.b	(a0)+,d0
+	subq	#1,d2
+	beq.b	.no
+	btst	#5,d1
+	beq.b	.cl
+	bset	#5,d0
+	bra.b	.cll
+.cl	bclr	#5,d0
+.cll	cmp.b	d1,d0
+	bne.b	.leep
+	bra.b	.luup
+
+.no	moveq	#-1,d0
+	rts
+.yea	moveq	#0,d0
+	rts
+
+.id1	dc.b	"PLAYSID",0
+.ide1
+ even
+
 * T‰nne v‰liin h‰m‰‰v‰sti
 
 *******************************************************************************
@@ -29598,15 +28822,17 @@ check_keyfile
 p_deltamusic
 	jmp	.deltainit(pc)
 	jmp	.deltaplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.deltaend(pc)
 	jmp	.deltastop(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.deltavolume(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_deltamusic(pc)
+	dc.w pt_delta2 				* type
 	dc	pf_cont!pf_stop!pf_volume!pf_ciakelaus
 	dc.b	"Delta Music 2",0
  even
@@ -29654,6 +28880,19 @@ p_deltamusic
 	bra.b	.delt
 
 
+
+id_deltamusic
+	lea	.delta_id(pc),a1	* Delta Music 2
+	moveq	#.delend-.delta_id,d0
+	bsr.w	search
+	bra.w	idtest
+
+.delta_id
+	dc.b	"DELTA MUSIC"
+.delend
+ even
+
+
 ******************************************************************************
 * Future Composer 1.0 - 1.3
 ******************************************************************************
@@ -29661,15 +28900,17 @@ p_deltamusic
 p_futurecomposer13
 	jmp	.fc10init(pc)
 	jmp	.fc10play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.fc10end(pc)
 	jmp	.fc10stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_futurecomposer13(pc)
+	dc.w pt_future10			* type
 	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus
 	dc.b	"Future Composer v1.0-1.3",0
  even
@@ -29714,6 +28955,9 @@ p_futurecomposer13
 .fc10stop
 	bra.w	clearsound
 
+id_futurecomposer13
+	cmp.l	#'SMOD',(a4)		* Futurecomposer 1.0-1.3
+	bra.w	idtest
 
 ******************************************************************************
 * Future Composer 1.4
@@ -29723,15 +28967,17 @@ p_futurecomposer13
 p_futurecomposer14
 	jmp	.fc10init(pc)
 	jmp	.fc10play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.fc10end(pc)
 	jmp	.fc10stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_futurecomposer14(pc)
+	dc.w pt_future14	* type
 	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus
 	dc.b	"Future Composer v1.4",0
  even
@@ -29776,6 +29022,10 @@ p_futurecomposer14
 .fc10stop
 	bra.w	clearsound
 
+id_futurecomposer14
+	cmp.l	#'FC14',(a4)		* Futurecomposer 1.4
+	bra.w	idtest
+
 
 
 
@@ -29786,15 +29036,17 @@ p_futurecomposer14
 p_soundmon
 	jmp	.bpsminit(pc)
 	jmp	.bpsmplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.bpsmend(pc)
 	jmp	.bpsmstop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_soundmon(pc)
+	dc.w pt_soundmon2
  dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
 	dc.b	"SoundMon v2.0",0
  even
@@ -29855,6 +29107,16 @@ p_soundmon
 	jmp	2158(a0)
 
 
+
+
+id_soundmon
+	move.l	26(a4),d0		* Soundmon
+	lsr.l	#8,d0
+	cmp.l	#'V.2',d0
+	bra.w	idtest
+
+
+
 ******************************************************************************
 * SoundMon 3
 ******************************************************************************
@@ -29862,15 +29124,17 @@ p_soundmon
 p_soundmon3
 	jmp	.bpsminit(pc)
 	jmp	.bpsmplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.bpsmend(pc)
 	jmp	.bpsmstop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP	
+	jmp id_soundmon3(pc)
+	dc.w pt_soundmon3 				* type
  dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
 	dc.b	"SoundMon v3.0",0
  even
@@ -29931,6 +29195,17 @@ p_soundmon3
 	move.l	bpsmroutines(a5),a0
 	jmp	8+$20(a0)
 
+id_soundmon3
+	move.l	26(a4),d0		* Soundmon
+	lsr.l	#8,d0
+	cmp.l	#'V.3',d0
+	beq.b	.y
+	cmp.l	#'BPS',d0
+	bra.w	idtest
+
+.y	moveq	#0,d0
+	rts
+
 
 ******************************************************************************
 * Jamcracker
@@ -29939,15 +29214,17 @@ p_soundmon3
 p_jamcracker
 	jmp	.jaminit(pc)
 	jmp	.jamplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.jamend(pc)
 	jmp	.jamstop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_jamcracker(pc)
+	dc.w pt_jamcracker				* type
 	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
 	dc.b	"JamCracker",0
  even
@@ -30000,6 +29277,10 @@ p_jamcracker
 	bra.w	clearsound
 
 
+id_jamcracker
+	cmp.l	#'BeEp',(a4)		* JamCracker
+	bra.w	idtest
+
 ******************************************************************************
 * Music Assembler
 ******************************************************************************
@@ -30007,15 +29288,17 @@ p_jamcracker
 p_musicassembler
 	jmp	.massinit(pc)
 	jmp	.massplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.massend(pc)
 	jmp	.massstop(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.massvolume(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_musicassembler(pc)
+	dc.w pt_musicass				* type
 	dc	pf_cont!pf_stop!pf_volume!pf_ciakelaus
 	dc.b	"Music Assembler",0
  even
@@ -30070,6 +29353,19 @@ p_musicassembler
 ;	bra.b	.minit
 
 
+
+id_musicassembler
+	lea	.muass_id(pc),a1	* Music Assembler
+	moveq	#.muassend-.muass_id,d0
+	bsr.w	search
+	bra.w	idtest
+
+
+.muass_id
+	dc.b	"usa-team 89"
+.muassend
+ even
+
 ******************************************************************************
 * Fred
 ******************************************************************************
@@ -30077,15 +29373,17 @@ p_musicassembler
 p_fred
 	jmp	.fredinit(pc)
 	jmp	.fredplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.fredend(pc)
 	jmp	.fredstop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.fredsong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_fred(pc)
+	dc.w pt_fred				* type
 	dc	pf_cont!pf_stop!pf_song!pf_ciakelaus
 	dc.b	"Fred",0
  even
@@ -30136,6 +29434,35 @@ p_fred
 	bra.b	.finit
 
 
+id_fred
+* d5 => maxsongs
+	move.l	a4,a0
+	moveq	#-1,d0				; Modul nicht erkannt (default)
+	cmpi.w	#$4efa,(a0)
+	bne.s	.ChkEnd
+	cmpi.w	#$4efa,$04(a0)
+	bne.s	.ChkEnd
+	cmpi.w	#$4efa,$08(a0)
+	bne.s	.ChkEnd
+	cmpi.w	#$4efa,$0c(a0)
+	bne.s	.ChkEnd
+	add.w	2(a0),a0
+	moveq	#4-1,d1
+.ChkLoop cmpi.w	#$123a,2(a0)
+	bne.s	.ChkNext
+	cmpi.w	#$b001,6(a0)
+	beq.s	.ChkSong
+.ChkNext addq.l	#2,a0
+	dbra	d1,.ChkLoop
+	bra.s	.ChkEnd				; Modul nicht erkannt
+.ChkSong add.w	4(a0),a0
+	moveq	#0,d5
+	move.b	4(a0),d5
+	moveq	#0,d0				; Modul erkannt
+.ChkEnd	tst.l	d0
+	rts
+
+
 ******************************************************************************
 * SonicArranger
 ******************************************************************************
@@ -30143,15 +29470,17 @@ p_fred
 p_sonicarranger
 	jmp	.init(pc)
 	jmp	 .play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	 .stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp 	.song(pc)
 	jmp 	.forward(pc)
 	jmp 	.backward(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_sonicarranger(pc)
+	dc.w pt_sonicarranger				* type
 	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song
 	dc.b	"Sonic Arranger",0
  even
@@ -30252,7 +29581,7 @@ p_sonicarranger
 ;     d7 = module length
 ; out: d0 = 0, valid valid
 ;      d0 = -1, not valid
-id_sonic
+id_sonicarranger
 	move.l	a4,a0
 	move.l	d7,d3
 	moveq	#-1,D0
@@ -30341,15 +29670,17 @@ id_sonic
 p_sidmon1
 	jmp	.sm10init(pc)
 	jmp	.sm10play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.sm10end(pc)
 	jmp	.sm10stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_sidmon1(pc)
+	dc.w pt_sidmon1				* type
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"SidMon 1",0
  even
@@ -30393,6 +29724,52 @@ sid10music	dc.l	0
 
 
 
+id_sidmon1
+* d1 => sid10init
+* d2 => sid10music
+
+	move.l	a4,a0
+
+	moveq	#-$01,d0
+	cmpi.l	#$08f90001,(a0)
+	bne.b	.l_f218
+	cmpi.l	#$00bfe001,$0004(a0)
+.l_f1f6	bne.b	.l_f218
+	cmpi.w	#$4e75,$025c(a0)
+	beq.b	.l_f20e
+	cmpi.w	#$4ef9,$025c(a0)
+	bne.b	.l_f218
+	move.w	#$4e75,$025c(a0)
+.l_f20e	moveq	#$2c,d1
+	move.l	#$0000016a,d2
+	bra.b	.l_f266
+.l_f218	cmpi.w	#$41fa,(a0)
+	bne.b	.l_f278
+	cmpi.w	#$d1e8,$0004(a0)
+	bne.b	.l_f278
+	cmpi.w	#$4e75,$0230(a0)
+	beq.b	.l_f23e
+	cmpi.w	#$4ef9,$0230(a0)
+	bne.b	.l_f248
+	move.w	#$4e75,$0230(a0)
+.l_f23e	moveq	#$00,d1
+	move.l	#$0000013e,d2
+	bra.b	.l_f266
+.l_f248	cmpi.w	#$4e75,$029c(a0)
+	beq.b	.l_f25e
+	cmpi.w	#$4ef9,$029c(a0)
+	bne.b	.l_f278
+	move.w	#$4e75,$029c(a0)
+.l_f25e	moveq	#$00,d1
+	move.l	#$0000016a,d2
+.l_f266	moveq	#$00,d0
+	add.l	a0,d1		* init
+	add.l	a0,d2		* music
+;	movem.l	d1/d2,sid10init
+.l_f278	tst.l	d0
+	rts	
+
+
 
 ******************************************************************************
 * Oktalyzer (v1.56)
@@ -30401,15 +29778,17 @@ sid10music	dc.l	0
 p_oktalyzer
 	jmp	.okinit(pc)
 	jmp	.okplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.okend(pc)
 	jmp	.okstop(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.okvolume(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_oktalyzer(pc)
+	dc.w pt_oktalyzer				* type
 	dc	pf_volume!pf_end
 	dc.b	"Oktalyzer",0
  even
@@ -30472,13 +29851,23 @@ p_oktalyzer
 	jmp	4096+$20(a0)
 
 
+
+id_oktalyzer
+	cmp.l	#'OKTA',(a4)		* Oktalyzer
+	bne.b	.nok
+	cmp.l	#'SONG',4(a4)
+	bra.w	idtest
+
+.nok	moveq	#-1,d0
+	rts
+
 ******************************************************************************
 * TFMX
 ******************************************************************************
 
 p_tfmx
 	jmp	.tfmxinit(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.tfmxvb(pc)
 	jmp	.tfmxend(pc)
 	jmp	.tfmxstop(pc)
@@ -30487,7 +29876,9 @@ p_tfmx
 	jmp	.tfmxsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_tfmx_(pc) 
+	dc.w pt_tfmx				* type
 	dc	pf_cont!pf_stop!pf_song!pf_volume!pf_kelaus!pf_poslen!pf_end
 	dc.b	"TFMX",0
  even
@@ -30746,6 +30137,110 @@ gettfmxsongs
 	rts	
 
 
+* TODO: all variants
+
+id_tfmx_
+	rts
+
+id_tfmxunion
+	cmp.l	#'TFHD',(a4)		* Yhdistetty TFMX formaatti
+	bra.w	idtest
+
+id_tfmx
+	cmp.l	#"TFMX",(a4)
+	beq.b	.y
+	cmp.l	#"tfmx",(a4)
+	bra.w	idtest
+
+.y	moveq	#0,d0
+	rts
+	
+
+
+id_TFMX_PRO	
+	move.l	a4,a1
+	lea	TFMX_IDs(pc),a0
+.id_loop
+	tst.b	(a0)
+	beq.b	.Not_TFMX_PRO
+	move.l	a4,a1		;Module
+.strloop
+	tst.b	(a0)
+	beq.s	.found
+	cmpm.b	(a0)+,(a1)+
+	beq.s	.strloop
+.skiploop
+	tst.b	(a0)+
+	bne.s	.skiploop
+	bra.s	.id_loop
+.found
+	move.l	a4,a0	;Module
+	move.w	$100(a0),d0
+	move.l	$1D0(a0),d1
+	bne.s	.valid
+	move.l	#$800,d1
+.valid
+	add.l	d1,a0	;Channel table
+	moveq	#0,d1
+	moveq	#0,d3	;Start as TFMX Pro
+.chanloop
+	move.w	d0,d2	;Channel number
+	lsl.w	#4,d2
+	move.l	a0,a2
+	add.w	d2,a2	;Channel pointer
+	move.w	(a2)+,d2	;Channel number
+	cmp.w	#$EFFE,d2	;End mark
+	bne.s	.done
+	move.w	(a2)+,d2	;Channel type
+	add.w	d2,d2
+	cmp.w	#10,d2
+	blo.s	.notover10
+	moveq	#0,d2
+	moveq	#0,d3	;Is TFMX Pro
+.notover10
+	jmp	.JTab(pc,d2.w)
+.JTab
+	bra.s	.done
+	bra.s	.test
+	bra.s	.next
+	bra.s	.probably_not
+	bra.s	.next
+.test
+	tst.w	d1	;Flip-flop?
+	beq.s	.start
+	bmi.s	.channum
+	bra.s	.chan
+.start
+	move.w	#$FFFF,d1
+	addq.w	#1,d0	;Next channel
+	bra.s	.chanloop
+.channum
+	move.w	2(a2),d1
+.chan
+	subq.w	#1,d1
+	move.w	(a2),d0	;Paired channel?
+	bra.s	.chanloop
+.probably_not
+	moveq	#-1,d3
+.next
+	addq.w	#1,d0	;Next Channel
+	bra.s	.chanloop
+.done
+	tst.l	d3
+	bne.s	.Not_TFMX_PRO
+	moveq	#0,d0	;Identified!
+	bra.s	.exit
+.Not_TFMX_PRO
+	moveq	#-1,d0
+.exit
+	rts
+
+TFMX_IDs
+	dc.b	'tfmxsong',0
+	dc.b	'TFMX-SONG',0
+	dc.b	'TFMX_SONG',0,0
+
+
 ******************************************************************************
 * TFMX 7 channels
 ******************************************************************************
@@ -30754,19 +30249,21 @@ gettfmxsongs
 
 p_tfmx7
 	jmp	.tfmxinit(pc)
-	dc.l	$4e754e75
+	p_NOP
 
 	jmp	.vb(pc)
-;	dc.l	$4e754e75
+;	p_NOP
 
 	jmp	.tfmxend(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.tfmxvol(pc)
 	jmp	.tfmxsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp  id_TFMX7V(pc)
+	dc.w pt_tfmx7 				* type
 	dc	pf_volume!pf_song!pf_poslen!pf_kelaus!pf_end
 	dc.b	"TFMX 7ch",0
  even
@@ -30889,21 +30386,104 @@ p_tfmx7
 
 
 
+id_TFMX7V
+	move.l	a4,a1
+	lea	TFMX_IDs(pc),a0
+.idloop
+	tst.b	(a0)
+	beq.b	.Not_TFMX7V
+	move.l	a4,a1
+.strloop
+	tst.b	(a0)
+	beq.s	.validID
+	cmpm.b	(a0)+,(a1)+
+	beq.s	.strloop
+.skiploop
+	tst.b	(a0)+
+	bne.s	.skiploop
+	bra.s	.idloop
+.validID
+	move.l	a4,a0
+	move.w	$100(a0),d0
+	move.l	$1D0(a0),d1
+	bne.s	.valid
+	move.l	#$800,d1
+.valid
+	add.l	d1,a0
+	moveq	#0,d1
+	moveq	#0,d3
+.chanloop
+	move.w	d0,d2
+	lsl.w	#4,d2
+	move.l	a0,a2
+	add.w	d2,a2
+	move.w	(a2)+,d2
+	cmp.w	#$EFFE,d2
+	bne.s	.done
+	move.w	(a2)+,d2
+	add.w	d2,d2
+	cmp.w	#10,d2
+	blo.s	.intable
+	moveq	#0,d2
+	moveq	#0,d3
+.intable
+	jmp	.JTab(pc,d2.w)
+.JTab
+	bra.s	.done
+	bra.s	.check
+	bra.s	.next
+	bra.s	.probably_not
+	bra.s	.next
+.check
+	tst.w	d1
+	beq.s	.norm
+	bmi.s	.paired
+	bra.s	.chan
+.norm
+	move.w	#$FFFF,d1
+	addq.w	#1,d0
+	bra.s	.chanloop
+.paired
+	move.w	2(a2),d1
+.chan
+	subq.w	#1,d1
+	move.w	(a2),d0
+	bra.s	.chanloop
+.probably_not
+	moveq	#-1,d3
+.next
+	addq.w	#1,d0
+	bra.s	.chanloop
+.done
+	tst.l	d3
+	beq.s	.Not_TFMX7V
+	moveq	#0,d0	;Identified!
+	bra.s	.exit
+.Not_TFMX7V
+	moveq	#-1,d0
+.exit
+	rts
+
+
+
+
 ******************************************************************************
 * MED
 ******************************************************************************
 
 p_med	jmp	.medinit(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.medvb(pc)
 	jmp	.medend(pc)
 	jmp	.medstop(pc)
 	jmp	.medcont(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.medsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_med(pc)
+	dc.w pt_med
 .flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song
 	dc.b	"MED "
 .nam1	dc.b	"     "
@@ -31241,6 +30821,15 @@ p_med	jmp	.medinit(pc)
 	bsr.w	.medend
 	bra.w	.medinit
 
+id_med	move.l	(a4),d0			* MED
+	lsr.l	#8,d0
+	cmp.l	#'MMD',d0
+
+idtest	beq.b	.y
+	moveq	#-1,d0
+	rts
+.y	moveq	#0,d0
+	rts
 
 
 
@@ -31250,16 +30839,18 @@ p_med	jmp	.medinit(pc)
  
 p_player
 	jmp	.p60init(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.p60end(pc)
 	jmp	.p60stop(pc)
 	jmp	.p60cont(pc)
 	jmp	.p60volume(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_player(pc)
+	dc.w pt_player
 	dc	pf_stop!pf_cont!pf_volume
 	dc.b	"The Player 6.1A",0
  even
@@ -31354,6 +30945,17 @@ p_player
 	bra.b	.ok2
 
 
+* TODO: both
+id_player
+ 	cmp.l	#'P61A',(a4)		* The player 6.1a
+	bra.w	idtest
+
+id_player2				* filename <= D0
+	and.l	#$dfffffff,d0
+	cmp.l	#'P61.',d0
+	bra.w	idtest
+	
+
 
 ******************************************************************************
 * Mark II
@@ -31364,15 +30966,17 @@ p_player
 p_markii
 	jmp	.markinit(pc)
 	jmp	.markmusic(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.markend(pc)
 	jmp	clearsound(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_markii(pc)
+	dc.w pt_markii
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"Mark II",0
  even
@@ -31417,6 +31021,33 @@ p_markii
 	rts
 
 
+id_markii
+	moveq.l	#-1,d0
+
+	cmp	#$48e7,(a4)
+	bne.b	.eim
+	cmp	#$41fa,4(a4)	
+	bne.b	.eim
+	cmp	#$4cd8,8(a4)
+	bne.b	.eim
+	cmp.l	#$0c0000ff,12(a4)
+	beq.b	.joom
+.eim
+
+	lea	.lbw000106(pc),a1
+.lbc0000ea
+	move.w	(a1)+,d1
+	beq.s	.lbc000104
+	cmp.l	#$2e5a4144,$0000(a4,d1.w)
+	bne.s	.lbc0000ea
+	cmp.l	#$5338392e,$0004(a4,d1.w)
+	bne.s	.lbc0000ea
+.joom	moveq.l	#0,d0
+.lbc000104
+	tst.l	d0
+	rts	
+.lbw000106	dc.w	$02a0,$033c,$0348,0
+
 
 ******************************************************************************
 * Maniacs of Noise
@@ -31425,15 +31056,17 @@ p_markii
 
 p_mon	jmp	.moninit(pc)
 	jmp	.monmusic(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.monend(pc)
 	jmp	clearsound(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.monvol(pc)
 	jmp	.monsong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_maniacsofnoise(pc)
+	dc.w pt_mon
 	dc	pf_stop!pf_cont!pf_song!pf_volume!pf_ciakelaus
 	dc.b	"Maniacs of Noise",0
 
@@ -31492,6 +31125,48 @@ p_mon	jmp	.moninit(pc)
 	bra.b	.init
 
 
+id_maniacsofnoise
+* d5 => max songs
+
+	move.l	a4,a0
+;	move.l	modulelength(a5),d1
+	move.l	d7,d1
+
+	moveq.l	#-1,d0
+	cmp.w	#$4efa,(a0)
+	bne.s	.o0001a8
+	cmp.w	#$4efa,4(a0)
+	bne.s	.o0001a8
+	cmp.w	#$4efa,8(a0)
+	bne.s	.o0001a8
+	cmp.w	#$4efa,12(a0)
+	beq.s	.o0001a8
+.o00015e	cmp.w	#$4bfa,0(a0)
+	bne.s	.o000182
+	cmp.w	#$0280,4(a0)
+	bne.s	.o000182
+	cmp.l	#$000000ff,6(a0)
+	bne.s	.o000182
+	cmp.l	#$5300b02d,$0014(a0)
+	beq.s	.o00018a
+.o000182	addq.l	#2,a0
+	subq.l	#2,d1
+	bpl.s	.o00015e
+	bra.s	.o0001a8
+ 
+.o00018a	move.w	2(a0),d1
+	lea	0(a0,d1.w),a1
+	move.w	$0018(a0),d1
+	lea	0(a1,d1.w),a1
+	moveq.l	#0,d0
+	move.b	2(a1),d0
+	subq	#1,d0
+	move.w	d0,d5
+	moveq.l	#0,d0
+.o0001a8
+	tst.l	d0
+	rts	
+
 
 
 ******************************************************************************
@@ -31500,15 +31175,17 @@ p_mon	jmp	.moninit(pc)
 
 p_dw	jmp	.dwinit(pc)
 	jmp	.dwmusic(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.dwend(pc)
 	jmp	clearsound(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.dwsong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_davidwhittaker(pc)
+	dc pt_dw
 	dc	pf_stop!pf_cont!pf_song!pf_ciakelaus
 	dc.b	"David Whittaker",0
 
@@ -31562,6 +31239,104 @@ whittaker_end	dc.l	0
 
 
 
+
+
+
+id_davidwhittaker
+* d5 => maxsongs
+* d6 => whittaker_end
+
+	move.l	a4,a0
+;	move.l	moduleaddress(a5),d0
+	move.l	a0,d0
+
+	cmp.w	#$48e7,(a0)
+	bne.s	.wc000130
+	cmp.w	#$6100,4(a0)
+	bne.s	.wc000130
+	cmp.w	#$4cdf,8(a0)
+	bne.s	.wc000130
+	cmp.w	#$4e75,12(a0)
+	bne.s	.wc000130
+	cmp.w	#$48e7,14(a0)
+	bne.s	.wc000130
+	cmp.w	#$6100,$0012(a0)
+	bne.s	.wc000130
+	cmp.w	#$4cdf,$0016(a0)
+	bne.s	.wc000130
+	cmp.w	#$4e75,$001a(a0)
+	beq.s	.wc000136
+.wc000130	moveq.l	#-1,d0
+	bra.w	.wc0001de
+ 
+.wc000136	moveq.l	#$1c,d1
+	add.l	d1,a0
+	sub.l	d1,d0
+.wc00013c	cmp.w	#$43fa,(a0)
+	bne.s	.wc000154
+	cmp.l	#$4880c0fc,4(a0)
+	bne.s	.wc000154
+	cmp.w	#$41fa,10(a0)
+	beq.s	.wc00015c
+.wc000154	addq.l	#2,a0
+	subq.l	#2,d0
+	bpl.s	.wc00013c
+	bra.s	.wc000130
+ 
+.wc00015c	move.l	a0,a1
+	move.l	d0,d1
+.wc000160	cmp.w	#$47fa,(a1)
+	bne.s	.wc000186
+	cmp.w	#$51eb,4(a1)
+	bne.s	.wc000186
+	cmp.w	#$51eb,8(a1)
+	beq.s	.wc00018e
+	cmp.w	#$33fc,8(a1)
+	beq.s	.wc00018e
+	cmp.w	#$426b,8(a1)
+	beq.s	.wc00018e
+.wc000186	addq.l	#2,a1
+	subq.l	#2,d1
+	bpl.s	.wc000160
+	bra.s	.wc000130
+ 
+.wc00018e	move.l	a1,d6
+	move.w	2(a1),d1
+	lea	-10(a1,d1.w),a1
+	move.l	a0,d1
+	sub.l	a1,d1
+	move.w	12(a0),d2
+	moveq.l	#0,d3
+	move.w	#$7fff,d4
+	moveq.l	#-1,d5
+.wc0001ac	move.w	8(a0),d0
+	lsr.w	#1,d0
+	subq.w	#1,d0
+	addq.w	#2,d2
+.wc0001b6	move.w	12(a0,d2.w),d3
+	btst	#0,d3
+	bne.s	.wc0001d6
+	sub.w	d1,d3
+	cmp.w	d4,d3
+	bge.s	.wc0001c8
+	move.w	d3,d4
+.wc0001c8	cmp.w	d4,d2
+	bge.s	.wc0001d6
+	addq.w	#2,d2
+	subq.w	#1,d0
+	bne.s	.wc0001b6
+	addq.l	#1,d5
+	bra.s	.wc0001ac
+ 
+.wc0001d6	
+	;move.w	d5,maxsongs(a5)	* songit
+	moveq.l	#0,d0
+.wc0001de
+	tst.l	d0
+	rts	
+ 
+
+
 ******************************************************************************
 * Hippel-COSO
 ******************************************************************************
@@ -31577,15 +31352,17 @@ whittaker_end	dc.l	0
 p_hippelcoso
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
 	jmp	.volume(pc)
 	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.ahiupdate(pc)
+	jmp id_hippelcoso(pc)
+	dc.w pt_hippelcoso
 .liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi
 	dc.b	"Hippel-COSO",0
  even
@@ -31710,6 +31487,84 @@ p_hippelcoso
 
 
 
+
+
+
+; Testet, ob es sich um ein Hippel-COSO-Modul handelt
+
+id_hippelcoso
+* d5 => max songs
+
+;	move.l	dtg_ChkData(a5),a0		; ^module
+	move.l	a4,a0
+
+	cmpi.l	#"COSO",$00(a0)			; test ID
+	bne.b	.ChkFail
+	cmpi.l	#"TFMX",$20(a0)			; test ID
+	bne.s	.ChkFail
+
+	move.l	$1c(a0),d0
+	sub.l	$18(a0),d0
+	bmi.s	.ChkFail				; table corrupt !
+	divu	#10,d0
+	swap	d0
+	tst.w	d0				; multiple of 10 ?
+	bne.s	.ChkFail				; no !
+	swap	d0
+	subq.w	#1,d0
+	beq.s	.ChkFail				; sampletable is empty !
+	move.l	a0,a1
+	add.l	$18(a0),a1			; ^sampletable
+	move.l	a1,a2
+	moveq	#0,d2
+.Chkoop move.l	(a1),d1				; ^samplestart
+	cmp.l	d2,d1
+	ble.b	.Chkext
+	move.l	d1,d2
+	move.l	a1,a2
+.Chkext add.w	#10,a1				; next sample
+	subq.l	#1,d0
+	bne.s	.Chkoop
+
+	move.l	$1c(a0),d0			; ^samples
+	move.l	d0,d1
+	add.l	(a2)+,d1			; get samplestart
+	moveq	#0,d2
+	move.w	(a2)+,d2			; get samplelength
+	add.l	d2,d2
+	add.l	d2,d1
+	addq.l	#4,d1				; 4 bytes null-sample
+
+
+;	move.l	modulelength(a5),d2
+
+;	cmp.l	d1,d2
+;;	slt	LoadSamp			; set load-samples flag
+;	blt.b	.ChkFail		* ei hyv‰ksyt‰ modeja joissa erilliset samplet
+
+
+;	add.l	#1024,d1
+;	cmp.l	d0,d2				; test size of module
+;	blt.s	.ChkFail				; too small
+;	cmp.l	d1,d2				; test size of module
+;	bgt.s	.ChkFail				; too big
+
+	move.l	$18(a4),d0
+	sub.l	$14(a4),d0
+	divu	#6,d0
+	subq.w	#2,d0
+	move.w	d0,d5				; store MaxSong
+	moveq	#0,d0				; Modul erkannt
+
+	bra.s	.Chknd
+.ChkFail
+	moveq	#-1,d0				; Modul nicht erkannt
+.Chknd
+	tst.l	d0
+	rts
+
+
+
 ******************************************************************************
 * Hippel
 ******************************************************************************
@@ -31717,15 +31572,17 @@ p_hippelcoso
 p_hippel
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	clearsound(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_hippelcoso(pc)
+	dc.w pt_hippel
 	dc	pf_cont!pf_stop!pf_song!pf_ciakelaus
 	dc.b	"Hippel",0
  even
@@ -31773,6 +31630,163 @@ hippelmusic	dc.l	0
 
 
 
+
+
+id_hippel
+* d7 <= modlen
+* a4 <= mod
+* d4 => hippel music 
+* d5 => max songs
+	move.l	d7,d0
+
+	cmp.l	#100,d0
+	blo.w	.lbC000288
+
+	move.l	a4,a0
+	move.l	a4,a1
+	add.l	d0,a1
+	lea	$10(a0),a0
+.loop	addq	#1,a0	
+	cmp.l	a0,a1
+	beq.w	.ChkFail
+	cmp.b	#"T",(a0)
+	bne.b	.loop
+	cmp.b	#"F",1(a0)
+	bne.b	.loop
+	cmp.b	#"M",2(a0)
+	bne.b	.loop
+	cmp.b	#"X",3(a0)
+	bne.b	.loop
+
+	move.l	a4,a1
+	move.l	a1,a0
+	move.l	d7,d0
+
+	cmp.w	#$6000,(a1)
+	bne.s	.lbC000156
+	addq.w	#2,a1
+	move.w	(a1),d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	bra.s	.lbC00016E
+ 
+.lbC000156	cmp.b	#$60,(a1)
+	bne.s	.lbC0001B6
+	move.b	1(a1),d1
+	ext.w	d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	addq.w	#2,a1
+.lbC00016E	addq.w	#4,a1
+	cmp.w	#$6100,(a1)
+	bne.s	.lbC000186
+	addq.w	#2,a1
+	move.w	(a1),d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	bra.s	.lbC00018E
+ 
+.lbC000186	cmp.w	#$41FA,(a1)
+	bne.s	.lbC0001B6
+	addq.w	#4,a1
+.lbC00018E	addq.w	#2,a1
+	cmp.w	#$6100,(a1)+
+	bne.s	.lbC0001B6
+	move.w	(a1),d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	cmp.w	#$41FA,(a1)+
+	bne.s	.lbC0001B6
+	move.w	(a1),d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	clr.w	(a1)
+.lbC0001B6	cmp.b	#$60,(a0)
+	bne.s	.lbC0001D0
+	cmp.b	#$60,2(a0)
+	bne.s	.lbC0001D0
+	cmp.w	#$48E7,4(a0)
+	bne.s	.lbC0001D0
+	addq.l	#2,a0
+	bra.s	.lbC00022C
+ 
+.lbC0001D0	cmp.b	#$60,(a0)
+	bne.s	.lbC0001EA
+	cmp.b	#$60,2(a0)
+	bne.s	.lbC0001EA
+	cmp.w	#$41FA,4(a0)
+	bne.s	.lbC0001EA
+	addq.l	#2,a0
+	bra.s	.lbC00022C
+ 
+.lbC0001EA	cmp.w	#$6000,(a0)
+	bne.s	.lbC000204
+	cmp.w	#$6000,4(a0)
+	bne.s	.lbC000204
+	cmp.w	#$48E7,8(a0)
+	bne.s	.lbC000204
+	addq.l	#4,a0
+	bra.s	.lbC00022C
+ 
+.lbC000204	cmp.w	#$6000,(a0)
+	bne.s	.lbC000288
+	cmp.w	#$6000,4(a0)
+	bne.s	.lbC000288
+	cmp.w	#$6000,8(a0)
+	bne.s	.lbC000288
+	cmp.w	#$6000,12(a0)
+	bne.s	.lbC000288
+	cmp.w	#$48E7,$0010(a0)
+	bne.s	.lbC000288
+	addq.l	#4,a0
+.lbC00022C	move.l	a0,d4
+	move.w	#$007F,d1
+.lbC000236	cmp.w	#$41FA,(a0)+
+	bne.s	.lbC00026C
+	move.w	(a0),d2
+	bmi.s	.lbC00026C
+	btst	#0,d2
+	bne.s	.lbC00026C
+	cmp.w	#$4000,d2
+	bcc.s	.lbC00026C
+	cmp.l	#'TFMX',$0000(a0,d2.w)
+	bne.s	.lbC00025C
+	move.w	$0010(a0,d2.w),d3
+	bra.s	.lbC000274
+ 
+.lbC00025C	cmp.l	#'COSO',$0000(a0,d2.w)
+	bne.s	.lbC00026C
+	move.w	#$00FF,d3
+	bra.s	.lbC000274
+ 
+.lbC00026C	subq.l	#2,d0
+	dbmi	d1,.lbC000236
+	bra.s	.lbC000288
+ 
+.lbC000274
+	subq.b	#1,d3
+	move.w	d3,d5
+	moveq	#0,d0
+	rts	
+
+.lbC000288
+.ChkFail
+	moveq.l	#-1,d0
+	rts	
+
+
+
+
 ******************************************************************************
 * Digibooster
 ******************************************************************************
@@ -31780,16 +31794,18 @@ hippelmusic	dc.l	0
 
 p_digibooster
 	jmp	.init(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.vb(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
 	jmp	.volu(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_digibooster(pc)
+	dc.w pt_digibooster
 	dc	pf_poslen!pf_kelaus!pf_volume!pf_stop!pf_cont!pf_end
 	dc.b	"DIGI Booster",0
  even
@@ -31921,6 +31937,16 @@ p_digibooster
 
 
 
+id_digibooster
+	cmp.l	#'DIGI',(a4)
+	bne.b	.nd
+	cmp.l	#' Boo',4(a4)
+	bne.b	.nd
+	cmp.l	#'ster',8(a4)
+	bra.w	idtest
+
+.nd	moveq	#-1,d0
+	rts
 
 ******************************************************************************
 * Digibooster PRO
@@ -31929,16 +31955,18 @@ p_digibooster
 
 p_digiboosterpro
 	jmp	.init(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.vb(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	jmp	.ahiupdate(pc)
+	jmp id_digiboosterpro(pc)
+	dc.w pt_digiboosterpro
 	dc	pf_volume!pf_stop!pf_cont!pf_ahi!pf_poslen!pf_kelaus!pf_end
 	dc.b	"DIGI Booster Pro",0
  even
@@ -32048,6 +32076,9 @@ p_digiboosterpro
 .ordn	dc.l	0
 .pattpos dc.l	0
 
+id_digiboosterpro
+	cmp.l	#'DBM0',(a4)
+	bra.w	idtest
 
 ******************************************************************************
 * THX
@@ -32065,7 +32096,9 @@ p_thx
 	jmp	.song(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_thx(pc)
+	dc.w pt_thx
 	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen
 	dc.b	"AHX Sound System",0
  even
@@ -32270,6 +32303,12 @@ p_thx
 
 
 
+id_thx
+	move.l	(a4),d0			* THX
+	lsr.l	#8,d0
+	cmp.l	#"THX",d0
+	bra.w	idtest
+
 
 ******************************************************************************
 * MusiclineEditor
@@ -32277,16 +32316,18 @@ p_thx
 
 p_mline
 	jmp	.init(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
 	jmp	.volume(pc)
 	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_mline(pc)
+	dc.w pt_mline
 	dc	pf_cont!pf_stop!pf_volume!pf_song
 	dc.b	"MusiclineEditor",0
  even
@@ -32400,6 +32441,16 @@ p_mline
 
 
 
+id_mline
+	cmp.l	#"MLED",(a4)		* musicline editor
+	bne.b	.nd
+	cmp.l	#"MODL",4(a4)
+	bra.w	idtest
+
+.nd	moveq	#-1,d0
+	rts
+	
+
 
 
 ******************************************************************************
@@ -32408,16 +32459,18 @@ p_mline
 
 p_aon
 	jmp	.init(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_aon(pc)
+	dc.w pt_aon
 	dc	pf_cont!pf_stop!pf_volume
 	dc.b	"Art Of Noise 4ch",0
  even
@@ -32468,6 +32521,10 @@ p_aon
 	bset	#0,$bfdf00	; Timer start, stop
 	rts
 
+id_aon
+	cmp.l	#"AON4",(a4)		* aon 4 channel
+	bra.w	idtest
+
 
 ******************************************************************************
 * PS3M
@@ -32488,16 +32545,18 @@ volj		rs.l	1
 boostj		rs.l	1
 
 p_multi	jmp	.s3init(pc)
-	dc.l	$4e754e75		* CIA
+	p_NOP		* CIA
 	jmp	.s3poslen(pc)		* VB
 	jmp	.s3end(pc)
 	jmp	.s3stop(pc)
 	jmp	.s3cont(pc)
 	jmp	.s3vol(pc)
-	dc.l	$4e754e75		* Song
+	p_NOP		* Song
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	jmp	ps3m_boost(pc)		* ahiupdate
+	jmp id_ps3m(pc)
+	dc.w pt_multi
  dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
 	dc.b	"PS3M",0
  even
@@ -32885,16 +32944,18 @@ ps3minitcount	dc	0
 
 p_sample
 	jmp	.init(pc)
-	dc.l	$4e754e75		* CIA
-	dc.l	$4e754e75		* VB
+	p_NOP		* CIA
+	p_NOP		* VB
 	jmp	.end(pc)		* end
 	jmp	.dostop(pc)		* Stop
 	jmp	.docont(pc)		* Cont
 	jmp	.vol(pc)		* volume
-	dc.l	$4e754e75		* Song
-	dc.l	$4e754e75		* Eteen
-	dc.l	$4e754e75		* Taakse
+	p_NOP		* Song
+	p_NOP		* Eteen
+	p_NOP		* Taakse
 	jmp	.ahiup(pc)		* AHI Update
+	jmp id_sample(pc)
+	dc.w pt_sample
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi
 .name	dc.b	"                        ",0
  even
@@ -32997,7 +33058,8 @@ p_sample
 .ahiup	move.l	sampleroutines(a5),a0
 	jmp	.s_ahiup(a0)
 
-
+id_sample
+	rts
 
 ******************************************************************************
 * PumaTracker
@@ -33006,15 +33068,17 @@ p_sample
 p_pumatracker
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_pumatracker(pc)
+	dc.w pt_pumatracker
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"PumaTracker",0
  even
@@ -33115,15 +33179,17 @@ id_pumatracker
 p_beathoven
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_beathoven(pc)
+	dc.w pt_beathoven
 	dc	pf_cont!pf_stop!pf_ciakelaus!pf_song
 	dc.b	"Beathoven Synthesizer",0
  even
@@ -33249,15 +33315,17 @@ id_beathoven
 p_gamemusiccreator
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_gamemusiccreator(pc)
+	dc.w pt_gamemusiccreator
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume
 	dc.b	"Game Music Creator",0
  even
@@ -33458,15 +33526,17 @@ id_gamemusiccreator
 p_digitalmugician
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_digitalmugician(pc)
+	dc.w pt_digitalmugician
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
 	dc.b	"Digital Mugician",0
  even
@@ -33544,15 +33614,17 @@ id_digitalmugician
 p_delicustom
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	deliEnd(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
 	jmp	deliVolume(pc)
 	jmp	deliSong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_delicustom(pc)
+	dc.w pt_delicustom
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"DeliTracker Custom",0
  even
@@ -33851,15 +33923,17 @@ id_chiptracker
 p_medley
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
 	jmp	.song(pc) 
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_medley(pc)
+	dc.w pt_medley
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"Medley Sound",0
  even
@@ -33974,15 +34048,17 @@ id_medley
 p_futureplayer
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
 	jmp	.song(pc) 
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_futureplayer(pc)
+	dc.w pt_futureplayer
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"Future Player",0
  even
@@ -34100,15 +34176,17 @@ id_futureplayer
 p_bendaglish
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
 	jmp	.song(pc) 
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_bendaglish(pc)
+	dc.w pt_bendaglish
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"Ben Daglish",0
  even
@@ -34227,15 +34305,17 @@ id_bendaglish
 p_sidmon2
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_sidmon2(pc)
+	dc.w pt_sidmon2
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
 	dc.b	"SidMon 2",0
  even
@@ -34306,15 +34386,17 @@ id_sidmon2
 p_deltamusic1
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_deltamusic1(pc)
+	dc.w pt_deltamusic1
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
 	dc.b	"Delta Music 1",0
  even
@@ -34392,15 +34474,17 @@ id_deltamusic1
 p_soundfx
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_soundfx(pc)
+	dc.w pt_soundfx
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
 	dc.b	"SoundFX",0
  even
@@ -34471,15 +34555,17 @@ id_soundfx
 p_gluemon
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_gluemon(pc)
+	dc.w pt_gluemon
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
 	dc.b	"GlueMon",0
  even
@@ -34562,15 +34648,17 @@ id_gluemon
 p_pretracker
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_pretracker(pc)
+	dc.w pt_pretracker
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
 	dc.b	"PreTracker by Pink/aBYSs",0
  even
@@ -34771,15 +34859,17 @@ id_pretracker
 p_custommade
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
 	jmp	.song(pc) 
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_custommade(pc)
+	dc.w pt_custommade
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"CustomMade",0
  even
@@ -34908,15 +34998,17 @@ id_custommade
 p_davelowe
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
+	p_NOP 	
+	p_NOP
 	jmp	.song(pc) 
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_davelowe(pc)
+	dc.w pt_davelowe
 	dc pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song!pf_end
 	dc.b	"Dave Lowe",0
  even
