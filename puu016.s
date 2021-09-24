@@ -23829,21 +23829,6 @@ loadfile
 	tst.l	d0
 	beq.w	.on
 
-	bsr.w	id_med
-	beq.w	.on
-
-	bsr.w	id_hippel
-	beq.w	.on
-
-	bsr.w	id_futurecomposer13
-	beq.w	.on
-
-	bsr.w	id_futurecomposer14
-	beq.w	.on
-
-	bsr.w	id_oktalyzer
-	beq.w	.on
-
 	bsr.w	id_tfmxunion
 	beq.w	.on
 
@@ -23861,98 +23846,14 @@ loadfile
 	bsr.w	id_hippelcoso
 	beq.w	.on
 
-	bsr.w	id_soundmon
-	beq.w	.on
-
-	bsr.w	id_soundmon3
-	beq.w	.on
-
-	bsr.w	id_musicassembler
-	beq.w	.on
-
-	bsr.w	id_sid1
-	beq.w	.on
-
-	bsr.w	id_sonicarranger
-	beq.w	.on
-
-	bsr.w	id_fred			* Fred
-	beq.w	.on
-
-	bsr.w	id_sidmon1		* Sidmon1
-	beq.w	.on
-
-	bsr.w	id_deltamusic
-	beq.w	.on
-
-	bsr.w	id_markii
-	beq.w	.on
-
-	bsr.w	id_maniacsofnoise
-	beq.w	.on
-	
-	bsr.w	id_davidwhittaker
-	beq.w	.on
-
-	bsr.w	id_jamcracker
-	beq.w	.on
-
-	bsr.w	id_digibooster
-	beq.w	.on
-
-	bsr.w	id_thx
-	beq.w	.on
-
-	bsr.w	id_mline
-	beq.w	.on
-
-	bsr.w	id_aon
-	beq.w	.on
-
-	bsr.w	id_player
-	beq.w	.on
-
-	bsr.w	id_pumatracker
-	beq.b	.on
-
-	bsr		id_beathoven
-	beq.b	.on
-
-	bsr		id_digitalmugician
-	beq.b	.on
-
-	bsr		id_gamemusiccreator
-	beq.b	.on
-
-	bsr	id_medley
-	beq.b	.on
-
-	bsr	id_bendaglish
-	beq.b	.on
-
-	bsr	id_sidmon2
-	beq.b	.on
-
-	bsr.w id_deltamusic1
-	beq.b .on 
-
-	bsr.w id_soundfx
-	beq.b .on 
-
-	bsr.w id_gluemon
-	beq.b .on 
-
-	bsr.w id_pretracker
-	beq.b .on 
-
-	bsr.w id_custommade
-	beq.b .on 
-
-	bsr	id_synthesis 
+	lea		internalFormats(pc),a3 
+	bsr	identifyFormatsOnly 
 	beq.b .on
-	bsr	id_syntracker 
+	lea		groupFormats(pc),a3 
+	bsr	identifyFormatsOnly 
 	beq.b .on
-	bsr	id_chiptracker
+	lea		eagleFormats(pc),a3 
+	bsr	identifyFormatsOnly 
 	beq.b .on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
@@ -25043,6 +24944,58 @@ search
 	rts
 
 
+* Formats
+* - built-in replayers in hippo
+* - replayer code is within modules
+* - replayer code is in libraries
+internalFormats
+	;dc.l	p_protracker 
+	dc.l	p_med 
+	dc.l 	p_mline 
+	dc.l 	p_musicassembler 
+	dc.l 	p_fred 
+	dc.l	p_sidmon1 
+	dc.l 	p_deltamusic 
+	dc.l	p_markii 
+	dc.l 	p_mon
+	dc.l 	p_dw
+	dc.l	p_hippel 
+	dc.l 	p_beathoven 
+	dc.l 	0
+
+* Formats
+* - replayers are in the HippoPlayer.group
+groupFormats
+	dc.l 	p_jamcracker 
+	dc.l 	p_pumatracker 
+	dc.l 	p_futurecomposer13
+	dc.l 	p_futurecomposer14 
+	dc.l 	p_oktalyzer
+	;dc.l	p_tfmx
+	dc.l	p_hippelcoso 
+	dc.l	p_soundmon 
+	dc.l	p_soundmon3 
+	dc.l	p_digibooster 
+	dc.l 	p_digiboosterpro 
+	dc.l	p_thx 
+	dc.l 	p_aon 
+	dc.l	p_digitalmugician
+	dc.l	p_gamemusiccreator 
+	dc.l	p_medley 
+	dc.l	p_bendaglish 
+	dc.l	p_sidmon2 
+	dc.l	p_deltamusic1 
+	dc.l	p_soundfx 
+	dc.l	p_gluemon
+	dc.l	p_pretracker 
+	dc.l 	p_custommade 
+	dc.l 	p_sonicarranger
+	dc.l 	p_player
+	dc.l 	0
+
+
+* Formats
+* - replayers provided in eagleplayers modules
 eagleFormats
 	dc.l	p_synthesis
 	dc.l	p_syntracker
@@ -25277,57 +25230,46 @@ tutki_moduuli
 
 	* These do not require player group:
 
-	bsr.w	id_med
-	beq.w	.med
+;	bsr.w	id_med
+;	beq.w	.med
+;
+;	bsr.w	id_mline
+;	beq.w	.mline
+;
+;	bsr.w	id_musicassembler
+;	beq.w	.musicassembler
+;
+;	bsr.w	id_fred			* Fred
+;	beq.w	.fred
+;
+;	bsr.w	id_sidmon1		* Sidmon1
+;	beq.w	.sidmon1
+;
+;	bsr.w	id_deltamusic
+;	beq.w	.deltamusic
+;
+;	bsr.w	id_markii
+;	beq.w	.markii
+;
+;	bsr.w	id_maniacsofnoise
+;	beq.w	.mon
+;
+;	bsr.w	id_davidwhittaker
+;	beq.w	.dw
+;
+;	bsr.w	id_hippel
+;	beq.w	.hippel
+;
+;	bsr	id_beathoven
+;	beq.w	.beathoven
+;
+	lea	internalFormats(pc),a3 
+	bsr	identifyFormats
+	beq.w 	.ex
 
-	bsr.w	id_mline
-	beq.w	.mline
-
-	bsr.w	id_musicassembler
-	beq.w	.musicassembler
-
-	bsr.w	id_fred			* Fred
-	beq.w	.fred
-
-	bsr.w	id_sidmon1		* Sidmon1
-	beq.w	.sidmon1
-
-	bsr.w	id_deltamusic
-	beq.w	.deltamusic
-
-	bsr.w	id_markii
-	beq.w	.markii
-
-	bsr.w	id_maniacsofnoise
-	beq.w	.mon
-
-	bsr.w	id_davidwhittaker
-	beq.w	.dw
-
-	bsr.w	id_hippel
-	beq.w	.hippel
-
-	bsr	id_beathoven
-	beq.w	.beathoven
-
-	***************************************************
-	* Eagle players
-	lea	eagleFormats,a3
-.eagleLoop 
-	tst.l	(a3)
-	beq.b	.eagleNotFound
-	move.l	(a3),a0
-	jsr	p_id(a0)
-	beq.b 	.eagleFound
-	addq	#4,a3
-	bra.b	.eagleLoop
-
-.eagleFound
-	move.l	(a3),a0
-	move.l	a0,playerbase(a5)
-	move	p_type(a0),playertype(a5)
-	bra	.ex
-.eagleNotFound
+	lea	eagleFormats(pc),a3
+	bsr 	identifyFormats 
+	beq.w 	.ex
 
 	***********************************
 
@@ -25383,24 +25325,6 @@ tutki_moduuli
 	tst.b	sampleinit(a5)		* sample??
 	bne.w	.sample
 
-	bsr.w	id_jamcracker
-	beq.w	.jam
-
-	bsr.w	id_pumatracker
-	beq.w	.pumatracker
-
-	bsr.w	id_futurecomposer13
-	beq.w	.future13
-
-	bsr.w	id_futurecomposer14
-	beq.w	.future14
-
-	bsr.w	id_oktalyzer
-	beq.w	.oktalyzer
-
-	bsr.w	id_tfmxunion
-	beq.w	.tfmxunion
-
 	bsr.w	id_TFMX_PRO
 	tst	d0
 	beq.w	.tfmx
@@ -25412,66 +25336,88 @@ tutki_moduuli
 	bsr.w	id_tfmx
 	beq.w	.tfmx
 
-	bsr.w	id_hippelcoso
-	beq.w	.hippelcoso
+	bsr.w	id_tfmxunion
+	beq.w	.tfmxunion
 
-	bsr.w	id_soundmon
-	beq.w	.soundmon
+	lea	groupFormats(pc),a3 
+	bsr	identifyFormats
+	beq.b .ex
 
-	bsr.w	id_soundmon3
-	beq.w	.soundmon3
+;	bsr.w	id_jamcracker
+;	beq.w	.jam
+;
+;	bsr.w	id_pumatracker
+;	beq.w	.pumatracker
+;
+;	bsr.w	id_futurecomposer13
+;	beq.w	.future13
+;
+;	bsr.w	id_futurecomposer14
+;	beq.w	.future14
+;
+;	bsr.w	id_oktalyzer
+;	beq.w	.oktalyzer
+;
+;	bsr.w	id_hippelcoso
+;	beq.w	.hippelcoso
+;
+;	bsr.w	id_soundmon
+;	beq.w	.soundmon
+;
+;	bsr.w	id_soundmon3
+;	beq.w	.soundmon3
+;
+;	bsr.w	id_digibooster
+;	beq.w	.digibooster
+;
+;	bsr.w	id_digiboosterpro
+;	beq.w	.digiboosterpro
+;
+;	bsr.w	id_thx
+;	beq.w	.thx
+;
+;	bsr.w	id_aon
+;	beq.w	.aon
 
-	bsr.w	id_digibooster
-	beq.w	.digibooster
-
-	bsr.w	id_digiboosterpro
-	beq.w	.digiboosterpro
-
-	bsr.w	id_thx
-	beq.w	.thx
-
-	bsr.w	id_aon
-	beq.w	.aon
-
-	bsr		id_digitalmugician
-	beq.w	.digitalmugician
-
-	bsr.w	id_gamemusiccreator
-	beq.w	.gamemusiccreator
-
-	bsr	id_medley
-	beq.w	.medley
-
-	bsr	id_bendaglish
-	beq.w	.bendaglish
-
-	bsr	id_sidmon2
-	beq.w	.sidmon2
-
-	bsr	id_deltamusic1
-	beq.w	.deltamusic1
-
-	bsr	id_soundfx
-	beq.w	.soundfx
-
-	bsr	id_gluemon
-	beq.w	.gluemon
-
-	bsr	id_pretracker
-	beq.w	.pretracker
-
-	bsr	id_custommade
-	beq.w	.custommade
-
-	bsr.w	id_sonicarranger
-	beq.w	.sonicarranger
-
-	bsr.w	id_player
-	beq.w	.player
-
+;	bsr		id_digitalmugician
+;	beq.w	.digitalmugician
+;
+;	bsr.w	id_gamemusiccreator
+;	beq.w	.gamemusiccreator
+;
+;	bsr	id_medley
+;	beq.w	.medley
+;
+;	bsr	id_bendaglish
+;	beq.w	.bendaglish
+;
+;	bsr	id_sidmon2
+;	beq.w	.sidmon2
+;
+;	bsr	id_deltamusic1
+;	beq.w	.deltamusic1
+;
+;	bsr	id_soundfx
+;	beq.w	.soundfx
+;
+;	bsr	id_gluemon
+;	beq.w	.gluemon
+;
+;	bsr	id_pretracker
+;	beq.w	.pretracker
+;
+;	bsr	id_custommade
+;	beq.w	.custommade
+;
+;	bsr.w	id_sonicarranger
+;	beq.w	.sonicarranger
+;
+;	bsr.w	id_player
+;	beq.w	.player
+;
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
-	beq.w	.player	
+	beq.w	.player
 	
 .mp
 	bsr.w	id_ps3m		
@@ -25497,7 +25443,8 @@ tutki_moduuli
 	moveq	#lod_tuntematon,d0
 	rts	
 
-.ex	bsr.w	tee_modnimi
+.ex	
+; bsr.w	tee_modnimi
 .ex2	
 	cmp	#pt_prot,playertype(a5)
 	beq.b	.wew
@@ -25515,15 +25462,15 @@ tutki_moduuli
 	moveq	#0,d0
 	rts
 
-
-.nimitalteen
-	move.l	moduleaddress(a5),a1
-.nimitalteen2
-	lea	modulename(a5),a0
-.co	move.b	(a1)+,(a0)+
-	dbeq	d0,.co
-	clr.b	(a0)
-	bra.b	.ex2
+;
+;.nimitalteen
+;	move.l	moduleaddress(a5),a1
+;.nimitalteen2
+;	lea	modulename(a5),a0
+;.co	move.b	(a1)+,(a0)+
+;	dbeq	d0,.co
+;	clr.b	(a0)
+;	bra.b	.ex2
 
 .oldst	st	oldst(a5)
 	bsr.w	convert_oldst
@@ -25533,8 +25480,10 @@ tutki_moduuli
 .pro	clr.b	oldst(a5)
 .pro0	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
-	moveq	#20-1,d0
-	bra.b	.nimitalteen
+	;moveq	#20-1,d0
+	;bra.b	.nimitalteen
+	bsr	copyNameFromModule
+	bra	.ex2
 
 
 .multi	pushpea	p_multi(pc),playerbase(a5)
@@ -25567,92 +25516,92 @@ tutki_moduuli
 	bra.w	.ex2
 
 
+;
+;.jam	pushpea	p_jamcracker(pC),playerbase(a5)
+;	move	#pt_jamcracker,playertype(a5)
+;	bra.w	.ex
 
-.jam	pushpea	p_jamcracker(pC),playerbase(a5)
-	move	#pt_jamcracker,playertype(a5)
-	bra.w	.ex
+;.soundmon
+;	pushpea	p_soundmon(pc),playerbase(a5)
+;	move	#pt_soundmon2,playertype(a5)
+;	moveq	#25-1,d0
+;	bra.w	.nimitalteen
 
-.soundmon
-	pushpea	p_soundmon(pc),playerbase(a5)
-	move	#pt_soundmon2,playertype(a5)
-	moveq	#25-1,d0
-	bra.w	.nimitalteen
-
-.soundmon3
-	pushpea	p_soundmon3(pc),playerbase(a5)
-	move	#pt_soundmon3,playertype(a5)
-	moveq	#25-1,d0
-	bra.w	.nimitalteen
+;.soundmon3
+;	pushpea	p_soundmon3(pc),playerbase(a5)
+;	move	#pt_soundmon3,playertype(a5)
+;	moveq	#25-1,d0
+;	bra.w	.nimitalteen
 
 
-.future13
-	pushpea	p_futurecomposer13(pc),playerbase(a5)
-	move	#pt_future10,playertype(a5)
-	bra.w	.ex
+;.future13
+;	pushpea	p_futurecomposer13(pc),playerbase(a5)
+;	move	#pt_future10,playertype(a5)
+;	bra.w	.ex
+;
+;.future14
+;	pushpea	p_futurecomposer14(pc),playerbase(a5)
+;	move	#pt_future14,playertype(a5)
+;	bra.w	.ex
+;
+;.deltamusic
+;	pushpea	p_deltamusic(pc),playerbase(a5)
+;	move	#pt_delta2,playertype(a5)
+;	bra.w	.ex
+;
+;.musicassembler
+;	pushpea	p_musicassembler(pc),playerbase(a5)
+;	move	#pt_musicass,playertype(a5)
+;	bra.w	.ex
+;
+;.fred	
+;	move	d5,maxsongs(a5)
+;	pushpea	p_fred(pc),playerbase(a5)
+;	move	#pt_fred,playertype(a5)
+;	bra.w	.ex
+;
+;.sonicarranger
+;	pushpea	p_sonicarranger(pc),playerbase(a5)
+;	move	#pt_sonicarranger,playertype(a5)
+;	bra.w	.ex
 
-.future14
-	pushpea	p_futurecomposer14(pc),playerbase(a5)
-	move	#pt_future14,playertype(a5)
-	bra.w	.ex
-
-.deltamusic
-	pushpea	p_deltamusic(pc),playerbase(a5)
-	move	#pt_delta2,playertype(a5)
-	bra.w	.ex
-
-.musicassembler
-	pushpea	p_musicassembler(pc),playerbase(a5)
-	move	#pt_musicass,playertype(a5)
-	bra.w	.ex
-
-.fred	
-	move	d5,maxsongs(a5)
-	pushpea	p_fred(pc),playerbase(a5)
-	move	#pt_fred,playertype(a5)
-	bra.w	.ex
-
-.sonicarranger
-	pushpea	p_sonicarranger(pc),playerbase(a5)
-	move	#pt_sonicarranger,playertype(a5)
-	bra.w	.ex
-
-.sidmon1
-	movem.l	d1/d2,sid10init
-	pushpea	p_sidmon1(pC),playerbase(a5)
-	move	#pt_sidmon1,playertype(a5)
-	bra.w	.ex
-
+;.sidmon1
+;	movem.l	d1/d2,sid10init
+;	pushpea	p_sidmon1(pC),playerbase(a5)
+;	move	#pt_sidmon1,playertype(a5)
+;	bra.w	.ex
+;
 .player
 	pushpea	p_player(pc),playerbase(a5)
 	move	#pt_player,playertype(a5)
 	bra.w	.ex
+;
+;.oktalyzer
+;	pushpea	p_oktalyzer(pc),playerbase(a5)
+;	move	#pt_oktalyzer,playertype(a5)
+;	bra.w	.ex
 
-.oktalyzer
-	pushpea	p_oktalyzer(pc),playerbase(a5)
-	move	#pt_oktalyzer,playertype(a5)
-	bra.w	.ex
 
+;.med	pushpea	p_med(pc),playerbase(a5)
+;	move	#pt_med,playertype(a5)
+;	clr.b	medrelocced(a5)
+;	bra.w	.ex
+;
+;.markii	pushpea	p_markii(pc),playerbase(a5)
+;	move	#pt_markii,playertype(a5)
+;	bra.w	.ex
+;	
+;
+;.mon	move	d5,maxsongs(a5)
+;	pushpea	p_mon(pc),playerbase(a5)
+;	move	#pt_mon,playertype(a5)
+;	bra.w	.ex
 
-.med	pushpea	p_med(pc),playerbase(a5)
-	move	#pt_med,playertype(a5)
-	clr.b	medrelocced(a5)
-	bra.w	.ex
-
-.markii	pushpea	p_markii(pc),playerbase(a5)
-	move	#pt_markii,playertype(a5)
-	bra.w	.ex
-	
-
-.mon	move	d5,maxsongs(a5)
-	pushpea	p_mon(pc),playerbase(a5)
-	move	#pt_mon,playertype(a5)
-	bra.w	.ex
-
-.dw	move	d5,maxsongs(a5)
-	move.l	d6,whittaker_end
-	pushpea	p_dw(pc),playerbase(a5)
-	move	#pt_dw,playertype(a5)
-	bra.w	.ex
+;.dw	move	d5,maxsongs(a5)
+;	move.l	d6,whittaker_end
+;	pushpea	p_dw(pc),playerbase(a5)
+;	move	#pt_dw,playertype(a5)
+;	bra.w	.ex
 
 .hippelcoso
 	move	d5,maxsongs(a5)
@@ -25660,81 +25609,81 @@ tutki_moduuli
 	move	#pt_hippelcoso,playertype(a5)
 	bra.w	.ex
 
-.hippel
-	move	d5,maxsongs(a5)
-	move.l	d4,hippelmusic
-	pushpea	p_hippel(pc),playerbase(a5)
-	move	#pt_hippel,playertype(a5)
-	bra.w	.ex
+;.hippel
+;	move	d5,maxsongs(a5)
+;	move.l	d4,hippelmusic
+;	pushpea	p_hippel(pc),playerbase(a5)
+;	move	#pt_hippel,playertype(a5)
+;	bra.w	.ex
 
 
-.digibooster
-	pushpea	p_digibooster(pc),playerbase(a5)
-	move	#pt_digibooster,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
-	lea	610(a4),a1
-	moveq	#30-1,d0
-	bra.w	.nimitalteen2
+;.digibooster
+;	pushpea	p_digibooster(pc),playerbase(a5)
+;	move	#pt_digibooster,playertype(a5)
+;	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+;	lea	610(a4),a1
+;	moveq	#30-1,d0
+;	bra.w	.nimitalteen2
 
+;
+;.digiboosterpro
+;	pushpea	p_digiboosterpro(pc),playerbase(a5)
+;	move	#pt_digiboosterpro,playertype(a5)
+;	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+;	lea	16(a4),a1
+;	moveq	#42-1,d0
+;	bra.w	.nimitalteen2
+;
 
-.digiboosterpro
-	pushpea	p_digiboosterpro(pc),playerbase(a5)
-	move	#pt_digiboosterpro,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
-	lea	16(a4),a1
-	moveq	#42-1,d0
-	bra.w	.nimitalteen2
+;.thx
+;	pushpea	p_thx(pc),playerbase(a5)
+;	move	#pt_thx,playertype(a5)
+;	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+;
+;	move.l	moduleaddress(a5),a1
+;	add	4(a1),a1		* modulename
+;	moveq	#25-1,d0
+;	bra.w	.nimitalteen2
 
+;.mline
+;	pushpea	p_mline(pc),playerbase(a5)
+;	move	#pt_mline,playertype(a5)
+;	bra.w	.ex
 
-.thx
-	pushpea	p_thx(pc),playerbase(a5)
-	move	#pt_thx,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+;.aon
+;	pushpea	p_aon(pc),playerbase(a5)
+;	move	#pt_aon,playertype(a5)
+;	bra.w	.ex
 
-	move.l	moduleaddress(a5),a1
-	add	4(a1),a1		* modulename
-	moveq	#25-1,d0
-	bra.w	.nimitalteen2
+;.pumatracker
+;	pushpea	p_pumatracker(pc),playerbase(a5)
+;	move	#pt_pumatracker,playertype(a5)
+;	moveq	#12-1,d0
+;	bra.w	.nimitalteen
 
-.mline
-	pushpea	p_mline(pc),playerbase(a5)
-	move	#pt_mline,playertype(a5)
-	bra.w	.ex
-
-.aon
-	pushpea	p_aon(pc),playerbase(a5)
-	move	#pt_aon,playertype(a5)
-	bra.w	.ex
-
-.pumatracker
-	pushpea	p_pumatracker(pc),playerbase(a5)
-	move	#pt_pumatracker,playertype(a5)
-	moveq	#12-1,d0
-	bra.w	.nimitalteen
-
-.beathoven
-	pushpea	p_beathoven(pc),playerbase(a5)
-	move	#pt_beathoven,playertype(a5)
-	move.l	moduleaddress(a5),a1
-	move.l	$20+36(a1),a1
-	moveq	#30-1,d0
-	bra.w	.nimitalteen2
-
-.gamemusiccreator
-	pushpea	p_gamemusiccreator(pc),playerbase(a5)
-	move	#pt_gamemusiccreator,playertype(a5)
-	bra.w	.ex
-
-.digitalmugician
-	pushpea	p_digitalmugician(pc),playerbase(a5)
-	move	#pt_digitalmugician,playertype(a5)
-	bra.w	.ex
-
-.medley
-	pushpea	p_medley(pc),playerbase(a5)
-	move	#pt_medley,playertype(a5)
-	bra.w	.ex
-
+;.beathoven
+;	pushpea	p_beathoven(pc),playerbase(a5)
+;	move	#pt_beathoven,playertype(a5)
+;	move.l	moduleaddress(a5),a1
+;	move.l	$20+36(a1),a1
+;	moveq	#30-1,d0
+;	bra.w	.nimitalteen2
+;
+;.gamemusiccreator
+;	pushpea	p_gamemusiccreator(pc),playerbase(a5)
+;	move	#pt_gamemusiccreator,playertype(a5)
+;	bra.w	.ex
+;
+;.digitalmugician
+;	pushpea	p_digitalmugician(pc),playerbase(a5)
+;	move	#pt_digitalmugician,playertype(a5)
+;	bra.w	.ex
+;
+;.medley
+;	pushpea	p_medley(pc),playerbase(a5)
+;	move	#pt_medley,playertype(a5)
+;	bra.w	.ex
+;
 .delicustom
 	pushpea	p_delicustom(pc),playerbase(a5)
 	move	#pt_delicustom,playertype(a5)
@@ -25750,64 +25699,64 @@ tutki_moduuli
 	move	#pt_davelowe,playertype(a5)
 	bra.w	.ex
 
-.bendaglish
-	pushpea	p_bendaglish(pc),playerbase(a5)
-	move	#pt_bendaglish,playertype(a5)
-	bra.w	.ex
+;.bendaglish
+;	pushpea	p_bendaglish(pc),playerbase(a5)
+;	move	#pt_bendaglish,playertype(a5)
+;	bra.w	.ex
+;
+;.sidmon2
+;	pushpea	p_sidmon2(pc),playerbase(a5)
+;	move	#pt_sidmon2,playertype(a5)
+;	bra.w	.ex
+;
+;.deltamusic1
+;	pushpea	p_deltamusic1(pc),playerbase(a5)
+;	move	#pt_deltamusic1,playertype(a5)
+;	bra.w	.ex
+;
+;.soundfx
+;	pushpea	p_soundfx(pc),playerbase(a5)
+;	move	#pt_soundfx,playertype(a5)
+;	bra.w	.ex
+;
+;.gluemon
+;	pushpea	p_gluemon(pc),playerbase(a5)
+;	move	#pt_gluemon,playertype(a5)
+;	bra.w	.ex
 
-.sidmon2
-	pushpea	p_sidmon2(pc),playerbase(a5)
-	move	#pt_sidmon2,playertype(a5)
-	bra.w	.ex
+;.pretracker
+;	pushpea	p_pretracker(pc),playerbase(a5)
+;	move	#pt_pretracker,playertype(a5)
+;	lea	$14(a4),a1
+;	moveq	#20-1,d0
+;	bra.w	.nimitalteen2
+;
+;.custommade
+;	pushpea	p_custommade(pc),playerbase(a5)
+;	move	#pt_custommade,playertype(a5)
+;	bra.w	.ex
+;
+;.synthesis
+;	pushpea	p_synthesis(pc),playerbase(a5)
+;	move	#pt_synthesis,playertype(a5)
+;	bra.w	.ex
 
-.deltamusic1
-	pushpea	p_deltamusic1(pc),playerbase(a5)
-	move	#pt_deltamusic1,playertype(a5)
-	bra.w	.ex
-
-.soundfx
-	pushpea	p_soundfx(pc),playerbase(a5)
-	move	#pt_soundfx,playertype(a5)
-	bra.w	.ex
-
-.gluemon
-	pushpea	p_gluemon(pc),playerbase(a5)
-	move	#pt_gluemon,playertype(a5)
-	bra.w	.ex
-
-.pretracker
-	pushpea	p_pretracker(pc),playerbase(a5)
-	move	#pt_pretracker,playertype(a5)
-	lea	$14(a4),a1
-	moveq	#20-1,d0
-	bra.w	.nimitalteen2
-
-.custommade
-	pushpea	p_custommade(pc),playerbase(a5)
-	move	#pt_custommade,playertype(a5)
-	bra.w	.ex
-
-.synthesis
-	pushpea	p_synthesis(pc),playerbase(a5)
-	move	#pt_synthesis,playertype(a5)
-	bra.w	.ex
-
-.syntracker
-	pushpea	p_syntracker(pc),playerbase(a5)
-	move	#pt_syntracker,playertype(a5)
-	bra.w	.ex
-
-.chiptracker
-	pushpea	p_chiptracker(pc),playerbase(a5)
-	move	#pt_chiptracker,playertype(a5)
-	bra.w	.ex
+;.syntracker
+;	pushpea	p_syntracker(pc),playerbase(a5)
+;	move	#pt_syntracker,playertype(a5)
+;	bra.w	.ex
+;
+;.chiptracker
+;	pushpea	p_chiptracker(pc),playerbase(a5)
+;	move	#pt_chiptracker,playertype(a5)
+;	bra.w	.ex
 
 
-.robhubbard2
-	pushpea	p_robhubbard2(pc),playerbase(a5)
-	move	#pt_robhubbard2,playertype(a5)
-	bra.w	.ex
-
+;.robhubbard2
+;	pushpea	p_robhubbard2(pc),playerbase(a5)
+;	move	#pt_robhubbard2,playertype(a5)
+;	bra.w	.ex
+;
 
 **** Oliko  sample??
 .sample
@@ -25946,6 +25895,67 @@ tutki_moduuli
 .tfmxid		dc.b	"mdat",0
  even
 
+
+idtest	beq.b	.y
+	moveq	#-1,d0
+	rts
+.y	moveq	#0,d0
+	rts
+
+* in:
+*   a3 = array of formats
+* out:
+*   d0 = 0 if some format accepted the module, ~0 otherwise
+identifyFormatsOnly
+	* Flag: only identify, do not grab data
+	moveq	#1,d1
+	bra.b 	doIdentifyFormats
+identifyFormats
+	* Flag: identify and grab module name and type
+	moveq	#0,d1
+	clr.b	modulename(a5)
+doIdentifyFormats
+.loop 
+	tst.l	(a3)
+	beq.b	.notFound
+	move.l	(a3),a0
+	pushpea	p_name(a0),d0
+	DPRINT	"id %s",1
+	pushm	all
+	jsr	p_id(a0)
+	popm 	all
+	beq.b 	.found
+	addq	#8,a3
+	bra.b	.loop
+.found
+	tst.b	d1 
+	bne.b 	.nameOk
+
+	move.l	(a3),a0
+	move.l	a0,playerbase(a5)
+	move	p_type(a0),playertype(a5)
+	
+	tst.b	modulename(a5)
+	bne.b 	.nameOk 
+	* Name was not provided by identifiers, make one
+	bsr.w	tee_modnimi
+.nameOk
+	moveq	#0,d0
+	rts
+.notFound
+	moveq	#-1,d0 
+	rts
+
+
+copyNameFromModule
+	move.l	moduleaddress(a5),a1
+copyNameFromA1
+	lea	modulename(a5),a0
+.co	move.b	(a1)+,(a0)+
+	dbeq	d0,.co
+	clr.b	(a0)
+	rts 
+	
 *******************************************************************
 * Formaattien tunnistusrutiinit
 *
@@ -28662,7 +28672,16 @@ init_sidpatch
 * Tunnistetaan SID piisit
 *******
 
-id_sid1
+id_sid1 
+	bsr.b	id_sid1_
+	bne.b 	.no
+	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	moveq	#0,d0 
+.no 
+	rts
+
+
+id_sid1_
 	cmp.l	#"PSID",(a4)
 	beq.b	.q
 	moveq	#-1,d0
@@ -29107,9 +29126,15 @@ p_soundmon
 	jmp	2158(a0)
 
 
+id_soundmon 
+	bsr.b 	id_soundmon_
+	bne.b 	.x 
+	moveq	#25-1,d0
+	bsr		copyNameFromModule
+	moveq	#0,d0
+.x	rts
 
-
-id_soundmon
+id_soundmon_
 	move.l	26(a4),d0		* Soundmon
 	lsr.l	#8,d0
 	cmp.l	#'V.2',d0
@@ -29195,7 +29220,16 @@ p_soundmon3
 	move.l	bpsmroutines(a5),a0
 	jmp	8+$20(a0)
 
-id_soundmon3
+
+id_soundmon3 
+	bsr.b 	id_soundmon3_
+	bne.b 	.x 
+	moveq	#25-1,d0
+	bsr		copyNameFromModule
+	moveq	#0,d0
+.x	rts
+
+id_soundmon3_
 	move.l	26(a4),d0		* Soundmon
 	lsr.l	#8,d0
 	cmp.l	#'V.3',d0
@@ -30821,15 +30855,19 @@ p_med	jmp	.medinit(pc)
 	bsr.w	.medend
 	bra.w	.medinit
 
-id_med	move.l	(a4),d0			* MED
+id_med 	
+	bsr.b id_med_ 
+	bne.b	.x 
+	clr.b	medrelocced(a5)
+.x	rts
+
+id_med_
+
+	move.l	(a4),d0			* MED
 	lsr.l	#8,d0
 	cmp.l	#'MMD',d0
+	bra	idtest
 
-idtest	beq.b	.y
-	moveq	#-1,d0
-	rts
-.y	moveq	#0,d0
-	rts
 
 
 
@@ -31126,6 +31164,13 @@ p_mon	jmp	.moninit(pc)
 
 
 id_maniacsofnoise
+	bsr.b 	id_maniacsofnoise_
+	bne.b 	.not 
+	move	d5,maxsongs(a5)
+	moveq	#0,d0
+.not rts 
+
+id_maniacsofnoise_
 * d5 => max songs
 
 	move.l	a4,a0
@@ -31240,9 +31285,15 @@ whittaker_end	dc.l	0
 
 
 
-
-
 id_davidwhittaker
+	bsr.b 	id_davidwhittaker_
+	bne.b 	.x 
+	move	d5,maxsongs(a5)
+	move.l	d6,whittaker_end
+	moveq	#0,d0
+.x	rts
+
+id_davidwhittaker_
 * d5 => maxsongs
 * d6 => whittaker_end
 
@@ -31487,12 +31538,17 @@ p_hippelcoso
 
 
 
-
+id_hippelcoso 
+	bsr.b 	id_hippelcoso_
+	bne.b .x 
+	move	d5,maxsongs(a5)
+	moveq	#0,d0 
+.x 	rts
 
 
 ; Testet, ob es sich um ein Hippel-COSO-Modul handelt
 
-id_hippelcoso
+id_hippelcoso_
 * d5 => max songs
 
 ;	move.l	dtg_ChkData(a5),a0		; ^module
@@ -31630,9 +31686,17 @@ hippelmusic	dc.l	0
 
 
 
+id_hippel 
+	bsr.b 	id_hippel_
+	bne.b .x 
+	move.l	d4,hippelmusic
+	move	d5,maxsongs(a5)
+	moveq	#0,d0 
+.x 	rts
 
 
-id_hippel
+
+id_hippel_
 * d7 <= modlen
 * a4 <= mod
 * d4 => hippel music 
@@ -31936,8 +32000,17 @@ p_digibooster
 	bra.w	vapauta_kanavat
 
 
-
 id_digibooster
+	bsr.b 	id_digibooster_
+	bne.b 	.x 
+	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	lea	610(a4),a1
+	moveq	#30-1,d0
+	bsr		copyNameFromA1
+	moveq	#0,d0
+.x 	rts
+
+id_digibooster_
 	cmp.l	#'DIGI',(a4)
 	bne.b	.nd
 	cmp.l	#' Boo',4(a4)
@@ -32076,7 +32149,19 @@ p_digiboosterpro
 .ordn	dc.l	0
 .pattpos dc.l	0
 
+
 id_digiboosterpro
+	bsr.b 	id_digiboosterpro_
+	bne.b 	.x 
+	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	move.l	moduleaddress(a5),a1
+	lea	16(a4),a1
+	moveq	#42-1,d0	
+	bsr		copyNameFromA1
+	moveq	#0,d0
+.x 	rts
+
+id_digiboosterpro_
 	cmp.l	#'DBM0',(a4)
 	bra.w	idtest
 
@@ -32301,9 +32386,17 @@ p_thx
 	bra.w	clearsound
 
 
+id_thx 
+	bsr.b id_thx_
+	bne.b .x 
+	move.l	moduleaddress(a5),a1
+	add	4(a1),a1		* modulename
+	moveq	#25-1,d0
+	bsr	copyNameFromA1
+	moveq	#0,d0
+.x 	rts
 
-
-id_thx
+id_thx_
 	move.l	(a4),d0			* THX
 	lsr.l	#8,d0
 	cmp.l	#"THX",d0
@@ -33125,7 +33218,15 @@ p_pumatracker
 	bra.w	clearsound
 
 
-id_pumatracker
+id_pumatracker 
+	bsr.b id_pumatracker_
+	bne.b .x 
+	moveq	#12-1,d0
+	bsr		copyNameFromModule
+	moveq	#0,d0
+.x 	rts
+
+id_pumatracker_
 	* test some attributes
 	* positive song length
 	tst		$c(a4)
@@ -33277,11 +33378,20 @@ p_beathoven
 	bsr.w	.doInit
 	rts
 
+id_beathoven
+	bsr.b id_beathoven_
+	bne.b .x 
+	move.l	moduleaddress(a5),a1
+	move.l	$20+36(a1),a1
+	moveq	#30-1,d0
+	bsr	copyNameFromA1
+.x 	rts
+
 * in: a4 = module
 * out: 
 *   d0 = 0, is beathoven
 *   do = -1, is not beathoven
-id_beathoven
+id_beathoven_
     * these seem to be executables, so check for hunk
     cmp.l   #$3f3,(a4)
     bne.b   .notBeat
@@ -34830,12 +34940,20 @@ p_pretracker
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
+id_pretracker 
+	bsr.b 	id_pretracker_
+	bne.b .x
+	lea	$14(a4),a1
+	moveq	#20-1,d0
+	bsr	copyNameFromA1
+	moveq	#0,d0
+.x  rts
 
 ; in: a4 = module
 ;     d7 = module length
 ; out: d0 = 0, valid valid
 ;      d0 = -1, not valid
-id_pretracker
+id_pretracker_
 	move.l	(a4),d0
 	lsr.l	#8,d0
 	cmp.l	#"PRT",d0
