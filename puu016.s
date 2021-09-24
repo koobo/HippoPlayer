@@ -1266,6 +1266,7 @@ pt_synthesis	rs.b 	1
 pt_syntracker	rs.b  	1
 pt_robhubbard2 	rs.b 	1
 pt_chiptracker	rs.b	1
+pt_quartet		rs.b    1
 
 * player group version
 xpl_versio	=	21
@@ -25001,6 +25002,7 @@ eagleFormats
 	dc.l	p_syntracker
 	dc.l	p_robhubbard2
 	dc.l	p_chiptracker
+	dc.l	p_quartet
 	dc.l 	0	
 
 *******
@@ -27369,7 +27371,7 @@ are
 	;move.l	#$5371a26,d0
 	;add.l	d0,(a0)
 	;sub.l	d0,4(a0)
-	bsr.w	fimp_decr
+	jsr	fimp_decr
 
 	* see if it needs to be relocated
 	move.l	(a3),a0
@@ -35241,6 +35243,80 @@ id_davelowe
 	rts
 
 
+
+
+******************************************************************************
+* Quartet
+******************************************************************************
+
+p_quartet
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_chiptracker 
+ dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse	
+	dc.b	"Quartet             (EP)",0
+
+.path dc.b "quartet",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+.error	popm	d1-a6
+	rts
+
+.id
+
+Check2
+	move.l	a4,a0
+        cmp.b   #$50,1(A0)
+        bne.b   .Fault
+        cmp.b   #30,(A0)
+        bhi.b   .Fault
+        moveq   #0,D1
+        move.b  (A0),D1
+        beq.b   .Fault
+        move.l  #3000,D2                        ; max. tempo
+        divu.w  D1,D2
+        swap    D2
+        tst.w   D2
+        bne.b   .Fault
+     move.l  d7,D2
+        bclr    #0,D2
+        add.l   D2,A0
+        moveq   #15,D2
+        moveq   #-1,D3
+.NextEnd
+        move.w  -(A0),D1
+        beq.b   .Zero
+        cmp.w   D3,D1
+        beq.b   .CheckEnd
+.Fault
+        moveq   #-1,D0
+        rts
+.Zero
+        dbf     D2,.NextEnd
+        bra.b   .Fault
+.CheckEnd
+        cmp.l   -2(A0),D3
+        bne.b   .Fault
+        cmp.l   -6(A0),D3
+        bne.b   .Fault
+        moveq   #0,D0
+	rts
+
 ******************************************************************************
 * Deli/eagle support
 ******************************************************************************
@@ -35474,12 +35550,14 @@ deliInit
 	move.l	d0,a0 
 	move.l	a4,(a0)
 .noDBTag
+
 	move.l	#EP_EagleBase,d0
 	bsr	deliGetTag
 	beq.b	.noEBTag
 	move.l	d0,a0 
 	move.l	a4,(a0)
 .noEBTag
+
 	move.l	#DTP_Config,d0  
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
@@ -35510,7 +35588,6 @@ deliInit
 	tst.l	d0
 	bne.w	.error
 .noExtLoad
-
 
 	move.l	#DTP_InitPlayer,d0  
 	bsr.w	deliGetTag
@@ -36087,15 +36164,16 @@ deliCopyDir
  endif
 	moveq	#0,d0
 	rts
-deliLoadFile move.l  a0,d0
+deliLoadFile
  if DEBUG
-	move.l	deliPathArray+var_b,d1
-	DPRINT	"loadFile '%s' path='%s'",109
+	move.l	deliPathArray+var_b,d0
+	DPRINT	"loadFile '%s'",109
  endif
 	pushm	d1-a6
 	lea 	var_b,a5
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
-	lea	    deliGetListDataData(a5),a1 
+	move.l	deliPathArray+var_b,a0
+	lea	deliGetListDataData(a5),a1 
 	lea 	deliGetListDataLength(a5),a2
 	bsr	loadfile
  if DEBUG
@@ -36111,7 +36189,13 @@ deliLoadFile move.l  a0,d0
 * Returns the last loaded file,
 * eg with dtg_LoadFile
 deliGetListData 
-	DPRINT	"getListData %d",110
+	DPRINT	"getListData %ld",110
+	tst.l	d0 
+	beq.b	.first
+	move.l	deliGetListDataData+var_b,a0 
+	move.l	deliGetListDataLength+var_b,d0
+	rts
+.first
 	move.l	moduleaddress+var_b,a0
 	move.l	modulelength+var_b,d0
 	rts
@@ -36637,28 +36721,28 @@ deliShowTags
 	move.l	16(a0),a0
 .tloop
 	movem.l	(a0)+,d0/d1
-	
-	sub.l	#DTP_TagBase,d0
-	lsl.l	#2,d0
+
+	move.l	d0,d2
+	sub.l	#DTP_TagBase,d2
+	bmi.b	.next
+	lsl.l	#2,d2
 	lea	tagsTable(pc),a1
-	add.l	d0,a1
-	lsr.l	#2,d0
-	add.l	#DTP_TagBase,d0
-	
+	add.l	d2,a1
+
 	cmp.l	#tagsTableEnd,a1
 	blo.b 	.okTag
-
-	sub.l	#EP_TagBase,d0
-	lsl.l	#2,d0
+.next
+	move.l	d0,d2
+	sub.l	#EP_TagBase,d2
+	bmi.b	.unknown
+	lsl.l	#2,d2
 	lea	tagsTable2(pc),a1
-	add.l	d0,a1
-	lsr.l	#2,d0
-	add.l	#EP_TagBase,d0
+	add.l	d2,a1
 	
-	cmp.l	#tagsTable2End,a1
-	blo.b 	.okTag
-
-	DPRINT  "Tag %lx: %lx",2002
+	cmp.l	#tagsTable2,a1
+	bhs.b	.okTag
+.unknown
+	DPRINT  "Tag? %lx: %lx",2002
 	bra.b	.oddTag
 .okTag
 	move.l	d1,d2
