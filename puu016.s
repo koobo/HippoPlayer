@@ -1154,6 +1154,23 @@ moduleListChanged	rs.b		1
 
 kplbase	rs.b	k_sizeof		* KPlayerin muuttujat (ProTracker)
 
+*** Deli support data
+* Dynamically allocated:
+deliBase	rs.l 	1
+* LoadSeg() data 
+deliPlayer	rs.l	1
+* Type of player which was loaded
+deliPlayerType	rs.w	1
+* Data loaded with *_LoadFile
+deliGetListDataData	rs.l 1
+deliGetListDataLength 	rs.l 1
+* Some tag data for faster access
+deliStoredInterrupt	rs.l	1
+deliStoredSetVolume	rs.l 	1
+deliStoredSetVoices rs.l	1
+deliStoredNoteStruct rs.l 	1
+deliPath		rs.l	1
+deliPathArray		rs.l	1	
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -5536,24 +5553,24 @@ freemodule
 	movem.l	d0-a6,-(sp)
 
 	DPRINT	"freemodule obtain data",1
-	bsr.w		obtainModuleData
+	bsr.w	obtainModuleData
 
 	* Check if need to do UnLoadSeg
-	bsr		moduleIsExecutable
+	bsr	moduleIsExecutable
 	move.b	d0,d7
 	
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
     * that UnLoadSeg() is needed.
 
-	clr		playertype(a5)
+	clr	playertype(a5)
 	clr.b	modulename(a5)
 	clr.b	moduletype(a5)
 	clr.b	kelausnappi(a5)
 	clr.b	do_early(a5)
 	clr.b	oldst(a5)
 	clr.b	sidflag(a5)
-	clr		ps3minitcount
+	clr	ps3minitcount
 	clr.b	ahi_use_nyt(a5)
 
 	clr	pos_maksimi(a5)
@@ -5569,7 +5586,8 @@ freemodule
 	* with different labels
 	lea	ps3mroutines(a5),a0		* vapautetaan replayeri
 	jsr	freereplayer
-
+	jsr	freeDeliPlayer
+	
 	move.l	(a5),a6
 	move.l	moduleaddress(a5),d0
 	beq.b	.ee
@@ -5611,6 +5629,8 @@ freemodule
 	clr.l	tfmxsamplesaddr(a5)
 	clr.l	tfmxsampleslen(a5)
 	clr.b	lod_tfmx(a5)
+
+	jsr	freeDeliLoadedFile
 
 	DPRINT	"freemodule release data",4
 	bsr.w	releaseModuleData
@@ -19571,7 +19591,8 @@ init_error
 	dr	ier_nomled_t
 	dr	ier_mlederr_t
 	dr	ier_not_compatible_t
-
+	dr	ier_eagleplayer_t
+	
 ier_error	=	-1
 ier_nochannels	=	-2
 ier_nociaints	=	-3
@@ -19594,6 +19615,7 @@ ier_ahi		=	-19
 ier_nomled	=	-20
 ier_mlederr	=	-21
 ier_not_compatible = 	-22
+ier_eagleplayer	= 	-23
 
 ;hardware_t
 ier_playererr_t
@@ -19628,6 +19650,8 @@ hardware_t	dc.b "68020 or better required!",0
 ahi_t	dc.b	"AHI device error!",0
 ier_not_compatible_t
 	dc.b	"Unsupported module type!",0
+ier_eagleplayer_t
+	dc.b	"Couldn't load eagleplayer!",0
  even
 
 
@@ -33486,13 +33510,13 @@ id_digitalmugician
 
 p_delicustom
 	jmp	.init(pc)
-	jmp	.play(pc)
+	jmp	deliPlay(pc)
 	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	jmp	.cont(pc)
-	dc.l	$4e754e75
-	jmp	.song(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc.l	$4e754e75
@@ -33501,34 +33525,10 @@ p_delicustom
  even
 
 .init
-	pushm	d1-a6	
 	move.l	moduleaddress(a5),a0
 	add.l	a0,a0
 	add.l 	a0,a0
 	bsr	deliInit
-	popm	d1-a6
-	rts
-
-
-* Interrupt play routine, use cached pointers to avoid tag searches
-.play
-	bsr	deliPlay
-	rts
-.end
-	bsr	deliEnd
-	rts
-.song
-	bsr	deliSong
-	rts
-
-* Not sure what exactly should be done with these two.
-* Seems to work more or less.
-.stop
-	bsr	deliStop
-	rts
-
-.cont
-	bsr	deliCont
 	rts
 
 id_delicustom
@@ -33581,59 +33581,28 @@ id_delicustom
 
 p_synthesis
 	jmp	.init(pc)
-	jmp	.play(pc)
+	jmp	deliPlay(pc)
 	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	jmp	.cont(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
-	dc.b	"Synthesis",0
- even
-.path dc.b "sys:c/eagleplayer2/eagleplayers/synth 4.0",0
- even
-.dp 	dc.l 	0
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_song
+	dc.b	"Synthesis           (EP)",0
 
-.init
-	pushm	d1-a6	
+.path dc.b "synth 4.0",0
+ even
 
-	tst.l	.dp 
-	bne.b	.loaded
-	move.l	#.path,d1
-	lore 	Dos,LoadSeg
-	move.l	d0,.dp
-	bne.b	.loaded
-	moveq	#ier_unknown,d0
-	bra	.error
-.loaded
-	move.l	.dp(pc),d0
-	lsl.l	#2,d0
-	move.l	d0,a0
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
 	bsr	deliInit
-	tst.l	d0
-	beq.b	.error
-	bsr	deliPlay
-.error
-	popm	d1-a6
-	rts
-
-* Interrupt play routine, use cached pointers to avoid tag searches
-.play
-	bsr	deliPlay
-	rts
-.end	
-	bsr	deliStop
-	bsr	deliEnd
-	rts
-.stop
-	bsr	deliStop
-	rts
-.cont
-	bsr	deliCont
+.error	popm	d1-a6
 	rts
 
 id_synthesis
@@ -33642,7 +33611,6 @@ id_synthesis
 	rts
 .c
 .lbC0003C8	
-	;MOVE.L	$24(A5),A0
 	move.l	a4,a0 
 	MOVEQ	#1,D0
 	CMP.L	#$53796E74,(A0)
@@ -33683,57 +33651,27 @@ id_synthesis
 
 p_syntracker
 	jmp	.init(pc)
-	jmp	.play(pc)
+	jmp	deliPlay(pc)
 	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	jmp	.cont(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
-	dc.b	"SynTracker",0
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc.b	"SynTracker          (EP)",0
+.path dc.b "syntracker",0
  even
-.path dc.b "sys:c/eagleplayer2/eagleplayers/syntracker",0
- even
-.dp 	dc.l 	0
 
-.init
-	pushm	d1-a6	
-
-	tst.l	.dp 
-	bne.b	.loaded
-	move.l	#.path,d1
-	lore 	Dos,LoadSeg
-	move.l	d0,.dp
-	bne.b	.loaded
-	moveq	#ier_unknown,d0
-	bra	.error
-.loaded
-	move.l	.dp(pc),d0
-	lsl.l	#2,d0
-	move.l	d0,a0
-
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
 	bsr	deliInit
-.error	DPRINT	"Syntracker init %ld",1
-	popm	d1-a6
-	rts
-
-* Interrupt play routine, use cached pointers to avoid tag searches
-.play
-	bsr	deliPlay
-	rts
-.end	
-	bsr	deliStop
-	bsr	deliEnd
-	rts
-.stop
-	bsr	deliStop
-	rts
-.cont
-	bsr	deliCont
+.error	popm	d1-a6
 	rts
 
 id_syntracker
@@ -33758,64 +33696,27 @@ id_syntracker
 
 p_robhubbard2
 	jmp	.init(pc)
-	jmp	.play(pc)
+	jmp	deliPlay(pc)
 	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	jmp	.cont(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
 	dc.l	$4e754e75
 	dc.l	$4e754e75
 	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
-	dc.b	"Rob Hubbard 2",0
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc.b	"Rob Hubbard 2       (EP)",0
+.path dc.b "rob hubbard 2",0
  even
-.path dc.b "sys:c/eagleplayer2/eagleplayers/rob hubbard 2",0
- even
-.dp 	dc.l 	0
 
-.init
-	pushm	d1-a6	
-
-	tst.l	.dp 
-	bne.b	.loaded
-	move.l	#.path,d1
-	lore 	Dos,LoadSeg
-	move.l	d0,.dp
-	bne.b	.loaded
-	moveq	#ier_unknown,d0
-	bra	.error
-.loaded
-	move.l	.dp(pc),d0
-	lsl.l	#2,d0
-	move.l	d0,a0
-	
-	;lea	ProgStart-4,a0
-	
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
 	bsr	deliInit
-	tst.l	d0
-	bne.b .error
-		
-	nop
-
-.error	DPRINT	"RH2 init %ld",1
-	popm	d1-a6
-	rts
-
-* Interrupt play routine, use cached pointers to avoid tag searches
-.play
-	bsr	deliPlay
-	rts
-.end	
-	bsr	deliStop
-	bsr	deliEnd
-	rts
-.stop
-	bsr	deliStop
-	rts
-.cont
-	bsr	deliCont
+.error	popm	d1-a6
 	rts
 
 ; in: a4 = module
@@ -35050,7 +34951,7 @@ id_davelowe
 
 
 ******************************************************************************
-* Deli support
+* Deli/eagle support
 ******************************************************************************
 
 * Local data
@@ -35058,6 +34959,7 @@ id_davelowe
 * - player type, to avoid reloading
 * - free player when exiting
 
+* TODO: free "loadFile" loaded data on exit
 
 * - todo: dtg_getlistdata
 
@@ -35133,24 +35035,84 @@ NSTF_32Bit 	EQU	1<<20
 NSTB_64Bit 	EQU	21	;        -"-        quadwords 
 NSTF_64Bit 	EQU	1<<21
 
-storedInterrupt	dc.l	0
-storedSetVolume	dc.l 	0
-storedSetVoices dc.l	0
-storedNoteStruct dc.l 	0
-deliPlayer	dc.l	0
-deliPlayerType	dc.w	0
-deliGetListDataData	dc.l 0
-deliGetListDataLength 	dc.l 0
+
+* in:
+*   a0: name
+* out:
+*   d0: loaded seglist or negative error code if fail
+loadDeliPlayer
+	* See if can reuse the old player
+	move	playertype(a5),d0
+	beq.b	.noMod
+	cmp	deliPlayerType(a5),d0
+	beq.b	.x
+.noMod
+	bsr.b	freeDeliPlayer
+
+	lea	-200(sp),sp
+	move.l	sp,a1
+	lea	.searchPath(pc),a2
+.path	move.b	(a2)+,(a1)+
+	bne.b	.path
+	subq	#1,a1
+.name	move.b	(a0)+,(a1)+
+	bne.b	.name
+
+	move.l	sp,d1
+ if DEBUG
+ 	move.l	d1,d0
+	DPRINT	"loadDeliPlayer %s",1
+ endif
+	lore 	Dos,LoadSeg
+	lea	200(sp),sp
+	
+	tst.l	d0
+	beq.b	.error
+	move	moduletype(a5),deliPlayerType(a5)
+	lsl.l	#2,d0
+.x
+	rts
+
+.error
+	moveq	#ier_eagleplayer,d0
+	rts	
+
+.searchPath	
+	dc.b	"eagleplayer2:eagleplayers/",0
+ even
+ 
+freeDeliPlayer
+	pushm	all
+	move.l	deliPlayer(a5),d1
+	beq.b	.x
+	lsr.l	#2,d1
+	clr.l	deliPlayer(a5)
+	clr	deliPlayerType(a5)
+	lore	Dos,UnLoadSeg
+	DPRINT	"freeDeliPlayer",1
+.x	bsr.w	freeDeliBase
+	popm	all
+	rts
+
+freeDeliLoadedFile
+	tst.l	deliGetListDataData(a5)
+	beq.b	.x
+	DPRINT	"freeDeliLoadedFile",1
+	move.l	deliGetListDataData(a5),a1
+	move.l	deliGetListDataLength(a5),d0
+	lore	Exec,FreeMem
+	clr.l	deliGetListDataData(a5)
+	clr.l	deliGetListDataLength(a5)
+.x	rts	
+
 
 * in:
 *   d0 = tag to find
 * out:
 *   d0 = tag data or NULL if not found
 deliGetTag
-	* This is a BPTR to a seglist, loaded with LoadSeg()
-	move.l	deliPlayer(pc),a0
-	;add.l	a0,a0
-	;add.l	a0,a0
+	* This is a ptr to a seglist, loaded with LoadSeg()
+	move.l	deliPlayer(a5),a0
 	* tag item array
 	move.l	16(a0),a0
 .loop
@@ -35173,20 +35135,23 @@ deliCallFunc
 	beq.b	.noFunc
 	DPRINT	"Call %lx",101
 	pushm 	d2-a6
-	lea	deliBase,a5
+	move.l	deliBase(a5),a5
 	move.l	d0,a0
 	jsr	(a0)
 	popm	d2-a6
 .noFunc rts
 
 * in:
-*  a0 = deliplayer or delucustom address from loadseg
+*  d0 = deliplayer or delicustom address from loadseg
 deliInit
 	pushm	d1-a6	
 	DPRINT	"deliInit",10
-	move.l	a0,deliPlayer
-	move	moduletype(a5),deliPlayerType
+	move.l	d0,deliPlayer(a5)
+	move	playertype(a5),deliPlayerType(a5)
 	bsr.w	buildDeliBase
+	tst.l	d0
+	beq	.noMem
+	move.l	deliBase(a5),a4
 
  if DEBUG
 	 bsr	deliShowTags
@@ -35205,15 +35170,13 @@ deliInit
 	bsr	deliGetTag
 	beq.b	.noDBTag
 	move.l	d0,a0 
-	lea	deliBase,a1
-	move.l	a1,(a0)
+	move.l	a4,(a0)
 .noDBTag
 	move.l	#EP_EagleBase,d0
 	bsr	deliGetTag
 	beq.b	.noEBTag
 	move.l	d0,a0 
-	lea	deliBase,a1
-	move.l	a1,(a0)
+	move.l	a4,(a0)
 .noEBTag
 	move.l	#DTP_Config,d0  
 	bsr.w	deliGetTag
@@ -35259,26 +35222,26 @@ deliInit
 	* set default song number
 	bsr	deliGetSongInfo
 	* d0 = def, d1 = min, d2 = max	
-	move	d0,deliBase+dtg_SndNum
+	move.l	deliBase(a5),a0
+	move	d0,dtg_SndNum(a0)
 	move	d0,songnumber(a5)
 	move	d2,maxsongs(a5)	
 
 	move.l	#DTP_Volume,d0  
 	bsr.w	deliGetTag
-	move.l	d0,storedSetVolume
+	move.l	d0,deliStoredSetVolume(a5)
 
 	move.l	#EP_Voices,d0  
 	bsr.w	deliGetTag
-	move.l	d0,storedSetVoices
+	move.l	d0,deliStoredSetVoices(a5)
 
 	move.l	#DTP_NoteStruct,d0  
 	bsr.w	deliGetTag
-	tst.l	d0
 	beq.w 	.noNoteStruct
 	* This is an address to the struct
 	move.l	d0,a0
 	move.l	(a0),a0
-	move.l	a0,storedNoteStruct
+	move.l	a0,deliStoredNoteStruct(a5)
  if DEBUG 
 	DPRINT	"NoteStruct: %lx",64
 
@@ -35330,8 +35293,7 @@ deliInit
 	move.l	#DTP_InitSound,d0  
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc	
-;	tst.l	d0
-;	bne.w	.error
+	* Does not return error code
 
 	DPRINT	"InitSound ok",12
 
@@ -35340,12 +35302,12 @@ deliInit
 	* otherwise assume the module handles it.
 	move.l	#DTP_Interrupt,d0  
 	bsr.w	deliGetTag
-	move.l	d0,storedInterrupt
+	move.l	d0,deliStoredInterrupt(a5)
 	beq.w	.noInt
 	DPRINT	"using hippo interrupt",33
  
 	* interrupt routine provided, set up an interrupt
-	move	deliBase+dtg_Timer,d0
+	move	dtg_Timer(a4),d0
 	jsr	init_ciaint_withTempo
 	beq.b	.gotCia
 	DPRINT	"cia error",44
@@ -35364,7 +35326,7 @@ deliInit
 .noInt
 
 	 * tst.l xyz(pc) is 020 instruction
-	move.l	storedInterrupt(pc),d0  
+	move.l	deliStoredInterrupt(a5),d0  
 	bne.b	.intSet
 	* try to start module provided int handler
 	move.l	#DTP_StartInt,d0
@@ -35378,7 +35340,7 @@ deliInit
 .skip
  if DEBUG
 	moveq	#0,d0
-	move	deliBase+dtg_Timer,d0
+	move	dtg_Timer(a4),d0
 	DPRINT	"init ok, dtg_Timer=%ld",55
  endif
 	* ok
@@ -35391,6 +35353,9 @@ deliInit
 	DPRINT	"init FAIL",56
 	moveq	#ier_error,d0 
 	bra.b	.exit
+.noMem
+	moveq	#ier_nomem,d0 
+	bra.b 	.exit
 	
 * out:
 *  d0=default song
@@ -35422,36 +35387,49 @@ deliGetSongInfo
 
 * Interrupt play routine, use cached pointers to avoid tag searches
 deliPlay
-	move.l	storedSetVoices(pc),d0 
+	move.l	a5,a4
+	move.l	deliBase(a5),a5
+	move	mainvolume(a4),d0
+	move	d0,dtg_SndVol(a5)
+	move	d0,EPG_Voice1Vol(a5)
+	move	d0,EPG_Voice2Vol(a5)
+	move	d0,EPG_Voice3Vol(a5)
+	move	d0,EPG_Voice4Vol(a5)
+	
+	move.l	deliStoredSetVoices(a4),d0 
 	beq.b 	.noSetVoices
 	move.l	d0,a0
 	* Enable all channels
 	moveq	#%1111,d0
+	push	a4
 	jsr 	(a0)
+	pop	 	a4
 .noSetVoices
-	move.l	storedInterrupt(pc),d0
+	move.l	deliStoredInterrupt(a4),d0
 	beq.b	.noInt
-	lea	deliBase,a5
-	move	var_b+mainvolume,dtg_SndVol(a5)
 	move.l	d0,a0
+	push	a4
 	jsr	(a0)
+	pop	 	a4
 .noInt
-	move.l	storedSetVolume(pc),d0
+	move.l	deliStoredSetVolume(a4),d0
 	beq.b	.noVol
-	lea	deliBase,a5
 	move.l 	d0,a0
+	push	a4
 	jsr	(a0)
+	pop	 	a4
 .noVol
-	pushm	a5/a6
+	pushm	a4/a5/a6
+	move.l	deliStoredNoteStruct(a4),d0 
 	bsr	deliNotePlayer
-	popm	a5/a6
+	popm	a4/a5/a6
 	rts
 
 deliEnd
 	pushm	d1-a6
 	DPRINT	"deliEnd",13
 	
-	move.l	storedInterrupt(pc),d0
+	move.l	deliStoredInterrupt(a5),d0
 	beq.b	.noIntUsed
 	jsr	rem_ciaint
 .noIntUsed
@@ -35467,17 +35445,15 @@ deliEnd
 	move.l	#DTP_EndPlayer,d0  
 	bsr	deliGetTag
 	bsr	deliCallFunc
+	
+	bsr	clearsound
 
-	moveq	#0,d0
 	popm	d1-a6
 	rts
-
-
 
 deliSong
 	DPRINT	"deliSong",114
 	bsr	deliStop
-
 	bsr	deliGetSongInfo
 
 	* low bound check
@@ -35491,7 +35467,8 @@ deliSong
 	move d2,songnumber(a5)
 .ok2
 	* Put it, wrong number may crash some players
-	move	songnumber(a5),deliBase+dtg_SndNum
+	move.l deliBase(a5),a0
+	move	songnumber(a5),dtg_SndNum(a0)
 
 	move.l	#DTP_InitSound,d0
 	bsr	deliGetTag
@@ -35526,16 +35503,40 @@ deliCont
 	move	#$800f,$dff096
 	rts
 
+deliVolume	
+	move.l	deliBase(a5),a0
+	move	mainvolume(a5),d0
+	move	d0,dtg_SndVol(a0)
+	move	d0,EPG_Voice1Vol(a0)
+	move	d0,EPG_Voice2Vol(a0)
+	move	d0,EPG_Voice3Vol(a0)
+	move	d0,EPG_Voice4Vol(a0)
+	rts
+
+freeDeliBase
+	tst.l	deliBase(a5)
+	beq.b	.x
+	move.l deliBase(a5),a0 
+	lea	ENPP_SizeOf(a0),a0 
+	jsr 	freemem 
+.x	clr.l	deliBase(a5)
+	rts 
+
+
 * Build the DeliBase structure, this is not a complete version.
  
 buildDeliBase
-	lea	deliBase,a0
-	lea	deliBaseLength(a0),a1
-.clrBase
-	clr.b	(a0)+
-	cmp.l	a0,a1 
-	bne.b .clrBase
-	lea	deliBase,a0
+	bsr.b	freeDeliBase
+
+	move.l	#-ENPP_SizeOf+EPG_SizeOf+200+200,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	jsr	getmem
+	bne.b 	.ok 
+	rts
+.ok
+	move.l 	d0,a0 
+	lea	-ENPP_SizeOf(a0),a0 
+	move.l	a0,deliBase(a5)
 
 	push a0
 	jsr	getcurrent 
@@ -35546,20 +35547,17 @@ buildDeliBase
 	move.l	l_nameaddr(a3),a1
 	move.l	a1,dtg_FileArrayPtr(a0)
 	lea	l_filename(a3),a2
-	lea	deliPath,a3
+	;lea	deliPath,a3
+	lea	EPG_SizeOf(a0),a3
+	move.l	a3,deliPath(a5)
+	lea	200(a3),a4
+	move.l	a4,deliPathArray(a5)
+	move.l	a4,dtg_PathArrayPtr(a0)
 	move.l	a3,dtg_DirArrayPtr(a0)
 .copy	move.b	(a2)+,(a3)+
 	cmp.l	a2,a1
 	bne.b	.copy
 	clr.b	(a3)		
-
-	lea	deliPathArray,a1
-	move.l	a1,dtg_PathArrayPtr(a0)
-	clr.b	(a1)
-	lea	deliPathArrayLength(a1),a2
-.clr	clr.b	(a1)+
-	cmp.l 	a2,a1
-	bne.b	.clr
 
  if DEBUG
 	move.l	dtg_FileArrayPtr(a0),d0
@@ -35652,12 +35650,9 @@ buildDeliBase
 	rts
 .setTimer
 	* May be called from interrupt, no logging allowed
-	;DPRINT	"deliSetTimer",15
 	move	dtg_Timer(a5),d0
-	jsr ciaint_setTempoFromD0
-	rts
-
-
+	jmp ciaint_setTempoFromD0
+	
 .stub
 	moveq	#0,d0
 	rts
@@ -35703,7 +35698,7 @@ deliFreeAudio
 deliCopyString move.l a0,d0
 	bsr.w	deliAppendStr
  if DEBUG
-	move.l	#deliPathArray,d1
+	move.l	deliPathArray+var_b,d1
 	DPRINT	"copyString %s path=%s",106
  endif
 	moveq	#0,d0
@@ -35712,7 +35707,7 @@ deliCopyFile
 	move.l	dtg_FileArrayPtr(a5),a0
 	bsr.w	deliAppendStr
  if DEBUG
-	move.l	#deliPathArray,d0
+	move.l	deliPathArray+var_b,d0
 	DPRINT	"copyFile path=%s",107
  endif
 	moveq	#0,d0
@@ -35721,25 +35716,25 @@ deliCopyDir
 	move.l	dtg_DirArrayPtr(a5),a0
 	bsr.w	deliAppendStr
  if DEBUG
-	move.l	#deliPathArray,d0
+	move.l	deliPathArray+var_b,d0
 	DPRINT	"copyDir path=%s",108
  endif
 	moveq	#0,d0
 	rts
 deliLoadFile move.l  a0,d0
  if DEBUG
-	move.l	#deliPathArray,d1
+	move.l	deliPathArray+var_b,d1
 	DPRINT	"loadFile '%s' path='%s'",109
  endif
 	pushm	d1-a6
 	lea 	var_b,a5
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
-	lea	deliGetListDataData(pc),a1 
-	lea 	deliGetListDataLength(pc),a2
+	lea	    deliGetListDataData(a5),a1 
+	lea 	deliGetListDataLength(a5),a2
 	bsr	loadfile
  if DEBUG
-	move.l	deliGetListDataData(pc),d1
-	move.l	deliGetListDataLength(pc),d2
+	move.l	deliGetListDataData(a5),d1
+	move.l	deliGetListDataLength(a5),d2
 	DPRINT "deliLoadfile: %ld %lx %ld",2
  endif
 	popm	d1-a6
@@ -35753,8 +35748,6 @@ deliGetListData
 	DPRINT	"getListData %d",110
 	move.l	moduleaddress+var_b,a0
 	move.l	modulelength+var_b,d0
-	;move.l	deliGetListDataData(pc),a0 
-	;move.l	deliGetListDataLength(pc),d0
 	rts
 
 deliAppendStr
@@ -35874,8 +35867,8 @@ funcENPP_GetListData
 	moveq	#0,d0
 	rts
 .second
-	move.l	deliGetListDataData(pc),a0
-	move.l	deliGetListDataLength(pc),d0
+	move.l	deliGetListDataData+var_b,a0
+	move.l	deliGetListDataLength+var_b,d0
 	rts
 .first	
 	move.l	moduleaddress+var_b,a0 
@@ -35884,7 +35877,7 @@ funcENPP_GetListData
 
 funcENPP_LoadFile
 	DPRINT "ENPP_LoadFile",1
-	lea	deliPathArray,a0
+	move.l deliPathArray+var_b,a0
 	bra	deliLoadFile
 funcENPP_CopyDir
 	DPRINT "ENPP_CopyDir",1
@@ -35972,23 +35965,6 @@ funcENPP_StringCMP
 	rts
 funcENPP_DMAMask
 	push	d1
-;	;DPRINT "ENPP_DMAMask",1
-;	* d0 = negative -> enable, positive -> disable
-;	* d1 = DMA bits
-;	tst d0 
-;	bmi.b	.enable
-;	move	d1,$dff096
-;	jsr	dmawait
-;	rts
-;.enable
-;	jsr	dmawait
-;	push	d1
-;	or		#$8000,d1
-;	move	d1,$dff096
-;	pop 	d1
-;	jsr	dmawait
-;	rts
-
 	tst.w	d0
 	bpl.s	.set2
 	or.w	#$8000,d1
@@ -36048,6 +36024,8 @@ funcENPP_PokeVol
 	;lsl.w	#3,d2			;mal 16/2
 	;mulu	(a5,d3.w),d0
 	;lsr.w	#6,d0
+	mulu	mainvolume+var_b,d0
+	lsr	#6,d0
 
 	lsl.w	#4,d2
 	add.w	d2,a0
@@ -36130,20 +36108,13 @@ funcENPP_GetHardwareType
 
 * NotePlayer implementation from EaglePlayer sources
 deliNotePlayer
-	move.l	storedNoteStruct(pc),d0 
+	tst.l	d0
 	beq.b 	.exit
-	lea	deliBase,a5
 	bsr.b 	.DT_NotePlayer
 .exit 
 	rts
 .DT_NotePlayer:	
-;NSTB_Period	EQU 1		;* Amiga period supplied instead of frequency
-;NSTF_Period	EQU 1<<1
-;NSTB_ExtPeriod	EQU 2		;* Extended period (period*4) supplied instead of frequency
-;NSTF_ExtPeriod	EQU 1<<2
-;NSTB_EvenLength EQU 4		;* Samplelength supplied as WORD instead of LONG
-;NSTF_EvenLength EQU 1<<4
-		movem.l	d0-a6,-(a7)
+		;movem.l	a4-a6,-(a7)
 		;move.l	PufferAdr(pc),a5
 		;move.l	DT_NoteStruct(a5),d0
 		;beq.w	.Return
@@ -36307,14 +36278,14 @@ deliNotePlayer
 
 		*moveq	#0,d1
 		*moveq	#0,d0
-		movem.l	(a7)+,d0-a6
+		;movem.l	(a7)+,a4-a6
 		rts
 
 
 
  if DEBUG
 deliShowTags
-	move.l	deliPlayer(pc),a0
+	move.l	deliPlayer(a5),a0
 	;add.l	a0,a0
 	;add.l	a0,a0
 	move.l	16(a0),a0
@@ -37321,34 +37292,4 @@ var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
-* Use the same buffer in p_delicustom to store the delibase
-;deliBase	= ptheader+(-ENPP_SizeOf)
-;deliBaseLength	= EPG_SizeOf  ;dtg_Reserved3
-* Also store the deli path stuff here
-* 100 bytes for module path
-;deliPath	= ptheader+ENPP_SizeOf+deliBaseLength 
-* Path manipuation array
-;deliPathArray	= deliPath+100
-;deliPathArrayLength = 200
-;	ds.b	1000
-
-	ds.b	32
-	ds.b	-ENPP_SizeOf
-deliBaseLength = EPG_SizeOf
-deliBase
-	ds.b	deliBaseLength
-	ds.b	32
-deliPath
-	ds.b	200
-deliPathArrayLength = 200
-deliPathArray
-	ds.b	deliPathArrayLength
-
-* TODO: dynamic alloc
-
-* Eagle/Delibase
-* negative size:  ENPP_SizeOf = -396
-* positive size:  dtg_Reserved3 = 136
-* total 532 bytes
-
  end
