@@ -1169,6 +1169,7 @@ deliStoredInterrupt	rs.l	1
 deliStoredSetVolume	rs.l 	1
 deliStoredSetVoices rs.l	1
 deliStoredNoteStruct rs.l 	1
+deliStoredGetPositionNr rs.l 1
 deliPath		rs.l	1
 deliPathArray		rs.l	1	
  if DEBUG
@@ -1258,6 +1259,7 @@ pt_davelowe		rs.b	1
 pt_synthesis	rs.b 	1
 pt_syntracker	rs.b  	1
 pt_robhubbard2 	rs.b 	1
+pt_chiptracker	rs.b	1
 
 * player group version
 xpl_versio	=	21
@@ -23902,7 +23904,7 @@ loadfile
 	beq.w	.on
 
 	bsr.w	id_player
-	beq.b	.on
+	beq.w	.on
 
 	bsr.w	id_pumatracker
 	beq.b	.on
@@ -23943,6 +23945,8 @@ loadfile
 	bsr	id_synthesis 
 	beq.b .on
 	bsr	id_syntracker 
+	beq.b .on
+	bsr	id_chiptracker
 	beq.b .on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
@@ -25302,6 +25306,8 @@ tutki_moduuli
 	beq .syntracker
 	bsr id_robhubbard2
 	beq .robhubbard2
+	bsr id_chiptracker 
+	beq .chiptracker
 	***********************************
 
 	tst.l	externalplayers(a5)
@@ -25769,6 +25775,12 @@ tutki_moduuli
 	pushpea	p_syntracker(pc),playerbase(a5)
 	move	#pt_syntracker,playertype(a5)
 	bra.w	.ex
+
+.chiptracker
+	pushpea	p_chiptracker(pc),playerbase(a5)
+	move	#pt_chiptracker,playertype(a5)
+	bra.w	.ex
+
 
 .robhubbard2
 	pushpea	p_robhubbard2(pc),playerbase(a5)
@@ -33760,6 +33772,44 @@ id_robhubbard2
 
 
 ******************************************************************************
+* ChipTracker
+******************************************************************************
+
+p_chiptracker
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	dc.l	$4e754e75
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	dc.l	$4e754e75
+ dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse
+	dc.b	"ChipTracker         (EP)",0
+
+.path dc.b "chiptracker",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+	bne.b .error
+
+
+	moveq	#0,d0
+.error	popm	d1-a6
+	rts
+
+id_chiptracker
+ 	  cmp.l   #'KRIS',952(A4)
+	rts
+
+******************************************************************************
 * Medley Sound System
 ******************************************************************************
 
@@ -35134,15 +35184,17 @@ deliCallFunc
 	tst.l	d0 
 	beq.b	.noFunc
 	DPRINT	"Call %lx",101
-	pushm 	d2-a6
+	pushm 	d2-d7/a2-a6
 	move.l	deliBase(a5),a5
 	move.l	d0,a0
 	jsr	(a0)
-	popm	d2-a6
+	popm	d2-d7/a2-a6
 .noFunc rts
 
 * in:
-*  d0 = deliplayer or delicustom address from loadseg
+*   d0: deliplayer or delicustom address from loadseg
+* out:
+*   d0: 0=all ok, negative ier_-code otherwise
 deliInit
 	pushm	d1-a6	
 	DPRINT	"deliInit",10
@@ -35297,6 +35349,17 @@ deliInit
 
 	DPRINT	"InitSound ok",12
 
+	* Get position info if available
+	move.l	#EP_GetPositionNr,d0  
+	bsr.w	deliGetTag
+	move.l	d0,deliStoredGetPositionNr(a5) 
+	beq.b	.noPos
+	move.l	#MI_Length,d1
+	bsr	deliFindInfoValue 
+	bmi.b 	.noPos
+	move	d0,pos_maksimi(a5)
+.noPos
+
 	* see if an interrupt routine is provided.
 	* if so, set up a cia interrupt to drive it.
 	* otherwise assume the module handles it.
@@ -35357,6 +35420,32 @@ deliInit
 	moveq	#ier_nomem,d0 
 	bra.b 	.exit
 	
+
+* Read module info values
+* in:
+*   d1: info value to find
+* out:
+*   d0: value, or -1 if not found
+deliFindInfoValue
+	move.l	#EP_Get_ModuleInfo,d0
+	bsr	deliGetTag
+	beq.b .notFound
+	bsr	deliCallFunc
+.loop
+	move.l	(a0)+,d0
+	beq.b  .end 
+	cmp.l	d1,d0 
+	beq.b 	.found
+	addq.l	#4,a0
+	bra.b  .loop
+.found 
+	move.l (a0),d0 
+.end 
+	rts
+.notFound 
+	moveq	#-1,d0 
+	rts 
+
 * out:
 *  d0=default song
 *  d1=min song
@@ -35419,6 +35508,15 @@ deliPlay
 	jsr	(a0)
 	pop	 	a4
 .noVol
+	move.l	deliStoredGetPositionNr(a4),d0
+	beq.b 	.noPos 
+	move.l 	d0,a0
+	push	a4
+	jsr	(a0)
+	pop	 a4
+	move	d0,pos_nykyinen(a4)
+.noPos	
+
 	pushm	a4/a5/a6
 	move.l	deliStoredNoteStruct(a4),d0 
 	bsr	deliNotePlayer
@@ -35501,6 +35599,20 @@ deliCont
 	bsr	deliGetTag
 	bsr	deliCallFunc
 	move	#$800f,$dff096
+	rts
+
+deliForward
+	DPRINT	"deliForward",145
+	move.l	#DTP_NextPatt,d0
+	bsr	deliGetTag
+	bsr	deliCallFunc
+	rts
+
+deliBackward
+	DPRINT	"deliBackward",146
+	move.l	#DTP_PrevPatt,d0
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	rts
 
 deliVolume	
