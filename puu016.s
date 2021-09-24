@@ -9095,12 +9095,12 @@ rbutton1
 	bra.w	.huh
 .je
 	cmp.l 	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
-	bne.b	.new
+	bne.w	.new
 	* special case: some delicustoms, SUNTronic modules,
 	* can't handle being started over, to be safe
 	* load these modules again before restarting.
 	cmp	#pt_delicustom,playertype(a5)
-	beq.b	.new
+	beq.w	.new
 	* similar case with SonicArranger with built-in
 	* replayer code. Data is modified upon init so that
 	* subsequent inits with same data will fail as
@@ -9112,7 +9112,7 @@ rbutton1
 	cmp.l	#'SOAR',(a0)
 	bne.b 	.new
 .notSoar
-
+	DPRINT	"Restarting the same module!",112
 ;.early
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
@@ -23843,9 +23843,6 @@ loadfile
 	bsr.w	id_tfmx
 	beq.w	.on
 
-	bsr.w	id_hippelcoso
-	beq.w	.on
-
 	DPRINT	"Internal",101
 	lea	internalFormats(pc),a3 
 	bsr	identifyFormatsOnly 
@@ -25304,8 +25301,6 @@ tutki_moduuli
 	moveq	#lod_grouperror,d0
 	rts
 
-;.aag_id	dc.b	"AAG9"
-; even
 
 .rite
 
@@ -25468,29 +25463,16 @@ tutki_moduuli
 	moveq	#0,d0
 	rts
 
-;
-;.nimitalteen
-;	move.l	moduleaddress(a5),a1
-;.nimitalteen2
-;	lea	modulename(a5),a0
-;.co	move.b	(a1)+,(a0)+
-;	dbeq	d0,.co
-;	clr.b	(a0)
-;	bra.b	.ex2
-
 .oldst	st	oldst(a5)
 	bsr.w	convert_oldst
 	bra.b	.pro0
 
-
 .pro	clr.b	oldst(a5)
 .pro0	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
-	;moveq	#20-1,d0
-	;bra.b	.nimitalteen
+	moveq	#20-1,d0
 	bsr	copyNameFromModule
 	bra	.ex2
-
 
 .multi	pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
@@ -25902,12 +25884,18 @@ tutki_moduuli
  even
 
 
+* Utility function
+* In:
+*   Z-flag
+* Out:
+*   d0 = 0, if Z set, -1 if not
 idtest	beq.b	.y
 	moveq	#-1,d0
 	rts
 .y	moveq	#0,d0
 	rts
 
+* Run through format list and execute id function for each format
 * in:
 *   a3 = array of formats
 * out:
@@ -25952,9 +25940,13 @@ doIdentifyFormats
 	moveq	#-1,d0 
 	rts
 
-
+* Grab name from loaded module data
+* In:
+*   d0 = max length for name
+* From start of the data:
 copyNameFromModule
 	move.l	moduleaddress(a5),a1
+* From pointer in A1:
 copyNameFromA1
 	lea	modulename(a5),a0
 .co	move.b	(a1)+,(a0)+
@@ -25986,6 +25978,9 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 *******
 * Virittelee nimen tied.nimestä
 *******
+* TODO: this doesn't work properly
+* "foob.ext" -> "ext"
+
 tee_modnimi
 	lea	modulename(a5),a1
 
@@ -29917,7 +29912,7 @@ p_tfmx
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	p_NOP
-	jmp id_tfmx_(pc) 
+	jmp id_tfmx(pc) 
 	dc.w pt_tfmx				* type
 	dc	pf_cont!pf_stop!pf_song!pf_volume!pf_kelaus!pf_poslen!pf_end
 	dc.b	"TFMX",0
@@ -30178,9 +30173,6 @@ gettfmxsongs
 
 
 * TODO: all variants
-
-id_tfmx_
-	rts
 
 id_tfmxunion
 	cmp.l	#'TFHD',(a4)		* Yhdistetty TFMX formaatti
@@ -34963,13 +34955,12 @@ id_pretracker_
 	lsr.l	#8,d0
 	cmp.l	#"PRT",d0
 	bne.b	.no
-	tst	4(a0)
+	tst	4(a4)
 	bne.b	.no
-	tst	8(a0)
+	tst	8(a4)
 	bne.b	.no
-	tst	$c(a0)
+	tst	$c(a4)
 	bne.b	.no
-	
 	moveq	#0,d0
 	rts
 .no	moveq	#-1,d0 
@@ -35345,9 +35336,9 @@ loadDeliPlayer
 	move	playertype(a5),d0
 	beq.b	.noMod
 	cmp	deliPlayerType(a5),d0
-	beq.b	.x
+	beq.b	.useOld
 .noMod
-	bsr.b	freeDeliPlayer
+	bsr.w	freeDeliPlayer
 
 	lea	-200(sp),sp
 	move.l	sp,a1
@@ -35370,7 +35361,12 @@ loadDeliPlayer
 	beq.b	.error
 	move	moduletype(a5),deliPlayerType(a5)
 	lsl.l	#2,d0
-.x
+
+	rts
+
+.useOld 
+	move.l	deliPlayer(a5),d0
+	DPRINT	"Using previous delipl 0x%lx",2
 	rts
 
 .error
@@ -35541,6 +35537,8 @@ deliInit
 	bsr.w	deliGetTag
 	move.l	d0,deliStoredSetVoices(a5)
 
+	* Quite important to clear the old one away!
+	clr.l	deliStoredNoteStruct(a5)
 	move.l	#DTP_NoteStruct,d0  
 	bsr.w	deliGetTag
 	beq.w 	.noNoteStruct
@@ -35729,8 +35727,10 @@ deliGetSongInfo
 	rts	
 
 * Interrupt play routine, use cached pointers to avoid tag searches
+deliInterrupt
 deliPlay
 	move.l	a5,a4
+	push	a4
 	move.l	deliBase(a5),a5
 	move	mainvolume(a4),d0
 	move	d0,dtg_SndVol(a5)
@@ -35738,39 +35738,39 @@ deliPlay
 	move	d0,EPG_Voice2Vol(a5)
 	move	d0,EPG_Voice3Vol(a5)
 	move	d0,EPG_Voice4Vol(a5)
-	
+
 	move.l	deliStoredSetVoices(a4),d0 
 	beq.b 	.noSetVoices
 	move.l	d0,a0
 	* Enable all channels
 	moveq	#%1111,d0
-	push	a4
 	jsr 	(a0)
-	pop	 	a4
+	move.l	(sp),a4
 .noSetVoices
+
 	move.l	deliStoredInterrupt(a4),d0
 	beq.b	.noInt
 	move.l	d0,a0
-	push	a4
 	jsr	(a0)
-	pop	 	a4
+	move.l	(sp),a4
 .noInt
+
 	move.l	deliStoredSetVolume(a4),d0
 	beq.b	.noVol
 	move.l 	d0,a0
-	push	a4
 	jsr	(a0)
-	pop	 	a4
+	move.l	(sp),a4
 .noVol
+
 	move.l	deliStoredGetPositionNr(a4),d0
 	beq.b 	.noPos 
 	move.l 	d0,a0
-	push	a4
 	jsr	(a0)
-	pop	 a4
+	move.l	(sp),a4
 	move	d0,pos_nykyinen(a4)
 .noPos	
-
+	pop 	a4
+	
 	pushm	a4/a5/a6
 	move.l	deliStoredNoteStruct(a4),d0 
 	bsr	deliNotePlayer
@@ -36475,27 +36475,23 @@ funcENPP_GetHardwareType
 * NotePlayer implementation from EaglePlayer sources
 deliNotePlayer
 	tst.l	d0
-	beq.b 	.exit
-	bsr.b 	.DT_NotePlayer
-.exit 
+	bne.b 	.DT_NotePlayer
 	rts
 .DT_NotePlayer:	
+
 		;movem.l	a4-a6,-(a7)
 		;move.l	PufferAdr(pc),a5
 		;move.l	DT_NoteStruct(a5),d0
 		;beq.w	.Return
 		move.l	d0,a4
 		move.l	4(a4),d7	;Flags
-;		move.l	d7,0
-		
+				
 		move.l	(a4),d0
 		beq.w	.Return
 		move.l	d0,a4
 
 		*--------- neue Note (= DMA off) ---------*
 		move.l	a4,a0
-		;move.w	DT_AudTagliste+6(pc),d2
-		;subq.w	#1,d2
 		moveq	#4-1,d2
 		moveq	#0,d1
 		moveq	#1,d3
@@ -36515,12 +36511,11 @@ deliNotePlayer
 					;D1 = Maske (LONG !!)
 		jsr	ENPP_DMAMask(a5)
 		moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
-.nostopDMA:	move.l	d1,-(a7)
-
+.nostopDMA:	;move.l	d1,-(a7)
+		move.l	d1,d6
+	
 		*---------- Neue Note setzen -------------*
 		move.l	a4,a0
-;		move.w	DT_AudTagliste+6(pc),d2		;num Channels
-;		subq.w	#1,d2
 		moveq	#4-1,d2
 		moveq	#0,d1
 .pass2		move.b	11(a0),d0
@@ -36528,7 +36523,6 @@ deliNotePlayer
 		beq.s	.skip2
 
 		move.l	$10(A0),d0			;SampleStart
-;		move.l	d0,0			;!!
 		jsr	ENPP_PokeAdr(A5)
 
 		moveq	#0,d0
@@ -36548,8 +36542,6 @@ deliNotePlayer
 
 		*-------- Volume/Period neu setzen -------*
 		move.l	a4,a0
-;		move.w	DT_AudTagliste+6(pc),d2		;num Channels
-;		subq.w	#1,d2
 		moveq	#4-1,d2
 		moveq	#0,d1
 .pass3
@@ -36563,7 +36555,7 @@ deliNotePlayer
 		and.b	#8,d0				;NCHF_Frequency
 		beq.s	.skip4
 
-; Only Amiga periods suppored in Hippo
+; Only Amiga periods supported in Hippo
 
 ;		moveq	#0,d0
 ;		move.w	$20(A0),d0			;Period (or Frequency)
@@ -36593,7 +36585,8 @@ deliNotePlayer
 .Last3:
 
 		*----- DMA starten (wenn erforderlich) ----*
-		move.l	(a7)+,d1
+		;move.l	(a7)+,d1
+		move.l	d6,d1
 		tst.l	d1
 		beq.s	.NostartDMA
 		move	#$8000,d0	;D0.w neg=enable ; 0/pos=disable
@@ -36602,14 +36595,11 @@ deliNotePlayer
 
 		*------ Repeatadr/Repeatlen poken --------*
 .NostartDMA:	move.l	a4,a0
-;		move.w	DT_AudTagliste+6(pc),d2		;num Channels
-;		subq.w	#1,d2
 		moveq	#4-1,d2
 		moveq	#0,d1
 .pass4		move.b	11(a0),d0
 		and.b	#4!32!64,d0			;NCHF_Repeat
 		beq.s	.skip5
-;		bra.s	.skip5
 
 		move.l	nch_RepeatStart(a0),d0		;RepeatStart
 		jsr	ENPP_PokeAdr(A5)
@@ -36622,15 +36612,7 @@ deliNotePlayer
 		lsr.l	#1,d0				;Bytes -> Words
 .pokeword2:
 		jsr	ENPP_PokeLen(a5)
-;		bra.s	.next5
 .skip5:
-;		move.b	11(a0),d0
-;		and.b	#2!4,d0				;NCHF_Sample
-;;		beq.s	.next5
-;		moveq	#0,d0
-;		jsr	ENPP_PokeAdr(a5)
-;		jsr	ENPP_PokeLen(a5)
-;.next5
 		clr.b	11(a0)
 		addq	#1,d1
 		move.l	(a0),d0
@@ -36652,8 +36634,6 @@ deliNotePlayer
  if DEBUG
 deliShowTags
 	move.l	deliPlayer(a5),a0
-	;add.l	a0,a0
-	;add.l	a0,a0
 	move.l	16(a0),a0
 .tloop
 	movem.l	(a0)+,d0/d1
