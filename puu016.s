@@ -23846,13 +23846,16 @@ loadfile
 	bsr.w	id_hippelcoso
 	beq.w	.on
 
-	lea		internalFormats(pc),a3 
+	DPRINT	"Internal",101
+	lea	internalFormats(pc),a3 
 	bsr	identifyFormatsOnly 
 	beq.b .on
-	lea		groupFormats(pc),a3 
+	DPRINT	"Group",102
+	lea	groupFormats(pc),a3 
 	bsr	identifyFormatsOnly 
 	beq.b .on
-	lea		eagleFormats(pc),a3 
+	DPRINT	"Eagle",103
+	lea	eagleFormats(pc),a3 
 	bsr	identifyFormatsOnly 
 	beq.b .on
 
@@ -25263,10 +25266,12 @@ tutki_moduuli
 ;	bsr	id_beathoven
 ;	beq.w	.beathoven
 ;
+	DPRINT	"Internal",303
 	lea	internalFormats(pc),a3 
 	bsr	identifyFormats
 	beq.w 	.ex
 
+	DPRINT	"Eagle",404
 	lea	eagleFormats(pc),a3
 	bsr 	identifyFormats 
 	beq.w 	.ex
@@ -25339,6 +25344,7 @@ tutki_moduuli
 	bsr.w	id_tfmxunion
 	beq.w	.tfmxunion
 
+	DPRINT	"Group",505
 	lea	groupFormats(pc),a3 
 	bsr	identifyFormats
 	beq.b .ex
@@ -25925,7 +25931,7 @@ doIdentifyFormats
 	jsr	p_id(a0)
 	popm 	all
 	beq.b 	.found
-	addq	#8,a3
+	addq	#4,a3
 	bra.b	.loop
 .found
 	tst.b	d1 
