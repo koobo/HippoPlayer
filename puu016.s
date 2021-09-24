@@ -1201,8 +1201,14 @@ p_song		rs.l	1
 p_eteen		rs.l	1
 p_taakse	rs.l	1
 p_ahiupdate	rs.l	1
+p_id  		rs.l 	1
+p_type      rs.w    1
 p_liput		rs	1	* ominaisuudet
 p_name		rs.l	1
+
+p_NOP macro 
+	dc.l	$4e754e75
+	endm
 
 * Player ids
 * These are self contained, replayer code inside the module
@@ -25037,6 +25043,12 @@ search
 	rts
 
 
+eagleFormats
+	dc.l	p_synthesis
+	dc.l	p_syntracker
+	dc.l	p_robhubbard2
+	dc.l	p_chiptracker
+	dc.l 	0	
 
 *******
 * Analysoidaan moduuli
@@ -25300,14 +25312,23 @@ tutki_moduuli
 
 	***************************************************
 	* Eagle players
-	bsr id_synthesis
-	beq .synthesis
-	bsr id_syntracker
-	beq .syntracker
-	bsr id_robhubbard2
-	beq .robhubbard2
-	bsr id_chiptracker 
-	beq .chiptracker
+	lea	eagleFormats,a3
+.eagleLoop 
+	tst.l	(a3)
+	beq.b	.eagleNotFound
+	move.l	(a3),a0
+	jsr	p_id(a0)
+	beq.b 	.eagleFound
+	addq	#4,a3
+	bra.b	.eagleLoop
+
+.eagleFound
+	move.l	(a3),a0
+	move.l	a0,playerbase(a5)
+	move	p_type(a0),playertype(a5)
+	bra	.ex
+.eagleNotFound
+
 	***********************************
 
 	tst.l	externalplayers(a5)
@@ -33594,15 +33615,17 @@ id_delicustom
 p_synthesis
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	deliEnd(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
 	jmp	deliVolume(pc)
 	jmp	deliSong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id(pc)
+	dc  pt_synthesis 
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_song
 	dc.b	"Synthesis           (EP)",0
 
@@ -33617,6 +33640,7 @@ p_synthesis
 .error	popm	d1-a6
 	rts
 
+.id
 id_synthesis
 	bsr.b  .c 
 	tst.l 	d0 
@@ -33664,15 +33688,17 @@ id_synthesis
 p_syntracker
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	deliEnd(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
 	jmp	deliVolume(pc)
 	jmp	deliSong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id(pc)
+	dc pt_syntracker
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
 	dc.b	"SynTracker          (EP)",0
 .path dc.b "syntracker",0
@@ -33686,6 +33712,8 @@ p_syntracker
 .error	popm	d1-a6
 	rts
 
+
+.id
 id_syntracker
 	move.l 	a4,a0
 	LEA	.SYNTRACKERSON.MSG(PC),A1
@@ -33709,15 +33737,17 @@ id_syntracker
 p_robhubbard2
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	deliEnd(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
 	jmp	deliVolume(pc)
 	jmp	deliSong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id(pc)
+	dc  pt_robhubbard2
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
 	dc.b	"Rob Hubbard 2       (EP)",0
 .path dc.b "rob hubbard 2",0
@@ -33735,6 +33765,7 @@ p_robhubbard2
 ;     d7 = module length
 ; out: d0 = 0, valid valid
 ;      d0 = -1, not valid
+.id
 id_robhubbard2
 	pushm	d1-a4
 	move.l	a4,a0 
@@ -33775,10 +33806,11 @@ id_robhubbard2
 * ChipTracker
 ******************************************************************************
 
+
 p_chiptracker
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	deliEnd(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
@@ -33786,8 +33818,10 @@ p_chiptracker
 	jmp	deliSong(pc)
 	jmp	deliForward(pc)
 	jmp	deliBackward(pc)
-	dc.l	$4e754e75
- dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse
+	p_NOP
+	jmp .id(pc)
+	dc  pt_chiptracker 
+ dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse	
 	dc.b	"ChipTracker         (EP)",0
 
 .path dc.b "chiptracker",0
@@ -33805,8 +33839,9 @@ p_chiptracker
 .error	popm	d1-a6
 	rts
 
+.id
 id_chiptracker
- 	  cmp.l   #'KRIS',952(A4)
+	cmp.l   #'KRIS',952(A4)
 	rts
 
 ******************************************************************************
