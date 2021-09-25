@@ -1269,6 +1269,10 @@ pt_chiptracker		rs.b	1
 pt_quartet		rs.b    1
 pt_facethemusic		rs.b 	1	
 pt_richardjoseph 	rs.b	1
+pt_instereo1		rs.b    1
+pt_instereo2       	rs.b    1
+pt_jasonbrooke		rs.b	1
+
 * player group version
 xpl_versio	=	21
 * convert player ids to start from zero to access table in player group
@@ -25011,6 +25015,9 @@ eagleFormats
 	dc.l	p_quartet
 	;dc.l	p_facethemusic
 	dc.l	p_richardjoseph
+	dc.l	p_instereo1 
+	dc.l	p_instereo2
+	dc.l	p_jasonbrooke
 	dc.l 	0	
 
 *******
@@ -35412,6 +35419,182 @@ p_richardjoseph
 .Fault
         rts
 
+
+******************************************************************************
+* In Stereo 1
+******************************************************************************
+
+p_instereo1
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_instereo1
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
+	dc.b	"In Stereo! 1.0      (EP)",0
+
+.path dc.b "in stereo 1.0",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+.error	popm	d1-a6
+	rts
+
+.id
+	MOVEQ	#1,D0
+	CMP.L	#$49534D21,(A4)
+	BNE.b .f 
+	CMP.L	#$56312E32,4(A4)
+	BNE.b .f
+	MOVEQ	#0,D0
+.f	tst.l d0
+    rts
+
+******************************************************************************
+* In Stereo 2
+******************************************************************************
+
+p_instereo2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_instereo1
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
+	dc.b	"In Stereo! 2.0      (EP)",0
+
+.path dc.b "in stereo 2.0",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+.error	popm	d1-a6
+	rts
+
+.id
+ 	MOVEQ	#1,D0
+	CMP.L	#$49533230,(A4)
+	BNE.S	.f
+	CMP.L	#$44463130,4(A4)
+	BNE.S	.f
+	CMP.L	#$5354424C,8(A4)
+	BNE.S	.f
+	MOVEQ	#0,D0
+.f  	tst.l 	d0
+	rts
+
+
+
+******************************************************************************
+* Jason Brooke
+******************************************************************************
+
+p_jasonbrooke
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_jasonbrooke
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
+	dc.b	"Jason Brooke        (EP)",0
+	        
+.path dc.b "jason brooke",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+.error	popm	d1-a6
+	rts
+
+
+.id
+	move.l	a4,a0
+	bsr.b 	.id_ 
+	tst.l d0
+	rts
+
+.id_
+	MOVEQ	#-1,D0
+	;LEA	lbW000166(PC),A1
+	MOVE.L	A0,A2
+	CMP.L	#$48E7F0F0,(A0)+
+	BNE.S	.lbC00058C
+	CMP.L	#$424047FA,(A0)+
+	BNE.S	.lbC00058A
+	CMP.L	#$FFF84A2B,(A0)
+	BNE.S	.lbC00058A
+	;ST	(A1)
+.lbC000588	MOVEQ	#0,D0
+.lbC00058A	RTS
+
+.lbC00058C	LEA	$AC(A2),A0
+	MOVEQ	#$19,D1
+.lbC000592	CMP.W	#$48E7,(A0)+
+	BEQ.S	.lbC00059E
+	DBRA	D1,.lbC000592
+	BRA.S	.lbC00058A
+
+.lbC00059E	CMP.W	#$F8FC,(A0)
+	BEQ.S	.lbC0005AA
+	CMP.W	#$F8F8,(A0)
+	BNE.S	.lbC00058A
+.lbC0005AA	ADDQ.L	#2,A0
+	CMP.L	#$8F90001,(A0)+
+	BNE.S	.lbC00058A
+	CMP.L	#$BFE001,(A0)+
+	BNE.S	.lbC00058A
+	CMP.L	#$33FC0780,(A0)+
+	BNE.S	.lbC00058A
+	CMP.L	#$DFF09A,(A0)+
+	BNE.S	.lbC00058A
+	CMP.W	#$47FA,(A0)+
+	BNE.S	.lbC00058A
+	MOVEQ	#1,D1
+	SWAP	D1
+	MOVEQ	#0,D2
+	MOVE.W	(A0),D2
+	SUB.L	D2,D1
+	SUB.L	D1,A0
+	CMP.L	A2,A0
+	BNE.S	.lbC00058A
+	;CLR.W	(A1)
+	BRA.S	.lbC000588
+
+
 ******************************************************************************
 * Deli/eagle support
 ******************************************************************************
@@ -35512,12 +35695,15 @@ loadDeliPlayer
 .noMod
 	bsr.w	freeDeliPlayer
 
+ ifeq asm
 	tst.b	uusikick(a5)
 	beq.b	.old
 	lea	.searchPath1(pc),a2
 	bsr.b	.tryLoad
 	bne.b	.ok
 .old
+ endif
+
 	lea	.searchPath2(pc),a2
 	bsr.b	.tryLoad
 	bne.b	.ok
