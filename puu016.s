@@ -25009,7 +25009,7 @@ eagleFormats
 	dc.l	p_robhubbard2
 	dc.l	p_chiptracker
 	dc.l	p_quartet
-	dc.l	p_facethemusic
+	;dc.l	p_facethemusic
 	dc.l	p_richardjoseph
 	dc.l 	0	
 
@@ -35503,6 +35503,7 @@ NSTF_64Bit 	EQU	1<<21
 * out:
 *   d0: loaded seglist or negative error code if fail
 loadDeliPlayer
+	move.l	a0,a3
 	* See if can reuse the old player
 	move	playertype(a5),d0
 	beq.b	.noMod
@@ -35541,9 +35542,15 @@ loadDeliPlayer
 	rts
 
 .error
+	lea	.err(pc),a0 
+	move.l	a3,d0
+	jsr	desmsg
+	lea	 desbuf(a5),a1
+	jsr	request
 	moveq	#ier_eagleplayer,d0
 	rts	
-
+.err
+	dc.b	"Unable to load eagleplayer:",10,"%s",0
 .searchPath	
 	dc.b	"eagleplayer2:eagleplayers/",0
  even
