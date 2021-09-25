@@ -35512,13 +35512,37 @@ loadDeliPlayer
 .noMod
 	bsr.w	freeDeliPlayer
 
+	tst.b	uusikick(a5)
+	beq.b	.old
+	lea	.searchPath1(pc),a2
+	bsr.b	.tryLoad
+	bne.b	.ok
+.old
+	lea	.searchPath2(pc),a2
+	bsr.b	.tryLoad
+	bne.b	.ok
+	bra.w	.error
+.ok
+	move	moduletype(a5),deliPlayerType(a5)
+	lsl.l	#2,d0
+	rts
+
+.useOld 
+	move.l	deliPlayer(a5),d0
+	DPRINT	"Using previous delipl 0x%lx",2
+	rts
+
+.tryLoad
 	lea	-200(sp),sp
 	move.l	sp,a1
-	lea	.searchPath(pc),a2
-.path	move.b	(a2)+,(a1)+
+;	lea	.searchPath(pc),a2
+.path	
+	move.b	(a2)+,(a1)+
 	bne.b	.path
 	subq	#1,a1
-.name	move.b	(a0)+,(a1)+
+	move.l	a3,a0
+.name	
+	move.b	(a0)+,(a1)+
 	bne.b	.name
 
 	move.l	sp,d1
@@ -35528,17 +35552,7 @@ loadDeliPlayer
  endif
 	lore 	Dos,LoadSeg
 	lea	200(sp),sp
-	
 	tst.l	d0
-	beq.b	.error
-	move	moduletype(a5),deliPlayerType(a5)
-	lsl.l	#2,d0
-
-	rts
-
-.useOld 
-	move.l	deliPlayer(a5),d0
-	DPRINT	"Using previous delipl 0x%lx",2
 	rts
 
 .error
@@ -35551,7 +35565,9 @@ loadDeliPlayer
 	rts	
 .err
 	dc.b	"Unable to load eagleplayer:",10,"%s",0
-.searchPath	
+.searchPath1
+	dc.b	"PROGDIR:eagleplayers/",0
+.searchPath2
 	dc.b	"eagleplayer2:eagleplayers/",0
  even
  
