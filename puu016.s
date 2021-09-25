@@ -1262,12 +1262,13 @@ pt_pretracker		rs.b	1
 pt_custommade		rs.b 	1
 pt_sonicarranger	rs.b	1
 pt_davelowe		rs.b	1
-pt_synthesis	rs.b 	1
-pt_syntracker	rs.b  	1
-pt_robhubbard2 	rs.b 	1
-pt_chiptracker	rs.b	1
+pt_synthesis		rs.b 	1
+pt_syntracker		rs.b  	1
+pt_robhubbard2 		rs.b 	1
+pt_chiptracker		rs.b	1
 pt_quartet		rs.b    1
-
+pt_facethemusic		rs.b 	1	
+pt_richardjoseph 	rs.b	1
 * player group version
 xpl_versio	=	21
 * convert player ids to start from zero to access table in player group
@@ -6326,6 +6327,7 @@ vastomaviesti
 * Oman signaalin vastaanotto (moduuli soitettu, jatkotoimenpiteet)
 *******
 signalreceived
+	DPRINT	"Song end signal",10
 
 	moveq	#1,d7			* menn‰‰n listassa eteenp‰in
 							* step forward in the list
@@ -6342,7 +6344,7 @@ signalreceived
  	beq.b	.ran
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
-	bne.w	rbutton13		* next song!
+	bne.w	actionNextSong		* next song!
 
 .ran	
 	* no subsongs, randomize next one
@@ -7501,9 +7503,9 @@ nappuloita
 	dc	$28
 	dr	rbutton5	* next
 	dc	$4f
-	dr	rbutton12	* prev song
+	dr	actionPrevSong	* prev song
 	dc	$4e
-	dr	rbutton13	* next song
+	dr	actionNextSong	* next song
 
 	dc	7
 	dr	.showtime
@@ -7574,9 +7576,9 @@ nappuloita
 
 
 	dc	$2d
-	dr	rbutton12		* prev song
+	dr	actionPrevSong		* prev song
 	dc	$2f
-	dr	rbutton13		* next song
+	dr	actionNextSong		* next song
 	dc	$3e
 	dr	lista_ylos	* select prev
 	dc	$1e
@@ -8571,10 +8573,11 @@ rbutton6
 *******************************************************************************
 * Song number <
 *******
+actionNextSong
 rbutton12
 	moveq	#1,d1		* lis‰t‰‰n songnumberia
 
-songo
+songSkip
 	tst.l	playingmodule(a5)
 	bmi.b	.nosong
 
@@ -8582,6 +8585,7 @@ songo
 
 	move.l	playerbase(a5),a0
 
+	moveq	#0,d0
 	move	songnumber(a5),d0	* Numeroita 0:sta eteenp‰in
 	sub	d1,d0
 	bpl.b	.ook
@@ -8591,6 +8595,7 @@ songo
 	blo.b	.jep
 	move	maxsongs(a5),d0
 .jep
+	DPRINT	"New song: %ld",1
 	move	d0,songnumber(a5)
 
 	st	kelattiintaakse(a5)
@@ -8610,9 +8615,10 @@ songo
 *******************************************************************************
 * Song number >
 *******
+actionPrevSong
 rbutton13
 	moveq	#-1,d1			* v‰hennet‰‰n songnumberia
-	bra.b	songo
+	bra.b	songSkip
 
 
 ******************************************************************************
@@ -20482,7 +20488,7 @@ rexxmessage
 	subq	#1,d0
 	move	d0,songnumber(a5)
 	moveq	#0,d1
-	bra.w	songo
+	bra.w	songSkip
 	
 	
 
@@ -25003,6 +25009,8 @@ eagleFormats
 	dc.l	p_robhubbard2
 	dc.l	p_chiptracker
 	dc.l	p_quartet
+	dc.l	p_facethemusic
+	dc.l	p_richardjoseph
 	dc.l 	0	
 
 *******
@@ -35261,9 +35269,9 @@ p_quartet
 	jmp	deliForward(pc)
 	jmp	deliBackward(pc)
 	p_NOP
-	jmp .id(pc)
-	dc  pt_chiptracker 
- dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse	
+	jmp 	.id(pc)
+	dc  	pt_quartet 
+ 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen	
 	dc.b	"Quartet             (EP)",0
 
 .path dc.b "quartet",0
@@ -35278,8 +35286,6 @@ p_quartet
 	rts
 
 .id
-
-Check2
 	move.l	a4,a0
         cmp.b   #$50,1(A0)
         bne.b   .Fault
@@ -35316,6 +35322,95 @@ Check2
         bne.b   .Fault
         moveq   #0,D0
 	rts
+
+******************************************************************************
+* Face The Music
+******************************************************************************
+
+p_facethemusic
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_facethemusic 
+ dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse	
+	dc.b	"Face The Music      (EP)",0
+
+.path dc.b "face the music",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+.error	popm	d1-a6
+	rts
+
+.id
+	MOVEQ	#0,D0
+	MOVE.L	(A4),D1
+	AND.L	#$FFFFFF00,D1
+	CMP.L	#$46544D00,D1
+	SNE	D0
+	rts
+
+
+******************************************************************************
+* Richard Joseph
+******************************************************************************
+
+p_richardjoseph
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_richardjoseph
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
+	dc.b	"Richard Joseph      (EP)",0
+
+.path dc.b "richard joseph player",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+.error	popm	d1-a6
+	rts
+
+.id
+        movea.l a4,A0
+        moveq   #-1,D0
+        move.l  (A0)+,D1
+        clr.b   D1
+        cmp.l   #$524A5000,D1
+        bne.b   .Fault
+        cmp.l   #'SMOD',(A0)+
+        bne.b   .Fault
+        addq.l  #4,A0
+        tst.l   (A0)
+        bne.b   .Fault
+        moveq   #0,D0
+.Fault
+        rts
 
 ******************************************************************************
 * Deli/eagle support
@@ -35604,6 +35699,7 @@ deliInit
 	move.l	deliBase(a5),a0
 	move	d0,dtg_SndNum(a0)
 	move	d0,songnumber(a5)
+	
 	move	d2,maxsongs(a5)	
 
 	move.l	#DTP_Volume,d0  
@@ -35679,23 +35775,25 @@ deliInit
 	DPRINT	"InitSound ok",12
 
 	* Get position info if available
-	move.l	#EP_GetPositionNr,d0  
+	bsr	deliUpdatePositionInfo
+
+	move.l	#DTP_Interrupt,d0  
 	bsr.w	deliGetTag
-	move.l	d0,deliStoredGetPositionNr(a5) 
-	beq.b	.noPos
-	move.l	#MI_Length,d1
-	bsr	deliFindInfoValue 
-	bmi.b 	.noPos
-	move	d0,pos_maksimi(a5)
-.noPos
+	move.l	d0,deliStoredInterrupt(a5)	
+
+	move.l	#DTP_StartInt,d0
+	bsr	deliGetTag
+	beq.b	.noStartInt
+	DPRINT	"using module interrupt",34
+	bsr	deliCallFunc
+	bra.b	.skip
+.noStartInt
 
 	* see if an interrupt routine is provided.
 	* if so, set up a cia interrupt to drive it.
 	* otherwise assume the module handles it.
-	move.l	#DTP_Interrupt,d0  
-	bsr.w	deliGetTag
-	move.l	d0,deliStoredInterrupt(a5)
-	beq.w	.noInt
+	tst.l	deliStoredInterrupt(a5)
+	beq.b	.skip
 	DPRINT	"using hippo interrupt",33
  
 	* interrupt routine provided, set up an interrupt
@@ -35715,20 +35813,6 @@ deliInit
 	moveq	#ier_nociaints,d0
 	bra.w	.error
 .gotCia
-.noInt
-
-	 * tst.l xyz(pc) is 020 instruction
-	move.l	deliStoredInterrupt(a5),d0  
-	bne.b	.intSet
-	* try to start module provided int handler
-	move.l	#DTP_StartInt,d0
-	bsr	deliGetTag
-	beq.b	.noStartInt
-	bsr	deliCallFunc
-	DPRINT	"using module interrupt",34
-.noStartInt
-.intSet
-
 .skip
  if DEBUG
 	moveq	#0,d0
@@ -35758,8 +35842,16 @@ deliInit
 deliFindInfoValue
 	move.l	#EP_Get_ModuleInfo,d0
 	bsr	deliGetTag
-	beq.b .notFound
+	beq.b 	.tryAnother
 	bsr	deliCallFunc
+	bra.b	.gotIt
+.tryAnother
+	move.l	#EP_NewModuleInfo,d0 
+	bsr	deliGetTag
+	beq.b 	.notFound
+	move.l	d0,a0
+.gotIt
+	* a0 = module info table
 .loop
 	move.l	(a0)+,d0
 	beq.b  .end 
@@ -35775,22 +35867,31 @@ deliFindInfoValue
 	moveq	#-1,d0 
 	rts 
 
+* After InitSound this updates the max position info
+deliUpdatePositionInfo	
+	clr	pos_maksimi(a5)
+	move.l	#EP_GetPositionNr,d0  
+	bsr.w	deliGetTag
+	move.l	d0,deliStoredGetPositionNr(a5) 
+	beq.b	.noPos
+	move.l	#MI_Length,d1
+	bsr	deliFindInfoValue 
+	bmi.b 	.noPos
+	move	d0,pos_maksimi(a5)
+.noPos	rts
+
 * out:
 *  d0=default song
 *  d1=min song
 *  d2=max song
 deliGetSongInfo
-	moveq	#0,d0 
-	moveq	#0,d1 
-	moveq	#0,d2
-	
 	move.l	#DTP_SubSongRange,d0  
 	bsr.w	deliGetTag
 	beq.b	.noSubSongs1
 	bsr	deliCallFunc
 	move.l	d1,d2
 	move.l	d0,d1
-	DPRINT	"Subsong def=%ld min=%ld max=%ld",111
+	DPRINT	"Subsongs def=%ld min=%ld max=%ld",1
 	rts
 
 .noSubSongs1
@@ -35799,8 +35900,14 @@ deliGetSongInfo
 	beq.b	.noSubSongs2
 	move.l	d0,a0
 	movem	(a0),d0/d1/d2
-	DPRINT	"NewSubSongs defa=%ld min=%ld max=%ld",112
+	DPRINT	"NewSubSongs def=%ld min=%ld max=%ld",2
+	rts
+	
 .noSubSongs2
+	DPRINT	"No subsongs",3
+	moveq	#0,d0 
+	moveq	#0,d1 
+	moveq	#0,d2	
 	rts	
 
 * Interrupt play routine, use cached pointers to avoid tag searches
@@ -35881,23 +35988,24 @@ deliEnd
 	rts
 
 deliSong
-	DPRINT	"deliSong",114
 	bsr	deliStop
 	bsr	deliGetSongInfo
+	* returns
+	* d1 = min song
+	* d2 = max son
+	
+	moveq	#0,d0
+	move	songnumber(a5),d0
 
-	* low bound check
-	cmp	songnumber(a5),d1
-	blo.b	.ok1
-	move	d1,songnumber(a5)
-.ok1
-	* upper bound check
-	cmp	songnumber(a5),d2
-	bhi.b .ok2
-	move d2,songnumber(a5)
-.ok2
+	* clamp d0 within d1-d2
+	jsr	clamp
+	move	d0,songnumber(a5)
+
+	DPRINT	"deliSong set: %ld",1
+	
 	* Put it, wrong number may crash some players
 	move.l deliBase(a5),a0
-	move	songnumber(a5),dtg_SndNum(a0)
+	move	d0,dtg_SndNum(a0)
 
 	move.l	#DTP_InitSound,d0
 	bsr	deliGetTag
@@ -35905,6 +36013,7 @@ deliSong
 	move.l	#DTP_StartInt,d0
 	bsr	deliGetTag
 	bsr	deliCallFunc
+	bsr	deliUpdatePositionInfo
 	rts
 
 * Not sure what exactly should be done with these two.
