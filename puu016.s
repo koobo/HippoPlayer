@@ -35451,21 +35451,95 @@ p_instereo1
 	jmp	deliForward(pc)
 	jmp	deliBackward(pc)
 	p_NOP
-	jmp .id(pc)
-	dc  pt_instereo1
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
+	jmp 	.id(pc)
+	dc 	pt_instereo1
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song
 	dc.b	"In Stereo! 1.0      (EP)",0
 
 .path dc.b "in stereo 1.0",0
  even
 
+* Let's bend over backwards for this one.
+* It is an amplifier eagleplayer, so it can run
+* with data in fast ram. The replay code contains waveform
+* buffers. They need to be in chip. Therefore,
+* patch the eagleplayer to load into chip ram before loading it.
+
 .init	pushm	d1-a6	
+
+	* First, find it.
+	lea	.path(pc),a3
+	bsr	findDeliPlayer
+	beq.w	.error 
+	move.l d0,d7 	* lock
+
+	* Get the path
+	lea	-100(sp),sp
+	move.l 	d7,d1
+	move.l	sp,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	move.l  d0,d6 
+
+	move.l	d7,d1
+	lore  Dos,UnLock
+
+	tst.l	d6 
+	beq.b 	.nameFromLockErr
+	
+	* Read it
+	move.l	sp,a0
+	bsr	plainLoadFile 
+	lea		100(sp),sp 
+	tst.l  d0 
+	beq.b  .fileError 
+
+	* Grab the 1st entry from the hunk size table and set
+	* 31th bit to 0, 30th bit to 1, to indicate hunk should be loaded
+	* into chip.
+	move.l	d0,a1
+	move.l	d0,d3
+	move.l 	20(a1),d0 
+	and.l	#%00111111111111111111111111111111,d0 
+	or.l	#%01000000000000000000000000000000,d0 
+	move.l	d0,20(a1)
+
+	move.l	d1,d0
+	lea	-100(sp),sp 
+	move.l	sp,a0
+	move.b	#'T',(a0)+
+	move.b	#':',(a0)+
+	lea	.path(pc),a2 
+.c	move.b	(a2)+,(a0)+
+	bne.b	.c
+	move.l	sp,a0
+	bsr	plainSaveFile 
+	lea	100(sp),sp
+
+	move.l	d3,a0 
+	jsr	freemem
+
+	tst.l	d0 
+	bmi.b 	.fileError
+
+	
 	lea	.path(pc),a0
 	bsr	loadDeliPlayer
 	bmi.b	.error
 	bsr	deliInit
 .error	popm	d1-a6
 	rts
+
+.fileError 
+	lea	100(sp),sp
+	moveq	#-1,d0
+	bra.b  .error 	
+
+.nameFromLockErr
+	lea	100(sp),sp 
+	moveq	#-1,d0 
+	bra.b 	.error
+
 
 .id
 	MOVEQ	#1,D0
@@ -35493,9 +35567,9 @@ p_instereo2
 	jmp	deliForward(pc)
 	jmp	deliBackward(pc)
 	p_NOP
-	jmp .id(pc)
-	dc  pt_instereo1
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
+	jmp 	.id(pc)
+	dc 	pt_instereo2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song	
 	dc.b	"In Stereo! 2.0      (EP)",0
 
 .path dc.b "in stereo 2.0",0
@@ -35710,22 +35784,17 @@ loadDeliPlayer
 .noMod
 	bsr.w	freeDeliPlayer
 
- ifeq asm
-	tst.b	uusikick(a5)
-	beq.b	.old
-	lea	.searchPath1(pc),a2
-	bsr.b	.tryLoad
-	bne.b	.ok
-.old
- endif
-
-	lea	.searchPath2(pc),a2
-	bsr.b	.tryLoad
-	bne.b	.ok
-	bra.w	.error
-.ok
+	bsr.w 	findDeliPlayer
+	move.l	d0,d4
+	bmi.b	.err
+	bsr.b	.load 
+	move.l	d0,d3
+	move.l	d4,d1
+	lore 	Dos,UnLock
+	move.l	d3,d0 
 	move	moduletype(a5),deliPlayerType(a5)
 	lsl.l	#2,d0
+.err
 	rts
 
 .useOld 
@@ -35733,10 +35802,70 @@ loadDeliPlayer
 	DPRINT	"Using previous delipl 0x%lx",2
 	rts
 
-.tryLoad
-	lea	-200(sp),sp
+* in:
+*   d4 = lock
+* out:
+*   d0 = setlist or NULL
+.load
+	lea	-100(sp),sp
+	move.l 	d4,d1
+	move.l	sp,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	beq.b 	.err2
+
+ if DEBUG
+ 	move.l	sp,d0
+	DPRINT	"loadDeliPlayer %s",1
+ endif
+ 	move.l	sp,d1
+	lore 	Dos,LoadSeg
+.err2
+	lea	100(sp),sp
+	tst.l	d0
+	rts
+
+
+* in:
+*   a3: name
+* out:
+*   d0: lock or negative err
+findDeliPlayer	
+	lea .searchPath1(pc),a2 
+	bsr.b 	.tryLock
+	bne.b	.ok 
+	
+* PROGDIR not available on kick13 or asm
+ ifeq asm
+	tst.b	uusikick(a5)
+	beq.b	.skip
+	lea .searchPath2(pc),a2 
+	bsr.b 	.tryLock
+	bne.b	.ok 
+.skip
+ endc 
+
+	lea .searchPath3(pc),a2 
+	bsr.b 	.tryLock
+	beq.b	.fail	
+.ok
+	rts
+
+.fail 
+	lea	.errMsg(pc),a0 
+	move.l	a3,d0
+	jsr	desmsg
+	lea	 desbuf(a5),a1
+	jsr	request
+	moveq	#ier_eagleplayer,d0
+	rts	
+.errMsg
+	dc.b	"Couldn't find eagleplayer:",10,"%s",0
+ even
+
+.tryLock
+	lea	-100(sp),sp
 	move.l	sp,a1
-;	lea	.searchPath(pc),a2
 .path	
 	move.b	(a2)+,(a1)+
 	bne.b	.path
@@ -35747,28 +35876,16 @@ loadDeliPlayer
 	bne.b	.name
 
 	move.l	sp,d1
- if DEBUG
- 	move.l	d1,d0
-	DPRINT	"loadDeliPlayer %s",1
- endif
-	lore 	Dos,LoadSeg
-	lea	200(sp),sp
+	move.l	#ACCESS_READ,d2
+ 	lore 	Dos,Lock
+	lea	100(sp),sp
 	tst.l	d0
 	rts
-
-.error
-	lea	.err(pc),a0 
-	move.l	a3,d0
-	jsr	desmsg
-	lea	 desbuf(a5),a1
-	jsr	request
-	moveq	#ier_eagleplayer,d0
-	rts	
-.err
-	dc.b	"Unable to load eagleplayer:",10,"%s",0
 .searchPath1
-	dc.b	"PROGDIR:eagleplayers/",0
+	dc.b	"T:",0
 .searchPath2
+	dc.b	"PROGDIR:eagleplayers/",0
+.searchPath3
 	dc.b	"eagleplayer2:eagleplayers/",0
  even
  
@@ -36300,11 +36417,10 @@ freeDeliBase
 
 
 * Build the DeliBase structure, this is not a complete version.
- 
 buildDeliBase
 	bsr.b	freeDeliBase
 
-	move.l	#-ENPP_SizeOf+EPG_SizeOf+200+200,d0
+	move.l	#-ENPP_SizeOf+EPG_SizeOf+200+200+UPS_SizeOF,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
 	bne.b 	.ok 
@@ -36334,6 +36450,10 @@ buildDeliBase
 	cmp.l	a2,a1
 	bne.b	.copy
 	clr.b	(a3)		
+
+	lea	200(a4),a4
+	* InStereo2 uses this private structure
+	move.l	a4,EPG_UPS_Structure(a0)
 
  if DEBUG
 	move.l	dtg_FileArrayPtr(a0),d0
@@ -37289,10 +37409,193 @@ EEP_EagleBase		dc.b "EP_EagleBase",0
 EEP_Check7	    	dc.b "EP_Check7",0
 EEP_Check8		    dc.b "EP_Check8",0
 EEP_SetPlayFrequency dc.b "EP_SetPlayFrequency",0
-EEP_SamplePlayer    dc.b "EP_SamplePlayer",0
-                           
+EEP_SamplePlayer    dc.b "EP_SamplePlayer",0                  
  even
+
+deliShowFlags
+	move.l	#EP_Flags,d0
+	bsr	deliGetTag
+	beq.w	.noFlags
+	btst	#EPF_Songend,d0
+	beq.b	.f10
+	DPRINT	"EPF_Songend",1
+.f10
+	btst	#EPF_Restart,d0
+	beq.b	.f11
+	DPRINT	"EPF_Restart",2
+.f11
+	btst	#EPF_Disable,d0
+	beq.b	.f12
+	DPRINT	"EPF_Disable",3
+.f12
+	btst	#EPF_NextSong,d0
+	beq.b	.f13
+	DPRINT	"EPF_NextSong",4
+.f13
+	btst	#EPF_PrevSong,d0
+	beq.b	.f14 
+	DPRINT	"EPF_PrevSong",5
+.f14 
+	btst	#EPF_NextPatt,d0
+	beq.b	.f15
+	DPRINT	"EPF_PrevPatt",6
+.f15 
+	btst	#EPF_Volume,d0
+	beq.b	.f16
+	DPRINT	"EPF_Volume",7
+.f16 
+	btst	#EPF_Balance,d0
+	beq.b	.f17
+	DPRINT	"EPF_Balance",8
+.f17 
+	btst	#EPF_Voices,d0
+	beq.b	.f18
+	DPRINT	"EPF_Voices",9
+.f18 
+	btst	#EPF_Save,d0
+	beq.b	.f19
+	DPRINT	"EPF_Save",11
+.f19
+	btst	#EPF_Analyzer,d0
+	beq.b	.f20
+	DPRINT	"EPF_Analyzer",12
+.f20
+	btst	#EPF_ModuleInfo,d0
+	beq.b	.f21
+	DPRINT	"EPF_ModuleInfo",13
+.f21
+	btst	#EPF_SampleInfo,d0
+	beq.b	.f22 
+	DPRINT	"EPF_SampleInfo",14
+.f22 
+	btst	#EPF_Packable,d0
+	beq.b	.f23
+	DPRINT	"EPF_Packable",15
+.f23 
+	btst	#EPF_InternalUPSStructure,d0
+	beq.b	.f24
+	DPRINT	"EPF_InternalUPSStructure",16
+.f24 
+	btst	#EPF_RestartSong,d0
+	beq.b	.f25
+	DPRINT	"EPF_RestartSong",17
+.f25 
+	btst	#EPF_LoadFast,d0
+	beq.b	.f26
+	DPRINT	"EPF_LoadFast",18
+.f26 
+	btst	#EPF_EPAudioAlloc,d0
+	beq.b	.f27
+	DPRINT	"EPF_EPAudioAlloc",19
+.f27 
+	btst	#EPF_VolBalVoi,d0
+	beq.b	.f28
+	DPRINT	"EPF_VolBalVoi",21
+.f28 
+	btst	#EPF_CalcDuration,d0
+	beq.b	.f29
+	DPRINT	"EPF_CalcDuration",22
+.f29 
+	 
+.noFlags
+	rts 
  endif
+
+
+* Loads a file
+* in:
+*  a0 = file path
+* out: 
+*  d0 = loaded file address, or NULL if error
+*  d1 = length
+plainLoadFile
+	pushm	d2-a6
+	moveq	#0,d7
+
+	move.l	_DosBase(a5),a6
+	move.l	a0,d1
+	move.l	#MODE_OLDFILE,d2
+	lob	Open
+	move.l	d0,d6
+	beq.b	.openErr
+
+	move.l	d6,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d6,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
+
+	move.l	d5,d0		
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,d7
+	beq.b	.noMem
+
+	move.l	d6,d1		* file
+	move.l	d7,d2		* destination
+	move.l	d5,d3		* pituus
+	lob	Read
+	* d0 = -1 on error, read bytes otherwise
+	tst.l	d0 
+	bpl.b 	.ok
+
+	move.l	d7,a0 
+	jsr	freemem 
+	moveq	#0,d7
+.ok
+
+.noMem 
+	move.l	d6,d1
+	lore 	Dos,Close
+
+.openErr 
+
+	move.l	d7,d0
+	move.l  d5,d1
+	popm	d2-a6 
+	rts
+
+* Loads a file
+* in:
+*  a0 = file path
+*  a1 = data address
+*  d0 = data length
+* out: 
+*  d0 = Written bytes or -1 if error
+plainSaveFile
+	pushm	d1-a6
+	moveq	#-1,d7
+	move.l	a1,d4
+	move.l 	d0,d5
+
+	move.l	_DosBase(a5),a6
+	move.l	a0,d1
+	move.l	#MODE_NEWFILE,d2
+	lob	Open
+	move.l	d0,d6
+	beq.b	.openErr
+
+	move.l	d6,d1	* file
+	move.l	d4,d2	* buffer
+	move.l	d5,d3  	* len
+	lob 	Write
+	move.l  d0,d7 
+
+	move.l	d6,d1 
+	lore 	Dos,Close
+.openErr 
+	move.l	d7,d0
+	popm	d1-a6 
+	rts
+
 
 *******************************************************************************
 * Playereitä
