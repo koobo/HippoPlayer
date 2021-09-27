@@ -27082,8 +27082,8 @@ getNameFromLock
 	bne.b	.ok_
 	DPRINT	"NameFromLock FAILED!",2
 .ok_
- 	tst.l	d0
  endif	
+ 	tst.l	d0
 	popm	d1-a6
 	rts
 .old
@@ -27418,12 +27418,18 @@ are
 .alreadyHaveIt
 	bra.b	.x
 
+* Clear CPU caches
+* Use after code has been modified.
+* Can be called from deli support code.
 clearCpuCaches
+	pushm	all
+	lea	var_b,a5
 	move.l	(a5),a6
 	cmp	#37,LIB_VERSION(a6)
 	blo.b	.vanha
 	lob	CacheClearU	* cachet tyhjix, ei gurua 68040:llä!
 .vanha
+	popm 	all
 	rts
 
 **
@@ -35967,8 +35973,19 @@ deliInit
 	beq	.noMem
 	move.l	deliBase(a5),a4
 
+	* Quite important to clear the old ones away
+	* so that they don't get accidentally changed
+	* on new modules and crash.
+	clr.l	deliStoredInterrupt(a5)
+	clr.l	deliStoredSetVolume(a5)
+	clr.l	deliStoredSetVoices(a5) 
+	clr.l	deliStoredNoteStruct(a5) 
+	clr.l	deliStoredGetPositionNr(a5)
+	
+	
  if DEBUG
 	 bsr	deliShowTags
+	bsr		deliShowFlags
  endif
 
 	* Order in DT
@@ -36016,6 +36033,22 @@ deliInit
 	bne.w	.error
 .noCheck5
 
+	* TODO:
+	move.l	#EP_ModuleChange,d0 
+	bsr	deliGetTag
+	beq.b	.noModuleChange
+	moveq	#ier_not_compatible,d0 
+	bra.w 	.exit
+.noModuleChange
+	move.l	#EP_InitAmplifier,d0 
+	bsr	deliGetTag 
+	beq.b 	.noAmp
+	bsr	deliCallFunc
+	;moveq	#ier_not_compatible,d0 
+	;bra.w 	.exit
+.noAmp
+
+
 	move.l	#DTP_ExtLoad,d0  
 	bsr.w	deliGetTag
 	beq.b	.noExtLoad
@@ -36024,6 +36057,7 @@ deliInit
 	tst.l	d0
 	bne.w	.error
 .noExtLoad
+
 
 	move.l	#DTP_InitPlayer,d0  
 	bsr.w	deliGetTag
@@ -36051,8 +36085,6 @@ deliInit
 	bsr.w	deliGetTag
 	move.l	d0,deliStoredSetVoices(a5)
 
-	* Quite important to clear the old one away!
-	clr.l	deliStoredNoteStruct(a5)
 	move.l	#DTP_NoteStruct,d0  
 	bsr.w	deliGetTag
 	beq.w 	.noNoteStruct
@@ -36155,6 +36187,11 @@ deliInit
 	bra.w	.error
 .gotCia
 .skip
+
+;	move.l	deliStoredInterrupt(a5),a0
+;	move.l	deliBase(a5),a5
+;	jsr	(a0)
+
  if DEBUG
 	moveq	#0,d0
 	move	dtg_Timer(a4),d0
@@ -36254,6 +36291,7 @@ deliGetSongInfo
 * Interrupt play routine, use cached pointers to avoid tag searches
 deliInterrupt
 deliPlay
+	
 	move.l	a5,a4
 	push	a4
 	move.l	deliBase(a5),a5
@@ -36744,8 +36782,8 @@ funcENPP_TestAufHide
 	DPRINT "ENPP_TestAufHide",1
 	rts
 funcENPP_ClearCache
-	DPRINT "ENPP_ClearCache",1
-	rts
+	;DPRINT "ENPP_ClearCache",1
+	bra clearCpuCaches
 funcENPP_CopyMemQuick
 	DPRINT "ENPP_CopyMemQuick",1
 	rts
@@ -36804,17 +36842,17 @@ funcENPP_StopInterrupt
 	DPRINT "ENPP_StopInterrupt",1
 	rts
 funcENPP_SongEnd
-	DPRINT "ENPP_SongEnd",1
-	rts
+	;DPRINT "ENPP_SongEnd",1
+	jmp	 dtg_SongEnd(a5)
 funcENPP_CutSuffix
 	DPRINT "ENPP_CutSuffix",1
 	rts
 funcENPP_SetTimer
-	DPRINT "ENPP_SetTimer",1
-	rts
+	;DPRINT "ENPP_SetTimer",1
+	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
-	DPRINT "ENPP_WaitAudioDMA",1
-	rts
+	;DPRINT "ENPP_WaitAudioDMA",1
+	bra dmawait
 funcENPP_SaveMem
 	DPRINT "ENPP_SaveMem",1
 	rts
@@ -36853,6 +36891,7 @@ funcENPP_TypeText
 	rts
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange",1
+	bsr	deliModuleChange
 	rts
 funcENPP_ModuleRestore
 	DPRINT "ENPP_ModuleRestore",1
@@ -36866,6 +36905,7 @@ funcENPP_CalcStringSize
 funcENPP_StringCMP
 	DPRINT "ENPP_StringCMP",1
 	rts
+
 funcENPP_DMAMask
 	push	d1
 	tst.w	d0
@@ -36952,7 +36992,8 @@ funcENPP_PokeCommand
 	rts
 
 funcENPP_Amplifier
-	DPRINT "ENPP_Amplifier",1
+	; Called from interrupt, no logging
+	;DPRINT "ENPP_Amplifier",1
 	rts
 funcENPP_TestAbortGadget
 	DPRINT "ENPP_TestAbortGadget",1
@@ -36985,11 +37026,11 @@ funcENPP_CloseCatalog
 	DPRINT "ENPP_CloseCatalog",1
 	rts
 funcENPP_AllocAmigaAudio
-	DPRINT "ENPP_AllocAmigaAudio",1
-	rts
+	;DPRINT "ENPP_AllocAmigaAudio",1
+	bra	deliAllocAudio
 funcENPP_FreeAmigaAudio
-	DPRINT "ENPP_FreeAmigaAudio",1
-	rts
+	;DPRINT "ENPP_FreeAmigaAudio",1
+	bra deliFreeAudio
 funcENPP_RawToFormat
 	DPRINT "ENPP_RawToFormat",1
 	rts
@@ -37165,6 +37206,14 @@ deliNotePlayer
 		*moveq	#0,d0
 		;movem.l	(a7)+,a4-a6
 		rts
+
+deliModuleChange
+	DPRINT	"deliModuleChange",1
+	* TODO
+	rts
+
+
+
 
 
 
