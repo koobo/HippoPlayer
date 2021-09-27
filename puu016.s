@@ -2079,6 +2079,18 @@ main
 	ble.b	.vanha
 	st	uusikick(a5)		* Uusi kickstart
 
+	* Set homedir for this task, kick2.0+
+	* Assume hat pr_HomeDir gets unlocked by os.
+ ifeq asm	
+	move.l	owntask(a5),a0 
+	tst.l 	pr_HomeDir(a0) 
+	bne.b 	.hasHome 
+	move.l	homelock(a5),d1 
+	lore	Dos,DupLock
+	move.l	d0,pr_HomeDir(a0)
+.hasHome
+ endif
+
 	lea	colors,a0
 	move	#$0301,d0
 ;	moveq	#$0001,d0
