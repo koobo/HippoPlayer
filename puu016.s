@@ -27431,20 +27431,23 @@ clearCpuCaches
 **
 * a0 = hunkki
 reloc	pushm	d0-d2/a0/a1
-	lea	28(a0),a0
-	move.l	(a0)+,d2
-	lsl.l	#2,d2	
-	move.l	a0,a1
-	move.l	a0,d1
-	lea	4(a0,d2.l),a0
-	move.l	(a0)+,d2
+	lea	28(a0),a0		* Address of CODE hunk length in long words
+	move.l	(a0)+,d2	* Read it
+	lsl.l	#2,d2		* Convert to bytes
+	move.l	a0,a1		* a0 = start of the actual code
+	move.l	a0,d1		* also in d1 
+	lea	4(a0,d2.l),a0	* skip over to HUNK_RELOC32 start + 4
+						* skip over the hunk id, that i
+	move.l	(a0)+,d2	* Number of offsets to handle
 	subq.l	#1,d2
 	bmi.b	.024c
-	addq.w	#4,a0
-.0242	move.l	(a0)+,d0
+	addq.w	#4,a0		* Skip over the target hunk number
+.0242	move.l	(a0)+,d0 * read RELOC32 offset
+	* Add start address of the code hunk to the 
+	* address specified by the reloc offset
 	add.l	d1,(a1,d0.l)
 	dbf	d2,.0242
-.024c	addq.w	#8,a0
+.024c	addq.w	#8,a0	* a0 points to next hunk likely
 	popm	d0-d2/a0/a1
 	rts	
 
