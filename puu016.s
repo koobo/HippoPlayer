@@ -938,6 +938,7 @@ soundfxroutines	rs.l	0
 gluemonroutines	rs.l	0
 pretrackerroutines rs.l	0
 custommaderoutines rs.l 0
+startrekkerroutines rs.l 0
 sonicroutines	rs.l	0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
@@ -1230,7 +1231,8 @@ pt_beathoven	rs.b	1
 pt_delicustom	rs.b 	1
 
 * These need a replayer from the group file
-pt_group_start = 49
+* These are ids into the file and must match playergroup0.s
+pt_group_start = 100
 	rsset	pt_group_start		* Ulkoiset
 pt_multi	rs.b	1		* PS3M (mod,ftm,mtm,s3m)
 pt_tfmx		rs.b	1
@@ -1262,6 +1264,10 @@ pt_pretracker		rs.b	1
 pt_custommade		rs.b 	1
 pt_sonicarranger	rs.b	1
 pt_davelowe		rs.b	1
+pt_startrekker		rs.b 	1
+
+pt_eagle_start = 1000
+	rsset	pt_eagle_start
 pt_synthesis		rs.b 	1
 pt_syntracker		rs.b  	1
 pt_robhubbard2 		rs.b 	1
@@ -24748,7 +24754,7 @@ loadfile
 .notDeliCustom 
 	bsr	id_davelowe
 	bne.b	.notDl
-	moveq	#pt_davelowe,d7
+	move	#pt_davelowe,d7
 	bra.b	.exeOk
 .notDl
 	bra.b	.notKnown
@@ -25013,6 +25019,7 @@ groupFormats
 	dc.l	p_pretracker 
 	dc.l 	p_custommade 
 	dc.l 	p_sonicarranger
+	dc.l	p_startrekker
 	dc.l 	p_player
 	dc.l 	0
 
@@ -25164,8 +25171,8 @@ tutki_moduuli2
 .ptch	cmp.l	#"M.K.",1080(a0)
 	beq.b	.petc
 	cmp.l	#"M!K!",1080(a0)
-	beq.b	.petc
-	cmp.l	#"FLT4",1080(a0)
+;	beq.b	.petc
+;	cmp.l	#"FLT4",1080(a0)
 .petc	rts
 
 .ahitun
@@ -28267,9 +28274,11 @@ id_protracker
 	beq.b	.p	
 	cmp.l	#'M!K!',1080(a4)	* Protracker 100 patterns
 	beq.b	.p	
-	cmp.l	#'FLT4',1080(a4)	* Startrekker
-	bra.w	idtest
-
+;	cmp.l	#'FLT4',1080(a4)	* Startrekker
+;	bra.w	idtest
+	moveq	#-1,d0 
+	rts
+	
 .p	moveq	#0,d0
 	rts
 
@@ -35278,6 +35287,149 @@ id_davelowe
 	moveq	#-1,D0
 	rts
 
+
+******************************************************************************
+* StarTrekker AM
+******************************************************************************
+
+p_startrekker
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp 	.id(pc)
+	dc.w 	pt_startrekker
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
+	dc.b	"Startrekker AM",0
+ even
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.END   = 8+$20
+
+.extraDataPtr	dc.l 	0
+.extraDataLen	dc.l 	0
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	startrekkerroutines(a5),a0
+	bsr.w	allocreplayer2
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+
+	* Load extra data file ".nt"
+	jsr	getcurrent 
+	* a3 = node
+	lea	-200(sp),sp
+	lea	l_filename(a3),a0
+	move.l	sp,a1
+.c	move.b	(a0)+,(a1)+
+	bne.b	.c
+	subq	#1,a1
+	move.b	#".",(a1)+
+	move.b	#"n",(a1)+
+	move.b	#"t",(a1)+
+	clr.b	(a1)
+
+ if DEBUG
+	move.l	sp,d0
+	DPRINT	"Loading %ls",1
+ endif
+
+
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
+	move.l	sp,a0
+	lea	.extraDataPtr(pc),a1
+	lea 	.extraDataLen(pc),a2
+	bsr	loadfile
+	lea	200(sp),sp
+	* d0 = 0 if success
+	tst.l	d0 
+	bne.b 	.fileErr
+
+	move.l	moduleaddress(a5),a0
+	move.l	.extraDataPtr(pc),a1
+	lea	mainvolume(a5),a2
+	lea	songover(a5),a3
+	lea	dmawait(pc),a4
+	push	a5
+	move.l	startrekkerroutines(a5),a5
+	jsr	.INIT(a5)
+	pop 	a5
+	move	d1,pos_maksimi(a5)
+.x
+	popm	d1-a6
+	* INIT returns 0 on success
+	rts	
+
+.fileErr 
+	moveq	#-1,d0 
+	bra.b 	.x
+
+.play
+	push	a5
+	move.l	startrekkerroutines(a5),a0
+	jsr	.PLAY(a0)
+	pop 	a5
+	move	d0,pos_nykyinen(a5)
+	rts
+
+.stop
+	bra.w	clearsound
+
+.end
+	jsr	rem_ciaint
+	move.l	startrekkerroutines(a5),a0
+	jsr	.END(a0)
+	bsr.w	clearsound
+
+	move.l	.extraDataPtr(pc),d0 
+	beq.b	.s
+	move.l	d0,a1
+	move.l	.extraDataLen(pc),d0 
+	clr.l 	.extraDataPtr 
+	clr.l	.extraDataLen
+	lore Exec,FreeMem
+.s
+	bra.w	vapauta_kanavat
+
+
+
+; in: a4 = module
+;     d7 = module lenght
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id
+	cmp.l	#"FLT4",$438(a4)
+	beq.s	.k
+	cmp.l	#"EXO4",$438(a4)
+	beq.s	.k
+	moveq	#-1,d0
+	rts 
+.k
+	moveq	#0,d0
+	rts
 
 
 

@@ -111,7 +111,8 @@ main
 	dc.l	pretrackerdata-main,custommadedata-pretrackerdata
 	dc.l	custommadedata-main,sonicarrangerdata-custommadedata
 	dc.l	sonicarrangerdata-main,davelowedata-sonicarrangerdata
-	dc.l	davelowedata-main,pend-davelowedata
+	dc.l	davelowedata-main,startrekkerdata-davelowedata
+	dc.l	startrekkerdata-main,pend-startrekkerdata
 	
 ;	ds.l	20*2		* Tilaa 20:lle uudelle
 
@@ -171,5 +172,6 @@ pretrackerdata		incbin pretracker.bin.im
 custommadedata		incbin custommade_v1.im
 sonicarrangerdata	incbin sonicarranger.im
 davelowedata		incbin davelowe.im
+startrekkerdata		incbin startrekker.im
 pend
 
