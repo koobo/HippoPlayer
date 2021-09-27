@@ -25242,7 +25242,7 @@ tutki_moduuli
 	bne.b	.ohi
 	
 	bsr.w	id_protracker
-	beq.w	.pro
+	beq.w	.protracker
 
 .ohi
 	* Test for formats that do not require an external
@@ -25503,7 +25503,8 @@ tutki_moduuli
 	bsr.w	convert_oldst
 	bra.b	.pro0
 
-.pro	clr.b	oldst(a5)
+.protracker	
+		clr.b	oldst(a5)
 .pro0	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
 	moveq	#20-1,d0
@@ -35380,11 +35381,22 @@ p_startrekker
 	move	d1,pos_maksimi(a5)
 .x
 	popm	d1-a6
+	tst.l	d0
 	* INIT returns 0 on success
 	rts	
 
 .fileErr 
-	moveq	#-1,d0 
+	* No extra data file tound. Proceed as Protracker
+	DPRINT	"Revert to Protracker",2
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	pushpea	p_protracker(pc),playerbase(a5)
+	move	#pt_prot,playertype(a5)
+	moveq	#20-1,d0
+	bsr	copyNameFromModule
+	moveq	#0,d0 
+	move.l	playerbase(a5),a0 
+	jsr	p_init(a0)
 	bra.b 	.x
 
 .play
@@ -35415,12 +35427,19 @@ p_startrekker
 	bra.w	vapauta_kanavat
 
 
+.id
+	bsr.b	.id_
+	bne.b 	.nok
+	moveq	#20-1,d0
+	bsr	copyNameFromModule
+	moveq	#0,d0	
+.nok	rts
 
 ; in: a4 = module
 ;     d7 = module lenght
 ; out: d0 = 0, valid valid
 ;      d0 = -1, not valid
-.id
+.id_
 	cmp.l	#"FLT4",$438(a4)
 	beq.s	.k
 	cmp.l	#"EXO4",$438(a4)
