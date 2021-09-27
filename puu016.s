@@ -35411,8 +35411,8 @@ p_richardjoseph
 	jmp .id(pc)
 	dc  pt_richardjoseph
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
-	dc.b	"Richard Joseph      (EP)",0
-
+	;dc.b	"Richard Joseph      (EP)",0
+	dc.b	"R.Joseph/VectorDean (EP)",0
 .path dc.b "richard joseph player",0
  even
 
