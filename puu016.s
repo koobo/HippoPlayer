@@ -36142,8 +36142,8 @@ deliInit
 	
 	
  if DEBUG
-	 bsr	deliShowTags
-	bsr		deliShowFlags
+	bsr	deliShowTags
+	bsr	deliShowFlags
  endif
 
 	* Order in DT
@@ -36191,13 +36191,12 @@ deliInit
 	bne.w	.error
 .noCheck5
 
-	* TODO:
-	move.l	#EP_ModuleChange,d0 
+	move.l	#EP_Flags,d0
 	bsr	deliGetTag
-	beq.b	.noModuleChange
-	moveq	#ier_not_compatible,d0 
-	bra.w 	.exit
-.noModuleChange
+	beq.b	.noFlags
+	bsr	deliHandleFlags
+.noFlags
+
 	move.l	#EP_InitAmplifier,d0 
 	bsr	deliGetTag 
 	beq.b 	.noAmp
@@ -36205,7 +36204,6 @@ deliInit
 	;moveq	#ier_not_compatible,d0 
 	;bra.w 	.exit
 .noAmp
-
 
 	move.l	#DTP_ExtLoad,d0  
 	bsr.w	deliGetTag
@@ -36232,7 +36230,6 @@ deliInit
 	move.l	deliBase(a5),a0
 	move	d0,dtg_SndNum(a0)
 	move	d0,songnumber(a5)
-	
 	move	d2,maxsongs(a5)	
 
 	move.l	#DTP_Volume,d0  
@@ -36414,7 +36411,15 @@ deliUpdatePositionInfo
 	bsr	deliFindInfoValue 
 	bmi.b 	.noPos
 	move	d0,pos_maksimi(a5)
-.noPos	rts
+	move.l	playerbase(a5),a0 
+	or	#pf_poslen,p_liput(a0)
+	rts
+.noPos
+	move.l	playerbase(a5),a0 
+	move	p_liput(a0),d0
+	bclr	#pb_poslen,d0
+	move	d0,p_liput(a0)
+	rts
 
 * out:
 *  d0=default song
@@ -36529,7 +36534,7 @@ deliSong
 	bsr	deliGetSongInfo
 	* returns
 	* d1 = min song
-	* d2 = max son
+	* d2 = max song
 	
 	moveq	#0,d0
 	move	songnumber(a5),d0
@@ -36716,11 +36721,15 @@ buildDeliBase
 	pea	.cutSuffix(pc)
 	move.l	(sp)+,dtg_CutSuffix(a0)
 
+	pea	deliModuleChange(pc)
+	move.l	(sp)+,EPG_ModuleChange(a0)
+
 	* Stub the rest
  	lea	.stub(pc),a1
 	move.l	a1,dtg_LockScreen(a0)
 	move.l	a1,dtg_UnlockScreen(a0)
 	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
+
 
 	* EaglePlayer negative offset jump table
 	lea	eagleJumpTableStart(pc),a1
@@ -37049,8 +37058,7 @@ funcENPP_TypeText
 	rts
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange",1
-	bsr	deliModuleChange
-	rts
+	bra	deliModuleChange
 funcENPP_ModuleRestore
 	DPRINT "ENPP_ModuleRestore",1
 	rts
@@ -37366,12 +37374,150 @@ deliNotePlayer
 		rts
 
 deliModuleChange
-	DPRINT	"deliModuleChange",1
-	* TODO
+	DPRINT	"deliModuleChange",6
+ if DEBUG
+	move.l	EPG_ARG1(a5),d0 
+	DPRINT	"Start %lx",1
+	move.l	EPG_ARG2(a5),d0 
+	DPRINT	"Length %lx",2
+	move.l	EPG_ARG3(a5),d0 
+	DPRINT	"Patches %lx",3
+	move.l	EPG_ARG4(a5),d0 
+	DPRINT	"Arg4 %lx",4
+	move.l	EPG_ARG5(a5),d0 
+	DPRINT	"Arg5 %lx",5
+ endif
+
+	; additional args not supported, lol!
+	move.l	EPG_ARG4(a5),d0 
+	cmp.l	#1,d0 
+	bne.b	.notSupp
+	move.l	EPG_ARG5(a5),d0 
+	cmp.l	#-2,d0 
+	bne.b 	.notSupp
+	tst.l	EPG_ARG1(a5)
+	beq.b	.notSupp
+	tst.l	EPG_ARG3(a5)
+	beq.b	.notSupp
+	tst.l	EPG_ARG2(a5)
+	beq.b	.notSupp
+
+	* Data to patch
+	move.l	EPG_ARG1(a5),a0
+	* PatchTable 
+	move.l	EPG_ARG3(a5),a1 
+	* Length of data to patch
+	move.l 	EPG_ARG2(a5),d1 
+	
+	pushm	a5/a6
+	bsr.b .patch
+	popm	a5/a6
+	bsr	clearCpuCaches
+	rts
+.notSupp
+	DPRINT	"Unsupported params!",8
 	rts
 
+* in:
+*  a1 = patchtable
+*  a0 = data
+*  d1 = len
+.patch
+	;lea	PatchTable(pc),a1
+	* End bound is at a4
+	lea	(a0,d1.l),a4
+	* PatchTable start at d1
+	move.l	a1,d1
+.loop
+	* find from a3 to a4
+	;move.l	ModuleAddr(pc),a0
+	move.l	a0,a3
+	;move.l	InfoBuffer+LoadSize(pc),d0
+	;move.l	d1,d0
+	;lea	(a0,d0.l),a4
+	* Get code to find
+	;lea	PatchTable(pc),a2
+	move.l	d1,a2
+	add	(a1),a2
+.findCode
+	* read data word
+	move	(a3),d7
+	cmp.l	a4,a3
+	bhs.b	.notFound
+	* compare patch word
+	cmp	(a2),d7
+	beq.b	.found
+.notF	addq	#2,a3
+	bra.b	.findCode
 
+.found
+	* compare length
+	move	2(a1),d6
+	move.l	a3,a6
+	move.l	a2,a5
+.cmp	cmpm.w	(a5)+,(a6)+
+	bne.b	.notF
+	dbf	d6,.cmp
+	* Found correct data at a3
+	* apply patch
 
+	* patch address
+; JSR x = $4eB9 xxxx xxxx
+; NOP   = $4e71
+	;lea	PatchTable(pc),a5
+	move.l	d1,a5
+	add	4(a1),a5
+	move	2(a1),d6
+	move	#$4eb9,(a3)+
+	move.l	a5,(a3)+
+	subq	#3,d6	
+	bmi.b	.NoNop
+.nopFill	move	#$4e71,(a3)+
+	dbf	d6,.nopFill
+.NoNop	
+
+.notFound
+	addq	#6,a1
+	tst	(a1)
+	bne.b	.loop
+	
+	rts
+	
+
+* Maps some EP flags into hippo flags
+* in:
+*    d0 = EPF_Flags
+deliHandleFlags
+	move.l	playerbase(a5),a0
+	move 	p_liput(a0),d1
+
+	bclr	#pb_end,d1
+	btst	#EPF_Songend,d0 
+	beq.b 	.1
+	bset	#pb_end,d1
+.1	
+	bclr	#pb_song,d1
+	btst	#EPF_NextSong,d0
+	beq.b 	.2
+	bset	#pb_song,d1
+.2
+	bclr	#pb_volume,d1
+	btst	#EPF_Volume,d0
+	beq.b 	.3
+	bset	#pb_volume,d1
+.3
+	bclr	#pb_kelauseteen,d1
+	btst	#EPF_NextPatt,d0
+	beq.b 	.4
+	bset	#pb_kelauseteen,d1
+.4
+	bclr	#pb_kelaustaakse,d1
+	btst	#EPF_PrevPatt,d0
+	beq.b 	.5
+	bset	#pb_kelaustaakse,d1
+.5
+	move	d1,p_liput(a0)
+	rts
 
 
 
