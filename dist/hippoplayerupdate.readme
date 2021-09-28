@@ -51,8 +51,18 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
   recognized. 
 - For lists with only list dividers the selection would sometimes 
   go looping around the list and never stopping.
-- JamCracker had an annoying audible *BEEP* once in a while. Fixed it.
-  (Empty sample data was not in chip mem.)
+ 
+## New features:
+- Patternscope XL, with twice the amount of rows. 
+  Implementation was also optimized quite a bit.
+- Eagleplayer support! Hippo can now use external eagleplayers to play some
+  formats. See below for format details. To use, you have to make
+  the eagleplayers available to Hippo. This can be done by ensuring
+  they are found from either "EaglePlayer2:Eagleplayers", which
+  is the usual EaglePlayer install location, or from
+  "PROGDIR:Eagleplayers". Here "PROGDIR:" means the directory
+  where the Hippo binary is located, and is only supported for kick2.0
+  and newer. Kick1.3 users are left with the former option.
 
 ## New music formats:
 - PreTracker by Pink/aBYSs. Noice! Samples are generated during 
@@ -63,8 +73,8 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 - CustomMade
   - Battle Squadron! Format by Ivo Zoer, songs composed by Ron Klaren. 
     Adaptation based on Wanted Team sources.
-- Dave Love
-  - Just wanted to hear Hippo play the International Karate + title music. 
+- Dave Lowe
+  - Just wanted to hear Hippo play the International Karate+ title music. 
     Adaptation based on Wanted Team sources.
 - DeliTracker Custom format improvements, adds support for modules 
   with external samples:
@@ -72,11 +82,31 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
   - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too
 - GlueMon (properly retro sound)
 - SoundFX (some nice ones in there)
- 
-## New features:
-- Patternscope XL, with twice the amount of rows. 
-  Implementation was also optimized quite a bit.
+- StarTrekker AM (pretty crunchy)
 - Improved JamCracker support: added volume control and position/length info.
+   - Also had an annoying audible *BEEP* once in a while. Fixed it.
+     (Empty sample data was not in chip mem, my fault.)
+
+## New supported Eagleplayer formats, plugin name in parenthesis:
+- Synthesis ("synth 4.0")
+- SynTracker ("syntracker")
+- Rob Hubbard 2 ("rob hubbard 2")
+  - Many Infogrames games used this, eg. the "Flood" title tune.
+- ChipTracker ("chiptracker")
+  - Tunes by 4-Mat!
+- Quartet ("quartet")
+  - This is an ST format. Quite unpleasant tunes.
+- Richard Joseph/VectorDean ("richard joseph player")
+- In Stereo! 1.0 ("in stereo 1.0")
+- In Stereo! 2.0 ("in stereo 2.0")
+  - Nice synth sounds! These two were predecessors to 
+    SonicArranger as far as I know.
+- Jason Brooke ("jason brooke")
+
+## Tips 
+- A nice place for exotic modules is the FTP server Modland. 
+- Eagleplayers can be found on aminet and on the Wanted Team web page. 
+  Many modules are also available there.
 
 ## Thanks and greetings to:
 - Spot/UpRough for beta testing and music format related assistance.

@@ -25,16 +25,43 @@ Formats
 + SonicArranger, all three variants
 - MusicMaker
 + SoundFX 1.x
-- Synthesis
++ Synthesis
 - FTM
-- InStereo
++ InStereo
 + Ron Klaren + CustomMade
 - MusicMakerV8
-- Syntracker
-- RichardJoseph
++ Syntracker
++ RichardJoseph
 - TCBTracker
-- Quartet
++ Quartet
++ JasonBrooke
+- MultiMediaSound
++ startrekker
 
+
+TODO
+- international karate+, memory overwrite
+
+TODO
+- startrekker, memory overwrite after main module data
+
+FIXED
+- play "aliens"
+- play "KRIS"
+--Boom
+
+FIXED
+- play rh-captainblood
+- play nuclear-synthetics.synmod
+-> ui hang, music play
+- play flood
+- play amegas
+-> SAME
+
+
+FIXED
+- play eagle module: nuclear-synthetics.synmod 
+- push play button -> booms
 
 FIXED
 - have list with two dividers
