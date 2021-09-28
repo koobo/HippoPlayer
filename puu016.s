@@ -7526,9 +7526,9 @@ nappuloita
 	dr	rbutton6	* prev
 	dc	$28
 	dr	rbutton5	* next
-	dc	$4f
-	dr	actionPrevSong	* prev song
 	dc	$4e
+	dr	actionPrevSong	* prev song
+	dc	$4f
 	dr	actionNextSong	* next song
 
 	dc	7
