@@ -943,7 +943,9 @@ sonicroutines	rs.l	0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
+startrekkerdataaddr rs.l 0
 tfmxsamplesaddr	rs.l	1	* TFMX:n samplejen osoite
+startrekkerdatalen rs.l 0
 tfmxsampleslen	rs.l	1	* TFMX:n samplejen pituus
 medrelocced	rs.b	1	* ei-0: Med-modi relocatoitu
 medtype		rs.b	1	* 0: 1-4, 1: 5-8, 2: 1-64
@@ -35315,8 +35317,6 @@ p_startrekker
 .PLAY  = 4+$20
 .END   = 8+$20
 
-.extraDataPtr	dc.l 	0
-.extraDataLen	dc.l 	0
 
 .init
 	bsr.w	varaa_kanavat
@@ -35358,11 +35358,10 @@ p_startrekker
 	DPRINT	"Loading %ls",1
  endif
 
-
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	move.l	sp,a0
-	lea	.extraDataPtr(pc),a1
-	lea 	.extraDataLen(pc),a2
+	lea	startrekkerdataaddr(a5),a1
+	lea 	startrekkerdatalen(a5),a2
 	bsr	loadfile
 	lea	200(sp),sp
 	* d0 = 0 if success
@@ -35370,7 +35369,7 @@ p_startrekker
 	bne.b 	.fileErr
 
 	move.l	moduleaddress(a5),a0
-	move.l	.extraDataPtr(pc),a1
+	move.l	startrekkerdataaddr(a5),a1
 	lea	mainvolume(a5),a2
 	lea	songover(a5),a3
 	lea	dmawait(pc),a4
@@ -35392,8 +35391,6 @@ p_startrekker
 	bsr.w	vapauta_kanavat
 	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
-	moveq	#20-1,d0
-	bsr	copyNameFromModule
 	moveq	#0,d0 
 	move.l	playerbase(a5),a0 
 	jsr	p_init(a0)
@@ -35415,17 +35412,7 @@ p_startrekker
 	move.l	startrekkerroutines(a5),a0
 	jsr	.END(a0)
 	bsr.w	clearsound
-
-	move.l	.extraDataPtr(pc),d0 
-	beq.b	.s
-	move.l	d0,a1
-	move.l	.extraDataLen(pc),d0 
-	clr.l 	.extraDataPtr 
-	clr.l	.extraDataLen
-	lore Exec,FreeMem
-.s
 	bra.w	vapauta_kanavat
-
 
 .id
 	bsr.b	.id_
