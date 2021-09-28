@@ -2090,12 +2090,12 @@ main
 	* Set homedir for this task, kick2.0+
 	* Assume hat pr_HomeDir gets unlocked by os.
  ifeq asm	
-	move.l	owntask(a5),a0 
-	tst.l 	pr_HomeDir(a0) 
+	move.l	owntask(a5),a3 
+	tst.l 	pr_HomeDir(a3) 
 	bne.b 	.hasHome 
 	move.l	homelock(a5),d1 
 	lore	Dos,DupLock
-	move.l	d0,pr_HomeDir(a0)
+	move.l	d0,pr_HomeDir(a3)
 .hasHome
  endif
 
