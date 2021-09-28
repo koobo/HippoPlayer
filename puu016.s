@@ -1018,7 +1018,7 @@ lod_tfmx		rs.b	1
 lod_pad			rs.b	1
 lod_kommentti		rs.b	1	 * 0: ei oteta kommenttia
 lod_xpkfile		rs.b	1	 * <>0: tiedosto oli xpk-pakattu
-	rs.b	1			
+lod_exefile		rs.b	1	 * <>0: file was an exe		
 lod_dirlock		rs.l	1
 lod_buf			rs.b	200
 lod_b			rs.b	0
@@ -5631,7 +5631,10 @@ freemodule
 	beq.b	.normal
 	move.l 	a1,d1
 	lore	Dos,UnLoadSeg
-	DPRINT	"UnLoadSeg!",3
+ if DEBUG
+	move.l	moduleaddress(a5),d0
+	DPRINT	"UnLoadSeg 0x%lx",3
+ endif
 	bra.b	.exe
 .normal
 
@@ -5656,6 +5659,7 @@ freemodule
 	* See if there are TFMX samples that can be freed
 	move.l	tfmxsamplesaddr(a5),d0
 	beq.b	.noTFMX
+	DPRINT	"Free extra data 0x%lx",6
 	move.l	d0,a1
 	move.l	tfmxsampleslen(a5),d0
 	lob	FreeMem
@@ -23283,6 +23287,9 @@ loadmodule
 	move.b	d0,d7
 	beq.w	.nodbf
 
+*****************************************************************
+* Double buffer load
+*****************************************************************
 	DPRINT	"Double buffer load",10
 
 	* Load with double buffering.
@@ -23290,13 +23297,21 @@ loadmodule
 
 	move.l	a0,modulefilename(a5)
 
+	* Store properties of current module
 	lea	-40(sp),sp
-
 	lea	(sp),a2
 	move.l	modulelength(a5),(a2)+
 	move.l	tfmxsamplesaddr(a5),(a2)+
 	move.l	tfmxsampleslen(a5),(a2)+
 	move.b	lod_tfmx(a5),(a2)
+
+	* Reset the extra data properties
+	* loadfile() sets for TFMX. For other files
+	* they are untouched. freemodule() will free
+	* these, setting to zero avoids double freemem
+	* crash.
+	clr.l	tfmxsamplesaddr(a5) 
+	clr.l	tfmxsampleslen(a5)
 
 ;	move.l	modulefilename(a5),a0
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
@@ -23304,7 +23319,7 @@ loadmodule
 	lea	modulelength(a5),a2
 	moveq	#0,d1			* kommentti talteen
 	bsr.w	loadfile
-	move.l	d0,d7
+	move.l	d0,d7			* store loadfile status
 
 	clr.b	loading(a5)		* lataus loppu
 
@@ -23312,12 +23327,14 @@ loadmodule
 	clr	pos_maksimi(a5)
 	clr	pos_nykyinen(a5)
 
+	* Store properties of the module that was just loaded
 	lea	20(sp),a2
 	move.l	modulelength(a5),(a2)+
 	move.l	tfmxsamplesaddr(a5),(a2)+
 	move.l	tfmxsampleslen(a5),(a2)+
 	move.b	lod_tfmx(a5),(a2)
 
+	* Restore properties of current module
 	lea	(sp),a2
 	move.l	(a2)+,modulelength(a5)
 	move.l	(a2)+,tfmxsamplesaddr(a5)
@@ -23325,6 +23342,11 @@ loadmodule
 	move.b	(a2),lod_tfmx(a5)
 
 	push	d7
+
+	* At this point correct properties
+	* for current module should be in place
+	* for freeing to NOT CRASH.
+
 
 	jsr	fadevolumedown
 	move	d0,-(sp)
@@ -23335,12 +23357,14 @@ loadmodule
 	jsr		p_end(a0)
 	lore    Exec,Enable
 
+
 	move.l	modulefilename(a5),a0
 	jsr	freemodule	
 	move	(sp)+,mainvolume(a5)
 
 	pop	d7
 
+	* Finally store properties of the newly loaded module.
 	lea	20(sp),a2
 ;	move.l	(a2)+,moduleaddress(a5)
 	move.l	moduleaddress2(a5),moduleaddress(a5)
@@ -23348,6 +23372,9 @@ loadmodule
 	move.l	(a2)+,tfmxsamplesaddr(a5)
 	move.l	(a2)+,tfmxsampleslen(a5)
 	move.b	(a2),lod_tfmx(a5)
+
+	* Grab exe load status from loader
+	move.b 	lod_exefile(a5),executablemoduleinit(a5)
 
 	tst.l	d7
 	beq.b	.nay
@@ -23374,8 +23401,10 @@ loadmodule
 	move.l	modulefilename(a5),a0
 
 .nodbf
-	** Normal loading
-
+*****************************************************************
+** Normal loading
+*****************************************************************
+	
  ifne DEBUG
 	move.l	a0,d0
 	DPRINT	 "Loading: %s",1
@@ -23406,6 +23435,9 @@ loadmodule
 	move.l	(sp)+,d0
 	tst	d0
 	bne.w	.err			* virhe lataamisessa
+
+	* Grab exe load status from loader
+	move.b 	lod_exefile(a5),executablemoduleinit(a5)
 
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
@@ -23667,7 +23699,8 @@ loadfile
 	* Clear flag that indicates that the module that was loaded
 	* was in fact an executable. If this is not done,
 	* XPK packed modules are thought to be DeliCustoms and mayhem ensues.
-	clr.b	executablemoduleinit(a5)
+	;clr.b	executablemoduleinit(a5)
+	clr.b	lod_exefile(a5)
 
 ** Archiven purku
 
@@ -24064,7 +24097,8 @@ loadfile
 
 	bsr	.handleExecutableModuleLoading
 	* Skip the rest if LoadSeg above went fine
-	tst.b	executablemoduleinit(a5)
+	;tst.b	executablemoduleinit(a5)
+	tst.b 	lod_exefile(a5)
 	bne.w	.exit
 
 
@@ -24732,7 +24766,8 @@ loadfile
 	* for Delitracker CUSTOM format, as it has to be loaded
 	* with LoadSeg(), being an exe file.
 	* Clear the flag that indicates exe module load status.
-	clr.b	executablemoduleinit(a5)
+	;clr.b	executablemoduleinit(a5)
+	clr.b	lod_exefile(a5)
 	* There are no AHI supported exe type modules
 	tst.b	ahi_muutpois(a5)
 	bne.w	.ahiSkip
@@ -24768,7 +24803,8 @@ loadfile
 	tst.l	d0
 	beq.b	.loadSegErr
 	* set type of loadsegged module
-	move.b	d7,executablemoduleinit(a5)
+	;move.b	d7,executablemoduleinit(a5)
+	move.b	d7,lod_exefile(a5)
 	move.l	d0,lod_address(a5)
 	* length is not readily available for these, so clear it
 	clr.l	lod_length(a5)
@@ -35338,7 +35374,7 @@ p_startrekker
 	rts
 .ok3
 	pushm	d1-a6
-
+	
 	* Load extra data file ".nt"
 	jsr	getcurrent 
 	* a3 = node
@@ -35365,6 +35401,7 @@ p_startrekker
 	bsr	loadfile
 	lea	200(sp),sp
 	* d0 = 0 if success
+
 	tst.l	d0 
 	bne.b 	.fileErr
 
@@ -35377,6 +35414,7 @@ p_startrekker
 	push	a5
 	move.l	startrekkerroutines(a5),a5
 	jsr	.INIT(a5)
+	moveq	#0,d0
 	pop 	a5
 	move	d1,pos_maksimi(a5)
 .x
