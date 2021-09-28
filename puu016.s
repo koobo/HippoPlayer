@@ -35310,7 +35310,7 @@ p_startrekker
 	jmp 	.id(pc)
 	dc.w 	pt_startrekker
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
-	dc.b	"Startrekker AM",0
+	dc.b	"StarTrekker AM",0
  even
 
 .INIT  = 0+$20
@@ -35373,6 +35373,7 @@ p_startrekker
 	lea	mainvolume(a5),a2
 	lea	songover(a5),a3
 	lea	dmawait(pc),a4
+	move.l	modulelength(a5),d0
 	push	a5
 	move.l	startrekkerroutines(a5),a5
 	jsr	.INIT(a5)

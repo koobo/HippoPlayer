@@ -10,10 +10,21 @@ test=0
 	jmp TESTPLAY
 
 	section	cc,data_c
-mt_data		incbin	"sys:music/Modland/Startrekker AM/broom/kingkeldon.mod"
-mt_data2	incbin	"sys:music/Modland/Startrekker AM/broom/kingkeldon.mod.nt"
-
-		section cod,code_p
+;mt_data		incbin	"sys:music/Modland/Startrekker AM/broom/kingkeldon.mod"
+;mt_data		incbin	"sys:music/Modland/Startrekker AM/the wiz/link(zelda2).mod"
+mt_data		incbin	"sys:music/Modland/Startrekker AM/GTS/fa.worse face.mod"
+e1
+  rept	32 
+   dc.l $deadbeef
+  endr
+	
+;mt_data2	incbin	"sys:music/Modland/Startrekker AM/broom/kingkeldon.mod.nt"
+mt_data2		incbin	"sys:music/Modland/Startrekker AM/GTS/fa.worse face.mod.nt"
+e2
+  rept	32 
+   dc.l $deadbeef
+  endr
+		section cod,code_c
 
 ; STARTREKKER 1.2      AM REPLAYROUTINE
 ;
@@ -31,6 +42,7 @@ TESTPLAY:
 	lea	vol,a2
 	lea songend,a3
 	lea dmawait,a4
+	move.l	#e1-mt_data,d0
 	jsr init
 
 tp_loop:cmp.b	#$80,$dff006
@@ -69,6 +81,7 @@ songend 	dc 0
 *   a2 = main volume ptr
 *   a3 = song end ptr
 *   a4 = dma wait ptr
+*   d0 = module len
 * out:
 *   d1 = max pos
 	jmp	init(pc)
@@ -85,7 +98,7 @@ init
 	move.l  a3,songEndAddr
 	move.l  a4,dmaWaitAddr
 
-	bsr	mt_init
+	bsr.b	mt_init
 	
 	move.l	moduleAddr(pc),a0 
 	moveq	#0,d1
@@ -97,7 +110,7 @@ play
 	move.l	mainVolAddr(pc),a0 
 	move	(a0),mainVol
 
-	bsr	mt_music
+	bsr.w	mt_music
 	moveq	#0,d0 
 	move.b	mt_songpos(pc),d0 
 	rts 
@@ -115,6 +128,8 @@ mainVol			dc.w 	0
 
 mt_init:
 	move.l moduleAddr(pc),a0
+	lea	(a0,d0.l),a3	* end bound
+
 	lea	$3b8(a0),a1
 
 	moveq	#$7f,d0
@@ -124,23 +139,31 @@ mt_lop2:move.b	(a1)+,d1
 	cmp.b	d2,d1
 	ble.s	mt_lop
 	move.l	d1,d2
-mt_lop:	dbf	d0,mt_lop2
+mt_lop:	
+	dbf	d0,mt_lop2
 	addq.b	#1,d2
-
+xx
 	asl.l	#8,d2
 	asl.l	#2,d2
+	* addr of first sample
 	lea	4(a1,d2.l),a2
 	lea	mt_samplestarts(pc),a1
 	add.w	#42,a0
 	moveq	#$1e,d0
-mt_lop3:clr.l	(a2)
-	move.l	a2,(a1)+
+	moveq	#1,d1
+
+	subQ	#4,a3
+mt_lop3:	
+	cmp.l	a3,a2	* overwrite check
+	bhs.b	.s
+	clr.l	(a2)
+.s	move.l	a2,(a1)+
 	moveq	#0,d1
-	move.w	(a0),d1
-	clr.b	2(a0)
+	move.w	(a0),d1		* sample len
+	clr.b	2(a0)		* ?
 	asl.l	#1,d1
-	add.l	d1,a2
-	add.l	#30,a0
+	add.l	d1,a2		* next sample data address
+	add.l	#30,a0		
 	dbf	d0,mt_lop3
 
 	or.b	#2,$bfe001
@@ -168,7 +191,7 @@ mt_music:
 	addq.b	#1,mt_counter
 	move.b	mt_counter(pc),d0
 	cmp.b	mt_speed(pc),d0
-	blt	mt_nonew
+	blt.w	mt_nonew
 	clr.b	mt_counter
 
 	move.l	moduleAddr(pc),a0
@@ -187,25 +210,25 @@ mt_music:
 
 	lea	$dff0a0,a5
 	lea	mt_voice1(pc),a4
-	bsr	mt_playvoice
+	bsr.w	mt_playvoice
 	addq.l	#4,d1
 	lea	$dff0b0,a5
 	lea	mt_voice2(pc),a4
-	bsr	mt_playvoice
+	bsr.w	mt_playvoice
 	addq.l	#4,d1
 	lea	$dff0c0,a5
 	lea	mt_voice3(pc),a4
-	bsr	mt_playvoice
+	bsr.w	mt_playvoice
 	addq.l	#4,d1
 	lea	$dff0d0,a5
 	lea	mt_voice4(pc),a4
-	bsr	mt_playvoice
+	bsr.w	mt_playvoice
 
-	bsr	mt_wait
+	bsr.w	mt_wait
 	move.w	mt_dmacon(pc),d0
 	or.w	#$8000,d0
 	move.w	d0,$dff096
-	bsr	mt_wait
+	bsr.w	mt_wait
 mt_nodma:
 	lea	$dff000,a3
 	lea	mt_voice1(pc),a4
@@ -266,7 +289,7 @@ mt_next:clr.w	mt_pattpos
 	move.b	$3b7(a0),mt_songpos
 mt_exit:tst.b	mt_break
 	bne.s	mt_next
-	bra	mt_amhandler
+	bra.w	mt_amhandler
 
 ;mt_wait:moveq	#4,d3		
 ;mt_wai2:move.b	$dff006,d2	
@@ -286,16 +309,16 @@ mt_wait:
 mt_nonew:
 	lea	mt_voice1(pc),a4
 	lea	$dff0a0,a5
-	bsr	mt_com
+	bsr.w	mt_com
 	lea	mt_voice2(pc),a4
 	lea	$dff0b0,a5
-	bsr	mt_com
+	bsr.w	mt_com
 	lea	mt_voice3(pc),a4
 	lea	$dff0c0,a5
-	bsr	mt_com
+	bsr.w	mt_com
 	lea	mt_voice4(pc),a4
 	lea	$dff0d0,a5
-	bsr	mt_com
+	bsr.w	mt_com
 	bra.s	mt_exit
 
 mt_mulu:
@@ -311,7 +334,7 @@ mt_playvoice:
 	move.b	(a4),d0
 	and.b	#$f0,d0
 	or.b	d0,d2
-	beq	mt_oldinstr
+	beq.w	mt_oldinstr
 
 	lea	mt_samplestarts-4(pc),a1
 	move.w	d2,34(a4)
@@ -362,19 +385,19 @@ mt_hejaSverige:
 mt_oldinstr:
 	move.w	(a4),d0
 	and.w	#$fff,d0
-	beq	mt_com2
+	beq.w	mt_com2
 	tst.w	30(a4)
 	bne.s	mt_rambo
 	tst.w	8(a4)
-	beq	mt_stopsound
+	beq.w	mt_stopsound
 	tst.b	$12(a4)
-	bne	mt_stopsound
+	bne.w	mt_stopsound
 	move.b	2(a4),d0
 	and.b	#$f,d0
 	cmp.b	#5,d0
-	beq	mt_setport
+	beq.w	mt_setport
 	cmp.b	#3,d0
-	beq	mt_setport
+	beq.w	mt_setport
 
 mt_rambo:
 	move.w	(a4),$10(a4)
@@ -418,11 +441,11 @@ mt_noaminst:
 
 mt_juck:move.w	$1a(a4),d0
 	or.w	d0,mt_dmacon
-	bra	mt_com2
+	bra.w	mt_com2
 
 mt_stopsound:
 	move.w	$1a(a4),$dff096
-	bra	mt_com2
+	bra.w	mt_com2
 
 mt_setport:
 	move.w	(a4),d2
@@ -432,9 +455,9 @@ mt_setport:
 	clr.b	$14(a4)
 	cmp.w	d0,d2
 	beq.s	mt_clrport
-	bge	mt_com2
+	bge.w	mt_com2
 	move.b	#1,$14(a4)
-	bra	mt_com2
+	bra.w	mt_com2
 mt_clrport:
 	clr.w	$16(a4)
 	rts
@@ -549,9 +572,9 @@ mt_com:	move.w	2(a4),d0
 	cmp.b	#2,d0
 	beq.s	mt_portdown
 	cmp.b	#3,d0
-	beq	mt_port
+	beq.w	mt_port
 	cmp.b	#4,d0
-	beq	mt_vib
+	beq.w	mt_vib
 	cmp.b	#5,d0
 	beq.s	mt_volport
 	cmp.b	#6,d0
@@ -586,10 +609,10 @@ mt_portdown2:
 	rts
 
 mt_volvib:
-	 bsr	mt_vib2
+	 bsr.w	mt_vib2
 	 bra.s	mt_volslide
 mt_volport:
-	 bsr	mt_port2
+	 bsr.w	mt_port2
 
 mt_volslide:
 	moveq	#0,d0
@@ -682,14 +705,14 @@ mt_amhandler:
 	lea	$dff0a0,a5
 mt_amloop:
 	tst.w	30(a6)
-	beq	mt_anrp
+	beq.w	mt_anrp
 	move.w	34(a6),d0
 	mulu	#120,d0
 	;add.l	#mt_data2+24,d0
 	add.l	dataAddr(pc),d0
 	move.l	d0,a0
 	tst.w	38(a6)
-	beq	mt_anrp
+	beq.w	mt_anrp
 	cmp.w	#1,38(a6)
 	bne.s	mt_anat
 	move.w	32(a6),d0
@@ -701,15 +724,15 @@ mt_amloop:
 	sub.w	d0,32(a6)
 	move.w	32(a6),d0
 	cmp.w	8(a0),d0
-	bgt	mt_anxt
+	bgt.w	mt_anxt
 	move.w	8(a0),32(a6)
 mt_aaeq:move.w	#2,38(a6)
-	bra	mt_anxt
+	bra.w	mt_anxt
 mt_aaad:move.w	10(a0),d0
 	add.w	d0,32(a6)
 	move.w	32(a6),d0
 	cmp.w	8(a0),d0
-	blt	mt_anxt
+	blt.w	mt_anxt
 	move.w	8(a0),32(a6)
 	bra.s	mt_aaeq
 mt_anat:cmp.w	#2,38(a6)
@@ -723,15 +746,15 @@ mt_anat:cmp.w	#2,38(a6)
 	sub.w	d0,32(a6)
 	move.w	32(a6),d0
 	cmp.w	12(a0),d0
-	bgt	mt_anxt
+	bgt.w	mt_anxt
 	move.w	12(a0),32(a6)
 mt_a2eq:move.w	#3,38(a6)
-	bra	mt_anxt
+	bra.w	mt_anxt
 mt_a2ad:move.w	14(a0),d0
 	add.w	d0,32(a6)
 	move.w	32(a6),d0
 	cmp.w	12(a0),d0
-	blt	mt_anxt
+	blt.w	mt_anxt
 	move.w	12(a0),32(a6)
 	bra.s	mt_a2eq
 mt_ana2:cmp.w	#3,38(a6)
