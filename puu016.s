@@ -25070,7 +25070,7 @@ eagleFormats
 	dc.l	p_robhubbard2
 	dc.l	p_chiptracker
 	dc.l	p_quartet
-	;dc.l	p_facethemusic
+	dc.l	p_facethemusic
 	dc.l	p_richardjoseph
 	dc.l	p_instereo1 
 	dc.l	p_instereo2
@@ -35555,7 +35555,7 @@ p_quartet
 p_facethemusic
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
-	p_NOP
+	jmp	.ftmVBlank(pc)
 	jmp	deliEnd(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
@@ -35588,6 +35588,10 @@ p_facethemusic
 	SNE	D0
 	rts
 
+.ftmVBlank
+	* Need to call this so that volume and voices are updated
+	* FTM use it's own replay otherwise.
+	bra	deliInterrupt
 
 ******************************************************************************
 * Richard Joseph
@@ -36352,6 +36356,8 @@ deliInit
 	beq.b	.noStartInt
 	DPRINT	"using module interrupt",34
 	bsr	deliCallFunc
+	* DTP_StartInt overrides DTP_Interrupt
+	clr.l	delistoredInterrupt(a5)
 	bra.b	.skip
 .noStartInt
 
