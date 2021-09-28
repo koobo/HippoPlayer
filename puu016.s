@@ -34050,7 +34050,7 @@ p_chiptracker
 	p_NOP
 	jmp .id(pc)
 	dc  pt_chiptracker 
- dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse	
+ dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2	
 	dc.b	"ChipTracker         (EP)",0
 
 .path dc.b "chiptracker",0
@@ -35457,7 +35457,7 @@ p_quartet
 	p_NOP
 	jmp 	.id(pc)
 	dc  	pt_quartet 
- 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen	
+ 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus
 	dc.b	"Quartet             (EP)",0
 
 .path dc.b "quartet",0
@@ -35568,8 +35568,7 @@ p_richardjoseph
 	p_NOP
 	jmp .id(pc)
 	dc  pt_richardjoseph
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
-	;dc.b	"Richard Joseph      (EP)",0
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"R.Joseph/VectorDean (EP)",0
 .path dc.b "richard joseph player",0
  even
@@ -35617,7 +35616,7 @@ p_instereo1
 	p_NOP
 	jmp 	.id(pc)
 	dc 	pt_instereo1
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"In Stereo! 1.0      (EP)",0
 
 .path dc.b "in stereo 1.0",0
@@ -35733,7 +35732,7 @@ p_instereo2
 	p_NOP
 	jmp 	.id(pc)
 	dc 	pt_instereo2
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song	
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"In Stereo! 2.0      (EP)",0
 
 .path dc.b "in stereo 2.0",0
@@ -35779,7 +35778,7 @@ p_jasonbrooke
 	p_NOP
 	jmp .id(pc)
 	dc  pt_jasonbrooke
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen	
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"Jason Brooke        (EP)",0
 	        
 .path dc.b "jason brooke",0
@@ -36432,6 +36431,8 @@ deliGetSongInfo
 	bsr	deliCallFunc
 	move.l	d1,d2
 	move.l	d0,d1
+	move.l	playerbase(a5),a0 
+	or		#pf_song,p_liput(a0)
 	DPRINT	"Subsongs def=%ld min=%ld max=%ld",1
 	rts
 
@@ -36441,11 +36442,15 @@ deliGetSongInfo
 	beq.b	.noSubSongs2
 	move.l	d0,a0
 	movem	(a0),d0/d1/d2
+	move.l	playerbase(a5),a0 
+	or		#pf_song,p_liput(a0)
 	DPRINT	"NewSubSongs def=%ld min=%ld max=%ld",2
 	rts
 	
 .noSubSongs2
 	DPRINT	"No subsongs",3
+	move.l	playerbase(a5),a0 
+	and		#~pf_song,p_liput(a0)
 	moveq	#0,d0 
 	moveq	#0,d1 
 	moveq	#0,d2	
@@ -37506,16 +37511,16 @@ deliHandleFlags
 	beq.b 	.3
 	bset	#pb_volume,d1
 .3
-	bclr	#pb_kelauseteen,d1
-	btst	#EPF_NextPatt,d0
-	beq.b 	.4
-	bset	#pb_kelauseteen,d1
-.4
-	bclr	#pb_kelaustaakse,d1
-	btst	#EPF_PrevPatt,d0
-	beq.b 	.5
-	bset	#pb_kelaustaakse,d1
-.5
+;	bclr	#pb_kelauseteen,d1
+;	btst	#EPF_NextPatt,d0
+;	beq.b 	.4
+;	bset	#pb_kelauseteen,d1
+;.4
+;	bclr	#pb_kelaustaakse,d1
+;	btst	#EPF_PrevPatt,d0
+;	beq.b 	.5
+;	bset	#pb_kelaustaakse,d1
+;.5
 	move	d1,p_liput(a0)
 	rts
 
