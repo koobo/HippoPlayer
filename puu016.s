@@ -11686,7 +11686,7 @@ aseta_vakiot
 .defdir1 dc.b	"SYS:",0
 .defdir2 dc.b	"RAM:",0
 .wb	dc.b	"Workbench",0
-.pat	dc.b	"~(#?.info|smpl.#?)",0
+.pat	dc.b	"~(#?.info|smpl.#?|#?.ins|#?.nt|#?.as)",0
  even
 
 bcopy
