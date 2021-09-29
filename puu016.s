@@ -1663,7 +1663,7 @@ progstart
 
 * consider this a file. let's try to get a lock on it.
 	move.l 	d3,d1
-	move.l	#ACCESS_READ,d2
+	moveq	#ACCESS_READ,d2
 	lore  	Dos,Lock
 	move.l	d0,d4
 	beq.b	.noLock
@@ -11654,7 +11654,7 @@ aseta_vakiot
 
 	lea	.defgroup(pc),a0
 	lea	groupname(a5),a1
-	bsr.b	copyb
+	bsr.w	copyb
 	
 	st	newdirectory(a5)
 	lea	.defdir1(pc),a0
@@ -25991,7 +25991,7 @@ doIdentifyFormats
 	beq.b	.notFound
 	move.l	(a3),a0
 	pushpea	p_name(a0),d0
-	DPRINT	"id %s",1
+	;DPRINT	"id %s",1
 	pushm	all
 	jsr	p_id(a0)
 	popm 	all
@@ -27282,7 +27282,7 @@ normalizeFilePath
 	move.l	d1,d7
 
  	;pushpea	tempdir(a5),d1
-	move.l	#ACCESS_READ,d2
+	moveq	#ACCESS_READ,d2
 	lore  	Dos,Lock
 	move.l	d0,d4
 	beq.b	.noLock1
@@ -35381,7 +35381,7 @@ p_startrekker
 	jsr	getcurrent 
 	* a3 = node
 	lea	-200(sp),sp
-	lea	l_filename(a3),a0
+	lea	l_filename(a3),a0 
 	move.l	sp,a1
 .c	move.b	(a0)+,(a1)+
 	bne.b	.c
@@ -36179,7 +36179,7 @@ findDeliPlayer
 	bne.b	.name
 
 	move.l	sp,d1
-	move.l	#ACCESS_READ,d2
+	moveq	#ACCESS_READ,d2
  	lore 	Dos,Lock
 	lea	100(sp),sp
 	tst.l	d0
@@ -36454,7 +36454,7 @@ deliInit
 	DPRINT	"using module interrupt",34
 	bsr	deliCallFunc
 	* DTP_StartInt overrides DTP_Interrupt
-	clr.l	delistoredInterrupt(a5)
+	clr.l	deliStoredInterrupt(a5)
 	bra.b	.skip
 .noStartInt
 
