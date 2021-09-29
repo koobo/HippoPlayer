@@ -1280,6 +1280,7 @@ pt_richardjoseph 	rs.b	1
 pt_instereo1		rs.b    1
 pt_instereo2       	rs.b    1
 pt_jasonbrooke		rs.b	1
+pt_earache			rs.b 	1
 
 * player group version
 xpl_versio	=	21
@@ -25075,6 +25076,7 @@ eagleFormats
 	dc.l	p_instereo1 
 	dc.l	p_instereo2
 	dc.l	p_jasonbrooke
+	dc.l	p_earache
 	dc.l 	0	
 
 *******
@@ -35889,6 +35891,101 @@ p_jasonbrooke
 	;CLR.W	(A1)
 	BRA.S	.lbC000588
 
+
+******************************************************************************
+* EarAche
+******************************************************************************
+
+p_earache
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_earache
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"EarAche             (EP)",0
+	        
+.path dc.b "earache",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+.error	popm	d1-a6
+	rts
+
+
+.id
+	move.l	a4,a0
+	bsr.b 	.id_ 
+	tst.l d0
+	rts
+
+.id_
+	moveq	#-1,D0
+
+	tst.w	(A0)
+	beq.b	.CheckRout
+	cmp.l	#'EASO',(A0)
+	bne.b	.NoHead
+	addq.l	#4,A0
+	bra.b	.CheckRout
+.NoHead
+	cmp.w	#$6000,(A0)+
+	bne.b	.Fault
+	move.l	A0,A1
+	move.w	(A0)+,D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	cmp.w	#$6000,(A0)+
+	bne.b	.Fault
+	move.w	(A0)+,D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+	add.w	D1,A1
+	cmp.l	#$33FC000F,(A1)+
+	bne.b	.Fault
+	cmp.l	#$00DFF096,(A1)+
+	bne.b	.Fault
+	cmp.w	#$43FA,(A1)+
+	bne.b	.Fault
+	move.w	(A1),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	add.w	D1,A1
+	move.l	A1,A0
+.CheckRout
+	cmp.l	#$18,(A0)		; check routine taken from EarAche editor
+	bne.b	.Fault
+	move.l	4(A0),D2
+	sub.l	(A0),D2
+	ble.b	.Fault
+	and.w	#7,D2
+	bne.b	.Fault
+	move.l	$10(A0),D2
+	sub.l	8(A0),D2
+	ble.b	.Fault
+	and.w	#15,D2
+	bne.b	.Fault
+	moveq	#0,D0
+.Fault
+	rts
 
 ******************************************************************************
 * Deli/eagle support
