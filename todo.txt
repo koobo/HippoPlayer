@@ -11,8 +11,8 @@ Formats
 + Beathoven
 + Deltamusic1
 + Digital mugician
-- earache
-- face the music
++ earache
++ face the music
 + sidmon2
 + JamCracker FIXES 
 - digital mugician 2
@@ -26,7 +26,6 @@ Formats
 - MusicMaker
 + SoundFX 1.x
 + Synthesis
-- FTM
 + InStereo
 + Ron Klaren + CustomMade
 - MusicMakerV8
@@ -38,12 +37,35 @@ Formats
 - MultiMediaSound
 + startrekker
 
+- maxtrax
+- kris hatlelid
+- special fx
+- sound images
+- sound master x
+- synth pack
+- wally beben
 
 TODO
-- international karate+, memory overwrite
+- test TMFX with doublebuffering
+
+TODO 
+- startrekker mem overwrite:
+-- "fa.worse face.mod"
+-- voidal.mod
+- startrekker silent:
+-- dizzy-fx-chip.mod
+-- dizzy-title.mod
 
 TODO
 - startrekker, memory overwrite after main module data
+
+FIXED
+- play "the real mule 2" startrekker
+- play DW internationa karate+, enforcer hits!
+
+FIXED
+- international karate+, memory overwrite
+-- same as Startrekker probleemakin
 
 FIXED
 - play "aliens"

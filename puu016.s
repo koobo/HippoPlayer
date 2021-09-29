@@ -1281,6 +1281,8 @@ pt_instereo1		rs.b    1
 pt_instereo2       	rs.b    1
 pt_jasonbrooke		rs.b	1
 pt_earache			rs.b 	1
+pt_krishatlelid		rs.b    1
+pt_richardjoseph2 	rs.b	1
 
 * player group version
 xpl_versio	=	21
@@ -25077,6 +25079,8 @@ eagleFormats
 	dc.l	p_instereo2
 	dc.l	p_jasonbrooke
 	dc.l	p_earache
+	dc.l	p_krishatlelid
+	dc.l	p_richardjoseph2
 	dc.l 	0	
 
 *******
@@ -36002,6 +36006,147 @@ p_earache
 .Fault
 	rts
 
+
+
+******************************************************************************
+* Kris Hatlelid
+******************************************************************************
+
+p_krishatlelid
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_krishatlelid
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"Kris Hatlelid       (EP)",0
+	        
+.path dc.b "kris hatlelid",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+.error	popm	d1-a6
+	rts
+
+
+.id
+	move.l	a4,a0
+	CMP.L	#$3F3,(A0)+
+	BNE.S	.lbC000506
+	TST.L	(A0)+
+	BNE.S	.lbC000506
+	CMP.L	#3,(A0)+
+	BNE.S	.lbC000506
+	TST.L	(A0)+
+	BNE.S	.lbC000506
+	CMP.L	#2,(A0)+
+	BNE.S	.lbC000506
+	MOVE.L	(A0)+,D1
+	BCLR	#$1E,D1
+	CMP.B	#$40,(A0)
+	BNE.S	.lbC000506
+	ADDQ.L	#4,A0
+	CMP.L	#1,(A0)+
+	BNE.S	.lbC000506
+	CMP.L	#$3E9,(A0)+
+	BNE.S	.lbC000506
+	CMP.L	(A0)+,D1
+	BNE.S	.lbC000506
+	CMP.L	#$60000016,(A0)+
+	BNE.S	.lbC00050A
+	CMP.L	#$ABCD,(A0)+
+	BNE.S	.lbC000506
+	CMP.L	#$B07C0000,$10(A0)
+	BNE.S	.lbC00050E
+	BRA.S	.lbC000524
+
+.lbC000506	MOVEQ	#-1,D0
+	RTS
+
+.lbC00050A	LEA	-$14(A0),A0
+.lbC00050E	CMP.L	#$41F90000,$10(A0)
+	BNE.S	.lbC000506
+	CMP.L	#$4E75,$14(A0)
+	BNE.S	.lbC000506
+.lbC000524	MOVEQ	#0,D0
+	RTS
+
+
+
+******************************************************************************
+* Richard Joseph
+******************************************************************************
+
+p_richardjoseph2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_richardjoseph2
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"Richard Joseph      (EP)",0
+	
+	        
+.path dc.b "richard joseph",0
+ even
+
+.init	pushm	d1-a6	
+	lea	.path(pc),a0
+	bsr	loadDeliPlayer
+	bmi.b	.error
+	bsr	deliInit
+	bne.b	.error
+
+.error	popm	d1-a6
+	rts
+
+.id
+	MOVE.L	a4,A0
+	CMP.L	#$3F3,(A0)
+	BNE.S	.lbC00043E
+	TST.B	$14(A0)
+	BEQ.S	.lbC00043E
+	LEA	$20(A0),A0
+	CMP.L	#$70FF4E75,(A0)+
+	BNE.S	.lbC00043E
+	CMP.L	#$522E4A4F,(A0)+
+	BNE.S	.lbC00043E
+	CMP.L	#$53455048,(A0)+
+	BNE.S	.lbC00043E
+	TST.L	(A0)+
+	BEQ.S	.lbC00043E
+	TST.L	(A0)+
+	BEQ.S	.lbC00043E
+	TST.L	(A0)+
+	BEQ.S	.lbC00043E
+	TST.L	(A0)
+	BEQ.S	.lbC00043E
+	MOVEQ	#0,D0
+	RTS
+
+.lbC00043E	MOVEQ	#-1,D0
+	RTS
+
 ******************************************************************************
 * Deli/eagle support
 ******************************************************************************
@@ -36327,7 +36472,8 @@ deliInit
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
 
-	* Not really needed:
+	* Checks!
+	
 	move.l	#DTP_Check2,d0  
 	bsr.w	deliGetTag
 	beq.b	.noCheck2
@@ -36336,6 +36482,14 @@ deliInit
 	tst.l	d0
 	bne.w	.error
 .noCheck2	
+	move.l	#EP_Check3,d0  
+	bsr.w	deliGetTag
+	beq.b	.noCheck3
+	bsr.w	deliCallFunc
+	DPRINT	"EP_Check3: %ld",91
+	tst.l	d0
+	bne.w	.error
+.noCheck3
 	move.l	#EP_Check5,d0  
 	bsr.w	deliGetTag
 	beq.b	.noCheck5
@@ -36812,10 +36966,18 @@ buildDeliBase
 	move.l	a4,deliPathArray(a5)
 	move.l	a4,dtg_PathArrayPtr(a0)
 	move.l	a3,dtg_DirArrayPtr(a0)
+	push	a2
 .copy	move.b	(a2)+,(a3)+
 	cmp.l	a2,a1
 	bne.b	.copy
 	clr.b	(a3)		
+
+	* The full path needs to be populated here, too.
+	* "Test drive 2" uses it.
+	pop	a2
+	move.l	dtg_PathArrayPtr(a0),a1
+.c2	move.b	(a2)+,(a1)+
+	bne.b	.c2 
 
 	lea	200(a4),a4
 	* InStereo2 uses this private structure
@@ -37007,7 +37169,7 @@ deliLoadFile
 	move.l	deliPathArray+var_b,a0
 	lea	deliGetListDataData(a5),a1 
 	lea 	deliGetListDataLength(a5),a2
-	bsr	loadfile
+	jsr	loadfile
  if DEBUG
 	move.l	deliGetListDataData(a5),d1
 	move.l	deliGetListDataLength(a5),d2
