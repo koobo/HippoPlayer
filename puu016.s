@@ -35568,7 +35568,7 @@ p_facethemusic
 	p_NOP
 	jmp .id(pc)
 	dc  pt_facethemusic 
- dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse	
+.flags 	dc pf_stop!pf_cont!pf_volume!pf_end	
 	dc.b	"Face The Music      (EP)",0
 
 .path dc.b "face the music",0
@@ -35579,6 +35579,13 @@ p_facethemusic
 	bsr	loadDeliPlayer
 	bmi.b	.error
 	bsr	deliInit
+	bne.b	.error
+
+	* Some tunes seem to end prematurely, try this
+	lea	.flags(pc),a0
+	and	#~pf_end,(a0)
+	moveq	#0,d0
+
 .error	popm	d1-a6
 	rts
 
@@ -35591,8 +35598,8 @@ p_facethemusic
 	rts
 
 .ftmVBlank
-	* Need to call this so that volume and voices are updated
-	* FTM use it's own replay otherwise.
+	* Need to call this so that volume and voices are updated.
+	* FTM use it's own interrupt otherwise.
 	bra	deliInterrupt
 
 ******************************************************************************
@@ -35613,7 +35620,7 @@ p_richardjoseph
 	p_NOP
 	jmp .id(pc)
 	dc  pt_richardjoseph
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"R.Joseph/VectorDean (EP)",0
 .path dc.b "richard joseph player",0
  even
@@ -35623,6 +35630,14 @@ p_richardjoseph
 	bsr	loadDeliPlayer
 	bmi.b	.error
 	bsr	deliInit
+	bne.b	.error
+
+	* Some tunes seem to end prematurely. Lets not use songend
+	* detection provided by eagleplayer.
+	lea	.flags(pc),a0
+	and	#~pf_end,(a0)
+	moveq	#0,d0
+
 .error	popm	d1-a6
 	rts
 
@@ -36551,6 +36566,7 @@ deliUpdatePositionInfo
 	move.l	#MI_Length,d1
 	bsr	deliFindInfoValue 
 	bmi.b 	.noPos
+	beq.b	.noPos
 	move	d0,pos_maksimi(a5)
 	move.l	playerbase(a5),a0 
 	or	#pf_poslen,p_liput(a0)
@@ -36640,6 +36656,8 @@ deliPlay
 	move.l 	d0,a0
 	jsr	(a0)
 	move.l	(sp),a4
+	tst	d0
+	bmi.b	.noPos
 	move	d0,pos_nykyinen(a4)
 .noPos	
 	pop 	a4
@@ -36894,8 +36912,17 @@ buildDeliBase
 
 .songEnd
 	* May be called from interrupt, no logging allowed
-	st	var_b+songover
+	pushm	d0/a0/a5
+	lea	var_b,a5
+	move.l	playerbase(a5),a0 
+	move	p_liput(a0),d0 
+	and	#pf_end,d0
+	beq.b	.noSongEnd
+	st	songover(a5)
+.noSongEnd
+	popm 	d0/a0/a5
 	rts
+
 .setTimer
 	* May be called from interrupt, no logging allowed
 	move	dtg_Timer(a5),d0
