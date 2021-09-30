@@ -875,6 +875,7 @@ keyfilechecked	rs.b	1	* ~0: keyfile tarkistettu
 
 songnumber	rs	1	* modin sisäisen kappaleen numero
 maxsongs	rs	1	* maximi songnumber
+minsong  	rs  1   * min songnumber
 
 
 moduleaddress	rs.l	1	* modin osoite
@@ -5615,6 +5616,8 @@ freemodule
 ;	st	positionmuutos(a5)
 	clr	positionmuutos(a5)
 	clr	songnumber(a5)
+	clr maxsongs(a5)
+	clr minsong(a5)
 ;	bsr.w	lootaa
 	bsr.w	inforivit_clear
 
@@ -8614,23 +8617,30 @@ songSkip
 
 	clr.b	kelausnappi(a5)
 
-	move.l	playerbase(a5),a0
-
-	moveq	#0,d0
-	move	songnumber(a5),d0	* Numeroita 0:sta eteenpäin
+	* this is reversed! TODO: FIX?
+	move	songnumber(a5),d0
 	sub	d1,d0
-	bpl.b	.ook
-	moveq	#0,d0
-.ook	
-	cmp	maxsongs(a5),d0
-	blo.b	.jep
-	move	maxsongs(a5),d0
-.jep
+
+	move	minsong(a5),d1 
+	move	maxsongs(a5),d2
+	bsr		clampWord
+
+;	moveq	#0,d0
+;	move	songnumber(a5),d0	* Numeroita 0:sta eteenpäin
+;	sub	d1,d0
+;	bpl.b	.ook
+;	moveq	#0,d0
+;.ook	
+;	cmp	maxsongs(a5),d0
+;	blo.b	.jep
+;	move	maxsongs(a5),d0
+;.jep
 	DPRINT	"New song: %ld",1
 	move	d0,songnumber(a5)
 
 	st	kelattiintaakse(a5)
 	clr.b	playing(a5)
+	move.l	playerbase(a5),a0
 	jsr	p_song(a0)
 	st	playing(a5)
 	st	kelattiintaakse(a5)
@@ -11248,15 +11258,14 @@ loadprefs2
 
 	move.b	prefs_samplecyber(a0),samplecyber(a5)
 	
-	moveq	#0,d0 
 	move.b	prefs_mpegaqua(a0),d0
 	moveq	#0,d1
 	moveq	#2,d2
-	bsr.w	clamp
+	bsr.w	clampByte
 	move.b	d0,mpegaqua(a0)
 	
 	move.b	prefs_mpegadiv(a0),d0 
-	bsr.w	clamp
+	bsr.w	clampByte
 	move.b	d0,mpegadiv(a5)
 
 	move.b	prefs_medmode(a0),medmode(a5)
@@ -11300,14 +11309,23 @@ loadprefs2
  even
 
 * in:
-*  d0 = value
+*  d0 = value, can be negative
 *  d1 = low bound
 *  d2 = high bound
 * out:
 *  d0 = value within bounds
+clampByte
+	ext		d0 
+	ext		d1 
+	ext		d2
+clampWord
+	ext.l	d0
+	ext.l	d1
+	ext.l	d2
 clamp
 	cmp.l	d1,d0
-	blo.b	.low
+	;blo.b	.low   
+	blt.b	.low  
 	cmp.l	d2,d0
 	bhi.b	.high
 	rts
@@ -16808,6 +16826,7 @@ lootaan_aika
 
 	move	songnumber(a5),d0
 	addq	#1,d0
+	sub		minsong(a5),d0
 
 	move.b	#' ',(a0)+
 	move.b	#'#',(a0)+
@@ -16825,6 +16844,7 @@ lootaan_aika
 	moveq	#0,d0
 	move	maxsongs(a5),d0
 	addq	#1,d0
+	sub		minsong(a5),d0
 	bsr.w	putnumber
 .jaa	
 
@@ -36538,6 +36558,7 @@ deliInit
 	move.l	deliBase(a5),a0
 	move	d0,dtg_SndNum(a0)
 	move	d0,songnumber(a5)
+	move	d1,minsong(a5)
 	move	d2,maxsongs(a5)	
 
 	move.l	#DTP_Volume,d0  
@@ -36855,11 +36876,10 @@ deliSong
 	* d1 = min song
 	* d2 = max song
 	
-	moveq	#0,d0
 	move	songnumber(a5),d0
 
 	* clamp d0 within d1-d2
-	jsr	clamp
+	jsr	clampWord
 	move	d0,songnumber(a5)
 
 	DPRINT	"deliSong set: %ld",1
