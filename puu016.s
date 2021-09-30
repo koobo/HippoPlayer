@@ -33923,13 +33923,10 @@ p_synthesis
 .path dc.b "synth 4.0",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-.error	popm	d1-a6
-	rts
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
 id_synthesis
@@ -33995,14 +33992,10 @@ p_syntracker
 .path dc.b "syntracker",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-.error	popm	d1-a6
-	rts
-
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
 id_syntracker
@@ -34044,13 +34037,10 @@ p_robhubbard2
 .path dc.b "rob hubbard 2",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-.error	popm	d1-a6
-	rts
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 ; in: a4 = module
 ;     d7 = module length
@@ -34118,17 +34108,10 @@ p_chiptracker
 .path dc.b "chiptracker",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-	bne.b .error
-
-
-	moveq	#0,d0
-.error	popm	d1-a6
-	rts
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
 id_chiptracker
@@ -35528,13 +35511,10 @@ p_quartet
 .path dc.b "quartet",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-.error	popm	d1-a6
-	rts
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
 	move.l	a4,a0
@@ -35598,19 +35578,17 @@ p_facethemusic
 .path dc.b "face the music",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
 	bne.b	.error
 
 	* Some tunes seem to end prematurely, try this
 	lea	.flags(pc),a0
 	and	#~pf_end,(a0)
 	moveq	#0,d0
-
-.error	popm	d1-a6
+.error	
 	rts
 
 .id
@@ -35649,20 +35627,16 @@ p_richardjoseph
 .path dc.b "richard joseph player",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
 	bne.b	.error
 
-	* Some tunes seem to end prematurely. Lets not use songend
-	* detection provided by eagleplayer.
+	* Some tunes seem to end prematurely, try this
 	lea	.flags(pc),a0
 	and	#~pf_end,(a0)
 	moveq	#0,d0
-
-.error	popm	d1-a6
+.error	
 	rts
 
 .id
@@ -35769,11 +35743,9 @@ p_instereo1
 	tst.l	d0 
 	bmi.b 	.fileError
 
-	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+
 .error	popm	d1-a6
 	rts
 
@@ -35822,13 +35794,10 @@ p_instereo2
 .path dc.b "in stereo 2.0",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-.error	popm	d1-a6
-	rts
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
  	MOVEQ	#1,D0
@@ -35868,14 +35837,10 @@ p_jasonbrooke
 .path dc.b "jason brooke",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-.error	popm	d1-a6
-	rts
-
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
 	move.l	a4,a0
@@ -35955,14 +35920,10 @@ p_earache
 .path dc.b "earache",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-.error	popm	d1-a6
-	rts
-
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
 	move.l	a4,a0
@@ -36052,14 +36013,10 @@ p_krishatlelid
 .path dc.b "kris hatlelid",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-.error	popm	d1-a6
-	rts
-
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
 	move.l	a4,a0
@@ -36130,15 +36087,10 @@ p_richardjoseph2
 .path dc.b "richard joseph",0
  even
 
-.init	pushm	d1-a6	
-	lea	.path(pc),a0
-	bsr	loadDeliPlayer
-	bmi.b	.error
-	bsr	deliInit
-	bne.b	.error
-
-.error	popm	d1-a6
-	rts
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
 
 .id
 	MOVE.L	a4,A0
@@ -36252,6 +36204,18 @@ NSTF_32Bit 	EQU	1<<20
 NSTB_64Bit 	EQU	21	;        -"-        quadwords 
 NSTF_64Bit 	EQU	1<<21
 
+* Load player and initialize module
+* in:
+*   a0: eagleplayer name
+* out:
+*   d0: 0=all ok, negative ier_-code otherwise
+deliLoadAndInit
+	bsr.b	loadDeliPlayer 
+	bmi.b 	.loadErr 
+	bsr.w	deliInit
+	tst.l	d0
+.loadErr	
+	rts
 
 * in:
 *   a0: name
@@ -36288,7 +36252,7 @@ loadDeliPlayer
 * in:
 *   d4 = lock
 * out:
-*   d0 = setlist or NULL
+*   d0 = seglist or NULL
 .load
 	lea	-100(sp),sp
 	move.l 	d4,d1
@@ -36527,11 +36491,7 @@ deliInit
 
 	move.l	#EP_InitAmplifier,d0 
 	bsr	deliGetTag 
-	beq.b 	.noAmp
 	bsr	deliCallFunc
-	;moveq	#ier_not_compatible,d0 
-	;bra.w 	.exit
-.noAmp
 
 	move.l	#DTP_ExtLoad,d0  
 	bsr.w	deliGetTag
@@ -36541,7 +36501,6 @@ deliInit
 	tst.l	d0
 	bne.w	.error
 .noExtLoad
-
 
 	move.l	#DTP_InitPlayer,d0  
 	bsr.w	deliGetTag
@@ -36577,50 +36536,7 @@ deliInit
 	move.l	(a0),a0
 	move.l	a0,deliStoredNoteStruct(a5)
  if DEBUG 
-	DPRINT	"NoteStruct: %lx",64
-
-	move.l	nst_MaxFrequency(a0),d0 
-	DPRINT	"MaxFreq: %ld",67
-	moveq	#0,d0
-	move	nst_MaxVolume(a0),d0 
-	DPRINT	"MaxVol: %ld",68
-
-	move.l	nst_Flags(a0),d1 
-	move.l	d1,d0 
-	DPRINT	"Flags: %lx",66
-	
-	moveq	#0,d0
-	btst	#NSTB_Period,d1
-	sne		d0
-	DPRINT	"NSTB_Period: %lx",69
-
-	btst	#NSTB_ExtPeriod,d1
-	sne		d0
-	DPRINT	"NSTB_ExtPeriod: %lx",70
-
-	btst	#NSTB_NTSCTiming,d1
-	sne		d0
-	DPRINT	"NSTB_NTSCTiming: %lx",71
-
-	btst	#NSTB_EvenLength,d1
-	sne		d0
-	DPRINT	"NSTB_EvenLength %lx",72
-
-	btst	#NSTB_AllRepeats,d1
-	sne		d0
-	DPRINT	"NSTB_AllRepeats %lx",73
-
-	btst	#NSTB_Reverse,d1
-	sne		d0
-	DPRINT	"NSTB_Reverse %lx",74
-
-	btst	#NSTB_Signed,d1
-	sne		d0
-	DPRINT	"NSTB_Signed %lx",75
-
-	btst	#NSTB_Unsigned,d1
-	sne		d0
-	DPRINT	"NSTB_Unsigned %lx",76
+	bsr		deliShowNoteStruct
  endif 
 .noNoteStruct
 
@@ -36673,10 +36589,6 @@ deliInit
 	bra.w	.error
 .gotCia
 .skip
-
-;	move.l	deliStoredInterrupt(a5),a0
-;	move.l	deliBase(a5),a5
-;	jsr	(a0)
 
  if DEBUG
 	moveq	#0,d0
@@ -36765,7 +36677,7 @@ deliGetSongInfo
 	move.l	d1,d2
 	move.l	d0,d1
 	move.l	playerbase(a5),a0 
-	or		#pf_song,p_liput(a0)
+	or	#pf_song,p_liput(a0)
 	DPRINT	"Subsongs def=%ld min=%ld max=%ld",1
 	rts
 
@@ -36776,14 +36688,14 @@ deliGetSongInfo
 	move.l	d0,a0
 	movem	(a0),d0/d1/d2
 	move.l	playerbase(a5),a0 
-	or		#pf_song,p_liput(a0)
+	or	#pf_song,p_liput(a0)
 	DPRINT	"NewSubSongs def=%ld min=%ld max=%ld",2
 	rts
 	
 .noSubSongs2
 	DPRINT	"No subsongs",3
 	move.l	playerbase(a5),a0 
-	and		#~pf_song,p_liput(a0)
+	and	#~pf_song,p_liput(a0)
 	moveq	#0,d0 
 	moveq	#0,d1 
 	moveq	#0,d2	
@@ -36993,7 +36905,7 @@ buildDeliBase
 	clr.b	(a3)		
 
 	* The full path needs to be populated here, too.
-	* "Test drive 2" uses it.
+	* "Test drive 2" uses it, for example.
 	pop	a2
 	move.l	dtg_PathArrayPtr(a0),a1
 .c2	move.b	(a2)+,(a1)+
@@ -37077,7 +36989,6 @@ buildDeliBase
 	move.l	a1,dtg_UnlockScreen(a0)
 	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
 
-
 	* EaglePlayer negative offset jump table
 	lea	eagleJumpTableStart(pc),a1
 	lea eagleJumpTableEnd(pc),a2	
@@ -37088,9 +36999,6 @@ buildDeliBase
 	cmp.l	a1,a2
 	bne.b	.jumps
  	rts
-
-.dummyEagleFunc
-	rts
 
 .songEnd
 	* May be called from interrupt, no logging allowed
@@ -37112,6 +37020,7 @@ buildDeliBase
 	
 .stub
 	moveq	#0,d0
+.dummyEagleFunc
 	rts
 
 .startInt	
@@ -37206,10 +37115,21 @@ deliGetListData
 	DPRINT	"getListData %ld",110
 	tst.l	d0 
 	beq.b	.first
+	subq.l	#1,d0 
+	beq.b 	.second 
+	moveq	#0,d0 
+	sub.l	a0,a0 
+	rts
+.second
 	move.l	deliGetListDataData+var_b,a0 
 	move.l	deliGetListDataLength+var_b,d0
 	rts
 .first
+ if DEBUG
+	move.l	moduleaddress+var_b,d0
+	move.l	modulelength+var_b,d1
+	DPRINT	"0x%lx %ld",2
+ endif
 	move.l	moduleaddress+var_b,a0
 	move.l	modulelength+var_b,d0
 	rts
@@ -37323,25 +37243,8 @@ funcENPP_WindowToFront
 	DPRINT "ENPP_WindowToFront",1EP_
 	rts
 funcENPP_GetListData
-	DPRINT "ENPP_GetListData %ld",1
-	tst.l	d0
-	beq.b	.first
-	cmp.l	#1,d0
-	beq.b	.second
-	moveq	#0,d0
-	rts
-.second
-	move.l	deliGetListDataData+var_b,a0
-	move.l	deliGetListDataLength+var_b,d0
-	rts
-.first	
-	move.l	moduleaddress+var_b,a0 
-	move.l	modulelength+var_b,d0
-	rts
-
+	bra	deliGetListData
 funcENPP_LoadFile
-	DPRINT "ENPP_LoadFile",1
-	move.l deliPathArray+var_b,a0
 	bra	deliLoadFile
 funcENPP_CopyDir
 	DPRINT "ENPP_CopyDir",1
@@ -37430,11 +37333,11 @@ funcENPP_StringCMP
 
 funcENPP_DMAMask
 	push	d1
-	tst.w	d0
-	bpl.s	.set2
-	or.w	#$8000,d1
+	tst		d0
+	bpl.b	.set2
+	or		#$8000,d1
 .set2
-	move.w	d1,$dff096
+	move	d1,$dff096
 	jsr	dmawait
 	pop 	d1
 	rts
@@ -37443,9 +37346,9 @@ funcENPP_PokeAdr
 	pushm	d2/a0
 	lea	$dff0a0,a0
 	moveq	#3,d2
-	and.w	d1,d2
-	lsl.w	#4,d2
-	add.w	d2,a0
+	and		d1,d2
+	lsl		#4,d2
+	add		d2,a0
 	move.l	d0,(a0)
 	popm	d2/a0
 	rts
@@ -37454,14 +37357,14 @@ funcENPP_PokeLen
 	pushm	d2/a0
 	lea	$dff0a0,a0
 	moveq	#3,d2
-	and.w	d1,d2
-	lsl.w	#4,d2
-	add.w	d2,a0
-	tst.w	d0
-	bne.s	.nozero
+	and		d1,d2
+	lsl		#4,d2
+	add		d2,a0
+	tst		d0
+	bne.b	.nozero
 	moveq	#1,d0
 .nozero
-	move.w	d0,4(a0)
+	move	d0,4(a0)
 	popm	d2/a0
 	rts
 
@@ -37469,12 +37372,10 @@ funcENPP_PokePer
 	pushm	d2/a0
 	lea	$dff0a0,a0
 	moveq	#3,d2
-	and.w	d1,d2
-	lsl.w	#4,d2
-	add.w	d2,a0
-	; O_o	
-	;lsr	#2,d0
-	move.w	d0,6(a0)
+	and		d1,d2
+	lsl		#4,d2
+	add		d2,a0
+	move	d0,6(a0)
 	popm	d2/a0
 	rts
 
@@ -37482,19 +37383,13 @@ funcENPP_PokeVol
 	pushm	d2/a0
 	lea	$dff0a0,a0
 	moveq	#3,d2
-	and.w	d1,d2
-	;add.w	d2,d2			;mal 2
-	;move.w	d2,d3
-	;add.w	#EPG_Voice1Vol,d3
-	;lsl.w	#3,d2			;mal 16/2
-	;mulu	(a5,d3.w),d0
-	;lsr.w	#6,d0
+	and	d1,d2
+	lsl	#4,d2
+	add	d2,a0
+;	mulu	dtg_SndVol(a5),d0
 	mulu	mainvolume+var_b,d0
 	lsr	#6,d0
-
-	lsl.w	#4,d2
-	add.w	d2,a0
-	move.w	d0,8(a0)
+	move	d0,8(a0)
 	popm	d2/a0
 	rts
 
@@ -38208,6 +38103,59 @@ deliShowFlags
 	 
 .noFlags
 	rts 
+
+deliShowNoteStruct
+	move.l	deliStoredNoteStruct(a5),d0
+	beq.w 	.x
+
+	DPRINT	"NoteStruct: %lx",64
+
+	move.l	nst_MaxFrequency(a0),d0 
+	DPRINT	"MaxFreq: %ld",67
+	moveq	#0,d0
+	move	nst_MaxVolume(a0),d0 
+	DPRINT	"MaxVol: %ld",68
+
+	move.l	nst_Flags(a0),d1 
+	move.l	d1,d0 
+	DPRINT	"Flags: %lx",66
+	
+	moveq	#0,d0
+	btst	#NSTB_Period,d1
+	sne		d0
+	DPRINT	"NSTB_Period: %lx",69
+
+	btst	#NSTB_ExtPeriod,d1
+	sne		d0
+	DPRINT	"NSTB_ExtPeriod: %lx",70
+
+	btst	#NSTB_NTSCTiming,d1
+	sne		d0
+	DPRINT	"NSTB_NTSCTiming: %lx",71
+
+	btst	#NSTB_EvenLength,d1
+	sne		d0
+	DPRINT	"NSTB_EvenLength %lx",72
+
+	btst	#NSTB_AllRepeats,d1
+	sne		d0
+	DPRINT	"NSTB_AllRepeats %lx",73
+
+	btst	#NSTB_Reverse,d1
+	sne		d0
+	DPRINT	"NSTB_Reverse %lx",74
+
+	btst	#NSTB_Signed,d1
+	sne		d0
+	DPRINT	"NSTB_Signed %lx",75
+
+	btst	#NSTB_Unsigned,d1
+	sne		d0
+	DPRINT	"NSTB_Unsigned %lx",76
+.x
+	rts
+
+
  endif
 
 
