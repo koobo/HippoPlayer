@@ -11679,7 +11679,7 @@ aseta_vakiot
 
 	lea	check_keyfile,a2
 
-	lea	.defgroup(pc),a0
+	lea	defgroup(pc),a0
 	lea	groupname(a5),a1
 	bsr.w	copyb
 	
@@ -11709,11 +11709,13 @@ aseta_vakiot
 	bra.w	defarc
 ;	rts
 
-.defgroup dc.b	"S:HippoPlayer.Group",0
 .defdir1 dc.b	"SYS:",0
 .defdir2 dc.b	"RAM:",0
 .wb	dc.b	"Workbench",0
 .pat	dc.b	"~(#?.info|smpl.#?|#?.ins|#?.nt|#?.as)",0
+defgroup dc.b	"S:"	
+hipGroupFileName
+	dc.b	"HippoPlayer.Group",0
  even
 
 bcopy
@@ -26137,22 +26139,9 @@ loadplayergroup
 	bsr.w	inforivit_group
 
 	moveq	#0,d7
-
-	move.l	_DosBase(a5),a6
-
-;	move.l	homelock(a5),d1
-;	beq.b	.noHome
-;\,	pushpea desbuf(a5),d2
-;	moveq	#100,d3
-;	jsr	getNameFromLock
-;.noHome
-
-	pushpea	groupname(a5),d1
-	move.l	#1005,d2
-	lob	Open
-	move.l	d0,d4
+	bsr		openPlayerGroupFile
 	beq.w	.error
-
+.ok
 	move.l	d4,d1		* selvitetään filen pituus
 	moveq	#0,d2	
 	moveq	#1,d3
@@ -26213,6 +26202,53 @@ loadplayergroup
 .error	moveq	#0,d7
 	bra.b	.x
 
+* out:
+*  d4 = file handle, or NULL if error
+openPlayerGroupFile
+	move.l	_DosBase(a5),a6
+	
+	* First try home dir
+	tst.l	homelock(a5)
+	beq.b	.noHome
+
+	lea	-100(sp),sp 
+	move.l	sp,a0
+	lea	.progdir(pc),a1 
+.c1 	move.b	(a1)+,(a0)+
+	bne.b	.c1
+	subq	#1,a0 
+	lea	hipGroupFileName,a1
+.c2	move.b	(a1)+,(a0)+
+	bne.b	.c2
+ if DEBUG 
+	move.l	sp,d0
+	DPRINT	"->%s",2
+ endif
+	move.l	sp,d1
+	move.l	#1005,d2
+	lob		Open
+	lea	100(sp),sp
+	move.l	d0,d4
+	bne.b	.ok 
+
+.noHome
+ if DEBUG 
+	pushpea	groupname(a5),d0
+	DPRINT	"->%s",3
+ endif
+
+	pushpea	groupname(a5),d1
+	move.l	#1005,d2
+	lob	Open
+	move.l	d0,d4
+.ok 
+	rts
+
+.progdir 
+	dc.b	"PROGDIR:",0
+	even
+
+
 
 * lataa yksittäisen replayerin playergroupista
 * d1 = muistin tyyppi
@@ -26245,11 +26281,7 @@ loadreplayer
 
 	bsr.w	inforivit_group2
 
-	move.l	_DosBase(a5),a6
-	pushpea	groupname(a5),d1
-	move.l	#1005,d2
-	lob	Open
-	move.l	d0,d4
+	bsr.w	openPlayerGroupFile
 	beq.w	.error
 
 	move.l	d4,d1
