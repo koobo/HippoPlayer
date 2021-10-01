@@ -1291,6 +1291,7 @@ pt_tcbtracker		rs.b 	1
 pt_markcooksey		rs.b	1
 pt_activisionpro	rs.b	1
 pt_maxtrax			rs.b 	1
+pt_wallybeben		rs.b 	1
 
 * player group version
 xpl_versio	=	21
@@ -25117,6 +25118,7 @@ eagleFormats
 	;dc.l	p_markcooksey
 	dc.l	p_activisionpro
 	dc.l	p_maxtrax
+	dc.l	p_wallybeben
 	dc.l 	0	
 
 *******
@@ -37012,6 +37014,76 @@ p_maxtrax
 	bhi.b	.Fault
 	;lea	.TwoFiles(PC),A1
 	;move.w	(A0),(A1)
+	moveq	#0,D0
+.Fault
+	rts
+
+
+******************************************************************************
+* Wally Beben
+******************************************************************************
+
+p_wallybeben
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_wallybeben
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Wally Beben         [EP]",0
+	        
+.path dc.b "wally beben",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	cmp.w	#$6000,(A0)+
+	bne.b	.Fault
+	move.w	(A0)+,D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	lea	-2(A0,D1.W),A1
+	cmp.b	#$61,(A1)+
+	bne.b	.Fault
+	tst.b	(A1)+
+	bne.b	.Short
+	addq.l	#2,A1
+.Short
+	cmp.w	#$4239,(A1)
+	bne.b	.Fault
+	addq.l	#6,A1
+	cmp.w	#$4239,(A1)
+	bne.b	.Fault
+	addq.l	#6,A1
+	cmp.w	#$4E75,(A1)
+	bne.b	.Fault
+	cmp.l	#$48E7FFFE,(A0)+
+	bne.b	.Fault
+	cmp.w	#$6100,(A0)+
+	bne.b	.Fault
+	add.w	(A0),A0
+	cmp.l	#$4CF900FF,(A0)+
+	beq.b	.Found
+	cmp.w	#$1039,(A0)
+	bne.b	.Fault
+.Found
 	moveq	#0,D0
 .Fault
 	rts
