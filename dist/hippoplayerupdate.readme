@@ -71,10 +71,10 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
   - Now supports more variants, previously only the compact form was 
     supported. Adaptation based on Wanted Team sources.
 - CustomMade
-  - Battle Squadron! Format by Ivo Zoer, songs composed by Ron Klaren. 
+  - "Battle Squadron"! Format by Ivo Zoer, songs composed by Ron Klaren. 
     Adaptation based on Wanted Team sources.
 - Dave Lowe
-  - Just wanted to hear Hippo play the International Karate+ title music. 
+  - Just wanted to hear Hippo play the "International Karate+" title music. 
     Adaptation based on Wanted Team sources.
 - DeliTracker Custom format improvements, adds support for modules 
   with external samples:
@@ -83,6 +83,9 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 - GlueMon (properly retro sound)
 - SoundFX (some nice ones in there)
 - StarTrekker AM (pretty crunchy)
+  - Audio Sculpture modules are also recognized as StarTrekker modules.
+    The replay routine is almost identical, but not quite, 
+    so may not play perfectly.
 - Improved JamCracker support: added volume control and position/length info.
    - Also had an annoying audible *BEEP* once in a while. Fixed it.
      (Empty sample data was not in chip mem, my fault.)
@@ -90,18 +93,35 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 ## New supported Eagleplayer formats, plugin name in parenthesis:
 - Synthesis ("synth 4.0")
 - SynTracker ("syntracker")
-- Rob Hubbard 2 ("rob hubbard 2")
-  - Many Infogrames games used this, eg. the "Flood" title tune.
-- ChipTracker ("chiptracker")
-  - Tunes by 4-Mat!
-- Quartet ("quartet")
-  - This is an ST format. Quite unpleasant tunes.
-- Richard Joseph/VectorDean ("richard joseph player")
+- AProSys ("aprosys")
+  - Original sounding synth tunes.
 - In Stereo! 1.0 ("in stereo 1.0")
 - In Stereo! 2.0 ("in stereo 2.0")
   - Nice synth sounds! These two were predecessors to 
     SonicArranger as far as I know.
+- ChipTracker ("chiptracker")
+  - Tunes by 4-Mat.
+- Jochen Hippel 7v ("jochen hippel 7v")
+  - Sweet seven channel tunes.
+- Jochen Hippel ST ("jochen hippel st")
+  - Hippel tunes from the Atari ST.
+- Rob Hubbard 2 ("rob hubbard 2")
+  - Many Infogrames games used this, eg. the "Flood" title tune.
+- Richard Joseph/VectorDean ("richard joseph player")
+  - "Chaos Engine"
+- Richard Joseph ("richard joseph")
+  - "Speedball 2"
+- TCBTracker ("tcb tracker")
+  - Richard Joseph tunes from the ST, such as "Magic Pockets". 
+- Quartet ("quartet")
+  - This is an Atari ST format. Quite low quality ones overall.
 - Jason Brooke ("jason brooke")
+  - "Space Harrier"
+- MaxTrax ("maxtrax")
+  - Bunch of game sountracks.
+- Activision Pro ("activision pro")
+  - Some of these seem to cause crashes. 
+  - "R-Type 2"
 
 ## Tips 
 - A nice place for exotic modules is the FTP server Modland. 
@@ -109,8 +129,9 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
   Many modules are also available there.
 
 ## Thanks and greetings to:
-- Spot/UpRough for beta testing and music format related assistance.
+- Spot/UpRough for vigorous beta testing and music format related assistance.
 - Marek Hac for beta testing.
+- Wanted Team for Eagleplayer resources.
 
 
 ------------------------------------------------------------------------------

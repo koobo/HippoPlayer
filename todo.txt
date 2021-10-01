@@ -1,4 +1,6 @@
 WISHLISH
++ Dir browser
++ Player group from PROGDIR
 + DONE: .gz support
 - UGLY: window size gadget
 + favorites list
@@ -31,22 +33,32 @@ Formats
 - MusicMakerV8
 + Syntracker
 + RichardJoseph
-- TCBTracker
++ TCBTracker
 + Quartet
 + JasonBrooke
 - MultiMediaSound
 + startrekker
 
-- maxtrax
-- kris hatlelid
++ maxtrax
++ kris hatlelid
 - special fx
 - sound images
-- sound master x
+- sound master 
 - synth pack
 - wally beben
++ aprosys
++ hippel7
++ hippel for st 
++ tcbtracker
++ audio sculpture
++ Activision Pro
 
 TODO
 - test TMFX with doublebuffering
+
+FIXED
+- min song handling: RJ.speedball
+- #2/4, should be #1/3?
 
 TODO 
 - startrekker mem overwrite:
@@ -56,7 +68,7 @@ TODO
 -- dizzy-fx-chip.mod
 -- dizzy-title.mod
 
-TODO
+FIXED
 - startrekker, memory overwrite after main module data
 
 FIXED
