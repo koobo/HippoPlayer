@@ -1168,6 +1168,7 @@ deliPlayerType	rs.w	1
 * Data loaded with *_LoadFile
 deliGetListDataData	rs.l 1
 deliGetListDataLength 	rs.l 1
+deliLoadFileIoErr	rs.l 1
 * Some tag data for faster access
 deliStoredInterrupt	rs.l	1
 deliStoredSetVolume	rs.l 	1
@@ -19631,14 +19632,17 @@ infodefresponse	=	*-4
 otag8	dc.l	RT_PubScrName,pubscreen+var_b
 	dc.l	TAG_END
 
-
 init_error
+	* Eagle related error messages shown elsewhere
+	cmp	#ier_eagleplayer,d0 
+	beq.b 	.skip
+	
 	neg	d0
 	add	d0,d0
 	lea	.ertab-2(pc,d0),a1
 	add	(a1),a1
 	bsr.w	request
-
+.skip
 * vapautetaan moduuli
 	jsr	freemodule
 * printataan infoa
@@ -37279,7 +37283,7 @@ findDeliPlayer
 	moveq	#ier_eagleplayer,d0
 	rts	
 .errMsg
-	dc.b	"Couldn't find eagleplayer:",10,"%s",0
+	dc.b	"Could not load eagleplayer:",10,"%s",0
  even
 
 .tryLock
@@ -37334,7 +37338,8 @@ freeDeliLoadedFile
 	lore	Exec,FreeMem
 	clr.l	deliGetListDataData(a5)
 	clr.l	deliGetListDataLength(a5)
-.x	rts	
+.x	clr.l	deliLoadFileIoErr(a5)
+	rts	
 
 
 * in:
@@ -37383,7 +37388,7 @@ deliInit
 	move	playertype(a5),deliPlayerType(a5)
 	bsr.w	buildDeliBase
 	tst.l	d0
-	beq	.noMem
+	beq	.noMemError
 	move.l	deliBase(a5),a4
 
 	* Quite important to clear the old ones away
@@ -37394,7 +37399,6 @@ deliInit
 	clr.l	deliStoredSetVoices(a5) 
 	clr.l	deliStoredNoteStruct(a5) 
 	clr.l	deliStoredGetPositionNr(a5)
-	
 	
  if DEBUG
 	bsr	deliShowTags
@@ -37436,7 +37440,7 @@ deliInit
 	bsr.w	deliCallFunc
 	DPRINT	"DTP_Check2: %ld",9
 	tst.l	d0
-	bne.w	.error
+	bne.w	.checkError
 .noCheck2	
 	move.l	#EP_Check3,d0  
 	bsr.w	deliGetTag
@@ -37444,7 +37448,7 @@ deliInit
 	bsr.w	deliCallFunc
 	DPRINT	"EP_Check3: %ld",91
 	tst.l	d0
-	bne.w	.error
+	bne.w	.checkError
 .noCheck3
 	move.l	#EP_Check5,d0  
 	bsr.w	deliGetTag
@@ -37452,7 +37456,7 @@ deliInit
 	bsr.w	deliCallFunc
 	DPRINT	"EP_Check5: %ld",8
 	tst.l	d0
-	bne.w	.error
+	bne.w	.checkError
 .noCheck5
 
 	move.l	#EP_Flags,d0
@@ -37471,7 +37475,7 @@ deliInit
 	bsr.w	deliCallFunc
 	DPRINT	"DTP_ExtLoad: %lx",81
 	tst.l	d0
-	bne.w	.error
+	bne.w	.extLoadError
 .noExtLoad
 
 	move.l	#DTP_InitPlayer,d0  
@@ -37559,7 +37563,7 @@ deliInit
 	bsr.w	deliCallFunc	
 
 	moveq	#ier_nociaints,d0
-	bra.w	.error
+	bra.w	.ciaError
 .gotCia
 .skip
 
@@ -37580,22 +37584,64 @@ deliInit
 
 	* ok
 	moveq	#0,d0
+.ciaError
 .exit
 	popm	d1-a6
 	rts
 
-.initError
-	DPRINT	"InitPlayer error: %ld",52
-	moveq	#ier_error,d0 
+.checkError
+	moveq	#ier_unknown,d0
 	bra.b	.exit
-.error
-	DPRINT	"init FAIL",56
-	moveq	#ier_error,d0 
-	bra.b	.exit
-.noMem
+.noMemError
 	moveq	#ier_nomem,d0 
 	bra.b 	.exit
-	
+
+.initError
+	DPRINT	"InitPlayer error: %ld",52
+	tst.l	deliLoadFileIoErr(a5)
+	bne.b	.ioErr
+	lea	.initErrMsg(pc),a0 
+	bra.b	.showErr
+
+.extLoadError
+	tst.l	deliLoadFileIoErr(a5)
+	bne.b 	.ioErr
+	lore	Dos,IoErr 
+	bra.b	.ioErr2
+
+.ioErr
+	move.l	deliLoadFileIoErr(a5),d0
+.ioErr2
+	tst.b	uusikick(a5)
+	bne.b	.newIoErr
+
+	lea	.ioErrMsg(pc),a0 
+.showErr
+	jsr	desmsg
+.ioErr3
+	lea	 desbuf(a5),a1 
+	jsr	 request
+	moveq	#ier_eagleplayer,d0
+	bra.b	.exit
+
+.newIoErr
+	lea	.ioErrMsg2(pc),a3
+	clr.b	(a3)
+	move.l	d0,d1 
+	pushpea	.ioErrMsg(pc),d2
+	pushpea desbuf(a5),d3
+	moveq	#100,d4
+	lore	Dos,Fault
+	move.b	#' ',(a3)
+	bra.b	.ioErr3
+
+.initErrMsg 
+	dc.b	"Eagleplayer init error (%ld)",0
+.ioErrMsg
+	dc.b	"Additional module data load error"
+.ioErrMsg2
+	dc.b	" (%ld)",0
+ even
 
 * Read module info values
 * in:
@@ -38096,12 +38142,20 @@ deliLoadFile
 	lea	deliGetListDataData(a5),a1 
 	lea 	deliGetListDataLength(a5),a2
 	jsr	loadfile
-	jsr	clearMainWindowWaitPointer
+	clr.l 	deliLoadFileIoErr(a5)
+	move.l	d0,d7
+	beq.b	.ok	
+	lore 	Dos,IoErr
+	move.l	d0,deliLoadFileIoErr(a5)
+.ok
+	move.l	d7,d0
  if DEBUG
 	move.l	deliGetListDataData(a5),d1
 	move.l	deliGetListDataLength(a5),d2
-	DPRINT "deliLoadfile: %ld %lx %ld",2
+	move.l	deliLoadFileIoErr(a5),d3
+	DPRINT "deliLoadfile: %ld %lx %ld err=%ld",2
  endif
+	jsr	clearMainWindowWaitPointer
 	popm	d1-a6
 	
  * 0 = success, non-0: fail
