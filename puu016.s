@@ -1159,15 +1159,16 @@ moduleListChanged	rs.b		1
 kplbase	rs.b	k_sizeof		* KPlayerin muuttujat (ProTracker)
 
 *** Deli support data
+deliData	rs.l    1
 * Dynamically allocated:
 deliBase	rs.l 	1
 * LoadSeg() data 
 deliPlayer	rs.l	1
 * Type of player which was loaded
 deliPlayerType	rs.w	1
-* Data loaded with *_LoadFile
-deliGetListDataData	rs.l 1
-deliGetListDataLength 	rs.l 1
+* Load file array pointer, contains (addr,len) pairs
+* Data loaded with dtg_LoadFile
+deliLoadFileArray	rs.l 1
 deliLoadFileIoErr	rs.l 1
 * Some tag data for faster access
 deliStoredInterrupt	rs.l	1
@@ -1296,6 +1297,7 @@ pt_wallybeben		rs.b 	1
 pt_synthpack		rs.b    1
 pt_jeroentel		rs.b 	1 
 pt_robhubbard 		rs.b 	1
+pt_sonix			rs.b 	1
 
 * player group version
 xpl_versio	=	21
@@ -5685,8 +5687,6 @@ freemodule
 	clr.l	tfmxsamplesaddr(a5)
 	clr.l	tfmxsampleslen(a5)
 	clr.b	lod_tfmx(a5)
-
-	jsr	freeDeliLoadedFile
 
 	DPRINT	"freemodule release data",4
 	bsr.w	releaseModuleData
@@ -11691,11 +11691,11 @@ aseta_vakiot
 	st	newdirectory(a5)
 	lea	.defdir1(pc),a0
 	lea	moduledir(a5),a1
-	bsr.b	copyb
+	bsr.w	copyb
 
 	lea	.defdir1(pc),a0
 	lea	prgdir(a5),a1
-	bsr.b	copyb
+	bsr.w	copyb
 
 	lea	.defdir2(pc),a0
 	lea	arcdir(a5),a1
@@ -11717,7 +11717,7 @@ aseta_vakiot
 .defdir1 dc.b	"SYS:",0
 .defdir2 dc.b	"RAM:",0
 .wb	dc.b	"Workbench",0
-.pat	dc.b	"~(#?.info|smpl.#?|#?.ins|#?.nt|#?.as)",0
+.pat	dc.b	"~(#?.info|smpl.#?|#?.ins|#?.nt|#?.as|#?.instr|#?.ss)",0
 defgroup dc.b	"S:"	
 hipGroupFileName
 	dc.b	"HippoPlayer.Group",0
@@ -16527,6 +16527,12 @@ inforivit_extracting
 .3	dc.b	"LZX extracting...",0
  even
 
+
+inforivit_eagleload
+	lea	.1(pc),a0
+	bra.w	putinfo2
+.1	dc.b	"Loading module data...",0
+ even
 
 * Siistit‰‰n moduulin nimi 
 
@@ -25129,6 +25135,7 @@ eagleFormats
 	dc.l	p_synthpack
 	dc.l	p_robhubbard 
 	dc.l 	p_jeroentel
+	dc.l	p_sonix
 	dc.l 	0	
 
 *******
@@ -27842,14 +27849,14 @@ p_protracker
 .procont
 	move.l	d0,-(Sp)
 	moveq	#0,d0
-	jsr	kplayer+kp_playstop
+ 	jsr	kplayer+kp_playstop
 	move.l	(sp)+,d0
 	rts	
 
 .provolume
 	move.l	d0,-(sp)
 	move	mainvolume(a5),d0
-	bsr.w	kplayer+kp_setmaster
+	jsr	kplayer+kp_setmaster
 	move.l	(sp)+,d0
 	rts
 
@@ -27857,7 +27864,7 @@ p_protracker
 .provb
 	tst.b	vbtimeruse(a5)
 	beq.b	.cus
-	bsr.w	kplayer+kp_music
+	jsr	kplayer+kp_music
 .cus
 	move	kplbase+k_songpos(a5),pos_nykyinen(a5)
 	tst.b	kplbase+k_songover(a5)
@@ -28019,7 +28026,7 @@ p_protracker
 	move.b	(a0,d7),d7
 	bmi.b	.nosong
 
-	bsr.w	kplayer+kp_end
+	jsr	kplayer+kp_end
 	
 	lea	kplbase(a5),a0
 	move.l	moduleaddress(a5),a1
@@ -37265,6 +37272,147 @@ p_jeroentel
 	rts
 
 
+
+******************************************************************************
+* Sonix Music Driver
+* Prefixes: SMUS, TINY, SNX
+******************************************************************************
+
+p_sonix
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_sonix
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+	dc.b	"Sonix Music Driver  [EP]",0
+.path dc.b "sonix music driver",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	move.l	d7,d4
+	move.l	A0,A1
+	cmp.l	#'FORM',(A0)
+	beq.w	.SmusCheck
+	move.w	(A0),D1
+	and.w	#$00F0,D1
+	bne.b	.TinyCheck
+	moveq	#20,D3
+	moveq	#3,D1
+.NextPos
+	move.l	(A0)+,D2
+	beq.b	.fault
+	bmi.b	.fault
+	btst	#0,D2
+	bne.b	.fault
+	add.l	D2,D3
+	dbf	D1,.NextPos
+	cmp.l	D4,D3
+	bge.b	.fault
+	addq.l	#4,A0
+	moveq	#3,D1
+.SecPass
+	tst.b	(A0)
+	bpl.b	.fault
+	cmp.w	#-1,(A0)
+	beq.b	.OK1
+	cmp.b	#$84,(A0)
+	bhi.b	.fault
+.OK1
+	add.l	(A1)+,A0
+	dbf	D1,.SecPass
+	tst.b	(A0)
+	beq.b	.fault
+.found
+	moveq	#0,D0
+.fault
+	rts
+
+
+.TinyCheck
+	cmp.l	#332,D4
+	ble.b	.fault
+	lea	48(A0),A1
+	cmp.l	#$140,(A1)+
+	bne.b	.fault
+	moveq	#2,D1
+.NextPos2
+	move.l	(A1)+,D2
+	beq.b	.fault
+	bmi.b	.fault
+	btst	#0,D2
+	bne.b	.fault
+	cmp.l	D2,D4
+	ble.b	.fault
+	lea	(A0,D2.L),A2
+	cmp.w	#-1,(A2)
+	beq.b	.OK2
+	tst.l	(A2)+
+	bne.b	.fault
+	tst.w	(A2)+
+	bne.b	.fault
+	tst.b	(A2)
+	bpl.b	.fault
+	cmp.b	#$82,(A2)
+	bhi.b	.fault
+.OK2
+	dbf	D1,.NextPos2
+	bra.b	.found
+
+.SmusCheck
+	cmp.l	#'SMUS',8(A0)
+	bne.b	.fault
+	cmp.l	#'SHDR',12(A0)
+	tst.b	23(A0)
+	beq.b	.fault
+	lea	24(A0),A1
+	cmp.l	#'NAME',(A1)+
+	bne.b	.fault
+	move.l	(A1)+,D1
+	bmi.w	.fault
+	addq.l	#1,D1
+	bclr	#0,D1
+	add.l	D1,A1
+	cmp.l	#'SNX1',(A1)+
+	bne.w	.fault
+	move.l	(A1)+,D1
+	bmi.w	.fault
+	addq.l	#1,D1
+	bclr	#0,D1
+	add.l	D1,A1
+.MoreIns
+	cmp.l	#'INS1',(A1)+
+	bne.w	.fault
+	move.l	(A1)+,D1
+	bmi.w	.fault
+	addq.l	#1,D1
+	bclr	#0,D1
+	cmp.b	#63,(A1)			; real sample number
+	bhi.w	.fault
+	tst.b	1(A1)				; MIDI check
+	bne.w	.fault
+	add.l	D1,A1
+	cmp.l	#'TRAK',(A1)
+	bne.b	.MoreIns
+	bra.w	.found
+
+
 ******************************************************************************
 * Deli/eagle support
 ******************************************************************************
@@ -37358,12 +37506,12 @@ NSTF_64Bit 	EQU	1<<21
 deliLoadAndInit
 	jsr	setMainWindowWaitPointer
 	bsr.b	loadDeliPlayer 
-	jsr 	clearMainWindowWaitPointer
 	tst.l 	d0
 	bmi.b 	.loadErr 
 	bsr.w	deliInit
 	tst.l	d0
 .loadErr	
+	jsr 	clearMainWindowWaitPointer
 	rts
 
 * in:
@@ -37498,20 +37646,29 @@ freeDeliPlayer
 .skip
 	clr.l	deliPlayer(a5)
 	clr	deliPlayerType(a5)
-.x	bsr.w	freeDeliBase
+.x
+	bsr		.freeDeliLoadedFile
+	bsr.w	freeDeliBase
 	popm	all
 	rts
 
-freeDeliLoadedFile
-	tst.l	deliGetListDataData(a5)
-	beq.b	.x
-	DPRINT	"freeDeliLoadedFile",1
-	move.l	deliGetListDataData(a5),a1
-	move.l	deliGetListDataLength(a5),d0
-	lore	Exec,FreeMem
-	clr.l	deliGetListDataData(a5)
-	clr.l	deliGetListDataLength(a5)
-.x	clr.l	deliLoadFileIoErr(a5)
+.freeDeliLoadedFile
+	tst.l	deliLoadFileArray(a5)
+	beq.b 	.xy
+	move.l	deliLoadFileArray(a5),a2
+.loop
+	tst.l 	(a2) 
+	beq.b 	.end
+	move.l	(a2),a1
+	move.l	4(a2),d0
+	lore 	Exec,FreeMem
+	clr.l	(a2)+
+	clr.l	(a2)+
+	bra.b 	.loop
+.end 
+	clr.l	deliLoadFileIoErr(a5)
+	clr.l	deliLoadFileArray(a5)
+.xy 
 	rts	
 
 
@@ -37746,6 +37903,7 @@ deliInit
 	DPRINT	"init ok, dtg_Timer=%ld",55
  endif
 
+; TEST RUN
 ; 	move	#1-1,d0
 ;.bbb
 ;	pushm all
@@ -37911,6 +38069,7 @@ deliGetSongInfo
 deliInterrupt
 deliPlay
 ;	move	#$f00,$dff180
+;	rts
 	
 	move.l	a5,a4
 	push	a4
@@ -38074,45 +38233,70 @@ deliVolume
 	rts
 
 freeDeliBase
-	tst.l	deliBase(a5)
+	tst.l	deliData(a5)
 	beq.b	.x
-	move.l deliBase(a5),a0 
-	lea	ENPP_SizeOf(a0),a0 
+	move.l deliData(a5),a0 
 	jsr 	freemem 
-.x	clr.l	deliBase(a5)
+.x	clr.l	deliData(a5)
 	rts 
+
 
 
 * Build the DeliBase structure, this is not a complete version.
 buildDeliBase
 	bsr.b	freeDeliBase
 
-	move.l	#-ENPP_SizeOf+EPG_SizeOf+200+200+UPS_SizeOF,d0
+	rsreset 
+_eagleJumpTable rs.b 	-ENPP_SizeOf
+_deliBase		rs.b 	EPG_SizeOf 
+_deliPath		rs.b    200
+_deliPathArray	rs.b   	200
+_upsStructure 	rs.b  	UPS_SizeOF
+* Space for 128 (address, length) pairs for dtg_LoadFile 
+_loadFileArray	rs.l 	2*128
+_deliDataSize	rs.b	0
+
+	move.l	#_deliDataSize,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
 	bne.b 	.ok 
 	rts
 .ok
-	move.l 	d0,a0 
-	lea	-ENPP_SizeOf(a0),a0 
+	move.l 	d0,deliData(a5)
+	move.l	d0,a4
+
+	lea	_deliBase(a4),a0 
 	move.l	a0,deliBase(a5)
 
-	push a0
-	jsr	getcurrent 
-	pop a0
+	* InStereo2 uses this private structure
+	lea	_upsStructure(a4),a1
+	move.l	a1,EPG_UPS_Structure(a0)
 
+	lea	_loadFileArray(a4),a1
+	move.l	a1,deliLoadFileArray(a5)
+
+	lea	_deliPath(a4),a1
+	move.l	a1,deliPath(a5)
+	move.l	a1,dtg_DirArrayPtr(a0)
+
+	lea	_deliPathArray(a4),a1
+	move.l	a1,deliPathArray(a5)
+	move.l	a1,dtg_PathArrayPtr(a0)
+
+
+
+	push	a0
+	jsr	getcurrent 
+	pop 	a0
 	* a3 = node
+	
 	* Grab path and file parts
+	* Name without path to A1
 	move.l	l_nameaddr(a3),a1
 	move.l	a1,dtg_FileArrayPtr(a0)
+	* Full path to A2
 	lea	l_filename(a3),a2
-	;lea	deliPath,a3
-	lea	EPG_SizeOf(a0),a3
-	move.l	a3,deliPath(a5)
-	lea	200(a3),a4
-	move.l	a4,deliPathArray(a5)
-	move.l	a4,dtg_PathArrayPtr(a0)
-	move.l	a3,dtg_DirArrayPtr(a0)
+	move.l	deliPath(a5),a3
 	push	a2
 .copy	move.b	(a2)+,(a3)+
 	cmp.l	a2,a1
@@ -38122,13 +38306,10 @@ buildDeliBase
 	* The full path needs to be populated here, too.
 	* "Test drive 2" uses it, for example.
 	pop	a2
-	move.l	dtg_PathArrayPtr(a0),a1
+	move.l	deliPathArray(a5),a1
 .c2	move.b	(a2)+,(a1)+
 	bne.b	.c2 
 
-	lea	200(a4),a4
-	* InStereo2 uses this private structure
-	move.l	a4,EPG_UPS_Structure(a0)
 
  if DEBUG
 	move.l	dtg_FileArrayPtr(a0),d0
@@ -38163,6 +38344,9 @@ buildDeliBase
 
 	move.l	moduleaddress(a5),dtg_ChkData(a0) 
 	move.l	modulelength(a5),dtg_ChkSize(a0)
+	* Default timer value is needed by
+	* Sonix Sound Driver
+	move	#28419/2,dtg_Timer(a0)
 
 	pea	deliAllocAudio(pc)
 	move.l	(sp)+,dtg_AudioAlloc(a0)
@@ -38230,9 +38414,12 @@ buildDeliBase
 
 .setTimer
 	* May be called from interrupt, no logging allowed
+	push	d0
 	move	dtg_Timer(a5),d0
-	jmp ciaint_setTempoFromD0
-	
+	jsr     ciaint_setTempoFromD0
+	pop 	d0 
+	rts
+
 .stub
 	moveq	#0,d0
 .dummyEagleFunc
@@ -38309,11 +38496,20 @@ deliLoadFile
  endif
 	pushm	d1-a6
 	lea 	var_b,a5
-	jsr	setMainWindowWaitPointer
+
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	move.l	deliPathArray+var_b,a0
-	lea	deliGetListDataData(a5),a1 
-	lea 	deliGetListDataLength(a5),a2
+
+	* Find empty loadfile slot
+	move.l	deliLoadFileArray(a5),a1
+.find
+	tst.l	(a1)
+	beq.b	.found
+	addq.l	#8,a1
+	bra.b 	.find
+.found
+	lea		4(a1),a2
+
 	jsr	loadfile
 	clr.l 	deliLoadFileIoErr(a5)
 	move.l	d0,d7
@@ -38323,31 +38519,39 @@ deliLoadFile
 .ok
 	move.l	d7,d0
  if DEBUG
-	move.l	deliGetListDataData(a5),d1
-	move.l	deliGetListDataLength(a5),d2
+	move.l	(a1),d1
+	move.l	(a2),d2
 	move.l	deliLoadFileIoErr(a5),d3
-	DPRINT "deliLoadfile: %ld %lx %ld err=%ld",2
+	DPRINT "deliLoad=%ld addr=%lx len=%ld err=%ld",2
  endif
-	jsr	clearMainWindowWaitPointer
 	popm	d1-a6
 	
  * 0 = success, non-0: fail
 	rts
-
-* Returns the last loaded file,
-* eg with dtg_LoadFile
+x
+* Get loaded data
+* in: 
+*   d0 = file number. 0 is the original module, 
+*                     1 is the 1st loaded file with dtg_LoadFile, etc
 deliGetListData 
 	DPRINT	"getListData %ld",110
 	tst.l	d0 
 	beq.b	.first
-	subq.l	#1,d0 
-	beq.b 	.second 
-	moveq	#0,d0 
-	sub.l	a0,a0 
-	rts
-.second
-	move.l	deliGetListDataData+var_b,a0 
-	move.l	deliGetListDataLength+var_b,d0
+
+	* Grab (addr,len) so that index 1 corresponds to the first item.
+	pushm	d3/a1
+	move.l	deliLoadFileArray+var_b,a1
+	move	d0,d3
+	lsl	#3,d3
+
+ if DEBUG
+ 	move.l	-8(a1,d3),d0
+	move.l	-8+4(a1,d3),d1
+	DPRINT	"0x%lx %ld",3
+ endif
+	move.l	-8(a1,d3),a0
+	move.l	-8+4(a1,d3),d0
+	popm	d3/a1
 	rts
 .first
  if DEBUG
