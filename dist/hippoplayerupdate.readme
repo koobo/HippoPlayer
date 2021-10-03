@@ -22,7 +22,8 @@ updated documentation. Please read the change history below.
 
 NOTE 2: Ensure that "HippoPlayer.group" gets updated, as old versions will
 not work. The default placement is the S: directory, which is a bit silly
-(location can be changed in Prefs).
+(location can be changed in Prefs). You can also place the file in the 
+same directory with the HiP binary, too, if you're using kick2.0 or newer.
 
 NOTE 3: If you get errors where some module is not recognized even 
 if it should be, try removing "S:HippoPlayer.prefs" first.
@@ -63,6 +64,8 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
   "PROGDIR:Eagleplayers". Here "PROGDIR:" means the directory
   where the Hippo binary is located, and is only supported for kick2.0
   and newer. Kick1.3 users are left with the former option.
+- Along similar lines "HippoPlayer.group" file is now also searched
+  first from "PROGDIR:", then the default (or configured) location.
 
 ## New music formats:
 - PreTracker by Pink/aBYSs. Noice! Samples are generated during 
@@ -79,7 +82,7 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 - DeliTracker Custom format improvements, adds support for modules 
   with external samples:
   - SUNTronic modules (from SUNTronicTunes.lha). Smooth!
-  - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too
+  - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too.
 - GlueMon (properly retro sound)
 - SoundFX (some nice ones in there)
 - StarTrekker AM (pretty crunchy)
@@ -90,7 +93,7 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
    - Also had an annoying audible *BEEP* once in a while. Fixed it.
      (Empty sample data was not in chip mem, my fault.)
 
-## New supported Eagleplayer formats, plugin name in parenthesis:
+## Supported Eagleplayer formats, plugin name in parenthesis:
 - Synthesis ("synth 4.0")
 - SynTracker ("syntracker")
 - AProSys ("aprosys")
@@ -122,6 +125,12 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 - Activision Pro ("activision pro")
   - Some of these seem to cause crashes. 
   - "R-Type 2"
+- Wally Beben ("wally beben")
+  - "Elite", "Hawkeye"
+- Jeroen Tel ("jeroen tel")
+  -  "Unreal" title
+- Rob Hubbard ("rob hubbard")
+  -  "Budokan"
 
 ## Tips 
 - A nice place for exotic modules is the FTP server Modland. 

@@ -54,6 +54,10 @@ Formats
 + Activision Pro
 
 TODO
+- eagleplayer better error msgs
+- missing files etc
+
+TODO
 - test TMFX with doublebuffering
 
 FIXED
