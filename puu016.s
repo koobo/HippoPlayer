@@ -1293,6 +1293,9 @@ pt_markcooksey		rs.b	1
 pt_activisionpro	rs.b	1
 pt_maxtrax			rs.b 	1
 pt_wallybeben		rs.b 	1
+pt_synthpack		rs.b    1
+pt_jeroentel		rs.b 	1 
+pt_robhubbard 		rs.b 	1
 
 * player group version
 xpl_versio	=	21
@@ -25123,6 +25126,9 @@ eagleFormats
 	dc.l	p_activisionpro
 	dc.l	p_maxtrax
 	dc.l	p_wallybeben
+	dc.l	p_synthpack
+	dc.l	p_robhubbard 
+	dc.l 	p_jeroentel
 	dc.l 	0	
 
 *******
@@ -27817,28 +27823,26 @@ p_protracker
 	bset	#1,d2			* fast flag
 .ss
 	lea	kplbase(a5),a0
-	bra.w	kplayer+kp_init
-;	rts
+	jmp	kplayer+kp_init
 	
 
 .proend	move.l	d0,-(sp)
-	bsr.w	kplayer+kp_end
+	jsr	kplayer+kp_end
 	move.l	(sp)+,d0
 	bra.w	vapauta_kanavat
-;	rts
 
 .prostop
 	move.l	d0,-(Sp)
 	moveq	#1,d0
-	bsr.w	kplayer+kp_playstop
-	bsr.w	kplayer+kp_clear
+	jsr	kplayer+kp_playstop
+	jsr	kplayer+kp_clear
 	move.l	(sp)+,d0
 	rts
 
 .procont
 	move.l	d0,-(Sp)
 	moveq	#0,d0
-	bsr.w	kplayer+kp_playstop
+	jsr	kplayer+kp_playstop
 	move.l	(sp)+,d0
 	rts	
 
@@ -37093,6 +37097,175 @@ p_wallybeben
 	rts
 
 ******************************************************************************
+* Synth Pack by Karsten Obarski
+******************************************************************************
+
+p_synthpack
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_synthpack
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Synth Pack          [EP]",0
+	        
+.path dc.b "synth pack",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	CMP.L	#$4F424953,(A0)+
+	BNE.S	.lbC0004FC
+	CMP.L	#$594E5448,(A0)+
+	BNE.S	.lbC0004FC
+	CMP.L	#$5041434B,(A0)+
+	BNE.S	.lbC0004FC
+	CMP.W	#$100,$500(A0)
+	BEQ.S	.lbC0004F8
+	TST.L	$500(A0)
+	BNE.S	.lbC0004FC
+	;BRA.S	.lbC0004FA
+.lbC0004F8	
+.lbC0004FA	MOVEQ	#0,D0
+.lbC0004FC	RTS
+
+
+******************************************************************************
+* Rob Hubbard
+******************************************************************************
+
+p_robhubbard
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_robhubbard
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Rob Hubbard         [EP]",0
+.path dc.b "rob hubbard",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	moveq	#-1,D0
+	move.w	#$6000,D1
+	cmp.w	(A0),D1
+	bne.s	.Return
+	cmp.w	4(A0),D1
+	bne.s	.Return
+	cmp.w	8(A0),D1
+	bne.s	.Return
+	cmp.w	12(A0),D1
+	bne.s	.Return
+	cmp.w	16(A0),D1
+	bne.s	.Return
+	cmp.w	#$41FA,20(A0)
+	bne.s	.Return
+	cmp.l	#$4E7541FA,28(A0)
+	bne.s	.Return
+	moveq	#0,D0
+.Return
+	rts			
+
+
+
+******************************************************************************
+* Jeroen Tel
+******************************************************************************
+
+p_jeroentel
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_jeroentel
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Jeroen Tel          [EP]",0
+.path dc.b "jeroen tel",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0 
+	moveq	#-1,D0
+	cmp.l	#1700,d7
+	ble.b	.Fault
+
+	lea	40(A0),A1
+.Check
+	cmp.l	#$02390001,(A0)
+	beq.b	.More
+	addq.l	#2,A0
+	cmp.l	A0,A1
+	bne.b	.Check
+	rts
+.More
+	addq.l	#8,A0
+	cmp.b	#$66,(A0)+
+	bne.b	.Fault
+	move.b	(A0)+,D1
+	bmi.b	.Fault
+	beq.b	.Fault
+	cmp.w	#$4E75,(A0)
+	bne.b	.Fault
+	ext.w	D1
+	add.w	D1,A0
+	cmp.w	#$4A39,(A0)
+	bne.b	.NoOne
+	moveq	#3,D1
+.NextOne
+	cmp.w	#$4A39,(A0)
+	bne.b	.Fault
+	lea	18(A0),A0
+	dbf	D1,.NextOne
+.NoOne
+	cmp.l	#$78001839,(A0)
+	bne.b	.Fault
+	moveq	#0,D0
+.Fault
+	rts
+
+
+******************************************************************************
 * Deli/eagle support
 ******************************************************************************
 
@@ -37638,7 +37811,7 @@ deliInit
 .initErrMsg 
 	dc.b	"Eagleplayer init error (%ld)",0
 .ioErrMsg
-	dc.b	"Additional module data load error"
+	dc.b	"Error loading additional module data"
 .ioErrMsg2
 	dc.b	" (%ld)",0
  even
