@@ -39,19 +39,31 @@ Formats
 - MultiMediaSound
 + startrekker
 
+- stonetracker
 + maxtrax
 + kris hatlelid
 - special fx
 - sound images
 - sound master 
-- synth pack
-- wally beben
++ synth pack
++ wally beben
 + aprosys
 + hippel7
 + hippel for st 
 + tcbtracker
 + audio sculpture
 + Activision Pro
++ sonix music driver
++ quartet st
++ jeroen tel
++ rob hubbard
+- mark cooksey
++ quartet st 
++ digital mugician 2
++ stonetracker
+
+TODO
+- add divider to fav list -> disappears
 
 TODO
 - eagleplayer better error msgs

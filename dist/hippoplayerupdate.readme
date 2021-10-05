@@ -33,6 +33,8 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 
 # Changes from v2.47 (31.8.2021) to v2.48 (?.?.2021)
 
+In this version, we will be trying to play them all.
+
 ## New fixes:
 - File and directory scan was refactored and is now much more robust.
   This fixes some bugs caused by very long path names and
@@ -67,14 +69,15 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 - Along similar lines "HippoPlayer.group" file is now also searched
   first from "PROGDIR:", then the default (or configured) location.
 
-## New music formats:
+## New music formats (added into HippoPlayer.group):
 - PreTracker by Pink/aBYSs. Noice! Samples are generated during 
   initialization which may take some time especially on slow CPUs.
 - SonicArranger
   - Now supports more variants, previously only the compact form was 
     supported. Adaptation based on Wanted Team sources.
 - CustomMade
-  - "Battle Squadron"! Format by Ivo Zoer, songs composed by Ron Klaren. 
+  - "Battle Squadron"
+  - Format by Ivo Zoer, songs composed by Ron Klaren. 
     Adaptation based on Wanted Team sources.
 - Dave Lowe
   - Just wanted to hear Hippo play the "International Karate+" title music. 
@@ -82,32 +85,36 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 - DeliTracker Custom format improvements, adds support for modules 
   with external samples:
   - SUNTronic modules (from SUNTronicTunes.lha). Smooth!
+    Check out "spring.src", this uses the Paula FM/AM channel modulation
+    feature, which is very rarely heard. 
   - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too.
 - GlueMon (properly retro sound)
 - SoundFX (some nice ones in there)
+   - Check out "waterfall.sfx"
 - StarTrekker AM (pretty crunchy)
   - Audio Sculpture modules are also recognized as StarTrekker modules.
     The replay routine is almost identical, but not quite, 
     so may not play perfectly.
+  - Recommended listen (since M.U.L.E. rules): "the-real-mule2.mod" 
 - Improved JamCracker support: added volume control and position/length info.
    - Also had an annoying audible *BEEP* once in a while. Fixed it.
      (Empty sample data was not in chip mem, my fault.)
 
 ## Supported Eagleplayer formats, plugin name in parenthesis:
-- Synthesis ("synth 4.0")
 - SynTracker ("syntracker")
 - AProSys ("aprosys")
   - Original sounding synth tunes.
 - In Stereo! 1.0 ("in stereo 1.0")
 - In Stereo! 2.0 ("in stereo 2.0")
-  - Nice synth sounds! These two were predecessors to 
-    SonicArranger as far as I know.
+- Synthesis ("synth 4.0")
+  - Nice synth sounds! These three were predecessors to SonicArranger,
+    in this order.
 - ChipTracker ("chiptracker")
   - Tunes by 4-Mat.
 - Jochen Hippel 7v ("jochen hippel 7v")
-  - Sweet seven channel tunes.
+  - Seven channel Hippel experience.
 - Jochen Hippel ST ("jochen hippel st")
-  - Hippel tunes from the Atari ST.
+  - Hippel tunes from the Atari ST. Hippel is a good composer.
 - Rob Hubbard 2 ("rob hubbard 2")
   - Many Infogrames games used this, eg. the "Flood" title tune.
 - Richard Joseph/VectorDean ("richard joseph player")
@@ -116,21 +123,38 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
   - "Speedball 2"
 - TCBTracker ("tcb tracker")
   - Richard Joseph tunes from the ST, such as "Magic Pockets". 
-- Quartet ("quartet")
-  - This is an Atari ST format. Quite low quality ones overall.
+- Quartet ("quartet") and Quartet ST ("quartet st")
+  - Rather low quality Atari tunes, but interesting to hear these on Amiga.
 - Jason Brooke ("jason brooke")
   - "Space Harrier"
 - MaxTrax ("maxtrax")
-  - Bunch of game sountracks.
+  - A bunch of not too exciting game sountracks.
 - Activision Pro ("activision pro")
-  - Some of these seem to cause crashes. 
+  - Some of these crash, disabling CPU caches may help.
   - "R-Type 2"
 - Wally Beben ("wally beben")
   - "Elite", "Hawkeye"
 - Jeroen Tel ("jeroen tel")
-  -  "Unreal" title
+  -  "Unreal"
 - Rob Hubbard ("rob hubbard")
   -  "Budokan"
+- Sonix Music Driver ("sonix music driver")
+  - File prefixes: SMUS.*, TINY.*, SNX.*
+  - These definitely have a sound of their own. A note based
+    editor, not a tracker.
+  - Many beautiful adaptations of classical music.
+  - "California Games"
+- Digital Mugician II ("mugician ii")
+  - Eight voices.
+- StoneTracker ("stonetracker")
+  - One of the newer 4-8 channel Amiga trackers.
+  - To play these, additional library "stonepacker.library" needs to be
+    installed to LIBS:.
+  - These modules have a separate sample data file which needs to be
+    correctly named for the eagleplayer to find it, by prepending "sps.". 
+    Example:
+    - Module name: "hypnosphere.spm" 
+    - Sample file: "sps.hypnosphere.spm"
 
 ## Tips 
 - A nice place for exotic modules is the FTP server Modland. 
@@ -138,7 +162,7 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
   Many modules are also available there.
 
 ## Thanks and greetings to:
-- Spot/UpRough for vigorous beta testing and music format related assistance.
+- Spot/UpRough for beta testing and music format related assistance.
 - Marek Hac for beta testing.
 - Wanted Team for Eagleplayer resources.
 
