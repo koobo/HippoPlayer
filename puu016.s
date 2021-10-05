@@ -36,6 +36,8 @@ TARK	= 0	* 1: tekstien tarkistus
 EFEKTI  = 0	* 1: efekti volumesliderill‰
 ANNOY	= 0 * 1: Unregistered version tekstej‰ ymp‰riins‰
 
+DELI_TEST_MODE = 0
+
 ; Magic constants used with playingmodule and chosenmodule
 ; Positive value:
 ; - playingmodule: index of the module being played
@@ -1292,12 +1294,16 @@ pt_hippelst		rs.b	1
 pt_tcbtracker		rs.b 	1
 pt_markcooksey		rs.b	1
 pt_activisionpro	rs.b	1
-pt_maxtrax			rs.b 	1
+pt_maxtrax		rs.b 	1
 pt_wallybeben		rs.b 	1
 pt_synthpack		rs.b    1
 pt_jeroentel		rs.b 	1 
 pt_robhubbard 		rs.b 	1
-pt_sonix			rs.b 	1
+pt_sonix		rs.b 	1
+pt_coredesign		rs.b    1
+pt_quartetst	   	rs.b    1
+pt_digitalmugician2	rs.b	1
+pt_stonetracker		rs.b	1
 
 * player group version
 xpl_versio	=	21
@@ -25127,7 +25133,8 @@ eagleFormats
 	dc.l	p_aprosys
 	dc.l	p_hippelst
 	dc.l	p_tcbtracker
-	;dc.l	p_markcooksey
+	; Hangs on interrupt wait loop
+	;dc.l	p_markcooksey 
 	dc.l	p_activisionpro
 	dc.l	p_maxtrax
 	dc.l	p_wallybeben
@@ -25135,6 +25142,11 @@ eagleFormats
 	dc.l	p_robhubbard 
 	dc.l 	p_jeroentel
 	dc.l	p_sonix
+	dc.l	p_quartetst 
+	; Hangs on privileged instruction?
+	;dc.l	p_coredesign
+	dc.l	p_digitalmugician2
+	dc.l	p_stonetracker
 	dc.l 	0	
 
 *******
@@ -32186,7 +32198,7 @@ p_digibooster
 	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
 	lea	610(a4),a1
 	moveq	#30-1,d0
-	bsr		copyNameFromA1
+	bsr	copyNameFromA1
 	moveq	#0,d0
 .x 	rts
 
@@ -37412,18 +37424,307 @@ p_sonix
 	bra.w	.found
 
 
+
+******************************************************************************
+* Quartet ST
+******************************************************************************
+
+p_quartetst
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id_quartet_st(pc)
+	dc  pt_quartetst
+.flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus
+	dc.b	"Quartet ST          [EP]",0
+.path dc.b "quartet st",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+* Quartet ST
+.id_quartet_st
+	move.l	a4,a0
+	move.w	(A0),D1
+	beq.b	.Fault
+	cmp.w	#$10,D1
+	bhi.b	.Fault
+	cmp.b	#4,7(A0)
+	bne.b	.Fault
+	cmp.b	#4,6(A0)
+	bhi.b	.Fault
+	tst.l	8(A0)
+	bne.b	.Fault
+	cmp.w	#'WT',12(A0)
+	beq.b	.Skippy
+.NoSpec
+	tst.l	12(A0)
+	bne.b	.Fault
+.Skippy
+	cmp.l	#$4C,24(A0)
+	bhi.b	.Fault
+	move.l	24(A0),D1
+	and.w	#3,D1
+	bne.b	.Fault
+	cmp.w	#$0056,16(A0)
+	beq.b	.Oki
+.Fault
+	moveq	#-1,D0
+	rts
+.Oki
+	moveq	#0,D0
+	rts
+
+
+
+
+******************************************************************************
+* Core Design
+******************************************************************************
+
+p_coredesign
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id_core_design(pc)
+	dc  pt_coredesign
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+	dc.b	"Core Design         [EP]",0
+.path dc.b "core design",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+* Core Design
+.id_core_design
+	move.l a4,a0
+	cmp.l	#$000003F3,(A0)
+	bne.b	.fail
+	tst.b	20(A0)				; loading into chip check
+	beq.b	.fail
+	lea	32(A0),A0
+	cmp.l	#$70FF4E75,(A0)+
+	bne.b	.fail
+	cmp.l	#'S.PH',(A0)+
+	bne.b	.fail
+	cmp.l	#'IPPS',(A0)+
+	bne.b	.fail
+	tst.l	(A0)+				; Interrupt pointer check
+	beq.b	.fail
+	tst.l	(A0)+				; Audio Interrupt pointer check
+	beq.b	.fail
+	tst.l	(A0)+				; InitSong pointer check
+	beq.b	.fail
+	tst.l	(A0)+				; EndSong pointer check
+	beq.b	.fail
+	tst.l	(A0)				; Subsongs check
+	beq.b	.fail
+
+	moveq	#0,D0
+	rts
+.fail
+	moveq	#-1,D0
+	rts
+
+* Sierra AGI
+* DTP_UserConfig
+
+;Check2
+;	movea.l	dtg_ChkData(A5),A0
+;	moveq	#-1,D0
+;
+;	cmp.w	#$800,(A0)
+;	bne.b	Fault
+;	move.l	dtg_ChkSize(A5),D2
+;	move.l	A0,A1
+;	moveq	#0,D1
+;	moveq	#2,D3
+;NextInfo
+;	addq.l	#2,A1
+;	move.b	1(A1),D1
+;	lsl.w	#8,D1
+;	move.b	(A1),D1
+;	cmp.l	D1,D2
+;	ble.b	Fault
+;	tst.w	D1
+;	beq.b	Fault
+;	lea	(A0,D1.L),A2
+;	cmp.b	#-1,-1(A2)
+;	bne.b	Fault
+;	cmp.b	#-1,-2(A2)
+;	bne.b	Fault
+;	dbf	D3,NextInfo
+;
+;	moveq	#0,D0
+;Fault
+;	rts
+
+
+******************************************************************************
+* Digital Mugician 2
+******************************************************************************
+
+p_digitalmugician2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	deliInterrupt(pc) ; for position updates
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id_digitalmugician2(pc)
+	dc  pt_digitalmugician2
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse
+	dc.b	"Digital Mugician II [EP]",0
+.path dc.b "mugician ii",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+* digital mugician ii ("mugician ii")
+* DTP_UserConfig
+.id_digitalmugician2
+	move.l	a4,a0
+	moveq	#-1,D0
+	lea	.text(PC),A1
+	moveq	#$19,D6
+.test	cmpm.b	(A0)+,(A1)+
+	bne.b	.Fault
+	dbra	D6,.test	
+	moveq	#0,D0
+.Fault
+	rts
+.text
+	dc.b	' MUGICIAN2/SOFTEYES 1990'
+	dc.w	1
+ even  
+
+******************************************************************************
+* StoneTracker
+******************************************************************************
+
+p_stonetracker
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	deliInterrupt(pc) 
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id_stonetracker(pc)
+	dc  pt_stonetracker
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelaus
+	dc.b	"StoneTracker        [EP]",0
+.path dc.b "stonetracker",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+.id_stonetracker
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	;MOVE.L	$24(A5),A0
+	;MOVE.L	$28(A5),D7
+	MOVE.L	(A0)+,D1
+	MOVE.W	D1,D2
+	CMP.L	#$53504D02,D1
+	BNE.b	.lbC00327A
+	LEA	(A0),A3
+	MOVEQ	#$1F,D6
+	BSR.b	.lbC00327E
+	BNE.b	.lbC00327A
+	LEA	$20(A0),A0
+	MOVEM.W	(A0)+,D3-D6
+	LEA	(A0),A1
+	MOVEM.L	D3/D4,-(SP)
+	ADD.L	D3,D3
+	ADD.L	D3,D3
+	ADD.L	D4,D4
+	ADD.L	D4,D4
+	LEA	0(A1,D3.L),A2
+	LEA	0(A2,D4.L),A3
+	MOVEM.L	(SP)+,D3/D4
+	MOVE.W	D3,D2
+	SUBQ.W	#1,D2
+	BMI.b	.lbC00327A
+	LEA	(A1),A4
+.lbC003250	CMP.L	(A4)+,D7
+	BLS.S	.lbC00327A
+	DBRA	D2,.lbC003250
+	MOVE.W	D4,D2
+	SUBQ.W	#1,D2
+	BMI.S	.lbC00327A
+	LEA	(A2),A4
+.lbC003260	CMP.L	(A4)+,D7
+	BLS.S	.lbC00327A
+	DBRA	D2,.lbC003260
+	MOVE.W	D5,D2
+	SUBQ.W	#1,D2
+	BMI.S	.lbC003278
+	LEA	(A3),A4
+.lbC003270	CMP.L	(A4)+,D7
+	BLS.S	.lbC00327A
+	DBRA	D2,.lbC003270
+.lbC003278	MOVEQ	#0,D0
+.lbC00327A	TST.L	D0
+	RTS
+
+.lbC00327E	MOVE.B	(A3)+,D0
+	BEQ.S	.lbC003290
+	AND.B	#$7F,D0
+	CMP.B	#$20,D0
+	BLT.S	.lbC003294
+	SUBQ.L	#1,D6
+	BGT.S	.lbC00327E
+.lbC003290	MOVEQ	#0,D0
+	BRA.S	.lbC003296
+
+.lbC003294	MOVEQ	#-1,D0
+.lbC003296	RTS
+
+
 ******************************************************************************
 * Deli/eagle support
 ******************************************************************************
 
-* Local data
-* - loadseg player code
-* - player type, to avoid reloading
-* - free player when exiting
 
-* TODO: free "loadFile" loaded data on exit
-
-* - todo: dtg_getlistdata
+DELI_LIST_DATA_SLOTS = 64
 
  STRUCTURE DTN_NoteStruct,0
 	APTR	nst_Channels		;pointer to a list of notechannels */
@@ -37903,15 +38204,16 @@ deliInit
  endif
 
 ; TEST RUN
-; 	move	#1-1,d0
-;.bbb
-;	pushm all
-;	move.l	deliStoredInterrupt(a5),a0 
-;	move.l	deliBase(a5),a5
-;	jsr	 (a0)
-;	popm all
-;	dbf	d0,.bbb
-
+ ifne DELI_TEST_MODE
+ 	move	#1-1,d0
+.bbb
+	pushm all
+	move.l	deliStoredInterrupt(a5),a0 
+	move.l	deliBase(a5),a5
+	;jsr	 (a0)
+	popm all
+	dbf	d0,.bbb
+ endc
 	* ok
 	moveq	#0,d0
 .ciaError
@@ -37944,7 +38246,7 @@ deliInit
 .ioErr2
 	tst.b	uusikick(a5)
 	bne.b	.newIoErr
-
+.oldIoErr
 	lea	.ioErrMsg(pc),a0 
 .showErr
 	jsr	desmsg
@@ -37952,9 +38254,12 @@ deliInit
 	lea	 desbuf(a5),a1 
 	jsr	 request
 	moveq	#ier_eagleplayer,d0
-	bra.b	.exit
+	bra.w	.exit
 
 .newIoErr
+	tst.l	d0
+	beq.b	.oldIoErr
+
 	lea	.ioErrMsg2(pc),a3
 	clr.b	(a3)
 	move.l	d0,d1 
@@ -38066,10 +38371,7 @@ deliGetSongInfo
 
 * Interrupt play routine, use cached pointers to avoid tag searches
 deliInterrupt
-deliPlay
-;	move	#$f00,$dff180
-;	rts
-	
+deliPlay	
 	move.l	a5,a4
 	push	a4
 	move.l	deliBase(a5),a5
@@ -38092,7 +38394,11 @@ deliPlay
 	move.l	deliStoredInterrupt(a4),d0
 	beq.b	.noInt
 	move.l	d0,a0
+ ifne DELI_TEST_MODE
+	move	#$500,$dff180
+ else
 	jsr	(a0)
+ endif
 	move.l	(sp),a4
 .noInt
 
@@ -38252,7 +38558,7 @@ _deliPath		rs.b    200
 _deliPathArray	rs.b   	200
 _upsStructure 	rs.b  	UPS_SizeOF
 * Space for 128 (address, length) pairs for dtg_LoadFile 
-_loadFileArray	rs.l 	2*128
+_loadFileArray	rs.l 	2*DELI_LIST_DATA_SLOTS
 _deliDataSize	rs.b	0
 
 	move.l	#_deliDataSize,d0
@@ -38437,9 +38743,29 @@ _deliDataSize	rs.b	0
 	moveq	#0,d0
 	rts
 .allocListData
-	DPRINT	"allocListData",202
-	moveq	#0,d0
+	DPRINT	"allocListData %ld %lx",202
+	* used by stonetracker
+	pushm	d1-a6
+	lea	var_b,a5
+	move.l	d0,d6
+	move.l	d1,d7
+	bsr	deliFindEmptyListDataSlot
+	bne.b	.err
+	move.l	a1,a3 
+	move.l	d6,d0
+	move.l	d7,d1
+	lore 	Exec,AllocMem
+	tst.l 	d0 
+	beq.b 	.err
+	* Store into list data slot
+	movem.l	d0/d6,(a3)
+.allocListDataX
+ 	popm 	d1-a6
 	rts
+.err
+	moveq	#0,d0
+	bra.b 	.allocListDataX
+	
 .freeListData
 	DPRINT	"freeListData",203
 	moveq	#0,d0
@@ -38496,18 +38822,13 @@ deliLoadFile
 	pushm	d1-a6
 	lea 	var_b,a5
 
+	* Find empty loadfile slot
+	bsr.b	deliFindEmptyListDataSlot
+	bne.b	.noSlots
+	lea	4(a1),a2
+
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	move.l	deliPathArray+var_b,a0
-
-	* Find empty loadfile slot
-	move.l	deliLoadFileArray(a5),a1
-.find
-	tst.l	(a1)
-	beq.b	.found
-	addq.l	#8,a1
-	bra.b 	.find
-.found
-	lea		4(a1),a2
 
 	jsr	loadfile
 	clr.l 	deliLoadFileIoErr(a5)
@@ -38523,11 +38844,32 @@ deliLoadFile
 	move.l	deliLoadFileIoErr(a5),d3
 	DPRINT "deliLoad=%ld addr=%lx len=%ld err=%ld",2
  endif
+.noSlots
 	popm	d1-a6
 	
  * 0 = success, non-0: fail
 	rts
-x
+
+* out:
+*   a1 = empty slot for (addr,len) pair
+deliFindEmptyListDataSlot
+	move.l	deliLoadFileArray(a5),a1
+	moveq	#0,d0
+.find
+	cmp	#DELI_LIST_DATA_SLOTS,d0 
+	beq.b	.error 
+	tst.l	(a1)
+	beq.b	.found
+	addq.l	#8,a1
+	addq	#1,d0
+	bra.b 	.find
+.found
+	moveq	#0,d0
+	rts
+.error 
+	moveq	#-1,d0 
+	rts 
+
 * Get loaded data
 * in: 
 *   d0 = file number. 0 is the original module, 
