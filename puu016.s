@@ -8529,15 +8529,14 @@ find_continue
 *******************************************************************************
 * Kelaus
 *******
-forwardButtonAction
 rbutton_kela1
 	tst.b	playing(a5)
 	beq.b	.e
 	tst.l	playingmodule(a5)
 	bmi.b	.e
+	st	kelattiintaakse(a5)
 	move.l	playerbase(a5),a0
 	jsr	p_taakse(a0)	
-	st	kelattiintaakse(a5)
 .e	rts
 
 rbutton_kela2_turbo
