@@ -1,5 +1,5 @@
 WISHLISH
-+ Dir browser
+- Dir browser
 + Player group from PROGDIR
 + DONE: .gz support
 - UGLY: window size gadget
@@ -10,57 +10,64 @@ WISHLISH
 + logon keskitys
 - keyshortcutit tooltippeihin?
 Formats
++ Activision Pro
++ aprosys
++ audio sculpture
 + Beathoven
++ ben daglish
 + Deltamusic1
 + Digital mugician
++ digital mugician 2
++ digital mugician 2
 + earache
 + face the music
-+ sidmon2
-+ JamCracker FIXES 
-- digital mugician 2
-+ game music creator
-+ mark ii sound system
-+ puma tracker
-+ medley
++ FTM
 + future player
-+ ben daglish
-+ SonicArranger, all three variants
-- MusicMaker
-+ SoundFX 1.x
-+ Synthesis
++ game music creator
++ hippel for st 
++ hippel7
 + InStereo
-+ Ron Klaren + CustomMade
-- MusicMakerV8
-+ Syntracker
-+ RichardJoseph
-+ TCBTracker
-+ Quartet
++ JamCracker FIXES
 + JasonBrooke
-- MultiMediaSound
-+ startrekker
-
-- stonetracker
-+ maxtrax
++ jeroen tel
 + kris hatlelid
-- special fx
++ mark ii sound system
++ maxtrax
++ medley
++ puma tracker
++ Quartet
++ quartet st
++ quartet st 
++ RichardJoseph
++ rob hubbard
++ Ron Klaren + CustomMade
++ sidmon2
++ SonicArranger, all three variants
++ sonix music driver
++ SoundFX 1.x
++ startrekker
++ stonetracker
++ synth pack
++ Synthesis
++ Syntracker
++ tcbtracker
++ TCBTracker
++ wally beben
+
+- mark cooksey
+- MultiMediaSound
+- MusicMaker
+- MusicMakerV8
 - sound images
 - sound master 
-+ synth pack
-+ wally beben
-+ aprosys
-+ hippel7
-+ hippel for st 
-+ tcbtracker
-+ audio sculpture
-+ Activision Pro
-+ sonix music driver
-+ quartet st
-+ jeroen tel
-+ rob hubbard
-- mark cooksey
-+ quartet st 
-+ digital mugician 2
-+ stonetracker
+- special fx
+- VSS voodoo sound synth!
+
+TODO
+- DTP_Config
+-> Hippel 7v
+-> stonetracker
+-> mugician 2
 
 TODO
 - add divider to fav list -> disappears
