@@ -1239,7 +1239,7 @@ pt_delicustom	rs.b 	1
 
 * These need a replayer from the group file
 * These are ids into the file and must match playergroup0.s
-pt_group_start = 100
+pt_group_start = 49
 	rsset	pt_group_start		* Ulkoiset
 pt_multi	rs.b	1		* PS3M (mod,ftm,mtm,s3m)
 pt_tfmx		rs.b	1
@@ -1305,6 +1305,14 @@ pt_quartetst	   	rs.b    1
 pt_digitalmugician2	rs.b	1
 pt_stonetracker		rs.b	1
 
+ if pt_prot<>33 
+   fail This must be 33
+ endc 
+ if pt_multi<>49
+   fail This must be 49
+ endc 
+
+ 
 * player group version
 xpl_versio	=	21
 * convert player ids to start from zero to access table in player group
