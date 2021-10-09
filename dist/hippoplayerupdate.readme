@@ -33,7 +33,7 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 
 # Changes from v2.47 (31.8.2021) to v2.48 (?.?.2021)
 
-In this version, we will be trying to play them all.
+In this version, we will be trying to play them all!
 
 ## New fixes:
 - File and directory scan was refactored and is now much more robust.
@@ -53,13 +53,14 @@ In this version, we will be trying to play them all.
 - If the XFDMaster library was enabled, DeliCustom modules were not
   recognized. 
 - For lists with only list dividers the selection would sometimes 
-  go looping around the list and never stopping.
+  go looping around the list and never stopping, making Hippo 
+  unresponsive.
  
 ## New features:
 - Patternscope XL, with twice the amount of rows. 
   Implementation was also optimized quite a bit.
-- Eagleplayer support! Hippo can now use external eagleplayers to play some
-  formats. See below for format details. To use, you have to make
+- Eagleplayer support! Hippo can now use external eagleplayers to play 
+  some formats. See below for details. To use, you have to make
   the eagleplayers available to Hippo. This can be done by ensuring
   they are found from either "EaglePlayer2:Eagleplayers", which
   is the usual EaglePlayer install location, or from
@@ -75,6 +76,8 @@ In this version, we will be trying to play them all.
 - SonicArranger
   - Now supports more variants, previously only the compact form was 
     supported. Adaptation based on Wanted Team sources.
+  - SonicArranger was made in 1990-92 by Carsten Schlote, Branko Mikic, Carsten Herbst.
+    Herbst and Mikic were also involved with InStereo! and Synthesis, see below.
 - CustomMade
   - "Battle Squadron"
   - Format by Ivo Zoer, songs composed by Ron Klaren. 
@@ -86,7 +89,8 @@ In this version, we will be trying to play them all.
   with external samples:
   - SUNTronic modules (from SUNTronicTunes.lha). Smooth!
     Check out "spring.src", this uses the Paula FM/AM channel modulation
-    feature, which is very rarely heard. 
+    feature, which is very rarely heard. Do it, do it now!
+    Google for "SUNTronicTunes.lha" to get all of them.
   - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too.
 - GlueMon (properly retro sound)
 - SoundFX (some nice ones in there)
@@ -106,10 +110,13 @@ In this version, we will be trying to play them all.
   - Original sounding synth tunes.
 - In Stereo! 1.0 ("in stereo 1.0")
 - In Stereo! 2.0 ("in stereo 2.0")
+  - By Cranium Software in 1990, Carsten Herbst, Branko Mikic.
 - Synthesis ("synth 4.0")
-  - Nice synth sounds! These three were predecessors to SonicArranger,
-    in this order.
-- ChipTracker ("chiptracker")
+  - Nice synth sounds in the three above formats!
+  - Synthesis was created in 1992 by Carsten Herbst, Branko Mikic.
+    It seems that In Stereo!, Synthesis and SonicArranger are related,
+    all mention Mr. Herbst in credits.
+ChipTracker ("chiptracker")
   - Tunes by 4-Mat.
 - Jochen Hippel 7v ("jochen hippel 7v")
   - Seven channel Hippel experience.
@@ -119,12 +126,15 @@ In this version, we will be trying to play them all.
   - Many Infogrames games used this, eg. the "Flood" title tune.
 - Richard Joseph/VectorDean ("richard joseph player")
   - "Chaos Engine"
+  - This format has two call signs depending on where you look, 
+    VectorDean and Richard Joseph.
 - Richard Joseph ("richard joseph")
   - "Speedball 2"
+  - A different Richard Joseph format.
 - TCBTracker ("tcb tracker")
   - Richard Joseph tunes from the ST, such as "Magic Pockets". 
 - Quartet ("quartet") and Quartet ST ("quartet st")
-  - Rather low quality Atari tunes, but interesting to hear these on Amiga.
+  - Atari ST originated format, interesting to hear these on Amiga.
 - Jason Brooke ("jason brooke")
   - "Space Harrier"
 - MaxTrax ("maxtrax")
@@ -151,11 +161,17 @@ In this version, we will be trying to play them all.
   - To play these, additional library "stonepacker.library" needs to be
     installed to LIBS:.
   - These modules have a separate sample data file which needs to be
-    correctly named for the eagleplayer to find it, by prepending "sps.". 
+    correctly named for the eagleplayer to find it, by prepending "sps."
+    to the sample file name.
     Example:
-    - Module name: "hypnosphere.spm" 
-    - Sample file: "sps.hypnosphere.spm"
-
+    - Module name: "spm.hypnosphere" 
+    - Sample file: "sps.hypnosphere"
+- MusicMaker V8 ("musicmaker4", "musicmaker8")
+  - 4 and 8 channel modules.
+  - Also one of the newer 4-8 channel trackers. The author 
+    has recently been updating it. He probably has a similar
+    synrome as I do :-)
+ 
 ## Tips 
 - A nice place for exotic modules is the FTP server Modland. 
 - Eagleplayers can be found on aminet and on the Wanted Team web page. 

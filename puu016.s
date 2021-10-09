@@ -1304,6 +1304,9 @@ pt_coredesign		rs.b    1
 pt_quartetst	   	rs.b    1
 pt_digitalmugician2	rs.b	1
 pt_stonetracker		rs.b	1
+pt_musicmaker4		rs.b	1
+pt_musicmaker8		rs.b	1
+
 
  if pt_prot<>33 
    fail This must be 33
@@ -25155,6 +25158,8 @@ eagleFormats
 	;dc.l	p_coredesign
 	dc.l	p_digitalmugician2
 	dc.l	p_stonetracker
+	dc.l	p_musicmaker4
+	dc.l	p_musicmaker8
 	dc.l 	0	
 
 *******
@@ -37591,6 +37596,338 @@ p_coredesign
 
 
 ******************************************************************************
+* Music Maker V8
+******************************************************************************
+
+p_musicmaker8
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	deliInterrupt(pc) ; Vol + voices
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp	 id_musicmaker8(pc)
+	dc  pt_musicmaker8
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end
+	dc.b	"MusicMaker V8 8-ch  [EP]",0
+.path dc.b "musicmaker8",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+
+id_musicmaker8
+	bsr.b	.do
+	bne.b	.no
+	bsr	siirra_moduuli2
+	moveq	#0,d0
+.no
+	rts
+	
+* Check
+.do
+.lbC00046E	MOVE.L	D7,-(SP)
+	;MOVE.L	$24(A5),A0		* dtg_ChkData
+	move.l	a4,a0
+	MOVEQ	#0,D7
+	CMP.L	#$464F524D,(A0)		; FORM
+	BNE.S	.lbC00049C
+	CMP.L	#$4D4D5638,8(A0)	; MMV8
+	BNE.S	.lbC00049C
+	MOVE.L	#$53444154,D0		; SDAT
+	BSR.b	MM_SearchLongWord
+	TST.L	D0
+	BMI.b	.NotRecognized
+	ADDQ.L	#4,A0
+	MOVEQ	#-1,D7
+.lbC00049C	CMP.W	#$5345,(A0)	; SE
+	BNE.b	.NotRecognized
+	bsr.b	MM4_8_ExtraCheck
+	BNE.b	.NotRecognized
+	TST.L	D7
+	;BEQ.S	OldFormatCheck
+	beq.b	.NotRecognized
+	;MOVE.L	$24(A5),A0			* dtg_ChkData
+	move.l	a4,a0
+	MOVE.L	#$494E5354,D0		; INST
+	BSR.b	MM_SearchLongWord
+	TST.L	D0
+	BPL.b	.CheckEnd
+	;MOVE.L	$24(A5),A0
+	move.l	a4,a0
+	MOVE.L	#$50494E53,D0		; PINS
+	BSR.b	MM_SearchLongWord
+	TST.L	D0
+	BPL.b	.CheckEnd
+	BRA.b	.NotRecognized
+
+;OldFormatCheck	MOVE.L	$20(A5),A0	* dtg_PathArrayPtr
+;	LEA	lbL000164(PC),A2
+;	MOVE.L	#$FF,D0
+;lbC0004EC	MOVE.B	(A0)+,(A2)+
+;	DBEQ	D0,lbC0004EC
+;	TST.W	D0
+;	BMI	NotRecognized
+;	SUBQ.L	#7,A2
+;	CMP.B	#$2E,(A2)+
+;	BNE	NotRecognized
+;	MOVE.L	A2,-(SP)
+;	LEA	SDATA.MSG(PC),A0
+;lbC000508	MOVE.B	(A2)+,D0
+;	BEQ.S	lbC000520
+;	BCLR	#5,D0
+;	CMP.B	(A0)+,D0
+;	BEQ.S	lbC000508
+;	MOVE.L	(SP)+,A2
+;	BRA	NotRecognized
+
+;SDATA.MSG	dc.b	'SDATA',0
+;
+;lbC000520	MOVE.L	(SP)+,A2
+;	MOVE.B	#$69,(A2)+
+;	CLR.B	(A2)
+;	MOVE.L	#lbL000164,D1
+;	MOVE.L	#$3ED,D2
+;	MOVE.L	A6,-(SP)
+;	MOVE.L	lbL00015C(PC),A6
+;	JSR	-$1E(A6)
+;	MOVEM.L	(SP)+,A6
+;	MOVE.L	D0,D4
+;	BNE.S	lbC000568
+;	MOVE.B	#$70,(A2)+
+;	CLR.B	(A2)
+;	MOVE.L	#lbL000164,D1
+;	MOVE.L	#$3ED,D2
+;	MOVE.L	A6,-(SP)
+;	MOVE.L	lbL00015C(PC),A6
+;	JSR	-$1E(A6)
+;	MOVE.L	(SP)+,A6
+;	MOVE.L	D0,D4
+;	BEQ.S	NotRecognized
+;lbC000568	MOVE.L	D4,D1
+;	MOVE.L	#lbL000264,D2
+;	MOVEQ	#8,D3
+;	MOVE.L	A6,-(SP)
+;	MOVE.L	lbL00015C(PC),A6
+;	JSR	-$2A(A6)
+;	MOVE.L	(SP)+,A6
+;	MOVE.L	D0,D3
+;	MOVE.L	D4,D1
+;	MOVE.L	A6,-(SP)
+;	MOVE.L	lbL00015C(PC),A6
+;	JSR	-$24(A6)
+;	MOVE.L	(SP)+,A6
+;	SUBQ.L	#8,D3
+;	BNE.S	NotRecognized
+.CheckEnd	MOVE.L	(SP)+,D7
+	MOVEQ	#0,D0
+	RTS
+
+.NotRecognized	MOVE.L	(SP)+,D7
+	MOVEQ	#-1,D0
+	RTS
+
+MM_SearchLongWord	MOVEM.L	D1/A2,-(SP)
+	ADDQ.L	#4,A0
+	MOVE.L	(A0)+,A2
+	ADD.L	A0,A2
+	ADDQ.L	#4,A0
+.lbC000308	CMP.L	(A0)+,D0
+	BEQ.S	.lbC000318
+	MOVE.L	(A0)+,D1
+	ADD.L	D1,A0
+	CMP.L	A2,A0
+	BLO.S	.lbC000308
+	MOVEQ	#-1,D0
+	BRA.S	.lbC00031A
+
+.lbC000318	MOVE.L	(A0)+,D0
+.lbC00031A	MOVEM.L	(SP)+,D1/A2
+	RTS
+
+MM4_8_ExtraCheck
+.lbC000CB4	CMP.W	#$5345,(A0)	; ST
+	BEQ.S	.lbC000CC0
+	CMP.B	#$FF,(A0)
+	BRA.S	.lbC000CC6
+
+.lbC000CC0	CMP.B	#$FF,$16(A0)
+.lbC000CC6	SNE	D0
+	EXT.W	D0
+	EXT.L	D0
+	RTS
+	
+
+******************************************************************************
+* Music Maker V4
+******************************************************************************
+
+p_musicmaker4
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	deliInterrupt(pc) ; Vol + voices
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp	 id_musicmaker4(pc)
+	dc  pt_musicmaker4
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+	dc.b	"MusicMaker V8 4-ch  [EP]",0
+.path dc.b "musicmaker4",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	bsr	deliLoadAndInit
+	rts 
+
+;EP_Check5 (FPTR) - same as DTP_Check2 but module is loaded into public
+
+id_musicmaker4
+	bsr.b	.Check2
+	beq.b	.ok
+	bsr.b	.Check5
+.ok	tst.l	d0
+	rts
+
+.Check2	MOVEQ	#1,D0
+	BRA.S	.lbC000466
+
+.Check5	MOVEQ	#0,D0
+.lbC000466	MOVEM.L	D6/D7,-(SP)
+	MOVE.L	D0,D6
+	;MOVE.L	$24(A5),A0		* dtg_ChkData
+	move.l	a4,a0
+	MOVEQ	#0,D7
+	CMP.L	#$464F524D,(A0)		; FORM
+	BNE.S	.lbC000498
+	CMP.L	#$4D4D5638,8(A0)	; MMV8
+	BNE.S	.lbC000498
+	MOVE.L	#$53444154,D0
+	BSR	MM_SearchLongWord
+	TST.L	D0
+	BMI.b	.lbC0005BA
+	ADDQ.L	#4,A0
+	MOVEQ	#-1,D7
+.lbC000498	CMP.W	#$5345,(A0)	; SE
+	BNE	.lbC0005BA
+	bSR.w	MM4_8_ExtraCheck
+	BEQ	.lbC0005BA
+	MOVE.B	$17(A0),D0
+	CMP.B	#$10,D0
+	BLO.b	.lbC0005BA
+	CMP.B	#$40,D0
+	BHI.b .lbC0005BA
+	TST.L	D7
+	;BEQ.S	lbC0004FC
+	beq.b	.NotRecognized
+;	MOVE.L	$24(A5),A0
+	move.l	a4,a0
+	MOVE.L	#$494E5354,D0		; INST
+	BSR.w MM_SearchLongWord
+	TST.L	D0
+	BMI.S	.lbC0004DE
+	TST.L	D6
+	BNE.b	.lbC0005B2
+	BRA.b	.lbC0005BA
+	;bra.b	.Ok
+
+.lbC0004DE	
+;	MOVE.L	$24(A5),A0
+	move.l	a4,a0
+	MOVE.L	#$50494E53,D0		; PINS
+	BSR.w	MM_SearchLongWord
+	TST.L	D0
+	BMI.b	.lbC0005BA
+	TST.L	D6
+	BNE.b	.lbC0005BA
+	BRA.w	.lbC0005B2
+	;bra	.Ok
+
+; Old format
+;lbC0004FC	MOVE.L	$20(A5),A0
+;	LEA	lbL000174(PC),A2
+;	MOVE.L	#$FF,D0
+;lbC00050A	MOVE.B	(A0)+,(A2)+
+;	DBEQ	D0,lbC00050A
+;	TST.W	D0
+;	BMI	lbC0005BA
+;	SUBQ.L	#7,A2
+;	CMP.B	#$2E,(A2)+
+;	BNE	lbC0005BA
+;	MOVE.L	A2,-(SP)
+;	LEA	SDATA.MSG(PC),A0
+;lbC000526	MOVE.B	(A2)+,D0
+;	BEQ.S	lbC000540
+;	BCLR	#5,D0
+;	CMP.B	(A0)+,D0
+;	BEQ.S	lbC000526
+;	MOVE.L	(SP)+,A2
+;	BRA	lbC0005BA
+;
+;SDATA.MSG	dc.b	'SDATA',0,0
+;	dc.b	0
+;
+;lbC000540	MOVE.L	(SP)+,A2
+;	MOVE.B	#$69,(A2)+
+;	CLR.B	(A2)
+;	MOVE.L	#lbL000174,D1
+;	MOVE.L	#$3ED,D2
+;	MOVE.L	A6,-(SP)
+;	MOVE.L	lbL00016C(PC),A6
+;	JSR	-$1E(A6)
+;	MOVEM.L	(SP)+,A6
+;	MOVE.L	D0,D4
+;	BNE.S	lbC000588
+;	MOVE.B	#$70,(A2)+
+;	CLR.B	(A2)
+;	MOVE.L	#lbL000174,D1
+;	MOVE.L	#$3ED,D2
+;	MOVE.L	A6,-(SP)
+;	MOVE.L	lbL00016C(PC),A6
+;	JSR	-$1E(A6)
+;	MOVE.L	(SP)+,A6
+;	MOVE.L	D0,D4
+;	BEQ.S	lbC0005BA
+;lbC000588	MOVE.L	D4,D1
+;	MOVE.L	#lbL000274,D2
+;	MOVEQ	#8,D3
+;	MOVE.L	A6,-(SP)
+;	MOVE.L	lbL00016C(PC),A6
+;	JSR	-$2A(A6)
+;	MOVE.L	(SP)+,A6
+;	MOVE.L	D0,D3
+;	MOVE.L	D4,D1
+;	MOVE.L	A6,-(SP)
+;	MOVE.L	lbL00016C(PC),A6
+;	JSR	-$24(A6)
+;	MOVE.L	(SP)+,A6
+;	SUBQ.L	#8,D3
+;	BNE.S	lbC0005BA
+.Ok
+.lbC0005B2	MOVEM.L	(SP)+,D6/D7
+	MOVEQ	#0,D0
+	RTS
+
+.NotRecognized
+.lbC0005BA	MOVEM.L	(SP)+,D6/D7
+	MOVEQ	#-1,D0
+	RTS
+
+******************************************************************************
 * Digital Mugician 2
 ******************************************************************************
 
@@ -38070,7 +38407,8 @@ deliInit
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
 
-	* Checks!
+	* Checks! Run through known ones
+	* and accept if one of these accepts.
 	
 	move.l	#DTP_Check2,d0  
 	bsr.w	deliGetTag
@@ -38078,7 +38416,7 @@ deliInit
 	bsr.w	deliCallFunc
 	DPRINT	"DTP_Check2: %ld",9
 	tst.l	d0
-	bne.w	.checkError
+	beq.b	.checksOk
 .noCheck2	
 	move.l	#EP_Check3,d0  
 	bsr.w	deliGetTag
@@ -38086,17 +38424,19 @@ deliInit
 	bsr.w	deliCallFunc
 	DPRINT	"EP_Check3: %ld",91
 	tst.l	d0
-	bne.w	.checkError
+	beq.b	.checksOk
 .noCheck3
 	move.l	#EP_Check5,d0  
 	bsr.w	deliGetTag
-	beq.b	.noCheck5
+	;beq.b	.noCheck5
+	beq.w	.checkError
 	bsr.w	deliCallFunc
 	DPRINT	"EP_Check5: %ld",8
 	tst.l	d0
 	bne.w	.checkError
 .noCheck5
 
+.checksOk
 	move.l	#EP_Flags,d0
 	bsr	deliGetTag
 	beq.b	.noFlags
@@ -39998,7 +40338,7 @@ plainLoadFile
 	popm	d2-a6 
 	rts
 
-* Loads a file
+* Saves a file
 * in:
 *  a0 = file path
 *  a1 = data address

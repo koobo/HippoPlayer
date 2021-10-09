@@ -53,11 +53,10 @@ Formats
 + tcbtracker
 + TCBTracker
 + wally beben
++ MusicMakerV8
 
 - mark cooksey
 - MultiMediaSound
-- MusicMaker
-- MusicMakerV8
 - sound images
 - sound master 
 - special fx
@@ -68,6 +67,7 @@ TODO
 -> Hippel 7v
 -> stonetracker
 -> mugician 2
+-> musicmaker8
 
 TODO
 - add divider to fav list -> disappears
