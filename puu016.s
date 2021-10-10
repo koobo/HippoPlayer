@@ -25170,10 +25170,14 @@ eagleFormats
 * a0 = moduuli, 1084 bytee
 
 tutki_moduuli2
-
+	pushm	d1-a6
+	move.l	a0,a4
+	move.l	#1084,d7
+	bsr.b	.do
+	popm	d1-a6
+	rts
+.do
 * ptmix -> 0: chip, 1: fast, 2: ps3m
-
-
 	tst.b	ahi_use(a5)
 	bne.b	.er
 
@@ -25191,99 +25195,111 @@ tutki_moduuli2
 	beq.w	.ff
 
 .nom
-	cmp.l	#'SCRM',44(a0)		* Screamtracker ]I[
-	beq.w	.f
-	cmp.l	#"OCTA",1080(a0)	* Fasttracker
-	beq.w	.f
+	bsr		id_ps3m
+	tst.l	d0
+	beq.w	.goPublic
+;	cmp.l	#'SCRM',44(a0)		* Screamtracker ]I[
+;	beq.w	.f
+;	cmp.l	#"OCTA",1080(a0)	* Fasttracker
+;	beq.w	.f
+;
+;	cmp.l	#`Exte`,(a0)		* Fasttracker ][ XM
+;	bne.b	.kala
+;	cmp.l	#`nded`,4(a0)
+;	bne.b	.kala
+;	cmp.l	#` Mod`,8(a0)
+;	bne.b	.kala
+;	cmp.l	#`ule:`,12(a0)
+;	beq.w	.f
+;
+;.kala	move.l	1080(a0),d0
+;	and.l	#$ffffff,d0		* fast
+;	cmp.l	#"CHN",d0
+;	beq.w	.f
+;	cmp	#"CH",1082(a0)		* fast
+;	beq.w	.f
+;	move.l	(a0),d0
+;	lsr.l	#8,d0
+;	cmp.l	#'MTM',d0		* multi
+;	beq.w	.f
+;	move.l	1080(a0),d0
+;	lsr.l	#8,d0
+;	cmp.l	#"TDZ",d0		* take
+;	beq.w	.f
 
-	cmp.l	#`Exte`,(a0)		* Fasttracker ][ XM
-	bne.b	.kala
-	cmp.l	#`nded`,4(a0)
-	bne.b	.kala
-	cmp.l	#` Mod`,8(a0)
-	bne.b	.kala
-	cmp.l	#`ule:`,12(a0)
-	beq.w	.f
 
-.kala	move.l	1080(a0),d0
-	and.l	#$ffffff,d0		* fast
-	cmp.l	#"CHN",d0
-	beq.w	.f
-	cmp	#"CH",1082(a0)		* fast
-	beq.w	.f
-	move.l	(a0),d0
-	lsr.l	#8,d0
-	cmp.l	#'MTM',d0		* multi
-	beq.w	.f
-	move.l	1080(a0),d0
-	lsr.l	#8,d0
-	cmp.l	#"TDZ",d0		* take
-	beq.w	.f
+* tfmx song data?
 
+* This check also matches "Hippel7", but apparently
+* the probebuffer data at this point is not enough
+* to id Hippel7 properly. Those will be moved into 
+* chip ram at later tage
 
-* tfmx?
-	cmp.l	#"TFMX",(a0)
-	beq.w	.f
-	cmp.l	#"tfmx",(a0)
-	beq.w	.f
+	cmp.l	#"TFMX",(a4)
+	beq.w	.goPublic
+	cmp.l	#"tfmx",(a4)
+	beq.w	.goPublic
 
-	cmp.l	#'OKTA',(a0)		* Oktalyzer
-	bne.b	.m
-	cmp.l	#'SONG',4(a0)
-	bne.b	.m
-	cmp.l	#$00010001,$10(a0)	* Onko 8 kanavaa?
-	bne.b	.m
-	cmp.l	#$00010001,$10+4(a0)
-	beq.b	.f
-.m
-	cmp.l	#'PSID',(a0)		* PSID-tiedosto
-	beq.b	.f
+;	cmp.l	#'OKTA',(a0)		* Oktalyzer
+;	bne.b	.m
+;	cmp.l	#'SONG',4(a0)
+;	bne.b	.m
+;	cmp.l	#$00010001,$10(a0)	* Onko 8 kanavaa?
+;	bne.b	.m
+;	cmp.l	#$00010001,$10+4(a0)
+;	beq.b	.f
+;.m
+	bsr	id_oktalyzer
+	tst.l	d0
+	bne.b	.notOkta
+	cmp.l	#$00010001,$10(a4)	* Onko 8 kanavaa?
+	bne.b	.notOkta
+	cmp.l	#$00010001,$10+4(a4)
+	beq.b	.goPublic
+.notOkta
 
-	move.l	(a0),d0			* THX
-	lsr.l	#8,d0
-	cmp.l	#"THX",d0
-	beq.b	.f
+	cmp.l	#'PSID',(a4)		* PSID-tiedosto
+	beq.b	.goPublic
 
-	cmp.l	#"MLED",(a0)		* MusicLine Editor?
-	bne.b	.ndd
-	cmp.l	#"MODL",4(a0)	
-	beq.b	.f
-.ndd
+	bsr	id_thx_
+	tst.l	d0
+	beq.B	.goPublic
+	bsr	id_pretracker_
+	tst.l	d0
+	beq.B	.goPublic
+	bsr	id_mline
+	tst.l	d0
+	beq.b	.goPublic
+	bsr	id_musicmaker8_
+	tst.l	d0
+	beq.b	.goPublic
+	;bsr	id_digitalmugician2 
+	;beq.b	.goPublic
 
 ** OctaMed SoundStudio mixattavat moduulit
-
-	move.l	(a0),d0
+	move.l	(a4),d0
 	lsr.l	#8,d0
 	cmp.l	#'MMD',d0
 	bne.b	.nome
-	btst	#0,20(a0)		* mmdflags, MMD_LOADTOFASTMEM
-	bne.b	.f
-
-;	move.l	8(a0),a1		* MMD0song *song
-;	add.l	a0,a1			* reloc
-;	btst	#7,768(a1)		* flags2; miksaus?
-;	bne.b	.f
-
-
+	btst	#0,20(a4)		* mmdflags, MMD_LOADTOFASTMEM
+	bne.b	.goPublic
 .nome
-	cmp.l	#'DIGI',(a0)		* digi booster
-	bne.b	.nd
-	cmp.l	#' Boo',4(a0)
-	bne.b	.nd
-	cmp.l	#'ster',8(a0)
-	beq.b	.f
 
-.nd
-	cmp.l	#'DBM0',(a0)		* digi booster pro
-	beq.b	.f
-
+	bsr	id_digibooster_
+	tst.l	d0
+	beq.b	.goPublic
+	bsr	id_digiboosterpro_
+	tst.l	d0
+	beq.b	.goPublic
 
 	tst.b	ahi_use(a5)
 	bne.b	.ahitun
 
-
-.nf	moveq	#-1,d0		* chip
+.goChip
+.nf	
+	moveq	#-1,d0		* chip
 	rts
+.goPublic
 .f	moveq	#0,d0		* public
 	rts
 .ff	moveq	#2,d0		* Protracker file
@@ -25637,7 +25653,7 @@ tutki_moduuli
 
 .multi	pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
 
 	move.l	moduleaddress(a5),a1	* tutkaillaan onko miss‰ muistissa
 	lore	Exec,TypeOfMem
@@ -25661,7 +25677,7 @@ tutki_moduuli
 
 .sid	pushpea	p_sid(pc),playerbase(a5)
 	move	#pt_sid,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	bra.w	.ex2
 
 
@@ -25769,7 +25785,7 @@ tutki_moduuli
 ;.digibooster
 ;	pushpea	p_digibooster(pc),playerbase(a5)
 ;	move	#pt_digibooster,playertype(a5)
-;	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+;	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
 ;	lea	610(a4),a1
 ;	moveq	#30-1,d0
 ;	bra.w	.nimitalteen2
@@ -25778,7 +25794,7 @@ tutki_moduuli
 ;.digiboosterpro
 ;	pushpea	p_digiboosterpro(pc),playerbase(a5)
 ;	move	#pt_digiboosterpro,playertype(a5)
-;	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+;	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
 ;	lea	16(a4),a1
 ;	moveq	#42-1,d0
 ;	bra.w	.nimitalteen2
@@ -25787,7 +25803,7 @@ tutki_moduuli
 ;.thx
 ;	pushpea	p_thx(pc),playerbase(a5)
 ;	move	#pt_thx,playertype(a5)
-;	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+;	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
 ;
 ;	move.l	moduleaddress(a5),a1
 ;	add	4(a1),a1		* modulename
@@ -27645,6 +27661,7 @@ freereplayer
 *************
 * Tarkistaa onko moduuli fastissa. Jos on, siirt‰‰ sen chippiin
 
+moveModuleToChipMem
 siirra_moduuli
 	pushm	d1-a6
 
@@ -27682,6 +27699,7 @@ sirerro	moveq	#ier_nomem,d0
 *************
 * Tarkistaa onko moduuli chipiss‰. Jos on, siirt‰‰ sen fastiin (jos on).
 
+moveModulieToPublicMem
 siirra_moduuli2
 	pushm	d1-a6
 
@@ -28877,7 +28895,7 @@ init_sidpatch
 id_sid1 
 	bsr.b	id_sid1_
 	bne.b 	.no
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	moveq	#0,d0 
 .no 
 	rts
@@ -30030,7 +30048,7 @@ p_oktalyzer
 	p_NOP
 	p_NOP
 	p_NOP
-	jmp .id_oktalyzer(pc)
+	jmp id_oktalyzer(pc)
 	dc.w pt_oktalyzer				* type
 	dc	pf_volume!pf_end
 	dc.b	"Oktalyzer",0
@@ -30095,7 +30113,7 @@ p_oktalyzer
 
 
 
-.id_oktalyzer
+id_oktalyzer
 	cmp.l	#'OKTA',(a4)		* Oktalyzer
 	bne.b	.nok
 	cmp.l	#'SONG',4(a4)
@@ -30875,7 +30893,7 @@ p_med	jmp	.medinit(pc)
 
 ** jos on octamixplayerill‰ soitettava ja sijaitsee chipiss‰, koitetaan
 ** siirt‰‰ fastiin:
-	bsr.w	siirra_moduuli2
+	bsr.w	moveModulieToPublicMem
 
 
 .yeep
@@ -32207,16 +32225,16 @@ p_digibooster
 
 
 .id_digibooster
-	bsr.b 	.id_digibooster_
+	bsr.b 	id_digibooster_
 	bne.b 	.x 
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	lea	610(a4),a1
 	moveq	#30-1,d0
 	bsr	copyNameFromA1
 	moveq	#0,d0
 .x 	rts
 
-.id_digibooster_
+id_digibooster_
 	cmp.l	#'DIGI',(a4)
 	bne.b	.nd
 	cmp.l	#' Boo',4(a4)
@@ -32357,9 +32375,9 @@ p_digiboosterpro
 
 
 .id_digiboosterpro
-	bsr.b 	.id_digiboosterpro_
+	bsr.b 	id_digiboosterpro_
 	bne.b 	.y 
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	move.l	moduleaddress(a5),a1
 	lea	16(a4),a1
 	moveq	#42-1,d0	
@@ -32367,7 +32385,7 @@ p_digiboosterpro
 	moveq	#0,d0
 .y 	rts
 
-.id_digiboosterpro_
+id_digiboosterpro_
 	cmp.l	#'DBM0',(a4)
 	bra.w	idtest
 
@@ -32593,7 +32611,7 @@ p_thx
 
 
 .id_thx 
-	bsr.b .id_thx_
+	bsr.b id_thx_
 	bne.b	.y
 	move.l	moduleaddress(a5),a1
 	add	4(a1),a1		* modulename
@@ -32602,7 +32620,7 @@ p_thx
 	moveq	#0,d0
 .y 	rts
 
-.id_thx_
+id_thx_
 	move.l	(a4),d0			* THX
 	lsr.l	#8,d0
 	cmp.l	#"THX",d0
@@ -32625,7 +32643,7 @@ p_mline
 	p_NOP
 	p_NOP
 	p_NOP
-	jmp .id_mline(pc)
+	jmp id_mline(pc)
 	dc.w pt_mline
 	dc	pf_cont!pf_stop!pf_volume!pf_song
 	dc.b	"MusiclineEditor",0
@@ -32740,7 +32758,7 @@ p_mline
 
 
 
-.id_mline
+id_mline
 	cmp.l	#"MLED",(a4)		* musicline editor
 	bne.b	.nd
 	cmp.l	#"MODL",4(a4)
@@ -36235,7 +36253,7 @@ p_hippel7
 	jmp	deliForward(pc)
 	jmp	deliBackward(pc)
 	p_NOP
-	jmp .id(pc)
+	jmp id_hippel7(pc)
 	dc  pt_hippel7
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen
 	dc.b	"Jochen Hippel 7v    [EP]",0
@@ -36245,9 +36263,19 @@ p_hippel7
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|4,d0
 	bsr	deliLoadAndInit
 	rts 
 
+id_hippel7
+	bsr.b	.id
+	bne.b	.not
+	* This is identified as TFMX song data which goes into
+	* public mem, fix it.
+	bsr	moveModuleToChipMem
+	moveq	#0,d0
+.not
+	rts
 .id
 	move.l	a4,a0
 	moveq	#-1,D0
@@ -37612,32 +37640,35 @@ p_musicmaker8
 	jmp	deliForward(pc)
 	jmp	deliBackward(pc)
 	p_NOP
-	jmp	 id_musicmaker8(pc)
-	dc  pt_musicmaker8
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end
+	jmp	.id_musicmaker8(pc)
+	dc 	 pt_musicmaker8
+.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end
 	dc.b	"MusicMaker V8 8-ch  [EP]",0
-.path dc.b "musicmaker8",0
+.path 	dc.b "musicmaker8",0
  even
 
 .init
 	lea	.path(pc),a0 
+	move.l	#8<<16|5,d0
 	bsr	deliLoadAndInit
 	rts 
 
 
-id_musicmaker8
-	bsr.b	.do
+.id_musicmaker8
+	bsr.b	id_musicmaker8_
 	bne.b	.no
-	bsr	siirra_moduuli2
+	bsr	moveModulieToPublicMem
 	moveq	#0,d0
 .no
 	rts
 	
 * Check
-.do
-.lbC00046E	MOVE.L	D7,-(SP)
+id_musicmaker8_
+.lbC00046E	MOVEm.L	d6/D7,-(SP)
 	;MOVE.L	$24(A5),A0		* dtg_ChkData
 	move.l	a4,a0
+	move.l	a4,d6			* end bound
+	add.l	d7,d6
 	MOVEQ	#0,D7
 	CMP.L	#$464F524D,(A0)		; FORM
 	BNE.S	.lbC00049C
@@ -37670,69 +37701,11 @@ id_musicmaker8
 	BPL.b	.CheckEnd
 	BRA.b	.NotRecognized
 
-;OldFormatCheck	MOVE.L	$20(A5),A0	* dtg_PathArrayPtr
-;	LEA	lbL000164(PC),A2
-;	MOVE.L	#$FF,D0
-;lbC0004EC	MOVE.B	(A0)+,(A2)+
-;	DBEQ	D0,lbC0004EC
-;	TST.W	D0
-;	BMI	NotRecognized
-;	SUBQ.L	#7,A2
-;	CMP.B	#$2E,(A2)+
-;	BNE	NotRecognized
-;	MOVE.L	A2,-(SP)
-;	LEA	SDATA.MSG(PC),A0
-;lbC000508	MOVE.B	(A2)+,D0
-;	BEQ.S	lbC000520
-;	BCLR	#5,D0
-;	CMP.B	(A0)+,D0
-;	BEQ.S	lbC000508
-;	MOVE.L	(SP)+,A2
-;	BRA	NotRecognized
-
-;SDATA.MSG	dc.b	'SDATA',0
-;
-;lbC000520	MOVE.L	(SP)+,A2
-;	MOVE.B	#$69,(A2)+
-;	CLR.B	(A2)
-;	MOVE.L	#lbL000164,D1
-;	MOVE.L	#$3ED,D2
-;	MOVE.L	A6,-(SP)
-;	MOVE.L	lbL00015C(PC),A6
-;	JSR	-$1E(A6)
-;	MOVEM.L	(SP)+,A6
-;	MOVE.L	D0,D4
-;	BNE.S	lbC000568
-;	MOVE.B	#$70,(A2)+
-;	CLR.B	(A2)
-;	MOVE.L	#lbL000164,D1
-;	MOVE.L	#$3ED,D2
-;	MOVE.L	A6,-(SP)
-;	MOVE.L	lbL00015C(PC),A6
-;	JSR	-$1E(A6)
-;	MOVE.L	(SP)+,A6
-;	MOVE.L	D0,D4
-;	BEQ.S	NotRecognized
-;lbC000568	MOVE.L	D4,D1
-;	MOVE.L	#lbL000264,D2
-;	MOVEQ	#8,D3
-;	MOVE.L	A6,-(SP)
-;	MOVE.L	lbL00015C(PC),A6
-;	JSR	-$2A(A6)
-;	MOVE.L	(SP)+,A6
-;	MOVE.L	D0,D3
-;	MOVE.L	D4,D1
-;	MOVE.L	A6,-(SP)
-;	MOVE.L	lbL00015C(PC),A6
-;	JSR	-$24(A6)
-;	MOVE.L	(SP)+,A6
-;	SUBQ.L	#8,D3
-;	BNE.S	NotRecognized
-.CheckEnd	MOVE.L	(SP)+,D7
+.CheckEnd	MOVEm.L	(SP)+,d6/D7
 	MOVEQ	#0,D0
 	RTS
 
-.NotRecognized	MOVE.L	(SP)+,D7
+.NotRecognized	MOVEm.L	(SP)+,d6/D7
 	MOVEQ	#-1,D0
 	RTS
 
@@ -37741,12 +37714,16 @@ MM_SearchLongWord	MOVEM.L	D1/A2,-(SP)
 	MOVE.L	(A0)+,A2
 	ADD.L	A0,A2
 	ADDQ.L	#4,A0
-.lbC000308	CMP.L	(A0)+,D0
+.lbC000308	
+	cmp.l	d6,a0
+	bhs.b	.nope
+	CMP.L	(A0)+,D0
 	BEQ.S	.lbC000318
 	MOVE.L	(A0)+,D1
 	ADD.L	D1,A0
 	CMP.L	A2,A0
 	BLO.S	.lbC000308
+.nope
 	MOVEQ	#-1,D0
 	BRA.S	.lbC00031A
 
@@ -37808,10 +37785,12 @@ id_musicmaker4
 	BRA.S	.lbC000466
 
 .Check5	MOVEQ	#0,D0
-.lbC000466	MOVEM.L	D6/D7,-(SP)
-	MOVE.L	D0,D6
+.lbC000466	MOVEM.L	d5/D6/D7,-(SP)
+	MOVE.L	D0,D5
 	;MOVE.L	$24(A5),A0		* dtg_ChkData
 	move.l	a4,a0
+	move.l	a4,d6			* end bound
+	add.l	d7,d6
 	MOVEQ	#0,D7
 	CMP.L	#$464F524D,(A0)		; FORM
 	BNE.S	.lbC000498
@@ -37841,10 +37820,9 @@ id_musicmaker4
 	BSR.w MM_SearchLongWord
 	TST.L	D0
 	BMI.S	.lbC0004DE
-	TST.L	D6
+	TST.L	D5
 	BNE.b	.lbC0005B2
 	BRA.b	.lbC0005BA
-	;bra.b	.Ok
 
 .lbC0004DE	
 ;	MOVE.L	$24(A5),A0
@@ -37853,78 +37831,17 @@ id_musicmaker4
 	BSR.w	MM_SearchLongWord
 	TST.L	D0
 	BMI.b	.lbC0005BA
-	TST.L	D6
+	TST.L	D5
 	BNE.b	.lbC0005BA
 	BRA.w	.lbC0005B2
-	;bra	.Ok
 
-; Old format
-;lbC0004FC	MOVE.L	$20(A5),A0
-;	LEA	lbL000174(PC),A2
-;	MOVE.L	#$FF,D0
-;lbC00050A	MOVE.B	(A0)+,(A2)+
-;	DBEQ	D0,lbC00050A
-;	TST.W	D0
-;	BMI	lbC0005BA
-;	SUBQ.L	#7,A2
-;	CMP.B	#$2E,(A2)+
-;	BNE	lbC0005BA
-;	MOVE.L	A2,-(SP)
-;	LEA	SDATA.MSG(PC),A0
-;lbC000526	MOVE.B	(A2)+,D0
-;	BEQ.S	lbC000540
-;	BCLR	#5,D0
-;	CMP.B	(A0)+,D0
-;	BEQ.S	lbC000526
-;	MOVE.L	(SP)+,A2
-;	BRA	lbC0005BA
-;
-;SDATA.MSG	dc.b	'SDATA',0,0
-;	dc.b	0
-;
-;lbC000540	MOVE.L	(SP)+,A2
-;	MOVE.B	#$69,(A2)+
-;	CLR.B	(A2)
-;	MOVE.L	#lbL000174,D1
-;	MOVE.L	#$3ED,D2
-;	MOVE.L	A6,-(SP)
-;	MOVE.L	lbL00016C(PC),A6
-;	JSR	-$1E(A6)
-;	MOVEM.L	(SP)+,A6
-;	MOVE.L	D0,D4
-;	BNE.S	lbC000588
-;	MOVE.B	#$70,(A2)+
-;	CLR.B	(A2)
-;	MOVE.L	#lbL000174,D1
-;	MOVE.L	#$3ED,D2
-;	MOVE.L	A6,-(SP)
-;	MOVE.L	lbL00016C(PC),A6
-;	JSR	-$1E(A6)
-;	MOVE.L	(SP)+,A6
-;	MOVE.L	D0,D4
-;	BEQ.S	lbC0005BA
-;lbC000588	MOVE.L	D4,D1
-;	MOVE.L	#lbL000274,D2
-;	MOVEQ	#8,D3
-;	MOVE.L	A6,-(SP)
-;	MOVE.L	lbL00016C(PC),A6
-;	JSR	-$2A(A6)
-;	MOVE.L	(SP)+,A6
-;	MOVE.L	D0,D3
-;	MOVE.L	D4,D1
-;	MOVE.L	A6,-(SP)
-;	MOVE.L	lbL00016C(PC),A6
-;	JSR	-$24(A6)
-;	MOVE.L	(SP)+,A6
-;	SUBQ.L	#8,D3
-;	BNE.S	lbC0005BA
 .Ok
-.lbC0005B2	MOVEM.L	(SP)+,D6/D7
+.lbC0005B2	MOVEM.L	(SP)+,d5/D6/D7
 	MOVEQ	#0,D0
 	RTS
 
 .NotRecognized
-.lbC0005BA	MOVEM.L	(SP)+,D6/D7
+.lbC0005BA	MOVEM.L	(SP)+,d5/D6/D7
 	MOVEQ	#-1,D0
 	RTS
 
@@ -37944,7 +37861,7 @@ p_digitalmugician2
 	jmp	deliForward(pc)
 	jmp	deliBackward(pc)
 	p_NOP
-	jmp .id_digitalmugician2(pc)
+	jmp id_digitalmugician2(pc)
 	dc  pt_digitalmugician2
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse
 	dc.b	"Digital Mugician II [EP]",0
@@ -37953,12 +37870,21 @@ p_digitalmugician2
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|8,d0
 	bsr	deliLoadAndInit
 	rts 
 
 * digital mugician ii ("mugician ii")
 * DTP_UserConfig
-.id_digitalmugician2
+id_digitalmugician2
+;	bsr.b 	.do
+;	tst.l	d0
+;	bne.b	.no
+;	bsr	moveModulieToPublicMem
+;	moveq	#0,d0
+;.no 
+;	rts
+;.do	
 	move.l	a4,a0
 	moveq	#-1,D0
 	lea	.text(PC),A1
@@ -37999,10 +37925,19 @@ p_stonetracker
 
 .init
 	lea	.path(pc),a0 
+	move.l	#1<<16|60,d0
 	bsr	deliLoadAndInit
 	rts 
 
 .id_stonetracker
+;	bsr.b	id_stonetracker_ 
+;	tst.l 	d0 
+;	bne.b 	.not 
+;	bsr		moveModulieToPublicMem
+;	moveq	#0,d0
+;.not
+;	rts
+id_stonetracker_
 	move.l	a4,a0
 	MOVEQ	#-1,D0
 	;MOVE.L	$24(A5),A0
