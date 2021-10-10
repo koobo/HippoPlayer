@@ -33619,6 +33619,7 @@ p_beathoven
 	move.l	$20+36(a1),a1
 	moveq	#30-1,d0
 	bsr	copyNameFromA1
+	moveq	#0,d0
 .x 	rts
 
 * in: a4 = module
