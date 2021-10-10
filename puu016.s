@@ -34050,6 +34050,7 @@ p_synthesis
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|11,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -34113,6 +34114,7 @@ p_syntracker
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -34156,6 +34158,7 @@ p_robhubbard2
 
 .init
 	lea	.path(pc),a0 
+	move.l	#2<<16|0,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -34219,6 +34222,7 @@ p_chiptracker
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -35645,6 +35649,7 @@ p_quartet
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -35713,6 +35718,7 @@ p_facethemusic
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|7,d0
 	bsr	deliLoadAndInit
 	bne.b	.error
 
@@ -35761,6 +35767,7 @@ p_richardjoseph
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
 	bsr	deliLoadAndInit
 	bne.b	.error
 
@@ -35876,6 +35883,7 @@ p_instereo1
 	bmi.b 	.fileError
 
 	lea	.path(pc),a0 
+	move.l	#5<<16|0,d0
 	bsr	deliLoadAndInit
 
 .error	popm	d1-a6
@@ -35927,6 +35935,7 @@ p_instereo2
 
 .init
 	lea	.path(pc),a0 
+	move.l	#2<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -35970,6 +35979,7 @@ p_jasonbrooke
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -36049,6 +36059,7 @@ p_earache
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -36142,6 +36153,7 @@ p_krishatlelid
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -36216,6 +36228,7 @@ p_richardjoseph2
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -36378,6 +36391,7 @@ p_aprosys
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -36419,6 +36433,7 @@ p_hippelst
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|4,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -36606,6 +36621,7 @@ p_tcbtracker
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -36700,6 +36716,7 @@ p_markcooksey
 
 .init
 	lea	.path(pc),a0 
+	move.l	#10<<16|10,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -36821,6 +36838,7 @@ p_activisionpro
 
 .init
 	lea	.path(pc),a0 
+	move.l	#1<<16|8,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37057,6 +37075,7 @@ p_maxtrax
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37124,6 +37143,7 @@ p_wallybeben
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37193,6 +37213,7 @@ p_synthpack
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37240,6 +37261,7 @@ p_robhubbard
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|6,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37292,6 +37314,7 @@ p_jeroentel
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37363,6 +37386,7 @@ p_sonix
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37503,6 +37527,7 @@ p_quartetst
 
 .init
 	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37567,6 +37592,7 @@ p_coredesign
 
 .init
 	lea	.path(pc),a0 
+	move.l	#10<<16|10,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -37780,6 +37806,7 @@ p_musicmaker4
 
 .init
 	lea	.path(pc),a0 
+	move.l	#8<<16|5,d0
 	bsr	deliLoadAndInit
 	rts 
 
@@ -38146,6 +38173,7 @@ NSTF_64Bit 	EQU	1<<21
 * Load player and initialize module
 * in:
 *   a0: eagleplayer name
+*   d0: required version; major<<16|minor
 * out:
 *   d0: 0=all ok, negative ier_-code otherwise
 deliLoadAndInit
@@ -38161,27 +38189,71 @@ deliLoadAndInit
 
 * in:
 *   a0: name
+*   d0: required version; major<<16|minor
 * out:
 *   d0: loaded seglist or negative error code if fail
 loadDeliPlayer
+	move.l	d0,d5
 	move.l	a0,a3
 	* See if can reuse the old player
 	move	playertype(a5),d0
 	beq.b	.noMod
 	cmp	deliPlayerType(a5),d0
-	beq.b	.useOld
+	beq.w	.useOld
 .noMod
 	bsr.w	freeDeliPlayer
 
 	bsr.w 	findDeliPlayer
 	move.l	d0,d4
 	bmi.b	.err
-	bsr.b	.load 
+	bsr.w	.load 
 	move.l	d0,d3
 	move.l	d4,d1
 	lore 	Dos,UnLock
+
+	* Get version
 	move.l	d3,d0 
+	lsl.l	#2,d0
+	move.l	d0,a0 
+	move.l	#DTP_PlayerVersion,d0
+	bsr	deliGetTagFromA0
+	beq.b	.noVersion 
+	move.l	d0,d6
+
+	* Version check!
+	cmp.l	d5,d6
+	bhs.b	.ok
+
+	move.l	d3,d1 
+	lore Dos,UnLoadSeg
+
+	move.l	a3,d0
+	move.l	d5,d1
+	clr	d1
+	swap	d1
+	move	d5,d2
+	ext.l	d2
+	move.l	d6,d3
+	clr	d3 
+	swap 	d3 
+	move	d6,d4
+	ext.l	d4
+
+	move.l	playerbase(a5),a0
+	pushpea	p_name(a0),d5
+	
+	lea	.errMsg(pc),a0 
+	jsr	desmsg
+	lea	 desbuf(a5),a1
+	jsr	request
+
+	moveq	#ier_eagleplayer,d0
+	rts
+
+.ok
+.noVersion
 	move	moduletype(a5),deliPlayerType(a5)
+	move.l	d3,d0 
 	lsl.l	#2,d0
 .err
 	rts
@@ -38190,6 +38262,14 @@ loadDeliPlayer
 	move.l	deliPlayer(a5),d0
 	DPRINT	"Using previous delipl 0x%lx",2
 	rts
+
+.errMsg
+	dc.b	"Version mismatch for eagleplayer:",10
+	dc.b	'"%s"',10
+	dc.b	"Required version: %ld.%ld or newer, found: %ld.%ld",10
+	dc.b	'Detected format: "%s"',0
+ even
+
 
 * in:
 *   d4 = lock
@@ -38241,16 +38321,20 @@ findDeliPlayer
 	rts
 
 .fail 
-	lea	.errMsg(pc),a0 
+	move.l	playerbase(a5),a0 
+	pushpea p_name(a0),d1
 	move.l	a3,d0
+	lea	.errMsg(pc),a0 
 	jsr	desmsg
 	lea	 desbuf(a5),a1
 	jsr	request
 	moveq	#ier_eagleplayer,d0
 	rts	
 .errMsg
-	dc.b	"Could not load eagleplayer:",10,"%s",0
- even
+	dc.b	"Could not load eagleplayer:",10
+	dc.b	'"%s"',10
+	dc.b	'Detected format: "%s"',0
+	 even
 
 .tryLock
 	lea	-100(sp),sp
@@ -38324,6 +38408,7 @@ freeDeliPlayer
 deliGetTag
 	* This is a ptr to a seglist, loaded with LoadSeg()
 	move.l	deliPlayer(a5),a0
+deliGetTagFromA0
 	* tag item array
 	move.l	16(a0),a0
 .loop
