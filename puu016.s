@@ -16848,10 +16848,6 @@ lootaan_aika
 
 
 .lootaan_song
-* ENFORCER HITS
-* playerbase is invalid here?
-
-
 	move.l	playerbase(a5),a1
 	move	p_liput(a1),d0
 	btst	#pb_song,d0
@@ -18266,9 +18262,11 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	
 
+	cmp	#pt_startrekker,playertype(a5)
+	beq.b	.yes
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.nop
-	move.l	#ptheader,d4
+.yes	move.l	#ptheader,d4
 	bra.b	.mod
 .nop
 	cmp	#pt_multi,playertype(a5)
@@ -35491,7 +35489,14 @@ p_startrekker
 	rts
 .ok3
 	pushm	d1-a6
-	
+
+	move.l	moduleaddress(a5),a0
+	move	#950/2-1,d0
+	lea	ptheader,a1
+.cl	move	(a0)+,(a1)+
+	dbf	d0,.cl
+
+
 	* Load extra data file ".nt"
 	jsr	getcurrent 
 	* a3 = node
