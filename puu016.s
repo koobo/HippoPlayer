@@ -23735,6 +23735,18 @@ lod_xfderr	=	-17
 lod_extract	=	-18
 lod_loadsegfail = -19
 
+* Skip XPK identification
+loadfileStraight
+	push	d7
+	move.b	xpkid(a5),d7
+	clr.b	xpkid(a5)
+	push	d7
+	bsr.b	loadfile
+	pop	d7
+	move.b	d7,xpkid(a5)
+	pop	d7
+	rts
+
 loadfile
 	movem.l	d1-a6,-(sp)
 
@@ -25172,6 +25184,7 @@ eagleFormats
 * a0 = moduuli, 1084 bytee
 
 tutki_moduuli2
+	DPRINT	"Check for PUBLIC load",1
 	pushm	d1-a6
 	move.l	a0,a4
 	move.l	#1084,d7
@@ -25197,37 +25210,37 @@ tutki_moduuli2
 	beq.w	.ff
 
 .nom
-	bsr		id_ps3m
-	tst.l	d0
-	beq.w	.goPublic
-;	cmp.l	#'SCRM',44(a0)		* Screamtracker ]I[
-;	beq.w	.f
-;	cmp.l	#"OCTA",1080(a0)	* Fasttracker
-;	beq.w	.f
-;
-;	cmp.l	#`Exte`,(a0)		* Fasttracker ][ XM
-;	bne.b	.kala
-;	cmp.l	#`nded`,4(a0)
-;	bne.b	.kala
-;	cmp.l	#` Mod`,8(a0)
-;	bne.b	.kala
-;	cmp.l	#`ule:`,12(a0)
-;	beq.w	.f
-;
-;.kala	move.l	1080(a0),d0
-;	and.l	#$ffffff,d0		* fast
-;	cmp.l	#"CHN",d0
-;	beq.w	.f
-;	cmp	#"CH",1082(a0)		* fast
-;	beq.w	.f
-;	move.l	(a0),d0
-;	lsr.l	#8,d0
-;	cmp.l	#'MTM',d0		* multi
-;	beq.w	.f
-;	move.l	1080(a0),d0
-;	lsr.l	#8,d0
-;	cmp.l	#"TDZ",d0		* take
-;	beq.w	.f
+;	bsr	id_ps3m
+;	tst.l	d0
+;	beq.w	.goPublic
+	cmp.l	#'SCRM',44(a0)		* Screamtracker ]I[
+	beq.w	.f
+	cmp.l	#"OCTA",1080(a0)	* Fasttracker
+	beq.w	.f
+
+	cmp.l	#`Exte`,(a0)		* Fasttracker ][ XM
+	bne.b	.kala
+	cmp.l	#`nded`,4(a0)
+	bne.b	.kala
+	cmp.l	#` Mod`,8(a0)
+	bne.b	.kala
+	cmp.l	#`ule:`,12(a0)
+	beq.w	.f
+
+.kala	move.l	1080(a0),d0
+	and.l	#$ffffff,d0		* fast
+	cmp.l	#"CHN",d0
+	beq.w	.f
+	cmp	#"CH",1082(a0)		* fast
+	beq.w	.f
+	move.l	(a0),d0
+	lsr.l	#8,d0
+	cmp.l	#'MTM',d0		* multi
+	beq.w	.f
+	move.l	1080(a0),d0
+	lsr.l	#8,d0
+	cmp.l	#"TDZ",d0		* take
+	beq.w	.f
 
 
 * tfmx song data?
@@ -27068,7 +27081,7 @@ toggleListMode
 	move.b	#LISTMODE_FAVORITES,listMode(a5)
 .set
 	bsr.b	.setButtonStates
-	bsr.b	.setListState
+	bsr.w	.setListState
 	* Playing module should be invalidated,
 	* it is not compatible between the two lists.
 	tst.l	playingmodule(a5) 
@@ -35569,7 +35582,7 @@ p_startrekker
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	lea	startrekkerdataaddr(a5),a1
 	lea 	startrekkerdatalen(a5),a2
-	bsr	loadfile
+	bsr	loadfileStraight
 	rts
 
 .fileErr 
@@ -39271,7 +39284,7 @@ deliLoadFile
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	move.l	deliPathArray+var_b,a0
 
-	jsr	loadfile
+	jsr	loadfileStraight
 	clr.l 	deliLoadFileIoErr(a5)
 	move.l	d0,d7
 	beq.b	.ok	
