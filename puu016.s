@@ -16848,6 +16848,10 @@ lootaan_aika
 
 
 .lootaan_song
+* ENFORCER HITS
+* playerbase is invalid here?
+
+
 	move.l	playerbase(a5),a1
 	move	p_liput(a1),d0
 	btst	#pb_song,d0
@@ -27067,6 +27071,12 @@ toggleListMode
 .set
 	bsr.b	.setButtonStates
 	bsr.b	.setListState
+	* Playing module should be invalidated,
+	* it is not compatible between the two lists.
+	tst.l	playingmodule(a5) 
+	bmi.b	.not
+	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
+.not
 	rts
 
 .setButtonStates
