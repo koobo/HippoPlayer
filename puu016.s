@@ -1306,7 +1306,7 @@ pt_digitalmugician2	rs.b	1
 pt_stonetracker		rs.b	1
 pt_musicmaker4		rs.b	1
 pt_musicmaker8		rs.b	1
-
+pt_soundcontrol		rs.b    1
 
  if pt_prot<>33 
    fail This must be 33
@@ -25160,6 +25160,7 @@ eagleFormats
 	dc.l	p_stonetracker
 	dc.l	p_musicmaker4
 	dc.l	p_musicmaker8
+	dc.l	p_soundcontrol
 	dc.l 	0	
 
 *******
@@ -38063,6 +38064,59 @@ p_stonetracker
 .lbC003294	MOVEQ	#-1,D0
 .lbC003296	RTS
 
+******************************************************************************
+* Soundcontrol
+******************************************************************************
+
+p_soundcontrol
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_soundcontrol
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+	dc.b	"SoundControl        [EP]",0
+	        
+.path dc.b "soundcontrol",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
+	bsr	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	CMP.W	#3,$20(A0)
+	BEQ.S	.lbC000466
+	CMP.W	#2,$20(A0)
+	BNE.S	.lbC00048E
+	TST.L	$1C(A0)
+	BNE.S	.lbC00048E
+.lbC000466	TST.W	$10(A0)
+	BNE.S	.lbC00048E
+	MOVE.W	$12(A0),D1
+	BMI.S	.lbC00048E
+	BTST	#0,D1
+	BNE.S	.lbC00048E
+	ADD.W	D1,A0
+	CMP.W	#$FFFF,$3E(A0)
+	BNE.S	.lbC00048E
+	CMP.L	#$400,$40(A0)
+	BNE.S	.lbC00048E
+	MOVEQ	#0,D0
+.lbC00048E
+	rts
 
 ******************************************************************************
 * Deli/eagle support
