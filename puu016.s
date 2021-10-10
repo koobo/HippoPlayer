@@ -27141,7 +27141,6 @@ toggleListMode
 	* in this case, we must update the favorite status
 	* of each list node
 
-	;XAX
 	* TODO: kick13 slider4 height is bad
 	* TODO: profiling
 
@@ -38491,6 +38490,10 @@ deliInit
 	move.l	#DTP_Config,d0  
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
+
+	move.l	#DTP_CustomPlayer,d0
+	bsr.w	deliGetTag
+	bne.w	.checksOk
 
 	* Checks! Run through known ones
 	* and accept if one of these accepts.
