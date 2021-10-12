@@ -29170,7 +29170,7 @@ p_futurecomposer13
 	p_NOP
 	jmp .id_futurecomposer13(pc)
 	dc.w pt_future10			* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen
 	dc.b	"Future Composer v1.0-1.3",0
  even
 
@@ -29204,8 +29204,13 @@ p_futurecomposer13
 	moveq	#0,d0
 	rts
 .fc10play
+	push	a5
 	move.l	fc10routines(a5),a0
-	jmp	$20+436(a0)
+	jsr	$20+436(a0)
+	pop		a5
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+	rts
 
 .fc10end
 	bsr.w	rem_ciaint
@@ -29237,9 +29242,14 @@ p_futurecomposer14
 	p_NOP
 	jmp .id_futurecomposer14(pc)
 	dc.w pt_future14	* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen
 	dc.b	"Future Composer v1.4",0
  even
+
+.offset_init = $20+0
+.offset_play = $20+4
+.offset_end = $20+8
+
 
 .fc10init
 	bsr.w	varaa_kanavat
@@ -29266,13 +29276,18 @@ p_futurecomposer14
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
 	move.l	fc14routines(a5),a3
-	jsr	$20(a3)
+	jsr	.offset_init(a3)
 	movem.l	(sp)+,d0-a6
 	moveq	#0,d0
 	rts
 .fc10play
 	move.l	fc14routines(a5),a0
-	jmp	$20+466(a0)
+	push	a5
+	jsr	.offset_play(a0)
+	pop 	a5 
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+	rts
 
 .fc10end
 	bsr.w	rem_ciaint
