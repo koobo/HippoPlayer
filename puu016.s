@@ -416,7 +416,7 @@ _MedPlayerBase	rs.l	1
 _MedPlayerBase1	rs.l	1
 _MedPlayerBase2	rs.l	1
 _MedPlayerBase3	rs.l	1
-_MlineBase	rs.l	1
+_MlineBase		rs.l	1
 _XFDBase	rs.l	1
 
  ifne DEBUG
@@ -878,7 +878,7 @@ keyfilechecked	rs.b	1	* ~0: keyfile tarkistettu
 
 songnumber	rs	1	* modin sis‰isen kappaleen numero
 maxsongs	rs	1	* maximi songnumber
-minsong  	rs  1   * min songnumber
+minsong  	rs 	1   * min songnumber
 
 
 moduleaddress	rs.l	1	* modin osoite
@@ -1304,10 +1304,10 @@ pt_sonix		rs.b 	1
 pt_coredesign		rs.b    1
 pt_quartetst	   	rs.b    1
 pt_digitalmugician2	rs.b	1
-pt_stonetracker		rs.b	1
 pt_musicmaker4		rs.b	1
 pt_musicmaker8		rs.b	1
 pt_soundcontrol		rs.b    1
+pt_stonetracker		rs.b	1
 
  if pt_prot<>33 
    fail This must be 33
@@ -6392,7 +6392,7 @@ vastomaviesti
 *******
 signalreceived
 	DPRINT	"Song end signal",10
-
+	
 	moveq	#1,d7			* menn‰‰n listassa eteenp‰in
 							* step forward in the list
 
@@ -19700,7 +19700,7 @@ init_error
 	dr	ier_mlederr_t
 	dr	ier_not_compatible_t
 	dr	ier_eagleplayer_t
-	
+
 ier_error	=	-1
 ier_nochannels	=	-2
 ier_nociaints	=	-3
@@ -24215,9 +24215,6 @@ loadfile
 .nosa2	clr.b	sampleformat(a5)
 
 
-
-
-
 	st	lod_xpkfile(a5)	* lippu: xpk file
 
 * Ladataan eka XPK-hunkki tiedostosta ja katsotaan voidaanko se
@@ -25035,9 +25032,6 @@ get_mline
 
 
 
-
-
-
 *******************************************************************************
 * Analysoidaan tiedosto
 *******************************************************************************
@@ -25172,10 +25166,10 @@ eagleFormats
 	; Hangs on privileged instruction?
 	;dc.l	p_coredesign
 	dc.l	p_digitalmugician2
-	dc.l	p_stonetracker
 	dc.l	p_musicmaker4
 	dc.l	p_musicmaker8
 	dc.l	p_soundcontrol
+	dc.l	p_stonetracker
 	dc.l 	0	
 
 *******
@@ -25185,7 +25179,7 @@ eagleFormats
 * a0 = moduuli, 1084 bytee
 
 tutki_moduuli2
-	DPRINT	"Check for PUBLIC load",1
+	DPRINT	"Check where to load",1
 	pushm	d1-a6
 	move.l	a0,a4
 	move.l	#1084,d7
@@ -25256,15 +25250,6 @@ tutki_moduuli2
 	cmp.l	#"tfmx",(a4)
 	beq.w	.goPublic
 
-;	cmp.l	#'OKTA',(a0)		* Oktalyzer
-;	bne.b	.m
-;	cmp.l	#'SONG',4(a0)
-;	bne.b	.m
-;	cmp.l	#$00010001,$10(a0)	* Onko 8 kanavaa?
-;	bne.b	.m
-;	cmp.l	#$00010001,$10+4(a0)
-;	beq.b	.f
-;.m
 	bsr	id_oktalyzer
 	tst.l	d0
 	bne.b	.notOkta
@@ -37986,7 +37971,7 @@ id_digitalmugician2
 p_stonetracker
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
-	jmp	deliInterrupt(pc) 
+	p_NOP ;jmp	deliInterrupt(pc) ; for position updates
 	jmp	deliEnd(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
@@ -37995,28 +37980,284 @@ p_stonetracker
 	jmp	deliForward(pc)
 	jmp	deliBackward(pc)
 	p_NOP
-	jmp .id_stonetracker(pc)
+	jmp id_stonetracker(pc)
 	dc  pt_stonetracker
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_song!pf_kelaus!pf_end
 	dc.b	"StoneTracker        [EP]",0
-.path dc.b "stonetracker",0
+.path dc.b "eaglestone",0
  even
-
+ 
 .init
 	lea	.path(pc),a0 
-	move.l	#1<<16|60,d0
+	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
+	bmi.b	.not
+
+.MHD_Name = 4
+	move.l	moduleaddress(a5),a0
+	lea	.MHD_Name(a0),a0
+ 	lea	modulename(a5),a1
+ 	moveq	#31-1,d0
+.name	move.b	(a0)+,(a1)+
+ 	dbeq	d0,.name
+
+	moveq	#0,d0
+.not
 	rts 
 
-.id_stonetracker
-;	bsr.b	id_stonetracker_ 
-;	tst.l 	d0 
-;	bne.b 	.not 
-;	bsr		moveModuleToPublicMem
-;	moveq	#0,d0
-;.not
-;	rts
-id_stonetracker_
+; p_stonetracker2xxx
+; 	jmp	.init(pc)
+; 	jmp	.play(pc)
+; 	jmp	.interrupt(pc)
+; 	jmp	.end(pc)
+; 	jmp	.stop(pc)
+; 	jmp	.cont(pc)
+; 	jmp	.volume(pc)
+; 	jmp	.song(pc)
+; 	p_NOP
+; 	p_NOP
+; 	p_NOP
+; 	jmp 	id_stonetracker(pc)
+; 	dc  	pt_stonetracker
+; 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_kelaus!pf_song
+; 	dc.b	"StoneTracker",0
+;  even
+
+; .vectors 
+; 	dc.l 	0 * VL_UserData
+; 	dc.l	0 * VL_ID
+; 	dc.l 	.songEnd * VL_SongEnd
+; 	dc.l	0 * VL_EndFadeVolSong
+; 	dc.l 	0 * VL_EndFadeBalance
+; 	dc.l	0 * VL_EndFadeVolFx
+
+; .songEnd
+; ;	st	songover+var_b
+; 	rts 
+
+; .init
+; 	bsr	get_stoneplayer
+; 	bne.b	.ok1
+; 	moveq	#ier_nostoneplayer,d0
+; 	rts 
+; .ok1
+
+; 	* Load extra data file "sps." or ".sps"
+; 	jsr	getcurrent 
+; 	* a3 = node
+; 	lea	-200(sp),sp
+; 	lea	l_filename(a3),a0 
+; 	move.l	sp,a1
+; .c	move.b	(a0)+,(a1)+
+; 	bne.b	.c
+; 	move.l 	sp,a0
+
+; .findExt
+; 	move.b	(a0),d0
+; 	rol.l	#8,d0
+; 	move.b	1(a0),d0
+; 	rol.l	#8,d0
+; 	move.b	2(a0),d0
+; 	rol.l	#8,d0
+; 	move.b	3(a0),d0
+; 	move.l	d0,d1
+; 	and.l	#$ffdfdfdf,d0 
+; 	and.l	#$dfdfdfff,d1 
+; 	cmp.l	#".SPM",d0
+; 	beq.b	.foundExt1	
+; 	cmp.l	#"SPM.",d1
+; 	beq.b	.foundExt2
+; 	addq	#1,a0
+; 	cmp.l	a0,a1 
+; 	bne.b	.findExt
+; 	lea	200(sp),sp
+; 	moveq	#ier_filerr,d0 
+; 	rts
+; .foundExt1
+; 	move.b	#'S',3(a0)
+; 	bra.b	.go
+; .foundExt2
+; 	move.b	#'S',2(a0)
+; .go
+; 	move.l	sp,a0
+
+;  if DEBUG
+; 	move.l	a0,d0
+; 	DPRINT	"Load SPM: %s",1
+;  endif
+ 
+; 	move.l	#MEMF_PUBLIC,d0
+; 	lea	stonetrackerdataaddr(a5),a1
+; 	lea 	stonetrackerdatalen(a5),a2
+; 	jsr	loadfileStraight
+; 	lea	200(sp),sp
+; 	* d0 = 0 if success
+; 	tst.l	d0
+; 	beq.b	.loadOk
+
+; 	moveq	#ier_filerr,d0
+; 	rts
+
+; .loadOk
+
+; 	move.l _StonePlayerBase(a5),a6
+
+; 	move.l	moduleaddress(a5),a0 
+; 	move.l	modulelength(a5),d0
+; 	lob	spCheckModule
+; 	DPRINT	"SPM check: %ld",11
+; 	tst.l	d0
+; 	bmi.w	.checkError
+; 	move.l	stonetrackerdataaddr(a5),a0 
+; 	move.l	stonetrackerdatalen(a5),d0
+; 	lob	spCheckModule
+; 	DPRINT	"SPS check: %ld",12
+; 	tst.l	d0
+; 	bmi.b	.checkError
+
+; 	lob	spInstallPlayer
+; 	tst.l	d0 
+; 	bne.w	.installError
+	
+; 	move.l	moduleaddress(a5),a0 
+; 	move.l	stonetrackerdataaddr(a5),a1
+; 	sub.l	a2,a2
+; 	lob  	spInstallModule
+
+; 	lea	.vectors(pc),a0 
+;     	lob     spSetVectors
+    
+; 	bsr.b	.play
+
+; 	move.l	moduleaddress(a5),a0 
+; 	move	MHD_NbSong(a0),d0
+; 	subq	#1,d0
+; 	move	d0,maxsongs(a5)	
+
+;  if DEBUG
+; 	moveq	#0,d0 
+; 	move	MHD_NbSong(a0),d0 
+; 	DPRINT	"Songs %ld",10
+;  endif 
+
+
+; 	lea	MHD_Name(a0),a0
+; 	lea	modulename(a5),a1
+; 	moveq	#31-1,d0
+; .name	move.b	(a0)+,(a1)+
+; 	dbeq	d0,.name
+
+; 	moveq	#0,d0
+; 	rts
+
+; .installError
+; 	moveq	#ier_error,d0
+; 	rts
+; .checkError
+; 	moveq	#ier_unknown,d0
+; 	rts
+
+; .play
+; 	move.l _StonePlayerBase(a5),a6
+; 	lob 	spInitPlayer
+; 	lob 	spStartPlayer
+; 	bsr.b	.status
+; 	rts 
+
+; .status
+;  if DEBUG
+; 	move.l _StonePlayerBase(a5),a6
+; 	lea	-PD_SIZE(sp),sp
+; 	move.l	sp,a0
+; 	lob	spGetPlayerData
+
+; 	move.l	sp,a0
+; 	moveq	#0,d0
+; 	move	PD_Position(a0),d0
+; 	moveq	#0,d1
+; 	move	PD_Volume(a0),d1
+; 	moveq	#0,d2
+; 	move	PD_Period(a0),d2
+; 	moveq	#0,d3
+; 	move	PD_NbVoices(a0),d3
+; 	moveq	#0,d4
+; 	move	PD_Speed(a0),d4
+; 	moveq	#0,d5
+; 	move	PD_Song(a0),d5
+; 	DPRINT	"pos=%ld vol=%ld per=%ld voices=%ld spd=%ld song=%ld",3
+	
+; 	;move	PD_Position(a0),pos_nykyinen(a5)
+; 	;move	PD_Song(a0),songnumber(a5)
+
+; 	lea	PD_SIZE(sp),sp
+;  endif
+; 	rts
+
+; .end
+; 	bsr.b	.stop
+; 	move.l _StonePlayerBase(a5),a6
+; 	lob 	spRemovePlayer
+
+; 	move.l	_StonePlayerBase(a5),d0
+; 	jsr	closel
+; 	clr.l	_StonePlayerBase(a5)
+; 	rts 
+; .stop
+; 	move.l _StonePlayerBase(a5),a6
+; 	moveq	#VOF_CUTDMA,d0
+; 	lob 	spStopPlayer
+; 	rts 
+; .cont
+; 	move.l _StonePlayerBase(a5),a6
+; 	lob 	spStartPlayer
+; 	rts 
+; .volume
+; 	move.l _StonePlayerBase(a5),a6
+; 	move	mainvolume(a5),d0
+; 	moveq	#1,d1
+; 	lob	spSlideSongVolume
+; 	rts 
+; .song
+; 	move.l _StonePlayerBase(a5),a6
+; 	move	songnumber(a5),d0 
+; 	addq	#1,d0
+; 	moveq	#0,d1
+; 	moveq	#0,d2
+; 	DPRINT	"StoneSong %ld",2
+; 	lob	spSetPlayerPos
+; 	bsr.w	.status
+; 	rts 
+
+; .interrupt
+; 	rts
+	
+; 	push	a6
+; 	lea	-PD_SIZE(sp),sp
+; 	move.l 	_StonePlayerBase(a5),a6
+; 	move.l	sp,a0
+; 	lob	spGetPlayerData
+
+; 	move.l	sp,a0
+; 	;move	PD_Position(a0),pos_nykyinen(a5)
+; 	;move	PD_Song(a0),songnumber(a5)
+
+; 	lea	PD_SIZE(sp),sp
+; 	pop	a6
+; 	rts
+
+
+id_stonetracker
+	push	a4
+	bsr	.id_stonetracker_
+	pop	a4
+	tst.l 	d0 
+	bne.b .not 
+	bsr	moveModuleToPublicMem
+	moveq	#0,d0
+.not
+	rts
+	
+.id_stonetracker_
 	move.l	a4,a0
 	MOVEQ	#-1,D0
 	;MOVE.L	$24(A5),A0
@@ -38134,6 +38375,7 @@ p_soundcontrol
 
 ******************************************************************************
 * Deli/eagle support
+* Delisupport
 ******************************************************************************
 
 
@@ -38405,11 +38647,13 @@ findDeliPlayer
  
 freeDeliPlayer
 	pushm	all
-	move.l	deliPlayer(a5),d1
+	tst.l	deliPlayer(a5)
 	beq.b	.x
+
 	* DeliCustom is UnloadSegged elsewhere
-	cmp		#pt_delicustom,deliPlayerType(a5)
+	cmp	#pt_delicustom,deliPlayerType(a5)
 	beq.b 	.skip
+	move.l	deliPlayer(a5),d1
 	lsr.l	#2,d1
 	lore	Dos,UnLoadSeg
 	DPRINT	"freeDeliPlayer",1
@@ -38417,7 +38661,7 @@ freeDeliPlayer
 	clr.l	deliPlayer(a5)
 	clr	deliPlayerType(a5)
 .x
-	bsr		.freeDeliLoadedFile
+	bsr	.freeDeliLoadedFile
 	bsr.w	freeDeliBase
 	popm	all
 	rts
@@ -38927,6 +39171,10 @@ deliEnd
 	
 	bsr	clearsound
 
+	move.l	#EP_EjectPlayer,d0
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	
 	popm	d1-a6
 	rts
 
@@ -39911,7 +40159,7 @@ deliModuleChange
 	pushm	a5/a6
 	bsr.b .patch
 	popm	a5/a6
-	bsr	clearCpuCaches
+	jsr	clearCpuCaches
 	rts
 .notSupp
 	DPRINT	"Unsupported params!",8
