@@ -736,6 +736,7 @@ filterstatus	rs.b	1		* filtterin
 modulefilterstate rs.b	1		* ..
 ptmix		rs.b	1		* 0: normi ptreplay, 1:mixireplay
 xpkid		rs.b	1		* 0: ei xpktunnistusta, 1:joo
+							* seems to be that 0 enables xpkid here
 fade		rs.b	1		* 0: ei feidausta
 boxsize		rs	1		* montako nime‰ mahtuu fileboksiin
 						* size of the module name box
@@ -23739,7 +23740,8 @@ lod_loadsegfail = -19
 loadfileStraight
 	push	d7
 	move.b	xpkid(a5),d7
-	clr.b	xpkid(a5)
+	* DISABLE:
+	st		xpkid(a5)
 	push	d7
 	bsr.b	loadfile
 	pop	d7
@@ -24223,7 +24225,6 @@ loadfile
 
 	tst.b	xpkid(a5)	* Oliko XPK id p‰‰ll‰?
 	bne.w	.noid
-
 
 	bsr.w	inforivit_xpkload2
 
