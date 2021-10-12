@@ -6392,7 +6392,7 @@ vastomaviesti
 *******
 signalreceived
 	DPRINT	"Song end signal",10
-	
+
 	moveq	#1,d7			* menn‰‰n listassa eteenp‰in
 							* step forward in the list
 
@@ -37992,7 +37992,6 @@ p_stonetracker
 	moveq	#0<<16|1,d0
 	bsr	deliLoadAndInit
 	bmi.b	.not
-
 .MHD_Name = 4
 	move.l	moduleaddress(a5),a0
 	lea	.MHD_Name(a0),a0
@@ -38465,9 +38464,9 @@ deliLoadAndInit
 	tst.l 	d0
 	bmi.b 	.loadErr 
 	bsr.w	deliInit
-	tst.l	d0
 .loadErr	
 	jsr 	clearMainWindowWaitPointer
+	tst.l	d0
 	rts
 
 * in:
