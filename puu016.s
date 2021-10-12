@@ -25668,7 +25668,7 @@ tutki_moduuli
 
 .multi	pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
-	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 
 	move.l	moduleaddress(a5),a1	* tutkaillaan onko miss‰ muistissa
 	lore	Exec,TypeOfMem
@@ -25692,7 +25692,7 @@ tutki_moduuli
 
 .sid	pushpea	p_sid(pc),playerbase(a5)
 	move	#pt_sid,playertype(a5)
-	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	bra.w	.ex2
 
 
@@ -25800,7 +25800,7 @@ tutki_moduuli
 ;.digibooster
 ;	pushpea	p_digibooster(pc),playerbase(a5)
 ;	move	#pt_digibooster,playertype(a5)
-;	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
+;	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 ;	lea	610(a4),a1
 ;	moveq	#30-1,d0
 ;	bra.w	.nimitalteen2
@@ -25809,7 +25809,7 @@ tutki_moduuli
 ;.digiboosterpro
 ;	pushpea	p_digiboosterpro(pc),playerbase(a5)
 ;	move	#pt_digiboosterpro,playertype(a5)
-;	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
+;	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 ;	lea	16(a4),a1
 ;	moveq	#42-1,d0
 ;	bra.w	.nimitalteen2
@@ -25818,7 +25818,7 @@ tutki_moduuli
 ;.thx
 ;	pushpea	p_thx(pc),playerbase(a5)
 ;	move	#pt_thx,playertype(a5)
-;	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
+;	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 ;
 ;	move.l	moduleaddress(a5),a1
 ;	add	4(a1),a1		* modulename
@@ -27719,7 +27719,7 @@ sirerro	moveq	#ier_nomem,d0
 *************
 * Tarkistaa onko moduuli chipiss‰. Jos on, siirt‰‰ sen fastiin (jos on).
 
-moveModulieToPublicMem
+moveModuleToPublicMem
 siirra_moduuli2
 	pushm	d1-a6
 
@@ -28915,7 +28915,7 @@ init_sidpatch
 id_sid1 
 	bsr.b	id_sid1_
 	bne.b 	.no
-	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	moveq	#0,d0 
 .no 
 	rts
@@ -30928,7 +30928,7 @@ p_med	jmp	.medinit(pc)
 
 ** jos on octamixplayerill‰ soitettava ja sijaitsee chipiss‰, koitetaan
 ** siirt‰‰ fastiin:
-	bsr.w	moveModulieToPublicMem
+	bsr.w	moveModuleToPublicMem
 
 
 .yeep
@@ -32262,7 +32262,7 @@ p_digibooster
 .id_digibooster
 	bsr.b 	id_digibooster_
 	bne.b 	.x 
-	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	lea	610(a4),a1
 	moveq	#30-1,d0
 	bsr	copyNameFromA1
@@ -32412,7 +32412,7 @@ p_digiboosterpro
 .id_digiboosterpro
 	bsr.b 	id_digiboosterpro_
 	bne.b 	.y 
-	bsr.w	moveModulieToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	move.l	moduleaddress(a5),a1
 	lea	16(a4),a1
 	moveq	#42-1,d0	
@@ -35762,6 +35762,14 @@ p_facethemusic
 	rts
 
 .id
+	bsr.b	.do
+	bne.b	.not 
+	bsr 	moveModuleToPublicMem
+	moveq	#0,d0
+.not		
+	rts
+
+.do
 	MOVEQ	#0,D0
 	MOVE.L	(A4),D1
 	AND.L	#$FFFFFF00,D1
@@ -37726,7 +37734,7 @@ p_musicmaker8
 .id_musicmaker8
 	bsr.b	id_musicmaker8_
 	bne.b	.no
-	bsr	moveModulieToPublicMem
+	bsr	moveModuleToPublicMem
 	moveq	#0,d0
 .no
 	rts
@@ -37950,7 +37958,7 @@ id_digitalmugician2
 ;	bsr.b 	.do
 ;	tst.l	d0
 ;	bne.b	.no
-;	bsr	moveModulieToPublicMem
+;	bsr	moveModuleToPublicMem
 ;	moveq	#0,d0
 ;.no 
 ;	rts
@@ -38003,7 +38011,7 @@ p_stonetracker
 ;	bsr.b	id_stonetracker_ 
 ;	tst.l 	d0 
 ;	bne.b 	.not 
-;	bsr		moveModulieToPublicMem
+;	bsr		moveModuleToPublicMem
 ;	moveq	#0,d0
 ;.not
 ;	rts
