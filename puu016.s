@@ -25250,14 +25250,8 @@ tutki_moduuli2
 	cmp.l	#"tfmx",(a4)
 	beq.w	.goPublic
 
-	bsr	id_oktalyzer
-	tst.l	d0
-	bne.b	.notOkta
-	cmp.l	#$00010001,$10(a4)	* Onko 8 kanavaa?
-	bne.b	.notOkta
-	cmp.l	#$00010001,$10+4(a4)
+	bsr	id_oktalyzer8ch
 	beq.b	.goPublic
-.notOkta
 
 	cmp.l	#'PSID',(a4)		* PSID-tiedosto
 	beq.b	.goPublic
@@ -30063,21 +30057,31 @@ p_oktalyzer
 	p_NOP
 	jmp	.okend(pc)
 	jmp	.okstop(pc)
-	p_NOP
+	jmp	.okcont(pc)
 	jmp	.okvolume(pc)
 	p_NOP
 	p_NOP
 	p_NOP
 	p_NOP
-	jmp id_oktalyzer(pc)
-	dc.w pt_oktalyzer				* type
-	dc	pf_volume!pf_end
+	jmp 	.id(pc)
+	dc.w 	pt_oktalyzer				* type
+	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont
 	dc.b	"Oktalyzer",0
  even
 
-.okstop	st	playing(a5)	* ei sallita pysäyttelemistä
-	rts
+.offset_init = $20+0 
+.offset_play = $20+4 
+.offset_end  = $20+8 
+.offset_vol  = $20+12 
 
+
+.okstop	;st	playing(a5)	* ei sallita pysäyttelemistä
+	move	#$f,$dff096
+	rts
+.okcont
+	move	#$800f,$dff096
+	rts
+	
 .okinit	
 	bsr.w	varaa_kanavat
 	beq.b	.ok
@@ -30092,37 +30096,40 @@ p_oktalyzer
 .ok2
 
 	lea	oktaroutines(a5),a0
-	bsr.w	allocreplayer2		* chippiin
+	bsr.w	allocreplayer
 	beq.b	.ok3
 	bsr.w	rem_ciaint
 	bra.w	vapauta_kanavat
-;	rts
 
 .ok3	
 	move.l	moduleaddress(a5),a0
 	lea	songover(a5),a1
 	move.l	oktaroutines(a5),a2
-	jsr	$20(a2)
+	jsr	.offset_init(a2)
 	tst	d0
-	beq.b	.ee
-	bsr.b	.oke
-	bsr.w	rem_ciaint
-	moveq	#ier_nomem,d0
-	rts
-
-.ee	bsr.b	.okvolume
+	bne.b	.mem
+	bsr.b	.okvolume
 	moveq	#0,d0
 	rts
 
+.mem	moveq	#ier_nomem,d0
+	rts
+
+
 .okplay	
+	push	a5
 	move.l	oktaroutines(a5),a0
-	jmp	526+$20(a0)
+	jsr	.offset_play(a0)
+	pop	a5
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+	rts
 
 .okend	
 	bsr.w	rem_ciaint
 	pushm	all
 	move.l	oktaroutines(a5),a0
-	jsr	52+$20(a0)
+	jsr	.offset_end(a0)
 	popm	all
 .oke	bra.w	vapauta_kanavat
 
@@ -30130,9 +30137,16 @@ p_oktalyzer
 	moveq	#0,d0
 	move	mainvolume(a5),d0
 	move.l	oktaroutines(a5),a0
-	jmp	4096+$20(a0)
+	jmp	.offset_vol(a0)
 
 
+.id 
+	bsr.b	id_oktalyzer8ch 
+	bne.b	id_oktalyzer
+
+	bsr	moveModuleToPublicMem
+	moveq	#0,d0 
+	rts
 
 id_oktalyzer
 	cmp.l	#'OKTA',(a4)		* Oktalyzer
@@ -30143,6 +30157,19 @@ id_oktalyzer
 .nok	moveq	#-1,d0
 	rts
 
+id_oktalyzer8ch
+	bsr.b  id_oktalyzer
+	bne.b 	.no
+	cmp.l	#$00010001,$10(a4)	* Onko 8 kanavaa?
+	bne.b	.no
+	cmp.l	#$00010001,$10+4(a4)
+	beq.b	.go
+.no 
+	moveq	#-1,d0
+	rts
+.go 
+	moveq	#0,d0
+	rts
 ******************************************************************************
 * TFMX
 ******************************************************************************
