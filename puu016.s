@@ -8464,8 +8464,16 @@ find_continue
 	; Use chosen module as starting point of seardh
 
 	DPRINT  "find_continue obtain list",1
-	bsr.w		obtainModuleList
+	bsr.w	obtainModuleList
+
 	bsr.w	getcurrent		* a0 => chosen module listnode
+	tst.l	d0 
+	bne.b	.foundCurrent
+	* start from beginning
+	clr.l	chosenmodule(a5)
+	bsr	getcurrent
+.foundCurrent
+
 	move.l	a0,a3
 	move.l	a3,a4
 
