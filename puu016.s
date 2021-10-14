@@ -36217,7 +36217,7 @@ p_aprosys
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
-	dc  pt_hippel7
+	dc  pt_aprosys
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
 	dc.b	"AProSys             [EP]",0
 		        
