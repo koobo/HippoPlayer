@@ -26048,6 +26048,8 @@ loadreplayer
 	lea	probebuffer+8+1024(a5),a0
 	move	playertype(a5),d0
 .find
+	tst	(a0)
+	beq.w 	.error
 	cmp	(a0),d0 
 	beq.b 	.found 
 	lea	2+4+4(a0),a0 
@@ -27231,8 +27233,10 @@ are
 	addq	#8,a4			* skip header
 
 .find
+	tst	(a4) 			* end reached?
+	beq.b 	.xab
 	cmp	(a4),d0 
-	beq.b .found 
+	beq.b	.found 
 	lea	2+4+4(a4),a4
 	bra.b	.find
 .found
