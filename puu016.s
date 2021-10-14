@@ -25181,6 +25181,7 @@ eagleFormats
 	dc.l	p_musicmaker8
 	dc.l	p_soundcontrol
 	dc.l	p_stonetracker
+	dc.l	p_themusicalenlightenment
 	dc.l 	0	
 
 *******
@@ -37939,6 +37940,101 @@ p_soundcontrol
 	BNE.S	.lbC00048E
 	MOVEQ	#0,D0
 .lbC00048E
+	rts
+
+
+******************************************************************************
+* The Musical Enlightenment
+******************************************************************************
+
+p_themusicalenlightenment
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	dc  pt_themusicalenlightenment
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+	dc.b	"The Musical Enlighte[EP]",0
+	        
+.path dc.b "tme",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
+	bsr	deliLoadAndInit
+	rts 
+
+.id
+	movea.l	a4,A0
+	moveq	#-1,D0
+
+	tst.b	(A0)
+	bne.b	.Fault
+	move.l	d7,D1
+	cmp.l	#7000,D1
+	blt.b	.Fault
+	move.l	(A0),D2
+	beq.b	.Fault
+
+	cmp.l	#$0000050F,$3C(A0)
+	bne.s	.CheckAnother
+	cmp.l	#$0000050F,$40(A0)
+	bne.s	.CheckAnother
+	bra.b	.TME_OK
+
+.CheckAnother
+	cmp.l	#$00040B11,$1284(A0)
+	bne.s	.CheckSize
+	cmp.l	#$181E2329,$1188(A0)
+	bne.s	.CheckSize
+	cmp.l	#$2F363C41,$128C(A0)
+	bne.s	.CheckSize
+.TME_OK
+	moveq	#0,D0
+.Fault
+	rts
+
+.CheckSize
+	bsr.b	.GetSize
+	cmp.l	D2,A2
+	beq.b	.TME_OK
+	bra.b	.Fault
+.GetSize
+	move.l	A0,A1
+	move.l	A0,A2
+	lea	$1AAA(A2),A2
+	move.w	$1A84(A1),D3
+	mulu.w	#12,D3
+	add.l	D3,A2
+	move.w	$1A86(A1),D3
+	mulu.w	#6,D3
+	add.l	D3,A2
+	moveq	#0,D1
+.NextInuc
+	addq.l	#4,A2
+	tst.b	-4(A2)
+	bne.b	.NextInuc
+	addq.l	#4,D1
+	cmp.l	#$400,D1
+	blt.b	.NextInuc
+	moveq	#0,D1
+	lea	$44(A1),A1
+.NextSamp	tst.b	$18(A1,D1.L)
+	beq.b	.NoSample
+	add.l	4(A1,D1.L),A2
+.NoSample	add.l	#$80,D1
+	cmp.l	#$1000,D1
+	blt.b	.NextSamp
+	sub.l	A0,A2
 	rts
 
 ******************************************************************************
