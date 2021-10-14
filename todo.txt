@@ -18,7 +18,6 @@ Formats
 + Deltamusic1
 + Digital mugician
 + digital mugician 2
-+ digital mugician 2
 + earache
 + face the music
 + FTM
@@ -37,13 +36,13 @@ Formats
 + puma tracker
 + Quartet
 + quartet st
-+ quartet st 
 + RichardJoseph
 + rob hubbard
 + Ron Klaren + CustomMade
 + sidmon2
 + SonicArranger, all three variants
 + sonix music driver
++ sound control
 + SoundFX 1.x
 + startrekker
 + stonetracker
@@ -54,13 +53,49 @@ Formats
 + TCBTracker
 + wally beben
 + MusicMakerV8
++ VSS voodoo sound synth!
 
 - mark cooksey
 - MultiMediaSound
 - sound images
 - sound master 
 - special fx
-- VSS voodoo sound synth!
+
+FIXED
+- start hip with "exp-prg"
+- pause 
+- switch to fav,
+- switch back
+- hit f for search, "popcorn.o"
+-> enforcer hit
+
+
+FIXED
+- oktalyzer: replayer in chip,
+             can mod be in fast?
+-> crap replayer rip 
+-> 8ch mods go into fast
+
+TODO?
+- stonetracker mem leak?
+
+FIXED
+-  "rsi theme.fc" sounds pretty buggy
+- pos/len?
+
+FIXED
+- turn off xpk id for deli additional file loads
+-> load all into chip
+
+FIXED
+- kick13: xpk id off,
+- load "synth pack" module
+- "idenfitying xpk file" still seen, when loadiing samples?
+
+TOOD
+- APS.Cliffs
+-> illegal reads a lot
+-> hangs due to enforcer hit logging
 
 TODO
 - DTP_Config
@@ -69,10 +104,25 @@ TODO
 -> mugician 2
 -> musicmaker8
 
+FIXED
+- play 2nd module from main list
+- switch to favs 
+- play 2nd module from fav list 
+--> 2nd main list module restarts!
+
+TODO
+- soundmon3: beeping error
+
+FIXED
+- beathoven not recognized
+
+FIXED
+- delicustom not regonized (should allow CHECKS missing)
+
 TODO
 - add divider to fav list -> disappears
 
-TODO
+TODO?
 - eagleplayer better error msgs
 - missing files etc
 
@@ -83,7 +133,7 @@ FIXED
 - min song handling: RJ.speedball
 - #2/4, should be #1/3?
 
-TODO 
+FIXED 
 - startrekker mem overwrite:
 -- "fa.worse face.mod"
 -- voidal.mod
