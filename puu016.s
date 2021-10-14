@@ -944,6 +944,7 @@ gluemonroutines	rs.l	0
 pretrackerroutines rs.l	0
 custommaderoutines rs.l 0
 startrekkerroutines rs.l 0
+voodooroutines	rs.l	0
 sonicroutines	rs.l	0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
@@ -25138,6 +25139,7 @@ groupFormats
 	dc.l 	p_custommade 
 	dc.l 	p_sonicarranger
 	dc.l	p_startrekker
+	dc.l	p_voodoosupremesynthesizer
 	dc.l 	p_player
 	dc.l 	0
 
@@ -35352,6 +35354,118 @@ p_startrekker
 	rts
 
 
+******************************************************************************
+* Voodoo Supreme Synthesizer
+******************************************************************************
+
+p_voodoosupremesynthesizer
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	jmp	.cont(pc)
+	jmp	.vol(pc)
+	jmp	.song(pc)
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp 	.id(pc)
+	dc.w 	pt_voodoosupremesynthesizer
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"VoodooSupremeSynthesizer",0
+ even
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.END   = 8+$20
+.VOL   = 12+$20
+.SONG  = 16+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	voodooroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	move.l	moduleaddress(a5),a0
+	move.l	modulelength(a5),d0
+	lea	songover(a5),a1
+	move.l	voodooroutines(a5),a2
+	jsr	.INIT(a2)
+	tst.l	d0
+	bne.b	.noMem
+
+	* min song = d1
+	* max song = d2
+	move	d2,maxsongs(a5)
+
+	bsr.b	.vol
+	moveq	#0,d0
+	rts
+
+.noMem
+	moveq	#ier_nomem,d0
+	rts
+.end
+	jsr	rem_ciaint
+	move.l	voodooroutines(a5),a0
+	jsr	.END(a0)
+	bsr	clearsound
+	bsr	vapauta_kanavat
+	rts
+
+.play
+	move.l	voodooroutines(a5),a0
+	jsr	.PLAY(a0)
+	rts
+.stop
+	bra	clearsound
+.cont
+	rts
+.vol
+	move	mainvolume(a5),d0
+	move.l	voodooroutines(a5),a0
+	jmp	.VOL(a0)
+.song	
+	move	songnumber(a5),d0
+	move.l	voodooroutines(a5),a0
+	jmp	.SONG(a0)
+	
+.id
+	move.l	a4,a0
+	move.l	d7,d0
+	ADDQ.L	#1,D0
+	AND.L	#$FFFFFFFE,D0
+	ADD.L	D0,A0
+	MOVEQ	#-1,D0
+	SUB.W	#$40,A0
+	MOVEQ	#$1F,D1
+.lbC000360	
+	CMP.L	#$56535330,(A0)
+	BEQ.B	.lbC000372
+	ADDQ.L	#2,A0
+	DBRA	D1,.lbC000360
+	RTS
+.lbC000372	
+	CMP.L	#$100,4(A0)
+	BHS.B	.no
+	MOVEQ	#0,D0
+.no
+	RTS
 
 ******************************************************************************
 * Quartet
