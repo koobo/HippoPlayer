@@ -215,7 +215,7 @@ check	macro
 use = 0
 	include	player61.i
 
-
+	include	playerIds.i
 	include	kpl_offsets.S
 
 *******************************************************************************
@@ -909,7 +909,8 @@ do_early	rs.b	1
 externalplayers	rs.l	1	* ulkoisen soittorutiininivaskan osoite
 
 external	rs.b	1	* lippu: tarvitaan xplayeri
-xtype		rs.b	1	* ladatun replayerin tyyppi
+			rs.b 	1	* pad
+xtype		rs.w	1	* ladatun replayerin tyyppi
 xplayer		rs.l	1	* osote
 xlen		rs.l	1	* pakattupituus
 
@@ -1219,95 +1220,95 @@ p_NOP macro
 	dc.l	$4e754e75
 	endm
 
-* Player ids
-* These are self contained, replayer code inside the module
-pt_internal_start = 33
-	rsset	pt_internal_start
-pt_prot		rs.b	1
-pt_sid		rs.b	1
-pt_delta2	rs.b	1
-pt_musicass	rs.b	1
-pt_fred		rs.b	1
-pt_sidmon1	rs.b	1
-pt_med		rs.b	1
-pt_markii	rs.b	1
-pt_mon		rs.b	1
-pt_dw		rs.b	1
-pt_hippel	rs.b	1
-pt_mline	rs.b	1
-pt_beathoven	rs.b	1
-pt_delicustom	rs.b 	1
+; * Player ids
+; * These are self contained, replayer code inside the module
+; pt_internal_start = 33
+; 	rsset	pt_internal_start
+; pt_prot		rs.b	1
+; pt_sid		rs.b	1
+; pt_delta2	rs.b	1
+; pt_musicass	rs.b	1
+; pt_fred		rs.b	1
+; pt_sidmon1	rs.b	1
+; pt_med		rs.b	1
+; pt_markii	rs.b	1
+; pt_mon		rs.b	1
+; pt_dw		rs.b	1
+; pt_hippel	rs.b	1
+; pt_mline	rs.b	1
+; pt_beathoven	rs.b	1
+; pt_delicustom	rs.b 	1
 
-* These need a replayer from the group file
-* These are ids into the file and must match playergroup0.s
-pt_group_start = 49
-	rsset	pt_group_start		* Ulkoiset
-pt_multi	rs.b	1		* PS3M (mod,ftm,mtm,s3m)
-pt_tfmx		rs.b	1
-pt_tfmx7	rs.b	1
-pt_jamcracker	rs.b	1
-pt_future10	rs.b	1
-pt_future14	rs.b	1
-pt_soundmon2	rs.b	1
-pt_soundmon3	rs.b	1
-pt_oktalyzer	rs.b	1
-pt_player	rs.b	1
-pt_hippelcoso	rs.b	1
-pt_digibooster	rs.b	1
-pt_thx		rs.b	1
-pt_sample	rs.b	1
-pt_aon		rs.b	1
-pt_digiboosterpro rs.b	1
-pt_pumatracker	rs.b 	1
-pt_gamemusiccreator	rs.b 	 1
-pt_digitalmugician 	rs.b  	1
-pt_medley 	 	rs.b  	1
-pt_futureplayer 	rs.b 	1
-pt_bendaglish		rs.b 	1
-pt_sidmon2		rs.b	1
-pt_deltamusic1 		rs.b 	1
-pt_soundfx		rs.b	1
-pt_gluemon		rs.b	1
-pt_pretracker		rs.b	1
-pt_custommade		rs.b 	1
-pt_sonicarranger	rs.b	1
-pt_davelowe		rs.b	1
-pt_startrekker		rs.b 	1
+; * These need a replayer from the group file
+; * These are ids into the file and must match playergroup0.s
+; pt_group_start = 49
+; 	rsset	pt_group_start		* Ulkoiset
+; pt_multi	rs.b	1		* PS3M (mod,ftm,mtm,s3m)
+; pt_tfmx		rs.b	1
+; pt_tfmx7	rs.b	1
+; pt_jamcracker	rs.b	1
+; pt_future10	rs.b	1
+; pt_future14	rs.b	1
+; pt_soundmon2	rs.b	1
+; pt_soundmon3	rs.b	1
+; pt_oktalyzer	rs.b	1
+; pt_player	rs.b	1
+; pt_hippelcoso	rs.b	1
+; pt_digibooster	rs.b	1
+; pt_thx		rs.b	1
+; pt_sample	rs.b	1
+; pt_aon		rs.b	1
+; pt_digiboosterpro rs.b	1
+; pt_pumatracker	rs.b 	1
+; pt_gamemusiccreator	rs.b 	 1
+; pt_digitalmugician 	rs.b  	1
+; pt_medley 	 	rs.b  	1
+; pt_futureplayer 	rs.b 	1
+; pt_bendaglish		rs.b 	1
+; pt_sidmon2		rs.b	1
+; pt_deltamusic1 		rs.b 	1
+; pt_soundfx		rs.b	1
+; pt_gluemon		rs.b	1
+; pt_pretracker		rs.b	1
+; pt_custommade		rs.b 	1
+; pt_sonicarranger	rs.b	1
+; pt_davelowe		rs.b	1
+; pt_startrekker		rs.b 	1
 
-pt_eagle_start = 1000
-	rsset	pt_eagle_start
-pt_synthesis		rs.b 	1
-pt_syntracker		rs.b  	1
-pt_robhubbard2 		rs.b 	1
-pt_chiptracker		rs.b	1
-pt_quartet		rs.b    1
-pt_facethemusic		rs.b 	1	
-pt_richardjoseph 	rs.b	1
-pt_instereo1		rs.b    1
-pt_instereo2       	rs.b    1
-pt_jasonbrooke		rs.b	1
-pt_earache		rs.b 	1
-pt_krishatlelid		rs.b    1
-pt_richardjoseph2 	rs.b	1
-pt_hippel7		rs.b	1
-pt_aprosys		rs.b	1
-pt_hippelst		rs.b	1
-pt_tcbtracker		rs.b 	1
-pt_markcooksey		rs.b	1
-pt_activisionpro	rs.b	1
-pt_maxtrax		rs.b 	1
-pt_wallybeben		rs.b 	1
-pt_synthpack		rs.b    1
-pt_jeroentel		rs.b 	1 
-pt_robhubbard 		rs.b 	1
-pt_sonix		rs.b 	1
-pt_coredesign		rs.b    1
-pt_quartetst	   	rs.b    1
-pt_digitalmugician2	rs.b	1
-pt_musicmaker4		rs.b	1
-pt_musicmaker8		rs.b	1
-pt_soundcontrol		rs.b    1
-pt_stonetracker		rs.b	1
+; pt_eagle_start = 1000
+; 	rsset	pt_eagle_start
+; pt_synthesis		rs.b 	1
+; pt_syntracker		rs.b  	1
+; pt_robhubbard2 		rs.b 	1
+; pt_chiptracker		rs.b	1
+; pt_quartet		rs.b    1
+; pt_facethemusic		rs.b 	1	
+; pt_richardjoseph 	rs.b	1
+; pt_instereo1		rs.b    1
+; pt_instereo2       	rs.b    1
+; pt_jasonbrooke		rs.b	1
+; pt_earache		rs.b 	1
+; pt_krishatlelid		rs.b    1
+; pt_richardjoseph2 	rs.b	1
+; pt_hippel7		rs.b	1
+; pt_aprosys		rs.b	1
+; pt_hippelst		rs.b	1
+; pt_tcbtracker		rs.b 	1
+; pt_markcooksey		rs.b	1
+; pt_activisionpro	rs.b	1
+; pt_maxtrax		rs.b 	1
+; pt_wallybeben		rs.b 	1
+; pt_synthpack		rs.b    1
+; pt_jeroentel		rs.b 	1 
+; pt_robhubbard 		rs.b 	1
+; pt_sonix		rs.b 	1
+; pt_coredesign		rs.b    1
+; pt_quartetst	   	rs.b    1
+; pt_digitalmugician2	rs.b	1
+; pt_musicmaker4		rs.b	1
+; pt_musicmaker8		rs.b	1
+; pt_soundcontrol		rs.b    1
+; pt_stonetracker		rs.b	1
 
  if pt_prot<>33 
    fail This must be 33
@@ -1316,14 +1317,9 @@ pt_stonetracker		rs.b	1
    fail This must be 49
  endc 
 
- 
+
 * player group version
-xpl_versio	=	21
-* convert player ids to start from zero to access table in player group
-xpl_offs	=	pt_group_start
-
-
-
+xpl_versio	=	22
 
 
 *********************************************************************************
@@ -26258,6 +26254,12 @@ loadplayergroup
 .xx	
 	bsr.w	inforivit_clear
 
+ if DEBUG 
+	move.l	d7,a0 
+	move.l	-4(a0),d0 
+	DPRINT	"Group size %ld",2
+ endif
+
 	move.l	d7,d0
 	popm	d1-a6
 	rts
@@ -26326,7 +26328,7 @@ loadreplayer
 	clr.l	externalplayers(a5)
 
 	move	playertype(a5),d0		* onko jo sama ladattuna?
-	cmp.b	xtype(a5),d0
+	cmp		xtype(a5),d0
 	bne.b	.jou
 	DPRINT	"Using already loaded",2
 	move.l	xplayer(a5),a1			* osoite a1:een
@@ -26336,7 +26338,7 @@ loadreplayer
 	rts
 
 .jou
-	move.b	d0,xtype(a5)
+	move	d0,xtype(a5)
 	
 	move.l	xplayer(a5),a0			* vapautetaan vanha 
 	jsr	freemem
@@ -26348,11 +26350,10 @@ loadreplayer
 	beq.w	.error
 
 	move.l	d4,d1
-;	move.l	#probebuffer+var_b,d2
 	pushpea	probebuffer+1024(a5),d2
-	move.l	#450,d3
+	move.l	#1024,d3
 	lob	Read
-	cmp.l	#450,d0
+	cmp.l	#1024,d0
 	bne.w	.error	
 
 	cmp.b	#xpl_versio,7+probebuffer+1024(a5)
@@ -26360,28 +26361,23 @@ loadreplayer
 
 	lea	probebuffer+8+1024(a5),a0
 	move	playertype(a5),d0
-	sub	#xpl_offs,d0
-	move	d0,d1
-	add	d1,d1
-	
-	lsl	#3,d0
-
-	movem.l	(a0,d0),d2/d6	* player offset, length
-	tst.l	d2
-	beq.b	.error		* Onko koko playeri‰ filess‰?
-
-* d3k0dez!
-	; sub.l	#$a370,d2
-	; swap	d2
-	; rol.l	d1,d2	
-	; addq	#1,d1
-	; sub.l	#$a370,d6
-	; swap	d6	
-	; rol.l	d1,d6
-
-	addq.l	#8,d2		* skip player group header data
-
+.find
+	cmp	(a0),d0 
+	beq.b 	.found 
+	lea	2+4+4(a0),a0 
+	bra.b	.find
+.found
+	movem.l	2(a0),d2/d6	* player offset, length
 	move.l	d6,xlen(a5)	* pituus talteen
+
+ if DEBUG
+ 	push	d2
+ 	ext.l	d0
+	move.l	d2,d1
+	move.l	d6,d2
+	DPRINT	"Single rep type=%ld offs=%ld len=%ld",3
+	pop	d2
+ endif
 
 	move.l	d4,d1		* hyp‰t‰‰n oikeaan kohtaan
 	moveq	#-1,d3
@@ -26423,7 +26419,7 @@ loadreplayer
 	rts
 
 .error	moveq	#0,d7
-	clr.b	xtype(a5)
+	clr		xtype(a5)
 	bra.b	.x
 
 
@@ -27542,33 +27538,27 @@ are
 
 .nah
 	move	playertype(a5),d0
-	sub	#xpl_offs,d0
 
 	* map player type into a position in the group header
 	* table
 	move.l	externalplayers(a5),a4
 	addq	#8,a4			* skip header
-	lsl	#3,d0
-	movem.l (a4,d0),d0/d7		* offset, length
 
-* d3k0dez!
-;	sub.l	#$a370,d0
-;	swap	d0
-;	rol.l	d1,d0
-;	addq	#1,d1
-;	sub.l	#$a370,d7
-;	swap	d7
-;	rol.l	d1,d7
+.find
+	cmp	(a4),d0 
+	beq.b .found 
+	lea	2+4+4(a4),a4
+	bra.b	.find
+.found
+	movem.l 2(a4),d0/d7		* offset, length
 
-
-	* get actual data address
-	lea     (a4,d0.l),a1
+	* get actual data address, relative to start
+	move.l	externalplayers(a5),a1
+	add.l	d0,a1
 .contti
-
 	move.l	a1,a4
 	move.l	a0,a3
 	move.l	4(a4),d0
-	;sub.l	#$5371a26,d0
 	move.l	d6,d1			* mem type
 	jsr	getmem
 	move.l	d0,(a3)
@@ -27582,18 +27572,17 @@ are
 	move.l	d7,d0
 	lore	Exec,CopyMem	
 	move.l	(a3),a0
-	;move.l	#$5371a26,d0
-	;add.l	d0,(a0)
-	;sub.l	d0,4(a0)
 	jsr	fimp_decr
 
+	cmp	#pt_eagle_start,playertype(a5)
+	bhs.b 	.ok 
+	
 	* see if it needs to be relocated
 	move.l	(a3),a0
 	cmp.l	#$000003f3,(a0)
 	bne.b	.ok
 	DPRINT	"Relocating",2
 	bsr.b	reloc
-
 .ok
 	bsr	clearCpuCaches
 
