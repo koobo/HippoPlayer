@@ -6537,6 +6537,11 @@ signalreceived
 
 .mododo	
 	* init error, no module to play
+
+	DPRINT	"Deallocate resources!",101
+	jsr	rem_ciaint
+	jsr	vapauta_kanavat
+
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* initti virhe
 	jsr	init_error
 	bra.b	.reet
@@ -6559,7 +6564,7 @@ signalreceived
 	move.l	modamount(a5),chosenmodule(a5)
 	subq.l	#1,chosenmodule(a5)
 	bsr.w	resh
-	bra.b	.reet
+	bra.w	.reet
 
 .hm	
 	* In "pm_through" mode start over from the first module
@@ -6571,9 +6576,9 @@ signalreceived
 * Shuffle-soitto
 .karumeininki
 	move.l	modamount(a5),d0
-	beq.b	.reet		* jos ei yht‰‰n, jatketaan entisen soittoa
+	beq.w	.reet		* jos ei yht‰‰n, jatketaan entisen soittoa
 	cmp.l	#1,d0		* Jos vain yksi, jatketaan soittoa
-	beq.b	.reet
+	beq.w	.reet
 	bra.w	soitamodi2
 
 
