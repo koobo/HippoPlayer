@@ -21296,11 +21296,13 @@ quad_code
 	add.l	d0,draw1(a5)
 	add.l	d0,draw2(a5)
 
-
+	
 	moveq	#0,d7
 	move	playertype(a5),d6
 	jsr	printhippo2	
 
+	* Set to non-zero if LMB is pressed:
+	moveq	#0,d5	
 
 	move.l	quad_task(a5),a1
 	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
@@ -21314,11 +21316,18 @@ scopeLoop
 	tst.b	tapa_quad(a5)		* pitääkö poistua?
 	bne.w	qexit
 
+	* Bypass screen check if LMB has been pressed
+	tst.b 	d5
+	bne.b	.joo
+
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
 	move.l	windowbase3(a5),a0	* ollaanko päällimmäisenä?
+	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
 	beq.b	.joo
+	* Scope screen is not active, but screen might be partially
+	* visible? sc_TopEdge==0 means it can't be partially visible.
 	tst	sc_TopEdge(a1)
 	beq.w	.m
 .joo
@@ -21355,11 +21364,11 @@ scopeLoop
 	beq.b	.noen
 	move	playertype(a5),d6
 	bsr.b	.clear
-.noen	pushm	d6/d7
+.noen	pushm	d5/d6/d7
 	jsr		obtainModuleData
 	bsr.w	drawScope
 	jsr 	releaseModuleData
-	popm	d6/d7
+	popm	d5/d6/d7
 	moveq	#-1,d7
 	bra.b	.m
 .n	
@@ -21406,7 +21415,10 @@ scopeLoop
 	* RMB closes window
 	cmp	#MENUDOWN,d3
 	beq.b	.xq
-	;cmp	#SELECTDOWN,d3 
+	cmp	#SELECTDOWN,d3
+	bne.b	.qx 
+	* LMB activates 
+	moveq	#1,d5
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.w	scopeLoop
 
