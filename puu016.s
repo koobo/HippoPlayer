@@ -25194,6 +25194,7 @@ eagleFormats
 	dc.l	p_soundcontrol
 	dc.l	p_stonetracker
 	dc.l	p_themusicalenlightenment
+	dc.l	p_timfollin2
 	dc.l 	0	
 
 *******
@@ -38060,6 +38061,82 @@ p_themusicalenlightenment
 	blt.b	.NextSamp
 	sub.l	A0,A2
 	rts
+
+
+
+******************************************************************************
+* Tim Follin
+******************************************************************************
+
+p_timfollin2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	dc  	pt_timfollin2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc.b	"Tim Follin          [EP]",0
+	        
+.path dc.b "tim follin ii",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr	deliLoadAndInit
+	rts 
+
+.id
+	MOVEQ	#-1,D0
+	MOVE.L	a4,A0
+	MOVE.W	#$4EF9,D1
+	CMP.W	(A0),D1
+	BNE.S	.lbC00057C
+	CMP.W	6(A0),D1
+	BNE.S	.lbC00057A
+	CMP.W	12(A0),D1
+	BNE.S	.lbC00057A
+	CMP.W	$12(A0),D1
+	BNE.S	.lbC00057A
+	CMP.W	$18(A0),D1
+	BNE.S	.lbC00057A
+	CMP.W	$1E(A0),D1
+	BNE.S	.lbC00057A
+	MOVE.L	$2C(A0),D1
+	SUB.L	2(A0),D1
+	CMP.W	#$A0,D1
+	MOVEQ	#0,D0
+.lbC00057A	
+	RTS
+
+.lbC00057C
+	CMP.W	#$601A,(A0)
+	BNE.S	.lbC000586
+	LEA	$1C(A0),A0
+.lbC000586	
+	CMP.W	#$1010,(A0)
+	BEQ.S	.lbC000592
+	CMP.W	#$1012,(A0)
+	BNE.S	.lbC00057A
+.lbC000592
+	ADDQ.L	#2,A0
+	MOVE.L	4(A0),D1
+	CMP.L	8(A0),D1
+	BNE.S	.lbC00057A
+	CMP.L	12(A0),D1
+	BNE.S	.lbC00057A
+	CMP.L	$10(A0),D1
+	BNE.S	.lbC00057A
+	MOVEQ	#0,D0
+	RTS
 
 ******************************************************************************
 * Deli/eagle support

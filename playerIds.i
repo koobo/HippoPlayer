@@ -91,3 +91,4 @@ pt_musicmaker8		rs.b	1
 pt_soundcontrol		rs.b    1
 pt_stonetracker		rs.b	1
 pt_themusicalenlightenment rs.b	1
+pt_timfollin2       rs.b    1
