@@ -35736,7 +35736,15 @@ p_instereo1
 
 	lea	.path(pc),a0 
 	move.l	#5<<16|0,d0
+
+	* Clear playertype so that the group lookup 
+	* will fail and loader will look into 
+	* filesystem, finding the above patched player.
+	move	playertype(a5),-(sp)
+	clr	playertype(a5)
 	bsr	deliLoadAndInit
+	move	(sp)+,playertype(a5)
+	tst.l	d0
 
 .error	popm	d1-a6
 	rts
