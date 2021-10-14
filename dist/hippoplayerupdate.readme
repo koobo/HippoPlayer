@@ -60,23 +60,27 @@ In this episode, we will be trying to play them all!
 ## New features:
 - Patternscope XL, with twice the amount of rows. 
   Generally patternscope should use much less CPU now.
+- Dual monitor support is now possible with P96. In such case
+  Hippo may think the scopes are invisible and stop updating them.
+  Clicking the left mouse button in the scope window will 
+  reactivate the scope.
 - Limited Eagleplayer plugin support. Hippo is now able to use
   some eagleplayers for music playback. A set of Hippo compatible
   eagleplayers have been included into the group file, so there is
   no need to search and install the correct versions. 
-  See below for details.
+  See below for more info.
 - The "HippoPlayer.group" file, which is basically a compressed
-  archive, on kick2.0 or newer is now searched first from PROGDIR:, 
+  archive, on kick2.0 or newer, is now searched first from PROGDIR:, 
   then the default (or configured) location. Therefore it can be kept 
   alongside the main Hippo binary.
 - NOTE! The group file is now larger than before. It's a good idea
   on low memory systems to set the group mode to "Load single" 
-  in "Prefs/Play-1/Mode", so that that whole group file is not kept
-  in memory. 
+  in "Prefs/Play-1/Mode", so that that the group file is not kept
+  in memory fully. 
 
 ## Music format related fixes
 - Improved JamCracker support: added volume control and position/length info.
-   - Also had an annoying audible *BEEP* once in a while. Fixed it.
+   - Also fixed an annoying audible *BEEP* once in a while.
      (Empty sample data was not in chip mem, my fault.)
 -  FutureComposer (both old and new formats) now support position/length info.
    FC1.4 replayer changed to another and a modified a bit,
@@ -85,19 +89,17 @@ In this episode, we will be trying to play them all!
   previously wasn't possible.
 
 ## New music formats:
-- PreTracker by Pink/aBYSs. Noice! Samples are generated during 
+- PreTracker by Pink/aBYSs. Very noice! Samples are generated during 
   initialization which may take some time especially on slow CPUs.
 - SonicArranger
   - Now supports more variants, previously only the compact form was 
     supported. Adaptation based on Wanted Team sources.
-  - SonicArranger was made in 1990-92 by Carsten Schlote, Branko Mikic, Carsten Herbst.
-    Herbst and Mikic were also involved with InStereo! and Synthesis, see below.
 - CustomMade
   - "Battle Squadron"
   - Songs composed by Ron Klaren. Adaptation based on Wanted Team sources.
 - Dave Lowe
   - Just wanted to hear Hippo play the "International Karate+" title music. 
-    Adaptation based on Wanted Team sources.
+  - Adaptation based on Wanted Team sources.
 - DeliTracker Custom format improvements, adds support for modules 
   with external samples:
   - SUNTronic modules (from SUNTronicTunes.lha). Smooth!
@@ -116,9 +118,9 @@ In this episode, we will be trying to play them all!
     so may not play perfectly.
   - Recommended listen (since M.U.L.E. rules): "the-real-mule2.mod" 
 - Voodoo Supreme Synthesizer
-  - Another obscure synth format. 
-  - Based on eagleplayer by Buggs/DEFECT. Some bug fixing was needed for this,
-    plenty of illegal memory reads were happening.
+  - An obscure synth format. 
+  - Based on eagleplayer by Buggs/DEFECT. Some bug fixing was needed for 
+    this, plenty of illegal memory reads were happening.
 
 ## Supported Eagleplayer formats, plugin name in parenthesis:
 - SynTracker ("syntracker")
@@ -130,17 +132,15 @@ In this episode, we will be trying to play them all!
 - In Stereo! 1.0 ("in stereo 1.0")
   - Eagleplayer by Eagleeye/DEFECT
 - In Stereo! 2.0 ("in stereo 2.0")
-  - By Cranium Software in 1990, Carsten Herbst, Branko Mikic.
   - Eagleplayer by Eagleeye/DEFECT
 - Synthesis ("synth 4.0")
   - Nice synth sounds in the three above formats!
-  - Synthesis was created in 1992 by Carsten Herbst, Branko Mikic.
-    It seems that In Stereo!, Synthesis and SonicArranger are related,
-    all mention Mr. Herbst in credits.
+  - It seems that In Stereo!, Synthesis and SonicArranger are related,
+    all mention Carsten Herbst in credits.
   - Eagleplayer by Eagleeye/DEFECT
 ChipTracker ("chiptracker")
-  - Tunes by 4-Mat.
   - Also known as KRISTracker.
+  - Tunes by 4-Mat.
   - Eagleplayer by Wanted Team
 - Jochen Hippel 7v ("jochen hippel 7v")
   - Seven channel Hippel experience.
@@ -154,7 +154,7 @@ ChipTracker ("chiptracker")
   - Eagleplayer by Eagleeye/DFT & Wanted Team
 - Richard Joseph/VectorDean ("richard joseph player")
   - "Chaos Engine"
-  - This format has two call signs depending on where you look, 
+  - This format has two names depending on where you look, 
     VectorDean and Richard Joseph.
   - Eagleplayer by Wanted Team
 - Richard Joseph ("richard joseph")
@@ -192,7 +192,7 @@ ChipTracker ("chiptracker")
   - "California Games"
   - Eagleplayer by Wanted Team
 - Digital Mugician II ("mugician ii")
-  - Seven voices apparently.  
+  - Seven voices.  
   - Eagleplayer by Wanted Team
 - StoneTracker ("eaglestone")
   - One of the newer 4-8 channel Amiga trackers.
@@ -208,11 +208,10 @@ ChipTracker ("chiptracker")
     - Sample file: "sps.hypnosphere"
   - Eagleplayer by Emmanuel MARTY, author of StoneTracker
 - MusicMaker V8 ("musicmaker4", "musicmaker8")
-  - 4 and 8 channel modules. 
-  - Older format with multiple files per module not supported.
-  - Also one of the newer 4-8 channel trackers. The author 
-    has recently been updating it.
-  - Eagleplayers by Thomas Winischhofer, author of MusicMaker
+  - 4-8 channel modules. 
+  - Format with multiple files per module not supported.
+  - MM8 has recently been updated, which is cool.
+  - Eagleplayers by Thomas Winischhofer, the author of MusicMaker
 - MaxTrax ("maxtrax")
   - Eagleplayer by Wanted Team
 - SoundControl ("soundcontrol")
