@@ -25845,35 +25845,18 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 *******
 * Virittelee nimen tied.nimestä
 *******
-* TODO: this doesn't work properly
-* "foob.ext" -> "ext"
 
 tee_modnimi
 	lea	modulename(a5),a1
-
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	beq.b	.eiarc			* otetaan pelkkä filename
 	move.l	solename(a5),a0
 	bra.b	.copy
-
 .eiarc
 	lea	8+fileinfoblock(a5),a0
-	move.l	a0,a2
-.loop	move.b	(a0)+,d0
-	beq.b	.ee
-	cmp.b	#'.',d0
-	bne.b	.loop
-	move.l	a0,d1
-	sub.l	a2,d1
-	cmp	#4+1,d1
-	bhi.b	.ee		* onko etuliite pitempi kuin 4 merkkiä
-
 .copy	move.b	(a0)+,(a1)+
 	bne.b	.copy
 	rts
-.ee	move.l	a2,a0
-	bra.b	.copy
-
 
 
 *******************************************************************************
