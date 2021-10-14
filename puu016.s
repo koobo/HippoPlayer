@@ -35469,7 +35469,7 @@ p_quartet
 	jmp 	.id(pc)
 	dc  	pt_quartet 
  	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus
-	dc.b	"Quartet (ST)        [EP]",0
+	dc.b	"Quartet             [EP]",0
 
 .path dc.b "quartet",0
  even
