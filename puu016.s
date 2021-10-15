@@ -1426,23 +1426,15 @@ DEBU	macro
 	endc
 	endm
 
-* Print to debug console
+* Print to debug console, very clever.
 * Param 1: string
 * Param 2: label,  for some reason \@ doesn't work
 * d0-d7:    formatting parameters
 DPRINT macro
 	ifne DEBUG
-	push 	a0
-	lea 	.DD\2(pc),a0
-	;pea		.DD\2(pc)
 	jsr	desmsgDebugAndPrint
-	;addq.l	#4,sp
-	pop 	a0
-	bra.b	.D\2
-.DD\2
- 	dc.b 	\1,10,0
- 	even
-.D\2
+  dc.b 	\1,10,0
+  even
 	endc
 	endm
 
@@ -2186,6 +2178,7 @@ lelp
 
 	* The first debug print should be after opening
 	* intuition since it may use the alert box.	
+bob
 	DPRINT	"Hippo is alive"
 
 	tst.b	uusikick(a5)
@@ -5258,14 +5251,32 @@ desmsg4	movem.l	d0-d7/a0-a3/a6,-(sp)
 
  if DEBUG 
 desmsgDebugAndPrint
+	* sp contains the return address, which is
+	* the string to print
 	movem.l	d0-d7/a0-a3/a6,-(sp)
+	* get string
+	move.l	4*(8+4+1)(sp),a0
+	* find end of string
+	move.l	a0,a1
+.e	tst.b	(a1)+
+	bne.b	.e
+	move.l	a1,d0
+	btst	#0,d0
+	beq.b	.even
+	addq.l	#1,d0
+.even
+	* overwrite return address 
+	* for RTS to be just after the string
+	move.l	d0,4*(8+4+1)(sp)
+
 	lea	debugDesBuf+var_b,a3
 	move.l	sp,a1	
 	lea	putc(pc),a2	
 	move.l	4.w,a6
 	lob	RawDoFmt
 	movem.l	(sp)+,d0-d7/a0-a3/a6
-	bra	PRINTOUT_DEBUGBUFFER
+	bsr	PRINTOUT_DEBUGBUFFER
+	rts	* teleport!
  endif
 
 *******************************************************************************
