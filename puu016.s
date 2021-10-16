@@ -4138,11 +4138,59 @@ getscreeninfo
 	move.b	sc_WBorLeft(a0),windowleft+1(a5)
 	move.b	sc_WBorRight(a0),windowright+1(a5)
 
+	move.l 	sc_Font(a0),a1  * TextAttr, screen font
+	moveq	#0,d3
+	move	ta_YSize(a1),d3
+
+ if DEBUG
 	moveq	#0,d0
 	move.b	sc_BarHeight(a0),d0
 	moveq	#0,d1
 	move.b	sc_WBorTop(a0),d1
-	DPRINT	"sc_BarHeight=%ld sc_WBorTop=%ld"
+	moveq	#0,d2 
+	move.b	sc_BarVBorder(a0),d2
+	DPRINT	"sc_BarHeight=%ld sc_WBorTop=%ld sc_BarVBorder=%ld fontY=%ld"
+ endif
+
+	* It seems that the total height of the window
+	* border must be calculated using the screen font height
+	* and adding some safety margin.
+	* Screen bar height can't be used to calculate window
+	* title bar height since that can configured separately.
+	addq	#2,d3
+	move	d3,windowtop(a5)
+ 
+
+* Screen Border = 0 + Window Border = 0, font 13
+* - sc_BarHeight= 15
+* - sc_WBorTop = 2
+* - ta_YSize = 13
+
+* Screen Border = 0 + Window Border = 0, font 8
+* - sc_BarHeight= 10
+* - sc_WBorTop = 2
+* - ta_YSize = 8
+
+* Screen Border = 0 + Window Border = 0 + font 24
+* - sc_BarHeight= 26
+* - sc_WBorTop = 2
+* - ta_YSize = 24
+
+* Screen Border = 8 + Window Border = 0 + font 13
+* - sc_BarHeight= 23
+* - sc_WBorTop = 2
+* - ta_YSize = 13
+
+* Screen Border = 8 + Window Border = 0 + font 8
+* - sc_BarHeight= 18
+* - sc_WBorTop = 2
+* - ta_YSize = 8
+
+* Screen Border = 0 + Window Border = 8 + font 13
+* - sc_BarHeight= 15
+* - sc_WBorTop = 10
+* - ta_YSize = 13
+
 
 	move	windowtopb(a5),d0
 	add	d0,windowtop(a5)
