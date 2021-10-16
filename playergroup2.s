@@ -99,7 +99,7 @@ head	macro
 
 headend
 
-	incdir	pl/
+	incdir	pl/im/
 
 ps3m1 incbin	ps3m.im
 ps3m2
@@ -292,7 +292,7 @@ tcbtracker1
 tcbtracker2
 
 markcooksey1
-	incbin "mark cooksey.im"
+;	incbin "mark cooksey.im"
 markcooksey2
 
 activisionpro1
@@ -356,7 +356,7 @@ tme1
 tme2
 
 timfollin21
-	incbin	"timfollin ii.im"
+	incbin	"tim follin ii.im"
 timfollin22	
 
 pend
