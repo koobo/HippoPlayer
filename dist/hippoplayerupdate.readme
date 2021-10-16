@@ -55,6 +55,11 @@ In this episode, we will be trying to play them all!
 - For lists with only list dividers the selection would sometimes 
   go looping around the list and never stopping, making Hippo 
   unresponsive.
+- A new method of calculating the window bar height is now used.
+  This should fix the VisualPrefs related bug where adjusting
+  window and screen title bar heights caused Hippo to add extra
+  vertical space at the top part of the window.
+
 - A few other minor issues fixed.
  
 ## New features:
@@ -206,7 +211,7 @@ ChipTracker ("chiptracker")
     Example:
     - Module name: "spm.hypnosphere" 
     - Sample file: "sps.hypnosphere"
-  - Eagleplayer by Emmanuel MARTY, author of StoneTracker
+  - Eagleplayer by Emmanuel Marty, author of StoneTracker
 - MusicMaker V8 ("musicmaker4", "musicmaker8")
   - 4-8 channel modules. 
   - Format with multiple files per module not supported.
@@ -233,6 +238,9 @@ ChipTracker ("chiptracker")
 - Kris Hatlelid 
   - "Test Drive II"
   - Eagleplayer by Wanted Team
+- Tim Follin
+  - "Ghouls 'n' Ghosts"
+  - Eagleplayer by Andy Silva and Buggs/DEFECT 
  
 ## Tips 
 - A nice place for exotic modules is the FTP server Modland. 
