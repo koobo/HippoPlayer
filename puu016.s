@@ -27330,22 +27330,46 @@ are
 .contti
 	move.l	a1,a4
 	move.l	a0,a3
-	move.l	4(a4),d0
-	move.l	d6,d1			* mem type
+	cmp.l	#"IMP!",(a4)
+	beq.b	.imp
+	moveq	#1,d6
+	move.l	(a4),d0		* shr decompressed size
+	bra.b	.noImp
+.imp
+	moveq	#0,d6
+	move.l	4(a4),d0	* fimp decompressed size
+.noImp
+
+	move.l	d6,d1		* mem type
 	jsr	getmem
-	move.l	d0,(a3)
+	move.l	d0,(a3)		* store pointer
 	bne.b	.ok2
 	popm	d1-a6
 	moveq	#ier_nomem,d0
 	rts
 
-.ok2	move.l	d0,a1
+.ok2	
+	move.l	d0,a1
+
+	* a4 = compressed data
+	* a1 = output buffer
+	tst	d6
+	bne.b	.shr
+
 	move.l	a4,a0
 	move.l	d7,d0
 	lore	Exec,CopyMem	
 	move.l	(a3),a0
+	DPRINT	"Exploding"
 	jsr	fimp_decr
+	bra.b	.wasImp
+.shr
 
+	DPRINT	"Deshrinklering"
+	lea	4(a4),a0
+	jsr	ShrinklerDecompress
+
+.wasImp
 	cmp	#pt_eagle_start,playertype(a5)
 	bhs.b 	.ok 
 	
@@ -40653,6 +40677,7 @@ kplayer		incbin	kpl
 
 * FImp decruncher code
 fimp_decr	incbin	fimp_dec.bin
+shr_decr	include	ShrinklerDecompress.s
 
 xpkname		dc.b	"xpkmaster.library",0
 ppname		dc.b	"powerpacker.library",0
