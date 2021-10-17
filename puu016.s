@@ -9241,12 +9241,16 @@ rbutton1
 .je
 	cmp.l 	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.w	.new
-	* special case: some delicustoms, SUNTronic modules,
+	* Special case: some delicustoms, SUNTronic modules,
 	* can't handle being started over, to be safe
 	* load these modules again before restarting.
 	cmp	#pt_delicustom,playertype(a5)
 	beq.w	.new
-	* similar case with SonicArranger with built-in
+	* Same with all EaglePlayers to be save.
+	* At least Tim Follin crashes.
+	cmp	#pt_eagle_start,playertype(a5)
+	bhs.b	.new
+	* Similar case with SonicArranger with built-in
 	* replayer code. Data is modified upon init so that
 	* subsequent inits with same data will fail as
 	* unsupported module.
