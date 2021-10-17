@@ -1625,7 +1625,7 @@ progstart
 	;pushpea	sv_argvArray(a5),MN_LENGTH(a1) * uudet parametrit viestiin
 	;move.l	#"K-P!",MN_LENGTH+4(a1) * tunnistin!
 
-	bsr.w	.preparePaths
+	bsr.b	.preparePaths
 
  if DEBUG
 	push	a0
@@ -1671,7 +1671,7 @@ progstart
 .loop
 	* Take one and see if it was the last one
 	move.l	(a3),d3
-	beq	.done
+	beq.b	.done
 
 	* See if it was one of the four letter commands
 	move.l	d3,a0 
@@ -1722,7 +1722,7 @@ progstart
 .error
 	* go to next argv slot
 	addq.l	#4,a3
-	bra.w	.loop
+	bra.b	.loop
 .done 
 	popm	all
 	rts
@@ -1908,7 +1908,7 @@ PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
 	lea	var_b,a5
 	move.l	output(a5),d1
-	bne.w	.open
+	bne.b	.open
 
 	* try tall window firsr
 	move.l	#.bmb,d1
@@ -1923,7 +1923,7 @@ PRINTOUT
 	move.l	d0,output(a5)
 	bne.b	.open
 	* still not open! exit
-	bra.w	.x
+	bra.b	.x
 
 .bmb	dc.b	"CON:0/0/350/500/HiP debug",0
 .bmbSmall
@@ -2266,7 +2266,7 @@ bob
 	clr	(a0)
 	move.l	topazbase(a5),fontbase(a5)
 
-	bra.w	.koh
+	bra.b	.koh
 
 .poh
 
@@ -2386,7 +2386,7 @@ bob
 	lea	sivu6-sivu5(a1),a1
 	bsr.b	.num
 
-	bra.w	.eer2
+	bra.b	.eer2
 
 
 .num
@@ -2726,7 +2726,7 @@ bob
 	DPRINT	"Loading group"
 
 	tst.b	groupmode(a5)			* ladataanko playergrouppi?
-	bne.w	.purr
+	bne.b	.purr
 	jsr	loadplayergroup
 	move.l	d0,externalplayers(a5)
 ;	bne.b	.purr
@@ -2908,7 +2908,7 @@ msgloop
 	btst	d3,d0
 	beq.b	.nrexm
 	jsr	rexxmessage
-	bra		returnmsg
+	bra.w		returnmsg
 
 .nrexm
 * Tuliko viesti‰ porttiin?
@@ -3123,14 +3123,14 @@ msgloop
 	cmp	#$01,d3			* '1'? -> iconify
 	bne.b	.nico
 	moveq	#0,d3			* muutetaan -> ~`
-	bsr	nappuloita
-	bra	returnmsg
+	bsr.w	nappuloita
+	bra.w	returnmsg
 .nico
 
 	tst	d3
 	beq.b  .noKeys
-	bsr nappuloita
-	bra	returnmsg
+	bsr.w nappuloita
+	bra.w	returnmsg
 .noKeys
 
 	tst.b	win(a5)
@@ -3176,7 +3176,7 @@ msgloop
 	move.b	tooltipSignal(a5),d3 
 	btst	d3,d0 
 	beq.b	.noTooltipSignal
-	bsr	tooltipDisplayHandler
+	bsr.w	tooltipDisplayHandler
 .noTooltipSignal
 
 * Vastataan IDCMP:n viestiin
@@ -3189,7 +3189,7 @@ msgloop
 	* Ignore any ui actions if window is frozen
 	* Flush any remaining messages 
 	bsr.w	areMainWindowGadgetsFrozen
-	bne	returnmsg		
+	bne.w	returnmsg		
 
 * Process IDCMP messages if any
 	clr.b	ignoreMouseMoveMessage(a5)
@@ -3222,7 +3222,7 @@ msgloop
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.noRawKey
 	clr	userIdleTick(a5)	
-	bsr	nappuloita
+	bsr.w	nappuloita
 	bra.b	.idcmpLoop
 .noRawKey	
 	* There will be a lot of mousemove messages.
@@ -3233,22 +3233,22 @@ msgloop
 	bne.b	.noMouseMove
 	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
-	bne.w  	.idcmpLoop
+	bne.b  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
-	bsr	mousemoving
-	bra.w	.idcmpLoop
+	bsr.w	mousemoving
+	bra.b	.idcmpLoop
 
 .noMouseMove
 	cmp.l	#IDCMP_GADGETUP,d2
 	bne.b	.noGadgetUp
 	clr	userIdleTick(a5)	
-	bsr	gadgetsup
+	bsr.w	gadgetsup
 	bra.w	.idcmpLoop
 .noGadgetUp
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.noMouseButtons
 	clr	userIdleTick(a5)	
-	bsr	buttonspressed
+	bsr.w	buttonspressed
 	bra.w	.idcmpLoop
 .noMouseButtons	
 	cmp.l	#IDCMP_CLOSEWINDOW,d2
@@ -3261,7 +3261,7 @@ exit
 	lea	var_b,a5
 
 	DPRINT "Hippo is exiting"
-	bsr	setMainWindowWaitPointer	
+	bsr.w	setMainWindowWaitPointer	
 
 	lea	.exmsg(pc),a0
 	moveq	#102+WINX,d0
@@ -3349,7 +3349,7 @@ exit
 	move.l	calibrationaddr(a5),a0
 	bsr.w	freemem
 	move.l	randomtable(a5),a0
-	bsr 	freemem
+	bsr.w 	freemem
 
 	bsr.w	flush_messages
 	bsr.w	sulje_ikkuna
@@ -3453,7 +3453,7 @@ exit2
 	bne.b	.nz
 	moveq	#1,d1
 .nz
-	bsr		divu_32
+	bsr.w		divu_32
 	DPRINT "Getmem avg: %ld bytes"
 
 	move.l	#(1)*50,d1
@@ -5322,7 +5322,7 @@ desmsgDebugAndPrint
 	move.l	4.w,a6
 	lob	RawDoFmt
 	movem.l	(sp)+,d0-d7/a0-a3/a6
-	bsr	PRINTOUT_DEBUGBUFFER
+	bsr.w	PRINTOUT_DEBUGBUFFER
 	rts	* teleport!
  endif
 
@@ -5681,7 +5681,7 @@ freemodule
 	bsr.w	obtainModuleData
 
 	* Check if need to do UnLoadSeg
-	bsr	moduleIsExecutable
+	bsr.w	moduleIsExecutable
 	move.b	d0,d7
 	
 	* Need to clear playertype(a5) to avoid
@@ -5907,22 +5907,22 @@ buttonspressed
 	beq.w	.nowindow
 
 	* Any button activity should first close any active tooltip
-	bsr	closeTooltipPopup
+	bsr.w	closeTooltipPopup
 
 	cmp	#SELECTDOWN,d3		* left button down
 	bne.b	.test1
-	bsr	.leftButtonDownAction
+	bsr.w	.leftButtonDownAction
 	rts
 
 .test1
 	cmp	#MENUUP,d3
 	bne.b	.test2
-	bsr	.rightButtonUpAction		* right button up
+	bsr.w	.rightButtonUpAction		* right button up
 	rts 
 
 .test2	cmp	#MENUDOWN,d3			* right button down
 	bne.b .exit
-	bsr	.rightButtonDownAction
+	bsr.b	.rightButtonDownAction
 .exit 
 	rts
 	
@@ -5931,7 +5931,7 @@ buttonspressed
 * Oikeata nappulaa painettu. Tutkitaan oliko rmbfunktio-nappuloiden p‰‰ll‰
 
 	tst.b	kokolippu(a5)		* onko pienen‰?
-	beq.w	.nowindow
+	beq.b	.nowindow
 
 ** onko lootan p‰‰ll‰
 ** on top of the filebox?
@@ -5967,14 +5967,14 @@ buttonspressed
 	lea		rightButtonActionsList,a2
 .actionLoop
 	movem.l	(a2)+,a0/a1
-	bsr	.rightButtonDownCheck
+	bsr.b	.rightButtonDownCheck
 	beq.b	.handled
 	tst.l	(a2) 
 	bne.b	.actionLoop
 
 	* no RMB actions found
 	* try line marking
-	bsr	marklineRightMouseButton
+	bsr.w	marklineRightMouseButton
 	beq.b	.nothingMarked
 	rts
 
@@ -6027,11 +6027,11 @@ buttonspressed
 *   a0=gadget
 *   a1=gadget function to run
 .rightButtonDownCheck
-	bsr		checkMouseOnGadget
+	bsr.w		checkMouseOnGadget
 	bne.b	.mouseNotOn
 	move.l	a0,rightButtonSelectedGadget(a5)
 	move.l	a1,rightButtonSelectedGadgetRoutine(a5)
-	bsr	forceSelectGadget
+	bsr.w	forceSelectGadget
 	moveq	#0,d0
 .mouseNotOn
 	rts
@@ -6041,7 +6041,7 @@ buttonspressed
 * If the pointer is still on that gadget, run the routine.
 .rightButtonUpAction
 	move.l	rightButtonSelectedGadget(a5),d2
-	beq.w	.noGadget
+	beq.b	.noGadget
 
 	DPRINT	"RMB UP"
 
@@ -6052,14 +6052,14 @@ buttonspressed
 	* Toggling select and deselect again results in a neutral
 	* toggle button look.
 	move.l	d2,a0
-	bsr	forceDeselectGadget
+	bsr.w	forceDeselectGadget
 	move.l	d2,a0
-	bsr	forceSelectGadget
+	bsr.w	forceSelectGadget
 	move.l	d2,a0
-	bsr	forceDeselectGadget
+	bsr.w	forceDeselectGadget
 	
 	move.l	d2,a0
-	bsr 	checkMouseOnGadget
+	bsr.w 	checkMouseOnGadget
 	bne.b	.xy	
 
 	* Pointer was on top, run the routine
@@ -6124,7 +6124,7 @@ forceSelectGadget
 	moveq	#-1,d0 
 	lob		AddGadget
 	move.l	d2,a0	
-	bsr	refreshGadget
+	bsr.b	refreshGadget
 	rts
 
 * Forces a boolean gadget to show the deselected status
@@ -6145,7 +6145,7 @@ forceDeselectGadget
 	lob		AddGadget
 
 	move.l	d2,a0	
-	bsr	refreshGadget
+	bsr.b	refreshGadget
 	rts
 
 * Redraws gadget
@@ -6211,15 +6211,15 @@ tooltipHandler
 	;DPRINT	"tooltiphandler"
 
 	* First, inactivate incoming tooltip
-	bsr	deactivateTooltip
+	bsr.w	deactivateTooltip
 	
 	* Close any tooltip that may be showing since mouse was moving.
-	bsr	closeTooltipPopup
+	bsr.w	closeTooltipPopup
 
 	* If some lengthy operation is going on lets not
 	* try to display tooltips.
-	bsr	areMainWindowGadgetsFrozen
-	bne.w	.exit
+	bsr.w	areMainWindowGadgetsFrozen
+	bne.b	.exit
 
 	* Skip further checks if mouse is not over the main button area
 	move	mousey(a5),d1
@@ -6253,7 +6253,7 @@ tooltipHandler
 	and	#GFLG_DISABLED,d0
 	bne.b	.disabled
 
-	bsr	checkMouseOnGadget
+	bsr.b	checkMouseOnGadget
 	bne.b	.no
 	* Yes it was.
 	* Check if this gadget was not allowed to have tooltips for now
@@ -6272,7 +6272,7 @@ tooltipHandler
 .no 
 	addq.l	#ttle_SIZEOF,a3
 	tst.l	(a3)
-	bne.w	.loop
+	bne.b	.loop
 .exit	rts
 
 * Displays tooltip if needed
@@ -6364,7 +6364,7 @@ omaviesti
 	moveq	#MEMF_PUBLIC,d1		* varataan muistia
 	bsr.w	getmem
 	move.l	d0,appnamebuf(a5)
-	beq.w	.huh			* ERROR!
+	beq.b	.huh			* ERROR!
 	move.l	d0,a2
 
 .addfiles
@@ -6558,16 +6558,16 @@ signalreceived
 	bsr.w	resh
 
 	DPRINT	"signalreceived getListNode"
-	bsr		getListNode
-	beq		.erer 
+	bsr.w		getListNode
+	beq.w		.erer 
 	move.l	a0,a3
 
 	isListDivider	l_filename(a3)	* onko divideri??
 	bne.b	.wasfile
 	tst	d7			* pit‰‰ olla jotain ett‰ ei j‰‰ 
-	bne.w	.eekk			* jummaamaan dividerin kohdalle
+	bne.b	.eekk			* jummaamaan dividerin kohdalle
 	moveq	#1,d7
-	bra.w	.eekk
+	bra.b	.eekk
 .wasfile
 
 	lea	l_filename(a3),a0	* ladataan
@@ -6623,7 +6623,7 @@ signalreceived
 	move.l	modamount(a5),chosenmodule(a5)
 	subq.l	#1,chosenmodule(a5)
 	bsr.w	resh
-	bra.w	.reet
+	bra.b	.reet
 
 .hm	
 	* In "pm_through" mode start over from the first module
@@ -6694,7 +6694,7 @@ satunnaismodi
 	* Got a random value in proper range in d1
 	* Test if a slot is free. Try again if not.
 	move.l	d1,d0
-	bsr.w	testRandomTableEntry
+	bsr.b	testRandomTableEntry
 	bne.b	.a
 	* Was free. Take it.
 	bsr.w	setRandomTableEntry
@@ -6714,7 +6714,7 @@ clear_random
 	tst.l	randomtable(a5)
 	beq.b	.noList
 	move.l	randomtable(a5),a0 
-	bsr 	freemem 
+	bsr.w 	freemem 
 	move.l	randomtable(a5),d0
 	clr.l	randomtable(a5)
 .noList
@@ -6753,7 +6753,7 @@ testRandomTableEntry
 getRandomValueTableEntry	
 	push 	d1
 	tst.l	randomtable(a5) 
-	bne.w	.yesTable
+	bne.b	.yesTable
 
 	* Each byte can hold a slot for 8 modules.
 	* A bit silly dynamic allocation as probably
@@ -6763,11 +6763,11 @@ getRandomValueTableEntry
 	lsr.l	#3,d0
 	addq.l	#1,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr	getmem
+	bsr.w	getmem
 	
 	move.l	d0,randomtable(a5)
 	bne.b	.ok
-	bsr	showOutOfMemoryError
+	bsr.w	showOutOfMemoryError
 .ok
 	pop     d0
 		
@@ -6794,7 +6794,7 @@ setRandomTableEntry
 	DPRINT  "setRandomTableEntry %ld"
 	
 	* Set it in the table
-	bsr.w	getRandomValueTableEntry
+	bsr.b	getRandomValueTableEntry
 	beq.b	.error
 	bset	d0,(a0)
 .error
@@ -6855,7 +6855,7 @@ getRandomValue
         lsr.l   d1,d0
 		
 		move.l	d0,d1 
-		bsr	getRandomValueMask
+		bsr.w	getRandomValueMask
 		and.l	d0,d1
 		
 		pop	d0
@@ -7100,7 +7100,7 @@ umph
 * find the corresponding file from the list
 
 	DPRINT	"soitamodi getListNode"
-	bsr		getListNode
+	bsr.w		getListNode
 	beq.w	.erer
 	move.l	a0,a3
 
@@ -7447,7 +7447,7 @@ nappuloita
 	bne.b	.f0
 	or.l	#WFLG_ACTIVATE,sflags
 	bsr.w	rbutton10b
-	bra.w	.ee
+	bra.b	.ee
 .f0
 	cmp.b	#$41,d3		* backspace + shift?
 	beq.b	.fid
@@ -7915,7 +7915,7 @@ gadgetsup
 	* until some other gadget tooltip gets shown.
 	move.l	a2,disableTooltipForGadget(a5)
 	* Any button activity should first close any active tooltip
-	bsr	closeTooltipPopup
+	bsr.w	closeTooltipPopup
 
 	move	gg_GadgetID(a2),d0
 	add	d0,d0
@@ -7994,7 +7994,7 @@ rsort
 
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
-	bsr.w	printbox
+	bsr.b	printbox
 	bra.b	.d
 .t	dc.b	"Sorting...",0
  even
@@ -8020,7 +8020,7 @@ rsort
 	DPRINT  "rsort obtain list"
 	bsr.w		obtainModuleList
 	;lea	moduleListHeader(a5),a3
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
 
 * paino 24 bytee
@@ -8083,7 +8083,7 @@ rsort
 	move.l	(a3),a1  	* grab node address
 
 	;lea	moduleListHeader(a5),a0
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	ADDTAIL			* lis‰t‰‰n node (a1)
 
 	lea SORT_ELEMENT_LENGTH(a3),a3	
@@ -8393,7 +8393,7 @@ getcurrent
 *    d0 = 1 if data available
 *    a3 = list node pointer
 getcurrent2
-	bsr getListNode
+	bsr.w getListNode
 	move.l	a0,a3
 	rts
 
@@ -8426,7 +8426,7 @@ getcurrent2
 *******
 
 comment_file
-	bsr.w	getcurrent
+	bsr.b	getcurrent
 	beq.b	.x
 	move.l	a3,a4
 
@@ -8531,7 +8531,7 @@ find_continue
 	bne.b	.foundCurrent
 	* start from beginning
 	clr.l	chosenmodule(a5)
-	bsr	getcurrent
+	bsr.w	getcurrent
 .foundCurrent
 
 	move.l	a0,a3
@@ -8554,7 +8554,7 @@ find_continue
 * lista l‰pi eik‰ lˆytyny. k‰yd‰‰n alusta l‰htˆkohtaan.
 
 	moveq	#-1,d7
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 .luuppo2
 	addq.l	#1,d7
@@ -8681,7 +8681,7 @@ mousemoving
 	bsr.w	rslider1
 	lea	slider4,a2
 	bsr.w	rslider4
-	bsr	tooltipHandler
+	bsr.w	tooltipHandler
 	movem.l	(sp)+,d0-a6
 	rts
 
@@ -8720,7 +8720,7 @@ songSkip
 
 	move	minsong(a5),d1 
 	move	maxsongs(a5),d2
-	bsr		clampWord
+	bsr.w		clampWord
 
 ;	moveq	#0,d0
 ;	move	songnumber(a5),d0	* Numeroita 0:sta eteenp‰in
@@ -8959,7 +8959,7 @@ rslider4
 	bsr.w	divu_32
 
 	cmp.l	firstname(a5),d0
-	beq.w	.q
+	beq.b	.q
 	move.l	d0,firstname(a5)
 	bra.w	showNamesNoCentering
 
@@ -9028,7 +9028,7 @@ reslider
 	* as the fractions get floored off
 	move.l	#65535,d1  * scale 
 	;bsr.w	mulu_32
-	bsr	mulu_64
+	bsr.w	mulu_64
 	* d0:d1 now has a 64-bit value 
 
 	move.l	modamount(a5),d2
@@ -9040,7 +9040,7 @@ reslider
 .positive
 
 ;	bsr.w	divu_32  * d0=d0/d1
-	bsr	divu_64	 
+	bsr.w	divu_64	 
 	* d0:d1 is now d0:d1/d2
 	* take the lower 32 bits
 	move.l	d1,d0	
@@ -9168,7 +9168,7 @@ rbutton1
 	DPRINT  "playButtonAction obtain list"
 	bsr.w		obtainModuleList
 	;lea	moduleListHeader(a5),a0	* Insertoidaan node...
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	nodetomove(a5),a1
 	move.l	a3,a2
 	
@@ -9178,7 +9178,7 @@ rbutton1
 	st	hippoonbox(a5)
 	DPRINT  "playButtonAction release list"
 	bsr.w		releaseModuleList
-	bsr		listChanged
+	bsr.w		listChanged
 	bra.w	resh
 
 .nomove
@@ -9225,7 +9225,7 @@ rbutton1
 * etsit‰‰n listasta vastaava tiedosto
 
 	DPRINT	"playbutton getListNode"
-	bsr		getListNode
+	bsr.w		getListNode
 	beq.w	.erer
 	move.l 	a0,a3
 
@@ -9298,7 +9298,7 @@ rbutton1
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
 	lore	Exec,Disable
-	bsr.w	halt			* Vapautetaan se jos on
+	bsr.b	halt			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
 	lore 	Exec,Enable
@@ -9363,8 +9363,8 @@ rinsert2
 
 * etsit‰‰n listasta vastaava kohta
 	DPRINT	"insert getListNode"
-	bsr		getListNode
-	beq		rbutton7		* go to "add"
+	bsr.w		getListNode
+	beq.w		rbutton7		* go to "add"
 
 * a0 = valittu nimi
 	move.l	a0,fileinsert(a5)
@@ -9388,7 +9388,7 @@ add_divider
 
 
 	DPRINT	"addDivider getListNode"
-	bsr		getListNode
+	bsr.w		getListNode
 	beq.b		.x
 	move.l	a0,a3
 
@@ -9425,10 +9425,10 @@ add_divider
 	
 * a1 = insertattava nimi
 ;	lea	moduleListHeader(a5),a0
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a3,a2
 	lore	Exec,Insert
-	bsr	listChanged
+	bsr.w	listChanged
 	st	hippoonbox(a5)
 	bsr.w	resh
 .x	
@@ -9575,7 +9575,7 @@ filereq_code
 	bne.b	.val
 
 	move.b	#$7f,new(a5)		* new-lippu: cancel
-	bra	.fileReqCancelled
+	bra.w	.fileReqCancelled
 .val
 
 	tst.b	new(a5)			* jos 'new', clearataan lista.
@@ -9727,9 +9727,9 @@ filereq_code
 
 	move.l	fib_DirEntryType+fileinfoblock2(a5),d0
 	cmp.l	#ST_FILE,d0
-	beq	.filetta
+	beq.w	.filetta
 	cmp.l	#ST_LINKFILE,d0
-	beq	.filetta
+	beq.w	.filetta
 	cmp.l	#ST_USERDIR,d0
 	bne.w	.unsupportedEntry
 
@@ -9793,10 +9793,10 @@ filereq_code
 
 .pathOverflow
 	DPRINT	"Path name overflow!"
-	bra	.loopo
+	bra.w	.loopo
 .unsupportedEntry
 	DPRINT	"Unsupported entry: %ld"
-	bra	.loopo
+	bra.w	.loopo
 
 **** skannattuamme yhden hakemiston tutkitaan siin‰ olleet muut hakemistot
 * Files scanned, now check the subdirs.
@@ -9823,7 +9823,7 @@ filereq_code
 	* the first word in the memory contains the subdir count
 	move.l	d7,a3
 	move	(a3)+,d5
-	beq.w	.errd2
+	beq.b	.errd2
 	* some subdirs were stored
 	subq	#1,d5
 
@@ -9838,7 +9838,7 @@ filereq_code
 	move.l	a0,d3	* store this for later
 	move.l	d6,a1
 	subq	#2,a0	* skip last NULL and separator
-	bsr	nimenalku
+	bsr.w	nimenalku
 	* a0 = last part of the path
 
 	* Add a named divider from a0
@@ -9897,8 +9897,8 @@ filereq_code
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
 	bne.b	.gotMem2
-	bsr	showOutOfMemoryError
-	bra	.errd
+	bsr.w	showOutOfMemoryError
+	bra.b	.errd
 .gotMem2
 	move.l	d0,a3		* a3 = listunit
 	
@@ -9957,7 +9957,7 @@ filereq_code
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1		* varataan muistia
 	bsr.w	getmem
 	bne.b	.gotMem
-	bsr	showOutOfMemoryError
+	bsr.w	showOutOfMemoryError
 	bra.b	.whoops2
 .gotMem
 	move.l	d0,a3
@@ -10012,7 +10012,7 @@ filereq_code
 
 .dirdiv
 	lea	.barf(pc),a0
-	bra.w	adddivider
+	bra.b	adddivider
 
 .t	dc.b	"My stomach feels content.",0
 	* This must not be changed, content checked in adddivider below.
@@ -10033,7 +10033,7 @@ addfile
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
 	;lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
-	bsr		getVisibleModuleListHeader
+	bsr.w		getVisibleModuleListHeader
 	move.l	a3,a1
 
 	tst.b	filereqmode(a5)		* onko add vai insert?
@@ -10070,7 +10070,7 @@ adddivider
 
 ** testataan onko dirdivideri? jos on, pistet‰‰n sen p‰‰lle
 	;lea	moduleListHeader(a5),a3
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
 	move.l	MLH_TAILPRED(a3),d0    * this points to the last element of the list
 	beq.b	.pehe
@@ -10363,7 +10363,7 @@ freelist
 	DPRINT  "freelist obtain list"
 	bsr.w		obtainModuleList
 	tst.l		modamount(a5)
-	beq.w	.listEmpty
+	beq.b	.listEmpty
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	tst.l	playingmodule(a5)
 	bmi.b	.ehe
@@ -10387,7 +10387,7 @@ freelist
 	clr.l	modamount(a5) 
 	* need to reset random table to nothingness as well
 	bsr.w	clear_random
-	bsr	clearCachedNode
+	bsr.w	clearCachedNode
 
 	* reset list slider and list box 
 	clr.l	firstname(a5)	
@@ -10565,7 +10565,7 @@ rlpg
 .bailOut
 	moveq	#0,d5	* memory address for freemem 
 .bailOut2
-	bsr	showOutOfMemoryError
+	bsr.w	showOutOfMemoryError
 	move.l	d6,d1
 	lob	Close
 	bra.w	.x2
@@ -10636,7 +10636,7 @@ rlpg
 	moveq	#0,d5
 	lea	xpk_module_program_error(pc),a1
 	bsr.w	request
-	bra	.x2
+	bra.w	.x2
 .xpkOk
 
 	move.l	.addr(pc),a3
@@ -10679,7 +10679,7 @@ rlpg
 	pushm 	d1-a6
 	lea		moduleListHeader(a5),a2
 	move.l	.loppu(pc),a4 
-	bsr	importModuleProgramFromData
+	bsr.w	importModuleProgramFromData
 	DPRINT 	"Imported %ld files"
 	popm	d1-a6
 
@@ -10696,7 +10696,7 @@ rlpg
 
 .x2
 	tst.l	d5
-	beq.w	.xxx
+	beq.b	.xxx
 
 	tst.l	.len
 	beq.b	.xx0
@@ -10732,7 +10732,7 @@ rlpg
 .what
 	lea	unknown_module_program_error(pc),a1
 	bsr.w	request
-	bra.w	.x2
+	bra.b	.x2
 
 .openerr
 	move	#1,a4			* lippu
@@ -10861,8 +10861,8 @@ importModuleProgramFromData
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
 	bne.b	.gotMem2
-	bsr	showOutOfMemoryError
-	bra	.x2	
+	bsr.w	showOutOfMemoryError
+	bra.b	.x2	
 .gotMem2
 	move.l	d0,a2
 
@@ -11002,7 +11002,7 @@ rsaveprog
 	lea	filereqtitle3(pc),a3
 	lob	rtFileRequestA		* ReqToolsin tiedostovalikko
 	tst.l	d0
-	beq.w	.ex
+	beq.b	.ex
 	move.l	req_file2(a5),a0
 	bsr.w	parsereqdir3
 
@@ -11022,7 +11022,7 @@ rsaveprog
 
 	lea	filename2(a5),a0
 	lea	moduleListHeader(a5),a1
-	bsr exportModuleProgramToFile
+	bsr.b exportModuleProgramToFile
 
 	move.l	req_file2(a5),d0
 	beq.b	.ex
@@ -11186,7 +11186,7 @@ komentojono
 
 	move.l	a2,a1
 	;lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
-	bsr		getVisibleModuleListHeader
+	bsr.w		getVisibleModuleListHeader
 	lore	Exec,AddTail
 
 	pushm	a2/a3
@@ -11208,7 +11208,7 @@ komentojono
 	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
 
 	st	hippoonbox(a5)
-	bsr		listChanged
+	bsr.w		listChanged
 	bsr.w	resh
 	bsr.w	rbutton1		* soitetaan 
 .x	rts
@@ -11382,7 +11382,7 @@ loadprefs2
 
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
-	bsr.w	sliderit
+	bsr.b	sliderit
 	bsr.w	setprefsbox
 	bsr.w	mainpriority
 
@@ -12789,7 +12789,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 flush_messages2
 	move.l	windowbase2(a5),a0 
-	bra		flushWindowMessages
+	bra.w		flushWindowMessages
 
 
 
@@ -13141,8 +13141,8 @@ pupdate				* Ikkuna p‰ivitys
 	bsr.w	pearly			* early load
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
-	bsr		pfavorites		* favorites
-	bsr		ptooltips       * tooltips
+	bsr.w		pfavorites		* favorites
+	bsr.w		ptooltips       * tooltips
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -15737,7 +15737,7 @@ listselector
 .ox
 
 	move.l	d5,a0
-	bsr		flushWindowMessages
+	bsr.w		flushWindowMessages
 
 	move.l	d5,d0
 	beq.b	.eek
@@ -15817,7 +15817,7 @@ shn
 .eper
 
 	tst	d4		* ei mink‰‰nlaista uudelleensijoitusta
-	bne.w	.nob
+	bne.b	.nob
 
 	moveq	#0,d2
 	move	boxsize(a5),d2
@@ -15910,7 +15910,7 @@ shn
 	bra.b	.huh2
 
 .nomods	
-	bsr.w	.unmark
+	bsr.b	.unmark
 .huh2
 .xx
 	move.l	#-1,markedline(a5)
@@ -15985,7 +15985,7 @@ doPrintNames
 ;	DPRINT  "shownames obtain list"
 	bsr.w  obtainModuleList
 	;lea	moduleListHeader(a5),a4	
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 
 ;	DPRINT	".doNames %ld"
@@ -16008,9 +16008,9 @@ doPrintNames
 ;	bsr	clearCachedNode
 ;	move.l	d3,d0
 
-	bsr	getListNodeCached
+	bsr.w	getListNodeCached
 	tst.l	(a0)
-	beq	.lop
+	beq.w	.lop
 	move.l	a0,a3
 	move.l	a0,a4
 .baa
@@ -16075,7 +16075,7 @@ doPrintNames
 	* Random play mode magic check: Add a marker to the end to indicate module has been played?
 	* Here the module index is needed
 	move.l 	d3,d0 
-	bsr		testRandomTableEntry
+	bsr.w		testRandomTableEntry
 	beq.b	.fu
 	move.b	#"Æ",-1(a2)
 .fu
@@ -16090,7 +16090,7 @@ doPrintNames
 	beq.b	.noFav
 	isListInFavoriteMode
 	bne.b	.noBold
-	bsr	printBold
+	bsr.w	printBold
 	bra.b	.wasFav
 .noFav
 .noBold
@@ -16196,7 +16196,7 @@ elete
 	beq.w	.erer
 
 	;lea	moduleListHeader(a5),a4
-	bsr		getVisibleModuleListHeader
+	bsr.w		getVisibleModuleListHeader
 	move.l	a0,a4
 
 ; .luuppo	TSTNODE	a4,a3
@@ -16206,8 +16206,8 @@ elete
 ; 	subq.l #1,d0 
 ; 	bpl.b  .luuppo
 	DPRINT	"delete getListNode"
-	bsr		getListNode
-	beq		.erer
+	bsr.w		getListNode
+	beq.w		.erer
 	move.l	a0,a3
 	
 	tst.l	d7
@@ -17214,7 +17214,7 @@ getFileBoxIndexFromMousePosition
 * Chosen line is highlighted and previously chosen line highlight removed.
 
 markline
-	bsr getFileBoxIndexFromMousePosition
+	bsr.b getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
 	* something marked
@@ -17239,12 +17239,12 @@ markline
 	add.l	firstname(a5),d1
 	* See if clicking on an already chosen module
 	cmp.l	chosenmodule(a5),d1
-	beq.w	.oo
+	beq.b	.oo
 	* This does not seem to happen ever?
 	cmp.l	#PLAYING_MODULE_REMOVED,chosenmodule(a5)
 	beq.b	.oo2
 	pushm	d1/d2
-	bsr.w	unmarkit
+	bsr.b	unmarkit
 	popm	d1/d2
 .u	st	dontmark(a5)
 .oo2	
@@ -17296,13 +17296,13 @@ markit
 	bhs.b	.outside
 
 	move.l	markedline(a5),d5
-	bmi.w	.outside
+	bmi.b	.outside
 	moveq	#0,d0
 	move	boxsize(a5),d0
 	cmp.l	d0,d5
-	bhs.w	.outside
+	bhs.b	.outside
 	tst.b	win(a5)
-	beq.w	.outside
+	beq.b	.outside
 
 ; TODO: this probably prevents clicking on empty parts of the list
 ;       to highlight lines
@@ -17358,7 +17358,7 @@ marklineRightMouseButton
 	* distracting
 	isListInFavoriteMode
 	bne.b	.ou
-	bsr	 getFileBoxIndexFromMousePosition
+	bsr.w	 getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
 	* something marked
@@ -17380,7 +17380,7 @@ marklineRightMouseButton
 	add.l	firstname(a5),d0
 	move.l	d0,d4
 	* Get the actual node into a0
-	bsr	getListNode
+	bsr.w	getListNode
 	beq.b	.notFound
 
 	isListDivider  l_filename(a0)
@@ -17389,10 +17389,10 @@ marklineRightMouseButton
 	* Toggle favorite status
 	isFavoriteModule a0 
 	bne.b	.wasFavorite
-	bsr	addFavoriteModule
+	bsr.w	addFavoriteModule
 	bra.b	.wasNotFavorite
 .wasFavorite
-	bsr	removeFavoriteModule
+	bsr.w	removeFavoriteModule
 .wasNotFavorite
 
 	move.l	d4,d0
@@ -17400,7 +17400,7 @@ marklineRightMouseButton
 	move	d3,d1 	* target y-line
 	moveq	#1,d2   * just do one line
 	push 	d3
-	bsr	doPrintNames
+	bsr.w	doPrintNames
 	pop 	d3
 
 	* see if this line happened to be chosen already.
@@ -17408,7 +17408,7 @@ marklineRightMouseButton
 	* wiped away above.
 	cmp.l	 markedline(a5),d3	
 	bne.b	.different
-	bsr	markit
+	bsr.w	markit
 .different
 	rts	
 .notFile
@@ -17441,8 +17441,8 @@ getVisibleModuleListHeader
 * content.
 listChanged
 	DPRINT "List changed"
-	bsr	clearCachedNode
-	bsr	clear_random	
+	bsr.w	clearCachedNode
+	bsr.w	clear_random	
 	st	moduleListChanged(a5)
 	rts
 
@@ -17464,9 +17464,9 @@ getListNode
 	cmp.l 	modamount(a5),d0
 	bhs.b	.out
 
-	bsr	obtainModuleList
+	bsr.w	obtainModuleList
 	;lea	moduleListHeader(a5),a0
-	bsr	getVisibleModuleListHeader
+	bsr.b	getVisibleModuleListHeader
 
 	* When using dbf loop usually subtract 1, but here
 	* one SUCC is needed to get to the head element
@@ -17477,7 +17477,7 @@ getListNode
 	SUCC    a0,a0
 	dbf	 	d1,.loop
 	dbf		d0,.loop
-	bsr	releaseModuleList
+	bsr.w	releaseModuleList
 
  if DEBUG
  	move.l	l_nameaddr(a0),d0
@@ -17510,7 +17510,7 @@ getListNodeCached
 	tst.l	cachedNode(a5)
 	bne.b	.n
 	* Get head node from the minimal list header
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	MLH_HEAD(a0),cachedNode(a5)
 	;move.l	moduleListHeader+MLH_HEAD(a5),cachedNode(a5)
 	clr.l	cachedNodeIndex(a5)
@@ -17667,7 +17667,7 @@ showTooltipPopup
 .prl	
 	move	d3,d1
 	moveq	#8,d0	* x-coord
-	bsr.w	.print
+	bsr.b	.print
 	* next y
 	addq	#8,d3
 	* find next line
@@ -17716,7 +17716,7 @@ showTooltipPopup
 * Closes the tooltip popup if open.
 * Also deactivates any tooltip that is about to open.
 closeTooltipPopup
-	bsr	deactivateTooltip
+	bsr.w	deactivateTooltip
 	move.l	tooltipPopupWindow(a5),d0
 	beq.b	.exit
 	move.l	d0,a0
@@ -18990,7 +18990,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .flush_messages
 	move.l	swindowbase(a5),a0
-	bra  flushWindowMessages
+	bra.w  flushWindowMessages
 	
 
 
@@ -19989,7 +19989,7 @@ init_ciaint_withTempo
 	move.b whichtimer(a5),d1
 	DPRINT	"CIA Timer %lx %ld"
  endif
-	bsr	ciaint_setTempo
+	bsr.b	ciaint_setTempo
 
 	lea	ciacra(a3),a2
 	tst.b	d6
@@ -20422,7 +20422,7 @@ rexxmessage
 	lea	rexxport(a5),a0
 	lore	Exec,GetMsg
 	move.l	d0,rexxmsg(a5)
-	beq.w	.nomsg
+	beq.b	.nomsg
 
 	move.l	rexxmsg(a5),a1
 	clr.l	rm_Result1(a5)
@@ -20590,7 +20590,7 @@ rexxmessage
 	move.l	a0,l_nameaddr(a3)	* pelk‰n nimen osoite
 
 	bsr.w	addfile
-	bsr	listChanged
+	bsr.w	listChanged
 
 	st	hippoonbox(a5)
 	tst.l	chosenmodule(a5)
@@ -20642,10 +20642,10 @@ rexxmessage
 
 .chooseNext
 	moveq	#0,d4	* rawkey modifier, no shift
-	bra	lista_alas
+	bra.w	lista_alas
 .choosePrev	
 	moveq	#0,d4	* rawkey modifier, no shift
-	bra	lista_ylos
+	bra.w	lista_ylos
 	
 *** VOLUME
 .volume
@@ -21186,7 +21186,7 @@ quad_code
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
-	bra.w	.cont
+	bra.b	.cont
 
 .delt	move.l	#(256+32)*4,d0
 	move.l	#MEMF_CLEAR,d1
@@ -21305,7 +21305,7 @@ quad_code
 	moveq	#11,d1
 	move	#335,d2
 	move	#82,d3
-	bsr	scopeIsNormal
+	bsr.w	scopeIsNormal
 	bne.b	.notLarge3
 	add	#64,d3
 .notLarge3
@@ -21315,7 +21315,7 @@ quad_code
 	moveq	#13,d1
 	move	#323,d4
 	move	#67,d5
-	bsr	scopeIsNormal
+	bsr.w	scopeIsNormal
 	bne.b	.notLarge4
 	add	#64,d5
 .notLarge4
@@ -21530,7 +21530,7 @@ qexit	bsr.b	qflush_messages
 
 qflush_messages
 	move.l	windowbase3(a5),a0 
-	bra		flushWindowMessages
+	bra.w		flushWindowMessages
 
 
 *** Scope interrupt code, keeps track the play positions of protracker replayer samples
@@ -21873,7 +21873,7 @@ drawScope
 	move	#320,d4		* x-koko
 	move	#64,d5	* y-koko
 	bsr.w	scopeIsNormal
-	bne.w	.notLarge0
+	bne.b	.notLarge0
 	add	#64,d5
 .notLarge0
 
@@ -22653,7 +22653,7 @@ notescroller
 	move.l	draw1(a5),a0
 	* two vertical positions
 	lea	23*40(a0),a0
-	bsr 	scopeIsNormal
+	bsr.w 	scopeIsNormal
 	bne.b	.normal
 	lea	(4*8)*40(a0),a0
 .normal
@@ -23898,7 +23898,7 @@ loadfile
 	bne.w	.nope
 	lea	gzipDecompressCommand(pc),a0
 	moveq	#1,d6	* "Unzipping" message
-	bra.w	.unp
+	bra.b	.unp
 
 .lha	lea	arclha(a5),a0
 	moveq	#0,d6
@@ -24066,26 +24066,26 @@ loadfile
 
 	bsr.w	id_TFMX_PRO
 	tst	d0
-	beq.w	.on
+	beq.b	.on
 
 	bsr.w	id_TFMX7V
 	tst	d0
-	beq.w	.on
+	beq.b	.on
 
 	bsr.w	id_tfmx
-	beq.w	.on
+	beq.b	.on
 
 	DPRINT	"Internal"
 	lea	internalFormats(pc),a3 
-	bsr	identifyFormatsOnly 
+	bsr.w	identifyFormatsOnly 
 	beq.b .on
 	DPRINT	"Group"
 	lea	groupFormats(pc),a3 
-	bsr	identifyFormatsOnly 
+	bsr.w	identifyFormatsOnly 
 	beq.b .on
 	DPRINT	"Eagle"
 	lea	eagleFormats(pc),a3 
-	bsr	identifyFormatsOnly 
+	bsr.w	identifyFormatsOnly 
 	beq.b .on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
@@ -24183,7 +24183,7 @@ loadfile
 	bne.b 	.exOk
 	move.l	d3,d1
 	lob	UnLock
-	bra	.open_error
+	bra.w	.open_error
 .exOk
 	move.l	d3,d1
 	lob	UnLock
@@ -24263,7 +24263,7 @@ loadfile
 
 .nolha
 
-	bsr	.handleExecutableModuleLoading
+	bsr.w	.handleExecutableModuleLoading
 	* Skip the rest if LoadSeg above went fine
 	;tst.b	executablemoduleinit(a5)
 	tst.b 	lod_exefile(a5)
@@ -24941,19 +24941,19 @@ loadfile
 
 	* Test for known exe formats
 
-	bsr	id_futureplayer
+	bsr.w	id_futureplayer
 	bne.b	.notFuturePlayer
 	moveq	#pt_futureplayer,d7
 	bra.b	.exeOk
 
 .notFuturePlayer
-	bsr	id_delicustom
+	bsr.w	id_delicustom
 	bne.b	.notDeliCustom
 	moveq	#pt_delicustom,d7
 	bra.b	.exeOk 
 
 .notDeliCustom 
-	bsr	id_davelowe
+	bsr.w	id_davelowe
 	bne.b	.notDl
 	move	#pt_davelowe,d7
 	bra.b	.exeOk
@@ -25324,11 +25324,11 @@ tutki_moduuli2
 	move.l	(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#'MTM',d0		* multi
-	beq.w	.f
+	beq.b	.f
 	move.l	1080(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#"TDZ",d0		* take
-	beq.w	.f
+	beq.b	.f
 
 
 * tfmx song data?
@@ -25339,26 +25339,26 @@ tutki_moduuli2
 * chip ram at later tage
 
 	cmp.l	#"TFMX",(a4)
-	beq.w	.goPublic
+	beq.b	.goPublic
 	cmp.l	#"tfmx",(a4)
-	beq.w	.goPublic
+	beq.b	.goPublic
 
-	bsr	id_oktalyzer8ch
+	bsr.w	id_oktalyzer8ch
 	beq.b	.goPublic
 
 	cmp.l	#'PSID',(a4)		* PSID-tiedosto
 	beq.b	.goPublic
 
-	bsr	id_thx_
+	bsr.w	id_thx_
 	tst.l	d0
 	beq.B	.goPublic
-	bsr	id_pretracker_
+	bsr.w	id_pretracker_
 	tst.l	d0
 	beq.B	.goPublic
-	bsr	id_mline
+	bsr.w	id_mline
 	tst.l	d0
 	beq.b	.goPublic
-	bsr	id_musicmaker8_
+	bsr.w	id_musicmaker8_
 	tst.l	d0
 	beq.b	.goPublic
 	;bsr	id_digitalmugician2 
@@ -25373,10 +25373,10 @@ tutki_moduuli2
 	bne.b	.goPublic
 .nome
 
-	bsr	id_digibooster_
+	bsr.w	id_digibooster_
 	tst.l	d0
 	beq.b	.goPublic
-	bsr	id_digiboosterpro_
+	bsr.w	id_digiboosterpro_
 	tst.l	d0
 	beq.b	.goPublic
 
@@ -25486,20 +25486,20 @@ tutki_moduuli
 	beq.w	.delicustom
 
 	tst.b	sampleinit(a5)
-	bne.w	.noop
+	bne.b	.noop
 
 	tst.b	ahi_muutpois(a5)	
-	bne.w	.noop
+	bne.b	.noop
 
 	* Ensure no id funcs are ran on executables
 	tst.b	executablemoduleinit(a5)
-	bne.w	.noop
+	bne.b	.noop
 
 	* These do not require player group:
 
 	DPRINT	"Internal"
 	lea	internalFormats(pc),a3 
-	bsr	identifyFormats
+	bsr.w	identifyFormats
 	beq.w 	.ex2
 
 ;	DPRINT	"Eagle"
@@ -25547,7 +25547,7 @@ tutki_moduuli
 	bsr.w	id_hippelcoso
 	beq.w	.hippelcoso
 
-	bra.w	.mp
+	bra.b	.mp
 .mpa
 	* First test for exe modules, skip the rest
 	* of the checks since moduledata is a seglist
@@ -25575,13 +25575,13 @@ tutki_moduuli
 
 	DPRINT	"Group"
 	lea	groupFormats(pc),a3 
-	bsr	identifyFormats
+	bsr.w	identifyFormats
 	beq.b .ex2
 
 	DPRINT	"Eagle"
 	lea	eagleFormats(pc),a3
-	bsr 	identifyFormats 
-	beq.w 	.ex2
+	bsr.w 	identifyFormats 
+	beq.b 	.ex2
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
@@ -25603,7 +25603,7 @@ tutki_moduuli
 	beq.w	.sid
 
 	bsr.w	id_oldst
-	beq.w	.oldst
+	beq.b	.oldst
 
 
 .er	
@@ -25639,8 +25639,8 @@ tutki_moduuli
 .pro0	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
 	moveq	#20-1,d0
-	bsr	copyNameFromModule
-	bra	.ex2
+	bsr.w	copyNameFromModule
+	bra.b	.ex2
 
 .multi	pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
@@ -25884,7 +25884,7 @@ doIdentifyFormats
 	tst.b	modulename(a5)
 	bne.b 	.nameOk 
 	* Name was not provided by identifiers, make one
-	bsr.w	tee_modnimi
+	bsr.b	tee_modnimi
 .nameOk
 	moveq	#0,d0
 	rts
@@ -25956,7 +25956,7 @@ loadplayergroup
 	bsr.w	inforivit_group
 
 	moveq	#0,d7
-	bsr		openPlayerGroupFile
+	bsr.w		openPlayerGroupFile
 	beq.w	.error
 .ok
 	move.l	d4,d1		* selvitet‰‰n filen pituus
@@ -26263,7 +26263,7 @@ whag	tst.b	win(a5)
 
 	move.l	a0,a3
 	and	#~GFLG_DISABLED,gg_Flags(a3)
-	bsr	redrawButtonGadget
+	bsr.b	redrawButtonGadget
 
 	lea	kela2,a0
 	cmp.l	a0,a3
@@ -26288,7 +26288,7 @@ whag	tst.b	win(a5)
 	tst	2(a4)		* enemm‰n kuin yksi kerrallaan?
 	bne.b	.l
 	rol	#1,d7
-	bra.w	.loop
+	bra.b	.loop
 .l
 	dbf	d6,.loop
 
@@ -26436,7 +26436,7 @@ acouscll
 addFavoriteModule
 	;bsr	isFavoriteModule
 	isFavoriteModule a0
-	bne.w .exit
+	bne.b .exit
 
  if DEBUG
 	pea	l_filename(a0)
@@ -26449,7 +26449,7 @@ addFavoriteModule
 	* see if for some reason a0 is already in the favorite list
 	bsr.w	findFavoriteModule
 	tst.l	d0
-	bne.w	.exit	* bail out if so
+	bne.b	.exit	* bail out if so
 
 	move.l	a0,a3
 
@@ -26458,7 +26458,7 @@ addFavoriteModule
 	move.l	-4(a3),d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
-	beq.w	.noMem
+	beq.b	.noMem
 	move.l	d0,a4
 
 	* Copy node contents
@@ -26485,7 +26485,7 @@ addFavoriteModule
 
 	st	favoriteListChanged(a5)
  if DEBUG
-	bsr	logFavoriteList
+	bsr.w	logFavoriteList
  endif
 .noMem
 .exit
@@ -26497,7 +26497,7 @@ addFavoriteModule
 removeFavoriteModule
 	;bsr	isFavoriteModule
 	isFavoriteModule a0
-	beq.w	.exit
+	beq.b	.exit
 	clr.b	l_favorite(a0)
 
  if DEBUG
@@ -26509,7 +26509,7 @@ removeFavoriteModule
 .loop
 	* Find matching l_filename from favorite list
 	* node is in a0
-	bsr	findFavoriteModule
+	bsr.b	findFavoriteModule
 	beq.b	.exit
 	* found matching one, in a1
 	move.l	a1,d2
@@ -26526,7 +26526,7 @@ removeFavoriteModule
 	bra.b	.loop
 .exit
  if DEBUG
-	bsr	logFavoriteList
+	bsr.w	logFavoriteList
  endif
 	;bsr exportFavoriteModulesWithMessage
 	rts
@@ -26638,7 +26638,7 @@ importFavoriteModulesFromDisk
 	move.l	d6,a0
 	jsr	freemem
 .noData
-	bsr	logFavoriteList
+	bsr.w	logFavoriteList
 	rts
 
 
@@ -26738,7 +26738,7 @@ handleFavoriteModuleConfigChange
 	pushm	all
 
 	tst.b	favorites(a5)
-	beq.w	.noFavs
+	beq.b	.noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: enabled"
 	bsr.w	enableListModeChangeButton
 
@@ -26754,7 +26754,7 @@ handleFavoriteModuleConfigChange
 	DPRINT	"->populating"
 
 * if list is empty, try importing data
-	bsr	importFavoriteModulesFromDisk
+	bsr.w	importFavoriteModulesFromDisk
 * then the current list should be updated to contain favorite statuses
 	lea	moduleListHeader(a5),a0
 .loop
@@ -26767,11 +26767,11 @@ handleFavoriteModuleConfigChange
 	bra.b	.loop
 .end
 	* refresh list
-	bra.w	.refresh
+	bra.b	.refresh
 
 .noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: disabled"
-	bsr	disableListModeChangeButton
+	bsr.w	disableListModeChangeButton
 	isListInFavoriteMode
 	beq.b	.noFav
 	* If disabled from prefs must toggle to normal mode
@@ -26785,7 +26785,7 @@ handleFavoriteModuleConfigChange
 	* there's some stuff in the list, free it and refresh view
 	* l_favorite need not be cleaned since they won't be displayed
 	* anyway if feature is disabled
-	bsr	freeFavoriteList
+	bsr.w	freeFavoriteList
 .refresh
 	st	hippoonbox(a5)
 	jsr	resh
@@ -26858,7 +26858,7 @@ toggleListMode
 	* the disabled shadow
 	move.l	a0,a3
 	push	a0
-	bsr	redrawButtonGadget	
+	bsr.w	redrawButtonGadget	
 	bsr.b	.refresh
 	pop	a0
 	jsr	printkorva
@@ -26879,8 +26879,8 @@ toggleListMode
 	jsr	obtainModuleList
 
 	jsr	clear_random
-	bsr	clearCachedNode
-	bsr	getVisibleModuleListHeader
+	bsr.w	clearCachedNode
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 
 	* set d1 to FF if list is in normal mode
@@ -26935,7 +26935,7 @@ enableListModeChangeButton
 	and	 #~GFLG_DISABLED,gg_Flags(a3)
 	move.l 	a3,a0
 	jsr	refreshGadgetInA0
-	bsr 	redrawButtonGadget
+	bsr.w 	redrawButtonGadget
 .x	rts 
 
 disableListModeChangeButton
@@ -27064,7 +27064,7 @@ getNameFromLock
 	move.l	.fib,d2
 	lob 	Examine
 	tst.l	d0
-	beq.w	.cleanup
+	beq.b	.cleanup
 	
 	* add separator if needed
 	tst.b	(a4)
@@ -27185,7 +27185,7 @@ normalizeFilePath
 	move.l	d4,d1
 	move.l	sp,d2
 	move.l	#200,d3
-	bsr  	getNameFromLock
+	bsr.w  	getNameFromLock
 	tst.l	d0 
 	beq.b	.noName
 	move.l	sp,a0
@@ -27362,7 +27362,6 @@ are
 	jsr	fimp_decr
 	bra.b	.wasImp
 .shr
-
 	DPRINT	"Deshrinklering"
 	lea	4(a4),a0
 	jsr	ShrinklerDecompress
@@ -27378,7 +27377,7 @@ are
 	DPRINT	"Relocating"
 	bsr.b	reloc
 .ok
-	bsr	clearCpuCaches
+	bsr.b	clearCpuCaches
 
  
 .x	popm	d1-a6
@@ -29157,7 +29156,7 @@ p_soundmon
 	bsr.b 	.id_soundmon_
 	bne.b 	.x 
 	moveq	#25-1,d0
-	bsr	copyNameFromModule
+	bsr.w	copyNameFromModule
 	moveq	#0,d0
 .x	rts
 
@@ -29252,7 +29251,7 @@ p_soundmon3
 	bsr.b 	.id_soundmon3_
 	bne.b 	.x 
 	moveq	#25-1,d0
-	bsr	copyNameFromModule
+	bsr.w	copyNameFromModule
 	moveq	#0,d0
 .x	rts
 
@@ -29591,7 +29590,7 @@ p_sonicarranger
 	move	d3,maxsongs(a5)
 
 	move	d2,d0
-	bsr	ciaint_setTempoFromD0
+	bsr.w	ciaint_setTempoFromD0
 .skip
 	moveq	#0,d0
 	rts	
@@ -29610,7 +29609,7 @@ p_sonicarranger
 	bra.w	vapauta_kanavat
 
 .stop
-	bra	clearsound
+	bra.w	clearsound
 	
 .song
 	move	songnumber(a5),d0
@@ -29763,7 +29762,7 @@ p_sidmon1
 	; The id routine does code modification to the module
 	; provided replay routine, for safety clear caches
 	; before calling.
-	bsr	clearCpuCaches
+	bsr.w	clearCpuCaches
 	move.l	sid10init(pc),a0
 	jsr	(a0)
 	movem.l	(sp)+,d0-a6
@@ -29936,7 +29935,7 @@ p_oktalyzer
 	bsr.b	id_oktalyzer8ch 
 	bne.b	id_oktalyzer
 
-	bsr	moveModuleToPublicMem
+	bsr.w	moveModuleToPublicMem
 	moveq	#0,d0 
 	rts
 
@@ -30930,7 +30929,7 @@ p_med	jmp	.medinit(pc)
 	move.l	(a4),d0			* MED
 	lsr.l	#8,d0
 	cmp.l	#'MMD',d0
-	bra	idtest
+	bra.w	idtest
 
 
 
@@ -32075,7 +32074,7 @@ p_digibooster
 	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	lea	610(a4),a1
 	moveq	#30-1,d0
-	bsr	copyNameFromA1
+	bsr.w	copyNameFromA1
 	moveq	#0,d0
 .x 	rts
 
@@ -32226,7 +32225,7 @@ p_digiboosterpro
 	move.l	moduleaddress(a5),a1
 	lea	16(a4),a1
 	moveq	#42-1,d0	
-	bsr		copyNameFromA1
+	bsr.w		copyNameFromA1
 	moveq	#0,d0
 .y 	rts
 
@@ -32461,7 +32460,7 @@ p_thx
 	move.l	moduleaddress(a5),a1
 	add	4(a1),a1		* modulename
 	moveq	#25-1,d0
-	bsr	copyNameFromA1
+	bsr.w	copyNameFromA1
 	moveq	#0,d0
 .y 	rts
 
@@ -33291,7 +33290,7 @@ p_pumatracker
 	bsr.b .id_pumatracker_
 	bne.b .x 
 	moveq	#12-1,d0
-	bsr		copyNameFromModule
+	bsr.w		copyNameFromModule
 	moveq	#0,d0
 .x 	rts
 
@@ -33453,7 +33452,7 @@ p_beathoven
 	move.l	moduleaddress(a5),a1
 	move.l	$20+36(a1),a1
 	moveq	#30-1,d0
-	bsr	copyNameFromA1
+	bsr.w	copyNameFromA1
 	moveq	#0,d0
 .x 	rts
 
@@ -33475,10 +33474,10 @@ p_beathoven
     bne.b   .notBeat
     * looks good, relocate it
     move.l  a4,a0
-    bsr reloc
+    bsr.w reloc
 	* clear the hunk id for safety to avoid reloccing again
 	clr.l	(a4)
-	bsr	clearCpuCaches
+	bsr.w	clearCpuCaches
     moveq   #0,d0
     rts
 .notBeat    
@@ -33582,16 +33581,16 @@ p_gamemusiccreator
     * loop length (?), must be less than total length
     move    12(a0),d2 
     cmp     d1,d2
-    bhi.w   .notGmc
+    bhi.b   .notGmc
 
     add     #16,a0
     dbf d0,.sampleLoop
 
     * pattern table size
     cmp.b   #$64,243(a4)
-    bhi.w   .notGmc
+    bhi.b   .notGmc
     tst.b   243(a4)
-    beq.w   .notGmc
+    beq.b   .notGmc
 
     * pattern order table
 	* contains offsets to patterns, each pattern is $400 bytes long,
@@ -33604,7 +33603,7 @@ p_gamemusiccreator
 	* offsets should be divisible by $400
     move    (a0),d0
     and     #$3ff,d0
-    bne.w   .notGmc
+    bne.b   .notGmc
 
 	* store the highest pattern index	
 	move    (a0),d0
@@ -33622,7 +33621,7 @@ p_gamemusiccreator
 
 	; high bound
     cmp     #100,d2
-    bhi.w   .notGmc
+    bhi.b   .notGmc
 	
  * validate the first pattern, it's apparently
  * a bit difficult to correctly determine the real amount
@@ -33780,7 +33779,7 @@ p_digitalmugician
 	lea	.id_start(pc),a1	
 	moveq	#.id_end-.id_start,d0
 	bsr.w	search
-	bra	idtest
+	bra.w	idtest
 
 .id_start
 	dc.b	' MUGICIAN/SOFTEYES 1990 '
@@ -33812,7 +33811,7 @@ p_delicustom
 .init
 	move.l	moduleaddress(a5),d0
 	lsl.l	#2,d0
-	bsr	deliInit
+	bsr.w	deliInit
 	rts
 
 id_delicustom
@@ -33886,7 +33885,7 @@ p_synthesis
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|11,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -33950,7 +33949,7 @@ p_syntracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -33994,7 +33993,7 @@ p_robhubbard2
 .init
 	lea	.path(pc),a0 
 	move.l	#2<<16|0,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 ; in: a4 = module
@@ -34058,7 +34057,7 @@ p_chiptracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -34522,7 +34521,7 @@ p_sidmon2
 .id_sidmon2
 	lea		.idStart(pc),a1
 	moveq	#.idEnd-.idStart,d0
-	bra 	search
+	bra.w 	search
 
 .idStart	dc.b	'SIDMON II - THE MIDI VERSION'
 .idEnd 
@@ -34913,9 +34912,9 @@ p_pretracker
 .next
 	addq	#2,a0
 	cmp.l	a4,a0
-	blo	.patchLoop
+	blo.b	.patchLoop
 
-	bsr		clearCpuCaches
+	bsr.w		clearCpuCaches
 
 	move.l .myPlayer(pc),a0
 	move.l .mySong(pc),a1
@@ -34985,7 +34984,7 @@ p_pretracker
 	bne.b .x
 	lea	$14(a4),a1
 	moveq	#20-1,d0
-	bsr	copyNameFromA1
+	bsr.w	copyNameFromA1
 	moveq	#0,d0
 .x  rts
 
@@ -35407,7 +35406,7 @@ p_startrekker
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	lea	startrekkerdataaddr(a5),a1
 	lea 	startrekkerdatalen(a5),a2
-	bsr	loadfileStraight
+	bsr.w	loadfileStraight
 	rts
 
 .fileErr 
@@ -35420,7 +35419,7 @@ p_startrekker
 	moveq	#0,d0 
 	move.l	playerbase(a5),a0 
 	jsr	p_init(a0)
-	bra.w 	.x
+	bra.b 	.x
 
 .play
 	push	a5
@@ -35444,7 +35443,7 @@ p_startrekker
 	bsr.b	.id_
 	bne.b 	.nok
 	moveq	#20-1,d0
-	bsr	copyNameFromModule
+	bsr.w	copyNameFromModule
 	moveq	#0,d0	
 .nok	rts
 
@@ -35534,8 +35533,8 @@ p_voodoosupremesynthesizer
 	jsr	rem_ciaint
 	move.l	voodooroutines(a5),a0
 	jsr	.END(a0)
-	bsr	clearsound
-	bsr	vapauta_kanavat
+	bsr.w	clearsound
+	bsr.w	vapauta_kanavat
 	rts
 
 .play
@@ -35543,7 +35542,7 @@ p_voodoosupremesynthesizer
 	jsr	.PLAY(a0)
 	rts
 .stop
-	bra	clearsound
+	bra.w	clearsound
 .cont
 	rts
 .vol
@@ -35604,7 +35603,7 @@ p_quartet
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -35673,7 +35672,7 @@ p_facethemusic
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|7,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	bne.b	.error
 
 	* Some tunes seem to end prematurely, try this
@@ -35686,7 +35685,7 @@ p_facethemusic
 .id
 	bsr.b	.do
 	bne.b	.not 
-	bsr 	moveModuleToPublicMem
+	bsr.w 	moveModuleToPublicMem
 	moveq	#0,d0
 .not		
 	rts
@@ -35702,7 +35701,7 @@ p_facethemusic
 .ftmVBlank
 	* Need to call this so that volume and voices are updated.
 	* FTM uses it's own interrupt otherwise.
-	bra	deliInterrupt
+	bra.w	deliInterrupt
 
 ******************************************************************************
 * Richard Joseph
@@ -35730,7 +35729,7 @@ p_richardjoseph
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	bne.b	.error
 
 	* Some tunes seem to end prematurely, try this
@@ -35791,7 +35790,7 @@ p_instereo1
 
 	* First, find it.
 	lea	.path(pc),a3
-	bsr	findDeliPlayer
+	bsr.w	findDeliPlayer
 	beq.w	.error 
 	move.l d0,d7 	* lock
 
@@ -35811,7 +35810,7 @@ p_instereo1
 	
 	* Read it
 	move.l	sp,a0
-	bsr	plainLoadFile 
+	bsr.w	plainLoadFile 
 	lea		100(sp),sp 
 	tst.l  d0 
 	beq.b  .fileError 
@@ -35835,7 +35834,7 @@ p_instereo1
 .c	move.b	(a2)+,(a0)+
 	bne.b	.c
 	move.l	sp,a0
-	bsr	plainSaveFile 
+	bsr.w	plainSaveFile 
 	lea	100(sp),sp
 
 	move.l	d3,a0 
@@ -35852,7 +35851,7 @@ p_instereo1
 	* filesystem, finding the above patched player.
 	move	playertype(a5),-(sp)
 	clr	playertype(a5)
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	move	(sp)+,playertype(a5)
 	tst.l	d0
 
@@ -35906,7 +35905,7 @@ p_instereo2
 .init
 	lea	.path(pc),a0 
 	move.l	#2<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -35950,7 +35949,7 @@ p_jasonbrooke
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -36030,7 +36029,7 @@ p_earache
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -36124,7 +36123,7 @@ p_krishatlelid
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -36199,7 +36198,7 @@ p_richardjoseph2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -36258,7 +36257,7 @@ p_hippel7
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|4,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 id_hippel7
@@ -36266,7 +36265,7 @@ id_hippel7
 	bne.b	.not
 	* This is identified as TFMX song data which goes into
 	* public mem, fix it.
-	bsr	moveModuleToChipMem
+	bsr.w	moveModuleToChipMem
 	moveq	#0,d0
 .not
 	rts
@@ -36362,7 +36361,7 @@ p_aprosys
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -36404,7 +36403,7 @@ p_hippelst
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|4,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -36414,7 +36413,7 @@ p_hippelst
         ;move.l  dtg_ChkData(A5),A0
         ;move.l  dtg_ChkSize(A5),D0
         move.l  A0,A4
-        bsr.w   .Check
+        bsr.b   .Check
         cmp.w   #2,D0
         bne.b   .Fault
         moveq   #0,D1
@@ -36478,7 +36477,7 @@ p_hippelst
 	LEA	$20(A0),A1
 	MOVEQ	#0,D6
 	MOVEQ	#0,D7
-.lbC000222	BSR.W	.lbC0002B6
+.lbC000222	BSR.B	.lbC0002B6
 	LEA	$40(A1),A1
 	DBRA	D0,.lbC000222
 	RTS
@@ -36505,14 +36504,14 @@ p_hippelst
 
 .lbC000262
 	tst.w	48(A0)				; FX Check
-	beq.w	.lbC0001F8
+	beq.b	.lbC0001F8
 	tst.l	24(A0)
 	beq.b	.lbC0001F8
 
 	CMPI.L	#'TFMX',$20(A0)
 	BEQ.S	.lbC00027A
 	CMPI.L	#'MMME',$20(A0)
-	BEQ.w	.lbC000200
+	BEQ.b	.lbC000200
 	MOVEQ	#0,D0
 	RTS
 
@@ -36592,7 +36591,7 @@ p_tcbtracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 
@@ -36602,9 +36601,9 @@ p_tcbtracker
 	
 	lea	(a0,d0.l),a2		; pour tests ultÈrieurs
 	cmpi.l	 #$132,d0
-	blo.w	.ohno			; trop petit
+	blo.b	.ohno			; trop petit
 	cmpi.l	#"AN C",(a0)
-	bne.w	.ohno
+	bne.b	.ohno
 	moveq	#0,d3
 	move.l	#"OOL!",d1		; marque avec "!"
 	move.l	4(a0),d2
@@ -36687,7 +36686,7 @@ p_markcooksey
 .init
 	lea	.path(pc),a0 
 	move.l	#10<<16|10,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 
@@ -36809,7 +36808,7 @@ p_activisionpro
 .init
 	lea	.path(pc),a0 
 	move.l	#1<<16|8,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -36828,13 +36827,13 @@ p_activisionpro
 	MOVE.L	A0,A2
 	LEA	.lbB000624(PC),A1
 	MOVE.L	#3,D1
-	BSR	.lbC0005EE
+	BSR.W	.lbC0005EE
 	BNE.S	.lbC000518
 	;MOVE.L	A0,lbL0000BA
 	LEA	.lbB00062C(PC),A1
 	MOVE.L	#12,D1
-	BSR	.lbC0005EE
-	BNE	.lbC0005EC
+	BSR.W	.lbC0005EE
+	BNE.W	.lbC0005EC
 	;MOVE.L	A0,lbL0000BE
 	MOVEQ	#0,D1
 	CMP.W	#$4E75,$28(A2)
@@ -36843,30 +36842,30 @@ p_activisionpro
 .lbC00050C	
 	;MOVE.L	D1,lbL0000C2
 	MOVEQ	#0,D0
-	BRA	.lbC0005EC
+	BRA.W	.lbC0005EC
 
 .lbC000518	MOVE.L	A4,A0
 	MOVE.L	D4,D2
 	LEA	.lbB000646(PC),A1
 	MOVE.L	#9,D1
-	BSR	.lbC0005EE
+	BSR.W	.lbC0005EE
 	BNE.S	.lbC00055A
 	;MOVE.L	A0,lbL0000BA
 	LEA	.lbB00065A(PC),A1
 	MOVE.L	#10,D1
-	BSR	.lbC0005EE
-	BNE	.lbC0005EC
+	BSR.B	.lbC0005EE
+	BNE.B	.lbC0005EC
 	;MOVE.L	A0,lbL0000BE
 	;MOVE.L	#2,lbL0000C2
 	MOVEQ	#0,D0
-	BRA	.lbC0005EC
+	BRA.B	.lbC0005EC
 
 .lbC00055A	MOVE.L	A4,A0
 	MOVE.L	D4,D2
 	CMP.W	#$6000,(A0)
-	BNE	.lbC0005EA
+	BNE.B	.lbC0005EA
 	CMP.W	#$6000,4(A0)
-	BNE	.lbC0005EA
+	BNE.B	.lbC0005EA
 	CMP.W	#$6000,8(A0)
 	BNE.S	.lbC0005EA
 	CMP.W	#$6000,12(A0)
@@ -36876,13 +36875,13 @@ p_activisionpro
 	CMP.W	#$6000,$14(A0)
 	BNE.S	.lbC0005EA
 	CMP.W	#$6000,$18(A0)
-	BNE	.lbC0005EA
+	BNE.B	.lbC0005EA
 	CMP.W	#$6000,$1C(A0)
-	BNE	.lbC0005EA
+	BNE.B	.lbC0005EA
 	CMP.W	#$6000,$20(A0)
-	BNE	.lbC0005EA
+	BNE.B	.lbC0005EA
 	CMP.W	#$6000,$20(A0)
-	BNE	.lbC0005EA
+	BNE.B	.lbC0005EA
 	MOVE.W	$16(A0),D0
 	LEA	$16(A0,D0.W),A1
 	CMP.L	#$2F0841FA,(A1)
@@ -36899,7 +36898,7 @@ p_activisionpro
 .lbC0005EC	RTS
 
 .lbC0005EE	MOVE.L	D1,D3
-	BSR	.lbC000604
+	BSR.B	.lbC000604
 	BEQ.S	.lbC000600
 	ADDQ.L	#2,A0
 	SUBQ.L	#2,D2
@@ -37052,7 +37051,7 @@ p_maxtrax
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -37120,7 +37119,7 @@ p_wallybeben
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -37190,7 +37189,7 @@ p_synthpack
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -37238,7 +37237,7 @@ p_robhubbard
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|6,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -37291,7 +37290,7 @@ p_jeroentel
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -37363,7 +37362,7 @@ p_sonix
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -37449,7 +37448,7 @@ p_sonix
 	cmp.l	#'NAME',(A1)+
 	bne.b	.fault
 	move.l	(A1)+,D1
-	bmi.w	.fault
+	bmi.b	.fault
 	addq.l	#1,D1
 	bclr	#0,D1
 	add.l	D1,A1
@@ -37504,7 +37503,7 @@ p_quartetst
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 * Quartet ST
@@ -37569,7 +37568,7 @@ p_coredesign
 .init
 	lea	.path(pc),a0 
 	move.l	#10<<16|10,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 * Core Design
@@ -37663,14 +37662,14 @@ p_musicmaker8
 .init
 	lea	.path(pc),a0 
 	move.l	#8<<16|5,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 
 .id_musicmaker8
 	bsr.b	id_musicmaker8_
 	bne.b	.no
-	bsr	moveModuleToPublicMem
+	bsr.w	moveModuleToPublicMem
 	moveq	#0,d0
 .no
 	rts
@@ -37783,7 +37782,7 @@ p_musicmaker4
 .init
 	lea	.path(pc),a0 
 	move.l	#8<<16|5,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 ;EP_Check5 (FPTR) - same as DTP_Check2 but module is loaded into public
@@ -37811,15 +37810,15 @@ id_musicmaker4
 	CMP.L	#$4D4D5638,8(A0)	; MMV8
 	BNE.S	.lbC000498
 	MOVE.L	#$53444154,D0
-	BSR	MM_SearchLongWord
+	BSR.W	MM_SearchLongWord
 	TST.L	D0
 	BMI.b	.lbC0005BA
 	ADDQ.L	#4,A0
 	MOVEQ	#-1,D7
 .lbC000498	CMP.W	#$5345,(A0)	; SE
-	BNE	.lbC0005BA
+	BNE.B	.lbC0005BA
 	bSR.w	MM4_8_ExtraCheck
-	BEQ	.lbC0005BA
+	BEQ.B	.lbC0005BA
 	MOVE.B	$17(A0),D0
 	CMP.B	#$10,D0
 	BLO.b	.lbC0005BA
@@ -37885,7 +37884,7 @@ p_digitalmugician2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|8,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 * digital mugician ii ("mugician ii")
@@ -37940,7 +37939,7 @@ p_stonetracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	bmi.b	.not
 .MHD_Name = 4
 	move.l	moduleaddress(a5),a0
@@ -37957,11 +37956,11 @@ p_stonetracker
 
 id_stonetracker
 	push	a4
-	bsr	.id_stonetracker_
+	bsr.b	.id_stonetracker_
 	pop	a4
 	tst.l 	d0 
 	bne.b .not 
-	bsr	moveModuleToPublicMem
+	bsr.w	moveModuleToPublicMem
 	moveq	#0,d0
 .not
 	rts
@@ -38055,7 +38054,7 @@ p_soundcontrol
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -38110,7 +38109,7 @@ p_themusicalenlightenment
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -38206,7 +38205,7 @@ p_timfollin2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr	deliLoadAndInit
+	bsr.b	deliLoadAndInit
 	rts 
 
 .id
@@ -38387,7 +38386,7 @@ loadDeliPlayer
 	lsl.l	#2,d0
 	move.l	d0,a0 
 	move.l	#DTP_PlayerVersion,d0
-	bsr	deliGetTagFromA0
+	bsr.w	deliGetTagFromA0
 	beq.b	.noVersion 
 	move.l	d0,d6
 
@@ -38558,7 +38557,7 @@ findDeliPlayer
 	* To get data size this must be subtracted
 	move.l	-4(a1),d0
 	subq.l	#4,d0
-	bsr	plainSaveFile
+	bsr.w	plainSaveFile
 	pop 	a0 
 	jsr		freemem
 
@@ -38588,7 +38587,7 @@ freeDeliPlayer
 	clr.l	deliPlayer(a5)
 	clr	deliPlayerType(a5)
 .x
-	bsr	.freeDeliLoadedFile
+	bsr.b	.freeDeliLoadedFile
 	bsr.w	freeDeliBase
 	popm	all
 	rts
@@ -38660,7 +38659,7 @@ deliInit
 	move	playertype(a5),deliPlayerType(a5)
 	bsr.w	buildDeliBase
 	tst.l	d0
-	beq	.noMemError
+	beq.w	.noMemError
 	move.l	deliBase(a5),a4
 
 	* Quite important to clear the old ones away
@@ -38673,8 +38672,8 @@ deliInit
 	clr.l	deliStoredGetPositionNr(a5)
 	
  if DEBUG
-	bsr	deliShowTags
-	bsr	deliShowFlags
+	bsr.w	deliShowTags
+	bsr.w	deliShowFlags
  endif
 
 	* Order in DT
@@ -38687,14 +38686,14 @@ deliInit
 	* SubSongRange	
 
 	move.l	#DTP_DeliBase,d0
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	beq.b	.noDBTag
 	move.l	d0,a0 
 	move.l	a4,(a0)
 .noDBTag
 
 	move.l	#EP_EagleBase,d0
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	beq.b	.noEBTag
 	move.l	d0,a0 
 	move.l	a4,(a0)
@@ -38739,14 +38738,14 @@ deliInit
 
 .checksOk
 	move.l	#EP_Flags,d0
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	beq.b	.noFlags
-	bsr	deliHandleFlags
+	bsr.w	deliHandleFlags
 .noFlags
 
 	move.l	#EP_InitAmplifier,d0 
-	bsr	deliGetTag 
-	bsr	deliCallFunc
+	bsr.w	deliGetTag 
+	bsr.w	deliCallFunc
 
 	move.l	#DTP_ExtLoad,d0  
 	bsr.w	deliGetTag
@@ -38768,7 +38767,7 @@ deliInit
 
 
 	* set default song number
-	bsr	deliGetSongInfo
+	bsr.w	deliGetSongInfo
 	* d0 = def, d1 = min, d2 = max	
 	move.l	deliBase(a5),a0
 	move	d0,dtg_SndNum(a0)
@@ -38786,13 +38785,13 @@ deliInit
 
 	move.l	#DTP_NoteStruct,d0  
 	bsr.w	deliGetTag
-	beq.w 	.noNoteStruct
+	beq.b 	.noNoteStruct
 	* This is an address to the struct
 	move.l	d0,a0
 	move.l	(a0),a0
 	move.l	a0,deliStoredNoteStruct(a5)
  if DEBUG 
-	bsr		deliShowNoteStruct
+	bsr.w		deliShowNoteStruct
  endif 
 .noNoteStruct
 
@@ -38804,17 +38803,17 @@ deliInit
 	DPRINT	"InitSound ok"
 
 	* Get position info if available
-	bsr	deliUpdatePositionInfo
+	bsr.w	deliUpdatePositionInfo
 
 	move.l	#DTP_Interrupt,d0  
 	bsr.w	deliGetTag
 	move.l	d0,deliStoredInterrupt(a5)	
 
 	move.l	#DTP_StartInt,d0
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	beq.b	.noStartInt
 	DPRINT	"using module interrupt"
-	bsr	deliCallFunc
+	bsr.w	deliCallFunc
 	* DTP_StartInt overrides DTP_Interrupt
 	clr.l	deliStoredInterrupt(a5)
 	bra.b	.skip
@@ -38842,7 +38841,7 @@ deliInit
 	bsr.w	deliCallFunc	
 
 	moveq	#ier_nociaints,d0
-	bra.w	.ciaError
+	bra.b	.ciaError
 .gotCia
 .skip
 
@@ -38903,7 +38902,7 @@ deliInit
 	lea	 desbuf(a5),a1 
 	jsr	 request
 	moveq	#ier_eagleplayer,d0
-	bra.w	.exit
+	bra.b	.exit
 
 .newIoErr
 	tst.l	d0
@@ -38934,13 +38933,13 @@ deliInit
 *   d0: value, or -1 if not found
 deliFindInfoValue
 	move.l	#EP_Get_ModuleInfo,d0
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	beq.b 	.tryAnother
-	bsr	deliCallFunc
+	bsr.w	deliCallFunc
 	bra.b	.gotIt
 .tryAnother
 	move.l	#EP_NewModuleInfo,d0 
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	beq.b 	.notFound
 	move.l	d0,a0
 .gotIt
@@ -38968,7 +38967,7 @@ deliUpdatePositionInfo
 	move.l	d0,deliStoredGetPositionNr(a5) 
 	beq.b	.noPos
 	move.l	#MI_Length,d1
-	bsr	deliFindInfoValue 
+	bsr.b	deliFindInfoValue 
 	bmi.b 	.noPos
 	beq.b	.noPos
 	move	d0,pos_maksimi(a5)
@@ -38990,7 +38989,7 @@ deliGetSongInfo
 	move.l	#DTP_SubSongRange,d0  
 	bsr.w	deliGetTag
 	beq.b	.noSubSongs1
-	bsr	deliCallFunc
+	bsr.w	deliCallFunc
 	move.l	d1,d2
 	move.l	d0,d1
 	move.l	playerbase(a5),a0 
@@ -39071,7 +39070,7 @@ deliPlay
 	
 	pushm	a4/a5/a6
 	move.l	deliStoredNoteStruct(a4),d0 
-	bsr	deliNotePlayer
+	bsr.w	deliNotePlayer
 	popm	a4/a5/a6
 	rts
 
@@ -39085,18 +39084,18 @@ deliEnd
 .noIntUsed
 
 	move.l	#DTP_StopInt,d0
-	bsr	deliGetTag
-	bsr	deliCallFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 
 	move.l	#DTP_EndSound,d0  
-	bsr	deliGetTag
-	bsr	deliCallFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 
 	move.l	#DTP_EndPlayer,d0  
-	bsr	deliGetTag
-	bsr	deliCallFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 	
-	bsr	clearsound
+	bsr.w	clearsound
 
 	move.l	#EP_EjectPlayer,d0
 	bsr.w	deliGetTag
@@ -39106,8 +39105,8 @@ deliEnd
 	rts
 
 deliSong
-	bsr	deliStop
-	bsr	deliGetSongInfo
+	bsr.b	deliStop
+	bsr.w	deliGetSongInfo
 	* returns
 	* d1 = min song
 	* d2 = max song
@@ -39125,12 +39124,12 @@ deliSong
 	move	d0,dtg_SndNum(a0)
 
 	move.l	#DTP_InitSound,d0
-	bsr	deliGetTag
-	bsr	deliCallFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 	move.l	#DTP_StartInt,d0
-	bsr	deliGetTag
-	bsr	deliCallFunc
-	bsr	deliUpdatePositionInfo
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bsr.w	deliUpdatePositionInfo
 	rts
 
 * Not sure what exactly should be done with these two.
@@ -39138,38 +39137,38 @@ deliSong
 deliStop
 	DPRINT	"deliStop"
 	move.l	#DTP_EndSound,d0
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	;bsr	deliCallFunc	;;**
 	move.l	#DTP_StopInt,d0
-	bsr	deliGetTag
-	bsr	deliCallFunc
-	bsr	clearsound
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bsr.w	clearsound
 	;move	#$f,$dff096
 	rts
 
 deliCont
 	DPRINT	"deliCont"
 	move.l	#DTP_InitSound,d0
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	;bsr	.callFunc
 	move.l	#DTP_StartInt,d0
-	bsr	deliGetTag
-	bsr	deliCallFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 	move	#$800f,$dff096
 	rts
 
 deliForward
 	DPRINT	"deliForward"
 	move.l	#DTP_NextPatt,d0
-	bsr	deliGetTag
-	bsr	deliCallFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 	rts
 
 deliBackward
 	DPRINT	"deliBackward"
 	move.l	#DTP_PrevPatt,d0
-	bsr	deliGetTag
-	bsr	deliCallFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 	rts
 
 deliVolume	
@@ -39402,7 +39401,7 @@ _deliDataSize	rs.b	0
 	lea	var_b,a5
 	move.l	d0,d6
 	move.l	d1,d7
-	bsr	deliFindEmptyListDataSlot
+	bsr.w	deliFindEmptyListDataSlot
 	bne.b	.err
 	move.l	a1,a3 
 	move.l	d6,d0
@@ -39429,7 +39428,7 @@ deliAllocAudio
 	pushm	d1-a6
 	lea	var_b,a5
 	* returns d0=0 on success:
-	bsr	varaa_kanavat 
+	bsr.w	varaa_kanavat 
 	popm	d1-a6
 	rts
 
@@ -39437,7 +39436,7 @@ deliFreeAudio
 	DPRINT	"deliAudioFree"
 	pushm	d1-a6
 	lea	var_b,a5
-	bsr	vapauta_kanavat
+	bsr.w	vapauta_kanavat
 	popm	d1-a6
 	rts
 
@@ -39649,7 +39648,7 @@ funcENPP_TestAufHide
 	rts
 funcENPP_ClearCache
 	;DPRINT "ENPP_ClearCache"
-	bra clearCpuCaches
+	bra.w clearCpuCaches
 funcENPP_CopyMemQuick
 	DPRINT "ENPP_CopyMemQuick"
 	rts
@@ -39666,24 +39665,24 @@ funcENPP_WindowToFront
 	DPRINT "ENPP_WindowToFront"
 	rts
 funcENPP_GetListData
-	bra	deliGetListData
+	bra.w	deliGetListData
 funcENPP_LoadFile
-	bra	deliLoadFile
+	bra.w	deliLoadFile
 funcENPP_CopyDir
 	DPRINT "ENPP_CopyDir"
-	bra	deliCopyDir
+	bra.w	deliCopyDir
 funcENPP_CopyFile
 	DPRINT "ENPP_CopyFile"
-	bra	 deliCopyFile
+	bra.w	 deliCopyFile
 funcENPP_CopyString
 	DPRINT "ENPP_CopyString"
-	bra	deliCopyString
+	bra.w	deliCopyString
 funcENPP_AllocAudio
 	DPRINT "ENPP_AllocAudio"
-	bra deliAllocAudio
+	bra.w deliAllocAudio
 funcENPP_FreeAudio
 	DPRINT "ENPP_FreeAudio"
-	bra deliFreeAudio
+	bra.w deliFreeAudio
 funcENPP_StartInterrupt
 	DPRINT "ENPP_StartInterrupt"
 	rts
@@ -39701,7 +39700,7 @@ funcENPP_SetTimer
 	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
 	;DPRINT "ENPP_WaitAudioDMA"
-	bra dmawait
+	bra.w dmawait
 funcENPP_SaveMem
 	DPRINT "ENPP_SaveMem"
 	rts
@@ -39740,7 +39739,7 @@ funcENPP_TypeText
 	rts
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange"
-	bra	deliModuleChange
+	bra.w	deliModuleChange
 funcENPP_ModuleRestore
 	DPRINT "ENPP_ModuleRestore"
 	rts
@@ -39867,10 +39866,10 @@ funcENPP_CloseCatalog
 	rts
 funcENPP_AllocAmigaAudio
 	;DPRINT "ENPP_AllocAmigaAudio"
-	bra	deliAllocAudio
+	bra.w	deliAllocAudio
 funcENPP_FreeAmigaAudio
 	;DPRINT "ENPP_FreeAmigaAudio"
-	bra deliFreeAudio
+	bra.w deliFreeAudio
 funcENPP_RawToFormat
 	DPRINT "ENPP_RawToFormat"
 	rts
@@ -40230,7 +40229,7 @@ deliShowTags
 	DPRINT  "Tag %lx %s: %lx"
 .oddTag
 	tst.l	(a0) 
-	bne.w	.tloop
+	bne.b	.tloop
 	rts
 
 tagsTable
@@ -40441,7 +40440,7 @@ EEP_SamplePlayer    dc.b "EP_SamplePlayer",0
 
 deliShowFlags
 	move.l	#EP_Flags,d0
-	bsr	deliGetTag
+	bsr.w	deliGetTag
 	beq.w	.noFlags
 	btst	#EPF_Songend,d0
 	beq.b	.f10
