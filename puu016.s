@@ -38737,6 +38737,8 @@ deliInit
 .noCheck5
 
 .checksOk
+	jsr		clearCpuCaches  ; Extra safety
+
 	move.l	#EP_Flags,d0
 	bsr.w	deliGetTag
 	beq.b	.noFlags
@@ -38765,6 +38767,7 @@ deliInit
 	bne.w	.initError
 	DPRINT	"initPlayer ok"
 
+	jsr		clearCpuCaches  ; Extra safety
 
 	* set default song number
 	bsr.w	deliGetSongInfo
@@ -38801,6 +38804,7 @@ deliInit
 	* Does not return error code
 
 	DPRINT	"InitSound ok"
+	jsr		clearCpuCaches  ; Extra safety
 
 	* Get position info if available
 	bsr.w	deliUpdatePositionInfo
