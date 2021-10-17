@@ -25452,13 +25452,9 @@ tutki_moduuli
 	move.l	moduleaddress(a5),a4
 	move.l	modulelength(a5),d7
 
-	* Give some kB of data to identifyiers
-	* as some are very slow on large data 
-	* (hippel, activision pro)
-	cmp.l	#1024*4,d7
-	blo.b	.lenOk
-	move.l	#1024*4,d7
-.lenOk
+	* NOTE! Some are very slow
+	* - hippel
+	* - activision pro
 
 ;	tst.b	keyfile+49(a5)	* datan väliltä 38-50 pitää olla nollia
 ;	beq.b	.zz
@@ -25869,7 +25865,7 @@ doIdentifyFormats
 	beq.b	.notFound
 	move.l	(a3),a0
 	pushpea	p_name(a0),d0
-	DPRINT	"- %s"
+	;DPRINT	"- %s"
 	pushm	all
 	jsr	p_id(a0)
 	tst.b	d0
@@ -31771,6 +31767,11 @@ id_hippel
 * d5 => max songs
 	move.l	d7,d0
 
+	cmp.l	#1024,d0
+	blo.b	.ok
+	move.l	#1024,d0
+.ok
+
 	cmp.l	#100,d0
 	blo.w	.lbC000288
 
@@ -36812,8 +36813,14 @@ p_activisionpro
 	rts 
 
 .id
+
 	move.l	a4,a0 
 	move.l	d7,d0
+
+	cmp.l	#1024,d0
+	blo.b	.ok
+	move.l	#1024,d0
+.ok
 
 .lbC0004CA	MOVE.L	A0,A4
 	MOVE.L	D0,D4
