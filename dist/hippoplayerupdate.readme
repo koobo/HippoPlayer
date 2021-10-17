@@ -59,7 +59,6 @@ In this episode, we will be trying to play them all!
   This should fix the VisualPrefs related bug where adjusting
   window and screen title bar heights caused Hippo to add extra
   vertical space at the top part of the window.
-
 - A few other minor issues fixed.
  
 ## New features:
@@ -82,6 +81,9 @@ In this episode, we will be trying to play them all!
   on low memory systems to set the group mode to "Load single" 
   in "Prefs/Play-1/Mode", so that that the group file is not kept
   in memory fully. 
+- Group file data compression was changed from File Imploder to
+  Shrinkler by Blueberry as an experiment. Much better compression
+  ratio, slower decompression.
 
 ## Music format related fixes
 - Improved JamCracker support: added volume control and position/length info.
@@ -127,7 +129,7 @@ In this episode, we will be trying to play them all!
   - Based on eagleplayer by Buggs/DEFECT. Some bug fixing was needed for 
     this, plenty of illegal memory reads were happening.
 
-## Supported Eagleplayer formats, plugin name in parenthesis:
+## Supported Eagleplayer formats, plugin name in parentheses:
 - SynTracker ("syntracker")
   - Eagleplayer by Eagleeye/DEFECT
 - AProSys ("aprosys")
