@@ -38114,6 +38114,8 @@ p_themusicalenlightenment
 
 .id
 	movea.l	a4,A0
+	lea	(a4,d7.l),a3	* upper bound
+
 	moveq	#-1,D0
 
 	tst.b	(A0)
@@ -38131,10 +38133,26 @@ p_themusicalenlightenment
 	bra.b	.TME_OK
 
 .CheckAnother
+	* Range check
+
+	pea	$1284(a0)
+	cmp.l	(sp)+,a3
+	bhs.b	.Fault
+
 	cmp.l	#$00040B11,$1284(A0)
 	bne.s	.CheckSize
+
+	pea	$1188(a0)
+	cmp.l	(sp)+,a3
+	bhs.b	.Fault
+
 	cmp.l	#$181E2329,$1188(A0)
 	bne.s	.CheckSize
+
+	pea	$128c(a0)
+	cmp.l	(sp)+,a3
+	bhs.b	.Fault
+
 	cmp.l	#$2F363C41,$128C(A0)
 	bne.s	.CheckSize
 .TME_OK
@@ -38150,10 +38168,24 @@ p_themusicalenlightenment
 .GetSize
 	move.l	A0,A1
 	move.l	A0,A2
+
+	pea	$1aaa(a2)
+	cmp.l	(sp)+,a3
+	bhs.b	.X
+	
+	pea	$1a84(a1)
+	cmp.l	(sp)+,a3
+	bhs.b	.X
+
 	lea	$1AAA(A2),A2
 	move.w	$1A84(A1),D3
 	mulu.w	#12,D3
 	add.l	D3,A2
+
+	pea	$1a86(a1)
+	cmp.l	(sp)+,a3
+	bhs.b	.X	
+
 	move.w	$1A86(A1),D3
 	mulu.w	#6,D3
 	add.l	D3,A2
@@ -38166,15 +38198,21 @@ p_themusicalenlightenment
 	cmp.l	#$400,D1
 	blt.b	.NextInuc
 	moveq	#0,D1
+
 	lea	$44(A1),A1
-.NextSamp	tst.b	$18(A1,D1.L)
+.NextSamp
+	pea	$18(A1,D1.L)
+	cmp.l	(sp)+,a3
+	bhs.b	.X
+
+	tst.b	$18(A1,D1.L)
 	beq.b	.NoSample
 	add.l	4(A1,D1.L),A2
 .NoSample	add.l	#$80,D1
 	cmp.l	#$1000,D1
 	blt.b	.NextSamp
 	sub.l	A0,A2
-	rts
+.X	rts
 
 
 
