@@ -33503,7 +33503,7 @@ p_gamemusiccreator
 	p_NOP
 	p_NOP
 	p_NOP
-	jmp .id_gamemusiccreator(pc)
+	jmp id_gamemusiccreator(pc)
 	dc.w pt_gamemusiccreator
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume
 	dc.b	"Game Music Creator",0
@@ -33512,7 +33512,6 @@ p_gamemusiccreator
 .GMC_INIT  = $20+0
 .GMC_PLAY  = $20+4
 .GMC_END   = $20+8
-
 
 .init
 	bsr.w	varaa_kanavat
@@ -33563,34 +33562,39 @@ p_gamemusiccreator
 ; in: a4 = module
 ; out: d0 = 0, valid GMC
 ;      d0 = -1, not GMC
-.id_gamemusiccreator
-	push	a4	 	* save this, needed by other identifiers
-    moveq   #15-1,d0
-    move.l  a4,a0
+id_gamemusiccreator
+	DPRINT	"GAMEMUSICCREATOR"
+	pushm 	d1-a6
+	bsr.b	.do
+	popm 	d1-a6 
+	rts
+.do
+	moveq   #15-1,d0
+	move.l  a4,a0
 .sampleLoop
 	* sample vol check probably
-    cmp.b   #$40,7(a0)
-    bhi.w   .notGmc
+	cmp.b   #$40,7(a0)
+    	bhi.w   .notGmc
 
     * sample len
-    move    4(a0),d1 
-    cmp     #$7fff,d1
-    bhi.w   .notGmc
+ 	move    4(a0),d1 
+    	cmp     #$7fff,d1
+    	bhi.w   .notGmc
 
-    add     d1,d1
+    	add     d1,d1
     * loop length (?), must be less than total length
-    move    12(a0),d2 
-    cmp     d1,d2
-    bhi.b   .notGmc
+    	move    12(a0),d2 
+    	cmp     d1,d2
+    	bhi.b   .notGmc
 
-    add     #16,a0
-    dbf d0,.sampleLoop
+    	add     #16,a0
+    	dbf d0,.sampleLoop
 
     * pattern table size
-    cmp.b   #$64,243(a4)
-    bhi.b   .notGmc
-    tst.b   243(a4)
-    beq.b   .notGmc
+    	cmp.b   #$64,243(a4)
+    	bhi.b   .notGmc
+    	tst.b   243(a4)
+    	beq.b   .notGmc
 
     * pattern order table
 	* contains offsets to patterns, each pattern is $400 bytes long,
@@ -33598,37 +33602,37 @@ p_gamemusiccreator
 	* Possible to have 100 individual patterns
  	moveq   #100-1,d7
 	lea     244(a4),a0
-    moveq   #0,d2 * numpat
+    	moveq   #0,d2 * numpat
 .pattLoop
 	* offsets should be divisible by $400
-    move    (a0),d0
-    and     #$3ff,d0
-    bne.b   .notGmc
+    	move    (a0),d0
+    	and     #$3ff,d0
+    	bne.b   .notGmc
 
 	* store the highest pattern index	
 	move    (a0),d0
 	lsr     #8,d0
-    lsr     #2,d0
-    cmp     d2,d0
-    blo.b   .numpat
-    move    d0,d2
+    	lsr     #2,d0
+   	cmp     d2,d0
+    	blo.b   .numpat
+    	move    d0,d2
 .numpat
-    addq.l    #2,a0
-    dbf d7,.pattLoop
+    	addq.l    #2,a0
+    	dbf d7,.pattLoop
 
 	; check how many patterns are there
-    addq    #1,d2
+    	addq    #1,d2
 
 	; high bound
-    cmp     #100,d2
-    bhi.b   .notGmc
+    	cmp     #100,d2
+    	bhi.b   .notGmc
 	
  * validate the first pattern, it's apparently
  * a bit difficult to correctly determine the real amount
  * of patterns in a module. Thre should at least be one!
 
 .patterns
-    lea     444(a4),a0
+    	lea     444(a4),a0
      * traverse a pattern
     * four bytes per channel per row,
     * so 16 bytes per row
@@ -33667,34 +33671,30 @@ p_gamemusiccreator
 ;.c3
 
 	move.l  (a0),d0
-    and     #$f000,d0
-    beq.b   .noSample
-	clr		d0
+    	and     #$f000,d0
+    	beq.b   .noSample
+	clr	d0
 	swap    d0
-	tst		d0
-	beq.w	.ok
+	tst	d0
+	beq.b	.okP
 	* d0 is now the period
 	* 0 is allowed
-	lea		periods,a1
+	lea	periods,a1
 	moveq	#(periodsEnd-periods)/2-1,d1
 .perLoop
-	cmp		(a1)+,d0
+	cmp	(a1)+,d0
 	beq.b	.okP
-	dbf		d1,.perLoop
+	dbf	d1,.perLoop
 	* BAD PERIOD, BAD!
 	bra.b	.notGmc
 .okP
 .noSample
-
-    addq.l  #4,a0
-    dbf     d5,.rows
-
-	pop     a4
-    moveq   #0,d0
-    rts
+    	addq.l  #4,a0
+    	dbf     d5,.rows
+   	moveq   #0,d0
+    	rts
 .notGmc
-	pop     a4
-    moveq  #-1,d0 
+   	moveq  #-1,d0 
 	rts
 
 
@@ -35806,12 +35806,12 @@ p_instereo1
 	lore  Dos,UnLock
 
 	tst.l	d6 
-	beq.b 	.nameFromLockErr
+	beq.w 	.nameFromLockErr
 	
 	* Read it
 	move.l	sp,a0
 	bsr.w	plainLoadFile 
-	lea		100(sp),sp 
+	lea	100(sp),sp 
 	tst.l  d0 
 	beq.b  .fileError 
 
