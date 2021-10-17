@@ -6577,6 +6577,9 @@ signalreceived
 	tst.l	d0
 	bne.b	.loader
 
+	bsr.w	inforivit_initializing
+	DDELAY 5
+
 	move.l	playerbase(a5),a0	* soitto p‰‰lle
 	jsr	p_init(a0)
 	tst.l	d0
@@ -7185,6 +7188,9 @@ umph
 	tst.l	d0
 	bne.b	.loader
 
+	bsr.w	inforivit_initializing
+	DDELAY 5
+	
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -16594,7 +16600,7 @@ inforivit_group
 
 inforivit_group2
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra.w	putinfo2
 .1	dc.b	"Loading replayer...",0
  even
 
@@ -16613,10 +16619,16 @@ inforivit_extracting
  even
 
 
-inforivit_eagleload
+inforivit_initializing
 	lea	.1(pc),a0
 	bra.w	putinfo2
-.1	dc.b	"Loading module data...",0
+.1	dc.b	"Initializing...",0
+ even
+
+inforivit_identifying
+	lea	.1(pc),a0
+	bra.w	putinfo
+.1	dc.b	"Identifying...",0
  even
 
 * Siistit‰‰n moduulin nimi 
@@ -25409,7 +25421,7 @@ tutki_moduuli2
 
 tutki_moduuli
 	DPRINT	"Identify module"
-
+	bsr	inforivit_identifying
  ifne PILA
 
 	lea	keyfile(a5),a4
@@ -25852,7 +25864,7 @@ doIdentifyFormats
 	beq.b	.notFound
 	move.l	(a3),a0
 	pushpea	p_name(a0),d0
-	;DPRINT	"id %s"
+	DPRINT	"- %s"
 	pushm	all
 	jsr	p_id(a0)
 	tst.b	d0
@@ -25997,7 +26009,7 @@ loadplayergroup
 	moveq	#0,d7
 
 .xx	
-	bsr.w	inforivit_clear
+	;bsr.w	inforivit_clear
 
  if DEBUG 
 	move.l	d7,a0 
@@ -26089,7 +26101,7 @@ loadreplayer
 	jsr	freemem
 	clr.l	xplayer(a5)
 
-	bsr.w	inforivit_group2
+;	bsr.w	inforivit_group2
 
 	bsr.w	openPlayerGroupFile
 	beq.w	.error
@@ -26155,7 +26167,7 @@ loadreplayer
 
 
 .xx	
-	bsr.w	inforivit_clear
+;	bsr.w	inforivit_clear
 
 	move.l	d7,d0
 	move.l	xplayer(a5),a1
@@ -27270,6 +27282,10 @@ are
 
 	tst.l	(a0)			* onko jo ennest‰‰n?
 	bne.w	.alreadyHaveIt
+
+	push 	a0
+	bsr.w	inforivit_group2
+	pop 	a0
 
 	cmp.b	#GROUPMODE_LOAD_SINGLE,groupmode(a5)
 	bne.b	.nah
