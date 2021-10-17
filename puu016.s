@@ -31767,9 +31767,9 @@ id_hippel
 * d5 => max songs
 	move.l	d7,d0
 
-	cmp.l	#1024,d0
+	cmp.l	#1024*2,d0
 	blo.b	.ok
-	move.l	#1024,d0
+	move.l	#1024*2,d0
 .ok
 
 	cmp.l	#100,d0
