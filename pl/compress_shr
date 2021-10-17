@@ -1,0 +1,2 @@
+#!/bin/bash
+find bin -type f -not -iname "*.uaem" -exec ../shrinkle.sh "{}" \;

@@ -1,5 +1,7 @@
-;APS00000041000000410000004100000041000000410000004100000133000000410000004100000041
+;APS0000004C0000004C0000004C0000004C0000004C0000004C0000013E0000004C0000004C0000004C
 
+IM=0
+SHR=1
 	incdir	include/
 	include	playerIds.i
 
@@ -99,6 +101,7 @@ head	macro
 
 headend
 
+ ifne IM
 	incdir	pl/im/
 
 ps3m1 incbin	ps3m.im
@@ -214,14 +217,128 @@ startrekker2
 vss1
 	incbin	vss.im
 vss2
+  endif
 
+  ifne SHR
+ 	incdir	pl/shr/
 
+ps3m1 incbin	ps3m.shr
+ps3m2
 
+tfmx1 incbin tfmx.shr
+tfmx2 
 
-	incdir	eagleplayers/
+tfmx7c1 incbin tfmx7c.shr
+tfmx7c2
 
+jamc1 incbin jamc.shr
+jamc2
 
+fc101 incbin fc10.shr
+fc102 
 
+fc141 incbin fc14.shr
+fc142 
+
+bpsm1 incbin bpsm.shr
+bpsm2 
+
+soundmon31 incbin soundmon3.shr
+soundmon32 
+
+okta1 incbin okta.shr
+okta2 
+
+p61a1 incbin p61a.shr
+p61a2
+
+hippelcoso1 incbin hippelcoso.shr
+hippelcoso2
+
+digi1 incbin digi.shr
+digi2 
+
+thx1 incbin thx.shr
+thx2 
+
+sampleplay1 incbin sampleplay.shr
+sampleplay2 
+
+aon41
+	incbin aon4.shr
+aon42
+
+dbpro1
+	incbin dbpro.shr
+dbpro2 
+
+pumatracker1 
+	incbin pumatracker.shr
+pumatracker2 
+
+gmc1
+	incbin gamemusiccreator.shr
+gmc2 
+
+mugician1 
+	incbin mugiplayer.shr
+mugician2 
+
+medley1 
+	incbin imploder.shr
+medley2
+
+futureplayer1 
+	incbin future_player.shr
+futureplayer2 
+
+bendaglish1 
+	incbin bendaglish.shr
+bendaglish2 
+
+sidmonv21
+	incbin sidmon_v2.shr
+sidmonv22
+
+delta11 
+	incbin delta1.shr
+delta12
+
+soundfx1
+	incbin soundfx.shr
+soundfx2 
+
+gluemon1 
+	incbin gluemon13.shr
+gluemon2
+
+pretracker1 
+	incbin pretracker.bin.shr
+pretracker2 
+
+custommade1 
+	incbin custommade_v1.shr
+custommade2 
+
+sonicarranger1
+	incbin sonicarranger.shr
+sonicarranger2
+
+davelowe1
+	incbin davelowe.shr
+davelowe2 
+
+startrekker1 
+	incbin startrekker.shr
+startrekker2
+
+vss1
+	incbin	vss.shr
+vss2
+	endif
+
+ ifne IM
+	incdir	eagleplayers/im/
 
 synthesis1
 	incbin "synth 4.0.im"
@@ -358,5 +475,146 @@ tme2
 timfollin21
 	incbin	"tim follin ii.im"
 timfollin22	
+ 	endif
 
+
+  ifne SHR
+	incdir	eagleplayers/shr/
+
+synthesis1
+	incbin "synth 4.0.shr"
+synthesis2
+
+syntracker1
+	incbin syntracker.shr
+syntracker2
+
+robhubbard21
+	incbin "rob hubbard 2.shr"
+robhubbard22
+
+chiptracker1
+	incbin chiptracker.shr
+chiptracker2
+
+quartet1
+	incbin quartet.shr
+quartet2
+
+facethemusic1
+	incbin "face the music.shr"
+facethemusic2
+
+richardjoseph1
+	incbin "richard joseph player.shr"
+richardjoseph2
+
+instereo11
+	incbin "in stereo 1.0.shr"
+instereo12
+
+instereo21
+	incbin "in stereo 2.0.shr"
+instereo22
+
+jasonbrooke1
+	incbin "jason brooke.shr"
+jasonbrooke2
+
+earache1
+	incbin earache.shr
+earache2
+
+krishatlelid1
+	incbin "kris hatlelid.shr"
+krishatlelid2
+
+richardjoseph21
+	incbin "richard joseph.shr"
+richardjoseph22
+
+hippel71
+	incbin "jochen hippel 7v.shr"
+hippel72
+
+aprosys1
+	incbin aprosys.shr
+aprosys2
+
+hippelst1
+	incbin "jochen hippel st.shr"
+hippelst2
+
+tcbtracker1
+	incbin "tcb tracker.shr"
+tcbtracker2
+
+markcooksey1
+;	incbin "mark cooksey.shr"
+markcooksey2
+
+activisionpro1
+	incbin "activision pro.shr"
+activisionpro2
+
+maxtrax1
+	incbin maxtrax.shr
+maxtrax2
+
+wallybeben1
+	incbin "wally beben.shr"
+wallybeben2
+
+synthpack1
+	incbin "synth pack.shr"
+synthpack2
+
+jeroentel1
+	incbin "jeroen tel.shr"
+jeroentel2
+
+robhubbard1
+	incbin "rob hubbard.shr"
+robhubbard2
+
+sonix1
+	incbin "sonix music driver.shr"
+sonix2
+
+coredesign1
+;	incbin "core design.shr"
+coredesign2
+
+quartetst1
+	incbin "quartet st.shr"
+quartetst2
+
+digitalmugician21
+	incbin "mugician ii.shr"
+digitalmugician22
+
+musicmaker41
+	incbin musicmaker4.shr
+musicmaker42
+
+musicmaker81
+	incbin musicmaker8.shr
+musicmaker82
+
+soundcontrol1
+	incbin soundcontrol.shr
+soundcontrol2
+
+stonetracker1
+	incbin eaglestone.shr
+stonetracker2
+
+tme1
+	incbin	tme.shr
+tme2
+
+timfollin21
+	incbin	"tim follin ii.shr"
+timfollin22	
+	endif
 pend
