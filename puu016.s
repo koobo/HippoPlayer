@@ -27329,11 +27329,11 @@ are
 	move.l	a0,a3
 	cmp.l	#"IMP!",(a4)
 	beq.b	.imp
-	moveq	#1,d6
+	moveq	#1,d5		* type flag
 	move.l	(a4),d0		* shr decompressed size
 	bra.b	.noImp
 .imp
-	moveq	#0,d6
+	moveq	#1,d5		* type flag
 	move.l	4(a4),d0	* fimp decompressed size
 .noImp
 
@@ -27351,7 +27351,7 @@ are
 
 	* a4 = compressed data
 	* a1 = output buffer
-	tst	d6
+	tst	d5
 	bne.b	.shr
 
 	move.l	a4,a0
