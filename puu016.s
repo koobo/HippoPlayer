@@ -25189,8 +25189,8 @@ internalFormats
 	dc.l	p_markii 
 	dc.l 	p_mon
 	dc.l 	p_dw
-	dc.l	p_hippel 
 	dc.l 	p_beathoven 
+	dc.l	p_hippel	* very slow id 
 	dc.l 	0
 
 * Formats
@@ -25248,7 +25248,6 @@ eagleFormats
 	dc.l	p_tcbtracker
 	; Hangs on interrupt wait loop
 	;dc.l	p_markcooksey 
-	dc.l	p_activisionpro
 	dc.l	p_maxtrax
 	dc.l	p_wallybeben
 	dc.l	p_synthpack
@@ -25265,6 +25264,7 @@ eagleFormats
 	dc.l	p_stonetracker
 	dc.l	p_themusicalenlightenment
 	dc.l	p_timfollin2
+	dc.l	p_activisionpro  	* very slow id
 	dc.l 	0	
 
 *******
@@ -25454,6 +25454,13 @@ tutki_moduuli
 	move.l	moduleaddress(a5),a4
 	move.l	modulelength(a5),d7
 
+	* Give some kB of data to identifyiers
+	* as some are very slow on large data 
+	* (hippel, activision pro)
+	cmp.l	#1024*4,d7
+	blo.b	.lenOk
+	move.l	#1024*4,d7
+.lenOk
 
 ;	tst.b	keyfile+49(a5)	* datan v‰lilt‰ 38-50 pit‰‰ olla nollia
 ;	beq.b	.zz
