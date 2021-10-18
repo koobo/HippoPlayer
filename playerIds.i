@@ -56,7 +56,7 @@ pt_davelowe		rs.b	1
 pt_startrekker		rs.b 	1
 pt_voodoosupremesynthesizer rs.b  1
 
-pt_eagle_start = 1000
+pt_eagle_start = 150
 	rsset	pt_eagle_start
 pt_synthesis		rs.b 	1
 pt_syntracker		rs.b  	1
