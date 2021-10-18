@@ -31860,7 +31860,10 @@ hippelmusic	dc.l	0
 
 
 id_hippel 
+	push	d7
 	bsr.b 	.id_hippel_
+	pop	d7
+	tst.l	d0
 	bne.b .x 
 	move.l	d4,hippelmusic
 	move	d5,maxsongs(a5)
@@ -31874,12 +31877,13 @@ id_hippel
 * a4 <= mod
 * d4 => hippel music 
 * d5 => max songs
-	move.l	d7,d0
 
-	cmp.l	#1024*2,d0
+	* check some data, not all, too slow otherwise
+	cmp.l	#1024*4,d7
 	blo.b	.ok
-	move.l	#1024*2,d0
+	move.l	#1024*4,d7
 .ok
+	move.l	d7,d0
 
 	cmp.l	#100,d0
 	blo.w	.lbC000288
@@ -36926,9 +36930,10 @@ p_activisionpro
 	move.l	a4,a0 
 	move.l	d7,d0
 
-	cmp.l	#1024,d0
+	* check smaller area, otherwise can be slooow
+	cmp.l	#1024*4,d0
 	blo.b	.ok
-	move.l	#1024,d0
+	move.l	#1024*4,d0
 .ok
 
 .lbC0004CA	MOVE.L	A0,A4
@@ -37087,12 +37092,17 @@ p_activisionpro
 	dc.b	$FF
 	dc.b	$E5
 	dc.b	$40
-.lbB00065A	dc.b	$48
+.lbB00065A
+	dc.b	$48
 	dc.b	$E7
 	dc.b	$FC
 	dc.b	$FE
 	dc.b	$41
-.lbB00065F	dc.b	$FA
+
+* This bit is needed to recognize "d-generation-sfx.avp":
+
+.lbB00065F
+	dc.b	$FA
 	dc.b	$FF
 	dc.b	$FF
 	dc.b	$43
@@ -37132,7 +37142,7 @@ p_activisionpro
 	dc.b	3
 	dc.b	$4E
 	dc.b	$75
-
+ even
 
 ******************************************************************************
 * MaxTrax
