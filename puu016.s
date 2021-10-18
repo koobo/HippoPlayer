@@ -18341,7 +18341,109 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .nosid
 
+	cmp	#pt_eagle_start,playertype(a5)		* eagleplayer
+	blo.w	.noeagle
+	move	#33,info_prosessi(a5)		* some magic flag
+	
+	lea	.form3(pc),a0
+	lea	-32(sp),sp
+	move.l	sp,a4
+	bsr.w	.namtypsizcom
+	moveq	#10+20,d5
+	bsr.w	.allo2
+	bne.w	.jee9eg
+	lea	32(sp),sp
+	bra.w	.sexit
+.jee9eg
+	move.l	sp,a1
+	move.l	infotaz(a5),a3
+	jsr	desmsg4
+	bsr.w	.putcomment
+	lea	32(sp),sp
 
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+
+	move.l	#MI_SongName,d1
+	lea	.eagleSong(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_AuthorName,d1
+	lea	.eagleAuthor(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_Prefix,d1
+	lea	.eaglePrefix(pc),a0
+	bsr.b	.deliPutInfo
+	move.l	#MI_Samples,d1
+	lea	.eagleSamples(pc),a0
+	bsr.b	.deliPutInfo
+	move.l	#MI_SynthSamples,d1
+	lea	.eagleSynthSamples(pc),a0
+	bsr.b	.deliPutInfo
+	move.l	#MI_Songsize,d1
+	lea	.eagleSongSize(pc),a0
+	bsr.b	.deliPutInfo
+	move.l	#MI_SamplesSize,d1
+	lea	.eagleSamplesSize(pc),a0
+	bsr.b	.deliPutInfo
+	move.l	#MI_Voices,d1
+	lea	.eagleVoices(pc),a0
+	bsr.b	.deliPutInfo
+
+	move.l	#MI_Duration,d1
+	jsr	deliFindInfoValue
+	ble.b	.noEagleDur
+	divu	#60,d0 
+	move.l	d0,d1
+	swap	d1 
+	ext.l 	d0 
+	ext.l 	d1
+	lea	.eagleDuration(pc),a0
+	bsr.b	.deliPutInfo2
+.noEagleDur
+
+	move.l	#MI_About,d1
+	lea	.eagleAbout(pc),a0
+	bsr.b	.deliPutInfo
+
+	bra.w	.selvis
+
+.deliPutInfo
+	push 	a0
+	jsr	deliFindInfoValue
+	pop  	a0
+	tst.l	d0
+	* zero or lower
+	ble.b	.noInfo
+.deliPutInfo2
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	bsr.b	.deliFormat
+.noInfo
+	rts
+
+.deliFormat	
+	pushm	d0-d7
+	move.l	sp,a1
+	lea	putc(pc),a2	;merkkien siirto
+	lore 	Exec,RawDoFmt
+	popm	d0-d7
+	rts
+
+.eagleSong	 	dc.b	"Song: %s",ILF,ILF2,0
+.eagleAuthor		dc.b	"Author: %s",ILF,ILF2,0
+.eagleSamples		dc.b	"Samples: %ld",ILF,ILF2,0
+.eagleSynthSamples	dc.b	"Synth samples: %ld",ILF,ILF2,0
+.eagleSongSize	 	dc.b	"Song size: %ld bytes",ILF,ILF2,0
+.eagleSamplesSize	dc.b	"Samples size: %ld bytes",ILF,ILF2,0
+.eaglePrefix 		dc.b	"Prefix: %s",ILF,ILF2,0
+.eagleVoices	 	dc.b	"Voices: %ld",ILF,ILF2,0
+.eagleDuration	 	dc.b	"Duration: %02ld:%02ld",ILF,ILF2,0
+.eagleAbout	 	dc.b	"About: %s",ILF,ILF2,0
+ even
+
+.noeagle
 
 ********* module (PT)
 
