@@ -101,6 +101,7 @@ In this episode, we will be trying to play them all!
 - SonicArranger
   - Now supports more variants, previously only the compact form was 
     supported. Adaptation based on Wanted Team sources.
+  - There is still one variant (at least) that is not supported.
 - CustomMade
   - "Battle Squadron"
   - Songs composed by Ron Klaren. Adaptation based on Wanted Team sources.
@@ -244,6 +245,12 @@ ChipTracker ("chiptracker")
   - "Ghouls 'n' Ghosts"
   - Eagleplayer by Andy Silva and Buggs/DEFECT 
  
+## Misc 
+- In the HippoSupport folder there is a tool called "TerminateHiP". 
+  This is no longer compatible with Hippo. Instead, an AREXX script 
+  such as the following should work:
+  rx "address hippoplayer ; quit"
+
 ## Tips 
 - A nice place for exotic modules is the FTP server Modland. 
 - Eagleplayers can be found on aminet and on the Wanted Team web page. 
