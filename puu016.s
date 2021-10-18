@@ -1487,8 +1487,6 @@ progstart
 	move.l	d0,a4
 	move.l	d0,_DosBase(a5)
 
-	DPRINT	"Start"
-
 	sub.l	a1,a1
 	lob	FindTask
 	move.l	d0,a3
@@ -1506,45 +1504,25 @@ progstart
 	beq.w	.waswb			* workbenchilt‰
 	move.l	d0,a0
 	move.l	(a0),lockhere(a5)
+	DPRINT	"Start from WB"
 	bra.w	.waswb
 .nowb	
 	move.l	pr_CurrentDir(a3),lockhere(a5) * nykyinen hakemisto CLI:lt‰
+	DPRINT	"Start from CLI"
 
-	cmp	#36,LIB_VERSION(a6)
-	blo.b	.noo	
-	move.l 	pr_HomeDir(a3),d1
-	beq.b	.noo
-	lore	Dos,DupLock
-	move.l	d0,homelock(a5)
-.noo
-
- if DEBUG
-	move.l 	pr_CurrentDir(a3),d1
-	move.l	#ptheader,d2
-	moveq	#100,d3 
-	jsr	getNameFromLock
-	move.l	#ptheader,d0
-	DPRINT	"Current dir: %s"
-	move.l	4.w,a6
-	cmp	#36,LIB_VERSION(a6)
-	blo.b	.ooold	
-	move.l 	pr_HomeDir(a3),d1
-	move.l	#ptheader,d2
-	moveq	#100,d3 
-	jsr	getNameFromLock
-	move.l	#ptheader,d0
-	DPRINT	"Home dir: %s"
-.ooold
- endif 
-
+	push	a3
 	bsr.w	CLIparms
-
+	pop	a3
 .waswb	
 	move.l	(a5),a6
+
+	* a3 = current task
+	bsr.b	.getDirInfo
+
 	lea	portname,a1		* joko oli yksi HiP??
 	lob	FindPort
 	tst.l	d0
-	bne.b	.poptofront
+	bne.w	.poptofront
 
 	* There was no hip already running, launch a new one
 
@@ -1593,6 +1571,36 @@ progstart
 	moveq	#0,d0
 	rts
 
+* in:
+*  a3 = current task
+*  a6 = exec
+.getDirInfo 
+	cmp	#36,LIB_VERSION(a6)
+	blo.b	.noo	
+	move.l 	pr_HomeDir(a3),d1
+	beq.b	.noo
+	lore	Dos,DupLock
+	move.l	d0,homelock(a5)
+.noo
+
+ if DEBUG
+	move.l 	lockhere(a5),d1
+	move.l	#ptheader,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	move.l	#ptheader,d0
+	DPRINT	"Current dir: %s"
+	move.l 	homelock(a5),d1
+	beq.b	.ooold
+	move.l	#ptheader,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	move.l	#ptheader,d0
+	DPRINT	"Home dir: %s"
+.ooold
+ endif 
+	rts
+
 .poptofront
 	tst.l	sv_argvArray+4(a5)	* oliko parametrej‰?
 	bne.b	.huh			* jos ei, pullautetaan hip!
@@ -1600,7 +1608,7 @@ progstart
 	move.l	d0,a0
 	move.l	poptofrontr-hippoport(a0),a0	* pullautusrutiini
 	jsr	(a0)								* what is this evil magic?
-	bra.b	.eien
+	bra.w	.eien
 
 * Oli! L‰hetet‰‰n hipille!
 .huh
