@@ -18372,6 +18372,9 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	#MI_AuthorName,d1
 	lea	.eagleAuthor(pc),a0
 	bsr.w	.deliPutInfo
+	move.l	#MI_SubSongs,d1
+	lea	.eagleSubsongs(pc),a0
+	bsr.w	.deliPutInfo
 	move.l	#MI_Prefix,d1
 	lea	.eaglePrefix(pc),a0
 	bsr.b	.deliPutInfo
@@ -18431,8 +18434,9 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	popm	d0-d7
 	rts
 
-.eagleSong	 	dc.b	"Song: %s",ILF,ILF2,0
-.eagleAuthor		dc.b	"Author: %s",ILF,ILF2,0
+.eagleSong	 	dc.b	"Song: %-33.33s",ILF,ILF2,0
+.eagleAuthor		dc.b	"Author: %-31.31s",ILF,ILF2,0
+.eagleSubsongs		dc.b	"Subsongs: %ld",ILF,ILF2,0
 .eagleSamples		dc.b	"Samples: %ld",ILF,ILF2,0
 .eagleSynthSamples	dc.b	"Synth samples: %ld",ILF,ILF2,0
 .eagleSongSize	 	dc.b	"Song size: %ld bytes",ILF,ILF2,0
@@ -18440,7 +18444,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .eaglePrefix 		dc.b	"Prefix: %s",ILF,ILF2,0
 .eagleVoices	 	dc.b	"Voices: %ld",ILF,ILF2,0
 .eagleDuration	 	dc.b	"Duration: %02ld:%02ld",ILF,ILF2,0
-.eagleAbout	 	dc.b	"About: %s",ILF,ILF2,0
+.eagleAbout	 	dc.b	"About: %-32.32s",ILF,ILF2,0
  even
 
 .noeagle
