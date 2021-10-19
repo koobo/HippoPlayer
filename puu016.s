@@ -25286,99 +25286,6 @@ search
 	rts
 
 
-* Formats
-* - built-in replayers in hippo
-* - replayer code is within modules
-* - replayer code is in libraries
-internalFormats
-	;dc.l	p_protracker 
-	dc.l	p_med 
-	dc.l 	p_mline 
-	dc.l 	p_musicassembler 
-	dc.l 	p_fred 
-	dc.l	p_sidmon1 
-	dc.l 	p_deltamusic 
-	dc.l	p_markii 
-	dc.l 	p_mon
-	dc.l 	p_dw
-	dc.l 	p_beathoven 
-	dc.l	p_hippel	* very slow id 
-	dc.l 	0
-
-* Formats
-* - replayers are in the HippoPlayer.group
-groupFormats
-	dc.l 	p_jamcracker 
-	dc.l 	p_pumatracker 
-	dc.l 	p_futurecomposer13
-	dc.l 	p_futurecomposer14 
-	dc.l 	p_oktalyzer
-	;dc.l	p_tfmx
-	dc.l	p_hippelcoso 
-	dc.l	p_soundmon 
-	dc.l	p_soundmon3 
-	dc.l	p_digibooster 
-	dc.l 	p_digiboosterpro 
-	dc.l	p_thx 
-	dc.l 	p_aon 
-	dc.l	p_digitalmugician
-	dc.l	p_gamemusiccreator 
-	dc.l	p_medley 
-	dc.l	p_bendaglish 
-	dc.l	p_sidmon2 
-	dc.l	p_deltamusic1 
-	dc.l	p_soundfx 
-	dc.l	p_gluemon
-	dc.l	p_pretracker 
-	dc.l 	p_custommade 
-	dc.l 	p_sonicarranger
-	dc.l	p_startrekker
-	dc.l	p_voodoosupremesynthesizer
-	dc.l 	p_player
-	dc.l 	0
-
-
-* Formats
-* - replayers provided in eagleplayers modules
-eagleFormats
-	dc.l	p_synthesis
-	dc.l	p_syntracker
-	dc.l	p_robhubbard2
-	dc.l	p_chiptracker
-	dc.l	p_quartet
-	dc.l	p_facethemusic
-	dc.l	p_richardjoseph
-	dc.l	p_instereo1 
-	dc.l	p_instereo2
-	dc.l	p_jasonbrooke
-	dc.l	p_earache
-	dc.l	p_krishatlelid
-	dc.l	p_richardjoseph2
-	dc.l	p_hippel7
-	dc.l	p_aprosys
-	dc.l	p_hippelst
-	dc.l	p_tcbtracker
-	; Hangs on interrupt wait loop
-	;dc.l	p_markcooksey 
-	dc.l	p_maxtrax
-	dc.l	p_wallybeben
-	dc.l	p_synthpack
-	dc.l	p_robhubbard 
-	dc.l 	p_jeroentel
-	dc.l	p_sonix
-	dc.l	p_quartetst 
-	; Hangs on privileged instruction?
-	;dc.l	p_coredesign
-	dc.l	p_digitalmugician2
-	dc.l	p_musicmaker4
-	dc.l	p_musicmaker8
-	dc.l	p_soundcontrol
-	dc.l	p_stonetracker
-	dc.l	p_themusicalenlightenment
-	dc.l	p_timfollin2
-	dc.l	p_activisionpro  	* very slow id
-	dc.l 	0	
-
 *******
 * Analysoidaan moduuli
 *******
@@ -25975,23 +25882,25 @@ identifyFormats
 	clr.b	modulename(a5)
 doIdentifyFormats
 .loop 
-	tst.l	(a3)
+	tst	(a3)
 	beq.b	.notFound
-	move.l	(a3),a0
-	pushpea	p_name(a0),d0
+	move.l	a3,a0
+	add	(a0),a0
+ if DEBUG
+	;pushpea	p_name(a0),d0
 	;DPRINT	"- %s"
+ endif
 	pushm	all
 	jsr	p_id(a0)
 	tst.b	d0
 	popm 	all
 	beq.b 	.found
-	addq	#4,a3
+	addq	#2,a3
 	bra.b	.loop
 .found
 	tst.b	d1 
 	bne.b 	.nameOk
 
-	move.l	(a3),a0
 	move.l	a0,playerbase(a5)
 	move	p_type(a0),playertype(a5)
 	
@@ -27527,11 +27436,11 @@ reloc	pushm	d0-d2/a0/a1
 	move.l	a0,a1		* a0 = start of the actual code
 	move.l	a0,d1		* also in d1 
 	lea	4(a0,d2.l),a0	* skip over to HUNK_RELOC32 start + 4
-						* skip over the hunk id, that i
+						* skip over the hunk id, that is
 	move.l	(a0)+,d2	* Number of offsets to handle
 	subq.l	#1,d2
 	bmi.b	.024c
-	addq.w	#4,a0		* Skip over the target hunk number
+	addq.w	#4,a0		* Skip over the target hunk number, assume we know it
 .0242	move.l	(a0)+,d0 * read RELOC32 offset
 	* Add start address of the code hunk to the 
 	* address specified by the reloc offset
@@ -27675,6 +27584,104 @@ clearsound
 	popm	d0/a0
 	rts
 
+
+******************************************************************************
+* Music formats
+******************************************************************************
+
+* Formats
+* - built-in replayers in hippo
+* - replayer code is within modules
+* - replayer code is in libraries
+* - TFMX and ProTracker have special handling 
+internalFormats
+	;dr.w	p_protracker 
+	dr.w	p_med 
+	dr.w 	p_mline 
+	dr.w 	p_musicassembler 
+	dr.w 	p_fred 
+	dr.w	p_sidmon1 
+	dr.w 	p_deltamusic 
+	dr.w	p_markii 
+	dr.w 	p_mon
+	dr.w 	p_dw
+	dr.w 	p_beathoven 
+	dr.w	p_hippel	* very slow id 
+	dc.w 	0
+
+* Formats
+* - replayers are in the HippoPlayer.group
+groupFormats
+	dr.w 	p_jamcracker 
+	dr.w 	p_pumatracker 
+	dr.w 	p_futurecomposer13
+	dr.w 	p_futurecomposer14 
+	dr.w 	p_oktalyzer
+	;dr.w	p_tfmx
+	dr.w	p_hippelcoso 
+	dr.w	p_soundmon 
+	dr.w	p_soundmon3 
+	dr.w	p_digibooster 
+	dr.w 	p_digiboosterpro 
+	dr.w	p_thx 
+	dr.w 	p_aon 
+	dr.w	p_digitalmugician
+	dr.w	p_gamemusiccreator 
+	dr.w	p_medley 
+	dr.w	p_bendaglish 
+	dr.w	p_sidmon2 
+	dr.w	p_deltamusic1 
+	dr.w	p_soundfx 
+	dr.w	p_gluemon
+	dr.w	p_pretracker 
+	dr.w 	p_custommade 
+	dr.w 	p_sonicarranger
+	dr.w	p_startrekker
+	dr.w	p_voodoosupremesynthesizer
+	dr.w 	p_player
+	dc.w 	0
+
+
+* Formats
+* - replayers provided in eagleplayer plugins
+eagleFormats
+	dr.w	p_synthesis
+	dr.w	p_syntracker
+	dr.w	p_robhubbard2
+	dr.w	p_chiptracker
+	dr.w	p_quartet
+	dr.w	p_facethemusic
+	dr.w	p_richardjoseph
+	dr.w	p_instereo1 
+	dr.w	p_instereo2
+	dr.w	p_jasonbrooke
+	dr.w	p_earache
+	dr.w	p_krishatlelid
+	dr.w	p_richardjoseph2
+	dr.w	p_hippel7
+	dr.w	p_aprosys
+	dr.w	p_hippelst
+	dr.w	p_tcbtracker
+	; Hangs on interrupt wait loop
+	;dr.w	p_markcooksey 
+	dr.w	p_maxtrax
+	dr.w	p_wallybeben
+	dr.w	p_synthpack
+	dr.w	p_robhubbard 
+	dr.w 	p_jeroentel
+	dr.w	p_sonix
+	dr.w	p_quartetst 
+	; Hangs on privileged instruction?
+	;dr.w	p_coredesign
+	dr.w	p_digitalmugician2
+	dr.w	p_musicmaker4
+	dr.w	p_musicmaker8
+	dr.w	p_soundcontrol
+	dr.w	p_stonetracker
+	dr.w	p_themusicalenlightenment
+	dr.w	p_timfollin2
+	dr.w	p_activisionpro  	* very slow id
+	dc.w 	0	
 
 ******************************************************************************
 * Protracker
@@ -33681,7 +33688,6 @@ p_gamemusiccreator
 ; out: d0 = 0, valid GMC
 ;      d0 = -1, not GMC
 id_gamemusiccreator
-	DPRINT	"GAMEMUSICCREATOR"
 	pushm 	d1-a6
 	bsr.b	.do
 	popm 	d1-a6 
@@ -38899,7 +38905,7 @@ deliInit
 .noCheck5
 
 .checksOk
-	jsr		clearCpuCaches  ; Extra safety
+	bsr	clearCpuCaches  ; Extra safety
 
 	move.l	#EP_Flags,d0
 	bsr.w	deliGetTag
@@ -38929,7 +38935,7 @@ deliInit
 	bne.w	.initError
 	DPRINT	"initPlayer ok"
 
-	jsr		clearCpuCaches  ; Extra safety
+	bsr	clearCpuCaches  ; Extra safety
 
 	* set default song number
 	bsr.w	deliGetSongInfo
@@ -38966,7 +38972,7 @@ deliInit
 	* Does not return error code
 
 	DPRINT	"InitSound ok"
-	jsr		clearCpuCaches  ; Extra safety
+	bsr	clearCpuCaches  ; Extra safety
 
 	* Get position info if available
 	bsr.w	deliUpdatePositionInfo
@@ -40809,7 +40815,7 @@ plainLoadFile
 	rts
 
 * Saves a file
-* in:
+* in:	
 *  a0 = file path
 *  a1 = data address
 *  d0 = data length
