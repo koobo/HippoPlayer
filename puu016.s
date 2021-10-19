@@ -1514,13 +1514,12 @@ progstart
 	bsr.w	CLIparms
 	pop	a3
 .waswb	
-	move.l	(a5),a6
 
 	* a3 = current task
-	bsr.b	.getDirInfo
 
+	bsr.b	.getDirInfo
 	lea	portname,a1		* joko oli yksi HiP??
-	lob	FindPort
+	lore	Exec,FindPort
 	tst.l	d0
 	bne.w	.poptofront
 
