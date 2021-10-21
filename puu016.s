@@ -10930,7 +10930,7 @@ importModuleProgramFromData
 .what
 	lea	unknown_module_program_error(pc),a1
 	bsr.w	request
-	rts
+	bra.b  	.x2
 
 unknown_module_program_error  dc.b	"Not a module program!",0
 xpk_module_program_error	 dc.b	"Could not load XPK compressed module program!",0
