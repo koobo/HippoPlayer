@@ -63,7 +63,9 @@ In this episode, we will be trying to play them all!
  
 ## New features:
 - Patternscope XL, with twice the amount of rows. 
-  Generally patternscope should use much less CPU now.
+  It is available in Prefs with the other scopes.
+  Generally patternscope should use less CPU now, due to some
+  optimizations.
 - Dual monitor support is now possible with P96. In such case
   Hippo may think the scopes are invisible and stop updating them.
   Clicking the left mouse button in the scope window will 
@@ -146,7 +148,7 @@ In this episode, we will be trying to play them all!
   - It seems that In Stereo!, Synthesis and SonicArranger are related,
     all mention Carsten Herbst in credits.
   - Eagleplayer by Eagleeye/DEFECT
-ChipTracker ("chiptracker")
+- ChipTracker ("chiptracker")
   - Also known as KRISTracker.
   - Tunes by 4-Mat.
   - Eagleplayer by Wanted Team
@@ -179,7 +181,6 @@ ChipTracker ("chiptracker")
   - "Space Harrier"
   - Eagleplayer by Wanted Team
 - Activision Pro ("activision pro")
-  - Some of these crash, disabling CPU caches may help.
   - "R-Type 2"
   - Eagleplayer by Eagleeye/DEFECT
 - Wally Beben ("wally beben")
@@ -193,18 +194,18 @@ ChipTracker ("chiptracker")
   - Eagleplayer by EagleeEye/DFT & Wanted Team
 - Sonix Music Driver ("sonix music driver")
   - File prefixes: SMUS.*, TINY.*, SNX.*
-  - These definitely have a sound of their own. A note based
-    editor, not a tracker.
+  - These definitely have their own, musical sound. 
+  - A note based editor. Quite unlike any tracker music.
   - Instruments are separate files.
-  - Many beautiful adaptations of classical music.
-  - "California Games"
+  - Many beautiful adaptations of classical music, such as "Arabesque".
+  - "California Games" music was also made in this format.
   - Eagleplayer by Wanted Team
 - Digital Mugician II ("mugician ii")
   - Seven voices.  
   - Eagleplayer by Wanted Team
 - StoneTracker ("eaglestone")
   - One of the newer 4-8 channel Amiga trackers.
-  - These don't work on kick1.3 and/or 68000, I think.
+  - These don't work on kick1.3 and/or 68000.
   - To play these, additional libraries are needed in LIBS:
     - stoneplayer.library, stonepacker.library
     - These can be found in the StoneTracker aminet archive.
@@ -218,14 +219,16 @@ ChipTracker ("chiptracker")
 - MusicMaker V8 ("musicmaker4", "musicmaker8")
   - 4-8 channel modules. 
   - Format with multiple files per module not supported.
-  - MM8 has recently been updated, which is cool.
+  - First versions of this app were released way back in the 80s,  
+    there have been new updates just recently, cool!
   - Eagleplayers by Thomas Winischhofer, the author of MusicMaker
 - MaxTrax ("maxtrax")
   - Eagleplayer by Wanted Team
 - SoundControl ("soundcontrol")
   - Eagleplayer by Wanted Team
 - Synth Pack
-  - Synth enabled format by the legendary Sound Tracker creator Karsten Obarski.
+  - Synth enabled format by the legendary Sound Tracker creator 
+    Karsten Obarski.
   - These tunes are worth checking out.
   - Eagleplayer by Wanted Team
 - EarAche 
@@ -246,9 +249,9 @@ ChipTracker ("chiptracker")
   - Eagleplayer by Andy Silva and Buggs/DEFECT 
  
 ## Misc 
-- In the HippoSupport folder there is a tool called "TerminateHiP". 
-  This is no longer compatible with Hippo. Instead, an AREXX script 
-  such as the following should work:
+- In the original hippo release, in the HippoSupport folder, there is a
+  tool called "TerminateHiP". This is no longer compatible with Hippo. 
+  Instead, an AREXX script such as the following should work:
   rx "address hippoplayer ; quit"
 
 ## Tips 
@@ -261,7 +264,6 @@ ChipTracker ("chiptracker")
 - Marek Hac for beta testing.
 - Wanted Team for Eagleplayer resources.
 - Authors of all the included eagleplayers, I hope you don't mind!
-
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------

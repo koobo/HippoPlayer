@@ -49,7 +49,6 @@ Formats
 + synth pack
 + Synthesis
 + Syntracker
-+ tcbtracker
 + TCBTracker
 + wally beben
 + MusicMakerV8
@@ -61,12 +60,99 @@ Formats
 - sound master 
 - special fx
 
+BUG
+- SMUS.Fille, .Arabesque, not loading on kick13, ok on 30. probably out of chip mem
+
+ISSUES/Spot
+- Hawkeye.TME crash
+- FC: RSI theme "still sounds weird"
+- FC: "prince.hip" same tune and also sounds weird
+- FC: paranoimia.smod 
+-> ok on a1200
+
+FIXD
+- actvision pro, hippel i
+
+TODO
+- show player capabilities in info window
+
+WORKS
+- test HOMEDIR: if launched from icon
+
+FIXED
+CRASH on real amiga PART 2
+- Jumping Jackson level 1
+
+FIXED
+CRASH ON real amiga
+- instereo2 
+- activision pro 
+- tme
+- Synthesis
+- Richard Joseph  (VectorDean ok)
+
+TODO: 
+- SonicArranger: SA-alkuiset "unknown module"
+
+TODO 
+- kick 13
+- play testdrive 2, try to load something else 
+--> crash
+
+
+FIXED
+TODO
+- check TME on amiga
+
+TODO 
+- kick13 + mine 
+-> crash
+
+TODO
+- slow init:
+-- mm8 
+-- Pretracker 
+
+TOOD
+- APS.Cliffs
+-> illegal reads a lot
+-> hangs due to enforcer hit logging
+
+TODO
+- DTP_Config
+-> Hippel 7v
+-> stonetracker
+-> mugician 2
+-> musicmaker8
+
+TODO
+- soundmon3: beeping error
+
+TODO?
+- stonetracker mem leak?
+
+TODO?
+- eagleplayer better error msgs
+- missing files etc
+
+TODO
+- test TMFX with doublebuffering
+
+TODO
+- add divider to fav list -> disappears
+
+FIXED
+- GMC. pitänee olla fastissa?
+- piip! 
+
+FIXED
+- hippel not recognized with 2k
+-- pt
+
 FIXED
 - play tim follin: ghouls and ghosts 
   three times with enter -> crash
 
-TODO
-- check TME on amiga
 
 FIXED
 - tim follin not loading on kick 1.3>/tmp/1
@@ -99,9 +185,6 @@ FIXED
 -> crap replayer rip 
 -> 8ch mods go into fast
 
-TODO?
-- stonetracker mem leak?
-
 FIXED
 -  "rsi theme.fc" sounds pretty buggy
 - pos/len?
@@ -115,42 +198,17 @@ FIXED
 - load "synth pack" module
 - "idenfitying xpk file" still seen, when loadiing samples?
 
-TOOD
-- APS.Cliffs
--> illegal reads a lot
--> hangs due to enforcer hit logging
-
-TODO
-- DTP_Config
--> Hippel 7v
--> stonetracker
--> mugician 2
--> musicmaker8
-
 FIXED
 - play 2nd module from main list
 - switch to favs 
 - play 2nd module from fav list 
 --> 2nd main list module restarts!
 
-TODO
-- soundmon3: beeping error
-
 FIXED
 - beathoven not recognized
 
 FIXED
 - delicustom not regonized (should allow CHECKS missing)
-
-TODO
-- add divider to fav list -> disappears
-
-TODO?
-- eagleplayer better error msgs
-- missing files etc
-
-TODO
-- test TMFX with doublebuffering
 
 FIXED
 - min song handling: RJ.speedball
