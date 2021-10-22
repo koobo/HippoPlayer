@@ -3358,6 +3358,7 @@ exit
 	move.l	randomtable(a5),a0
 	bsr.w 	freemem
 
+	jsr	closeTooltipPopup
 	bsr.w	flush_messages
 	bsr.w	sulje_ikkuna
 
