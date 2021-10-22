@@ -6862,11 +6862,11 @@ getRandomValue
         moveq   #$10,d1
         lsr.l   d1,d0
 		
-		move.l	d0,d1 
-		bsr.w	getRandomValueMask
-		and.l	d0,d1
-		
-		pop	d0
+	move.l	d0,d1 
+	bsr.w	getRandomValueMask
+	and.l	d0,d1
+
+	pop	d0
         rts
 
 
@@ -6982,8 +6982,8 @@ divu_64
 
 
 
-* To discard too big random values quickly, "and" the value with a suitable mask,
-* based on amount of modules. Calculate the mask here.
+* To discard too big random values quickly, "and" the value with a 
+* suitable mask, based on amount of modules. Calculate the mask here.
 getRandomValueMask
 	move.l	randomValueMask(a5),d0 
 	bne.b	.x
@@ -7000,11 +7000,10 @@ getRandomValueMask
 *   d0 = value to check
 * out: 
 *   d0 = highest bit in value set
-* destroy:
-*   d1
 * example: 0x7f -> 0x40
 
 findHighestBit
+	push	d1
 	move.l	d0,d1
 	lsr.l	#1,d1
 	or.l	d1,d0
@@ -7029,6 +7028,7 @@ findHighestBit
 	move.l	d0,d1
 	lsr.l	#1,d1
 	sub.l	d1,d0
+	pop	d1
 	rts	
 
 
