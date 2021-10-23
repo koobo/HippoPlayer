@@ -59,6 +59,9 @@ In this episode, we will be trying to play them all!
   This should fix the VisualPrefs related bug where adjusting
   window and screen title bar heights caused Hippo to add extra
   vertical space at the top part of the window.
+- Fixed the random generator bug where the first value was not random.
+  In random play mode this could result to the same first module 
+  being player every time. 
 - A few other minor issues fixed.
  
 ## New features:
@@ -226,25 +229,25 @@ In this episode, we will be trying to play them all!
   - Eagleplayer by Wanted Team
 - SoundControl ("soundcontrol")
   - Eagleplayer by Wanted Team
-- Synth Pack
+- Synth Pack ("synth pack")
   - Synth enabled format by the legendary Sound Tracker creator 
     Karsten Obarski.
   - These tunes are worth checking out.
   - Eagleplayer by Wanted Team
-- EarAche 
+- EarAche ("earache")
   - An obscure synth format with apparently only three modules in existence.
   - Eagleplayer by Wanted Team
-- The Musical Enlightenment
+- The Musical Enlightenment ("tme")
   - Yet another obscure synth format.
   - Eagleplayer by Wanted Team
-- Face The Music
+- Face The Music ("face the music")
   - 8 channel format.
   - This one does some illegal memory reads from audio interrupts sometimes.
   - Eagleplayer by Buggs of DEFECT
-- Kris Hatlelid 
+- Kris Hatlelid ("kris hatlelid")
   - "Test Drive II"
   - Eagleplayer by Wanted Team
-- Tim Follin
+- Tim Follin ("tim follin ii")
   - "Ghouls 'n' Ghosts"
   - Eagleplayer by Andy Silva and Buggs/DEFECT 
  
