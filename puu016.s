@@ -169,7 +169,7 @@ check	macro
 
 	include	dos/dos_lib.i
 	include	dos/dosextens.i
-
+	include dos/doshunks.i
 
 	include	rexx/rxslib.i
 
@@ -1187,6 +1187,8 @@ deliPathArray		rs.l	1
 debugDesBuf		rs.b	1000
  endif
 
+overlayDataStream	rs.l 	1
+
 * Size of global variables data. Must be even.
 size_var	rs.b	0
 
@@ -1476,9 +1478,26 @@ DDELAY macro
 	section	detach,code_p
 
 progstart
+	jmp	progstart_(pc)
+
+	* Overlay magic word at offset 8
+	dc.l	$ABCD
+
+_overlayDataStream		dc.l	0 * STREAM
+_overlayDataOvTab		dc.l	0 * OVTAB
+_overlayDataHTab		dc.l	0 * HTAB
+_overlayDataGlbVec		dc.l	0 * GLBVEC
+
+progstart_
 	lea	var_b,a5
 	move.l	a0,d6
 	move.l	d0,d7
+
+	* Grab file handle.
+	* It will be closed when this segment exits.
+	* Prevent that by clearing the handle.
+	move.l	_overlayDataStream(pc),overlayDataStream(a5)
+	clr.l	_overlayDataStream
 
 	move.l	4.w,a6
 	move.l	a6,(a5)
@@ -2209,6 +2228,22 @@ bob
 	move.l	d0,_RexxBase(a5)
 	sne	rexxon(a5)		* Lippu
 .norexx
+
+	move.l overlayDataStream(a5),d0 
+	DPRINT	"Overlay file: %lx"
+ if DEBUG
+	tst.b	uusikick(a5)
+	beq.b 	.oldv
+	move.l	d0,d1
+	move.l	#ptheader,d2
+	move.l	#100,d3
+	push	a6
+	lore	Dos,NameFromFH		* kick2.0+
+	pop	a6
+	pushpea	ptheader,d0
+	DPRINT	"Overlay name: %s"
+.oldv 
+ 	endif
 
 	lea 	gfxname(pc),a1		
 	lob	OldOpenLibrary
@@ -3472,6 +3507,11 @@ exit2
 	lob	Close
 .xef
  endc
+
+	move.l overlayDataStream(a5),d1 
+	beq.b 	.noOvl 
+	lore  	Dos,Close
+.noOvl
 
  ifeq asm
 	move.l	lockhere(a5),d1		* free CurrentDir lock
@@ -25979,9 +26019,15 @@ loadplayergroup
 	bsr.w	inforivit_group
 
 	moveq	#0,d7
-	bsr.w		openPlayerGroupFile
+	bsr.w	openPlayerGroupFile
 	beq.w	.error
 .ok
+	cmp.l	overlayDataStream(a5),d4 
+	bne.b 	.noOvl
+	move.l	#groupLength,d5
+	bra.b	.skip
+.noOvl
+
 	move.l	d4,d1		* selvitet‰‰n filen pituus
 	moveq	#0,d2	
 	moveq	#1,d3
@@ -25996,7 +26042,7 @@ loadplayergroup
 	moveq	#0,d2
 	moveq	#-1,d3
 	lob	Seek
-
+.skip
 	move.l	d5,d0
 	moveq	#MEMF_PUBLIC,d1
 	jsr	getmem
@@ -26021,7 +26067,10 @@ loadplayergroup
 
 .x	move.l	d4,d1
 	beq.b	.xx
+	cmp.l	overlayDataStream(a5),d1
+	beq.b	.noClose
 	lob	Close	
+.noClose
 
 	move.l	d7,a0		* onko oikee versio??
 
@@ -26053,6 +26102,19 @@ loadplayergroup
 openPlayerGroupFile
 	move.l	_DosBase(a5),a6
 	
+	move.l	overlayDataStream(a5),d1 
+	beq.b 	.noOvl
+	* Move file pointer to the start of the group.
+	* Last 4 is HUNK_END
+	move.l	#-(groupLength+4),d2
+	moveq 	#OFFSET_END,d3
+	lob 	Seek
+	bmi.b	.noOvl
+	move.l	overlayDataStream(a5),d4
+	DPRINT	"->overlay group" 
+	bra.b 	.ok
+.noOvl
+
 	* First try home dir
 	tst.l	homelock(a5)
 	beq.b	.noHome
@@ -26162,8 +26224,11 @@ loadreplayer
 	pop	d2
  endif
 
-	move.l	d4,d1		* hyp‰t‰‰n oikeaan kohtaan
-	moveq	#-1,d3
+	* hyp‰t‰‰n oikeaan kohtaan
+	move.l	d4,d1	
+	;moveq	#OFFSET_BEGINNING,d3
+	sub.l	#1024,d2
+	moveq	#OFFSET_CURRENT,d3
 	lob	Seek
 
 	move.l	d6,d0
@@ -26187,8 +26252,10 @@ loadreplayer
 
 .x	move.l	d4,d1
 	beq.b	.xx
+	cmp.l	overlayDataStream(a5),d1 
+	beq.b	.noClose
 	lob	Close	
-
+.noClose
 
 .xx	
 ;	bsr.w	inforivit_clear
@@ -41610,4 +41677,27 @@ var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
+
+	section groupdata,data_p 
+
+	* DATA section, to be converted into OVERLAY section
+	* - HUNK_DATA ($3ea)
+	* - long word N
+	* - N longwords of data follow
+
+	* OVERLAY section
+	* - HUNK_OVERLAY ($3f5)
+	* - long word ZERO (overlay table size)
+	* - HUNK_BREAK
+	* - data
+
+	dc.l	HUNK_BREAK
+	dc.l	"K-P!"
+groupData
+	incbin  sys:s/hippoplayer.group	
+* Need to take into account the long word padding to determine actual
+* length relative to the end of the file.
+	cnop	0,4
+groupLength = *-groupData
+
  end
