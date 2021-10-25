@@ -18383,22 +18383,22 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	bsr.w	.deliPutInfo
 	move.l	#MI_Prefix,d1
 	lea	.eaglePrefix(pc),a0
-	bsr.b	.deliPutInfo
+	bsr.w	.deliPutInfo
 	move.l	#MI_Samples,d1
 	lea	.eagleSamples(pc),a0
-	bsr.b	.deliPutInfo
+	bsr.w	.deliPutInfo
 	move.l	#MI_SynthSamples,d1
 	lea	.eagleSynthSamples(pc),a0
-	bsr.b	.deliPutInfo
+	bsr.w	.deliPutInfo
 	move.l	#MI_Songsize,d1
 	lea	.eagleSongSize(pc),a0
-	bsr.b	.deliPutInfo
+	bsr.w	.deliPutInfo
 	move.l	#MI_SamplesSize,d1
 	lea	.eagleSamplesSize(pc),a0
-	bsr.b	.deliPutInfo
+	bsr.w	.deliPutInfo
 	move.l	#MI_Voices,d1
 	lea	.eagleVoices(pc),a0
-	bsr.b	.deliPutInfo
+	bsr.w	.deliPutInfo
 
 	move.l	#MI_Duration,d1
 	jsr	deliFindInfoValue
@@ -18409,13 +18409,57 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	ext.l 	d0 
 	ext.l 	d1
 	lea	.eagleDuration(pc),a0
-	bsr.b	.deliPutInfo2
+	bsr.w	.deliPutInfo2
 .noEagleDur
 
 	move.l	#MI_About,d1
 	lea	.eagleAbout(pc),a0
 	bsr.b	.deliPutInfo
 
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+
+	move.l	#DTP_PlayerName,d0 
+	jsr	deliGetTag 
+	beq.b 	.noPlrName 
+	lea	.eagleName(pc),a0 
+	bsr.b	.deliPutInfo2	
+.noPlrName 
+	* Creator, 1-3 lines
+	move.l	#DTP_Creator,d0 
+	jsr	deliGetTag 
+	beq.b 	.noCrtr
+	push	d0
+	lea	.eagleCreator(pc),a0 
+	bsr.b	.deliPutInfo2	
+	pop	a0
+	* wrap to another line if there is text
+	moveq	#30-1,d0
+.findEnd
+	tst.b	(a0)+
+	dbeq	d0,.findEnd
+	tst	d0
+	bpl.b	.noMore
+	move.l	a0,d0
+	push	a0
+	lea	.eagleCreator2(pc),a0 
+	bsr.b	.deliPutInfo2
+	pop	a0
+	* wrap to 3rd line?
+	moveq	#39-1,d0
+.findEnd2
+	tst.b	(a0)+
+	dbeq	d0,.findEnd2
+	tst	d0
+	bpl.b	.noMore
+	move.l	a0,d0
+	lea	.eagleCreator2(pc),a0 
+	bsr.b	.deliPutInfo2	
+.noMore
+	
+.noCrtr
 	bra.w	.selvis
 
 .deliPutInfo
@@ -18440,6 +18484,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	popm	d0-d7
 	rts
 
+* max width: 39
 .eagleSong	 	dc.b	"Song: %-33.33s",ILF,ILF2,0
 .eagleAuthor		dc.b	"Author: %-31.31s",ILF,ILF2,0
 .eagleSubsongs		dc.b	"Subsongs: %ld",ILF,ILF2,0
@@ -18450,7 +18495,10 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .eaglePrefix 		dc.b	"Prefix: %s",ILF,ILF2,0
 .eagleVoices	 	dc.b	"Voices: %ld",ILF,ILF2,0
 .eagleDuration	 	dc.b	"Duration: %02ld:%02ld",ILF,ILF2,0
-.eagleAbout	 	dc.b	"About: %-32.32s",ILF,ILF2,0
+.eagleAbout	     	dc.b	"About: %-32.32s",ILF,ILF2,0
+.eagleName		dc.b	"Eagleplayer: %-26.26s",ILF,ILF2,0
+.eagleCreator       	dc.b	"Creator: %-30.30s",ILF,ILF2,0
+.eagleCreator2       	dc.b	"%-39.39s",ILF,ILF2,0
  even
 
 .noeagle
