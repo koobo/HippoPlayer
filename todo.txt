@@ -60,6 +60,32 @@ Formats
 - sound master 
 - special fx
 
+FIXED
+- kick 13
+- open exo-prg 
+- open favs
+- open info window: shows -944 files, obviously wrong
+
+FIXED
+- in favorites view press rmb+new (CLEAR),
+  does not clear favorites, clears main list
+
+FIXED
+- open hip
+- allow button tooltip open 
+- press "ESC"
+- tooltip is left
+
+FIXED
+- set startup module list
+- set play in random order
+- start hip 
+- v2.45: always different module
+- v2.47: always same module
+
+FIXED 
+- load a PT Module as a module program, crash
+
 BUG
 - SMUS.Fille, .Arabesque, not loading on kick13, ok on 30. probably out of chip mem
 

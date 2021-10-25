@@ -61,7 +61,8 @@ In this episode, we will be trying to play them all!
   vertical space at the top part of the window.
 - Fixed the random generator bug where the first value was not random.
   In random play mode this could result to the same first module 
-  being player every time. 
+  being player every time.
+- Clearing the favorites list with RMB+New didn't work, now does.
 - A few other minor issues fixed.
  
 ## New features:
@@ -75,17 +76,16 @@ In this episode, we will be trying to play them all!
   reactivate the scope.
 - Limited Eagleplayer plugin support. Hippo is now able to use
   some eagleplayers for music playback. A set of Hippo compatible
-  eagleplayers have been included into the group file, so there is
-  no need to search and install the correct versions. 
-  See below for more info.
+  eagleplayers have been fetched from Aminet and included in the 
+  group file. See below for more info.
 - The "HippoPlayer.group" file, which is basically a compressed
-  archive, on kick2.0 or newer, is now searched first from PROGDIR:, 
-  then the default (or configured) location. Therefore it can be kept 
-  alongside the main Hippo binary.
+  random access file archive, on kick2.0 or newer, 
+  is now searched first from PROGDIR:, then the default (or configured) 
+  location. Therefore it can be kept alongside the main Hippo binary.
 - NOTE! The group file is now larger than before. It's a good idea
   on low memory systems to set the group mode to "Load single" 
-  in "Prefs/Play-1/Mode", so that that the group file is not kept
-  in memory fully. 
+  in "Prefs/Play-1/Mode", so that individual replayers are loaded
+  when needed instead of keeping the whole file in memory.
 - Group file data compression was changed from File Imploder to
   Shrinkler by Blueberry as an experiment. Much better compression
   ratio, slower decompression.
@@ -259,8 +259,7 @@ In this episode, we will be trying to play them all!
 
 ## Tips 
 - A nice place for exotic modules is the FTP server Modland. 
-- Eagleplayers can be found on aminet and on the Wanted Team web page. 
-  Many modules are also available there.
+- Another place to check is the Wanted Team web page. 
 
 ## Thanks and greetings to:
 - Spot/UpRough for beta testing and music format related assistance.
