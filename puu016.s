@@ -19745,11 +19745,11 @@ rbutton10
 	jsr		obtainModuleList
 	moveq	#0,d5
 	* calculate the amount of list dividers in the list
-	lea	moduleListHeader(a5),a4
-.l	TSTNODE	a4,a3
+	;lea	moduleListHeader(a5),a4
+	bsr.w	getVisibleModuleListHeader
+.l	TSTNODE	a0,a0
 	beq.b	.e
-	move.l	a3,a4
-	isListDivider  l_filename(a3)	* onko divideri??
+	isListDivider  l_filename(a0)	* onko divideri??
 	bne.b	.l
 	addq.l	#1,d5
 	bra.b	.l
