@@ -8867,10 +8867,16 @@ clearlist
 rbutton9
 	clr.b	movenode(a5)
 	DPRINT  "clearlist"
-	bsr.w		setMainWindowWaitPointer
+	bsr.w	setMainWindowWaitPointer
+	isListInFavoriteMode
+	bne.b	.isFav
 	bsr.w	freelist
+	bra.b	.done 
+.isFav
+	jsr	freeFavoriteList
+.done
 	DPRINT "clearlist done"
-	bsr.w		clearMainWindowWaitPointer
+	bsr.w	clearMainWindowWaitPointer
 	bra.w	shownames
 
 *******************************************************************************
@@ -26596,6 +26602,12 @@ freeFavoriteList
 	bra.b	.loop
 
 .listFreed
+	st	favoriteListChanged(a5)
+	isListInFavoriteMode
+	beq.b	.noFav
+	* In favorite mode, no more modules to show
+	clr.l	modamount(a5)
+.noFav	
 	rts
 
 importFavoriteModulesFromDisk
