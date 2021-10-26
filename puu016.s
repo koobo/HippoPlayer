@@ -1213,7 +1213,8 @@ p_eteen		rs.l	1
 p_taakse	rs.l	1
 p_ahiupdate	rs.l	1
 p_id  		rs.l 	1
-p_type      rs.w    1
+p_author	rs.l 	1
+p_type 		rs.w    1
 p_liput		rs	1	* ominaisuudet
 p_name		rs.l	1
 
@@ -11134,7 +11135,7 @@ exportModuleProgramToFile
 	bra.b	.exit
 
 .openError
-	lea	openerror_t(pc),a1
+	lea	openerror_t,a1
 	bsr.w	request
 	bra.b	.exit
 
@@ -18498,6 +18499,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .eagleAbout	     	dc.b	"About: %-32.32s",ILF,ILF2,0
 .eagleName		dc.b	"Eagleplayer: %-26.26s",ILF,ILF2,0
 .eagleCreator       	dc.b	"Creator: %-30.30s",ILF,ILF2,0
+.fullLineFormat		
 .eagleCreator2       	dc.b	"%-39.39s",ILF,ILF2,0
  even
 
@@ -18798,17 +18800,50 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
 	jsr	desmsg4
-	bsr.b	.putcomment
+	bsr.w	.putcomment
 	lea	32(sp),sp
+	
+	moveq	#0,d0 
+	move.l	playerbase(a5),a0 
+	jsr	p_author(a0) 
+	tst.l	d0 
+	beq.b 	.noAuth
+
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+	
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	push	d0
+	lea	.author(pc),a0
+	bsr	desmsg3
+	pop	a0
+	* wrap to another line if there is text
+	moveq	#31-1,d0
+.findEndA
+	tst.b	(a0)+
+	dbeq	d0,.findEndA
+	tst	d0
+	bpl.b	.noMoreA
+	move.l	a0,d0
+	lea	.fullLineFormat(pc),a0 
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	bsr		desmsg3
+.noMoreA
+.noAuth
 	bra.w	.selvis
 
 
 .form3	
 	dc.b	"Name: %-33.33s",ILF,ILF2
 	dc.b	"Type: %-33.33s",ILF,ILF2
-	dc.b	"Size: %-9.ld   ($%08.lx-$%08.lx)",ILF,ILF2,ILF,ILF2
+	dc.b	"Size: %-9.ld   ($%08.lx-$%08.lx)",ILF,ILF2
+	dc.b	ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
-	
+.author
+	dc.b	"Player: %-31.31s",ILF,ILF2,0
  even
 
 
@@ -18823,8 +18858,12 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .puct
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
-
 	lea	filecomment(a5),a0
+	bsr.b	.putlines
+	popm	d0/d1/a0/a3
+	rts
+
+.putlines
 	moveq	#0,d0
 .com	addq	#1,d0
 	cmp	d1,d0
@@ -18837,9 +18876,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.b	#ILF2,(a3)+
 .naga	move.b	(a0)+,(a3)+
 	bne.b	.com
-	popm	d0/d1/a0/a3
 	rts
- 
+
 *************************************
 
 .namtypsizcom
@@ -27760,6 +27798,7 @@ p_protracker
 	jmp	.taakse(pc)
 	p_NOP
 	jmp id_protracker(pc)
+	p_NOP
 	dc.w pt_prot 				* type
 .flags	
  dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2
@@ -28594,6 +28633,7 @@ p_sid	jmp	.init(pc)
 	p_NOP
 	p_NOP
 	jmp id_sid1(pc)
+	p_NOP
 	dc.w pt_sid 				* type
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen
 	dc.b	"PSID",0
@@ -29043,11 +29083,16 @@ p_deltamusic
 	p_NOP
 	p_NOP
 	jmp .id_deltamusic(pc)
+	jmp	.author(pc)
 	dc.w pt_delta2 				* type
 	dc	pf_cont!pf_stop!pf_volume!pf_ciakelaus
 	dc.b	"Delta Music 2",0
+.a	dc.b	"Bent Nielsen",0
  even
 
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .deltainit
 	bsr.w	varaa_kanavat
@@ -29108,6 +29153,13 @@ p_deltamusic
 * Future Composer 1.0 - 1.3
 ******************************************************************************
 
+fc_author
+	pushpea	.a(pc),d0
+	rts
+
+.a	dc.b	"Supersero/Superions (based on Jochen Hippel replay)",0
+	even 
+
 p_futurecomposer13
 	jmp	.fc10init(pc)
 	jmp	.fc10play(pc)
@@ -29121,10 +29173,12 @@ p_futurecomposer13
 	p_NOP
 	p_NOP
 	jmp .id_futurecomposer13(pc)
+	jmp	fc_author(pc)
 	dc.w pt_future10			* type
 	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen
 	dc.b	"Future Composer v1.0-1.3",0
  even
+
 
 .fc10init
 	bsr.w	varaa_kanavat
@@ -29193,9 +29247,11 @@ p_futurecomposer14
 	p_NOP
 	p_NOP
 	jmp .id_futurecomposer14(pc)
+	jmp	fc_author(pc)
 	dc.w pt_future14	* type
 	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen
 	dc.b	"Future Composer v1.4",0
+
  even
 
 .offset_init = $20+0
@@ -29259,6 +29315,13 @@ p_futurecomposer14
 * SoundMon
 ******************************************************************************
 
+bp_author 
+	pushpea	.a(pc),d0 
+	rts
+
+.a 	dc.b	"Brian Postma",0 
+	even
+
 p_soundmon
 	jmp	.bpsminit(pc)
 	jmp	.bpsmplay(pc)
@@ -29272,10 +29335,12 @@ p_soundmon
 	jmp	.taakse(pc)
 	p_NOP
 	jmp .id_soundmon(pc)
+	jmp	bp_author(pc)
 	dc.w pt_soundmon2
  dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
 	dc.b	"SoundMon v2.0",0
  even
+
 
 .bpsminit
 	bsr.w	varaa_kanavat
@@ -29366,6 +29431,7 @@ p_soundmon3
 	jmp	.taakse(pc)
 	p_NOP	
 	jmp .id_soundmon3(pc)
+	jmp	bp_author(pc)
 	dc.w pt_soundmon3 				* type
  dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
 	dc.b	"SoundMon v3.0",0
@@ -29465,10 +29531,16 @@ p_jamcracker
 	p_NOP
 	p_NOP
 	jmp .id_jamcracker(pc)
+	jmp	.author(pc)
 	dc.w pt_jamcracker				* type
 	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
 	dc.b	"JamCracker",0
+.a 	dc.b 	"Xag/Betrayal, Martin Kemmel",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts 
 
 .jaminit
 	bsr.w	varaa_kanavat
@@ -29539,10 +29611,16 @@ p_musicassembler
 	p_NOP
 	p_NOP
 	jmp .id_musicassembler(pc)
+	jmp	.author(pc)
 	dc.w pt_musicass				* type
 	dc	pf_cont!pf_stop!pf_volume!pf_ciakelaus
 	dc.b	"Music Assembler",0
+.a 	dc.b	"Oscar Giesen & Marco Swagerman",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .massinit
 	bsr.w	varaa_kanavat
@@ -29624,11 +29702,17 @@ p_fred
 	p_NOP
 	p_NOP
 	jmp .id_fred(pc)
+	jmp	.author(pc)
 	dc.w pt_fred				* type
 	dc	pf_cont!pf_stop!pf_song!pf_ciakelaus
 	dc.b	"Fred",0
+.a 	dc.b	"Frederic Hahn",0
  even
 
+.author
+	pushpea	.a(pc),d0
+	rts
+	
 .fredinit
 	bsr.w	varaa_kanavat
 	beq.b	.ok
@@ -29722,10 +29806,16 @@ p_sonicarranger
 	jmp 	.backward(pc)
 	p_NOP
 	jmp .id_sonicarranger(pc)
+	jmp	.author(pc)
 	dc.w pt_sonicarranger				* type
 	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song
 	dc.b	"Sonic Arranger",0
+.a 	dc.b	"Carlsten Schlote, Branko Mikic, Carsten Herbst"
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts	
 
 .offset_init 		= $20+0
 .offset_play 		= $20+4
@@ -29922,6 +30012,7 @@ p_sidmon1
 	p_NOP
 	p_NOP
 	jmp 	.id_sidmon1(pc)
+	jmp	author_vliet(pc)
 	dc.w 	pt_sidmon1			* type
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"SidMon 1",0
@@ -30036,10 +30127,16 @@ p_oktalyzer
 	p_NOP
 	p_NOP
 	jmp 	.id(pc)
+	jmp	.author(pc)
 	dc.w 	pt_oktalyzer				* type
 	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont
 	dc.b	"Oktalyzer",0
+.a	dc.b	"Armin Sander",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .offset_init = $20+0 
 .offset_play = $20+4 
@@ -30146,6 +30243,13 @@ id_oktalyzer8ch
 * TFMX
 ******************************************************************************
 
+tfmx_author
+	pushpea	.a(pc),d0 
+	rts
+.a 
+	dc.b	"Chris Huelsbeck, Peter Thierolf",0
+	even
+
 p_tfmx
 	jmp	.tfmxinit(pc)
 	p_NOP
@@ -30159,11 +30263,11 @@ p_tfmx
 	jmp	.taakse(pc)
 	p_NOP
 	jmp id_tfmx(pc) 
+	jmp	tfmx_author(pc)
 	dc.w pt_tfmx				* type
 	dc	pf_cont!pf_stop!pf_song!pf_volume!pf_kelaus!pf_poslen!pf_end
 	dc.b	"TFMX",0
  even
-
 
 
 .eteen
@@ -30541,6 +30645,7 @@ p_tfmx7
 	jmp	.taakse(pc)
 	p_NOP
 	jmp  id_TFMX7V(pc)
+	jmp	tfmx_author(pc)
 	dc.w pt_tfmx7 				* type
 	dc	pf_volume!pf_song!pf_poslen!pf_kelaus!pf_end
 	dc.b	"TFMX 7ch",0
@@ -30761,6 +30866,7 @@ p_med	jmp	.medinit(pc)
 	jmp	.taakse(pc)
 	p_NOP
 	jmp .id_med(pc)
+	jmp	.author(pc)
 	dc.w pt_med
 .flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song
 	dc.b	"MED "
@@ -30770,9 +30876,14 @@ p_med	jmp	.medinit(pc)
 .pahk1  dc.b	"4ch",0
 .pahk2  dc.b	"5-8ch",0
 .pahk3	dc.b	"1-64ch",0
+.a_	dc.b	"Teijo Kinnunen",0
 
  even
- 
+
+.author
+	pushpea	.a_(pc),d0
+	rts
+
 .medvb
 	move.l	moduleaddress(a5),a0
 	move	46(a0),pos_nykyinen(a5)
@@ -31118,7 +31229,13 @@ p_med	jmp	.medinit(pc)
 ******************************************************************************
 * The Player v6.1a
 ******************************************************************************
- 
+
+guru_author
+	pushpea	.a(pc),d0
+	rts
+.a	dc.b	"Jarno Paananen (Guru/Sahara Surfers)"
+	even
+
 p_player
 	jmp	.p60init(pc)
 	p_NOP
@@ -31132,10 +31249,12 @@ p_player
 	p_NOP
 	p_NOP
 	jmp id_player(pc)
+	jmp	guru_author(pc)
 	dc.w pt_player
 	dc	pf_stop!pf_cont!pf_volume
 	dc.b	"The Player 6.1A",0
  even
+
 
 .p60end
 	movem.l	d0-a6,-(sp)
@@ -31243,8 +31362,6 @@ id_player2				* filename <= D0
 * Mark II
 ******************************************************************************
 
-
-
 p_markii
 	jmp	.markinit(pc)
 	jmp	.markmusic(pc)
@@ -31258,10 +31375,16 @@ p_markii
 	p_NOP
 	p_NOP
 	jmp .id_markii(pc)
+	jmp	.author(pc)
 	dc.w pt_markii
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"Mark II",0
+.a	dc.b	"Darius Zendeh",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .markinit
 	bsr.w	varaa_kanavat
@@ -31348,11 +31471,16 @@ p_mon	jmp	.moninit(pc)
 	p_NOP
 	p_NOP
 	jmp .id_maniacsofnoise(pc)
+	jmp	.author(pc)
 	dc.w pt_mon
 	dc	pf_stop!pf_cont!pf_song!pf_volume!pf_ciakelaus
 	dc.b	"Maniacs of Noise",0
-
+.a 	dc.b 	"Charles Deenen, Jeroen Tel",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .moninit
 	bsr.w	varaa_kanavat
@@ -31474,11 +31602,15 @@ p_dw	jmp	.dwinit(pc)
 	p_NOP
 	p_NOP
 	jmp id_davidwhittaker(pc)
+	jmp	.author(pc)
 	dc pt_dw
 	dc	pf_stop!pf_cont!pf_song!pf_ciakelaus
-	dc.b	"David Whittaker",0
-
+.a	dc.b	"David Whittaker",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .dwinit
 	bsr.w	varaa_kanavat
@@ -31644,6 +31776,13 @@ id_davidwhittaker
 ;	jmp	ahi_update(pc)
 ;	jmp	ahi_pause(pc)
 
+hippel_author
+	pushpea	.a(pc),d0
+	rts
+.a 	dc.b	"Jochen 'Mad Max' Hippel",0
+ 	even
+
+
 p_hippelcoso
 	jmp	.init(pc)
 	jmp	.play(pc)
@@ -31657,6 +31796,7 @@ p_hippelcoso
 	p_NOP
 	jmp	.ahiupdate(pc)
 	jmp id_hippelcoso(pc)
+	jmp	hippel_author(pc)
 	dc.w pt_hippelcoso
 .liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi
 	dc.b	"Hippel-COSO",0
@@ -31882,6 +32022,7 @@ p_hippel
 	p_NOP
 	p_NOP
 	jmp id_hippel(pc)
+	jmp	hippel_author(pc)
 	dc.w pt_hippel
 	dc	pf_cont!pf_stop!pf_song!pf_ciakelaus
 	dc.b	"Hippel",0
@@ -32108,6 +32249,11 @@ id_hippel
 * Digibooster
 ******************************************************************************
 
+db_author
+	pushpea	.a(pc),d0
+	rts
+.a 	dc.b 	"Tomasz & Waldemar Piasta",0
+	even
 
 p_digibooster
 	jmp	.init(pc)
@@ -32122,6 +32268,7 @@ p_digibooster
 	jmp	.taakse(pc)
 	p_NOP
 	jmp .id_digibooster(pc)
+	jmp	db_author(pc)
 	dc.w pt_digibooster
 	dc	pf_poslen!pf_kelaus!pf_volume!pf_stop!pf_cont!pf_end
 	dc.b	"DIGI Booster",0
@@ -32292,6 +32439,7 @@ p_digiboosterpro
 	jmp	.taakse(pc)
 	jmp	.ahiupdate(pc)
 	jmp .id_digiboosterpro(pc)
+	jmp	db_author(pc)
 	dc.w pt_digiboosterpro
 	dc	pf_volume!pf_stop!pf_cont!pf_ahi!pf_poslen!pf_kelaus!pf_end
 	dc.b	"DIGI Booster Pro",0
@@ -32422,6 +32570,11 @@ id_digiboosterpro_
 * THX
 ******************************************************************************
 
+thx_author
+	pushpea	.a(pc),d0
+	rts
+.a 	dc.b	"Pink/aBYSs",0
+	even 
 
 p_thx
 	jmp	.init(pc)
@@ -32436,6 +32589,7 @@ p_thx
 	jmp	.taakse(pc)
 	p_NOP
 	jmp .id_thx(pc)
+	jmp	thx_author(pc)
 	dc.w pt_thx
 	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen
 	dc.b	"AHX Sound System",0
@@ -32673,10 +32827,16 @@ p_mline
 	p_NOP
 	p_NOP
 	jmp id_mline(pc)
+	jmp	.author(pc)
 	dc.w pt_mline
 	dc	pf_cont!pf_stop!pf_volume!pf_song
 	dc.b	"MusiclineEditor",0
+.a 	dc.b	"Conny Cyreus, Christian Cyreus, Jimmy Fredriksson & John Carehag",0
  even
+	
+.author
+	pushpea	.a(pc),d0
+	rts
 
 ._LVOInitPlayer		=	-30
 ._LVOEndPlayer		=	-36
@@ -32816,10 +32976,16 @@ p_aon
 	p_NOP
 	p_NOP
 	jmp .id_aon(pc)
+	jmp	.author(pc)
 	dc.w pt_aon
 	dc	pf_cont!pf_stop!pf_volume
 	dc.b	"Art Of Noise 4ch",0
+.a	dc.b	"Bastian Spiegel (Twice/Lego)",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .init
 	bsr.w	varaa_kanavat
@@ -32902,9 +33068,11 @@ p_multi	jmp	.s3init(pc)
 	jmp	.taakse(pc)
 	jmp	ps3m_boost(pc)		* ahiupdate
 	jmp id_ps3m(pc)
+	jmp	guru_author(pc)
 	dc.w pt_multi
  dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
 	dc.b	"PS3M",0
+
  even
 
 
@@ -33301,10 +33469,16 @@ p_sample
 	p_NOP		* Taakse
 	jmp	.ahiup(pc)		* AHI Update
 	jmp id_sample(pc)
+	jmp	.author(pc)
 	dc.w pt_sample
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi
 .name	dc.b	"                        ",0
+.a		dc.b	"Samples by K-P, MP3 by Stephane Tavenard",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 	rsset	$20
 .s_init		rs.l	1
@@ -33424,11 +33598,16 @@ p_pumatracker
 	p_NOP
 	p_NOP
 	jmp .id_pumatracker(pc)
+	jmp	.author(pc)
 	dc.w pt_pumatracker
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"PumaTracker",0
+.a  dc.b "Jean-Charles Meyrignac, Pierre-Eric Loriaux, adapted by Flyspy/Agile",0
  even
 
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .init
 	bsr.w	varaa_kanavat
@@ -33543,11 +33722,16 @@ p_beathoven
 	p_NOP
 	p_NOP
 	jmp .id_beathoven(pc)
+	jmp	.author(pc)
 	dc.w pt_beathoven
 	dc	pf_cont!pf_stop!pf_ciakelaus!pf_song
 	dc.b	"Beathoven Synthesizer",0
+.a  	dc.b "Thomas Lopatic (Dr.Nobody/HQC), adapted by Wanted Team",0
  even
 
+.author 
+	pushpea	.a(pc),d0 
+	rts 
 
 * play
 .BEAT_PLAY = 16+$20
@@ -33570,7 +33754,7 @@ p_beathoven
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -33689,10 +33873,16 @@ p_gamemusiccreator
 	p_NOP
 	p_NOP
 	jmp id_gamemusiccreator(pc)
+	jmp	.author(pc)
 	dc.w pt_gamemusiccreator
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume
 	dc.b	"Game Music Creator",0
+.a 	dc.b "Andreas Tadic",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .GMC_INIT  = $20+0
 .GMC_PLAY  = $20+4
@@ -33714,7 +33904,7 @@ p_gamemusiccreator
 	* allocate into chip mem
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -33735,7 +33925,7 @@ p_gamemusiccreator
 	jmp	.GMC_PLAY(a0)
 
 .end
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	move.l	gamemusiccreatorroutines(a5),a0
 	jsr	.GMC_END(a0)
 	bsr.w	clearsound
@@ -33886,6 +34076,12 @@ id_gamemusiccreator
 * Digital Mugician
 ******************************************************************************
 
+author_vliet
+	pushpea	.a(pc),d0
+	rts
+.a dc.b "Reinier van Vliet (Rhino/Team Hoi)",0
+ even
+
 p_digitalmugician
 	jmp	.init(pc)
 	jmp	.play(pc)
@@ -33898,11 +34094,13 @@ p_digitalmugician
 	p_NOP
 	p_NOP
 	p_NOP
-	jmp .id_digitalmugician(pc)
-	dc.w pt_digitalmugician
+	jmp	 .id_digitalmugician(pc)
+	jmp	author_vliet(pc)
+	dc.w 	pt_digitalmugician
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
 	dc.b	"Digital Mugician",0
  even
+
 
 .DMU_INIT  = 0
 .DMU_PLAY  = 4
@@ -33987,6 +34185,7 @@ p_delicustom
 	p_NOP
 	p_NOP
 	jmp id_delicustom(pc)
+	jmp	deliAuthor(pc)
 	dc.w pt_delicustom
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"DeliTracker Custom",0
@@ -34059,6 +34258,7 @@ p_synthesis
 	p_NOP
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_synthesis 
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_song
 	dc.b	"Synthesis           [EP]",0
@@ -34124,6 +34324,7 @@ p_syntracker
 	p_NOP
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc pt_syntracker
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
 	dc.b	"SynTracker          [EP]",0
@@ -34231,6 +34432,7 @@ p_chiptracker
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_chiptracker 
  dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2	
 	dc.b	"ChipTracker         [EP]",0
@@ -34266,10 +34468,16 @@ p_medley
 	p_NOP
 	p_NOP
 	jmp .id_medley(pc)
+	jmp	.author(pc)
 	dc.w pt_medley
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"Medley Sound",0
+.a 	dc.b	"Paul van der Valk",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .MEDLEY_INIT  = 0+$20
 .MEDLEY_PLAY  = 4+$20
@@ -34391,10 +34599,17 @@ p_futureplayer
 	p_NOP
 	p_NOP
 	jmp id_futureplayer(pc)
+	jmp	.author(pc)
 	dc.w pt_futureplayer
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"Future Player",0
+.a 	dc.b	"Paul van der Valk, adapted by Wanted Team",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
 
 .FP_INIT  = 0+$20
 .FP_PLAY  = 4+$20
@@ -34519,10 +34734,16 @@ p_bendaglish
 	p_NOP
 	p_NOP
 	jmp .id_bendaglish(pc)
+	jmp	.author(pc)
 	dc.w pt_bendaglish
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"Ben Daglish",0
+.a 	dc.b	"Ben Daglish, adapted by Wanted Team",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .BD_INIT  = 0+$20
 .BD_PLAY  = 4+$20
@@ -34648,10 +34869,17 @@ p_sidmon2
 	p_NOP
 	p_NOP
 	jmp .id_sidmon2(pc)
+	jmp	.author(pc)
 	dc.w pt_sidmon2
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
 	dc.b	"SidMon 2",0
+.a	dc.b	"Michael Kleps (Unknown/DOC 1990)",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
 
 .INIT  = 0+$20
 .PLAY  = 4+$20
@@ -34729,10 +34957,16 @@ p_deltamusic1
 	p_NOP
 	p_NOP
 	jmp .id_deltamusic1(pc)
+	jmp	.author(pc)
 	dc.w pt_deltamusic1
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
 	dc.b	"Delta Music 1",0
+.a 	dc.b	"Bent Nielsen",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .INIT  = 0+$20
 .PLAY  = 4+$20
@@ -34817,10 +35051,16 @@ p_soundfx
 	p_NOP
 	p_NOP
 	jmp .id_soundfx(pc)
+	jmp	.author(pc)
 	dc.w pt_soundfx
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
 	dc.b	"SoundFX",0
+.a 	dc.b	"Christian Haller & Christian A. Webber",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .INIT  = 0+$20
 .PLAY  = 4+$20
@@ -34898,10 +35138,16 @@ p_gluemon
 	p_NOP
 	p_NOP
 	jmp .id_gluemon(pc)
+	jmp	.author(pc)
 	dc.w pt_gluemon
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
 	dc.b	"GlueMon",0
+.a	dc.b	"Lars Malmborg (GlueMaster/North Star)",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .INIT  = 0+$20
 .PLAY  = 4+$20
@@ -34991,6 +35237,7 @@ p_pretracker
 	p_NOP
 	p_NOP
 	jmp .id_pretracker(pc)
+	jmp	thx_author(pc)
 	dc.w pt_pretracker
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
 	dc.b	"PreTracker by Pink/aBYSs",0
@@ -35098,7 +35345,7 @@ p_pretracker
 	cmp.l	a4,a0
 	blo.b	.patchLoop
 
-	bsr.w		clearCpuCaches
+	bsr.w	clearCpuCaches
 
 	move.l .myPlayer(pc),a0
 	move.l .mySong(pc),a1
@@ -35209,9 +35456,17 @@ p_custommade
 	p_NOP
 	p_NOP
 	jmp .id_custommade(pc)
+	jmp	.author(pc)
 	dc.w pt_custommade
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"CustomMade",0
+.a 	dc.b	"Ivo Zoer & Ron Klaren, adapted by Andy Silva & Wanted Team",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
  even
 
 .INIT  = 0+$20
@@ -35344,10 +35599,16 @@ p_davelowe
 	p_NOP
 	p_NOP
 	jmp id_davelowe(pc)
+	jmp	.author(pc)
 	dc.w pt_davelowe
 	dc pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song!pf_end
 	dc.b	"Dave Lowe",0
+.a 	dc.b	"Dave Lowe, adapted by Wanted Team",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .INIT  = 0+$20
 .PLAY  = 4+$20
@@ -35480,11 +35741,17 @@ p_startrekker
 	p_NOP
 	p_NOP
 	jmp 	.id(pc)
+	jmp	.author(pc)
 	dc.w 	pt_startrekker
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
 	dc.b	"StarTrekker AM",0
+.a 	dc.b "Bjoern Wesen/Exolon of Fairlight",0
  even
 
+.author
+	pushpea	.a(pc),d0 
+	rts
+	
 .INIT  = 0+$20
 .PLAY  = 4+$20
 .END   = 8+$20
@@ -35664,10 +35931,16 @@ p_voodoosupremesynthesizer
 	p_NOP
 	p_NOP
 	jmp 	.id(pc)
+	jmp	.author(pc)
 	dc.w 	pt_voodoosupremesynthesizer
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"VoodooSupremeSynthesizer",0
+.a 	dc.b "Thomas Partl",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .INIT  = 0+$20
 .PLAY  = 4+$20
@@ -35777,6 +36050,7 @@ p_quartet
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
 	dc  	pt_quartet 
  	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus
 	dc.b	"Quartet             [EP]",0
@@ -35845,6 +36119,7 @@ p_facethemusic
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_facethemusic 
 .flags 	dc pf_stop!pf_cont!pf_volume!pf_end	
 	dc.b	"Face The Music      [EP]",0
@@ -35904,6 +36179,7 @@ p_richardjoseph
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_richardjoseph
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"R.Joseph/VectorDean [EP]",0
@@ -35957,6 +36233,7 @@ p_instereo1
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
 	dc 	pt_instereo1
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"In Stereo! 1.0      [EP]",0
@@ -36079,6 +36356,7 @@ p_instereo2
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
 	dc 	pt_instereo2
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"In Stereo! 2.0      [EP]",0
@@ -36123,6 +36401,7 @@ p_jasonbrooke
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_jasonbrooke
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"Jason Brooke        [EP]",0
@@ -36203,6 +36482,7 @@ p_earache
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_earache
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"EarAche             [EP]",0
@@ -36297,6 +36577,7 @@ p_krishatlelid
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_krishatlelid
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"Kris Hatlelid       [EP]",0
@@ -36371,6 +36652,7 @@ p_richardjoseph2
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_richardjoseph2
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"Richard Joseph      [EP]",0
@@ -36431,6 +36713,7 @@ p_hippel7
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp id_hippel7(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_hippel7
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen
 	dc.b	"Jochen Hippel 7v    [EP]",0
@@ -36535,6 +36818,7 @@ p_aprosys
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_aprosys
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
 	dc.b	"AProSys             [EP]",0
@@ -36578,6 +36862,7 @@ p_hippelst
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_hippelst
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
 	dc.b	"Jochen Hippel ST    [EP]",0	        
@@ -36766,6 +37051,7 @@ p_tcbtracker
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_tcbtracker
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse
 	dc.b	"TCBTracker (ST)     [EP]",0	        
@@ -36861,6 +37147,7 @@ p_markcooksey
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
 	dc  	pt_markcooksey
 .flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_song
 	dc.b	"Mark Cooksey        [EP]",0	        
@@ -36982,6 +37269,7 @@ p_activisionpro
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_activisionpro
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"Activision Pro      [EP]",0
@@ -37231,6 +37519,7 @@ p_maxtrax
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_maxtrax
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"MaxTrax             [EP]",0
@@ -37299,6 +37588,7 @@ p_wallybeben
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_wallybeben
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"Wally Beben         [EP]",0
@@ -37369,6 +37659,7 @@ p_synthpack
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_synthpack
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"Synth Pack          [EP]",0
@@ -37418,6 +37709,7 @@ p_robhubbard
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_robhubbard
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"Rob Hubbard         [EP]",0
@@ -37471,6 +37763,7 @@ p_jeroentel
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_jeroentel
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
 	dc.b	"Jeroen Tel          [EP]",0
@@ -37543,6 +37836,7 @@ p_sonix
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_sonix
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
 	dc.b	"Sonix Music Driver  [EP]",0
@@ -37684,6 +37978,7 @@ p_quartetst
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id_quartet_st(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_quartetst
 .flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus
 	dc.b	"Quartet ST          [EP]",0
@@ -37749,6 +38044,7 @@ p_coredesign
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id_core_design(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_coredesign
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
 	dc.b	"Core Design         [EP]",0
@@ -37843,6 +38139,7 @@ p_musicmaker8
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp	.id_musicmaker8(pc)
+	jmp	deliAuthor(pc)
 	dc 	 pt_musicmaker8
 .flags	dc 	pf_stop!pf_cont!pf_volume!pf_end
 	dc.b	"MusicMaker V8 8-ch  [EP]",0
@@ -37963,6 +38260,7 @@ p_musicmaker4
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp	 id_musicmaker4(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_musicmaker4
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
 	dc.b	"MusicMaker V8 4-ch  [EP]",0
@@ -38065,6 +38363,7 @@ p_digitalmugician2
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp id_digitalmugician2(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_digitalmugician2
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse
 	dc.b	"Digital Mugician II [EP]",0
@@ -38120,6 +38419,7 @@ p_stonetracker
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp id_stonetracker(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_stonetracker
 .flags	dc pf_stop!pf_cont!pf_volume!pf_song!pf_kelaus!pf_end
 	dc.b	"StoneTracker        [EP]",0
@@ -38234,6 +38534,7 @@ p_soundcontrol
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_soundcontrol
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
 	dc.b	"SoundControl        [EP]",0
@@ -38289,6 +38590,7 @@ p_themusicalenlightenment
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_themusicalenlightenment
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
 	dc.b	"The Musical Enlighte[EP]",0
@@ -38423,6 +38725,7 @@ p_timfollin2
 	jmp	deliBackward(pc)
 	p_NOP
 	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
 	dc  	pt_timfollin2
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
 	dc.b	"Tim Follin          [EP]",0
@@ -39421,6 +39724,11 @@ deliVolume
 .noVol
 	rts
 
+deliAuthor
+	rts
+	;move.l	#DTP_Creator,d0
+	;bra	deliGetTag
+	
 freeDeliBase
 	tst.l	deliData(a5)
 	beq.b	.x
@@ -39660,7 +39968,7 @@ deliAllocAudio
 	pushm	d1-a6
 	lea	var_b,a5
 	* returns d0=0 on success:
-	bsr.w	varaa_kanavat 
+	jsr	varaa_kanavat 
 	popm	d1-a6
 	rts
 
@@ -39668,7 +39976,7 @@ deliFreeAudio
 	DPRINT	"deliAudioFree"
 	pushm	d1-a6
 	lea	var_b,a5
-	bsr.w	vapauta_kanavat
+	jsr	vapauta_kanavat
 	popm	d1-a6
 	rts
 
