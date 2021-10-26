@@ -18767,7 +18767,14 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
 	lea	filecomment(a5),a0
+	tst.b	(a0)
+	beq.b	.empty
 	bsr.b	.putlines
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+.empty
 	popm	d0/d1/a0/a3
 	rts
 
