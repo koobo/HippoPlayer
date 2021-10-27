@@ -20108,7 +20108,7 @@ init_ciaint_withTempo
 	move.l a3,d0
 	moveq	#0,d1
 	move.b whichtimer(a5),d1
-	DPRINT	"CIA Timer %lx %ld"
+	DPRINT	"CIA Timer allocated %lx %ld"
  endif
 	bsr.b	ciaint_setTempo
 
@@ -20167,8 +20167,8 @@ rem_ciaint
 	move.l	ciabase(a5),a6
 	lea	ciaserver(pc),a1
 	lob	RemICRVector
-
 	st	ciasaatu(a5)		* ei keskeytystä!
+	DPRINT	"CIA Timer freed"
 	popm	all
 	rts
 
@@ -32945,6 +32945,7 @@ p_aon
 	bra.b	.x
 
 .end
+	bsr	rem_ciaint
 	move.l	aonroutines(a5),a0
 	jsr	.OFFSET_END(a0)
 	bsr.w	clearsound
