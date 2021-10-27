@@ -32880,7 +32880,7 @@ id_mline
 
 p_aon
 	jmp	.init(pc)
-	p_NOP
+	jmp 	.play(pc)
 	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
@@ -32890,13 +32890,19 @@ p_aon
 	p_NOP
 	p_NOP
 	p_NOP
-	jmp .id_aon(pc)
+	jmp 	.id_aon(pc)
 	jmp	.author(pc)
-	dc.w pt_aon
-	dc	pf_cont!pf_stop!pf_volume
+	dc.w 	pt_aon
+	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
 	dc.b	"Art Of Noise 4ch",0
 .a	dc.b	"Bastian Spiegel (Twice/Lego)",0
  even
+
+.OFFSET_INIT = 0
+.OFFSET_PLAY = 4
+.OFFSET_END  = 8
+.OFFSET_STOP = 12
+.OFFSET_CONT = 16
 
 .author
 	pushpea	.a(pc),d0
@@ -32908,45 +32914,56 @@ p_aon
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
 	lea	aonroutines(a5),a0
 	bsr.w	allocreplayer
-	bne.w	vapauta_kanavat
-
-.ok3	
+	beq.b	.ok3
+	bsr.w	rem_ciaint
+	bra.w	vapauta_kanavat
+.ok3
 	pushm	d1-a6
 
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
-	moveq	#0,d0
-	move.l	aonroutines(a5),a2
-	jsr	(a2)
+	lea	songover(a5),a2 
+	lea	ciaint_setTempoFromD0(pc),a3
+	move.l	aonroutines(a5),a4
+	jsr	.OFFSET_INIT(a4)
 	tst.l	d0
-	bne.b	.cia
-
+	bne.b	.noMem
+	
 .x	popm	d1-a6
 	rts
 
-.cia	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
+.noMem
+	moveq	#ier_nomem,d0
 	bra.b	.x
 
-
-.end	move.l	aonroutines(a5),a0
-	jsr	4(a0)
+.end
+	move.l	aonroutines(a5),a0
+	jsr	.OFFSET_END(a0)
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
+.play
+	move.l	aonroutines(a5),a0
+	jsr	.OFFSET_PLAY(a0)
+	move	d0,pos_nykyinen(a5) 
+	move	d1,pos_maksimi(a5)
+	rts
 
 .stop
-	move	#$f,$dff096
-	bclr	#0,$bfdf00
-	rts
-
+	move.l	aonroutines(a5),a0
+	jmp		.OFFSET_STOP(a0)
+	
 .cont	
-	move	#$800f,$dff096
-	bset	#0,$bfdf00	; Timer start, stop
-	rts
+	move.l	aonroutines(a5),a0
+	jmp		.OFFSET_CONT(a0)
 
 .id_aon
 	cmp.l	#"AON4",(a4)		* aon 4 channel
