@@ -194,8 +194,8 @@ calibrationaddr	rs.l	1
 
 sampleforcerate	rs	1
 samplebuf	rs.l	1	* sampleplayeri
-samplehandle	rs.l	1	* sampletiedosto
-samplehandle2	rs.l	1	* sampletiedosto 2
+;samplehandle	rs.l	1	* sampletiedosto
+;samplehandle2	rs.l	1	* sampletiedosto 2
 killsample	rs.b	1
 		rs.b	1
 
@@ -1941,13 +1941,13 @@ sample_code
 	moveq	#0,d7
 
 
-	tst	mplippu(a5)
-	bne.b	.yi1
-	move.l	samplehandle(a5),d1
-	move.l	samplestart(a5),d2		* bodyn alkuun
-	moveq	#-1,d3
-	lore	Dos,Seek
-.yi1
+;	tst	mplippu(a5)
+;	bne.b	.yi1
+;	move.l	samplehandle(a5),d1
+;	move.l	samplestart(a5),d2		* bodyn alkuun
+;	moveq	#-1,d3
+;	lore	Dos,Seek
+;.yi1
 	bsr.w	mp_start
 
 .loopahi2
@@ -2046,13 +2046,14 @@ sample_code
 	clr.l	samplefollow(a5)
 	move.l	4(a3),samplepointer(a5)
 
-	tst	mplippu(a5)
-	bne.b	.yi2
-	move.l	samplehandle(a5),d1
-	move.l	samplestart(a5),d2		* bodyn alkuun
-	moveq	#-1,d3
-	lore	Dos,Seek
-.yi2	bsr.w	mp_start
+;	tst	mplippu(a5)
+;	bne.b	.yi2
+;	move.l	samplehandle(a5),d1
+;	move.l	samplestart(a5),d2		* bodyn alkuun
+;	moveq	#-1,d3
+;	lore	Dos,Seek
+;.yi2
+	bsr.w	mp_start
 
 .loopw
 
@@ -2334,13 +2335,14 @@ sample_code
 	move.l	#AHISF_IMM,ahiflags(a5)
 	moveq	#0,d7
 
-	tst	mplippu(a5)
-	bne.b	.yi3
-	move.l	samplehandle(a5),d1
-	move.l	samplestart(a5),d2		* bodyn alkuun
-	moveq	#-1,d3
-	lore	Dos,Seek
-.yi3	bsr.w	mp_start
+;	tst	mplippu(a5)
+;	bne.b	.yi3
+;	move.l	samplehandle(a5),d1
+;	move.l	samplestart(a5),d2		* bodyn alkuun
+;	moveq	#-1,d3
+;	lore	Dos,Seek
+.yi3
+	bsr.w	mp_start
 
 .loopahi1
 
