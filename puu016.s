@@ -36217,7 +36217,9 @@ p_instereo1
 	move.l	d1,d0
 	lea	-100(sp),sp 
 	move.l	sp,a0
-	move.b	#'T',(a0)+
+	move.b	#'R',(a0)+
+	move.b	#'A',(a0)+
+	move.b	#'M',(a0)+
 	move.b	#':',(a0)+
 	lea	.path(pc),a2 
 .c	move.b	(a2)+,(a0)+
@@ -38924,7 +38926,7 @@ loadDeliPlayer
 	tst.l	d0
 	rts
 
-epPath		dc.b	"T:hippoEP",0
+epPath		dc.b	"RAM:hippoEP",0
  even
 
 
@@ -38999,7 +39001,7 @@ findDeliPlayer
 	tst.l	d0
 	rts
 .searchPath1
-	dc.b	"T:",0
+	dc.b	"RAM:",0
 .searchPath2
 	dc.b	"PROGDIR:eagleplayers/",0
 .searchPath3
