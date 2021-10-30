@@ -19,14 +19,14 @@ ver	macro
 ;	dc.b	"v2.45 (10.1.2000)"
 ;	dc.b	"v2.47ß (?.?.2021)"
 ;	dc.b	"v2.47 (31.8.2021)"
-	dc.b	"v2.48ß (?.?.2021)"
+	dc.b	"v2.48 (31.10.2021)"
 	endm	
 
 
-DEBUG	= 1
+DEBUG	= 0
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
-asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
+asm	= 0	* 1: Run from AsmOne, 0: CLI/Workbench
 
 zoom	= 0	* 1: zoomaava hippo
 fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
@@ -39124,7 +39124,7 @@ deliInit
 	move.l	deliBase(a5),a4
 
 	* Quite important to clear the old ones away
-	* so that they don't get accidentally changed
+	* so that they don't get accidentally called
 	* on new modules and crash.
 	clr.l	deliStoredInterrupt(a5)
 	clr.l	deliStoredSetVolume(a5)

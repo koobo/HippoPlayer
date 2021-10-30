@@ -60,6 +60,22 @@ Formats
 - sound master 
 - special fx
 
+CRASH
+- sonic arranger: svensktoppen
+
+FIXED
+- kick13
+- play: lastninja2-end.aon
+        AON4.Last_Ninja_2-end 
+- play: TF.Puzznic
+-> too fast
+
+FIXED 
+- aon4: beep
+
+FIXED
+- sampleplayer giana.wav kick13/68000 -> boom
+
 FIXED
 - kick 13
 - open exo-prg 

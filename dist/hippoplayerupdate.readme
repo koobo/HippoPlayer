@@ -31,7 +31,7 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
-# Changes from v2.47 (31.8.2021) to v2.48 (?.?.2021)
+# Changes from v2.47 (31.8.2021) to v2.48 (31.10.2021)
 
 In this episode, we will be trying to play them all!
 
@@ -63,6 +63,13 @@ In this episode, we will be trying to play them all!
   In random play mode this could result to the same first module 
   being player every time.
 - Clearing the favorites list with RMB+New didn't work, now does.
+- The sampleplayer had a nasty bug that probably made it not work 
+  at all on kickstart 1.3 in most cases. There was an unnecessary 
+  file seek operation done on an invalid file handle, which, at least
+  for me, crashed on kick1.3 and didn't crash on kick3.0. Now works.
+  Sidenote: I'm a little bit impressed how capable the sampleplayer is, 
+  it handles CD-quality WAVs on 68000 nicely. The code though is quite
+  horrible to look at :-) 
 - A few other minor issues fixed.
  
 ## New features:
@@ -89,6 +96,9 @@ In this episode, we will be trying to play them all!
 - Group file data compression was changed from File Imploder to
   Shrinkler by Blueberry as an experiment. Much better compression
   ratio, slower decompression.
+- Info window will now show who created the replay code for the 
+  current format, and information retrieved from the active eagleplayer
+  plugin.
 
 ## Music format related fixes
 - Improved JamCracker support: added volume control and position/length info.
@@ -99,7 +109,10 @@ In this episode, we will be trying to play them all!
    hopefully now works better with "rsi theme.fc".
 - Oktalyzer now also has position/length info and can be paused, which 
   previously wasn't possible.
-
+- Improved Art of Noise (4 channels) support as well: added position/length 
+  info, song end detection, fast forwarding. Also uses Hippo timers now.
+   - Similar *BEEP* bug fixed here as with JamCracker.
+  
 ## New music formats:
 - PreTracker by Pink/aBYSs. Very noice! Samples are generated during 
   initialization which may take some time especially on slow CPUs.
@@ -218,7 +231,7 @@ In this episode, we will be trying to play them all!
     Example:
     - Module name: "spm.hypnosphere" 
     - Sample file: "sps.hypnosphere"
-  - Eagleplayer by Emmanuel Marty, author of StoneTracker
+  - Eagleplayer by Emmanuel Marty, one of the authors of StoneTracker
 - MusicMaker V8 ("musicmaker4", "musicmaker8")
   - 4-8 channel modules. 
   - Format with multiple files per module not supported.
