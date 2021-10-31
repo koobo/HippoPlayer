@@ -1,0 +1,4 @@
+failat 11
+makedir im
+List bin TO T:fimp LFORMAT "fimp %s%s im/%s.im -m11 -io"
+execute T:fimp

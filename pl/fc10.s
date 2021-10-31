@@ -255,6 +255,15 @@ setpervol:
 	lsr.w #6,d0		; Delirium
 	move.w d0,50(a5)	;Set volume
 
+	* current position
+	moveq	#0,d0
+	move	V1data+6(pc),d0
+	divu	#$d,d0
+
+	move.l	V1data+52(pc),d1
+	sub.l	V1data(pc),d1
+	divu	#$d,d1
+	
 	movem.l	(sp)+,d7/a0
 	rts
 

@@ -2,7 +2,7 @@ Short: Updated HippoPlayer, a module player for classic Amigas
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.47 
+Version: 2.48
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -14,10 +14,274 @@ To use, copy the files over the files that you have from an existing
 installation. Check out aminet for the original package:
 https://aminet.net/mus/play/hippoplayer.lha
 
-Or, just copy HiP somewhere and HippoPlayer.group to S:, then run
-HiP. That should work if you have the reqtools.library installed. 
+Or, just copy HiP somewhere and "HippoPlayer.group" to S:, then run
+HiP. That should work if you have the "reqtools.library" installed. 
 
+NOTE 1: The original archive is in its original state. There is no
+updated documentation. Please read the change history below.
 
+NOTE 2: Ensure that "HippoPlayer.group" gets updated, as old versions will
+not work. The default placement is the S: directory, which is a bit silly
+(location can be changed in Prefs). You can also place the file in the 
+same directory with the HiP binary, too, if you're using kick2.0 or newer.
+
+NOTE 3: If you get errors where some module is not recognized even 
+if it should be, try removing "S:HippoPlayer.prefs" first.
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+# Changes from v2.47 (31.8.2021) to v2.48 (31.10.2021)
+
+In this episode, we will be trying to play them all!
+
+## New fixes:
+- File and directory scan was refactored and is now much more robust.
+  This fixes some bugs caused by very long path names and
+  some other corner cases, such as uncommon directory types.
+  Subdirectories will also be added in alphabetical order.
+  Thanks to Zoltar of the English Amiga Board for reporting 
+  a nasty bug and testing a bunch of desperate fixes. 
+- Fix crash caused by a devious ProTracker module "Sunday Hangover" by 
+  Skope/UpRough. The modules uses the "EFF" command without a sample,
+  which is unexpected. Also crashes ProTracker v2.3d and other apps.
+- After playing a DeliCustom type module and then trying to play a 
+  XPK/PP/FImp/XFD compressed module lead to the new module being recognized 
+  as DeliCustom even if it wasn't, which lead to all kinds of bad things.
+- Fixed the case where favorites were not saved if the user exited while 
+  being in the favorites view. 
+- If the XFDMaster library was enabled, DeliCustom modules were not
+  recognized. 
+- For lists with only list dividers the selection would sometimes 
+  go looping around the list and never stopping, making Hippo 
+  unresponsive.
+- A new method of calculating the window bar height is now used.
+  This should fix the VisualPrefs related bug where adjusting
+  window and screen title bar heights caused Hippo to add extra
+  vertical space at the top part of the window.
+- Fixed the random generator bug where the first value was not random.
+  In random play mode this could result to the same first module 
+  being player every time.
+- Clearing the favorites list with RMB+New didn't work, now does.
+- The sampleplayer had a nasty bug that probably made it not work 
+  at all on kickstart 1.3 in most cases. There was an unnecessary 
+  file seek operation done on an invalid file handle, which, at least
+  for me, crashed on kick1.3 and didn't crash on kick3.0. Now works.
+  Sidenote: I'm a little bit impressed how capable the sampleplayer is, 
+  it handles CD-quality WAVs on 68000 nicely. The code though is quite
+  horrible to look at :-) 
+- A few other minor issues fixed.
+ 
+## New features:
+- Patternscope XL, with twice the amount of rows. 
+  It is available in Prefs with the other scopes.
+  Generally patternscope should use less CPU now, due to some
+  optimizations.
+- Dual monitor support is now possible with P96. In such case
+  Hippo may think the scopes are invisible and stop updating them.
+  Clicking the left mouse button in the scope window will 
+  reactivate the scope.
+- Limited Eagleplayer plugin support. Hippo is now able to use
+  some eagleplayers for music playback. A set of Hippo compatible
+  eagleplayers have been fetched from Aminet and included in the 
+  group file. See below for more info.
+- The "HippoPlayer.group" file, which is basically a compressed
+  random access file archive, on kick2.0 or newer, 
+  is now searched first from PROGDIR:, then the default (or configured) 
+  location. Therefore it can be kept alongside the main Hippo binary.
+- NOTE! The group file is now larger than before. It's a good idea
+  on low memory systems to set the group mode to "Load single" 
+  in "Prefs/Play-1/Mode", so that individual replayers are loaded
+  when needed instead of keeping the whole file in memory.
+- Group file data compression was changed from File Imploder to
+  Shrinkler by Blueberry as an experiment. Much better compression
+  ratio, slower decompression.
+- Info window will now show who created the replay code for the 
+  current format, and information retrieved from the active eagleplayer
+  plugin.
+
+## Music format related fixes
+- Improved JamCracker support: added volume control and position/length info.
+   - Also fixed an annoying audible *BEEP* once in a while.
+     (Empty sample data was not in chip mem, my fault.)
+-  FutureComposer (both old and new formats) now support position/length info.
+   FC1.4 replayer changed to another and a modified a bit,
+   hopefully now works better with "rsi theme.fc".
+- Oktalyzer now also has position/length info and can be paused, which 
+  previously wasn't possible.
+- Improved Art of Noise (4 channels) support as well: added position/length 
+  info, song end detection, fast forwarding. Also uses Hippo timers now.
+   - Similar *BEEP* bug fixed here as with JamCracker.
+  
+## New music formats:
+- PreTracker by Pink/aBYSs. Very noice! Samples are generated during 
+  initialization which may take some time especially on slow CPUs.
+- SonicArranger
+  - Now supports more variants, previously only the compact form was 
+    supported. Adaptation based on Wanted Team sources.
+  - There is still one variant (at least) that is not supported.
+- CustomMade
+  - "Battle Squadron"
+  - Songs composed by Ron Klaren. Adaptation based on Wanted Team sources.
+- Dave Lowe
+  - Just wanted to hear Hippo play the "International Karate+" title music. 
+  - Adaptation based on Wanted Team sources.
+- DeliTracker Custom format improvements, adds support for modules 
+  with external samples:
+  - SUNTronic modules (from SUNTronicTunes.lha). Smooth!
+    Check out "spring.src", this uses the Paula FM/AM channel modulation
+    feature, which is very rarely heard. 
+    Google for "SUNTronicTunes.lha" to get all SUNTronic tunes, 
+    adapted by Peter Kunath of the DeliTracker team.
+  - ModsAnthology/Synth/Custom/CUST.Lemmings now works, too.
+- GlueMon (properly retro sound)
+   - Tunes from Mahoney & Kaktus music disk "His Master's Noise".
+- SoundFX (some nice ones in there)
+   - Listen to "waterfall.sfx"
+- StarTrekker AM (pretty crunchy)
+  - Audio Sculpture modules are also recognized as StarTrekker modules.
+    The replay routine is almost identical, but not quite, 
+    so may not play perfectly.
+  - Recommended listen (since M.U.L.E. rules): "the-real-mule2.mod" 
+- Voodoo Supreme Synthesizer
+  - An obscure synth format. 
+  - Based on eagleplayer by Buggs/DEFECT. Some bug fixing was needed for 
+    this, plenty of illegal memory reads were happening.
+
+## Supported Eagleplayer formats, plugin name in parentheses:
+- SynTracker ("syntracker")
+  - Eagleplayer by Eagleeye/DEFECT
+- AProSys ("aprosys")
+  - Original sounding synth tunes.
+  - Some modules cause illegal memory read enforcer hits.
+  - Eagleplayer by Delirium & Buggs/DEFECT
+- In Stereo! 1.0 ("in stereo 1.0")
+  - Eagleplayer by Eagleeye/DEFECT
+- In Stereo! 2.0 ("in stereo 2.0")
+  - Eagleplayer by Eagleeye/DEFECT
+- Synthesis ("synth 4.0")
+  - Nice synth sounds in the three above formats!
+  - It seems that In Stereo!, Synthesis and SonicArranger are related,
+    all mention Carsten Herbst in credits.
+  - Eagleplayer by Eagleeye/DEFECT
+- ChipTracker ("chiptracker")
+  - Also known as KRISTracker.
+  - Tunes by 4-Mat.
+  - Eagleplayer by Wanted Team
+- Jochen Hippel 7v ("jochen hippel 7v")
+  - Seven channel Hippel experience.
+  - Eagleplayer by Wanted Team
+- Jochen Hippel ST ("jochen hippel st")
+  - Hippel tunes from the Atari ST. Hippel quality!
+  - Not all tunes (that I found) are supported.
+  - Eagleplayer by Wanted Team
+- Rob Hubbard 2 ("rob hubbard 2")
+  - Many Infogrames games used this, eg. the "Flood" title tune.
+  - Eagleplayer by Eagleeye/DFT & Wanted Team
+- Richard Joseph/VectorDean ("richard joseph player")
+  - "Chaos Engine"
+  - This format has two names depending on where you look, 
+    VectorDean and Richard Joseph.
+  - Eagleplayer by Wanted Team
+- Richard Joseph ("richard joseph")
+  - "Speedball 2"
+  - A different Richard Joseph format.
+  - Eagleplayer by Wanted Team
+- TCBTracker ("tcb tracker")
+  - Richard Joseph tunes from the ST, such as "Magic Pockets". 
+  - Eagleplayer by Meynaf and Wanted Team 
+- Quartet ("quartet") and Quartet ST ("quartet st")
+  - Atari ST originated format, interesting to hear these on Amiga.
+  - Eagleplayers by Wanted Team
+- Jason Brooke ("jason brooke")
+  - "Space Harrier"
+  - Eagleplayer by Wanted Team
+- Activision Pro ("activision pro")
+  - "R-Type 2"
+  - Eagleplayer by Eagleeye/DEFECT
+- Wally Beben ("wally beben")
+  - "Elite", "Hawkeye"
+  - Eagleplayer by Wanted Team
+- Jeroen Tel ("jeroen tel")
+  - "Unreal"
+  - Eagleplayer by Wanted Team
+- Rob Hubbard ("rob hubbard")
+  -  "Budokan"
+  - Eagleplayer by EagleeEye/DFT & Wanted Team
+- Sonix Music Driver ("sonix music driver")
+  - File prefixes: SMUS.*, TINY.*, SNX.*
+  - These definitely have their own, musical sound. 
+  - A note based editor. Quite unlike any tracker music.
+  - Instruments are separate files.
+  - Many beautiful adaptations of classical music, such as "Arabesque".
+  - "California Games" music was also made in this format.
+  - Eagleplayer by Wanted Team
+- Digital Mugician II ("mugician ii")
+  - Seven voices.  
+  - Eagleplayer by Wanted Team
+- StoneTracker ("eaglestone")
+  - One of the newer 4-8 channel Amiga trackers.
+  - These don't work on kick1.3 and/or 68000.
+  - To play these, additional libraries are needed in LIBS:
+    - stoneplayer.library, stonepacker.library
+    - These can be found in the StoneTracker aminet archive.
+  - These modules have a separate sample data file which needs to be
+    correctly named for the eagleplayer to find it, by prepending "sps."
+    to the sample file name.
+    Example:
+    - Module name: "spm.hypnosphere" 
+    - Sample file: "sps.hypnosphere"
+  - Eagleplayer by Emmanuel Marty, one of the authors of StoneTracker
+- MusicMaker V8 ("musicmaker4", "musicmaker8")
+  - 4-8 channel modules. 
+  - Format with multiple files per module not supported.
+  - First versions of this app were released way back in the 80s,  
+    there have been new updates just recently, cool!
+  - Eagleplayers by Thomas Winischhofer, the author of MusicMaker
+- MaxTrax ("maxtrax")
+  - Eagleplayer by Wanted Team
+- SoundControl ("soundcontrol")
+  - Eagleplayer by Wanted Team
+- Synth Pack ("synth pack")
+  - Synth enabled format by the legendary Sound Tracker creator 
+    Karsten Obarski.
+  - These tunes are worth checking out.
+  - Eagleplayer by Wanted Team
+- EarAche ("earache")
+  - An obscure synth format with apparently only three modules in existence.
+  - Eagleplayer by Wanted Team
+- The Musical Enlightenment ("tme")
+  - Yet another obscure synth format.
+  - Eagleplayer by Wanted Team
+- Face The Music ("face the music")
+  - 8 channel format.
+  - This one does some illegal memory reads from audio interrupts sometimes.
+  - Eagleplayer by Buggs of DEFECT
+- Kris Hatlelid ("kris hatlelid")
+  - "Test Drive II"
+  - Eagleplayer by Wanted Team
+- Tim Follin ("tim follin ii")
+  - "Ghouls 'n' Ghosts"
+  - Eagleplayer by Andy Silva and Buggs/DEFECT 
+ 
+## Misc 
+- In the original hippo release, in the HippoSupport folder, there is a
+  tool called "TerminateHiP". This is no longer compatible with Hippo. 
+  Instead, an AREXX script such as the following should work:
+  rx "address hippoplayer ; quit"
+
+## Tips 
+- A nice place for exotic modules is the FTP server Modland. 
+- Another place to check is the Wanted Team web page. 
+
+## Thanks and greetings to:
+- Spot/UpRough for beta testing and music format related assistance.
+- Marek Hac for beta testing.
+- Wanted Team for Eagleplayer resources.
+- Authors of all the included eagleplayers, I hope you don't mind!
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 # Changes from v2.46b (15.6.2021) to v2.47 (31.8.2021)
 
@@ -114,7 +378,8 @@ support, some fixes. Check out the details below.
   _General_ subpage in prefs. This feature probably doesn't make any
   sense if you are using floppies. 
   
-
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 # Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
 

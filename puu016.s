@@ -18,14 +18,15 @@ ver	macro
 ;	dc.b	"v2.44 (16.8.1998)"
 ;	dc.b	"v2.45 (10.1.2000)"
 ;	dc.b	"v2.47ﬂ (?.?.2021)"
-	dc.b	"v2.47 (31.8.2021)"
+;	dc.b	"v2.47 (31.8.2021)"
+	dc.b	"v2.48 (31.10.2021)"
 	endm	
 
 
-DEBUG	= 1
+DEBUG	= 0
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
-asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
+asm	= 0	* 1: Run from AsmOne, 0: CLI/Workbench
 
 zoom	= 0	* 1: zoomaava hippo
 fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
@@ -34,6 +35,8 @@ PILA	= 0	* 1: pikku pila niille joilla on wRECin key muttei 060:aa
 TARK	= 0	* 1: tekstien tarkistus
 EFEKTI  = 0	* 1: efekti volumesliderill‰
 ANNOY	= 0 * 1: Unregistered version tekstej‰ ymp‰riins‰
+
+DELI_TEST_MODE = 0
 
 ; Magic constants used with playingmodule and chosenmodule
 ; Positive value:
@@ -202,6 +205,7 @@ check	macro
 	include	devices/ahi_lib.i
 
 	include	misc/deliplayer.i
+	include	misc/eagleplayer.i
 
 	incdir include/
 	include	mucro.i
@@ -211,7 +215,7 @@ check	macro
 use = 0
 	include	player61.i
 
-
+	include	playerIds.i
 	include	kpl_offsets.S
 
 *******************************************************************************
@@ -412,7 +416,7 @@ _MedPlayerBase	rs.l	1
 _MedPlayerBase1	rs.l	1
 _MedPlayerBase2	rs.l	1
 _MedPlayerBase3	rs.l	1
-_MlineBase	rs.l	1
+_MlineBase		rs.l	1
 _XFDBase	rs.l	1
 
  ifne DEBUG
@@ -424,7 +428,8 @@ sidlibstore2	rs.l	2
 
 owntask		rs.l	1
 lockhere	rs.l	1		* currentdir-lock
-cli		rs.l	1
+homelock	rs.l 	1		* homedir-lock (V36)
+cli			rs.l	1
 segment		rs.l	1	* Toisiks ekan hunkin segmentti
 fileinfoblock	rs.b	260		* 4:ll‰ jaollisessa osoitteessa!
 fileinfoblock2	rs.b	260		
@@ -530,8 +535,12 @@ vbsaatu		rs.b	1		* 1: saatiin vb intti
 
 prefs_task	rs.l	1		* prefs-prosessi
 
+* Prefs window will close if it receives this signal
 prefs_signal	rs.b	1		* prefs-signaali
+
+* Prefs window will update contents when receiving this
 prefs_signal2	rs.b	1		* prefs-signaali 2
+
 songHasEndedSignal	rs.b	1	* Kappale soinut
 ownsignal2	rs.b	1	* position update in title bar, prefs update 
 uiRefreshSignal	rs.b	1	* lootan p‰ivitys
@@ -702,13 +711,32 @@ s3mmode3	rs.b	1		* Volume boost
 stereofactor	rs.b	1		* stereofactor
 xfd		rs.b	1		* ~0: k‰ytet‰‰n xfdmaster.libb°‰
 ps3mb		rs.b	1
-timeoutmode	rs.b	1
+
+QUADMODE_QUADRASCOPE = 0
+QUADMODE_HIPPOSCOPE = 1
+QUADMODE_FREQANALYZER = 2
+QUADMODE_PATTERNSCOPE = 3
+QUADMODE_FQUADRASCOPE = 4
+QUADMODE_PATTERNSCOPEXL = 5
+
+* Scope mode
 quadmode	rs.b	1		* scopemoodi
+* Modified scope mode internally used in scopes for jumptables
 quadmode2	rs.b	1		
+
+* Store the original window height to switch between
+* large and normal height mode
+quadWindowHeightOriginal	rs.l	1
+* Pattern scope configuration parameters for normal and large mode
+quadNoteScrollerLinesHalf	rs.w	1
+quadNoteScrollerLines		rs.l	1
+
+timeoutmode	rs.b	1
 filterstatus	rs.b	1		* filtterin 
 modulefilterstate rs.b	1		* ..
 ptmix		rs.b	1		* 0: normi ptreplay, 1:mixireplay
 xpkid		rs.b	1		* 0: ei xpktunnistusta, 1:joo
+							* seems to be that 0 enables xpkid here
 fade		rs.b	1		* 0: ei feidausta
 boxsize		rs	1		* montako nime‰ mahtuu fileboksiin
 						* size of the module name box
@@ -804,7 +832,11 @@ markedline	rs.l	1	* merkitty rivi
 playingmodule	rs.l	1	* index of the module that is being played
 chosenmodule	rs.l	1	* index of the chosen module in the list
 
-groupmode	rs.b	1
+GROUPMODE_ALL_ON_STARTUP = 0
+GROUPMODE_ALL_ON_DEMAND = 1
+GROUPMODE_DISABLE = 2
+GROUPMODE_LOAD_SINGLE = 3
+groupmode	rs.b	1	* player group handling mode
 
 movenode	rs.b	1	* ~0: move p‰‰ll‰
 nodetomove	rs.l	1	* t‰t‰ nodea siirret‰‰n
@@ -846,6 +878,7 @@ keyfilechecked	rs.b	1	* ~0: keyfile tarkistettu
 
 songnumber	rs	1	* modin sis‰isen kappaleen numero
 maxsongs	rs	1	* maximi songnumber
+minsong  	rs 	1   * min songnumber
 
 
 moduleaddress	rs.l	1	* modin osoite
@@ -876,7 +909,8 @@ do_early	rs.b	1
 externalplayers	rs.l	1	* ulkoisen soittorutiininivaskan osoite
 
 external	rs.b	1	* lippu: tarvitaan xplayeri
-xtype		rs.b	1	* ladatun replayerin tyyppi
+			rs.b 	1	* pad
+xtype		rs.w	1	* ladatun replayerin tyyppi
 xplayer		rs.l	1	* osote
 xlen		rs.l	1	* pakattupituus
 
@@ -901,13 +935,23 @@ gamemusiccreatorroutines rs.l 0
 digitalmugicianroutines	rs.l 0
 medleyroutines rs.l 0
 futureplayerroutines rs.l 0
+daveloweroutines	rs.l 	0
 bendaglishroutines	rs.l	0
 sidmon2routines 	rs.l 	0
 deltamusic1routines rs.l 	0
+soundfxroutines	rs.l	0
+gluemonroutines	rs.l	0
+pretrackerroutines rs.l	0
+custommaderoutines rs.l 0
+startrekkerroutines rs.l 0
+voodooroutines	rs.l	0
+sonicroutines	rs.l	0
 tfmxroutines	rs.l	0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
+startrekkerdataaddr rs.l 0
 tfmxsamplesaddr	rs.l	1	* TFMX:n samplejen osoite
+startrekkerdatalen rs.l 0
 tfmxsampleslen	rs.l	1	* TFMX:n samplejen pituus
 medrelocced	rs.b	1	* ei-0: Med-modi relocatoitu
 medtype		rs.b	1	* 0: 1-4, 1: 5-8, 2: 1-64
@@ -980,7 +1024,7 @@ lod_tfmx		rs.b	1
 lod_pad			rs.b	1
 lod_kommentti		rs.b	1	 * 0: ei oteta kommenttia
 lod_xpkfile		rs.b	1	 * <>0: tiedosto oli xpk-pakattu
-	rs.b	1			
+lod_exefile		rs.b	1	 * <>0: file was an exe		
 lod_dirlock		rs.l	1
 lod_buf			rs.b	200
 lod_b			rs.b	0
@@ -1119,6 +1163,30 @@ moduleListChanged	rs.b		1
 
 kplbase	rs.b	k_sizeof		* KPlayerin muuttujat (ProTracker)
 
+*** Deli support data
+deliData	rs.l    1
+* Dynamically allocated:
+deliBase	rs.l 	1
+* LoadSeg() data 
+deliPlayer	rs.l	1
+* Type of player which was loaded
+deliPlayerType	rs.w	1
+* Load file array pointer, contains (addr,len) pairs
+* Data loaded with dtg_LoadFile
+deliLoadFileArray	rs.l 1
+deliLoadFileIoErr	rs.l 1
+* Some tag data for faster access
+deliStoredInterrupt	rs.l	1
+deliStoredSetVolume	rs.l 	1
+deliStoredSetVoices rs.l	1
+deliStoredNoteStruct rs.l 	1
+deliStoredGetPositionNr rs.l 1
+deliPath		rs.l	1
+deliPathArray		rs.l	1	
+ if DEBUG
+debugDesBuf		rs.b	1000
+ endif
+
 * Size of global variables data. Must be even.
 size_var	rs.b	0
 
@@ -1144,65 +1212,25 @@ p_song		rs.l	1
 p_eteen		rs.l	1
 p_taakse	rs.l	1
 p_ahiupdate	rs.l	1
+p_id  		rs.l 	1
+p_author	rs.l 	1
+p_type 		rs.w    1
 p_liput		rs	1	* ominaisuudet
 p_name		rs.l	1
 
-* Player ids
-* These are self contained, replayer code inside the module
-pt_internal_start = 33
-	rsset	pt_internal_start
-pt_prot		rs.b	1
-pt_sid		rs.b	1
-pt_delta2	rs.b	1
-pt_musicass	rs.b	1
-pt_fred		rs.b	1
-pt_sonicarr	rs.b	1
-pt_sidmon1	rs.b	1
-pt_med		rs.b	1
-pt_markii	rs.b	1
-pt_mon		rs.b	1
-pt_dw		rs.b	1
-pt_hippel	rs.b	1
-pt_mline	rs.b	1
-pt_beathoven	rs.b	1
-pt_delicustom	rs.b 	1
+p_NOP macro 
+	dc.l	$4e754e75
+	endm
 
-* These need a replayer from the group file
-pt_group_start = 49
-	rsset	pt_group_start		* Ulkoiset
-pt_multi	rs.b	1		* PS3M (mod,ftm,mtm,s3m)
-pt_tfmx		rs.b	1
-pt_tfmx7	rs.b	1
-pt_jamcracker	rs.b	1
-pt_future10	rs.b	1
-pt_future14	rs.b	1
-pt_soundmon2	rs.b	1
-pt_soundmon3	rs.b	1
-pt_oktalyzer	rs.b	1
-pt_player	rs.b	1
-pt_hippelcoso	rs.b	1
-pt_digibooster	rs.b	1
-pt_thx		rs.b	1
-pt_sample	rs.b	1
-pt_aon		rs.b	1
-pt_digiboosterpro rs.b	1
-pt_pumatracker	rs.b 	1
-pt_gamemusiccreator  rs.b  1
-pt_digitalmugician 	 rs.b  1
-pt_medley 	 rs.b  1
-pt_futureplayer 	rs.b 	1
-pt_bendaglish	rs.b 	1
-pt_sidmon2		rs.b	1
-pt_deltamusic1 	rs.b 	1
+ if pt_prot<>33 
+   fail This must be 33
+ endc 
+ if pt_multi<>49
+   fail This must be 49
+ endc 
 
 * player group version
-xpl_versio	=	21
-* convert player ids to start from zero to access table in player group
-xpl_offs	=	pt_group_start
-
-
-
-
+xpl_versio	=	22
 
 *********************************************************************************
 *
@@ -1307,23 +1335,14 @@ DEBU	macro
 	endc
 	endm
 
-* Print to debug console
+* Print to debug console, very clever.
 * Param 1: string
-* Param 2: label,  for some reason \@ doesn't work
-* d0-d7:    formatting parameters
+* d0-d6:    formatting parameters, d7 is reserved
 DPRINT macro
 	ifne DEBUG
-	push a0
-	lea .DD\2(pc),a0
-	jsr	desmsg
-	pop a0
-	pea	desbuf(a5)
-	jsr	PRINTOUT
-	bra.b	.D\2
-.DD\2
- 	dc.b 	\1,10,0
- 	even
-.D\2
+	jsr	desmsgDebugAndPrint
+  dc.b 	\1,10,0
+  even
 	endc
 	endm
 
@@ -1377,8 +1396,6 @@ progstart
 	move.l	d0,a4
 	move.l	d0,_DosBase(a5)
 
-	DPRINT	"Start",1
-
 	sub.l	a1,a1
 	lob	FindTask
 	move.l	d0,a3
@@ -1393,21 +1410,27 @@ progstart
 	move.l	d0,d5
 	move.l	d0,a0
 	move.l	sm_ArgList(a0),d0	* nykyisen hakemiston lukko
-	beq.b	.waswb			* workbenchilt‰
+	beq.w	.waswb			* workbenchilt‰
 	move.l	d0,a0
 	move.l	(a0),lockhere(a5)
-	bra.b	.waswb
+	DPRINT	"Start from WB"
+	bra.w	.waswb
 .nowb	
 	move.l	pr_CurrentDir(a3),lockhere(a5) * nykyinen hakemisto CLI:lt‰
+	DPRINT	"Start from CLI"
 
+	push	a3
 	bsr.w	CLIparms
-
+	pop	a3
 .waswb	
-	move.l	(a5),a6
+
+	* a3 = current task
+
+	bsr.b	.getDirInfo
 	lea	portname,a1		* joko oli yksi HiP??
-	lob	FindPort
+	lore	Exec,FindPort
 	tst.l	d0
-	bne.b	.poptofront
+	bne.w	.poptofront
 
 	* There was no hip already running, launch a new one
 
@@ -1456,6 +1479,36 @@ progstart
 	moveq	#0,d0
 	rts
 
+* in:
+*  a3 = current task
+*  a6 = exec
+.getDirInfo 
+	cmp	#36,LIB_VERSION(a6)
+	blo.b	.noo	
+	move.l 	pr_HomeDir(a3),d1
+	beq.b	.noo
+	lore	Dos,DupLock
+	move.l	d0,homelock(a5)
+.noo
+
+ if DEBUG
+	move.l 	lockhere(a5),d1
+	move.l	#ptheader,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	move.l	#ptheader,d0
+	DPRINT	"Current dir: %s"
+	move.l 	homelock(a5),d1
+	beq.b	.ooold
+	move.l	#ptheader,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	move.l	#ptheader,d0
+	DPRINT	"Home dir: %s"
+.ooold
+ endif 
+	rts
+
 .poptofront
 	tst.l	sv_argvArray+4(a5)	* oliko parametrej‰?
 	bne.b	.huh			* jos ei, pullautetaan hip!
@@ -1463,7 +1516,7 @@ progstart
 	move.l	d0,a0
 	move.l	poptofrontr-hippoport(a0),a0	* pullautusrutiini
 	jsr	(a0)								* what is this evil magic?
-	bra.b	.eien
+	bra.w	.eien
 
 * Oli! L‰hetet‰‰n hipille!
 .huh
@@ -1488,7 +1541,7 @@ progstart
 	;pushpea	sv_argvArray(a5),MN_LENGTH(a1) * uudet parametrit viestiin
 	;move.l	#"K-P!",MN_LENGTH+4(a1) * tunnistin!
 
-	bsr.w	.preparePaths
+	bsr.b	.preparePaths
 
  if DEBUG
 	push	a0
@@ -1498,7 +1551,7 @@ progstart
 	tst.l	(a0)
 	beq.b	.bob2
 	move.l	(a0)+,d1
-	DPRINT	"%ld: %s",3
+	DPRINT	"%ld: %s"
 	addq	#1,d0
 	bra.b	.bob
 .bob2
@@ -1534,7 +1587,7 @@ progstart
 .loop
 	* Take one and see if it was the last one
 	move.l	(a3),d3
-	beq	.done
+	beq.b	.done
 
 	* See if it was one of the four letter commands
 	move.l	d3,a0 
@@ -1549,7 +1602,7 @@ progstart
 
 * consider this a file. let's try to get a lock on it.
 	move.l 	d3,d1
-	move.l	#ACCESS_READ,d2
+	moveq	#ACCESS_READ,d2
 	lore  	Dos,Lock
 	move.l	d0,d4
 	beq.b	.noLock
@@ -1558,7 +1611,7 @@ progstart
 	move.l	d4,d1
  	pushpea tempdir(a5),d2  		* this space can be used
  	move.l	#200,d3 
- 	jsr		getNameFromLock
+ 	jsr	getNameFromLock
 	* store return status for a little while so we can UnLock first
 	move.l	d0,d3
 
@@ -1585,7 +1638,7 @@ progstart
 .error
 	* go to next argv slot
 	addq.l	#4,a3
-	bra.w	.loop
+	bra.b	.loop
 .done 
 	popm	all
 	rts
@@ -1762,11 +1815,16 @@ quad_segment
 
 
  ifne DEBUG
+PRINTOUT_DEBUGBUFFER
+	pea	debugDesBuf+var_b 
+	bsr.b PRINTOUT
+	rts
+
 PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
 	lea	var_b,a5
 	move.l	output(a5),d1
-	bne.w	.open
+	bne.b	.open
 
 	* try tall window firsr
 	move.l	#.bmb,d1
@@ -1781,7 +1839,7 @@ PRINTOUT
 	move.l	d0,output(a5)
 	bne.b	.open
 	* still not open! exit
-	bra.w	.x
+	bra.b	.x
 
 .bmb	dc.b	"CON:0/0/350/500/HiP debug",0
 .bmbSmall
@@ -1969,6 +2027,18 @@ main
 	ble.b	.vanha
 	st	uusikick(a5)		* Uusi kickstart
 
+	* Set homedir for this task, kick2.0+
+	* Assume hat pr_HomeDir gets unlocked by os.
+ ifeq asm	
+	move.l	owntask(a5),a3 
+	tst.l 	pr_HomeDir(a3) 
+	bne.b 	.hasHome 
+	move.l	homelock(a5),d1 
+	lore	Dos,DupLock
+	move.l	d0,pr_HomeDir(a3)
+.hasHome
+ endif
+
 	lea	colors,a0
 	move	#$0301,d0
 ;	moveq	#$0001,d0
@@ -2023,6 +2093,7 @@ lelp
 
 	* The first debug print should be after opening
 	* intuition since it may use the alert box.	
+bob
 	DPRINT	"Hippo is alive"
 
 	tst.b	uusikick(a5)
@@ -2111,7 +2182,7 @@ lelp
 	clr	(a0)
 	move.l	topazbase(a5),fontbase(a5)
 
-	bra.w	.koh
+	bra.b	.koh
 
 .poh
 
@@ -2121,7 +2192,7 @@ lelp
 
  if DEBUG
 	move.l	ta_Name(a0),d0 
-	DPRINT	"Opening font %s",544
+	DPRINT	"Opening font %s"
  endif 
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
@@ -2231,7 +2302,7 @@ lelp
 	lea	sivu6-sivu5(a1),a1
 	bsr.b	.num
 
-	bra.w	.eer2
+	bra.b	.eer2
 
 
 .num
@@ -2260,7 +2331,7 @@ lelp
 ;if DEBUG
 ;	ext.l	d0
 ;	move.l	it_IText(a2),d1
-;	DPRINT	"Gadget id=%ld Text=%s",111	
+;	DPRINT	"Gadget id=%ld Text=%s"
 ;endif
 
 	move.l	#text_attr,it_ITextFont(a2)	* fontti
@@ -2565,14 +2636,13 @@ lelp
 	bsr.w	zipMainWindow
 .hid
 
-	bsr.w	inforivit_clear
+	jsr	inforivit_clear
+	jsr	importFavoriteModulesFromDisk
 
-	jsr		importFavoriteModulesFromDisk
-
-	DPRINT	"Loading group",1
+	DPRINT	"Loading group"
 
 	tst.b	groupmode(a5)			* ladataanko playergrouppi?
-	bne.w	.purr
+	bne.b	.purr
 	jsr	loadplayergroup
 	move.l	d0,externalplayers(a5)
 ;	bne.b	.purr
@@ -2613,13 +2683,13 @@ lelp
 
 	tst.b	quadon(a5)			* avataanko scope?
 	beq.b	.q
-	DPRINT	"Starting scope",7
+	DPRINT	"Starting scope"
 	jsr	start_quad
 .q
 	tst.b	infoon(a5)
 	beq.b	.qq
 ;	st	oli_infoa(a5)
-	DPRINT	"Starting info",8	
+	DPRINT	"Starting info"
 	jsr	rbutton10b
 .qq
 
@@ -2692,7 +2762,7 @@ lelp
 * P‰‰silmukka
 *	
 
-	DPRINT	"Entering msgloop",10
+	DPRINT	"Entering msgloop"
 
 	bra.b	msgloop
 returnmsg
@@ -2754,7 +2824,7 @@ msgloop
 	btst	d3,d0
 	beq.b	.nrexm
 	jsr	rexxmessage
-	bra		returnmsg
+	bra.w		returnmsg
 
 .nrexm
 * Tuliko viesti‰ porttiin?
@@ -2961,7 +3031,7 @@ msgloop
 	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
 	btst	d3,d0
 	beq.w	.nwwwq
-	DPRINT	"rawkey from input handler",9
+	DPRINT	"rawkey from input handler"
 	moveq	#0,d4
 	move	rawkeyinput(a5),d3
 	cmp	#$25,d3			* oliko 'h'?
@@ -2969,14 +3039,14 @@ msgloop
 	cmp	#$01,d3			* '1'? -> iconify
 	bne.b	.nico
 	moveq	#0,d3			* muutetaan -> ~`
-	bsr	nappuloita
-	bra	returnmsg
+	bsr.w	nappuloita
+	bra.w	returnmsg
 .nico
 
 	tst	d3
 	beq.b  .noKeys
-	bsr nappuloita
-	bra	returnmsg
+	bsr.w nappuloita
+	bra.w	returnmsg
 .noKeys
 
 	tst.b	win(a5)
@@ -3022,7 +3092,7 @@ msgloop
 	move.b	tooltipSignal(a5),d3 
 	btst	d3,d0 
 	beq.b	.noTooltipSignal
-	bsr	tooltipDisplayHandler
+	bsr.w	tooltipDisplayHandler
 .noTooltipSignal
 
 * Vastataan IDCMP:n viestiin
@@ -3035,7 +3105,7 @@ msgloop
 	* Ignore any ui actions if window is frozen
 	* Flush any remaining messages 
 	bsr.w	areMainWindowGadgetsFrozen
-	bne	returnmsg		
+	bne.w	returnmsg		
 
 * Process IDCMP messages if any
 	clr.b	ignoreMouseMoveMessage(a5)
@@ -3058,7 +3128,7 @@ msgloop
 	lob	ReplyMsg
 
 	;move.l	d2,d0
-	;DPRINT	"IDCMP=%ld",91
+	;DPRINT	"IDCMP=%ld"
 
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
 	bne.b	.noChangeWindow
@@ -3068,7 +3138,7 @@ msgloop
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.noRawKey
 	clr	userIdleTick(a5)	
-	bsr	nappuloita
+	bsr.w	nappuloita
 	bra.b	.idcmpLoop
 .noRawKey	
 	* There will be a lot of mousemove messages.
@@ -3079,22 +3149,22 @@ msgloop
 	bne.b	.noMouseMove
 	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
-	bne.w  	.idcmpLoop
+	bne.b  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
-	bsr	mousemoving
-	bra.w	.idcmpLoop
+	bsr.w	mousemoving
+	bra.b	.idcmpLoop
 
 .noMouseMove
 	cmp.l	#IDCMP_GADGETUP,d2
 	bne.b	.noGadgetUp
 	clr	userIdleTick(a5)	
-	bsr	gadgetsup
+	bsr.w	gadgetsup
 	bra.w	.idcmpLoop
 .noGadgetUp
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.noMouseButtons
 	clr	userIdleTick(a5)	
-	bsr	buttonspressed
+	bsr.w	buttonspressed
 	bra.w	.idcmpLoop
 .noMouseButtons	
 	cmp.l	#IDCMP_CLOSEWINDOW,d2
@@ -3106,8 +3176,8 @@ msgloop
 exit	
 	lea	var_b,a5
 
-	DPRINT "Hippo is exiting",666
-	bsr	setMainWindowWaitPointer	
+	DPRINT "Hippo is exiting"
+	bsr.w	setMainWindowWaitPointer	
 
 	lea	.exmsg(pc),a0
 	moveq	#102+WINX,d0
@@ -3195,8 +3265,9 @@ exit
 	move.l	calibrationaddr(a5),a0
 	bsr.w	freemem
 	move.l	randomtable(a5),a0
-	bsr 	freemem
+	bsr.w 	freemem
 
+	jsr	closeTooltipPopup
 	bsr.w	flush_messages
 	bsr.w	sulje_ikkuna
 
@@ -3287,20 +3358,20 @@ exit2
 
  ifne DEBUG
 	move.l	getmemCount(pc),d0
-	DPRINT "Getmem count: %ld",668
+	DPRINT "Getmem count: %ld"
 	move.l	freememCount(pc),d1
-	DPRINT "Freememcount: %ld",669
+	DPRINT "Freememcount: %ld"
 	move.l	getmemTotal(pc),d0 
 	lsr.l	#8,d0 
 	lsr.l	#2,d0 
-	DPRINT "Getmem total: %ld kilobytes",670
+	DPRINT "Getmem total: %ld kilobytes"
 	move.l	getmemTotal(pc),d0
 	move.l	getmemCount(pc),d1
 	bne.b	.nz
 	moveq	#1,d1
 .nz
-	bsr		divu_32
-	DPRINT "Getmem avg: %ld bytes",671
+	bsr.w		divu_32
+	DPRINT "Getmem avg: %ld bytes"
 
 	move.l	#(1)*50,d1
 	lore	Dos,Delay
@@ -3314,6 +3385,10 @@ exit2
  ifeq asm
 	move.l	lockhere(a5),d1		* free CurrentDir lock
 	lore	Dos,UnLock
+	move.l	homelock(a5),d1
+	beq.b	.noHome
+	lob     UnLock
+.noHome
 	lore	Exec,Forbid			* forbid multitasking 
 	bsr.w	vastomaviesti		* reply to any message we may have received
 
@@ -3777,7 +3852,7 @@ ply2	equr	d7
 *** P‰ivitet‰‰n ikkunan sis‰ltˆ
 
 zipwindow
-	DPRINT	"ZipWindow refresh",1
+	DPRINT	"ZipWindow refresh"
 	tst.b	win(a5)
 	bne.b	.onw	
 	rts
@@ -3920,7 +3995,7 @@ avaa_ikkuna
 	moveq	#0,d1
 	move	wd_Width(a0),d0
 	move	wd_Height(a0),d1
-	DPRINT	"Open window %ldx%ld",1
+	DPRINT	"Open window %ldx%ld"
  endif
 	move.l	rastport(a5),a1
 	move.l	fontbase(a5),a0
@@ -3980,11 +4055,59 @@ getscreeninfo
 	move.b	sc_WBorLeft(a0),windowleft+1(a5)
 	move.b	sc_WBorRight(a0),windowright+1(a5)
 
+	move.l 	sc_Font(a0),a1  * TextAttr, screen font
+	moveq	#0,d3
+	move	ta_YSize(a1),d3
+
+ if DEBUG
 	moveq	#0,d0
 	move.b	sc_BarHeight(a0),d0
 	moveq	#0,d1
 	move.b	sc_WBorTop(a0),d1
-	DPRINT	"sc_BarHeight=%ld sc_WBorTop=%ld",30
+	moveq	#0,d2 
+	move.b	sc_BarVBorder(a0),d2
+	DPRINT	"sc_BarHeight=%ld sc_WBorTop=%ld sc_BarVBorder=%ld fontY=%ld"
+ endif
+
+	* It seems that the total height of the window
+	* border must be calculated using the screen font height
+	* and adding some safety margin.
+	* Screen bar height can't be used to calculate window
+	* title bar height since that can configured separately.
+	addq	#2,d3
+	move	d3,windowtop(a5)
+ 
+
+* Screen Border = 0 + Window Border = 0, font 13
+* - sc_BarHeight= 15
+* - sc_WBorTop = 2
+* - ta_YSize = 13
+
+* Screen Border = 0 + Window Border = 0, font 8
+* - sc_BarHeight= 10
+* - sc_WBorTop = 2
+* - ta_YSize = 8
+
+* Screen Border = 0 + Window Border = 0 + font 24
+* - sc_BarHeight= 26
+* - sc_WBorTop = 2
+* - ta_YSize = 24
+
+* Screen Border = 8 + Window Border = 0 + font 13
+* - sc_BarHeight= 23
+* - sc_WBorTop = 2
+* - ta_YSize = 13
+
+* Screen Border = 8 + Window Border = 0 + font 8
+* - sc_BarHeight= 18
+* - sc_WBorTop = 2
+* - ta_YSize = 8
+
+* Screen Border = 0 + Window Border = 8 + font 13
+* - sc_BarHeight= 15
+* - sc_WBorTop = 10
+* - ta_YSize = 13
+
 
 	move	windowtopb(a5),d0
 	add	d0,windowtop(a5)
@@ -4176,6 +4299,7 @@ getscreeninfo
 	add	d3,prefssiz+2
 	add	d3,quadsiz+2
 	add	d3,swinsiz+2
+	move	quadsiz+2,quadWindowHeightOriginal(a5)
 
 	move	WINSIZX(a5),wsizex
 	move	WINSIZY(a5),wsizey
@@ -4935,7 +5059,11 @@ printhippo2
 	moveq	#0,d0	
 	moveq	#0,d1
 	moveq	#126,d2
-	moveq	#14,d3
+	move	#14,d3
+	jsr	scopeIsNormal
+	bne.b	.normal
+	add	#64/2,d3
+.normal
 	moveq	#96,d4	
 	moveq	#66,d5
 
@@ -5083,7 +5211,37 @@ desmsg3	movem.l	d0-d7/a0-a3/a6,-(sp)
 * a1 = parametrit
 desmsg4	movem.l	d0-d7/a0-a3/a6,-(sp)
 	bra.b	pulppa
+* a3 = desbuf
 
+ if DEBUG 
+desmsgDebugAndPrint
+	* sp contains the return address, which is
+	* the string to print
+	movem.l	d0-d7/a0-a3/a6,-(sp)
+	* get string
+	move.l	4*(8+4+1)(sp),a0
+	* find end of string
+	move.l	a0,a1
+.e	tst.b	(a1)+
+	bne.b	.e
+	move.l	a1,d7
+	btst	#0,d7
+	beq.b	.even
+	addq.l	#1,d7
+.even
+	* overwrite return address 
+	* for RTS to be just after the string
+	move.l	d7,4*(8+4+1)(sp)
+
+	lea	debugDesBuf+var_b,a3
+	move.l	sp,a1	
+	lea	putc(pc),a2	
+	move.l	4.w,a6
+	lob	RawDoFmt
+	movem.l	(sp)+,d0-d7/a0-a3/a6
+	bsr.w	PRINTOUT_DEBUGBUFFER
+	rts	* teleport!
+ endif
 
 *******************************************************************************
 * Laatikoiden piirto
@@ -5436,28 +5594,25 @@ freemem	movem.l	d0/d1/a0/a1/a6,-(sp)
 freemodule
 	movem.l	d0-a6,-(sp)
 
-	DPRINT	"freemodule obtain data",1
-	bsr.w		obtainModuleData
+	DPRINT	"freemodule obtain data"
+	bsr.w	obtainModuleData
 
 	* Check if need to do UnLoadSeg
-	cmp	#pt_delicustom,playertype(a5)
-	seq	d7
-	cmp	#pt_futureplayer,playertype(a5)
-	seq	d6
-	or.b	d6,d7
-
+	bsr.w	moduleIsExecutable
+	move.b	d0,d7
+	
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
     * that UnLoadSeg() is needed.
 
-	clr		playertype(a5)
+	clr	playertype(a5)
 	clr.b	modulename(a5)
 	clr.b	moduletype(a5)
 	clr.b	kelausnappi(a5)
 	clr.b	do_early(a5)
 	clr.b	oldst(a5)
 	clr.b	sidflag(a5)
-	clr		ps3minitcount
+	clr	ps3minitcount
 	clr.b	ahi_use_nyt(a5)
 
 	clr	pos_maksimi(a5)
@@ -5465,6 +5620,8 @@ freemodule
 ;	st	positionmuutos(a5)
 	clr	positionmuutos(a5)
 	clr	songnumber(a5)
+	clr maxsongs(a5)
+	clr minsong(a5)
 ;	bsr.w	lootaa
 	bsr.w	inforivit_clear
 
@@ -5473,7 +5630,8 @@ freemodule
 	* with different labels
 	lea	ps3mroutines(a5),a0		* vapautetaan replayeri
 	jsr	freereplayer
-
+	jsr	freeDeliPlayer
+	
 	move.l	(a5),a6
 	move.l	moduleaddress(a5),d0
 	beq.b	.ee
@@ -5483,14 +5641,17 @@ freemodule
 	beq.b	.normal
 	move.l 	a1,d1
 	lore	Dos,UnLoadSeg
-	DPRINT	"UnLoadSeg!",3
-	bra.b	.deliCustom
+ if DEBUG
+	move.l	moduleaddress(a5),d0
+	DPRINT	"UnLoadSeg 0x%lx"
+ endif
+	bra.b	.exe
 .normal
 
 	move.l	modulelength(a5),d0
 	beq.b	.ee
 	lob	FreeMem				* hit!
-.deliCustom	
+.exe
 
 	clr.l	moduleaddress(a5)
 	clr.l	modulelength(a5)
@@ -5508,6 +5669,7 @@ freemodule
 	* See if there are TFMX samples that can be freed
 	move.l	tfmxsamplesaddr(a5),d0
 	beq.b	.noTFMX
+	DPRINT	"Free extra data 0x%lx"
 	move.l	d0,a1
 	move.l	tfmxsampleslen(a5),d0
 	lob	FreeMem
@@ -5516,13 +5678,27 @@ freemodule
 	clr.l	tfmxsampleslen(a5)
 	clr.b	lod_tfmx(a5)
 
-	DPRINT	"freemodule release data",4
+	DPRINT	"freemodule release data"
 	bsr.w	releaseModuleData
 
 	movem.l	(sp)+,d0-a6
 	rts
 
-	
+
+* out:
+*  d0 = non-zero if loaded module is an LoadSeg() loaded exe	
+moduleIsExecutable
+	cmp	#pt_delicustom,playertype(a5)
+	beq.b	.isExe
+	cmp	#pt_futureplayer,playertype(a5)
+	beq.b	.isExe
+	cmp	#pt_davelowe,playertype(a5)
+	beq.b	.isExe
+	moveq	#0,d0
+	rts
+.isExe 
+	moveq	#1,d0 
+	rts
 
 *******************************************************************************
 * Volumen feidaus
@@ -5648,22 +5824,22 @@ buttonspressed
 	beq.w	.nowindow
 
 	* Any button activity should first close any active tooltip
-	bsr	closeTooltipPopup
+	bsr.w	closeTooltipPopup
 
 	cmp	#SELECTDOWN,d3		* left button down
 	bne.b	.test1
-	bsr	.leftButtonDownAction
+	bsr.w	.leftButtonDownAction
 	rts
 
 .test1
 	cmp	#MENUUP,d3
 	bne.b	.test2
-	bsr	.rightButtonUpAction		* right button up
+	bsr.w	.rightButtonUpAction		* right button up
 	rts 
 
 .test2	cmp	#MENUDOWN,d3			* right button down
 	bne.b .exit
-	bsr	.rightButtonDownAction
+	bsr.b	.rightButtonDownAction
 .exit 
 	rts
 	
@@ -5672,7 +5848,7 @@ buttonspressed
 * Oikeata nappulaa painettu. Tutkitaan oliko rmbfunktio-nappuloiden p‰‰ll‰
 
 	tst.b	kokolippu(a5)		* onko pienen‰?
-	beq.w	.nowindow
+	beq.b	.nowindow
 
 ** onko lootan p‰‰ll‰
 ** on top of the filebox?
@@ -5703,19 +5879,19 @@ buttonspressed
 
 ** check buttons with RMB functions defined and trigger those
 
-	DPRINT		"RMB DOWN check",1
+	DPRINT		"RMB DOWN check"
 
 	lea		rightButtonActionsList,a2
 .actionLoop
 	movem.l	(a2)+,a0/a1
-	bsr	.rightButtonDownCheck
+	bsr.b	.rightButtonDownCheck
 	beq.b	.handled
 	tst.l	(a2) 
 	bne.b	.actionLoop
 
 	* no RMB actions found
 	* try line marking
-	bsr	marklineRightMouseButton
+	bsr.w	marklineRightMouseButton
 	beq.b	.nothingMarked
 	rts
 
@@ -5731,7 +5907,7 @@ buttonspressed
 	rts
 
 .new	
-	DPRINT	"ZipWindow Intuition",2
+	DPRINT	"ZipWindow Intuition"
 	move.l	windowbase(a5),a0	* Kick2.0+
 	lore	Intui,ZipWindow
 	rts
@@ -5768,11 +5944,11 @@ buttonspressed
 *   a0=gadget
 *   a1=gadget function to run
 .rightButtonDownCheck
-	bsr		checkMouseOnGadget
+	bsr.w		checkMouseOnGadget
 	bne.b	.mouseNotOn
 	move.l	a0,rightButtonSelectedGadget(a5)
 	move.l	a1,rightButtonSelectedGadgetRoutine(a5)
-	bsr	forceSelectGadget
+	bsr.w	forceSelectGadget
 	moveq	#0,d0
 .mouseNotOn
 	rts
@@ -5782,9 +5958,9 @@ buttonspressed
 * If the pointer is still on that gadget, run the routine.
 .rightButtonUpAction
 	move.l	rightButtonSelectedGadget(a5),d2
-	beq.w	.noGadget
+	beq.b	.noGadget
 
-	DPRINT	"RMB UP",123
+	DPRINT	"RMB UP"
 
 	* In any case RMB selected gadgets should be deselected when now.
 	*
@@ -5793,21 +5969,21 @@ buttonspressed
 	* Toggling select and deselect again results in a neutral
 	* toggle button look.
 	move.l	d2,a0
-	bsr	forceDeselectGadget
+	bsr.w	forceDeselectGadget
 	move.l	d2,a0
-	bsr	forceSelectGadget
+	bsr.w	forceSelectGadget
 	move.l	d2,a0
-	bsr	forceDeselectGadget
+	bsr.w	forceDeselectGadget
 	
 	move.l	d2,a0
-	bsr 	checkMouseOnGadget
+	bsr.w 	checkMouseOnGadget
 	bne.b	.xy	
 
 	* Pointer was on top, run the routine
 	move.l	rightButtonSelectedGadgetRoutine(a5),d0
 	beq.b	.xy
 	move.l	d0,a0
-	DPRINT	"Execute routine",125
+	DPRINT	"Execute routine"
 	jsr		(a0)
 .xy
 	clr.l	rightButtonSelectedGadget(a5)
@@ -5865,7 +6041,7 @@ forceSelectGadget
 	moveq	#-1,d0 
 	lob		AddGadget
 	move.l	d2,a0	
-	bsr	refreshGadget
+	bsr.b	refreshGadget
 	rts
 
 * Forces a boolean gadget to show the deselected status
@@ -5886,7 +6062,7 @@ forceDeselectGadget
 	lob		AddGadget
 
 	move.l	d2,a0	
-	bsr	refreshGadget
+	bsr.b	refreshGadget
 	rts
 
 * Redraws gadget
@@ -5949,18 +6125,18 @@ checkMouseOnGadget
 * Called when a mouse move event is received.
 * It will close any existing tooltip and set up a new one if needed.
 tooltipHandler
-	;DPRINT	"tooltiphandler",1
+	;DPRINT	"tooltiphandler"
 
 	* First, inactivate incoming tooltip
-	bsr	deactivateTooltip
+	bsr.w	deactivateTooltip
 	
 	* Close any tooltip that may be showing since mouse was moving.
-	bsr	closeTooltipPopup
+	bsr.w	closeTooltipPopup
 
 	* If some lengthy operation is going on lets not
 	* try to display tooltips.
-	bsr	areMainWindowGadgetsFrozen
-	bne.w	.exit
+	bsr.w	areMainWindowGadgetsFrozen
+	bne.b	.exit
 
 	* Skip further checks if mouse is not over the main button area
 	move	mousey(a5),d1
@@ -5994,13 +6170,13 @@ tooltipHandler
 	and	#GFLG_DISABLED,d0
 	bne.b	.disabled
 
-	bsr	checkMouseOnGadget
+	bsr.b	checkMouseOnGadget
 	bne.b	.no
 	* Yes it was.
 	* Check if this gadget was not allowed to have tooltips for now
 	move.l	ttle_gadget(a3),d0
 	move.l	disableTooltipForGadget(a5),d1
-	;DPRINT	"found gadget=%lx dis=%lx",22
+	;DPRINT	"found gadget=%lx dis=%lx"
 	cmp.l  d1,d0
 	beq.b	.disabled
 	* Store tooltip to be displayed and activate
@@ -6009,11 +6185,11 @@ tooltipHandler
 	move	#1*50+25,tooltipTick(a5) * about 1.5 seconds	
 	rts
 .disabled
-	;DPRINT	"was disabled",3
+	;DPRINT	"was disabled"
 .no 
 	addq.l	#ttle_SIZEOF,a3
 	tst.l	(a3)
-	bne.w	.loop
+	bne.b	.loop
 .exit	rts
 
 * Displays tooltip if needed
@@ -6105,7 +6281,7 @@ omaviesti
 	moveq	#MEMF_PUBLIC,d1		* varataan muistia
 	bsr.w	getmem
 	move.l	d0,appnamebuf(a5)
-	beq.w	.huh			* ERROR!
+	beq.b	.huh			* ERROR!
 	move.l	d0,a2
 
 .addfiles
@@ -6187,6 +6363,7 @@ vastomaviesti
 * Oman signaalin vastaanotto (moduuli soitettu, jatkotoimenpiteet)
 *******
 signalreceived
+	DPRINT	"Song end signal"
 
 	moveq	#1,d7			* menn‰‰n listassa eteenp‰in
 							* step forward in the list
@@ -6203,7 +6380,7 @@ signalreceived
  	beq.b	.ran
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
-	bne.w	rbutton13		* next song!
+	bne.w	actionNextSong		* next song!
 
 .ran	
 	* no subsongs, randomize next one
@@ -6297,17 +6474,17 @@ signalreceived
 	st	hippoonbox(a5)
 	bsr.w	resh
 
-	DPRINT	"signalreceived getListNode",1
-	bsr		getListNode
-	beq		.erer 
+	DPRINT	"signalreceived getListNode"
+	bsr.w		getListNode
+	beq.w		.erer 
 	move.l	a0,a3
 
 	isListDivider	l_filename(a3)	* onko divideri??
 	bne.b	.wasfile
 	tst	d7			* pit‰‰ olla jotain ett‰ ei j‰‰ 
-	bne.w	.eekk			* jummaamaan dividerin kohdalle
+	bne.b	.eekk			* jummaamaan dividerin kohdalle
 	moveq	#1,d7
-	bra.w	.eekk
+	bra.b	.eekk
 .wasfile
 
 	lea	l_filename(a3),a0	* ladataan
@@ -6336,6 +6513,11 @@ signalreceived
 
 .mododo	
 	* init error, no module to play
+
+	DPRINT	"Deallocate resources!"
+	jsr	rem_ciaint
+	jsr	vapauta_kanavat
+
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* initti virhe
 	jsr	init_error
 	bra.b	.reet
@@ -6370,9 +6552,9 @@ signalreceived
 * Shuffle-soitto
 .karumeininki
 	move.l	modamount(a5),d0
-	beq.b	.reet		* jos ei yht‰‰n, jatketaan entisen soittoa
+	beq.w	.reet		* jos ei yht‰‰n, jatketaan entisen soittoa
 	cmp.l	#1,d0		* Jos vain yksi, jatketaan soittoa
-	beq.b	.reet
+	beq.w	.reet
 	bra.w	soitamodi2
 
 
@@ -6407,7 +6589,7 @@ satunnaismodi
 	subq.l	#1,d0 
 	bpl.b	.h
 
-	DPRINT 	"all random table slots taken",1
+	DPRINT 	"all random table slots taken"
 
 	* All slots taken, clear it and start over.
 	* This means all modules have randomly played.
@@ -6429,7 +6611,7 @@ satunnaismodi
 	* Got a random value in proper range in d1
 	* Test if a slot is free. Try again if not.
 	move.l	d1,d0
-	bsr.w	testRandomTableEntry
+	bsr.b	testRandomTableEntry
 	bne.b	.a
 	* Was free. Take it.
 	bsr.w	setRandomTableEntry
@@ -6443,13 +6625,13 @@ clear_random
 	pushm	all
 	
 ** taulukko tyhj‰ks
-	DPRINT  "clear_random",1
+	DPRINT  "clear_random"
 	bsr.w	 	obtainModuleList
 	clr.l	randomValueMask(a5)
 	tst.l	randomtable(a5)
 	beq.b	.noList
 	move.l	randomtable(a5),a0 
-	bsr 	freemem 
+	bsr.w 	freemem 
 	move.l	randomtable(a5),d0
 	clr.l	randomtable(a5)
 .noList
@@ -6488,7 +6670,7 @@ testRandomTableEntry
 getRandomValueTableEntry	
 	push 	d1
 	tst.l	randomtable(a5) 
-	bne.w	.yesTable
+	bne.b	.yesTable
 
 	* Each byte can hold a slot for 8 modules.
 	* A bit silly dynamic allocation as probably
@@ -6498,11 +6680,11 @@ getRandomValueTableEntry
 	lsr.l	#3,d0
 	addq.l	#1,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr	getmem
+	bsr.w	getmem
 	
 	move.l	d0,randomtable(a5)
 	bne.b	.ok
-	bsr	showOutOfMemoryError
+	bsr.w	showOutOfMemoryError
 .ok
 	pop     d0
 		
@@ -6526,10 +6708,10 @@ getRandomValueTableEntry
 *   d0 = module index
 setRandomTableEntry
 	pushm	all
-	DPRINT  "setRandomTableEntry %ld",1
+	DPRINT  "setRandomTableEntry %ld"
 	
 	* Set it in the table
-	bsr.w	getRandomValueTableEntry
+	bsr.b	getRandomValueTableEntry
 	beq.b	.error
 	bset	d0,(a0)
 .error
@@ -6589,11 +6771,11 @@ getRandomValue
         moveq   #$10,d1
         lsr.l   d1,d0
 		
-		move.l	d0,d1 
-		bsr	getRandomValueMask
-		and.l	d0,d1
-		
-		pop	d0
+	move.l	d0,d1 
+	bsr.w	getRandomValueMask
+	and.l	d0,d1
+
+	pop	d0
         rts
 
 
@@ -6709,8 +6891,8 @@ divu_64
 
 
 
-* To discard too big random values quickly, "and" the value with a suitable mask,
-* based on amount of modules. Calculate the mask here.
+* To discard too big random values quickly, "and" the value with a 
+* suitable mask, based on amount of modules. Calculate the mask here.
 getRandomValueMask
 	move.l	randomValueMask(a5),d0 
 	bne.b	.x
@@ -6727,11 +6909,10 @@ getRandomValueMask
 *   d0 = value to check
 * out: 
 *   d0 = highest bit in value set
-* destroy:
-*   d1
 * example: 0x7f -> 0x40
 
 findHighestBit
+	push	d1
 	move.l	d0,d1
 	lsr.l	#1,d1
 	or.l	d1,d0
@@ -6756,6 +6937,7 @@ findHighestBit
 	move.l	d0,d1
 	lsr.l	#1,d1
 	sub.l	d1,d0
+	pop	d1
 	rts	
 
 
@@ -6780,7 +6962,7 @@ soitamodi2
 
 * Called based on user input
 soitamodi
-	DPRINT  "Soitamodi",1
+	DPRINT  "Soitamodi"
 	moveq	#0,d6		* 0: allow volume fade down
 	moveq	#0,d5		* 0: no forced random
 umph	
@@ -6823,7 +7005,7 @@ umph
 .ee
 	* Valid chosenmodule index found
 	move.l	d0,chosenmodule(a5)
-	DPRINT "->chosenmodule %ld",12112
+	DPRINT "->chosenmodule %ld"
 	* Take a slot in the random table as well
 	move.l	d0,d2					* store copy for later
 	bsr.w	setRandomTableEntry		* Merkataan listaan..
@@ -6834,14 +7016,21 @@ umph
 * etsit‰‰n listasta vastaava tiedosto
 * find the corresponding file from the list
 
-	DPRINT	"soitamodi getListNode",1
-	bsr		getListNode
+	DPRINT	"soitamodi getListNode"
+	bsr.w		getListNode
 	beq.w	.erer
 	move.l	a0,a3
 
 	* This might be a list divider. Try again in that case.
 	isListDivider l_filename(a3)	* onko divideri?
-	beq.w	umph			* kokeillaan edellist‰/seuraavaa/rnd
+	bne.b	.noDiv		* kokeillaan edellist‰/seuraavaa/rnd
+
+	* try next one until at end of the list
+	TSTNODE	a3,a0
+	bne.w	umph
+	bra.w	.erer
+
+.noDiv
 
 	cmp.l	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
 	bne.b	.new
@@ -6857,7 +7046,7 @@ umph
 	lore    Exec,Enable
 
 	move.l	playerbase(a5),a0
-	jsr		p_init(a0)
+	jsr	p_init(a0)
 	tst.l	d0
 	bne.w	.inierr
 
@@ -7156,7 +7345,7 @@ nappuloita
 ; 	move.b	d3,d0
 ; 	moveq	#0,d1
 ; 	move	d3,d1
-; 	DPRINT	"Raw key=%lx qual=%lx",1
+; 	DPRINT	"Raw key=%lx qual=%lx"
 ;  endc 
 
 	and	#$ff,d3
@@ -7175,7 +7364,7 @@ nappuloita
 	bne.b	.f0
 	or.l	#WFLG_ACTIVATE,sflags
 	bsr.w	rbutton10b
-	bra.w	.ee
+	bra.b	.ee
 .f0
 	cmp.b	#$41,d3		* backspace + shift?
 	beq.b	.fid
@@ -7220,7 +7409,7 @@ nappuloita
 	addq.l	#2,a0
 	cmp.l	#.nabse,a0
 	bne.b	.checke
-	DPRINT	"No action for key",2
+	DPRINT	"No action for key"
 .ee	movem.l	(sp)+,d0-a6
 .sd	
 .exit
@@ -7354,10 +7543,10 @@ nappuloita
 	dr	rbutton6	* prev
 	dc	$28
 	dr	rbutton5	* next
-	dc	$4f
-	dr	rbutton12	* prev song
 	dc	$4e
-	dr	rbutton13	* next song
+	dr	actionPrevSong	* prev song
+	dc	$4f
+	dr	actionNextSong	* next song
 
 	dc	7
 	dr	.showtime
@@ -7428,9 +7617,9 @@ nappuloita
 
 
 	dc	$2d
-	dr	rbutton12		* prev song
+	dr	actionPrevSong		* prev song
 	dc	$2f
-	dr	rbutton13		* next song
+	dr	actionNextSong		* next song
 	dc	$3e
 	dr	lista_ylos	* select prev
 	dc	$1e
@@ -7643,7 +7832,7 @@ gadgetsup
 	* until some other gadget tooltip gets shown.
 	move.l	a2,disableTooltipForGadget(a5)
 	* Any button activity should first close any active tooltip
-	bsr	closeTooltipPopup
+	bsr.w	closeTooltipPopup
 
 	move	gg_GadgetID(a2),d0
 	add	d0,d0
@@ -7722,7 +7911,7 @@ rsort
 
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
-	bsr.w	printbox
+	bsr.b	printbox
 	bra.b	.d
 .t	dc.b	"Sorting...",0
  even
@@ -7745,10 +7934,10 @@ rsort
 
 
 ** Lasketaan painot jokaiselle
-	DPRINT  "rsort obtain list",1
+	DPRINT  "rsort obtain list"
 	bsr.w		obtainModuleList
 	;lea	moduleListHeader(a5),a3
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
 
 * paino 24 bytee
@@ -7811,7 +8000,7 @@ rsort
 	move.l	(a3),a1  	* grab node address
 
 	;lea	moduleListHeader(a5),a0
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	ADDTAIL			* lis‰t‰‰n node (a1)
 
 	lea SORT_ELEMENT_LENGTH(a3),a3	
@@ -7828,7 +8017,7 @@ rsort
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .npl	clr.l	chosenmodule(a5)
 	st	hippoonbox(a5)
-	DPRINT  "rsort release list",2
+	DPRINT  "rsort release list"
 	bsr.w		releaseModuleList
 	bsr.w		unlockMainWindow
 	bra.w	resh
@@ -8084,7 +8273,7 @@ rmove
 	move.l	a3,nodetomove(a5)
  if DEBUG
 	move.l	l_nameaddr(a3),d0
-	DPRINT	"moving %s",1
+	DPRINT	"moving %s"
  endc
 	st	movenode(a5)
 	move.l	a3,a1
@@ -8121,12 +8310,12 @@ getcurrent
 *    d0 = 1 if data available
 *    a3 = list node pointer
 getcurrent2
-	bsr getListNode
+	bsr.w getListNode
 	move.l	a0,a3
 	rts
 
 * etsit‰‰n listasta vastaava kohta
-;	DPRINT  "getcurrent obtain list",1
+;	DPRINT  "getcurrent obtain list"
 ; 	bsr.w		obtainModuleList
 ; 	lea	er(a5),a4
 ; .luuppo
@@ -8136,13 +8325,13 @@ getcurrent2
 ; 	;dbf	d0,.luuppo
 ; 	subq.l	#1,d0 
 ; 	bpl.b  .luuppo
-; 	DPRINT  "getcurrent release list 1",2
+; 	DPRINT  "getcurrent release list 1"
 ; 	bsr.w		releaseModuleList
 * a3 = valittu nimi
 ; 	moveq	#1,d0
 ; 	rts
 ; .q	
-; 	DPRINT  "getcurrent release list 2",3
+; 	DPRINT  "getcurrent release list 2"
 ; ;	bsr.w		releaseModuleList
 ; 	moveq	#0,d0
 ; 	rts
@@ -8154,7 +8343,7 @@ getcurrent2
 *******
 
 comment_file
-	bsr.w	getcurrent
+	bsr.b	getcurrent
 	beq.b	.x
 	move.l	a3,a4
 
@@ -8251,9 +8440,17 @@ find_continue
 
 	; Use chosen module as starting point of seardh
 
-	DPRINT  "find_continue obtain list",1
-	bsr.w		obtainModuleList
+	DPRINT  "find_continue obtain list"
+	bsr.w	obtainModuleList
+
 	bsr.w	getcurrent		* a0 => chosen module listnode
+	tst.l	d0 
+	bne.b	.foundCurrent
+	* start from beginning
+	clr.l	chosenmodule(a5)
+	bsr.w	getcurrent
+.foundCurrent
+
 	move.l	a0,a3
 	move.l	a3,a4
 
@@ -8274,7 +8471,7 @@ find_continue
 * lista l‰pi eik‰ lˆytyny. k‰yd‰‰n alusta l‰htˆkohtaan.
 
 	moveq	#-1,d7
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 .luuppo2
 	addq.l	#1,d7
@@ -8287,7 +8484,7 @@ find_continue
 	bne.b	.luuppo2
 
 .q	
-	DPRINT  "find_continue release list",2
+	DPRINT  "find_continue release list"
 	bsr.w 	releaseModuleList
 	rts
 
@@ -8324,7 +8521,7 @@ find_continue
 	move.l	d7,chosenmodule(a5)
  if DEBUG
 	move.l	d7,d0
-	DPRINT	"Found module at %ld",3
+	DPRINT	"Found module at %ld"
  endc
 	st	hippoonbox(a5)
 	bsr.w	resh
@@ -8335,15 +8532,14 @@ find_continue
 *******************************************************************************
 * Kelaus
 *******
-forwardButtonAction
 rbutton_kela1
 	tst.b	playing(a5)
 	beq.b	.e
 	tst.l	playingmodule(a5)
 	bmi.b	.e
+	st	kelattiintaakse(a5)
 	move.l	playerbase(a5),a0
 	jsr	p_taakse(a0)	
-	st	kelattiintaakse(a5)
 .e	rts
 
 rbutton_kela2_turbo
@@ -8397,12 +8593,12 @@ rbutton11
 *******
 mousemoving
 	movem.l	d0-a6,-(sp)
-;	DPRINT	"mousemove",1
+;	DPRINT	"mousemove"
 	lea	slider1,a2
 	bsr.w	rslider1
 	lea	slider4,a2
 	bsr.w	rslider4
-	bsr	tooltipHandler
+	bsr.w	tooltipHandler
 	movem.l	(sp)+,d0-a6
 	rts
 
@@ -8425,30 +8621,40 @@ rbutton6
 *******************************************************************************
 * Song number <
 *******
+actionNextSong
 rbutton12
 	moveq	#1,d1		* lis‰t‰‰n songnumberia
 
-songo
+songSkip
 	tst.l	playingmodule(a5)
 	bmi.b	.nosong
 
 	clr.b	kelausnappi(a5)
 
-	move.l	playerbase(a5),a0
-
-	move	songnumber(a5),d0	* Numeroita 0:sta eteenp‰in
+	* this is reversed! TODO: FIX?
+	move	songnumber(a5),d0
 	sub	d1,d0
-	bpl.b	.ook
-	moveq	#0,d0
-.ook	
-	cmp	maxsongs(a5),d0
-	blo.b	.jep
-	move	maxsongs(a5),d0
-.jep
+
+	move	minsong(a5),d1 
+	move	maxsongs(a5),d2
+	bsr.w		clampWord
+
+;	moveq	#0,d0
+;	move	songnumber(a5),d0	* Numeroita 0:sta eteenp‰in
+;	sub	d1,d0
+;	bpl.b	.ook
+;	moveq	#0,d0
+;.ook	
+;	cmp	maxsongs(a5),d0
+;	blo.b	.jep
+;	move	maxsongs(a5),d0
+;.jep
+	DPRINT	"New song: %ld"
 	move	d0,songnumber(a5)
 
 	st	kelattiintaakse(a5)
 	clr.b	playing(a5)
+	move.l	playerbase(a5),a0
 	jsr	p_song(a0)
 	st	playing(a5)
 	st	kelattiintaakse(a5)
@@ -8464,9 +8670,10 @@ songo
 *******************************************************************************
 * Song number >
 *******
+actionPrevSong
 rbutton13
 	moveq	#-1,d1			* v‰hennet‰‰n songnumberia
-	bra.b	songo
+	bra.b	songSkip
 
 
 ******************************************************************************
@@ -8568,11 +8775,17 @@ rbutton4a
 clearlist
 rbutton9
 	clr.b	movenode(a5)
-	DPRINT  "clearlist",1
-	bsr.w		setMainWindowWaitPointer
+	DPRINT  "clearlist"
+	bsr.w	setMainWindowWaitPointer
+	isListInFavoriteMode
+	bne.b	.isFav
 	bsr.w	freelist
-	DPRINT "clearlist done",2
-	bsr.w		clearMainWindowWaitPointer
+	bra.b	.done 
+.isFav
+	jsr	freeFavoriteList
+.done
+	DPRINT "clearlist done"
+	bsr.w	clearMainWindowWaitPointer
 	bra.w	shownames
 
 *******************************************************************************
@@ -8652,7 +8865,7 @@ rslider4
 	* Take scaling into account later below as well.
 
 	and.l	#$ffff,d0
-	;DPRINT "slider4 mouse, VertPot=%lx",13
+	;DPRINT "slider4 mouse, VertPot=%lx"
 
 	lsr.l	#1,d0		* [0..$7fff]
 
@@ -8669,7 +8882,7 @@ rslider4
 	bsr.w	divu_32
 
 	cmp.l	firstname(a5),d0
-	beq.w	.q
+	beq.b	.q
 	move.l	d0,firstname(a5)
 	bra.w	showNamesNoCentering
 
@@ -8738,7 +8951,7 @@ reslider
 	* as the fractions get floored off
 	move.l	#65535,d1  * scale 
 	;bsr.w	mulu_32
-	bsr	mulu_64
+	bsr.w	mulu_64
 	* d0:d1 now has a 64-bit value 
 
 	move.l	modamount(a5),d2
@@ -8750,7 +8963,7 @@ reslider
 .positive
 
 ;	bsr.w	divu_32  * d0=d0/d1
-	bsr	divu_64	 
+	bsr.w	divu_64	 
 	* d0:d1 is now d0:d1/d2
 	* take the lower 32 bits
 	move.l	d1,d0	
@@ -8816,7 +9029,7 @@ reslider
 .bar
 
 	* Refresh one gadget
-	;DPRINT "Updating slider",86
+	;DPRINT "Updating slider"
 	lea	slider4,a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
@@ -8859,7 +9072,7 @@ resetslider
 
 playButtonAction
 rbutton1
-	DPRINT  "playButtonAction",1
+	DPRINT  "playButtonAction"
 
 	tst.b	movenode(a5)
 	beq.w	.nomove
@@ -8872,13 +9085,13 @@ rbutton1
 
  if DEBUG
  	move.l	l_nameaddr(a3),d0
-	DPRINT	"move, inserting after %s",99
+	DPRINT	"move, inserting after %s"
  endc
 
-	DPRINT  "playButtonAction obtain list",11
+	DPRINT  "playButtonAction obtain list"
 	bsr.w		obtainModuleList
 	;lea	moduleListHeader(a5),a0	* Insertoidaan node...
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	nodetomove(a5),a1
 	move.l	a3,a2
 	
@@ -8886,9 +9099,9 @@ rbutton1
 	addq.l	#1,modamount(a5)
 	addq.l	#1,chosenmodule(a5)	* valitaan movetettu node
 	st	hippoonbox(a5)
-	DPRINT  "playButtonAction release list",2
+	DPRINT  "playButtonAction release list"
 	bsr.w		releaseModuleList
-	bsr		listChanged
+	bsr.w		listChanged
 	bra.w	resh
 
 .nomove
@@ -8910,7 +9123,7 @@ rbutton1
 .ere	
 	move.l	d0,d2
 
-	DPRINT	"->chosen module %ld",2313
+	DPRINT	"->chosen module %ld"
 
 	;move.b	new2(a5),d1
 	;clr.b	new2(a5)
@@ -8934,8 +9147,8 @@ rbutton1
 
 * etsit‰‰n listasta vastaava tiedosto
 
-	DPRINT	"playbutton getListNode",111
-	bsr		getListNode
+	DPRINT	"playbutton getListNode"
+	bsr.w		getListNode
 	beq.w	.erer
 	move.l 	a0,a3
 
@@ -8950,9 +9163,29 @@ rbutton1
 	bra.w	.huh
 .je
 	cmp.l 	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
-	bne.b	.new
-
-.early
+	bne.w	.new
+	* Special case: some delicustoms, SUNTronic modules,
+	* can't handle being started over, to be safe
+	* load these modules again before restarting.
+	cmp	#pt_delicustom,playertype(a5)
+	beq.w	.new
+	* Same with all EaglePlayers to be save.
+	* At least Tim Follin crashes.
+	cmp	#pt_eagle_start,playertype(a5)
+	bhs.b	.new
+	* Similar case with SonicArranger with built-in
+	* replayer code. Data is modified upon init so that
+	* subsequent inits with same data will fail as
+	* unsupported module.
+	cmp	#pt_sonicarranger,playertype(a5)
+	bne.b	.notSoar
+	* Check for "compact" SA module
+	move.l  moduleaddress(a5),a0 
+	cmp.l	#'SOAR',(a0)
+	bne.b 	.new
+.notSoar
+	DPRINT	"Restarting the same module!"
+;.early
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
 
@@ -8961,7 +9194,7 @@ rbutton1
 	lore	Exec,Disable
 	bsr.w	halt
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
+	jsr	p_end(a0)
 	lore    Exec,Enable
 	move	(sp)+,mainvolume(a5)
 
@@ -9052,9 +9285,9 @@ rinsert2
 	move.l	chosenmodule(a5),d0
 
 * etsit‰‰n listasta vastaava kohta
-	DPRINT	"insert getListNode",1
-	bsr		getListNode
-	beq		rbutton7		* go to "add"
+	DPRINT	"insert getListNode"
+	bsr.w		getListNode
+	beq.w		rbutton7		* go to "add"
 
 * a0 = valittu nimi
 	move.l	a0,fileinsert(a5)
@@ -9068,7 +9301,7 @@ rinsert2
 * Add divider
 *******
 add_divider
-	DPRINT  "add_divider obtain list",1
+	DPRINT  "add_divider obtain list"
 	bsr.w		obtainModuleList
 	tst.l	modamount(a5)
 	beq.w	.x
@@ -9077,8 +9310,8 @@ add_divider
 ;	subq	#1,d0			* valitun nimen edellinen node
 
 
-	DPRINT	"addDivider getListNode",2
-	bsr		getListNode
+	DPRINT	"addDivider getListNode"
+	bsr.w		getListNode
 	beq.b		.x
 	move.l	a0,a3
 
@@ -9115,14 +9348,14 @@ add_divider
 	
 * a1 = insertattava nimi
 ;	lea	moduleListHeader(a5),a0
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a3,a2
 	lore	Exec,Insert
-	bsr	listChanged
+	bsr.w	listChanged
 	st	hippoonbox(a5)
 	bsr.w	resh
 .x	
-	DPRINT  "add_divider release list",21
+	DPRINT  "add_divider release list"
 	bsr.w		releaseModuleList
 	rts
 
@@ -9150,6 +9383,8 @@ rbutton7
 	rts
 .ook	move.l	_DosBase(a5),a6
 
+	;bra	filereq_code
+
 	pushpea	fileprocname(pc),d1
 
 	move.l	priority(a5),d2
@@ -9157,8 +9392,11 @@ rbutton7
 
 	pushpea	filereq_segment(pc),d3
 	lsr.l	#2,d3
-	move.l	#5000,d4		* saattaa tarvita, kun on rekursiivinen
-	lob		CreateProc
+	* stack size needs to be large.  needed for recursive dir scan,
+	* it seems that kick1.3 needs more than kick3.0 for 10 levels of 
+	* sub dirs.
+	move.l	#7000,d4	
+	lob	CreateProc
 	tst.l	d0
 	beq.b	.error
 	addq	#1,filereq_prosessi(a5)
@@ -9234,7 +9472,7 @@ filereq_code
 	* During processing of data lock window and reserve
 	* the list structure.
 
-	DPRINT  "filereq_code obtain list",1
+	DPRINT  "filereq_code obtain list"
 	bsr.w		obtainModuleList
 	bsr.w		lockMainWindow
 	pop 	d0
@@ -9248,7 +9486,7 @@ filereq_code
 	clr.l	filelistaddr(a5)
 .noFileList
 
-	DPRINT  "filereq_code release list",2
+	DPRINT  "filereq_code release list"
 	bsr.w		releaseModuleList
 	bsr.w		unlockMainWindow
 	rts
@@ -9260,7 +9498,7 @@ filereq_code
 	bne.b	.val
 
 	move.b	#$7f,new(a5)		* new-lippu: cancel
-	bra	.fileReqCancelled
+	bra.w	.fileReqCancelled
 .val
 
 	tst.b	new(a5)			* jos 'new', clearataan lista.
@@ -9321,10 +9559,11 @@ filereq_code
 	move.b	#'/',(a3)+
 	clr.b	(a3)
 
-	DPRINT2	"Dir->",3
-	DEBU	(sp)
-	DPRINT	"<-",4
-	
+ if DEBUG 
+	move.l	sp,d0
+	DPRINT	"ReqTools dir: %s"
+ endif 
+
 	move.l	a3,d3			* hakemiston pituus
 	sub.l	sp,d3
 	add.l	#l_size,d3		* listayksikˆn koko
@@ -9342,23 +9581,47 @@ filereq_code
 	bra.w	.skip
 
 
-
+* recursively scan directory
+* in: 
+*  d2 = path to directory to be scanned, with separator
+*  d3 = path length + l_size. d3 should not be destroyed
 .scanni
-	move.l	d2,a4		* hakemisto
-	moveq	#0,d6
 
-	move.l	#250*4+2,d0	* tilaa 250:lle hakemistolukolle	
+ if DEBUG
+	move.l	d2,d0
+	DPRINT	"Scan: %s"
+ endif
+	move.l	d2,a4		* hakemisto
+	moveq	#0,d6		* lock for dir scan
+
+	* Have a buffer that stores pointers to subdirectory names within this subdirectory.
+.MAX_SUBDIRS_TO_SCAN = 250
+
+	* space for counter and path pointers	
+	move.l	#.MAX_SUBDIRS_TO_SCAN*4+2,d0	
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
 	move.l	d0,d7
 	beq.w	.errd
 
+	* Get a lock on dir.
+	* This will succeed even on an empty string, it will then
+	* be a lock on SYS:. Add a paranoia check for that.
+	tst.b	(a4)
+	beq.w	.errd
 	move.l	a4,d1
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
 	move.l	d0,d6			* d6 = hakemiston lukko
+  if DEBUG
+	bne.b	.lockOk
+	DPRINT	"Lock failed!"
+	bra.w 	.errd
+  else 
 	beq.w	.errd
-
+  endif
+.lockOk
+	* Examine it
 	move.l	d6,d1
 	pushpea	fileinfoblock2(a5),d2
 	lob	Examine
@@ -9372,116 +9635,158 @@ filereq_code
 	move.l	d6,d1
 	pushpea	fileinfoblock2(a5),d2
 	lore	Dos,ExNext
+	* No more items to check in directory?
 	tst.l	d0
-	beq.b	.dodirs
-	tst.l	fib_DirEntryType+fileinfoblock2(a5)
-	bmi.w	.filetta		* Onko tiedosto vai hakemisto?
+	beq.w	.dodirs	
+
+	* Success! What is it?
+	* ST_ROOT=1
+	* ST_USERDIR=2
+	* ST_SOFTLINK=3
+	* ST_LINKDIR=4
+	* ST_FILE=-3
+	* ST_LINKFILE=-4
+	* ST_PIPEFILE=-5
+
+	move.l	fib_DirEntryType+fileinfoblock2(a5),d0
+	cmp.l	#ST_FILE,d0
+	beq.w	.filetta
+	cmp.l	#ST_LINKFILE,d0
+	beq.w	.filetta
+	cmp.l	#ST_USERDIR,d0
+	bne.w	.unsupportedEntry
+
+	* It was a directory. Store it for later, this way
+	* files in the directory get placed first in the list,
+	* then after that the subdir contents.
 
 	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
 	;beq.b	.loopo
 
 * otetaan kyseisen hakemiston nimi talteen myˆhemp‰‰ k‰yttˆ‰ varten
-
-	move.l	#200,d0
+* build a full path for this dir entry
+.MAX_PATH_LEN = 200
+	move.l	#.MAX_PATH_LEN,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
-	* TODO: no error check
 	move.l	d0,a1
 	tst.l	d0
 	beq.b	.lc0
+	* high bound
+	lea	.MAX_PATH_LEN-1(a1),a2
 
 	move.l	a4,a0
-.lc	move.b	(a0)+,(a1)+
+.lc	cmp.l   a1,a2
+	beq.b	.pathOverflow
+	move.b	(a0)+,(a1)+
 	bne.b	.lc
 	subq	#1,a1
-	lea		fib_FileName+fileinfoblock2(a5),a0
-.lc2	
+	lea	fib_FileName+fileinfoblock2(a5),a0
+.lc2	cmp.l   a1,a2
+	beq.b	.pathOverflow
 	move.b	(a0)+,(a1)+
 	bne.b	.lc2
 
+	* Add path separator
+	subq	#1,a1		* NULL
+	cmp.b	#':',-1(a1)
+	beq.b	.dd
+	move.b	#'/',(a1)+
+.dd	clr.b	(a1)
+
+	* check if subdir buffer limit is reached
 	move.l	d7,a0
 	move	(a0),d1
+
+ if DEBUG
+	cmp	#.MAX_SUBDIRS_TO_SCAN,d1
+	blo.b	.BOB
+	DPRINT	"Subdir limit!"
+.BOB
+ endif
+
+	cmp	#.MAX_SUBDIRS_TO_SCAN,d1
+	bhs.w	.loopo
+	* add one path pointer and increment counter
 	addq	#1,(a0)+
 	lsl	#2,d1
 	move.l	d0,(a0,d1)
 .lc0
-	bra.b	.loopo
+	bra.w	.loopo
+
+.pathOverflow
+	DPRINT	"Path name overflow!"
+	bra.w	.loopo
+.unsupportedEntry
+	DPRINT	"Unsupported entry: %ld"
+	bra.w	.loopo
 
 **** skannattuamme yhden hakemiston tutkitaan siin‰ olleet muut hakemistot
+* Files scanned, now check the subdirs.
 .dodirs
-	
+	* ExNext failed, then we come here.
+	* ERROR_NO_MORE_ENTRIES = 232 should be the normal case.
+ if DEBUG
+	lore	Dos,IoErr
+	cmp.l	#ERROR_NO_MORE_ENTRIES,d0
+	beq.b	.io
+	DPRINT	"IoErr=%ld"
+.io
+ endif
 	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
 	;beq.w	.errd
 	* Allow recursion into directories with kick1.3 too!
-
 	pushm	all
+
+	* sort subdirs to get them in nice order
+	move.l 	d7,a0 		
+	move	(a0)+,d0
+	jsr	sortStringPtrArray
+
+	* the first word in the memory contains the subdir count
 	move.l	d7,a3
 	move	(a3)+,d5
-	beq.w	.errd2
+	beq.b	.errd2
+	* some subdirs were stored
 	subq	#1,d5
 
-.dodirsl
+.dodirsLoop
+	* subdir path
 	move.l	(a3)+,d6
 
- if DEBUG
-	move.l	d6,d0
-	DPRINT	"Scanning %s",11
- endif
+	move.l	d6,a0
+.findDirEnd
+	tst.b	(a0)+
+	bne.b	.findDirEnd
+	move.l	a0,d3	* store this for later
+	move.l	d6,a1
+	subq	#2,a0	* skip last NULL and separator
+	bsr.w	nimenalku
+	* a0 = last part of the path
 
-	move.l	d6,d1
-	moveq	#ACCESS_READ,d2
-	lore	Dos,Lock
-	move.l	d0,d4
-	beq.b	.porre
-
-	move.l	d4,d1
-	pushpea	fileinfoblock2(a5),d2
-	lob	Examine
-
-	lea	fib_FileName+fileinfoblock2(a5),a0	* hakemiston nimi
-	bsr.w	adddivider
+	* Add a named divider from a0
+	* Remove separator temporarily
+	move.l	d3,a1
+	move.b	-2(a1),d0
+	clr.b	-2(a1)
+	bsr.w	adddivider	* all regs preserved
+	move.b	d0,-2(a1)
 
 	pushm	all
-	lea	-200(sp),sp
-
-	move.l	d4,d1
-	move.l	sp,d2
-	moveq	#100,d3			* max pituus hakemistolle
-	jsr		getNameFromLock
-	push	d0
-	
-	move.l	d4,d1
-	lob	UnLock
-
-	tst.l	(sp)+
-	beq.b	.porrer
-	move.l	sp,a2
-.fe0	tst.b	(a2)+
-	bne.b	.fe0
-
-	subq	#1,a2
-	cmp.b	#':',-1(a2)
-	beq.b	.na0
-	move.b	#'/',(a2)+
-.na0	clr.b	(a2)
-
-	sub.l	sp,a2
-	lea	l_size(a2),a2
-	move.l	a2,d3
-	move.l	sp,d2
+	* path length
+	sub.l	d6,d3
+	add.l	#l_size,d3
+	* path to scan
+	move.l	d6,d2
+	* scan it
 	bsr.w	.scanni
-
+	; Add end-of-directory divider
 	bsr.w	.dirdiv
-
-.porrer
-	lea	200(sp),sp
 	popm	all
-
-.porre	dbf	d5,.dodirsl
+	dbf	d5,.dodirsLoop
 
 .errd2	popm	all
-
-	bra.w	.errd
+	bra.b	.errd
 
 * in: 
 *   a4="dir 1/dir 2/",0
@@ -9500,9 +9805,10 @@ filereq_code
 	beq.w	.loopo
 .yas
 
-	* DPRINT	"Adding file at .filetta",1112
+	* allocate memory for list node
 
 	lea	fib_FileName+fileinfoblock2(a5),a0	* filename
+
 	move.l	a0,a1
 .fie	tst.b	(a1)+
 	bne.b	.fie
@@ -9510,12 +9816,12 @@ filereq_code
 
 	move.l	d3,d0		* hakemisto + nimi (pituus)
 	add.l	a1,d0
-	move.l	d0,d2
+	move.l	d0,d2		* TODO: whats this
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	bsr.w	getmem
 	bne.b	.gotMem2
-	bsr	showOutOfMemoryError
-	bra	.errd
+	bsr.w	showOutOfMemoryError
+	bra.b	.errd
 .gotMem2
 	move.l	d0,a3		* a3 = listunit
 	
@@ -9562,7 +9868,7 @@ filereq_code
 ************* Reqtoollislta saadut tiedostot
 * d4=path length
 .file
-	;DPRINT 	"Adding file at .file",111
+	;DPRINT 	"Adding file at .file"
 
 	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin 16383
 	bhs.b	.overload
@@ -9570,12 +9876,11 @@ filereq_code
 	move.l	d4,d0				* listunit,polku,nimi pituus
 	add.l	rtfl_StrLen(a4),d0	* incoming string length
 	addq.l	#1,d0				* space for terminating zero
-	move.l	d0,d2
 
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1		* varataan muistia
 	bsr.w	getmem
 	bne.b	.gotMem
-	bsr	showOutOfMemoryError
+	bsr.w	showOutOfMemoryError
 	bra.b	.whoops2
 .gotMem
 	move.l	d0,a3
@@ -9630,29 +9935,28 @@ filereq_code
 
 .dirdiv
 	lea	.barf(pc),a0
-	bra.w	adddivider
+	bra.b	adddivider
 
 .t	dc.b	"My stomach feels content.",0
 	* This must not be changed, content checked in adddivider below.
 .barf	dc.b	"/\/\/\/\/\/\/\",0
 	even
 
-
 * addaa/inserttaa listaan a3:ssa olevan noden
 addfile	
 	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.exit
 
-;  ifne DEBUG
-; 	DPRINT2 "Adding->",1
-; 	DEBU	l_filename(a3)
-; 	DPRINT  "<-",2
-;  endif
+ ; ifne DEBUG
+ ;	DPRINT2 "Adding->",1
+ ;	DEBU	l_filename(a3)
+ ;	DPRINT  "<-"
+ ; endif
 
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
 	;lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
-	bsr		getVisibleModuleListHeader
+	bsr.w		getVisibleModuleListHeader
 	move.l	a3,a1
 
 	tst.b	filereqmode(a5)		* onko add vai insert?
@@ -9689,7 +9993,7 @@ adddivider
 
 ** testataan onko dirdivideri? jos on, pistet‰‰n sen p‰‰lle
 	;lea	moduleListHeader(a5),a3
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
 	move.l	MLH_TAILPRED(a3),d0    * this points to the last element of the list
 	beq.b	.pehe
@@ -9979,10 +10283,10 @@ winfile
 * Vapautetaan tiedostolista
 *******
 freelist
-	DPRINT  "freelist obtain list",1
+	DPRINT  "freelist obtain list"
 	bsr.w		obtainModuleList
 	tst.l		modamount(a5)
-	beq.w	.listEmpty
+	beq.b	.listEmpty
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	tst.l	playingmodule(a5)
 	bmi.b	.ehe
@@ -10006,14 +10310,14 @@ freelist
 	clr.l	modamount(a5) 
 	* need to reset random table to nothingness as well
 	bsr.w	clear_random
-	bsr		clearCachedNode
+	bsr.w	clearCachedNode
 
 	* reset list slider and list box 
 	clr.l	firstname(a5)	
 	bsr.w	reslider
 
 .listEmpty
-	DPRINT  "freelist release list",2
+	DPRINT  "freelist release list"
 	bsr.w		releaseModuleList
 	rts
 
@@ -10061,11 +10365,11 @@ rlpg
 	isListInFavoriteMode
 	bne.b	.isFav
 	bsr.w setMainWindowWaitPointer
-	DPRINT  "rloadprog obtain list",1
+	DPRINT  "rloadprog obtain list"
 	bsr.w	obtainModuleList
 	bsr.b .doLoadProgram
 	bsr.w clearMainWindowWaitPointer
-	DPRINT  "rloadprog release list",2
+	DPRINT  "rloadprog release list"
 	bsr.w	releaseModuleList
 .isFav
 	rts
@@ -10174,7 +10478,7 @@ rlpg
 	lob	Seek		* alkuun
 
 	move.l	d5,d0		* muistia listalle
-	DPRINT	"Allocating %ld for list",10
+	DPRINT	"Allocating %ld for list"
 	moveq	#MEMF_PUBLIC,d1
 	bsr.w	getmem
 	move.l	d0,a3
@@ -10184,7 +10488,7 @@ rlpg
 .bailOut
 	moveq	#0,d5	* memory address for freemem 
 .bailOut2
-	bsr	showOutOfMemoryError
+	bsr.w	showOutOfMemoryError
 	move.l	d6,d1
 	lob	Close
 	bra.w	.x2
@@ -10195,7 +10499,7 @@ rlpg
 	moveq	#MEMF_ANY,d1
 	lore	Exec,AvailMem
 	pop  	a6
-	DPRINT	"Mem left   %ld",12
+	DPRINT	"Mem left   %ld"
 	* Arbitrary 100 kB safety margin
 	sub.l	#100*1024,d0
 	cmp.l	d0,d5
@@ -10255,7 +10559,7 @@ rlpg
 	moveq	#0,d5
 	lea	xpk_module_program_error(pc),a1
 	bsr.w	request
-	bra	.x2
+	bra.w	.x2
 .xpkOk
 
 	move.l	.addr(pc),a3
@@ -10298,8 +10602,8 @@ rlpg
 	pushm 	d1-a6
 	lea		moduleListHeader(a5),a2
 	move.l	.loppu(pc),a4 
-	bsr	importModuleProgramFromData
-	DPRINT 	"Imported %ld files",110
+	bsr.w	importModuleProgramFromData
+	DPRINT 	"Imported %ld files"
 	popm	d1-a6
 
 	move.l	d0,modamount(a5)
@@ -10315,7 +10619,7 @@ rlpg
 
 .x2
 	tst.l	d5
-	beq.w	.xxx
+	beq.b	.xxx
 
 	tst.l	.len
 	beq.b	.xx0
@@ -10351,7 +10655,7 @@ rlpg
 .what
 	lea	unknown_module_program_error(pc),a1
 	bsr.w	request
-	bra.w	.x2
+	bra.b	.x2
 
 .openerr
 	move	#1,a4			* lippu
@@ -10423,7 +10727,7 @@ importModuleProgramFromData
  if DEBUG
 	move.l	a3,d0 
 	move.l	a4,d1
-	DPRINT	"importModuleProgramFromData %lx %lx",1
+	DPRINT	"importModuleProgramFromData %lx %lx"
  endif
 
 	moveq	#0,d7 		* count
@@ -10480,8 +10784,8 @@ importModuleProgramFromData
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
 	bne.b	.gotMem2
-	bsr	showOutOfMemoryError
-	bra	.x2	
+	bsr.w	showOutOfMemoryError
+	bra.b	.x2	
 .gotMem2
 	move.l	d0,a2
 
@@ -10542,7 +10846,7 @@ importModuleProgramFromData
 .what
 	lea	unknown_module_program_error(pc),a1
 	bsr.w	request
-	rts
+	bra.b  	.x2
 
 unknown_module_program_error  dc.b	"Not a module program!",0
 xpk_module_program_error	 dc.b	"Could not load XPK compressed module program!",0
@@ -10569,12 +10873,12 @@ nimenalku
 rsaveprog
 	isListInFavoriteMode
 	bne.b	.x
-	DPRINT  "rsaveprog obtain list",1
+	DPRINT  "rsaveprog obtain list"
 	bsr.w obtainModuleList
 	bsr.w setMainWindowWaitPointer
 	bsr.b	.doSaveProg
 	bsr.w clearMainWindowWaitPointer
-	DPRINT  "rloadprog release list",2
+	DPRINT  "rloadprog release list"
 	bsr.w releaseModuleList
 .x	rts
 
@@ -10621,7 +10925,7 @@ rsaveprog
 	lea	filereqtitle3(pc),a3
 	lob	rtFileRequestA		* ReqToolsin tiedostovalikko
 	tst.l	d0
-	beq.w	.ex
+	beq.b	.ex
 	move.l	req_file2(a5),a0
 	bsr.w	parsereqdir3
 
@@ -10641,7 +10945,7 @@ rsaveprog
 
 	lea	filename2(a5),a0
 	lea	moduleListHeader(a5),a1
-	bsr exportModuleProgramToFile
+	bsr.b exportModuleProgramToFile
 
 	move.l	req_file2(a5),d0
 	beq.b	.ex
@@ -10682,7 +10986,7 @@ filereqtitle3
 exportModuleProgramToFile
  if DEBUG
 	move.l	a0,d0
-	DPRINT	"Exporting module list to %s",0
+	DPRINT	"Exporting module list to %s"
  endif
 	move.l	a1,a4
 	move.l	_DosBase(a5),a6
@@ -10739,7 +11043,7 @@ exportModuleProgramToFile
 	bra.b	.exit
 
 .openError
-	lea	openerror_t(pc),a1
+	lea	openerror_t,a1
 	bsr.w	request
 	bra.b	.exit
 
@@ -10752,7 +11056,7 @@ exportModuleProgramToFile
 *******
 
 komentojono
-	DPRINT	"Processing command line parameters",1
+	DPRINT	"Processing command line parameters"
 	lea	sv_argvArray+4(a5),a3	* ei ekaa
 	moveq	#ARGVSLOTS-1-1,d7
 	move.l	modamount(a5),d6	* vanha m‰‰r‰ talteen
@@ -10766,7 +11070,7 @@ komentojono
 
  if DEBUG
 	move.l	d5,d0
-	DPRINT	"->%ls",0
+	DPRINT	"->%ls"
  endif
 
 	move.l	d5,a0
@@ -10805,7 +11109,7 @@ komentojono
 
 	move.l	a2,a1
 	;lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
-	bsr		getVisibleModuleListHeader
+	bsr.w		getVisibleModuleListHeader
 	lore	Exec,AddTail
 
 	pushm	a2/a3
@@ -10827,7 +11131,7 @@ komentojono
 	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
 
 	st	hippoonbox(a5)
-	bsr		listChanged
+	bsr.w		listChanged
 	bsr.w	resh
 	bsr.w	rbutton1		* soitetaan 
 .x	rts
@@ -10860,7 +11164,7 @@ tokenizepattern
 ***************************
 
 loadprefs
-	DPRINT 	"Load prefs",1
+	DPRINT 	"Load prefs"
 	pushpea	prefsfilename(pc),d7
 
 ;	move.l	(a5),a0			* Kokeillaan ladata preffsi
@@ -10909,7 +11213,7 @@ loadprefs2
 	cmp.b	#prefsversio,prefsdata(a5)	* Onko oikea versio?
 	beq.b	.q
 
-	DPRINT	"Old prefs, set some defaults",2
+	DPRINT	"Old prefs, set some defaults"
 
 * Vanha prefssi?
 * Laitetaan defaultti archivejutut 
@@ -10921,7 +11225,7 @@ loadprefs2
 	cmp.l	#prefs_size,d0
 	bhi.w	.eeee
 
-	DPRINT	"Set values",3
+	DPRINT	"Set values"
 
 * Pistet‰‰n ladatut arvot yms. paikoilleen
 	lea	prefsdata(a5),a0
@@ -10978,15 +11282,14 @@ loadprefs2
 
 	move.b	prefs_samplecyber(a0),samplecyber(a5)
 	
-	moveq	#0,d0 
 	move.b	prefs_mpegaqua(a0),d0
 	moveq	#0,d1
 	moveq	#2,d2
-	bsr.w	clamp
+	bsr.w	clampByte
 	move.b	d0,mpegaqua(a0)
 	
 	move.b	prefs_mpegadiv(a0),d0 
-	bsr.w	clamp
+	bsr.w	clampByte
 	move.b	d0,mpegadiv(a5)
 
 	move.b	prefs_medmode(a0),medmode(a5)
@@ -11002,7 +11305,7 @@ loadprefs2
 
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
-	bsr.w	sliderit
+	bsr.b	sliderit
 	bsr.w	setprefsbox
 	bsr.w	mainpriority
 
@@ -11030,14 +11333,23 @@ loadprefs2
  even
 
 * in:
-*  d0 = value
+*  d0 = value, can be negative
 *  d1 = low bound
 *  d2 = high bound
 * out:
 *  d0 = value within bounds
+clampByte
+	ext		d0 
+	ext		d1 
+	ext		d2
+clampWord
+	ext.l	d0
+	ext.l	d1
+	ext.l	d2
 clamp
 	cmp.l	d1,d0
-	blo.b	.low
+	;blo.b	.low   
+	blt.b	.low  
 	cmp.l	d2,d0
 	bhi.b	.high
 	rts
@@ -11184,7 +11496,7 @@ setprefsbox
 
 
 saveprefs
-	DPRINT	"Prefs save",1
+	DPRINT	"Prefs save"
 	move.l	windowbase(a5),d0
 	beq.b	.h
 	move.l	d0,a0
@@ -11384,18 +11696,18 @@ aseta_vakiot
 
 	lea	check_keyfile,a2
 
-	lea	.defgroup(pc),a0
+	lea	defgroup(pc),a0
 	lea	groupname(a5),a1
-	bsr.b	copyb
+	bsr.w	copyb
 	
 	st	newdirectory(a5)
 	lea	.defdir1(pc),a0
 	lea	moduledir(a5),a1
-	bsr.b	copyb
+	bsr.w	copyb
 
 	lea	.defdir1(pc),a0
 	lea	prgdir(a5),a1
-	bsr.b	copyb
+	bsr.w	copyb
 
 	lea	.defdir2(pc),a0
 	lea	arcdir(a5),a1
@@ -11414,11 +11726,13 @@ aseta_vakiot
 	bra.w	defarc
 ;	rts
 
-.defgroup dc.b	"S:HippoPlayer.Group",0
 .defdir1 dc.b	"SYS:",0
 .defdir2 dc.b	"RAM:",0
 .wb	dc.b	"Workbench",0
-.pat	dc.b	"~(#?.info|smpl.#?)",0
+.pat	dc.b	"~(#?.info|smpl.#?|#?.ins|#?.nt|#?.as|#?.instr|#?.ss)",0
+defgroup dc.b	"S:"	
+hipGroupFileName
+	dc.b	"HippoPlayer.Group",0
  even
 
 bcopy
@@ -11613,7 +11927,7 @@ drawtexture
 *******
 
 updateprefs
-	DPRINT	"Update prefs",1
+	DPRINT	"Update prefs"
 	pushm	all
 	tst	prefs_prosessi(a5)
 	beq.b	.x
@@ -12124,7 +12438,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	beq.w	.cancelled
 
 ** USE
-	DPRINT	"Prefs use",2
+	DPRINT	"Prefs use"
 
 	move.l	mixingrate_new(a5),mixirate(a5)
 	move	tfmxmixingrate_new(a5),tfmxmixingrate(a5)
@@ -12315,7 +12629,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	rts
 
 .cancelled
-	DPRINT	"Prefs cancel",3
+	DPRINT	"Prefs cancel"
 * Pistet‰‰n vanhat asennot propgadgetteihin
 ;	move.l	pslider1+gg_SpecialInfo,a0
 ;	move	s3mmixpot_new(a5),pi_HorizPot(a0)
@@ -12398,7 +12712,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 flush_messages2
 	move.l	windowbase2(a5),a0 
-	bra		flushWindowMessages
+	bra.w		flushWindowMessages
 
 
 
@@ -12750,8 +13064,8 @@ pupdate				* Ikkuna p‰ivitys
 	bsr.w	pearly			* early load
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
-	bsr		pfavorites		* favorites
-	bsr		ptooltips       * tooltips
+	bsr.w		pfavorites		* favorites
+	bsr.w		ptooltips       * tooltips
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -12925,7 +13239,7 @@ gadgetsup2
 
  ;if DEBUG
 ;	ext.l	d0
-;	DPRINT	"Gadget id=%ld",1
+;	DPRINT	"Gadget id=%ld"
  ;endif
 
 	add	d0,d0
@@ -13120,7 +13434,7 @@ rquadm
 	and.b	#$80,d1
 
 	addq.b	#1,d0
-	cmp.b	#4,d0
+	cmp.b	#5,d0
 	ble.b	.k
 	clr.b	d0
 .k	or.b	d1,d0
@@ -13142,18 +13456,22 @@ psup3
 	subq.b	#1,d0
 	beq.b	.q
 	lea	ls05(pc),a0
+	subq.b	#1,d0
+	beq.b	.q
+	lea	ls06(pc),a0
 .q
 	lea	pout3,a1
 	bsr.w	prunt
 	bra.b	quadu
 
 
-ls00	dc.b	14,5
+ls00	dc.b	14,6
 ls01	dc.b	"Quadrascope",0
 ls02	dc.b	"Hipposcope",0
 ls03	dc.b	"Freq. analyzer",0
 ls04	dc.b	"Patternscope",0
 ls05	dc.b	"F. Quadrascope",0
+ls06	dc.b	"PatternscopeXL",0
  even
 
 rscopebar
@@ -15342,7 +15660,7 @@ listselector
 .ox
 
 	move.l	d5,a0
-	bsr		flushWindowMessages
+	bsr.w		flushWindowMessages
 
 	move.l	d5,d0
 	beq.b	.eek
@@ -15422,7 +15740,7 @@ shn
 .eper
 
 	tst	d4		* ei mink‰‰nlaista uudelleensijoitusta
-	bne.w	.nob
+	bne.b	.nob
 
 	moveq	#0,d2
 	move	boxsize(a5),d2
@@ -15430,7 +15748,7 @@ shn
 	lsr	#1,d2		* center chosenmodule in the middle of the box
 	
 	move.l	chosenmodule(a5),d0
-	;DPRINT "Shownames center index %ld",10
+	;DPRINT "Shownames center index %ld"
 
 	sub.l	d2,d0
 	bmi.b	.nok
@@ -15445,7 +15763,7 @@ shn
 	moveq	#0,d0	
 .ok	
 	move.l	d0,firstname(a5)
-	;DPRINT "->first name %ld",12
+	;DPRINT "->first name %ld"
 
 .nob
 	tst.b	hippoonbox(a5)
@@ -15515,7 +15833,7 @@ shn
 	bra.b	.huh2
 
 .nomods	
-	bsr.w	.unmark
+	bsr.b	.unmark
 .huh2
 .xx
 	move.l	#-1,markedline(a5)
@@ -15587,13 +15905,13 @@ shn
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien m‰‰r‰
 doPrintNames
-;	DPRINT  "shownames obtain list",1
+;	DPRINT  "shownames obtain list"
 	bsr.w  obtainModuleList
 	;lea	moduleListHeader(a5),a4	
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 
-;	DPRINT	".doNames %ld",31
+;	DPRINT	".doNames %ld"
 
 	* d0 = module index
 	* d1 = line number to print to
@@ -15613,9 +15931,9 @@ doPrintNames
 ;	bsr	clearCachedNode
 ;	move.l	d3,d0
 
-	bsr	getListNodeCached
+	bsr.w	getListNodeCached
 	tst.l	(a0)
-	beq	.lop
+	beq.w	.lop
 	move.l	a0,a3
 	move.l	a0,a4
 .baa
@@ -15680,7 +15998,7 @@ doPrintNames
 	* Random play mode magic check: Add a marker to the end to indicate module has been played?
 	* Here the module index is needed
 	move.l 	d3,d0 
-	bsr		testRandomTableEntry
+	bsr.w		testRandomTableEntry
 	beq.b	.fu
 	move.b	#"Æ",-1(a2)
 .fu
@@ -15695,7 +16013,7 @@ doPrintNames
 	beq.b	.noFav
 	isListInFavoriteMode
 	bne.b	.noBold
-	bsr	printBold
+	bsr.w	printBold
 	bra.b	.wasFav
 .noFav
 .noBold
@@ -15719,7 +16037,7 @@ doPrintNames
 	dbf	d5,.looppo
 .lop	
 	
-;	DPRINT  "shownames release list",2
+;	DPRINT  "shownames release list"
 	bsr.w 	releaseModuleList
 	rts
 	
@@ -15801,7 +16119,7 @@ elete
 	beq.w	.erer
 
 	;lea	moduleListHeader(a5),a4
-	bsr		getVisibleModuleListHeader
+	bsr.w		getVisibleModuleListHeader
 	move.l	a0,a4
 
 ; .luuppo	TSTNODE	a4,a3
@@ -15810,9 +16128,9 @@ elete
 ; 	;dbf	d0,.luuppo
 ; 	subq.l #1,d0 
 ; 	bpl.b  .luuppo
-	DPRINT	"delete getListNode",1
-	bsr		getListNode
-	beq		.erer
+	DPRINT	"delete getListNode"
+	bsr.w		getListNode
+	beq.w		.erer
 	move.l	a0,a3
 	
 	tst.l	d7
@@ -15871,7 +16189,7 @@ elete
  ifne DEBUG
 	DPRINT2 "Deleting->",1
 	DEBU	l_filename(a0)
-	DPRINT  "<-",2
+	DPRINT  "<-"
  endc
 
 
@@ -15924,7 +16242,7 @@ execuutti
 	move.l	lockhere(a5),d1
 	pushpea	200(sp),d2
 	moveq	#100,d3
-	jsr		getNameFromLock
+	jsr	getNameFromLock
 	lea	.tagz(pc),a0
 	move.l	d7,a1
 	pushpea	200(sp),4(a0)
@@ -16222,6 +16540,18 @@ inforivit_extracting
  even
 
 
+;inforivit_initializing
+;	lea	.1(pc),a0
+;	bra.w	putinfo2
+;.1	dc.b	"Initializing...",0
+; even
+;
+;inforivit_identifying
+;	lea	.1(pc),a0
+;	bra.w	putinfo
+;.1	dc.b	"Identifying...",0
+; even
+;
 * Siistit‰‰n moduulin nimi 
 
 siisti_nimi
@@ -16534,6 +16864,7 @@ lootaan_aika
 
 	move	songnumber(a5),d0
 	addq	#1,d0
+	sub		minsong(a5),d0
 
 	move.b	#' ',(a0)+
 	move.b	#'#',(a0)+
@@ -16547,16 +16878,12 @@ lootaan_aika
 	bne.b	.ql
 	bra.b	.jaa
 .nptr
-	cmp	#pt_sonicarr,playertype(a5)
-	beq.b	.jaa
-
 	move.b	#"/",(a0)+
 	moveq	#0,d0
 	move	maxsongs(a5),d0
 	addq	#1,d0
+	sub		minsong(a5),d0
 	bsr.w	putnumber
-
-
 .jaa	
 
 ;	tst.b	uusikick(a5)	
@@ -16810,7 +17137,7 @@ getFileBoxIndexFromMousePosition
 * Chosen line is highlighted and previously chosen line highlight removed.
 
 markline
-	bsr getFileBoxIndexFromMousePosition
+	bsr.b getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
 	* something marked
@@ -16835,12 +17162,12 @@ markline
 	add.l	firstname(a5),d1
 	* See if clicking on an already chosen module
 	cmp.l	chosenmodule(a5),d1
-	beq.w	.oo
+	beq.b	.oo
 	* This does not seem to happen ever?
 	cmp.l	#PLAYING_MODULE_REMOVED,chosenmodule(a5)
 	beq.b	.oo2
 	pushm	d1/d2
-	bsr.w	unmarkit
+	bsr.b	unmarkit
 	popm	d1/d2
 .u	st	dontmark(a5)
 .oo2	
@@ -16892,13 +17219,13 @@ markit
 	bhs.b	.outside
 
 	move.l	markedline(a5),d5
-	bmi.w	.outside
+	bmi.b	.outside
 	moveq	#0,d0
 	move	boxsize(a5),d0
 	cmp.l	d0,d5
-	bhs.w	.outside
+	bhs.b	.outside
 	tst.b	win(a5)
-	beq.w	.outside
+	beq.b	.outside
 
 ; TODO: this probably prevents clicking on empty parts of the list
 ;       to highlight lines
@@ -16954,7 +17281,7 @@ marklineRightMouseButton
 	* distracting
 	isListInFavoriteMode
 	bne.b	.ou
-	bsr	 getFileBoxIndexFromMousePosition
+	bsr.w	 getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
 	* something marked
@@ -16969,14 +17296,14 @@ marklineRightMouseButton
 	moveq	#0,d0
 	move	d1,d0
 	move.l	d0,d3
-	DPRINT	"RMB mark on line %ld",1
+	DPRINT	"RMB mark on line %ld"
 
 	* To get node index add index of the first visible
 	* item
 	add.l	firstname(a5),d0
 	move.l	d0,d4
 	* Get the actual node into a0
-	bsr	getListNode
+	bsr.w	getListNode
 	beq.b	.notFound
 
 	isListDivider  l_filename(a0)
@@ -16985,10 +17312,10 @@ marklineRightMouseButton
 	* Toggle favorite status
 	isFavoriteModule a0 
 	bne.b	.wasFavorite
-	bsr	addFavoriteModule
+	bsr.w	addFavoriteModule
 	bra.b	.wasNotFavorite
 .wasFavorite
-	bsr	removeFavoriteModule
+	bsr.w	removeFavoriteModule
 .wasNotFavorite
 
 	move.l	d4,d0
@@ -16996,7 +17323,7 @@ marklineRightMouseButton
 	move	d3,d1 	* target y-line
 	moveq	#1,d2   * just do one line
 	push 	d3
-	bsr	doPrintNames
+	bsr.w	doPrintNames
 	pop 	d3
 
 	* see if this line happened to be chosen already.
@@ -17004,12 +17331,12 @@ marklineRightMouseButton
 	* wiped away above.
 	cmp.l	 markedline(a5),d3	
 	bne.b	.different
-	bsr	markit
+	bsr.w	markit
 .different
 	rts	
 .notFile
 .notFound
-	DPRINT	"Not favoriting this line",2
+	DPRINT	"Not favoriting this line"
 	rts
 
 *********************************
@@ -17036,9 +17363,9 @@ getVisibleModuleListHeader
 * Also set a flag, this is used to detect chnages in favorites
 * content.
 listChanged
-	DPRINT "List changed",1
-	bsr	clearCachedNode
-	bsr	clear_random	
+	DPRINT "List changed"
+	bsr.w	clearCachedNode
+	bsr.w	clear_random	
 	st	moduleListChanged(a5)
 	rts
 
@@ -17053,16 +17380,16 @@ listChanged
 *   a0=list node
 *   Z=set if index is out of bounds
 getListNode
-	DPRINT	"getListNode %ld",1
+	DPRINT	"getListNode %ld"
 
 	tst.l	modamount(a5)
 	beq.b	.out
 	cmp.l 	modamount(a5),d0
 	bhs.b	.out
 
-	bsr	obtainModuleList
+	bsr.w	obtainModuleList
 	;lea	moduleListHeader(a5),a0
-	bsr	getVisibleModuleListHeader
+	bsr.b	getVisibleModuleListHeader
 
 	* When using dbf loop usually subtract 1, but here
 	* one SUCC is needed to get to the head element
@@ -17073,11 +17400,11 @@ getListNode
 	SUCC    a0,a0
 	dbf	 	d1,.loop
 	dbf		d0,.loop
-	bsr	releaseModuleList
+	bsr.w	releaseModuleList
 
  if DEBUG
  	move.l	l_nameaddr(a0),d0
-	DPRINT	"->found=%s",2
+	DPRINT	"->found=%s"
  endc
 	moveq	#1,d0 	* found
 	rts
@@ -17106,7 +17433,7 @@ getListNodeCached
 	tst.l	cachedNode(a5)
 	bne.b	.n
 	* Get head node from the minimal list header
-	bsr	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	MLH_HEAD(a0),cachedNode(a5)
 	;move.l	moduleListHeader+MLH_HEAD(a5),cachedNode(a5)
 	clr.l	cachedNodeIndex(a5)
@@ -17114,11 +17441,11 @@ getListNodeCached
 	move.l	cachedNodeIndex(a5),d1
 	* New cached index
 	move.l	d0,cachedNodeIndex(a5)
-	;DPRINT	"Getlistnode to=%ld cached=%ld",1
+	;DPRINT	"Getlistnode to=%ld cached=%ld"
 	move.l	cachedNode(a5),a0
 
 	sub.l	d1,d0
-	;DPRINT	"->step %ld",2
+	;DPRINT	"->step %ld"
 	tst.l	d0
 	beq.b   .x
 	bpl.b  	.forward2
@@ -17233,7 +17560,7 @@ showTooltipPopup
 	lore	Intui,OpenWindow
 	move.l	d0,d5
 	beq.w	.x
-	DPRINT	"Tooltip opened %lx",1
+	DPRINT	"Tooltip opened %lx"
 	move.l	d0,a0
 	move.l	wd_RPort(a0),d7		* rastport
 	move.l	a0,tooltipPopupWindow(a5)
@@ -17263,7 +17590,7 @@ showTooltipPopup
 .prl	
 	move	d3,d1
 	moveq	#8,d0	* x-coord
-	bsr.w	.print
+	bsr.b	.print
 	* next y
 	addq	#8,d3
 	* find next line
@@ -17312,7 +17639,7 @@ showTooltipPopup
 * Closes the tooltip popup if open.
 * Also deactivates any tooltip that is about to open.
 closeTooltipPopup
-	bsr	deactivateTooltip
+	bsr.w	deactivateTooltip
 	move.l	tooltipPopupWindow(a5),d0
 	beq.b	.exit
 	move.l	d0,a0
@@ -17929,7 +18256,162 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .nosid
 
+	cmp	#pt_eagle_start,playertype(a5)		* eagleplayer
+	blo.w	.noeagle
+	move	#33,info_prosessi(a5)		* some magic flag
+	
+	lea	.form3(pc),a0
+	lea	-32(sp),sp
+	move.l	sp,a4
+	bsr.w	.namtypsizcom
+	moveq	#10+20,d5
+	bsr.w	.allo2
+	bne.w	.jee9eg
+	lea	32(sp),sp
+	bra.w	.sexit
+.jee9eg
+	move.l	sp,a1
+	move.l	infotaz(a5),a3
+	jsr	desmsg4
+	bsr.w	.putcomment
+	lea	32(sp),sp
 
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+
+	move.l	#MI_SongName,d1
+	lea	.eagleSong(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_AuthorName,d1
+	lea	.eagleAuthor(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_SubSongs,d1
+	lea	.eagleSubsongs(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_Prefix,d1
+	lea	.eaglePrefix(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_Samples,d1
+	lea	.eagleSamples(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_SynthSamples,d1
+	lea	.eagleSynthSamples(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_Songsize,d1
+	lea	.eagleSongSize(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_SamplesSize,d1
+	lea	.eagleSamplesSize(pc),a0
+	bsr.w	.deliPutInfo
+	move.l	#MI_Voices,d1
+	lea	.eagleVoices(pc),a0
+	bsr.w	.deliPutInfo
+
+	move.l	#MI_Duration,d1
+	jsr	deliFindInfoValue
+	ble.b	.noEagleDur
+	divu	#60,d0 
+	move.l	d0,d1
+	swap	d1 
+	ext.l 	d0 
+	ext.l 	d1
+	lea	.eagleDuration(pc),a0
+	bsr.w	.deliPutInfo2
+.noEagleDur
+
+	move.l	#MI_About,d1
+	lea	.eagleAbout(pc),a0
+	bsr.b	.deliPutInfo
+
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+
+	move.l	#DTP_PlayerName,d0 
+	jsr	deliGetTag 
+	beq.b 	.noPlrName 
+	lea	.eagleName(pc),a0 
+	bsr.b	.deliPutInfo2	
+.noPlrName 
+	* Creator, 1-3 lines
+	move.l	#DTP_Creator,d0 
+	jsr	deliGetTag 
+	beq.b 	.noCrtr
+	push	d0
+	lea	.eagleCreator(pc),a0 
+	bsr.b	.deliPutInfo2	
+	pop	a0
+	* wrap to another line if there is text
+	moveq	#30-1,d0
+.findEnd
+	tst.b	(a0)+
+	dbeq	d0,.findEnd
+	tst	d0
+	bpl.b	.noMore
+	move.l	a0,d0
+	push	a0
+	lea	.eagleCreator2(pc),a0 
+	bsr.b	.deliPutInfo2
+	pop	a0
+	* wrap to 3rd line?
+	moveq	#39-1,d0
+.findEnd2
+	tst.b	(a0)+
+	dbeq	d0,.findEnd2
+	tst	d0
+	bpl.b	.noMore
+	move.l	a0,d0
+	lea	.eagleCreator2(pc),a0 
+	bsr.b	.deliPutInfo2	
+.noMore
+	
+.noCrtr
+	bra.w	.selvis
+
+.deliPutInfo
+	push 	a0
+	jsr	deliFindInfoValue
+	pop  	a0
+	tst.l	d0
+	* zero or lower
+	ble.b	.noInfo
+.deliPutInfo2
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	bsr.b	.deliFormat
+.noInfo
+	rts
+
+.deliFormat	
+	pushm	d0-d7
+	move.l	sp,a1
+	lea	putc(pc),a2	;merkkien siirto
+	lore 	Exec,RawDoFmt
+	popm	d0-d7
+	rts
+
+* max width: 39
+.eagleSong	 	dc.b	"Song: %-33.33s",ILF,ILF2,0
+.eagleAuthor		dc.b	"Author: %-31.31s",ILF,ILF2,0
+.eagleSubsongs		dc.b	"Subsongs: %ld",ILF,ILF2,0
+.eagleSamples		dc.b	"Samples: %ld",ILF,ILF2,0
+.eagleSynthSamples	dc.b	"Synth samples: %ld",ILF,ILF2,0
+.eagleSongSize	 	dc.b	"Song size: %ld bytes",ILF,ILF2,0
+.eagleSamplesSize	dc.b	"Samples size: %ld bytes",ILF,ILF2,0
+.eaglePrefix 		dc.b	"Prefix: %s",ILF,ILF2,0
+.eagleVoices	 	dc.b	"Voices: %ld",ILF,ILF2,0
+.eagleDuration	 	dc.b	"Duration: %02ld:%02ld",ILF,ILF2,0
+.eagleAbout	     	dc.b	"About: %-32.32s",ILF,ILF2,0
+.eagleName		dc.b	"Eagleplayer: %-26.26s",ILF,ILF2,0
+.eagleCreator       	dc.b	"Creator: %-30.30s",ILF,ILF2,0
+.fullLineFormat		
+.eagleCreator2       	dc.b	"%-39.39s",ILF,ILF2,0
+ even
+
+.noeagle
 
 ********* module (PT)
 
@@ -17937,9 +18419,11 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	
 
+	cmp	#pt_startrekker,playertype(a5)
+	beq.b	.yes
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.nop
-	move.l	#ptheader,d4
+.yes	move.l	#ptheader,d4
 	bra.b	.mod
 .nop
 	cmp	#pt_multi,playertype(a5)
@@ -18224,17 +18708,50 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
 	jsr	desmsg4
-	bsr.b	.putcomment
+	bsr.w	.putcomment
 	lea	32(sp),sp
+	
+	moveq	#0,d0 
+	move.l	playerbase(a5),a0 
+	jsr	p_author(a0) 
+	tst.l	d0 
+	beq.b 	.noAuth
+
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+	
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	push	d0
+	lea	.author(pc),a0
+	bsr	desmsg3
+	pop	a0
+	* wrap to another line if there is text
+	moveq	#31-1,d0
+.findEndA
+	tst.b	(a0)+
+	dbeq	d0,.findEndA
+	tst	d0
+	bpl.b	.noMoreA
+	move.l	a0,d0
+	lea	.fullLineFormat(pc),a0 
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	bsr		desmsg3
+.noMoreA
+.noAuth
 	bra.w	.selvis
 
 
 .form3	
 	dc.b	"Name: %-33.33s",ILF,ILF2
 	dc.b	"Type: %-33.33s",ILF,ILF2
-	dc.b	"Size: %-9.ld   ($%08.lx-$%08.lx)",ILF,ILF2,ILF,ILF2
+	dc.b	"Size: %-9.ld   ($%08.lx-$%08.lx)",ILF,ILF2
+	dc.b	ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
-	
+.author
+	dc.b	"Player: %-31.31s",ILF,ILF2,0
  even
 
 
@@ -18249,8 +18766,19 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .puct
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
-
 	lea	filecomment(a5),a0
+	tst.b	(a0)
+	beq.b	.empty
+	bsr.b	.putlines
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+.empty
+	popm	d0/d1/a0/a3
+	rts
+
+.putlines
 	moveq	#0,d0
 .com	addq	#1,d0
 	cmp	d1,d0
@@ -18263,9 +18791,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.b	#ILF2,(a3)+
 .naga	move.b	(a0)+,(a3)+
 	bne.b	.com
-	popm	d0/d1/a0/a3
 	rts
- 
+
 *************************************
 
 .namtypsizcom
@@ -18584,7 +19111,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .flush_messages
 	move.l	swindowbase(a5),a0
-	bra  flushWindowMessages
+	bra.w  flushWindowMessages
 	
 
 
@@ -19221,20 +19748,20 @@ rbutton10
 	movem.l	d0-a6,-(sp)
 
 * lasketaan dividereitten m‰‰r‰
-	DPRINT  "aboutButtonAction obtain list",1
+	DPRINT  "aboutButtonAction obtain list"
 	jsr		obtainModuleList
 	moveq	#0,d5
 	* calculate the amount of list dividers in the list
-	lea	moduleListHeader(a5),a4
-.l	TSTNODE	a4,a3
+	;lea	moduleListHeader(a5),a4
+	bsr.w	getVisibleModuleListHeader
+.l	TSTNODE	a0,a0
 	beq.b	.e
-	move.l	a3,a4
-	isListDivider  l_filename(a3)	* onko divideri??
+	isListDivider  l_filename(a0)	* onko divideri??
 	bne.b	.l
 	addq.l	#1,d5
 	bra.b	.l
 .e	move.l	d5,divideramount(a5)
-	DPRINT  "aboutButtonAction release list",2
+	DPRINT  "aboutButtonAction release list"
 	jsr		releaseModuleList
 
 	st	infolag(a5)
@@ -19332,14 +19859,17 @@ infodefresponse	=	*-4
 otag8	dc.l	RT_PubScrName,pubscreen+var_b
 	dc.l	TAG_END
 
-
 init_error
+	* Eagle related error messages shown elsewhere
+	cmp	#ier_eagleplayer,d0 
+	beq.b 	.skip
+	
 	neg	d0
 	add	d0,d0
 	lea	.ertab-2(pc,d0),a1
 	add	(a1),a1
 	bsr.w	request
-
+.skip
 * vapautetaan moduuli
 	jsr	freemodule
 * printataan infoa
@@ -19367,6 +19897,8 @@ init_error
 	dr	ahi_t
 	dr	ier_nomled_t
 	dr	ier_mlederr_t
+	dr	ier_not_compatible_t
+	dr	ier_eagleplayer_t
 
 ier_error	=	-1
 ier_nochannels	=	-2
@@ -19389,6 +19921,8 @@ ier_hardware	=	-18
 ier_ahi		=	-19
 ier_nomled	=	-20
 ier_mlederr	=	-21
+ier_not_compatible = 	-22
+ier_eagleplayer	= 	-23
 
 ;hardware_t
 ier_playererr_t
@@ -19421,7 +19955,10 @@ nochip_t dc.b	"Not enough chip memory!",0
 filerr_t	dc.b	"File error!",0
 hardware_t	dc.b "68020 or better required!",0
 ahi_t	dc.b	"AHI device error!",0
-
+ier_not_compatible_t
+	dc.b	"Unsupported module type!",0
+ier_eagleplayer_t
+	dc.b	"Couldn't load eagleplayer!",0
  even
 
 
@@ -19571,9 +20108,9 @@ init_ciaint_withTempo
 	move.l a3,d0
 	moveq	#0,d1
 	move.b whichtimer(a5),d1
-	DPRINT	"CIA Timer %lx %ld",1
+	DPRINT	"CIA Timer allocated %lx %ld"
  endif
-	bsr	ciaint_setTempo
+	bsr.b	ciaint_setTempo
 
 	lea	ciacra(a3),a2
 	tst.b	d6
@@ -19630,8 +20167,8 @@ rem_ciaint
 	move.l	ciabase(a5),a6
 	lea	ciaserver(pc),a1
 	lob	RemICRVector
-
 	st	ciasaatu(a5)		* ei keskeytyst‰!
+	DPRINT	"CIA Timer freed"
 	popm	all
 	rts
 
@@ -19950,7 +20487,6 @@ softint
 start_quad
 	st	scopeflag(a5)
 start_quad2
-;	bra	quad_code
 
 	move.l	a6,-(sp)
 	move.l	_DosBase(a5),a6
@@ -20007,7 +20543,7 @@ rexxmessage
 	lea	rexxport(a5),a0
 	lore	Exec,GetMsg
 	move.l	d0,rexxmsg(a5)
-	beq.w	.nomsg
+	beq.b	.nomsg
 
 	move.l	rexxmsg(a5),a1
 	clr.l	rm_Result1(a5)
@@ -20020,7 +20556,7 @@ rexxmessage
 
  if DEBUG
 	move.l	(a4),d0
-	DPRINT	"ARexx: %s",1
+	DPRINT	"ARexx: %s"
  endif
 
 	lea	.komennot-4(pc),a3
@@ -20175,7 +20711,7 @@ rexxmessage
 	move.l	a0,l_nameaddr(a3)	* pelk‰n nimen osoite
 
 	bsr.w	addfile
-	bsr	listChanged
+	bsr.w	listChanged
 
 	st	hippoonbox(a5)
 	tst.l	chosenmodule(a5)
@@ -20227,10 +20763,10 @@ rexxmessage
 
 .chooseNext
 	moveq	#0,d4	* rawkey modifier, no shift
-	bra	lista_alas
+	bra.w	lista_alas
 .choosePrev	
 	moveq	#0,d4	* rawkey modifier, no shift
-	bra	lista_ylos
+	bra.w	lista_ylos
 	
 *** VOLUME
 .volume
@@ -20244,7 +20780,7 @@ rexxmessage
 	subq	#1,d0
 	move	d0,songnumber(a5)
 	moveq	#0,d1
-	bra.w	songo
+	bra.w	songSkip
 	
 	
 
@@ -20647,6 +21183,19 @@ wflags3 set WFLG_SMART_REFRESH!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags3 set wflags3!WFLG_RMBTRAP
 idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS
 
+QUADMODE2_QUADRASCOPE = 0
+QUADMODE2_QUADRASCOPE_BARS = 1
+QUADMODE2_HIPPOSCOPE = 2
+QUADMODE2_HIPPOSCOPE_BARS = 3
+QUADMODE2_FREQANALYZER = 4
+QUADMODE2_FREQANALYZER_BARS = 5
+QUADMODE2_PATTERNSCOPE = 6
+QUADMODE2_PATTERNSCOPE_BARS = 7
+QUADMODE2_FQUADRASCOPE = 8
+QUADMODE2_FQUADRASCOPE_BARS = 9
+QUADMODE2_PATTERNSCOPEXL = 10
+QUADMODE2_PATTERNSCOPEXL_BARS = 11
+
 quad_code
 	lea	var_b,a5
 	clr.l	mtab(a5)
@@ -20665,9 +21214,13 @@ quad_code
 	cmp.l	a1,a0
 	bne.b	.cl
 
-	* quadmode2 is copy of the quadmode which is user selected in prefs
-	
-	* TODO: what is this code doing?
+ if DEBUG
+	moveq	#0,d0 
+	move.b	quadmode(a5),d0
+	DPRINT	"Quad mode: %lx"
+ endif
+	* This creates a jumptable compatible value out of quadmode,
+	* where bit 8 indicates "bars enabled"
 	move.b	quadmode(a5),d0
 	move.b	d0,d1
 	and	#$f,d1
@@ -20688,10 +21241,12 @@ quad_code
 	jmp	.4(pc)		* hipposcope bars
 	jmp	.5(pc)		* freq. analyzer
 	jmp	.6(pc)		* freq. analyzer bars
-	jmp	.cont(pc)	* patternscope
-	jmp	.cont(pc)	* patternscope bars (ei oo!)
+	jmp	.patternScopeNormal(pc)	* patternscope
+	jmp	.patternScopeNormal(pc)	* patternscope bars (ei oo!)
 	jmp	.7(pc)		* filled quadrascope
 	jmp	.8(pc)		* filled quadrascope & bars
+	jmp	.patternScopeXL(pc)	* patternscope xl
+	jmp	.patternScopeXL(pc)	* patternscope xl bars (no bars available though)
 
 
 .7	moveq	#-1,d7
@@ -20778,44 +21333,51 @@ quad_code
 	beq.w	.memer
 	bra.w	.wo
 
-.cont
-	
-;	lea	ls01(pc),a0
-;	move.b	quadmode2(a5),d0
-;	lsr.b	#1,d0
-;	beq.b	.ti
-;	lea	ls02(pc),a0
-;	subq.b	#1,d0
-;	beq.b	.ti
-;	lea	ls03(pc),a0
-;	subq.b	#1,d0
-;	beq.b	.ti
-;	lea	ls04(pc),a0	
-;	subq.b	#1,d0
-;	beq.b	.ti
-;	lea	ls05(pc),a0	
-;.ti	move.l	a0,quadtitl
+.patternScopeNormal
+	move	#8,quadNoteScrollerLines(a5)
+	move	#4,quadNoteScrollerLinesHalf(a5)
+	bra.b	.cont
+.patternScopeXL
+	move	#16,quadNoteScrollerLines(a5)
+	move	#8,quadNoteScrollerLinesHalf(a5)
+	;bra.b	.cont
 
-	
+.cont
+		
 
 
 * Piirtoalueet
-	move.l	#320/8*72*2,d0
+	move.l	#320/8*(72)*2,d0
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge
+	move.l	#320/8*(72+64)*2,d0
+.notLarge
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
 	jsr	getmem
 	beq.b	.me
 	move.l	d0,buffer0(a5)
 	add.l	#320/8*2,d0		* yl‰‰lle 2 vararivi‰
 	move.l	d0,buffer1(a5)
-	add.l	#320/8*70,d0
+	add.l	#320/8*(70),d0
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge2
+	add.l	#320/8*(64),d0
+.notLarge2
 	move.l	d0,buffer2(a5)		* alaalle 4 
-
 
 .gurgle
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc3,a0
+	* Restore top/left to some previous used value
 	move.l	quadpos(a5),(a0)
+
+	move	quadWindowHeightOriginal(a5),d0
+	bsr.w	scopeIsNormal
+	bne.b	.normSize
+	add	#64,d0
+.normSize
+	move	d0,nw_Height(a0)
 
 	move	wbleveys(a5),d0		* WB:n leveys
 	move	(a0),d1			* Ikkunan x-paikka
@@ -20863,13 +21425,21 @@ quad_code
 	moveq	#4,d0
 	moveq	#11,d1
 	move	#335,d2
-	moveq	#82,d3
+	move	#82,d3
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge3
+	add	#64,d3
+.notLarge3
 	bsr.w	drawtexture
 
 	moveq	#8,d0
 	moveq	#13,d1
 	move	#323,d4
-	moveq	#67,d5
+	move	#67,d5
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge4
+	add	#64,d5
+.notLarge4
 	moveq	#$0a,d6
 	move.l	rastport3(a5),a0
 	move.l	a0,a1
@@ -20886,14 +21456,22 @@ quad_code
 	lea	omabitmap(a5),a0
 	moveq	#1,d0
 	move	#320,d1
-	moveq	#66,d2
+	move	#66,d2
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge5
+	add	#64,d2
+.notLarge5
 	lore	GFX,InitBitMap
 	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
  
 	moveq	#7,plx1
 	move	#332,plx2
 	moveq	#13,ply1
-	moveq	#80,ply2
+	move	#80,ply2
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge6
+	add 	#64,ply2
+.notLarge6
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -20903,15 +21481,17 @@ quad_code
 
 	move.l	buffer1(a5),draw1(a5)
 	move.l	buffer2(a5),draw2(a5)
-	moveq	#3*40,d0
+	moveq	#3*40,d0 	* 3 vertical lines
 	add.l	d0,draw1(a5)
 	add.l	d0,draw2(a5)
 
-
+	
 	moveq	#0,d7
 	move	playertype(a5),d6
 	jsr	printhippo2	
 
+	* Set to non-zero if LMB is pressed:
+	moveq	#0,d5	
 
 	move.l	quad_task(a5),a1
 	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
@@ -20925,11 +21505,18 @@ scopeLoop
 	tst.b	tapa_quad(a5)		* pit‰‰kˆ poistua?
 	bne.w	qexit
 
+	* Bypass screen check if LMB has been pressed
+	tst.b 	d5
+	bne.b	.joo
+
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
 	move.l	windowbase3(a5),a0	* ollaanko p‰‰llimm‰isen‰?
+	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
 	beq.b	.joo
+	* Scope screen is not active, but screen might be partially
+	* visible? sc_TopEdge==0 means it can't be partially visible.
 	tst	sc_TopEdge(a1)
 	beq.w	.m
 .joo
@@ -20966,11 +21553,11 @@ scopeLoop
 	beq.b	.noen
 	move	playertype(a5),d6
 	bsr.b	.clear
-.noen	pushm	d6/d7
+.noen	pushm	d5/d6/d7
 	jsr		obtainModuleData
 	bsr.w	drawScope
 	jsr 	releaseModuleData
-	popm	d6/d7
+	popm	d5/d6/d7
 	moveq	#-1,d7
 	bra.b	.m
 .n	
@@ -20990,7 +21577,11 @@ scopeLoop
 	moveq	#10,d0
 	moveq	#14,d1
 	move	#330,d2
-	moveq	#79,d3
+	move	#79,d3
+	bsr.w 	scopeIsNormal
+	bne.b	.notLarge7
+	add 	#64,d3
+.notLarge7
 	add	windowleft(a5),d0
 	add	windowleft(a5),d2
 	add	windowtop(a5),d1
@@ -21010,8 +21601,13 @@ scopeLoop
 	lob	ReplyMsg
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.qx
+	* RMB closes window
 	cmp	#MENUDOWN,d3
 	beq.b	.xq
+	cmp	#SELECTDOWN,d3
+	bne.b	.qx 
+	* LMB activates 
+	moveq	#1,d5
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.w	scopeLoop
 
@@ -21055,7 +21651,7 @@ qexit	bsr.b	qflush_messages
 
 qflush_messages
 	move.l	windowbase3(a5),a0 
-	bra		flushWindowMessages
+	bra.w		flushWindowMessages
 
 
 *** Scope interrupt code, keeps track the play positions of protracker replayer samples
@@ -21064,9 +21660,8 @@ scopeinterrupt				* a5 = var_b
 	bne.w	.n
 
 	lea	kplbase(a5),a0
-	moveq	#0,d0
 	move.b	k_usertrig(a0),d0
-	move.b	d0,omatrigger(a5)
+	or.b	d0,omatrigger(a5)
 	clr.b	k_usertrig(a0)
 
 	lea	k_chan1temp(a0),a2
@@ -21085,11 +21680,15 @@ scopeinterrupt				* a5 = var_b
 	move	n_tempvol(a2),ns_tempvol2(a0)
 	addq	#1,a3
 
-	cmp.b	#6,quadmode2(a5)	* Patternscope?
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)	
 	beq.b	.eq
-	cmp.b	#7,quadmode2(a5)	* Patternscope??
+	cmp.b	#QUADMODE2_PATTERNSCOPE_BARS,quadmode2(a5)
 	beq.b	.eq
-
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)	
+	beq.b	.eq
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
+	beq.b	.eq
+	
 	move	n_tempvol(a2),ns_tempvol(a0)
 
 .eq	lea	n_sizeof(a2),a2
@@ -21123,7 +21722,18 @@ scopeinterrupt				* a5 = var_b
 	add.l	d0,(a0)
 .nn
 	rts
-	
+
+* Check if scope is in normal sized mode.
+* Z is clear it true, Z set if false
+* 1: true
+* 0: false
+scopeIsNormal
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	beq.b	.large
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
+	;beq.b	.large
+.large
+	rts
 
 
 
@@ -21261,14 +21871,22 @@ drawScope
 	move.l	draw2(a5),$54-$58(a0)	* clear draw area
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
-	move	#64*64+20,(a0)
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge
+	move	#(64+64)*64+20,(a0)
+	bra.b	.large
+.notLarge
+	move	#(64+0)*64+20,(a0)
+.large
 
 	lob	DisownBlitter
 
 	cmp	#pt_sample,playertype(a5)
 	bne.b	.toot
-	cmp.b	#8,quadmode2(a5)	* filled? 8 tai 9
-	bhs.b	.fil
+	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
+	beq.b	.fil
+	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,quadmode2(a5)	
+	beq.b	.fil
 	bsr.w	samplescope
 	bra.w	.cont
 .fil
@@ -21286,17 +21904,19 @@ drawScope
 	beq.b	.ttt
 	jmp	.t(pc,d0)
 
-.t	bra.b	.1
+* protracker jump table
+.t	bra.b	.1 * quad
 	bra.b	.3
-	bra.b	.2
+	bra.b	.2 * hippo
 	bra.b	.4
-	bra.b	.5
+	bra.b	.5 * freq
 	bra.b	.6
+	bra.b	.7 * pattern
 	bra.b	.7
-	bra.b	.7
-	bra.b	.8
+	bra.b	.8 * fquad
 	bra.b	.9
-
+	bra.b	.7 * pattern xl
+	bra.b	.7
 
 .1	bsr.w	quadrascope
 	bra.w	.cont
@@ -21328,17 +21948,20 @@ drawScope
 	bsr.w	lever
 	bra.b	.cont
 
+* multichannel jump table
 .ttt	jmp	.tt(pc,d0)
-.tt	bra.b	.11
+.tt	bra.b	.11 * quad
 	bra.b	.11
+	bra.b	.22 * hipp
 	bra.b	.22
-	bra.b	.22
+	bra.b	.33 * freq
 	bra.b	.33
-	bra.b	.33
+	bra.b	.11 * patt
 	bra.b	.11
+	bra.b	.44 * fquad
+	bra.b	.44
+	bra.b	.11 * patt
 	bra.b	.11
-	bra.b	.44
-	bra.b	.44
 
 .22	bsr.w	multihipposcope
 	bra.b	.cont
@@ -21347,7 +21970,7 @@ drawScope
 .33	bsr.w	freqscope
 	bra.b	.cont
 .44	bsr.w	multiscopefilled
-	bsr.b	mirrorfill
+	bsr.w	mirrorfill
 .cont
 
 	* double buffer
@@ -21369,17 +21992,20 @@ drawScope
 	add	windowtop(a5),d3
 	move	#$c0,d6		* minterm, suora kopio a->d
 	move	#320,d4		* x-koko
-	moveq	#64,d5		* y-koko
-
+	move	#64,d5	* y-koko
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge0
+	add	#64,d5
+.notLarge0
 
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.joa
 
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.jaa
-	cmp.b	#1,quadmode2(a5)
+	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
 	bls.b	.joa
-	cmp.b	#6,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
 	blo.b	.jaa
 .joa	addq	#4,d0
 	subq	#4,d4
@@ -21387,11 +22013,13 @@ drawScope
 .jaa
 
 
-	cmp.b	#8,quadmode2(a5)
+	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
 	bhs.b	.jaoww
-	cmp.b	#6,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
 	blo.b	.jaow
-.jaoww	addq	#1,d2
+.jaoww
+	* TODO: MAGIC adjustments?	
+	addq	#1,d2
 	subq	#1,d4
 .jaow
 
@@ -22144,44 +22772,57 @@ notescroller
 
 *** viiva
 	move.l	draw1(a5),a0
-	lea	7*40+2*8*40(a0),a0
+	* two vertical positions
+	lea	23*40(a0),a0
+	bsr.w 	scopeIsNormal
+	bne.b	.normal
+	lea	(4*8)*40(a0),a0
+.normal
+	* 19 times 16 pixels horizontally
 	moveq	#19-1,d0
-.raita	or	#$aaaa,(a0)+
-	or	#$aaaa,8*40-2(a0)
+	move	#$aaaa,d1
+.raita	
+	* put 16 pixels here
+	or	d1,(a0)+
+	* ...and 8 pixels below
+	or	d1,8*40-2(a0)
 	dbf	d0,.raita
 
 
 	lea	kplbase(a5),a0
-	moveq	#0,d0
-	move.b	omatrigger(a5),d0
-	clr.b	omatrigger(a5)
-
 	lea	k_chan1temp(a0),a1
 	lea	ch1(a5),a0
+	* channel bitmask
+	moveq	#1,d2
 	moveq	#4-1,d1
-.setscope
-	ror.b	#1,d0
-	bpl.b	.e
+.setscope	
+	* see if channel bit is on
+	move.b	omatrigger(a5),d0
+	and.b	d2,d0
+	beq.b	.e	
+	* was on, clear it, and copy the volume value
+	move.b  d2,d0 	
+	not.b   d0
+	and.b  	d0,omatrigger(a5)
 	move	n_tempvol(a1),ns_tempvol(a0)
-.e	lea	ns_size(a0),a0
+.e	
+	* next bit
+	add.b	d2,d2
+	lea	ns_size(a0),a0
 	lea	n_sizeof(a1),a1
 	dbf	d1,.setscope
 
 
 	move	ch1+ns_tempvol(a5),d0	
-;	move.l	ch1+ns_start(a5),a0
 	moveq	#2,d1
 	bsr.b	.palkki
 	move	ch2+ns_tempvol(a5),d0	
-;	move.l	ch2+ns_start(a5),a0
 	moveq	#11,d1
 	bsr.b	.palkki
 	move	ch3+ns_tempvol(a5),d0	
-;	move.l	ch3+ns_start(a5),a0
 	moveq	#20,d1
 	bsr.b	.palkki
 	move	ch4+ns_tempvol(a5),d0	
-;	move.l	ch4+ns_start(a5),a0
 	moveq	#29,d1
 	bsr.b	.palkki
 
@@ -22203,6 +22844,7 @@ notescroller
 	bsr.b	.palkki2
 
 .ohi
+	* animate the volume bars towards bottom
 	lea	ch1(a5),a0
 	moveq	#4-1,d0
 .orl	tst	ns_tempvol(a0)
@@ -22219,20 +22861,19 @@ notescroller
 ***** Volumepalkgi
 
 .palkki
-;	move.b	(a0),d0
-;	sub.b	#$80,d0
-;	and	#$ff,d0
-;	mulu	kplbase+k_mastervolume(a5),d0
-;	lsr	#8,d0
-
 	mulu	kplbase+k_mastervolume(a5),d0
 	lsr	#6,d0
 
 	move.l	draw1(a5),a0
-	lea	64*40(a0),a0
+	* horizontal position
 	add	d1,a0
-	lea	.paldata(pC),a1
+	* move to bottom
+	move	quadNoteScrollerLines(a5),d1
+	lsl	#3,d1
+	mulu	#40,d1
+	add.l	d1,a0
 
+	lea	.paldata(pC),a1
 	moveq	#-2,d2
 	subq	#1,d0
 	bmi.b	.yg
@@ -22253,9 +22894,15 @@ notescroller
 	moveq	#0,d0
 	move	ns_period(a3),d0
 	beq.b	.h
+	* range is 108 - 907
 	sub	#108,d0
-	lsl	#1,d0
-	divu	#27,d0		* lukualueeksi 0-59
+
+	* this many vertical pixels
+	move	quadNoteScrollerLines(a5),d3
+	lsl	#3,d3
+	subq	#5,d3
+	mulu	d3,d0
+	divu	#907-108,d0
 
 	move.l	draw1(a5),a0
 	lea	multab(a5),a1
@@ -22297,7 +22944,9 @@ notescroller
 
 **************** Piirret‰‰n patterndata
 
+ 
 .notescr
+	pushm	a5/a6
 
 	lea	kplbase(a5),a0
 	move.l	k_songdataptr(a0),a3
@@ -22313,33 +22962,46 @@ notescroller
 	move.l	draw1(a5),a4
 	addq	#3,a4
 
-	moveq	#8-1,d7
+	* draw this many lines
+	move	quadNoteScrollerLines(a5),d7
+	subq	#1,d7 * dbf
 	move	k_patternpos(a0),d6	* eka rivi?
 
+	* figure out where to place the first line
 	move	d6,d0
-	subq	#4,d0
+	; move the cursor in the middle
+	sub	quadNoteScrollerLinesHalf(a5),d0
 	bpl.b	.ok
 	neg	d0
 	sub	d0,d7
 
-	moveq	#4,d1
+	move	quadNoteScrollerLinesHalf(a5),d1
 	sub	d0,d1
 	sub	d1,d6
 	lsl	#4,d1
 	sub	d1,a3
 
+	; vertical position in target 
 	mulu	#8*40,d0
 	add.l	d0,a4
 
 	bra.b	.ok2
 .ok
-	lea	-4*16(a3),a3
-	subq	#4,d6
+	move	quadNoteScrollerLinesHalf(a5),d0
+	lsl	#4,d0
+	sub	d0,a3
+	sub	quadNoteScrollerLinesHalf(a5),d6
 .ok2
 
+	* store font data into a2 and d4 for fast access later
+	move.l	topazbase(a5),a2
+	move	38(a2),d4		* font modulo
+	move.l	34(a2),a2		* data
 
-
+	* vertical loop
+	* line loop
 .plorl
+	* print linenumber
 	lea	.pos(pc),a0		* rivinumero
 	move	d6,d0
 	divu	#10,d0
@@ -22354,90 +23016,23 @@ notescroller
 	moveq	#2-1,d1
 	bsr.w	.print
 
+	* horizontal loop
+	* print 4 horizontal notes	
 	moveq	#4-1,d5
 .plorl2
-
-	lea	.note(pc),a2
+	* builds a one note text here
+	lea	.note(pc),a0
 
 	moveq	#0,d0
 	move.b	2(a3),d0
 	bne.b	.jee
-	move.b	#' ',(a2)+
-	move.b	#' ',(a2)+
-	move.b	#' ',(a2)+
+	* empty note
+	move	#'  ',(a0)+
+	move.b	#' ',(a0)+
 	bra.b	.nonote
-.jee
-	subq	#1,d0
-	divu	#12*2,d0
-	addq	#1,d0
-	or.b	#'0',d0
-	move.b	d0,2(a2)
-	swap	d0
-	lea	.notes(pc),a1
-	lea	(a1,d0),a0
-	move.b	(a0)+,(a2)+		* Nuotti
-	move.b	(a0)+,(a2)+
-	addq	#1,a2
-.nonote
 
-	moveq	#0,d0			* samplenumero
-	move.b	3(a3),d0
-	bne.b	.onh
-	move.b	#' ',(a2)+
-	move.b	#' ',(a2)+
-	bra.b	.eihn
-.onh
-
-	lsr	#2,d0
-	divu	#$10,d0
-	bne.b	.onh2
-	move.b	#' ',(a2)+
-	bra.b	.eihn2
-.onh2	or.b	#'0',d0
-	move.b	d0,(a2)+
-.eihn2	swap	d0
-	bsr.b	.hegs
-.eihn
-
-	move.b	(a3),d0			* komento
-	lsr.b	#2,d0
-	bsr.b	.hegs
-	moveq	#0,d0
-	move.b	1(a3),d0
-	divu	#$10,d0
-	bsr.b	.hegs
-	swap	d0
-	bsr.b	.hegs
-
-
-	move.l	a4,a1
-	lea	.note(pc),a0
-	moveq	#8-1,d1
-	bsr.b	.print
-
-
-	addq	#4,a3
-	add	#9,a4
-	dbf	d5,.plorl2
-
-	add	#8*40-4*9,a4
-	addq	#1,d6
-	cmp	#64,d6
-	beq.b	.lorl
-	dbf	d7,.plorl
-.lorl
-	rts
-
-
-.hegs	cmp.b	#9,d0
-	bhi.b	.high1
-	or.b	#'0',d0
-	bra.b	.hge
-.high1	sub.b	#10,d0
-	add.b	#'A',d0
-.hge	move.b	d0,(a2)+
-	rts
-
+* notes table is here so that a shorter
+* access can be used below
 .notes	dc.b	"C-"
 	dc.b	"C#"
 	dc.b	"D-"
@@ -22450,36 +23045,136 @@ notescroller
 	dc.b	"A-"
 	dc.b	"A#"
 	dc.b	"B-"
+ 	even
+
+.jee
+	* calculate octave number
+	subq	#1,d0
+	divu	#12*2,d0
+	addq	#1,d0
+	or.b	#'0',d0
+	move.b	d0,2(a0)
+	* figure out note text
+	swap	d0
+	* two chars
+	move	.notes(pc,d0.w),(a0)+
+	* skip over octave number 
+	addq	#1,a0
+.nonote
+
+	moveq	#0,d0			* samplenumero
+	move.b	3(a3),d0
+	bne.b	.onh
+	* a0 is odd here
+	move.b	#' ',(a0)+
+	move.b	#' ',(a0)+
+	bra.b	.eihn
+.onh
+	* sample number pre-multiplied by 4
+	lsr	#2,d0
+	move	d0,d1
+	* get the upper digit
+	lsr	#4,d1
+	bne.b	.onh2
+	move.b	#' ',(a0)+
+	bra.b	.eihn2
+.onh2	or.b	#'0',d1
+	move.b	d1,(a0)+
+.eihn2	
+	* lower digit
+	and.b	#$f,d0
+	bsr.b	.hegs
+.eihn
+
+	move.b	(a3),d0	* command, premultiplied
+	lsr.b	#2,d0
+	bsr.b	.hegs
+	move.b	1(a3),d0 * command parameter
+	move.b	d0,d1
+	lsr.b	#4,d0	* upper char
+	bsr.b	.hegs
+	moveq	#$f,d0	* lower char
+	and.b	d1,d0
+	bsr.b	.hegs
+
+	* print 8 chars
+	* a4 = destination bufer
+	move.l	a4,a1
+	lea	.note(pc),a0
+	moveq	#8-1,d1
+	bsr.b	.print
+
+	* next note
+	addq	#4,a3
+	* next horizontal position
+	add	#9,a4
+	dbf	d5,.plorl2
+
+	* next vertical position
+	add	#8*40-4*9,a4
+	* next pattern line, check if at the end
+	addq	#1,d6
+	cmp	#64,d6
+	dbeq d7,.plorl
+
+	popm	a5/a6
+	
+	rts
+
+* convert decimal number 0-9 into ASCII char
+.hegs	cmp.b	#9,d0
+	bhi.b	.high1
+	or.b	#'0',d0
+	move.b	d0,(a0)+
+	rts
+.high1	
+	;sub.b	#10,d0
+	;add.b	#'A',d0
+	add.b	#-10+'A',d0
+	move.b	d0,(a0)+
+	rts
 
 .note	dc.b	"00000000"
 .pos	dc.b	"00"
  even
 
 .print
-	pushm	a3-a4
-	move.l	topazbase(a5),a2
-	;move.l	fontbase(a5),a2
-	move	38(a2),d2		* font modulo
-	move.l	34(a2),a2		* data
-
-	moveq	#40,d4
+	* a2 contains font data
+	* d4 contains font modulo
 	
-.ooe	moveq	#0,d0
+	* space char
+	moveq	#$20,d3
+
+	* get one char to print
+	moveq	#0,d0
+.ooe	
 	move.b	(a0)+,d0
-	cmp.b	#$20,d0
+	cmp.b	d3,d0
 	beq.b	.space
-	lea	-$20(a2,d0),a3
-	move.l	a1,a4
+	* get char pixels
+	lea	-$20(a2,d0),a6
 
-	moveq	#8-1,d3
-.lin	move.b	(a3),(a4)	
-	add	d2,a3
-	add	d4,a4
-	dbf	d3,.lin
-
-.space	addq	#1,a1
+	* do 8 pixels height
+ 	move.b	(a6),(a1)	
+	add	d4,a6
+	move.b	(a6),1*40(a1)	
+	add	d4,a6
+	move.b	(a6),2*40(a1)	
+	add	d4,a6
+	move.b	(a6),3*40(a1)	
+	add	d4,a6
+	move.b	(a6),4*40(a1)	
+	add	d4,a6
+	move.b	(a6),5*40(a1)	
+	add	d4,a6
+	move.b	(a6),6*40(a1)	
+	add	d4,a6
+	move.b	(a6),7*40(a1)	
+ 
+.space	
+	* go to next horiz position
+	addq	#1,a1
 	dbf	d1,.ooe
-	popm	a3-a4
 	rts
 
 	
@@ -22868,18 +23563,31 @@ loadmodule
 	move.b	d0,d7
 	beq.w	.nodbf
 
+*****************************************************************
+* Double buffer load
+*****************************************************************
+	DPRINT	"Double buffer load"
+
 	* Load with double buffering.
 	* Module being played is preserved while new one is loaded.
 
 	move.l	a0,modulefilename(a5)
 
+	* Store properties of current module
 	lea	-40(sp),sp
-
 	lea	(sp),a2
 	move.l	modulelength(a5),(a2)+
 	move.l	tfmxsamplesaddr(a5),(a2)+
 	move.l	tfmxsampleslen(a5),(a2)+
 	move.b	lod_tfmx(a5),(a2)
+
+	* Reset the extra data properties
+	* loadfile() sets for TFMX. For other files
+	* they are untouched. freemodule() will free
+	* these, setting to zero avoids double freemem
+	* crash.
+	clr.l	tfmxsamplesaddr(a5) 
+	clr.l	tfmxsampleslen(a5)
 
 ;	move.l	modulefilename(a5),a0
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
@@ -22887,7 +23595,7 @@ loadmodule
 	lea	modulelength(a5),a2
 	moveq	#0,d1			* kommentti talteen
 	bsr.w	loadfile
-	move.l	d0,d7
+	move.l	d0,d7			* store loadfile status
 
 	clr.b	loading(a5)		* lataus loppu
 
@@ -22895,12 +23603,14 @@ loadmodule
 	clr	pos_maksimi(a5)
 	clr	pos_nykyinen(a5)
 
+	* Store properties of the module that was just loaded
 	lea	20(sp),a2
 	move.l	modulelength(a5),(a2)+
 	move.l	tfmxsamplesaddr(a5),(a2)+
 	move.l	tfmxsampleslen(a5),(a2)+
 	move.b	lod_tfmx(a5),(a2)
 
+	* Restore properties of current module
 	lea	(sp),a2
 	move.l	(a2)+,modulelength(a5)
 	move.l	(a2)+,tfmxsamplesaddr(a5)
@@ -22908,6 +23618,11 @@ loadmodule
 	move.b	(a2),lod_tfmx(a5)
 
 	push	d7
+
+	* At this point correct properties
+	* for current module should be in place
+	* for freeing to NOT CRASH.
+
 
 	jsr	fadevolumedown
 	move	d0,-(sp)
@@ -22918,12 +23633,14 @@ loadmodule
 	jsr		p_end(a0)
 	lore    Exec,Enable
 
+
 	move.l	modulefilename(a5),a0
 	jsr	freemodule	
 	move	(sp)+,mainvolume(a5)
 
 	pop	d7
 
+	* Finally store properties of the newly loaded module.
 	lea	20(sp),a2
 ;	move.l	(a2)+,moduleaddress(a5)
 	move.l	moduleaddress2(a5),moduleaddress(a5)
@@ -22931,6 +23648,9 @@ loadmodule
 	move.l	(a2)+,tfmxsamplesaddr(a5)
 	move.l	(a2)+,tfmxsampleslen(a5)
 	move.b	(a2),lod_tfmx(a5)
+
+	* Grab exe load status from loader
+	move.b 	lod_exefile(a5),executablemoduleinit(a5)
 
 	tst.l	d7
 	beq.b	.nay
@@ -22957,11 +23677,13 @@ loadmodule
 	move.l	modulefilename(a5),a0
 
 .nodbf
-	** Normal loading
-
+*****************************************************************
+** Normal loading
+*****************************************************************
+	
  ifne DEBUG
 	move.l	a0,d0
-	DPRINT	 "Loading: %s",1
+	DPRINT	 "Loading: %s"
  endif
 
 	jsr	freemodule		* Varmistetaan
@@ -22989,6 +23711,9 @@ loadmodule
 	move.l	(sp)+,d0
 	tst	d0
 	bne.w	.err			* virhe lataamisessa
+
+	* Grab exe load status from loader
+	move.b 	lod_exefile(a5),executablemoduleinit(a5)
 
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
@@ -23096,6 +23821,7 @@ loaderr
 	dr	openerror_t
 	dr	error_t
 	dr	extract_t
+	dr  readerror_t  * loadseg failure 
 
 cryptederror_t
 ;	dc.b	"File is encrypted!",0
@@ -23116,8 +23842,12 @@ unknown_t
 	dc.b	"Unknown file format!",0
 unknownDueToAhi_t
 	dc.b	"Unknown file format!",10
-	dc.b	"This may be because non-AHI replayers",10
-	dc.b	"are disabled.",0
+	dc.b	"This may be because non-AHI",10
+	dc.b	"replayers are disabled.",0
+unknownDueToGroupDisabled_t
+	dc.b	"Unknown file format!",10
+	dc.b	"This may be because the",10
+	dc.b	"player group is disabled.",0
 nofast_t
 memerror_t	
 	dc.b	"Not enough memory!",0
@@ -23172,6 +23902,10 @@ tuntematonvirhe
 	beq.b	.noAhiSkip
 	lea	unknownDueToAhi_t(pc),a1
 .noAhiSkip
+	cmp.b	#GROUPMODE_DISABLE,groupmode(a5)
+	bne.b	.groupSkip
+	lea	unknownDueToGroupDisabled_t(pc),a1
+.groupSkip
 
 	lea	.g(pc),a2
 	bsr.w	rawrequest
@@ -23211,6 +23945,20 @@ lod_notafile	=	-15
 lod_openerr2	=	-16
 lod_xfderr	=	-17
 lod_extract	=	-18
+lod_loadsegfail = -19
+
+* Skip XPK identification
+loadfileStraight
+	push	d7
+	move.b	xpkid(a5),d7
+	* DISABLE:
+	st		xpkid(a5)
+	push	d7
+	bsr.b	loadfile
+	pop	d7
+	move.b	d7,xpkid(a5)
+	pop	d7
+	rts
 
 loadfile
 	movem.l	d1-a6,-(sp)
@@ -23237,6 +23985,11 @@ loadfile
 	bne.b	.fe
 	subq	#1,a0
 
+	* Clear flag that indicates that the module that was loaded
+	* was in fact an executable. If this is not done,
+	* XPK packed modules are thought to be DeliCustoms and mayhem ensues.
+	;clr.b	executablemoduleinit(a5)
+	clr.b	lod_exefile(a5)
 
 ** Archiven purku
 
@@ -23266,7 +24019,7 @@ loadfile
 	bne.w	.nope
 	lea	gzipDecompressCommand(pc),a0
 	moveq	#1,d6	* "Unzipping" message
-	bra.w	.unp
+	bra.b	.unp
 
 .lha	lea	arclha(a5),a0
 	moveq	#0,d6
@@ -23378,7 +24131,7 @@ loadfile
 
  if DEBUG
 	pushpea	fib_FileName+fileinfoblock(a5),d0
-	DPRINT  "Scanning: %s",0
+	DPRINT  "Scanning: %s"
  endif
 	
 .loop	
@@ -23391,7 +24144,7 @@ loadfile
 
  if DEBUG
 	pushpea	fib_FileName+fileinfoblock(a5),d0
-	DPRINT  "->%s",1
+	DPRINT  "->%s"
  endif
 	pushpea	fib_FileName+fileinfoblock(a5),d1
 	move.l	#MODE_OLDFILE,d2
@@ -23429,112 +24182,32 @@ loadfile
 	tst.l	d0
 	beq.w	.on
 
-	bsr.w	id_med
-	beq.w	.on
-
-	bsr.w	id_hippel
-	beq.w	.on
-
-	bsr.w	id_futurecomposer13
-	beq.w	.on
-
-	bsr.w	id_futurecomposer14
-	beq.w	.on
-
-	bsr.w	id_oktalyzer
-	beq.w	.on
-
 	bsr.w	id_tfmxunion
 	beq.w	.on
 
 	bsr.w	id_TFMX_PRO
 	tst	d0
-	beq.w	.on
+	beq.b	.on
 
 	bsr.w	id_TFMX7V
 	tst	d0
-	beq.w	.on
+	beq.b	.on
 
 	bsr.w	id_tfmx
-	beq.w	.on
-
-	bsr.w	id_hippelcoso
-	beq.w	.on
-
-	bsr.w	id_soundmon
-	beq.w	.on
-
-	bsr.w	id_soundmon3
-	beq.w	.on
-
-	bsr.w	id_musicassembler
-	beq.w	.on
-
-	bsr.w	id_sid1
-	beq.w	.on
-
-	bsr.w	id_sonic
-	beq.w	.on
-
-	bsr.w	id_fred			* Fred
-	beq.w	.on
-
-	bsr.w	id_sidmon1		* Sidmon1
-	beq.w	.on
-
-	bsr.w	id_deltamusic
-	beq.w	.on
-
-	bsr.w	id_markii
-	beq.w	.on
-
-	bsr.w	id_maniacsofnoise
-	beq.w	.on
-	
-	bsr.w	id_davidwhittaker
 	beq.b	.on
 
-	bsr.w	id_jamcracker
-	beq.b	.on
-
-	bsr.w	id_digibooster
-	beq.b	.on
-
-	bsr.w	id_thx
-	beq.b	.on
-
-	bsr.w	id_mline
-	beq.b	.on
-
-	bsr.w	id_aon
-	beq.b	.on
-
-	bsr.w	id_player
-	beq.b	.on
-
-	bsr.w	id_pumatracker
-	beq.b	.on
-
-	bsr		id_beathoven
-	beq.b	.on
-
-	bsr		id_digitalmugician
-	beq.b	.on
-
-	bsr		id_gamemusiccreator
-	beq.b	.on
-
-	bsr	id_medley
-	beq.b	.on
-
-	bsr	id_bendaglish
-	beq.b	.on
-
-	bsr	id_sidmon2
-	beq.b	.on
-
-	bsr.w id_deltamusic
-	beq.b .on 
+	DPRINT	"Internal"
+	lea	internalFormats(pc),a3 
+	bsr.w	identifyFormatsOnly 
+	beq.b .on
+	DPRINT	"Group"
+	lea	groupFormats(pc),a3 
+	bsr.w	identifyFormatsOnly 
+	beq.b .on
+	DPRINT	"Eagle"
+	lea	eagleFormats(pc),a3 
+	bsr.w	identifyFormatsOnly 
+	beq.b .on
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
@@ -23626,12 +24299,23 @@ loadfile
 	move.l	d0,d1
 	lea	fileinfoblock(a5),a3
 	move.l	a3,d2
-	lob	Examine			* Nasty! Error is not checked
+	lob	Examine
+	tst.l	d0 
+	bne.b 	.exOk
+	move.l	d3,d1
+	lob	UnLock
+	bra.w	.open_error
+.exOk
 	move.l	d3,d1
 	lob	UnLock
 
-	tst.l	fib_DirEntryType(a3)	* onko tiedosto vai hakemisto?
-	bpl.w	.nofile_err
+	;tst.l	fib_DirEntryType(a3)	* onko tiedosto vai hakemisto?
+	;bpl.w	.nofile_err
+	cmp.l	#ST_FILE,fib_DirEntryType(a3)
+	beq.b	.isFile
+	cmp.l	#ST_LINKFILE,fib_DirEntryType(a3)
+	bne.w	.nofile_err
+.isFile
 
 	move.l	124(a3),lod_length(a5)	* tiedoston pituus
 	beq.w	.open_error		* jos 0 -> errori
@@ -23647,7 +24331,7 @@ loadfile
 .noc
 	* Read some bytes of data into the probebuffer
 
-	DPRINT	"Probing",4
+	DPRINT	"Probing"
 
 	move.l	#1005,d2
 	move.l	lod_filename(a5),d1
@@ -23700,8 +24384,14 @@ loadfile
 
 .nolha
 
-** Is this a sample file, stop loading if so.
+	bsr.w	.handleExecutableModuleLoading
+	* Skip the rest if LoadSeg above went fine
+	;tst.b	executablemoduleinit(a5)
+	tst.b 	lod_exefile(a5)
+	bne.w	.exit
 
+
+** Is this a sample file, stop loading if so.
 ** Jos havaitaan file sampleks, ei ladata enemp‰‰
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
@@ -23736,9 +24426,6 @@ loadfile
 .nosa2	clr.b	sampleformat(a5)
 
 
-
-
-
 	st	lod_xpkfile(a5)	* lippu: xpk file
 
 * Ladataan eka XPK-hunkki tiedostosta ja katsotaan voidaanko se
@@ -23746,7 +24433,6 @@ loadfile
 
 	tst.b	xpkid(a5)	* Oliko XPK id p‰‰ll‰?
 	bne.w	.noid
-
 
 	bsr.w	inforivit_xpkload2
 
@@ -23759,7 +24445,7 @@ loadfile
 
 	move.l	.xfhpointerp(pc),a0	* Varataan ekalle hunkille muistia.
 	move.l	xf_NLen(a0),d0
-	moveq	#MEMF_PUBLIC,d1
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
 	move.l	d0,d4
 	bne.b	.ok
@@ -23975,7 +24661,7 @@ loadfile
 	bsr.w	inforivit_fimpdecr
 
 	move.l	lod_address(a5),a0
-	bsr.w	fimp_decr	
+	jsr	fimp_decr	
 	bra.w	.exit
 
 .wasnt_fimp
@@ -24060,50 +24746,10 @@ loadfile
 ****** Ihan Tavallinen Lataus
 
 
-	* Probebuffer now has 1084 of data we can check
-	* for Delitracker CUSTOM format, as it has to be loaded
-	* with LoadSeg(), being an exe file.
-	tst.b	ahi_muutpois(a5)
-	bne.w	.ahiSkip
-	pushm 	d1-a6
-	clr.b	executablemoduleinit(a5)
-	lea	probebuffer(a5),a4
-	move.l	#1084,d7
-	bsr		id_futureplayer
-	bne.b	.notFuturePlayer
-	moveq	#pt_futureplayer,d7
-	bra.b	.wasFuturePlayer
-.notFuturePlayer
-	bsr		id_delicustom
-	bne.b	.notDeliCustom
-	moveq	#pt_delicustom,d7
-.wasFuturePlayer
-	move.l	#MEMF_PUBLIC,lod_memtype(a5)
-	bsr.w	.infor
-	move.l	lod_filename(a5),d1
-	lore	Dos,LoadSeg
-	tst.l	d0
-	beq.b	.loadSegErr
-	* set type of loadsegged module
-	move.b	d7,executablemoduleinit(a5)
-	move.l	d0,lod_address(a5)
-	clr.l	lod_length(a5)
- if DEBUG
-	move.l	d7,d0
-	DPRINT	"Module LoadSeg ok for type %ld",7
- endif
-.loadSegErr
-.notDeliCustom
-	popm 	d1-a6
-.ahiSkip
-
-	* Skip the rest if LoadSeg went fine
-	tst.b	executablemoduleinit(a5)
-	bne.w	.exit
 
  if DEBUG
 	move.l	lod_length(a5),d0
-	DPRINT	"Normal load %ld",5
+	DPRINT	"Normal load %ld"
  endif
  
 	bsr.w	.alloc
@@ -24268,6 +24914,7 @@ loadfile
         beq.b   .nofast
 
 .publl  move.l   #MEMF_PUBLIC!MEMF_CLEAR,d0
+	DPRINT	"Loading to PUBLIC memory"
 
 .osd    move.l  d0,lod_memtype(a5)
 .nofast rts
@@ -24398,6 +25045,68 @@ loadfile
 .eee	rts
 
 
+
+.handleExecutableModuleLoading
+	* Probebuffer now has 1084 of data we can check
+	* for Delitracker CUSTOM format, as it has to be loaded
+	* with LoadSeg(), being an exe file.
+	* Clear the flag that indicates exe module load status.
+	;clr.b	executablemoduleinit(a5)
+	clr.b	lod_exefile(a5)
+	* There are no AHI supported exe type modules
+	tst.b	ahi_muutpois(a5)
+	bne.w	.ahiSkip
+	pushm 	d1-a6
+	lea	probebuffer(a5),a4
+	move.l	#1084,d7
+
+	* Test for known exe formats
+
+	bsr.w	id_futureplayer
+	bne.b	.notFuturePlayer
+	moveq	#pt_futureplayer,d7
+	bra.b	.exeOk
+
+.notFuturePlayer
+	bsr.w	id_delicustom
+	bne.b	.notDeliCustom
+	moveq	#pt_delicustom,d7
+	bra.b	.exeOk 
+
+.notDeliCustom 
+	bsr.w	id_davelowe
+	bne.b	.notDl
+	move	#pt_davelowe,d7
+	bra.b	.exeOk
+.notDl
+	bra.b	.notKnown
+.exeOk
+	move.l	#MEMF_PUBLIC,lod_memtype(a5)
+	bsr.w	.infor
+	move.l	lod_filename(a5),d1
+	lore	Dos,LoadSeg
+	tst.l	d0
+	beq.b	.loadSegErr
+	* set type of loadsegged module
+	;move.b	d7,executablemoduleinit(a5)
+	move.b	d7,lod_exefile(a5)
+	move.l	d0,lod_address(a5)
+	* length is not readily available for these, so clear it
+	clr.l	lod_length(a5)
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"Module LoadSeg ok for type %ld"
+ endif
+.loadExit
+.notKnown
+	popm 	d1-a6
+.ahiSkip
+	rts
+.loadSegErr
+	move	#lod_loadsegfail,lod_error(a5)
+	bra.b 	.loadExit
+
+* Removes the temp directory used for unarchiving lha etc
 remarctemp
 	pushm	all
 	lea	-200(sp),sp
@@ -24437,7 +25146,7 @@ tdir	dc.b	"∞HiP∞",0
 get_xpk	move.l	_XPKBase(a5),d0
 	beq.b	.noep
 	rts
-.noep	lea 	xpkname(pc),a1		
+.noep	lea 	xpkname,a1		
 	move.l	a6,-(sp)
 	move.l	(a5),a6
 	lob	OldOpenLibrary
@@ -24448,7 +25157,7 @@ get_xpk	move.l	_XPKBase(a5),d0
 get_pp	move.l	_PPBase(a5),d0
 	beq.b	.noep
 	rts
-.noep	lea 	ppname(pc),a1		
+.noep	lea 	ppname,a1		
 	move.l	a6,-(sp)
 	move.l	(a5),a6
 	lob	OldOpenLibrary
@@ -24459,7 +25168,7 @@ get_pp	move.l	_PPBase(a5),d0
 get_sid	move.l	_SIDBase(a5),d0
 	beq.b	.noep
 	rts
-.noep	lea 	sidname(pc),a1		
+.noep	lea 	sidname,a1		
 	move.l	a6,-(sp)
 	move.l	(a5),a6
 	lob	OldOpenLibrary
@@ -24474,7 +25183,7 @@ get_xfd
 	move.l	_XFDBase(a5),d0
 	beq.b	.x
 	rts
-.x	lea	xfdname(pc),a1
+.x	lea	xfdname,a1
 	push	a6
 	lore	Exec,OldOpenLibrary
 	pop	a6
@@ -24485,7 +25194,7 @@ get_med1
 	move.l	_MedPlayerBase1(a5),d0
 	beq.b	.q
 	rts
-.q	lea	medplayername1(pc),a1
+.q	lea	medplayername1,a1
 ;	moveq	#6,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -24498,7 +25207,7 @@ get_med2
 	move.l	_MedPlayerBase2(a5),d0
 	beq.b	.q
 	rts
-.q	lea	medplayername2(pc),a1
+.q	lea	medplayername2,a1
 ;	moveq	#6,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -24511,7 +25220,7 @@ get_med3
 	move.l	_MedPlayerBase3(a5),d0
 	beq.b	.q
 	rts
-.q	lea	medplayername3(pc),a1
+.q	lea	medplayername3,a1
 ;	moveq	#7,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -24525,15 +25234,12 @@ get_mline
 	move.l	_MlineBase(a5),d0
 	beq.b	.q
 	rts
-.q	lea	mlinename(pc),a1
+.q	lea	mlinename,a1
 	push	a6
 	lore	Exec,OldOpenLibrary
 	pop	a6
 	move.l	d0,_MlineBase(a5)
 	rts	
-
-
-
 
 
 
@@ -24587,7 +25293,6 @@ search
 	rts
 
 
-
 *******
 * Analysoidaan moduuli
 *******
@@ -24595,10 +25300,15 @@ search
 * a0 = moduuli, 1084 bytee
 
 tutki_moduuli2
-
+	DPRINT	"Check where to load"
+	pushm	d1-a6
+	move.l	a0,a4
+	move.l	#1084,d7
+	bsr.b	.do
+	popm	d1-a6
+	rts
+.do
 * ptmix -> 0: chip, 1: fast, 2: ps3m
-
-
 	tst.b	ahi_use(a5)
 	bne.b	.er
 
@@ -24616,6 +25326,9 @@ tutki_moduuli2
 	beq.w	.ff
 
 .nom
+;	bsr	id_ps3m
+;	tst.l	d0
+;	beq.w	.goPublic
 	cmp.l	#'SCRM',44(a0)		* Screamtracker ]I[
 	beq.w	.f
 	cmp.l	#"OCTA",1080(a0)	* Fasttracker
@@ -24639,76 +25352,70 @@ tutki_moduuli2
 	move.l	(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#'MTM',d0		* multi
-	beq.w	.f
+	beq.b	.f
 	move.l	1080(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#"TDZ",d0		* take
-	beq.w	.f
-
-
-* tfmx?
-	cmp.l	#"TFMX",(a0)
-	beq.w	.f
-	cmp.l	#"tfmx",(a0)
-	beq.w	.f
-
-	cmp.l	#'OKTA',(a0)		* Oktalyzer
-	bne.b	.m
-	cmp.l	#'SONG',4(a0)
-	bne.b	.m
-	cmp.l	#$00010001,$10(a0)	* Onko 8 kanavaa?
-	bne.b	.m
-	cmp.l	#$00010001,$10+4(a0)
-	beq.b	.f
-.m
-	cmp.l	#'PSID',(a0)		* PSID-tiedosto
 	beq.b	.f
 
-	move.l	(a0),d0			* THX
-	lsr.l	#8,d0
-	cmp.l	#"THX",d0
-	beq.b	.f
 
-	cmp.l	#"MLED",(a0)		* MusicLine Editor?
-	bne.b	.ndd
-	cmp.l	#"MODL",4(a0)	
-	beq.b	.f
-.ndd
+* tfmx song data?
+
+* This check also matches "Hippel7", but apparently
+* the probebuffer data at this point is not enough
+* to id Hippel7 properly. Those will be moved into 
+* chip ram at later tage
+
+	cmp.l	#"TFMX",(a4)
+	beq.b	.goPublic
+	cmp.l	#"tfmx",(a4)
+	beq.b	.goPublic
+
+	bsr.w	id_oktalyzer8ch
+	beq.b	.goPublic
+
+	cmp.l	#'PSID',(a4)		* PSID-tiedosto
+	beq.b	.goPublic
+
+	bsr.w	id_thx_
+	tst.l	d0
+	beq.B	.goPublic
+	bsr.w	id_pretracker_
+	tst.l	d0
+	beq.B	.goPublic
+	bsr.w	id_mline
+	tst.l	d0
+	beq.b	.goPublic
+	bsr.w	id_musicmaker8_
+	tst.l	d0
+	beq.b	.goPublic
+	;bsr	id_digitalmugician2 
+	;beq.b	.goPublic
 
 ** OctaMed SoundStudio mixattavat moduulit
-
-	move.l	(a0),d0
+	move.l	(a4),d0
 	lsr.l	#8,d0
 	cmp.l	#'MMD',d0
 	bne.b	.nome
-	btst	#0,20(a0)		* mmdflags, MMD_LOADTOFASTMEM
-	bne.b	.f
-
-;	move.l	8(a0),a1		* MMD0song *song
-;	add.l	a0,a1			* reloc
-;	btst	#7,768(a1)		* flags2; miksaus?
-;	bne.b	.f
-
-
+	btst	#0,20(a4)		* mmdflags, MMD_LOADTOFASTMEM
+	bne.b	.goPublic
 .nome
-	cmp.l	#'DIGI',(a0)		* digi booster
-	bne.b	.nd
-	cmp.l	#' Boo',4(a0)
-	bne.b	.nd
-	cmp.l	#'ster',8(a0)
-	beq.b	.f
 
-.nd
-	cmp.l	#'DBM0',(a0)		* digi booster pro
-	beq.b	.f
-
+	bsr.w	id_digibooster_
+	tst.l	d0
+	beq.b	.goPublic
+	bsr.w	id_digiboosterpro_
+	tst.l	d0
+	beq.b	.goPublic
 
 	tst.b	ahi_use(a5)
 	bne.b	.ahitun
 
-
-.nf	moveq	#-1,d0		* chip
+.goChip
+.nf	
+	moveq	#-1,d0		* chip
 	rts
+.goPublic
 .f	moveq	#0,d0		* public
 	rts
 .ff	moveq	#2,d0		* Protracker file
@@ -24720,8 +25427,8 @@ tutki_moduuli2
 .ptch	cmp.l	#"M.K.",1080(a0)
 	beq.b	.petc
 	cmp.l	#"M!K!",1080(a0)
-	beq.b	.petc
-	cmp.l	#"FLT4",1080(a0)
+;	beq.b	.petc
+;	cmp.l	#"FLT4",1080(a0)
 .petc	rts
 
 .ahitun
@@ -24739,8 +25446,8 @@ tutki_moduuli2
 
 
 tutki_moduuli
-	DPRINT	"Identify module",1
-
+	DPRINT	"Identify module"
+;	bsr	inforivit_identifying
  ifne PILA
 
 	lea	keyfile(a5),a4
@@ -24773,6 +25480,9 @@ tutki_moduuli
 	move.l	moduleaddress(a5),a4
 	move.l	modulelength(a5),d7
 
+	* NOTE! Some are very slow
+	* - hippel
+	* - activision pro
 
 ;	tst.b	keyfile+49(a5)	* datan v‰lilt‰ 38-50 pit‰‰ olla nollia
 ;	beq.b	.zz
@@ -24791,7 +25501,7 @@ tutki_moduuli
 	bne.b	.ohi
 	
 	bsr.w	id_protracker
-	beq.w	.pro
+	beq.w	.protracker
 
 .ohi
 	* Test for formats that do not require an external
@@ -24804,7 +25514,7 @@ tutki_moduuli
 	beq.w	.delicustom
 
 	tst.b	sampleinit(a5)
-	bne.w	.noop
+	bne.b	.noop
 
 	tst.b	ahi_muutpois(a5)	
 	bne.b	.noop
@@ -24815,41 +25525,17 @@ tutki_moduuli
 
 	* These do not require player group:
 
-	bsr.w	id_med
-	beq.w	.med
+	DPRINT	"Internal"
+	lea	internalFormats(pc),a3 
+	bsr.w	identifyFormats
+	beq.w 	.ex2
 
-	bsr.w	id_mline
-	beq.w	.mline
+;	DPRINT	"Eagle"
+;	lea	eagleFormats(pc),a3
+;	bsr 	identifyFormats 
+;	beq.w 	.ex2
 
-	bsr.w	id_musicassembler
-	beq.w	.musicassembler
-
-	bsr.w	id_sonic
-	beq.w	.sonicarranger
-
-	bsr.w	id_fred			* Fred
-	beq.w	.fred
-
-	bsr.w	id_sidmon1		* Sidmon1
-	beq.w	.sidmon1
-
-	bsr.w	id_deltamusic
-	beq.w	.deltamusic
-
-	bsr.w	id_markii
-	beq.w	.markii
-
-	bsr.w	id_maniacsofnoise
-	beq.w	.mon
-
-	bsr.w	id_davidwhittaker
-	beq.w	.dw
-
-	bsr.w	id_hippel
-	beq.w	.hippel
-
-	bsr	id_beathoven
-	beq.w	.beathoven
+	***********************************
 
 	tst.l	externalplayers(a5)
 	bne.b	.noop
@@ -24863,10 +25549,10 @@ tutki_moduuli
 
 	tst.l	externalplayers(a5)	* ladataan playerit
 	bne.b	.rite
-	cmp.b	#2,groupmode(a5)	* onko disabled
+	cmp.b	#GROUPMODE_DISABLE,groupmode(a5)	* onko disabled
 	beq.w	.nopl
 
-	cmp.b	#3,groupmode(a5)	* tarpeen vaatiessa 1 replayeri?
+	cmp.b	#GROUPMODE_LOAD_SINGLE,groupmode(a5)	* tarpeen vaatiessa 1 replayeri?
 	bne.b	.rote
 	st	external(a5)		* Lippu!
 	bra.b	.rite
@@ -24877,8 +25563,6 @@ tutki_moduuli
 	moveq	#lod_grouperror,d0
 	rts
 
-;.aag_id	dc.b	"AAG9"
-; even
 
 .rite
 
@@ -24891,33 +25575,17 @@ tutki_moduuli
 	bsr.w	id_hippelcoso
 	beq.w	.hippelcoso
 
-	bra.w	.mp
+	bra.b	.mp
 .mpa
 	* First test for exe modules, skip the rest
 	* of the checks since moduledata is a seglist
 	cmp.b	#pt_futureplayer,executablemoduleinit(a5)
 	beq.w	.futureplayer
+	cmp.b	#pt_davelowe,executablemoduleinit(a5)
+	beq.w	.davelowe
 
 	tst.b	sampleinit(a5)		* sample??
 	bne.w	.sample
-
-	bsr.w	id_jamcracker
-	beq.w	.jam
-
-	bsr.w	id_pumatracker
-	beq.w	.pumatracker
-
-	bsr.w	id_futurecomposer13
-	beq.w	.future13
-
-	bsr.w	id_futurecomposer14
-	beq.w	.future14
-
-	bsr.w	id_oktalyzer
-	beq.w	.oktalyzer
-
-	bsr.w	id_tfmxunion
-	beq.w	.tfmxunion
 
 	bsr.w	id_TFMX_PRO
 	tst	d0
@@ -24930,51 +25598,22 @@ tutki_moduuli
 	bsr.w	id_tfmx
 	beq.w	.tfmx
 
-	bsr.w	id_hippelcoso
-	beq.w	.hippelcoso
+	bsr.w	id_tfmxunion
+	beq.w	.tfmxunion
 
-	bsr.w	id_soundmon
-	beq.w	.soundmon
+	DPRINT	"Group"
+	lea	groupFormats(pc),a3 
+	bsr.w	identifyFormats
+	beq.b .ex2
 
-	bsr.w	id_soundmon3
-	beq.w	.soundmon3
-
-	bsr.w	id_digibooster
-	beq.w	.digibooster
-
-	bsr.w	id_digiboosterpro
-	beq.w	.digiboosterpro
-
-	bsr.w	id_thx
-	beq.w	.thx
-
-	bsr.w	id_aon
-	beq.w	.aon
-
-	bsr		id_digitalmugician
-	beq.w	.digitalmugician
-
-	bsr.w	id_gamemusiccreator
-	beq.w	.gamemusiccreator
-
-	bsr	id_medley
-	beq.w	.medley
-
-	bsr	id_bendaglish
-	beq.w	.bendaglish
-
-	bsr	id_sidmon2
-	beq.w	.sidmon2
-
-	bsr	id_deltamusic1
-	beq.w	.deltamusic1
-
-	bsr.w	id_player
-	beq.w	.player
+	DPRINT	"Eagle"
+	lea	eagleFormats(pc),a3
+	bsr.w 	identifyFormats 
+	beq.b 	.ex2
 
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
-	beq.w	.player	
+	beq.w	.player
 	
 .mp
 	bsr.w	id_ps3m		
@@ -24992,15 +25631,16 @@ tutki_moduuli
 	beq.w	.sid
 
 	bsr.w	id_oldst
-	beq.w	.oldst
+	beq.b	.oldst
 
 
 .er	
-	DPRINT 	"Unknown format",2
+	DPRINT 	"Unknown format"
 	moveq	#lod_tuntematon,d0
 	rts	
 
-.ex	bsr.w	tee_modnimi
+.ex	
+	 bsr.w	tee_modnimi
 .ex2	
 	cmp	#pt_prot,playertype(a5)
 	beq.b	.wew
@@ -25011,36 +25651,28 @@ tutki_moduuli
  if DEBUG
 	moveq	#0,d0
 	move	playertype(a5),d0
-	DPRINT 	"Detected %ld",3
+	moveq	#p_name,d1
+	add.l	playerbase(a5),d1 
+	DPRINT 	"Detected %ld %s"
  endif
 	moveq	#0,d0
 	rts
-
-
-.nimitalteen
-	move.l	moduleaddress(a5),a1
-.nimitalteen2
-	lea	modulename(a5),a0
-.co	move.b	(a1)+,(a0)+
-	dbeq	d0,.co
-	clr.b	(a0)
-	bra.b	.ex2
 
 .oldst	st	oldst(a5)
 	bsr.w	convert_oldst
 	bra.b	.pro0
 
-
-.pro	clr.b	oldst(a5)
+.protracker	
+		clr.b	oldst(a5)
 .pro0	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
 	moveq	#20-1,d0
-	bra.b	.nimitalteen
-
+	bsr.w	copyNameFromModule
+	bra.b	.ex2
 
 .multi	pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 
 	move.l	moduleaddress(a5),a1	* tutkaillaan onko miss‰ muistissa
 	lore	Exec,TypeOfMem
@@ -25064,176 +25696,18 @@ tutki_moduuli
 
 .sid	pushpea	p_sid(pc),playerbase(a5)
 	move	#pt_sid,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	bra.w	.ex2
-
-
-
-.jam	pushpea	p_jamcracker(pC),playerbase(a5)
-	move	#pt_jamcracker,playertype(a5)
-	bra.w	.ex
-
-.soundmon
-	pushpea	p_soundmon(pc),playerbase(a5)
-	move	#pt_soundmon2,playertype(a5)
-	moveq	#25-1,d0
-	bra.w	.nimitalteen
-
-.soundmon3
-	pushpea	p_soundmon3(pc),playerbase(a5)
-	move	#pt_soundmon3,playertype(a5)
-	moveq	#25-1,d0
-	bra.w	.nimitalteen
-
-
-.future13
-	pushpea	p_futurecomposer13(pc),playerbase(a5)
-	move	#pt_future10,playertype(a5)
-	bra.w	.ex
-
-.future14
-	pushpea	p_futurecomposer14(pc),playerbase(a5)
-	move	#pt_future14,playertype(a5)
-	bra.w	.ex
-
-.deltamusic
-	pushpea	p_deltamusic(pc),playerbase(a5)
-	move	#pt_delta2,playertype(a5)
-	bra.w	.ex
-
-.musicassembler
-	pushpea	p_musicassembler(pc),playerbase(a5)
-	move	#pt_musicass,playertype(a5)
-	bra.w	.ex
-
-.fred	
-	move	d5,maxsongs(a5)
-	pushpea	p_fred(pc),playerbase(a5)
-	move	#pt_fred,playertype(a5)
-	bra.w	.ex
-
-.sonicarranger
-	pushpea	p_sonicarranger(pc),playerbase(a5)
-	move	#pt_sonicarr,playertype(a5)
-	bra.w	.ex
-
-.sidmon1
-	movem.l	d1/d2,sid10init
-	pushpea	p_sidmon1(pC),playerbase(a5)
-	move	#pt_sidmon1,playertype(a5)
-	bra.w	.ex
 
 .player
 	pushpea	p_player(pc),playerbase(a5)
 	move	#pt_player,playertype(a5)
 	bra.w	.ex
 
-.oktalyzer
-	pushpea	p_oktalyzer(pc),playerbase(a5)
-	move	#pt_oktalyzer,playertype(a5)
-	bra.w	.ex
-
-
-.med	pushpea	p_med(pc),playerbase(a5)
-	move	#pt_med,playertype(a5)
-	clr.b	medrelocced(a5)
-	bra.w	.ex
-
-.markii	pushpea	p_markii(pc),playerbase(a5)
-	move	#pt_markii,playertype(a5)
-	bra.w	.ex
-	
-
-.mon	move	d5,maxsongs(a5)
-	pushpea	p_mon(pc),playerbase(a5)
-	move	#pt_mon,playertype(a5)
-	bra.w	.ex
-
-.dw	move	d5,maxsongs(a5)
-	move.l	d6,whittaker_end
-	pushpea	p_dw(pc),playerbase(a5)
-	move	#pt_dw,playertype(a5)
-	bra.w	.ex
-
 .hippelcoso
 	move	d5,maxsongs(a5)
 	pushpea	p_hippelcoso(pc),playerbase(a5)
 	move	#pt_hippelcoso,playertype(a5)
-	bra.w	.ex
-
-.hippel
-	move	d5,maxsongs(a5)
-	move.l	d4,hippelmusic
-	pushpea	p_hippel(pc),playerbase(a5)
-	move	#pt_hippel,playertype(a5)
-	bra.w	.ex
-
-
-.digibooster
-	pushpea	p_digibooster(pc),playerbase(a5)
-	move	#pt_digibooster,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
-	lea	610(a4),a1
-	moveq	#30-1,d0
-	bra.w	.nimitalteen2
-
-
-.digiboosterpro
-	pushpea	p_digiboosterpro(pc),playerbase(a5)
-	move	#pt_digiboosterpro,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
-	lea	16(a4),a1
-	moveq	#42-1,d0
-	bra.w	.nimitalteen2
-
-
-.thx
-	pushpea	p_thx(pc),playerbase(a5)
-	move	#pt_thx,playertype(a5)
-	bsr.w	siirra_moduuli2		* siirret‰‰n fastiin jos mahdollista
-
-	move.l	moduleaddress(a5),a1
-	add	4(a1),a1		* modulename
-	moveq	#25-1,d0
-	bra.w	.nimitalteen2
-
-.mline
-	pushpea	p_mline(pc),playerbase(a5)
-	move	#pt_mline,playertype(a5)
-	bra.w	.ex
-
-.aon
-	pushpea	p_aon(pc),playerbase(a5)
-	move	#pt_aon,playertype(a5)
-	bra.w	.ex
-
-.pumatracker
-	pushpea	p_pumatracker(pc),playerbase(a5)
-	move	#pt_pumatracker,playertype(a5)
-	moveq	#12-1,d0
-	bra.w	.nimitalteen
-
-.beathoven
-	pushpea	p_beathoven(pc),playerbase(a5)
-	move	#pt_beathoven,playertype(a5)
-	move.l	moduleaddress(a5),a1
-	move.l	$20+36(a1),a1
-	moveq	#30-1,d0
-	bra.w	.nimitalteen2
-
-.gamemusiccreator
-	pushpea	p_gamemusiccreator(pc),playerbase(a5)
-	move	#pt_gamemusiccreator,playertype(a5)
-	bra.w	.ex
-
-.digitalmugician
-	pushpea	p_digitalmugician(pc),playerbase(a5)
-	move	#pt_digitalmugician,playertype(a5)
-	bra.w	.ex
-
-.medley
-	pushpea	p_medley(pc),playerbase(a5)
-	move	#pt_medley,playertype(a5)
 	bra.w	.ex
 
 .delicustom
@@ -25246,20 +25720,9 @@ tutki_moduuli
 	move	#pt_futureplayer,playertype(a5)
 	bra.w	.ex
 
-
-.bendaglish
-	pushpea	p_bendaglish(pc),playerbase(a5)
-	move	#pt_bendaglish,playertype(a5)
-	bra.w	.ex
-
-.sidmon2
-	pushpea	p_sidmon2(pc),playerbase(a5)
-	move	#pt_sidmon2,playertype(a5)
-	bra.w	.ex
-
-.deltamusic1
-	pushpea	p_deltamusic1(pc),playerbase(a5)
-	move	#pt_deltamusic1,playertype(a5)
+.davelowe
+	pushpea	p_davelowe(pc),playerbase(a5)
+	move	#pt_davelowe,playertype(a5)
 	bra.w	.ex
 
 **** Oliko  sample??
@@ -25399,6 +25862,80 @@ tutki_moduuli
 .tfmxid		dc.b	"mdat",0
  even
 
+
+* Utility function
+* In:
+*   Z-flag
+* Out:
+*   d0 = 0, if Z set, -1 if not
+idtest	beq.b	.y
+	moveq	#-1,d0
+	rts
+.y	moveq	#0,d0
+	rts
+
+* Run through format list and execute id function for each format
+* in:
+*   a3 = array of formats
+* out:
+*   d0 = 0 if some format accepted the module, ~0 otherwise
+identifyFormatsOnly
+	* Flag: only identify, do not grab data
+	moveq	#1,d1
+	bra.b 	doIdentifyFormats
+identifyFormats
+	* Flag: identify and grab module name and type
+	moveq	#0,d1
+	clr.b	modulename(a5)
+doIdentifyFormats
+.loop 
+	tst	(a3)
+	beq.b	.notFound
+	move.l	a3,a0
+	add	(a0),a0
+ if DEBUG
+	;pushpea	p_name(a0),d0
+	;DPRINT	"- %s"
+ endif
+	pushm	all
+	jsr	p_id(a0)
+	tst.b	d0
+	popm 	all
+	beq.b 	.found
+	addq	#2,a3
+	bra.b	.loop
+.found
+	tst.b	d1 
+	bne.b 	.nameOk
+
+	move.l	a0,playerbase(a5)
+	move	p_type(a0),playertype(a5)
+	
+	tst.b	modulename(a5)
+	bne.b 	.nameOk 
+	* Name was not provided by identifiers, make one
+	bsr.b	tee_modnimi
+.nameOk
+	moveq	#0,d0
+	rts
+.notFound
+	moveq	#-1,d0 
+	rts
+
+* Grab name from loaded module data
+* In:
+*   d0 = max length for name
+* From start of the data:
+copyNameFromModule
+	move.l	moduleaddress(a5),a1
+* From pointer in A1:
+copyNameFromA1
+	lea	modulename(a5),a0
+.co	move.b	(a1)+,(a0)+
+	dbeq	d0,.co
+	clr.b	(a0)
+	rts 
+	
 *******************************************************************
 * Formaattien tunnistusrutiinit
 *
@@ -25416,1067 +25953,25 @@ tutki_moduuli
 *
  
 
-
-
-id_med	move.l	(a4),d0			* MED
-	lsr.l	#8,d0
-	cmp.l	#'MMD',d0
-
-idtest	beq.b	.y
-	moveq	#-1,d0
-	rts
-.y	moveq	#0,d0
-	rts
-
-id_musicassembler
-	lea	.muass_id(pc),a1	* Music Assembler
-	moveq	#.muassend-.muass_id,d0
-	bsr.w	search
-	bra.b	idtest
-
-
-.muass_id
-	dc.b	"usa-team 89"
-.muassend
- even
-
-id_sonic
-	lea	.sonicid(pc),a1		* SonicArranger
-	moveq	#.sonice-.sonicid,d0
-	bsr.w	search
-	bra.b	idtest
-
-
-.sonicid
-	dc.b	"musicirq",0
-.sonice
- even
-
-
-id_deltamusic
-	lea	.delta_id(pc),a1	* Delta Music 2
-	moveq	#.delend-.delta_id,d0
-	bsr.w	search
-	bra.b	idtest
-
-.delta_id
-	dc.b	"DELTA MUSIC"
-.delend
- even
-
-
-id_jamcracker
-	cmp.l	#'BeEp',(a4)		* JamCracker
-	bra.b	idtest
-
-id_futurecomposer13
-	cmp.l	#'SMOD',(a4)		* Futurecomposer 1.0-1.3
-	bra.b	idtest
-
-id_futurecomposer14
-	cmp.l	#'FC14',(a4)		* Futurecomposer 1.4
-	bra.b	idtest
-
-id_oktalyzer
-	cmp.l	#'OKTA',(a4)		* Oktalyzer
-	bne.b	.nok
-	cmp.l	#'SONG',4(a4)
-	bra.w	idtest
-
-.nok	moveq	#-1,d0
-	rts
-
-
-id_tfmxunion
-	cmp.l	#'TFHD',(a4)		* Yhdistetty TFMX formaatti
-	bra.w	idtest
-
-
-id_tfmx
-	cmp.l	#"TFMX",(a4)
-	beq.b	.y
-	cmp.l	#"tfmx",(a4)
-	bra.w	idtest
-
-.y	moveq	#0,d0
-	rts
-	
-
-id_soundmon
-	move.l	26(a4),d0		* Soundmon
-	lsr.l	#8,d0
-	cmp.l	#'V.2',d0
-	bra.w	idtest
-
-
-id_soundmon3
-	move.l	26(a4),d0		* Soundmon
-	lsr.l	#8,d0
-	cmp.l	#'V.3',d0
-	beq.b	.y
-	cmp.l	#'BPS',d0
-	bra.w	idtest
-
-.y	moveq	#0,d0
-	rts
-
-
-id_digibooster
-	cmp.l	#'DIGI',(a4)
-	bne.b	.nd
-	cmp.l	#' Boo',4(a4)
-	bne.b	.nd
-	cmp.l	#'ster',8(a4)
-	bra.w	idtest
-
-.nd	moveq	#-1,d0
-	rts
-
-id_digiboosterpro
-	cmp.l	#'DBM0',(a4)
-	bra.w	idtest
-
-id_thx
-	move.l	(a4),d0			* THX
-	lsr.l	#8,d0
-	cmp.l	#"THX",d0
-	bra.w	idtest
-
-id_aon
-	cmp.l	#"AON4",(a4)		* aon 4 channel
-	bra.w	idtest
-
-id_mline
-	cmp.l	#"MLED",(a4)		* musicline editor
-	bne.b	.nd
-	cmp.l	#"MODL",4(a4)
-	bra.w	idtest
-
-.nd	moveq	#-1,d0
-	rts
-	
-
-
-id_player
- 	cmp.l	#'P61A',(a4)		* The player 6.1a
-	bra.w	idtest
-
-id_player2				* filename <= D0
-	and.l	#$dfffffff,d0
-	cmp.l	#'P61.',d0
-	bra.w	idtest
-	
-
-
-id_protracker
-	cmp.l	#'M.K.',1080(a4)	* Protracker
-	beq.b	.p	
-	cmp.l	#'M!K!',1080(a4)	* Protracker 100 patterns
-	beq.b	.p	
-	cmp.l	#'FLT4',1080(a4)	* Startrekker
-	bra.w	idtest
-
-.p	moveq	#0,d0
-	rts
-
-
-id_fred
-* d5 => maxsongs
-	move.l	a4,a0
-	moveq	#-1,d0				; Modul nicht erkannt (default)
-	cmpi.w	#$4efa,(a0)
-	bne.s	.ChkEnd
-	cmpi.w	#$4efa,$04(a0)
-	bne.s	.ChkEnd
-	cmpi.w	#$4efa,$08(a0)
-	bne.s	.ChkEnd
-	cmpi.w	#$4efa,$0c(a0)
-	bne.s	.ChkEnd
-	add.w	2(a0),a0
-	moveq	#4-1,d1
-.ChkLoop cmpi.w	#$123a,2(a0)
-	bne.s	.ChkNext
-	cmpi.w	#$b001,6(a0)
-	beq.s	.ChkSong
-.ChkNext addq.l	#2,a0
-	dbra	d1,.ChkLoop
-	bra.s	.ChkEnd				; Modul nicht erkannt
-.ChkSong add.w	4(a0),a0
-	moveq	#0,d5
-	move.b	4(a0),d5
-	moveq	#0,d0				; Modul erkannt
-.ChkEnd	tst.l	d0
-	rts
-
-
-
-
-id_sidmon1
-* d1 => sid10init
-* d2 => sid10music
-
-	move.l	a4,a0
-
-	moveq	#-$01,d0
-	cmpi.l	#$08f90001,(a0)
-	bne.b	.l_f218
-	cmpi.l	#$00bfe001,$0004(a0)
-.l_f1f6	bne.b	.l_f218
-	cmpi.w	#$4e75,$025c(a0)
-	beq.b	.l_f20e
-	cmpi.w	#$4ef9,$025c(a0)
-	bne.b	.l_f218
-	move.w	#$4e75,$025c(a0)
-.l_f20e	moveq	#$2c,d1
-	move.l	#$0000016a,d2
-	bra.b	.l_f266
-.l_f218	cmpi.w	#$41fa,(a0)
-	bne.b	.l_f278
-	cmpi.w	#$d1e8,$0004(a0)
-	bne.b	.l_f278
-	cmpi.w	#$4e75,$0230(a0)
-	beq.b	.l_f23e
-	cmpi.w	#$4ef9,$0230(a0)
-	bne.b	.l_f248
-	move.w	#$4e75,$0230(a0)
-.l_f23e	moveq	#$00,d1
-	move.l	#$0000013e,d2
-	bra.b	.l_f266
-.l_f248	cmpi.w	#$4e75,$029c(a0)
-	beq.b	.l_f25e
-	cmpi.w	#$4ef9,$029c(a0)
-	bne.b	.l_f278
-	move.w	#$4e75,$029c(a0)
-.l_f25e	moveq	#$00,d1
-	move.l	#$0000016a,d2
-.l_f266	moveq	#$00,d0
-	add.l	a0,d1		* init
-	add.l	a0,d2		* music
-;	movem.l	d1/d2,sid10init
-.l_f278	tst.l	d0
-	rts	
-
-
-id_markii
-	moveq.l	#-1,d0
-
-	cmp	#$48e7,(a4)
-	bne.b	.eim
-	cmp	#$41fa,4(a4)	
-	bne.b	.eim
-	cmp	#$4cd8,8(a4)
-	bne.b	.eim
-	cmp.l	#$0c0000ff,12(a4)
-	beq.b	.joom
-.eim
-
-	lea	.lbw000106(pc),a1
-.lbc0000ea
-	move.w	(a1)+,d1
-	beq.s	.lbc000104
-	cmp.l	#$2e5a4144,$0000(a4,d1.w)
-	bne.s	.lbc0000ea
-	cmp.l	#$5338392e,$0004(a4,d1.w)
-	bne.s	.lbc0000ea
-.joom	moveq.l	#0,d0
-.lbc000104
-	tst.l	d0
-	rts	
-.lbw000106	dc.w	$02a0,$033c,$0348,0
-
-
-id_maniacsofnoise
-* d5 => max songs
-
-	move.l	a4,a0
-;	move.l	modulelength(a5),d1
-	move.l	d7,d1
-
-	moveq.l	#-1,d0
-	cmp.w	#$4efa,(a0)
-	bne.s	.o0001a8
-	cmp.w	#$4efa,4(a0)
-	bne.s	.o0001a8
-	cmp.w	#$4efa,8(a0)
-	bne.s	.o0001a8
-	cmp.w	#$4efa,12(a0)
-	beq.s	.o0001a8
-.o00015e	cmp.w	#$4bfa,0(a0)
-	bne.s	.o000182
-	cmp.w	#$0280,4(a0)
-	bne.s	.o000182
-	cmp.l	#$000000ff,6(a0)
-	bne.s	.o000182
-	cmp.l	#$5300b02d,$0014(a0)
-	beq.s	.o00018a
-.o000182	addq.l	#2,a0
-	subq.l	#2,d1
-	bpl.s	.o00015e
-	bra.s	.o0001a8
- 
-.o00018a	move.w	2(a0),d1
-	lea	0(a0,d1.w),a1
-	move.w	$0018(a0),d1
-	lea	0(a1,d1.w),a1
-	moveq.l	#0,d0
-	move.b	2(a1),d0
-	subq	#1,d0
-	move.w	d0,d5
-	moveq.l	#0,d0
-.o0001a8
-	tst.l	d0
-	rts	
-
-
-id_davidwhittaker
-* d5 => maxsongs
-* d6 => whittaker_end
-
-	move.l	a4,a0
-;	move.l	moduleaddress(a5),d0
-	move.l	a0,d0
-
-	cmp.w	#$48e7,(a0)
-	bne.s	.wc000130
-	cmp.w	#$6100,4(a0)
-	bne.s	.wc000130
-	cmp.w	#$4cdf,8(a0)
-	bne.s	.wc000130
-	cmp.w	#$4e75,12(a0)
-	bne.s	.wc000130
-	cmp.w	#$48e7,14(a0)
-	bne.s	.wc000130
-	cmp.w	#$6100,$0012(a0)
-	bne.s	.wc000130
-	cmp.w	#$4cdf,$0016(a0)
-	bne.s	.wc000130
-	cmp.w	#$4e75,$001a(a0)
-	beq.s	.wc000136
-.wc000130	moveq.l	#-1,d0
-	bra.w	.wc0001de
- 
-.wc000136	moveq.l	#$1c,d1
-	add.l	d1,a0
-	sub.l	d1,d0
-.wc00013c	cmp.w	#$43fa,(a0)
-	bne.s	.wc000154
-	cmp.l	#$4880c0fc,4(a0)
-	bne.s	.wc000154
-	cmp.w	#$41fa,10(a0)
-	beq.s	.wc00015c
-.wc000154	addq.l	#2,a0
-	subq.l	#2,d0
-	bpl.s	.wc00013c
-	bra.s	.wc000130
- 
-.wc00015c	move.l	a0,a1
-	move.l	d0,d1
-.wc000160	cmp.w	#$47fa,(a1)
-	bne.s	.wc000186
-	cmp.w	#$51eb,4(a1)
-	bne.s	.wc000186
-	cmp.w	#$51eb,8(a1)
-	beq.s	.wc00018e
-	cmp.w	#$33fc,8(a1)
-	beq.s	.wc00018e
-	cmp.w	#$426b,8(a1)
-	beq.s	.wc00018e
-.wc000186	addq.l	#2,a1
-	subq.l	#2,d1
-	bpl.s	.wc000160
-	bra.s	.wc000130
- 
-.wc00018e	move.l	a1,d6
-	move.w	2(a1),d1
-	lea	-10(a1,d1.w),a1
-	move.l	a0,d1
-	sub.l	a1,d1
-	move.w	12(a0),d2
-	moveq.l	#0,d3
-	move.w	#$7fff,d4
-	moveq.l	#-1,d5
-.wc0001ac	move.w	8(a0),d0
-	lsr.w	#1,d0
-	subq.w	#1,d0
-	addq.w	#2,d2
-.wc0001b6	move.w	12(a0,d2.w),d3
-	btst	#0,d3
-	bne.s	.wc0001d6
-	sub.w	d1,d3
-	cmp.w	d4,d3
-	bge.s	.wc0001c8
-	move.w	d3,d4
-.wc0001c8	cmp.w	d4,d2
-	bge.s	.wc0001d6
-	addq.w	#2,d2
-	subq.w	#1,d0
-	bne.s	.wc0001b6
-	addq.l	#1,d5
-	bra.s	.wc0001ac
- 
-.wc0001d6	
-	;move.w	d5,maxsongs(a5)	* songit
-	moveq.l	#0,d0
-.wc0001de
-	tst.l	d0
-	rts	
- 
-
-
-
-; Testet, ob es sich um ein Hippel-COSO-Modul handelt
-
-id_hippelcoso
-* d5 => max songs
-
-;	move.l	dtg_ChkData(a5),a0		; ^module
-	move.l	a4,a0
-
-	cmpi.l	#"COSO",$00(a0)			; test ID
-	bne.b	.ChkFail
-	cmpi.l	#"TFMX",$20(a0)			; test ID
-	bne.s	.ChkFail
-
-	move.l	$1c(a0),d0
-	sub.l	$18(a0),d0
-	bmi.s	.ChkFail				; table corrupt !
-	divu	#10,d0
-	swap	d0
-	tst.w	d0				; multiple of 10 ?
-	bne.s	.ChkFail				; no !
-	swap	d0
-	subq.w	#1,d0
-	beq.s	.ChkFail				; sampletable is empty !
-	move.l	a0,a1
-	add.l	$18(a0),a1			; ^sampletable
-	move.l	a1,a2
-	moveq	#0,d2
-.Chkoop move.l	(a1),d1				; ^samplestart
-	cmp.l	d2,d1
-	ble.b	.Chkext
-	move.l	d1,d2
-	move.l	a1,a2
-.Chkext add.w	#10,a1				; next sample
-	subq.l	#1,d0
-	bne.s	.Chkoop
-
-	move.l	$1c(a0),d0			; ^samples
-	move.l	d0,d1
-	add.l	(a2)+,d1			; get samplestart
-	moveq	#0,d2
-	move.w	(a2)+,d2			; get samplelength
-	add.l	d2,d2
-	add.l	d2,d1
-	addq.l	#4,d1				; 4 bytes null-sample
-
-
-;	move.l	modulelength(a5),d2
-
-;	cmp.l	d1,d2
-;;	slt	LoadSamp			; set load-samples flag
-;	blt.b	.ChkFail		* ei hyv‰ksyt‰ modeja joissa erilliset samplet
-
-
-;	add.l	#1024,d1
-;	cmp.l	d0,d2				; test size of module
-;	blt.s	.ChkFail				; too small
-;	cmp.l	d1,d2				; test size of module
-;	bgt.s	.ChkFail				; too big
-
-	move.l	$18(a4),d0
-	sub.l	$14(a4),d0
-	divu	#6,d0
-	subq.w	#2,d0
-	move.w	d0,d5				; store MaxSong
-	moveq	#0,d0				; Modul erkannt
-
-	bra.s	.Chknd
-.ChkFail
-	moveq	#-1,d0				; Modul nicht erkannt
-.Chknd
-	tst.l	d0
-	rts
-
-
-id_hippel
-* d7 <= modlen
-* a4 <= mod
-* d4 => hippel music 
-* d5 => max songs
-	move.l	d7,d0
-
-	cmp.l	#100,d0
-	blo.w	.lbC000288
-
-	move.l	a4,a0
-	move.l	a4,a1
-	add.l	d0,a1
-	lea	$10(a0),a0
-.loop	addq	#1,a0	
-	cmp.l	a0,a1
-	beq.w	.ChkFail
-	cmp.b	#"T",(a0)
-	bne.b	.loop
-	cmp.b	#"F",1(a0)
-	bne.b	.loop
-	cmp.b	#"M",2(a0)
-	bne.b	.loop
-	cmp.b	#"X",3(a0)
-	bne.b	.loop
-
-	move.l	a4,a1
-	move.l	a1,a0
-	move.l	d7,d0
-
-	cmp.w	#$6000,(a1)
-	bne.s	.lbC000156
-	addq.w	#2,a1
-	move.w	(a1),d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	bra.s	.lbC00016E
- 
-.lbC000156	cmp.b	#$60,(a1)
-	bne.s	.lbC0001B6
-	move.b	1(a1),d1
-	ext.w	d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	addq.w	#2,a1
-.lbC00016E	addq.w	#4,a1
-	cmp.w	#$6100,(a1)
-	bne.s	.lbC000186
-	addq.w	#2,a1
-	move.w	(a1),d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	bra.s	.lbC00018E
- 
-.lbC000186	cmp.w	#$41FA,(a1)
-	bne.s	.lbC0001B6
-	addq.w	#4,a1
-.lbC00018E	addq.w	#2,a1
-	cmp.w	#$6100,(a1)+
-	bne.s	.lbC0001B6
-	move.w	(a1),d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	cmp.w	#$41FA,(a1)+
-	bne.s	.lbC0001B6
-	move.w	(a1),d1
-	bmi.s	.lbC0001B6
-	btst	#0,d1
-	bne.s	.lbC0001B6
-	add.w	d1,a1
-	clr.w	(a1)
-.lbC0001B6	cmp.b	#$60,(a0)
-	bne.s	.lbC0001D0
-	cmp.b	#$60,2(a0)
-	bne.s	.lbC0001D0
-	cmp.w	#$48E7,4(a0)
-	bne.s	.lbC0001D0
-	addq.l	#2,a0
-	bra.s	.lbC00022C
- 
-.lbC0001D0	cmp.b	#$60,(a0)
-	bne.s	.lbC0001EA
-	cmp.b	#$60,2(a0)
-	bne.s	.lbC0001EA
-	cmp.w	#$41FA,4(a0)
-	bne.s	.lbC0001EA
-	addq.l	#2,a0
-	bra.s	.lbC00022C
- 
-.lbC0001EA	cmp.w	#$6000,(a0)
-	bne.s	.lbC000204
-	cmp.w	#$6000,4(a0)
-	bne.s	.lbC000204
-	cmp.w	#$48E7,8(a0)
-	bne.s	.lbC000204
-	addq.l	#4,a0
-	bra.s	.lbC00022C
- 
-.lbC000204	cmp.w	#$6000,(a0)
-	bne.s	.lbC000288
-	cmp.w	#$6000,4(a0)
-	bne.s	.lbC000288
-	cmp.w	#$6000,8(a0)
-	bne.s	.lbC000288
-	cmp.w	#$6000,12(a0)
-	bne.s	.lbC000288
-	cmp.w	#$48E7,$0010(a0)
-	bne.s	.lbC000288
-	addq.l	#4,a0
-.lbC00022C	move.l	a0,d4
-	move.w	#$007F,d1
-.lbC000236	cmp.w	#$41FA,(a0)+
-	bne.s	.lbC00026C
-	move.w	(a0),d2
-	bmi.s	.lbC00026C
-	btst	#0,d2
-	bne.s	.lbC00026C
-	cmp.w	#$4000,d2
-	bcc.s	.lbC00026C
-	cmp.l	#'TFMX',$0000(a0,d2.w)
-	bne.s	.lbC00025C
-	move.w	$0010(a0,d2.w),d3
-	bra.s	.lbC000274
- 
-.lbC00025C	cmp.l	#'COSO',$0000(a0,d2.w)
-	bne.s	.lbC00026C
-	move.w	#$00FF,d3
-	bra.s	.lbC000274
- 
-.lbC00026C	subq.l	#2,d0
-	dbmi	d1,.lbC000236
-	bra.s	.lbC000288
- 
-.lbC000274
-	subq.b	#1,d3
-	move.w	d3,d5
-	moveq	#0,d0
-	rts	
-
-.lbC000288
-.ChkFail
-	moveq.l	#-1,d0
-	rts	
-
-
-
-
-id_TFMX_PRO	
-	move.l	a4,a1
-	lea	TFMX_IDs(pc),a0
-.id_loop
-	tst.b	(a0)
-	beq.b	.Not_TFMX_PRO
-	move.l	a4,a1		;Module
-.strloop
-	tst.b	(a0)
-	beq.s	.found
-	cmpm.b	(a0)+,(a1)+
-	beq.s	.strloop
-.skiploop
-	tst.b	(a0)+
-	bne.s	.skiploop
-	bra.s	.id_loop
-.found
-	move.l	a4,a0	;Module
-	move.w	$100(a0),d0
-	move.l	$1D0(a0),d1
-	bne.s	.valid
-	move.l	#$800,d1
-.valid
-	add.l	d1,a0	;Channel table
-	moveq	#0,d1
-	moveq	#0,d3	;Start as TFMX Pro
-.chanloop
-	move.w	d0,d2	;Channel number
-	lsl.w	#4,d2
-	move.l	a0,a2
-	add.w	d2,a2	;Channel pointer
-	move.w	(a2)+,d2	;Channel number
-	cmp.w	#$EFFE,d2	;End mark
-	bne.s	.done
-	move.w	(a2)+,d2	;Channel type
-	add.w	d2,d2
-	cmp.w	#10,d2
-	blo.s	.notover10
-	moveq	#0,d2
-	moveq	#0,d3	;Is TFMX Pro
-.notover10
-	jmp	.JTab(pc,d2.w)
-.JTab
-	bra.s	.done
-	bra.s	.test
-	bra.s	.next
-	bra.s	.probably_not
-	bra.s	.next
-.test
-	tst.w	d1	;Flip-flop?
-	beq.s	.start
-	bmi.s	.channum
-	bra.s	.chan
-.start
-	move.w	#$FFFF,d1
-	addq.w	#1,d0	;Next channel
-	bra.s	.chanloop
-.channum
-	move.w	2(a2),d1
-.chan
-	subq.w	#1,d1
-	move.w	(a2),d0	;Paired channel?
-	bra.s	.chanloop
-.probably_not
-	moveq	#-1,d3
-.next
-	addq.w	#1,d0	;Next Channel
-	bra.s	.chanloop
-.done
-	tst.l	d3
-	bne.s	.Not_TFMX_PRO
-	moveq	#0,d0	;Identified!
-	bra.s	.exit
-.Not_TFMX_PRO
-	moveq	#-1,d0
-.exit
-	rts
-
-TFMX_IDs
-	dc.b	'tfmxsong',0
-	dc.b	'TFMX-SONG',0
-	dc.b	'TFMX_SONG',0,0
-
-
-
-id_TFMX7V
-	move.l	a4,a1
-	lea	TFMX_IDs(pc),a0
-.idloop
-	tst.b	(a0)
-	beq.b	.Not_TFMX7V
-	move.l	a4,a1
-.strloop
-	tst.b	(a0)
-	beq.s	.validID
-	cmpm.b	(a0)+,(a1)+
-	beq.s	.strloop
-.skiploop
-	tst.b	(a0)+
-	bne.s	.skiploop
-	bra.s	.idloop
-.validID
-	move.l	a4,a0
-	move.w	$100(a0),d0
-	move.l	$1D0(a0),d1
-	bne.s	.valid
-	move.l	#$800,d1
-.valid
-	add.l	d1,a0
-	moveq	#0,d1
-	moveq	#0,d3
-.chanloop
-	move.w	d0,d2
-	lsl.w	#4,d2
-	move.l	a0,a2
-	add.w	d2,a2
-	move.w	(a2)+,d2
-	cmp.w	#$EFFE,d2
-	bne.s	.done
-	move.w	(a2)+,d2
-	add.w	d2,d2
-	cmp.w	#10,d2
-	blo.s	.intable
-	moveq	#0,d2
-	moveq	#0,d3
-.intable
-	jmp	.JTab(pc,d2.w)
-.JTab
-	bra.s	.done
-	bra.s	.check
-	bra.s	.next
-	bra.s	.probably_not
-	bra.s	.next
-.check
-	tst.w	d1
-	beq.s	.norm
-	bmi.s	.paired
-	bra.s	.chan
-.norm
-	move.w	#$FFFF,d1
-	addq.w	#1,d0
-	bra.s	.chanloop
-.paired
-	move.w	2(a2),d1
-.chan
-	subq.w	#1,d1
-	move.w	(a2),d0
-	bra.s	.chanloop
-.probably_not
-	moveq	#-1,d3
-.next
-	addq.w	#1,d0
-	bra.s	.chanloop
-.done
-	tst.l	d3
-	beq.s	.Not_TFMX7V
-	moveq	#0,d0	;Identified!
-	bra.s	.exit
-.Not_TFMX7V
-	moveq	#-1,d0
-.exit
-	rts
-
-
-
 keyfilename	dc.b	"L:HippoPlayer.Key",0
  even
 
 
 *******
-* Tunnistetaan SID piisit
-*******
-
-id_sid1
-	cmp.l	#"PSID",(a4)
-	beq.b	.q
-	moveq	#-1,d0
-	rts
-.q	moveq	#0,d0
-	rts
-
-id_sid
-	bsr.b	id_sid1
-	beq.w	.yea
-
-	move.l	modulefilename(a5),a0
-	lea	desbuf(a5),a1
-	move.l	a1,a2
-.c	move.b	(a0)+,(a1)+
-	bne.b	.c
-	subq.l	#1,a1
-	move.b	#'.',(a1)+
-	move.b	#'i',(a1)+
-	move.b	#'n',(a1)+
-	move.b	#'f',(a1)+
-	move.b	#'o',(a1)+
-	clr.b	(a1)
-
-	move.l	a2,d1			* avataan_ikoni
-	move.l	#1005,d2
-	lore	Dos,Open
-	move.l	d0,d5
-	beq.b	.no
-
-	lea	probebuffer(a5),a0	* luetaan ikoni
-	move.l	a0,d2
-	move.l	#1000,d3			* 1000 bytee
-	move.l	d5,d1
-	lob	Read
-	move.l	d5,d1
-	lob	Close
-
-* tutkitaan onko playsidin ikoni.
-
-	lea	probebuffer(a5),a0
-	move	#1000,d2
-
-.leep	lea	.id1(pc),a1
-.luup	move.b	(a1)+,d1
-	beq.b	.yea
-	move.b	(a0)+,d0
-	subq	#1,d2
-	beq.b	.no
-	btst	#5,d1
-	beq.b	.cl
-	bset	#5,d0
-	bra.b	.cll
-.cl	bclr	#5,d0
-.cll	cmp.b	d1,d0
-	bne.b	.leep
-	bra.b	.luup
-
-.no	moveq	#-1,d0
-	rts
-.yea	moveq	#0,d0
-	rts
-
-.id1	dc.b	"PLAYSID",0
-.ide1
- even
-
-
-*******
-* Tunnistetaan Old Soundtracker piisit (15 samplea). Tarttee n. 1700 byte‰
-*******
-id_oldst
-
-*** Tarkistetaan onko samplejen arvot moduulille sopivat
-	lea	20(a4),a0
-	moveq	#0,d0
-	move	#$7fff,d2
-	moveq	#15-1,d1
-.l1
-	cmp	22(a0),d2	* samplelen
-	blo.w	.fail
-	cmp	#1,22(a0)
-	bhi.b	.f0
-	addq	#1,d0
-.f0
-	cmp.b	#64,25(a0)	* volume
-	bhi.w	.fail	
-	cmp	26(a0),d2	* repeat point
-	blo.b	.fail
-	cmp	28(a0),d2	* repeat length
-	blo.b	.fail
-	lea	30(a0),a0
-	dbf	d1,.l1
-	
-	cmp	#15,d0
-	beq.b	.fail
-
-
-* a0 = songlen
-	tst.b	(a0)
-	beq.b	.fail
-	cmp.b	#$7f,(a0)
-	bhi.b	.fail
-	addq	#2,a0	
-
-***** Ovatko postablen arvot oikeita (0-63)?
-
-	moveq	#128-1,d0
-	moveq	#0,d1
-.l2	tst.b	(a0)
-	beq.b	.l22
-	addq	#1,d1
-.l22	cmp.b	#63,(a0)+
-	bhi.b	.fail
-	dbf	d0,.l2
-
-	tst	d1
-	beq.b	.fail
-
-
-* a0 = patterndata
-
-*** Tarkistetaan eka patterni
-
-	move	#4*64-1,d3
-.l3
-	move	(a0)+,d0
-	move	(a0)+,d1
-
-	move	d0,d2
-	and	#$f000,d2		* pit‰s olla tyhj‰‰
-	bne.b	.fail
-
-	move	d1,d2			* tutkaillaan komentoa
-	and	#$0f00,d2		* sallittuja: 0-4, a-f
-	cmp	#$0400,d2
-	bls.b	.oks
-	cmp	#$0a00,d2
-	blo.b	.fail
-
-.oks
-
-	move	d1,d2			* onko samplea?
-	and	#$f000,d2
-	beq.b	.noper
-
-
-	and	#$fff,d0		* period
-	beq.b	.noper
-	cmp	#856,d0
-	bhi.b	.fail
-	cmp	#113,d0
-	blo.b	.fail	
-.noper
-	dbf	d3,.l3
-
-	moveq	#0,d0
-	rts
-
-.fail	moveq	#-1,d0
-	rts
-
-convert_oldst
-
-*******
-* Muutetaan PT-formaattiin
-* a4 <= moduuli
-
-	move.l	modulelength(a5),d0
-	add.l	#484,d0
-	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
-	lore	Exec,AllocMem
-	tst.l	d0
-	beq.b	.fail
-	move.l	d0,a3
-
-	lea	(a4),a0
-	lea	(a3),a1
-	move	#470/2-1,d0
-.c1	move	(a0)+,(a1)+
-	dbf	d0,.c1
-
-	lea	16*30(a1),a1		* 16 tyhj‰‰ samplee
-
-	moveq	#(128+1+1)/2-1,d0
-.c2	move	(a0)+,(a1)+
-	dbf	d0,.c2
-	move.l	#"M.K.",(a1)+
-
-	move.l	a4,a2
-	add.l	modulelength(a5),a2
-.c3	move.b	(a0)+,(a1)+
-	cmp.l	a2,a0
-	bne.b	.c3
-
-	move.b	#$7f,951(a3)
-
-	lea	20(a3),a0		* repeat pointer jaetaan kahdella
-	moveq	#$f-1,d0
-.f	lsr	#1,26(a0)
-	lea	30(a0),a0
-	dbf	d0,.f
-
-	move.l	moduleaddress(a5),a1
-	move.l	modulelength(a5),d0
-	lore	Exec,FreeMem
-
-	move.l	a3,moduleaddress(a5)
-	add.l	#484,modulelength(a5)
-
-	moveq	#0,d0			* on oikee moduuli
-	rts
-
-.fail	moveq	#-1,d0
-	rts
-
-
-
-
-
-
-*******
 * Virittelee nimen tied.nimest‰
 *******
+
 tee_modnimi
 	lea	modulename(a5),a1
-
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	beq.b	.eiarc			* otetaan pelkk‰ filename
 	move.l	solename(a5),a0
 	bra.b	.copy
-
 .eiarc
 	lea	8+fileinfoblock(a5),a0
-	move.l	a0,a2
-.loop	move.b	(a0)+,d0
-	beq.b	.ee
-	cmp.b	#'.',d0
-	bne.b	.loop
-	move.l	a0,d1
-	sub.l	a2,d1
-	cmp	#4+1,d1
-	bhi.b	.ee		* onko etuliite pitempi kuin 4 merkki‰
-
 .copy	move.b	(a0)+,(a1)+
 	bne.b	.copy
 	rts
-.ee	move.l	a2,a0
-	bra.b	.copy
-
 
 
 *******************************************************************************
@@ -26484,21 +25979,16 @@ tee_modnimi
 *******
 
 loadplayergroup
-	DPRINT	"Load player group",1
+	DPRINT	"Load player group"
 	pushm	d1-a6
 
 
 	bsr.w	inforivit_group
 
 	moveq	#0,d7
-
-	move.l	_DosBase(a5),a6
-	pushpea	groupname(a5),d1
-	move.l	#1005,d2
-	lob	Open
-	move.l	d0,d4
+	bsr.w		openPlayerGroupFile
 	beq.w	.error
-
+.ok
 	move.l	d4,d1		* selvitet‰‰n filen pituus
 	moveq	#0,d2	
 	moveq	#1,d3
@@ -26550,7 +26040,13 @@ loadplayergroup
 	moveq	#0,d7
 
 .xx	
-	bsr.w	inforivit_clear
+	;bsr.w	inforivit_clear
+
+ if DEBUG 
+	move.l	d7,a0 
+	move.l	-4(a0),d0 
+	DPRINT	"Group size %ld"
+ endif
 
 	move.l	d7,d0
 	popm	d1-a6
@@ -26559,12 +26055,59 @@ loadplayergroup
 .error	moveq	#0,d7
 	bra.b	.x
 
+* out:
+*  d4 = file handle, or NULL if error
+openPlayerGroupFile
+	move.l	_DosBase(a5),a6
+	
+	* First try home dir
+	tst.l	homelock(a5)
+	beq.b	.noHome
+
+	lea	-100(sp),sp 
+	move.l	sp,a0
+	lea	.progdir(pc),a1 
+.c1 	move.b	(a1)+,(a0)+
+	bne.b	.c1
+	subq	#1,a0 
+	lea	hipGroupFileName,a1
+.c2	move.b	(a1)+,(a0)+
+	bne.b	.c2
+ if DEBUG 
+	move.l	sp,d0
+	DPRINT	"->%s"
+ endif
+	move.l	sp,d1
+	move.l	#1005,d2
+	lob		Open
+	lea	100(sp),sp
+	move.l	d0,d4
+	bne.b	.ok 
+
+.noHome
+ if DEBUG 
+	pushpea	groupname(a5),d0
+	DPRINT	"->%s"
+ endif
+
+	pushpea	groupname(a5),d1
+	move.l	#1005,d2
+	lob	Open
+	move.l	d0,d4
+.ok 
+	rts
+
+.progdir 
+	dc.b	"PROGDIR:",0
+	even
+
+
 
 * lataa yksitt‰isen replayerin playergroupista
 * d1 = muistin tyyppi
 
 loadreplayer
-	DPRINT	"Load replayer",1
+	DPRINT	"Load single replayer"
 	pushm	d1-d6/a0/a2-a6
 	move.l	d6,a4				* muistin tyyppi!
 
@@ -26573,8 +26116,9 @@ loadreplayer
 	clr.l	externalplayers(a5)
 
 	move	playertype(a5),d0		* onko jo sama ladattuna?
-	cmp.b	xtype(a5),d0
+	cmp	xtype(a5),d0
 	bne.b	.jou
+	DPRINT	"Using already loaded"
 	move.l	xplayer(a5),a1			* osoite a1:een
 	move.l	xlen(a5),d7
 	moveq	#1,d0
@@ -26582,7 +26126,7 @@ loadreplayer
 	rts
 
 .jou
-	move.b	d0,xtype(a5)
+	move	d0,xtype(a5)
 	
 	move.l	xplayer(a5),a0			* vapautetaan vanha 
 	jsr	freemem
@@ -26590,19 +26134,14 @@ loadreplayer
 
 	bsr.w	inforivit_group2
 
-	move.l	_DosBase(a5),a6
-	pushpea	groupname(a5),d1
-	move.l	#1005,d2
-	lob	Open
-	move.l	d0,d4
+	bsr.w	openPlayerGroupFile
 	beq.w	.error
 
 	move.l	d4,d1
-;	move.l	#probebuffer+var_b,d2
 	pushpea	probebuffer+1024(a5),d2
-	move.l	#450,d3
+	move.l	#1024,d3
 	lob	Read
-	cmp.l	#450,d0
+	cmp.l	#1024,d0
 	bne.w	.error	
 
 	cmp.b	#xpl_versio,7+probebuffer+1024(a5)
@@ -26610,28 +26149,25 @@ loadreplayer
 
 	lea	probebuffer+8+1024(a5),a0
 	move	playertype(a5),d0
-	sub	#xpl_offs,d0
-	move	d0,d1
-	add	d1,d1
-	
-	lsl	#3,d0
-
-	movem.l	(a0,d0),d2/d6	* player offset, length
-	tst.l	d2
-	beq.b	.error		* Onko koko playeri‰ filess‰?
-
-* d3k0dez!
-	; sub.l	#$a370,d2
-	; swap	d2
-	; rol.l	d1,d2	
-	; addq	#1,d1
-	; sub.l	#$a370,d6
-	; swap	d6	
-	; rol.l	d1,d6
-
-	addq.l	#8,d2		* skip player group header data
-
+.find
+	tst	(a0)
+	beq.w 	.error
+	cmp	(a0),d0 
+	beq.b 	.found 
+	lea	2+4+4(a0),a0 
+	bra.b	.find
+.found
+	movem.l	2(a0),d2/d6	* player offset, length
 	move.l	d6,xlen(a5)	* pituus talteen
+
+ if DEBUG
+ 	push	d2
+ 	ext.l	d0
+	move.l	d2,d1
+	move.l	d6,d2
+	DPRINT	"Single rep type=%ld offs=%ld len=%ld"
+	pop	d2
+ endif
 
 	move.l	d4,d1		* hyp‰t‰‰n oikeaan kohtaan
 	moveq	#-1,d3
@@ -26662,7 +26198,7 @@ loadreplayer
 
 
 .xx	
-	bsr.w	inforivit_clear
+;	bsr.w	inforivit_clear
 
 	move.l	d7,d0
 	move.l	xplayer(a5),a1
@@ -26673,7 +26209,7 @@ loadreplayer
 	rts
 
 .error	moveq	#0,d7
-	clr.b	xtype(a5)
+	clr		xtype(a5)
 	bra.b	.x
 
 
@@ -26757,7 +26293,7 @@ whag	tst.b	win(a5)
 
 	move.l	a0,a3
 	and	#~GFLG_DISABLED,gg_Flags(a3)
-	bsr	redrawButtonGadget
+	bsr.b	redrawButtonGadget
 
 	lea	kela2,a0
 	cmp.l	a0,a3
@@ -26782,7 +26318,7 @@ whag	tst.b	win(a5)
 	tst	2(a4)		* enemm‰n kuin yksi kerrallaan?
 	bne.b	.l
 	rol	#1,d7
-	bra.w	.loop
+	bra.b	.loop
 .l
 	dbf	d6,.loop
 
@@ -26930,12 +26466,12 @@ acouscll
 addFavoriteModule
 	;bsr	isFavoriteModule
 	isFavoriteModule a0
-	bne.w .exit
+	bne.b .exit
 
  if DEBUG
 	pea	l_filename(a0)
 	pop  d0
-	DPRINT	"addFavoriteModule %s",1
+	DPRINT	"addFavoriteModule %s"
  endif
 	* set favorite flag
 	st	l_favorite(a0)
@@ -26943,7 +26479,7 @@ addFavoriteModule
 	* see if for some reason a0 is already in the favorite list
 	bsr.w	findFavoriteModule
 	tst.l	d0
-	bne.w	.exit	* bail out if so
+	bne.b	.exit	* bail out if so
 
 	move.l	a0,a3
 
@@ -26952,7 +26488,7 @@ addFavoriteModule
 	move.l	-4(a3),d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
-	beq.w	.noMem
+	beq.b	.noMem
 	move.l	d0,a4
 
 	* Copy node contents
@@ -26979,7 +26515,7 @@ addFavoriteModule
 
 	st	favoriteListChanged(a5)
  if DEBUG
-	bsr	logFavoriteList
+	bsr.w	logFavoriteList
  endif
 .noMem
 .exit
@@ -26991,19 +26527,19 @@ addFavoriteModule
 removeFavoriteModule
 	;bsr	isFavoriteModule
 	isFavoriteModule a0
-	beq.w	.exit
+	beq.b	.exit
 	clr.b	l_favorite(a0)
 
  if DEBUG
 	pea	l_filename(a0)
 	pop  d0
-	DPRINT	"removeFavoriteModule %s",1
+	DPRINT	"removeFavoriteModule %s"
 	 endif
 
 .loop
 	* Find matching l_filename from favorite list
 	* node is in a0
-	bsr	findFavoriteModule
+	bsr.b	findFavoriteModule
 	beq.b	.exit
 	* found matching one, in a1
 	move.l	a1,d2
@@ -27020,7 +26556,7 @@ removeFavoriteModule
 	bra.b	.loop
 .exit
  if DEBUG
-	bsr	logFavoriteList
+	bsr.w	logFavoriteList
  endif
 	;bsr exportFavoriteModulesWithMessage
 	rts
@@ -27067,13 +26603,19 @@ freeFavoriteList
 	bra.b	.loop
 
 .listFreed
+	st	favoriteListChanged(a5)
+	isListInFavoriteMode
+	beq.b	.noFav
+	* In favorite mode, no more modules to show
+	clr.l	modamount(a5)
+.noFav	
 	rts
 
 importFavoriteModulesFromDisk
-	DPRINT	"importFavoriteModulesFromDisk",1
+	DPRINT	"importFavoriteModulesFromDisk"
 	tst.b	favorites(a5)
 	bne.b	.enabled
-	DPRINT	"->disabled in prefs",2
+	DPRINT	"->disabled in prefs"
 	bsr.w		disableListModeChangeButton
 	rts
 .enabled
@@ -27127,12 +26669,12 @@ importFavoriteModulesFromDisk
 	move.l	d6,a3			* start of buffer	
 	lea	(a3,d5.l),a4	* end of buffer
 	jsr	importModuleProgramFromData
-	DPRINT 	"Imported %ld favorite files",3
+	DPRINT 	"Imported %ld favorite files"
 
 	move.l	d6,a0
 	jsr	freemem
 .noData
-	bsr	logFavoriteList
+	bsr.w	logFavoriteList
 	rts
 
 
@@ -27182,9 +26724,18 @@ exportFavoriteModulesWithMessage
 	rts
 	
 exportFavoriteModulesToDisk
-	DPRINT	"exportFavoriteModulesToDisk",1
+	DPRINT	"exportFavoriteModulesToDisk"
 	tst.b	favorites(a5)
 	beq.b	.x
+
+	* User is exiting while in fav mode?
+	isListInFavoriteMode
+	beq.b	.normalMode
+	move.b	moduleListChanged(a5),d0 
+	clr.b	moduleListChanged(a5)
+	or.b	d0,favoriteListChanged(a5)
+.normalMode
+
 	tst.b	favoriteListChanged(a5)
 	beq.b	.x
 	lea	favoriteModuleFileName(pc),a0
@@ -27207,13 +26758,13 @@ updateFavoriteStatus
 
 logFavoriteList
 ; if DEBUG
-;	DPRINT	"Favorite modules:",2
+;	DPRINT	"Favorite modules:"
 ;	lea	favoriteListHeader(a5),a0
 ;.l	TSTNODE	a0,a0
 ;	beq.b	.x
 ;	lea	l_filename(a0),a1
 ;	move.l	a1,d0
-;	DPRINT	"%s",1
+;	DPRINT	"%s"
 ;	bra.b	.l
 ;.x
 ; endif
@@ -27223,8 +26774,8 @@ handleFavoriteModuleConfigChange
 	pushm	all
 
 	tst.b	favorites(a5)
-	beq.w	.noFavs
-	DPRINT	"handleFavoriteModuleConfigChange: enabled",1
+	beq.b	.noFavs
+	DPRINT	"handleFavoriteModuleConfigChange: enabled"
 	bsr.w	enableListModeChangeButton
 
 * favorites are enabled.
@@ -27236,10 +26787,10 @@ handleFavoriteModuleConfigChange
 	lea	favoriteListHeader(a5),a0
 	IFNOTEMPTY a0,.exit
 
-	DPRINT	"->populating",3
+	DPRINT	"->populating"
 
 * if list is empty, try importing data
-	bsr	importFavoriteModulesFromDisk
+	bsr.w	importFavoriteModulesFromDisk
 * then the current list should be updated to contain favorite statuses
 	lea	moduleListHeader(a5),a0
 .loop
@@ -27252,11 +26803,11 @@ handleFavoriteModuleConfigChange
 	bra.b	.loop
 .end
 	* refresh list
-	bra.w	.refresh
+	bra.b	.refresh
 
 .noFavs
-	DPRINT	"handleFavoriteModuleConfigChange: disabled",2
-	bsr	disableListModeChangeButton
+	DPRINT	"handleFavoriteModuleConfigChange: disabled"
+	bsr.w	disableListModeChangeButton
 	isListInFavoriteMode
 	beq.b	.noFav
 	* If disabled from prefs must toggle to normal mode
@@ -27266,11 +26817,11 @@ handleFavoriteModuleConfigChange
 	* favorites are not enabled
 	lea	favoriteListHeader(a5),a0
 	IFEMPTY a0,.exit
-	DPRINT	"->cleaning up",4
+	DPRINT	"->cleaning up"
 	* there's some stuff in the list, free it and refresh view
 	* l_favorite need not be cleaned since they won't be displayed
 	* anyway if feature is disabled
-	bsr	freeFavoriteList
+	bsr.w	freeFavoriteList
 .refresh
 	st	hippoonbox(a5)
 	jsr	resh
@@ -27289,7 +26840,7 @@ handleFavoriteModuleConfigChange
 ;	rts
 
 toggleListMode
-	DPRINT	"toggleListMode",1
+	DPRINT	"toggleListMode"
 
 	isListInFavoriteMode
 	beq.b	.wasNormal
@@ -27310,7 +26861,13 @@ toggleListMode
 	move.b	#LISTMODE_FAVORITES,listMode(a5)
 .set
 	bsr.b	.setButtonStates
-	bsr.b	.setListState
+	bsr.w	.setListState
+	* Playing module should be invalidated,
+	* it is not compatible between the two lists.
+	tst.l	playingmodule(a5) 
+	bmi.b	.not
+	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
+.not
 	rts
 
 .setButtonStates
@@ -27337,7 +26894,7 @@ toggleListMode
 	* the disabled shadow
 	move.l	a0,a3
 	push	a0
-	bsr	redrawButtonGadget	
+	bsr.w	redrawButtonGadget	
 	bsr.b	.refresh
 	pop	a0
 	jsr	printkorva
@@ -27358,8 +26915,8 @@ toggleListMode
 	jsr	obtainModuleList
 
 	jsr	clear_random
-	bsr	clearCachedNode
-	bsr	getVisibleModuleListHeader
+	bsr.w	clearCachedNode
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 
 	* set d1 to FF if list is in normal mode
@@ -27375,7 +26932,6 @@ toggleListMode
 	* in this case, we must update the favorite status
 	* of each list node
 
-	;XAX
 	* TODO: kick13 slider4 height is bad
 	* TODO: profiling
 
@@ -27399,7 +26955,7 @@ toggleListMode
 	move.l	d3,modamount(a5)
  if DEBUG
 	move.l	d3,d0
-	DPRINT	"Modamount=%ld",2
+	DPRINT	"Modamount=%ld"
  endif
 	jsr	releaseModuleList
 	jsr	clearMainWindowWaitPointer
@@ -27415,7 +26971,7 @@ enableListModeChangeButton
 	and	 #~GFLG_DISABLED,gg_Flags(a3)
 	move.l 	a3,a0
 	jsr	refreshGadgetInA0
-	bsr 	redrawButtonGadget
+	bsr.w 	redrawButtonGadget
 .x	rts 
 
 disableListModeChangeButton
@@ -27466,7 +27022,7 @@ createio
 	movem.l	(sp)+,a0-a2
 	rts
 
-*******
+***************************************************************************
 * getNameFromLock
 * DOS library NameFromLock is originally a V36 function. 
 * Here's a port ofthe  V40 implementation that works on older 
@@ -27479,35 +27035,41 @@ createio
 *   d0 = 1 success, 0 failure
 *******
 getNameFromLock 
-.true		equ		1
-.false		equ		0
+.true		equ	1
+.false		equ	0
 .return		equr	d5
 .fl_lock	equr	d6
 .fl_lock2	equr	d7
 .fib		equr	d4
-.debug      	equ    0
+
+	tst.l 	d1
+	bne.b	.lockOk
+	DPRINT	"NULL lock!"
+	* A NULL lock is valid and will return "SYS:" or similar, but
+	* it is not ok in Hippo context.
+	moveq	#.false,d0
+	rts
+.lockOk
 
 	pushm 	d1-a6
- ifne .debug
-	DPRINT	"getNameFromLock!",10
- endif
 	* It's all DOS, baby
 	move.l	_DosBase(a5),a6
+	tst.b	uusikick(a5)
+	beq.b	.old
+	lob     NameFromLock
+ if DEBUG
+	bne.b	.ok_
+	DPRINT	"NameFromLock FAILED!"
+.ok_
+ endif	
+ 	tst.l	d0
+	popm	d1-a6
+	rts
+.old
 
 	* Use this one as the working fib, probably fine.
 	pushpea	fileinfoblock2(a5),.fib
 
-;	* allocate space from stack
-;	* ensure divisible by 4
-;	lea		-(fib_SIZEOF+4)(sp),sp
-;	move.l	sp,d0
-;	* make d0 divisible by 4
-;	and.l	#~%11,d0
-;	* above could have rounded down,
-;	* so round up to next proper address
-;	addq.l	#4,d0
-;	move.l	d0,.fib		* usable fib address
-;
 	* save start of output buffer to a3 for later
 	move.l	d2,a3	
 
@@ -27538,11 +27100,13 @@ getNameFromLock
 	move.l	.fib,d2
 	lob 	Examine
 	tst.l	d0
-	beq.w	.cleanup
-
+	beq.b	.cleanup
+	
 	* add separator if needed
 	tst.b	(a4)
 	beq.b	.noSep
+	cmp.l	a3,a4		* space check!
+	beq.b	.noSpace
 	move.b	#'/',-(a4)
 .noSep
 	move.l	.fib,a0
@@ -27553,7 +27117,7 @@ getNameFromLock
 	bne.b	.findEnd
 	subq.l	#1,a0	* backtrack to NULL
 .copyPart
-	cmp.l	a3,a4
+	cmp.l	a3,a4		* space check!
 	beq.b	.noSpace
 	move.b	-(a0),-(a4)
 	cmp.l	a0,a1
@@ -27567,6 +27131,8 @@ getNameFromLock
 	bra.b	.loop
 .loopEnd
 	* next comes the name for the device
+	cmp.l	a3,a4		* space check!
+	beq.b	.noSpace
 	move.b	#':',-(a4)
 
 	* Dig into the lock, first convert BPTR to APTR.
@@ -27592,7 +27158,7 @@ getNameFromLock
 	add.l	d0,a0
 
 .copyPart2
-	cmp.l	a3,a4
+	cmp.l	a3,a4		* space check!
 	beq.b	.noSpace
 	move.b	-(a0),-(a4)
 	cmp.l	a0,a1
@@ -27601,14 +27167,11 @@ getNameFromLock
 	* all done!
 	* move the resulting string to the front of the buffer.
 	* here a3 and a4 point to the same buffer 
-	move.l	a3,d0
+
 .move
 	move.b	(a4)+,(a3)+
 	bne.b	.move
 
- ifne .debug
-	DPRINT	"->name=%s",2
- endif 
 
 	* indicate success
 	moveq 	#.true,.return
@@ -27617,22 +27180,20 @@ getNameFromLock
 	move.l	.fl_lock,d1
 	lob UnLock
 	
-	;lea		(fib_SIZEOF+4)(sp),sp
-
 	* return status
 	move.l	.return,d0
  if DEBUG
 	bne.b	.ok 
-	DPRINT	"GetNameFromLock FAILED!",100
+	DPRINT	"GetNameFromLock FAILED!"
 .ok
  endif	
- ifne .debug
-	DPRINT	"->success=%ld",3
- endif
+
 	popm 	d1-a6
+	tst.l 	d0
 	rts
 
 
+***************************************************************************
 * Takes a file path and normalizes it by replacing
 * logical names/assigns with actual drive names.
 * It will transform path parts such as "SYS:"
@@ -27647,20 +27208,20 @@ normalizeFilePath
  	pushm	all
  if DEBUG
 	move.l	d1,d0
-	DPRINT	"Normalizing: %s",1101
+	DPRINT	"Normalizing: %s"
  endif
 	move.l	d1,d7
 
  	;pushpea	tempdir(a5),d1
-	move.l	#ACCESS_READ,d2
+	moveq	#ACCESS_READ,d2
 	lore  	Dos,Lock
 	move.l	d0,d4
-	beq.w	.noLock1
+	beq.b	.noLock1
 	lea	-200(sp),sp
 	move.l	d4,d1
 	move.l	sp,d2
 	move.l	#200,d3
-	bsr  	getNameFromLock
+	bsr.w  	getNameFromLock
 	tst.l	d0 
 	beq.b	.noName
 	move.l	sp,a0
@@ -27680,11 +27241,59 @@ normalizeFilePath
 	lob 	UnLock
  if DEBUG
 	move.l	d7,d0
-	DPRINT	"to: %s",1102
+	DPRINT	"to: %s"
  endif
 .noLock1
 	popm	all
 	rts
+
+***************************************************************************
+* Insertion sort of string pointer array 
+*
+* in:
+*  a0 = array of string pointers
+*  d0 = length of the array, unsigned 16-bit
+* out:
+*  a0 = sorted array
+sortStringPtrArray
+	cmp	#1,d0
+	bls.b	.x
+	pushm	d1/d2/d3/d6/d7/a1/a2
+	moveq	#1,d1 
+.sortLoopOuter
+	move	d1,d2
+.sortLoopInner
+	move	d2,d3
+	lsl	#2,d3
+	movem.l	-4(a0,d3),a1/a2
+.strCmp 
+	move.b	(a1)+,d6
+	move.b	(a2)+,d7
+	cmp.b	d6,d7
+	blo.b	.swap
+	tst.b	d6
+	beq.b	.exitLoop
+	tst.b	d7
+	beq.b	.exitLoop
+	cmp.b	d6,d7
+	beq.b	.strCmp
+	cmp.b	d6,d7
+	bhi.b	.exitLoop
+.swap
+	movem.l	-4(a0,d3),a1/a2
+	exg	a1,a2
+	movem.l	a1/a2,-4(a0,d3)
+	
+	subq	#1,d2
+;	bra.b 	.sortLoopInner
+	bne.b	.sortLoopInner	
+.exitLoop
+	addq	#1,d1
+	cmp 	d0,d1
+	bne.b 	.sortLoopOuter
+	popm	d1/d2/d3/d6/d7/a1/a2
+.x	rts
+
 
 *******************************************************************************
 *                                Soittorutiinit
@@ -27698,20 +27307,26 @@ normalizeFilePath
 
 allocreplayer2
 	pushm	d1-a6
-	DPRINT	"Alloc replayer to chip",1
+	DPRINT	"Alloc replayer to chip"
 	moveq	#MEMF_CHIP,d6
 	bra.b	are
 
 allocreplayer
 	pushm	d1-a6
-	DPRINT	"Alloc replayer to public mem",1
+	DPRINT	"Alloc replayer to public mem"
 	moveq	#MEMF_PUBLIC,d6
 are	
 
 	tst.l	(a0)			* onko jo ennest‰‰n?
 	bne.w	.alreadyHaveIt
 
-	cmp.b	#3,groupmode(a5)
+	jsr	setMainWindowWaitPointer
+
+;	push 	a0
+;	bsr.w	inforivit_group2
+;	pop 	a0
+
+	cmp.b	#GROUPMODE_LOAD_SINGLE,groupmode(a5)
 	bne.b	.nah
 
 ** Ladataan yksi kipale replayereit‰ groupista
@@ -27720,84 +27335,107 @@ are
 * d7 = pakatun pituus
 	bne.b	.contti
 .xab	popm	d1-a6
+	jsr	clearMainWindowWaitPointer
 	moveq	#ier_grouperror,d0
 	rts
 
 .nah
 	move	playertype(a5),d0
-	sub	#xpl_offs,d0
 
 	* map player type into a position in the group header
 	* table
 	move.l	externalplayers(a5),a4
 	addq	#8,a4			* skip header
-	lsl	#3,d0
-	movem.l (a4,d0),d0/d7		* offset, length
 
-* d3k0dez!
-;	sub.l	#$a370,d0
-;	swap	d0
-;	rol.l	d1,d0
-;	addq	#1,d1
-;	sub.l	#$a370,d7
-;	swap	d7
-;	rol.l	d1,d7
+.find
+	tst	(a4) 			* end reached?
+	beq.b 	.xab
+	cmp	(a4),d0 
+	beq.b	.found 
+	lea	2+4+4(a4),a4
+	bra.b	.find
+.found
+	movem.l 2(a4),d0/d7		* offset, length
 
-
-	* get actual data address
-	lea     (a4,d0.l),a1
+	* get actual data address, relative to start
+	move.l	externalplayers(a5),a1
+	add.l	d0,a1
 .contti
-
 	move.l	a1,a4
 	move.l	a0,a3
-	move.l	4(a4),d0
-	;sub.l	#$5371a26,d0
-	move.l	d6,d1			* mem type
+	cmp.l	#"IMP!",(a4)
+	beq.b	.imp
+	moveq	#1,d5		* type flag
+	move.l	(a4),d0		* shr decompressed size
+	bra.b	.noImp
+.imp
+	moveq	#1,d5		* type flag
+	move.l	4(a4),d0	* fimp decompressed size
+.noImp
+
+	move.l	d6,d1		* mem type
 	jsr	getmem
-	move.l	d0,(a3)
+	move.l	d0,(a3)		* store pointer
 	bne.b	.ok2
 	popm	d1-a6
+	jsr	clearMainWindowWaitPointer
 	moveq	#ier_nomem,d0
 	rts
 
-.ok2	move.l	d0,a1
+.ok2	
+	move.l	d0,a1
+
+	* a4 = compressed data
+	* a1 = output buffer
+	tst	d5
+	bne.b	.shr
+
 	move.l	a4,a0
 	move.l	d7,d0
 	lore	Exec,CopyMem	
 	move.l	(a3),a0
-	;move.l	#$5371a26,d0
-	;add.l	d0,(a0)
-	;sub.l	d0,4(a0)
-	bsr.w	fimp_decr
+	DPRINT	"Exploding"
+	jsr	fimp_decr
+	bra.b	.wasImp
+.shr
+	DPRINT	"Deshrinklering"
+	lea	4(a4),a0
+	jsr	ShrinklerDecompress
 
+.wasImp
+	cmp	#pt_eagle_start,playertype(a5)
+	bhs.b 	.ok 
+	
 	* see if it needs to be relocated
 	move.l	(a3),a0
 	cmp.l	#$000003f3,(a0)
 	bne.b	.ok
-	DPRINT	"Relocating",2
+	DPRINT	"Relocating"
 	bsr.b	reloc
-
 .ok
-	bsr	clearCpuCaches
+	bsr.b	clearCpuCaches
 
- if DEBUG
-	move.l	(a3),d0
-	DPRINT	"Address: %lx",4
- endif
  
 .x	popm	d1-a6
+	jsr	clearMainWindowWaitPointer
 	moveq	#0,d0	
 	rts
 
 .alreadyHaveIt
 	bra.b	.x
 
+* Clear CPU caches
+* Use after code has been modified.
+* Can be called from deli support code.
 clearCpuCaches
+	pushm	all
+	lea	var_b,a5
 	move.l	(a5),a6
 	cmp	#37,LIB_VERSION(a6)
 	blo.b	.vanha
 	lob	CacheClearU	* cachet tyhjix, ei gurua 68040:ll‰!
 .vanha
+	popm 	all
 	rts
 
 **
@@ -27805,20 +27443,23 @@ clearCpuCaches
 **
 * a0 = hunkki
 reloc	pushm	d0-d2/a0/a1
-	lea	28(a0),a0
-	move.l	(a0)+,d2
-	lsl.l	#2,d2	
-	move.l	a0,a1
-	move.l	a0,d1
-	lea	4(a0,d2.l),a0
-	move.l	(a0)+,d2
+	lea	28(a0),a0		* Address of CODE hunk length in long words
+	move.l	(a0)+,d2	* Read it
+	lsl.l	#2,d2		* Convert to bytes
+	move.l	a0,a1		* a0 = start of the actual code
+	move.l	a0,d1		* also in d1 
+	lea	4(a0,d2.l),a0	* skip over to HUNK_RELOC32 start + 4
+						* skip over the hunk id, that is
+	move.l	(a0)+,d2	* Number of offsets to handle
 	subq.l	#1,d2
 	bmi.b	.024c
-	addq.w	#4,a0
-.0242	move.l	(a0)+,d0
+	addq.w	#4,a0		* Skip over the target hunk number, assume we know it
+.0242	move.l	(a0)+,d0 * read RELOC32 offset
+	* Add start address of the code hunk to the 
+	* address specified by the reloc offset
 	add.l	d1,(a1,d0.l)
 	dbf	d2,.0242
-.024c	addq.w	#8,a0
+.024c	addq.w	#8,a0	* a0 points to next hunk likely
 	popm	d0-d2/a0/a1
 	rts	
 
@@ -27836,7 +27477,7 @@ freereplayer
 	pop	a0
 	clr.l	(a0)
 .x
-	cmp.b	#2,groupmode(a5)	* jos playerfile disabloitu,
+	cmp.b	#GROUPMODE_DISABLE,groupmode(a5)	* jos playerfile disabloitu,
 	blo.b	.xx			* vapautetaan se ejectin yhteydess‰
 					* tai load single moodina
 	move.l	externalplayers(a5),a0		
@@ -27847,6 +27488,7 @@ freereplayer
 *************
 * Tarkistaa onko moduuli fastissa. Jos on, siirt‰‰ sen chippiin
 
+moveModuleToChipMem
 siirra_moduuli
 	pushm	d1-a6
 
@@ -27884,6 +27526,7 @@ sirerro	moveq	#ier_nomem,d0
 *************
 * Tarkistaa onko moduuli chipiss‰. Jos on, siirt‰‰ sen fastiin (jos on).
 
+moveModuleToPublicMem
 siirra_moduuli2
 	pushm	d1-a6
 
@@ -27956,12 +27599,110 @@ clearsound
 
 
 ******************************************************************************
+* Music formats
+******************************************************************************
+
+* Formats
+* - built-in replayers in hippo
+* - replayer code is within modules
+* - replayer code is in libraries
+* - TFMX and ProTracker have special handling 
+internalFormats
+	;dr.w	p_protracker 
+	dr.w	p_med 
+	dr.w 	p_mline 
+	dr.w 	p_musicassembler 
+	dr.w 	p_fred 
+	dr.w	p_sidmon1 
+	dr.w 	p_deltamusic 
+	dr.w	p_markii 
+	dr.w 	p_mon
+	dr.w 	p_dw
+	dr.w 	p_beathoven 
+	dr.w	p_hippel	* very slow id 
+	dc.w 	0
+
+* Formats
+* - replayers are in the HippoPlayer.group
+groupFormats
+	dr.w 	p_jamcracker 
+	dr.w 	p_pumatracker 
+	dr.w 	p_futurecomposer13
+	dr.w 	p_futurecomposer14 
+	dr.w 	p_oktalyzer
+	;dr.w	p_tfmx
+	dr.w	p_hippelcoso 
+	dr.w	p_soundmon 
+	dr.w	p_soundmon3 
+	dr.w	p_digibooster 
+	dr.w 	p_digiboosterpro 
+	dr.w	p_thx 
+	dr.w 	p_aon 
+	dr.w	p_digitalmugician
+	dr.w	p_gamemusiccreator 
+	dr.w	p_medley 
+	dr.w	p_bendaglish 
+	dr.w	p_sidmon2 
+	dr.w	p_deltamusic1 
+	dr.w	p_soundfx 
+	dr.w	p_gluemon
+	dr.w	p_pretracker 
+	dr.w 	p_custommade 
+	dr.w 	p_sonicarranger
+	dr.w	p_startrekker
+	dr.w	p_voodoosupremesynthesizer
+	dr.w 	p_player
+	dc.w 	0
+
+
+* Formats
+* - replayers provided in eagleplayer plugins
+eagleFormats
+	dr.w	p_synthesis
+	dr.w	p_syntracker
+	dr.w	p_robhubbard2
+	dr.w	p_chiptracker
+	dr.w	p_quartet
+	dr.w	p_facethemusic
+	dr.w	p_richardjoseph
+	dr.w	p_instereo1 
+	dr.w	p_instereo2
+	dr.w	p_jasonbrooke
+	dr.w	p_earache
+	dr.w	p_krishatlelid
+	dr.w	p_richardjoseph2
+	dr.w	p_hippel7
+	dr.w	p_aprosys
+	dr.w	p_hippelst
+	dr.w	p_tcbtracker
+	; Hangs on interrupt wait loop
+	;dr.w	p_markcooksey 
+	dr.w	p_maxtrax
+	dr.w	p_wallybeben
+	dr.w	p_synthpack
+	dr.w	p_robhubbard 
+	dr.w 	p_jeroentel
+	dr.w	p_sonix
+	dr.w	p_quartetst 
+	; Hangs on privileged instruction?
+	;dr.w	p_coredesign
+	dr.w	p_digitalmugician2
+	dr.w	p_musicmaker4
+	dr.w	p_musicmaker8
+	dr.w	p_soundcontrol
+	dr.w	p_stonetracker
+	dr.w	p_themusicalenlightenment
+	dr.w	p_timfollin2
+	dr.w	p_activisionpro  	* very slow id
+	dc.w 	0	
+
+******************************************************************************
 * Protracker
 ******************************************************************************
 
 p_protracker
 	jmp	.proinit(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.provb(pc)
 	jmp	.proend(pc)
 	jmp	.prostop(pc)
@@ -27970,7 +27711,10 @@ p_protracker
 	jmp	.prosong(pc)		* Song
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_protracker(pc)
+	p_NOP
+	dc.w pt_prot 				* type
 .flags	
  dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2
 
@@ -28055,35 +27799,33 @@ p_protracker
 	bset	#1,d2			* fast flag
 .ss
 	lea	kplbase(a5),a0
-	bra.w	kplayer+kp_init
-;	rts
+	jmp	kplayer+kp_init
 	
 
 .proend	move.l	d0,-(sp)
-	bsr.w	kplayer+kp_end
+	jsr	kplayer+kp_end
 	move.l	(sp)+,d0
 	bra.w	vapauta_kanavat
-;	rts
 
 .prostop
 	move.l	d0,-(Sp)
 	moveq	#1,d0
-	bsr.w	kplayer+kp_playstop
-	bsr.w	kplayer+kp_clear
+	jsr	kplayer+kp_playstop
+	jsr	kplayer+kp_clear
 	move.l	(sp)+,d0
 	rts
 
 .procont
 	move.l	d0,-(Sp)
 	moveq	#0,d0
-	bsr.w	kplayer+kp_playstop
+ 	jsr	kplayer+kp_playstop
 	move.l	(sp)+,d0
 	rts	
 
 .provolume
 	move.l	d0,-(sp)
 	move	mainvolume(a5),d0
-	bsr.w	kplayer+kp_setmaster
+	jsr	kplayer+kp_setmaster
 	move.l	(sp)+,d0
 	rts
 
@@ -28091,7 +27833,7 @@ p_protracker
 .provb
 	tst.b	vbtimeruse(a5)
 	beq.b	.cus
-	bsr.w	kplayer+kp_music
+	jsr	kplayer+kp_music
 .cus
 	move	kplbase+k_songpos(a5),pos_nykyinen(a5)
 	tst.b	kplbase+k_songover(a5)
@@ -28253,7 +27995,7 @@ p_protracker
 	move.b	(a0,d7),d7
 	bmi.b	.nosong
 
-	bsr.w	kplayer+kp_end
+	jsr	kplayer+kp_end
 	
 	lea	kplbase(a5),a0
 	move.l	moduleaddress(a5),a1
@@ -28607,32 +28349,185 @@ modlen
 .mt_chan4temp	ds.b	8
  even
 
-.mt_SongDataPtr	dc.l 0
-.mt_speed	dc.b 6
- even
-.mt_counter	dc.b 0
- even
-.mt_SongPos	dc.b 0
- even
-.mt_PBreakPos	dc.b 0
- even
-.mt_PosJumpFlag	dc.b 0
- even
-.mt_PBreakFlag	dc.b 0
- even
-.mt_PattDelTime	dc.b 0
- even
-.mt_PattDelTime2 dc.b 0
- even
-.mt_PatternPos	dc.w 0
- even
 .varmistus	dc	0
-
+.mt_SongDataPtr	dc.l 0
+.mt_PatternPos	dc.w 0
+.mt_speed	dc.b 6
+.mt_counter	dc.b 0
+.mt_SongPos	dc.b 0
+.mt_PBreakPos	dc.b 0
+.mt_PosJumpFlag	dc.b 0
+.mt_PBreakFlag	dc.b 0
+.mt_PattDelTime	dc.b 0
+.mt_PattDelTime2 dc.b 0
  even
 
 .dataend
 
  endb	a5
+
+* TODO: also run id_oldst 
+id_protracker
+	cmp.l	#'M.K.',1080(a4)	* Protracker
+	beq.b	.p	
+	cmp.l	#'M!K!',1080(a4)	* Protracker 100 patterns
+	beq.b	.p	
+;	cmp.l	#'FLT4',1080(a4)	* Startrekker
+;	bra.w	idtest
+	moveq	#-1,d0 
+	rts
+	
+.p	moveq	#0,d0
+	rts
+
+
+*******
+* Tunnistetaan Old Soundtracker piisit (15 samplea). Tarttee n. 1700 byte‰
+*******
+id_oldst
+
+*** Tarkistetaan onko samplejen arvot moduulille sopivat
+	lea	20(a4),a0
+	moveq	#0,d0
+	move	#$7fff,d2
+	moveq	#15-1,d1
+.l1
+	cmp	22(a0),d2	* samplelen
+	blo.w	.fail
+	cmp	#1,22(a0)
+	bhi.b	.f0
+	addq	#1,d0
+.f0
+	cmp.b	#64,25(a0)	* volume
+	bhi.w	.fail	
+	cmp	26(a0),d2	* repeat point
+	blo.b	.fail
+	cmp	28(a0),d2	* repeat length
+	blo.b	.fail
+	lea	30(a0),a0
+	dbf	d1,.l1
+	
+	cmp	#15,d0
+	beq.b	.fail
+
+
+* a0 = songlen
+	tst.b	(a0)
+	beq.b	.fail
+	cmp.b	#$7f,(a0)
+	bhi.b	.fail
+	addq	#2,a0	
+
+***** Ovatko postablen arvot oikeita (0-63)?
+
+	moveq	#128-1,d0
+	moveq	#0,d1
+.l2	tst.b	(a0)
+	beq.b	.l22
+	addq	#1,d1
+.l22	cmp.b	#63,(a0)+
+	bhi.b	.fail
+	dbf	d0,.l2
+
+	tst	d1
+	beq.b	.fail
+
+
+* a0 = patterndata
+
+*** Tarkistetaan eka patterni
+
+	move	#4*64-1,d3
+.l3
+	move	(a0)+,d0
+	move	(a0)+,d1
+
+	move	d0,d2
+	and	#$f000,d2		* pit‰s olla tyhj‰‰
+	bne.b	.fail
+
+	move	d1,d2			* tutkaillaan komentoa
+	and	#$0f00,d2		* sallittuja: 0-4, a-f
+	cmp	#$0400,d2
+	bls.b	.oks
+	cmp	#$0a00,d2
+	blo.b	.fail
+
+.oks
+
+	move	d1,d2			* onko samplea?
+	and	#$f000,d2
+	beq.b	.noper
+
+
+	and	#$fff,d0		* period
+	beq.b	.noper
+	cmp	#856,d0
+	bhi.b	.fail
+	cmp	#113,d0
+	blo.b	.fail	
+.noper
+	dbf	d3,.l3
+
+	moveq	#0,d0
+	rts
+
+.fail	moveq	#-1,d0
+	rts
+
+convert_oldst
+
+*******
+* Muutetaan PT-formaattiin
+* a4 <= moduuli
+
+	move.l	modulelength(a5),d0
+	add.l	#484,d0
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
+	lore	Exec,AllocMem
+	tst.l	d0
+	beq.b	.fail
+	move.l	d0,a3
+
+	lea	(a4),a0
+	lea	(a3),a1
+	move	#470/2-1,d0
+.c1	move	(a0)+,(a1)+
+	dbf	d0,.c1
+
+	lea	16*30(a1),a1		* 16 tyhj‰‰ samplee
+
+	moveq	#(128+1+1)/2-1,d0
+.c2	move	(a0)+,(a1)+
+	dbf	d0,.c2
+	move.l	#"M.K.",(a1)+
+
+	move.l	a4,a2
+	add.l	modulelength(a5),a2
+.c3	move.b	(a0)+,(a1)+
+	cmp.l	a2,a0
+	bne.b	.c3
+
+	move.b	#$7f,951(a3)
+
+	lea	20(a3),a0		* repeat pointer jaetaan kahdella
+	moveq	#$f-1,d0
+.f	lsr	#1,26(a0)
+	lea	30(a0),a0
+	dbf	d0,.f
+
+	move.l	moduleaddress(a5),a1
+	move.l	modulelength(a5),d0
+	lore	Exec,FreeMem
+
+	move.l	a3,moduleaddress(a5)
+	add.l	#484,modulelength(a5)
+
+	moveq	#0,d0			* on oikee moduuli
+	rts
+
+.fail	moveq	#-1,d0
+	rts
 
 
 
@@ -28642,16 +28537,19 @@ modlen
 ******************************************************************************
 
 p_sid	jmp	.init(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.song(pc)
 	jmp	.eteen(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	jmp id_sid1(pc)
+	p_NOP
+	dc.w pt_sid 				* type
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen
 	dc.b	"PSID",0
 .flag	dc.b	0
@@ -28916,6 +28814,88 @@ init_sidpatch
 	RTS	
 
 
+
+*******
+* Tunnistetaan SID piisit
+*******
+
+id_sid1 
+	bsr.b	id_sid1_
+	bne.b 	.no
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	moveq	#0,d0 
+.no 
+	rts
+
+
+id_sid1_
+	cmp.l	#"PSID",(a4)
+	beq.b	.q
+	moveq	#-1,d0
+	rts
+.q	moveq	#0,d0
+	rts
+
+id_sid
+	bsr.b	id_sid1
+	beq.w	.yea
+
+	move.l	modulefilename(a5),a0
+	lea	desbuf(a5),a1
+	move.l	a1,a2
+.c	move.b	(a0)+,(a1)+
+	bne.b	.c
+	subq.l	#1,a1
+	move.b	#'.',(a1)+
+	move.b	#'i',(a1)+
+	move.b	#'n',(a1)+
+	move.b	#'f',(a1)+
+	move.b	#'o',(a1)+
+	clr.b	(a1)
+
+	move.l	a2,d1			* avataan_ikoni
+	move.l	#1005,d2
+	lore	Dos,Open
+	move.l	d0,d5
+	beq.b	.no
+
+	lea	probebuffer(a5),a0	* luetaan ikoni
+	move.l	a0,d2
+	move.l	#1000,d3			* 1000 bytee
+	move.l	d5,d1
+	lob	Read
+	move.l	d5,d1
+	lob	Close
+
+* tutkitaan onko playsidin ikoni.
+
+	lea	probebuffer(a5),a0
+	move	#1000,d2
+
+.leep	lea	.id1(pc),a1
+.luup	move.b	(a1)+,d1
+	beq.b	.yea
+	move.b	(a0)+,d0
+	subq	#1,d2
+	beq.b	.no
+	btst	#5,d1
+	beq.b	.cl
+	bset	#5,d0
+	bra.b	.cll
+.cl	bclr	#5,d0
+.cll	cmp.b	d1,d0
+	bne.b	.leep
+	bra.b	.luup
+
+.no	moveq	#-1,d0
+	rts
+.yea	moveq	#0,d0
+	rts
+
+.id1	dc.b	"PLAYSID",0
+.ide1
+ even
+
 * T‰nne v‰liin h‰m‰‰v‰sti
 
 *******************************************************************************
@@ -29008,19 +28988,26 @@ check_keyfile
 p_deltamusic
 	jmp	.deltainit(pc)
 	jmp	.deltaplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.deltaend(pc)
 	jmp	.deltastop(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.deltavolume(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_deltamusic(pc)
+	jmp	.author(pc)
+	dc.w pt_delta2 				* type
 	dc	pf_cont!pf_stop!pf_volume!pf_ciakelaus
 	dc.b	"Delta Music 2",0
+.a	dc.b	"Bent Nielsen",0
  even
 
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .deltainit
 	bsr.w	varaa_kanavat
@@ -29064,25 +29051,49 @@ p_deltamusic
 	bra.b	.delt
 
 
+
+.id_deltamusic
+	lea	.delta_id(pc),a1	* Delta Music 2
+	moveq	#.delend-.delta_id,d0
+	bsr.w	search
+	bra.w	idtest
+
+.delta_id
+	dc.b	"DELTA MUSIC"
+.delend
+ even
+
+
 ******************************************************************************
 * Future Composer 1.0 - 1.3
 ******************************************************************************
 
+fc_author
+	pushpea	.a(pc),d0
+	rts
+
+.a	dc.b	"Supersero/Superions (based on Jochen Hippel replay)",0
+	even 
+
 p_futurecomposer13
 	jmp	.fc10init(pc)
 	jmp	.fc10play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.fc10end(pc)
 	jmp	.fc10stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_futurecomposer13(pc)
+	jmp	fc_author(pc)
+	dc.w pt_future10			* type
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen
 	dc.b	"Future Composer v1.0-1.3",0
  even
+
 
 .fc10init
 	bsr.w	varaa_kanavat
@@ -29114,8 +29125,13 @@ p_futurecomposer13
 	moveq	#0,d0
 	rts
 .fc10play
+	push	a5
 	move.l	fc10routines(a5),a0
-	jmp	$20+436(a0)
+	jsr	$20+436(a0)
+	pop		a5
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+	rts
 
 .fc10end
 	bsr.w	rem_ciaint
@@ -29124,6 +29140,9 @@ p_futurecomposer13
 .fc10stop
 	bra.w	clearsound
 
+.id_futurecomposer13
+	cmp.l	#'SMOD',(a4)		* Futurecomposer 1.0-1.3
+	bra.w	idtest
 
 ******************************************************************************
 * Future Composer 1.4
@@ -29133,18 +29152,27 @@ p_futurecomposer13
 p_futurecomposer14
 	jmp	.fc10init(pc)
 	jmp	.fc10play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.fc10end(pc)
 	jmp	.fc10stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_futurecomposer14(pc)
+	jmp	fc_author(pc)
+	dc.w pt_future14	* type
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen
 	dc.b	"Future Composer v1.4",0
+
  even
+
+.offset_init = $20+0
+.offset_play = $20+4
+.offset_end = $20+8
+
 
 .fc10init
 	bsr.w	varaa_kanavat
@@ -29171,13 +29199,18 @@ p_futurecomposer14
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
 	move.l	fc14routines(a5),a3
-	jsr	$20(a3)
+	jsr	.offset_init(a3)
 	movem.l	(sp)+,d0-a6
 	moveq	#0,d0
 	rts
 .fc10play
 	move.l	fc14routines(a5),a0
-	jmp	$20+466(a0)
+	push	a5
+	jsr	.offset_play(a0)
+	pop 	a5 
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+	rts
 
 .fc10end
 	bsr.w	rem_ciaint
@@ -29186,6 +29219,10 @@ p_futurecomposer14
 .fc10stop
 	bra.w	clearsound
 
+.id_futurecomposer14
+	cmp.l	#'FC14',(a4)		* Futurecomposer 1.4
+	bra.w	idtest
+
 
 
 
@@ -29193,21 +29230,32 @@ p_futurecomposer14
 * SoundMon
 ******************************************************************************
 
+bp_author 
+	pushpea	.a(pc),d0 
+	rts
+
+.a 	dc.b	"Brian Postma",0 
+	even
+
 p_soundmon
 	jmp	.bpsminit(pc)
 	jmp	.bpsmplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.bpsmend(pc)
 	jmp	.bpsmstop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp .id_soundmon(pc)
+	jmp	bp_author(pc)
+	dc.w pt_soundmon2
  dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
 	dc.b	"SoundMon v2.0",0
  even
+
 
 .bpsminit
 	bsr.w	varaa_kanavat
@@ -29265,6 +29313,22 @@ p_soundmon
 	jmp	2158(a0)
 
 
+.id_soundmon 
+	bsr.b 	.id_soundmon_
+	bne.b 	.x 
+	moveq	#25-1,d0
+	bsr.w	copyNameFromModule
+	moveq	#0,d0
+.x	rts
+
+.id_soundmon_
+	move.l	26(a4),d0		* Soundmon
+	lsr.l	#8,d0
+	cmp.l	#'V.2',d0
+	bra.w	idtest
+
+
+
 ******************************************************************************
 * SoundMon 3
 ******************************************************************************
@@ -29272,15 +29336,18 @@ p_soundmon
 p_soundmon3
 	jmp	.bpsminit(pc)
 	jmp	.bpsmplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.bpsmend(pc)
 	jmp	.bpsmstop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP	
+	jmp .id_soundmon3(pc)
+	jmp	bp_author(pc)
+	dc.w pt_soundmon3 				* type
  dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
 	dc.b	"SoundMon v3.0",0
  even
@@ -29342,6 +29409,26 @@ p_soundmon3
 	jmp	8+$20(a0)
 
 
+.id_soundmon3 
+	bsr.b 	.id_soundmon3_
+	bne.b 	.x 
+	moveq	#25-1,d0
+	bsr.w	copyNameFromModule
+	moveq	#0,d0
+.x	rts
+
+.id_soundmon3_
+	move.l	26(a4),d0		* Soundmon
+	lsr.l	#8,d0
+	cmp.l	#'V.3',d0
+	beq.b	.y
+	cmp.l	#'BPS',d0
+	bra.w	idtest
+
+.y	moveq	#0,d0
+	rts
+
+
 ******************************************************************************
 * Jamcracker
 ******************************************************************************
@@ -29349,18 +29436,26 @@ p_soundmon3
 p_jamcracker
 	jmp	.jaminit(pc)
 	jmp	.jamplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.jamend(pc)
 	jmp	.jamstop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_jamcracker(pc)
+	jmp	.author(pc)
+	dc.w pt_jamcracker				* type
+	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
 	dc.b	"JamCracker",0
+.a 	dc.b 	"Xag/Betrayal, Martin Kemmel",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts 
 
 .jaminit
 	bsr.w	varaa_kanavat
@@ -29382,17 +29477,24 @@ p_jamcracker
 ;	rts
 
 .ok3	
+	pushm a5/a6
 	move.l	moduleaddress(a5),a0
 	lea	dmawait(pc),a1
 	lea	songover(a5),a2
-	move.l	jamroutines(a5),a3
-	jsr	(a3)
+	lea mainvolume(a5),a3 
+	lea nullsample,a4
+	move.l	jamroutines(a5),a6
+	jsr	(a6)
+	popm a5/a6
+	move	d0,pos_maksimi(a5)
 	moveq	#0,d0
 	rts	
 
 .jamplay
 	move.l	jamroutines(a5),a0
-	jmp	304(a0)
+	jsr 4(a0)
+	move	d0,pos_nykyinen(a5)
+	rts
 
 .jamend
 	bsr.w	rem_ciaint
@@ -29403,6 +29505,10 @@ p_jamcracker
 	bra.w	clearsound
 
 
+.id_jamcracker
+	cmp.l	#'BeEp',(a4)		* JamCracker
+	bra.w	idtest
+
 ******************************************************************************
 * Music Assembler
 ******************************************************************************
@@ -29410,18 +29516,26 @@ p_jamcracker
 p_musicassembler
 	jmp	.massinit(pc)
 	jmp	.massplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.massend(pc)
 	jmp	.massstop(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.massvolume(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_musicassembler(pc)
+	jmp	.author(pc)
+	dc.w pt_musicass				* type
 	dc	pf_cont!pf_stop!pf_volume!pf_ciakelaus
 	dc.b	"Music Assembler",0
+.a 	dc.b	"Oscar Giesen, Marco Swagerman",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .massinit
 	bsr.w	varaa_kanavat
@@ -29473,6 +29587,19 @@ p_musicassembler
 ;	bra.b	.minit
 
 
+
+.id_musicassembler
+	lea	.muass_id(pc),a1	* Music Assembler
+	moveq	#.muassend-.muass_id,d0
+	bsr.w	search
+	bra.w	idtest
+
+
+.muass_id
+	dc.b	"usa-team 89"
+.muassend
+ even
+
 ******************************************************************************
 * Fred
 ******************************************************************************
@@ -29480,19 +29607,27 @@ p_musicassembler
 p_fred
 	jmp	.fredinit(pc)
 	jmp	.fredplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.fredend(pc)
 	jmp	.fredstop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.fredsong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_fred(pc)
+	jmp	.author(pc)
+	dc.w pt_fred				* type
 	dc	pf_cont!pf_stop!pf_song!pf_ciakelaus
 	dc.b	"Fred",0
+.a 	dc.b	"Frederic Hahn",0
  even
 
+.author
+	pushpea	.a(pc),d0
+	rts
+	
 .fredinit
 	bsr.w	varaa_kanavat
 	beq.b	.ok
@@ -29539,58 +29674,241 @@ p_fred
 	bra.b	.finit
 
 
+.id_fred
+* d5 => maxsongs
+	move.l	a4,a0
+	moveq	#-1,d0				; Modul nicht erkannt (default)
+	cmpi.w	#$4efa,(a0)
+	bne.s	.ChkEnd
+	cmpi.w	#$4efa,$04(a0)
+	bne.s	.ChkEnd
+	cmpi.w	#$4efa,$08(a0)
+	bne.s	.ChkEnd
+	cmpi.w	#$4efa,$0c(a0)
+	bne.s	.ChkEnd
+	add.w	2(a0),a0
+	moveq	#4-1,d1
+.ChkLoop cmpi.w	#$123a,2(a0)
+	bne.s	.ChkNext
+	cmpi.w	#$b001,6(a0)
+	beq.s	.ChkSong
+.ChkNext addq.l	#2,a0
+	dbra	d1,.ChkLoop
+	bra.s	.ChkEnd				; Modul nicht erkannt
+.ChkSong add.w	4(a0),a0
+	moveq	#0,d5
+	move.b	4(a0),d5
+	move	d5,maxsongs(a5)
+	moveq	#0,d0				; Modul erkannt
+.ChkEnd	tst.l	d0
+	rts
+
+
 ******************************************************************************
 * SonicArranger
 ******************************************************************************
 
 p_sonicarranger
-	jmp	.soninit(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	jmp	.sonend(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	jmp	.sonsong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_song
+	jmp	.init(pc)
+	jmp	 .play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	 .stop(pc)
+	p_NOP
+	p_NOP
+	jmp 	.song(pc)
+	jmp 	.forward(pc)
+	jmp 	.backward(pc)
+	p_NOP
+	jmp .id_sonicarranger(pc)
+	jmp	.author(pc)
+	dc.w pt_sonicarranger				* type
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song
 	dc.b	"Sonic Arranger",0
+.a 	dc.b	"Carlsten Schlote, Branko Mikic, Carsten Herbst"
  even
 
-.soninit
+.author
+	pushpea	.a(pc),d0
+	rts	
+
+.offset_init 		= $20+0
+.offset_play 		= $20+4
+.offset_end		= $20+8
+.offset_song 		= $20+12
+.offset_forward 	= $20+16
+.offset_backward 	= $20+20
+
+.init
 	bsr.w	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
-.ok	
-	movem.l	d0-a6,-(sp)
+.ok
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	sonicroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	bsr.w	rem_ciaint
+	bra.w	vapauta_kanavat
+.ok3
+	;bra	.skip
+
 	move.l	moduleaddress(a5),a0
-	jsr	(a0)
-	move.l	moduleaddress(a5),a0
-	jsr	4(a0)
-	moveq	#0,d0
-	move	songnumber(a5),d0
-	move.l	moduleaddress(a5),a0
-	jsr	12(a0)	
-	move	#10,maxsongs(a5)
-	movem.l	(sp)+,d0-a6
+	move.l	modulelength(a5),d0
+	lea	mainvolume(a5),a1
+	lea	songover(a5),a2
+	lea	pos_nykyinen(a5),a3
+	move.l	sonicroutines(a5),a4
+	push	a5
+	jsr	.offset_init(a4)
+	pop	a5
+	cmp.b	#-1,d0
+	beq.b	.memErr
+	cmp.b	#-2,d0
+	beq.b	.formatErr
+	move	d1,pos_maksimi(a5)
+	move	d3,maxsongs(a5)
+
+	move	d2,d0
+	bsr.w	ciaint_setTempoFromD0
+.skip
 	moveq	#0,d0
 	rts	
 
-.sonend
-	movem.l	d0-a6,-(sp)
-	move.l	moduleaddress(a5),a0
-	jsr	16(a0)
-	move.l	moduleaddress(a5),a0
-	jsr	8(a0)
-	movem.l	(sp)+,d0-a6
+.memErr	moveq	#ier_nomem,d0
+	rts
+.formatErr
+	moveq	#ier_not_compatible,d0
+	rts
+
+.end
+	bsr.w	rem_ciaint
+	move.l	sonicroutines(a5),a0
+	jsr	.offset_end(a0)
+	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
-.sonsong
-	bsr.b	.sonend	
-	bra.b	.soninit
+.stop
+	bra.w	clearsound
+	
+.song
+	move	songnumber(a5),d0
+	move.l	sonicroutines(a5),a0
+	push	a5
+	jsr	.offset_song(a0)
+	pop	a5
+	move	d0,pos_maksimi(a5)
+	rts
+
+.forward
+	move.l	sonicroutines(a5),a0
+	push	a5
+	jsr	.offset_forward(a0)
+	pop	a5
+	rts
+.backward
+	move.l	sonicroutines(a5),a0
+	push	a5
+	jsr	.offset_backward(a0)
+	pop	a5
+	rts
+
+.play	
+	move.l	sonicroutines(a5),a0
+	jmp	.offset_play(a0)
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_sonicarranger
+	move.l	a4,a0
+	move.l	d7,d3
+	moveq	#-1,D0
+
+	cmp.l	#'SOAR',(A0)
+	bne.b	.NoSong
+	addq.l	#4,A0
+	cmp.l	#'V1.0',(A0)+
+	bne.w	.Fault
+	cmp.l	#'STBL',(A0)
+	bne.w	.Fault
+	bra.w	.Found
+.NoSong
+	cmp.w	#$4EFA,(A0)
+	bne.b	.NoRepa
+	move.w	2(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	lea	6(A0,D1.W),A1
+	cmp.w	#$41FA,(A1)+
+	bne.b	.Fault
+	moveq	#0,D1
+	move.w	(A1),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	add.w	D1,A1
+	subq.l	#8,D3
+	sub.l	D1,D3
+	bmi.b	.Fault
+	move.l	A1,A0
+.NoRepa
+	move.l	A0,A1
+	moveq	#$28,D1
+	sub.l	D1,D3
+	bmi.b	.Fault
+	cmp.l	(A1)+,D1
+	bne.b	.Fault
+	moveq	#6,D1
+.NextLong
+	move.l	(A1)+,D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+	dbf	D1,.NextLong
+	sub.l	D2,D3
+	bmi.b	.Fault
+	lea	(A0,D2.L),A1
+	move.l	(A1)+,D1
+	beq.b	.SynthOnly
+	move.l	A1,A0
+.NextSize
+	sub.l	(A0),D3
+	bmi.b	.Fault
+	add.l	(A0)+,A1
+	addq.l	#4,A1
+	subq.l	#1,D1
+	bne.b	.NextSize
+.SynthOnly
+	moveq	#12,D1
+	sub.l	D1,D3
+	bmi.b	.Fault
+	lea	.Text(PC),A0
+.CheckString
+	cmpm.b	(A0)+,(A1)+
+	bne.b	.Fault
+	dbeq	D1,.CheckString
+.Found
+	moveq	#0,D0
+.Fault
+	tst.l	d0
+	rts
+.Text
+	dc.b	'deadbeef'
+	dc.l	0
+
 
 ******************************************************************************
 * SidMon 1.0
@@ -29599,15 +29917,18 @@ p_sonicarranger
 p_sidmon1
 	jmp	.sm10init(pc)
 	jmp	.sm10play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.sm10end(pc)
 	jmp	.sm10stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp 	.id_sidmon1(pc)
+	jmp	author_vliet(pc)
+	dc.w 	pt_sidmon1			* type
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"SidMon 1",0
  even
@@ -29625,6 +29946,10 @@ p_sidmon1
 	rts
 .ok2
 	movem.l	d0-a6,-(sp)
+	; The id routine does code modification to the module
+	; provided replay routine, for safety clear caches
+	; before calling.
+	bsr.w	clearCpuCaches
 	move.l	sid10init(pc),a0
 	jsr	(a0)
 	movem.l	(sp)+,d0-a6
@@ -29642,10 +29967,62 @@ p_sidmon1
 .sm10stop
 	bra.w	clearsound
 
+
+
+.id_sidmon1
+* d1 => sid10init
+* d2 => sid10music
+	move.l	a4,a0
+	bsr.b	.do 
+	tst.l	d0 
+	bne.b 	.no
+	move.l	d1,sid10init
+	move.l	d2,sid10music
+.no
+	rts 
+.do
+	moveq	#-$01,d0
+	cmpi.l	#$08f90001,(a0)
+	bne.b	.l_f218
+	cmpi.l	#$00bfe001,$0004(a0)
+.l_f1f6	bne.b	.l_f218
+	cmpi.w	#$4e75,$025c(a0)
+	beq.b	.l_f20e
+	cmpi.w	#$4ef9,$025c(a0)
+	bne.b	.l_f218
+	move.w	#$4e75,$025c(a0)
+.l_f20e	moveq	#$2c,d1
+	move.l	#$0000016a,d2
+	bra.b	.l_f266
+.l_f218	cmpi.w	#$41fa,(a0)
+	bne.b	.l_f278
+	cmpi.w	#$d1e8,$0004(a0)
+	bne.b	.l_f278
+	cmpi.w	#$4e75,$0230(a0)
+	beq.b	.l_f23e
+	cmpi.w	#$4ef9,$0230(a0)
+	bne.b	.l_f248
+	move.w	#$4e75,$0230(a0)
+.l_f23e	moveq	#$00,d1
+	move.l	#$0000013e,d2
+	bra.b	.l_f266
+.l_f248	cmpi.w	#$4e75,$029c(a0)
+	beq.b	.l_f25e
+	cmpi.w	#$4ef9,$029c(a0)
+	bne.b	.l_f278
+	move.w	#$4e75,$029c(a0)
+.l_f25e	moveq	#$00,d1
+	move.l	#$0000016a,d2
+.l_f266	moveq	#$00,d0
+	add.l	a0,d1		* init
+	add.l	a0,d2		* music
+;	movem.l	d1/d2,sid10init
+.l_f278	
+	rts	
+
+
 sid10init	dc.l	0
 sid10music	dc.l	0
-
-
 
 
 ******************************************************************************
@@ -29655,22 +30032,40 @@ sid10music	dc.l	0
 p_oktalyzer
 	jmp	.okinit(pc)
 	jmp	.okplay(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.okend(pc)
 	jmp	.okstop(pc)
-	dc.l	$4e754e75
+	jmp	.okcont(pc)
 	jmp	.okvolume(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_volume!pf_end
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp 	.id(pc)
+	jmp	.author(pc)
+	dc.w 	pt_oktalyzer				* type
+	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont
 	dc.b	"Oktalyzer",0
+.a	dc.b	"Armin Sander",0
  even
 
-.okstop	st	playing(a5)	* ei sallita pys‰yttelemist‰
+.author
+	pushpea	.a(pc),d0 
 	rts
 
+.offset_init = $20+0 
+.offset_play = $20+4 
+.offset_end  = $20+8 
+.offset_vol  = $20+12 
+
+
+.okstop	;st	playing(a5)	* ei sallita pys‰yttelemist‰
+	move	#$f,$dff096
+	rts
+.okcont
+	move	#$800f,$dff096
+	rts
+	
 .okinit	
 	bsr.w	varaa_kanavat
 	beq.b	.ok
@@ -29685,37 +30080,40 @@ p_oktalyzer
 .ok2
 
 	lea	oktaroutines(a5),a0
-	bsr.w	allocreplayer2		* chippiin
+	bsr.w	allocreplayer
 	beq.b	.ok3
 	bsr.w	rem_ciaint
 	bra.w	vapauta_kanavat
-;	rts
 
 .ok3	
 	move.l	moduleaddress(a5),a0
 	lea	songover(a5),a1
 	move.l	oktaroutines(a5),a2
-	jsr	$20(a2)
+	jsr	.offset_init(a2)
 	tst	d0
-	beq.b	.ee
-	bsr.b	.oke
-	bsr.w	rem_ciaint
-	moveq	#ier_nomem,d0
-	rts
-
-.ee	bsr.b	.okvolume
+	bne.b	.mem
+	bsr.b	.okvolume
 	moveq	#0,d0
 	rts
 
+.mem	moveq	#ier_nomem,d0
+	rts
+
+
 .okplay	
+	push	a5
 	move.l	oktaroutines(a5),a0
-	jmp	526+$20(a0)
+	jsr	.offset_play(a0)
+	pop	a5
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+	rts
 
 .okend	
 	bsr.w	rem_ciaint
 	pushm	all
 	move.l	oktaroutines(a5),a0
-	jsr	52+$20(a0)
+	jsr	.offset_end(a0)
 	popm	all
 .oke	bra.w	vapauta_kanavat
 
@@ -29723,16 +30121,53 @@ p_oktalyzer
 	moveq	#0,d0
 	move	mainvolume(a5),d0
 	move.l	oktaroutines(a5),a0
-	jmp	4096+$20(a0)
+	jmp	.offset_vol(a0)
 
 
+.id 
+	bsr.b	id_oktalyzer8ch 
+	bne.b	id_oktalyzer
+
+	bsr.w	moveModuleToPublicMem
+	moveq	#0,d0 
+	rts
+
+id_oktalyzer
+	cmp.l	#'OKTA',(a4)		* Oktalyzer
+	bne.b	.nok
+	cmp.l	#'SONG',4(a4)
+	bra.w	idtest
+
+.nok	moveq	#-1,d0
+	rts
+
+id_oktalyzer8ch
+	bsr.b  id_oktalyzer
+	bne.b 	.no
+	cmp.l	#$00010001,$10(a4)	* Onko 8 kanavaa?
+	bne.b	.no
+	cmp.l	#$00010001,$10+4(a4)
+	beq.b	.go
+.no 
+	moveq	#-1,d0
+	rts
+.go 
+	moveq	#0,d0
+	rts
 ******************************************************************************
 * TFMX
 ******************************************************************************
 
+tfmx_author
+	pushpea	.a(pc),d0 
+	rts
+.a 
+	dc.b	"Chris Huelsbeck, Peter Thierolf",0
+	even
+
 p_tfmx
 	jmp	.tfmxinit(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.tfmxvb(pc)
 	jmp	.tfmxend(pc)
 	jmp	.tfmxstop(pc)
@@ -29741,11 +30176,13 @@ p_tfmx
 	jmp	.tfmxsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp id_tfmx(pc) 
+	jmp	tfmx_author(pc)
+	dc.w pt_tfmx				* type
 	dc	pf_cont!pf_stop!pf_song!pf_volume!pf_kelaus!pf_poslen!pf_end
 	dc.b	"TFMX",0
  even
-
 
 
 .eteen
@@ -30000,6 +30437,107 @@ gettfmxsongs
 	rts	
 
 
+* TODO: all variants
+
+id_tfmxunion
+	cmp.l	#'TFHD',(a4)		* Yhdistetty TFMX formaatti
+	bra.w	idtest
+
+id_tfmx
+	cmp.l	#"TFMX",(a4)
+	beq.b	.y
+	cmp.l	#"tfmx",(a4)
+	bra.w	idtest
+
+.y	moveq	#0,d0
+	rts
+	
+
+
+id_TFMX_PRO	
+	move.l	a4,a1
+	lea	TFMX_IDs(pc),a0
+.id_loop
+	tst.b	(a0)
+	beq.b	.Not_TFMX_PRO
+	move.l	a4,a1		;Module
+.strloop
+	tst.b	(a0)
+	beq.s	.found
+	cmpm.b	(a0)+,(a1)+
+	beq.s	.strloop
+.skiploop
+	tst.b	(a0)+
+	bne.s	.skiploop
+	bra.s	.id_loop
+.found
+	move.l	a4,a0	;Module
+	move.w	$100(a0),d0
+	move.l	$1D0(a0),d1
+	bne.s	.valid
+	move.l	#$800,d1
+.valid
+	add.l	d1,a0	;Channel table
+	moveq	#0,d1
+	moveq	#0,d3	;Start as TFMX Pro
+.chanloop
+	move.w	d0,d2	;Channel number
+	lsl.w	#4,d2
+	move.l	a0,a2
+	add.w	d2,a2	;Channel pointer
+	move.w	(a2)+,d2	;Channel number
+	cmp.w	#$EFFE,d2	;End mark
+	bne.s	.done
+	move.w	(a2)+,d2	;Channel type
+	add.w	d2,d2
+	cmp.w	#10,d2
+	blo.s	.notover10
+	moveq	#0,d2
+	moveq	#0,d3	;Is TFMX Pro
+.notover10
+	jmp	.JTab(pc,d2.w)
+.JTab
+	bra.s	.done
+	bra.s	.test
+	bra.s	.next
+	bra.s	.probably_not
+	bra.s	.next
+.test
+	tst.w	d1	;Flip-flop?
+	beq.s	.start
+	bmi.s	.channum
+	bra.s	.chan
+.start
+	move.w	#$FFFF,d1
+	addq.w	#1,d0	;Next channel
+	bra.s	.chanloop
+.channum
+	move.w	2(a2),d1
+.chan
+	subq.w	#1,d1
+	move.w	(a2),d0	;Paired channel?
+	bra.s	.chanloop
+.probably_not
+	moveq	#-1,d3
+.next
+	addq.w	#1,d0	;Next Channel
+	bra.s	.chanloop
+.done
+	tst.l	d3
+	bne.s	.Not_TFMX_PRO
+	moveq	#0,d0	;Identified!
+	bra.s	.exit
+.Not_TFMX_PRO
+	moveq	#-1,d0
+.exit
+	rts
+
+TFMX_IDs
+	dc.b	'tfmxsong',0
+	dc.b	'TFMX-SONG',0
+	dc.b	'TFMX_SONG',0,0
+
+
 ******************************************************************************
 * TFMX 7 channels
 ******************************************************************************
@@ -30008,19 +30546,22 @@ gettfmxsongs
 
 p_tfmx7
 	jmp	.tfmxinit(pc)
-	dc.l	$4e754e75
+	p_NOP
 
 	jmp	.vb(pc)
-;	dc.l	$4e754e75
+;	p_NOP
 
 	jmp	.tfmxend(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.tfmxvol(pc)
 	jmp	.tfmxsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp  id_TFMX7V(pc)
+	jmp	tfmx_author(pc)
+	dc.w pt_tfmx7 				* type
 	dc	pf_volume!pf_song!pf_poslen!pf_kelaus!pf_end
 	dc.b	"TFMX 7ch",0
  even
@@ -30143,21 +30684,105 @@ p_tfmx7
 
 
 
+id_TFMX7V
+	move.l	a4,a1
+	lea	TFMX_IDs(pc),a0
+.idloop
+	tst.b	(a0)
+	beq.b	.Not_TFMX7V
+	move.l	a4,a1
+.strloop
+	tst.b	(a0)
+	beq.s	.validID
+	cmpm.b	(a0)+,(a1)+
+	beq.s	.strloop
+.skiploop
+	tst.b	(a0)+
+	bne.s	.skiploop
+	bra.s	.idloop
+.validID
+	move.l	a4,a0
+	move.w	$100(a0),d0
+	move.l	$1D0(a0),d1
+	bne.s	.valid
+	move.l	#$800,d1
+.valid
+	add.l	d1,a0
+	moveq	#0,d1
+	moveq	#0,d3
+.chanloop
+	move.w	d0,d2
+	lsl.w	#4,d2
+	move.l	a0,a2
+	add.w	d2,a2
+	move.w	(a2)+,d2
+	cmp.w	#$EFFE,d2
+	bne.s	.done
+	move.w	(a2)+,d2
+	add.w	d2,d2
+	cmp.w	#10,d2
+	blo.s	.intable
+	moveq	#0,d2
+	moveq	#0,d3
+.intable
+	jmp	.JTab(pc,d2.w)
+.JTab
+	bra.s	.done
+	bra.s	.check
+	bra.s	.next
+	bra.s	.probably_not
+	bra.s	.next
+.check
+	tst.w	d1
+	beq.s	.norm
+	bmi.s	.paired
+	bra.s	.chan
+.norm
+	move.w	#$FFFF,d1
+	addq.w	#1,d0
+	bra.s	.chanloop
+.paired
+	move.w	2(a2),d1
+.chan
+	subq.w	#1,d1
+	move.w	(a2),d0
+	bra.s	.chanloop
+.probably_not
+	moveq	#-1,d3
+.next
+	addq.w	#1,d0
+	bra.s	.chanloop
+.done
+	tst.l	d3
+	beq.s	.Not_TFMX7V
+	moveq	#0,d0	;Identified!
+	bra.s	.exit
+.Not_TFMX7V
+	moveq	#-1,d0
+.exit
+	rts
+
+
+
+
 ******************************************************************************
 * MED
 ******************************************************************************
 
 p_med	jmp	.medinit(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.medvb(pc)
 	jmp	.medend(pc)
 	jmp	.medstop(pc)
 	jmp	.medcont(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.medsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp .id_med(pc)
+	jmp	.author(pc)
+	dc.w pt_med
 .flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song
 	dc.b	"MED "
 .nam1	dc.b	"     "
@@ -30166,9 +30791,14 @@ p_med	jmp	.medinit(pc)
 .pahk1  dc.b	"4ch",0
 .pahk2  dc.b	"5-8ch",0
 .pahk3	dc.b	"1-64ch",0
+.a_	dc.b	"Teijo Kinnunen",0
 
  even
- 
+
+.author
+	pushpea	.a_(pc),d0
+	rts
+
 .medvb
 	move.l	moduleaddress(a5),a0
 	move	46(a0),pos_nykyinen(a5)
@@ -30309,7 +30939,7 @@ p_med	jmp	.medinit(pc)
 
 ** jos on octamixplayerill‰ soitettava ja sijaitsee chipiss‰, koitetaan
 ** siirt‰‰ fastiin:
-	bsr.w	siirra_moduuli2
+	bsr.w	moveModuleToPublicMem
 
 
 .yeep
@@ -30495,28 +31125,51 @@ p_med	jmp	.medinit(pc)
 	bsr.w	.medend
 	bra.w	.medinit
 
+.id_med 	
+	bsr.b 	.id_med_ 
+	bne.b	.x 
+	clr.b	medrelocced(a5)
+.x	rts
+
+.id_med_
+
+	move.l	(a4),d0			* MED
+	lsr.l	#8,d0
+	cmp.l	#'MMD',d0
+	bra.w	idtest
+
 
 
 
 ******************************************************************************
 * The Player v6.1a
 ******************************************************************************
- 
+
+guru_author
+	pushpea	.a(pc),d0
+	rts
+.a	dc.b	"Jarno Paananen (Guru/Sahara Surfers)"
+	even
+
 p_player
 	jmp	.p60init(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.p60end(pc)
 	jmp	.p60stop(pc)
 	jmp	.p60cont(pc)
 	jmp	.p60volume(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_player(pc)
+	jmp	guru_author(pc)
+	dc.w pt_player
 	dc	pf_stop!pf_cont!pf_volume
 	dc.b	"The Player 6.1A",0
  even
+
 
 .p60end
 	movem.l	d0-a6,-(sp)
@@ -30608,28 +31261,45 @@ p_player
 	bra.b	.ok2
 
 
+* TODO: both
+id_player
+ 	cmp.l	#'P61A',(a4)		* The player 6.1a
+	bra.w	idtest
+
+id_player2				* filename <= D0
+	and.l	#$dfffffff,d0
+	cmp.l	#'P61.',d0
+	bra.w	idtest
+	
+
 
 ******************************************************************************
 * Mark II
 ******************************************************************************
 
-
-
 p_markii
 	jmp	.markinit(pc)
 	jmp	.markmusic(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.markend(pc)
 	jmp	clearsound(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_markii(pc)
+	jmp	.author(pc)
+	dc.w pt_markii
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"Mark II",0
+.a	dc.b	"Darius Zendeh",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .markinit
 	bsr.w	varaa_kanavat
@@ -30671,6 +31341,33 @@ p_markii
 	rts
 
 
+.id_markii
+	moveq.l	#-1,d0
+
+	cmp	#$48e7,(a4)
+	bne.b	.eim
+	cmp	#$41fa,4(a4)	
+	bne.b	.eim
+	cmp	#$4cd8,8(a4)
+	bne.b	.eim
+	cmp.l	#$0c0000ff,12(a4)
+	beq.b	.joom
+.eim
+
+	lea	.lbw000106(pc),a1
+.lbc0000ea
+	move.w	(a1)+,d1
+	beq.s	.lbc000104
+	cmp.l	#$2e5a4144,$0000(a4,d1.w)
+	bne.s	.lbc0000ea
+	cmp.l	#$5338392e,$0004(a4,d1.w)
+	bne.s	.lbc0000ea
+.joom	moveq.l	#0,d0
+.lbc000104
+	tst.l	d0
+	rts	
+.lbw000106	dc.w	$02a0,$033c,$0348,0
+
 
 ******************************************************************************
 * Maniacs of Noise
@@ -30679,19 +31376,26 @@ p_markii
 
 p_mon	jmp	.moninit(pc)
 	jmp	.monmusic(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.monend(pc)
 	jmp	clearsound(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.monvol(pc)
 	jmp	.monsong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_maniacsofnoise(pc)
+	jmp	.author(pc)
+	dc.w pt_mon
 	dc	pf_stop!pf_cont!pf_song!pf_volume!pf_ciakelaus
 	dc.b	"Maniacs of Noise",0
-
+.a 	dc.b 	"Charles Deenen, Jeroen Tel",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .moninit
 	bsr.w	varaa_kanavat
@@ -30746,6 +31450,55 @@ p_mon	jmp	.moninit(pc)
 	bra.b	.init
 
 
+.id_maniacsofnoise
+	bsr.b 	.id_maniacsofnoise_
+	bne.b 	.not 
+	move	d5,maxsongs(a5)
+	moveq	#0,d0
+.not rts 
+
+.id_maniacsofnoise_
+* d5 => max songs
+
+	move.l	a4,a0
+;	move.l	modulelength(a5),d1
+	move.l	d7,d1
+
+	moveq.l	#-1,d0
+	cmp.w	#$4efa,(a0)
+	bne.s	.o0001a8
+	cmp.w	#$4efa,4(a0)
+	bne.s	.o0001a8
+	cmp.w	#$4efa,8(a0)
+	bne.s	.o0001a8
+	cmp.w	#$4efa,12(a0)
+	beq.s	.o0001a8
+.o00015e	cmp.w	#$4bfa,0(a0)
+	bne.s	.o000182
+	cmp.w	#$0280,4(a0)
+	bne.s	.o000182
+	cmp.l	#$000000ff,6(a0)
+	bne.s	.o000182
+	cmp.l	#$5300b02d,$0014(a0)
+	beq.s	.o00018a
+.o000182	addq.l	#2,a0
+	subq.l	#2,d1
+	bpl.s	.o00015e
+	bra.s	.o0001a8
+ 
+.o00018a	move.w	2(a0),d1
+	lea	0(a0,d1.w),a1
+	move.w	$0018(a0),d1
+	lea	0(a1,d1.w),a1
+	moveq.l	#0,d0
+	move.b	2(a1),d0
+	subq	#1,d0
+	move.w	d0,d5
+	moveq.l	#0,d0
+.o0001a8
+	tst.l	d0
+	rts	
+
 
 
 ******************************************************************************
@@ -30754,19 +31507,25 @@ p_mon	jmp	.moninit(pc)
 
 p_dw	jmp	.dwinit(pc)
 	jmp	.dwmusic(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.dwend(pc)
 	jmp	clearsound(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.dwsong(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_davidwhittaker(pc)
+	jmp	.author(pc)
+	dc pt_dw
 	dc	pf_stop!pf_cont!pf_song!pf_ciakelaus
-	dc.b	"David Whittaker",0
-
+.a	dc.b	"David Whittaker",0
  even
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .dwinit
 	bsr.w	varaa_kanavat
@@ -30816,6 +31575,110 @@ whittaker_end	dc.l	0
 
 
 
+
+id_davidwhittaker
+	bsr.b 	.id_davidwhittaker_
+	bne.b 	.x 
+	move	d5,maxsongs(a5)
+	move.l	d6,whittaker_end
+	moveq	#0,d0
+.x	rts
+
+.id_davidwhittaker_
+* d5 => maxsongs
+* d6 => whittaker_end
+
+	move.l	a4,a0
+;	move.l	moduleaddress(a5),d0
+	move.l	a0,d0
+
+	cmp.w	#$48e7,(a0)
+	bne.s	.wc000130
+	cmp.w	#$6100,4(a0)
+	bne.s	.wc000130
+	cmp.w	#$4cdf,8(a0)
+	bne.s	.wc000130
+	cmp.w	#$4e75,12(a0)
+	bne.s	.wc000130
+	cmp.w	#$48e7,14(a0)
+	bne.s	.wc000130
+	cmp.w	#$6100,$0012(a0)
+	bne.s	.wc000130
+	cmp.w	#$4cdf,$0016(a0)
+	bne.s	.wc000130
+	cmp.w	#$4e75,$001a(a0)
+	beq.s	.wc000136
+.wc000130	moveq.l	#-1,d0
+	bra.w	.wc0001de
+ 
+.wc000136	moveq.l	#$1c,d1
+	add.l	d1,a0
+	sub.l	d1,d0
+.wc00013c	cmp.w	#$43fa,(a0)
+	bne.s	.wc000154
+	cmp.l	#$4880c0fc,4(a0)
+	bne.s	.wc000154
+	cmp.w	#$41fa,10(a0)
+	beq.s	.wc00015c
+.wc000154	addq.l	#2,a0
+	subq.l	#2,d0
+	bpl.s	.wc00013c
+	bra.s	.wc000130
+ 
+.wc00015c	move.l	a0,a1
+	move.l	d0,d1
+.wc000160	cmp.w	#$47fa,(a1)
+	bne.s	.wc000186
+	cmp.w	#$51eb,4(a1)
+	bne.s	.wc000186
+	cmp.w	#$51eb,8(a1)
+	beq.s	.wc00018e
+	cmp.w	#$33fc,8(a1)
+	beq.s	.wc00018e
+	cmp.w	#$426b,8(a1)
+	beq.s	.wc00018e
+.wc000186	addq.l	#2,a1
+	subq.l	#2,d1
+	bpl.s	.wc000160
+	bra.s	.wc000130
+ 
+.wc00018e	move.l	a1,d6
+	move.w	2(a1),d1
+	lea	-10(a1,d1.w),a1
+	move.l	a0,d1
+	sub.l	a1,d1
+	move.w	12(a0),d2
+	moveq.l	#0,d3
+	move.w	#$7fff,d4
+	moveq.l	#-1,d5
+.wc0001ac	move.w	8(a0),d0
+	lsr.w	#1,d0
+	subq.w	#1,d0
+	addq.w	#2,d2
+.wc0001b6	move.w	12(a0,d2.w),d3
+	btst	#0,d3
+	bne.s	.wc0001d6
+	sub.w	d1,d3
+	cmp.w	d4,d3
+	bge.s	.wc0001c8
+	move.w	d3,d4
+.wc0001c8	cmp.w	d4,d2
+	bge.s	.wc0001d6
+	addq.w	#2,d2
+	subq.w	#1,d0
+	bne.s	.wc0001b6
+	addq.l	#1,d5
+	bra.s	.wc0001ac
+ 
+.wc0001d6	
+	;move.w	d5,maxsongs(a5)	* songit
+	moveq.l	#0,d0
+.wc0001de
+	tst.l	d0
+	rts	
+ 
+
+
 ******************************************************************************
 * Hippel-COSO
 ******************************************************************************
@@ -30828,18 +31691,28 @@ whittaker_end	dc.l	0
 ;	jmp	ahi_update(pc)
 ;	jmp	ahi_pause(pc)
 
+hippel_author
+	pushpea	.a(pc),d0
+	rts
+.a 	dc.b	"Jochen 'Mad Max' Hippel",0
+ 	even
+
+
 p_hippelcoso
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
 	jmp	.volume(pc)
 	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.ahiupdate(pc)
+	jmp id_hippelcoso(pc)
+	jmp	hippel_author(pc)
+	dc.w pt_hippelcoso
 .liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi
 	dc.b	"Hippel-COSO",0
  even
@@ -30964,6 +31837,89 @@ p_hippelcoso
 
 
 
+id_hippelcoso 
+	bsr.b 	.id_hippelcoso_
+	bne.b .x 
+	move	d5,maxsongs(a5)
+	moveq	#0,d0 
+.x 	rts
+
+
+; Testet, ob es sich um ein Hippel-COSO-Modul handelt
+
+.id_hippelcoso_
+* d5 => max songs
+
+;	move.l	dtg_ChkData(a5),a0		; ^module
+	move.l	a4,a0
+
+	cmpi.l	#"COSO",$00(a0)			; test ID
+	bne.b	.ChkFail
+	cmpi.l	#"TFMX",$20(a0)			; test ID
+	bne.s	.ChkFail
+
+	move.l	$1c(a0),d0
+	sub.l	$18(a0),d0
+	bmi.s	.ChkFail				; table corrupt !
+	divu	#10,d0
+	swap	d0
+	tst.w	d0				; multiple of 10 ?
+	bne.s	.ChkFail				; no !
+	swap	d0
+	subq.w	#1,d0
+	beq.s	.ChkFail				; sampletable is empty !
+	move.l	a0,a1
+	add.l	$18(a0),a1			; ^sampletable
+	move.l	a1,a2
+	moveq	#0,d2
+.Chkoop move.l	(a1),d1				; ^samplestart
+	cmp.l	d2,d1
+	ble.b	.Chkext
+	move.l	d1,d2
+	move.l	a1,a2
+.Chkext add.w	#10,a1				; next sample
+	subq.l	#1,d0
+	bne.s	.Chkoop
+
+	move.l	$1c(a0),d0			; ^samples
+	move.l	d0,d1
+	add.l	(a2)+,d1			; get samplestart
+	moveq	#0,d2
+	move.w	(a2)+,d2			; get samplelength
+	add.l	d2,d2
+	add.l	d2,d1
+	addq.l	#4,d1				; 4 bytes null-sample
+
+
+;	move.l	modulelength(a5),d2
+
+;	cmp.l	d1,d2
+;;	slt	LoadSamp			; set load-samples flag
+;	blt.b	.ChkFail		* ei hyv‰ksyt‰ modeja joissa erilliset samplet
+
+
+;	add.l	#1024,d1
+;	cmp.l	d0,d2				; test size of module
+;	blt.s	.ChkFail				; too small
+;	cmp.l	d1,d2				; test size of module
+;	bgt.s	.ChkFail				; too big
+
+	move.l	$18(a4),d0
+	sub.l	$14(a4),d0
+	divu	#6,d0
+	subq.w	#2,d0
+	move.w	d0,d5				; store MaxSong
+	moveq	#0,d0				; Modul erkannt
+
+	bra.s	.Chknd
+.ChkFail
+	moveq	#-1,d0				; Modul nicht erkannt
+.Chknd
+	tst.l	d0
+	rts
+
+
+
 ******************************************************************************
 * Hippel
 ******************************************************************************
@@ -30971,15 +31927,18 @@ p_hippelcoso
 p_hippel
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	clearsound(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_hippel(pc)
+	jmp	hippel_author(pc)
+	dc.w pt_hippel
 	dc	pf_cont!pf_stop!pf_song!pf_ciakelaus
 	dc.b	"Hippel",0
  even
@@ -31027,23 +31986,205 @@ hippelmusic	dc.l	0
 
 
 
+id_hippel 
+	push	d7
+	bsr.b 	.id_hippel_
+	pop	d7
+	tst.l	d0
+	bne.b .x 
+	move.l	d4,hippelmusic
+	move	d5,maxsongs(a5)
+	moveq	#0,d0 
+.x 	rts
+
+
+
+.id_hippel_
+* d7 <= modlen
+* a4 <= mod
+* d4 => hippel music 
+* d5 => max songs
+
+	* check some data, not all, too slow otherwise
+	cmp.l	#1024*4,d7
+	blo.b	.ok
+	move.l	#1024*4,d7
+.ok
+	move.l	d7,d0
+
+	cmp.l	#100,d0
+	blo.w	.lbC000288
+
+	move.l	a4,a0
+	move.l	a4,a1
+	add.l	d0,a1
+	lea	$10(a0),a0
+.loop	addq	#1,a0	
+	cmp.l	a0,a1
+	beq.w	.ChkFail
+	cmp.b	#"T",(a0)
+	bne.b	.loop
+	cmp.b	#"F",1(a0)
+	bne.b	.loop
+	cmp.b	#"M",2(a0)
+	bne.b	.loop
+	cmp.b	#"X",3(a0)
+	bne.b	.loop
+
+	move.l	a4,a1
+	move.l	a1,a0
+	move.l	d7,d0
+
+	cmp.w	#$6000,(a1)
+	bne.s	.lbC000156
+	addq.w	#2,a1
+	move.w	(a1),d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	bra.s	.lbC00016E
+ 
+.lbC000156	cmp.b	#$60,(a1)
+	bne.s	.lbC0001B6
+	move.b	1(a1),d1
+	ext.w	d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	addq.w	#2,a1
+.lbC00016E	addq.w	#4,a1
+	cmp.w	#$6100,(a1)
+	bne.s	.lbC000186
+	addq.w	#2,a1
+	move.w	(a1),d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	bra.s	.lbC00018E
+ 
+.lbC000186	cmp.w	#$41FA,(a1)
+	bne.s	.lbC0001B6
+	addq.w	#4,a1
+.lbC00018E	addq.w	#2,a1
+	cmp.w	#$6100,(a1)+
+	bne.s	.lbC0001B6
+	move.w	(a1),d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	cmp.w	#$41FA,(a1)+
+	bne.s	.lbC0001B6
+	move.w	(a1),d1
+	bmi.s	.lbC0001B6
+	btst	#0,d1
+	bne.s	.lbC0001B6
+	add.w	d1,a1
+	clr.w	(a1)
+.lbC0001B6	cmp.b	#$60,(a0)
+	bne.s	.lbC0001D0
+	cmp.b	#$60,2(a0)
+	bne.s	.lbC0001D0
+	cmp.w	#$48E7,4(a0)
+	bne.s	.lbC0001D0
+	addq.l	#2,a0
+	bra.s	.lbC00022C
+ 
+.lbC0001D0	cmp.b	#$60,(a0)
+	bne.s	.lbC0001EA
+	cmp.b	#$60,2(a0)
+	bne.s	.lbC0001EA
+	cmp.w	#$41FA,4(a0)
+	bne.s	.lbC0001EA
+	addq.l	#2,a0
+	bra.s	.lbC00022C
+ 
+.lbC0001EA	cmp.w	#$6000,(a0)
+	bne.s	.lbC000204
+	cmp.w	#$6000,4(a0)
+	bne.s	.lbC000204
+	cmp.w	#$48E7,8(a0)
+	bne.s	.lbC000204
+	addq.l	#4,a0
+	bra.s	.lbC00022C
+ 
+.lbC000204	cmp.w	#$6000,(a0)
+	bne.s	.lbC000288
+	cmp.w	#$6000,4(a0)
+	bne.s	.lbC000288
+	cmp.w	#$6000,8(a0)
+	bne.s	.lbC000288
+	cmp.w	#$6000,12(a0)
+	bne.s	.lbC000288
+	cmp.w	#$48E7,$0010(a0)
+	bne.s	.lbC000288
+	addq.l	#4,a0
+.lbC00022C	move.l	a0,d4
+	move.w	#$007F,d1
+.lbC000236	cmp.w	#$41FA,(a0)+
+	bne.s	.lbC00026C
+	move.w	(a0),d2
+	bmi.s	.lbC00026C
+	btst	#0,d2
+	bne.s	.lbC00026C
+	cmp.w	#$4000,d2
+	bcc.s	.lbC00026C
+	cmp.l	#'TFMX',$0000(a0,d2.w)
+	bne.s	.lbC00025C
+	move.w	$0010(a0,d2.w),d3
+	bra.s	.lbC000274
+ 
+.lbC00025C	cmp.l	#'COSO',$0000(a0,d2.w)
+	bne.s	.lbC00026C
+	move.w	#$00FF,d3
+	bra.s	.lbC000274
+ 
+.lbC00026C	subq.l	#2,d0
+	dbmi	d1,.lbC000236
+	bra.s	.lbC000288
+ 
+.lbC000274
+	subq.b	#1,d3
+	move.w	d3,d5
+	moveq	#0,d0
+	rts	
+
+.lbC000288
+.ChkFail
+	moveq.l	#-1,d0
+	rts	
+
+
+
+
 ******************************************************************************
 * Digibooster
 ******************************************************************************
 
+db_author
+	pushpea	.a(pc),d0
+	rts
+.a 	dc.b 	"Tomasz & Waldemar Piasta",0
+	even
 
 p_digibooster
 	jmp	.init(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.vb(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
 	jmp	.volu(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp .id_digibooster(pc)
+	jmp	db_author(pc)
+	dc.w pt_digibooster
 	dc	pf_poslen!pf_kelaus!pf_volume!pf_stop!pf_cont!pf_end
 	dc.b	"DIGI Booster",0
  even
@@ -31174,7 +32315,26 @@ p_digibooster
 	bra.w	vapauta_kanavat
 
 
+.id_digibooster
+	bsr.b 	id_digibooster_
+	bne.b 	.x 
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	lea	610(a4),a1
+	moveq	#30-1,d0
+	bsr.w	copyNameFromA1
+	moveq	#0,d0
+.x 	rts
 
+id_digibooster_
+	cmp.l	#'DIGI',(a4)
+	bne.b	.nd
+	cmp.l	#' Boo',4(a4)
+	bne.b	.nd
+	cmp.l	#'ster',8(a4)
+	bra.w	idtest
+
+.nd	moveq	#-1,d0
+	rts
 
 ******************************************************************************
 * Digibooster PRO
@@ -31183,16 +32343,19 @@ p_digibooster
 
 p_digiboosterpro
 	jmp	.init(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.vb(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	jmp	.ahiupdate(pc)
+	jmp .id_digiboosterpro(pc)
+	jmp	db_author(pc)
+	dc.w pt_digiboosterpro
 	dc	pf_volume!pf_stop!pf_cont!pf_ahi!pf_poslen!pf_kelaus!pf_end
 	dc.b	"DIGI Booster Pro",0
  even
@@ -31303,10 +32466,30 @@ p_digiboosterpro
 .pattpos dc.l	0
 
 
+.id_digiboosterpro
+	bsr.b 	id_digiboosterpro_
+	bne.b 	.y 
+	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	move.l	moduleaddress(a5),a1
+	lea	16(a4),a1
+	moveq	#42-1,d0	
+	bsr.w		copyNameFromA1
+	moveq	#0,d0
+.y 	rts
+
+id_digiboosterpro_
+	cmp.l	#'DBM0',(a4)
+	bra.w	idtest
+
 ******************************************************************************
 * THX
 ******************************************************************************
 
+thx_author
+	pushpea	.a(pc),d0
+	rts
+.a 	dc.b	"Pink/aBYSs",0
+	even 
 
 p_thx
 	jmp	.init(pc)
@@ -31319,7 +32502,10 @@ p_thx
 	jmp	.song(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
-	dc.l	$4e754e75
+	p_NOP
+	jmp .id_thx(pc)
+	jmp	thx_author(pc)
+	dc.w pt_thx
 	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen
 	dc.b	"AHX Sound System",0
  even
@@ -31522,7 +32708,21 @@ p_thx
 	bra.w	clearsound
 
 
+.id_thx 
+	bsr.b id_thx_
+	bne.b	.y
+	move.l	moduleaddress(a5),a1
+	add	4(a1),a1		* modulename
+	moveq	#25-1,d0
+	bsr.w	copyNameFromA1
+	moveq	#0,d0
+.y 	rts
 
+id_thx_
+	move.l	(a4),d0			* THX
+	lsr.l	#8,d0
+	cmp.l	#"THX",d0
+	bra.w	idtest
 
 
 ******************************************************************************
@@ -31531,19 +32731,27 @@ p_thx
 
 p_mline
 	jmp	.init(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
 	jmp	.volume(pc)
 	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_mline(pc)
+	jmp	.author(pc)
+	dc.w pt_mline
 	dc	pf_cont!pf_stop!pf_volume!pf_song
 	dc.b	"MusiclineEditor",0
+.a 	dc.b	"Conny Cyreus, Christian Cyreus, Jimmy Fredriksson, John Carehag",0
  even
+	
+.author
+	pushpea	.a(pc),d0
+	rts
 
 ._LVOInitPlayer		=	-30
 ._LVOEndPlayer		=	-36
@@ -31654,6 +32862,16 @@ p_mline
 
 
 
+id_mline
+	cmp.l	#"MLED",(a4)		* musicline editor
+	bne.b	.nd
+	cmp.l	#"MODL",4(a4)
+	bra.w	idtest
+
+.nd	moveq	#-1,d0
+	rts
+	
+
 
 
 ******************************************************************************
@@ -31662,19 +32880,33 @@ p_mline
 
 p_aon
 	jmp	.init(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	jmp 	.play(pc)
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_cont!pf_stop!pf_volume
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp 	.id_aon(pc)
+	jmp	.author(pc)
+	dc.w 	pt_aon
+	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
 	dc.b	"Art Of Noise 4ch",0
+.a	dc.b	"Bastian Spiegel (Twice/Lego)",0
  even
+
+.OFFSET_INIT = 0
+.OFFSET_PLAY = 4
+.OFFSET_END  = 8
+.OFFSET_STOP = 12
+.OFFSET_CONT = 16
+
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .init
 	bsr.w	varaa_kanavat
@@ -31682,45 +32914,61 @@ p_aon
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
 	lea	aonroutines(a5),a0
 	bsr.w	allocreplayer
-	bne.w	vapauta_kanavat
-
-.ok3	
+	beq.b	.ok3
+	bsr.w	rem_ciaint
+	bra.w	vapauta_kanavat
+.ok3
 	pushm	d1-a6
 
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
-	moveq	#0,d0
-	move.l	aonroutines(a5),a2
-	jsr	(a2)
+	lea	songover(a5),a2 
+	lea	ciaint_setTempoFromD0(pc),a3
+	move.l	aonroutines(a5),a4
+	jsr	.OFFSET_INIT(a4)
 	tst.l	d0
-	bne.b	.cia
-
+	bne.b	.noMem
+	
 .x	popm	d1-a6
 	rts
 
-.cia	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
+.noMem
+	moveq	#ier_nomem,d0
 	bra.b	.x
 
-
-.end	move.l	aonroutines(a5),a0
-	jsr	4(a0)
+.end
+	bsr	rem_ciaint
+	move.l	aonroutines(a5),a0
+	jsr	.OFFSET_END(a0)
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
+.play
+	move.l	aonroutines(a5),a0
+	jsr	.OFFSET_PLAY(a0)
+	move	d0,pos_nykyinen(a5) 
+	move	d1,pos_maksimi(a5)
+	rts
 
 .stop
-	move	#$f,$dff096
-	bclr	#0,$bfdf00
-	rts
-
+	move.l	aonroutines(a5),a0
+	jmp		.OFFSET_STOP(a0)
+	
 .cont	
-	move	#$800f,$dff096
-	bset	#0,$bfdf00	; Timer start, stop
-	rts
+	move.l	aonroutines(a5),a0
+	jmp		.OFFSET_CONT(a0)
+
+.id_aon
+	cmp.l	#"AON4",(a4)		* aon 4 channel
+	bra.w	idtest
 
 
 ******************************************************************************
@@ -31742,18 +32990,22 @@ volj		rs.l	1
 boostj		rs.l	1
 
 p_multi	jmp	.s3init(pc)
-	dc.l	$4e754e75		* CIA
+	p_NOP		* CIA
 	jmp	.s3poslen(pc)		* VB
 	jmp	.s3end(pc)
 	jmp	.s3stop(pc)
 	jmp	.s3cont(pc)
 	jmp	.s3vol(pc)
-	dc.l	$4e754e75		* Song
+	p_NOP		* Song
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	jmp	ps3m_boost(pc)		* ahiupdate
+	jmp id_ps3m(pc)
+	jmp	guru_author(pc)
+	dc.w pt_multi
  dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
 	dc.b	"PS3M",0
+
  even
 
 
@@ -32139,16 +33391,19 @@ ps3minitcount	dc	0
 
 p_sample
 	jmp	.init(pc)
-	dc.l	$4e754e75		* CIA
-	dc.l	$4e754e75		* VB
+	p_NOP		* CIA
+	p_NOP		* VB
 	jmp	.end(pc)		* end
 	jmp	.dostop(pc)		* Stop
 	jmp	.docont(pc)		* Cont
 	jmp	.vol(pc)		* volume
-	dc.l	$4e754e75		* Song
-	dc.l	$4e754e75		* Eteen
-	dc.l	$4e754e75		* Taakse
+	p_NOP		* Song
+	p_NOP		* Eteen
+	p_NOP		* Taakse
 	jmp	.ahiup(pc)		* AHI Update
+	jmp id_sample(pc)
+	p_NOP		* author
+	dc.w pt_sample
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi
 .name	dc.b	"                        ",0
  even
@@ -32251,7 +33506,8 @@ p_sample
 .ahiup	move.l	sampleroutines(a5),a0
 	jmp	.s_ahiup(a0)
 
-
+id_sample
+	rts
 
 ******************************************************************************
 * PumaTracker
@@ -32260,19 +33516,26 @@ p_sample
 p_pumatracker
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_pumatracker(pc)
+	jmp	.author(pc)
+	dc.w pt_pumatracker
 	dc	pf_stop!pf_cont!pf_ciakelaus
 	dc.b	"PumaTracker",0
+.a  dc.b "Jean-Charles Meyrignac, Pierre-Eric Loriaux",0
  even
 
+.author
+	pushpea	.a(pc),d0
+	rts
 
 .init
 	bsr.w	varaa_kanavat
@@ -32315,7 +33578,15 @@ p_pumatracker
 	bra.w	clearsound
 
 
-id_pumatracker
+.id_pumatracker 
+	bsr.b .id_pumatracker_
+	bne.b .x 
+	moveq	#12-1,d0
+	bsr.w		copyNameFromModule
+	moveq	#0,d0
+.x 	rts
+
+.id_pumatracker_
 	* test some attributes
 	* positive song length
 	tst		$c(a4)
@@ -32369,19 +33640,26 @@ id_pumatracker
 p_beathoven
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
 	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_beathoven(pc)
+	jmp	.author(pc)
+	dc.w pt_beathoven
 	dc	pf_cont!pf_stop!pf_ciakelaus!pf_song
 	dc.b	"Beathoven Synthesizer",0
+.a  	dc.b "Thomas Lopatic (Dr.Nobody/HQC), adapted by Wanted Team",0
  even
 
+.author 
+	pushpea	.a(pc),d0 
+	rts 
 
 * play
 .BEAT_PLAY = 16+$20
@@ -32404,7 +33682,7 @@ p_beathoven
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -32419,14 +33697,14 @@ p_beathoven
 	pushm	all
 	move.l	moduleaddress(a5),a2
 	move.l	.BEAT_SUBSONGS(a2),d0 
-	DPRINT	"Beathoven init, subsongs=%ld",1
+	DPRINT	"Beathoven init, subsongs=%ld"
 	subq	#1,d0
 	move	d0,maxsongs(a5)
 	push 	a2
 	move.l	.BEAT_INIT(a2),a0
 	moveq	#0,d0	* subsong
 	move	songnumber(a5),d0	
-	DPRINT	"Subsong=%ld",2
+	DPRINT	"Subsong=%ld"
 	jsr		(a0)
 	pop 	a2
 	move.l	.BEAT_OPT_INIT(a2),d0 
@@ -32465,11 +33743,21 @@ p_beathoven
 	bsr.w	.doInit
 	rts
 
+.id_beathoven
+	bsr.b .id_beathoven_
+	bne.b .x 
+	move.l	moduleaddress(a5),a1
+	move.l	$20+36(a1),a1
+	moveq	#30-1,d0
+	bsr.w	copyNameFromA1
+	moveq	#0,d0
+.x 	rts
+
 * in: a4 = module
 * out: 
 *   d0 = 0, is beathoven
 *   do = -1, is not beathoven
-id_beathoven
+.id_beathoven_
     * these seem to be executables, so check for hunk
     cmp.l   #$3f3,(a4)
     bne.b   .notBeat
@@ -32483,10 +33771,10 @@ id_beathoven
     bne.b   .notBeat
     * looks good, relocate it
     move.l  a4,a0
-    bsr reloc
+    bsr.w reloc
 	* clear the hunk id for safety to avoid reloccing again
 	clr.l	(a4)
-	bsr	clearCpuCaches
+	bsr.w	clearCpuCaches
     moveq   #0,d0
     rts
 .notBeat    
@@ -32503,23 +33791,30 @@ id_beathoven
 p_gamemusiccreator
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_gamemusiccreator(pc)
+	jmp	.author(pc)
+	dc.w pt_gamemusiccreator
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume
 	dc.b	"Game Music Creator",0
+.a 	dc.b "Andreas Tadic",0
  even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
 
 .GMC_INIT  = $20+0
 .GMC_PLAY  = $20+4
 .GMC_END   = $20+8
-
 
 .init
 	bsr.w	varaa_kanavat
@@ -32527,7 +33822,7 @@ p_gamemusiccreator
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -32537,7 +33832,7 @@ p_gamemusiccreator
 	* allocate into chip mem
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -32558,7 +33853,7 @@ p_gamemusiccreator
 	jmp	.GMC_PLAY(a0)
 
 .end
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	move.l	gamemusiccreatorroutines(a5),a0
 	jsr	.GMC_END(a0)
 	bsr.w	clearsound
@@ -32571,33 +33866,37 @@ p_gamemusiccreator
 ; out: d0 = 0, valid GMC
 ;      d0 = -1, not GMC
 id_gamemusiccreator
-	push	a4	 	* save this, needed by other identifiers
-    moveq   #15-1,d0
-    move.l  a4,a0
+	pushm 	d1-a6
+	bsr.b	.do
+	popm 	d1-a6 
+	rts
+.do
+	moveq   #15-1,d0
+	move.l  a4,a0
 .sampleLoop
 	* sample vol check probably
-    cmp.b   #$40,7(a0)
-    bhi.w   .notGmc
+	cmp.b   #$40,7(a0)
+    	bhi.w   .notGmc
 
     * sample len
-    move    4(a0),d1 
-    cmp     #$7fff,d1
-    bhi.w   .notGmc
+ 	move    4(a0),d1 
+    	cmp     #$7fff,d1
+    	bhi.w   .notGmc
 
-    add     d1,d1
+    	add     d1,d1
     * loop length (?), must be less than total length
-    move    12(a0),d2 
-    cmp     d1,d2
-    bhi.w   .notGmc
+    	move    12(a0),d2 
+    	cmp     d1,d2
+    	bhi.b   .notGmc
 
-    add     #16,a0
-    dbf d0,.sampleLoop
+    	add     #16,a0
+    	dbf d0,.sampleLoop
 
     * pattern table size
-    cmp.b   #$64,243(a4)
-    bhi.w   .notGmc
-    tst.b   243(a4)
-    beq.w   .notGmc
+    	cmp.b   #$64,243(a4)
+    	bhi.b   .notGmc
+    	tst.b   243(a4)
+    	beq.b   .notGmc
 
     * pattern order table
 	* contains offsets to patterns, each pattern is $400 bytes long,
@@ -32605,37 +33904,37 @@ id_gamemusiccreator
 	* Possible to have 100 individual patterns
  	moveq   #100-1,d7
 	lea     244(a4),a0
-    moveq   #0,d2 * numpat
+    	moveq   #0,d2 * numpat
 .pattLoop
 	* offsets should be divisible by $400
-    move    (a0),d0
-    and     #$3ff,d0
-    bne.w   .notGmc
+    	move    (a0),d0
+    	and     #$3ff,d0
+    	bne.b   .notGmc
 
 	* store the highest pattern index	
 	move    (a0),d0
 	lsr     #8,d0
-    lsr     #2,d0
-    cmp     d2,d0
-    blo.b   .numpat
-    move    d0,d2
+    	lsr     #2,d0
+   	cmp     d2,d0
+    	blo.b   .numpat
+    	move    d0,d2
 .numpat
-    addq.l    #2,a0
-    dbf d7,.pattLoop
+    	addq.l    #2,a0
+    	dbf d7,.pattLoop
 
 	; check how many patterns are there
-    addq    #1,d2
+    	addq    #1,d2
 
 	; high bound
-    cmp     #100,d2
-    bhi.w   .notGmc
+    	cmp     #100,d2
+    	bhi.b   .notGmc
 	
  * validate the first pattern, it's apparently
  * a bit difficult to correctly determine the real amount
  * of patterns in a module. Thre should at least be one!
 
 .patterns
-    lea     444(a4),a0
+    	lea     444(a4),a0
      * traverse a pattern
     * four bytes per channel per row,
     * so 16 bytes per row
@@ -32674,34 +33973,30 @@ id_gamemusiccreator
 ;.c3
 
 	move.l  (a0),d0
-    and     #$f000,d0
-    beq.b   .noSample
-	clr		d0
+    	and     #$f000,d0
+    	beq.b   .noSample
+	clr	d0
 	swap    d0
-	tst		d0
-	beq.b	.ok
+	tst	d0
+	beq.b	.okP
 	* d0 is now the period
 	* 0 is allowed
-	lea		periods,a1
+	lea	periods,a1
 	moveq	#(periodsEnd-periods)/2-1,d1
 .perLoop
-	cmp		(a1)+,d0
-	beq.b	.ok
-	dbf		d1,.perLoop
+	cmp	(a1)+,d0
+	beq.b	.okP
+	dbf	d1,.perLoop
 	* BAD PERIOD, BAD!
 	bra.b	.notGmc
-.ok
+.okP
 .noSample
-
-    addq.l  #4,a0
-    dbf     d5,.rows
-
-	pop     a4
-    moveq   #0,d0
-    rts
+    	addq.l  #4,a0
+    	dbf     d5,.rows
+   	moveq   #0,d0
+    	rts
 .notGmc
-	pop     a4
-    moveq  #-1,d0 
+   	moveq  #-1,d0 
 	rts
 
 
@@ -32709,21 +34004,31 @@ id_gamemusiccreator
 * Digital Mugician
 ******************************************************************************
 
+author_vliet
+	pushpea	.a(pc),d0
+	rts
+.a dc.b "Reinier van Vliet (Rhino/Team Hoi)",0
+ even
+
 p_digitalmugician
 	jmp	.init(pc)
 	jmp	.play(pc)
-	dc.l	$4e754e75
+	p_NOP
 	jmp	.end(pc)
 	jmp	.stop(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp	 .id_digitalmugician(pc)
+	jmp	author_vliet(pc)
+	dc.w 	pt_digitalmugician
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
 	dc.b	"Digital Mugician",0
  even
+
 
 .DMU_INIT  = 0
 .DMU_PLAY  = 4
@@ -32735,7 +34040,7 @@ p_digitalmugician
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -32745,7 +34050,7 @@ p_digitalmugician
 	* allocate into chip mem, uses empty sample data 
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -32768,7 +34073,7 @@ p_digitalmugician
 	bra.w	clearsound
 
 .end
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	pushm	all
 	move.l	digitalmugicianroutines(a5),a0
 	jsr	.DMU_END(a0)
@@ -32780,11 +34085,11 @@ p_digitalmugician
 ; in: a4 = module
 ; out: d0 = 0, valid DMU
 ;      d0 = -1, not DMU
-id_digitalmugician
+.id_digitalmugician
 	lea	.id_start(pc),a1	
 	moveq	#.id_end-.id_start,d0
 	bsr.w	search
-	bra	idtest
+	bra.w	idtest
 
 .id_start
 	dc.b	' MUGICIAN/SOFTEYES 1990 '
@@ -32795,51 +34100,4987 @@ id_digitalmugician
 * Delitracker CUSTOM
 ******************************************************************************
 
-* Another version that initializes a5.
-* Deli calls have another base in a5.
-DELIDPRINT  macro
-	ifne DEBUG
-	pushm a0/a5
-	lea	var_b,a5
-	lea .DD\2(pc),a0
-	jsr	desmsg
-	pea	desbuf(a5)
-	jsr	PRINTOUT
-	popm	a0/a5
-	bra.b	.D\2
-.DD\2
- 	dc.b 	\1,10,0
- 	even
-.D\2
-	endc
-	endm
-
 p_delicustom
 	jmp	.init(pc)
-	jmp	.play(pc)
-	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	jmp	.cont(pc)
-	dc.l	$4e754e75
-	jmp	.song(pc)
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_delicustom(pc)
+	jmp	deliAuthor(pc)
+	dc.w pt_delicustom
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"DeliTracker Custom",0
  even
+
+.init
+	move.l	moduleaddress(a5),d0
+	lsl.l	#2,d0
+	bsr.w	deliInit
+	rts
+
+id_delicustom
+	lea	.id1_start(pc),a1	
+	moveq	#.id1_end-.id1_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+	lea	.id2_start(pc),a1	
+	moveq	#.id2_end-.id2_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+	lea	.id3_start(pc),a1	
+	moveq	#.id3_end-.id3_start,d0
+	bsr.w	search
+	bne.b	.notDeli
+
+	* search() leaves with a0 pointing
+	* to the next byte to be searched,
+	* get the value for DTP_CustomPlayer,
+	* it must be non-zero
+	tst.l	(a0)
+	beq.b	.notDeli
+
+	moveq	#0,d0
+	rts
+	
+.notDeli
+	moveq	#-1,d0 
+	rts
+
+.id1_start
+	moveq	#-1,d0
+	rts
+.id1_end
+
+.id2_start
+	dc.b	"DELIRIUM"
+.id2_end
+
+; Seems that the parameter for this that can be anything but 0
+.id3_start
+	dc.l DTP_CustomPlayer
+.id3_end
+
+
+
+******************************************************************************
+* Synthesis
+******************************************************************************
+
+p_synthesis
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_synthesis 
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_song
+	dc.b	"Synthesis           [EP]",0
+
+.path dc.b "synth 4.0",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|11,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0 
+	MOVEQ	#1,D0
+	CMP.L	#$53796E74,(A0)
+	BNE.S	.lbC000436
+	MOVE.L	4(A0),D0
+	LSR.L	#8,D0
+	CMP.L	#$68342E,D0
+	BEQ.S	.lbC000424
+	CMP.L	#$682E5063,4(A0)
+	BNE.S	.lbC000436
+	MOVEQ	#$64,D0
+.lbC0003F0	CMP.L	#$D1FC0000,(A0)
+	BNE.S	.lbC00040C
+	CMP.L	#$CC22C8,4(A0)
+	BNE.S	.lbC00040C
+	CMP.L	#$7200123A,8(A0)
+	BEQ.S	.lbC000414
+.lbC00040C	ADDQ.L	#4,A0
+	DBRA	D0,.lbC0003F0
+	RTS
+
+.lbC000414	MOVEQ	#-1,D0
+	SUBQ.L	#4,A0
+	CMP.W	#$41FA,(A0)+
+	BNE.S	.lbC000436
+	MOVEQ	#0,D1
+	MOVE.W	(A0),D1
+	ADD.L	D1,A0
+.lbC000424	
+	MOVEQ	#0,D0
+.lbC000436	
+	rts
+
+
+******************************************************************************
+* SynTracker
+******************************************************************************
+
+p_syntracker
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc pt_syntracker
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc.b	"SynTracker          [EP]",0
+.path dc.b "syntracker",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l 	a4,a0
+	LEA	.SYNTRACKERSON.MSG(PC),A1
+	MOVEQ	#-1,D0
+	MOVEQ	#15,D1
+.lbC0001E0	CMPM.B	(A1)+,(A0)+
+	BNE.S	.lbC0001EA
+	DBRA	D1,.lbC0001E0
+	MOVEQ	#0,D0
+.lbC0001EA	
+	RTS
+
+.SYNTRACKERSON.MSG	dc.b	'SYNTRACKER-SONG:',0,0
+
+
+******************************************************************************
+* Rob Hubbard 2
+******************************************************************************
+
+p_robhubbard2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id(pc)
+	dc  pt_robhubbard2
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc.b	"Rob Hubbard 2       [EP]",0
+.path dc.b "rob hubbard 2",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	move.l	#2<<16|0,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id
+	move.l	a4,a0 
+	SUB.W	$10(A0),D7
+	SUBQ.L	#2,D7
+	BNE.S	.lbC000336
+	MOVE.W	(A0),D0
+	LEA	0(A0,D0.W),A0
+	TST.W	(A0)
+	BMI.S	.lbC000336
+	MOVEQ	#0,D0
+	MOVEQ	#0,D1
+	MOVE.W	2(A0),D1
+	MOVE.W	12(A0),D2
+	MOVE.W	6(A0),D3
+	MOVEQ	#$10,D4
+.lbC000320	MOVE.W	0(A0,D4.W),D0
+	CMP.W	D1,D0
+	BGT.S	.lbC000336
+	CMP.W	D2,D0
+	BLT.S	.lbC000336
+	ADDQ.W	#2,D4
+	CMP.W	D4,D3
+	BLT.S	.lbC000320
+	MOVEQ	#0,D0
+	RTS
+.lbC000336	MOVEQ	#-1,D0
+	RTS
+
+
+******************************************************************************
+* ChipTracker
+******************************************************************************
+
+
+p_chiptracker
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_chiptracker 
+ dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2	
+	dc.b	"ChipTracker         [EP]",0
+
+.path dc.b "chiptracker",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	cmp.l   #'KRIS',952(A4)
+	sne	d0
+	rts
+
+******************************************************************************
+* Medley Sound System
+******************************************************************************
+
+p_medley
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	jmp	.song(pc) 
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_medley(pc)
+	jmp	.author(pc)
+	dc.w pt_medley
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"Medley Sound",0
+.a 	dc.b	"Paul van der Valk",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+.MEDLEY_INIT  = 0+$20
+.MEDLEY_PLAY  = 4+$20
+.MEDLEY_END   = 8+$20
+.MEDLEY_SONG  = 12+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	medleyroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	maxsongs(a5),a2
+	lea	ciaint_setTempoFromD0,a3
+	move	songnumber(a5),d0 	* song number
+	;moveq	#8,d0
+	addq	#1,d0
+	move.l	medleyroutines(a5),a6
+	jsr	.MEDLEY_INIT(a6)
+	popm	d1-a6
+	* INIT returns 0 on success
+	rts	
+
+.play
+	move.l	medleyroutines(a5),a0
+	jmp	.MEDLEY_PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Song %ld"
+ endif
+ 	move.l	medleyroutines(a5),a0
+	jsr	.MEDLEY_SONG(a0)
+	rts
+
+.end
+	jsr	rem_ciaint
+	pushm	all
+	move.l	medleyroutines(a5),a0
+	jsr	.MEDLEY_END(a0)
+	popm	all
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+
+; in: a4 = module
+;     d7 = module lenght
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_medley
+	cmp.l 	#"MSOB",(a4)
+	bne.b	.invalid
+	* next, three offsets, should point to inside module
+	* first byte should be zero since mods are small
+	tst.b	4(a4)
+	bne.b	.invalid
+	tst.b	8(a4)
+	bne.b	.invalid
+	tst.b	12(a4)
+	bne.b	.invalid
+
+	move.l	4(a4),d0
+	add.l	a4,d0
+	cmp.l	d0,a4
+	bhs.b	.invalid
+	move.l	8(a4),d0
+	add.l	a4,d0
+	cmp.l	d0,a4
+	bhs.b	.invalid
+	move.l	12(a4),d0
+	add.l	a4,d0
+	cmp.l	d0,a4
+	bhs.b	.invalid
+
+	moveq	#0,d0
+	rts
+
+.invalid
+	moveq	#-1,d0
+	rts
+
+
+******************************************************************************
+* Future Player
+******************************************************************************
+
+p_futureplayer
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	jmp	.song(pc) 
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_futureplayer(pc)
+	jmp	.author(pc)
+	dc.w pt_futureplayer
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"Future Player",0
+.a 	dc.b	"Paul van der Valk, adapted by Wanted Team",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+
+.FP_INIT  = 0+$20
+.FP_PLAY  = 4+$20
+.FP_END   = 8+$20
+.FP_SONG  = 12+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	futureplayerroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),d0
+	lea	nullsample,a1
+	lea	mainvolume(a5),a2
+	lea	maxsongs(a5),a3
+	lea	ciaint_setTempoFromD0,a4
+	move	songnumber(a5),d1 	* song number, starts from 0
+	move.l	futureplayerroutines(a5),a6
+	push	a5
+	jsr	.FP_INIT(a6)
+	pop	a5
+	tst.l	d0
+	bne.b	.inifail
+	* song name is in a0
+ if DEBUG
+	move.l 	a0,d0
+	DPRINT	"Song name: %s"
+ endif
+	lea	modulename(a5),a1
+.c	move.b	(a0)+,(a1)+
+	bne.b	.c
+
+	moveq	#0,d0
+.inifail
+	popm	d1-a6
+	* INIT returns 0 on success
+	rts	
+
+.play
+	move.l	futureplayerroutines(a5),a0
+	jmp	.FP_PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Song %ld"
+ endif
+	move.l	futureplayerroutines(a5),a0
+	jsr	.FP_SONG(a0)
+	rts
+
+.end
+	jsr	rem_ciaint
+	pushm	all
+	move.l	futureplayerroutines(a5),a0
+	jsr	.FP_END(a0)
+	popm	all
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_futureplayer
+	cmp.l	#$000003F3,(A4)
+	bne.b	.fail
+	tst.b	20(A4)				; loading into chip check
+	beq.b	.fail
+	lea	32(A4),A0
+	cmp.l	#$70FF4E75,(A0)+
+	bne.b	.fail
+	cmp.l	#'F.PL',(A0)+
+	bne.b	.fail
+	cmp.l	#'AYER',(A0)+
+	bne.b	.fail
+	tst.l	20(A0)				; Song pointer check
+	beq.b	.fail
+
+	moveq	#0,D0
+	rts
+.fail
+	moveq	#-1,D0
+	rts
+
+
+
+******************************************************************************
+* Ben Daglish
+******************************************************************************
+
+p_bendaglish
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	jmp	.song(pc) 
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_bendaglish(pc)
+	jmp	.author(pc)
+	dc.w pt_bendaglish
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"Ben Daglish",0
+.a 	dc.b	"Ben Daglish, adapted by Wanted Team",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+.BD_INIT  = 0+$20
+.BD_PLAY  = 4+$20
+.BD_END   = 8+$20
+.BD_SONG  = 12+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	bendaglishroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	maxsongs(a5),a2
+	move	songnumber(a5),d0 	* song number, starts from 0
+	move.l	bendaglishroutines(a5),a6
+	jsr	.BD_INIT(a6)
+	popm	d1-a6
+	* INIT returns 0 on success
+	rts	
+
+.play
+	move.l	bendaglishroutines(a5),a0
+	jmp	.BD_PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Song %ld"
+ endif
+	pushm	all
+	move.l	bendaglishroutines(a5),a0
+	jsr	.BD_SONG(a0)
+	popm	all
+	rts
+
+.end
+	jsr	rem_ciaint
+	pushm	all
+	move.l	bendaglishroutines(a5),a0
+	jsr	.BD_END(a0)
+	popm	all
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_bendaglish
+	move.l	a4,a0
+	cmp.w	#$6000,(A0)+
+	bne.s	.fail
+	move.l	A0,A1
+	move.w	(A0)+,D1
+	beq.b	.fail
+	bmi.b	.fail
+	btst	#0,D1
+	bne.b	.fail
+	cmp.w	#$6000,(A0)+
+	bne.s	.fail
+	move.w	(A0)+,D1
+	beq.b	.fail
+	bmi.b	.fail
+	btst	#0,D1
+	bne.b	.fail
+	addq.l	#2,A0
+	cmp.w	#$6000,(A0)+
+	bne.s	.fail
+	move.w	(A0),D1
+	beq.b	.fail
+	bmi.b	.fail
+	btst	#0,D1
+	bne.b	.fail
+	add.w	(A1),A1
+	cmp.l	#$3F006100,(A1)
+	bne.s	.fail
+	cmpi.w	#$3D7C,6(A1)
+	bne.s	.fail
+	cmpi.w	#$41FA,12(A1)
+	bne.s	.fail
+	moveq	#0,D0
+	rts
+
+.fail	moveq	#-1,d0
+	rts
+
+
+******************************************************************************
+* Sidmon v2
+******************************************************************************
+
+p_sidmon2
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_sidmon2(pc)
+	jmp	.author(pc)
+	dc.w pt_sidmon2
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc.b	"SidMon 2",0
+.a	dc.b	"Michael Kleps (Unknown/DOC 1990)",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	sidmon2routines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	dmawait(pc),a2
+	move.l	sidmon2routines(a5),a6
+	jsr	.INIT(a6)
+	popm	d1-a6
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	sidmon2routines(a5),a0
+	jmp	.PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.end
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_sidmon2
+	lea		.idStart(pc),a1
+	moveq	#.idEnd-.idStart,d0
+	bra.w 	search
+
+.idStart	dc.b	'SIDMON II - THE MIDI VERSION'
+.idEnd 
+ even 
+
+
+******************************************************************************
+* Delta Music 1
+******************************************************************************
+
+p_deltamusic1
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_deltamusic1(pc)
+	jmp	.author(pc)
+	dc.w pt_deltamusic1
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc.b	"Delta Music 1",0
+.a 	dc.b	"Bent Nielsen",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	deltamusic1routines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	dmawait(pc),a2
+	move.l	deltamusic1routines(a5),a6
+	jsr	.INIT(a6)
+	popm	d1-a6
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	deltamusic1routines(a5),a0
+	jmp	.PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.end
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_deltamusic1
+	move.l 	a4,a0
+	move.l  d7,d0
+	cmp.l	#"ALL ",(a0)
+	bne.b	.no
+	moveq	#104,d1
+	lea	4(a0),a1
+	moveq	#24,d2
+.l	cmp.l	(a1)+,d1
+	dbf	d2,.l
+	cmp.l 	d1,d0
+	blo.b 	.no
+	moveq	#0,d0
+	rts
+.no	moveq	#-1,d0 
+	rts
+
+******************************************************************************
+* SoundFX
+******************************************************************************
+
+p_soundfx
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_soundfx(pc)
+	jmp	.author(pc)
+	dc.w pt_soundfx
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
+	dc.b	"SoundFX",0
+.a 	dc.b	"Christian Haller, Christian A. Webber",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	soundfxroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	dmawait(pc),a2
+	lea	pos_nykyinen(a5),a3
+	lea 	pos_maksimi(a5),a4
+	move.l	soundfxroutines(a5),a6
+	jsr	.INIT(a6)
+	popm	d1-a6
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	soundfxroutines(a5),a0
+	jmp	.PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.end
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_soundfx
+	cmp.l	#"SONG",60(a4)
+	bne.b	.no
+	moveq	#0,d0
+	rts
+.no	moveq	#-1,d0 
+	rts
+
+******************************************************************************
+* GlueMon
+******************************************************************************
+
+p_gluemon
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_gluemon(pc)
+	jmp	.author(pc)
+	dc.w pt_gluemon
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc.b	"GlueMon",0
+.a	dc.b	"Lars Malmborg (GlueMaster/North Star)",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.END   = 8+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea 	gluemonroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	songover(a5),a2
+	lea 	pos_maksimi(a5),a3
+	lea	pos_nykyinen(a5),a4
+	move.l	gluemonroutines(a5),a6
+	jsr	.INIT(a6)
+	popm	d1-a6
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	gluemonroutines(a5),a0
+	jmp	.PLAY(a0)
+
+.stop
+	lea	$dff096,a0
+	moveq	#0,d0
+	move	d0,$a8-$96(a0)
+	move	d0,$b8-$96(a0)
+	move	d0,$c8-$96(a0)
+	move	d0,$d8-$96(a0)
+	;bra.w	clearsound
+	rts
+
+.end
+	move.l	gluemonroutines(a5),a0
+	jsr	.END(a0)
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_gluemon
+	cmp.l	#"GLUE",(a4)
+	bne.b	.no
+	cmp.l	#~"GLUE",4(a4)
+	bne.b	.no
+	moveq	#0,d0
+	rts
+.no	moveq	#-1,d0 
+	rts
+
+******************************************************************************
+* PreTracker
+******************************************************************************
+
+p_pretracker
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_pretracker(pc)
+	jmp	thx_author(pc)
+	dc.w pt_pretracker
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc.b	"PreTracker by Pink/aBYSs",0
+ even
+
+.mySong		dc.l  0
+.myPlayer	dc.l  0
+.chipMem	dc.l  0
+
+.setVol1
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0a8
+	pop 	d0
+	rts
+.setVol2
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0b8
+	pop 	d0
+	rts
+.setVol3
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0c8
+	pop 	d0
+	rts
+.setVol4
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0d8
+	pop 	d0
+	rts
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea 	pretrackerroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	move.l #16*1024,d0
+	move.l	#MEMF_PUBLIC|MEMF_CLEAR,d1 
+	jsr getmem
+	move.l d0,.mySong
+	beq.w .noMem
+	move.l #16*1024,d0
+	move.l	#MEMF_PUBLIC|MEMF_CLEAR,d1 
+	jsr getmem
+	move.l d0,.myPlayer
+	beq.w .noMem
+
+
+	pushm	d1-a6
+
+	move.l pretrackerroutines(a5),a0
+	move.l	a0,a4
+	add.l	-4(a4),a4 	* end of memory region
+.patchLoop
+* 33C0 xxxxxxxx = MOVE.L d0,xxxxxxxx
+* 4EB9 xxxxxxxx = JSR xxxxxxxx
+
+	move	(a0),d0
+	cmp		#$33c0,d0 
+	bne.b  .next 
+	cmp.l	#$dff0a8,2(a0)
+	beq.b	.1
+	cmp.l	#$dff0b8,2(a0)
+	beq.b	.2
+	cmp.l	#$dff0c8,2(a0)
+	beq.b	.3
+	cmp.l	#$dff0d8,2(a0)
+	beq.b	.4
+	bra.b 	.next
+.1	move	#$4eb9,(a0)
+	move.l	#.setVol1,2(a0)
+	bra.b 	.next
+.2	move	#$4eb9,(a0)
+	move.l	#.setVol2,2(a0)
+	bra.b 	.next
+.3	move	#$4eb9,(a0)
+	move.l	#.setVol3,2(a0)
+	bra.b 	.next
+.4	move	#$4eb9,(a0)
+	move.l	#.setVol4,2(a0)
+	;bra.b 	.next
+.next
+	addq	#2,a0
+	cmp.l	a4,a0
+	blo.b	.patchLoop
+
+	bsr.w	clearCpuCaches
+
+	move.l .myPlayer(pc),a0
+	move.l .mySong(pc),a1
+	move.l moduleaddress(a5),a2
+	move.l pretrackerroutines(a5),a3	
+	add.l	 (a3),a3
+	jsr		(a3) ; songInit
+	* in D0 returns the needed chipbuffer size
+
+	DPRINT	"Chip: %ld"
+
+	move.l	#MEMF_CHIP|MEMF_CLEAR,d1 
+	jsr getmem
+	move.l d0,.chipMem
+	beq.b .noMem
+
+	* May be slow, instrument generation 
+	jsr	setMainWindowWaitPointer
+
+	move.l pretrackerroutines(a5),a3
+	move.l	.myPlayer(pc),a0 
+	move.l  .chipMem(pc),a1 
+	move.l  .mySong(pc),a2	
+	add.l	4(a3),a3
+	jsr 	(a3)  ; playerInit
+
+	popm	d1-a6
+	jsr	clearMainWindowWaitPointer
+	moveq	#0,d0
+	rts	
+
+.noMem
+	bsr.b .free
+	popm	d1-a6
+	moveq #ier_nomem,d0
+	rts
+
+.free 
+	move.l .mySong(pc),a0
+	jsr	freemem 
+	clr.l .mySong
+	move.l .myPlayer(pc),a0
+	jsr	freemem 
+	clr.l .myPlayer 
+	move.l .chipMem(pc),a0 
+	jsr	freemem 
+	clr.l .chipMem
+	rts
+
+.play
+	move.l pretrackerroutines(a5),a1
+	move.l	.myPlayer(pc),a0 
+	add.l	8(a1),a1
+	jmp	(a1)		; playerTick
+	
+.stop
+	bra.w	clearsound
+
+.end
+	bsr.b .free
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+.id_pretracker 
+	bsr.b 	id_pretracker_
+	bne.b .x
+	lea	$14(a4),a1
+	moveq	#20-1,d0
+	bsr.w	copyNameFromA1
+	moveq	#0,d0
+.x  rts
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_pretracker_
+	move.l	(a4),d0
+	lsr.l	#8,d0
+	cmp.l	#"PRT",d0
+	bne.b	.no
+	tst	4(a4)
+	bne.b	.no
+	tst	8(a4)
+	bne.b	.no
+	tst	$c(a4)
+	bne.b	.no
+	moveq	#0,d0
+	rts
+.no	moveq	#-1,d0 
+	rts
+
+******************************************************************************
+* CustomMade
+******************************************************************************
+
+p_custommade
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	jmp	.song(pc) 
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp .id_custommade(pc)
+	jmp	.author(pc)
+	dc.w pt_custommade
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"CustomMade",0
+.a 	dc.b	"Ivo Zoer & Ron Klaren, adapted by Andy Silva & Wanted Team",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+ even
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.SONG  = 8+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	custommaderoutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea 	songover(a5),a2
+	move.l	custommaderoutines(a5),a3
+	jsr	.INIT(a3)
+
+*   d1 = min song, always 1
+*   d2 = max song
+*   d3 = timer value
+
+	subq	#1,d2 
+	clr	songnumber(a5)
+	move	d2,maxsongs(a5)
+
+	move	d3,d0 
+	jsr	ciaint_setTempoFromD0
+
+	popm	d1-a6
+	* INIT returns 0 on success
+	moveq	#0,d0
+	rts	
+
+.play
+	move.l	custommaderoutines(a5),a0
+	jmp	.PLAY(a0)
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Song %ld"
+ endif
+	* starts from 1, not 0
+	addq	#1,d0
+	move.l	custommaderoutines(a5),a0
+	jsr	.SONG(a0)
+	rts
+
+.end
+	jsr	rem_ciaint
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_custommade
+	move.l	a4,a0
+	moveq	#-1,D0
+	
+	cmp.w	#$4EF9,(A0)		; jmp
+	beq.b	.Later
+	cmp.w	#$4EB9,(A0)		; jsr
+	beq.b	.Later
+	cmp.w	#$6000,(A0)		; bra.w
+	bne.b	.Fault
+	cmp.w	#$6000,4(A0)
+	beq.b	.More
+.Fault
+	rts
+.Later
+	cmp.w	#$4EF9,6(A0)
+	bne.b	.Fault
+.More
+	lea	8(A0),A1
+	lea	400(A1),A2
+.Last
+	cmp.l	#$42280030,(A1)
+	bne.b	.NOM
+	cmp.l	#$42280031,4(A1)
+	bne.b	.NOM
+	cmp.l	#$42280032,8(A1)
+	beq.b	.Found
+.NOM
+	addq.l	#2,A1
+	cmp.l	A1,A2
+	bne.b	.Last
+	rts
+.Found
+	moveq	#0,D0
+	rts
+
+
+
+******************************************************************************
+* Dave Lowe
+******************************************************************************
+
+p_davelowe
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	jmp	.song(pc) 
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp id_davelowe(pc)
+	jmp	.author(pc)
+	dc.w pt_davelowe
+	dc pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song!pf_end
+	dc.b	"Dave Lowe",0
+.a 	dc.b	"Dave Lowe, adapted by Wanted Team",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.END   = 8+$20
+.SONG  = 12+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	daveloweroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0 
+	* LoadSeg BPTR->APTR
+	add.l	a0,a0
+	add.l	a0,a0
+	lea	mainvolume(a5),a1 
+	lea	songover(a5),a2
+	move.l	daveloweroutines(a5),a3
+	jsr	.INIT(a3)
+	subq	#1,d2
+	move	d2,maxsongs(a5)
+
+ if DEBUG
+ 	push	d0
+	move.l	d1,d0
+	move.l	d2,d1
+	move.l	d3,d2
+	DPRINT	"Range %ld-%ld %s"
+	pop	d0
+ endif
+	tst.l	d3
+	beq.b	.x
+	move.l	d3,a0
+	lea	modulename(a5),a1
+.c	move.b	(a0)+,(a1)+
+	bne.b	.c
+.x
+	popm	d1-a6
+	* INIT returns 0 on success
+	rts	
+
+.play
+	move.l	daveloweroutines(a5),a0
+	jsr	.PLAY(a0)
+	rts
+
+.stop
+	bra.w	clearsound
+
+.song
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	addq	#1,d0
+	DPRINT	"Song %ld"
+ endif
+	move.l	daveloweroutines(a5),a0
+	jmp .SONG(a0)
+
+.end
+	jsr	rem_ciaint
+	pushm	all
+	move.l	daveloweroutines(a5),a0
+	jsr	.END(a0)
+	popm	all
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+id_davelowe
+	move.l	a4,a0
+	cmp.l	#$000003F3,(A0)
+	bne.b	.fail
+	tst.b	20(A0)				; loading into chip check
+	beq.b	.fail
+	lea	32(A0),A0
+	cmp.l	#$70FF4E75,(A0)+
+	bne.b	.fail
+	cmp.l	#'UNCL',(A0)+
+	bne.b	.fail
+	cmp.l	#'EART',(A0)+
+	bne.b	.fail
+	tst.l	(A0)+				; InitSound pointer check
+	beq.b	.fail
+	tst.l	(A0)+				; Interrupt pointer check
+	beq.b	.fail
+	addq.l	#4,A0
+	tst.l	(A0)				; Subsong Counter label check
+	beq.b	.fail
+	moveq	#0,D0
+	rts
+.fail
+	moveq	#-1,D0
+	rts
+
+
+******************************************************************************
+* StarTrekker AM
+******************************************************************************
+
+p_startrekker
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	p_NOP 	
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp 	.id(pc)
+	jmp	.author(pc)
+	dc.w 	pt_startrekker
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
+	dc.b	"StarTrekker AM",0
+.a 	dc.b "Bjoern Wesen/Exolon of Fairlight",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+	
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.END   = 8+$20
+
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	startrekkerroutines(a5),a0
+	bsr.w	allocreplayer2
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	pushm	d1-a6
+
+	move.l	moduleaddress(a5),a0
+	move	#950/2-1,d0
+	lea	ptheader,a1
+.cl	move	(a0)+,(a1)+
+	dbf	d0,.cl
+
+
+	* Load extra data file ".nt"
+	jsr	getcurrent 
+	* a3 = node
+	lea	-200(sp),sp
+	lea	l_filename(a3),a0 
+	move.l	sp,a1
+.c	move.b	(a0)+,(a1)+
+	bne.b	.c
+	subq	#1,a1
+	move.b	#".",(a1)+
+	move.b	#"n",(a1)+
+	move.b	#"t",(a1)+
+	clr.b	(a1)
+
+	move.l	sp,a0
+	bsr.b	.loadExtraFile
+	* d0 = 0 if success
+ 	lea	200(sp),sp
+
+	tst.l	d0 
+	beq.b 	.gotNt
+	
+	* Load extra data file ".as"
+	* Audio Sculpture
+	jsr	getcurrent 
+	* a3 = node
+	lea	-200(sp),sp
+	lea	l_filename(a3),a0 
+	move.l	sp,a1
+.c2	move.b	(a0)+,(a1)+
+	bne.b	.c2
+	subq	#1,a1
+	move.b	#".",(a1)+
+	move.b	#"a",(a1)+
+	move.b	#"s",(a1)+
+	clr.b	(a1)
+
+	move.l	sp,a0
+	bsr.b	.loadExtraFile
+	* d0 = 0 if success
+ 	lea	200(sp),sp
+
+	tst.l	d0 
+	bne.b 	.fileErr
+
+.gotNt
+	move.l	moduleaddress(a5),a0
+	move.l	startrekkerdataaddr(a5),a1
+	lea	mainvolume(a5),a2
+	lea	songover(a5),a3
+	lea	dmawait(pc),a4
+	move.l	modulelength(a5),d0
+	push	a5
+	move.l	startrekkerroutines(a5),a5
+	jsr	.INIT(a5)
+	moveq	#0,d0
+	pop 	a5
+	move	d1,pos_maksimi(a5)
+.x
+	popm	d1-a6
+	tst.l	d0
+	* INIT returns 0 on success
+	rts	
+
+.loadExtraFile	
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"Loading %ls"
+ endif
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
+	lea	startrekkerdataaddr(a5),a1
+	lea 	startrekkerdatalen(a5),a2
+	bsr.w	loadfileStraight
+	rts
+
+.fileErr 
+	* No extra data file tound. Proceed as Protracker
+	DPRINT	"Revert to Protracker"
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	pushpea	p_protracker(pc),playerbase(a5)
+	move	#pt_prot,playertype(a5)
+	moveq	#0,d0 
+	move.l	playerbase(a5),a0 
+	jsr	p_init(a0)
+	bra.b 	.x
+
+.play
+	push	a5
+	move.l	startrekkerroutines(a5),a0
+	jsr	.PLAY(a0)
+	pop 	a5
+	move	d0,pos_nykyinen(a5)
+	rts
+
+.stop
+	bra.w	clearsound
+
+.end
+	jsr	rem_ciaint
+	move.l	startrekkerroutines(a5),a0
+	jsr	.END(a0)
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+.id
+	bsr.b	.id_
+	bne.b 	.nok
+	moveq	#20-1,d0
+	bsr.w	copyNameFromModule
+	moveq	#0,d0	
+.nok	rts
+
+; in: a4 = module
+;     d7 = module lenght
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id_
+	cmp.l	#"FLT4",$438(a4)
+	beq.s	.k
+	cmp.l	#"EXO4",$438(a4)
+	beq.s	.k
+	moveq	#-1,d0
+	rts 
+.k
+	moveq	#0,d0
+	rts
+
+
+******************************************************************************
+* Voodoo Supreme Synthesizer
+******************************************************************************
+
+p_voodoosupremesynthesizer
+	jmp	.init(pc)
+	jmp	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	jmp	.cont(pc)
+	jmp	.vol(pc)
+	jmp	.song(pc)
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp 	.id(pc)
+	jmp	.author(pc)
+	dc.w 	pt_voodoosupremesynthesizer
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc.b	"VoodooSupremeSynthesizer",0
+.a 	dc.b "Thomas Partl",0
+ even
+
+.author
+	pushpea	.a(pc),d0 
+	rts
+
+.INIT  = 0+$20
+.PLAY  = 4+$20
+.END   = 8+$20
+.VOL   = 12+$20
+.SONG  = 16+$20
+
+.init
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	jsr	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	voodooroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	jsr	rem_ciaint
+	bsr.w	vapauta_kanavat
+	rts
+.ok3
+	move.l	moduleaddress(a5),a0
+	move.l	modulelength(a5),d0
+	lea	songover(a5),a1
+	move.l	voodooroutines(a5),a2
+	jsr	.INIT(a2)
+	tst.l	d0
+	bne.b	.noMem
+
+	* min song = d1
+	* max song = d2
+	move	d2,maxsongs(a5)
+
+	bsr.b	.vol
+	moveq	#0,d0
+	rts
+
+.noMem
+	moveq	#ier_nomem,d0
+	rts
+.end
+	jsr	rem_ciaint
+	move.l	voodooroutines(a5),a0
+	jsr	.END(a0)
+	bsr.w	clearsound
+	bsr.w	vapauta_kanavat
+	rts
+
+.play
+	move.l	voodooroutines(a5),a0
+	jsr	.PLAY(a0)
+	rts
+.stop
+	bra.w	clearsound
+.cont
+	rts
+.vol
+	move	mainvolume(a5),d0
+	move.l	voodooroutines(a5),a0
+	jmp	.VOL(a0)
+.song	
+	move	songnumber(a5),d0
+	move.l	voodooroutines(a5),a0
+	jmp	.SONG(a0)
+	
+.id
+	move.l	a4,a0
+	move.l	d7,d0
+	ADDQ.L	#1,D0
+	AND.L	#$FFFFFFFE,D0
+	ADD.L	D0,A0
+	MOVEQ	#-1,D0
+	SUB.W	#$40,A0
+	MOVEQ	#$1F,D1
+.lbC000360	
+	CMP.L	#$56535330,(A0)
+	BEQ.B	.lbC000372
+	ADDQ.L	#2,A0
+	DBRA	D1,.lbC000360
+	RTS
+.lbC000372	
+	CMP.L	#$100,4(A0)
+	BHS.B	.no
+	MOVEQ	#0,D0
+.no
+	RTS
+
+******************************************************************************
+* Quartet
+******************************************************************************
+
+p_quartet
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_quartet 
+ 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus
+	dc.b	"Quartet             [EP]",0
+
+.path dc.b "quartet",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+        cmp.b   #$50,1(A0)
+        bne.b   .Fault
+        cmp.b   #30,(A0)
+        bhi.b   .Fault
+        moveq   #0,D1
+        move.b  (A0),D1
+        beq.b   .Fault
+        move.l  #3000,D2                        ; max. tempo
+        divu.w  D1,D2
+        swap    D2
+        tst.w   D2
+        bne.b   .Fault
+     move.l  d7,D2
+        bclr    #0,D2
+        add.l   D2,A0
+        moveq   #15,D2
+        moveq   #-1,D3
+.NextEnd
+        move.w  -(A0),D1
+        beq.b   .Zero
+        cmp.w   D3,D1
+        beq.b   .CheckEnd
+.Fault
+        moveq   #-1,D0
+        rts
+.Zero
+        dbf     D2,.NextEnd
+        bra.b   .Fault
+.CheckEnd
+        cmp.l   -2(A0),D3
+        bne.b   .Fault
+        cmp.l   -6(A0),D3
+        bne.b   .Fault
+        moveq   #0,D0
+	rts
+
+******************************************************************************
+* Face The Music
+******************************************************************************
+
+p_facethemusic
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	.ftmVBlank(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_facethemusic 
+.flags 	dc pf_stop!pf_cont!pf_volume!pf_end	
+	dc.b	"Face The Music      [EP]",0
+
+.path dc.b "face the music",0
+ even
+
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|7,d0
+	bsr.w	deliLoadAndInit
+	bne.b	.error
+
+	* Some tunes seem to end prematurely, try this
+	lea	.flags(pc),a0
+	and	#~pf_end,(a0)
+	moveq	#0,d0
+.error	
+	rts
+
+.id
+	bsr.b	.do
+	bne.b	.not 
+	bsr.w 	moveModuleToPublicMem
+	moveq	#0,d0
+.not		
+	rts
+
+.do
+	MOVEQ	#0,D0
+	MOVE.L	(A4),D1
+	AND.L	#$FFFFFF00,D1
+	CMP.L	#$46544D00,D1
+	SNE	D0
+	rts
+
+.ftmVBlank
+	* Need to call this so that volume and voices are updated.
+	* FTM uses it's own interrupt otherwise.
+	bra.w	deliInterrupt
+
+******************************************************************************
+* Richard Joseph
+******************************************************************************
+
+p_richardjoseph
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_richardjoseph
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"R.Joseph/VectorDean [EP]",0
+.path dc.b "richard joseph player",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
+	bsr.w	deliLoadAndInit
+	bne.b	.error
+
+	* Some tunes seem to end prematurely, try this
+	lea	.flags(pc),a0
+	and	#~pf_end,(a0)
+	moveq	#0,d0
+.error	
+	rts
+
+.id
+        movea.l a4,A0
+        moveq   #-1,D0
+        move.l  (A0)+,D1
+        clr.b   D1
+        cmp.l   #$524A5000,D1
+        bne.b   .Fault
+        cmp.l   #'SMOD',(A0)+
+        bne.b   .Fault
+        addq.l  #4,A0
+        tst.l   (A0)
+        bne.b   .Fault
+        moveq   #0,D0
+.Fault
+        rts
+
+
+******************************************************************************
+* In Stereo 1
+******************************************************************************
+
+p_instereo1
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc 	pt_instereo1
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"In Stereo! 1.0      [EP]",0
+
+.path dc.b "in stereo 1.0",0
+ even
+
+* Let's bend over backwards for this one.
+* It is an amplifier eagleplayer, so it can run
+* with data in fast ram. The replay code contains waveform
+* buffers. They need to be in chip. Therefore,
+* patch the eagleplayer to load into chip ram before loading it.
+
+.init	pushm	d1-a6	
+
+	* First, find it.
+	lea	.path(pc),a3
+	bsr.w	findDeliPlayer
+	beq.w	.error 
+	move.l d0,d7 	* lock
+
+	* Get the path
+	lea	-100(sp),sp
+	move.l 	d7,d1
+	move.l	sp,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	move.l  d0,d6 
+
+	move.l	d7,d1
+	lore  Dos,UnLock
+
+	tst.l	d6 
+	beq.w 	.nameFromLockErr
+	
+	* Read it
+	move.l	sp,a0
+	bsr.w	plainLoadFile 
+	lea	100(sp),sp 
+	tst.l  d0 
+	beq.b  .fileError 
+
+	* Grab the 1st entry from the hunk size table and set
+	* 31th bit to 0, 30th bit to 1, to indicate hunk should be loaded
+	* into chip.
+	move.l	d0,a1
+	move.l	d0,d3
+	move.l 	20(a1),d0 
+	and.l	#%00111111111111111111111111111111,d0 
+	or.l	#%01000000000000000000000000000000,d0 
+	move.l	d0,20(a1)
+
+	move.l	d1,d0
+	lea	-100(sp),sp 
+	move.l	sp,a0
+	move.b	#'R',(a0)+
+	move.b	#'A',(a0)+
+	move.b	#'M',(a0)+
+	move.b	#':',(a0)+
+	lea	.path(pc),a2 
+.c	move.b	(a2)+,(a0)+
+	bne.b	.c
+	move.l	sp,a0
+	bsr.w	plainSaveFile 
+	lea	100(sp),sp
+
+	move.l	d3,a0 
+	jsr	freemem
+
+	tst.l	d0 
+	bmi.b 	.fileError
+
+	lea	.path(pc),a0 
+	move.l	#5<<16|0,d0
+
+	* Camouflage playertype so that the group lookup 
+	* will fail and loader will look into 
+	* filesystem, finding the above patched player.
+	move	playertype(a5),-(sp)
+	move	#-1,playertype(a5)
+	bsr.w	deliLoadAndInit
+	move	(sp)+,playertype(a5)
+	tst.l	d0
+
+.error	popm	d1-a6
+	rts
+
+.fileError 
+	lea	100(sp),sp
+	moveq	#-1,d0
+	bra.b  .error 	
+
+.nameFromLockErr
+	lea	100(sp),sp 
+	moveq	#-1,d0 
+	bra.b 	.error
+
+
+.id
+	MOVEQ	#1,D0
+	CMP.L	#$49534D21,(A4)
+	BNE.b .f 
+	CMP.L	#$56312E32,4(A4)
+	BNE.b .f
+	MOVEQ	#0,D0
+.f	rts
+
+******************************************************************************
+* In Stereo 2
+******************************************************************************
+
+p_instereo2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc 	pt_instereo2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"In Stereo! 2.0      [EP]",0
+
+.path dc.b "in stereo 2.0",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	move.l	#2<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+ 	MOVEQ	#1,D0
+	CMP.L	#$49533230,(A4)
+	BNE.S	.f
+	CMP.L	#$44463130,4(A4)
+	BNE.S	.f
+	CMP.L	#$5354424C,8(A4)
+	BNE.S	.f
+	MOVEQ	#0,D0
+.f  
+	rts
+
+
+
+******************************************************************************
+* Jason Brooke
+******************************************************************************
+
+p_jasonbrooke
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_jasonbrooke
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"Jason Brooke        [EP]",0
+	        
+.path dc.b "jason brooke",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+
+	MOVEQ	#-1,D0
+	;LEA	lbW000166(PC),A1
+	MOVE.L	A0,A2
+	CMP.L	#$48E7F0F0,(A0)+
+	BNE.S	.lbC00058C
+	CMP.L	#$424047FA,(A0)+
+	BNE.S	.lbC00058A
+	CMP.L	#$FFF84A2B,(A0)
+	BNE.S	.lbC00058A
+	;ST	(A1)
+.lbC000588	MOVEQ	#0,D0
+.lbC00058A	RTS
+
+.lbC00058C	LEA	$AC(A2),A0
+	MOVEQ	#$19,D1
+.lbC000592	CMP.W	#$48E7,(A0)+
+	BEQ.S	.lbC00059E
+	DBRA	D1,.lbC000592
+	BRA.S	.lbC00058A
+
+.lbC00059E	CMP.W	#$F8FC,(A0)
+	BEQ.S	.lbC0005AA
+	CMP.W	#$F8F8,(A0)
+	BNE.S	.lbC00058A
+.lbC0005AA	ADDQ.L	#2,A0
+	CMP.L	#$8F90001,(A0)+
+	BNE.S	.lbC00058A
+	CMP.L	#$BFE001,(A0)+
+	BNE.S	.lbC00058A
+	CMP.L	#$33FC0780,(A0)+
+	BNE.S	.lbC00058A
+	CMP.L	#$DFF09A,(A0)+
+	BNE.S	.lbC00058A
+	CMP.W	#$47FA,(A0)+
+	BNE.S	.lbC00058A
+	MOVEQ	#1,D1
+	SWAP	D1
+	MOVEQ	#0,D2
+	MOVE.W	(A0),D2
+	SUB.L	D2,D1
+	SUB.L	D1,A0
+	CMP.L	A2,A0
+	BNE.S	.lbC00058A
+	;CLR.W	(A1)
+	BRA.S	.lbC000588
+
+
+******************************************************************************
+* EarAche
+******************************************************************************
+
+p_earache
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_earache
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"EarAche             [EP]",0
+	        
+.path dc.b "earache",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	bsr.b 	.id_ 
+	tst.l d0
+	rts
+
+.id_
+	moveq	#-1,D0
+
+	tst.w	(A0)
+	beq.b	.CheckRout
+	cmp.l	#'EASO',(A0)
+	bne.b	.NoHead
+	addq.l	#4,A0
+	bra.b	.CheckRout
+.NoHead
+	cmp.w	#$6000,(A0)+
+	bne.b	.Fault
+	move.l	A0,A1
+	move.w	(A0)+,D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	cmp.w	#$6000,(A0)+
+	bne.b	.Fault
+	move.w	(A0)+,D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+	add.w	D1,A1
+	cmp.l	#$33FC000F,(A1)+
+	bne.b	.Fault
+	cmp.l	#$00DFF096,(A1)+
+	bne.b	.Fault
+	cmp.w	#$43FA,(A1)+
+	bne.b	.Fault
+	move.w	(A1),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	add.w	D1,A1
+	move.l	A1,A0
+.CheckRout
+	cmp.l	#$18,(A0)		; check routine taken from EarAche editor
+	bne.b	.Fault
+	move.l	4(A0),D2
+	sub.l	(A0),D2
+	ble.b	.Fault
+	and.w	#7,D2
+	bne.b	.Fault
+	move.l	$10(A0),D2
+	sub.l	8(A0),D2
+	ble.b	.Fault
+	and.w	#15,D2
+	bne.b	.Fault
+	moveq	#0,D0
+.Fault
+	rts
+
+
+
+******************************************************************************
+* Kris Hatlelid
+******************************************************************************
+
+p_krishatlelid
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_krishatlelid
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"Kris Hatlelid       [EP]",0
+	        
+.path dc.b "kris hatlelid",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	CMP.L	#$3F3,(A0)+
+	BNE.S	.lbC000506
+	TST.L	(A0)+
+	BNE.S	.lbC000506
+	CMP.L	#3,(A0)+
+	BNE.S	.lbC000506
+	TST.L	(A0)+
+	BNE.S	.lbC000506
+	CMP.L	#2,(A0)+
+	BNE.S	.lbC000506
+	MOVE.L	(A0)+,D1
+	BCLR	#$1E,D1
+	CMP.B	#$40,(A0)
+	BNE.S	.lbC000506
+	ADDQ.L	#4,A0
+	CMP.L	#1,(A0)+
+	BNE.S	.lbC000506
+	CMP.L	#$3E9,(A0)+
+	BNE.S	.lbC000506
+	CMP.L	(A0)+,D1
+	BNE.S	.lbC000506
+	CMP.L	#$60000016,(A0)+
+	BNE.S	.lbC00050A
+	CMP.L	#$ABCD,(A0)+
+	BNE.S	.lbC000506
+	CMP.L	#$B07C0000,$10(A0)
+	BNE.S	.lbC00050E
+	BRA.S	.lbC000524
+
+.lbC000506	MOVEQ	#-1,D0
+	RTS
+
+.lbC00050A	LEA	-$14(A0),A0
+.lbC00050E	CMP.L	#$41F90000,$10(A0)
+	BNE.S	.lbC000506
+	CMP.L	#$4E75,$14(A0)
+	BNE.S	.lbC000506
+.lbC000524	MOVEQ	#0,D0
+	RTS
+
+
+
+******************************************************************************
+* Richard Joseph
+******************************************************************************
+
+p_richardjoseph2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_richardjoseph2
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"Richard Joseph      [EP]",0
+	
+	        
+.path dc.b "richard joseph",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	MOVE.L	a4,A0
+	CMP.L	#$3F3,(A0)
+	BNE.S	.lbC00043E
+	TST.B	$14(A0)
+	BEQ.S	.lbC00043E
+	LEA	$20(A0),A0
+	CMP.L	#$70FF4E75,(A0)+
+	BNE.S	.lbC00043E
+	CMP.L	#$522E4A4F,(A0)+
+	BNE.S	.lbC00043E
+	CMP.L	#$53455048,(A0)+
+	BNE.S	.lbC00043E
+	TST.L	(A0)+
+	BEQ.S	.lbC00043E
+	TST.L	(A0)+
+	BEQ.S	.lbC00043E
+	TST.L	(A0)+
+	BEQ.S	.lbC00043E
+	TST.L	(A0)
+	BEQ.S	.lbC00043E
+	MOVEQ	#0,D0
+	RTS
+
+.lbC00043E	MOVEQ	#-1,D0
+	RTS
+
+
+
+******************************************************************************
+* Hippel 7ch
+******************************************************************************
+
+p_hippel7
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	deliInterrupt(pc) ; handle position and vol updates
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	p_NOP
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp id_hippel7(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_hippel7
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen
+	dc.b	"Jochen Hippel 7v    [EP]",0
+		        
+.path dc.b "jochen hippel 7v",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|4,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+id_hippel7
+	bsr.b	.id
+	bne.b	.not
+	* This is identified as TFMX song data which goes into
+	* public mem, fix it.
+	bsr.w	moveModuleToChipMem
+	moveq	#0,d0
+.not
+	rts
+.id
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	cmp.w	#$6000,(A0)
+	bne.b	.Song
+	addq.l	#2,A0
+	move.w	(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	lea	(A0,D1.W),A0
+	moveq	#10,D1
+.Find_1
+	cmp.l	#$308141FA,(A0)
+	beq.b	.OK_1
+	addq.l	#2,A0
+	dbf	D1,.Find_1
+	rts
+.OK_1
+	addq.l	#4,A0
+	move.w	(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	lea	(A0,D1.W),A0
+.Song
+	cmp.l	#'TFMX',(A0)+
+	bne.b	.Fault
+	tst.b	(A0)
+	bne.b	.Fault
+	moveq	#2,D1
+	add.w	(A0)+,D1
+	add.w	(A0)+,D1
+	lsl.l	#6,D1
+	moveq	#1,D2
+	add.w	(A0)+,D2
+	moveq	#1,D3
+	add.w	(A0)+,D3
+	mulu.w	#28,D3
+	mulu.w	(A0)+,D2
+	add.l	D2,D1
+	add.l	D3,D1
+	addq.l	#2,A0
+	moveq	#1,D2
+	add.w	(A0)+,D2
+	lsl.l	#3,D2
+	add.l	D2,D1
+	moveq	#32,D2
+	add.l	D2,D1
+	add.l	D1,A0
+	tst.l	(A0)+
+	bne.b	.Fault
+	move.w	(A0),D2
+	beq.b	.Fault
+	add.l	D2,D2
+	cmp.l	26(A0),D2
+	bne.b	.Fault
+	moveq	#0,D0
+.Fault
+	tst.l	d0
+	rts
+
+******************************************************************************
+* AProSys
+******************************************************************************
+
+p_aprosys
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_aprosys
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+	dc.b	"AProSys             [EP]",0
+		        
+.path dc.b "aprosys",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	CMP.L	#$41445256,(A4)
+	BNE.S	.f
+	CMP.L	#$5041434B,4(A4)
+	BNE.S	.f
+	MOVEQ	#0,D0
+	rts
+.f	
+	MOVEQ	#-1,D0
+	RTS
+
+
+
+******************************************************************************
+* Jochen Hippel ST (also Jochen Hippel COSO ST)
+******************************************************************************
+
+p_hippelst
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_hippelst
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc.b	"Jochen Hippel ST    [EP]",0	        
+.path dc.b "jochen hippel st",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|4,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	move.l	d7,d0
+
+        ;move.l  dtg_ChkData(A5),A0
+        ;move.l  dtg_ChkSize(A5),D0
+        move.l  A0,A4
+        bsr.b   .Check
+        cmp.w   #2,D0
+        bne.b   .Fault
+        moveq   #0,D1
+        cmp.l   #'LSMP',$1C(A0)
+        bne.b   .OneFile
+        moveq   #1,D1
+.OneFile
+        ;lea     TwoFiles(PC),A1
+        ;move.l  D1,(A1)+
+        ;sub.l   A4,A0
+        ;move.l  A0,(A1)
+        moveq   #0,D0
+        bra.b   .Found
+
+.Fault   moveq   #-1,D0
+.Found   rts
+
+.Check
+.lbC0001C0	MOVEA.L	A0,A1
+	MOVEQ	#$7F,D1
+	BRA.S	.lbC0001DA
+
+.lbC0001C6	CMPI.W	#$41FA,(A1)+
+	BNE.S	.lbC0001F2
+	MOVE.W	(A1),D2
+	BMI.S	.lbC0001F2
+	BTST	#0,D2
+	BNE.S	.lbC0001F2
+	LEA	0(A1,D2.W),A0
+.lbC0001DA	CMPI.L	#'MMME',(A0)
+	BEQ.S	.lbC0001FC
+	CMPI.L	#'TFMX',(A0)
+	BEQ.S	.lbC000204
+	CMPI.L	#'COSO',(A0)
+	BEQ.S	.lbC000262
+.lbC0001F2	SUBQ.L	#2,D0
+	DBMI	D1,.lbC0001C6
+.lbC0001F8	MOVEQ	#0,D0
+	RTS
+
+.lbC0001FC
+;	MOVEQ	#1,D0
+;	RTS
+
+.lbC000200	MOVEQ	#2,D0
+	RTS
+
+.lbC000204	CMPI.W	#$200,4(A0)
+	BGE.S	.lbC0001F8
+
+	tst.w	16(A0)				; FX Check
+	beq.b	.lbC0001F8
+
+	BSR.S	.lbC000216
+	CMP.L	D6,D7
+	BLT.S	.lbC000230
+	MOVEQ	#1+1,D0
+	RTS
+
+.lbC000216	MOVE.W	4(A0),D0
+	LEA	$20(A0),A1
+	MOVEQ	#0,D6
+	MOVEQ	#0,D7
+.lbC000222	BSR.B	.lbC0002B6
+	LEA	$40(A1),A1
+	DBRA	D0,.lbC000222
+	RTS
+
+.lbC000230
+;	MOVEQ	#2,D0
+;	ADD.W	4(A0),D0
+;	ADD.W	6(A0),D0
+;	MULU.W	#$40,D0
+;	LEA	$20(A0,D0.W),A1
+;	MOVE.W	8(A0),D0
+;	MOVE.W	12(A0),D1
+;	ADDQ.W	#1,D0
+;	MULU.W	D0,D1
+;	ADDA.L	D1,A1
+;	MOVE.B	3(A1),D1
+;	CMP.B	#$FF,D1
+;	BNE.S	lbC00025E
+	MOVEQ	#5,D0
+	RTS
+
+;lbC00025E	MOVEQ	#3,D0
+;	RTS
+
+.lbC000262
+	tst.w	48(A0)				; FX Check
+	beq.b	.lbC0001F8
+	tst.l	24(A0)
+	beq.b	.lbC0001F8
+
+	CMPI.L	#'TFMX',$20(A0)
+	BEQ.S	.lbC00027A
+	CMPI.L	#'MMME',$20(A0)
+	BEQ.b	.lbC000200
+	MOVEQ	#0,D0
+	RTS
+
+.lbC00027A	BSR.S	.lbC000284
+	CMP.L	D6,D7
+	BLT.S	.lbC00029E
+	MOVEQ	#2,D0
+	RTS
+
+.lbC000284	MOVEA.L	A0,A2
+	ADDA.L	4(A0),A2
+	MOVEQ	#0,D6
+	MOVEQ	#0,D7
+	MOVE.W	$24(A0),D0
+.lbC000292
+	tst.w	64(A0)
+	beq.b	.Longer
+
+	MOVEA.W	(A2)+,A1
+
+	bra.b .SkipLon
+.Longer
+	move.l	(A2)+,A1
+.SkipLon
+	ADDA.L	A0,A1
+	BSR.S	.lbC0002B6
+	DBRA	D0,.lbC000292
+	RTS
+
+.lbC00029E
+;	MOVE.L	$10(A0),D0
+;	LEA	0(A0,D0.W),A1
+;	CMPI.B	#$FF,3(A1)
+;	BEQ.S	lbC0002B2
+	MOVEQ	#4,D0
+	RTS
+
+
+.lbC0002B6	MOVEA.L	A1,A3
+	MOVEQ	#0,D1
+	MOVE.B	(A3)+,D1
+	CMP.B	#$E2,D1
+	BNE.S	.lbC0002CC
+	TST.B	(A3)
+	BMI.S	.lbC0002CA
+	ADDQ.W	#1,D6
+	BRA.S	.lbC0002CC
+
+.lbC0002CA	ADDQ.W	#1,D7
+.lbC0002CC	RTS
+
+
+
+******************************************************************************
+* TCBTracker
+******************************************************************************
+
+p_tcbtracker
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_tcbtracker
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse
+	dc.b	"TCBTracker (ST)     [EP]",0	        
+.path dc.b "tcb tracker",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+
+.id
+	move.l	a4,a0 
+	move.l	d7,d0
+	
+	lea	(a0,d0.l),a2		; pour tests ultÈrieurs
+	cmpi.l	 #$132,d0
+	blo.b	.ohno			; trop petit
+	cmpi.l	#"AN C",(a0)
+	bne.b	.ohno
+	moveq	#0,d3
+	move.l	#"OOL!",d1		; marque avec "!"
+	move.l	4(a0),d2
+	cmp.l	d1,d2
+	beq.s	.hm
+	moveq	#1,d3
+	move.b	#".",d1			; ou marque avec "."
+	cmp.l	d1,d2
+	bne.s	.ohno
+.hm
+	move.l	8(a0),d1
+	cmpi.l	#127,d1			; nb patt : pas plus de 127, quand mÍme ?
+	bhi.s	.ohno
+	cmpi.b	#15,12(a0)		; speed en 16-n donc <16
+	bhi.s	.ohno
+	tst.b	13(a0)			; ‡ priori toujours 0
+	bne.s	.ohno
+	tst.b	$8e(a0)			; taille seq (peut pas Ítre 0 ou >7f)
+	ble.s	.ohno
+	lea	$110(a0),a1		; patt
+	tst.b	d3
+	beq.s	.fmt1
+;	tst.w	$128(a0)		; faut que ce soit 0
+;	bne.s	.ohno			; or 2 too, like TCB.MDemo4 5
+	lea	$132(a0),a1
+.fmt1
+	mulu.w	#$200,d1		; taille patt (on avait encore d1=nbr)
+	add.l	d1,a1			; et adr suite
+	lea	$d4(a1),a3
+	cmp.l	a2,a3			; regarder qu'il ne manque pas qqch...
+	bhs.s	.ohno
+;	move.l	(a1),d3			; taille totale d'ici
+;	add.l	d3,a1
+;	cmp.l	a2,a1			; tronquÈ !
+;	bhi.s	.ohno
+	cmpi.l	#-1,-8(a3)		; FFFFFFFF
+	bne.s	.ohno
+	tst.l	-4(a3)			; 00000000 (juste avant spl)
+	bne.s	.ohno
+	cmpi.l	#$d4,-$90(a3)		; 1er spl toujours en +$d4
+	bne.s	.ohno
+; todo : vÈrifier que les effets <>0 ou <>13 ne sont pas utilisÈs
+;.loop
+
+; bon, Áa devrait suffire...
+; ok
+	moveq	#0,d0
+	rts
+.ohno
+	moveq	#-1,d0
+	rts
+;forswap				; pour calculer chklen
+
+
+
+
+******************************************************************************
+* Mark Cooksey
+******************************************************************************
+
+p_markcooksey
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_markcooksey
+.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_song
+	dc.b	"Mark Cooksey        [EP]",0	        
+.path 	dc.b 	"mark cooksey",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	move.l	#10<<16|10,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+
+.id
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	;lea	Format(PC),A1
+	cmp.l	#$D040D040,(A0)
+	bne.b	.NextCheck
+	cmp.w	#$4EFB,4(A0)
+	bne.b	.fail
+	move.w	#$6000,D1
+	cmp.w	8(A0),D1
+	bne.b	.fail
+	cmp.w	12(A0),D1
+	bne.b	.fail
+	cmp.w	16(A0),D1
+	bne.b	.fail
+	cmp.w	20(A0),D1
+	bne.b	.fail
+	cmp.w	#$43FA,40(A0)
+	beq.b	.Old
+	cmp.w	24(A0),D1
+	bne.b	.fail
+	cmp.w	#$43FA,150(A0)
+	bne.b	.fail
+.Old
+;	clr.b	(A1)
+.Older
+	moveq	#0,D0
+.fail
+	rts
+
+.NextCheck
+	cmp.w	#$601A,(A0)
+	bne.b	.Third
+	addq.l	#2,A0
+	move.l	(A0)+,D1
+	bmi.b	.fail
+	btst	#0,D1
+	bne.b	.fail
+	tst.w	(A0)+
+	bne.b	.fail
+	moveq	#4,D2
+.ZeroCheck
+	tst.l	(A0)+
+	bne.b	.fail
+	dbf	D2,.ZeroCheck
+	lea	2(A0),A2
+	moveq	#3,D2
+.BranchCheck
+	cmp.w	#$6000,(A0)+
+	bne.b	.fail
+	move.w	(A0)+,D1
+	bmi.b	.fail
+	btst	#0,D1
+	bne.b	.fail
+	dbf	D2,.BranchCheck
+	add.w	(A2),A2
+	cmp.l	#$48E780F0,(A2)
+	bne.b	.fail
+
+	;st	(A1)
+	bra.b	.Older
+
+.Third
+	moveq	#1,D2
+.BranchCheck2
+	cmp.w	#$6000,(A0)+
+	bne.b	.fail2
+	move.w	(A0)+,D1
+	bmi.b	.fail2
+	btst	#0,D1
+	bne.b	.fail2
+	dbf	D2,.BranchCheck2
+	cmp.w	#$4DFA,(A0)+
+	bne.b	.fail2
+	addq.l	#2,A0
+	cmp.w	#$4A56,(A0)
+	beq.b	.Later
+	cmp.w	#$4A16,(A0)
+	bne.b	.fail2
+.Later
+	addq.l	#6,A0
+	cmp.w	#$41F9,(A0)+
+	bne.b	.fail2
+	cmp.l	#$DFF000,(A0)+
+	bne.b	.fail2
+	;move.b	#1,(A1)
+	moveq	#0,D0
+.fail2
+	rts
+
+******************************************************************************
+* Activision Pro
+******************************************************************************
+
+p_activisionpro
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_activisionpro
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Activision Pro      [EP]",0
+	        
+.path dc.b "activision pro",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	move.l	#1<<16|8,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+
+	move.l	a4,a0 
+	move.l	d7,d0
+
+	* check smaller area, otherwise can be slooow
+	cmp.l	#1024*4,d0
+	blo.b	.ok
+	move.l	#1024*4,d0
+.ok
+
+.lbC0004CA	MOVE.L	A0,A4
+	MOVE.L	D0,D4
+	MOVE.L	D0,D2
+	MOVE.L	A0,A2
+	LEA	.lbB000624(PC),A1
+	MOVE.L	#3,D1
+	BSR.W	.lbC0005EE
+	BNE.S	.lbC000518
+	;MOVE.L	A0,lbL0000BA
+	LEA	.lbB00062C(PC),A1
+	MOVE.L	#12,D1
+	BSR.W	.lbC0005EE
+	BNE.W	.lbC0005EC
+	;MOVE.L	A0,lbL0000BE
+	MOVEQ	#0,D1
+	CMP.W	#$4E75,$28(A2)
+	BNE.S	.lbC00050C
+	MOVEQ	#2,D1
+.lbC00050C	
+	;MOVE.L	D1,lbL0000C2
+	MOVEQ	#0,D0
+	BRA.W	.lbC0005EC
+
+.lbC000518	MOVE.L	A4,A0
+	MOVE.L	D4,D2
+	LEA	.lbB000646(PC),A1
+	MOVE.L	#9,D1
+	BSR.W	.lbC0005EE
+	BNE.S	.lbC00055A
+	;MOVE.L	A0,lbL0000BA
+	LEA	.lbB00065A(PC),A1
+	MOVE.L	#10,D1
+	BSR.B	.lbC0005EE
+	BNE.B	.lbC0005EC
+	;MOVE.L	A0,lbL0000BE
+	;MOVE.L	#2,lbL0000C2
+	MOVEQ	#0,D0
+	BRA.B	.lbC0005EC
+
+.lbC00055A	MOVE.L	A4,A0
+	MOVE.L	D4,D2
+	CMP.W	#$6000,(A0)
+	BNE.B	.lbC0005EA
+	CMP.W	#$6000,4(A0)
+	BNE.B	.lbC0005EA
+	CMP.W	#$6000,8(A0)
+	BNE.S	.lbC0005EA
+	CMP.W	#$6000,12(A0)
+	BNE.S	.lbC0005EA
+	CMP.W	#$6000,$10(A0)
+	BNE.S	.lbC0005EA
+	CMP.W	#$6000,$14(A0)
+	BNE.S	.lbC0005EA
+	CMP.W	#$6000,$18(A0)
+	BNE.B	.lbC0005EA
+	CMP.W	#$6000,$1C(A0)
+	BNE.B	.lbC0005EA
+	CMP.W	#$6000,$20(A0)
+	BNE.B	.lbC0005EA
+	CMP.W	#$6000,$20(A0)
+	BNE.B	.lbC0005EA
+	MOVE.W	$16(A0),D0
+	LEA	$16(A0,D0.W),A1
+	CMP.L	#$2F0841FA,(A1)
+	BNE.S	.lbC0005EA
+	;MOVE.L	A1,lbL0000BA
+	MOVE.W	$1A(A0),D0
+	LEA	$1A(A0,D0.W),A1
+	;MOVE.L	A1,lbL0000BE
+	;MOVE.L	#2,lbL0000C2
+	MOVEQ	#0,D0
+	BRA.S	.lbC0005EC
+
+.lbC0005EA	MOVEQ	#-1,D0
+.lbC0005EC	RTS
+
+.lbC0005EE	MOVE.L	D1,D3
+	BSR.B	.lbC000604
+	BEQ.S	.lbC000600
+	ADDQ.L	#2,A0
+	SUBQ.L	#2,D2
+	BGT.S	.lbC0005EE
+	MOVEQ	#-1,D0
+	RTS
+
+.lbC000600	MOVEQ	#0,D0
+	RTS
+
+.lbC000604
+	MOVEM.L	D1/D3/A0/A1,-(SP)
+	MOVEQ	#-1,D0
+.lbC00060A	MOVE.W	(A1)+,D1
+	CMP.W	#$FFFF,D1
+	BEQ.S	.lbC000616
+	CMP.W	(A0),D1
+	BNE.S	.lbC00061E
+.lbC000616	ADDQ.L	#2,A0
+	DBRA	D3,.lbC00060A
+	MOVEQ	#0,D0
+.lbC00061E	MOVEM.L	(SP)+,D1/D3/A0/A1
+	RTS
+
+.lbB000624	dc.b	$48
+	dc.b	$E7
+	dc.b	$FC
+	dc.b	$FE
+	dc.b	$E9
+	dc.b	$41
+	dc.b	$70
+	dc.b	0
+.lbB00062C	dc.b	$48
+	dc.b	$E7
+	dc.b	$FC
+	dc.b	$FE
+	dc.b	$41
+.lbB000631	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	$43
+.lbB000635	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	$47
+.lbB000639	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	$4B
+.lbB00063D	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	$2C
+	dc.b	$7C
+	dc.b	0
+	dc.b	$DF
+	dc.b	$F0
+	dc.b	$A0
+.lbB000646	dc.b	$48
+	dc.b	$E7
+	dc.b	0
+	dc.b	$C0
+	dc.b	$41
+.lbB00064B	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	$43
+.lbB00064F	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	2
+	dc.b	$80
+	dc.b	0
+	dc.b	0
+	dc.b	0
+	dc.b	$FF
+	dc.b	$E5
+	dc.b	$40
+.lbB00065A
+	dc.b	$48
+	dc.b	$E7
+	dc.b	$FC
+	dc.b	$FE
+	dc.b	$41
+
+* This bit is needed to recognize "d-generation-sfx.avp":
+
+.lbB00065F
+	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	$43
+.lbB000663	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	$4B
+
+.lbB000667	dc.b	$FA
+	dc.b	$FF
+	dc.b	$FF
+	dc.b	$2C
+	dc.b	$7C
+	dc.b	0
+	dc.b	$DF
+	dc.b	$F0
+	dc.b	$A0
+	dc.b	$48
+	dc.b	$E7
+	dc.b	$C0
+	dc.b	4
+	dc.b	$2A
+	dc.b	$7A
+	dc.b	$FA
+	dc.b	$66
+	dc.b	$70
+	dc.b	1
+	dc.b	$72
+	dc.b	0
+	dc.b	$4E
+	dc.b	$AD
+	dc.b	$FE
+	dc.b	$EC
+	dc.b	$4C
+	dc.b	$DF
+	dc.b	$20
+	dc.b	3
+	dc.b	$4E
+	dc.b	$75
+ even
+
+******************************************************************************
+* MaxTrax
+******************************************************************************
+
+p_maxtrax
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_maxtrax
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"MaxTrax             [EP]",0
+	        
+.path dc.b "maxtrax",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	movea.l	a4,A0
+	moveq	#-1,D0
+
+	move.l	d7,D1
+	lea	(A0,D1.L),A1
+	cmp.l	#'MXTX',(A0)+
+	bne.b	.Fault
+	tst.w	(A0)+
+	beq.b	.Fault
+	bmi.b	.Fault
+	tst.w	(A0)+
+	bpl.b	.NoMicro				; no microtonal?
+	lea	256(A0),A0
+.NoMicro
+	move.w	(A0)+,D1			; songs number
+	beq.b	.Fault
+	cmp.w	#256,D1
+	bhi.b	.Fault
+	subq.w	#1,D1
+.SongCheck
+	move.l	(A0)+,D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	mulu.w	#6,D2
+	add.l	D2,A0
+	cmp.l	A0,A1
+	ble.b	.Fault
+	dbf	D1,.SongCheck
+	cmp.w	#64,(A0)
+	bhi.b	.Fault
+	;lea	.TwoFiles(PC),A1
+	;move.w	(A0),(A1)
+	moveq	#0,D0
+.Fault
+	rts
+
+
+******************************************************************************
+* Wally Beben
+******************************************************************************
+
+p_wallybeben
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_wallybeben
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Wally Beben         [EP]",0
+	        
+.path dc.b "wally beben",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	cmp.w	#$6000,(A0)+
+	bne.b	.Fault
+	move.w	(A0)+,D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	lea	-2(A0,D1.W),A1
+	cmp.b	#$61,(A1)+
+	bne.b	.Fault
+	tst.b	(A1)+
+	bne.b	.Short
+	addq.l	#2,A1
+.Short
+	cmp.w	#$4239,(A1)
+	bne.b	.Fault
+	addq.l	#6,A1
+	cmp.w	#$4239,(A1)
+	bne.b	.Fault
+	addq.l	#6,A1
+	cmp.w	#$4E75,(A1)
+	bne.b	.Fault
+	cmp.l	#$48E7FFFE,(A0)+
+	bne.b	.Fault
+	cmp.w	#$6100,(A0)+
+	bne.b	.Fault
+	add.w	(A0),A0
+	cmp.l	#$4CF900FF,(A0)+
+	beq.b	.Found
+	cmp.w	#$1039,(A0)
+	bne.b	.Fault
+.Found
+	moveq	#0,D0
+.Fault
+	rts
+
+******************************************************************************
+* Synth Pack by Karsten Obarski
+******************************************************************************
+
+p_synthpack
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_synthpack
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Synth Pack          [EP]",0
+	        
+.path dc.b "synth pack",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|2,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	CMP.L	#$4F424953,(A0)+
+	BNE.S	.lbC0004FC
+	CMP.L	#$594E5448,(A0)+
+	BNE.S	.lbC0004FC
+	CMP.L	#$5041434B,(A0)+
+	BNE.S	.lbC0004FC
+	CMP.W	#$100,$500(A0)
+	BEQ.S	.lbC0004F8
+	TST.L	$500(A0)
+	BNE.S	.lbC0004FC
+	;BRA.S	.lbC0004FA
+.lbC0004F8	
+.lbC0004FA	MOVEQ	#0,D0
+.lbC0004FC	RTS
+
+
+******************************************************************************
+* Rob Hubbard
+******************************************************************************
+
+p_robhubbard
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_robhubbard
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Rob Hubbard         [EP]",0
+.path dc.b "rob hubbard",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|6,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	moveq	#-1,D0
+	move.w	#$6000,D1
+	cmp.w	(A0),D1
+	bne.s	.Return
+	cmp.w	4(A0),D1
+	bne.s	.Return
+	cmp.w	8(A0),D1
+	bne.s	.Return
+	cmp.w	12(A0),D1
+	bne.s	.Return
+	cmp.w	16(A0),D1
+	bne.s	.Return
+	cmp.w	#$41FA,20(A0)
+	bne.s	.Return
+	cmp.l	#$4E7541FA,28(A0)
+	bne.s	.Return
+	moveq	#0,D0
+.Return
+	rts			
+
+
+
+******************************************************************************
+* Jeroen Tel
+******************************************************************************
+
+p_jeroentel
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_jeroentel
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"Jeroen Tel          [EP]",0
+.path dc.b "jeroen tel",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0 
+	moveq	#-1,D0
+	cmp.l	#1700,d7
+	ble.b	.Fault
+
+	lea	40(A0),A1
+.Check
+	cmp.l	#$02390001,(A0)
+	beq.b	.More
+	addq.l	#2,A0
+	cmp.l	A0,A1
+	bne.b	.Check
+	rts
+.More
+	addq.l	#8,A0
+	cmp.b	#$66,(A0)+
+	bne.b	.Fault
+	move.b	(A0)+,D1
+	bmi.b	.Fault
+	beq.b	.Fault
+	cmp.w	#$4E75,(A0)
+	bne.b	.Fault
+	ext.w	D1
+	add.w	D1,A0
+	cmp.w	#$4A39,(A0)
+	bne.b	.NoOne
+	moveq	#3,D1
+.NextOne
+	cmp.w	#$4A39,(A0)
+	bne.b	.Fault
+	lea	18(A0),A0
+	dbf	D1,.NextOne
+.NoOne
+	cmp.l	#$78001839,(A0)
+	bne.b	.Fault
+	moveq	#0,D0
+.Fault
+	rts
+
+
+
+******************************************************************************
+* Sonix Music Driver
+* Prefixes: SMUS, TINY, SNX
+******************************************************************************
+
+p_sonix
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_sonix
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+	dc.b	"Sonix Music Driver  [EP]",0
+.path dc.b "sonix music driver",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	move.l	d7,d4
+	move.l	A0,A1
+	cmp.l	#'FORM',(A0)
+	beq.w	.SmusCheck
+	move.w	(A0),D1
+	and.w	#$00F0,D1
+	bne.b	.TinyCheck
+	moveq	#20,D3
+	moveq	#3,D1
+.NextPos
+	move.l	(A0)+,D2
+	beq.b	.fault
+	bmi.b	.fault
+	btst	#0,D2
+	bne.b	.fault
+	add.l	D2,D3
+	dbf	D1,.NextPos
+	cmp.l	D4,D3
+	bge.b	.fault
+	addq.l	#4,A0
+	moveq	#3,D1
+.SecPass
+	tst.b	(A0)
+	bpl.b	.fault
+	cmp.w	#-1,(A0)
+	beq.b	.OK1
+	cmp.b	#$84,(A0)
+	bhi.b	.fault
+.OK1
+	add.l	(A1)+,A0
+	dbf	D1,.SecPass
+	tst.b	(A0)
+	beq.b	.fault
+.found
+	moveq	#0,D0
+.fault
+	rts
+
+
+.TinyCheck
+	cmp.l	#332,D4
+	ble.b	.fault
+	lea	48(A0),A1
+	cmp.l	#$140,(A1)+
+	bne.b	.fault
+	moveq	#2,D1
+.NextPos2
+	move.l	(A1)+,D2
+	beq.b	.fault
+	bmi.b	.fault
+	btst	#0,D2
+	bne.b	.fault
+	cmp.l	D2,D4
+	ble.b	.fault
+	lea	(A0,D2.L),A2
+	cmp.w	#-1,(A2)
+	beq.b	.OK2
+	tst.l	(A2)+
+	bne.b	.fault
+	tst.w	(A2)+
+	bne.b	.fault
+	tst.b	(A2)
+	bpl.b	.fault
+	cmp.b	#$82,(A2)
+	bhi.b	.fault
+.OK2
+	dbf	D1,.NextPos2
+	bra.b	.found
+
+.SmusCheck
+	cmp.l	#'SMUS',8(A0)
+	bne.b	.fault
+	cmp.l	#'SHDR',12(A0)
+	tst.b	23(A0)
+	beq.b	.fault
+	lea	24(A0),A1
+	cmp.l	#'NAME',(A1)+
+	bne.b	.fault
+	move.l	(A1)+,D1
+	bmi.b	.fault
+	addq.l	#1,D1
+	bclr	#0,D1
+	add.l	D1,A1
+	cmp.l	#'SNX1',(A1)+
+	bne.w	.fault
+	move.l	(A1)+,D1
+	bmi.w	.fault
+	addq.l	#1,D1
+	bclr	#0,D1
+	add.l	D1,A1
+.MoreIns
+	cmp.l	#'INS1',(A1)+
+	bne.w	.fault
+	move.l	(A1)+,D1
+	bmi.w	.fault
+	addq.l	#1,D1
+	bclr	#0,D1
+	cmp.b	#63,(A1)			; real sample number
+	bhi.w	.fault
+	tst.b	1(A1)				; MIDI check
+	bne.w	.fault
+	add.l	D1,A1
+	cmp.l	#'TRAK',(A1)
+	bne.b	.MoreIns
+	bra.w	.found
+
+
+
+******************************************************************************
+* Quartet ST
+******************************************************************************
+
+p_quartetst
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id_quartet_st(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_quartetst
+.flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus
+	dc.b	"Quartet ST          [EP]",0
+.path dc.b "quartet st",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+* Quartet ST
+.id_quartet_st
+	move.l	a4,a0
+	move.w	(A0),D1
+	beq.b	.Fault
+	cmp.w	#$10,D1
+	bhi.b	.Fault
+	cmp.b	#4,7(A0)
+	bne.b	.Fault
+	cmp.b	#4,6(A0)
+	bhi.b	.Fault
+	tst.l	8(A0)
+	bne.b	.Fault
+	cmp.w	#'WT',12(A0)
+	beq.b	.Skippy
+.NoSpec
+	tst.l	12(A0)
+	bne.b	.Fault
+.Skippy
+	cmp.l	#$4C,24(A0)
+	bhi.b	.Fault
+	move.l	24(A0),D1
+	and.w	#3,D1
+	bne.b	.Fault
+	cmp.w	#$0056,16(A0)
+	beq.b	.Oki
+.Fault
+	moveq	#-1,D0
+	rts
+.Oki
+	moveq	#0,D0
+	rts
+
+
+
+
+******************************************************************************
+* Core Design
+******************************************************************************
+
+p_coredesign
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id_core_design(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_coredesign
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+	dc.b	"Core Design         [EP]",0
+.path dc.b "core design",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	move.l	#10<<16|10,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+* Core Design
+.id_core_design
+	move.l a4,a0
+	cmp.l	#$000003F3,(A0)
+	bne.b	.fail
+	tst.b	20(A0)				; loading into chip check
+	beq.b	.fail
+	lea	32(A0),A0
+	cmp.l	#$70FF4E75,(A0)+
+	bne.b	.fail
+	cmp.l	#'S.PH',(A0)+
+	bne.b	.fail
+	cmp.l	#'IPPS',(A0)+
+	bne.b	.fail
+	tst.l	(A0)+				; Interrupt pointer check
+	beq.b	.fail
+	tst.l	(A0)+				; Audio Interrupt pointer check
+	beq.b	.fail
+	tst.l	(A0)+				; InitSong pointer check
+	beq.b	.fail
+	tst.l	(A0)+				; EndSong pointer check
+	beq.b	.fail
+	tst.l	(A0)				; Subsongs check
+	beq.b	.fail
+
+	moveq	#0,D0
+	rts
+.fail
+	moveq	#-1,D0
+	rts
+
+* Sierra AGI
+* DTP_UserConfig
+
+;Check2
+;	movea.l	dtg_ChkData(A5),A0
+;	moveq	#-1,D0
+;
+;	cmp.w	#$800,(A0)
+;	bne.b	Fault
+;	move.l	dtg_ChkSize(A5),D2
+;	move.l	A0,A1
+;	moveq	#0,D1
+;	moveq	#2,D3
+;NextInfo
+;	addq.l	#2,A1
+;	move.b	1(A1),D1
+;	lsl.w	#8,D1
+;	move.b	(A1),D1
+;	cmp.l	D1,D2
+;	ble.b	Fault
+;	tst.w	D1
+;	beq.b	Fault
+;	lea	(A0,D1.L),A2
+;	cmp.b	#-1,-1(A2)
+;	bne.b	Fault
+;	cmp.b	#-1,-2(A2)
+;	bne.b	Fault
+;	dbf	D3,NextInfo
+;
+;	moveq	#0,D0
+;Fault
+;	rts
+
+
+******************************************************************************
+* Music Maker V8
+******************************************************************************
+
+p_musicmaker8
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	deliInterrupt(pc) ; Vol + voices
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp	.id_musicmaker8(pc)
+	jmp	deliAuthor(pc)
+	dc 	 pt_musicmaker8
+.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end
+	dc.b	"MusicMaker V8 8-ch  [EP]",0
+.path 	dc.b "musicmaker8",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	move.l	#8<<16|5,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+
+.id_musicmaker8
+	bsr.b	id_musicmaker8_
+	bne.b	.no
+	bsr.w	moveModuleToPublicMem
+	moveq	#0,d0
+.no
+	rts
+	
+* Check
+id_musicmaker8_
+.lbC00046E	MOVEm.L	d6/D7,-(SP)
+	;MOVE.L	$24(A5),A0		* dtg_ChkData
+	move.l	a4,a0
+	move.l	a4,d6			* end bound
+	add.l	d7,d6
+	MOVEQ	#0,D7
+	CMP.L	#$464F524D,(A0)		; FORM
+	BNE.S	.lbC00049C
+	CMP.L	#$4D4D5638,8(A0)	; MMV8
+	BNE.S	.lbC00049C
+	MOVE.L	#$53444154,D0		; SDAT
+	BSR.b	MM_SearchLongWord
+	TST.L	D0
+	BMI.b	.NotRecognized
+	ADDQ.L	#4,A0
+	MOVEQ	#-1,D7
+.lbC00049C	CMP.W	#$5345,(A0)	; SE
+	BNE.b	.NotRecognized
+	bsr.b	MM4_8_ExtraCheck
+	BNE.b	.NotRecognized
+	TST.L	D7
+	;BEQ.S	OldFormatCheck
+	beq.b	.NotRecognized
+	;MOVE.L	$24(A5),A0			* dtg_ChkData
+	move.l	a4,a0
+	MOVE.L	#$494E5354,D0		; INST
+	BSR.b	MM_SearchLongWord
+	TST.L	D0
+	BPL.b	.CheckEnd
+	;MOVE.L	$24(A5),A0
+	move.l	a4,a0
+	MOVE.L	#$50494E53,D0		; PINS
+	BSR.b	MM_SearchLongWord
+	TST.L	D0
+	BPL.b	.CheckEnd
+	BRA.b	.NotRecognized
+
+.CheckEnd	MOVEm.L	(SP)+,d6/D7
+	MOVEQ	#0,D0
+	RTS
+
+.NotRecognized	MOVEm.L	(SP)+,d6/D7
+	MOVEQ	#-1,D0
+	RTS
+
+MM_SearchLongWord	MOVEM.L	D1/A2,-(SP)
+	ADDQ.L	#4,A0
+	MOVE.L	(A0)+,A2
+	ADD.L	A0,A2
+	ADDQ.L	#4,A0
+.lbC000308	
+	cmp.l	d6,a0
+	bhs.b	.nope
+	CMP.L	(A0)+,D0
+	BEQ.S	.lbC000318
+	MOVE.L	(A0)+,D1
+	ADD.L	D1,A0
+	CMP.L	A2,A0
+	BLO.S	.lbC000308
+.nope
+	MOVEQ	#-1,D0
+	BRA.S	.lbC00031A
+
+.lbC000318	MOVE.L	(A0)+,D0
+.lbC00031A	MOVEM.L	(SP)+,D1/A2
+	RTS
+
+MM4_8_ExtraCheck
+.lbC000CB4	CMP.W	#$5345,(A0)	; ST
+	BEQ.S	.lbC000CC0
+	CMP.B	#$FF,(A0)
+	BRA.S	.lbC000CC6
+
+.lbC000CC0	CMP.B	#$FF,$16(A0)
+.lbC000CC6	SNE	D0
+	EXT.W	D0
+	EXT.L	D0
+	RTS
+	
+
+******************************************************************************
+* Music Maker V4
+******************************************************************************
+
+p_musicmaker4
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	deliInterrupt(pc) ; Vol + voices
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp	 id_musicmaker4(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_musicmaker4
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+	dc.b	"MusicMaker V8 4-ch  [EP]",0
+.path dc.b "musicmaker4",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	move.l	#8<<16|5,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+;EP_Check5 (FPTR) - same as DTP_Check2 but module is loaded into public
+
+id_musicmaker4
+	bsr.b	.Check2
+	beq.b	.ok
+	bsr.b	.Check5
+.ok	tst.l	d0
+	rts
+
+.Check2	MOVEQ	#1,D0
+	BRA.S	.lbC000466
+
+.Check5	MOVEQ	#0,D0
+.lbC000466	MOVEM.L	d5/D6/D7,-(SP)
+	MOVE.L	D0,D5
+	;MOVE.L	$24(A5),A0		* dtg_ChkData
+	move.l	a4,a0
+	move.l	a4,d6			* end bound
+	add.l	d7,d6
+	MOVEQ	#0,D7
+	CMP.L	#$464F524D,(A0)		; FORM
+	BNE.S	.lbC000498
+	CMP.L	#$4D4D5638,8(A0)	; MMV8
+	BNE.S	.lbC000498
+	MOVE.L	#$53444154,D0
+	BSR.W	MM_SearchLongWord
+	TST.L	D0
+	BMI.b	.lbC0005BA
+	ADDQ.L	#4,A0
+	MOVEQ	#-1,D7
+.lbC000498	CMP.W	#$5345,(A0)	; SE
+	BNE.B	.lbC0005BA
+	bSR.w	MM4_8_ExtraCheck
+	BEQ.B	.lbC0005BA
+	MOVE.B	$17(A0),D0
+	CMP.B	#$10,D0
+	BLO.b	.lbC0005BA
+	CMP.B	#$40,D0
+	BHI.b .lbC0005BA
+	TST.L	D7
+	;BEQ.S	lbC0004FC
+	beq.b	.NotRecognized
+;	MOVE.L	$24(A5),A0
+	move.l	a4,a0
+	MOVE.L	#$494E5354,D0		; INST
+	BSR.w MM_SearchLongWord
+	TST.L	D0
+	BMI.S	.lbC0004DE
+	TST.L	D5
+	BNE.b	.lbC0005B2
+	BRA.b	.lbC0005BA
+
+.lbC0004DE	
+;	MOVE.L	$24(A5),A0
+	move.l	a4,a0
+	MOVE.L	#$50494E53,D0		; PINS
+	BSR.w	MM_SearchLongWord
+	TST.L	D0
+	BMI.b	.lbC0005BA
+	TST.L	D5
+	BNE.b	.lbC0005BA
+	BRA.w	.lbC0005B2
+
+.Ok
+.lbC0005B2	MOVEM.L	(SP)+,d5/D6/D7
+	MOVEQ	#0,D0
+	RTS
+
+.NotRecognized
+.lbC0005BA	MOVEM.L	(SP)+,d5/D6/D7
+	MOVEQ	#-1,D0
+	RTS
+
+******************************************************************************
+* Digital Mugician 2
+******************************************************************************
+
+p_digitalmugician2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	jmp	deliInterrupt(pc) ; for position updates
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp id_digitalmugician2(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_digitalmugician2
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse
+	dc.b	"Digital Mugician II [EP]",0
+.path dc.b "mugician ii",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|8,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+* digital mugician ii ("mugician ii")
+* DTP_UserConfig
+id_digitalmugician2
+;	bsr.b 	.do
+;	tst.l	d0
+;	bne.b	.no
+;	bsr	moveModuleToPublicMem
+;	moveq	#0,d0
+;.no 
+;	rts
+;.do	
+	move.l	a4,a0
+	moveq	#-1,D0
+	lea	.text(PC),A1
+	moveq	#$19,D6
+.test	cmpm.b	(A0)+,(A1)+
+	bne.b	.Fault
+	dbra	D6,.test	
+	moveq	#0,D0
+.Fault
+	rts
+.text
+	dc.b	' MUGICIAN2/SOFTEYES 1990'
+	dc.w	1
+ even  
+
+******************************************************************************
+* StoneTracker
+******************************************************************************
+
+p_stonetracker
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP ;jmp	deliInterrupt(pc) ; for position updates
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp id_stonetracker(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_stonetracker
+.flags	dc pf_stop!pf_cont!pf_volume!pf_song!pf_kelaus!pf_end
+	dc.b	"StoneTracker        [EP]",0
+.path dc.b "eaglestone",0
+ even
+ 
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|1,d0
+	bsr.w	deliLoadAndInit
+	bmi.b	.not
+.MHD_Name = 4
+	move.l	moduleaddress(a5),a0
+	lea	.MHD_Name(a0),a0
+ 	lea	modulename(a5),a1
+ 	moveq	#31-1,d0
+.name	move.b	(a0)+,(a1)+
+ 	dbeq	d0,.name
+
+	moveq	#0,d0
+.not
+	rts 
+
+
+id_stonetracker
+	push	a4
+	bsr.b	.id_stonetracker_
+	pop	a4
+	tst.l 	d0 
+	bne.b .not 
+	bsr.w	moveModuleToPublicMem
+	moveq	#0,d0
+.not
+	rts
+	
+.id_stonetracker_
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	;MOVE.L	$24(A5),A0
+	;MOVE.L	$28(A5),D7
+	MOVE.L	(A0)+,D1
+	MOVE.W	D1,D2
+	CMP.L	#$53504D02,D1
+	BNE.b	.lbC00327A
+	LEA	(A0),A3
+	MOVEQ	#$1F,D6
+	BSR.b	.lbC00327E
+	BNE.b	.lbC00327A
+	LEA	$20(A0),A0
+	MOVEM.W	(A0)+,D3-D6
+	LEA	(A0),A1
+	MOVEM.L	D3/D4,-(SP)
+	ADD.L	D3,D3
+	ADD.L	D3,D3
+	ADD.L	D4,D4
+	ADD.L	D4,D4
+	LEA	0(A1,D3.L),A2
+	LEA	0(A2,D4.L),A3
+	MOVEM.L	(SP)+,D3/D4
+	MOVE.W	D3,D2
+	SUBQ.W	#1,D2
+	BMI.b	.lbC00327A
+	LEA	(A1),A4
+.lbC003250	CMP.L	(A4)+,D7
+	BLS.S	.lbC00327A
+	DBRA	D2,.lbC003250
+	MOVE.W	D4,D2
+	SUBQ.W	#1,D2
+	BMI.S	.lbC00327A
+	LEA	(A2),A4
+.lbC003260	CMP.L	(A4)+,D7
+	BLS.S	.lbC00327A
+	DBRA	D2,.lbC003260
+	MOVE.W	D5,D2
+	SUBQ.W	#1,D2
+	BMI.S	.lbC003278
+	LEA	(A3),A4
+.lbC003270	CMP.L	(A4)+,D7
+	BLS.S	.lbC00327A
+	DBRA	D2,.lbC003270
+.lbC003278	MOVEQ	#0,D0
+.lbC00327A	TST.L	D0
+	RTS
+
+.lbC00327E	MOVE.B	(A3)+,D0
+	BEQ.S	.lbC003290
+	AND.B	#$7F,D0
+	CMP.B	#$20,D0
+	BLT.S	.lbC003294
+	SUBQ.L	#1,D6
+	BGT.S	.lbC00327E
+.lbC003290	MOVEQ	#0,D0
+	BRA.S	.lbC003296
+
+.lbC003294	MOVEQ	#-1,D0
+.lbC003296	RTS
+
+******************************************************************************
+* Soundcontrol
+******************************************************************************
+
+p_soundcontrol
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_soundcontrol
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+	dc.b	"SoundControl        [EP]",0
+	        
+.path dc.b "soundcontrol",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	CMP.W	#3,$20(A0)
+	BEQ.S	.lbC000466
+	CMP.W	#2,$20(A0)
+	BNE.S	.lbC00048E
+	TST.L	$1C(A0)
+	BNE.S	.lbC00048E
+.lbC000466	TST.W	$10(A0)
+	BNE.S	.lbC00048E
+	MOVE.W	$12(A0),D1
+	BMI.S	.lbC00048E
+	BTST	#0,D1
+	BNE.S	.lbC00048E
+	ADD.W	D1,A0
+	CMP.W	#$FFFF,$3E(A0)
+	BNE.S	.lbC00048E
+	CMP.L	#$400,$40(A0)
+	BNE.S	.lbC00048E
+	MOVEQ	#0,D0
+.lbC00048E
+	rts
+
+
+******************************************************************************
+* The Musical Enlightenment
+******************************************************************************
+
+p_themusicalenlightenment
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_themusicalenlightenment
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+	dc.b	"The Musical Enlighte[EP]",0
+	        
+.path dc.b "tme",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|3,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	movea.l	a4,A0
+	lea	(a4,d7.l),a3	* upper bound
+
+	moveq	#-1,D0
+
+	tst.b	(A0)
+	bne.b	.Fault
+	move.l	d7,D1
+	cmp.l	#7000,D1
+	blt.b	.Fault
+	move.l	(A0),D2
+	beq.b	.Fault
+
+	cmp.l	#$0000050F,$3C(A0)
+	bne.s	.CheckAnother
+	cmp.l	#$0000050F,$40(A0)
+	bne.s	.CheckAnother
+	bra.b	.TME_OK
+
+.CheckAnother
+	* Range check
+
+	pea	$1284(a0)
+	cmp.l	(sp)+,a3
+	bhs.b	.Fault
+
+	cmp.l	#$00040B11,$1284(A0)
+	bne.s	.CheckSize
+
+	pea	$1188(a0)
+	cmp.l	(sp)+,a3
+	bhs.b	.Fault
+
+	cmp.l	#$181E2329,$1188(A0)
+	bne.s	.CheckSize
+
+	pea	$128c(a0)
+	cmp.l	(sp)+,a3
+	bhs.b	.Fault
+
+	cmp.l	#$2F363C41,$128C(A0)
+	bne.s	.CheckSize
+.TME_OK
+	moveq	#0,D0
+.Fault
+	rts
+
+.CheckSize
+	bsr.b	.GetSize
+	cmp.l	D2,A2
+	beq.b	.TME_OK
+	bra.b	.Fault
+.GetSize
+	move.l	A0,A1
+	move.l	A0,A2
+
+	pea	$1aaa(a2)
+	cmp.l	(sp)+,a3
+	bhs.b	.X
+	
+	pea	$1a84(a1)
+	cmp.l	(sp)+,a3
+	bhs.b	.X
+
+	lea	$1AAA(A2),A2
+	move.w	$1A84(A1),D3
+	mulu.w	#12,D3
+	add.l	D3,A2
+
+	pea	$1a86(a1)
+	cmp.l	(sp)+,a3
+	bhs.b	.X	
+
+	move.w	$1A86(A1),D3
+	mulu.w	#6,D3
+	add.l	D3,A2
+	moveq	#0,D1
+.NextInuc
+	addq.l	#4,A2
+	tst.b	-4(A2)
+	bne.b	.NextInuc
+	addq.l	#4,D1
+	cmp.l	#$400,D1
+	blt.b	.NextInuc
+	moveq	#0,D1
+
+	lea	$44(A1),A1
+.NextSamp
+	pea	$18(A1,D1.L)
+	cmp.l	(sp)+,a3
+	bhs.b	.X
+
+	tst.b	$18(A1,D1.L)
+	beq.b	.NoSample
+	add.l	4(A1,D1.L),A2
+.NoSample	add.l	#$80,D1
+	cmp.l	#$1000,D1
+	blt.b	.NextSamp
+	sub.l	A0,A2
+.X	rts
+
+
+
+******************************************************************************
+* Tim Follin
+******************************************************************************
+
+p_timfollin2
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_timfollin2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc.b	"Tim Follin          [EP]",0
+	        
+.path dc.b "tim follin ii",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr.b	deliLoadAndInit
+	rts 
+
+.id
+	MOVEQ	#-1,D0
+	MOVE.L	a4,A0
+	MOVE.W	#$4EF9,D1
+	CMP.W	(A0),D1
+	BNE.S	.lbC00057C
+	CMP.W	6(A0),D1
+	BNE.S	.lbC00057A
+	CMP.W	12(A0),D1
+	BNE.S	.lbC00057A
+	CMP.W	$12(A0),D1
+	BNE.S	.lbC00057A
+	CMP.W	$18(A0),D1
+	BNE.S	.lbC00057A
+	CMP.W	$1E(A0),D1
+	BNE.S	.lbC00057A
+	MOVE.L	$2C(A0),D1
+	SUB.L	2(A0),D1
+	CMP.W	#$A0,D1
+	MOVEQ	#0,D0
+.lbC00057A	
+	RTS
+
+.lbC00057C
+	CMP.W	#$601A,(A0)
+	BNE.S	.lbC000586
+	LEA	$1C(A0),A0
+.lbC000586	
+	CMP.W	#$1010,(A0)
+	BEQ.S	.lbC000592
+	CMP.W	#$1012,(A0)
+	BNE.S	.lbC00057A
+.lbC000592
+	ADDQ.L	#2,A0
+	MOVE.L	4(A0),D1
+	CMP.L	8(A0),D1
+	BNE.S	.lbC00057A
+	CMP.L	12(A0),D1
+	BNE.S	.lbC00057A
+	CMP.L	$10(A0),D1
+	BNE.S	.lbC00057A
+	MOVEQ	#0,D0
+	RTS
+
+******************************************************************************
+* Deli/eagle support
+* Delisupport
+******************************************************************************
+
+
+DELI_LIST_DATA_SLOTS = 64
+
+ STRUCTURE DTN_NoteStruct,0
+	APTR	nst_Channels		;pointer to a list of notechannels */
+	ULONG	nst_Flags		;misc flags (see below) */
+	ULONG	nst_MaxFrequency	;max. frequency of this player (28,867 Hz in DMA mode) */
+	UWORD	nst_MaxVolume		;max. volume of this player (in most cases 64) */
+	STRUCT	nst_Reserved,18		;reserved for future use (must be 0 for now) */
+	LABEL	DTN_NoteStruct_SIZEOF
+
+
+ STRUCTURE DTN_NoteChannel,0
+	APTR	nch_NextChannel		;next channel in the list (NULL if last) */
+	ULONG	nch_NotePlayer		;for use by the noteplayer (the deliplayer must ignore this) */
+	WORD	nch_Reserved0		;reserved for future use (must be 0 for now) */
+	UBYTE	nch_Private		;just what it says */
+	UBYTE	nch_Changed		;what has changed since last call */
+	WORD	nch_StereoPos		;set this field when the InitNote function is called */
+	WORD	nch_Stereo		;describes "where" this channel is supposed to play */
+	APTR	nch_SampleStart		;^sampledata */
+	ULONG	nch_SampleLength	;size of sample */
+	APTR	nch_RepeatStart		;^repeat part of sample */
+	ULONG	nch_RepeatLength	;size of repeat part */
+	ULONG	nch_Frequency		;frequency (or period) of sample */
+	UWORD	nch_Volume		;volume of sample */
+	STRUCT	nch_Reserved1,26	;reserved for future use (must be 0 for now) */
+	LABEL	DTN_NoteChannel_SIZEOF
+
+
+NSTB_Dummy	EQU	0	; only a dummy-NoteStruct (no NotePlayer
+				; needed)
+NSTF_Dummy	EQU	1<<0
+NSTB_Period	EQU	1	; Amiga period supplied instead of frequency
+NSTF_Period	EQU	1<<1
+NSTB_ExtPeriod 	EQU	2	; Extended period (period*4) supplied instead
+				; of frequency 
+NSTF_ExtPeriod	EQU	1<<2
+NSTB_NTSCTiming EQU	3	; Period/ExtPeriod supplied in NTSC instead of
+				; PAL 
+NSTF_NTSCTiming EQU	1<<3
+NSTB_EvenLength EQU	4	; Samplelength supplied as WORD instead of
+				; LONG 
+NSTF_EvenLength EQU	1<<4
+NSTB_AllRepeats EQU	5	; play Repeats even if no One-Shot part was
+				; played yet 
+NSTF_AllRepeats EQU	1<<5
+
+NSTB_Reverse 	EQU	8	; little endian byte ordering 
+NSTF_Reverse 	EQU	1<<8
+NSTB_Signed 	EQU	9	; sample data is signed linear
+				; (2's complement) 
+NSTF_Signed 	EQU	1<<9
+NSTB_Unsigned 	EQU	10	;       -"-      unsigned linear 
+NSTF_Unsigned 	EQU	1<<10
+NSTB_Ulaw 	EQU	11	;       -"-      U-law (logarithmic) 
+NSTF_Ulaw 	EQU	1<<11
+NSTB_Alaw 	EQU	12	;       -"-      A-law (logarithmic) 
+NSTF_Alaw 	EQU	1<<12
+NSTB_Float 	EQU	13	;       -"-      IEEE floats 
+NSTF_Float 	EQU	1<<13
+
+NSTB_7Bit 	EQU	16	; sample data is in 7-bit format 
+NSTF_7Bit 	EQU	1<<16
+NSTB_8Bit 	EQU	17	;        -"-        bytes 
+NSTF_8Bit 	EQU	1<<17
+NSTB_16Bit 	EQU	18	;        -"-        16-bit words 
+NSTF_16Bit 	EQU	1<<18
+NSTB_24Bit 	EQU	19	;        -"-        24-bit data 
+NSTF_24Bit 	EQU	1<<19
+NSTB_32Bit 	EQU	20	;        -"-        longwords 
+NSTF_32Bit 	EQU	1<<20
+NSTB_64Bit 	EQU	21	;        -"-        quadwords 
+NSTF_64Bit 	EQU	1<<21
+
+* Load player and initialize module
+* in:
+*   a0: eagleplayer name
+*   d0: required version; major<<16|minor
+* out:
+*   d0: 0=all ok, negative ier_-code otherwise
+deliLoadAndInit
+	jsr	setMainWindowWaitPointer
+	bsr.b	loadDeliPlayer 
+	tst.l 	d0
+	bmi.b 	.loadErr 
+	bsr.w	deliInit
+.loadErr	
+	jsr 	clearMainWindowWaitPointer
+	tst.l	d0
+	rts
+
+* in:
+*   a0: name
+*   d0: required version; major<<16|minor
+* out:
+*   d0: loaded seglist or negative error code if fail
+loadDeliPlayer
+	move.l	d0,d5
+	move.l	a0,a3
+	* See if can reuse the old player
+	move	playertype(a5),d0
+	beq.b	.noMod
+	cmp	deliPlayerType(a5),d0
+	beq.w	.useOld
+.noMod
+	bsr.w	freeDeliPlayer
+
+	bsr.w 	findDeliPlayer
+	move.l	d0,d4
+	bmi.w	.err
+	bsr.w	.load 
+	move.l	d0,d3
+	move.l	d4,d1
+	lore 	Dos,UnLock
+
+	* Remove temporary EP file
+	pushpea	epPath(pc),d1
+	lore	Dos,DeleteFile
+
+	moveq	#-1,d0	* err flag
+	tst.l   d3
+	beq.b	.err
+
+	* Get version
+	move.l	d3,d0 
+	lsl.l	#2,d0
+	move.l	d0,a0 
+	move.l	#DTP_PlayerVersion,d0
+	bsr.w	deliGetTagFromA0
+	beq.b	.noVersion 
+	move.l	d0,d6
+
+	* Version check!
+	cmp.l	d5,d6
+	bhs.b	.ok
+
+	move.l	d3,d1 
+	lore Dos,UnLoadSeg
+
+	move.l	a3,d0
+	move.l	d5,d1
+	clr	d1
+	swap	d1
+	move	d5,d2
+	ext.l	d2
+	move.l	d6,d3
+	clr	d3 
+	swap 	d3 
+	move	d6,d4
+	ext.l	d4
+
+	move.l	playerbase(a5),a0
+	pushpea	p_name(a0),d5
+	
+	lea	.errMsg(pc),a0 
+	jsr	desmsg
+	lea	 desbuf(a5),a1
+	jsr	request
+
+	moveq	#ier_eagleplayer,d0
+	rts
+
+.ok
+.noVersion
+	move	moduletype(a5),deliPlayerType(a5)
+	move.l	d3,d0 
+	lsl.l	#2,d0
+.err
+	rts
+
+.useOld 
+	move.l	deliPlayer(a5),d0
+	DPRINT	"Using previous delipl 0x%lx"
+	rts
+
+.errMsg
+	dc.b	"Version mismatch for eagleplayer:",10
+	dc.b	'"%s"',10
+	dc.b	"Required version: %ld.%ld or newer, found: %ld.%ld",10
+	dc.b	'Detected format: "%s"',0
+ even
+
+
+* in:
+*   d4 = lock
+* out:
+*   d0 = seglist or NULL
+.load
+	lea	-100(sp),sp
+	move.l 	d4,d1
+	move.l	sp,d2
+	moveq	#100,d3 
+	jsr	getNameFromLock
+	beq.b 	.err2
+
+ if DEBUG
+ 	move.l	sp,d0
+	DPRINT	"loadDeliPlayer %s"
+ endif
+ 	move.l	sp,d1
+	lore 	Dos,LoadSeg
+.err2
+
+	lea	100(sp),sp
+	tst.l	d0
+	rts
+
+epPath		dc.b	"RAM:hippoEP",0
+ even
+
+
+* in:
+*   a3: name
+* out:
+*   d0: lock or negative err
+findDeliPlayer	
+	* See if this can be loaded from the group
+	lea	-4(sp),sp 
+	move.l	sp,a0
+	* initialize to zero, important
+	clr.l	(a0) 
+	jsr	allocreplayer
+	move.l	(sp),a1
+	lea	4(sp),sp
+	tst.l	d0
+	beq.w	.epFromGroup
+
+	lea .searchPath1(pc),a2 
+	bsr.b 	.tryLock
+	bne.b	.ok 
+	
+* PROGDIR not available on kick13 or asm
+ ifeq asm
+	tst.b	uusikick(a5)
+	beq.b	.skip
+	lea .searchPath2(pc),a2 
+	bsr.b 	.tryLock
+	bne.b	.ok 
+.skip
+ endc 
+
+	lea .searchPath3(pc),a2 
+	bsr.b 	.tryLock
+	beq.b	.fail	
+.ok
+	rts
+
+.fail 
+	move.l	playerbase(a5),a0 
+	pushpea p_name(a0),d1
+	move.l	a3,d0
+	lea	.errMsg(pc),a0 
+	jsr	desmsg
+	lea	 desbuf(a5),a1
+	jsr	request
+	moveq	#ier_eagleplayer,d0
+	rts	
+.errMsg
+	dc.b	"Could not load eagleplayer:",10
+	dc.b	'"%s"',10
+	dc.b	'Detected format: "%s"',0
+	 even
+
+.tryLock
+	lea	-100(sp),sp
+	move.l	sp,a1
+.path	
+	move.b	(a2)+,(a1)+
+	bne.b	.path
+	subq	#1,a1
+	move.l	a3,a0
+.name	
+	move.b	(a0)+,(a1)+
+	bne.b	.name
+
+	move.l	sp,d1
+	moveq	#ACCESS_READ,d2
+ 	lore 	Dos,Lock
+	lea	100(sp),sp
+	tst.l	d0
+	rts
+.searchPath1
+	dc.b	"RAM:",0
+.searchPath2
+	dc.b	"PROGDIR:eagleplayers/",0
+.searchPath3
+	dc.b	"eagleplayer2:eagleplayers/",0
+ even
+
+* Copy replay data from group into a file for LoadSeg()
+* in:
+*   a1 = replayer data from group
+.epFromGroup
+	push	a1
+	lea	epPath(pc),a0 
+	* Mem allocation size is here.
+	* To get data size this must be subtracted
+	move.l	-4(a1),d0
+	subq.l	#4,d0
+	bsr.w	plainSaveFile
+	pop 	a0 
+	jsr		freemem
+
+	tst.l	d0
+	beq.w	.fail
+
+	pushpea	epPath(pc),d1
+	moveq	#ACCESS_READ,d2
+ 	lore 	Dos,Lock
+	tst.l	d0 
+	beq.w	.fail
+	rts
+
+freeDeliPlayer
+	pushm	all
+	tst.l	deliPlayer(a5)
+	beq.b	.x
+
+	* DeliCustom is UnloadSegged elsewhere
+	cmp	#pt_delicustom,deliPlayerType(a5)
+	beq.b 	.skip
+	move.l	deliPlayer(a5),d1
+	lsr.l	#2,d1
+	lore	Dos,UnLoadSeg
+	DPRINT	"freeDeliPlayer"
+.skip
+	clr.l	deliPlayer(a5)
+	clr	deliPlayerType(a5)
+.x
+	bsr.b	.freeDeliLoadedFile
+	bsr.w	freeDeliBase
+	popm	all
+	rts
+
+.freeDeliLoadedFile
+	tst.l	deliLoadFileArray(a5)
+	beq.b 	.xy
+	move.l	deliLoadFileArray(a5),a2
+.loop
+	tst.l 	(a2) 
+	beq.b 	.end
+	move.l	(a2),a1
+	move.l	4(a2),d0
+	lore 	Exec,FreeMem
+	clr.l	(a2)+
+	clr.l	(a2)+
+	bra.b 	.loop
+.end 
+	clr.l	deliLoadFileIoErr(a5)
+	clr.l	deliLoadFileArray(a5)
+.xy 
+	rts	
 
 
 * in:
 *   d0 = tag to find
 * out:
 *   d0 = tag data or NULL if not found
-.getTag
-	* This is a BPTR to a seglist, loaded with LoadSeg()
-	move.l	moduleaddress(a5),a0
-	add.l	a0,a0
-	add.l	a0,a0
+deliGetTag
+	* This is a ptr to a seglist, loaded with LoadSeg()
+	move.l	deliPlayer(a5),a0
+deliGetTagFromA0
 	* tag item array
 	move.l	16(a0),a0
 .loop
@@ -32857,24 +39098,43 @@ p_delicustom
     addq.l  #8,a0
     bra.b   .loop
 
-.callFunc	
+deliCallFunc	
 	tst.l	d0 
 	beq.b	.noFunc
-	DPRINT	"Call %lx",101
-	pushm 	d2-a6
-	lea	deliBase,a5
+	DPRINT	"Call %lx"
+	pushm 	d2-d7/a2-a6
+	move.l	deliBase(a5),a5
 	move.l	d0,a0
 	jsr	(a0)
-	popm	d2-a6
+	popm	d2-d7/a2-a6
 .noFunc rts
 
-.init
+* in:
+*   d0: deliplayer or delicustom address from loadseg
+* out:
+*   d0: 0=all ok, negative ier_-code otherwise
+deliInit
 	pushm	d1-a6	
-	DPRINT	"deliInit",10
-	bsr.w	.buildDeliBase
+	DPRINT	"deliInit 0x%lx"
+	move.l	d0,deliPlayer(a5)
+	move	playertype(a5),deliPlayerType(a5)
+	bsr.w	buildDeliBase
+	tst.l	d0
+	beq.w	.noMemError
+	move.l	deliBase(a5),a4
 
+	* Quite important to clear the old ones away
+	* so that they don't get accidentally called
+	* on new modules and crash.
+	clr.l	deliStoredInterrupt(a5)
+	clr.l	deliStoredSetVolume(a5)
+	clr.l	deliStoredSetVoices(a5) 
+	clr.l	deliStoredNoteStruct(a5) 
+	clr.l	deliStoredGetPositionNr(a5)
+	
  if DEBUG
-	 bsr	.showTags
+	bsr.w	deliShowTags
+	bsr.w	deliShowFlags
  endif
 
 	* Order in DT
@@ -32887,233 +39147,603 @@ p_delicustom
 	* SubSongRange	
 
 	move.l	#DTP_DeliBase,d0
-	bsr	.getTag
+	bsr.w	deliGetTag
 	beq.b	.noDBTag
 	move.l	d0,a0 
-	lea	deliBase,a1
-	move.l	a1,(a0)
+	move.l	a4,(a0)
 .noDBTag
 
+	move.l	#EP_EagleBase,d0
+	bsr.w	deliGetTag
+	beq.b	.noEBTag
+	move.l	d0,a0 
+	move.l	a4,(a0)
+.noEBTag
+
+	move.l	#DTP_Config,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+
+	move.l	#DTP_CustomPlayer,d0
+	bsr.w	deliGetTag
+	bne.w	.checksOk
+
+	* Checks! Run through known ones
+	* and accept if one of these accepts.
+	
+	move.l	#DTP_Check2,d0  
+	bsr.w	deliGetTag
+	beq.b	.noCheck2
+	bsr.w	deliCallFunc
+	DPRINT	"DTP_Check2: %ld"
+	tst.l	d0
+	beq.b	.checksOk
+.noCheck2	
+	move.l	#EP_Check3,d0  
+	bsr.w	deliGetTag
+	beq.b	.noCheck3
+	bsr.w	deliCallFunc
+	DPRINT	"EP_Check3: %ld"
+	tst.l	d0
+	beq.b	.checksOk
+.noCheck3
+	move.l	#EP_Check5,d0  
+	bsr.w	deliGetTag
+	;beq.b	.noCheck5
+	beq.w	.checkError
+	bsr.w	deliCallFunc
+	DPRINT	"EP_Check5: %ld"
+	tst.l	d0
+	bne.w	.checkError
+.noCheck5
+
+.checksOk
+	bsr	clearCpuCaches  ; Extra safety
+
+	move.l	#EP_Flags,d0
+	bsr.w	deliGetTag
+	beq.b	.noFlags
+	bsr.w	deliHandleFlags
+.noFlags
+
+	move.l	#EP_InitAmplifier,d0 
+	bsr.w	deliGetTag 
+	bsr.w	deliCallFunc
+
+	move.l	#DTP_ExtLoad,d0  
+	bsr.w	deliGetTag
+	beq.b	.noExtLoad
+	bsr.w	deliCallFunc
+	DPRINT	"DTP_ExtLoad: %lx"
+	tst.l	d0
+	bne.w	.extLoadError
+.noExtLoad
+
 	move.l	#DTP_InitPlayer,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
 	* Status is returned in d0, can't rely on status flags
 	* here. d0=0 if ok, else not ok
 	tst.l	d0
-	bne.w	.error
-	DPRINT	"initPlayer ok",11
+	bne.w	.initError
+	DPRINT	"initPlayer ok"
+
+	bsr	clearCpuCaches  ; Extra safety
 
 	* set default song number
-	bsr	.getSongInfo
+	bsr.w	deliGetSongInfo
 	* d0 = def, d1 = min, d2 = max	
-	move	d0,deliBase+dtg_SndNum
+	move.l	deliBase(a5),a0
+	move	d0,dtg_SndNum(a0)
 	move	d0,songnumber(a5)
+	move	d1,minsong(a5)
 	move	d2,maxsongs(a5)	
 
 	move.l	#DTP_Volume,d0  
-	bsr.w	.getTag
-	move.l	d0,.storedSetVolume
+	bsr.w	deliGetTag
+	move.l	d0,deliStoredSetVolume(a5)
+
+	move.l	#EP_Voices,d0  
+	bsr.w	deliGetTag
+	move.l	d0,deliStoredSetVoices(a5)
+
+	move.l	#DTP_NoteStruct,d0  
+	bsr.w	deliGetTag
+	beq.b 	.noNoteStruct
+	* This is an address to the struct
+	move.l	d0,a0
+	move.l	(a0),a0
+	move.l	a0,deliStoredNoteStruct(a5)
+ if DEBUG 
+	bsr.w		deliShowNoteStruct
+ endif 
+.noNoteStruct
 
 	move.l	#DTP_InitSound,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
+	* Does not return error code
 
-	DPRINT	"InitSound ok",12
+	DPRINT	"InitSound ok"
+	bsr	clearCpuCaches  ; Extra safety
+
+	* Get position info if available
+	bsr.w	deliUpdatePositionInfo
+
+	move.l	#DTP_Interrupt,d0  
+	bsr.w	deliGetTag
+	move.l	d0,deliStoredInterrupt(a5)	
+
+	move.l	#DTP_StartInt,d0
+	bsr.w	deliGetTag
+	beq.b	.noStartInt
+	DPRINT	"using module interrupt"
+	bsr.w	deliCallFunc
+	* DTP_StartInt overrides DTP_Interrupt
+	clr.l	deliStoredInterrupt(a5)
+	bra.b	.skip
+.noStartInt
 
 	* see if an interrupt routine is provided.
 	* if so, set up a cia interrupt to drive it.
 	* otherwise assume the module handles it.
-	move.l	#DTP_Interrupt,d0  
-	bsr.w	.getTag
-	move.l	d0,.storedInterrupt
-	beq.w	.noInt
-	DPRINT	"using hippo interrupt",33
+	tst.l	deliStoredInterrupt(a5)
+	beq.b	.skip
+	DPRINT	"using hippo interrupt"
  
 	* interrupt routine provided, set up an interrupt
-	move	deliBase+dtg_Timer,d0
-	bsr	init_ciaint_withTempo
+	move	dtg_Timer(a4),d0
+	jsr	init_ciaint_withTempo
 	beq.b	.gotCia
-	DPRINT	"cia error",44
+	DPRINT	"cia error"
 
 	* try to clean up
 	move.l	#DTP_EndSound,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
 	move.l	#DTP_EndPlayer,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
 
 	moveq	#ier_nociaints,d0
-	bra.w	.error
+	bra.b	.ciaError
 .gotCia
-.noInt
-
-	 * tst.l xyz(pc) is 020 instruction
-	move.l	.storedInterrupt(pc),d0  
-	bne.b	.intSet
-	* try to start module provided int handler
-	move.l	#DTP_StartInt,d0
-	bsr	.getTag
-	beq.b	.noStartInt
-	bsr	.callFunc
-	DPRINT	"using module interrupt",34
-.noStartInt
-.intSet
-
 .skip
+
  if DEBUG
 	moveq	#0,d0
-	move	deliBase+dtg_Timer,d0
-	DPRINT	"init ok, dtg_Timer=%ld",55
+	move	dtg_Timer(a4),d0
+	DPRINT	"init ok, dtg_Timer=%ld"
  endif
+
+; TEST RUN
+ ifne DELI_TEST_MODE
+ 	move	#1-1,d0
+.bbb
+	pushm all
+	move.l	deliStoredInterrupt(a5),a0 
+	move.l	deliBase(a5),a5
+	;jsr	 (a0)
+	popm all
+	dbf	d0,.bbb
+ endc
 	* ok
 	moveq	#0,d0
+.ciaError
 .exit
 	popm	d1-a6
 	rts
 
-.error
-	DPRINT	"init FAIL",56
-	moveq	#-1,d0 
+.checkError
+	moveq	#ier_unknown,d0
 	bra.b	.exit
-	
+.noMemError
+	moveq	#ier_nomem,d0 
+	bra.b 	.exit
 
-* Interrupt play routine, use cached pointers to avoid tag searches
-.play
-	move.l	.storedInterrupt(pc),d0
-	beq.b	.nope
-	lea	deliBase,a5
-	move	var_b+mainvolume,dtg_SndVol(a5)
+.initError
+	DPRINT	"InitPlayer error: %ld"
+	tst.l	deliLoadFileIoErr(a5)
+	bne.b	.ioErr
+	lea	.initErrMsg(pc),a0 
+	bra.b	.showErr
+
+.extLoadError
+	tst.l	deliLoadFileIoErr(a5)
+	bne.b 	.ioErr
+	lore	Dos,IoErr 
+	bra.b	.ioErr2
+
+.ioErr
+	move.l	deliLoadFileIoErr(a5),d0
+.ioErr2
+	tst.b	uusikick(a5)
+	bne.b	.newIoErr
+.oldIoErr
+	lea	.ioErrMsg(pc),a0 
+.showErr
+	jsr	desmsg
+.ioErr3
+	lea	 desbuf(a5),a1 
+	jsr	 request
+	moveq	#ier_eagleplayer,d0
+	bra.b	.exit
+
+.newIoErr
+	tst.l	d0
+	beq.b	.oldIoErr
+
+	lea	.ioErrMsg2(pc),a3
+	clr.b	(a3)
+	move.l	d0,d1 
+	pushpea	.ioErrMsg(pc),d2
+	pushpea desbuf(a5),d3
+	moveq	#100,d4
+	lore	Dos,Fault
+	move.b	#' ',(a3)
+	bra.b	.ioErr3
+
+.initErrMsg 
+	dc.b	"Eagleplayer init error (%ld)",0
+.ioErrMsg
+	dc.b	"Error loading additional module data"
+.ioErrMsg2
+	dc.b	" (%ld)",0
+ even
+
+* Read module info values
+* in:
+*   d1: info value to find
+* out:
+*   d0: value, or -1 if not found
+deliFindInfoValue
+	move.l	#EP_Get_ModuleInfo,d0
+	bsr.w	deliGetTag
+	beq.b 	.tryAnother
+	bsr.w	deliCallFunc
+	bra.b	.gotIt
+.tryAnother
+	move.l	#EP_NewModuleInfo,d0 
+	bsr.w	deliGetTag
+	beq.b 	.notFound
 	move.l	d0,a0
-	jsr	(a0)
-	move.l	.storedSetVolume(pc),d0
-	beq.b	.noVol
-	lea	deliBase,a5
-	move.l 	d0,a0
-	jsr	(a0)
-.noVol
-.nope
+.gotIt
+	* a0 = module info table
+.loop
+	move.l	(a0)+,d0
+	beq.b  .end 
+	cmp.l	d1,d0 
+	beq.b 	.found
+	addq.l	#4,a0
+	bra.b  .loop
+.found 
+	move.l (a0),d0 
+.end 
 	rts
+.notFound 
+	moveq	#-1,d0 
+	rts 
 
-.storedInterrupt	dc.l	0
-.storedSetVolume	dc.l 	0
-
-.end
-	pushm	d1-a6
-	DPRINT	"deliEnd",13
-	
-	move.l	.storedInterrupt(pc),d0
-	beq.b	.noIntUsed
-	bsr.w	rem_ciaint
-.noIntUsed
-
-	move.l	#DTP_StopInt,d0
-	bsr	.getTag
-	bsr	.callFunc
-
-	move.l	#DTP_EndSound,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
-
-	move.l	#DTP_EndPlayer,d0  
-	bsr.w	.getTag
-	bsr.w	.callFunc	
-
-	moveq	#0,d0
-	popm	d1-a6
+* After InitSound this updates the max position info
+deliUpdatePositionInfo	
+	clr	pos_maksimi(a5)
+	move.l	#EP_GetPositionNr,d0  
+	bsr.w	deliGetTag
+	move.l	d0,deliStoredGetPositionNr(a5) 
+	beq.b	.noPos
+	move.l	#MI_Length,d1
+	bsr.b	deliFindInfoValue 
+	bmi.b 	.noPos
+	beq.b	.noPos
+	move	d0,pos_maksimi(a5)
+	move.l	playerbase(a5),a0 
+	or	#pf_poslen,p_liput(a0)
 	rts
-
+.noPos
+	move.l	playerbase(a5),a0 
+	move	p_liput(a0),d0
+	bclr	#pb_poslen,d0
+	move	d0,p_liput(a0)
+	rts
 
 * out:
 *  d0=default song
 *  d1=min song
 *  d2=max song
-.getSongInfo
-	moveq	#0,d0 
-	moveq	#0,d1 
-	moveq	#0,d2
-	
+deliGetSongInfo
 	move.l	#DTP_SubSongRange,d0  
-	bsr.w	.getTag
+	bsr.w	deliGetTag
 	beq.b	.noSubSongs1
-	bsr	.callFunc
+	bsr.w	deliCallFunc
 	move.l	d1,d2
 	move.l	d0,d1
-	DPRINT	"Subsong def=%ld min=%ld max=%ld",111
+	move.l	playerbase(a5),a0 
+	or	#pf_song,p_liput(a0)
+	DPRINT	"Subsongs def=%ld min=%ld max=%ld"
 	rts
 
 .noSubSongs1
 	move.l	#DTP_NewSubSongRange,d0  
-	bsr.w	.getTag
+	bsr.w	deliGetTag
 	beq.b	.noSubSongs2
 	move.l	d0,a0
 	movem	(a0),d0/d1/d2
-	DPRINT	"NewSubSongs defa=%ld min=%ld max=%ld",112
+	move.l	playerbase(a5),a0 
+	or	#pf_song,p_liput(a0)
+	DPRINT	"NewSubSongs def=%ld min=%ld max=%ld"
+	rts
+	
 .noSubSongs2
+	DPRINT	"No subsongs"
+	move.l	playerbase(a5),a0 
+	and	#~pf_song,p_liput(a0)
+	moveq	#0,d0 
+	moveq	#0,d1 
+	moveq	#0,d2	
 	rts	
 
-.song
-	DPRINT	"deliSong",114
-	bsr	.stop
+* Interrupt play routine, use cached pointers to avoid tag searches
+deliInterrupt
+deliPlay	
+	move.l	a5,a4
+	push	a4
+	move.l	deliBase(a5),a5
+	move	mainvolume(a4),d0
+	move	d0,dtg_SndVol(a5)
+	move	d0,EPG_Voice1Vol(a5)
+	move	d0,EPG_Voice2Vol(a5)
+	move	d0,EPG_Voice3Vol(a5)
+	move	d0,EPG_Voice4Vol(a5)
 
-	bsr	.getSongInfo
+	move.l	deliStoredSetVoices(a4),d0 
+	beq.b 	.noSetVoices
+	move.l	d0,a0
+	* Enable all channels
+	moveq	#%1111,d0
+	jsr 	(a0)
+	move.l	(sp),a4
+.noSetVoices
 
-	* low bound check
-	cmp	songnumber(a5),d1
-	blo.b	.ok1
-	move	d1,songnumber(a5)
-.ok1
-	* upper bound check
-	cmp	songnumber(a5),d2
-	bhi.b .ok2
-	move d2,songnumber(a5)
-.ok2
+	move.l	deliStoredInterrupt(a4),d0
+	beq.b	.noInt
+	move.l	d0,a0
+ ifne DELI_TEST_MODE
+	move	#$500,$dff180
+ else
+	jsr	(a0)
+ endif
+	move.l	(sp),a4
+.noInt
+
+	move.l	deliStoredSetVolume(a4),d0
+	beq.b	.noVol
+	move.l 	d0,a0
+	jsr	(a0)
+	move.l	(sp),a4
+.noVol
+
+	move.l	deliStoredGetPositionNr(a4),d0
+	beq.b 	.noPos 
+	move.l 	d0,a0
+	jsr	(a0)
+	move.l	(sp),a4
+	tst	d0
+	bmi.b	.noPos
+	move	d0,pos_nykyinen(a4)
+.noPos	
+	pop 	a4
+	
+	pushm	a4/a5/a6
+	move.l	deliStoredNoteStruct(a4),d0 
+	bsr.w	deliNotePlayer
+	popm	a4/a5/a6
+	rts
+
+deliEnd
+	pushm	d1-a6
+	DPRINT	"deliEnd"
+	
+	move.l	deliStoredInterrupt(a5),d0
+	beq.b	.noIntUsed
+	jsr	rem_ciaint
+.noIntUsed
+
+	move.l	#DTP_StopInt,d0
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+
+	move.l	#DTP_EndSound,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+
+	move.l	#DTP_EndPlayer,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	
+	bsr.w	clearsound
+
+	move.l	#EP_EjectPlayer,d0
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	
+	popm	d1-a6
+	rts
+
+deliSong
+	bsr.b	deliStop
+	bsr.w	deliGetSongInfo
+	* returns
+	* d1 = min song
+	* d2 = max song
+	
+	move	songnumber(a5),d0
+
+	* clamp d0 within d1-d2
+	jsr	clampWord
+	move	d0,songnumber(a5)
+
+	DPRINT	"deliSong set: %ld"
+	
 	* Put it, wrong number may crash some players
-	move	songnumber(a5),deliBase+dtg_SndNum
+	move.l deliBase(a5),a0
+	move	d0,dtg_SndNum(a0)
 
 	move.l	#DTP_InitSound,d0
-	bsr	.getTag
-	bsr	.callFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 	move.l	#DTP_StartInt,d0
-	bsr	.getTag
-	bsr	.callFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bsr.w	deliUpdatePositionInfo
 	rts
 
 * Not sure what exactly should be done with these two.
 * Seems to work more or less.
-.stop
-	DPRINT	"deliStop",14
+deliStop
+	DPRINT	"deliStop"
 	move.l	#DTP_EndSound,d0
-	bsr	.getTag
-	;bsr	.callFunc
+	bsr.w	deliGetTag
+	;bsr	deliCallFunc	;;**
 	move.l	#DTP_StopInt,d0
-	bsr	.getTag
-	bsr	.callFunc
-	;bsr	clearsound
-	move	#$f,$dff096
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bsr.w	clearsound
+	;move	#$f,$dff096
 	rts
 
-.cont
-	DPRINT	"deliCont",144
+deliCont
+	DPRINT	"deliCont"
 	move.l	#DTP_InitSound,d0
-	bsr	.getTag
+	bsr.w	deliGetTag
 	;bsr	.callFunc
 	move.l	#DTP_StartInt,d0
-	bsr	.getTag
-	bsr	.callFunc
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
 	move	#$800f,$dff096
 	rts
 
-* Build the DeliBase structure, this is not a complete version.
+deliForward
+	DPRINT	"deliForward"
+	move.l	#DTP_NextPatt,d0
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	rts
 
-.buildDeliBase
-	lea	deliBase,a0
-	lea	deliBaseLength(a0),a1
-.clrBase
-	clr.b	(a0)+
-	cmp.l	a0,a1 
-	bne.b .clrBase
-	lea	deliBase,a0
+deliBackward
+	DPRINT	"deliBackward"
+	move.l	#DTP_PrevPatt,d0
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	rts
+
+deliVolume	
+	move.l	deliBase(a5),a0
+	move	mainvolume(a5),d0
+	move	d0,dtg_SndVol(a0)
+	move	d0,EPG_Voice1Vol(a0)
+	move	d0,EPG_Voice2Vol(a0)
+	move	d0,EPG_Voice3Vol(a0)
+	move	d0,EPG_Voice4Vol(a0)
+	move.l	deliStoredSetVolume(a5),d0
+	beq.b	.noVol
+	move.l 	d0,a1
+	push	a5
+	move.l	a0,a5	
+	jsr	(a1)
+	pop 	a5
+.noVol
+	rts
+
+deliAuthor
+	rts
+	;move.l	#DTP_Creator,d0
+	;bra	deliGetTag
+	
+freeDeliBase
+	tst.l	deliData(a5)
+	beq.b	.x
+	move.l deliData(a5),a0 
+	jsr 	freemem 
+.x	clr.l	deliData(a5)
+	rts 
+
+
+
+* Build the DeliBase structure, this is not a complete version.
+buildDeliBase
+	bsr.b	freeDeliBase
+
+	rsreset 
+_eagleJumpTable rs.b 	-ENPP_SizeOf
+_deliBase		rs.b 	EPG_SizeOf 
+_deliPath		rs.b    200
+_deliPathArray	rs.b   	200
+_upsStructure 	rs.b  	UPS_SizeOF
+* Space for 128 (address, length) pairs for dtg_LoadFile 
+_loadFileArray	rs.l 	2*DELI_LIST_DATA_SLOTS
+_deliDataSize	rs.b	0
+
+	move.l	#_deliDataSize,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	jsr	getmem
+	bne.b 	.ok 
+	rts
+.ok
+	move.l 	d0,deliData(a5)
+	move.l	d0,a4
+
+	lea	_deliBase(a4),a0 
+	move.l	a0,deliBase(a5)
+
+	* InStereo2 uses this private structure
+	lea	_upsStructure(a4),a1
+	move.l	a1,EPG_UPS_Structure(a0)
+
+	lea	_loadFileArray(a4),a1
+	move.l	a1,deliLoadFileArray(a5)
+
+	lea	_deliPath(a4),a1
+	move.l	a1,deliPath(a5)
+	move.l	a1,dtg_DirArrayPtr(a0)
+
+	lea	_deliPathArray(a4),a1
+	move.l	a1,deliPathArray(a5)
+	move.l	a1,dtg_PathArrayPtr(a0)
+
+
+
+	push	a0
+	jsr	getcurrent 
+	pop 	a0
+	* a3 = node
+	
+	* Grab path and file parts
+	* Name without path to A1
+	move.l	l_nameaddr(a3),a1
+	move.l	a1,dtg_FileArrayPtr(a0)
+	* Full path to A2
+	lea	l_filename(a3),a2
+	move.l	deliPath(a5),a3
+	push	a2
+.copy	move.b	(a2)+,(a3)+
+	cmp.l	a2,a1
+	bne.b	.copy
+	clr.b	(a3)		
+
+	* The full path needs to be populated here, too.
+	* "Test drive 2" uses it, for example.
+	pop	a2
+	move.l	deliPathArray(a5),a1
+.c2	move.b	(a2)+,(a1)+
+	bne.b	.c2 
+
+
+ if DEBUG
+	move.l	dtg_FileArrayPtr(a0),d0
+	DPRINT	"File: %s"
+	move.l	dtg_DirArrayPtr(a0),d0
+	DPRINT	"Dir: %s"
+ endif
 
 	move.l	_DosBase(a5),dtg_DOSBase(a0)
 	move.l	_IntuiBase(a5),dtg_IntuitionBase(a0)
@@ -33129,13 +39759,28 @@ p_delicustom
 	move	#64,dtg_SndRBal(a0)
 	clr	dtg_LED(a0)
 
-	pea	.allocAudio(pc)
+	move	#%1111,EPG_Voices(a0)
+	move	#64,EPG_Voice1Vol(a0)
+	move	#64,EPG_Voice2Vol(a0)
+	move	#64,EPG_Voice3Vol(a0)
+	move	#64,EPG_Voice4Vol(a0)
+	move	#255,EPG_Volume(a0)
+	move	#255,EPG_Balance(a0)
+	move	#255,EPG_LeftBalance(a0)
+	move	#255,EPG_RightBalance(a0)
+
+	move.l	moduleaddress(a5),dtg_ChkData(a0) 
+	move.l	modulelength(a5),dtg_ChkSize(a0)
+	* Default timer value is needed by
+	* Sonix Sound Driver
+	move	#28419/2,dtg_Timer(a0)
+
+	pea	deliAllocAudio(pc)
 	move.l	(sp)+,dtg_AudioAlloc(a0)
-	pea	.freeAudio(pc)
+	pea	deliFreeAudio(pc)
 	move.l	(sp)+,dtg_AudioFree(a0)
 	pea	dmawait(pc)
 	move.l	(sp)+,dtg_WaitAudioDMA(a0)
-
 	pea	.startInt(pc)
 	move.l	(sp)+,dtg_StartInt(a0)
 	pea	.stopInt(pc)
@@ -33144,144 +39789,917 @@ p_delicustom
 	move.l	(sp)+,dtg_SongEnd(a0)	* may be called from interrupt
 	pea	.setTimer(pc)
 	move.l	(sp)+,dtg_SetTimer(a0)	* may be called from interrupt
+	pea	.allocListData(pc)
+	move.l	(sp)+,dtg_AllocListData(a0)
+	pea	.freeListData(pc)
+	move.l	(sp)+,dtg_FreeListData(a0)
+	pea	deliCopyString(pc)
+	move.l	(sp)+,dtg_CopyString(a0)
+	pea	deliCopyFile(pc)
+	move.l	(sp)+,dtg_CopyFile(a0)
+	pea	deliCopyDir(pc)
+	move.l	(sp)+,dtg_CopyDir(a0)
+	pea	deliLoadFile(pc)
+	move.l	(sp)+,dtg_LoadFile(a0)
+	pea	deliGetListData(pc)
+	move.l	(sp)+,dtg_GetListData(a0)
+	pea	.cutSuffix(pc)
+	move.l	(sp)+,dtg_CutSuffix(a0)
 
-	* Lemmings uses CopyString and CopyFile. Not supported!
+	pea	deliModuleChange(pc)
+	move.l	(sp)+,EPG_ModuleChange(a0)
 
 	* Stub the rest
- if DEBUG
-	pea	.f1(pc)
-	move.l	(sp)+,dtg_LockScreen(a0)
-	pea	.f2(pc)
-	move.l	(sp)+,dtg_UnlockScreen(a0)
-	pea	.f3(pc)
-	move.l	(sp)+,dtg_NotePlayer(a0) 	* may be called from interrupt
-	pea	.f4(pc)
-	move.l	(sp)+,dtg_AllocListData(a0)
-	pea	.f5(pc)
-	move.l	(sp)+,dtg_FreeListData(a0)
-	pea	.f6(pc)
-	move.l	(sp)+,dtg_CopyString(a0)
-	pea	.f7(pc)
-	move.l	(sp)+,dtg_CopyFile(a0)
-	pea	.f8(pc)
-	move.l	(sp)+,dtg_CopyDir(a0)
-	pea	.f9(pc)
-	move.l	(sp)+,dtg_LoadFile(a0)
-	pea	.f10(pc)
-	move.l	(sp)+,dtg_GetListData(a0)
- else 
-	lea	.stub(pc),a1
+ 	lea	.stub(pc),a1
 	move.l	a1,dtg_LockScreen(a0)
 	move.l	a1,dtg_UnlockScreen(a0)
 	move.l	a1,dtg_NotePlayer(a0) 	* may be called from interrupt
-	move.l	a1,dtg_AllocListData(a0)
-	move.l	a1,dtg_FreeListData(a0)
-	move.l	a1,dtg_CopyString(a0)
-	move.l	a1,dtg_CopyFile(a0)
-	move.l	a1,dtg_CopyDir(a0)
-	move.l	a1,dtg_LoadFile(a0)
-	move.l	a1,dtg_GetListData(a0)
- endif
-	rts
 
-.allocAudio 
-	DELIDPRINT	"deliAudioAlloc",1102
-	pushm	d1-a6
-	lea	var_b,a5
-	* returns d0=0 on success:
-	bsr	varaa_kanavat 
-	popm	d1-a6
-	rts
-
-.freeAudio 
-	DELIDPRINT	"deliAudioFree",1103
-	pushm	d1-a6
-	lea	var_b,a5
-	bsr	vapauta_kanavat
-	popm	d1-a6
-	rts
+	* EaglePlayer negative offset jump table
+	lea	eagleJumpTableStart(pc),a1
+	lea eagleJumpTableEnd(pc),a2	
+.jumps	
+	subq.l	#6,a0
+	move.w	(a1)+,(a0)
+	move.l	(a1)+,2(a0)
+	cmp.l	a1,a2
+	bne.b	.jumps
+ 	rts
 
 .songEnd
 	* May be called from interrupt, no logging allowed
-	;DELIDPRINT	"deliSongEnd",3
-	;st		var_b+songover
+	pushm	d0/a0/a5
+	lea	var_b,a5
+	move.l	playerbase(a5),a0 
+	move	p_liput(a0),d0 
+	and	#pf_end,d0
+	beq.b	.noSongEnd
+	st	songover(a5)
+.noSongEnd
+	popm 	d0/a0/a5
 	rts
+
 .setTimer
 	* May be called from interrupt, no logging allowed
-	;DELIDPRINT	"deliSetTimer",15
+	push	d0
+	move	dtg_Timer(a5),d0
+	jsr     ciaint_setTempoFromD0
+	pop 	d0 
+	rts
+
 .stub
 	moveq	#0,d0
+.dummyEagleFunc
 	rts
 
 .startInt	
-	DELIDPRINT	"deliStartInt",1
+	DPRINT 	"deliStartInt"
 	moveq	#0,d0
 	rts
 .stopInt 
-	DELIDPRINT	"deliStopInt",2
+	DPRINT	"deliStopInt"
+	moveq	#0,d0
+	rts
+.cutSuffix 
+	DPRINT	"cutSuffix"
+	moveq	#0,d0
+	rts
+.allocListData
+	DPRINT	"allocListData %ld %lx"
+	* used by stonetracker
+	pushm	d1-a6
+	lea	var_b,a5
+	move.l	d0,d6
+	move.l	d1,d7
+	bsr.w	deliFindEmptyListDataSlot
+	bne.b	.err
+	move.l	a1,a3 
+	move.l	d6,d0
+	move.l	d7,d1
+	lore 	Exec,AllocMem
+	tst.l 	d0 
+	beq.b 	.err
+	* Store into list data slot
+	movem.l	d0/d6,(a3)
+.allocListDataX
+ 	popm 	d1-a6
+	rts
+.err
+	moveq	#0,d0
+	bra.b 	.allocListDataX
+	
+.freeListData
+	DPRINT	"freeListData"
 	moveq	#0,d0
 	rts
 
+deliAllocAudio 
+	DPRINT	"deliAudioAlloc"
+	pushm	d1-a6
+	lea	var_b,a5
+	* returns d0=0 on success:
+	jsr	varaa_kanavat 
+	popm	d1-a6
+	rts
+
+deliFreeAudio 
+	DPRINT	"deliAudioFree"
+	pushm	d1-a6
+	lea	var_b,a5
+	jsr	vapauta_kanavat
+	popm	d1-a6
+	rts
+
+deliCopyString move.l a0,d0
+	bsr.w	deliAppendStr
  if DEBUG
-.f1 DELIDPRINT	"f1",1101
+	move.l	deliPathArray+var_b,d1
+	DPRINT	"copyString %s path=%s"
+ endif
 	moveq	#0,d0
 	rts
-.f2 DELIDPRINT	"f2",102
+deliCopyFile 
+	move.l	dtg_FileArrayPtr(a5),a0
+	bsr.w	deliAppendStr
+ if DEBUG
+	move.l	deliPathArray+var_b,d0
+	DPRINT	"copyFile path=%s"
+ endif
 	moveq	#0,d0
 	rts
-.f3 DELIDPRINT	"f3",103
+deliCopyDir 
+	move.l	dtg_DirArrayPtr(a5),a0
+	bsr.w	deliAppendStr
+ if DEBUG
+	move.l	deliPathArray+var_b,d0
+	DPRINT	"copyDir path=%s"
+ endif
 	moveq	#0,d0
 	rts
-.f4 DELIDPRINT	"f4",104
+deliLoadFile
+ if DEBUG
+	move.l	deliPathArray+var_b,d0
+	DPRINT	"loadFile '%s'"
+ endif
+	pushm	d1-a6
+	lea 	var_b,a5
+
+	* Find empty loadfile slot
+	bsr.b	deliFindEmptyListDataSlot
+	bne.b	.noSlots
+	lea	4(a1),a2
+
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
+	move.l	deliPathArray+var_b,a0
+
+	jsr	loadfileStraight
+	clr.l 	deliLoadFileIoErr(a5)
+	move.l	d0,d7
+	beq.b	.ok	
+	lore 	Dos,IoErr
+	move.l	d0,deliLoadFileIoErr(a5)
+.ok
+	move.l	d7,d0
+ if DEBUG
+	move.l	(a1),d1
+	move.l	(a2),d2
+	move.l	deliLoadFileIoErr(a5),d3
+	DPRINT "deliLoad=%ld addr=%lx len=%ld err=%ld"
+ endif
+.noSlots
+	popm	d1-a6
+	
+ * 0 = success, non-0: fail
+	rts
+
+* out:
+*   a1 = empty slot for (addr,len) pair
+deliFindEmptyListDataSlot
+	move.l	deliLoadFileArray(a5),a1
+	moveq	#0,d0
+.find
+	cmp	#DELI_LIST_DATA_SLOTS,d0 
+	beq.b	.error 
+	tst.l	(a1)
+	beq.b	.found
+	addq.l	#8,a1
+	addq	#1,d0
+	bra.b 	.find
+.found
 	moveq	#0,d0
 	rts
-.f5 DELIDPRINT	"f5",105
-	moveq	#0,d0
+.error 
+	moveq	#-1,d0 
+	rts 
+
+* Get loaded data
+* in: 
+*   d0 = file number. 0 is the original module, 
+*                     1 is the 1st loaded file with dtg_LoadFile, etc
+deliGetListData 
+	DPRINT	"getListData %ld"
+	tst.l	d0 
+	beq.b	.first
+
+	* Grab (addr,len) so that index 1 corresponds to the first item.
+	pushm	d3/a1
+	move.l	deliLoadFileArray+var_b,a1
+	move	d0,d3
+	lsl	#3,d3
+
+ if DEBUG
+ 	move.l	-8(a1,d3),d0
+	move.l	-8+4(a1,d3),d1
+	DPRINT	"0x%lx %ld"
+ endif
+	move.l	-8(a1,d3),a0
+	move.l	-8+4(a1,d3),d0
+	popm	d3/a1
 	rts
-.f6 DELIDPRINT	"f6",106
-	moveq	#0,d0
+.first
+ if DEBUG
+	move.l	moduleaddress+var_b,d0
+	move.l	modulelength+var_b,d1
+	DPRINT	"0x%lx %ld"
+ endif
+	move.l	moduleaddress+var_b,a0
+	move.l	modulelength+var_b,d0
 	rts
-.f7 DELIDPRINT	"f7",107
-	moveq	#0,d0
+
+deliAppendStr
+	move.l 	dtg_PathArrayPtr(a5),a1 
+.1	tst.b 	(a1)+
+	bne.b 	.1
+	subq	#1,a1
+.2	move.b 	(a0)+,(a1)+
+	bne.b 	.2
 	rts
-.f8 DELIDPRINT	"f8",108
-	moveq	#0,d0
+
+* First negative offset is first, -6
+eagleJumpTableStart
+		jmp funcENPP_AllocSampleStruct
+		jmp funcENPP_NewLoadFile2
+		jmp funcENPP_MakeDirCorrect
+		jmp funcENPP_TestAufHide
+		jmp funcENPP_ClearCache
+		jmp funcENPP_CopyMemQuick
+		jmp funcENPP_GetPassword
+		jmp funcENPP_StringCopy2
+		jmp funcENPP_ScreenToFront
+		jmp funcENPP_WindowToFront
+		jmp funcENPP_GetListData
+		jmp funcENPP_LoadFile    **
+		jmp funcENPP_CopyDir 	 **
+		jmp funcENPP_CopyFile    **
+		jmp funcENPP_CopyString
+		jmp funcENPP_AllocAudio
+		jmp funcENPP_FreeAudio
+		jmp funcENPP_StartInterrupt
+		jmp funcENPP_StopInterrupt
+		jmp funcENPP_SongEnd
+		jmp funcENPP_CutSuffix
+		jmp funcENPP_SetTimer
+		jmp funcENPP_WaitAudioDMA
+		jmp funcENPP_SaveMem
+		jmp funcENPP_FileReq
+		jmp funcENPP_TextRequest
+		jmp funcENPP_LoadExecutable
+		jmp funcENPP_NewLoadFile
+		jmp funcENPP_ScrollText
+		jmp funcENPP_LoadPlConfig
+		jmp funcENPP_SavePlConfig
+		jmp funcENPP_FindTag
+		jmp funcENPP_FindAuthor
+		jmp funcENPP_Hexdez
+		jmp funcENPP_TypeText
+		jmp funcENPP_ModuleChange
+		jmp funcENPP_ModuleRestore
+		jmp funcENPP_StringCopy
+		jmp funcENPP_CalcStringSize
+		jmp funcENPP_StringCMP
+		jmp funcENPP_DMAMask	 	*
+		jmp funcENPP_PokeAdr		*	 
+		jmp funcENPP_PokeLen		*
+		jmp funcENPP_PokePer		*
+		jmp funcENPP_PokeVol		*
+		jmp funcENPP_PokeCommand	* filter toggle
+		jmp funcENPP_Amplifier
+		jmp funcENPP_TestAbortGadget
+		jmp funcENPP_GetEPNrfromMessage
+		jmp funcENPP_InitDisplay
+		jmp funcENPP_FillDisplay
+		jmp funcENPP_RemoveDisplay
+		jmp funcENPP_GetLocaleString
+		jmp funcENPP_SetWaitPointer
+		jmp funcENPP_ClearWaitPointer
+		jmp funcENPP_OpenCatalog
+		jmp funcENPP_CloseCatalog
+		jmp funcENPP_AllocAmigaAudio
+		jmp funcENPP_FreeAmigaAudio
+		jmp funcENPP_RawToFormat
+		jmp funcENPP_FindAmplifier
+		jmp funcENPP_UserCallup5
+		jmp funcENPP_GetLoadListData
+		jmp funcENPP_SetListData
+		jmp funcENPP_GetHardwareType
+eagleJumpTableEnd
+
+funcENPP_AllocSampleStruct
+	DPRINT "ENPP_AllocSampleStruct"
 	rts
-.f9 DELIDPRINT	"f9",109
-	moveq	#0,d0
+funcENPP_NewLoadFile2
+	DPRINT "ENPP_NewLoadFile2"
 	rts
-.f10 DELIDPRINT	"f10",110
-	moveq	#0,d0
+funcENPP_MakeDirCorrect
+	DPRINT "ENPP_MakeDirCorrect"
 	rts
+funcENPP_TestAufHide
+	DPRINT "ENPP_TestAufHide"
+	rts
+funcENPP_ClearCache
+	;DPRINT "ENPP_ClearCache"
+	bra.w clearCpuCaches
+funcENPP_CopyMemQuick
+	DPRINT "ENPP_CopyMemQuick"
+	rts
+funcENPP_GetPassword
+	DPRINT "ENPP_GetPassword"
+	rts
+funcENPP_StringCopy2
+	DPRINT "ENPP_StringCopy2"
+	rts
+funcENPP_ScreenToFront
+	DPRINT "ENPP_ScreenToFront"
+	rts
+funcENPP_WindowToFront
+	DPRINT "ENPP_WindowToFront"
+	rts
+funcENPP_GetListData
+	bra.w	deliGetListData
+funcENPP_LoadFile
+	bra.w	deliLoadFile
+funcENPP_CopyDir
+	DPRINT "ENPP_CopyDir"
+	bra.w	deliCopyDir
+funcENPP_CopyFile
+	DPRINT "ENPP_CopyFile"
+	bra.w	 deliCopyFile
+funcENPP_CopyString
+	DPRINT "ENPP_CopyString"
+	bra.w	deliCopyString
+funcENPP_AllocAudio
+	DPRINT "ENPP_AllocAudio"
+	bra.w deliAllocAudio
+funcENPP_FreeAudio
+	DPRINT "ENPP_FreeAudio"
+	bra.w deliFreeAudio
+funcENPP_StartInterrupt
+	DPRINT "ENPP_StartInterrupt"
+	rts
+funcENPP_StopInterrupt
+	DPRINT "ENPP_StopInterrupt"
+	rts
+funcENPP_SongEnd
+	;DPRINT "ENPP_SongEnd"
+	jmp	 dtg_SongEnd(a5)
+funcENPP_CutSuffix
+	DPRINT "ENPP_CutSuffix"
+	rts
+funcENPP_SetTimer
+	;DPRINT "ENPP_SetTimer"
+	jmp dtg_SetTimer(a5)
+funcENPP_WaitAudioDMA
+	;DPRINT "ENPP_WaitAudioDMA"
+	bra.w dmawait
+funcENPP_SaveMem
+	DPRINT "ENPP_SaveMem"
+	rts
+funcENPP_FileReq
+	DPRINT "ENPP_FileReq"
+	rts
+funcENPP_TextRequest
+	DPRINT "ENPP_TextRequest"
+	rts
+funcENPP_LoadExecutable
+	DPRINT "ENPP_LoadExecutable"
+	rts
+funcENPP_NewLoadFile
+	DPRINT "ENPP_NewLoadFile"
+	rts
+funcENPP_ScrollText
+	DPRINT "ENPP_ScrollText"
+	rts
+funcENPP_LoadPlConfig
+	DPRINT "ENPP_LoadPlConfig"
+	rts
+funcENPP_SavePlConfig
+	DPRINT "ENPP_SavePlConfig"
+	rts
+funcENPP_FindTag
+	DPRINT "ENPP_FindTag"
+	rts
+funcENPP_FindAuthor
+	DPRINT "ENPP_FindAuthor"
+	rts
+funcENPP_Hexdez
+	DPRINT "ENPP_Hexdez"
+	rts
+funcENPP_TypeText
+	DPRINT "ENPP_TypeText"
+	rts
+funcENPP_ModuleChange
+	DPRINT "ENPP_ModuleChange"
+	bra.w	deliModuleChange
+funcENPP_ModuleRestore
+	DPRINT "ENPP_ModuleRestore"
+	rts
+funcENPP_StringCopy
+	DPRINT "ENPP_StringCopy"
+	rts
+funcENPP_CalcStringSize
+	DPRINT "ENPP_CalcStringSize"
+	rts
+funcENPP_StringCMP
+	DPRINT "ENPP_StringCMP"
+	rts
+
+funcENPP_DMAMask
+	push	d1
+	tst		d0
+	bpl.b	.set2
+	or		#$8000,d1
+.set2
+	move	d1,$dff096
+	jsr	dmawait
+	pop 	d1
+	rts
+
+funcENPP_PokeAdr
+	pushm	d2/a0
+	lea	$dff0a0,a0
+	moveq	#3,d2
+	and		d1,d2
+	lsl		#4,d2
+	add		d2,a0
+	move.l	d0,(a0)
+	popm	d2/a0
+	rts
+
+funcENPP_PokeLen
+	pushm	d2/a0
+	lea	$dff0a0,a0
+	moveq	#3,d2
+	and		d1,d2
+	lsl		#4,d2
+	add		d2,a0
+	tst		d0
+	bne.b	.nozero
+	moveq	#1,d0
+.nozero
+	move	d0,4(a0)
+	popm	d2/a0
+	rts
+
+funcENPP_PokePer
+	pushm	d2/a0
+	lea	$dff0a0,a0
+	moveq	#3,d2
+	and		d1,d2
+	lsl		#4,d2
+	add		d2,a0
+	move	d0,6(a0)
+	popm	d2/a0
+	rts
+
+funcENPP_PokeVol
+	pushm	d2/a0
+	lea	$dff0a0,a0
+	moveq	#3,d2
+	and	d1,d2
+	lsl	#4,d2
+	add	d2,a0
+;	mulu	dtg_SndVol(a5),d0
+	mulu	mainvolume+var_b,d0
+	lsr	#6,d0
+	move	d0,8(a0)
+	popm	d2/a0
+	rts
+
+funcENPP_PokeCommand
+	DPRINT "ENPP_PokeCommand"
+	cmp.b	#1,d0 
+	bne.b 	.unknown
+	* d1=0 -> led off
+	* d1=1 -> led on
+	tst.b 	d1
+	beq.b .off
+	bclr	#1,$bfe001
+.unknown
+	rts
+.off 
+	bset	#1,$bfe001
+	rts
+
+funcENPP_Amplifier
+	; Called from interrupt, no logging
+	;DPRINT "ENPP_Amplifier"
+	rts
+funcENPP_TestAbortGadget
+	DPRINT "ENPP_TestAbortGadget"
+	rts
+funcENPP_GetEPNrfromMessage
+	DPRINT "ENPP_GetEPNrfromMessage"
+	rts
+funcENPP_InitDisplay
+	DPRINT "ENPP_InitDisplay"
+	rts
+funcENPP_FillDisplay
+	DPRINT "ENPP_FillDisplay"
+	rts
+funcENPP_RemoveDisplay
+	DPRINT "ENPP_RemoveDisplay"
+	rts
+funcENPP_GetLocaleString
+	DPRINT "ENPP_GetLocaleString"
+	rts
+funcENPP_SetWaitPointer
+	DPRINT "ENPP_SetWaitPointer"
+	rts
+funcENPP_ClearWaitPointer
+	DPRINT "ENPP_ClearWaitPointer"
+	rts
+funcENPP_OpenCatalog
+	DPRINT "ENPP_OpenCatalog"
+	rts
+funcENPP_CloseCatalog
+	DPRINT "ENPP_CloseCatalog"
+	rts
+funcENPP_AllocAmigaAudio
+	;DPRINT "ENPP_AllocAmigaAudio"
+	bra.w	deliAllocAudio
+funcENPP_FreeAmigaAudio
+	;DPRINT "ENPP_FreeAmigaAudio"
+	bra.w deliFreeAudio
+funcENPP_RawToFormat
+	DPRINT "ENPP_RawToFormat"
+	rts
+funcENPP_FindAmplifier
+	DPRINT "ENPP_FindAmplifier"
+	rts
+funcENPP_UserCallup5
+	DPRINT "ENPP_UserCallup5"
+	rts
+funcENPP_GetLoadListData
+	DPRINT "ENPP_GetLoadListData"
+	rts
+funcENPP_SetListData
+	DPRINT "ENPP_SetListData"
+	rts
+funcENPP_GetHardwareType
+	DPRINT "ENPP_GetHardwareType"
+	rts
+
+* NotePlayer implementation from EaglePlayer sources
+deliNotePlayer
+	tst.l	d0
+	bne.b 	.DT_NotePlayer
+	rts
+.DT_NotePlayer:	
+
+		;movem.l	a4-a6,-(a7)
+		;move.l	PufferAdr(pc),a5
+		;move.l	DT_NoteStruct(a5),d0
+		;beq.w	.Return
+		move.l	d0,a4
+		move.l	4(a4),d7	;Flags
+				
+		move.l	(a4),d0
+		beq.w	.Return
+		move.l	d0,a4
+
+		*--------- neue Note (= DMA off) ---------*
+		move.l	a4,a0
+		moveq	#4-1,d2
+		moveq	#0,d1
+		moveq	#1,d3
+.pass1		move.b	11(a0),d0
+		and.b	#2,d0		;NCHF_Sample
+		beq.s	.skip
+		or.l	d3,d1		;DMA Mask
+.skip		lsl.l	#1,d3
+		move.l	(a0),d0
+		beq.s	.Last1
+		move.l	d0,a0		*add #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass1
+.Last1:
+		tst.l	d1
+		beq.s	.nostopDMA
+		moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
+					;D1 = Maske (LONG !!)
+		jsr	ENPP_DMAMask(a5)
+		moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
+.nostopDMA:	;move.l	d1,-(a7)
+		move.l	d1,d6
+	
+		*---------- Neue Note setzen -------------*
+		move.l	a4,a0
+		moveq	#4-1,d2
+		moveq	#0,d1
+.pass2		move.b	11(a0),d0
+		and.b	#2,d0				;NCHF_Sample
+		beq.s	.skip2
+
+		move.l	$10(A0),d0			;SampleStart
+		jsr	ENPP_PokeAdr(A5)
+
+		moveq	#0,d0
+		move.w	nch_SampleLength(a0),d0
+		btst	#4,d7
+		bne.s	.pokeword1
+		move.l	nch_SampleLength(A0),d0		;NCH_SampleLength ;SampleLen
+		lsr.l	#1,d0				;Bytes -> Words
+.pokeword1:
+		jsr	ENPP_PokeLen(a5)
+.skip2:		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last2
+		move.l	d0,a0		;add #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass2
+.Last2:
+
+		*-------- Volume/Period neu setzen -------*
+		move.l	a4,a0
+		moveq	#4-1,d2
+		moveq	#0,d1
+.pass3
+		move.b	11(a0),d0
+		and.b	#$10,d0				;NCHF_Volume
+		beq.s	.skip3
+
+		move	nch_Volume(a0),d0			;Volume
+		jsr	ENPP_PokeVol(a5)
+.skip3:		move.b	11(a0),d0
+		and.b	#8,d0				;NCHF_Frequency
+		beq.s	.skip4
+
+; Only Amiga periods supported in Hippo
+
+;		moveq	#0,d0
+;		move.w	$20(A0),d0			;Period (or Frequency)
+;		btst	#2,d7
+;		bne.s	.extper				;4*Period ?
+;		btst	#1,d7				
+;		bne.s	.per				;1*Period ?
+;							;Frequenz in Period umrechnen
+;		moveq	#0,d0
+;		move.l	$20(a0),d3			;Frequenz
+;		beq	.per				;== 0 ? -> weiter
+;		lsr.l	#1,d3
+;		move.l	#3546895/2,d0		;Amiga Audiorate
+;		divu	d3,d0			;
+;		and.l	#$ffff,d0
+;		bra.s	.per
+;.extper
+;		lsr	#2,d0				;noch ersetzen durch DirektWrite bei 4*Per
+;.per
+		move.w	nch_Frequency(A0),d0		;Period (or Frequency)
+		jsr	ENPP_PokePer(a5)
+.skip4:		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last3
+		move.l	d0,a0		;add.w #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass3
+.Last3:
+
+		*----- DMA starten (wenn erforderlich) ----*
+		;move.l	(a7)+,d1
+		move.l	d6,d1
+		tst.l	d1
+		beq.s	.NostartDMA
+		move	#$8000,d0	;D0.w neg=enable ; 0/pos=disable
+					;D1 = Maske (LONG !!)
+		jsr	ENPP_DMAMask(a5)
+
+		*------ Repeatadr/Repeatlen poken --------*
+.NostartDMA:	move.l	a4,a0
+		moveq	#4-1,d2
+		moveq	#0,d1
+.pass4		move.b	11(a0),d0
+		and.b	#4!32!64,d0			;NCHF_Repeat
+		beq.s	.skip5
+
+		move.l	nch_RepeatStart(a0),d0		;RepeatStart
+		jsr	ENPP_PokeAdr(A5)
+
+		moveq	#0,d0
+		move.w	nch_RepeatLength(a0),d0		;Repeatlen
+		btst	#4,d7
+		bne.s	.pokeword2
+		move.l	nch_RepeatLength(A0),d0		;NCH_SampleLength ;SampleLen
+		lsr.l	#1,d0				;Bytes -> Words
+.pokeword2:
+		jsr	ENPP_PokeLen(a5)
+.skip5:
+		clr.b	11(a0)
+		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last
+		move.l	d0,a0		*add #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass4
+.Last:
+
+.Return:
+;		jsr	ENPP_Amplifier(a5)
+
+		*moveq	#0,d1
+		*moveq	#0,d0
+		;movem.l	(a7)+,a4-a6
+		rts
+
+deliModuleChange
+	DPRINT	"deliModuleChange"
+ if DEBUG
+	move.l	EPG_ARG1(a5),d0 
+	DPRINT	"Start %lx"
+	move.l	EPG_ARG2(a5),d0 
+	DPRINT	"Length %lx"
+	move.l	EPG_ARG3(a5),d0 
+	DPRINT	"Patches %lx"
+	move.l	EPG_ARG4(a5),d0 
+	DPRINT	"Arg4 %lx"
+	move.l	EPG_ARG5(a5),d0 
+	DPRINT	"Arg5 %lx"
  endif
 
+	; additional args not supported, lol!
+	move.l	EPG_ARG4(a5),d0 
+	cmp.l	#1,d0 
+	bne.b	.notSupp
+	move.l	EPG_ARG5(a5),d0 
+	cmp.l	#-2,d0 
+	bne.b 	.notSupp
+	tst.l	EPG_ARG1(a5)
+	beq.b	.notSupp
+	tst.l	EPG_ARG3(a5)
+	beq.b	.notSupp
+	tst.l	EPG_ARG2(a5)
+	beq.b	.notSupp
+
+	* Data to patch
+	move.l	EPG_ARG1(a5),a0
+	* PatchTable 
+	move.l	EPG_ARG3(a5),a1 
+	* Length of data to patch
+	move.l 	EPG_ARG2(a5),d1 
+	
+	pushm	a5/a6
+	bsr.b .patch
+	popm	a5/a6
+	jsr	clearCpuCaches
+	rts
+.notSupp
+	DPRINT	"Unsupported params!"
+	rts
+
+* in:
+*  a1 = patchtable
+*  a0 = data
+*  d1 = len
+.patch
+	;lea	PatchTable(pc),a1
+	* End bound is at a4
+	lea	(a0,d1.l),a4
+	* PatchTable start at d1
+	move.l	a1,d1
+.loop
+	* find from a3 to a4
+	;move.l	ModuleAddr(pc),a0
+	move.l	a0,a3
+	;move.l	InfoBuffer+LoadSize(pc),d0
+	;move.l	d1,d0
+	;lea	(a0,d0.l),a4
+	* Get code to find
+	;lea	PatchTable(pc),a2
+	move.l	d1,a2
+	add	(a1),a2
+.findCode
+	* read data word
+	move	(a3),d7
+	cmp.l	a4,a3
+	bhs.b	.notFound
+	* compare patch word
+	cmp	(a2),d7
+	beq.b	.found
+.notF	addq	#2,a3
+	bra.b	.findCode
+
+.found
+	* compare length
+	move	2(a1),d6
+	move.l	a3,a6
+	move.l	a2,a5
+.cmp	cmpm.w	(a5)+,(a6)+
+	bne.b	.notF
+	dbf	d6,.cmp
+	* Found correct data at a3
+	* apply patch
+
+	* patch address
+; JSR x = $4eB9 xxxx xxxx
+; NOP   = $4e71
+	;lea	PatchTable(pc),a5
+	move.l	d1,a5
+	add	4(a1),a5
+	move	2(a1),d6
+	move	#$4eb9,(a3)+
+	move.l	a5,(a3)+
+	subq	#3,d6	
+	bmi.b	.NoNop
+.nopFill	move	#$4e71,(a3)+
+	dbf	d6,.nopFill
+.NoNop	
+
+.notFound
+	addq	#6,a1
+	tst	(a1)
+	bne.b	.loop
+	
+	rts
+	
+
+* Maps some EP flags into hippo flags
+* in:
+*    d0 = EPF_Flags
+deliHandleFlags
+	move.l	playerbase(a5),a0
+	move 	p_liput(a0),d1
+
+	bclr	#pb_end,d1
+	btst	#EPF_Songend,d0 
+	beq.b 	.1
+	bset	#pb_end,d1
+.1	
+	bclr	#pb_song,d1
+	btst	#EPF_NextSong,d0
+	beq.b 	.2
+	bset	#pb_song,d1
+.2
+	bclr	#pb_volume,d1
+	btst	#EPF_Volume,d0
+	beq.b 	.3
+	bset	#pb_volume,d1
+.3
+;	bclr	#pb_kelauseteen,d1
+;	btst	#EPF_NextPatt,d0
+;	beq.b 	.4
+;	bset	#pb_kelauseteen,d1
+;.4
+;	bclr	#pb_kelaustaakse,d1
+;	btst	#EPF_PrevPatt,d0
+;	beq.b 	.5
+;	bset	#pb_kelaustaakse,d1
+;.5
+	move	d1,p_liput(a0)
+	rts
+
+
 
  if DEBUG
-.showTags
-	move.l	moduleaddress(a5),a0
-	add.l	a0,a0
-	add.l	a0,a0
+deliShowTags
+	move.l	deliPlayer(a5),a0
 	move.l	16(a0),a0
 .tloop
 	movem.l	(a0)+,d0/d1
-	
-	sub.l	#DTP_TagBase,d0
-	lsl.l	#2,d0
-	lea		tagsTable(pc,d0.l),a1
-	lsr.l	#2,d0
-	add.l	#DTP_TagBase,d0
-	
+
+	move.l	d0,d2
+	sub.l	#DTP_TagBase,d2
+	bmi.b	.next
+	lsl.l	#2,d2
+	lea	tagsTable(pc),a1
+	add.l	d2,a1
+
 	cmp.l	#tagsTableEnd,a1
 	blo.b 	.okTag
-	DPRINT  "Tag %lx: %lx",2002
+.next
+	move.l	d0,d2
+	sub.l	#EP_TagBase,d2
+	bmi.b	.unknown
+	lsl.l	#2,d2
+	lea	tagsTable2(pc),a1
+	add.l	d2,a1
+	
+	cmp.l	#tagsTable2,a1
+	bhs.b	.okTag
+.unknown
+	DPRINT  "Tag? %lx: %lx"
 	bra.b	.oddTag
 .okTag
 	move.l	d1,d2
 	move.l	(a1),d1
-	DPRINT  "Tag %lx %s: %lx",2001
+	DPRINT  "Tag %lx %s: %lx"
 .oddTag
 	tst.l	(a0) 
-	bne.w	.tloop
+	bne.b	.tloop
 	rts
 
 tagsTable
@@ -33338,6 +40756,56 @@ tagsTable
  dc.l EDTP_InitNote  
 tagsTableEnd
  
+tagsTable2
+	dc.l EEP_Get_ModuleInfo	
+	dc.l EEP_Free_ModuleInfo	
+	dc.l EEP_Voices		
+	dc.l EEP_SampleInit		
+	dc.l EEP_SampleEnd		
+	dc.l EEP_Save
+	dc.l EEP_ModuleChange		
+	dc.l EEP_ModuleRestore	
+	dc.l EEP_StructInit		
+	dc.l EEP_StructEnd		
+	dc.l EEP_LoadPlConfig		
+	dc.l EEP_SavePlConfig		
+	dc.l EEP_GetPositionNr	
+	dc.l EEP_SetSpeed		
+	dc.l EEP_Flags		
+	dc.l EEP_KickVersion		
+	dc.l EEP_PlayerVersion	
+	dc.l EEP_CheckModule		
+	dc.l EEP_EjectPlayer
+	dc.l EEP_Date			
+	dc.l EEP_Check3
+	dc.l EEP_SaveAsPT		
+	dc.l EEP_NewModuleInfo	
+	dc.l EEP_FreeExtLoad
+	dc.l EEP_PlaySample		
+	dc.l EEP_PatternInit		
+	dc.l EEP_PatternEnd		
+	dc.l EEP_Check4
+	dc.l EEP_Check5
+	dc.l EEP_Check6
+	dc.l EEP_CreatorLNr
+	dc.l EEP_PlayerNameLNr
+	dc.l EEP_PlayerInfo		
+	dc.l EEP_PlaySampleInit
+	dc.l EEP_PlaySampleEnd
+	dc.l EEP_InitAmplifier	
+	dc.l EEP_CheckSegment
+	dc.l EEP_Show
+	dc.l EEP_Hide
+	dc.l EEP_LocaleTable
+	dc.l EEP_Helpnodename
+	dc.l EEP_AttnFlags
+	dc.l EEP_EagleBase
+	dc.l EEP_Check7		
+	dc.l EEP_Check8		
+	dc.l EEP_SetPlayFrequency
+	dc.l EEP_SamplePlayer
+tagsTable2End
+
 EDTP_InternalPlayer   	dc.b "DTP_InternalPlayer",0 ; obsolete
 EDTP_CustomPlayer   	dc.b "DTP_CustomPlayer",0 ; player is a customplayer
 EDTP_RequestDTVersion   	dc.b "DTP_RequestDTVersion",0 ; minimum DeliTracker version needed
@@ -33389,593 +40857,294 @@ EDTP_ModuleName   	dc.b "DTP_ModuleName",0 ; get the name of the current module
 EDTP_FormatName   	dc.b "DTP_FormatName",0 ; get the name of the module format
 EDTP_AuthorName   	dc.b "DTP_AuthorName",0 ; not implemented yet
 EDTP_InitNote   	dc.b "DTP_InitNote",0 ; NoteStruct initialization
+
+
+EEP_Get_ModuleInfo	dc.b "EP_Get_ModuleInfo",0
+EEP_Free_ModuleInfo	dc.b "EP_Free_ModuleInfo",0
+EEP_Voices			dc.b "EP_Voices",0
+EEP_SampleInit		dc.b "EP_SampleInit",0
+EEP_SampleEnd		dc.b "EP_SampleEnd",0
+EEP_Save	    	dc.b "EP_Save",0
+EEP_ModuleChange	dc.b "EP_ModuleChange",0
+EEP_ModuleRestore	dc.b "EP_ModuleRestore",0
+EEP_StructInit		dc.b "EP_StructInit",0
+EEP_StructEnd		dc.b "EP_StructEnd",0
+EEP_LoadPlConfig	dc.b "EP_LoadPlConfig",0
+EEP_SavePlConfig	dc.b "EP_SavePlConfig",0
+EEP_GetPositionNr	dc.b "EP_GetPositionNr",0
+EEP_SetSpeed		dc.b "EP_SetSpeed",0
+EEP_Flags		    dc.b "EP_Flags",0
+EEP_KickVersion		dc.b "EP_KickVersion",0
+EEP_PlayerVersion	dc.b "EP_PlayerVersion",0
+EEP_CheckModule		dc.b "EP_CheckModule",0
+EEP_EjectPlayer		dc.b "EP_EjectPlayer",0
+EEP_Date		    dc.b "EP_Date",0
+EEP_Check3		    dc.b "EP_Check3",0
+EEP_SaveAsPT		dc.b "EP_SaveAsPT",0
+EEP_NewModuleInfo	dc.b "EP_NewModuleInfo",0
+EEP_FreeExtLoad		dc.b "EP_FreeExtLoad",0
+EEP_PlaySample		dc.b "EP_PlaySample",0
+EEP_PatternInit		dc.b "EP_PatternInit",0
+EEP_PatternEnd		dc.b "EP_PatternEnd",0
+EEP_Check4	     	dc.b "EP_Check4",0
+EEP_Check5		    dc.b "EP_Check5",0
+EEP_Check6		    dc.b "EP_Check6",0
+EEP_CreatorLNr		dc.b "EP_CreatorLNr",0
+EEP_PlayerNameLNr	dc.b "EP_PlayerNameLNr",0
+EEP_PlayerInfo		dc.b "EP_PlayerInfo",0
+EEP_PlaySampleInit	dc.b "EP_PlaySampleInit",0
+EEP_PlaySampleEnd	dc.b "EP_PlaySampleEnd",0
+EEP_InitAmplifier	dc.b "EP_InitAmplifier",0
+EEP_CheckSegment	dc.b "EP_CheckSegment",0
+EEP_Show	     	dc.b "EP_Show",0
+EEP_Hide		    dc.b "EP_Hide",0
+EEP_LocaleTable		dc.b "EP_LocaleTable",0
+EEP_Helpnodename	dc.b "EP_Helpnodename",0
+EEP_AttnFlags		dc.b "EP_AttnFlags",0
+EEP_EagleBase		dc.b "EP_EagleBase",0
+EEP_Check7	    	dc.b "EP_Check7",0
+EEP_Check8		    dc.b "EP_Check8",0
+EEP_SetPlayFrequency dc.b "EP_SetPlayFrequency",0
+EEP_SamplePlayer    dc.b "EP_SamplePlayer",0                  
  even
- endif
 
-id_delicustom
-	lea	.id1_start(pc),a1	
-	moveq	#.id1_end-.id1_start,d0
-	bsr.w	search
-	bne.b	.notDeli
-	lea	.id2_start(pc),a1	
-	moveq	#.id2_end-.id2_start,d0
-	bsr.w	search
-	bne.b	.notDeli
-	lea	.id3_start(pc),a1	
-	moveq	#.id3_end-.id3_start,d0
-	bsr.w	search
-	bne.b	.notDeli
+deliShowFlags
+	move.l	#EP_Flags,d0
+	bsr.w	deliGetTag
+	beq.w	.noFlags
+	btst	#EPF_Songend,d0
+	beq.b	.f10
+	DPRINT	"EPF_Songend"
+.f10
+	btst	#EPF_Restart,d0
+	beq.b	.f11
+	DPRINT	"EPF_Restart"
+.f11
+	btst	#EPF_Disable,d0
+	beq.b	.f12
+	DPRINT	"EPF_Disable"
+.f12
+	btst	#EPF_NextSong,d0
+	beq.b	.f13
+	DPRINT	"EPF_NextSong"
+.f13
+	btst	#EPF_PrevSong,d0
+	beq.b	.f14 
+	DPRINT	"EPF_PrevSong"
+.f14 
+	btst	#EPF_NextPatt,d0
+	beq.b	.f15
+	DPRINT	"EPF_PrevPatt"
+.f15 
+	btst	#EPF_Volume,d0
+	beq.b	.f16
+	DPRINT	"EPF_Volume"
+.f16 
+	btst	#EPF_Balance,d0
+	beq.b	.f17
+	DPRINT	"EPF_Balance"
+.f17 
+	btst	#EPF_Voices,d0
+	beq.b	.f18
+	DPRINT	"EPF_Voices"
+.f18 
+	btst	#EPF_Save,d0
+	beq.b	.f19
+	DPRINT	"EPF_Save"
+.f19
+	btst	#EPF_Analyzer,d0
+	beq.b	.f20
+	DPRINT	"EPF_Analyzer"
+.f20
+	btst	#EPF_ModuleInfo,d0
+	beq.b	.f21
+	DPRINT	"EPF_ModuleInfo"
+.f21
+	btst	#EPF_SampleInfo,d0
+	beq.b	.f22 
+	DPRINT	"EPF_SampleInfo"
+.f22 
+	btst	#EPF_Packable,d0
+	beq.b	.f23
+	DPRINT	"EPF_Packable"
+.f23 
+	btst	#EPF_InternalUPSStructure,d0
+	beq.b	.f24
+	DPRINT	"EPF_InternalUPSStructure"
+.f24 
+	btst	#EPF_RestartSong,d0
+	beq.b	.f25
+	DPRINT	"EPF_RestartSong"
+.f25 
+	btst	#EPF_LoadFast,d0
+	beq.b	.f26
+	DPRINT	"EPF_LoadFast"
+.f26 
+	btst	#EPF_EPAudioAlloc,d0
+	beq.b	.f27
+	DPRINT	"EPF_EPAudioAlloc"
+.f27 
+	btst	#EPF_VolBalVoi,d0
+	beq.b	.f28
+	DPRINT	"EPF_VolBalVoi"
+.f28 
+	btst	#EPF_CalcDuration,d0
+	beq.b	.f29
+	DPRINT	"EPF_CalcDuration"
+.f29 
+	 
+.noFlags
+	rts 
 
-	* search() leaves with a0 pointing
-	* to the next byte to be searched,
-	* get the value for DTP_CustomPlayer,
-	* it must be non-zero
-	tst.l	(a0)
-	beq.b	.notDeli
+deliShowNoteStruct
+	move.l	deliStoredNoteStruct(a5),d0
+	beq.w 	.x
 
+	DPRINT	"NoteStruct: %lx"
+
+	move.l	nst_MaxFrequency(a0),d0 
+	DPRINT	"MaxFreq: %ld"
 	moveq	#0,d0
-	rts
+	move	nst_MaxVolume(a0),d0 
+	DPRINT	"MaxVol: %ld"
+
+	move.l	nst_Flags(a0),d1 
+	move.l	d1,d0 
+	DPRINT	"Flags: %lx"
 	
-.notDeli
-	moveq	#-1,d0 
-	rts
-
-.id1_start
-	moveq	#-1,d0
-	rts
-.id1_end
-
-.id2_start
-	dc.b	"DELIRIUM"
-.id2_end
-
-; Seems that the parameter for this that can be anything but 0
-.id3_start
-	dc.l DTP_CustomPlayer
-.id3_end
-
-
-
-******************************************************************************
-* Medley Sound System
-******************************************************************************
-
-p_medley
-	jmp	.init(pc)
-	jmp	.play(pc)
-	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	jmp	.song(pc) 
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
-	dc.b	"Medley Sound",0
- even
-
-.MEDLEY_INIT  = 0+$20
-.MEDLEY_PLAY  = 4+$20
-.MEDLEY_END   = 8+$20
-.MEDLEY_SONG  = 12+$20
-
-.init
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	jsr	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	medleyroutines(a5),a0
-	bsr.w	allocreplayer
-	beq.b	.ok3
-	jsr	rem_ciaint
-	bsr.w	vapauta_kanavat
-	rts
-.ok3
-	pushm	d1-a6
-	move.l	moduleaddress(a5),a0
-	lea	mainvolume(a5),a1
-	lea	maxsongs(a5),a2
-	lea	ciaint_setTempoFromD0,a3
-	move	songnumber(a5),d0 	* song number
-	;moveq	#8,d0
-	addq	#1,d0
-	move.l	medleyroutines(a5),a6
-	jsr	.MEDLEY_INIT(a6)
-	popm	d1-a6
-	* INIT returns 0 on success
-	rts	
-
-.play
-	move.l	medleyroutines(a5),a0
-	jmp	.MEDLEY_PLAY(a0)
-
-.stop
-	bra.w	clearsound
-
-.song
- if DEBUG
 	moveq	#0,d0
-	move	songnumber(a5),d0
-	DPRINT	"Song %ld",1
+	btst	#NSTB_Period,d1
+	sne		d0
+	DPRINT	"NSTB_Period: %lx"
+
+	btst	#NSTB_ExtPeriod,d1
+	sne		d0
+	DPRINT	"NSTB_ExtPeriod: %lx"
+
+	btst	#NSTB_NTSCTiming,d1
+	sne		d0
+	DPRINT	"NSTB_NTSCTiming: %lx"
+
+	btst	#NSTB_EvenLength,d1
+	sne		d0
+	DPRINT	"NSTB_EvenLength %lx"
+
+	btst	#NSTB_AllRepeats,d1
+	sne		d0
+	DPRINT	"NSTB_AllRepeats %lx"
+
+	btst	#NSTB_Reverse,d1
+	sne		d0
+	DPRINT	"NSTB_Reverse %lx"
+
+	btst	#NSTB_Signed,d1
+	sne		d0
+	DPRINT	"NSTB_Signed %lx"
+
+	btst	#NSTB_Unsigned,d1
+	sne		d0
+	DPRINT	"NSTB_Unsigned %lx"
+.x
+	rts
+
+
  endif
- 	move.l	medleyroutines(a5),a0
-	jsr	.MEDLEY_SONG(a0)
+
+
+* Loads a file
+* in:
+*  a0 = file path
+* out: 
+*  d0 = loaded file address, or NULL if error
+*  d1 = length
+plainLoadFile
+	pushm	d2-a6
+	moveq	#0,d7
+
+	move.l	_DosBase(a5),a6
+	move.l	a0,d1
+	move.l	#MODE_OLDFILE,d2
+	lob	Open
+	move.l	d0,d6
+	beq.b	.openErr
+
+	move.l	d6,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d6,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
+
+	move.l	d5,d0		
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,d7
+	beq.b	.noMem
+
+	move.l	d6,d1		* file
+	move.l	d7,d2		* destination
+	move.l	d5,d3		* pituus
+	lob	Read
+	* d0 = -1 on error, read bytes otherwise
+	tst.l	d0 
+	bpl.b 	.ok
+
+	move.l	d7,a0 
+	jsr	freemem 
+	moveq	#0,d7
+.ok
+
+.noMem 
+	move.l	d6,d1
+	lore 	Dos,Close
+
+.openErr 
+
+	move.l	d7,d0
+	move.l  d5,d1
+	popm	d2-a6 
 	rts
 
-.end
-	jsr	rem_ciaint
-	pushm	all
-	move.l	medleyroutines(a5),a0
-	jsr	.MEDLEY_END(a0)
-	popm	all
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
-
-
-
-; in: a4 = module
-;     d7 = module lenght
-; out: d0 = 0, valid valid
-;      d0 = -1, not valid
-id_medley
-	cmp.l 	#"MSOB",(a4)
-	bne.b	.invalid
-	* next, three offsets, should point to inside module
-	* first byte should be zero since mods are small
-	tst.b	4(a4)
-	bne.b	.invalid
-	tst.b	8(a4)
-	bne.b	.invalid
-	tst.b	12(a4)
-	bne.b	.invalid
-
-	move.l	4(a4),d0
-	add.l	a4,d0
-	cmp.l	d0,a4
-	bhs.b	.invalid
-	move.l	8(a4),d0
-	add.l	a4,d0
-	cmp.l	d0,a4
-	bhs.b	.invalid
-	move.l	12(a4),d0
-	add.l	a4,d0
-	cmp.l	d0,a4
-	bhs.b	.invalid
-
-	moveq	#0,d0
-	rts
-
-.invalid
-	moveq	#-1,d0
-	rts
-
-
-******************************************************************************
-* Future Player
-******************************************************************************
-
-p_futureplayer
-	jmp	.init(pc)
-	jmp	.play(pc)
-	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	jmp	.song(pc) 
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
-	dc.b	"Future Player",0
- even
-
-.FP_INIT  = 0+$20
-.FP_PLAY  = 4+$20
-.FP_END   = 8+$20
-.FP_SONG  = 12+$20
-
-.init
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	jsr	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	futureplayerroutines(a5),a0
-	bsr.w	allocreplayer
-	beq.b	.ok3
-	jsr	rem_ciaint
-	bsr.w	vapauta_kanavat
-	rts
-.ok3
+* Saves a file
+* in:	
+*  a0 = file path
+*  a1 = data address
+*  d0 = data length
+* out: 
+*  d0 = Written bytes or -1 if error
+plainSaveFile
 	pushm	d1-a6
-	move.l	moduleaddress(a5),d0
-	lea	nullsample,a1
-	lea	mainvolume(a5),a2
-	lea	maxsongs(a5),a3
-	lea	ciaint_setTempoFromD0,a4
-	move	songnumber(a5),d1 	* song number, starts from 0
-	move.l	futureplayerroutines(a5),a6
-	push	a5
-	jsr	.FP_INIT(a6)
-	pop	a5
-	tst.l	d0
-	bne.b	.fail
-	* song name is in a0
- if DEBUG
-	move.l 	a0,d0
-	DPRINT	"Song name: %s",3
- endif
-	lea	modulename(a5),a1
-.c	move.b	(a0)+,(a1)+
-	bne.b	.c
+	moveq	#-1,d7
+	move.l	a1,d4
+	move.l 	d0,d5
 
-	moveq	#0,d0
-.fail
-	popm	d1-a6
-	* INIT returns 0 on success
-	rts	
+	move.l	_DosBase(a5),a6
+	move.l	a0,d1
+	move.l	#MODE_NEWFILE,d2
+	lob	Open
+	move.l	d0,d6
+	beq.b	.openErr
 
-.play
-	move.l	futureplayerroutines(a5),a0
-	jmp	.FP_PLAY(a0)
+	move.l	d6,d1	* file
+	move.l	d4,d2	* buffer
+	move.l	d5,d3  	* len
+	lob 	Write
+	move.l  d0,d7 
 
-.stop
-	bra.w	clearsound
-
-.song
- if DEBUG
-	moveq	#0,d0
-	move	songnumber(a5),d0
-	DPRINT	"Song %ld",1
- endif
-	move.l	futureplayerroutines(a5),a0
-	jsr	.FP_SONG(a0)
+	move.l	d6,d1 
+	lore 	Dos,Close
+.openErr 
+	move.l	d7,d0
+	popm	d1-a6 
 	rts
 
-.end
-	jsr	rem_ciaint
-	pushm	all
-	move.l	futureplayerroutines(a5),a0
-	jsr	.FP_END(a0)
-	popm	all
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
-
-
-; in: a4 = module
-;     d7 = module length
-; out: d0 = 0, valid valid
-;      d0 = -1, not valid
-id_futureplayer
-	cmp.l	#$000003F3,(A4)
-	bne.b	.fail
-	tst.b	20(A4)				; loading into chip check
-	beq.b	.fail
-	lea	32(A4),A0
-	cmp.l	#$70FF4E75,(A0)+
-	bne.b	.fail
-	cmp.l	#'F.PL',(A0)+
-	bne.b	.fail
-	cmp.l	#'AYER',(A0)+
-	bne.b	.fail
-	tst.l	20(A0)				; Song pointer check
-	beq.b	.fail
-
-	moveq	#0,D0
-	rts
-.fail
-	moveq	#-1,D0
-	rts
-
-
-
-******************************************************************************
-* Ben Daglish
-******************************************************************************
-
-p_bendaglish
-	jmp	.init(pc)
-	jmp	.play(pc)
-	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	jmp	.song(pc) 
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
-	dc.b	"Ben Daglish",0
- even
-
-.BD_INIT  = 0+$20
-.BD_PLAY  = 4+$20
-.BD_END   = 8+$20
-.BD_SONG  = 12+$20
-
-.init
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	jsr	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	bendaglishroutines(a5),a0
-	bsr.w	allocreplayer
-	beq.b	.ok3
-	jsr	rem_ciaint
-	bsr.w	vapauta_kanavat
-	rts
-.ok3
-	pushm	d1-a6
-	move.l	moduleaddress(a5),a0
-	lea	mainvolume(a5),a1
-	lea	maxsongs(a5),a2
-	move	songnumber(a5),d0 	* song number, starts from 0
-	move.l	bendaglishroutines(a5),a6
-	jsr	.BD_INIT(a6)
-	popm	d1-a6
-	* INIT returns 0 on success
-	rts	
-
-.play
-	move.l	bendaglishroutines(a5),a0
-	jmp	.BD_PLAY(a0)
-
-.stop
-	bra.w	clearsound
-
-.song
- if DEBUG
-	moveq	#0,d0
-	move	songnumber(a5),d0
-	DPRINT	"Song %ld",1
- endif
-	pushm	all
-	move.l	bendaglishroutines(a5),a0
-	jsr	.BD_SONG(a0)
-	popm	all
-	rts
-
-.end
-	jsr	rem_ciaint
-	pushm	all
-	move.l	bendaglishroutines(a5),a0
-	jsr	.BD_END(a0)
-	popm	all
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
-
-
-; in: a4 = module
-;     d7 = module length
-; out: d0 = 0, valid valid
-;      d0 = -1, not valid
-id_bendaglish
-	move.l	a4,a0
-	cmp.w	#$6000,(A0)+
-	bne.s	.fail
-	move.l	A0,A1
-	move.w	(A0)+,D1
-	beq.b	.fail
-	bmi.b	.fail
-	btst	#0,D1
-	bne.b	.fail
-	cmp.w	#$6000,(A0)+
-	bne.s	.fail
-	move.w	(A0)+,D1
-	beq.b	.fail
-	bmi.b	.fail
-	btst	#0,D1
-	bne.b	.fail
-	addq.l	#2,A0
-	cmp.w	#$6000,(A0)+
-	bne.s	.fail
-	move.w	(A0),D1
-	beq.b	.fail
-	bmi.b	.fail
-	btst	#0,D1
-	bne.b	.fail
-	add.w	(A1),A1
-	cmp.l	#$3F006100,(A1)
-	bne.s	.fail
-	cmpi.w	#$3D7C,6(A1)
-	bne.s	.fail
-	cmpi.w	#$41FA,12(A1)
-	bne.s	.fail
-	moveq	#0,D0
-	rts
-
-.fail	moveq	#-1,d0
-	rts
-
-
-******************************************************************************
-* Sidmon v2
-******************************************************************************
-
-p_sidmon2
-	jmp	.init(pc)
-	jmp	.play(pc)
-	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
-	dc.b	"SidMon 2",0
- even
-
-.INIT  = 0+$20
-.PLAY  = 4+$20
-
-.init
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	jsr	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	sidmon2routines(a5),a0
-	bsr.w	allocreplayer
-	beq.b	.ok3
-	jsr	rem_ciaint
-	bsr.w	vapauta_kanavat
-	rts
-.ok3
-	pushm	d1-a6
-	move.l	moduleaddress(a5),a0
-	lea	mainvolume(a5),a1
-	lea	dmawait(pc),a2
-	move.l	sidmon2routines(a5),a6
-	jsr	.INIT(a6)
-	popm	d1-a6
-	moveq	#0,d0
-	rts	
-
-.play
-	move.l	sidmon2routines(a5),a0
-	jmp	.PLAY(a0)
-
-.stop
-	bra.w	clearsound
-
-.end
-	jsr	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
-
-
-; in: a4 = module
-;     d7 = module length
-; out: d0 = 0, valid valid
-;      d0 = -1, not valid
-id_sidmon2
-	lea		.idStart(pc),a1
-	moveq	#.idEnd-.idStart,d0
-	bra 	search
-
-.idStart	dc.b	'SIDMON II - THE MIDI VERSION'
-.idEnd 
- even 
-
-
-******************************************************************************
-* Delta Music 1
-******************************************************************************
-
-p_deltamusic1
-	jmp	.init(pc)
-	jmp	.play(pc)
-	dc.l	$4e754e75
-	jmp	.end(pc)
-	jmp	.stop(pc)
-	dc.l	$4e754e75 	
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc.l	$4e754e75
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
-	dc.b	"Delta Music 1",0
- even
-
-.INIT  = 0+$20
-.PLAY  = 4+$20
-
-.init
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	jsr	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	deltamusic1routines(a5),a0
-	bsr.w	allocreplayer
-	beq.b	.ok3
-	jsr	rem_ciaint
-	bsr.w	vapauta_kanavat
-	rts
-.ok3
-	pushm	d1-a6
-	move.l	moduleaddress(a5),a0
-	lea	mainvolume(a5),a1
-	lea	dmawait(pc),a2
-	move.l	deltamusic1routines(a5),a6
-	jsr	.INIT(a6)
-	popm	d1-a6
-	moveq	#0,d0
-	rts	
-
-.play
-	move.l	deltamusic1routines(a5),a0
-	jmp	.PLAY(a0)
-
-.stop
-	bra.w	clearsound
-
-.end
-	jsr	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
-
-
-; in: a4 = module
-;     d7 = module length
-; out: d0 = 0, valid valid
-;      d0 = -1, not valid
-id_deltamusic1
-	move.l 	a4,a0
-	move.l  d7,d0
-	cmp.l	#"ALL ",(a0)
-	bne.b	.no
-	moveq	#104,d1
-	lea	4(a0),a1
-	moveq	#24,d2
-.l	cmp.l	(a1)+,d1
-	dbf	d2,.l
-	cmp.l 	d1,d0
-	blo.b 	.no
-	moveq	#0,d0
-	rts
-.no	moveq	#-1,d0 
-	rts
 
 *******************************************************************************
 * Playereit‰
@@ -33987,6 +41156,7 @@ kplayer		incbin	kpl
 
 * FImp decruncher code
 fimp_decr	incbin	fimp_dec.bin
+shr_decr	include	ShrinklerDecompress.s
 
 xpkname		dc.b	"xpkmaster.library",0
 ppname		dc.b	"powerpacker.library",0
@@ -33996,6 +41166,7 @@ medplayername3	dc.b	"octamixplayer.library",0
 sidname		dc.b	"playsid.library",0
 mlinename	dc.b	"mline.library",0
 xfdname		dc.b	"xfdmaster.library",0
+ even
 
 	section	plrs,data
 
@@ -34737,9 +41908,4 @@ var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
-* Use the same buffer in p_delicustom to store thedeliBase
-deliBase	= ptheader
-deliBaseLength	= dtg_Reserved3
-
-
  end

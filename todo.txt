@@ -1,4 +1,6 @@
 WISHLISH
+- Dir browser
++ Player group from PROGDIR
 + DONE: .gz support
 - UGLY: window size gadget
 + favorites list
@@ -8,20 +10,313 @@ WISHLISH
 + logon keskitys
 - keyshortcutit tooltippeihin?
 Formats
++ Activision Pro
++ aprosys
++ audio sculpture
 + Beathoven
-- Deltamusic1
-+ Digital mugician
-- earache
-- face the music
-+ sidmon2
-- JamCracker FIXES (check EP/DT)
-- digital mugician 2
-+ game music creator
-+ mark ii sound system
-+ puma tracker
-+ medley
-+ future player
 + ben daglish
++ Deltamusic1
++ Digital mugician
++ digital mugician 2
++ earache
++ face the music
++ FTM
++ future player
++ game music creator
++ hippel for st 
++ hippel7
++ InStereo
++ JamCracker FIXES
++ JasonBrooke
++ jeroen tel
++ kris hatlelid
++ mark ii sound system
++ maxtrax
++ medley
++ puma tracker
++ Quartet
++ quartet st
++ RichardJoseph
++ rob hubbard
++ Ron Klaren + CustomMade
++ sidmon2
++ SonicArranger, all three variants
++ sonix music driver
++ sound control
++ SoundFX 1.x
++ startrekker
++ stonetracker
++ synth pack
++ Synthesis
++ Syntracker
++ TCBTracker
++ wally beben
++ MusicMakerV8
++ VSS voodoo sound synth!
+
+- mark cooksey
+- MultiMediaSound
+- sound images
+- sound master 
+- special fx
+
+CRASH
+- sonic arranger: svensktoppen
+
+FIXED
+- kick13
+- play: lastninja2-end.aon
+        AON4.Last_Ninja_2-end 
+- play: TF.Puzznic
+-> too fast
+
+FIXED 
+- aon4: beep
+
+FIXED
+- sampleplayer giana.wav kick13/68000 -> boom
+
+FIXED
+- kick 13
+- open exo-prg 
+- open favs
+- open info window: shows -944 files, obviously wrong
+
+FIXED
+- in favorites view press rmb+new (CLEAR),
+  does not clear favorites, clears main list
+
+FIXED
+- open hip
+- allow button tooltip open 
+- press "ESC"
+- tooltip is left
+
+FIXED
+- set startup module list
+- set play in random order
+- start hip 
+- v2.45: always different module
+- v2.47: always same module
+
+FIXED 
+- load a PT Module as a module program, crash
+
+BUG
+- SMUS.Fille, .Arabesque, not loading on kick13, ok on 30. probably out of chip mem
+
+ISSUES/Spot
+- Hawkeye.TME crash
+- FC: RSI theme "still sounds weird"
+- FC: "prince.hip" same tune and also sounds weird
+- FC: paranoimia.smod 
+-> ok on a1200
+
+FIXD
+- actvision pro, hippel i
+
+TODO
+- show player capabilities in info window
+
+WORKS
+- test HOMEDIR: if launched from icon
+
+FIXED
+CRASH on real amiga PART 2
+- Jumping Jackson level 1
+
+FIXED
+CRASH ON real amiga
+- instereo2 
+- activision pro 
+- tme
+- Synthesis
+- Richard Joseph  (VectorDean ok)
+
+TODO: 
+- SonicArranger: SA-alkuiset "unknown module"
+
+TODO 
+- kick 13
+- play testdrive 2, try to load something else 
+--> crash
+
+
+FIXED
+TODO
+- check TME on amiga
+
+TODO 
+- kick13 + mine 
+-> crash
+
+TODO
+- slow init:
+-- mm8 
+-- Pretracker 
+
+TOOD
+- APS.Cliffs
+-> illegal reads a lot
+-> hangs due to enforcer hit logging
+
+TODO
+- DTP_Config
+-> Hippel 7v
+-> stonetracker
+-> mugician 2
+-> musicmaker8
+
+TODO
+- soundmon3: beeping error
+
+TODO?
+- stonetracker mem leak?
+
+TODO?
+- eagleplayer better error msgs
+- missing files etc
+
+TODO
+- test TMFX with doublebuffering
+
+TODO
+- add divider to fav list -> disappears
+
+FIXED
+- GMC. pitänee olla fastissa?
+- piip! 
+
+FIXED
+- hippel not recognized with 2k
+-- pt
+
+FIXED
+- play tim follin: ghouls and ghosts 
+  three times with enter -> crash
+
+
+FIXED
+- tim follin not loading on kick 1.3>/tmp/1
+
+FIXED
+- check instereo1 and 2
+
+FIXED
+- reuse of previously decompressed replayer not working
+
+FIXED
+- ps3m id, goes through all: internal group eagle, no need
+
+FIXED
+- very slow ids: HIPPEL, ACTIVISION PRO
+
+
+FIXED
+- start hip with "exp-prg"
+- pause 
+- switch to fav,
+- switch back
+- hit f for search, "popcorn.o"
+-> enforcer hit
+
+
+FIXED
+- oktalyzer: replayer in chip,
+             can mod be in fast?
+-> crap replayer rip 
+-> 8ch mods go into fast
+
+FIXED
+-  "rsi theme.fc" sounds pretty buggy
+- pos/len?
+
+FIXED
+- turn off xpk id for deli additional file loads
+-> load all into chip
+
+FIXED
+- kick13: xpk id off,
+- load "synth pack" module
+- "idenfitying xpk file" still seen, when loadiing samples?
+
+FIXED
+- play 2nd module from main list
+- switch to favs 
+- play 2nd module from fav list 
+--> 2nd main list module restarts!
+
+FIXED
+- beathoven not recognized
+
+FIXED
+- delicustom not regonized (should allow CHECKS missing)
+
+FIXED
+- min song handling: RJ.speedball
+- #2/4, should be #1/3?
+
+FIXED 
+- startrekker mem overwrite:
+-- "fa.worse face.mod"
+-- voidal.mod
+- startrekker silent:
+-- dizzy-fx-chip.mod
+-- dizzy-title.mod
+
+FIXED
+- startrekker, memory overwrite after main module data
+
+FIXED
+- play "the real mule 2" startrekker
+- play DW internationa karate+, enforcer hits!
+
+FIXED
+- international karate+, memory overwrite
+-- same as Startrekker probleemakin
+
+FIXED
+- play "aliens"
+- play "KRIS"
+--Boom
+
+FIXED
+- play rh-captainblood
+- play nuclear-synthetics.synmod
+-> ui hang, music play
+- play flood
+- play amegas
+-> SAME
+
+
+FIXED
+- play eagle module: nuclear-synthetics.synmod 
+- push play button -> booms
+
+FIXED
+- have list with two dividers
+- try to play
+-> list will animate between two dividers
+
+FIXED
+- enable XFD
+-> delicustom stops working
+
+FEATURE
+- Now that we have multiple monitor support with P96 libraries it is possible to have HippoPlayer playing in its own Native screen and have RTG Workbench active at the same time on the other monitor. But as soon as the Screen on which HippoPlayer is placed is not active anymore the Scopes stop updating, only the timer updates.
+Would it be possible to add an option for the Scopes to update at all times regardless if the screen is active or not?
+
+BUG
+- disable non-ahi replayers
+- load cus.bioniccommando
+-> boom
+
+BUG
+- artofnoise: schubidu
+- extra beeps
+
+BUG
+- When using AHI as output device I always get the error "Trouble with the player group". I have copied the new .group file too, of course.
 
 ONLY ON ASM only build
 + Press E -> enforcer hits
@@ -29,6 +324,15 @@ ONLY ON ASM only build
 BUG:
 - open DeltaMusic_v2.0.s 
 -> bomb -> thinks it is a module and calls code from within text file
+
+NOT BUG:
+- open PRT file which is gz -> unknown
+- file was renamed
+
+BUG:
+- open xl Patternscope
+- play ps3m module 
+--> should switch to normal size?
 
 FIXED
 + RMB+Pr: broken layout
@@ -50,9 +354,10 @@ FIXED: BIG memory leak
 
 TODO
 - VisualPrefs
--- Set Screen title bar height to max
--- Hippo draws top part of window bad
--- Set large bottom border 
+-- Set Screen title bar height to 8 
+    -> zipped window title is too tall
+    -> normal window top part is bad
+-- Set Window title bar height to 8 -> all ok
 
 TODO
 - cräshäsi joku moduuli zipattu: HeHasNoFace, DataJack
