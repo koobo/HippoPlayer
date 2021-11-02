@@ -19,14 +19,15 @@ ver	macro
 ;	dc.b	"v2.45 (10.1.2000)"
 ;	dc.b	"v2.47ß (?.?.2021)"
 ;	dc.b	"v2.47 (31.8.2021)"
-	dc.b	"v2.48 (31.10.2021)"
+;	dc.b	"v2.48 (31.10.2021)"
+	dc.b	"v2.49 (?.?.2021)"
 	endm	
 
 
-DEBUG	= 0
+DEBUG	= 1
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
-asm	= 0	* 1: Run from AsmOne, 0: CLI/Workbench
+asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
 
 zoom	= 0	* 1: zoomaava hippo
 fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
@@ -14840,25 +14841,27 @@ rfont
 
 	move.l	d7,a0
 	lea	rtfo_Attr(a0),a0	* fontin textattr
-	cmp	#8,ta_YSize(a0)
-	bne.b	.ew
-	btst	#FPB_PROPORTIONAL,ta_Flags(a1)	* Onko proportional?
-	bne.b	.ew
-
-	lore	DiskFont,OpenDiskFont	* onko leveys 8 pix?
+	lore	DiskFont,OpenDiskFont	
 	tst.l	d0
 	beq.b	.ew
 	move.l	d0,a3
+	
 	cmp	#8,tf_XSize(a3)
 	sne	d3
+	cmp	#8,tf_YSize(a3)
+	sne 	d4
+	btst	#FPB_PROPORTIONAL,tf_Flags(a3) 
+	sne 	d5
+
 	move.l	a3,a1
 	lore	GFX,CloseFont
 	move.l	a3,a1
 	lob	RemFont		* puis muistista
 
-	tst.b	d3
+	or.b	d3,d4 
+	or.b	d4,d5
 	bne.b	.ew
-	
+
 	move.l	d7,a0
 	lea	rtfo_Attr(a0),a0
 	move.l	4(a0),prefs_textattr+prefsdata(a5) * YSize, Style, Flags talteen
