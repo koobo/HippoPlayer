@@ -14841,6 +14841,7 @@ rfont
 
 	move.l	d7,a0
 	lea	rtfo_Attr(a0),a0	* fontin textattr
+	* Open font from TextAttr in A0
 	lore	DiskFont,OpenDiskFont	
 	tst.l	d0
 	beq.b	.ew
@@ -22995,11 +22996,31 @@ notescroller
 	sub	d0,a3
 	sub	quadNoteScrollerLinesHalf(a5),d6
 .ok2
-
-	* store font data into a2 and d4 for fast access later
+	* Check if font is usable
+	move.l	fontbase(a5),a2
+	moveq	#8,d4
+	cmp	tf_YSize(a2),d4
+	bne.b 	.try1
+	cmp	tf_XSize(a2),d4 
+	bne.b 	.try1
+	btst	#FPB_PROPORTIONAL,tf_Flags(a2)
+	beq.b	.okFont
+.try1
+	* Fallback to topaz
 	move.l	topazbase(a5),a2
-	move	38(a2),d4		* font modulo
-	move.l	34(a2),a2		* data
+	cmp	tf_YSize(a2),d4 
+	bne.b 	.badFont
+	cmp	tf_XSize(a2),d4 
+	bne.b 	.badFont
+	btst	#FPB_PROPORTIONAL,tf_Flags(a2)
+	beq.b	.okFont
+.badFont
+	* Can't use these fonts, give up!
+	bra	.exitNoteScroller
+.okFont
+	* store font data into a2 and d4 for fast access later
+	move	tf_Modulo(a2),d4		* font modulo
+	move.l	tf_CharData(a2),a2		* data
 
 	* vertical loop
 	* line loop
@@ -23119,7 +23140,7 @@ notescroller
 	addq	#1,d6
 	cmp	#64,d6
 	dbeq d7,.plorl
-
+.exitNoteScroller
 	popm	a5/a6
 	
 	rts
