@@ -727,7 +727,7 @@ quadmode2	rs.b	1
 
 * Store the original window height to switch between
 * large and normal height mode
-quadWindowHeightOriginal	rs.l	1
+quadWindowHeightOriginal	rs.w	1
 * Pattern scope configuration parameters for normal and large mode
 quadNoteScrollerLinesHalf	rs.w	1
 quadNoteScrollerLines		rs.l	1
@@ -4300,7 +4300,10 @@ getscreeninfo
 	add	d3,prefssiz+2
 	add	d3,quadsiz+2
 	add	d3,swinsiz+2
+	tst	quadWindowHeightOriginal(a5)
+	bne.b	.setAlready
 	move	quadsiz+2,quadWindowHeightOriginal(a5)
+.setAlready
 
 	move	WINSIZX(a5),wsizex
 	move	WINSIZY(a5),wsizey
