@@ -3021,7 +3021,14 @@ msgloop
 	tst.l	playingmodule(a5)
 	bmi.b	.ee
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
-.ee	bsr.w	rbutton1
+.ee	
+	cmp.b	#pm_random,playmode(a5)
+	bne.b	.noRand
+	bsr	soitamodi_random
+	bra.b	.wasRand
+.noRand
+	bsr.w	rbutton1
+.wasRand
 	movem.l	(sp)+,d0-a6
 	
 .nwww	pop	d0
