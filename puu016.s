@@ -4404,8 +4404,12 @@ wrender
 .cler	
 	tst	boxsize(a5)
 	bne.b	.clef
+	* Box is minimized, skipped gadgets:
+	cmp.l	#gadgetListModeChangeButton,a3
+	beq.b	.skipClear
 	cmp.l	#slider4,a3		* fileslider
 	bne.b	.clef
+.skipClear
 	rts	
 .clef
 	move.l	rastport(a5),a0
@@ -4421,25 +4425,21 @@ wrender
 
 * sitten isket‰‰n gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
-;	lea	gadgets,a1
 	lea	(a4),a1
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-;	lea	gadgets,a0
 	lea	(a4),a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	lob	RefreshGadgets
 
 
-
-
 **** paksunnetaan gadujen reunat
 
+* Draw button highlights
 
-;	lea	gadgets,a3
 	lea	(a4),a3
 .loloop
 	move.l	(a3),d3
@@ -4448,6 +4448,13 @@ wrender
 	cmp.l	#slider1,a3
 	beq.b	.nel
 
+	tst	boxsize(a5)
+	bne.b	.visibleBox
+	* Skip this one if it is not properly visible
+	cmp.l	#gadgetListModeChangeButton,a3
+	beq.b	.nel
+.visibleBox
+	
 	movem	4(a3),plx1/ply1/plx2/ply2
 	add	plx1,plx2
 	add	ply1,ply2
@@ -4463,6 +4470,7 @@ wrender
 	tst.l	d3
 	bne.b	.loloop
 
+* Draw slider highlights
 
 	tst.b	uusikick(a5)
 	beq.b	.nelq
@@ -4491,11 +4499,6 @@ wrender
 	bsr.w	sliderlaatikko
 
 .nelq
-
-
-
-
-
 
 *** Piirret‰‰n korvat
 	pushm	all
