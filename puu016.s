@@ -591,7 +591,10 @@ deltab2		rs.l	1
 deltab3		rs.l	1	
 deltab4		rs.l	1	
 omatrigger	rs.b	1	* kopio kplayerin usertrigist‰
-		rs.b	1	
+* This turns to 1 if user has manually activated the scope
+* by LMB click, when scope was passivated because not being
+* visible. As this is global user does not need to do that again.
+scopeManualActivation	rs.b	1	
 multab		rs.b	512
 
 ps3mchannels	rs.l	1	* Osoitin PS3M mixer channel blockeihin
@@ -21508,7 +21511,7 @@ quad_code
 	jsr	printhippo2	
 
 	* Set to non-zero if LMB is pressed:
-	moveq	#0,d5	
+	move.b	scopeManualActivation(a5),d5
 
 	move.l	quad_task(a5),a1
 	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
@@ -21529,6 +21532,7 @@ scopeLoop
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
 	move.l	windowbase3(a5),a0	* ollaanko p‰‰llimm‰isen‰?
+
 	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
 	beq.b	.joo
@@ -21625,6 +21629,7 @@ scopeLoop
 	bne.b	.qx 
 	* LMB activates 
 	moveq	#1,d5
+	move.b	d5,scopeManualActivation(a5)
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.w	scopeLoop
 
