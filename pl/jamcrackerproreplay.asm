@@ -119,7 +119,7 @@ ConvertNote
 	* index 1 is the first period
 	* bump one octave to contain lower notes
 	* ie. index 3 must be 12
-	addq	#8,d0
+	;add	#12,d0
 	move.b	nt_instr(a0),d1
 .noPer
 	* Need to prioritize which operation to show in the
