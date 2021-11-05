@@ -114,6 +114,7 @@ ConvertNote
 	* note, transpose missing
 	moveq	#$7f,d0
 	and.b	(a0),d0
+	* zero for no note
 
 	* instrument number, would need sound transpose too
 	moveq	#$3f,d1

@@ -23787,9 +23787,11 @@ noteScroller2
 	dc.b	"B-"
  	even
 
-* Use value as is
+* Use value as an index
 .notPeriod
 	move	d0,d5
+	* indices start from 1
+	subq	#1,d5
 .found
 	* print note
 	divu	#12,d5
@@ -29588,7 +29590,7 @@ p_futurecomposer14
 .fc10play
 	move.l	fc14routines(a5),a0
 	push	a5
-;	jsr	.offset_play(a0)
+	jsr	.offset_play(a0)
 	pop 	a5 
 	move	d0,pos_nykyinen(a5)
 	move	d1,pos_maksimi(a5)
@@ -29634,9 +29636,14 @@ p_soundmon
 	jmp .id_soundmon(pc)
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
- dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
 	dc.b	"SoundMon v2.0",0
  even
+
+.offset_init	= $20+0
+.offset_play	= $20+4
+.offset_forward	= $20+8
+.offset_rewind	= $20+12
 
 
 .bpsminit
@@ -29668,16 +29675,16 @@ p_soundmon
 	lea	mainvolume(a5),a4
 	pushpea	dmawait(pc),d0
 
-	push	a6
+	pushm	a5/a6
 	move.l	bpsmroutines(a5),a6
-	jsr	(a6)
-	pop	a6
-
+	jsr	.offset_init(a6)
+	popm	a5/a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts
 .bpsmplay
 	move.l	bpsmroutines(a5),a0
-	jmp	300(a0)
+	jmp	.offset_play(a0)
 .bpsmend
 	bsr.w	rem_ciaint
 	bsr.w	clearsound
@@ -29688,11 +29695,12 @@ p_soundmon
 
 .eteen
 	move.l	bpsmroutines(a5),a0
-	jmp	2180(a0)
+	jmp	.offset_forward(a0)
 
 .taakse
 	move.l	bpsmroutines(a5),a0
-	jmp	2158(a0)
+	jmp	.offset_rewind(a0)
+
 
 
 .id_soundmon 
