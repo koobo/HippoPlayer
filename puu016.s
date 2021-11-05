@@ -26793,6 +26793,7 @@ varaa_kanavat
 	move.l	d5,acou_deviceerr(a5)
 	bne.b	acouscl
 	st	kanavatvarattu(a5)
+	DPRINT	"Audio open"
 .na	movem.l	(sp)+,d1-a6
 	moveq	#0,d0
 	rts
@@ -26818,6 +26819,7 @@ vapauta_kanavat
 	bne.b	acouscll
 	lea	iorequest(a5),a1
 	lore	Exec,CloseDevice
+	DPRINT	"Audio close"
 acouscll
 	clr.l	acou_deviceerr(a5)
 	clr.b	kanavatvarattu(a5)
