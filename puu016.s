@@ -29637,7 +29637,7 @@ p_soundmon
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
  	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
-	dc.b	"SoundMon v2.0",0
+	dc.b	"BP SoundMon v2.0",0
  even
 
 .offset_init	= $20+0
@@ -29735,11 +29735,11 @@ p_soundmon3
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	p_NOP	
-	jmp .id_soundmon3(pc)
+	jmp 	.id_soundmon3(pc)
 	jmp	bp_author(pc)
-	dc.w pt_soundmon3 				* type
- dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
-	dc.b	"SoundMon v3.0",0
+	dc.w 	pt_soundmon3 	* type
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
+	dc.b	"BP SoundMon 3 (v2.2)",0
  even
 
 .bpsminit
@@ -29772,11 +29772,11 @@ p_soundmon3
 	lea	mainvolume(a5),a4
 	pushpea	dmawait(pc),d0
 
-	push	a6
+	pushm	a5/a6
 	move.l	bpsmroutines(a5),a6
 	jsr	$20(a6)
-	pop	a6
-
+	popm	a5/a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts
 .bpsmplay

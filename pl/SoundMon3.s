@@ -1,4 +1,10 @@
-testi = 0
+;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
+testi = 1
+
+	incdir	include:
+	INCLUDE	"Exec/Types.i"
+	include	mucro.i
+	include	misc/eagleplayer.i
 
  ifne testi
 
@@ -10,34 +16,61 @@ testi = 0
 ;		bsr.w	BP_InitSound
 
 
+	move.l	#dmawait_,d0
 	lea	data,a0
 	lea	dum(pc),a1
 	lea	dum(pc),a2
 	lea	vol(pc),a4
 	lea	zum,a3
-	bsr.b	main
-wait:		cmp.b	#$80,$dff006
-		bne.s	wait
+	jsr	init
+wait:	
+	cmp.b	#$80,$dff006
+	bne.s	wait
+.w	cmp.b	#$80,$dff006
+	beq.s	.w
+
 	move	#$ff0,$dff180
-	bsr.b	main+4
+	jsr	BP_Music
 	clr	$dff180
-		btst	#6,$bfe001
-		bne.s	wait
-error:		move.w	#15,$dff096
+	btst	#6,$bfe001
+	bne.s	wait
+error:		
+	move.w	#15,$dff096
 	rts
+	
 vol	dc	64
 dum	dc.l	0
-zum	dc	0
+
+dmawait_
+	pushm	d0/d1
+	moveq	#12-1,d1
+.d	move.b	$dff006,d0
+.k	cmp.b	$dff006,d0
+	beq.b	.k
+	dbf	d1,.d
+	popm	d0/d1
+	rts
+
+	rts
+
+	section	chippo,bss_c
+zum	ds.l	0
 
  endc
 
+;	section	chippo2,code_c
 
 main
-	jmp	BP_InitSound(pc)
+	jmp 	init(pc)
 	jmp	BP_Music(pc)
 	jmp	forward(pc)
+	jmp	rewind(pc)
 
 
+init
+	bsr	BP_InitSound
+	bsr 	 PatternInit
+	rts
 
 ;------------------------------------------------------------------------------
 ; Rewind
@@ -79,16 +112,59 @@ volume		dc	0
 dmawait		dc.l	0
 
 
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.l	#3,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#16,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	* Period index starting from 1, 0 for no period
+	move.b	(a0),d0
+	beq.b	.optional
+		
+	* this could be the sample number
+	move.b	1(a0),d1
+	lsr.b	#4,d1
+
+.optional
+	moveq	#15,d2
+	and.b 	1(a0),d2
+	move.b	2(a0),d3
+	rts
+
+
+
+
 *----------------------------------------------------------------------------*
 BP_InitSound:
 	movem.l	a0-a5,-(sp)
 	move.l	d0,dmawait
-
-BP_Config:	lea	BP_StartPuffer,a0
-		lea	BP_MerkPuffer,a1
-		move.w	#BP_SizePuffer-1,d0
-.opyIt:		move.b	(a0)+,(a1)+
-		dbf	d0,.opyIt
+;
+;BP_Config:	lea	BP_StartPuffer,a0
+;		lea	BP_MerkPuffer,a1
+;		move.w	#BP_SizePuffer-1,d0
+;.opyIt:		move.b	(a0)+,(a1)+
+;		dbf	d0,.opyIt
 
 	movem.l	(sp)+,a0-a5
 	
@@ -111,11 +187,11 @@ BP_Config:	lea	BP_StartPuffer,a0
 	bset	#1,$bfe001
 
 
-		lea	BP_StartPuffer,a0
-		lea	BP_MerkPuffer,a1
-		move.w	#BP_SizePuffer-1,d0
-.CopyIt:	move.b	(a1)+,(a0)+
-		dbf	d0,.CopyIt
+;		lea	BP_StartPuffer,a0
+;		lea	BP_MerkPuffer,a1
+;		move.w	#BP_SizePuffer-1,d0
+;.CopyIt:	move.b	(a1)+,(a0)+
+;		dbf	d0,.CopyIt
 
 
 		lea	BP_WaveBuffer,a0
@@ -309,11 +385,40 @@ BP_3BA:		moveq	#0,d1
 		move.w	$1E(a0),d3
 		lsl.w	#4,d3
 		add.l	d2,d3
-		move.l	#$200,d4
+		
+	;	move.l	#$200,d4
+	;	move.b	BP_B0E,d4
+	;	add.l	d3,d4
+	;	move.l	d4,a2
+	;	add.l	a0,a2
+		
+		lea	$200(a0),a2
+		add.l	d3,a2
+
+		cmp.b	#1,d7
+		bne.b 	.a 
+		move.l	a2,Stripe1
+		bra.b	.d
+.a
+		cmp.b	#2,d7
+		bne.b 	.b 
+		move.l	a2,Stripe2
+		bra.b	.d
+.b
+		cmp.b	#4,d7
+		bne.b 	.c 
+		move.l	a2,Stripe3
+		bra.b	.d
+.c
+		cmp.b	#8,d7
+		bne.b 	.d 
+		move.l	a2,Stripe4
+.d
+		moveq	#0,d4
 		move.b	BP_B0E,d4
-		add.l	d3,d4
-		move.l	d4,a2
-		add.l	a0,a2
+		add.l	d4,a2
+
+		
 		moveq	#0,d3
 		move.b	(a2),d3
 		tst.b	d3
@@ -454,9 +559,12 @@ BP_592:		lea	$10(a3),a3
 		move.b	BP_B17,BP_B0D
 		bra.s	BP_5EE
 
-BP_5BE:		addq.b	#3,BP_B0E
+BP_5BE:		
+		addq	#1,PI_Pattpos+PatternInfo
+		addq.b	#3,BP_B0E
 		cmpi.b	#$30,BP_B0E
 		bne.s	BP_5EE
+		clr	PI_Pattpos+PatternInfo
 		clr.b	BP_B0E
 		addq.w	#1,BP_B0C
 		move.l	BP_Data(pc),a0
@@ -910,10 +1018,11 @@ BP_SizePuffer	= *-BP_StartPuffer
 		dc.w	0				;Sicherheit
 
 ;	SECTION	SoundMonBSSPuffer,Bss_f
-BP_MerkPuffer:	ds.b	BP_SizePuffer
+;BP_MerkPuffer:	ds.b	BP_SizePuffer
 
  ifne testi
 
 	SECTION	SoundMonModule,Data_C
-data:		incbin "music:kumma/sm3.ghosts"
+data:		incbin "m:Exo/BP SoundMon 3/Brian Postma/blockbrain.bp3"
+
  endc
