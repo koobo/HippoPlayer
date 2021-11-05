@@ -1,5 +1,6 @@
 ;APS00000022000000220000002200000022000000220000002200000022000000220000002200000022
 	incdir	include:
+	include	misc/eagleplayer.i
 	include mucro.i
 
 testi	=	0
@@ -53,7 +54,12 @@ init
 	dbf	d0,.q
 	
 	bsr.w	_fc_init
+	bsr	PatternInit
 	rts
+
+
+
+
 
 regs	ds.l	16
 
@@ -92,7 +98,68 @@ play
 	rts
 
 end	
-	bsr.b	_fc_end
+	bsr.w	_fc_end
+	rts
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	moveq	#2,D0
+	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#32,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	* Pattern end, turn into Protracker D-command
+	cmp.b	#$49,(a0)
+	bne.b 	.notEnd 
+	moveq	#$d,d2
+	rts
+.notEnd
+	* note, transpose missing
+	moveq	#$7f,d0
+	and.b	(a0),d0
+
+	* instrument number, would need sound transpose too
+	moveq	#$3f,d1
+	and.b	1(a0),d1
+
+	move	#%11000000,d2
+	and.b	1(a0),d2
+	beq.b	.noPort
+	* Portamento command
+			;Bit 7 = portamento on
+			;Bit 6 = portamento off
+	* Portamento value
+			;Bit 7-5 = always zero
+			;Bit 4 = up/down
+			;Bit 3-0 = value
+	btst	#7,d2
+	beq.b	.noPortVal
+	move.b	3(a0),d3
+.noPortVal
+	lsr	#6,d2
+
+.noPort
+
+
 	rts
 
 
@@ -278,12 +345,16 @@ music_on:
 	moveq #0,d5
 	moveq #6,d6
 	lea V1data(pc),a0		;Point to voice1 data area
+	lea	Stripe1(pc),a2
 	bsr.w new_note
 	lea V2data(pc),a0		;Point to voice2 data area
+	lea	Stripe2(pc),a2
 	bsr.w new_note
 	lea V3data(pc),a0		;Point to voice3 data area
+	lea	Stripe3(pc),a2
 	bsr.w new_note
 	lea V4data(pc),a0		;Point to voice4 data area
+	lea	Stripe4(pc),a2
 	bsr.w new_note
 nonewnote:
 	clr.w (a5)
@@ -302,7 +373,7 @@ nonewnote:
 	move.l d0,$c6(a6)
 	lea V4data(pc),a0
 	bsr.w effects
-	bsr.b vol
+	bsr.w vol
 	move.l d0,$d6(a6)
 	lea V1data(pc),a0
 	move.l 68+(0*74)(a0),a1		;Get samplepointer
@@ -366,8 +437,15 @@ endplay:
 	rts
 
 new_note:
-	move.l 34(a0),a1
-	adda.w 40(a0),a1
+	move.l 34(a0),a1	* pattern pointer
+	
+	move.l 	a1,(a2)		* set stripe pointer
+	lea 	PatternInfo(pc),a2 
+	move	40(a0),d1 	* pattern position, 2 byte increments
+	lsr	#1,d1 
+	move	d1,PI_Pattpos(a2)
+
+	adda.w 40(a0),a1	* current pattern row
 	cmp.b #$49,(a1)		;Check "END" mark in pattern
 	beq.s patend
 	cmp.w #64,40(a0)		;Have all the notes been played?
@@ -452,7 +530,7 @@ noport:
 	move.b d5,25(a0)
 	move.b d5,26(a0)
 nextnote:
-	addq.w #2,40(a0)
+	addq.w #2,40(a0)	* advance to next pattern row, 2 bytes per 
 	rts
 
 effects:

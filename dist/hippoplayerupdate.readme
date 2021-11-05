@@ -28,6 +28,92 @@ same directory with the HiP binary, too, if you're using kick2.0 or newer.
 NOTE 3: If you get errors where some module is not recognized even 
 if it should be, try removing "S:HippoPlayer.prefs" first.
 
+List of supported formats:
+- Activision Pro, Martin Walker
+- AProSys
+- Beathoven Sound System 
+- Ben Daglish
+- ChipTracker
+- CustomMade
+- Dave Lowe
+- David Whittaker 
+- DeliTracker Custom
+- Delta Music v1, v2
+- DIGI Booster, DIGI Booster PRO 
+- Digital Mugician v1, v2 
+- EarAche
+- Face The Music 
+- FastTracker 2
+- FredMon 
+- Future Composer v1.0-v1.4 
+- Future Player 
+- Game Music Creator
+- GlueMon
+- Hippel, Hippel 7v, Hippel-COSO
+- Hippel ST, Hippel ST COSO
+- In Stereo! v1, v2
+- JamCracker
+- Jason Brooke 
+- Jeroen Tel
+- Kris Hatlelid
+- Maniacs of Noise 
+- Mark II 
+- MaxTrax
+- MED, OctaMED
+- Medley Sound 
+- Music Assembler
+- Musicline Editor
+- MusicMaker
+- Oktalyzer
+- PreTracker
+- ProTracker, NoiseTracker, SoundTracker, Old SoundTracker
+- PSID
+- PumaTracker 
+- Quartet, Quartet ST
+- Richard Joseph
+- Rob Hubbard 1, 2
+- Sample files (WAV, AIFF, IFF, MP3)
+- ScreamTracker 3
+- Sidmon v1, v2
+- Sonic arranger
+- Sonix
+- SoundControl
+- SoundFX
+- SoundMon v2, v3
+- StarTrekker, Audio Sculpture
+- StoneTracker
+- Synth Pack
+- Synthesis 
+- SynTracker
+- MultiTracker/TakeTracker (8 channel Protracker)
+- TcbTracker
+- TFMX, TFMX 7v 
+- The Musical Enlightenment
+- The Player 6.0A
+- THX, AHX 
+- Tim Follin 2
+- VectorDean
+- Voodoo Supreme Synthesizer
+- Wally Beben
+
+
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+# Changes from v2.48 (31.10.2021) to v2.49 (?.?.202?)
+
+## New fixes:
+
+## New features:
+- Patternscope support for
+  - Future Composer v1.4
+  - JamCracker
+  - ChipTracker
+  - The Musical Enlightenment
+  - TCBTracker
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
