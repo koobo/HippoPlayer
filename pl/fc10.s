@@ -1,17 +1,155 @@
+;APS00000022000000220000002200000022000000220000002200000022000000220000002200000022
+	incdir	include:
+	include	misc/eagleplayer.i
+	include mucro.i
+
+testi	=	0
+
+ ifne testi
+
+
+	lea 	mod,a0
+	lea	mainVol_(pc),a1
+	lea	songend_(pc),a2
+	jsr	init	
+loop
+	cmp.b	#$80,$dff006
+	bne.b	loop
+.x	cmp.b	#$80,$dff006
+	beq.b	.x
+
+	move	#$ff0,$dff180
+	jsr	play
+	clr	$dff180
+
+	btst	#6,$bfe001
+	bne.b	loop
+
+	jsr	end
+	move	#$f,$dff096
+	rts
+
+songend_	dc 	0
+mainVol_ 	dc 	$40/1
+
+	section	cc,data_c
+mod	incbin	"sys:music/modsanthology/synth/fc13/fc13.sting"
+ endc
+
+
+
+
+	jmp init(pc)
+	jmp play(pc)
+	jmp end(pc)
+
+moduleAddr	dc.l 	0
+mainVolumeAddr	dc.l	0
+mainVolume	dc 	$40
+songOverAddr	dc.l 	0
+
+
+init
+	move.l	a0,moduleAddr
+	move.l	a1,mainVolumeAddr 
+	move.l	a2,songOverAddr
+
+	bsr.w	fc10init
+	bsr.b	PatternInit
+	moveq	#0,d0
+	rts
+
+
+play
+
+	move.l	mainVolumeAddr(pc),a0 
+	move	(a0),mainVolume
+	bsr.w	fc10music
+
+	* current position
+	moveq	#0,d0
+	move	V1data+6(pc),d0
+	divu	#$d,d0
+
+	move.l	V1data+52(pc),d1
+	sub.l	V1data(pc),d1
+	divu	#$d,d1
+end
+
+	rts
+
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	moveq	#2,D0
+	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#32,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	* Pattern end, turn into Protracker D-command
+	cmp.b	#$49,(a0)
+	bne.b 	.notEnd 
+	moveq	#$d,d2
+	rts
+.notEnd
+	* note, transpose missing
+	moveq	#$7f,d0
+	and.b	(a0),d0
+
+	* instrument number, would need sound transpose too
+	moveq	#$3f,d1
+	and.b	1(a0),d1
+
+	move	#%11000000,d2
+	and.b	1(a0),d2
+	beq.b	.noPort
+	* Portamento command
+			;Bit 7 = portamento on
+			;Bit 6 = portamento off
+	* Portamento value
+			;Bit 7-5 = always zero
+			;Bit 4 = up/down
+			;Bit 3-0 = value
+	btst	#7,d2
+	beq.b	.noPortVal
+	move.b	3(a0),d3
+.noPortVal
+	lsr	#6,d2
+
+.noPort
+
+
+	rts
+
+
 ***************************************************************
 **  Amiga FUTURE COMPOSER V1.0 / 1.2 / 1.3   Replay routine  **
 ***************************************************************
-
-
 
 
 fc10init
 ;INIT_MUSIC:
 * a0 = moduleaddress
 	move.w #1,onoff
-
-	move.l	a1,volume
-	move.l	a2,songend
 
 	bset	#1,$bfe001
 	lea 100(a0),a1
@@ -137,12 +275,16 @@ music_on:
 	bne.s nonewnote
 	move.w repspd(pc),respcnt	;Restore replayspeed counter
 	lea V1data(pc),a0		;Point to voice1 data area
+	lea	Stripe1(pc),a2
 	bsr.w new_note
 	lea V2data(pc),a0		;Point to voice2 data area
+	lea	Stripe2(pc),a2
 	bsr.w new_note
 	lea V3data(pc),a0		;Point to voice3 data area
+	lea	Stripe3(pc),a2
 	bsr.w new_note
 	lea V4data(pc),a0		;Point to voice4 data area
+	lea	Stripe4(pc),a2
 	bsr.w new_note
 nonewnote:
 	clr.w audtemp
@@ -227,8 +369,7 @@ chan4:
 setpervol:
 	movem.l	d7/a0,-(sp)
 
-	move.l	volume(pC),a0
-	move	(a0),d7
+	move	mainVolume(pC),d7
 
 	lea $dff0a6,a5
 	move.w (a6)+,(a5)	;Set period
@@ -255,14 +396,7 @@ setpervol:
 	lsr.w #6,d0		; Delirium
 	move.w d0,50(a5)	;Set volume
 
-	* current position
-	moveq	#0,d0
-	move	V1data+6(pc),d0
-	divu	#$d,d0
 
-	move.l	V1data+52(pc),d1
-	sub.l	V1data(pc),d1
-	divu	#$d,d1
 	
 	movem.l	(sp)+,d7/a0
 	rts
@@ -270,6 +404,14 @@ setpervol:
 new_note:
 	moveq #0,d5
 	move.l 34(a0),a1
+
+	move.l 	a1,(a2)		* set stripe pointer
+	lea 	PatternInfo(pc),a2 
+	move	40(a0),d1 	* pattern position, 2 byte increments
+	lsr	#1,d1 
+	move	d1,PI_Pattpos(a2)
+
+
 	adda.w 40(a0),a1
 	cmp.w #64,40(a0)
 	bne.b samepat
@@ -278,7 +420,7 @@ new_note:
 	cmpa.l 52(a0),a2	;Is it the end?
 	bne.s notend
 
-	move.l	songend(pc),a2
+	move.l	songOverAddr(pc),a2
 	st	(a2)
 
 	move.w d5,6(a0)		;yes!
