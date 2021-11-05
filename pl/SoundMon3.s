@@ -1,5 +1,5 @@
 ;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
-testi = 1
+testi = 0
 
 	incdir	include:
 	INCLUDE	"Exec/Types.i"
@@ -416,8 +416,12 @@ BP_3BA:		moveq	#0,d1
 .d
 		moveq	#0,d4
 		move.b	BP_B0E,d4
-		add.l	d4,a2
+		divu	#3,d4
+		move	d4,PatternInfo+PI_Pattpos
 
+		moveq	#0,d4
+		move.b	BP_B0E,d4
+		add.l	d4,a2
 		
 		moveq	#0,d3
 		move.b	(a2),d3
@@ -560,11 +564,9 @@ BP_592:		lea	$10(a3),a3
 		bra.s	BP_5EE
 
 BP_5BE:		
-		addq	#1,PI_Pattpos+PatternInfo
 		addq.b	#3,BP_B0E
 		cmpi.b	#$30,BP_B0E
 		bne.s	BP_5EE
-		clr	PI_Pattpos+PatternInfo
 		clr.b	BP_B0E
 		addq.w	#1,BP_B0C
 		move.l	BP_Data(pc),a0

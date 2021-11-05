@@ -427,6 +427,11 @@ bploop3		moveq	#0,d1
 .d
 		moveq	#0,d4
 		move.b	SMON_BPPatCount(a5),d4
+		divu	#3,d4
+		move	d4,PatternInfo+PI_Pattpos
+
+		moveq	#0,d4
+		move.b	SMON_BPPatCount(a5),d4
 		add.l	d4,a2
 
 		* a2 points to current pattern data, modulo 3
@@ -541,11 +546,9 @@ bpskip2		lea	$10(a3),a3
 		dbra	d0,bploop3
 
 	* Pattern position
-		addq	#1,PI_Pattpos+PatternInfo
 		addq.b	#3,SMON_BPPatCount(a5)
 		cmpi.b	#48,SMON_BPPatCount(a5)
 		bne.b	bpskip8
-		clr	PI_Pattpos+PatternInfo
 		move.b	#0,SMON_BPPatCount(a5)
 		* Increase song position
 		addq.w	#1,SMON_BPStep(a5)

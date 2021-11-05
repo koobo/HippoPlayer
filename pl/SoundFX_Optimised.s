@@ -1,10 +1,11 @@
 ;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
 
-test	=	1
+
+test	=	0
 
 	incdir	include:
 	include	mucro.i
-
+	include	misc/eagleplayer.i
 
  ifne test
 bob
@@ -58,7 +59,7 @@ playLoop
 
 	SECTION	modu,data_c
 
-module  incbin	"sys:music/Roots/Modules/SoundFX/Chris Huelsbeck/battle isle (data-intro).sfx"
+module  incbin	"m:exo/SoundFX/- unknown/waterfall.sfx"
 
 	SECTION	modu2,code_p
  endif
@@ -72,8 +73,9 @@ init
 	move.l	a2,dmaWaitAddr
 	move.l	a3,curPosAddr
 	move.l	a4,maxPosAddr
-	bsr.b	fx_init
+	bsr.w	fx_init
 	bsr.b	posUpdate
+	bsr.b	PatternInit
 	moveq	#0,d0
 	rts
 
@@ -89,6 +91,46 @@ play
 	move	(a0),masterVol
 	bsr.b	posUpdate
 	bsr.w	fx_play
+	rts
+
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.l	#16,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#6,PI_Speed(a0)		; Magic positive: use periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	tst	(a0)
+	bmi.b	.no
+	move	(a0),d0
+
+	* sample num
+	move.b	2(a0),d1
+	lsr.b	#4,d1
+.no
+	moveq	#$f,d2
+	and.b	2(a0),d2
+	move.b	3(a0),d3
+
 	rts
 
 dmaWaitAddr		dc.l 	0
@@ -341,10 +383,25 @@ PlaySound:
 	add	#472,a2			;zeiger auf Patterntab.
 	add	#12,a3			;zeiger auf Instr.Daten
 	move.l	TrackPos(pc),d0		;Postionzeiger
+
+	move.l	PosCounter(pc),d1
+	lsr.l	#4,d1
+	move	d1,PatternInfo+PI_Pattpos
+
 	clr.l	d1
 	move.b	(a2,d0.l),d1		;dazugehörige PatternNr. holen
 	moveq	#10,d7
 	lsl.l	d7,d1			;*1024 / länge eines Pattern
+	
+	pea	(a0,d1.l)
+	move.l	(sp)+,Stripe1
+	pea	4(a0,d1.l)
+	move.l	(sp)+,Stripe2
+	pea	8(a0,d1.l)
+	move.l	(sp)+,Stripe3
+	pea	12(a0,d1.l)
+	move.l	(sp)+,Stripe4
+
 	add.l	PosCounter,d1		;Offset ins Pattern
 	clr.w	DmaCon
 	lea	StepControl0,a4
@@ -378,13 +435,17 @@ NoSetRegs:
 	sub	#22,a6			;nächste Daten
 	sub	#$10,a5			;nächster Kanal
 	dbf	d7,SetRegsLoop
+
+
 	tst	PlayLock
 	beq.s	NoEndPattern
+	;addq	#1,PatternInfo+PI_Pattpos
 	add.l	#16,PosCounter		;PatternPos erhöhen
 	cmp.l	#1024,PosCounter	;schon Ende ?
 	blt.s	NoEndPattern
 
 	clr.l	PosCounter		;PatternPos löschen
+	;clr	PatternInfo+PI_Pattpos
 	addq.l	#1,TrackPos		;Position erhöhen
 NoAddPos:
 	move.w	AnzPat(pc),d0		;AnzahlPosition
