@@ -19970,7 +19970,7 @@ ier_nosid_t
 ier_sidicon_t
 	dc.b	"Trouble with SID icon!",0
 ier_nomled_t
-	dc.b	"Couldn't open mled.library!",0
+	dc.b	"Couldn't open mline.library!",0
 ier_mlederr_t
 	dc.b	"MusiclineEditor init error!",0
 ier_nopr_t
