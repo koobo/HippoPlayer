@@ -41,7 +41,6 @@ pt_aon		rs.b	1
 pt_digiboosterpro rs.b	1
 pt_pumatracker	rs.b 	1
 pt_gamemusiccreator	rs.b 	 1
-pt_digitalmugician 	rs.b  	1
 pt_medley 	 	rs.b  	1
 pt_futureplayer 	rs.b 	1
 pt_bendaglish		rs.b 	1
@@ -92,3 +91,4 @@ pt_soundcontrol		rs.b    1
 pt_stonetracker		rs.b	1
 pt_themusicalenlightenment rs.b	1
 pt_timfollin2       rs.b    1
+pt_digitalmugician 	rs.b  	1

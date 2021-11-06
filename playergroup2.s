@@ -1,4 +1,4 @@
-;APS0000004C0000004C0000004C0000004C0000004C0000004C0000013E0000004C0000004C0000004C
+;APS0000008C0000008C0000008C0000008C0000008C0000008C0000015D0000008C0000008C0000008C
 
 IM=0
 SHR=1
@@ -6,7 +6,8 @@ SHR=1
 	include	playerIds.i
 
 	auto	j\
-	auto	wb ram:HippoPlayer.group\
+;	auto	wb ram:HippoPlayer.group\
+	auto	wb s:HippoPlayer.group\
 	auto	a0\
 	auto	a1\
 	
@@ -163,10 +164,6 @@ gmc1
 	incbin gamemusiccreator.im
 gmc2 
 
-mugician1 
-	incbin mugiplayer.im
-mugician2 
-
 medley1 
 	incbin imploder.im
 medley2
@@ -280,10 +277,6 @@ pumatracker2
 gmc1
 	incbin gamemusiccreator.shr
 gmc2 
-
-mugician1 
-	incbin mugiplayer.shr
-mugician2 
 
 medley1 
 	incbin imploder.shr
@@ -453,6 +446,10 @@ digitalmugician21
 	incbin "mugician ii.im"
 digitalmugician22
 
+mugician1 
+	incbin "mugician.amp.im"
+mugician2 
+
 musicmaker41
 	incbin musicmaker4.im
 musicmaker42
@@ -593,6 +590,10 @@ quartetst2
 digitalmugician21
 	incbin "mugician ii.shr"
 digitalmugician22
+
+mugician1 
+	incbin "mugician.amp.shr"
+mugician2 
 
 musicmaker41
 	incbin musicmaker4.shr

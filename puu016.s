@@ -28236,7 +28236,6 @@ groupFormats
 	dr.w 	p_digiboosterpro 
 	dr.w	p_thx 
 	dr.w 	p_aon 
-	dr.w	p_digitalmugician
 	dr.w	p_gamemusiccreator 
 	dr.w	p_medley 
 	dr.w	p_bendaglish 
@@ -28291,6 +28290,7 @@ eagleFormats
 	dr.w	p_stonetracker
 	dr.w	p_themusicalenlightenment
 	dr.w	p_timfollin2
+	dr.w	p_digitalmugician
 	dr.w	p_activisionpro  	* very slow id
 	dc.w 	0	
 
@@ -34626,75 +34626,29 @@ author_vliet
 
 p_digitalmugician
 	jmp	.init(pc)
-	jmp	.play(pc)
+	jmp	deliPlay(pc)
 	p_NOP
-	jmp	.end(pc)
-	jmp	.stop(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
 	p_NOP
-	p_NOP
-	p_NOP
-	p_NOP
-	p_NOP
-	p_NOP
-	jmp	 .id_digitalmugician(pc)
-	jmp	author_vliet(pc)
-	dc.w 	pt_digitalmugician
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
-	dc.b	"Digital Mugician",0
+	jmp .id_digitalmugician(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_digitalmugician
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope
+	dc.b	"Digital Mugician    [EP]",0
+.path	dc.b	"mugician.amp",0
  even
-
-
-.DMU_INIT  = 0
-.DMU_PLAY  = 4
-.DMU_END   = 8
-
+ 
 .init
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	jsr	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	digitalmugicianroutines(a5),a0
-	* allocate into chip mem, uses empty sample data 
-	bsr.w	allocreplayer2
-	beq.b	.ok3
-	jsr	rem_ciaint
-	bsr.w	vapauta_kanavat
-	rts
-.ok3
-	pushm	d1-a6
-	move.l	moduleaddress(a5),a0
-	lea	mainvolume(a5),a1
-	moveq	#0,d0 	* song number
-	move.l	digitalmugicianroutines(a5),a2
-	jsr	.DMU_INIT(a2)
-	popm	d1-a6
+	lea	.path(pc),a0 
 	moveq	#0,d0
-	rts	
-
-.play
-	move.l	digitalmugicianroutines(a5),a0
-	jmp	.DMU_PLAY(a0)
-
-
-.stop
-	bra.w	clearsound
-
-.end
-	jsr	rem_ciaint
-	pushm	all
-	move.l	digitalmugicianroutines(a5),a0
-	jsr	.DMU_END(a0)
-	popm	all
-	bsr.w	clearsound
-
-	bra.w	vapauta_kanavat
+	bsr.w	deliLoadAndInit
+	rts 
 
 ; in: a4 = module
 ; out: d0 = 0, valid DMU
@@ -38910,7 +38864,7 @@ p_digitalmugician2
 	jmp id_digitalmugician2(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_digitalmugician2
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope
 	dc.b	"Digital Mugician II [EP]",0
 .path dc.b "mugician ii",0
  even
@@ -40909,7 +40863,7 @@ funcENPP_PokeVol
 	rts
 
 funcENPP_PokeCommand
-	DPRINT "ENPP_PokeCommand"
+	;DPRINT "ENPP_PokeCommand"
 	cmp.b	#1,d0 
 	bne.b 	.unknown
 	* d1=0 -> led off
