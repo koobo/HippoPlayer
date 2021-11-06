@@ -457,6 +457,7 @@ userport3	rs.l	1		*
 windowbase3	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
+minifontbase rs.l	1
 notifyhandle	rs.l	1		* Screennotifylle
 windowtop	rs	1		* ikkunoiden eisysteemialueen yl‰reuna
 windowright	rs	1
@@ -3307,8 +3308,11 @@ exit
 	move.l	d0,a1
 	lore	GFX,CloseFont
 .uh2
-
-
+	move.l	minifontbase(a5),d0
+	beq.b	.uh3
+	move.l	d0,a1
+	lore	GFX,CloseFont
+.uh3
 	move.l	topazbase(a5),a1
 	lore	GFX,CloseFont
 
@@ -21233,6 +21237,14 @@ quad_code
 
 	addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
+	tst.l	minifontbase(a5)
+	bne.b	.fontIs
+	lea		mini_text_attr,a0
+	lore	DiskFont,OpenDiskFont
+	move.l	d0,minifontbase(a5)
+	DPRINT	"Got mini font"
+.fontIs 
+
 	lea	ch1(a5),a0
 	lea	4*ns_size(a0),a1
 .cl	clr	(a0)+
@@ -22014,6 +22026,7 @@ drawScope
 
 .other
 
+	* Generic notescroller
 	tst.l	deliPatternInfo(a5)
 	beq.b	.cont
 	bsr	noteScroller2
@@ -23624,7 +23637,7 @@ samples0
 	move.l	draw1(a5),a0
 	rts
 	
-
+* Note scroller supporting the PI_PatternInfo data
 noteScroller2
 	cmp.b	#QUADMODE_PATTERNSCOPE,quadmode(a5)
 	beq.b	.1
@@ -23632,37 +23645,54 @@ noteScroller2
 	beq.b	.1
 	rts
 .1
-
 	* magic flag: display row numbers	
 	lea	.pos(pc),a0
 	clr.b	(a0)
 
-	move.l	deliPatternInfo(a5),a1
-	move.l	PI_Stripes+0(a1),a0
 	move.l	draw1(a5),a4
-	bsr.b	.do
+	move.l	deliPatternInfo(a5),a1
 
-	* magic flag: no row numbers
-	lea	.pos(pc),a0
-	st	(a0)
-	
-	move.l	deliPatternInfo(a5),a1
-	move.l	PI_Stripes+4(a1),a0
-	move.l	draw1(a5),a4
-	add	#3+9,a4
-	bsr.b	.do
+	lea	PI_Stripes(a1),a0
+	move	PI_Voices(a1),d7
 
-	move.l	deliPatternInfo(a5),a1
-	move.l	PI_Stripes+4+4(a1),a0
-	move.l	draw1(a5),a4
-	add	#3+9+9,a4
-	bsr.b	.do
+	* font availability check
+	cmp		#4,d7
+	bls.b	.only4
+	tst.l	minifontbase(a5)
+	beq.b	.x
+.only4
 
-	move.l	deliPatternInfo(a5),a1
-	move.l	PI_Stripes+4+4+4(a1),a0
-	move.l	draw1(a5),a4
-	add	#3+9+9+9,a4
+	subq	#1,d7
+	moveq	#0,d6
+.loop
+	pushm	d6/d7/a0/a4/a5/a6
+	move.l	(a0),a0		* stripe data
 	bsr.b	.do
+	popm	d6/d7/a0/a4/a5/a6
+
+	* magic flag: no row numbers more than once
+	lea	.pos(pc),a2
+	tst.b	(a2)
+	bmi.b	.wasSet
+	* jump over number column
+	addq	#3,a4
+	st	(a2)
+.wasSet
+	addq	#4,a0 		* next stripe
+
+	cmp	#4,PI_Voices(a1)
+	bls.b	.voices4
+
+	addq	#4,a4		* next screen pos horizontal
+	not.b	d6
+	* add some space after two 
+	bne.b	.continue
+	addq	#1,a4
+	bra.b	.continue
+.voices4
+	add	#9,a4
+.continue
+	dbf	d7,.loop
 
 	bsr	noteScrollerHorizontalLines
 .x	rts
@@ -23676,7 +23706,6 @@ noteScroller2
 	cmp.l	a3,a0
 	bhs.b 	.x
 
-	pushm	a5/a6
 
 	* draw this many lines
 	move	quadNoteScrollerLines(a5),d7
@@ -23715,14 +23744,16 @@ noteScroller2
 .ok2
 	bsr	noteScrollerGetFont
 	beq	.exitNoteScroller
+	
 
+
+* d4 = font modulo
+* d6 = line number
+* d7 = rows to draw
 * a0 = pattern data
 * a1 = pattern info
 * a2 = font data
 * a4 = destination draw buffer
-* d4 = font modulo
-* d6 = line number
-* d7 = rows to draw
 
 .rowLoop
 	* print line number in d6
@@ -23740,6 +23771,7 @@ noteScroller2
 	move.l	a4,a5
 	moveq	#2-1,d3
 	bsr.w	.print
+
 .skip
 	move.l	a1,d5
 * ChipTracker, TME, Mugician2, TCBTracker
@@ -23801,7 +23833,7 @@ noteScroller2
 	move.w	.notes(pc,d5),(a3)+
 	* print octave
 	addq.b	#1,d0
-	bsr.b	.convertD0ToCharInA3Fill
+	bsr.w	.convertD0ToCharInA3Fill
 	bra.b	.wasNote
 
 .emptyNote
@@ -23845,8 +23877,21 @@ noteScroller2
 	bmi.b	.noPos
 	addq	#3,a5
 .noPos
+
+	cmp	#4,PI_Voices(a1)
+	bls.b	.normalFont
+	pushm	d4/a2
+	move.l	minifontbase+var_b,a2
+	move	tf_Modulo(a2),d4		
+	move.l	tf_CharData(a2),a2		
+	moveq	#8-1,d3
+	bsr.w	.printSmall
+	popm	d4/a2
+	bra.b	.smallFont
+.normalFont
 	moveq	#8-1,d3
 	bsr.b	.print
+.smallFont
 
 	* next vertical draw position
 	add	#8*40,a4
@@ -23857,7 +23902,6 @@ noteScroller2
 	dbeq	d7,.rowLoop
 
 .exitNoteScroller
-	popm	a5/a6
 	rts
 
 .convertD0ToCharInA3
@@ -23879,10 +23923,10 @@ noteScroller2
 * in:
 *   a5 = dest draw buffer
 *   a3 = text to draw
+*   a2 = contains font data
+*   d4 = contains font modulo
+
 .print
-	* a2 contains font data
-	* d4 contains font modulo
-	
 	* get one char to print
 	moveq	#0,d5
 .charLoop	
@@ -23917,6 +23961,181 @@ noteScroller2
 	addq	#1,a5
 	dbf	d3,.charLoop
 	rts
+
+* Print text with small font
+* Assumes:
+* - fixed font
+* - width 4
+* - height 8
+* - even number of chars s input text
+.printSmall	
+	* nibble masks
+	moveq	#$0f,d1
+	move	#$f0,d2
+
+	* get one char to print here
+	moveq	#0,d5
+.charLoop2	
+	* even position
+
+	move.b	(a3)+,d5
+	* get char pixels
+	ror.l	#1,d5
+	lea	-$10(a2,d5),a6	* space char $20/2
+	bmi.b	.lowNib
+ 
+ 	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,1*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,2*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,3*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,4*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,5*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,6*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,7*40(a5)	
+	bra.b	.evenCharDone
+.lowNib
+ 	move.b	(a6),d0 
+	lsl.b	#$4,d0 
+ 	or.b	d0,(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsl.b	#$4,d0 
+ 	or.b	d0,1*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsl.b	#$4,d0 
+ 	or.b	d0,2*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsl.b	#$4,d0 
+ 	or.b	d0,3*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsl.b	#$4,d0 
+ 	or.b	d0,4*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsl.b	#$4,d0 
+ 	or.b	d0,5*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsl.b	#$4,d0 
+ 	or.b	d0,6*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsl.b	#$4,d0 
+ 	or.b	d0,7*40(a5)	
+* odd char done	
+
+.evenCharDone
+
+	* odd position
+
+	move.b	(a3)+,d5
+	* get char pixels
+	ror.l	#1,d5
+	lea	-$10(a2,d5),a6
+	bmi.b	.lowNib2
+ 
+ 	move.b	(a6),d0 
+	lsr.b	#4,d0
+	or.b	d0,(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsr.b	#4,d0
+ 	or.b	d0,1*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsr.b	#4,d0
+ 	or.b	d0,2*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsr.b	#4,d0
+ 	or.b	d0,3*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsr.b	#4,d0
+ 	or.b	d0,4*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsr.b	#4,d0
+ 	or.b	d0,5*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsr.b	#4,d0
+ 	or.b	d0,6*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	lsr.b	#4,d0
+ 	or.b	d0,7*40(a5)	
+	bra.b	.oddCharDone
+.lowNib2
+ 	move.b	(a6),d0 
+	and.b	d1,d0
+ 	or.b	d0,(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d1,d0
+ 	or.b	d0,1*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d1,d0
+ 	or.b	d0,2*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d1,d0
+ 	or.b	d0,3*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d1,d0
+ 	or.b	d0,4*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d1,d0
+ 	or.b	d0,5*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d1,d0
+ 	or.b	d0,6*40(a5)	
+	add	d4,a6
+	move.b	(a6),d0 
+	and.b	d1,d0
+ 	or.b	d0,7*40(a5)	
+* odd char done	
+
+.oddCharDone
+
+	* go to next horiz position 
+	addq	#1,a5
+
+	* next two input chars
+	subq	#1,d3
+	dbf	d3,.charLoop2
+	rts
+
 
 
 .note	dc.b	"00000000"
@@ -24616,12 +24835,12 @@ loadfile
 	lea	lod_buf(a5),a1
 	move.l	a1,lod_filename(a5)
 	move.l	a4,a0
-	bsr.w	bcopy
+	jsr	bcopy
 	subq	#1,a1
 	move.b	#'/',(a1)+
 	lea	fib_FileName+fileinfoblock(a5),a0
 	push	a0
-	bsr.w	bcopy
+	jsr	bcopy
 	pop	a0		* tfmx?
 
 	move.l	(a0),d0
@@ -41583,11 +41802,20 @@ xfdname		dc.b	"xfdmaster.library",0
 
 text_attr
 	dc.l	topaz		* ta_Name
-	dc	8		* ta_YSize
+	dc		8		* ta_YSize
 	dc.b	0		* ta_Style
 	dc.b	0		* ta_Flags
 
 topaz	dc.b	"topaz.font",0
+ even
+
+mini_text_attr
+	dc.l	.mini	* ta_Name
+	dc	8		* ta_YSize
+	dc.b	0		* ta_Style
+	dc.b	FPF_PROPORTIONAL * ta_Flags
+
+.mini	dc.b	"mini4.font",0
  even
 
 
