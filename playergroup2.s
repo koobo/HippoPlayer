@@ -97,7 +97,10 @@ head	macro
 	head	pt_stonetracker,stonetracker
 	head	pt_themusicalenlightenment,tme
 	head	pt_timfollin2,timfollin2
-	
+	head	pt_steveturner,steveturner
+	head	pt_jasonpage,jasonpage
+	head	pt_specialfx,specialfx
+
 	dc	0
 	dc.l	0,0
 
@@ -619,4 +622,21 @@ timfollin21
 	incbin	"tim follin ii.shr"
 timfollin22	
 	endif
+
+
+steveturner1
+	incbin	"steve turner.shr"
+steveturner2
+
+
+jasonpage1
+	incbin	"jason page.shr"
+jasonpage2
+
+
+specialfx1
+	incbin	"special fx.shr"
+specialfx2
+
+
 pend

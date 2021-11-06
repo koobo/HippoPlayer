@@ -28308,6 +28308,9 @@ eagleFormats
 	dr.w	p_themusicalenlightenment
 	dr.w	p_timfollin2
 	dr.w	p_digitalmugician
+	dr.w 	p_jasonpage
+	dr.w	p_specialfx
+	dr.w	p_steveturner
 	dr.w	p_activisionpro  	* very slow id
 	dc.w 	0	
 
@@ -39252,7 +39255,7 @@ p_timfollin2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.b	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -39298,6 +39301,218 @@ p_timfollin2
 	BNE.S	.lbC00057A
 	MOVEQ	#0,D0
 	RTS
+
+******************************************************************************
+* Jason Page
+******************************************************************************
+
+p_jasonpage
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_jasonpage
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc.b	"Jason Page          [EP]",0
+	        
+.path dc.b "jason page",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+
+	MOVEQ	#-1,D0
+	CMP.W	#2,(A0)
+	BNE.S	.lbC000382
+	BTST	#0,3(A0)
+	BNE.S	.lbC000382
+	MOVE.W	4(A0),D1
+	BTST	#0,D1
+	BNE.S	.lbC000382
+	TST.W	0(A0,D1.W)
+	BNE.S	.lbC000382
+	MOVE.W	$30(A0),D0
+	LEA	2(A0),A1
+	MOVEQ	#$16,D1
+.lbC00034E	TST.W	(A1)
+	BEQ.S	.lbC000382
+	BTST	#0,1(A1)
+	BNE.S	.lbC000382
+	CMP.W	(A1)+,D0
+	BLE.S	.lbC000382
+	DBRA	D1,.lbC00034E
+	MOVEQ	#0,D0
+	MOVE.W	$2E(A0),D0
+	ADD.L	D0,A0
+	MOVE.W	(A0),D0
+	AND.W	#$F00,D0
+	CMP.W	#$F00,D0
+	BNE.S	.lbC00037C
+	BRA.W	.lbC000380
+
+.lbC00037C
+.lbC000380	BRA.S	.lbC0003AE
+
+.lbC000382	TST.W	(A0)
+	BNE.S	.lbC0003B0
+	TST.L	$80(A0)
+	BNE.S	.lbC0003B0
+	CMP.L	#$CBE,$84(A0)
+	BNE.S	.lbC0003B0
+	CMP.L	#$308BE,$CB6(A0)
+	BNE.S	.lbC0003B0
+	CMP.L	#$309BE,$CBA(A0)
+	BNE.S	.lbC0003B0
+.lbC0003AE	MOVEQ	#0,D0
+.lbC0003B0	RTS
+	RTS
+
+
+******************************************************************************
+* Steve Turner
+******************************************************************************
+
+p_steveturner
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_steveturner
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc.b	"Steve Turner        [EP]",0
+	        
+.path dc.b "steve tuner",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	CMP.W	#$2B7C,(A0)
+	BNE.S	.no
+	CMP.W	#$2B7C,8(A0)
+	BNE.S	.no
+	CMP.W	#$2B7C,$10(A0)
+	BNE.S	.no
+	CMP.W	#$2B7C,$18(A0)
+	BNE.S	.no
+	CMP.L	#$303C00FF,$20(A0)
+	BNE.S	.no
+	CMP.L	#$32004EB9,$24(A0)
+	BNE.S	.no
+	CMP.W	#$4E75,$2C(A0)
+	BNE.S	.no
+	MOVEQ	#0,D0
+.no
+	rts
+
+******************************************************************************
+* SpecialFX
+******************************************************************************
+
+p_specialfx
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_specialfx
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc.b	"Special FX          [EP]",0
+	        
+.path dc.b "special fx",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr.b	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	MOVE.W	#$6000,D1
+	CMP.W	(A0)+,D1
+	BNE.S	.lbC0003C6
+	MOVE.L	A0,A1
+	MOVE.W	(A0)+,D2
+	BMI.S	.lbC0003C6
+	BEQ.S	.lbC0003C6
+	BTST	#0,D2
+	BNE.S	.lbC0003C6
+	MOVEQ	#2,D4
+.lbC000378	CMP.W	(A0)+,D1
+	BNE.S	.lbC0003C6
+	MOVE.W	(A0)+,D3
+	BMI.S	.lbC0003C6
+	BEQ.S	.lbC0003C6
+	BTST	#0,D3
+	BNE.S	.lbC0003C6
+	DBRA	D4,.lbC000378
+	ADD.W	D2,A1
+	CMP.W	(A0),D1
+	BNE.S	.lbC0003AE
+	MOVEQ	#2,D4
+.lbC000394	CMP.W	(A0)+,D1
+	BNE.S	.lbC0003C6
+	MOVE.W	(A0)+,D3
+	BMI.S	.lbC0003C6
+	BEQ.S	.lbC0003C6
+	BTST	#0,D3
+	BNE.S	.lbC0003C6
+	DBRA	D4,.lbC000394
+	CMP.W	(A0),D1
+	BEQ.S	.lbC0003C6
+	BRA.S	.lbC0003B6
+
+.lbC0003AE	CMP.W	#$6100,(A1)
+	BNE.S	.lbC0003C6
+	ADDQ.L	#4,A1
+.lbC0003B6	CMP.W	#$41F9,(A1)
+	BNE.S	.lbC0003C6
+	ADDQ.L	#6,A1
+	CMP.W	#$43F9,(A1)
+	BNE.S	.lbC0003C6
+	MOVEQ	#0,D0
+.lbC0003C6	RTS
 
 ******************************************************************************
 * Deli/eagle support
@@ -40764,7 +40979,7 @@ funcENPP_SetTimer
 	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
 	;DPRINT "ENPP_WaitAudioDMA"
-	bra.w dmawait
+	jmp dmawait
 funcENPP_SaveMem
 	DPRINT "ENPP_SaveMem"
 	rts

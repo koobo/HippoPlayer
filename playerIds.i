@@ -92,3 +92,6 @@ pt_stonetracker		rs.b	1
 pt_themusicalenlightenment rs.b	1
 pt_timfollin2       rs.b    1
 pt_digitalmugician 	rs.b  	1
+pt_specialfx		rs.b  	1
+pt_steveturner		rs.b 	1
+pt_jasonpage		rs.b 	1
