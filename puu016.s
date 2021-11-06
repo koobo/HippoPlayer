@@ -21591,7 +21591,7 @@ scopeLoop
 
 .doDraw
 	pushm	d5/d6/d7
-	jsr		obtainModuleData
+	jsr	obtainModuleData
 	bsr.w	drawScope
 	jsr 	releaseModuleData
 	popm	d5/d6/d7
@@ -23656,7 +23656,7 @@ noteScroller2
 	move	PI_Voices(a1),d7
 
 	* font availability check
-	cmp		#4,d7
+	cmp	#4,d7
 	bls.b	.only4
 	tst.l	minifontbase(a5)
 	beq.b	.x
@@ -23697,15 +23697,23 @@ noteScroller2
 	bsr	noteScrollerHorizontalLines
 .x	rts
 
+.xy	
+ if DEBUG
+ 	move	#$0f0,$dff180
+	move.l	moduleaddress(a5),d0
+	move.l	modulelength(a5),d1
+	move.l	a0,d2
+	DPRINT	"INSANITY %lx %ld -> %lx"
+ endif
+	rts
 .do
 	* sanity check
 	move.l	moduleaddress(a5),a3
 	cmp.l	a3,a0
-	blo.b  	.x
+	blo.b  	.xy
 	add.l	modulelength(a5),a3
 	cmp.l	a3,a0
-	bhs.b 	.x
-
+	bhs.b 	.xy
 
 	* draw this many lines
 	move	quadNoteScrollerLines(a5),d7
@@ -23967,7 +23975,7 @@ noteScroller2
 * - fixed font
 * - width 4
 * - height 8
-* - even number of chars s input text
+* - even number of chars as input text
 .printSmall	
 	* nibble masks
 	moveq	#$0f,d1
@@ -24167,6 +24175,9 @@ loadmodule
 	* Load with double buffering.
 	* Module being played is preserved while new one is loaded.
 
+	* Tampering with module data here
+	jsr	obtainModuleData
+
 	move.l	a0,modulefilename(a5)
 
 	* Store properties of current module
@@ -24215,6 +24226,8 @@ loadmodule
 
 	push	d7
 
+	jsr	releaseModuleData
+
 	* At this point correct properties
 	* for current module should be in place
 	* for freeing to NOT CRASH.
@@ -24226,7 +24239,7 @@ loadmodule
 	jsr	halt			* Vapautetaan se jos on
 	move.l	modulefilename(a5),a0
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
+	jsr	p_end(a0)
 	lore    Exec,Enable
 
 
@@ -24235,6 +24248,8 @@ loadmodule
 	move	(sp)+,mainvolume(a5)
 
 	pop	d7
+
+	jsr	obtainModuleData
 
 	* Finally store properties of the newly loaded module.
 	lea	20(sp),a2
@@ -24256,6 +24271,8 @@ loadmodule
 .nay
 
 	lea	40(sp),sp
+
+	jsr	releaseModuleData
 
 	cmp	#XPKERR_NOMEM,lod_xpkerror(a5)
 	beq.b	.nomemdbf
