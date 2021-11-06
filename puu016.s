@@ -35595,7 +35595,7 @@ p_soundfx
 	jmp .id_soundfx(pc)
 	jmp	.author(pc)
 	dc.w pt_soundfx
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope
 	dc.b	"SoundFX",0
 .a 	dc.b	"Christian Haller, Christian A. Webber",0
  even
@@ -35626,7 +35626,7 @@ p_soundfx
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
-	pushm	d1-a6
+	pushm	d1-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	dmawait(pc),a2
@@ -35634,7 +35634,8 @@ p_soundfx
 	lea 	pos_maksimi(a5),a4
 	move.l	soundfxroutines(a5),a6
 	jsr	.INIT(a6)
-	popm	d1-a6
+	popm	d1-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 
