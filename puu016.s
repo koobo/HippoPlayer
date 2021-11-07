@@ -21237,13 +21237,6 @@ quad_code
 
 	addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
-	tst.l	minifontbase(a5)
-	bne.b	.fontIs
-	lea		mini_text_attr,a0
-	lore	DiskFont,OpenDiskFont
-	move.l	d0,minifontbase(a5)
-	DPRINT	"Got mini font"
-.fontIs 
 
 	lea	ch1(a5),a0
 	lea	4*ns_size(a0),a1
@@ -21524,15 +21517,24 @@ quad_code
 	add.l	d0,draw1(a5)
 	add.l	d0,draw2(a5)
 
-
 	* State flag indicating whether scope has been cleared
 	moveq	#0,d7
+	* State flag indicating font request has been shown 
+	* Up bit for patternscope
+	moveq	#0,d6	
+	cmp.b	#QUADMODE_PATTERNSCOPE,quadmode(a5) 
+	beq.b	.isPatts
+	cmp.b	#QUADMODE_PATTERNSCOPEXL,quadmode(a5)
+	bne.b	.noPatts
+.isPatts
+	DPRINT	"Patternscope active"
+	bset	#15,d6
+.noPatts
 
-	move	playertype(a5),d6
-	jsr	printhippo2	
-
-	* Set to non-zero if LMB is pressed:
+	* Set to non-zero if LMB is pressed
 	move.b	scopeManualActivation(a5),d5
+
+	jsr	printhippo2	
 
 scopeTest=0
 
@@ -21587,15 +21589,32 @@ scopeLoop
 	beq.b	.doNotDraw
 	tst.b	d7
 	bne.b	.doDraw
+	* This clears the hippo gfx away when starting again
 	bsr.b	.clear
 
 .doDraw
+	* Needs a clear in the future
+	moveq	#-1,d7
+
+	tst.b	d6		* font check flag
+	bne.b	.fontCheckDone
+	tst	d6 		* pattscope indicator bit
+	bpl.b	.noPatts
+	move.l	deliPatternInfo(a5),d0 
+	beq.b	.fontCheckDone
+	move.l	d0,a0 
+	cmp	#4,PI_Voices(a0) 
+	bls.b	 .fontCheckDone
+	st	d6
+	bsr	getScopeMiniFontIfNeeded
+.fontCheckDone
+ 
+.noPatts
 	pushm	d5/d6/d7
 	jsr	obtainModuleData
 	bsr.w	drawScope
 	jsr 	releaseModuleData
 	popm	d5/d6/d7
-	moveq	#-1,d7
 	bra.b	.continue
 
 .doNotDraw
@@ -21629,6 +21648,7 @@ scopeLoop
 
 .m
 .continue
+	* Poll for messages
 	move.l	(a5),a6
 	move.l	userport3(a5),a0
 	lob	GetMsg
@@ -21647,7 +21667,7 @@ scopeLoop
 	cmp	#SELECTDOWN,d3
 	bne.b	.qx 
 	* LMB activates 
-	moveq	#1,d5
+	st	d5
 	move.b	d5,scopeManualActivation(a5)
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.w	scopeLoop
@@ -21776,7 +21796,36 @@ scopeIsNormal
 .large
 	rts
 
-
+* Opens the mini font for 4+ channel notescroller if needed
+getScopeMiniFontIfNeeded
+	tst.l	minifontbase(a5)
+	bne.w	.skip
+	* See if we need the small font
+	move.b 	quadmode(a5),d0 
+	cmp.b	#QUADMODE_PATTERNSCOPE,d0 
+	beq.b	.noSkip
+	cmp.b	#QUADMODE_PATTERNSCOPEXL,d0 
+	bne.b	.skip
+.noSkip
+	move.l	deliPatternInfo(a5),d0
+	beq.b	.skip
+	move.l	d0,a0
+	cmp	#4,PI_Voices(a0)
+	bls.b	.skip
+	lea	mini_text_attr,a0
+	lore	DiskFont,OpenDiskFont
+	move.l	d0,minifontbase(a5)
+	bne.b	.miniOk
+	lea	.noFontMsg(pc),a1 
+	bsr	request
+	rts
+.noFontMsg
+	dc.b	"Couldn't open 'mini4' font for patternscope!",0
+	even
+.miniOk
+	DPRINT	"Got mini font"
+.skip
+	rts
 
 ******* Quadrascopelle 
 voltab
@@ -24630,7 +24679,7 @@ loadfile
 	and.l	#$ffdfdf00,d0
 	cmp.l	#'.GZ'<<8,d0
 	bne.w	.nope
-	lea	gzipDecompressCommand(pc),a0
+	lea	gzipDecompressCommand,a0
 	moveq	#1,d6	* "Unzipping" message
 	bra.b	.unp
 
@@ -30677,8 +30726,8 @@ p_oktalyzer
 	p_NOP
 	jmp 	.id(pc)
 	jmp	.author(pc)
-	dc.w 	pt_oktalyzer				* type
-	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont
+	dc.w 	pt_oktalyzer * type
+	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont!pf_scope
 	dc.b	"Oktalyzer",0
 .a	dc.b	"Armin Sander",0
  even
@@ -30723,16 +30772,23 @@ p_oktalyzer
 	move.l	moduleaddress(a5),a0
 	lea	songover(a5),a1
 	move.l	oktaroutines(a5),a2
+	push	a5
 	jsr	.offset_init(a2)
+	pop	a5
 	tst	d0
 	bne.b	.mem
+	
+	move.l	a0,deliPatternInfo(a5)
+	moveq	#0,d0
+	move	PI_Voices(a0),d0
+	DPRINT	"Voices: %ld"
+
 	bsr.b	.okvolume
 	moveq	#0,d0
 	rts
 
 .mem	moveq	#ier_nomem,d0
 	rts
-
 
 .okplay	
 	push	a5
