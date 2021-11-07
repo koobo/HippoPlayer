@@ -308,7 +308,7 @@ prefs_favorites		rs.b	1
 prefs_medrate		rs	1
 
 prefs_tooltips		rs.b 	1
-			rs.b 	1 * pad
+prefs_savestate		rs.b 	1
 
 prefs_size		rs.b	0
 
@@ -679,8 +679,8 @@ early_new	rs.b	1
 prefix_new	rs.b	1
 autosort_new	rs.b	1
 favorites_new	rs.b	1	
-tooltips_new	rs.b  1	
-				rs.b  1 * pad
+tooltips_new	rs.b 	1	
+savestate_new	rs.b 	1
 
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -1052,7 +1052,7 @@ ahi_muutpois	= prefsdata+prefs_ahi_muutpois
 ahi_use_nyt	rs.b	1
 favorites	rs.b	1
 tooltips	rs.b  	1
-			rs.b    1 * pad
+savestate	rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * audio homman muuttujat
@@ -11321,6 +11321,7 @@ loadprefs2
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
+	move.b	prefs_savestate(a0),savestate(a5)
 
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
@@ -11613,7 +11614,8 @@ saveprefs
 	move.b	medmode(a5),prefs_medmode(a0)
 	move	medrate(a5),prefs_medrate(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
-
+	move.b	tooltips(a5),prefs_tooltips(a0)
+	move.b	savestate(a5),prefs_savestate(a0)
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
@@ -12069,6 +12071,7 @@ prefs_code
 	move	medrate(a5),medrate_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
+	move.b	savestate(a5),savestate_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -12221,9 +12224,6 @@ prefs_code
 	or	d0,gg_Flags+VaL6
 
 .uusi
-** Disabloidaan Early load
-;	or	d0,bUu3+gg_Flags
-
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc2,a0
@@ -12520,6 +12520,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 	move.b	favorites_new(a5),favorites(a5)
 	move.b	tooltips_new(a5),tooltips(a5)
+	move.b	savestate_new(a5),savestate(a5)
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
@@ -12841,6 +12842,12 @@ prefsgads
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
+
+	* Remove "Early load" gadget
+	move.l	windowbase2(a5),a0
+	lea	bUu3,a1
+	lob	RemoveGadget
+
 	lea	gadgets2,a0
 	move.l	windowbase2(a5),a1
 	sub.l	a2,a2
@@ -12984,9 +12991,10 @@ pmousebuttons
 	lea	tomaatti,a0		* priority
 	lea	rpri_req(pc),a2
 	bsr.w	.check
-	lea	bUu3,a0
-	lea	rearly_req(pc),a2
-	bsr.w	.check
+; Early load has been disabled 
+;	lea	bUu3,a0
+;	lea	rearly_req(pc),a2
+;	bsr.w	.check
 	bra.w	.xx
 
 .1	subq	#1,d0
@@ -13089,8 +13097,9 @@ pupdate				* Ikkuna päivitys
 	bsr.w	pearly			* early load
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
-	bsr.w		pfavorites		* favorites
-	bsr.w		ptooltips       * tooltips
+	bsr.w	pfavorites		* favorites
+	bsr.w	ptooltips  	     	* tooltips
+	bsr	psavestate		* savestate
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -13262,10 +13271,10 @@ gadgetsup2
 	movem.l	d0-a6,-(sp)
 	move	gg_GadgetID(a2),d0
 
- ;if DEBUG
-;	ext.l	d0
-;	DPRINT	"Gadget id=%ld"
- ;endif
+ if DEBUG
+	ext.l	d0
+	DPRINT	"Gadget id=%ld"
+ endif
 
 	add	d0,d0
 	cmp	#20*2,d0
@@ -13330,7 +13339,8 @@ gadgetsup2
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
 	dr	rfavorites	* favorites
-	dr      rtooltips   * tooltips
+	dr      rtooltips   	* tooltips
+	dr 	rsavestate	* save state
 
 .s1
 *** Sivu1
@@ -14396,6 +14406,15 @@ ptooltips
 	lea	prefsTooltips,a0
 	bra.w	tickaa
 
+********* Tooltips
+rsavestate
+	not.b	savestate_new(a5)
+psavestate
+	move.b	savestate_new(a5),d0
+	lea	prefsSaveState,a0
+	bra.w	tickaa
+
+
 ********* Autosort
 rautosort
 	not.b	autosort_new(a5)
@@ -15123,53 +15142,52 @@ ls299	dc.b	1,7
  even
 
 **** Early load
-rearly_req
-	lea	ls400(pc),a0
-	bsr.w	listselector
-	bmi.b	.x
-	move.b	d0,early_new(a5)
-	cmp.b	#11,d0
-	blo.b	pearly
-	move.b	#10,early_new(a5)
-	bra.b	pearly
-.x	rts
-
+* DISABLED!
 rearly
-	move.b	early_new(a5),d0
-	addq.b	#1,d0
-	cmp.b	#10,d0
-	bls.b	.r
-	clr.b	d0
-.r	move.b	d0,early_new(a5)
-pearly
-	moveq	#0,d0
-	move.b	early_new(a5),d0
-	add	d0,d0
-	lea	ls400+2(pc,d0),a0
-	lea	bUu3,a1
-	bra.w	prunt
-
-
-
-
-ls400	dc.b	2,11
-	dc.b	"0",0
-	dc.b	"1",0
-	dc.b	"2",0
-	dc.b	"3",0
-	dc.b	"4",0
-	dc.b	"5",0
-	dc.b	"6",0
-	dc.b	"7",0
-	dc.b	"8",0
-	dc.b	"9",0
-	dc.b	"10",0
- even
-
-
-
-
-
+pearly	rts
+;rearly_req
+;	lea	ls400(pc),a0
+;	bsr.w	listselector
+;	bmi.b	.x
+;	move.b	d0,early_new(a5)
+;	cmp.b	#11,d0
+;	blo.b	pearly
+;	move.b	#10,early_new(a5)
+;	bra.b	pearly
+;.x	rts
+;
+;rearly
+;	move.b	early_new(a5),d0
+;	addq.b	#1,d0
+;	cmp.b	#10,d0
+;	bls.b	.r
+;	clr.b	d0
+;.r	move.b	d0,early_new(a5)
+;pearly
+;	moveq	#0,d0
+;	move.b	early_new(a5),d0
+;	add	d0,d0
+;	lea	ls400+2(pc,d0),a0
+;	lea	bUu3,a1
+;	bra.w	prunt
+;
+;
+;
+;
+;ls400	dc.b	2,11
+;	dc.b	"0",0
+;	dc.b	"1",0
+;	dc.b	"2",0
+;	dc.b	"3",0
+;	dc.b	"4",0
+;	dc.b	"5",0
+;	dc.b	"6",0
+;	dc.b	"7",0
+;	dc.b	"8",0
+;	dc.b	"9",0
+;	dc.b	"10",0
+; even
+;
 
 
 ;samplecyber	rs.b	1
@@ -42241,9 +42259,12 @@ prefsFavoritest2       dc.b 1,0,1,0
        dc.w 0,0
        dc.l 0,0,0
 
+
+
 * "Button tooltips" button copypasted from above, 
 * x-coordinates adjusted manually.
-prefsTooltips dc.l 0
+
+prefsTooltips dc.l prefsSaveState
        dc.w 406-192,121,28,12,3,1,1
        dc.l prefsTooltipsgr,0,prefsTooltipst,0,0
        dc.w 0
@@ -42268,6 +42289,37 @@ prefsTooltipstx       dc.b "Button tooltips.........",0
 prefsTooltipst2       dc.b 1,0,1,0
        dc.w 0,0
        dc.l 0,0,0
+
+
+* "Save state" button
+prefsSaveState
+	dc.l 0
+       dc.w 406,121-42,28,12,3,1,1
+       dc.l prefsSaveStategr,0,prefsSaveStatet,0,0
+       dc.w 0
+       dc.l 0
+prefsSaveStategr       dc.w 0,0
+       dc.b 2,0,1,3
+       dc.l prefsSaveStatexy,prefsSaveStategr2
+prefsSaveStatexy       dc.w 0,11
+       dc.w 0,0
+       dc.w 27,0
+prefsSaveStategr2      dc.w 0,0
+       dc.b 1,0,1,3
+       dc.l prefsSaveStatexy2,0
+prefsSaveStatexy2      dc.w 27,1
+       dc.w 27,11
+       dc.w 1,11
+prefsSaveStatet        dc.b 1,0,1,0
+       dc.w -146,2
+       dc.l 0,prefsSaveStatetx,prefsSaveStatet2
+prefsSaveStatetx  
+	     dc.b "Keep list on exit ",0
+       even
+prefsSaveStatet2       dc.b 1,0,1,0
+       dc.w 0,0
+       dc.l 0,0,0
+
 
 ; Gadget
 gadgetListModeChangeButton
