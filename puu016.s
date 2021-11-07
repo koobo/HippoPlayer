@@ -21799,7 +21799,7 @@ scopeIsNormal
 * Opens the mini font for 4+ channel notescroller if needed
 getScopeMiniFontIfNeeded
 	tst.l	minifontbase(a5)
-	bne.w	.skip
+	bne.b	.skip
 	* See if we need the small font
 	move.b 	quadmode(a5),d0 
 	cmp.b	#QUADMODE_PATTERNSCOPE,d0 
@@ -21812,20 +21812,28 @@ getScopeMiniFontIfNeeded
 	move.l	d0,a0
 	cmp	#4,PI_Voices(a0)
 	bls.b	.skip
+	lea	diskfontname,a1
+	lore	Exec,OldOpenLibrary
+	tst.l 	d0 
+	beq.b	.skip 
+	move.l	d0,a6
 	lea	mini_text_attr,a0
-	lore	DiskFont,OpenDiskFont
+	lob	OpenDiskFont
 	move.l	d0,minifontbase(a5)
+	move.l	a6,a1
+	lore 	Exec,CloseLibrary
+	tst.l	minifontbase(a5)
 	bne.b	.miniOk
 	lea	.noFontMsg(pc),a1 
 	bsr	request
+.skip
+	rts
+.miniOk
+	DPRINT	"Got mini font"
 	rts
 .noFontMsg
 	dc.b	"Couldn't open 'mini4' font for patternscope!",0
 	even
-.miniOk
-	DPRINT	"Got mini font"
-.skip
-	rts
 
 ******* Quadrascopelle 
 voltab
