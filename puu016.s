@@ -23695,6 +23695,7 @@ samples0
 	rts
 	
 * Note scroller supporting the PI_PatternInfo data
+patternScope2
 noteScroller2
 	cmp.b	#QUADMODE_PATTERNSCOPE,quadmode(a5)
 	beq.b	.1
@@ -33591,16 +33592,16 @@ p_aon
 	jmp 	.id_aon(pc)
 	jmp	.author(pc)
 	dc.w 	pt_aon
-	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
+	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope
 	dc.b	"Art Of Noise 4ch",0
 .a	dc.b	"Bastian Spiegel (Twice/Lego)",0
  even
 
-.OFFSET_INIT = 0
-.OFFSET_PLAY = 4
-.OFFSET_END  = 8
-.OFFSET_STOP = 12
-.OFFSET_CONT = 16
+.OFFSET_INIT = $20+0
+.OFFSET_PLAY = $20+4
+.OFFSET_END  = $20+8
+.OFFSET_STOP = $20+12
+.OFFSET_CONT = $20+16
 
 .author
 	pushpea	.a(pc),d0
@@ -33634,7 +33635,8 @@ p_aon
 	jsr	.OFFSET_INIT(a4)
 	tst.l	d0
 	bne.b	.noMem
-	
+	move.l	a0,deliPatternInfo(a5)
+
 .x	popm	d1-a6
 	rts
 

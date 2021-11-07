@@ -1,7 +1,8 @@
-;APS0000ACB60000D5600000009100000091000000910000009100000091000000910000009100000091
+;APS0000ACF30000D59D0000009100000091000000910000009100000091000000910000009100000091
 	incdir	include:
 	include	exec/exec_lib.i
 	include	exec/memory.i
+	include	misc/eagleplayer.i
 	include	mucro.i
 
 TESTI	=	0
@@ -48,8 +49,8 @@ mod
 
 start
 
-	jmp	init(pc) 
-	jmp	play(pc)
+	jmp init(pc) 
+	jmp play(pc)
 	jmp end(pc) 
 	jmp stop(pc)
 	jmp continue(pc)
@@ -85,6 +86,7 @@ init
 	moveq #0,d0 * start pos
 	bsr.w	AON_INITFIX
 	bne.b	.err
+	bsr.w	PatternInit
 	moveq	#0,d0 
 	rts 
 
@@ -147,6 +149,49 @@ continue
 			lea $10(a1),a1
 			dbf	d1,.loop4
 			rts
+
+
+
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.l	#4+4+4+4,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	* note: zero = no note
+
+	moveq	#63,d0
+	and.b	(a0),d0
+	
+	moveq	#%00111111,d1
+	and.b	1(a0),d1
+
+	moveq	#$3f,d2
+	and.b	2(a0),d2
+	
+	move.b	3(a0),d3
+	rts
+
 
 ****************************************************************************
 
@@ -524,7 +569,7 @@ AON_SETREPEATS:
 ;---------------------- Neuen Step auslesen -------------------------
 aon_playnewstep
 			cmp.b	#$ff,aon_patcnt(a6)
-			beq.b	aon_breakpat
+			beq.w	aon_breakpat
 
 ; read new step
 aon_getstep
@@ -541,12 +586,25 @@ aon_nopatdelay		move.b	#-1,aon_patdelaycnt+1(a6)
 			moveq	#0,d0
 			move.b	acteditpattern(a6),d0
 			move.l	aon_pattdata(a6),a0	; get start of patdat
-
 			moveq	#10,d1
 			lsl.l	d1,d0			; patnr*1024=patoff
 			lea	(a0,d0.l),a0		; add to start of data
-			move	aon_patcnt(a6),d1
 
+			push 	a1
+			move.l a0,a1
+			move.l a1,Stripe1
+			addq	#4,a1
+			move.l a1,Stripe2
+			addq	#4,a1
+			move.l a1,Stripe3
+			addq	#4,a1
+			move.l a1,Stripe4
+			pop 	a1
+			move	aon_patcnt(a6),d1	* increments of 4
+			lsr 	#2,d1
+			move	d1,PatternInfo+PI_Pattpos
+
+			move	aon_patcnt(a6),d1
 			add	d1,d1			; *4 bcoz 1 Pattern
 			add	d1,d1			; =4 Channels
 			lea	(a0,d1.l),a0		; add pattcounter
