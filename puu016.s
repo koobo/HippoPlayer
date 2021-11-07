@@ -34503,7 +34503,7 @@ p_gamemusiccreator
 	jmp id_gamemusiccreator(pc)
 	jmp	.author(pc)
 	dc.w pt_gamemusiccreator
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume!pf_scope
 	dc.b	"Game Music Creator",0
 .a 	dc.b "Andreas Tadic",0
  even
@@ -34536,7 +34536,7 @@ p_gamemusiccreator
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
-	pushm	all
+	pushm	d0-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
@@ -34544,7 +34544,8 @@ p_gamemusiccreator
 	lea	pos_maksimi(a5),a4
 	move.l	gamemusiccreatorroutines(a5),a6
 	jsr	.GMC_INIT(a6)
-	popm	all
+	popm	d0-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 

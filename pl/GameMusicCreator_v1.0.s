@@ -1,7 +1,10 @@
 ;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
+    incdir	include:
+	include mucro.i
+	include	misc/eagleplayer.i
 
 
-testi = 1
+testi = 0
 
  ifne testi
 
@@ -11,7 +14,6 @@ testi = 1
     lea MUSICDATA,a4
     bsr id_gamemusiccreator
     beq okmod
-
     rts
 okmod
     
@@ -221,6 +223,9 @@ id_gamemusiccreator
     moveq  #-1,d0 
     rts
 
+
+
+
     section data,data_c
 
 mod
@@ -235,20 +240,65 @@ MUSICDATA
 * not identified properly:
  ;incbin "sys:Music/Roots/Modules/Game Music Creator/Paul McMaster/jet set willy 2 title.gmc"
  ;incbin "sys:Music/Roots/Modules/Game Music Creator/Robin Burrows/fatal mission - che bang.gmc"
- incbin "sys:Music/Roots/Modules/Game Music Creator/Ten Pin Alley/covert action - finalmusic.gmc"
+ incbin "M:exo/Game Music Creator/Ten Pin Alley/covert action - finalmusic.gmc"
  ;incbin "sys:Music/Roots/Modules/Game Music Creator/Ten Pin Alley/covert action - thememusic.gmc"
 
 MUSICDATALEN = *-MUSICDATA
 
 
-    section gmc,code_c
+    section gmc,code_p
  endc
 
 start
 
-    jmp MU_startmusic(pc)
+    jmp init(pc)
     jmp MU_interrupt(pc)
     jmp MU_stopmusic(pc)
+
+init
+    bsr.b MU_startmusic 
+    bsr.b PatternInit
+    moveq #0,d0
+    rts 
+
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.l	#4+4+4+4,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#6,PI_Speed(a0)	; Magic! Positive indicates periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+    move.b   2(a0),d1 
+    and.b    #$f0,d1 
+    beq.b   .noInstrument
+    lsr.b     #4,d1
+    * period
+    move    (a0),d0
+.noInstrument
+    moveq   #$0f,d2
+    and.b   2(a0),d2
+    move.b  3(a0),d3
+    rts
+
 
 *******************************************************
 ******** GameMusicCreator Replay-routine v1.0 *********
@@ -296,7 +346,7 @@ MU_startmusic:
 MU_sizeloop:
     move.w  (a2)+,d2
     cmp.w   d2,d0
-    bge     MU_nosizeadd
+    bge.b     MU_nosizeadd
     move.w  d2,d0
 MU_nosizeadd:
     dbf     d1,MU_sizeloop
@@ -305,14 +355,14 @@ MU_nosizeadd:
     add.l   #444,a1
     add.l   d0,a1
     move.l  #14,d7
-    bsr     MU_calcins
+    bsr.b     MU_calcins
     ;move.l  $6c,MU_oldirq+2
     ;move.l  #MU_interrupt,$6c
     rts
 
 MU_calcins:
     cmp.l   #0,(a0)
-    bne     MU_calcit
+    bne.b     MU_calcit
     add.l   #16,a0
     dbf     d7,MU_calcins
     rts 
@@ -325,7 +375,7 @@ MU_calcit:
     add.l   d1,d0
     move.l  d0,8(a0) ;set repeat
     cmp.w   #2,12(a0)
-    bne     mu_looping
+    bne.b     mu_looping
     move.l  #MU_empty,8(a0)
 mu_looping:
     clr.l   d0
@@ -348,23 +398,23 @@ MU_interrupt:
     movem.l  d0-d7/a0-a6,-(a7)
     ;btst     #5,$dff01f
     ;beq      MU_novertblank
-    bsr      MU_playsong
+    bsr.b      MU_playsong
 MU_novertblank:
     movem.l  (a7)+,d0-d7/a0-a6
 ;MU_oldirq:  jmp $0
     rts
 MU_playsong:
-    bsr     MU_everyvert
+    bsr.w     MU_everyvert
     add.w   #1,MU_songspeed
     move.w  MU_songstep,d0
     cmp.w   MU_songspeed,d0
-    ble     MU_okplay
+    ble.b     MU_okplay
     rts
 MU_okplay: 
     clr.w   MU_songspeed
     add.w   #1,MU_patterncount
     cmp.w   #65,MU_patterncount
-    bne     MU_playit
+    bne.w     MU_playit
 MU_setnewpat:
     ******* calc position ****
     add.l   #1,MU_pospointer
@@ -378,7 +428,7 @@ MU_setnewpat:
     move    240+2(a5),(a0)
 
     cmp.l   240(a5),d0
-    bhi     MU_setstart
+    bhi.b     MU_setstart
         ***********************
     move.w  #1,MU_patterncount
     add.l   #2,MU_tablepos
@@ -389,7 +439,17 @@ MU_setnewpat:
     add.l   #444,a0
     add.l   d0,a0
     move.l  a0,MU_songpointer
-    bra     MU_playit
+
+    move.l  a0,Stripe1
+    addq    #4,a0
+    move.l  a0,Stripe2
+    addq    #4,a0
+    move.l  a0,Stripe3
+    addq    #4,a0
+    move.l  a0,Stripe4
+    clr     PatternInfo+PI_Pattpos
+
+    bra.b     MU_playit
     ************************
 MU_setstart:
     clr.l   MU_pospointer
@@ -399,34 +459,35 @@ MU_setstart:
 
     move.l  MU_data,MU_tablepos
     add.l   #242,MU_tablepos
-    bra     MU_setnewpat
+    bra.w     MU_setnewpat
 MU_playit:
     move.l  MU_songpointer,a0
     add.l   #16,MU_songpointer
+    addq    #1,PatternInfo+PI_Pattpos
     move.l  (a0),d0
     clr.w   d3
     move.w  #1,d2
-    bsr     MU_setinstr
-    bsr     MU_seteffect
+    bsr.b     MU_setinstr
+    bsr.w     MU_seteffect
     move.l  4(a0),d0
     move.w  #2,d2
-    bsr     MU_setinstr
-    bsr     MU_seteffect
+    bsr.b     MU_setinstr
+    bsr.w     MU_seteffect
     move.l  8(a0),d0
     move.w  #3,d2
-    bsr     MU_setinstr
-    bsr     MU_seteffect
+    bsr.b     MU_setinstr
+    bsr.w     MU_seteffect
     move.l  12(a0),d0
     move.w  #4,d2
-    bsr     MU_setinstr
-    bsr     MU_seteffect
+    bsr.b     MU_setinstr
+    bsr.w     MU_seteffect
     move.w  d3,$dff096
     rts
 MU_setinstr:
     move.w  d0,d5
     and.w   #$f000,d0
     cmp.w   #0,d0
-    bne     MU_setit
+    bne.b     MU_setit
     rts
 MU_setit:
     swap    d0
@@ -440,7 +501,7 @@ MU_setit:
     move.l  MU_data,a6
     add.l   d0,a6
     cmp.w   #1,d2
-    bne     MU_conti1
+    bne.b     MU_conti1
     clr.w   $dff0a8
     move.l  a6,MU_chan0
     move.l  (a6),$dff0a0
@@ -453,7 +514,7 @@ MU_setit:
     rts
 MU_conti1:
     cmp.w   #2,d2
-    bne     MU_conti2
+    bne.b     MU_conti2
     clr.w   $dff0b8
     move.l  a6,MU_chan1
     move.l  (a6),$dff0b0
@@ -466,7 +527,7 @@ MU_conti1:
     rts
 MU_conti2:
     cmp.w   #3,d2
-    bne     MU_conti3
+    bne.b     MU_conti3
     clr.w   $dff0c8
     move.l  a6,MU_chan2
     move.l  (a6),$dff0c0
@@ -493,33 +554,33 @@ MU_seteffect:
     and.w   #$00ff,d5
     and.w   #$0f00,d6
     cmp.w   #0,d6
-    beq     MU_effjump2
+    beq.b     MU_effjump2
     cmp.w   #$0100,d6
-    beq     MU_slideup
+    beq.w     MU_slideup
     cmp.w   #$0200,d6
-    beq     MU_slidedown
+    beq.w     MU_slidedown
     cmp.w   #$0300,d6
-    beq     MU_setvolume
+    beq.w     MU_setvolume
     cmp.w   #$0500,d6
-    beq     MU_posjump
+    beq.b     MU_posjump
     cmp.w   #$0400,d6
-    bne     MU_nobreak
+    bne.b     MU_nobreak
 MU_itsabreak:
     move.w  #64,MU_patterncount
     rts
 MU_nobreak:
     cmp.w   #$0800,d6
-    bne     MU_effjump0
+    bne.b     MU_effjump0
     move.w  d5,MU_songstep
     rts
 MU_effjump0:
     cmp.w   #$0600,d6
-    bne     MU_effjump1
+    bne.b     MU_effjump1
     bclr    #1,$bfe001
     rts
 MU_effjump1:
     cmp.w   #$0700,d6
-    bne     MU_effjump2
+    bne.b     MU_effjump2
     bset    #1,$bfe001
 MU_effjump2:
     rts
@@ -535,22 +596,22 @@ MU_posjump:
     add.l   #244,a0
     add.l   d4,a0
     move.l  a0,MU_tablepos
-    bra     MU_itsabreak
+    bra.b     MU_itsabreak
 MU_slideup:
     neg.w   d5
 MU_slidedown:
     cmp.w   #1,d2
-    bne     MU_j1
+    bne.b     MU_j1
     move.w  d5,MU_slide0
     rts
 MU_j1:
     cmp.w   #2,d2
-    bne     MU_j2
+    bne.b     MU_j2
     move.w  d5,MU_slide1
     rts
 MU_j2:
     cmp.w   #3,d2
-    bne     MU_j3
+    bne.b     MU_j3
     move.w  d5,MU_slide2
     rts
 MU_j3:
@@ -558,19 +619,19 @@ MU_j3:
     rts
 MU_setvolume:
     cmp.w   #1,d2
-    bne     MU_j00
+    bne.b     MU_j00
     move.w  d5,MU_vol0
     ;move.w  d5,$dff0a8
     rts
 MU_j00:
     cmp.w   #2,d2
-    bne     MU_j22
+    bne.b     MU_j22
     move.w  d5,MU_vol1
     ;move.w  d5,$dff0b8
     rts
 MU_j22:
     cmp.w   #3,d2
-    bne     MU_j33
+    bne.b     MU_j33
     move.w  d5,MU_vol2
     ;move.w  d5,$dff0c8
     rts
@@ -592,7 +653,7 @@ MU_everyvert:
     add.w   d0,MU_note3
     move.w  MU_note3,$dff0d6
     btst    #0,MU_stop
-    beq     MU_ok1
+    beq.b     MU_ok1
     bclr    #0,MU_stop
     move.l  MU_chan0,a0
     move.l  8(a0),$dff0a0
@@ -600,7 +661,7 @@ MU_everyvert:
     clr.l   MU_chan0
 MU_ok1:
     btst    #1,MU_stop
-    beq     MU_ok2
+    beq.b     MU_ok2
     bclr    #1,MU_stop
     move.l  MU_chan1,a0
     move.l  8(a0),$dff0b0
@@ -608,7 +669,7 @@ MU_ok1:
     clr.l   MU_chan1
 MU_ok2:
     btst    #2,MU_stop
-    beq     MU_ok3
+    beq.b     MU_ok3
     bclr    #2,MU_stop
     move.l  MU_chan2,a0
     move.l  8(a0),$dff0c0
@@ -616,7 +677,7 @@ MU_ok2:
     clr.l   MU_chan2
 MU_ok3:
     btst    #3,MU_stop
-    beq     MU_ok4
+    beq.b     MU_ok4
     bclr    #3,MU_stop
     move.l  MU_chan3,a0
     move.l  8(a0),$dff0d0
@@ -625,22 +686,22 @@ MU_ok3:
 MU_ok4:
     move.w   #$8000,d3
     cmp.l    #0,MU_chan0
-    beq      MU_okk1
+    beq.b      MU_okk1
     bset     #0,MU_stop
     bset     #0,d3
 MU_okk1:
     cmp.l    #0,MU_chan1
-    beq      MU_okk2
+    beq.b      MU_okk2
     bset     #1,MU_stop
     bset     #1,d3
 MU_okk2:
     cmp.l    #0,MU_chan2
-    beq      MU_okk3
+    beq.b      MU_okk3
     bset     #2,MU_stop
     bset     #2,d3
 MU_okk3:
     cmp.l    #0,MU_chan3
-    beq      MU_okk4
+    beq.b      MU_okk4
     bset     #3,MU_stop
     bset     #3,d3
 MU_okk4:
