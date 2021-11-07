@@ -1,10 +1,13 @@
 ;APS0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B
-testi = 1
+testi = 0
 
 
 	incdir	include:
 	include exec/memory.i
 	include exec/exec_lib.i
+	include	misc/eagleplayer.i
+	include	mucro.i
+
  ifne testi
 
 	lea	Music,a0 
@@ -64,6 +67,8 @@ lbL001912	dc.l	0
 lbL0021D2	dc.l	0
 lbL002A94	dc.l	0
 
+numOfVoices	dc		0
+
 init_ 
 	move.l	a0,moduleAddr
 	move.l	a1,songEndAddr
@@ -89,20 +94,35 @@ init_
 	move.l	lbL001912(pc),(a0)+
 	move.l	lbL0021D2(pc),(a0)+
 
+
+	MOVE.L	moduleAddr(PC),D0
+	MOVE.L	D0,A0
+	ADDQ.L	#8,A0
+	MOVE.L	#"CMOD",D0
+	BSR	FindBlock
+	MOVEQ	#4,D0
+	ADD.W	(A0)+,D0
+	ADD.W	(A0)+,D0
+	ADD.W	(A0)+,D0
+	ADD.W	(A0)+,D0
+	MOVE	D0,numOfVoices
+
+
 	move.l	moduleAddr(pc),a0
-	bsr.b	init
+	bsr.w	init
+	bsr	PatternInit
 	moveq	#0,d0
 	rts
 .mem 
 	moveq	#-1,d0 
 	rts
 music_
-	bsr.b	music
+	bsr.w	music
 	move	curPos(pc),d0 
 	move	maxPos(pc),d1
 	rts 
 end_ 
-	bsr.b	end
+	bsr.w	end
 	move.l	chipAddr(pc),d0 
 	beq.b 	.x 
 	move.l	d0,a1 
@@ -112,6 +132,62 @@ end_
 	clr.l	chipAddr 
 .x	rts
 
+
+
+
+
+PatternInfo
+	ds.b	PI_Stripes
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+Stripe5	dc.l	1
+Stripe6	dc.l	1
+Stripe7	dc.l	1
+Stripe8	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	
+	move	numOfVoices(pc),d0
+	move	d0,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	lsl		#2,d0
+	ext.l	d0 
+	move.l	d0,PI_Modulo(a0)
+	
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+
+FindBlock	MOVEM.L	D2/D3,-(SP)
+.l	MOVEM.L	(A0)+,D2/D3
+	ADD.L	D3,A0
+	CMP.L	D2,D0
+	BNE.S	.l
+	SUB.L	D3,A0
+	MOVE.L	D3,D0
+	MOVEM.L	(SP)+,D2/D3
+	RTS
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	* note index, 0 = no note
+	move.b	(a0),D0
+	move.b	1(a0),d1
+	move.b	2(a0),d2
+	move.b	3(a0),d3
+	rts
+	
 init
 	JMP	lbC00002C(pc)
 music
@@ -262,8 +338,8 @@ lbC000194	OR.W	(A0)+,D1
 	MOVE.W	D0,$C6(A6)
 	MOVE.W	D0,$D6(A6)
 	MOVE.W	#$FF,$9E(A6)
-	BSR.W	lbC00103A
-	BSR.W	lbC00103A
+	BSR.W	dmaWait
+	BSR.W	dmaWait
 	ST	lbB000204
 	RTS
 
@@ -271,6 +347,7 @@ lbW000202	dc.w	0
 lbB000204	dc.b	0
 	dc.b	0
 
+* Play
 lbC000206	MOVE.B	lbB000204(PC),D0
 	BEQ.S	lbC00021A
 	MOVE.W	#$800F,$DFF096
@@ -897,24 +974,26 @@ lbW0007CC	dc.w	lbW0007CC-lbW0007CC
 	dc.w	lbW0007CC-lbW0007CC
 
 lbC000814	CLR.W	lbW0010A4
-	MOVE.L	lbL0010A6(PC),A1
+	MOVE.L	patternAddr(PC),A1
 	ADD.W	lbW0010AA(PC),A1
-	MOVE.L	A1,lbL0010A6
-	ADDQ.W	#1,lbW0010AC
+	MOVE.L	A1,patternAddr
+	ADDQ.W	#1,okta_PattPos
 	BSR.B	lbC0008A2
 	TST.W	lbW0010B0
 	BPL.S	lbC000840
-	CMP.W	lbW0010AC(PC),D0
+	CMP.W	okta_PattPos(PC),D0
 	BGT.S	lbC000888
-lbC000840	CLR.W	lbW0010AC
+lbC000840	CLR.W	okta_PattPos
 	MULU	lbW0010AA(PC),D0
-	SUB.L	D0,lbL0010A6
+	SUB.L	D0,patternAddr
 	TST.W	lbW0010B0
 	BMI.S	lbC000862
 	MOVE.W	lbW0010B0(PC),lbW0010B2
 	BRA.S	lbC000868
 
-lbC000862	ADDQ.W	#1,lbW0010B2	* cur pos
+NextSongPos
+lbC000862	
+	ADDQ.W	#1,lbW0010B2	* cur pos
 lbC000868	MOVE.W	lbW0010B2(PC),D0
 	CMP.W	lbW000148(pc),D0	* max pos
 	BNE.S	lbC000884
@@ -924,10 +1003,15 @@ lbC000868	MOVE.W	lbW0010B2(PC),D0
 	CLR.W	lbW0010B2
 	MOVE.W	lbW000146(pc),lbW0010AE
 lbC000884	BSR.B	lbC0008B4
-lbC000888	MOVE.L	lbL0010A6(PC),A0
+lbC000888	MOVE.L	patternAddr(PC),A0
 	MOVEM.L	(A0),D0-D7
 	MOVEM.L	D0-D7,lbW001830
 	MOVE.W	#$FFFF,lbW0010B0
+
+	push	a0
+	lea		PatternInfo(pc),a0
+	move	okta_PattPos(pc),PI_Pattpos(a0)
+	pop 	a0
 	RTS
 
 lbC0008A2	MOVE.W	lbW0010B2(PC),D0
@@ -939,9 +1023,22 @@ lbC0008B4	LEA	lbL001550,A0
 	MOVE.W	lbW0010B2(PC),D2
 	MOVEQ	#0,D0
 	MOVE.B	0(A0,D2.W),D0
+
+	LEA	PatternInfo(PC),A0
+	MOVE.W	D0,PI_Pattern(A0)
 	BSR.B	lbC0008D6
-	MOVE.L	A0,lbL0010A6
-	CLR.W	lbW0010AC
+	MOVE.L	A0,patternAddr
+	CLR.W	okta_PattPos
+
+	MOVEM.L	D0/A0/A1,-(SP)
+	LEA	PatternInfo(PC),A1
+	MOVE.W	D0,PI_Pattlength(A1)	
+	LEA		PI_Stripes(A1),A1	
+	MOVEQ	#8-1,D0
+.s	MOVE.L	A0,(A1)+
+	ADDQ.L	#4,A0
+	DBRA	D0,.s
+	MOVEM.L	(SP)+,D0/A0/A1
 	RTS
 
 lbC0008D6	LEA	lbL0015D0,A0
@@ -1149,7 +1246,7 @@ lbC000B44	BTST	#3,D0
 lbC000B56	RTS
 
 lbC000B58	LEA	lbW001830,A2
-	LEA	lbW001850,A3
+	LEA	lbW001850,A3	* patterndata?
 	LEA	$DFF0A0,A4
 	LEA	lbW00105A(PC),A6
 	MOVEQ	#1,D5
@@ -1158,8 +1255,8 @@ lbC000B72	TST.B	(A3)
 	BNE.S	lbC000B8C
 	BSR.S	lbC000BA0
 	ADDQ.W	#4,A2
-	LEA	$1C(A3),A3
-	LEA	$10(A4),A4
+	LEA	$1C(A3),A3	* next row?
+	LEA	$10(A4),A4	* next chan data?
 	ADD.W	D5,D5
 	SUBQ.W	#1,D7
 	DBRA	D7,lbC000B72
@@ -1577,11 +1674,11 @@ lbC000F22	MOVE.L	D1,(A0)+
 	MOVE.L	D0,(A0)+
 	MOVE.L	D0,(A0)+
 	BSR.W	lbC0008B4
-	SUBQ.W	#1,lbW0010AC
+	SUBQ.W	#1,okta_PattPos
 	MOVE.W	#$FFFF,lbW0010B0
-	MOVE.L	lbL0010A6(PC),A0
+	MOVE.L	patternAddr(PC),A0
 	SUB.W	lbW0010AA(PC),A0
-	MOVE.L	A0,lbL0010A6
+	MOVE.L	A0,patternAddr
 	MOVE.W	lbW000146,lbW0010AE
 	CLR.W	lbW0010A4
 	CLR.W	lbB0010C4
@@ -1650,7 +1747,7 @@ lbC00102C	MOVE.W	D0,lbW0010CC
 	MOVE.W	D1,lbW0010CE
 	RTS
 
-lbC00103A	MOVEM.L	D0/D1,-(SP)
+dmaWait	MOVEM.L	D0/D1,-(SP)
 	MOVEQ	#4,D1
 lbC001040	MOVE.B	$DFF006,D0
 lbC001046	CMP.B	$DFF006,D0
@@ -1698,9 +1795,9 @@ lbW00105A	dc.w	$358
 	dc.w	$71
 	dc.w	0
 lbW0010A4	dc.w	0
-lbL0010A6	dc.l	0
+patternAddr	dc.l	0
 lbW0010AA	dc.w	0
-lbW0010AC	dc.w	0
+okta_PattPos	dc.w	0
 lbW0010AE	dc.w	0
 lbW0010B0	dc.w	0
 curPos
