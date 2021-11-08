@@ -2748,6 +2748,7 @@ bob
 .oohi
 
 
+
  ifne EFEKTI
 	jsr	efekti
  endc
@@ -36439,7 +36440,7 @@ p_startrekker
 	jmp 	.id(pc)
 	jmp	.author(pc)
 	dc.w 	pt_startrekker
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope
 	dc.b	"StarTrekker AM",0
 .a 	dc.b "Bjoern Wesen/Exolon of Fairlight",0
  even
@@ -36538,6 +36539,7 @@ p_startrekker
 	jsr	.INIT(a5)
 	moveq	#0,d0
 	pop 	a5
+	move.l	a0,deliPatternInfo(a5)
 	move	d1,pos_maksimi(a5)
 .x
 	popm	d1-a6

@@ -2,6 +2,7 @@
 
 	incdir 	include:
 	include mucro.i 
+	include	misc/eagleplayer.i
 
 test=0
 
@@ -98,11 +99,12 @@ init
 	move.l  a3,songEndAddr
 	move.l  a4,dmaWaitAddr
 
-	bsr.b	mt_init
-	
-	move.l	moduleAddr(pc),a0 
+	bsr.w	mt_init
+	bsr.b	PatternInit
+
+	move.l	moduleAddr(pc),a1 
 	moveq	#0,d1
-	move.b	$3b6(a0),d1 
+	move.b	$3b6(a1),d1 
 	moveq	#0,d0
 	rts 
 
@@ -125,6 +127,54 @@ songEndAddr		dc.l 	0
 dmaWaitAddr		dc.l 	0
 mainVolAddr		dc.l 	0
 mainVol			dc.w 	0
+
+
+
+
+
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.l	#4+4+4+4,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#6,PI_Speed(a0)		; Magic! Indicates periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	; 00 11 22 33
+	; Sp pp Sc aa
+
+	* sample num
+	move.b	2(a0),d1
+	lsr.b	#4,d1
+	move.b	(a0),d0
+	and.b	#$f0,d0
+	or.b	d0,d1
+
+	moveq	#$f,d2
+	and.b	2(a0),d2
+	move.b	3(a0),d3
+
+	move	(a0),d0
+	and	#$fff,d0
+	rts
 
 mt_init:
 	move.l moduleAddr(pc),a0
@@ -205,6 +255,19 @@ mt_music:
 	move.b	(a2,d0.w),d1
 	lsl.w	#8,d1
 	lsl.w	#2,d1
+
+	lea		(a0,d1.l),a5
+	move.l	a5,Stripe1
+	addq	#4,a5
+	move.l	a5,Stripe2
+	addq	#4,a5
+	move.l	a5,Stripe3
+	addq	#4,a5
+	move.l	a5,Stripe4
+	move	mt_pattpos(pc),d2
+	lsr		#4,d2
+	move	d2,PatternInfo+PI_Pattpos	
+
 	add.w	mt_pattpos(pc),d1
 	clr.w	mt_dmacon
 
