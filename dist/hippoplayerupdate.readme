@@ -105,14 +105,57 @@ List of supported formats:
 # Changes from v2.48 (31.10.2021) to v2.49 (?.?.202?)
 
 ## New fixes:
+- The font selector in Prefs had a proper bug that made it ignore user
+  selected font received from the font requester. The default font
+  therefore could not be changed, until now. Note: Hippo accepts
+  8x8 fixed fonts only.
+- Fix the case where the scope window is sometimes left too tall.
+- When starting with empty list in random mode, ensure that the first
+  module being played is actually random and not the first one.
+- Do not draw the new list mode change button if it doesn't fit, 
+  removing the visual glitch when window is minified with RMB+Pr.
 
 ## New features:
-- Patternscope support for
-  - Future Composer v1.4
+- Patternscope support added to the following formats:
+  - Art Of Noise (4 voices)
+  - BP SoundMon v2, v3 
+    - Note and sample transposes are not shown
+  - ChipTracker 
+  - Digital Mugician
+  - Digital Mugician 2 (7 voices)
+  - Future Composer v1.0-v1.4
+    - Note and sample transposes are not shown
+  - Game Music Creator
   - JamCracker
-  - ChipTracker
-  - The Musical Enlightenment
+  - Oktalyzer (4-8 voices)
+  - SoundFX 
   - TCBTracker
+  - The Musical Enlightenment
+- Patternscope notes
+  - The 5-8 voice patternscope needs a small font,  "mini4", 
+    available on aminet: https://aminet.net/text/bfont/mini.font.lha
+  - Playing a 8 voice module on a 68000 takes a lot of CPU power and not much
+    is left for the patternsope, so some jerkiness is to be expected.
+- P96 multi screen fix: when scope if manually reactivated by LMB click,
+  this will be remembered until app is closed.
+- New Prefs setting: "Keep list on exit". This enables the following:
+  - Module list will be saved on exit and restored when Hippo is started again.
+  - Chosen module and playing state are preserved.
+  - File requester path that was last used to add files to 
+    the list will be used the next time file requester is opened.
+  - Note! This feature relies on file system comments working.
+  
+## Music format related fixes
+- Digital Mugician upgraded to Wanted Team eagleplayer. Supports subsongs,
+  pattern skipping, patternscope.
+  
+## New Eagleplayer formats, plugin name in parentheses:
+- Sound FX ("sound fx")
+  - Eagleplayer by Wanted Team
+- Jason Page ("jason page")
+  - Eagleplayer by Wanted Team
+- Steve Turner ("steve turner")
+  - Eagleplayer by Wanted Team
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
