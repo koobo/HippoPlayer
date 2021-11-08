@@ -2762,6 +2762,13 @@ bob
 .komento0
 	bsr.w	komentojono			* tutkitaan komentojono.
 
+	* Command line and startup modules handled,
+	* if none of these provided stuff, try the saved
+	* state modules.
+	tst.l 	modamount(a5)
+	bne.b	.skip
+	jsr	importSavedStateModulesFromDisk
+.skip
 
 *********************************************************************************
 *
@@ -3200,6 +3207,7 @@ exit
  even
 .exmsg2
 	jsr	exportFavoriteModulesToDisk
+	jsr	exportSavedStateModulesToDisk
 
 * poistetaan loput prosessit...
 
@@ -27313,48 +27321,11 @@ importFavoriteModulesFromDisk
 	bsr.w	enableListModeChangeButton
 
 	moveq	#0,d6
-
 	lea	favoriteModuleFileName(pc),a0
-	move.l	a0,d1
-	move.l	#1005,d2
-	lore 	Dos,Open
-	move.l	d0,d4
-	beq.b	.error
-
-	move.l	d4,d1		* figure out file length
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d4,d1
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d0,d5		* which is this
-
-	move.l	d4,d1
-	moveq	#0,d2
-	moveq	#-1,d3
-	lob	Seek	
-
-	move.l	d5,d0		* get some mem
-	moveq	#MEMF_PUBLIC,d1
-	jsr	getmem
+	jsr	plainLoadFile
 	move.l	d0,d6
-	beq.b	.error 
-
-	move.l	d4,d1		* file
-	move.l	d6,d2		* destination
-	move.l	d5,d3		* pituus
-	lob	Read
-	* ignore errors here
-
-.error
-	move.l	d4,d1
-	beq.b	.noClose
-	lore	Dos,Close
-.noClose
-	tst.l	d6
 	beq.b	.noData
+	move.l	d1,d5
 
 	lea favoriteListHeader(a5),a2
 	move.l	d6,a3			* start of buffer	
@@ -27673,6 +27644,129 @@ disableListModeChangeButton
 	or	#GFLG_DISABLED,gg_Flags(a0)
 	jsr	refreshGadgetInA0
 .x	rts
+
+
+*******************************************************************************
+* Save state operations
+* - module list
+* - chosen module
+* - play status
+*******
+
+importSavedStateModulesFromDisk
+	DPRINT	"importSavedStateModulesFromDisk"
+	tst.b	savestate(a5)
+	bne.b	.enabled
+.error	rts
+
+.enabled
+	lea	savedStateModuleFileName(pc),a0
+	jsr	plainLoadFile
+	move.l	d0,d6	* address
+	beq.b	.error
+	move.l	d1,d7 	* length
+
+	lea moduleListHeader(a5),a2
+	move.l	d6,a3		* start of buffer	
+	lea	(a3,d7.l),a4	* end of buffer
+	jsr	importModuleProgramFromData
+	DPRINT 	"Imported %ld files"
+
+	move.l	d6,a0
+	jsr	freemem
+
+	tst.l	d0
+	beq.b	.none
+	move.l	d0,modamount(a5)
+	
+	pushpea	savedStateModuleFileName(pc),d1
+	moveq	#ACCESS_READ,d2
+	lore	Dos,Lock
+	move.l	d0,d4
+	beq.b	.noLock
+	move.l	d4,d1
+	pushpea	fileinfoblock(a5),d2
+	lob	Examine
+	move.l	d4,d1
+	beq.b	.noLock
+	lob	UnLock
+	lea	fileinfoblock+fib_Comment(a5),a0
+	move.l	a0,d0
+	cmp.b	#" ",8(a0)
+	beq.b	.parse
+.noLock
+.exit
+	jsr	resh
+.none
+	rts
+	
+.parse
+* "00000000 0"
+* convert into number
+	moveq	#0,d3
+	moveq	#28,d1
+	moveq	#8-1,d2
+.loop
+	moveq	#0,d0
+	move.b	(a0)+,d0
+	cmp.b	#"A",d0
+	bhs.b	.hi 
+	sub.b	#"0",d0
+	bra.b	.lo
+.hi
+	sub.b	#"A"-10,d0
+.lo
+	lsl.l	d1,d0
+	or.l	d0,d3
+	subq.l	#4,d1
+	dbf	d2,.loop
+
+	tst.l	d3
+	bmi.b	.neg
+	move.l	d3,chosenmodule(a5)
+.neg
+	cmp.b	#"1",1(a0)
+	bne.b	.exit
+
+	jsr	resh
+	jmp	playButtonAction
+	
+
+exportSavedStateModulesToDisk
+	DPRINT	"exportSavedStateModulesToDisk"
+	tst.b	savestate(a5)
+	beq.b	.x
+
+	lea	savedStateModuleFileName(pc),a0
+	lea	moduleListHeader(a5),a1
+	jsr 	exportModuleProgramToFile
+
+	* Store playing state and chosen module into comment
+	move.l	chosenmodule(a5),d0
+
+	moveq	#0,d1
+	tst.l	playingmodule(a5)
+	bmi.b	.no
+	moveq	#1,d1
+.no
+	
+	lea	.comment(pc),a0
+	lea	probebuffer(a5),a1
+	jsr	desmsg
+
+	pushpea	savedStateModuleFileName(pc),d1
+	pushpea	desbuf(a5),d2
+	lore	Dos,SetComment
+
+.x	rts
+
+.comment	dc.b	"%08lx %ld",0
+		even
+
+savedStateModuleFileName
+	dc.b	"S:HippoSavedList.prg",0
+ even
+
 
 *******************************************************************************
 * CreatePort
@@ -33746,7 +33840,7 @@ p_multi	jmp	.s3init(pc)
 	rts
 .ok	bsr.w	vapauta_kanavat
 
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	moveq	#ier_nociaints,d0
 	rts
