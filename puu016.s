@@ -1189,6 +1189,11 @@ deliStoredGetPositionNr rs.l 1
 deliPath		rs.l	1
 deliPathArray		rs.l	1	
 deliPatternInfo		rs.l 	1
+
+* Path read from auto saved modulelist comment,
+* which is the last path used to add files to list
+lastStoredFileReqDirectory	rs.l 	1
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -3288,6 +3293,8 @@ exit
 	bsr.w	freemem
 	move.l	randomtable(a5),a0
 	bsr.w 	freemem
+	move.l	lastStoredFileReqDirectory(a5),a0 
+	bsr	freemem
 
 	jsr	closeTooltipPopup
 	bsr.w	flush_messages
@@ -9480,11 +9487,30 @@ filereq_code
 	beq.b	.eimuut
 	clr.b	newdirectory(a5)
 
+	* Use either prefs set directory, or one from saved state
+
 	move.l	req_file(a5),a1		* Vaihdetaan hakemistoa...
 	lea	newdir_tags(pc),a0
 	lea	moduledir(a5),a2
 	move.l	a2,4(a0)
+
+	tst.b	savestate(a5)
+	beq.b	.noSaveState
+	move.l	lastStoredFileReqDirectory(a5),d0 
+	beq.b	.noSaveState
+	move.l	d0,4(a0)
+.noSaveState
+ if DEBUG
+	move.l	4(a0),d0
+	DPRINT	"FileReq to %s"
+ endif
 	lore	Req,rtChangeReqAttrA
+
+	* When set once, filereq will remember the 
+	* last user dir.
+	move.l	lastStoredFileReqDirectory(a5),a0 
+	bsr		freemem
+	clr.l	lastStoredFileReqDirectory(a5)
 
 .eimuut
 
@@ -9526,7 +9552,6 @@ filereq_code
 	rts
 
 .processResult
-
 	* Test if user selected anything or canceled
 	move.l	d0,filelistaddr(a5)
 	bne.b	.val
@@ -27727,8 +27752,36 @@ importSavedStateModulesFromDisk
 	move.l	d3,chosenmodule(a5)
 .neg
 	cmp.b	#"1",1(a0)
-	bne.b	.exit
+	seq	d7
 
+	cmp.b	#" ",2(a0)
+	bne.b	.noPath
+	tst.b	3(a0)
+	beq.b	.noPath
+
+	lea	3(a0),a1
+	move.l	a1,a2
+.fl	tst.b	(a2)+
+	bne.b	.fl
+	
+	move.l	a2,d0
+	sub.l	a1,d0 
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,lastStoredFileReqDirectory(a5) 
+	beq.b	.noPath
+	move.l	d0,a0
+.copy
+	move.b	(a1)+,(a0)+
+	cmp.l	a2,a1
+	bne.b	.copy
+
+	DPRINT	"Saved filereq path=%s"
+
+.noPath
+	* Finally, either just refresh or play.
+	tst.b	d7
+	beq.w	.exit
 	jsr	resh
 	jmp	playButtonAction
 	
@@ -27750,10 +27803,27 @@ exportSavedStateModulesToDisk
 	bmi.b	.no
 	moveq	#1,d1
 .no
-	
+	* Store last used dir as well
+	* Try the reqtools dir first
+	move.l	req_file(a5),d2
+	beq.b	.doEmpty
+	move.l	d2,a0
+	move.l	rtfi_Dir(a0),d2
+	bne.b	.yesDir
+.doEmpty
+	* ..then the previously stored one
+	move.l	lastStoredFileReqDirectory(a5),d2
+	bne.b	.yesDir
+	pushpea	.empty(pc),d2
+.yesDir
 	lea	.comment(pc),a0
 	lea	probebuffer(a5),a1
 	jsr	desmsg
+
+ if DEBUG 
+	pushpea desbuf(a5),d0
+	DPRINT	"->%s"
+ endif
 
 	pushpea	savedStateModuleFileName(pc),d1
 	pushpea	desbuf(a5),d2
@@ -27761,7 +27831,8 @@ exportSavedStateModulesToDisk
 
 .x	rts
 
-.comment	dc.b	"%08lx %ld",0
+.comment	dc.b	"%08lx %ld %s"
+.empty		dc.b	0
 		even
 
 savedStateModuleFileName
@@ -33726,7 +33797,7 @@ p_aon
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
