@@ -27717,7 +27717,10 @@ importSavedStateModulesFromDisk
 	beq.b	.noLock
 	lob	UnLock
 	lea	fileinfoblock+fib_Comment(a5),a0
+ if DEBUG
 	move.l	a0,d0
+	DPRINT	"->%s"
+ endif
 	cmp.b	#" ",8(a0)
 	beq.b	.parse
 .noLock
@@ -28474,7 +28477,6 @@ internalFormats
 	dr.w 	p_deltamusic 
 	dr.w	p_markii 
 	dr.w 	p_mon
-	dr.w 	p_dw
 	dr.w 	p_beathoven 
 	dr.w	p_hippel	* very slow id 
 	dc.w 	0
@@ -28553,6 +28555,7 @@ eagleFormats
 	dr.w 	p_jasonpage
 	dr.w	p_specialfx
 	dr.w	p_steveturner
+	dr.w 	p_davidwhittaker
 	dr.w	p_activisionpro  	* very slow id
 	dc.w 	0	
 
@@ -32388,177 +32391,112 @@ p_mon	jmp	.moninit(pc)
 * David Whittaker
 ******************************************************************************
 
-p_dw	jmp	.dwinit(pc)
-	jmp	.dwmusic(pc)
+p_davidwhittaker
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
 	p_NOP
-	jmp	.dwend(pc)
-	jmp	clearsound(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
 	p_NOP
-	p_NOP
-	jmp	.dwsong(pc)
-	p_NOP
-	p_NOP
-	p_NOP
-	jmp id_davidwhittaker(pc)
-	jmp	.author(pc)
-	dc pt_dw
-	dc	pf_stop!pf_cont!pf_song!pf_ciakelaus
-.a	dc.b	"David Whittaker",0
- even
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_davidwhittaker
+.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"David Whittaker     [EP]",0
+	        
+.path 	dc.b "david whittaker",0
+ 	even
 
-.author
-	pushpea	.a(pc),d0
+.init
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bsr.w	deliLoadAndInit
 	rts
 
-.dwinit
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr.w	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-
-.init	
-	moveq.l	#0,d0
-	move	songnumber(a5),d0
-	move.l	moduleaddress(a5),a0
-	jsr	(a0)
-	moveq	#0,d0
-	rts	
-
-
-.dwmusic
-	move.l	moduleaddress(a5),a0
-	moveq	#0,d0
-	jmp	14(a0)
-
-
-.dwsong	bsr.b	.dend
-	bra.b	.init
-
-.dwend	bsr.w	rem_ciaint
-	pushm	all
-	bsr.b	.dend
-	popm	all
-	bra.w	vapauta_kanavat
-
-
-.dend	move.l	whittaker_end(pc),a0
-	moveq.l	#0,d0
-	jmp	(a0)
-
-
-
-whittaker_end	dc.l	0
-
-
-
-
-id_davidwhittaker
-	bsr.b 	.id_davidwhittaker_
-	bne.b 	.x 
-	move	d5,maxsongs(a5)
-	move.l	d6,whittaker_end
-	moveq	#0,d0
-.x	rts
-
-.id_davidwhittaker_
-* d5 => maxsongs
-* d6 => whittaker_end
-
+.id
 	move.l	a4,a0
-;	move.l	moduleaddress(a5),d0
-	move.l	a0,d0
+	MOVEQ	#-1,D0
+	MOVE.L	A0,A1
+	CMP.L	#$48E7F1FE,(A1)
+	BNE.S	.lbC0003DC
+	ADDQ.L	#4,A1
+	CMP.W	#$6100,(A1)+
+	BNE.S	.lbC000410
+	ADD.W	(A1),A1
+	MOVEQ	#9,D1
+.lbC0003C4	CMP.W	#$47FA,(A1)+
+	BEQ.S	.lbC0003D0
+	DBRA	D1,.lbC0003C4
+	RTS
 
-	cmp.w	#$48e7,(a0)
-	bne.s	.wc000130
-	cmp.w	#$6100,4(a0)
-	bne.s	.wc000130
-	cmp.w	#$4cdf,8(a0)
-	bne.s	.wc000130
-	cmp.w	#$4e75,12(a0)
-	bne.s	.wc000130
-	cmp.w	#$48e7,14(a0)
-	bne.s	.wc000130
-	cmp.w	#$6100,$0012(a0)
-	bne.s	.wc000130
-	cmp.w	#$4cdf,$0016(a0)
-	bne.s	.wc000130
-	cmp.w	#$4e75,$001a(a0)
-	beq.s	.wc000136
-.wc000130	moveq.l	#-1,d0
-	bra.w	.wc0001de
- 
-.wc000136	moveq.l	#$1c,d1
-	add.l	d1,a0
-	sub.l	d1,d0
-.wc00013c	cmp.w	#$43fa,(a0)
-	bne.s	.wc000154
-	cmp.l	#$4880c0fc,4(a0)
-	bne.s	.wc000154
-	cmp.w	#$41fa,10(a0)
-	beq.s	.wc00015c
-.wc000154	addq.l	#2,a0
-	subq.l	#2,d0
-	bpl.s	.wc00013c
-	bra.s	.wc000130
- 
-.wc00015c	move.l	a0,a1
-	move.l	d0,d1
-.wc000160	cmp.w	#$47fa,(a1)
-	bne.s	.wc000186
-	cmp.w	#$51eb,4(a1)
-	bne.s	.wc000186
-	cmp.w	#$51eb,8(a1)
-	beq.s	.wc00018e
-	cmp.w	#$33fc,8(a1)
-	beq.s	.wc00018e
-	cmp.w	#$426b,8(a1)
-	beq.s	.wc00018e
-.wc000186	addq.l	#2,a1
-	subq.l	#2,d1
-	bpl.s	.wc000160
-	bra.s	.wc000130
- 
-.wc00018e	move.l	a1,d6
-	move.w	2(a1),d1
-	lea	-10(a1,d1.w),a1
-	move.l	a0,d1
-	sub.l	a1,d1
-	move.w	12(a0),d2
-	moveq.l	#0,d3
-	move.w	#$7fff,d4
-	moveq.l	#-1,d5
-.wc0001ac	move.w	8(a0),d0
-	lsr.w	#1,d0
-	subq.w	#1,d0
-	addq.w	#2,d2
-.wc0001b6	move.w	12(a0,d2.w),d3
-	btst	#0,d3
-	bne.s	.wc0001d6
-	sub.w	d1,d3
-	cmp.w	d4,d3
-	bge.s	.wc0001c8
-	move.w	d3,d4
-.wc0001c8	cmp.w	d4,d2
-	bge.s	.wc0001d6
-	addq.w	#2,d2
-	subq.w	#1,d0
-	bne.s	.wc0001b6
-	addq.l	#1,d5
-	bra.s	.wc0001ac
- 
-.wc0001d6	
-	;move.w	d5,maxsongs(a5)	* songit
-	moveq.l	#0,d0
-.wc0001de
-	tst.l	d0
-	rts	
+.lbC0003D0	BSR.b	.lbC000424
+	TST.L	D2
+	BNE.S	.lbC000410
+	BRA.S	.lbC00040E
+
+.lbC0003DC	CMP.L	#$8F90001,(A1)
+	BEQ.S	.lbC000412
+	CMP.L	#$4E714E71,(A1)
+	BEQ.S	.lbC000410
+	CMP.W	#$47FA,(A1)+
+	BEQ.S	.lbC000406
+	MOVEQ	#3,D1
+.lbC0003F4	CMP.W	#$47FA,(A1)+
+	BEQ.S	.lbC000400
+	DBRA	D1,.lbC0003F4
+	RTS
+
+.lbC000400	ADD.W	(A1),A1
+	CMP.L	A0,A1
+	BNE.S	.lbC000410
+.lbC000406	
+	BSR.S	.lbC000424
+	TST.L	D2
+	BNE.S	.lbC000410
+.lbC00040C	
+.lbC00040E	MOVEQ	#0,D0
+.lbC000410	RTS
+
+.lbC000412	ADDQ.L	#4,A1
+	CMP.L	#$BFE001,(A1)+
+	BNE.S	.lbC000410
+	BSR.S	.lbC000424
+	TST.L	D2
+	BEQ.S	.lbC00040C
+	RTS
+
+.lbC000424	MOVEQ	#$7F,D1
+.lbC000426	CMP.W	#$6100,(A1)+
+	BEQ.S	.lbC000434
+	DBRA	D1,.lbC000426
+.lbC000430	MOVEQ	#-1,D2
+	RTS
+
+.lbC000434	ADD.W	(A1),A1
+	MOVEQ	#$7F,D1
+	CMP.L	#$48E7F1FE,(A0)
+	BNE.S	.lbC00044A
+	ADDQ.L	#4,A1
+	CMP.W	#$6100,(A1)+
+	BNE.S	.lbC000430
+	ADD.W	(A1),A1
+.lbC00044A	CMP.W	#$4E75,(A1)
+	BEQ.S	.lbC000430
+	CMP.W	#$2F0B,(A1)
+	BEQ.S	.lbC000466
+	CMP.L	#$DFF0C8,(A1)
+	BEQ.S	.lbC000466
+	ADDQ.L	#2,A1
+	DBRA	D1,.lbC00044A
+	BRA.S	.lbC000430
+
+.lbC000466	MOVEQ	#0,D2
+	RTS
  
 
 
@@ -40187,6 +40125,12 @@ deliInit
 	clr.l	deliPatternInfo(a5)
 	
  if DEBUG
+ 	move.l	#DTP_PlayerName,d0 
+	jsr	deliGetTag 
+	beq.b	.noPlr
+	DPRINT	"Name: %s"
+.noPlr
+
 	bsr.w	deliShowTags
 	bsr.w	deliShowFlags
  endif

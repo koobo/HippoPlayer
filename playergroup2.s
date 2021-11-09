@@ -100,6 +100,7 @@ head	macro
 	head	pt_steveturner,steveturner
 	head	pt_jasonpage,jasonpage
 	head	pt_specialfx,specialfx
+	head	pt_davidwhittaker,davidwhittaker
 
 	dc	0
 	dc.l	0,0
@@ -551,7 +552,8 @@ tcbtracker1
 tcbtracker2
 
 markcooksey1
-;	incbin "mark cooksey.shr"
+;	incbin "mark cooksey.amp.shr"
+	incbin "mark cooksey.shr"
 markcooksey2
 
 activisionpro1
@@ -637,6 +639,10 @@ jasonpage2
 specialfx1
 	incbin	"special fx.shr"
 specialfx2
+
+davidwhittaker1
+	incbin	"david whittaker.shr"
+davidwhittaker2
 
 
 pend

@@ -1,7 +1,7 @@
 ;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
 
 * Player ids
-* These are self contained, replayer code inside the module
+* These are self contained, replayer code inside the module, or in a library
 pt_internal_start = 33
 	rsset	pt_internal_start
 pt_prot		rs.b	1
@@ -13,16 +13,14 @@ pt_sidmon1	rs.b	1
 pt_med		rs.b	1
 pt_markii	rs.b	1
 pt_mon		rs.b	1
-pt_dw		rs.b	1
 pt_hippel	rs.b	1
 pt_mline	rs.b	1
 pt_beathoven	rs.b	1
 pt_delicustom	rs.b 	1
 
-* These need a replayer from the group file
-* These are ids into the file and must match playergroup0.s
+* These need a replayer code from the group file
 pt_group_start = 49
-	rsset	pt_group_start		* Ulkoiset
+	rsset	pt_group_start	
 pt_multi	rs.b	1		* PS3M (mod,ftm,mtm,s3m)
 pt_tfmx		rs.b	1
 pt_tfmx7	rs.b	1
@@ -55,6 +53,7 @@ pt_davelowe		rs.b	1
 pt_startrekker		rs.b 	1
 pt_voodoosupremesynthesizer rs.b  1
 
+* These have the eagleplayer included in the group file
 pt_eagle_start = 150
 	rsset	pt_eagle_start
 pt_synthesis		rs.b 	1
@@ -95,3 +94,4 @@ pt_digitalmugician 	rs.b  	1
 pt_specialfx		rs.b  	1
 pt_steveturner		rs.b 	1
 pt_jasonpage		rs.b 	1
+pt_davidwhittaker	rs.b	1
