@@ -1,4 +1,4 @@
-;APS0001A9480000D8470000350C00002D7E000000000000000000000000000000000000000000000000
+;APS0001A9E30000D8E2000034AA00002D1C000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -10,8 +10,9 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
-DEBUG	=	1
+DEBUG	=	0
 TEST 	= 	1
+
 
 * Print to debug console, very clever.
 * Param 1: string
@@ -621,117 +622,91 @@ s3init
 
 * write stripe data to data write pos
 
-* d0 = song pos
-* d1 = pattern pos
+* Set active song and pattern position
+* in:
+*   d0 = song pos
+*   d1 = pattern pos
 pushPatternInfo
-;	and.l	#$ffff,d0
-;	and.l	#$ffff,d1
-;	DPRINT	"Push songpos=%ld pattpos=%ld"
-	
 	movem 	d0/d1,activeSongPos
 	rts
 
 	basereg	data,a5
 
-* Get info at current playpos
+* Get info related to what is currently being played
+* out:
+*  d0 = song position 
+*  d1 = pattern position
 getPatternInfo
-
 	pushm	d2/d3/d4/a0
 	move.l	playpos(a5),d3
 	move.l	mrate50(a5),d4
 	lsr.l	#8,d4
 	divu	d4,d3
 	lsr	#8,d3
-
-	moveq	#0,d0
-	move	d3,d0
-		
+	
 	lea	patternInfoBuffer(a5),a0
 	lsl	#2,d3
-	add.w	d3,a0
-	
+	add.w	d3,a0	
+
+ if DEBUG
+	moveq	#0,d0 
+	move	d3,d0
+	lsr		#2,d0
+	move.l	playpos(a5),d1
+	lsr.l	#8,d1
 	moveq	#0,d2
 	moveq	#0,d3
 	movem	(a0),d2/d3
-
-	move.l	playpos(a5),d1
-	lsr.l	#8,d1	
-;	DPRINT	"Read idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
+	DPRINT	"Read idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
+ endif 
 
 	movem	(a0),d0/d1
 
 	popm	d2/d3/d4/a0
 	rts
 
-updatePatternInfo
-
+updatePatternInfoBuffer
 	* This stores the currently active positions
 	* into the buffer, ahead of time relative
 	* to what is being played.
 
-	pushm 	a0/d2/d3
- rem
-	* move whole buffersize ahead of playpos
-	move.l	buffSize(a5),d2
-	lsl.l	#8,d2
-	add.l	playpos(a5),d2
-	* wrap around if needed
-	and.l	buffSizeMaskFF(a5),d2
-	move.l	d2,d1
+	pushm 	d1-d3/a0
 	
-	* how many ticks is it?
-	* use it as index
-	move.l	mrate50(a5),d3
-	lsr.l	#8,d3
-	divu	d3,d2
-	lsr	#8,d2
-
-	pushm	d0/d1/d2/D3
-	moveq	#0,d0
-	move	d2,d0
-	;move.l	playpos(a5),d1
+	move.l	playpos(a5),d0
+	move.l	mrate50(a5),d1
 	lsr.l	#8,d1
- erem
-	move.l	playpos(a5),d2
-	sub.l	mrate(a5),d2
-	bpl.b	.ok
-	move.l	buffSize(a5),d3
-	lsl.l	#8,d3
-	add.l	d3,d2
-	and.l	buffSizeMaskFF(a5),d2
-.ok
-	move.l	mrate50(a5),d3
-	lsr.l	#8,d3
-	divu	d3,d2
-	lsr	#8,d2	
+	divu	d1,d0
+	lsr.w	#8,d0
+	
+	* pick the previous slot, that is farthest from the current
+	* position timewise.
 
-	pushm	d0/d1/d2/D3
-	moveq	#0,d0
-	move	d2,d0
+	subq	#1,d0
 
+ if DEBUG
+	ext.l	d0
 	move.l	playpos(a5),d1
 	lsr.l	#8,d1
 	moveq	#0,d2
 	move	activeSongPos(a5),d2
 	moveq	#0,d3
 	move	activePattPos(a5),d3
-
-;	DPRINT	"Push idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
-	popm	d0/d1/d2/D3
-	
+	DPRINT	"Push idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
+ endif
 
 	lea	patternInfoBuffer(a5),a0 
 	* times 4 since it's 4 bytes
-	lsl	#2,d2
-	add.w	d2,a0
+	asl	#2,d0
+	add.w	d0,a0
 
-	rept 1
 	move	activeSongPos(a5),(a0)+
 	move	activePattPos(a5),(a0)+
-	endr
 	
-	popm	a0/d2/d3
+	popm	d1-d3/a0
+	rts	
 
+
+updatePatternInfoData
 	* This updates the information that
 	* corresponds to what is being played currently
 
@@ -739,20 +714,26 @@ updatePatternInfo
 	beq.b	.mod 
 	rts 
 .mod
+	pushm	d0/d1/a0-a2
+
 	move.l	mt_songdataptr(pc),a0
-	lea	12(a0),a3
 	lea	952(a0),a2	;pattpo
 	lea	1084(a0),a0	;patterndata
 
 	bsr.w	getPatternInfo
+	* d0 = song pos
+	* d1 = patt pos
 	move	d1,PatternInfo+PI_Pattpos
 
+	moveq	#0,d1
 	move.b	(a2,d0),d1
-	asl.l	#8,d1
-	mulu	numchans,d1
+	lsl.w	#8,d1
+	mulu	numchans(a5),d1
+
+	* Start of pattern corresponding to this song pos
 	lea	(a0,d1.l),a0 
 
-	move	numchans,d0
+	move	numchans(a5),d0
 	subq	#1,d0
 	lea	Stripe1(pc),a1
 .stripes
@@ -760,9 +741,13 @@ updatePatternInfo
 	addq	#4,a0
 	dbf	d0,.stripes
 
+	popm	d0/d1/a0-a2
 	rts
+ 
  endb a5
  
+
+
 
 s3vol	
 	move.l	var_volume(pC),a0
@@ -916,7 +901,7 @@ s3end	tst.b	ahi_use
 	lob 	Delay
 	move.l	output,d1
 	beq.b	.noDbg
-	lob		Close
+	lob	Close
 .noDbg
  endif
 
@@ -1442,6 +1427,7 @@ PatternInit
 	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
 	move	numchans(pc),PatternInfo+PI_Voices
 
+
 	cmp	#mtMOD,mtype
 	beq.b	.mod
 	cmp	#mtMTM,mtype
@@ -1575,14 +1561,45 @@ lev3	move.l	d0,-(sp)
 	rte
 
 
+
+* a1 = playpos
 lev6server
 	move.l	mrate50-playpos(a1),d0
+	* grab previous value
+	;move.l	(a1),d1
+	* next playpos
 	add.l	d0,(a1)
+	
+	* clamp playpos
 	move.l	buffSizeMaskFF(pc),d0
+
+	* next pattern pbuf pos
+;	addq.l	#1,playpos2
+
+;	move.l	(a1),comp1
+;	move.l	d1,comp2
+
+;	cmp.l	(a1),d1
+;	blo.b	.o
+
+;	sub.l	(a1),d1
+;	bmi.b	.o
+
+;	cmp.l	#$7fffff,(a1)
+;	bhs.b	.o
+;
+;	* if playpos wraps, wrap this too
+;	clr.l	playpos2
+;	move	#$f00,$dff180
+;.o
 	and.l	d0,(a1)
+
 ;	moveq	#1,d0
 	moveq	#0,d0
 	rts
+
+comp1	dc.l	 0
+comp2	dc.l	0
 
 buffSizeMaskFF
 	dc.l	(BUFFER-1)<<8!$ff
@@ -9405,6 +9422,17 @@ syss3mPlay
 	jsr	divu_32
 	move.l	d0,mrate50(a5)			;In fact vblankfrequency
 
+
+	move.l	buffSize,d0
+	move.l	mrate50,d1
+	lsr.l	#8,d1
+	divu	d1,d0
+	ext.l	d0
+	move.l	d0,maxPlayPos2
+	DPRINT	"Max ppos2=%ld"
+
+
+
 	moveq	#8,d3
 	lea	cianame(a5),a1
 	move.b	#'a',3(a1)
@@ -9573,10 +9601,11 @@ syncz	move.l	(sp),a6
 	jsr	play
 
 	lea	data,a5
-	bsr 	updatePatternInfo
+	bsr 	updatePatternInfoBuffer
+	bsr		updatePatternInfoData
 
  ifne TEST
- 	move	#$550,$dff180
+; 	move	#$550,$dff180
  	btst	#10,$dff016
  	bne.b	.noRMB
 	;btst	#6,$bfe001 
@@ -9962,6 +9991,9 @@ vboost		dc.l	0
 pmode		dc	SURROUND
 system		dc	DISABLED
 
+playpos2	dc.l	0
+maxPlayPos2	dc.l	0
+
 PS3M_play	dc	0
 PS3M_break	dc	0
 PS3M_poscha	dc	0
@@ -10087,6 +10119,7 @@ xm_insts	ds.l	128
 activeSongPos 	dc 	0
 activePattPos 	dc 	0
 * buffered information: song position, pattern position
+			ds.l	4	* underflow room
 patternInfoBuffer
 			ds.l	2048
 
