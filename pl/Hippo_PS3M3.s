@@ -1,4 +1,4 @@
-;APS0001A9E30000D8E2000034AA00002D1C000000000000000000000000000000000000000000000000
+;APS0001A9E20000D8E1000034A900002D1B000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -10,7 +10,7 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
-DEBUG	=	0
+DEBUG	=	1
 TEST 	= 	1
 
 
@@ -694,16 +694,39 @@ updatePatternInfoBuffer
 	DPRINT	"Push idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
  endif
 
-	lea	patternInfoBuffer(a5),a0 
-	* times 4 since it's 4 bytes
-	asl	#2,d0
-	add.w	d0,a0
+	lea	patternInfoBuffer(a5),a0
 
+	move	prevPushedIndex(pc),d1
+	asl		#2,d1
+	move	d0,prevPushedIndex
+	asl		#2,d0
+
+ if DEBUG
+	ext.l 	d0 
+	ext.l	d1
+	DPRINT	"curIdx=%ld  prevIdx=%ld"
+ endif
+
+	* if prevIdx+1 < currentIndex, fill the gap with prev value
+	addq.l	#4,d1
+	cmp	d0,d1
+	bge.b	.b
+.fill
+	;DPRINT	"FILL %ld %ld"
+	move.l	-4(a0,d1),(a0,d1)
+	addq.l	#4,d1
+	cmp	d0,d1
+	bne.b	.fill
+.b 
+	add.w	d0,a0
 	move	activeSongPos(a5),(a0)+
 	move	activePattPos(a5),(a0)+
 	
 	popm	d1-d3/a0
 	rts	
+
+prevPushedIndex
+	dc 	0
 
 
 updatePatternInfoData
