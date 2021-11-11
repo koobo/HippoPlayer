@@ -1,4 +1,4 @@
-;APS0001A9E20000D8E1000034A900002D1B000000000000000000000000000000000000000000000000
+;APS0001AA0D0000D90C000034D400002D2A000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -657,7 +657,7 @@ getPatternInfo
 	moveq	#0,d2
 	moveq	#0,d3
 	movem	(a0),d2/d3
-	DPRINT	"Read idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
+;;	DPRINT	"Read idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
  endif 
 
 	movem	(a0),d0/d1
@@ -670,8 +670,20 @@ updatePatternInfoBuffer
 	* into the buffer, ahead of time relative
 	* to what is being played.
 
-	pushm 	d1-d3/a0
+	pushm 	d1-d4/a0
 	
+	move.l	buffSize(a5),d4
+	move.l	mrate50(a5),d3
+	lsr.l	#8,d3
+	divu	d3,d4
+	* d4 = max index number
+	
+ if DEBUG 
+	moveq	#0,d0 
+	move	d4,d0
+;	DPRINT	"MAX IDX=%ld"
+ endif 
+
 	move.l	playpos(a5),d0
 	move.l	mrate50(a5),d1
 	lsr.l	#8,d1
@@ -681,7 +693,12 @@ updatePatternInfoBuffer
 	* pick the previous slot, that is farthest from the current
 	* position timewise.
 
+	* TODO: Wrap around if neg
 	subq	#1,d0
+	bpl.b	.pos
+	DPRINT	"negggg" 
+	add	d4,d0
+.pos
 
  if DEBUG
 	ext.l	d0
@@ -691,42 +708,80 @@ updatePatternInfoBuffer
 	move	activeSongPos(a5),d2
 	moveq	#0,d3
 	move	activePattPos(a5),d3
-	DPRINT	"Push idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
+;;	DPRINT	"Push idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
  endif
 
 	lea	patternInfoBuffer(a5),a0
 
-	move	prevPushedIndex(pc),d1
-	asl		#2,d1
-	move	d0,prevPushedIndex
-	asl		#2,d0
+	move	prevPushedIndex(a5),d1
+	asl	#2,d1
+	move	d0,prevPushedIndex(a5)
+	asl	#2,d0
 
  if DEBUG
 	ext.l 	d0 
 	ext.l	d1
-	DPRINT	"curIdx=%ld  prevIdx=%ld"
+;	DPRINT	"curIdx=%ld  prevIdx=%ld"
  endif
 
-	* if prevIdx+1 < currentIndex, fill the gap with prev value
-	addq.l	#4,d1
+	* previous data
+	move.l	(a0,d1),d2
+
+	* max index, in long words
+	lsl	#2,d4
+
+.fill 
+;	DPRINT	"fill cur=%ld prev=%ld"
+	* prevIdx + 1
+	addq	#4,d1
+	* wrap over if end reached
+	cmp	d1,d4
+	bne.b	.noWrap
+	moveq	#0,d1
+.noWrap
+	* if prevIdx == idx, stop
+	cmp	d0,d1
+	beq.b	.done
+	
+	* fill one slot
+	move.l	d2,(a0,d1)
+;	move.l	-4(a0,d1),(a0,d1)
+	bra.b 	.fill
+
+.done
+
+ rem
+	* if prevIdx+1 < currentIndex, fill the gap with the previous value
+	* TODO: wrap around case
+	addq	#4,d1
+	* If prevIdx is greater or equal, do not fill
 	cmp	d0,d1
 	bge.b	.b
 .fill
+	* prevIdx is below curIdx, catch up and fill the slots in between
 	;DPRINT	"FILL %ld %ld"
 	move.l	-4(a0,d1),(a0,d1)
-	addq.l	#4,d1
+	addq	#4,d1
 	cmp	d0,d1
 	bne.b	.fill
+	bra.b	.fillDone
 .b 
+	DPRINT	"WRAP"
+;.c 
+;	addq	#4,d1
+;	cmp	d0,d1
+;	bne.b	.c
+
+	* Wrap case!
+ erem 
+
+.fillDone
 	add.w	d0,a0
 	move	activeSongPos(a5),(a0)+
 	move	activePattPos(a5),(a0)+
 	
-	popm	d1-d3/a0
+	popm	d1-d4/a0
 	rts	
-
-prevPushedIndex
-	dc 	0
 
 
 updatePatternInfoData
@@ -10139,6 +10194,7 @@ xm_patts	ds.l	256
 xm_insts	ds.l	128
 
 
+prevPushedIndex	dc 	0
 activeSongPos 	dc 	0
 activePattPos 	dc 	0
 * buffered information: song position, pattern position
