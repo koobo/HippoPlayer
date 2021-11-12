@@ -22088,7 +22088,7 @@ drawScope
 	bsr.w	hipposcope
 	bra.w	.cont
 .5	bsr.w	freqscope
-	bra.b	.cont
+	bra.w	.cont
 .6	pushm	all
 	bsr.w	freqscope
 	bsr.w	lever2
@@ -22116,12 +22116,12 @@ drawScope
 	bra.b	.22
 	bra.b	.33 * freq
 	bra.b	.33
-	bra.b	.11 * patt
-	bra.b	.11
+	bra.b	.55 * patt
+	bra.b	.55
 	bra.b	.44 * fquad
 	bra.b	.44
-	bra.b	.11 * patt
-	bra.b	.11
+	bra.b	.55 * patt
+	bra.b	.55
 
 .22	bsr.w	multihipposcope
 	bra.b	.cont
@@ -22132,9 +22132,11 @@ drawScope
 .44	bsr.w	multiscopefilled
 	bsr.w	mirrorfill
 	bra.b	.cont 
+.55	* PS3M patternscope mode
+	tst.l	deliPatternInfo(a5) 
+	beq.b	.11
 
 .other
-
 	* Generic notescroller
 	tst.l	deliPatternInfo(a5)
 	beq.b	.cont
@@ -23771,6 +23773,11 @@ noteScroller2
 	tst.l	minifontbase(a5)
 	beq.b	.x
 .only4
+	cmp	#8,d7
+	bls.b	.ok8
+	moveq	#8,d7
+
+.ok8
 
 	subq	#1,d7
 	moveq	#0,d6
@@ -23810,10 +23817,10 @@ noteScroller2
 .xy	
  if DEBUG
  	move	#$0f0,$dff180
-	move.l	moduleaddress(a5),d0
-	move.l	modulelength(a5),d1
-	move.l	a0,d2
-	DPRINT	"INSANITY %lx %ld -> %lx"
+	;move.l	moduleaddress(a5),d0
+	;move.l	modulelength(a5),d1
+	;move.l	a0,d2
+	;DPRINT	"INSANITY %lx %ld -> %lx"
  endif
 	rts
 .do
@@ -33889,7 +33896,7 @@ p_multi	jmp	.s3init(pc)
 	move.l	ps3mroutines(a5),a6
 	jsr	init1j(a6)
 
-	pushpea	CHECKSTART,d0		* tarkistussummaa varten
+	;pushpea	CHECKSTART,d0		* tarkistussummaa varten
 	lea	ps3m_buff1(a5),a0
 	lea	ps3m_buff2(a5),a1
 	lea	ps3m_mixingperiod(a5),a2
@@ -33898,8 +33905,6 @@ p_multi	jmp	.s3init(pc)
 	move.l	ps3mroutines(a5),a6
 	jsr	init2j(a6)
 	move.l	d0,ps3mchannels(a5)
-
-
 
 	move.l	mixirate(a5),d0	
 	move.b	s3mmode3(a5),d1		* volumeboost
@@ -33921,7 +33926,20 @@ p_multi	jmp	.s3init(pc)
 	move.l	ps3mroutines(a5),a5
 	pea	.updateps3m3(pc)	* updaterutiini, surroundin stereo
 	jsr	init0j(a5)
-	addq	#4,sp
+	addq	#4,sp			* pop pea
+
+;	sub.l	a0,a0	;XAX
+	move.l	a0,deliPatternInfo+var_b
+ if DEBUG
+	beq.b	.noPatInfo
+	push	d0
+	moveq	#0,d0
+	move	PI_Voices(a0),d0
+	move.l	PI_Modulo(a0),d1
+	DPRINT	"Voices=%ld modulo=%ld"
+	pop 	d0
+.noPatInfo
+ endif
 
 	popm	d1-a6
 	cmp	#333,d0		* killermoden koodi
