@@ -1,4 +1,4 @@
-;APS0001AA2E0000D92D0000347D00002D2A000000000000000000000000000000000000000000000000
+;APS0001AE190000DCAE0000351500002DC2000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -11,7 +11,7 @@
 ;at least 1.09 (haven't tried older) is sufficient.
 
 DEBUG	=	1
-TEST 	= 	1
+TEST 	= 	0
 
 
 * Print to debug console, very clever.
@@ -208,7 +208,10 @@ TESTMODE
 	section	mod,data_p
 module	
 ;	incbin	"m:multichannel/approaching antares.mod"
-	incbin	"m:multichannel/chaotic dance.mtm"
+;	incbin	"m:multichannel/chaotic dance.mtm"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
+	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
+;	incbin	"m:multichannel/near_dark.s3m"
 moduleE
 	section	co,code_p
  endc
@@ -559,7 +562,7 @@ s3init
 	st 	PS3M_play(a5)
 
 .kala	
-	bsr.w	s3mPlay
+	jsr	s3mPlay
 	bsr.w	s3end
 	move.l	var_playing(pc),a0
 	clr.b	(a0)
@@ -695,7 +698,6 @@ updatePatternInfoBuffer
 	subq	#1,d0
 	bpl.b	.pos
 	* wrap to the other end
-	DPRINT	"negggg" 
 	add	d4,d0
 .pos
 
@@ -762,6 +764,8 @@ updatePatternInfoData
 	beq.b	.mod 
 	cmp	#mtMTM,mtype(a5)
 	beq.b 	.mtm
+	cmp	#mtS3M,mtype(a5)
+	beq.w	.s3m
 	rts 
 .mod
 	move.l	mt_songdataptr(pc),a0
@@ -831,6 +835,133 @@ updatePatternInfoData
 	addq	#2,d1 			* next sequence
 	dbf	d7,.loo
 
+	rts
+
+
+.s3m 	
+	bsr.w	getPatternInfo
+	* d0 = song pos
+	* d1 = patt pos
+	move	d1,PatternInfo+PI_Pattpos
+
+
+	* module data
+	move.l	s3m(a5),a0
+	move.b	orders(a0,d0),d0
+
+	cmp.b	#$fe,d0				; marker that is skipped
+	beq.w	.skip
+	cmp.b	#$ff,d0				; end of tune mark
+	beq.w	.skip
+	cmp	pats(a5),d0
+	bhs.w	.skip 
+
+	add	d0,d0
+	move.l	patts(a5),a1
+	move	(a1,d0),d0
+	beq.w	.skip
+	iword	d0
+
+	* Unpack once if same
+	cmp	unpackedPatternPosition(a5),d0 
+	beq.w	.skip 
+	move	d0,unpackedPatternPosition(a5)
+	DPRINT	"Unpack %ld"
+
+	lsl.l	#4,d0
+	lea	2(a0,d0.l),a0
+
+	* start of pattern data
+	lea	unpackedPattern(a5),a1
+	move.l	a1,a2
+
+	* clear old 
+	move	numchans(a5),d7
+	* multiply by 4 and 64
+	* total pattern length based on chans
+	lsl	#8,d7
+	* quad long words
+	lsr	#4,d7
+	moveq	#0,d6
+.clear	move.l	d6,(a2)+
+	move.l	d6,(a2)+
+	move.l	d6,(a2)+
+	move.l	d6,(a2)+
+	dbf	d7,.clear
+
+	* 64 rows
+	moveq	#64-1,d7
+.rowLoop 
+.noteLoop
+	moveq	#0,d3
+	moveq	#0,d4
+	moveq	#0,d5
+	moveq	#0,d6
+
+	move.b	(a0)+,d0 
+	beq.b	.rowEnd 
+
+	moveq	#$1f,d1
+	and	d0,d1			* channel number
+	lsl	#2,d1  		* multiple of 4, index to unpacked pattern
+
+	and	#~31,d0
+	;move.b	d0,flgs(a2)
+	
+	moveq	#32,d2
+	and	d0,d2
+	beq.b	.nnot
+
+	move.b	(a0)+,d3	* note
+	addq.b	#1,d3
+	move.b	(a0)+,d4	* instr	
+	addq.b	#1,d4
+.nnot
+	moveq	#64,d2
+	and	d0,d2
+	beq.b	.nvol
+	* Emulate a PT vol command
+	* Later actual command overrides
+	moveq	#$c,d5
+	move.b	(a1)+,d6
+.nvol	
+	and	#128,d0
+	beq.b	.noCmd
+	move.b	(a0)+,d0
+	bmi.b	.d
+	move.b	d0,d5		* cmd
+.d	move.b	(a0)+,d6	* param
+
+.noCmd
+	move.b	d3,(a1,d1)
+	move.b	d4,1(a1,d1)
+	move.b	d5,2(a1,d1)
+	move.b	d6,3(a1,d1)
+	bra.b	.noteLoop
+.rowEnd
+	* new row in destination
+	move	numchans(a5),d0
+	lsl	#2,d0
+	add	d0,a1
+	dbf	d7,.rowLoop
+
+.skip
+
+* Pattern is unpacked, points stripes into it
+
+	move	numchans(a5),D0
+	subq	#1,d0
+	lea	Stripe1,a0
+	lea	unpackedPattern(a5),a1
+.stri 
+	move.l	a1,(a0)+
+	addq	#4,a1
+	dbf	d0,.stri
+
+	rts
+
+
+.xm
 
 	rts
 
@@ -988,7 +1119,7 @@ s3end	tst.b	ahi_use
  ifne DEBUG
 	move.l	#2*50,d1
 	move.l	dosbase,a6
-	lob 	Delay
+;	lob 	Delay
 	move.l	output,d1
 	beq.b	.noDbg
 	lob	Close
@@ -1048,7 +1179,7 @@ ahi_init
 	bsr.w	init
 	bsr.w	FinalInit
 
-	move	numchans(pc),setchannels
+	move	numchans,setchannels
 	move.l	ahi_rate(pc),setfreq
 	move.l	ahi_mode(pc),setmode
 
@@ -1517,15 +1648,19 @@ PatternInit
 	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
 	move	numchans(pc),PatternInfo+PI_Voices
 
+	move	#-1,unpackedPatternPosition
+
 	cmp	#mtMOD,mtype
 	beq.b	.mod
 	cmp	#mtMTM,mtype
 	beq.b	.mtm
+	cmp	#mtS3M,mtype 
+	beq.b 	.s3m 
 	rts
 
 .mtm 
-	move.l	#3,PI_Modulo(A0)		; Number of bytes to next row
-	move	#-1,PI_Speed(a0)		; Magic! Negative: note index
+	move.l	#3,PI_Modulo(A0)	; Number of bytes to next row
+	move	#-1,PI_Speed(a0)	; Magic! Negative: note index
 	rts
 
 .mod
@@ -1536,6 +1671,15 @@ PatternInit
 	move	#6,PI_Speed(a0)		; Magic! Positive: period, Negative: note index
 	rts
 
+.s3m 
+	* 4 bytes per note, per channel
+	move	numchans(pc),d1
+	mulu	#4,d1
+	move.l	d1,PI_Modulo(A0)	; Number of bytes to next row
+	move	#-1,PI_Speed(a0)	; Magic! Negative: note index
+	rts
+
+
 * Called by the PI engine to get values for a particular row
 ConvertNote
 	moveq	#0,D0		; Period, Note
@@ -1545,7 +1689,7 @@ ConvertNote
 
 	move	mtype(pc),d0
 	cmp 	#mtMOD,d0
-	beq.b	.mtMOD
+	beq.w	.mtMOD
 	cmp	#mtMTM,d0 
 	beq.b	.mtMTM
 	cmp	#mtS3M,d0 
@@ -1558,7 +1702,34 @@ ConvertNote
 	rts
 
 .mtS3M
+	* upper four bits: octave
+	* lower four bits: semitone
+	moveq	#0,d1
+	move.b	(a0),d1
+	beq.b	.noNote
+	subq.b	#1,d1
+	
+	moveq	#$f,d0
+	and	d1,d0
+	lsr.b	#4,d1
+	move.b	.multab12(pc,d1.w),d1
+	add	d1,d0
+
+	addq	#1,d0
+	move.b	1(a0),d1
+	subq.b	#1,d1
+.noNote
+	move.b	2(a0),d2
+	move.b	3(a0),d3
 	rts
+
+.multab12
+.a set	 0
+	rept	16
+	dc.b	.a
+.a set .a+12
+	endr
+
 
 .mtMTM
 ;(NOS*37)³192   ³Each track is saved independently and takes exactly 192 bytes.
@@ -4566,11 +4737,13 @@ s3m_init
 
  	moveq	#0,d0
 	move.b	(a1),d0
+	DPRINT	"First order=%ld"
 	add	d0,d0
 	sub.l	a1,a1
 	move	(a3,d0),d0
 	beq.b	.q
 	iword	d0
+	DPRINT	"First patt=%ld"
 	asl.l	#4,d0
 	lea	2(a0,d0.l),a1
 .q	move.l	a1,ppos(a5)
@@ -4678,6 +4851,11 @@ ccmds	lea	c0(a5),a2
 
 uusrow	clr	cn(a5)
 
+	;;;;;;;;;;;;
+	move	pos(a5),activeSongPos
+	move	rows(a5),activePattPos
+	;;;;;;;;;;;;
+
 	tst	pdelaycnt(a5)
 	bne.b	process
 
@@ -4689,9 +4867,15 @@ uusrow	clr	cn(a5)
 	dbf	d7,.cl
 
 	move.l	ppos(a5),a1
+
+ if DEBUG
+;	move.l	a1,d0
+;	DPRINT	"Ppos=%lx"
+ endif
+ 
 	lea	c0(a5),a4		;chanblocks
 .loo	move.b	(a1)+,d0
-	beq.b	.end
+	beq.b	.end		* zero = end of row
 
 	moveq	#$1f,d5
 	and	d0,d5			;chan
@@ -4959,7 +5143,8 @@ burk	addq	#1,pos(a5)			; inc songposition
 	moveq	#6,d0
 .ok	move	d0,spd(a5)
 
-cont	move	pos(a5),d0
+cont	
+	move	pos(a5),d0
 	move	d0,PS3M_position(a5)
 	st	PS3M_poscha(a5)
 
@@ -6154,6 +6339,9 @@ xm_runEnvelopes
 
 xm_newrow
 	clr	cn(a5)
+
+	move	pos(a5),activeSongPos
+	move	rows(a5),activePattPos
 
 	tst	pdelaycnt(a5)
 	bne.w	.process
@@ -9679,14 +9867,13 @@ syncz	move.l	(sp),a6
 	bsr	updatePatternInfoData
 
  ifne TEST
-;	lea	PatternInfo,a1
-;	lea	PI_Stripes(a1),a0
-	
-;	move.l	PI_Modulo(a1),d0
-;	mulu	PI_Pattpos(a1),d0
-;	add.l	d0,a0
-;	move.l	PI_Convert(a1),a2
-;	jsr	(a2)
+	lea	PatternInfo,a1
+	lea	PI_Stripes(a1),a0
+	move.l	PI_Modulo(a1),d0
+	mulu	PI_Pattpos(a1),d0
+	add.l	d0,a0
+	move.l	PI_Convert(a1),a2
+	jsr	(a2)
 
 ; 	move	#$550,$dff180
  	btst	#10,$dff016
@@ -10205,9 +10392,19 @@ activePattPos 	dc 	0
 * buffered information: song position, pattern position
 			ds.l	4	* underflow room
 patternInfoBuffer
+	* TODO: how big should this be?
 			ds.l	2048
 
+* 64 rows
+* 32 channels
+* 4 bytes per note
+* TODO: dynamic allocation
+upa
+unpackedPattern
+	ds.b	64*4*32
 
+unpackedPatternPosition
+	dc.w	-1
 
 
  if DEBUG
@@ -10238,10 +10435,16 @@ PRINTOUT
 	* still not open! exit
 	bra.b	.x
 
-.bmb	dc.b	"CON:20/10/350/490/HiP PS3M debug",0
-.bmbSmall
-	dc.b	"CON:20/10/350/190/HiP PS3M debug",0
+  ifne TEST
+.bmb		dc.b	"CON:20/10/350/490/HiP PS3M debug",0
+.bmbSmall  	dc.b	"CON:20/10/350/190/HiP PS3M debug",0
+  else 
+.bmb		dc.b	"CON:20/10/350/190/HiP PS3M debug",0
+.bmbSmall  	dc.b	"CON:20/10/350/90/HiP PS3M debug",0
+  endif
     even
+
+
 .open
 	move.l	32+4(sp),a0
 
