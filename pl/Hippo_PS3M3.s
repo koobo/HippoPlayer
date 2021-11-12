@@ -1,4 +1,4 @@
-;APS0001AA0D0000D90C000034D400002D2A000000000000000000000000000000000000000000000000
+;APS0001AA2E0000D92D0000347D00002D2A000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -207,8 +207,8 @@ TESTMODE
 
 	section	mod,data_p
 module	
-;	incbin	"m:multichannel/title.mod"
-	incbin	"m:multichannel/approaching antares.mod"
+;	incbin	"m:multichannel/approaching antares.mod"
+	incbin	"m:multichannel/chaotic dance.mtm"
 moduleE
 	section	co,code_p
  endc
@@ -599,8 +599,8 @@ s3init
 .ne	
 	moveq	#0,d0
 .en 
-	bsr	PatternInit
  endif 
+	lea		PatternInfo(pc),a0
 
 	popm	d1-d7/a1-a6
 	rts
@@ -638,6 +638,7 @@ pushPatternInfo
 *  d1 = pattern position
 getPatternInfo
 	pushm	d2/d3/d4/a0
+	* Calculate index based on current play position
 	move.l	playpos(a5),d3
 	move.l	mrate50(a5),d4
 	lsr.l	#8,d4
@@ -665,12 +666,10 @@ getPatternInfo
 	popm	d2/d3/d4/a0
 	rts
 
+* This stores the currently active positions
+* into the buffer, ahead of time relative
+* to what is being played.
 updatePatternInfoBuffer
-	* This stores the currently active positions
-	* into the buffer, ahead of time relative
-	* to what is being played.
-
-	pushm 	d1-d4/a0
 	
 	move.l	buffSize(a5),d4
 	move.l	mrate50(a5),d3
@@ -693,9 +692,9 @@ updatePatternInfoBuffer
 	* pick the previous slot, that is farthest from the current
 	* position timewise.
 
-	* TODO: Wrap around if neg
 	subq	#1,d0
 	bpl.b	.pos
+	* wrap to the other end
 	DPRINT	"negggg" 
 	add	d4,d0
 .pos
@@ -724,7 +723,7 @@ updatePatternInfoBuffer
 ;	DPRINT	"curIdx=%ld  prevIdx=%ld"
  endif
 
-	* previous data
+	* previous data long word
 	move.l	(a0,d1),d2
 
 	* max index, in long words
@@ -745,55 +744,26 @@ updatePatternInfoBuffer
 	
 	* fill one slot
 	move.l	d2,(a0,d1)
-;	move.l	-4(a0,d1),(a0,d1)
 	bra.b 	.fill
-
 .done
 
- rem
-	* if prevIdx+1 < currentIndex, fill the gap with the previous value
-	* TODO: wrap around case
-	addq	#4,d1
-	* If prevIdx is greater or equal, do not fill
-	cmp	d0,d1
-	bge.b	.b
-.fill
-	* prevIdx is below curIdx, catch up and fill the slots in between
-	;DPRINT	"FILL %ld %ld"
-	move.l	-4(a0,d1),(a0,d1)
-	addq	#4,d1
-	cmp	d0,d1
-	bne.b	.fill
-	bra.b	.fillDone
-.b 
-	DPRINT	"WRAP"
-;.c 
-;	addq	#4,d1
-;	cmp	d0,d1
-;	bne.b	.c
-
-	* Wrap case!
- erem 
-
-.fillDone
+	* finally store new data
 	add.w	d0,a0
 	move	activeSongPos(a5),(a0)+
 	move	activePattPos(a5),(a0)+
 	
-	popm	d1-d4/a0
 	rts	
 
-
+* This updates the information in PatternInfo structure
+* to correspond to what is being played currently
 updatePatternInfoData
-	* This updates the information that
-	* corresponds to what is being played currently
 
-	cmp	#mtMOD,mtype
+	cmp	#mtMOD,mtype(a5)
 	beq.b	.mod 
+	cmp	#mtMTM,mtype(a5)
+	beq.b 	.mtm
 	rts 
 .mod
-	pushm	d0/d1/a0-a2
-
 	move.l	mt_songdataptr(pc),a0
 	lea	952(a0),a2	;pattpo
 	lea	1084(a0),a0	;patterndata
@@ -818,10 +788,52 @@ updatePatternInfoData
 	move.l	a0,(a1)+
 	addq	#4,a0
 	dbf	d0,.stripes
-
-	popm	d0/d1/a0-a2
 	rts
  
+.mtm 
+	bsr.w	getPatternInfo
+	* d0 = song pos
+	* d1 = patt pos
+	move	d1,PatternInfo+PI_Pattpos
+	move	d0,d6
+
+
+	move	numchans(a5),d7
+	subq	#1,d7
+	moveq	#0,d1	* sequence index
+	lea	Stripe1(pc),a4
+.loo
+	;move.l	mt_songdataptr(pc),a0
+	move.l	orderz(pc),a2
+	moveq	#0,d0
+	move.b	(a2,d6),d0
+	lsl	#6,d0				; 32 channels * word
+
+	move.l	sequ(pc),a2
+	add	d1,d0			; sequence
+	move.b	(a2,d0),d2
+	lsl	#8,d2
+	move.b	1(a2,d0),d2
+
+	move	d2,d0
+	beq.b	.zero
+
+	iword	d0
+	move.l	tracks(pc),a2
+	subq	#1,d0
+	mulu	#192,d0
+	add.l	d0,a2	
+	* Stripe!
+	move.l	a2,(a4)
+
+.zero
+	addq	#4,a4			* next stripe
+	addq	#2,d1 			* next sequence
+	dbf	d7,.loo
+
+
+	rts
+
  endb a5
  
 
@@ -1505,7 +1517,6 @@ PatternInit
 	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
 	move	numchans(pc),PatternInfo+PI_Voices
 
-
 	cmp	#mtMOD,mtype
 	beq.b	.mod
 	cmp	#mtMTM,mtype
@@ -1535,11 +1546,11 @@ ConvertNote
 	move	mtype(pc),d0
 	cmp 	#mtMOD,d0
 	beq.b	.mtMOD
-	cmp		#mtMTM,d0 
+	cmp	#mtMTM,d0 
 	beq.b	.mtMTM
-	cmp		#mtS3M,d0 
+	cmp	#mtS3M,d0 
 	beq.b	.mtS3M
-	cmp		#mtXM,d0 
+	cmp	#mtXM,d0 
 	beq.b	.mtXM
 	rts
 
@@ -1577,6 +1588,15 @@ ConvertNote
 	and.b	2(a0),d2
 
 	move.b	3(a0),d3
+
+;	and.l	#$ff,d0
+;	beq.b	.s
+;	and.l	#$ff,d1
+;	and.l	#$ff,d2
+;	and.l	#$ff,d3
+;	DPRINT	"per=%ld sam=%ld cmd=%lx prm=%lx"
+;.s
+
 	rts
 
 .mtMOD
@@ -1759,10 +1779,11 @@ play	;movem.l	d0-a6,-(sp)
 
 
 
-
-
-
 init	
+	bsr.b 	.doInit 
+	bsr	PatternInit
+	rts
+.doInit
 	lea	data,a5
 	clr	mtype(a5)
 
@@ -8070,27 +8091,7 @@ mt_getnewnote
 	mulu	numchans(pc),d1
 
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	;; MOD
-;	cmp	#mtMOD,mtype
-;	bne.b	.skip
-;	pushm 	d0/a0/a5
-;	lea	(a0,d1.l),a5
-;
-;	move	numchans(pc),d0
-;	subq	#1,d0
-;	lea	Stripe1(pc),a0
-;.stripes
-;	move.l	a5,(a0)+
-;	addq	#4,a5
-;	dbf	d0,.stripes
-;
-;	moveq	#0,d0
-;	move	mt_patternpos(pc),d0
-;	divu	numchans(pc),d0
-;	lsr	#2,d0
-;	move	d0,PatternInfo+PI_Pattpos	
-;	popm	d0/a0/a5
-;.skip
+	;; Works for both MOD and MTM
 	pushm	d0/d1
 	moveq	#0,d0 
 	move.b 	mt_songpos(pc),d0
@@ -8100,7 +8101,7 @@ mt_getnewnote
 	lsr	#2,d1
 	bsr	pushPatternInfo
 	popm	d0/d1
-;	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 	add	mt_patternpos(pc),d1
@@ -8139,19 +8140,19 @@ getnew	cmp	#mtMOD,mtype
 
 * MOD get note data
 	move.l	(a0,d1.l),(a6)
-	addq.l	#4,d1
+	addq.l	#4,d1		* get to next row
 	rts
 
 * MTM get note data
 .mtm	
 
-	move.l	mt_songdataptr(pc),a0
+	;move.l	mt_songdataptr(pc),a0
 	move.l	orderz(pc),a2
 	moveq	#0,d0
 	move.b	mt_songpos(pc),d0
 	move.b	(a2,d0),d0
-
 	lsl	#6,d0				; 32 channels * word
+
 	move.l	sequ(pc),a2
 	add	d1,d0
 	move.b	(a2,d0),d2
@@ -8159,6 +8160,7 @@ getnew	cmp	#mtMOD,mtype
 	move.b	1(a2,d0),d2
 	move	d2,d0
 	beq.b	.zero
+
 	iword	d0
 	move.l	tracks(pc),a2
 	subq	#1,d0
@@ -8169,12 +8171,6 @@ getnew	cmp	#mtMOD,mtype
 	move	mt_patternpos(pc),d2
 	divu	numchans(pc),d2
 	lsr	#2,d2
-
-	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	move	d2,PatternInfo+PI_Pattpos
-	lea	(a2,d0.l),a1 
-	move.l	a1,(a4)+
-	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	* MTM note takes 3 bytes
 	mulu	#3,d2
@@ -9680,9 +9676,18 @@ syncz	move.l	(sp),a6
 
 	lea	data,a5
 	bsr 	updatePatternInfoBuffer
-	bsr		updatePatternInfoData
+	bsr	updatePatternInfoData
 
  ifne TEST
+;	lea	PatternInfo,a1
+;	lea	PI_Stripes(a1),a0
+	
+;	move.l	PI_Modulo(a1),d0
+;	mulu	PI_Pattpos(a1),d0
+;	add.l	d0,a0
+;	move.l	PI_Convert(a1),a2
+;	jsr	(a2)
+
 ; 	move	#$550,$dff180
  	btst	#10,$dff016
  	bne.b	.noRMB
