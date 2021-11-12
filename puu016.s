@@ -971,7 +971,7 @@ ps3m_buff2	rs.l	1
 ps3m_mixingperiod rs.l	1
 ps3m_playpos	rs.l	1
 ps3m_buffSizeMask rs.l	1
-
+ps3mUnpackedPattern rs.l 1
 
 ahi_use_new		rs.b	1
 ahi_muutpois_new	rs.b	1
@@ -23815,22 +23815,42 @@ noteScroller2
 .x	rts
 
 .xy	
+
  if DEBUG
  	move	#$0f0,$dff180
-	;move.l	moduleaddress(a5),d0
-	;move.l	modulelength(a5),d1
-	;move.l	a0,d2
-	;DPRINT	"INSANITY %lx %ld -> %lx"
+	move.l	moduleaddress(a5),d0
+	move.l	modulelength(a5),d1
+	move.l	a0,d2
+	DPRINT	"INSANITY %lx %ld -> %lx"
  endif
 	rts
 .do
-	* sanity check
-	move.l	moduleaddress(a5),a3
-	cmp.l	a3,a0
-	blo.b  	.xy
-	add.l	modulelength(a5),a3
-	cmp.l	a3,a0
-	bhs.b 	.xy
+       	* sanity check
+
+	move.l	a0,d0
+	beq.b	.xy
+
+	move.l	ps3mUnpackedPattern(a5),d0
+	tst.l	d0
+	beq.b	.noPattern
+
+	cmp.l	d0,a0
+	bhs.b	.sane
+	add.l	#32*4*64,d0
+	cmp.l	d0,a0
+	blo.b	.sane
+
+.noPattern
+	cmp.l	#1024,a0
+	bls.b	.xy
+	move.l  moduleaddress(a5),a3
+   	cmp.l   a3,a0
+	bls.b	.xy
+    	add.l   modulelength(a5),a3
+    	cmp.l   a3,a0
+   	bhs.w   .xy
+.sane
+	;rts
 
 	* draw this many lines
 	move	quadNoteScrollerLines(a5),d7
@@ -33930,6 +33950,7 @@ p_multi	jmp	.s3init(pc)
 
 ;	sub.l	a0,a0	;XAX
 	move.l	a0,deliPatternInfo+var_b
+	move.l	a1,ps3mUnpackedPattern+var_b
  if DEBUG
 	beq.b	.noPatInfo
 	push	d0
@@ -33965,7 +33986,8 @@ p_multi	jmp	.s3init(pc)
 	move.l	ps3mroutines(a5),a0
 	jmp	poslenj(a0)
 
-.s3end	move.l	ps3mroutines(a5),a0
+.s3end	clr.l	ps3mUnpackedPattern(a5)
+	move.l	ps3mroutines(a5),a0
 	jmp	endj(a0)
 
 .s3stop	move.l	ps3mroutines(a5),a0

@@ -1,4 +1,4 @@
-;APS0001AE190000DCAE0000351500002DC2000000000000000000000000000000000000000000000000
+;APS0001AEC10000DD560000352C00002DD9000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -10,7 +10,7 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
-DEBUG	=	1
+DEBUG	=	0
 TEST 	= 	0
 
 
@@ -387,7 +387,7 @@ s3init
 
 	move.l	4(sp),voluproutine
 
-	pushm	d1-d7/a1-a6
+	pushm	d1-d7/a2-a6
 
 	clr	PS3M_eject
 	clr	PS3M_position
@@ -603,9 +603,10 @@ s3init
 	moveq	#0,d0
 .en 
  endif 
-	lea		PatternInfo(pc),a0
+	lea	PatternInfo(pc),a0
+	lea	unpackedPattern,a1
 
-	popm	d1-d7/a1-a6
+	popm	d1-d7/a2-a6
 	rts
 
 .prit	dc.b	-10,-1,0,1,9
@@ -915,20 +916,22 @@ updatePatternInfoData
 	move.b	(a0)+,d3	* note
 	addq.b	#1,d3
 	move.b	(a0)+,d4	* instr	
-	addq.b	#1,d4
 .nnot
 	moveq	#64,d2
 	and	d0,d2
 	beq.b	.nvol
 	* Emulate a PT vol command
 	* Later actual command overrides
-	moveq	#$c,d5
-	move.b	(a1)+,d6
+;	moveq	#$c,d5
+;	move.b	(a0)+,d6
+	addq	#1,a0
 .nvol	
 	and	#128,d0
 	beq.b	.noCmd
+
 	move.b	(a0)+,d0
 	bmi.b	.d
+
 	move.b	d0,d5		* cmd
 .d	move.b	(a0)+,d6	* param
 
@@ -1682,11 +1685,6 @@ PatternInit
 
 * Called by the PI engine to get values for a particular row
 ConvertNote
-	moveq	#0,D0		; Period, Note
-	moveq	#0,D1		; Sample number
-	moveq	#0,D2		; Command 
-	moveq	#0,D3		; Command argument
-
 	move	mtype(pc),d0
 	cmp 	#mtMOD,d0
 	beq.w	.mtMOD
@@ -1699,9 +1697,19 @@ ConvertNote
 	rts
 
 .mtXM
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
 	rts
 
 .mtS3M
+	moveq	#0,D0		; Period, Note
+	;moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
 	* upper four bits: octave
 	* lower four bits: semitone
 	moveq	#0,d1
@@ -1715,11 +1723,12 @@ ConvertNote
 	move.b	.multab12(pc,d1.w),d1
 	add	d1,d0
 
-	addq	#1,d0
+	addq.b	#1,d0
 	move.b	1(a0),d1
-	subq.b	#1,d1
 .noNote
+.yes
 	move.b	2(a0),d2
+	and	#$3f,d2		* TODO
 	move.b	3(a0),d3
 	rts
 
@@ -1732,6 +1741,11 @@ ConvertNote
 
 
 .mtMTM
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
 ;(NOS*37)³192   ³Each track is saved independently and takes exactly 192 bytes.
 ;	³      ³The tracks are arranged as 64 consecutive 3-byte notes.  These
 ;	³      ³notes have the following format:
@@ -9867,13 +9881,14 @@ syncz	move.l	(sp),a6
 	bsr	updatePatternInfoData
 
  ifne TEST
-	lea	PatternInfo,a1
-	lea	PI_Stripes(a1),a0
-	move.l	PI_Modulo(a1),d0
-	mulu	PI_Pattpos(a1),d0
-	add.l	d0,a0
-	move.l	PI_Convert(a1),a2
-	jsr	(a2)
+;	lea	PatternInfo,a1
+;	lea	PI_Stripes(a1),a0
+;	move	PI_Pattpos(a1),d0
+;	mulu	PI_Modulo+2(a1),d0
+;	add.l	d0,a0
+;	move.l	PI_Convert(a1),a2
+;	jsr	(a2)	
+;	DPRINT	"con=%lx"
 
 ; 	move	#$550,$dff180
  	btst	#10,$dff016
