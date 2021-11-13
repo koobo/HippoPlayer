@@ -1,5 +1,5 @@
 ;APS0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B
-testi = 0
+testi = 1
 
 
 	incdir	include:
@@ -37,7 +37,8 @@ songend_	dc	0
 
 		section	dc,data_c
 
-Music:		incbin	"m:exo/oktalyzer/captain/popcorn.okta"
+;Music:		incbin	"m:exo/oktalyzer/captain/popcorn.okta"
+Music:		incbin	"m:exo/oktalyzer/mohr/1 love night dub.okta"
 
 
 
@@ -213,27 +214,27 @@ lbC00002C	MOVEM.L	D0-D7/A0-A6,-(SP)
 	ADDQ.W	#8,A0
 	MOVE.L	A0,lbL000136
 	MOVE.L	#$434D4F44,D0
-	BSR.W	lbC000110
+	BSR.W	FindHunk
 	LEA	lbL00013E(PC),A1
 	MOVE.L	(A0)+,(A1)+
 	MOVE.L	(A0)+,(A1)+
 	MOVE.L	#$53414D50,D0
-	BSR.W	lbC000110
+	BSR.W	FindHunk
 	LEA	lbL0010D0,A1
 	MOVE.W	#$47F,D0
 lbC000064	MOVE.B	(A0)+,(A1)+
 	DBRA	D0,lbC000064
 	MOVE.L	#$53504545,D0
-	BSR.W	lbC000110
+	BSR.W	FindHunk
 	MOVE.W	(A0)+,lbW000146
 	MOVE.L	#$534C454E,D0
-	BSR.W	lbC000110
+	BSR.W	FindHunk
 	MOVE.W	(A0)+,lbW00010A
 	MOVE.L	#$504C454E,D0
-	BSR.B	lbC000110
+	BSR.B	FindHunk
 	MOVE.W	(A0)+,lbW000148
 	MOVE.L	#$50415454,D0
-	BSR.B	lbC000110
+	BSR.B	FindHunk
 	LEA	lbL001550,A1
 	MOVEQ	#$7F,D0
 lbC0000AC	MOVE.B	(A0)+,(A1)+
@@ -241,18 +242,20 @@ lbC0000AC	MOVE.B	(A0)+,(A1)+
 	LEA	lbL0015D0,A1
 	MOVEQ	#0,D7
 lbC0000BA	MOVE.L	#$50424F44,D0
-	BSR.B	lbC000110
+	BSR.B	FindHunk
 	MOVE.L	A0,(A1)+
 	ADDQ.W	#1,D7
 	CMP.W	lbW00010A(PC),D7
 	BNE.S	lbC0000BA
+
 	LEA	lbL0010E4,A5
 	LEA	lbL0016D0,A1
 	MOVEQ	#0,D7
+
 lbC0000DC	TST.L	(A5)
 	BEQ.S	lbC0000F0
 	MOVE.L	#$53424F44,D0
-	BSR.B	lbC000110
+	BSR.B	FindHunk	* ENFORCER HIT
 	MOVE.L	A0,(A1)
 	MOVE.L	D0,4(A1)
 lbC0000F0	ADDQ.W	#8,A1
@@ -269,7 +272,7 @@ lbW00010A	dc.w	0
 	dc.w	0
 	dc.w	0
 
-lbC000110	MOVEM.L	D2/D3,-(SP)
+FindHunk	MOVEM.L	D2/D3,-(SP)
 	MOVE.L	lbL000136(PC),A0
 lbC000118	MOVEM.L	(A0)+,D2/D3
 	CMP.L	D2,D0
