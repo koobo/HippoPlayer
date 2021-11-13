@@ -1,4 +1,4 @@
-;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
+;APS000000000000000000000000000000000000000000000000000000000005D0430000000000000000
 *******************************************************************************
 *                                HippoPlayer
 *******************************************************************************
@@ -24,7 +24,7 @@ ver	macro
 	endm	
 
 
-DEBUG	= 1
+DEBUG	= 0
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
 asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
@@ -454,7 +454,7 @@ rastport2	rs.l	1		*
 userport2	rs.l	1		*
 rastport3	rs.l	1		* quadrascope
 userport3	rs.l	1		* 
-windowbase3	rs.l	1		* scopes window
+scopeWindowBase	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 minifontbase rs.l	1
@@ -732,6 +732,7 @@ quadmode2	rs.b	1
 * Store the original window height to switch between
 * large and normal height mode
 quadWindowHeightOriginal	rs.w	1
+quadWindowWidthOriginal		rs.w	1
 * Pattern scope configuration parameters for normal and large mode
 quadNoteScrollerLinesHalf	rs.w	1
 quadNoteScrollerLines		rs.l	1
@@ -2061,9 +2062,9 @@ main
 	bsr.b	.boob
 	lea	winstruc2-winstruc(a0),a0
 	bsr.b	.boob
-	lea	winstruc3-winstruc2(a0),a0
+	lea	scopeWindowStructure-winstruc2(a0),a0
 	bsr.b	.boob
-	lea	winlistsel-winstruc3(a0),a0
+	lea	winlistsel-scopeWindowStructure(a0),a0
 	bsr.b	.boob
 	lea	swinstruc-winlistsel(a0),a0
 	bsr.b	.boob
@@ -4308,7 +4309,7 @@ getscreeninfo
 
 	add	d0,winstruc+nw_Height		* suhteutetaan koot fonttiin
 	add	d0,winstruc2+nw_Height
-	add	d0,winstruc3+nw_Height
+	add	d0,scopeWindowStructure+nw_Height
 	add	d0,swinstruc+nw_Height
 	add	d0,windowpos22+2(a5)	* pienen ikkunan zip-koko
 
@@ -4318,7 +4319,7 @@ getscreeninfo
 	sub	d2,d1
 	add	d1,winstruc+nw_Width
 	add	d1,winstruc2+nw_Width
-	add	d1,winstruc3+nw_Width
+	add	d1,scopeWindowStructure+nw_Width
 	add	d1,swinstruc+nw_Width
 
 	add	d1,WINSIZX(a5)
@@ -4335,6 +4336,10 @@ getscreeninfo
 	bne.b	.setAlready
 	move	quadsiz+2,quadWindowHeightOriginal(a5)
 .setAlready
+	tst	quadWindowWidthOriginal(a5)
+	bne.b	.setAlready2
+	move	quadsiz,quadWindowWidthOriginal(a5)
+.setAlready2
 
 	move	WINSIZX(a5),wsizex
 	move	WINSIZY(a5),wsizey
@@ -11582,7 +11587,7 @@ saveprefs
 	sne	prefs_infoon+prefsdata(a5)
 
 
-	move.l	windowbase3(a5),d0
+	move.l	scopeWindowBase(a5),d0
 	beq.b	.k
 	move.l	d0,a0
 	move.l	4(a0),quadpos(a5)
@@ -21261,6 +21266,7 @@ str2msg	pushm	d0/d1/a0/a1/a6
 * Scoperutiinit
 *******************************************************************************
 wflags3 set WFLG_SMART_REFRESH!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
+;wflags3 set wflags!WFLG_SIZEGADGET
 wflags3 set wflags3!WFLG_RMBTRAP
 idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
 
@@ -21276,6 +21282,9 @@ QUADMODE2_FQUADRASCOPE = 8
 QUADMODE2_FQUADRASCOPE_BARS = 9
 QUADMODE2_PATTERNSCOPEXL = 10
 QUADMODE2_PATTERNSCOPEXL_BARS = 11
+
+* must be divisible by 16	
+SCOPE_WINDOW_WIDE_DELTA = 16*18  ;288	
 
 quad_code
 	lea	var_b,a5
@@ -21296,6 +21305,8 @@ quad_code
 	cmp.l	a1,a0
 	bne.b	.cl
 
+qdebug 
+
  if DEBUG
 	moveq	#0,d0 
 	move.b	quadmode(a5),d0
@@ -21304,8 +21315,8 @@ quad_code
 	* This creates a jumptable compatible value out of quadmode,
 	* where bit 8 indicates "bars enabled"
 	move.b	quadmode(a5),d0
-	move.b	d0,d1
-	and	#$f,d1
+	moveq	#$f,d1
+	and.b	d0,d1
 	add.b	d1,d1
 	tst.b	d0
 	bpl.b	.e
@@ -21428,7 +21439,7 @@ quad_code
 		
 
 	move.l	_IntuiBase(a5),a6
-	lea	winstruc3,a0
+	lea	scopeWindowStructure,a0
 	* Restore top/left to some previous used value
 	move.l	quadpos(a5),(a0)
 
@@ -21456,7 +21467,7 @@ quad_code
 .ok2
 
 	lob	OpenWindow
-	move.l	d0,windowbase3(a5)
+	move.l	d0,scopeWindowBase(a5)
 	bne.b	.ok3
 	lea	windowerr_t(pc),a1
 .me	bsr.w	request
@@ -21481,10 +21492,34 @@ quad_code
 	move.l	pen_1(a5),d0
 	lob	SetAPen
 
-	bsr		drawScopeWindowDecorations
-	bsr		initScopeBitmaps
-	beq.b	.memer
+	 
+ rem ; NOT NEEDED
+	move.l	scopeWindowBase(a5),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	move	wd_LeftEdge(a0),d0
+	move	wd_TopEdge(a0),d1
+	move	wd_Width(a0),d2
+	move	wd_Height(a0),d3
+	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
 
+	* MinWidth, no change
+	moveq	#0,d0
+	* MinHeight, no change
+	moveq	#0,d1
+	* MaxWidth, as large as possible
+	moveq	#-1,d2
+	* MaxHeight, as large as possible
+	moveq	#-1,d3	
+	move.l	scopeWindowBase(a5),a0
+	lore	Intui,WindowLimits
+ erem ; NOT NEEDED
+
+	bsr	drawScopeWindowDecorations
+	bsr	initScopeBitmaps
+	beq.w	.memer
 
 	* State flag indicating whether scope has been cleared
 	moveq	#0,d7
@@ -21504,6 +21539,12 @@ quad_code
 	move.b	scopeManualActivation(a5),d5
 
 	jsr	printhippo2	
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Scope loop
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 scopeTest=0
 
@@ -21530,7 +21571,7 @@ scopeLoop
 
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
-	move.l	windowbase3(a5),a0	* ollaanko p‰‰llimm‰isen‰?
+	move.l	scopeWindowBase(a5),a0	* ollaanko p‰‰llimm‰isen‰?
 
 	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
@@ -21603,7 +21644,11 @@ scopeLoop
 	move.l	rastport3(a5),a1
 	moveq	#10,d0
 	moveq	#14,d1
-	move	#330,d2
+ 	move	#330,d2
+ 	bsr	scopeIsNormalWidth
+ 	beq.b	.normW1
+ 	add	#SCOPE_WINDOW_WIDE_DELTA,d2
+.normW1
 	move	#79,d3
 	bsr.w 	scopeIsNormal
 	bne.b	.notLarge7
@@ -21629,7 +21674,7 @@ scopeLoop
 	move	im_Code(a1),d3
 	lob	ReplyMsg
 	cmp.l	#IDCMP_NEWSIZE,d2 
-	beq.b 	.noNewSize
+	bne.b 	.noNewSize
 	bsr.w	scopeWindowSizeChanged
 	bra.w 	scopeLoop
 .noNewSize
@@ -21643,12 +21688,15 @@ scopeLoop
 	* LMB activates 
 	st	d5
 	move.b	d5,scopeManualActivation(a5)
+
+;	bsr	makeDoubleWidthScopeWindow
+
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.w	scopeLoop
 
 .xq	clr.b	scopeflag(a5)
 	
-qexit	bsr.b	qflush_messages
+qexit	bsr.w	qflush_messages
 
 
 	move.l	mtab(a5),a0
@@ -21663,12 +21711,12 @@ qexit	bsr.b	qflush_messages
 	clr.l	deltab1(a5)
 
 	move.l	_IntuiBase(a5),a6		
-	move.l	windowbase3(a5),d0
+	move.l	scopeWindowBase(a5),d0
 	beq.b	.uh1
 	move.l	d0,a0
 	move.l	4(a0),quadpos(a5)	* koordinaatit talteen
 	lob	CloseWindow
-	clr.l	windowbase3(a5)
+	clr.l	scopeWindowBase(a5)
 .uh1
 
 
@@ -21683,17 +21731,97 @@ qexit	bsr.b	qflush_messages
 	clr	quad_prosessi(a5)	* lippu: lopetettiin
 	rts
 
+* Needs to be called twice if window is first moved.
+* Check required width from scopeWindowBase!
+makeDoubleWidthScopeWindow
+	DPRINT	"Double width"
+
+	move.l	scopeWindowBase(a5),a0 
+	move	wd_Width(a0),d0
+	cmp	quadWindowWidthOriginal(a5),d0
+	bne.b	.already
+
+	move	wd_LeftEdge(a0),d1
+	add	wd_Width(a0),d1
+	add	#SCOPE_WINDOW_WIDE_DELTA,d1
+
+	move	wbleveys(a5),d0
+	sub	d1,d0
+	bpl.b	.fits
+	* Does not fit 
+	moveq	#0,d1
+	lore	Intui,MoveWindow
+	DPRINT	"->move"
+	rts
+.fits
+	move	#SCOPE_WINDOW_WIDE_DELTA,d0 
+	moveq	#0,d1
+	lore	Intui,SizeWindow
+	DPRINT	"->resize"
+	rts
+.already
+	DPRINT	"->no change"
+	rts
+
+makeNormalWidthScopeWindow
+	DPRINT	"Normal width"
+
+	move.l	scopeWindowBase(a5),a0 
+	move	wd_Width(a0),d0
+	cmp	quadWindowWidthOriginal(a5),d0
+	beq.b	makeDoubleWidthScopeWindow\.already
+
+	move	#-280,d0 
+	moveq	#0,d1
+	lore	Intui,SizeWindow
+	rts
+
+getScopeDrawAreaWidth
+	push	a0
+	move.l	scopeWindowBase(a5),a0 
+	moveq	#0,d0
+	move	wd_Width(a0),d0
+	pop	a0
+	cmp	quadWindowWidthOriginal(a5),d0
+	beq.b	.normal
+	move	#320+SCOPE_WINDOW_WIDE_DELTA,d0
+	rts
+.normal
+	move	#320,d0
+	rts
+
+getScopeDrawAreaWidthModulo
+	bsr.b	getScopeDrawAreaWidth
+	lsr	#3,d0
+	rts
+
+* Z is set if scope is normal width
+scopeIsNormalWidth
+	pushm	d0/a0
+	move.l	scopeWindowBase(a5),a0 
+	move	wd_Width(a0),d0
+	cmp	quadWindowWidthOriginal(a5),d0
+	popm	d0/a0
+	rts
+
 scopeWindowSizeChanged
 	DPRINT	"Scope NEWSIZE"
+	move.l	scopeWindowBase(a5),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	move	wd_LeftEdge(a0),d0
+	move	wd_TopEdge(a0),d1
+	move	wd_Width(a0),d2
+	move	wd_Height(a0),d3
+	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
 	rts
 
 
 qflush_messages
-	move.l	windowbase3(a5),a0 
-	bra.w		flushWindowMessages
-
-
-
+	move.l	scopeWindowBase(a5),a0 
+	bra.w	flushWindowMessages
 
 
 initScopeBitmaps
@@ -21701,28 +21829,50 @@ initScopeBitmaps
 	jsr	freemem
 
 * Piirtoalueet
-	move.l	#320/8*(72)*2,d0
+	bsr	getScopeDrawAreaWidthModulo
+	move	d0,d1
+	mulu	#(72)*2,d0
+;	move.l	#320/8*(72)*2,d0
 	bsr.w	scopeIsNormal
 	bne.b	.notLarge
-	move.l	#320/8*(72+64)*2,d0
+;	move.l	#320/8*(72+64)*2,d0
+	mulu	#(72+64)*2,d1
+	move.l	d1,d0
 .notLarge
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
 	jsr	getmem
 	beq.b	.memError
-	move.l	d0,buffer0(a5)
-	add.l	#320/8*2,d0		* yl‰‰lle 2 vararivi‰
-	move.l	d0,buffer1(a5)
-	add.l	#320/8*(70),d0
+	move.l	d0,buffer0(a5)	* for freeing later
+	move.l	d0,a0
+
+	bsr	getScopeDrawAreaWidthModulo
+	* add two lines apce on top
+	add	d0,d0
+	add	d0,a0
+;	add.l	#320/8*2,d1	* two vertical lines space on top
+	move.l	a0,buffer1(a5)
+
+	bsr	getScopeDrawAreaWidthModulo
+	move	d0,d1
+	* 70 vertical lines
+	mulu	#70,d0
+	add.l	d0,a0
+;	add.l	#320/8*(70),d0
 	bsr.w	scopeIsNormal
 	bne.b	.notLarge2
-	add.l	#320/8*(64),d0
+	* add further 64 vertical lines
+;	add.l	#320/8*(64),d0
+	mulu	#64,d1
+	add.l	d1,a0
 .notLarge2
-	move.l	d0,buffer2(a5)		* alaalle 4 
+	move.l	a0,buffer2(a5)		* alaalle 4 
 
 *** Initialisoidaan oma bitmappi
 	lea	omabitmap(a5),a0
+	bsr	getScopeDrawAreaWidth
+	move	d0,d1
 	moveq	#1,d0
-	move	#320,d1
+;	move	#320,d1
 	move	#66,d2
 	bsr.w	scopeIsNormal
 	bne.b	.notLarge5
@@ -21733,10 +21883,13 @@ initScopeBitmaps
  
 	move.l	buffer1(a5),draw1(a5)
 	move.l	buffer2(a5),draw2(a5)
-	moveq	#3*40,d0 	* 3 vertical lines
+	bsr	getScopeDrawAreaWidthModulo
+	mulu	#3,d0
+;	moveq	#3*40,d0 	* 3 vertical lines
 	add.l	d0,draw1(a5)
 	add.l	d0,draw2(a5)
 
+	* no error, Z not set
 .memError
 	rts
 
@@ -21750,6 +21903,10 @@ drawScopeWindowDecorations
 	moveq	#4,d0
 	moveq	#11,d1
 	move	#335,d2
+	bsr	scopeIsNormalWidth
+	beq.b	.normW
+	add	#SCOPE_WINDOW_WIDE_DELTA,d2
+.normW
 	move	#82,d3
 	bsr.w	scopeIsNormal
 	bne.b	.notLarge3
@@ -21760,6 +21917,10 @@ drawScopeWindowDecorations
 	moveq	#8,d0
 	moveq	#13,d1
 	move	#323,d4
+	bsr	scopeIsNormalWidth
+	beq.b	.normW2
+	add	#SCOPE_WINDOW_WIDE_DELTA,d4	
+.normW2
 	move	#67,d5
 	bsr.w	scopeIsNormal
 	bne.b	.notLarge4
@@ -21772,11 +21933,14 @@ drawScopeWindowDecorations
 	add	windowtop(a5),d1
 	move.l	d0,d2
 	move.l	d1,d3
-	lob	ClipBlit
+	lore	GFX,ClipBlit
 .vanaha
-
-	moveq	#7,plx1
 	move	#332,plx2
+	bsr	scopeIsNormalWidth
+	beq.b	.normW3
+	add	#SCOPE_WINDOW_WIDE_DELTA,plx2
+.normW3
+	moveq	#7,plx1
 	moveq	#13,ply1
 	move	#80,ply2
 	bsr.w	scopeIsNormal
@@ -22042,16 +22206,26 @@ drawScope
 	lob	OwnBlitter
 	lob	WaitBlit
 
+	* Blit width in 16-bit words
+	moveq	#20,d0
+	bsr	scopeIsNormalWidth
+	beq.b	.normW
+	add	#SCOPE_WINDOW_WIDE_DELTA/16,d0
+.normW
 	lea	$dff058,a0
 	move.l	draw2(a5),$54-$58(a0)	
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
 	bsr.w	scopeIsNormal
 	bne.b	.notLarge
-	move	#(64+64)*64+20,(a0)
+;	move	#(64+64)*64+20,(a0)
+	add	#(64+64)*64,d0
+	move	d0,(a0)
 	bra.b	.large
 .notLarge
-	move	#(64+0)*64+20,(a0)
+;	move	#(64+0)*64+20,(a0)
+	add	#(64+0)*64,d0
+	move	d0,(a0)
 .large
 
 	lob	DisownBlitter
@@ -22188,6 +22362,10 @@ drawScope
 	add	windowtop(a5),d3
 	move	#$c0,d6		* minterm, suora kopio a->d
 	move	#320,d4		* x-koko
+	bsr	scopeIsNormalWidth
+	beq.b	.normW3
+	add	#SCOPE_WINDOW_WIDE_DELTA,d4
+.normW3	
 	move	#64,d5	* y-koko
 	bsr.w	scopeIsNormal
 	bne.b	.notLarge0
@@ -23802,7 +23980,6 @@ noteScroller2
 	moveq	#8,d7
 
 .ok8
-
 	subq	#1,d7
 	moveq	#0,d6
 .loop
@@ -23874,7 +24051,13 @@ noteScroller2
     	cmp.l   a3,a0
    	bhs.w   .xy
 .sane
-	;rts
+
+	* destination bitmap 8 pixel height modulo in d4
+	move	#8*40,d4
+	bsr	scopeIsNormalWidth
+	beq.b	.normW
+	move	#8*((320+SCOPE_WINDOW_WIDE_DELTA)/8),d4
+.normW	
 
 	* draw this many lines
 	move	quadNoteScrollerLines(a5),d7
@@ -23902,7 +24085,7 @@ noteScroller2
 	sub	d1,a0
 
 	* vertical position in target 
-	mulu	#8*40,d0
+	mulu	d4,d0
 	add.l	d0,a4
 	bra.b	.ok2
 .ok
@@ -23911,12 +24094,15 @@ noteScroller2
 	sub	d0,a0
 	sub	quadNoteScrollerLinesHalf(a5),d6
 .ok2
+	move	d4,d3
 	bsr	noteScrollerGetFont
 	beq	.exitNoteScroller
 	
+	swap	d4	* dest modulo in upper half!
+	move	d3,d4
+	swap	d4	
 
-
-* d4 = font modulo
+* d4 = font modulo, upper half = destination modulo
 * d6 = line number
 * d7 = rows to draw
 * a0 = pattern data
@@ -24063,7 +24249,11 @@ noteScroller2
 .smallFont
 
 	* next vertical draw position
-	add	#8*40,a4
+;	add	#8*40,a4
+	swap	d4
+	add	d4,a4
+	swap	d4
+
 	* Next row
 	add.l	PI_Modulo(a1),a0
 	addq	#1,d6
@@ -24826,14 +25016,14 @@ loadfile
 	lea	-160(sp),sp
 	move.l	sp,a1
 	lea	arcdir(a5),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	cmp.b	#':',-1(a1)
 	beq.b	.na
 	move.b	#'/',(a1)+
 .na	
 	lea	tdir(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 
 ** vanha kick: kopioidaan parametrin per‰‰n RAM:∞HiP∞/
 	tst.b	uusikick(a5)
@@ -24844,7 +25034,7 @@ loadfile
 	subq	#1,a1
 	move.b	#' ',(a1)+
 	lea	(sp),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	cmp.b	#':',-1(a1)
 	beq.b	.na0
@@ -33795,7 +33985,7 @@ p_aon
 	lea	aonroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bra.w	vapauta_kanavat
 .ok3
 	pushm	d1-a6
@@ -33803,7 +33993,7 @@ p_aon
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2 
-	lea	ciaint_setTempoFromD0(pc),a3
+	lea	ciaint_setTempoFromD0,a3
 	move.l	aonroutines(a5),a4
 	jsr	.OFFSET_INIT(a4)
 	tst.l	d0
@@ -33818,7 +34008,7 @@ p_aon
 	bra.b	.x
 
 .end
-	bsr	rem_ciaint
+	jsr	rem_ciaint
 	move.l	aonroutines(a5),a0
 	jsr	.OFFSET_END(a0)
 	bsr.w	clearsound
@@ -33905,7 +34095,7 @@ p_multi	jmp	.s3init(pc)
 	beq.b	.ok2
 	moveq	#ier_nociaints,d0
 	rts
-.ok2	bsr.w	rem_ciaint
+.ok2	jsr	rem_ciaint
 
 
 	lea	ps3mroutines(a5),a0
@@ -42346,7 +42536,7 @@ wreg2
  even
 
 * Scope window
-winstruc3
+scopeWindowStructure
 	dc	259
 	dc	157
 quadsiz	dc	340,85
