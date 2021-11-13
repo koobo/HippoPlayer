@@ -1,5 +1,9 @@
 WISHLISH
+1) Remember last directory where you picked your last played mod (instead of the configured directory in prefs).
+2) Remember last played module. Pressing play immediately on startup plays the previously played song.
+
 - Dir browser
+- Patternscope for other formats too?
 + Player group from PROGDIR
 + DONE: .gz support
 - UGLY: window size gadget
@@ -54,11 +58,63 @@ Formats
 + MusicMakerV8
 + VSS voodoo sound synth!
 
+- art of noise 8ch
 - mark cooksey
 - MultiMediaSound
 - sound images
 - sound master 
 - special fx
+
+PATTERNINIT - EP
+- TME
+- KRIS
+- Mugician2
+
+CRASH
+- "m:exo/oktalyzer/mohr/1 love night dub.okta"
+
+TODO
+- alloc scope bitplanes with AllocRaster
+- kuinka iso puskuri riittää patternInfoBufferille?
+- Patternscope+s3m: 4kB mix buffer, fläsh
+
+TODO
+- AHX
+
+TODO
+- FLT8 startrekker should play with ps3m
+
+REQ:
+Feature-suggestions:
+1) Remember last directory where you picked your last played mod (instead of the configured directory in prefs).
+2) Remember last played module. Pressing play immediately on startup plays the previously played song.
+
+NEW FORMATS:
++ jd. - Special FX
+- dw. - David Whittaker (Some work, some don't !)
++ jpn. + smp. - Jason Page
+- mcr. + mcs. - Mark Cooksey
+- mc. - Mark Cooksey (old)
++ jpold. - Steve Turner
+
+BUG? 
+- check if audio is alloced in all EPs
+
+FIXED: BUG
+- set random play
+- push play or New and add files, always first one starts to play instead of random
+
+FIXED: GFX GLITCH
+- minify window with RMB+Pr
+--> top part of favorites button is visible
+
+SCOPE BUG: activation
+- the scope works in multimonitor support as long as ALL modules that are played
+  support it. Once a module that doesn't support the scope is loaded
+  the next module that supports it does not enable it anymore.
+  So if you play modules in random order as soon as a 
+  module that doesn't support visualization is played the scope
+  stops working all together (until you click on the scope of course).
 
 CRASH
 - sonic arranger: svensktoppen
