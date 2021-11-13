@@ -10,8 +10,8 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
-DEBUG	=	0
-TEST 	= 	0
+DEBUG	=	1
+TEST 	= 	1
 
 
 * Print to debug console, very clever.
@@ -150,18 +150,19 @@ TESTMODE
 
 	* mix rate
 	move.l	#15000,d0
+	move.l	#27000,d0
 	* volume boost
 	moveq	#3,d1
 	* mode
-;	moveq	#sm_stereo,d3
-	moveq	#2,d3
+	moveq	#STEREO,d3
 	* priority, killer
 	moveq	#2,d4
 	* mod address
 	move.l	#module,d2
 	* mixing buffer size, shift for 4096
 	* 3 = 32 kB (MAX)
-	moveq	#3,d5
+	moveq	#3,d5	* max
+	moveq	#0,d5	* min
 	lea	.playing(pc),a0
 	lea	.dummyFunc(pc),a1
 	lea	.volume(pc),a2
@@ -656,7 +657,7 @@ getPatternInfo
  if DEBUG
 	moveq	#0,d0 
 	move	d3,d0
-	lsr		#2,d0
+	lsr	#2,d0
 	move.l	playpos(a5),d1
 	lsr.l	#8,d1
 	moveq	#0,d2
@@ -680,10 +681,13 @@ updatePatternInfoBuffer
 	lsr.l	#8,d3
 	divu	d3,d4
 	* d4 = max index number
+	* Round up to have some extra buffer in case
+	* of read overflow, which happens on small mix buffers.
+	addq	#1,d4
 	
  if DEBUG 
-	moveq	#0,d0 
-	move	d4,d0
+;	moveq	#0,d0 
+;	move	d4,d0
 ;	DPRINT	"MAX IDX=%ld"
  endif 
 
@@ -721,8 +725,8 @@ updatePatternInfoBuffer
 	asl	#2,d0
 
  if DEBUG
-	ext.l 	d0 
-	ext.l	d1
+;	ext.l 	d0 
+;	ext.l	d1
 ;	DPRINT	"curIdx=%ld  prevIdx=%ld"
  endif
 
@@ -760,6 +764,10 @@ updatePatternInfoBuffer
 * This updates the information in PatternInfo structure
 * to correspond to what is being played currently
 updatePatternInfoData
+	bsr.w	getPatternInfo
+	* d0 = song pos
+	* d1 = patt pos
+	move	d1,PatternInfo+PI_Pattpos
 
 	cmp	#mtMOD,mtype(a5)
 	beq.b	.mod 
@@ -773,11 +781,7 @@ updatePatternInfoData
 	lea	952(a0),a2	;pattpo
 	lea	1084(a0),a0	;patterndata
 
-	bsr.w	getPatternInfo
 	* d0 = song pos
-	* d1 = patt pos
-	move	d1,PatternInfo+PI_Pattpos
-
 	moveq	#0,d1
 	move.b	(a2,d0),d1
 	lsl.w	#8,d1
@@ -796,12 +800,8 @@ updatePatternInfoData
 	rts
  
 .mtm 
-	bsr.w	getPatternInfo
 	* d0 = song pos
-	* d1 = patt pos
-	move	d1,PatternInfo+PI_Pattpos
 	move	d0,d6
-
 
 	move	numchans(a5),d7
 	subq	#1,d7
@@ -838,13 +838,8 @@ updatePatternInfoData
 
 	rts
 
-
 .s3m 	
-	bsr.w	getPatternInfo
 	* d0 = song pos
-	* d1 = patt pos
-	move	d1,PatternInfo+PI_Pattpos
-
 
 	* module data
 	move.l	s3m(a5),a0
@@ -903,7 +898,7 @@ updatePatternInfoData
 	beq.b	.rowEnd 
 
 	moveq	#$1f,d1
-	and	d0,d1			* channel number
+	and	d0,d1		* channel number
 	lsl	#2,d1  		* multiple of 4, index to unpacked pattern
 
 	and	#~31,d0
@@ -920,7 +915,7 @@ updatePatternInfoData
 	moveq	#64,d2
 	and	d0,d2
 	beq.b	.nvol
-	* Emulate a PT vol command
+	* Emulate the PT vol command
 	* Later actual command overrides
 ;	moveq	#$c,d5
 ;	move.b	(a0)+,d6
@@ -965,6 +960,7 @@ updatePatternInfoData
 
 
 .xm
+	* d0 = song pos
 
 	rts
 
@@ -1128,7 +1124,6 @@ s3end	tst.b	ahi_use
 	lob	Close
 .noDbg
  endif
-
 	rts
 
 	endb	a5
@@ -10406,6 +10401,8 @@ activeSongPos 	dc 	0
 activePattPos 	dc 	0
 * buffered information: song position, pattern position
 			ds.l	4	* underflow room
+
+pi
 patternInfoBuffer
 	* TODO: how big should this be?
 			ds.l	2048
