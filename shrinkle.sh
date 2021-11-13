@@ -14,3 +14,4 @@ cat $TMPFILE >> "$1.shr"
 rm $TMPFILE
 mkdir -p shr
 mv "$1.shr" shr/
+echo "Wrote shr/$1.shr"
