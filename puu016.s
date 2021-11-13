@@ -21262,7 +21262,7 @@ str2msg	pushm	d0/d1/a0/a1/a6
 *******************************************************************************
 wflags3 set WFLG_SMART_REFRESH!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags3 set wflags3!WFLG_RMBTRAP
-idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS
+idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
 
 QUADMODE2_QUADRASCOPE = 0
 QUADMODE2_QUADRASCOPE_BARS = 1
@@ -21427,28 +21427,6 @@ quad_code
 .cont
 		
 
-
-* Piirtoalueet
-	move.l	#320/8*(72)*2,d0
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge
-	move.l	#320/8*(72+64)*2,d0
-.notLarge
-	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
-	jsr	getmem
-	beq.b	.me
-	move.l	d0,buffer0(a5)
-	add.l	#320/8*2,d0		* yl‰‰lle 2 vararivi‰
-	move.l	d0,buffer1(a5)
-	add.l	#320/8*(70),d0
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge2
-	add.l	#320/8*(64),d0
-.notLarge2
-	move.l	d0,buffer2(a5)		* alaalle 4 
-
-.gurgle
-
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc3,a0
 	* Restore top/left to some previous used value
@@ -21503,71 +21481,10 @@ quad_code
 	move.l	pen_1(a5),d0
 	lob	SetAPen
 
-	tst.b	uusikick(a5)		* uusi kick?
-	beq.b	.vanaha
+	bsr		drawScopeWindowDecorations
+	bsr		initScopeBitmaps
+	beq.b	.memer
 
-	move.l	rastport3(a5),a2
-	moveq	#4,d0
-	moveq	#11,d1
-	move	#335,d2
-	move	#82,d3
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge3
-	add	#64,d3
-.notLarge3
-	bsr.w	drawtexture
-
-	moveq	#8,d0
-	moveq	#13,d1
-	move	#323,d4
-	move	#67,d5
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge4
-	add	#64,d5
-.notLarge4
-	moveq	#$0a,d6
-	move.l	rastport3(a5),a0
-	move.l	a0,a1
-	add	windowleft(a5),d0
-	add	windowtop(a5),d1
-	move.l	d0,d2
-	move.l	d1,d3
-	lob	ClipBlit
-.vanaha
-
-*** Initialisoidaan oma bitmappi
-
-	lea	omabitmap(a5),a0
-	moveq	#1,d0
-	move	#320,d1
-	move	#66,d2
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge5
-	add	#64,d2
-.notLarge5
-	lore	GFX,InitBitMap
-	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
- 
-	moveq	#7,plx1
-	move	#332,plx2
-	moveq	#13,ply1
-	move	#80,ply2
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge6
-	add 	#64,ply2
-.notLarge6
-	add	windowleft(a5),plx1
-	add	windowleft(a5),plx2
-	add	windowtop(a5),ply1
-	add	windowtop(a5),ply2
-	move.l	rastport3(a5),a1
-	jsr	laatikko2
-
-	move.l	buffer1(a5),draw1(a5)
-	move.l	buffer2(a5),draw2(a5)
-	moveq	#3*40,d0 	* 3 vertical lines
-	add.l	d0,draw1(a5)
-	add.l	d0,draw2(a5)
 
 	* State flag indicating whether scope has been cleared
 	moveq	#0,d7
@@ -21711,6 +21628,11 @@ scopeLoop
 	move.l	im_Class(a1),d2		* luokka	
 	move	im_Code(a1),d3
 	lob	ReplyMsg
+	cmp.l	#IDCMP_NEWSIZE,d2 
+	beq.b 	.noNewSize
+	bsr.w	scopeWindowSizeChanged
+	bra.w 	scopeLoop
+.noNewSize
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.qx
 	* RMB closes window
@@ -21733,6 +21655,7 @@ qexit	bsr.b	qflush_messages
 	jsr	freemem
 	move.l	buffer0(a5),a0
 	jsr	freemem
+	clr.l	buffer0(a5)
 	move.l	deltab1(a5),a0
 	jsr	freemem
 	clr.l	mtab(a5)
@@ -21760,12 +21683,113 @@ qexit	bsr.b	qflush_messages
 	clr	quad_prosessi(a5)	* lippu: lopetettiin
 	rts
 
+scopeWindowSizeChanged
+	DPRINT	"Scope NEWSIZE"
+	rts
 
 
 qflush_messages
 	move.l	windowbase3(a5),a0 
 	bra.w		flushWindowMessages
 
+
+
+
+
+initScopeBitmaps
+	move.l	buffer0(a5),a0
+	jsr	freemem
+
+* Piirtoalueet
+	move.l	#320/8*(72)*2,d0
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge
+	move.l	#320/8*(72+64)*2,d0
+.notLarge
+	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
+	jsr	getmem
+	beq.b	.memError
+	move.l	d0,buffer0(a5)
+	add.l	#320/8*2,d0		* yl‰‰lle 2 vararivi‰
+	move.l	d0,buffer1(a5)
+	add.l	#320/8*(70),d0
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge2
+	add.l	#320/8*(64),d0
+.notLarge2
+	move.l	d0,buffer2(a5)		* alaalle 4 
+
+*** Initialisoidaan oma bitmappi
+	lea	omabitmap(a5),a0
+	moveq	#1,d0
+	move	#320,d1
+	move	#66,d2
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge5
+	add	#64,d2
+.notLarge5
+	lore	GFX,InitBitMap
+	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
+ 
+	move.l	buffer1(a5),draw1(a5)
+	move.l	buffer2(a5),draw2(a5)
+	moveq	#3*40,d0 	* 3 vertical lines
+	add.l	d0,draw1(a5)
+	add.l	d0,draw2(a5)
+
+.memError
+	rts
+
+
+
+drawScopeWindowDecorations
+	tst.b	uusikick(a5)		* uusi kick?
+	beq.b	.vanaha
+
+	move.l	rastport3(a5),a2
+	moveq	#4,d0
+	moveq	#11,d1
+	move	#335,d2
+	move	#82,d3
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge3
+	add	#64,d3
+.notLarge3
+	bsr.w	drawtexture
+
+	moveq	#8,d0
+	moveq	#13,d1
+	move	#323,d4
+	move	#67,d5
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge4
+	add	#64,d5
+.notLarge4
+	moveq	#$0a,d6
+	move.l	rastport3(a5),a0
+	move.l	a0,a1
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	move.l	d0,d2
+	move.l	d1,d3
+	lob	ClipBlit
+.vanaha
+
+	moveq	#7,plx1
+	move	#332,plx2
+	moveq	#13,ply1
+	move	#80,ply2
+	bsr.w	scopeIsNormal
+	bne.b	.notLarge6
+	add 	#64,ply2
+.notLarge6
+	add	windowleft(a5),plx1
+	add	windowleft(a5),plx2
+	add	windowtop(a5),ply1
+	add	windowtop(a5),ply2
+	move.l	rastport3(a5),a1
+	jsr	laatikko2
+	rts
 
 *** Scope interrupt code, keeps track the play positions of protracker replayer samples
 scopeinterrupt				* a5 = var_b
