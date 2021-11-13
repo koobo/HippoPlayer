@@ -146,10 +146,10 @@ List of supported formats:
   - Note! This feature relies on file system comments working.
   
 ## Music format related fixes
-- Digital Mugician upgraded to Wanted Team eagleplayer. Supports subsongs,
-  pattern skipping, patternscope.
-- David Whittaker upgraded to Wanted Team eagleplayer. Better support
-  for different variants, volume and songend support.
+- Digital Mugician upgraded to Wanted Team eagleplayer ("mugician.amp").
+  Supports subsongs, pattern skipping, patternscope.
+- David Whittaker upgraded to Wanted Team eagleplayer ("david whittaker").
+  Better support for different variants, volume and songend support.
   
 ## New Eagleplayer formats, plugin name in parentheses:
 - Sound FX ("sound fx")
