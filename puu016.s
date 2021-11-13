@@ -24,7 +24,7 @@ ver	macro
 	endm	
 
 
-DEBUG	= 0
+DEBUG	= 1
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
 asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
@@ -21689,7 +21689,13 @@ scopeLoop
 	st	d5
 	move.b	d5,scopeManualActivation(a5)
 
-;	bsr	makeDoubleWidthScopeWindow
+	bsr	scopeIsNormalWidth
+	beq.b	.dou
+	bsr	makeNormalWidthScopeWindow
+	bra	scopeLoop
+.dou	
+	bsr	makeDoubleWidthScopeWindow
+	bra	scopeLoop
 
 .qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.w	scopeLoop
@@ -21757,6 +21763,7 @@ makeDoubleWidthScopeWindow
 	move	#SCOPE_WINDOW_WIDE_DELTA,d0 
 	moveq	#0,d1
 	lore	Intui,SizeWindow
+	bsr	drawScopeWindowDecorations
 	DPRINT	"->resize"
 	rts
 .already
@@ -21771,7 +21778,7 @@ makeNormalWidthScopeWindow
 	cmp	quadWindowWidthOriginal(a5),d0
 	beq.b	makeDoubleWidthScopeWindow\.already
 
-	move	#-280,d0 
+	move	#-SCOPE_WINDOW_WIDE_DELTA,d0 
 	moveq	#0,d1
 	lore	Intui,SizeWindow
 	rts
@@ -21816,6 +21823,8 @@ scopeWindowSizeChanged
 	move	wd_Width(a0),d2
 	move	wd_Height(a0),d3
 	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+	bsr	drawScopeWindowDecorations
+	bsr	initScopeBitmaps
 	rts
 
 
@@ -21825,6 +21834,8 @@ qflush_messages
 
 
 initScopeBitmaps
+	DPRINT	"initScopeBitmaps"
+	lore	GFX,WaitBlit
 	move.l	buffer0(a5),a0
 	jsr	freemem
 
@@ -24052,12 +24063,7 @@ noteScroller2
    	bhs.w   .xy
 .sane
 
-	* destination bitmap 8 pixel height modulo in d4
-	move	#8*40,d4
-	bsr	scopeIsNormalWidth
-	beq.b	.normW
-	move	#8*((320+SCOPE_WINDOW_WIDE_DELTA)/8),d4
-.normW	
+
 
 	* draw this many lines
 	move	quadNoteScrollerLines(a5),d7
@@ -24094,15 +24100,19 @@ noteScroller2
 	sub	d0,a0
 	sub	quadNoteScrollerLinesHalf(a5),d6
 .ok2
-	move	d4,d3
+
+	* destination bitmap 8 pixel height modulo in d4
+	bsr	getScopeDrawAreaWidthModulo
+
+	* store modulo in the other half of d7
+	swap 	d7
+	move	d0,d7
+	swap	d7
+
 	bsr	noteScrollerGetFont
 	beq	.exitNoteScroller
-	
-	swap	d4	* dest modulo in upper half!
-	move	d3,d4
-	swap	d4	
 
-* d4 = font modulo, upper half = destination modulo
+* d4 = font modulo
 * d6 = line number
 * d7 = rows to draw
 * a0 = pattern data
@@ -24110,7 +24120,13 @@ noteScroller2
 * a2 = font data
 * a4 = destination draw buffer
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; row loop
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; row loop
+
 .rowLoop
+	; get screen modulo to lower half of d7
+	swap	d7
+
 	* print line number in d6
 	lea	.pos(pc),a3
 	tst.b	(a3)
@@ -24248,17 +24264,22 @@ noteScroller2
 	bsr.b	.print
 .smallFont
 
-	* next vertical draw position
+	* next vertical draw position, 8 pixels down
 ;	add	#8*40,a4
-	swap	d4
-	add	d4,a4
-	swap	d4
-
+	move	d7,d3
+	lsl		#3,d3
+	add	 	d3,a4
+	
 	* Next row
 	add.l	PI_Modulo(a1),a0
 	addq	#1,d6
+	swap  	d7 ; get loop variable
 	cmp	PI_Pattlength(a1),d6
 	dbeq	d7,.rowLoop
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; loop end
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; loop end
+
 
 .exitNoteScroller
 	rts
@@ -24327,6 +24348,14 @@ noteScroller2
 * - width 4
 * - height 8
 * - even number of chars as input text
+ 
+* in:
+*   a5 = dest draw buffer
+*   a3 = text to draw
+*   a2 = contains font data
+*   d4 = contains font modulo
+*  	d7 = screen modulo
+
 .printSmall	
 	* nibble masks
 	moveq	#$0f,d1
@@ -24347,66 +24376,80 @@ noteScroller2
 	and.b	d2,d0 
  	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,1*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,2*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,3*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,4*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,5*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,6*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,7*40(a5)	
+ 	or.b	d0,(a5)	
 	bra.b	.evenCharDone
 .lowNib
  	move.b	(a6),d0 
 	lsl.b	#$4,d0 
  	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,1*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,2*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,3*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,4*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,5*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,6*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,7*40(a5)	
+ 	or.b	d0,(a5)	
 * odd char done	
 
 .evenCharDone
@@ -24423,72 +24466,93 @@ noteScroller2
 	lsr.b	#4,d0
 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,1*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,2*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,3*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,4*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,5*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,6*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,7*40(a5)	
+ 	or.b	d0,(a5)	
 	bra.b	.oddCharDone
 .lowNib2
  	move.b	(a6),d0 
 	and.b	d1,d0
  	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,1*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,2*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,3*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,4*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,5*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,6*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,7*40(a5)	
+ 	or.b	d0,(a5)	
 * odd char done	
 
 .oddCharDone
 
 	* go to next horiz position 
 	addq	#1,a5
+	sub	d7,a5
+	sub	d7,a5
+	sub	d7,a5
+	sub	d7,a5
+	sub	d7,a5
+	sub	d7,a5
+	sub	d7,a5
 
 	* next two input chars
 	subq	#1,d3
