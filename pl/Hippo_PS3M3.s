@@ -1,4 +1,4 @@
-;APS0001B03E0000DED3000035CF00002E5C000000000000000000000000000000000000000000000000
+;APS0001B04D0000DEE2000035CF00002E5C000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -212,8 +212,8 @@ module
 ;	incbin	"m:multichannel/chaotic dance.mtm"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
-;	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
-	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
+	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
+;	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
 ;	incbin	"m:multichannel/near_dark.s3m"
 moduleE
 	section	co,code_p
@@ -387,6 +387,10 @@ s3poslen
 
 
 s3init	
+	* Store this first to allow debug logs to work
+	move.l	a3,dosbase
+
+	DPRINT	"s3init"
 
 	move.l	4(sp),voluproutine
 
@@ -411,11 +415,8 @@ s3init
 	move.l	a0,var_playing
 	move.l	a1,inforivit
 	move.l	a2,var_volume
-	move.l	a3,dosbase
 	move.l	a4,songoverf
 	move.l	a6,gfxbase
-
-;	DPRINT	"s3init"
 
 	tst.b	ahi_use
 	bne.w	ahi_init
@@ -1009,7 +1010,7 @@ updatePatternInfoData
 	subq	#1,d1
 
 .xmChanLoop
-	moveq	#0,d3
+	moveq	#-1,d3
 	moveq	#0,d4
 	moveq	#0,d5
 	moveq	#0,d6
@@ -1020,7 +1021,7 @@ updatePatternInfoData
 	btst	#0,d0
 	beq.b	.nonote
 	move.b	(a1)+,d3
-	addq.b	#1,d3
+;	addq.b	#1,d3
 .nonote	btst	#1,d0
 	beq.b	.noinst
 	move.b	(a1)+,d4
@@ -1041,7 +1042,7 @@ updatePatternInfoData
 	
 .all	
 	move.b	d0,d3
-	addq.b	#1,d3
+	;addq.b	#1,d3
 	move.b	(a1)+,d4
 	addq	#1,a1
 	;move.b	(a1)+,vol(a2)
@@ -1104,7 +1105,10 @@ s3cont	tst.b	ahi_use
 	rts
 
 
-s3end	tst.b	ahi_use
+s3end
+	DPRINT	"S3end"
+
+	tst.b	ahi_use
 	bne.w	ahi_end
 	
 	pushm	all
@@ -1114,7 +1118,6 @@ s3end	tst.b	ahi_use
 
 
 .joopajoo
-	DPRINT	"Stop"
 
 	lea	data,a5
 	basereg	data,a5
@@ -1217,11 +1220,12 @@ s3end	tst.b	ahi_use
 .eimem6	
 
  ifne DEBUG
-	move.l	#2*50,d1
+	move.l	#1*50,d1
 	move.l	dosbase,a6
-;	lob 	Delay
+	lob 	Delay
 	move.l	output,d1
 	beq.b	.noDbg
+	clr.l	output
 	lob	Close
 .noDbg
  endif
@@ -1840,10 +1844,12 @@ ConvertNote
 	moveq	#0,D2		; Command 
 	moveq	#0,D3		; Command argument
 
+	moveq	#-1,d0
+	cmp.b	(a0),d0
+	beq.b	.noXMNote
 	moveq	#$7f,d0
 	and.b	(a0),d0		; note 0-71, 0 = C-0
-						; +1 added so 0 is "no note"
-	beq.b	.noXMNote
+	;beq.b	.noXMNote
 	
 	moveq	#$7f,d1
 	and.b	1(a0),d1	; instrument 0-128
