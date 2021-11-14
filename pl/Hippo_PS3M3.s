@@ -1,4 +1,4 @@
-;APS0001AEC10000DD560000352C00002DD9000000000000000000000000000000000000000000000000
+;APS0001B03E0000DED3000035CF00002E5C000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -211,7 +211,9 @@ module
 ;	incbin	"m:multichannel/approaching antares.mod"
 ;	incbin	"m:multichannel/chaotic dance.mtm"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
-	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
+;	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
+	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
 ;	incbin	"m:multichannel/near_dark.s3m"
 moduleE
 	section	co,code_p
@@ -775,6 +777,8 @@ updatePatternInfoData
 	beq.b 	.mtm
 	cmp	#mtS3M,mtype(a5)
 	beq.w	.s3m
+	cmp	#mtXM,mtype(a5)
+	beq.w	.xm
 	rts 
 .mod
 	move.l	mt_songdataptr(pc),a0
@@ -946,15 +950,15 @@ updatePatternInfoData
 .skip
 
 * Pattern is unpacked, points stripes into it
-
+.putStripes
 	move	numchans(a5),D0
 	subq	#1,d0
 	lea	Stripe1,a0
 	lea	unpackedPattern(a5),a1
-.stri 
+.stripesLoop 
 	move.l	a1,(a0)+
 	addq	#4,a1
-	dbf	d0,.stri
+	dbf	d0,.stripesLoop
 
 	rts
 
@@ -962,6 +966,103 @@ updatePatternInfoData
 .xm
 	* d0 = song pos
 
+	move.l s3m(a5),a0
+	moveq	#0,d1
+	move.b	xmOrders(a0,d0),d1	
+	cmp.b	xmNumPatts(a0),d1	* limit check
+	bhs.w	.xmSkip
+
+	* Unpack once if same
+	move.l	d1,d0
+	cmp	unpackedPatternPosition(a5),d0
+	beq.w	.xmSkip
+	move	d0,unpackedPatternPosition(a5)
+	DPRINT	"Unpack %ld"
+
+	lsl	#2,d0
+	lea	xm_patts(a5),a1
+	move.l	(a1,d0),a1
+	lea	xmNumRows(a1),a3
+	tword	(a3)+,d0 	* xmNumRows
+
+ if DEBUG
+ 	moveq	#0,d1
+	move 	numchans(a5),d1
+	DPRINT	"Rows=%ld chans=%ld"
+ endif
+
+	* XM can have variable pattern length, store for this one
+	move	d0,PatternInfo+PI_Pattlength
+	move.l	a1,a3
+	tlword	(a3)+,d1	* Length of pattern header
+	tst	d1
+	beq.b	.xmEmptyPattern
+	add.l	d1,a1		* skip header 
+
+	* Start of XM pattern data at a1
+	lea	unpackedPattern(a5),a0
+
+	move	d0,d7
+	subq 	#1,d7
+.xmRowLoop
+	move 	numchans(a5),d1
+	subq	#1,d1
+
+.xmChanLoop
+	moveq	#0,d3
+	moveq	#0,d4
+	moveq	#0,d5
+	moveq	#0,d6
+
+	move.b	(a1)+,d0
+	bpl.b	.all
+
+	btst	#0,d0
+	beq.b	.nonote
+	move.b	(a1)+,d3
+	addq.b	#1,d3
+.nonote	btst	#1,d0
+	beq.b	.noinst
+	move.b	(a1)+,d4
+.noinst	btst	#2,d0
+	beq.b	.novol
+	* Emulate PT C-command
+	moveq	#$c,d5
+	move.b	(a1)+,d6
+	;addq	#1,a1
+	;move.b	(a1)+,vol(a2)
+.novol	btst	#3,d0
+	beq.b	.nocmd
+	move.b	(a1)+,d5
+.nocmd	btst	#4,d0
+	beq.b	.next
+	move.b	(a1)+,d6
+	bra.b	.next
+	
+.all	
+	move.b	d0,d3
+	addq.b	#1,d3
+	move.b	(a1)+,d4
+	addq	#1,a1
+	;move.b	(a1)+,vol(a2)
+	move.b	(a1)+,d5
+	move.b	(a1)+,d6
+.next	
+	move.b	d3,(a0)+
+	move.b	d4,(a0)+
+	move.b	d5,(a0)+
+	move.b	d6,(a0)+
+
+	dbf	d1,.xmChanLoop
+
+	dbf	d7,.xmRowLoop
+
+* Pattern is unpacked, points stripes into it
+	bra.w	.putStripes
+.xmSkip
+	rts
+
+.xmEmptyPattern
 	rts
 
  endb a5
@@ -1654,6 +1755,8 @@ PatternInit
 	beq.b	.mtm
 	cmp	#mtS3M,mtype 
 	beq.b 	.s3m 
+	cmp	#mtXM,mtype 
+	beq.b 	.s3m 
 	rts
 
 .mtm 
@@ -1669,6 +1772,8 @@ PatternInit
 	move	#6,PI_Speed(a0)		; Magic! Positive: period, Negative: note index
 	rts
 
+* Both of these will use temporaru uncompressed pattern data
+.xm
 .s3m 
 	* 4 bytes per note, per channel
 	move	numchans(pc),d1
@@ -1691,14 +1796,6 @@ ConvertNote
 	beq.b	.mtXM
 	rts
 
-.mtXM
-	moveq	#0,D0		; Period, Note
-	moveq	#0,D1		; Sample number
-	moveq	#0,D2		; Command 
-	moveq	#0,D3		; Command argument
-
-	rts
-
 .mtS3M
 	moveq	#0,D0		; Period, Note
 	;moveq	#0,D1		; Sample number
@@ -1710,20 +1807,23 @@ ConvertNote
 	moveq	#0,d1
 	move.b	(a0),d1
 	beq.b	.noNote
+	* Uncompressed data has one added to reserve 0 for "no note"
 	subq.b	#1,d1
 	
+	* up nibble contains octave number
+	* low nibble note index
 	moveq	#$f,d0
-	and	d1,d0
+	and.b	d1,d0
 	lsr.b	#4,d1
 	move.b	.multab12(pc,d1.w),d1
 	add	d1,d0
 
-	addq.b	#1,d0
+	addq	#1,d0
 	move.b	1(a0),d1
 .noNote
-.yes
 	move.b	2(a0),d2
-	and	#$3f,d2		* TODO
+	and	#$3f,d2		* TODO, cut off command, there could possibly be a better way
+
 	move.b	3(a0),d3
 	rts
 
@@ -1734,6 +1834,26 @@ ConvertNote
 .a set .a+12
 	endr
 
+.mtXM
+	;moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	moveq	#$7f,d0
+	and.b	(a0),d0		; note 0-71, 0 = C-0
+						; +1 added so 0 is "no note"
+	beq.b	.noXMNote
+	
+	moveq	#$7f,d1
+	and.b	1(a0),d1	; instrument 0-128
+
+.noXMNote
+	move.b	2(a0),d2
+	and	#$3f,d2		* TODO, cut off command, there could possibly be a better way
+
+	move.b	3(a0),d3
+	rts
 
 .mtMTM
 	moveq	#0,D0		; Period, Note
@@ -6349,8 +6469,10 @@ xm_runEnvelopes
 xm_newrow
 	clr	cn(a5)
 
+	;;;;;;;;;;;;
 	move	pos(a5),activeSongPos
 	move	rows(a5),activePattPos
+	;;;;;;;;;;;;
 
 	tst	pdelaycnt(a5)
 	bne.w	.process
@@ -9872,8 +9994,8 @@ syncz	move.l	(sp),a6
 	jsr	play
 
 	lea	data,a5
-	bsr 	updatePatternInfoBuffer
-	bsr	updatePatternInfoData
+	jsr 	updatePatternInfoBuffer
+	jsr	updatePatternInfoData
 
  ifne TEST
 ;	lea	PatternInfo,a1
@@ -10407,13 +10529,14 @@ patternInfoBuffer
 	* TODO: how big should this be?
 			ds.l	2048
 
-* 64 rows
+* 64 + 64 rows
+* NOTE! xm can have variable rows?
 * 32 channels
 * 4 bytes per note
 * TODO: dynamic allocation
 upa
 unpackedPattern
-	ds.b	64*4*32
+	ds.b	(64+64)*4*32
 
 unpackedPatternPosition
 	dc.w	-1
