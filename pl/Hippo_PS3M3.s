@@ -541,7 +541,7 @@ s3init
 	bne.b	.alavaraa
 
 .memerr	bsr.w	s3end
-	popm	d1-a6
+	popm	d1-d7/a2-a6
 	moveq	#ier_nomem,d0
 	rts
 
@@ -572,8 +572,7 @@ s3init
 	clr.b	(a0)
 	move.l	inforivit(pc),a0
 	jsr	(a0)
-	moveq	#0,d0
-	popm	d1-a6
+	popm	d1-d7/a2-a6
 	move	#333,d0		* killeri lopettanut
 	rts
 
@@ -1109,8 +1108,11 @@ s3end
 	DPRINT	"S3end"
 
 	tst.b	ahi_use
-	bne.w	ahi_end
-	
+	beq.b	.noAhi
+	bsr.w	ahi_end
+	bra.w	.closeDebugWindow
+.noAhi
+
 	pushm	all
 	bsr.b	.joopajoo
 	popm	all
@@ -1219,6 +1221,7 @@ s3end
 
 .eimem6	
 
+.closeDebugWindow
  ifne DEBUG
 	move.l	#1*50,d1
 	move.l	dosbase,a6
@@ -1279,6 +1282,8 @@ ps3m_task	dc.l	0
 
 ********************** AHI liittymä
 ahi_init
+	DPRINT	"ahi_init"
+
 	bsr.w	init
 	bsr.w	FinalInit
 
@@ -1287,10 +1292,11 @@ ahi_init
 	move.l	ahi_mode(pc),setmode
 
 	bsr.b	ahi_init0
+	
 	tst.l	d0
 	bne.b	.erro
-
-.x	popm	d1-a6
+.x
+	popm	d1-d7/a2-a6
 	rts
 
 .erro	push	d0
@@ -2086,6 +2092,7 @@ play	;movem.l	d0-a6,-(sp)
 
 
 init	
+	DPRINT	"init"
 	bsr.b 	.doInit 
 	bsr	PatternInit
 	rts
@@ -2222,6 +2229,7 @@ init
 
 
 FinalInit
+	DPRINT	"FinalInit"
 	clr.l	bufpos(a5)
 	clr.l	playpos(a5)
 
