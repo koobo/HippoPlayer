@@ -760,8 +760,8 @@ updatePatternInfoBuffer
 	add.w	d0,a0
 	move	activeSongPos(a5),(a0)+
 	move	activePattPos(a5),(a0)+
-	
 	rts	
+
 
 * This updates the information in PatternInfo structure
 * to correspond to what is being played currently
@@ -769,7 +769,7 @@ updatePatternInfoData
 	bsr.w	getPatternInfo
 	* d0 = song pos
 	* d1 = patt pos
-	move	d1,PatternInfo+PI_Pattpos
+	move	d1,PatternInfo+PI_Pattpos(a5)
 
 	cmp	#mtMOD,mtype(a5)
 	beq.b	.mod 
@@ -839,7 +839,6 @@ updatePatternInfoData
 	addq	#4,a4			* next stripe
 	addq	#2,d1 			* next sequence
 	dbf	d7,.loo
-
 	rts
 
 .s3m 	
@@ -875,7 +874,10 @@ updatePatternInfoData
 	lea	unpackedPattern(a5),a1
 	move.l	a1,a2
 
-	* clear old 
+	* clear old, this is probably needed
+	* as S3M pattern can miss tracks so 
+	* old tracks might remain in the previous 
+	* unpacked data.
 	move	numchans(a5),d7
 	* multiply by 4 and 64
 	* total pattern length based on chans
@@ -921,9 +923,9 @@ updatePatternInfoData
 	beq.b	.nvol
 	* Emulate the PT vol command
 	* Later actual command overrides
-;	moveq	#$c,d5
-;	move.b	(a0)+,d6
-	addq	#1,a0
+	moveq	#$c,d5
+	move.b	(a0)+,d6
+	;addq	#1,a0
 .nvol	
 	and	#128,d0
 	beq.b	.noCmd
@@ -992,7 +994,7 @@ updatePatternInfoData
  endif
 
 	* XM can have variable pattern length, store for this one
-	move	d0,PatternInfo+PI_Pattlength
+	move	d0,PatternInfo+PI_Pattlength(a5)
 	move.l	a1,a3
 	tlword	(a3)+,d1	* Length of pattern header
 	tst	d1
@@ -1009,7 +1011,8 @@ updatePatternInfoData
 	subq	#1,d1
 
 .xmChanLoop
-	moveq	#-1,d3
+	;moveq	#-1,d3
+	moveq	#0,d3
 	moveq	#0,d4
 	moveq	#0,d5
 	moveq	#0,d6
@@ -1019,23 +1022,41 @@ updatePatternInfoData
 
 	btst	#0,d0
 	beq.b	.nonote
+;	ror.b	#1,d0
+;	bpl.b	.nonote
+	;addq.b	#1,d3
 	move.b	(a1)+,d3
-;	addq.b	#1,d3
-.nonote	btst	#1,d0
+.nonote	
+	btst	#1,d0
 	beq.b	.noinst
+;	ror.b	#1,d0
+;	bpl.b	.noinst
 	move.b	(a1)+,d4
-.noinst	btst	#2,d0
+
+.noinst
+	btst	#2,d0
 	beq.b	.novol
+;	ror.b	#1,d0
+;	bpl.b	.novol
+	
 	* Emulate PT C-command
 	moveq	#$c,d5
 	move.b	(a1)+,d6
 	;addq	#1,a1
 	;move.b	(a1)+,vol(a2)
-.novol	btst	#3,d0
+.novol	
+	btst	#3,d0
 	beq.b	.nocmd
+;	ror.b	#1,d0
+;	bpl.b	.nocmd
 	move.b	(a1)+,d5
-.nocmd	btst	#4,d0
+
+.nocmd	
+	btst	#4,d0
 	beq.b	.next
+;	ror.b	#1,d0
+;	bpl.b	.next
+	
 	move.b	(a1)+,d6
 	bra.b	.next
 	
@@ -1850,12 +1871,12 @@ ConvertNote
 	moveq	#0,D2		; Command 
 	moveq	#0,D3		; Command argument
 
-	moveq	#-1,d0
-	cmp.b	(a0),d0
-	beq.b	.noXMNote
+;	moveq	#-1,d0
+;	cmp.b	(a0),d0
+;	beq.b	.noXMNote
 	moveq	#$7f,d0
 	and.b	(a0),d0		; note 0-71, 0 = C-0
-	;beq.b	.noXMNote
+	beq.b	.noXMNote
 	
 	moveq	#$7f,d1
 	and.b	1(a0),d1	; instrument 0-128
