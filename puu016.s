@@ -736,6 +736,12 @@ quadWindowHeightOriginal	rs.w	1
 quadNoteScrollerLinesHalf	rs.w	1
 quadNoteScrollerLines		rs.l	1
 
+* default: 320
+scopeDrawAreaWidth		rs.w 	1
+scopeDrawAreaModulo		rs.w 	1
+* default: 64
+scopeDrawAreaHeight		rs.w 	1
+
 timeoutmode	rs.b	1
 filterstatus	rs.b	1		* filtterin 
 modulefilterstate rs.b	1		* ..
@@ -4334,6 +4340,7 @@ getscreeninfo
 	tst	quadWindowHeightOriginal(a5)
 	bne.b	.setAlready
 	move	quadsiz+2,quadWindowHeightOriginal(a5)
+	sub		#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,quadWindowHeightOriginal(a5)
 .setAlready
 
 	move	WINSIZX(a5),wsizex
@@ -21277,6 +21284,9 @@ QUADMODE2_FQUADRASCOPE_BARS = 9
 QUADMODE2_PATTERNSCOPEXL = 10
 QUADMODE2_PATTERNSCOPEXL_BARS = 11
 
+SCOPE_DRAW_AREA_WIDTH_DEFAULT = 320
+SCOPE_DRAW_AREA_HEIGHT_DEFAULT = 64
+
 quad_code
 	lea	var_b,a5
 	clr.l	mtab(a5)
@@ -21288,6 +21298,10 @@ quad_code
 	move.l	d0,quad_task(a5)
 
 	addq	#1,quad_prosessi(a5)	* Lippu: prosessi päällä
+
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,scopeDrawAreaWidth(a5) 
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,scopeDrawAreaModulo(a5)
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,scopeDrawAreaHeight(a5)
 
 
 	lea	ch1(a5),a0
@@ -21389,7 +21403,7 @@ quad_code
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
-	bra.b	.cont
+	bra.w	.cont
 
 .delt	move.l	#(256+32)*4,d0
 	move.l	#MEMF_CLEAR,d1
@@ -21420,9 +21434,9 @@ quad_code
 	move	#4,quadNoteScrollerLinesHalf(a5)
 	bra.b	.cont
 .patternScopeXL
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT*2,scopeDrawAreaHeight(a5)
 	move	#16,quadNoteScrollerLines(a5)
 	move	#8,quadNoteScrollerLinesHalf(a5)
-	;bra.b	.cont
 
 .cont
 		
@@ -21433,10 +21447,7 @@ quad_code
 	move.l	quadpos(a5),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
-	bsr.w	scopeIsNormal
-	bne.b	.normSize
-	add	#64,d0
-.normSize
+	add		scopeDrawAreaHeight(a5),d0
 	move	d0,nw_Height(a0)
 
 	move	wbleveys(a5),d0		* WB:n leveys
@@ -21603,12 +21614,10 @@ scopeLoop
 	move.l	rastport3(a5),a1
 	moveq	#10,d0
 	moveq	#14,d1
-	move	#330,d2
-	move	#79,d3
-	bsr.w 	scopeIsNormal
-	bne.b	.notLarge7
-	add 	#64,d3
-.notLarge7
+	move	scopeDrawAreaWidth(a5),d2
+	add		#10,d2
+	move	scopeDrawAreaHeight(a5),d3
+	add		#79-64,d3
 	add	windowleft(a5),d0
 	add	windowleft(a5),d2
 	add	windowtop(a5),d1
@@ -21629,7 +21638,7 @@ scopeLoop
 	move	im_Code(a1),d3
 	lob	ReplyMsg
 	cmp.l	#IDCMP_NEWSIZE,d2 
-	beq.b 	.noNewSize
+	bne.b 	.noNewSize
 	bsr.w	scopeWindowSizeChanged
 	bra.w 	scopeLoop
 .noNewSize
@@ -21694,46 +21703,52 @@ qflush_messages
 
 
 
-
-
 initScopeBitmaps
 	move.l	buffer0(a5),a0
 	jsr	freemem
+	move	scopeDrawAreaModulo(a5),d0 
+	move	scopeDrawAreaHeight(a5),d1
+	* allocate 6 extra rasterlines
+	addq	#6,d1
+	mulu	d1,d0
+	* two buffers
+	add.l	d0,d0
 
-* Piirtoalueet
-	move.l	#320/8*(72)*2,d0
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge
-	move.l	#320/8*(72+64)*2,d0
-.notLarge
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
 	jsr	getmem
 	beq.b	.memError
-	move.l	d0,buffer0(a5)
-	add.l	#320/8*2,d0		* yläälle 2 varariviä
-	move.l	d0,buffer1(a5)
-	add.l	#320/8*(70),d0
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge2
-	add.l	#320/8*(64),d0
-.notLarge2
-	move.l	d0,buffer2(a5)		* alaalle 4 
+	move.l	d0,a0
+	move.l	a0,buffer0(a5)
+	move	scopeDrawAreaModulo(a5),d1
+	* leave two lines spare at the top
+	add	d1,a0
+	add	d1,a0
+	;add.l	#320/8*2,d0		* yläälle 2 varariviä
+	move.l	a0,buffer1(a5)
 
+	move	scopeDrawAreaModulo(a5),d0
+	move	scopeDrawAreaHeight(a5),d1
+	* four lines spare at the botrom
+	addq	#4,d1
+	mulu	d1,d0
+	add.l	d0,a0
+	move.l	a0,buffer2(a5)
+	
 *** Initialisoidaan oma bitmappi
 	lea	omabitmap(a5),a0
 	moveq	#1,d0
-	move	#320,d1
-	move	#66,d2
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge5
-	add	#64,d2
-.notLarge5
+	move	scopeDrawAreaWidth(a5),d1
+	move	scopeDrawAreaHeight(a5),d2
+	* why add 2 here? 
+	addq	#2,d2
 	lore	GFX,InitBitMap
 	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
  
 	move.l	buffer1(a5),draw1(a5)
 	move.l	buffer2(a5),draw2(a5)
-	moveq	#3*40,d0 	* 3 vertical lines
+	move	scopeDrawAreaModulo(a5),d0
+	* make draw buffer start at 3rd line. why?
+	mulu	#3,d0
 	add.l	d0,draw1(a5)
 	add.l	d0,draw2(a5)
 
@@ -21749,22 +21764,18 @@ drawScopeWindowDecorations
 	move.l	rastport3(a5),a2
 	moveq	#4,d0
 	moveq	#11,d1
-	move	#335,d2
-	move	#82,d3
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge3
-	add	#64,d3
-.notLarge3
+	move	scopeDrawAreaWidth(a5),d2
+	add		#335-320,d2
+	move	scopeDrawAreaHeight(a5),d3
+	add		#82-64,d3
 	bsr.w	drawtexture
 
 	moveq	#8,d0
 	moveq	#13,d1
-	move	#323,d4
-	move	#67,d5
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge4
-	add	#64,d5
-.notLarge4
+	move	scopeDrawAreaWidth(a5),d4
+	add	#323-320,d4
+	move	scopeDrawAreaHeight(a5),d5
+	addq	#67-64,d5
 	moveq	#$0a,d6
 	move.l	rastport3(a5),a0
 	move.l	a0,a1
@@ -21776,13 +21787,11 @@ drawScopeWindowDecorations
 .vanaha
 
 	moveq	#7,plx1
-	move	#332,plx2
+	move	scopeDrawAreaWidth(a5),plx2
+	add		#332-320,plx2
 	moveq	#13,ply1
-	move	#80,ply2
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge6
-	add 	#64,ply2
-.notLarge6
+	move	scopeDrawAreaHeight(a5),ply2
+	add		#80-64,ply2
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -22046,13 +22055,22 @@ drawScope
 	move.l	draw2(a5),$54-$58(a0)	
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge
-	move	#(64+64)*64+20,(a0)
-	bra.b	.large
-.notLarge
-	move	#(64+0)*64+20,(a0)
-.large
+
+	* build BLTSIZ parameter
+	move	scopeDrawAreaHeight(a5),d0
+	lsl	#6,d0
+	move	scopeDrawAreaModulo(a5),d1
+	lsr	#1,d1	* words
+	add	d1,d0
+	move	d0,(a0)
+
+;	bsr.w	scopeIsNormal
+;	bne.b	.notLarge
+;	move	#(64+64)*64+20,(a0)
+;	bra.b	.large
+;.notLarge
+;	move	#(64+0)*64+20,(a0)
+;.large
 
 	lob	DisownBlitter
 
@@ -22187,12 +22205,8 @@ drawScope
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
 	move	#$c0,d6		* minterm, suora kopio a->d
-	move	#320,d4		* x-koko
-	move	#64,d5	* y-koko
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge0
-	add	#64,d5
-.notLarge0
+	move	scopeDrawAreaWidth(a5),d4
+	move	scopeDrawAreaHeight(a5),d5
 
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.joa
@@ -22966,7 +22980,7 @@ getps3mb
 noteScrollerHorizontalLines
 *** viiva
 	move.l	draw1(a5),a0
-	* two vertical positions
+	* first line at y=23
 	lea	23*40(a0),a0
 	bsr.w 	scopeIsNormal
 	bne.b	.normal
@@ -37898,6 +37912,7 @@ p_tcbtracker
 * Mark Cooksey
 ******************************************************************************
 
+ REM **************************
 p_markcooksey
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
@@ -37920,8 +37935,11 @@ p_markcooksey
 
 .init
 	lea	.path(pc),a0 
-	move.l	#10<<16|10,d0
+;	move.l	#10<<16|10,d0
+	moveq	#0,d0
 	bsr.w	deliLoadAndInit
+	DPRINT	"Mark cooksey initialized"
+
 	rts 
 
 
@@ -38015,6 +38033,7 @@ p_markcooksey
 	moveq	#0,D0
 .fail2
 	rts
+ EREM **************************
 
 ******************************************************************************
 * Activision Pro
@@ -40722,6 +40741,7 @@ deliAuthor
 freeDeliBase
 	tst.l	deliData(a5)
 	beq.b	.x
+
 	move.l deliData(a5),a0 
 	jsr 	freemem 
 .x	clr.l	deliData(a5)
@@ -42302,7 +42322,8 @@ mini_text_attr
 	dc.l	.mini	* ta_Name
 	dc	8		* ta_YSize
 	dc.b	0		* ta_Style
-	dc.b	FPF_PROPORTIONAL * ta_Flags
+	dc.b	0		* ta_Flags
+;	dc.b	FPF_PROPORTIONAL * ta_Flags
 
 .mini	dc.b	"mini4.font",0
  even
