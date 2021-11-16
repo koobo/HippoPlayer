@@ -212,7 +212,8 @@ module
 ;	incbin	"m:multichannel/chaotic dance.mtm"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
-	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
+	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-04.s3m"
+;	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
 ;	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
 ;	incbin	"m:multichannel/near_dark.s3m"
 moduleE
