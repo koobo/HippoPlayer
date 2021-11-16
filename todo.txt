@@ -1,9 +1,6 @@
 WISHLISH
-1) Remember last directory where you picked your last played mod (instead of the configured directory in prefs).
-2) Remember last played module. Pressing play immediately on startup plays the previously played song.
-
 - Dir browser
-- Patternscope for other formats too?
++ Patternscope for other formats too?
 + Player group from PROGDIR
 + DONE: .gz support
 - UGLY: window size gadget
@@ -57,18 +54,36 @@ Formats
 + wally beben
 + MusicMakerV8
 + VSS voodoo sound synth!
++ jason page 
++ steve turner
 
 - art of noise 8ch
 - mark cooksey
 - MultiMediaSound
 - sound images
 - sound master 
-- special fx
++ special fx
 
 PATTERNINIT - EP
-- TME
-- KRIS
-- Mugician2
++ TME
++ KRIS
++ Mugician2
+
+NOTES PROBLEM?
+- play "happy_tune-chip.xm"
+- first three notes should be maybe: C-3, D#3, B-3 
+
+FIXED: CRASH 
+- play "happy_tune-chip.xm"
+- push play again -> boom
+
+TEST 
+- correct size for patterninfo buffer
+- try low mix rate, largest buffer
+-> 655
+
+ENFORCER HIT
+- play purplemotion tunes starting from the end
 
 CRASH
 - "m:exo/oktalyzer/mohr/1 love night dub.okta"
@@ -81,17 +96,44 @@ TODO
 TODO
 - AHX
 
+FIXED: CRASH
+- AHI + PS3M patternscope
+
+TODO
+- alloc scope bitplanes with AllocRaster
+- kuinka iso puskuri riitt‰‰ patternInfoBufferille?
+- FIXED: Patternscope+s3m: 4kB mix buffer, fl‰sh
+- mode switch for pattern scope in PS3M: disable costly patternscope
+  stuff if patternscope is not used
+
+CRASH
+- start
+- scope open
+- play unreal-08.s3m
+
+CRASH
+- start
+- scope open
+- play unreal-03.s3m
+
+HITS 
+- start 
+- scope open
+- play The-Party-5_v2_3.XM
+
+TODO
+- AHX patterns
+
 TODO
 - FLT8 startrekker should play with ps3m
 
-REQ:
-Feature-suggestions:
-1) Remember last directory where you picked your last played mod (instead of the configured directory in prefs).
-2) Remember last played module. Pressing play immediately on startup plays the previously played song.
+REQ Feature-suggestions:
++ Remember last directory where you picked your last played mod (instead of the configured directory in prefs).
++ Remember last played module. Pressing play immediately on startup plays the previously played song.
 
-NEW FORMATS:
+REQ NEW FORMATS:
 + jd. - Special FX
-- dw. - David Whittaker (Some work, some don't !)
++ dw. - David Whittaker (Some work, some don't !)
 + jpn. + smp. - Jason Page
 - mcr. + mcs. - Mark Cooksey
 - mc. - Mark Cooksey (old)
