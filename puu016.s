@@ -20,7 +20,7 @@ ver	macro
 ;	dc.b	"v2.47ß (?.?.2021)"
 ;	dc.b	"v2.47 (31.8.2021)"
 ;	dc.b	"v2.48 (31.10.2021)"
-	dc.b	"v2.49 (?.?.2021)"
+	dc.b	"v2.49ß (?.?.2021)"
 	endm	
 
 
@@ -33657,19 +33657,11 @@ p_mline
 .c2	move.b	(a0)+,(a1)+
 	bne.b	.c2
 
-
-	move.l	a4,d1
-	move.l	#MODE_NEWFILE,d2
-	lore	Dos,Open
-	move.l	d0,d7
-	beq.b	.orr
-
-	move.l	d7,d1
-	move.l	moduleaddress(a5),d2
-	move.l	modulelength(a5),d3
-	lob	Write
-	move.l	d7,d1
-	lob	Close
+	move.l	a4,a0
+	move.l	moduleaddress(a5),a1
+	move.l	modulelength(a5),d0
+	bsr		plainSaveFile
+	bmi.b	.orr
 
 	bsr.w	get_mline
 	bne.b	.ok0
@@ -33893,7 +33885,7 @@ p_multi	jmp	.s3init(pc)
 ;eteenj	jmp	eteen(pc)
 ;taaksej	jmp	taakse(pc)
 
-
+* This does test resource allocation and frees them right after.
 .s3init
 	bsr.w	varaa_kanavat
 	beq.b	.ok
@@ -33972,7 +33964,6 @@ p_multi	jmp	.s3init(pc)
 	jsr	init0j(a5)
 	addq	#4,sp			* pop pea
 
-;	sub.l	a0,a0	;XAX
 	move.l	a0,deliPatternInfo+var_b
 	move.l	a1,ps3mUnpackedPattern+var_b
  if DEBUG
@@ -41173,36 +41164,9 @@ eagleJumpTableStart
 		jmp funcENPP_GetHardwareType
 eagleJumpTableEnd
 
-funcENPP_AllocSampleStruct
-	DPRINT "ENPP_AllocSampleStruct"
-	rts
-funcENPP_NewLoadFile2
-	DPRINT "ENPP_NewLoadFile2"
-	rts
-funcENPP_MakeDirCorrect
-	DPRINT "ENPP_MakeDirCorrect"
-	rts
-funcENPP_TestAufHide
-	DPRINT "ENPP_TestAufHide"
-	rts
 funcENPP_ClearCache
 	;DPRINT "ENPP_ClearCache"
 	bra.w clearCpuCaches
-funcENPP_CopyMemQuick
-	DPRINT "ENPP_CopyMemQuick"
-	rts
-funcENPP_GetPassword
-	DPRINT "ENPP_GetPassword"
-	rts
-funcENPP_StringCopy2
-	DPRINT "ENPP_StringCopy2"
-	rts
-funcENPP_ScreenToFront
-	DPRINT "ENPP_ScreenToFront"
-	rts
-funcENPP_WindowToFront
-	DPRINT "ENPP_WindowToFront"
-	rts
 funcENPP_GetListData
 	bra.w	deliGetListData
 funcENPP_LoadFile
@@ -41222,75 +41186,24 @@ funcENPP_AllocAudio
 funcENPP_FreeAudio
 	DPRINT "ENPP_FreeAudio"
 	bra.w deliFreeAudio
-funcENPP_StartInterrupt
-	DPRINT "ENPP_StartInterrupt"
-	rts
-funcENPP_StopInterrupt
-	DPRINT "ENPP_StopInterrupt"
-	rts
 funcENPP_SongEnd
 	;DPRINT "ENPP_SongEnd"
 	jmp	 dtg_SongEnd(a5)
-funcENPP_CutSuffix
-	DPRINT "ENPP_CutSuffix"
-	rts
 funcENPP_SetTimer
 	;DPRINT "ENPP_SetTimer"
 	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
 	;DPRINT "ENPP_WaitAudioDMA"
 	jmp dmawait
-funcENPP_SaveMem
-	DPRINT "ENPP_SaveMem"
-	rts
-funcENPP_FileReq
-	DPRINT "ENPP_FileReq"
-	rts
-funcENPP_TextRequest
-	DPRINT "ENPP_TextRequest"
-	rts
-funcENPP_LoadExecutable
-	DPRINT "ENPP_LoadExecutable"
-	rts
-funcENPP_NewLoadFile
-	DPRINT "ENPP_NewLoadFile"
-	rts
-funcENPP_ScrollText
-	DPRINT "ENPP_ScrollText"
-	rts
-funcENPP_LoadPlConfig
-	DPRINT "ENPP_LoadPlConfig"
-	rts
-funcENPP_SavePlConfig
-	DPRINT "ENPP_SavePlConfig"
-	rts
-funcENPP_FindTag
-	DPRINT "ENPP_FindTag"
-	rts
-funcENPP_FindAuthor
-	DPRINT "ENPP_FindAuthor"
-	rts
-funcENPP_Hexdez
-	DPRINT "ENPP_Hexdez"
-	rts
-funcENPP_TypeText
-	DPRINT "ENPP_TypeText"
-	rts
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange"
 	bra.w	deliModuleChange
-funcENPP_ModuleRestore
-	DPRINT "ENPP_ModuleRestore"
-	rts
-funcENPP_StringCopy
-	DPRINT "ENPP_StringCopy"
-	rts
-funcENPP_CalcStringSize
-	DPRINT "ENPP_CalcStringSize"
-	rts
-funcENPP_StringCMP
-	DPRINT "ENPP_StringCMP"
-	rts
+funcENPP_AllocAmigaAudio
+	;DPRINT "ENPP_AllocAmigaAudio"
+	bra.w	deliAllocAudio
+funcENPP_FreeAmigaAudio
+	;DPRINT "ENPP_FreeAmigaAudio"
+	bra.w deliFreeAudio
 
 funcENPP_DMAMask
 	push	d1
@@ -41369,9 +41282,96 @@ funcENPP_PokeCommand
 	bset	#1,$bfe001
 	rts
 
+*************** Unimplemented eaglebase functions:
+
+ if DEBUG
 funcENPP_Amplifier
 	; Called from interrupt, no logging
 	;DPRINT "ENPP_Amplifier"
+	rts
+funcENPP_AllocSampleStruct
+	DPRINT "ENPP_AllocSampleStruct"
+	rts
+funcENPP_NewLoadFile2
+	DPRINT "ENPP_NewLoadFile2"
+	rts
+funcENPP_MakeDirCorrect
+	DPRINT "ENPP_MakeDirCorrect"
+	rts
+funcENPP_TestAufHide
+	DPRINT "ENPP_TestAufHide"
+	rts
+funcENPP_CopyMemQuick
+	DPRINT "ENPP_CopyMemQuick"
+	rts
+funcENPP_GetPassword
+	DPRINT "ENPP_GetPassword"
+	rts
+funcENPP_StringCopy2
+	DPRINT "ENPP_StringCopy2"
+	rts
+funcENPP_ScreenToFront
+	DPRINT "ENPP_ScreenToFront"
+	rts
+funcENPP_WindowToFront
+	DPRINT "ENPP_WindowToFront"
+	rts
+funcENPP_StartInterrupt
+	DPRINT "ENPP_StartInterrupt"
+	rts
+funcENPP_StopInterrupt
+	DPRINT "ENPP_StopInterrupt"
+	rts
+funcENPP_CutSuffix
+	DPRINT "ENPP_CutSuffix"
+	rts
+funcENPP_SaveMem
+	DPRINT "ENPP_SaveMem"
+	rts
+funcENPP_FileReq
+	DPRINT "ENPP_FileReq"
+	rts
+funcENPP_TextRequest
+	DPRINT "ENPP_TextRequest"
+	rts
+funcENPP_LoadExecutable
+	DPRINT "ENPP_LoadExecutable"
+	rts
+funcENPP_NewLoadFile
+	DPRINT "ENPP_NewLoadFile"
+	rts
+funcENPP_ScrollText
+	DPRINT "ENPP_ScrollText"
+	rts
+funcENPP_LoadPlConfig
+	DPRINT "ENPP_LoadPlConfig"
+	rts
+funcENPP_SavePlConfig
+	DPRINT "ENPP_SavePlConfig"
+	rts
+funcENPP_FindTag
+	DPRINT "ENPP_FindTag"
+	rts
+funcENPP_FindAuthor
+	DPRINT "ENPP_FindAuthor"
+	rts
+funcENPP_Hexdez
+	DPRINT "ENPP_Hexdez"
+	rts
+funcENPP_TypeText
+	DPRINT "ENPP_TypeText"
+	rts
+funcENPP_ModuleRestore
+	DPRINT "ENPP_ModuleRestore"
+	rts
+funcENPP_StringCopy
+	DPRINT "ENPP_StringCopy"
+	rts
+funcENPP_CalcStringSize
+	DPRINT "ENPP_CalcStringSize"
+	rts
+funcENPP_StringCMP
+	DPRINT "ENPP_StringCMP"
 	rts
 funcENPP_TestAbortGadget
 	DPRINT "ENPP_TestAbortGadget"
@@ -41403,12 +41403,6 @@ funcENPP_OpenCatalog
 funcENPP_CloseCatalog
 	DPRINT "ENPP_CloseCatalog"
 	rts
-funcENPP_AllocAmigaAudio
-	;DPRINT "ENPP_AllocAmigaAudio"
-	bra.w	deliAllocAudio
-funcENPP_FreeAmigaAudio
-	;DPRINT "ENPP_FreeAmigaAudio"
-	bra.w deliFreeAudio
 funcENPP_RawToFormat
 	DPRINT "ENPP_RawToFormat"
 	rts
@@ -41427,6 +41421,54 @@ funcENPP_SetListData
 funcENPP_GetHardwareType
 	DPRINT "ENPP_GetHardwareType"
 	rts
+ else 
+funcENPP_Amplifier
+funcENPP_AllocSampleStruct
+funcENPP_NewLoadFile2
+funcENPP_MakeDirCorrect
+funcENPP_TestAufHide
+funcENPP_CopyMemQuick
+funcENPP_GetPassword
+funcENPP_StringCopy2
+funcENPP_ScreenToFront
+funcENPP_WindowToFront
+funcENPP_StartInterrupt
+funcENPP_StopInterrupt
+funcENPP_CutSuffix
+funcENPP_SaveMem
+funcENPP_FileReq
+funcENPP_TextRequest
+funcENPP_LoadExecutable
+funcENPP_NewLoadFile
+funcENPP_ScrollText
+funcENPP_LoadPlConfig
+funcENPP_SavePlConfig
+funcENPP_FindTag
+funcENPP_FindAuthor
+funcENPP_Hexdez
+funcENPP_TypeText
+funcENPP_ModuleRestore
+funcENPP_StringCopy
+funcENPP_CalcStringSize
+funcENPP_StringCMP
+funcENPP_TestAbortGadget
+funcENPP_GetEPNrfromMessage
+funcENPP_InitDisplay
+funcENPP_FillDisplay
+funcENPP_RemoveDisplay
+funcENPP_GetLocaleString
+funcENPP_SetWaitPointer
+funcENPP_ClearWaitPointer
+funcENPP_OpenCatalog
+funcENPP_CloseCatalog
+funcENPP_RawToFormat
+funcENPP_FindAmplifier
+funcENPP_UserCallup5
+funcENPP_GetLoadListData
+funcENPP_SetListData
+funcENPP_GetHardwareType
+	rts
+ endif
 
 * NotePlayer implementation from EaglePlayer sources
 deliNotePlayer
