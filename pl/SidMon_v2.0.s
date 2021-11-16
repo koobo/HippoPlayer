@@ -1,6 +1,7 @@
 ;APS00000023000000230000002300000023000000230000002300000023000000230000002300000023
 	incdir 	include:
 	include	mucro.i
+	include	misc/eagleplayer.i
 
 test	=	0
 
@@ -71,12 +72,45 @@ init
 play
 	move.l	mainVolumeAddress(pc),a0
 	move	(a0),mainVolume
-	bra.w	playmuzak
+	bsr		playmuzak
+
+	moveq	#0,d0
+	move.b	currentpos(pc),d0
+	moveq	#0,d1
+	move.b	length(pc),d1
+	rts
 
 mainVolumeAddress	dc.l	0
 dmaWaitRoutine		dc.l	0
 mainVolume		dc.w	0
 
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.l	#4*nt_sizeof,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+	rts 
+	
 initmuzak:
 	movem.l	d0-d7/a0-a6,-(a7)
 	bset	#$1,$bfe001
@@ -175,14 +209,14 @@ playmuzak:
 	lea	$dff000,a6
 
 	lea	length(pc),a0
-	addq.b	#$1,6(a0)
+	addq.b	#$1,6(a0)	*currentrast2
 	cmp.b	#$3,6(a0)
 	bne.s	notthree
 	clr.b	6(a0)
 notthree:
-	addq.b	#$1,4(a0)
-	move.b	4(a0),d0
-	cmp.b	1(a0),d0
+	addq.b	#$1,4(a0) *currentrast
+	move.b	4(a0),d0  *currentrast
+	cmp.b	1(a0),d0  *speed
 	blt	doeffects
 	clr.b	4(a0)
 	clr.b	6(a0)
@@ -237,18 +271,24 @@ repeatloop:
 	lea	voice2-voice1(a2),a2
 	dbf	d0,repeatloop
 
-	addq.b	#$1,3(a0)
-	move.b	5(a0),d0
-	cmp.b	3(a0),d0
-	bne.s	doeffects
-	clr.b	3(a0)
-	move.b	(a0),d0
+	* a0 = length
 
-	cmp.b	2(a0),d0
+	addq.b	#$1,3(a0)	*currentnot
+	move.b	3(a0),PatternInfo+PI_Pattpos+1
+	move.b	5(a0),PatternInfo+PI_Pattlength+1
+	move.b	5(a0),d0	*patlength
+	cmp.b	3(a0),d0	*currentnot
+	bne.s	doeffects
+	clr.b	3(a0)		*currentnot
+	move.b	(a0),d0		*length
+	clr		PatternInfo+PI_Pattpos
+
+	cmp.b	2(a0),d0	*currentpos
 	bne.s	addlater
-	move.b	#-$1,2(a0)
+	* songend?
+	move.b	#-$1,2(a0)	*currentpos
 addlater:
-	addq.b	#$1,2(a0)
+	addq.b	#$1,2(a0)	*currentpos
 
 	lea	voice1(pc),a2
 	bsr	findnote
@@ -345,20 +385,21 @@ joho:	move.l	(a3)+,a0
 	movem.l	(a7)+,d0-d4/a0-a3
 	rts
 
+* a2 = voiceN
 findnote:
 	moveq	#$0,d0
 	moveq	#$0,d1
 	moveq	#$0,d2
-	move.b	2(a0),d0
+	move.b	2(a0),d0	*currentpos
 
 	move.l	positions(pc),a1
-	add.l	(a2),a1
+	add.l	(a2),a1	* pos and trans offset
 	move.b	(a1,d0.w),d2
 	add.w	d2,d2
 	move.l	patternpointer(pc),a1
 	move.w	(a1,d2.w),d2
 	add.l	patterns(pc),d2
-	move.l	d2,64(a2)
+	move.l	d2,64(a2)	* note address
 
 	move.l	ntransposes(pc),a1
 	add.l	(a2),a1
@@ -1055,10 +1096,10 @@ song:		dc.l	0
 sampleno:	dc.w	0
 midimode:	dc.w	0
 length:		dc.b	0
-speed:		dc.b	0
+speed:		dc.b	0 
 currentpos:	dc.b	0
 currentnot:	dc.b	0
-currentrast:	dc.b	0
+currentrast:	dc.b		0
 patlength:	dc.b	0
 currentrast2:	dc.b	0
 
