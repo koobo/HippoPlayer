@@ -1,4 +1,4 @@
-;APS0001B04D0000DEE2000035CF00002E5C000000000000000000000000000000000000000000000000
+;APS0001B1550000DCEA000033E300002C70000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -206,17 +206,7 @@ TESTMODE
 .ps3m_playpos 	dc.l	0
 .ps3m_buffSizeMask dc.l 0
 
-	section	mod,data_p
-module	
-;	incbin	"m:multichannel/approaching antares.mod"
-;	incbin	"m:multichannel/chaotic dance.mtm"
-;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
-;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
-	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-04.s3m"
-;	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
-;	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
-;	incbin	"m:multichannel/near_dark.s3m"
-moduleE
+	
 	section	co,code_p
  endc
 
@@ -866,7 +856,7 @@ updatePatternInfoData
 	cmp	unpackedPatternPosition(a5),d0 
 	beq.w	.skip 
 	move	d0,unpackedPatternPosition(a5)
-	DPRINT	"Unpack %ld"
+	DPRINT	"Unpack %lx"
 
 	lsl.l	#4,d0
 	lea	2(a0,d0.l),a0
@@ -1353,7 +1343,7 @@ ahi_init0
 
 	bsr.w	ahi_setmastervol
 
-	move	tempo(pc),d0
+	move	tempo,d0
 	bsr.w	ahi_tempo
 
 	lea	ahi_ctrltags(pc),a1
@@ -1443,7 +1433,7 @@ ahi_playmusic
 
 	bsr	s3vol
 
-	move	mtype(pc),d0
+	move	mtype,d0
 	lea	s3m_music(pc),a0
 	subq	#1,d0
 	beq.b	.m
@@ -1456,7 +1446,7 @@ ahi_playmusic
 .m	jsr	(a0)
 
 	lea	cha0,a4
-	move	numchans(pc),d7
+	move	numchans,d7
 	subq	#1,d7
 	moveq	#0,d6
 .chl
@@ -4868,14 +4858,19 @@ s3m_init
 	iword	d0
 	move	d0,pats(a5)
 
+ if DEBUG
+ 	ext.l	d0
+	DPRINT	"Patterns %ld"
+ endif
 	move	insnum(a0),d0
 	iword	d0
 	move	d0,inss(a5)
 
+	DPRINT	"Instruments %ld"
+
 	move	ffv(a0),d0
 	iword	d0
-	move	#$0100,ffv(a0)	* signed!
-	
+	move	#$0100,ffv(a0)	* signed!	
 
 	move	flags(a0),d0
 	iword	d0
@@ -4900,6 +4895,20 @@ s3m_init
 	lea	(a2,d0.l),a3
 	move.l	a3,patts(a5)
 
+ if DEBUG
+	pushm	all
+	move	pats(a5),d1
+	subq	#1,d1 
+	move.l	patts(a5),a0
+.patloop
+	moveq	#0,d0
+	move	(a0)+,d0 
+	iword	d0
+	DPRINT	"patseg=%lx"
+	dbf	d1,.patloop
+	popm	all
+ endif
+ 
  	moveq	#0,d0
 	move.b	(a1),d0
 	DPRINT	"First order=%ld"
@@ -4925,10 +4934,25 @@ s3m_init
 	moveq	#125,d0
 .qw	move	d0,tempo(a5)
 
+ if DEBUG
+	push	d0
+	move.l	setmodulelen(pc),d0
+	DPRINT	"Modlen %lx"
+	pop	d0 
+ endif 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Instrument loop
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	move	inss(a5),d0
 	subq	#1,d0
 	move.l	samples(a5),a2
+
+	* Set to non-zero if out-of-bounds sample data is detected
+	moveq	#0,d7
+	* Find out mininum segment address, in d6
+	moveq	#-1,d6
 
 .instloop
 	moveq	#0,d1
@@ -4937,24 +4961,65 @@ s3m_init
 	lsl.l	#4,d1
 	lea	(a0,d1.l),a1
 
-*** Vaihdetaan unsigned -> signed
-	cmp	#1,fformat(a5)		* unsigned samples?
-	beq.b	.kon0	
+ if DEBUG
+	pushm	d0-d4
+	move.l	d1,d0
+	move.l	inslength(a1),d1
+	ilword	d1
 
+	moveq	#0,d2
+	move.b	inspack(a1),d2
+	moveq	#0,d3
+	move.b	insflags(a1),d3
+	moveq	#0,d4
+	move.b	instype(a1),d4
+	DPRINT	"seg=%04lx len=%04lx pack=%lx flags=%lx type=%lx"
+	popm	d0-d4
+ endif
+
+*** Vaihdetaan unsigned -> signed
+; Convert sample
+	cmp	#1,fformat(a5)		* unsigned samples?
+	beq.w	.kon0	
 	moveq	#0,d1
 	move	insmemseg(a1),d1
 	iword	d1
 	lsl.l	#4,d1
+
+	beq.b	.higher
+	cmp.l	d1,d6
+	blo.b	.higher
+	move.l	d1,d6
+.higher
+
 	lea	(a0,d1.l),a3	* sample data start
 	move.l	inslength(a1),d1
 	beq.b	.skip
 	ilword	d1
-	subq	#1,d1
-	moveq	#-128,d2
-.kon	eor.b	d2,(a3)+
-	dbf	d1,.kon
+
+	* SAFETY: high bound check
+	* a4 = end of module
+	move.l	a0,a4
+	add.l	setmodulelen(pc),a4
+	* end of sample
+	add.l	d1,a3
+	cmp.l 	a3,a4
+	bls.b	.over 
+	bra.b 	.skip
+
+.over	
+	* Out-of-range: set flag	
+	st	d7
+ if DEBUG
+	pushm	d0/d1
+	move.l	a3,d0
+	move.l	a4,d1
+	DPRINT	"SAMPLE OVERFLOW %lx > %lx"
+	popm	d0/d1
+ endif
 .skip
 .kon0	
+
 ***
 	btst	#0,insflags(a1)
 	beq.b	.eloo
@@ -4963,7 +5028,87 @@ s3m_init
 	cmp.l	#2,d1
 	bls.b	.eloo
 	move.l	insloopend(a1),inslength(a1)
-.eloo	dbf	d0,.instloop
+.eloo	
+	dbf	d0,.instloop
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Instrument conversion loop
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	* Do a sample data based conversion if everything seem
+	* legal.
+	tst.b	d7 
+	bne.b	.method2
+
+	DPRINT	"Conversion method 1"
+
+	move	inss(a5),d0
+	subq	#1,d0
+	move.l	samples(a5),a2
+
+.instkonloop
+	moveq	#0,d1
+	move	(a2)+,d1
+	iword	d1
+	lsl.l	#4,d1
+	lea	(a0,d1.l),a1
+
+*** Vaihdetaan unsigned -> signed
+; Convert sample
+	cmp	#1,fformat(a5)		* unsigned samples?
+	beq.b	.skip2	
+	moveq	#0,d1
+	move	insmemseg(a1),d1
+	iword	d1
+	lsl.l	#4,d1
+
+	lea	(a0,d1.l),a3	* sample data start
+	move.l	inslength(a1),d1
+	beq.b	.skip2
+	ilword	d1
+	subq	#1,d1
+	moveq	#-128,d2
+.kon2	
+	eor.b	d2,(a3)+
+	dbf	d1,.kon2
+.skip2
+
+	dbf	d0,.instkonloop
+	bra.b	.method1
+
+.method2
+	* Ignore sample parameters and just convert module memory range
+	* starting from the first sample segment.
+	
+	DPRINT	"Conversion method 2"
+	cmp	#1,fformat(a5)		* unsigned samples?
+	beq.b	.skip3	
+
+	* lowest sample segment address
+	move.l	d6,d0
+	add.l	a0,d0
+	* module data end address
+	move.l	a0,d1
+	move.l	d0,a1
+ 
+ if DEBUG
+	move.l	a4,d2
+	DPRINT	"Low seg %lx modstart=%lx modend=%lx"
+ endif 
+
+	moveq	#-128,d2
+.eorl
+	eor.b	d2,(a1)+
+	cmp.l	a1,a4
+	bne.b	.eorl
+
+.skip3
+
+.method1
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Instrument loops end
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 	move	#1,fformat(a5)		* muutetaan signed.
@@ -10665,3 +10810,23 @@ output			ds.l 	1
 debugDesBuf		ds.b	1024
 
  endif
+
+	ifne TEST
+
+	section	mod,data_p
+module	
+;	incbin	"m:multichannel/approaching antares.mod"
+;	incbin	"m:multichannel/chaotic dance.mtm"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-04.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-06.s3m"
+	incbin	"m:modsanthology/authors.g-q/purple_m/2ndreality_purplemotion.s3m"
+;	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
+;	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
+;	incbin	"m:multichannel/near_dark.s3m"
+moduleE
+	ds.b	1024
+
+	endif
+	
