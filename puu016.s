@@ -24114,7 +24114,6 @@ noteScroller2
 
 .doStripe
        	* sanity check
-
 	move.l	a0,d0
 	beq.b	.xy
 
@@ -24138,14 +24137,15 @@ noteScroller2
     	cmp.l   a3,a0
    	bhs.w   .xy
 .sane
-	;rts
 
+	* sanity check passed
+	
 	* draw this many lines
 	move	quadNoteScrollerLines(a5),d7
 	subq	#1,d7 * dbf
 	move	PI_Pattpos(a1),d6
 
-	* current position data
+	* current position in data
 	move	d6,d0
 	mulu	PI_Modulo+2(a1),d0 
 	add	d0,a0
@@ -24337,18 +24337,19 @@ noteScroller2
 	bsr.b	.print
 .smallFont
 
-	* next vertical draw position
-	;add	#8*40,a4	
+	* next vertical draw position, one font height down
 	move	d7,d3
-	lsl	#3,d3
+	lsl	#3,d3	* times 8
 	add	d3,a4
-	
-	* Next row
-	add.l	PI_Modulo(a1),a0
-	addq	#1,d6
-	cmp	PI_Pattlength(a1),d6
+
 	* get loop counter
 	swap	d7
+
+	* Next row in data
+	add.l	PI_Modulo(a1),a0
+	* Row counter
+	addq	#1,d6
+	cmp	PI_Pattlength(a1),d6
 	dbeq	d7,.rowLoop
 
 .exitNoteScroller
@@ -24421,7 +24422,10 @@ noteScroller2
 * - height 8
 * - even number of chars as input text
 * - d7 = screen modulo
+
+
 .printSmall	
+
 	* nibble masks
 	moveq	#$0f,d1
 	move	#$f0,d2
@@ -24430,6 +24434,8 @@ noteScroller2
 	moveq	#0,d5
 .charLoop2	
 	* even position
+
+	push 	a5
 
 	move.b	(a3)+,d5
 	* get char pixels
@@ -24518,6 +24524,7 @@ noteScroller2
 * odd char done	
 
 .evenCharDone
+	move.l	(sp),a5
 
 	* odd position
 
@@ -24608,17 +24615,10 @@ noteScroller2
 * odd char done	
 
 .oddCharDone
-
+	pop 	a5
 	* go to next horiz position 
 	addq	#1,a5
-	sub		d7,a5
-	sub		d7,a5
-	sub		d7,a5
-	sub		d7,a5
-	sub		d7,a5
-	sub		d7,a5
-	sub		d7,a5
-
+	
 	* next two input chars
 	subq	#1,d3
 	dbf	d3,.charLoop2
