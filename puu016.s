@@ -21831,6 +21831,8 @@ requestNormalScopeDrawArea
 *   d0 = new draw area width
 *   d1 = new draw area height
 requestScopeDrawAreaChange
+	* Width should be divisible by 16, 
+	* for blitter to handle it.
  if DEBUG 	
 	ext.l 	d0 
 	ext.l 	d1
@@ -21855,8 +21857,11 @@ requestScopeDrawAreaChange
 	* Does not fit, move left 
 	move	d3,d0 
 	moveq	#0,d1
+ if DEBUG 
+ 	ext.l 	d0 
+	DPRINT	"->move %ld %ld"
+ endif 
 	lore	Intui,MoveWindow
-	DPRINT	"->move"
 	rts
 .fits
 
@@ -23252,8 +23257,7 @@ notescroller
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
 	cmp	scopeDrawAreaWidth(a5),d0
 	beq.b	.sizeOk
-	move	scopeDrawAreaHeight(a5),d1
-	bsr.w	requestScopeDrawAreaChange
+	bsr	requestNormalScopeDrawArea
 	rts
 .sizeOk
 	pushm	all
@@ -24031,8 +24035,7 @@ noteScroller2
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
 	cmp	scopeDrawAreaWidth(a5),d0
 	beq.b	.proceed
-	move	scopeDrawAreaHeight(a5),d1
-	bsr	requestScopeDrawAreaChange	
+	bsr	requestNormalScopeDrawArea
 	rts
 .over4
 	* Test if font is available
@@ -24042,13 +24045,21 @@ noteScroller2
 	bls.b	.max16
 	moveq	#16,d7
 .max16
-	* Request wider window
+	* Request larger/wider window
 	move	d7,d0
-	subq	#8,d0
-	bmi.b	.proceed
-	* each stripe is 64 pix
-	lsl	#6,d0
-	add	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+	* each stripe is 32 pix, every other stripe has 8 pix extra
+	;lsl	#5,d0
+	mulu	#40,d0
+	;move	d7,d1
+	;lsr	#1,d1
+	;lsl	#3,d1
+	;add	d1,d0
+
+	add	#15,d0
+	and	#$fff0,d0
+
+
+
 	cmp	scopeDrawAreaWidth(a5),d0
 	beq.b	.proceed
 	move	scopeDrawAreaHeight(a5),d1
@@ -24063,6 +24074,7 @@ noteScroller2
 
 	move.l	draw1(a5),a4
 	subq	#1,d7
+	* alt flag
 	moveq	#0,d6
 .loop
 	pushm	d6/d7/a0/a4/a5/a6
@@ -24089,7 +24101,7 @@ noteScroller2
 	* add some space after two 
 	bne.b	.continue
 	* every other stripe has additional 8 pixels
-	addq	#1,a4
+;	addq	#1,a4
 	bra.b	.continue
 .voices4
 	* 72 pixels per stripe
@@ -24372,7 +24384,6 @@ noteScroller2
 	rts
 
 * Large font print
-* Assumes screen width is 320
 * in:
 *   a5 = dest draw buffer
 *   a3 = text to draw
@@ -24388,24 +24399,33 @@ noteScroller2
 	beq.b	.space
 	* get char pixels
 	lea	-$20(a2,d5),a6
-
+	push	a5
 	* do 8 pixels height
- 	move.b	(a6),(a5)+	
+ 	move.b	(a6),(a5)	
 	add	d4,a6
-	move.b	(a6),1*40-1(a5)	
+	add	d7,a5
+	move.b	(a6),(a5)	
 	add	d4,a6
-	move.b	(a6),2*40-1(a5)	
+	add	d7,a5
+	move.b	(a6),(a5)	
 	add	d4,a6
-	move.b	(a6),3*40-1(a5)	
+	add	d7,a5
+	move.b	(a6),(a5)	
 	add	d4,a6
-	move.b	(a6),4*40-1(a5)	
+	add	d7,a5
+	move.b	(a6),(a5)	
 	add	d4,a6
-	move.b	(a6),5*40-1(a5)	
+	add	d7,a5
+	move.b	(a6),(a5)	
 	add	d4,a6
-	move.b	(a6),6*40-1(a5)	
+	add	d7,a5
+	move.b	(a6),(a5)	
 	add	d4,a6
-	move.b	(a6),7*40-1(a5)	
- 
+	add	d7,a5
+	move.b	(a6),(a5)	
+	pop 	a5
+	addq	#1,a5 
+	
 	* go to next horiz position
 	dbf	d3,.charLoop
 	rts
