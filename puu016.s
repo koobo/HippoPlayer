@@ -454,7 +454,7 @@ rastport2	rs.l	1		*
 userport2	rs.l	1		*
 rastport3	rs.l	1		* quadrascope
 userport3	rs.l	1		* 
-windowbase3	rs.l	1		* scopes window
+scopeWindowBase	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 minifontbase rs.l	1
@@ -741,6 +741,10 @@ scopeDrawAreaWidth		rs.w 	1
 scopeDrawAreaModulo		rs.w 	1
 * default: 64
 scopeDrawAreaHeight		rs.w 	1
+
+scopeDrawAreaWidthRequest		rs.w 	1
+scopeDrawAreaHeightRequest		rs.w 	1
+
 
 timeoutmode	rs.b	1
 filterstatus	rs.b	1		* filtterin 
@@ -11589,7 +11593,7 @@ saveprefs
 	sne	prefs_infoon+prefsdata(a5)
 
 
-	move.l	windowbase3(a5),d0
+	move.l	scopeWindowBase(a5),d0
 	beq.b	.k
 	move.l	d0,a0
 	move.l	4(a0),quadpos(a5)
@@ -21269,7 +21273,7 @@ str2msg	pushm	d0/d1/a0/a1/a6
 *******************************************************************************
 wflags3 set WFLG_SMART_REFRESH!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags3 set wflags3!WFLG_RMBTRAP
-idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
+idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE!IDCMP_CHANGEWINDOW
 
 QUADMODE2_QUADRASCOPE = 0
 QUADMODE2_QUADRASCOPE_BARS = 1
@@ -21286,6 +21290,7 @@ QUADMODE2_PATTERNSCOPEXL_BARS = 11
 
 SCOPE_DRAW_AREA_WIDTH_DEFAULT = 320
 SCOPE_DRAW_AREA_HEIGHT_DEFAULT = 64
+SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
 
 quad_code
 	lea	var_b,a5
@@ -21302,7 +21307,6 @@ quad_code
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,scopeDrawAreaWidth(a5) 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,scopeDrawAreaModulo(a5)
 	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,scopeDrawAreaHeight(a5)
-
 
 	lea	ch1(a5),a0
 	lea	4*ns_size(a0),a1
@@ -21434,11 +21438,14 @@ quad_code
 	move	#4,quadNoteScrollerLinesHalf(a5)
 	bra.b	.cont
 .patternScopeXL
-	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT*2,scopeDrawAreaHeight(a5)
+	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,scopeDrawAreaHeight(a5)
 	move	#16,quadNoteScrollerLines(a5)
 	move	#8,quadNoteScrollerLinesHalf(a5)
 
 .cont
+	* Start with no size request active.
+	move	scopeDrawAreaWidth(a5),scopeDrawAreaWidthRequest(a5)
+	move	scopeDrawAreaHeight(a5),scopeDrawAreaHeightRequest(a5)
 		
 
 	move.l	_IntuiBase(a5),a6
@@ -21447,7 +21454,7 @@ quad_code
 	move.l	quadpos(a5),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
-	add		scopeDrawAreaHeight(a5),d0
+	add	scopeDrawAreaHeight(a5),d0
 	move	d0,nw_Height(a0)
 
 	move	wbleveys(a5),d0		* WB:n leveys
@@ -21467,7 +21474,7 @@ quad_code
 .ok2
 
 	lob	OpenWindow
-	move.l	d0,windowbase3(a5)
+	move.l	d0,scopeWindowBase(a5)
 	bne.b	.ok3
 	lea	windowerr_t(pc),a1
 .me	bsr.w	request
@@ -21516,6 +21523,10 @@ quad_code
 
 	jsr	printhippo2	
 
+*********************************************************************
+* Scope main loop
+*********************************************************************
+
 scopeTest=0
 
 scopeLoop
@@ -21541,7 +21552,7 @@ scopeLoop
 
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
-	move.l	windowbase3(a5),a0	* ollaanko p‰‰llimm‰isen‰?
+	move.l	scopeWindowBase(a5),a0	* ollaanko p‰‰llimm‰isen‰?
 
 	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
@@ -21564,9 +21575,12 @@ scopeLoop
 	btst	#pb_scope,d0 
 	beq.b	.doNotDraw
 
-.pleaseDraw	
 	tst.b	playing(a5)
 	beq.b	.doNotDraw
+
+	bsr	scopeDrawAreaSizeChangeRequestIsActive
+	bne.b	.doNotDraw
+
 	tst.b	d7
 	bne.b	.doDraw
 	* This clears the hippo gfx away when starting again
@@ -21637,18 +21651,27 @@ scopeLoop
 	move.l	im_Class(a1),d2		* luokka	
 	move	im_Code(a1),d3
 	lob	ReplyMsg
+
+	cmp.l	#IDCMP_CHANGEWINDOW,d2 
+	bne.b 	.noChangeWindow
+	bsr		scopeWindowChanged
+	bra.w	scopeLoop
+
+.noChangeWindow
 	cmp.l	#IDCMP_NEWSIZE,d2 
 	bne.b 	.noNewSize
 	bsr.w	scopeWindowSizeChanged
 	bra.w 	scopeLoop
 .noNewSize
+
+
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.qx
 	* RMB closes window
 	cmp	#MENUDOWN,d3
 	beq.b	.xq
 	cmp	#SELECTDOWN,d3
-	bne.b	.qx 
+	bne.b	.qx
 	* LMB activates 
 	st	d5
 	move.b	d5,scopeManualActivation(a5)
@@ -21657,8 +21680,11 @@ scopeLoop
 
 .xq	clr.b	scopeflag(a5)
 	
-qexit	bsr.b	qflush_messages
+*********************************************************************
+* Scope exit
+*********************************************************************
 
+qexit	bsr.b	qflush_messages
 
 	move.l	mtab(a5),a0
 	jsr	freemem
@@ -21672,14 +21698,13 @@ qexit	bsr.b	qflush_messages
 	clr.l	deltab1(a5)
 
 	move.l	_IntuiBase(a5),a6		
-	move.l	windowbase3(a5),d0
+	move.l	scopeWindowBase(a5),d0
 	beq.b	.uh1
 	move.l	d0,a0
 	move.l	4(a0),quadpos(a5)	* koordinaatit talteen
 	lob	CloseWindow
-	clr.l	windowbase3(a5)
+	clr.l	scopeWindowBase(a5)
 .uh1
-
 
 	lore	Exec,Forbid
 
@@ -21688,19 +21713,12 @@ qexit	bsr.b	qflush_messages
 	bsr.w	updateprefs
 .reer
 
-
 	clr	quad_prosessi(a5)	* lippu: lopetettiin
 	rts
 
-scopeWindowSizeChanged
-	DPRINT	"Scope NEWSIZE"
-	rts
-
-
 qflush_messages
-	move.l	windowbase3(a5),a0 
-	bra.w		flushWindowMessages
-
+	move.l	scopeWindowBase(a5),a0 
+	bra.w	flushWindowMessages
 
 
 initScopeBitmaps
@@ -21765,9 +21783,9 @@ drawScopeWindowDecorations
 	moveq	#4,d0
 	moveq	#11,d1
 	move	scopeDrawAreaWidth(a5),d2
-	add		#335-320,d2
+	add	#335-320,d2
 	move	scopeDrawAreaHeight(a5),d3
-	add		#82-64,d3
+	add	#82-64,d3
 	bsr.w	drawtexture
 
 	moveq	#8,d0
@@ -21788,10 +21806,10 @@ drawScopeWindowDecorations
 
 	moveq	#7,plx1
 	move	scopeDrawAreaWidth(a5),plx2
-	add		#332-320,plx2
+	add	#332-320,plx2
 	moveq	#13,ply1
 	move	scopeDrawAreaHeight(a5),ply2
-	add		#80-64,ply2
+	add	#80-64,ply2
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -21800,7 +21818,202 @@ drawScopeWindowDecorations
 	jsr	laatikko2
 	rts
 
-*** Scope interrupt code, keeps track the play positions of protracker replayer samples
+
+
+requestNormalScopeDrawArea
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0 
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+
+
+* Resize window based on relative change to
+* the draw area.
+* In:
+*   d0 = new draw area width
+*   d1 = new draw area height
+requestScopeDrawAreaChange
+ if DEBUG 	
+	ext.l 	d0 
+	ext.l 	d1
+	DPRINT	"Draw area change %ld %ld"
+ endif
+	move	d0,scopeDrawAreaWidthRequest(a5)
+	move	d1,scopeDrawAreaHeightRequest(a5)
+	sub	scopeDrawAreaWidth(a5),d0
+	sub	scopeDrawAreaHeight(a5),d1
+	move	d1,d2
+	or	d0,d2
+	beq.b	.noDiff
+
+	move.l	scopeWindowBase(a5),a0
+	* Calculate new right edge position for window 
+	move	wd_LeftEdge(a0),d2
+	add		wd_Width(a0),d2
+	add		d0,d2
+	move	wbleveys(a5),d3
+	sub	d2,d3
+	bpl.b	.fits
+	* Does not fit, move left 
+	move	d3,d0 
+	moveq	#0,d1
+	lore	Intui,MoveWindow
+	DPRINT	"->move"
+	rts
+.fits
+
+	move.l	scopeWindowBase(a5),a0 
+	lore 	Intui,SizeWindow
+	DPRINT	"->resize"
+.noDiff
+	rts
+
+scopeDrawAreaSizeChangeRequestIsActive
+	move	scopeDrawAreaWidthRequest(a5),d0 
+	cmp	scopeDrawAreaWidth(a5),d0 
+	bne.b 	.yes
+	move	scopeDrawAreaHeightRequest(a5),d0 
+	cmp	scopeDrawAreaHeight(a5),d0 
+	bne.b 	.yes
+	moveq	#0,d0
+	rts
+.yes	
+	moveq	#1,d0
+	rts
+
+* Called when IDCMP_CHANGEWINDOW message arrives.
+scopeWindowChanged
+	DPRINT	"Scope change"
+ if DEBUG
+	move.l	scopeWindowBase(a5),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	move	wd_LeftEdge(a0),d0
+	move	wd_TopEdge(a0),d1
+	move	wd_Width(a0),d2
+	move	wd_Height(a0),d3
+	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+ endif
+	* Request again after window move
+ 	bsr.b	scopeDrawAreaSizeChangeRequestIsActive
+	beq.b .nope 
+	move	scopeDrawAreaWidthRequest(a5),d0
+	move	scopeDrawAreaHeightRequest(a5),d1
+	bsr.w requestScopeDrawAreaChange
+.nope
+	rts
+
+* Called when IDCMP_NEWSIZE message arrives.
+* Window size change request has been fulfilled.
+scopeWindowSizeChanged
+	DPRINT	"Scope new size"
+ if DEBUG
+	move.l	scopeWindowBase(a5),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	move	wd_LeftEdge(a0),d0
+	move	wd_TopEdge(a0),d1
+	move	wd_Width(a0),d2
+	move	wd_Height(a0),d3
+	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+ endif
+	move	scopeDrawAreaWidthRequest(a5),scopeDrawAreaWidth(a5)
+	move	scopeDrawAreaHeightRequest(a5),scopeDrawAreaHeight(a5)
+	move	scopeDrawAreaWidth(a5),d0 
+	lsr	#3,d0 
+	move	d0,scopeDrawAreaModulo(a5)
+
+	bsr	initScopeBitmaps
+	bsr	drawScopeWindowDecorations
+	rts
+
+
+
+
+ REM ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+* Needs to be called twice if window is first moved.
+* Check required width from scopeWindowBase!
+makeDoubleWidthScopeWindow
+	DPRINT	"Double width"
+
+	move.l	scopeWindowBase(a5),a0 
+	move	wd_Width(a0),d0
+	cmp	quadWindowWidthOriginal(a5),d0
+	bne.b	.already
+
+	move	wd_LeftEdge(a0),d1
+	add	wd_Width(a0),d1
+	add	#SCOPE_WINDOW_WIDE_DELTA,d1
+
+	move	wbleveys(a5),d0
+	sub	d1,d0
+	bpl.b	.fits
+	* Does not fit 
+	moveq	#0,d1
+	lore	Intui,MoveWindow
+	DPRINT	"->move"
+	rts
+.fits
+	move	#SCOPE_WINDOW_WIDE_DELTA,d0 
+	moveq	#0,d1
+	lore	Intui,SizeWindow
+	DPRINT	"->resize"
+	rts
+.already
+	DPRINT	"->no change"
+	rts
+
+makeNormalWidthScopeWindow
+	DPRINT	"Normal width"
+
+	move.l	scopeWindowBase(a5),a0 
+	move	wd_Width(a0),d0
+	cmp	quadWindowWidthOriginal(a5),d0
+	beq.b	makeDoubleWidthScopeWindow\.already
+
+	move	#-280,d0 
+	moveq	#0,d1
+	lore	Intui,SizeWindow
+	rts
+
+getScopeDrawAreaWidth
+	push	a0
+	move.l	scopeWindowBase(a5),a0 
+	moveq	#0,d0
+	move	wd_Width(a0),d0
+	pop	a0
+	cmp	quadWindowWidthOriginal(a5),d0
+	beq.b	.normal
+	move	#320+SCOPE_WINDOW_WIDE_DELTA,d0
+	rts
+.normal
+	move	#320,d0
+	rts
+
+getScopeDrawAreaWidthModulo
+	bsr.b	getScopeDrawAreaWidth
+	lsr	#3,d0
+	rts
+
+* Z is set if scope is normal width
+scopeIsNormalWidth
+	pushm	d0/a0
+	move.l	scopeWindowBase(a5),a0 
+	move	wd_Width(a0),d0
+	cmp	quadWindowWidthOriginal(a5),d0
+	popm	d0/a0
+	rts
+
+
+ EREM ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;,
+
+*********************************************************************
+* Scope interrupt code, keeps track the play positions of 
+* protracker replayer samples
+*********************************************************************
+
 scopeinterrupt				* a5 = var_b
 	cmp	#pt_prot,playertype(a5)
 	bne.w	.n
@@ -22043,7 +22256,10 @@ voltab3
 	rts
 
 
-***************** Piirret‰‰n
+**************************************************************************
+* Scope draw
+**************************************************************************
+
 drawScope
 
 	* clear draw area
@@ -22063,14 +22279,6 @@ drawScope
 	lsr	#1,d1	* words
 	add	d1,d0
 	move	d0,(a0)
-
-;	bsr.w	scopeIsNormal
-;	bne.b	.notLarge
-;	move	#(64+64)*64+20,(a0)
-;	bra.b	.large
-;.notLarge
-;	move	#(64+0)*64+20,(a0)
-;.large
 
 	lob	DisownBlitter
 
@@ -22973,19 +23181,29 @@ getps3mb
 
 
 
-*******************************
+*********************************************************************
 * NoteScroller (ProTracker)
 *
 
 noteScrollerHorizontalLines
 *** viiva
 	move.l	draw1(a5),a0
+	move	scopeDrawAreaModulo(a5),d2
 	* first line at y=23
-	lea	23*40(a0),a0
+	moveq	#23,d3
+	mulu	d2,d3
+	add		d3,a0
+	;lea	23*40(a0),a0
 	bsr.w 	scopeIsNormal
 	bne.b	.normal
-	lea	(4*8)*40(a0),a0
+	* further down if tall window
+	moveq	#4*8,d3
+	mulu	d2,d3
+	add		d3,a0
+	;lea	(4*8)*40(a0),a0
 .normal
+	lsl		#3,d2
+	subq	#2,d2
 	* 19 times 16 pixels horizontally
 	moveq	#19-1,d0
 	move	#$aaaa,d1
@@ -22993,7 +23211,8 @@ noteScrollerHorizontalLines
 	* put 16 pixels here
 	or	d1,(a0)+
 	* ...and 8 pixels below
-	or	d1,8*40-2(a0)
+	;or	d1,8*40-2(a0)
+	or	d1,(a0,d2)
 	dbf	d0,.raita
 	rts
 
@@ -23030,9 +23249,15 @@ noteScrollerGetFont
 	rts
 
 notescroller
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+	cmp	scopeDrawAreaWidth(a5),d0
+	beq.b	.sizeOk
+	move	scopeDrawAreaHeight(a5),d1
+	bsr.w	requestScopeDrawAreaChange
+	rts
+.sizeOk
 	pushm	all
 	bsr.w	.notescr
-
 	bsr	noteScrollerHorizontalLines
 
 	lea	kplbase(a5),a0
@@ -23187,10 +23412,8 @@ notescroller
 .paldata
 
 
-
 **************** Piirret‰‰n patterndata
 
- 
 .notescr
 	pushm	a5/a6
 
@@ -23785,7 +24008,9 @@ samples0
 	lea	multab(a5),a2
 	move.l	draw1(a5),a0
 	rts
-	
+
+*********************************************************************
+* GENERIC NOTESCROLLER
 * Note scroller supporting the PI_PatternInfo data
 patternScope2
 noteScroller2
@@ -23795,34 +24020,54 @@ noteScroller2
 	beq.b	.1
 	rts
 .1
-	* magic flag: display row numbers	
-	lea	.pos(pc),a0
-	clr.b	(a0)
-
-	move.l	draw1(a5),a4
 	move.l	deliPatternInfo(a5),a1
-
 	lea	PI_Stripes(a1),a0
 	move	PI_Voices(a1),d7
 
 	* font availability check
 	cmp	#4,d7
-	bls.b	.only4
+	bhi.b	.over4
+
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+	cmp	scopeDrawAreaWidth(a5),d0
+	beq.b	.proceed
+	move	scopeDrawAreaHeight(a5),d1
+	bsr	requestScopeDrawAreaChange	
+	rts
+.over4
+	* Test if font is available
 	tst.l	minifontbase(a5)
 	beq.b	.x
-.only4
-	cmp	#8,d7
-	bls.b	.ok8
-	moveq	#8,d7
+	cmp	#16,d7
+	bls.b	.max16
+	moveq	#16,d7
+.max16
+	* Request wider window
+	move	d7,d0
+	subq	#8,d0
+	bmi.b	.proceed
+	* each stripe is 64 pix
+	lsl	#6,d0
+	add	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+	cmp	scopeDrawAreaWidth(a5),d0
+	beq.b	.proceed
+	move	scopeDrawAreaHeight(a5),d1
+	bsr	requestScopeDrawAreaChange
+	rts
 
-.ok8
+.proceed
 
+	* magic flag: display row numbers	
+	lea	.pos(pc),a4
+	clr.b	(a4)
+
+	move.l	draw1(a5),a4
 	subq	#1,d7
 	moveq	#0,d6
 .loop
 	pushm	d6/d7/a0/a4/a5/a6
 	move.l	(a0),a0		* stripe data
-	bsr.b	.do
+	bsr.b	.doStripe
 	popm	d6/d7/a0/a4/a5/a6
 
 	* magic flag: no row numbers more than once
@@ -23838,13 +24083,16 @@ noteScroller2
 	cmp	#4,PI_Voices(a1)
 	bls.b	.voices4
 
+	* 32 pixels per stripe
 	addq	#4,a4		* next screen pos horizontal
 	not.b	d6
 	* add some space after two 
 	bne.b	.continue
+	* every other stripe has additional 8 pixels
 	addq	#1,a4
 	bra.b	.continue
 .voices4
+	* 72 pixels per stripe
 	add	#9,a4
 .continue
 	dbf	d7,.loop
@@ -23862,7 +24110,9 @@ noteScroller2
 	DPRINT	"INSANITY %lx %ld -> %lx"
  endif
 	rts
-.do
+
+
+.doStripe
        	* sanity check
 
 	move.l	a0,d0
@@ -23916,7 +24166,9 @@ noteScroller2
 	sub	d1,a0
 
 	* vertical position in target 
-	mulu	#8*40,d0
+	;mulu	#8*40,d0
+	mulu	scopeDrawAreaModulo(a5),d0
+	lsl.l	#3,d0
 	add.l	d0,a4
 	bra.b	.ok2
 .ok
@@ -23933,12 +24185,20 @@ noteScroller2
 * d4 = font modulo
 * d6 = line number
 * d7 = rows to draw
+* d7 = screen modulo, other half
 * a0 = pattern data
 * a1 = pattern info
 * a2 = font data
 * a4 = destination draw buffer
 
+	swap	d7
+	move	scopeDrawAreaModulo(a5),d7
+	swap	d7
+
 .rowLoop
+	* get screen modulo for .print and .printSmall routines
+	swap	d7
+
 	* print line number in d6
 	lea	.pos(pc),a3
 	tst.b	(a3)
@@ -24064,6 +24324,7 @@ noteScroller2
 	cmp	#4,PI_Voices(a1)
 	bls.b	.normalFont
 	pushm	d4/a2
+	* TODO: use swap d4?
 	move.l	minifontbase+var_b,a2
 	move	tf_Modulo(a2),d4		
 	move.l	tf_CharData(a2),a2		
@@ -24077,11 +24338,17 @@ noteScroller2
 .smallFont
 
 	* next vertical draw position
-	add	#8*40,a4
+	;add	#8*40,a4	
+	move	d7,d3
+	lsl	#3,d3
+	add	d3,a4
+	
 	* Next row
 	add.l	PI_Modulo(a1),a0
 	addq	#1,d6
 	cmp	PI_Pattlength(a1),d6
+	* get loop counter
+	swap	d7
 	dbeq	d7,.rowLoop
 
 .exitNoteScroller
@@ -24102,7 +24369,9 @@ noteScroller2
 .emptyChar 
 	move.b	#' ',(a3)+
 	rts
- 
+
+* Large font print
+* Assumes screen width is 320
 * in:
 *   a5 = dest draw buffer
 *   a3 = text to draw
@@ -24151,6 +24420,7 @@ noteScroller2
 * - width 4
 * - height 8
 * - even number of chars as input text
+* - d7 = screen modulo
 .printSmall	
 	* nibble masks
 	moveq	#$0f,d1
@@ -24166,71 +24436,85 @@ noteScroller2
 	ror.l	#1,d5
 	lea	-$10(a2,d5),a6	* space char $20/2
 	bmi.b	.lowNib
- 
+	
  	move.b	(a6),d0 
 	and.b	d2,d0 
  	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,1*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,2*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,3*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,4*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,5*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,6*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d2,d0 
- 	or.b	d0,7*40(a5)	
+ 	or.b	d0,(a5)	
 	bra.b	.evenCharDone
 .lowNib
  	move.b	(a6),d0 
 	lsl.b	#$4,d0 
  	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,1*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,2*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,3*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,4*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,5*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,6*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsl.b	#$4,d0 
- 	or.b	d0,7*40(a5)	
+ 	or.b	d0,(a5)	
 * odd char done	
 
 .evenCharDone
@@ -24247,72 +24531,93 @@ noteScroller2
 	lsr.b	#4,d0
 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,1*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,2*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,3*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,4*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,5*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,6*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	lsr.b	#4,d0
- 	or.b	d0,7*40(a5)	
+ 	or.b	d0,(a5)	
 	bra.b	.oddCharDone
 .lowNib2
  	move.b	(a6),d0 
 	and.b	d1,d0
  	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,1*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,2*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,3*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,4*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,5*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,6*40(a5)	
+ 	or.b	d0,(a5)	
 	add	d4,a6
+	add	d7,a5
 	move.b	(a6),d0 
 	and.b	d1,d0
- 	or.b	d0,7*40(a5)	
+ 	or.b	d0,(a5)	
 * odd char done	
 
 .oddCharDone
 
 	* go to next horiz position 
 	addq	#1,a5
+	sub		d7,a5
+	sub		d7,a5
+	sub		d7,a5
+	sub		d7,a5
+	sub		d7,a5
+	sub		d7,a5
+	sub		d7,a5
 
 	* next two input chars
 	subq	#1,d3
@@ -24840,14 +25145,14 @@ loadfile
 	lea	-160(sp),sp
 	move.l	sp,a1
 	lea	arcdir(a5),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	cmp.b	#':',-1(a1)
 	beq.b	.na
 	move.b	#'/',(a1)+
 .na	
 	lea	tdir(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 
 ** vanha kick: kopioidaan parametrin per‰‰n RAM:∞HiP∞/
 	tst.b	uusikick(a5)
@@ -24858,7 +25163,7 @@ loadfile
 	subq	#1,a1
 	move.b	#' ',(a1)+
 	lea	(sp),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	cmp.b	#':',-1(a1)
 	beq.b	.na0
@@ -33801,7 +34106,7 @@ p_aon
 	lea	aonroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bra.w	vapauta_kanavat
 .ok3
 	pushm	d1-a6
@@ -33809,7 +34114,7 @@ p_aon
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2 
-	lea	ciaint_setTempoFromD0(pc),a3
+	lea	ciaint_setTempoFromD0,a3
 	move.l	aonroutines(a5),a4
 	jsr	.OFFSET_INIT(a4)
 	tst.l	d0
@@ -33824,7 +34129,7 @@ p_aon
 	bra.b	.x
 
 .end
-	bsr	rem_ciaint
+	jsr	rem_ciaint
 	move.l	aonroutines(a5),a0
 	jsr	.OFFSET_END(a0)
 	bsr.w	clearsound
@@ -33911,7 +34216,7 @@ p_multi	jmp	.s3init(pc)
 	beq.b	.ok2
 	moveq	#ier_nociaints,d0
 	rts
-.ok2	bsr.w	rem_ciaint
+.ok2	jsr	rem_ciaint
 
 
 	lea	ps3mroutines(a5),a0
