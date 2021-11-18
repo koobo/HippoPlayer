@@ -23197,27 +23197,29 @@ noteScrollerHorizontalLines
 	* first line at y=23
 	moveq	#23,d3
 	mulu	d2,d3
-	add		d3,a0
+	add	d3,a0
 	;lea	23*40(a0),a0
 	bsr.w 	scopeIsNormal
 	bne.b	.normal
 	* further down if tall window
 	moveq	#4*8,d3
 	mulu	d2,d3
-	add		d3,a0
+	add	d3,a0
 	;lea	(4*8)*40(a0),a0
 .normal
-	lsl		#3,d2
+	* 2nd row offset
+	lsl	#3,d2
 	subq	#2,d2
 	* 19 times 16 pixels horizontally
-	moveq	#19-1,d0
+	move	scopeDrawAreaModulo(a5),d0
+	lsr	#1,d0
+	subq	#1,d0
 	move	#$aaaa,d1
 .raita	
 	* put 16 pixels here
-	or	d1,(a0)+
+	or.w	d1,(a0)+
 	* ...and 8 pixels below
-	;or	d1,8*40-2(a0)
-	or	d1,(a0,d2)
+	or.w	d1,(a0,d2)
 	dbf	d0,.raita
 	rts
 
@@ -24041,24 +24043,18 @@ noteScroller2
 	* Test if font is available
 	tst.l	minifontbase(a5)
 	beq.b	.x
-	cmp	#16,d7
+	* 18 fits into 640 pix!
+	cmp	#18,d7
 	bls.b	.max16
-	moveq	#16,d7
+	moveq	#18,d7
 .max16
 	* Request larger/wider window
 	move	d7,d0
-	* each stripe is 32 pix, every other stripe has 8 pix extra
-	;lsl	#5,d0
-	mulu	#40,d0
-	;move	d7,d1
-	;lsr	#1,d1
-	;lsl	#3,d1
-	;add	d1,d0
-
+	* each stripe is 32 pix
+	mulu	#32,d0
+	add	#32,d0
 	add	#15,d0
 	and	#$fff0,d0
-
-
 
 	cmp	scopeDrawAreaWidth(a5),d0
 	beq.b	.proceed
@@ -24074,8 +24070,6 @@ noteScroller2
 
 	move.l	draw1(a5),a4
 	subq	#1,d7
-	* alt flag
-	moveq	#0,d6
 .loop
 	pushm	d6/d7/a0/a4/a5/a6
 	move.l	(a0),a0		* stripe data
@@ -24094,14 +24088,8 @@ noteScroller2
 
 	cmp	#4,PI_Voices(a1)
 	bls.b	.voices4
-
 	* 32 pixels per stripe
 	addq	#4,a4		* next screen pos horizontal
-	not.b	d6
-	* add some space after two 
-	bne.b	.continue
-	* every other stripe has additional 8 pixels
-;	addq	#1,a4
 	bra.b	.continue
 .voices4
 	* 72 pixels per stripe
