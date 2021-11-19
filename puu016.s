@@ -5098,6 +5098,7 @@ printhippo1
  endc
 	
 
+** Print into scope window
 printhippo2
 	tst.b	uusikick(a5)
 	bne.b	.yep
@@ -5109,10 +5110,12 @@ printhippo2
 	moveq	#0,d1
 	moveq	#126,d2
 	move	#14,d3
-	jsr	scopeIsNormal
-	bne.b	.normal
-	add	#64/2,d3
-.normal
+ PRINTT fix this
+ 
+;	jsr	scopeIsPatternXL
+;	bne.b	.normal
+;	add	#64/2,d3
+;.normal
 	moveq	#96,d4	
 	moveq	#66,d5
 
@@ -21342,11 +21345,11 @@ quad_code
 	jmp	.5(pc)		* freq. analyzer
 	jmp	.6(pc)		* freq. analyzer bars
 	jmp	.patternScopeNormal(pc)	* patternscope
-	jmp	.patternScopeNormal(pc)	* patternscope bars (ei oo!)
+	jmp	.patternScopeNormalBars(pc)	* patternscope bars (ei oo!)
 	jmp	.7(pc)		* filled quadrascope
 	jmp	.8(pc)		* filled quadrascope & bars
 	jmp	.patternScopeXL(pc)	* patternscope xl
-	jmp	.patternScopeXL(pc)	* patternscope xl bars (no bars available though)
+	jmp	.patternScopeXLBars(pc)	* patternscope xl bars (no bars available though)
 
 
 .7	moveq	#-1,d7
@@ -21434,19 +21437,29 @@ quad_code
 	bra.w	.wo
 
 .patternScopeNormal
-	move	#8,quadNoteScrollerLines(a5)
-	move	#4,quadNoteScrollerLinesHalf(a5)
+.patternScopeNormalBars
+	* Prevent use of _BARS enumeration in quadmode2,
+	* makes things easier. 
+	move.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
+	DPRINT	"Patternscope NORMAL"
 	bra.b	.cont
 .patternScopeXL
-	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,scopeDrawAreaHeight(a5)
-	move	#16,quadNoteScrollerLines(a5)
-	move	#8,quadNoteScrollerLinesHalf(a5)
-
+.patternScopeXLBars
+	move.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	DPRINT	"Patternscope XL"
 .cont
+
 	* Start with no size request active.
 	move	scopeDrawAreaWidth(a5),scopeDrawAreaWidthRequest(a5)
 	move	scopeDrawAreaHeight(a5),scopeDrawAreaHeightRequest(a5)
 		
+	* lines count for patternscope, 8px high rows
+	move	scopeDrawAreaHeight(a5),d0
+	lsr	#3,d0 
+	move	d0,quadNoteScrollerLines(a5)
+	lsr	#1,d0
+	move	d0,quadNoteScrollerLinesHalf(a5)
+
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc3,a0
@@ -21499,8 +21512,8 @@ quad_code
 	move.l	pen_1(a5),d0
 	lob	SetAPen
 
-	bsr		drawScopeWindowDecorations
-	bsr		initScopeBitmaps
+	bsr	drawScopeWindowDecorations
+	bsr	initScopeBitmaps
 	beq.b	.memer
 
 
@@ -21509,9 +21522,9 @@ quad_code
 	* State flag indicating font request has been shown 
 	* Up bit for patternscope
 	moveq	#0,d6	
-	cmp.b	#QUADMODE_PATTERNSCOPE,quadmode(a5) 
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5) 
 	beq.b	.isPatts
-	cmp.b	#QUADMODE_PATTERNSCOPEXL,quadmode(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
 	bne.b	.noPatts
 .isPatts
 	DPRINT	"Patternscope active"
@@ -21629,9 +21642,9 @@ scopeLoop
 	moveq	#10,d0
 	moveq	#14,d1
 	move	scopeDrawAreaWidth(a5),d2
-	add		#10,d2
+	add	#10,d2
 	move	scopeDrawAreaHeight(a5),d3
-	add		#79-64,d3
+	add	#79-64,d3
 	add	windowleft(a5),d0
 	add	windowleft(a5),d2
 	add	windowtop(a5),d1
@@ -21654,7 +21667,7 @@ scopeLoop
 
 	cmp.l	#IDCMP_CHANGEWINDOW,d2 
 	bne.b 	.noChangeWindow
-	bsr		scopeWindowChanged
+	bsr	scopeWindowChanged
 	bra.w	scopeLoop
 
 .noChangeWindow
@@ -21773,6 +21786,13 @@ initScopeBitmaps
 .memError
 	rts
 
+* Z is set if patternscope is active
+patternScopeIsActive
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5) 
+	beq.b	.isPatts
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+.isPatts
+	rts
 
 
 drawScopeWindowDecorations
@@ -21822,35 +21842,39 @@ drawScopeWindowDecorations
 
 requestNormalScopeDrawArea
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0 
-	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
 
 
 * Resize window based on relative change to
 * the draw area.
 * In:
-*   d0 = new draw area width
+*   d0 = new draw area width, must be divisible by 16
+*        for blitter
 *   d1 = new draw area height
+* Out:
+*   d0 = 0 if draw area is already matching
+*   d0 = ~0 window will change to accommodate
 requestScopeDrawAreaChange
-	* Width should be divisible by 16, 
-	* for blitter to handle it.
- if DEBUG 	
-	ext.l 	d0 
-	ext.l 	d1
-	DPRINT	"Draw area change %ld %ld"
- endif
+
 	move	d0,scopeDrawAreaWidthRequest(a5)
 	move	d1,scopeDrawAreaHeightRequest(a5)
 	sub	scopeDrawAreaWidth(a5),d0
 	sub	scopeDrawAreaHeight(a5),d1
 	move	d1,d2
 	or	d0,d2
-	beq.b	.noDiff
+	beq.w	.noDiff
+
+ if DEBUG 	
+	ext.l 	d0 
+	ext.l 	d1
+	DPRINT	"Draw area change %ld %ld"
+ endif
 
 	move.l	scopeWindowBase(a5),a0
 	* Calculate new right edge position for window 
 	move	wd_LeftEdge(a0),d2
-	add		wd_Width(a0),d2
-	add		d0,d2
+	add	wd_Width(a0),d2
+	add	d0,d2
 	move	wbleveys(a5),d3
 	sub	d2,d3
 	bpl.b	.fits
@@ -21862,13 +21886,22 @@ requestScopeDrawAreaChange
 	DPRINT	"->move %ld %ld"
  endif 
 	lore	Intui,MoveWindow
+	moveq	#1,d0
 	rts
 .fits
+ if DEBUG 
+ 	ext.l 	d0 
+ 	ext.l 	d1
+	DPRINT	"->resize %ld %ld"
+ endif 
 
 	move.l	scopeWindowBase(a5),a0 
 	lore 	Intui,SizeWindow
-	DPRINT	"->resize"
+	moveq	#1,d0
+	rts
 .noDiff
+;	DPRINT	"->no change!"
+	moveq	#0,d0
 	rts
 
 scopeDrawAreaSizeChangeRequestIsActive
@@ -21901,10 +21934,10 @@ scopeWindowChanged
  endif
 	* Request again after window move
  	bsr.b	scopeDrawAreaSizeChangeRequestIsActive
-	beq.b .nope 
+	beq.b 	.nope 
 	move	scopeDrawAreaWidthRequest(a5),d0
 	move	scopeDrawAreaHeightRequest(a5),d1
-	bsr.w requestScopeDrawAreaChange
+	bsr.w 	requestScopeDrawAreaChange
 .nope
 	rts
 
@@ -21930,89 +21963,17 @@ scopeWindowSizeChanged
 	lsr	#3,d0 
 	move	d0,scopeDrawAreaModulo(a5)
 
+	* lines count for patternscope, 8px high rows
+	move	scopeDrawAreaHeight(a5),d0
+	lsr		#3,d0 
+	move	d0,quadNoteScrollerLines(a5)
+	lsr		#1,d0
+	move	d0,quadNoteScrollerLinesHalf(a5)
+
 	bsr	initScopeBitmaps
 	bsr	drawScopeWindowDecorations
 	rts
 
-
-
-
- REM ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-* Needs to be called twice if window is first moved.
-* Check required width from scopeWindowBase!
-makeDoubleWidthScopeWindow
-	DPRINT	"Double width"
-
-	move.l	scopeWindowBase(a5),a0 
-	move	wd_Width(a0),d0
-	cmp	quadWindowWidthOriginal(a5),d0
-	bne.b	.already
-
-	move	wd_LeftEdge(a0),d1
-	add	wd_Width(a0),d1
-	add	#SCOPE_WINDOW_WIDE_DELTA,d1
-
-	move	wbleveys(a5),d0
-	sub	d1,d0
-	bpl.b	.fits
-	* Does not fit 
-	moveq	#0,d1
-	lore	Intui,MoveWindow
-	DPRINT	"->move"
-	rts
-.fits
-	move	#SCOPE_WINDOW_WIDE_DELTA,d0 
-	moveq	#0,d1
-	lore	Intui,SizeWindow
-	DPRINT	"->resize"
-	rts
-.already
-	DPRINT	"->no change"
-	rts
-
-makeNormalWidthScopeWindow
-	DPRINT	"Normal width"
-
-	move.l	scopeWindowBase(a5),a0 
-	move	wd_Width(a0),d0
-	cmp	quadWindowWidthOriginal(a5),d0
-	beq.b	makeDoubleWidthScopeWindow\.already
-
-	move	#-280,d0 
-	moveq	#0,d1
-	lore	Intui,SizeWindow
-	rts
-
-getScopeDrawAreaWidth
-	push	a0
-	move.l	scopeWindowBase(a5),a0 
-	moveq	#0,d0
-	move	wd_Width(a0),d0
-	pop	a0
-	cmp	quadWindowWidthOriginal(a5),d0
-	beq.b	.normal
-	move	#320+SCOPE_WINDOW_WIDE_DELTA,d0
-	rts
-.normal
-	move	#320,d0
-	rts
-
-getScopeDrawAreaWidthModulo
-	bsr.b	getScopeDrawAreaWidth
-	lsr	#3,d0
-	rts
-
-* Z is set if scope is normal width
-scopeIsNormalWidth
-	pushm	d0/a0
-	move.l	scopeWindowBase(a5),a0 
-	move	wd_Width(a0),d0
-	cmp	quadWindowWidthOriginal(a5),d0
-	popm	d0/a0
-	rts
-
-
- EREM ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;,
 
 *********************************************************************
 * Scope interrupt code, keeps track the play positions of 
@@ -22044,13 +22005,7 @@ scopeinterrupt				* a5 = var_b
 	move	n_tempvol(a2),ns_tempvol2(a0)
 	addq	#1,a3
 
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)	
-	beq.b	.eq
-	cmp.b	#QUADMODE2_PATTERNSCOPE_BARS,quadmode2(a5)
-	beq.b	.eq
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)	
-	beq.b	.eq
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
+	bsr	patternScopeIsActive
 	beq.b	.eq
 	
 	move	n_tempvol(a2),ns_tempvol(a0)
@@ -22091,25 +22046,22 @@ scopeinterrupt				* a5 = var_b
 * Z is clear it true, Z set if false
 * 1: true
 * 0: false
-scopeIsNormal
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
-	beq.b	.large
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
-	;beq.b	.large
-.large
-	rts
+;scopeIsPatternXL
+;	cmp.b	#QUADMODE_PATTERNSCOPEXL,quadmode(a5)
+;	;beq.b	.large
+;	;cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
+;	;beq.b	.large
+;.large
+;	rts
+;
 
 * Opens the mini font for 4+ channel notescroller if needed
 getScopeMiniFontIfNeeded
 	tst.l	minifontbase(a5)
 	bne.b	.skip
 	* See if we need the small font
-	move.b 	quadmode(a5),d0 
-	cmp.b	#QUADMODE_PATTERNSCOPE,d0 
-	beq.b	.noSkip
-	cmp.b	#QUADMODE_PATTERNSCOPEXL,d0 
+	bsr	patternScopeIsActive
 	bne.b	.skip
-.noSkip
 	move.l	deliPatternInfo(a5),d0
 	beq.b	.skip
 	move.l	d0,a0
@@ -23194,18 +23146,13 @@ noteScrollerHorizontalLines
 *** viiva
 	move.l	draw1(a5),a0
 	move	scopeDrawAreaModulo(a5),d2
-	* first line at y=23
-	moveq	#23,d3
+	* first line at y-coordinate
+	move	scopeDrawAreaHeight(a5),d3
+	lsr	#1,d3
+	sub	#9,d3
 	mulu	d2,d3
 	add	d3,a0
-	;lea	23*40(a0),a0
-	bsr.w 	scopeIsNormal
-	bne.b	.normal
-	* further down if tall window
-	moveq	#4*8,d3
-	mulu	d2,d3
-	add	d3,a0
-	;lea	(4*8)*40(a0),a0
+
 .normal
 	* 2nd row offset
 	lsl	#3,d2
@@ -23255,14 +23202,23 @@ noteScrollerGetFont
 	move.l	tf_CharData(a2),a2		* data
 	rts
 
+patternScopePt
+noteScrollerPt
 notescroller
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	bne.b 	.normHeight
+	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
+.normHeight
 	cmp	scopeDrawAreaWidth(a5),d0
+	bne.b	.plz
+	cmp	scopeDrawAreaHeight(a5),d1
 	beq.b	.sizeOk
-	bsr	requestNormalScopeDrawArea
+.plz	bsr	requestScopeDrawAreaChange
 	rts
 .sizeOk
-	pushm	all
+
 	bsr.w	.notescr
 	bsr	noteScrollerHorizontalLines
 
@@ -23330,8 +23286,6 @@ notescroller
 .urh	lea	ns_size(a0),a0
 	dbf	d0,.orl
 
-
-	popm	all
 	rts
 
 
@@ -23347,7 +23301,7 @@ notescroller
 	* move to bottom
 	move	quadNoteScrollerLines(a5),d1
 	lsl	#3,d1
-	mulu	#40,d1
+	mulu	scopeDrawAreaModulo(a5),d1
 	add.l	d1,a0
 
 	lea	.paldata(pC),a1
@@ -23474,8 +23428,9 @@ notescroller
 	* vertical loop
 	* line loop
 .plorl
-	* print linenumber
-	lea	.pos(pc),a0		* rivinumero
+	* print linenumber, in BCD format
+	lea	.pos(pc),a0		
+
 	moveq	#0,d0
 	move	d6,d0
 	divu	#10,d0
@@ -23484,6 +23439,15 @@ notescroller
 	swap	d0
 	or.b	#'0',d0
 	move.b	d0,1(a0)
+
+;	move.b	d6,d0
+;	lsr.b	#4,d0
+;	or.b	#'0',d0
+;	move.b	d0,(a0)
+;	moveq	#$f,d0
+;	and.b	d6,d0
+;	or.b	#'0',d0
+;	move.b	d0,1(a0)
 
 	move.l	a4,a1
 	subq	#3,a1
@@ -23587,8 +23551,11 @@ notescroller
 	* next vertical position
 	add	#8*40-4*9,a4
 	* next pattern line, check if at the end
+	;moveq	#1,d0
+	;abcd	d0,d6
+	;cmp.b	#$64,d6
 	addq	#1,d6
-	cmp	#64,d6
+	cmp		#64,d6
 	dbeq d7,.plorl
 .exitNoteScroller
 	popm	a5/a6
@@ -24018,11 +23985,11 @@ samples0
 *********************************************************************
 * GENERIC NOTESCROLLER
 * Note scroller supporting the PI_PatternInfo data
+patternScopeGeneric
+noteScrollerGeneric
 patternScope2
 noteScroller2
-	cmp.b	#QUADMODE_PATTERNSCOPE,quadmode(a5)
-	beq.b	.1
-	cmp.b	#QUADMODE_PATTERNSCOPEXL,quadmode(a5)
+	bsr	patternScopeIsActive
 	beq.b	.1
 	rts
 .1
@@ -24030,20 +23997,28 @@ noteScroller2
 	lea	PI_Stripes(a1),a0
 	move	PI_Voices(a1),d7
 
-	* font availability check
+
+* Required height in d1
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	bne.b	.notXl
+	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
+.notXl
+
 	cmp	#4,d7
 	bhi.b	.over4
 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
-	cmp	scopeDrawAreaWidth(a5),d0
+	bsr	requestScopeDrawAreaChange
 	beq.b	.proceed
-	bsr	requestNormalScopeDrawArea
+	* resize will happen later
 	rts
 .over4
 	* Test if font is available
 	tst.l	minifontbase(a5)
 	beq.b	.x
-	* 18 fits into 640 pix!
+	
+	* 18 stripes fit into 640 pix!
 	cmp	#18,d7
 	bls.b	.max16
 	moveq	#18,d7
@@ -24051,15 +24026,15 @@ noteScroller2
 	* Request larger/wider window
 	move	d7,d0
 	* each stripe is 32 pix
-	mulu	#32,d0
+	mulu	#32,d0 * TODO: shift
 	add	#32,d0
+	* ensure divisible by 16 for blitter safety
 	add	#15,d0
 	and	#$fff0,d0
 
-	cmp	scopeDrawAreaWidth(a5),d0
-	beq.b	.proceed
-	move	scopeDrawAreaHeight(a5),d1
 	bsr	requestScopeDrawAreaChange
+	beq.b	.proceed
+	* resize will happen later
 	rts
 
 .proceed
@@ -24435,7 +24410,7 @@ noteScroller2
 .printSmall	
 
 	* nibble masks
-	moveq	#$0f,d1
+	moveq	#$0f,d1 * TODO: CAN BE REMOVED
 	move	#$f0,d2
 
 	* get one char to print here
