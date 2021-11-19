@@ -21993,9 +21993,9 @@ scopeWindowSizeChanged
 
 	* lines count for patternscope, 8px high rows
 	move	scopeDrawAreaHeight(a5),d0
-	lsr		#3,d0 
+	lsr	#3,d0 
 	move	d0,quadNoteScrollerLines(a5)
-	lsr		#1,d0
+	lsr	#1,d0
 	move	d0,quadNoteScrollerLinesHalf(a5)
 
 	bsr	initScopeBitmaps
@@ -22401,11 +22401,14 @@ drawScope
 	move	scopeDrawAreaWidth(a5),d4
 	move	scopeDrawAreaHeight(a5),d5
 
+
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.joa
 
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.jaa
+	bsr	patternScopeIsActive
+	beq.b	.noMagic
 	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
 	bls.b	.joa
 	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
@@ -22426,7 +22429,7 @@ drawScope
 	addq	#1,d2
 	subq	#1,d4
 .jaow
-
+.noMagic
 	lob	BltBitMapRastPort
 .skippi
 	rts
@@ -24109,10 +24112,10 @@ noteScroller2
 
  if DEBUG
  	move	#$0f0,$dff180
-	move.l	moduleaddress(a5),d0
-	move.l	modulelength(a5),d1
-	move.l	a0,d2
-	DPRINT	"INSANITY %lx %ld -> %lx"
+;	move.l	moduleaddress(a5),d0
+;	move.l	modulelength(a5),d1
+;	move.l	a0,d2
+;	DPRINT	"INSANITY %lx %ld -> %lx"
  endif
 	rts
 
