@@ -24356,46 +24356,27 @@ noteScroller2
 .print
 	* get one char to print
 	moveq	#0,d5
+	move.l	a5,d1
 .charLoop	
 	move.b	(a3)+,d5
 	cmp.b	#$20,d5
 	beq.b	.space
 	* get char pixels
 	lea	-$20(a2,d5),a6
-	push	a5
 	* do 8 pixels height
+ rept 7
  	move.b	(a6),(a5)	
 	add	d4,a6
 	add	d7,a5
+ endr
 	move.b	(a6),(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),(a5)	
-	pop 	a5
-	addq	#1,a5 
+.space
+	addq.l	#1,d1
+	move.l	d1,a5
 	
 	* go to next horiz position
 	dbf	d3,.charLoop
 	rts
-.space	
-	* go to next horiz position
-	addq	#1,a5
-	dbf	d3,.charLoop
 	rts
 
 * Print text with small font
@@ -24406,201 +24387,98 @@ noteScroller2
 * - even number of chars as input text
 * - d7 = screen modulo
 
-
 .printSmall	
 
-	* nibble masks
-	moveq	#$0f,d1 * TODO: CAN BE REMOVED
+	* nibble mask
 	move	#$f0,d2
+
+	* dest buffer pointer
+	move.l	a5,d1
 
 	* get one char to print here
 	moveq	#0,d5
 .charLoop2	
 	* even position
 
-	push 	a5
-
 	move.b	(a3)+,d5
+	cmp.b	#$20,d5
+	beq.w	.evenCharDone
+
 	* get char pixels
 	ror.l	#1,d5
 	lea	-$10(a2,d5),a6	* space char $20/2
 	bmi.b	.lowNib
-	
+
+ rept 7
  	move.b	(a6),d0 
 	and.b	d2,d0 
  	or.b	d0,(a5)	
 	add	d4,a6
 	add	d7,a5
+ endr
 	move.b	(a6),d0 
 	and.b	d2,d0 
  	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d2,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d2,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d2,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d2,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d2,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d2,d0 
- 	or.b	d0,(a5)	
+
 	bra.b	.evenCharDone
+
 .lowNib
+
+ rept 7
  	move.b	(a6),d0 
-	lsl.b	#$4,d0 
+	lsl.b	#4,d0 
  	or.b	d0,(a5)	
 	add	d4,a6
 	add	d7,a5
+ endr
 	move.b	(a6),d0 
-	lsl.b	#$4,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsl.b	#$4,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsl.b	#$4,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsl.b	#$4,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsl.b	#$4,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsl.b	#$4,d0 
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsl.b	#$4,d0 
+	lsl.b	#4,d0 
  	or.b	d0,(a5)	
 * odd char done	
 
 .evenCharDone
-	move.l	(sp),a5
+	move.l	d1,a5
 
 	* odd position
 
 	move.b	(a3)+,d5
+	cmp.b	#$20,d5
+	beq.w	.oddCharDone
+
 	* get char pixels
 	ror.l	#1,d5
 	lea	-$10(a2,d5),a6
 	bmi.b	.lowNib2
  
+  rept 7
  	move.b	(a6),d0 
 	lsr.b	#4,d0
 	or.b	d0,(a5)	
 	add	d4,a6
 	add	d7,a5
+ endr
 	move.b	(a6),d0 
 	lsr.b	#4,d0
  	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsr.b	#4,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsr.b	#4,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsr.b	#4,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsr.b	#4,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsr.b	#4,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	lsr.b	#4,d0
- 	or.b	d0,(a5)	
+
 	bra.b	.oddCharDone
 .lowNib2
- 	move.b	(a6),d0 
-	and.b	d1,d0
+ rept 7
+	moveq	#$f,d0
+ 	and.b	(a6),d0 
  	or.b	d0,(a5)	
 	add	d4,a6
 	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d1,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d1,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d1,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d1,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d1,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d1,d0
- 	or.b	d0,(a5)	
-	add	d4,a6
-	add	d7,a5
-	move.b	(a6),d0 
-	and.b	d1,d0
+ endr
+	moveq	#$f,d0
+ 	and.b	(a6),d0 
  	or.b	d0,(a5)	
 * odd char done	
 
 .oddCharDone
-	pop 	a5
 	* go to next horiz position 
-	addq	#1,a5
+	addq.l	#1,d1
+	move.l	d1,a5
 	
 	* next two input chars
 	subq	#1,d3
