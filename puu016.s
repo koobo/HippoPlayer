@@ -1150,7 +1150,7 @@ findpattern	rs.b	30		* find pattern
 divider		rs.b	26		* divider
 
 omabitmap	rs.b	bm_SIZEOF-7*4	* 1 bitplanea, ei tilaa muille
-omabitmap2	rs.b	bm_SIZEOF-6*4	* 2
+bitmapHippoHead	rs.b	bm_SIZEOF-6*4	* 2
 omabitmap3	rs.b	bm_SIZEOF-7*4	* 1
 omabitmap4	rs.b	bm_SIZEOF-6*4	* 2
 omabitmap5	rs.b	bm_SIZEOF-6*4	* 2
@@ -4902,16 +4902,19 @@ unlockMainWindow
 **************
 * Hipon tulostaminen
 
+HIPPOHEAD_WIDTH = 96
+HIPPOHEAD_HEIGHT = 66
+
 inithippo
 *** Lasketaan checksummi infoikkunan no-onelle ja unregistered-tekstille.
 
 	check	1
 
-	lea	omabitmap2(a5),a2
+	lea	bitmapHippoHead(a5),a2
 	move.l	a2,a0
 	moveq	#2,d0
-	moveq	#96,d1
-	moveq	#66,d2
+	moveq	#HIPPOHEAD_WIDTH,d1
+	moveq	#HIPPOHEAD_HEIGHT,d2
 	lore	GFX,InitBitMap
 	move.l	#hippohead,bm_Planes(a2)
 	move.l	#hippohead+792,bm_Planes+4(a2)
@@ -4943,7 +4946,7 @@ printhippo1
 
 	moveq	#0,d0		* lähde x,y
 	moveq	#0,d1
-	moveq	#66,d5		* y-koko
+	moveq	#HIPPOHEAD_HEIGHT,d5		* y-koko
 
 	moveq	#76+WINY-14,d3
 	move	boxsize(a5),d6
@@ -4957,7 +4960,7 @@ printhippo1
 .rrr
 	moveq	#0,d1
 .rr
-	lea	omabitmap2(a5),a0
+	lea	bitmapHippoHead(a5),a0
 	move.l	rastport(a5),a1		* main
 	moveq	#92,d2		* kohde x
 	tst.b	d7
@@ -4968,7 +4971,7 @@ printhippo1
 	add	windowtop(a5),d3
 ;	move	#$ee,d6		* minterm, kopio a or d ->d
 	move	#$c0,d6		* minterm, suora kopio
-	moveq	#96,d4		* x-koko
+	moveq	#HIPPOHEAD_WIDTH,d4		* x-koko
 	lore	GFX,BltBitMapRastPort
 .r	popm	d0-d7/a0-a2/a6
 	rts
@@ -5018,8 +5021,8 @@ printhippo1
 * alkup. x: 96, y: 66
 * max  x: 220, y: 400
 
-	moveq	#96,d0
-	moveq	#66,d1
+	moveq	#HIPPOHEAD_WIDTH,d0
+	moveq	#HIPPOHEAD_HEIGHT,d1
 
 	move	d0,bsa_SrcWidth(a3)
 	move	d1,bsa_SrcHeight(a3)
@@ -5029,7 +5032,7 @@ printhippo1
 	move	d1,bsa_YDestFactor(a3)
 
 	move.l	a4,bsa_DestBitMap(a3)
-	pushpea	omabitmap2(a5),bsa_SrcBitMap(a3)
+	pushpea	bitmapHippoHead(a5),bsa_SrcBitMap(a3)
 
 
 	move.l	windowbase(a5),a0
@@ -5099,29 +5102,33 @@ printhippo1
 	
 
 ** Print into scope window
-printhippo2
+printHippoScopeWindow
 	tst.b	uusikick(a5)
 	bne.b	.yep
 	rts
 .yep	pushm	d0-d6/a0-a2/a6
-	lea	omabitmap2(a5),a0
+	lea	bitmapHippoHead(a5),a0
 	move.l	rastport3(a5),a1		* quad
 	moveq	#0,d0	
 	moveq	#0,d1
-	moveq	#126,d2
-	move	#14,d3
- PRINTT fix this
- 
-;	jsr	scopeIsPatternXL
-;	bne.b	.normal
-;	add	#64/2,d3
-;.normal
-	moveq	#96,d4	
-	moveq	#66,d5
 
+
+	* Center hippohead into scope window
+	move.l	scopeWindowBase(a5),a2 
+	move	wd_Width(a2),d2
+	lsr	#1,d2
+	sub	#HIPPOHEAD_WIDTH/2,d2
+
+	move	#14,d3
+	move	scopeDrawAreaHeight(a5),d4
+	sub	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d4
+	asr	#1,d4
+	add	d4,d3
+
+	moveq	#HIPPOHEAD_WIDTH,d4	
+	moveq	#HIPPOHEAD_HEIGHT,d5
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
-;	move	#$ee,d6			* D: A or D
 	move	#$c0,d6			* suora kopio
 	lore	GFX,BltBitMapRastPort
 	popm	d0-d6/a0-a2/a6
@@ -21534,7 +21541,7 @@ quad_code
 	* Set to non-zero if LMB is pressed
 	move.b	scopeManualActivation(a5),d5
 
-	jsr	printhippo2	
+	jsr	printHippoScopeWindow	
 
 *********************************************************************
 * Scope main loop
@@ -21631,7 +21638,7 @@ scopeLoop
 	* Request fulfilled
 	moveq	#0,d7
 	bsr.b	.clear
-	jsr	printhippo2
+	jsr	printHippoScopeWindow
 	bra.b	.continue
 
 .clear
@@ -21869,6 +21876,8 @@ requestScopeDrawAreaChange
 	ext.l 	d1
 	DPRINT	"Draw area change %ld %ld"
  endif
+	PRINTT	"height check missing"	
+	PRINTT "ALERT"
 
 	move.l	scopeWindowBase(a5),a0
 	* Calculate new right edge position for window 
@@ -23434,23 +23443,12 @@ notescroller
 	swap	d0 
 	or.b	d0,d6	
 
-
 	* vertical loop
 	* line loop
 .plorl
 	* print linenumber, in BCD format
 	* avoid DIVU in loop this way
 	lea	.pos(pc),a0		
-
-;	moveq	#0,d0
-;	move	d6,d0
-;	divu	#10,d0
-;	or.b	#'0',d0
-;	move.b	d0,(a0)
-;	swap	d0
-;	or.b	#'0',d0
-;	move.b	d0,1(a0)
-
 	move.b	d6,d0
 	lsr.b	#4,d0
 	or.b	#'0',d0
@@ -24158,7 +24156,6 @@ noteScroller2
 	sub	d1,a0
 
 	* vertical position in target 
-	;mulu	#8*40,d0
 	mulu	scopeDrawAreaModulo(a5),d0
 	lsl.l	#3,d0
 	add.l	d0,a4
@@ -24182,7 +24179,6 @@ noteScroller2
 * a1 = pattern info
 * a2 = font data
 * a4 = destination draw buffer
-
 
 	swap	d7
 	move	scopeDrawAreaModulo(a5),d7
@@ -24212,7 +24208,7 @@ noteScroller2
 	swap	d7
 
 	* print line number as BCD from D2 
-	lea	.pos(pc),a3
+;	lea	.pos(pc),a3
 	move.b	d2,d0
 	lsr.b	#4,d0
 	bsr.w	.convertD0ToCharInA3Fill
@@ -24224,6 +24220,7 @@ noteScroller2
 	move.l	a4,a5
 	moveq	#2-1,d3
 	bsr.w	.print
+	subq	#2,a3 
 
 	* next vertical draw position, one font height down
 	move	d7,d3
