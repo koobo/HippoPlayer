@@ -23425,29 +23425,40 @@ notescroller
 	bsr	noteScrollerGetFont
 	beq	.exitNoteScroller
 
+	* convert row in D6 to BCD
+	moveq	#0,d0
+	move	d6,d0
+	divu	#10,d0 
+	lsl.b	#4,d0
+	move.b	d0,d6
+	swap	d0 
+	or.b	d0,d6	
+
+
 	* vertical loop
 	* line loop
 .plorl
 	* print linenumber, in BCD format
+	* avoid DIVU in loop this way
 	lea	.pos(pc),a0		
 
-	moveq	#0,d0
-	move	d6,d0
-	divu	#10,d0
-	or.b	#'0',d0
-	move.b	d0,(a0)
-	swap	d0
-	or.b	#'0',d0
-	move.b	d0,1(a0)
-
-;	move.b	d6,d0
-;	lsr.b	#4,d0
+;	moveq	#0,d0
+;	move	d6,d0
+;	divu	#10,d0
 ;	or.b	#'0',d0
 ;	move.b	d0,(a0)
-;	moveq	#$f,d0
-;	and.b	d6,d0
+;	swap	d0
 ;	or.b	#'0',d0
 ;	move.b	d0,1(a0)
+
+	move.b	d6,d0
+	lsr.b	#4,d0
+	or.b	#'0',d0
+	move.b	d0,(a0)
+	moveq	#$f,d0
+	and.b	d6,d0
+	or.b	#'0',d0
+	move.b	d0,1(a0)
 
 	move.l	a4,a1
 	subq	#3,a1
@@ -23551,11 +23562,13 @@ notescroller
 	* next vertical position
 	add	#8*40-4*9,a4
 	* next pattern line, check if at the end
-	;moveq	#1,d0
-	;abcd	d0,d6
-	;cmp.b	#$64,d6
-	addq	#1,d6
-	cmp		#64,d6
+	* clear X flag for ABCD
+	andi.b	#~%00010000,ccr
+	* Next row in BCD
+	moveq	#1,d0
+	abcd.b	d0,d6
+	* row 64 in BCD
+	cmp.b	#$64,d6
 	dbeq d7,.plorl
 .exitNoteScroller
 	popm	a5/a6
@@ -24087,6 +24100,10 @@ noteScroller2
 	rts
 
 
+***********************************************************
+* Draw one stripe
+***********************************************************
+
 .doStripe
        	* sanity check
 	move.l	a0,d0
@@ -24166,23 +24183,41 @@ noteScroller2
 * a2 = font data
 * a4 = destination draw buffer
 
+
 	swap	d7
 	move	scopeDrawAreaModulo(a5),d7
 	swap	d7
 
-.rowLoop
-	* get screen modulo for .print and .printSmall routines
-	swap	d7
+***********************************************************
+* Line numbers column
+***********************************************************
 
-	* print line number in d6
 	lea	.pos(pc),a3
 	tst.b	(a3)
-	bmi.b	.skip
+	bmi.b	.skipNumbers
+
+	pushm	d6/d7/a4/a5
+
+	* row number in D2 as BCD
 	moveq	#0,d0
 	move	d6,d0
-	divu	#10,d0
+	divu	#10,d0 
+	lsl.b	#4,d0
+	move.b	d0,d2
+	swap	d0 
+	or.b	d0,d2
+	
+.lineNumberRowLoop
+	* get screen modulo
+	swap	d7
+
+	* print line number as BCD from D2 
+	lea	.pos(pc),a3
+	move.b	d2,d0
+	lsr.b	#4,d0
 	bsr.w	.convertD0ToCharInA3Fill
-	swap	d0
+	moveq	#$f,d0
+	and.b	d2,d0
 	bsr.w	.convertD0ToCharInA3Fill
 
 	subq	#2,a3
@@ -24190,7 +24225,47 @@ noteScroller2
 	moveq	#2-1,d3
 	bsr.w	.print
 
-.skip
+	* next vertical draw position, one font height down
+	move	d7,d3
+	lsl	#3,d3	* times 8
+	add	d3,a4
+
+	* clear X flag for ABCD
+	andi.b	#~%00010000,ccr
+	* Next row in BCD
+	moveq	#1,d0
+	abcd.b	d0,d2
+
+	* get loop counter
+	swap	d7
+
+	* next pattern line, check if at the end
+	addq	#1,d6
+	cmp	PI_Pattlength(a1),d6
+	dbeq	d7,.lineNumberRowLoop
+
+	popm	d6/d7/a4/a5
+	* move "cursor" 3 chars to the right 
+	addq	#3,a4
+
+.skipNumbers
+
+	* Select font for note data
+	cmp	#4,PI_Voices(a1)
+	bls.b	.normalFont
+	move.l	minifontbase(a5),a2
+	move	tf_Modulo(a2),d4		
+	move.l	tf_CharData(a2),a2		
+.normalFont
+	
+***********************************************************
+* Note column
+***********************************************************
+
+.rowLoop
+	* get screen modulo for .print and .printSmall routines
+	swap	d7
+
 	move.l	a1,d5
 * ChipTracker, TME, Mugician2, TCBTracker
 * use d0-d3,a1
@@ -24288,30 +24363,20 @@ noteScroller2
 	moveq	#$f,d0
 	and.b	d3,d0
 	bsr.b	.convertD0ToCharInA3Fill
-	
+
+	* print this:	
 	lea	.note(pc),a3
+	* to here:
 	move.l	a4,a5
-	move.b	.pos(pc),d3
-	bmi.b	.noPos
-	addq	#3,a5
-.noPos
-
+	moveq	#8-1,d3
+	
 	cmp	#4,PI_Voices(a1)
-	bls.b	.normalFont
-	pushm	d4/a2
-	* TODO: use swap d4?
-	move.l	minifontbase+var_b,a2
-	move	tf_Modulo(a2),d4		
-	move.l	tf_CharData(a2),a2		
-	moveq	#8-1,d3
+	bls.b	.printNorm
 	bsr.w	.printSmall
-	popm	d4/a2
-	bra.b	.smallFont
-.normalFont
-	moveq	#8-1,d3
+	bra.b	.wasSmall
+.printNorm
 	bsr.b	.print
-.smallFont
-
+.wasSmall
 	* next vertical draw position, one font height down
 	move	d7,d3
 	lsl	#3,d3	* times 8
@@ -24376,7 +24441,6 @@ noteScroller2
 	
 	* go to next horiz position
 	dbf	d3,.charLoop
-	rts
 	rts
 
 * Print text with small font
