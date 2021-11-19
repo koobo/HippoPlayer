@@ -21886,14 +21886,33 @@ requestScopeDrawAreaChange
 	add	d0,d2
 	move	wbleveys(a5),d3
 	sub	d2,d3
-	bpl.b	.fits
-	* Does not fit, move left 
-	move	d3,d0 
-	moveq	#0,d1
+;	bpl.b	.fits
+
+	move	wd_TopEdge(a0),d4
+	add	wd_Height(a0),d4
+	add	d1,d4
+	move	wbkorkeus(a5),d5
+	sub	d4,d5
+
+	tst	d3
+	bmi.b	.1
+	moveq	#0,d3
+.1	tst	d5
+	bmi.b	.2
+	moveq	#0,d5
+.2
+	move	d3,d2
+	or	d5,d2
+	beq.b	.fits
+ 
+	move	d3,d0
+	move	d5,d1 
  if DEBUG 
  	ext.l 	d0 
+ 	ext.l 	d1
 	DPRINT	"->move %ld %ld"
- endif 
+ endif
+   
 	lore	Intui,MoveWindow
 	moveq	#1,d0
 	rts
@@ -24037,7 +24056,7 @@ noteScroller2
 	* Request larger/wider window
 	move	d7,d0
 	* each stripe is 32 pix
-	mulu	#32,d0 * TODO: shift
+	lsl	#5,d0 ;mulu	#32,d0 	
 	add	#32,d0
 	* ensure divisible by 16 for blitter safety
 	add	#15,d0
@@ -24103,7 +24122,9 @@ noteScroller2
 ***********************************************************
 
 .doStripe
-       	* sanity check
+
+********************** sanity check
+
 	move.l	a0,d0
 	beq.b	.xy
 
@@ -24128,7 +24149,7 @@ noteScroller2
    	bhs.w   .xy
 .sane
 
-	* sanity check passed
+********************** calculate stuff
 	
 	* draw this many lines
 	move	quadNoteScrollerLines(a5),d7
@@ -24183,7 +24204,7 @@ noteScroller2
 	swap	d7
 	move	scopeDrawAreaModulo(a5),d7
 	swap	d7
-
+	
 ***********************************************************
 * Line numbers column
 ***********************************************************
@@ -24208,7 +24229,6 @@ noteScroller2
 	swap	d7
 
 	* print line number as BCD from D2 
-;	lea	.pos(pc),a3
 	move.b	d2,d0
 	lsr.b	#4,d0
 	bsr.w	.convertD0ToCharInA3Fill
@@ -24216,11 +24236,11 @@ noteScroller2
 	and.b	d2,d0
 	bsr.w	.convertD0ToCharInA3Fill
 
-	subq	#2,a3
+	subq	#2,a3	* restore a3
 	move.l	a4,a5
 	moveq	#2-1,d3
 	bsr.w	.print
-	subq	#2,a3 
+	subq	#2,a3 	* restore a3
 
 	* next vertical draw position, one font height down
 	move	d7,d3
