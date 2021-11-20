@@ -24132,7 +24132,10 @@ noteScroller2
 .xy	
 
  if DEBUG
- 	move	#$0f0,$dff180
+* MTM modules commonly have empty stripes, caught
+* by insanity checks.
+
+; 	move	#$0f0,$dff180
 ;	move.l	moduleaddress(a5),d0
 ;	move.l	modulelength(a5),d1
 ;	move.l	a0,d2
@@ -24147,7 +24150,7 @@ noteScroller2
 
 .doStripe
 
-********************** sanity check
+*** Sanity check, is the stripe address legal?
 
 	move.l	a0,d0
 	beq.b	.xy
@@ -24155,6 +24158,7 @@ noteScroller2
 	move.l	ps3mUnpackedPattern(a5),d0
 	tst.l	d0
 	beq.b	.noPattern
+	* Pointer within the unpacked pattern region?
 
 	cmp.l	d0,a0
 	bhs.b	.sane
@@ -24163,6 +24167,8 @@ noteScroller2
 	blo.b	.sane
 
 .noPattern
+	* Pointer within the module data?
+
 	cmp.l	#1024,a0
 	bls.b	.xy
 	move.l  moduleaddress(a5),a3
@@ -24173,7 +24179,7 @@ noteScroller2
    	bhs.w   .xy
 .sane
 
-********************** calculate stuff
+*** calculate stuff
 	
 	* draw this many lines
 	move	quadNoteScrollerLines(a5),d7
@@ -24365,7 +24371,8 @@ noteScroller2
 	move.w	.notes(pc,d5),(a3)+
 	* print octave
 	addq.b	#1,d0
-	bsr.w	.convertD0ToCharInA3Fill
+	or.b	#'0',d0
+	move.b	d0,(a3)+
 	bra.b	.wasNote
 
 .emptyNote
