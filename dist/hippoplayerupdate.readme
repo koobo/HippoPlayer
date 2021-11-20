@@ -115,13 +115,18 @@ List of supported formats:
 - Do not draw the new list mode change button if it doesn't fit, 
   removing the visual glitch when window is minified with RMB+Pr.
 
+## Music format related fixes:
+- ScreamTracker3 (S3M) replayer would crash when attempting 
+  to play some modules that had an unexpected sample set up. 
+  Some robustness added to lessen crashiness.
+
 ## New features:
 - Patternscope support added to the following formats:
-  - Art Of Noise (4 voices)
+  - Art Of Noise (4 channels)
   - BP SoundMon v2, v3 (Note and sample transposes are not shown)
   - ChipTracker 
   - Digital Mugician
-  - Digital Mugician 2 (7 voices)
+  - Digital Mugician 2 (7 channels)
   - FastTracker (FM, multichannel)
   - FastTracker 2 (XM, multichannel)
   - Future Composer v1.0-v1.4 (Note and sample transposes are not shown)
@@ -134,14 +139,18 @@ List of supported formats:
   - TCBTracker
   - The Musical Enlightenment
 - Patternscope notes
+  - Patternscope is able to display 4-18 channels side by side in both
+    normal height and double height (XL) mode.
+  - The 18 channels wide scope window just fits onto a 640 pixel wide screen.
   - A small font needs to be installed in FONTS: when displaying 
-    over 4 voices, called "mini4", available on aminet: 
+    over 4 tracks, called "mini4", available on aminet: 
     https://aminet.net/text/bfont/mini.font.lha
-  - Playing a 8+ voice module on a 68000 takes a lot of CPU power and not much
-    is left for the patternsope, so some jerkiness is to be expected.
-  - Lowering PS3M mixing buffer size in Prefs may reduce jerkiness
-    on low power systems, on the other hand this likely increases skipping 
-    in playback.
+  - Playing a 8+ channel module takes a lot of CPU power and not much
+    is left for the patternsope. Patternscope display itself is also
+    heavier the more channels there are to be shown.
+  - Lowering PS3M mixing buffer size and mixing rate in Prefs can reduce 
+    scope jerkiness, on the other hand sound quality is lower and 
+    audio skipping may increase.
 - P96 multi screen fix: when scope if manually reactivated by LMB click,
   this will be remembered until app is closed.
 - New Prefs setting: "Keep list on exit". This enables the following:
@@ -155,7 +164,8 @@ List of supported formats:
 - Digital Mugician upgraded to Wanted Team eagleplayer ("mugician.amp").
   Supports subsongs, pattern skipping, patternscope.
 - David Whittaker upgraded to Wanted Team eagleplayer ("david whittaker").
-  Better support for different variants, volume and songend support.
+  Compared to previous this one has better support for different variants, 
+  volume and songend support.
   
 ## New Eagleplayer formats, plugin name in parentheses:
 - Sound FX ("sound fx")
@@ -164,6 +174,10 @@ List of supported formats:
   - Eagleplayer by Wanted Team
 - Steve Turner ("steve turner")
   - Eagleplayer by Wanted Team
+
+## Known issues;
+- Sonic Arranger module "svensktoppen" may cause a crash.
+- Oktalyzer module "1 love night dub.okta" may cause a crash.
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------

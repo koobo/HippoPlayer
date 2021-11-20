@@ -73,9 +73,17 @@ NOTES PROBLEM?
 - play "happy_tune-chip.xm"
 - first three notes should be maybe: C-3, D#3, B-3 
 
+OK: PATTERN SCOPE GREEN FLASH 
+- flying in saturns rings.mtm 
+- chaotic dance.mtm
+- MTM can have missing tracks
+
 FIXED: CRASH 
 - play "happy_tune-chip.xm"
 - push play again -> boom
+
+TODO
+- test 8ch startrekker
 
 TEST 
 - correct size for patterninfo buffer
@@ -88,7 +96,7 @@ ENFORCER HIT
 CRASH
 - "m:exo/oktalyzer/mohr/1 love night dub.okta"
 
-TODO
+FIXED: 
 - alloc scope bitplanes with AllocRaster
 - kuinka iso puskuri riitt‰‰ patternInfoBufferille?
 - Patternscope+s3m: 4kB mix buffer, fl‰sh
@@ -106,17 +114,18 @@ TODO
 - mode switch for pattern scope in PS3M: disable costly patternscope
   stuff if patternscope is not used
 
-CRASH
+FIXED: CRASH
 - start
 - scope open
 - play unreal-08.s3m
 
-CRASH
+FIXED: CRASH
+- also crash on v2.45
 - start
 - scope open
 - play unreal-03.s3m
 
-HITS 
+FIXED: HITS 
 - start 
 - scope open
 - play The-Party-5_v2_3.XM
