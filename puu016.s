@@ -584,6 +584,8 @@ ch3		rs.b	ns_size
 ch4		rs.b	ns_size
 mtab		rs.l	1
 buffer0		rs.l	1
+buffer0w 	rs.w 	1
+buffer0h  	rs.w 	1
 buffer1		rs.l	1
 buffer2		rs.l	1
 scopeVerticalBarTable		rs.l	1
@@ -21708,13 +21710,10 @@ qexit	bsr.b	qflush_messages
 
 	move.l	mtab(a5),a0
 	jsr	freemem
-	move.l	buffer0(a5),a0
-	jsr	freemem
-	clr.l	buffer0(a5)
+	bsr	freeScopeBitmaps
 	move.l	deltab1(a5),a0
 	jsr	freemem
 	clr.l	mtab(a5)
-	clr.l	buffer0(a5)
 	clr.l	deltab1(a5)
 
 	move.l	_IntuiBase(a5),a6		
@@ -21740,23 +21739,47 @@ qflush_messages
 	move.l	scopeWindowBase(a5),a0 
 	bra.w	flushWindowMessages
 
+freeScopeBitmaps
+	move.l	buffer0(a5),d0
+	beq.b	.noFree
+	move.l	d0,a0
+	clr.l	buffer0(a5)
+	move	buffer0w(a5),d0
+	move	buffer0h(a5),d1
+	lore	GFX,FreeRaster
+.noFree
+	rts
 
 initScopeBitmaps
-	move.l	buffer0(a5),a0
-	jsr	freemem
-	move	scopeDrawAreaModulo(a5),d0 
-	move	scopeDrawAreaHeight(a5),d1
-	* allocate 6 extra rasterlines
-	addq	#6,d1
-	mulu	d1,d0
-	* two buffers
-	add.l	d0,d0
+	bsr.b 	freeScopeBitmaps
 
-	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
-	jsr	getmem
-	beq.b	.memError
-	move.l	d0,a0
+	moveq	#0,d0
+	move	scopeDrawAreaWidth(a5),d0 
+	moveq	#0,d1
+	move	scopeDrawAreaHeight(a5),d1
+	* allocate 6 extra rasterlines per buffer
+	addq.l	#6,d1
+	* two buffers
+	add.l	d1,d1
+	move	d0,buffer0w(a5)
+	move	d1,buffer0h(a5)
+	lore	GFX,AllocRaster
+	move.l	d0,buffer0(a5)
+	beq.b	.memError 
+
+ 	move.l	d0,a0
 	move.l	a0,buffer0(a5)
+
+	* AllocRaster does not clear memory, clear it
+	move.l 	a0,a1
+	move	scopeDrawAreaModulo(a5),d1
+	mulu	buffer0h(a5),d1
+	lsr.l	#2,d1
+	subq	#1,d1
+.clr
+	clr.l	(a1)+
+	dbf	d1,.clr
+
 	move	scopeDrawAreaModulo(a5),d1
 	* leave two lines spare at the top
 	add	d1,a0
