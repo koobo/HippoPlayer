@@ -23461,7 +23461,7 @@ notescroller
 	move	d6,d0
 	divu	#10,d0 
 	lsl.b	#4,d0
-	move.b	d0,d6
+	move.w	d0,d6
 	swap	d0 
 	or.b	d0,d6	
 
@@ -23471,14 +23471,12 @@ notescroller
 	* print linenumber, in BCD format
 	* avoid DIVU in loop this way
 	lea	.pos(pc),a0		
-	move.b	d6,d0
-	lsr.b	#4,d0
-	or.b	#'0',d0
-	move.b	d0,(a0)
-	moveq	#$f,d0
-	and.b	d6,d0
-	or.b	#'0',d0
-	move.b	d0,1(a0)
+
+	move.w	d6,d0	* $00XY
+	lsl.w	#4,d0	* $0XY0
+	lsr.b	#4,d0	* $0X0Y
+	or.w	#$3030,d0
+	move	d0,(a0)
 
 	move.l	a4,a1
 	subq	#3,a1
@@ -23583,7 +23581,7 @@ notescroller
 	add	#8*40-4*9,a4
 	* next pattern line, check if at the end
 	* clear X flag for ABCD
-	andi.b	#~%00010000,ccr
+	sub.b	d0,d0
 	* Next row in BCD
 	moveq	#1,d0
 	abcd.b	d0,d6
@@ -24223,7 +24221,7 @@ noteScroller2
 	move	d6,d0
 	divu	#10,d0 
 	lsl.b	#4,d0
-	move.b	d0,d2
+	move	d0,d2
 	swap	d0 
 	or.b	d0,d2
 	
@@ -24232,14 +24230,12 @@ noteScroller2
 	swap	d7
 
 	* print line number as BCD from D2 
-	move.b	d2,d0
-	lsr.b	#4,d0
-	bsr.w	.convertD0ToCharInA3Fill
-	moveq	#$f,d0
-	and.b	d2,d0
-	bsr.w	.convertD0ToCharInA3Fill
+	move	d2,d0	* $00XY
+	lsl.w	#4,d0	* $0XY0
+	lsr.b	#4,d0	* $0X0Y
+	or.w	#$3030,d0
+	move	d0,(a3)
 
-	subq	#2,a3	* restore a3
 	move.l	a4,a5
 	moveq	#2-1,d3
 	bsr.w	.print
@@ -24251,7 +24247,7 @@ noteScroller2
 	add	d3,a4
 
 	* clear X flag for ABCD
-	andi.b	#~%00010000,ccr
+	sub.b	d0,d0
 	* Next row in BCD
 	moveq	#1,d0
 	abcd.b	d0,d2
