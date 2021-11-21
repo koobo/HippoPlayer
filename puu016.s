@@ -738,14 +738,32 @@ quadWindowHeightOriginal	rs.w	1
 quadNoteScrollerLinesHalf	rs.w	1
 quadNoteScrollerLines		rs.l	1
 
+* Scope window draw area dimensions
 * default: 320
 scopeDrawAreaWidth		rs.w 	1
 scopeDrawAreaModulo		rs.w 	1
 * default: 64
 scopeDrawAreaHeight		rs.w 	1
 
+* Requested dimensions for new draw area,
+* to be set to above variables when resize done.
 scopeDrawAreaWidthRequest		rs.w 	1
 scopeDrawAreaHeightRequest		rs.w 	1
+* To handle iwndow size and pos detection manually,
+* previous values are needed for comparison.
+scopePreviousWidth				rs.w  	1
+scopePreviousHeight 			rs.w 	1
+scopePreviousTopEdge  			rs.w 	1 
+scopePreviousLeftEdge			rs.w 	1
+
+* When scope is in patternscope mode
+* and running the generic patternscope,
+* there is only need to update it when data changes.
+* Use these two to detect it.
+scopePreviousPattPos		rs.w	1
+scopePreviousSongPos		rs.w	1
+
+
 
 
 timeoutmode	rs.b	1
@@ -21285,7 +21303,11 @@ str2msg	pushm	d0/d1/a0/a1/a6
 *******************************************************************************
 wflags3 set WFLG_SMART_REFRESH!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags3 set wflags3!WFLG_RMBTRAP
-idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE!IDCMP_CHANGEWINDOW
+idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS
+
+; These could be useful to detect window changes but they don't
+; seem to work on kick1.3 similarly as on kick3.0.
+;!IDCMP_NEWSIZE!IDCMP_CHANGEWINDOW!IDCMP_REFRESHWINDOW
 
 QUADMODE2_QUADRASCOPE = 0
 QUADMODE2_QUADRASCOPE_BARS = 1
@@ -21521,6 +21543,12 @@ quad_code
 	move.l	pen_1(a5),d0
 	lob	SetAPen
 
+	move.l	scopeWindowBase(a5),a0 
+	move	wd_LeftEdge(a0),scopePreviousLeftEdge(a5)
+	move	wd_TopEdge(a0),scopePreviousTopEdge(a5)
+	move	wd_Width(a0),scopePreviousWidth(a5)
+	move	wd_Height(a0),scopePreviousHeight(a5)
+
 	bsr	drawScopeWindowDecorations
 	bsr	initScopeBitmaps
 	beq.b	.memer
@@ -21606,7 +21634,7 @@ scopeLoop
 	tst.b	d7
 	bne.b	.doDraw
 	* This clears the hippo gfx away when starting again
-	bsr.b	.clear
+	bsr.w	scopeDrawAreaClear
 
 .doDraw
 	* Needs a clear in the future
@@ -21639,33 +21667,18 @@ scopeLoop
 	beq.b	.continue
 	* Request fulfilled
 	moveq	#0,d7
-	bsr.b	.clear
+	bsr.w	scopeDrawAreaClear
 	jsr	printHippoScopeWindow
-	bra.b	.continue
-
-.clear
-	move.l	rastport3(a5),a1
-	move.l	pen_0(a5),d0
-	lore	GFX,SetAPen
-	move.l	rastport3(a5),a1
-	moveq	#10,d0
-	moveq	#14,d1
-	move	scopeDrawAreaWidth(a5),d2
-	add	#10,d2
-	move	scopeDrawAreaHeight(a5),d3
-	add	#79-64,d3
-	add	windowleft(a5),d0
-	add	windowleft(a5),d2
-	add	windowtop(a5),d1
-	add	windowtop(a5),d3
-	jmp	_LVORectFill(a6)
+	bra.w	.continue
 
 .m
 .continue
+	* Manual size and position detection by polling.
+	bsr		scopeWindowChangeHandler
+.getMoreMsg
 	* Poll for messages
-	move.l	(a5),a6
 	move.l	userport3(a5),a0
-	lob	GetMsg
+	lore	Exec,GetMsg
 	tst.l	d0
 	beq.w	scopeLoop
 	move.l	d0,a1
@@ -21674,33 +21687,41 @@ scopeLoop
 	move	im_Code(a1),d3
 	lob	ReplyMsg
 
-	cmp.l	#IDCMP_CHANGEWINDOW,d2 
-	bne.b 	.noChangeWindow
-	bsr	scopeWindowChanged
-	bra.w	scopeLoop
-
-.noChangeWindow
-	cmp.l	#IDCMP_NEWSIZE,d2 
-	bne.b 	.noNewSize
-	bsr.w	scopeWindowSizeChanged
-	bra.w 	scopeLoop
-.noNewSize
-
+;	cmp.l	#IDCMP_REFRESHWINDOW,d2 
+;	bne.b 	.noRefresh
+;	bsr.w	scopeRefreshWindow
+;	bra.b	.getMoreMsg
+;.noRefresh
+;	cmp.l	#IDCMP_CHANGEWINDOW,d2 
+;	bne.b 	.noChangeWindow
+;	bsr	scopeWindowChanged
+;	bra.b	.getMoreMsg
+;.noChangeWindow
+;	cmp.l	#IDCMP_NEWSIZE,d2 
+;	bne.b 	.noNewSize
+;	bsr.w	scopeWindowSizeChanged
+;	bra.b	.getMoreMsg
+;.noNewSize
 
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
-	bne.b	.qx
+	bne.b	.noButtons
+
 	* RMB closes window
 	cmp	#MENUDOWN,d3
-	beq.b	.xq
+	beq.b	.quit
 	cmp	#SELECTDOWN,d3
-	bne.b	.qx
+	bne.b	.noButtons
 	* LMB activates 
 	st	d5
 	move.b	d5,scopeManualActivation(a5)
-.qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
-	bne.w	scopeLoop
 
-.xq	clr.b	scopeflag(a5)
+.noButtons
+	cmp.l	#IDCMP_CLOSEWINDOW,d2
+	beq.b	.quit
+	bra.b	.getMoreMsg
+	
+.quit
+	clr.b	scopeflag(a5)
 	
 *********************************************************************
 * Scope exit
@@ -21825,9 +21846,69 @@ patternScopeIsActive
 	rts
 
 
+scopeDrawAreaClear
+	move.l	rastport3(a5),a1
+	move.l	pen_0(a5),d0
+	lore	GFX,SetAPen
+	move.l	rastport3(a5),a1
+	moveq	#10,d0
+	moveq	#14,d1
+	move	scopeDrawAreaWidth(a5),d2
+	add	#10,d2
+	move	scopeDrawAreaHeight(a5),d3
+	add	#79-64,d3
+	add	windowleft(a5),d0
+	add	windowleft(a5),d2
+	add	windowtop(a5),d1
+	add	windowtop(a5),d3
+	jmp	_LVORectFill(a6)
+
+
+* Called each scope loop to detect changes in window position
+* and size. This provides IDCMP_NEWSIZE and IDCMP_CHANGEWINDOW
+* kind of functionality by polling. Seems to work on kick1.3 and kick3.0,
+* for some reason the IDCMP approach did not work similarly on
+* both kickstarts.
+scopeWindowChangeHandler
+	move.l	scopeWindowBase(a5),a0
+	move	wd_Width(a0),d0 
+	move	wd_Height(a0),d1 
+	move	wd_TopEdge(a0),d2 
+	move	wd_LeftEdge(a0),d3
+
+	cmp	scopePreviousTopEdge(a5),d2
+	bne.b	.posChange
+	cmp	scopePreviousLeftEdge(a5),d3 
+	bne.b	.posChange
+	cmp	scopePreviousWidth(a5),d0 
+	bne.b	.sizeChange
+	cmp scopePreviousHeight(a5),d1 
+	bne.b	.sizeChange
+	rts
+.posChange
+	move	d2,scopePreviousTopEdge(a5) 
+	move	d3,scopePreviousLeftEdge(a5)
+	bsr.w	scopeWindowChanged
+	rts
+.sizeChange 
+	move	d0,scopePreviousWidth(a5)
+	move	d1,scopePreviousHeight(a5)
+	bsr.w	scopeWindowSizeChanged
+	rts
+
+
+;scopeRefreshWindow
+;	move.l	scopeWindowBase(a5),a0
+;	lore	Intui,BeginRefresh
+;;	bsr.b	drawScopeWindowDecorations
+;	moveq	#1,d0 * true: complete
+;	move.l	scopeWindowBase(a5),a0 
+;	lore	Intui,EndRefresh
+;	rts
+
 drawScopeWindowDecorations
 	tst.b	uusikick(a5)		* uusi kick?
-	beq.b	.vanaha
+	beq.b	.kick13
 
 	move.l	rastport3(a5),a2
 	moveq	#4,d0
@@ -21852,8 +21933,28 @@ drawScopeWindowDecorations
 	move.l	d0,d2
 	move.l	d1,d3
 	lob	ClipBlit
-.vanaha
-
+	bra.b	.drawBox 
+	
+.kick13	
+	* Kickstart 1.3, since there is no background texture fill,
+	* the window must be cleared by other means
+	* to get rid of previous stuff after resize.
+	move.l	rastport3(a5),a1
+	move.l	pen_0(a5),d0
+	lore	GFX,SetAPen
+	moveq	#4,d0
+	moveq	#11,d1
+	move	scopeDrawAreaWidth(a5),d2
+	add	#335-320,d2
+	move	scopeDrawAreaHeight(a5),d3
+	add	#82-64,d3
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	add	windowleft(a5),d2
+	add	windowtop(a5),d3
+	jsr	_LVORectFill(a6)
+	
+.drawBox
 	moveq	#7,plx1
 	move	scopeDrawAreaWidth(a5),plx2
 	add	#332-320,plx2
@@ -21869,11 +21970,10 @@ drawScopeWindowDecorations
 	rts
 
 
-
 requestNormalScopeDrawArea
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0 
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
-
+	* falling thru!
 
 * Resize window based on relative change to
 * the draw area.
@@ -21970,7 +22070,7 @@ scopeDrawAreaSizeChangeRequestIsActive
 
 * Called when IDCMP_CHANGEWINDOW message arrives.
 scopeWindowChanged
-	DPRINT	"Scope change"
+	DPRINT	"scopeWindowChanged"
  if DEBUG
 	move.l	scopeWindowBase(a5),a0
 	moveq	#0,d0
@@ -21984,7 +22084,7 @@ scopeWindowChanged
 	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
  endif
 	* Request again after window move
- 	bsr.b	scopeDrawAreaSizeChangeRequestIsActive
+ 	bsr.w	scopeDrawAreaSizeChangeRequestIsActive
 	beq.b 	.nope 
 	move	scopeDrawAreaWidthRequest(a5),d0
 	move	scopeDrawAreaHeightRequest(a5),d1
@@ -21995,7 +22095,7 @@ scopeWindowChanged
 * Called when IDCMP_NEWSIZE message arrives.
 * Window size change request has been fulfilled.
 scopeWindowSizeChanged
-	DPRINT	"Scope new size"
+	DPRINT	"scopeWindowSizeChanged"
  if DEBUG
 	move.l	scopeWindowBase(a5),a0
 	moveq	#0,d0
@@ -22269,6 +22369,24 @@ voltab3
 **************************************************************************
 
 drawScope
+
+	* See if the whole drawing phase can be skipped
+	bsr	patternScopeIsActive
+	bne.b	.noPattSc
+	move.l	deliPatternInfo(a5),d0 
+	beq.b 	.noPattSc 
+	move.l	d0,a0
+	movem	PI_Pattpos(a0),d0/d1 
+	cmp	scopePreviousPattPos(a5),d0 
+	bne.b	.doUpdate
+	cmp	scopePreviousSongPos(a5),d1 
+	bne.b	.doUpdate
+;	move	#$080,$dff180
+	rts
+.doUpdate
+	move	d0,scopePreviousPattPos(a5)
+	move	d1,scopePreviousSongPos(a5)
+.noPattSc
 
 	* clear draw area
 	move.l	_GFXBase(a5),a6
