@@ -370,6 +370,7 @@ boosto
 	lea	data,a5
 	bra.w	makedivtabs
 
+* This is called in VERTB interrupt
 s3poslen
 	move.l	poslen(pc),a0
 	move	PS3M_position,(a0)+
@@ -825,8 +826,10 @@ updatePatternInfoData
 	add.l	d0,a2	
 	* Stripe!
 	move.l	a2,(a4)
-
+	bra.b 	.noZ
 .zero
+	clr.l	(a4)
+.noZ
 	addq	#4,a4			* next stripe
 	addq	#2,d1 			* next sequence
 	dbf	d7,.loo
@@ -1309,6 +1312,8 @@ ahi_init
 	bne.b	.erro
 .x
 	popm	d1-d7/a2-a6
+	sub.l	a0,a0 
+	sub.l	a1,a1
 	rts
 
 .erro	push	d0
