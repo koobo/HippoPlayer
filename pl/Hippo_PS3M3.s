@@ -1,4 +1,4 @@
-;APS0001B1550000DCEA000033E300002C70000000000000000000000000000000000000000000000000
+;APS0001B1200000DCB5000033AE00002C3B000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -949,7 +949,7 @@ updatePatternInfoData
 .putStripes
 	move	numchans(a5),D0
 	subq	#1,d0
-	lea	Stripe1,a0
+	lea	Stripe1(a5),a0
 	lea	unpackedPattern(a5),a1
 .stripesLoop 
 	move.l	a1,(a0)+
@@ -1005,7 +1005,6 @@ updatePatternInfoData
 	subq	#1,d1
 
 .xmChanLoop
-	;moveq	#-1,d3
 	moveq	#0,d3
 	moveq	#0,d4
 	moveq	#0,d5
@@ -1014,24 +1013,23 @@ updatePatternInfoData
 	move.b	(a1)+,d0
 	bpl.b	.all
 
-	btst	#0,d0
-	beq.b	.nonote
-;	ror.b	#1,d0
-;	bpl.b	.nonote
-	;addq.b	#1,d3
+;	btst	#0,d0
+;	beq.b	.nonote
+	ror.b	#1,d0
+	bpl.b	.nonote
 	move.b	(a1)+,d3
 .nonote	
-	btst	#1,d0
-	beq.b	.noinst
-;	ror.b	#1,d0
-;	bpl.b	.noinst
+;	btst	#1,d0
+;	beq.b	.noinst
+	ror.b	#1,d0
+	bpl.b	.noinst
 	move.b	(a1)+,d4
 
 .noinst
-	btst	#2,d0
-	beq.b	.novol
-;	ror.b	#1,d0
-;	bpl.b	.novol
+;	btst	#2,d0
+;	beq.b	.novol
+	ror.b	#1,d0
+	bpl.b	.novol
 	
 	* Emulate PT C-command
 	moveq	#$c,d5
@@ -1039,27 +1037,25 @@ updatePatternInfoData
 	;addq	#1,a1
 	;move.b	(a1)+,vol(a2)
 .novol	
-	btst	#3,d0
-	beq.b	.nocmd
-;	ror.b	#1,d0
-;	bpl.b	.nocmd
+;	btst	#3,d0
+;	beq.b	.nocmd
+	ror.b	#1,d0
+	bpl.b	.nocmd
 	move.b	(a1)+,d5
 
 .nocmd	
-	btst	#4,d0
-	beq.b	.next
-;	ror.b	#1,d0
-;	bpl.b	.next
+;	btst	#4,d0
+;	beq.b	.next
+	ror.b	#1,d0
+	bpl.b	.next
 	
 	move.b	(a1)+,d6
 	bra.b	.next
 	
 .all	
 	move.b	d0,d3
-	;addq.b	#1,d3
 	move.b	(a1)+,d4
-	addq	#1,a1
-	;move.b	(a1)+,vol(a2)
+	addq	#1,a1 * skip vol
 	move.b	(a1)+,d5
 	move.b	(a1)+,d6
 .next	
@@ -1073,8 +1069,8 @@ updatePatternInfoData
 	dbf	d7,.xmRowLoop
 
 * Pattern is unpacked, points stripes into it
-	bra.w	.putStripes
 .xmSkip
+	bra.w	.putStripes
 	rts
 
 .xmEmptyPattern
@@ -1992,41 +1988,16 @@ lev3	move.l	d0,-(sp)
 * a1 = playpos
 lev6server
 	move.l	mrate50-playpos(a1),d0
-	* grab previous value
-	;move.l	(a1),d1
 	* next playpos
 	add.l	d0,(a1)
 	
 	* clamp playpos
 	move.l	buffSizeMaskFF(pc),d0
-
-	* next pattern pbuf pos
-;	addq.l	#1,playpos2
-
-;	move.l	(a1),comp1
-;	move.l	d1,comp2
-
-;	cmp.l	(a1),d1
-;	blo.b	.o
-
-;	sub.l	(a1),d1
-;	bmi.b	.o
-
-;	cmp.l	#$7fffff,(a1)
-;	bhs.b	.o
-;
-;	* if playpos wraps, wrap this too
-;	clr.l	playpos2
-;	move	#$f00,$dff180
-;.o
 	and.l	d0,(a1)
 
 ;	moveq	#1,d0
 	moveq	#0,d0
 	rts
-
-comp1	dc.l	 0
-comp2	dc.l	0
 
 buffSizeMaskFF
 	dc.l	(BUFFER-1)<<8!$ff
