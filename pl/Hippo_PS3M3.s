@@ -1,4 +1,4 @@
-;APS0001B1200000DCB5000033AE00002C3B000000000000000000000000000000000000000000000000
+;APS0001B37B0000DCB1000033AE00002C3B000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -1432,7 +1432,7 @@ ahi_cont
 ahi_playmusic
 	pushm	d2-d7/a2-a6
 
-	bsr	s3vol
+	bsr.w	s3vol
 
 	move	mtype,d0
 	lea	s3m_music(pc),a0
@@ -2082,7 +2082,7 @@ play	;movem.l	d0-a6,-(sp)
 init	
 	DPRINT	"init"
 	bsr.b 	.doInit 
-	bsr	PatternInit
+	bsr.w	PatternInit
 	rts
 .doInit
 	lea	data,a5
@@ -4388,6 +4388,7 @@ lb_5fac	dbf	d2,lb_5fa0
 
 
 detectchannels
+	DPRINT	"Detect channels"
 	lea	ch(pc),a0
 	moveq	#7,d0
 .l2	clr.l	(a0)+
@@ -4406,7 +4407,7 @@ detectchannels
 	lsl.l	#4,d0
 	lea	(a0,d0.l),a3
 	addq.l	#2,a3
-	moveq	#63,d6
+	moveq	#64-1,d6
 .rowloop
 	move.b	(a3)+,d0
 	beq.b	.newrow
@@ -4453,8 +4454,10 @@ detectchannels
 
 .newrow
 	dbf	d6,.rowloop
+
 .qt
 	dbf	d7,.pattloop	
+
 
 	moveq	#1,d0
 	moveq	#1,d1
@@ -4925,11 +4928,6 @@ s3m_init
 	subq	#1,d0
 	move.l	samples(a5),a2
 
-	* Set to non-zero if out-of-bounds sample data is detected
-	moveq	#0,d7
-	* Find out mininum segment address, in d6
-	moveq	#-1,d6
-
 .instloop
 	moveq	#0,d1
 	move	(a2)+,d1
@@ -4938,61 +4936,60 @@ s3m_init
 	lea	(a0,d1.l),a1
 
  if DEBUG
-	pushm	d0-d4
-	move.l	d1,d0
-	move.l	inslength(a1),d1
-	ilword	d1
+	pushm	d0-d5
+	move	inss(a5),d2
+	sub	d0,d2
+	move	d2,d0
+	ext.l	d0
+	move.l	inslength(a1),d2
+	ilword	d2
 
-	moveq	#0,d2
-	move.b	inspack(a1),d2
 	moveq	#0,d3
-	move.b	insflags(a1),d3
+	move.b	inspack(a1),d3
 	moveq	#0,d4
-	move.b	instype(a1),d4
-	DPRINT	"seg=%04lx len=%04lx pack=%lx flags=%lx type=%lx"
-	popm	d0-d4
+	move.b	insflags(a1),d4
+	moveq	#0,d5
+	move.b	instype(a1),d5
+	DPRINT	"%02ld: seg=%04lx len=%04lx pck=%lx flgs=%lx typ=%lx"
+	popm	d0-d5
  endif
 
 *** Vaihdetaan unsigned -> signed
 ; Convert sample
 	cmp	#1,fformat(a5)		* unsigned samples?
-	beq.w	.kon0	
+	beq.b	.kon0
+
+	* skip non-samples to avoid thrashing around
+	cmp.b	#1,instype(a1)
+	bne.b	.eloo
+		
 	moveq	#0,d1
 	move	insmemseg(a1),d1
 	iword	d1
 	lsl.l	#4,d1
 
-	beq.b	.higher
-	cmp.l	d1,d6
-	blo.b	.higher
-	move.l	d1,d6
-.higher
-
 	lea	(a0,d1.l),a3	* sample data start
 	move.l	inslength(a1),d1
 	beq.b	.skip
 	ilword	d1
+	moveq	#-128,d2
 
 	* SAFETY: high bound check
 	* a4 = end of module
 	move.l	a0,a4
 	add.l	setmodulelen(pc),a4
-	* end of sample
-	add.l	d1,a3
-	cmp.l 	a3,a4
-	bls.b	.over 
-	bra.b 	.skip
 
-.over	
-	* Out-of-range: set flag	
-	st	d7
- if DEBUG
-	pushm	d0/d1
-	move.l	a3,d0
-	move.l	a4,d1
-	DPRINT	"SAMPLE OVERFLOW %lx > %lx"
-	popm	d0/d1
- endif
+.kon2	
+	* Overflow safety check
+	cmp.l	a4,a3
+	bhs.b	.oflow
+	eor.b	d2,(a3)+
+	dbf	d1,.kon2
+	bra.w	.kon0
+
+.oflow
+	DPRINT	"overflow"
+
 .skip
 .kon0	
 
@@ -5008,82 +5005,7 @@ s3m_init
 	dbf	d0,.instloop
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Instrument conversion loop
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-	* Do a sample data based conversion if everything seem
-	* legal.
-	tst.b	d7 
-	bne.b	.method2
-
-	DPRINT	"Conversion method 1"
-
-	move	inss(a5),d0
-	subq	#1,d0
-	move.l	samples(a5),a2
-
-.instkonloop
-	moveq	#0,d1
-	move	(a2)+,d1
-	iword	d1
-	lsl.l	#4,d1
-	lea	(a0,d1.l),a1
-
-*** Vaihdetaan unsigned -> signed
-; Convert sample
-	cmp	#1,fformat(a5)		* unsigned samples?
-	beq.b	.skip2	
-	moveq	#0,d1
-	move	insmemseg(a1),d1
-	iword	d1
-	lsl.l	#4,d1
-
-	lea	(a0,d1.l),a3	* sample data start
-	move.l	inslength(a1),d1
-	beq.b	.skip2
-	ilword	d1
-	subq	#1,d1
-	moveq	#-128,d2
-.kon2	
-	eor.b	d2,(a3)+
-	dbf	d1,.kon2
-.skip2
-
-	dbf	d0,.instkonloop
-	bra.b	.method1
-
-.method2
-	* Ignore sample parameters and just convert module memory range
-	* starting from the first sample segment.
-	
-	DPRINT	"Conversion method 2"
-	cmp	#1,fformat(a5)		* unsigned samples?
-	beq.b	.skip3	
-
-	* lowest sample segment address
-	move.l	d6,d0
-	add.l	a0,d0
-	* module data end address
-	move.l	a0,d1
-	move.l	d0,a1
- 
- if DEBUG
-	move.l	a4,d2
-	DPRINT	"Low seg %lx modstart=%lx modend=%lx"
- endif 
-
-	moveq	#-128,d2
-.eorl
-	eor.b	d2,(a1)+
-	cmp.l	a1,a4
-	bne.b	.eorl
-
-.skip3
-
-.method1
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Instrument loops end
+;;; Instrument loop end
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
@@ -5102,6 +5024,8 @@ s3m_init
 	move.l	#14317056/4,clock(a5)		; Clock constant
 	move	#64,globalVol(a5)
 	moveq	#0,d0
+
+	DPRINT	"s3m_init done"
 	rts
 
 
@@ -5279,7 +5203,11 @@ process	lea	c0(a5),a2
 	and	#$f,d0
 	add	d0,d0
 
-	move.l	sample(a2),a1
+	; This can be zero!
+	move.l	sample(a2),d2
+	beq.w	.zeroSam
+
+	move.l	d2,a1
 	move.l	$20(a1),d2
 	ilword	d2
 
@@ -5337,6 +5265,7 @@ process	lea	c0(a5),a2
 	move.l	d0,mLength(a4)
 	clr.b	mOnOff(a4)
 
+.zeroSam
 .f	moveq	#64,d0
 	and.b	flgs(a2),d0
 	beq.b	.evol
@@ -6132,6 +6061,7 @@ specials
 	and	#$f,d0
 	add	d0,d0
 
+	* ENFORCER HITS, a1 can be NULL
 	move.l	sample(a2),a1
 
 	move.l	$20(a1),d2
@@ -6284,7 +6214,7 @@ xm_init
 	move.l	a1,a3				; xmInstSize
 	tlword	(a3)+,d0
 	cmp.l	#1<<24,d0		* järjettömän iso?
-	bhs.w	.q
+	bhs.b	.q
 	lea	xmNumSamples(a1),a3
 	tword	(a3)+,d1
 	lea	xmSmpHdrSize(a1),a3
@@ -6458,7 +6388,7 @@ xm_runEnvelopes
 	move	rVolume(a2),d0
 
 			btst	#xmEnvOn,xmVolType(a1)
-			beq	.0BAE
+			beq.w	.0BAE
 			moveq	#0,d1
 			move.b	xmNumVolPnts(a1),d1
 			lea	xmVolEnv(a1),a3
@@ -8575,7 +8505,7 @@ mt_getnewnote
 	move	mt_patternpos(pc),d1
 	divu	numchans(pc),d1
 	lsr	#2,d1
-	bsr	pushPatternInfo
+	bsr.w	pushPatternInfo
 	popm	d0/d1
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -10801,6 +10731,13 @@ module
 ;	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
 ;	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
 ;	incbin	"m:multichannel/near_dark.s3m"
+;	incbin	"m:exo/startrekker flt8/- unknown/gidion graveland.mod"
+;	incbin	"m:modsanthology/misc/compos/tt/1_orkin_659_iii.s3m"
+
+; PROBLEM MODULES:
+;	incbin	"m:modsanthology/misc/compos/tt/1_differences.s3m"
+;	incbin	"m:modsanthology/misc/compos/tt/3_sunshine.s3m"
+
 moduleE
 	ds.b	1024
 
