@@ -6518,12 +6518,14 @@ signalreceived
 	
 
 .eipa
+	DPRINT	"Replay end"
+
 	* Stopping playback 
 	lore  	Exec,Disable
 	clr.b	playing(a5)		* soitto seis
+	lore   	Exec,Enable
 	move.l	playerbase(a5),a0	* stop module
 	jsr	 	p_end(a0)
-	lore   	Exec,Enable
 
 	bsr.w	freemodule
 
@@ -6576,6 +6578,7 @@ signalreceived
 	tst.l	d0
 	bne.b	.loader
 
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0	* soitto p‰‰lle
 	jsr	p_init(a0)
 	tst.l	d0
@@ -6596,7 +6599,7 @@ signalreceived
 .mododo	
 	* init error, no module to play
 
-	DPRINT	"Deallocate resources!"
+	DPRINT	"ERROR, deallocate resources!"
 	jsr	rem_ciaint
 	jsr	vapauta_kanavat
 
@@ -6622,7 +6625,7 @@ signalreceived
 	move.l	modamount(a5),chosenmodule(a5)
 	subq.l	#1,chosenmodule(a5)
 	bsr.w	resh
-	bra.b	.reet
+	bra.w	.reet
 
 .hm	
 	* In "pm_through" mode start over from the first module
@@ -7121,12 +7124,14 @@ umph
 	* Restart it from beginning.
 
 * on!
+	DPRINT	"Replay end"
 	lore    Exec,Disable
 	bsr.w	halt			* soitetaan vaan alusta
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr 	p_end(a0)
-	lore    Exec,Enable
 
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -7139,6 +7144,8 @@ umph
 	rts
 	
 .new
+	DPRINT	"New mod"
+
 	* New module to be played.
 
 	moveq	#0,d7			* flag for double buffering (0: no db)
@@ -7157,12 +7164,13 @@ umph
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
 .hm1
+	DPRINT	"Replay end"
 
 	lore    Exec,Disable
 	bsr.w	halt			* Vapautetaan se jos on
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
-	lore    Exec,Enable
 	bsr.w	freemodule	
 
 	tst	d6
@@ -7184,6 +7192,7 @@ umph
 	tst.l	d0
 	bne.b	.loader
 
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -7206,6 +7215,8 @@ umph
 
 
 .inierr	
+	DPRINT	"Replay init ERROR"
+
 	* Replay init failed.
 	* Did not get a module to play successfully.
 	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
@@ -8837,13 +8848,14 @@ rbutton4a
 	bsr.w	fadevolumedown
 
 .nofa	move	d0,-(sp)
+	DPRINT	"Replay end (eject)"
 
 	lore    Exec,Disable
 	bsr.w	halt
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
-	lore    Exec,Enable
 
 	bsr.w	freemodule
 	move	(sp)+,mainvolume(a5)
@@ -9254,7 +9266,7 @@ rbutton1
 	* Same with all EaglePlayers to be save.
 	* At least Tim Follin crashes.
 	cmp	#pt_eagle_start,playertype(a5)
-	bhs.b	.new
+	bhs.w	.new
 	* Similar case with SonicArranger with built-in
 	* replayer code. Data is modified upon init so that
 	* subsequent inits with same data will fail as
@@ -9264,7 +9276,7 @@ rbutton1
 	* Check for "compact" SA module
 	move.l  moduleaddress(a5),a0 
 	cmp.l	#'SOAR',(a0)
-	bne.b 	.new
+	bne.w 	.new
 .notSoar
 	DPRINT	"Restarting the same module!"
 ;.early
@@ -9272,16 +9284,16 @@ rbutton1
 	move	d0,-(sp)
 
 
+	DPRINT	"Replay end"
 * Soitetaan vaan alusta
 	lore	Exec,Disable
 	bsr.w	halt
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
-	lore    Exec,Enable
 	move	(sp)+,mainvolume(a5)
 
-
-
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -9302,11 +9314,13 @@ rbutton1
 
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
+	DPRINT	"Replay end"
+
 	lore	Exec,Disable
-	bsr.b	halt			* Vapautetaan se jos on
+	bsr.w	halt			* Vapautetaan se jos on
+	lore 	Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
-	lore 	Exec,Enable
 	bsr.w	freemodule	
 	move	(sp)+,mainvolume(a5)
 .nomod
@@ -9320,6 +9334,7 @@ rbutton1
 	tst.l	d0
 	bne.b	.loader
 
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -9340,6 +9355,7 @@ rbutton1
 	moveq	#ier_unknown,d0
 
 .inierr	
+	DPRINT	"Replay init ERROR"
 	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
 	bra.w	init_error
 ;	rts
@@ -21999,8 +22015,7 @@ requestScopeDrawAreaChange
 	ext.l 	d1
 	DPRINT	"Draw area change %ld %ld"
  endif
-	PRINTT	"height check missing"	
-	PRINTT "ALERT"
+
 
 	move.l	scopeWindowBase(a5),a0
 	* Calculate new right edge position for window 
@@ -22009,7 +22024,6 @@ requestScopeDrawAreaChange
 	add	d0,d2
 	move	wbleveys(a5),d3
 	sub	d2,d3
-;	bpl.b	.fits
 
 	move	wd_TopEdge(a0),d4
 	add	wd_Height(a0),d4
@@ -24804,15 +24818,15 @@ loadmodule
 
 	jsr	fadevolumedown
 	move	d0,-(sp)
+	DPRINT	"Replay end"
 	lore    Exec,Disable
 	jsr	halt			* Vapautetaan se jos on
-	move.l	modulefilename(a5),a0
+	lore    Exec,Enable
+	;;;move.l	modulefilename(a5),a0
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
-	lore    Exec,Enable
 
-
-	move.l	modulefilename(a5),a0
+	;;;move.l	modulefilename(a5),a0
 	jsr	freemodule	
 	move	(sp)+,mainvolume(a5)
 
