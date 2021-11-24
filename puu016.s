@@ -29886,7 +29886,7 @@ p_sid	jmp	.init(pc)
 	jmp id_sid1(pc)
 	p_NOP
 	dc.w pt_sid 				* type
-	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen
+	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume
 	dc.b	"PSID",0
 .flag	dc.b	0
  even
@@ -29965,23 +29965,22 @@ p_sid	jmp	.init(pc)
 
 
 .error1
-;	bsr.b	.closl
 	moveq	#ier_nomem,d0
 	bra.b	.er
 
 .error2	bsr.b	.free
-;	bsr.b	.closl
 	moveq	#ier_sidicon,d0
 	bra.b	.er
 
 .error3
 	bsr.b	.free
-;	bsr.b	.closl
 	moveq	#ier_sidinit,d0
 	bra.b	.er
 
 
 .free	lob	FreeEmulResource
+	bsr 	sid_remVolumePatch
+
 	clr.b	.flag
 	rts
 
@@ -29999,6 +29998,8 @@ p_sid	jmp	.init(pc)
 	move	songnumber(a5),d0
 	addq	#1,d0
 	lob	StartSong
+
+	bsr.w	sid_addVolumePatch
 	rts
 
 .song	movem.l	d0/d1/a0/a1/a6,-(sp)
@@ -30010,16 +30011,8 @@ p_sid	jmp	.init(pc)
 	movem.l	d0/d1/a0/a1/a6,-(sp)
 	lore	SID,StopSong
 	bsr.b	.free
-;	bsr.b	.closl
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
-
-;.closl	
-;	bsr.b	rem_sidpatch
-;	move.l	_SIDBase(a5),a1
-;	lore	Exec,CloseLibrary
-;	clr.l	_SIDBase(a5)
-;	rts
 
 
 .stop	movem.l	d0/d1/a0/a1/a6,-(sp)
@@ -30059,6 +30052,7 @@ rem_sidpatch
 	move.l	sidlibstore2+4(a5),4+86(a0)
 	move.l	sidlibstore1(a5),14(a1)
 	move.l	sidlibstore1+4(a5),4+14(a1)
+	bsr	clearCpuCaches
 .q	rts
 
 init_sidpatch
@@ -30092,6 +30086,8 @@ init_sidpatch
 	move.l	.sidp1+4(pc),4+14(a1)
 	move.l	.sidp2(pc),86(a0)
 	move.l	.sidp2+4(pc),4+86(a0)
+	bsr	clearCpuCaches
+
 .q	rts
 
 .sidp1	jsr	.sidpatch1
@@ -30149,6 +30145,79 @@ init_sidpatch
 .LB_0978 ADDQ.L	#4,A7
 	RTS	
 
+
+
+; AllocEmulResource funkkarin osoitteesta:
+; 8418: move d0,$dff0a8
+;  +12: move d0,$dff0b8
+;  +12: move d0,$dff0c8
+
+sid_addVolumePatch
+	move.l	_SIDBase(a5),a0
+	cmp #1,LIB_VERSION(a0)
+	bne.b	.q
+	cmp	#1,LIB_REVISION(a0)
+	bne.b	.q
+	lea	_LVOAllocEmulResource(a0),a0
+	move.l	2(a0),a0
+	move	.vol1patch(pc),8418(a0)
+	move.l	.vol1patch+2(pc),8418+2(a0)
+	move	.vol2patch(pc),12+8418(a0)
+	move.l	.vol2patch+2(pc),12+8418+2(a0)
+	move	.vol3patch(pc),12+12+8418(a0)
+	move.l	.vol3patch+2(pc),12+12+8418+2(a0)
+	bsr	clearCpuCaches
+.q
+	rts
+
+.vol1patch	jsr	.vol1
+.vol2patch	jsr	.vol2 
+.vol3patch	jsr	.vol3
+
+.vol1 
+	push	d0 
+	mulu	var_b+mainvolume,d0
+	lsr	#6,d0 
+	move	d0,$dff0a8
+	pop d0 
+	rts
+.vol2 
+	push	d0 
+	mulu	var_b+mainvolume,d0
+	lsr	#6,d0 
+	move	d0,$dff0b8
+	pop d0 
+	rts
+.vol3 
+	push	d0 
+	mulu	var_b+mainvolume,d0
+	lsr	#6,d0 
+	move	d0,$dff0c8
+	pop d0 
+	rts
+
+
+sid_remVolumePatch
+	move.l	_SIDBase(a5),a0
+	cmp #1,LIB_VERSION(a0)
+	bne.b	.q
+	cmp	#1,LIB_REVISION(a0)
+	bne.b	.q
+	lea	_LVOAllocEmulResource(a0),a0
+	move.l	2(a0),a0
+	move	.vol1orig(pc),8418(a0)
+	move.l	.vol1orig+2(pc),8418+2(a0)
+	move	.vol2orig(pc),12+8418(a0)
+	move.l	.vol2orig+2(pc),12+8418+2(a0)
+	move	.vol3orig(pc),12+12+8418(a0)
+	move.l	.vol3orig+2(pc),12+12+8418+2(a0)
+	bsr	clearCpuCaches
+.q
+	rts
+
+.vol1orig	move	d0,$dff0a8
+.vol2orig	move	d0,$dff0b8
+.vol3orig	move	d0,$dff0c8
 
 
 *******
