@@ -34455,9 +34455,11 @@ p_multi	jmp	.s3init(pc)
 	jsr	init0j(a5)
 	addq	#4,sp			* pop pea
 
-	move.l	a0,deliPatternInfo+var_b
-	move.l	a1,ps3mUnpackedPattern+var_b
+	lea	var_b,a5
+	move.l	a0,deliPatternInfo(a5)
+	move.l	a1,ps3mUnpackedPattern(a5)
  if DEBUG
+	tst.l	deliPatternInfo(a5)
 	beq.b	.noPatInfo
 	push	d0
 	moveq	#0,d0
