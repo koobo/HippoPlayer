@@ -23672,15 +23672,15 @@ notescroller
 	* calculate octave number
 	subq	#1,d0
 	divu	#12*2,d0
-	addq	#1,d0
-	or.b	#'0',d0
-	move.b	d0,2(a0)
+	moveq	#'0',d1 
+	* first octave is 1
+	addq.b	#1,d0
+	add.b	d0,d1
 	* figure out note text
 	swap	d0
 	* two chars
 	move	.notes(pc,d0.w),(a0)+
-	* skip over octave number 
-	addq	#1,a0
+	move.b	d1,(a0)+
 .nonote
 
 	moveq	#0,d0			* samplenumero
@@ -23707,10 +23707,10 @@ notescroller
 	bsr.b	.hegs
 .eihn
 
-	move.b	(a3),d0	* command, premultiplied
+	move.b	(a3)+,d0	* command, premultiplied
 	lsr.b	#2,d0
 	bsr.b	.hegs
-	move.b	1(a3),d0 * command parameter
+	move.b	(a3),d0 * command parameter
 	move.b	d0,d1
 	lsr.b	#4,d0	* upper char
 	bsr.b	.hegs
@@ -23721,12 +23721,13 @@ notescroller
 	* print 8 chars
 	* a4 = destination bufer
 	move.l	a4,a1
-	lea	.note(pc),a0
+	;lea	.note(pc),a0
+	subq	#8,a0
 	moveq	#8-1,d1
 	bsr.b	.print
 
 	* next note
-	addq	#4,a3
+	addq	#4-1,a3
 	* next horizontal position
 	add	#9,a4
 	dbf	d5,.plorl2
@@ -24199,30 +24200,35 @@ noteScroller2
 	rts
 .over
 	
-	* 18 stripes fit into 640 pix!
+	* max 18 stripes fit into 640 pixels
 	cmp	#18,d7
 	bls.b	.max16
 	moveq	#18,d7
 .max16
-	* Request larger/wider window
+	* Request larger/wider/narrower window
 	move	d7,d0
 
 	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,d7
 	bhi.b	.narrow
-	mulu	#72,d0
-	add	#32,d0
+	* normal font stripe
+;	mulu	#72,d0
+	move	d0,d2 * tricky mul with 72
+	lsl		#6,d2
+	lsl		#3,d0
+	add		d2,d0
 	bra.b	.wide
 .narrow
 	* Test if font is available
 	tst.l	minifontbase(a5)
 	beq.b	.x
-
-	* each stripe is 32 pix
+	* each narrow stripe is 32 pix
 	lsl	#5,d0 ;mulu	#32,d0 	
-	add	#32,d0
 .wide
+	* some right margin
+	;add	#32,d0
 	* ensure divisible by 16 for blitter safety
-	add	#15,d0
+	;add	#15,d0
+	add		#32+15,d0
 	and	#$fff0,d0
 
 	bsr	requestScopeDrawAreaChange
@@ -24231,7 +24237,7 @@ noteScroller2
 
 .proceed
 
-	* magic flag: display row numbers	
+	* magic flag: display row numbers column	 
 	lea	.pos(pc),a4
 	clr.b	(a4)
 
@@ -24312,9 +24318,9 @@ noteScroller2
 	move.l  moduleaddress(a5),a3
    	cmp.l   a3,a0
 	bls.b	.xy
-    	add.l   modulelength(a5),a3
-    	cmp.l   a3,a0
-   	bhs.w   .xy
+    add.l   modulelength(a5),a3
+    cmp.l   a3,a0
+   	bhs.b   .xy
 .sane
 
 *** calculate stuff
@@ -24358,7 +24364,6 @@ noteScroller2
 	bsr	noteScrollerGetFont
 	beq	.exitNoteScroller
 	
-
 
 * d4 = font modulo
 * d6 = line number
@@ -24449,9 +24454,12 @@ noteScroller2
 	* get screen modulo for .print and .printSmall routines
 	swap	d7
 
+	* save a1
 	move.l	a1,d5
-* ChipTracker, TME, Mugician2, TCBTracker
-* use d0-d3,a1
+
+* ChipTracker, TME, Mugician2, TCBTracker, etc
+* register usage: d0-d3, a1
+
 	* Get note data at a0
 	move.l	PI_Convert(a1),a3
 	jsr	(a3)
@@ -24466,7 +24474,8 @@ noteScroller2
 	lea	.note(pc),a3
 	tst	d0
 	beq.b	.emptyNote
-	tst	PI_Speed(a1)
+	* Check magic flag: negative indicates note indices
+	tst	PI_Speed(a1)	
 	bmi.b	.notPeriod
 	lea	periods(pc),a5
 	lea	periodsEnd(pc),a6
@@ -24502,14 +24511,18 @@ noteScroller2
 	subq	#1,d5
 .found
 	* print note
+	* divide to get octave
 	divu	#12,d5
-	move.b	d5,d0
+	* convert octave into text
+	moveq	#'0',d0
+	* first octave shall be 1, not 0
+	addq.b	#1,d5
+	add.b	d5,d0
+	* convert note into text
 	swap 	d5
 	add	d5,d5
 	move.w	.notes(pc,d5),(a3)+
 	* print octave
-	addq.b	#1,d0
-	or.b	#'0',d0
 	move.b	d0,(a3)+
 	bra.b	.wasNote
 
@@ -24548,9 +24561,11 @@ noteScroller2
 	and.b	d3,d0
 	bsr.b	.convertD0ToCharInA3Fill
 
-	* print this:	
-	lea	.note(pc),a3
-	* to here:
+	; to the start of .note
+	;lea	.note(pc),a3
+	subq	#8,a3
+
+	* print a3 into a4
 	move.l	a4,a5
 	moveq	#8-1,d3
 	
@@ -24620,6 +24635,7 @@ noteScroller2
  endr
 	move.b	(a6),(a5)	
 .space
+	* next horiz position in screen buffer
 	addq.l	#1,d1
 	move.l	d1,a5
 	
@@ -24653,6 +24669,8 @@ noteScroller2
 	beq.w	.evenCharDone
 
 	* get char pixels
+	* check which source nibble to use
+	* index should be halved since 4 pixels per char
 	ror.l	#1,d5
 	lea	-$10(a2,d5),a6	* space char $20/2
 	bmi.b	.lowNib
