@@ -19933,7 +19933,7 @@ request2
 	lea	.ok_g(pc),a2
 	bsr.b	rawrequest
 	movem.l	(sp)+,d0-a6
-	tst.l	d0
+	tst.l	d0	* not needed?!
 	rts
 
 .ok_g	dc.b	"OK",0
@@ -21342,6 +21342,12 @@ SCOPE_DRAW_AREA_WIDTH_DEFAULT = 320
 SCOPE_DRAW_AREA_HEIGHT_DEFAULT = 64
 SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
 
+* If more channels than defined here,
+* switch to small font.
+;SCOPE_SMALL_FONT_CHANNEL_LIMIT = 4
+SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
+
+
 quad_code
 	lea	var_b,a5
 	clr.l	mtab(a5)
@@ -21575,13 +21581,10 @@ quad_code
 	* State flag indicating font request has been shown 
 	* Up bit for patternscope
 	moveq	#0,d6	
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5) 
-	beq.b	.isPatts
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	bsr	patternScopeIsActive
 	bne.b	.noPatts
-.isPatts
 	DPRINT	"Patternscope active"
-	bset	#15,d6
+	st		d6
 .noPatts
 
 	* Set to non-zero if LMB is pressed
@@ -21656,20 +21659,11 @@ scopeLoop
 	* Needs a clear in the future
 	moveq	#-1,d7
 
-	tst.b	d6		* font check flag
-	bne.b	.fontCheckDone
-	tst	d6 		* pattscope indicator bit
-	bpl.b	.noPatts
-	move.l	deliPatternInfo(a5),d0 
-	beq.b	.fontCheckDone
-	move.l	d0,a0 
-	cmp	#4,PI_Voices(a0) 
-	bls.b	 .fontCheckDone
-	st	d6
+	tst.b	d6 		* pattscope indicator bit
+	beq.b	.noPatts
 	bsr	getScopeMiniFontIfNeeded
-.fontCheckDone
- 
 .noPatts
+
 	pushm	d5/d6/d7
 	jsr	obtainModuleData
 	bsr.w	drawScope
@@ -22109,6 +22103,7 @@ scopeWindowChanged
 * Called when IDCMP_NEWSIZE message arrives.
 * Window size change request has been fulfilled.
 scopeWindowSizeChanged
+	pushm	d2-d6
 	DPRINT	"scopeWindowSizeChanged"
  if DEBUG
 	move.l	scopeWindowBase(a5),a0
@@ -22137,6 +22132,7 @@ scopeWindowSizeChanged
 
 	bsr	initScopeBitmaps
 	bsr	drawScopeWindowDecorations
+	popm	d2-d6
 	rts
 
 
@@ -22225,17 +22221,17 @@ getScopeMiniFontIfNeeded
 	tst.l	minifontbase(a5)
 	bne.b	.skip
 	* See if we need the small font
-	bsr	patternScopeIsActive
+	bsr.w	patternScopeIsActive
 	bne.b	.skip
 	move.l	deliPatternInfo(a5),d0
 	beq.b	.skip
 	move.l	d0,a0
-	cmp	#4,PI_Voices(a0)
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a0)
 	bls.b	.skip
 	lea	diskfontname,a1
 	lore	Exec,OldOpenLibrary
 	tst.l 	d0 
-	beq.b	.skip 
+	beq.b	.skip
 	move.l	d0,a6
 	lea	mini_text_attr,a0
 	lob	OpenDiskFont
@@ -22245,7 +22241,11 @@ getScopeMiniFontIfNeeded
 	tst.l	minifontbase(a5)
 	bne.b	.miniOk
 	lea	.noFontMsg(pc),a1 
+	tst.b	(a1)
+	beq.b	.skip
 	bsr	request
+	* Show this only once to not be annoying
+	clr.b	(a1)	
 .skip
 	rts
 .miniOk
@@ -22395,7 +22395,6 @@ drawScope
 	bne.b	.doUpdate
 	cmp	scopePreviousSongPos(a5),d1 
 	bne.b	.doUpdate
-;	move	#$080,$dff180
 	rts
 .doUpdate
 	move	d0,scopePreviousPattPos(a5)
@@ -24183,7 +24182,6 @@ noteScroller2
 	lea	PI_Stripes(a1),a0
 	move	PI_Voices(a1),d7
 
-
 * Required height in d1
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
 	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
@@ -24192,17 +24190,14 @@ noteScroller2
 .notXl
 
 	cmp	#4,d7
-	bhi.b	.over4
+	bhi.b	.over
 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
 	bsr	requestScopeDrawAreaChange
 	beq.b	.proceed
 	* resize will happen later
 	rts
-.over4
-	* Test if font is available
-	tst.l	minifontbase(a5)
-	beq.b	.x
+.over
 	
 	* 18 stripes fit into 640 pix!
 	cmp	#18,d7
@@ -24211,16 +24206,27 @@ noteScroller2
 .max16
 	* Request larger/wider window
 	move	d7,d0
+
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,d7
+	bhi.b	.narrow
+	mulu	#72,d0
+	add	#32,d0
+	bra.b	.wide
+.narrow
+	* Test if font is available
+	tst.l	minifontbase(a5)
+	beq.b	.x
+
 	* each stripe is 32 pix
 	lsl	#5,d0 ;mulu	#32,d0 	
 	add	#32,d0
+.wide
 	* ensure divisible by 16 for blitter safety
 	add	#15,d0
 	and	#$fff0,d0
 
 	bsr	requestScopeDrawAreaChange
 	beq.b	.proceed
-	* resize will happen later
 	rts
 
 .proceed
@@ -24247,7 +24253,7 @@ noteScroller2
 .wasSet
 	addq	#4,a0 		* next stripe
 
-	cmp	#4,PI_Voices(a1)
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a1)
 	bls.b	.voices4
 	* 32 pixels per stripe
 	addq	#4,a4		* next screen pos horizontal
@@ -24428,7 +24434,7 @@ noteScroller2
 .skipNumbers
 
 	* Select font for note data
-	cmp	#4,PI_Voices(a1)
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a1)
 	bls.b	.normalFont
 	move.l	minifontbase(a5),a2
 	move	tf_Modulo(a2),d4		
@@ -24548,7 +24554,7 @@ noteScroller2
 	move.l	a4,a5
 	moveq	#8-1,d3
 	
-	cmp	#4,PI_Voices(a1)
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a1)
 	bls.b	.printNorm
 	bsr.w	.printSmall
 	bra.b	.wasSmall
@@ -31517,10 +31523,11 @@ p_oktalyzer
 	bne.b	.mem
 	
 	move.l	a0,deliPatternInfo(a5)
+ if DEBUG 
 	moveq	#0,d0
 	move	PI_Voices(a0),d0
 	DPRINT	"Voices: %ld"
-
+ endif 
 	bsr.b	.okvolume
 	moveq	#0,d0
 	rts
