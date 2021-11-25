@@ -69,6 +69,16 @@ PATTERNINIT - EP
 + KRIS
 + Mugician2
 
+
+FIXED: BUG - kick13
+- open
+- open patternscope xl
+- play "rsi theme.smod"
+--> scope ok 
+- play "popcorn.okta"
+--> scope empty
+
+
 NOTES PROBLEM?
 - play "happy_tune-chip.xm"
 - first three notes should be maybe: C-3, D#3, B-3 
@@ -107,10 +117,12 @@ TODO
 FIXED: CRASH
 - AHI + PS3M patternscope
 
-TODO
+FIXED: TODO
 - alloc scope bitplanes with AllocRaster
 - kuinka iso puskuri riittää patternInfoBufferille?
 - FIXED: Patternscope+s3m: 4kB mix buffer, fläsh
+
+TODO
 - mode switch for pattern scope in PS3M: disable costly patternscope
   stuff if patternscope is not used
 
@@ -250,11 +262,10 @@ TODO
 
 
 FIXED
-TODO
 - check TME on amiga
 
 TODO 
-- kick13 + mine 
+- kick13 + mline
 -> crash
 
 TODO
@@ -459,7 +470,7 @@ FIXED: BIG memory leak
 - oktalyzer
 - tfmx -> mem runs out
 
-TODO
+FIXED
 - VisualPrefs
 -- Set Screen title bar height to 8 
     -> zipped window title is too tall
