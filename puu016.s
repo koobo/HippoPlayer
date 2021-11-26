@@ -34513,8 +34513,19 @@ p_multi	jmp	.s3init(pc)
 .nd	popm	d1/a5
 	rts
 
-
+* VBLANK routine
+* Updates:
+* - position and lenght info
+* - patternscope information, if needed
 .s3poslen
+	moveq	#0,d0
+	tst.b	scopeflag(a5)
+	beq.b	.noScope 
+	* Sets Z if patternscope is active:
+	bsr		patternScopeIsActive
+	* Inform PS3M 
+	seq		d0
+.noScope
 	move.l	ps3mroutines(a5),a0
 	jmp	poslenj(a0)
 

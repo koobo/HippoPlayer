@@ -1,4 +1,4 @@
-;APS0001B37B0000DCB1000033AE00002C3B000000000000000000000000000000000000000000000000
+;APS0001B3910000DCC7000033C400002C51000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -151,6 +151,7 @@ TESTMODE
 	* mix rate
 	move.l	#15000,d0
 	move.l	#27000,d0
+	move.l	#5000,d0
 	* volume boost
 	moveq	#3,d1
 	* mode
@@ -370,13 +371,22 @@ boosto
 	lea	data,a5
 	bra.w	makedivtabs
 
-* This is called in VERTB interrupt
+* This is called in VERTB/VBLANK interrupt
+* in: 
+*  d0 = if non-zero pattern scope is active in HiP
 s3poslen
 	move.l	poslen(pc),a0
-	move	PS3M_position,(a0)+
-	move	positioneita,(a0)
+	lea	data,a5
+	basereg	data,a5
+	move	PS3M_position(a5),(a0)+
+	move	positioneita(a5),(a0)
+	tst.b	d0 
+	beq.b	.noPatternScope
+	bsr	updatePatternInfoBuffer
+	bsr	updatePatternInfoData
+.noPatternScope
 	rts
-
+	endb	a5
 
 s3init	
 	* Store this first to allow debug logs to work
@@ -638,9 +648,10 @@ pushPatternInfo
 getPatternInfo
 	pushm	d2/d3/d4/a0
 	* Calculate index based on current play position
-	move.l	playpos(a5),d3
 	move.l	mrate50(a5),d4
+	beq.b	.notReady
 	lsr.l	#8,d4
+	move.l	playpos(a5),d3
 	divu	d4,d3
 	lsr	#8,d3
 	
@@ -661,17 +672,22 @@ getPatternInfo
  endif 
 
 	movem	(a0),d0/d1
-
+.x
 	popm	d2/d3/d4/a0
 	rts
+.notReady
+	moveq	#0,d0 
+	moveq	#0,d1 
+	bra.b 	.x
 
 * This stores the currently active positions
 * into the buffer, ahead of time relative
 * to what is being played.
 updatePatternInfoBuffer
 	
-	move.l	buffSize(a5),d4
 	move.l	mrate50(a5),d3
+	beq.b	.skip
+	move.l	buffSize(a5),d4
 	lsr.l	#8,d3
 	divu	d3,d4
 	* d4 = max index number
@@ -752,6 +768,7 @@ updatePatternInfoBuffer
 	add.w	d0,a0
 	move	activeSongPos(a5),(a0)+
 	move	activePattPos(a5),(a0)+
+.skip
 	rts	
 
 
@@ -5064,8 +5081,8 @@ ccmds	lea	c0(a5),a2
 uusrow	clr	cn(a5)
 
 	;;;;;;;;;;;;
-	move	pos(a5),activeSongPos
-	move	rows(a5),activePattPos
+	move	pos(a5),activeSongPos(a5)
+	move	rows(a5),activePattPos(a5)
 	;;;;;;;;;;;;
 
 	tst	pdelaycnt(a5)
@@ -6559,8 +6576,8 @@ xm_newrow
 	clr	cn(a5)
 
 	;;;;;;;;;;;;
-	move	pos(a5),activeSongPos
-	move	rows(a5),activePattPos
+	move	pos(a5),activeSongPos(a5)
+	move	rows(a5),activePattPos(a5)
 	;;;;;;;;;;;;
 
 	tst	pdelaycnt(a5)
@@ -10077,30 +10094,19 @@ timerB
 	move	#$820f,$96(a6)
 	clr.l	playpos
 
-syncz	move.l	(sp),a6
+syncz	
+	move.l	(sp),a6
 	CALL	WaitTOF
 	lea	$dff000,a6
 	jsr	play
 
+ ifne TEST
 	lea	data,a5
 	jsr 	updatePatternInfoBuffer
 	jsr	updatePatternInfoData
 
- ifne TEST
-;	lea	PatternInfo,a1
-;	lea	PI_Stripes(a1),a0
-;	move	PI_Pattpos(a1),d0
-;	mulu	PI_Modulo+2(a1),d0
-;	add.l	d0,a0
-;	move.l	PI_Convert(a1),a2
-;	jsr	(a2)	
-;	DPRINT	"con=%lx"
-
-; 	move	#$550,$dff180
  	btst	#10,$dff016
  	bne.b	.noRMB
-	;btst	#6,$bfe001 
-	;bne.b 	.noMouse
 	DPRINT	"eject"
 	st	PS3M_eject(a5)
 .noRMB
@@ -10725,7 +10731,7 @@ debugDesBuf		ds.b	1024
 module	
 ;	incbin	"m:multichannel/approaching antares.mod"
 ;	incbin	"m:multichannel/chaotic dance.mtm"
-;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
+	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-04.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-06.s3m"
@@ -10742,7 +10748,7 @@ module
 
 ; PROBLEM MODULES:
 ; Uneven orders table size, ILLEGAL s3m:
-	incbin	"m:multichannel/1981-datajack.s3m"
+;	incbin	"m:multichannel/1981-datajack.s3m"
 ;	incbin	"m:multichannel/1985-hehasnoface.s3m"
 ; even orders:
 ;	incbin	"m:multichannel/data_jack.s3m"
