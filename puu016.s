@@ -22426,6 +22426,10 @@ drawScope
 
 	* Sample scope
 
+	* Get normal scope area
+	bsr	requestNormalScopeDrawArea
+	bne.w	.skippi * wait for resize
+
 	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
 	beq.b	.fil
 	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,quadmode2(a5)	
