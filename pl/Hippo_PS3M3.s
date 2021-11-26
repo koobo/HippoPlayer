@@ -4865,7 +4865,9 @@ s3m_init
 	move	slen(a5),d0
 	moveq	#1,d1
 	and	d0,d1
-	add	d1,d0
+	add	d1,d0	* make even
+	* ALERT! Some modules expect this to be odd,
+	* making it even breaks things.
 	lea	(a1,d0.l),a2
 	move.l	a2,samples(a5)
 
@@ -10727,16 +10729,25 @@ module
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-04.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-06.s3m"
-	incbin	"m:modsanthology/authors.g-q/purple_m/2ndreality_purplemotion.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/2ndreality_purplemotion.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
 ;	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
 ;	incbin	"m:multichannel/near_dark.s3m"
 ;	incbin	"m:exo/startrekker flt8/- unknown/gidion graveland.mod"
 ;	incbin	"m:modsanthology/misc/compos/tt/1_orkin_659_iii.s3m"
 
-; PROBLEM MODULES:
+; FIXED PROBLEM MODULES:
 ;	incbin	"m:modsanthology/misc/compos/tt/1_differences.s3m"
 ;	incbin	"m:modsanthology/misc/compos/tt/3_sunshine.s3m"
+
+; PROBLEM MODULES:
+; Uneven orders table size, ILLEGAL s3m:
+	incbin	"m:multichannel/1981-datajack.s3m"
+;	incbin	"m:multichannel/1985-hehasnoface.s3m"
+; even orders:
+;	incbin	"m:multichannel/data_jack.s3m"
+
+;	incbin	"m:modsanthology/misc/compos/tt/5_shit.s3m"
 
 moduleE
 	ds.b	1024
