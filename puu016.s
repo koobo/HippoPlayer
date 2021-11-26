@@ -23619,6 +23619,9 @@ notescroller
 	swap	d0 
 	or.b	d0,d6	
 
+	* space char for print
+	moveq	#$20,d3
+
 	* vertical loop
 	* line loop
 .plorl
@@ -23683,8 +23686,7 @@ notescroller
 	move.b	d1,(a0)+
 .nonote
 
-	moveq	#0,d0			* samplenumero
-	move.b	3(a3),d0
+	move.b	3(a3),d0	* sample num
 	bne.b	.onh
 	* a0 is odd here
 	move.b	#' ',(a0)+
@@ -23692,10 +23694,10 @@ notescroller
 	bra.b	.eihn
 .onh
 	* sample number pre-multiplied by 4
-	lsr	#2,d0
-	move	d0,d1
+	lsr.b	#2,d0
+	move.b	d0,d1
 	* get the upper digit
-	lsr	#4,d1
+	lsr.b	#4,d1
 	bne.b	.onh2
 	move.b	#' ',(a0)+
 	bra.b	.eihn2
@@ -23767,9 +23769,6 @@ notescroller
 	* a2 contains font data
 	* d4 contains font modulo
 	
-	* space char
-	moveq	#$20,d3
-
 	* get one char to print
 	moveq	#0,d0
 .ooe	
