@@ -1,4 +1,4 @@
-;APS0001B3910000DCC7000033C400002C51000000000000000000000000000000000000000000000000
+;APS0001B3EB0000DD210000343900002C51000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -382,8 +382,8 @@ s3poslen
 	move	positioneita(a5),(a0)
 	tst.b	d0 
 	beq.b	.noPatternScope
-	bsr	updatePatternInfoBuffer
-	bsr	updatePatternInfoData
+	bsr.w	updatePatternInfoBuffer
+	bsr.w	updatePatternInfoData
 .noPatternScope
 	rts
 	endb	a5
@@ -778,6 +778,13 @@ updatePatternInfoData
 	bsr.w	getPatternInfo
 	* d0 = song pos
 	* d1 = patt pos
+
+	* Pattern pos high limit check
+	* due to unpackedPattern fixed max size
+	cmp	#127,d1
+	bls.b	.ok
+	moveq	#127,d1
+.ok
 	move	d1,PatternInfo+PI_Pattpos(a5)
 
 	cmp	#mtMOD,mtype(a5)
@@ -1004,7 +1011,13 @@ updatePatternInfoData
 	DPRINT	"Rows=%ld chans=%ld"
  endif
 
-	* XM can have variable pattern length, store for this one
+	* XM can have variable pattern length, store it.
+	* The unpacked pattern has fixed max size, 128 rows,
+	* check for overrun.
+	cmp	#127,d0
+	bls.b	.okSize
+	moveq	#127,d0
+.okSize
 	move	d0,PatternInfo+PI_Pattlength(a5)
 	move.l	a1,a3
 	tlword	(a3)+,d1	* Length of pattern header
@@ -1030,21 +1043,15 @@ updatePatternInfoData
 	move.b	(a1)+,d0
 	bpl.b	.all
 
-;	btst	#0,d0
-;	beq.b	.nonote
 	ror.b	#1,d0
 	bpl.b	.nonote
 	move.b	(a1)+,d3
 .nonote	
-;	btst	#1,d0
-;	beq.b	.noinst
 	ror.b	#1,d0
 	bpl.b	.noinst
 	move.b	(a1)+,d4
 
 .noinst
-;	btst	#2,d0
-;	beq.b	.novol
 	ror.b	#1,d0
 	bpl.b	.novol
 	
@@ -1054,21 +1061,16 @@ updatePatternInfoData
 	;addq	#1,a1
 	;move.b	(a1)+,vol(a2)
 .novol	
-;	btst	#3,d0
-;	beq.b	.nocmd
 	ror.b	#1,d0
 	bpl.b	.nocmd
 	move.b	(a1)+,d5
 
 .nocmd	
-;	btst	#4,d0
-;	beq.b	.next
 	ror.b	#1,d0
 	bpl.b	.next
 	
 	move.b	(a1)+,d6
 	bra.b	.next
-	
 .all	
 	move.b	d0,d3
 	move.b	(a1)+,d4
@@ -1095,8 +1097,6 @@ updatePatternInfoData
 
  endb a5
  
-
-
 
 s3vol	
 	move.l	var_volume(pC),a0
@@ -9921,17 +9921,6 @@ syss3mPlay
 	jsr	divu_32
 	move.l	d0,mrate50(a5)			;In fact vblankfrequency
 
-
-	move.l	buffSize,d0
-	move.l	mrate50,d1
-	lsr.l	#8,d1
-	divu	d1,d0
-	ext.l	d0
-	move.l	d0,maxPlayPos2
-	DPRINT	"Max ppos2=%ld"
-
-
-
 	moveq	#8,d3
 	lea	cianame(a5),a1
 	move.b	#'a',3(a1)
@@ -10488,9 +10477,6 @@ vboost		dc.l	0
 pmode		dc	SURROUND
 system		dc	DISABLED
 
-playpos2	dc.l	0
-maxPlayPos2	dc.l	0
-
 PS3M_play	dc	0
 PS3M_break	dc	0
 PS3M_poscha	dc	0
@@ -10622,7 +10608,7 @@ activePattPos 	dc 	0
 pi
 patternInfoBuffer
 	* TODO: how big should this be?
-			ds.l	2048
+		ds.l	2048	; = 8 kB
 
 * 64 + 64 rows
 * NOTE! xm can have variable rows?
@@ -10631,7 +10617,7 @@ patternInfoBuffer
 * TODO: dynamic allocation
 upa
 unpackedPattern
-	ds.b	(64+64)*4*32
+	ds.b	(64+64)*4*32	; = 16 kB
 
 unpackedPatternPosition
 	dc.w	-1
