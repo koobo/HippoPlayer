@@ -23623,8 +23623,9 @@ notescroller
 	swap	d0 
 	or.b	d0,d6	
 
-	* space char for print
-	moveq	#$20,d3
+	* d3 is FREE!
+	* use for horizontal skipping
+	moveq	#9,d3
 
 	* vertical loop
 	* line loop
@@ -23655,8 +23656,8 @@ notescroller
 	move.b	2(a3),d0
 	bne.b	.jee
 	* empty note
-	move	#'  ',(a0)+
-	move.b	#' ',(a0)+
+	clr.w	(a0)+
+	clr.b	(a0)+
 	bra.b	.nonote
 
 * notes table is here so that a shorter
@@ -23693,8 +23694,8 @@ notescroller
 	move.b	3(a3),d0	* sample num
 	bne.b	.onh
 	* a0 is odd here
-	move.b	#' ',(a0)+
-	move.b	#' ',(a0)+
+	clr.b	(a0)+
+	clr.b	(a0)+
 	bra.b	.eihn
 .onh
 	* sample number pre-multiplied by 4
@@ -23703,7 +23704,7 @@ notescroller
 	* get the upper digit
 	lsr.b	#4,d1
 	bne.b	.onh2
-	move.b	#' ',(a0)+
+	clr.b	(a0)+
 	bra.b	.eihn2
 .onh2	or.b	#'0',d1
 	move.b	d1,(a0)+
@@ -23735,7 +23736,8 @@ notescroller
 	* next note
 	addq	#4-1,a3
 	* next horizontal position
-	add	#9,a4
+	;add	#9,a4
+	add	d3,a4
 	dbf	d5,.plorl2
 
 	* next vertical position
@@ -23750,8 +23752,7 @@ notescroller
 	cmp.b	#$64,d6
 	dbeq d7,.plorl
 .exitNoteScroller
-	popm	a5/a6
-	
+	popm	a5/a6	
 	rts
 
 * convert decimal number 0-9 into ASCII char
@@ -23777,8 +23778,7 @@ notescroller
 	moveq	#0,d0
 .ooe	
 	move.b	(a0)+,d0
-	cmp.b	d3,d0
-	beq.b	.space
+	beq.b	.space	 * space check
 	* get char pixels
 	lea	-$20(a2,d0),a6
 
@@ -24379,6 +24379,8 @@ noteScroller2
 
 	swap	d7
 	move	scopeDrawAreaModulo(a5),d7
+	move	d7,d0 
+	lsl	#3,d0 	* x8, full height of font
 	swap	d7
 	
 ***********************************************************
@@ -24389,7 +24391,9 @@ noteScroller2
 	tst.b	(a3)
 	bmi.b	.skipNumbers
 
-	pushm	d6/d7/a4/a5
+	pushm	d6/d7/a0/a4/a5
+	* row modulo:
+	move	d0,a0
 
 	* row number in D2 as BCD
 	moveq	#0,d0
@@ -24417,9 +24421,8 @@ noteScroller2
 	subq	#2,a3 	* restore a3
 
 	* next vertical draw position, one font height down
-	move	d7,d3
-	lsl	#3,d3	* times 8
-	add	d3,a4
+	* row modulo is in a0
+	add	a0,a4
 
 	* clear X flag for ABCD
 	sub.b	d0,d0
@@ -24435,7 +24438,7 @@ noteScroller2
 	cmp	PI_Pattlength(a1),d6
 	dbeq	d7,.lineNumberRowLoop
 
-	popm	d6/d7/a4/a5
+	popm	d6/d7/a0/a4/a5
 	* move "cursor" 3 chars to the right 
 	addq	#3,a4
 
@@ -24530,8 +24533,8 @@ noteScroller2
 	bra.b	.wasNote
 
 .emptyNote
-	move.w	#'  ',(a3)+
-	move.b	#' ',(a3)+
+	clr.w	(a3)+
+	clr.b	(a3)+
 .unknownNote
 .wasNote
 
@@ -24547,8 +24550,8 @@ noteScroller2
 	bra.b	.wasSampleNum
 
 .noSampleNum
-	move.b	#' ',(a3)+
-	move.b	#' ',(a3)+
+	clr.b	(a3)+
+	clr.b	(a3)+
 
 .wasSampleNum
 
@@ -24610,7 +24613,7 @@ noteScroller2
 	move.b	d0,(a3)+
 	rts
 .emptyChar 
-	move.b	#' ',(a3)+
+	clr.b	(a3)+
 	rts
 
 * Large font print
@@ -24626,7 +24629,6 @@ noteScroller2
 	move.l	a5,d1
 .charLoop	
 	move.b	(a3)+,d5
-	cmp.b	#$20,d5
 	beq.b	.space
 	* get char pixels
 	lea	-$20(a2,d5),a6
@@ -24668,8 +24670,7 @@ noteScroller2
 	* even position
 
 	move.b	(a3)+,d5
-	cmp.b	#$20,d5
-	beq.w	.evenCharDone
+	beq.w	.evenCharDone	* space check
 
 	* get char pixels
 	* check which source nibble to use
@@ -24711,8 +24712,7 @@ noteScroller2
 	* odd position
 
 	move.b	(a3)+,d5
-	cmp.b	#$20,d5
-	beq.w	.oddCharDone
+	beq.w	.oddCharDone	* space check
 
 	* get char pixels
 	ror.l	#1,d5
@@ -24753,8 +24753,6 @@ noteScroller2
 	subq	#1,d3
 	dbf	d3,.charLoop2
 	rts
-
-
 
 .note	dc.b	"00000000"
 .pos	dc.b	"00"
