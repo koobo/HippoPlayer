@@ -35,7 +35,7 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 
 # Changes from v2.48 (31.10.2021) to v2.49 (?.?.202?)
 
-Let's look inside the modules while they are playing!
+Pattern party edition!
 
 ## New fixes:
 - The font selector in Prefs had a proper bug that made it ignore user
@@ -65,7 +65,7 @@ Let's look inside the modules while they are playing!
   - Game Music Creator
   - JamCracker
   - MultiTracker (MTM, multichannel)
-  - Oktalyzer (4-8 voices)
+  - Oktalyzer (4-8 channels)
   - Scream Tracker 3 (S3M, multichannel)
   - SoundFX 
   - StarTrekker
@@ -74,25 +74,24 @@ Let's look inside the modules while they are playing!
 - Patternscope notes
   - Patternscope is able to display 4-18 channels side by side in both
     normal height and double height (XL) mode. The 18 channel wide scope
-    window just fits into a 640 pixel wide screen.
+    window just fits into a 640 pixel wide screen. Channels over 18
+    will not be shown.
   - Normal configured font is used when there are 4-8 channels to be displayed. 
     For over 8 channels a smaller font is used, and needs to be installed in 
     FONTS:, called "mini4", available on aminet: 
     https://aminet.net/text/bfont/mini.font.lha
-  - Playing a 8+ channel module takes a lot of CPU power and not much
+  - Playing a 8+ channel module takes some CPU power and not much
     is left for the patternsope. Patternscope display itself is also
     naturally more CPU intensive the more channels there are to be shown.
-  - Lowering PS3M mixing buffer size and mixing rate in Prefs can reduce 
-    scope jerkiness on low power systems, on the other hand sound quality 
-    gets worse and audio skipping may increase.
   - A500 can handle Oktalyzer modules with Patternscope, but struggles
     with PS3M. 
+  - Personal achievement! First time ever use of "binary coded decimal"
+    in patternscope implementation :-)
 - New Prefs setting: "Keep list on exit". This enables the following:
   - Module list will be saved on exit and restored when Hippo is started again.
   - Last chosen module is selected and played, if it was playing.
   - File requester path that was last used to add files to 
     the list will be used the next time file requester is opened.
-  - Note! This feature relies on file system comments working.
   
 ## Music format related fixes
 - Volume support added for PSID tunes. These are played by the 
@@ -108,7 +107,7 @@ Let's look inside the modules while they are playing!
   volume and songend support.
   
 ## New Eagleplayer formats, plugin name in parentheses:
-- Sound FX ("sound fx")
+- Special FX ("special fx")
   - Eagleplayer by Wanted Team
 - Jason Page ("jason page")
   - Eagleplayer by Wanted Team
@@ -116,6 +115,9 @@ Let's look inside the modules while they are playing!
   - Eagleplayer by Wanted Team
 
 ## Known issues;
+- Sometimes after the scope window has resized the right side of the
+  window frame is not refreshed properly. Activating the window 
+  repaints the window border again.
 - Sonic Arranger module "svensktoppen" may cause a crash.
 - Oktalyzer module "1 love night dub.okta" may cause a crash.
 - There are some invalid S3M modules around with an uneven 
@@ -542,12 +544,14 @@ External applications using the HippoPort still use all data freely.
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
-List of supported formats:
+List of supported formats (could be incomplete):
 - Activision Pro (also known as Martin Walker)
 - AProSys
+- Art of Noise (4ch, 8ch not supported)
 - Beathoven Sound System 
 - Ben Daglish
-- ChipTracker
+- BP SoundMon v2, v3
+- ChipTracker (also known as KRISTracker)
 - CustomMade
 - Dave Lowe
 - David Whittaker 
@@ -588,23 +592,24 @@ List of supported formats:
 - PumaTracker 
 - Quartet, Quartet ST
 - Richard Joseph
-- Rob Hubbard 1, 2
+- Richard Joseph 2 (also known as VectorDean)
+- Rob Hubbard 1
+- Rob Hubbar 2 (also known as Infogrames)
 - Sample files (WAV, AIFF, IFF, MP3)
 - ScreamTracker 3
 - Sidmon v1, v2
-- Sonic arranger
+- Sonic Arranger (some variants not supported)
 - Sonix
 - SoundControl
 - SoundFX
-- SoundFX
-- SoundMon v2, v3
-- StarTrekker, Audio Sculpture
+- SpecialFX
+- StarTrekker, Audio Sculpture (8ch format not supported)
 - Steve Turner
 - StoneTracker
 - Synth Pack
 - Synthesis 
 - SynTracker
-- TcbTracker
+- TCBTracker
 - TFMX, TFMX 7v 
 - The Musical Enlightenment
 - The Player 6.0A

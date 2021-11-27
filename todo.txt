@@ -69,6 +69,23 @@ PATTERNINIT - EP
 + KRIS
 + Mugician2
 
+FIXED: BUG:
+- play oktalyzer with pattern scope
+- play wav -> scope does not reset
+
+FIXED: BUG
+- play module from favorites
+- exit
+- start
+- hippo starts playing module from main list
+
+
+BUG (A1200 test):
+- patternscope 
+- play a lot of stuff, mainly XM, "wit down", "bag of tricks"
+- play "troublevision.mod"
+- play "hawkeye.tme"
+--> recoverable alert
 
 FIXED: BUG - kick13
 - open
