@@ -28028,6 +28028,7 @@ handleFavoriteModuleConfigChange
 ;	rts
 
 toggleListMode
+	pushm	all
 	DPRINT	"toggleListMode"
 
 	isListInFavoriteMode
@@ -28056,6 +28057,7 @@ toggleListMode
 	bmi.b	.not
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .not
+	popm	all
 	rts
 
 .setButtonStates
@@ -28230,7 +28232,7 @@ importSavedStateModulesFromDisk
 	rts
 	
 .parse
-* "00000000 0"
+* "00000000 00 abc"
 * convert into number
 	moveq	#0,d3
 	moveq	#28,d1
@@ -28250,16 +28252,27 @@ importSavedStateModulesFromDisk
 	subq.l	#4,d1
 	dbf	d2,.loop
 
+	* check play/no play
+	cmp.b	#"1",1(a0)
+	seq	d7
+
+	* check list mode!
+	* switch mode before setting chosen module
+	* chosenmodule will be reset otherwise.
+	cmp.b	#"1",2(a0)
+	bne.b	.normalMode
+	* all regs preserved
+	bsr	toggleListMode
+.normalMode
+
 	tst.l	d3
 	bmi.b	.neg
 	move.l	d3,chosenmodule(a5)
 .neg
-	cmp.b	#"1",1(a0)
-	seq	d7
 
-	cmp.b	#" ",2(a0)
+	cmp.b	#" ",3(a0)
 	bne.b	.noPath
-	tst.b	3(a0)
+	tst.b	4(a0)
 	beq.b	.noPath
 
 	lea	3(a0),a1
@@ -28282,6 +28295,7 @@ importSavedStateModulesFromDisk
 	DPRINT	"Saved filereq path=%s"
 
 .noPath
+
 	* Finally, either just refresh or play.
 	tst.b	d7
 	beq.w	.exit
@@ -28306,18 +28320,25 @@ exportSavedStateModulesToDisk
 	bmi.b	.no
 	moveq	#1,d1
 .no
+	* Store list mode
+	moveq	#0,d2
+	isListInFavoriteMode
+	beq.b	.normalMode
+	moveq	#1,d2
+.normalMode
+
 	* Store last used dir as well
 	* Try the reqtools dir first
-	move.l	req_file(a5),d2
+	move.l	req_file(a5),d3
 	beq.b	.doEmpty
-	move.l	d2,a0
-	move.l	rtfi_Dir(a0),d2
+	move.l	d3,a0
+	move.l	rtfi_Dir(a0),d3
 	bne.b	.yesDir
 .doEmpty
 	* ..then the previously stored one
-	move.l	lastStoredFileReqDirectory(a5),d2
+	move.l	lastStoredFileReqDirectory(a5),d3
 	bne.b	.yesDir
-	pushpea	.empty(pc),d2
+	pushpea	.empty(pc),d3
 .yesDir
 	lea	.comment(pc),a0
 	lea	probebuffer(a5),a1
@@ -28334,7 +28355,8 @@ exportSavedStateModulesToDisk
 
 .x	rts
 
-.comment	dc.b	"%08lx %ld %s"
+* <chosenmodule< <play/noplay><listmode> <filereq path> 
+.comment	dc.b	"%08lx %ld%ld %s"
 .empty		dc.b	0
 		even
 
