@@ -24391,29 +24391,28 @@ noteScroller2
 	tst.b	(a3)
 	bmi.b	.skipNumbers
 
-	pushm	d6/d7/a0/a4/a5
-	* row modulo:
-	move	d0,a0
-
+	pushm	d6/d7/a4/a5
+	* row modulo in d0
+	
 	* row number in D2 as BCD
-	moveq	#0,d0
-	move	d6,d0
-	divu	#10,d0 
-	lsl.b	#4,d0
-	move	d0,d2
-	swap	d0 
-	or.b	d0,d2
+	moveq	#0,d3
+	move	d6,d3
+	divu	#10,d3 
+	lsl.b	#4,d3
+	move	d3,d2
+	swap	d3 
+	or.b	d3,d2
 	
 .lineNumberRowLoop
 	* get screen modulo
 	swap	d7
 
 	* print line number as BCD from D2 
-	move	d2,d0	* $00XY
-	lsl.w	#4,d0	* $0XY0
-	lsr.b	#4,d0	* $0X0Y
-	or.w	#$3030,d0
-	move	d0,(a3)
+	move	d2,d3	* $00XY
+	lsl.w	#4,d3	* $0XY0
+	lsr.b	#4,d3	* $0X0Y
+	or.w	#$3030,d3
+	move	d3,(a3)
 
 	move.l	a4,a5
 	moveq	#2-1,d3
@@ -24421,14 +24420,14 @@ noteScroller2
 	subq	#2,a3 	* restore a3
 
 	* next vertical draw position, one font height down
-	* row modulo is in a0
-	add	a0,a4
+	* row modulo is in d0
+	add	d0,a4
 
 	* clear X flag for ABCD
-	sub.b	d0,d0
+	sub.b	d3,d3
 	* Next row in BCD
-	moveq	#1,d0
-	abcd.b	d0,d2
+	moveq	#1,d3
+	abcd.b	d3,d2
 
 	* get loop counter
 	swap	d7
@@ -24438,7 +24437,7 @@ noteScroller2
 	cmp	PI_Pattlength(a1),d6
 	dbeq	d7,.lineNumberRowLoop
 
-	popm	d6/d7/a0/a4/a5
+	popm	d6/d7/a4/a5
 	* move "cursor" 3 chars to the right 
 	addq	#3,a4
 
@@ -24670,7 +24669,7 @@ noteScroller2
 	* even position
 
 	move.b	(a3)+,d5
-	beq.w	.evenCharDone	* space check
+	beq.w	.evenCharSkip * space check
 
 	* get char pixels
 	* check which source nibble to use
@@ -24706,8 +24705,10 @@ noteScroller2
  	or.b	d0,(a5)	
 * odd char done	
 
+
 .evenCharDone
 	move.l	d1,a5
+.evenCharSkip
 
 	* odd position
 
