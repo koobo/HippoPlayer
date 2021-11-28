@@ -69,6 +69,17 @@ PATTERNINIT - EP
 + KRIS
 + Mugician2
 
+FIXED: BUG: 
+- flood.dum not working on kick13
+FIXED: BUG:
+- JAM.Dr-Awesome-11: kick13 -> crash
+FIXED: BUG
+- add from "sys:music"
+- exit
+- start
+- "add"
+- tries to add from " sys:music" -> error
+
 FIXED: BUG:
 - play oktalyzer with pattern scope
 - play wav -> scope does not reset

@@ -2,7 +2,7 @@ Short: Updated HippoPlayer, a module player for classic Amigas
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.48
+Version: 2.49
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -29,13 +29,13 @@ NOTE 3: If you get errors where some module is not recognized even
 if it should be, try removing "S:HippoPlayer.prefs" first.
 
 
-
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
-# Changes from v2.48 (31.10.2021) to v2.49 (?.?.202?)
 
-Pattern party edition!
+# Changes from v2.48 (31.10.2021) to v2.49 (29.11.2021)
+
+It's the pattern party edition!
 
 ## New fixes:
 - The font selector in Prefs had a proper bug that made it ignore user
@@ -51,6 +51,8 @@ Pattern party edition!
   when AHI was enabled and a non-Paula AHI mode was active.
 - P96 multi screen fix: when scope if manually reactivated by LMB click,
   this will be remembered until app is closed.
+- "Rob Hubbard 2/Infogrames" format was probably not working,
+  should be ok now.
 
 ## New features:
 - Patternscope support added to the following formats:
@@ -81,12 +83,12 @@ Pattern party edition!
     FONTS:, called "mini4", available on aminet: 
     https://aminet.net/text/bfont/mini.font.lha
   - Playing a 8+ channel module takes some CPU power and not much
-    is left for the patternsope. Patternscope display itself is also
-    naturally more CPU intensive the more channels there are to be shown.
+    is left for the patternscope in low power systems. The scope display 
+    is also more CPU+Blitter intensive the more channels there are to 
+    be shown. I had some fun optimizing it, though! This includes my 
+    personal first use of binary coded decimals :-)
   - A500 can handle Oktalyzer modules with Patternscope, but struggles
-    with PS3M. 
-  - Personal achievement! First time ever use of "binary coded decimal"
-    in patternscope implementation :-)
+    with PS3M (as usual). A1200 should generally perform ok.
 - New Prefs setting: "Keep list on exit". This enables the following:
   - Module list will be saved on exit and restored when Hippo is started again.
   - Last chosen module is selected and played, if it was playing.
@@ -112,6 +114,7 @@ Pattern party edition!
 - Jason Page ("jason page")
   - Eagleplayer by Wanted Team
 - Steve Turner ("steve turner")
+  - "Paradroid 90"
   - Eagleplayer by Wanted Team
 
 ## Known issues;
@@ -123,8 +126,10 @@ Pattern party edition!
 - There are some invalid S3M modules around with an uneven 
   length orders table. These will crash Hippo.
 
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
 
 # Changes from v2.47 (31.8.2021) to v2.48 (31.10.2021)
 
@@ -375,8 +380,10 @@ In this episode, we will be trying to play them all!
 - Wanted Team for Eagleplayer resources.
 - Authors of all the included eagleplayers, I hope you don't mind!
 
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
 
 # Changes from v2.46b (15.6.2021) to v2.47 (31.8.2021)
 
@@ -473,8 +480,10 @@ support, some fixes. Check out the details below.
   _General_ subpage in prefs. This feature probably doesn't make any
   sense if you are using floppies. 
   
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
 
 # Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
 
@@ -541,8 +550,10 @@ External applications using the HippoPort still use all data freely.
 - A bunch of smaller fixes, such as enforcer hit removals at a few places.
 - Code refactoring! It's still quite a mess in many places.
   
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
 
 List of supported formats (could be incomplete):
 - Activision Pro (also known as Martin Walker)
