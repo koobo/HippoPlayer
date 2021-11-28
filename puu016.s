@@ -35682,9 +35682,10 @@ p_robhubbard2
 	p_NOP
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_robhubbard2
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
-	dc.b	"Rob Hubbard 2       [EP]",0
+	dc.b	"R.Hubbard 2/Infogra.[EP]",0
 .path dc.b "rob hubbard 2",0
  even
 
