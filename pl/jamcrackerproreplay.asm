@@ -4,7 +4,7 @@
 	include mucro.i
 	include	misc/eagleplayer.i
 
-testi	=	0
+testi	=	1
 
  ifne testi
 
@@ -201,8 +201,8 @@ pt_sizeof		RS.W	0
 nt_period		RS.B	1
 nt_instr		RS.B	1
 nt_speed		RS.B	1
-nt_arpeggio	RS.B	1
-nt_vibrato	RS.B	1
+nt_arpeggio		RS.B	1
+nt_vibrato		RS.B	1
 nt_phase		RS.B	1
 nt_volume		RS.B	1
 nt_porta		RS.B	1
@@ -210,9 +210,9 @@ nt_sizeof		RS.W	0
 
 		RSRESET		;Voice info structure
 pv_waveoffset	RS.W	1
-pv_dmacon		RS.W	1
+pv_dmacon	RS.W	1
 pv_custbase	RS.L	1
-pv_inslen		RS.W	1
+pv_inslen	RS.W	1
 pv_insaddress	RS.L	1
 pv_peraddress	RS.L	1
 pv_pers		RS.W	3
@@ -224,12 +224,14 @@ pv_deltavib	RS.W	1
 pv_vol		RS.W	1
 pv_deltavol	RS.W	1
 pv_vollevel	RS.W	1
-pv_phase		RS.W	1
+pv_phase	RS.W	1
 pv_deltaphase	RS.W	1
 pv_vibcnt		RS.B	1
 pv_vibmax		RS.B	1
 pv_flags		RS.B	1
+			RS.B	1	 * PADDING to get even
 pv_sizeof		RS.W	0
+
 
 
 ;	*** Test routine ***
