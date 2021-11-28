@@ -28274,7 +28274,7 @@ importSavedStateModulesFromDisk
 	tst.b	4(a0)
 	beq.b	.noPath
 
-	lea	3(a0),a1
+	lea	4(a0),a1
 	move.l	a1,a2
 .fl	tst.b	(a2)+
 	bne.b	.fl
