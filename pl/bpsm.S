@@ -1,7 +1,135 @@
-start
+;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+TESTI	=	0
+
 
 	incdir	include:
 	INCLUDE	"Exec/Types.i"
+	include	mucro.i
+	include	misc/eagleplayer.i
+
+ ifne TESTI
+
+	move.l	#dmawait_,d0
+	lea	mod,a0
+	lea	songend_,a1
+	lea	poslen_,a2
+	lea	null_,a3
+	lea	mastervol,a4
+	jsr	init
+	bne.b	exit
+loop
+	cmp.b	#$80,$dff006
+	bne.b	loop
+.x	cmp.b	#$80,$dff006
+	beq.b	.x
+
+	move	#$ff0,$dff180
+	jsr	play
+	clr	$dff180
+
+	btst	#6,$bfe001
+	bne.b	loop
+
+;	jsr	end
+exit
+	rts
+
+dmawait_
+	pushm	d0/d1
+	moveq	#12-1,d1
+.d	move.b	$dff006,d0
+.k	cmp.b	$dff006,d0
+	beq.b	.k
+	dbf	d1,.d
+	popm	d0/d1
+	rts
+
+mastervol	dc	64/1
+songend_	dc	0
+poslen_		dc.l	0
+
+	section	dd,data_c
+mod
+	incbin	"m:modsanthology/synth/soundmon/BP.Wonderworld"
+null_
+	dc.l	0
+ endc
+
+	section	ddd,code_p
+
+	jmp	init(pc)
+play	
+	jmp 	SM_PlayModule(pc)
+	jmp	SM_Forward(pc)
+	jmp	SM_Rewind(pc)
+
+
+
+init
+;
+* a0 = module
+* a1 = songend
+* a2 = pos/len
+* a3 = null sample
+* a4 = volume
+* d0 = dmawait
+
+	pushm	d1-d7/A1-a6
+	lea	SM_DataArea(pc),a6
+	move.l	d0,dmawait(a6)
+	move.l	a4,volume(a6)
+	move.l	a1,songend(a6)
+	move.l	a2,poslen(a6)
+	move.l	a3,null(a6)
+	bsr.w	SM_InitSound
+	bsr.b	PatternInit
+	popm	d1-d7/A1-a6
+
+	moveq	#0,d0	
+	rts 
+
+
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.l	#3,PI_Modulo(A0)	; Number of bytes to next row
+	move.w	#16,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	* Period index starting from 1, 0 for no period
+	move.b	(a0),d0
+	beq.b	.optional
+		
+	* this could be the sample number
+	move.b	1(a0),d1
+	lsr.b	#4,d1
+
+.optional
+	moveq	#15,d2
+	and.b 	1(a0),d2
+	move.b	2(a0),d3
+	rts
+
+
 
 ;------------------------------------------------------------------------------
 ;******************************************************************************
@@ -38,32 +166,13 @@ start
 	LABEL	SoundMonStruct_SIZEOF
 ;------------------------------------------------------------------------------
 ; InitSound
-;
-* a0 = module
-* a1 = songend
-* a2 = pos/len
-* a3 = null sample
-* a4 = volume
-* d0 = dmawait
 
-* init: 0
-* play: 300
-* rew: 2158
-* forw: 2180
 
 
 SM_InitSound	movem.l	d0-d2/a0-a1/a4,-(sp)
-
-	move.l	a4,-(sp)
-
+	
 		lea	SM_DataArea(pc),a4
-
-	move.l	d0,dmawait(a4)
-	move.l	a1,songend(a4)
-	move.l	a2,poslen(a4)
-	move.l	a3,null(a4)
-	move.l	(sp)+,volume(a4)
-	move.l	a0,a1
+		move.l	a0,a1
 
 	move	30(a0),2(a2)		* songlen talteen
 
@@ -282,14 +391,51 @@ bploop3		moveq	#0,d1
 		subq.w	#1,d2
 		mulu	#48,d2
 		moveq	#0,d3
-		move.w	30(a0),d3
+		move.w	30(a0),d3	* song length
 		lsl.w	#4,d3
 		add.l	d2,d3
-		move.l	#$00000200,d4
+		* skip over something to access pattern
+
+		;move.l	#$00000200,d4
+		;move.b	SMON_BPPatCount(a5),d4
+		;add.l	d3,d4
+		;move.l	d4,a2
+		* offset to module start
+		;add.l	a0,a2
+		
+		lea	$200(a0),a2
+		add.l	d3,a2
+
+		cmp.b	#1,d7
+		bne.b 	.a 
+		move.l	a2,Stripe1
+		bra.b	.d
+.a
+		cmp.b	#2,d7
+		bne.b 	.b 
+		move.l	a2,Stripe2
+		bra.b	.d
+.b
+		cmp.b	#4,d7
+		bne.b 	.c 
+		move.l	a2,Stripe3
+		bra.b	.d
+.c
+		cmp.b	#8,d7
+		bne.b 	.d 
+		move.l	a2,Stripe4
+.d
+		moveq	#0,d4
 		move.b	SMON_BPPatCount(a5),d4
-		add.l	d3,d4
-		move.l	d4,a2
-		add.l	a0,a2
+		divu	#3,d4
+		move	d4,PatternInfo+PI_Pattpos
+
+		moveq	#0,d4
+		move.b	SMON_BPPatCount(a5),d4
+		add.l	d4,a2
+
+		* a2 points to current pattern data, modulo 3
+		
 		moveq	#0,d3 
 		move.b	(a2),d3
 		tst.b	d3
@@ -335,9 +481,9 @@ bpsamplechange	move.b	d3,3(a1)
 		or.w	d7,SMON_DMA(a5)
 bpoptionals 	moveq	#0,d3
 		moveq	#0,d4
-		move.b	1(a2),d3
+		move.b	1(a2),d3	* Command
 		and.b	#15,d3
-		move.b	2(a2),d4
+		move.b	2(a2),d4	* Parameter
 
 		cmpi.b	#0,d3			; Optionals Here
 		bne.b	notopt0
@@ -399,10 +545,12 @@ bpskip2		lea	$10(a3),a3
 		asl.w	#1,d7
 		dbra	d0,bploop3
 
+	* Pattern position
 		addq.b	#3,SMON_BPPatCount(a5)
 		cmpi.b	#48,SMON_BPPatCount(a5)
 		bne.b	bpskip8
 		move.b	#0,SMON_BPPatCount(a5)
+		* Increase song position
 		addq.w	#1,SMON_BPStep(a5)
 
 	;	move.l	SMON_Global(a5),a2

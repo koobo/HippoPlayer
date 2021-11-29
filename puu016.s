@@ -19,14 +19,16 @@ ver	macro
 ;	dc.b	"v2.45 (10.1.2000)"
 ;	dc.b	"v2.47ß (?.?.2021)"
 ;	dc.b	"v2.47 (31.8.2021)"
-	dc.b	"v2.48 (31.10.2021)"
+;	dc.b	"v2.48 (31.10.2021)"
+;	dc.b	"v2.49ß (?.?.2021)"
+	dc.b	"v2.49 (29.11.2021)"
 	endm	
 
 
-DEBUG	= 0
+DEBUG	= 1
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
-asm	= 0	* 1: Run from AsmOne, 0: CLI/Workbench
+asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
 
 zoom	= 0	* 1: zoomaava hippo
 fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
@@ -307,7 +309,7 @@ prefs_favorites		rs.b	1
 prefs_medrate		rs	1
 
 prefs_tooltips		rs.b 	1
-			rs.b 	1 * pad
+prefs_savestate		rs.b 	1
 
 prefs_size		rs.b	0
 
@@ -453,9 +455,10 @@ rastport2	rs.l	1		*
 userport2	rs.l	1		*
 rastport3	rs.l	1		* quadrascope
 userport3	rs.l	1		* 
-windowbase3	rs.l	1		* scopes window
+scopeWindowBase	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
+minifontbase rs.l	1
 notifyhandle	rs.l	1		* Screennotifylle
 windowtop	rs	1		* ikkunoiden eisysteemialueen yläreuna
 windowright	rs	1
@@ -582,6 +585,8 @@ ch3		rs.b	ns_size
 ch4		rs.b	ns_size
 mtab		rs.l	1
 buffer0		rs.l	1
+buffer0w 	rs.w 	1
+buffer0h  	rs.w 	1
 buffer1		rs.l	1
 buffer2		rs.l	1
 scopeVerticalBarTable		rs.l	1
@@ -590,7 +595,10 @@ deltab2		rs.l	1
 deltab3		rs.l	1	
 deltab4		rs.l	1	
 omatrigger	rs.b	1	* kopio kplayerin usertrigistä
-		rs.b	1	
+* This turns to 1 if user has manually activated the scope
+* by LMB click, when scope was passivated because not being
+* visible. As this is global user does not need to do that again.
+scopeManualActivation	rs.b	1	
 multab		rs.b	512
 
 ps3mchannels	rs.l	1	* Osoitin PS3M mixer channel blockeihin
@@ -674,8 +682,8 @@ early_new	rs.b	1
 prefix_new	rs.b	1
 autosort_new	rs.b	1
 favorites_new	rs.b	1	
-tooltips_new	rs.b  1	
-				rs.b  1 * pad
+tooltips_new	rs.b 	1	
+savestate_new	rs.b 	1
 
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -726,10 +734,38 @@ quadmode2	rs.b	1
 
 * Store the original window height to switch between
 * large and normal height mode
-quadWindowHeightOriginal	rs.l	1
+quadWindowHeightOriginal	rs.w	1
 * Pattern scope configuration parameters for normal and large mode
 quadNoteScrollerLinesHalf	rs.w	1
 quadNoteScrollerLines		rs.l	1
+
+* Scope window draw area dimensions
+* default: 320
+scopeDrawAreaWidth		rs.w 	1
+scopeDrawAreaModulo		rs.w 	1
+* default: 64
+scopeDrawAreaHeight		rs.w 	1
+
+* Requested dimensions for new draw area,
+* to be set to above variables when resize done.
+scopeDrawAreaWidthRequest		rs.w 	1
+scopeDrawAreaHeightRequest		rs.w 	1
+* To handle iwndow size and pos detection manually,
+* previous values are needed for comparison.
+scopePreviousWidth				rs.w  	1
+scopePreviousHeight 			rs.w 	1
+scopePreviousTopEdge  			rs.w 	1 
+scopePreviousLeftEdge			rs.w 	1
+
+* When scope is in patternscope mode
+* and running the generic patternscope,
+* there is only need to update it when data changes.
+* Use these two to detect it.
+scopePreviousPattPos		rs.w	1
+scopePreviousSongPos		rs.w	1
+
+
+
 
 timeoutmode	rs.b	1
 filterstatus	rs.b	1		* filtterin 
@@ -966,7 +1002,7 @@ ps3m_buff2	rs.l	1
 ps3m_mixingperiod rs.l	1
 ps3m_playpos	rs.l	1
 ps3m_buffSizeMask rs.l	1
-
+ps3mUnpackedPattern rs.l 1
 
 ahi_use_new		rs.b	1
 ahi_muutpois_new	rs.b	1
@@ -1047,7 +1083,7 @@ ahi_muutpois	= prefsdata+prefs_ahi_muutpois
 ahi_use_nyt	rs.b	1
 favorites	rs.b	1
 tooltips	rs.b  	1
-			rs.b    1 * pad
+savestate	rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * audio homman muuttujat
@@ -1135,7 +1171,7 @@ findpattern	rs.b	30		* find pattern
 divider		rs.b	26		* divider
 
 omabitmap	rs.b	bm_SIZEOF-7*4	* 1 bitplanea, ei tilaa muille
-omabitmap2	rs.b	bm_SIZEOF-6*4	* 2
+bitmapHippoHead	rs.b	bm_SIZEOF-6*4	* 2
 omabitmap3	rs.b	bm_SIZEOF-7*4	* 1
 omabitmap4	rs.b	bm_SIZEOF-6*4	* 2
 omabitmap5	rs.b	bm_SIZEOF-6*4	* 2
@@ -1183,6 +1219,12 @@ deliStoredNoteStruct rs.l 	1
 deliStoredGetPositionNr rs.l 1
 deliPath		rs.l	1
 deliPathArray		rs.l	1	
+deliPatternInfo		rs.l 	1
+
+* Path read from auto saved modulelist comment,
+* which is the last path used to add files to list
+lastStoredFileReqDirectory	rs.l 	1
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -2742,6 +2784,7 @@ bob
 .oohi
 
 
+
  ifne EFEKTI
 	jsr	efekti
  endc
@@ -2756,6 +2799,13 @@ bob
 .komento0
 	bsr.w	komentojono			* tutkitaan komentojono.
 
+	* Command line and startup modules handled,
+	* if none of these provided stuff, try the saved
+	* state modules.
+	tst.l 	modamount(a5)
+	bne.b	.skip
+	jsr	importSavedStateModulesFromDisk
+.skip
 
 *********************************************************************************
 *
@@ -3020,7 +3070,14 @@ msgloop
 	tst.l	playingmodule(a5)
 	bmi.b	.ee
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
-.ee	bsr.w	rbutton1
+.ee	
+	cmp.b	#pm_random,playmode(a5)
+	bne.b	.noRand
+	bsr	soitamodi_random
+	bra.b	.wasRand
+.noRand
+	bsr.w	rbutton1
+.wasRand
 	movem.l	(sp)+,d0-a6
 	
 .nwww	pop	d0
@@ -3187,6 +3244,7 @@ exit
  even
 .exmsg2
 	jsr	exportFavoriteModulesToDisk
+	jsr	exportSavedStateModulesToDisk
 
 * poistetaan loput prosessit...
 
@@ -3266,6 +3324,8 @@ exit
 	bsr.w	freemem
 	move.l	randomtable(a5),a0
 	bsr.w 	freemem
+	move.l	lastStoredFileReqDirectory(a5),a0 
+	bsr	freemem
 
 	jsr	closeTooltipPopup
 	bsr.w	flush_messages
@@ -3295,8 +3355,11 @@ exit
 	move.l	d0,a1
 	lore	GFX,CloseFont
 .uh2
-
-
+	move.l	minifontbase(a5),d0
+	beq.b	.uh3
+	move.l	d0,a1
+	lore	GFX,CloseFont
+.uh3
 	move.l	topazbase(a5),a1
 	lore	GFX,CloseFont
 
@@ -4299,7 +4362,11 @@ getscreeninfo
 	add	d3,prefssiz+2
 	add	d3,quadsiz+2
 	add	d3,swinsiz+2
+	tst	quadWindowHeightOriginal(a5)
+	bne.b	.setAlready
 	move	quadsiz+2,quadWindowHeightOriginal(a5)
+	sub		#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,quadWindowHeightOriginal(a5)
+.setAlready
 
 	move	WINSIZX(a5),wsizex
 	move	WINSIZY(a5),wsizey
@@ -4393,8 +4460,12 @@ wrender
 .cler	
 	tst	boxsize(a5)
 	bne.b	.clef
+	* Box is minimized, skipped gadgets:
+	cmp.l	#gadgetListModeChangeButton,a3
+	beq.b	.skipClear
 	cmp.l	#slider4,a3		* fileslider
 	bne.b	.clef
+.skipClear
 	rts	
 .clef
 	move.l	rastport(a5),a0
@@ -4410,25 +4481,21 @@ wrender
 
 * sitten isketään gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
-;	lea	gadgets,a1
 	lea	(a4),a1
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-;	lea	gadgets,a0
 	lea	(a4),a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	lob	RefreshGadgets
 
 
-
-
 **** paksunnetaan gadujen reunat
 
+* Draw button highlights
 
-;	lea	gadgets,a3
 	lea	(a4),a3
 .loloop
 	move.l	(a3),d3
@@ -4437,6 +4504,13 @@ wrender
 	cmp.l	#slider1,a3
 	beq.b	.nel
 
+	tst	boxsize(a5)
+	bne.b	.visibleBox
+	* Skip this one if it is not properly visible
+	cmp.l	#gadgetListModeChangeButton,a3
+	beq.b	.nel
+.visibleBox
+	
 	movem	4(a3),plx1/ply1/plx2/ply2
 	add	plx1,plx2
 	add	ply1,ply2
@@ -4452,6 +4526,7 @@ wrender
 	tst.l	d3
 	bne.b	.loloop
 
+* Draw slider highlights
 
 	tst.b	uusikick(a5)
 	beq.b	.nelq
@@ -4480,11 +4555,6 @@ wrender
 	bsr.w	sliderlaatikko
 
 .nelq
-
-
-
-
-
 
 *** Piirretään korvat
 	pushm	all
@@ -4853,16 +4923,19 @@ unlockMainWindow
 **************
 * Hipon tulostaminen
 
+HIPPOHEAD_WIDTH = 96
+HIPPOHEAD_HEIGHT = 66
+
 inithippo
 *** Lasketaan checksummi infoikkunan no-onelle ja unregistered-tekstille.
 
 	check	1
 
-	lea	omabitmap2(a5),a2
+	lea	bitmapHippoHead(a5),a2
 	move.l	a2,a0
 	moveq	#2,d0
-	moveq	#96,d1
-	moveq	#66,d2
+	moveq	#HIPPOHEAD_WIDTH,d1
+	moveq	#HIPPOHEAD_HEIGHT,d2
 	lore	GFX,InitBitMap
 	move.l	#hippohead,bm_Planes(a2)
 	move.l	#hippohead+792,bm_Planes+4(a2)
@@ -4894,7 +4967,7 @@ printhippo1
 
 	moveq	#0,d0		* lähde x,y
 	moveq	#0,d1
-	moveq	#66,d5		* y-koko
+	moveq	#HIPPOHEAD_HEIGHT,d5		* y-koko
 
 	moveq	#76+WINY-14,d3
 	move	boxsize(a5),d6
@@ -4908,7 +4981,7 @@ printhippo1
 .rrr
 	moveq	#0,d1
 .rr
-	lea	omabitmap2(a5),a0
+	lea	bitmapHippoHead(a5),a0
 	move.l	rastport(a5),a1		* main
 	moveq	#92,d2		* kohde x
 	tst.b	d7
@@ -4919,7 +4992,7 @@ printhippo1
 	add	windowtop(a5),d3
 ;	move	#$ee,d6		* minterm, kopio a or d ->d
 	move	#$c0,d6		* minterm, suora kopio
-	moveq	#96,d4		* x-koko
+	moveq	#HIPPOHEAD_WIDTH,d4		* x-koko
 	lore	GFX,BltBitMapRastPort
 .r	popm	d0-d7/a0-a2/a6
 	rts
@@ -4969,8 +5042,8 @@ printhippo1
 * alkup. x: 96, y: 66
 * max  x: 220, y: 400
 
-	moveq	#96,d0
-	moveq	#66,d1
+	moveq	#HIPPOHEAD_WIDTH,d0
+	moveq	#HIPPOHEAD_HEIGHT,d1
 
 	move	d0,bsa_SrcWidth(a3)
 	move	d1,bsa_SrcHeight(a3)
@@ -4980,7 +5053,7 @@ printhippo1
 	move	d1,bsa_YDestFactor(a3)
 
 	move.l	a4,bsa_DestBitMap(a3)
-	pushpea	omabitmap2(a5),bsa_SrcBitMap(a3)
+	pushpea	bitmapHippoHead(a5),bsa_SrcBitMap(a3)
 
 
 	move.l	windowbase(a5),a0
@@ -5049,27 +5122,34 @@ printhippo1
  endc
 	
 
-printhippo2
+** Print into scope window
+printHippoScopeWindow
 	tst.b	uusikick(a5)
 	bne.b	.yep
 	rts
 .yep	pushm	d0-d6/a0-a2/a6
-	lea	omabitmap2(a5),a0
+	lea	bitmapHippoHead(a5),a0
 	move.l	rastport3(a5),a1		* quad
 	moveq	#0,d0	
 	moveq	#0,d1
-	moveq	#126,d2
-	move	#14,d3
-	jsr	scopeIsNormal
-	bne.b	.normal
-	add	#64/2,d3
-.normal
-	moveq	#96,d4	
-	moveq	#66,d5
 
+
+	* Center hippohead into scope window
+	move.l	scopeWindowBase(a5),a2 
+	move	wd_Width(a2),d2
+	lsr	#1,d2
+	sub	#HIPPOHEAD_WIDTH/2,d2
+
+	move	#14,d3
+	move	scopeDrawAreaHeight(a5),d4
+	sub	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d4
+	asr	#1,d4
+	add	d4,d3
+
+	moveq	#HIPPOHEAD_WIDTH,d4	
+	moveq	#HIPPOHEAD_HEIGHT,d5
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
-;	move	#$ee,d6			* D: A or D
 	move	#$c0,d6			* suora kopio
 	lore	GFX,BltBitMapRastPort
 	popm	d0-d6/a0-a2/a6
@@ -5622,6 +5702,9 @@ freemodule
 	clr	songnumber(a5)
 	clr maxsongs(a5)
 	clr minsong(a5)
+	* For non-EP players supporting patterninfo
+	clr.l	deliPatternInfo(a5) 
+
 ;	bsr.w	lootaa
 	bsr.w	inforivit_clear
 
@@ -6436,12 +6519,14 @@ signalreceived
 	
 
 .eipa
+	DPRINT	"Replay end"
+
 	* Stopping playback 
 	lore  	Exec,Disable
 	clr.b	playing(a5)		* soitto seis
+	lore   	Exec,Enable
 	move.l	playerbase(a5),a0	* stop module
 	jsr	 	p_end(a0)
-	lore   	Exec,Enable
 
 	bsr.w	freemodule
 
@@ -6494,6 +6579,7 @@ signalreceived
 	tst.l	d0
 	bne.b	.loader
 
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0	* soitto päälle
 	jsr	p_init(a0)
 	tst.l	d0
@@ -6514,7 +6600,7 @@ signalreceived
 .mododo	
 	* init error, no module to play
 
-	DPRINT	"Deallocate resources!"
+	DPRINT	"ERROR, deallocate resources!"
 	jsr	rem_ciaint
 	jsr	vapauta_kanavat
 
@@ -6540,7 +6626,7 @@ signalreceived
 	move.l	modamount(a5),chosenmodule(a5)
 	subq.l	#1,chosenmodule(a5)
 	bsr.w	resh
-	bra.b	.reet
+	bra.w	.reet
 
 .hm	
 	* In "pm_through" mode start over from the first module
@@ -7039,12 +7125,14 @@ umph
 	* Restart it from beginning.
 
 * on!
+	DPRINT	"Replay end"
 	lore    Exec,Disable
 	bsr.w	halt			* soitetaan vaan alusta
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr 	p_end(a0)
-	lore    Exec,Enable
 
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -7057,6 +7145,8 @@ umph
 	rts
 	
 .new
+	DPRINT	"New mod"
+
 	* New module to be played.
 
 	moveq	#0,d7			* flag for double buffering (0: no db)
@@ -7075,12 +7165,13 @@ umph
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
 .hm1
+	DPRINT	"Replay end"
 
 	lore    Exec,Disable
 	bsr.w	halt			* Vapautetaan se jos on
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
-	lore    Exec,Enable
 	bsr.w	freemodule	
 
 	tst	d6
@@ -7102,6 +7193,7 @@ umph
 	tst.l	d0
 	bne.b	.loader
 
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -7124,6 +7216,8 @@ umph
 
 
 .inierr	
+	DPRINT	"Replay init ERROR"
+
 	* Replay init failed.
 	* Did not get a module to play successfully.
 	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
@@ -8755,13 +8849,14 @@ rbutton4a
 	bsr.w	fadevolumedown
 
 .nofa	move	d0,-(sp)
+	DPRINT	"Replay end (eject)"
 
 	lore    Exec,Disable
 	bsr.w	halt
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
-	lore    Exec,Enable
 
 	bsr.w	freemodule
 	move	(sp)+,mainvolume(a5)
@@ -9172,7 +9267,7 @@ rbutton1
 	* Same with all EaglePlayers to be save.
 	* At least Tim Follin crashes.
 	cmp	#pt_eagle_start,playertype(a5)
-	bhs.b	.new
+	bhs.w	.new
 	* Similar case with SonicArranger with built-in
 	* replayer code. Data is modified upon init so that
 	* subsequent inits with same data will fail as
@@ -9182,7 +9277,7 @@ rbutton1
 	* Check for "compact" SA module
 	move.l  moduleaddress(a5),a0 
 	cmp.l	#'SOAR',(a0)
-	bne.b 	.new
+	bne.w 	.new
 .notSoar
 	DPRINT	"Restarting the same module!"
 ;.early
@@ -9190,16 +9285,16 @@ rbutton1
 	move	d0,-(sp)
 
 
+	DPRINT	"Replay end"
 * Soitetaan vaan alusta
 	lore	Exec,Disable
 	bsr.w	halt
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
-	lore    Exec,Enable
 	move	(sp)+,mainvolume(a5)
 
-
-
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -9220,11 +9315,13 @@ rbutton1
 
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
+	DPRINT	"Replay end"
+
 	lore	Exec,Disable
-	bsr.b	halt			* Vapautetaan se jos on
+	bsr.w	halt			* Vapautetaan se jos on
+	lore 	Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr		p_end(a0)
-	lore 	Exec,Enable
 	bsr.w	freemodule	
 	move	(sp)+,mainvolume(a5)
 .nomod
@@ -9238,6 +9335,7 @@ rbutton1
 	tst.l	d0
 	bne.b	.loader
 
+	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -9258,6 +9356,7 @@ rbutton1
 	moveq	#ier_unknown,d0
 
 .inierr	
+	DPRINT	"Replay init ERROR"
 	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
 	bra.w	init_error
 ;	rts
@@ -9446,11 +9545,30 @@ filereq_code
 	beq.b	.eimuut
 	clr.b	newdirectory(a5)
 
+	* Use either prefs set directory, or one from saved state
+
 	move.l	req_file(a5),a1		* Vaihdetaan hakemistoa...
 	lea	newdir_tags(pc),a0
 	lea	moduledir(a5),a2
 	move.l	a2,4(a0)
+
+	tst.b	savestate(a5)
+	beq.b	.noSaveState
+	move.l	lastStoredFileReqDirectory(a5),d0 
+	beq.b	.noSaveState
+	move.l	d0,4(a0)
+.noSaveState
+ if DEBUG
+	move.l	4(a0),d0
+	DPRINT	"FileReq to %s"
+ endif
 	lore	Req,rtChangeReqAttrA
+
+	* When set once, filereq will remember the 
+	* last user dir.
+	move.l	lastStoredFileReqDirectory(a5),a0 
+	bsr		freemem
+	clr.l	lastStoredFileReqDirectory(a5)
 
 .eimuut
 
@@ -9492,7 +9610,6 @@ filereq_code
 	rts
 
 .processResult
-
 	* Test if user selected anything or canceled
 	move.l	d0,filelistaddr(a5)
 	bne.b	.val
@@ -11296,6 +11413,7 @@ loadprefs2
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
+	move.b	prefs_savestate(a0),savestate(a5)
 
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
@@ -11522,7 +11640,7 @@ saveprefs
 	sne	prefs_infoon+prefsdata(a5)
 
 
-	move.l	windowbase3(a5),d0
+	move.l	scopeWindowBase(a5),d0
 	beq.b	.k
 	move.l	d0,a0
 	move.l	4(a0),quadpos(a5)
@@ -11588,7 +11706,8 @@ saveprefs
 	move.b	medmode(a5),prefs_medmode(a0)
 	move	medrate(a5),prefs_medrate(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
-
+	move.b	tooltips(a5),prefs_tooltips(a0)
+	move.b	savestate(a5),prefs_savestate(a0)
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
@@ -12044,6 +12163,7 @@ prefs_code
 	move	medrate(a5),medrate_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
+	move.b	savestate(a5),savestate_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -12196,9 +12316,6 @@ prefs_code
 	or	d0,gg_Flags+VaL6
 
 .uusi
-** Disabloidaan Early load
-;	or	d0,bUu3+gg_Flags
-
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc2,a0
@@ -12495,6 +12612,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 	move.b	favorites_new(a5),favorites(a5)
 	move.b	tooltips_new(a5),tooltips(a5)
+	move.b	savestate_new(a5),savestate(a5)
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
@@ -12816,6 +12934,12 @@ prefsgads
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
+
+	* Remove "Early load" gadget
+	move.l	windowbase2(a5),a0
+	lea	bUu3,a1
+	lob	RemoveGadget
+
 	lea	gadgets2,a0
 	move.l	windowbase2(a5),a1
 	sub.l	a2,a2
@@ -12959,9 +13083,10 @@ pmousebuttons
 	lea	tomaatti,a0		* priority
 	lea	rpri_req(pc),a2
 	bsr.w	.check
-	lea	bUu3,a0
-	lea	rearly_req(pc),a2
-	bsr.w	.check
+; Early load has been disabled 
+;	lea	bUu3,a0
+;	lea	rearly_req(pc),a2
+;	bsr.w	.check
 	bra.w	.xx
 
 .1	subq	#1,d0
@@ -13064,8 +13189,9 @@ pupdate				* Ikkuna päivitys
 	bsr.w	pearly			* early load
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
-	bsr.w		pfavorites		* favorites
-	bsr.w		ptooltips       * tooltips
+	bsr.w	pfavorites		* favorites
+	bsr.w	ptooltips  	     	* tooltips
+	bsr	psavestate		* savestate
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -13237,10 +13363,10 @@ gadgetsup2
 	movem.l	d0-a6,-(sp)
 	move	gg_GadgetID(a2),d0
 
- ;if DEBUG
-;	ext.l	d0
-;	DPRINT	"Gadget id=%ld"
- ;endif
+ if DEBUG
+	ext.l	d0
+	DPRINT	"Gadget id=%ld"
+ endif
 
 	add	d0,d0
 	cmp	#20*2,d0
@@ -13305,7 +13431,8 @@ gadgetsup2
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
 	dr	rfavorites	* favorites
-	dr      rtooltips   * tooltips
+	dr      rtooltips   	* tooltips
+	dr 	rsavestate	* save state
 
 .s1
 *** Sivu1
@@ -14371,6 +14498,15 @@ ptooltips
 	lea	prefsTooltips,a0
 	bra.w	tickaa
 
+********* Tooltips
+rsavestate
+	not.b	savestate_new(a5)
+psavestate
+	move.b	savestate_new(a5),d0
+	lea	prefsSaveState,a0
+	bra.w	tickaa
+
+
 ********* Autosort
 rautosort
 	not.b	autosort_new(a5)
@@ -14840,25 +14976,28 @@ rfont
 
 	move.l	d7,a0
 	lea	rtfo_Attr(a0),a0	* fontin textattr
-	cmp	#8,ta_YSize(a0)
-	bne.b	.ew
-	btst	#FPB_PROPORTIONAL,ta_Flags(a1)	* Onko proportional?
-	bne.b	.ew
-
-	lore	DiskFont,OpenDiskFont	* onko leveys 8 pix?
+	* Open font from TextAttr in A0
+	lore	DiskFont,OpenDiskFont	
 	tst.l	d0
 	beq.b	.ew
 	move.l	d0,a3
+	
 	cmp	#8,tf_XSize(a3)
 	sne	d3
+	cmp	#8,tf_YSize(a3)
+	sne 	d4
+	btst	#FPB_PROPORTIONAL,tf_Flags(a3) 
+	sne 	d5
+
 	move.l	a3,a1
 	lore	GFX,CloseFont
 	move.l	a3,a1
 	lob	RemFont		* puis muistista
 
-	tst.b	d3
+	or.b	d3,d4 
+	or.b	d4,d5
 	bne.b	.ew
-	
+
 	move.l	d7,a0
 	lea	rtfo_Attr(a0),a0
 	move.l	4(a0),prefs_textattr+prefsdata(a5) * YSize, Style, Flags talteen
@@ -15095,53 +15234,52 @@ ls299	dc.b	1,7
  even
 
 **** Early load
-rearly_req
-	lea	ls400(pc),a0
-	bsr.w	listselector
-	bmi.b	.x
-	move.b	d0,early_new(a5)
-	cmp.b	#11,d0
-	blo.b	pearly
-	move.b	#10,early_new(a5)
-	bra.b	pearly
-.x	rts
-
+* DISABLED!
 rearly
-	move.b	early_new(a5),d0
-	addq.b	#1,d0
-	cmp.b	#10,d0
-	bls.b	.r
-	clr.b	d0
-.r	move.b	d0,early_new(a5)
-pearly
-	moveq	#0,d0
-	move.b	early_new(a5),d0
-	add	d0,d0
-	lea	ls400+2(pc,d0),a0
-	lea	bUu3,a1
-	bra.w	prunt
-
-
-
-
-ls400	dc.b	2,11
-	dc.b	"0",0
-	dc.b	"1",0
-	dc.b	"2",0
-	dc.b	"3",0
-	dc.b	"4",0
-	dc.b	"5",0
-	dc.b	"6",0
-	dc.b	"7",0
-	dc.b	"8",0
-	dc.b	"9",0
-	dc.b	"10",0
- even
-
-
-
-
-
+pearly	rts
+;rearly_req
+;	lea	ls400(pc),a0
+;	bsr.w	listselector
+;	bmi.b	.x
+;	move.b	d0,early_new(a5)
+;	cmp.b	#11,d0
+;	blo.b	pearly
+;	move.b	#10,early_new(a5)
+;	bra.b	pearly
+;.x	rts
+;
+;rearly
+;	move.b	early_new(a5),d0
+;	addq.b	#1,d0
+;	cmp.b	#10,d0
+;	bls.b	.r
+;	clr.b	d0
+;.r	move.b	d0,early_new(a5)
+;pearly
+;	moveq	#0,d0
+;	move.b	early_new(a5),d0
+;	add	d0,d0
+;	lea	ls400+2(pc,d0),a0
+;	lea	bUu3,a1
+;	bra.w	prunt
+;
+;
+;
+;
+;ls400	dc.b	2,11
+;	dc.b	"0",0
+;	dc.b	"1",0
+;	dc.b	"2",0
+;	dc.b	"3",0
+;	dc.b	"4",0
+;	dc.b	"5",0
+;	dc.b	"6",0
+;	dc.b	"7",0
+;	dc.b	"8",0
+;	dc.b	"9",0
+;	dc.b	"10",0
+; even
+;
 
 
 ;samplecyber	rs.b	1
@@ -19796,7 +19934,7 @@ request2
 	lea	.ok_g(pc),a2
 	bsr.b	rawrequest
 	movem.l	(sp)+,d0-a6
-	tst.l	d0
+	tst.l	d0	* not needed?!
 	rts
 
 .ok_g	dc.b	"OK",0
@@ -19946,7 +20084,7 @@ ier_nosid_t
 ier_sidicon_t
 	dc.b	"Trouble with SID icon!",0
 ier_nomled_t
-	dc.b	"Couldn't open mled.library!",0
+	dc.b	"Couldn't open mline.library!",0
 ier_mlederr_t
 	dc.b	"MusiclineEditor init error!",0
 ier_nopr_t
@@ -20487,6 +20625,7 @@ softint
 start_quad
 	st	scopeflag(a5)
 start_quad2
+;	jmp	quad_code
 
 	move.l	a6,-(sp)
 	move.l	_DosBase(a5),a6
@@ -21183,6 +21322,10 @@ wflags3 set WFLG_SMART_REFRESH!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags3 set wflags3!WFLG_RMBTRAP
 idcmpflags3 = IDCMP_CLOSEWINDOW!IDCMP_MOUSEBUTTONS
 
+; These could be useful to detect window changes but they don't
+; seem to work on kick1.3 similarly as on kick3.0.
+;!IDCMP_NEWSIZE!IDCMP_CHANGEWINDOW!IDCMP_REFRESHWINDOW
+
 QUADMODE2_QUADRASCOPE = 0
 QUADMODE2_QUADRASCOPE_BARS = 1
 QUADMODE2_HIPPOSCOPE = 2
@@ -21196,6 +21339,16 @@ QUADMODE2_FQUADRASCOPE_BARS = 9
 QUADMODE2_PATTERNSCOPEXL = 10
 QUADMODE2_PATTERNSCOPEXL_BARS = 11
 
+SCOPE_DRAW_AREA_WIDTH_DEFAULT = 320
+SCOPE_DRAW_AREA_HEIGHT_DEFAULT = 64
+SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
+
+* If more channels than defined here,
+* switch to small font.
+;SCOPE_SMALL_FONT_CHANNEL_LIMIT = 4
+SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
+
+
 quad_code
 	lea	var_b,a5
 	clr.l	mtab(a5)
@@ -21207,6 +21360,10 @@ quad_code
 	move.l	d0,quad_task(a5)
 
 	addq	#1,quad_prosessi(a5)	* Lippu: prosessi päällä
+
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,scopeDrawAreaWidth(a5) 
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,scopeDrawAreaModulo(a5)
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,scopeDrawAreaHeight(a5)
 
 	lea	ch1(a5),a0
 	lea	4*ns_size(a0),a1
@@ -21242,11 +21399,11 @@ quad_code
 	jmp	.5(pc)		* freq. analyzer
 	jmp	.6(pc)		* freq. analyzer bars
 	jmp	.patternScopeNormal(pc)	* patternscope
-	jmp	.patternScopeNormal(pc)	* patternscope bars (ei oo!)
+	jmp	.patternScopeNormalBars(pc)	* patternscope bars (ei oo!)
 	jmp	.7(pc)		* filled quadrascope
 	jmp	.8(pc)		* filled quadrascope & bars
 	jmp	.patternScopeXL(pc)	* patternscope xl
-	jmp	.patternScopeXL(pc)	* patternscope xl bars (no bars available though)
+	jmp	.patternScopeXLBars(pc)	* patternscope xl bars (no bars available though)
 
 
 .7	moveq	#-1,d7
@@ -21307,7 +21464,7 @@ quad_code
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
-	bra.b	.cont
+	bra.w	.cont
 
 .delt	move.l	#(256+32)*4,d0
 	move.l	#MEMF_CLEAR,d1
@@ -21334,38 +21491,29 @@ quad_code
 	bra.w	.wo
 
 .patternScopeNormal
-	move	#8,quadNoteScrollerLines(a5)
-	move	#4,quadNoteScrollerLinesHalf(a5)
+.patternScopeNormalBars
+	* Prevent use of _BARS enumeration in quadmode2,
+	* makes things easier. 
+	move.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
+	DPRINT	"Patternscope NORMAL"
 	bra.b	.cont
 .patternScopeXL
-	move	#16,quadNoteScrollerLines(a5)
-	move	#8,quadNoteScrollerLinesHalf(a5)
-	;bra.b	.cont
-
+.patternScopeXLBars
+	move.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	DPRINT	"Patternscope XL"
 .cont
+
+	* Start with no size request active.
+	move	scopeDrawAreaWidth(a5),scopeDrawAreaWidthRequest(a5)
+	move	scopeDrawAreaHeight(a5),scopeDrawAreaHeightRequest(a5)
 		
+	* lines count for patternscope, 8px high rows
+	move	scopeDrawAreaHeight(a5),d0
+	lsr	#3,d0 
+	move	d0,quadNoteScrollerLines(a5)
+	lsr	#1,d0
+	move	d0,quadNoteScrollerLinesHalf(a5)
 
-
-* Piirtoalueet
-	move.l	#320/8*(72)*2,d0
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge
-	move.l	#320/8*(72+64)*2,d0
-.notLarge
-	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
-	jsr	getmem
-	beq.b	.me
-	move.l	d0,buffer0(a5)
-	add.l	#320/8*2,d0		* yläälle 2 varariviä
-	move.l	d0,buffer1(a5)
-	add.l	#320/8*(70),d0
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge2
-	add.l	#320/8*(64),d0
-.notLarge2
-	move.l	d0,buffer2(a5)		* alaalle 4 
-
-.gurgle
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc3,a0
@@ -21373,10 +21521,7 @@ quad_code
 	move.l	quadpos(a5),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
-	bsr.w	scopeIsNormal
-	bne.b	.normSize
-	add	#64,d0
-.normSize
+	add	scopeDrawAreaHeight(a5),d0
 	move	d0,nw_Height(a0)
 
 	move	wbleveys(a5),d0		* WB:n leveys
@@ -21396,7 +21541,7 @@ quad_code
 .ok2
 
 	lob	OpenWindow
-	move.l	d0,windowbase3(a5)
+	move.l	d0,scopeWindowBase(a5)
 	bne.b	.ok3
 	lea	windowerr_t(pc),a1
 .me	bsr.w	request
@@ -21412,186 +21557,139 @@ quad_code
 
 	jsr	setscrtitle
 
+	move.l	quad_task(a5),a1
+	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
+	lore	Exec,SetTaskPri
 
 	move.l	_GFXBase(a5),a6
 	move.l	rastport3(a5),a1
 	move.l	pen_1(a5),d0
 	lob	SetAPen
 
-	tst.b	uusikick(a5)		* uusi kick?
-	beq.b	.vanaha
+	move.l	scopeWindowBase(a5),a0 
+	move	wd_LeftEdge(a0),scopePreviousLeftEdge(a5)
+	move	wd_TopEdge(a0),scopePreviousTopEdge(a5)
+	move	wd_Width(a0),scopePreviousWidth(a5)
+	move	wd_Height(a0),scopePreviousHeight(a5)
 
-	move.l	rastport3(a5),a2
-	moveq	#4,d0
-	moveq	#11,d1
-	move	#335,d2
-	move	#82,d3
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge3
-	add	#64,d3
-.notLarge3
-	bsr.w	drawtexture
-
-	moveq	#8,d0
-	moveq	#13,d1
-	move	#323,d4
-	move	#67,d5
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge4
-	add	#64,d5
-.notLarge4
-	moveq	#$0a,d6
-	move.l	rastport3(a5),a0
-	move.l	a0,a1
-	add	windowleft(a5),d0
-	add	windowtop(a5),d1
-	move.l	d0,d2
-	move.l	d1,d3
-	lob	ClipBlit
-.vanaha
+	bsr	drawScopeWindowDecorations
+	bsr	initScopeBitmaps
+	beq.b	.memer
 
 
-*** Initialisoidaan oma bitmappi
-
-	lea	omabitmap(a5),a0
-	moveq	#1,d0
-	move	#320,d1
-	move	#66,d2
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge5
-	add	#64,d2
-.notLarge5
-	lore	GFX,InitBitMap
-	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
- 
-	moveq	#7,plx1
-	move	#332,plx2
-	moveq	#13,ply1
-	move	#80,ply2
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge6
-	add 	#64,ply2
-.notLarge6
-	add	windowleft(a5),plx1
-	add	windowleft(a5),plx2
-	add	windowtop(a5),ply1
-	add	windowtop(a5),ply2
-	move.l	rastport3(a5),a1
-	jsr	laatikko2
-
-	move.l	buffer1(a5),draw1(a5)
-	move.l	buffer2(a5),draw2(a5)
-	moveq	#3*40,d0 	* 3 vertical lines
-	add.l	d0,draw1(a5)
-	add.l	d0,draw2(a5)
-
-	
+	* State flag indicating whether scope has been cleared
 	moveq	#0,d7
-	move	playertype(a5),d6
-	jsr	printhippo2	
+	* State flag indicating font request has been shown 
+	* Up bit for patternscope
+	moveq	#0,d6	
+	bsr	patternScopeIsActive
+	bne.b	.noPatts
+	DPRINT	"Patternscope active"
+	st		d6
+.noPatts
 
-	* Set to non-zero if LMB is pressed:
-	moveq	#0,d5	
+	* Set to non-zero if LMB is pressed
+	move.b	scopeManualActivation(a5),d5
 
-	move.l	quad_task(a5),a1
-	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
-	lore	Exec,SetTaskPri
+	jsr	printHippoScopeWindow	
 
+*********************************************************************
+* Scope main loop
+*********************************************************************
+
+scopeTest=0
 
 scopeLoop
+
+ ifne scopeTest
+ 	move	#$666,$dff180
+.1 	cmp.b	#$40,$dff006
+ 	bne.b	.1
+.2 	cmp.b	#$40,$dff006
+ 	beq.b	.2
+ 	move	#$f00,$dff180
+ else
 	move.l	_GFXBase(a5),a6
 	lob	WaitTOF
+ endif
 
 	tst.b	tapa_quad(a5)		* pitääkö poistua?
 	bne.w	qexit
 
 	* Bypass screen check if LMB has been pressed
 	tst.b 	d5
-	bne.b	.joo
+	bne.b	.screenVisible
 
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
-	move.l	windowbase3(a5),a0	* ollaanko päällimmäisenä?
+	move.l	scopeWindowBase(a5),a0	* ollaanko päällimmäisenä?
+
 	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
-	beq.b	.joo
+	beq.b	.screenVisible
 	* Scope screen is not active, but screen might be partially
 	* visible? sc_TopEdge==0 means it can't be partially visible.
 	tst	sc_TopEdge(a1)
-	beq.w	.m
-.joo
+	beq.w 	.continue
+.screenVisible
 
-** jos AHI, ei scopeja
-
-	cmp	#pt_prot,playertype(a5)		 * pelittää vain PT modeilla.
-	bne.b	.nnq
-.nna	tst.b	ahi_use_nyt(a5)
-	bne.b	.n
-	bra.b	.nn
-
-.nnq	cmp	#pt_sample,playertype(a5)	 * ja sampleplayerillä
-;	beq.b	.nn
-	beq.b	.nna
-	cmp	#pt_multi,playertype(a5) 	* ja PS3M:llä
-	bne.b	.n
-
+	* No scopes when AHI
 	tst.b	ahi_use_nyt(a5)
-	bne.b	.n
+	bne.b	.doNotDraw
 
-	cmp.b	#5,s3mmode1(a5)		* killer
-	beq.b	.n
+	* Does the active player support scopes?
+	move.l	playerbase(a5),d0
+	beq.b	.doNotDraw
+	move.l	d0,a0
+	move	p_liput(a0),d0 
+	btst	#pb_scope,d0 
+	beq.b	.doNotDraw
 
-	
-.nn	tst.b	playing(a5)
-	beq.b	.n
+	tst.b	playing(a5)
+	beq.b	.doNotDraw
+
+	bsr	scopeDrawAreaSizeChangeRequestIsActive
+	bne.b	.doNotDraw
+
 	tst.b	d7
-	bne.b	.je
-	bsr.b	.clear
+	bne.b	.doDraw
+	* This clears the hippo gfx away when starting again
+	bsr.w	scopeDrawAreaClear
 
-.je
-	cmp	playertype(a5),d6
-	beq.b	.noen
-	move	playertype(a5),d6
-	bsr.b	.clear
-.noen	pushm	d5/d6/d7
-	jsr		obtainModuleData
+.doDraw
+	* Needs a clear in the future
+	moveq	#-1,d7
+
+	tst.b	d6 		* pattscope indicator bit
+	beq.b	.noPatts
+	bsr	getScopeMiniFontIfNeeded
+.noPatts
+
+	pushm	d5/d6/d7
+	jsr	obtainModuleData
 	bsr.w	drawScope
 	jsr 	releaseModuleData
 	popm	d5/d6/d7
-	moveq	#-1,d7
-	bra.b	.m
-.n	
+	bra.b	.continue
+
+.doNotDraw
+	* See if clear requested
 	tst.b	d7
-	beq.b	.m
+	beq.b	.continue
+	* Request fulfilled
 	moveq	#0,d7
-
-.nm	bsr.b	.clear
-	jsr	printhippo2
-	bra.b	.m
-
-.clear
-	move.l	rastport3(a5),a1
-	move.l	pen_0(a5),d0
-	lore	GFX,SetAPen
-	move.l	rastport3(a5),a1
-	moveq	#10,d0
-	moveq	#14,d1
-	move	#330,d2
-	move	#79,d3
-	bsr.w 	scopeIsNormal
-	bne.b	.notLarge7
-	add 	#64,d3
-.notLarge7
-	add	windowleft(a5),d0
-	add	windowleft(a5),d2
-	add	windowtop(a5),d1
-	add	windowtop(a5),d3
-	jmp	_LVORectFill(a6)
+	bsr.w	scopeDrawAreaClear
+	jsr	printHippoScopeWindow
+	bra.w	.continue
 
 .m
-	move.l	(a5),a6
+.continue
+	* Manual size and position detection by polling.
+	bsr		scopeWindowChangeHandler
+.getMoreMsg
+	* Poll for messages
 	move.l	userport3(a5),a0
-	lob	GetMsg
+	lore	Exec,GetMsg
 	tst.l	d0
 	beq.w	scopeLoop
 	move.l	d0,a1
@@ -21599,42 +21697,65 @@ scopeLoop
 	move.l	im_Class(a1),d2		* luokka	
 	move	im_Code(a1),d3
 	lob	ReplyMsg
+
+;	cmp.l	#IDCMP_REFRESHWINDOW,d2 
+;	bne.b 	.noRefresh
+;	bsr.w	scopeRefreshWindow
+;	bra.b	.getMoreMsg
+;.noRefresh
+;	cmp.l	#IDCMP_CHANGEWINDOW,d2 
+;	bne.b 	.noChangeWindow
+;	bsr	scopeWindowChanged
+;	bra.b	.getMoreMsg
+;.noChangeWindow
+;	cmp.l	#IDCMP_NEWSIZE,d2 
+;	bne.b 	.noNewSize
+;	bsr.w	scopeWindowSizeChanged
+;	bra.b	.getMoreMsg
+;.noNewSize
+
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
-	bne.b	.qx
+	bne.b	.noButtons
+
 	* RMB closes window
 	cmp	#MENUDOWN,d3
-	beq.b	.xq
+	beq.b	.quit
 	cmp	#SELECTDOWN,d3
-	bne.b	.qx 
+	bne.b	.noButtons
 	* LMB activates 
-	moveq	#1,d5
-.qx	cmp.l	#IDCMP_CLOSEWINDOW,d2
-	bne.w	scopeLoop
+	st	d5
+	move.b	d5,scopeManualActivation(a5)
 
-.xq	clr.b	scopeflag(a5)
+.noButtons
+	cmp.l	#IDCMP_CLOSEWINDOW,d2
+	beq.b	.quit
+	bra.b	.getMoreMsg
 	
-qexit	bsr.b	qflush_messages
+.quit
+	clr.b	scopeflag(a5)
+	
+*********************************************************************
+* Scope exit
+*********************************************************************
 
+qexit	bsr.b	qflush_messages
 
 	move.l	mtab(a5),a0
 	jsr	freemem
-	move.l	buffer0(a5),a0
-	jsr	freemem
+	bsr	freeScopeBitmaps
 	move.l	deltab1(a5),a0
 	jsr	freemem
 	clr.l	mtab(a5)
-	clr.l	buffer0(a5)
 	clr.l	deltab1(a5)
 
 	move.l	_IntuiBase(a5),a6		
-	move.l	windowbase3(a5),d0
+	move.l	scopeWindowBase(a5),d0
 	beq.b	.uh1
 	move.l	d0,a0
 	move.l	4(a0),quadpos(a5)	* koordinaatit talteen
 	lob	CloseWindow
-	clr.l	windowbase3(a5)
+	clr.l	scopeWindowBase(a5)
 .uh1
-
 
 	lore	Exec,Forbid
 
@@ -21643,18 +21764,384 @@ qexit	bsr.b	qflush_messages
 	bsr.w	updateprefs
 .reer
 
-
 	clr	quad_prosessi(a5)	* lippu: lopetettiin
 	rts
 
-
-
 qflush_messages
-	move.l	windowbase3(a5),a0 
-	bra.w		flushWindowMessages
+	move.l	scopeWindowBase(a5),a0 
+	bra.w	flushWindowMessages
+
+freeScopeBitmaps
+	move.l	buffer0(a5),d0
+	beq.b	.noFree
+	move.l	d0,a0
+	clr.l	buffer0(a5)
+	move	buffer0w(a5),d0
+	move	buffer0h(a5),d1
+	lore	GFX,FreeRaster
+.noFree
+	rts
+
+initScopeBitmaps
+	bsr.b 	freeScopeBitmaps
+
+	moveq	#0,d0
+	move	scopeDrawAreaWidth(a5),d0 
+	moveq	#0,d1
+	move	scopeDrawAreaHeight(a5),d1
+	* allocate 6 extra rasterlines per buffer
+	addq.l	#6,d1
+	* two buffers
+	add.l	d1,d1
+	move	d0,buffer0w(a5)
+	move	d1,buffer0h(a5)
+	lore	GFX,AllocRaster
+	move.l	d0,buffer0(a5)
+	beq.b	.memError 
+
+ 	move.l	d0,a0
+	move.l	a0,buffer0(a5)
+
+	* AllocRaster does not clear memory, clear it
+	move.l 	a0,a1
+	move	scopeDrawAreaModulo(a5),d1
+	mulu	buffer0h(a5),d1
+	lsr.l	#2,d1
+	subq	#1,d1
+.clr
+	clr.l	(a1)+
+	dbf	d1,.clr
+
+	move	scopeDrawAreaModulo(a5),d1
+	* leave two lines spare at the top
+	add	d1,a0
+	add	d1,a0
+	;add.l	#320/8*2,d0		* yläälle 2 varariviä
+	move.l	a0,buffer1(a5)
+
+	move	scopeDrawAreaModulo(a5),d0
+	move	scopeDrawAreaHeight(a5),d1
+	* four lines spare at the botrom
+	addq	#4,d1
+	mulu	d1,d0
+	add.l	d0,a0
+	move.l	a0,buffer2(a5)
+	
+*** Initialisoidaan oma bitmappi
+	lea	omabitmap(a5),a0
+	moveq	#1,d0
+	move	scopeDrawAreaWidth(a5),d1
+	move	scopeDrawAreaHeight(a5),d2
+	* why add 2 here? 
+	addq	#2,d2
+	lore	GFX,InitBitMap
+	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
+ 
+	move.l	buffer1(a5),draw1(a5)
+	move.l	buffer2(a5),draw2(a5)
+	move	scopeDrawAreaModulo(a5),d0
+	* make draw buffer start at 3rd line. why?
+	mulu	#3,d0
+	add.l	d0,draw1(a5)
+	add.l	d0,draw2(a5)
+
+.memError
+	rts
+
+* Z is set if patternscope is active
+patternScopeIsActive
+	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5) 
+	beq.b	.isPatts
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+.isPatts
+	rts
 
 
-*** Scope interrupt code, keeps track the play positions of protracker replayer samples
+scopeDrawAreaClear
+	move.l	rastport3(a5),a1
+	move.l	pen_0(a5),d0
+	lore	GFX,SetAPen
+	move.l	rastport3(a5),a1
+	moveq	#10,d0
+	moveq	#14,d1
+	move	scopeDrawAreaWidth(a5),d2
+	add	#10,d2
+	move	scopeDrawAreaHeight(a5),d3
+	add	#79-64,d3
+	add	windowleft(a5),d0
+	add	windowleft(a5),d2
+	add	windowtop(a5),d1
+	add	windowtop(a5),d3
+	jmp	_LVORectFill(a6)
+
+
+* Called each scope loop to detect changes in window position
+* and size. This provides IDCMP_NEWSIZE and IDCMP_CHANGEWINDOW
+* kind of functionality by polling. Seems to work on kick1.3 and kick3.0,
+* for some reason the IDCMP approach did not work similarly on
+* both kickstarts.
+scopeWindowChangeHandler
+	move.l	scopeWindowBase(a5),a0
+	move	wd_Width(a0),d0 
+	move	wd_Height(a0),d1 
+	move	wd_TopEdge(a0),d2 
+	move	wd_LeftEdge(a0),d3
+
+	cmp	scopePreviousTopEdge(a5),d2
+	bne.b	.posChange
+	cmp	scopePreviousLeftEdge(a5),d3 
+	bne.b	.posChange
+	cmp	scopePreviousWidth(a5),d0 
+	bne.b	.sizeChange
+	cmp scopePreviousHeight(a5),d1 
+	bne.b	.sizeChange
+	rts
+.posChange
+	move	d2,scopePreviousTopEdge(a5) 
+	move	d3,scopePreviousLeftEdge(a5)
+	bsr.w	scopeWindowChanged
+	rts
+.sizeChange 
+	move	d0,scopePreviousWidth(a5)
+	move	d1,scopePreviousHeight(a5)
+	bsr.w	scopeWindowSizeChanged
+	rts
+
+
+;scopeRefreshWindow
+;	move.l	scopeWindowBase(a5),a0
+;	lore	Intui,BeginRefresh
+;;	bsr.b	drawScopeWindowDecorations
+;	moveq	#1,d0 * true: complete
+;	move.l	scopeWindowBase(a5),a0 
+;	lore	Intui,EndRefresh
+;	rts
+
+drawScopeWindowDecorations
+	tst.b	uusikick(a5)		* uusi kick?
+	beq.b	.kick13
+
+	move.l	rastport3(a5),a2
+	moveq	#4,d0
+	moveq	#11,d1
+	move	scopeDrawAreaWidth(a5),d2
+	add	#335-320,d2
+	move	scopeDrawAreaHeight(a5),d3
+	add	#82-64,d3
+	bsr.w	drawtexture
+
+	moveq	#8,d0
+	moveq	#13,d1
+	move	scopeDrawAreaWidth(a5),d4
+	add	#323-320,d4
+	move	scopeDrawAreaHeight(a5),d5
+	addq	#67-64,d5
+	moveq	#$0a,d6
+	move.l	rastport3(a5),a0
+	move.l	a0,a1
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	move.l	d0,d2
+	move.l	d1,d3
+	lob	ClipBlit
+	bra.b	.drawBox 
+	
+.kick13	
+	* Kickstart 1.3, since there is no background texture fill,
+	* the window must be cleared by other means
+	* to get rid of previous stuff after resize.
+	move.l	rastport3(a5),a1
+	move.l	pen_0(a5),d0
+	lore	GFX,SetAPen
+	moveq	#4,d0
+	moveq	#11,d1
+	move	scopeDrawAreaWidth(a5),d2
+	add	#335-320,d2
+	move	scopeDrawAreaHeight(a5),d3
+	add	#82-64,d3
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	add	windowleft(a5),d2
+	add	windowtop(a5),d3
+	jsr	_LVORectFill(a6)
+	
+.drawBox
+	moveq	#7,plx1
+	move	scopeDrawAreaWidth(a5),plx2
+	add	#332-320,plx2
+	moveq	#13,ply1
+	move	scopeDrawAreaHeight(a5),ply2
+	add	#80-64,ply2
+	add	windowleft(a5),plx1
+	add	windowleft(a5),plx2
+	add	windowtop(a5),ply1
+	add	windowtop(a5),ply2
+	move.l	rastport3(a5),a1
+	jsr	laatikko2
+	rts
+
+
+requestNormalScopeDrawArea
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0 
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	* falling thru!
+
+* Resize window based on relative change to
+* the draw area.
+* In:
+*   d0 = new draw area width, must be divisible by 16
+*        for blitter
+*   d1 = new draw area height
+* Out:
+*   d0 = 0 if draw area is already matching
+*   d0 = ~0 window will change to accommodate
+requestScopeDrawAreaChange
+
+	move	d0,scopeDrawAreaWidthRequest(a5)
+	move	d1,scopeDrawAreaHeightRequest(a5)
+	sub	scopeDrawAreaWidth(a5),d0
+	sub	scopeDrawAreaHeight(a5),d1
+	move	d1,d2
+	or	d0,d2
+	beq.w	.noDiff
+
+ if DEBUG 	
+	ext.l 	d0 
+	ext.l 	d1
+	DPRINT	"Draw area change %ld %ld"
+ endif
+
+
+	move.l	scopeWindowBase(a5),a0
+	* Calculate new right edge position for window 
+	move	wd_LeftEdge(a0),d2
+	add	wd_Width(a0),d2
+	add	d0,d2
+	move	wbleveys(a5),d3
+	sub	d2,d3
+
+	move	wd_TopEdge(a0),d4
+	add	wd_Height(a0),d4
+	add	d1,d4
+	move	wbkorkeus(a5),d5
+	sub	d4,d5
+
+	tst	d3
+	bmi.b	.1
+	moveq	#0,d3
+.1	tst	d5
+	bmi.b	.2
+	moveq	#0,d5
+.2
+	move	d3,d2
+	or	d5,d2
+	beq.b	.fits
+ 
+	move	d3,d0
+	move	d5,d1 
+ if DEBUG 
+ 	ext.l 	d0 
+ 	ext.l 	d1
+	DPRINT	"->move %ld %ld"
+ endif
+   
+	lore	Intui,MoveWindow
+	moveq	#1,d0
+	rts
+.fits
+ if DEBUG 
+ 	ext.l 	d0 
+ 	ext.l 	d1
+	DPRINT	"->resize %ld %ld"
+ endif 
+
+	move.l	scopeWindowBase(a5),a0 
+	lore 	Intui,SizeWindow
+	moveq	#1,d0
+	rts
+.noDiff
+;	DPRINT	"->no change!"
+	moveq	#0,d0
+	rts
+
+scopeDrawAreaSizeChangeRequestIsActive
+	move	scopeDrawAreaWidthRequest(a5),d0 
+	cmp	scopeDrawAreaWidth(a5),d0 
+	bne.b 	.yes
+	move	scopeDrawAreaHeightRequest(a5),d0 
+	cmp	scopeDrawAreaHeight(a5),d0 
+	bne.b 	.yes
+	moveq	#0,d0
+	rts
+.yes	
+	moveq	#1,d0
+	rts
+
+* Called when IDCMP_CHANGEWINDOW message arrives.
+scopeWindowChanged
+	DPRINT	"scopeWindowChanged"
+ if DEBUG
+	move.l	scopeWindowBase(a5),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	move	wd_LeftEdge(a0),d0
+	move	wd_TopEdge(a0),d1
+	move	wd_Width(a0),d2
+	move	wd_Height(a0),d3
+	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+ endif
+	* Request again after window move
+ 	bsr.w	scopeDrawAreaSizeChangeRequestIsActive
+	beq.b 	.nope 
+	move	scopeDrawAreaWidthRequest(a5),d0
+	move	scopeDrawAreaHeightRequest(a5),d1
+	bsr.w 	requestScopeDrawAreaChange
+.nope
+	rts
+
+* Called when IDCMP_NEWSIZE message arrives.
+* Window size change request has been fulfilled.
+scopeWindowSizeChanged
+	pushm	d2-d6
+	DPRINT	"scopeWindowSizeChanged"
+ if DEBUG
+	move.l	scopeWindowBase(a5),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	move	wd_LeftEdge(a0),d0
+	move	wd_TopEdge(a0),d1
+	move	wd_Width(a0),d2
+	move	wd_Height(a0),d3
+	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+ endif
+	move	scopeDrawAreaWidthRequest(a5),scopeDrawAreaWidth(a5)
+	move	scopeDrawAreaHeightRequest(a5),scopeDrawAreaHeight(a5)
+	move	scopeDrawAreaWidth(a5),d0 
+	lsr	#3,d0 
+	move	d0,scopeDrawAreaModulo(a5)
+
+	* lines count for patternscope, 8px high rows
+	move	scopeDrawAreaHeight(a5),d0
+	lsr	#3,d0 
+	move	d0,quadNoteScrollerLines(a5)
+	lsr	#1,d0
+	move	d0,quadNoteScrollerLinesHalf(a5)
+
+	bsr	initScopeBitmaps
+	bsr	drawScopeWindowDecorations
+	popm	d2-d6
+	rts
+
+
+*********************************************************************
+* Scope interrupt code, keeps track the play positions of 
+* protracker replayer samples
+*********************************************************************
+
 scopeinterrupt				* a5 = var_b
 	cmp	#pt_prot,playertype(a5)
 	bne.w	.n
@@ -21680,13 +22167,7 @@ scopeinterrupt				* a5 = var_b
 	move	n_tempvol(a2),ns_tempvol2(a0)
 	addq	#1,a3
 
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)	
-	beq.b	.eq
-	cmp.b	#QUADMODE2_PATTERNSCOPE_BARS,quadmode2(a5)
-	beq.b	.eq
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)	
-	beq.b	.eq
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
+	bsr	patternScopeIsActive
 	beq.b	.eq
 	
 	move	n_tempvol(a2),ns_tempvol(a0)
@@ -21727,15 +22208,53 @@ scopeinterrupt				* a5 = var_b
 * Z is clear it true, Z set if false
 * 1: true
 * 0: false
-scopeIsNormal
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
-	beq.b	.large
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
-	;beq.b	.large
-.large
+;scopeIsPatternXL
+;	cmp.b	#QUADMODE_PATTERNSCOPEXL,quadmode(a5)
+;	;beq.b	.large
+;	;cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
+;	;beq.b	.large
+;.large
+;	rts
+;
+
+* Opens the mini font for 4+ channel notescroller if needed
+getScopeMiniFontIfNeeded
+	tst.l	minifontbase(a5)
+	bne.b	.skip
+	* See if we need the small font
+	bsr.w	patternScopeIsActive
+	bne.b	.skip
+	move.l	deliPatternInfo(a5),d0
+	beq.b	.skip
+	move.l	d0,a0
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a0)
+	bls.b	.skip
+	lea	diskfontname,a1
+	lore	Exec,OldOpenLibrary
+	tst.l 	d0 
+	beq.b	.skip
+	move.l	d0,a6
+	lea	mini_text_attr,a0
+	lob	OpenDiskFont
+	move.l	d0,minifontbase(a5)
+	move.l	a6,a1
+	lore 	Exec,CloseLibrary
+	tst.l	minifontbase(a5)
+	bne.b	.miniOk
+	lea	.noFontMsg(pc),a1 
+	tst.b	(a1)
+	beq.b	.skip
+	bsr	request
+	* Show this only once to not be annoying
+	clr.b	(a1)	
+.skip
 	rts
-
-
+.miniOk
+	DPRINT	"Got mini font"
+	rts
+.noFontMsg
+	dc.b	"Couldn't open 'mini4' font for patternscope!",0
+	even
 
 ******* Quadrascopelle 
 voltab
@@ -21860,29 +22379,58 @@ voltab3
 	rts
 
 
-***************** Piirretään
+**************************************************************************
+* Scope draw
+**************************************************************************
+
 drawScope
 
+	* See if the whole drawing phase can be skipped
+	bsr	patternScopeIsActive
+	bne.b	.noPattSc
+	move.l	deliPatternInfo(a5),d0 
+	beq.b 	.noPattSc 
+	move.l	d0,a0
+	movem	PI_Pattpos(a0),d0/d1 
+	cmp	scopePreviousPattPos(a5),d0 
+	bne.b	.doUpdate
+	cmp	scopePreviousSongPos(a5),d1 
+	bne.b	.doUpdate
+	rts
+.doUpdate
+	move	d0,scopePreviousPattPos(a5)
+	move	d1,scopePreviousSongPos(a5)
+.noPattSc
+
+	* clear draw area
 	move.l	_GFXBase(a5),a6
 	lob	OwnBlitter
 	lob	WaitBlit
 
 	lea	$dff058,a0
-	move.l	draw2(a5),$54-$58(a0)	* clear draw area
+	move.l	draw2(a5),$54-$58(a0)	
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge
-	move	#(64+64)*64+20,(a0)
-	bra.b	.large
-.notLarge
-	move	#(64+0)*64+20,(a0)
-.large
+
+	* build BLTSIZ parameter
+	move	scopeDrawAreaHeight(a5),d0
+	lsl	#6,d0
+	move	scopeDrawAreaModulo(a5),d1
+	lsr	#1,d1	* words
+	add	d1,d0
+	move	d0,(a0)
 
 	lob	DisownBlitter
 
 	cmp	#pt_sample,playertype(a5)
 	bne.b	.toot
+
+	* Sample scope
+
+	* Get normal scope area
+	bsr	requestNormalScopeDrawArea
+	bne.w	.skippi * wait for resize
+
 	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
 	beq.b	.fil
 	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,quadmode2(a5)	
@@ -21901,7 +22449,12 @@ drawScope
 	move.b	quadmode2(a5),d0
 	add	d0,d0
 	cmp	#pt_multi,playertype(a5)
-	beq.b	.ttt
+	beq.w	.ttt
+	cmp	#pt_prot,playertype(a5)
+	bne.w	.other
+
+	* Protracker scope
+
 	jmp	.t(pc,d0)
 
 * protracker jump table
@@ -21924,12 +22477,12 @@ drawScope
 	bra.w	.cont
 .3	bsr.w	lever
 	bsr.w	quadrascope
-	bra.b	.cont
+	bra.w	.cont
 .4	bsr.w	lever
 	bsr.w	hipposcope
-	bra.b	.cont
+	bra.w	.cont
 .5	bsr.w	freqscope
-	bra.b	.cont
+	bra.w	.cont
 .6	pushm	all
 	bsr.w	freqscope
 	bsr.w	lever2
@@ -21948,7 +22501,8 @@ drawScope
 	bsr.w	lever
 	bra.b	.cont
 
-* multichannel jump table
+	* PS3M scope
+	* multichannel jump table
 .ttt	jmp	.tt(pc,d0)
 .tt	bra.b	.11 * quad
 	bra.b	.11
@@ -21956,12 +22510,12 @@ drawScope
 	bra.b	.22
 	bra.b	.33 * freq
 	bra.b	.33
-	bra.b	.11 * patt
-	bra.b	.11
+	bra.b	.55 * patt
+	bra.b	.55
 	bra.b	.44 * fquad
 	bra.b	.44
-	bra.b	.11 * patt
-	bra.b	.11
+	bra.b	.55 * patt
+	bra.b	.55
 
 .22	bsr.w	multihipposcope
 	bra.b	.cont
@@ -21971,7 +22525,19 @@ drawScope
 	bra.b	.cont
 .44	bsr.w	multiscopefilled
 	bsr.w	mirrorfill
+	bra.b	.cont 
+.55	* PS3M patternscope mode
+	tst.l	deliPatternInfo(a5) 
+	beq.b	.11
+
+.other
+	* Generic notescroller
+	tst.l	deliPatternInfo(a5)
+	beq.b	.cont
+	bsr	noteScroller2
+
 .cont
+	* scope processed, deliver unto screen
 
 	* double buffer
 	move.l	draw1(a5),d0
@@ -21991,38 +22557,38 @@ drawScope
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
 	move	#$c0,d6		* minterm, suora kopio a->d
-	move	#320,d4		* x-koko
-	move	#64,d5	* y-koko
-	bsr.w	scopeIsNormal
-	bne.b	.notLarge0
-	add	#64,d5
-.notLarge0
+	move	scopeDrawAreaWidth(a5),d4
+	move	scopeDrawAreaHeight(a5),d5
+
 
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.joa
 
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.jaa
+	bsr	patternScopeIsActive
+	beq.b	.noMagic
 	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
 	bls.b	.joa
 	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
 	blo.b	.jaa
-.joa	addq	#4,d0
+.joa	
+	* magic adjustment for sample?
+	addq	#4,d0
 	subq	#4,d4
 	bra.b	.jaow
 .jaa
-
 
 	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
 	bhs.b	.jaoww
 	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
 	blo.b	.jaow
 .jaoww
-	* TODO: MAGIC adjustments?	
+	* MAGIC adjustments for protracker?
 	addq	#1,d2
 	subq	#1,d4
 .jaow
-
+.noMagic
 	lob	BltBitMapRastPort
 .skippi
 	rts
@@ -22762,32 +23328,89 @@ getps3mb
 
 
 
-*******************************
+*********************************************************************
 * NoteScroller (ProTracker)
 *
 
-notescroller
-	pushm	all
-	bsr.w	.notescr
-
+noteScrollerHorizontalLines
 *** viiva
 	move.l	draw1(a5),a0
-	* two vertical positions
-	lea	23*40(a0),a0
-	bsr.w 	scopeIsNormal
-	bne.b	.normal
-	lea	(4*8)*40(a0),a0
+	move	scopeDrawAreaModulo(a5),d2
+	* first line at y-coordinate
+	move	scopeDrawAreaHeight(a5),d3
+	lsr	#1,d3
+	sub	#9,d3
+	mulu	d2,d3
+	add	d3,a0
+
 .normal
+	* 2nd row offset
+	lsl	#3,d2
+	subq	#2,d2
 	* 19 times 16 pixels horizontally
-	moveq	#19-1,d0
+	move	scopeDrawAreaModulo(a5),d0
+	lsr	#1,d0
+	subq	#1,d0
 	move	#$aaaa,d1
 .raita	
 	* put 16 pixels here
-	or	d1,(a0)+
+	or.w	d1,(a0)+
 	* ...and 8 pixels below
-	or	d1,8*40-2(a0)
+	or.w	d1,(a0,d2)
 	dbf	d0,.raita
+	rts
 
+* out:
+*  d4 = modulo, or NULL
+*  a2 = data
+noteScrollerGetFont
+	* Check if font is usable
+	move.l	fontbase(a5),a2
+	moveq	#8,d4
+	cmp	tf_YSize(a2),d4
+	bne.b 	.try1
+	cmp	tf_XSize(a2),d4 
+	bne.b 	.try1
+	btst	#FPB_PROPORTIONAL,tf_Flags(a2)
+	beq.b	.okFont
+.try1
+	* Fallback to topaz
+	move.l	topazbase(a5),a2
+	cmp	tf_YSize(a2),d4 
+	bne.b 	.badFont
+	cmp	tf_XSize(a2),d4 
+	bne.b 	.badFont
+	btst	#FPB_PROPORTIONAL,tf_Flags(a2)
+	beq.b	.okFont
+.badFont
+	* Can't use these fonts, give up!
+	moveq	#0,d4
+	rts
+.okFont
+	* store font data into a2 and d4 for fast access later
+	move	tf_Modulo(a2),d4		* font modulo
+	move.l	tf_CharData(a2),a2		* data
+	rts
+
+patternScopePt
+noteScrollerPt
+notescroller
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	bne.b 	.normHeight
+	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
+.normHeight
+	cmp	scopeDrawAreaWidth(a5),d0
+	bne.b	.plz
+	cmp	scopeDrawAreaHeight(a5),d1
+	beq.b	.sizeOk
+.plz	bsr	requestScopeDrawAreaChange
+	rts
+.sizeOk
+
+	bsr.w	.notescr
+	bsr	noteScrollerHorizontalLines
 
 	lea	kplbase(a5),a0
 	lea	k_chan1temp(a0),a1
@@ -22853,8 +23476,6 @@ notescroller
 .urh	lea	ns_size(a0),a0
 	dbf	d0,.orl
 
-
-	popm	all
 	rts
 
 
@@ -22870,7 +23491,7 @@ notescroller
 	* move to bottom
 	move	quadNoteScrollerLines(a5),d1
 	lsl	#3,d1
-	mulu	#40,d1
+	mulu	scopeDrawAreaModulo(a5),d1
 	add.l	d1,a0
 
 	lea	.paldata(pC),a1
@@ -22941,10 +23562,8 @@ notescroller
 .paldata
 
 
-
 **************** Piirretään patterndata
 
- 
 .notescr
 	pushm	a5/a6
 
@@ -22993,23 +23612,34 @@ notescroller
 	sub	quadNoteScrollerLinesHalf(a5),d6
 .ok2
 
-	* store font data into a2 and d4 for fast access later
-	move.l	topazbase(a5),a2
-	move	38(a2),d4		* font modulo
-	move.l	34(a2),a2		* data
+	bsr	noteScrollerGetFont
+	beq	.exitNoteScroller
+
+	* convert row in D6 to BCD
+	moveq	#0,d0
+	move	d6,d0
+	divu	#10,d0 
+	lsl.b	#4,d0
+	move.w	d0,d6
+	swap	d0 
+	or.b	d0,d6	
+
+	* d3 is FREE!
+	* use for horizontal skipping
+	moveq	#9,d3
 
 	* vertical loop
 	* line loop
 .plorl
-	* print linenumber
-	lea	.pos(pc),a0		* rivinumero
-	move	d6,d0
-	divu	#10,d0
-	or.b	#'0',d0
-	move.b	d0,(a0)
-	swap	d0
-	or.b	#'0',d0
-	move.b	d0,1(a0)
+	* print linenumber, in BCD format
+	* avoid DIVU in loop this way
+	lea	.pos(pc),a0		
+
+	move.w	d6,d0	* $00XY
+	lsl.w	#4,d0	* $0XY0
+	lsr.b	#4,d0	* $0X0Y
+	or.w	#$3030,d0
+	move	d0,(a0)
 
 	move.l	a4,a1
 	subq	#3,a1
@@ -23027,8 +23657,8 @@ notescroller
 	move.b	2(a3),d0
 	bne.b	.jee
 	* empty note
-	move	#'  ',(a0)+
-	move.b	#' ',(a0)+
+	clr.w	(a0)+
+	clr.b	(a0)+
 	bra.b	.nonote
 
 * notes table is here so that a shorter
@@ -23051,32 +23681,31 @@ notescroller
 	* calculate octave number
 	subq	#1,d0
 	divu	#12*2,d0
-	addq	#1,d0
-	or.b	#'0',d0
-	move.b	d0,2(a0)
+	moveq	#'0',d1 
+	* first octave is 1
+	addq.b	#1,d0
+	add.b	d0,d1
 	* figure out note text
 	swap	d0
 	* two chars
 	move	.notes(pc,d0.w),(a0)+
-	* skip over octave number 
-	addq	#1,a0
+	move.b	d1,(a0)+
 .nonote
 
-	moveq	#0,d0			* samplenumero
-	move.b	3(a3),d0
+	move.b	3(a3),d0	* sample num
 	bne.b	.onh
 	* a0 is odd here
-	move.b	#' ',(a0)+
-	move.b	#' ',(a0)+
+	clr.b	(a0)+
+	clr.b	(a0)+
 	bra.b	.eihn
 .onh
 	* sample number pre-multiplied by 4
-	lsr	#2,d0
-	move	d0,d1
+	lsr.b	#2,d0
+	move.b	d0,d1
 	* get the upper digit
-	lsr	#4,d1
+	lsr.b	#4,d1
 	bne.b	.onh2
-	move.b	#' ',(a0)+
+	clr.b	(a0)+
 	bra.b	.eihn2
 .onh2	or.b	#'0',d1
 	move.b	d1,(a0)+
@@ -23086,10 +23715,10 @@ notescroller
 	bsr.b	.hegs
 .eihn
 
-	move.b	(a3),d0	* command, premultiplied
+	move.b	(a3)+,d0	* command, premultiplied
 	lsr.b	#2,d0
 	bsr.b	.hegs
-	move.b	1(a3),d0 * command parameter
+	move.b	(a3),d0 * command parameter
 	move.b	d0,d1
 	lsr.b	#4,d0	* upper char
 	bsr.b	.hegs
@@ -23100,25 +23729,31 @@ notescroller
 	* print 8 chars
 	* a4 = destination bufer
 	move.l	a4,a1
-	lea	.note(pc),a0
+	;lea	.note(pc),a0
+	subq	#8,a0
 	moveq	#8-1,d1
 	bsr.b	.print
 
 	* next note
-	addq	#4,a3
+	addq	#4-1,a3
 	* next horizontal position
-	add	#9,a4
+	;add	#9,a4
+	add	d3,a4
 	dbf	d5,.plorl2
 
 	* next vertical position
 	add	#8*40-4*9,a4
 	* next pattern line, check if at the end
-	addq	#1,d6
-	cmp	#64,d6
+	* clear X flag for ABCD
+	sub.b	d0,d0
+	* Next row in BCD
+	moveq	#1,d0
+	abcd.b	d0,d6
+	* row 64 in BCD
+	cmp.b	#$64,d6
 	dbeq d7,.plorl
-
-	popm	a5/a6
-	
+.exitNoteScroller
+	popm	a5/a6	
 	rts
 
 * convert decimal number 0-9 into ASCII char
@@ -23128,8 +23763,6 @@ notescroller
 	move.b	d0,(a0)+
 	rts
 .high1	
-	;sub.b	#10,d0
-	;add.b	#'A',d0
 	add.b	#-10+'A',d0
 	move.b	d0,(a0)+
 	rts
@@ -23142,35 +23775,33 @@ notescroller
 	* a2 contains font data
 	* d4 contains font modulo
 	
-	* space char
-	moveq	#$20,d3
-
 	* get one char to print
 	moveq	#0,d0
 .ooe	
 	move.b	(a0)+,d0
-	cmp.b	d3,d0
-	beq.b	.space
+	beq.b	.space	 * space check
 	* get char pixels
 	lea	-$20(a2,d0),a6
 
 	* do 8 pixels height
- 	move.b	(a6),(a1)	
+ 	move.b	(a6),(a1)+	
 	add	d4,a6
-	move.b	(a6),1*40(a1)	
+	move.b	(a6),1*40-1(a1)	
 	add	d4,a6
-	move.b	(a6),2*40(a1)	
+	move.b	(a6),2*40-1(a1)	
 	add	d4,a6
-	move.b	(a6),3*40(a1)	
+	move.b	(a6),3*40-1(a1)	
 	add	d4,a6
-	move.b	(a6),4*40(a1)	
+	move.b	(a6),4*40-1(a1)	
 	add	d4,a6
-	move.b	(a6),5*40(a1)	
+	move.b	(a6),5*40-1(a1)	
 	add	d4,a6
-	move.b	(a6),6*40(a1)	
+	move.b	(a6),6*40-1(a1)	
 	add	d4,a6
-	move.b	(a6),7*40(a1)	
- 
+	move.b	(a6),7*40-1(a1)	
+	* go to next horiz position
+	dbf	d1,.ooe
+	rts 
 .space	
 	* go to next horiz position
 	addq	#1,a1
@@ -23540,13 +24171,596 @@ samples0
 	lea	multab(a5),a2
 	move.l	draw1(a5),a0
 	rts
+
+*********************************************************************
+* GENERIC NOTESCROLLER
+* Note scroller supporting the PI_PatternInfo data
+patternScopeGeneric
+noteScrollerGeneric
+patternScope2
+noteScroller2
+	bsr	patternScopeIsActive
+	beq.b	.1
+	rts
+.1
+	move.l	deliPatternInfo(a5),a1
+	lea	PI_Stripes(a1),a0
+	move	PI_Voices(a1),d7
+
+* Required height in d1
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	bne.b	.notXl
+	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
+.notXl
+
+	cmp	#4,d7
+	bhi.b	.over
+
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+	bsr	requestScopeDrawAreaChange
+	beq.b	.proceed
+	* resize will happen later
+	rts
+.over
+	
+	* max 18 stripes fit into 640 pixels
+	cmp	#18,d7
+	bls.b	.max16
+	moveq	#18,d7
+.max16
+	* Request larger/wider/narrower window
+	move	d7,d0
+
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,d7
+	bhi.b	.narrow
+	* normal font stripe
+;	mulu	#72,d0
+	move	d0,d2 * tricky mul with 72
+	lsl		#6,d2
+	lsl		#3,d0
+	add		d2,d0
+	bra.b	.wide
+.narrow
+	* Test if font is available
+	tst.l	minifontbase(a5)
+	beq.b	.x
+	* each narrow stripe is 32 pix
+	lsl	#5,d0 ;mulu	#32,d0 	
+.wide
+	* some right margin
+	;add	#32,d0
+	* ensure divisible by 16 for blitter safety
+	;add	#15,d0
+	add		#32+15,d0
+	and	#$fff0,d0
+
+	bsr	requestScopeDrawAreaChange
+	beq.b	.proceed
+	rts
+
+.proceed
+
+	* magic flag: display row numbers column	 
+	lea	.pos(pc),a4
+	clr.b	(a4)
+
+	move.l	draw1(a5),a4
+	subq	#1,d7
+.loop
+	pushm	d6/d7/a0/a4/a5/a6
+	move.l	(a0),a0		* stripe data
+	bsr.b	.doStripe
+	popm	d6/d7/a0/a4/a5/a6
+
+	* magic flag: no row numbers more than once
+	lea	.pos(pc),a2
+	tst.b	(a2)
+	bmi.b	.wasSet
+	* jump over number column
+	addq	#3,a4
+	st	(a2)
+.wasSet
+	addq	#4,a0 		* next stripe
+
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a1)
+	bls.b	.voices4
+	* 32 pixels per stripe
+	addq	#4,a4		* next screen pos horizontal
+	bra.b	.continue
+.voices4
+	* 72 pixels per stripe
+	add	#9,a4
+.continue
+	dbf	d7,.loop
+
+	bsr	noteScrollerHorizontalLines
+.x	rts
+
+.xy	
+
+ if DEBUG
+* MTM modules commonly have empty stripes, caught
+* by insanity checks.
+
+; 	move	#$0f0,$dff180
+;	move.l	moduleaddress(a5),d0
+;	move.l	modulelength(a5),d1
+;	move.l	a0,d2
+;	DPRINT	"INSANITY %lx %ld -> %lx"
+ endif
+	rts
+
+
+***********************************************************
+* Draw one stripe
+***********************************************************
+
+.doStripe
+
+*** Sanity check, is the stripe address legal?
+
+	move.l	a0,d0
+	beq.b	.xy
+
+	move.l	ps3mUnpackedPattern(a5),d0
+	tst.l	d0
+	beq.b	.noPattern
+	* Pointer within the unpacked pattern region?
+
+	cmp.l	d0,a0
+	bhs.b	.sane
+	add.l	#32*4*64,d0
+	cmp.l	d0,a0
+	blo.b	.sane
+
+.noPattern
+	* Pointer within the module data?
+
+	cmp.l	#1024,a0
+	bls.b	.xy
+	move.l  moduleaddress(a5),a3
+   	cmp.l   a3,a0
+	bls.b	.xy
+    add.l   modulelength(a5),a3
+    cmp.l   a3,a0
+   	bhs.b   .xy
+.sane
+
+*** calculate stuff
+	
+	* draw this many lines
+	move	quadNoteScrollerLines(a5),d7
+	subq	#1,d7 * dbf
+	move	PI_Pattpos(a1),d6
+
+	* current position in data
+	move	d6,d0
+	mulu	PI_Modulo+2(a1),d0 
+	add	d0,a0
+
+	* figure out where to place the first line
+	move	d6,d0
+	; move the cursor in the middle
+	sub	quadNoteScrollerLinesHalf(a5),d0
+	bpl.b	.ok
+	neg	d0
+	sub	d0,d7
+
+	move	quadNoteScrollerLinesHalf(a5),d1
+	sub	d0,d1
+	sub	d1,d6
+	mulu	PI_Modulo+2(a1),d1
+	* adjust data pointer
+	sub	d1,a0
+
+	* vertical position in target 
+	mulu	scopeDrawAreaModulo(a5),d0
+	lsl.l	#3,d0
+	add.l	d0,a4
+	bra.b	.ok2
+.ok
+	move	quadNoteScrollerLinesHalf(a5),d0
+	mulu	PI_Modulo+2(a1),d0
+	sub	d0,a0
+	sub	quadNoteScrollerLinesHalf(a5),d6
+.ok2
+	bsr	noteScrollerGetFont
+	beq	.exitNoteScroller
 	
 
+* d4 = font modulo
+* d6 = line number
+* d7 = rows to draw
+* d7 = screen modulo, other half
+* a0 = pattern data
+* a1 = pattern info
+* a2 = font data
+* a4 = destination draw buffer
+
+	swap	d7
+	move	scopeDrawAreaModulo(a5),d7
+	move	d7,d0 
+	lsl	#3,d0 	* x8, full height of font
+	swap	d7
+	
+***********************************************************
+* Line numbers column
+***********************************************************
+
+	lea	.pos(pc),a3
+	tst.b	(a3)
+	bmi.b	.skipNumbers
+
+	pushm	d6/d7/a4/a5
+	* row modulo in d0
+	
+	* row number in D2 as BCD
+	moveq	#0,d3
+	move	d6,d3
+	divu	#10,d3 
+	lsl.b	#4,d3
+	move	d3,d2
+	swap	d3 
+	or.b	d3,d2
+	
+.lineNumberRowLoop
+	* get screen modulo
+	swap	d7
+
+	* print line number as BCD from D2 
+	move	d2,d3	* $00XY
+	lsl.w	#4,d3	* $0XY0
+	lsr.b	#4,d3	* $0X0Y
+	or.w	#$3030,d3
+	move	d3,(a3)
+
+	move.l	a4,a5
+	moveq	#2-1,d3
+	bsr.w	.print
+	subq	#2,a3 	* restore a3
+
+	* next vertical draw position, one font height down
+	* row modulo is in d0
+	add	d0,a4
+
+	* clear X flag for ABCD
+	sub.b	d3,d3
+	* Next row in BCD
+	moveq	#1,d3
+	abcd.b	d3,d2
+
+	* get loop counter
+	swap	d7
+
+	* next pattern line, check if at the end
+	addq	#1,d6
+	cmp	PI_Pattlength(a1),d6
+	dbeq	d7,.lineNumberRowLoop
+
+	popm	d6/d7/a4/a5
+	* move "cursor" 3 chars to the right 
+	addq	#3,a4
+
+.skipNumbers
+
+	* Select font for note data
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a1)
+	bls.b	.normalFont
+	move.l	minifontbase(a5),a2
+	move	tf_Modulo(a2),d4		
+	move.l	tf_CharData(a2),a2		
+.normalFont
+	
+***********************************************************
+* Note column
+***********************************************************
+
+.rowLoop
+	* get screen modulo for .print and .printSmall routines
+	swap	d7
+
+	* save a1
+	move.l	a1,d5
+
+* ChipTracker, TME, Mugician2, TCBTracker, etc
+* register usage: d0-d3, a1
+
+	* Get note data at a0
+	move.l	PI_Convert(a1),a3
+	jsr	(a3)
+	move.l	d5,a1
+
+* d0 = period
+* d1 = sample num
+* d2 = command 
+* d3 = command argument
+
+	moveq	#0,d5
+	lea	.note(pc),a3
+	tst	d0
+	beq.b	.emptyNote
+	* Check magic flag: negative indicates note indices
+	tst	PI_Speed(a1)	
+	bmi.b	.notPeriod
+	lea	periods(pc),a5
+	lea	periodsEnd(pc),a6
+.findPeriod
+	cmp	(a5)+,d0
+	beq.b	.found
+	addq	#1,d5
+	cmp.l	a6,a5
+	bne.b	.findPeriod
+* Unknown
+	move.w  #'**',(a3)+
+	move.b  #'*',(a3)+
+	bra.b	.unknownNote
+
+.notes	dc.b	"C-"
+	dc.b	"C#"
+	dc.b	"D-"
+	dc.b	"D#"
+	dc.b	"E-"
+	dc.b	"F-"
+	dc.b	"F#"
+	dc.b	"G-"
+	dc.b	"G#"
+	dc.b	"A-"
+	dc.b	"A#"
+	dc.b	"B-"
+ 	even
+
+* Use value as an index
+.notPeriod
+	move	d0,d5
+	* indices start from 1
+	subq	#1,d5
+.found
+	* print note
+	* divide to get octave
+	divu	#12,d5
+	* convert octave into text
+	moveq	#'0',d0
+	* first octave shall be 1, not 0
+	addq.b	#1,d5
+	add.b	d5,d0
+	* convert note into text
+	swap 	d5
+	add	d5,d5
+	move.w	.notes(pc,d5),(a3)+
+	* print octave
+	move.b	d0,(a3)+
+	bra.b	.wasNote
+
+.emptyNote
+	clr.w	(a3)+
+	clr.b	(a3)+
+.unknownNote
+.wasNote
+
+	* sample 00-ff
+	move.b	d1,d0
+	beq.b	.noSampleNum
+
+	lsr.b	#4,d0
+	bsr.b	.convertD0ToCharInA3
+	moveq	#$f,d0
+	and.b	d1,d0
+	bsr.b	.convertD0ToCharInA3Fill
+	bra.b	.wasSampleNum
+
+.noSampleNum
+	clr.b	(a3)+
+	clr.b	(a3)+
+
+.wasSampleNum
+
+	* Command 0-Z
+	move.b	d2,d0
+	bsr.b	.convertD0ToCharInA3Fill
+
+	* Param 00-ff
+	move.b	d3,d0
+	lsr.b	#4,d0
+	bsr.b	.convertD0ToCharInA3Fill
+	moveq	#$f,d0
+	and.b	d3,d0
+	bsr.b	.convertD0ToCharInA3Fill
+
+	; to the start of .note
+	;lea	.note(pc),a3
+	subq	#8,a3
+
+	* print a3 into a4
+	move.l	a4,a5
+	moveq	#8-1,d3
+	
+	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a1)
+	bls.b	.printNorm
+	bsr.w	.printSmall
+	bra.b	.wasSmall
+.printNorm
+	bsr.b	.print
+.wasSmall
+	* next vertical draw position, one font height down
+	move	d7,d3
+	lsl	#3,d3	* times 8
+	add	d3,a4
+
+	* get loop counter
+	swap	d7
+
+	* Next row in data
+	add.l	PI_Modulo(a1),a0
+	* Row counter
+	addq	#1,d6
+	cmp	PI_Pattlength(a1),d6
+	dbeq	d7,.rowLoop
+
+.exitNoteScroller
+	rts
+
+.convertD0ToCharInA3
+	beq.b	.emptyChar
+.convertD0ToCharInA3Fill
+	cmp.b	#9,d0
+	bhi.b	.high1
+	or.b	#'0',d0
+	move.b	d0,(a3)+
+	rts
+.high1	
+	add.b	#-10+'A',d0
+	move.b	d0,(a3)+
+	rts
+.emptyChar 
+	clr.b	(a3)+
+	rts
+
+* Large font print
+* in:
+*   a5 = dest draw buffer
+*   a3 = text to draw
+*   a2 = contains font data
+*   d4 = contains font modulo
+
+.print
+	* get one char to print
+	moveq	#0,d5
+	move.l	a5,d1
+.charLoop	
+	move.b	(a3)+,d5
+	beq.b	.space
+	* get char pixels
+	lea	-$20(a2,d5),a6
+	* do 8 pixels height
+ rept 7
+ 	move.b	(a6),(a5)	
+	add	d4,a6
+	add	d7,a5
+ endr
+	move.b	(a6),(a5)	
+.space
+	* next horiz position in screen buffer
+	addq.l	#1,d1
+	move.l	d1,a5
+	
+	* go to next horiz position
+	dbf	d3,.charLoop
+	rts
+
+* Print text with small font
+* Assumes:
+* - fixed font
+* - width 4
+* - height 8
+* - even number of chars as input text
+* - d7 = screen modulo
+
+.printSmall	
+
+	* nibble mask
+	move	#$f0,d2
+
+	* dest buffer pointer
+	move.l	a5,d1
+
+	* get one char to print here
+	moveq	#0,d5
+.charLoop2	
+	* even position
+
+	move.b	(a3)+,d5
+	beq.w	.evenCharSkip * space check
+
+	* get char pixels
+	* check which source nibble to use
+	* index should be halved since 4 pixels per char
+	ror.l	#1,d5
+	lea	-$10(a2,d5),a6	* space char $20/2
+	bmi.b	.lowNib
+
+ rept 7
+ 	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,(a5)	
+	add	d4,a6
+	add	d7,a5
+ endr
+	move.b	(a6),d0 
+	and.b	d2,d0 
+ 	or.b	d0,(a5)	
+
+	bra.b	.evenCharDone
+
+.lowNib
+
+ rept 7
+ 	move.b	(a6),d0 
+	lsl.b	#4,d0 
+ 	or.b	d0,(a5)	
+	add	d4,a6
+	add	d7,a5
+ endr
+	move.b	(a6),d0 
+	lsl.b	#4,d0 
+ 	or.b	d0,(a5)	
+* odd char done	
 
 
+.evenCharDone
+	move.l	d1,a5
+.evenCharSkip
 
+	* odd position
+
+	move.b	(a3)+,d5
+	beq.w	.oddCharDone	* space check
+
+	* get char pixels
+	ror.l	#1,d5
+	lea	-$10(a2,d5),a6
+	bmi.b	.lowNib2
  
-*******************************************************************************
+  rept 7
+ 	move.b	(a6),d0 
+	lsr.b	#4,d0
+	or.b	d0,(a5)	
+	add	d4,a6
+	add	d7,a5
+ endr
+	move.b	(a6),d0 
+	lsr.b	#4,d0
+ 	or.b	d0,(a5)	
+
+	bra.b	.oddCharDone
+.lowNib2
+ rept 7
+	moveq	#$f,d0
+ 	and.b	(a6),d0 
+ 	or.b	d0,(a5)	
+	add	d4,a6
+	add	d7,a5
+ endr
+	moveq	#$f,d0
+ 	and.b	(a6),d0 
+ 	or.b	d0,(a5)	
+* odd char done	
+
+.oddCharDone
+	* go to next horiz position 
+	addq.l	#1,d1
+	move.l	d1,a5
+	
+	* next two input chars
+	subq	#1,d3
+	dbf	d3,.charLoop2
+	rts
+
+.note	dc.b	"00000000"
+.pos	dc.b	"00"
+ even
+
+ ******************************************************************************
 
 *******
 * Module loading
@@ -23570,6 +24784,9 @@ loadmodule
 
 	* Load with double buffering.
 	* Module being played is preserved while new one is loaded.
+
+	* Tampering with module data here
+	jsr	obtainModuleData
 
 	move.l	a0,modulefilename(a5)
 
@@ -23619,6 +24836,8 @@ loadmodule
 
 	push	d7
 
+	jsr	releaseModuleData
+
 	* At this point correct properties
 	* for current module should be in place
 	* for freeing to NOT CRASH.
@@ -23626,19 +24845,21 @@ loadmodule
 
 	jsr	fadevolumedown
 	move	d0,-(sp)
+	DPRINT	"Replay end"
 	lore    Exec,Disable
 	jsr	halt			* Vapautetaan se jos on
-	move.l	modulefilename(a5),a0
-	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
 	lore    Exec,Enable
+	;;;move.l	modulefilename(a5),a0
+	move.l	playerbase(a5),a0
+	jsr	p_end(a0)
 
-
-	move.l	modulefilename(a5),a0
+	;;;move.l	modulefilename(a5),a0
 	jsr	freemodule	
 	move	(sp)+,mainvolume(a5)
 
 	pop	d7
+
+	jsr	obtainModuleData
 
 	* Finally store properties of the newly loaded module.
 	lea	20(sp),a2
@@ -23660,6 +24881,8 @@ loadmodule
 .nay
 
 	lea	40(sp),sp
+
+	jsr	releaseModuleData
 
 	cmp	#XPKERR_NOMEM,lod_xpkerror(a5)
 	beq.b	.nomemdbf
@@ -24017,7 +25240,7 @@ loadfile
 	and.l	#$ffdfdf00,d0
 	cmp.l	#'.GZ'<<8,d0
 	bne.w	.nope
-	lea	gzipDecompressCommand(pc),a0
+	lea	gzipDecompressCommand,a0
 	moveq	#1,d6	* "Unzipping" message
 	bra.b	.unp
 
@@ -24052,14 +25275,14 @@ loadfile
 	lea	-160(sp),sp
 	move.l	sp,a1
 	lea	arcdir(a5),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	cmp.b	#':',-1(a1)
 	beq.b	.na
 	move.b	#'/',(a1)+
 .na	
 	lea	tdir(pc),a0
-	bsr.w	copyb
+	jsr	copyb
 
 ** vanha kick: kopioidaan parametrin perään RAM:°HiP°/
 	tst.b	uusikick(a5)
@@ -24070,7 +25293,7 @@ loadfile
 	subq	#1,a1
 	move.b	#' ',(a1)+
 	lea	(sp),a0
-	bsr.w	copyb
+	jsr	copyb
 	subq	#1,a1
 	cmp.b	#':',-1(a1)
 	beq.b	.na0
@@ -24239,12 +25462,12 @@ loadfile
 	lea	lod_buf(a5),a1
 	move.l	a1,lod_filename(a5)
 	move.l	a4,a0
-	bsr.w	bcopy
+	jsr	bcopy
 	subq	#1,a1
 	move.b	#'/',(a1)+
 	lea	fib_FileName+fileinfoblock(a5),a0
 	push	a0
-	bsr.w	bcopy
+	jsr	bcopy
 	pop	a0		* tfmx?
 
 	move.l	(a0),d0
@@ -26418,6 +27641,7 @@ varaa_kanavat
 	move.l	d5,acou_deviceerr(a5)
 	bne.b	acouscl
 	st	kanavatvarattu(a5)
+	DPRINT	"Audio open"
 .na	movem.l	(sp)+,d1-a6
 	moveq	#0,d0
 	rts
@@ -26443,6 +27667,7 @@ vapauta_kanavat
 	bne.b	acouscll
 	lea	iorequest(a5),a1
 	lore	Exec,CloseDevice
+	DPRINT	"Audio close"
 acouscll
 	clr.l	acou_deviceerr(a5)
 	clr.b	kanavatvarattu(a5)
@@ -26622,48 +27847,11 @@ importFavoriteModulesFromDisk
 	bsr.w	enableListModeChangeButton
 
 	moveq	#0,d6
-
 	lea	favoriteModuleFileName(pc),a0
-	move.l	a0,d1
-	move.l	#1005,d2
-	lore 	Dos,Open
-	move.l	d0,d4
-	beq.b	.error
-
-	move.l	d4,d1		* figure out file length
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d4,d1
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d0,d5		* which is this
-
-	move.l	d4,d1
-	moveq	#0,d2
-	moveq	#-1,d3
-	lob	Seek	
-
-	move.l	d5,d0		* get some mem
-	moveq	#MEMF_PUBLIC,d1
-	jsr	getmem
+	jsr	plainLoadFile
 	move.l	d0,d6
-	beq.b	.error 
-
-	move.l	d4,d1		* file
-	move.l	d6,d2		* destination
-	move.l	d5,d3		* pituus
-	lob	Read
-	* ignore errors here
-
-.error
-	move.l	d4,d1
-	beq.b	.noClose
-	lore	Dos,Close
-.noClose
-	tst.l	d6
 	beq.b	.noData
+	move.l	d1,d5
 
 	lea favoriteListHeader(a5),a2
 	move.l	d6,a3			* start of buffer	
@@ -26840,6 +28028,7 @@ handleFavoriteModuleConfigChange
 ;	rts
 
 toggleListMode
+	pushm	all
 	DPRINT	"toggleListMode"
 
 	isListInFavoriteMode
@@ -26868,6 +28057,7 @@ toggleListMode
 	bmi.b	.not
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .not
+	popm	all
 	rts
 
 .setButtonStates
@@ -26982,6 +28172,198 @@ disableListModeChangeButton
 	or	#GFLG_DISABLED,gg_Flags(a0)
 	jsr	refreshGadgetInA0
 .x	rts
+
+
+*******************************************************************************
+* Save state operations
+* - module list
+* - chosen module
+* - play status
+*******
+
+importSavedStateModulesFromDisk
+	DPRINT	"importSavedStateModulesFromDisk"
+	tst.b	savestate(a5)
+	bne.b	.enabled
+.error	rts
+
+.enabled
+	lea	savedStateModuleFileName(pc),a0
+	jsr	plainLoadFile
+	move.l	d0,d6	* address
+	beq.b	.error
+	move.l	d1,d7 	* length
+
+	lea moduleListHeader(a5),a2
+	move.l	d6,a3		* start of buffer	
+	lea	(a3,d7.l),a4	* end of buffer
+	jsr	importModuleProgramFromData
+	DPRINT 	"Imported %ld files"
+
+	move.l	d6,a0
+	jsr	freemem
+
+	tst.l	d0
+	beq.b	.none
+	move.l	d0,modamount(a5)
+	
+	pushpea	savedStateModuleFileName(pc),d1
+	moveq	#ACCESS_READ,d2
+	lore	Dos,Lock
+	move.l	d0,d4
+	beq.b	.noLock
+	move.l	d4,d1
+	pushpea	fileinfoblock(a5),d2
+	lob	Examine
+	move.l	d4,d1
+	beq.b	.noLock
+	lob	UnLock
+	lea	fileinfoblock+fib_Comment(a5),a0
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"->%s"
+ endif
+	cmp.b	#" ",8(a0)
+	beq.b	.parse
+.noLock
+.exit
+	jsr	resh
+.none
+	rts
+	
+.parse
+* "00000000 00 abc"
+* convert into number
+	moveq	#0,d3
+	moveq	#28,d1
+	moveq	#8-1,d2
+.loop
+	moveq	#0,d0
+	move.b	(a0)+,d0
+	cmp.b	#"A",d0
+	bhs.b	.hi 
+	sub.b	#"0",d0
+	bra.b	.lo
+.hi
+	sub.b	#"A"-10,d0
+.lo
+	lsl.l	d1,d0
+	or.l	d0,d3
+	subq.l	#4,d1
+	dbf	d2,.loop
+
+	* check play/no play
+	cmp.b	#"1",1(a0)
+	seq	d7
+
+	* check list mode!
+	* switch mode before setting chosen module
+	* chosenmodule will be reset otherwise.
+	cmp.b	#"1",2(a0)
+	bne.b	.normalMode
+	* all regs preserved
+	bsr	toggleListMode
+.normalMode
+
+	tst.l	d3
+	bmi.b	.neg
+	move.l	d3,chosenmodule(a5)
+.neg
+
+	cmp.b	#" ",3(a0)
+	bne.b	.noPath
+	tst.b	4(a0)
+	beq.b	.noPath
+
+	lea	4(a0),a1
+	move.l	a1,a2
+.fl	tst.b	(a2)+
+	bne.b	.fl
+	
+	move.l	a2,d0
+	sub.l	a1,d0 
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,lastStoredFileReqDirectory(a5) 
+	beq.b	.noPath
+	move.l	d0,a0
+.copy
+	move.b	(a1)+,(a0)+
+	cmp.l	a2,a1
+	bne.b	.copy
+
+	DPRINT	"Saved filereq path=%s"
+
+.noPath
+
+	* Finally, either just refresh or play.
+	tst.b	d7
+	beq.w	.exit
+	jsr	resh
+	jmp	playButtonAction
+	
+
+exportSavedStateModulesToDisk
+	DPRINT	"exportSavedStateModulesToDisk"
+	tst.b	savestate(a5)
+	beq.b	.x
+
+	lea	savedStateModuleFileName(pc),a0
+	lea	moduleListHeader(a5),a1
+	jsr 	exportModuleProgramToFile
+
+	* Store playing state and chosen module into comment
+	move.l	chosenmodule(a5),d0
+
+	moveq	#0,d1
+	tst.l	playingmodule(a5)
+	bmi.b	.no
+	moveq	#1,d1
+.no
+	* Store list mode
+	moveq	#0,d2
+	isListInFavoriteMode
+	beq.b	.normalMode
+	moveq	#1,d2
+.normalMode
+
+	* Store last used dir as well
+	* Try the reqtools dir first
+	move.l	req_file(a5),d3
+	beq.b	.doEmpty
+	move.l	d3,a0
+	move.l	rtfi_Dir(a0),d3
+	bne.b	.yesDir
+.doEmpty
+	* ..then the previously stored one
+	move.l	lastStoredFileReqDirectory(a5),d3
+	bne.b	.yesDir
+	pushpea	.empty(pc),d3
+.yesDir
+	lea	.comment(pc),a0
+	lea	probebuffer(a5),a1
+	jsr	desmsg
+
+ if DEBUG 
+	pushpea desbuf(a5),d0
+	DPRINT	"->%s"
+ endif
+
+	pushpea	savedStateModuleFileName(pc),d1
+	pushpea	desbuf(a5),d2
+	lore	Dos,SetComment
+
+.x	rts
+
+* <chosenmodule< <play/noplay><listmode> <filereq path> 
+.comment	dc.b	"%08lx %ld%ld %s"
+.empty		dc.b	0
+		even
+
+savedStateModuleFileName
+	dc.b	"S:HippoSavedList.prg",0
+ even
+
 
 *******************************************************************************
 * CreatePort
@@ -27617,7 +28999,6 @@ internalFormats
 	dr.w 	p_deltamusic 
 	dr.w	p_markii 
 	dr.w 	p_mon
-	dr.w 	p_dw
 	dr.w 	p_beathoven 
 	dr.w	p_hippel	* very slow id 
 	dc.w 	0
@@ -27638,7 +29019,6 @@ groupFormats
 	dr.w 	p_digiboosterpro 
 	dr.w	p_thx 
 	dr.w 	p_aon 
-	dr.w	p_digitalmugician
 	dr.w	p_gamemusiccreator 
 	dr.w	p_medley 
 	dr.w	p_bendaglish 
@@ -27693,6 +29073,11 @@ eagleFormats
 	dr.w	p_stonetracker
 	dr.w	p_themusicalenlightenment
 	dr.w	p_timfollin2
+	dr.w	p_digitalmugician
+	dr.w 	p_jasonpage
+	dr.w	p_specialfx
+	dr.w	p_steveturner
+	dr.w 	p_davidwhittaker
 	dr.w	p_activisionpro  	* very slow id
 	dc.w 	0	
 
@@ -28550,7 +29935,7 @@ p_sid	jmp	.init(pc)
 	jmp id_sid1(pc)
 	p_NOP
 	dc.w pt_sid 				* type
-	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen
+	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume
 	dc.b	"PSID",0
 .flag	dc.b	0
  even
@@ -28629,23 +30014,22 @@ p_sid	jmp	.init(pc)
 
 
 .error1
-;	bsr.b	.closl
 	moveq	#ier_nomem,d0
 	bra.b	.er
 
 .error2	bsr.b	.free
-;	bsr.b	.closl
 	moveq	#ier_sidicon,d0
 	bra.b	.er
 
 .error3
 	bsr.b	.free
-;	bsr.b	.closl
 	moveq	#ier_sidinit,d0
 	bra.b	.er
 
 
 .free	lob	FreeEmulResource
+	bsr 	sid_remVolumePatch
+
 	clr.b	.flag
 	rts
 
@@ -28663,6 +30047,8 @@ p_sid	jmp	.init(pc)
 	move	songnumber(a5),d0
 	addq	#1,d0
 	lob	StartSong
+
+	bsr.w	sid_addVolumePatch
 	rts
 
 .song	movem.l	d0/d1/a0/a1/a6,-(sp)
@@ -28674,16 +30060,8 @@ p_sid	jmp	.init(pc)
 	movem.l	d0/d1/a0/a1/a6,-(sp)
 	lore	SID,StopSong
 	bsr.b	.free
-;	bsr.b	.closl
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
-
-;.closl	
-;	bsr.b	rem_sidpatch
-;	move.l	_SIDBase(a5),a1
-;	lore	Exec,CloseLibrary
-;	clr.l	_SIDBase(a5)
-;	rts
 
 
 .stop	movem.l	d0/d1/a0/a1/a6,-(sp)
@@ -28723,6 +30101,7 @@ rem_sidpatch
 	move.l	sidlibstore2+4(a5),4+86(a0)
 	move.l	sidlibstore1(a5),14(a1)
 	move.l	sidlibstore1+4(a5),4+14(a1)
+	bsr	clearCpuCaches
 .q	rts
 
 init_sidpatch
@@ -28756,6 +30135,8 @@ init_sidpatch
 	move.l	.sidp1+4(pc),4+14(a1)
 	move.l	.sidp2(pc),86(a0)
 	move.l	.sidp2+4(pc),4+86(a0)
+	bsr	clearCpuCaches
+
 .q	rts
 
 .sidp1	jsr	.sidpatch1
@@ -28813,6 +30194,79 @@ init_sidpatch
 .LB_0978 ADDQ.L	#4,A7
 	RTS	
 
+
+
+; AllocEmulResource funkkarin osoitteesta:
+; 8418: move d0,$dff0a8
+;  +12: move d0,$dff0b8
+;  +12: move d0,$dff0c8
+
+sid_addVolumePatch
+	move.l	_SIDBase(a5),a0
+	cmp #1,LIB_VERSION(a0)
+	bne.b	.q
+	cmp	#1,LIB_REVISION(a0)
+	bne.b	.q
+	lea	_LVOAllocEmulResource(a0),a0
+	move.l	2(a0),a0
+	move	.vol1patch(pc),8418(a0)
+	move.l	.vol1patch+2(pc),8418+2(a0)
+	move	.vol2patch(pc),12+8418(a0)
+	move.l	.vol2patch+2(pc),12+8418+2(a0)
+	move	.vol3patch(pc),12+12+8418(a0)
+	move.l	.vol3patch+2(pc),12+12+8418+2(a0)
+	bsr	clearCpuCaches
+.q
+	rts
+
+.vol1patch	jsr	.vol1
+.vol2patch	jsr	.vol2 
+.vol3patch	jsr	.vol3
+
+.vol1 
+	push	d0 
+	mulu	var_b+mainvolume,d0
+	lsr	#6,d0 
+	move	d0,$dff0a8
+	pop d0 
+	rts
+.vol2 
+	push	d0 
+	mulu	var_b+mainvolume,d0
+	lsr	#6,d0 
+	move	d0,$dff0b8
+	pop d0 
+	rts
+.vol3 
+	push	d0 
+	mulu	var_b+mainvolume,d0
+	lsr	#6,d0 
+	move	d0,$dff0c8
+	pop d0 
+	rts
+
+
+sid_remVolumePatch
+	move.l	_SIDBase(a5),a0
+	cmp #1,LIB_VERSION(a0)
+	bne.b	.q
+	cmp	#1,LIB_REVISION(a0)
+	bne.b	.q
+	lea	_LVOAllocEmulResource(a0),a0
+	move.l	2(a0),a0
+	move	.vol1orig(pc),8418(a0)
+	move.l	.vol1orig+2(pc),8418+2(a0)
+	move	.vol2orig(pc),12+8418(a0)
+	move.l	.vol2orig+2(pc),12+8418+2(a0)
+	move	.vol3orig(pc),12+12+8418(a0)
+	move.l	.vol3orig+2(pc),12+12+8418+2(a0)
+	bsr	clearCpuCaches
+.q
+	rts
+
+.vol1orig	move	d0,$dff0a8
+.vol2orig	move	d0,$dff0b8
+.vol3orig	move	d0,$dff0c8
 
 
 *******
@@ -29090,9 +30544,13 @@ p_futurecomposer13
 	jmp .id_futurecomposer13(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future10			* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope
 	dc.b	"Future Composer v1.0-1.3",0
  even
+
+
+.offset_init = $20+0
+.offset_play = $20+4
 
 
 .fc10init
@@ -29112,23 +30570,23 @@ p_futurecomposer13
 	beq.b	.ok3
 	bsr.w	rem_ciaint
 	bra.w	vapauta_kanavat
-;	rts
 
 .ok3
-	movem.l	d0-a6,-(sp)
+	pushm	d0-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
 	move.l	fc10routines(a5),a3
-	jsr	$20(a3)
-	movem.l	(sp)+,d0-a6
+	jsr	.offset_init(a3)
+	popm	d0-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts
 .fc10play
 	push	a5
 	move.l	fc10routines(a5),a0
-	jsr	$20+436(a0)
-	pop		a5
+	jsr	.offset_play(a0)
+	pop	a5
 	move	d0,pos_nykyinen(a5)
 	move	d1,pos_maksimi(a5)
 	rts
@@ -29164,7 +30622,7 @@ p_futurecomposer14
 	jmp .id_futurecomposer14(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future14	* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope
 	dc.b	"Future Composer v1.4",0
 
  even
@@ -29194,13 +30652,14 @@ p_futurecomposer14
 ;	rts
 
 .ok3	
-	movem.l	d0-a6,-(sp)
+	pushm 	d0-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
 	move.l	fc14routines(a5),a3
 	jsr	.offset_init(a3)
-	movem.l	(sp)+,d0-a6
+	popm	d0-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts
 .fc10play
@@ -29252,9 +30711,14 @@ p_soundmon
 	jmp .id_soundmon(pc)
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
- dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
-	dc.b	"SoundMon v2.0",0
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
+	dc.b	"BP SoundMon v2.0",0
  even
+
+.offset_init	= $20+0
+.offset_play	= $20+4
+.offset_forward	= $20+8
+.offset_rewind	= $20+12
 
 
 .bpsminit
@@ -29286,16 +30750,16 @@ p_soundmon
 	lea	mainvolume(a5),a4
 	pushpea	dmawait(pc),d0
 
-	push	a6
+	pushm	a5/a6
 	move.l	bpsmroutines(a5),a6
-	jsr	(a6)
-	pop	a6
-
+	jsr	.offset_init(a6)
+	popm	a5/a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts
 .bpsmplay
 	move.l	bpsmroutines(a5),a0
-	jmp	300(a0)
+	jmp	.offset_play(a0)
 .bpsmend
 	bsr.w	rem_ciaint
 	bsr.w	clearsound
@@ -29306,11 +30770,12 @@ p_soundmon
 
 .eteen
 	move.l	bpsmroutines(a5),a0
-	jmp	2180(a0)
+	jmp	.offset_forward(a0)
 
 .taakse
 	move.l	bpsmroutines(a5),a0
-	jmp	2158(a0)
+	jmp	.offset_rewind(a0)
+
 
 
 .id_soundmon 
@@ -29345,11 +30810,11 @@ p_soundmon3
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	p_NOP	
-	jmp .id_soundmon3(pc)
+	jmp 	.id_soundmon3(pc)
 	jmp	bp_author(pc)
-	dc.w pt_soundmon3 				* type
- dc	pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
-	dc.b	"SoundMon v3.0",0
+	dc.w 	pt_soundmon3 	* type
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
+	dc.b	"BP SoundMon 3 (v2.2)",0
  even
 
 .bpsminit
@@ -29382,11 +30847,11 @@ p_soundmon3
 	lea	mainvolume(a5),a4
 	pushpea	dmawait(pc),d0
 
-	push	a6
+	pushm	a5/a6
 	move.l	bpsmroutines(a5),a6
 	jsr	$20(a6)
-	pop	a6
-
+	popm	a5/a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts
 .bpsmplay
@@ -29448,10 +30913,14 @@ p_jamcracker
 	jmp .id_jamcracker(pc)
 	jmp	.author(pc)
 	dc.w pt_jamcracker				* type
-	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
+	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope
 	dc.b	"JamCracker",0
 .a 	dc.b 	"Xag/Betrayal, Martin Kemmel",0
  even
+
+.offset_init	= $20+0
+.offset_play	= $20+4
+
 
 .author
 	pushpea	.a(pc),d0
@@ -29484,15 +30953,16 @@ p_jamcracker
 	lea mainvolume(a5),a3 
 	lea nullsample,a4
 	move.l	jamroutines(a5),a6
-	jsr	(a6)
+	jsr	.offset_init(a6)
 	popm a5/a6
 	move	d0,pos_maksimi(a5)
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 
 .jamplay
 	move.l	jamroutines(a5),a0
-	jsr 4(a0)
+	jsr 	.offset_play(a0)
 	move	d0,pos_nykyinen(a5)
 	rts
 
@@ -30043,8 +31513,8 @@ p_oktalyzer
 	p_NOP
 	jmp 	.id(pc)
 	jmp	.author(pc)
-	dc.w 	pt_oktalyzer				* type
-	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont
+	dc.w 	pt_oktalyzer * type
+	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont!pf_scope
 	dc.b	"Oktalyzer",0
 .a	dc.b	"Armin Sander",0
  even
@@ -30089,16 +31559,24 @@ p_oktalyzer
 	move.l	moduleaddress(a5),a0
 	lea	songover(a5),a1
 	move.l	oktaroutines(a5),a2
+	push	a5
 	jsr	.offset_init(a2)
+	pop	a5
 	tst	d0
 	bne.b	.mem
+	
+	move.l	a0,deliPatternInfo(a5)
+ if DEBUG 
+	moveq	#0,d0
+	move	PI_Voices(a0),d0
+	DPRINT	"Voices: %ld"
+ endif 
 	bsr.b	.okvolume
 	moveq	#0,d0
 	rts
 
 .mem	moveq	#ier_nomem,d0
 	rts
-
 
 .okplay	
 	push	a5
@@ -31505,177 +32983,112 @@ p_mon	jmp	.moninit(pc)
 * David Whittaker
 ******************************************************************************
 
-p_dw	jmp	.dwinit(pc)
-	jmp	.dwmusic(pc)
+p_davidwhittaker
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
 	p_NOP
-	jmp	.dwend(pc)
-	jmp	clearsound(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
 	p_NOP
-	p_NOP
-	jmp	.dwsong(pc)
-	p_NOP
-	p_NOP
-	p_NOP
-	jmp id_davidwhittaker(pc)
-	jmp	.author(pc)
-	dc pt_dw
-	dc	pf_stop!pf_cont!pf_song!pf_ciakelaus
-.a	dc.b	"David Whittaker",0
- even
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_davidwhittaker
+.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+	dc.b	"David Whittaker     [EP]",0
+	        
+.path 	dc.b "david whittaker",0
+ 	even
 
-.author
-	pushpea	.a(pc),d0
+.init
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bsr.w	deliLoadAndInit
 	rts
 
-.dwinit
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr.w	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-
-.init	
-	moveq.l	#0,d0
-	move	songnumber(a5),d0
-	move.l	moduleaddress(a5),a0
-	jsr	(a0)
-	moveq	#0,d0
-	rts	
-
-
-.dwmusic
-	move.l	moduleaddress(a5),a0
-	moveq	#0,d0
-	jmp	14(a0)
-
-
-.dwsong	bsr.b	.dend
-	bra.b	.init
-
-.dwend	bsr.w	rem_ciaint
-	pushm	all
-	bsr.b	.dend
-	popm	all
-	bra.w	vapauta_kanavat
-
-
-.dend	move.l	whittaker_end(pc),a0
-	moveq.l	#0,d0
-	jmp	(a0)
-
-
-
-whittaker_end	dc.l	0
-
-
-
-
-id_davidwhittaker
-	bsr.b 	.id_davidwhittaker_
-	bne.b 	.x 
-	move	d5,maxsongs(a5)
-	move.l	d6,whittaker_end
-	moveq	#0,d0
-.x	rts
-
-.id_davidwhittaker_
-* d5 => maxsongs
-* d6 => whittaker_end
-
+.id
 	move.l	a4,a0
-;	move.l	moduleaddress(a5),d0
-	move.l	a0,d0
+	MOVEQ	#-1,D0
+	MOVE.L	A0,A1
+	CMP.L	#$48E7F1FE,(A1)
+	BNE.S	.lbC0003DC
+	ADDQ.L	#4,A1
+	CMP.W	#$6100,(A1)+
+	BNE.S	.lbC000410
+	ADD.W	(A1),A1
+	MOVEQ	#9,D1
+.lbC0003C4	CMP.W	#$47FA,(A1)+
+	BEQ.S	.lbC0003D0
+	DBRA	D1,.lbC0003C4
+	RTS
 
-	cmp.w	#$48e7,(a0)
-	bne.s	.wc000130
-	cmp.w	#$6100,4(a0)
-	bne.s	.wc000130
-	cmp.w	#$4cdf,8(a0)
-	bne.s	.wc000130
-	cmp.w	#$4e75,12(a0)
-	bne.s	.wc000130
-	cmp.w	#$48e7,14(a0)
-	bne.s	.wc000130
-	cmp.w	#$6100,$0012(a0)
-	bne.s	.wc000130
-	cmp.w	#$4cdf,$0016(a0)
-	bne.s	.wc000130
-	cmp.w	#$4e75,$001a(a0)
-	beq.s	.wc000136
-.wc000130	moveq.l	#-1,d0
-	bra.w	.wc0001de
- 
-.wc000136	moveq.l	#$1c,d1
-	add.l	d1,a0
-	sub.l	d1,d0
-.wc00013c	cmp.w	#$43fa,(a0)
-	bne.s	.wc000154
-	cmp.l	#$4880c0fc,4(a0)
-	bne.s	.wc000154
-	cmp.w	#$41fa,10(a0)
-	beq.s	.wc00015c
-.wc000154	addq.l	#2,a0
-	subq.l	#2,d0
-	bpl.s	.wc00013c
-	bra.s	.wc000130
- 
-.wc00015c	move.l	a0,a1
-	move.l	d0,d1
-.wc000160	cmp.w	#$47fa,(a1)
-	bne.s	.wc000186
-	cmp.w	#$51eb,4(a1)
-	bne.s	.wc000186
-	cmp.w	#$51eb,8(a1)
-	beq.s	.wc00018e
-	cmp.w	#$33fc,8(a1)
-	beq.s	.wc00018e
-	cmp.w	#$426b,8(a1)
-	beq.s	.wc00018e
-.wc000186	addq.l	#2,a1
-	subq.l	#2,d1
-	bpl.s	.wc000160
-	bra.s	.wc000130
- 
-.wc00018e	move.l	a1,d6
-	move.w	2(a1),d1
-	lea	-10(a1,d1.w),a1
-	move.l	a0,d1
-	sub.l	a1,d1
-	move.w	12(a0),d2
-	moveq.l	#0,d3
-	move.w	#$7fff,d4
-	moveq.l	#-1,d5
-.wc0001ac	move.w	8(a0),d0
-	lsr.w	#1,d0
-	subq.w	#1,d0
-	addq.w	#2,d2
-.wc0001b6	move.w	12(a0,d2.w),d3
-	btst	#0,d3
-	bne.s	.wc0001d6
-	sub.w	d1,d3
-	cmp.w	d4,d3
-	bge.s	.wc0001c8
-	move.w	d3,d4
-.wc0001c8	cmp.w	d4,d2
-	bge.s	.wc0001d6
-	addq.w	#2,d2
-	subq.w	#1,d0
-	bne.s	.wc0001b6
-	addq.l	#1,d5
-	bra.s	.wc0001ac
- 
-.wc0001d6	
-	;move.w	d5,maxsongs(a5)	* songit
-	moveq.l	#0,d0
-.wc0001de
-	tst.l	d0
-	rts	
+.lbC0003D0	BSR.b	.lbC000424
+	TST.L	D2
+	BNE.S	.lbC000410
+	BRA.S	.lbC00040E
+
+.lbC0003DC	CMP.L	#$8F90001,(A1)
+	BEQ.S	.lbC000412
+	CMP.L	#$4E714E71,(A1)
+	BEQ.S	.lbC000410
+	CMP.W	#$47FA,(A1)+
+	BEQ.S	.lbC000406
+	MOVEQ	#3,D1
+.lbC0003F4	CMP.W	#$47FA,(A1)+
+	BEQ.S	.lbC000400
+	DBRA	D1,.lbC0003F4
+	RTS
+
+.lbC000400	ADD.W	(A1),A1
+	CMP.L	A0,A1
+	BNE.S	.lbC000410
+.lbC000406	
+	BSR.S	.lbC000424
+	TST.L	D2
+	BNE.S	.lbC000410
+.lbC00040C	
+.lbC00040E	MOVEQ	#0,D0
+.lbC000410	RTS
+
+.lbC000412	ADDQ.L	#4,A1
+	CMP.L	#$BFE001,(A1)+
+	BNE.S	.lbC000410
+	BSR.S	.lbC000424
+	TST.L	D2
+	BEQ.S	.lbC00040C
+	RTS
+
+.lbC000424	MOVEQ	#$7F,D1
+.lbC000426	CMP.W	#$6100,(A1)+
+	BEQ.S	.lbC000434
+	DBRA	D1,.lbC000426
+.lbC000430	MOVEQ	#-1,D2
+	RTS
+
+.lbC000434	ADD.W	(A1),A1
+	MOVEQ	#$7F,D1
+	CMP.L	#$48E7F1FE,(A0)
+	BNE.S	.lbC00044A
+	ADDQ.L	#4,A1
+	CMP.W	#$6100,(A1)+
+	BNE.S	.lbC000430
+	ADD.W	(A1),A1
+.lbC00044A	CMP.W	#$4E75,(A1)
+	BEQ.S	.lbC000430
+	CMP.W	#$2F0B,(A1)
+	BEQ.S	.lbC000466
+	CMP.L	#$DFF0C8,(A1)
+	BEQ.S	.lbC000466
+	ADDQ.L	#2,A1
+	DBRA	D1,.lbC00044A
+	BRA.S	.lbC000430
+
+.lbC000466	MOVEQ	#0,D2
+	RTS
  
 
 
@@ -32785,19 +34198,11 @@ p_mline
 .c2	move.b	(a0)+,(a1)+
 	bne.b	.c2
 
-
-	move.l	a4,d1
-	move.l	#MODE_NEWFILE,d2
-	lore	Dos,Open
-	move.l	d0,d7
-	beq.b	.orr
-
-	move.l	d7,d1
-	move.l	moduleaddress(a5),d2
-	move.l	modulelength(a5),d3
-	lob	Write
-	move.l	d7,d1
-	lob	Close
+	move.l	a4,a0
+	move.l	moduleaddress(a5),a1
+	move.l	modulelength(a5),d0
+	bsr		plainSaveFile
+	bmi.b	.orr
 
 	bsr.w	get_mline
 	bne.b	.ok0
@@ -32893,16 +34298,16 @@ p_aon
 	jmp 	.id_aon(pc)
 	jmp	.author(pc)
 	dc.w 	pt_aon
-	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume
+	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope
 	dc.b	"Art Of Noise 4ch",0
 .a	dc.b	"Bastian Spiegel (Twice/Lego)",0
  even
 
-.OFFSET_INIT = 0
-.OFFSET_PLAY = 4
-.OFFSET_END  = 8
-.OFFSET_STOP = 12
-.OFFSET_CONT = 16
+.OFFSET_INIT = $20+0
+.OFFSET_PLAY = $20+4
+.OFFSET_END  = $20+8
+.OFFSET_STOP = $20+12
+.OFFSET_CONT = $20+16
 
 .author
 	pushpea	.a(pc),d0
@@ -32914,7 +34319,7 @@ p_aon
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -32923,7 +34328,7 @@ p_aon
 	lea	aonroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bra.w	vapauta_kanavat
 .ok3
 	pushm	d1-a6
@@ -32931,12 +34336,13 @@ p_aon
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2 
-	lea	ciaint_setTempoFromD0(pc),a3
+	lea	ciaint_setTempoFromD0,a3
 	move.l	aonroutines(a5),a4
 	jsr	.OFFSET_INIT(a4)
 	tst.l	d0
 	bne.b	.noMem
-	
+	move.l	a0,deliPatternInfo(a5)
+
 .x	popm	d1-a6
 	rts
 
@@ -32945,7 +34351,7 @@ p_aon
 	bra.b	.x
 
 .end
-	bsr	rem_ciaint
+	jsr	rem_ciaint
 	move.l	aonroutines(a5),a0
 	jsr	.OFFSET_END(a0)
 	bsr.w	clearsound
@@ -33020,7 +34426,7 @@ p_multi	jmp	.s3init(pc)
 ;eteenj	jmp	eteen(pc)
 ;taaksej	jmp	taakse(pc)
 
-
+* This does test resource allocation and frees them right after.
 .s3init
 	bsr.w	varaa_kanavat
 	beq.b	.ok
@@ -33028,11 +34434,11 @@ p_multi	jmp	.s3init(pc)
 	rts
 .ok	bsr.w	vapauta_kanavat
 
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	moveq	#ier_nociaints,d0
 	rts
-.ok2	bsr.w	rem_ciaint
+.ok2	jsr	rem_ciaint
 
 
 	lea	ps3mroutines(a5),a0
@@ -33067,7 +34473,7 @@ p_multi	jmp	.s3init(pc)
 	move.l	ps3mroutines(a5),a6
 	jsr	init1j(a6)
 
-	pushpea	CHECKSTART,d0		* tarkistussummaa varten
+	;pushpea	CHECKSTART,d0		* tarkistussummaa varten
 	lea	ps3m_buff1(a5),a0
 	lea	ps3m_buff2(a5),a1
 	lea	ps3m_mixingperiod(a5),a2
@@ -33076,8 +34482,6 @@ p_multi	jmp	.s3init(pc)
 	move.l	ps3mroutines(a5),a6
 	jsr	init2j(a6)
 	move.l	d0,ps3mchannels(a5)
-
-
 
 	move.l	mixirate(a5),d0	
 	move.b	s3mmode3(a5),d1		* volumeboost
@@ -33099,7 +34503,22 @@ p_multi	jmp	.s3init(pc)
 	move.l	ps3mroutines(a5),a5
 	pea	.updateps3m3(pc)	* updaterutiini, surroundin stereo
 	jsr	init0j(a5)
-	addq	#4,sp
+	addq	#4,sp			* pop pea
+
+	lea	var_b,a5
+	move.l	a0,deliPatternInfo(a5)
+	move.l	a1,ps3mUnpackedPattern(a5)
+ if DEBUG
+	tst.l	deliPatternInfo(a5)
+	beq.b	.noPatInfo
+	push	d0
+	moveq	#0,d0
+	move	PI_Voices(a0),d0
+	move.l	PI_Modulo(a0),d1
+	DPRINT	"Voices=%ld modulo=%ld"
+	pop 	d0
+.noPatInfo
+ endif
 
 	popm	d1-a6
 	cmp	#333,d0		* killermoden koodi
@@ -33120,12 +34539,24 @@ p_multi	jmp	.s3init(pc)
 .nd	popm	d1/a5
 	rts
 
-
+* VBLANK routine
+* Updates:
+* - position and lenght info
+* - patternscope information, if needed
 .s3poslen
+	moveq	#0,d0
+	tst.b	scopeflag(a5)
+	beq.b	.noScope 
+	* Sets Z if patternscope is active:
+	bsr		patternScopeIsActive
+	* Inform PS3M 
+	seq		d0
+.noScope
 	move.l	ps3mroutines(a5),a0
 	jmp	poslenj(a0)
 
-.s3end	move.l	ps3mroutines(a5),a0
+.s3end	clr.l	ps3mUnpackedPattern(a5)
+	move.l	ps3mroutines(a5),a0
 	jmp	endj(a0)
 
 .s3stop	move.l	ps3mroutines(a5),a0
@@ -33543,7 +34974,7 @@ p_pumatracker
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -33553,7 +34984,7 @@ p_pumatracker
 	* allocate into chip mem
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -33570,7 +35001,7 @@ p_pumatracker
 	jmp	$20+4(a0)
 	rts
 .end
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -33731,7 +35162,7 @@ p_beathoven
 	
 
 .end
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bsr.b	.deInit
 	bra.w	vapauta_kanavat
 
@@ -33803,7 +35234,7 @@ p_gamemusiccreator
 	jmp id_gamemusiccreator(pc)
 	jmp	.author(pc)
 	dc.w pt_gamemusiccreator
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume!pf_scope
 	dc.b	"Game Music Creator",0
 .a 	dc.b "Andreas Tadic",0
  even
@@ -33836,7 +35267,7 @@ p_gamemusiccreator
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
-	pushm	all
+	pushm	d0-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
@@ -33844,7 +35275,8 @@ p_gamemusiccreator
 	lea	pos_maksimi(a5),a4
 	move.l	gamemusiccreatorroutines(a5),a6
 	jsr	.GMC_INIT(a6)
-	popm	all
+	popm	d0-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 
@@ -34012,75 +35444,29 @@ author_vliet
 
 p_digitalmugician
 	jmp	.init(pc)
-	jmp	.play(pc)
+	jmp	deliPlay(pc)
 	p_NOP
-	jmp	.end(pc)
-	jmp	.stop(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
 	p_NOP
-	p_NOP
-	p_NOP
-	p_NOP
-	p_NOP
-	p_NOP
-	jmp	 .id_digitalmugician(pc)
-	jmp	author_vliet(pc)
-	dc.w 	pt_digitalmugician
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_volume
-	dc.b	"Digital Mugician",0
+	jmp .id_digitalmugician(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_digitalmugician
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope
+	dc.b	"Digital Mugician    [EP]",0
+.path	dc.b	"mugician.amp",0
  even
-
-
-.DMU_INIT  = 0
-.DMU_PLAY  = 4
-.DMU_END   = 8
-
+ 
 .init
-	bsr.w	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	jsr	init_ciaint
-	beq.b	.ok2
-	bsr.w	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	digitalmugicianroutines(a5),a0
-	* allocate into chip mem, uses empty sample data 
-	bsr.w	allocreplayer2
-	beq.b	.ok3
-	jsr	rem_ciaint
-	bsr.w	vapauta_kanavat
-	rts
-.ok3
-	pushm	d1-a6
-	move.l	moduleaddress(a5),a0
-	lea	mainvolume(a5),a1
-	moveq	#0,d0 	* song number
-	move.l	digitalmugicianroutines(a5),a2
-	jsr	.DMU_INIT(a2)
-	popm	d1-a6
+	lea	.path(pc),a0 
 	moveq	#0,d0
-	rts	
-
-.play
-	move.l	digitalmugicianroutines(a5),a0
-	jmp	.DMU_PLAY(a0)
-
-
-.stop
-	bra.w	clearsound
-
-.end
-	jsr	rem_ciaint
-	pushm	all
-	move.l	digitalmugicianroutines(a5),a0
-	jsr	.DMU_END(a0)
-	popm	all
-	bsr.w	clearsound
-
-	bra.w	vapauta_kanavat
+	bsr.w	deliLoadAndInit
+	rts 
 
 ; in: a4 = module
 ; out: d0 = 0, valid DMU
@@ -34297,9 +35683,10 @@ p_robhubbard2
 	p_NOP
 	p_NOP
 	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc  pt_robhubbard2
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
-	dc.b	"Rob Hubbard 2       [EP]",0
+	dc.b	"R.Hubbard 2/Infogra.[EP]",0
 .path dc.b "rob hubbard 2",0
  even
 
@@ -34362,7 +35749,7 @@ p_chiptracker
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_chiptracker 
- dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2	
+ dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2	
 	dc.b	"ChipTracker         [EP]",0
 
 .path dc.b "chiptracker",0
@@ -34981,7 +36368,7 @@ p_soundfx
 	jmp .id_soundfx(pc)
 	jmp	.author(pc)
 	dc.w pt_soundfx
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope
 	dc.b	"SoundFX",0
 .a 	dc.b	"Christian Haller, Christian A. Webber",0
  even
@@ -35012,7 +36399,7 @@ p_soundfx
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
-	pushm	d1-a6
+	pushm	d1-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	dmawait(pc),a2
@@ -35020,7 +36407,8 @@ p_soundfx
 	lea 	pos_maksimi(a5),a4
 	move.l	soundfxroutines(a5),a6
 	jsr	.INIT(a6)
-	popm	d1-a6
+	popm	d1-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 
@@ -35671,7 +37059,7 @@ p_startrekker
 	jmp 	.id(pc)
 	jmp	.author(pc)
 	dc.w 	pt_startrekker
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope
 	dc.b	"StarTrekker AM",0
 .a 	dc.b "Bjoern Wesen/Exolon of Fairlight",0
  even
@@ -35770,6 +37158,7 @@ p_startrekker
 	jsr	.INIT(a5)
 	moveq	#0,d0
 	pop 	a5
+	move.l	a0,deliPatternInfo(a5)
 	move	d1,pos_maksimi(a5)
 .x
 	popm	d1-a6
@@ -36983,7 +38372,7 @@ p_tcbtracker
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_tcbtracker
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse
+.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse
 	dc.b	"TCBTracker (ST)     [EP]",0	        
 .path dc.b "tcb tracker",0
  even
@@ -37064,6 +38453,7 @@ p_tcbtracker
 * Mark Cooksey
 ******************************************************************************
 
+ REM **************************
 p_markcooksey
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
@@ -37086,8 +38476,11 @@ p_markcooksey
 
 .init
 	lea	.path(pc),a0 
-	move.l	#10<<16|10,d0
+;	move.l	#10<<16|10,d0
+	moveq	#0,d0
 	bsr.w	deliLoadAndInit
+	DPRINT	"Mark cooksey initialized"
+
 	rts 
 
 
@@ -37181,6 +38574,7 @@ p_markcooksey
 	moveq	#0,D0
 .fail2
 	rts
+ EREM **************************
 
 ******************************************************************************
 * Activision Pro
@@ -38295,7 +39689,7 @@ p_digitalmugician2
 	jmp id_digitalmugician2(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_digitalmugician2
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope
 	dc.b	"Digital Mugician II [EP]",0
 .path dc.b "mugician ii",0
  even
@@ -38522,7 +39916,7 @@ p_themusicalenlightenment
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_themusicalenlightenment
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
 	dc.b	"The Musical Enlighte[EP]",0
 	        
 .path dc.b "tme",0
@@ -38666,7 +40060,7 @@ p_timfollin2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.b	deliLoadAndInit
+	bsr.w	deliLoadAndInit
 	rts 
 
 .id
@@ -38712,6 +40106,218 @@ p_timfollin2
 	BNE.S	.lbC00057A
 	MOVEQ	#0,D0
 	RTS
+
+******************************************************************************
+* Jason Page
+******************************************************************************
+
+p_jasonpage
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_jasonpage
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc.b	"Jason Page          [EP]",0
+	        
+.path dc.b "jason page",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+
+	MOVEQ	#-1,D0
+	CMP.W	#2,(A0)
+	BNE.S	.lbC000382
+	BTST	#0,3(A0)
+	BNE.S	.lbC000382
+	MOVE.W	4(A0),D1
+	BTST	#0,D1
+	BNE.S	.lbC000382
+	TST.W	0(A0,D1.W)
+	BNE.S	.lbC000382
+	MOVE.W	$30(A0),D0
+	LEA	2(A0),A1
+	MOVEQ	#$16,D1
+.lbC00034E	TST.W	(A1)
+	BEQ.S	.lbC000382
+	BTST	#0,1(A1)
+	BNE.S	.lbC000382
+	CMP.W	(A1)+,D0
+	BLE.S	.lbC000382
+	DBRA	D1,.lbC00034E
+	MOVEQ	#0,D0
+	MOVE.W	$2E(A0),D0
+	ADD.L	D0,A0
+	MOVE.W	(A0),D0
+	AND.W	#$F00,D0
+	CMP.W	#$F00,D0
+	BNE.S	.lbC00037C
+	BRA.W	.lbC000380
+
+.lbC00037C
+.lbC000380	BRA.S	.lbC0003AE
+
+.lbC000382	TST.W	(A0)
+	BNE.S	.lbC0003B0
+	TST.L	$80(A0)
+	BNE.S	.lbC0003B0
+	CMP.L	#$CBE,$84(A0)
+	BNE.S	.lbC0003B0
+	CMP.L	#$308BE,$CB6(A0)
+	BNE.S	.lbC0003B0
+	CMP.L	#$309BE,$CBA(A0)
+	BNE.S	.lbC0003B0
+.lbC0003AE	MOVEQ	#0,D0
+.lbC0003B0	RTS
+	RTS
+
+
+******************************************************************************
+* Steve Turner
+******************************************************************************
+
+p_steveturner
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_steveturner
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc.b	"Steve Turner        [EP]",0
+	        
+.path dc.b "steve tuner",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr.w	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	CMP.W	#$2B7C,(A0)
+	BNE.S	.no
+	CMP.W	#$2B7C,8(A0)
+	BNE.S	.no
+	CMP.W	#$2B7C,$10(A0)
+	BNE.S	.no
+	CMP.W	#$2B7C,$18(A0)
+	BNE.S	.no
+	CMP.L	#$303C00FF,$20(A0)
+	BNE.S	.no
+	CMP.L	#$32004EB9,$24(A0)
+	BNE.S	.no
+	CMP.W	#$4E75,$2C(A0)
+	BNE.S	.no
+	MOVEQ	#0,D0
+.no
+	rts
+
+******************************************************************************
+* SpecialFX
+******************************************************************************
+
+p_specialfx
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp 	.id(pc)
+	jmp	deliAuthor(pc)
+	dc  	pt_specialfx
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc.b	"Special FX          [EP]",0
+	        
+.path dc.b "special fx",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr.b	deliLoadAndInit
+	rts 
+
+.id
+	move.l	a4,a0
+	MOVEQ	#-1,D0
+	MOVE.W	#$6000,D1
+	CMP.W	(A0)+,D1
+	BNE.S	.lbC0003C6
+	MOVE.L	A0,A1
+	MOVE.W	(A0)+,D2
+	BMI.S	.lbC0003C6
+	BEQ.S	.lbC0003C6
+	BTST	#0,D2
+	BNE.S	.lbC0003C6
+	MOVEQ	#2,D4
+.lbC000378	CMP.W	(A0)+,D1
+	BNE.S	.lbC0003C6
+	MOVE.W	(A0)+,D3
+	BMI.S	.lbC0003C6
+	BEQ.S	.lbC0003C6
+	BTST	#0,D3
+	BNE.S	.lbC0003C6
+	DBRA	D4,.lbC000378
+	ADD.W	D2,A1
+	CMP.W	(A0),D1
+	BNE.S	.lbC0003AE
+	MOVEQ	#2,D4
+.lbC000394	CMP.W	(A0)+,D1
+	BNE.S	.lbC0003C6
+	MOVE.W	(A0)+,D3
+	BMI.S	.lbC0003C6
+	BEQ.S	.lbC0003C6
+	BTST	#0,D3
+	BNE.S	.lbC0003C6
+	DBRA	D4,.lbC000394
+	CMP.W	(A0),D1
+	BEQ.S	.lbC0003C6
+	BRA.S	.lbC0003B6
+
+.lbC0003AE	CMP.W	#$6100,(A1)
+	BNE.S	.lbC0003C6
+	ADDQ.L	#4,A1
+.lbC0003B6	CMP.W	#$41F9,(A1)
+	BNE.S	.lbC0003C6
+	ADDQ.L	#6,A1
+	CMP.W	#$43F9,(A1)
+	BNE.S	.lbC0003C6
+	MOVEQ	#0,D0
+.lbC0003C6	RTS
 
 ******************************************************************************
 * Deli/eagle support
@@ -39131,8 +40737,15 @@ deliInit
 	clr.l	deliStoredSetVoices(a5) 
 	clr.l	deliStoredNoteStruct(a5) 
 	clr.l	deliStoredGetPositionNr(a5)
+	clr.l	deliPatternInfo(a5)
 	
  if DEBUG
+ 	move.l	#DTP_PlayerName,d0 
+	jsr	deliGetTag 
+	beq.b	.noPlr
+	DPRINT	"Name: %s"
+.noPlr
+
 	bsr.w	deliShowTags
 	bsr.w	deliShowFlags
  endif
@@ -39200,15 +40813,22 @@ deliInit
 .checksOk
 	bsr	clearCpuCaches  ; Extra safety
 
+	move.l	#EP_InitAmplifier,d0 
+	bsr.w	deliGetTag 
+	bsr.w	deliCallFunc
+
+	move.l	#EP_PatternInit,d0  
+	bsr.w	deliGetTag
+	beq.b	.noPattInit
+	bsr.w	deliCallFunc
+	move.l	a0,deliPatternInfo(a5)	
+.noPattInit
+
 	move.l	#EP_Flags,d0
 	bsr.w	deliGetTag
 	beq.b	.noFlags
 	bsr.w	deliHandleFlags
 .noFlags
-
-	move.l	#EP_InitAmplifier,d0 
-	bsr.w	deliGetTag 
-	bsr.w	deliCallFunc
 
 	move.l	#DTP_ExtLoad,d0  
 	bsr.w	deliGetTag
@@ -39662,6 +41282,7 @@ deliAuthor
 freeDeliBase
 	tst.l	deliData(a5)
 	beq.b	.x
+
 	move.l deliData(a5),a0 
 	jsr 	freemem 
 .x	clr.l	deliData(a5)
@@ -40104,36 +41725,9 @@ eagleJumpTableStart
 		jmp funcENPP_GetHardwareType
 eagleJumpTableEnd
 
-funcENPP_AllocSampleStruct
-	DPRINT "ENPP_AllocSampleStruct"
-	rts
-funcENPP_NewLoadFile2
-	DPRINT "ENPP_NewLoadFile2"
-	rts
-funcENPP_MakeDirCorrect
-	DPRINT "ENPP_MakeDirCorrect"
-	rts
-funcENPP_TestAufHide
-	DPRINT "ENPP_TestAufHide"
-	rts
 funcENPP_ClearCache
 	;DPRINT "ENPP_ClearCache"
 	bra.w clearCpuCaches
-funcENPP_CopyMemQuick
-	DPRINT "ENPP_CopyMemQuick"
-	rts
-funcENPP_GetPassword
-	DPRINT "ENPP_GetPassword"
-	rts
-funcENPP_StringCopy2
-	DPRINT "ENPP_StringCopy2"
-	rts
-funcENPP_ScreenToFront
-	DPRINT "ENPP_ScreenToFront"
-	rts
-funcENPP_WindowToFront
-	DPRINT "ENPP_WindowToFront"
-	rts
 funcENPP_GetListData
 	bra.w	deliGetListData
 funcENPP_LoadFile
@@ -40153,75 +41747,24 @@ funcENPP_AllocAudio
 funcENPP_FreeAudio
 	DPRINT "ENPP_FreeAudio"
 	bra.w deliFreeAudio
-funcENPP_StartInterrupt
-	DPRINT "ENPP_StartInterrupt"
-	rts
-funcENPP_StopInterrupt
-	DPRINT "ENPP_StopInterrupt"
-	rts
 funcENPP_SongEnd
 	;DPRINT "ENPP_SongEnd"
 	jmp	 dtg_SongEnd(a5)
-funcENPP_CutSuffix
-	DPRINT "ENPP_CutSuffix"
-	rts
 funcENPP_SetTimer
 	;DPRINT "ENPP_SetTimer"
 	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
 	;DPRINT "ENPP_WaitAudioDMA"
-	bra.w dmawait
-funcENPP_SaveMem
-	DPRINT "ENPP_SaveMem"
-	rts
-funcENPP_FileReq
-	DPRINT "ENPP_FileReq"
-	rts
-funcENPP_TextRequest
-	DPRINT "ENPP_TextRequest"
-	rts
-funcENPP_LoadExecutable
-	DPRINT "ENPP_LoadExecutable"
-	rts
-funcENPP_NewLoadFile
-	DPRINT "ENPP_NewLoadFile"
-	rts
-funcENPP_ScrollText
-	DPRINT "ENPP_ScrollText"
-	rts
-funcENPP_LoadPlConfig
-	DPRINT "ENPP_LoadPlConfig"
-	rts
-funcENPP_SavePlConfig
-	DPRINT "ENPP_SavePlConfig"
-	rts
-funcENPP_FindTag
-	DPRINT "ENPP_FindTag"
-	rts
-funcENPP_FindAuthor
-	DPRINT "ENPP_FindAuthor"
-	rts
-funcENPP_Hexdez
-	DPRINT "ENPP_Hexdez"
-	rts
-funcENPP_TypeText
-	DPRINT "ENPP_TypeText"
-	rts
+	jmp dmawait
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange"
 	bra.w	deliModuleChange
-funcENPP_ModuleRestore
-	DPRINT "ENPP_ModuleRestore"
-	rts
-funcENPP_StringCopy
-	DPRINT "ENPP_StringCopy"
-	rts
-funcENPP_CalcStringSize
-	DPRINT "ENPP_CalcStringSize"
-	rts
-funcENPP_StringCMP
-	DPRINT "ENPP_StringCMP"
-	rts
+funcENPP_AllocAmigaAudio
+	;DPRINT "ENPP_AllocAmigaAudio"
+	bra.w	deliAllocAudio
+funcENPP_FreeAmigaAudio
+	;DPRINT "ENPP_FreeAmigaAudio"
+	bra.w deliFreeAudio
 
 funcENPP_DMAMask
 	push	d1
@@ -40286,7 +41829,7 @@ funcENPP_PokeVol
 	rts
 
 funcENPP_PokeCommand
-	DPRINT "ENPP_PokeCommand"
+	;DPRINT "ENPP_PokeCommand"
 	cmp.b	#1,d0 
 	bne.b 	.unknown
 	* d1=0 -> led off
@@ -40300,9 +41843,96 @@ funcENPP_PokeCommand
 	bset	#1,$bfe001
 	rts
 
+*************** Unimplemented eaglebase functions:
+
+ if DEBUG
 funcENPP_Amplifier
 	; Called from interrupt, no logging
 	;DPRINT "ENPP_Amplifier"
+	rts
+funcENPP_AllocSampleStruct
+	DPRINT "ENPP_AllocSampleStruct"
+	rts
+funcENPP_NewLoadFile2
+	DPRINT "ENPP_NewLoadFile2"
+	rts
+funcENPP_MakeDirCorrect
+	DPRINT "ENPP_MakeDirCorrect"
+	rts
+funcENPP_TestAufHide
+	DPRINT "ENPP_TestAufHide"
+	rts
+funcENPP_CopyMemQuick
+	DPRINT "ENPP_CopyMemQuick"
+	rts
+funcENPP_GetPassword
+	DPRINT "ENPP_GetPassword"
+	rts
+funcENPP_StringCopy2
+	DPRINT "ENPP_StringCopy2"
+	rts
+funcENPP_ScreenToFront
+	DPRINT "ENPP_ScreenToFront"
+	rts
+funcENPP_WindowToFront
+	DPRINT "ENPP_WindowToFront"
+	rts
+funcENPP_StartInterrupt
+	DPRINT "ENPP_StartInterrupt"
+	rts
+funcENPP_StopInterrupt
+	DPRINT "ENPP_StopInterrupt"
+	rts
+funcENPP_CutSuffix
+	DPRINT "ENPP_CutSuffix"
+	rts
+funcENPP_SaveMem
+	DPRINT "ENPP_SaveMem"
+	rts
+funcENPP_FileReq
+	DPRINT "ENPP_FileReq"
+	rts
+funcENPP_TextRequest
+	DPRINT "ENPP_TextRequest"
+	rts
+funcENPP_LoadExecutable
+	DPRINT "ENPP_LoadExecutable"
+	rts
+funcENPP_NewLoadFile
+	DPRINT "ENPP_NewLoadFile"
+	rts
+funcENPP_ScrollText
+	DPRINT "ENPP_ScrollText"
+	rts
+funcENPP_LoadPlConfig
+	DPRINT "ENPP_LoadPlConfig"
+	rts
+funcENPP_SavePlConfig
+	DPRINT "ENPP_SavePlConfig"
+	rts
+funcENPP_FindTag
+	DPRINT "ENPP_FindTag"
+	rts
+funcENPP_FindAuthor
+	DPRINT "ENPP_FindAuthor"
+	rts
+funcENPP_Hexdez
+	DPRINT "ENPP_Hexdez"
+	rts
+funcENPP_TypeText
+	DPRINT "ENPP_TypeText"
+	rts
+funcENPP_ModuleRestore
+	DPRINT "ENPP_ModuleRestore"
+	rts
+funcENPP_StringCopy
+	DPRINT "ENPP_StringCopy"
+	rts
+funcENPP_CalcStringSize
+	DPRINT "ENPP_CalcStringSize"
+	rts
+funcENPP_StringCMP
+	DPRINT "ENPP_StringCMP"
 	rts
 funcENPP_TestAbortGadget
 	DPRINT "ENPP_TestAbortGadget"
@@ -40334,12 +41964,6 @@ funcENPP_OpenCatalog
 funcENPP_CloseCatalog
 	DPRINT "ENPP_CloseCatalog"
 	rts
-funcENPP_AllocAmigaAudio
-	;DPRINT "ENPP_AllocAmigaAudio"
-	bra.w	deliAllocAudio
-funcENPP_FreeAmigaAudio
-	;DPRINT "ENPP_FreeAmigaAudio"
-	bra.w deliFreeAudio
 funcENPP_RawToFormat
 	DPRINT "ENPP_RawToFormat"
 	rts
@@ -40358,6 +41982,54 @@ funcENPP_SetListData
 funcENPP_GetHardwareType
 	DPRINT "ENPP_GetHardwareType"
 	rts
+ else 
+funcENPP_Amplifier
+funcENPP_AllocSampleStruct
+funcENPP_NewLoadFile2
+funcENPP_MakeDirCorrect
+funcENPP_TestAufHide
+funcENPP_CopyMemQuick
+funcENPP_GetPassword
+funcENPP_StringCopy2
+funcENPP_ScreenToFront
+funcENPP_WindowToFront
+funcENPP_StartInterrupt
+funcENPP_StopInterrupt
+funcENPP_CutSuffix
+funcENPP_SaveMem
+funcENPP_FileReq
+funcENPP_TextRequest
+funcENPP_LoadExecutable
+funcENPP_NewLoadFile
+funcENPP_ScrollText
+funcENPP_LoadPlConfig
+funcENPP_SavePlConfig
+funcENPP_FindTag
+funcENPP_FindAuthor
+funcENPP_Hexdez
+funcENPP_TypeText
+funcENPP_ModuleRestore
+funcENPP_StringCopy
+funcENPP_CalcStringSize
+funcENPP_StringCMP
+funcENPP_TestAbortGadget
+funcENPP_GetEPNrfromMessage
+funcENPP_InitDisplay
+funcENPP_FillDisplay
+funcENPP_RemoveDisplay
+funcENPP_GetLocaleString
+funcENPP_SetWaitPointer
+funcENPP_ClearWaitPointer
+funcENPP_OpenCatalog
+funcENPP_CloseCatalog
+funcENPP_RawToFormat
+funcENPP_FindAmplifier
+funcENPP_UserCallup5
+funcENPP_GetLoadListData
+funcENPP_SetListData
+funcENPP_GetHardwareType
+	rts
+ endif
 
 * NotePlayer implementation from EaglePlayer sources
 deliNotePlayer
@@ -41180,11 +42852,21 @@ xfdname		dc.b	"xfdmaster.library",0
 
 text_attr
 	dc.l	topaz		* ta_Name
-	dc	8		* ta_YSize
+	dc		8		* ta_YSize
 	dc.b	0		* ta_Style
 	dc.b	0		* ta_Flags
 
 topaz	dc.b	"topaz.font",0
+ even
+
+mini_text_attr
+	dc.l	.mini	* ta_Name
+	dc	8		* ta_YSize
+	dc.b	0		* ta_Style
+	dc.b	0		* ta_Flags
+;	dc.b	FPF_PROPORTIONAL * ta_Flags
+
+.mini	dc.b	"mini4.font",0
  even
 
 
@@ -41356,9 +43038,12 @@ prefsFavoritest2       dc.b 1,0,1,0
        dc.w 0,0
        dc.l 0,0,0
 
+
+
 * "Button tooltips" button copypasted from above, 
 * x-coordinates adjusted manually.
-prefsTooltips dc.l 0
+
+prefsTooltips dc.l prefsSaveState
        dc.w 406-192,121,28,12,3,1,1
        dc.l prefsTooltipsgr,0,prefsTooltipst,0,0
        dc.w 0
@@ -41383,6 +43068,37 @@ prefsTooltipstx       dc.b "Button tooltips.........",0
 prefsTooltipst2       dc.b 1,0,1,0
        dc.w 0,0
        dc.l 0,0,0
+
+
+* "Save state" button
+prefsSaveState
+	dc.l 0
+       dc.w 406,121-42,28,12,3,1,1
+       dc.l prefsSaveStategr,0,prefsSaveStatet,0,0
+       dc.w 0
+       dc.l 0
+prefsSaveStategr       dc.w 0,0
+       dc.b 2,0,1,3
+       dc.l prefsSaveStatexy,prefsSaveStategr2
+prefsSaveStatexy       dc.w 0,11
+       dc.w 0,0
+       dc.w 27,0
+prefsSaveStategr2      dc.w 0,0
+       dc.b 1,0,1,3
+       dc.l prefsSaveStatexy2,0
+prefsSaveStatexy2      dc.w 27,1
+       dc.w 27,11
+       dc.w 1,11
+prefsSaveStatet        dc.b 1,0,1,0
+       dc.w -146,2
+       dc.l 0,prefsSaveStatetx,prefsSaveStatet2
+prefsSaveStatetx  
+	     dc.b "Keep list on exit ",0
+       even
+prefsSaveStatet2       dc.b 1,0,1,0
+       dc.w 0,0
+       dc.l 0,0,0
+
 
 ; Gadget
 gadgetListModeChangeButton

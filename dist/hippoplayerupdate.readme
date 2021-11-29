@@ -2,7 +2,7 @@ Short: Updated HippoPlayer, a module player for classic Amigas
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.48
+Version: 2.49
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -28,8 +28,108 @@ same directory with the HiP binary, too, if you're using kick2.0 or newer.
 NOTE 3: If you get errors where some module is not recognized even 
 if it should be, try removing "S:HippoPlayer.prefs" first.
 
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
+
+# Changes from v2.48 (31.10.2021) to v2.49 (29.11.2021)
+
+It's the pattern party edition!
+
+## New fixes:
+- The font selector in Prefs had a proper bug that made it ignore user
+  selected font received from the font requester. The default font
+  therefore could not be changed, until now. Note: Hippo accepts
+  8x8 fixed fonts only.
+- Fix the case where the scope window is sometimes left too tall.
+- When starting with empty list in random mode, ensure that the first
+  module being played is actually random and not the first one.
+- Do not draw the new list mode change button if it doesn't fit, 
+  removing the visual glitch when window is minified with RMB+Pr.
+- A possible hang during stopping of playback fixed. This happened
+  when AHI was enabled and a non-Paula AHI mode was active.
+- P96 multi screen fix: when scope if manually reactivated by LMB click,
+  this will be remembered until app is closed.
+- "Rob Hubbard 2/Infogrames" format was probably not working,
+  should be ok now.
+
+## New features:
+- Patternscope support added to the following formats:
+  - Art Of Noise (4 channels)
+  - BP SoundMon v2, v3 (Note and sample transposes are not shown)
+  - ChipTracker (eagleplayer)
+  - Digital Mugician (eagleplayer)
+  - Digital Mugician 2 (7 channels, eagleplayer)
+  - FastTracker (FM, multichannel)
+  - FastTracker 2 (XM, multichannel)
+  - Future Composer v1.0-v1.4 (Note and sample transposes are not shown)
+  - Game Music Creator
+  - JamCracker
+  - MultiTracker (MTM, multichannel)
+  - Oktalyzer (4-8 channels)
+  - Scream Tracker 3 (S3M, multichannel)
+  - SoundFX 
+  - StarTrekker
+  - TCBTracker (eagleplayer)
+  - The Musical Enlightenment (eagleplayer)
+- Patternscope notes
+  - Patternscope is able to display 4-18 channels side by side in both
+    normal height and double height (XL) mode. The 18 channel wide scope
+    window just fits into a 640 pixel wide screen. Channels over 18
+    will not be shown.
+  - Normal configured font is used when there are 4-8 channels to be displayed. 
+    For over 8 channels a smaller font is used, and needs to be installed in 
+    FONTS:, called "mini4", available on aminet: 
+    https://aminet.net/text/bfont/mini.font.lha
+  - Playing a 8+ channel module takes some CPU power and not much
+    is left for the patternscope in low power systems. The scope display 
+    is also more CPU+Blitter intensive the more channels there are to 
+    be shown. I had some fun optimizing it, though! This includes my 
+    personal first use of binary coded decimals :-)
+  - A500 can handle Oktalyzer modules with Patternscope, but struggles
+    with PS3M (as usual). A1200 should generally perform ok.
+- New Prefs setting: "Keep list on exit". This enables the following:
+  - Module list will be saved on exit and restored when Hippo is started again.
+  - Last chosen module is selected and played, if it was playing.
+  - File requester path that was last used to add files to 
+    the list will be used the next time file requester is opened.
+  
+## Music format related fixes
+- Volume support added for PSID tunes. These are played by the 
+  playsid.library which now gets a live patch to allow volume
+  control.
+- ScreamTracker3 (S3M) replayer would crash when attempting 
+  to play some modules that had an unexpected sample set up. 
+  Some fixes were made to avoid crashing.
+- Digital Mugician upgraded to Wanted Team eagleplayer ("mugician.amp").
+  Supports subsongs, pattern skipping, patternscope.
+- David Whittaker upgraded to Wanted Team eagleplayer ("david whittaker").
+  Compared to previous this one has better support for different variants, 
+  volume and songend support.
+  
+## New Eagleplayer formats, plugin name in parentheses:
+- Special FX ("special fx")
+  - Eagleplayer by Wanted Team
+- Jason Page ("jason page")
+  - Eagleplayer by Wanted Team
+- Steve Turner ("steve turner")
+  - "Paradroid 90"
+  - Eagleplayer by Wanted Team
+
+## Known issues;
+- Sometimes after the scope window has resized the right side of the
+  window frame is not refreshed properly. Activating the window 
+  repaints the window border again.
+- Sonic Arranger module "svensktoppen" may cause a crash.
+- Oktalyzer module "1 love night dub.okta" may cause a crash.
+- There are some invalid S3M modules around with an uneven 
+  length orders table. These will crash Hippo.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
 
 # Changes from v2.47 (31.8.2021) to v2.48 (31.10.2021)
 
@@ -280,8 +380,10 @@ In this episode, we will be trying to play them all!
 - Wanted Team for Eagleplayer resources.
 - Authors of all the included eagleplayers, I hope you don't mind!
 
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
 
 # Changes from v2.46b (15.6.2021) to v2.47 (31.8.2021)
 
@@ -378,8 +480,10 @@ support, some fixes. Check out the details below.
   _General_ subpage in prefs. This feature probably doesn't make any
   sense if you are using floppies. 
   
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
 
 # Changes from v2.45 (10.1.2000) to v2.46b (15.6.2021)
 
@@ -445,3 +549,83 @@ External applications using the HippoPort still use all data freely.
   programs or adding files. 
 - A bunch of smaller fixes, such as enforcer hit removals at a few places.
 - Code refactoring! It's still quite a mess in many places.
+  
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+List of supported formats (could be incomplete):
+- Activision Pro (also known as Martin Walker)
+- AProSys
+- Art of Noise (4ch, 8ch not supported)
+- Beathoven Sound System 
+- Ben Daglish
+- BP SoundMon v2, v3
+- ChipTracker (also known as KRISTracker)
+- CustomMade
+- Dave Lowe
+- David Whittaker 
+- DeliTracker Custom
+- Delta Music v1, v2
+- DIGI Booster, DIGI Booster PRO 
+- Digital Mugician v1, v2 
+- EarAche
+- Face The Music
+- FastTracker (multichannel Protracker-like format) 
+- FastTracker 2
+- FredMon 
+- Future Composer v1.0-v1.4 
+- Future Player 
+- Game Music Creator
+- GlueMon
+- Hippel ST, Hippel ST COSO
+- Hippel, Hippel 7v, Hippel-COSO
+- In Stereo! v1, v2
+- JamCracker
+- Jason Brooke 
+- Jason Page
+- Jeroen Tel
+- Kris Hatlelid
+- Maniacs of Noise 
+- Mark II 
+- MaxTrax
+- MED, OctaMED
+- Medley Sound 
+- MultiTracker, TakeTracker (multichannel Protracker-like formats)
+- Music Assembler
+- Musicline Editor
+- MusicMaker
+- Oktalyzer
+- PreTracker
+- ProTracker, NoiseTracker, SoundTracker, Old SoundTracker
+- PSID
+- PumaTracker 
+- Quartet, Quartet ST
+- Richard Joseph
+- Richard Joseph 2 (also known as VectorDean)
+- Rob Hubbard 1
+- Rob Hubbar 2 (also known as Infogrames)
+- Sample files (WAV, AIFF, IFF, MP3)
+- ScreamTracker 3
+- Sidmon v1, v2
+- Sonic Arranger (some variants not supported)
+- Sonix
+- SoundControl
+- SoundFX
+- SpecialFX
+- StarTrekker, Audio Sculpture (8ch format not supported)
+- Steve Turner
+- StoneTracker
+- Synth Pack
+- Synthesis 
+- SynTracker
+- TCBTracker
+- TFMX, TFMX 7v 
+- The Musical Enlightenment
+- The Player 6.0A
+- THX, AHX 
+- Tim Follin 2
+- VectorDean
+- Voodoo Supreme Synthesizer
+- Wally Beben

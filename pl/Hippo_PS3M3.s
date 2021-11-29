@@ -1,4 +1,4 @@
-;APS0001A4900000D38F0000305200002906000000000000000000000000000000000000000000000000
+;APS0001B3EB0000DD210000343900002C51000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -10,6 +10,20 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
+DEBUG	=	1
+TEST 	= 	1
+
+
+* Print to debug console, very clever.
+* Param 1: string
+* d0-d6:    formatting parameters, d7 is reserved
+DPRINT macro
+	ifne DEBUG
+	jsr	desmsgDebugAndPrint
+  dc.b 	\1,10,0
+  even
+	endc
+	endm
 
 CHECKCRC	=	$FB289E39	; tekstien tarkistussumma
 
@@ -40,7 +54,6 @@ ier_ahi		=	-19
 
 	incdir	include:
 
-
 	include	exec/exec_lib.i
 	include	exec/execbase.i
 	include	exec/memory.i
@@ -50,6 +63,7 @@ ier_ahi		=	-19
 	include	intuition/intuition_lib.i
 
 	include	dos/dos_lib.i
+	include	dos/dos.i
 
 	include	hardware/intbits.i
 	include	resources/cia_lib.i
@@ -59,9 +73,10 @@ ier_ahi		=	-19
 	include	devices/ahi_lib.i
 	include	devices/ahi.i
 
+	include	misc/eagleplayer.i
+
 	include	Guru.i
 	include	ps3m.i
-
 	include	mucro.i
 
 
@@ -98,8 +113,103 @@ tword	macro
 ;	dc.b	`Replay version 0.942/020+ / 30.10.1994 `,10,10
 ;	endm
 
-euha
 
+ ifne TEST
+TESTMODE
+	move.l	4.w,a6
+	lea	.dosname(pc),a1
+	lob	OldOpenLibrary
+	move.l	d0,._DosBase
+	lea	.gfxname(pc),a1
+	lob	OldOpenLibrary
+	move.l	d0,._GfxBase
+
+	* cybercalib: false
+	moveq	#0,d0
+	moveq	#0,d1
+	* ahi_use: false
+	moveq	#0,d2
+	moveq	#0,d3
+	moveq	#0,d4
+	moveq	#0,D5
+	moveq	#0,D6
+	move.l	#moduleE-module,D7
+	lea	.ps3m_mname(pc),a0
+	lea	.ps3m_numchans(pc),a1
+	lea	.ps3m_mtype(pc),a2
+	lea	.ps3m_samples(pc),a3
+	lea	.ps3m_xm_insts(pc),a4
+	jsr	init1j
+
+	lea	.ps3m_buff1(pc),a0
+	lea	.ps3m_buff2(pc),a1
+	lea	.ps3m_mixingperiod(pc),a2
+	lea	.ps3m_playpos(pc),a3
+	lea	.ps3m_buffSizeMask(pc),a4
+	jsr	init2j
+
+	* mix rate
+	move.l	#15000,d0
+	move.l	#27000,d0
+	move.l	#5000,d0
+	* volume boost
+	moveq	#3,d1
+	* mode
+	moveq	#STEREO,d3
+	* priority, killer
+	moveq	#2,d4
+	* mod address
+	move.l	#module,d2
+	* mixing buffer size, shift for 4096
+	* 3 = 32 kB (MAX)
+	moveq	#3,d5	* max
+	moveq	#0,d5	* min
+	lea	.playing(pc),a0
+	lea	.dummyFunc(pc),a1
+	lea	.volume(pc),a2
+	move.l	._DosBase(pc),a3
+	lea	.songover(pc),a4
+	move.l	._GfxBase(pc),a6
+	move.l	#.songpos,d6
+	move.l	#.dummyFunc,d7
+	pea	.dummyFunc(pc)
+	jsr	init0j
+	addq	#4,sp
+	; playing
+	jsr	endj	
+
+	
+	rts
+
+.gfxname	dc.b	"graphics.library",0
+.dosname	dc.b	"dos.library",0
+ even
+
+._DosBase	dc.l 	0 
+._GfxBase	dc.l	0
+.songpos	dc.l 	0
+.songover	dc 	0
+.volume		dc	64
+.dummyFunc	rts
+.dummy  	dc 	0
+
+.playing	dc.w	-1
+ 
+.ps3m_mname 	dc.l 	0
+.ps3m_numchans	dc.l 	0 
+.ps3m_mtype 	dc.l	0
+.ps3m_samples 	dc.l 	0
+.ps3m_xm_insts 	dc.l 	0
+
+.ps3m_buff1	dc.l 	0
+.ps3m_buff2	dc.l 	0
+.ps3m_mixingperiod dc.l 0
+.ps3m_playpos 	dc.l	0
+.ps3m_buffSizeMask dc.l 0
+
+	
+	section	co,code_p
+ endc
 
 
 
@@ -124,6 +234,7 @@ vboostj	jmp	boosto(pc)
 inforivit	dc.l	0
 var_playing	dc.l	0
 var_volume	dc.l	0
+_DosBase
 dosbase		dc.l	0
 songoverf	dc.l	0
 gfxbase		dc.l	0
@@ -139,7 +250,9 @@ ahi_stereolev	dc	0
 ahi_mode	dc.l	0
 
 
-init1r	move.l	#mname,(a0)
+init1r
+
+	move.l	#mname,(a0)
 	move.l	#numchans,(a1)
 	move.l	#mtype,(a2)
 	move.l	#samples,(a3)
@@ -174,70 +287,70 @@ init2r
 *******************************************************************************
 * lasketaan tekstien tarkistussumma
 
-TABSIZE		=	256
-CRC_32          =	$edb88320    * CRC-32 polynomial *
-INITCRC		=	$ffffffff
+;TABSIZE		=	256
+;CRC_32          =	$edb88320    * CRC-32 polynomial *
+;INITCRC		=	$ffffffff
 
-	pushm	d2-a6
-	move.l	d0,a0
-	move.l	#1998,d0
+; 	pushm	d2-a6
+; 	move.l	d0,a0
+; 	move.l	#1998,d0
 
-	pushm	d0/a0
-	move.l	#TABSIZE*4,d0
-	moveq	#MEMF_PUBLIC,d1
-	move.l	4.w,a6
-	lob	AllocMem
-	move.l	d0,a3
+; 	pushm	d0/a0
+; 	move.l	#TABSIZE*4,d0
+; 	moveq	#MEMF_PUBLIC,d1
+; 	move.l	4.w,a6
+; 	lob	AllocMem
+; 	move.l	d0,a3
 
-** make crc table
+; ** make crc table
 
-	move.l	a3,a0
-	moveq	#0,d4
-.loop	move.l	d4,d0
-	moveq	#0,d1		* accum = 0
-	lsl.l	#1,d0		* item <<=1
-	moveq	#8-1,d2		* for (i = 8;  i > 0;  i--) {
-.loop2	lsr.l	#1,d0		* item >>=1
-	move.l	d0,d3
-	eor.l	d1,d3
-	and	#1,d3		* if ((item ^ accum) & 0x0001)
-	beq.b	.else
-	lsr.l	#1,d1
-	eor.l	#CRC_32,d1	* accum = (accum >> 1) ^ CRC_32;
-	bra.b	.o
-.else	lsr.l	#1,d1		* accum>>=1
-.o	dbf	d2,.loop2
-	move.l	d1,(a0)+
-	addq	#1,d4
-	cmp	#TABSIZE,d4
-	bne.b	.loop
-	popm	d0/a0
+; 	move.l	a3,a0
+; 	moveq	#0,d4
+; .loop	move.l	d4,d0
+; 	moveq	#0,d1		* accum = 0
+; 	lsl.l	#1,d0		* item <<=1
+; 	moveq	#8-1,d2		* for (i = 8;  i > 0;  i--) {
+; .loop2	lsr.l	#1,d0		* item >>=1
+; 	move.l	d0,d3
+; 	eor.l	d1,d3
+; 	and	#1,d3		* if ((item ^ accum) & 0x0001)
+; 	beq.b	.else
+; 	lsr.l	#1,d1
+; 	eor.l	#CRC_32,d1	* accum = (accum >> 1) ^ CRC_32;
+; 	bra.b	.o
+; .else	lsr.l	#1,d1		* accum>>=1
+; .o	dbf	d2,.loop2
+; 	move.l	d1,(a0)+
+; 	addq	#1,d4
+; 	cmp	#TABSIZE,d4
+; 	bne.b	.loop
+; 	popm	d0/a0
 
-** calc crc
-	moveq	#INITCRC,d7
-	move.l	#$ff,d1
-.oop	move.l	d7,d6
-	lsr.l	#8,d6
-	move.b	(a0)+,d5
-	eor.l	d7,d5
-	and.l	d1,d5
-	lsl.l	#2,d5
-	move.l	(a3,d5),d5
-	eor.l	d5,d6
-	move.l	d6,d7
-	subq.l	#1,d0
-	bne.b	.oop
-	move.l	a3,a1
-	move.l	#4*TABSIZE,d0
-	lob	FreeMem
+; ** calc crc
+; 	moveq	#INITCRC,d7
+; 	move.l	#$ff,d1
+; .oop	move.l	d7,d6
+; 	lsr.l	#8,d6
+; 	move.b	(a0)+,d5
+; 	eor.l	d7,d5
+; 	and.l	d1,d5
+; 	lsl.l	#2,d5
+; 	move.l	(a3,d5),d5
+; 	eor.l	d5,d6
+; 	move.l	d6,d7
+; 	subq.l	#1,d0
+; 	bne.b	.oop
+; 	move.l	a3,a1
+; 	move.l	#4*TABSIZE,d0
+; 	lob	FreeMem
 
-*	cmp.l	#CHECKCRC,d7
-*	beq.b	.jeez
-*.douch	move	$dff006,$dff180
-*	bra.b	.douch
-*.jeez
+; *	cmp.l	#CHECKCRC,d7
+; *	beq.b	.jeez
+; *.douch	move	$dff006,$dff180
+; *	bra.b	.douch
+; *.jeez
 
-	popm	d2-a6
+;	popm	d2-a6
 *******************************************************************************
 
 	move.l	#buff1,(a0)
@@ -258,17 +371,32 @@ boosto
 	lea	data,a5
 	bra.w	makedivtabs
 
+* This is called in VERTB/VBLANK interrupt
+* in: 
+*  d0 = if non-zero pattern scope is active in HiP
 s3poslen
 	move.l	poslen(pc),a0
-	move	PS3M_position,(a0)+
-	move	positioneita,(a0)
+	lea	data,a5
+	basereg	data,a5
+	move	PS3M_position(a5),(a0)+
+	move	positioneita(a5),(a0)
+	tst.b	d0 
+	beq.b	.noPatternScope
+	bsr.w	updatePatternInfoBuffer
+	bsr.w	updatePatternInfoData
+.noPatternScope
 	rts
-
+	endb	a5
 
 s3init	
+	* Store this first to allow debug logs to work
+	move.l	a3,dosbase
+
+	DPRINT	"s3init"
+
 	move.l	4(sp),voluproutine
 
-	pushm	d1-a6
+	pushm	d1-d7/a2-a6
 
 	clr	PS3M_eject
 	clr	PS3M_position
@@ -289,7 +417,6 @@ s3init
 	move.l	a0,var_playing
 	move.l	a1,inforivit
 	move.l	a2,var_volume
-	move.l	a3,dosbase
 	move.l	a4,songoverf
 	move.l	a6,gfxbase
 
@@ -306,7 +433,7 @@ s3init
 
 	bsr.w	s3vol
 
-
+ ifeq TEST
 	move	numchans,d0
 	move.l	adjustroutine(pc),a5	* rutiini joka antaa uudet parametrit
 	jsr	(a5)			* kanavien määrästä ja tunen nimestä
@@ -315,7 +442,7 @@ s3init
 	move.b	d1,vboost+3
 	move	d3,pmode
 	move.b	d4,s3mmode1a
-
+ endc
 	clr	system
 	cmp.b	#5,d4
 	bne.b	.fr2
@@ -339,6 +466,9 @@ s3init
 	lsl.l	#8,d0
 	move.b	#$ff,d0
 	move.l	d0,buffSizeMaskFF
+
+	move.l	buffSize(a5),d0
+	DPRINT 	"buffSize=%lx"
 
 	move.l	4.w,a6
 
@@ -413,7 +543,7 @@ s3init
 	bne.b	.alavaraa
 
 .memerr	bsr.w	s3end
-	popm	d1-a6
+	popm	d1-d7/a2-a6
 	moveq	#ier_nomem,d0
 	rts
 
@@ -438,14 +568,13 @@ s3init
 	st 	PS3M_play(a5)
 
 .kala	
-	bsr.w	s3mPlay
+	jsr	s3mPlay
 	bsr.w	s3end
 	move.l	var_playing(pc),a0
 	clr.b	(a0)
 	move.l	inforivit(pc),a0
 	jsr	(a0)
-	moveq	#0,d0
-	popm	d1-a6
+	popm	d1-d7/a2-a6
 	move	#333,d0		* killeri lopettanut
 	rts
 
@@ -463,6 +592,9 @@ s3init
 	ext	d2
 	ext.l	d2
 
+ ifne TEST
+	jsr	s3m_code
+ else
 	move.l	#s3m_segment,d3
 	lsr.l	#2,d3
 	move.l	#3000,d4
@@ -470,11 +602,16 @@ s3init
 	tst.l	d0
 	bne.b	.ne
 	moveq	#ier_noprocess,d0
-	bsr.b	s3end
+	bsr.w	s3end
 	bra.b	.en
 .ne	
 	moveq	#0,d0
-.en	popm	d1-a6
+.en 
+ endif 
+	lea	PatternInfo(pc),a0
+	lea	unpackedPattern,a1
+
+	popm	d1-d7/a2-a6
 	rts
 
 .prit	dc.b	-10,-1,0,1,9
@@ -484,7 +621,482 @@ s3init
 
 
 
+* current playback position = playpos/mrate50 
+* data write position = 
+*    (playpos + bufferSize) & buffSizeMaskFF
+*    /mrate50
+* data write position should be IN FRONT of playback
+* position as much as it takes for mix buffer to
+* play through, bufferSize/mrate50 ticks.
 
+* write stripe data to data write pos
+
+* Set active song and pattern position
+* in:
+*   d0 = song pos
+*   d1 = pattern pos
+pushPatternInfo
+	movem 	d0/d1,activeSongPos
+	rts
+
+	basereg	data,a5
+
+* Get info related to what is currently being played
+* out:
+*  d0 = song position 
+*  d1 = pattern position
+getPatternInfo
+	pushm	d2/d3/d4/a0
+	* Calculate index based on current play position
+	move.l	mrate50(a5),d4
+	beq.b	.notReady
+	lsr.l	#8,d4
+	move.l	playpos(a5),d3
+	divu	d4,d3
+	lsr	#8,d3
+	
+	lea	patternInfoBuffer(a5),a0
+	lsl	#2,d3
+	add.w	d3,a0	
+
+ if DEBUG
+	moveq	#0,d0 
+	move	d3,d0
+	lsr	#2,d0
+	move.l	playpos(a5),d1
+	lsr.l	#8,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	movem	(a0),d2/d3
+;;	DPRINT	"Read idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
+ endif 
+
+	movem	(a0),d0/d1
+.x
+	popm	d2/d3/d4/a0
+	rts
+.notReady
+	moveq	#0,d0 
+	moveq	#0,d1 
+	bra.b 	.x
+
+* This stores the currently active positions
+* into the buffer, ahead of time relative
+* to what is being played.
+updatePatternInfoBuffer
+	
+	move.l	mrate50(a5),d3
+	beq.b	.skip
+	move.l	buffSize(a5),d4
+	lsr.l	#8,d3
+	divu	d3,d4
+	* d4 = max index number
+	* Round up to have some extra buffer in case
+	* of read overflow, which happens on small mix buffers.
+	addq	#1,d4
+	
+ if DEBUG 
+;	moveq	#0,d0 
+;	move	d4,d0
+;	DPRINT	"MAX IDX=%ld"
+ endif 
+
+	move.l	playpos(a5),d0
+	move.l	mrate50(a5),d1
+	lsr.l	#8,d1
+	divu	d1,d0
+	lsr.w	#8,d0
+	
+	* pick the previous slot, that is farthest from the current
+	* position timewise.
+
+	subq	#1,d0
+	bpl.b	.pos
+	* wrap to the other end
+	add	d4,d0
+.pos
+
+ if DEBUG
+	ext.l	d0
+	move.l	playpos(a5),d1
+	lsr.l	#8,d1
+	moveq	#0,d2
+	move	activeSongPos(a5),d2
+	moveq	#0,d3
+	move	activePattPos(a5),d3
+;;	DPRINT	"Push idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
+ endif
+
+	lea	patternInfoBuffer(a5),a0
+
+	move	prevPushedIndex(a5),d1
+	asl	#2,d1
+	move	d0,prevPushedIndex(a5)
+	asl	#2,d0
+
+ if DEBUG
+;	ext.l 	d0 
+;	ext.l	d1
+;	DPRINT	"curIdx=%ld  prevIdx=%ld"
+ endif
+
+	* previous data long word
+	move.l	(a0,d1),d2
+
+	* max index, in long words
+	lsl	#2,d4
+
+.fill 
+;	DPRINT	"fill cur=%ld prev=%ld"
+	* prevIdx + 1
+	addq	#4,d1
+	* wrap over if end reached
+	cmp	d1,d4
+	bne.b	.noWrap
+	moveq	#0,d1
+.noWrap
+	* if prevIdx == idx, stop
+	cmp	d0,d1
+	beq.b	.done
+	
+	* fill one slot
+	move.l	d2,(a0,d1)
+	bra.b 	.fill
+.done
+
+	* finally store new data
+	add.w	d0,a0
+	move	activeSongPos(a5),(a0)+
+	move	activePattPos(a5),(a0)+
+.skip
+	rts	
+
+
+* This updates the information in PatternInfo structure
+* to correspond to what is being played currently
+updatePatternInfoData
+	bsr.w	getPatternInfo
+	* d0 = song pos
+	* d1 = patt pos
+
+	* Pattern pos high limit check
+	* due to unpackedPattern fixed max size
+	cmp	#127,d1
+	bls.b	.ok
+	moveq	#127,d1
+.ok
+	move	d1,PatternInfo+PI_Pattpos(a5)
+
+	cmp	#mtMOD,mtype(a5)
+	beq.b	.mod 
+	cmp	#mtMTM,mtype(a5)
+	beq.b 	.mtm
+	cmp	#mtS3M,mtype(a5)
+	beq.w	.s3m
+	cmp	#mtXM,mtype(a5)
+	beq.w	.xm
+	rts 
+.mod
+	move.l	mt_songdataptr(pc),a0
+	lea	952(a0),a2	;pattpo
+	lea	1084(a0),a0	;patterndata
+
+	* d0 = song pos
+	moveq	#0,d1
+	move.b	(a2,d0),d1
+	lsl.w	#8,d1
+	mulu	numchans(a5),d1
+
+	* Start of pattern corresponding to this song pos
+	lea	(a0,d1.l),a0 
+
+	move	numchans(a5),d0
+	subq	#1,d0
+	lea	Stripe1(pc),a1
+.stripes
+	move.l	a0,(a1)+
+	addq	#4,a0
+	dbf	d0,.stripes
+	rts
+ 
+.mtm 
+	* d0 = song pos
+	move	d0,d6
+
+	move	numchans(a5),d7
+	subq	#1,d7
+	moveq	#0,d1	* sequence index
+	lea	Stripe1(pc),a4
+.loo
+	;move.l	mt_songdataptr(pc),a0
+	move.l	orderz(pc),a2
+	moveq	#0,d0
+	move.b	(a2,d6),d0
+	lsl	#6,d0				; 32 channels * word
+
+	move.l	sequ(pc),a2
+	add	d1,d0			; sequence
+	move.b	(a2,d0),d2
+	lsl	#8,d2
+	move.b	1(a2,d0),d2
+
+	move	d2,d0
+	beq.b	.zero
+
+	iword	d0
+	move.l	tracks(pc),a2
+	subq	#1,d0
+	mulu	#192,d0
+	add.l	d0,a2	
+	* Stripe!
+	move.l	a2,(a4)
+	bra.b 	.noZ
+.zero
+	clr.l	(a4)
+.noZ
+	addq	#4,a4			* next stripe
+	addq	#2,d1 			* next sequence
+	dbf	d7,.loo
+	rts
+
+.s3m 	
+	* d0 = song pos
+
+	* module data
+	move.l	s3m(a5),a0
+	move.b	orders(a0,d0),d0
+
+	cmp.b	#$fe,d0				; marker that is skipped
+	beq.w	.skip
+	cmp.b	#$ff,d0				; end of tune mark
+	beq.w	.skip
+	cmp	pats(a5),d0
+	bhs.w	.skip 
+
+	add	d0,d0
+	move.l	patts(a5),a1
+	move	(a1,d0),d0
+	beq.w	.skip
+	iword	d0
+
+	* Unpack once if same
+	cmp	unpackedPatternPosition(a5),d0 
+	beq.w	.skip 
+	move	d0,unpackedPatternPosition(a5)
+	DPRINT	"Unpack %lx"
+
+	lsl.l	#4,d0
+	lea	2(a0,d0.l),a0
+
+	* start of pattern data
+	lea	unpackedPattern(a5),a1
+	move.l	a1,a2
+
+	* clear old, this is probably needed
+	* as S3M pattern can miss tracks so 
+	* old tracks might remain in the previous 
+	* unpacked data.
+	move	numchans(a5),d7
+	* multiply by 4 and 64
+	* total pattern length based on chans
+	lsl	#8,d7
+	* quad long words
+	lsr	#4,d7
+	moveq	#0,d6
+.clear	move.l	d6,(a2)+
+	move.l	d6,(a2)+
+	move.l	d6,(a2)+
+	move.l	d6,(a2)+
+	dbf	d7,.clear
+
+	* 64 rows
+	moveq	#64-1,d7
+.rowLoop 
+.noteLoop
+	moveq	#0,d3
+	moveq	#0,d4
+	moveq	#0,d5
+	moveq	#0,d6
+
+	move.b	(a0)+,d0 
+	beq.b	.rowEnd 
+
+	moveq	#$1f,d1
+	and	d0,d1		* channel number
+	lsl	#2,d1  		* multiple of 4, index to unpacked pattern
+
+	and	#~31,d0
+	;move.b	d0,flgs(a2)
+	
+	moveq	#32,d2
+	and	d0,d2
+	beq.b	.nnot
+
+	move.b	(a0)+,d3	* note
+	addq.b	#1,d3
+	move.b	(a0)+,d4	* instr	
+.nnot
+	moveq	#64,d2
+	and	d0,d2
+	beq.b	.nvol
+	* Emulate the PT vol command
+	* Later actual command overrides
+	moveq	#$c,d5
+	move.b	(a0)+,d6
+	;addq	#1,a0
+.nvol	
+	and	#128,d0
+	beq.b	.noCmd
+
+	move.b	(a0)+,d0
+	bmi.b	.d
+
+	move.b	d0,d5		* cmd
+.d	move.b	(a0)+,d6	* param
+
+.noCmd
+	move.b	d3,(a1,d1)
+	move.b	d4,1(a1,d1)
+	move.b	d5,2(a1,d1)
+	move.b	d6,3(a1,d1)
+	bra.b	.noteLoop
+.rowEnd
+	* new row in destination
+	move	numchans(a5),d0
+	lsl	#2,d0
+	add	d0,a1
+	dbf	d7,.rowLoop
+
+.skip
+
+* Pattern is unpacked, points stripes into it
+.putStripes
+	move	numchans(a5),D0
+	subq	#1,d0
+	lea	Stripe1(a5),a0
+	lea	unpackedPattern(a5),a1
+.stripesLoop 
+	move.l	a1,(a0)+
+	addq	#4,a1
+	dbf	d0,.stripesLoop
+
+	rts
+
+
+.xm
+	* d0 = song pos
+
+	move.l s3m(a5),a0
+	moveq	#0,d1
+	move.b	xmOrders(a0,d0),d1	
+	cmp.b	xmNumPatts(a0),d1	* limit check
+	bhs.w	.xmSkip
+
+	* Unpack once if same
+	move.l	d1,d0
+	cmp	unpackedPatternPosition(a5),d0
+	beq.w	.xmSkip
+	move	d0,unpackedPatternPosition(a5)
+	DPRINT	"Unpack %ld"
+
+	lsl	#2,d0
+	lea	xm_patts(a5),a1
+	move.l	(a1,d0),a1
+	lea	xmNumRows(a1),a3
+	tword	(a3)+,d0 	* xmNumRows
+
+ if DEBUG
+ 	moveq	#0,d1
+	move 	numchans(a5),d1
+	DPRINT	"Rows=%ld chans=%ld"
+ endif
+
+	* XM can have variable pattern length, store it.
+	* The unpacked pattern has fixed max size, 128 rows,
+	* check for overrun.
+	cmp	#127,d0
+	bls.b	.okSize
+	moveq	#127,d0
+.okSize
+	move	d0,PatternInfo+PI_Pattlength(a5)
+	move.l	a1,a3
+	tlword	(a3)+,d1	* Length of pattern header
+	tst	d1
+	beq.b	.xmEmptyPattern
+	add.l	d1,a1		* skip header 
+
+	* Start of XM pattern data at a1
+	lea	unpackedPattern(a5),a0
+
+	move	d0,d7
+	subq 	#1,d7
+.xmRowLoop
+	move 	numchans(a5),d1
+	subq	#1,d1
+
+.xmChanLoop
+	moveq	#0,d3
+	moveq	#0,d4
+	moveq	#0,d5
+	moveq	#0,d6
+
+	move.b	(a1)+,d0
+	bpl.b	.all
+
+	ror.b	#1,d0
+	bpl.b	.nonote
+	move.b	(a1)+,d3
+.nonote	
+	ror.b	#1,d0
+	bpl.b	.noinst
+	move.b	(a1)+,d4
+
+.noinst
+	ror.b	#1,d0
+	bpl.b	.novol
+	
+	* Emulate PT C-command
+	moveq	#$c,d5
+	move.b	(a1)+,d6
+	;addq	#1,a1
+	;move.b	(a1)+,vol(a2)
+.novol	
+	ror.b	#1,d0
+	bpl.b	.nocmd
+	move.b	(a1)+,d5
+
+.nocmd	
+	ror.b	#1,d0
+	bpl.b	.next
+	
+	move.b	(a1)+,d6
+	bra.b	.next
+.all	
+	move.b	d0,d3
+	move.b	(a1)+,d4
+	addq	#1,a1 * skip vol
+	move.b	(a1)+,d5
+	move.b	(a1)+,d6
+.next	
+	move.b	d3,(a0)+
+	move.b	d4,(a0)+
+	move.b	d5,(a0)+
+	move.b	d6,(a0)+
+
+	dbf	d1,.xmChanLoop
+
+	dbf	d7,.xmRowLoop
+
+* Pattern is unpacked, points stripes into it
+.xmSkip
+	bra.w	.putStripes
+	rts
+
+.xmEmptyPattern
+	rts
+
+ endb a5
+ 
 
 s3vol	
 	move.l	var_volume(pC),a0
@@ -520,9 +1132,15 @@ s3cont	tst.b	ahi_use
 	rts
 
 
-s3end	tst.b	ahi_use
-	bne.w	ahi_end
-	
+s3end
+	DPRINT	"S3end"
+
+	tst.b	ahi_use
+	beq.b	.noAhi
+	bsr.w	ahi_end
+	bra.w	.closeDebugWindow
+.noAhi
+
 	pushm	all
 	bsr.b	.joopajoo
 	popm	all
@@ -530,6 +1148,7 @@ s3end	tst.b	ahi_use
 
 
 .joopajoo
+
 	lea	data,a5
 	basereg	data,a5
 
@@ -548,9 +1167,11 @@ s3end	tst.b	ahi_use
 	move.l	gfxbase,a6
 	lob	WaitTOF
 	popm	d0/d1/a0/a1/a6
-
+  
+ ifeq TEST
 	tst	PS3M_wait(a5)			; Wait for player
 	bne.b	.ll				; task to finish
+ endc
 
 .d
 
@@ -626,7 +1247,20 @@ s3end	tst.b	ahi_use
 	lob	FreeMem
 	clr.l	dtab(a5)
 
-.eimem6	rts
+.eimem6	
+
+.closeDebugWindow
+ ifne DEBUG
+	move.l	#1*50,d1
+	move.l	dosbase,a6
+	lob 	Delay
+	move.l	output,d1
+	beq.b	.noDbg
+	clr.l	output
+	lob	Close
+.noDbg
+ endif
+	rts
 
 	endb	a5
 
@@ -664,6 +1298,8 @@ s3m_code
 	lob	FindTask
 	move.l	d0,ps3m_task
 
+	DPRINT	"s3m_code"
+	
 	st	PS3M_play
 	jmp	syss3mPlay
 
@@ -674,18 +1310,23 @@ ps3m_task	dc.l	0
 
 ********************** AHI liittymä
 ahi_init
+	DPRINT	"ahi_init"
+
 	bsr.w	init
 	bsr.w	FinalInit
 
-	move	numchans(pc),setchannels
+	move	numchans,setchannels
 	move.l	ahi_rate(pc),setfreq
 	move.l	ahi_mode(pc),setmode
 
 	bsr.b	ahi_init0
+	
 	tst.l	d0
 	bne.b	.erro
-
-.x	popm	d1-a6
+.x
+	popm	d1-d7/a2-a6
+	sub.l	a0,a0 
+	sub.l	a1,a1
 	rts
 
 .erro	push	d0
@@ -720,7 +1361,7 @@ ahi_init0
 
 	bsr.w	ahi_setmastervol
 
-	move	tempo(pc),d0
+	move	tempo,d0
 	bsr.w	ahi_tempo
 
 	lea	ahi_ctrltags(pc),a1
@@ -805,12 +1446,12 @@ ahi_cont
 
 
 
-playmusic
+ahi_playmusic
 	pushm	d2-d7/a2-a6
 
-	bsr	s3vol
+	bsr.w	s3vol
 
-	move	mtype(pc),d0
+	move	mtype,d0
 	lea	s3m_music(pc),a0
 	subq	#1,d0
 	beq.b	.m
@@ -823,7 +1464,7 @@ playmusic
 .m	jsr	(a0)
 
 	lea	cha0,a4
-	move	numchans(pc),d7
+	move	numchans,d7
 	subq	#1,d7
 	moveq	#0,d6
 .chl
@@ -1061,7 +1702,7 @@ ahi_tempo
 
 PlayerFunc:
 	blk.b	MLN_SIZE
-	dc.l	playmusic
+	dc.l	ahi_playmusic
 	dc.l	0
 	dc.l	0
 
@@ -1133,6 +1774,199 @@ setchannels 	= 	*-2
 
 
 
+PatternInfo
+	ds.b	PI_Stripes	
+Stripe1	ds.l	32
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	numchans(pc),PatternInfo+PI_Voices
+
+	move	#-1,unpackedPatternPosition
+
+	cmp	#mtMOD,mtype
+	beq.b	.mod
+	cmp	#mtMTM,mtype
+	beq.b	.mtm
+	cmp	#mtS3M,mtype 
+	beq.b 	.s3m 
+	cmp	#mtXM,mtype 
+	beq.b 	.s3m 
+	rts
+
+.mtm 
+	move.l	#3,PI_Modulo(A0)	; Number of bytes to next row
+	move	#-1,PI_Speed(a0)	; Magic! Negative: note index
+	rts
+
+.mod
+	* 4 bytes per note, per channel
+	move	numchans(pc),d1
+	mulu	#4,d1
+	move.l	d1,PI_Modulo(A0)	; Number of bytes to next row
+	move	#6,PI_Speed(a0)		; Magic! Positive: period, Negative: note index
+	rts
+
+* Both of these will use temporaru uncompressed pattern data
+.xm
+.s3m 
+	* 4 bytes per note, per channel
+	move	numchans(pc),d1
+	mulu	#4,d1
+	move.l	d1,PI_Modulo(A0)	; Number of bytes to next row
+	move	#-1,PI_Speed(a0)	; Magic! Negative: note index
+	rts
+
+
+* Called by the PI engine to get values for a particular row
+ConvertNote
+	move	mtype(pc),d0
+	cmp 	#mtMOD,d0
+	beq.w	.mtMOD
+	cmp	#mtMTM,d0 
+	beq.b	.mtMTM
+	cmp	#mtS3M,d0 
+	beq.b	.mtS3M
+	cmp	#mtXM,d0 
+	beq.b	.mtXM
+	rts
+
+.mtS3M
+	moveq	#0,D0		; Period, Note
+	;moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	* upper four bits: octave
+	* lower four bits: semitone
+	moveq	#0,d1
+	move.b	(a0),d1
+	beq.b	.noNote
+	* Uncompressed data has one added to reserve 0 for "no note"
+	subq.b	#1,d1
+	
+	* up nibble contains octave number
+	* low nibble note index
+	moveq	#$f,d0
+	and.b	d1,d0
+	lsr.b	#4,d1
+	move.b	.multab12(pc,d1.w),d1
+	add	d1,d0
+
+	addq	#1,d0
+	move.b	1(a0),d1
+.noNote
+	move.b	2(a0),d2
+	and	#$3f,d2		* TODO, cut off command, there could possibly be a better way
+
+	move.b	3(a0),d3
+	rts
+
+.multab12
+.a set	 0
+	rept	16
+	dc.b	.a
+.a set .a+12
+	endr
+
+.mtXM
+	;moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+;	moveq	#-1,d0
+;	cmp.b	(a0),d0
+;	beq.b	.noXMNote
+	moveq	#$7f,d0
+	and.b	(a0),d0		; note 0-71, 0 = C-0
+	beq.b	.noXMNote
+	
+	moveq	#$7f,d1
+	and.b	1(a0),d1	; instrument 0-128
+
+.noXMNote
+	move.b	2(a0),d2
+	and	#$3f,d2		* TODO, cut off command, there could possibly be a better way
+
+	move.b	3(a0),d3
+	rts
+
+.mtMTM
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+;(NOS*37)³192   ³Each track is saved independently and takes exactly 192 bytes.
+;	³      ³The tracks are arranged as 64 consecutive 3-byte notes.  These
+;	³      ³notes have the following format:
+;	³      ³
+;	³      ³
+;	³      ³  BYTE 0   BYTE 1   BYTE 2
+;	³      ³ ppppppii iiiieeee aaaaaaaa
+;	³      ³
+;	³      ³ p = pitch value (0=no pitch stated)
+;	³      ³ i = instrument number (0=no instrument number)
+;	³      ³ e = effect number
+;	³      ³ a = effect argument
+	move.b	(a0),d0
+	lsr.b	#2,d0
+
+	moveq	#%11,d1
+	and.b	(a0),d1
+	lsl.b	#4,d1
+
+	move.b	1(a0),d2
+	lsr.b	#4,d2
+	or.b	d2,d1
+
+	moveq	#%1111,d2
+	and.b	2(a0),d2
+
+	move.b	3(a0),d3
+
+;	and.l	#$ff,d0
+;	beq.b	.s
+;	and.l	#$ff,d1
+;	and.l	#$ff,d2
+;	and.l	#$ff,d3
+;	DPRINT	"per=%ld sam=%ld cmd=%lx prm=%lx"
+;.s
+
+	rts
+
+.mtMOD
+	; 00 11 22 33
+	; Sp pp Sc aa
+
+	; 0 or positive: period values
+
+	* sample num
+	move.b	2(a0),d1
+	lsr.b	#4,d1
+	move.b	(a0),d0
+	and.b	#$f0,d0
+	or.b	d0,d1
+
+	moveq	#$f,d2
+	and.b	2(a0),d2
+	move.b	3(a0),d3
+
+	move	(a0),d0
+	and	#$fff,d0
+
+	rts
+
+
+
+
+
 *********************************
 *	   PS3M 0.9A ®		*
 *	  Version 0.960		*
@@ -1158,7 +1992,7 @@ slev4	;move	d1,$9c(a0)
 
 lev3	move.l	d0,-(sp)
 	move	#$20,$dff09c
-	move.l	mrate50,d0
+	move.l	mrate50(pc),d0
 	add.l	d0,playpos
 	move.l	buffSizeMaskFF(pc),d0
 	and.l	d0,playpos
@@ -1167,11 +2001,17 @@ lev3	move.l	d0,-(sp)
 	rte
 
 
+
+* a1 = playpos
 lev6server
 	move.l	mrate50-playpos(a1),d0
+	* next playpos
 	add.l	d0,(a1)
+	
+	* clamp playpos
 	move.l	buffSizeMaskFF(pc),d0
 	and.l	d0,(a1)
+
 ;	moveq	#1,d0
 	moveq	#0,d0
 	rts
@@ -1256,10 +2096,12 @@ play	;movem.l	d0-a6,-(sp)
 
 
 
-
-
-
 init	
+	DPRINT	"init"
+	bsr.b 	.doInit 
+	bsr.w	PatternInit
+	rts
+.doInit
 	lea	data,a5
 	clr	mtype(a5)
 
@@ -1392,6 +2234,7 @@ init
 
 
 FinalInit
+	DPRINT	"FinalInit"
 	clr.l	bufpos(a5)
 	clr.l	playpos(a5)
 
@@ -3562,6 +4405,7 @@ lb_5fac	dbf	d2,lb_5fa0
 
 
 detectchannels
+	DPRINT	"Detect channels"
 	lea	ch(pc),a0
 	moveq	#7,d0
 .l2	clr.l	(a0)+
@@ -3580,7 +4424,7 @@ detectchannels
 	lsl.l	#4,d0
 	lea	(a0,d0.l),a3
 	addq.l	#2,a3
-	moveq	#63,d6
+	moveq	#64-1,d6
 .rowloop
 	move.b	(a3)+,d0
 	beq.b	.newrow
@@ -3627,8 +4471,10 @@ detectchannels
 
 .newrow
 	dbf	d6,.rowloop
+
 .qt
 	dbf	d7,.pattloop	
+
 
 	moveq	#1,d0
 	moveq	#1,d1
@@ -4008,14 +4854,19 @@ s3m_init
 	iword	d0
 	move	d0,pats(a5)
 
+ if DEBUG
+ 	ext.l	d0
+	DPRINT	"Patterns %ld"
+ endif
 	move	insnum(a0),d0
 	iword	d0
 	move	d0,inss(a5)
 
+	DPRINT	"Instruments %ld"
+
 	move	ffv(a0),d0
 	iword	d0
-	move	#$0100,ffv(a0)	* signed!
-	
+	move	#$0100,ffv(a0)	* signed!	
 
 	move	flags(a0),d0
 	iword	d0
@@ -4031,7 +4882,9 @@ s3m_init
 	move	slen(a5),d0
 	moveq	#1,d1
 	and	d0,d1
-	add	d1,d0
+	add	d1,d0	* make even
+	* ALERT! Some modules expect this to be odd,
+	* making it even breaks things.
 	lea	(a1,d0.l),a2
 	move.l	a2,samples(a5)
 
@@ -4040,13 +4893,29 @@ s3m_init
 	lea	(a2,d0.l),a3
 	move.l	a3,patts(a5)
 
+ if DEBUG
+	pushm	all
+	move	pats(a5),d1
+	subq	#1,d1 
+	move.l	patts(a5),a0
+.patloop
+	moveq	#0,d0
+	move	(a0)+,d0 
+	iword	d0
+	DPRINT	"patseg=%lx"
+	dbf	d1,.patloop
+	popm	all
+ endif
+ 
  	moveq	#0,d0
 	move.b	(a1),d0
+	DPRINT	"First order=%ld"
 	add	d0,d0
 	sub.l	a1,a1
 	move	(a3,d0),d0
 	beq.b	.q
 	iword	d0
+	DPRINT	"First patt=%ld"
 	asl.l	#4,d0
 	lea	2(a0,d0.l),a1
 .q	move.l	a1,ppos(a5)
@@ -4063,6 +4932,16 @@ s3m_init
 	moveq	#125,d0
 .qw	move	d0,tempo(a5)
 
+ if DEBUG
+	push	d0
+	move.l	setmodulelen(pc),d0
+	DPRINT	"Modlen %lx"
+	pop	d0 
+ endif 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Instrument loop
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	move	inss(a5),d0
 	subq	#1,d0
@@ -4075,24 +4954,64 @@ s3m_init
 	lsl.l	#4,d1
 	lea	(a0,d1.l),a1
 
-*** Vaihdetaan unsigned -> signed
-	cmp	#1,fformat(a5)		* unsigned samples?
-	beq.b	.kon0	
+ if DEBUG
+	pushm	d0-d5
+	move	inss(a5),d2
+	sub	d0,d2
+	move	d2,d0
+	ext.l	d0
+	move.l	inslength(a1),d2
+	ilword	d2
 
+	moveq	#0,d3
+	move.b	inspack(a1),d3
+	moveq	#0,d4
+	move.b	insflags(a1),d4
+	moveq	#0,d5
+	move.b	instype(a1),d5
+	DPRINT	"%02ld: seg=%04lx len=%04lx pck=%lx flgs=%lx typ=%lx"
+	popm	d0-d5
+ endif
+
+*** Vaihdetaan unsigned -> signed
+; Convert sample
+	cmp	#1,fformat(a5)		* unsigned samples?
+	beq.b	.kon0
+
+	* skip non-samples to avoid thrashing around
+	cmp.b	#1,instype(a1)
+	bne.b	.eloo
+		
 	moveq	#0,d1
 	move	insmemseg(a1),d1
 	iword	d1
 	lsl.l	#4,d1
+
 	lea	(a0,d1.l),a3	* sample data start
 	move.l	inslength(a1),d1
 	beq.b	.skip
 	ilword	d1
-	subq	#1,d1
 	moveq	#-128,d2
-.kon	eor.b	d2,(a3)+
-	dbf	d1,.kon
+
+	* SAFETY: high bound check
+	* a4 = end of module
+	move.l	a0,a4
+	add.l	setmodulelen(pc),a4
+
+.kon2	
+	* Overflow safety check
+	cmp.l	a4,a3
+	bhs.b	.oflow
+	eor.b	d2,(a3)+
+	dbf	d1,.kon2
+	bra.w	.kon0
+
+.oflow
+	DPRINT	"overflow"
+
 .skip
 .kon0	
+
 ***
 	btst	#0,insflags(a1)
 	beq.b	.eloo
@@ -4101,7 +5020,12 @@ s3m_init
 	cmp.l	#2,d1
 	bls.b	.eloo
 	move.l	insloopend(a1),inslength(a1)
-.eloo	dbf	d0,.instloop
+.eloo	
+	dbf	d0,.instloop
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Instrument loop end
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 	move	#1,fformat(a5)		* muutetaan signed.
@@ -4119,6 +5043,8 @@ s3m_init
 	move.l	#14317056/4,clock(a5)		; Clock constant
 	move	#64,globalVol(a5)
 	moveq	#0,d0
+
+	DPRINT	"s3m_init done"
 	rts
 
 
@@ -4154,6 +5080,11 @@ ccmds	lea	c0(a5),a2
 
 uusrow	clr	cn(a5)
 
+	;;;;;;;;;;;;
+	move	pos(a5),activeSongPos(a5)
+	move	rows(a5),activePattPos(a5)
+	;;;;;;;;;;;;
+
 	tst	pdelaycnt(a5)
 	bne.b	process
 
@@ -4165,9 +5096,15 @@ uusrow	clr	cn(a5)
 	dbf	d7,.cl
 
 	move.l	ppos(a5),a1
+
+ if DEBUG
+;	move.l	a1,d0
+;	DPRINT	"Ppos=%lx"
+ endif
+ 
 	lea	c0(a5),a4		;chanblocks
 .loo	move.b	(a1)+,d0
-	beq.b	.end
+	beq.b	.end		* zero = end of row
 
 	moveq	#$1f,d5
 	and	d0,d5			;chan
@@ -4285,7 +5222,11 @@ process	lea	c0(a5),a2
 	and	#$f,d0
 	add	d0,d0
 
-	move.l	sample(a2),a1
+	; This can be zero!
+	move.l	sample(a2),d2
+	beq.w	.zeroSam
+
+	move.l	d2,a1
 	move.l	$20(a1),d2
 	ilword	d2
 
@@ -4343,6 +5284,7 @@ process	lea	c0(a5),a2
 	move.l	d0,mLength(a4)
 	clr.b	mOnOff(a4)
 
+.zeroSam
 .f	moveq	#64,d0
 	and.b	flgs(a2),d0
 	beq.b	.evol
@@ -4435,7 +5377,8 @@ burk	addq	#1,pos(a5)			; inc songposition
 	moveq	#6,d0
 .ok	move	d0,spd(a5)
 
-cont	move	pos(a5),d0
+cont	
+	move	pos(a5),d0
 	move	d0,PS3M_position(a5)
 	st	PS3M_poscha(a5)
 
@@ -5137,6 +6080,7 @@ specials
 	and	#$f,d0
 	add	d0,d0
 
+	* ENFORCER HITS, a1 can be NULL
 	move.l	sample(a2),a1
 
 	move.l	$20(a1),d2
@@ -5289,7 +6233,7 @@ xm_init
 	move.l	a1,a3				; xmInstSize
 	tlword	(a3)+,d0
 	cmp.l	#1<<24,d0		* järjettömän iso?
-	bhs.w	.q
+	bhs.b	.q
 	lea	xmNumSamples(a1),a3
 	tword	(a3)+,d1
 	lea	xmSmpHdrSize(a1),a3
@@ -5463,7 +6407,7 @@ xm_runEnvelopes
 	move	rVolume(a2),d0
 
 			btst	#xmEnvOn,xmVolType(a1)
-			beq	.0BAE
+			beq.w	.0BAE
 			moveq	#0,d1
 			move.b	xmNumVolPnts(a1),d1
 			lea	xmVolEnv(a1),a3
@@ -5630,6 +6574,11 @@ xm_runEnvelopes
 
 xm_newrow
 	clr	cn(a5)
+
+	;;;;;;;;;;;;
+	move	pos(a5),activeSongPos(a5)
+	move	rows(a5),activePattPos(a5)
+	;;;;;;;;;;;;
 
 	tst	pdelaycnt(a5)
 	bne.w	.process
@@ -7564,7 +8513,22 @@ mt_getnewnote
 	move.b	mt_songpos(pc),d0
 	move.b	(a2,d0),d1
 	asl.l	#8,d1
-	mulu	numchans,d1
+	mulu	numchans(pc),d1
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	;; Works for both MOD and MTM
+	pushm	d0/d1
+	moveq	#0,d0 
+	move.b 	mt_songpos(pc),d0
+	moveq	#0,d1
+	move	mt_patternpos(pc),d1
+	divu	numchans(pc),d1
+	lsr	#2,d1
+	bsr.w	pushPatternInfo
+	popm	d0/d1
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 	add	mt_patternpos(pc),d1
 	clr	mt_dmacontemp
 
@@ -7572,19 +8536,23 @@ mt_getnewnote
 	bne.b	.ei
 	moveq	#0,d1
 .ei
-	move	numchans,d7
+	move	numchans(pc),d7
 	subq	#1,d7
 	lea	cha0,a5
 	lea	mt_chan1temp(pc),a6
-.loo	move	d7,-(sp)
 
+	lea	Stripe1(pc),a4
+.loo
+	move	d7,-(sp)
 	tst.l	(a6)
 	bne.b	.mt_plvskip
 	bsr.w	mt_pernop
 .mt_plvskip
 	bsr.b	getnew
 
+	push	a4
 	bsr.w	mt_playvoice
+	pop 	a4
 	move	(sp)+,d7
 	lea	mChanBlock_SIZE(a5),a5
 	lea	44(a6),a6			; Size of MT_chanxtemp
@@ -7594,17 +8562,22 @@ mt_getnewnote
 
 getnew	cmp	#mtMOD,mtype
 	bne.b	.mtm
+
+* MOD get note data
 	move.l	(a0,d1.l),(a6)
-	addq.l	#4,d1
+	addq.l	#4,d1		* get to next row
 	rts
 
-.mtm	move.l	mt_songdataptr(pc),a0
+* MTM get note data
+.mtm	
+
+	;move.l	mt_songdataptr(pc),a0
 	move.l	orderz(pc),a2
 	moveq	#0,d0
 	move.b	mt_songpos(pc),d0
 	move.b	(a2,d0),d0
-
 	lsl	#6,d0				; 32 channels * word
+
 	move.l	sequ(pc),a2
 	add	d1,d0
 	move.b	(a2,d0),d2
@@ -7612,15 +8585,19 @@ getnew	cmp	#mtMOD,mtype
 	move.b	1(a2,d0),d2
 	move	d2,d0
 	beq.b	.zero
+
 	iword	d0
 	move.l	tracks(pc),a2
 	subq	#1,d0
 	mulu	#192,d0
 
+	* mt_patternpos back to multiples of 1
 	moveq	#0,d2
 	move	mt_patternpos(pc),d2
-	divu	numchans,d2
+	divu	numchans(pc),d2
 	lsr	#2,d2
+
+	* MTM note takes 3 bytes
 	mulu	#3,d2
 	add.l	d2,d0
 
@@ -9032,7 +10009,7 @@ timerB
 
 
 	pushm	all
-	move.l	voluproutine(pc),a0
+	move.l	voluproutine,a0
 	jsr	(a0)
 	popm	all
 
@@ -9106,21 +10083,33 @@ timerB
 	move	#$820f,$96(a6)
 	clr.l	playpos
 
-syncz	move.l	(sp),a6
+syncz	
+	move.l	(sp),a6
 	CALL	WaitTOF
-
 	lea	$dff000,a6
 	jsr	play
 
-	tst	PS3M_break
+ ifne TEST
+	lea	data,a5
+	jsr 	updatePatternInfoBuffer
+	jsr	updatePatternInfoData
+
+ 	btst	#10,$dff016
+ 	bne.b	.noRMB
+	DPRINT	"eject"
+	st	PS3M_eject(a5)
+.noRMB
+ endif
+
+	tst	PS3M_break(a5)
 	beq.b	.nb
-	clr	PS3M_break
+	clr	PS3M_break(a5)
 	move.l	songoverf,a6
 	st	(a6)
 ;	st	songover+var_b
 .nb
 
-	tst	PS3M_eject
+	tst	PS3M_eject(a5)
 	beq.b	syncz
 
 exits	lea	$dff000,a6
@@ -9158,7 +10147,10 @@ rem2	moveq	#0,d0
 	bmi.b	rem3
 	CALL	FreeSignal
 
-rem3	CALL	Forbid
+rem3	
+ ifeq TEST
+	CALL	Forbid
+ endc
 	clr	PS3M_wait(a5)
 	movem.l	(sp)+,d0-a6
 	moveq	#0,d0			;No error code
@@ -9171,7 +10163,7 @@ s3mPlay	movem.l	d0-a6,-(sp)
 	lea	data,a5
 	move	$dff002,-(sp)		;Old DMAs
 
-	move.l	gfxbase(pc),a6
+	move.l	gfxbase,a6
 	move.l	34(a6),-(sp)		;Old view
 	move.l	a6,-(sp)
 	sub.l	a1,a1
@@ -9606,3 +10598,151 @@ audiodev 	dc.b	`audio.device`,0
 xm_patts	ds.l	256
 xm_insts	ds.l	128
 
+
+prevPushedIndex	dc 	0
+activeSongPos 	dc 	0
+activePattPos 	dc 	0
+* buffered information: song position, pattern position
+			ds.l	4	* underflow room
+
+pi
+patternInfoBuffer
+	* TODO: how big should this be?
+		ds.l	2048	; = 8 kB
+
+* 64 + 64 rows
+* NOTE! xm can have variable rows?
+* 32 channels
+* 4 bytes per note
+* TODO: dynamic allocation
+upa
+unpackedPattern
+	ds.b	(64+64)*4*32	; = 16 kB
+
+unpackedPatternPosition
+	dc.w	-1
+
+
+ if DEBUG
+PRINTOUT_DEBUGBUFFER
+	pea	debugDesBuf(pc)
+	bsr.b PRINTOUT
+	rts
+
+PRINTOUT
+	pushm	d0-d3/a0/a1/a5/a6
+	move.l	output(pc),d1
+	bne.w	.open
+
+	* try tall window firsr
+	move.l	#.bmb,d1
+	move.l	#MODE_NEWFILE,d2
+	move.l	dosbase,a6
+	lob 	Open
+	move.l	d0,output
+	bne.b	.open
+	* smaller next
+	move.l	#.bmbSmall,d1
+	move.l	#MODE_NEWFILE,d2
+	move.l	dosbase,a6
+	lob	Open
+	move.l	d0,output
+	bne.b	.open
+	* still not open! exit
+	bra.b	.x
+
+  ifne TEST
+.bmb		dc.b	"CON:20/10/350/490/HiP PS3M debug",0
+.bmbSmall  	dc.b	"CON:20/10/350/190/HiP PS3M debug",0
+  else 
+.bmb		dc.b	"CON:20/10/350/190/HiP PS3M debug",0
+.bmbSmall  	dc.b	"CON:20/10/350/90/HiP PS3M debug",0
+  endif
+    even
+
+
+.open
+	move.l	32+4(sp),a0
+
+	moveq	#0,d3
+	move.l	a0,d2
+.p	addq	#1,d3
+	tst.b	(a0)+
+	bne.b	.p
+	move.l	_DosBase,a6
+ 	lob	Write
+.x	popm	d0-d3/a0/a1/a5/a6
+	move.l	(sp)+,(sp)
+	rts
+ 
+desmsgDebugAndPrint
+	* sp contains the return address, which is
+	* the string to print
+	movem.l	d0-d7/a0-a3/a6,-(sp)
+	* get string
+	move.l	4*(8+4+1)(sp),a0
+	* find end of string
+	move.l	a0,a1
+.e	tst.b	(a1)+
+	bne.b	.e
+	move.l	a1,d7
+	btst	#0,d7
+	beq.b	.even
+	addq.l	#1,d7
+.even
+	* overwrite return address 
+	* for RTS to be just after the string
+	move.l	d7,4*(8+4+1)(sp)
+
+	lea	debugDesBuf(pc),a3
+	move.l	sp,a1	
+	lea	.putc(pc),a2	
+	move.l	4.w,a6
+	lob	RawDoFmt
+	movem.l	(sp)+,d0-d7/a0-a3/a6
+	bsr.w	PRINTOUT_DEBUGBUFFER
+	rts	* teleport!
+.putc	
+	move.b	d0,(a3)+	
+	rts
+
+output			ds.l 	1
+debugDesBuf		ds.b	1024
+
+ endif
+
+	ifne TEST
+
+	section	mod,data_p
+module	
+;	incbin	"m:multichannel/approaching antares.mod"
+;	incbin	"m:multichannel/chaotic dance.mtm"
+	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-04.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-06.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/2ndreality_purplemotion.s3m"
+;	incbin	"m:modsanthology/authors.g-q/jazz.den/happy_tune.xm"
+;	incbin	"m:modsanthology/authors.g-q/jazz.den/the_4th_dimension.xm"
+;	incbin	"m:multichannel/near_dark.s3m"
+;	incbin	"m:exo/startrekker flt8/- unknown/gidion graveland.mod"
+;	incbin	"m:modsanthology/misc/compos/tt/1_orkin_659_iii.s3m"
+
+; FIXED PROBLEM MODULES:
+;	incbin	"m:modsanthology/misc/compos/tt/1_differences.s3m"
+;	incbin	"m:modsanthology/misc/compos/tt/3_sunshine.s3m"
+
+; PROBLEM MODULES:
+; Uneven orders table size, ILLEGAL s3m:
+;	incbin	"m:multichannel/1981-datajack.s3m"
+;	incbin	"m:multichannel/1985-hehasnoface.s3m"
+; even orders:
+;	incbin	"m:multichannel/data_jack.s3m"
+
+;	incbin	"m:modsanthology/misc/compos/tt/5_shit.s3m"
+
+moduleE
+	ds.b	1024
+
+	endif
+	

@@ -1,4 +1,4 @@
-;APS0000004C0000004C0000004C0000004C0000004C0000004C0000013E0000004C0000004C0000004C
+;APS0000008C0000008C0000008C0000008C0000008C0000008C0000015D0000008C0000008C0000008C
 
 IM=0
 SHR=1
@@ -6,7 +6,8 @@ SHR=1
 	include	playerIds.i
 
 	auto	j\
-	auto	wb ram:HippoPlayer.group\
+;	auto	wb ram:HippoPlayer.group\
+	auto	wb s:HippoPlayer.group\
 	auto	a0\
 	auto	a1\
 	
@@ -96,7 +97,11 @@ head	macro
 	head	pt_stonetracker,stonetracker
 	head	pt_themusicalenlightenment,tme
 	head	pt_timfollin2,timfollin2
-	
+	head	pt_steveturner,steveturner
+	head	pt_jasonpage,jasonpage
+	head	pt_specialfx,specialfx
+	head	pt_davidwhittaker,davidwhittaker
+
 	dc	0
 	dc.l	0,0
 
@@ -162,10 +167,6 @@ pumatracker2
 gmc1
 	incbin gamemusiccreator.im
 gmc2 
-
-mugician1 
-	incbin mugiplayer.im
-mugician2 
 
 medley1 
 	incbin imploder.im
@@ -280,10 +281,6 @@ pumatracker2
 gmc1
 	incbin gamemusiccreator.shr
 gmc2 
-
-mugician1 
-	incbin mugiplayer.shr
-mugician2 
 
 medley1 
 	incbin imploder.shr
@@ -453,6 +450,10 @@ digitalmugician21
 	incbin "mugician ii.im"
 digitalmugician22
 
+mugician1 
+	incbin "mugician.amp.im"
+mugician2 
+
 musicmaker41
 	incbin musicmaker4.im
 musicmaker42
@@ -551,7 +552,8 @@ tcbtracker1
 tcbtracker2
 
 markcooksey1
-;	incbin "mark cooksey.shr"
+;	incbin "mark cooksey.amp.shr"
+	incbin "mark cooksey.shr"
 markcooksey2
 
 activisionpro1
@@ -594,6 +596,10 @@ digitalmugician21
 	incbin "mugician ii.shr"
 digitalmugician22
 
+mugician1 
+	incbin "mugician.amp.shr"
+mugician2 
+
 musicmaker41
 	incbin musicmaker4.shr
 musicmaker42
@@ -618,4 +624,25 @@ timfollin21
 	incbin	"tim follin ii.shr"
 timfollin22	
 	endif
+
+
+steveturner1
+	incbin	"steve turner.shr"
+steveturner2
+
+
+jasonpage1
+	incbin	"jason page.shr"
+jasonpage2
+
+
+specialfx1
+	incbin	"special fx.shr"
+specialfx2
+
+davidwhittaker1
+	incbin	"david whittaker.shr"
+davidwhittaker2
+
+
 pend

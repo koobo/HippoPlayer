@@ -1,5 +1,6 @@
 WISHLISH
 - Dir browser
++ Patternscope for other formats too?
 + Player group from PROGDIR
 + DONE: .gz support
 - UGLY: window size gadget
@@ -53,12 +54,158 @@ Formats
 + wally beben
 + MusicMakerV8
 + VSS voodoo sound synth!
++ jason page 
++ steve turner
 
+- art of noise 8ch
 - mark cooksey
 - MultiMediaSound
 - sound images
 - sound master 
-- special fx
++ special fx
+
+PATTERNINIT - EP
++ TME
++ KRIS
++ Mugician2
+
+FIXED: BUG: 
+- flood.dum not working on kick13
+FIXED: BUG:
+- JAM.Dr-Awesome-11: kick13 -> crash
+FIXED: BUG
+- add from "sys:music"
+- exit
+- start
+- "add"
+- tries to add from " sys:music" -> error
+
+FIXED: BUG:
+- play oktalyzer with pattern scope
+- play wav -> scope does not reset
+
+FIXED: BUG
+- play module from favorites
+- exit
+- start
+- hippo starts playing module from main list
+
+
+BUG (A1200 test):
+- patternscope 
+- play a lot of stuff, mainly XM, "wit down", "bag of tricks"
+- play "troublevision.mod"
+- play "hawkeye.tme"
+--> recoverable alert
+
+FIXED: BUG - kick13
+- open
+- open patternscope xl
+- play "rsi theme.smod"
+--> scope ok 
+- play "popcorn.okta"
+--> scope empty
+
+
+NOTES PROBLEM?
+- play "happy_tune-chip.xm"
+- first three notes should be maybe: C-3, D#3, B-3 
+
+OK: PATTERN SCOPE GREEN FLASH 
+- flying in saturns rings.mtm 
+- chaotic dance.mtm
+- MTM can have missing tracks
+
+FIXED: CRASH 
+- play "happy_tune-chip.xm"
+- push play again -> boom
+
+TODO
+- test 8ch startrekker
+
+TEST 
+- correct size for patterninfo buffer
+- try low mix rate, largest buffer
+-> 655
+
+ENFORCER HIT
+- play purplemotion tunes starting from the end
+
+CRASH
+- "m:exo/oktalyzer/mohr/1 love night dub.okta"
+
+FIXED: 
+- alloc scope bitplanes with AllocRaster
+- kuinka iso puskuri riittää patternInfoBufferille?
+- Patternscope+s3m: 4kB mix buffer, fläsh
+
+TODO
+- AHX
+
+FIXED: CRASH
+- AHI + PS3M patternscope
+
+FIXED: TODO
+- alloc scope bitplanes with AllocRaster
+- kuinka iso puskuri riittää patternInfoBufferille?
+- FIXED: Patternscope+s3m: 4kB mix buffer, fläsh
+
+TODO
+- mode switch for pattern scope in PS3M: disable costly patternscope
+  stuff if patternscope is not used
+
+FIXED: CRASH
+- start
+- scope open
+- play unreal-08.s3m
+
+FIXED: CRASH
+- also crash on v2.45
+- start
+- scope open
+- play unreal-03.s3m
+
+FIXED: HITS 
+- start 
+- scope open
+- play The-Party-5_v2_3.XM
+
+TODO
+- AHX patterns
+
+TODO
+- FLT8 startrekker should play with ps3m
+
+REQ Feature-suggestions:
++ Remember last directory where you picked your last played mod (instead of the configured directory in prefs).
++ Remember last played module. Pressing play immediately on startup plays the previously played song.
+
+REQ NEW FORMATS:
++ jd. - Special FX
++ dw. - David Whittaker (Some work, some don't !)
++ jpn. + smp. - Jason Page
+- mcr. + mcs. - Mark Cooksey
+- mc. - Mark Cooksey (old)
++ jpold. - Steve Turner
+
+BUG? 
+- check if audio is alloced in all EPs
+
+FIXED: BUG
+- set random play
+- push play or New and add files, always first one starts to play instead of random
+
+FIXED: GFX GLITCH
+- minify window with RMB+Pr
+--> top part of favorites button is visible
+
+SCOPE BUG: activation
+- the scope works in multimonitor support as long as ALL modules that are played
+  support it. Once a module that doesn't support the scope is loaded
+  the next module that supports it does not enable it anymore.
+  So if you play modules in random order as soon as a 
+  module that doesn't support visualization is played the scope
+  stops working all together (until you click on the scope of course).
 
 CRASH
 - sonic arranger: svensktoppen
@@ -143,11 +290,10 @@ TODO
 
 
 FIXED
-TODO
 - check TME on amiga
 
 TODO 
-- kick13 + mine 
+- kick13 + mline
 -> crash
 
 TODO
@@ -352,7 +498,7 @@ FIXED: BIG memory leak
 - oktalyzer
 - tfmx -> mem runs out
 
-TODO
+FIXED
 - VisualPrefs
 -- Set Screen title bar height to 8 
     -> zipped window title is too tall
