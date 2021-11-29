@@ -1,8 +1,8 @@
-Short: Updated HippoPlayer, a module player for classic Amigas
+Short: Updated HippoPlayer, a module player
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.49
+Version: 2.50
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -27,6 +27,14 @@ same directory with the HiP binary, too, if you're using kick2.0 or newer.
 
 NOTE 3: If you get errors where some module is not recognized even 
 if it should be, try removing "S:HippoPlayer.prefs" first.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.49 (29.11.2021) to v2.50 (??.??.202?)
+- bob!
 
 
 ------------------------------------------------------------------------------
