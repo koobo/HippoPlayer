@@ -1,4 +1,4 @@
-;APS0001B3EB0000DD210000343900002C51000000000000000000000000000000000000000000000000
+;APS0001B41B0000DD530000347300002C8B000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -11,7 +11,11 @@
 ;at least 1.09 (haven't tried older) is sufficient.
 
 DEBUG	=	1
-TEST 	= 	1
+TEST 	= 	0
+
+ ifeq TEST
+	auto	wo p:pl/bin/ps3m\
+ endif
 
 
 * Print to debug console, very clever.
@@ -38,6 +42,7 @@ mtS3M = 1
 mtMOD = 2
 mtMTM = 3
 mtXM  = 4
+mtIT  = 5
 
 ENABLED = 0
 DISABLED = 1
@@ -146,6 +151,8 @@ TESTMODE
 	lea	.ps3m_mixingperiod(pc),a2
 	lea	.ps3m_playpos(pc),a3
 	lea	.ps3m_buffSizeMask(pc),a4
+	move.l	#0,d0 			* deliPlayer
+	move.l	#dummyDeliBase,d1	* deliBase
 	jsr	init2j
 
 	* mix rate
@@ -353,6 +360,8 @@ init2r
 ;	popm	d2-a6
 *******************************************************************************
 
+	move.l	d0,deliPlayer
+	move.l	d1,deliBase
 	move.l	#buff1,(a0)
 	move.l	#buff2,(a1)
 	move.l	#mixingperiod,(a2)
@@ -1461,6 +1470,9 @@ ahi_playmusic
 	subq	#1,d0
 	beq.b	.m
 	lea	xm_music(pc),a0
+	subq	#1,d0
+	beq.b  .m
+	lea		it_music(pc),a0
 .m	jsr	(a0)
 
 	lea	cha0,a4
@@ -1515,7 +1527,7 @@ ahi_volume:
 	move.l	d6,d0
 
 	move	mVolume(a4),d1
-	mulu	PS3M_master(pc),d1
+	mulu	PS3M_master,d1
 	lsl.l	#4,d1			* max=$10000
 
 	move.l	#$8000,d2
@@ -1572,7 +1584,7 @@ ahi_period:
 	move	mPeriod(a4),d1
 	beq.b	.exit
 
-	move.l	clock(pc),d0
+	move.l	clock,d0
 	lsl.l	#2,d0
 
 	bsr.w	divu_32
@@ -1826,14 +1838,22 @@ PatternInit
 * Called by the PI engine to get values for a particular row
 ConvertNote
 	move	mtype(pc),d0
-	cmp 	#mtMOD,d0
-	beq.w	.mtMOD
-	cmp	#mtMTM,d0 
-	beq.b	.mtMTM
-	cmp	#mtS3M,d0 
+	subq	#1,d0
 	beq.b	.mtS3M
-	cmp	#mtXM,d0 
+	subq	#1,d0
+	beq.w	.mtMOD
+	subq	#1,d0
+	beq.b	.mtMTM
+	subq	#1,d0
 	beq.b	.mtXM
+;	cmp 	#mtMOD,d0
+;	beq.w	.mtMOD
+;	cmp	#mtMTM,d0 
+;	beq.b	.mtMTM
+;	cmp	#mtS3M,d0 
+;	beq.b	.mtS3M
+;	cmp	#mtXM,d0 
+;	beq.b	.mtXM
 	rts
 
 .mtS3M
@@ -1963,7 +1983,20 @@ ConvertNote
 
 	rts
 
-
+id_it
+	MOVEQ	#0,D0
+	CMP.L	#$494D504D,(A0)
+	BNE.S	.itFail
+	MOVE.W	$2A(A0),D1			*  Cmwt: format version
+	ROR.W	#8,D1
+	CMP.W	#$100,D1
+	BEQ.S	.itYes
+	CMP.W	#$200,D1
+	BEQ.S	.itYes
+.itFail
+	MOVEQ	#-1,D0
+.itYes
+	RTS
 
 
 
@@ -2042,7 +2075,7 @@ play	;movem.l	d0-a6,-(sp)
 	add	d0,d2
 
 	cmp.l	#16,d2
-	blt.b	.ei
+	blt.w	.ei
 
 	move	d2,todobytes(a5)
 
@@ -2070,13 +2103,19 @@ play	;movem.l	d0-a6,-(sp)
 	bra.b	.o
 
 .xm	cmp	#mtXM,mtype(a5)
-	bne.b	.mod
-
+	bne.b	.noXM
+	
 	bsr.w	xm_music
 	lea	data,a5
 	bra.b	.o
 
-.mod	bsr.w	mt_music			; Also with MTMs
+.noXM
+	cmp	#mtIT,mtype(a5)
+	bne.b	.mod
+	bsr	it_music
+	bra.b	.o
+.mod
+	bsr.w	mt_music			; Also with MTMs
 
 .o	move	bytesperframe(a5),d0
 	add	d0,bytes2music(a5)
@@ -2145,6 +2184,10 @@ init
 	and.l	#$ffffff00,d1
 	cmp.l	#'TDZ'<<8,d1
 	beq.b	.tdz
+	
+	bsr	id_it
+	beq.w	.it
+
 	bra.w	.error
 
 .chn	move.l	d0,d1
@@ -2202,6 +2245,10 @@ init
 	move	#mtXM,mtype(a5)
 	bra.b	.init
 
+.it
+	move	#mtIT,mtype(a5)
+	bra.b	.init
+
 .s3m	move	#mtS3M,mtype(a5)
 
 
@@ -2228,6 +2275,9 @@ init
 
 	cmp	#mtXM,mtype(a5)
 	beq.w	xm_init
+
+	cmp	#mtIT,mtype(a5)
+	beq	it_init
 
 .error	moveq	#1,d0
 	rts
@@ -3617,7 +3667,6 @@ mix_020	moveq	#0,d7
 	swap	d0
 	move.l	d4,d5
 	swap	d5
-
 	divul.l	d5,d5:d6		; bytes left to loop end
 	tst.l	d5
 	beq.b	.e
@@ -3813,7 +3862,6 @@ mix2_020
 
 	move.l	d4,d5
 	swap	d5
-
 	divul.l	d5,d5:d6		; bytes left to loop end
 	tst.l	d5
 	beq.b	.e
@@ -4009,7 +4057,6 @@ mix16_020
 	swap	d0
 	move.l	d4,d5
 	swap	d5
-
 	divul.l	d5,d5:d6		; bytes left to loop end
 	tst.l	d5
 	beq.b	.e
@@ -4207,7 +4254,6 @@ mix162_020
 
 	move.l	d4,d5
 	swap	d5
-
 	divul.l	d5,d5:d6		; bytes left to loop end
 	tst.l	d5
 	beq.b	.e
@@ -9826,6 +9872,457 @@ mt_pattdeltime2	dc.b 0
 mt_patternpos	dc 0
 mt_dmacontemp	dc 0
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+ STRUCTURE DTN_NoteStruct,0
+	APTR	nst_Channels		;pointer to a list of notechannels */
+	ULONG	nst_Flags		;misc flags (see below) */
+	ULONG	nst_MaxFrequency	;max. frequency of this player (28,867 Hz in DMA mode) */
+	UWORD	nst_MaxVolume		;max. volume of this player (in most cases 64) */
+	STRUCT	nst_Reserved,18		;reserved for future use (must be 0 for now) */
+	LABEL	DTN_NoteStruct_SIZEOF
+
+
+ STRUCTURE DTN_NoteChannel,0
+	APTR	nch_NextChannel		;next channel in the list (NULL if last) */
+	ULONG	nch_NotePlayer		;for use by the noteplayer (the deliplayer must ignore this) */
+	WORD	nch_Reserved0		;reserved for future use (must be 0 for now) */
+	UBYTE	nch_Private		;just what it says */
+	UBYTE	nch_Changed		;what has changed since last call */
+	WORD	nch_StereoPos		;set this field when the InitNote function is called */
+	WORD	nch_Stereo		;describes "where" this channel is supposed to play */
+	APTR	nch_SampleStart		;^sampledata */
+	ULONG	nch_SampleLength	;size of sample */
+	APTR	nch_RepeatStart		;^repeat part of sample */
+	ULONG	nch_RepeatLength	;size of repeat part */
+	ULONG	nch_Frequency		;frequency (or period) of sample */
+	UWORD	nch_Volume		;volume of sample */
+	STRUCT	nch_Reserved1,26	;reserved for future use (must be 0 for now) */
+	LABEL	DTN_NoteChannel_SIZEOF
+
+deliPlayer		dc.l	0
+deliBase		dc.l	0
+
+* in:
+*   d0 = tag to find
+* out:
+*   d0 = tag data or NULL if not found
+deliGetTag
+	* This is a ptr to a seglist, loaded with LoadSeg()
+	move.l	deliPlayer(pc),a0
+deliGetTagFromA0
+	* tag item array
+	move.l	16(a0),a0
+.loop
+    ;cmp.l  #TAG_END,(a0)
+    tst.l   (a0)            * TAG_END is NULL
+    beq.b   .notFound
+    cmp.l   (a0),d0
+    bne.b   .notThis
+    move.l  4(a0),d0
+    rts
+.notFound
+	moveq   #0,d0
+	rts
+.notThis
+    addq.l  #8,a0
+    bra.b   .loop
+
+deliCallFunc	
+	tst.l	d0 
+	beq.b	.noFunc
+	pushm 	d2-d7/a2-a6
+	move.l	deliBase(pc),a5
+	move.l	d0,a0
+	jsr	(a0)
+	popm	d2-d7/a2-a6
+.noFunc rts
+
+
+it_init
+	DPRINT	"it_init"
+ if DEBUG
+	move.l	deliPlayer(pc),d0
+	move.l	deliBase(pc),d1
+	DPRINT	"deliPl=%lx deliBase=%lx"
+ endif
+
+	move.l	deliBase(pc),a0
+	pea	it_setTimer(pc)
+	move.l	(sp)+,dtg_SetTimer(a0)
+
+	move.l	s3m(pc),a0
+	pea	4(a0)
+	move.l	(sp)+,mname
+
+	; Unsigned samples?
+	move	#1,fformat
+
+	; S3M
+	move.l	#14317056/4,clock		; Clock constant
+	;move.l	#14317056/1,clock		; Clock constant
+	; MOD
+	;move.l	#14187580/4,clock		; Clock constant
+	; XM
+	;move.l	#8363*1712/4,clock		; Clock constant
+	; MTM
+	;move.l	#14317056/4,clock		; Clock constant
+
+	moveq	#32,d0
+	move	d0,numchans
+	addq	#1,d0
+	lsr	#1,d0
+	move	d0,maxchan
+
+	lea	pantab(pc),a0
+	move.l	a0,a1
+	moveq	#8-1,d0
+.ll	clr.l	(a1)+
+	dbf	d0,.ll
+
+	move	numchans(pc),d0
+	subq	#1,d0
+	moveq	#0,d1
+.lop	tst	d1
+	beq.b	.vas
+	cmp	#3,d1
+	beq.b	.vas
+.oik	move.b	#-1,(a0)+
+	bra.b	.je
+.vas	move.b	#1,(a0)+
+.je	addq	#1,d1
+	and	#3,d1
+	dbf	d0,.lop
+
+	lea	cha0(pc),a0
+	moveq	#32-1,d0
+.l	st	mOnOff(a0)
+	lea	mChanBlock_SIZE(a0),a0
+	dbf	d0,.l
+
+
+	rts
+
+* ciavalue = timervalue / tempovalue
+* ciavalue * tempovalue = timervalue
+* tempovalue = timervalue / ciavalue
+
+* common dtg_Timer = 14209
+* mrate = 5002
+
+;.getTimerConstant
+;	move.l	4.w,a0
+;	move.b	PowerSupplyFrequency(a0),d0
+;	cmp.b	#60,d0
+;	beq.b	.NTSC
+;.PAL	
+;	move.l	#1773447,d0
+;	rts
+;.NTSC	
+;	move.l	gfxbase(pc),a0
+;	move	gb_DisplayFlags(a0),d0
+;	btst	#4,d0				; REALLY_PAL
+;	bne.b	.PAL				; Just to be sure
+;	move.l	#1789773,d0
+;	rts
+;	
+* Convert dtg_Timer value into a tempo value
+it_setTempo
+	move.l	deliBase(pc),a0
+	move	dtg_Timer(a0),d1
+	beq.b	.defaultTempo
+	move.l	timer(pc),d0
+	beq.b	.defaultTempo
+	divu	d1,d0
+	move	d0,tempo
+.x
+ 	rts
+
+.defaultTempo
+	move	#125,tempo
+	rts
+
+it_setTimer
+	bsr.b	it_setTempo
+	move	tempo(pc),d0
+	beq.b	.x
+	move.l	mrate(pc),d1
+	beq.b	.x
+	move.l	d1,d2
+	lsl.l	#2,d1
+	add.l	d2,d1
+	add	d0,d0
+	divu	d0,d1
+
+	addq	#1,d1
+	and	#~1,d1
+	move	d1,bytesperframe
+.x	rts
+
+it_music
+	pushm	a5/a6
+ ifeq TEST
+	move.l	#DTP_Interrupt,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bsr.b	.notePlayer
+ else
+	move	#$800,$dff180	
+;	moveq	#32-1,d2
+	moveq	#1-1,d2
+	lea	cha0(pc),a6
+.testLoop
+	move.l	#module,mStart(a6)
+	move.l	#10000,mLength(a6)
+	move	#64,mVolume(a6)
+	move	#300,mPeriod(a6)
+	clr.l	mFPos(a6)
+	clr.b	mLoop(a6)
+	clr.b	mOnOff(a6)
+
+	lea	mChanBlock_SIZE(a6),a6
+	dbf	d2,.testLoop
+ endif
+	bsr.b	it_setTimer
+	popm	a5/a6
+	rts
+	
+.notePlayer:
+	move	#$800,$dff180	
+	move.l	#DTP_NoteStruct,d0  
+	bsr.w	deliGetTag
+	* This is an address to the struct
+	move.l	d0,a0
+	move.l	(a0),a4
+	move.l	a4,a5
+
+		move.l	nst_Flags(a4),d7	;Flags
+				
+		move.l	(a4),d0
+		beq.w	.Return
+		move.l	d0,a4
+
+		*--------- neue Note (= DMA off) ---------*
+		move.l	a4,a0
+		moveq	#32-1,d2
+		moveq	#0,d1
+		moveq	#1,d3
+.pass1		
+		;move.b	nch_Changed(a0),d0
+		;and.b	#2,d0		;NCHF_Sample
+		moveq	#2,d0		;NCHF_Sample
+		and.b	nch_Changed(a0),d0
+		beq.s	.skip
+		or.l	d3,d1		;DMA Mask
+.skip		lsl.l	#1,d3
+		move.l	(a0),d0
+		beq.s	.Last1
+		move.l	d0,a0		*add #NoteStruct1-NoteStruct0,a0
+		dbf	d2,.pass1
+.Last1:
+
+		tst.l	d1
+		beq.s	.nostopDMA
+		;moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
+					;D1 = Maske (LONG !!)
+		;jsr	ENPP_DMAMask(a5)
+		;moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
+
+		* Stop status
+		moveq	#32-1,d2
+		lea	cha0(pc),a6
+		move.l	d1,d0
+.stopLoop
+		ror.l	#1,d0
+		bpl.b	.skipStop
+		st	mOnOff(a6)
+.skipStop
+		* 0 = channel on, 0xff = channel off	
+		lea	mChanBlock_SIZE(a6),a6
+		dbf	d2,.stopLoop
+
+
+.nostopDMA:	;move.l	d1,-(a7)
+		move.l	d1,d6
+	
+		*---------- Neue Note setzen -------------*
+		move.l	a4,a0
+		moveq	#32-1,d2
+		moveq	#0,d1
+		lea	cha0(pc),a6
+.pass2		
+
+		;move.b	nch_Changed(a0),d0
+		;and.b	#2,d0				;NCHF_Sample
+		moveq	#2,d0				;NCHF_Sample
+		and.b	nch_Changed(a0),d0
+		beq.s	.skip2
+
+		move.l	$10(A0),d0			;SampleStart
+		;jsr	ENPP_PokeAdr(A5)
+		move.l	d0,mStart(a6)
+		;DPRINT	"start=%lx"
+	
+		moveq	#0,d0
+		move.w	nch_SampleLength(a0),d0
+		btst	#4,d7
+		bne.s	.pokeword1
+		move.l	nch_SampleLength(A0),d0		;NCH_SampleLength ;SampleLen
+		lsr.l	#1,d0				;Bytes -> Words
+.pokeword1:
+		;jsr	ENPP_PokeLen(a5)
+		move.l	d0,mLength(a6)
+		;DPRINT	"len=%ld"
+	
+		clr.l	mFPos(a6)
+.skip2:		
+		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last2
+		move.l	d0,a0		;add #NoteStruct1-NoteStruct0,a0
+		lea	mChanBlock_SIZE(a6),a6
+		dbf	d2,.pass2
+.Last2:
+
+		*-------- Volume/Period neu setzen -------*
+		move.l	a4,a0
+		moveq	#32-1,d2
+		moveq	#0,d1
+		lea	cha0(pc),a6
+.pass3
+		;move.b	nch_Changed(a0),d0
+		;and.b	#$10,d0				;NCHF_Volume
+		moveq	#$10,d0				;NCHF_Volume
+		and.b	nch_Changed(a0),d0
+		beq.s	.skip3
+
+		moveq	#0,d0
+		move	nch_Volume(a0),d0			;Volume
+		;jsr	ENPP_PokeVol(a5)
+		; Scale volume to 0..64
+		mulu	#64,d0
+		divu	nst_MaxVolume(a5),d0
+		move	d0,mVolume(a6)
+		ext.l	d0
+		;DPRINT	"vol=%ld"
+.skip3:		
+		;move.b	nch_Changed(a0),d0
+		;and.b	#8,d0				;NCHF_Frequency
+		moveq	#8,d0				;NCHF_Frequency
+		and.b	nch_Changed(a0),d0
+		beq.s	.skip4
+
+		moveq	#0,d0
+		move.w	nch_Frequency(A0),d0			;Period (or Frequency)
+		btst	#2,d7
+		bne.s	.extper				;4*Period ?
+		btst	#1,d7				
+		bne.s	.per				;1*Period ?
+							;Frequenz in Period umrechnen
+		moveq	#0,d0
+		move.l	nch_Frequency(a0),d3			;Frequenz
+		beq.b	.per
+	;move.l d3,d0
+	;DPRINT "freq=%ld"
+		lsr.l	#1,d3
+		move.l	#3546895/2,d0		;Amiga Audiorate
+		divu	d3,d0			;
+		and.l	#$ffff,d0
+		bra.s	.per
+.extper
+		lsr	#2,d0				;noch ersetzen durch DirektWrite bei 4*Per
+.per
+;		move.w	nch_Frequency(A0),d0		;Period (or Frequency)
+		;jsr	ENPP_PokePer(a5)
+		;move	#300,d0
+		move	d0,mPeriod(a6)
+		clr.l	mFPos(a6)
+		;ext.l	d0
+		;DPRINT	"per=%ld"
+.skip4:		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last3
+		move.l	d0,a0		;add.w #NoteStruct1-NoteStruct0,a0
+		lea	mChanBlock_SIZE(a6),a6
+		dbf	d2,.pass3
+.Last3:
+
+		*----- DMA starten (wenn erforderlich) ----*
+		;move.l	(a7)+,d1
+		;move.l	d6,d1
+		;tst.l	d1
+		;beq.s	.NostartDMA
+		;move	#$8000,d0	;D0.w neg=enable ; 0/pos=disable
+					;D1 = Maske (LONG !!)
+		;jsr	ENPP_DMAMask(a5)
+
+		* Start status
+		moveq	#32-1,d2
+		lea	cha0(pc),a6
+		move.l	d6,d0
+		beq.b	.NostartDMA
+.startLoop
+		ror.l	#1,d0
+		bpl.b	.skipStart
+		clr.b	mOnOff(a6)
+.skipStart
+		* 0 = channel on, 0xff = channel off	
+		lea	mChanBlock_SIZE(a6),a6
+		dbf	d2,.startLoop
+
+
+		*------ Repeatadr/Repeatlen poken --------*
+.NostartDMA:	move.l	a4,a0
+		moveq	#32-1,d2
+		moveq	#0,d1
+		lea	cha0(pc),a6
+.pass4		
+		;move.b	nch_Changed(a0),d0
+		;and.b	#4!32!64,d0			;NCHF_Repeat
+		moveq	#4!32!64,d0			;NCHF_Repeat
+		and.b	nch_Changed(a0),d0
+		beq.s	.skip5
+
+		move.l	nch_RepeatStart(a0),d0		;RepeatStart
+		;jsr	ENPP_PokeAdr(A5)
+		move.l	d0,mLStart(a6)
+		;DPRINT	"loopstart=%lx"
+
+		moveq	#0,d0
+		move.w	nch_RepeatLength(a0),d0		;Repeatlen
+		btst	#4,d7
+		bne.s	.pokeword2
+		move.l	nch_RepeatLength(A0),d0		;NCH_SampleLength ;SampleLen
+		lsr.l	#1,d0				;Bytes -> Words
+.pokeword2:
+		;jsr	ENPP_PokeLen(a5)
+		move.l	d0,mLLength(a6)
+		;DPRINT	"looplen=%ld"
+		cmp.l	#2,d0
+		bls.b	.noLoop
+		st	mLoop(a6)
+		bra.w	.yesLoop
+.noLoop
+.skip5:
+		clr.b	mLoop(a6)
+.yesLoop
+
+		clr.b	nch_Changed(a0)
+		addq	#1,d1
+		move.l	(a0),d0
+		beq.s	.Last
+		move.l	d0,a0		*add #NoteStruct1-NoteStruct0,a0
+		lea	mChanBlock_SIZE(a6),a6
+		dbf	d2,.pass4
+.Last:
+
+.Return:
+	rts
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ; PLAYING PROCESSES
@@ -10709,15 +11206,21 @@ desmsgDebugAndPrint
 output			ds.l 	1
 debugDesBuf		ds.b	1024
 
- endif
+ endif ;; DEBUG
 
-	ifne TEST
+ ifne TEST
 
 	section	mod,data_p
+
+dummyDeliBase		ds.b	1024
+
 module	
+	incbin	"m:it/a spell of love and lust.it"
+	
+
 ;	incbin	"m:multichannel/approaching antares.mod"
 ;	incbin	"m:multichannel/chaotic dance.mtm"
-	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-04.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-06.s3m"
@@ -10744,5 +11247,5 @@ module
 moduleE
 	ds.b	1024
 
-	endif
+	endif ;; TEST
 	

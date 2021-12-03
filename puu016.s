@@ -16496,15 +16496,17 @@ inforivit_play
 	subq	#1,d0
 	beq.b	.hee
 	lea	.4(pc),a0
+	subq	#1,d0
+	beq.b	.hee
+	lea	 .5(pc),a0
 .hee	move.l	a0,d1
 
-;	cmp	#mtMOD,mtype
 	cmp	#mtMOD,d3
 	bne.w	.leer
 	pushm	d1/d2
 	bsr.w	siisti_nimi
 	popm	d1/d2
-	bra.b	.leer
+	bra.w	.leer
 
 .hee2
 	lea	modulename(a5),a1
@@ -16515,6 +16517,8 @@ inforivit_play
 .2	dc.b	"Pro/Fasttracker",0
 .3	dc.b	"Multitracker",0
 .4	dc.b	"Fasttracker ][ XM",0
+.5	dc.b	"ImpulseTracker",0
+
  even
 
 .eer	bsr.w	siisti_nimi
@@ -26576,10 +26580,13 @@ tutki_moduuli2
 	move.l	(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#'MTM',d0		* multi
-	beq.b	.f
+	beq.w	.f
 	move.l	1080(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#"TDZ",d0		* take
+	beq.b	.f
+
+	bsr	id_it			 * IT
 	beq.b	.f
 
 
@@ -34412,7 +34419,8 @@ p_multi	jmp	.s3init(pc)
 	dc.w pt_multi
  dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
 	dc.b	"PS3M",0
-
+.itPath
+	dc.b	"impulse",0
  even
 
 
@@ -34449,10 +34457,27 @@ p_multi	jmp	.s3init(pc)
 
 .ok3	
 	pushm	d1-a6
+
+	move.l	moduleaddress(a5),a0
+	bsr.W 	id_it
+	bne.b	.notIt
+	DPRINT "IT detected"
+	moveq	#$62,d0	* version
+	lea	.itPath(pc),a0 
+	* Distract loader so that it will not try to
+	* load PS3M from player group, instead it will
+	* try eagleplayer loading from filesystem.
+	move	playertype(a5),-(sp)
+	move	#-1,playertype(a5)
+	bsr	deliLoadAndInit
+	move	(sp)+,playertype(a5)
+	tst.l	d0
+	bne.w	.itError
+.notIt
+
 	addq	#1,ps3minitcount
 
 	move	mixirate+2(a5),hip_ps3mrate+hippoport(a5)
-
 
 * v‰litet‰‰n tietoa ps3m:lle ja hankitaan sit‰ silt‰
 
@@ -34481,6 +34506,8 @@ p_multi	jmp	.s3init(pc)
 	lea	ps3m_playpos(a5),a3
 	lea	ps3m_buffSizeMask(a5),a4
 	move.l	ps3mroutines(a5),a6
+	move.l	deliPlayer(a5),d0
+	move.l	deliBase(a5),d1
 	jsr	init2j(a6)
 	move.l	d0,ps3mchannels(a5)
 
@@ -34527,6 +34554,11 @@ p_multi	jmp	.s3init(pc)
 	addq	#4,sp		* killer: hyp‰t‰‰n play-aliohjelman 'ohi'
 .e	rts
 
+* Failed to init eagleplayer
+.itError
+	popm	d1-a6
+	rts
+
 
 .updateps3m3
 	pushm	d1/a5
@@ -34559,6 +34591,7 @@ p_multi	jmp	.s3init(pc)
 .s3end	clr.l	ps3mUnpackedPattern(a5)
 	move.l	ps3mroutines(a5),a0
 	jmp	endj(a0)
+	
 
 .s3stop	move.l	ps3mroutines(a5),a0
 	jmp	stopj(a0)
@@ -34740,7 +34773,7 @@ mtS3M = 1
 mtMOD = 2
 mtMTM = 3
 mtXM  = 4
-
+mtIT  = 5
 
 
 * Initti vaihe 1. Jos d0<>0, moduuli ei kelpaa.
@@ -34750,6 +34783,9 @@ id_ps3m		pushm	d1-a6
 
 	move.l	a4,a0
 ;	move.l	moduleaddress(a5),a0
+
+	bsr.w	id_it
+	beq.w	.it
 
 	cmp.l	#`SCRM`,44(a0)
 	beq.b	.s3m
@@ -34795,6 +34831,7 @@ id_ps3m		pushm	d1-a6
 
 .xm	cmp	#$401,xmVersion(a0)		; Kool turbo-optimizin'...
 	bne.b	.j
+.it
 .chn
 .ch
 .tdz
@@ -34810,8 +34847,25 @@ id_ps3m		pushm	d1-a6
 
 .xmsign		dc.b	`Extended Module:`
  even
+
 ps3minitcount	dc	0
 
+* ID from A0
+id_it
+	MOVEQ	#0,D0
+	CMP.L	#$494D504D,(A0)
+	BNE.S	.itFail
+	MOVE.W	$2A(A0),D1			*  Cmwt: format version
+	ROR.W	#8,D1
+	CMP.W	#$100,D1
+	BEQ.S	.itYes
+	CMP.W	#$200,D1
+	BEQ.S	.itYes
+.itFail
+	MOVEQ	#-1,D0
+.itYes
+	tst.l	d0
+	RTS
 
 
 
@@ -40321,8 +40375,8 @@ p_specialfx
 .lbC0003C6	RTS
 
 ******************************************************************************
-* Deli/eagle support
 * Delisupport
+* Eaglesupport
 ******************************************************************************
 
 
@@ -40627,7 +40681,7 @@ findDeliPlayer
 	subq.l	#4,d0
 	bsr.w	plainSaveFile
 	pop 	a0 
-	jsr		freemem
+	jsr	freemem
 
 	tst.l	d0
 	beq.w	.fail
@@ -40778,6 +40832,11 @@ deliInit
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
 
+	* For ImpulseTracker support:
+	move.l	#DTP_InitNote,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+
 	move.l	#DTP_CustomPlayer,d0
 	bsr.w	deliGetTag
 	bne.w	.checksOk
@@ -40910,6 +40969,11 @@ deliInit
 	* otherwise assume the module handles it.
 	tst.l	deliStoredInterrupt(a5)
 	beq.b	.skip
+	* If running PS3M, do not start interrupts.
+	* PS3M will handle it.
+	cmp		#pt_multi,playertype(a5)
+	beq.b 	.skip
+
 	DPRINT	"using hippo interrupt"
  
 	* interrupt routine provided, set up an interrupt
@@ -41011,6 +41075,7 @@ deliInit
 .ioErrMsg2
 	dc.b	" (%ld)",0
  even
+
 
 * Read module info values
 * in:
@@ -42427,6 +42492,14 @@ tagsTable
  dc.l EDTP_FormatName   
  dc.l EDTP_AuthorName   
  dc.l EDTP_InitNote  
+ dc.l EDTP_NoteAllocMem
+ dc.l EDTP_NoteFreeMem
+ dc.l EDTP_PlayerInfo
+ dc.l EDTP_Patterns
+ dc.l EDTP_Duration
+ dc.l EDTP_SampleData
+ dc.l EDTP_MiscText
+
 tagsTableEnd
  
 tagsTable2
@@ -42530,7 +42603,13 @@ EDTP_ModuleName   	dc.b "DTP_ModuleName",0 ; get the name of the current module
 EDTP_FormatName   	dc.b "DTP_FormatName",0 ; get the name of the module format
 EDTP_AuthorName   	dc.b "DTP_AuthorName",0 ; not implemented yet
 EDTP_InitNote   	dc.b "DTP_InitNote",0 ; NoteStruct initialization
-
+EDTP_NoteAllocMem dc.b "DTP_NoteAllocMem",0
+EDTP_NoteFreeMem dc.b "DTP_NoteFreeMem",0
+EDTP_PlayerInfo dc.b "DTP_PlayerInfo",0
+EDTP_Patterns dc.b "DTP_Patterns",0
+EDTP_Duration dc.b "DTP_Duration",0
+EDTP_SampleData dc.b "DTP_SampleData",0
+EDTP_MiscText dc.b "DTP_MiscText",0
 
 EEP_Get_ModuleInfo	dc.b "EP_Get_ModuleInfo",0
 EEP_Free_ModuleInfo	dc.b "EP_Free_ModuleInfo",0
