@@ -27315,7 +27315,7 @@ openPlayerGroupFile
 
 	lea	-100(sp),sp 
 	move.l	sp,a0
-	lea	.progdir(pc),a1 
+	lea	progdir(pc),a1 
 .c1 	move.b	(a1)+,(a0)+
 	bne.b	.c1
 	subq	#1,a0 
@@ -27346,7 +27346,7 @@ openPlayerGroupFile
 .ok 
 	rts
 
-.progdir 
+progdir 
 	dc.b	"PROGDIR:",0
 	even
 
@@ -40664,6 +40664,9 @@ findDeliPlayer
 	tst.b	uusikick(a5)
 	beq.b	.skip
 	lea .searchPath2(pc),a2 
+	bsr.b 	.tryLock
+	bne.b	.ok 
+	lea progdir(pc),a2 
 	bsr.b 	.tryLock
 	bne.b	.ok 
 .skip
