@@ -16476,11 +16476,9 @@ inforivit_play
 .hth	dbeq	d0,.copc
 	clr.b	(a1)
 
-;	move	numchans,d2		* kanavien m‰‰r‰
 	move.l	ps3m_numchans(a5),a0
 	move	(a0),d2
 
-;	move	mtype,d0
 	move.l	ps3m_mtype(a5),a0
 	move	(a0),d0
 	move	d0,d3
@@ -16488,7 +16486,6 @@ inforivit_play
 	lea	.1(pc),a0
 	subq	#1,d0
 	beq.b	.hee
-
 	lea	.2(pc),a0
 	subq	#1,d0
 	beq.b	.hee2
@@ -16498,6 +16495,7 @@ inforivit_play
 	lea	.4(pc),a0
 	subq	#1,d0
 	beq.b	.hee
+	moveq	#0,d2 * clear channel count for IT
 	lea	 .5(pc),a0
 .hee	move.l	a0,d1
 
@@ -16517,8 +16515,7 @@ inforivit_play
 .2	dc.b	"Pro/Fasttracker",0
 .3	dc.b	"Multitracker",0
 .4	dc.b	"Fasttracker ][ XM",0
-.5	dc.b	"ImpulseTracker",0
-
+.5	dc.b	"ImpulseTracker      [DP]",0
  even
 
 .eer	bsr.w	siisti_nimi
@@ -16538,7 +16535,7 @@ inforivit_play
 	move.l	a0,d0
 
 	lea	tyyppi1_t(pc),a0
-	tst	d2
+	tst	d2			* PS3M channel count
 	beq.b	.ic
 	lea	tyyppi2_t(pc),a0
 .ic	bsr.w	desmsg
@@ -18399,14 +18396,20 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .nosid
 
+	* Check for IT special case,
+	* handle it as an eagleplayer
+	jsr	isImpulseTrackerActive
+	beq.b	.yesIT
 	cmp	#pt_eagle_start,playertype(a5)		* eagleplayer
 	blo.w	.noeagle
+.yesIT
 	move	#33,info_prosessi(a5)		* some magic flag
-	
+
 	lea	.form3(pc),a0
 	lea	-32(sp),sp
 	move.l	sp,a4
 	bsr.w	.namtypsizcom
+
 	moveq	#10+20,d5
 	bsr.w	.allo2
 	bne.w	.jee9eg
@@ -18834,6 +18837,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .noo_med
 .noo
+	* DEFAULT INFO
+
 	move	#35,info_prosessi(a5)
 
 	lea	.form3(pc),a0
@@ -18848,6 +18853,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	lea	32(sp),sp
 	bra.w	.sexit
 .jee9a
+	* parameters in a1
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
 	jsr	desmsg4
@@ -18881,7 +18887,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	lea	.fullLineFormat(pc),a0 
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
-	bsr		desmsg3
+	jsr	desmsg3
 .noMoreA
 .noAuth
 	bra.w	.selvis
@@ -18938,6 +18944,15 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 *************************************
 
+* writes into a4 depending on format:
+* - module name address
+* - module type address
+* - mix rate integer
+* - mix rate decimal
+* - module length
+* - module start addr
+* - module end addr
+
 .namtypsizcom
 	pushm	d0/d1
 
@@ -18957,7 +18972,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .lee
 	cmp	#pt_multi,playertype(a5)		* mixing rate
 	bne.b	.nah
-
+	jsr	isImpulseTrackerActive
+	beq.b	.nah
 .rrqq	
 	move.l	mixirate(a5),d0
 	tst.b	ahi_use_nyt(a5)
@@ -22571,6 +22587,8 @@ drawScope
 
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.jaa
+	bsr	isImpulseTrackerActive
+	beq.b	.joa
 	bsr	patternScopeIsActive
 	beq.b	.noMagic
 	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
@@ -34403,6 +34421,22 @@ taaksej		rs.l	1
 volj		rs.l	1
 boostj		rs.l	1
 
+* Sets Z if PS3M+ImpulseTracker is active
+isImpulseTrackerActive
+	pushm	d0/a0
+	cmp	#pt_multi,playertype(a5)
+	bne.b	.no
+	move.l	ps3m_mtype(a5),d0
+	beq.b	.no
+	move.l	d0,a0
+	cmp	#mtIT,(a0)
+	beq.b	.yes
+.no	moveq	#-1,d0
+.x	popm	d0/a0
+	rts
+.yes	moveq	#0,d0
+	bra.b	.x
+
 p_multi	jmp	.s3init(pc)
 	p_NOP		* CIA
 	jmp	.s3poslen(pc)		* VB
@@ -34415,7 +34449,7 @@ p_multi	jmp	.s3init(pc)
 	jmp	.taakse(pc)
 	jmp	ps3m_boost(pc)		* ahiupdate
 	jmp id_ps3m(pc)
-	jmp	guru_author(pc)
+	jmp	.author(pc)
 	dc.w pt_multi
  dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
 	dc.b	"PS3M",0
@@ -34423,6 +34457,11 @@ p_multi	jmp	.s3init(pc)
 	dc.b	"impulse",0
  even
 
+.author
+	move.l	ps3m_mtype(a5),a0
+	cmp	#mtIT,(a0)
+	bne.w	guru_author
+	bra	deliAuthor
 
 
 ;init1j	jmp	init1r(pc)
@@ -34462,6 +34501,7 @@ p_multi	jmp	.s3init(pc)
 	bsr.W 	id_it
 	bne.b	.notIt
 	DPRINT "IT detected"
+
 	moveq	#$62,d0	* version
 	lea	.itPath(pc),a0 
 	* Distract loader so that it will not try to
@@ -34534,6 +34574,14 @@ p_multi	jmp	.s3init(pc)
 	addq	#4,sp			* pop pea
 
 	lea	var_b,a5
+
+	bsr	isImpulseTrackerActive
+	bne.b	.notIT
+	* No patternscope for this one	
+	sub.l	a0,a0
+	sub.l	a1,a1
+.notIT
+
 	move.l	a0,deliPatternInfo(a5)
 	move.l	a1,ps3mUnpackedPattern(a5)
  if DEBUG
