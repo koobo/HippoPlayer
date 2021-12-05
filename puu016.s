@@ -22588,7 +22588,14 @@ drawScope
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.jaa
 	bsr	isImpulseTrackerActive
-	beq.b	.joa
+	bne.b	.noIt
+	pushm d0-d6/a0/a1/a6
+	bsr	requestNormalScopeDrawArea
+	popm	d0-d6/a0/a1/a6
+	bne.b	.skippi	* wait for resize
+	* Displaying sample scope, so need magic
+	bra.b	.joa
+.noIt
 	bsr	patternScopeIsActive
 	beq.b	.noMagic
 	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
