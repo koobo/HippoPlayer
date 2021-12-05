@@ -1,4 +1,4 @@
-;APS0001B41B0000DD530000347300002C8B000000000000000000000000000000000000000000000000
+;APS0001B52A0000DE620000349C00002CB4000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -387,6 +387,8 @@ s3poslen
 	move.l	poslen(pc),a0
 	lea	data,a5
 	basereg	data,a5
+;	cmp	#mtIT,mtype(a5)
+;	beq.b	.skip
 	move	PS3M_position(a5),(a0)+
 	move	positioneita(a5),(a0)
 	tst.b	d0 
@@ -394,6 +396,7 @@ s3poslen
 	bsr.w	updatePatternInfoBuffer
 	bsr.w	updatePatternInfoData
 .noPatternScope
+.skip
 	rts
 	endb	a5
 
@@ -1278,6 +1281,17 @@ s3end
 
 
 eteen	pushm	all
+
+	DPRINT	"Forward"
+
+	cmp	#mtIT,mtype
+	bne.b	.noIt
+	move.l	#DTP_NextPatt,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bra.b	.bb
+.noIt
+
 	move	positioneita,d1
 	subq	#2,d1
 	bmi.b	.bb
@@ -1289,13 +1303,24 @@ eteen	pushm	all
 .a	bsr.w	setPosition
 .bb	popm	all
 	rts
+
 taakse	pushm	all
+
+	DPRINT	"Backward"
+
+	cmp	#mtIT,mtype
+	bne.b	.noIt
+	move.l	#DTP_PrevPatt,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bra.b	.x
+.noIt
 	move	PS3M_position,d0
 	subq	#1,d0
 	bpl.b	.b
 	clr	d0
 .b	bsr.w	setPosition
-	popm	all
+.x	popm	all
 	rts
 
 
@@ -1346,15 +1371,16 @@ ahi_init
 
 
 ahi_init0
+	DPRINT	"ahi_init0"
 	OPENAHI	1
 	move.l	d0,ahibase
-	beq.b	.ahi_error
+	beq.w	.ahi_error
 	move.l	d0,a6
 
 	lea	ahi_tags(pc),a1
 	jsr	_LVOAHI_AllocAudioA(a6)
 	move.l	d0,ahi_ctrl
-	beq.b	.ahi_error
+	beq.w	.ahi_error
 
 	move.l	d0,a2
 	moveq	#0,d0				;Load module as one sound!
@@ -1377,6 +1403,9 @@ ahi_init0
 	move.b	#1,setpause-ahi_ctrltags(a1)
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_ControlAudioA(a6)
+
+	DPRINT	"->%ld"
+
 	tst.l	d0
 	bne.b	.ahi_error
 	moveq	#0,d0
@@ -1692,11 +1721,10 @@ soundfunc:
 
 ahi_tempo
 	movem.l	d0-d1/a0-a2/a6,-(sp)
-
 	and.l	#$ffff,d0
 	lsl.w	#1,d0
 	divu	#5,d0
-
+ 
 	move.l	ahibase(pc),a6
 	lea	.tags(pc),a1
 	move	d0,4(a1)
@@ -1881,8 +1909,9 @@ ConvertNote
 	addq	#1,d0
 	move.b	1(a0),d1
 .noNote
-	move.b	2(a0),d2
-	and	#$3f,d2		* TODO, cut off command, there could possibly be a better way
+	moveq	#$3f,d2
+	and.b	2(a0),d2
+	* TODO, truncated command code, there could possibly be a better way
 
 	move.b	3(a0),d3
 	rts
@@ -1900,9 +1929,6 @@ ConvertNote
 	moveq	#0,D2		; Command 
 	moveq	#0,D3		; Command argument
 
-;	moveq	#-1,d0
-;	cmp.b	(a0),d0
-;	beq.b	.noXMNote
 	moveq	#$7f,d0
 	and.b	(a0),d0		; note 0-71, 0 = C-0
 	beq.b	.noXMNote
@@ -1911,8 +1937,9 @@ ConvertNote
 	and.b	1(a0),d1	; instrument 0-128
 
 .noXMNote
-	move.b	2(a0),d2
-	and	#$3f,d2		* TODO, cut off command, there could possibly be a better way
+	moveq	#$3f,d2
+	and.b	2(a0),d2
+	* TODO, truncated command code, there could possibly be a better way
 
 	move.b	3(a0),d3
 	rts
@@ -1986,14 +2013,7 @@ ConvertNote
 id_it
 	MOVEQ	#0,D0
 	CMP.L	#$494D504D,(A0)
-	BNE.S	.itFail
-	MOVE.W	$2A(A0),D1			*  Cmwt: format version
-	ROR.W	#8,D1
-	CMP.W	#$100,D1
 	BEQ.S	.itYes
-	CMP.W	#$200,D1
-	BEQ.S	.itYes
-.itFail
 	MOVEQ	#-1,D0
 .itYes
 	RTS
@@ -9873,8 +9893,8 @@ mt_patternpos	dc 0
 mt_dmacontemp	dc 0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ImpulseTracker
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 
  STRUCTURE DTN_NoteStruct,0
 	APTR	nst_Channels		;pointer to a list of notechannels */
@@ -9904,6 +9924,7 @@ mt_dmacontemp	dc 0
 
 deliPlayer		dc.l	0
 deliBase		dc.l	0
+itLastTimer		dc.w	0
 
 * in:
 *   d0 = tag to find
@@ -9916,7 +9937,6 @@ deliGetTagFromA0
 	* tag item array
 	move.l	16(a0),a0
 .loop
-    ;cmp.l  #TAG_END,(a0)
     tst.l   (a0)            * TAG_END is NULL
     beq.b   .notFound
     cmp.l   (a0),d0
@@ -9948,6 +9968,7 @@ it_init
 	move.l	deliBase(pc),d1
 	DPRINT	"deliPl=%lx deliBase=%lx"
  endif
+	clr	itLastTimer
 
 	move.l	deliBase(pc),a0
 	pea	it_setTimer(pc)
@@ -9957,19 +9978,29 @@ it_init
 	pea	4(a0)
 	move.l	(sp)+,mname
 
-	; Unsigned samples?
+	; Sample format setting
 	move	#1,fformat
 
 	; S3M
-	move.l	#14317056/4,clock		; Clock constant
-	;move.l	#14317056/1,clock		; Clock constant
+	; Sounds ok:
+	;move.l	#14317056/4,clock		; Clock constant
 	; MOD
-	;move.l	#14187580/4,clock		; Clock constant
+	; Also ok:
+	move.l	#14187580/4,clock		; Clock constant
 	; XM
 	;move.l	#8363*1712/4,clock		; Clock constant
 	; MTM
 	;move.l	#14317056/4,clock		; Clock constant
 
+	bsr	it_calcTempo
+	move	d0,tempo
+
+ if DEBUG
+	ext.l	d0
+	DPRINT	"Initial tempo %ld"
+ endif
+
+	; Use all channels!
 	moveq	#32,d0
 	move	d0,numchans
 	addq	#1,d0
@@ -9996,13 +10027,6 @@ it_init
 	and	#3,d1
 	dbf	d0,.lop
 
-	lea	cha0(pc),a0
-	moveq	#32-1,d0
-.l	st	mOnOff(a0)
-	lea	mChanBlock_SIZE(a0),a0
-	dbf	d0,.l
-
-
 	rts
 
 * ciavalue = timervalue / tempovalue
@@ -10012,42 +10036,55 @@ it_init
 * common dtg_Timer = 14209
 * mrate = 5002
 
-;.getTimerConstant
-;	move.l	4.w,a0
-;	move.b	PowerSupplyFrequency(a0),d0
-;	cmp.b	#60,d0
-;	beq.b	.NTSC
-;.PAL	
-;	move.l	#1773447,d0
-;	rts
-;.NTSC	
-;	move.l	gfxbase(pc),a0
-;	move	gb_DisplayFlags(a0),d0
-;	btst	#4,d0				; REALLY_PAL
-;	bne.b	.PAL				; Just to be sure
-;	move.l	#1789773,d0
-;	rts
-;	
-* Convert dtg_Timer value into a tempo value
-it_setTempo
+* Use this since the AHI init flow never gets to the
+* part of code that initializes "timer".
+getTimerValue
+	move.l	timer(pc),d0
+	bne.b 	.x
+	move.l	4.w,a0
+	move.b	PowerSupplyFrequency(a0),d0
+	cmp.b	#60,d0
+	beq.b	.NTSC
+.PAL	
+	move.l	#1773447,d0
+	move.l	d0,timer
+	rts
+.NTSC	
+	move.l	gfxbase,a0
+	move	gb_DisplayFlags(a0),d0
+	btst	#4,d0				; REALLY_PAL
+	bne.b	.PAL				; Just to be sure
+	move.l	#1789773,d0
+	move.l	d0,timer
+.x	rts
+
+* This could be called from interrupts
+it_calcTempo
+	* Convert dtg_Timer value into a tempo value
 	move.l	deliBase(pc),a0
+
 	move	dtg_Timer(a0),d1
 	beq.b	.defaultTempo
-	move.l	timer(pc),d0
-	beq.b	.defaultTempo
+	bsr.b	getTimerValue
 	divu	d1,d0
-	move	d0,tempo
-.x
- 	rts
-
+	rts
 .defaultTempo
-	move	#125,tempo
+	moveq	#125,d0
 	rts
 
 it_setTimer
-	bsr.b	it_setTempo
-	move	tempo(pc),d0
+	move.l	deliBase(pc),a0
+	move	dtg_Timer(a0),d0
+	cmp	itLastTimer(pc),d0
 	beq.b	.x
+	move	d0,itLastTimer
+
+	bsr.b	it_calcTempo
+	move	d0,tempo
+	
+	tst.b	ahi_use
+	bne.w	ahi_tempo
+
 	move.l	mrate(pc),d1
 	beq.b	.x
 	move.l	d1,d2
@@ -10085,12 +10122,13 @@ it_music
 	lea	mChanBlock_SIZE(a6),a6
 	dbf	d2,.testLoop
  endif
-	bsr.b	it_setTimer
+	;;;bsr.w	it_setTimer
 	popm	a5/a6
 	rts
 	
+* IT specific noteplayer
 .notePlayer:
-	move	#$800,$dff180	
+;	move	#$800,$dff180	
 	move.l	#DTP_NoteStruct,d0  
 	bsr.w	deliGetTag
 	* This is an address to the struct
@@ -10226,10 +10264,13 @@ it_music
 		beq.b	.per
 	;move.l d3,d0
 	;DPRINT "freq=%ld"
-		lsr.l	#1,d3
-		move.l	#3546895/2,d0		;Amiga Audiorate
+;		lsr.l	#1,d3
+		lsr.l	#2,d3
+;		move.l	#3546895/2,d0		;Amiga Audiorate
+		move.l	#3546895/1,d0		;Amiga Audiorate
 		divu	d3,d0			;
-		and.l	#$ffff,d0
+;		and.l	#$ffff,d0
+		ext.l	d0
 		bra.s	.per
 .extper
 		lsr	#2,d0				;noch ersetzen durch DirektWrite bei 4*Per
@@ -10303,7 +10344,7 @@ it_music
 		cmp.l	#2,d0
 		bls.b	.noLoop
 		st	mLoop(a6)
-		bra.w	.yesLoop
+		bra.b	.yesLoop
 .noLoop
 .skip5:
 		clr.b	mLoop(a6)
@@ -11102,6 +11143,8 @@ activePattPos 	dc 	0
 * buffered information: song position, pattern position
 			ds.l	4	* underflow room
 
+	printt TODO dynamic
+	printt TODO dynamic
 pi
 patternInfoBuffer
 	* TODO: how big should this be?
@@ -11112,6 +11155,8 @@ patternInfoBuffer
 * 32 channels
 * 4 bytes per note
 * TODO: dynamic allocation
+	printt TODO dynamic
+	printt TODO dynamic
 upa
 unpackedPattern
 	ds.b	(64+64)*4*32	; = 16 kB
