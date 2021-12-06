@@ -1,4 +1,4 @@
-;APS0000123800008BD2000032BD0000A4F30004AFD30005EA6F0004275D0004963400002EA00000BAEF
+;APS0000125200008D0B0000340C0000A62C0004B10C0005EBA8000428960004976D00002FEF0000BC28
 ;test
 ;	lea	var_b,a5
 ;	move.l	4.w,(a5)
@@ -20,7 +20,7 @@
 ; even
 
 
-DEBUG	=	0
+DEBUG	=	1
 
 * Print to debug console, very clever.
 * Param 1: string
@@ -172,6 +172,7 @@ _GFXBase	rs.l	1
 _XPKBase	rs.l	1
 _MPEGABase	rs.l	1
 ahibase		rs.l	1
+ahi_task	rs.l	1
 ahi_ctrl	rs.l	1
 ahiflags	rs.l	1
 modulefilename	rs.l	1
@@ -252,7 +253,7 @@ debugDesBuf		rs.b	1000
 size_var	rs.b	0
 
 	jmp	init(pc)
-	jmp	end(pc)
+	jmp	endSamplePlay(pc)
 	jmp	stop(pc)
 	jmp	cont(pc)
 	jmp	vol(pc)
@@ -308,19 +309,30 @@ ahinfo
 
 	rts
 
-end
+endSamplePlay
 	pushm	all
+	DPRINT	"end sample play"
 	lea	var_b(pc),a5
 	st	killsample(a5)
 .w	
+	* Wait for the process to exit
 	moveq	#2,d1
 	lore	Dos,Delay
 	tst	sample_prosessi(a5)
 	bne.b	.w
 
+	* Try this again, should be done
+	* in the same task as ahi_init, otherwise might
+	* hang.
+	bsr	ahi_end
+
  if DEBUG
 	move.l	output(a5),d1
 	beq.b	.noDbg
+	move.l	#4*50,d1
+	lore	Dos,Delay
+	move.l	output(a5),d1
+	clr.l	output(a5)
 	lore	Dos,Close
 .noDbg
  endif
@@ -365,7 +377,23 @@ stop	st	samplestop+var_b
 
 init
 	lea	var_b(pc),a5
-
+	bsr.b	.doInit
+	DPRINT	"init status=%ld"
+ if DEBUG
+	tst.l	d0
+	beq.b	._1
+	move.l	output(a5),d1
+	beq.b	._1
+	move.l	#4*50,d1
+	lore	Dos,Delay
+	move.l	output(a5),d1
+	clr.l	output(a5)
+	lore	Dos,Close
+._1
+ endif
+	tst.l	d0
+	rts
+.doInit
 
 	move.b	13+4(sp),kutistus(a5)
 	move.l	8+4(sp),songover(a5)
@@ -406,7 +434,8 @@ init
 	tst	sample_prosessi(a5)
 	bne.b	.q
 	bsr.w	varaa_kanavat
-	beq.b	.ok
+	beq.w	.ok
+	DPRINT	"No audio"
 	moveq	#ier_nochannels,d0
 .q	rts
 
@@ -491,7 +520,7 @@ init
 	move.l	d0,samplestart(a5)
 
 	move.l	samplebodysize(a5),d0
-	bsr.b	.moi
+	bsr.w	.moi
 
 	lea	fh1(a5),a0
 	move.l	modulefilename(a5),mfh_filename(a0)
@@ -531,6 +560,7 @@ init
 ;	bne.w	.sampleok
 
 .orok
+	DPRINT	"ier_filerr"
 	moveq	#ier_filerr,d0
 	bra.w	sampleiik
 	
@@ -625,6 +655,7 @@ init
 	bsr.w	getmem
 	move.l	d0,samplework(a5)
 	bne.b	.wa4
+	DPRINT	"ier_nomem"
 	moveq	#ier_nomem,d0
 	bra.w	sampleiik
 .wa4
@@ -688,6 +719,7 @@ init
 *********** MP init
 
 .mpinit
+	DPRINT	"MPEGA init"
 
 * mpega stream
 	rsreset
@@ -720,6 +752,7 @@ init
 	lob	OldOpenLibrary
 	move.l	d0,_MPEGABase(a5)
 	bne.b	.uzx
+	DPRINT	"no MPEGA"
 	moveq	#ier_error,d0
 	bra.w	sampleiik
 .uzx
@@ -728,6 +761,7 @@ init
 	lore	MPEGA,MPEGA_open
 	move.l	d0,mpstream(a5)
 	bne.b	.uz
+	DPRINT	"no MPEGA strea"
 	moveq	#ier_filerr,d0
 	bra.w	sampleiik
 .uz
@@ -764,6 +798,7 @@ init
 	bsr.w	getmem
 	move.l	d0,samplework(a5)
 	bne.b	.wa4q
+	DPRINT	"ier_nomem"
 	moveq	#ier_nomem,d0
 	bra.w	sampleiik
 .wa4q
@@ -932,6 +967,7 @@ init
 	bra.b	.ok2
 
 .memerr
+	DPRINT	"ier_nochip"
 	moveq	#ier_nochip,d0
 	bra.w	sampleiik
 .ok2
@@ -972,6 +1008,7 @@ init
 	bsr.w	getmem
 	move.l	d0,samplework2(a5)
 	bne.b	.nik
+	DPRINT	"ier_nomem"
 	moveq	#ier_nomem,d0
 	bra.w	sampleiik
 
@@ -1020,6 +1057,7 @@ init
 	dbf	d3,.alco
 	bra.b	.ahin
 .nomo
+	DPRINT	"ier_nomem"
 	moveq	#ier_nomem,d0
 	bra.w	sampleiik
 
@@ -1082,15 +1120,18 @@ init
 
 .ahi_error
 	bsr.w	ahi_end
+	DPRINT	"ier_ahi"
 	moveq	#ier_ahi,d0
 	bra.w	sampleiik
 
 
 .error	
+	DPRINT	"ier_noprocess"
 	moveq	#ier_noprocess,d0
 	bra.w	sampleiik
 
 .vaara
+	DPRINT	"ier_unknown"
 	moveq	#ier_unknown,d0
 	bra.w	sampleiik
 
@@ -1111,6 +1152,13 @@ init
 
 ahi_alustus
 	pushm	all
+
+	sub.l	a1,a1
+	move.l	4.w,a6
+	lob	FindTask
+	move.l	d0,ahi_task(a5)
+	DPRINT	"ahi_init task=%lx"
+
 	OPENAHI	1
 	move.l	d0,ahibase(a5)
 	beq.w	.ahi_error		* oudosti tämä bugaa välillä.
@@ -1122,7 +1170,6 @@ ahi_alustus
 	beq.w	.ahi_error
 	move.l	d0,a2
 
-
 	moveq	#0,d0				;sample 1
 	moveq	#AHIST_DYNAMICSAMPLE,d1
 	lea	ahi_sound1(pc),a0
@@ -1130,38 +1177,34 @@ ahi_alustus
 	tst.l	d0
 	bne.w	.ahi_error
 
-
 	moveq	#1,d0				;sample 2
 	moveq	#AHIST_DYNAMICSAMPLE,d1
 	lea	ahi_sound2(pc),a0
 	jsr	_LVOAHI_LoadSound(a6)
 	tst.l	d0
-	bne.b	.ahi_error
+	bne.w	.ahi_error
 
 	moveq	#2,d0				;sample 3
 	moveq	#AHIST_DYNAMICSAMPLE,d1
 	lea	ahi_sound3(pc),a0
 	jsr	_LVOAHI_LoadSound(a6)
 	tst.l	d0
-	bne.b	.ahi_error
+	bne.w	.ahi_error
 
 	moveq	#3,d0				;sample 4
 	moveq	#AHIST_DYNAMICSAMPLE,d1
 	lea	ahi_sound4(pc),a0
 	jsr	_LVOAHI_LoadSound(a6)
 	tst.l	d0
-	bne.b	.ahi_error
+	bne.w	.ahi_error
 
 	move.l	ahimode(pc),d0
 	lea	getattr_tags(pc),a1
 	jsr	_LVOAHI_GetAudioAttrsA(a6)
 
-
 	bsr.w	ahi_setmastervol
 	move	mainvolume+var_b(pc),d0
 	bsr.w	vol
-
-
 
 **** frequency
 	moveq	#0,d0		* channel
@@ -1180,9 +1223,9 @@ ahi_alustus
 
 	lea	ahi_ctrltags(pc),a1
 	jsr	_LVOAHI_ControlAudioA(a6)
+	DPRINT	"->control audio: %ld"
 	tst.l	d0
 	bne.b	.ahi_error
-
 
 	popm	all
 	moveq	#0,d0
@@ -1219,15 +1262,27 @@ ahi_sound4
 
 ahi_end:
 	pushm	all
+
+ 	sub.l	a1,a1
+	move.l	4.w,a6
+	lob	FindTask
+	DPRINT	"ahi_end task=%lx"
+	cmp.l	ahi_task(a5),d0
+	beq.b	.ok
+	DPRINT	"task mismatch, skipping"
+	bra.b	.x
+.ok
 	move.l	ahibase(a5),d0
 	beq.b	.1
+	DPRINT	"ahi_end"
 	move.l	d0,a6
+
 	move.l	ahi_ctrl(a5),a2
 	jsr	_LVOAHI_FreeAudio(a6)
 	CLOSEAHI
-
+	DPRINT	"close ahi ok"
 .1	clr.l	ahibase(a5)
-	popm	all
+.x	popm	all
 	rts
 
 ahi_ctrltags:
@@ -1379,6 +1434,7 @@ ahi_setvolume:
 
 ahi_stopsound
 ahihalt	pushm	all
+	DPRINT	"ahi_stopsound"
 	moveq	#0,d0		* channel
 	moveq	#0,d1		* freq = 0, temporary stop
 	move.l	ahi_ctrl+var_b(pc),a2
@@ -1400,7 +1456,7 @@ ahihalt	pushm	all
 	bsr.b	ahi_setvolume
 	moveq	#0,d0
 	moveq	#1,d6
-	bsr.b	ahi_setvolume
+	bsr.w	ahi_setvolume
 
 .x
 	popm	all
@@ -1448,7 +1504,6 @@ sampleiik
 	bsr.w	clearsound
 	bsr.w	vapauta_kanavat
 	bsr.w	closesample
-
 
 	bsr.w	ahi_end
 
@@ -2777,6 +2832,7 @@ sample_code
 
 
 quit
+	DPRINT	"quit"
 	bsr.b	wait
 
 quit2	
@@ -2890,6 +2946,7 @@ playblock_14bit
 	bra.b	goa
 
 ahiplay
+	DPRINT	"ahi_play"
 	move	#0,d0		* channel
 	move.l	d7,d1		* samplebank	
 	moveq	#0,d2		* offset
