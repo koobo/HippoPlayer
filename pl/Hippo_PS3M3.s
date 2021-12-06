@@ -1187,12 +1187,9 @@ s3end
 
 .d
 
-
 ******
 ;	clr	PS3M_reinit
 *******
-
-
 
 	move.l	4.w,a6
 
@@ -1372,6 +1369,12 @@ ahi_init
 
 ahi_init0
 	DPRINT	"ahi_init0"
+
+	move.l	4.w,a6
+	sub.l	a1,a1
+	lob	 FindTask
+	move.l d0,ahi_task
+
 	OPENAHI	1
 	move.l	d0,ahibase
 	beq.w	.ahi_error
@@ -1417,8 +1420,19 @@ ahi_init0
 
 
 ahi_end
+	DPRINT	"ahi_end"
+	move.l	4.w,a6
+	sub.l 	a1,a1
+	lob 	FindTask
+	cmp.l	ahi_task(pc),d0
+	beq.b	.ok
+	DPRINT 	"task mismatch %lx"
+	bra.b 	.1
+.ok
+
 	move.l	ahibase(pc),d0
 	beq.b	.1
+	clr.l	ahibase
 	move.l	d0,a6
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_FreeAudio(a6)
@@ -1773,6 +1787,7 @@ setmodulelen	dc.l	0
 
 ahibase:	dc.l	0
 ahi_ctrl:	dc.l	0
+ahi_task	dc.l	0
 
 attr_stereo		dc.l	0
 attr_panning		dc.l	0
