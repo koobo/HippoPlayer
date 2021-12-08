@@ -69,10 +69,28 @@ PATTERNINIT - EP
 + KRIS
 + Mugician2
 
+CRASH?
+- have an ahi init error
+- press "PRG"
+- boom
+
+TODO
+- "list mode toggle" stil visible with RMB+PR
+
+TODO:
+- eagleplayers using "noteplayers" do not allocate audio
+
+FIXED: MP3 BUG:
+- quick note, HiP also seems to freeze/lockup when playing some (but not all) MP3's,
+  was listening to a load of the matt gray reformation mp3's for them to freeze HiP when 
+  trying to change song/quit the program, workbench isnt locked up, just HiP.
+
 FIXED: BUG: 
 - flood.dum not working on kick13
+
 FIXED: BUG:
 - JAM.Dr-Awesome-11: kick13 -> crash
+
 FIXED: BUG
 - add from "sys:music"
 - exit
