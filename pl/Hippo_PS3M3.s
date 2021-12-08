@@ -1,4 +1,4 @@
-;APS0001B52A0000DE620000349C00002CB4000000000000000000000000000000000000000000000000
+;APS0001B5460000DE7E000034A500002CBA000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -10,7 +10,7 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
-DEBUG	=	1
+DEBUG	=	0
 TEST 	= 	0
 
  ifeq TEST
@@ -467,6 +467,20 @@ s3init
 	lea	data,a5
 	basereg	data,a5
 
+	move.l	4.w,a6
+
+	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	lob	AllocMem
+	move.l	d0,patternInfoBufferPtr(a5)
+	beq	.memerr
+
+	move.l	#UNPACKED_PATTERN_SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	lob	AllocMem
+	move.l	d0,unpackedPatternPtr(a5)
+	beq	.memerr
+
 ;	move.b	ps3mb+var_b,d1
 	move.l	#4096,d0
 	lsl.l	d5,d0
@@ -482,7 +496,6 @@ s3init
 	move.l	buffSize(a5),d0
 	DPRINT 	"buffSize=%lx"
 
-	move.l	4.w,a6
 
 	move.l	#1024*4*2,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -621,7 +634,7 @@ s3init
 .en 
  endif 
 	lea	PatternInfo(pc),a0
-	lea	unpackedPattern,a1
+	move.l	unpackedPatternPtr,a1
 
 	popm	d1-d7/a2-a6
 	rts
@@ -667,7 +680,7 @@ getPatternInfo
 	divu	d4,d3
 	lsr	#8,d3
 	
-	lea	patternInfoBuffer(a5),a0
+	move.l	patternInfoBufferPtr(a5),a0
 	lsl	#2,d3
 	add.w	d3,a0	
 
@@ -739,7 +752,7 @@ updatePatternInfoBuffer
 ;;	DPRINT	"Push idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
  endif
 
-	lea	patternInfoBuffer(a5),a0
+	move.l	patternInfoBufferPtr(a5),a0
 
 	move	prevPushedIndex(a5),d1
 	asl	#2,d1
@@ -901,7 +914,7 @@ updatePatternInfoData
 	lea	2(a0,d0.l),a0
 
 	* start of pattern data
-	lea	unpackedPattern(a5),a1
+	move.l	unpackedPatternPtr(a5),a1
 	move.l	a1,a2
 
 	* clear old, this is probably needed
@@ -986,7 +999,7 @@ updatePatternInfoData
 	move	numchans(a5),D0
 	subq	#1,d0
 	lea	Stripe1(a5),a0
-	lea	unpackedPattern(a5),a1
+	move.l	unpackedPatternPtr(a5),a1
 .stripesLoop 
 	move.l	a1,(a0)+
 	addq	#4,a1
@@ -1038,7 +1051,7 @@ updatePatternInfoData
 	add.l	d1,a1		* skip header 
 
 	* Start of XM pattern data at a1
-	lea	unpackedPattern(a5),a0
+	move.l	unpackedPatternPtr(a5),a0
 
 	move	d0,d7
 	subq 	#1,d7
@@ -1257,6 +1270,22 @@ s3end
 	clr.l	dtab(a5)
 
 .eimem6	
+
+	move.l	patternInfoBufferPtr(a5),d0
+	beq.b	.e1
+	move.l	d0,a1
+	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
+	lob	FreeMem
+	clr.l	patternInfoBufferPtr(a5)
+.e1
+
+	move.l	unpackedPatternPtr(a5),d0
+	beq.b	.e2
+	move.l	d0,a1
+	move.l	#UNPACKED_PATTERN_SIZE,d0
+	lob	FreeMem
+	clr.l	unpackedPatternPtr(a5)
+.e2
 
 .closeDebugWindow
  ifne DEBUG
@@ -11158,23 +11187,23 @@ activePattPos 	dc 	0
 * buffered information: song position, pattern position
 			ds.l	4	* underflow room
 
-	printt TODO dynamic
-	printt TODO dynamic
-pi
-patternInfoBuffer
-	* TODO: how big should this be?
-		ds.l	2048	; = 8 kB
+* TODO: how big should this be?
+PATTERN_INFO_BUFFER_SIZE = 2048*4	; = 8 kB
 
+pi
+patternInfoBufferPtr
+		dc.l 	0
+		
 * 64 + 64 rows
 * NOTE! xm can have variable rows?
 * 32 channels
 * 4 bytes per note
-* TODO: dynamic allocation
-	printt TODO dynamic
-	printt TODO dynamic
+
+UNPACKED_PATTERN_SIZE = (64+64)*4*32	; = 16 kB
+
 upa
-unpackedPattern
-	ds.b	(64+64)*4*32	; = 16 kB
+unpackedPatternPtr
+	dc.l	0
 
 unpackedPatternPosition
 	dc.w	-1
