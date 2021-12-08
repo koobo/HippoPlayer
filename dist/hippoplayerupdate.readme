@@ -34,7 +34,32 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 
 
 # Changes from v2.49 (29.11.2021) to v2.50 (??.??.202?)
-- bob!
+
+## New fixes
+- There was a bug in the sample player (which also plays MP3) in AHI
+  compatibility. It could hang when playback was stopped.
+  This happened especially when using AHI with the Toccata driver.
+  Should work now.
+
+## New supported music formats
+- Impulse Tracker, using the "Impulse" deliplayer, written by the
+  Delirium team for DeliTracker.
+  - PS3M mixing engine and AHI are supported.
+  - 32 channels are in use in all modules. This is due to the way 
+    IT modules work: channels are used dynamically according to 
+    whatever is needed at the moment.
+  - Pattern skip forward and back is supported, along with song
+    end detection. Stereo scope works (with PS3M).
+  - Channel panning is not supported, each mixed channel has a fixed
+    stereo position.
+  - The deliplayer "Impulse" is not included in the HippoPlayer.group file, 
+    so Hippo will look for it in the following places:
+    "PROGDIR:", "PROGDIR:eagleplayers", "eagleplayer2:eagleplayers".
+    Here "PROGDIR:" is the directory where the Hippo binary is installed.
+  - "Impulse" can be found in the aminet DeliTracker archive.
+  - "Impulse" supports ImpulseTracker formats v1.00 and v2.00. 
+    There are other IT formats around, too, which are not supported.
+
 
 
 ------------------------------------------------------------------------------
