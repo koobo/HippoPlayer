@@ -28583,6 +28583,7 @@ savedStateModuleFileName
 
 
 freeFileBrowserList
+	push	a6
 	move.l	(a5),a6		* execbase
 	lea	fileBrowserListHeader(a5),a2
 .loop
@@ -28597,7 +28598,8 @@ freeFileBrowserList
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	bne.b	.noB
 	clr.l	modamount(a5)
-.noB	rts
+.noB	pop	a6
+	rts
 
 engageFileBrowserMode
 	DPRINT	"engage!"
@@ -28618,6 +28620,8 @@ disengageFileBrowserMode
 
 * Fill root level entries with volume names
 fileBrowserRoot
+	bsr.b	freeFileBrowserList
+
 	move.l	_DosBase(a5),a0
 	move.l	dl_Root(a0),a0
 	move.l	rn_Info(a0),d0
@@ -28673,26 +28677,64 @@ fileBrowserDir
 	pushpea	l_filename(a3),d0
 	DPRINT	"fileBrowserDir %s"
  endif
+	tst.b	l_filename(a3)
+	beq.w	fileBrowserRoot
+
 	pushpea	l_filename(a3),d1
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
 	move.l	d0,d6
-	beq.b	.error
+	beq.w	.error
+
 
 	move.l	d6,d1
 	pushpea	fileinfoblock(a5),d2
 	lob	Examine
 	tst.l	d0
-	beq.b	.error
+	beq.w	.error
 
-	* Clear old list
 	bsr.w	freeFileBrowserList
 
-	* Create "parent" entry from node in a3
-	; TODO
-	;lea	l_filename(a4),a0
-	;bsr.b	.createNode
+	move.l	d6,d1
+	lore	Dos,ParentDir
+	move.l	d0,d5
+	* NULL means the root level
+	
+	lea	-100(sp),sp
+	move.l	d0,d1		* lock
+	bne.b	.notNull
+	* null lock
+	clr.b	(sp)
+	bra.b	.ok
+.notNull
+	move.l	sp,d2		* buf
+	move.l	#100,d3		* len
+	bsr	getNameFromLock
+	push	d0
+	move.l	d5,d1
+	lore 	Dos,UnLock
+	pop	d0
+	tst.l	d0
+	bne.b	.ok
+	lea	100(sp),sp
+	bra.w	.error
 
+.ok
+	* Create "parent" entry 
+	move.l	sp,a0
+	moveq	#1,d7
+	bsr	createNode
+	pushpea	.parentLabel(pc),l_nameaddr(a0)
+.notRoot
+	lea	100(sp),sp
+	tst.l	d0
+	beq.b	.error
+
+	move.l	a0,a3
+	pushpea	l_filename(a3),d0
+	DPRINT	"Adding parent %s"
+	jsr	addfile
+; EREM
 
 .scan
 	move.l	d6,d1
@@ -28715,10 +28757,20 @@ fileBrowserDir
 	bra.b	.scan
 
 .scanDone
-	jsr	sortModuleList
-;	st	hippoonbox(a5)
-;	jsr	resh
+.doUnlock
 .error
+	cmp.l	#1,modamount(a5)
+	bhi.b	.skip
+	* Sort will do refresh if there is more than 1 module
+	st	hippoonbox(a5)
+	jsr	resh
+.skip
+
+	* Do refresh in any case,
+	* list can be emptied with empty dir
+	* etc
+	jsr	sortModuleList
+
 	move.l	d6,d1
 	beq.b	.noLock
 	lore	Dos,UnLock
@@ -28766,7 +28818,6 @@ fileBrowserDir
 	beq.b	.error_
 	move.l	a0,a3
 	pushpea	l_filename(a3),d0
-	DPRINT	"Adding %ls"
 	jsr	addfile
 .lockFail
 .error_
@@ -28775,13 +28826,13 @@ fileBrowserDir
 
 
 .parentLabel
-	dc.b 	"<< Parent >>            abc"
-		;   0123456789123456789012345678
+	dc.b 	"     «««« Parent »»»»      "
+		;0123456789123456789012345678
 	even
 
 * in:
 *   a0: path
-*   d7:  0 = file, 1 = dir
+*   d7: 0 = file, 1 = dir
 * out:
 *   a0: new node
 *   d0: 1 on success, 0 on out-of-mem
@@ -28809,8 +28860,7 @@ createNode
 	st	l_divider(a0)
 .notDiv
 
-.copy
-	move.b	(a2)+,(a1)+
+.copy	move.b	(a2)+,(a1)+
 	bne.b	.copy
 
 	* find file name
