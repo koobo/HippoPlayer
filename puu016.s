@@ -1234,6 +1234,15 @@ deliPatternInfo		rs.l 	1
 * which is the last path used to add files to list
 lastStoredFileReqDirectory	rs.l 	1
 
+* Stores the selection indexes so that returning to
+* parent can select the correct item.
+FILEBROWSER_HISTORY_SIZE = 16
+fileBrowserSelectionHistoryIndex rs.w 1
+fileBrowserSelectionHistory		 rs.l FILEBROWSER_HISTORY_SIZE
+* Lock for currently active dir, so that it can 
+* be saved to state if needed.
+fileBrowserCurrentDirLock		rs.l	1
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -2837,7 +2846,7 @@ lelp
 * Pääsilmukka
 *	
 
-	DPRINT	"Entering msgloop"
+	DPRINT	"Entering message loop"
 
 	bra.b	msgloop
 returnmsg
@@ -2857,7 +2866,6 @@ msgloop
 	bsr.w	komentojono
 	bra.b	returnmsg
 .noal
-
 
 	moveq	#0,d0
 	move.b	songHasEndedSignal(a5),d1
@@ -3443,6 +3451,11 @@ exit
 exit2
 	move.l	_IntuiBase(a5),d0
 	bsr.w	closel
+
+	move.l	fileBrowserCurrentDirLock(a5),d1
+	beq.b	._1
+	lore	Dos,UnLock
+._1
 
 
  ifne DEBUG
@@ -6475,7 +6488,7 @@ signalreceived
 	DPRINT	"Song end signal"
 
 	moveq	#1,d7			* mennään listassa eteenpäin
-							* step forward in the list
+					* step forward in the list
 
 	cmp.b	#pm_random,playmode(a5)	* Arvotaanko järjestys?
 	bne.b	.norand
@@ -6499,14 +6512,14 @@ signalreceived
 	* Play mode is not random. 
 
 	cmp.b	#pm_repeatmodule,playmode(a5) 	* Jatketaanko soittoa?
-	beq.w	.reet							* If module repeat on, just exit
+	beq.w	.reet			* If module repeat on, just exit
 	
 	cmp.l	#1,modamount(a5) * Jos vain yksi modi,
 	bne.b	.notone		* jatketaan soittoa keskeytyksettä.
 	cmp.l	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Listassa yksi modi, joka on uusi.
 	bne.b	.oon			* Soitetaan se.
 	moveq	#0,d7			* ei lisätä eikä vähennetä
-							* no stepping in the list
+					* no stepping in the list
 	bra.b	.notone
 .oon
 
@@ -6521,16 +6534,14 @@ signalreceived
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne.w	rbutton13		* next song!
-
 	bra.w	.reet
-
 
 .notone
 
 	tst.l	playingmodule(a5)	* soitettiinko edes mitään
 	bmi.w	.err
 
-	cmp.b	#pm_module,playmode(a5)		* Play mode was "module", stop after playing 
+	cmp.b	#pm_module,playmode(a5)	* Play mode was "module", stop after playing 
 	beq.w	.stop
 
 ** Onko subsongeja soiteltavaks?
@@ -6552,7 +6563,7 @@ signalreceived
 	clr.b	playing(a5)		* soitto seis
 	lore   	Exec,Enable
 	move.l	playerbase(a5),a0	* stop module
-	jsr	 	p_end(a0)
+	jsr 	p_end(a0)
 
 	bsr.w	freemodule
 
@@ -6584,18 +6595,16 @@ signalreceived
 
 	bsr	forceRefreshList
 
-
 	DPRINT	"signalreceived getListNode"
 	bsr.w	getListNode
 	beq.w	.erer 
 	move.l	a0,a3
 
 	tst.b	l_divider(a3)
-	;isListDivider	l_filename(a3)	* onko divideri??
 	beq.b	.wasfile
-	tst	d7		* pitää olla jotain että ei jää 
+	tst	d7			* pitää olla jotain että ei jää 
 	bne.b	.eekk		* jummaamaan dividerin kohdalle
-	moveq	#1,d7
+	moveq	#1,d7	* step forward
 	bra.b	.eekk
 .wasfile
 
@@ -6660,6 +6669,12 @@ signalreceived
  	clr.l	playingmodule(a5)	* Alotetaan alusta
 	* select first module
 	clr.l	chosenmodule(a5)
+
+	* SANITY CHECK: in the case where it's all dividers,
+	* stop instead of trying to find something to play.
+	bsr	calculateDividersInList
+	cmp.l	modamount(a5),d0
+	beq.w	ejectButtonAction
 	bra.w	.repea
 
 * Shuffle-soitto
@@ -6739,7 +6754,7 @@ clear_random
 	
 ** taulukko tyhjäks
 	DPRINT  "clear_random"
-	bsr.w	 	obtainModuleList
+	bsr.w	 obtainModuleList
 	clr.l	randomValueMask(a5)
 	tst.l	randomtable(a5)
 	beq.b	.noList
@@ -6754,7 +6769,7 @@ clear_random
 	st	hippoonbox(a5)
 	bsr.w	shownames
 .x
-	bsr.w		releaseModuleList
+	bsr.w	releaseModuleList
 	popm	all
 	rts
 
@@ -7480,6 +7495,12 @@ nappuloita
 	and.b	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.noshifts
 
+	cmp.b	#$37,d3		* m + shift
+	bne.b	.1
+	bsr	rlistmode
+	bra.w	.ee
+.1
+
 
 	cmp.b	#$17,d3		* i + shift?
 	bne.b	.f0
@@ -8025,7 +8046,12 @@ SORT_ELEMENT_LENGTH = 4+24
 rsort
 sortButtonAction
 	skipIfGadgetDisabled gadgetSortButton
+	bsr.b	sortModuleList
+	bra	forceRefreshList
+
 sortModuleList
+	* Skip force refresh
+
 	* Let's not sort a list with 1 module, that would be silly I guess.
 	cmp.l	#2,modamount(a5)
 	bhs.b	.so
@@ -8144,7 +8170,6 @@ sortModuleList
 	DPRINT  "rsort release list"
 	bsr.w	releaseModuleList
 	bsr.w	unlockMainWindow
-	bsr	forceRefreshList
 	rts
 
 * a3 = lista
@@ -8897,11 +8922,12 @@ actionContinue
 * Eject
 *******
 rbutton4b
-	moveq	#1,d0
+	moveq	#1,d0		* fade volume: no
 	bra.b	rbutton4a
 
+ejectButtonAction
 rbutton4
-	moveq	#0,d0
+	moveq	#0,d0		* fade volume: allowed
 rbutton4a
 	clr.b	kelausnappi(a5)
 
@@ -9055,7 +9081,9 @@ rslider4
 *******
 
 forceRefreshList
+	DPRINT	"forceRefreshList"
 	st	hippoonbox(a5)
+
 
 resh	pushm	all
 	bsr.w	shownames
@@ -9310,7 +9338,6 @@ rbutton1
 
 	bsr.w	clear_random		* Tyhjäx
 	bsr.w	setRandomTableEntry		* merkitään...
-
 
 * etsitään listasta vastaava tiedosto
 
@@ -10151,16 +10178,9 @@ addfile
 	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.exit
 
- ; ifne DEBUG
- ;	DPRINT2 "Adding->",1
- ;	DEBU	l_filename(a3)
- ;	DPRINT  "<-"
- ; endif
-
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
-	;lea	moduleListHeader(a5),a0	* lisätään listaan
-	bsr.w		getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a3,a1
 
 	tst.b	filereqmode(a5)		* onko add vai insert?
@@ -10168,11 +10188,8 @@ addfile
 
  	jsr	_LVOAddTail(a6)
 
-	tst.b	l_divider(a3)
-	bne.b	.skip
 	move.l	a3,a0
 	jsr	updateFavoriteStatus
-.skip
 	rts
  
 .insert	move.l	fileinsert(a5),a2	* minkä filen perään insertataan
@@ -10940,10 +10957,8 @@ otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
 *   d7 = some other magic flag?
 loadprog
 	DPRINT	"loadprog"
-	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	bne.b	.noBr
+	* Ensure correct list mode
 	jsr	engageNormalMode
-.noBr
 	bra.b	rloadprogDoIt\.blob
 
 * in:
@@ -11310,6 +11325,10 @@ exportModuleProgramToFile
 
 komentojono
 	DPRINT	"Processing command line parameters"
+
+	* Ensure correct list mode before proceeding
+	jsr	engageNormalMode
+
 	lea	sv_argvArray+4(a5),a3	* ei ekaa
 	moveq	#ARGVSLOTS-1-1,d7
 	move.l	modamount(a5),d6	* vanha määrä talteen
@@ -11362,7 +11381,7 @@ komentojono
 
 	move.l	a2,a1
 	;lea	moduleListHeader(a5),a0	* lisätään listaan
-	bsr.w		getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	lore	Exec,AddTail
 
 	pushm	a2/a3
@@ -16000,11 +16019,19 @@ shn
 
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	bne.b	.doHippo
-	lea	.noFavs(pc),a0
+	* What to show when no modules and favorites mode?
 	moveq	#90+WINX,d0
+	lea	.noFavs(pc),a0
+	tst.b	favorites(a5)
+	bne.b	.favsOn
+	lea	.noFavs2(pc),a0
+	moveq	#90-7*8+WINX,d0
+.favsOn
 	bsr.w	printbox
 	bra.b	.wasFav
-.noFavs dc.b 	"No favorites!",0
+.noFavs 	dc.b 	"No favorites!",0
+.noFavs2	dc.b	"Favorites feature disabled!",0
+		even
 .doHippo
 	bsr.w	printhippo1
 .wasFav	
@@ -16233,21 +16260,26 @@ doPrintNames
 
 	moveq	#0,d7			* clear divider flag
 
-;	isListDivider (a1)		* list divider magic marker check?
-;	isListDivider	l_filename(a3)
-;	bne.b	.nodi
 	tst.b	l_divider(a3)
 	beq.b	.nodi
-;	addq	#1,a1			* skip to avoid displaying marker
-	st	d7			* set flag: divider being handled
+	st	d7	* set flag: divider being handled
 	* Set color for list divider
 	push	a1
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.1
 	move.l	pen_2(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
 	move.l	pen_3(a5),d0
 	move.l	rastport(a5),a1
 	lob	SetAPen
+	bra.b	.2
+.1
+	* Filebrowser divider color
+	move.l	pen_2(a5),d0
+	move.l	rastport(a5),a1
+	lore	GFX,SetAPen
+.2
 	pop	a1
 .nodi
 	* copy name into temporary stack buffer
@@ -16266,7 +16298,7 @@ doPrintNames
 	dbf	d0,.fi
 .fo	clr.b	(a2)			* terminate
 
-	tst.b	d7			* divider will not have a random play marker
+	tst.b	d7		* divider will not have a random play marker
 	bne.b	.fu
 
 	cmp.b	#pm_random,playmode(a5)
@@ -20051,26 +20083,30 @@ freeinfosample
 * About
 **
 
+calculateDividersInList
+	jsr	obtainModuleList
+	bsr.w	getVisibleModuleListHeader
+	moveq	#0,d0
+.l	TSTNODE	a0,a0
+	beq.b	.e
+	tst.b	l_divider(a0)
+	beq.b	.l
+	addq.l	#1,d0
+	bra.b	.l
+.e	jsr	releaseModuleList
+	rts
+
 aboutButtonAction
 rbutton10
 	movem.l	d0-a6,-(sp)
 
 * lasketaan dividereitten määrä
 	DPRINT  "aboutButtonAction obtain list"
-	jsr	obtainModuleList
-	moveq	#0,d5
 	* calculate the amount of list dividers in the list
 	;lea	moduleListHeader(a5),a4
-	bsr.w	getVisibleModuleListHeader
-.l	TSTNODE	a0,a0
-	beq.b	.e
-	tst.b	l_divider(a0)
-	beq.b	.l
-	addq.l	#1,d5
-	bra.b	.l
-.e	move.l	d5,divideramount(a5)
+	bsr.b	calculateDividersInList
+	move.l	d0,divideramount(a5)
 	DPRINT  "aboutButtonAction release list"
-	jsr	releaseModuleList
 
 	st	infolag(a5)
 
@@ -26798,7 +26834,7 @@ tutki_moduuli2
 	bsr.w	id_mline
 	tst.l	d0
 	beq.b	.goPublic
-	bsr.w	id_musicmaker8_
+	jsr	id_musicmaker8_
 	tst.l	d0
 	beq.b	.goPublic
 	;bsr	id_digitalmugician2 
@@ -28075,10 +28111,8 @@ importFavoriteModulesFromDisk
 	tst.b	favorites(a5)
 	bne.b	.enabled
 	DPRINT	"->disabled in prefs"
-	bsr.w		disableListModeChangeButton
 	rts
 .enabled
-	bsr.w	enableListModeChangeButton
 
 	moveq	#0,d6
 	lea	favoriteModuleFileName(pc),a0
@@ -28172,9 +28206,12 @@ favoriteModuleFileName
 * in:
 *  a0 = list node
 updateFavoriteStatus
+	tst.b	l_divider(a0)
+	bne.b	.skipDivs
 	bsr.w	findFavoriteModule
 	* a matching favorite module was found? set flag 
 	sne	l_favorite(a0)
+.skipDivs
 	rts
 
 logFavoriteList
@@ -28197,8 +28234,7 @@ handleFavoriteModuleConfigChange
 	tst.b	favorites(a5)
 	beq.b	.noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: enabled"
-	bsr.w	enableListModeChangeButton
-
+	
 * favorites are enabled.
 * - they may have been enabled ealier, or
 * - they became enabled just now
@@ -28228,11 +28264,12 @@ handleFavoriteModuleConfigChange
 
 .noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: disabled"
-	bsr.w	disableListModeChangeButton
+	;bsr.w	disableListModeChangeButton
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	bne.b	.noFav
 	* If disabled from prefs must toggle to normal mode
-	bsr.b	toggleListMode
+	;bsr.b	toggleListMode
+	bsr.b	engageNormalMode
 .noFav
 	
 	* favorites are not enabled
@@ -28261,6 +28298,7 @@ toggleListMode
 	beq.b	engageFavoritesMode
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
 	beq.w	engageFileBrowserMode
+	; falling
 	;cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	;beq.b	engageNormalMode
 	;rts
@@ -28268,6 +28306,13 @@ toggleListMode
 engageNormalMode
 	DPRINT	"engage normal"
 	pushm	all
+	
+	cmp.b	#LISTMODE_NORMAL,listMode(a5)
+	beq.b	.skip
+	
+	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
+	bne.b	.wasNotFav
+
 	* List was in favorite mode.
 	* Store list changed status, so changes will be saved.
 	* Combine with favoritesListChanged, since that may also
@@ -28275,19 +28320,26 @@ engageNormalMode
 	move.b	moduleListChanged(a5),d0
 	or.b	d0,favoriteListChanged(a5)
 	clr.b	moduleListChanged(a5)
+
+.wasNotFav
 	move.b	#LISTMODE_NORMAL,listMode(a5)
 	bsr.b	engageListMode
+
+.skip
 	popm	all
 	rts	
 
 engageFavoritesMode
+	pushm	all
 	DPRINT	"engage favorites"
 	* Moving to favorite mode
 	* moduleListChanged must be cleared initially to catch
 	* any subsequent user edits.
 	clr.b	moduleListChanged(a5)
 	move.b	#LISTMODE_FAVORITES,listMode(a5)
-	; Falling through
+	bsr.b	engageListMode
+	popm	all
+	rts	
 	
 * Common operations to be done after list mode change
 engageListMode
@@ -28379,16 +28431,13 @@ engageListMode
 	bsr.w	enableButtonWithEar
 	lea	gadgetPrgButton,a0
 	bsr.w	enableButtonWithEar
-	* Tooltip for normal and fav mode
-;.tip
-;	move.l	#tooltipList\.listModeChange,tooltipList\.gadgetListModeChangeButtonTooltip
 	rts
 
 .favoritesMode
 	lea	gadgetPrgButton,a0
 	bsr	disableButton
 	rts
-;	bra.b	.tip
+
 	
 .browserMode
 	lea	gadgetAddButton,a0
@@ -28403,8 +28452,6 @@ engageListMode
 	bsr.w	disableButton
 	lea	gadgetPrgButton,a0
 	bsr.w	disableButton
-	* Tooltip for browser mode
-; 	move.l	#tooltipList\.listModeChangeFileBrowser,tooltipList\.gadgetListModeChangeButtonTooltip
 	rts
 
 .setListModeChangeButtonIcon
@@ -28425,14 +28472,6 @@ engageListMode
 	jmp	refreshGadgetInA0
 	
 
-enableListModeChangeButton
-	lea 	gadgetListModeChangeButton,a0
-	bra	enableButton
-
-
-disableListModeChangeButton
-	lea 	gadgetListModeChangeButton,a0
-	bra	disableButton
 
 *******************************************************************************
 *
@@ -28483,7 +28522,7 @@ importSavedStateModulesFromDisk
 	lea	fileinfoblock+fib_Comment(a5),a0
  if DEBUG
 	move.l	a0,d0
-	DPRINT	"->%s"
+	DPRINT	"State=%s"
  endif
 	cmp.b	#" ",8(a0)
 	beq.b	.parse
@@ -28522,15 +28561,29 @@ importSavedStateModulesFromDisk
 	* switch mode before setting chosen module
 	* chosenmodule will be reset otherwise.
 	cmp.b	#"1",2(a0)
-	bne.b	.normalMode
-	* all regs preserved
-	bsr	toggleListMode
-.normalMode
+	beq.b	.favMode
+	cmp.b	#"2",2(a0)
+	beq.b	.browserMode
+	* default
+	bsr	engageNormalMode
+	bra.b	.engaged
+.favMode
+	bsr	engageFavoritesMode
+	bra.b	.engaged
+.browserMode
+	bsr	engageFileBrowserMode
+	cmp.b	#" ",3(a0)
+	bne.b	.engaged
+	tst.b	4(a0)
+	beq.b	.engaged
+	* Pass path into a0
+	addq	#4,a0
+	pushm	d3/d7
+	bsr	fileBrowserDirWithPath	
+	popm	d3/d7
+	bra.b	.fbInit
 
-	tst.l	d3
-	bmi.b	.neg
-	move.l	d3,chosenmodule(a5)
-.neg
+.engaged
 
 	cmp.b	#" ",3(a0)
 	bne.b	.noPath
@@ -28557,6 +28610,11 @@ importSavedStateModulesFromDisk
 	DPRINT	"Saved filereq path=%s"
 
 .noPath
+.fbInit
+	tst.l	d3
+	bmi.b	.neg
+	move.l	d3,chosenmodule(a5)
+.neg
 
 	* Finally, either just refresh or play.
 	tst.b	d7
@@ -28568,23 +28626,29 @@ importSavedStateModulesFromDisk
 exportSavedStateModulesToDisk
 	DPRINT	"exportSavedStateModulesToDisk"
 	tst.b	savestate(a5)
-	beq.b	.x
+	beq.w	.x
 
 	lea	savedStateModuleFileName(pc),a0
 	lea	moduleListHeader(a5),a1
 	jsr 	exportModuleProgramToFile
 
-	* Store playing state and chosen module into comment
-	move.l	chosenmodule(a5),d0
+	* Formatting parameters into d0,d1,d2,d3
 
-	moveq	#0,d1
-	tst.l	playingmodule(a5)
-	bmi.b	.no
-	moveq	#1,d1
-.no
-	* Store list mode
-	moveq	#0,d2
-	move.b	listMode(a5),d2
+	* Store current file browser dir, if
+	* currently in browser mode
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.notBrowser
+	move.l	fileBrowserCurrentDirLock(a5),d1
+	beq.b	.notBrowser
+
+	pushpea	probebuffer(a5),d2	* temp buffer
+	move.l	#200,d3
+	bsr		getNameFromLock
+	tst.l	d0
+	beq.b	.notBrowser
+	pushpea	probebuffer(a5),d3
+	bra.b	.yesDir
+.notBrowser
 
 	* Store last used dir as well
 	* Try the reqtools dir first
@@ -28599,8 +28663,22 @@ exportSavedStateModulesToDisk
 	bne.b	.yesDir
 	pushpea	.empty(pc),d3
 .yesDir
+
+	* Store playing state and chosen module into comment
+	move.l	chosenmodule(a5),d0
+
+	moveq	#0,d1
+	tst.l	playingmodule(a5)
+	bmi.b	.no
+	moveq	#1,d1
+.no
+	
+* Store list mode
+	moveq	#0,d2
+	move.b	listMode(a5),d2
+
 	lea	.comment(pc),a0
-	lea	probebuffer(a5),a1
+	lea	probebuffer(a5),a1 	* nice temp buffer
 	jsr	desmsg
 
  if DEBUG 
@@ -28663,19 +28741,28 @@ countFileBrowserFiles
 
 engageFileBrowserMode
 	DPRINT	"engage file browser"
+	pushm	all
 	move.b	#LISTMODE_BROWSER,listMode(a5)
-	bsr	engageListMode
 	bsr.b	countFileBrowserFiles
 	move.l	d0,modamount(a5)
-	beq.b	fileBrowserRoot
-	jsr	forceRefreshList
+	bsr.w	engageListMode
+	tst.l	modamount(a5)
+	bne.b	.notRootView
+	moveq	#0,d0	* initial chosen item
+	bsr.b	fileBrowserRoot
+.notRootView
+	popm	all
 	rts
 
 * Fill root level entries with volume names
+* in:
+*   d0 = chosen item index
 fileBrowserRoot
-	DPRINT	"file browser root"
+	DPRINT	"file browser root, select=%ld"
+	push	d0
 	jsr	setMainWindowWaitPointer
 	jsr	obtainModuleList
+	clr	fileBrowserSelectionHistoryIndex(a5)
 	bsr.w	freeFileBrowserList
 
 	move.l	_DosBase(a5),a0
@@ -28698,7 +28785,8 @@ fileBrowserRoot
 	moveq	#0,d2
 	move.b	(a2)+,d2
 
-	moveq	#l_size+2,d0	* Space for ":" and NULL
+	* Add extra space for ":" and NULL
+	moveq	#l_size+2,d0	
 	add.l	d2,d0
 	move.l	#MEMF_CLEAR,d1
 	jsr	getmem
@@ -28722,11 +28810,27 @@ fileBrowserRoot
 	move.l	dl_Next(a3),d5
 	bne.b	.devloop
 
-	jsr	sortModuleList
 .error
+	* Does not do force refresh
+	jsr	sortModuleList
+
+	* Select item
+	pop	d0
+	move.l	d0,chosenmodule(a5)
+	jsr	forceRefreshList
+	
 	jsr	releaseModuleList
 	jsr	clearMainWindowWaitPointer
 	rts
+
+
+* Enters a given directory 
+* in:
+*    a0 = path
+fileBrowserDirWithPath
+	moveq	#-1,d4
+	move.l	a0,d1
+	bra.b	fileBrowserDir\.plainPath
 
 * Enters a directory denoted by the given list node, which is a divider
 * in:
@@ -28734,15 +28838,42 @@ fileBrowserRoot
 fileBrowserDir
  if DEBUG
 	pushpea	l_filename(a3),d0
-	DPRINT	"fileBrowserDir %s"
+	move.l	chosenmodule(a5),d1
+	DPRINT	"fileBrowserDir %s at %ld"
  endif
+	* Chosen module status in d4
+	moveq	#-1,d4
+	move.l	a3,a0
+	bsr	isFileBrowserParentNode
+	beq.b	.notParent
+	* When entering parent pop the selection from history
+	bsr	popFileBrowserSelectionHistoryItem
+	move.l	d0,d4
+.notParent
+
+	* Path to d1
+	pushpea	l_filename(a3),d1
+
 	* Check if empty path, this means the root level
 	tst.b	l_filename(a3)
 	beq.w	fileBrowserRoot
+
+.plainPath
 	jsr	obtainModuleList
 	jsr	setMainWindowWaitPointer
+	jsr	tokenizepattern
 
-	pushpea	l_filename(a3),d1
+	tst.l	d4
+	bpl.b	.goingToParent
+	* Entering a new dir, push previous selection,
+	bsr	pushFileBrowserSelectionHistoryItem
+	* ... then select first item.
+	moveq	#0,d4
+.goingToParent
+	push	d4
+
+	* Start reading dir
+	* path in d1
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
 	move.l	d0,d6
@@ -28754,10 +28885,19 @@ fileBrowserDir
 	tst.l	d0
 	beq.w	.error
 
+	* Copy lock for state saving
+	move.l	fileBrowserCurrentDirLock(a5),d1
+	beq.b	.1
+	lob	UnLock
+.1 	move.l	d6,d1
+	lob	DupLock
+	move.l	d0,fileBrowserCurrentDirLock(a5)
+
+	* Empty whatever we had previously
 	bsr.w	freeFileBrowserList
 	
-	* Construct "Parent"
-
+	*** Construct "Parent"
+	
 	move.l	d6,d1
 	lore	Dos,ParentDir
 	move.l	d0,d5
@@ -28787,16 +28927,15 @@ fileBrowserDir
 	move.l	sp,a0
 	moveq	#1,d7
 	bsr.w	createNode
-	pushpea	.parentLabel(pc),l_nameaddr(a0)
+	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
 .notRoot
 	lea	200(sp),sp
 	tst.l	d0
-	beq.b	.error
-
+	beq.w	.error
 	move.l	a0,a3
-	pushpea	l_filename(a3),d0
-	DPRINT	"Adding parent %s"
 	jsr	addfile
+
+	*** Dir scan
 
 .scan
 	move.l	d6,d1
@@ -28806,7 +28945,6 @@ fileBrowserDir
 	beq.b	.scanDone
 
 	move.l	fib_DirEntryType+fileinfoblock(a5),d0
-	moveq	#0,d7	* file
 	cmp.l	#ST_FILE,d0
 	beq.b	.file
 	cmp.l	#ST_LINKFILE,d0
@@ -28814,31 +28952,41 @@ fileBrowserDir
 	cmp.l	#ST_USERDIR,d0
 	bne.b	.scan
 	moveq	#1,d7	* dir
- if DEBUG
-	pushpea fib_FileName+fileinfoblock(a5),d0
-	DPRINT	"Dir %s"
- endif
+	bsr.w	.doEntry
+	bra.b	.scan
+
 .file
+	tst.b	uusikick(a5)
+	beq.b	.oldKick
+	pushpea	tokenizedpattern(a5),d1
+	pushpea	fib_FileName+fileinfoblock(a5),d2
+	lore	Dos,MatchPatternNoCase
+	* 0 = did not match, skip this file if so
+	tst.l	d0
+	beq.b	.scan
+.oldKick
+	moveq	#0,d7	* file
 	bsr.b	.doEntry
 	bra.b	.scan
 
 .scanDone
 .doUnlock
 .error
-	cmp.l	#1,modamount(a5)
-	bhi.b	.skip
-	* Sort will do refresh if there is more than 1 module
-	jsr	forceRefreshList
-.skip
-	* Do refresh in any case,
-	* list can be emptied with empty dir
-	* etc
-	jsr	sortModuleList
-
 	move.l	d6,d1
 	beq.b	.noLock
 	lore	Dos,UnLock
 .noLock
+
+	* All done. Sort it.
+	* Does not do force refresh:
+	jsr	sortModuleList
+
+	* Figure out if the chosen module.
+	* Eg, returning from "parent" to a correct item.
+	pop	d4
+ 	move.l	d4,chosenmodule(a5)
+	jsr	forceRefreshList
+	
 	jsr	releaseModuleList
 	jsr	clearMainWindowWaitPointer
 	rts
@@ -28881,6 +29029,7 @@ fileBrowserDir
 	* Create node using path in a0
 	bsr.b createNode
 	beq.b	.error_
+
 	move.l	a0,a3
 	pushpea	l_filename(a3),d0
 	jsr	addfile
@@ -28890,11 +29039,28 @@ fileBrowserDir
 	rts
 
 
-.parentLabel
-	;dc.b 	"     «««« Parent »»»»      "
+parentNodeLabel
 	dc.b 	"  ««««««« Parent »»»»»»»»  "
 		    ;0123456789123456789012345678
+	dc.b	0 * needed for comparison below
 	even
+
+* Checks if this node is a "Parent" node
+* in:
+*   a0 = node
+isFileBrowserParentNode
+	move.l	l_nameaddr(a0),a0
+	lea		parentNodeLabel(pc),a1
+.c	
+	cmpm.b	(a0)+,(a1)+
+	bne.b	.not
+	tst.b	(a1)
+	bne.b	.c
+	moveq	#1,d0	* true
+	rts
+.not
+	moveq	#0,d0	* false
+	rts
 
 * in:
 *   a0: path
@@ -28947,7 +29113,33 @@ createNode
 	moveq	#0,d0
 	rts
 
+* Keeps track of indexes of entered directories.
+pushFileBrowserSelectionHistoryItem
+	move	fileBrowserSelectionHistoryIndex(a5),d0
+ 	cmp	#FILEBROWSER_HISTORY_SIZE,d0
+	bhs.b	.full
+	lea	fileBrowserSelectionHistory(a5),a0
+ 	lsl	#2,d0
+	move.l	chosenmodule(a5),(a0,d0)
+ 	addq	#1,fileBrowserSelectionHistoryIndex(a5)
+.full
+	rts
 
+* Pops the last item out.
+popFileBrowserSelectionHistoryItem
+	move	fileBrowserSelectionHistoryIndex(a5),d0
+	subq	#1,d0
+	bpl.b	.ok
+	DPRINT	"Browser history underflow"
+	clr		d0
+.ok
+	move	d0,fileBrowserSelectionHistoryIndex(a5)
+ 	lsl	#2,d0
+	lea	fileBrowserSelectionHistory(a5),a0
+	add	d0,a0
+	move.l	(a0),d0
+	clr.l	(a0)
+ 	rts
 
 *******************************************************************************
 * CreatePort
@@ -33737,7 +33929,7 @@ p_hippelcoso
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	jsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -33966,7 +34158,7 @@ p_hippel
 	jmp	(a0)
 
 .end
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -41213,24 +41405,24 @@ findDeliPlayer
 	tst.l	d0
 	beq.w	.epFromGroup
 
-	lea .searchPath1(pc),a2 
-	bsr.b 	.tryLock
+	lea 	.searchPath1(pc),a2 
+	bsr.w 	.tryLock
 	bne.b	.ok 
 	
 * PROGDIR not available on kick13 or asm
  ifeq asm
 	tst.b	uusikick(a5)
 	beq.b	.skip
-	lea .searchPath2(pc),a2 
+	lea 	.searchPath2(pc),a2 
 	bsr.b 	.tryLock
 	bne.b	.ok 
-	lea progdir(pc),a2 
+	lea 	progdir,a2 
 	bsr.b 	.tryLock
 	bne.b	.ok 
 .skip
  endc 
 
-	lea .searchPath3(pc),a2 
+	lea	 .searchPath3(pc),a2 
 	bsr.b 	.tryLock
 	beq.b	.fail	
 .ok
@@ -43916,7 +44108,6 @@ tooltipList
 	dc.l	gadgetForwardButton,.forward
 	dc.l	gadgetRewindButton,.rewind
 	dc.l	gadgetListModeChangeButton,.listModeChange
-.gadgetListModeChangeButtonTooltip = *-4
 	dc.l	0 ; END
 
 .play
@@ -43988,14 +44179,17 @@ tooltipList
 .rewind
 	dc.b	20,1
 	dc.b	"Skip module backward",0
+;.listModeChange
+;	dc.b	38,2
+;	dc.b	"LMB: Toggle list mode",0
+;	dc.b	"     Normal > Favorites > File browser",0
 .listModeChange
-	dc.b	38,2
+	dc.b	22,4
 	dc.b	"LMB: Toggle list mode",0
-	dc.b	"     Normal > Favorites > File browser",0
-;	dc.b	"RMB: Go to file browser",0
-;.listModeChangeFileBrowser
-;	dc.b	23,1
-;	dc.b	"LMB/RMB: Go to playlist",0
+	dc.b	"     - Normal playlist",0
+	dc.b    "     - Favorites list",0
+	dc.b    "     - File browser",0
+
   even
 
 *** Samplename ikkuna
