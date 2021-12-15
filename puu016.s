@@ -20970,7 +20970,9 @@ rexxmessage
 	dr	.ps3m3,.ps3mrate
 	dr	.loadp,.loadprefs
 	dr	.sampt,rbutton10b
-	dc	0
+	dr	.listmodet,toggleListMode
+	dr	.favoritet,.toggleFavorite
+	dc 	0 ; END
 
 .playt	dc.b	"PLAY",0
 .cleart	dc.b	"CLEAR",0
@@ -21002,6 +21004,8 @@ rexxmessage
 .ps3m3	dc.b	"PS3MRATE",0
 .loadp	dc.b	"LOADPREFS",0
 .sampt	dc.b	"SAMPLES",0
+.listmodet dc.b "TOGGLEMODE",0
+.favoritet dc.b "FAVORITE",0
  even
 
 
@@ -21260,6 +21264,24 @@ rexxmessage
 .q	not.b	kokolippu(a5)
 	jmp	avaa_ikkuna
 
+.toggleFavorite
+	tst.b	favorites(a5)
+	beq.b	.1
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.1
+	move.l	chosenmodule(a5),d0
+	bsr		getListNode
+	beq.b	.1
+	tst.b	l_divider(a0)
+	bne.b	.1
+	* Toggle favorite status
+	isFavoriteModule a0 
+	bne.b	.remove
+	bsr	addFavoriteModule
+	bra.b	.2
+.remove	bsr	removeFavoriteModule
+.2	bsr	forceRefreshList
+.1	rts
 
 * GET:
 * 	current song
