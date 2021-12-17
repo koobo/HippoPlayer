@@ -16029,7 +16029,8 @@ shn
 .favsOn
 	bsr.w	printbox
 	bra.b	.wasFav
-.noFavs 	dc.b 	"No favorites!",0
+.noFavs 	dc.b 	"No favorites!",10
+		dc.b	"Add with RMB.",0
 .noFavs2	dc.b	"Favorites feature disabled!",0
 		even
 .doHippo
