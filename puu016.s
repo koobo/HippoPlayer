@@ -28112,6 +28112,9 @@ findFavoriteModule
 	* matches so far, loop until zero termination
 	tst.b	(a2)
 	bne.b	.compare
+	* the counterpart must also have a zero here
+	tst.b	(a3)
+	bne.b	.notFound
 * no differences found, it is a match
 	moveq	#1,d0
 	rts
