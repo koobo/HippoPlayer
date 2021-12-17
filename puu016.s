@@ -8059,6 +8059,14 @@ sortModuleList
 .so
 	bsr.w	lockMainWindow
 
+	* Skip info display in these cases
+	cmp.l	#100,modamount(a5)
+	blo.b	.d
+	* Annoying to see the text flashing rapidly
+	* when browsing
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.d
+	
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
 	bsr.b	printbox
