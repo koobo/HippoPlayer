@@ -17597,7 +17597,7 @@ marklineRightMouseButton
 	tst.b	favorites(a5)
 	beq.b	.out
 	* No RMB marking if list is in fav mode
-	* Lets not ro RMB window folding however, seems
+	* Lets not do RMB window folding however, seems
 	* distracting
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.ou
@@ -17622,23 +17622,10 @@ marklineRightMouseButton
 	* item
 	add.l	firstname(a5),d0
 	move.l	d0,d4
-	* Get the actual node into a0
-	bsr.w	getListNode
-	beq.b	.notFound
 
-;	isListDivider  l_filename(a0)
-;	beq.b	.notFile
-	tst.b	l_divider(a0)
-	bne.b	.notFile
-
-	* Toggle favorite status
-	isFavoriteModule a0 
-	bne.b	.wasFavorite
-	bsr.w	addFavoriteModule
-	bra.b	.wasNotFavorite
-.wasFavorite
-	bsr.w	removeFavoriteModule
-.wasNotFavorite
+	* Toggle for node at index d0
+	bsr	toggleFavoriteStatus
+	beq.b	.failed
 
 	move.l	d4,d0
 	* d0 contains the node index
@@ -17657,7 +17644,7 @@ marklineRightMouseButton
 .different
 	rts	
 .notFile
-.notFound
+.failed
 	DPRINT	"Not favoriting this line"
 	rts
 
@@ -21282,17 +21269,9 @@ rexxmessage
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.1
 	move.l	chosenmodule(a5),d0
-	bsr		getListNode
+	bsr		toggleFavoriteStatus
 	beq.b	.1
-	tst.b	l_divider(a0)
-	bne.b	.1
-	* Toggle favorite status
-	isFavoriteModule a0 
-	bne.b	.remove
-	bsr	addFavoriteModule
-	bra.b	.2
-.remove	bsr	removeFavoriteModule
-.2	bsr	forceRefreshList
+	bsr	forceRefreshList
 .1	rts
 
 * GET:
@@ -27984,16 +27963,37 @@ acouscll
 *
 *****************************************************************************
 
+* Toggle favorite status for list node
 * in:
-*  a0 = module list node
-;isFavoriteModule
-;	tst.b	l_favorite(a0)
-;	rts
+*   d0 = node index
+* out:
+*	d0 = 0 on failure, 1 on OK
+toggleFavoriteStatus
+	* Get the actual node into a0
+	bsr.w	getListNode
+	beq.b	.notFound
+
+	tst.b	l_divider(a0)
+	bne.b	.notFile
+
+	* Toggle favorite status
+	isFavoriteModule a0 
+	bne.b	.wasFavorite
+	bsr.b	addFavoriteModule
+	bra.b	.wasNotFavorite
+.wasFavorite
+	bsr.w	removeFavoriteModule
+.wasNotFavorite
+	moveq	#1,d0
+	rts
+.notFound
+.notFile
+	moveq	#0,d0
+	rts
 
 * in:
-*  a0 = module list node
+*   a0 = module list node
 addFavoriteModule
-	;bsr	isFavoriteModule
 	isFavoriteModule a0
 	bne.b .exit
 
@@ -28048,13 +28048,11 @@ addFavoriteModule
  endif
 .noMem
 .exit
-	;bsr exportFavoriteModulesWithMessage
 	rts
 
 * in:
 *  a0 = module list node
 removeFavoriteModule
-	;bsr	isFavoriteModule
 	isFavoriteModule a0
 	beq.b	.exit
 	clr.b	l_favorite(a0)
@@ -28087,7 +28085,6 @@ removeFavoriteModule
  if DEBUG
 	bsr.w	logFavoriteList
  endif
-	;bsr exportFavoriteModulesWithMessage
 	rts
 
 * in:
@@ -29028,14 +29025,17 @@ fileBrowserDir
 	jsr	clearMainWindowWaitPointer
 	rts
 
+* Creates a list node and adds it to the list
 * in:
 *   d6: parent lock
 *   d7: 0 = file, 1 = dir
+*   fileinfoblock: File to add
 * out:
 *   a3: new node
 .doEntry	
 	lea	-200(sp),sp
 
+	* TODO: This is done many times for the same parent lock
 	move.l	d6,d1		* lock
 	move.l	sp,d2		* buf
 	move.l	#160,d3		* len
