@@ -16291,25 +16291,6 @@ doPrintNames
 	move.l	pen_2(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetAPen
-	
- REM
-	tst.b	l_divider(a3)
-	bmi.b	.2
-	* Also format the divider if it is a Parent.
-	pop	a1
-	move.l	a2,a0
-	move.b	#"«",(a2)+
-	move.b	#"«",(a2)+
-	move.b	#"«",(a2)+
-	move.b	#"«",(a2)+
-	move.b	#"«",(a2)+
-	move.b	#" ",(a2)+
-	moveq	#27-5-1,d0	
-.4	move.b	(a1)+,(a2)+
-	dbeq	d0,.4
-	clr.b	(a2)
-	bra.b	.3
- EREM
 .2
 	pop	a1
 .nodi
@@ -28928,7 +28909,8 @@ fileBrowserDir
 	* ... then select first item.
 	moveq	#0,d4
 .goingToParent
-	push	d4
+	* d4 and d5 flow to the end
+	moveq	#0,d5	* initial value
 
 	* Start reading dir
 	* path in d1
@@ -28953,16 +28935,16 @@ fileBrowserDir
 
 	* Empty whatever we had previously
 	bsr.w	freeFileBrowserList
-	
+
 	*********************************************
 	* Construct "Parent"
 	*********************************************
 	
+	* NULL lock means the "SYS:"
 	move.l	d6,d1
 	lore	Dos,ParentDir
-	move.l	d0,d5
-	* NULL lock means the "SYS:"
-	
+	move.l	d0,d7
+		
 	lea	-200(sp),sp
 	move.l	d0,d1		* lock
 	bne.b	.notNull
@@ -28974,7 +28956,7 @@ fileBrowserDir
 	move.l	#200,d3		* len
 	bsr	getNameFromLock
 	push	d0
-	move.l	d5,d1
+	move.l	d7,d1
 	lore 	Dos,UnLock
 	pop	d0
 	tst.l	d0
@@ -28986,16 +28968,16 @@ fileBrowserDir
 	* Create parent entry 
 
 	move.l	sp,a0
-	moveq	#1,d7
+	moveq	#2,d7		* 2 = make parent node
 	bsr.w	createNode
-	bsr	makeParentNode
-.notRoot
 	lea	200(sp),sp
 	tst.l	d0
 	beq.w	.error
-	move.l	a0,a3
-	jsr	addfile
 
+	bsr	makeParentNode
+	* store parent node into d5 for a while
+	move.l	a0,d5
+	
 	*********************************************
 	* Dir scan
 	*********************************************
@@ -29055,7 +29037,7 @@ fileBrowserDir
 .oldKick
 	moveq	#0,d7	* file
 .plzDo
-	bsr.b	.doEntry
+	bsr.w	.doEntry
 	bne.b	.scan	* stop on error
 
 .scanDone
@@ -29068,14 +29050,27 @@ fileBrowserDir
 	beq.b	.noLock
 	lore	Dos,UnLock
 .noLock
-
-	* All done. Sort it.
-	* Does not do force refresh:
+	
+	* All done. Sort it. 
+	* Does not do force refresh.
+	* Destroys every register known to man.
+	pushm	d4/d5
 	jsr	sortModuleList
+	popm	d4/d5
+
+	* Insert parent to the top
+	tst.l	d5
+	beq.b	.noParent
+	bsr.w	getVisibleModuleListHeader
+	* get parent node
+	move.l	d5,a1
+	* Insert a1 into a0
+	lore	Exec,AddHead
+	addq.l	#1,modamount(a5)
+.noParent
 
 	* Figure out if the chosen module.
 	* Eg, returning from "parent" to a correct item.
-	pop	d4
  	move.l	d4,chosenmodule(a5)
 	jsr	forceRefreshList
 	
@@ -29149,28 +29144,29 @@ isFileBrowserParentNode
 * in:
 *   a0 = node
 makeParentNode
-	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
+	push	a0
+	pushpea	fib_FileName+fileinfoblock(a5),d0
+	lea	.form(pc),a0
+	jsr	desmsg
+	pop	a0
 
-	* If filename starts with NULL, put
-	* a parent label there, this means
-	* the parent will take to the root level.
- REM
-	tst.b	l_filename(a0)
-	bne.b	.notRoot
-	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
-	bra.w	.1
-.notRoot
-	* If name contains a NULL, this means
-	* that the remaining path is a "VOLUME:".
-	* Make name point to this.
-	move.l	l_nameaddr(a0),d0
-	beq.b	.2
-	move.l	d0,a1
-	tst.b	(a1)
-	bne.b	.1
-.2	pushpea	l_filename(a0),l_nameaddr(a0)
-.1
- EREM
+	lea	desbuf(a5),a1
+.fill	cmp.b	#" ",(a1)
+	bne.b	.x
+	move.b	#"«",(a1)+
+	bra.b	.fill
+.x	move.b	#" ",-1(a1)
+
+	lea	l_filename(a0),a1
+.end	tst.b	(a1)+
+	bne.b	.end
+	move.l	a1,l_nameaddr(a0)
+	lea	desbuf(a5),a2
+.cp	move.b	(a2)+,(a1)+
+	bne.b	.cp
+	
+;	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
+
 	* magic: indicate parent divider/dir with $7f,
 	* normal divider/dir is $ff.
 	move.b	#$7f,l_divider(a0)
@@ -29182,9 +29178,13 @@ makeParentNode
  endif
 	rts
 
+.form	dc.b	"    %23.23s",0
+ even
+
+
 * in:
 *   a0: path
-*   d7: 0 = file, 1 = dir
+*   d7: 0 = file, 1 = dir, 2 = parent dir
 * out:
 *   a0: new node
 *   d0: 1 on success, 0 on out-of-mem
@@ -29198,6 +29198,10 @@ createNode
 	bne.b	.len
 	sub.l	a2,a0
 	add	#l_size,a0
+	cmp.b	#2,d7
+	bne.b	.notPar
+	add	#30,a0		* additional space for list item name
+.notPar
 	move.l	a0,d0
 	move.l	#MEMF_CLEAR,d1
 	jsr	getmem
@@ -29251,7 +29255,8 @@ popFileBrowserSelectionHistoryItem
 	subq	#1,d0
 	bpl.b	.ok
 	DPRINT	"Browser history underflow"
-	clr		d0
+	moveq	#0,d0
+	rts
 .ok
 	move	d0,fileBrowserSelectionHistoryIndex(a5)
  	lsl	#2,d0
@@ -34064,7 +34069,7 @@ p_hippelcoso
 	lea	hippelcosoroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-.gog	bsr.w	rem_ciaint
+.gog	jsr	rem_ciaint
 	bra.w	vapauta_kanavat
 ;	rts
 
