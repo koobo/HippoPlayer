@@ -16267,13 +16267,16 @@ doPrintNames
 	bsr.w	cut_prefix
 	move.l	a0,a1
 
-	moveq	#0,d7			* clear divider flag
+	moveq	#0,d7		* clear divider flag
+	* copy name into temporary stack buffer
+	lea	-30(sp),sp
+	move.l	sp,a2
 
 	tst.b	l_divider(a3)
 	beq.b	.nodi
 	st	d7	* set flag: divider being handled
 	* Set color for list divider
-	push	a1
+	pushm	a1
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.1
 	move.l	pen_2(a5),d0
@@ -16288,12 +16291,28 @@ doPrintNames
 	move.l	pen_2(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetAPen
+	
+ REM
+	tst.b	l_divider(a3)
+	bmi.b	.2
+	* Also format the divider if it is a Parent.
+	pop	a1
+	move.l	a2,a0
+	move.b	#"«",(a2)+
+	move.b	#"«",(a2)+
+	move.b	#"«",(a2)+
+	move.b	#"«",(a2)+
+	move.b	#"«",(a2)+
+	move.b	#" ",(a2)+
+	moveq	#27-5-1,d0	
+.4	move.b	(a1)+,(a2)+
+	dbeq	d0,.4
+	clr.b	(a2)
+	bra.b	.3
+ EREM
 .2
 	pop	a1
 .nodi
-	* copy name into temporary stack buffer
-	lea	-30(sp),sp
-	move.l	sp,a2
 	move.l	a2,a0
 	moveq	#27-1,d0		* max kirjainten määrä nimessä
 .ff	move.b	(a1)+,(a2)+
@@ -28880,6 +28899,11 @@ fileBrowserDir
 	move.l	a3,a0
 	bsr	isFileBrowserParentNode
 	beq.b	.notParent
+ if DEBUG
+ 	pushpea	l_filename(a3),d0
+ 	move.l	l_nameaddr(a3),d1
+	DPRINT	"->ENTERING parent %s -> %s"
+ endif
 	* When entering parent pop the selection from history
 	bsr	popFileBrowserSelectionHistoryItem
 	move.l	d0,d4
@@ -28959,11 +28983,12 @@ fileBrowserDir
 	bra.w	.error
 
 .ok
-	* Create "parent" entry 
+	* Create parent entry 
+
 	move.l	sp,a0
 	moveq	#1,d7
 	bsr.w	createNode
-	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
+	bsr	makeParentNode
 .notRoot
 	lea	200(sp),sp
 	tst.l	d0
@@ -29077,7 +29102,7 @@ fileBrowserDir
 
 	move.l	a3,a0
 	* Create node using path in a0
-	bsr.b createNode
+	bsr.w createNode
 	beq.b	.error_
 
 	pushm	a3/a4
@@ -29096,7 +29121,7 @@ fileBrowserGoToParent
 	DPRINT	"Go to parent"
 	* Get the 1st node
 	moveq	#0,d0
-	bsr		getListNode
+	bsr	getListNode
 	beq.b	.x
 	move.l	a0,a3	* save this
 	bsr.b	isFileBrowserParentNode
@@ -29112,19 +29137,49 @@ fileBrowserGoToParent
 * out:
 *   d0 = 1 if was a parent node, 0 otherwise
 isFileBrowserParentNode
-	move.l	l_nameaddr(a0),a0
-	lea		parentNodeLabel(pc),a1
-.c	
-	cmpm.b	(a0)+,(a1)+
-	bne.b	.not
-	tst.b	(a1)	* until NULL
-	bne.b	.c
-	tst.b	(a0)	* the other must have NULL also
+	cmp.b	#$7f,l_divider(a0)
 	bne.b	.not
 	moveq	#1,d0	* true
 	rts
 .not
 	moveq	#0,d0	* false
+	rts
+
+* Make node a parent directory node
+* in:
+*   a0 = node
+makeParentNode
+	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
+
+	* If filename starts with NULL, put
+	* a parent label there, this means
+	* the parent will take to the root level.
+ REM
+	tst.b	l_filename(a0)
+	bne.b	.notRoot
+	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
+	bra.w	.1
+.notRoot
+	* If name contains a NULL, this means
+	* that the remaining path is a "VOLUME:".
+	* Make name point to this.
+	move.l	l_nameaddr(a0),d0
+	beq.b	.2
+	move.l	d0,a1
+	tst.b	(a1)
+	bne.b	.1
+.2	pushpea	l_filename(a0),l_nameaddr(a0)
+.1
+ EREM
+	* magic: indicate parent divider/dir with $7f,
+	* normal divider/dir is $ff.
+	move.b	#$7f,l_divider(a0)
+
+ if DEBUG
+	pushpea	l_filename(a0),d0
+	move.l	l_nameaddr(a0),d1
+	DPRINT	"makeParentNode path=%s->`%s`"
+ endif
 	rts
 
 * in:
@@ -29210,7 +29265,6 @@ popFileBrowserSelectionHistoryItem
 parentNodeLabel
 	dc.b 	"  ««««««« Parent »»»»»»»»  "
 		    ;0123456789123456789012345678
-	dc.b	0 * needed for parent comparison
 	even
 
 *******************************************************************************
@@ -34064,7 +34118,7 @@ p_hippelcoso
 	tst.b	ahi_use_nyt(a5)
 	bne.b	.ahien
 
-	bsr.w	rem_ciaint
+	jsr	rem_ciaint
 	pushm	all
 	move.l	hippelcosoroutines(a5),a0
 	jsr	$20+8(a0)
@@ -36285,7 +36339,6 @@ id_gamemusiccreator
 	; high bound
     	cmp     #100,d2
     	bhi.b   .notGmc
-	
  * validate the first pattern, it's apparently
  * a bit difficult to correctly determine the real amount
  * of patterns in a module. Thre should at least be one!
