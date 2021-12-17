@@ -28,6 +28,12 @@ same directory with the HiP binary, too, if you're using kick2.0 or newer.
 NOTE 3: If you get errors where some module is not recognized even 
 if it should be, try removing "S:HippoPlayer.prefs" first.
 
+NOTE 4: Too long didn't read
+- Prefs options: "Button tooltips", "Favorite modules", "Keep list on exit" 
+- Button above the file slider
+- Improved patternscope
+- New music formats
+
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -35,13 +41,16 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 
 # Changes from v2.49 (29.11.2021) to v2.50 (??.??.202?)
 
-## New fixes
+## New fixes:
 - There was a bug in the sample player (which also plays MP3) in AHI
   compatibility. It could hang when playback was stopped.
   This happened especially when using AHI with the Toccata driver.
   Should work now.
+- When the play mode was set to "List repeatedly" and the list was full
+  of dividers (a.k.a. directories), Hippo could get stuck trying to find
+  a module to be played. This should be fixed now.
 
-## New supported music formats
+## New supported music formats:
 - Impulse Tracker, using the "Impulse" deliplayer, written by the
   Delirium team for DeliTracker.
   - PS3M mixing engine and AHI are supported.
@@ -60,7 +69,29 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
   - "Impulse" supports ImpulseTracker formats v1.00 and v2.00. 
     There are other IT formats around, too, which are not supported.
 
+## New features:
+- The list can now be in three modes:
+  - playlist view
+  - favorites view
+  - file browser view (new)
+- Toggle the mode with the button on top of the file slider, or
+  using the keyboard shortcut: [SHIFT+M] 
+- File browser mode:
+  - The list displays contents of directories.
+  - Directories are entered by mouse double click, "Play" button, 
+    or with the return/enter key.
+  - To go to the parent directory, enter the top most item 
+    "Parent", or use the keyboard shortcut: [BACKSPACE].
+  - Files are filtered using the configured match pattern,
+    see "Prefs/Loading/File Match Pattern" (kick2.0+ only).
+  - If you have enabled "Keep list on exit", Hippo will return to the
+    directory where you left off if you were in the file browser mode
+    when exiting.
 
+## New ARexx commands (for HippoPlayerIR support):
+  - TOGGLEMODE: change between list modes
+  - FAVORITE: toggle chosen module favorite status
+  
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------

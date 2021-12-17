@@ -77,8 +77,51 @@ CRASH?
 TODO
 - "list mode toggle" stil visible with RMB+PR
 
+CRASH
+- open hippo
+- DMU.FerryTell was playing in state
+- start to play automatically
+- crashes after DeliInit call
+
+TODO filebrowser
+- Sorting... message: use tick counter to delay it
+- BACKSPACE shortcut for "go to parent"
+- TOGGLE FAVORITE: use common code for arexx, rmb marking
+- 2. Also in file browser. When I double click on some drawer/assign/device it not let me in. I need to use keyboard and press Enter. But this is a bit strange, because I noticed that only on my A1200. On A600 it works perfectly.
+- SORT after browser list, remove "Sorting..." txt, it's annoying
+- Better msg "No favorites! Add with RMB"
++ go to browser, launch module from CLI -> should change mode
++ never disable toggle button
++ in browser mode, loading a module program with "enter" -> normal mode
++ save state?
++ obtainmodulelist
++ waitpointers
++ LMB toggle 
+- do not cause favs save when playing around in browser
++ RANDOM PLAY MODE: next module happens to be a dir -> silly error
+--- toggle list modes, should random table be cleaned?
+--- it is, but the random play marker is NOT?
+--- play next: iterate over DIRS, then loop and loop?
++ Use FILTERING
++ Remember position when going to parent
++ If favorites disabled, show 
+  "No favorites (favorites mode disabled in prefs)"
++ boom:
+-- random mode
+-- filebrowse to "romeo knight"
+-- play around
+-- push eject
++ LOOP:
+-- play mode "list repeatedly"
+-- open browser with only dirs
+-- wait for song end?
++ KEYBOARD: shift+m: toggle list mode
+
+TODO
+- PS3M volume boost: improve it
+
 TODO:
-- eagleplayers using "noteplayers" do not allocate audio
+- eagleplayers using "noteplayers" do not allocate audio, maybe?
 
 FIXED: MP3 BUG:
 - quick note, HiP also seems to freeze/lockup when playing some (but not all) MP3's,
