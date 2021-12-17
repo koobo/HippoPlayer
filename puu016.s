@@ -28930,7 +28930,9 @@ fileBrowserDir
 	* Empty whatever we had previously
 	bsr.w	freeFileBrowserList
 	
-	*** Construct "Parent"
+	*********************************************
+	* Construct "Parent"
+	*********************************************
 	
 	move.l	d6,d1
 	lore	Dos,ParentDir
@@ -28969,7 +28971,35 @@ fileBrowserDir
 	move.l	a0,a3
 	jsr	addfile
 
-	*** Dir scan
+	*********************************************
+	* Dir scan
+	*********************************************
+
+	* Build base path
+	lea	-200(sp),sp
+	move.l	d6,d1		* lock
+	move.l	sp,d2		* buf
+	move.l	#160,d3		* len, leave 40 for filename
+	bsr	getNameFromLock
+	tst.l	d0
+	beq.b	.lockFail
+
+	move.l	sp,a0
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+	subq	#1,a0		* back to NULL
+
+	cmp.b	#":",-1(a0)
+	beq.b	.isSep
+	cmp.b	#"/",-1(a0)
+	beq.b	.isSep
+	move.b	#"/",(a0)+
+.isSep
+	* Path address
+	move.l	sp,a3
+	* Filename part start position
+	move.l	a0,a4
 
 .scan
 	move.l	d6,d1
@@ -28986,8 +29016,7 @@ fileBrowserDir
 	cmp.l	#ST_USERDIR,d0
 	bne.b	.scan
 	moveq	#1,d7	* dir
-	bsr.w	.doEntry
-	bra.b	.scan
+	bra.b	.plzDo
 
 .file
 	tst.b	uusikick(a5)
@@ -29000,12 +29029,16 @@ fileBrowserDir
 	beq.b	.scan
 .oldKick
 	moveq	#0,d7	* file
+.plzDo
 	bsr.b	.doEntry
-	bra.b	.scan
+	bne.b	.scan	* stop on error
 
 .scanDone
 .doUnlock
 .error
+.lockFail
+	lea	200(sp),sp
+
 	move.l	d6,d1
 	beq.b	.noLock
 	lore	Dos,UnLock
@@ -29027,52 +29060,35 @@ fileBrowserDir
 
 * Creates a list node and adds it to the list
 * in:
-*   d6: parent lock
-*   d7: 0 = file, 1 = dir
+*   a3 = Path start address
+*   a4 = Filename start address in the path
+*   d6 = parent lock
+*   d7 = 0 = file, 1 = dir
 *   fileinfoblock: File to add
 * out:
-*   a3: new node
+*   d0: 1 = ok, 0 = error
 .doEntry	
-	lea	-200(sp),sp
-
-	* TODO: This is done many times for the same parent lock
-	move.l	d6,d1		* lock
-	move.l	sp,d2		* buf
-	move.l	#160,d3		* len
-	bsr	getNameFromLock
-	tst.l	d0
-	beq.b	.lockFail
-
-	move.l	sp,a2
-.findEnd
-	tst.b	(a2)+
-	bne.b	.findEnd
-	subq	#1,a2		* back to NULL
-
-	cmp.b	#":",-1(a2)
-	beq.b	.isSep
-	cmp.b	#"/",-1(a2)
-	beq.b	.isSep
-	move.b	#"/",(a2)+
-.isSep
-
-	* copy current path part, from ExNext
+	* copy current filename part, from ExNext
 	lea	fib_FileName+fileinfoblock(a5),a1
+	move.l	a4,a2
 .cp2
 	move.b	(a1)+,(a2)+
 	bne.b	.cp2
 
-	move.l	sp,a0
+	move.l	a3,a0
 	* Create node using path in a0
 	bsr.b createNode
 	beq.b	.error_
 
+	pushm	a3/a4
 	move.l	a0,a3
 	pushpea	l_filename(a3),d0
 	jsr	addfile
-.lockFail
+	popm	a3/a4
+	moveq	#1,d0	* ok
+	rts
 .error_
-	lea	200(sp),sp
+	moveq	#0,d0 	* failboat
 	rts
 
 
