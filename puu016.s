@@ -16401,6 +16401,9 @@ rbutton8b
 rbutton8
 deleteButtonAction
 delete
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq	fileBrowserGoToParent
+
 	skipIfGadgetDisabled gadgetDelButton
 	moveq	#0,d7
 	bsr.b	.elete
@@ -29062,23 +29065,35 @@ fileBrowserDir
 	rts
 
 
-parentNodeLabel
-	dc.b 	"  ««««««« Parent »»»»»»»»  "
-		    ;0123456789123456789012345678
-	dc.b	0 * needed for comparison below
-	even
+fileBrowserGoToParent
+	DPRINT	"Go to parent"
+	* Get the 1st node
+	moveq	#0,d0
+	bsr		getListNode
+	beq.b	.x
+	move.l	a0,a3	* save this
+	bsr.b	isFileBrowserParentNode
+	beq.b	.x
+	* Enter into node a3
+	bsr	fileBrowserDir
+.x
+	rts
 
 * Checks if this node is a "Parent" node
 * in:
 *   a0 = node
+* out:
+*   d0 = 1 if was a parent node, 0 otherwise
 isFileBrowserParentNode
 	move.l	l_nameaddr(a0),a0
 	lea		parentNodeLabel(pc),a1
 .c	
 	cmpm.b	(a0)+,(a1)+
 	bne.b	.not
-	tst.b	(a1)
+	tst.b	(a1)	* until NULL
 	bne.b	.c
+	tst.b	(a0)	* the other must have NULL also
+	bne.b	.not
 	moveq	#1,d0	* true
 	rts
 .not
@@ -29163,6 +29178,13 @@ popFileBrowserSelectionHistoryItem
 	move.l	(a0),d0
 	clr.l	(a0)
  	rts
+
+
+parentNodeLabel
+	dc.b 	"  ««««««« Parent »»»»»»»»  "
+		    ;0123456789123456789012345678
+	dc.b	0 * needed for parent comparison
+	even
 
 *******************************************************************************
 * CreatePort
