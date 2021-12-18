@@ -20368,157 +20368,6 @@ efekti
 * Keskeytykset
 *******
 
-_ciaa	=	$bfe001
-_ciab	=	$bfd000
-
-cianame	dc.b	"ciaa.resource",0
- even
-
-	
-* init with default tempo 
-init_ciaint
-	moveq	#0,d0
-* init with specified tempo in d0. 0 = default
-init_ciaint_withTempo
-	tst.b	ciasaatu(a5)
-	bne.b	.hm
-.c	moveq	#0,d0
-	rts
-
-.hm	clr.b	vbtimeruse(a5)		* k‰ytet‰‰n ciaa
-	tst.b	vbtimer(a5)		* onko vblank k‰ytˆss‰?
-	beq.b	.ci
-	st	vbtimeruse(a5)		* k‰ytet‰‰n vblankia
-	bra.b	.c
-.ci
-	pushm	d1-a6
-
-	move	#28419/2,d1
-	tst	d0
-	beq.b	.default
-	move	d0,d1
-.default
-	move	d1,timerhi(a5)
-
-** CIAA
-
-	lea	_ciaa,a3
-	lea	ciaserver(pc),a4
-	moveq	#0,d6			* timer a
-	move.l	ciabasea(a5),d0
-	beq.b	.noa
-	move.l	d0,a6
-	lea	(a4),a1
-	move.l	d6,d0
-	lob	AddICRVector
-	tst.l	d0
-	beq.b	.gottimer		* Saatiinko?
-
-	lea	(a4),a1
-	moveq	#1,d6			* timer b
-	move.l	d6,d0
-	lob	AddICRVector
-	tst.l	d0
-	beq.b	.gottimer
-.noa
-** CIAB
-
-	lea	_ciab,a3
-	lea	ciaserver(pc),a4
-	moveq	#0,d6			* timer a
-	move.l	ciabaseb(a5),d0
-	beq.b	.nob
-	move.l	d0,a6
-	lea	(a4),a1
-	move.l	d6,d0
-	lob	AddICRVector
-	tst.l	d0
-	beq.b	.gottimer		* Saatiinko?
-
-	lea	(a4),a1
-	moveq	#1,d6			* timer b
-	move.l	d6,d0
-	lob	AddICRVector
-	tst.l	d0
-	beq.b	.gottimer
-.nob
-	popm	d1-a6
-	moveq	#-1,d0			* ERROR! Ei saatu varattua timeri‰.
-	rts
-
-.gottimer
-	move.l	a3,ciaddr(a5)
-	move.l	a6,ciabase(a5)
-	move.b	d6,whichtimer(a5)	* 0: timer a, 1:timer b
-
- if DEBUG
-	move.l a3,d0
-	moveq	#0,d1
-	move.b whichtimer(a5),d1
-	DPRINT	"CIA Timer allocated %lx %ld"
- endif
-	bsr.b	ciaint_setTempo
-
-	lea	ciacra(a3),a2
-	tst.b	d6
-	beq.b	.tima
-	lea	ciacrb(a3),a2
-.tima
-	clr.b	ciasaatu(a5)		* saatiin keskeytys
-
-	move.b	#%00010001,(a2)		* Continuous, force load
-	popm	d1-a6
-	moveq	#0,d0
-	rts
-
-
-* Sets tempo value word from timerhi(a5) into currently
-* active CIA timer.
-* May be called from interrupt.
-ciaint_setTempo
-	pushm	a2/a3/a5
-	lea		var_b,a5
-	move.l 	ciaddr(a5),a3
-	lea	ciatalo(a3),a2
-	tst.b	whichtimer(a5)
-	beq.b	.timera
-	lea	ciatblo(a3),a2
-.timera	
-	move.b	timerlo(a5),(a2)
-	move.b	timerhi(a5),$100(a2)
-; Probaly not good idea to debug print here,
-; can be called from interrupt (in case of DeliCustom).
-	popm	a2/a3/a5
-	rts
-
-ciaint_setTempoFromD0
-	move	d0,timerhi+var_b
-	bra.b	ciaint_setTempo
-
-
-rem_ciaint
-	tst.b	ciasaatu(a5)
-	beq.b	.hm
-	rts
-
-.hm	pushm	all
-	move.l	ciaddr(a5),a3
-
-	moveq	#0,d0
-	move.b	whichtimer(a5),d0	* RemICRVector
-	bne.b	.b
-	move.b	#%00000000,ciacra(a3)
-	bra.b	.a
-.b	move.b	#%00000000,ciacrb(a3)
-.a
-	move.l	ciabase(a5),a6
-	lea	ciaserver(pc),a1
-	lob	RemICRVector
-	st	ciasaatu(a5)		* ei keskeytyst‰!
-	DPRINT	"CIA Timer freed"
-	popm	all
-	rts
-
 
 ******************************************************************************
 *
@@ -27883,81 +27732,6 @@ gadstate
 
 
 
-*******************************************************************************
-* Varaa/vapauttaa ‰‰nikanavat
-*******
-varaa_kanavat
-	tst.b	kanavatvarattu+var_b
-	beq.b	.jee
-	moveq	#0,d0
-	rts
-.jee	
-	movem.l	d1-a6,-(sp)
-	lea	var_b,a5
-
-	move.l	playerbase(a5),a0
-	move	p_liput(a0),d0
-	btst	#pb_ahi,d0
-	beq.b	.naa
-	tst.b	ahi_use_nyt(a5)
-	bne.b	.na
-.naa
-
-	bsr.w	createport
-	bsr.w	createio
-
-	lea	iorequest(a5),a1
-	lea	.adname(pc),a0
-	moveq	#0,d0
-	moveq	#0,d1
-	moveq	#100,d7
-	tst.b	nastyaudio(a5)
-	beq.b	.nona
-	moveq	#127,d7
-.nona	move.b	d7,LN_PRI(a1)
-	lea	.allocmap(pc),a2
-	move.l	a2,ioa_Data(a1)
-* d2 = kanavalistan pituus
-	moveq	#1,d2			* vain yksi vaihtoehto
-	move.l	d2,ioa_Length(a1)
-	move.l	(a5),a6
-	lob	OpenDevice
-	move.l	d0,d5
-	move.l	d5,acou_deviceerr(a5)
-	bne.b	acouscl
-	st	kanavatvarattu(a5)
-	DPRINT	"Audio open"
-.na	movem.l	(sp)+,d1-a6
-	moveq	#0,d0
-	rts
-
-.adname		dc.b	"audio.device",0
-.allocmap	dc.b	$0f
- even
-
-acouscl
-	movem.l	(sp)+,d1-a6
-	bsr.b	vapauta_kanavat
-	moveq	#-1,d0
-	rts
-
-vapauta_kanavat	
-	tst.b	kanavatvarattu+var_b
-	bne.b	.eeo
-	rts
-.eeo	movem.l	d0-a6,-(sp)
-	lea	var_b,a5
-
-	tst.l	acou_deviceerr(a5)
-	bne.b	acouscll
-	lea	iorequest(a5),a1
-	lore	Exec,CloseDevice
-	DPRINT	"Audio close"
-acouscll
-	clr.l	acou_deviceerr(a5)
-	clr.b	kanavatvarattu(a5)
-	movem.l	(sp)+,d0-a6
-	rts
 
 
 
@@ -29590,6 +29364,246 @@ sortStringPtrArray
 	popm	d1/d2/d3/d6/d7/a1/a2
 .x	rts
 
+*******************************************************************************
+*** SECTION *******************************************************************
+*
+* Replay routines
+* Related support functions
+*
+*******************************************************************************
+
+
+
+*******************************************************************************
+* Audio allocation
+*******************************************************************************
+
+varaa_kanavat
+	tst.b	kanavatvarattu+var_b
+	beq.b	.jee
+	moveq	#0,d0
+	rts
+.jee	
+	movem.l	d1-a6,-(sp)
+	lea	var_b,a5
+
+	move.l	playerbase(a5),a0
+	move	p_liput(a0),d0
+	btst	#pb_ahi,d0
+	beq.b	.naa
+	tst.b	ahi_use_nyt(a5)
+	bne.b	.na
+.naa
+
+	bsr.w	createport
+	bsr.w	createio
+
+	lea	iorequest(a5),a1
+	lea	.adname(pc),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#100,d7
+	tst.b	nastyaudio(a5)
+	beq.b	.nona
+	moveq	#127,d7
+.nona	move.b	d7,LN_PRI(a1)
+	lea	.allocmap(pc),a2
+	move.l	a2,ioa_Data(a1)
+* d2 = kanavalistan pituus
+	moveq	#1,d2			* vain yksi vaihtoehto
+	move.l	d2,ioa_Length(a1)
+	move.l	(a5),a6
+	lob	OpenDevice
+	move.l	d0,d5
+	move.l	d5,acou_deviceerr(a5)
+	bne.b	acouscl
+	st	kanavatvarattu(a5)
+	DPRINT	"Audio open"
+.na	movem.l	(sp)+,d1-a6
+	moveq	#0,d0
+	rts
+
+.adname		dc.b	"audio.device",0
+.allocmap	dc.b	$0f
+ even
+
+acouscl
+	movem.l	(sp)+,d1-a6
+	bsr.b	vapauta_kanavat
+	moveq	#-1,d0
+	rts
+
+vapauta_kanavat	
+	tst.b	kanavatvarattu+var_b
+	bne.b	.eeo
+	rts
+.eeo	movem.l	d0-a6,-(sp)
+	lea	var_b,a5
+
+	tst.l	acou_deviceerr(a5)
+	bne.b	acouscll
+	lea	iorequest(a5),a1
+	lore	Exec,CloseDevice
+	DPRINT	"Audio close"
+acouscll
+	clr.l	acou_deviceerr(a5)
+	clr.b	kanavatvarattu(a5)
+	movem.l	(sp)+,d0-a6
+	rts
+
+*******************************************************************************
+* CIA interrupt handling
+*******************************************************************************
+
+_ciaa	=	$bfe001
+_ciab	=	$bfd000
+
+cianame	dc.b	"ciaa.resource",0
+ even
+	
+* init with default tempo 
+init_ciaint
+	moveq	#0,d0
+* init with specified tempo in d0. 0 = default
+init_ciaint_withTempo
+	tst.b	ciasaatu(a5)
+	bne.b	.hm
+.c	moveq	#0,d0
+	rts
+
+.hm	clr.b	vbtimeruse(a5)		* k‰ytet‰‰n ciaa
+	tst.b	vbtimer(a5)		* onko vblank k‰ytˆss‰?
+	beq.b	.ci
+	st	vbtimeruse(a5)		* k‰ytet‰‰n vblankia
+	bra.b	.c
+.ci
+	pushm	d1-a6
+
+	move	#28419/2,d1
+	tst	d0
+	beq.b	.default
+	move	d0,d1
+.default
+	move	d1,timerhi(a5)
+
+** CIAA
+
+	lea	_ciaa,a3
+	lea	ciaserver(pc),a4
+	moveq	#0,d6			* timer a
+	move.l	ciabasea(a5),d0
+	beq.b	.noa
+	move.l	d0,a6
+	lea	(a4),a1
+	move.l	d6,d0
+	lob	AddICRVector
+	tst.l	d0
+	beq.b	.gottimer		* Saatiinko?
+
+	lea	(a4),a1
+	moveq	#1,d6			* timer b
+	move.l	d6,d0
+	lob	AddICRVector
+	tst.l	d0
+	beq.b	.gottimer
+.noa
+** CIAB
+
+	lea	_ciab,a3
+	lea	ciaserver(pc),a4
+	moveq	#0,d6			* timer a
+	move.l	ciabaseb(a5),d0
+	beq.b	.nob
+	move.l	d0,a6
+	lea	(a4),a1
+	move.l	d6,d0
+	lob	AddICRVector
+	tst.l	d0
+	beq.b	.gottimer		* Saatiinko?
+
+	lea	(a4),a1
+	moveq	#1,d6			* timer b
+	move.l	d6,d0
+	lob	AddICRVector
+	tst.l	d0
+	beq.b	.gottimer
+.nob
+	popm	d1-a6
+	moveq	#-1,d0			* ERROR! Ei saatu varattua timeri‰.
+	rts
+
+.gottimer
+	move.l	a3,ciaddr(a5)
+	move.l	a6,ciabase(a5)
+	move.b	d6,whichtimer(a5)	* 0: timer a, 1:timer b
+
+ if DEBUG
+	move.l a3,d0
+	moveq	#0,d1
+	move.b whichtimer(a5),d1
+	DPRINT	"CIA Timer allocated %lx %ld"
+ endif
+	bsr.b	ciaint_setTempo
+
+	lea	ciacra(a3),a2
+	tst.b	d6
+	beq.b	.tima
+	lea	ciacrb(a3),a2
+.tima
+	clr.b	ciasaatu(a5)		* saatiin keskeytys
+
+	move.b	#%00010001,(a2)		* Continuous, force load
+	popm	d1-a6
+	moveq	#0,d0
+	rts
+
+
+* Sets tempo value word from timerhi(a5) into currently
+* active CIA timer.
+* May be called from interrupt.
+ciaint_setTempo
+	pushm	a2/a3/a5
+	lea		var_b,a5
+	move.l 	ciaddr(a5),a3
+	lea	ciatalo(a3),a2
+	tst.b	whichtimer(a5)
+	beq.b	.timera
+	lea	ciatblo(a3),a2
+.timera	
+	move.b	timerlo(a5),(a2)
+	move.b	timerhi(a5),$100(a2)
+; Probaly not good idea to debug print here,
+; can be called from interrupt (in case of DeliCustom).
+	popm	a2/a3/a5
+	rts
+
+ciaint_setTempoFromD0
+	move	d0,timerhi+var_b
+	bra.b	ciaint_setTempo
+
+
+rem_ciaint
+	tst.b	ciasaatu(a5)
+	beq.b	.hm
+	rts
+
+.hm	pushm	all
+	move.l	ciaddr(a5),a3
+
+	moveq	#0,d0
+	move.b	whichtimer(a5),d0	* RemICRVector
+	bne.b	.b
+	move.b	#%00000000,ciacra(a3)
+	bra.b	.a
+.b	move.b	#%00000000,ciacrb(a3)
+.a
+	move.l	ciabase(a5),a6
+	lea	ciaserver(pc),a1
+	lob	RemICRVector
+	st	ciasaatu(a5)		* ei keskeytyst‰!
+	DPRINT	"CIA Timer freed"
+	popm	all
+	rts
 
 *******************************************************************************
 *                                Soittorutiinit
@@ -29598,8 +29612,6 @@ sortStringPtrArray
 **********************************************
 * Varaa muistia ja purkaa soittorutiinin
 * a0 = osoitin paikkaan mihin laitetaan osoite
-
-
 
 allocreplayer2
 	pushm	d1-a6
@@ -34067,7 +34079,7 @@ p_hippelcoso
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -34076,7 +34088,7 @@ p_hippelcoso
 	lea	hippelcosoroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-.gog	jsr	rem_ciaint
+.gog	bsr	rem_ciaint
 	bra.w	vapauta_kanavat
 ;	rts
 
@@ -34130,7 +34142,7 @@ p_hippelcoso
 	tst.b	ahi_use_nyt(a5)
 	bne.b	.ahien
 
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	hippelcosoroutines(a5),a0
 	jsr	$20+8(a0)
@@ -34276,7 +34288,7 @@ p_hippel
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -34296,7 +34308,7 @@ p_hippel
 	jmp	(a0)
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -35233,7 +35245,7 @@ p_aon
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -35242,7 +35254,7 @@ p_aon
 	lea	aonroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bra.w	vapauta_kanavat
 .ok3
 	pushm	d1-a6
@@ -35250,7 +35262,7 @@ p_aon
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2 
-	lea	ciaint_setTempoFromD0,a3
+	lea	ciaint_setTempoFromD0(pc),a3
 	move.l	aonroutines(a5),a4
 	jsr	.OFFSET_INIT(a4)
 	tst.l	d0
@@ -35265,7 +35277,7 @@ p_aon
 	bra.b	.x
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	move.l	aonroutines(a5),a0
 	jsr	.OFFSET_END(a0)
 	bsr.w	clearsound
@@ -35370,11 +35382,11 @@ p_multi	jmp	.s3init(pc)
 	rts
 .ok	bsr.w	vapauta_kanavat
 
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	moveq	#ier_nociaints,d0
 	rts
-.ok2	jsr	rem_ciaint
+.ok2	bsr	rem_ciaint
 
 
 	lea	ps3mroutines(a5),a0
@@ -35965,7 +35977,7 @@ p_pumatracker
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -35975,7 +35987,7 @@ p_pumatracker
 	* allocate into chip mem
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -35992,7 +36004,7 @@ p_pumatracker
 	jmp	$20+4(a0)
 	rts
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -36104,7 +36116,7 @@ p_beathoven
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36153,7 +36165,7 @@ p_beathoven
 	
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.b	.deInit
 	bra.w	vapauta_kanavat
 
@@ -36244,7 +36256,7 @@ p_gamemusiccreator
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36254,7 +36266,7 @@ p_gamemusiccreator
 	* allocate into chip mem
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36276,7 +36288,7 @@ p_gamemusiccreator
 	jmp	.GMC_PLAY(a0)
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	move.l	gamemusiccreatorroutines(a5),a0
 	jsr	.GMC_END(a0)
 	bsr.w	clearsound
@@ -36795,7 +36807,7 @@ p_medley
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36804,7 +36816,7 @@ p_medley
 	lea	medleyroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36812,7 +36824,7 @@ p_medley
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	maxsongs(a5),a2
-	lea	ciaint_setTempoFromD0,a3
+	lea	ciaint_setTempoFromD0(pc),a3
 	move	songnumber(a5),d0 	* song number
 	;moveq	#8,d0
 	addq	#1,d0
@@ -36840,7 +36852,7 @@ p_medley
 	rts
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	medleyroutines(a5),a0
 	jsr	.MEDLEY_END(a0)
@@ -36927,7 +36939,7 @@ p_futureplayer
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36936,7 +36948,7 @@ p_futureplayer
 	lea	futureplayerroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36945,7 +36957,7 @@ p_futureplayer
 	lea	nullsample,a1
 	lea	mainvolume(a5),a2
 	lea	maxsongs(a5),a3
-	lea	ciaint_setTempoFromD0,a4
+	lea	ciaint_setTempoFromD0(pc),a4
 	move	songnumber(a5),d1 	* song number, starts from 0
 	move.l	futureplayerroutines(a5),a6
 	push	a5
@@ -36986,7 +36998,7 @@ p_futureplayer
 	rts
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	futureplayerroutines(a5),a0
 	jsr	.FP_END(a0)
@@ -37061,7 +37073,7 @@ p_bendaglish
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37070,7 +37082,7 @@ p_bendaglish
 	lea	bendaglishroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37105,7 +37117,7 @@ p_bendaglish
 	rts
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	bendaglishroutines(a5),a0
 	jsr	.BD_END(a0)
@@ -37195,7 +37207,7 @@ p_sidmon2
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37204,7 +37216,7 @@ p_sidmon2
 	lea	sidmon2routines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37226,7 +37238,7 @@ p_sidmon2
 	bra.w	clearsound
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -37282,7 +37294,7 @@ p_deltamusic1
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37291,7 +37303,7 @@ p_deltamusic1
 	lea	deltamusic1routines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37313,7 +37325,7 @@ p_deltamusic1
 	bra.w	clearsound
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -37376,7 +37388,7 @@ p_soundfx
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37385,7 +37397,7 @@ p_soundfx
 	lea	soundfxroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37410,7 +37422,7 @@ p_soundfx
 	bra.w	clearsound
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -37465,7 +37477,7 @@ p_gluemon
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37474,7 +37486,7 @@ p_gluemon
 	lea 	gluemonroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37507,7 +37519,7 @@ p_gluemon
 .end
 	move.l	gluemonroutines(a5),a0
 	jsr	.END(a0)
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -37588,7 +37600,7 @@ p_pretracker
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37597,7 +37609,7 @@ p_pretracker
 	lea 	pretrackerroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37712,7 +37724,7 @@ p_pretracker
 
 .end
 	bsr.b .free
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -37785,7 +37797,7 @@ p_custommade
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37794,7 +37806,7 @@ p_custommade
 	lea	custommaderoutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37814,7 +37826,7 @@ p_custommade
 	move	d2,maxsongs(a5)
 
 	move	d3,d0 
-	jsr	ciaint_setTempoFromD0
+	bsr	ciaint_setTempoFromD0
 
 	popm	d1-a6
 	* INIT returns 0 on success
@@ -37841,7 +37853,7 @@ p_custommade
 	rts
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -37927,7 +37939,7 @@ p_davelowe
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37936,7 +37948,7 @@ p_davelowe
 	lea	daveloweroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37990,7 +38002,7 @@ p_davelowe
 	jmp .SONG(a0)
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	daveloweroutines(a5),a0
 	jsr	.END(a0)
@@ -38069,7 +38081,7 @@ p_startrekker
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -38078,7 +38090,7 @@ p_startrekker
 	lea	startrekkerroutines(a5),a0
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -38170,7 +38182,7 @@ p_startrekker
 .fileErr 
 	* No extra data file tound. Proceed as Protracker
 	DPRINT	"Revert to Protracker"
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
@@ -38191,7 +38203,7 @@ p_startrekker
 	bra.w	clearsound
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	move.l	startrekkerroutines(a5),a0
 	jsr	.END(a0)
 	bsr.w	clearsound
@@ -38261,7 +38273,7 @@ p_voodoosupremesynthesizer
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -38270,7 +38282,7 @@ p_voodoosupremesynthesizer
 	lea	voodooroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -38294,7 +38306,7 @@ p_voodoosupremesynthesizer
 	moveq	#ier_nomem,d0
 	rts
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	move.l	voodooroutines(a5),a0
 	jsr	.END(a0)
 	bsr.w	clearsound
@@ -38567,7 +38579,7 @@ p_instereo1
 	move.l 	d7,d1
 	move.l	sp,d2
 	moveq	#100,d3 
-	jsr	getNameFromLock
+	bsr	getNameFromLock
 	move.l  d0,d6 
 
 	move.l	d7,d1
@@ -41507,7 +41519,7 @@ loadDeliPlayer
 	move.l 	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3 
-	jsr	getNameFromLock
+	bsr	getNameFromLock
 	beq.b 	.err2
 
  if DEBUG
@@ -41536,7 +41548,7 @@ findDeliPlayer
 	move.l	sp,a0
 	* initialize to zero, important
 	clr.l	(a0) 
-	jsr	allocreplayer
+	bsr	allocreplayer
 	move.l	(sp),a1
 	lea	4(sp),sp
 	tst.l	d0
@@ -41734,7 +41746,7 @@ deliInit
 	
  if DEBUG
  	move.l	#DTP_PlayerName,d0 
-	jsr	deliGetTag 
+	bsr	deliGetTag 
 	beq.b	.noPlr
 	DPRINT	"Name: %s"
 .noPlr
@@ -41916,7 +41928,7 @@ deliInit
  
 	* interrupt routine provided, set up an interrupt
 	move	dtg_Timer(a4),d0
-	jsr	init_ciaint_withTempo
+	bsr	init_ciaint_withTempo
 	beq.b	.gotCia
 	DPRINT	"cia error"
 
@@ -42169,7 +42181,7 @@ deliEnd
 	
 	move.l	deliStoredInterrupt(a5),d0
 	beq.b	.noIntUsed
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 .noIntUsed
 
 	move.l	#DTP_StopInt,d0
@@ -42468,7 +42480,7 @@ _deliDataSize	rs.b	0
 	* May be called from interrupt, no logging allowed
 	push	d0
 	move	dtg_Timer(a5),d0
-	jsr     ciaint_setTempoFromD0
+	bsr     ciaint_setTempoFromD0
 	pop 	d0 
 	rts
 
@@ -42523,7 +42535,7 @@ deliAllocAudio
 	pushm	d1-a6
 	lea	var_b,a5
 	* returns d0=0 on success:
-	jsr	varaa_kanavat 
+	bsr	varaa_kanavat 
 	popm	d1-a6
 	rts
 
@@ -42531,7 +42543,7 @@ deliFreeAudio
 	DPRINT	"deliAudioFree"
 	pushm	d1-a6
 	lea	var_b,a5
-	jsr	vapauta_kanavat
+	bsr	vapauta_kanavat
 	popm	d1-a6
 	rts
 
@@ -42777,7 +42789,7 @@ funcENPP_DMAMask
 	or		#$8000,d1
 .set2
 	move	d1,$dff096
-	jsr	dmawait
+	bsr	dmawait
 	pop 	d1
 	rts
 
