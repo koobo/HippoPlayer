@@ -1316,10 +1316,15 @@ l_size		rs.b	0
 * Soittomoodit
 *
 
+* Repeat list 
 pm_repeat	=	1
+* Play list once
 pm_through	=	2
+* Repeat module
 pm_repeatmodule	=	3
+* Play module once
 pm_module	=	4
+* Random play 
 pm_random	=	5
 pm_max		=	5
 
@@ -6674,7 +6679,7 @@ signalreceived
 	* stop instead of trying to find something to play.
 	bsr	calculateDividersInList
 	cmp.l	modamount(a5),d0
-	beq.w	ejectButtonAction
+	beq.b	.err
 	bra.w	.repea
 
 * Shuffle-soitto
@@ -8913,6 +8918,7 @@ ejectButtonAction
 rbutton4
 	moveq	#0,d0		* fade volume: allowed
 rbutton4a
+	DPRINT	"Eject button action"
 	clr.b	kelausnappi(a5)
 
 	tst.l	playingmodule(a5)
@@ -8931,9 +8937,10 @@ rbutton4a
 	bsr.w	halt
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	lore    Exec,Enable
+	move.l	playerbase(a5),d0
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
-
+	jsr	p_end(a0)
+	
 	bsr.w	freemodule
 	move	(sp)+,mainvolume(a5)
 	clr.b	movenode(a5)
