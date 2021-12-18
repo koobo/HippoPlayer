@@ -35378,6 +35378,7 @@ p_multi	jmp	.s3init(pc)
 	jmp id_ps3m(pc)
 	jmp	.author(pc)
 	dc.w pt_multi
+.flags
  dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
 	dc.b	"PS3M",0
 .itPath
@@ -35415,7 +35416,6 @@ p_multi	jmp	.s3init(pc)
 	rts
 .ok2	bsr	rem_ciaint
 
-
 	lea	ps3mroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
@@ -35423,6 +35423,11 @@ p_multi	jmp	.s3init(pc)
 
 .ok3	
 	pushm	d1-a6
+
+	* IT deliplayer will clear the "poslen" flag, so make sure
+	* it is available for other formats.
+	lea	.flags(pc),a0
+	or	#pf_poslen,(a0)
 
 	move.l	moduleaddress(a5),a0
 	bsr.W 	id_it
