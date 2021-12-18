@@ -16279,7 +16279,7 @@ doPrintNames
 	pushm	a1
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.1
-	move.l	pen_2(a5),d0
+.3	move.l	pen_2(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
 	move.l	pen_3(a5),d0
@@ -16288,6 +16288,10 @@ doPrintNames
 	bra.b	.2
 .1
 	* Filebrowser divider color
+	* Special case for parent node:
+	tst.b	l_divider(a3)
+	bpl.b	.3
+	* Filebrowser directory:
 	move.l	pen_2(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetAPen
