@@ -28542,8 +28542,7 @@ importSavedStateModulesFromDisk
 	move.l	d6,a0
 	jsr	freemem
 
-	tst.l	d0
-	beq.b	.none
+	* Can be zero
 	move.l	d0,modamount(a5)
 	
 	pushpea	savedStateModuleFileName(pc),d1
