@@ -7823,8 +7823,9 @@ nappuloita
 
 .scopetoggle
 	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-	beq.w	start_quad		
+	beq.b	.startQ		
 	jmp	sulje_quad		* suljetaan jos oli auki
+.startQ	jmp	start_quad
 
 .pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikan‰pp‰imet
 .pm0	st	hippoonbox(a5)
@@ -8460,7 +8461,7 @@ moveButtonAction
 
 	cmp.l	#2,modamount(a5)
 	blo.b	.qq
-	bsr.b	getcurrent
+	bsr.w	getcurrent
 	beq.b	.q
 	move.l	a3,nodetomove(a5)
  if DEBUG
@@ -8480,31 +8481,6 @@ moveButtonAction
 .qq	rts
 
 
-* Gets the chosen module list element 
-* Out:
-*    d0 = 0 if not found
-*    d0 = 1 if data available
-*    a3 = list node pointer
-*** Chosenmodule node A3:een
-getcurrent
-	tst.l	modamount(a5)
-	beq.b	.q
-	move.l	chosenmodule(a5),d0
-	bpl.b	getcurrent2
-.q	moveq	#0,d0
-	rts
-
-* Gets the chosen module list element into a3
-* In:
-*   d0 = Module index
-* Out:
-*    d0 = 0 if not found
-*    d0 = 1 if data available
-*    a3 = list node pointer
-getcurrent2
-	bsr.w getListNode
-	move.l	a0,a3
-	rts
 
 * etsit‰‰n listasta vastaava kohta
 ;	DPRINT  "getcurrent obtain list"
@@ -8535,7 +8511,7 @@ getcurrent2
 *******
 
 comment_file
-	bsr.b	getcurrent
+	bsr.w	getcurrent
 	beq.b	.x
 	move.l	a3,a4
 
@@ -12200,6 +12176,15 @@ drawtexture
 	rts
 
 .texture dc	$5555,$aaaa
+
+
+*******************************************************************************
+*** SECTION *******************************************************************
+*
+* Preferences section
+* - Prefs UI
+*
+*******************************************************************************
 
 
 *******************************************************************************
@@ -17652,9 +17637,41 @@ marklineRightMouseButton
 	DPRINT	"Not favoriting this line"
 	rts
 
-*********************************
+
+*******************************************************************************
+*** SECTION *******************************************************************
+*
 * List node utilities
-********************************
+*
+*******************************************************************************
+
+
+* Gets the chosen module list element 
+* Out:
+*    d0 = 0 if not found
+*    d0 = 1 if data available
+*    a3 = list node pointer
+*** Chosenmodule node A3:een
+getcurrent
+	tst.l	modamount(a5)
+	beq.b	.q
+	move.l	chosenmodule(a5),d0
+	bpl.b	getcurrent2
+.q	moveq	#0,d0
+	rts
+
+* Gets the chosen module list element into a3
+* In:
+*   d0 = Module index
+* Out:
+*    d0 = 0 if not found
+*    d0 = 1 if data available
+*    a3 = list node pointer
+getcurrent2
+	bsr.b getListNode
+	move.l	a0,a3
+	rts
+
 
 * Gets the list header that corresponds to the current list mode,
 * either normal, or favorites list. 
@@ -17822,11 +17839,12 @@ clearCachedNode
 	clr.l	cachedNode(a5)	
 	rts
 
-
-
-*********************************
+*******************************************************************************
+*** SECTION *******************************************************************
+*
 * Tooltip popup
-********************************
+*
+*******************************************************************************
 
 * in: 
 *   a0=structure of
@@ -18034,12 +18052,14 @@ loadkeyfile
 
 
 
-
 *******************************************************************************
+*** SECTION *******************************************************************
 *
-* Module info
+* Info window
+* - module info
+* - about info
 *
-*******
+*******************************************************************************
 
 sulje_foo
 	cmp	#33,info_prosessi(a5)
@@ -20364,15 +20384,20 @@ efekti
 
   endc
   
+
+*******************************************************************************
+*** SECTION *******************************************************************
+*
+* Vertical blanking interrupt
+* CIA interrupt
+* Software interrupt
+*
+*******************************************************************************
+
 *******************************************************************************
 * Keskeytykset
 *******
 
-
-******************************************************************************
-*
-* Vertical blanking interrupt
-*
 
 intserver
 	dc.l	0,0
@@ -20609,6 +20634,7 @@ dummyserver_NOTUSED
 * CIA timer interrupt
 * Software interrupt
 *
+******************************************************************************
 
 ciaserver
 	dc.l	0,0
@@ -20674,60 +20700,14 @@ softint
 	rts
 
 
-*******************************************************************************
-* Scoperutiinit
-*******
-
-* K‰ynnistys
-
-start_quad
-	st	scopeflag(a5)
-start_quad2
-;	jmp	quad_code
-
-	move.l	a6,-(sp)
-	move.l	_DosBase(a5),a6
-	pushpea	.prn(pc),d1
-	moveq	#0,d2			* pri
-	move.l	#quad_segment,d3
-	lsr.l	#2,d3
-	move.l	#3000,d4
-	lob	CreateProc
-	tst.l	d0
-	beq.b	.error
-	addq	#1,quad_prosessi(a5)
-
-	bsr.w	updateprefs
-
-.error	move.l	(sp)+,a6
-	rts
-
-.prn	dc.b	"HiP-Scope",0
- even
- 
-* Sammutus
-
-sulje_quad
-	clr.b	scopeflag(a5)
-sulje_quad2
-	push	a6
-	tst	quad_prosessi(a5)
-	beq.b	.tt	
-
-	move.l	quad_task(a5),a1
-	moveq	#0,d0
-	lore	Exec,SetTaskPri
-	st	tapa_quad(a5)		* lippu: poistu!
-.t	tst	quad_prosessi(a5)	* odotellaan
-	beq.b	.tt
-	jsr	dela
-	bra.b	.t
-.tt	clr.b	tapa_quad(a5)
-	pop	a6
-	rts
 
 
-
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* ARexx support
+*
+********************************************************************************
 
 ******************************************************************************
 *
@@ -21385,6 +21365,59 @@ str2msg	pushm	d0/d1/a0/a1/a6
 ;	jsr	_LVOReplyMsg(a6)
 
 
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* Scopes
+*
+********************************************************************************
+
+* K‰ynnistys
+start_quad
+	st	scopeflag(a5)
+start_quad2
+;	jmp	quad_code
+
+	move.l	a6,-(sp)
+	move.l	_DosBase(a5),a6
+	pushpea	.prn(pc),d1
+	moveq	#0,d2			* pri
+	move.l	#quad_segment,d3
+	lsr.l	#2,d3
+	move.l	#3000,d4
+	lob	CreateProc
+	tst.l	d0
+	beq.b	.error
+	addq	#1,quad_prosessi(a5)
+
+	bsr.w	updateprefs
+
+.error	move.l	(sp)+,a6
+	rts
+
+.prn	dc.b	"HiP-Scope",0
+ even
+ 
+* Sammutus
+
+sulje_quad
+	clr.b	scopeflag(a5)
+sulje_quad2
+	push	a6
+	tst	quad_prosessi(a5)
+	beq.b	.tt	
+
+	move.l	quad_task(a5),a1
+	moveq	#0,d0
+	lore	Exec,SetTaskPri
+	st	tapa_quad(a5)		* lippu: poistu!
+.t	tst	quad_prosessi(a5)	* odotellaan
+	beq.b	.tt
+	jsr	dela
+	bra.b	.t
+.tt	clr.b	tapa_quad(a5)
+	pop	a6
+	rts
 
 
 *******************************************************************************
@@ -24841,7 +24874,12 @@ noteScroller2
 .pos	dc.b	"00"
  even
 
- ******************************************************************************
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* Module loading
+*
+********************************************************************************
 
 *******
 * Module loading
@@ -27735,9 +27773,10 @@ gadstate
 
 
 
-*****************************************************************************
+********************************************************************************
+*** SECTION ********************************************************************
 *
-* Favorite module list handling
+* Favorite list handling
 *
 *****************************************************************************
 
@@ -28099,9 +28138,10 @@ handleFavoriteModuleConfigChange
 	popm	all 
 	rts
 
-******************************************************************************
+********************************************************************************
+*** SECTION ********************************************************************
 *
-* Favorite list ui operations
+* List mode operations
 *
 ******************************************************************************
 
@@ -28284,11 +28324,12 @@ engageListMode
 	jmp	refreshGadgetInA0
 	
 
-
-*******************************************************************************
+********************************************************************************
+*** SECTION ********************************************************************
 *
 * Save state operations
 * - module list
+* - list mode
 * - chosen module
 * - play status
 *
@@ -28512,7 +28553,8 @@ savedStateModuleFileName
 	dc.b	"S:HippoSavedList.prg",0
  even
 
-*******************************************************************************
+********************************************************************************
+*** SECTION ********************************************************************
 *
 * File browser mode operations
 *
@@ -31145,32 +31187,10 @@ sid_addVolumePatch
 .q
 	rts
 
-.vol1patch	jsr	.vol1
-.vol2patch	jsr	.vol2 
-.vol3patch	jsr	.vol3
-
-.vol1 
-	push	d0 
-	mulu	var_b+mainvolume,d0
-	lsr	#6,d0 
-	move	d0,$dff0a8
-	pop d0 
-	rts
-.vol2 
-	push	d0 
-	mulu	var_b+mainvolume,d0
-	lsr	#6,d0 
-	move	d0,$dff0b8
-	pop d0 
-	rts
-.vol3 
-	push	d0 
-	mulu	var_b+mainvolume,d0
-	lsr	#6,d0 
-	move	d0,$dff0c8
-	pop d0 
-	rts
-
+; PreTracker patch is usable here
+.vol1patch	jsr	p_pretracker\.setVol1
+.vol2patch	jsr	p_pretracker\.setVol2
+.vol3patch	jsr	p_pretracker\.setVol3
 
 sid_remVolumePatch
 	move.l	_SIDBase(a5),a0
@@ -32121,7 +32141,7 @@ p_sonicarranger
 	dc.w pt_sonicarranger				* type
 	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song
 	dc.b	"Sonic Arranger",0
-.a 	dc.b	"Carlsten Schlote, Branko Mikic, Carsten Herbst"
+.a 	dc.b	"Carsten Schlote, Branko Mikic, Carsten Herbst"
  even
 
 .author
@@ -39453,6 +39473,7 @@ p_tcbtracker
 
 ******************************************************************************
 * Mark Cooksey
+* NOT USED 
 ******************************************************************************
 
  REM **************************
@@ -40355,7 +40376,10 @@ p_quartetst
 
 ******************************************************************************
 * Core Design
+* NOT USED
 ******************************************************************************
+ 
+ REM **********************************
 
 p_coredesign
 	jmp	.init(pc)
@@ -40446,6 +40470,8 @@ p_coredesign
 ;	moveq	#0,D0
 ;Fault
 ;	rts
+
+ EREM **********************************
 
 
 ******************************************************************************
@@ -41212,7 +41238,7 @@ p_steveturner
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
 	dc.b	"Steve Turner        [EP]",0
 	        
-.path dc.b "steve tuner",0
+.path dc.b "steve turner",0
  even
 
 .init
@@ -41321,9 +41347,12 @@ p_specialfx
 	MOVEQ	#0,D0
 .lbC0003C6	RTS
 
-******************************************************************************
-* Delisupport
-* Eaglesupport
+*******************************************************************************
+*** SECTION *******************************************************************
+*
+* EaglePlayer plugin support 
+* Keywords: Delisupport, Eaglesupport
+*
 ******************************************************************************
 
 
@@ -42771,7 +42800,7 @@ funcENPP_SetTimer
 	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
 	;DPRINT "ENPP_WaitAudioDMA"
-	jmp dmawait
+	bra dmawait
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange"
 	bra.w	deliModuleChange
