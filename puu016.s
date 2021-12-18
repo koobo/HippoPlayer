@@ -28971,7 +28971,7 @@ fileBrowserDir
 	* Create parent entry 
 
 	move.l	sp,a0
-	moveq	#2,d7		* 2 = make parent node
+	moveq	#createNode\.PARENT,d7	 * make parent node
 	bsr.w	createNode
 	lea	200(sp),sp
 	tst.l	d0
@@ -29025,7 +29025,7 @@ fileBrowserDir
 	beq.b	.file
 	cmp.l	#ST_USERDIR,d0
 	bne.b	.scan
-	moveq	#1,d7	* dir
+	moveq	#createNode\.DIR,d7	* dir
 	bra.b	.plzDo
 
 .file
@@ -29038,7 +29038,7 @@ fileBrowserDir
 	tst.l	d0
 	beq.b	.scan
 .oldKick
-	moveq	#0,d7	* file
+	moveq	#createNode\.FILE,d7	* file
 .plzDo
 	bsr.w	.doEntry
 	bne.b	.scan	* stop on error
@@ -29192,6 +29192,10 @@ makeParentNode
 *   a0: new node
 *   d0: 1 on success, 0 on out-of-mem
 createNode
+.FILE = 0
+.DIR = 1
+.PARENT = 2
+
 	move.l	a0,d1
 	move.l	d7,d0
 
@@ -29201,7 +29205,7 @@ createNode
 	bne.b	.len
 	sub.l	a2,a0
 	add	#l_size,a0
-	cmp.b	#2,d7
+	cmp.b	#.PARENT,d7
 	bne.b	.notPar
 	add	#30,a0		* additional space for list item name
 .notPar
