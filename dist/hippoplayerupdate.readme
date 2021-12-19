@@ -53,35 +53,38 @@ NOTE 4: Too long didn't read
 ## New supported music formats:
 - Impulse Tracker, using the "Impulse" deliplayer, written by the
   Delirium team for DeliTracker.
-  - PS3M mixing engine and AHI are supported.
+  - Impulse plays IT formats v1.00 and v2.00. There are other formats 
+    around, too, which are not supported.
+  - Impulse supports pattern skip forwards and back, along with song
+    end detection. Song position display is not supported.
   - 32 channels are in use in all modules. This is due to the way 
-    IT modules work: channels are used dynamically according to 
+    IT modules work, channels are used dynamically according to 
     whatever is needed at the moment.
-  - Pattern skip forward and back is supported, along with song
-    end detection. Stereo scope works (with PS3M).
-  - Channel panning is not supported, each mixed channel has a fixed
+  - Modules can be played using the PS3M mixing engine or AHI.
+  - Stereo scope works with PS3M.
+  - Channel panning is not supported, each channel has a fixed
     stereo position.
-  - The deliplayer "Impulse" is not included in the HippoPlayer.group file, 
+  - Impulse is not included in the HippoPlayer.group file, 
     so Hippo will look for it in the following places:
     "PROGDIR:", "PROGDIR:eagleplayers", "eagleplayer2:eagleplayers".
     Here "PROGDIR:" is the directory where the Hippo binary is installed.
-  - "Impulse" can be found in the aminet DeliTracker archive.
-  - "Impulse" supports ImpulseTracker formats v1.00 and v2.00. 
-    There are other IT formats around, too, which are not supported.
+  - Impulse can be found in the Aminet DeliTracker archive.
 
 ## New features:
-- The list can now be in three modes:
-  - playlist view
-  - favorites view
-  - file browser view (new)
+- File browser. The list can now be in three modes:
+  - Playlist view
+  - Favorites view
+  - File browser view (new)
 - Toggle the mode with the button on top of the file slider, or
-  using the keyboard shortcut: [SHIFT+M] 
-- File browser mode:
-  - The list displays contents of directories.
+  using the keyboard shortcut [SHIFT+M] 
+- File browser:
+  - In this mode the list displays contents of directories.
   - Directories are entered by mouse double click, "Play" button, 
-    or with the return/enter key.
-  - To go to the parent directory, enter the top most item 
-    "Parent", or use the keyboard shortcut: [BACKSPACE].
+    or with the return/enter key. (Note that double click can
+    be enabled/disabled in Prefs.)
+  - The topmost list item shows the name of the displayed directory.
+    Activating it goes back to the parent directory.
+    Keyboard shortcut for navigating to parent: [BACKSPACE].
   - Files are filtered using the configured match pattern,
     see "Prefs/Loading/File Match Pattern" (kick2.0+ only).
   - If you have enabled "Keep list on exit", Hippo will return to the
