@@ -6754,11 +6754,24 @@ satunnaismodi
 .reet	rts
 
 
+* Clear random table and do force refresh of list
+* if in random mode.
 clear_random
+	bsr.b	clearRandomTable
+	cmp.b	#pm_random,playmode(a5)
+	bne.b	.x
+	* Request refresh to clear out random play indicators
+	st	hippoonbox(a5)
 	pushm	all
-	
-** taulukko tyhjäks
-	DPRINT  "clear_random"
+	bsr.w	shownames
+	popm	all
+.x
+	rts
+
+* Clear random table
+clearRandomTable
+	pushm	d0/a0
+	DPRINT  "clearRandomTable"
 	bsr.w	 obtainModuleList
 	clr.l	randomValueMask(a5)
 	tst.l	randomtable(a5)
@@ -6768,14 +6781,8 @@ clear_random
 	move.l	randomtable(a5),d0
 	clr.l	randomtable(a5)
 .noList
-	cmp.b	#pm_random,playmode(a5)
-	bne.b	.x
-	* Request refresh to clear out random play indicators
-	st	hippoonbox(a5)
-	bsr.w	shownames
-.x
 	bsr.w	releaseModuleList
-	popm	all
+	popm	d0/a0
 	rts
 
 * Test if index given in d0 is taken in the random table
@@ -6810,6 +6817,8 @@ getRandomValueTableEntry
 	* the amount is a very few bytes.
 	push	d0
 	move.l	modamount(a5),d0 
+	DPRINT	"New randomtable for %ld"
+
 	lsr.l	#3,d0
 	addq.l	#1,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -28218,13 +28227,12 @@ engageListMode
 	* Remove previous list selection
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)		
 
-	jsr	obtainModuleList
+	jsr	obtainModuleList	
+	jsr	clearRandomTable
 	
-	jsr	clear_random
 	bsr.w	clearCachedNode
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
-
 	* set d1 to FF if list is in normal mode
 	cmp.b	#LISTMODE_NORMAL,listMode(a5)
 	seq 	d1
