@@ -10390,9 +10390,10 @@ it_music
 		st	mLoop(a6)
 		bra.b	.yesLoop
 .noLoop
-.skip5:
 		clr.b	mLoop(a6)
 .yesLoop
+
+.skip5:
 
 		clr.b	nch_Changed(a0)
 		addq	#1,d1
