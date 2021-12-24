@@ -35446,6 +35446,13 @@ p_multi	jmp	.s3init(pc)
 	bne.b	.notIt
 	DPRINT "IT detected"
 
+	move.l	(a5),a0
+	btst	#AFB_68020,AttnFlags+1(a0)
+	bne.b	.cpuOk
+	moveq	#ier_hardware,d0
+	bra.b	.itError
+.cpuOk
+
 	moveq	#$62,d0	* version
 	lea	.itPath(pc),a0 
 	* Distract loader so that it will not try to
@@ -35453,8 +35460,13 @@ p_multi	jmp	.s3init(pc)
 	* try eagleplayer loading from filesystem.
 	move	playertype(a5),-(sp)
 	move	#-1,playertype(a5)
-	bsr	deliLoadAndInit
+	jsr	setMainWindowWaitPointer
+	bsr.w	loadDeliPlayer 
 	move	(sp)+,playertype(a5)
+	tst.l 	d0
+	bmi.w 	.itError
+	bsr.w	deliInit
+	jsr 	clearMainWindowWaitPointer
 	tst.l	d0
 	bne.w	.itError
 .notIt
@@ -41974,7 +41986,7 @@ deliInit
 	beq.b	.skip
 	* If running PS3M, do not start interrupts.
 	* PS3M will handle it.
-	cmp		#pt_multi,playertype(a5)
+	cmp	#pt_multi,playertype(a5)
 	beq.b 	.skip
 
 	DPRINT	"using hippo interrupt"
@@ -43769,36 +43781,73 @@ deliShowNoteStruct
 	
 	moveq	#0,d0
 	btst	#NSTB_Period,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_Period: %lx"
 
 	btst	#NSTB_ExtPeriod,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_ExtPeriod: %lx"
 
 	btst	#NSTB_NTSCTiming,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_NTSCTiming: %lx"
 
 	btst	#NSTB_EvenLength,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_EvenLength %lx"
 
 	btst	#NSTB_AllRepeats,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_AllRepeats %lx"
 
 	btst	#NSTB_Reverse,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_Reverse %lx"
 
 	btst	#NSTB_Signed,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_Signed %lx"
 
 	btst	#NSTB_Unsigned,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_Unsigned %lx"
+
+	btst	#NSTB_Ulaw,d1
+	sne	d0
+	DPRINT	"NSTB_Ulaw %lx"
+
+	btst	#NSTB_Alaw,d1
+	sne	d0
+	DPRINT	"NSTB_Alaw %lx"
+
+	btst	#NSTB_Float,d1
+	sne	d0
+	DPRINT	"NSTB_Float %lx"
+
+	btst	#NSTB_7Bit,d1
+	sne	d0
+	DPRINT	"NSTB_7Bit %lx"
+
+	btst	#NSTB_8Bit,d1
+	sne	d0
+	DPRINT	"NSTB_8Bit %lx"
+
+	btst	#NSTB_16Bit,d1
+	sne	d0
+	DPRINT	"NSTB_16Bit %lx"
+
+	btst	#NSTB_24Bit,d1
+	sne	d0
+	DPRINT	"NSTB_24Bit %lx"
+
+	btst	#NSTB_32Bit,d1
+	sne	d0
+	DPRINT	"NSTB_32Bit %lx"
+
+	btst	#NSTB_64Bit,d1
+	sne	d0
+	DPRINT	"NSTB_64Bit %lx"
+
 .x
 	rts
 
