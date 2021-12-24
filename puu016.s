@@ -1980,7 +1980,8 @@ about_tt
  dc.b 0
 
 
-scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
+;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
+scrtit	dc.b	"HippoPlayer by K-P Koljonen in 1994-2000,2021",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -35450,7 +35451,7 @@ p_multi	jmp	.s3init(pc)
 	btst	#AFB_68020,AttnFlags+1(a0)
 	bne.b	.cpuOk
 	moveq	#ier_hardware,d0
-	bra.b	.itError
+	bra.w	.itError
 .cpuOk
 
 	moveq	#$62,d0	* version
