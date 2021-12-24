@@ -8872,13 +8872,14 @@ mt_trenoc
 
  
 mt_setdma
-	move	numchans,d7
+	move	numchans(pc),d7
 	subq	#1,d7
-	lea	cha0,a5
+	lea	cha0(pc),a5
 	lea	mt_chan1temp(pc),a6
-.loo	move	d7,-(sp)
+.loo	
+	;move	d7,-(sp)
 	bsr.w	setreg
-	move	(sp)+,d7
+	;move	(sp)+,d7
 	lea	mChanBlock_SIZE(a5),a5
 	lea	44(a6),a6			; Size of MT_chanxtemp
 	dbf	d7,.loo
@@ -10145,6 +10146,7 @@ it_setTimer
 it_music
 	pushm	a5/a6
  ifeq TEST
+
 	move.l	#DTP_Interrupt,d0  
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
@@ -10170,242 +10172,115 @@ it_music
 	popm	a5/a6
 	rts
 	
+
+
+
 * IT specific noteplayer
-.notePlayer:
-;	move	#$800,$dff180	
+.notePlayer
 	move.l	#DTP_NoteStruct,d0  
 	bsr.w	deliGetTag
 	* This is an address to the struct
 	move.l	d0,a0
 	move.l	(a0),a4
-	move.l	a4,a5
+	move.l	nst_Flags(a4),d7	* Flags
+	moveq	#32-1,d6
+	move.l	(a4),d0	* get 1st channel data
+	beq.w	.x
+	move.l	d0,a0
+	lea	cha0(pc),a6
+.chLoop
 
-		move.l	nst_Flags(a4),d7	;Flags
+	;;;;;;;;;;;;;;;;;;;;;; Sample Start
+
+	moveq	#2,d0	* Sample
+	and.b	11(a0),d0
+	beq.b	.noSample
+
+	* Set sample address
+	move.l	nch_SampleStart(a0),mStart(a6)
+	* Set sample length
+	move.l	nch_SampleLength(a0),mLength(a6)
+	clr.l	mFPos(a6)
+
+	* Set on/off status
+	st	mOnOff(a6) * stop audio
+	tst.l	mStart(a6)
+	beq.b	.noSample
+	cmp.l	#2,mLength(a6)
+	bls.b	.noSample
+	clr.b	mOnOff(a6) * start audio
+.noSample
+
+	;;;;;;;;;;;;;;;;;;;;;; Sample Repeat
+	
+	moveq	#4,d0	* Repeat
+	and.b	11(a0),d0
+	beq.b	.noRepeat
+
+	* Set repeat address
+	move.l	nch_RepeatStart(a0),mLStart(a6)
+	* Set sample length
+	move.l	nch_RepeatLength(a0),mLLength(a6)
+	
+		clr.l	mFPos(a6)
+	* Set loop status
+	clr.b	mLoop(a6)
+	tst.l	mLStart(a6)
+	beq.b	.noRepeat
+	cmp.l	#2,mLLength(a6)
+	bls.b	.noRepeat
+	st	mLoop(a6)
+.noRepeat
+
+	;;;;;;;;;;;;;;;;;;;;;; Sample Volume
+
+	moveq	#$10,d0	* Volume
+	and.b	11(a0),d0
+	beq.b	.noVolume
+
+	moveq	#0,d0
+	move	nch_Volume(a0),d0
+	lsl.l	#6,d0
+	divu	nst_MaxVolume(a4),d0
+	move	d0,mVolume(a6)
+.noVolume
+
+	;;;;;;;;;;;;;;;;;;;;;; Sample Frequency/Period
+
+	moveq	#8,d0	* Freq
+	and.b	11(a0),d0
+	beq.b	.noFreq
 				
-		move.l	(a4),d0
-		beq.w	.Return
-		move.l	d0,a4
+	moveq	#0,d0
+	move.l	nch_Frequency(a0),d3
+	beq.b	.per_
 
-		*--------- neue Note (= DMA off) ---------*
-		move.l	a4,a0
-		moveq	#32-1,d2
-		moveq	#0,d1
-		moveq	#1,d3
-.pass1		
-		;move.b	nch_Changed(a0),d0
-		;and.b	#2,d0		;NCHF_Sample
-		moveq	#2,d0		;NCHF_Sample
-		and.b	nch_Changed(a0),d0
-		beq.s	.skip
-		or.l	d3,d1		;DMA Mask
-.skip		lsl.l	#1,d3
-		move.l	(a0),d0
-		beq.s	.Last1
-		move.l	d0,a0		*add #NoteStruct1-NoteStruct0,a0
-		dbf	d2,.pass1
-.Last1:
+	lsr.l	#1,d3
+	cmp.l	#$ffff,d3
+	bhi.b	.per_
 
-		tst.l	d1
-		beq.s	.nostopDMA
-		;moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
-					;D1 = Maske (LONG !!)
-		;jsr	ENPP_DMAMask(a5)
-		;moveq	#0,d0		;D0.w neg=enable ; 0/pos=disable
+	move.l	#3546895<<1,d0		;Amiga Audiorate
+	divu	d3,d0
+.per_
 
-		* Stop status
-		moveq	#32-1,d2
-		lea	cha0(pc),a6
-		move.l	d1,d0
-.stopLoop
-		ror.l	#1,d0
-		bpl.b	.skipStop
-		st	mOnOff(a6)
-.skipStop
-		* 0 = channel on, 0xff = channel off	
-		lea	mChanBlock_SIZE(a6),a6
-		dbf	d2,.stopLoop
+	move	d0,mPeriod(a6)
+	; Is this needed?
+	; clr.l	mFPos(a6)
 
+.noFreq
 
-.nostopDMA:	;move.l	d1,-(a7)
-		move.l	d1,d6
-	
-		*---------- Neue Note setzen -------------*
-		move.l	a4,a0
-		moveq	#32-1,d2
-		moveq	#0,d1
-		lea	cha0(pc),a6
-.pass2		
+	;;;;;;;;;;;;;;;;;;;;;; Next channel
 
-		;move.b	nch_Changed(a0),d0
-		;and.b	#2,d0				;NCHF_Sample
-		moveq	#2,d0				;NCHF_Sample
-		and.b	nch_Changed(a0),d0
-		beq.s	.skip2
+	clr.b	nch_Changed(a0)
 
-		move.l	$10(A0),d0			;SampleStart
-		;jsr	ENPP_PokeAdr(A5)
-		move.l	d0,mStart(a6)
-		;DPRINT	"start=%lx"
-	
-		moveq	#0,d0
-		move.w	nch_SampleLength(a0),d0
-		btst	#4,d7
-		bne.s	.pokeword1
-		move.l	nch_SampleLength(A0),d0		;NCH_SampleLength ;SampleLen
-		lsr.l	#1,d0				;Bytes -> Words
-.pokeword1:
-		;jsr	ENPP_PokeLen(a5)
-		move.l	d0,mLength(a6)
-		;DPRINT	"len=%ld"
-	
-		clr.l	mFPos(a6)
-.skip2:		
-		addq	#1,d1
-		move.l	(a0),d0
-		beq.s	.Last2
-		move.l	d0,a0		;add #NoteStruct1-NoteStruct0,a0
-		lea	mChanBlock_SIZE(a6),a6
-		dbf	d2,.pass2
-.Last2:
-
-		*-------- Volume/Period neu setzen -------*
-		move.l	a4,a0
-		moveq	#32-1,d2
-		moveq	#0,d1
-		lea	cha0(pc),a6
-.pass3
-		;move.b	nch_Changed(a0),d0
-		;and.b	#$10,d0				;NCHF_Volume
-		moveq	#$10,d0				;NCHF_Volume
-		and.b	nch_Changed(a0),d0
-		beq.s	.skip3
-
-		moveq	#0,d0
-		move	nch_Volume(a0),d0			;Volume
-		;jsr	ENPP_PokeVol(a5)
-		; Scale volume to 0..64
-		mulu	#64,d0
-		divu	nst_MaxVolume(a5),d0
-		move	d0,mVolume(a6)
-		ext.l	d0
-		;DPRINT	"vol=%ld"
-.skip3:		
-		;move.b	nch_Changed(a0),d0
-		;and.b	#8,d0				;NCHF_Frequency
-		moveq	#8,d0				;NCHF_Frequency
-		and.b	nch_Changed(a0),d0
-		beq.s	.skip4
-
-		moveq	#0,d0
-		move.w	nch_Frequency(A0),d0			;Period (or Frequency)
-		btst	#2,d7
-		bne.s	.extper				;4*Period ?
-		btst	#1,d7				
-		bne.s	.per				;1*Period ?
-							;Frequenz in Period umrechnen
-		moveq	#0,d0
-		move.l	nch_Frequency(a0),d3			;Frequenz
-		beq.b	.per
-	;move.l d3,d0
-	;DPRINT "freq=%ld"
-;		lsr.l	#1,d3
-		lsr.l	#2,d3
-;		move.l	#3546895/2,d0		;Amiga Audiorate
-		move.l	#3546895/1,d0		;Amiga Audiorate
-		divu	d3,d0			;
-;		and.l	#$ffff,d0
-		ext.l	d0
-		bra.s	.per
-.extper
-		lsr	#2,d0				;noch ersetzen durch DirektWrite bei 4*Per
-.per
-;		move.w	nch_Frequency(A0),d0		;Period (or Frequency)
-		;jsr	ENPP_PokePer(a5)
-		;move	#300,d0
-		move	d0,mPeriod(a6)
-		clr.l	mFPos(a6)
-		;ext.l	d0
-		;DPRINT	"per=%ld"
-.skip4:		addq	#1,d1
-		move.l	(a0),d0
-		beq.s	.Last3
-		move.l	d0,a0		;add.w #NoteStruct1-NoteStruct0,a0
-		lea	mChanBlock_SIZE(a6),a6
-		dbf	d2,.pass3
-.Last3:
-
-		*----- DMA starten (wenn erforderlich) ----*
-		;move.l	(a7)+,d1
-		;move.l	d6,d1
-		;tst.l	d1
-		;beq.s	.NostartDMA
-		;move	#$8000,d0	;D0.w neg=enable ; 0/pos=disable
-					;D1 = Maske (LONG !!)
-		;jsr	ENPP_DMAMask(a5)
-
-		* Start status
-		moveq	#32-1,d2
-		lea	cha0(pc),a6
-		move.l	d6,d0
-		beq.b	.NostartDMA
-.startLoop
-		ror.l	#1,d0
-		bpl.b	.skipStart
-		clr.b	mOnOff(a6)
-.skipStart
-		* 0 = channel on, 0xff = channel off	
-		lea	mChanBlock_SIZE(a6),a6
-		dbf	d2,.startLoop
-
-
-		*------ Repeatadr/Repeatlen poken --------*
-.NostartDMA:	move.l	a4,a0
-		moveq	#32-1,d2
-		moveq	#0,d1
-		lea	cha0(pc),a6
-.pass4		
-		;move.b	nch_Changed(a0),d0
-		;and.b	#4!32!64,d0			;NCHF_Repeat
-		moveq	#4!32!64,d0			;NCHF_Repeat
-		and.b	nch_Changed(a0),d0
-		beq.s	.skip5
-
-		move.l	nch_RepeatStart(a0),d0		;RepeatStart
-		;jsr	ENPP_PokeAdr(A5)
-		move.l	d0,mLStart(a6)
-		;DPRINT	"loopstart=%lx"
-
-		moveq	#0,d0
-		move.w	nch_RepeatLength(a0),d0		;Repeatlen
-		btst	#4,d7
-		bne.s	.pokeword2
-		move.l	nch_RepeatLength(A0),d0		;NCH_SampleLength ;SampleLen
-		lsr.l	#1,d0				;Bytes -> Words
-.pokeword2:
-		;jsr	ENPP_PokeLen(a5)
-		move.l	d0,mLLength(a6)
-		;DPRINT	"looplen=%ld"
-		cmp.l	#2,d0
-		bls.b	.noLoop
-		st	mLoop(a6)
-		bra.b	.yesLoop
-.noLoop
-		clr.b	mLoop(a6)
-.yesLoop
-
-.skip5:
-
-		clr.b	nch_Changed(a0)
-		addq	#1,d1
-		move.l	(a0),d0
-		beq.s	.Last
-		move.l	d0,a0		*add #NoteStruct1-NoteStruct0,a0
-		lea	mChanBlock_SIZE(a6),a6
-		dbf	d2,.pass4
-.Last:
-
-.Return:
+	move.l	(a0),d0
+	beq.b	.x
+	move.l	d0,a0
+	lea	mChanBlock_SIZE(a6),a6
+	dbf	d6,.chLoop
+.x
 	rts
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
