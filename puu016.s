@@ -6853,7 +6853,7 @@ setRandomTableEntry
 	DPRINT  "setRandomTableEntry %ld"
 	
 	* Set it in the table
-	bsr.b	getRandomValueTableEntry
+	bsr.w	getRandomValueTableEntry
 	beq.b	.error
 	bset	d0,(a0)
 .error
@@ -8868,6 +8868,8 @@ rbutton3
 	bpl.b	.hu
 .hehe	rts
 .hu	
+	DPRINT	"stop"
+
 	clr.b	kelausnappi(a5)
 
 	move.l	playerbase(a5),a0
@@ -8883,10 +8885,10 @@ rbutton3
 	
 	lore    Exec,Disable
 	clr.b	playing(a5)
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_stop(a0)
-	lore    Exec,Enable
-
+	
 	move	(sp)+,mainvolume(a5)
 
 	bra.w	inforivit_pause
@@ -8900,6 +8902,8 @@ actionContinue
 	bpl.b	.hu
 .hehe	rts
 .hu	
+	DPRINT	"continue"
+
 	clr.b	kelausnappi(a5)
 
 	move.l	playerbase(a5),a0
