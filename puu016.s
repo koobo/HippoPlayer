@@ -5725,6 +5725,10 @@ freemodule
 	* Check if need to do UnLoadSeg
 	bsr.w	moduleIsExecutable
 	move.b	d0,d7
+
+	* IT hack!
+	jsr	isImpulseTrackerActive
+	sne	d6
 	
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
@@ -5778,7 +5782,14 @@ freemodule
 
 	move.l	modulelength(a5),d0
 	beq.b	.ee
-	lob	FreeMem				* hit!
+
+	* IT deliplayer memory overrun hack
+	tst.b	d6
+	bne.b	.notIT
+	DPRINT	"IT hack 2!"
+	addq.l	#2,d0
+.notIT
+	lob	FreeMem
 .exe
 
 	clr.l	moduleaddress(a5)
@@ -25131,7 +25142,6 @@ loadmodule
 	clr.b	contonerr_laskuri(a5)
 	bra.b	loaderr
 .iik2
-
 	bsr.w	inforivit_errc		* Skipping -teksti
 	moveq	#50,d1
 	lore	Dos,Delay
@@ -26115,14 +26125,26 @@ loadfile
 * Finally here we just do an ordinary read.
 ****** Ihan Tavallinen Lataus
 
-
-
  if DEBUG
 	move.l	lod_length(a5),d0
 	DPRINT	"Normal load %ld"
  endif
- 
+ 	
+	pushm d0/a0
+	lea	probebuffer(a5),a0
+	bsr	id_it
+	popm d0/a0
+	bne.b	.wasNotIt
+	DPRINT	"IT hack 1!"
+	move.l	lod_length(a5),d0
+	addq.l	#2,d0
+	move.l	lod_memtype(a5),d1
+	lore	Exec,AllocMem
+	bra.b	.itAlloc
+.wasNotIt
+
 	bsr.w	.alloc
+.itAlloc
 	move.l	d0,lod_address(a5)
 	beq.w	.error
 
@@ -35472,6 +35494,7 @@ p_multi	jmp	.s3init(pc)
 	bne.w	.itError
 .notIt
 
+
 	addq	#1,ps3minitcount
 
 	move	mixirate+2(a5),hip_ps3mrate+hippoport(a5)
@@ -35537,6 +35560,10 @@ p_multi	jmp	.s3init(pc)
 	* No patternscope for this one	
 	sub.l	a0,a0
 	sub.l	a1,a1
+
+	* TODO: in case of PS3M init error, do some
+	* deli uninitializing?
+
 .notIT
 
 	move.l	a0,deliPatternInfo(a5)
@@ -35857,6 +35884,7 @@ ps3minitcount	dc	0
 
 * ID from A0
 id_it
+	push	d1
 	MOVEQ	#0,D0
 	CMP.L	#$494D504D,(A0)
 	BNE.S	.itFail
@@ -35869,6 +35897,7 @@ id_it
 .itFail
 	MOVEQ	#-1,D0
 .itYes
+	pop	d1
 	tst.l	d0
 	RTS
 
@@ -41951,7 +41980,7 @@ deliInit
 	move.l	(a0),a0
 	move.l	a0,deliStoredNoteStruct(a5)
  if DEBUG 
-	bsr.w		deliShowNoteStruct
+	bsr.w	deliShowNoteStruct
  endif 
 .noNoteStruct
 
