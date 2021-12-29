@@ -29136,10 +29136,10 @@ popFileBrowserSelectionHistoryItem
  	rts
 
 
-parentNodeLabel
-	dc.b 	"  ««««««« Parent »»»»»»»»  "
-		    ;0123456789123456789012345678
-	even
+;parentNodeLabel
+;	dc.b 	"  ««««««« Parent »»»»»»»»  "
+;		    ;0123456789123456789012345678
+;	even
 
 *******************************************************************************
 * CreatePort
