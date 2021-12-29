@@ -37198,6 +37198,8 @@ p_bendaglish
 	DPRINT	"Song %ld"
  endif
 	pushm	all
+	* Safety:
+ 	move.l  #$07800780,$dff09a
 	move.l	bendaglishroutines(a5),a0
 	jsr	.BD_SONG(a0)
 	popm	all
@@ -37208,7 +37210,7 @@ p_bendaglish
 	pushm	all
 	* Safety: disable audio interrupts and clear requests
 	* which this replayer uses. Pending interrupts
-	* may trigger after code has been deallocated.
+	* may trigger after code is in wrong state or deallocated.
  	move.l  #$07800780,$dff09a
 	move.l	bendaglishroutines(a5),a0
 	jsr	.BD_END(a0)
@@ -39013,7 +39015,7 @@ p_krishatlelid
 .end
 	* Safety: disable audio interrupts and clear requests
 	* which this replayer uses. Pending interrupts
-	* may trigger after code has been deallocated.
+	* may trigger after code is in wrong state or deallocated.
 	move.l  #$07800780,$dff09a
 	bra	deliEnd
 
