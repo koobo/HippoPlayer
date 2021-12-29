@@ -28515,8 +28515,11 @@ importSavedStateModulesFromDisk
 	tst.b	d7
 	beq.w	.exit
 	jsr	resh
+	tst.l	modamount(a5)
+	beq.b	.empty
 	jmp	playButtonAction
-	
+.empty
+	rts
 
 exportSavedStateModulesToDisk
 	DPRINT	"exportSavedStateModulesToDisk"
