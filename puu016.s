@@ -37205,6 +37205,10 @@ p_bendaglish
 .end
 	bsr	rem_ciaint
 	pushm	all
+	* Safety: disable audio interrupts and clear requests
+	* which this replayer uses. Pending interrupts
+	* may trigger after code has been deallocated.
+ 	move.l  #$07800780,$dff09a
 	move.l	bendaglishroutines(a5),a0
 	jsr	.BD_END(a0)
 	popm	all
@@ -38515,7 +38519,7 @@ p_facethemusic
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
 	jmp	.ftmVBlank(pc)
-	jmp	deliEnd(pc)
+	jmp	.end(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
 	jmp	deliVolume(pc)
@@ -38544,6 +38548,13 @@ p_facethemusic
 	and	#~pf_end,(a0)
 	moveq	#0,d0
 .error	
+	rts
+
+
+.end
+	bsr	deliEnd
+	* Extra safety:
+	move.l  #$07800780,$dff09a
 	rts
 
 .id
@@ -38975,7 +38986,7 @@ p_krishatlelid
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
 	p_NOP
-	jmp	deliEnd(pc)
+	jmp	.end(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
 	jmp	deliVolume(pc)
@@ -38997,6 +39008,13 @@ p_krishatlelid
 	moveq	#0<<16|1,d0
 	bsr.w	deliLoadAndInit
 	rts 
+
+.end
+	* Safety: disable audio interrupts and clear requests
+	* which this replayer uses. Pending interrupts
+	* may trigger after code has been deallocated.
+	move.l  #$07800780,$dff09a
+	bra	deliEnd
 
 .id
 	move.l	a4,a0
