@@ -186,9 +186,10 @@ ConvertNote
 	moveq	#%00111111,d1
 	and.b	1(a0),d1
 
+	* MAX is "z", $7a
 	moveq	#$3f,d2
 	and.b	2(a0),d2
-	
+
 	move.b	3(a0),d3
 	rts
 

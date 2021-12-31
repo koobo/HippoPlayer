@@ -21,14 +21,16 @@ ver	macro
 ;	dc.b	"v2.47 (31.8.2021)"
 ;	dc.b	"v2.48 (31.10.2021)"
 ;	dc.b	"v2.49ß (?.?.2021)"
-	dc.b	"v2.49 (29.11.2021)"
+;	dc.b	"v2.49 (29.11.2021)"
+;	dc.b	"v2.50ß (?.?.202?)"
+	dc.b	"v2.50 (31.12.2021)"
 	endm	
 
 
-DEBUG	= 1
+DEBUG	= 0
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
-asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
+asm	= 0	* 1: Run from AsmOne, 0: CLI/Workbench
 
 zoom	= 0	* 1: zoomaava hippo
 fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
@@ -74,21 +76,21 @@ WINY	= 3
 * This char as the first char in filename indicates a list divider
 DIVIDER_MAGIC = '÷'
 
-isListDivider macro 
-	cmp.b 	#DIVIDER_MAGIC,\1
-	endm
+;isListDivider macro 
+;	cmp.b 	#DIVIDER_MAGIC,\1
+;	endm
 
 isFavoriteModule macro 
 	tst.b 	l_favorite(\1)
 	endm
 
-
-* Checks if list is in favorite mode
-* Z is set if in normal mode, otherwise favorite mode
-isListInFavoriteMode macro
-	tst.b	listMode(a5)
-	endm
-
+;
+;* Checks if list is in favorite mode
+;* Z is set if in normal mode, otherwise favorite mode
+;isListInFavoriteMode macro
+;	cmp.b #LISTMODE_FAVORITES,listMode(a5)
+;	endm
+;
 
 iword	macro
 	ror	#8,\1
@@ -433,7 +435,9 @@ lockhere	rs.l	1		* currentdir-lock
 homelock	rs.l 	1		* homedir-lock (V36)
 cli			rs.l	1
 segment		rs.l	1	* Toisiks ekan hunkin segmentti
+* Fileinfoblock used by main task
 fileinfoblock	rs.b	260		* 4:llä jaollisessa osoitteessa!
+* Fileinfoblock used by file req task
 fileinfoblock2	rs.b	260		
 
  if fileinfoblock&%11
@@ -1029,6 +1033,10 @@ favoriteListHeader	rs.b 	MLH_SIZE
 favoriteListChanged	rs.b	1
 			rs.b	1	* pad
 
+* List for file browser
+fileBrowserListHeader	rs.b	MLH_SIZE
+
+
 ** InfoWindow kamaa
 infosample	rs.l	1		* samplesoittajan väliaikaisalue
 swindowbase	rs.l	1
@@ -1190,10 +1198,12 @@ randomValueMask  	rs.l		1 * mask to quickly cull too big random numbers based on
 randomtable		rs.l		1 * pointer to random table, allocated when needed
 
 * Indicates which mode the list is in, either normal list 
-* or favorites
-LISTMODE_NORMAL = 0
-LISTMODE_FAVORITES = 1
-listMode		rs.b		1
+* or favorites, or file browser
+LISTMODE_NORMAL		= 0
+LISTMODE_FAVORITES 	= 1
+LISTMODE_BROWSER	= 2
+listMode		rs.b	1
+
 * This is set each time list has been edited by user in some way.
 moduleListChanged	rs.b		1
 
@@ -1224,6 +1234,15 @@ deliPatternInfo		rs.l 	1
 * Path read from auto saved modulelist comment,
 * which is the last path used to add files to list
 lastStoredFileReqDirectory	rs.l 	1
+
+* Stores the selection indexes so that returning to
+* parent can select the correct item.
+FILEBROWSER_HISTORY_SIZE = 16
+fileBrowserSelectionHistoryIndex rs.w 1
+fileBrowserSelectionHistory		 rs.l FILEBROWSER_HISTORY_SIZE
+* Lock for currently active dir, so that it can 
+* be saved to state if needed.
+fileBrowserCurrentDirLock		rs.l	1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -1272,7 +1291,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	22
+xpl_versio	=	23
 
 *********************************************************************************
 *
@@ -1281,13 +1300,14 @@ xpl_versio	=	22
 *
 
 	rsreset
-			rs.b	MLN_SIZE	* Minimal node 
-l_nameaddr	rs.l	1			* osoitin pelkkään tied.nimeen
-								* address to filename without path
-l_favorite		rs.b 	1			* favorite status for this file
-l_filename	rs.b	0			* tied.nimi ja polku alkaa tästä
-								* full path to filename begins at this point
-								* element size is dynamically calculated based on path length.
+		rs.b	MLN_SIZE	* Minimal node 
+l_nameaddr	rs.l	1		* osoitin pelkkään tied.nimeen
+					* address to filename without path
+l_favorite	rs.b 	1		* favorite status for this file
+l_divider	rs.b	1		* this is a divider, ie. a path
+l_filename	rs.b	0		* tied.nimi ja polku alkaa tästä
+					* full path to filename begins at this point
+					* element size is dynamically calculated based on path length.
 l_size		rs.b	0
 
 
@@ -1297,10 +1317,15 @@ l_size		rs.b	0
 * Soittomoodit
 *
 
+* Repeat list 
 pm_repeat	=	1
+* Play list once
 pm_through	=	2
+* Repeat module
 pm_repeatmodule	=	3
+* Play module once
 pm_module	=	4
+* Random play 
 pm_random	=	5
 pm_max		=	5
 
@@ -1411,6 +1436,19 @@ DDELAY macro
 	endc
 	endm
 
+
+skipIfGadgetDisabled macro
+	;lea	\1,a0
+	;move	#GFLG_DISABLED,d0  * $0100
+	;and	gg_Flags(a0),d0
+	;beq.b	._go
+	;btst	#0,gg_Flags(a0)
+	;beq.b	._go
+	btst	#0,gg_Flags+\1
+	beq.b	._go
+	rts
+._go
+	endm
 
 *********************************************************************************
 *
@@ -1943,7 +1981,8 @@ about_tt
  dc.b 0
 
 
-scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
+;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
+scrtit	dc.b	"HippoPlayer by K-P Koljonen in 1994-2000,2021",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -2135,7 +2174,7 @@ lelp
 
 	* The first debug print should be after opening
 	* intuition since it may use the alert box.	
-bob
+
 	DPRINT	"Hippo is alive"
 
 	tst.b	uusikick(a5)
@@ -2533,6 +2572,8 @@ bob
 	NEWLIST	a0
 	lea	favoriteListHeader(a5),a0
 	NEWLIST a0
+	lea	fileBrowserListHeader(a5),a0
+	NEWLIST a0
 
 	lea	.startingMsg(pc),a0
 	moveq	#102+WINX,d0
@@ -2812,7 +2853,7 @@ bob
 * Pääsilmukka
 *	
 
-	DPRINT	"Entering msgloop"
+	DPRINT	"Entering message loop"
 
 	bra.b	msgloop
 returnmsg
@@ -2832,7 +2873,6 @@ msgloop
 	bsr.w	komentojono
 	bra.b	returnmsg
 .noal
-
 
 	moveq	#0,d0
 	move.b	songHasEndedSignal(a5),d1
@@ -2924,8 +2964,8 @@ msgloop
 	cmp	boxsize0(a5),d0
 	bne.b	.noe
 
-	st	hippoonbox(a5)
-	bsr.w	resh
+	jsr	forceRefreshList
+
 .noe
 
 ** ei saa rämpätä ikkunaa jos se ei oo oikeassa koossaan!!
@@ -3039,8 +3079,8 @@ msgloop
 .nas
 
 	jsr	listChanged
-	st	hippoonbox(a5)
-	bsr.w	resh
+	jsr	forceRefreshList
+
 
 	move.b	haluttiinuusimodi(a5),d1
 	clr.b	haluttiinuusimodi(a5)
@@ -3295,6 +3335,7 @@ exit
 	jsr	rem_ciaint
 
 	jsr	freeFavoriteList
+	jsr	freeFileBrowserList
 
 	tst.b	vbsaatu(a5)
 	beq.b	.nbv
@@ -3417,6 +3458,11 @@ exit
 exit2
 	move.l	_IntuiBase(a5),d0
 	bsr.w	closel
+
+	move.l	fileBrowserCurrentDirLock(a5),d1
+	beq.b	._1
+	lore	Dos,UnLock
+._1
 
 
  ifne DEBUG
@@ -5680,6 +5726,10 @@ freemodule
 	* Check if need to do UnLoadSeg
 	bsr.w	moduleIsExecutable
 	move.b	d0,d7
+
+	* IT hack!
+	jsr	isImpulseTrackerActive
+	sne	d6
 	
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
@@ -5733,7 +5783,14 @@ freemodule
 
 	move.l	modulelength(a5),d0
 	beq.b	.ee
-	lob	FreeMem				* hit!
+
+	* IT deliplayer memory overrun hack
+	tst.b	d6
+	bne.b	.notIT
+	DPRINT	"IT hack 2!"
+	addq.l	#2,d0
+.notIT
+	lob	FreeMem
 .exe
 
 	clr.l	moduleaddress(a5)
@@ -5964,7 +6021,7 @@ buttonspressed
 
 	DPRINT		"RMB DOWN check"
 
-	lea		rightButtonActionsList,a2
+	lea	rightButtonActionsList,a2
 .actionLoop
 	movem.l	(a2)+,a0/a1
 	bsr.b	.rightButtonDownCheck
@@ -6449,7 +6506,7 @@ signalreceived
 	DPRINT	"Song end signal"
 
 	moveq	#1,d7			* mennään listassa eteenpäin
-							* step forward in the list
+					* step forward in the list
 
 	cmp.b	#pm_random,playmode(a5)	* Arvotaanko järjestys?
 	bne.b	.norand
@@ -6473,14 +6530,14 @@ signalreceived
 	* Play mode is not random. 
 
 	cmp.b	#pm_repeatmodule,playmode(a5) 	* Jatketaanko soittoa?
-	beq.w	.reet							* If module repeat on, just exit
+	beq.w	.reet			* If module repeat on, just exit
 	
 	cmp.l	#1,modamount(a5) * Jos vain yksi modi,
 	bne.b	.notone		* jatketaan soittoa keskeytyksettä.
 	cmp.l	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Listassa yksi modi, joka on uusi.
 	bne.b	.oon			* Soitetaan se.
 	moveq	#0,d7			* ei lisätä eikä vähennetä
-							* no stepping in the list
+					* no stepping in the list
 	bra.b	.notone
 .oon
 
@@ -6495,16 +6552,14 @@ signalreceived
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne.w	rbutton13		* next song!
-
 	bra.w	.reet
-
 
 .notone
 
 	tst.l	playingmodule(a5)	* soitettiinko edes mitään
 	bmi.w	.err
 
-	cmp.b	#pm_module,playmode(a5)		* Play mode was "module", stop after playing 
+	cmp.b	#pm_module,playmode(a5)	* Play mode was "module", stop after playing 
 	beq.w	.stop
 
 ** Onko subsongeja soiteltavaks?
@@ -6526,7 +6581,7 @@ signalreceived
 	clr.b	playing(a5)		* soitto seis
 	lore   	Exec,Enable
 	move.l	playerbase(a5),a0	* stop module
-	jsr	 	p_end(a0)
+	jsr 	p_end(a0)
 
 	bsr.w	freemodule
 
@@ -6556,19 +6611,18 @@ signalreceived
 	move.l	chosenmodule(a5),playingmodule(a5)
 	move.l	playingmodule(a5),d0
 
-	st	hippoonbox(a5)
-	bsr.w	resh
+	bsr	forceRefreshList
 
 	DPRINT	"signalreceived getListNode"
-	bsr.w		getListNode
-	beq.w		.erer 
+	bsr.w	getListNode
+	beq.w	.erer 
 	move.l	a0,a3
 
-	isListDivider	l_filename(a3)	* onko divideri??
-	bne.b	.wasfile
+	tst.b	l_divider(a3)
+	beq.b	.wasfile
 	tst	d7			* pitää olla jotain että ei jää 
-	bne.b	.eekk			* jummaamaan dividerin kohdalle
-	moveq	#1,d7
+	bne.b	.eekk		* jummaamaan dividerin kohdalle
+	moveq	#1,d7	* step forward
 	bra.b	.eekk
 .wasfile
 
@@ -6633,6 +6687,12 @@ signalreceived
  	clr.l	playingmodule(a5)	* Alotetaan alusta
 	* select first module
 	clr.l	chosenmodule(a5)
+
+	* SANITY CHECK: in the case where it's all dividers,
+	* stop instead of trying to find something to play.
+	bsr	calculateDividersInList
+	cmp.l	modamount(a5),d0
+	beq.b	.err
 	bra.w	.repea
 
 * Shuffle-soitto
@@ -6707,12 +6767,25 @@ satunnaismodi
 .reet	rts
 
 
+* Clear random table and do force refresh of list
+* if in random mode.
 clear_random
+	bsr.b	clearRandomTable
+	cmp.b	#pm_random,playmode(a5)
+	bne.b	.x
+	* Request refresh to clear out random play indicators
+	st	hippoonbox(a5)
 	pushm	all
-	
-** taulukko tyhjäks
-	DPRINT  "clear_random"
-	bsr.w	 	obtainModuleList
+	bsr.w	shownames
+	popm	all
+.x
+	rts
+
+* Clear random table
+clearRandomTable
+	pushm	d0/a0
+	DPRINT  "clearRandomTable"
+	bsr.w	 obtainModuleList
 	clr.l	randomValueMask(a5)
 	tst.l	randomtable(a5)
 	beq.b	.noList
@@ -6721,14 +6794,8 @@ clear_random
 	move.l	randomtable(a5),d0
 	clr.l	randomtable(a5)
 .noList
-	cmp.b	#pm_random,playmode(a5)
-	bne.b	.x
-	* Request refresh to clear out random play indicators
-	st	hippoonbox(a5)
-	bsr.w	shownames
-.x
-	bsr.w		releaseModuleList
-	popm	all
+	bsr.w	releaseModuleList
+	popm	d0/a0
 	rts
 
 * Test if index given in d0 is taken in the random table
@@ -6763,6 +6830,8 @@ getRandomValueTableEntry
 	* the amount is a very few bytes.
 	push	d0
 	move.l	modamount(a5),d0 
+	DPRINT	"New randomtable for %ld"
+
 	lsr.l	#3,d0
 	addq.l	#1,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -6797,7 +6866,7 @@ setRandomTableEntry
 	DPRINT  "setRandomTableEntry %ld"
 	
 	* Set it in the table
-	bsr.b	getRandomValueTableEntry
+	bsr.w	getRandomValueTableEntry
 	beq.b	.error
 	bset	d0,(a0)
 .error
@@ -7103,19 +7172,19 @@ umph
 * find the corresponding file from the list
 
 	DPRINT	"soitamodi getListNode"
-	bsr.w		getListNode
+	bsr.w	getListNode
 	beq.w	.erer
 	move.l	a0,a3
 
 	* This might be a list divider. Try again in that case.
-	isListDivider l_filename(a3)	* onko divideri?
-	bne.b	.noDiv		* kokeillaan edellistä/seuraavaa/rnd
+	;isListDivider l_filename(a3)	* onko divideri?
+	tst.b	l_divider(a3)
+	beq.b	.noDiv		* kokeillaan edellistä/seuraavaa/rnd
 
 	* try next one until at end of the list
 	TSTNODE	a3,a0
 	bne.w	umph
 	bra.w	.erer
-
 .noDiv
 
 	cmp.l	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
@@ -7453,6 +7522,12 @@ nappuloita
 	and.b	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.noshifts
 
+	cmp.b	#$37,d3		* m + shift
+	bne.b	.1
+	bsr	rlistmode
+	bra.w	.ee
+.1
+
 
 	cmp.b	#$17,d3		* i + shift?
 	bne.b	.f0
@@ -7775,8 +7850,9 @@ nappuloita
 
 .scopetoggle
 	tst	quad_prosessi(a5)	* jos ei ollu, päälle
-	beq.w	start_quad		
+	beq.b	.startQ		
 	jmp	sulje_quad		* suljetaan jos oli auki
+.startQ	jmp	start_quad
 
 .pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikanäppäimet
 .pm0	st	hippoonbox(a5)
@@ -7996,13 +8072,29 @@ rlistmode
 SORT_ELEMENT_LENGTH = 4+24
 
 rsort
+sortButtonAction
+	skipIfGadgetDisabled gadgetSortButton
+	bsr.b	sortModuleList
+	bra	forceRefreshList
+
+sortModuleList
+	* Skip force refresh
+
 	* Let's not sort a list with 1 module, that would be silly I guess.
 	cmp.l	#2,modamount(a5)
 	bhs.b	.so
 	rts
 .so
-	bsr.w		lockMainWindow
+	bsr.w	lockMainWindow
 
+	* Skip info display in these cases
+	cmp.l	#100,modamount(a5)
+	blo.b	.d
+	* Annoying to see the text flashing rapidly
+	* when browsing
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.d
+	
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
 	bsr.b	printbox
@@ -8013,7 +8105,7 @@ rsort
 .d
 	move.l	modamount(a5),d0
 	moveq	#4+24,d1		* node address and weight
-	bsr.w		mulu_32		* 
+	bsr.w	mulu_32		* 
 	addq.l	#8,d0			* add some empty space, this is needed when rebuilding the list
 							* to check if end is reached.
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -8029,7 +8121,7 @@ rsort
 
 ** Lasketaan painot jokaiselle
 	DPRINT  "rsort obtain list"
-	bsr.w		obtainModuleList
+	bsr.w	obtainModuleList
 	;lea	moduleListHeader(a5),a3
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
@@ -8110,25 +8202,29 @@ rsort
 	bmi.b	.npl
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .npl	clr.l	chosenmodule(a5)
-	st	hippoonbox(a5)
+	
 	DPRINT  "rsort release list"
-	bsr.w		releaseModuleList
-	bsr.w		unlockMainWindow
-	bra.w	resh
+	bsr.w	releaseModuleList
+	bsr.w	unlockMainWindow
+	rts
 
 * a3 = lista
 * Hakee ensimmäisen nimen, joka ei ole divideri
-
-
 
 .eka
 .ploop2
 	tst.l	(a3)		* Oliko viimeinen
 	beq.b	.ep2
 	move.l	(a3),a0
-	move.l	l_nameaddr(a0),a0	
-	isListDivider  (a0)		* eka hitti
-	bne.b	.jep1
+	;move.l	l_nameaddr(a0),a0	
+	;isListDivider  (a0)		* eka hitti
+	;isListDivider l_filename(a0)
+	tst.b	l_divider(a0)
+	beq.b	.jep1
+	* Ignore dividers in browser mode
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.jep1
+
 	lea	28(a3),a3
 	bra.b	.ploop2
 
@@ -8144,9 +8240,15 @@ rsort
 	tst.l	(a3)		* Oliko viimeinen
 	beq.b	.jep1
 	move.l	(a3),a0
-	move.l	l_nameaddr(a0),a0
-	isListDivider (a0)		* toka hitti
-	beq.b	.jep1
+;	move.l	l_nameaddr(a0),a0
+	* Ignore dividers in browser mode
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	._d
+;	isListDivider (a0)		* toka hitti
+;	isListDivider l_filename(a0)
+	tst.b	l_divider(a0)
+	bne.b	.jep1
+._d
 	lea	28(a3),a3
 	bra.b	.ploop3
 
@@ -8309,10 +8411,32 @@ rsort
 	moveq	#0,d1
 	moveq	#0,d2
 
-	isListDivider  (a2)
-	bne.b	.boobo
+	* In normal case dividers have no value when sorting,
+	* in brower mode they should be sorted properly.
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.browserMode
+	tst.b	l_divider(a3)
+	beq.b	.boobo
+	* dividers ignored
 	rts
+
+	* In browser mode modify name so that
+	* directories get sorted before files
+.browserMode
+	tst.b	l_divider(a3)
+	beq.b	.notDiv
+	lea	-100(sp),sp
+	move.l	sp,a0
+	move.b	#DIVIDER_MAGIC,(a0)+
+.cp_	move.b	(a2)+,(a0)+
+	bne.b	.cp_
+	move.l	sp,a2
+	bsr.b	.doGetV		
+	lea	100(sp),sp
+	rts
+.notDiv
 .boobo
+.doGetV
 	move.l	a2,a0
 	bsr.w	cut_prefix
 	move.l	a0,a2
@@ -8356,13 +8480,15 @@ rsort
 * Move
 *******
 rmove
+moveButtonAction
+	skipIfGadgetDisabled gadgetMoveButton
 
 	tst.b	movenode(a5)	* Jos toistamiseen painetaan, mennään "play"hin
 	bne.w	rbutton1
 
 	cmp.l	#2,modamount(a5)
 	blo.b	.qq
-	bsr.b	getcurrent
+	bsr.w	getcurrent
 	beq.b	.q
 	move.l	a3,nodetomove(a5)
  if DEBUG
@@ -8377,36 +8503,11 @@ rmove
 	tst.l	playingmodule(a5)
 	bmi.b	.q
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
-.q	st	hippoonbox(a5)
-	bsr.w	resh
+.q	
+	bsr	forceRefreshList
 .qq	rts
 
 
-* Gets the chosen module list element 
-* Out:
-*    d0 = 0 if not found
-*    d0 = 1 if data available
-*    a3 = list node pointer
-*** Chosenmodule node A3:een
-getcurrent
-	tst.l	modamount(a5)
-	beq.b	.q
-	move.l	chosenmodule(a5),d0
-	bpl.b	getcurrent2
-.q	moveq	#0,d0
-	rts
-
-* Gets the chosen module list element into a3
-* In:
-*   d0 = Module index
-* Out:
-*    d0 = 0 if not found
-*    d0 = 1 if data available
-*    a3 = list node pointer
-getcurrent2
-	bsr.w getListNode
-	move.l	a0,a3
-	rts
 
 * etsitään listasta vastaava kohta
 ;	DPRINT  "getcurrent obtain list"
@@ -8437,7 +8538,7 @@ getcurrent2
 *******
 
 comment_file
-	bsr.b	getcurrent
+	bsr.w	getcurrent
 	beq.b	.x
 	move.l	a3,a4
 
@@ -8617,8 +8718,7 @@ find_continue
 	move.l	d7,d0
 	DPRINT	"Found module at %ld"
  endc
-	st	hippoonbox(a5)
-	bsr.w	resh
+	bsr	forceRefreshList
 	moveq	#0,d0
 	rts
 
@@ -8676,7 +8776,9 @@ rkelr
 *******************************************************************************
 * New
 *******
+newButtonAction
 rbutton11
+	skipIfGadgetDisabled gadgetNewButton
 	st	new(a5)
 ;	bsr.w	rbutton9		* Clear list
 	bra.w	rbutton1		* Play
@@ -8779,6 +8881,8 @@ rbutton3
 	bpl.b	.hu
 .hehe	rts
 .hu	
+	DPRINT	"stop"
+
 	clr.b	kelausnappi(a5)
 
 	move.l	playerbase(a5),a0
@@ -8794,10 +8898,10 @@ rbutton3
 	
 	lore    Exec,Disable
 	clr.b	playing(a5)
+	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_stop(a0)
-	lore    Exec,Enable
-
+	
 	move	(sp)+,mainvolume(a5)
 
 	bra.w	inforivit_pause
@@ -8811,6 +8915,8 @@ actionContinue
 	bpl.b	.hu
 .hehe	rts
 .hu	
+	DPRINT	"continue"
+
 	clr.b	kelausnappi(a5)
 
 	move.l	playerbase(a5),a0
@@ -8831,12 +8937,14 @@ actionContinue
 * Eject
 *******
 rbutton4b
-	moveq	#1,d0
+	moveq	#1,d0		* fade volume: no
 	bra.b	rbutton4a
 
+ejectButtonAction
 rbutton4
-	moveq	#0,d0
+	moveq	#0,d0		* fade volume: allowed
 rbutton4a
+	DPRINT	"Eject button action"
 	clr.b	kelausnappi(a5)
 
 	tst.l	playingmodule(a5)
@@ -8855,9 +8963,10 @@ rbutton4a
 	bsr.w	halt
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	lore    Exec,Enable
+	move.l	playerbase(a5),d0
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
-
+	jsr	p_end(a0)
+	
 	bsr.w	freemodule
 	move	(sp)+,mainvolume(a5)
 	clr.b	movenode(a5)
@@ -8867,13 +8976,15 @@ rbutton4a
 *******************************************************************************
 * Tyhjennetään moduulista
 *******
-clearlist
 rbutton9
+	DPRINT	"clearListButtonAction"
+	skipIfGadgetDisabled gadgetNewButton
+clearlist
 	clr.b	movenode(a5)
 	DPRINT  "clearlist"
 	bsr.w	setMainWindowWaitPointer
-	isListInFavoriteMode
-	bne.b	.isFav
+	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.isFav
 	bsr.w	freelist
 	bra.b	.done 
 .isFav
@@ -8985,6 +9096,11 @@ rslider4
 * Suhteutetaan nuppi tiedostojen määrään
 * Asetetaan valitun nimen kohdalle
 *******
+
+forceRefreshList
+	DPRINT	"forceRefreshList"
+	st	hippoonbox(a5)
+
 
 resh	pushm	all
 	bsr.w	shownames
@@ -9126,10 +9242,11 @@ reslider
 	* Refresh one gadget
 	;DPRINT "Updating slider"
 	lea	slider4,a0
-	move.l	windowbase(a5),a1
-	sub.l	a2,a2
-	moveq	#1,d0			 	* number of gadgets to refresh
-	lore	Intui,RefreshGList
+;	move.l	windowbase(a5),a1
+;	sub.l	a2,a2
+;	moveq	#1,d0			 	* number of gadgets to refresh
+;	lore	Intui,RefreshGList
+	bsr		refreshGadgetInA0
 
 ;	lea	slider4,a0
 ;	move.l	gg_SpecialInfo(a0),a1
@@ -9193,11 +9310,11 @@ rbutton1
 	lore	Exec,Insert
 	addq.l	#1,modamount(a5)
 	addq.l	#1,chosenmodule(a5)	* valitaan movetettu node
-	st	hippoonbox(a5)
 	DPRINT  "playButtonAction release list"
-	bsr.w		releaseModuleList
-	bsr.w		listChanged
-	bra.w	resh
+	bsr.w	releaseModuleList
+	bsr.w	listChanged
+	bsr	forceRefreshList
+	rts
 
 .nomove
 	;check	2		* reg check
@@ -9239,16 +9356,24 @@ rbutton1
 	bsr.w	clear_random		* Tyhjäx
 	bsr.w	setRandomTableEntry		* merkitään...
 
-
 * etsitään listasta vastaava tiedosto
 
 	DPRINT	"playbutton getListNode"
-	bsr.w		getListNode
+	bsr.w	getListNode
 	beq.w	.erer
 	move.l 	a0,a3
 
-	isListDivider l_filename(a3)
-	bne.b	.je
+	* Is it a divider?
+;	isListDivider l_filename(a3)
+	tst.b	l_divider(a3)
+	beq.b	.je
+
+	* In file browser mode, dividers need special attention
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.noBrowser
+	jmp	fileBrowserDir
+.noBrowser
+
 	* skip over to the next module if this was a divider
 	TSTNODE	a3,a3
 	beq.w	.erer			* end of list reached?
@@ -9400,18 +9525,19 @@ rinsert2
 * Add divider
 *******
 add_divider
+	skipIfGadgetDisabled gadgetMoveButton
+	
 	DPRINT  "add_divider obtain list"
-	bsr.w		obtainModuleList
+	bsr.w	obtainModuleList
 	tst.l	modamount(a5)
 	beq.w	.x
 	move.l	chosenmodule(a5),d0
 	bmi.w	.x
 ;	subq	#1,d0			* valitun nimen edellinen node
 
-
 	DPRINT	"addDivider getListNode"
-	bsr.w		getListNode
-	beq.b		.x
+	bsr.w	getListNode
+	beq.b	.x
 	move.l	a0,a3
 
 	bsr.w	get_rt
@@ -9441,7 +9567,7 @@ add_divider
 	lea	divider(a5),a0
 	lea	l_filename(a1),a2
 	move.l	a2,l_nameaddr(a1)
-	move.b	#DIVIDER_MAGIC,(a2)+		* divider merkintä
+	st	l_divider(a1)
 .fe	move.b	(a0)+,(a2)+
 	bne.b	.fe
 	
@@ -9451,8 +9577,8 @@ add_divider
 	move.l	a3,a2
 	lore	Exec,Insert
 	bsr.w	listChanged
-	st	hippoonbox(a5)
-	bsr.w	resh
+	bsr	forceRefreshList
+
 .x	
 	DPRINT  "add_divider release list"
 	bsr.w		releaseModuleList
@@ -9469,13 +9595,16 @@ otag17	dc.l	RT_PubScrName,pubscreen+var_b
 
 
 
+
 *******************************************************************************
 * Add files to list
-* Recursive scan (apparently only on kick2.0)
+* Recursive scan (apparently only on kick2.0 (not quite, also works on 1.3))
 * Uses a separate process
 *******
 addButtonAction
 rbutton7
+	skipIfGadgetDisabled gadgetAddButton
+
 	clr.b	movenode(a5)
 	tst	filereq_prosessi(a5)
 	beq.b	.ook
@@ -10060,20 +10189,15 @@ filereq_code
 	even
 
 * addaa/inserttaa listaan a3:ssa olevan noden
+* in: 
+*   a3 = list node to be added into the list
 addfile	
 	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.exit
 
- ; ifne DEBUG
- ;	DPRINT2 "Adding->",1
- ;	DEBU	l_filename(a3)
- ;	DPRINT  "<-"
- ; endif
-
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
-	;lea	moduleListHeader(a5),a0	* lisätään listaan
-	bsr.w		getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a3,a1
 
 	tst.b	filereqmode(a5)		* onko add vai insert?
@@ -10120,9 +10244,11 @@ adddivider
 	beq.b	.pehe
 	move.l	d0,a0
 
-	isListDivider (a0)    * Magic divider character
-	bne.b	.pehe
-	cmp.b	#'/',7(a0)	 * Another magic divider character
+;	isListDivider (a0)    * Magic divider character
+;	bne.b	.pehe
+	tst.b	l_divider(a3)
+	beq.b	.pehe
+	cmp.b	#'/',7-1(a0)	 * Another magic divider character
 	bne.b	.pehe
 	moveq	#1,d7		 * set a magic flag: overwrite existing divider
 	bra.b	.hue
@@ -10153,8 +10279,11 @@ adddivider
 	move.l	a2,l_nameaddr(a3)
 
 	* first insert divider magic marker
-	move.b	#DIVIDER_MAGIC,(a2)+		* divider merkintä
-							* a0 = directory name
+	;move.b	#DIVIDER_MAGIC,(a2)+	* divider merkintä
+	st	l_divider(a3)
+
+	* a0 = directory name
+
 	* find out length of the name,
 	* max allowed is 21	
 	move.l	a0,a1
@@ -10468,37 +10597,39 @@ parsereqdir2
 * Ladataan/tallennetaan moduuliohjelma
 *******
 
-* ladataan PRG joka on d7:ssa
+* ladataan PRG joka on d7:ssa, AREXX
 rloadprog2
-	bra.b	rlpg
+	bra.b	rloadprogDoIt
 
-rloadprog0		* LoadProgram joka AddTailaa vanhan listan perään.
+* LoadProgram joka AddTailaa vanhan listan perään.
+* Only from keyboard.
+rloadprog0		
 	st	lprgadd(a5)
 
+* From keys, gadgets
 rloadprog
 	moveq	#0,d7
+	skipIfGadgetDisabled gadgetPrgButton
 
-rlpg
-	isListInFavoriteMode
-	bne.b	.isFav
-	bsr.w setMainWindowWaitPointer
+rloadprogDoIt
+
+	bsr.w 	setMainWindowWaitPointer
 	DPRINT  "rloadprog obtain list"
 	bsr.w	obtainModuleList
-	bsr.b .doLoadProgram
-	bsr.w clearMainWindowWaitPointer
+	bsr.b 	.doLoadProgram
+	bsr.w	 clearMainWindowWaitPointer
 	DPRINT  "rloadprog release list"
 	bsr.w	releaseModuleList
-.isFav
 	rts
 
 .doLoadProgram
 	tst	filereq_prosessi(a5)
 	bne.w	.kex
 
-	bsr.b	.mop
+	bsr.b	.showLoadingProgram
 	bra.b	.dd
 
-.mop
+.showLoadingProgram
 	pushm	all
 	lea	.t(pc),a0
 	moveq	#46+WINX,d0
@@ -10571,6 +10702,14 @@ rlpg
 ***** ladataan proggis
 
 	move.l	a0,.infile
+
+ if DEBUG
+	move.l	a0,d0
+	moveq	#0,d1
+	move.b	d7,d1
+	DPRINT	"Infile: %s add: %ld"
+ endif		
+
 
 	move.l	_DosBase(a5),a6
 	move.l	a0,d1
@@ -10766,8 +10905,8 @@ rlpg
 
 	clr.l	chosenmodule(a5)	* moduuliksi eka
 .kex	bsr.w	listChanged
-	st	hippoonbox(a5)
-	bra.w	resh
+	bsr	forceRefreshList
+	rts
 
 .what
 	lea	unknown_module_program_error(pc),a1
@@ -10813,24 +10952,31 @@ rlpg
 
 .noran	clr.l	chosenmodule(a5)
 
-.eh	st	hippoonbox(a5)
-	bsr.w	resh
+.eh	
+	bsr	forceRefreshList
 	bra.w	rbutton1	* Play
 
-
-.blob	bsr.w	.mop
+.blob	bsr.w	.showLoadingProgram
 	bra.w	.loadp
 
-	bra.b	.blob
 
 .tags
 	dc.l	RTFI_Flags,FREQF_PATGAD
 otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
 
 * UGH! Evil hackery:
-loadprog
-	bra.b	*-22		* bra.b -> bra.b .blob
+;loadprog
+;	bra.b	*-22		* bra.b -> bra.b .blob
 
+* in:
+*   a0 = module program file name
+*   d4 = some magic flag?
+*   d7 = some other magic flag?
+loadprog
+	DPRINT	"loadprog"
+	* Ensure correct list mode
+	jsr	engageNormalMode
+	bra.b	rloadprogDoIt\.blob
 
 * in:
 *   a2 = list header
@@ -10914,12 +11060,26 @@ importModuleProgramFromData
 	lsl	#8,d0
 	move.b	(a3)+,d0
 
+	cmp.b	#DIVIDER_MAGIC,(a3)
+	bne.b	.notDiv1
+	addq	#1,a3
+	st	l_divider(a2)
+	subq	#1,d0
+.notDiv1
+
 	subq	#1,d0
 .cy	move.b	(a3)+,(a0)+
 	dbf	d0,.cy
 	clr.b	(a0)
 	bra.b	.old2
 .new2
+
+	cmp.b	#DIVIDER_MAGIC,(a3)
+	bne.b	.notDiv2
+	addq	#1,a3
+	st	l_divider(a2)
+.notDiv2
+
 .le	move.b	(a3),(a0)+
 	cmp.b	#10,(a3)+
 	bne.b	.le
@@ -10927,13 +11087,14 @@ importModuleProgramFromData
 .old2
 
 	lea	l_filename(a2),a1
-	isListDivider (a1)		* divideri
-	bne.b	.nd
+	tst.b	l_divider(a2)
+	beq.b	.notDiv
 	move.l	a1,a0
-	bra.b	.di
-.nd
+	bra.b	.wasDiv
+.notDiv
 	bsr.w	nimenalku
-.di	move.l	a0,l_nameaddr(a2)
+.wasDiv
+	move.l	a0,l_nameaddr(a2)
 
 	* add node a1 to list a0	
 	move.l	a2,a1
@@ -10988,15 +11149,17 @@ nimenalku
 
 
 rsaveprog
-	isListInFavoriteMode
-	bne.b	.x
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.x
+	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.x
 	DPRINT  "rsaveprog obtain list"
-	bsr.w obtainModuleList
-	bsr.w setMainWindowWaitPointer
+	bsr.w 	obtainModuleList
+	bsr.w	 setMainWindowWaitPointer
 	bsr.b	.doSaveProg
-	bsr.w clearMainWindowWaitPointer
+	bsr.w 	clearMainWindowWaitPointer
 	DPRINT  "rloadprog release list"
-	bsr.w releaseModuleList
+	bsr.w 	releaseModuleList
 .x	rts
 
 .doSaveProg
@@ -11071,8 +11234,8 @@ rsaveprog
 	lob	rtFreeRequest
 .ex
 
-	st	hippoonbox(a5)
-	bra.w	resh
+	bsr	forceRefreshList
+	rts
 
 .nomods	lea	.lerr(pc),a1
 	bra.w	request
@@ -11130,6 +11293,11 @@ exportModuleProgramToFile
 	move.l	sp,a1
 
 	lea	l_filename(a3),a0
+	tst.b	l_divider(a3)
+	beq.b	.noDiv
+	move.b	#DIVIDER_MAGIC,(a1)+
+.noDiv
+
 .co	move.b	(a0)+,(a1)+
 	bne.b	.co
 	subq	#1,a1
@@ -11174,6 +11342,10 @@ exportModuleProgramToFile
 
 komentojono
 	DPRINT	"Processing command line parameters"
+
+	* Ensure correct list mode before proceeding
+	jsr	engageNormalMode
+
 	lea	sv_argvArray+4(a5),a3	* ei ekaa
 	moveq	#ARGVSLOTS-1-1,d7
 	move.l	modamount(a5),d6	* vanha määrä talteen
@@ -11226,7 +11398,7 @@ komentojono
 
 	move.l	a2,a1
 	;lea	moduleListHeader(a5),a0	* lisätään listaan
-	bsr.w		getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	lore	Exec,AddTail
 
 	pushm	a2/a3
@@ -11247,9 +11419,8 @@ komentojono
 	beq.b	.x
 	move.l	d6,chosenmodule(a5)	* ensimmäinen uusi moduuli valituksi
 
-	st	hippoonbox(a5)
-	bsr.w		listChanged
-	bsr.w	resh
+	bsr.w	listChanged
+	bsr	forceRefreshList
 	bsr.w	rbutton1		* soitetaan 
 .x	rts
 
@@ -12038,6 +12209,15 @@ drawtexture
 	rts
 
 .texture dc	$5555,$aaaa
+
+
+*******************************************************************************
+*** SECTION *******************************************************************
+*
+* Preferences section
+* - Prefs UI
+*
+*******************************************************************************
 
 
 *******************************************************************************
@@ -15863,13 +16043,22 @@ shn
 
 	bsr.b	clearbox
 
-	isListInFavoriteMode
-	beq.b	.doHippo
-	lea	.noFavs(pc),a0
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	bne.b	.doHippo
+	* What to show when no modules and favorites mode?
 	moveq	#90+WINX,d0
+	lea	.noFavs(pc),a0
+	tst.b	favorites(a5)
+	bne.b	.favsOn
+	lea	.noFavs2(pc),a0
+	moveq	#90-7*8+WINX,d0
+.favsOn
 	bsr.w	printbox
 	bra.b	.wasFav
-.noFavs dc.b "No favorites!",0
+.noFavs 	dc.b 	"No favorites!",10
+		dc.b	"Add with RMB.",0
+.noFavs2	dc.b	"Favorites feature disabled!",0
+		even
 .doHippo
 	bsr.w	printhippo1
 .wasFav	
@@ -16096,25 +16285,37 @@ doPrintNames
 	bsr.w	cut_prefix
 	move.l	a0,a1
 
-	moveq	#0,d7			* clear divider flag
+	moveq	#0,d7		* clear divider flag
+	* copy name into temporary stack buffer
+	lea	-30(sp),sp
+	move.l	sp,a2
 
-	isListDivider (a1)		* list divider magic marker check?
-	bne.b	.nodi
-	addq	#1,a1			* skip to avoid displaying marker
-	st		d7				* set flag: divider being handled
+	tst.b	l_divider(a3)
+	beq.b	.nodi
+	st	d7	* set flag: divider being handled
 	* Set color for list divider
-	push	a1
-	move.l	pen_2(a5),d0
+	pushm	a1
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.1
+.3	move.l	pen_2(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
 	move.l	pen_3(a5),d0
 	move.l	rastport(a5),a1
 	lob	SetAPen
+	bra.b	.2
+.1
+	* Filebrowser divider color
+	* Special case for parent node:
+	tst.b	l_divider(a3)
+	bpl.b	.3
+	* Filebrowser directory:
+	move.l	pen_2(a5),d0
+	move.l	rastport(a5),a1
+	lore	GFX,SetAPen
+.2
 	pop	a1
 .nodi
-	* copy name into temporary stack buffer
-	lea	-30(sp),sp
-	move.l	sp,a2
 	move.l	a2,a0
 	moveq	#27-1,d0		* max kirjainten määrä nimessä
 .ff	move.b	(a1)+,(a2)+
@@ -16128,7 +16329,7 @@ doPrintNames
 	dbf	d0,.fi
 .fo	clr.b	(a2)			* terminate
 
-	tst.b	d7			* divider will not have a random play marker
+	tst.b	d7		* divider will not have a random play marker
 	bne.b	.fu
 
 	cmp.b	#pm_random,playmode(a5)
@@ -16136,7 +16337,7 @@ doPrintNames
 	* Random play mode magic check: Add a marker to the end to indicate module has been played?
 	* Here the module index is needed
 	move.l 	d3,d0 
-	bsr.w		testRandomTableEntry
+	bsr.w	testRandomTableEntry
 	beq.b	.fu
 	move.b	#"®",-1(a2)
 .fu
@@ -16149,8 +16350,8 @@ doPrintNames
 	beq.b	.noFav
 	isFavoriteModule a3
 	beq.b	.noFav
-	isListInFavoriteMode
-	bne.b	.noBold
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.noBold
 	bsr.w	printBold
 	bra.b	.wasFav
 .noFav
@@ -16184,8 +16385,8 @@ doPrintNames
 ***** Katkaisee prefixin nimestä a0:ssa
 
 cut_prefix
-	isListDivider (a0)		* onko divideri?
-	beq.b	.xx
+;	isListDivider (a0)		* onko divideri?
+;	beq.b	.xx
 
 	pushm	d0/a1
 	move.b	prefixcut(a5),d0
@@ -16210,6 +16411,7 @@ cut_prefix
 
 * right mouse button + Del button
 hiiridelete
+	skipIfGadgetDisabled gadgetDelButton
 	tst.l	chosenmodule(a5)
 	bmi.b	.noChosen
 	bsr.w	areyousure_delete
@@ -16219,21 +16421,27 @@ hiiridelete
 	rts
 
 rbutton8b
+	skipIfGadgetDisabled gadgetDelButton
 .l	moveq	#1,d7		* DELETE from DISK!
-	bsr.b	elete
+	bsr.b	delete\.elete
 	tst.b	deleteflag(a5)
 	bne.b	.l
 	bra.w	resh
-;	rts
 
 rbutton8
+deleteButtonAction
 delete
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq	fileBrowserGoToParent
+
+	skipIfGadgetDisabled gadgetDelButton
 	moveq	#0,d7
-	bsr.b	elete
+	bsr.b	.elete
 	bsr.w	resh
 	clr.b	deleteflag(a5)
 	rts
-elete
+.elete
+
 	clr.b	movenode(a5)
 	moveq	#PLAYING_MODULE_NONE,d0
 	move.l	d0,chosenmodule2(a5)
@@ -16260,26 +16468,21 @@ elete
 	bsr.w		getVisibleModuleListHeader
 	move.l	a0,a4
 
-; .luuppo	TSTNODE	a4,a3
-; 	beq.w	.erer
-; 	move.l	a3,a4
-; 	;dbf	d0,.luuppo
-; 	subq.l #1,d0 
-; 	bpl.b  .luuppo
 	DPRINT	"delete getListNode"
-	bsr.w		getListNode
-	beq.w		.erer
+	bsr.w	getListNode
+	beq.w	.erer
 	move.l	a0,a3
 	
 	tst.l	d7
 	beq.b	.nmod
 
-	isListDivider l_filename(a3)
-	bne.b	.de
+;	isListDivider l_filename(a3)
+;	bne.b	.de
+	tst.b	l_divider(a3)
+	beq.b	.de
 	not.b	deleteflag(a5)		 * Deleting a divider! Special action
 	beq.w	.nmodo
 	bra.b	.ni
-
 .de
 	tst.b	deleteflag(a5)
 	bne.b	.ni
@@ -16475,11 +16678,9 @@ inforivit_play
 .hth	dbeq	d0,.copc
 	clr.b	(a1)
 
-;	move	numchans,d2		* kanavien määrä
 	move.l	ps3m_numchans(a5),a0
 	move	(a0),d2
 
-;	move	mtype,d0
 	move.l	ps3m_mtype(a5),a0
 	move	(a0),d0
 	move	d0,d3
@@ -16487,7 +16688,6 @@ inforivit_play
 	lea	.1(pc),a0
 	subq	#1,d0
 	beq.b	.hee
-
 	lea	.2(pc),a0
 	subq	#1,d0
 	beq.b	.hee2
@@ -16495,15 +16695,18 @@ inforivit_play
 	subq	#1,d0
 	beq.b	.hee
 	lea	.4(pc),a0
+	subq	#1,d0
+	beq.b	.hee
+	moveq	#0,d2 * clear channel count for IT
+	lea	 .5(pc),a0
 .hee	move.l	a0,d1
 
-;	cmp	#mtMOD,mtype
 	cmp	#mtMOD,d3
 	bne.w	.leer
 	pushm	d1/d2
 	bsr.w	siisti_nimi
 	popm	d1/d2
-	bra.b	.leer
+	bra.w	.leer
 
 .hee2
 	lea	modulename(a5),a1
@@ -16514,6 +16717,7 @@ inforivit_play
 .2	dc.b	"Pro/Fasttracker",0
 .3	dc.b	"Multitracker",0
 .4	dc.b	"Fasttracker ][ XM",0
+.5	dc.b	"ImpulseTracker      [DP]",0
  even
 
 .eer	bsr.w	siisti_nimi
@@ -16533,7 +16737,7 @@ inforivit_play
 	move.l	a0,d0
 
 	lea	tyyppi1_t(pc),a0
-	tst	d2
+	tst	d2			* PS3M channel count
 	beq.b	.ic
 	lea	tyyppi2_t(pc),a0
 .ic	bsr.w	desmsg
@@ -17415,10 +17619,10 @@ marklineRightMouseButton
 	tst.b	favorites(a5)
 	beq.b	.out
 	* No RMB marking if list is in fav mode
-	* Lets not ro RMB window folding however, seems
+	* Lets not do RMB window folding however, seems
 	* distracting
-	isListInFavoriteMode
-	bne.b	.ou
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.ou
 	bsr.w	 getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
@@ -17440,21 +17644,10 @@ marklineRightMouseButton
 	* item
 	add.l	firstname(a5),d0
 	move.l	d0,d4
-	* Get the actual node into a0
-	bsr.w	getListNode
-	beq.b	.notFound
 
-	isListDivider  l_filename(a0)
-	beq.b	.notFile
-
-	* Toggle favorite status
-	isFavoriteModule a0 
-	bne.b	.wasFavorite
-	bsr.w	addFavoriteModule
-	bra.b	.wasNotFavorite
-.wasFavorite
-	bsr.w	removeFavoriteModule
-.wasNotFavorite
+	* Toggle for node at index d0
+	bsr	toggleFavoriteStatus
+	beq.b	.failed
 
 	move.l	d4,d0
 	* d0 contains the node index
@@ -17473,26 +17666,64 @@ marklineRightMouseButton
 .different
 	rts	
 .notFile
-.notFound
+.failed
 	DPRINT	"Not favoriting this line"
 	rts
 
-*********************************
+
+*******************************************************************************
+*** SECTION *******************************************************************
+*
 * List node utilities
-********************************
+*
+*******************************************************************************
+
+
+* Gets the chosen module list element 
+* Out:
+*    d0 = 0 if not found
+*    d0 = 1 if data available
+*    a3 = list node pointer
+*** Chosenmodule node A3:een
+getcurrent
+	tst.l	modamount(a5)
+	beq.b	.q
+	move.l	chosenmodule(a5),d0
+	bpl.b	getcurrent2
+.q	moveq	#0,d0
+	rts
+
+* Gets the chosen module list element into a3
+* In:
+*   d0 = Module index
+* Out:
+*    d0 = 0 if not found
+*    d0 = 1 if data available
+*    a3 = list node pointer
+getcurrent2
+	bsr.b getListNode
+	move.l	a0,a3
+	rts
+
 
 * Gets the list header that corresponds to the current list mode,
 * either normal, or favorites list. 
 * Out:
 *  a0 = list header address
 getVisibleModuleListHeader
-	isListInFavoriteMode
-	bne.b	.isFav
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.isFav
+	cmp.b	 #LISTMODE_BROWSER,listMode(a5)
+	beq.b	.isBrowser
 	lea	moduleListHeader(a5),a0
 	rts
 .isFav
 	lea	favoriteListHeader(a5),a0
 	rts
+.isBrowser
+	lea	fileBrowserListHeader(a5),a0
+	rts
+	
 
 * When an element is moved, added, inserted, deleted,
 * random bookkeeping must be reset,
@@ -17500,11 +17731,16 @@ getVisibleModuleListHeader
 * no longer represent the list state correctly.
 * Also set a flag, this is used to detect chnages in favorites
 * content.
+* In file browser mode contents can NOT be changed.
+
 listChanged
 	DPRINT "List changed"
 	bsr.w	clearCachedNode
 	bsr.w	clear_random	
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.browser
 	st	moduleListChanged(a5)
+.browser
 	rts
 
 ; TODO: list traversal end check should not be needed,
@@ -17636,11 +17872,12 @@ clearCachedNode
 	clr.l	cachedNode(a5)	
 	rts
 
-
-
-*********************************
+*******************************************************************************
+*** SECTION *******************************************************************
+*
 * Tooltip popup
-********************************
+*
+*******************************************************************************
 
 * in: 
 *   a0=structure of
@@ -17848,12 +18085,14 @@ loadkeyfile
 
 
 
-
 *******************************************************************************
+*** SECTION *******************************************************************
 *
-* Module info
+* Info window
+* - module info
+* - about info
 *
-*******
+*******************************************************************************
 
 sulje_foo
 	cmp	#33,info_prosessi(a5)
@@ -18394,14 +18633,20 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .nosid
 
+	* Check for IT special case,
+	* handle it as an eagleplayer
+	jsr	isImpulseTrackerActive
+	beq.b	.yesIT
 	cmp	#pt_eagle_start,playertype(a5)		* eagleplayer
 	blo.w	.noeagle
+.yesIT
 	move	#33,info_prosessi(a5)		* some magic flag
-	
+
 	lea	.form3(pc),a0
 	lea	-32(sp),sp
 	move.l	sp,a4
 	bsr.w	.namtypsizcom
+
 	moveq	#10+20,d5
 	bsr.w	.allo2
 	bne.w	.jee9eg
@@ -18829,6 +19074,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 .noo_med
 .noo
+	* DEFAULT INFO
+
 	move	#35,info_prosessi(a5)
 
 	lea	.form3(pc),a0
@@ -18843,6 +19090,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	lea	32(sp),sp
 	bra.w	.sexit
 .jee9a
+	* parameters in a1
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
 	jsr	desmsg4
@@ -18863,7 +19111,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	bsr.w	.lloppu
 	push	d0
 	lea	.author(pc),a0
-	bsr	desmsg3
+	jsr	desmsg3
 	pop	a0
 	* wrap to another line if there is text
 	moveq	#31-1,d0
@@ -18876,7 +19124,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	lea	.fullLineFormat(pc),a0 
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
-	bsr		desmsg3
+	jsr	desmsg3
 .noMoreA
 .noAuth
 	bra.w	.selvis
@@ -18933,6 +19181,15 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 *************************************
 
+* writes into a4 depending on format:
+* - module name address
+* - module type address
+* - mix rate integer
+* - mix rate decimal
+* - module length
+* - module start addr
+* - module end addr
+
 .namtypsizcom
 	pushm	d0/d1
 
@@ -18952,7 +19209,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .lee
 	cmp	#pt_multi,playertype(a5)		* mixing rate
 	bne.b	.nah
-
+	jsr	isImpulseTrackerActive
+	beq.b	.nah
 .rrqq	
 	move.l	mixirate(a5),d0
 	tst.b	ahi_use_nyt(a5)
@@ -19881,26 +20139,30 @@ freeinfosample
 * About
 **
 
+calculateDividersInList
+	jsr	obtainModuleList
+	bsr.w	getVisibleModuleListHeader
+	moveq	#0,d0
+.l	TSTNODE	a0,a0
+	beq.b	.e
+	tst.b	l_divider(a0)
+	beq.b	.l
+	addq.l	#1,d0
+	bra.b	.l
+.e	jsr	releaseModuleList
+	rts
+
 aboutButtonAction
 rbutton10
 	movem.l	d0-a6,-(sp)
 
 * lasketaan dividereitten määrä
 	DPRINT  "aboutButtonAction obtain list"
-	jsr		obtainModuleList
-	moveq	#0,d5
 	* calculate the amount of list dividers in the list
 	;lea	moduleListHeader(a5),a4
-	bsr.w	getVisibleModuleListHeader
-.l	TSTNODE	a0,a0
-	beq.b	.e
-	isListDivider  l_filename(a0)	* onko divideri??
-	bne.b	.l
-	addq.l	#1,d5
-	bra.b	.l
-.e	move.l	d5,divideramount(a5)
+	bsr.b	calculateDividersInList
+	move.l	d0,divideramount(a5)
 	DPRINT  "aboutButtonAction release list"
-	jsr		releaseModuleList
 
 	st	infolag(a5)
 
@@ -20155,166 +20417,20 @@ efekti
 
   endc
   
+
+*******************************************************************************
+*** SECTION *******************************************************************
+*
+* Vertical blanking interrupt
+* CIA interrupt
+* Software interrupt
+*
+*******************************************************************************
+
 *******************************************************************************
 * Keskeytykset
 *******
 
-_ciaa	=	$bfe001
-_ciab	=	$bfd000
-
-cianame	dc.b	"ciaa.resource",0
- even
-
-	
-* init with default tempo 
-init_ciaint
-	moveq	#0,d0
-* init with specified tempo in d0. 0 = default
-init_ciaint_withTempo
-	tst.b	ciasaatu(a5)
-	bne.b	.hm
-.c	moveq	#0,d0
-	rts
-
-.hm	clr.b	vbtimeruse(a5)		* käytetään ciaa
-	tst.b	vbtimer(a5)		* onko vblank käytössä?
-	beq.b	.ci
-	st	vbtimeruse(a5)		* käytetään vblankia
-	bra.b	.c
-.ci
-	pushm	d1-a6
-
-	move	#28419/2,d1
-	tst	d0
-	beq.b	.default
-	move	d0,d1
-.default
-	move	d1,timerhi(a5)
-
-** CIAA
-
-	lea	_ciaa,a3
-	lea	ciaserver(pc),a4
-	moveq	#0,d6			* timer a
-	move.l	ciabasea(a5),d0
-	beq.b	.noa
-	move.l	d0,a6
-	lea	(a4),a1
-	move.l	d6,d0
-	lob	AddICRVector
-	tst.l	d0
-	beq.b	.gottimer		* Saatiinko?
-
-	lea	(a4),a1
-	moveq	#1,d6			* timer b
-	move.l	d6,d0
-	lob	AddICRVector
-	tst.l	d0
-	beq.b	.gottimer
-.noa
-** CIAB
-
-	lea	_ciab,a3
-	lea	ciaserver(pc),a4
-	moveq	#0,d6			* timer a
-	move.l	ciabaseb(a5),d0
-	beq.b	.nob
-	move.l	d0,a6
-	lea	(a4),a1
-	move.l	d6,d0
-	lob	AddICRVector
-	tst.l	d0
-	beq.b	.gottimer		* Saatiinko?
-
-	lea	(a4),a1
-	moveq	#1,d6			* timer b
-	move.l	d6,d0
-	lob	AddICRVector
-	tst.l	d0
-	beq.b	.gottimer
-.nob
-	popm	d1-a6
-	moveq	#-1,d0			* ERROR! Ei saatu varattua timeriä.
-	rts
-
-.gottimer
-	move.l	a3,ciaddr(a5)
-	move.l	a6,ciabase(a5)
-	move.b	d6,whichtimer(a5)	* 0: timer a, 1:timer b
-
- if DEBUG
-	move.l a3,d0
-	moveq	#0,d1
-	move.b whichtimer(a5),d1
-	DPRINT	"CIA Timer allocated %lx %ld"
- endif
-	bsr.b	ciaint_setTempo
-
-	lea	ciacra(a3),a2
-	tst.b	d6
-	beq.b	.tima
-	lea	ciacrb(a3),a2
-.tima
-	clr.b	ciasaatu(a5)		* saatiin keskeytys
-
-	move.b	#%00010001,(a2)		* Continuous, force load
-	popm	d1-a6
-	moveq	#0,d0
-	rts
-
-
-* Sets tempo value word from timerhi(a5) into currently
-* active CIA timer.
-* May be called from interrupt.
-ciaint_setTempo
-	pushm	a2/a3/a5
-	lea		var_b,a5
-	move.l 	ciaddr(a5),a3
-	lea	ciatalo(a3),a2
-	tst.b	whichtimer(a5)
-	beq.b	.timera
-	lea	ciatblo(a3),a2
-.timera	
-	move.b	timerlo(a5),(a2)
-	move.b	timerhi(a5),$100(a2)
-; Probaly not good idea to debug print here,
-; can be called from interrupt (in case of DeliCustom).
-	popm	a2/a3/a5
-	rts
-
-ciaint_setTempoFromD0
-	move	d0,timerhi+var_b
-	bra.b	ciaint_setTempo
-
-
-rem_ciaint
-	tst.b	ciasaatu(a5)
-	beq.b	.hm
-	rts
-
-.hm	pushm	all
-	move.l	ciaddr(a5),a3
-
-	moveq	#0,d0
-	move.b	whichtimer(a5),d0	* RemICRVector
-	bne.b	.b
-	move.b	#%00000000,ciacra(a3)
-	bra.b	.a
-.b	move.b	#%00000000,ciacrb(a3)
-.a
-	move.l	ciabase(a5),a6
-	lea	ciaserver(pc),a1
-	lob	RemICRVector
-	st	ciasaatu(a5)		* ei keskeytystä!
-	DPRINT	"CIA Timer freed"
-	popm	all
-	rts
-
-
-******************************************************************************
-*
-* Vertical blanking interrupt
-*
 
 intserver
 	dc.l	0,0
@@ -20551,6 +20667,7 @@ dummyserver_NOTUSED
 * CIA timer interrupt
 * Software interrupt
 *
+******************************************************************************
 
 ciaserver
 	dc.l	0,0
@@ -20616,60 +20733,14 @@ softint
 	rts
 
 
-*******************************************************************************
-* Scoperutiinit
-*******
-
-* Käynnistys
-
-start_quad
-	st	scopeflag(a5)
-start_quad2
-;	jmp	quad_code
-
-	move.l	a6,-(sp)
-	move.l	_DosBase(a5),a6
-	pushpea	.prn(pc),d1
-	moveq	#0,d2			* pri
-	move.l	#quad_segment,d3
-	lsr.l	#2,d3
-	move.l	#3000,d4
-	lob	CreateProc
-	tst.l	d0
-	beq.b	.error
-	addq	#1,quad_prosessi(a5)
-
-	bsr.w	updateprefs
-
-.error	move.l	(sp)+,a6
-	rts
-
-.prn	dc.b	"HiP-Scope",0
- even
- 
-* Sammutus
-
-sulje_quad
-	clr.b	scopeflag(a5)
-sulje_quad2
-	push	a6
-	tst	quad_prosessi(a5)
-	beq.b	.tt	
-
-	move.l	quad_task(a5),a1
-	moveq	#0,d0
-	lore	Exec,SetTaskPri
-	st	tapa_quad(a5)		* lippu: poistu!
-.t	tst	quad_prosessi(a5)	* odotellaan
-	beq.b	.tt
-	jsr	dela
-	bra.b	.t
-.tt	clr.b	tapa_quad(a5)
-	pop	a6
-	rts
 
 
-
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* ARexx support
+*
+********************************************************************************
 
 ******************************************************************************
 *
@@ -20764,7 +20835,9 @@ rexxmessage
 	dr	.ps3m3,.ps3mrate
 	dr	.loadp,.loadprefs
 	dr	.sampt,rbutton10b
-	dc	0
+	dr	.listmodet,toggleListMode
+	dr	.favoritet,.toggleFavorite
+	dc 	0 ; END
 
 .playt	dc.b	"PLAY",0
 .cleart	dc.b	"CLEAR",0
@@ -20796,6 +20869,8 @@ rexxmessage
 .ps3m3	dc.b	"PS3MRATE",0
 .loadp	dc.b	"LOADPREFS",0
 .sampt	dc.b	"SAMPLES",0
+.listmodet dc.b "TOGGLEMODE",0
+.favoritet dc.b "FAVORITE",0
  even
 
 
@@ -20852,12 +20927,12 @@ rexxmessage
 	bsr.w	addfile
 	bsr.w	listChanged
 
-	st	hippoonbox(a5)
 	tst.l	chosenmodule(a5)
 	bpl.b	.ee
 	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennestään
-.ee	bra.w	resh
-
+.ee	
+	bsr	forceRefreshList
+	rts
 
 
 *** INSERT
@@ -20902,10 +20977,10 @@ rexxmessage
 
 .chooseNext
 	moveq	#0,d4	* rawkey modifier, no shift
-	bra.w	lista_alas
+	jmp	lista_alas
 .choosePrev	
 	moveq	#0,d4	* rawkey modifier, no shift
-	bra.w	lista_ylos
+	jmp	lista_ylos
 	
 *** VOLUME
 .volume
@@ -21054,6 +21129,16 @@ rexxmessage
 .q	not.b	kokolippu(a5)
 	jmp	avaa_ikkuna
 
+.toggleFavorite
+	tst.b	favorites(a5)
+	beq.b	.1
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.1
+	move.l	chosenmodule(a5),d0
+	bsr		toggleFavoriteStatus
+	beq.b	.1
+	bsr	forceRefreshList
+.1	rts
 
 * GET:
 * 	current song
@@ -21313,6 +21398,59 @@ str2msg	pushm	d0/d1/a0/a1/a6
 ;	jsr	_LVOReplyMsg(a6)
 
 
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* Scopes
+*
+********************************************************************************
+
+* Käynnistys
+start_quad
+	st	scopeflag(a5)
+start_quad2
+;	jmp	quad_code
+
+	move.l	a6,-(sp)
+	move.l	_DosBase(a5),a6
+	pushpea	.prn(pc),d1
+	moveq	#0,d2			* pri
+	move.l	#quad_segment,d3
+	lsr.l	#2,d3
+	move.l	#3000,d4
+	lob	CreateProc
+	tst.l	d0
+	beq.b	.error
+	addq	#1,quad_prosessi(a5)
+
+	bsr.w	updateprefs
+
+.error	move.l	(sp)+,a6
+	rts
+
+.prn	dc.b	"HiP-Scope",0
+ even
+ 
+* Sammutus
+
+sulje_quad
+	clr.b	scopeflag(a5)
+sulje_quad2
+	push	a6
+	tst	quad_prosessi(a5)
+	beq.b	.tt	
+
+	move.l	quad_task(a5),a1
+	moveq	#0,d0
+	lore	Exec,SetTaskPri
+	st	tapa_quad(a5)		* lippu: poistu!
+.t	tst	quad_prosessi(a5)	* odotellaan
+	beq.b	.tt
+	jsr	dela
+	bra.b	.t
+.tt	clr.b	tapa_quad(a5)
+	pop	a6
+	rts
 
 
 *******************************************************************************
@@ -22566,6 +22704,15 @@ drawScope
 
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.jaa
+	bsr	isImpulseTrackerActive
+	bne.b	.noIt
+	pushm d0-d6/a0/a1/a6
+	bsr	requestNormalScopeDrawArea
+	popm	d0-d6/a0/a1/a6
+	bne.b	.skippi	* wait for resize
+	* Displaying sample scope, so need magic
+	bra.b	.joa
+.noIt
 	bsr	patternScopeIsActive
 	beq.b	.noMagic
 	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
@@ -24760,7 +24907,12 @@ noteScroller2
 .pos	dc.b	"00"
  even
 
- ******************************************************************************
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* Module loading
+*
+********************************************************************************
 
 *******
 * Module loading
@@ -24940,7 +25092,7 @@ loadmodule
 
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
-	bne.b	.nip
+	bne.w	.nip
 	tst.b	executablemoduleinit(a5)
 	bne.b	.nip
 
@@ -24963,7 +25115,7 @@ loadmodule
 	bne.b	.cop
 
 	jsr	freemodule
-	jsr	rbutton9		* lista tyhjäks
+	jsr	clearlist	* lista tyhjäks
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 
 	move.l	sp,a0			* ohjelman nimi
@@ -24991,7 +25143,6 @@ loadmodule
 	clr.b	contonerr_laskuri(a5)
 	bra.b	loaderr
 .iik2
-
 	bsr.w	inforivit_errc		* Skipping -teksti
 	moveq	#50,d1
 	lore	Dos,Delay
@@ -25131,6 +25282,12 @@ tuntematonvirhe
 .groupSkip
 
 	lea	.g(pc),a2
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.noBr	
+	lea	.onlyOk(pc),a2
+	bsr.w	rawrequest
+	bra.b	.w
+.noBr
 	bsr.w	rawrequest
 	tst.l	d0
 	beq.b	.w	
@@ -25139,6 +25296,7 @@ tuntematonvirhe
 	rts
 
 .g	dc.b	"_Delete from list|_OK",0
+.onlyOk = *-4
  even
 
 *******************************************************************************
@@ -25968,14 +26126,26 @@ loadfile
 * Finally here we just do an ordinary read.
 ****** Ihan Tavallinen Lataus
 
-
-
  if DEBUG
 	move.l	lod_length(a5),d0
 	DPRINT	"Normal load %ld"
  endif
- 
+ 	
+	pushm d0/a0
+	lea	probebuffer(a5),a0
+	bsr	id_it
+	popm d0/a0
+	bne.b	.wasNotIt
+	DPRINT	"IT hack 1!"
+	move.l	lod_length(a5),d0
+	addq.l	#2,d0
+	move.l	lod_memtype(a5),d1
+	lore	Exec,AllocMem
+	bra.b	.itAlloc
+.wasNotIt
+
 	bsr.w	.alloc
+.itAlloc
 	move.l	d0,lod_address(a5)
 	beq.w	.error
 
@@ -26575,10 +26745,13 @@ tutki_moduuli2
 	move.l	(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#'MTM',d0		* multi
-	beq.b	.f
+	beq.w	.f
 	move.l	1080(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#"TDZ",d0		* take
+	beq.b	.f
+
+	bsr	id_it			 * IT
 	beq.b	.f
 
 
@@ -26609,7 +26782,7 @@ tutki_moduuli2
 	bsr.w	id_mline
 	tst.l	d0
 	beq.b	.goPublic
-	bsr.w	id_musicmaker8_
+	jsr	id_musicmaker8_
 	tst.l	d0
 	beq.b	.goPublic
 	;bsr	id_digitalmugician2 
@@ -27289,7 +27462,7 @@ openPlayerGroupFile
 
 	lea	-100(sp),sp 
 	move.l	sp,a0
-	lea	.progdir(pc),a1 
+	lea	progdir(pc),a1 
 .c1 	move.b	(a1)+,(a0)+
 	bne.b	.c1
 	subq	#1,a0 
@@ -27320,7 +27493,7 @@ openPlayerGroupFile
 .ok 
 	rts
 
-.progdir 
+progdir 
 	dc.b	"PROGDIR:",0
 	even
 
@@ -27442,6 +27615,49 @@ loadreplayer
 * Scope kanssa
 *******
 
+
+* Disables a button gadget
+* in:
+*   a0 = button gadget
+disableButton
+	move	#GFLG_DISABLED,d0
+	and	gg_Flags(a0),d0
+	bne.b	.alreadyDisabled
+	or	#GFLG_DISABLED,gg_Flags(a0)
+	jsr	refreshGadgetInA0
+.alreadyDisabled
+	rts
+
+* Enables a button gadget
+* in:
+*   a0 = button gadget
+enableButton
+	move	#GFLG_DISABLED,d0
+	and	gg_Flags(a0),d0
+	beq.b	.alreadyEnabled
+	and	 #~GFLG_DISABLED,gg_Flags(a0)
+	* When re-enabling, need to draw the frame and clear
+	* the disabled shadow
+	move.l	a0,a3
+	push	a0
+	bsr.w	redrawButtonGadget	
+	pop	a0
+	moveq	#1,d0
+.alreadyEnabled
+	rts
+
+* Enables a button gadget with RMB ear gfx
+* in:
+*   a0 = button gadget
+enableButtonWithEar
+	bsr.b	enableButton
+	beq.b	.alreadyEnabled
+	jsr	printkorva
+.alreadyEnabled
+	rts
+	
+
+
 whatgadgets2
 	moveq	#0,d0
 	bra.b	whag
@@ -27548,7 +27764,8 @@ whag	tst.b	win(a5)
 	popm	all
 	rts
 
-* Gadget in a3
+* in:
+*   a3 = gadget
 drawButtonFrame
 	pushm	all				* varjostus kuntoon taas
 	movem	4(a3),plx1/ply1/plx2/ply2
@@ -27564,7 +27781,9 @@ drawButtonFrame
 	rts
 
 
-* Gadget in a3
+* Clear button area, refresh gadget, draw button frame
+* in:
+*   a3 = gadget
 redrawButtonGadget
 	movem	4(a3),d0/d1	* putsataan gadgetin alue..
 	move	d0,d2
@@ -27578,11 +27797,8 @@ redrawButtonGadget
 	pop	d6
 
 	move.l	a3,a0
-	move.l	windowbase(a5),a1
-	sub.l	a2,a2
+	jsr	refreshGadgetInA0
 
-	moveq	#1,d0
-	lore	Intui,RefreshGList
 	bsr.b	drawButtonFrame
 	rts
 
@@ -27598,98 +27814,47 @@ gadstate
 
 
 
-*******************************************************************************
-* Varaa/vapauttaa äänikanavat
-*******
-varaa_kanavat
-	tst.b	kanavatvarattu+var_b
-	beq.b	.jee
+
+
+
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* Favorite list handling
+*
+*****************************************************************************
+
+* Toggle favorite status for list node
+* in:
+*   d0 = node index
+* out:
+*	d0 = 0 on failure, 1 on OK
+toggleFavoriteStatus
+	* Get the actual node into a0
+	bsr.w	getListNode
+	beq.b	.notFound
+
+	tst.b	l_divider(a0)
+	bne.b	.notFile
+
+	* Toggle favorite status
+	isFavoriteModule a0 
+	bne.b	.wasFavorite
+	bsr.b	addFavoriteModule
+	bra.b	.wasNotFavorite
+.wasFavorite
+	bsr.w	removeFavoriteModule
+.wasNotFavorite
+	moveq	#1,d0
+	rts
+.notFound
+.notFile
 	moveq	#0,d0
 	rts
-.jee	
-	movem.l	d1-a6,-(sp)
-	lea	var_b,a5
-
-	move.l	playerbase(a5),a0
-	move	p_liput(a0),d0
-	btst	#pb_ahi,d0
-	beq.b	.naa
-	tst.b	ahi_use_nyt(a5)
-	bne.b	.na
-.naa
-
-	bsr.w	createport
-	bsr.w	createio
-
-	lea	iorequest(a5),a1
-	lea	.adname(pc),a0
-	moveq	#0,d0
-	moveq	#0,d1
-	moveq	#100,d7
-	tst.b	nastyaudio(a5)
-	beq.b	.nona
-	moveq	#127,d7
-.nona	move.b	d7,LN_PRI(a1)
-	lea	.allocmap(pc),a2
-	move.l	a2,ioa_Data(a1)
-* d2 = kanavalistan pituus
-	moveq	#1,d2			* vain yksi vaihtoehto
-	move.l	d2,ioa_Length(a1)
-	move.l	(a5),a6
-	lob	OpenDevice
-	move.l	d0,d5
-	move.l	d5,acou_deviceerr(a5)
-	bne.b	acouscl
-	st	kanavatvarattu(a5)
-	DPRINT	"Audio open"
-.na	movem.l	(sp)+,d1-a6
-	moveq	#0,d0
-	rts
-
-.adname		dc.b	"audio.device",0
-.allocmap	dc.b	$0f
- even
-
-acouscl
-	movem.l	(sp)+,d1-a6
-	bsr.b	vapauta_kanavat
-	moveq	#-1,d0
-	rts
-
-vapauta_kanavat	
-	tst.b	kanavatvarattu+var_b
-	bne.b	.eeo
-	rts
-.eeo	movem.l	d0-a6,-(sp)
-	lea	var_b,a5
-
-	tst.l	acou_deviceerr(a5)
-	bne.b	acouscll
-	lea	iorequest(a5),a1
-	lore	Exec,CloseDevice
-	DPRINT	"Audio close"
-acouscll
-	clr.l	acou_deviceerr(a5)
-	clr.b	kanavatvarattu(a5)
-	movem.l	(sp)+,d0-a6
-	rts
-
-
-
-********************************
-* Favorite module list handling
-********************************
 
 * in:
-*  a0 = module list node
-;isFavoriteModule
-;	tst.b	l_favorite(a0)
-;	rts
-
-* in:
-*  a0 = module list node
+*   a0 = module list node
 addFavoriteModule
-	;bsr	isFavoriteModule
 	isFavoriteModule a0
 	bne.b .exit
 
@@ -27744,13 +27909,11 @@ addFavoriteModule
  endif
 .noMem
 .exit
-	;bsr exportFavoriteModulesWithMessage
 	rts
 
 * in:
 *  a0 = module list node
 removeFavoriteModule
-	;bsr	isFavoriteModule
 	isFavoriteModule a0
 	beq.b	.exit
 	clr.b	l_favorite(a0)
@@ -27783,7 +27946,6 @@ removeFavoriteModule
  if DEBUG
 	bsr.w	logFavoriteList
  endif
-	;bsr exportFavoriteModulesWithMessage
 	rts
 
 * in:
@@ -27808,6 +27970,9 @@ findFavoriteModule
 	* matches so far, loop until zero termination
 	tst.b	(a2)
 	bne.b	.compare
+	* the counterpart must also have a zero here
+	tst.b	(a3)
+	bne.b	.notFound
 * no differences found, it is a match
 	moveq	#1,d0
 	rts
@@ -27829,8 +27994,8 @@ freeFavoriteList
 
 .listFreed
 	st	favoriteListChanged(a5)
-	isListInFavoriteMode
-	beq.b	.noFav
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	bne.b	.noFav
 	* In favorite mode, no more modules to show
 	clr.l	modamount(a5)
 .noFav	
@@ -27841,10 +28006,8 @@ importFavoriteModulesFromDisk
 	tst.b	favorites(a5)
 	bne.b	.enabled
 	DPRINT	"->disabled in prefs"
-	bsr.w		disableListModeChangeButton
 	rts
 .enabled
-	bsr.w	enableListModeChangeButton
 
 	moveq	#0,d6
 	lea	favoriteModuleFileName(pc),a0
@@ -27906,8 +28069,7 @@ exportFavoriteModulesWithMessage
 	jsr	unfreezeMainWindowGadgets
 	jsr	clearMainWindowWaitPointer
 	* request full refresh of filebox:
-	st	hippoonbox(a5)
-	jsr	resh
+	jsr	forceRefreshList
 .x	popm	all
 	rts
 	
@@ -27917,8 +28079,8 @@ exportFavoriteModulesToDisk
 	beq.b	.x
 
 	* User is exiting while in fav mode?
-	isListInFavoriteMode
-	beq.b	.normalMode
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	bne.b	.normalMode
 	move.b	moduleListChanged(a5),d0 
 	clr.b	moduleListChanged(a5)
 	or.b	d0,favoriteListChanged(a5)
@@ -27939,9 +28101,12 @@ favoriteModuleFileName
 * in:
 *  a0 = list node
 updateFavoriteStatus
+	tst.b	l_divider(a0)
+	bne.b	.skipDivs
 	bsr.w	findFavoriteModule
 	* a matching favorite module was found? set flag 
 	sne	l_favorite(a0)
+.skipDivs
 	rts
 
 logFavoriteList
@@ -27964,8 +28129,7 @@ handleFavoriteModuleConfigChange
 	tst.b	favorites(a5)
 	beq.b	.noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: enabled"
-	bsr.w	enableListModeChangeButton
-
+	
 * favorites are enabled.
 * - they may have been enabled ealier, or
 * - they became enabled just now
@@ -27995,11 +28159,12 @@ handleFavoriteModuleConfigChange
 
 .noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: disabled"
-	bsr.w	disableListModeChangeButton
-	isListInFavoriteMode
-	beq.b	.noFav
+	;bsr.w	disableListModeChangeButton
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	bne.b	.noFav
 	* If disabled from prefs must toggle to normal mode
-	bsr.b	toggleListMode
+	;bsr.b	toggleListMode
+	bsr.b	engageNormalMode
 .noFav
 	
 	* favorites are not enabled
@@ -28011,28 +28176,39 @@ handleFavoriteModuleConfigChange
 	* anyway if feature is disabled
 	bsr.w	freeFavoriteList
 .refresh
-	st	hippoonbox(a5)
-	jsr	resh
+	jsr	forceRefreshList
+
 .exit
 	popm	all 
 	rts
 
-********************************
-* Favorite list ui operations
-********************************
-
-* Checks if list is in favorite mode
-* Z is set if in normal mode, otherwise favorite mode
-;isListInFavoriteMode
-;	tst.b	listMode(a5)
-;	rts
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* List mode operations
+*
+******************************************************************************
 
 toggleListMode
-	pushm	all
-	DPRINT	"toggleListMode"
+	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
+	beq.b	engageFavoritesMode
+	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
+	beq.w	engageFileBrowserMode
+	; falling
+	;cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	;beq.b	engageNormalMode
+	;rts
 
-	isListInFavoriteMode
-	beq.b	.wasNormal
+engageNormalMode
+	DPRINT	"engage normal"
+	pushm	all
+	
+	cmp.b	#LISTMODE_NORMAL,listMode(a5)
+	beq.b	.skip
+	
+	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
+	bne.b	.wasNotFav
+
 	* List was in favorite mode.
 	* Store list changed status, so changes will be saved.
 	* Combine with favoritesListChanged, since that may also
@@ -28040,78 +28216,54 @@ toggleListMode
 	move.b	moduleListChanged(a5),d0
 	or.b	d0,favoriteListChanged(a5)
 	clr.b	moduleListChanged(a5)
+
+.wasNotFav
 	move.b	#LISTMODE_NORMAL,listMode(a5)
-	bra.b	.set
-.wasNormal
+	bsr.b	engageListMode
+
+.skip
+	popm	all
+	rts	
+
+engageFavoritesMode
+	pushm	all
+	DPRINT	"engage favorites"
 	* Moving to favorite mode
 	* moduleListChanged must be cleared initially to catch
 	* any subsequent user edits.
 	clr.b	moduleListChanged(a5)
 	move.b	#LISTMODE_FAVORITES,listMode(a5)
-.set
-	bsr.b	.setButtonStates
-	bsr.w	.setListState
+	bsr.b	engageListMode
+	popm	all
+	rts	
+	
+* Common operations to be done after list mode change
+engageListMode
+	bsr.w	.setListModeChangeButtonIcon
+	bsr.w	.setButtonStatesAccordingToListMode
+	bsr.b	.setListState
 	* Playing module should be invalidated,
 	* it is not compatible between the two lists.
 	tst.l	playingmodule(a5) 
 	bmi.b	.not
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .not
-	popm	all
 	rts
 
-.setButtonStates
-	lea	listImage,a0
-	isListInFavoriteMode
-	beq.b	.isNormal
-	lea	favoriteImage,a0
-.isNormal
-	* Toggle listmode button icon
-	move.l	a0,gadgetListModeChangeButtonImagePtr
-	lea	gadgetListModeChangeButton,a0
-	move.l	windowbase(a5),a1
-	sub.l	a2,a2
-	moveq	#1,d0			 	* number of gadgets to refresh
-	lore	Intui,RefreshGList
-
-	* Enable/disable "Prg" button
-
-	lea	gadgetPrgButton,a0
-	isListInFavoriteMode
-	bne.b	.disable
-	and	 #~GFLG_DISABLED,gg_Flags(a0)
-	* When re-enabling, need to draw the frame and clear
-	* the disabled shadow
-	move.l	a0,a3
-	push	a0
-	bsr.w	redrawButtonGadget	
-	bsr.b	.refresh
-	pop	a0
-	jsr	printkorva
-	rts
-.disable	
-	or	#GFLG_DISABLED,gg_Flags(a0)
-.refresh
-	lea	gadgetPrgButton,a0
-	move.l	windowbase(a5),a1
-	sub.l	a2,a2
-	moveq	#1,d0			 	* number of gadgets to refresh
-	lore	Intui,RefreshGList
-	rts
 
 .setListState
 	* Remove previous list selection
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)		
-	jsr	obtainModuleList
 
-	jsr	clear_random
+	jsr	obtainModuleList	
+	jsr	clearRandomTable
+	
 	bsr.w	clearCachedNode
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
-
 	* set d1 to FF if list is in normal mode
-	isListInFavoriteMode
-	seq	d1
+	cmp.b	#LISTMODE_NORMAL,listMode(a5)
+	seq 	d1
 	* set d2 to FF if favorites changed
 	tst.b	favoriteListChanged(a5)
 	sne	d2
@@ -28149,37 +28301,82 @@ toggleListMode
  endif
 	jsr	releaseModuleList
 	jsr	clearMainWindowWaitPointer
-	st	hippoonbox(a5)
-	jsr	resh
+	jsr	forceRefreshList
 	rts
 
-enableListModeChangeButton
-	lea 	gadgetListModeChangeButton,a3
-	move	#GFLG_DISABLED,d0
-	and	gg_Flags(a3),d0
-	beq.b	.x
-	and	 #~GFLG_DISABLED,gg_Flags(a3)
-	move.l 	a3,a0
-	jsr	refreshGadgetInA0
-	bsr.w 	redrawButtonGadget
-.x	rts 
+.setButtonStatesAccordingToListMode
+	cmp.b	#LISTMODE_NORMAL,listMode(a5)
+	beq.b	.normalMode
+	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.favoritesMode
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.browserMode
+	rts
 
-disableListModeChangeButton
-	lea 	gadgetListModeChangeButton,a0
-	move	#GFLG_DISABLED,d0
-	and	gg_Flags(a0),d0
-	bne.b	.x
-	or	#GFLG_DISABLED,gg_Flags(a0)
-	jsr	refreshGadgetInA0
-.x	rts
+.normalMode
+	lea	gadgetAddButton,a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetDelButton,a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetNewButton,a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetSortButton,a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetMoveButton,a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetPrgButton,a0
+	bsr.w	enableButtonWithEar
+	rts
 
+.favoritesMode
+	lea	gadgetPrgButton,a0
+	bsr	disableButton
+	rts
 
-*******************************************************************************
+	
+.browserMode
+	lea	gadgetAddButton,a0
+	bsr.w	disableButton
+	lea	gadgetDelButton,a0
+	bsr.w	disableButton
+	lea	gadgetNewButton,a0
+	bsr.w	disableButton
+	lea	gadgetSortButton,a0
+	bsr.w	disableButton
+	lea	gadgetMoveButton,a0
+	bsr.w	disableButton
+	lea	gadgetPrgButton,a0
+	bsr.w	disableButton
+	rts
+
+.setListModeChangeButtonIcon
+	lea	listImage,a0
+	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
+	beq.b	.set
+	lea	favoriteImage,a0
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.set
+	lea	fileBrowserImage,a0
+	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.set
+	rts
+.set
+	* Toggle listmode button icon
+	move.l	a0,gadgetListModeChangeButtonImagePtr
+	lea	gadgetListModeChangeButton,a0
+	jmp	refreshGadgetInA0
+	
+
+********************************************************************************
+*** SECTION ********************************************************************
+*
 * Save state operations
 * - module list
+* - list mode
 * - chosen module
 * - play status
-*******
+*
+*******************************************************************************
 
 importSavedStateModulesFromDisk
 	DPRINT	"importSavedStateModulesFromDisk"
@@ -28203,8 +28400,7 @@ importSavedStateModulesFromDisk
 	move.l	d6,a0
 	jsr	freemem
 
-	tst.l	d0
-	beq.b	.none
+	* Can be zero
 	move.l	d0,modamount(a5)
 	
 	pushpea	savedStateModuleFileName(pc),d1
@@ -28221,7 +28417,7 @@ importSavedStateModulesFromDisk
 	lea	fileinfoblock+fib_Comment(a5),a0
  if DEBUG
 	move.l	a0,d0
-	DPRINT	"->%s"
+	DPRINT	"State=%s"
  endif
 	cmp.b	#" ",8(a0)
 	beq.b	.parse
@@ -28260,15 +28456,29 @@ importSavedStateModulesFromDisk
 	* switch mode before setting chosen module
 	* chosenmodule will be reset otherwise.
 	cmp.b	#"1",2(a0)
-	bne.b	.normalMode
-	* all regs preserved
-	bsr	toggleListMode
-.normalMode
+	beq.b	.favMode
+	cmp.b	#"2",2(a0)
+	beq.b	.browserMode
+	* default
+	bsr	engageNormalMode
+	bra.b	.engaged
+.favMode
+	bsr	engageFavoritesMode
+	bra.b	.engaged
+.browserMode
+	bsr	engageFileBrowserMode
+	cmp.b	#" ",3(a0)
+	bne.b	.engaged
+	tst.b	4(a0)
+	beq.b	.engaged
+	* Pass path into a0
+	addq	#4,a0
+	pushm	d3/d7
+	bsr	fileBrowserDirWithPath	
+	popm	d3/d7
+	bra.b	.fbInit
 
-	tst.l	d3
-	bmi.b	.neg
-	move.l	d3,chosenmodule(a5)
-.neg
+.engaged
 
 	cmp.b	#" ",3(a0)
 	bne.b	.noPath
@@ -28295,37 +28505,48 @@ importSavedStateModulesFromDisk
 	DPRINT	"Saved filereq path=%s"
 
 .noPath
+.fbInit
+	tst.l	d3
+	bmi.b	.neg
+	move.l	d3,chosenmodule(a5)
+.neg
 
 	* Finally, either just refresh or play.
 	tst.b	d7
 	beq.w	.exit
 	jsr	resh
+	tst.l	modamount(a5)
+	beq.b	.empty
 	jmp	playButtonAction
-	
+.empty
+	rts
 
 exportSavedStateModulesToDisk
 	DPRINT	"exportSavedStateModulesToDisk"
 	tst.b	savestate(a5)
-	beq.b	.x
+	beq.w	.x
 
 	lea	savedStateModuleFileName(pc),a0
 	lea	moduleListHeader(a5),a1
 	jsr 	exportModuleProgramToFile
 
-	* Store playing state and chosen module into comment
-	move.l	chosenmodule(a5),d0
+	* Formatting parameters into d0,d1,d2,d3
 
-	moveq	#0,d1
-	tst.l	playingmodule(a5)
-	bmi.b	.no
-	moveq	#1,d1
-.no
-	* Store list mode
-	moveq	#0,d2
-	isListInFavoriteMode
-	beq.b	.normalMode
-	moveq	#1,d2
-.normalMode
+	* Store current file browser dir, if
+	* currently in browser mode
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.notBrowser
+	move.l	fileBrowserCurrentDirLock(a5),d1
+	beq.b	.notBrowser
+
+	pushpea	probebuffer(a5),d2	* temp buffer
+	move.l	#200,d3
+	bsr		getNameFromLock
+	tst.l	d0
+	beq.b	.notBrowser
+	pushpea	probebuffer(a5),d3
+	bra.b	.yesDir
+.notBrowser
 
 	* Store last used dir as well
 	* Try the reqtools dir first
@@ -28340,8 +28561,22 @@ exportSavedStateModulesToDisk
 	bne.b	.yesDir
 	pushpea	.empty(pc),d3
 .yesDir
+
+	* Store playing state and chosen module into comment
+	move.l	chosenmodule(a5),d0
+
+	moveq	#0,d1
+	tst.l	playingmodule(a5)
+	bmi.b	.no
+	moveq	#1,d1
+.no
+	
+* Store list mode
+	moveq	#0,d2
+	move.b	listMode(a5),d2
+
 	lea	.comment(pc),a0
-	lea	probebuffer(a5),a1
+	lea	probebuffer(a5),a1 	* nice temp buffer
 	jsr	desmsg
 
  if DEBUG 
@@ -28364,6 +28599,547 @@ savedStateModuleFileName
 	dc.b	"S:HippoSavedList.prg",0
  even
 
+********************************************************************************
+*** SECTION ********************************************************************
+*
+* File browser mode operations
+*
+********************************************************************************
+
+freeFileBrowserList
+	push	a6
+	move.l	(a5),a6		* execbase
+	lea	fileBrowserListHeader(a5),a2
+.loop
+	* a0: list, a1: destroyed, d0: node, or zero
+	move.l	a2,a0
+	lob	RemHead
+	beq.b	.listFreed
+	move.l	d0,a0
+	jsr	freemem
+	bra.b	.loop
+.listFreed
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.noB
+	clr.l	modamount(a5)
+.noB	pop	a6
+	rts
+
+countFileBrowserFiles
+	jsr	obtainModuleList
+	lea	fileBrowserListHeader(a5),a0
+	moveq	#0,d0
+.loop
+	TSTNODE	a0,a0
+	beq.b	.x
+	addq.l	#1,d0
+	bra.b	.loop
+.x
+	jsr	releaseModuleList
+	rts
+
+engageFileBrowserMode
+	DPRINT	"engage file browser"
+	pushm	all
+	move.b	#LISTMODE_BROWSER,listMode(a5)
+	bsr.b	countFileBrowserFiles
+	move.l	d0,modamount(a5)
+	bsr.w	engageListMode
+	tst.l	modamount(a5)
+	bne.b	.notRootView
+	moveq	#0,d0	* initial chosen item
+	bsr.b	fileBrowserRoot
+.notRootView
+	popm	all
+	rts
+
+* Fill root level entries with volume names
+* in:
+*   d0 = chosen item index
+fileBrowserRoot
+	DPRINT	"file browser root, select=%ld"
+	push	d0
+	jsr	setMainWindowWaitPointer
+	jsr	obtainModuleList
+	clr	fileBrowserSelectionHistoryIndex(a5)
+	bsr.w	freeFileBrowserList
+
+	move.l	_DosBase(a5),a0
+	move.l	dl_Root(a0),a0
+	move.l	rn_Info(a0),d0
+	lsl.l	#2,d0
+	move.l	d0,a0
+	move.l	di_DevInfo(a0),d5
+.devloop
+	lsl.l	#2,d5
+	move.l	d5,a3
+	
+	* Only grab volumes
+	cmp.l	#DLT_VOLUME,dl_Type(a3)
+	bne.b	.next
+
+	move.l	dl_Name(a3),d1
+	lsl.l	#2,d1
+	move.l	d1,a2
+	moveq	#0,d2
+	move.b	(a2)+,d2
+
+	* Add extra space for ":" and NULL
+	moveq	#l_size+2,d0	
+	add.l	d2,d0
+	move.l	#MEMF_CLEAR,d1
+	jsr	getmem
+	beq.b	.error
+
+	move.l	d0,a1
+	lea	l_filename(a1),a0
+	move.l	a0,l_nameaddr(a1)
+	st	l_divider(a1)
+	subq	#1,d2
+.copyName
+	move.b	(a2)+,(a0)+
+	dbf	d2,.copyName
+	move.b	#":",(a0)+
+	clr.b	(a0)
+
+	bsr.w	getVisibleModuleListHeader
+	ADDTAIL	* add node (a1)
+	addq.l	#1,modamount(a5)
+.next
+	move.l	dl_Next(a3),d5
+	bne.b	.devloop
+
+.error
+	* Does not do force refresh
+	jsr	sortModuleList
+
+	* Select item
+	pop	d0
+	move.l	d0,chosenmodule(a5)
+	jsr	forceRefreshList
+	
+	jsr	releaseModuleList
+	jsr	clearMainWindowWaitPointer
+	rts
+
+
+* Enters a given directory 
+* in:
+*    a0 = path
+fileBrowserDirWithPath
+	moveq	#-1,d4
+	move.l	a0,d1
+	bra.b	fileBrowserDir\.plainPath
+
+* Enters a directory denoted by the given list node, which is a divider
+* in:
+*    a3 = parent node
+fileBrowserDir
+ if DEBUG
+	pushpea	l_filename(a3),d0
+	move.l	chosenmodule(a5),d1
+	DPRINT	"fileBrowserDir %s at %ld"
+ endif
+	* Chosen module status in d4
+	moveq	#-1,d4
+	move.l	a3,a0
+	bsr	isFileBrowserParentNode
+	beq.b	.notParent
+ if DEBUG
+ 	pushpea	l_filename(a3),d0
+ 	move.l	l_nameaddr(a3),d1
+	DPRINT	"->ENTERING parent %s -> %s"
+ endif
+	* When entering parent pop the selection from history
+	bsr	popFileBrowserSelectionHistoryItem
+	move.l	d0,d4
+.notParent
+
+	* Path to d1
+	pushpea	l_filename(a3),d1
+
+	* Check if empty path, this means the root level
+	tst.b	l_filename(a3)
+	beq.w	fileBrowserRoot
+
+.plainPath
+	jsr	obtainModuleList
+	jsr	setMainWindowWaitPointer
+	jsr	tokenizepattern
+
+	tst.l	d4
+	bpl.b	.goingToParent
+	* Entering a new dir, push previous selection,
+	bsr	pushFileBrowserSelectionHistoryItem
+	* ... then select first item.
+	moveq	#0,d4
+.goingToParent
+	* d4 and d5 flow to the end
+	moveq	#0,d5	* initial value
+
+	* Start reading dir
+	* path in d1
+	moveq	#ACCESS_READ,d2
+	lore	Dos,Lock
+	move.l	d0,d6
+	beq.w	.error
+
+	move.l	d6,d1
+	pushpea	fileinfoblock(a5),d2
+	lob	Examine
+	tst.l	d0
+	beq.w	.error
+
+	* Copy lock for state saving
+	move.l	fileBrowserCurrentDirLock(a5),d1
+	beq.b	.1
+	lob	UnLock
+.1 	move.l	d6,d1
+	lob	DupLock
+	move.l	d0,fileBrowserCurrentDirLock(a5)
+
+	* Empty whatever we had previously
+	bsr.w	freeFileBrowserList
+
+	*********************************************
+	* Construct "Parent"
+	*********************************************
+	
+	* NULL lock means the "SYS:"
+	move.l	d6,d1
+	lore	Dos,ParentDir
+	move.l	d0,d7
+		
+	lea	-200(sp),sp
+	move.l	d0,d1		* lock
+	bne.b	.notNull
+	* NULL lock, clear the path to indicate this
+	clr.b	(sp)
+	bra.b	.ok
+.notNull
+	move.l	sp,d2		* buf
+	move.l	#200,d3		* len
+	bsr	getNameFromLock
+	push	d0
+	move.l	d7,d1
+	lore 	Dos,UnLock
+	pop	d0
+	tst.l	d0
+	bne.b	.ok
+	lea	200(sp),sp
+	bra.w	.error
+
+.ok
+	* Create parent entry 
+
+	move.l	sp,a0
+	moveq	#createNode\.PARENT,d7	 * make parent node
+	bsr.w	createNode
+	lea	200(sp),sp
+	tst.l	d0
+	beq.w	.error
+
+	bsr	makeParentNode
+	* store parent node into d5 for a while
+	move.l	a0,d5
+	
+	*********************************************
+	* Dir scan
+	*********************************************
+
+	* Build base path
+	lea	-200(sp),sp
+	move.l	d6,d1		* lock
+	move.l	sp,d2		* buf
+	move.l	#160,d3		* len, leave 40 for filename
+	bsr	getNameFromLock
+	tst.l	d0
+	beq.b	.lockFail
+
+	move.l	sp,a0
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+	subq	#1,a0		* back to NULL
+
+	cmp.b	#":",-1(a0)
+	beq.b	.isSep
+	cmp.b	#"/",-1(a0)
+	beq.b	.isSep
+	move.b	#"/",(a0)+
+.isSep
+	* Path address
+	move.l	sp,a3
+	* Filename part start position
+	move.l	a0,a4
+
+.scan
+	move.l	d6,d1
+	pushpea	fileinfoblock(a5),d2
+	lore	Dos,ExNext
+	tst.l	d0
+	beq.b	.scanDone
+
+	move.l	fib_DirEntryType+fileinfoblock(a5),d0
+	cmp.l	#ST_FILE,d0
+	beq.b	.file
+	cmp.l	#ST_LINKFILE,d0
+	beq.b	.file
+	cmp.l	#ST_USERDIR,d0
+	bne.b	.scan
+	moveq	#createNode\.DIR,d7	* dir
+	bra.b	.plzDo
+
+.file
+	tst.b	uusikick(a5)
+	beq.b	.oldKick
+	pushpea	tokenizedpattern(a5),d1
+	pushpea	fib_FileName+fileinfoblock(a5),d2
+	lore	Dos,MatchPatternNoCase
+	* 0 = did not match, skip this file if so
+	tst.l	d0
+	beq.b	.scan
+.oldKick
+	moveq	#createNode\.FILE,d7	* file
+.plzDo
+	bsr.w	.doEntry
+	bne.b	.scan	* stop on error
+
+.scanDone
+.doUnlock
+.error
+.lockFail
+	lea	200(sp),sp
+
+	move.l	d6,d1
+	beq.b	.noLock
+	lore	Dos,UnLock
+.noLock
+	
+	* All done. Sort it. 
+	* Does not do force refresh.
+	* Destroys every register known to man.
+	pushm	d4/d5
+	jsr	sortModuleList
+	popm	d4/d5
+
+	* Insert parent to the top
+	tst.l	d5
+	beq.b	.noParent
+	bsr.w	getVisibleModuleListHeader
+	* get parent node
+	move.l	d5,a1
+	* Insert a1 into a0
+	lore	Exec,AddHead
+	addq.l	#1,modamount(a5)
+.noParent
+
+	* Figure out if the chosen module.
+	* Eg, returning from "parent" to a correct item.
+ 	move.l	d4,chosenmodule(a5)
+	jsr	forceRefreshList
+	
+	jsr	releaseModuleList
+	jsr	clearMainWindowWaitPointer
+	rts
+
+* Creates a list node and adds it to the list
+* in:
+*   a3 = Path start address
+*   a4 = Filename start address in the path
+*   d6 = parent lock
+*   d7 = 0 = file, 1 = dir
+*   fileinfoblock: File to add
+* out:
+*   d0: 1 = ok, 0 = error
+.doEntry	
+	* copy current filename part, from ExNext
+	lea	fib_FileName+fileinfoblock(a5),a1
+	move.l	a4,a2
+.cp2
+	move.b	(a1)+,(a2)+
+	bne.b	.cp2
+
+	move.l	a3,a0
+	* Create node using path in a0
+	bsr.w createNode
+	beq.b	.error_
+
+	pushm	a3/a4
+	move.l	a0,a3
+	pushpea	l_filename(a3),d0
+	jsr	addfile
+	popm	a3/a4
+	moveq	#1,d0	* ok
+	rts
+.error_
+	moveq	#0,d0 	* failboat
+	rts
+
+
+fileBrowserGoToParent
+	DPRINT	"Go to parent"
+	* Get the 1st node
+	moveq	#0,d0
+	bsr	getListNode
+	beq.b	.x
+	move.l	a0,a3	* save this
+	bsr.b	isFileBrowserParentNode
+	beq.b	.x
+	* Enter into node a3
+	bsr	fileBrowserDir
+.x
+	rts
+
+* Checks if this node is a "Parent" node
+* in:
+*   a0 = node
+* out:
+*   d0 = 1 if was a parent node, 0 otherwise
+isFileBrowserParentNode
+	cmp.b	#$7f,l_divider(a0)
+	bne.b	.not
+	moveq	#1,d0	* true
+	rts
+.not
+	moveq	#0,d0	* false
+	rts
+
+* Make node a parent directory node
+* in:
+*   a0 = node
+makeParentNode
+	push	a0
+	pushpea	fib_FileName+fileinfoblock(a5),d0
+	lea	.form(pc),a0
+	jsr	desmsg
+	pop	a0
+
+	lea	desbuf(a5),a1
+.fill	cmp.b	#" ",(a1)
+	bne.b	.x
+	move.b	#"«",(a1)+
+	bra.b	.fill
+.x	move.b	#" ",-1(a1)
+
+	lea	l_filename(a0),a1
+.end	tst.b	(a1)+
+	bne.b	.end
+	move.l	a1,l_nameaddr(a0)
+	lea	desbuf(a5),a2
+.cp	move.b	(a2)+,(a1)+
+	bne.b	.cp
+	
+;	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
+
+	* magic: indicate parent divider/dir with $7f,
+	* normal divider/dir is $ff.
+	move.b	#$7f,l_divider(a0)
+
+ if DEBUG
+	pushpea	l_filename(a0),d0
+	move.l	l_nameaddr(a0),d1
+	DPRINT	"makeParentNode path=%s->`%s`"
+ endif
+	rts
+
+.form	dc.b	"    %23.23s",0
+ even
+
+
+* in:
+*   a0: path
+*   d7: 0 = file, 1 = dir, 2 = parent dir
+* out:
+*   a0: new node
+*   d0: 1 on success, 0 on out-of-mem
+createNode
+.FILE = 0
+.DIR = 1
+.PARENT = 2
+
+	move.l	a0,d1
+	move.l	d7,d0
+
+	move.l	a0,a2
+.len
+	tst.b	(a0)+
+	bne.b	.len
+	sub.l	a2,a0
+	add	#l_size,a0
+	cmp.b	#.PARENT,d7
+	bne.b	.notPar
+	add	#30,a0		* additional space for list item name
+.notPar
+	move.l	a0,d0
+	move.l	#MEMF_CLEAR,d1
+	jsr	getmem
+	beq.b	.memErr
+	move.l	d0,a0
+
+	* copy path
+	lea	l_filename(a0),a1
+
+	tst.b	d7
+	beq.b	.notDiv
+	st	l_divider(a0)
+.notDiv
+
+.copy	move.b	(a2)+,(a1)+
+	bne.b	.copy
+
+	* find file name
+	lea	l_filename(a0),a2
+.findFile
+	cmp.b	#"/",-1(a1)
+	beq.b	.found
+	cmp.b	#":",-1(a1)
+	beq.b	.found
+	subq	#1,a1
+	cmp.l	a2,a1
+	bne.b	.findFile
+.found	
+	move.l	a1,l_nameaddr(a0)
+	moveq	#1,d0
+	rts
+.memErr
+	moveq	#0,d0
+	rts
+
+* Keeps track of indexes of entered directories.
+pushFileBrowserSelectionHistoryItem
+	move	fileBrowserSelectionHistoryIndex(a5),d0
+ 	cmp	#FILEBROWSER_HISTORY_SIZE,d0
+	bhs.b	.full
+	lea	fileBrowserSelectionHistory(a5),a0
+ 	lsl	#2,d0
+	move.l	chosenmodule(a5),(a0,d0)
+ 	addq	#1,fileBrowserSelectionHistoryIndex(a5)
+.full
+	rts
+
+* Pops the last item out.
+popFileBrowserSelectionHistoryItem
+	move	fileBrowserSelectionHistoryIndex(a5),d0
+	subq	#1,d0
+	bpl.b	.ok
+	DPRINT	"Browser history underflow"
+	moveq	#0,d0
+	rts
+.ok
+	move	d0,fileBrowserSelectionHistoryIndex(a5)
+ 	lsl	#2,d0
+	lea	fileBrowserSelectionHistory(a5),a0
+	add	d0,a0
+	move.l	(a0),d0
+	clr.l	(a0)
+ 	rts
+
+
+;parentNodeLabel
+;	dc.b 	"  ««««««« Parent »»»»»»»»  "
+;		    ;0123456789123456789012345678
+;	even
 
 *******************************************************************************
 * CreatePort
@@ -28676,6 +29452,246 @@ sortStringPtrArray
 	popm	d1/d2/d3/d6/d7/a1/a2
 .x	rts
 
+*******************************************************************************
+*** SECTION *******************************************************************
+*
+* Replay routines
+* Related support functions
+*
+*******************************************************************************
+
+
+
+*******************************************************************************
+* Audio allocation
+*******************************************************************************
+
+varaa_kanavat
+	tst.b	kanavatvarattu+var_b
+	beq.b	.jee
+	moveq	#0,d0
+	rts
+.jee	
+	movem.l	d1-a6,-(sp)
+	lea	var_b,a5
+
+	move.l	playerbase(a5),a0
+	move	p_liput(a0),d0
+	btst	#pb_ahi,d0
+	beq.b	.naa
+	tst.b	ahi_use_nyt(a5)
+	bne.b	.na
+.naa
+
+	bsr.w	createport
+	bsr.w	createio
+
+	lea	iorequest(a5),a1
+	lea	.adname(pc),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#100,d7
+	tst.b	nastyaudio(a5)
+	beq.b	.nona
+	moveq	#127,d7
+.nona	move.b	d7,LN_PRI(a1)
+	lea	.allocmap(pc),a2
+	move.l	a2,ioa_Data(a1)
+* d2 = kanavalistan pituus
+	moveq	#1,d2			* vain yksi vaihtoehto
+	move.l	d2,ioa_Length(a1)
+	move.l	(a5),a6
+	lob	OpenDevice
+	move.l	d0,d5
+	move.l	d5,acou_deviceerr(a5)
+	bne.b	acouscl
+	st	kanavatvarattu(a5)
+	DPRINT	"Audio open"
+.na	movem.l	(sp)+,d1-a6
+	moveq	#0,d0
+	rts
+
+.adname		dc.b	"audio.device",0
+.allocmap	dc.b	$0f
+ even
+
+acouscl
+	movem.l	(sp)+,d1-a6
+	bsr.b	vapauta_kanavat
+	moveq	#-1,d0
+	rts
+
+vapauta_kanavat	
+	tst.b	kanavatvarattu+var_b
+	bne.b	.eeo
+	rts
+.eeo	movem.l	d0-a6,-(sp)
+	lea	var_b,a5
+
+	tst.l	acou_deviceerr(a5)
+	bne.b	acouscll
+	lea	iorequest(a5),a1
+	lore	Exec,CloseDevice
+	DPRINT	"Audio close"
+acouscll
+	clr.l	acou_deviceerr(a5)
+	clr.b	kanavatvarattu(a5)
+	movem.l	(sp)+,d0-a6
+	rts
+
+*******************************************************************************
+* CIA interrupt handling
+*******************************************************************************
+
+_ciaa	=	$bfe001
+_ciab	=	$bfd000
+
+cianame	dc.b	"ciaa.resource",0
+ even
+	
+* init with default tempo 
+init_ciaint
+	moveq	#0,d0
+* init with specified tempo in d0. 0 = default
+init_ciaint_withTempo
+	tst.b	ciasaatu(a5)
+	bne.b	.hm
+.c	moveq	#0,d0
+	rts
+
+.hm	clr.b	vbtimeruse(a5)		* käytetään ciaa
+	tst.b	vbtimer(a5)		* onko vblank käytössä?
+	beq.b	.ci
+	st	vbtimeruse(a5)		* käytetään vblankia
+	bra.b	.c
+.ci
+	pushm	d1-a6
+
+	move	#28419/2,d1
+	tst	d0
+	beq.b	.default
+	move	d0,d1
+.default
+	move	d1,timerhi(a5)
+
+** CIAA
+
+	lea	_ciaa,a3
+	lea	ciaserver(pc),a4
+	moveq	#0,d6			* timer a
+	move.l	ciabasea(a5),d0
+	beq.b	.noa
+	move.l	d0,a6
+	lea	(a4),a1
+	move.l	d6,d0
+	lob	AddICRVector
+	tst.l	d0
+	beq.b	.gottimer		* Saatiinko?
+
+	lea	(a4),a1
+	moveq	#1,d6			* timer b
+	move.l	d6,d0
+	lob	AddICRVector
+	tst.l	d0
+	beq.b	.gottimer
+.noa
+** CIAB
+
+	lea	_ciab,a3
+	lea	ciaserver(pc),a4
+	moveq	#0,d6			* timer a
+	move.l	ciabaseb(a5),d0
+	beq.b	.nob
+	move.l	d0,a6
+	lea	(a4),a1
+	move.l	d6,d0
+	lob	AddICRVector
+	tst.l	d0
+	beq.b	.gottimer		* Saatiinko?
+
+	lea	(a4),a1
+	moveq	#1,d6			* timer b
+	move.l	d6,d0
+	lob	AddICRVector
+	tst.l	d0
+	beq.b	.gottimer
+.nob
+	popm	d1-a6
+	moveq	#-1,d0			* ERROR! Ei saatu varattua timeriä.
+	rts
+
+.gottimer
+	move.l	a3,ciaddr(a5)
+	move.l	a6,ciabase(a5)
+	move.b	d6,whichtimer(a5)	* 0: timer a, 1:timer b
+
+ if DEBUG
+	move.l a3,d0
+	moveq	#0,d1
+	move.b whichtimer(a5),d1
+	DPRINT	"CIA Timer allocated %lx %ld"
+ endif
+	bsr.b	ciaint_setTempo
+
+	lea	ciacra(a3),a2
+	tst.b	d6
+	beq.b	.tima
+	lea	ciacrb(a3),a2
+.tima
+	clr.b	ciasaatu(a5)		* saatiin keskeytys
+
+	move.b	#%00010001,(a2)		* Continuous, force load
+	popm	d1-a6
+	moveq	#0,d0
+	rts
+
+
+* Sets tempo value word from timerhi(a5) into currently
+* active CIA timer.
+* May be called from interrupt.
+ciaint_setTempo
+	pushm	a2/a3/a5
+	lea		var_b,a5
+	move.l 	ciaddr(a5),a3
+	lea	ciatalo(a3),a2
+	tst.b	whichtimer(a5)
+	beq.b	.timera
+	lea	ciatblo(a3),a2
+.timera	
+	move.b	timerlo(a5),(a2)
+	move.b	timerhi(a5),$100(a2)
+; Probaly not good idea to debug print here,
+; can be called from interrupt (in case of DeliCustom).
+	popm	a2/a3/a5
+	rts
+
+ciaint_setTempoFromD0
+	move	d0,timerhi+var_b
+	bra.b	ciaint_setTempo
+
+
+rem_ciaint
+	tst.b	ciasaatu(a5)
+	beq.b	.hm
+	rts
+
+.hm	pushm	all
+	move.l	ciaddr(a5),a3
+
+	moveq	#0,d0
+	move.b	whichtimer(a5),d0	* RemICRVector
+	bne.b	.b
+	move.b	#%00000000,ciacra(a3)
+	bra.b	.a
+.b	move.b	#%00000000,ciacrb(a3)
+.a
+	move.l	ciabase(a5),a6
+	lea	ciaserver(pc),a1
+	lob	RemICRVector
+	st	ciasaatu(a5)		* ei keskeytystä!
+	DPRINT	"CIA Timer freed"
+	popm	all
+	rts
 
 *******************************************************************************
 *                                Soittorutiinit
@@ -28684,8 +29700,6 @@ sortStringPtrArray
 **********************************************
 * Varaa muistia ja purkaa soittorutiinin
 * a0 = osoitin paikkaan mihin laitetaan osoite
-
-
 
 allocreplayer2
 	pushm	d1-a6
@@ -30219,32 +31233,10 @@ sid_addVolumePatch
 .q
 	rts
 
-.vol1patch	jsr	.vol1
-.vol2patch	jsr	.vol2 
-.vol3patch	jsr	.vol3
-
-.vol1 
-	push	d0 
-	mulu	var_b+mainvolume,d0
-	lsr	#6,d0 
-	move	d0,$dff0a8
-	pop d0 
-	rts
-.vol2 
-	push	d0 
-	mulu	var_b+mainvolume,d0
-	lsr	#6,d0 
-	move	d0,$dff0b8
-	pop d0 
-	rts
-.vol3 
-	push	d0 
-	mulu	var_b+mainvolume,d0
-	lsr	#6,d0 
-	move	d0,$dff0c8
-	pop d0 
-	rts
-
+; PreTracker patch is usable here
+.vol1patch	jsr	p_pretracker\.setVol1
+.vol2patch	jsr	p_pretracker\.setVol2
+.vol3patch	jsr	p_pretracker\.setVol3
 
 sid_remVolumePatch
 	move.l	_SIDBase(a5),a0
@@ -31195,7 +32187,7 @@ p_sonicarranger
 	dc.w pt_sonicarranger				* type
 	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song
 	dc.b	"Sonic Arranger",0
-.a 	dc.b	"Carlsten Schlote, Branko Mikic, Carsten Herbst"
+.a 	dc.b	"Carsten Schlote, Branko Mikic, Carsten Herbst"
  even
 
 .author
@@ -33153,7 +34145,7 @@ p_hippelcoso
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -33162,7 +34154,7 @@ p_hippelcoso
 	lea	hippelcosoroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-.gog	bsr.w	rem_ciaint
+.gog	bsr	rem_ciaint
 	bra.w	vapauta_kanavat
 ;	rts
 
@@ -33216,7 +34208,7 @@ p_hippelcoso
 	tst.b	ahi_use_nyt(a5)
 	bne.b	.ahien
 
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	hippelcosoroutines(a5),a0
 	jsr	$20+8(a0)
@@ -33362,7 +34354,7 @@ p_hippel
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -33382,7 +34374,7 @@ p_hippel
 	jmp	(a0)
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -34319,7 +35311,7 @@ p_aon
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -34328,7 +35320,7 @@ p_aon
 	lea	aonroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bra.w	vapauta_kanavat
 .ok3
 	pushm	d1-a6
@@ -34336,7 +35328,7 @@ p_aon
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2 
-	lea	ciaint_setTempoFromD0,a3
+	lea	ciaint_setTempoFromD0(pc),a3
 	move.l	aonroutines(a5),a4
 	jsr	.OFFSET_INIT(a4)
 	tst.l	d0
@@ -34351,7 +35343,7 @@ p_aon
 	bra.b	.x
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	move.l	aonroutines(a5),a0
 	jsr	.OFFSET_END(a0)
 	bsr.w	clearsound
@@ -34395,6 +35387,22 @@ taaksej		rs.l	1
 volj		rs.l	1
 boostj		rs.l	1
 
+* Sets Z if PS3M+ImpulseTracker is active
+isImpulseTrackerActive
+	pushm	d0/a0
+	cmp	#pt_multi,playertype(a5)
+	bne.b	.no
+	move.l	ps3m_mtype(a5),d0
+	beq.b	.no
+	move.l	d0,a0
+	cmp	#mtIT,(a0)
+	beq.b	.yes
+.no	moveq	#-1,d0
+.x	popm	d0/a0
+	rts
+.yes	moveq	#0,d0
+	bra.b	.x
+
 p_multi	jmp	.s3init(pc)
 	p_NOP		* CIA
 	jmp	.s3poslen(pc)		* VB
@@ -34407,13 +35415,20 @@ p_multi	jmp	.s3init(pc)
 	jmp	.taakse(pc)
 	jmp	ps3m_boost(pc)		* ahiupdate
 	jmp id_ps3m(pc)
-	jmp	guru_author(pc)
+	jmp	.author(pc)
 	dc.w pt_multi
+.flags
  dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
 	dc.b	"PS3M",0
-
+.itPath
+	dc.b	"impulse",0
  even
 
+.author
+	move.l	ps3m_mtype(a5),a0
+	cmp	#mtIT,(a0)
+	bne.w	guru_author
+	bra	deliAuthor
 
 
 ;init1j	jmp	init1r(pc)
@@ -34434,12 +35449,11 @@ p_multi	jmp	.s3init(pc)
 	rts
 .ok	bsr.w	vapauta_kanavat
 
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	moveq	#ier_nociaints,d0
 	rts
-.ok2	jsr	rem_ciaint
-
+.ok2	bsr	rem_ciaint
 
 	lea	ps3mroutines(a5),a0
 	bsr.w	allocreplayer
@@ -34448,10 +35462,46 @@ p_multi	jmp	.s3init(pc)
 
 .ok3	
 	pushm	d1-a6
+
+	* IT deliplayer will clear the "poslen" flag, so make sure
+	* it is available for other formats.
+	lea	.flags(pc),a0
+	or	#pf_poslen,(a0)
+
+	move.l	moduleaddress(a5),a0
+	bsr.W 	id_it
+	bne.b	.notIt
+	DPRINT "IT detected"
+
+	move.l	(a5),a0
+	btst	#AFB_68020,AttnFlags+1(a0)
+	bne.b	.cpuOk
+	moveq	#ier_hardware,d0
+	bra.w	.itError
+.cpuOk
+
+	moveq	#$62,d0	* version
+	lea	.itPath(pc),a0 
+	* Distract loader so that it will not try to
+	* load PS3M from player group, instead it will
+	* try eagleplayer loading from filesystem.
+	move	playertype(a5),-(sp)
+	move	#-1,playertype(a5)
+	jsr	setMainWindowWaitPointer
+	bsr.w	loadDeliPlayer 
+	move	(sp)+,playertype(a5)
+	tst.l 	d0
+	bmi.w 	.itError
+	bsr.w	deliInit
+	jsr 	clearMainWindowWaitPointer
+	tst.l	d0
+	bne.w	.itError
+.notIt
+
+
 	addq	#1,ps3minitcount
 
 	move	mixirate+2(a5),hip_ps3mrate+hippoport(a5)
-
 
 * välitetään tietoa ps3m:lle ja hankitaan sitä siltä
 
@@ -34480,6 +35530,8 @@ p_multi	jmp	.s3init(pc)
 	lea	ps3m_playpos(a5),a3
 	lea	ps3m_buffSizeMask(a5),a4
 	move.l	ps3mroutines(a5),a6
+	move.l	deliPlayer(a5),d0
+	move.l	deliBase(a5),d1
 	jsr	init2j(a6)
 	move.l	d0,ps3mchannels(a5)
 
@@ -34506,6 +35558,18 @@ p_multi	jmp	.s3init(pc)
 	addq	#4,sp			* pop pea
 
 	lea	var_b,a5
+
+	bsr	isImpulseTrackerActive
+	bne.b	.notIT
+	* No patternscope for this one	
+	sub.l	a0,a0
+	sub.l	a1,a1
+
+	* TODO: in case of PS3M init error, do some
+	* deli uninitializing?
+
+.notIT
+
 	move.l	a0,deliPatternInfo(a5)
 	move.l	a1,ps3mUnpackedPattern(a5)
  if DEBUG
@@ -34525,6 +35589,11 @@ p_multi	jmp	.s3init(pc)
 	bne.b	.e
 	addq	#4,sp		* killer: hypätään play-aliohjelman 'ohi'
 .e	rts
+
+* Failed to init eagleplayer
+.itError
+	popm	d1-a6
+	rts
 
 
 .updateps3m3
@@ -34558,6 +35627,7 @@ p_multi	jmp	.s3init(pc)
 .s3end	clr.l	ps3mUnpackedPattern(a5)
 	move.l	ps3mroutines(a5),a0
 	jmp	endj(a0)
+	
 
 .s3stop	move.l	ps3mroutines(a5),a0
 	jmp	stopj(a0)
@@ -34739,7 +35809,7 @@ mtS3M = 1
 mtMOD = 2
 mtMTM = 3
 mtXM  = 4
-
+mtIT  = 5
 
 
 * Initti vaihe 1. Jos d0<>0, moduuli ei kelpaa.
@@ -34749,6 +35819,9 @@ id_ps3m		pushm	d1-a6
 
 	move.l	a4,a0
 ;	move.l	moduleaddress(a5),a0
+
+	bsr.w	id_it
+	beq.w	.it
 
 	cmp.l	#`SCRM`,44(a0)
 	beq.b	.s3m
@@ -34794,6 +35867,7 @@ id_ps3m		pushm	d1-a6
 
 .xm	cmp	#$401,xmVersion(a0)		; Kool turbo-optimizin'...
 	bne.b	.j
+.it
 .chn
 .ch
 .tdz
@@ -34809,8 +35883,27 @@ id_ps3m		pushm	d1-a6
 
 .xmsign		dc.b	`Extended Module:`
  even
+
 ps3minitcount	dc	0
 
+* ID from A0
+id_it
+	push	d1
+	MOVEQ	#0,D0
+	CMP.L	#$494D504D,(A0)
+	BNE.S	.itFail
+	MOVE.W	$2A(A0),D1			*  Cmwt: format version
+	ROR.W	#8,D1
+	CMP.W	#$100,D1
+	BEQ.S	.itYes
+	CMP.W	#$200,D1
+	BEQ.S	.itYes
+.itFail
+	MOVEQ	#-1,D0
+.itYes
+	pop	d1
+	tst.l	d0
+	RTS
 
 
 
@@ -34974,7 +36067,7 @@ p_pumatracker
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -34984,7 +36077,7 @@ p_pumatracker
 	* allocate into chip mem
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -35001,7 +36094,7 @@ p_pumatracker
 	jmp	$20+4(a0)
 	rts
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -35113,7 +36206,7 @@ p_beathoven
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -35162,7 +36255,7 @@ p_beathoven
 	
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.b	.deInit
 	bra.w	vapauta_kanavat
 
@@ -35253,7 +36346,7 @@ p_gamemusiccreator
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -35263,7 +36356,7 @@ p_gamemusiccreator
 	* allocate into chip mem
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -35285,7 +36378,7 @@ p_gamemusiccreator
 	jmp	.GMC_PLAY(a0)
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	move.l	gamemusiccreatorroutines(a5),a0
 	jsr	.GMC_END(a0)
 	bsr.w	clearsound
@@ -35360,7 +36453,6 @@ id_gamemusiccreator
 	; high bound
     	cmp     #100,d2
     	bhi.b   .notGmc
-	
  * validate the first pattern, it's apparently
  * a bit difficult to correctly determine the real amount
  * of patterns in a module. Thre should at least be one!
@@ -35805,7 +36897,7 @@ p_medley
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -35814,7 +36906,7 @@ p_medley
 	lea	medleyroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -35822,7 +36914,7 @@ p_medley
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	maxsongs(a5),a2
-	lea	ciaint_setTempoFromD0,a3
+	lea	ciaint_setTempoFromD0(pc),a3
 	move	songnumber(a5),d0 	* song number
 	;moveq	#8,d0
 	addq	#1,d0
@@ -35850,7 +36942,7 @@ p_medley
 	rts
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	medleyroutines(a5),a0
 	jsr	.MEDLEY_END(a0)
@@ -35937,7 +37029,7 @@ p_futureplayer
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -35946,7 +37038,7 @@ p_futureplayer
 	lea	futureplayerroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -35955,7 +37047,7 @@ p_futureplayer
 	lea	nullsample,a1
 	lea	mainvolume(a5),a2
 	lea	maxsongs(a5),a3
-	lea	ciaint_setTempoFromD0,a4
+	lea	ciaint_setTempoFromD0(pc),a4
 	move	songnumber(a5),d1 	* song number, starts from 0
 	move.l	futureplayerroutines(a5),a6
 	push	a5
@@ -35996,7 +37088,7 @@ p_futureplayer
 	rts
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	futureplayerroutines(a5),a0
 	jsr	.FP_END(a0)
@@ -36071,7 +37163,7 @@ p_bendaglish
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36080,7 +37172,7 @@ p_bendaglish
 	lea	bendaglishroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36109,14 +37201,20 @@ p_bendaglish
 	DPRINT	"Song %ld"
  endif
 	pushm	all
+	* Safety:
+ 	move.l  #$07800780,$dff09a
 	move.l	bendaglishroutines(a5),a0
 	jsr	.BD_SONG(a0)
 	popm	all
 	rts
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
+	* Safety: disable audio interrupts and clear requests
+	* which this replayer uses. Pending interrupts
+	* may trigger after code is in wrong state or deallocated.
+ 	move.l  #$07800780,$dff09a
 	move.l	bendaglishroutines(a5),a0
 	jsr	.BD_END(a0)
 	popm	all
@@ -36205,7 +37303,7 @@ p_sidmon2
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36214,7 +37312,7 @@ p_sidmon2
 	lea	sidmon2routines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36236,7 +37334,7 @@ p_sidmon2
 	bra.w	clearsound
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -36292,7 +37390,7 @@ p_deltamusic1
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36301,7 +37399,7 @@ p_deltamusic1
 	lea	deltamusic1routines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36323,7 +37421,7 @@ p_deltamusic1
 	bra.w	clearsound
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -36386,7 +37484,7 @@ p_soundfx
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36395,7 +37493,7 @@ p_soundfx
 	lea	soundfxroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36420,7 +37518,7 @@ p_soundfx
 	bra.w	clearsound
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -36475,7 +37573,7 @@ p_gluemon
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36484,7 +37582,7 @@ p_gluemon
 	lea 	gluemonroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36517,7 +37615,7 @@ p_gluemon
 .end
 	move.l	gluemonroutines(a5),a0
 	jsr	.END(a0)
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -36598,7 +37696,7 @@ p_pretracker
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36607,7 +37705,7 @@ p_pretracker
 	lea 	pretrackerroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36722,7 +37820,7 @@ p_pretracker
 
 .end
 	bsr.b .free
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -36795,7 +37893,7 @@ p_custommade
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36804,7 +37902,7 @@ p_custommade
 	lea	custommaderoutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -36824,7 +37922,7 @@ p_custommade
 	move	d2,maxsongs(a5)
 
 	move	d3,d0 
-	jsr	ciaint_setTempoFromD0
+	bsr	ciaint_setTempoFromD0
 
 	popm	d1-a6
 	* INIT returns 0 on success
@@ -36851,7 +37949,7 @@ p_custommade
 	rts
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	clearsound
 	bra.w	vapauta_kanavat
 
@@ -36937,7 +38035,7 @@ p_davelowe
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -36946,7 +38044,7 @@ p_davelowe
 	lea	daveloweroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37000,7 +38098,7 @@ p_davelowe
 	jmp .SONG(a0)
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	daveloweroutines(a5),a0
 	jsr	.END(a0)
@@ -37079,7 +38177,7 @@ p_startrekker
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37088,7 +38186,7 @@ p_startrekker
 	lea	startrekkerroutines(a5),a0
 	bsr.w	allocreplayer2
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37180,7 +38278,7 @@ p_startrekker
 .fileErr 
 	* No extra data file tound. Proceed as Protracker
 	DPRINT	"Revert to Protracker"
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
@@ -37201,7 +38299,7 @@ p_startrekker
 	bra.w	clearsound
 
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	move.l	startrekkerroutines(a5),a0
 	jsr	.END(a0)
 	bsr.w	clearsound
@@ -37271,7 +38369,7 @@ p_voodoosupremesynthesizer
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	jsr	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
@@ -37280,7 +38378,7 @@ p_voodoosupremesynthesizer
 	lea	voodooroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
@@ -37304,7 +38402,7 @@ p_voodoosupremesynthesizer
 	moveq	#ier_nomem,d0
 	rts
 .end
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 	move.l	voodooroutines(a5),a0
 	jsr	.END(a0)
 	bsr.w	clearsound
@@ -37427,7 +38525,7 @@ p_facethemusic
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
 	jmp	.ftmVBlank(pc)
-	jmp	deliEnd(pc)
+	jmp	.end(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
 	jmp	deliVolume(pc)
@@ -37456,6 +38554,13 @@ p_facethemusic
 	and	#~pf_end,(a0)
 	moveq	#0,d0
 .error	
+	rts
+
+
+.end
+	bsr	deliEnd
+	* Extra safety:
+	move.l  #$07800780,$dff09a
 	rts
 
 .id
@@ -37577,7 +38682,7 @@ p_instereo1
 	move.l 	d7,d1
 	move.l	sp,d2
 	moveq	#100,d3 
-	jsr	getNameFromLock
+	bsr	getNameFromLock
 	move.l  d0,d6 
 
 	move.l	d7,d1
@@ -37887,7 +38992,7 @@ p_krishatlelid
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
 	p_NOP
-	jmp	deliEnd(pc)
+	jmp	.end(pc)
 	jmp	deliStop(pc)
 	jmp	deliCont(pc)
 	jmp	deliVolume(pc)
@@ -37909,6 +39014,13 @@ p_krishatlelid
 	moveq	#0<<16|1,d0
 	bsr.w	deliLoadAndInit
 	rts 
+
+.end
+	* Safety: disable audio interrupts and clear requests
+	* which this replayer uses. Pending interrupts
+	* may trigger after code is in wrong state or deallocated.
+	move.l  #$07800780,$dff09a
+	bra	deliEnd
 
 .id
 	move.l	a4,a0
@@ -38451,6 +39563,7 @@ p_tcbtracker
 
 ******************************************************************************
 * Mark Cooksey
+* NOT USED 
 ******************************************************************************
 
  REM **************************
@@ -39353,7 +40466,10 @@ p_quartetst
 
 ******************************************************************************
 * Core Design
+* NOT USED
 ******************************************************************************
+ 
+ REM **********************************
 
 p_coredesign
 	jmp	.init(pc)
@@ -39444,6 +40560,8 @@ p_coredesign
 ;	moveq	#0,D0
 ;Fault
 ;	rts
+
+ EREM **********************************
 
 
 ******************************************************************************
@@ -40210,7 +41328,7 @@ p_steveturner
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
 	dc.b	"Steve Turner        [EP]",0
 	        
-.path dc.b "steve tuner",0
+.path dc.b "steve turner",0
  even
 
 .init
@@ -40319,9 +41437,12 @@ p_specialfx
 	MOVEQ	#0,D0
 .lbC0003C6	RTS
 
-******************************************************************************
-* Deli/eagle support
-* Delisupport
+*******************************************************************************
+*** SECTION *******************************************************************
+*
+* EaglePlayer plugin support 
+* Keywords: Delisupport, Eaglesupport
+*
 ******************************************************************************
 
 
@@ -40517,7 +41638,7 @@ loadDeliPlayer
 	move.l 	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3 
-	jsr	getNameFromLock
+	bsr	getNameFromLock
 	beq.b 	.err2
 
  if DEBUG
@@ -40546,27 +41667,30 @@ findDeliPlayer
 	move.l	sp,a0
 	* initialize to zero, important
 	clr.l	(a0) 
-	jsr	allocreplayer
+	bsr	allocreplayer
 	move.l	(sp),a1
 	lea	4(sp),sp
 	tst.l	d0
 	beq.w	.epFromGroup
 
-	lea .searchPath1(pc),a2 
-	bsr.b 	.tryLock
+	lea 	.searchPath1(pc),a2 
+	bsr.w 	.tryLock
 	bne.b	.ok 
 	
 * PROGDIR not available on kick13 or asm
  ifeq asm
 	tst.b	uusikick(a5)
 	beq.b	.skip
-	lea .searchPath2(pc),a2 
+	lea 	.searchPath2(pc),a2 
+	bsr.b 	.tryLock
+	bne.b	.ok 
+	lea 	progdir,a2 
 	bsr.b 	.tryLock
 	bne.b	.ok 
 .skip
  endc 
 
-	lea .searchPath3(pc),a2 
+	lea	 .searchPath3(pc),a2 
 	bsr.b 	.tryLock
 	beq.b	.fail	
 .ok
@@ -40626,7 +41750,7 @@ findDeliPlayer
 	subq.l	#4,d0
 	bsr.w	plainSaveFile
 	pop 	a0 
-	jsr		freemem
+	jsr	freemem
 
 	tst.l	d0
 	beq.w	.fail
@@ -40741,7 +41865,7 @@ deliInit
 	
  if DEBUG
  	move.l	#DTP_PlayerName,d0 
-	jsr	deliGetTag 
+	bsr	deliGetTag 
 	beq.b	.noPlr
 	DPRINT	"Name: %s"
 .noPlr
@@ -40774,6 +41898,11 @@ deliInit
 .noEBTag
 
 	move.l	#DTP_Config,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+
+	* For ImpulseTracker support:
+	move.l	#DTP_InitNote,d0  
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
 
@@ -40875,7 +42004,7 @@ deliInit
 	move.l	(a0),a0
 	move.l	a0,deliStoredNoteStruct(a5)
  if DEBUG 
-	bsr.w		deliShowNoteStruct
+	bsr.w	deliShowNoteStruct
  endif 
 .noNoteStruct
 
@@ -40909,11 +42038,16 @@ deliInit
 	* otherwise assume the module handles it.
 	tst.l	deliStoredInterrupt(a5)
 	beq.b	.skip
+	* If running PS3M, do not start interrupts.
+	* PS3M will handle it.
+	cmp	#pt_multi,playertype(a5)
+	beq.b 	.skip
+
 	DPRINT	"using hippo interrupt"
  
 	* interrupt routine provided, set up an interrupt
 	move	dtg_Timer(a4),d0
-	jsr	init_ciaint_withTempo
+	bsr	init_ciaint_withTempo
 	beq.b	.gotCia
 	DPRINT	"cia error"
 
@@ -41010,6 +42144,7 @@ deliInit
 .ioErrMsg2
 	dc.b	" (%ld)",0
  even
+
 
 * Read module info values
 * in:
@@ -41165,7 +42300,7 @@ deliEnd
 	
 	move.l	deliStoredInterrupt(a5),d0
 	beq.b	.noIntUsed
-	jsr	rem_ciaint
+	bsr	rem_ciaint
 .noIntUsed
 
 	move.l	#DTP_StopInt,d0
@@ -41464,7 +42599,7 @@ _deliDataSize	rs.b	0
 	* May be called from interrupt, no logging allowed
 	push	d0
 	move	dtg_Timer(a5),d0
-	jsr     ciaint_setTempoFromD0
+	bsr     ciaint_setTempoFromD0
 	pop 	d0 
 	rts
 
@@ -41519,7 +42654,7 @@ deliAllocAudio
 	pushm	d1-a6
 	lea	var_b,a5
 	* returns d0=0 on success:
-	jsr	varaa_kanavat 
+	bsr	varaa_kanavat 
 	popm	d1-a6
 	rts
 
@@ -41527,7 +42662,7 @@ deliFreeAudio
 	DPRINT	"deliAudioFree"
 	pushm	d1-a6
 	lea	var_b,a5
-	jsr	vapauta_kanavat
+	bsr	vapauta_kanavat
 	popm	d1-a6
 	rts
 
@@ -41755,7 +42890,7 @@ funcENPP_SetTimer
 	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
 	;DPRINT "ENPP_WaitAudioDMA"
-	jmp dmawait
+	bra dmawait
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange"
 	bra.w	deliModuleChange
@@ -41773,7 +42908,7 @@ funcENPP_DMAMask
 	or		#$8000,d1
 .set2
 	move	d1,$dff096
-	jsr	dmawait
+	bsr	dmawait
 	pop 	d1
 	rts
 
@@ -42426,6 +43561,14 @@ tagsTable
  dc.l EDTP_FormatName   
  dc.l EDTP_AuthorName   
  dc.l EDTP_InitNote  
+ dc.l EDTP_NoteAllocMem
+ dc.l EDTP_NoteFreeMem
+ dc.l EDTP_PlayerInfo
+ dc.l EDTP_Patterns
+ dc.l EDTP_Duration
+ dc.l EDTP_SampleData
+ dc.l EDTP_MiscText
+
 tagsTableEnd
  
 tagsTable2
@@ -42529,7 +43672,13 @@ EDTP_ModuleName   	dc.b "DTP_ModuleName",0 ; get the name of the current module
 EDTP_FormatName   	dc.b "DTP_FormatName",0 ; get the name of the module format
 EDTP_AuthorName   	dc.b "DTP_AuthorName",0 ; not implemented yet
 EDTP_InitNote   	dc.b "DTP_InitNote",0 ; NoteStruct initialization
-
+EDTP_NoteAllocMem dc.b "DTP_NoteAllocMem",0
+EDTP_NoteFreeMem dc.b "DTP_NoteFreeMem",0
+EDTP_PlayerInfo dc.b "DTP_PlayerInfo",0
+EDTP_Patterns dc.b "DTP_Patterns",0
+EDTP_Duration dc.b "DTP_Duration",0
+EDTP_SampleData dc.b "DTP_SampleData",0
+EDTP_MiscText dc.b "DTP_MiscText",0
 
 EEP_Get_ModuleInfo	dc.b "EP_Get_ModuleInfo",0
 EEP_Free_ModuleInfo	dc.b "EP_Free_ModuleInfo",0
@@ -42686,36 +43835,73 @@ deliShowNoteStruct
 	
 	moveq	#0,d0
 	btst	#NSTB_Period,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_Period: %lx"
 
 	btst	#NSTB_ExtPeriod,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_ExtPeriod: %lx"
 
 	btst	#NSTB_NTSCTiming,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_NTSCTiming: %lx"
 
 	btst	#NSTB_EvenLength,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_EvenLength %lx"
 
 	btst	#NSTB_AllRepeats,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_AllRepeats %lx"
 
 	btst	#NSTB_Reverse,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_Reverse %lx"
 
 	btst	#NSTB_Signed,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_Signed %lx"
 
 	btst	#NSTB_Unsigned,d1
-	sne		d0
+	sne	d0
 	DPRINT	"NSTB_Unsigned %lx"
+
+	btst	#NSTB_Ulaw,d1
+	sne	d0
+	DPRINT	"NSTB_Ulaw %lx"
+
+	btst	#NSTB_Alaw,d1
+	sne	d0
+	DPRINT	"NSTB_Alaw %lx"
+
+	btst	#NSTB_Float,d1
+	sne	d0
+	DPRINT	"NSTB_Float %lx"
+
+	btst	#NSTB_7Bit,d1
+	sne	d0
+	DPRINT	"NSTB_7Bit %lx"
+
+	btst	#NSTB_8Bit,d1
+	sne	d0
+	DPRINT	"NSTB_8Bit %lx"
+
+	btst	#NSTB_16Bit,d1
+	sne	d0
+	DPRINT	"NSTB_16Bit %lx"
+
+	btst	#NSTB_24Bit,d1
+	sne	d0
+	DPRINT	"NSTB_24Bit %lx"
+
+	btst	#NSTB_32Bit,d1
+	sne	d0
+	DPRINT	"NSTB_32Bit %lx"
+
+	btst	#NSTB_64Bit,d1
+	sne	d0
+	DPRINT	"NSTB_64Bit %lx"
+
 .x
 	rts
 
@@ -43141,7 +44327,7 @@ gadgetListModeChangeButtonImage
 	; ig_TopEdge
 	dc 3
 	; ig_Width
-	dc 9
+	dc 9+1
 	; ig_Height
 	dc 7
 	; ig_Depth
@@ -43202,6 +44388,8 @@ rightButtonActionsList
 	dc.l 	gadgetInfoButton,aboutButtonAction
 	* Play -> Random play
 	dc.l	gadgetPlayButton,soitamodi_random
+	* Toggle list mode -> File browser mode
+	;dc.l	gadgetListModeChangeButton,engageFileBrowserMode
 	dc.l	0 ; END
  
 
@@ -43296,9 +44484,17 @@ tooltipList
 .rewind
 	dc.b	20,1
 	dc.b	"Skip module backward",0
+;.listModeChange
+;	dc.b	38,2
+;	dc.b	"LMB: Toggle list mode",0
+;	dc.b	"     Normal > Favorites > File browser",0
 .listModeChange
-	dc.b	37,1
-	dc.b	"Switch between playlist and favorites",0
+	dc.b	22,4
+	dc.b	"LMB: Toggle list mode",0
+	dc.b	"     - Normal playlist",0
+	dc.b    "     - Favorites list",0
+	dc.b    "     - File browser",0
+
   even
 
 *** Samplename ikkuna
@@ -43592,15 +44788,34 @@ favoriteImage
 	dc	%0001110000000000				
 	dc	%0000100000000000				
 
-
 listImage
-	dc	%1101111110000000
+	dc	%1101111111000000
 	dc	%0000000000000000				
-	dc	%1101111110000000
+	dc	%1101111111000000
 	dc	%0000000000000000
-	dc	%1101111110000000
+	dc	%1101111111000000
 	dc	%0000000000000000
-	dc	%1101111110000000
+	dc	%1101111111000000
+
+ REM
+fileBrowserImage
+	dc	%1111111000000000
+	dc	%1010010100000000				
+	dc	%1011110010000000
+	dc	%1000000010000000
+	dc	%1011111010000000
+	dc	%1011111010000000
+	dc	%1111111110000000
+ EREM
+ 
+fileBrowserImage
+	dc	%1111111100000000
+	dc	%1010011010000000				
+	dc	%1011111001000000
+	dc	%1000000001000000
+	dc	%1011111101000000
+	dc	%1011001101000000
+	dc	%1111111111000000
 
 
 	section	mah,bss_c

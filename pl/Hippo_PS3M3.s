@@ -1,4 +1,4 @@
-;APS0001B3EB0000DD210000343900002C51000000000000000000000000000000000000000000000000
+;APS0001B5460000DE7E000034A500002CBA000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -10,8 +10,12 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
-DEBUG	=	1
-TEST 	= 	1
+DEBUG	=	0
+TEST 	= 	0
+
+ ifeq TEST
+	auto	wo p:pl/bin/ps3m\
+ endif
 
 
 * Print to debug console, very clever.
@@ -38,6 +42,7 @@ mtS3M = 1
 mtMOD = 2
 mtMTM = 3
 mtXM  = 4
+mtIT  = 5
 
 ENABLED = 0
 DISABLED = 1
@@ -146,6 +151,8 @@ TESTMODE
 	lea	.ps3m_mixingperiod(pc),a2
 	lea	.ps3m_playpos(pc),a3
 	lea	.ps3m_buffSizeMask(pc),a4
+	move.l	#0,d0 			* deliPlayer
+	move.l	#dummyDeliBase,d1	* deliBase
 	jsr	init2j
 
 	* mix rate
@@ -353,6 +360,8 @@ init2r
 ;	popm	d2-a6
 *******************************************************************************
 
+	move.l	d0,deliPlayer
+	move.l	d1,deliBase
 	move.l	#buff1,(a0)
 	move.l	#buff2,(a1)
 	move.l	#mixingperiod,(a2)
@@ -378,6 +387,8 @@ s3poslen
 	move.l	poslen(pc),a0
 	lea	data,a5
 	basereg	data,a5
+;	cmp	#mtIT,mtype(a5)
+;	beq.b	.skip
 	move	PS3M_position(a5),(a0)+
 	move	positioneita(a5),(a0)
 	tst.b	d0 
@@ -385,6 +396,7 @@ s3poslen
 	bsr.w	updatePatternInfoBuffer
 	bsr.w	updatePatternInfoData
 .noPatternScope
+.skip
 	rts
 	endb	a5
 
@@ -455,6 +467,20 @@ s3init
 	lea	data,a5
 	basereg	data,a5
 
+	move.l	4.w,a6
+
+	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	lob	AllocMem
+	move.l	d0,patternInfoBufferPtr(a5)
+	beq	.memerr
+
+	move.l	#UNPACKED_PATTERN_SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	lob	AllocMem
+	move.l	d0,unpackedPatternPtr(a5)
+	beq	.memerr
+
 ;	move.b	ps3mb+var_b,d1
 	move.l	#4096,d0
 	lsl.l	d5,d0
@@ -470,7 +496,6 @@ s3init
 	move.l	buffSize(a5),d0
 	DPRINT 	"buffSize=%lx"
 
-	move.l	4.w,a6
 
 	move.l	#1024*4*2,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -609,7 +634,7 @@ s3init
 .en 
  endif 
 	lea	PatternInfo(pc),a0
-	lea	unpackedPattern,a1
+	move.l	unpackedPatternPtr,a1
 
 	popm	d1-d7/a2-a6
 	rts
@@ -655,7 +680,7 @@ getPatternInfo
 	divu	d4,d3
 	lsr	#8,d3
 	
-	lea	patternInfoBuffer(a5),a0
+	move.l	patternInfoBufferPtr(a5),a0
 	lsl	#2,d3
 	add.w	d3,a0	
 
@@ -727,7 +752,7 @@ updatePatternInfoBuffer
 ;;	DPRINT	"Push idx=%03ld ppos=%04lx song=%02ld pat=%02ld"
  endif
 
-	lea	patternInfoBuffer(a5),a0
+	move.l	patternInfoBufferPtr(a5),a0
 
 	move	prevPushedIndex(a5),d1
 	asl	#2,d1
@@ -889,7 +914,7 @@ updatePatternInfoData
 	lea	2(a0,d0.l),a0
 
 	* start of pattern data
-	lea	unpackedPattern(a5),a1
+	move.l	unpackedPatternPtr(a5),a1
 	move.l	a1,a2
 
 	* clear old, this is probably needed
@@ -974,7 +999,7 @@ updatePatternInfoData
 	move	numchans(a5),D0
 	subq	#1,d0
 	lea	Stripe1(a5),a0
-	lea	unpackedPattern(a5),a1
+	move.l	unpackedPatternPtr(a5),a1
 .stripesLoop 
 	move.l	a1,(a0)+
 	addq	#4,a1
@@ -1026,7 +1051,7 @@ updatePatternInfoData
 	add.l	d1,a1		* skip header 
 
 	* Start of XM pattern data at a1
-	lea	unpackedPattern(a5),a0
+	move.l	unpackedPatternPtr(a5),a0
 
 	move	d0,d7
 	subq 	#1,d7
@@ -1175,12 +1200,9 @@ s3end
 
 .d
 
-
 ******
 ;	clr	PS3M_reinit
 *******
-
-
 
 	move.l	4.w,a6
 
@@ -1249,6 +1271,22 @@ s3end
 
 .eimem6	
 
+	move.l	patternInfoBufferPtr(a5),d0
+	beq.b	.e1
+	move.l	d0,a1
+	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
+	lob	FreeMem
+	clr.l	patternInfoBufferPtr(a5)
+.e1
+
+	move.l	unpackedPatternPtr(a5),d0
+	beq.b	.e2
+	move.l	d0,a1
+	move.l	#UNPACKED_PATTERN_SIZE,d0
+	lob	FreeMem
+	clr.l	unpackedPatternPtr(a5)
+.e2
+
 .closeDebugWindow
  ifne DEBUG
 	move.l	#1*50,d1
@@ -1269,6 +1307,17 @@ s3end
 
 
 eteen	pushm	all
+
+	DPRINT	"Forward"
+
+	cmp	#mtIT,mtype
+	bne.b	.noIt
+	move.l	#DTP_NextPatt,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bra.b	.bb
+.noIt
+
 	move	positioneita,d1
 	subq	#2,d1
 	bmi.b	.bb
@@ -1280,13 +1329,24 @@ eteen	pushm	all
 .a	bsr.w	setPosition
 .bb	popm	all
 	rts
+
 taakse	pushm	all
+
+	DPRINT	"Backward"
+
+	cmp	#mtIT,mtype
+	bne.b	.noIt
+	move.l	#DTP_PrevPatt,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bra.b	.x
+.noIt
 	move	PS3M_position,d0
 	subq	#1,d0
 	bpl.b	.b
 	clr	d0
 .b	bsr.w	setPosition
-	popm	all
+.x	popm	all
 	rts
 
 
@@ -1337,15 +1397,22 @@ ahi_init
 
 
 ahi_init0
+	DPRINT	"ahi_init0"
+
+	move.l	4.w,a6
+	sub.l	a1,a1
+	lob	 FindTask
+	move.l d0,ahi_task
+
 	OPENAHI	1
 	move.l	d0,ahibase
-	beq.b	.ahi_error
+	beq.w	.ahi_error
 	move.l	d0,a6
 
 	lea	ahi_tags(pc),a1
 	jsr	_LVOAHI_AllocAudioA(a6)
 	move.l	d0,ahi_ctrl
-	beq.b	.ahi_error
+	beq.w	.ahi_error
 
 	move.l	d0,a2
 	moveq	#0,d0				;Load module as one sound!
@@ -1368,6 +1435,9 @@ ahi_init0
 	move.b	#1,setpause-ahi_ctrltags(a1)
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_ControlAudioA(a6)
+
+	DPRINT	"->%ld"
+
 	tst.l	d0
 	bne.b	.ahi_error
 	moveq	#0,d0
@@ -1379,8 +1449,19 @@ ahi_init0
 
 
 ahi_end
+	DPRINT	"ahi_end"
+	move.l	4.w,a6
+	sub.l 	a1,a1
+	lob 	FindTask
+	cmp.l	ahi_task(pc),d0
+	beq.b	.ok
+	DPRINT 	"task mismatch %lx"
+	bra.b 	.1
+.ok
+
 	move.l	ahibase(pc),d0
 	beq.b	.1
+	clr.l	ahibase
 	move.l	d0,a6
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_FreeAudio(a6)
@@ -1461,6 +1542,9 @@ ahi_playmusic
 	subq	#1,d0
 	beq.b	.m
 	lea	xm_music(pc),a0
+	subq	#1,d0
+	beq.b  .m
+	lea		it_music(pc),a0
 .m	jsr	(a0)
 
 	lea	cha0,a4
@@ -1515,7 +1599,7 @@ ahi_volume:
 	move.l	d6,d0
 
 	move	mVolume(a4),d1
-	mulu	PS3M_master(pc),d1
+	mulu	PS3M_master,d1
 	lsl.l	#4,d1			* max=$10000
 
 	move.l	#$8000,d2
@@ -1572,7 +1656,7 @@ ahi_period:
 	move	mPeriod(a4),d1
 	beq.b	.exit
 
-	move.l	clock(pc),d0
+	move.l	clock,d0
 	lsl.l	#2,d0
 
 	bsr.w	divu_32
@@ -1680,11 +1764,10 @@ soundfunc:
 
 ahi_tempo
 	movem.l	d0-d1/a0-a2/a6,-(sp)
-
 	and.l	#$ffff,d0
 	lsl.w	#1,d0
 	divu	#5,d0
-
+ 
 	move.l	ahibase(pc),a6
 	lea	.tags(pc),a1
 	move	d0,4(a1)
@@ -1733,6 +1816,7 @@ setmodulelen	dc.l	0
 
 ahibase:	dc.l	0
 ahi_ctrl:	dc.l	0
+ahi_task	dc.l	0
 
 attr_stereo		dc.l	0
 attr_panning		dc.l	0
@@ -1826,14 +1910,22 @@ PatternInit
 * Called by the PI engine to get values for a particular row
 ConvertNote
 	move	mtype(pc),d0
-	cmp 	#mtMOD,d0
-	beq.w	.mtMOD
-	cmp	#mtMTM,d0 
-	beq.b	.mtMTM
-	cmp	#mtS3M,d0 
+	subq	#1,d0
 	beq.b	.mtS3M
-	cmp	#mtXM,d0 
+	subq	#1,d0
+	beq.w	.mtMOD
+	subq	#1,d0
+	beq.b	.mtMTM
+	subq	#1,d0
 	beq.b	.mtXM
+;	cmp 	#mtMOD,d0
+;	beq.w	.mtMOD
+;	cmp	#mtMTM,d0 
+;	beq.b	.mtMTM
+;	cmp	#mtS3M,d0 
+;	beq.b	.mtS3M
+;	cmp	#mtXM,d0 
+;	beq.b	.mtXM
 	rts
 
 .mtS3M
@@ -1861,8 +1953,9 @@ ConvertNote
 	addq	#1,d0
 	move.b	1(a0),d1
 .noNote
-	move.b	2(a0),d2
-	and	#$3f,d2		* TODO, cut off command, there could possibly be a better way
+	moveq	#$3f,d2
+	and.b	2(a0),d2
+	* TODO, truncated command code, there could possibly be a better way
 
 	move.b	3(a0),d3
 	rts
@@ -1880,9 +1973,6 @@ ConvertNote
 	moveq	#0,D2		; Command 
 	moveq	#0,D3		; Command argument
 
-;	moveq	#-1,d0
-;	cmp.b	(a0),d0
-;	beq.b	.noXMNote
 	moveq	#$7f,d0
 	and.b	(a0),d0		; note 0-71, 0 = C-0
 	beq.b	.noXMNote
@@ -1891,8 +1981,9 @@ ConvertNote
 	and.b	1(a0),d1	; instrument 0-128
 
 .noXMNote
-	move.b	2(a0),d2
-	and	#$3f,d2		* TODO, cut off command, there could possibly be a better way
+	moveq	#$3f,d2
+	and.b	2(a0),d2
+	* TODO, truncated command code, there could possibly be a better way
 
 	move.b	3(a0),d3
 	rts
@@ -1963,7 +2054,13 @@ ConvertNote
 
 	rts
 
-
+id_it
+	MOVEQ	#0,D0
+	CMP.L	#$494D504D,(A0)
+	BEQ.S	.itYes
+	MOVEQ	#-1,D0
+.itYes
+	RTS
 
 
 
@@ -2042,7 +2139,7 @@ play	;movem.l	d0-a6,-(sp)
 	add	d0,d2
 
 	cmp.l	#16,d2
-	blt.b	.ei
+	blt.w	.ei
 
 	move	d2,todobytes(a5)
 
@@ -2070,13 +2167,19 @@ play	;movem.l	d0-a6,-(sp)
 	bra.b	.o
 
 .xm	cmp	#mtXM,mtype(a5)
-	bne.b	.mod
-
+	bne.b	.noXM
+	
 	bsr.w	xm_music
 	lea	data,a5
 	bra.b	.o
 
-.mod	bsr.w	mt_music			; Also with MTMs
+.noXM
+	cmp	#mtIT,mtype(a5)
+	bne.b	.mod
+	bsr	it_music
+	bra.b	.o
+.mod
+	bsr.w	mt_music			; Also with MTMs
 
 .o	move	bytesperframe(a5),d0
 	add	d0,bytes2music(a5)
@@ -2145,6 +2248,10 @@ init
 	and.l	#$ffffff00,d1
 	cmp.l	#'TDZ'<<8,d1
 	beq.b	.tdz
+	
+	bsr	id_it
+	beq.w	.it
+
 	bra.w	.error
 
 .chn	move.l	d0,d1
@@ -2202,6 +2309,10 @@ init
 	move	#mtXM,mtype(a5)
 	bra.b	.init
 
+.it
+	move	#mtIT,mtype(a5)
+	bra.b	.init
+
 .s3m	move	#mtS3M,mtype(a5)
 
 
@@ -2228,6 +2339,9 @@ init
 
 	cmp	#mtXM,mtype(a5)
 	beq.w	xm_init
+
+	cmp	#mtIT,mtype(a5)
+	beq	it_init
 
 .error	moveq	#1,d0
 	rts
@@ -3617,7 +3731,6 @@ mix_020	moveq	#0,d7
 	swap	d0
 	move.l	d4,d5
 	swap	d5
-
 	divul.l	d5,d5:d6		; bytes left to loop end
 	tst.l	d5
 	beq.b	.e
@@ -3813,7 +3926,6 @@ mix2_020
 
 	move.l	d4,d5
 	swap	d5
-
 	divul.l	d5,d5:d6		; bytes left to loop end
 	tst.l	d5
 	beq.b	.e
@@ -4009,7 +4121,6 @@ mix16_020
 	swap	d0
 	move.l	d4,d5
 	swap	d5
-
 	divul.l	d5,d5:d6		; bytes left to loop end
 	tst.l	d5
 	beq.b	.e
@@ -4207,7 +4318,6 @@ mix162_020
 
 	move.l	d4,d5
 	swap	d5
-
 	divul.l	d5,d5:d6		; bytes left to loop end
 	tst.l	d5
 	beq.b	.e
@@ -8762,13 +8872,14 @@ mt_trenoc
 
  
 mt_setdma
-	move	numchans,d7
+	move	numchans(pc),d7
 	subq	#1,d7
-	lea	cha0,a5
+	lea	cha0(pc),a5
 	lea	mt_chan1temp(pc),a6
-.loo	move	d7,-(sp)
+.loo	
+	;move	d7,-(sp)
 	bsr.w	setreg
-	move	(sp)+,d7
+	;move	(sp)+,d7
 	lea	mChanBlock_SIZE(a5),a5
 	lea	44(a6),a6			; Size of MT_chanxtemp
 	dbf	d7,.loo
@@ -9826,6 +9937,353 @@ mt_pattdeltime2	dc.b 0
 mt_patternpos	dc 0
 mt_dmacontemp	dc 0
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ImpulseTracker
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+ STRUCTURE DTN_NoteStruct,0
+	APTR	nst_Channels		;pointer to a list of notechannels */
+	ULONG	nst_Flags		;misc flags (see below) */
+	ULONG	nst_MaxFrequency	;max. frequency of this player (28,867 Hz in DMA mode) */
+	UWORD	nst_MaxVolume		;max. volume of this player (in most cases 64) */
+	STRUCT	nst_Reserved,18		;reserved for future use (must be 0 for now) */
+	LABEL	DTN_NoteStruct_SIZEOF
+
+
+ STRUCTURE DTN_NoteChannel,0
+	APTR	nch_NextChannel		;next channel in the list (NULL if last) */
+	ULONG	nch_NotePlayer		;for use by the noteplayer (the deliplayer must ignore this) */
+	WORD	nch_Reserved0		;reserved for future use (must be 0 for now) */
+	UBYTE	nch_Private		;just what it says */
+	UBYTE	nch_Changed		;what has changed since last call */
+	WORD	nch_StereoPos		;set this field when the InitNote function is called */
+	WORD	nch_Stereo		;describes "where" this channel is supposed to play */
+	APTR	nch_SampleStart		;^sampledata */
+	ULONG	nch_SampleLength	;size of sample */
+	APTR	nch_RepeatStart		;^repeat part of sample */
+	ULONG	nch_RepeatLength	;size of repeat part */
+	ULONG	nch_Frequency		;frequency (or period) of sample */
+	UWORD	nch_Volume		;volume of sample */
+	STRUCT	nch_Reserved1,26	;reserved for future use (must be 0 for now) */
+	LABEL	DTN_NoteChannel_SIZEOF
+
+deliPlayer		dc.l	0
+deliBase		dc.l	0
+itLastTimer		dc.w	0
+
+* in:
+*   d0 = tag to find
+* out:
+*   d0 = tag data or NULL if not found
+deliGetTag
+	* This is a ptr to a seglist, loaded with LoadSeg()
+	move.l	deliPlayer(pc),a0
+deliGetTagFromA0
+	* tag item array
+	move.l	16(a0),a0
+.loop
+    tst.l   (a0)            * TAG_END is NULL
+    beq.b   .notFound
+    cmp.l   (a0),d0
+    bne.b   .notThis
+    move.l  4(a0),d0
+    rts
+.notFound
+	moveq   #0,d0
+	rts
+.notThis
+    addq.l  #8,a0
+    bra.b   .loop
+
+deliCallFunc	
+	tst.l	d0 
+	beq.b	.noFunc
+	pushm 	d2-d7/a2-a6
+	move.l	deliBase(pc),a5
+	move.l	d0,a0
+	jsr	(a0)
+	popm	d2-d7/a2-a6
+.noFunc rts
+
+
+it_init
+	DPRINT	"it_init"
+ if DEBUG
+	move.l	deliPlayer(pc),d0
+	move.l	deliBase(pc),d1
+	DPRINT	"deliPl=%lx deliBase=%lx"
+ endif
+	clr	itLastTimer
+
+	move.l	deliBase(pc),a0
+	pea	it_setTimer(pc)
+	move.l	(sp)+,dtg_SetTimer(a0)
+
+	move.l	s3m(pc),a0
+	pea	4(a0)
+	move.l	(sp)+,mname
+
+	; Sample format setting
+	move	#1,fformat
+
+	; S3M
+	; Sounds ok:
+	;move.l	#14317056/4,clock		; Clock constant
+	; MOD
+	; Also ok:
+	move.l	#14187580/4,clock		; Clock constant
+	; XM
+	;move.l	#8363*1712/4,clock		; Clock constant
+	; MTM
+	;move.l	#14317056/4,clock		; Clock constant
+
+	bsr	it_calcTempo
+	move	d0,tempo
+
+ if DEBUG
+	ext.l	d0
+	DPRINT	"Initial tempo %ld"
+ endif
+
+	; Use all channels!
+	moveq	#32,d0
+	move	d0,numchans
+	addq	#1,d0
+	lsr	#1,d0
+	move	d0,maxchan
+
+	lea	pantab(pc),a0
+	move.l	a0,a1
+	moveq	#8-1,d0
+.ll	clr.l	(a1)+
+	dbf	d0,.ll
+
+	move	numchans(pc),d0
+	subq	#1,d0
+	moveq	#0,d1
+.lop	tst	d1
+	beq.b	.vas
+	cmp	#3,d1
+	beq.b	.vas
+.oik	move.b	#-1,(a0)+
+	bra.b	.je
+.vas	move.b	#1,(a0)+
+.je	addq	#1,d1
+	and	#3,d1
+	dbf	d0,.lop
+
+	rts
+
+* ciavalue = timervalue / tempovalue
+* ciavalue * tempovalue = timervalue
+* tempovalue = timervalue / ciavalue
+
+* common dtg_Timer = 14209
+* mrate = 5002
+
+* Use this since the AHI init flow never gets to the
+* part of code that initializes "timer".
+getTimerValue
+	move.l	timer(pc),d0
+	bne.b 	.x
+	move.l	4.w,a0
+	move.b	PowerSupplyFrequency(a0),d0
+	cmp.b	#60,d0
+	beq.b	.NTSC
+.PAL	
+	move.l	#1773447,d0
+	move.l	d0,timer
+	rts
+.NTSC	
+	move.l	gfxbase,a0
+	move	gb_DisplayFlags(a0),d0
+	btst	#4,d0				; REALLY_PAL
+	bne.b	.PAL				; Just to be sure
+	move.l	#1789773,d0
+	move.l	d0,timer
+.x	rts
+
+* This could be called from interrupts
+it_calcTempo
+	* Convert dtg_Timer value into a tempo value
+	move.l	deliBase(pc),a0
+
+	move	dtg_Timer(a0),d1
+	beq.b	.defaultTempo
+	bsr.b	getTimerValue
+	divu	d1,d0
+	rts
+.defaultTempo
+	moveq	#125,d0
+	rts
+
+it_setTimer
+	move.l	deliBase(pc),a0
+	move	dtg_Timer(a0),d0
+	cmp	itLastTimer(pc),d0
+	beq.b	.x
+	move	d0,itLastTimer
+
+	bsr.b	it_calcTempo
+	move	d0,tempo
+	
+	tst.b	ahi_use
+	bne.w	ahi_tempo
+
+	move.l	mrate(pc),d1
+	beq.b	.x
+	move.l	d1,d2
+	lsl.l	#2,d1
+	add.l	d2,d1
+	add	d0,d0
+	divu	d0,d1
+
+	addq	#1,d1
+	and	#~1,d1
+	move	d1,bytesperframe
+.x	rts
+
+it_music
+	pushm	a5/a6
+ ifeq TEST
+
+	move.l	#DTP_Interrupt,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+	bsr.b	.notePlayer
+ else
+	move	#$800,$dff180	
+;	moveq	#32-1,d2
+	moveq	#1-1,d2
+	lea	cha0(pc),a6
+.testLoop
+	move.l	#module,mStart(a6)
+	move.l	#10000,mLength(a6)
+	move	#64,mVolume(a6)
+	move	#300,mPeriod(a6)
+	clr.l	mFPos(a6)
+	clr.b	mLoop(a6)
+	clr.b	mOnOff(a6)
+
+	lea	mChanBlock_SIZE(a6),a6
+	dbf	d2,.testLoop
+ endif
+	;;;bsr.w	it_setTimer
+	popm	a5/a6
+	rts
+	
+
+
+
+* IT specific noteplayer
+.notePlayer
+	move.l	#DTP_NoteStruct,d0  
+	bsr.w	deliGetTag
+	* This is an address to the struct
+	move.l	d0,a0
+	move.l	(a0),a4
+	move.l	nst_Flags(a4),d7	* Flags
+	moveq	#32-1,d6
+	move.l	(a4),d0	* get 1st channel data
+	beq.w	.x
+	move.l	d0,a0
+	lea	cha0(pc),a6
+.chLoop
+
+	;;;;;;;;;;;;;;;;;;;;;; Sample Start
+
+	moveq	#2,d0	* Sample
+	and.b	11(a0),d0
+	beq.b	.noSample
+
+	* Set sample address
+	move.l	nch_SampleStart(a0),mStart(a6)
+	* Set sample length
+	move.l	nch_SampleLength(a0),mLength(a6)
+	clr.l	mFPos(a6)
+
+	* Set on/off status
+	st	mOnOff(a6) * stop audio
+	tst.l	mStart(a6)
+	beq.b	.noSample
+	cmp.l	#2,mLength(a6)
+	bls.b	.noSample
+	clr.b	mOnOff(a6) * start audio
+.noSample
+
+	;;;;;;;;;;;;;;;;;;;;;; Sample Repeat
+	
+	moveq	#4,d0	* Repeat
+	and.b	11(a0),d0
+	beq.b	.noRepeat
+
+	* Set repeat address
+	move.l	nch_RepeatStart(a0),mLStart(a6)
+	* Set sample length
+	move.l	nch_RepeatLength(a0),mLLength(a6)
+	
+		clr.l	mFPos(a6)
+	* Set loop status
+	clr.b	mLoop(a6)
+	tst.l	mLStart(a6)
+	beq.b	.noRepeat
+	cmp.l	#2,mLLength(a6)
+	bls.b	.noRepeat
+	st	mLoop(a6)
+.noRepeat
+
+	;;;;;;;;;;;;;;;;;;;;;; Sample Volume
+
+	moveq	#$10,d0	* Volume
+	and.b	11(a0),d0
+	beq.b	.noVolume
+
+	moveq	#0,d0
+	move	nch_Volume(a0),d0
+	lsl.l	#6,d0
+	divu	nst_MaxVolume(a4),d0
+	move	d0,mVolume(a6)
+.noVolume
+
+	;;;;;;;;;;;;;;;;;;;;;; Sample Frequency/Period
+
+	moveq	#8,d0	* Freq
+	and.b	11(a0),d0
+	beq.b	.noFreq
+				
+	moveq	#0,d0
+	move.l	nch_Frequency(a0),d3
+	beq.b	.per_
+
+	lsr.l	#1,d3
+	cmp.l	#$ffff,d3
+	bhi.b	.per_
+
+	move.l	#3546895<<1,d0		;Amiga Audiorate
+	divu	d3,d0
+.per_
+
+	move	d0,mPeriod(a6)
+	; Is this needed?
+	; clr.l	mFPos(a6)
+
+.noFreq
+
+	;;;;;;;;;;;;;;;;;;;;;; Next channel
+
+	clr.b	nch_Changed(a0)
+
+	move.l	(a0),d0
+	beq.b	.x
+	move.l	d0,a0
+	lea	mChanBlock_SIZE(a6),a6
+	dbf	d6,.chLoop
+.x
+	rts
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ; PLAYING PROCESSES
@@ -10605,19 +11063,23 @@ activePattPos 	dc 	0
 * buffered information: song position, pattern position
 			ds.l	4	* underflow room
 
-pi
-patternInfoBuffer
-	* TODO: how big should this be?
-		ds.l	2048	; = 8 kB
+* TODO: how big should this be?
+PATTERN_INFO_BUFFER_SIZE = 2048*4	; = 8 kB
 
+pi
+patternInfoBufferPtr
+		dc.l 	0
+		
 * 64 + 64 rows
 * NOTE! xm can have variable rows?
 * 32 channels
 * 4 bytes per note
-* TODO: dynamic allocation
+
+UNPACKED_PATTERN_SIZE = (64+64)*4*32	; = 16 kB
+
 upa
-unpackedPattern
-	ds.b	(64+64)*4*32	; = 16 kB
+unpackedPatternPtr
+	dc.l	0
 
 unpackedPatternPosition
 	dc.w	-1
@@ -10709,15 +11171,21 @@ desmsgDebugAndPrint
 output			ds.l 	1
 debugDesBuf		ds.b	1024
 
- endif
+ endif ;; DEBUG
 
-	ifne TEST
+ ifne TEST
 
 	section	mod,data_p
+
+dummyDeliBase		ds.b	1024
+
 module	
+	incbin	"m:it/a spell of love and lust.it"
+	
+
 ;	incbin	"m:multichannel/approaching antares.mod"
 ;	incbin	"m:multichannel/chaotic dance.mtm"
-	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
+;	incbin	"m:modsanthology/authors.g-q/purple_m/aquaphobia.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/charts_overdrive.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-04.s3m"
 ;	incbin	"m:modsanthology/authors.g-q/purple_m/unreal-06.s3m"
@@ -10744,5 +11212,5 @@ module
 moduleE
 	ds.b	1024
 
-	endif
+	endif ;; TEST
 	

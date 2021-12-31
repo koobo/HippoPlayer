@@ -1,8 +1,8 @@
-Short: Updated HippoPlayer, a module player for classic Amigas
+Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.49
+Version: 2.50
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -27,6 +27,85 @@ same directory with the HiP binary, too, if you're using kick2.0 or newer.
 
 NOTE 3: If you get errors where some module is not recognized even 
 if it should be, try removing "S:HippoPlayer.prefs" first.
+
+NOTE 4: Too long didn't read
+- Prefs options: "Button tooltips", "Favorite modules", "Keep list on exit" 
+- Button above the file slider
+- Improved patternscope
+- New music formats
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.49 (29.11.2021) to v2.50 (31.12.2021)
+
+## New fixes:
+- There was a bug in the sample player (which also plays MP3) in AHI
+  compatibility. It could hang when playback was stopped.
+  This happened especially when using AHI with the Toccata driver.
+  Should work now.
+- Another different possible AHI related hang bug fixed which could 
+  happen when pausing playback. 
+- When the play mode was set to "List repeatedly" and the list was full
+  of dividers (a.k.a. directories), Hippo could get stuck trying to find
+  a module to be played. This should be fixed now.
+- Possible hang/crash bug (related to a stray audio interrupt) fixed
+  in Ben Daglish and Kris Hatlelid formats.
+
+## New supported music formats:
+- Impulse Tracker, using the "Impulse" deliplayer, written by the
+  Delirium team for DeliTracker.
+  - Impulse plays IT formats v1.00 and v2.00. Newer formats are not supported.
+  - Impulse supports pattern skip forwards and back, along with song
+    end detection. Song position display is not supported.
+  - 32 channels are in use in all modules. This is due to the way 
+    IT modules work, channels are used dynamically according to 
+    whatever is needed at the moment.
+  - Modules can be played using the PS3M mixing engine or AHI.
+  - Stereo scope works with PS3M.
+  - Channel panning is not supported, each channel has a fixed
+    stereo position.
+  - Requires 68020 or better.
+  - Impulse is not included in the HippoPlayer.group file, 
+    so Hippo will look for it in the following places:
+    "PROGDIR:", "PROGDIR:eagleplayers", "eagleplayer2:eagleplayers".
+    Here "PROGDIR:" is the directory where the Hippo binary is installed.
+  - Impulse can be found in the Aminet DeliTracker archive.
+
+## New features:
+- There is a new list mode which can be toggled by the button on 
+  top of the file slider: file browser. The list modes now are:
+  - Playlist (list icon)
+  - Favorites (heart icon)
+  - File browser (disk icon)
+- File browser mode:
+  - In this mode the list displays contents of directories.
+  - Directories are entered by the "Play" button, return/enter key,
+    or LMB double click. (Note that double click can
+    be enabled/disabled in Prefs.)
+  - The topmost list item shows the name of the displayed directory.
+    Activating it goes back to the parent directory.
+  - Files are filtered using the configured match pattern,
+    see "Prefs/Loading/File Match Pattern" (kick2.0+ only).
+  - If you have enabled "Keep list on exit", Hippo will return to the
+    directory where you left off if you were in the file browser mode
+    when exiting.
+- New keyboard shortcuts:
+  - List mode toggle: [SHIFT+M] 
+  - Navigate to parent in file browser: [BACKSPACE]
+
+## New ARexx commands (for HippoPlayerIR support):
+  - TOGGLEMODE: change between list modes
+  - FAVORITE: toggle chosen module favorite status
+
+## Known issues:
+- Same as with v2.49
+
+## Thanks for beta testing go to:
+- Spot/UpRough 
+- Marek Hac
 
 
 ------------------------------------------------------------------------------
@@ -117,7 +196,7 @@ It's the pattern party edition!
   - "Paradroid 90"
   - Eagleplayer by Wanted Team
 
-## Known issues;
+## Known issues:
 - Sometimes after the scope window has resized the right side of the
   window frame is not refreshed properly. Activating the window 
   repaints the window border again.
