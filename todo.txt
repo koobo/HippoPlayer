@@ -1,5 +1,5 @@
 WISHLISH
-- Dir browser
++ Dir browser
 + Patternscope for other formats too?
 + Player group from PROGDIR
 + DONE: .gz support
@@ -74,8 +74,48 @@ CRASH?
 - press "PRG"
 - boom
 
+FIXED: BUG:
+- empty list, something is playing
+- restore tries to play something eventhough nothing is available
+
+FIXED: BUG
+- walkig with rainbow.it
+--> Does not sound similar as with EP, notes cut short
+--> also period issues
+
+FIXED: ENFORCER HIT
+- play "crush them.it", "spirulina.it"
+- eject
+- one byte after module mem area is overwritten
+- EP, DT: no problem
+- Seems to originate from DTP_InitPlayer
+
+FIXED: KICK 13 crash:
+- play "switchblade.bd"
+- go to song #2 or #3
+
+FIXED: KICK 13 crash:
+- play "blasteroids.bd"
+- eject
+--> GURU
+- ok on kick1.3 with debug window
+- ok on kick3.0
+- REPRODUCES: hip v2.49+group
+-- "Exiting..." and hang
+
+BUG
+- often hangs in AHI init
+- more toccata problems?
+
+CRASH PS3M
+- play IT "justin1.it"
+- play "nub.okta"
+-- PS3M crashes? maybe the code is deallocated while it is still needed
+- play "the cosmic dog ii.mod"
+- only happened once
+
 TODO
-- "list mode toggle" stil visible with RMB+PR
+- "list mode toggle" still visible with RMB+PR
 
 CRASH
 - open hippo
@@ -83,13 +123,43 @@ CRASH
 - start to play automatically
 - crashes after DeliInit call
 
+TODO
+- close tooltip popup when module ends
+
+ENFORCER HITS
+- startup with state: "elevation.it"
+- enforcer hits
+- still plays
+
+FIXED: CRASH
+- play oktalyzer module
+- open FB with only dirs
+- wait for hippo to try to find something to play
+- crash!
+
+FIXED: BUG
+- title mode should show songpos
+- play it module
+- play s3m module
+--> no songpos
+
+FIXED: BUG
+- play mode: random
+- toggle between list modes
+- normal list: shows the R-random play indicators at places
+- toggle more
+- normal list: somes the R at different places
+
 TODO filebrowser
++ SHOW dir name on top, instead of "Parent"?
 - Sorting... message: use tick counter to delay it
-- BACKSPACE shortcut for "go to parent"
-- TOGGLE FAVORITE: use common code for arexx, rmb marking
-- 2. Also in file browser. When I double click on some drawer/assign/device it not let me in. I need to use keyboard and press Enter. But this is a bit strange, because I noticed that only on my A1200. On A600 it works perfectly.
-- SORT after browser list, remove "Sorting..." txt, it's annoying
-- Better msg "No favorites! Add with RMB"
++ BACKSPACE shortcut for "go to parent"
++ TOGGLE FAVORITE: use common code for arexx, rmb marking
+- 2. Also in file browser. When I double click on some drawer/assign/device it not let me in. 
+  I need to use keyboard and press Enter. 
+  But this is a bit strange, because I noticed that only on my A1200. On A600 it works perfectly.
++ SORT after browser list, remove "Sorting..." txt, it's annoying
++ Better msg "No favorites! Add with RMB"
 + go to browser, launch module from CLI -> should change mode
 + never disable toggle button
 + in browser mode, loading a module program with "enter" -> normal mode
@@ -97,7 +167,7 @@ TODO filebrowser
 + obtainmodulelist
 + waitpointers
 + LMB toggle 
-- do not cause favs save when playing around in browser
+? do not cause favs save when playing around in browser
 + RANDOM PLAY MODE: next module happens to be a dir -> silly error
 --- toggle list modes, should random table be cleaned?
 --- it is, but the random play marker is NOT?
