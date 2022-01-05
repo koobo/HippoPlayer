@@ -23,14 +23,15 @@ ver	macro
 ;	dc.b	"v2.49ß (?.?.2021)"
 ;	dc.b	"v2.49 (29.11.2021)"
 ;	dc.b	"v2.50ß (?.?.202?)"
-	dc.b	"v2.50 (31.12.2021)"
+;	dc.b	"v2.50 (31.12.2021)"
+	dc.b	"v2.51ß (?.?.202?)"
 	endm	
 
 
-DEBUG	= 0
+DEBUG	= 1
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
-asm	= 0	* 1: Run from AsmOne, 0: CLI/Workbench
+asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
 
 zoom	= 0	* 1: zoomaava hippo
 fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
