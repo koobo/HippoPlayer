@@ -25721,11 +25721,18 @@ loadfile
 	move.l	d0,lod_filehandle(a5)
 	beq.w	.open_error
 
+	lea	probebuffer(a5),a0
+	move.w	#1084/4-1,d0
+.clrProbe
+	clr.l	(a0)+
+	dbf	d0,.clrProbe
+
 	move.l	lod_filehandle(a5),d1
 	lea	probebuffer(a5),a0
 	move.l	a0,d2
 	move.l	#1084,d3
 	lob	Read
+	DPRINT	"Probe read: %ld"
 ;	cmp.l	#1084,d0
 ;	bne.w	.read_error
 
@@ -26151,7 +26158,29 @@ loadfile
 	beq.w	.error
 
 	bsr.w	.infor
-	bsr.w	.seekstart
+
+;	bsr.w	.seekstart
+
+	* Make use of the already read data in probebuffer
+	move.l	lod_filehandle(a5),d1		
+	moveq	#0,d2
+	moveq	#OFFSET_CURRENT,d3
+	lore	Dos,Seek
+	DPRINT	"File position %ld"
+	cmp.l	#-1,d0
+	beq	.error2
+
+	move.l	lod_address(a5),a0
+
+	move.l	d0,d1
+	beq.b	.skipInitial
+
+	lea	probebuffer(a5),a1
+	subq	#1,d0
+.copyInitial
+	move.b	(a1)+,(a0)+
+	dbf	d0,.copyInitial
+.skipInitial
 
  ifeq floadpr
 	move.l	lod_filehandle(a5),d1
@@ -26164,7 +26193,7 @@ loadfile
  else
 
 *** laatukko file load progress indicator blabh
-
+	pushm	d1/a0
 	tst.b	win(a5)
 	beq.b	.eilox
 	moveq	#15+WINX,plx1
@@ -26177,43 +26206,66 @@ loadfile
 	add	windowtop(a5),ply2
 	move.l	rastport(a5),a1
 	jsr	laatikko3
-.eilox
-
+.eilox	popm	d1/a0
 
 	move.l	lod_length(a5),d4
-	move.l	lod_address(a5),d5
+	* subtract already read amount
+	sub.l	d1,d4
+	* where to load data, considering the already read amount
+	move.l	a0,d5
+	;move.l	lod_address(a5),d5
+
 
 .loadloop
+ if DEBUG
+ 	move.l	d4,d0
+	DPRINT	"Bytes to read %ld"
+ endif
+	* See if we got all of it already?
+	tst.l	d4
+	beq.w	.don
+	bmi.w	.don
+
 	move.l	lod_filehandle(a5),d1
 	move.l	d5,d2
-;	move.l	#$4000,d3
 	move.l	#$2000,d3
-;	move.l	#$1000,d3
-;	move.l	#512,d3
 	lore	Dos,Read
 
+	cmp.l	#-1,d0
+	bne.b	.noErr
+ if DEBUG
+	lob	IoErr
+	DPRINT	"IoErr=%ld"
+ endif
+	bra	.error2
+.noErr
+
+	* Subtract total bytes to be read
 	sub.l	d0,d4
 	bmi.w	.error2
 	beq.b	.don
 
+	* Advance target addres
 	add.l	d0,d5
-
 	bsr.b	.lood
-
 	bra.b	.loadloop
 
-
+* Draw progress bar
 .lood
 	tst.b	win(a5)
 	beq.b	.wxx
 	pushm	d4/d5
 
+	* File length is in d5
 	move.l	lod_length(a5),d5
 	move.l	d5,d3
 	lsr.l	#8,d3
+	* Bytes left to read is in d4
 	sub.l	d4,d5
+	* Bytes read is in d5
 	lsr.l	#8,d5
 
+	* Calculate 
 	mulu	#229,d5
 	divu	d3,d5
 	move	d5,d4
@@ -26243,7 +26295,7 @@ loadfile
 .wxx
 	rts
 .don
-
+	DPRINT	"Read done"
  endc
 
 .exit	
@@ -26288,8 +26340,12 @@ loadfile
 	moveq	#0,d2
 	moveq	#-1,d3
 	move.l	_DosBase(a5),a6
-	;lob	Seek	
-	jmp	_LVOSeek(a6)
+	lob	Seek
+ if DEBUG
+	lob	IoErr
+	DPRINT	"Seek IoErr=%ld"
+ endif	
+	rts
 
 .closeit
 	move.l	lod_filehandle(a5),d1
@@ -26391,8 +26447,14 @@ loadfile
 	bra.w	.exit
 
 .open_error
+ if DEBUG
+	lore	Dos,IoErr
+	DPRINT	"Open IoErr=%ld"
+ endif
+
 	move	#lod_openerr,lod_error(a5)
 	bra.w	.exit
+
 .error
 .nomem_error
 .fimp_error
@@ -26432,8 +26494,13 @@ loadfile
 
 .free	move.l	lod_address(a5),d0
 	beq.b	.eee
+	clr.l	lod_address(a5)
 	move.l	d0,a1
 	move.l	lod_length(a5),d0
+ if DEBUG
+ 	move.l	a1,d1
+	DPRINT	"Free %ld bytes at 0x%lx"
+ endif
 	move.l	(a5),a6
 	lob	FreeMem
 .eee	rts
@@ -35618,7 +35685,7 @@ p_multi	jmp	.s3init(pc)
 	tst.b	scopeflag(a5)
 	beq.b	.noScope 
 	* Sets Z if patternscope is active:
-	bsr		patternScopeIsActive
+	jsr	patternScopeIsActive
 	* Inform PS3M 
 	seq		d0
 .noScope
