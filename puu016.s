@@ -28850,13 +28850,13 @@ fileBrowserDir
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
 	move.l	d0,d6
-	beq.w	.error
+	beq.w	.error0
 
 	move.l	d6,d1
 	pushpea	fileinfoblock(a5),d2
 	lob	Examine
 	tst.l	d0
-	beq.w	.error
+	beq.w	.error0
 
 	* Copy lock for state saving
 	move.l	fileBrowserCurrentDirLock(a5),d1
@@ -28895,7 +28895,7 @@ fileBrowserDir
 	tst.l	d0
 	bne.b	.ok
 	lea	200(sp),sp
-	bra.w	.error
+	bra.w	.error0
 
 .ok
 	* Create parent entry 
@@ -28905,7 +28905,7 @@ fileBrowserDir
 	bsr.w	createNode
 	lea	200(sp),sp
 	tst.l	d0
-	beq.w	.error
+	beq.w	.error0
 
 	bsr	makeParentNode
 	* store parent node into d5 for a while
@@ -28974,10 +28974,9 @@ fileBrowserDir
 	bne.b	.scan	* stop on error
 
 .scanDone
-.doUnlock
-.error
 .lockFail
 	lea	200(sp),sp
+.error0
 
 	move.l	d6,d1
 	beq.b	.noLock
