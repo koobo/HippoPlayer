@@ -3804,10 +3804,9 @@ iderror
 inputhandler
 	tst.b	hotkey(a1)
 	beq.b	.quit
-	pushm	d0/d1/a0/a1/a6
+	push	a0
 .handlerloop
-	move.b	ie_Class(a0),d0			* class
-	cmp.b	#IECLASS_RAWKEY,d0
+	cmp.b	#IECLASS_RAWKEY,ie_Class(a0)
 	bne.b	.cont
 	move	ie_Qualifier(a0),d0
 	and	#IEQUALIFIER_LSHIFT!IEQUALIFIER_CONTROL!IEQUALIFIER_LCOMMAND,d0
@@ -3818,15 +3817,19 @@ inputhandler
 	bmi.b	.cont				* vain jos nappula alhaalla
 	clr.b	ie_Class(a0)			* ieclass_null (syodaan pois)
 	move	d0,rawkeyinput(a1)		* a1 = var_b
+	pushm	d1/a6
 	move.b	rawKeySignal(a1),d1
 	jsr	signalit
+	popm	d1/a6
 	bra.b	.exhand
 	
-.cont	move.l	ie_NextEvent(a0),d0		* seuraava
+.cont	
+	;move.l	ie_NextEvent(a0),d0		* seuraava
+	move.l	(a0),d0		* ie_NextEvent = 0
 	move.l	d0,a0
 	bne.b	.handlerloop
 .exhand	
-	popm	d0/d1/a0/a1/a6
+	pop	a0
 .quit	move.l	a0,d0
 	rts
 
