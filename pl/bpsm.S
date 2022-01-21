@@ -4,9 +4,11 @@ TESTI	=	0
 
 
 	incdir	include:
-	INCLUDE	"Exec/Types.i"
-	include	mucro.i
+	Include	mucro.i
 	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
+	incdir
 
  ifne TESTI
 
@@ -123,10 +125,33 @@ ConvertNote
 	move.b	1(a0),d1
 	lsr.b	#4,d1
 
+	* Sample transpose
+	lea	PI_SampleTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d1
+
+	moveq	#15,d2
+	and.b 	1(a0),d2		* cmd
+
+	cmpi.b	#10,d2    		;Option 10->transposes off
+	bne.b	.bp_do1
+	move.b	2(a0),d3
+	and.b	#240,d3	  		;Higher nibble=transpose
+	bne.b	.bp_not1
+.bp_do1
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	ext	d0
+.bp_not1	
+	* scale is 7 octaves.
+	* note 0 is the 4th octave.
+	add	#4*12,d0
+
 .optional
 	moveq	#15,d2
-	and.b 	1(a0),d2
-	move.b	2(a0),d3
+	and.b 	1(a0),d2	* cmd
+	move.b	2(a0),d3	* arg
 	rts
 
 
@@ -409,21 +434,29 @@ bploop3		moveq	#0,d1
 		cmp.b	#1,d7
 		bne.b 	.a 
 		move.l	a2,Stripe1
+		move.b	SMON_ST(a5),PatternInfo+PI_SampleTranspose1
+		move.b	SMON_TR(a5),PatternInfo+PI_NoteTranspose1
 		bra.b	.d
 .a
 		cmp.b	#2,d7
 		bne.b 	.b 
 		move.l	a2,Stripe2
+		move.b	SMON_ST(a5),PatternInfo+PI_SampleTranspose2
+		move.b	SMON_TR(a5),PatternInfo+PI_NoteTranspose2
 		bra.b	.d
 .b
 		cmp.b	#4,d7
 		bne.b 	.c 
 		move.l	a2,Stripe3
+		move.b	SMON_ST(a5),PatternInfo+PI_SampleTranspose3
+		move.b	SMON_TR(a5),PatternInfo+PI_NoteTranspose3
 		bra.b	.d
 .c
 		cmp.b	#8,d7
 		bne.b 	.d 
 		move.l	a2,Stripe4
+		move.b	SMON_ST(a5),PatternInfo+PI_SampleTranspose4
+		move.b	SMON_TR(a5),PatternInfo+PI_NoteTranspose4
 .d
 		moveq	#0,d4
 		move.b	SMON_BPPatCount(a5),d4

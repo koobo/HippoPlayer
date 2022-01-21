@@ -1,7 +1,12 @@
 ;APS00000022000000220000002200000022000000220000002200000022000000220000002200000022
+
 	incdir	include:
+	Include	mucro.i
 	include	misc/eagleplayer.i
-	include mucro.i
+	incdir	include/
+	include	patternInfo.i
+	incdir
+
 
 testi	=	0
 
@@ -136,10 +141,22 @@ ConvertNote
 	* note, transpose missing
 	moveq	#$7f,d0
 	and.b	(a0),d0
+	* zero for no note
+	beq.b	.noNote
 
 	* instrument number, would need sound transpose too
 	moveq	#$3f,d1
 	and.b	1(a0),d1
+
+	*  Sample transpose
+	lea	PI_SampleTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d1
+
+	* Convert sample 0 into sample 1, so it will also
+	* be printed as number.
+	addq.b	#1,d1
+.noNote
 
 	move	#%11000000,d2
 	and.b	1(a0),d2
@@ -344,32 +361,46 @@ music_on:
 	move.w 6(a5),4(a5)		;Restore replayspeed counter
 	moveq #0,d5
 	moveq #6,d6
-	lea V1data(pc),a0		;Point to voice1 data area
+	
+	lea 	V1data(pc),a0		;Point to voice1 data area
 	lea	Stripe1(pc),a2
-	bsr.w new_note
-	lea V2data(pc),a0		;Point to voice2 data area
+	bsr.w 	new_note
+	move.b	44(a0),PatternInfo+PI_NoteTranspose1
+	move.b	22(a0),PatternInfo+PI_SampleTranspose1
+	
+
+	lea 	V2data(pc),a0		;Point to voice2 data area
 	lea	Stripe2(pc),a2
-	bsr.w new_note
-	lea V3data(pc),a0		;Point to voice3 data area
+	bsr.w 	new_note
+	move.b	44(a0),PatternInfo+PI_NoteTranspose2
+	move.b	22(a0),PatternInfo+PI_SampleTranspose2
+
+	lea 	V3data(pc),a0		;Point to voice3 data area
 	lea	Stripe3(pc),a2
-	bsr.w new_note
-	lea V4data(pc),a0		;Point to voice4 data area
+	bsr.w 	new_note
+	move.b	44(a0),PatternInfo+PI_NoteTranspose3
+	move.b	22(a0),PatternInfo+PI_SampleTranspose3
+
+	lea 	V4data(pc),a0		;Point to voice4 data area
 	lea	Stripe4(pc),a2
-	bsr.w new_note
+	bsr.w 	new_note
+	move.b	44(a0),PatternInfo+PI_NoteTranspose4
+	move.b	22(a0),PatternInfo+PI_SampleTranspose4
+
 nonewnote:
 	clr.w (a5)
 	lea $dff000,a6
 	lea V1data(pc),a0
 	bsr.w effects
-	bsr.b	vol
+	bsr.w	vol
 	move.l d0,$a6(a6)
 	lea V2data(pc),a0
 	bsr.w effects
-	bsr.b	vol
+	bsr.w	vol
 	move.l d0,$b6(a6)
 	lea V3data(pc),a0
 	bsr.w effects
-	bsr.b	vol
+	bsr.w	vol
 	move.l d0,$c6(a6)
 	lea V4data(pc),a0
 	bsr.w effects
@@ -716,8 +747,8 @@ setvolume:
 calcperiod:
 	move.b 43(a0),d0
 	bmi.s lockednote
-	add.b 8(a0),d0
-	add.b 44(a0),d0
+	add.b 8(a0),d0	* note 
+	add.b 44(a0),d0 * note transpose
 lockednote:
 	moveq #$7f,d1
 	and.l d1,d0
@@ -852,23 +883,98 @@ VOLpoint: dc.l 0
 
 silent: dc.w $0100,$0000,$0000,$00e1
 
-PERIODS:dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
-	dc.w $0434,$03f8,$03c0,$038a,$0358,$0328,$02fa,$02d0
-	dc.w $02a6,$0280,$025c,$023a,$021a,$01fc,$01e0,$01c5
-	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d
-	dc.w $010d,$00fe,$00f0,$00e2,$00d6,$00ca,$00be,$00b4
-	dc.w $00aa,$00a0,$0097,$008f,$0087,$007f,$0078,$0071
-	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
-	dc.w $0071,$0071,$0071,$0071,$0d60,$0ca0,$0be8,$0b40
-	dc.w $0a98,$0a00,$0970,$08e8,$0868,$07f0,$0780,$0714
-	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0
-	dc.w $10d0,$0fe0,$0f00,$0e28,$06b0,$0650,$05f4,$05a0
-	dc.w $054c,$0500,$04b8,$0474,$0434,$03f8,$03c0,$038a
+* 132 values => 11 octaves
+PERIODS:
+	* 0. octave
+	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
+	dc.w $0434,$03f8,$03c0,$038a
+	* 1. octave
 	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a
-	dc.w $021a,$01fc,$01e0,$01c5,$01ac,$0194,$017d,$0168
-	dc.w $0153,$0140,$012e,$011d,$010d,$00fe,$00f0,$00e2
+	dc.w $021a,$01fc,$01e0,$01c5
+	* 2. octave
+	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d
+	dc.w $010d,$00fe,$00f0,$00e2
+	* 3. octave
+	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f
+	dc.b $0087,$007f,$0078,$0071
+	* 4. octave
+	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
+	dc.w $0071,$0071,$0071,$0071
+	* -1. octave
+	dc.w $0d60,$0ca0,$0be8,$0b40,$0a98,$0a00,$0970,$08e8
+	dc.w $0868,$07f0,$0780,$0714
+	* -2. octave
+	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0
+	dc.w $10d0,$0fe0,$0f00,$0e28
+	* 0. octave again
+	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
+	dc.w $0434,$03f8,$03c0,$038a
+	* 1. octave again
+	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a
+	dc.w $021a,$01fc,$01e0,$01c5
+	* 2. octave again
+	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d
+	dc.w $010d,$00fe,$00f0,$00e2
+	* 3. octave again
 	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f
 	dc.w $0087,$007f,$0078,$0071
+
+OCT macro
+oc_ set (\1)*12
+	rept 12
+	dc.b	oc_
+oc_ set oc_+1
+	endr
+	endm
+
+* Map note index from pattern data into note indexes
+* suitable for PatternInfo.
+PERIOD_INDEXES:
+	* 0. octave
+	OCT 2-1
+;	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
+;	dc.w $0434,$03f8,$03c0,$038a
+	* 1. octave
+	OCT 2+0
+;	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a
+;	dc.w $021a,$01fc,$01e0,$01c5
+	* 2. octave
+	OCT 2+1
+;	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d
+;	dc.w $010d,$00fe,$00f0,$00e2
+	* 3. octave
+	OCT 2+2
+;	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f
+;	dc.b $0087,$007f,$0078,$0071
+	* 4. octave
+	OCT 2+3
+;	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
+;	dc.w $0071,$0071,$0071,$0071
+	* -1. octave
+	OCT 2-1
+;	dc.w $0d60,$0ca0,$0be8,$0b40,$0a98,$0a00,$0970,$08e8
+;	dc.w $0868,$07f0,$0780,$0714
+	* -2. octave
+	OCT 2-2
+;	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0
+;	dc.w $10d0,$0fe0,$0f00,$0e28
+	* 0. octave again
+	OCT 2+0
+;	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
+;	dc.w $0434,$03f8,$03c0,$038a
+	* 1. octave again
+	OCT 2+1
+;	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a
+;	dc.w $021a,$01fc,$01e0,$01c5
+	* 2. octave again
+	OCT 2+2
+;	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d
+;	dc.w $010d,$00fe,$00f0,$00e2
+	* 3. octave again
+	OCT 2+3
+;	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f
+;	dc.w $0087,$007f,$0078,$0071
+
 
 SOUNDINFO:
 ;Start.l , Length.w , Repeat start.w , Repeat-length.w , dcb.b 6,0 

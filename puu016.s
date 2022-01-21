@@ -217,6 +217,7 @@ check	macro
 	include	med.i
 	include	Guru.i
 	include	ps3m.i
+	include	patternInfo.i
 use = 0
 	include	player61.i
 
@@ -24337,6 +24338,7 @@ noteScroller2
 	move.l	deliPatternInfo(a5),a1
 	lea	PI_Stripes(a1),a0
 	move	PI_Voices(a1),d7
+	clr	PI_CurrentChannelNumber(a1)
 
 * Required height in d1
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
@@ -24344,7 +24346,6 @@ noteScroller2
 	bne.b	.notXl
 	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
 .notXl
-
 	cmp	#4,d7
 	bhi.b	.over
 
@@ -24423,6 +24424,7 @@ noteScroller2
 	* 72 pixels per stripe
 	add	#9,a4
 .continue
+	addq	#1,PI_CurrentChannelNumber(a1)
 	dbf	d7,.loop
 
 	bsr	noteScrollerHorizontalLines

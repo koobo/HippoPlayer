@@ -2,9 +2,12 @@
 testi = 0
 
 	incdir	include:
-	INCLUDE	"Exec/Types.i"
-	include	mucro.i
+	Include	mucro.i
 	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
+	incdir
+
 
  ifne testi
 
@@ -131,6 +134,7 @@ PatternInit
 	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
 	rts
 
+
 * Called by the PI engine to get values for a particular row
 ConvertNote
 	moveq	#0,D0		; Period, Note
@@ -146,10 +150,33 @@ ConvertNote
 	move.b	1(a0),d1
 	lsr.b	#4,d1
 
+	* Sample transpose
+	lea	PI_SampleTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d1
+
+	moveq	#15,d2
+	and.b 	1(a0),d2		* cmd
+
+	cmpi.b	#10,d2    		;Option 10->transposes off
+	bne.b	.bp_do1
+	move.b	2(a0),d3
+	and.b	#240,d3	  		;Higher nibble=transpose
+	bne.b	.bp_not1
+.bp_do1
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	ext	d0
+.bp_not1	
+	* scale is 7 octaves.
+	* note 0 is the 4th octave.
+	add		#4*12,d0
+
 .optional
 	moveq	#15,d2
-	and.b 	1(a0),d2
-	move.b	2(a0),d3
+	and.b 	1(a0),d2	* cmd
+	move.b	2(a0),d3	* arg
 	rts
 
 
@@ -377,8 +404,8 @@ BP_3BA:		moveq	#0,d1
 		add.l	d2,d1
 		addi.l	#$200,d1
 		move.w	(a0,d1.w),d2
-		move.b	2(a0,d1.w),BP_B0F
-		move.b	3(a0,d1.w),BP_B10
+		move.b	2(a0,d1.w),BP_B0F	* SMON_ST
+		move.b	3(a0,d1.w),BP_B10	* SMON_TR
 		subq.w	#1,d2
 		mulu.w	#$30,d2
 		moveq	#0,d3
@@ -398,21 +425,29 @@ BP_3BA:		moveq	#0,d1
 		cmp.b	#1,d7
 		bne.b 	.a 
 		move.l	a2,Stripe1
+		move.b	SMON_ST(pc),PatternInfo+PI_SampleTranspose1
+		move.b	SMON_TR(pc),PatternInfo+PI_NoteTranspose1
 		bra.b	.d
 .a
 		cmp.b	#2,d7
 		bne.b 	.b 
 		move.l	a2,Stripe2
+		move.b	SMON_ST(pc),PatternInfo+PI_SampleTranspose2
+		move.b	SMON_TR(pc),PatternInfo+PI_NoteTranspose2
 		bra.b	.d
 .b
 		cmp.b	#4,d7
 		bne.b 	.c 
 		move.l	a2,Stripe3
+		move.b	SMON_ST(pc),PatternInfo+PI_SampleTranspose3
+		move.b	SMON_TR(pc),PatternInfo+PI_NoteTranspose3
 		bra.b	.d
 .c
 		cmp.b	#8,d7
 		bne.b 	.d 
 		move.l	a2,Stripe4
+		move.b	SMON_ST(pc),PatternInfo+PI_SampleTranspose4
+		move.b	SMON_TR(pc),PatternInfo+PI_NoteTranspose4
 .d
 		moveq	#0,d4
 		move.b	BP_B0E,d4
@@ -992,7 +1027,10 @@ BP_B0C:		dc.b	0
 BP_B0D:		dc.b	0
 patcounter
 BP_B0E:		dc.b	0
+
+SMON_ST:
 BP_B0F:		dc.b	0
+SMON_TR:
 BP_B10:		dc.b	0
 BP_B11:		dc.b	1
 BP_B12:		dc.b	6
