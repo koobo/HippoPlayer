@@ -22674,7 +22674,8 @@ drawScope
 	beq.b	.11
 
 .other
-	* Generic notescroller
+	* Fallback option!
+	* Display notescroller if possible.
 	tst.l	deliPatternInfo(a5)
 	beq.b	.cont
 	bsr	noteScroller2
@@ -24327,14 +24328,10 @@ samples0
 *********************************************************************
 * GENERIC NOTESCROLLER
 * Note scroller supporting the PI_PatternInfo data
-patternScopeGeneric
-noteScrollerGeneric
-patternScope2
+* patternScopeGeneric
+* noteScrollerGeneric
+* patternScope2
 noteScroller2
-	bsr	patternScopeIsActive
-	beq.b	.1
-	rts
-.1
 	move.l	deliPatternInfo(a5),a1
 	lea	PI_Stripes(a1),a0
 	move	PI_Voices(a1),d7
