@@ -144,6 +144,12 @@ ConvertNote
 	* zero for no note
 	beq.b	.noNote
 
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	lea	PERIOD_INDEXES(pc),a3
+	move.b	0(a3,d0.w),d0
+
 	* instrument number, would need sound transpose too
 	moveq	#$3f,d1
 	and.b	1(a0),d1
