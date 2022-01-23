@@ -24472,8 +24472,8 @@ noteScroller2
 	move.l  moduleaddress(a5),a3
    	cmp.l   a3,a0
 	bls.b	.xy
-    add.l   modulelength(a5),a3
-    cmp.l   a3,a0
+    	add.l   modulelength(a5),a3
+    	cmp.l   a3,a0
    	bhs.b   .xy
 .sane
 
@@ -34962,12 +34962,12 @@ id_digiboosterpro_
 thx_author
 	pushpea	.a(pc),d0
 	rts
-.a 	dc.b	"Pink/aBYSs",0
+.a 	dc.b	"Dexter & Pink/aBYSs",0
 	even 
 
 p_thx
 	jmp	.init(pc)
-	jmp	.play(pc)
+	p_NOP	; Hippo CIA not used in AHX/THX
 	jmp	.vb(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
@@ -34977,13 +34977,12 @@ p_thx
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	p_NOP
-	jmp .id_thx(pc)
+	jmp 	.id_thx(pc)
 	jmp	thx_author(pc)
-	dc.w pt_thx
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen
+	dc.w 	pt_thx
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen!pf_scope
 	dc.b	"AHX Sound System",0
  even
-
 
 
 .ahxInitCIA          = 0*4
@@ -34994,16 +34993,16 @@ p_thx
 .ahxStopSong         = 5*4
 .ahxKillPlayer       = 6*4
 .ahxKillCIA          = 7*4
-.ahxNextPattern      = 8*4       ;implemented, although no-one requested it :-)
-.ahxPrevPattern      = 9*4       ;implemented, although no-one requested it :-)
+.ahxNextPattern      = 8*4   ;implemented, although no-one requested it :-)
+.ahxPrevPattern      = 9*4   ;implemented, although no-one requested it :-)
 
-.ahxBSS_P            = 10*4      ;pointer to ahx's public (fast) memory block
-.ahxBSS_C            = 11*4      ;pointer to ahx's explicit chip memory block
-.ahxBSS_Psize        = 12*4      ;size of public memory (intern use only!)
-.ahxBSS_Csize        = 13*4      ;size of chip memory (intern use only!)
-.ahxModule           = 14*4      ;pointer to ahxModule after InitModule
-.ahxIsCIA            = 15*4      ;byte flag (using ANY (intern/own) cia?)
-.ahxTempo            = 16*4      ;word to cia tempo (normally NOT needed to xs)
+.ahxBSS_P            = 10*4  ;pointer to ahx's public (fast) memory block
+.ahxBSS_C            = 11*4  ;pointer to ahx's explicit chip memory block
+.ahxBSS_Psize        = 12*4  ;size of public memory (intern use only!)
+.ahxBSS_Csize        = 13*4  ;size of chip memory (intern use only!)
+.ahxModule           = 14*4  ;pointer to ahxModule after InitModule
+.ahxIsCIA            = 15*4  ;byte flag (using ANY (intern/own) cia?)
+.ahxTempo            = 16*4  ;word to cia tempo (normally NOT needed to xs)
 
 .ahx_pExternalTiming = 0         ;byte, offset to public memory block
 .ahx_pMainVolume     = 1         ;byte, offset to public memory block
@@ -35014,6 +35013,10 @@ p_thx
 .ahx_pVoice1Temp     = 246       ;struct, current Voice 1 values
 .ahx_pVoice2Temp     = 478       ;struct, current Voice 2 values
 .ahx_pVoice3Temp     = 710       ;struct, current Voice 3 values
+
+.ahx_currentSongPos	= $448+4
+.ahx_maxSongPos 	= $44c+4
+.ahx_currentPattPos 	= $44a
 
 .ahx_pvtTrack        = 0         ;byte          (relative to ahx_pVoiceXTemp!)
 .ahx_pvtTranspose    = 1         ;byte          (relative to ahx_pVoiceXTemp!)
@@ -35056,8 +35059,8 @@ p_thx
 .vb	move.l	thxroutines(a5),a0
 	move.l	.ahxBSS_P(a0),a0
 
-	move	$448+4(a0),pos_nykyinen(a5)
-	move	$44c+4(a0),pos_maksimi(a5)
+	move	.ahx_currentSongPos(a0),pos_nykyinen(a5)
+	move	.ahx_maxSongPos(a0),pos_maksimi(a5)
 
 	tst.b	.ahx_pSongEnd(a0)
 	beq.b	.x
@@ -35069,22 +35072,17 @@ p_thx
 
 
 .init
-
-;	bsr.w	varaa_kanavat
-;	beq.b	.ok
-;	moveq	#ier_nochannels,d0
-;	rts
-;.ok	
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
 
 	lea	thxroutines(a5),a0
 	bsr.w	allocreplayer
-;	bne.w	vapauta_kanavat
+	bne.w	vapauta_kanavat
 	beq.b	.ok3
-	rts
-
-;	beq.b	.ok3
-;	bra.w	vapauta_kanavat
-;;	rts
+	bra.w	vapauta_kanavat
 
 .ok3	
 
@@ -35117,7 +35115,7 @@ p_thx
 
 	move.l	thxroutines(a5),a2
 	jsr	.ahxKillCIA(a2)
-;	bsr.w	vapauta_kanavat
+	bsr.w	vapauta_kanavat
 	moveq	#ier_nomem,d0
 	bra.b	.xxx
 .ok4
@@ -35128,7 +35126,6 @@ p_thx
 	tst	d0
 	bne.b	.thxInitFailed
 
-
 	move.l	.ahxBSS_P(a2),a0
 	clr	maxsongs(a5)
 	move.b	.ahx_pSubsongs(a0),maxsongs+1(a5)
@@ -35138,10 +35135,12 @@ p_thx
 	moveq   #0,d1
 	jsr	.ahxInitSubSong(a2)
 
-
 	bsr.w	.volu
+	bsr.w	.patternInit
+
 	popm	d1-a6
 
+	pushpea	.PatternInfo(pc),deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 
@@ -35149,8 +35148,8 @@ p_thx
 	move.l	thxroutines(a5),a2
 	jsr	.ahxKillCIA(a2)
 .thxInitFailed2
-
-;	bsr.w	vapauta_kanavat
+	
+	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 .xxx
 	popm	d1-a6
@@ -35158,17 +35157,15 @@ p_thx
 
 
 .ahxCIAInterrupt
-.play
 	move.l	thxroutines+var_b,a0
-	jmp	.ahxInterrupt(a0)
+	jsr	.ahxInterrupt(a0)
+	bra.b	.updateStripes
 
 .end	bsr.b	.halt
-;	bra.w	vapauta_kanavat
-	rts
+	bra.w	vapauta_kanavat
 
 .song	bsr.b	.halt
 	bra.w	.ok3
-
 
 .halt	
 	pushm	all
@@ -35181,6 +35178,134 @@ p_thx
 	
 	bra.w	clearsound
 
+
+* Pattern scope support
+
+.updateStripes
+	pushm	d0-d1/a0-a4
+
+	move.l	thxroutines+var_b,a0
+	move.l	.ahxBSS_P(a0),a0
+	move	.ahx_currentPattPos(a0),.PatternInfo+PI_Pattpos
+	lea	.ahx_pVoice0Temp(a0),a0
+
+	move.l	moduleaddress+var_b,a1
+	lea	.PatternInfo+PI_NoteTranspose1(pc),a2
+	lea	.Stripe1(pc),a3
+
+	* Get SS, number of subsongs
+	moveq	#0,d1
+	move.b	13(a1),d1
+	* Subsong list length in bytes:
+	add	d1,d1
+	* Skip over subsong list 
+	lea	14(a1,d1),a4
+	* Get LEN, length of the position list
+	move	6(a1),d1
+	and	#$fff,d1
+	* Position list length in bytes:
+	lsl	#3,d1
+	* Skip over position list,
+	* A4 now points to the 1st track data
+	add	d1,a4
+	* Get TRL, track length
+	moveq	#0,d0
+	move.b	10(a1),d0
+	* Track length in bytes
+	mulu	#3,d0
+
+	bsr.b	.doStripe
+	bsr.b	.doStripe
+	bsr.b	.doStripe
+	bsr.b	.doStripe
+
+	popm	d0-d1/a0-a4
+	rts
+
+.doStripe
+	move.b	.ahx_pvtTranspose(a0),(a2)+
+	moveq	#0,d1
+	move.b	.ahx_pvtTrack(a0),d1
+	add	#232,a0	* Next channel data 
+
+	tst.b	6(a1)
+	bmi.b	.1
+	* If bit 7 of byte 6 is 1, track 0 is included. 
+	* If it is 0, track 0 was empty, and is
+        * therefore not saved with the module, to save space.
+	tst.b	d1
+	bne.b	.1
+	* Track 0 is an empty stripe
+	clr.l	(a3)+
+	rts
+.1
+	* Get current track offset
+	mulu	d0,d1
+	* Address of current track
+	add.l a4,d1
+	* Into the stripe array
+	move.l	d1,(a3)+
+	rts
+
+.patternInit
+	lea	.PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	.ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	moveq	#3,D0
+	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
+	move.l	moduleaddress(a5),a1
+	move.b	10(a1),d0 		* TRL, track length 1-64
+	move.w	d0,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+* Each entry is 24 bits (3 bytes) long, and consists of
+* bits 23-18 (6 bits): The note. This ranges from 0 (no note) to 60 (B-5)
+* bits 17-12 (6 bits): The sample. This ranges from 0 to 63.
+* bits 11-8  (4 bits): The command. See list below
+* bits 7-0   (8 bits): The command's data. See list below
+
+.ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+	
+	* 01234567 01234567 01234567
+	* nnnnnnSS SSSScccc PPPPPPPP
+
+	move.b	(a0),d0
+	rol	#8,d0
+	move.b	1(a0),d0
+
+	moveq	#$f,d2
+	and.b	d0,d2 	* cmd
+	
+	lsr	#4,d0
+	moveq	#%111111,d1
+	and.b	d0,d1	* sample
+
+	lsr	#6,d0	* note
+	beq.b 	.noNote
+
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	ext	d0
+
+.noNote
+
+	move.b	2(a0),d3	* arg
+	rts
+
+.PatternInfo 		ds.b	PI_Stripes	
+.Stripe1		dc.l	1
+.Stripe2		dc.l	1
+.Stripe3		dc.l	1
+.Stripe4		dc.l	1
 
 .id_thx 
 	bsr.b id_thx_
@@ -42723,7 +42848,7 @@ deliAllocAudio
 	pushm	d1-a6
 	lea	var_b,a5
 	* returns d0=0 on success:
-	bsr	varaa_kanavat 
+	jsr	varaa_kanavat 
 	popm	d1-a6
 	rts
 
