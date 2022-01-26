@@ -35085,9 +35085,8 @@ p_thx
 	bra.w	vapauta_kanavat
 
 .ok3	
-
+	DPRINT	"AHX init"
 	pushm	d1-a6
-
 
 	lea	.ahxCIAInterrupt(pc),a0
 	moveq	#0,d0
@@ -35161,7 +35160,8 @@ p_thx
 	jsr	.ahxInterrupt(a0)
 	bra.b	.updateStripes
 
-.end	bsr.b	.halt
+.end	DPRINT	"AHX end"
+	bsr.b	.halt
 	bra.w	vapauta_kanavat
 
 .song	bsr.b	.halt
@@ -35186,6 +35186,10 @@ p_thx
 
 	move.l	thxroutines+var_b,a0
 	move.l	.ahxBSS_P(a0),a0
+
+	tst.b	.ahx_pPlaying(a0)
+	beq.b	.noUpd
+	
 	move	.ahx_currentPattPos(a0),.PatternInfo+PI_Pattpos
 	lea	.ahx_pVoice0Temp(a0),a0
 
@@ -35218,7 +35222,7 @@ p_thx
 	bsr.b	.doStripe
 	bsr.b	.doStripe
 	bsr.b	.doStripe
-
+.noUpd
 	popm	d0-d1/a0-a4
 	rts
 
@@ -35228,17 +35232,22 @@ p_thx
 	move.b	.ahx_pvtTrack(a0),d1
 	add	#232,a0	* Next channel data 
 
-	tst.b	6(a1)
-	bmi.b	.1
 	* If bit 7 of byte 6 is 1, track 0 is included. 
 	* If it is 0, track 0 was empty, and is
         * therefore not saved with the module, to save space.
+	tst.b	6(a1)
+	bmi.b	.notZero
+	* Track 0 not included.
 	tst.b	d1
 	bne.b	.1
 	* Track 0 is an empty stripe
-	clr.l	(a3)+
+.goZero	clr.l	(a3)+
 	rts
+.notZero
+	subq.b	#1,d1
+	bmi.b	.goZero
 .1
+
 	* Get current track offset
 	mulu	d0,d1
 	* Address of current track
@@ -35291,10 +35300,14 @@ p_thx
 	lsr	#6,d0	* note
 	beq.b 	.noNote
 
+
 	lea	PI_NoteTranspose1(a1),a3
 	add	PI_CurrentChannelNumber(a1),a3
 	add.b	(a3),d0
 	ext	d0
+
+	* Up one octaves to allow negative transpose
+	add	#1*12,d0
 
 .noNote
 
@@ -43056,7 +43069,7 @@ eagleJumpTableEnd
 
 funcENPP_ClearCache
 	;DPRINT "ENPP_ClearCache"
-	bra.w clearCpuCaches
+	jmp clearCpuCaches
 funcENPP_GetListData
 	bra.w	deliGetListData
 funcENPP_LoadFile
@@ -43097,12 +43110,12 @@ funcENPP_FreeAmigaAudio
 
 funcENPP_DMAMask
 	push	d1
-	tst		d0
+	tst	d0
 	bpl.b	.set2
-	or		#$8000,d1
+	or	#$8000,d1
 .set2
 	move	d1,$dff096
-	bsr	dmawait
+	jsr	dmawait
 	pop 	d1
 	rts
 
@@ -43110,9 +43123,9 @@ funcENPP_PokeAdr
 	pushm	d2/a0
 	lea	$dff0a0,a0
 	moveq	#3,d2
-	and		d1,d2
-	lsl		#4,d2
-	add		d2,a0
+	and	d1,d2
+	lsl	#4,d2
+	add	d2,a0
 	move.l	d0,(a0)
 	popm	d2/a0
 	rts
@@ -43121,10 +43134,10 @@ funcENPP_PokeLen
 	pushm	d2/a0
 	lea	$dff0a0,a0
 	moveq	#3,d2
-	and		d1,d2
-	lsl		#4,d2
-	add		d2,a0
-	tst		d0
+	and	d1,d2
+	lsl	#4,d2
+	add	d2,a0
+	tst	d0
 	bne.b	.nozero
 	moveq	#1,d0
 .nozero
@@ -43136,9 +43149,9 @@ funcENPP_PokePer
 	pushm	d2/a0
 	lea	$dff0a0,a0
 	moveq	#3,d2
-	and		d1,d2
-	lsl		#4,d2
-	add		d2,a0
+	and	d1,d2
+	lsl	#4,d2
+	add	d2,a0
 	move	d0,6(a0)
 	popm	d2/a0
 	rts
