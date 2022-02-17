@@ -39,6 +39,26 @@ NOTE 4: Too long didn't read
 ------------------------------------------------------------------------------
 
 
+# Changes from v2.50 (31.12.2021) to v2.51 (?.?.2022)
+
+## New fixes:
+- Simplify file loading so that compatibility with FTPMount is 
+  better (FTPMount does not seem to support file seeking properly).
+- Fix crash with "Keep list on exit" when restarting in
+  file browser mode and the directory has disappeared.
+- When the scope is open and the current format only supports 
+  patternscope, display that instead of an empty window.
+
+## Music format related changes:
+- Patternscope support added to the THX/AHX format.
+- Patternscope now displays note and sample transpose information
+  for Future Composer and BP SoundMon formats.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
 # Changes from v2.49 (29.11.2021) to v2.50 (31.12.2021)
 
 ## New fixes:
