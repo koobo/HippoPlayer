@@ -29,8 +29,9 @@ NOTE 3: If you get errors where some module is not recognized even
 if it should be, try removing "S:HippoPlayer.prefs" first.
 
 NOTE 4: Too long didn't read
-- Prefs options: "Button tooltips", "Favorite modules", "Keep list on exit" 
-- Button above the file slider
+- Prefs options: "Button tooltips", "Favorite modules", "Keep list on exit",
+  "Big buttons"
+- New button above the file slider
 - Improved patternscope
 - New music formats
 
@@ -44,16 +45,22 @@ NOTE 4: Too long didn't read
 ## New fixes:
 - Simplify file loading so that compatibility with FTPMount is 
   better (FTPMount does not seem to support file seeking properly).
+  FTPMount can be used to access Modland with Hippo.
 - Fix crash with "Keep list on exit" when restarting in
   file browser mode and the directory has disappeared.
 - When the scope is open and the current format only supports 
   patternscope, display that instead of an empty window.
+- Fix move losing the moved item if nothing is selected when trying to insert
+  the item back. Now it is inserted to the beginning of the list.
 
 ## Music format related changes:
-- Patternscope support added to the THX/AHX format.
+- Patternscope support added to the THX/AHX format. Also shows transposes.
 - Patternscope now displays note and sample transpose information
   for Future Composer and BP SoundMon formats.
 
+## New features:
+- "Big button" option in Prefs. This doubles the height of the two 
+  button rows in the main window.
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
