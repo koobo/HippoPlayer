@@ -9298,7 +9298,11 @@ rbutton1
 	clr.b	movenode(a5)
 
 	bsr.w	getcurrent
-	beq.w	.nomove
+	bne.b	.gotCurrent
+	* No selection! Insert to beginning
+	bsr.w	getVisibleModuleListHeader
+	move.l	a0,a3
+.gotCurrent
 
  if DEBUG
  	move.l	l_nameaddr(a3),d0
