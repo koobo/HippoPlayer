@@ -314,7 +314,8 @@ prefs_medrate		rs	1
 
 prefs_tooltips		rs.b 	1
 prefs_savestate		rs.b 	1
-
+prefs_altbuttons	rs.b	1
+prefs_pad0		rs.b	1
 prefs_size		rs.b	0
 
 *******************************************************************************
@@ -690,6 +691,8 @@ autosort_new	rs.b	1
 favorites_new	rs.b	1	
 tooltips_new	rs.b 	1	
 savestate_new	rs.b 	1
+altbuttons_new  rs.b   1
+___pad0         rs.b   1
 
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -868,8 +871,8 @@ cachedNodeIndex	rs.l	1
 cachedNode	rs.l	1	
 
 markedline	rs.l	1	* merkitty rivi
-					* Highlighted line inside the box, range is from 0
-					* to current boxsize
+				* Highlighted line inside the box, range is from 0
+				* to current boxsize
 
 playingmodule	rs.l	1	* index of the module that is being played
 chosenmodule	rs.l	1	* index of the chosen module in the list
@@ -1094,6 +1097,8 @@ ahi_use_nyt	rs.b	1
 favorites	rs.b	1
 tooltips	rs.b  	1
 savestate	rs.b    1
+altbuttons  rs.b    1
+altbuttonsUse  rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * audio homman muuttujat
@@ -2265,7 +2270,7 @@ lelp
 	clr	(a0)
 	move.l	topazbase(a5),fontbase(a5)
 
-	bra.b	.koh
+	bra.w	.koh
 
 .poh
 
@@ -4005,14 +4010,20 @@ zipwindow
 
 
 
-avaa_ikkuna2
+avaa_ikkuna2:
 	bsr.w	sulje_ikkuna
 	not.b	kokolippu(a5)
 	
 
-avaa_ikkuna
+avaa_ikkuna:
 	bsr.w	getscreeninfo
 	bne.w	.opener
+
+	; Button config, may adjust WINSIZY
+	jsr	configureMainWindowButtonSizes
+	; Update into window structure
+	move	WINSIZX(a5),wsizex
+	move	WINSIZY(a5),wsizey
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc,a0
@@ -4696,6 +4707,12 @@ wrender
 	move	#253+WINX,plx2
 	moveq	#61+WINY,ply1
 	move	#128+WINY,ply2
+ 	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+ 	add	#16,ply1
+	add	#16,ply2
+.noAlt1
+
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	boxy(a5),ply2
@@ -6695,7 +6712,7 @@ signalreceived
 
 	* SANITY CHECK: in the case where it's all dividers,
 	* stop instead of trying to find something to play.
-	bsr	calculateDividersInList
+	jsr	calculateDividersInList
 	cmp.l	modamount(a5),d0
 	beq.b	.err
 	bra.w	.repea
@@ -8043,7 +8060,7 @@ gadgetsup
 
 * Print some text into the filebox
 ** a0 = teksti, d0 = x-koordinaatti
-printbox
+printbox:
 	tst.b	win(a5)
 	beq.b	.q
 	tst	boxsize(a5)
@@ -8053,7 +8070,11 @@ printbox
 	bsr.w	clearbox		* fileboxi tyhj‰ks
 	popm	d0/a0
 	moveq	#69+WINY,d1	
-	move	boxsize(a5),d2
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+ 	add	#16,d1
+.noAlt1
+ 	move	boxsize(a5),d2
 	lsr	#1,d2
 	subq	#1,d2
 	lsl	#3,d2
@@ -9102,7 +9123,7 @@ rslider4
 * Asetetaan valitun nimen kohdalle
 *******
 
-forceRefreshList
+forceRefreshList:
 	DPRINT	"forceRefreshList"
 	st	hippoonbox(a5)
 
@@ -9251,7 +9272,7 @@ reslider
 ;	sub.l	a2,a2
 ;	moveq	#1,d0			 	* number of gadgets to refresh
 ;	lore	Intui,RefreshGList
-	bsr		refreshGadgetInA0
+	bsr	refreshGadgetInA0
 
 ;	lea	slider4,a0
 ;	move.l	gg_SpecialInfo(a0),a1
@@ -9310,7 +9331,7 @@ rbutton1
  endc
 
 	DPRINT  "playButtonAction obtain list"
-	bsr.w		obtainModuleList
+	bsr.w	obtainModuleList
 	;lea	moduleListHeader(a5),a0	* Insertoidaan node...
 	bsr.w	getVisibleModuleListHeader
 	move.l	nodetomove(a5),a1
@@ -11594,6 +11615,7 @@ loadprefs2
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
 	move.b	prefs_savestate(a0),savestate(a5)
+	move.b  prefs_altbuttons(a0),altbuttons(a5)
 
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
@@ -11888,6 +11910,7 @@ saveprefs
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
+	move.b	altbuttons(a5),prefs_altbuttons(a0)
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
@@ -12353,6 +12376,7 @@ prefs_code
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
+	move.b	altbuttons(a5),altbuttons_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -12802,6 +12826,16 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	favorites_new(a5),favorites(a5)
 	move.b	tooltips_new(a5),tooltips(a5)
 	move.b	savestate_new(a5),savestate(a5)
+
+	move.b	altbuttons(a5),d0
+	move.b	altbuttons_new(a5),altbuttons(a5)
+	cmp.b	altbuttons(a5),d0
+	beq.b	.1
+	DPRINT	"Alt buttons changed"
+	* magic! causes reopening of the main window:
+	clr	boxsize00(a5)
+.1
+
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
@@ -13381,6 +13415,7 @@ pupdate				* Ikkuna p‰ivitys
 	bsr.w	pfavorites		* favorites
 	bsr.w	ptooltips  	     	* tooltips
 	bsr	psavestate		* savestate
+	bsr	paltbuttons     * alt buttons
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -13620,8 +13655,9 @@ gadgetsup2
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
 	dr	rfavorites	* favorites
-	dr      rtooltips   	* tooltips
+	dr  	rtooltips     * tooltips
 	dr 	rsavestate	* save state
+	dr  	raltbuttons * alt buttons
 
 .s1
 *** Sivu1
@@ -14687,12 +14723,21 @@ ptooltips
 	lea	prefsTooltips,a0
 	bra.w	tickaa
 
-********* Tooltips
+********* Save state
 rsavestate
 	not.b	savestate_new(a5)
 psavestate
 	move.b	savestate_new(a5),d0
 	lea	prefsSaveState,a0
+	bra.w	tickaa
+
+********* Alt buttons
+raltbuttons
+	not.b	altbuttons_new(a5)
+
+paltbuttons
+	move.b	altbuttons_new(a5),d0
+	lea	prefsAltButtons,a0
 	bra.w	tickaa
 
 
@@ -16021,7 +16066,7 @@ shownames2
 	moveq	#1,d4		* flag: do not center
 	bra.b	shn
 
-clearbox
+clearbox:
 	tst	boxsize(a5)
 	beq.b	.x
 	tst.b	win(a5)
@@ -16031,10 +16076,15 @@ clearbox
 	moveq	#62+WINY,d1
 	move	#251+WINX,d2
 	move	#127+WINY,d3
+ 	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d1
+	add	#16,d3  
+.noAlt1
 	add	boxy(a5),d3
 	bra.w	tyhjays
 
-shownames
+shownames:
 	moveq	#0,d4	 	* flag: center
 shn
 	tst	boxsize(a5)
@@ -16111,7 +16161,7 @@ shn
 	move.l	firstname2(a5),d7
 	move.l	d0,firstname2(a5)
 	cmp.l	d0,d7
-	beq.b	.nomods
+	beq.w	.nomods
 	sub.l	d0,d7		* d7 should be in range 0..boxsize
 	bmi.b	.alas
 
@@ -16131,6 +16181,11 @@ shn
 	move	d7,d3
 	lsl	#3,d3
 	add	#63+WINY,d3		* dest y
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d1		* source y
+	add	#16,d3		* desy y
+.noAlt1
 	bsr.w	.copy
 	move.l	firstname(a5),d0
 	moveq	#0,d1
@@ -16155,6 +16210,11 @@ shn
 	lsl	#3,d1
 	add	#63+WINY,d1		* source y	
 	moveq	#63+WINY,d3	* dest y
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt2
+	add	#16,d1		* source y
+	add	#16,d3		* dest y
+.noAlt2
 	bsr.b	.copy
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
@@ -16280,7 +16340,11 @@ doPrintNames
 	move	d4,d6
 	lsl	#3,d6
 	add	#83+WINY-14,d6		* turn line number into a Y-coordinate
-
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+ 	add	#16,d6	
+.noAlt1
+ 
 	* loop to print d5 lines 
 .looppo
 	* a4=current node
@@ -16474,7 +16538,7 @@ delete
 	beq.w	.erer
 
 	;lea	moduleListHeader(a5),a4
-	bsr.w		getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 
 	DPRINT	"delete getListNode"
@@ -17468,13 +17532,23 @@ getFileBoxIndexFromMousePosition
 	blo.b	.out
 	cmp	#251+WINX,d0
 	bhi.b	.out
-	cmp	#63+WINY,d1
+	moveq	#63+WINY,d2
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d3
+.noAlt1
+	cmp		d3,d1
+;	cmp	#63+WINY,d1
 	blo.b	.out
 	move	#126+WINY,d2
 	add	boxy(a5),d2
 	cmp	d2,d1
 	bhi.b	.out
 	sub	#63+WINY,d1
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt2
+	sub	#16,d1
+.noAlt2
 	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
 	moveq	#1,d0
 	rts
@@ -17487,7 +17561,7 @@ getFileBoxIndexFromMousePosition
 * Calculates chosenmodule, which is an index of the selected item.
 * Chosen line is highlighted and previously chosen line highlight removed.
 
-markline
+markline:
 	bsr.b getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
@@ -17599,6 +17673,10 @@ markit
 	move	d5,d1
 	lsl	#3,d1		* mulu #8,d1
 	add	#63+WINY,d1
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d1
+.noAlt1
 	moveq	#33+WINX,d0 
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -17694,7 +17772,7 @@ marklineRightMouseButton
 *    d0 = 1 if data available
 *    a3 = list node pointer
 *** Chosenmodule node A3:een
-getcurrent
+getcurrent:
 	tst.l	modamount(a5)
 	beq.b	.q
 	move.l	chosenmodule(a5),d0
@@ -17709,17 +17787,17 @@ getcurrent
 *    d0 = 0 if not found
 *    d0 = 1 if data available
 *    a3 = list node pointer
-getcurrent2
+getcurrent2:
 	bsr.b getListNode
 	move.l	a0,a3
 	rts
 
 
 * Gets the list header that corresponds to the current list mode,
-* either normal, or favorites list. 
+* either normal, or favorites list, or filebrowser list.
 * Out:
 *  a0 = list header address
-getVisibleModuleListHeader
+getVisibleModuleListHeader:
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.isFav
 	cmp.b	 #LISTMODE_BROWSER,listMode(a5)
@@ -17762,7 +17840,7 @@ listChanged
 * out:
 *   a0=list node
 *   Z=set if index is out of bounds
-getListNode
+getListNode:
 	DPRINT	"getListNode %ld"
 
 	tst.l	modamount(a5)
@@ -20905,7 +20983,10 @@ rexxmessage
 
 
 *** ADD	
-.add	tst.b	d0
+.add	
+	printt "TODO: normal list mode"
+
+	tst.b	d0
 	beq.w	rbutton7
 
 .add2	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
@@ -20946,6 +21027,8 @@ rexxmessage
 
 *** INSERT
 .insert
+	printt "TODO: normal list mode"
+
 	tst.b	d0
 	beq.w	rinsert
 	bsr.w	rinsert2
@@ -20956,6 +21039,8 @@ rexxmessage
 
 *** MOVE
 .move
+	printt "TODO: normal list mode"
+
 	bsr.w	a2i
 	move	d0,-(sp)
 	bsr.w	rmove
@@ -29525,6 +29610,281 @@ sortStringPtrArray
 	popm	d1/d2/d3/d6/d7/a1/a2
 .x	rts
 
+
+*******************************************************************************
+* Big buttons, normal buttons
+*******************************************************************************
+
+configureMainWindowButtonSizes
+	lea	gadgets,a4
+	basereg gadgets,a4
+
+	lea	button1im,a3
+	basereg button1im,a3
+
+	tst.b	altbuttons(a5)
+	beq.w	.useNormal
+	; Already in alt mode?
+	tst.b	altbuttonsUse(a5)
+	bne.w	.x
+	move.b	altbuttons(a5),altbuttonsUse(a5)
+	* Enlarge main window!
+	add	#16,WINSIZY(a5)
+
+; Set up double buttons
+	* 1st row
+	lea	gadgetPlayButton(a4),a0
+	lea	button1imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetInfoButton(a4),a0
+	lea	button2imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetStopButton(a4),a0
+	lea	button3imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetEjectButton(a4),a0
+	lea	button4imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetNextButton(a4),a0
+	lea	button5imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetPrevButton(a4),a0
+	lea	button6imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetNextSongButton(a4),a0
+	lea	button12imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetPrevSongButton(a4),a0
+	lea	button13imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetForwardButton(a4),a0
+	lea	kela2imDouble(a3),a2
+	bsr.b	.double
+	lea	gadgetRewindButton(a4),a0
+	lea	kela1imDouble(a3),a2
+	bsr.b	.double
+
+	* 2nd row
+	lea	gadgetAddButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetDelButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetNewButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetPrefsButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetVolumeSlider(a4),a0
+	bsr.b	.double2
+	lea	gadgetSortButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetMoveButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetPrgButton(a4),a0
+	bsr.b	.double2
+
+	lea	gadgetListModeChangeButton(a4),a0
+	add	#16,gg_TopEdge(a0)
+
+	lea	gadgetFileSlider(a4),a0
+	add	#16,gg_TopEdge(a0)
+
+	lea	gadgetVolumeSlider(a4),a0
+	move.l	gg_GadgetRender(a0),a1
+	pushpea slider1imDouble(a3),ig_ImageData(a1)
+	addq	#8,ig_Height(a1)
+	bra.b	.doubleDone
+.double
+	addq	#8,gg_Height(a0)
+	move.l	gg_GadgetRender(a0),a1
+	move.l	a2,ig_ImageData(a1)
+	lsl.w	ig_Height(a1)
+	rts
+.double2
+	addq	#8,gg_Height(a0)
+	addq	#8,gg_TopEdge(a0)
+	move.l	gg_GadgetText(a0),d0
+	beq.b	.doubleNoText
+	move.l	d0,a1
+	addq	#4,it_TopEdge(a1)
+.doubleNoText
+.doubleDone
+	rts
+
+.useNormal
+	; Already in normal mode?
+	tst.b	altbuttonsUse(a5)
+	beq.w	.x
+	move.b	altbuttons(a5),altbuttonsUse(a5)
+
+	* Diminish main window!
+	sub	#16,WINSIZY(a5)
+
+; Set up normal buttons
+
+	* 1st row
+	lea	gadgetPlayButton(a4),a0
+	lea	button1im(a3),a2
+	bsr.w	.normal
+	lea	gadgetInfoButton(a4),a0
+	lea	button2im(a3),a2
+	bsr.w	.normal
+	lea	gadgetStopButton(a4),a0
+	lea	button3im(a3),a2
+	bsr.w	.normal
+	lea	gadgetEjectButton(a4),a0
+	lea	button4im(a3),a2
+	bsr.w	.normal
+	lea	gadgetNextButton(a4),a0
+	lea	button5im(a3),a2
+	bsr.w	.normal
+	lea	gadgetPrevButton(a4),a0
+	lea	button6im(a3),a2
+	bsr.w	.normal
+	lea	gadgetNextSongButton(a4),a0
+	lea	button12im(a3),a2
+	bsr.w	.normal
+	lea	gadgetPrevSongButton(a4),a0
+	lea	button13im(a3),a2
+	bsr.w	.normal
+	lea	gadgetForwardButton(a4),a0
+	lea	kela2im(a3),a2
+	bsr.b	.normal
+	lea	gadgetRewindButton(a4),a0
+	lea	kela1im(a3),a2
+	bsr.b	.normal
+
+	* 2nd row
+	lea	gadgetAddButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetDelButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetNewButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetPrefsButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetVolumeSlider(a4),a0
+	bsr.b	.normal2
+	lea	gadgetSortButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetMoveButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetPrgButton(a4),a0
+	bsr.b	.normal2
+
+	lea	gadgetListModeChangeButton(a4),a0
+	sub	#16,gg_TopEdge(a0)
+
+	lea	gadgetFileSlider(a4),a0
+	sub	#16,gg_TopEdge(a0)
+
+	lea	gadgetVolumeSlider(a4),a0
+	move.l	gg_GadgetRender(a0),a1
+	pushpea slider1im(a3),ig_ImageData(a1)
+	subq	#8,ig_Height(a1)
+	bra.b	.normalDone
+.normal
+	subq	#8,gg_Height(a0)
+	move.l	gg_GadgetRender(a0),a1
+	move.l	a2,ig_ImageData(a1)
+	lsr.w	ig_Height(a1)
+	rts
+.normal2
+	subq	#8,gg_Height(a0)
+	subq	#8,gg_TopEdge(a0)
+	move.l	gg_GadgetText(a0),d0
+	beq.b	.normalNoText
+	move.l	d0,a1
+	subq	#4,it_TopEdge(a1)
+.normalNoText
+.normalDone
+	rts
+
+.x
+	rts
+
+	endb   a3
+	endb   a4
+
+
+*******************************************************************************
+* IFF pictures to buttons
+*******************************************************************************
+ REM 
+initializeButtonImages
+	lea	iffname,a0
+	lore	Exec,OldOpenLibrary
+	tst.l	d0
+	beq.w	.x
+	move.l	d0,d7
+
+	move.l	d0,a6
+	lea	.pic(pc),a0
+	moveq	#IFFL_MODE_READ,d0
+	lob		OpenIFF
+	move.l	d0,d6
+	beq.b	.x
+
+	move.l	d6,a1
+	lob     GetBMHD
+	tst.l	d0
+	beq.b	.x
+	move.l	d0,a4
+	move	bmh_Width(a4),d1
+	move	bmh_Height(a4),d2
+	move.b	bmh_nPlanes(a4),d0
+
+	lea bitmapPlayButton(pc),a0
+	lore 	GFX,InitBitMap
+
+	move	bmh_Width(a4),d0
+	move	bmh_Height(a4),d1
+	moveq	#0,d2
+	move.b	bmh_nPlanes(a4),d2
+	mulu	d2,d1
+	lore	Exec,AllocRaster
+	tst.l	d0
+	beq.b	.x
+	move.l	d0,a0
+	lea	bitmapPlayButton+bm_Planes(pc),a1
+	* Length of one plane in bytes:
+	move	bitmapPlayButton+bm_BytesPerRow(pc),d1
+	mulu	bitmapPlayButton+bm_Rows(pc),d1
+	moveq	#0,d0
+	move.b	bitmapPlayButton+bm_Depth(pc),d0
+	subq	#1,d0
+.planes
+	move.l	a0,(a1)+
+	add	d1,a0
+	dbf	d0,.planes
+
+	move.l	d6,a1
+	lea	bitmapPlayButton(pc),a0
+	move.l	d7,a6
+	lob	DecodePic
+	tst.l	d0
+	beq.b	.x
+	
+	nop
+.x
+	tst.l	d6
+	beq.b	.1
+	move.l	d6,a1
+	lob	CloseIFF
+
+.1
+
+
+	move.l	d7,d0
+	jsr	closel
+
+	rts
+
+.pic	dc.b	"sys:HippoPlayButton.iff",0
+
+bitmapPlayButton ds.b bm_SIZEOF
+ EREM
+
+
 *******************************************************************************
 *** SECTION *******************************************************************
 *
@@ -29765,6 +30125,7 @@ rem_ciaint
 	DPRINT	"CIA Timer freed"
 	popm	all
 	rts
+
 
 *******************************************************************************
 *                                Soittorutiinit
@@ -44460,16 +44821,16 @@ prefsTooltipsxy2      dc.w 27,1
 prefsTooltipst        dc.b 1,0,1,0
        dc.w -146-52,2
        dc.l 0,prefsTooltipstx,prefsTooltipst2
-prefsTooltipstx       dc.b "Button tooltips.........",0
+prefsTooltipstx 
+       dc.b "Button tooltips.........",0
        even
 prefsTooltipst2       dc.b 1,0,1,0
        dc.w 0,0
        dc.l 0,0,0
 
-
 * "Save state" button
 prefsSaveState
-	dc.l 0
+       dc.l prefsAltButtons
        dc.w 406,121-42,28,12,3,1,1
        dc.l prefsSaveStategr,0,prefsSaveStatet,0,0
        dc.w 0
@@ -44496,6 +44857,35 @@ prefsSaveStatet2       dc.b 1,0,1,0
        dc.w 0,0
        dc.l 0,0,0
 
+prefsAltButtons 
+       dc.l 0
+       dc.w 406-192,121-14,28,12,3,1,1
+       dc.l prefsAltButtonsgr,0,prefsAltButtonst,0,0
+       dc.w 0
+       dc.l 0
+prefsAltButtonsgr       dc.w 0,0
+       dc.b 2,0,1,3
+       dc.l prefsAltButtonsxy,prefsAltButtonsgr2
+prefsAltButtonsxy       dc.w 0,11
+       dc.w 0,0
+       dc.w 27,0
+prefsAltButtonsgr2      dc.w 0,0
+       dc.b 1,0,1,3
+       dc.l prefsAltButtonsxy2,0
+prefsAltButtonsxy2      dc.w 27,1
+       dc.w 27,11
+       dc.w 1,11
+prefsAltButtonst        dc.b 1,0,1,0
+       dc.w -146-52,2
+       dc.l 0,prefsAltButtonstx,prefsAltButtonst2
+prefsAltButtonstx 
+      ;dc.b "Bizarre buttons.........",0
+      ;dc.b "Unconventional buttons..",0
+       dc.b "Big buttons,............",0
+       even
+prefsAltButtonst2       dc.b 1,0,1,0
+       dc.w 0,0
+       dc.l 0,0,0
 
 ; Gadget
 gadgetListModeChangeButton
@@ -44554,25 +44944,27 @@ gadgetListModeChangeButtonImagePtr
 	dc.l 0
 
 * Rename the gadgets defined above to something not crazy
+* 1st row
 gadgetPlayButton 	EQU  button1
 gadgetInfoButton	EQU  button2
 gadgetStopButton	EQU  button3
 gadgetEjectButton	EQU  button4
 gadgetNextButton	EQU  button5
 gadgetPrevButton        EQU  button6
+gadgetForwardButton     EQU  kela2
+gadgetRewindButton      EQU  kela1
+gadgetNextSongButton    EQU  button12
+gadgetPrevSongButton    EQU  button13
+* 2nd row
 gadgetAddButton         EQU  button7
 gadgetDelButton         EQU  button8
 gadgetNewButton   	EQU  button11
-gadgetNextSongButton    EQU  button12
-gadgetPrevSongButton    EQU  button13
 gadgetPrefsButton	EQU  button20
 gadgetVolumeSlider	EQU  slider1
 gadgetFileSlider        EQU  slider4
 gadgetSortButton        EQU  lilb2
 gadgetMoveButton        EQU  lilb1 
 gadgetPrgButton         EQU  plg
-gadgetForwardButton     EQU  kela2
-gadgetRewindButton      EQU  kela1
 
 gadgetFileSliderInitialHeight = 67-16+2
 
@@ -44883,6 +45275,32 @@ nAMISKA5im
 	dc.l $00000020,$00200020,$00200020,$00200020,$7FE0FFC0,$80008000
 	dc.l $80008000,$80008000,$80000000,$00000000
 
+* Width: 11 pixels
+* Height: 9 pixels
+
+slider1imDouble
+	dc.l $00000020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $7FE0FFC0
+
+
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80000000
+	dc.l $00000000
+
+
 
 button1im	
 	dc	%1100000000000000				
@@ -44892,6 +45310,24 @@ button1im
 	dc	%1111110000000000				
 	dc	%1111000000000000				
 	dc	%1110000000000000				
+	dc	%0000000000000000				
+
+button1imDouble
+
+	dc	%1000000000000000				
+	dc	%1100000000000000				
+	dc	%1110000000000000				
+	dc	%1111000000000000				
+	dc	%1111100000000000				
+	dc	%1111110000000000				
+	dc	%1111111000000000				
+	dc	%1111111000000000				
+	dc	%1111110000000000				
+	dc	%1111100000000000				
+	dc	%1111000000000000				
+	dc	%1110000000000000				
+	dc	%1100000000000000				
+	dc	%1000000000000000				
 	dc	%0000000000000000				
 
 button2im
@@ -44905,6 +45341,26 @@ button2im
 	dc	%0111000000000000				
 	dc	%1111110000000000				
 
+button2imDouble
+	dc	%0000000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0000000000000000				
+	dc	%1111000000000000				
+	dc	%1111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%1111110000000000				
+	dc	%1111110000000000				
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+
 button3im
 	dc	%1111001111000000				
 	dc	%1111001111000000				
@@ -44913,6 +45369,24 @@ button3im
 	dc	%1111001111000000				
 	dc	%1111001111000000				
 	dc	%1111001111000000				
+	dc	%0000000000000000				
+
+button3imDouble
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%0000000000000000				
 	dc	%0000000000000000				
 
 button4im
@@ -44925,6 +45399,24 @@ button4im
 	dc	%1111111111110000				
 	dc	%0000000000000000				
 
+button4imDouble
+	dc	%0000000000000000				
+	dc	%0000011000000000				
+	dc	%0000111100000000
+	dc	%0001111110000000
+	dc	%0011111111000000				
+	dc	%0111111111100000				
+	dc	%1111111111110000				
+	dc	%1111111111110000				
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+	dc	%1111111111110000				
+	dc	%1111111111110000				
+	dc	%1111111111110000				
+	dc	%1111111111110000				
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+
 button5im
 	dc	%1100000110000011
 	dc	%1111000111100011
@@ -44934,7 +45426,25 @@ button5im
 	dc	%1111000111100011
 	dc	%1100000110000011
 	dc	%0000000000000000				
-	
+
+button5imDouble
+	dc	%1000000100000011
+	dc	%1100000110000011
+	dc	%1110000111000011
+	dc	%1111000111100011
+	dc	%1111100111110011
+	dc	%1111110111111011
+	dc	%1111111111111111
+	dc	%1111111111111111
+	dc	%1111110111111011
+	dc	%1111100111110011
+	dc	%1111000111100011
+	dc	%1110000111000011
+	dc	%1100000110000011
+	dc	%1000000100000011
+	dc	%0000000000000000					
+	dc	%0000000000000000				
+
 button6im
 	dc	%1100000110000011
 	dc	%1100011110001111
@@ -44944,7 +45454,25 @@ button6im
 	dc	%1100011110001111
 	dc	%1100000110000011
 	dc	%0000000000000000				
-		
+
+button6imDouble
+	dc	%1100000010000001
+	dc	%1100000110000011
+	dc	%1100001110000111
+	dc	%1100011110001111
+	dc	%1100111110011111
+	dc	%1101111110111111
+	dc	%1111111111111111
+	dc	%1111111111111111
+	dc	%1101111110111111
+	dc	%1100111110011111
+	dc	%1100011110001111
+	dc	%1100001110000111
+	dc	%1100000110000011
+	dc	%1100000010000001
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+
 button12im
 	dc	%1100000110000000
 	dc	%1111000110000000
@@ -44954,7 +45482,25 @@ button12im
 	dc	%1111000110000000
 	dc	%1100000110000000
 	dc	%0000000000000000
-	
+
+button12imDouble
+	dc	%1000000110000000
+	dc	%1100000110000000
+	dc	%1110000110000000
+	dc	%1111000110000000
+	dc	%1111100110000000
+	dc	%1111110110000000
+	dc	%1111111110000000
+	dc	%1111111110000000
+	dc	%1111110110000000
+	dc	%1111100110000000
+	dc	%1111000110000000
+	dc	%1110000110000000
+	dc	%1100000110000000
+	dc	%1000000110000000
+	dc	%0000000000000000
+	dc	%0000000000000000	
+
 button13im
 	dc	%1100000110000000
 	dc	%1100011110000000
@@ -44963,6 +45509,24 @@ button13im
 	dc	%1101111110000000
 	dc	%1100011110000000
 	dc	%1100000110000000
+	dc	%0000000000000000				
+
+button13imDouble
+	dc	%1100000010000000
+	dc	%1100000110000000
+	dc	%1100001110000000
+	dc	%1100011110000000
+	dc	%1100111110000000
+	dc	%1101111110000000
+	dc	%1111111110000000
+	dc	%1111111110000000
+	dc	%1101111110000000
+	dc	%1100111110000000
+	dc	%1100011110000000
+	dc	%1100001110000000
+	dc	%1100000110000000
+	dc	%1100000010000000
+	dc	%0000000000000000				
 	dc	%0000000000000000				
 
 
@@ -44976,6 +45540,24 @@ kela1im
 	dc	%0000011000001100
 	dc	%0000000000000000				
 
+kela1imDouble
+	dc	%0000001000000100
+	dc	%0000011000001100
+	dc	%0000111000011100
+	dc	%0001111000111100
+	dc	%0011111001111100
+	dc	%0111111011111100
+	dc	%1111111111111100
+	dc	%1111111111111100
+	dc	%0111111011111100
+	dc	%0011111001111100
+	dc	%0001111000111100
+	dc	%0000111000011100
+	dc	%0000011000001100
+	dc	%0000001000000100
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+
 kela2im	
 	dc	%1100000110000000
 	dc	%1111000111100000
@@ -44984,6 +45566,24 @@ kela2im
 	dc	%1111110111111000
 	dc	%1111000111100000
 	dc	%1100000110000000
+	dc	%0000000000000000				
+
+kela2imDouble
+	dc	%1000000100000000
+	dc	%1100000110000000
+	dc	%1110000111000000
+	dc	%1111000111100000
+	dc	%1111100111110000
+	dc	%1111110111111000
+	dc	%1111111111111100
+	dc	%1111111111111100
+	dc	%1111110111111000
+	dc	%1111100111110000
+	dc	%1111000111100000
+	dc	%1110000111000000
+	dc	%1100000110000000
+	dc	%1000000100000000
+	dc	%0000000000000000				
 	dc	%0000000000000000				
 
 
@@ -45007,6 +45607,7 @@ listImage
 	dc	%1101111111000000
 	dc	%0000000000000000
 	dc	%1101111111000000
+
 
  REM
 fileBrowserImage
