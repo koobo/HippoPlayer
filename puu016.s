@@ -1496,11 +1496,14 @@ progstart
 	lob	GetMsg
 	move.l	d0,d5
 	move.l	d0,a0
+	move.l  sm_NumArgs(a0),d4
+	* Get WBArg array:
 	move.l	sm_ArgList(a0),d0	* nykyisen hakemiston lukko
-	beq.w	.waswb			* workbenchiltä
-	move.l	d0,a0
-	move.l	(a0),lockhere(a5)
+	beq.b	.waswb			* workbenchiltä
+	move.l	d0,a1
+	move.l	wa_Lock(a1),lockhere(a5)
 	DPRINT	"Start from WB"
+	bsr.w	.buildWbStartParams
 	bra.w	.waswb
 .nowb	
 	move.l	pr_CurrentDir(a3),lockhere(a5) * nykyinen hakemisto CLI:ltä
@@ -1511,9 +1514,10 @@ progstart
 	pop	a3
 .waswb	
 
+
 	* a3 = current task
 
-	bsr.b	.getDirInfo
+	bsr.w	.getDirInfo
 	lea	portname,a1		* joko oli yksi HiP??
 	lore	Exec,FindPort
 	tst.l	d0
@@ -1564,6 +1568,80 @@ progstart
 	lob	ReplyMsg
 .nomsg
 	moveq	#0,d0
+	rts
+
+* Get parameters received by launching with project icons
+* where the tool is defined to be HiP. Multiple projects
+* can be opened simultaneously.
+*
+* This builds the command line argument array based
+* on WBArgs. The CLI arg processing will then handle
+* these as if they were entered from CLI.
+*
+* In:
+*   d4 = WBArg parameter count
+*   a1 = WBArg array
+.buildWbStartParams
+	pushm	all
+
+ if DEBUG
+ 	move.l	d4,d0
+ 	DPRINT	"sm_NumArgs=%ld"
+ endif
+
+	* Pointers to strings
+	lea	sv_argvArray(a5),a2
+	* Strings
+	lea	sv_argvBuffer(a5),a4
+	* Temporary buffer:
+	lea	ptheader,a3
+.wbArgLoop
+	* Null term it for safety
+	clr.b	(a3)
+	move.l	wa_Name(a1),d0
+	move.l	wa_Lock(a1),d1
+ if DEBUG
+	DPRINT	"wa_Name=%s wa_Lock=%lx"
+	tst.l	d1
+ endif
+	beq.b	.nullLock
+	move.l	a3,d2
+	move.l	#200,d3
+	jsr	getNameFromLock
+	tst.l	d0
+	* Skip if errors
+	beq.b	.stop
+.nullLock
+	* Store string ptr
+	move.l	a4,(a2)+
+	* Copy path based on lock
+	move.l	a3,a0
+	tst.b	(a0)
+	beq.b	.emptyPath
+.copyPath1
+	move.b	(a0)+,(a4)+
+	bne.b	.copyPath1
+	subq	#1,a4
+	cmp.b	#':',-1(a4)
+	beq.b	.noSep
+	move.b	#'/',(a4)+
+.emptyPath
+.noSep
+	* Copy filename
+	move.l	wa_Name(a1),a0
+.copyName1
+	move.b	(a0)+,(a4)+
+	bne.b	.copyName1
+
+ if DEBUG
+	move.l	-4(a2),d0
+	DPRINT	"-->%s"
+ endif
+	addq	#wa_SIZEOF,a1
+	subq	#1,d4
+	bne.b	.wbArgLoop
+.stop
+	popm	all
 	rts
 
 * in:
