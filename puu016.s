@@ -4667,17 +4667,7 @@ wrender
 	cmp.l	#gadgetListModeChangeButton,a3
 	beq.b	.nel
 .visibleBox
-	
-	movem	4(a3),plx1/ply1/plx2/ply2
-	add	plx1,plx2
-	add	ply1,ply2
-	subq	#1,ply2
-	subq	#1,plx1
-
-	push	d3
-	move.l	rastport(a5),a1
-	bsr.w	laatikko1
-	pop	d3
+	jsr	drawButtonFrameMainWindow
 
 .nel	move.l	d3,a3
 	tst.l	d3
@@ -5501,20 +5491,32 @@ desmsgDebugAndPrint
 
 ** bevelboksit, reunat kaks pixeliä
 
-laatikko1
+laatikko1:
 	move.l	pen_2(a5),d3
 	move.l	pen_1(a5),d2
 	bra.b	laatikko0
 
-
-laatikko2
+laatikko2:
 	move.l	pen_1(a5),d3
 	move.l	pen_2(a5),d2
+
 ;	bra.b	laatikko0
 
 
+* In:
+*   d2 = pen 1
+*   d3 = pen 2
+*   d4 = x1
+*   d5 = y1
+*   d6 = x2
+*   d7 = y2
+*   a1 = rastport 
+laatikko0:
+	tst.b	uusikick(a5)
+	bne.b	.new
+	exg	d2,d3
+.new
 
-laatikko0
 	move.l	a1,a3
 	move	d2,a4
 	move	d3,a2
@@ -5578,6 +5580,11 @@ laatikko3
 	move.l	a1,a3
 	move.l	pen_2(a5),a2
 	move.l	pen_1(a5),a4
+
+	tst.b	uusikick(a5)
+	bne.b	.new
+	exg	a2,a4
+.new
 
 	move	a4,d0
 	move.l	a3,a1
@@ -13285,16 +13292,7 @@ prefsgads
 	subq.b	#GTYP_STRGADGET-GTYP_PROPGADGET,d7
 	beq.b	.nel	
 
-	movem	4(a3),plx1/ply1/plx2/ply2
-	add	plx1,plx2
-	add	ply1,ply2
-	subq	#1,ply2
-	subq	#1,plx1
-	push	d3
-	move.l	rastport2(a5),a1
-	bsr.w	laatikko1
-	pop	d3
-
+	jsr	drawButtonFramePrefsWindow
 
 .nel	move.l	d3,a3
 	tst.l	d3
@@ -27986,7 +27984,7 @@ whag	tst.b	win(a5)
 
 	move.l	a0,a3
 	and	#~GFLG_DISABLED,gg_Flags(a3)
-	bsr.b	redrawButtonGadget
+	bsr.w	redrawButtonGadget
 
 	lea	kela2,a0
 	cmp.l	a0,a3
@@ -28005,7 +28003,7 @@ whag	tst.b	win(a5)
 	or	#GFLG_DISABLED,gg_Flags(a3)
 	moveq	#1,d0
 	lore	Intui,RefreshGList
-	bsr.b	drawButtonFrame
+	bsr.b	drawButtonFrameMainWindow
 
 .on
 	tst	2(a4)		* enemmän kuin yksi kerrallaan?
@@ -28020,19 +28018,34 @@ whag	tst.b	win(a5)
 
 * in:
 *   a3 = gadget
-drawButtonFrame
-	pushm	all				* varjostus kuntoon taas
-	movem	4(a3),plx1/ply1/plx2/ply2
+drawButtonFrameMainWindow
 	cmp.l	#slider1,a3
-	beq.b	.kex
+	beq.b	.x
+	pushm	all				* varjostus kuntoon taas
+	move.l	rastport(a5),a1
+	bsr.b	doDrawButtonFrame
+	popm	all
+.x	rts
+
+
+* in:
+*   a3 = gadget
+drawButtonFramePrefsWindow
+	pushm	all				* varjostus kuntoon taas
+	move.l	rastport2(a5),a1
+	bsr.b	doDrawButtonFrame
+	popm	all
+	rts
+
+doDrawButtonFrame
+	movem	4(a3),plx1/ply1/plx2/ply2
 	add	plx1,plx2
 	add	ply1,ply2
 	subq	#1,ply2
 	subq	#1,plx1
-	move.l	rastport(a5),a1
-	jsr	laatikko1
-.kex	popm	all
-	rts
+	move.l	pen_2(a5),d3
+	move.l	pen_1(a5),d2
+	jmp	laatikko0
 
 
 * Clear button area, refresh gadget, draw button frame
@@ -28053,7 +28066,7 @@ redrawButtonGadget
 	move.l	a3,a0
 	jsr	refreshGadgetInA0
 
-	bsr.b	drawButtonFrame
+	bsr.w	drawButtonFrameMainWindow
 	rts
 
 
@@ -44867,21 +44880,10 @@ sivu6		include	gadgets/prefs_sivu6.s
 
 prefsFavorites dc.l prefsTooltips
        dc.w 406,121,28,12,3,1,1
-       dc.l prefsFavoritesgr,0,prefsFavoritest,0,0
+       dc.l 0
+       dc.l 0,prefsFavoritest,0,0
        dc.w 0
        dc.l 0
-prefsFavoritesgr       dc.w 0,0
-       dc.b 2,0,1,3
-       dc.l prefsFavoritesxy,prefsFavoritesgr2
-prefsFavoritesxy       dc.w 0,11
-       dc.w 0,0
-       dc.w 27,0
-prefsFavoritesgr2      dc.w 0,0
-       dc.b 1,0,1,3
-       dc.l prefsFavoritesxy2,0
-prefsFavoritesxy2      dc.w 27,1
-       dc.w 27,11
-       dc.w 1,11
 prefsFavoritest        dc.b 1,0,1,0
        dc.w -146,2
        dc.l 0,prefsFavoritestx,prefsFavoritest2
@@ -44898,21 +44900,10 @@ prefsFavoritest2       dc.b 1,0,1,0
 
 prefsTooltips dc.l prefsSaveState
        dc.w 406-192,121,28,12,3,1,1
-       dc.l prefsTooltipsgr,0,prefsTooltipst,0,0
+       dc.l 0
+       dc.l 0,prefsTooltipst,0,0
        dc.w 0
        dc.l 0
-prefsTooltipsgr       dc.w 0,0
-       dc.b 2,0,1,3
-       dc.l prefsTooltipsxy,prefsTooltipsgr2
-prefsTooltipsxy       dc.w 0,11
-       dc.w 0,0
-       dc.w 27,0
-prefsTooltipsgr2      dc.w 0,0
-       dc.b 1,0,1,3
-       dc.l prefsTooltipsxy2,0
-prefsTooltipsxy2      dc.w 27,1
-       dc.w 27,11
-       dc.w 1,11
 prefsTooltipst        dc.b 1,0,1,0
        dc.w -146-52,2
        dc.l 0,prefsTooltipstx,prefsTooltipst2
@@ -44927,21 +44918,10 @@ prefsTooltipst2       dc.b 1,0,1,0
 prefsSaveState
        dc.l prefsAltButtons
        dc.w 406,121-42,28,12,3,1,1
-       dc.l prefsSaveStategr,0,prefsSaveStatet,0,0
+       dc.l 0
+       dc.l 0,prefsSaveStatet,0,0
        dc.w 0
        dc.l 0
-prefsSaveStategr       dc.w 0,0
-       dc.b 2,0,1,3
-       dc.l prefsSaveStatexy,prefsSaveStategr2
-prefsSaveStatexy       dc.w 0,11
-       dc.w 0,0
-       dc.w 27,0
-prefsSaveStategr2      dc.w 0,0
-       dc.b 1,0,1,3
-       dc.l prefsSaveStatexy2,0
-prefsSaveStatexy2      dc.w 27,1
-       dc.w 27,11
-       dc.w 1,11
 prefsSaveStatet        dc.b 1,0,1,0
        dc.w -146,2
        dc.l 0,prefsSaveStatetx,prefsSaveStatet2
@@ -44955,21 +44935,10 @@ prefsSaveStatet2       dc.b 1,0,1,0
 prefsAltButtons 
        dc.l 0
        dc.w 406-192,121-14,28,12,3,1,1
-       dc.l prefsAltButtonsgr,0,prefsAltButtonst,0,0
+       dc.l 0
+       dc.l 0,prefsAltButtonst,0,0
        dc.w 0
        dc.l 0
-prefsAltButtonsgr       dc.w 0,0
-       dc.b 2,0,1,3
-       dc.l prefsAltButtonsxy,prefsAltButtonsgr2
-prefsAltButtonsxy       dc.w 0,11
-       dc.w 0,0
-       dc.w 27,0
-prefsAltButtonsgr2      dc.w 0,0
-       dc.b 1,0,1,3
-       dc.l prefsAltButtonsxy2,0
-prefsAltButtonsxy2      dc.w 27,1
-       dc.w 27,11
-       dc.w 1,11
 prefsAltButtonst        dc.b 1,0,1,0
        dc.w -146-52,2
        dc.l 0,prefsAltButtonstx,prefsAltButtonst2
