@@ -320,18 +320,32 @@ prefs_size		rs.b	0
 
 *******************************************************************************
 *
-* Scope variables
+* Scope variables for one audio channel
+* Values are copied hede from replay code internal structures.
+* Currently only Protracker supported
 *
+
 
  	rsreset
 ns_start	rs.l	1
 ns_length	rs	1
 ns_loopstart	rs.l	1
 ns_replen	rs	1
+* Not used:
 ns_tempvol2	rs	1
 ns_period	rs	1
 ns_tempvol	rs	1
 ns_size		rs.b	0
+
+	rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1
+scope_pad	  rs.b  1
+scope_size rs.b 0
+
 
 
 *******************************************************************************
@@ -586,10 +600,10 @@ mousey		rs	1
 
 draw1		rs.l	1
 draw2		rs.l	1
-ch1		rs.b	ns_size
-ch2		rs.b	ns_size
-ch3		rs.b	ns_size
-ch4		rs.b	ns_size
+;ch1		rs.b	ns_size
+;ch2		rs.b	ns_size
+;ch3		rs.b	ns_size
+;ch4		rs.b	ns_size
 mtab		rs.l	1
 buffer0		rs.l	1
 buffer0w 	rs.w 	1
@@ -601,12 +615,15 @@ deltab1		rs.l	1
 deltab2		rs.l	1	
 deltab3		rs.l	1	
 deltab4		rs.l	1	
-omatrigger	rs.b	1	* kopio kplayerin usertrigistä
+;omatrigger	rs.b	1	* kopio kplayerin usertrigistä
 * This turns to 1 if user has manually activated the scope
 * by LMB click, when scope was passivated because not being
 * visible. As this is global user does not need to do that again.
 scopeManualActivation	rs.b	1	
+__pad0              rs.b  1
 multab		rs.b	512
+
+scopeData  rs.b	 scope_size
 
 ps3mchannels	rs.l	1	* Osoitin PS3M mixer channel blockeihin
 
@@ -2830,10 +2847,10 @@ lelp
 .purr
 
 
-	pushpea	ch1(a5),hippoport+hip_PTch1(a5)
-	pushpea	ch2(a5),hippoport+hip_PTch2(a5)
-	pushpea	ch3(a5),hippoport+hip_PTch3(a5)
-	pushpea	ch4(a5),hippoport+hip_PTch4(a5)
+	pushpea	scopeData+scope_ch1(a5),hippoport+hip_PTch1(a5)
+	pushpea	scopeData+scope_ch2(a5),hippoport+hip_PTch2(a5)
+	pushpea	scopeData+scope_ch3(a5),hippoport+hip_PTch3(a5)
+	pushpea	scopeData+scope_ch4(a5),hippoport+hip_PTch4(a5)
 	pushpea	kplbase(a5),hippoport+hip_kplbase(a5)
 	pushpea	moduleListHeader(a5),hippoport+hip_moduleListHeader(a5)
 
@@ -21675,7 +21692,7 @@ quad_code
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,scopeDrawAreaModulo(a5)
 	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,scopeDrawAreaHeight(a5)
 
-	lea	ch1(a5),a0
+	lea	scopeData+scope_ch1(a5),a0
 	lea	4*ns_size(a0),a1
 .cl	clr	(a0)+
 	cmp.l	a1,a0
@@ -22458,11 +22475,11 @@ scopeinterrupt				* a5 = var_b
 
 	lea	kplbase(a5),a0
 	move.b	k_usertrig(a0),d0
-	or.b	d0,omatrigger(a5)
+	or.b	d0,scopeData+scope_trigger(a5)
 	clr.b	k_usertrig(a0)
 
 	lea	k_chan1temp(a0),a2
-	lea	ch1(a1),a0
+	lea	scopeData+scope_ch1(a1),a0
 	lea	hippoport+hip_PTtrigger1(a5),a3
 	moveq	#4-1,d1
 .setscope
@@ -22487,7 +22504,7 @@ scopeinterrupt				* a5 = var_b
 	dbf	d1,.setscope
 
 	moveq	#4-1,d1
-	lea	ch1(a5),a0
+	lea	scopeData+scope_ch1(a5),a0
 
 .le	moveq	#0,d0
 	tst	ns_period(a0)
@@ -22965,19 +22982,19 @@ mirrorfill0
 
 
 quadrascope
-	lea	ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3
 	move.l	draw1(a5),a0
 	lea	-30(a0),a0
 	bsr.b	.scope
-	lea	ch2(a5),a3
+	lea	scopeData+scope_ch2(a5),a3
 	move.l	draw1(a5),a0
 	lea	-20(a0),a0
 	bsr.b	.scope
-	lea	ch3(a5),a3
+	lea	scopeData+scope_ch3(a5),a3
 	move.l	draw1(a5),a0
 	lea	-10(a0),a0
 	bsr.b	.scope
-	lea	ch4(a5),a3
+	lea	scopeData+scope_ch4(a5),a3
 	move.l	draw1(a5),a0
 ;	bsr.b	.scope
 ;	rts
@@ -23064,22 +23081,22 @@ hm\2
 	rts
 
 hipposcope
-	lea	ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3
 	move.l	draw1(a5),a6
 	lea	-20-95*40(a6),a6
 	bsr.b	.twirl
 
-	lea	ch2(a5),a3
+	lea	scopeData+scope_ch2(a5),a3
 	move.l	draw1(a5),a6
 	lea	-10-95*40(a6),a6
 	bsr.b	.twirl
 
-	lea	ch3(a5),a3
+	lea	scopeData+scope_ch3(a5),a3
 	move.l	draw1(a5),a6
 	lea	0-95*40(a6),a6
 	bsr.b	.twirl
 
-	lea	ch4(a5),a3
+	lea	scopeData+scope_ch4(a5),a3
 	move.l	draw1(a5),a6
 	lea	10-95*40(a6),a6
 ;	bsr.b	.twirl
@@ -23223,28 +23240,28 @@ freqscope
 
 .protr
 
-	lea	ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3
 	move.l	deltab1(a5),a0
 	bsr.w	.tut
-	lea	ch4(a5),a3
+	lea	scopeData+scope_ch4(a5),a3
 	move.l	deltab4(a5),a0
 	bsr.w	.tut
 
-	lea	ch2(a5),a3
+	lea	scopeData+scope_ch2(a5),a3
 	move.l	deltab2(a5),a0
 	bsr.w	.tut
-	lea	ch3(a5),a3
+	lea	scopeData+scope_ch3(a5),a3
 	move.l	deltab3(a5),a0
 	bsr.w	.tut
 
-	move	ns_tempvol+ch1(a5),d1
-	move	ns_tempvol+ch4(a5),d2
+	move	ns_tempvol+scopeData+scope_ch1(a5),d1
+	move	ns_tempvol+scopeData+scope_ch4(a5),d2
 	move.l	deltab1(a5),a0
 	move.l	deltab4(a5),a1
 	bsr.w	.pre
 
-	move	ns_tempvol+ch2(a5),d1
-	move	ns_tempvol+ch3(a5),d2
+	move	ns_tempvol+scopeData+scope_ch2(a5),d1
+	move	ns_tempvol+scopeData+scope_ch3(a5),d2
 	move.l	deltab2(a5),a0
 	move.l	deltab3(a5),a1
 	bsr.b	.pre
@@ -23734,19 +23751,19 @@ notescroller
 
 	lea	kplbase(a5),a0
 	lea	k_chan1temp(a0),a1
-	lea	ch1(a5),a0
+	lea	scopeData+scope_ch1(a5),a0
 	* channel bitmask
 	moveq	#1,d2
 	moveq	#4-1,d1
 .setscope	
 	* see if channel bit is on
-	move.b	omatrigger(a5),d0
+	move.b	scopeData+scope_trigger(a5),d0
 	and.b	d2,d0
 	beq.b	.e	
 	* was on, clear it, and copy the volume value
 	move.b  d2,d0 	
 	not.b   d0
-	and.b  	d0,omatrigger(a5)
+	and.b  	d0,scopeData+scope_trigger(a5)
 	move	n_tempvol(a1),ns_tempvol(a0)
 .e	
 	* next bit
@@ -23756,39 +23773,39 @@ notescroller
 	dbf	d1,.setscope
 
 
-	move	ch1+ns_tempvol(a5),d0	
+	move	scopeData+scope_ch1+ns_tempvol(a5),d0	
 	moveq	#2,d1
 	bsr.b	.palkki
-	move	ch2+ns_tempvol(a5),d0	
+	move	scopeData+scope_ch2+ns_tempvol(a5),d0	
 	moveq	#11,d1
 	bsr.b	.palkki
-	move	ch3+ns_tempvol(a5),d0	
+	move	scopeData+scope_ch3+ns_tempvol(a5),d0	
 	moveq	#20,d1
 	bsr.b	.palkki
-	move	ch4+ns_tempvol(a5),d0	
+	move	scopeData+scope_ch4+ns_tempvol(a5),d0	
 	moveq	#29,d1
 	bsr.b	.palkki
 
-	lea	ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3
 	move.b	#%11100000,d2
 	moveq	#38,d1
 	bsr.b	.palkki2
-	lea	ch2(a5),a3
+	lea	scopeData+scope_ch2(a5),a3
 	moveq	#%1110,d2
 	moveq	#38,d1
 	bsr.b	.palkki2
-	lea	ch3(a5),a3
+	lea	scopeData+scope_ch3(a5),a3
 	moveq	#39,d1
 	move.b	#%11100000,d2
 	bsr.b	.palkki2
-	lea	ch4(a5),a3
+	lea	scopeData+scope_ch4(a5),a3
 	moveq	#%1110,d2
 	moveq	#39,d1
 	bsr.b	.palkki2
 
 .ohi
 	* animate the volume bars towards bottom
-	lea	ch1(a5),a0
+	lea	scopeData+scope_ch1(a5),a0
 	moveq	#4-1,d0
 .orl	tst	ns_tempvol(a0)
 	beq.b	.urh
@@ -24332,32 +24349,32 @@ notescroller
 
 ********** Palkit
 lever2
-	lea	ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3
 	move.l	draw1(a5),a0
 	bsr.b	dlever
-	lea	ch4(a5),a3
+	lea	scopeData+scope_ch4(a5),a3
 	move.l	draw1(a5),a0
 	lea	10(a0),a0
 	bsr.b	dlever
-	lea	ch2(a5),a3
+	lea	scopeData+scope_ch2(a5),a3
 	move.l	draw1(a5),a0
 	lea	20(a0),a0
 	bsr.b	dlever
-	lea	ch3(a5),a3
+	lea	scopeData+scope_ch3(a5),a3
 	move.l	draw1(a5),a0
 	lea	30(a0),a0
 	bsr.b	dlever
 	rts
 
 lever
-	lea	ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3
 	moveq	#4-1,d2
 	moveq	#0,d3
 	move.l	draw1(a5),a2
 .l	move.l	a2,a0
 	bsr.b	dlever
 	lea	10(a2),a2
-	lea	ch2-ch1(a3),a3
+	lea	ns_size(a3),a3
 	dbf	d2,.l
 	rts
 	
