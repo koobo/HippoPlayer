@@ -17630,9 +17630,9 @@ getFileBoxIndexFromMousePosition
 	moveq	#63+WINY,d2
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
-	add	#16,d3
+	add	#16,d2
 .noAlt1
-	cmp		d3,d1
+	cmp		d2,d1
 ;	cmp	#63+WINY,d1
 	blo.b	.out
 	move	#126+WINY,d2
