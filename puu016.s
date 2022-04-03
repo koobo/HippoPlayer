@@ -27144,6 +27144,7 @@ tutki_moduuli
  endc
 
 
+	* Address may be null in case of sample file
 	move.l	moduleaddress(a5),a4
 	move.l	modulelength(a5),d7
 
@@ -27166,7 +27167,9 @@ tutki_moduuli
 	* Ensure no id funcs are ran on executables
 	tst.b	executablemoduleinit(a5)
 	bne.b	.ohi
-	
+	* See if there is data to check
+	move.l	a4,d0
+	beq.b	.ohi
 	bsr.w	id_protracker
 	beq.w	.protracker
 
