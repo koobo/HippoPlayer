@@ -7370,7 +7370,7 @@ umph
 	bsr.w	halt			* Vapautetaan se jos on
 	lore    Exec,Enable
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
+	jsr	p_end(a0)
 	bsr.w	freemodule	
 
 	tst	d6
@@ -9584,7 +9584,7 @@ rbutton1
 	bsr.w	halt			* Vapautetaan se jos on
 	lore 	Exec,Enable
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
+	jsr	p_end(a0)
 	bsr.w	freemodule	
 	move	(sp)+,mainvolume(a5)
 .nomod
@@ -36698,7 +36698,8 @@ p_sample
 
 	jsr	.s_ahinfo(a0)
 
-
+	move.l	colordiv(a5),d0
+	DPRINT	"colordiv=%ld"
 ** lis‰‰
 	moveq	#0,d0
 	cmp	#16000,horizfreq(a5)
@@ -36740,6 +36741,15 @@ p_sample
 	move.l	a2,samplepointer2(a5)
 	move.b	d2,samplestereo(a5)
 	move.l	d3,samplebufsiz(a5)
+
+ if DEBUG
+	pushm	d0-d3
+	move.l	d3,d0
+	move.l	(a1),d2
+	move.l	(a2),d3
+	DPRINT	"Bufsize=%ld add=%ld buf1=%lx buf2=%lx"
+	popm	d0-d3
+ endif
 
 	tst	d0
 	bne.b	.x
