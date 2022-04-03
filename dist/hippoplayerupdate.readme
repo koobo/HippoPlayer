@@ -45,14 +45,24 @@ NOTE 4: Too long didn't read
 ## New fixes:
 - Simplify file loading so that compatibility with FTPMount is 
   better (FTPMount does not seem to support file seeking properly).
-  FTPMount can be used to access Modland with Hippo.
+  FTPMount can be used to access Modland with Hippo, for example.
 - Fix crash with "Keep list on exit" when restarting in
   file browser mode and the directory has disappeared.
 - When the scope is open and the current format only supports 
   patternscope, display that instead of an empty window.
 - Fix move losing the moved item if nothing is selected when trying to insert
   the item back. Now it is inserted to the beginning of the list.
-
+- Fix the button and box frame graphics so that they look correct
+  on kickstart 1.3 too.
+- MP3 files with ID3v2 tag data did not get recognized and played
+  previously. Now they should work.
+- MP3 identification improved so that in addition to filename suffix ".mp3" also
+  the prefix "mp3." is now checked. Additionally any possible ID3v2 tag data is 
+  is used to determine if a file is an MP3 file. 
+- There was a rather severe regression in v2.49 sampleplayer. Scopes
+  didn't work properly things could crash. Fixed these,
+  hopefully. 
+  
 ## Music format related changes:
 - Patternscope support added to the THX/AHX format. Also shows transposes.
 - Patternscope now displays note and sample transpose information
@@ -60,7 +70,12 @@ NOTE 4: Too long didn't read
 
 ## New features:
 - "Big button" option in Prefs. This doubles the height of the two 
-  button rows in the main window.
+  button rows in the main window. May be helpful with higher resolution
+  screens. The original icons were designed for the 640x256 resolution. 
+- Added support for launching via "project icons". These are icons
+  used for data files which specify the default tool which should be used
+  to open the files. This is a very basic use case from the beginning of
+  Workbench, finally supported.
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
