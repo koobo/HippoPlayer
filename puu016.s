@@ -644,7 +644,12 @@ samplepointer2		rs.l	1
 samplestereo		rs.b	1
 * This is set in loadfile() to indicate a sample is found.
 * Actual loading is then skipped.
-sampleinit		rs.b	1			
+sampleinit		rs.b	1		
+* Sample format
+* 1 = IFF
+* 2 = AIFF
+* 3 = WAV
+* 4 = MP3
 sampleformat		rs.b	1
 
 * This is set in loadfile() to indicate an executable module has been 
@@ -1196,7 +1201,8 @@ desbuf2		rs.b	200		* muotoilupuskuri prefssille
 filename	rs.b	108		* tiedoston nimi (reqtools)
 filename2	rs.b	108		* Load/Save program-rutiineille
 tempdir		rs.b	200		* ReqToolsin hakemistopolku 
-probebuffer	rs.b	2048		* tiedoston tutkimispuskuri
+PROBE_BUFFER_LEN = 2048
+probebuffer	rs.b	PROBE_BUFFER_LEN * tiedoston tutkimispuskuri
 ptsonglist	rs.b	64		* Protrackerin songlisti
 xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkkiä)
 findpattern	rs.b	30		* find pattern
@@ -25723,11 +25729,11 @@ loadfile
 	lea	probebuffer(a5),a0
 	move.l	a0,d2
 
-	move.l	#2048/4-1,d0	* tyhjäks
+	move.l	#PROBE_BUFFER_LEN/4-1,d0	* tyhjäks
 .clear	clr.l	(a0)+
 	dbf	d0,.clear
 
-	move.l	#2048,d3
+	move.l	#PROBE_BUFFER_LEN,d3
 	lob	Read
 	move.l	d0,d7
 	cmp.l	#100,d0
@@ -25906,11 +25912,14 @@ loadfile
 	beq.w	.open_error
 
 	lea	probebuffer(a5),a0
-	move.w	#1084/4-1,d0
+	move.w	#PROBE_BUFFER_LEN/4-1,d0
 .clrProbe
 	clr.l	(a0)+
 	dbf	d0,.clrProbe
 
+	* Here the full buffer is not used for some reason.
+	* Probably for optimization.
+	
 	move.l	lod_filehandle(a5),d1
 	lea	probebuffer(a5),a0
 	move.l	a0,d2
@@ -26559,6 +26568,12 @@ loadfile
 
 
 ***** tutkaillaan onko sample
+
+* 
+* In:
+*   a0 = probebuffer
+* Out:
+*   Z-flag set if recognized
 .samplecheck
 ** IFF
 	move.b	#1,sampleformat(a5)
@@ -26582,17 +26597,18 @@ loadfile
 ** MPEG
 	move.b	#4,sampleformat(a5)
 
-	move.l	modulefilename(a5),a0
-.zu	tst.b	(a0)+
+	* Check file suffix
+	move.l	modulefilename(a5),a1
+.zu	tst.b	(a1)+
 	bne.b	.zu
-	subq.l	#1,a0
-	move.b	-(a0),d0
+	subq.l	#1,a1
+	move.b	-(a1),d0
 	ror.l	#8,d0
-	move.b	-(a0),d0
+	move.b	-(a1),d0
 	ror.l	#8,d0
-	move.b	-(a0),d0
+	move.b	-(a1),d0
 	ror.l	#8,d0
-	move.b	-(a0),d0
+	move.b	-(a1),d0
 	ror.l	#8,d0
 	and.l	#$ffdfdfff,d0
 	cmp.l	#".MP1",d0
@@ -26600,7 +26616,10 @@ loadfile
 	cmp.l	#".MP2",d0
 	beq.b	.sampl
 	cmp.l	#".MP3",d0
+	beq.b	.sampl
 
+	* Finally check probe buffer contents 
+	bsr	id_mp3
 
 .sampl	rts
 	
@@ -36713,6 +36732,93 @@ p_sample
 id_sample
 	rts
 
+* In:
+*   a0 = probebuffer, size 2048
+* Out:
+*  d0 = 0 = recognized, -1 = not
+id_mp3
+	* Check for ID3v2 header
+	move.l	(a0),d0
+	lsr.l	#8,d0
+	cmp.l	#"ID3",d0
+	bne.b	.not
+
+	cmp.b	#$ff,3(a0)
+	beq.b	.not
+	cmp.b	#$ff,4(a0)
+	beq.b	.not
+	* Low flag nybble should be zero
+	moveq	#$0f,d0
+	and.b	5(a0),d0
+	bne.b	.not
+	* synchsafe integer bytes are all 7 bits
+	cmp.b	#$80,6(a0)
+	bhs.b	.not
+	cmp.b	#$80,7(a0)
+	bhs.b	.not
+	cmp.b	#$80,8(a0)
+	bhs.b	.not
+	cmp.b	#$80,9(a0)
+	bhs.b	.not
+	bra.b	.yepID3v2
+.not
+
+	* Find MPEG sync word
+
+;#define SYNC_VALID( v ) ( ((v & 0xFFE00000) == 0xFFE00000) &&\
+;                          ((v & 0x00060000) != 0x00000000) &&\
+;                          ((v & 0xF000) != 0xF000) &&\
+;                          ((v & 0xF000) != 0x0000) &&\
+;                          ((v & 0x0C00) != 0x0C00) )
+	move	#PROBE_BUFFER_LEN-4-1,d1
+	move.l	a0,a1
+.loop
+	move.b	(a1)+,d2
+	lsl.l	#8,d2
+	move.b	(a1),d2
+	lsl.l	#8,d2
+	move.b	1(a1),d2
+	lsl.l	#8,d2
+	move.b	2(a1),d2
+	
+	move.l	d2,d3
+	and.l	#$FFE00000,d3
+	cmp.l	#$FFE00000,d3
+	bne.b	.next
+
+	move.l	d2,d3
+	and.l	#$00060000,d3
+	beq.b	.next
+
+	move.l	d2,d3
+	and.l	#$F000,d3
+	cmp.w	#$F000,d3
+	beq.b	.next
+
+	move.l	d2,d3
+	and.l	#$F000,d3
+	beq.b	.next
+	
+	move.l	d2,d3
+	and.l	#$0C00,d3
+	cmp.w	#$0C00,d3
+	bne.b	.yepSyncWord
+.next
+	dbf	d1,.loop
+
+.nope
+	moveq	#-1,d0
+	rts
+
+.yepID3v2
+	DPRINT	"MP3 ID3v2 tag found"
+	moveq	#0,d0
+	rts
+.yepSyncWord
+	DPRINT	"MP3 sync word found"
+	moveq	#0,d0
+	rts
+
 ******************************************************************************
 * PumaTracker
 ******************************************************************************
@@ -38952,7 +39058,7 @@ p_startrekker
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	lea	startrekkerdataaddr(a5),a1
 	lea 	startrekkerdatalen(a5),a2
-	bsr.w	loadfileStraight
+	jsr	loadfileStraight
 	rts
 
 .fileErr 
@@ -43342,7 +43448,7 @@ deliFreeAudio
 	DPRINT	"deliAudioFree"
 	pushm	d1-a6
 	lea	var_b,a5
-	bsr	vapauta_kanavat
+	jsr	vapauta_kanavat
 	popm	d1-a6
 	rts
 
@@ -43570,7 +43676,7 @@ funcENPP_SetTimer
 	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
 	;DPRINT "ENPP_WaitAudioDMA"
-	bra dmawait
+	jmp dmawait
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange"
 	bra.w	deliModuleChange
