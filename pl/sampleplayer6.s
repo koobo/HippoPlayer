@@ -1,4 +1,4 @@
-;APS0000111100009048000034CB0000A9690004B4800005EF1C00042C0A00049AE1000030A70000BF65
+;APS0000111100009186000035070000AAA70004B5BE0005F05A00042D4800049C1F000030E30000C0A3
 test	=	0
 DEBUG	=	0
 
@@ -447,11 +447,11 @@ init
 	tst.l	d0
 	rts
 .doInit
-
-	move.b	13+4(sp),kutistus(a5)
-	move.l	8+4(sp),songover(a5)
-	move.l	4+4(sp),colordiv(a5)
-	move.l	4(sp),_XPKBase(a5)
+	* Two subroutine calls when getting here, hence 4+4
+	move.b	13+4+4(sp),kutistus(a5)
+	move.l	8+4+4(sp),songover(a5)
+	move.l	4+4+4(sp),colordiv(a5)
+	move.l	4+4(sp),_XPKBase(a5)
 
 	move.b	d0,samplebufsiz0(a5)
 	move.b	d1,sampleformat(a5)
@@ -1259,6 +1259,11 @@ init
 	moveq	#0,d7
 	move	samplefreq(a5),d7
 
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"frequency=%ld"
+ endif
+
 	tst.b	kutistus(a5)
 	beq.b	.nok
 	cmp	#KUTISTUSTAAJUUS,d7
@@ -1290,7 +1295,13 @@ init
 
 	divu	d7,d4
 	move	d4,sampleper(a5)	* samplen periodi
+ if DEBUG
+	moveq	#0,d0
+	move	d4,d0
+	DPRINT	"period=%ld"
+ endif
 	move.l	colordiv(a5),d0	
+ 	DPRINT	"colordiv=%ld"
 	divu	d4,d0
 	ext.l	d0
 	move.l	d0,sampleadd(a5)	* seuranta, paljonko soitetaan framessa
@@ -1369,6 +1380,8 @@ init
 	move	mainvolume+var_b(pc),d0
 	bsr.w	vol
 
+	DPRINT	"CreateProc"
+
 ** k‰ynnistet‰‰n prosessi
 	pushpea	.pn(pc),d1
 	moveq	#0,d2			* pri
@@ -1388,6 +1401,13 @@ init
 	move.b	samplestereo(a5),d2
 	move.l	samplebufsiz(a5),d3
 
+ if DEBUG
+	pushm	all
+	move.l	d1,d0
+	move.l	d3,d1
+	DPRINT	"add=%ld buf=%ld"
+	popm	all 
+ endif
 	moveq	#0,d0
 	rts
 
