@@ -26580,11 +26580,11 @@ loadfile
 	cmp.l	#"FORM",(a0)
 	bne.b	.nosa0
 	cmp.l	#"8SVX",8(a0)
-	beq.b	.sampl
+	beq.w	.sampl
 ** AIFF
 	move.b	#2,sampleformat(a5)
 	cmp.l	#"AIFF",8(a0)
-	beq.b	.sampl
+	beq.w	.sampl
 
 .nosa0
 ** RIFF WAVE
@@ -26592,7 +26592,7 @@ loadfile
 	cmp.l	#"RIFF",(a0)
 	bne.b	.nosaa
 	cmp.l	#"WAVE",8(a0)
-	beq.b	.sampl
+	beq.w	.sampl
 .nosaa
 ** MPEG
 	move.b	#4,sampleformat(a5)
@@ -26616,6 +26616,38 @@ loadfile
 	cmp.l	#".MP2",d0
 	beq.b	.sampl
 	cmp.l	#".MP3",d0
+	beq.b	.sampl
+
+	* Check file prefix
+	move.l	modulefilename(a5),a1
+	move.l	a1,a2
+.zu2	tst.b	(a1)+
+	bne.b	.zu2
+	subq.l	#1,a1
+.zu3	cmp.l	a1,a2
+	beq.b	.zu4
+	cmp.b	#":",-1(a1)
+	beq.b	.zu4
+	cmp.b	#"/",-1(a1)
+	beq.b	.zu4
+	subq	#1,a1
+	bra.b	.zu3
+.zu4
+	move.l	a1,d0
+
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	and.l	#$dfdfffff,d0
+	cmp.l	#"MP1.",d0
+	beq.b	.sampl
+	cmp.l	#"MP2.",d0
+	beq.b	.sampl
+	cmp.l	#"MP3.",d0
 	beq.b	.sampl
 
 	* Finally check probe buffer contents 
@@ -36767,7 +36799,10 @@ id_mp3
 .not
 
 	* Find MPEG sync word
+	* This is very unreliable in the sense that many other formats
+	* will be recognized as MPEG streams. Let's not do it.
 
+ REM ;;;;
 ;#define SYNC_VALID( v ) ( ((v & 0xFFE00000) == 0xFFE00000) &&\
 ;                          ((v & 0x00060000) != 0x00000000) &&\
 ;                          ((v & 0xF000) != 0xF000) &&\
@@ -36808,7 +36843,7 @@ id_mp3
 	bne.b	.yepSyncWord
 .next
 	dbf	d1,.loop
-
+ EREM ;;;;;;;;;
 .nope
 	moveq	#-1,d0
 	rts
