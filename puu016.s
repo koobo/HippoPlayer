@@ -323,30 +323,33 @@ prefs_size		rs.b	0
 * Scope variables for one audio channel
 * Values are copied hede from replay code internal structures.
 * Currently only Protracker supported
-*
 
+* Scope data for one channel
+* This should correspond go the "PTch" structure in hippoport
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_tempvol    rs         1 * Volume
+ns_period     rs         1 * Period
+;Unused:
+;ns_tempvol2	rs	1
+ns_size       rs.b       0 * = 16 bytes
 
- 	rsreset
-ns_start	rs.l	1
-ns_length	rs	1
-ns_loopstart	rs.l	1
-ns_replen	rs	1
-* Not used:
-ns_tempvol2	rs	1
-ns_period	rs	1
-ns_tempvol	rs	1
-ns_size		rs.b	0
-
-	rsreset
+* Combined scope data structure
+              rsreset
 scope_ch1	  rs.b	ns_size
 scope_ch2	  rs.b	ns_size
 scope_ch3	  rs.b	ns_size
 scope_ch4	  rs.b	ns_size
-scope_trigger rs.b  1
+scope_trigger rs.b  1 * Audio channel enable DMA flags
 scope_pad	  rs.b  1
-scope_size rs.b 0
+scope_size    rs.b  0
 
-
+ if ns_size<>16
+    fail "This is assumed to be 16 in code"
+ endif
 
 *******************************************************************************
 *
@@ -1377,6 +1380,7 @@ pb_end		=	14
 pb_poslen	=	15
 pb_scope	=	13
 pb_ahi		=	12
+pb_quadscope =  11
 pf_cont		=	1<<pb_cont
 pf_stop		=	1<<pb_stop
 pf_song		=	1<<pb_song
@@ -1390,6 +1394,7 @@ pf_end		=	1<<pb_end
 pf_poslen	=	1<<pb_poslen
 pf_scope	=	1<<pb_scope
 pf_ahi		=	1<<pb_ahi
+pf_quadscope	=	1<<pb_quadscope
 
 
 *********************************************************************************
@@ -22475,7 +22480,9 @@ scopeWindowSizeChanged
 
 scopeinterrupt				* a5 = var_b
 	cmp	#pt_prot,playertype(a5)
-	bne.w	.n
+	bne.w	.notProtracker
+
+	* Copy scope data from Protracker data structures
 
 	lea	kplbase(a5),a0
 	move.b	k_usertrig(a0),d0
@@ -22495,7 +22502,7 @@ scopeinterrupt				* a5 = var_b
 	move.l	n_loopstart(a2),ns_loopstart(a0)
 	move	n_replen(a2),ns_replen(a0)
 .e	move	n_period(a2),ns_period(a0)
-	move	n_tempvol(a2),ns_tempvol2(a0)
+	;move	n_tempvol(a2),ns_tempvol2(a0)
 	addq	#1,a3
 
 	bsr	patternScopeIsActive
@@ -22507,6 +22514,9 @@ scopeinterrupt				* a5 = var_b
 	lea	ns_size(a0),a0
 	dbf	d1,.setscope
 
+.quadScopeSampleFollow
+	* Update quadrascope sample data pointers based on period
+
 	moveq	#4-1,d1
 	lea	scopeData+scope_ch1(a5),a0
 
@@ -22515,7 +22525,8 @@ scopeinterrupt				* a5 = var_b
 	beq.b	.noe
 	move.l	colordiv(a5),d0		* colorclock/vbtaajuus
 	divu	ns_period(a0),d0
-.noe	ext.l	d0
+	ext.l	d0
+.noe	
 	add.l	d0,ns_start(a0)
 	lsr	#1,d0
 	sub	d0,ns_length(a0)
@@ -22526,27 +22537,26 @@ scopeinterrupt				* a5 = var_b
 	lea	ns_size(a0),a0
 	dbf	d1,.le
 	rts
-.n
+
+.notProtracker
 	cmp	#pt_sample,playertype(a5)
-	bne.b	.nn
+	bne.b	.notSample
+
+	* Sample scope data
 	move.l	sampleadd(a5),d0
 	move.l	samplefollow(a5),a0
 	add.l	d0,(a0)
-.nn
+
+.notSample
+	* Check player has generic quadrascope support
+	move.l	playerbase(a5),a0
+	move	#pf_quadscope,d1
+	and	p_liput(a0),d1
+	bne.b	.quadScopeSampleFollow
+
+	* No scopes for u this time.
 	rts
 
-* Check if scope is in normal sized mode.
-* Z is clear it true, Z set if false
-* 1: true
-* 0: false
-;scopeIsPatternXL
-;	cmp.b	#QUADMODE_PATTERNSCOPEXL,quadmode(a5)
-;	;beq.b	.large
-;	;cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
-;	;beq.b	.large
-;.large
-;	rts
-;
 
 * Opens the mini font for 4+ channel notescroller if needed
 getScopeMiniFontIfNeeded
@@ -22781,10 +22791,15 @@ drawScope
 	add	d0,d0
 	cmp	#pt_multi,playertype(a5)
 	beq.w	.ttt
-	cmp	#pt_prot,playertype(a5)
-	bne.w	.other
+	
+	* Check for generic quadscope support
+	move.l	playerbase(a5),a0
+	move	#pf_quadscope,d1
+	and	p_liput(a0),d1
+	beq	.other
 
 	* Protracker scope
+	* .. or similarly working others
 
 	jmp	.t(pc,d0)
 
@@ -22819,7 +22834,11 @@ drawScope
 	bsr.w	lever2
 	popm	all
 	bra.b	.cont
-.7	bsr.w	notescroller
+
+.7	* Protracker specific notescroller launch
+	cmp	#pt_prot,playertype(a5)
+	bne.b	.other
+	bsr.w	notescroller
 	bra.b	.cont
 
 .8	bsr.w	quadrascope
@@ -22864,6 +22883,7 @@ drawScope
 .other
 	* Fallback option!
 	* Display notescroller if possible.
+	* Non-Protracker formats.
 	tst.l	deliPatternInfo(a5)
 	beq.b	.cont
 	bsr	noteScroller2
@@ -23011,15 +23031,16 @@ quadrascope
 .halt	rts
 
 .jolt	
+	move	#$0f0,$dff180
+
 	move.l	d0,a4
 	move.l	d1,a1
 
 	move	ns_length(a3),d5
 	move	ns_replen(a3),d4
 
-
 	move	ns_tempvol(a3),d1
-	mulu	k_mastervolume+kplbase(a5),d1
+	mulu	mainvolume(a5),d1
 	lsr	#6,d1
 
 	tst	d1
@@ -23110,7 +23131,7 @@ hipposcope
 .twirl
 	move.l	mtab(a5),a0
 	move	ns_tempvol(a3),d0
-	muls	k_mastervolume+kplbase(a5),d0
+	mulu	mainvolume(a5),d0
 	lsr	#6,d0
 	subq	#1,d0
 	bpl.b	.e
@@ -23305,7 +23326,7 @@ freqscope
 
 
 .pre
-	mulu	k_mastervolume+kplbase(a5),d1
+	mulu	mainvolume(a5),d1
 	lsr	#6,d1
 	bne.b	.1
 	moveq	#1,d1
@@ -23314,7 +23335,7 @@ freqscope
 	move.l	mtab(a5),a2
 	add.l	d1,a2
 
-	mulu	k_mastervolume+kplbase(a5),d2
+	mulu	mainvolume(a5),d2
 	lsr	#6,d2
 	bne.b	.2
 	moveq	#1,d2
@@ -23361,7 +23382,7 @@ freqscope
 
 .tut	
 	move	ns_tempvol(a3),d4
-	mulu	k_mastervolume+kplbase(a5),d4
+	mulu	mainvolume(a5),d4
 	lsr	#6,d4
 	bne.b	.h
 	moveq	#1,d4
@@ -23823,7 +23844,7 @@ notescroller
 ***** Volumepalkgi
 
 .palkki
-	mulu	kplbase+k_mastervolume(a5),d0
+	mulu	mainvolume(a5),d0
 	lsr	#6,d0
 
 	move.l	draw1(a5),a0
@@ -24400,7 +24421,7 @@ dlever
 
 
 	move	ns_tempvol(a3),d0
-	mulu	k_mastervolume+kplbase(a5),d0
+	mulu	mainvolume(a5),d0
 	lsr	#6,d0
 	bne.b	.pad
 	moveq	#1,d0
@@ -30711,7 +30732,7 @@ p_protracker
 	p_NOP
 	dc.w pt_prot 				* type
 .flags	
- dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2
+ dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscope
 
 	dc.b	"Protracker",0
  even
@@ -37611,7 +37632,7 @@ p_robhubbard2
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_robhubbard2
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_scope!pf_quadscope
 	dc.b	"R.Hubbard 2/Infogra.[EP]",0
 .path dc.b "rob hubbard 2",0
  even
@@ -43735,68 +43756,140 @@ funcENPP_FreeAmigaAudio
 	;DPRINT "ENPP_FreeAmigaAudio"
 	bra.w deliFreeAudio
 
+* Sequence (kpl14.s):
+* - Stop channel DMAs
+* - Set sample start and sample length
+* - Large DMA wait
+* - Enable channel DMAs
+* - Small DMA wait
+* - Set loopstart and replen for enabled channels
+
+* Sequence (noteplayer):
+* - Stop channel DMAs, ENPP_DMAMask
+* - Set sample:
+*   - ENPP_PokeAdr, ENPP_PokeLen
+*   - ENPP_PokeVol, ENPP_PokePer
+* - Start channel DMAs, ENPP_DMAMask
+* - Set sample loop:
+*   - ENPP_PokeAdr, ENPP_PokeLen
+
+* In:
+*   d0 = negative: enable DMA, positive: disable DMA
+*   d1 = DMA audio flags %abcd
 funcENPP_DMAMask
+	move	#$f00,$dff180
+
 	push	d1
 	tst	d0
-	bpl.b	.set2
+	bpl.b	.clr
 	or	#$8000,d1
-.set2
 	move	d1,$dff096
+	* Set scope trigger bits
+	or.b	d1,scopeData+scope_trigger+var_b
 	jsr	dmawait
 	pop 	d1
 	rts
 
-funcENPP_PokeAdr
-	pushm	d2/a0
-	lea	$dff0a0,a0
-	moveq	#3,d2
-	and	d1,d2
-	lsl	#4,d2
-	add	d2,a0
-	move.l	d0,(a0)
-	popm	d2/a0
+.clr
+	move	d1,$dff096
+	not.b	d1
+	* Clear scope trigger bits
+	and.b	d1,scopeData+scope_trigger+var_b
+	jsr	dmawait
+	pop 	d1
 	rts
 
-funcENPP_PokeLen
-	pushm	d2/a0
-	lea	$dff0a0,a0
+* In:
+*   d0 = address
+*   d1 = channel 0..3
+funcENPP_PokeAdr
+	pushm	d2/d3/a0
 	moveq	#3,d2
 	and	d1,d2
 	lsl	#4,d2
-	add	d2,a0
+	lea	$dff0a0,a0
+	move.l	d0,(a0,d2)
+	
+	* Set sample start if DMA is not enabled,
+	* otherwise set loopstart
+	lea	scopeData+var_b,a0
+	moveq	#1,d3
+	lsl	d1,d3
+	and.b	scope_trigger(a0),d3
+	beq.b	.notEnabled
+	move.l	d0,ns_loopstart+scope_ch1(a0,d2)
+	popm	d2/d3/a0
+	rts
+.notEnabled
+	move.l	d0,ns_start+scope_ch1(a0,d2)
+	popm	d2/d3/a0
+	rts
+
+* In:
+*   d0 = length
+*   d1 = channel 0..3
+funcENPP_PokeLen
+	pushm	d2/d3/a0
+	moveq	#3,d2
+	and	d1,d2
+	lsl	#4,d2
 	tst	d0
 	bne.b	.nozero
 	moveq	#1,d0
 .nozero
-	move	d0,4(a0)
-	popm	d2/a0
+	lea	$dff0a0,a0
+	move	d0,4(a0,d2)
+
+ 	* Set sample len if DMA is not enabled,
+	* otherwise set looplen
+	lea	scopeData+var_b,a0
+	moveq	#1,d3
+	lsl	d1,d3
+	and.b	scope_trigger(a0),d3
+	beq.b	.notEnabled
+	move	d0,ns_replen+scope_ch1(a0,d2)
+	popm	d2/d3/a0
+	rts
+.notEnabled
+	move	d0,ns_length+scope_ch1(a0,d2)
+	popm	d2/d3/a0
 	rts
 
+* In:
+*   d0 = period
+*   d1 = channel 0..3
 funcENPP_PokePer
 	pushm	d2/a0
-	lea	$dff0a0,a0
 	moveq	#3,d2
 	and	d1,d2
 	lsl	#4,d2
-	add	d2,a0
-	move	d0,6(a0)
+	lea	$dff0a0,a0
+	move	d0,6(a0,d2)
+	lea	scope_ch1+scopeData+var_b,a0
+	move	d0,ns_period(a0,d2)
 	popm	d2/a0
 	rts
 
+* In:
+*   d0 = volume
+*   d1 = channel 0..3
 funcENPP_PokeVol
 	pushm	d2/a0
-	lea	$dff0a0,a0
 	moveq	#3,d2
 	and	d1,d2
 	lsl	#4,d2
-	add	d2,a0
-;	mulu	dtg_SndVol(a5),d0
 	mulu	mainvolume+var_b,d0
 	lsr	#6,d0
-	move	d0,8(a0)
+	lea	$dff0a0,a0
+	move	d0,8(a0,d2)
+	lea	scope_ch1+scopeData+var_b,a0
+	move	d0,ns_tempvol(a0,d2)
 	popm	d2/a0
 	rts
 
+* In:
+*   d0 = command
+*   d1 = parameter
 funcENPP_PokeCommand
 	;DPRINT "ENPP_PokeCommand"
 	cmp.b	#1,d0 
