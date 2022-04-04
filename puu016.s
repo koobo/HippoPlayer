@@ -45099,7 +45099,7 @@ prefsAltButtonst        dc.b 1,0,1,0
 prefsAltButtonstx 
       ;dc.b "Bizarre buttons.........",0
       ;dc.b "Unconventional buttons..",0
-       dc.b "Big buttons,............",0
+       dc.b "Big buttons.............",0
        even
 prefsAltButtonst2       dc.b 1,0,1,0
        dc.w 0,0
