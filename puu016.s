@@ -5889,7 +5889,8 @@ freemodule
 	clr minsong(a5)
 	* For non-EP players supporting patterninfo
 	clr.l	deliPatternInfo(a5) 
-
+	jsr	clearScopeData
+	
 ;	bsr.w	lootaa
 	bsr.w	inforivit_clear
 
@@ -22527,6 +22528,9 @@ scopeinterrupt				* a5 = var_b
 	divu	ns_period(a0),d0
 	ext.l	d0
 .noe	
+;	ror.b	#1,d2
+;	bpl.b	.plu
+
 	add.l	d0,ns_start(a0)
 	lsr	#1,d0
 	sub	d0,ns_length(a0)
@@ -22549,6 +22553,7 @@ scopeinterrupt				* a5 = var_b
 
 .notSample
 	* Check player has generic quadrascope support
+	move.b	scopeData+scope_trigger(a5),d2
 	move.l	playerbase(a5),a0
 	move	#pf_quadscope,d1
 	and	p_liput(a0),d1
@@ -22557,6 +22562,13 @@ scopeinterrupt				* a5 = var_b
 	* No scopes for u this time.
 	rts
 
+clearScopeData
+	clr.b	scope_trigger+scopeData(a5)
+	lea	scope_ch1+scopeData(a5),a0
+	moveq	#4*ns_size/2-1,d0
+.c	clr	(a0)+
+	dbf	d0,.c
+	rts
 
 * Opens the mini font for 4+ channel notescroller if needed
 getScopeMiniFontIfNeeded
@@ -23005,7 +23017,88 @@ mirrorfill0
 .x	rts
 
 
-quadrascope
+* In: 
+*   a3 = scope data
+* Out:
+*   d0 = sample start, or 0 if bounds check failed for any value
+*   d1 = loop start
+*   d2 = sample length
+*   d3 = repeat length
+*   
+getScopeChannelData
+	cmp	#pt_prot,playertype(a5)
+	bne.b	.notPt
+
+	* Similar check as before
+	move.l	ns_start(a3),d0
+	beq.w	.fail
+	move.l	ns_loopstart(a3),d1
+	beq.w	.fail
+	move	ns_length(a3),d2
+	move	ns_replen(a3),d3
+	tst.l	d0
+	rts
+
+.notPt
+	* More comprehensive check for others
+	
+	move.l	ns_start(a3),d0
+	beq.b	.fail
+	move.l	ns_loopstart(a3),d1
+	beq.b	.fail
+	move	ns_length(a3),d2
+	beq.b	.fail
+	move	ns_replen(a3),d3
+	beq.b	.fail
+
+	
+	move.l	moduleaddress(a5),d4
+	move.l	d4,d5
+	add.l	modulelength(a5),d5
+
+	cmp	#pt_robhubbard2,playertype(a5)
+	bne.b	.notRH2
+	* Samples are found elsewhere, get the bounds:
+	move.l	deliLoadFileArray(a5),d4
+	beq.b	.skipCheck
+	push	a2
+	move.l	d4,a2 
+	move.l	(a2)+,d4 * addr
+	move.l	d4,d5
+	add.l	(a2),d5 * len
+	pop	a2
+;	DPRINT	"%lx %lx %lx %lx-%lx %lx"
+.notRH2
+
+	* Check start
+	cmp	#2,d2
+	bls.b	.shortLen
+	cmp.l	d4,d0
+	blo.b	.fail
+	cmp.l	d5,d0
+	bhs.b	.fail
+.shortLen
+
+ REM
+	* Check loop start
+	cmp	#2,d3
+	bls.b	.shortRepLen
+	cmp.l	d4,d1
+	blo.b	.fail
+	cmp.l	d5,d1
+	blo.b	.fail
+.shortRepLen
+ EREM
+ 
+.skipCheck
+.go
+	tst.l	d0
+	rts
+.fail
+	moveq	#0,d0
+	rts
+
+quadrascope:
 	lea	scopeData+scope_ch1(a5),a3
 	move.l	draw1(a5),a0
 	lea	-30(a0),a0
@@ -23024,26 +23117,19 @@ quadrascope
 ;	rts
 
 .scope
-	move.l	ns_loopstart(a3),d0
-	beq.b	.halt
-	move.l	ns_start(a3),d1
+	bsr	getScopeChannelData
 	bne.b	.jolt
-.halt	rts
+	rts
 
 .jolt	
-	move	#$0f0,$dff180
-
-	move.l	d0,a4
-	move.l	d1,a1
-
-	move	ns_length(a3),d5
-	move	ns_replen(a3),d4
-
+	move.l	d0,a1 * start
+	move.l	d1,a4 * loopstart
+	move	d2,d5 * len
+	move	d3,d4 * replen
+	
 	move	ns_tempvol(a3),d1
 	mulu	mainvolume(a5),d1
 	lsr	#6,d1
-
-	tst	d1
 	bne.b	.heee
 	moveq	#1,d1
 .heee	subq	#1,d1
@@ -23084,8 +23170,8 @@ sco	macro
 	ifne	\1
 	subq	#2,d5
 	bpl.b	hm\2	* $6a04
-	move	d4,d5
-	move.l	a4,a1
+	move	d4,d5	* replen
+	move.l	a4,a1   * loop start
 hm\2
 	endc
 	endm
@@ -23099,9 +23185,10 @@ hm\2
 	sco	0,7
 	sco	1,0
 
+	* Reset bit pattern:
 	moveq	#1,d0
-	sub	d0,a0
-	sub	d0,a3
+	sub.l	d0,a0
+	sub.l	d0,a3
 	dbf	d7,drlo
 	rts
 
@@ -23141,17 +23228,20 @@ hipposcope
 	lea	64*256(a2),a4
 
 
-	move.l	ns_loopstart(a3),d6
-	beq.b	.halt
-	move.l	ns_start(a3),d1
+;	move.l	ns_loopstart(a3),d6
+;	beq.b	.halt
+;	move.l	ns_start(a3),d1
+;	bne.b	.jolt
+;.halt	rts
+;.jolt	
+	bsr	getScopeChannelData
 	bne.b	.jolt
-.halt	rts
-.jolt	
-	move.l	d1,a1
-
-	move	ns_length(a3),d4
-;	move.l	ns_start(a3),a1
-	move	ns_replen(a3),d5
+	rts
+.jolt
+	move.l	d0,a1 * start
+	move.l	d1,d6 * loopstart
+	move	d2,d4 * len
+	move	d3,d5 * replen
 
 	lea	multab(a5),a0
 	moveq	#108/4-1,d0
@@ -23390,22 +23480,34 @@ freqscope
 
 
 
-	move.l	ns_loopstart(a3),d0
-	beq.b	.halt
-	move.l	ns_start(a3),d1
-	bne.b	.jolt
-.halt	rts
+;	move.l	ns_loopstart(a3),d0
+;	beq.b	.halt
+;	move.l	ns_start(a3),d1
+;	bne.b	.jolt
+;.halt	rts
+;.jolt	
 
-.jolt	
-	move.l	d0,a4
-	move.l	d1,a1
+	bsr	getScopeChannelData
+	bne.b	.jolt
+	rts
+.jolt
+
+	;move.l	d0,a4
+	;move.l	d1,a1
+	move.l	d0,a1 * start
+	move.l	d1,a4 * loop start
 
 	moveq	#0,d4
-	move	ns_replen(a3),d4
-	add.l	d4,d4
+	move	d3,d4 * replen
 	moveq	#0,d5
-	move	ns_length(a3),d5
-	add.l	d5,d5
+	move	d2,d5 * len
+
+;	moveq	#0,d4
+;	move	ns_replen(a3),d4
+;	add.l	d4,d4
+;	moveq	#0,d5
+;	move	ns_length(a3),d5
+;	add.l	d5,d5
 
 	move	ns_period(a3),d0
 	bne.b	.noe
@@ -24477,7 +24579,6 @@ makeScopeVerticalBars
 
 
 *** Sample IFF 8SVX scope
-
 
 samplescope
 	bsr.b	samples0
@@ -37404,7 +37505,7 @@ p_digitalmugician
 	jmp .id_digitalmugician(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_digitalmugician
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope!pf_quadscope
 	dc.b	"Digital Mugician    [EP]",0
 .path	dc.b	"mugician.amp",0
  even
@@ -42024,7 +42125,7 @@ p_timfollin2
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_timfollin2
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscope
 	dc.b	"Tim Follin          [EP]",0
 	        
 .path dc.b "tim follin ii",0
@@ -43777,7 +43878,7 @@ funcENPP_FreeAmigaAudio
 *   d0 = negative: enable DMA, positive: disable DMA
 *   d1 = DMA audio flags %abcd
 funcENPP_DMAMask
-	move	#$f00,$dff180
+	;move	#$f00,$dff180
 
 	push	d1
 	tst	d0
