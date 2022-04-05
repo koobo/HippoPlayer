@@ -60,8 +60,7 @@ NOTE 4: Too long didn't read
   the prefix "mp3." is now checked. Additionally any possible ID3v2 tag data is 
   is used to determine if a file is an MP3 file. 
 - There was a rather severe regression in v2.49 sampleplayer. Scopes
-  didn't work properly things could crash. Fixed these,
-  hopefully. 
+  didn't work properly and things could crash. Fixed these.
   
 ## Music format related changes:
 - Patternscope support added to the THX/AHX format. Also shows transposes.
@@ -76,6 +75,14 @@ NOTE 4: Too long didn't read
   used for data files which specify the default tool which should be used
   to open the files. This is a very basic use case from the beginning of
   Workbench, finally supported.
+- Sample waveform based scope support added to the following formats:
+  - Rob Hubbard 2/Infogrames
+  - Tim Follin
+  - Digital Mugician
+
+## Tips and tricks:
+- Enabling "Doubleclick" in Prefs makes starting playback easier.
+
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -726,7 +733,7 @@ List of supported formats (could be incomplete):
 - Richard Joseph
 - Richard Joseph 2 (also known as VectorDean)
 - Rob Hubbard 1
-- Rob Hubbar 2 (also known as Infogrames)
+- Rob Hubbard 2 (also known as Infogrames)
 - Sample files (WAV, AIFF, IFF, MP3)
 - ScreamTracker 3
 - Sidmon v1, v2
