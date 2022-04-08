@@ -75,10 +75,15 @@ NOTE 4: Too long didn't read
   used for data files which specify the default tool which should be used
   to open the files. This is a very basic use case from the beginning of
   Workbench, finally supported.
-- Sample waveform based scope support added to the following formats:
-  - Rob Hubbard 2/Infogrames
-  - Tim Follin
+- Sample scope was previously supported for Protracker, sample player, mp3, 
+  and PS3M multichannel modules (S3M, XM, IT, MTM, FT). 
+  Added support for the following formats:
+  - BP Soundmon (both older and newer formats)
+  - Future Composer (both older and newer formats as well)
+  - Hippel COSO
   - Digital Mugician
+  - Tim Follin
+  - Rob Hubbard 2/Infogrames
 
 ## Tips and tricks:
 - Enabling "Doubleclick" in Prefs makes starting playback easier.
