@@ -23041,7 +23041,18 @@ getScopeChannelData
 
 .notPt
 	* More comprehensive check for others
-	
+ REM
+	move.l	ns_start(a3),d0
+	move.l	ns_loopstart(a3),d2
+	moveq	#0,d1
+	move	ns_length(a3),d1
+	moveq	#0,d3
+	move	ns_replen(a3),d3
+	move.l	moduleaddress(a5),d4
+	move.l	d4,d5
+	add.l	modulelength(a5),d5
+	DPRINT	"%lx %lx %lx %lx - %lx %lx"
+ EREM
 	move.l	ns_start(a3),d0
 	beq.b	.fail
 	move.l	ns_loopstart(a3),d1
@@ -23051,9 +23062,12 @@ getScopeChannelData
 	move	ns_replen(a3),d3
 	beq.b	.fail
 
+	
 	* This one has waveforms inside the replay code:
 	cmp	#pt_future10,playertype(a5)
 	beq.b	.skipCheck
+	;cmp	#pt_digitalmugician,playertype(a5)
+	;beq.b	.skipCheck
 
 	move.l	moduleaddress(a5),d4
 	move.l	d4,d5
@@ -23117,7 +23131,8 @@ quadrascope:
 	bsr.b	.scope
 	lea	scopeData+scope_ch4(a5),a3
 	move.l	draw1(a5),a0
-;	bsr.b	.scope
+
+;	bsr.w	.scope
 ;	rts
 
 .scope
@@ -43926,15 +43941,15 @@ funcENPP_PokeAdr
 	moveq	#1,d3
 	lsl	d1,d3
 	and.b	scope_trigger(a0),d3
-	beq.b	.notEnabled
-	move.l	d0,ns_loopstart+scope_ch1(a0,d2)
-	popm	d2/d3/a0
-	rts
-.notEnabled
+	bne.b	.1
 	move.l	d0,ns_start+scope_ch1(a0,d2)
+;	bra.b	.2
+.1
+	move.l	d0,ns_loopstart+scope_ch1(a0,d2)
+.2
 	popm	d2/d3/a0
 	rts
-
+	
 * In:
 *   d0 = length
 *   d1 = channel 0..3
@@ -43956,12 +43971,12 @@ funcENPP_PokeLen
 	moveq	#1,d3
 	lsl	d1,d3
 	and.b	scope_trigger(a0),d3
-	beq.b	.notEnabled
-	move	d0,ns_replen+scope_ch1(a0,d2)
-	popm	d2/d3/a0
-	rts
-.notEnabled
+	bne.b 	.1
 	move	d0,ns_length+scope_ch1(a0,d2)
+;	bra.b	.2
+.1
+	move	d0,ns_replen+scope_ch1(a0,d2)
+.2
 	popm	d2/d3/a0
 	rts
 
