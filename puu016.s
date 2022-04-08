@@ -23051,11 +23051,15 @@ getScopeChannelData
 	move	ns_replen(a3),d3
 	beq.b	.fail
 
-	
+	* This one has waveforms inside the replay code:
+	cmp	#pt_future10,playertype(a5)
+	beq.b	.skipCheck
+
 	move.l	moduleaddress(a5),d4
 	move.l	d4,d5
 	add.l	modulelength(a5),d5
 
+	* This one has samples loaded separately:
 	cmp	#pt_robhubbard2,playertype(a5)
 	bne.b	.notRH2
 	* Samples are found elsewhere, get the bounds:
@@ -32254,7 +32258,7 @@ p_futurecomposer13
 	jmp .id_futurecomposer13(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future10			* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscope
 	dc.b	"Future Composer v1.0-1.3",0
  even
 
@@ -32276,7 +32280,7 @@ p_futurecomposer13
 	rts
 .ok2
 	lea	fc10routines(a5),a0
-	bsr.w	allocreplayer2
+	bsr.w	allocreplayer2 * Into CHIP, has waveforms in it
 	beq.b	.ok3
 	bsr.w	rem_ciaint
 	bra.w	vapauta_kanavat
@@ -32286,8 +32290,9 @@ p_futurecomposer13
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
-	move.l	fc10routines(a5),a3
-	jsr	.offset_init(a3)
+	lea	scopeData(a5),a3
+	move.l	fc10routines(a5),a4
+	jsr	.offset_init(a4)
 	popm	d0-d7/a1-a6
 	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
@@ -32332,7 +32337,7 @@ p_futurecomposer14
 	jmp .id_futurecomposer14(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future14	* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscope
 	dc.b	"Future Composer v1.4",0
 
  even
@@ -32366,8 +32371,9 @@ p_futurecomposer14
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
-	move.l	fc14routines(a5),a3
-	jsr	.offset_init(a3)
+	lea	scopeData(a5),a3
+	move.l	fc14routines(a5),a4
+	jsr	.offset_init(a4)
 	popm	d0-d7/a1-a6
 	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
@@ -32421,7 +32427,7 @@ p_soundmon
 	jmp .id_soundmon(pc)
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscope
 	dc.b	"BP SoundMon v2.0",0
  even
 
@@ -32459,6 +32465,7 @@ p_soundmon
 	clr.l	(a3)
 	lea	mainvolume(a5),a4
 	pushpea	dmawait(pc),d0
+	pushpea	scopeData(a5),d1
 
 	pushm	a5/a6
 	move.l	bpsmroutines(a5),a6
@@ -32523,7 +32530,7 @@ p_soundmon3
 	jmp 	.id_soundmon3(pc)
 	jmp	bp_author(pc)
 	dc.w 	pt_soundmon3 	* type
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscope
 	dc.b	"BP SoundMon 3 (v2.2)",0
  even
 
@@ -32539,7 +32546,6 @@ p_soundmon3
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
-
 	lea	bpsmroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
@@ -32556,6 +32562,7 @@ p_soundmon3
 	clr.l	(a3)
 	lea	mainvolume(a5),a4
 	pushpea	dmawait(pc),d0
+	pushpea	scopeData(a5),d1
 
 	pushm	a5/a6
 	move.l	bpsmroutines(a5),a6
@@ -34836,7 +34843,7 @@ p_hippelcoso
 	jmp id_hippelcoso(pc)
 	jmp	hippel_author(pc)
 	dc.w pt_hippelcoso
-.liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi
+.liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi!pf_scope!pf_quadscope
 	dc.b	"Hippel-COSO",0
  even
 
@@ -34894,6 +34901,7 @@ p_hippelcoso
 	move	songnumber(a5),d0
 	addq	#1,d0
 	lea	dmawait(pc),a2
+	lea	scopeData(a5),a3
 
 	move.l	modulelength(a5),d1
 	move.b	ahi_use(a5),d2
@@ -34908,9 +34916,10 @@ p_hippelcoso
 * a0 = module
 * a1 = songend
 * a2 = dmawait
+* a3 = scope
 
-	move.l	hippelcosoroutines(a5),a3
-	jsr	$20+0(a3)
+	move.l	hippelcosoroutines(a5),a4
+	jsr	$20+0(a4)
 	tst.l	d0
 	bne.b	.ER
 
@@ -43910,7 +43919,7 @@ funcENPP_PokeAdr
 	lsl	#4,d2
 	lea	$dff0a0,a0
 	move.l	d0,(a0,d2)
-	
+
 	* Set sample start if DMA is not enabled,
 	* otherwise set loopstart
 	lea	scopeData+var_b,a0

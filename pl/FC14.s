@@ -8,6 +8,27 @@
 	incdir
 
 
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+
 testi	=	0
 
  ifne testi
@@ -16,6 +37,7 @@ testi	=	0
 	lea 	mod,a0
 	lea	mainVol_(pc),a1
 	lea	songend_(pc),a2
+	lea	scope_(pc),a3
 	jsr	init	
 loop
 	cmp.b	#$80,$dff006
@@ -23,9 +45,9 @@ loop
 .x	cmp.b	#$80,$dff006
 	beq.b	.x
 
-	move	#$ff0,$dff180
+;	move	#$ff0,$dff180
 	jsr	play
-	clr	$dff180
+;	clr	$dff180
 
 	btst	#6,$bfe001
 	bne.b	loop
@@ -36,9 +58,10 @@ loop
 
 songend_	dc 	0
 mainVol_ 	dc 	$40/1
+scope_		ds.b scope_size
 
 	section	cc,data_c
-mod	incbin	"sys:music/exo/Future Composer 1.4/Jochen Hippel/rsi theme.fc"
+mod	incbin	"m:exo/Future Composer 1.4/Jochen Hippel/rsi theme.fc"
  endc
 
 
@@ -52,6 +75,7 @@ init
 	move.l	a0,moduleAddr
 	move.l	a1,mainVolumeAddr 
 	move.l	a2,songOverAddr
+	move.l	a3,scope
 
 	lea	regs(pc),a0
 	moveq	#16-1,d0
@@ -190,6 +214,7 @@ moduleAddr	dc.l 	0
 mainVolumeAddr	dc.l	0
 mainVolume	dc 	$40
 songOverAddr	dc.l 	0
+scope		dc.l	0
 
 *********************************************************
 **  Amiga FUTURE COMPOSER  »» V1.4 ««  Replay routine  **
@@ -399,19 +424,43 @@ nonewnote:
 	lea V1data(pc),a0
 	bsr.w effects
 	bsr.w	vol
-	move.l d0,$a6(a6)
+	move.l d0,$a6(a6) * per+vol
+	
+	* vol+per
+	swap	d0
+	move.l	scope(pc),a0
+	move.l	d0,scope_ch1+ns_vol(a0)
+	
 	lea V2data(pc),a0
 	bsr.w effects
 	bsr.w	vol
 	move.l d0,$b6(a6)
+
+	* vol+per
+	swap	d0
+	move.l	scope(pc),a0
+	move.l	d0,scope_ch2+ns_vol(a0)
+
 	lea V3data(pc),a0
 	bsr.w effects
 	bsr.w	vol
 	move.l d0,$c6(a6)
+
+	* vol+per
+	swap	d0
+	move.l	scope(pc),a0
+	move.l	d0,scope_ch3+ns_vol(a0)
+
 	lea V4data(pc),a0
 	bsr.w effects
 	bsr.w vol
 	move.l d0,$d6(a6)
+
+	* vol+per
+	swap	d0
+	move.l	scope(pc),a0
+	move.l	d0,scope_ch4+ns_vol(a0)
+
 	lea V1data(pc),a0
 	move.l 68+(0*74)(a0),a1		;Get samplepointer
 	adda.w 64+(0*74)(a0),a1		;add repeat_start
@@ -428,8 +477,11 @@ nonewnote:
 	moveq #2,d0
 	moveq #0,d5
 	move.w (a5),d7
+
 	ori.w #$8000,d7			;Set/clr bit = 1
 	move.w d7,$dff096		;Enable audio DMA
+
+;;;	rts
 chan1:
 	lea V1data+72(pc),a0
 	move.w (a0),d7
@@ -440,6 +492,11 @@ chan1:
 	move.w d5,(a0)
 	move.l a1,$a0(a6)		;Set samplestart
 	move.w d1,$a4(a6)		;Set samplelength
+	
+	move.l	scope(pc),a0
+	move.l	a1,scope_ch1+ns_loopstart(a0)
+	move	d1,scope_ch1+ns_replen(a0)
+
 chan2:
 	lea V2data+72(pc),a0
 	move.w (a0),d7
@@ -450,6 +507,11 @@ chan2:
 	move.w d5,(a0)
 	move.l a2,$b0(a6)
 	move.w d2,$b4(a6)
+
+	move.l	scope(pc),a0
+	move.l	a2,scope_ch2+ns_loopstart(a0)
+	move	d2,scope_ch2+ns_replen(a0)
+
 chan3:
 	lea V3data+72(pc),a0
 	move.w (a0),d7
@@ -460,6 +522,11 @@ chan3:
 	move.w d5,(a0)
 	move.l a3,$c0(a6)
 	move.w d3,$c4(a6)
+
+	move.l	scope(pc),a0
+	move.l	a3,scope_ch3+ns_loopstart(a0)
+	move	d3,scope_ch3+ns_replen(a0)
+
 chan4:
 	lea V4data+72(pc),a0
 	move.w (a0),d7
@@ -470,7 +537,13 @@ chan4:
 	move.w d5,(a0)
 	move.l a4,$d0(a6)
 	move.w d4,$d4(a6)
+
+	move.l	scope(pc),a0
+	move.l	a4,scope_ch4+ns_loopstart(a0)
+	move	d4,scope_ch4+ns_replen(a0)
+
 endplay:
+
 	rts
 
 new_note:
@@ -603,12 +676,23 @@ testnewsound:
 	lea SOUNDINFO(pc),a4
 	lsl.w #4,d0
 	adda.w d0,a4
-	move.l 60(a0),a3
+	move.l 60(a0),a3 * get HW addr for this channel
 	move.l (a4)+,d1
-	move.l d1,(a3)
+	move.l d1,(a3)		* addr
 	move.l d1,68(a0)
-	move.w (a4)+,4(a3)
+	move.w (a4)+,4(a3)	 * len
 	move.l (a4),64(a0)
+
+	pushm	a2/a3
+	move.l	scope(pc),a2
+	sub	#$f0a0,a3
+	add	a3,a2
+	move.l	d1,ns_start(a2)
+	move	-2(a4),ns_length(a2)
+	move.l	d1,ns_loopstart(a2)
+	move	-2(a4),ns_replen(a2)
+	popm	a2/a3
+
 	move.w #$0003,72(a0)
 	move.w d7,16(a0)
 	move.b #$01,23(a0)
@@ -622,18 +706,29 @@ testE4:
 	lea SOUNDINFO(pc),a4
 	lsl.w #4,d0
 	adda.w d0,a4
-	move.l 60(a0),a3
+	move.l 60(a0),a3 * get HW addr for this channel
 	move.l (a4)+,d1
-	move.l d1,(a3)
+	move.l d1,(a3)	* addr
 	move.l d1,68(a0)
-	move.w (a4)+,4(a3)
-	move.l (a4),64(a0)
+	move.w (a4)+,4(a3) * len
+	move.l (a4),64(a0) 
+
+	pushm	a2/a3
+	move.l	scope(pc),a2
+	sub	#$f0a0,a3
+	add	a3,a2
+	move.l	d1,ns_start(a2)
+	move	-2(a4),ns_length(a2)
+	move.l	d1,ns_loopstart(a2)
+	move	-2(a4),ns_replen(a2)
+	popm	a2/a3
+
 	move.w #$0003,72(a0)
 	addq.w #2,50(a0)
 	bra.w transpose
 testE9:
 	cmpi.b #$e9,d0
-	bne.b testpatjmp
+	bne.w testpatjmp
 	move.w 32(a0),d1
 	or.w d1,(a5)
 	move.w d1,$dff096
@@ -651,9 +746,20 @@ testE9:
 	lsl.w #4,d1
 	add.w d1,a2
 	add.l (a2),a4
-	move.l 60(a0),a3
-	move.l a4,(a3)
-	move.l 4(a2),4(a3)
+	move.l 60(a0),a3 * get HW addr for this channel
+	move.l a4,(a3)	* addr 
+	move.l 4(a2),4(a3) * len
+
+	pushm	a3/a5
+	move.l	scope(pc),a5
+	sub	#$f0a0,a3
+	add	a3,a5
+	move.l	a4,ns_start(a5)
+	move	4(a2),ns_length(a5)
+	move.l	a4,ns_loopstart(a5)
+	move	4(a2),ns_replen(a5)
+	popm	a3/a5
+
 	move.l a4,68(a0)
 	move.l 6(a2),64(a0)
 	move.w d7,16(a0)
