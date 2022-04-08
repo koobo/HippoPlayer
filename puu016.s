@@ -32645,7 +32645,7 @@ p_jamcracker
 	jmp .id_jamcracker(pc)
 	jmp	.author(pc)
 	dc.w pt_jamcracker				* type
-	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope
+	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscope
 	dc.b	"JamCracker",0
 .a 	dc.b 	"Xag/Betrayal, Martin Kemmel",0
  even
@@ -32678,15 +32678,16 @@ p_jamcracker
 ;	rts
 
 .ok3	
-	pushm a5/a6
+	pushm 	a5/a6
 	move.l	moduleaddress(a5),a0
 	lea	dmawait(pc),a1
 	lea	songover(a5),a2
-	lea mainvolume(a5),a3 
-	lea nullsample,a4
+	lea 	mainvolume(a5),a3 
+	lea 	nullsample,a4
 	move.l	jamroutines(a5),a6
+	lea	scopeData(a5),a5
 	jsr	.offset_init(a6)
-	popm a5/a6
+	popm 	a5/a6
 	move	d0,pos_maksimi(a5)
 	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
