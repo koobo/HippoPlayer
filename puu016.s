@@ -5857,7 +5857,7 @@ freemem	movem.l	d0/d1/a0/a1/a6,-(sp)
 
 
 
-freemodule
+freemodule:
 	movem.l	d0-a6,-(sp)
 
 	DPRINT	"freemodule obtain data"
@@ -6718,11 +6718,11 @@ signalreceived
 	DPRINT	"Replay end"
 
 	* Stopping playback 
-	lore  	Exec,Disable
+	bsr	obtainModuleData
 	clr.b	playing(a5)		* soitto seis
-	lore   	Exec,Enable
 	move.l	playerbase(a5),a0	* stop module
 	jsr 	p_end(a0)
+	bsr	releaseModuleData
 
 	bsr.w	freemodule
 
@@ -7336,11 +7336,11 @@ umph
 
 * on!
 	DPRINT	"Replay end"
-	lore    Exec,Disable
+	bsr	obtainModuleData
 	bsr.w	halt			* soitetaan vaan alusta
-	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr 	p_end(a0)
+	bsr	releaseModuleData
 
 	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
@@ -7377,11 +7377,11 @@ umph
 .hm1
 	DPRINT	"Replay end"
 
-	lore    Exec,Disable
+	bsr	obtainModuleData
 	bsr.w	halt			* Vapautetaan se jos on
-	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
+	bsr	releaseModuleData
 	bsr.w	freemodule	
 
 	tst	d6
@@ -9635,7 +9635,7 @@ rbutton1
 	bra.w	init_error
 ;	rts
 
-halt	clr.b	playing(a5)	
+halt:	clr.b	playing(a5)	
 ;	clr	songnumber(a5)
 	clr	pos_nykyinen(a5)
 	clr	positionmuutos(a5)
@@ -21941,7 +21941,7 @@ quad_code
 
 scopeTest=0
 
-scopeLoop
+scopeLoop:
 
  ifne scopeTest
  	move	#$666,$dff180
