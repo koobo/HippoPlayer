@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.50
+Version: 2.51
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -61,29 +61,38 @@ NOTE 4: Too long didn't read
   is used to determine if a file is an MP3 file. 
 - There was a rather severe regression in v2.49 sampleplayer. Scopes
   didn't work properly and things could crash. Fixed these.
-  
-## Music format related changes:
-- Patternscope support added to the THX/AHX format. Also shows transposes.
-- Patternscope now displays note and sample transpose information
-  for Future Composer and BP SoundMon formats.
+- The play button icon had an extra pixel at the bottom. 
+  This went unnoticed until now :-)
+
 
 ## New features:
-- "Big button" option in Prefs. This doubles the height of the two 
+- "Big buttons" option in Prefs. This doubles the height of the two 
   button rows in the main window. May be helpful with higher resolution
   screens. The original icons were designed for the 640x256 resolution. 
 - Added support for launching via "project icons". These are icons
   used for data files which specify the default tool which should be used
   to open the files. This is a very basic use case from the beginning of
   Workbench, finally supported.
-- Sample scope was previously supported for Protracker, sample player, mp3, 
-  and PS3M multichannel modules (S3M, XM, IT, MTM, FT). 
-  Added support for the following formats:
-  - BP Soundmon (both older and newer formats)
-  - Future Composer (both older and newer formats as well)
-  - Hippel COSO
-  - Digital Mugician
-  - Tim Follin
-  - Rob Hubbard 2/Infogrames
+- Patternscope support added to the THX/AHX format. Also shows transposes.
+- Patternscope now displays note and sample transpose information
+  for Future Composer and BP SoundMon formats.
+- Improved sample scope support
+  - Sample scope was previously availables for Protracker, sample player
+    and some multichannel modules (S3M, XM, IT, MTM, FT). 
+  - Added support for the following hippoplayers:
+    - BP SoundMon (v2.0-v2.2)
+    - Future Composer (v1.0-v1.4)
+    - Hippel COSO
+    - JamCracker
+    - SoundFX
+  - Added support for the following eagleplayers. Note that
+    not all EPs have a bug-free scope support.
+    - AProSys, ChipTracker, David Whittaker, Digital Mugician, EarAche
+    - Jason Brooke, Jason Page, Jeroen Tel, Jochen Hippel ST
+    - Kris Hatlelid, MaxTrax, Quartet, Quartet ST, R.Joseph/VectorDean
+    - Richard Joseph, Rob Hubbard, Rob Hubbard 2/Infogrames, Sonix Music Driver
+    - SoundControl, Special FX, Steve Turner, Synth Pack, TCBTracker (ST)
+    - The Musical Enlightenment, Tim Follin, Wally Beben
 
 ## Tips and tricks:
 - Enabling "Doubleclick" in Prefs makes starting playback easier.
@@ -758,7 +767,7 @@ List of supported formats (could be incomplete):
 - The Musical Enlightenment
 - The Player 6.0A
 - THX, AHX 
-- Tim Follin 2
+- Tim Follin
 - VectorDean
 - Voodoo Supreme Synthesizer
 - Wally Beben

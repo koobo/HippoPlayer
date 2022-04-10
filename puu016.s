@@ -38512,7 +38512,7 @@ p_soundfx
 	jmp .id_soundfx(pc)
 	jmp	.author(pc)
 	dc.w pt_soundfx
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"SoundFX",0
 .a 	dc.b	"Christian Haller, Christian A. Webber",0
  even
@@ -38550,6 +38550,7 @@ p_soundfx
 	lea	pos_nykyinen(a5),a3
 	lea 	pos_maksimi(a5),a4
 	move.l	soundfxroutines(a5),a6
+	lea	scopeData(a5),a5
 	jsr	.INIT(a6)
 	popm	d1-d7/a1-a6
 	move.l	a0,deliPatternInfo(a5)
