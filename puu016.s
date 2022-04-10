@@ -1261,8 +1261,11 @@ deliStoredSetVoices rs.l	1
 deliStoredNoteStruct rs.l 	1
 deliStoredGetPositionNr rs.l 1
 deliPath		rs.l	1
-deliPathArray		rs.l	1	
+deliPathArray		rs.l	1
+* Pattern info data returned by EP	
 deliPatternInfo		rs.l 	1
+* UPS_USER struct info returned by EP
+deliUPSStruct			rs.l 	1
 
 * Path read from auto saved modulelist comment,
 * which is the last path used to add files to list
@@ -1380,7 +1383,8 @@ pb_end		=	14
 pb_poslen	=	15
 pb_scope	=	13
 pb_ahi		=	12
-pb_quadscope =  11
+pb_quadscopePoke =      11      ; EP poke interface
+pb_quadscopeUps	=  	10	; EP UPS interface
 pf_cont		=	1<<pb_cont
 pf_stop		=	1<<pb_stop
 pf_song		=	1<<pb_song
@@ -1394,7 +1398,8 @@ pf_end		=	1<<pb_end
 pf_poslen	=	1<<pb_poslen
 pf_scope	=	1<<pb_scope
 pf_ahi		=	1<<pb_ahi
-pf_quadscope	=	1<<pb_quadscope
+pf_quadscopeUps	=	1<<pb_quadscopeUps
+pf_quadscopePoke =	1<<pb_quadscopePoke
 
 
 *********************************************************************************
@@ -20710,16 +20715,16 @@ intserver
 
 	* Yes, we still are. Let's check if the playing position has changed
 	* since the last check.
-	move	pos_nykyinen(a5),d0	  	* current position
+	move	pos_nykyinen(a5),d0	* current position
 	move	positionmuutos(a5),d1	* last known position
 	cmp	d1,d0
 	beq.b	.eee
 	move	d0,positionmuutos(a5)	* was different, store new changed position
 
-	tst.b	kelattiintaakse(a5)		* check if there was some rewinding going on
+	tst.b	kelattiintaakse(a5)	* check if there was some rewinding going on
 	beq.b	.norewind
-	clr.b	kelattiintaakse(a5)		* there was, let's not check for songend based 
-									* on positions
+	clr.b	kelattiintaakse(a5)	* there was, let's not check for songend based 
+					* on positions
 	bra.b	.rewind
 .norewind
 	* If the last known position is higher than the current position,
@@ -20845,14 +20850,14 @@ signalit
 	move.l	4.w,a6			
 	jmp	_LVOSignal(a6)
 
-
+ REM
 dummyserver_NOTUSED
 	dc.l	0,0
 	dc.b	2,0
 	dc.l	0
 	dc.l	0
 	dc.l	0
-
+ EREM
 
 ******************************************************************************
 *
@@ -22479,7 +22484,7 @@ scopeWindowSizeChanged
 * protracker replayer samples
 *********************************************************************
 
-scopeinterrupt				* a5 = var_b
+scopeinterrupt:				* a5 = var_b
 	cmp	#pt_prot,playertype(a5)
 	bne.w	.notProtracker
 
@@ -22550,19 +22555,77 @@ scopeinterrupt				* a5 = var_b
 	move.l	sampleadd(a5),d0
 	move.l	samplefollow(a5),a0
 	add.l	d0,(a0)
+	rts
 
 .notSample
 	* Check player has generic quadrascope support
-	move.b	scopeData+scope_trigger(a5),d2
 	move.l	playerbase(a5),a0
-	move	#pf_quadscope,d1
-	and	p_liput(a0),d1
-	bne.b	.quadScopeSampleFollow
+	move	p_liput(a0),d1
 
+;	bra	.quadScopeSampleFollow
+
+	* Poke method:
+	btst	#pb_quadscopePoke,d1
+	bne.b	.quadScopeSampleFollow
+	
+	* UPS method:
+	btst	#pb_quadscopeUps,d1
+	beq.b	.noScopes
+
+	* UPS struct provided by eagle player?
+	move.l	deliUPSStruct(a5),d0
+	beq.b	.quadScopeSampleFollow
+	
+	* Handle UPS, it will provide input for normal sample follow
+	bsr.b	.handleUPS
+	bra.b	.quadScopeSampleFollow
+
+.noScopes
 	* No scopes for u this time.
 	rts
 
+.handleUPS
+	move.l	d0,a0
+	tst	UPS_Enabled(a0)
+	bne.b	.disabled
+	lea	nullsample,a1
+	move	#$f00,$dff180
+
+	lea	UPS_Voice1Adr(a0),a2
+	lea	scopeData+scope_ch1(a5),a3
+	moveq	#4-1,d0
+.upsLoop
+	move	UPS_Voice1Vol(a2),ns_tempvol(a3)
+	move	UPS_Voice1Per(a2),d1
+	beq.b	.1
+	* New sample starts as period is non-zero
+	move	d1,ns_period(a3)
+	move.l	UPS_Voice1Adr(a2),ns_start(a3)
+	move	UPS_Voice1Len(a2),ns_length(a3)
+.1	
+	move.l	UPS_Voice1Adr(a2),d1
+	move	UPS_Voice1Len(a2),d2
+
+	tst	UPS_Voice1Repeat(a2)
+	beq.b	.11
+	* This case is very seldom used
+	move.l	a1,d1
+	moveq	#1,d2
+.11
+	move.l	d1,ns_loopstart(a3)
+	move	d2,ns_replen(a3)
+
+	lea	UPS_Modulo(a2),a2
+	lea	ns_size(a3),a3
+	dbf	d0,.upsLoop
+.disabled
+	rts
+
+
+* Clears any scope data that points into module data.
 clearScopeData
+	rts
+	clr.l	deliUPSStruct(a5)
 	clr.b	scope_trigger+scopeData(a5)
 	lea	scope_ch1+scopeData(a5),a0
 	moveq	#4*ns_size/2-1,d0
@@ -22806,7 +22869,7 @@ drawScope
 	
 	* Check for generic quadscope support
 	move.l	playerbase(a5),a0
-	move	#pf_quadscope,d1
+	move	#pf_quadscopeUps,d1
 	and	p_liput(a0),d1
 	beq	.other
 
@@ -23025,7 +23088,7 @@ mirrorfill0
 *   d2 = sample length
 *   d3 = repeat length
 *   
-getScopeChannelData
+getScopeChannelData:
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.notPt
 
@@ -23062,6 +23125,7 @@ getScopeChannelData
 	move	ns_replen(a3),d3
 	beq.b	.fail
 
+ REM
 	
 	* This one has waveforms inside the replay code:
 	cmp	#pt_future10,playertype(a5)
@@ -23097,6 +23161,8 @@ getScopeChannelData
 	bhs.b	.fail
 .shortLen
 
+ EREM
+ 
  REM
 	* Check loop start
 	cmp	#2,d3
@@ -23121,14 +23187,17 @@ quadrascope:
 	move.l	draw1(a5),a0
 	lea	-30(a0),a0
 	bsr.b	.scope
+
 	lea	scopeData+scope_ch2(a5),a3
 	move.l	draw1(a5),a0
 	lea	-20(a0),a0
 	bsr.b	.scope
+
 	lea	scopeData+scope_ch3(a5),a3
 	move.l	draw1(a5),a0
 	lea	-10(a0),a0
 	bsr.b	.scope
+
 	lea	scopeData+scope_ch4(a5),a3
 	move.l	draw1(a5),a0
 
@@ -30852,7 +30921,7 @@ p_protracker
 	p_NOP
 	dc.w pt_prot 				* type
 .flags	
- dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscope
+ dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopeUps
 
 	dc.b	"Protracker",0
  even
@@ -32273,7 +32342,7 @@ p_futurecomposer13
 	jmp .id_futurecomposer13(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future10			* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscope
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscopeUps
 	dc.b	"Future Composer v1.0-1.3",0
  even
 
@@ -32352,7 +32421,7 @@ p_futurecomposer14
 	jmp .id_futurecomposer14(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future14	* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscope
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscopeUps
 	dc.b	"Future Composer v1.4",0
 
  even
@@ -32442,7 +32511,7 @@ p_soundmon
 	jmp .id_soundmon(pc)
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscope
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopeUps
 	dc.b	"BP SoundMon v2.0",0
  even
 
@@ -32545,7 +32614,7 @@ p_soundmon3
 	jmp 	.id_soundmon3(pc)
 	jmp	bp_author(pc)
 	dc.w 	pt_soundmon3 	* type
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscope
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopeUps
 	dc.b	"BP SoundMon 3 (v2.2)",0
  even
 
@@ -32645,7 +32714,7 @@ p_jamcracker
 	jmp .id_jamcracker(pc)
 	jmp	.author(pc)
 	dc.w pt_jamcracker				* type
-	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscope
+	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopeUps
 	dc.b	"JamCracker",0
 .a 	dc.b 	"Xag/Betrayal, Martin Kemmel",0
  even
@@ -34731,7 +34800,7 @@ p_davidwhittaker
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_davidwhittaker
-.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"David Whittaker     [EP]",0
 	        
 .path 	dc.b "david whittaker",0
@@ -34859,7 +34928,7 @@ p_hippelcoso
 	jmp id_hippelcoso(pc)
 	jmp	hippel_author(pc)
 	dc.w pt_hippelcoso
-.liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi!pf_scope!pf_quadscope
+.liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi!pf_scope!pf_quadscopeUps
 	dc.b	"Hippel-COSO",0
  even
 
@@ -37530,7 +37599,7 @@ p_digitalmugician
 	jmp .id_digitalmugician(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_digitalmugician
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope!pf_quadscope
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope!pf_quadscopePoke
 	dc.b	"Digital Mugician    [EP]",0
 .path	dc.b	"mugician.amp",0
  even
@@ -37758,7 +37827,7 @@ p_robhubbard2
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_robhubbard2
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_scope!pf_quadscope
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_scope!pf_quadscopePoke
 	dc.b	"R.Hubbard 2/Infogra.[EP]",0
 .path dc.b "rob hubbard 2",0
  even
@@ -37822,7 +37891,7 @@ p_chiptracker
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_chiptracker 
- dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2	
+ dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2!pf_quadscopeUps
 	dc.b	"ChipTracker         [EP]",0
 
 .path dc.b "chiptracker",0
@@ -39448,7 +39517,7 @@ p_quartet
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_quartet 
- 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus
+ 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Quartet             [EP]",0
 
 .path dc.b "quartet",0
@@ -39584,7 +39653,7 @@ p_richardjoseph
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_richardjoseph
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"R.Joseph/VectorDean [EP]",0
 .path dc.b "richard joseph player",0
  even
@@ -39808,7 +39877,7 @@ p_jasonbrooke
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_jasonbrooke
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Jason Brooke        [EP]",0
 	        
 .path dc.b "jason brooke",0
@@ -39984,7 +40053,7 @@ p_krishatlelid
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_krishatlelid
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Kris Hatlelid       [EP]",0
 	        
 .path dc.b "kris hatlelid",0
@@ -40066,7 +40135,7 @@ p_richardjoseph2
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_richardjoseph2
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Richard Joseph      [EP]",0
 	
 	        
@@ -40232,7 +40301,7 @@ p_aprosys
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_aprosys
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"AProSys             [EP]",0
 		        
 .path dc.b "aprosys",0
@@ -40276,7 +40345,7 @@ p_hippelst
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_hippelst
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Jochen Hippel ST    [EP]",0	        
 .path dc.b "jochen hippel st",0
  even
@@ -40465,7 +40534,7 @@ p_tcbtracker
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_tcbtracker
-.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse
+.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse!pf_quadscopeUps
 	dc.b	"TCBTracker (ST)     [EP]",0	        
 .path dc.b "tcb tracker",0
  even
@@ -40939,7 +41008,7 @@ p_maxtrax
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_maxtrax
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"MaxTrax             [EP]",0
 	        
 .path dc.b "maxtrax",0
@@ -41008,7 +41077,7 @@ p_wallybeben
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_wallybeben
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Wally Beben         [EP]",0
 	        
 .path dc.b "wally beben",0
@@ -41079,7 +41148,7 @@ p_synthpack
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_synthpack
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Synth Pack          [EP]",0
 	        
 .path dc.b "synth pack",0
@@ -41129,7 +41198,7 @@ p_robhubbard
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_robhubbard
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Rob Hubbard         [EP]",0
 .path dc.b "rob hubbard",0
  even
@@ -41183,7 +41252,7 @@ p_jeroentel
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_jeroentel
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Jeroen Tel          [EP]",0
 .path dc.b "jeroen tel",0
  even
@@ -41256,7 +41325,7 @@ p_sonix
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_sonix
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Sonix Music Driver  [EP]",0
 .path dc.b "sonix music driver",0
  even
@@ -41398,7 +41467,7 @@ p_quartetst
 	jmp .id_quartet_st(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_quartetst
-.flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Quartet ST          [EP]",0
 .path dc.b "quartet st",0
  even
@@ -41959,7 +42028,7 @@ p_soundcontrol
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_soundcontrol
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
 	dc.b	"SoundControl        [EP]",0
 	        
 .path dc.b "soundcontrol",0
@@ -42015,7 +42084,7 @@ p_themusicalenlightenment
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_themusicalenlightenment
-.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_quadscopeUps
 	dc.b	"The Musical Enlighte[EP]",0
 	        
 .path dc.b "tme",0
@@ -42150,7 +42219,7 @@ p_timfollin2
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_timfollin2
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscope
+ dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopePoke
 	dc.b	"Tim Follin          [EP]",0
 	        
 .path dc.b "tim follin ii",0
@@ -42743,7 +42812,7 @@ findDeliPlayer
 	beq.w	.fail
 	rts
 
-freeDeliPlayer
+freeDeliPlayer:
 	pushm	all
 	tst.l	deliPlayer(a5)
 	beq.b	.x
@@ -42824,7 +42893,7 @@ deliCallFunc
 *   d0: deliplayer or delicustom address from loadseg
 * out:
 *   d0: 0=all ok, negative ier_-code otherwise
-deliInit
+deliInit:
 	pushm	d1-a6	
 	DPRINT	"deliInit 0x%lx"
 	move.l	d0,deliPlayer(a5)
@@ -42929,10 +42998,10 @@ deliInit
 
 	move.l	#EP_PatternInit,d0  
 	bsr.w	deliGetTag
-	beq.b	.noPattInit
+;	beq.b	.noPattInit
 	bsr.w	deliCallFunc
-	move.l	a0,deliPatternInfo(a5)	
-.noPattInit
+	move.l	a0,deliPatternInfo(a5)
+;.noPattInit
 
 	move.l	#EP_Flags,d0
 	bsr.w	deliGetTag
@@ -42949,6 +43018,16 @@ deliInit
 	bne.w	.extLoadError
 .noExtLoad
 
+	move.l	#EP_StructInit,d0
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc	
+	move.l	a0,deliUPSStruct(a5)
+	beq.b	.noUPS
+	move.l	playerbase(a5),a0
+	or	#pf_scope!pf_quadscopeUps,p_liput(a0)
+	DPRINT	"Quadscope supported"
+.noUPS
+ 
 	move.l	#DTP_InitPlayer,d0  
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc	
@@ -43275,7 +43354,7 @@ deliPlay
 	popm	a4/a5/a6
 	rts
 
-deliEnd
+deliEnd:
 	pushm	d1-a6
 	DPRINT	"deliEnd"
 	
@@ -43296,6 +43375,10 @@ deliEnd
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
 	
+	move.l	#EP_StructEnd,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+
 	bsr.w	clearsound
 
 	move.l	#EP_EjectPlayer,d0
@@ -43910,7 +43993,7 @@ funcENPP_DMAMask
 	bpl.b	.clr
 	or	#$8000,d1
 	move	d1,$dff096
-	* Set scope trigger bits
+;	* Set scope trigger bits
 	or.b	d1,scopeData+scope_trigger+var_b
 	jsr	dmawait
 	pop 	d1
@@ -43929,7 +44012,7 @@ funcENPP_DMAMask
 *   d0 = address
 *   d1 = channel 0..3
 funcENPP_PokeAdr
-	pushm	d2/d3/a0
+	pushm	d2/d3/a0/a1
 	moveq	#3,d2
 	and	d1,d2
 	lsl	#4,d2
@@ -43938,24 +44021,29 @@ funcENPP_PokeAdr
 
 	* Set sample start if DMA is not enabled,
 	* otherwise set loopstart
-	lea	scopeData+var_b,a0
+ 	lea	var_b,a0
+ 	move	#pf_quadscopePoke,d3
+ 	move.l	playerbase(a0),a1
+ 	and	p_liput(a1),d3
+ 	beq.b	.2
+
+	lea	scopeData(a0),a0
 	moveq	#1,d3
 	lsl	d1,d3
 	and.b	scope_trigger(a0),d3
 	bne.b	.1
 	move.l	d0,ns_start+scope_ch1(a0,d2)
-;	bra.b	.2
 .1
 	move.l	d0,ns_loopstart+scope_ch1(a0,d2)
 .2
-	popm	d2/d3/a0
+	popm	d2/d3/a0/a1
 	rts
 	
 * In:
 *   d0 = length
 *   d1 = channel 0..3
 funcENPP_PokeLen
-	pushm	d2/d3/a0
+	pushm	d2/d3/a0/a1
 	moveq	#3,d2
 	and	d1,d2
 	lsl	#4,d2
@@ -43965,42 +44053,56 @@ funcENPP_PokeLen
 .nozero
 	lea	$dff0a0,a0
 	move	d0,4(a0,d2)
-
+; REM
  	* Set sample len if DMA is not enabled,
 	* otherwise set looplen
-	lea	scopeData+var_b,a0
+ 	lea	var_b,a0
+ 	move	#pf_quadscopePoke,d3
+ 	move.l	playerbase(a0),a1
+ 	and	p_liput(a1),d3
+ 	beq.b	.2
+
+	lea	scopeData(a0),a0
 	moveq	#1,d3
 	lsl	d1,d3
 	and.b	scope_trigger(a0),d3
 	bne.b 	.1
 	move	d0,ns_length+scope_ch1(a0,d2)
-;	bra.b	.2
 .1
 	move	d0,ns_replen+scope_ch1(a0,d2)
 .2
-	popm	d2/d3/a0
+; EREM
+	popm	d2/d3/a0/a1
 	rts
 
 * In:
 *   d0 = period
 *   d1 = channel 0..3
 funcENPP_PokePer
-	pushm	d2/a0
+	pushm	d2/d3/a0/a1
 	moveq	#3,d2
 	and	d1,d2
 	lsl	#4,d2
 	lea	$dff0a0,a0
 	move	d0,6(a0,d2)
-	lea	scope_ch1+scopeData+var_b,a0
+
+	lea	var_b,a0
+ 	move	#pf_quadscopePoke,d3
+ 	move.l	playerbase(a0),a1
+ 	and	p_liput(a1),d3
+ 	beq.b	.1
+
+	lea	scopeData(a0),a0
 	move	d0,ns_period(a0,d2)
-	popm	d2/a0
+.1
+	popm	d2/d3/a0/a1
 	rts
 
 * In:
 *   d0 = volume
 *   d1 = channel 0..3
 funcENPP_PokeVol
-	pushm	d2/a0
+	pushm	d2/d3/a0/a1
 	moveq	#3,d2
 	and	d1,d2
 	lsl	#4,d2
@@ -44008,9 +44110,17 @@ funcENPP_PokeVol
 	lsr	#6,d0
 	lea	$dff0a0,a0
 	move	d0,8(a0,d2)
-	lea	scope_ch1+scopeData+var_b,a0
+
+ 	lea	var_b,a0
+ 	move	#pf_quadscopePoke,d3
+ 	move.l	playerbase(a0),a1
+ 	and	p_liput(a1),d3
+ 	beq.b	.1
+
+	lea	scopeData(a0),a0
 	move	d0,ns_tempvol(a0,d2)
-	popm	d2/a0
+.1
+	popm	d2/d3/a0/a1
 	rts
 
 * In:
