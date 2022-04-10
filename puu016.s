@@ -37374,7 +37374,7 @@ p_gamemusiccreator
 	jmp id_gamemusiccreator(pc)
 	jmp	.author(pc)
 	dc.w pt_gamemusiccreator
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume!pf_scope
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"Game Music Creator",0
 .a 	dc.b "Andreas Tadic",0
  even
@@ -37400,8 +37400,7 @@ p_gamemusiccreator
 	rts
 .ok2
 	lea	gamemusiccreatorroutines(a5),a0
-	* allocate into chip mem
-	bsr.w	allocreplayer2
+	bsr.w	allocreplayer
 	beq.b	.ok3
 	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
@@ -37414,6 +37413,8 @@ p_gamemusiccreator
 	lea	pos_nykyinen(a5),a3
 	lea	pos_maksimi(a5),a4
 	move.l	gamemusiccreatorroutines(a5),a6
+	lea	scopeData(a5),a5
+	move.l	#nullsample,d0
 	jsr	.GMC_INIT(a6)
 	popm	d0-d7/a1-a6
 	move.l	a0,deliPatternInfo(a5)
