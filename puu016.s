@@ -36236,7 +36236,7 @@ p_aon
 	jmp 	.id_aon(pc)
 	jmp	.author(pc)
 	dc.w 	pt_aon
-	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope
+	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"Art Of Noise 4ch",0
 .a	dc.b	"Bastian Spiegel (Twice/Lego)",0
  even
@@ -36275,8 +36275,9 @@ p_aon
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2 
 	lea	ciaint_setTempoFromD0(pc),a3
-	move.l	aonroutines(a5),a4
-	jsr	.OFFSET_INIT(a4)
+	lea	scopeData(a5),a4
+	move.l	aonroutines(a5),a6
+	jsr	.OFFSET_INIT(a6)
 	tst.l	d0
 	bne.b	.noMem
 	move.l	a0,deliPatternInfo(a5)

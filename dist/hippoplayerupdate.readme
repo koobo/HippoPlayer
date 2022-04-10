@@ -80,6 +80,7 @@ NOTE 4: Too long didn't read
   - Sample scope was previously availables for Protracker, sample player
     and some multichannel modules (S3M, XM, IT, MTM, FT). 
   - Added support for the following hippoplayers:
+    - Art Of Noise (4 channels)
     - BP SoundMon (v2.0-v2.2)
     - Future Composer (v1.0-v1.4)
     - Hippel COSO
