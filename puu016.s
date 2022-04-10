@@ -1381,9 +1381,9 @@ pb_ciakelaus	=	6		* 2x = lmb, 4x = rmb
 pb_ciakelaus2	=	7		* pattern = lmb, 2x = rmb
 pb_end		=	14
 pb_poslen	=	15
-pb_scope	=	13
+pb_scope	=	13	; Replayer supports patternscope or quadscope
 pb_ahi		=	12
-pb_quadscopePoke =      11      ; EP poke interface
+pb_quadscopePoke =      11      ; Normal quadscope or EP poke interface
 pb_quadscopeUps	=  	10	; EP UPS interface
 pf_cont		=	1<<pb_cont
 pf_stop		=	1<<pb_stop
@@ -5045,14 +5045,14 @@ releaseModuleList
 	popm	a0/a6
 	rts
 
-obtainModuleData
+obtainModuleData:
 	pushm	a0/a6
 	lea 	moduleDataSemaphore(a5),a0
 	lore    Exec,ObtainSemaphore
 	popm	a0/a6
 	rts
 
-releaseModuleData
+releaseModuleData:
 	pushm	a0/a6
 	lea 	moduleDataSemaphore(a5),a0
 	lore    Exec,ReleaseSemaphore
@@ -22533,9 +22533,6 @@ scopeinterrupt:				* a5 = var_b
 	divu	ns_period(a0),d0
 	ext.l	d0
 .noe	
-;	ror.b	#1,d2
-;	bpl.b	.plu
-
 	add.l	d0,ns_start(a0)
 	lsr	#1,d0
 	sub	d0,ns_length(a0)
@@ -22624,7 +22621,6 @@ scopeinterrupt:				* a5 = var_b
 
 * Clears any scope data that points into module data.
 clearScopeData
-	rts
 	clr.l	deliUPSStruct(a5)
 	clr.b	scope_trigger+scopeData(a5)
 	lea	scope_ch1+scopeData(a5),a0
@@ -22866,10 +22862,10 @@ drawScope
 	add	d0,d0
 	cmp	#pt_multi,playertype(a5)
 	beq.w	.ttt
-	
+
 	* Check for generic quadscope support
 	move.l	playerbase(a5),a0
-	move	#pf_quadscopeUps,d1
+	move	#pf_quadscopeUps!pf_quadscopePoke,d1
 	and	p_liput(a0),d1
 	beq	.other
 
@@ -27575,7 +27571,7 @@ tutki_moduuli
 	bra.b	.pro0
 
 .protracker	
-		clr.b	oldst(a5)
+	clr.b	oldst(a5)
 .pro0	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
 	moveq	#20-1,d0
@@ -30921,7 +30917,7 @@ p_protracker
 	p_NOP
 	dc.w pt_prot 				* type
 .flags	
- dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopeUps
+ dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopePoke
 
 	dc.b	"Protracker",0
  even
@@ -32342,7 +32338,7 @@ p_futurecomposer13
 	jmp .id_futurecomposer13(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future10			* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscopeUps
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"Future Composer v1.0-1.3",0
  even
 
@@ -32421,7 +32417,7 @@ p_futurecomposer14
 	jmp .id_futurecomposer14(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future14	* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscopeUps
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"Future Composer v1.4",0
 
  even
@@ -32511,7 +32507,7 @@ p_soundmon
 	jmp .id_soundmon(pc)
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopeUps
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke
 	dc.b	"BP SoundMon v2.0",0
  even
 
@@ -32614,7 +32610,7 @@ p_soundmon3
 	jmp 	.id_soundmon3(pc)
 	jmp	bp_author(pc)
 	dc.w 	pt_soundmon3 	* type
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopeUps
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke
 	dc.b	"BP SoundMon 3 (v2.2)",0
  even
 
@@ -32714,7 +32710,7 @@ p_jamcracker
 	jmp .id_jamcracker(pc)
 	jmp	.author(pc)
 	dc.w pt_jamcracker				* type
-	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopeUps
+	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"JamCracker",0
 .a 	dc.b 	"Xag/Betrayal, Martin Kemmel",0
  even
@@ -34928,7 +34924,7 @@ p_hippelcoso
 	jmp id_hippelcoso(pc)
 	jmp	hippel_author(pc)
 	dc.w pt_hippelcoso
-.liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi!pf_scope!pf_quadscopeUps
+.liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi!pf_scope!pf_quadscopePoke
 	dc.b	"Hippel-COSO",0
  even
 
@@ -36865,19 +36861,19 @@ id_it
 
 p_sample
 	jmp	.init(pc)
-	p_NOP		* CIA
-	p_NOP		* VB
+	p_NOP	* CIA
+	p_NOP	* VB
 	jmp	.end(pc)		* end
 	jmp	.dostop(pc)		* Stop
 	jmp	.docont(pc)		* Cont
 	jmp	.vol(pc)		* volume
-	p_NOP		* Song
-	p_NOP		* Eteen
-	p_NOP		* Taakse
+	p_NOP	* Song
+	p_NOP	* Eteen
+	p_NOP	* Taakse
 	jmp	.ahiup(pc)		* AHI Update
-	jmp id_sample(pc)
-	p_NOP		* author
-	dc.w pt_sample
+	jmp 	id_sample(pc)
+	p_NOP	* author
+	dc.w 	pt_sample
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi
 .name	dc.b	"                        ",0
  even
@@ -39958,7 +39954,7 @@ p_earache
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_earache
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"EarAche             [EP]",0
 	        
 .path dc.b "earache",0
@@ -42294,7 +42290,7 @@ p_jasonpage
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_jasonpage
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
 	dc.b	"Jason Page          [EP]",0
 	        
 .path dc.b "jason page",0
@@ -42375,7 +42371,7 @@ p_steveturner
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_steveturner
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
 	dc.b	"Steve Turner        [EP]",0
 	        
 .path dc.b "steve turner",0
@@ -42427,7 +42423,7 @@ p_specialfx
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_specialfx
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
 	dc.b	"Special FX          [EP]",0
 	        
 .path dc.b "special fx",0
