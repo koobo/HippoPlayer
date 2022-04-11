@@ -22034,8 +22034,11 @@ scopeLoop:
 
 	pushm	d5/d6/d7
 	jsr	obtainModuleData
+	* Final safety check
+	tst.b	playing(a5)
+	beq.b	.1
 	bsr.w	drawScope
-	jsr 	releaseModuleData
+.1	jsr 	releaseModuleData
 	popm	d5/d6/d7
 	bra.b	.continue
 
