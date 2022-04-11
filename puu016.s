@@ -45657,8 +45657,8 @@ calcSampleStep
 	divu	d0,d1		* playback frequency in hertz
 	ext.l	d1
 	lsl.l	#8,d1
-	;divu	#8000,d1	* resampling destination frequency
-	divu	#16000,d1	* resampling destination frequency
+	divu	#8000,d1	* resampling destination frequency
+	;divu	#16000,d1	* resampling destination frequency
 	;divu	#20000,d1	* resampling destination frequency
 	;divu	#24000,d1	* resampling destination frequency
 	;divu	#28000,d1	* resampling destination frequency
