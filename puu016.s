@@ -45,6 +45,11 @@ DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 
+
+ ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
+    fail "Enable only one"
+ endif
+ 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE-2)
     fail "Enable only one"
  endif
@@ -45238,12 +45243,10 @@ plainSaveFile
 ***************************************************************************
 
   ifne FEATURE_SPECTRUMSCOPE
-spectrum
+spectrum:
 
 	incdir
 	include	"hippo_fft.s"
-
-;FFT_LENGTH = 128 ; TODO: REPLACE
 
 ; Length of the mixing buffer, to be passed to FFT
 MIX_LENGTH = FFT_LENGTH
@@ -45329,8 +45332,8 @@ getSpectrumVolumeTable
 	bne.b	.1
 	moveq	#1,d0
 .1	subq	#1,d0
-	lsl		#8,d0
-	add		d0,d0
+	lsl	#8,d0
+	add	d0,d0
 	move.l	spectrumVolumeTable(a5),a2
 	add	d0,a2
 	rts
@@ -45466,9 +45469,7 @@ prepareSpectrumSineTable
 
 runSpectrumScope
 	tst.b	spectrumInitialized(a5)
-	beq.b	.x
-
-	move	#$0f0,$dff180
+	beq.w	.x
 
 	bsr.w	spectrumCopySamples
 	bsr.w	spectrumMixSamples
@@ -45477,12 +45478,17 @@ runSpectrumScope
 	bsr.w	windowFFT
 
 	lea	mixedSample,a0
+	lea	imaginary,a1
+	move.l	spectrumSineTable(a5),a2
 	bsr.w	sampleFFT
 		
-	; a0, a1 = results
+	lea	mixedSample,a0
+	lea	imaginary,a1
 	bsr.w	calcFFTPower
+
 	bsr.w	drawFFT
 
+;	rts
 
 	* Vertical fill
 	lore	GFX,OwnBlitter
@@ -45542,14 +45548,26 @@ spectrumCopySamples
 	tst.l	ns_loopstart(a3) * Always check these to avoid
 	beq.b	.empty			 * enforcer hits!
 	move.l	ns_start(a3),d0
-	bne.w	.jolt
+	bne.b	.jolt
 
 .empty
 	; empty sample
-	moveq	#0,d0
-	rept	SAMPLE_LENGTH/4
+;	moveq	#0,d0
+;	rept	SAMPLE_LENGTH/4
+;	move.l	d0,(a4)+
+;	endr
+	moveq	#SAMPLE_LENGTH/4/8-1,d0
+	moveq	#0,d1
+.c
 	move.l	d0,(a4)+
-	endr
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	dbf	d0,.c
 	rts
 
 .jolt	
@@ -45595,13 +45613,22 @@ spectrumCopySamples
 
 
 .large
-	rept	SAMPLE_LENGTH/4
-;	move.l	(a1)+,(a4)+
+	moveq	#SAMPLE_LENGTH/4/4-1,d0
+.c2	
+ rept 4
 	move.b	(a1)+,(a4)+
 	move.b	(a1)+,(a4)+
 	move.b	(a1)+,(a4)+
 	move.b	(a1)+,(a4)+	
-	endr
+ endr
+	dbf	d0,.c2
+
+;	rept	SAMPLE_LENGTH/4
+;	move.b	(a1)+,(a4)+
+;	move.b	(a1)+,(a4)+
+;	move.b	(a1)+,(a4)+
+;	move.b	(a1)+,(a4)+	
+;	endr
 	rts
 
 
@@ -45673,10 +45700,12 @@ spectrumMixSamples
 	tst	d4
 	beq.w	.add
 
+	moveq	#MIX_LENGTH/2-1,d7
+.m1
 ; move to buffer (first set)
 	;rept	SAMPLE_LENGTH
 	printt "scale the volume table instead"
-	rept	MIX_LENGTH
+	rept	2 ;MIX_LENGTH
 	; sample byte
 	moveq	#0,d5
 	move.b	(a0,d0.w),d5
@@ -45691,13 +45720,17 @@ spectrumMixSamples
 	add.l	d1,d0
 	addx.w	d6,d0
 	endr
+
+	dbf	d7,.m1
 	rts
 .add
 
 ; add to buffer
 ;	rept	SAMPLE_LENGTH
+	moveq	#MIX_LENGTH/2-1,d7
+.m2
 	printt "scale the volume table instead"
-	rept	MIX_LENGTH
+	rept	2; MIX_LENGTH
 	; sample byte
 	moveq	#0,d5
 	move.b	(a0,d0.w),d5
@@ -45713,6 +45746,7 @@ spectrumMixSamples
 	add.l	d1,d0
 	addx.w	d6,d0
 	endr
+	dbf	d7,.m2
 	rts
 
 
@@ -45721,15 +45755,16 @@ drawFFT
 	; The other half is mirror of the first.
 	lea	mixedSample,a0
 	move.l	draw1(a5),a1
-	addq	#2,a1
+	addq	#2+2,a1
 	move.l	spectrumMuluTable(a5),a2
 	move.l	spectrumLogTable(a5),a3
 	move	#%11100000,d6
-	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d5
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-2,d5
 
 	moveq	#FFT_LENGTH/2-1,d7
 .l
  if 1
+ 	
 	move	(a0)+,d1
 	;cmp.l	max(pc),d1
 	;blo.b	.m
@@ -45738,22 +45773,25 @@ drawFFT
 	; grab value from log table
 	add	d1,d1
 	move	(a3,d1),d1
-	asr	#1,d1 ;;;;;;;;;;;;
+	lsr	#1,d1 ;;;;;;;;;;;;
 	move	d5,d0
 	sub	d1,d0
  else 
+;	move	d5,d0
+;	sub	(a0)+,d0
+	move	(a0)+,d1
+	lsr	#2,d1
 	move	d5,d0
-	sub	(a0)+,d0
+	sub	d1,d0
  endif
 	; clip test, should be unecessar though
 	bpl.b	.c
 	moveq	#0,d0
-	bra.b	.a
 .c
 	add	d0,d0 
 	move	(a2,d0),d0
 	or.b	d6,(a1,d0)
-.a
+
 	ror.b	#4,d6
 	bpl.b	.b
 	addq	#1,a1
@@ -46805,5 +46843,6 @@ channel2Data	ds.b	SAMPLE_LENGTH
 channel3Data	ds.b	SAMPLE_LENGTH
 channel4Data	ds.b	SAMPLE_LENGTH
 mixedSample	    ds.w	SAMPLE_LENGTH
+imaginary	ds.w	SAMPLE_LENGTH
 
  end

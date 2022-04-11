@@ -219,22 +219,36 @@ prepareSquareTable
 	endif
 
 ; in
-; a0 = 16-bit signed sampledata (real array)
+;    a0 = 16-bit signed sampledata (real array)
+;    a1 = imaginary array, to be overwritten
+;    a2 = sinewave
 ; out
-; a0 = result array, real (overwritten input)
-; a1 = result array, imaginary
+;   a0 = result array, real (overwritten input)
+;   a1 = result array, imaginary
 sampleFFT
 	; clear imaginary array
-	lea	fi(pc),a2
-	move.l	a2,a1
+	move.l	a1,a3
 
-	moveq	#0,d0
-	rept	FFT_LENGTH/2
-	move.l	d0,(a2)+
-	endr
+	moveq	#FFT_LENGTH/2/8-1,d0
+.c	
+	clr.l	(a3)+
+	clr.l	(a3)+
+	clr.l	(a3)+
+	clr.l	(a3)+
+	clr.l	(a3)+
+	clr.l	(a3)+
+	clr.l	(a3)+
+	clr.l	(a3)+
+	dbf	d0,.c
 
-	bsr.w	fix_fft
-	rts
+;	moveq	#0,d0
+;	rept	FFT_LENGTH/2
+;	move.l	d0,(a3)+
+;	endr
+
+	;bsr.w	fix_fft
+	;rts
+	bra.w	fix_fft
 
 ;in
 ; a0 = result array reals
@@ -254,16 +268,6 @@ calcFFTPower
 	muls	d1,d1
 	add.l	d1,d0
 	 
- 	if 0
-	moveq	#0,d0
-	moveq	#0,d1
-	move	(a0),d0
-	move	(a1)+,d1	
-	lsl.l	#2,d0
-	lsl.l	#2,d1
-	move.l	(a2,d0.l),d0
-	add.l	(a2,d1.l),d0
-	endif
 
 ;	cmp.l	maxSqr(pc),d0
 ;	blo.b	.s
@@ -291,8 +295,8 @@ calcFFTPower
 	include	"isqrt16.s"
 
 
-fi	ds.w	FFT_LENGTH
-fr	ds.w	FFT_LENGTH
+;fi	ds.w	FFT_LENGTH
+;fr	ds.w	FFT_LENGTH
 ;fpow	ds.w	FFT_LENGTH
 
 fix_fft
@@ -309,7 +313,7 @@ fix_fft
 	lea	.vars(pc),a5
 	; m, data size 1<<7 = 128
 	move	#FFT_SIZE,.m(a5)
-	lea	Sinewave(pc),a2	
+	;lea	Sinewave(pc),a2	
 	bsr.b	.fix_fft2
 	movem.l	(sp)+,a5/a6
 	rts
@@ -662,7 +666,8 @@ fix_fft
 ;; void window(fixed fr[], int n)
 
 ; in:
-; a0 = input data
+;   a0 = input data
+;   a2 = sinewave
 windowFFT
 
 ;; {
@@ -671,7 +676,7 @@ windowFFT
 ;;         j = N_WAVE/n;
 
 	; sinewave index step
-	move	#N_WAVE/FFT_LENGTH*2,d7
+	moveq	#N_WAVE/FFT_LENGTH*2,d7
 
 ;;         n >>= 1;
 	
@@ -685,7 +690,8 @@ windowFFT
 
 	;k=N_WAVE/4
 	;index to sinewave
-	lea	Sinewave+N_WAVE/4*2(pc),a1
+	;lea	Sinewave+N_WAVE/4*2(pc),a1
+	lea 	N_WAVE/4*2(a2),a1
 
 	moveq	#15,d3		; muls shift
 	move	#16384,d2
@@ -1022,7 +1028,8 @@ windowFFT
 ;;   -3211,  -3011,  -2811,  -2610,  -2410,  -2209,  -2009,  -1808,
 ;;   -1607,  -1406,  -1206,  -1005,   -804,   -603,   -402,   -201,
 ;; };
-
+ 
+  REM ;;;;;;;;;;;;;;
 Sinewave 
 	dc.w	       0,    201,    402,    603,    804,   1005,   1206,   1406
 	dc.w	    1607,   1808,   2009,   2209,   2410,   2610,   2811,   3011
@@ -1153,7 +1160,7 @@ Sinewave
 	dc.w	   -4807,  -4608,  -4409,  -4210,  -4011,  -3811,  -3611,  -3411
 	dc.w	   -3211,  -3011,  -2811,  -2610,  -2410,  -2209,  -2009,  -1808
 	dc.w	   -1607,  -1406,  -1206,  -1005,   -804,   -603,   -402,   -201
-
+  EREM ;;;;;;;;;;;
 
 ;; #if N_LOUD != 100
 ;;         ERROR: N_LOUD != 100
