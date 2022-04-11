@@ -45476,9 +45476,15 @@ runSpectrumScope
 	tst.b	spectrumInitialized(a5)
 	beq.w	.x
 
+	cmp	#pt_multi,playertype(a5)
+	bne.b	.pt
+	bsr	spectrumGetPS3MSampleData
+	bra.b	.ps3m
+.pt
 	bsr.w	spectrumCopySamples
 	bsr.w	spectrumMixSamples
-	
+.ps3m
+
 	move.l	spectrumMixedData(a5),a0
 	bsr.w	windowFFT
 
@@ -45795,9 +45801,38 @@ drawFFT
 	addq	#1,a1
 .b
 	dbf	d7,.l	
-	
 
 	rts		
+
+spectrumGetPS3MSampleData
+	move.l	ps3m_playpos(a5),a0
+	move.l	(a0),d0
+	lsr.l	#8,d0
+	move.l	ps3m_buffSizeMask(a5),a0
+	move.l	(a0),d1
+
+	move.l	ps3m_buff1(a5),a0
+	move.l	(a0),a0
+	move.l	ps3m_buff2(a5),a1
+	move.l	(a1),a1
+	
+	move.l	spectrumMixedData(a5),a2
+	moveq	#FFT_LENGTH/2-1,d7
+.loop
+ rept 2
+	move.b	(a0,d0),d2
+	move.b	(a1,d0),d3
+	ext	d2
+	ext	d3
+	add	d3,d2
+	asl	#4,d2
+	move	d2,(a2)+
+	addq	#1,d0
+	and	d1,d0
+ endr
+	dbf	d7,.loop
+
+	rts
 
   endif ; FEATURE_SPECTRUMSCOPE
 
