@@ -23179,6 +23179,7 @@ getScopeChannelData:
 	add.l	modulelength(a5),d5
 	DPRINT	"%lx %lx %lx %lx - %lx %lx"
  EREM
+
 	move.l	ns_start(a3),d0
 	beq.b	.fail
 	move.l	ns_loopstart(a3),d1
@@ -23187,6 +23188,10 @@ getScopeChannelData:
 	beq.b	.fail
 	move	ns_replen(a3),d3
 	beq.b	.fail
+	cmp.l	#1024,d0
+	blo.b	.fail
+	cmp.l	#1024,d1
+	blo.b	.fail
 
  REM
 	
@@ -45582,10 +45587,18 @@ spectrumCopySamples
 	rts
 
 .jolt	
+	cmp.l	#1024,d0
+	blo.b	.empty
+
+	move.l	ns_loopstart(a3),d1
+	cmp.l	#1024,d1
+	blo.b	.empty
+
 	move.l	d0,a1				* Sample start
 	move	ns_length(a3),d5	* Sample length
 	move	ns_replen(a3),d0
-	move.l	ns_loopstart(a3),d1
+
+
 .d
 	; see if enough data to copy all in one block
 	cmp	#SAMPLE_LENGTH/2,d5
