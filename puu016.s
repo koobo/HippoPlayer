@@ -43,7 +43,7 @@ ANNOY	= 0 * 1: Unregistered version tekstejä ympäriinsä
 
 DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
-FEATURE_SPECTRUMSCOPE	= 	0
+FEATURE_SPECTRUMSCOPE	= 	1
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE-2)
     fail "Enable only one"
@@ -181,7 +181,6 @@ check	macro
 	include	dos/dos_lib.i
 	include	dos/dosextens.i
 
-
 	include	rexx/rxslib.i
 
 	include	devices/audio.i
@@ -218,6 +217,9 @@ check	macro
 	include	misc/deliplayer.i
 	include	misc/eagleplayer.i
 
+	include	math/mathffp_lib.i
+	include	math/mathtrans_lib.i
+	
 	incdir include/
 	include	mucro.i
 	include	med.i
@@ -626,6 +628,15 @@ deltab2		rs.l	1
 deltab3		rs.l	1	
 deltab4		rs.l	1	
   endif
+  ifne FEATURE_SPECTRUMSCOPE
+spectrumVolumeTable	 rs.l 1
+spectrumMuluTable rs.l 1
+spectrumLogTable rs.l 1
+spectrumSineTable rs.l 1
+spectrumInitialized rs.w 1
+  endif
+
+
 ;omatrigger	rs.b	1	* kopio kplayerin usertrigistä
 * This turns to 1 if user has manually activated the scope
 * by LMB click, when scope was passivated because not being
@@ -2108,7 +2119,7 @@ about_tt
 
 
 ;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
-scrtit	dc.b	"HippoPlayer by K-P Koljonen in 1994-2000,2021-2022",0
+scrtit	dc.b	"HippoPlayer by K-P in 1994-2000, 2021-2022",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -3641,7 +3652,7 @@ exit2
 	rts
 
 
-closel	
+closel:
 	beq.b	.notopen
 	move.l	d0,a1
 	lore	Exec,CloseLibrary
@@ -5801,7 +5812,8 @@ poptofront
 
 * d0=koko
 * d1=tyyppi
-getmem	movem.l	d1/d3/a0/a1/a6,-(sp)
+getmem:
+	movem.l	d1/d3/a0/a1/a6,-(sp)
  ifne DEBUG
 	add.l	d0,getmemTotal
 	addq.l	#1,getmemCount
@@ -5819,7 +5831,8 @@ getmem	movem.l	d1/d3/a0/a1/a6,-(sp)
 	rts
 
 * a0=osoite
-freemem	movem.l	d0/d1/a0/a1/a6,-(sp)
+freemem:
+	movem.l	d0/d1/a0/a1/a6,-(sp)
  ifne DEBUG
 	addq.l	#1,freememCount
  endc
@@ -21827,6 +21840,10 @@ quad_code
 	bsr.b	.delt
 	beq.w	.memer
  endif
+ ifne FEATURE_SPECTRUMSCOPE
+	jsr	spectrumInitialize
+	beq.w	.memer
+ endif
 	bra.w	.cont
 
   ifne FEATURE_FREQSCOPE 
@@ -21853,6 +21870,10 @@ quad_code
 	beq.w	.memer
 	bsr.w	voltab3
 	bsr.b	.delt
+	beq.w	.memer
+  endif
+  if FEATURE_SPECTRUMSCOPE
+   	jsr	spectrumInitialize
 	beq.w	.memer
   endif
 	bra.w	.wo * go to bar init
@@ -22119,6 +22140,10 @@ qexit	bsr.b	qflush_messages
 	clr.l	deltab1(a5)
 	jsr	freemem
   endif
+  ifne FEATURE_SPECTRUMSCOPE
+	jsr	spectrumUninitialize
+  endif
+
 	move.l	_IntuiBase(a5),a6		
 	move.l	scopeWindowBase(a5),d0
 	beq.b	.uh1
@@ -22127,7 +22152,6 @@ qexit	bsr.b	qflush_messages
 	lob	CloseWindow
 	clr.l	scopeWindowBase(a5)
 .uh1
-
 	lore	Exec,Forbid
 
 	cmp	#1,prefsivu(a5)		* display prefssivu?
@@ -23430,8 +23454,8 @@ piup	macro
 	endm
 
 freqscope
-  ifeq FEATURE_FREQSCOPE
-	rts
+  ifne FEATURE_SPECTRUMSCOPE
+	jmp	runSpectrumScope
   endif
   
   ifne FEATURE_FREQSCOPE
@@ -29754,7 +29778,7 @@ createio
 * out:
 *   d0 = 1 success, 0 failure
 *******
-getNameFromLock 
+getNameFromLock:
 .true		equ	1
 .false		equ	0
 .return		equr	d5
@@ -45106,6 +45130,11 @@ deliShowNoteStruct
 
  endif
 
+****************************************************************************
+*
+* File load and save utilities
+*
+***************************************************************************
 
 * Loads a file
 * in:
@@ -45201,6 +45230,540 @@ plainSaveFile
 	popm	d1-a6 
 	rts
 
+***************************************************************************
+*
+* Frequency spectrum scope
+* Integer FFT
+*
+***************************************************************************
+
+  ifne FEATURE_SPECTRUMSCOPE
+spectrum
+
+	incdir
+	include	"hippo_fft.s"
+
+;FFT_LENGTH = 128 ; TODO: REPLACE
+
+; Length of the mixing buffer, to be passed to FFT
+MIX_LENGTH = FFT_LENGTH
+
+; Sample data bytes to be copied. Should be enough so that mixing
+; process has enough data.
+SAMPLE_LENGTH = MIX_LENGTH*2
+
+spectrumInitialize
+	DPRINT	"Spectrum init"
+
+	clr.b	spectrumInitialized(a5)
+
+	bsr.w	prepareSpectrumVolumeTable
+	beq.b	.x	
+	bsr.w	prepareSpectrumMuluTable
+	beq.b	.x
+	bsr.w	prepareSpectrumLogTable
+	beq.b	.x
+	bsr	prepareSpectrumSineTable
+	beq.b	.x
+	st	spectrumInitialized(a5)
+	moveq	#1,d0
+	rts
+.x	DPRINT 	"Spectrum init failed"
+	moveq	#0,d0
+	rts
+
+
+spectrumUninitialize
+	DPRINT	"Spectrum uninit"
+
+	move.l	spectrumVolumeTable(a5),a0
+	clr.l	spectrumVolumeTable(a5)
+	jsr	freemem
+	move.l	spectrumMuluTable(a5),a0
+	clr.l	spectrumMuluTable(a5)
+	jsr	freemem
+	move.l	spectrumLogTable(a5),a0
+	clr.l	spectrumLogTable(a5)
+	jsr	freemem
+	move.l	spectrumSineTable(a5),a0
+	clr.l	spectrumSineTable(a5)
+	jsr	freemem
+	rts
+
+prepareSpectrumVolumeTable
+	move.l	#$40*$100*2,d0
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,spectrumVolumeTable(a5)
+	bne.b	.do
+	rts
+
+.do
+	move.l	d0,a0
+	moveq	#0,d0
+.v
+	moveq	#0,d1
+.byte
+	move	d1,d2
+	ext	d2
+	muls	d0,d2
+	asr	#6,d2
+	move	d2,(a0)+
+
+	addq	#1,d1
+	cmp	#256,d1
+	bne.b	.byte
+
+	addq	#1,d0
+	cmp	#64,d0
+	bne.b	.v
+	moveq	#1,d0
+	rts
+
+; in:
+;    d0 = volume
+; out:
+;    a2 = table
+getSpectrumVolumeTable
+	tst	d0
+	bne.b	.1
+	moveq	#1,d0
+.1	subq	#1,d0
+	lsl		#8,d0
+	add		d0,d0
+	move.l	spectrumVolumeTable(a5),a2
+	add	d0,a2
+	rts
+
+prepareSpectrumMuluTable
+	move.l	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT*2,d0
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,spectrumMuluTable(a5)
+	bne.b	.do
+	rts
+.do
+	move.l	d0,a0
+	moveq	#0,d0
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d1
+.l	move	d0,(a0)+
+	add	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,d0
+	dbf	d1,.l
+	moveq	#1,d0
+	rts
+
+
+; This creates a logarithm-like table that starts from
+; 0 and levels to about to FFT_HEIGHT, at around index 256.
+; Max index allowed is $1000, which is the FFT power value.
+; Effect:
+; Dampen high power frequencies, typically the low ones
+; Enhance low power frequencies, typically the high ones
+; Makes for a better visual, so that power output is more flat
+; and not concentrated to the left only.
+
+prepareSpectrumLogTable
+	move.l	#$1000*2,d0
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,spectrumLogTable(a5)
+	bne.b	.do
+	rts
+.do
+	move.l	d0,a0
+	move	#$1000-1,d0
+	move.l	#-215,d2	; acceleration
+	move.l	#1<<16,d1 	; speed
+	moveq	#0,d3		; position
+	
+.l
+	move.l	d3,d4
+	swap	d4
+	move	d4,(a0)+
+
+	; accelerate
+	add.l	d2,d1
+	bpl.b	.posSpeed
+	clr.l	d1
+.posSpeed
+	; move position
+	add.l	d1,d3
+	bpl.b	.k
+	clr.l	d3
+.k	
+	dbf	d0,.l
+	moveq	#1,d0
+	rts
+
+* Precalculated FFP constants
+FFP_2PIper1024 	= $c90fdb39 * 2PI divided by 1024
+FFP_7fff 	= $fffe004f
+FFP_zero        = 0
+
+* This calculates a 1024 entry sine table with 16-bit
+* range.
+prepareSpectrumSineTable
+	moveq	#0,d6
+
+	lea	_MTName(pc),a1
+	lore	Exec,OldOpenLibrary
+	move.l	d0,d5
+	beq.b	.x
+
+	lea	_FFPName(pc),a1
+	lob	OldOpenLibrary
+	move.l	d0,d6
+	beq.b	.x
+
+	move.l	#1024*2,d0
+	moveq	#MEMF_PUBLIC,d1
+	jsr	getmem
+	move.l	d0,spectrumSineTable(a5)
+	bne.b	.do
+.x
+	bsr.b	.close
+	moveq	#0,d0
+	rts
+
+.close
+	move.l	d5,d0
+	jsr	closel
+	move.l	d6,d0
+	jmp	closel
+	
+.do
+	move.l	d0,a2
+ 
+	* D4 = multiplier 
+	* D3 = step
+	* D2 = current
+
+	moveq	#FFP_zero,d2
+	move.l	#FFP_2PIper1024,d3
+	move.l	#FFP_7fff,d4
+
+	move	#1024-1,d7
+.loop
+	move.l	d2,d0
+	move.l	d5,a6
+	lob	SPSin
+	move.l	d4,d1
+	move.l	d6,a6
+	lob	SPMul
+	lob	SPFix
+	move	d0,(a2)+
+
+	move.l	d2,d0
+	move.l	d3,d1
+	lob	SPAdd
+	move.l	d0,d2
+
+	dbf	d7,.loop   
+
+	bsr.b	.close
+	moveq	#1,d0
+	rts
+
+runSpectrumScope
+	tst.b	spectrumInitialized(a5)
+	beq.b	.x
+
+	move	#$0f0,$dff180
+
+	bsr.w	spectrumCopySamples
+	bsr.w	spectrumMixSamples
+	
+	lea	mixedSample,a0
+	bsr.w	windowFFT
+
+	lea	mixedSample,a0
+	bsr.w	sampleFFT
+		
+	; a0, a1 = results
+	bsr.w	calcFFTPower
+	bsr.w	drawFFT
+
+
+	* Vertical fill
+	lore	GFX,OwnBlitter
+
+	move.l	draw1(a5),a0
+	addq	#2,a0 * horiz offset
+	moveq	#2,d0 * modulo
+	lea	40(a0),a1 * target is one line below
+	lea	$dff000,a2
+
+	lob	WaitBlit
+	move.l	a0,$50(a2)	* A
+	move.l	a1,$48(a2)	* C
+	move.l	a1,$54(a2)	* D
+	move	d0,$60(a2)	* C
+	move	d0,$64(a2)	* A
+	move	d0,$66(a2)	* D
+	move.l	#-1,$44(a2) * masks
+	move.l	#$0b5a0000,$40(a2)	* D = A not C
+	* Height: 65 px
+	* Width 19*16 = 304 px
+	move	#65*64+19,$58(a2)
+
+	jsr	_LVODisownBlitter(a6)
+
+.x
+	rts
+
+
+
+spectrumCopySamples
+	lea	scopeData+scope_ch1(a5),a3
+	lea	channel1Data,a4
+	bsr.b	.copySample
+	lea	scopeData+scope_ch2(a5),a3
+	lea	channel2Data,a4
+	bsr.b	.copySample
+	lea	scopeData+scope_ch3(a5),a3
+	lea	channel3Data,a4
+	bsr.b	.copySample
+	lea	scopeData+scope_ch4(a5),a3
+	lea	channel4Data,a4
+	;bsr.b	.copySample
+	;rts
+
+* in
+*   a3 = scope channel block
+*   a4 = sample data destination buffer
+.copySample
+	; Destination buffer
+	;lea	channelData(a3),a4
+	
+	tst	ns_period(a3)
+	beq.b	.empty
+	tst	ns_tempvol(a3)
+	beq.b	.empty
+	tst.l	ns_loopstart(a3) * Always check these to avoid
+	beq.b	.empty			 * enforcer hits!
+	move.l	ns_start(a3),d0
+	bne.w	.jolt
+
+.empty
+	; empty sample
+	moveq	#0,d0
+	rept	SAMPLE_LENGTH/4
+	move.l	d0,(a4)+
+	endr
+	rts
+
+.jolt	
+	move.l	d0,a1				* Sample start
+	move	ns_length(a3),d5	* Sample length
+	move	ns_replen(a3),d0
+	move.l	ns_loopstart(a3),d1
+.d
+	; see if enough data to copy all in one block
+	cmp	#SAMPLE_LENGTH/2,d5
+	bhs.b	.large
+	; sample length 2, ie. empty sample?
+	cmp	#2,d5
+	bls.w	.empty
+	
+	; this loop is active when there is some data to be copied
+	moveq	#SAMPLE_LENGTH/2-1,d7	* words to copy
+.small
+	; sample word
+	; source pointer can be odd
+	move.b	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+
+	
+	subq	#1,d5			* one word copied, check length
+	bpl.b	.l
+
+	cmp	#2,d0
+	bls.b	.emptyRepeat
+
+	; sample repeat	starts
+	; repeat length
+	move	d0,d5
+	; repeat data start
+	move.l	d1,a1
+.l
+	dbf	d7,.small		* Loop..
+	rts
+
+.emptyRepeat
+.er	clr	(a4)+
+	dbf	d7,.er
+	rts
+
+
+.large
+	rept	SAMPLE_LENGTH/4
+;	move.l	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+	
+	endr
+	rts
+
+
+; in:
+;    d0 = period
+; out:
+;    d1 = 8+8 fixed point sample skip value ff000000aa, ff = fractions
+calcSampleStep
+	tst	d0
+	bne.b	.1
+	moveq	#1,d1
+	rts
+.1
+	move.l	#3546895,d1	* PAL clock
+	divu	d0,d1		* playback frequency in hertz
+	ext.l	d1
+	lsl.l	#8,d1
+	;divu	#8000,d1	* resampling destination frequency
+	divu	#16000,d1	* resampling destination frequency
+	;divu	#20000,d1	* resampling destination frequency
+	;divu	#24000,d1	* resampling destination frequency
+	;divu	#28000,d1	* resampling destination frequency
+	ext.l	d1
+	ror.l	#8,d1
+
+	; 8000 dest frequency means that the FFT scale goes
+	; from 0 to 4000.
+	rts
+
+
+
+spectrumMixSamples
+	lea	scopeData+scope_ch1(a5),a1
+	lea	channel1Data,a0
+	moveq	#1,d4
+	bsr.b	.mixSample
+
+	lea	scopeData+scope_ch2(a5),a1
+	lea	channel2Data,a0
+	moveq	#0,d4
+	bsr.b	.mixSample
+
+	lea	scopeData+scope_ch3(a5),a1
+	lea	channel3Data,a0
+	moveq	#0,d4
+	bsr.b	.mixSample
+
+	lea	scopeData+scope_ch4(a5),a1
+	lea	channel4Data,a0
+	moveq	#0,d4
+	;bsr.b	.mixSample
+	;rts
+
+.mixSample
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	; out: a2 = voltab
+
+	move	ns_period(a1),d0
+	bsr.b	calcSampleStep
+	; result in d1
+
+	;lea	channelData(a0),a0
+	lea	mixedSample,a1
+
+	moveq	#0,d6
+	moveq	#0,d0
+
+	tst	d4
+	beq.w	.add
+
+; move to buffer (first set)
+	;rept	SAMPLE_LENGTH
+	printt "scale the volume table instead"
+	rept	MIX_LENGTH
+	; sample byte
+	moveq	#0,d5
+	move.b	(a0,d0.w),d5
+	; volume scaled byte
+	add	d5,d5
+	move.w	(a2,d5.w),d5
+	; scale input data for FFT to get larger resolution output
+	asl	#4,d5	
+	move	d5,(a1)+
+
+	; next source sample
+	add.l	d1,d0
+	addx.w	d6,d0
+	endr
+	rts
+.add
+
+; add to buffer
+;	rept	SAMPLE_LENGTH
+	printt "scale the volume table instead"
+	rept	MIX_LENGTH
+	; sample byte
+	moveq	#0,d5
+	move.b	(a0,d0.w),d5
+	; volume scaled byte
+	add	d5,d5
+	move.w	(a2,d5.w),d4
+	; add to mix buffer
+	; scale input data for FFT to get larger resolution output
+	asl	#4,d4
+	add.w	d4,(a1)+
+
+	; next source sample
+	add.l	d1,d0
+	addx.w	d6,d0
+	endr
+	rts
+
+
+drawFFT
+	; FFT data is here.
+	; The other half is mirror of the first.
+	lea	mixedSample,a0
+	move.l	draw1(a5),a1
+	addq	#2,a1
+	move.l	spectrumMuluTable(a5),a2
+	move.l	spectrumLogTable(a5),a3
+	move	#%11100000,d6
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d5
+
+	moveq	#FFT_LENGTH/2-1,d7
+.l
+ if 1
+	move	(a0)+,d1
+	;cmp.l	max(pc),d1
+	;blo.b	.m
+	;move.l	d1,max
+;.m
+	; grab value from log table
+	add	d1,d1
+	move	(a3,d1),d1
+	asr	#1,d1 ;;;;;;;;;;;;
+	move	d5,d0
+	sub	d1,d0
+ else 
+	move	d5,d0
+	sub	(a0)+,d0
+ endif
+	; clip test, should be unecessar though
+	bpl.b	.c
+	moveq	#0,d0
+	bra.b	.a
+.c
+	add	d0,d0 
+	move	(a2,d0),d0
+	or.b	d6,(a1,d0)
+.a
+	ror.b	#4,d6
+	bpl.b	.b
+	addq	#1,a1
+.b
+	dbf	d7,.l	
+	
+
+	rts		
+
+  endif ; FEATURE_SPECTRUMSCOPE
 
 *******************************************************************************
 * Playereitä
@@ -45214,15 +45777,17 @@ kplayer		incbin	kpl
 fimp_decr	incbin	fimp_dec.bin
 shr_decr	include	ShrinklerDecompress.s
 
-xpkname		dc.b	"xpkmaster.library",0
-ppname		dc.b	"powerpacker.library",0
-medplayername1	dc.b	"medplayer.library",0
-medplayername2	dc.b	"octaplayer.library",0
-medplayername3	dc.b	"octamixplayer.library",0
-sidname		dc.b	"playsid.library",0
-mlinename	dc.b	"mline.library",0
-xfdname		dc.b	"xfdmaster.library",0
- even
+xpkname         dc.b    "xpkmaster.library",0
+ppname          dc.b    "powerpacker.library",0
+medplayername1  dc.b    "medplayer.library",0
+medplayername2  dc.b    "octaplayer.library",0
+medplayername3  dc.b    "octamixplayer.library",0
+sidname         dc.b    "playsid.library",0
+mlinename       dc.b    "mline.library",0
+xfdname         dc.b    "xfdmaster.library",0
+_MTName         dc.b    "mathtrans.library",0
+_FFPName        dc.b    "mathffp.library",0
+                even
 
 	section	plrs,data
 
@@ -46233,4 +46798,12 @@ var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
+
+
+channel1Data	ds.b	SAMPLE_LENGTH
+channel2Data	ds.b	SAMPLE_LENGTH
+channel3Data	ds.b	SAMPLE_LENGTH
+channel4Data	ds.b	SAMPLE_LENGTH
+mixedSample	    ds.w	SAMPLE_LENGTH
+
  end
