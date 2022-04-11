@@ -16541,6 +16541,9 @@ doPrintNames
 .nodi
 	move.l	a2,a0
 	moveq	#27-1,d0		* max kirjainten m‰‰r‰ nimess‰
+	* ENFORCER HIT HAPPENED HERE once:
+	* when right clicking in filebrowser mode, to set
+	* as fav. a1 read was illegal
 .ff	move.b	(a1)+,(a2)+
 	dbeq	d0,.ff
 	* test if buffer exhausted already
@@ -22650,7 +22653,6 @@ scopeinterrupt:				* a5 = var_b
 	tst	UPS_Enabled(a0)
 	bne.b	.disabled
 	lea	nullsample,a1
-	move	#$f00,$dff180
 
 	lea	UPS_Voice1Adr(a0),a2
 	lea	scopeData+scope_ch1(a5),a3
