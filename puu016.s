@@ -45,7 +45,6 @@ DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 
-
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
  endif
@@ -634,10 +633,17 @@ deltab3		rs.l	1
 deltab4		rs.l	1	
   endif
   ifne FEATURE_SPECTRUMSCOPE
+spectrumMemory		rs.l 1
 spectrumVolumeTable	 rs.l 1
 spectrumMuluTable rs.l 1
 spectrumLogTable rs.l 1
 spectrumSineTable rs.l 1
+spectrumChannel1	rs.l 1
+spectrumChannel2	rs.l 1
+spectrumChannel3	rs.l 1
+spectrumChannel4	rs.l 1
+spectrumMixedData	rs.l 1
+spectrumImagData	rs.l 1
 spectrumInitialized rs.w 1
   endif
 
@@ -45248,29 +45254,64 @@ spectrum:
 	incdir
 	include	"hippo_fft.s"
 
-; Length of the mixing buffer, to be passed to FFT
+; Length of the mixed data, to be passed to FFT
 MIX_LENGTH = FFT_LENGTH
 
 ; Sample data bytes to be copied. Should be enough so that mixing
-; process has enough data.
+; process has enough data, as it interpolates according to current
+; channel period. 
 SAMPLE_LENGTH = MIX_LENGTH*2
 
 spectrumInitialize
 	DPRINT	"Spectrum init"
 
+VOLUME_TABLE_LEN = $40*$100*2
+MULU_TABLE_LEN = SCOPE_DRAW_AREA_HEIGHT_DEFAULT*2
+LOG_TABLE_LEN = $1000*2
+SINE_TABLE_LEN = 1024*2
+
+SPECTRUM_TOTAL set VOLUME_TABLE_LEN+MULU_TABLE_LEN+LOG_TABLE_LEN+SINE_TABLE_LEN
+SPECTRUM_TOTAL set SPECTRUM_TOTAL+4*SAMPLE_LENGTH ; bytes
+SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
+
 	clr.b	spectrumInitialized(a5)
 
-	bsr.w	prepareSpectrumVolumeTable
-	beq.b	.x	
+	move.l	#SPECTRUM_TOTAL,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	jsr	getmem
+	move.l	d0,spectrumMemory(a5)
+	beq.b	.x
+	move.l	d0,a0
+	move.l	a0,spectrumVolumeTable(a5)
+	add.l	#VOLUME_TABLE_LEN,a0
+	move.l	a0,spectrumMuluTable(a5)
+	add	#MULU_TABLE_LEN,a0
+	move.l	a0,spectrumLogTable(a5)
+	add	#LOG_TABLE_LEN,a0
+	move.l	a0,spectrumSineTable(a5)
+	add	#SINE_TABLE_LEN,a0
+	move.l	a0,spectrumChannel1(a5)
+	add	#SAMPLE_LENGTH,a0
+	move.l	a0,spectrumChannel2(a5)
+	add	#SAMPLE_LENGTH,a0
+	move.l	a0,spectrumChannel3(a5)
+	add	#SAMPLE_LENGTH,a0
+	move.l	a0,spectrumChannel4(a5)
+	add	#SAMPLE_LENGTH,a0
+	move.l	a0,spectrumMixedData(a5)
+	add	#FFT_LENGTH*2,a0
+	move.l	a0,spectrumImagData(a5)
+
+	bsr.w	prepareSpectrumSineTable
+	beq.b	.x
+	bsr.b	prepareSpectrumVolumeTable
 	bsr.w	prepareSpectrumMuluTable
-	beq.b	.x
 	bsr.w	prepareSpectrumLogTable
-	beq.b	.x
-	bsr	prepareSpectrumSineTable
-	beq.b	.x
+
 	st	spectrumInitialized(a5)
 	moveq	#1,d0
 	rts
+	
 .x	DPRINT 	"Spectrum init failed"
 	moveq	#0,d0
 	rts
@@ -45278,31 +45319,14 @@ spectrumInitialize
 
 spectrumUninitialize
 	DPRINT	"Spectrum uninit"
-
-	move.l	spectrumVolumeTable(a5),a0
-	clr.l	spectrumVolumeTable(a5)
-	jsr	freemem
-	move.l	spectrumMuluTable(a5),a0
-	clr.l	spectrumMuluTable(a5)
-	jsr	freemem
-	move.l	spectrumLogTable(a5),a0
-	clr.l	spectrumLogTable(a5)
-	jsr	freemem
-	move.l	spectrumSineTable(a5),a0
-	clr.l	spectrumSineTable(a5)
+	clr.b	spectrumInitialized(a5)
+	move.l	spectrumMemory(a5),a0
+	clr.l	spectrumMemory(a5)
 	jsr	freemem
 	rts
 
 prepareSpectrumVolumeTable
-	move.l	#$40*$100*2,d0
-	moveq	#MEMF_PUBLIC,d1
-	jsr	getmem
-	move.l	d0,spectrumVolumeTable(a5)
-	bne.b	.do
-	rts
-
-.do
-	move.l	d0,a0
+	move.l	spectrumVolumeTable(a5),a0
 	moveq	#0,d0
 .v
 	moveq	#0,d1
@@ -45310,7 +45334,8 @@ prepareSpectrumVolumeTable
 	move	d1,d2
 	ext	d2
 	muls	d0,d2
-	asr	#6,d2
+	;asr	#6,d2
+	asr	#3,d2	* scale suitable for graph
 	move	d2,(a0)+
 
 	addq	#1,d1
@@ -45339,14 +45364,7 @@ getSpectrumVolumeTable
 	rts
 
 prepareSpectrumMuluTable
-	move.l	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT*2,d0
-	moveq	#MEMF_PUBLIC,d1
-	jsr	getmem
-	move.l	d0,spectrumMuluTable(a5)
-	bne.b	.do
-	rts
-.do
-	move.l	d0,a0
+	move.l	spectrumMuluTable(a5),a0
 	moveq	#0,d0
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d1
 .l	move	d0,(a0)+
@@ -45366,14 +45384,7 @@ prepareSpectrumMuluTable
 ; and not concentrated to the left only.
 
 prepareSpectrumLogTable
-	move.l	#$1000*2,d0
-	moveq	#MEMF_PUBLIC,d1
-	jsr	getmem
-	move.l	d0,spectrumLogTable(a5)
-	bne.b	.do
-	rts
-.do
-	move.l	d0,a0
+	move.l	spectrumLogTable(a5),a0
 	move	#$1000-1,d0
 	move.l	#-215,d2	; acceleration
 	move.l	#1<<16,d1 	; speed
@@ -45416,12 +45427,6 @@ prepareSpectrumSineTable
 	lea	_FFPName(pc),a1
 	lob	OldOpenLibrary
 	move.l	d0,d6
-	beq.b	.x
-
-	move.l	#1024*2,d0
-	moveq	#MEMF_PUBLIC,d1
-	jsr	getmem
-	move.l	d0,spectrumSineTable(a5)
 	bne.b	.do
 .x
 	bsr.b	.close
@@ -45435,7 +45440,7 @@ prepareSpectrumSineTable
 	jmp	closel
 	
 .do
-	move.l	d0,a2
+	move.l	spectrumSineTable(a5),a2
  
 	* D4 = multiplier 
 	* D3 = step
@@ -45474,22 +45479,20 @@ runSpectrumScope
 	bsr.w	spectrumCopySamples
 	bsr.w	spectrumMixSamples
 	
-	lea	mixedSample,a0
+	move.l	spectrumMixedData(a5),a0
 	bsr.w	windowFFT
 
-	lea	mixedSample,a0
-	lea	imaginary,a1
+	move.l	spectrumMixedData(a5),a0
+	move.l	spectrumImagData(a5),a1
 	move.l	spectrumSineTable(a5),a2
 	bsr.w	sampleFFT
 		
-	lea	mixedSample,a0
-	lea	imaginary,a1
+	move.l	spectrumMixedData(a5),a0
+	move.l	spectrumImagData(a5),a1
 	bsr.w	calcFFTPower
 
 	bsr.w	drawFFT
-
-;	rts
-
+	
 	* Vertical fill
 	lore	GFX,OwnBlitter
 
@@ -45521,16 +45524,16 @@ runSpectrumScope
 
 spectrumCopySamples
 	lea	scopeData+scope_ch1(a5),a3
-	lea	channel1Data,a4
+	move.l	spectrumChannel1(a5),a4
 	bsr.b	.copySample
 	lea	scopeData+scope_ch2(a5),a3
-	lea	channel2Data,a4
+	move.l	spectrumChannel2(a5),a4
 	bsr.b	.copySample
 	lea	scopeData+scope_ch3(a5),a3
-	lea	channel3Data,a4
+	move.l	spectrumChannel3(a5),a4
 	bsr.b	.copySample
 	lea	scopeData+scope_ch4(a5),a3
-	lea	channel4Data,a4
+	move.l	spectrumChannel4(a5),a4
 	;bsr.b	.copySample
 	;rts
 
@@ -45556,8 +45559,8 @@ spectrumCopySamples
 ;	rept	SAMPLE_LENGTH/4
 ;	move.l	d0,(a4)+
 ;	endr
-	moveq	#SAMPLE_LENGTH/4/8-1,d0
-	moveq	#0,d1
+	moveq	#SAMPLE_LENGTH/4/8-1,d1
+	moveq	#0,d0
 .c
 	move.l	d0,(a4)+
 	move.l	d0,(a4)+
@@ -45567,7 +45570,7 @@ spectrumCopySamples
 	move.l	d0,(a4)+
 	move.l	d0,(a4)+
 	move.l	d0,(a4)+
-	dbf	d0,.c
+	dbf	d1,.c
 	rts
 
 .jolt	
@@ -45581,7 +45584,7 @@ spectrumCopySamples
 	bhs.b	.large
 	; sample length 2, ie. empty sample?
 	cmp	#2,d5
-	bls.w	.empty
+	bls.b	.empty
 	
 	; this loop is active when there is some data to be copied
 	moveq	#SAMPLE_LENGTH/2-1,d7	* words to copy
@@ -45662,22 +45665,22 @@ calcSampleStep
 
 spectrumMixSamples
 	lea	scopeData+scope_ch1(a5),a1
-	lea	channel1Data,a0
+	move.l	spectrumChannel1(a5),a0
 	moveq	#1,d4
 	bsr.b	.mixSample
 
 	lea	scopeData+scope_ch2(a5),a1
-	lea	channel2Data,a0
+	move.l	spectrumChannel2(a5),a0
 	moveq	#0,d4
 	bsr.b	.mixSample
 
 	lea	scopeData+scope_ch3(a5),a1
-	lea	channel3Data,a0
+	move.l	spectrumChannel3(a5),a0
 	moveq	#0,d4
 	bsr.b	.mixSample
 
 	lea	scopeData+scope_ch4(a5),a1
-	lea	channel4Data,a0
+	move.l	spectrumChannel4(a5),a0
 	moveq	#0,d4
 	;bsr.b	.mixSample
 	;rts
@@ -45691,19 +45694,18 @@ spectrumMixSamples
 	bsr.b	calcSampleStep
 	; result in d1
 
-	;lea	channelData(a0),a0
-	lea	mixedSample,a1
+	move.l	spectrumMixedData(a5),a1
 
 	moveq	#0,d6
 	moveq	#0,d0
-
+	
+	* Copy or add?
 	tst	d4
-	beq.w	.add
+	beq.b	.add
 
 	moveq	#MIX_LENGTH/2-1,d7
 .m1
 ; move to buffer (first set)
-	;rept	SAMPLE_LENGTH
 	printt "scale the volume table instead"
 	rept	2 ;MIX_LENGTH
 	; sample byte
@@ -45711,10 +45713,8 @@ spectrumMixSamples
 	move.b	(a0,d0.w),d5
 	; volume scaled byte
 	add	d5,d5
-	move.w	(a2,d5.w),d5
-	; scale input data for FFT to get larger resolution output
-	asl	#4,d5	
-	move	d5,(a1)+
+	; copy
+	move.w	(a2,d5.w),(a1)+
 
 	; next source sample
 	add.l	d1,d0
@@ -45726,7 +45726,6 @@ spectrumMixSamples
 .add
 
 ; add to buffer
-;	rept	SAMPLE_LENGTH
 	moveq	#MIX_LENGTH/2-1,d7
 .m2
 	printt "scale the volume table instead"
@@ -45738,8 +45737,6 @@ spectrumMixSamples
 	add	d5,d5
 	move.w	(a2,d5.w),d4
 	; add to mix buffer
-	; scale input data for FFT to get larger resolution output
-	asl	#4,d4
 	add.w	d4,(a1)+
 
 	; next source sample
@@ -45753,7 +45750,7 @@ spectrumMixSamples
 drawFFT
 	; FFT data is here.
 	; The other half is mirror of the first.
-	lea	mixedSample,a0
+	move.l	spectrumMixedData(a5),a0
 	move.l	draw1(a5),a1
 	addq	#2+2,a1
 	move.l	spectrumMuluTable(a5),a2
@@ -45761,6 +45758,7 @@ drawFFT
 	move	#%11100000,d6
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-2,d5
 
+	; Take the 1st half
 	moveq	#FFT_LENGTH/2-1,d7
 .l
  if 1
@@ -46836,13 +46834,4 @@ var_b		ds.b	size_var
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
-
-
-channel1Data	ds.b	SAMPLE_LENGTH
-channel2Data	ds.b	SAMPLE_LENGTH
-channel3Data	ds.b	SAMPLE_LENGTH
-channel4Data	ds.b	SAMPLE_LENGTH
-mixedSample	    ds.w	SAMPLE_LENGTH
-imaginary	ds.w	SAMPLE_LENGTH
-
  end
