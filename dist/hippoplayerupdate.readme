@@ -77,16 +77,18 @@ NOTE 4: Too long didn't read
 - Patternscope now displays note and sample transpose information
   for Future Composer and BP SoundMon formats.
 - Improved sample scope support
-  - Sample scope was previously availables for Protracker, sample player
+  - Sample scope refers to Quadrascope, Hipposcope and friends.
+  - They were previously available for Protracker, sample player
     and some multichannel modules (S3M, XM, IT, MTM, FT). 
   - Added support for the following hippoplayers:
     - Art Of Noise (4 channels)
     - BP SoundMon (v2.0-v2.2)
     - Future Composer (v1.0-v1.4)
+    - Game Music Creator
     - Hippel COSO
     - JamCracker
     - SoundFX
-  - Added support for the following eagleplayers. Note that
+  - Also added support for the following eagleplayers. Note that
     not all EPs have a bug-free scope support.
     - AProSys, ChipTracker, David Whittaker, Digital Mugician, EarAche
     - Jason Brooke, Jason Page, Jeroen Tel, Jochen Hippel ST
@@ -94,6 +96,14 @@ NOTE 4: Too long didn't read
     - Richard Joseph, Rob Hubbard, Rob Hubbard 2/Infogrames, Sonix Music Driver
     - SoundControl, Special FX, Steve Turner, Synth Pack, TCBTracker (ST)
     - The Musical Enlightenment, Tim Follin, Wally Beben
+- The "Freq. Analyzer" scope was removed. It was some kind of a
+  histogram display of sample bytes, quite boring and not really informative.
+- New scope "Freq. Spectrum" was added. This is an assembler conversion
+  of the fixed-point fast fourier transform by Tom Robers in 1989.
+  I did the conversion in 2012 and tweaked it a lot, which was fun :-) 
+  I realized it would be cool to have it in Hippo, so here goes. 
+  It does a 128-point FFT and runs fine on A500. On the left are the low
+  frequencies and on the right are the high frequencies.
 
 ## Tips and tricks:
 - Enabling "Doubleclick" in Prefs makes starting playback easier.
