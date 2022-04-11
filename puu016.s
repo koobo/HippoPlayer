@@ -2108,7 +2108,7 @@ about_tt
 
 
 ;scrtit	dc.b	"HippoPlayer - Copyright й 1994-2021 K-P Koljonen",0
-scrtit	dc.b	"HippoPlayer by K-P Koljonen in 1994-2000,2021",0
+scrtit	dc.b	"HippoPlayer by K-P Koljonen in 1994-2000,2021-2022",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -2141,7 +2141,7 @@ about_t1
  dc.b " as long as all the files are included",10,3
  dc.b "   unaltered. Not for commercial use",10,3
  dc.b " without a permission from the author.",10,3
- dc.b " Copyright й 1994-2021 by K-P Koljonen",10,3
+ dc.b " Copyright й 1994-2022 by K-P Koljonen",10,3
  dc.b "           *** FREEWARE ***",10,3
  dc.b "ннннннннннннннннннннннннннннннннннннннн",10,3
  ;dc.b "Snail mail: Kari-Pekka Koljonen",10,3
