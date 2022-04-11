@@ -41,7 +41,13 @@ TARK	= 0	* 1: tekstien tarkistus
 EFEKTI  = 0	* 1: efekti volumesliderillä
 ANNOY	= 0 * 1: Unregistered version tekstejä ympäriinsä
 
-DELI_TEST_MODE = 0
+DELI_TEST_MODE 		= 	0
+FEATURE_FREQSCOPE	=	0
+FEATURE_SPECTRUMSCOPE	= 	0
+
+ ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE-2)
+    fail "Enable only one"
+ endif
 
 ; Magic constants used with playingmodule and chosenmodule
 ; Positive value:
@@ -614,10 +620,12 @@ buffer0h  	rs.w 	1
 buffer1		rs.l	1
 buffer2		rs.l	1
 scopeVerticalBarTable		rs.l	1
+  ifne FEATURE_FREQSCOPE
 deltab1		rs.l	1	
 deltab2		rs.l	1	
 deltab3		rs.l	1	
 deltab4		rs.l	1	
+  endif
 ;omatrigger	rs.b	1	* kopio kplayerin usertrigistä
 * This turns to 1 if user has manually activated the scope
 * by LMB click, when scope was passivated because not being
@@ -13930,7 +13938,15 @@ psup3
 ls00	dc.b	14,6
 ls01	dc.b	"Quadrascope",0
 ls02	dc.b	"Hipposcope",0
-ls03	dc.b	"Freq. analyzer",0
+ls03	
+  ifne FEATURE_FREQSCOPE
+	dc.b	"Freq. analyzer"
+  endif
+  ifne FEATURE_SPECTRUMSCOPE
+	dc.b    "Freq. spectrum"
+  endif
+	dc.b  0
+  
 ls04	dc.b	"Patternscope",0
 ls05	dc.b	"F. Quadrascope",0
 ls06	dc.b	"PatternscopeXL",0
@@ -21695,8 +21711,9 @@ quad_code
 	lea	var_b,a5
 	clr.l	mtab(a5)
 	clr.l	buffer0(a5)
+  ifne FEATURE_FREQSCOPE
 	clr.l	deltab1(a5)
-
+  endif
 	sub.l	a1,a1
 	lore	Exec,FindTask
 	move.l	d0,quad_task(a5)
@@ -21781,6 +21798,7 @@ quad_code
 	move.l	d0,mtab(a5)
 	beq.w	.memer
 	bsr.w	voltab
+
 .wo	move.l	#512,d0		* palkkitaulu
 	move.l	#MEMF_CLEAR,d1
 	jsr	getmem
@@ -21798,7 +21816,9 @@ quad_code
 	bsr.w	voltab2
 	bra.b	.wo
 
-.5	move.l	#64*256,d0	* volumetaulukko
+.5	
+  ifne FEATURE_FREQSCOPE
+	move.l	#64*256,d0	* volumetaulukko
 	move.l	#MEMF_CLEAR,d1
 	jsr	getmem
 	move.l	d0,mtab(a5)
@@ -21806,8 +21826,10 @@ quad_code
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
+ endif
 	bra.w	.cont
 
+  ifne FEATURE_FREQSCOPE 
 .delt	move.l	#(256+32)*4,d0
 	move.l	#MEMF_CLEAR,d1
 	jsr	getmem
@@ -21820,9 +21842,11 @@ quad_code
 	add.l	#256+32,d0
 	move.l	d0,deltab4(a5)
 .r	rts
+  endif
 
-
-.6	move.l	#64*256,d0	* volumetaulukko
+.6	
+  ifne FEATURE_FREQSCOPE 
+    move.l	#64*256,d0	* volumetaulukko
 	move.l	#MEMF_CLEAR,d1
 	jsr	getmem
 	move.l	d0,mtab(a5)
@@ -21830,7 +21854,8 @@ quad_code
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
-	bra.w	.wo
+  endif
+	bra.w	.wo * go to bar init
 
 .patternScopeNormal
 .patternScopeNormalBars
@@ -22083,13 +22108,14 @@ scopeLoop:
 qexit	bsr.b	qflush_messages
 
 	move.l	mtab(a5),a0
+	clr.l	mtab(a5)
 	jsr	freemem
 	bsr	freeScopeBitmaps
+  ifne FEATURE_FREQSCOPE
 	move.l	deltab1(a5),a0
-	jsr	freemem
-	clr.l	mtab(a5)
 	clr.l	deltab1(a5)
-
+	jsr	freemem
+  endif
 	move.l	_IntuiBase(a5),a6		
 	move.l	scopeWindowBase(a5),d0
 	beq.b	.uh1
@@ -22773,6 +22799,7 @@ voltab2
 
 
 ***************** Freqscopelle
+  ifne FEATURE_FREQSCOPE
 voltab3
 	move.l	mtab(a5),a0
 	moveq	#$40-1,d3
@@ -22789,7 +22816,7 @@ voltab3
 	addq	#1,d2
 	dbf	d3,.olp2
 	rts
-
+  endif
 
 **************************************************************************
 * Scope draw
@@ -23400,6 +23427,11 @@ piup	macro
 	endm
 
 freqscope
+  ifeq FEATURE_FREQSCOPE
+	rts
+  endif
+  
+  ifne FEATURE_FREQSCOPE
 	moveq	#0,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -23675,6 +23707,7 @@ piup2	macro
 	dbf	d7,.loop11
 
 	rts
+  endif ; FEATURE_FREQSCOPE
 
 *********** Scopet PS3M
 *** stereoscope
