@@ -69,9 +69,26 @@ PATTERNINIT - EP
 + KRIS
 + Mugician2
 
-TODO
+
+TODO - 2022 April
++ FIXED: fix kick 1.3 bevel borders
++ FIXED: mp3 IDv3 header skip
++ FIXED: quadrascope support for other playroutines
++ FIXED: improved mp3 id
+- check DIGIBooster mods, mods start with "DIGI Booster module"
++ FIXED: BUG: open scope
+       play some non scope supporting mod
+       then play mp3 
+  ---> scope enforcer hits
++ BUG: play some deli module with scope
+  - with double buffering
+  - load unknown file
+  -> scope enforcer hit, read already freed module?
+  -> POSSIBLY FIXED
+
+TODO - 2022 January
 - click scope window: switch visualization mode
-- allow changing button icon gfx and height
++ FIXED: allow changing button icon gfx and height
 
 TODO
 - AREXX: check that file adds etc are working in correct list mode
@@ -85,7 +102,7 @@ TODO: When a module has more than 1 sub-song it will go to next
   subsong even when in random play mode. 
   I think in random play mode it should only play first song, since some have quite a 
   few and most sub-songs are then short sound effects.
-FIXED Some formats display the HippoScope, but the scope is not working at 
++ FIXED Some formats display the HippoScope, but the scope is not working at 
   all, for example: Future Composer 1.0-1.3, 1.4, SoundFX, 
   Art of Noice 4ch, Game Music Creator, BP Soundmon v2.0, Oktalyzer, 
   Sonic Arranger, Chiptracker [EP]

@@ -66,11 +66,10 @@ This time we skip over one version number!
 - Move "Button tooltips" Prefs button to the "Display" Prefs subpage, which is
   the correct placement.
 - The play button icon had an extra pixel at the bottom. 
-  This went unnoticed until now, how is that even possible?
-  
+  This went unnoticed until now, how is that even possible?!
 
 ## New features:
-- "Big buttons" option in Prefs. This doubles the height of the two 
+- "Big buttons" option in Prefs/Display. This doubles the height of the two 
   button rows in the main window. May be helpful with higher resolution
   screens. The original icons were designed for the 640x256 resolution. 
 - Added support for launching HiP via "project icons". These are icons
@@ -80,7 +79,7 @@ This time we skip over one version number!
 - Patternscope support added to the THX/AHX format. Also shows transposes.
 - Patternscope now displays note and sample transpose information
   for Future Composer and BP SoundMon formats.
-- Improved sample scope support
+- Improved sample scope support:
   - Sample scope refers to Quadrascope, Hipposcope and friends. They were 
     previously available for Protracker, sample player and some 
     multichannel modules. 
