@@ -670,11 +670,19 @@ samplebufsiz_new	rs.b	1
 samplebufsiz0		rs.b	1
 samplebufsiz		rs.l	1
 
+* Sample playback rate, bytes per frame.
 sampleadd		rs.l	1
+* Pointer to a pointer to the sample position.
+* This is reset to zero by sample player when a buffer
+* is played through.
 samplefollow		rs.l	1
+* Sample pointer for mono samples, or the other stereo channel
 samplepointer		rs.l	1
+* Sample pointer to the other stereo channel
 samplepointer2		rs.l	1
+* Set to non-zero if sample being played is stereo
 samplestereo		rs.b	1
+
 * This is set in loadfile() to indicate a sample is found.
 * Actual loading is then skipped.
 sampleinit		rs.b	1		
@@ -22617,7 +22625,7 @@ scopeinterrupt:				* a5 = var_b
 	cmp	#pt_sample,playertype(a5)
 	bne.b	.notSample
 
-	* Sample scope data
+	* Sample scope data. Update sample follow position once per frame.
 	move.l	sampleadd(a5),d0
 	move.l	samplefollow(a5),a0
 	add.l	d0,(a0)
@@ -22916,12 +22924,18 @@ drawScope
 	beq.b	.fil
 	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,quadmode2(a5)	
 	beq.b	.fil
+	cmp.b	#QUADMODE2_FREQANALYZER,quadmode2(a5)
+	beq.b	.sampleFr
+	cmp.b	#QUADMODE2_FREQANALYZER_BARS,quadmode2(a5)
+	beq.b	.sampleFr
 	bsr.w	samplescope
 	bra.w	.cont
+.sampleFr
+	bsr.w	freqscope
+	bra	.cont
 .fil
 	bsr.w	samplescopefilled
 	bsr.w	mirrorfill
-
 	bra.w	.cont
 .toot
 
@@ -24740,9 +24754,8 @@ makeScopeVerticalBars
 	rts
 
 
-
-
-*** Sample IFF 8SVX scope
+*** Sample scope
+*** Any sample played by the sample player
 
 samplescope
 	bsr.b	samples0
@@ -24792,12 +24805,14 @@ samples0
 
 	move.l	samplebufsiz(a5),d4
 	subq.l	#1,d4
+
 	moveq	#1,d0
 	move	#$80,d6
 
 	lea	multab(a5),a2
 	move.l	draw1(a5),a0
 	rts
+
 
 *********************************************************************
 * GENERIC NOTESCROLLER
@@ -45486,14 +45501,21 @@ runSpectrumScope
 	beq.w	.x
 
 	cmp	#pt_multi,playertype(a5)
-	bne.b	.pt
+	beq.b	.ps3m
+	cmp	#pt_sample,playertype(a5)
+	beq.b	.sample
+	bra.b	.normal
+
+.ps3m
 	bsr	spectrumGetPS3MSampleData
-	bra.b	.ps3m
-.pt
+	bra.b	.go
+.sample
+	bsr	spectrumGetSampleData
+	bra.b	.go
+.normal
 	bsr.w	spectrumCopySamples
 	bsr.w	spectrumMixSamples
-.ps3m
-
+.go
 	move.l	spectrumMixedData(a5),a0
 	bsr.w	windowFFT
 
@@ -45834,11 +45856,10 @@ spectrumGetPS3MSampleData
 	move.l	(a1),a1
 	
 	move.l	spectrumMixedData(a5),a2
-	moveq	#FFT_LENGTH/2-1,d7
+	moveq	#FFT_LENGTH-1,d7
 .loop
- rept 2
-	move.b	(a0,d0),d2
-	move.b	(a1,d0),d3
+	move.b	(a0,d0.l),d2
+	move.b	(a1,d0.l),d3
 	ext	d2
 	ext	d3
 	add	d3,d2
@@ -45846,9 +45867,57 @@ spectrumGetPS3MSampleData
 	move	d2,(a2)+
 	addq	#1,d0
 	and	d1,d0
- endr
 	dbf	d7,.loop
 
+	rts
+
+spectrumGetSampleData
+	jsr	samples0
+	* d5 = follow offset
+	* d4 = buffer size mask
+
+	move.l	spectrumMixedData(a5),a3
+	moveq	#FFT_LENGTH/2-1,d7
+
+	move.l	samplepointer(a5),a1
+	move.l	(a1),a1
+	
+	tst.b	samplestereo(a5)
+	bne.b	.stereo
+
+	* mono	
+.mloop
+	move.b	(a1,d5.l),d2
+	ext	d2
+	asl	#5,d2 * scale
+	move	d2,(a3)+
+	
+	addq.l	#1,d5
+	cmp.l	d4,d5
+	bne.b	.1
+	moveq	#0,d5
+.1
+	dbf	d7,.mloop
+	rts
+
+.stereo
+	move.l	samplepointer2(a5),a2
+	move.l	(a2),a2
+.sloop
+	move.b	(a1,d5.l),d2
+	move.b	(a2,d5.l),d3
+	ext	d2
+	ext	d3
+	add	d3,d2
+	asl	#4,d2 * scale
+	move	d2,(a3)+
+
+	addq.l	#1,d5
+	cmp.l	d4,d5
+	bne.b	.2
+	moveq	#0,d5
+.2
+	dbf	d7,.sloop
 	rts
 
   endif ; FEATURE_SPECTRUMSCOPE
