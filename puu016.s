@@ -2458,9 +2458,11 @@ lelp
 
 	* Do all kinds of adjustments to gadgets
 
-	* Add the latest "favorites" prefs button to the end of the
+	* Add the "Favorites" prefs button to the end of the
 	* list of first page of prefs gadgets
 	move.l	#prefsFavorites,bUu22
+	* Add "Button tooltips" prefs button to the page 2
+	move.l	#prefsTooltips,eskimO
 
 	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
 	bsr.b	.hum
@@ -13555,9 +13557,7 @@ pupdate				* Ikkuna päivitys
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
 	bsr.w	pfavorites		* favorites
-	bsr.w	ptooltips  	     	* tooltips
 	bsr	psavestate		* savestate
-	bsr	paltbuttons     * alt buttons
 	bra.w	.x
 
 .2	subq	#1,d0
@@ -13573,6 +13573,8 @@ pupdate				* Ikkuna päivitys
 	bsr.w	pprefx			* prefix cut
 	bsr.w	pfont			* fontti
 	bsr.w	pscreen			* screen refresh rates
+	bsr.w	ptooltips  	     	* tooltips
+	bsr	paltbuttons  	        * alt buttons
 	bra.w	.x
 
 .3	subq	#1,d0
@@ -13797,9 +13799,7 @@ gadgetsup2
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
 	dr	rfavorites	* favorites
-	dr  	rtooltips     * tooltips
 	dr 	rsavestate	* save state
-	dr  	raltbuttons * alt buttons
 
 .s1
 *** Sivu1
@@ -13812,6 +13812,8 @@ gadgetsup2
 	dr	rscopebar	* bar mode scopeille
 	dr	rprefx		* prefix cut
 	dr	rinfosize	* module info size
+	dr  	rtooltips     * tooltips
+	dr  	raltbuttons * alt buttons
 
 .s2
 *** Sivu2
@@ -46047,7 +46049,7 @@ sivu6		include	gadgets/prefs_sivu6.s
 * the data was not exactly same as the original, creating extra stuff
 * and other odd things, so I copy-pasted the new bit here.
 
-prefsFavorites dc.l prefsTooltips
+prefsFavorites dc.l prefsSaveState
        dc.w 406,121,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsFavoritest,0,0
@@ -46067,17 +46069,17 @@ prefsFavoritest2       dc.b 1,0,1,0
 * "Button tooltips" button copypasted from above, 
 * x-coordinates adjusted manually.
 
-prefsTooltips dc.l prefsSaveState
-       dc.w 406-192,121,28,12,3,1,1
+prefsTooltips dc.l prefsAltButtons
+       dc.w 406,51,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsTooltipst,0,0
        dc.w 0
        dc.l 0
 prefsTooltipst        dc.b 1,0,1,0
-       dc.w -146-52,2
+       dc.w -146,2
        dc.l 0,prefsTooltipstx,prefsTooltipst2
 prefsTooltipstx 
-       dc.b "Button tooltips.........",0
+       dc.b "Button tooltips...",0
        even
 prefsTooltipst2       dc.b 1,0,1,0
        dc.w 0,0
@@ -46085,7 +46087,7 @@ prefsTooltipst2       dc.b 1,0,1,0
 
 * "Save state" button
 prefsSaveState
-       dc.l prefsAltButtons
+       dc.l 0
        dc.w 406,121-42,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsSaveStatet,0,0
@@ -46101,20 +46103,21 @@ prefsSaveStatet2       dc.b 1,0,1,0
        dc.w 0,0
        dc.l 0,0,0
 
+
 prefsAltButtons 
        dc.l 0
-       dc.w 406-192,121-14,28,12,3,1,1
+       dc.w 406,51+14,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsAltButtonst,0,0
        dc.w 0
        dc.l 0
 prefsAltButtonst        dc.b 1,0,1,0
-       dc.w -146-52,2
+       dc.w -146,2
        dc.l 0,prefsAltButtonstx,prefsAltButtonst2
 prefsAltButtonstx 
       ;dc.b "Bizarre buttons.........",0
       ;dc.b "Unconventional buttons..",0
-       dc.b "Big buttons.............",0
+       dc.b "Big buttons.......",0
        even
 prefsAltButtonst2       dc.b 1,0,1,0
        dc.w 0,0
