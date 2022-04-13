@@ -28,7 +28,7 @@ ver	macro
 	endm	
 
 
-DEBUG	= 1
+DEBUG	= 0
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
 asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
@@ -612,7 +612,7 @@ mousex		rs	1		* hiiren paikka x,y
 mousey		rs	1
 
 ******* Scope variables
-
+ REM ;;;;;; REMOVED 
 draw1		rs.l	1
 draw2		rs.l	1
 ;ch1		rs.b	ns_size
@@ -647,6 +647,9 @@ spectrumImagData	rs.l 1
 spectrumInitialized rs.w 1
   endif
 
+* Mulutable for scope window modulo
+multab		rs.w	256
+  EREM ;;;;; SCOPE STATE REMOVED
 
 ;omatrigger	rs.b	1	* kopio kplayerin usertrigist‰
 * This turns to 1 if user has manually activated the scope
@@ -654,7 +657,6 @@ spectrumInitialized rs.w 1
 * visible. As this is global user does not need to do that again.
 scopeManualActivation	rs.b	1	
 __pad0              rs.b  1
-multab		rs.b	512
 
 scopeData  rs.b	 scope_size
 
@@ -799,14 +801,24 @@ QUADMODE_PATTERNSCOPE = 3
 QUADMODE_FQUADRASCOPE = 4
 QUADMODE_PATTERNSCOPEXL = 5
 
+
+* Store the original window height to switch between
+* large and normal height mode
+* TODO
+quadWindowHeightOriginal	rs.w	1
+* Scope mode
+* TODO
+quadmode	rs.b	1		* scopemoodi
+		rs.b	1
+
+ REM ;; SCOPE STATE REMOVED
+
+
 * Scope mode
 quadmode	rs.b	1		* scopemoodi
 * Modified scope mode internally used in scopes for jumptables
 quadmode2	rs.b	1		
 
-* Store the original window height to switch between
-* large and normal height mode
-quadWindowHeightOriginal	rs.w	1
 * Pattern scope configuration parameters for normal and large mode
 quadNoteScrollerLinesHalf	rs.w	1
 quadNoteScrollerLines		rs.l	1
@@ -836,7 +848,7 @@ scopePreviousLeftEdge			rs.w 	1
 scopePreviousPattPos		rs.w	1
 scopePreviousSongPos		rs.w	1
 
-
+  EREM ;; SCOPE STATE REMOVED
 
 
 timeoutmode	rs.b	1
@@ -2379,13 +2391,6 @@ lelp
 
 
 
-*** Multab scopeille
-	lea	multab(a5),a0
-	moveq	#0,d0
-.mu	move	d0,(a0)+
-	add	#40,d0
-	cmp	#40*256,d0
-	bne.b	.mu
 
 
 
@@ -4578,7 +4583,7 @@ getscreeninfo
 	tst	quadWindowHeightOriginal(a5)
 	bne.b	.setAlready
 	move	quadsiz+2,quadWindowHeightOriginal(a5)
-	sub		#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,quadWindowHeightOriginal(a5)
+	sub	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,quadWindowHeightOriginal(a5)
 .setAlready
 
 	move	WINSIZX(a5),wsizex
@@ -5338,19 +5343,19 @@ printHippoScopeWindow
 	rts
 .yep	pushm	d0-d6/a0-a2/a6
 	lea	bitmapHippoHead(a5),a0
-	move.l	rastport3(a5),a1		* quad
+	move.l	s_rastport3(a4),a1		* quad
 	moveq	#0,d0	
 	moveq	#0,d1
 
 
 	* Center hippohead into scope window
-	move.l	scopeWindowBase(a5),a2 
+	move.l	s_scopeWindowBase(a4),a2 
 	move	wd_Width(a2),d2
 	lsr	#1,d2
 	sub	#HIPPOHEAD_WIDTH/2,d2
 
 	move	#14,d3
-	move	scopeDrawAreaHeight(a5),d4
+	move	s_scopeDrawAreaHeight(a4),d4
 	sub	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d4
 	asr	#1,d4
 	add	d4,d3
@@ -12418,7 +12423,7 @@ drawtexture
 * Luodaan erillinen prosessi
 *******
 
-updateprefs
+updateprefs:
 	DPRINT	"Update prefs"
 	pushm	all
 	tst	prefs_prosessi(a5)
@@ -21661,12 +21666,69 @@ str2msg	pushm	d0/d1/a0/a1/a6
 * Scopes
 *
 ********************************************************************************
+                              rsreset
+s_global                      rs.l       1
+s_quad_task                   rs.l       1
+s_scopeWindowBase             rs.l       1
+s_rastport3                   rs.l       1	
+s_userport3                   rs.l       1
+;s_miniFontBase                rs.l       1
+s_buffer0                     rs.l       1
+s_buffer0w                    rs.w       1
+s_buffer0h                    rs.w       1
+s_quadmode                    rs.b       1
+s_quadmode2                   rs.b       1
+s_multab                      rs.w       70 * modulo multiplication table
+s_scopeDrawAreaWidth		rs.w 	1
+s_scopeDrawAreaModulo		rs.w 	1
+s_scopeDrawAreaWidthRequest   rs.w       1
+s_scopeDrawAreaHeightRequest  rs.w       1
+s_scopeDrawAreaHeight         rs.w       1
+s_quadNoteScrollerLines       rs.w       1
+s_quadNoteScrollerLinesHalf   rs.w       1
+s_scopePreviousLeftEdge       rs.w       1
+s_scopePreviousTopEdge        rs.w       1
+s_scopePreviousWidth          rs.w       1
+s_scopePreviousHeight         rs.w       1
+s_scopePreviousPattPos        rs.w       1
+s_scopePreviousSongPos        rs.w       1
+s_omabitmap                   rs.b      bm_SIZEOF
+s_buffer1                     rs.l       1
+s_buffer2                     rs.l       1
+s_draw1                       rs.l       1
+s_draw2                       rs.l       1
+                              ifne       FEATURE_FREQSCOPE
+s_deltab1                     rs.l       1	
+s_deltab2                     rs.l       1	
+s_deltab3                     rs.l       1	
+s_deltab4                     rs.l       1	
+                              endif
+                              ifne       FEATURE_SPECTRUMSCOPE
+s_spectrumMemory              rs.l       1
+s_spectrumVolumeTable         rs.l       1
+s_spectrumMuluTable           rs.l       1
+s_spectrumLogTable            rs.l       1
+s_spectrumSineTable           rs.l       1
+s_spectrumChannel1            rs.l       1
+s_spectrumChannel2            rs.l       1
+s_spectrumChannel3            rs.l       1
+s_spectrumChannel4            rs.l       1
+s_spectrumMixedData           rs.l       1
+s_spectrumImagData            rs.l       1
+s_spectrumInitialized         rs.w       1
+                              endif
+
+s_scopeHorizontalBarTable       rs.b       512
+s_mtab                        rs.b       64*256*2 * volume table for scopes
+sizeof_scopeVars              rs.b       1
+
 
 * K‰ynnistys
 start_quad
 	st	scopeflag(a5)
 start_quad2
-;	jmp	quad_code
+	printt "teeeeesting............."
+	jmp	quad_code
 
 	move.l	a6,-(sp)
 	move.l	_DosBase(a5),a6
@@ -21746,20 +21808,34 @@ SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 
 quad_code
 	lea	var_b,a5
-	clr.l	mtab(a5)
-	clr.l	buffer0(a5)
+	lea	var_scopes,a4
+	move.l	a5,s_global(a4)
+
+*** Multab scopeille
+	lea	s_multab(a4),a0
+	moveq	#0,d0
+.mu	move	d0,(a0)+
+	add	#40,d0
+	cmp	#40*256,d0
+	bne.b	.mu
+
+	;clr.l	s_mtab(a4)
+	clr.l	s_buffer0(a4)
   ifne FEATURE_FREQSCOPE
-	clr.l	deltab1(a5)
+	clr.l	s_deltab1(a4)
   endif
 	sub.l	a1,a1
 	lore	Exec,FindTask
-	move.l	d0,quad_task(a5)
+	move.l	d0,s_quad_task(a4)
 
-	addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
+	;addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
-	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,scopeDrawAreaWidth(a5) 
-	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,scopeDrawAreaModulo(a5)
-	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,scopeDrawAreaHeight(a5)
+	; TODO: input params
+	move.b	#0,s_quadmode(a4)
+
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,s_scopeDrawAreaWidth(a4) 
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
 
 	lea	scopeData+scope_ch1(a5),a0
 	lea	4*ns_size(a0),a1
@@ -21767,24 +21843,26 @@ quad_code
 	cmp.l	a1,a0
 	bne.b	.cl
 
+BOMBO
+
  if DEBUG
 	moveq	#0,d0 
-	move.b	quadmode(a5),d0
+	move.b	s_quadmode(a4),d0
 	DPRINT	"Quad mode: %lx"
  endif
 	* This creates a jumptable compatible value out of quadmode,
 	* where bit 8 indicates "bars enabled"
-	move.b	quadmode(a5),d0
+	move.b	s_quadmode(a4),d0
 	move.b	d0,d1
 	and	#$f,d1
 	add.b	d1,d1
 	tst.b	d0
 	bpl.b	.e
 	addq.b	#1,d1
-.e	move.b	d1,quadmode2(a5)	* 0-9
+.e	move.b	d1,s_quadmode2(a4)	* 0-9
 
 	moveq	#0,d0
-	move.b	quadmode2(a5),d0
+	move.b	s_quadmode2(a4),d0
 	lsl	#2,d0
 	jmp	.t(pc,d0)
 
@@ -21809,57 +21887,31 @@ quad_code
 
 * Quadrascope
 .1	moveq	#0,d7
-.11	move.l	#64*256*2,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
+.11	
 	bsr.w	voltab
 	bra.w	.cont
 
 * Hipposcope
 .2
-	move.l	#64*256*2,d0
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
 	bsr.w	voltab2
 	bra.w	.cont
 
 
 .3	moveq	#0,d7
-.33	move.l	#64*256*2,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
+.33
 	bsr.w	voltab
 
-.wo	move.l	#512,d0		* palkkitaulu
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,scopeVerticalBarTable(a5)
-	beq.w	.memer
-	bsr.w	makeScopeVerticalBars		* tehd‰‰n palkkitaulu
+.wo	
+	bsr.w	makeScopeHorizontalBars		* tehd‰‰n palkkitaulu
 	bra.w	.cont
 
 
-.4	move.l	#64*256*2,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
+.4
 	bsr.w	voltab2
 	bra.b	.wo
 
 .5	
   ifne FEATURE_FREQSCOPE
-	move.l	#64*256,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
@@ -21874,24 +21926,19 @@ quad_code
 .delt	move.l	#(256+32)*4,d0
 	move.l	#MEMF_CLEAR,d1
 	jsr	getmem
-	move.l	d0,deltab1(a5)
+	move.l	d0,s_deltab1(a4)
 	beq.b	.r
 	add.l	#256+32,d0
-	move.l	d0,deltab2(a5)
+	move.l	d0,s_deltab2(a4)
 	add.l	#256+32,d0
-	move.l	d0,deltab3(a5)
+	move.l	d0,s_deltab3(a4)
 	add.l	#256+32,d0
-	move.l	d0,deltab4(a5)
+	move.l	d0,s_deltab4(a4)
 .r	rts
   endif
 
 .6	
   ifne FEATURE_FREQSCOPE 
-    move.l	#64*256,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
@@ -21906,34 +21953,36 @@ quad_code
 .patternScopeNormalBars
 	* Prevent use of _BARS enumeration in quadmode2,
 	* makes things easier. 
-	move.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
+	move.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
 	DPRINT	"Patternscope NORMAL"
 	bra.b	.cont
 .patternScopeXL
 .patternScopeXLBars
-	move.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	move.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
 	DPRINT	"Patternscope XL"
 .cont
 
 	* Start with no size request active.
-	move	scopeDrawAreaWidth(a5),scopeDrawAreaWidthRequest(a5)
-	move	scopeDrawAreaHeight(a5),scopeDrawAreaHeightRequest(a5)
+	move	s_scopeDrawAreaWidth(a4),s_scopeDrawAreaWidthRequest(a4)
+	move	s_scopeDrawAreaHeight(a4),s_scopeDrawAreaHeightRequest(a4)
 		
 	* lines count for patternscope, 8px high rows
-	move	scopeDrawAreaHeight(a5),d0
+	move	s_scopeDrawAreaHeight(a4),d0
 	lsr	#3,d0 
-	move	d0,quadNoteScrollerLines(a5)
+	move	d0,s_quadNoteScrollerLines(a4)
 	lsr	#1,d0
-	move	d0,quadNoteScrollerLinesHalf(a5)
+	move	d0,s_quadNoteScrollerLinesHalf(a4)
 
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc3,a0
 	* Restore top/left to some previous used value
-	move.l	quadpos(a5),(a0)
+	
+	; TODO
+	;move.l	quadpos(a5),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
-	add	scopeDrawAreaHeight(a5),d0
+	add	s_scopeDrawAreaHeight(a4),d0
 	move	d0,nw_Height(a0)
 
 	move	wbleveys(a5),d0		* WB:n leveys
@@ -21953,7 +22002,7 @@ quad_code
 .ok2
 
 	lob	OpenWindow
-	move.l	d0,scopeWindowBase(a5)
+	move.l	d0,s_scopeWindowBase(a4)
 	bne.b	.ok3
 	lea	windowerr_t(pc),a1
 .me	bsr.w	request
@@ -21964,25 +22013,25 @@ quad_code
 
 .ok3
 	move.l	d0,a0
-	move.l	wd_RPort(a0),rastport3(a5)
-	move.l	wd_UserPort(a0),userport3(a5)
+	move.l	wd_RPort(a0),s_rastport3(a4)
+	move.l	wd_UserPort(a0),s_userport3(a4)
 
 	jsr	setscrtitle
 
-	move.l	quad_task(a5),a1
+	move.l	s_quad_task(a4),a1
 	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
 	lore	Exec,SetTaskPri
 
 	move.l	_GFXBase(a5),a6
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	move.l	pen_1(a5),d0
 	lob	SetAPen
 
-	move.l	scopeWindowBase(a5),a0 
-	move	wd_LeftEdge(a0),scopePreviousLeftEdge(a5)
-	move	wd_TopEdge(a0),scopePreviousTopEdge(a5)
-	move	wd_Width(a0),scopePreviousWidth(a5)
-	move	wd_Height(a0),scopePreviousHeight(a5)
+	move.l	s_scopeWindowBase(a4),a0 
+	move	wd_LeftEdge(a0),s_scopePreviousLeftEdge(a4)
+	move	wd_TopEdge(a0),s_scopePreviousTopEdge(a4)
+	move	wd_Width(a0),s_scopePreviousWidth(a4)
+	move	wd_Height(a0),s_scopePreviousHeight(a4)
 
 	bsr	drawScopeWindowDecorations
 	bsr	initScopeBitmaps
@@ -22103,7 +22152,7 @@ scopeLoop:
 	bsr		scopeWindowChangeHandler
 .getMoreMsg
 	* Poll for messages
-	move.l	userport3(a5),a0
+	move.l	s_userport3(a4),a0
 	lore	Exec,GetMsg
 	tst.l	d0
 	beq.w	scopeLoop
@@ -22155,13 +22204,13 @@ scopeLoop:
 
 qexit	bsr.b	qflush_messages
 
-	move.l	mtab(a5),a0
-	clr.l	mtab(a5)
+	;move.l	s_mtab(a4),a0
+	;clr.l	s_mtab(a4)
 	jsr	freemem
 	bsr	freeScopeBitmaps
   ifne FEATURE_FREQSCOPE
-	move.l	deltab1(a5),a0
-	clr.l	deltab1(a5)
+	move.l	s_deltab1(a4),a0
+	clr.l	s_deltab1(a4)
 	jsr	freemem
   endif
   ifne FEATURE_SPECTRUMSCOPE
@@ -22169,10 +22218,10 @@ qexit	bsr.b	qflush_messages
   endif
 
 	move.l	_IntuiBase(a5),a6		
-	move.l	scopeWindowBase(a5),d0
+	move.l	s_scopeWindowBase(a4),d0
 	beq.b	.uh1
 	move.l	d0,a0
-	move.l	4(a0),quadpos(a5)	* koordinaatit talteen
+	;move.l	4(a0),quadpos(a5)	* koordinaatit talteen
 	lob	CloseWindow
 	clr.l	scopeWindowBase(a5)
 .uh1
@@ -22187,16 +22236,16 @@ qexit	bsr.b	qflush_messages
 	rts
 
 qflush_messages
-	move.l	scopeWindowBase(a5),a0 
+	move.l	s_scopeWindowBase(a4),a0 
 	bra.w	flushWindowMessages
 
 freeScopeBitmaps
-	move.l	buffer0(a5),d0
+	move.l	s_buffer0(a4),d0
 	beq.b	.noFree
 	move.l	d0,a0
-	clr.l	buffer0(a5)
-	move	buffer0w(a5),d0
-	move	buffer0h(a5),d1
+	clr.l	s_buffer0(a4)
+	move	s_buffer0w(a4),d0
+	move	s_buffer0h(a4),d1
 	lore	GFX,FreeRaster
 .noFree
 	rts
@@ -22205,87 +22254,87 @@ initScopeBitmaps
 	bsr.b 	freeScopeBitmaps
 
 	moveq	#0,d0
-	move	scopeDrawAreaWidth(a5),d0 
+	move	s_scopeDrawAreaWidth(a4),d0 
 	moveq	#0,d1
-	move	scopeDrawAreaHeight(a5),d1
+	move	s_scopeDrawAreaHeight(a4),d1
 	* allocate 6 extra rasterlines per buffer
 	addq.l	#6,d1
 	* two buffers
 	add.l	d1,d1
-	move	d0,buffer0w(a5)
-	move	d1,buffer0h(a5)
+	move	d0,s_buffer0w(a4)
+	move	d1,s_buffer0h(a4)
 	lore	GFX,AllocRaster
-	move.l	d0,buffer0(a5)
+	move.l	d0,s_buffer0(a4)
 	beq.b	.memError 
 
  	move.l	d0,a0
-	move.l	a0,buffer0(a5)
+	move.l	a0,s_buffer0(a4)
 
 	* AllocRaster does not clear memory, clear it
 	move.l 	a0,a1
-	move	scopeDrawAreaModulo(a5),d1
-	mulu	buffer0h(a5),d1
+	move	s_scopeDrawAreaModulo(a4),d1
+	mulu	s_buffer0h(a4),d1
 	lsr.l	#2,d1
 	subq	#1,d1
 .clr
 	clr.l	(a1)+
 	dbf	d1,.clr
 
-	move	scopeDrawAreaModulo(a5),d1
+	move	s_scopeDrawAreaModulo(a4),d1
 	* leave two lines spare at the top
 	add	d1,a0
 	add	d1,a0
 	;add.l	#320/8*2,d0		* yl‰‰lle 2 vararivi‰
-	move.l	a0,buffer1(a5)
+	move.l	a0,s_buffer1(a4)
 
-	move	scopeDrawAreaModulo(a5),d0
-	move	scopeDrawAreaHeight(a5),d1
+	move	s_scopeDrawAreaModulo(a4),d0
+	move	s_scopeDrawAreaHeight(a4),d1
 	* four lines spare at the botrom
 	addq	#4,d1
 	mulu	d1,d0
 	add.l	d0,a0
-	move.l	a0,buffer2(a5)
+	move.l	a0,s_buffer2(a4)
 	
 *** Initialisoidaan oma bitmappi
-	lea	omabitmap(a5),a0
+	lea	s_omabitmap(a5),a0
 	moveq	#1,d0
-	move	scopeDrawAreaWidth(a5),d1
-	move	scopeDrawAreaHeight(a5),d2
+	move	s_scopeDrawAreaWidth(a4),d1
+	move	s_scopeDrawAreaHeight(a4),d2
 	* why add 2 here? 
 	addq	#2,d2
 	lore	GFX,InitBitMap
-	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
+	move.l	s_buffer1(a4),s_omabitmap+bm_Planes(a4)
  
-	move.l	buffer1(a5),draw1(a5)
-	move.l	buffer2(a5),draw2(a5)
-	move	scopeDrawAreaModulo(a5),d0
+	move.l	s_buffer1(a4),s_draw1(a4)
+	move.l	s_buffer2(a4),s_draw2(a4)
+	move	s_scopeDrawAreaModulo(a4),d0
 	* make draw buffer start at 3rd line. why?
 	mulu	#3,d0
-	add.l	d0,draw1(a5)
-	add.l	d0,draw2(a5)
+	add.l	d0,s_draw1(a4)
+	add.l	d0,s_draw2(a4)
 
 .memError
 	rts
 
 * Z is set if patternscope is active
 patternScopeIsActive
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5) 
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4) 
 	beq.b	.isPatts
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
 .isPatts
 	rts
 
 
 scopeDrawAreaClear
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	move.l	pen_0(a5),d0
 	lore	GFX,SetAPen
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	moveq	#10,d0
 	moveq	#14,d1
-	move	scopeDrawAreaWidth(a5),d2
+	move	s_scopeDrawAreaWidth(a4),d2
 	add	#10,d2
-	move	scopeDrawAreaHeight(a5),d3
+	move	s_scopeDrawAreaHeight(a4),d3
 	add	#79-64,d3
 	add	windowleft(a5),d0
 	add	windowleft(a5),d2
@@ -22300,29 +22349,29 @@ scopeDrawAreaClear
 * for some reason the IDCMP approach did not work similarly on
 * both kickstarts.
 scopeWindowChangeHandler
-	move.l	scopeWindowBase(a5),a0
+	move.l	s_scopeWindowBase(a4),a0
 	move	wd_Width(a0),d0 
 	move	wd_Height(a0),d1 
 	move	wd_TopEdge(a0),d2 
 	move	wd_LeftEdge(a0),d3
 
-	cmp	scopePreviousTopEdge(a5),d2
+	cmp	s_scopePreviousTopEdge(a4),d2
 	bne.b	.posChange
-	cmp	scopePreviousLeftEdge(a5),d3 
+	cmp	s_scopePreviousLeftEdge(a4),d3 
 	bne.b	.posChange
-	cmp	scopePreviousWidth(a5),d0 
+	cmp	s_scopePreviousWidth(a4),d0 
 	bne.b	.sizeChange
-	cmp scopePreviousHeight(a5),d1 
+	cmp s_scopePreviousHeight(a4),d1 
 	bne.b	.sizeChange
 	rts
 .posChange
-	move	d2,scopePreviousTopEdge(a5) 
-	move	d3,scopePreviousLeftEdge(a5)
+	move	d2,s_scopePreviousTopEdge(a4) 
+	move	d3,s_scopePreviousLeftEdge(a4)
 	bsr.w	scopeWindowChanged
 	rts
 .sizeChange 
-	move	d0,scopePreviousWidth(a5)
-	move	d1,scopePreviousHeight(a5)
+	move	d0,s_scopePreviousWidth(a4)
+	move	d1,s_scopePreviousHeight(a4)
 	bsr.w	scopeWindowSizeChanged
 	rts
 
@@ -22340,23 +22389,23 @@ drawScopeWindowDecorations
 	tst.b	uusikick(a5)		* uusi kick?
 	beq.b	.kick13
 
-	move.l	rastport3(a5),a2
+	move.l	s_rastport3(a4),a2
 	moveq	#4,d0
 	moveq	#11,d1
-	move	scopeDrawAreaWidth(a5),d2
+	move	s_scopeDrawAreaWidth(a4),d2
 	add	#335-320,d2
-	move	scopeDrawAreaHeight(a5),d3
+	move	s_scopeDrawAreaHeight(a4),d3
 	add	#82-64,d3
 	bsr.w	drawtexture
 
 	moveq	#8,d0
 	moveq	#13,d1
-	move	scopeDrawAreaWidth(a5),d4
+	move	s_scopeDrawAreaWidth(a4),d4
 	add	#323-320,d4
-	move	scopeDrawAreaHeight(a5),d5
+	move	s_scopeDrawAreaHeight(a4),d5
 	addq	#67-64,d5
 	moveq	#$0a,d6
-	move.l	rastport3(a5),a0
+	move.l	s_rastport3(a4),a0
 	move.l	a0,a1
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -22369,14 +22418,14 @@ drawScopeWindowDecorations
 	* Kickstart 1.3, since there is no background texture fill,
 	* the window must be cleared by other means
 	* to get rid of previous stuff after resize.
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	move.l	pen_0(a5),d0
 	lore	GFX,SetAPen
 	moveq	#4,d0
 	moveq	#11,d1
-	move	scopeDrawAreaWidth(a5),d2
+	move	s_scopeDrawAreaWidth(a4),d2
 	add	#335-320,d2
-	move	scopeDrawAreaHeight(a5),d3
+	move	s_scopeDrawAreaHeight(a4),d3
 	add	#82-64,d3
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -22386,16 +22435,16 @@ drawScopeWindowDecorations
 	
 .drawBox
 	moveq	#7,plx1
-	move	scopeDrawAreaWidth(a5),plx2
+	move	s_scopeDrawAreaWidth(a4),plx2
 	add	#332-320,plx2
 	moveq	#13,ply1
-	move	scopeDrawAreaHeight(a5),ply2
+	move	s_scopeDrawAreaHeight(a4),ply2
 	add	#80-64,ply2
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
 	add	windowtop(a5),ply2
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	jsr	laatikko2
 	rts
 
@@ -22416,10 +22465,10 @@ requestNormalScopeDrawArea
 *   d0 = ~0 window will change to accommodate
 requestScopeDrawAreaChange
 
-	move	d0,scopeDrawAreaWidthRequest(a5)
-	move	d1,scopeDrawAreaHeightRequest(a5)
-	sub	scopeDrawAreaWidth(a5),d0
-	sub	scopeDrawAreaHeight(a5),d1
+	move	d0,s_scopeDrawAreaWidthRequest(a4)
+	move	d1,s_scopeDrawAreaHeightRequest(a4)
+	sub	s_scopeDrawAreaWidth(a4),d0
+	sub	s_scopeDrawAreaHeight(a4),d1
 	move	d1,d2
 	or	d0,d2
 	beq.w	.noDiff
@@ -22431,7 +22480,7 @@ requestScopeDrawAreaChange
  endif
 
 
-	move.l	scopeWindowBase(a5),a0
+	move.l	s_scopeWindowBase(a4),a0
 	* Calculate new right edge position for window 
 	move	wd_LeftEdge(a0),d2
 	add	wd_Width(a0),d2
@@ -22474,7 +22523,7 @@ requestScopeDrawAreaChange
 	DPRINT	"->resize %ld %ld"
  endif 
 
-	move.l	scopeWindowBase(a5),a0 
+	move.l	s_scopeWindowBase(a4),a0 
 	lore 	Intui,SizeWindow
 	moveq	#1,d0
 	rts
@@ -22484,11 +22533,11 @@ requestScopeDrawAreaChange
 	rts
 
 scopeDrawAreaSizeChangeRequestIsActive
-	move	scopeDrawAreaWidthRequest(a5),d0 
-	cmp	scopeDrawAreaWidth(a5),d0 
+	move	s_scopeDrawAreaWidthRequest(a4),d0 
+	cmp	s_scopeDrawAreaWidth(a4),d0 
 	bne.b 	.yes
-	move	scopeDrawAreaHeightRequest(a5),d0 
-	cmp	scopeDrawAreaHeight(a5),d0 
+	move	s_scopeDrawAreaHeightRequest(a4),d0 
+	cmp	s_scopeDrawAreaHeight(a4),d0 
 	bne.b 	.yes
 	moveq	#0,d0
 	rts
@@ -22500,7 +22549,7 @@ scopeDrawAreaSizeChangeRequestIsActive
 scopeWindowChanged
 	DPRINT	"scopeWindowChanged"
  if DEBUG
-	move.l	scopeWindowBase(a5),a0
+	move.l	s_scopeWindowBase(a4),a0
 	moveq	#0,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -22514,8 +22563,8 @@ scopeWindowChanged
 	* Request again after window move
  	bsr.w	scopeDrawAreaSizeChangeRequestIsActive
 	beq.b 	.nope 
-	move	scopeDrawAreaWidthRequest(a5),d0
-	move	scopeDrawAreaHeightRequest(a5),d1
+	move	s_scopeDrawAreaWidthRequest(a4),d0
+	move	s_scopeDrawAreaHeightRequest(a4),d1
 	bsr.w 	requestScopeDrawAreaChange
 .nope
 	rts
@@ -22526,7 +22575,7 @@ scopeWindowSizeChanged
 	pushm	d2-d6
 	DPRINT	"scopeWindowSizeChanged"
  if DEBUG
-	move.l	scopeWindowBase(a5),a0
+	move.l	s_scopeWindowBase(a4),a0
 	moveq	#0,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -22537,18 +22586,18 @@ scopeWindowSizeChanged
 	move	wd_Height(a0),d3
 	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
  endif
-	move	scopeDrawAreaWidthRequest(a5),scopeDrawAreaWidth(a5)
-	move	scopeDrawAreaHeightRequest(a5),scopeDrawAreaHeight(a5)
-	move	scopeDrawAreaWidth(a5),d0 
+	move	s_scopeDrawAreaWidthRequest(a4),s_scopeDrawAreaWidth(a4)
+	move	s_scopeDrawAreaHeightRequest(a4),s_scopeDrawAreaHeight(a4)
+	move	s_scopeDrawAreaWidth(a4),d0 
 	lsr	#3,d0 
-	move	d0,scopeDrawAreaModulo(a5)
+	move	d0,s_scopeDrawAreaModulo(a4)
 
 	* lines count for patternscope, 8px high rows
-	move	scopeDrawAreaHeight(a5),d0
+	move	s_scopeDrawAreaHeight(a4),d0
 	lsr	#3,d0 
-	move	d0,quadNoteScrollerLines(a5)
+	move	d0,s_quadNoteScrollerLines(a4)
 	lsr	#1,d0
-	move	d0,quadNoteScrollerLinesHalf(a5)
+	move	d0,s_quadNoteScrollerLinesHalf(a4)
 
 	bsr	initScopeBitmaps
 	bsr	drawScopeWindowDecorations
@@ -22588,9 +22637,9 @@ scopeinterrupt:				* a5 = var_b
 	;move	n_tempvol(a2),ns_tempvol2(a0)
 	addq	#1,a3
 
-	bsr	patternScopeIsActive
-	beq.b	.eq
-	
+	;TODO
+	;bsr	patternScopeIsActive
+	;beq.b	.eq	
 	move	n_tempvol(a2),ns_tempvol(a0)
 
 .eq	lea	n_sizeof(a2),a2
@@ -22648,6 +22697,7 @@ scopeinterrupt:				* a5 = var_b
 
 	* UPS struct provided by eagle player?
 	move.l	deliUPSStruct(a5),d0
+	* Unnecessary check?
 	beq.b	.quadScopeSampleFollow
 	
 	* Handle UPS, it will provide input for normal sample follow
@@ -22707,6 +22757,9 @@ clearScopeData
 
 * Opens the mini font for 4+ channel notescroller if needed
 getScopeMiniFontIfNeeded
+	; TODO: can't do disk access in a Task
+	rts
+
 	tst.l	minifontbase(a5)
 	bne.b	.skip
 	* See if we need the small font
@@ -22746,7 +22799,7 @@ getScopeMiniFontIfNeeded
 
 ******* Quadrascopelle 
 voltab
-	move.l	mtab(a5),a0
+	lea	s_mtab(a4),a0
 	moveq	#$40-1,d3
 	moveq	#0,d2
 
@@ -22801,7 +22854,7 @@ voltab
 
 ******* Hipposcopelle
 voltab2
-	move.l	mtab(a5),a0
+	lea	s_mtab(a4),a0
 
 	moveq	#$40-1,d3
 	moveq	#0,d2
@@ -22851,7 +22904,7 @@ voltab2
 ***************** Freqscopelle
   ifne FEATURE_FREQSCOPE
 voltab3
-	move.l	mtab(a5),a0
+	move.l	m_mtab(a4),a0
 	moveq	#$40-1,d3
 	moveq	#0,d2
 .olp2	moveq	#0,d0
@@ -22881,14 +22934,14 @@ drawScope
 	beq.b 	.noPattSc 
 	move.l	d0,a0
 	movem	PI_Pattpos(a0),d0/d1 
-	cmp	scopePreviousPattPos(a5),d0 
+	cmp	s_scopePreviousPattPos(a4),d0 
 	bne.b	.doUpdate
-	cmp	scopePreviousSongPos(a5),d1 
+	cmp	s_scopePreviousSongPos(a4),d1 
 	bne.b	.doUpdate
 	rts
 .doUpdate
-	move	d0,scopePreviousPattPos(a5)
-	move	d1,scopePreviousSongPos(a5)
+	move	d0,s_scopePreviousPattPos(a4)
+	move	d1,s_scopePreviousSongPos(a4)
 .noPattSc
 
 	* clear draw area
@@ -22897,14 +22950,14 @@ drawScope
 	lob	WaitBlit
 
 	lea	$dff058,a0
-	move.l	draw2(a5),$54-$58(a0)	
+	move.l	s_draw2(a4),$54-$58(a0)	
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
 
 	* build BLTSIZ parameter
-	move	scopeDrawAreaHeight(a5),d0
+	move	s_scopeDrawAreaHeight(a4),d0
 	lsl	#6,d0
-	move	scopeDrawAreaModulo(a5),d1
+	move	s_scopeDrawAreaModulo(a4),d1
 	lsr	#1,d1	* words
 	add	d1,d0
 	move	d0,(a0)
@@ -22920,13 +22973,13 @@ drawScope
 	bsr	requestNormalScopeDrawArea
 	bne.w	.skippi * wait for resize
 
-	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
+	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
 	beq.b	.fil
-	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,quadmode2(a5)	
+	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,s_quadmode2(a4)	
 	beq.b	.fil
-	cmp.b	#QUADMODE2_FREQANALYZER,quadmode2(a5)
+	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
 	beq.b	.sampleFr
-	cmp.b	#QUADMODE2_FREQANALYZER_BARS,quadmode2(a5)
+	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
 	beq.b	.sampleFr
 	bsr.w	samplescope
 	bra.w	.cont
@@ -22941,7 +22994,7 @@ drawScope
 
 
 	moveq	#0,d0
-	move.b	quadmode2(a5),d0
+	move.b	s_quadmode2(a4),d0
 	add	d0,d0
 	cmp	#pt_multi,playertype(a5)
 	beq.w	.ttt
@@ -23002,7 +23055,7 @@ drawScope
 	bsr.w	mirrorfill2
 	lob	WaitBlit
 	lob	DisownBlitter
-	bsr.w	lever
+	bsr.w	lever * extra gfx drawn, must wait until fill done
 	bra.b	.cont
 
 	* PS3M scope
@@ -23046,16 +23099,16 @@ drawScope
 	* scope processed, deliver unto screen
 
 	* double buffer
-	move.l	draw1(a5),d0
-	move.l	draw2(a5),d1
-	move.l	d1,draw1(a5)
-	move.l	d0,draw2(a5)
+	move.l	s_draw1(a4),d0
+	move.l	s_draw2(a4),d1
+	move.l	d1,s_draw1(a4)
+	move.l	d0,s_draw2(a4)
 
-	lea	omabitmap(a5),a0
+	lea	s_omabitmap(a4),a0
 	move.l	d0,bm_Planes(a0)
 
 	move.l	_GFXBase(a5),a6	* kopioidaan kamat ikkunaan
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	moveq	#0,d0		* l‰hde x,y
 	moveq	#0,d1
 	moveq	#10,d2		* kohde x,y
@@ -23063,8 +23116,8 @@ drawScope
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
 	move	#$c0,d6		* minterm, suora kopio a->d
-	move	scopeDrawAreaWidth(a5),d4
-	move	scopeDrawAreaHeight(a5),d5
+	move	s_scopeDrawAreaWidth(a4),d4
+	move	s_scopeDrawAreaHeight(a4),d5
 
 
 	cmp	#pt_sample,playertype(a5)
@@ -23083,9 +23136,9 @@ drawScope
 .noIt
 	bsr	patternScopeIsActive
 	beq.b	.noMagic
-	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
+	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,s_quadmode2(a4)
 	bls.b	.joa
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
 	blo.b	.jaa
 .joa	
 	* magic adjustment for sample?
@@ -23094,9 +23147,9 @@ drawScope
 	bra.b	.jaow
 .jaa
 
-	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
+	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
 	bhs.b	.jaoww
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
 	blo.b	.jaow
 .jaoww
 	* MAGIC adjustments for protracker?
@@ -23130,7 +23183,7 @@ mirrorfill0
 	lore	GFX,OwnBlitter
 	lob	WaitBlit
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	$dff058,a2
 
 	move.l	a0,$50-$58(a2)	* A
@@ -23268,22 +23321,22 @@ getScopeChannelData:
 
 quadrascope:
 	lea	scopeData+scope_ch1(a5),a3
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	-30(a0),a0
 	bsr.b	.scope
 
 	lea	scopeData+scope_ch2(a5),a3
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	-20(a0),a0
 	bsr.b	.scope
 
 	lea	scopeData+scope_ch3(a5),a3
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	-10(a0),a0
 	bsr.b	.scope
 
 	lea	scopeData+scope_ch4(a5),a3
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 
 ;	bsr.w	.scope
 ;	rts
@@ -23294,6 +23347,8 @@ quadrascope:
 	rts
 
 .jolt	
+	push	a4
+
 	move.l	d0,a1 * start
 	move.l	d1,a4 * loopstart
 	move	d2,d5 * len
@@ -23307,14 +23362,14 @@ quadrascope:
 .heee	subq	#1,d1
 	add	d1,d1
 	lsl.l	#8,d1
-	move.l	mtab(a5),a2
+	lea	s_mtab(a4),a2
 	add.l	d1,a2
 
 	lea	-40(a0),a3
 
-	cmp.b	#8,quadmode2(a5)
+	cmp.b	#8,s_quadmode2(a4)
 	beq.b	.iik
-	cmp.b	#9,quadmode2(a5)
+	cmp.b	#9,s_quadmode2(a4)
 	bne.b	.ook
 .iik	move.l	a0,a3
 .ook
@@ -23362,33 +23417,37 @@ hm\2
 	sub.l	d0,a0
 	sub.l	d0,a3
 	dbf	d7,drlo
+
+	pop	a4
 	rts
 
 hipposcope
 	lea	scopeData+scope_ch1(a5),a3
-	move.l	draw1(a5),a6
+	move.l	s_draw1(a4),a6
 	lea	-20-95*40(a6),a6
 	bsr.b	.twirl
 
 	lea	scopeData+scope_ch2(a5),a3
-	move.l	draw1(a5),a6
+	move.l	s_draw1(a4),a6
 	lea	-10-95*40(a6),a6
 	bsr.b	.twirl
 
 	lea	scopeData+scope_ch3(a5),a3
-	move.l	draw1(a5),a6
+	move.l	s_draw1(a4),a6
 	lea	0-95*40(a6),a6
 	bsr.b	.twirl
 
 	lea	scopeData+scope_ch4(a5),a3
-	move.l	draw1(a5),a6
+	move.l	s_draw1(a4),a6
 	lea	10-95*40(a6),a6
 ;	bsr.b	.twirl
 ;	rts
 
 
 .twirl
-	move.l	mtab(a5),a0
+	push	a4
+
+	lea	s_mtab(a4),a0
 	move	ns_tempvol(a3),d0
 	mulu	mainvolume(a5),d0
 	lsr	#6,d0
@@ -23406,19 +23465,7 @@ hipposcope
 ;	bne.b	.jolt
 ;.halt	rts
 ;.jolt	
-	bsr	getScopeChannelData
-	bne.b	.jolt
-	rts
-.jolt
-	move.l	d0,a1 * start
-	move.l	d1,d6 * loopstart
-	move	d2,d4 * len
-	move	d3,d5 * replen
 
-	lea	multab(a5),a0
-	moveq	#108/4-1,d0
-
-	moveq	#0,d1
 
 lir	macro
 	move.b	(a1)+,d1
@@ -23445,6 +23492,21 @@ lir	macro
  endc
 	endm
 
+
+	bsr	getScopeChannelData
+	beq.w	.x
+
+	move.l	d0,a1 * start
+	move.l	d1,d6 * loopstart
+	move	d2,d4 * len
+	move	d3,d5 * replen
+
+	lea	s_multab(a4),a0
+	moveq	#108/4-1,d0
+
+	moveq	#0,d1
+
+
 .d
 	lir	0,0
 	lir	1,1
@@ -23452,7 +23514,8 @@ lir	macro
 	lir	3,1
 
 	dbf	d0,.d
-
+.x
+	pop	a4
 	rts
 
 
@@ -23493,6 +23556,7 @@ freqscope
   endif
   
   ifne FEATURE_FREQSCOPE
+  fail "Fix a4 accessess first"
 	moveq	#0,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -23778,20 +23842,20 @@ multiscope
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	19(a0),a0
 	bsr.b	.h
 
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	39(a0),a0
 .h
 
 	move.l	ps3m_playpos(a5),a2
 	move.l	(a2),d5
 	lsr.l	#8,d5
-	lea	multab(a5),a2
+	lea	s_multab(a4),a2
 		
 	moveq	#160/8-1-1,d7
 	moveq	#1,d0
@@ -23832,20 +23896,20 @@ multiscopefilled
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	19(a0),a0
 	bsr.b	.h
 
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	39(a0),a0
 .h
 
 	move.l	ps3m_playpos(a5),a2
 	move.l	(a2),d5
 	lsr.l	#8,d5
-	lea	multab(a5),a2
+	lea	s_multab(a4),a2
 		
 	moveq	#160/8-1-1,d7
 	moveq	#1,d0
@@ -23912,18 +23976,18 @@ multihipposcope
 ;	move.l	playpos,d5
 	lsr.l	#8,d5
 
-	lea	multab(a5),a2
-	move.l	draw1(a5),a3
+	lea	s_multab(a4),a2
+	move.l	s_draw1(a4),a0
 	bsr.w	getps3mb
 	moveq	#32,d6
-	moveq	#120/4-1,d7
+	moveq	#120/2-1,d7
 
 ;	tst.b	scopeboost(a5)
 ;	beq.b	.d
 ;	moveq	#240/4-1,d7
 .d
 
- rept 4
+ rept 2
 	move.b	(a1,d5),d1
 	asr.b	#1,d1
 	ext	d1
@@ -23976,10 +24040,10 @@ getps3mb
 
 noteScrollerHorizontalLines
 *** viiva
-	move.l	draw1(a5),a0
-	move	scopeDrawAreaModulo(a5),d2
+	move.l	s_draw1(a4),a0
+	move	s_scopeDrawAreaModulo(a4),d2
 	* first line at y-coordinate
-	move	scopeDrawAreaHeight(a5),d3
+	move	s_scopeDrawAreaHeight(a4),d3
 	lsr	#1,d3
 	sub	#9,d3
 	mulu	d2,d3
@@ -23990,7 +24054,7 @@ noteScrollerHorizontalLines
 	lsl	#3,d2
 	subq	#2,d2
 	* 19 times 16 pixels horizontally
-	move	scopeDrawAreaModulo(a5),d0
+	move	s_scopeDrawAreaModulo(a4),d0
 	lsr	#1,d0
 	subq	#1,d0
 	move	#$aaaa,d1
@@ -24039,13 +24103,13 @@ noteScrollerPt
 notescroller
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
 	bne.b 	.normHeight
 	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
 .normHeight
-	cmp	scopeDrawAreaWidth(a5),d0
+	cmp	s_scopeDrawAreaWidth(a4),d0
 	bne.b	.plz
-	cmp	scopeDrawAreaHeight(a5),d1
+	cmp	s_scopeDrawAreaHeight(a4),d1
 	beq.b	.sizeOk
 .plz	bsr	requestScopeDrawAreaChange
 	rts
@@ -24127,13 +24191,13 @@ notescroller
 	mulu	mainvolume(a5),d0
 	lsr	#6,d0
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	* horizontal position
 	add	d1,a0
 	* move to bottom
-	move	quadNoteScrollerLines(a5),d1
+	move	s_quadNoteScrollerLines(a4),d1
 	lsl	#3,d1
-	mulu	scopeDrawAreaModulo(a5),d1
+	mulu	s_scopeDrawAreaModulo(a4),d1
 	add.l	d1,a0
 
 	lea	.paldata(pC),a1
@@ -24161,14 +24225,14 @@ notescroller
 	sub	#108,d0
 
 	* this many vertical pixels
-	move	quadNoteScrollerLines(a5),d3
+	move	s_quadNoteScrollerLines(a4),d3
 	lsl	#3,d3
 	subq	#5,d3
 	mulu	d3,d0
 	divu	#907-108,d0
 
-	move.l	draw1(a5),a0
-	lea	multab(a5),a1
+	move.l	s_draw1(a4),a0
+	lea	s_multab(a4),a1
 	add	d0,d0
 	move	(a1,d0),d0
 	add	d0,a0
@@ -24207,7 +24271,7 @@ notescroller
 **************** Piirret‰‰n patterndata
 
 .notescr
-	pushm	a5/a6
+	pushm	a4/a5/a6
 
 	lea	kplbase(a5),a0
 	move.l	k_songdataptr(a0),a3
@@ -24220,23 +24284,24 @@ notescroller
 	add.l	d0,a3
 	lea	1084-952(a3),a3
 
-	move.l	draw1(a5),a4
-	addq	#3,a4
-
 	* draw this many lines
-	move	quadNoteScrollerLines(a5),d7
+	move	s_quadNoteScrollerLines(a4),d7
 	subq	#1,d7 * dbf
 	move	k_patternpos(a0),d6	* eka rivi?
+
+	* Target
+	move.l	s_draw1(a5),a0
+	addq	#3,a0
 
 	* figure out where to place the first line
 	move	d6,d0
 	; move the cursor in the middle
-	sub	quadNoteScrollerLinesHalf(a5),d0
+	sub	s_quadNoteScrollerLinesHalf(a4),d0
 	bpl.b	.ok
 	neg	d0
 	sub	d0,d7
 
-	move	quadNoteScrollerLinesHalf(a5),d1
+	move	s_quadNoteScrollerLinesHalf(a4),d1
 	sub	d0,d1
 	sub	d1,d6
 	lsl	#4,d1
@@ -24244,18 +24309,22 @@ notescroller
 
 	; vertical position in target 
 	mulu	#8*40,d0
-	add.l	d0,a4
+	add.l	d0,a0
 
 	bra.b	.ok2
 .ok
-	move	quadNoteScrollerLinesHalf(a5),d0
+	move	s_quadNoteScrollerLinesHalf(a4),d0
 	lsl	#4,d0
 	sub	d0,a3
-	sub	quadNoteScrollerLinesHalf(a5),d6
+	sub	s_quadNoteScrollerLinesHalf(a4),d6
 .ok2
 
-	bsr	noteScrollerGetFont
+	
+	bsr	noteScrollerGetFont * Uses d4,a2 only
 	beq	.exitNoteScroller
+
+	* Target screen addr goes in a4 
+	move.l	a0,a4
 
 	* convert row in D6 to BCD
 	moveq	#0,d0
@@ -24377,14 +24446,14 @@ notescroller
 	bsr.b	.print
 
 	* next note
-	addq	#4-1,a3
+	addq.l	#4-1,a3
 	* next horizontal position
 	;add	#9,a4
 	add	d3,a4
 	dbf	d5,.plorl2
 
 	* next vertical position
-	add	#8*40-4*9,a4
+	lea	(8*40-4*9)(a4),a4
 	* next pattern line, check if at the end
 	* clear X flag for ABCD
 	sub.b	d0,d0
@@ -24395,7 +24464,7 @@ notescroller
 	cmp.b	#$64,d6
 	dbeq d7,.plorl
 .exitNoteScroller
-	popm	a5/a6	
+	popm	a4/a5/a6	
 	rts
 
 * convert decimal number 0-9 into ASCII char
@@ -24655,18 +24724,18 @@ notescroller
 ********** Palkit
 lever2
 	lea	scopeData+scope_ch1(a5),a3
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	bsr.b	dlever
 	lea	scopeData+scope_ch4(a5),a3
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	10(a0),a0
 	bsr.b	dlever
 	lea	scopeData+scope_ch2(a5),a3
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	20(a0),a0
 	bsr.b	dlever
 	lea	scopeData+scope_ch3(a5),a3
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	30(a0),a0
 	bsr.b	dlever
 	rts
@@ -24675,7 +24744,7 @@ lever
 	lea	scopeData+scope_ch1(a5),a3
 	moveq	#4-1,d2
 	moveq	#0,d3
-	move.l	draw1(a5),a2
+	move.l	s_draw1(a4),a2
 .l	move.l	a2,a0
 	bsr.b	dlever
 	lea	10(a2),a2
@@ -24695,7 +24764,7 @@ dlever
 	lsl	#1,d1
 	divu	#27,d1		* lukualueeksi 0-59
 
-	lea	multab(a5),a1
+	lea	s_multab(a4),a1
 	add	d1,d1
 	add	(a1,d1),a0
 
@@ -24711,7 +24780,7 @@ dlever
 	bpl.b	.ojdo
 	moveq	#0,d0
 .ojdo
-	move.l	scopeVerticalBarTable(a5),a1
+	lea	s_scopeHorizontalBarTable(a4),a1
 	movem.l	(a1,d0),d0/d1
 
 	pushm	d2/d3
@@ -24740,8 +24809,8 @@ dlever
 
 ****** taulukkoon 1-64 pix leveit‰ palkkeja
 
-makeScopeVerticalBars	
-	move.l	scopeVerticalBarTable(a5),a0
+makeScopeHorizontalBars	
+	lea	s_scopeHorizontalBarTable(a4),a0
 	moveq	#64-1,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -24809,8 +24878,8 @@ samples0
 	moveq	#1,d0
 	move	#$80,d6
 
-	lea	multab(a5),a2
-	move.l	draw1(a5),a0
+	lea	s_multab(a4),a2
+	move.l	s_draw1(a4),a0
 	rts
 
 
@@ -24828,7 +24897,7 @@ noteScroller2
 
 * Required height in d1
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
 	bne.b	.notXl
 	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
 .notXl
@@ -24855,9 +24924,9 @@ noteScroller2
 	* normal font stripe
 ;	mulu	#72,d0
 	move	d0,d2 * tricky mul with 72
-	lsl		#6,d2
-	lsl		#3,d0
-	add		d2,d0
+	lsl	#6,d2
+	lsl	#3,d0
+	add	d2,d0
 	bra.b	.wide
 .narrow
 	* Test if font is available
@@ -24870,7 +24939,7 @@ noteScroller2
 	;add	#32,d0
 	* ensure divisible by 16 for blitter safety
 	;add	#15,d0
-	add		#32+15,d0
+	add	#32+15,d0
 	and	#$fff0,d0
 
 	bsr	requestScopeDrawAreaChange
@@ -24878,12 +24947,12 @@ noteScroller2
 	rts
 
 .proceed
+	move.l	s_draw1(a4),a6
 
 	* magic flag: display row numbers column	 
 	lea	.pos(pc),a4
 	clr.b	(a4)
 
-	move.l	draw1(a5),a4
 	subq	#1,d7
 .loop
 	pushm	d6/d7/a0/a4/a5/a6
@@ -24896,7 +24965,7 @@ noteScroller2
 	tst.b	(a2)
 	bmi.b	.wasSet
 	* jump over number column
-	addq	#3,a4
+	addq	#3,a6
 	st	(a2)
 .wasSet
 	addq	#4,a0 		* next stripe
@@ -24904,11 +24973,11 @@ noteScroller2
 	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a1)
 	bls.b	.voices4
 	* 32 pixels per stripe
-	addq	#4,a4		* next screen pos horizontal
+	addq	#4,a6		* next screen pos horizontal
 	bra.b	.continue
 .voices4
 	* 72 pixels per stripe
-	add	#9,a4
+	add	#9,a6
 .continue
 	addq	#1,PI_CurrentChannelNumber(a1)
 	dbf	d7,.loop
@@ -24969,24 +25038,24 @@ noteScroller2
 *** calculate stuff
 	
 	* draw this many lines
-	move	quadNoteScrollerLines(a5),d7
+	move	s_quadNoteScrollerLines(a4),d7
 	subq	#1,d7 * dbf
 	move	PI_Pattpos(a1),d6
 
 	* current position in data
 	move	d6,d0
 	mulu	PI_Modulo+2(a1),d0 
-	add	d0,a0
+	add.l	d0,a0
 
 	* figure out where to place the first line
 	move	d6,d0
 	; move the cursor in the middle
-	sub	quadNoteScrollerLinesHalf(a5),d0
+	sub	s_quadNoteScrollerLinesHalf(a4),d0
 	bpl.b	.ok
 	neg	d0
 	sub	d0,d7
 
-	move	quadNoteScrollerLinesHalf(a5),d1
+	move	s_quadNoteScrollerLinesHalf(a4),d1
 	sub	d0,d1
 	sub	d1,d6
 	mulu	PI_Modulo+2(a1),d1
@@ -24994,20 +25063,20 @@ noteScroller2
 	sub	d1,a0
 
 	* vertical position in target 
-	mulu	scopeDrawAreaModulo(a5),d0
+	mulu	s_scopeDrawAreaModulo(a4),d0
 	lsl.l	#3,d0
-	add.l	d0,a4
+	add.l	d0,a6
 	bra.b	.ok2
 .ok
-	move	quadNoteScrollerLinesHalf(a5),d0
+	move	s_quadNoteScrollerLinesHalf(a4),d0
 	mulu	PI_Modulo+2(a1),d0
 	sub	d0,a0
-	sub	quadNoteScrollerLinesHalf(a5),d6
+	sub	s_quadNoteScrollerLinesHalf(a4),d6
 .ok2
-	bsr	noteScrollerGetFont
+	bsr	noteScrollerGetFont * uses d4,a2
 	beq	.exitNoteScroller
 	
-
+	
 * d4 = font modulo
 * d6 = line number
 * d7 = rows to draw
@@ -25018,11 +25087,14 @@ noteScroller2
 * a4 = destination draw buffer
 
 	swap	d7
-	move	scopeDrawAreaModulo(a5),d7
+	move	s_scopeDrawAreaModulo(a4),d7
 	move	d7,d0 
 	lsl	#3,d0 	* x8, full height of font
 	swap	d7
-	
+
+	* destination draw buffer	
+	move.l	a6,a4
+
 ***********************************************************
 * Line numbers column
 ***********************************************************
@@ -25398,6 +25470,8 @@ noteScroller2
 .note	dc.b	"00000000"
 .pos	dc.b	"00"
  even
+
+; End of scopes for now
 
 ********************************************************************************
 *** SECTION ********************************************************************
@@ -45298,33 +45372,33 @@ SPECTRUM_TOTAL set VOLUME_TABLE_LEN+MULU_TABLE_LEN+LOG_TABLE_LEN+SINE_TABLE_LEN
 SPECTRUM_TOTAL set SPECTRUM_TOTAL+4*SAMPLE_LENGTH ; bytes
 SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 
-	clr.b	spectrumInitialized(a5)
+	clr.b	s_spectrumInitialized(a4)
 
 	move.l	#SPECTRUM_TOTAL,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
-	move.l	d0,spectrumMemory(a5)
+	move.l	d0,s_spectrumMemory(a4)
 	beq.b	.x
 	move.l	d0,a0
-	move.l	a0,spectrumVolumeTable(a5)
+	move.l	a0,s_spectrumVolumeTable(a4)
 	add.l	#VOLUME_TABLE_LEN,a0
-	move.l	a0,spectrumMuluTable(a5)
+	move.l	a0,s_spectrumMuluTable(a4)
 	add	#MULU_TABLE_LEN,a0
-	move.l	a0,spectrumLogTable(a5)
+	move.l	a0,s_spectrumLogTable(a4)
 	add	#LOG_TABLE_LEN,a0
-	move.l	a0,spectrumSineTable(a5)
+	move.l	a0,s_spectrumSineTable(a4)
 	add	#SINE_TABLE_LEN,a0
-	move.l	a0,spectrumChannel1(a5)
+	move.l	a0,s_spectrumChannel1(a4)
 	add	#SAMPLE_LENGTH,a0
-	move.l	a0,spectrumChannel2(a5)
+	move.l	a0,s_spectrumChannel2(a4)
 	add	#SAMPLE_LENGTH,a0
-	move.l	a0,spectrumChannel3(a5)
+	move.l	a0,s_spectrumChannel3(a4)
 	add	#SAMPLE_LENGTH,a0
-	move.l	a0,spectrumChannel4(a5)
+	move.l	a0,s_spectrumChannel4(a4)
 	add	#SAMPLE_LENGTH,a0
-	move.l	a0,spectrumMixedData(a5)
+	move.l	a0,s_spectrumMixedData(a4)
 	add	#FFT_LENGTH*2,a0
-	move.l	a0,spectrumImagData(a5)
+	move.l	a0,s_spectrumImagData(a4)
 
 	bsr.w	prepareSpectrumSineTable
 	beq.b	.x
@@ -45332,7 +45406,7 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	bsr.w	prepareSpectrumMuluTable
 	bsr.w	prepareSpectrumLogTable
 
-	st	spectrumInitialized(a5)
+	st	s_spectrumInitialized(a4)
 	moveq	#1,d0
 	rts
 	
@@ -45343,14 +45417,14 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 
 spectrumUninitialize
 	DPRINT	"Spectrum uninit"
-	clr.b	spectrumInitialized(a5)
-	move.l	spectrumMemory(a5),a0
-	clr.l	spectrumMemory(a5)
+	clr.b	s_spectrumInitialized(a4)
+	move.l	s_spectrumMemory(a4),a0
+	clr.l	s_spectrumMemory(a4)
 	jsr	freemem
 	rts
 
 prepareSpectrumVolumeTable
-	move.l	spectrumVolumeTable(a5),a0
+	move.l	s_spectrumVolumeTable(a4),a0
 	moveq	#0,d0
 .v
 	moveq	#0,d1
@@ -45383,12 +45457,12 @@ getSpectrumVolumeTable
 .1	subq	#1,d0
 	lsl	#8,d0
 	add	d0,d0
-	move.l	spectrumVolumeTable(a5),a2
+	move.l	s_spectrumVolumeTable(a4),a2
 	add	d0,a2
 	rts
 
 prepareSpectrumMuluTable
-	move.l	spectrumMuluTable(a5),a0
+	move.l	s_spectrumMuluTable(a4),a0
 	moveq	#0,d0
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d1
 .l	move	d0,(a0)+
@@ -45408,7 +45482,7 @@ prepareSpectrumMuluTable
 ; and not concentrated to the left only.
 
 prepareSpectrumLogTable
-	move.l	spectrumLogTable(a5),a0
+	move.l	s_spectrumLogTable(a4),a0
 	move	#$1000-1,d0
 	move.l	#-215,d2	; acceleration
 	move.l	#1<<16,d1 	; speed
@@ -45464,7 +45538,7 @@ prepareSpectrumSineTable
 	jmp	closel
 	
 .do
-	move.l	spectrumSineTable(a5),a2
+	move.l	s_spectrumSineTable(a4),a2
  
 	* D4 = multiplier 
 	* D3 = step
@@ -45497,7 +45571,7 @@ prepareSpectrumSineTable
 	rts
 
 runSpectrumScope
-	tst.b	spectrumInitialized(a5)
+	tst.b	s_spectrumInitialized(a4)
 	beq.w	.x
 
 	cmp	#pt_multi,playertype(a5)
@@ -45516,16 +45590,16 @@ runSpectrumScope
 	bsr.w	spectrumCopySamples
 	bsr.w	spectrumMixSamples
 .go
-	move.l	spectrumMixedData(a5),a0
+	move.l	s_spectrumMixedData(a4),a0
 	bsr.w	windowFFT
 
-	move.l	spectrumMixedData(a5),a0
-	move.l	spectrumImagData(a5),a1
-	move.l	spectrumSineTable(a5),a2
+	move.l	s_spectrumMixedData(a4),a0
+	move.l	s_spectrumImagData(a4),a1
+	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	sampleFFT
 		
-	move.l	spectrumMixedData(a5),a0
-	move.l	spectrumImagData(a5),a1
+	move.l	s_spectrumMixedData(a4),a0
+	move.l	s_spectrumImagData(a4),a1
 	bsr.w	calcFFTPower
 
 	bsr.w	drawFFT
@@ -45533,7 +45607,7 @@ runSpectrumScope
 	* Vertical fill
 	lore	GFX,OwnBlitter
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	addq	#2,a0 * horiz offset
 	moveq	#2,d0 * modulo
 	lea	40(a0),a1 * target is one line below
@@ -45560,17 +45634,18 @@ runSpectrumScope
 
 
 spectrumCopySamples
+	move.l	a4,a6
 	lea	scopeData+scope_ch1(a5),a3
-	move.l	spectrumChannel1(a5),a4
+	move.l	s_spectrumChannel1(a6),a4
 	bsr.b	.copySample
 	lea	scopeData+scope_ch2(a5),a3
-	move.l	spectrumChannel2(a5),a4
+	move.l	s_spectrumChannel2(a6),a4
 	bsr.b	.copySample
 	lea	scopeData+scope_ch3(a5),a3
-	move.l	spectrumChannel3(a5),a4
+	move.l	s_spectrumChannel3(a6),a4
 	bsr.b	.copySample
 	lea	scopeData+scope_ch4(a5),a3
-	move.l	spectrumChannel4(a5),a4
+	move.l	s_spectrumChannel4(a6),a4
 	;bsr.b	.copySample
 	;rts
 
@@ -45710,22 +45785,22 @@ calcSampleStep
 
 spectrumMixSamples
 	lea	scopeData+scope_ch1(a5),a1
-	move.l	spectrumChannel1(a5),a0
+	move.l	s_spectrumChannel1(a4),a0
 	moveq	#1,d4
 	bsr.b	.mixSample
 
 	lea	scopeData+scope_ch2(a5),a1
-	move.l	spectrumChannel2(a5),a0
+	move.l	s_spectrumChannel2(a4),a0
 	moveq	#0,d4
 	bsr.b	.mixSample
 
 	lea	scopeData+scope_ch3(a5),a1
-	move.l	spectrumChannel3(a5),a0
+	move.l	s_spectrumChannel3(a4),a0
 	moveq	#0,d4
 	bsr.b	.mixSample
 
 	lea	scopeData+scope_ch4(a5),a1
-	move.l	spectrumChannel4(a5),a0
+	move.l	s_spectrumChannel4(a4),a0
 	moveq	#0,d4
 	;bsr.b	.mixSample
 	;rts
@@ -45739,7 +45814,7 @@ spectrumMixSamples
 	bsr.b	calcSampleStep
 	; result in d1
 
-	move.l	spectrumMixedData(a5),a1
+	move.l	s_spectrumMixedData(a4),a1
 
 	moveq	#0,d6
 	moveq	#0,d0
@@ -45795,11 +45870,11 @@ spectrumMixSamples
 drawFFT
 	; FFT data is here.
 	; The other half is mirror of the first.
-	move.l	spectrumMixedData(a5),a0
-	move.l	draw1(a5),a1
+	move.l	s_spectrumMixedData(a4),a0
+	move.l	s_draw1(a4),a1
 	addq	#2+2,a1
-	move.l	spectrumMuluTable(a5),a2
-	move.l	spectrumLogTable(a5),a3
+	move.l	s_spectrumMuluTable(a4),a2
+	move.l	s_spectrumLogTable(a4),a3
 	move	#%11100000,d6
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-2,d5
 
@@ -45855,7 +45930,7 @@ spectrumGetPS3MSampleData
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
 	
-	move.l	spectrumMixedData(a5),a2
+	move.l	s_spectrumMixedData(a4),a2
 	moveq	#FFT_LENGTH-1,d7
 .loop
 	move.b	(a0,d0.l),d2
@@ -45876,7 +45951,7 @@ spectrumGetSampleData
 	* d5 = follow offset
 	* d4 = buffer size mask
 
-	move.l	spectrumMixedData(a5),a3
+	move.l	s_spectrumMixedData(a4),a3
 	moveq	#FFT_LENGTH/2-1,d7
 
 	move.l	samplepointer(a5),a1
@@ -46953,6 +47028,7 @@ slim2	ds	410*2
 		cnop 0,4
 * Global variables
 var_b		ds.b	size_var
+var_scopes  ds.b    sizeof_scopeVars
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950

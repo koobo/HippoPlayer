@@ -229,12 +229,8 @@ sampleFFT
 	; clear imaginary array
 	move.l	a1,a3
 
-	moveq	#FFT_LENGTH/2/8-1,d0
+	moveq	#FFT_LENGTH/2/4-1,d0
 .c	
-	clr.l	(a3)+
-	clr.l	(a3)+
-	clr.l	(a3)+
-	clr.l	(a3)+
 	clr.l	(a3)+
 	clr.l	(a3)+
 	clr.l	(a3)+
@@ -309,13 +305,13 @@ fix_fft
 .istep		rs.w	1
 .varsSizeof	rs.b	0
 
-	movem.l	a5/a6,-(sp)		
+	movem.l	a4/a5/a6,-(sp)		
 	lea	.vars(pc),a5
 	; m, data size 1<<7 = 128
 	move	#FFT_SIZE,.m(a5)
 	;lea	Sinewave(pc),a2	
 	bsr.b	.fix_fft2
-	movem.l	(sp)+,a5/a6
+	movem.l	(sp)+,a4/a5/a6
 	rts
 
 .vars	ds.b	.varsSizeof
