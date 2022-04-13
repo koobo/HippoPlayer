@@ -1,4 +1,4 @@
-;APS0001B5460000DE7E000034A500002CBA000000000000000000000000000000000000000000000000
+;APS0001B54E0000DE860000349A00002CAF000000000000000000000000000000000000000000000000
 * Uusin.
 * Tämä on käytössä
 
@@ -10,8 +10,8 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
-DEBUG	=	0
-TEST 	= 	0
+DEBUG		= 1
+TEST 		= 0
 
  ifeq TEST
 	auto	wo p:pl/bin/ps3m\
@@ -28,6 +28,7 @@ DPRINT macro
   even
 	endc
 	endm
+
 
 CHECKCRC	=	$FB289E39	; tekstien tarkistussumma
 
@@ -393,6 +394,8 @@ s3poslen
 	move	positioneita(a5),(a0)
 	tst.b	d0 
 	beq.b	.noPatternScope
+	move.b	ahi_use(pc),d0
+	bne.b	.skip
 	bsr.w	updatePatternInfoBuffer
 	bsr.w	updatePatternInfoData
 .noPatternScope
@@ -822,7 +825,7 @@ updatePatternInfoData
 	beq.w	.xm
 	rts 
 .mod
-	move.l	mt_songdataptr(pc),a0
+	move.l	mt_songdataptr,a0
 	lea	952(a0),a2	;pattpo
 	lea	1084(a0),a0	;patterndata
 
@@ -1289,7 +1292,7 @@ s3end
 
 .closeDebugWindow
  ifne DEBUG
-	move.l	#1*50,d1
+	move.l	#2*50,d1
 	move.l	dosbase,a6
 	lob 	Delay
 	move.l	output,d1
@@ -1404,12 +1407,14 @@ ahi_init0
 	lob	 FindTask
 	move.l d0,ahi_task
 
+	DPRINT	"Open AHI"
 	OPENAHI	1
 	move.l	d0,ahibase
 	beq.w	.ahi_error
 	move.l	d0,a6
 
 	lea	ahi_tags(pc),a1
+	DPRINT "AHI_AllocAudioA"
 	jsr	_LVOAHI_AllocAudioA(a6)
 	move.l	d0,ahi_ctrl
 	beq.w	.ahi_error
@@ -1418,31 +1423,38 @@ ahi_init0
 	moveq	#0,d0				;Load module as one sound!
 	moveq	#AHIST_SAMPLE,d1
 	lea	ahi_sound0(pc),a0
+	DPRINT "AHI_LoadSound"
 	jsr	_LVOAHI_LoadSound(a6)
 	tst.l	d0
-	bne.b	.ahi_error
+	bne.w	.ahi_error
 
 	move.l	setmode(pc),d0
 	lea	getattr_tags(pc),a1
+	DPRINT "AHI_GetAudioAttrsA"
 	jsr	_LVOAHI_GetAudioAttrsA(a6)
 
+	DPRINT	"Master vol"
 	bsr.w	ahi_setmastervol
 
+	DPRINT	"Tempo"
 	move	tempo,d0
 	bsr.w	ahi_tempo
 
 	lea	ahi_ctrltags(pc),a1
 	move.b	#1,setpause-ahi_ctrltags(a1)
 	move.l	ahi_ctrl(pc),a2
+	DPRINT "AHI_ControlAudioA"
 	jsr	_LVOAHI_ControlAudioA(a6)
 
 	DPRINT	"->%ld"
 
 	tst.l	d0
 	bne.b	.ahi_error
+	DPRINT	"All ok"
 	moveq	#0,d0
 	rts
 .ahi_error:
+	DPRINT	"AHI error"
 	moveq	#-1,d0
 	rts
 
@@ -1456,16 +1468,52 @@ ahi_end
 	cmp.l	ahi_task(pc),d0
 	beq.b	.ok
 	DPRINT 	"task mismatch %lx"
-	bra.b 	.1
+	bra.w 	.1
 .ok
 
+
 	move.l	ahibase(pc),d0
-	beq.b	.1
-	clr.l	ahibase
+	beq.w	.1
 	move.l	d0,a6
+
+	* Some ForteMedia and Toccata audio
+	* modes seem to need this here so avoid
+	* crashing in FreeAudio().
+
+	lea	ahi_ctrltags(pc),a1
+	clr.b	setpause-ahi_ctrltags(a1)
 	move.l	ahi_ctrl(pc),a2
+	DPRINT "AHI_ControlAudioA"
+	jsr	_LVOAHI_ControlAudioA(a6)
+
+	move	numchans,d7
+	subq	#1,d7
+	moveq	#0,d6
+.endLoop
+	move.l	d6,d0		* channel
+	moveq   #AHI_NOSOUND,d1
+	moveq   #0,d2
+    	moveq   #0,d3
+    	moveq   #AHISF_IMM,d4
+    	move.l	ahi_ctrl(pc),a2
+	DPRINT	"AHI_SetSound"
+    	jsr     _LVOAHI_SetSound(a6)
+	addq	#1,d6
+	dbf	d7,.endLoop
+
+	;DPRINT	"AHI_UnloadSound"
+   	;moveq   #0,d0
+    ;	move.l	ahi_ctrl(pc),a2
+  	;jsr     _LVOAHI_UnloadSound(a6)
+    
+	clr.l	ahibase
+	move.l	ahi_ctrl(pc),a2
+	DPRINT "AHI_FreeAudio"
 	jsr	_LVOAHI_FreeAudio(a6)
+	DPRINT	"Close AHI"
 	CLOSEAHI
+	DPRINT	"all ok"
+
 .1
 	rts
 
@@ -1506,6 +1554,7 @@ ahi_setmastervol
 	lea	ahi_effect(pc),a0
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
+	DPRINT "AHI_SetEffect"
 	jsr	_LVOAHI_SetEffect(a6)
 
 	popm	d0/d1/a0-a2/a6
@@ -1520,6 +1569,7 @@ ahi_cont
 	eor.b	#1,setpause-ahi_ctrltags(a1)
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
+	DPRINT "AHI_ControlAudioA"
 	jsr	_LVOAHI_ControlAudioA(a6)
 
 	popm	d0/d1/a0-a2/a6
@@ -1528,6 +1578,9 @@ ahi_cont
 
 
 ahi_playmusic
+	move	#$f00,$dff180
+	rts
+
 	pushm	d2-d7/a2-a6
 
 	bsr.w	s3vol
@@ -1634,6 +1687,7 @@ ahi_quiet
 	moveq	#AHISF_IMM,d3
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
+	DPRINT "AHI_SetVol"
 	jsr	_LVOAHI_SetVol(a6)
 	movem.l	(sp)+,d0-d3/d6/a0-a2/a6
 	rts
@@ -1734,8 +1788,9 @@ ahi_sample:
 * a0	struct Hook *
 * a1	struct AHISoundMessage *
 * a2	struct AHIAudioCtrl *
-soundfunc:
+SoundFuncImpl
 	movem.l	d2-d4/a6,-(sp)
+	;move	#$f00,$dff180
 
 	move	ahism_Channel(a1),d0
 	move	d0,d2
@@ -1791,7 +1846,7 @@ PlayerFunc:
 
 SoundFunc:
 	blk.b	MLN_SIZE
-	dc.l	soundfunc
+	dc.l	SoundFuncImpl
 	dc.l	0
 	dc.l	0
 
@@ -10295,7 +10350,10 @@ syss3mPlay
 	lea	data,a5
 	basereg	data,a5
 	
+	tst.b	ahi_use(a5)
+	beq.b	.1
 	move	#$f,$dff096
+.1
 
 	move.l	4.w,a6
 
