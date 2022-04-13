@@ -21662,6 +21662,14 @@ str2msg	pushm	d0/d1/a0/a1/a6
 *
 ********************************************************************************
 
+* Incoming volume values need to be validated or else there will
+* be over indexing mayhem and memory corruption!
+CLAMPVOL macro
+	cmp	#$40,\1
+	bls.b	*+4
+	moveq	#$40,\1
+	endm
+
 * Käynnistys
 start_quad
 	st	scopeflag(a5)
@@ -22591,7 +22599,9 @@ scopeinterrupt:				* a5 = var_b
 	bsr	patternScopeIsActive
 	beq.b	.eq
 	
-	move	n_tempvol(a2),ns_tempvol(a0)
+	move	n_tempvol(a2),d0
+	CLAMPVOL d0
+	move	d0,ns_tempvol(a0)
 
 .eq	lea	n_sizeof(a2),a2
 	lea	ns_size(a0),a0
@@ -22668,7 +22678,9 @@ scopeinterrupt:				* a5 = var_b
 	lea	scopeData+scope_ch1(a5),a3
 	moveq	#4-1,d0
 .upsLoop
-	move	UPS_Voice1Vol(a2),ns_tempvol(a3)
+	move	UPS_Voice1Vol(a2),d1
+	CLAMPVOL d1
+	move	d1,ns_tempvol(a3)
 	move	UPS_Voice1Per(a2),d1
 	beq.b	.1
 	* New sample starts as period is non-zero
@@ -23310,8 +23322,6 @@ quadrascope:
 	move.l	mtab(a5),a2
 	add.l	d1,a2
 
-	lea	-40(a0),a3
-
 	cmp.b	#8,quadmode2(a5)
 	beq.b	.iik
 	cmp.b	#9,quadmode2(a5)
@@ -23319,21 +23329,19 @@ quadrascope:
 .iik	move.l	a0,a3
 .ook
 
-	moveq	#0,d1
+	;moveq	#0,d1
 	moveq	#80/8-1,d7
 	moveq	#1,d0
-	moveq	#0,d6
-
 	
 drlo	
 
 sco	macro
-	move	d6,d2
+	moveq	#0,d2
 	move.b	(a1)+,d2
 	add	d2,d2
 	move	(a2,d2),d3
-	or.b	d0,(a3,d3)
 	or.b	d0,(a0,d3)
+	or.b	d0,-40(a0,d3)
 
 	ifne	\2
 	add.b	d0,d0
@@ -23390,6 +23398,7 @@ hipposcope
 .twirl
 	move.l	mtab(a5),a0
 	move	ns_tempvol(a3),d0
+	CLAMPVOL d0
 	mulu	mainvolume(a5),d0
 	lsr	#6,d0
 	subq	#1,d0
@@ -24069,7 +24078,9 @@ notescroller
 	move.b  d2,d0 	
 	not.b   d0
 	and.b  	d0,scopeData+scope_trigger(a5)
-	move	n_tempvol(a1),ns_tempvol(a0)
+	move	n_tempvol(a1),d0
+	CLAMPVOL d0
+	move	d0,ns_tempvol(a0)
 .e	
 	* next bit
 	add.b	d2,d2
@@ -44212,6 +44223,7 @@ funcENPP_PokeVol
  	beq.b	.1
 
 	lea	scopeData(a0),a0
+	CLAMPVOL d0
 	move	d0,ns_tempvol(a0,d2)
 .1
 	popm	d2/d3/a0/a1
