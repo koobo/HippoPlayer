@@ -22166,6 +22166,9 @@ qexit	bsr.b	qflush_messages
 	move.l	mtab(a5),a0
 	clr.l	mtab(a5)
 	jsr	freemem
+	move.l	scopeVerticalBarTable(a5),a0
+	clr.l	scopeVerticalBarTable(a5)
+	jsr	freemem
 	bsr	freeScopeBitmaps
   ifne FEATURE_FREQSCOPE
 	move.l	deltab1(a5),a0
