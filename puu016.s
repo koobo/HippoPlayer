@@ -28,7 +28,7 @@ ver	macro
 	endm	
 
 
-DEBUG	= 0
+DEBUG	= 1
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
 asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
@@ -489,9 +489,9 @@ userport	rs.l	1		*
 windowbase2	rs.l	1		* prefs
 rastport2	rs.l	1		* 
 userport2	rs.l	1		*
-rastport3	rs.l	1		* quadrascope
-userport3	rs.l	1		* 
-scopeWindowBase	rs.l	1		* scopes window
+;rastport3	rs.l	1		* quadrascope
+;userport3	rs.l	1		* 
+;scopeWindowBase	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 minifontbase rs.l	1
@@ -645,6 +645,7 @@ spectrumChannel4	rs.l 1
 spectrumMixedData	rs.l 1
 spectrumImagData	rs.l 1
 spectrumInitialized rs.w 1
+ rssrsrs
   endif
 
 * Mulutable for scope window modulo
@@ -5613,7 +5614,7 @@ laatikko0:
 	move	ply2,d1
 	move	plx2,d2
 	move	ply2,d3
-	bsr.b	drawli
+	bsr.w	drawli
 
 	move	plx2,d0
 	move	ply2,d1
@@ -5633,11 +5634,11 @@ laatikko0:
 looex	move.l	pen_1(a5),d0
 	move.l	a3,a1
 	jmp	_LVOSetAPen(a6)
-
-
+	
 ** bevelboksi, reunat 1 pix
 
 laatikko3
+
 	move.l	a1,a3
 	move.l	pen_2(a5),a2
 	move.l	pen_1(a5),a4
@@ -12007,13 +12008,13 @@ saveprefs
 	tst	info_prosessi(a5)
 	sne	prefs_infoon+prefsdata(a5)
 
-
-	move.l	scopeWindowBase(a5),d0
-	beq.b	.k
-	move.l	d0,a0
-	move.l	4(a0),quadpos(a5)
-	st	prefs_quadon+prefsdata(a5)
-.k
+	printt	"TODO TODO"
+;	move.l	scopeWindowBase(a5),d0
+;	beq.b	.k
+;	move.l	d0,a0
+;	move.l	4(a0),quadpos(a5)
+;	st	prefs_quadon+prefsdata(a5)
+;.k
 	move.l	swindowbase(a5),d0
 	beq.b	.gg
 	move.l	d0,a0
@@ -12362,7 +12363,7 @@ loadcybersoundcalibration
 ******************************************************************************
 * Piirt‰‰ tekstuurin ikkunaan
 
-drawtexture
+drawtexture:
 	movem.l	d0-a6,-(sp)
 	ext.l	d0
 	ext.l	d1
@@ -21678,7 +21679,6 @@ s_buffer0w                    rs.w       1
 s_buffer0h                    rs.w       1
 s_quadmode                    rs.b       1
 s_quadmode2                   rs.b       1
-s_multab                      rs.w       70 * modulo multiplication table
 s_scopeDrawAreaWidth		rs.w 	1
 s_scopeDrawAreaModulo		rs.w 	1
 s_scopeDrawAreaWidthRequest   rs.w       1
@@ -21718,7 +21718,8 @@ s_spectrumImagData            rs.l       1
 s_spectrumInitialized         rs.w       1
                               endif
 
-s_scopeHorizontalBarTable       rs.b       512
+s_multab                      rs.w       256 * modulo multiplication table
+s_scopeHorizontalBarTable     rs.b       512
 s_mtab                        rs.b       64*256*2 * volume table for scopes
 sizeof_scopeVars              rs.b       1
 
@@ -21727,8 +21728,8 @@ sizeof_scopeVars              rs.b       1
 start_quad
 	st	scopeflag(a5)
 start_quad2
-	printt "teeeeesting............."
-	jmp	quad_code
+
+	;jmp	quad_code
 
 	move.l	a6,-(sp)
 	move.l	_DosBase(a5),a6
@@ -21752,16 +21753,18 @@ start_quad2
  
 * Sammutus
 
-sulje_quad
+sulje_quad:
 	clr.b	scopeflag(a5)
 sulje_quad2
 	push	a6
 	tst	quad_prosessi(a5)
 	beq.b	.tt	
 
-	move.l	quad_task(a5),a1
-	moveq	#0,d0
-	lore	Exec,SetTaskPri
+	printt "todo todododo"
+	;move.l	quad_task(a5),a1
+	;moveq	#0,d0
+	;lore	Exec,SetTaskPri
+
 	st	tapa_quad(a5)		* lippu: poistu!
 .t	tst	quad_prosessi(a5)	* odotellaan
 	beq.b	.tt
@@ -21808,6 +21811,8 @@ SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 
 quad_code
 	lea	var_b,a5
+	move.l	(a5),a6
+
 	lea	var_scopes,a4
 	move.l	a5,s_global(a4)
 
@@ -21827,8 +21832,10 @@ quad_code
 	sub.l	a1,a1
 	lore	Exec,FindTask
 	move.l	d0,s_quad_task(a4)
+	move.l	d0,quad_task(a5)
 
-	;addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
+	addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
+
 
 	; TODO: input params
 	move.b	#0,s_quadmode(a4)
@@ -21837,13 +21844,8 @@ quad_code
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
 	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
 
-	lea	scopeData+scope_ch1(a5),a0
-	lea	4*ns_size(a0),a1
-.cl	clr	(a0)+
-	cmp.l	a1,a0
-	bne.b	.cl
+	bsr	clearScopeData
 
-BOMBO
 
  if DEBUG
 	moveq	#0,d0 
@@ -21864,6 +21866,7 @@ BOMBO
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
 	lsl	#2,d0
+BOMBO
 	jmp	.t(pc,d0)
 
 .t	jmp	.1(pc)		* quadrascope
@@ -21962,6 +21965,10 @@ BOMBO
 	DPRINT	"Patternscope XL"
 .cont
 
+
+
+
+
 	* Start with no size request active.
 	move	s_scopeDrawAreaWidth(a4),s_scopeDrawAreaWidthRequest(a4)
 	move	s_scopeDrawAreaHeight(a4),s_scopeDrawAreaHeightRequest(a4)
@@ -21973,12 +21980,12 @@ BOMBO
 	lsr	#1,d0
 	move	d0,s_quadNoteScrollerLinesHalf(a4)
 
-
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc3,a0
 	* Restore top/left to some previous used value
 	
 	; TODO
+	printt "todot odo"
 	;move.l	quadpos(a5),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
@@ -22000,7 +22007,6 @@ BOMBO
 	sub	6(a0),d0	* Jos ei mahdu ruudulle, laitetaan
 	move	d0,2(a0)	* mahdollisimman alas
 .ok2
-
 	lob	OpenWindow
 	move.l	d0,s_scopeWindowBase(a4)
 	bne.b	.ok3
@@ -22037,6 +22043,7 @@ BOMBO
 	bsr	initScopeBitmaps
 	beq.b	.memer
 
+; TEST! OK
 
 	* State flag indicating whether scope has been cleared
 	moveq	#0,d7
@@ -22046,13 +22053,14 @@ BOMBO
 	bsr	patternScopeIsActive
 	bne.b	.noPatts
 	DPRINT	"Patternscope active"
-	st		d6
+	st	d6
 .noPatts
 
 	* Set to non-zero if LMB is pressed
 	move.b	scopeManualActivation(a5),d5
-
 	jsr	printHippoScopeWindow	
+
+; TEST: OK
 
 *********************************************************************
 * Scope main loop
@@ -22074,6 +22082,7 @@ scopeLoop:
 	lob	WaitTOF
  endif
 
+
 	tst.b	tapa_quad(a5)		* pit‰‰kˆ poistua?
 	bne.w	qexit
 
@@ -22083,7 +22092,7 @@ scopeLoop:
 
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
-	move.l	scopeWindowBase(a5),a0	* ollaanko p‰‰llimm‰isen‰?
+	move.l	s_scopeWindowBase(a4),a0	* ollaanko p‰‰llimm‰isen‰?
 
 	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
@@ -22115,8 +22124,8 @@ scopeLoop:
 	tst.b	d7
 	bne.b	.doDraw
 	* This clears the hippo gfx away when starting again
-	bsr.w	scopeDrawAreaClear
-
+	;bsr.w	scopeDrawAreaClear
+	nop ;TEST
 .doDraw
 	* Needs a clear in the future
 	moveq	#-1,d7
@@ -22131,7 +22140,8 @@ scopeLoop:
 	* Final safety check
 	tst.b	playing(a5)
 	beq.b	.1
-	bsr.w	drawScope
+	;bsr.w	drawScope
+	nop
 .1	jsr 	releaseModuleData
 	popm	d5/d6/d7
 	bra.b	.continue
@@ -22142,14 +22152,15 @@ scopeLoop:
 	beq.b	.continue
 	* Request fulfilled
 	moveq	#0,d7
-	bsr.w	scopeDrawAreaClear
-	jsr	printHippoScopeWindow
+	nop ; TEST
+	;bsr.w	scopeDrawAreaClear
+	;jsr	printHippoScopeWindow
 	bra.w	.continue
 
 .m
 .continue
 	* Manual size and position detection by polling.
-	bsr		scopeWindowChangeHandler
+	bsr	scopeWindowChangeHandler
 .getMoreMsg
 	* Poll for messages
 	move.l	s_userport3(a4),a0
@@ -22204,9 +22215,6 @@ scopeLoop:
 
 qexit	bsr.b	qflush_messages
 
-	;move.l	s_mtab(a4),a0
-	;clr.l	s_mtab(a4)
-	jsr	freemem
 	bsr	freeScopeBitmaps
   ifne FEATURE_FREQSCOPE
 	move.l	s_deltab1(a4),a0
@@ -22221,9 +22229,10 @@ qexit	bsr.b	qflush_messages
 	move.l	s_scopeWindowBase(a4),d0
 	beq.b	.uh1
 	move.l	d0,a0
+	printt "todo todo to"
 	;move.l	4(a0),quadpos(a5)	* koordinaatit talteen
 	lob	CloseWindow
-	clr.l	scopeWindowBase(a5)
+	clr.l	s_scopeWindowBase(a4)
 .uh1
 	lore	Exec,Forbid
 
@@ -22296,7 +22305,7 @@ initScopeBitmaps
 	move.l	a0,s_buffer2(a4)
 	
 *** Initialisoidaan oma bitmappi
-	lea	s_omabitmap(a5),a0
+	lea	s_omabitmap(a4),a0
 	moveq	#1,d0
 	move	s_scopeDrawAreaWidth(a4),d1
 	move	s_scopeDrawAreaHeight(a4),d2
@@ -22361,7 +22370,7 @@ scopeWindowChangeHandler
 	bne.b	.posChange
 	cmp	s_scopePreviousWidth(a4),d0 
 	bne.b	.sizeChange
-	cmp s_scopePreviousHeight(a4),d1 
+	cmp 	s_scopePreviousHeight(a4),d1 
 	bne.b	.sizeChange
 	rts
 .posChange
@@ -22445,7 +22454,9 @@ drawScopeWindowDecorations
 	add	windowtop(a5),ply1
 	add	windowtop(a5),ply2
 	move.l	s_rastport3(a4),a1
+	push	a4
 	jsr	laatikko2
+	pop	a4
 	rts
 
 
@@ -22637,7 +22648,7 @@ scopeinterrupt:				* a5 = var_b
 	;move	n_tempvol(a2),ns_tempvol2(a0)
 	addq	#1,a3
 
-	;TODO
+	printt "todo todo todox"
 	;bsr	patternScopeIsActive
 	;beq.b	.eq	
 	move	n_tempvol(a2),ns_tempvol(a0)
@@ -36733,7 +36744,9 @@ p_multi	jmp	.s3init(pc)
 	tst.b	scopeflag(a5)
 	beq.b	.noScope 
 	* Sets Z if patternscope is active:
-	jsr	patternScopeIsActive
+	printt "todo todo todo"
+	;jsr	patternScopeIsActive
+	moveq	#-1,d0
 	* Inform PS3M 
 	seq		d0
 .noScope
