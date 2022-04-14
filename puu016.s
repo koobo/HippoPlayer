@@ -612,6 +612,13 @@ mousex		rs	1		* hiiren paikka x,y
 mousey		rs	1
 
 ******* Scope variables
+taskQuadraScope		rs.b 	TC_SIZE
+taskFilledQuadraScope	rs.b 	TC_SIZE
+taskHippoScope		rs.b	TC_SIZE
+taskSpectrumScope	rs.b	TC_SIZE
+taskPatternScope	rs.b 	TC_SIZE
+
+
  REM ;;;;;; REMOVED 
 draw1		rs.l	1
 draw2		rs.l	1
@@ -2055,10 +2062,10 @@ info_segment
 	dc	0 * pad
 
 
-	dc.l	16
-quad_segment
-	dc.l	0
-	jmp	quad_code
+;	dc.l	16
+;quad_segment
+;	dc.l	0
+;	jmp	quad_code
 
 ;	dc	0	* pad
 
@@ -21726,28 +21733,72 @@ s_mtab                        rs.b       64*256*2 * volume table for scopes
 sizeof_scopeVars              rs.b       1
 
 
+startQuadraScopeTask
+	DPRINT	"startQuadraScopeTask"
+
+	lea	taskQuadraScope(a5),a3
+
+	* Reset task structure
+	move.l	a3,a0
+	moveq	#TC_SIZE-1,d0
+.c	clr.b	(a0)+
+	dbf	d0,.c
+
+	* Initialize ln_Node
+	move.b	#NT_TASK,LN_TYPE(a3)
+	move.b	#-30,LN_PRI(a3)
+	move.l	#.name,LN_NAME(a3)
+
+	* Allocate stack, silent exit on failure
+	move.l	#3000,d0
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	jsr	getmem
+	beq.b	.x
+	move.l	d0,a0
+	move.l	a0,TC_SPLOWER(a3)
+	lea	3000(a0),a0
+	move.l	a0,TC_SPUPPER(a3)
+	move.l	a0,TC_SPREG(a3)
+
+	move.l	#$12341234,TC_Userdata(a3)
+
+	move.l	a3,a1
+	* initialPC
+	lea	quad_code(pc),a2
+	* finalPC (system default)
+	sub.l a3,a3		 
+	lore	Exec,AddTask
+
+.x
+	rts
+
+.name	dc.b 	"HiP-scope-task",0
+ even
+
+
 * Käynnistys
 start_quad
 	st	scopeflag(a5)
 start_quad2
 
-	;jmp	quad_code
+	;move.l	a6,-(sp)
+	;move.l	_DosBase(a5),a6
+	;pushpea	.prn(pc),d1
+	;moveq	#0,d2			* pri
+	;move.l	#quad_segment,d3
+	;lsr.l	#2,d3
+	;move.l	#3000,d4
+	;lob	CreateProc
+	;tst.l	d0
+	;beq.b	.error
 
-	move.l	a6,-(sp)
-	move.l	_DosBase(a5),a6
-	pushpea	.prn(pc),d1
-	moveq	#0,d2			* pri
-	move.l	#quad_segment,d3
-	lsr.l	#2,d3
-	move.l	#3000,d4
-	lob	CreateProc
-	tst.l	d0
-	beq.b	.error
+	bsr	startQuadraScopeTask	
 	addq	#1,quad_prosessi(a5)
 
 	bsr.w	updateprefs
 
-.error	move.l	(sp)+,a6
+.error	
+	;move.l	(sp)+,a6
 	rts
 
 .prn	dc.b	"HiP-Scope",0
@@ -21758,6 +21809,8 @@ start_quad2
 sulje_quad:
 	clr.b	scopeflag(a5)
 sulje_quad2
+	DPRINT	"->sulje_quad"
+
 	push	a6
 	tst	quad_prosessi(a5)
 	beq.b	.tt	
@@ -21774,6 +21827,7 @@ sulje_quad2
 	bra.b	.t
 .tt	clr.b	tapa_quad(a5)
 	pop	a6
+	DPRINT	"<-sulje_quad"
 	rts
 
 
@@ -21810,10 +21864,15 @@ SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
 ;SCOPE_SMALL_FONT_CHANNEL_LIMIT = 4
 SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 
+SDPRINT macro
+	nop
+	endm
 
+* Cannot use debug print here
 quad_code
 	lea	var_b,a5
 	move.l	(a5),a6
+	SDPRINT	"Scope task started"
 
 	move.l	#sizeof_scopeVars,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -21863,7 +21922,7 @@ quad_code
  if DEBUG
 	moveq	#0,d0 
 	move.b	s_quadmode(a4),d0
-	DPRINT	"Quad mode: %lx"
+	SDPRINT	"Quad mode: %lx"
  endif
 	* This creates a jumptable compatible value out of quadmode,
 	* where bit 8 indicates "bars enabled"
@@ -21879,7 +21938,6 @@ quad_code
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
 	lsl	#2,d0
-BOMBO
 	jmp	.t(pc,d0)
 
 .t	jmp	.1(pc)		* quadrascope
@@ -21970,12 +22028,12 @@ BOMBO
 	* Prevent use of _BARS enumeration in quadmode2,
 	* makes things easier. 
 	move.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
-	DPRINT	"Patternscope NORMAL"
+	SDPRINT	"Patternscope NORMAL"
 	bra.b	.cont
 .patternScopeXL
 .patternScopeXLBars
 	move.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
-	DPRINT	"Patternscope XL"
+	SDPRINT	"Patternscope XL"
 .cont
 
 
@@ -22065,7 +22123,7 @@ BOMBO
 	moveq	#0,d6	
 	bsr	patternScopeIsActive
 	bne.b	.noPatts
-	DPRINT	"Patternscope active"
+	SDPRINT	"Patternscope active"
 	st	d6
 .noPatts
 
@@ -22223,7 +22281,9 @@ scopeLoop:
 * Scope exit
 *********************************************************************
 
-qexit	bsr.b	qflush_messages
+qexit	
+	SDPRINT	"Scope task will exit"
+	bsr.b	qflush_messages
 
 	bsr	freeScopeBitmaps
   ifne FEATURE_FREQSCOPE
@@ -22250,13 +22310,14 @@ qexit	bsr.b	qflush_messages
 	jsr	freemem
 
 	* Is this needed?
-	lore	Exec,Forbid
+	;lore	Exec,Forbid
 
 	cmp	#1,prefsivu(a5)		* display prefssivu?
 	bne.b	.reer
 	bsr.w	updateprefs
 .reer
 
+	SDPRINT	"Scope task exiting"
 	clr	quad_prosessi(a5)	* lippu: lopetettiin
 	rts
 
@@ -22503,7 +22564,7 @@ requestScopeDrawAreaChange
  if DEBUG 	
 	ext.l 	d0 
 	ext.l 	d1
-	DPRINT	"Draw area change %ld %ld"
+	SDPRINT	"Draw area change %ld %ld"
  endif
 
 
@@ -22537,7 +22598,7 @@ requestScopeDrawAreaChange
  if DEBUG 
  	ext.l 	d0 
  	ext.l 	d1
-	DPRINT	"->move %ld %ld"
+	SDPRINT	"->move %ld %ld"
  endif
    
 	lore	Intui,MoveWindow
@@ -22547,7 +22608,7 @@ requestScopeDrawAreaChange
  if DEBUG 
  	ext.l 	d0 
  	ext.l 	d1
-	DPRINT	"->resize %ld %ld"
+	SDPRINT	"->resize %ld %ld"
  endif 
 
 	move.l	s_scopeWindowBase(a4),a0 
@@ -22555,7 +22616,7 @@ requestScopeDrawAreaChange
 	moveq	#1,d0
 	rts
 .noDiff
-;	DPRINT	"->no change!"
+;	SDPRINT	"->no change!"
 	moveq	#0,d0
 	rts
 
@@ -22574,7 +22635,7 @@ scopeDrawAreaSizeChangeRequestIsActive
 
 * Called when IDCMP_CHANGEWINDOW message arrives.
 scopeWindowChanged
-	DPRINT	"scopeWindowChanged"
+	SDPRINT	"scopeWindowChanged"
  if DEBUG
 	move.l	s_scopeWindowBase(a4),a0
 	moveq	#0,d0
@@ -22585,7 +22646,7 @@ scopeWindowChanged
 	move	wd_TopEdge(a0),d1
 	move	wd_Width(a0),d2
 	move	wd_Height(a0),d3
-	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+	SDPRINT	"left=%ld top=%ld width=%ld height=%ld"
  endif
 	* Request again after window move
  	bsr.w	scopeDrawAreaSizeChangeRequestIsActive
@@ -22600,7 +22661,7 @@ scopeWindowChanged
 * Window size change request has been fulfilled.
 scopeWindowSizeChanged
 	pushm	d2-d6
-	DPRINT	"scopeWindowSizeChanged"
+	SDPRINT	"scopeWindowSizeChanged"
  if DEBUG
 	move.l	s_scopeWindowBase(a4),a0
 	moveq	#0,d0
@@ -22611,7 +22672,7 @@ scopeWindowSizeChanged
 	move	wd_TopEdge(a0),d1
 	move	wd_Width(a0),d2
 	move	wd_Height(a0),d3
-	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+	SDPRINT	"left=%ld top=%ld width=%ld height=%ld"
  endif
 	move	s_scopeDrawAreaWidthRequest(a4),s_scopeDrawAreaWidth(a4)
 	move	s_scopeDrawAreaHeightRequest(a4),s_scopeDrawAreaHeight(a4)
@@ -23268,7 +23329,7 @@ getScopeChannelData:
 	move.l	moduleaddress(a5),d4
 	move.l	d4,d5
 	add.l	modulelength(a5),d5
-	DPRINT	"%lx %lx %lx %lx - %lx %lx"
+	SDPRINT	"%lx %lx %lx %lx - %lx %lx"
  EREM
 
 	move.l	ns_start(a3),d0
@@ -23308,7 +23369,7 @@ getScopeChannelData:
 	move.l	d4,d5
 	add.l	(a2),d5 * len
 	pop	a2
-;	DPRINT	"%lx %lx %lx %lx-%lx %lx"
+;	SDPRINT	"%lx %lx %lx %lx-%lx %lx"
 .notRH2
 
 	* Check start
@@ -25016,7 +25077,7 @@ noteScroller2:
 ;	move.l	moduleaddress(a5),d0
 ;	move.l	modulelength(a5),d1
 ;	move.l	a0,d2
-;	DPRINT	"INSANITY %lx %ld -> %lx"
+;	SDPRINT	"INSANITY %lx %ld -> %lx"
  endif
 	rts
 
@@ -45384,7 +45445,7 @@ MIX_LENGTH = FFT_LENGTH
 SAMPLE_LENGTH = MIX_LENGTH*2
 
 spectrumInitialize
-	DPRINT	"Spectrum init"
+	SDPRINT	"Spectrum init"
 
 VOLUME_TABLE_LEN = $40*$100*2
 MULU_TABLE_LEN = SCOPE_DRAW_AREA_HEIGHT_DEFAULT*2
@@ -45433,13 +45494,13 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	moveq	#1,d0
 	rts
 	
-.x	DPRINT 	"Spectrum init failed"
+.x	SDPRINT 	"Spectrum init failed"
 	moveq	#0,d0
 	rts
 
 
 spectrumUninitialize
-	DPRINT	"Spectrum uninit"
+	SDPRINT	"Spectrum uninit"
 	clr.b	s_spectrumInitialized(a4)
 	move.l	s_spectrumMemory(a4),a0
 	clr.l	s_spectrumMemory(a4)
