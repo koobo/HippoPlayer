@@ -20445,10 +20445,10 @@ rbutton10
 *******
 * a1 = teksti
 
-request
+request:
 	movem.l	d0-a6,-(sp)
 	sub.l	a4,a4
-request2
+request2:
 	lea	.ok_g(pc),a2
 	bsr.b	rawrequest
 	movem.l	(sp)+,d0-a6
@@ -20476,7 +20476,7 @@ areyousure_delete
 .y	dc.b	"_Yes|_No",0
  even
 
-rawrequest
+rawrequest:
 	jsr	get_rt
 	movem.l	a0-a4,-(sp)
 	moveq	#RT_REQINFO,D0
@@ -21697,6 +21697,8 @@ s_buffer1                     rs.l       1
 s_buffer2                     rs.l       1
 s_draw1                       rs.l       1
 s_draw2                       rs.l       1
+* Triggered channel volumes for Protracker animated volume bars
+s_patternScopeVolumes	      rs.w       4
                               ifne       FEATURE_FREQSCOPE
 s_deltab1                     rs.l       1	
 s_deltab2                     rs.l       1	
@@ -21813,7 +21815,16 @@ quad_code
 	lea	var_b,a5
 	move.l	(a5),a6
 
-	lea	var_scopes,a4
+	move.l	#sizeof_scopeVars,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	jsr	getmem
+	bne.b	.gotMem
+	* Quit with error
+	lea	memerror_t(pc),a1
+	bra	request
+.gotMem
+	move.l	d0,a4
+	;lea	var_scopes,a4
 	move.l	a5,s_global(a4)
 
 *** Multab scopeille
@@ -22233,6 +22244,12 @@ qexit	bsr.b	qflush_messages
 	lob	CloseWindow
 	clr.l	s_scopeWindowBase(a4)
 .uh1
+
+	* Free local data 
+	move.l	a4,a0
+	jsr	freemem
+
+	* Is this needed?
 	lore	Exec,Forbid
 
 	cmp	#1,prefsivu(a5)		* display prefssivu?
@@ -22644,15 +22661,11 @@ scopeinterrupt:				* a5 = var_b
 	move.l	n_loopstart(a2),ns_loopstart(a0)
 	move	n_replen(a2),ns_replen(a0)
 .e	move	n_period(a2),ns_period(a0)
-	;move	n_tempvol(a2),ns_tempvol2(a0)
-	addq	#1,a3
-
-	printt "todo todo todox"
-	;bsr	patternScopeIsActive
-	;beq.b	.eq	
 	move	n_tempvol(a2),ns_tempvol(a0)
 
-.eq	lea	n_sizeof(a2),a2
+	addq	#1,a3 * next trigger byte
+
+	lea	n_sizeof(a2),a2
 	lea	ns_size(a0),a0
 	dbf	d1,.setscope
 
@@ -24105,6 +24118,7 @@ noteScrollerGetFont
 	move.l	tf_CharData(a2),a2		* data
 	rts
 
+
 patternScopePt:
 noteScrollerPt:
 notescroller:
@@ -24125,12 +24139,12 @@ notescroller:
 	bsr.w	.notescr
 	bsr	noteScrollerHorizontalLines
 
-	lea	kplbase(a5),a0
-	lea	k_chan1temp(a0),a1
+	* Volume update
 	lea	scopeData+scope_ch1(a5),a0
 	* channel bitmask
 	moveq	#1,d2
 	moveq	#4-1,d1
+	lea	s_patternScopeVolumes(a4),a2
 .setscope	
 	* see if channel bit is on
 	move.b	scopeData+scope_trigger(a5),d0
@@ -24140,25 +24154,24 @@ notescroller:
 	move.b  d2,d0 	
 	not.b   d0
 	and.b  	d0,scopeData+scope_trigger(a5)
-	move	n_tempvol(a1),ns_tempvol(a0)
+	move	ns_tempvol(a0),(a2)
 .e	
 	* next bit
 	add.b	d2,d2
 	lea	ns_size(a0),a0
-	lea	n_sizeof(a1),a1
+	addq	#2,a2
 	dbf	d1,.setscope
 
-
-	move	scopeData+scope_ch1+ns_tempvol(a5),d0	
+	move	s_patternScopeVolumes+0(a4),d0
 	moveq	#2,d1
 	bsr.b	.palkki
-	move	scopeData+scope_ch2+ns_tempvol(a5),d0	
+	move	s_patternScopeVolumes+2(a4),d0
 	moveq	#11,d1
 	bsr.b	.palkki
-	move	scopeData+scope_ch3+ns_tempvol(a5),d0	
+	move	s_patternScopeVolumes+4(a4),d0
 	moveq	#20,d1
 	bsr.b	.palkki
-	move	scopeData+scope_ch4+ns_tempvol(a5),d0	
+	move	s_patternScopeVolumes+6(a4),d0
 	moveq	#29,d1
 	bsr.b	.palkki
 
@@ -24181,14 +24194,12 @@ notescroller:
 
 .ohi
 	* animate the volume bars towards bottom
-	lea	scopeData+scope_ch1(a5),a0
+	lea	s_patternScopeVolumes(a4),a0
 	moveq	#4-1,d0
-.orl	tst	ns_tempvol(a0)
+.orl	tst	(a0)+
 	beq.b	.urh
-	subq	#1,ns_tempvol(a0)
-.urh	lea	ns_size(a0),a0
-	dbf	d0,.orl
-
+	subq	#1,-2(a0)
+.urh	dbf	d0,.orl
 	rts
 
 
@@ -47042,7 +47053,7 @@ slim2	ds	410*2
 		cnop 0,4
 * Global variables
 var_b		ds.b	size_var
-var_scopes  ds.b    sizeof_scopeVars
+;var_scopes  ds.b    sizeof_scopeVars
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
