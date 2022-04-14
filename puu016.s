@@ -45646,6 +45646,7 @@ runSpectrumScope
 
 
 spectrumCopySamples
+	push	a4
 	move.l	a4,a6
 	lea	scopeData+scope_ch1(a5),a3
 	move.l	s_spectrumChannel1(a6),a4
@@ -45658,8 +45659,9 @@ spectrumCopySamples
 	bsr.b	.copySample
 	lea	scopeData+scope_ch4(a5),a3
 	move.l	s_spectrumChannel4(a6),a4
-	;bsr.b	.copySample
-	;rts
+	bsr.b	.copySample
+	pop		a4
+	rts
 
 * in
 *   a3 = scope channel block
