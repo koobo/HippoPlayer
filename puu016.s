@@ -24106,9 +24106,9 @@ noteScrollerGetFont
 	move.l	tf_CharData(a2),a2		* data
 	rts
 
-patternScopePt
-noteScrollerPt
-notescroller
+patternScopePt:
+noteScrollerPt:
+notescroller:
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
 	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
@@ -24298,7 +24298,7 @@ notescroller
 	move	k_patternpos(a0),d6	* eka rivi?
 
 	* Target
-	move.l	s_draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	addq	#3,a0
 
 	* figure out where to place the first line
