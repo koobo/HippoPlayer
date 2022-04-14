@@ -21837,8 +21837,10 @@ quad_code
 	addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
 
+	printt "tokpkopdo"
 	; TODO: input params
-	move.b	#0,s_quadmode(a4)
+;	move.b	#0,s_quadmode(a4)	
+	move.b	quadmode(a5),s_quadmode(a4)
 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,s_scopeDrawAreaWidth(a4) 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
@@ -22124,8 +22126,7 @@ scopeLoop:
 	tst.b	d7
 	bne.b	.doDraw
 	* This clears the hippo gfx away when starting again
-	;bsr.w	scopeDrawAreaClear
-	nop ;TEST
+	bsr.w	scopeDrawAreaClear
 .doDraw
 	* Needs a clear in the future
 	moveq	#-1,d7
@@ -22140,8 +22141,7 @@ scopeLoop:
 	* Final safety check
 	tst.b	playing(a5)
 	beq.b	.1
-	;bsr.w	drawScope
-	nop
+	bsr.w	drawScope
 .1	jsr 	releaseModuleData
 	popm	d5/d6/d7
 	bra.b	.continue
@@ -22152,9 +22152,8 @@ scopeLoop:
 	beq.b	.continue
 	* Request fulfilled
 	moveq	#0,d7
-	nop ; TEST
-	;bsr.w	scopeDrawAreaClear
-	;jsr	printHippoScopeWindow
+	bsr.w	scopeDrawAreaClear
+	jsr	printHippoScopeWindow
 	bra.w	.continue
 
 .m
@@ -23358,10 +23357,9 @@ quadrascope:
 	rts
 
 .jolt	
-	push	a4
 
 	move.l	d0,a1 * start
-	move.l	d1,a4 * loopstart
+	move.l	d1,a6 * loopstart
 	move	d2,d5 * len
 	move	d3,d4 * replen
 	
@@ -23389,8 +23387,7 @@ quadrascope:
 	moveq	#80/8-1,d7
 	moveq	#1,d0
 	moveq	#0,d6
-
-	
+		
 drlo	
 
 sco	macro
@@ -23409,7 +23406,7 @@ sco	macro
 	subq	#2,d5
 	bpl.b	hm\2	* $6a04
 	move	d4,d5	* replen
-	move.l	a4,a1   * loop start
+	move.l	a6,a1   * loop start
 hm\2
 	endc
 	endm
@@ -23429,71 +23426,74 @@ hm\2
 	sub.l	d0,a3
 	dbf	d7,drlo
 
-	pop	a4
 	rts
 
-hipposcope
+hipposcope:
 	lea	scopeData+scope_ch1(a5),a3
 	move.l	s_draw1(a4),a6
 	lea	-20-95*40(a6),a6
 	bsr.b	.twirl
-
+	* a6 is unchanged
+	
 	lea	scopeData+scope_ch2(a5),a3
-	move.l	s_draw1(a4),a6
-	lea	-10-95*40(a6),a6
+	lea	10(a6),a6
 	bsr.b	.twirl
 
 	lea	scopeData+scope_ch3(a5),a3
-	move.l	s_draw1(a4),a6
-	lea	0-95*40(a6),a6
+	lea	10(a6),a6
 	bsr.b	.twirl
 
 	lea	scopeData+scope_ch4(a5),a3
-	move.l	s_draw1(a4),a6
-	lea	10-95*40(a6),a6
-;	bsr.b	.twirl
-;	rts
+	lea	10(a6),a6
+	;bsr.b	.twirl
+	;rts
 
 
 .twirl
-	push	a4
-
-	lea	s_mtab(a4),a0
+	push 	a4
+	
 	move	ns_tempvol(a3),d0
 	mulu	mainvolume(a5),d0
+;	lsr	#1,d0 ;;;;;;;;;;;;;;;;;
 	lsr	#6,d0
 	subq	#1,d0
 	bpl.b	.e
 	moveq	#0,d0
 .e	lsl	#8,d0
+
+	* volume multab, y-specific value
+	lea	s_mtab(a4),a0
 	lea	(a0,d0),a2
+
+	* modulo multab
+	lea	s_multab(a4),a0
+
+	* x-specific byte value is in the other half
 	lea	64*256(a2),a4
 
 
-;	move.l	ns_loopstart(a3),d6
-;	beq.b	.halt
-;	move.l	ns_start(a3),d1
-;	bne.b	.jolt
-;.halt	rts
-;.jolt	
-
-
 lir	macro
+	* x-value
 	move.b	(a1)+,d1
 	move.b	(a4,d1),d1
 
+	* y-value
 	moveq	#0,d2
 	move.b	5(a1),d2
 	move.b	(a2,d2),d2
 
+	* modulo multab access
 	add	d2,d2
 	move	(a0,d2),d3
 
+	* plot pixel
 	move	d1,d2
 	lsr	#3,d2
 	sub	d2,d3
 	bset	d1,(a6,d3)
 
+	* progress in sample data,
+	* check every other pixel
  ifne \2
 	subq	#2,d4
 	bpl.b	.h\1
@@ -23507,23 +23507,20 @@ lir	macro
 	bsr	getScopeChannelData
 	beq.w	.x
 
+
 	move.l	d0,a1 * start
 	move.l	d1,d6 * loopstart
 	move	d2,d4 * len
 	move	d3,d5 * replen
 
-	lea	s_multab(a4),a0
+	* plot this many pixels
 	moveq	#108/4-1,d0
-
 	moveq	#0,d1
-
-
 .d
 	lir	0,0
 	lir	1,1
 	lir	2,0
 	lir	3,1
-
 	dbf	d0,.d
 .x
 	pop	a4
