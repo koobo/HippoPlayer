@@ -23104,7 +23104,6 @@ drawScope
 	tst.l	deliPatternInfo(a5)
 	beq.b	.cont
 	bsr	noteScroller2
-
 .cont
 	* scope processed, deliver unto screen
 
@@ -24897,7 +24896,7 @@ samples0
 * patternScopeGeneric
 * noteScrollerGeneric
 * patternScope2
-noteScroller2
+noteScroller2:
 	move.l	deliPatternInfo(a5),a1
 	lea	PI_Stripes(a1),a0
 	move	PI_Voices(a1),d7
@@ -24955,12 +24954,15 @@ noteScroller2
 	rts
 
 .proceed
-	move.l	s_draw1(a4),a6
 
 	* magic flag: display row numbers column	 
-	lea	.pos(pc),a4
-	clr.b	(a4)
+	lea	.pos(pc),a6
+	clr.b	(a6)
 
+	* Draw here
+	move.l	s_draw1(a4),a6
+
+	* Channel count
 	subq	#1,d7
 .loop
 	pushm	d6/d7/a0/a4/a5/a6
