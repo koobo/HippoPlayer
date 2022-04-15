@@ -612,12 +612,22 @@ mousex		rs	1		* hiiren paikka x,y
 mousey		rs	1
 
 ******* Scope variables
-taskQuadraScope		rs.b 	TC_SIZE
-taskFilledQuadraScope	rs.b 	TC_SIZE
-taskHippoScope		rs.b	TC_SIZE
-taskSpectrumScope	rs.b	TC_SIZE
-taskPatternScope	rs.b 	TC_SIZE
 
+taskQuadraScope		     rs.b TC_SIZE
+taskFilledQuadraScope	 rs.b TC_SIZE
+taskHippoScope		     rs.b TC_SIZE
+taskSpectrumScope	     rs.b TC_SIZE
+taskPatternScope         rs.b  TC_SIZE
+
+RUNNING_NOT       = 0
+RUNNING_YES       = 1
+RUNNING_SHUT_IT   = $80
+quadraScopeRunning	     rs.b 1
+filledQuadraScopeRunning rs.b 1
+hippoScopeRunning        rs.b 1
+patternScopeRunning      rs.b 1
+spectrumScopeRunning     rs.b 1
+                         rs.b 1 * pad
 
  REM ;;;;;; REMOVED 
 draw1		rs.l	1
@@ -3704,8 +3714,9 @@ getsignal
 	move.l	(a5),a6
 	jmp	_LVOAllocSignal(a6)
 
-dela	pushm	all		* pienenpieni delay
-	moveq	#2,d1
+smallDelay:
+dela:	pushm	all		* pienenpieni delay
+	moveq	#1,d1
 	lore	Dos,Delay
 	popm	all
 	rts
@@ -12432,7 +12443,8 @@ drawtexture:
 *******
 
 updateprefs:
-	DPRINT	"Update prefs"
+	; Called from scope, no logging
+	;DPRINT	"Update prefs"
 	pushm	all
 	tst	prefs_prosessi(a5)
 	beq.b	.x
@@ -13983,19 +13995,25 @@ psup3
 
 
 ls00	dc.b	14,6
+titleQuadraScope
 ls01	dc.b	"Quadrascope",0
+titleHippoScope
 ls02	dc.b	"Hipposcope",0
 ls03	
   ifne FEATURE_FREQSCOPE
 	dc.b	"Freq. analyzer"
   endif
   ifne FEATURE_SPECTRUMSCOPE
+titleFreqSpectrum
 	dc.b    "Freq. spectrum"
   endif
 	dc.b  0
-  
+
+titlePatternScope  
 ls04	dc.b	"Patternscope",0
+titleFilledQuadraScope
 ls05	dc.b	"F. Quadrascope",0
+titlePatternScopeXL
 ls06	dc.b	"PatternscopeXL",0
  even
 
@@ -21677,6 +21695,8 @@ str2msg	pushm	d0/d1/a0/a1/a6
                               rsreset
 s_global                      rs.l       1
 s_quad_task                   rs.l       1
+* Pointer to the running status flag
+s_runningStatusAddr            rs.l       1
 s_scopeWindowBase             rs.l       1
 s_rastport3                   rs.l       1	
 s_userport3                   rs.l       1
@@ -21732,24 +21752,20 @@ s_scopeHorizontalBarTable     rs.b       512
 s_mtab                        rs.b       64*256*2 * volume table for scopes
 sizeof_scopeVars              rs.b       1
 
-
-startQuadraScopeTask
-	DPRINT	"startQuadraScopeTask"
-
-	lea	taskQuadraScope(a5),a3
-
-	* Reset task structure
-	move.l	a3,a0
-	moveq	#TC_SIZE-1,d0
-.c	clr.b	(a0)+
-	dbf	d0,.c
+* In:
+*   a2 = Task name
+*   a3 = Task structure
+* Out:
+*   d0 = 1: ok, 0: out of mem
+initScopeTask
+	bsr.b	resetScopeTask
 
 	* Initialize ln_Node
 	move.b	#NT_TASK,LN_TYPE(a3)
 	move.b	#-30,LN_PRI(a3)
-	move.l	#.name,LN_NAME(a3)
+	move.l	a2,LN_NAME(a3)
 
-	* Allocate stack, silent exit on failure
+	* Allocate stack
 	move.l	#3000,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	jsr	getmem
@@ -21759,8 +21775,35 @@ startQuadraScopeTask
 	lea	3000(a0),a0
 	move.l	a0,TC_SPUPPER(a3)
 	move.l	a0,TC_SPREG(a3)
+	moveq	#1,d0
+.x	rts
 
-	move.l	#$12341234,TC_Userdata(a3)
+* In:
+*   a3 = Task structure
+resetScopeTask
+	* Reset task structure
+	move.l	a3,a0
+	moveq	#TC_SIZE-1,d0
+.c	clr.b	(a0)+
+	dbf	d0,.c
+	rts
+
+startQuadraScopeTask
+	DPRINT	"startQuadraScopeTask"
+	tst.b	quadraScopeRunning(a5)
+	bne.b	.x
+
+	lea	taskQuadraScope(a5),a3
+	lea	titleQuadraScope(pc),a2
+	bsr	initScopeTask
+
+	* Pass this as userdata
+	lea	.scopeInfo(pc),a1
+	lea	quadraScopeRunning(a5),a0
+	move.b	#RUNNING_YES,(a0)
+	move.l	a0,(a1)
+	move.b	quadmode(a5),4(a1)
+	move.l	a1,TC_Userdata(a3)
 
 	move.l	a3,a1
 	* initialPC
@@ -21768,12 +21811,38 @@ startQuadraScopeTask
 	* finalPC (system default)
 	sub.l a3,a3		 
 	lore	Exec,AddTask
-
 .x
 	rts
 
-.name	dc.b 	"HiP-scope-task",0
- even
+.scopeInfo
+	dc.l	0 	* address to exit flag
+	dc.w	0	* type of scope
+
+stopQuadraScopeTask
+	DPRINT	"stopQuadraScopeTask"
+	lea	quadraScopeRunning(a5),a2
+	lea	taskQuadraScope(a5),a3
+	bra	stopScopeTask
+
+stopScopeTask
+	tst.b	(a2)
+	beq.b	.x
+
+	* Raise task priority to normal
+	* so it will exit promptly
+	move.l	a3,a1
+	moveq	#0,d0
+	lore	Exec,SetTaskPri
+
+	* Flag indicates scope should quit
+	move.b	#RUNNING_SHUT_IT,(a2)
+.loop
+	tst.b	(a2)
+	beq.b	.x
+	jsr	smallDelay
+	bra.b	.loop
+.x
+	rts
 
 
 * Käynnistys
@@ -21811,25 +21880,26 @@ sulje_quad:
 sulje_quad2
 	DPRINT	"->sulje_quad"
 
-	push	a6
-	tst	quad_prosessi(a5)
-	beq.b	.tt	
+	bsr	stopQuadraScopeTask
 
-	printt "todo todododo"
-	;move.l	quad_task(a5),a1
-	;moveq	#0,d0
-	;lore	Exec,SetTaskPri
-
-	st	tapa_quad(a5)		* lippu: poistu!
-.t	tst	quad_prosessi(a5)	* odotellaan
-	beq.b	.tt
-	jsr	dela
-	bra.b	.t
-.tt	clr.b	tapa_quad(a5)
-	pop	a6
+;	push	a6
+;	tst	quad_prosessi(a5)
+;	beq.b	.tt	
+;
+;	printt "todo todododo"
+;	;move.l	quad_task(a5),a1
+;	;moveq	#0,d0
+;	;lore	Exec,SetTaskPri
+;
+;	st	tapa_quad(a5)		* lippu: poistu!
+;.t	tst	quad_prosessi(a5)	* odotellaan
+;	beq.b	.tt
+;	jsr	dela
+;	bra.b	.t
+;.tt	clr.b	tapa_quad(a5)
+;	pop	a6
 	DPRINT	"<-sulje_quad"
 	rts
-
 
 *******************************************************************************
 * Scoperutiinit
@@ -21864,11 +21934,11 @@ SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
 ;SCOPE_SMALL_FONT_CHANNEL_LIMIT = 4
 SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 
+; DPRINT cant be used as scope is now a task
 SDPRINT macro
-	nop
+
 	endm
 
-* Cannot use debug print here
 quad_code
 	lea	var_b,a5
 	move.l	(a5),a6
@@ -21886,6 +21956,21 @@ quad_code
 	;lea	var_scopes,a4
 	move.l	a5,s_global(a4)
 
+
+	sub.l	a1,a1
+	lore	Exec,FindTask
+	move.l	d0,s_quad_task(a4)
+	move.l	d0,quad_task(a5)
+	addq	#1,quad_prosessi(a5)	* Lippu: prosessi päällä
+
+	move.l	d0,a0
+	move.l	TC_Userdata(a0),a0
+	move.l	(a0),s_runningStatusAddr(a4)
+	;move.b	4(a0),quad_mode(a4)
+
+
+
+
 *** Multab scopeille
 	lea	s_multab(a4),a0
 	moveq	#0,d0
@@ -21899,13 +21984,6 @@ quad_code
   ifne FEATURE_FREQSCOPE
 	clr.l	s_deltab1(a4)
   endif
-	sub.l	a1,a1
-	lore	Exec,FindTask
-	move.l	d0,s_quad_task(a4)
-	move.l	d0,quad_task(a5)
-
-	addq	#1,quad_prosessi(a5)	* Lippu: prosessi päällä
-
 
 	printt "tokpkopdo"
 	; TODO: input params
@@ -22092,9 +22170,13 @@ quad_code
 	move.l	d0,a0
 	move.l	wd_RPort(a0),s_rastport3(a4)
 	move.l	wd_UserPort(a0),s_userport3(a4)
-
-	jsr	setscrtitle
-
+	
+	* Set window title based on task name
+	move.l	s_quad_task(a4),a1
+	move.l	LN_NAME(a1),a1
+	lea	scrtit,a2
+	lore	Intui,SetWindowTitles
+	
 	move.l	s_quad_task(a4),a1
 	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
 	lore	Exec,SetTaskPri
@@ -22154,8 +22236,11 @@ scopeLoop:
  endif
 
 
-	tst.b	tapa_quad(a5)		* pitääkö poistua?
-	bne.w	qexit
+	;tst.b	tapa_quad(a5)		* pitääkö poistua?
+	;bne.w	qexit
+	move.l	s_runningStatusAddr(a4),a0
+	tst.b	(A0)
+	bmi	qexit
 
 	* Bypass screen check if LMB has been pressed
 	tst.b 	d5
@@ -22305,21 +22390,37 @@ qexit
 	clr.l	s_scopeWindowBase(a4)
 .uh1
 
-	* Free local data 
-	move.l	a4,a0
-	jsr	freemem
-
-	* Is this needed?
-	;lore	Exec,Forbid
-
-	cmp	#1,prefsivu(a5)		* display prefssivu?
+	cmp	#1,prefsivu(a5)		* display prefs? Update as scope status changes
 	bne.b	.reer
 	bsr.w	updateprefs
 .reer
 
 	SDPRINT	"Scope task exiting"
 	clr	quad_prosessi(a5)	* lippu: lopetettiin
-	rts
+
+	* Dangerous exit procedures!	
+	lore	Exec,Forbid
+
+	* Not running anymore
+	move.l	s_runningStatusAddr(a4),a0
+	clr.b	(a0)
+
+	move.l	s_quad_task(a4),a1
+	
+	* Free local data. a4 invalid after this
+	move.l	a4,a0
+	jsr	freemem
+
+	* Free task stack
+	move.l	TC_SPLOWER(a1),a0
+	clr.l	TC_SPLOWER(a1)
+	jsr	freemem
+
+	* Remove self in a1
+	jmp	_LVORemTask(a6)
+
+
+
 
 qflush_messages
 	move.l	s_scopeWindowBase(a4),a0 
@@ -22841,6 +22942,7 @@ clearScopeData
 
 * Opens the mini font for 4+ channel notescroller if needed
 getScopeMiniFontIfNeeded
+	printt	 "todo todo"
 	; TODO: can't do disk access in a Task
 	rts
 
