@@ -15524,13 +15524,13 @@ pscreen
 	bsr.w	desmsg2
 	lea	desbuf2(a5),a0
 
-.do	moveq	#16+16,d0
-	moveq	#122,d1
+.do	moveq	#16,d0
+	move	#122+18,d1
 	bra.w	print3b
 
 
-.de	dc.b	"Screen refresh rate:",10
-	dc.b	"    %ldHz, %ldkHz",0
+.de
+	dc.b	"Screen: %ldHz/%ldkHz",0
 .dea	dc.b	"A gfx card detected.",0
  even
 
@@ -46424,33 +46424,9 @@ prefsFavorites dc.l prefsSaveState
        dc.l 0
 prefsFavoritest        dc.b 1,0,1,0
        dc.w -146,2
-       dc.l 0,prefsFavoritestx,prefsFavoritest2
+       dc.l 0,prefsFavoritestx,0
 prefsFavoritestx       dc.b "Favorite modules..",0
        even
-prefsFavoritest2       dc.b 1,0,1,0
-       dc.w 0,0
-       dc.l 0,0,0
-
-
-
-* "Button tooltips" button copypasted from above, 
-* x-coordinates adjusted manually.
-
-prefsTooltips dc.l prefsAltButtons
-       dc.w 406,51,28,12,3,1,1
-       dc.l 0
-       dc.l 0,prefsTooltipst,0,0
-       dc.w 0
-       dc.l 0
-prefsTooltipst        dc.b 1,0,1,0
-       dc.w -146,2
-       dc.l 0,prefsTooltipstx,prefsTooltipst2
-prefsTooltipstx 
-       dc.b "Button tooltips...",0
-       even
-prefsTooltipst2       dc.b 1,0,1,0
-       dc.w 0,0
-       dc.l 0,0,0
 
 * "Save state" button
 prefsSaveState
@@ -46462,33 +46438,187 @@ prefsSaveState
        dc.l 0
 prefsSaveStatet        dc.b 1,0,1,0
        dc.w -146,2
-       dc.l 0,prefsSaveStatetx,prefsSaveStatet2
+       dc.l 0,prefsSaveStatetx,0
 prefsSaveStatetx  
 	     dc.b "Keep list on exit ",0
        even
-prefsSaveStatet2       dc.b 1,0,1,0
-       dc.w 0,0
-       dc.l 0,0,0
 
+* "Button tooltips" button copypasted from above, 
+* x-coordinates adjusted manually.
+
+prefsTooltips dc.l prefsAltButtons
+       dc.w 214,107,28,12,3,1,1
+       dc.l 0
+       dc.l 0,prefsTooltipst,0,0
+       dc.w 0
+       dc.l 0
+prefsTooltipst        dc.b 1,0,1,0
+       dc.w -198,2
+       dc.l 0,prefsTooltipstx,0
+prefsTooltipstx 
+       dc.b "Button tooltips.........",0
+       even
 
 prefsAltButtons 
-       dc.l 0
-       dc.w 406,51+14,28,12,3,1,1
+       dc.l prefsQuadraScope
+       dc.w 214,107+14,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsAltButtonst,0,0
        dc.w 0
        dc.l 0
 prefsAltButtonst        dc.b 1,0,1,0
-       dc.w -146,2
-       dc.l 0,prefsAltButtonstx,prefsAltButtonst2
+       dc.w -198,2
+       dc.l 0,prefsAltButtonstx,0
 prefsAltButtonstx 
       ;dc.b "Bizarre buttons.........",0
       ;dc.b "Unconventional buttons..",0
-       dc.b "Big buttons.......",0
+       dc.b "Big buttons.............",0
+
+prefsBarsText
+	dc.b	"Bars",0
+	even
+
+prefsQuadraScope 
+       dc.l prefsQuadraScopeBars
+       dc.w 406-70,51+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,.t2
+.tx
+       dc.b "Quadra",0
        even
-prefsAltButtonst2       dc.b 1,0,1,0
-       dc.w 0,0
-       dc.l 0,0,0
+.t2    
+       dc.b 1,0,1,0
+
+       dc.w -146+70,2-14
+       dc.l 0,.tx2,0
+.tx2	dc.b	 "Scopes:",0
+ even
+
+prefsQuadraScopeBars
+       dc.l prefsQuadraScopeF
+       dc.w 406,51+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,prefsBarsText,0
+
+
+prefsQuadraScopeF
+       dc.l prefsQuadraScopeFBars
+       dc.w 406-70,51+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "Fill quad",0
+       even
+
+prefsQuadraScopeFBars
+       dc.l prefsHippoScope
+       dc.w 406,51+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,prefsBarsText,0
+
+prefsHippoScope
+       dc.l prefsHippoScopeBars
+       dc.w 406-70,51+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "Hippo",0
+       even
+
+prefsHippoScopeBars
+       dc.l prefsPatternScope
+       dc.w 406,51+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,prefsBarsText,0
+
+
+prefsPatternScope
+       dc.l prefsPatternScopeXL
+       dc.w 406-70,51+14+14+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "Pattern",0
+       even
+ even
+
+prefsPatternScopeXL
+       dc.l prefsSpectrumScope
+       dc.w 406,51+14+14+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "XL",0
+ even
+
+prefsSpectrumScope
+       dc.l prefsSpectrumScopeBars
+       dc.w 406-70,51+14+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "Spectrum",0
+       even
+
+prefsSpectrumScopeBars
+       dc.l 0
+       dc.w 406,51+14+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,prefsBarsText,0
+
+
+
+
 
 ; Gadget
 gadgetListModeChangeButton
