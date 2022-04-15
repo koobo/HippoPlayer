@@ -34,7 +34,10 @@ melonitx	dc.b "Filebox.........",0
 	even
 melonis	dc.w 2,0,0,0,0
 	dc.w 0,0,0,0,0,0
-gfonttou	dc.l pout2
+
+gfonttou	
+	;dc.l pout2
+	dc.l bUu2
 	dc.w 120,93,122,12,0,1,1
 	dc.l 0,0,gfonttout,0,0
 	dc.w 0
@@ -44,36 +47,39 @@ gfonttout	dc.b 1,0,1,0
 	dc.l 0,gfonttoutx,0
 gfonttoutx	dc.b "Font.........",0
 	even
-pout2	dc.l pout3
-	dc.w 406,107,28,12,3,1,1
-	dc.l 0,0,pout2t,0,0
-	dc.w 0
-	dc.l 0
-pout2t	dc.b 1,0,1,0
-	dc.w -146,2
-	dc.l 0,pout2tx,0
-pout2tx	dc.b "Scope.............",0
-	even
-pout3	dc.l pout3b
-	dc.w 312,121,122,12,0,1,1
-	dc.l 0,0,pout3t,0,0
-	dc.w 0
-	dc.l 0
-pout3t	dc.b 1,0,1,0
-	dc.w -52,2
-	dc.l 0,pout3tx,0
-pout3tx	dc.b "Type..",0
-	even
-pout3b	dc.l bUu2
-	dc.w 406,135,28,12,3,1,1
-	dc.l 0,0,pout3bt,0,0
-	dc.w 0
-	dc.l 0
-pout3bt	dc.b 1,0,1,0
-	dc.w -146,2
-	dc.l 0,pout3btx,0
-pout3btx	dc.b "Scope bars........",0
-	even
+
+; Disable old three scope gadgets
+;pout2	dc.l pout3
+;	dc.w 406,107,28,12,3,1,1
+;		dc.l 0,0,pout2t,0,0
+;	dc.w 0
+;	dc.l 0
+;pout2t	dc.b 1,0,1,0
+;	dc.w -146,2
+;	dc.l 0,pout2tx,0
+;pout2tx	dc.b "Scope.............",0
+;	even
+;pout3	dc.l pout3b
+;	dc.w 312,121,122,12,0,1,1
+;	dc.l 0,0,pout3t,0,0
+;	dc.w 0
+;	dc.l 0
+;pout3t	dc.b 1,0,1,0
+;	dc.w -52,2
+;	dc.l 0,pout3tx,0
+;pout3tx	dc.b "Type..",0
+;	even
+;pout3b	dc.l bUu2
+;	dc.w 406,135,28,12,3,1,1
+;	dc.l 0,0,pout3bt,0,0
+;	dc.w 0
+;	dc.l 0
+;pout3bt	dc.b 1,0,1,0
+;	dc.w -146,2
+;	dc.l 0,pout3btx,0
+;pout3btx	dc.b "Scope bars........",0
+;	even
+
 bUu2	dc.l eskimO
 	dc.w 406,37,28,12,3,1,1
 	dc.l 0,0,bUu2t,0,0

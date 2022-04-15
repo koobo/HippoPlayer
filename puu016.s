@@ -543,16 +543,16 @@ wbkorkeus	rs	1		* Workbench n‰ytˆn korkeus
 wbleveys	rs	1
 prefs_prosessi	rs	1		* ei-0: Prefs-prosessi p‰‰ll‰
 filereq_prosessi rs	1		* ei-0: Files-prosessi p‰‰ll‰
-quad_prosessi	rs	1		* ...
+;quad_prosessi	rs	1		* ...
 info_prosessi	rs	1		* ...
 about_moodi	rs.b	1		* 0: normaali, 1: moduleinfo
 filereqmode	rs.b	1		* 0: add mode, ~0: insert mode 
 fileinsert	rs.l	1		* node jonka j‰lkeen insertti
 haluttiinuusimodi rs	1		* new-nappulaa ja play:t‰ varten
-quad_task	rs.l	1		* Scopen taski
+;quad_task	rs.l	1		* Scopen taski
 quadon		rs.b	1		* jos 1: quad oli p‰‰ll‰
-tapa_quad	rs.b	1		* scopelle lopetus lippu
-scopeflag	rs.b	1		* ~0: scope p‰‰ll‰
+;tapa_quad	rs.b	1		* scopelle lopetus lippu
+;scopeflag	rs.b	1		* ~0: scope p‰‰ll‰
 infoon		rs.b	1		* 1: info on
 
 exitmainprogram	rs.b	1		* <>1: poistu ohjelmasta
@@ -3198,11 +3198,15 @@ msgloop
 	bsr.w	avaa_ikkuna2
 	bne.w	exit
 .bar2
-	tst	quad_prosessi(a5)
-	beq.b	.qer
-	jsr	sulje_quad
-	jsr	start_quad
-.qer	tst	info_prosessi(a5)
+	printt "todo todo"
+;	tst	quad_prosessi(a5)
+;	beq.b	.qer
+;	jsr	sulje_quad
+;	jsr	start_quad
+;.qer	
+
+
+	tst	info_prosessi(a5)
 	beq.w	returnmsg
 	jsr	sulje_info
 	move.b	oli_infoa(a5),d0
@@ -6214,12 +6218,13 @@ buttonspressed
 	bhi.b	.y
 
 ** toggle scope with rmb when on top of suitable place
+	printt "todo todo"
+;	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
+;	bne.b	.rew
+;	jsr	start_quad		
+;	rts
+;.rew	jsr	sulje_quad		* suljetaan jos oli auki
 
-	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-	bne.b	.rew
-	jsr	start_quad		
-	rts
-.rew	jsr	sulje_quad		* suljetaan jos oli auki
 .handled
 	rts
 .y
@@ -7898,7 +7903,7 @@ nappuloita
 	dc	$25
 	dr	.pm2	
 
-	dc	$31
+	dc	$31 * z-key
 	dr	.scopetoggle
 
 	dc	$37
@@ -8056,10 +8061,13 @@ nappuloita
 
 
 .scopetoggle
-	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-	beq.b	.startQ		
-	jmp	sulje_quad		* suljetaan jos oli auki
-.startQ	jmp	start_quad
+	printt	"todo todo"
+	DPRINT	"key scope toggle"
+	rts
+;	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
+;	beq.b	.startQ		
+;	jmp	sulje_quad		* suljetaan jos oli auki
+;.startQ	jmp	start_quad
 
 .pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikan‰pp‰imet
 .pm0	st	hippoonbox(a5)
@@ -12018,10 +12026,11 @@ saveprefs
 .g	
 
 	clr.b	prefs_quadon+prefsdata(a5)
-	tst.b	scopeflag(a5)
-	beq.b	.kk
-	st	prefs_quadon+prefsdata(a5)
-.kk
+;	tst.b	scopeflag(a5)
+;	beq.b	.kk
+;	st	prefs_quadon+prefsdata(a5)
+;.kk
+	printt	"TODO TODO"
 
 	tst	info_prosessi(a5)
 	sne	prefs_infoon+prefsdata(a5)
@@ -13495,9 +13504,9 @@ pmousebuttons
 	lea	pbutton2,a0		* show
 	lea	rpbutton1_req(pc),a2
 	bsr.w	.check
-	lea	pout3,a0		* scope type
-	lea	rquadm_req(pc),a2
-	bsr.w	.check
+	;lea	pout3,a0		* scope type
+	;lea	rquadm_req(pc),a2
+	;bsr.w	.check
 	lea	bUu2,a0			* prefix cut
 	lea	rprefx_req(pc),a2
 	bsr.w	.check
@@ -13596,13 +13605,13 @@ pupdate				* Ikkuna p‰ivitys
 .2	subq	#1,d0
 	bne.b	.3
 
-	bsr.w	psup3			* scope mode
+	;bsr.w	psup3			* scope mode
 	bsr.w	pbox			* box size
-	bsr.w	psup0			* scope on/off
+	;bsr.w	psup0			* scope on/off
 	bsr.w	pinfosize		* info size
 	bsr.w	pupdate1		* show
 	bsr.w	pselscreen		* screen
-	bsr.w	pscopebar		* scope bars
+	;bsr.w	pscopebar		* scope bars
 	bsr.w	pprefx			* prefix cut
 	bsr.w	pfont			* fontti
 	bsr.w	pscreen			* screen refresh rates
@@ -13840,9 +13849,9 @@ gadgetsup2
 	dr	rselscreen	* publicscreen
 	dr	rbox		* boxsize
 	dr	rfont		* font selector
-	dr	rquad		* scope on/off
-	dr	rquadm		* scopen moodi	* pout3
-	dr	rscopebar	* bar mode scopeille
+	;dr	rquad		* scope on/off
+	;dr	rquadm		* scopen moodi	* pout3
+	;dr	rscopebar	* bar mode scopeille
 	dr	rprefx		* prefix cut
 	dr	rinfosize	* module info size
 	dr  	rtooltips     * tooltips
@@ -13926,20 +13935,22 @@ rval6	moveq	#6,d0
 
 *** Scope
 
-rquad	
-	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-	beq.b	.s
-	bsr.w	sulje_quad		* suljetaan jos oli auki
-;	bra.b	psup0
-	rts
-
-.s	bsr.w	start_quad
+rquad
+	printt	"todo todo"	
+;	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
+;	beq.b	.s
+;	bsr.w	sulje_quad		* suljetaan jos oli auki
+;	rts
+;
+;.s	bsr.w	start_quad
+ REM
 
 psup0
-	tst	quad_prosessi(a5)
-	sne	d0
-	lea	pout2,a0
-	bra.w	tickaa
+	rts
+;	tst	quad_prosessi(a5)
+;	sne	d0
+;	lea	pout2,a0
+;	bra.w	tickaa
 
 
 rquadm_req
@@ -13992,7 +14003,7 @@ psup3
 	lea	pout3,a1
 	bsr.w	prunt
 	bra.b	quadu
-
+ EREM
 
 ls00	dc.b	14,6
 titleQuadraScope
@@ -14017,6 +14028,7 @@ titlePatternScopeXL
 ls06	dc.b	"PatternscopeXL",0
  even
 
+ REM
 rscopebar
 	eor.b	#$80,quadmode_new(a5)
 	move.b	quadmode_new(a5),quadmode(a5)
@@ -14026,17 +14038,22 @@ pscopebar
 	smi	d0
 	lea	pout3b,a0
 	bsr.w	tickaa
+ EREM
 
-quadu	tst	quad_prosessi(a5)
-	beq.b	.noq
-	move.b	quadmode_new(a5),quadmode(a5)
-	move.b	quadmode(a5),d0
-	cmp.b	scopechanged(a5),d0
-	beq.b	.noq
-	move.b	d0,scopechanged(a5)
-	bsr.w	sulje_quad
-	bsr.w	start_quad
-.noq	rts
+
+quadu:
+	printt	"todo todo"	
+	rts
+;	tst	quad_prosessi(a5)
+;	beq.b	.noq
+;	move.b	quadmode_new(a5),quadmode(a5)
+;	move.b	quadmode(a5),d0
+;	cmp.b	scopechanged(a5),d0
+;	beq.b	.noq
+;	move.b	d0,scopechanged(a5)
+;	bsr.w	sulje_quad
+;	bsr.w	start_quad
+;.noq	rts
 
 
 ** Mixingrate S3M
@@ -21818,6 +21835,25 @@ startQuadraScopeTask
 	dc.l	0 	* address to exit flag
 	dc.w	0	* type of scope
 
+stopScopeTasks
+	DPRINT	"stopScopeTasks"
+	lea	quadraScopeRunning(a5),a2
+	lea	taskQuadraScope(a5),a3
+	bsr.b	stopScopeTask
+	lea	hippoScopeRunning(a5),a2
+	lea	taskHippoScope(a5),a3
+	bsr.b	stopScopeTask
+	lea	filledQuadraScopeRunning(a5),a2
+	lea	taskFilledQuadraScope(a5),a3
+	bsr.b	stopScopeTask
+	lea	patternScopeRunning(a5),a2
+	lea	taskPatternScope(a5),a3
+	bsr.b	stopScopeTask
+	lea	spectrumScopeRunning(a5),a2
+	lea	taskSpectrumScope(a5),a3
+	bsr.b	stopScopeTask
+	rts
+
 stopQuadraScopeTask
 	DPRINT	"stopQuadraScopeTask"
 	lea	quadraScopeRunning(a5),a2
@@ -21847,7 +21883,7 @@ stopScopeTask
 
 * K‰ynnistys
 start_quad
-	st	scopeflag(a5)
+;	st	scopeflag(a5)
 start_quad2
 
 	;move.l	a6,-(sp)
@@ -21862,7 +21898,7 @@ start_quad2
 	;beq.b	.error
 
 	bsr	startQuadraScopeTask	
-	addq	#1,quad_prosessi(a5)
+	;addq	#1,quad_prosessi(a5)
 
 	bsr.w	updateprefs
 
@@ -21870,17 +21906,18 @@ start_quad2
 	;move.l	(sp)+,a6
 	rts
 
-.prn	dc.b	"HiP-Scope",0
- even
- 
+;.prn	dc.b	"HiP-Scope",0
+; even
+; 
 * Sammutus
 
 sulje_quad:
-	clr.b	scopeflag(a5)
+	;clr.b	scopeflag(a5)
 sulje_quad2
 	DPRINT	"->sulje_quad"
 
-	bsr	stopQuadraScopeTask
+	bsr	stopScopeTasks
+;	bsr	stopQuadraScopeTask
 
 ;	push	a6
 ;	tst	quad_prosessi(a5)
@@ -21960,13 +21997,13 @@ quad_code
 	sub.l	a1,a1
 	lore	Exec,FindTask
 	move.l	d0,s_quad_task(a4)
-	move.l	d0,quad_task(a5)
-	addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
+	;move.l	d0,quad_task(a5)
+	;addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
 	move.l	d0,a0
 	move.l	TC_Userdata(a0),a0
 	move.l	(a0),s_runningStatusAddr(a4)
-	;move.b	4(a0),quad_mode(a4)
+	move.b	4(a0),s_quadmode(a4)
 
 
 
@@ -21988,7 +22025,7 @@ quad_code
 	printt "tokpkopdo"
 	; TODO: input params
 ;	move.b	#0,s_quadmode(a4)	
-	move.b	quadmode(a5),s_quadmode(a4)
+	;move.b	quadmode(a5),s_quadmode(a4)
 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,s_scopeDrawAreaWidth(a4) 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
@@ -22360,7 +22397,7 @@ scopeLoop:
 	bra.b	.getMoreMsg
 	
 .quit
-	clr.b	scopeflag(a5)
+	;clr.b	scopeflag(a5)
 	
 *********************************************************************
 * Scope exit
@@ -22396,7 +22433,7 @@ qexit
 .reer
 
 	SDPRINT	"Scope task exiting"
-	clr	quad_prosessi(a5)	* lippu: lopetettiin
+	;clr	quad_prosessi(a5)	* lippu: lopetettiin
 
 	* Dangerous exit procedures!	
 	lore	Exec,Forbid
@@ -22411,12 +22448,14 @@ qexit
 	move.l	a4,a0
 	jsr	freemem
 
-	* Free task stack
+	* Free task stack. Is this safe, maybe.
+	* No mem alloc is done below or by any other
+	* task since Forbid()den.
 	move.l	TC_SPLOWER(a1),a0
-	clr.l	TC_SPLOWER(a1)
 	jsr	freemem
 
-	* Remove self in a1
+	* Remove self 
+	sub.l	a1,a1
 	jmp	_LVORemTask(a6)
 
 
@@ -28551,18 +28590,20 @@ whag	tst.b	win(a5)
 * else
 * clear flag
 
-	tst.b	scopeflag(a5)
-	beq.b	.c
-	btst	#pb_scope,d7
-	beq.b	.notopen
-	tst	quad_prosessi(a5)
-	bne.b	.c
-	bsr.w	start_quad2
-	bra.b	.c
-.notopen
-	tst	quad_prosessi(a5)
-	beq.b	.c
-	bsr.w	sulje_quad2
+	printt	"todo todo"
+;	tst.b	scopeflag(a5)
+;	beq.b	.c
+;	btst	#pb_scope,d7
+;	beq.b	.notopen
+;	tst	quad_prosessi(a5)
+;	bne.b	.c
+;	bsr.w	start_quad2
+;	bra.b	.c
+;.notopen
+;	tst	quad_prosessi(a5)
+;	beq.b	.c
+;	bsr.w	sulje_quad2
+
 .c
 
 ;	tst.l	keyfile+40(a5)	* datan v‰lilt‰ 38-50 pit‰‰ olla nollia
@@ -36913,15 +36954,9 @@ p_multi	jmp	.s3init(pc)
 * - position and lenght info
 * - patternscope information, if needed
 .s3poslen
-	moveq	#0,d0
-	tst.b	scopeflag(a5)
-	beq.b	.noScope 
-	* Sets Z if patternscope is active:
-	printt "todo todo todo"
-	;jsr	patternScopeIsActive
-	moveq	#-1,d0
-	* Inform PS3M 
-	seq		d0
+	tst.b	patternScopeRunning(a5)
+	* Inform PS3M, set to zero to skip patternscope routines
+	sne		d0
 .noScope
 	move.l	ps3mroutines(a5),a0
 	jmp	poslenj(a0)
