@@ -327,7 +327,24 @@ prefs_medrate		rs	1
 prefs_tooltips		rs.b 	1
 prefs_savestate		rs.b 	1
 prefs_altbuttons	rs.b	1
-prefs_pad0		rs.b	1
+
+prefs_quadraScope   rs.b 1
+prefs_quadraScopeBars   rs.b 1
+prefs_quadraScopeF   rs.b 1
+prefs_quadraScopeFBars   rs.b 1
+prefs_hippoScope   rs.b 1
+prefs_hippoScopeBars   rs.b 1
+prefs_patternScope   rs.b 1
+prefs_patternScopeXL   rs.b 1
+prefs_spectrumScope   rs.b 1
+prefs_spectrumScopeBars   rs.b 1
+
+prefs_quadraScopePos   rs.l 1
+prefs_quadraScopeFPos   rs.l 1
+prefs_hippoScopePos   rs.l 1
+prefs_patternScopePos   rs.l 1
+prefs_spectrumScopePos   rs.l 1
+
 prefs_size		rs.b	0
 
 *******************************************************************************
@@ -775,7 +792,16 @@ favorites_new	rs.b	1
 tooltips_new	rs.b 	1	
 savestate_new	rs.b 	1
 altbuttons_new  rs.b   1
-___pad0         rs.b   1
+quadraScope_new rs.b 1
+quadraScopeBars_new rs.b 1
+quadraScopeF_new rs.b 1
+quadraScopeFBars_new rs.b 1
+hippoScope_new rs.b 1
+hippoScopeBars_new rs.b 1
+patternScope_new rs.b 1
+patternScopeXL_new rs.b 1
+spectrumScope_new rs.b 1
+spectrumScopeBars_new rs.b 1
 
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -1193,6 +1219,18 @@ savestate	rs.b    1
 altbuttons  rs.b    1
 altbuttonsUse  rs.b    1
 autosort	= prefsdata+prefs_autosort
+
+* Runtime scope settings
+quadraScope   rs.b 1
+quadraScopeBars   rs.b 1
+quadraScopeF   rs.b 1
+quadraScopeFBars   rs.b 1
+hippoScope   rs.b 1
+hippoScopeBars   rs.b 1
+patternScope   rs.b 1
+patternScopeXL   rs.b 1
+spectrumScope   rs.b 1
+spectrumScopeBars   rs.b 1
 
 * audio homman muuttujat
 acou_deviceerr	rs.l	1
@@ -2957,7 +2995,7 @@ lelp
 	jsr	rbutton10b
 .qq
 
-	bsr.w	inforivit_clear
+	jsr	inforivit_clear
 
 	tst	boxsize(a5)
 	beq.b	.oohi
@@ -11810,6 +11848,17 @@ loadprefs2
 	move.b	prefs_savestate(a0),savestate(a5)
 	move.b  prefs_altbuttons(a0),altbuttons(a5)
 
+	move.b prefs_quadraScope(a0),      quadraScope(a5)    
+	move.b prefs_quadraScopeBars(a0),  quadraScopeBars(a5)        
+	move.b prefs_quadraScopeF(a0),     quadraScopeF(a5)       
+	move.b prefs_quadraScopeFBars(a0), quadraScopeFBars(a5)         
+	move.b prefs_hippoScope(a0),       hippoScope(a5)       
+	move.b prefs_hippoScopeBars(a0),    hippoScopeBars(a5)       
+	move.b prefs_patternScope(a0),     patternScope(a5)       
+	move.b prefs_patternScopeXL(a0),   patternScopeXL(a5)      
+	move.b prefs_spectrumScope(a0),    spectrumScope(a5)     
+	move.b prefs_spectrumScopeBars(a0),spectrumScopeBars(a5)          
+
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
 	move.l	prefs_textattr(a0),text_attr+4		* ysize jne
@@ -12105,6 +12154,18 @@ saveprefs
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
 	move.b	altbuttons(a5),prefs_altbuttons(a0)
+
+	move.b quadraScope(a5),prefs_quadraScope(a0)
+	move.b quadraScopeBars(a5),prefs_quadraScopeBars(a0)
+	move.b quadraScopeF(a5),prefs_quadraScopeF(a0)
+	move.b quadraScopeFBars(a5),prefs_quadraScopeFBars(a0)
+	move.b hippoScope(a5),prefs_hippoScope(a0)
+	move.b hippoScopeBars(a5),prefs_hippoScopeBars(a0)
+	move.b patternScope(a5),prefs_patternScope(a0)
+	move.b patternScopeXL(a5),prefs_patternScopeXL(a0)
+	move.b spectrumScope(a5),prefs_spectrumScope(a0)
+	move.b spectrumScopeBars(a5),prefs_spectrumScopeBars(a0)
+
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
@@ -12573,6 +12634,17 @@ prefs_code
 	move.b	savestate(a5),savestate_new(a5)
 	move.b	altbuttons(a5),altbuttons_new(a5)
 
+	move.b quadraScope(a5),      quadraScope_new(a5)    
+	move.b quadraScopeBars(a5),  quadraScopeBars_new(a5)        
+	move.b quadraScopeF(a5),     quadraScopeF_new(a5)       
+	move.b quadraScopeFBars(a5), quadraScopeFBars_new(a5)         
+	move.b hippoScope(a5),       hippoScope_new(a5)       
+	move.b hippoScopeBars(a5),    hippoScopeBars_new(a5)       
+	move.b patternScope(a5),     patternScope_new(a5)       
+	move.b patternScopeXL(a5),   patternScopeXL_new(a5)      
+	move.b spectrumScope(a5),    spectrumScope_new(a5)     
+	move.b spectrumScopeBars(a5),spectrumScopeBars_new(a5)  
+
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
 	move.l	ahi_mode(a5),ahi_mode_new(a5)
@@ -13030,6 +13102,19 @@ exprefs	move.l	_IntuiBase(a5),a6
 	* magic! causes reopening of the main window:
 	clr	boxsize00(a5)
 .1
+
+
+    move.b quadraScope_new(a5),quadraScope(a5) 
+	move.b quadraScopeBars_new(a5),quadraScopeBars(a5) 
+	move.b quadraScopeF_new(a5),quadraScopeF(a5)   
+	move.b quadraScopeFBars_new(a5),quadraScopeFBars(a5)
+	move.b hippoScope_new(a5),hippoScope(a5)      
+	move.b  hippoScopeBars_new(a5),hippoScopeBars(a5)  
+	move.b patternScope_new(a5),patternScope(a5)  
+	move.b patternScopeXL_new(a5),patternScopeXL(a5)  
+	move.b spectrumScope_new(a5),spectrumScope(a5)   
+	move.b spectrumScopeBars_new(a5),spectrumScopeBars(a5)
+
 
 	move.b	autosort_new(a5),autosort(a5)
 
@@ -13617,6 +13702,16 @@ pupdate				* Ikkuna p‰ivitys
 	bsr.w	pscreen			* screen refresh rates
 	bsr.w	ptooltips  	     	* tooltips
 	bsr	paltbuttons  	        * alt buttons
+	bsr	pQuadraScope
+	bsr	pQuadraScopeBars
+	bsr	pQuadraScopeF
+	bsr	pQuadraScopeFBars
+	bsr	pHippoScope
+	bsr	pHippoScopeBars
+	bsr	pPatternScope
+	bsr	pPatternScopeXL
+	bsr	pSpectrumScope
+	bsr	pSpectrumScopeBars
 	bra.w	.x
 
 .3	subq	#1,d0
@@ -13854,8 +13949,18 @@ gadgetsup2
 	;dr	rscopebar	* bar mode scopeille
 	dr	rprefx		* prefix cut
 	dr	rinfosize	* module info size
-	dr  	rtooltips     * tooltips
-	dr  	raltbuttons * alt buttons
+	dr  rtooltips     * tooltips
+	dr  raltbuttons * alt buttons
+	dr	rQuadraScope
+	dr	rQuadraScopeBars
+	dr	rQuadraScopeF
+	dr	rQuadraScopeFBars
+	dr	rHippoScope
+	dr	rHippoScopeBars
+	dr	rPatternScope
+	dr	rPatternScopeXL
+	dr	rSpectrumScope
+	dr	rSpectrumScopeBars
 
 .s2
 *** Sivu2
@@ -13935,6 +14040,104 @@ rval6	moveq	#6,d0
 
 *** Scope
 
+
+
+
+rQuadraScope
+	DPRINT	"rQuadrascope"
+	not.b	quadraScope_new(a5)
+pQuadraScope
+	DPRINT	"pQuadrascope"
+	move.b	quadraScope_new(a5),d0
+	lea	prefsQuadraScope,a0
+	bra.w	tickaa
+
+rQuadraScopeBars
+	DPRINT	"rQuadrascopeBars"
+	not.b	quadraScopeBars_new(a5)
+pQuadraScopeBars
+	move.b	quadraScopeBars_new(a5),d0
+	lea	prefsQuadraScopeBars,a0
+	bra.w	tickaa
+
+rQuadraScopeFBars
+	DPRINT	"rQuadraScopeFBars"
+	not.b	quadraScopeFBars_new(a5)
+pQuadraScopeFBars
+	move.b	quadraScopeFBars_new(a5),d0
+	lea	prefsQuadraScopeFBars,a0
+	bra.w	tickaa
+
+
+rQuadraScopeF
+	DPRINT	"rQuadraScopeF"
+	not.b	quadraScopeF_new(a5)
+pQuadraScopeF
+	DPRINT	"pQuadraScopeF"
+	move.b	quadraScopeF_new(a5),d0
+	lea	prefsQuadraScopeF,a0
+	bra.w	tickaa
+
+rHippoScope
+	DPRINT	"rHippoScope"
+	not.b	hippoScope_new(a5)
+
+pHippoScope
+	DPRINT	"pHippoScope"
+	move.b	hippoScope_new(a5),d0
+	lea	prefsHippoScope,a0
+	bra.w	tickaa
+
+
+rHippoScopeBars
+	DPRINT	"rHippoScopeBars"
+	not.b	hippoScopeBars_new(a5)
+
+pHippoScopeBars
+	DPRINT	"pHippoScopeBars"
+	move.b	hippoScopeBars_new(a5),d0
+	lea	prefsHippoScopeBars,a0
+	bra.w	tickaa
+
+rPatternScope
+	DPRINT	"rPatternScope"
+	not.b	patternScope_new(a5)
+pPatternScope
+	move.b	patternScope_new(a5),d0
+	lea	prefsPatternScope,a0
+	bra.w	tickaa
+
+rPatternScopeXL
+	DPRINT	"rPatternScopeXL"
+	not.b	patternScopeXL_new(a5)
+
+pPatternScopeXL
+	DPRINT	"pPatternScopeXL"
+	move.b	patternScopeXL_new(a5),d0
+	lea	prefsPatternScopeXL,a0
+	bra.w	tickaa
+
+rSpectrumScope
+	DPRINT	"rSpectrumScope"
+	not.b	spectrumScope_new(a5)
+pSpectrumScope
+	move.b	spectrumScope_new(a5),d0
+	lea	prefsSpectrumScope,a0
+	bra.w	tickaa
+
+
+rSpectrumScopeBars
+	DPRINT	"rSpectrumScopeBars"
+	not.b	spectrumScopeBars_new(a5)
+
+pSpectrumScopeBars
+	DPRINT	"pSpectrumScopeBars"
+	move.b	spectrumScopeBars_new(a5),d0
+	lea	prefsSpectrumScopeBars,a0
+	bra.w	tickaa
+	
+ REM ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 rquad
 	printt	"todo todo"	
 ;	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
@@ -13943,10 +14146,8 @@ rquad
 ;	rts
 ;
 ;.s	bsr.w	start_quad
- REM
 
-psup0
-	rts
+;psup0
 ;	tst	quad_prosessi(a5)
 ;	sne	d0
 ;	lea	pout2,a0
@@ -14003,7 +14204,7 @@ psup3
 	lea	pout3,a1
 	bsr.w	prunt
 	bra.b	quadu
- EREM
+ EREM ;;;;;;;;;;;;;;;;
 
 ls00	dc.b	14,6
 titleQuadraScope
@@ -14029,6 +14230,7 @@ ls06	dc.b	"PatternscopeXL",0
  even
 
  REM
+
 rscopebar
 	eor.b	#$80,quadmode_new(a5)
 	move.b	quadmode_new(a5),quadmode(a5)
@@ -14041,9 +14243,7 @@ pscopebar
  EREM
 
 
-quadu:
-	printt	"todo todo"	
-	rts
+;quadu:
 ;	tst	quad_prosessi(a5)
 ;	beq.b	.noq
 ;	move.b	quadmode_new(a5),quadmode(a5)
@@ -14054,6 +14254,8 @@ quadu:
 ;	bsr.w	sulje_quad
 ;	bsr.w	start_quad
 ;.noq	rts
+
+
 
 
 ** Mixingrate S3M
@@ -22403,7 +22605,7 @@ scopeLoop:
 * Scope exit
 *********************************************************************
 
-qexit	
+qexit:
 	SDPRINT	"Scope task will exit"
 	bsr.b	qflush_messages
 
@@ -22427,16 +22629,18 @@ qexit
 	clr.l	s_scopeWindowBase(a4)
 .uh1
 
-	cmp	#1,prefsivu(a5)		* display prefs? Update as scope status changes
-	bne.b	.reer
-	bsr.w	updateprefs
-.reer
-
 	SDPRINT	"Scope task exiting"
 	;clr	quad_prosessi(a5)	* lippu: lopetettiin
 
 	* Dangerous exit procedures!	
 	lore	Exec,Forbid
+
+	* display prefs? Update as scope status changes
+	cmp	#1,prefsivu(a5)		
+	bne.b	.reer
+	* This will Signal() which will not much of anything when Forbid()den
+	bsr.w	updateprefs
+.reer
 
 	* Not running anymore
 	move.l	s_runningStatusAddr(a4),a0
@@ -46493,7 +46697,6 @@ prefsQuadraScope
        even
 .t2    
        dc.b 1,0,1,0
-
        dc.w -146+70,2-14
        dc.l 0,.tx2,0
 .tx2	dc.b	 "Scopes:",0
