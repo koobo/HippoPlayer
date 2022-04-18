@@ -22033,6 +22033,15 @@ s_scopeHorizontalBarTable     rs.b       512
 s_mtab                        rs.b       64*256*2 * volume table for scopes
 sizeof_scopeVars              rs.b       1
 
+* Incoming volume values need to be validated or else there will
+* be over indexing mayhem and memory corruption!
+CLAMPVOL macro
+	cmp	#$40,\1
+	bls.b	*+4
+	moveq	#$40,\1
+	endm
+
+
 * Structure to help task starting and stopping
     STRUCTURE ScopeTaskDefinition,0
         UWORD st_runningStatusOffset
@@ -22064,6 +22073,7 @@ spectrumScopeTaskDefinition
 	dc.w	spectrumScopeRunning
 	dc.w	taskSpectrumScope
 	dc.l	spectrumScopeEntry
+
 
 
 * In:
@@ -23441,9 +23451,11 @@ scopeinterrupt:				* a5 = var_b
 	move	n_length(a2),ns_length(a0)
 	move.l	n_loopstart(a2),ns_loopstart(a0)
 	move	n_replen(a2),ns_replen(a0)
-.e	move	n_period(a2),ns_period(a0)
-	move	n_tempvol(a2),ns_tempvol(a0)
-
+.e	move	n_period(a2),ns_period(a0)	
+	move	n_tempvol(a2),d0
+	CLAMPVOL d0
+	move	d0,ns_tempvol(a0)
+	
 	addq	#1,a3 * next trigger byte
 
 	lea	n_sizeof(a2),a2
@@ -23522,7 +23534,9 @@ scopeinterrupt:				* a5 = var_b
 	lea	scopeData+scope_ch1(a5),a3
 	moveq	#4-1,d0
 .upsLoop
-	move	UPS_Voice1Vol(a2),ns_tempvol(a3)
+	move	UPS_Voice1Vol(a2),d1
+	CLAMPVOL d1
+	move	d1,ns_tempvol(a3)
 	move	UPS_Voice1Per(a2),d1
 	beq.b	.1
 	* New sample starts as period is non-zero
@@ -24177,7 +24191,7 @@ quadrascope:
 .iik	move.l	a0,a3
 .ook
 
-	moveq	#0,d1
+	;moveq	#0,d1
 	moveq	#80/8-1,d7
 	moveq	#1,d0
 	moveq	#0,d6
@@ -24185,12 +24199,12 @@ quadrascope:
 drlo	
 
 sco	macro
-	move	d6,d2
+	moveq	#0,d2
 	move.b	(a1)+,d2
 	add	d2,d2
 	move	(a2,d2),d3
-	or.b	d0,(a3,d3)
 	or.b	d0,(a0,d3)
+	or.b	d0,-40(a0,d3)
 
 	ifne	\2
 	add.b	d0,d0
@@ -24247,6 +24261,7 @@ hipposcope:
 	push 	a4
 	
 	move	ns_tempvol(a3),d0
+	CLAMPVOL d0
 	mulu	mainvolume(a5),d0
 ;	lsr	#1,d0 ;;;;;;;;;;;;;;;;;
 	lsr	#6,d0
@@ -24936,7 +24951,9 @@ notescroller:
 	move.b  d2,d0 	
 	not.b   d0
 	and.b  	d0,scopeData+scope_trigger(a5)
-	move	ns_tempvol(a0),(a2)
+	move	ns_tempvol(a0),d0
+	CLAMPVOL d0
+	move	d0,(a2)
 .e	
 	* next bit
 	add.b	d2,d2
@@ -45087,6 +45104,7 @@ funcENPP_PokeVol
  	beq.b	.1
 
 	lea	scopeData(a0),a0
+	CLAMPVOL d0
 	move	d0,ns_tempvol(a0,d2)
 .1
 	popm	d2/d3/a0/a1
