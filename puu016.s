@@ -338,7 +338,8 @@ prefs_patternScope   rs.b 1
 prefs_patternScopeXL   rs.b 1
 prefs_spectrumScope   rs.b 1
 prefs_spectrumScopeBars   rs.b 1
-
+	rs.b 1
+	
 prefs_quadraScopePos   rs.l 1
 prefs_quadraScopeFPos   rs.l 1
 prefs_hippoScopePos   rs.l 1
@@ -805,7 +806,8 @@ patternScope_new rs.b 1
 patternScopeXL_new rs.b 1
 spectrumScope_new rs.b 1
 spectrumScopeBars_new rs.b 1
-
+	rs.b 1
+	
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
 mpegadiv_new	rs.b	1
