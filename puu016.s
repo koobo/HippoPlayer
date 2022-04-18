@@ -818,7 +818,7 @@ medratepot_new	rs	1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
-scopechanged	rs.b	1		* scopea muutettu
+Xscopechanged	rs.b	1		* scopea muutettu
 contonerr_laskuri rs.b 1		* kuinka monta virheellistä lataus
 cybercalibration_new rs.b 1		* yritystä
 calibrationfile_new rs.b 100
@@ -21963,6 +21963,7 @@ s_windowTitle                 rs.l      1
 * Pointer to the running status flag
 s_runningStatusAddr            rs.l      1
 s_storedPositionAddr		rs.l 	1
+s_newWindow                   rs.b       nw_SIZEOF
 s_scopeWindowBase             rs.l       1
 s_rastport3                   rs.l       1	
 s_userport3                   rs.l       1
@@ -22625,8 +22626,8 @@ scopeEntry:
 	* This creates a jumptable compatible value out of quadmode,
 	* where bit 8 indicates "bars enabled"
 	move.b	s_quadmode(a4),d0
-	move.b	d0,d1
-	and	#$f,d1
+	moveq	#$f,d1
+	and.b		d0,d1
 	add.b	d1,d1
 	tst.b	d0
 	bpl.b	.e
@@ -22734,10 +22735,6 @@ scopeEntry:
 	SDPRINT	"Patternscope XL"
 .cont
 
-
-
-
-
 	* Start with no size request active.
 	move	s_scopeDrawAreaWidth(a4),s_scopeDrawAreaWidthRequest(a4)
 	move	s_scopeDrawAreaHeight(a4),s_scopeDrawAreaHeightRequest(a4)
@@ -22750,7 +22747,14 @@ scopeEntry:
 	move	d0,s_quadNoteScrollerLinesHalf(a4)
 
 	move.l	_IntuiBase(a5),a6
-	lea	winstruc3,a0
+	
+	* Copy new window structure for modifications
+	lea	winstruc3,a2
+	lea	s_newWindow(a4),a1
+	move.l	a1,a0
+	moveq	#nw_SIZEOF-1,d0
+.copy	move.b	(a2)+,(a1)+
+	dbf	d0,.copy
 
 	* Restore top/left to some previous used value
 	move.l	s_storedPositionAddr(a4),a1
@@ -22794,15 +22798,6 @@ scopeEntry:
 	lea	scrtit,a2
 	lore	Intui,SetWindowTitles
 	
-	* Move to stored position if not there already
-	move.l	s_scopeWindowBase(a4),a0
-	movem	4(a0),d2/d3
-	move.l	s_storedPositionAddr(a4),a1
-	movem	(a1),d0/d1
-	sub	d2,d0
-	sub	d3,d1
-	lob	MoveWindow
-
 	move.l	s_quad_task(a4),a1
 	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
 	lore	Exec,SetTaskPri
@@ -22885,12 +22880,12 @@ scopeLoop:
 	beq.w 	.continue
 .screenVisible
 
+	tst.b	playing(a5)
+	beq.b	.doNotDraw
+
 	* No scopes when AHI
 	tst.b	ahi_use_nyt(a5)
 	bne.b	.doNotDraw
-
-	tst.b	playing(a5)
-	beq.b	.doNotDraw
 
 	* Does the active player support scopes?
 	move.l	playerbase(a5),d0
@@ -22948,7 +22943,7 @@ scopeLoop:
 	moveq	#0,d7
 	bsr.w	scopeDrawAreaClear
 	jsr	printHippoScopeWindow
-	bra.w	.continue
+	;bra.w	.continue - FALL THROUGH
 
 .m
 .continue
@@ -24001,8 +23996,6 @@ drawScope:
 	rts
 
 
-
-
 mirrorfill
 	lore	GFX,OwnBlitter
 	lob	WaitBlit
@@ -24779,14 +24772,12 @@ hurl	macro
 
 ***** hipposcope ps3m:lle
 
-multihipposcope
-;	move.l	buff1,a1
+multihipposcope:
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
 
 	move	#240,d0
 	bsr.b	.1
-;	move.l	buff2,a1
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
 	moveq	#88,d0
@@ -24795,28 +24786,22 @@ multihipposcope
 
 	move.l	ps3m_playpos(a5),a2
 	move.l	(a2),d5
-;	move.l	playpos,d5
 	lsr.l	#8,d5
 
 	lea	s_multab(a4),a2
-	move.l	s_draw1(a4),a0
+	move.l	s_draw1(a4),a3
 	bsr.w	getps3mb
 	moveq	#32,d6
-	moveq	#120/2-1,d7
-
-;	tst.b	scopeboost(a5)
-;	beq.b	.d
-;	moveq	#240/4-1,d7
+	moveq	#120-1,d7
 .d
 
- rept 2
 	move.b	(a1,d5),d1
 	asr.b	#1,d1
 	ext	d1
 	add	d0,d1
 
 	move.b	5(a1,d5),d2
-	asr.b	#2,d2
+	asr.b	#2,d2 
 	ext	d2
 	add	d6,d2
 	add	d2,d2
@@ -24836,7 +24821,6 @@ multihipposcope
 
 	addq	#1,d5
 	and	d4,d5
- endr
 
 	dbf	d7,.d
 
@@ -24845,7 +24829,6 @@ multihipposcope
 
 getps3mb
 	push	a0
-;	move.l	buffSizeMask,d4
 	move.l	ps3m_buffSizeMask(a5),a0
 	move.l	(a0),d4
 	pop	a0
@@ -46618,9 +46601,8 @@ spectrumMixSamples
 
 	moveq	#MIX_LENGTH/2-1,d7
 .m1
-; move to buffer (first set)
-	printt "scale the volume table instead"
-	rept	2 ;MIX_LENGTH
+	; move to buffer (first set)
+	rept	2
 	; sample byte
 	moveq	#0,d5
 	move.b	(a0,d0.w),d5
@@ -46641,8 +46623,7 @@ spectrumMixSamples
 ; add to buffer
 	moveq	#MIX_LENGTH/2-1,d7
 .m2
-	printt "scale the volume table instead"
-	rept	2; MIX_LENGTH
+	rept	2
 	; sample byte
 	moveq	#0,d5
 	move.b	(a0,d0.w),d5
