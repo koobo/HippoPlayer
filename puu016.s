@@ -23850,12 +23850,12 @@ drawScope:
 .4	bsr.w	lever
 	bsr.w	hipposcope
 	bra.w	.cont
+
 .5	bsr.w	freqscope
 	bra.w	.cont
 .6	
 	bsr.w	freqscope
-	;lore	GFX,WaitBlit
-	;lob	DisownBlitter
+	lore	GFX,WaitBlit
 	bsr.w	lever2
 	bra.b	.cont
 
