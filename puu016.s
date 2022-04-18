@@ -6004,8 +6004,8 @@ freemodule:
 ;	st	positionmuutos(a5)
 	clr	positionmuutos(a5)
 	clr	songnumber(a5)
-	clr maxsongs(a5)
-	clr minsong(a5)
+	clr 	maxsongs(a5)
+	clr 	minsong(a5)
 	* For non-EP players supporting patterninfo
 	clr.l	deliPatternInfo(a5) 
 	jsr	clearScopeData
@@ -22616,8 +22616,6 @@ scopeEntry:
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
 	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
 
-	bsr	clearScopeData
-
 
  if DEBUG
 	moveq	#0,d0 
@@ -22891,6 +22889,9 @@ scopeLoop:
 	tst.b	ahi_use_nyt(a5)
 	bne.b	.doNotDraw
 
+	tst.b	playing(a5)
+	beq.b	.doNotDraw
+
 	* Does the active player support scopes?
 	move.l	playerbase(a5),d0
 	beq.b	.doNotDraw
@@ -22899,8 +22900,24 @@ scopeLoop:
 	btst	#pb_scope,d0 
 	beq.b	.doNotDraw
 
-	tst.b	playing(a5)
+	* Do not draw if patternmode and no pattern info
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
+	beq.b	.testPattern
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
+	bne.b	.noPattern
+.testPattern	
+	* Protracker special case
+	cmp	#pt_prot,playertype(a5)
+	beq.b	.izOk
+	* Pattern data check
+	tst.l	deliPatternInfo(a5)
+	bne.b	.izOk
+	bra.b	.doNotDraw
+.noPattern
+	* Check for sample scope support
+	and	#pf_quadscopeUps!pf_quadscopePoke,d0
 	beq.b	.doNotDraw
+.izOk
 
 	bsr	scopeDrawAreaSizeChangeRequestIsActive
 	bne.b	.doNotDraw
@@ -23518,7 +23535,8 @@ scopeinterrupt:				* a5 = var_b
 	move.l	deliUPSStruct(a5),d0
 	* Unnecessary check?
 	beq.b	.quadScopeSampleFollow
-	
+
+
 	* Handle UPS, it will provide input for normal sample follow
 	bsr.b	.handleUPS
 	bra.b	.quadScopeSampleFollow
@@ -23862,12 +23880,14 @@ drawScope:
 	beq.w	.renderPS3M
 
 ;	* Check for generic quadscope support
-	move.l	playerbase(a5),a0
-	move	#pf_quadscopeUps!pf_quadscopePoke,d1
-	and	p_liput(a0),d1
-	bne.b	.doit
-	rts
-.doit
+;	move.l	playerbase(a5),a0
+;	move	#pf_quadscopeUps!pf_quadscopePoke,d1
+;	and	p_liput(a0),d1
+;	bne.b	.doit
+;	tst.l	deliPatternInfo(a5)
+;	bne.b	.doit	
+;	rts
+;.doit
 
 	* Protracker scope
 	* .. or similarly working others
@@ -23894,11 +23914,9 @@ drawScope:
 .4	bsr	lever
 .2	bra	hipposcope
 
-.5	
-	bra	freqscope
+.5	bra	freqscope
 
-.6
-	bsr.w	freqscope
+.6	bsr.w	freqscope
 	lore	GFX,WaitBlit
 	bra	lever
 
@@ -23975,7 +23993,7 @@ drawScope:
 .11	bra	multiscope
 .22	bra	multihipposcope
 .33	bra	freqscope
-.44	bsr.w	multiscopefilled
+.44	bsr	multiscopefilled
 	bra	mirrorfill
 .55	* PS3M patternscope mode
 	tst.l	deliPatternInfo(a5) 
@@ -37330,7 +37348,7 @@ p_multi	jmp	.s3init(pc)
 	jmp	.author(pc)
 	dc.w pt_multi
 .flags
- dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
+ dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi!pf_quadscopePoke
 	dc.b	"PS3M",0
 .itPath
 	dc.b	"impulse",0
@@ -37836,7 +37854,7 @@ p_sample
 	jmp 	id_sample(pc)
 	p_NOP	* author
 	dc.w 	pt_sample
-	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi
+	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .name	dc.b	"                        ",0
  even
 
@@ -43983,8 +44001,8 @@ deliInit:
 	bsr.w	deliCallFunc	
 	move.l	a0,deliUPSStruct(a5)
 	beq.b	.noUPS
-	move.l	playerbase(a5),a0
-	or	#pf_scope!pf_quadscopeUps,p_liput(a0)
+	;move.l	playerbase(a5),a0
+	;or	#pf_scope!pf_quadscopeUps,p_liput(a0)
 	DPRINT	"Quadscope supported"
 .noUPS
  
