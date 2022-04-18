@@ -46365,6 +46365,7 @@ runSpectrumScope
 	bsr.w	spectrumMixSamples
 .go
 	move.l	s_spectrumMixedData(a4),a0
+	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	windowFFT
 
 	move.l	s_spectrumMixedData(a4),a0
