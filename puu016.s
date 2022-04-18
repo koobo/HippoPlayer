@@ -23453,12 +23453,12 @@ scopeinterrupt:				* a5 = var_b
 	move.l	n_loopstart(a2),ns_loopstart(a0)
 	move	n_replen(a2),ns_replen(a0)
 .e	move	n_period(a2),ns_period(a0)	
-	move	n_tempvol(a2),d0
-	CLAMPVOL d0
-	move	d0,ns_tempvol(a0)
+
+	move	n_tempvol(a2),d2
+	CLAMPVOL d2
+	move	d2,ns_tempvol(a0)
 	
 	addq	#1,a3 * next trigger byte
-
 	lea	n_sizeof(a2),a2
 	lea	ns_size(a0),a0
 	dbf	d1,.setscope
@@ -24186,6 +24186,7 @@ quadrascope:
 	beq.b	.iik
 	cmp.b	#9,s_quadmode2(a4)
 	bne.b	.ook
+	* Filled quadrascope
 .iik	move.l	a0,a3
 .ook
 
@@ -24202,7 +24203,7 @@ sco	macro
 	add	d2,d2
 	move	(a2,d2),d3
 	or.b	d0,(a0,d3)
-	or.b	d0,-40(a0,d3)
+	or.b	d0,(a3,d3)
 
 	ifne	\2
 	add.b	d0,d0
