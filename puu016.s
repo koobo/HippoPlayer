@@ -23782,138 +23782,8 @@ drawScope:
 
 	lob	DisownBlitter
 
-	cmp	#pt_sample,playertype(a5)
-	bne.b	.toot
+	bsr	.render
 
-	* Sample scope
-
-	* Get normal scope area
-	bsr	requestNormalScopeDrawArea
-	bne.w	.skippi * wait for resize
-
-	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
-	beq.b	.fil
-	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,s_quadmode2(a4)	
-	beq.b	.fil
-	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
-	beq.b	.sampleFr
-	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
-	beq.b	.sampleFr
-	bsr.w	samplescope
-	bra.w	.cont
-.sampleFr
-	bsr.w	freqscope
-	bra	.cont
-.fil
-	bsr.w	samplescopefilled
-	bsr.w	mirrorfill
-	bra.w	.cont
-.toot
-
-
-	moveq	#0,d0
-	move.b	s_quadmode2(a4),d0
-	add	d0,d0
-	cmp	#pt_multi,playertype(a5)
-	beq.w	.ttt
-
-	* Check for generic quadscope support
-	move.l	playerbase(a5),a0
-	move	#pf_quadscopeUps!pf_quadscopePoke,d1
-	and	p_liput(a0),d1
-	beq	.other
-
-	* Protracker scope
-	* .. or similarly working others
-
-	jmp	.t(pc,d0)
-
-* protracker jump table
-.t	bra.b	.1 * quad
-	bra.b	.3
-	bra.b	.2 * hippo
-	bra.b	.4
-	bra.b	.5 * freq
-	bra.b	.6
-	bra.b	.7 * pattern
-	bra.b	.7
-	bra.b	.8 * fquad
-	bra.b	.9
-	bra.b	.7 * pattern xl
-	bra.b	.7
-
-.1	bsr.w	quadrascope
-	bra.w	.cont
-.2	bsr.w	hipposcope
-	bra.w	.cont
-.3	bsr.w	lever
-	bsr.w	quadrascope
-	bra.w	.cont
-.4	bsr.w	lever
-	bsr.w	hipposcope
-	bra.w	.cont
-
-.5	bsr.w	freqscope
-	bra.w	.cont
-.6	
-	bsr.w	freqscope
-	lore	GFX,WaitBlit
-	bsr.w	lever2
-	bra.b	.cont
-
-.7	* Protracker specific notescroller launch
-	cmp	#pt_prot,playertype(a5)
-	bne.b	.other
-	bsr.w	notescroller
-	bra.b	.cont
-
-.8	bsr.w	quadrascope
-	bsr.w	mirrorfill
-	bra.b	.cont
-.9	bsr.w	quadrascope
-	bsr.w	mirrorfill2
-	lore	GFX,WaitBlit
-	lob	DisownBlitter
-	bsr.w	lever * extra gfx drawn, must wait until fill done
-	bra.b	.cont
-
-	* PS3M scope
-	* multichannel jump table
-.ttt	jmp	.tt(pc,d0)
-.tt	bra.b	.11 * quad
-	bra.b	.11
-	bra.b	.22 * hipp
-	bra.b	.22
-	bra.b	.33 * freq
-	bra.b	.33
-	bra.b	.55 * patt
-	bra.b	.55
-	bra.b	.44 * fquad
-	bra.b	.44
-	bra.b	.55 * patt
-	bra.b	.55
-
-.22	bsr.w	multihipposcope
-	bra.b	.cont
-.11	bsr.w	multiscope
-	bra.b	.cont
-.33	bsr.w	freqscope
-	bra.b	.cont
-.44	bsr.w	multiscopefilled
-	bsr.w	mirrorfill
-	bra.b	.cont 
-.55	* PS3M patternscope mode
-	tst.l	deliPatternInfo(a5) 
-	beq.b	.11
-
-.other
-	* Fallback option!
-	* Display notescroller if possible.
-	* Non-Protracker formats.
-	tst.l	deliPatternInfo(a5)
-	beq.b	.cont
-	bsr	noteScroller2
-.cont
 	* scope processed, deliver unto screen
 
 	* double buffer
@@ -23980,24 +23850,140 @@ drawScope:
 	rts
 
 
-;STRUCTURE   BitMap,0
-;WORD    bm_BytesPerRow
-;WORD    bm_Rows
-;BYTE    bm_Flags
-;BYTE    bm_Depth
-;WORD    bm_Pad
-;STRUCT  bm_Planes,8*4
-;LABEL   bm_SIZEOF
+.render
+	cmp	#pt_sample,playertype(a5)
+	beq.w	.renderSample
+	cmp	#pt_multi,playertype(a5)
+	beq.w	.renderPS3M
+
+	moveq	#0,d0
+	move.b	s_quadmode2(a4),d0
+	add	d0,d0
+
+;	* Check for generic quadscope support
+;	move.l	playerbase(a5),a0
+;	move	#pf_quadscopeUps!pf_quadscopePoke,d1
+;	and	p_liput(a0),d1
+;	beq	.other
+;	;beq	.cont
+
+	* Protracker scope
+	* .. or similarly working others
+
+	jmp	.t(pc,d0)
+
+* protracker jump table
+.t	bra.b	.1 * quad
+	bra.b	.3 * + bars
+	bra.b	.2 * hippo
+	bra.b	.4 * + bars
+	bra.b	.5 * freq
+	bra.b	.6 * + bars
+	bra.b	.7 * pattern normal size
+	bra.b	.7 * --""-- 
+	bra.b	.8 * fquad
+	bra.b	.9 * + bars
+	bra.b	.7 * pattern extra large
+	bra.b	.7 * --""--
+
+.3	bsr	lever
+.1	bra	quadrascope
+
+.4	bsr	lever
+.2	bra	hipposcope
+
+.5	bra	freqscope
+
+.6	bsr.w	freqscope
+	lore	GFX,WaitBlit
+	bra	lever2
+
+.7	* Protracker specific notescroller launch
+	cmp	#pt_prot,playertype(a5)
+	beq	notescroller
+	* Generic notescroller launch
+	tst.l	deliPatternInfo(a5)
+	bne.w	noteScroller2
+	rts
+	
+.8	bsr.w	quadrascope
+	bra	mirrorfill
+
+.9	bsr.b	.8
+	lore	GFX,WaitBlit
+	bra	lever * extra gfx drawn, must wait until fill done
+
+.other
+	* Fallback option!
+	* Display notescroller if possible.
+	* Non-Protracker formats.
+	tst.l	deliPatternInfo(a5)
+	beq.b	.cont
+	bsr	noteScroller2
+.cont
+	rts
 
 
-mirrorfill2
-	moveq	#0,d7
-	bra.b	mirrorfill0
+* Sample scope
+.renderSample
+	
+	* Get normal scope area
+	bsr	requestNormalScopeDrawArea
+	bne.w	.skippi * wait for resize
+
+	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
+	beq.b	.fil
+	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,s_quadmode2(a4)	
+	beq.b	.fil
+	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
+	beq.b	.sampleFr
+	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
+	beq.b	.sampleFr
+	bsr.w	samplescope
+	rts
+.sampleFr
+	bsr.w	freqscope
+	rts
+.fil
+	bsr.w	samplescopefilled
+	bsr.w	mirrorfill
+	rts
+
+.renderPS3M
+	moveq	#0,d0
+	move.b	s_quadmode2(a4),d0
+	add	d0,d0
+
+	* PS3M scope
+	* multichannel jump table
+	jmp	.tt(pc,d0)
+.tt	bra.b	.11 * quad
+	bra.b	.11
+	bra.b	.22 * hipp
+	bra.b	.22
+	bra.b	.33 * freq
+	bra.b	.33
+	bra.b	.55 * patt
+	bra.b	.55
+	bra.b	.44 * fquad
+	bra.b	.44
+	bra.b	.55 * patt
+	bra.b	.55
+
+.11	bra	multiscope
+.22	bra	multihipposcope
+.33	bra	freqscope
+.44	bsr.w	multiscopefilled
+	bra	mirrorfill
+.55	* PS3M patternscope mode
+	tst.l	deliPatternInfo(a5) 
+	bne.w	noteScroller2
+	rts
+
+
+
 
 mirrorfill
-	moveq	#1,d7
-
-mirrorfill0
 	lore	GFX,OwnBlitter
 	lob	WaitBlit
 
@@ -24024,10 +24010,8 @@ mirrorfill0
 	move.l	#$09f00000,$40-$58(a2)
 	move	#32*64+20,(a2)	
 
-	tst.b	d7
-	beq.b	.x
 	lob	DisownBlitter
-.x	rts
+	rts
 
 
 * In: 
