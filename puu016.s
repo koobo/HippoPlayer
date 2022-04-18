@@ -43998,12 +43998,13 @@ deliInit:
 
 	move.l	#EP_StructInit,d0
 	bsr.w	deliGetTag
+	beq.b	.noUPS
 	bsr.w	deliCallFunc	
 	move.l	a0,deliUPSStruct(a5)
-	beq.b	.noUPS
+	;beq.w	.noUPS
 	;move.l	playerbase(a5),a0
 	;or	#pf_scope!pf_quadscopeUps,p_liput(a0)
-	DPRINT	"Quadscope supported"
+;	DPRINT	"Quadscope supported"
 .noUPS
  
 	move.l	#DTP_InitPlayer,d0  
