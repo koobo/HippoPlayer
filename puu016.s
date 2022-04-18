@@ -25581,10 +25581,15 @@ dlever
 	lsl	#1,d1
 	divu	#27,d1		* lukualueeksi 0-59
 
+	* clamp
+	cmp	#59,d1
+	bls.b	.1
+	move	#59,d1
+.1
+
 	lea	s_multab(a4),a1
 	add	d1,d1
 	add	(a1,d1),a0
-
 
 	move	ns_tempvol(a3),d0
 	mulu	mainvolume(a5),d0
