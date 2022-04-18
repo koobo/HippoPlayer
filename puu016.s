@@ -471,6 +471,8 @@ _MedPlayerBase2	rs.l	1
 _MedPlayerBase3	rs.l	1
 _MlineBase		rs.l	1
 _XFDBase	rs.l	1
+_FFPBase	rs.l 1
+_MTBase     rs.l 1
 
  ifne DEBUG
 output		rs.l	1
@@ -3686,6 +3688,10 @@ exit
 	bsr.w	closel
 	move.l	_ReqBase(a5),d0
 	bsr.w	closel
+	move.l	_FFPBase(a5),d0
+	bsr     closel
+	move.l	_MTBase(a5),d0
+	bsr     closel
 
 	bsr.w	tulostavirhe
 exit2
@@ -22045,32 +22051,38 @@ CLAMPVOL macro
 * Structure to help task starting and stopping
     STRUCTURE ScopeTaskDefinition,0
         UWORD st_runningStatusOffset
+        UWORD st_prefsStatusOffset
         UWORD st_taskOffset
         APTR st_entryPoint
     LABEL ScopeTaskDefinition_SIZEOF
 
 quadraScopeTaskDefinition
 	dc.w	quadraScopeRunning
+	dc.w	prefs_quadraScope
 	dc.w	taskQuadraScope
 	dc.l	quadraScopeEntry
 
 quadraScopeFTaskDefinition
 	dc.w	quadraScopeFRunning
+	dc.w	prefs_quadraScopeF
 	dc.w	taskQuadraScopeF
 	dc.l	quadraScopeFEntry
 
 hippoScopeTaskDefinition
 	dc.w	hippoScopeRunning
+	dc.w	prefs_hippoScope
 	dc.w	taskHippoScope
 	dc.l	hippoScopeEntry
 
 patternScopeTaskDefinition
 	dc.w	patternScopeRunning
+	dc.w	prefs_patternScope
 	dc.w	taskPatternScope
 	dc.l	patternScopeEntry
 
 spectrumScopeTaskDefinition
 	dc.w	spectrumScopeRunning
+	dc.w	prefs_spectrumScope
 	dc.w	taskSpectrumScope
 	dc.l	spectrumScopeEntry
 
@@ -22149,7 +22161,9 @@ startScopeTask:
 	sub.l a3,a3		 
 	lore	Exec,AddTask
 
-	bsr	updateScopeStatusesToPrefs
+	move	st_prefsStatusOffset(a4),d0
+	lea	prefsdata(a5),a0
+	st	(a0,d0)
 .x
 	popm	d2-d7/a2-a6
 	rts
@@ -22246,7 +22260,7 @@ restartHippoScopeTask
 
 startPatternScopeTask
 	DPRINT	"startPatternScopeTask"
-	printt "todo todo, load minifont"
+	bsr	getScopeMiniFontIfNeeded
 	lea	patternScopeTaskDefinition(pc),a4
 	bra.w	startScopeTask
 
@@ -22264,7 +22278,24 @@ restartPatternScopeTask
 
 startSpectrumScopeTask
 	DPRINT	"startSpectrumScopeTask"
-	printt "todo todo load math libs"
+
+	move.l	(a5),a6
+	tst.l	_FFPBase(a5)
+	bne.b	.1
+	lea	_FFPName,a1
+	lob	OldOpenLibrary
+	move.l	d0,_FFPBase(a5)
+	beq.b	.fail
+.1
+	tst.l	_MTBase(a5)
+	bne.b	.2
+	lea	_MTName,a1
+	lob  	OldOpenLibrary
+	move.l	d0,_MTBase(a5)
+	bne.b	.2
+.fail
+	rts
+.2
 	lea	spectrumScopeTaskDefinition(pc),a4
 	bra.w	startScopeTask
 		
@@ -22277,7 +22308,7 @@ restartSpectrumScopeTask
 	tst.b	spectrumScopeRunning(a5)
 	beq.b	.x
 	bsr.b	stopSpectrumScopeTask
-	bsr.b	startSpectrumScopeTask
+	bsr.w	startSpectrumScopeTask
 .x	rts	
 
 stopScopeTasks
@@ -22862,7 +22893,7 @@ scopeLoop:
 	;tst.b	tapa_quad(a5)		* pitääkö poistua?
 	;bne.w	qexit
 	move.l	s_runningStatusAddr(a4),a0
-	tst.b	(A0)
+	tst.b	(a0)
 	bmi	qexit
 
 	* Bypass screen check if LMB has been pressed
@@ -22908,11 +22939,6 @@ scopeLoop:
 	* Needs a clear in the future
 	moveq	#-1,d7
 
-	tst.b	d6 		* pattscope indicator bit
-	beq.b	.noPatts
-	bsr	getScopeMiniFontIfNeeded
-.noPatts
-
 	pushm	d5/d6/d7
 	jsr	obtainModuleData
 	* Final safety check
@@ -22937,6 +22963,12 @@ scopeLoop:
 .continue
 	* Manual size and position detection by polling.
 	bsr	scopeWindowChangeHandler
+
+	* Store window position so it gets saved with prefs
+	move.l	s_scopeWindowBase(a4),a0
+	move.l	s_storedPositionAddr(a4),a1
+	move.l	4(a0),(a1)
+
 .getMoreMsg
 	* Poll for messages
 	move.l	s_userport3(a4),a0
@@ -23575,20 +23607,16 @@ clearScopeData
 
 * Opens the mini font for 4+ channel notescroller if needed
 getScopeMiniFontIfNeeded
-	printt	 "todo todo"
-	; TODO: can't do disk access in a Task
-	rts
-
 	tst.l	minifontbase(a5)
 	bne.b	.skip
 	* See if we need the small font
-	bsr.w	patternScopeIsActive
-	bne.b	.skip
-	move.l	deliPatternInfo(a5),d0
-	beq.b	.skip
-	move.l	d0,a0
-	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a0)
-	bls.b	.skip
+;	bsr.w	patternScopeIsActive
+;	bne.b	.skip
+;	move.l	deliPatternInfo(a5),d0
+;	beq.b	.skip
+;	move.l	d0,a0
+;	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a0)
+;	bls.b	.skip
 	lea	diskfontname,a1
 	lore	Exec,OldOpenLibrary
 	tst.l 	d0 
@@ -23599,22 +23627,22 @@ getScopeMiniFontIfNeeded
 	move.l	d0,minifontbase(a5)
 	move.l	a6,a1
 	lore 	Exec,CloseLibrary
-	tst.l	minifontbase(a5)
-	bne.b	.miniOk
-	lea	.noFontMsg(pc),a1 
-	tst.b	(a1)
-	beq.b	.skip
-	bsr	request
-	* Show this only once to not be annoying
-	clr.b	(a1)	
+;	tst.l	minifontbase(a5)
+;	bne.b	.miniOk
+;	lea	.noFontMsg(pc),a1 
+;	tst.b	(a1)
+;	beq.b	.skip
+;	bsr	request
+;	* Show this only once to not be annoying
+;	clr.b	(a1)	
 .skip
 	rts
 .miniOk
 	DPRINT	"Got mini font"
 	rts
-.noFontMsg
-	dc.b	"Couldn't open 'mini4' font for patternscope!",0
-	even
+;.noFontMsg
+;	dc.b	"Couldn't open 'mini4' font for patternscope!",0;
+;	even
 
 ******* Quadrascopelle 
 voltab
@@ -46339,29 +46367,9 @@ FFP_zero        = 0
 * This calculates a 1024 entry sine table with 16-bit
 * range.
 prepareSpectrumSineTable
-	moveq	#0,d6
+	move.l	_FFPBase(a5),d6
+	move.l	_MTBase(a5),d5
 
-	lea	_MTName(pc),a1
-	lore	Exec,OldOpenLibrary
-	move.l	d0,d5
-	beq.b	.x
-
-	lea	_FFPName(pc),a1
-	lob	OldOpenLibrary
-	move.l	d0,d6
-	bne.b	.do
-.x
-	bsr.b	.close
-	moveq	#0,d0
-	rts
-
-.close
-	move.l	d5,d0
-	jsr	closel
-	move.l	d6,d0
-	jmp	closel
-	
-.do
 	move.l	s_spectrumSineTable(a4),a2
  
 	* D4 = multiplier 
@@ -46390,7 +46398,6 @@ prepareSpectrumSineTable
 
 	dbf	d7,.loop   
 
-	bsr.b	.close
 	moveq	#1,d0
 	rts
 
