@@ -1222,6 +1222,7 @@ altbuttonsUse  rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * Runtime scope settings
+ REM
 quadraScope   rs.b 1
 quadraScopeBars   rs.b 1
 quadraScopeF   rs.b 1
@@ -1232,7 +1233,8 @@ patternScope   rs.b 1
 patternScopeXL   rs.b 1
 spectrumScope   rs.b 1
 spectrumScopeBars   rs.b 1
-
+ EREM
+ 
 * audio homman muuttujat
 acou_deviceerr	rs.l	1
 iorequest	rs.b	ioa_SIZEOF
@@ -2459,6 +2461,7 @@ lelp
 
 	pushm	all
 	bsr.w	loadprefs
+
 	bsr.w	loadps3msettings
 	bsr.w	loadcybersoundcalibration
 	popm	all
@@ -2990,6 +2993,8 @@ lelp
 ;	DPRINT	"Starting scope"
 ;	jsr	start_quad
 ;.q
+	jsr	startAndStopScopeTasks
+
 	tst.b	infoon(a5)
 	beq.b	.qq
 ;	st	oli_infoa(a5)
@@ -8105,6 +8110,7 @@ nappuloita
 .scopetoggle
 	printt	"todo todo"
 	DPRINT	"key scope toggle"
+	jsr	toggleScopes
 	rts
 ;	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
 ;	beq.b	.startQ		
@@ -11853,6 +11859,7 @@ loadprefs2
 	move.b	prefs_savestate(a0),savestate(a5)
 	move.b  prefs_altbuttons(a0),altbuttons(a5)
 
+ REM
 	move.b prefs_quadraScope(a0),      quadraScope(a5)    
 	move.b prefs_quadraScopeBars(a0),  quadraScopeBars(a5)        
 	move.b prefs_quadraScopeF(a0),     quadraScopeF(a5)       
@@ -11863,7 +11870,8 @@ loadprefs2
 	move.b prefs_patternScopeXL(a0),   patternScopeXL(a5)      
 	move.b prefs_spectrumScope(a0),    spectrumScope(a5)     
 	move.b prefs_spectrumScopeBars(a0),spectrumScopeBars(a5)          
-
+ EREM
+ 
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
 	move.l	prefs_textattr(a0),text_attr+4		* ysize jne
@@ -12161,7 +12169,8 @@ saveprefs
 	move.b	savestate(a5),prefs_savestate(a0)
 	move.b	altbuttons(a5),prefs_altbuttons(a0)
 
-	move.b quadraScope(a5),prefs_quadraScope(a0)
+  REM
+ 	move.b quadraScope(a5),prefs_quadraScope(a0)
 	move.b quadraScopeBars(a5),prefs_quadraScopeBars(a0)
 	move.b quadraScopeF(a5),prefs_quadraScopeF(a0)
 	move.b quadraScopeFBars(a5),prefs_quadraScopeFBars(a0)
@@ -12171,7 +12180,7 @@ saveprefs
 	move.b patternScopeXL(a5),prefs_patternScopeXL(a0)
 	move.b spectrumScope(a5),prefs_spectrumScope(a0)
 	move.b spectrumScopeBars(a5),prefs_spectrumScopeBars(a0)
-
+ EREM
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
@@ -12583,6 +12592,9 @@ prefs_code
 	lea	var_b,a5
 	addq	#1,prefs_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
+	printt	"TODO TODO"
+	; basereg a4 gadgets?
+
 
 	clr.b	prefs_exit(a5)		* Lippu
 
@@ -12642,6 +12654,7 @@ prefs_code
 	move.b	savestate(a5),savestate_new(a5)
 	move.b	altbuttons(a5),altbuttons_new(a5)
 
+ REM
 	move.b quadraScope(a5),      quadraScope_new(a5)    
 	move.b quadraScopeBars(a5),  quadraScopeBars_new(a5)        
 	move.b quadraScopeF(a5),     quadraScopeF_new(a5)       
@@ -12652,7 +12665,8 @@ prefs_code
 	move.b patternScopeXL(a5),   patternScopeXL_new(a5)      
 	move.b spectrumScope(a5),    spectrumScope_new(a5)     
 	move.b spectrumScopeBars(a5),spectrumScopeBars_new(a5)  
-
+ EREM
+ 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
 	move.l	ahi_mode(a5),ahi_mode_new(a5)
@@ -13113,17 +13127,18 @@ exprefs	move.l	_IntuiBase(a5),a6
 .1
 
 
-    move.b quadraScope_new(a5),quadraScope(a5) 
+ REM
+      	move.b quadraScope_new(a5),quadraScope(a5) 
 	move.b quadraScopeBars_new(a5),quadraScopeBars(a5) 
 	move.b quadraScopeF_new(a5),quadraScopeF(a5)   
 	move.b quadraScopeFBars_new(a5),quadraScopeFBars(a5)
 	move.b hippoScope_new(a5),hippoScope(a5)      
-	move.b  hippoScopeBars_new(a5),hippoScopeBars(a5)  
+	move.b hippoScopeBars_new(a5),hippoScopeBars(a5)  
 	move.b patternScope_new(a5),patternScope(a5)  
 	move.b patternScopeXL_new(a5),patternScopeXL(a5)  
 	move.b spectrumScope_new(a5),spectrumScope(a5)   
 	move.b spectrumScopeBars_new(a5),spectrumScopeBars(a5)
-
+ EREM
 
 	move.b	autosort_new(a5),autosort(a5)
 
@@ -13676,8 +13691,9 @@ pmousebuttons
 
 * This updates the preds window to match state.
 * p-functions handle each gadget.
-pupdate				* Ikkuna p‰ivitys
+pupdate:				* Ikkuna p‰ivitys
 	pushm	all
+	DPRINT	"prefs::pUpdate"
 
 	move	prefsivu(a5),d0
 	bne.b	.2
@@ -14053,71 +14069,65 @@ rval6	moveq	#6,d0
 
 rQuadraScope
 	DPRINT	"rQuadrascope"
-	move.b	quadraScopeRunning(a5),d0
-	beq.b	.start
-	moveq	#0,d0
-	lea	prefsQuadraScope,a0
-	bsr	tickaa
-	bra	stopQuadraScopeTask
+	not.b	prefsdata+prefs_quadraScope(a5)
+	bne.b	.start
+	bsr	stopQuadraScopeTask
+	bra.b pQuadraScope
 .start	
-	moveq	#1,d0
-	lea	prefsQuadraScope,a0
-	bsr	tickaa
-	bra	startQuadraScopeTask
-
+	bsr	startQuadraScopeTask
+	
 pQuadraScope
-	DPRINT	"pQuadrascope"
-	move.b	quadraScopeRunning(a5),d0
+	move.b	prefsdata+prefs_quadraScope(a5),d0
 	lea	prefsQuadraScope,a0
 	bra	tickaa
 
 rQuadraScopeBars
 	DPRINT	"rQuadrascopeBars"
 	not.b	quadraScopeBars_new(a5)
+	bsr	restartQuadraScopeTask
 
 pQuadraScopeBars
 	move.b	quadraScopeBars_new(a5),d0
 	lea	prefsQuadraScopeBars,a0
 	bra.w	tickaa
 
+rQuadraScopeF
+	DPRINT	"rQuadraScopeF"
+	move.b	quadraScopeFRunning(a5),d0
+	beq.b	.start
+	bsr	stopQuadraScopeFTask
+	bra.b	pQuadraScopeF
+.start	
+	bsr	startQuadraScopeFTask
+
+pQuadraScopeF
+	move.b	quadraScopeFRunning(a5),d0
+	move.b	d0,prefs_quadraScopeF(a5)
+	lea	prefsQuadraScopeF,a0
+	bra	tickaa
+
 rQuadraScopeFBars
 	DPRINT	"rQuadraScopeFBars"
 	not.b	quadraScopeFBars_new(a5)
-
+	bsr	restartQuadraScopeFTask
+	
 pQuadraScopeFBars
 	move.b	quadraScopeFBars_new(a5),d0
 	lea	prefsQuadraScopeFBars,a0
 	bra.w	tickaa
 
-
-rQuadraScopeF
-	DPRINT	"rQuadraScopeF"
-	move.b	quadraScopeFRunning(a5),d0
-	beq.b	.start
-	moveq	#0,d0
-	lea	prefsQuadraScopeF,a0
-	bsr	tickaa
-	bra	stopQuadraScopeFTask
-.start	
-	moveq	#1,d0
-	lea	prefsQuadraScopeF,a0
-	bsr	tickaa
-	bra	startQuadraScopeFTask
-
-pQuadraScopeF
-	DPRINT	"pQuadraScopeF"
-	move.b	quadraScopeFRunning(a5),d0
-	lea	prefsQuadraScopeF,a0
-	bra	tickaa
-
-
 rHippoScope
 	DPRINT	"rHippoScope"
-	not.b	hippoScope_new(a5)
-
+	tst.b	hippoScopeRunning(a5)
+	beq.b	.start
+	bsr	stopHippoScopeTask
+	bra.b pHippoScope
+.start	
+	bsr	startHippoScopeTask
+	
 pHippoScope
-	DPRINT	"pHippoScope"
-	move.b	hippoScope_new(a5),d0
+	move.b	hippoScopeRunning(a5),d0
+	move.b	d0,prefs_hippoScope(a5)
 	lea	prefsHippoScope,a0
 	bra.w	tickaa
 
@@ -14125,46 +14135,59 @@ pHippoScope
 rHippoScopeBars
 	DPRINT	"rHippoScopeBars"
 	not.b	hippoScopeBars_new(a5)
+	bsr	restartHippoScopeTask
 
 pHippoScopeBars
-	DPRINT	"pHippoScopeBars"
 	move.b	hippoScopeBars_new(a5),d0
 	lea	prefsHippoScopeBars,a0
 	bra.w	tickaa
 
 rPatternScope
 	DPRINT	"rPatternScope"
-	not.b	patternScope_new(a5)
+	tst.b	patternScopeRunning(a5)
+	beq.b	.start
+	bsr	stopPatternScopeTask
+	bra.b 	pPatternScope
+.start	
+	bsr	startPatternScopeTask
+
 pPatternScope
-	move.b	patternScope_new(a5),d0
+	move.b	patternScopeRunning(a5),d0
+	move.b	d0,prefs_patternScope(a5)
 	lea	prefsPatternScope,a0
 	bra.w	tickaa
 
 rPatternScopeXL
 	DPRINT	"rPatternScopeXL"
 	not.b	patternScopeXL_new(a5)
+	bsr	restartPatternScopeTask
 
 pPatternScopeXL
-	DPRINT	"pPatternScopeXL"
 	move.b	patternScopeXL_new(a5),d0
 	lea	prefsPatternScopeXL,a0
 	bra.w	tickaa
 
 rSpectrumScope
 	DPRINT	"rSpectrumScope"
-	not.b	spectrumScope_new(a5)
+	tst.b	spectrumScopeRunning(a5)
+	beq.b	.start
+	bsr	stopSpectrumScopeTask
+	bra.b 	pSpectrumScope
+.start	
+	bsr	startSpectrumScopeTask
+	
 pSpectrumScope
-	move.b	spectrumScope_new(a5),d0
+	move.b	spectrumScopeRunning(a5),d0
+	move.b	d0,prefs_spectrumScope(a5)
 	lea	prefsSpectrumScope,a0
 	bra.w	tickaa
-
 
 rSpectrumScopeBars
 	DPRINT	"rSpectrumScopeBars"
 	not.b	spectrumScopeBars_new(a5)
+	bsr	restartSpectrumScopeTask
 
 pSpectrumScopeBars
-	DPRINT	"pSpectrumScopeBars"
 	move.b	spectrumScopeBars_new(a5),d0
 	lea	prefsSpectrumScopeBars,a0
 	bra.w	tickaa
@@ -14237,7 +14260,6 @@ psup3
 	lea	pout3,a1
 	bsr.w	prunt
 	bra.b	quadu
- EREM ;;;;;;;;;;;;;;;;
 
 ls00	dc.b	14,6
 titleQuadraScope
@@ -14261,6 +14283,8 @@ ls05	dc.b	"F. Quadrascope",0
 titlePatternScopeXL
 ls06	dc.b	"PatternscopeXL",0
  even
+ EREM ;;;;;;;;;;;;;;;;
+
 
  REM
 
@@ -16491,8 +16515,8 @@ listselector
 	move.l	d7,a4
 	bra.w	doPrint	
 
-
-
+*******************************************************************************
+*  End of Prefs section
 *******************************************************************************
 
 *******
@@ -21949,8 +21973,10 @@ str2msg	pushm	d0/d1/a0/a1/a6
                               rsreset
 s_global                      rs.l       1
 s_quad_task                   rs.l       1
+s_windowTitle                 rs.l      1
 * Pointer to the running status flag
-s_runningStatusAddr            rs.l       1
+s_runningStatusAddr            rs.l      1
+s_storedPositionAddr		rs.l 	1
 s_scopeWindowBase             rs.l       1
 s_rastport3                   rs.l       1	
 s_userport3                   rs.l       1
@@ -22006,45 +22032,37 @@ s_scopeHorizontalBarTable     rs.b       512
 s_mtab                        rs.b       64*256*2 * volume table for scopes
 sizeof_scopeVars              rs.b       1
 
-
-
-
-	STRUCTURE ScopeTaskDefinition,0
+* Structure to help task starting and stopping
+    STRUCTURE ScopeTaskDefinition,0
         UWORD st_runningStatusOffset
-		UWORD st_taskOffset
-		APTR st_entryPoint
-		APTR st_taskName
-	LABEL ScopeTaskDefinition_SIZEOF
+        UWORD st_taskOffset
+        APTR st_entryPoint
+    LABEL ScopeTaskDefinition_SIZEOF
 
 quadraScopeTaskDefinition
 	dc.w	quadraScopeRunning
 	dc.w	taskQuadraScope
 	dc.l	quadraScopeEntry
-	dc.l	titleQuadraScope
 
 quadraScopeFTaskDefinition
 	dc.w	quadraScopeFRunning
 	dc.w	taskQuadraScopeF
 	dc.l	quadraScopeFEntry
-	dc.l	titleQuadraScopeF
 
 hippoScopeTaskDefinition
 	dc.w	hippoScopeRunning
 	dc.w	taskHippoScope
 	dc.l	hippoScopeEntry
-	dc.l	titleHippoScope
 
 patternScopeTaskDefinition
 	dc.w	patternScopeRunning
 	dc.w	taskPatternScope
 	dc.l	patternScopeEntry
-	dc.l	titlePatternScope
 
 spectrumScopeTaskDefinition
 	dc.w	spectrumScopeRunning
 	dc.w	taskSpectrumScope
 	dc.l	spectrumScopeEntry
-	dc.l	titleSpectrumScope
 
 
 * In:
@@ -22085,7 +22103,19 @@ resetScopeTask
 
 * In:
 *  a4 = task definition
-startScopeTask
+*  d7 = capability bits, pf_samplescope/pf_patternscope
+startScopeTask:
+	pushm	d2-d7/a2-a6
+	* Check player caps, do not start
+	* scope if not supported
+;	move.l	playerbase(a5),d0
+;	beq.b	.1
+;	move.l	d0,a0
+;	move	p_liput(a0),d0
+;	and	d7,d0
+;	beq.b	.x
+;.1
+
 	* Check if running already
 	move	st_runningStatusOffset(a4),d7
 	tst.b 	(a5,d7)
@@ -22094,7 +22124,7 @@ startScopeTask
 	* Get task structure
 	move	st_taskOffset(a4),d0
 	lea	(a5,d0),a3
-	move.l	st_taskName(a4),a2
+	lea	.tn(pc),a2
 	bsr	initScopeTask
 
 	* Mark it as running
@@ -22108,59 +22138,142 @@ startScopeTask
 	sub.l a3,a3		 
 	lore	Exec,AddTask
 .x
+	popm	d2-d7/a2-a6
+	rts
+
+.tn	dc.b	"HiP-scope",0
+	even
+
+* Sets up scopes open or close according to prefs.
+startAndStopScopeTasks
+	DPRINT	"startAndStopScopeTasks"
+	tst.b	prefsdata+prefs_quadraScope(a5)
+	beq.b	.1
+	bsr.b	startQuadraScopeTask
+	bra.b	.2
+.1	bsr.b	stopQuadraScopeTask
+.2
+	tst.b	prefsdata+prefs_quadraScopeF(a5)
+	beq.b	.3
+	bsr.w	startQuadraScopeFTask
+	bra.b	.4
+.3	bsr.w	stopQuadraScopeFTask	
+.4
+	tst.b	prefsdata+prefs_hippoScope(a5)
+	beq.b	.5
+	bsr.w	startHippoScopeTask
+	bra.b	.6
+.5	bsr.w	stopHippoScopeTask	
+.6
+	tst.b	prefsdata+prefs_patternScope(a5)
+	beq.b	.7
+	bsr.w	startPatternScopeTask
+	bra.b	.8
+.7	bsr.w	stopPatternScopeTask	
+.8
+	tst.b	prefsdata+prefs_spectrumScope(a5)
+	beq.b	.9
+	bsr.w	startSpectrumScopeTask
+	bra.b	.10
+.9	bsr.w	stopSpectrumScopeTask	
+.10
 	rts
 
 startQuadraScopeTask
 	DPRINT	"startQuadraScopeTask"
 	lea	quadraScopeTaskDefinition(pc),a4
-	bra.b	startScopeTask
-startQuadraScopeFTask
-	DPRINT	"startQuadraScopeFTask"
-	lea	quadraScopeFTaskDefinition(pc),a4
-	bra.b	startScopeTask
-startHippoScopeTask
-	DPRINT	"startHippoScopeTask"
-	lea	hippoScopeTaskDefinition(pc),a4
+	;move	#pf_samplescope,d7
 	bra.w	startScopeTask
-startPatternScopeTask
-	DPRINT	"startPatternScopeTask"
-	lea	patternScopeTaskDefinition(pc),a4
-	bra.w	startScopeTask
-startSpectrumScopeTask
-	DPRINT	"startSpectrumScopeTask"
-	lea	spectrumScopeTaskDefinition(pc),a4
-	bra.w	startScopeTask
-		
 
 stopQuadraScopeTask
 	DPRINT	"stopQuadraScopeTask"
 	lea	quadraScopeTaskDefinition(pc),a4
 	bra.w	stopScopeTask
+
+restartQuadraScopeTask
+	tst.b	quadraScopeRunning(a5)
+	beq.b	.x
+	bsr.b	stopQuadraScopeTask
+	bsr.b	startQuadraScopeTask
+.x	rts	
+
+startQuadraScopeFTask
+	DPRINT	"startQuadraScopeFTask"
+	lea	quadraScopeFTaskDefinition(pc),a4
+	bra.w	startScopeTask
+
 stopQuadraScopeFTask
 	DPRINT	"stopQuadraScopeFTask"
 	lea	quadraScopeFTaskDefinition(pc),a4
 	bra.w	stopScopeTask
+
+restartQuadraScopeFTask
+	tst.b	quadraScopeFRunning(a5)
+	beq.b	.x
+	bsr.b	stopQuadraScopeFTask
+	bsr.b	startQuadraScopeFTask
+.x	rts	
+
+startHippoScopeTask
+	DPRINT	"startHippoScopeTask"
+	lea	hippoScopeTaskDefinition(pc),a4
+	bra.w	startScopeTask
+
 stopHippoScopeTask
 	DPRINT	"stopHippoScopeTask"
 	lea	hippoScopeTaskDefinition(pc),a4
-	bra.b	stopScopeTask
-stopPatternScopeTask
-	DPRINT	"stopPATTENRScopeTask"
+	bra.w	stopScopeTask
+
+restartHippoScopeTask
+	tst.b	hippoScopeRunning(a5)
+	beq.b	.x
+	bsr.b	stopHippoScopeTask
+	bsr.b	startHippoScopeTask
+.x	rts	
+
+startPatternScopeTask
+	DPRINT	"startPatternScopeTask"
+	printt "todo todo, load minifont"
 	lea	patternScopeTaskDefinition(pc),a4
-	bra.b	stopScopeTask
+	bra.w	startScopeTask
+
+stopPatternScopeTask
+	DPRINT	"stopPatternScopeTask"
+	lea	patternScopeTaskDefinition(pc),a4
+	bra.w	stopScopeTask
+
+restartPatternScopeTask
+	tst.b	patternScopeRunning(a5)
+	beq.b	.x
+	bsr.b	stopPatternScopeTask
+	bsr.b	startPatternScopeTask
+.x	rts	
+
+startSpectrumScopeTask
+	DPRINT	"startSpectrumScopeTask"
+	printt "todo todo load math libs"
+	lea	spectrumScopeTaskDefinition(pc),a4
+	bra.w	startScopeTask
+		
 stopSpectrumScopeTask
 	DPRINT	"stopSpectrumScopeTask"
 	lea	spectrumScopeTaskDefinition(pc),a4
 	bra.b	stopScopeTask
+
+restartSpectrumScopeTask
+	tst.b	spectrumScopeRunning(a5)
+	beq.b	.x
+	bsr.b	stopSpectrumScopeTask
+	bsr.b	startSpectrumScopeTask
+.x	rts	
 
 stopScopeTasks
 	DPRINT	"stopScopeTasks"
 	bsr.w	stopQuadraScopeTask
 	bsr.w	stopQuadraScopeFTask
 	bsr.w	stopHippoScopeTask
-	bsr.b	stopPatternScopeTask
-	bsr.b	stopSpectrumScopeTask
-	rts
+	bsr.w	stopPatternScopeTask
+	bra	stopSpectrumScopeTask
 
 stopScopeTask
 	* Check irunning already
@@ -22182,10 +22295,65 @@ stopScopeTask
 	move.b	#RUNNING_SHUT_IT,(a5,d7)
 .loop
 	tst.b 	(a5,d7)
-	beq.b	.x
+	beq.b	.z
 	jsr	smallDelay
 	bra.b	.loop
-.x
+.z
+
+.x	rts
+
+
+toggleScopes
+	lea	.toggle(pc),a2
+	moveq	#0,d0
+	or.b	quadraScopeRunning(a5),d0
+	or.b	quadraScopeFRunning(a5),d0
+	or.b	hippoScopeRunning(a5),d0
+	or.b	patternScopeRunning(a5),d0
+	or.b	spectrumScopeRunning(a5),d0
+	beq.b	.start
+	move.b	quadraScopeRunning(a5),(a2)+
+	move.b	quadraScopeFRunning(a5),(a2)+
+	move.b	hippoScopeRunning(a5),(a2)+
+	move.b	patternScopeRunning(a5),(a2)+
+	move.b	spectrumScopeRunning(a5),(a2)+
+	bsr	stopScopeTasks
+	rts
+
+.start
+	tst.b	(a2)+
+	beq.b	.a
+	bsr	startQuadraScopeTask
+.a	tst.b	(a2)+
+	beq.b	.b
+	bsr	startQuadraScopeFTask
+.b	tst.b	(a2)+
+	beq.b	.c
+	bsr	startHippoScopeTask
+.c	tst.b	(a2)+
+	beq.b	.d
+	bsr	startPatternScopeTask
+.d	tst.b	(a2)+
+	beq.b	.e
+	bsr	startSpectrumScopeTask
+.e
+	bsr	updateScopeStatusesToPrefs
+	bsr	updateprefs
+	rts
+
+.toggle	ds.b	6
+
+updateScopeStatusesToPrefs
+	tst.b	quadraScopeRunning(a5)
+	sne	prefsdata+prefs_quadraScope(a5)
+	tst.b	quadraScopeFRunning(a5)
+	sne	prefsdata+prefs_quadraScopeF(a5)
+	tst.b	hippoScopeRunning(a5)
+	sne	prefsdata+prefs_hippoScope(a5)
+	tst.b	patternScopeRunning(a5)
+	sne	prefsdata+prefs_patternScope(a5)
+	tst.b	spectrumScopeRunning(a5)
+	sne	prefsdata+prefs_spectrumScope(a5)
 	rts
 
 
@@ -22287,28 +22455,53 @@ SDPRINT macro
 quadraScopeEntry
 	move	#quadraScopeRunning,d6
 	moveq	#QUADMODE_QUADRASCOPE,d7
-	bra.b	scopeEntry
+	printt "Todo TODO bars toggle"
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_quadraScopePos(a5),a2
+	bra.w	scopeEntry
+
+.t	dc.b	"QuadraScope",0
+ even
 
 quadraScopeFEntry
 	move	#quadraScopeFRunning,d6
 	moveq	#QUADMODE_FQUADRASCOPE,d7
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_quadraScopeFPos(a5),a2
 	bra.b	scopeEntry
+
+.t	dc.b	"Filled QuadraScope",0
+ even
 
 hippoScopeEntry
 	move	#hippoScopeRunning,d6
 	moveq	#QUADMODE_HIPPOSCOPE,d7
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_hippoScopePos(a5),a2
 	bra.b	scopeEntry
+
+.t	dc.b	"HippoScope",0
+ even
 
 patternScopeEntry
 	move	#patternScopeRunning,d6
 	moveq	#QUADMODE_PATTERNSCOPE,d7
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_patternScopePos(a5),a2
 	bra.b	scopeEntry
 
+.t	dc.b	"PatternScope",0
+ even
 
 spectrumScopeEntry
 	move	#spectrumScopeRunning,d6
 	moveq	#QUADMODE_FREQANALYZER,d7
-;	bra.w	scopeEntry
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_spectrumScopePos(a5),a2
+	bra.b	scopeEntry
+
+.t	dc.b	"SpectrumScope",0
+ even
 
 scopeEntry:
 quad_code:
@@ -22327,22 +22520,19 @@ quad_code:
 	move.l	d0,a4
 	move.l	a5,s_global(a4)
 
+	* Store address for the running status flag to check and pass shutdown info
 	pea	(a5,d6)
-	;pea	quadraScopeRunning(a5)
-	
 	move.l	(sp)+,s_runningStatusAddr(a4)
+	* Store requested operating mode
 	move.b	d7,s_quadmode(a4)
+	* Store window position on exit to this address
+	move.l	a2,s_storedPositionAddr(a4)
+	* Window title should be set to this
+	move.l	a3,s_windowTitle(a4)
 
 	sub.l	a1,a1
 	lore	Exec,FindTask
 	move.l	d0,s_quad_task(a4)
-	;move.l	d0,quad_task(a5)
-	;addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
-
-;	move.l	d0,a0
-;	move.l	TC_Userdata(a0),a0
-;	move.l	(a0),s_runningStatusAddr(a4)
-;	move.b	4(a0),s_quadmode(a4)
 
 
 
@@ -22507,11 +22697,10 @@ quad_code:
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc3,a0
+
 	* Restore top/left to some previous used value
-	
-	; TODO
-	printt "todot odo"
-	;move.l	quadpos(a5),(a0)
+	move.l	s_storedPositionAddr(a4),a1
+	move.l	(a1),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
 	add	s_scopeDrawAreaHeight(a4),d0
@@ -22547,9 +22736,7 @@ quad_code:
 	move.l	wd_RPort(a0),s_rastport3(a4)
 	move.l	wd_UserPort(a0),s_userport3(a4)
 	
-	* Set window title based on task name
-	move.l	s_quad_task(a4),a1
-	move.l	LN_NAME(a1),a1
+	move.l	s_windowTitle(a4),a1
 	lea	scrtit,a2
 	lore	Intui,SetWindowTitles
 	
@@ -22760,8 +22947,9 @@ qexit:
 	move.l	s_scopeWindowBase(a4),d0
 	beq.b	.uh1
 	move.l	d0,a0
-	printt "todo todo to"
-	;move.l	4(a0),quadpos(a5)	* koordinaatit talteen
+	* Store last window position
+	move.l	s_storedPositionAddr(a4),a1
+	move.l	4(a0),(a1)
 	lob	CloseWindow
 	clr.l	s_scopeWindowBase(a4)
 .uh1
@@ -22772,27 +22960,28 @@ qexit:
 	* Dangerous exit procedures!	
 	lore	Exec,Forbid
 
-	* display prefs? Update as scope status changes
-	cmp	#1,prefsivu(a5)		
-	bne.b	.reer
-	* This will Signal() which will not much of anything when Forbid()den
-	bsr.w	updateprefs
-.reer
-
 	* Not running anymore
 	move.l	s_runningStatusAddr(a4),a0
 	clr.b	(a0)
 
-	move.l	s_quad_task(a4),a1
-	
+	* Is prefs displayed? Update as scope status changes
+	bsr.w	updateScopeStatusesToPrefs
+	cmp	#1,prefsivu(a5)		
+	bne.b	.x
+	* This will Signal()
+	bsr.w	updateprefs
+.x
+
+	move.l	s_quad_task(a4),a2
+
 	* Free local data. a4 invalid after this
 	move.l	a4,a0
 	jsr	freemem
 
-	* Free task stack. Is this safe, maybe.
+	* Free task stack. Is this safe, maybe?
 	* No mem alloc is done below or by any other
 	* task since Forbid()den.
-	move.l	TC_SPLOWER(a1),a0
+	move.l	TC_SPLOWER(a2),a0
 	jsr	freemem
 
 	* Remove self 
@@ -46704,7 +46893,8 @@ quadsiz	dc	340,85
 	dc.l	wflags3
 	dc.l	0
 	dc.l	0	
-quadtitl dc.l	.t
+;quadtitl
+	dc.l	.t
 	dc.l	0
 	dc.l	0	
 	dc	0,0	* min x,y
