@@ -2988,13 +2988,6 @@ lelp
 
 	bsr.w	init_inputhandler
 	bsr.w	init_screennotify
-
-	printt	 "todo todo"
-;	tst.b	quadon(a5)			* avataanko scope?
-;	beq.b	.q
-;	DPRINT	"Starting scope"
-;	jsr	start_quad
-;.q
 	jsr	startAndStopScopeTasks
 
 	tst.b	infoon(a5)
@@ -3247,13 +3240,8 @@ msgloop
 	bsr.w	avaa_ikkuna2
 	bne.w	exit
 .bar2
-	printt "todo todo"
-;	tst	quad_prosessi(a5)
-;	beq.b	.qer
-;	jsr	sulje_quad
-;	jsr	start_quad
-;.qer	
-
+	jsr	stopScopeTasks
+	jsr	startAndStopScopeTasks
 
 	tst	info_prosessi(a5)
 	beq.w	returnmsg
@@ -6272,12 +6260,7 @@ buttonspressed
 	bhi.b	.y
 
 ** toggle scope with rmb when on top of suitable place
-	printt "todo todo"
-;	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-;	bne.b	.rew
-;	jsr	start_quad		
-;	rts
-;.rew	jsr	sulje_quad		* suljetaan jos oli auki
+	jsr	toggleScopes
 
 .handled
 	rts
@@ -8115,13 +8098,7 @@ nappuloita
 
 
 .scopetoggle
-	printt	"todo todo"
-	DPRINT	"key scope toggle"
 	jmp	toggleScopes
-;	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-;	beq.b	.startQ		
-;	jmp	sulje_quad		* suljetaan jos oli auki
-;.startQ	jmp	start_quad
 
 .pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikan‰pp‰imet
 .pm0	st	hippoonbox(a5)
@@ -22633,11 +22610,6 @@ scopeEntry:
 	clr.l	s_deltab1(a4)
   endif
 
-	printt "tokpkopdo"
-	; TODO: input params
-;	move.b	#0,s_quadmode(a4)	
-	;move.b	quadmode(a5),s_quadmode(a4)
-
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,s_scopeDrawAreaWidth(a4) 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
 	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
@@ -23039,9 +23011,6 @@ qexit:
 	move.l	s_scopeWindowBase(a4),d0
 	beq.b	.uh1
 	move.l	d0,a0
-	* Store last window position
-	move.l	s_storedPositionAddr(a4),a1
-	move.l	4(a0),(a1)
 	lob	CloseWindow
 	clr.l	s_scopeWindowBase(a4)
 .uh1
@@ -23772,7 +23741,7 @@ voltab3
 * Scope draw
 **************************************************************************
 
-drawScope
+drawScope:
 
 	* See if the whole drawing phase can be skipped
 	bsr	patternScopeIsActive
@@ -23883,10 +23852,11 @@ drawScope
 	bra.w	.cont
 .5	bsr.w	freqscope
 	bra.w	.cont
-.6	pushm	all
+.6	
 	bsr.w	freqscope
+	;lore	GFX,WaitBlit
+	;lob	DisownBlitter
 	bsr.w	lever2
-	popm	all
 	bra.b	.cont
 
 .7	* Protracker specific notescroller launch
@@ -23900,7 +23870,7 @@ drawScope
 	bra.b	.cont
 .9	bsr.w	quadrascope
 	bsr.w	mirrorfill2
-	lob	WaitBlit
+	lore	GFX,WaitBlit
 	lob	DisownBlitter
 	bsr.w	lever * extra gfx drawn, must wait until fill done
 	bra.b	.cont
