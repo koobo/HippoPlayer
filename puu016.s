@@ -23782,7 +23782,7 @@ drawScope:
 
 	lob	DisownBlitter
 
-	bsr	.render
+	bsr.w	.render
 
 	* scope processed, deliver unto screen
 
@@ -23853,19 +23853,21 @@ drawScope:
 .render
 	cmp	#pt_sample,playertype(a5)
 	beq.w	.renderSample
-	cmp	#pt_multi,playertype(a5)
-	beq.w	.renderPS3M
 
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
 	add	d0,d0
 
+	cmp	#pt_multi,playertype(a5)
+	beq.w	.renderPS3M
+
 ;	* Check for generic quadscope support
-;	move.l	playerbase(a5),a0
-;	move	#pf_quadscopeUps!pf_quadscopePoke,d1
-;	and	p_liput(a0),d1
-;	beq	.other
-;	;beq	.cont
+	move.l	playerbase(a5),a0
+	move	#pf_quadscopeUps!pf_quadscopePoke,d1
+	and	p_liput(a0),d1
+	bne.b	.doit
+	rts
+.doit
 
 	* Protracker scope
 	* .. or similarly working others
@@ -23892,11 +23894,13 @@ drawScope:
 .4	bsr	lever
 .2	bra	hipposcope
 
-.5	bra	freqscope
+.5	
+	bra	freqscope
 
-.6	bsr.w	freqscope
+.6
+	bsr.w	freqscope
 	lore	GFX,WaitBlit
-	bra	lever2
+	bra	lever
 
 .7	* Protracker specific notescroller launch
 	cmp	#pt_prot,playertype(a5)
@@ -23913,46 +23917,44 @@ drawScope:
 	lore	GFX,WaitBlit
 	bra	lever * extra gfx drawn, must wait until fill done
 
-.other
-	* Fallback option!
-	* Display notescroller if possible.
-	* Non-Protracker formats.
-	tst.l	deliPatternInfo(a5)
-	beq.b	.cont
-	bsr	noteScroller2
-.cont
-	rts
+;.other
+;	* Fallback option!
+;	* Display notescroller if possible.
+;	* Non-Protracker formats.
+;	tst.l	deliPatternInfo(a5)
+;	beq.b	.cont
+;	bsr	noteScroller2
+;.cont
+;	rts
 
 
 * Sample scope
 .renderSample
-	
 	* Get normal scope area
 	bsr	requestNormalScopeDrawArea
-	bne.w	.skippi * wait for resize
+	bne.b	.sampleSkip * wait for resize
 
 	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
 	beq.b	.fil
 	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,s_quadmode2(a4)	
 	beq.b	.fil
 	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
-	beq.b	.sampleFr
+	beq.w	freqscope
 	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
-	beq.b	.sampleFr
+	beq.w	freqscope
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
+	beq.b	.sampleSkip
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)	
+	beq.b	.sampleSkip
+	* Default
 	bsr.w	samplescope
-	rts
-.sampleFr
-	bsr.w	freqscope
+.sampleSkip
 	rts
 .fil
 	bsr.w	samplescopefilled
-	bsr.w	mirrorfill
-	rts
+	bra	mirrorfill
 
 .renderPS3M
-	moveq	#0,d0
-	move.b	s_quadmode2(a4),d0
-	add	d0,d0
 
 	* PS3M scope
 	* multichannel jump table
@@ -24149,7 +24151,7 @@ quadrascope:
 	rts
 
 .jolt	
-
+	
 	move.l	d0,a1 * start
 	move.l	d1,a6 * loopstart
 	move	d2,d5 * len
@@ -25522,25 +25524,7 @@ notescroller:
 
 *******************************************************************
 
-
 ********** Palkit
-lever2
-	lea	scopeData+scope_ch1(a5),a3
-	move.l	s_draw1(a4),a0
-	bsr.b	dlever
-	lea	scopeData+scope_ch4(a5),a3
-	move.l	s_draw1(a4),a0
-	lea	10(a0),a0
-	bsr.b	dlever
-	lea	scopeData+scope_ch2(a5),a3
-	move.l	s_draw1(a4),a0
-	lea	20(a0),a0
-	bsr.b	dlever
-	lea	scopeData+scope_ch3(a5),a3
-	move.l	s_draw1(a4),a0
-	lea	30(a0),a0
-	bsr.b	dlever
-	rts
 
 lever
 	lea	scopeData+scope_ch1(a5),a3
@@ -25548,7 +25532,7 @@ lever
 	moveq	#0,d3
 	move.l	s_draw1(a4),a2
 .l	move.l	a2,a0
-	bsr.b	dlever
+	bsr.b	.dlever
 	lea	10(a2),a2
 	lea	ns_size(a3),a3
 	dbf	d2,.l
@@ -25556,7 +25540,7 @@ lever
 	
 
 * 907-108
-dlever
+.dlever
 	cmp	#2,ns_length(a3)
 	bls.b	.h
 	moveq	#0,d1
@@ -43974,10 +43958,10 @@ deliInit:
 
 	move.l	#EP_PatternInit,d0  
 	bsr.w	deliGetTag
-;	beq.b	.noPattInit
+	beq.b	.noPattInit
 	bsr.w	deliCallFunc
 	move.l	a0,deliPatternInfo(a5)
-;.noPattInit
+.noPattInit
 
 	move.l	#EP_Flags,d0
 	bsr.w	deliGetTag
