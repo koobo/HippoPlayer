@@ -23494,8 +23494,26 @@ scopeinterrupt:				* a5 = var_b
 	lsr	#1,d0
 	sub	d0,ns_length(a0)
 	bpl.b	.plu
+
+	* Negative overrun
+	move	ns_length(a0),d0
+	ext.l	d0
+	* safety check
+	move	ns_replen(a0),d2
+	bne.b	.nz
+	moveq	#1,d2
+.nz
+	* Modulo with respect to the replen
+	divs	d2,d0
+	swap	d0
+	ext.l	d0
+	* Adjust replen according to overrun, words
 	move	ns_replen(a0),ns_length(a0)
+	add	d0,ns_length(a0)	
+	* Adjust loopstart, bytes
 	move.l	ns_loopstart(a0),ns_start(a0)
+	add.l	d0,d0
+	sub.l	d0,ns_start(a0)
 .plu	
 	lea	ns_size(a0),a0
 	dbf	d1,.le
