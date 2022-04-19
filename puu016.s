@@ -68,17 +68,13 @@ PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
 MAX_MODULES		= $1ffff 		    * this should be enough!
 
 
-;; Random play related
-;;RANDOM_PLAY_TABLE_SIZE  = MAX_MODULES/8+1
-;;MAX_RANDOM_MASK 	= $ffff 	* output mask for the random generator
 	
-	
- ifne TARK
- ifeq asm
- printt "Onko CHECKSUMMI oikea? Molemmat!"
- printt "Onko CHECKSUMMI oikea?"
- endc
- endc
+ ;ifne TARK
+ ;ifeq asm
+ ;printt "Onko CHECKSUMMI oikea? Molemmat!"
+ ;printt "Onko CHECKSUMMI oikea?"
+ ;endc
+ ;endc
  
 
 WINX	= 2	* X ja Y lisäykset pääikkunan grafiikkaan
@@ -274,7 +270,7 @@ prefs_s3mrate		rs.l	1
 prefs_mainpos1		rs.l	1
 prefs_mainpos2		rs.l	1
 prefs_prefspos		rs.l	1
-prefs_quadpos		rs.l	1
+Xprefs_quadpos		rs.l	1
 			rs	1
 prefs_alarm		rs	1
 prefs_moddir		rs.b	150
@@ -558,7 +554,7 @@ infopos2	rs	2		* sampleikkunan ja sidinfon paikka
 
 screenaddr	rs.l	1		* Näytön osoite
 windowpos_p	rs	2		* Prefs ikkunan paikka
-quadpos		rs	2		* Quad-ikkunan paikka
+Xquadpos		rs	2		* Quad-ikkunan paikka
 wbkorkeus	rs	1		* Workbench näytön korkeus
 wbleveys	rs	1
 prefs_prosessi	rs	1		* ei-0: Prefs-prosessi päällä
@@ -640,15 +636,17 @@ taskHippoScope		     rs.b TC_SIZE
 taskSpectrumScope	     rs.b TC_SIZE
 taskPatternScope         rs.b  TC_SIZE
 
+* Status for scope tasks:
 RUNNING_NOT       = 0
 RUNNING_YES       = 1
+* Request scope shutdown
 RUNNING_SHUT_IT   = $80
 quadraScopeRunning	     rs.b 1
 quadraScopeFRunning rs.b 1
 hippoScopeRunning        rs.b 1
 patternScopeRunning      rs.b 1
 spectrumScopeRunning     rs.b 1
-                         rs.b 1 * pad
+scopeToggleTable         rs.b 5 * Used by toggleScopes()
 
  REM ;;;;;; REMOVED 
 draw1		rs.l	1
@@ -759,7 +757,7 @@ s3mmode2_new	rs.b	1
 s3mmode3_new	rs.b	1
 stereofactor_new rs.b	1
 div_new		rs.b	1
-quadmode_new	rs.b	1
+Xquadmode_new	rs.b	1
 moduledir_new	rs.b	150
 prgdir_new	rs.b	150
 arcdir_new	rs.b	150
@@ -11737,8 +11735,8 @@ loadprefs2
 	move	#23,windowpos2+2(a5)
 	move	#42,windowpos_p(a5)
 	move	#18,windowpos_p+2(a5)
-	move	#259,quadpos(a5)
-	move	#157,quadpos+2(a5)
+	;move	#259,quadpos(a5)
+	;move	#157,quadpos+2(a5)
 	bsr.w	aseta_vakiot
 
 	pop	d1
@@ -11781,12 +11779,12 @@ loadprefs2
 	move.b	prefs_s3mmode1(a0),s3mmode1(a5)
 	move.b	prefs_s3mmode2(a0),s3mmode2(a5)
 	move.b	prefs_s3mmode3(a0),s3mmode3(a5)
-	printt "todo todo"
+	
 	;move.b	prefs_quadmode(a0),quadmode(a5)
 	move.l	prefs_mainpos1(a0),windowpos(a5)
 	move.l	prefs_mainpos2(a0),windowpos2(a5)
 	move.l	prefs_prefspos(a0),windowpos_p(a5)
-	move.l	prefs_quadpos(a0),quadpos(a5)
+	;move.l	prefs_quadpos(a0),quadpos(a5)
 	;move.b	prefs_quadon(a0),quadon(a5)
 	move.b	prefs_ptmix(a0),ptmix(a5)
 	move.b	prefs_xpkid(a0),xpkid(a5)
@@ -12072,23 +12070,9 @@ saveprefs
 	move.l	4(a0),windowpos_p(a5)
 .g	
 
-;	clr.b	prefs_quadon+prefsdata(a5)
-;	tst.b	scopeflag(a5)
-;	beq.b	.kk
-;	st	prefs_quadon+prefsdata(a5)
-;.kk
-	printt	"TODO TODO"
-
 	tst	info_prosessi(a5)
 	sne	prefs_infoon+prefsdata(a5)
 
-	printt	"TODO TODO"
-;	move.l	scopeWindowBase(a5),d0
-;	beq.b	.k
-;	move.l	d0,a0
-;	move.l	4(a0),quadpos(a5)
-;	st	prefs_quadon+prefsdata(a5)
-;.k
 	move.l	swindowbase(a5),d0
 	beq.b	.gg
 	move.l	d0,a0
@@ -12112,7 +12096,7 @@ saveprefs
 	move.l	windowpos(a5),prefs_mainpos1(a0)
 	move.l	windowpos2(a5),prefs_mainpos2(a0)
 	move.l	windowpos_p(a5),prefs_prefspos(a0)
-	move.l	quadpos(a5),prefs_quadpos(a0)
+	;move.l	quadpos(a5),prefs_quadpos(a0)
 	move.b	ptmix(a5),prefs_ptmix(a0)
 	move.b	xpkid(a5),prefs_xpkid(a0)
 	move.b	fade(a5),prefs_fade(a0)
@@ -14177,128 +14161,6 @@ pSpectrumScopeBars
 	lea	prefsSpectrumScopeBars,a0
 	bra.w	tickaa
 	
- REM ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-rquad
-	printt	"todo todo"	
-;	tst	quad_prosessi(a5)	* jos ei ollu, päälle
-;	beq.b	.s
-;	bsr.w	sulje_quad		* suljetaan jos oli auki
-;	rts
-;
-;.s	bsr.w	start_quad
-
-;psup0
-;	tst	quad_prosessi(a5)
-;	sne	d0
-;	lea	pout2,a0
-;	bra.w	tickaa
-
-
-rquadm_req
-	lea	ls00(pc),a0
-	bsr.w	listselector
-	bmi.b	.x
-	move.b	quadmode_new(a5),d1
-	and.b	#$80,d1
-	or.b	d1,d0
-	move.b	d0,quadmode_new(a5)
-	move.b	d0,quadmode(a5)
-	bsr.b	psup3
-	bra.w	quadu
-
-.x	rts
-
-rquadm
-	move.b	quadmode_new(a5),d0
-	move.b	d0,d1
-	and.b	#$f,d0
-	and.b	#$80,d1
-
-	addq.b	#1,d0
-	cmp.b	#5,d0
-	ble.b	.k
-	clr.b	d0
-.k	or.b	d1,d0
-	move.b	d0,quadmode_new(a5)
-	move.b	d0,quadmode(a5)			* vaikutus suoraan
-
-psup3	
-	lea	ls01(pc),a0
-	moveq	#$f,d0
-	and.b	quadmode_new(a5),d0
-	beq.b	.q
-	lea	ls02(pc),a0
-	subq.b	#1,d0
-	beq.b	.q
-	lea	ls03(pc),a0
-	subq.b	#1,d0
-	beq.b	.q
-	lea	ls04(pc),a0
-	subq.b	#1,d0
-	beq.b	.q
-	lea	ls05(pc),a0
-	subq.b	#1,d0
-	beq.b	.q
-	lea	ls06(pc),a0
-.q
-	lea	pout3,a1
-	bsr.w	prunt
-	bra.b	quadu
-
-ls00	dc.b	14,6
-titleQuadraScope
-ls01	dc.b	"Quadrascope",0
-titleHippoScope
-ls02	dc.b	"Hipposcope",0
-ls03	
-  ifne FEATURE_FREQSCOPE
-	dc.b	"Freq. analyzer"
-  endif
-  ifne FEATURE_SPECTRUMSCOPE
-titleSpectrumScope
-	dc.b    "Freq. spectrum"
-  endif
-	dc.b  0
-
-titlePatternScope  
-ls04	dc.b	"Patternscope",0
-titleQuadraScopeF
-ls05	dc.b	"F. Quadrascope",0
-titlePatternScopeXL
-ls06	dc.b	"PatternscopeXL",0
- even
- EREM ;;;;;;;;;;;;;;;;
-
-
- REM
-
-rscopebar
-	eor.b	#$80,quadmode_new(a5)
-	move.b	quadmode_new(a5),quadmode(a5)
-
-pscopebar
-	tst.b	quadmode_new(a5)
-	smi	d0
-	lea	pout3b,a0
-	bsr.w	tickaa
- EREM
-
-
-;quadu:
-;	tst	quad_prosessi(a5)
-;	beq.b	.noq
-;	move.b	quadmode_new(a5),quadmode(a5)
-;	move.b	quadmode(a5),d0
-;	cmp.b	scopechanged(a5),d0
-;	beq.b	.noq
-;	move.b	d0,scopechanged(a5)
-;	bsr.w	sulje_quad
-;	bsr.w	start_quad
-;.noq	rts
-
-
-
 
 ** Mixingrate S3M
 rpslider1
@@ -21687,7 +21549,7 @@ rexxmessage
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.1
 	move.l	chosenmodule(a5),d0
-	bsr		toggleFavoriteStatus
+	bsr	toggleFavoriteStatus
 	beq.b	.1
 	bsr	forceRefreshList
 .1	rts
@@ -22030,10 +21892,10 @@ CLAMPVOL macro
 
 * Structure to help task starting and stopping
     STRUCTURE ScopeTaskDefinition,0
-        UWORD st_runningStatusOffset
-        UWORD st_prefsStatusOffset
-        UWORD st_taskOffset
-        APTR st_entryPoint
+        UWORD st_runningStatusOffset * Relative to a5
+        UWORD st_prefsStatusOffset * Relative to a5+prefsdata
+        UWORD st_taskOffset * Relative to a5
+        APTR st_entryPoint * Code start address
     LABEL ScopeTaskDefinition_SIZEOF
 
 quadraScopeTaskDefinition
@@ -22065,7 +21927,6 @@ spectrumScopeTaskDefinition
 	dc.w	prefs_spectrumScope
 	dc.w	taskSpectrumScope
 	dc.l	spectrumScopeEntry
-
 
 
 * In:
@@ -22141,6 +22002,7 @@ startScopeTask:
 	sub.l a3,a3		 
 	lore	Exec,AddTask
 
+	* Update prefs status as well
 	move	st_prefsStatusOffset(a4),d0
 	lea	prefsdata(a5),a0
 	st	(a0,d0)
@@ -22300,7 +22162,7 @@ stopScopeTasks
 	bra	stopSpectrumScopeTask
 
 stopScopeTask
-	* Check irunning already
+	* Check if running already
 	move	st_runningStatusOffset(a4),d7
 	tst.b 	(a5,d7)
 	beq.b	.x
@@ -22328,7 +22190,8 @@ stopScopeTask
 
 
 toggleScopes
-	lea	.toggle(pc),a2
+	lea	scopeToggleTable(a5),a2
+	* Is any scope running?
 	moveq	#0,d0
 	or.b	quadraScopeRunning(a5),d0
 	or.b	quadraScopeFRunning(a5),d0
@@ -22336,25 +22199,25 @@ toggleScopes
 	or.b	patternScopeRunning(a5),d0
 	or.b	spectrumScopeRunning(a5),d0
 	beq.b	.start
+	* Preserve running statuses and stop all
 	move.b	quadraScopeRunning(a5),(a2)+
 	move.b	quadraScopeFRunning(a5),(a2)+
 	move.b	hippoScopeRunning(a5),(a2)+
 	move.b	patternScopeRunning(a5),(a2)+
 	move.b	spectrumScopeRunning(a5),(a2)+
-	bsr	stopScopeTasks
-	rts
-
+	bra.w	stopScopeTasks
+	
 .start
 	* Start scopes that were toggled off.
 	* If none were toggled off, start the default
-	* one.
+	* one. Test 5 bytes:
 	tst.l	(a2)
 	bne.b	.some
 	tst.b	4(a2)
 	bne.b	.some
+	* Enable the 1st one if all are off
 	st	(a2)
 .some
-
 	tst.b	(a2)+
 	beq.b	.a
 	bsr	startQuadraScopeTask
@@ -22371,11 +22234,10 @@ toggleScopes
 	beq.b	.e
 	bsr	startSpectrumScopeTask
 .e
+	* Make prefs window show the correct status
 	bsr	updateScopeStatusesToPrefs
-	bsr	updateprefs
-	rts
+	bra	updateprefs
 
-.toggle	ds.b	6
 
 updateScopeStatusesToPrefs
 	tst.b	quadraScopeRunning(a5)
@@ -22390,63 +22252,6 @@ updateScopeStatusesToPrefs
 	sne	prefsdata+prefs_spectrumScope(a5)
 	rts
 
-
-* Käynnistys
-;start_quad
-;	st	scopeflag(a5)
-;start_quad2
-
-	;move.l	a6,-(sp)
-	;move.l	_DosBase(a5),a6
-	;pushpea	.prn(pc),d1
-	;moveq	#0,d2			* pri
-	;move.l	#quad_segment,d3
-	;lsr.l	#2,d3
-	;move.l	#3000,d4
-	;lob	CreateProc
-	;tst.l	d0
-	;beq.b	.error
-
-;	bsr	startQuadraScopeTask	
-	;addq	#1,quad_prosessi(a5)
-
-;	bsr.w	updateprefs
-
-;.error	
-	;move.l	(sp)+,a6
-;	rts
-
-;.prn	dc.b	"HiP-Scope",0
-; even
-; 
-* Sammutus
-
-;sulje_quad:
-;	;clr.b	scopeflag(a5)
-;sulje_quad2
-;	DPRINT	"->sulje_quad"
-;
-;	bsr	stopScopeTasks
-;	bsr	stopQuadraScopeTask
-
-;	push	a6
-;	tst	quad_prosessi(a5)
-;	beq.b	.tt	
-;
-;	printt "todo todododo"
-;	;move.l	quad_task(a5),a1
-;	;moveq	#0,d0
-;	;lore	Exec,SetTaskPri
-;
-;	st	tapa_quad(a5)		* lippu: poistu!
-;.t	tst	quad_prosessi(a5)	* odotellaan
-;	beq.b	.tt
-;	jsr	dela
-;	bra.b	.t
-;.tt	clr.b	tapa_quad(a5)
-;	pop	a6
-;	DPRINT	"<-sulje_quad"
-;	rts
 
 *******************************************************************************
 * Scoperutiinit
@@ -22478,13 +22283,14 @@ SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
 
 * If more channels than defined here,
 * switch to small font.
-;SCOPE_SMALL_FONT_CHANNEL_LIMIT = 4
 SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 
 ; DPRINT cant be used as scope is now a task
 SDPRINT macro
 
 	endm
+
+* Scope task entry points:
 
 quadraScopeEntry
 	lea	var_b,a5
@@ -22562,6 +22368,7 @@ spectrumScopeEntry
 .t	dc.b	"SpectrumScope",0
  even
 
+* Main scope task entry point
 * In:
 *   d6 = Offset to scope running flag 
 *   d7 = operating mode
@@ -22596,10 +22403,7 @@ scopeEntry:
 	lore	Exec,FindTask
 	move.l	d0,s_quad_task(a4)
 
-
-
-
-*** Multab scopeille
+* Modulo multab 
 	lea	s_multab(a4),a0
 	moveq	#0,d0
 .mu	move	d0,(a0)+
@@ -23534,8 +23338,6 @@ scopeinterrupt:				* a5 = var_b
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d1
 
-;	bra	.quadScopeSampleFollow
-
 	* Poke method:
 	btst	#pb_quadscopePoke,d1
 	bne.b	.quadScopeSampleFollow
@@ -23547,12 +23349,12 @@ scopeinterrupt:				* a5 = var_b
 	* UPS struct provided by eagle player?
 	move.l	deliUPSStruct(a5),d0
 	* Unnecessary check?
-	beq.b	.quadScopeSampleFollow
+	beq.w	.quadScopeSampleFollow
 
 
 	* Handle UPS, it will provide input for normal sample follow
 	bsr.b	.handleUPS
-	bra.b	.quadScopeSampleFollow
+	bra.w	.quadScopeSampleFollow
 
 .noScopes
 	* No scopes for u this time.
@@ -24279,7 +24081,6 @@ hipposcope:
 	move	ns_tempvol(a3),d0
 	CLAMPVOL d0
 	mulu	mainvolume(a5),d0
-;	lsr	#1,d0 ;;;;;;;;;;;;;;;;;
 	lsr	#6,d0
 	subq	#1,d0
 	bpl.b	.e
@@ -29168,11 +28969,11 @@ whag	tst.b	win(a5)
 
 	pushm	all
 
-	tst	d0
-	beq.b	.c
-	
-	move.l	playerbase(a5),a0
-	move	p_liput(a0),d7
+;	tst	d0
+;	beq.b	.c
+
+; In v2.50 and older scopes were shut down here if 
+; active player didn't support it. 
 
 * if usescope=1 then open scope if flag=1
 * else
@@ -29180,7 +28981,6 @@ whag	tst.b	win(a5)
 * else
 * clear flag
 
-	printt	"todo todo"
 ;	tst.b	scopeflag(a5)
 ;	beq.b	.c
 ;	btst	#pb_scope,d7
@@ -29194,7 +28994,7 @@ whag	tst.b	win(a5)
 ;	beq.b	.c
 ;	bsr.w	sulje_quad2
 
-.c
+;.c
 
 ;	tst.l	keyfile+40(a5)	* datan väliltä 38-50 pitää olla nollia
 ;	beq.b	.zz
@@ -32099,7 +31899,6 @@ p_protracker
 	lea	(a2,d2.l),a1
 
 ************************ OPT
-	printt	 Opti!
 
 	moveq	#1024/4/4-1,d2
 .look	
@@ -46441,7 +46240,7 @@ spectrumCopySamples
 	lea	scopeData+scope_ch4(a5),a3
 	move.l	s_spectrumChannel4(a6),a4
 	bsr.b	.copySample
-	pop		a4
+	pop	a4
 	rts
 
 * in
@@ -46483,16 +46282,14 @@ spectrumCopySamples
 .jolt	
 	cmp.l	#1024,d0
 	blo.b	.empty
-
+	
 	move.l	ns_loopstart(a3),d1
 	cmp.l	#1024,d1
 	blo.b	.empty
 
-	move.l	d0,a1				* Sample start
+	move.l	d0,a1			* Sample start
 	move	ns_length(a3),d5	* Sample length
 	move	ns_replen(a3),d0
-
-
 .d
 	; see if enough data to copy all in one block
 	cmp	#SAMPLE_LENGTH/2,d5
@@ -46613,12 +46410,11 @@ spectrumMixSamples
 
 	moveq	#0,d6
 	moveq	#0,d0
+	moveq	#MIX_LENGTH/2-1,d7
 	
 	* Copy or add?
 	tst	d4
 	beq.b	.add
-
-	moveq	#MIX_LENGTH/2-1,d7
 .m1
 	; move to buffer (first set)
 	rept	2
@@ -46638,9 +46434,7 @@ spectrumMixSamples
 	dbf	d7,.m1
 	rts
 .add
-
 ; add to buffer
-	moveq	#MIX_LENGTH/2-1,d7
 .m2
 	rept	2
 	; sample byte
