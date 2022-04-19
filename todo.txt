@@ -71,6 +71,8 @@ PATTERNINIT - EP
 
 
 TODO - 2022 April
+- new scope toggle: darkness.s3m, patternscope, 5ch, toggling makes pattscope window too big
++ sample scope support for StarTrekker
 + FIXED: fix kick 1.3 bevel borders
 + FIXED: mp3 IDv3 header skip
 + FIXED: quadrascope support for other playroutines
@@ -115,7 +117,7 @@ CRASH:
 --> didn't crash for me
 
 TODO:
-- hippel-coso sample scope support
++ hippel-coso sample scope support
 
 FIXED CRASH:
 - save state filebrowse into a VOLUME
@@ -135,7 +137,7 @@ Steps:
 - ahi_end  -> crash
 - Sampleplay: works
 
-TODO:
+FIXED? TODO:
 - PS3M: check if AHI enabled, skip all patternscope stuff
 
 CRASH?

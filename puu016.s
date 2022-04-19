@@ -39985,7 +39985,7 @@ p_startrekker
 	jmp 	.id(pc)
 	jmp	.author(pc)
 	dc.w 	pt_startrekker
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"StarTrekker AM",0
 .a 	dc.b "Bjoern Wesen/Exolon of Fairlight",0
  even
@@ -40079,11 +40079,12 @@ p_startrekker
 	lea	songover(a5),a3
 	lea	dmawait(pc),a4
 	move.l	modulelength(a5),d0
-	push	a5
-	move.l	startrekkerroutines(a5),a5
-	jsr	.INIT(a5)
+	pushm	a5/a6
+	move.l	startrekkerroutines(a5),a6
+	lea	scopeData(a5),a5
+	jsr	.INIT(a6)
 	moveq	#0,d0
-	pop 	a5
+	popm 	a5/a6
 	move.l	a0,deliPatternInfo(a5)
 	move	d1,pos_maksimi(a5)
 .x
