@@ -22190,6 +22190,7 @@ stopScopeTask
 
 
 toggleScopes
+	DPRINT	"toggleScopes"
 	lea	scopeToggleTable(a5),a2
 	* Is any scope running?
 	moveq	#0,d0
@@ -22211,7 +22212,13 @@ toggleScopes
 	* Start scopes that were toggled off.
 	* If none were toggled off, start the default
 	* one. Test 5 bytes:
-	tst.l	(a2)
+	tst.b	(a2)
+	bne.b	.some
+	tst.b	1(a2)
+	bne.b	.some
+	tst.b	2(a2)
+	bne.b	.some
+	tst.b	3(a2)
 	bne.b	.some
 	tst.b	4(a2)
 	bne.b	.some
@@ -28968,6 +28975,9 @@ whag	tst.b	win(a5)
 	beq.b	.ww
 
 	pushm	all
+
+	move.l	playerbase(a5),a0
+	move	p_liput(a0),d7
 
 ;	tst	d0
 ;	beq.b	.c
