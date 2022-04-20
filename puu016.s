@@ -5210,6 +5210,40 @@ inithippo
 
 	check	1
 
+	tst.b	uusikick(a5)
+	bne.b	.new
+
+	* Re-map colors to be more kick13 compatible
+	lea	hippohead,a0
+	lea	792(a0),a1
+	move	#96*66/8-1,d7
+.bytes
+	move	#$80,d2
+.bits
+	move.b	(a0),d0
+	and	d2,d0
+	move.b	(a1),d1
+	and	d2,d1
+	add d1,d0
+	cmp	d2,d0
+	bne.b	.z
+	eor.b	d2,(a0)
+	eor.b	d2,(a1)
+.z
+	lsr.b	#1,d2
+	bne.b	.bits
+
+	* Switch cols 1 and 2
+	* %00 = %00
+	* %01 = %10
+	* %10 = %01
+	* %11 = %11
+	addq	#1,a0
+	addq	#1,a1
+	dbf	d7,.bytes
+
+.new
+
 	lea	bitmapHippoHead(a5),a2
 	move.l	a2,a0
 	moveq	#2,d0
@@ -5226,9 +5260,10 @@ printhippo1
 	tst	boxsize(a5)
 	beq.b	.q
 	tst.b	win(a5)
-	beq.b	.q
-	tst.b	uusikick(a5)
 	bne.b	.yep
+;	beq.b	.q
+;	tst.b	uusikick(a5)
+;	bne.b	.yep
 .q	rts
 .yep
 	pushm	d0-d7/a0-a2/a6
@@ -5280,10 +5315,11 @@ printhippo1
 printhippo1
 * zoomaava hipon p‰‰
 	tst.b	win(a5)
-	beq.b	.q
-	tst.b	uusikick(a5)
 	bne.b	.yep
-.q	rts
+	;beq.b	.q
+	;tst.b	uusikick(a5)
+	;bne.b	.yep
+.q	;rts
 .yep
 	pushm	all
 	move.b	reghippo(a5),d7
@@ -5403,10 +5439,11 @@ printhippo1
 
 ** Print into scope window
 printHippoScopeWindow
-	tst.b	uusikick(a5)
-	bne.b	.yep
-	rts
-.yep	pushm	d0-d6/a0-a2/a6
+	;tst.b	uusikick(a5)
+	;bne.b	.yep
+	;rts
+;.yep	
+	pushm	d0-d6/a0-a2/a6
 	lea	bitmapHippoHead(a5),a0
 	move.l	s_rastport3(a4),a1		* quad
 	moveq	#0,d0	
@@ -47342,7 +47379,9 @@ asciitable
 
 	section	mini,data_c
 
+* 2 bitplane image, 96x66 pixels
 hippohead	incbin	gfx/hip.raw
+
 tickdata	dc	$001c,$0030,$0060,$70c0,$3980,$1f00,$0e00
 
 * 16x4 pixeli‰
