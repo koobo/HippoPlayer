@@ -45971,7 +45971,14 @@ MIX_LENGTH = FFT_LENGTH
 ; Sample data bytes to be copied. Should be enough so that mixing
 ; process has enough data, as it interpolates according to current
 ; channel period. 
+; For HIPC.WingsOfDeath (Level 1) this buffer is not long enough
+; so either make it larger or do range check using mask.
 SAMPLE_LENGTH = MIX_LENGTH*2
+SAMPLE_LENGTH_MASK = 255
+
+ if SAMPLE_LENGTH<>256
+   fail "Assumed to be 256"
+ endif
 
 spectrumInitialize
 	SDPRINT	"Spectrum init"
@@ -46353,10 +46360,10 @@ spectrumCopySamples
 ; out:
 ;    d1 = 8+8 fixed point sample skip value ff000000aa, ff = fractions
 calcSampleStep
-	tst	d0
-	bne.b	.1
-	moveq	#1,d1
-	rts
+	* sanity check, 100 corresponds to about 35 kHz
+	cmp	#100,d0
+	bhs.b .1
+	moveq	#100,d0
 .1
 	move.l	#3546895,d1	* PAL clock
 	divu	d0,d1		* playback frequency in hertz
@@ -46411,6 +46418,7 @@ spectrumMixSamples
 
 	moveq	#0,d6
 	moveq	#0,d0
+	move	#SAMPLE_LENGTH_MASK,d3
 	moveq	#MIX_LENGTH/2-1,d7
 	
 	* Copy or add?
@@ -46430,6 +46438,8 @@ spectrumMixSamples
 	; next source sample
 	add.l	d1,d0
 	addx.w	d6,d0
+	; safety: keep offset within data buffer
+	and	d3,d0
 	endr
 
 	dbf	d7,.m1
@@ -46450,6 +46460,8 @@ spectrumMixSamples
 	; next source sample
 	add.l	d1,d0
 	addx.w	d6,d0
+	; safety: keep offset within data buffer
+	and	d3,d0
 	endr
 	dbf	d7,.m2
 	rts
