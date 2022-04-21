@@ -1153,7 +1153,7 @@ filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 
 loading		rs.b	1		* ~0: lataus meneill‰‰n
 loading2	rs.b	1		* ~0: filejen addaus meneill‰‰n
-							* TODO: not used, remove?
+					* TODO: not used, remove?
 * List of favorite modules
 favoriteListHeader	rs.b 	MLH_SIZE
 * Flag indicates the list has changed before last save
@@ -20946,6 +20946,7 @@ intserver
 
 	* Trigger signal for the main application loop indicating song has ended.
 	* If there is a loading operation going on, let's not signal.
+	* This tests both "loading" and "loading2"
 	tst	loading(a5)	
 	bne.b	.wasLoading
 	move.b	songHasEndedSignal(a5),d1
@@ -20974,9 +20975,19 @@ intserver
 	* If the last known position is higher than the current position,
 	* we deduce that the song has actually ended and may have restarted
 	* from the beginning.
+	* This may trigger an extra songend signal after 
+	* the above signal, so it should only be enabled for formats
+	* that have pos/len but not songend support.
+	* These are: MED, SoundFX, StarTrekker
+	move.l	playerbase(a5),a0
+	move	#pf_end,d2
+	and	p_liput(a0),d2
+	bne.b	.skipCheck
+	* Current format does not have songend support, do the check!
 	sub	d1,d0	
 	bmi.b	.songover
 .rewind
+.skipCheck
 	* Send a signal indicating that playing position has changed
 	move.b	ownsignal2(a5),d1
 	bsr.w	signalit
