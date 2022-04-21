@@ -7813,6 +7813,11 @@ nappuloita
 	bsr	rlistmode
 	bra.w	.ee
 .1
+	cmp.b	#$23,d3		* f + shift
+	bne.b	.2
+	jsr	toggleFavoriteStatusForCurrentModule
+	bra	.ee
+.2
 
 
 	cmp.b	#$17,d3		* i + shift?
@@ -21592,15 +21597,7 @@ rexxmessage
 	jmp	avaa_ikkuna
 
 .toggleFavorite
-	tst.b	favorites(a5)
-	beq.b	.1
-	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.1
-	move.l	chosenmodule(a5),d0
-	bsr	toggleFavoriteStatus
-	beq.b	.1
-	bsr	forceRefreshList
-.1	rts
+	bra	toggleFavoriteStatusForCurrentModule
 
 * GET:
 * 	current song
@@ -29194,6 +29191,20 @@ gadstate
 * Favorite list handling
 *
 *****************************************************************************
+
+toggleFavoriteStatusForCurrentModule
+	tst.b	favorites(a5)
+	beq.b	.1
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.1
+	move.l	chosenmodule(a5),d0
+	bsr.b	toggleFavoriteStatus
+	beq.b	.1
+	jsr	forceRefreshList
+.1	rts
+
+
+
 
 * Toggle favorite status for list node
 * in:
