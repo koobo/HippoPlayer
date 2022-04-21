@@ -20891,7 +20891,7 @@ intserver
 
 	* Check if tooltip tick count is active.
 	* It it expires, trigger a signal
-	tst		tooltipTick(a5)
+	tst	tooltipTick(a5)
 	beq.b	.notActive
 	subq	#1,tooltipTick(a5)
 	bne.b	.notActive
@@ -20913,7 +20913,7 @@ intserver
 	beq.b	.novb
 	* Play some music!
 	move.l	playerbase(a5),a0
-	jsr		p_ciaroutine(a0)
+	jsr	p_ciaroutine(a0)
 	move.l	(sp),a5
 .novb
 	* Whatever happened above, let's call the VBlank-replay routine.
@@ -22058,7 +22058,7 @@ startScopeTask:
 	popm	d2-d7/a2-a6
 	rts
 
-.tn	dc.b	"HiP-scope",0
+.tn	dc.b	"HiP-Scope",0
 	even
 
 * Sets up scopes open or close according to prefs.
