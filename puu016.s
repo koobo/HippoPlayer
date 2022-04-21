@@ -46142,6 +46142,7 @@ prepareSpectrumVolumeTable
 ; out:
 ;    a2 = table
 getSpectrumVolumeTable
+	CLAMPVOL d0
 	tst	d0
 	bne.b	.1
 	moveq	#1,d0
@@ -46182,6 +46183,8 @@ prepareSpectrumLogTable
 .l
 	move.l	d3,d4
 	swap	d4
+	* Scale to fit better in scope window height range 0..64
+	lsr	#1,d4
 	move	d4,(a0)+
 
 	; accelerate
@@ -46548,13 +46551,19 @@ drawFFT
 	move.l	s_spectrumLogTable(a4),a3
 	move	#%11100000,d6
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-2,d5
-
+	* Clamp value for log table indexing:
+	move	#$1000-1,d4
+	
 	; Take the 1st half
 	moveq	#FFT_LENGTH/2-1,d7
 .l
  if 1
  	
 	move	(a0)+,d1
+	cmp	d4,d1
+	bls.b	.ok
+	move	d4,d1
+.ok
 	;cmp.l	max(pc),d1
 	;blo.b	.m
 	;move.l	d1,max
@@ -46562,7 +46571,7 @@ drawFFT
 	; grab value from log table
 	add	d1,d1
 	move	(a3,d1),d1
-	lsr	#1,d1 ;;;;;;;;;;;;
+	;lsr	#1,d1 ;;;;;;;;;;;;
 	move	d5,d0
 	sub	d1,d0
  else 
