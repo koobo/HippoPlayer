@@ -5214,11 +5214,16 @@ inithippo
 	bne.b	.new
 
 	* Re-map colors to be more kick13 compatible
+	* Switch colors 1 and 2
+	* %00 = %00
+	* %01 = %10
+	* %10 = %01
+	* %11 = %11
 	lea	hippohead,a0
 	lea	792(a0),a1
 	move	#96*66/8-1,d7
 .bytes
-	move	#$80,d2
+	moveq	#$1,d2
 .bits
 	move.b	(a0),d0
 	and	d2,d0
@@ -5230,14 +5235,9 @@ inithippo
 	eor.b	d2,(a0)
 	eor.b	d2,(a1)
 .z
-	lsr.b	#1,d2
+	add.b   d2,d2
 	bne.b	.bits
 
-	* Switch cols 1 and 2
-	* %00 = %00
-	* %01 = %10
-	* %10 = %01
-	* %11 = %11
 	addq	#1,a0
 	addq	#1,a1
 	dbf	d7,.bytes
