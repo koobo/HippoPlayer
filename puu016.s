@@ -24048,7 +24048,9 @@ quadrascope:
 	lsr	#6,d1
 	bne.b	.heee
 	moveq	#1,d1
-.heee	subq	#1,d1
+.heee	
+	CLAMPVOL d1
+	subq	#1,d1
 	add	d1,d1
 	lsl.l	#8,d1
 	lea	s_mtab(a4),a2
@@ -24134,9 +24136,9 @@ hipposcope:
 	push 	a4
 	
 	move	ns_tempvol(a3),d0
-	CLAMPVOL d0
 	mulu	mainvolume(a5),d0
 	lsr	#6,d0
+	CLAMPVOL d0
 	subq	#1,d0
 	bpl.b	.e
 	moveq	#0,d0
