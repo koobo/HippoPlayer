@@ -57,9 +57,9 @@ This time we skip over one version number!
   when trying to insert the item back. Now it is inserted to the beginning
   of the list.
 
-- Fix the button and box frame graphics so that they look correct
-  on kickstart 1.3 too.
-
+- Kickstart 1.3: Fix the button and box frame graphics so that they 
+  look correct.
+  
 - MP3 files with ID3v2 tag data did not get recognized and played
   previously. Now they should work.
 
@@ -72,6 +72,10 @@ This time we skip over one version number!
 
 - Move "Button tooltips" Prefs button to the "Display" Prefs subpage, which 
   is the correct placement.
+
+- Sometimes when a module ends and the next one should be played,
+  the next one is skipped and the one following that is played.
+  Fixed!
 
 - The play button icon had an extra pixel at the bottom. 
   This went unnoticed until now, how is that even possible?!
@@ -89,20 +93,25 @@ This time we skip over one version number!
   Workbench, finally supported.
 
 - Patternscope support added to the THX/AHX format. Also shows transposes.
+
 - Patternscope now displays note and sample transpose information
-  for Future Composer and BP SoundMon formats.
+  for Future Composer and BP SoundMon formats as well.
+
+- PreTracker gets position/length display, song end detection and scope
+  support. By the way, go listen to some PreTracker tunes, do it now.
 
 - Improved sample scope support:
   - Sample scope refers to QuadraScope, HippoScope and friends. They were 
     previously available for Protracker, sample player and some 
     multichannel modules. 
-  - Added support for the following hippoplayers:
+  - Added support for the following players:
     - Art Of Noise (4 channels)
     - BP SoundMon (v2.0-v2.2)
     - Future Composer (v1.0-v1.4)
     - Game Music Creator
     - Hippel-COSO
     - JamCracker
+    - PreTracker
     - SoundFX
     - StarTrekker
   - Also added support for the following eagleplayers. Note that
@@ -117,8 +126,8 @@ This time we skip over one version number!
     incorrectly, this means every chip and synth sample in practice. 
     The playback position was calculated wrong and resulted in an 
     unrealistically static waveform display. 
-  - It's quite interesting to see how synth formats look with scopes, as
-    they deform and manipulate the waveforms in real time. For
+  - Sidenote: It's quite interesting to see how synth formats look with 
+    scopes, as they deform and manipulate the waveforms in real time. For
     example, FC waveforms looks quite simple whereas JamCracker and 
     Hippel-COSO look more complex. BP SoundMon seems to be in between 
     these two.
@@ -130,7 +139,8 @@ This time we skip over one version number!
 - New scope "Spectrum" was added. On the left are the low frequencies 
   and on the right are the high frequencies. This is an assembler conversion
   of the fixed-point fast fourier transform by Tom Roberts in 1989.
-  I converted it in 2012 to see how fast I can get it to run.
+  I converted it in 2012 to see how fast I can get it to run as it requires
+  a lot of calculations (an optimization challenge, yay!).
   I realized it would be cool to have it in Hippo, so here goes. 
   It does a 128-point FFT and runs ok on A500. The frequency display is 
   linear due to small amount of points calculated.
@@ -148,13 +158,24 @@ This time we skip over one version number!
   CPU and blitter intensive so having many running on A500
   will work but will also not be very smooth.
 
+- New keyboard shortcut [SHIFT+F]: toggle favorite status for
+  the currently selected module. (Plain [F] is find module.)
+
+- Kickstart 1.3: The hippo head is now displayed! 
+
 
 ## Known issues:
 - Same as with v2.49
 
 ## Tips and tricks:
-- Enabling "Doubleclick" in Prefs makes starting playback easier.
-
+- Enabling "Doubleclick" in Prefs makes starting playback easier
+  if you like using the mouse.
+- Activating "Keep list on exit" allows you to conveniently continue 
+  where you left off in your module listening adventures when
+  you start Hippo again.
+- Hippo is fully keyboard controllable. A way to browse through 
+  a large mod collection is to switch to file browser using
+  [SHIFT-M] and then using arrows, enter and backspace.
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
