@@ -32889,10 +32889,39 @@ sid_addVolumePatch
 .q
 	rts
 
-; PreTracker patch is usable here
-.vol1patch	jsr	p_pretracker\.setVol1
-.vol2patch	jsr	p_pretracker\.setVol2
-.vol3patch	jsr	p_pretracker\.setVol3
+.vol1patch	jsr	.setVol1
+.vol2patch	jsr	.setVol2
+.vol3patch	jsr	.setVol3
+
+.setVol1
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0a8
+	pop 	d0
+	rts
+.setVol2
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0b8
+	pop 	d0
+	rts
+.setVol3
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0c8
+	pop 	d0
+	rts
+.setVol4
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0d8
+	pop 	d0
+	rts
+
 
 sid_remVolumePatch
 	move.l	_SIDBase(a5),a0
@@ -36573,7 +36602,7 @@ p_thx
 	jmp 	.id_thx(pc)
 	jmp	thx_author(pc)
 	dc.w 	pt_thx
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen!pf_scope
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"AHX Sound System",0
  even
 
@@ -36751,7 +36780,7 @@ p_thx
 .ahxCIAInterrupt
 	move.l	thxroutines+var_b,a0
 	jsr	.ahxInterrupt(a0)
-	bra.b	.updateStripes
+	bra.w	.updateStripes
 
 .end	DPRINT	"AHX end"
 	bsr.b	.halt
@@ -36771,13 +36800,37 @@ p_thx
 	
 	bra.w	clearsound
 
+* Scope support
+
+.updateScope
+	lea	scopeData+scope_ch1(a4),a0
+	move.l	thxroutines(a4),a1
+	move.l	.ahxBSS_P(a1),a1
+	lea	.ahx_pVoice0Temp(a1),a1
+
+	moveq	#4-1,d0
+.scope
+	move.l	.ahx_pvtAudioPointer(a1),ns_start(a0)
+	move.l	.ahx_pvtAudioPointer(a1),ns_loopstart(a0)
+	move	#$140,ns_length(a0)
+	move	#$140,ns_replen(a0)
+	move	.ahx_pvtAudioPeriod(a1),ns_period(a0)
+	move	.ahx_pvtAudioVolume(a1),ns_tempvol(a0)
+
+	add	#232,a1	* Next channel data 
+	add 	#ns_size,a0
+	dbf	d0,.scope
+	rts
+
 
 * Pattern scope support
 
 .updateStripes
 	pushm	d0-d1/a0-a4
+	lea	var_b,a4
+	bsr.b	.updateScope
 
-	move.l	thxroutines+var_b,a0
+	move.l	thxroutines(a4),a0
 	move.l	.ahxBSS_P(a0),a0
 
 	tst.b	.ahx_pPlaying(a0)
@@ -36786,7 +36839,7 @@ p_thx
 	move	.ahx_currentPattPos(a0),.PatternInfo+PI_Pattpos
 	lea	.ahx_pVoice0Temp(a0),a0
 
-	move.l	moduleaddress+var_b,a1
+	move.l	moduleaddress(a4),a1
 	lea	.PatternInfo+PI_NoteTranspose1(pc),a2
 	lea	.Stripe1(pc),a3
 
@@ -39552,42 +39605,14 @@ p_pretracker
 	jmp .id_pretracker(pc)
 	jmp	thx_author(pc)
 	dc.w pt_pretracker
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_scope!pf_quadscopePoke!pf_poslen!pf_end
 	dc.b	"PreTracker by Pink/aBYSs",0
  even
 
-.mySong		dc.l  0
-.myPlayer	dc.l  0
-.chipMem	dc.l  0
+.offset_init = $20+0
+.offset_play = $20+4
+.offset_stop = $20+8
 
-.setVol1
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0a8
-	pop 	d0
-	rts
-.setVol2
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0b8
-	pop 	d0
-	rts
-.setVol3
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0c8
-	pop 	d0
-	rts
-.setVol4
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0d8
-	pop 	d0
-	rts
 
 .init
 	bsr.w	varaa_kanavat
@@ -39608,119 +39633,42 @@ p_pretracker
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
-	move.l #16*1024,d0
-	move.l	#MEMF_PUBLIC|MEMF_CLEAR,d1 
-	jsr getmem
-	move.l d0,.mySong
-	beq.w .noMem
-	move.l #16*1024,d0
-	move.l	#MEMF_PUBLIC|MEMF_CLEAR,d1 
-	jsr getmem
-	move.l d0,.myPlayer
-	beq.w .noMem
-
-
-	pushm	d1-a6
-
-	move.l pretrackerroutines(a5),a0
-	move.l	a0,a4
-	add.l	-4(a4),a4 	* end of memory region
-.patchLoop
-* 33C0 xxxxxxxx = MOVE.L d0,xxxxxxxx
-* 4EB9 xxxxxxxx = JSR xxxxxxxx
-
-	move	(a0),d0
-	cmp		#$33c0,d0 
-	bne.b  .next 
-	cmp.l	#$dff0a8,2(a0)
-	beq.b	.1
-	cmp.l	#$dff0b8,2(a0)
-	beq.b	.2
-	cmp.l	#$dff0c8,2(a0)
-	beq.b	.3
-	cmp.l	#$dff0d8,2(a0)
-	beq.b	.4
-	bra.b 	.next
-.1	move	#$4eb9,(a0)
-	move.l	#.setVol1,2(a0)
-	bra.b 	.next
-.2	move	#$4eb9,(a0)
-	move.l	#.setVol2,2(a0)
-	bra.b 	.next
-.3	move	#$4eb9,(a0)
-	move.l	#.setVol3,2(a0)
-	bra.b 	.next
-.4	move	#$4eb9,(a0)
-	move.l	#.setVol4,2(a0)
-	;bra.b 	.next
-.next
-	addq	#2,a0
-	cmp.l	a4,a0
-	blo.b	.patchLoop
-
-	bsr.w	clearCpuCaches
-
-	move.l .myPlayer(pc),a0
-	move.l .mySong(pc),a1
-	move.l moduleaddress(a5),a2
-	move.l pretrackerroutines(a5),a3	
-	add.l	 (a3),a3
-	jsr		(a3) ; songInit
-	* in D0 returns the needed chipbuffer size
-
-	DPRINT	"Chip: %ld"
-
-	move.l	#MEMF_CHIP|MEMF_CLEAR,d1 
-	jsr getmem
-	move.l d0,.chipMem
-	beq.b .noMem
-
-	* May be slow, instrument generation 
 	jsr	setMainWindowWaitPointer
-
-	move.l pretrackerroutines(a5),a3
-	move.l	.myPlayer(pc),a0 
-	move.l  .chipMem(pc),a1 
-	move.l  .mySong(pc),a2	
-	add.l	4(a3),a3
-	jsr 	(a3)  ; playerInit
-
+	pushm	d1-a6
+	move.l	moduleaddress(a5),a0
+	lea	scopeData(a5),a1
+	lea	mainvolume(a5),a2
+	lea	songover(a5),a3
+	move.l pretrackerroutines(a5),a4
+	jsr	.offset_init(a4)
 	popm	d1-a6
 	jsr	clearMainWindowWaitPointer
+	tst.l	d0
+	beq.b 	.noMem
 	moveq	#0,d0
 	rts	
 
 .noMem
-	bsr.b .free
-	popm	d1-a6
 	moveq #ier_nomem,d0
 	rts
 
-.free 
-	move.l .mySong(pc),a0
-	jsr	freemem 
-	clr.l .mySong
-	move.l .myPlayer(pc),a0
-	jsr	freemem 
-	clr.l .myPlayer 
-	move.l .chipMem(pc),a0 
-	jsr	freemem 
-	clr.l .chipMem
-	rts
-
 .play
-	move.l pretrackerroutines(a5),a1
-	move.l	.myPlayer(pc),a0 
-	add.l	8(a1),a1
-	jmp	(a1)		; playerTick
+	push	a5
+	move.l	pretrackerroutines(a5),a0
+	jsr	.offset_play(a0)
+	pop	a5
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+	rts
 	
 .stop
 	bra.w	clearsound
 
 .end
-	bsr.b .free
 	bsr	rem_ciaint
 	bsr.w	clearsound
+	move.l pretrackerroutines(a5),a0
+	jsr	.offset_stop(a0)
 	bra.w	vapauta_kanavat
 
 .id_pretracker 
