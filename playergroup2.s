@@ -20,7 +20,7 @@ SHR=1
 
 
 
-start	dc.b	"HiPxPla",23	* Tunnistus ja versio, 8 bytes
+start	dc.b	"HiPxPla",24	* Tunnistus ja versio, 8 bytes
 
 head	macro
 	dc.w	\1
