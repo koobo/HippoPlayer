@@ -648,46 +648,6 @@ patternScopeRunning      rs.b 1
 spectrumScopeRunning     rs.b 1
 scopeToggleTable         rs.b 5 * Used by toggleScopes()
 
- REM ;;;;;; REMOVED 
-draw1		rs.l	1
-draw2		rs.l	1
-;ch1		rs.b	ns_size
-;ch2		rs.b	ns_size
-;ch3		rs.b	ns_size
-;ch4		rs.b	ns_size
-mtab		rs.l	1
-buffer0		rs.l	1
-buffer0w 	rs.w 	1
-buffer0h  	rs.w 	1
-buffer1		rs.l	1
-buffer2		rs.l	1
-scopeVerticalBarTable		rs.l	1
-  ifne FEATURE_FREQSCOPE
-deltab1		rs.l	1	
-deltab2		rs.l	1	
-deltab3		rs.l	1	
-deltab4		rs.l	1	
-  endif
-  ifne FEATURE_SPECTRUMSCOPE
-spectrumMemory		rs.l 1
-spectrumVolumeTable	 rs.l 1
-spectrumMuluTable rs.l 1
-spectrumLogTable rs.l 1
-spectrumSineTable rs.l 1
-spectrumChannel1	rs.l 1
-spectrumChannel2	rs.l 1
-spectrumChannel3	rs.l 1
-spectrumChannel4	rs.l 1
-spectrumMixedData	rs.l 1
-spectrumImagData	rs.l 1
-spectrumInitialized rs.w 1
- rssrsrs
-  endif
-
-* Mulutable for scope window modulo
-multab		rs.w	256
-  EREM ;;;;; SCOPE STATE REMOVED
-
 ;omatrigger	rs.b	1	* kopio kplayerin usertrigistä
 * This turns to 1 if user has manually activated the scope
 * by LMB click, when scope was passivated because not being
