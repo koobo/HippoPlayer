@@ -46141,29 +46141,29 @@ prepareSpectrumExpTable
 ; a0 = result (overwritten input array)
 
 loudnessFFT
-	moveq	#EXP_TABLE_LEN,d5
-	move.l	s_spectrumExpTable(a4),a3
-	
+	move.l	s_spectrumExpTable(a4),a3	
 	moveq	#FFT_LENGTH/2-1,d7
-.l2
-	move	(a0)+,d0
+.l1
+	* calculate re^2 + im^2
+	move	(a0),d0
 	muls	d0,d0
 	move	(a1)+,d1
 	muls	d1,d1
 	add.l	d1,d0
 
+	* find the slot in the table where the value lands
 	move.l	a3,a2
-	moveq	#0,d6
-.l3
+	moveq	#EXP_TABLE_LEN-1,d5
+	* this loop is run 4096 times :-O
+.l2
 	cmp.l	(a2)+,d0
-	bhi.b	.break
-	addq	#1,d6
-	cmp	d5,d6
-	bne.b	.l3
-	* d6 gets the max value now
-.break
-	move	d6,-2(a0)
-	dbf	d7,.l2
+	dbhi	d5,.l2
+
+	* use the DBcc value directly, neat
+	addq	#1,d5	
+	move	d5,(a0)+
+
+	dbf	d7,.l1
 	rts
 
 
@@ -46516,24 +46516,14 @@ drawFFT
 	move.l	s_spectrumMuluTable(a4),a2
 	move	#%11100000,d6
 	
-	* High clamp 
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d3
-
 	; Take the 1st half
 	moveq	#FFT_LENGTH/2-1,d7
 .loop
-	moveq	#EXP_TABLE_LEN,d1
-	sub	(a0)+,d1
-	
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d0
-	sub	d1,d0
-	bpl.b	.low
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
+	sub	(a0)+,d0
+	bpl.b	.1
 	moveq	#0,d0
-.low
-	cmp	d3,d0
-	bls.b	.high
-	move	d3,d0
-.high
+.1
 	add	d0,d0 
 	move	(a2,d0),d0
 	or.b	d6,(a1,d0)
