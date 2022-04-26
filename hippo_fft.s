@@ -74,6 +74,9 @@ N_WAVE		= 	1024
 LOG2_N_WAVE	= 	10
 	
 ;; #define N_LOUD          100     /* dimension of Loudampl[] */
+
+N_LOUD = 100
+
 ;; #ifndef fixed
 ;; #define fixed short
 ;; #endif
@@ -111,8 +114,8 @@ FFT_LOOPS = 0
 	include	"exec/exec_lib.i"
 test
 	move.l	4.w,a6
-	jsr	_LVOForbid(a6)
-	jsr	_LVODisable(a6)
+;	jsr	_LVOForbid(a6)
+;	jsr	_LVODisable(a6)
 
 
 	bsr.w	.waitVBlank
@@ -125,8 +128,8 @@ test
 	lsr.l	#8,d6
 	
 	move.l	4.w,a6
-	jsr	_LVOEnable(a6)
-	jsr	_LVOPermit(a6)
+;	jsr	_LVOEnable(a6)
+;	jsr	_LVOPermit(a6)
 	rts
 
 
@@ -148,6 +151,7 @@ testFFT
 	;bsr	windowFFT
 
 	lea	fr(pc),a0
+	lea	fi(pc),a1
 	bsr.w	sampleFFT
 
 
@@ -171,7 +175,11 @@ testFFT
 	;; passed
 	moveq	#0,d7
 
-	
+	lea	fr(pc),a0
+	lea	fi(pc),a1
+	bsr	loudFFT
+	rts
+		
 	lea	fr(pc),a0
 	lea	fi(pc),a1
 	move.l	d7,-(sp)
@@ -251,6 +259,7 @@ sampleFFT
 ; a1 = result array imaginary
 ;out
 ; a0 = result (overwritten input array)
+ REM ;;;;;;;;;;;;;,
 calcFFTPower	
 	; Calculate for the 1st half, 2nd half is mirror of the 1st and
 	; not used in drawing.
@@ -289,12 +298,14 @@ calcFFTPower
 
 	incdir	
 	include	"isqrt16.s"
+ EREM ;;;;;;;;;;;;;;;;;
 
-
-;fi	ds.w	FFT_LENGTH
-;fr	ds.w	FFT_LENGTH
-;fpow	ds.w	FFT_LENGTH
-
+ ifne FFT_TEST
+fi	ds.w	FFT_LENGTH
+fr	ds.w	FFT_LENGTH
+fpow	ds.w	FFT_LENGTH
+ endif
+ 
 fix_fft
 
 	rsreset
@@ -309,7 +320,9 @@ fix_fft
 	lea	.vars(pc),a5
 	; m, data size 1<<7 = 128
 	move	#FFT_SIZE,.m(a5)
-	;lea	Sinewave(pc),a2	
+ ifne FFT_TEST
+	lea	Sinewave(pc),a2	
+ endif
 	bsr.b	.fix_fft2
 	movem.l	(sp)+,a4/a5/a6
 	rts
@@ -672,7 +685,7 @@ windowFFT
 ;;         j = N_WAVE/n;
 
 	; sinewave index step
-	moveq	#N_WAVE/FFT_LENGTH*2,d7
+	move	#N_WAVE/FFT_LENGTH*2,d7
 
 ;;         n >>= 1;
 	
@@ -768,6 +781,77 @@ windowFFT
 ;;                         loud[i] = max;
 ;;         }
 ;; }
+
+
+;in
+; a0 = result array reals
+; a1 = result array imaginary
+;out
+; a0 = result (overwritten input array)
+ rem ;;;;;;;;;
+loudFFT
+	lea	Loudampl(pc),a2
+	lea	Loudampl2(pc),a3
+	
+	tst.l	(a3)
+	bne.b	.1
+
+	move	(a2)+,d0
+	muls	d0,d0
+	move.l	d0,(a3)+
+
+	moveq	#N_LOUD-1-1,d7
+.l1
+	move	(a2)+,d0
+	muls	d0,d0
+	move.l	d0,(a3)
+	add.l	-4(a3),d0
+	lsr.l	#1,d0
+	move.l	d0,-4(a3)
+	addq.l	#4,a3
+	dbf	d7,.l1
+.1
+
+nok
+	moveq	#FFT_LENGTH/2-1,d7
+.l2
+	move	(a0)+,d0
+	muls	d0,d0
+	move	(a1)+,d1
+	muls	d1,d1
+	add.l	d1,d0
+
+	lea	Loudampl2(pc),a2
+	moveq	#0,d6
+	moveq	#N_LOUD,d5
+.l3
+	cmp.l	(a2)+,d0
+	bhi.b	.break
+	
+	addq	#1,d6
+	;cmp	#N_LOUD,d6
+	cmp		d5,d6
+	bne.b	.l3
+
+.break
+	* d6 = dB level
+	;neg	d6
+	;addq	#6,d6
+	;bmi.b	.2
+	;moveq	#0,d6
+.2
+
+	subq	#6,d6
+	bpl.b 	.3
+	moveq	#0,d6
+.3	
+	move	d6,-2(a0)
+
+	dbf	d7,.l2
+
+
+	rts
+ EREM ;;;;;;;;;;;;;;;
 
 ;; /*      db_from_ampl() - find loudness (in dB) from
 ;;         the complex amplitude.
@@ -1025,7 +1109,7 @@ windowFFT
 ;;   -1607,  -1406,  -1206,  -1005,   -804,   -603,   -402,   -201,
 ;; };
  
-  REM ;;;;;;;;;;;;;;
+ ifne FFT_TEST
 Sinewave 
 	dc.w	       0,    201,    402,    603,    804,   1005,   1206,   1406
 	dc.w	    1607,   1808,   2009,   2209,   2410,   2610,   2811,   3011
@@ -1156,7 +1240,7 @@ Sinewave
 	dc.w	   -4807,  -4608,  -4409,  -4210,  -4011,  -3811,  -3611,  -3411
 	dc.w	   -3211,  -3011,  -2811,  -2610,  -2410,  -2209,  -2009,  -1808
 	dc.w	   -1607,  -1406,  -1206,  -1005,   -804,   -603,   -402,   -201
-  EREM ;;;;;;;;;;;
+  endif
 
 ;; #if N_LOUD != 100
 ;;         ERROR: N_LOUD != 100
@@ -1176,6 +1260,38 @@ Sinewave
 ;;       1,      1,      1,      0,      0,      0,      0,      0,
 ;;       0,      0,      0,      0,
 ;; };
+
+
+ REM ;;;;;
+Loudampl
+  dc.w  32767,  29203,  26027,  23197,  20674,  18426,  16422,  14636
+  ; 9
+  dc.w  13044,  11626,  10361,   9234,   8230,   7335,   6537,   5826
+  ; 17
+  dc.w   5193,   4628,   4125,   3676,   3276,   2920,   2602,   2319
+  ; 25
+  dc.w   2067,   1842,   1642,   1463,   1304,   1162,   1036,    923
+  ; 33
+  dc.w    823,    733,    653,    582,    519,    462,    412,    367
+  ; 41
+  dc.w    327,    292,    260,    231,    206,    184,    164,    146
+  ; 49
+  dc.w    130,    116,    103,     92,     82,     73,     65,     58
+  ; 57
+  dc.w     51,     46,     41,     36,     32,     29,     26,     23
+  ; 65
+  dc.w     20,     18,     16,     14,     13,     11,     10,      9
+  ; 73
+  dc.w      8,      7,      6,      5,      5,      4,      4,      3
+  dc.w      3,      2,      2,      2,      2,      1,      1,      1
+  dc.w      1,      1,      1,      0,      0,      0,      0,      0
+  dc.w      0,      0,      0,      0
+
+
+
+Loudampl2
+	ds.l	N_LOUD
+ EREM ;;;;;;;;;
 
 ;; #ifdef  MAIN
 

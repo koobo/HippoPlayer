@@ -21910,7 +21910,7 @@ s_deltab4                     rs.l       1
 s_spectrumMemory              rs.l       1
 s_spectrumVolumeTable         rs.l       1
 s_spectrumMuluTable           rs.l       1
-s_spectrumLogTable            rs.l       1
+s_spectrumExpTable            rs.l       1
 s_spectrumSineTable           rs.l       1
 s_spectrumChannel1            rs.l       1
 s_spectrumChannel2            rs.l       1
@@ -46009,10 +46009,10 @@ spectrumInitialize
 
 VOLUME_TABLE_LEN = $40*$100*2
 MULU_TABLE_LEN = SCOPE_DRAW_AREA_HEIGHT_DEFAULT*2
-LOG_TABLE_LEN = $1000*2
+EXP_TABLE_LEN = SCOPE_DRAW_AREA_HEIGHT_DEFAULT
 SINE_TABLE_LEN = 1024*2
 
-SPECTRUM_TOTAL set VOLUME_TABLE_LEN+MULU_TABLE_LEN+LOG_TABLE_LEN+SINE_TABLE_LEN
+SPECTRUM_TOTAL set VOLUME_TABLE_LEN+MULU_TABLE_LEN+EXP_TABLE_LEN*4+SINE_TABLE_LEN
 SPECTRUM_TOTAL set SPECTRUM_TOTAL+4*SAMPLE_LENGTH ; bytes
 SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 
@@ -46028,8 +46028,8 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	add.l	#VOLUME_TABLE_LEN,a0
 	move.l	a0,s_spectrumMuluTable(a4)
 	add	#MULU_TABLE_LEN,a0
-	move.l	a0,s_spectrumLogTable(a4)
-	add	#LOG_TABLE_LEN,a0
+	move.l	a0,s_spectrumExpTable(a4)
+	add	#EXP_TABLE_LEN*4,a0
 	move.l	a0,s_spectrumSineTable(a4)
 	add	#SINE_TABLE_LEN,a0
 	move.l	a0,s_spectrumChannel1(a4)
@@ -46048,7 +46048,7 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	beq.b	.x
 	bsr.b	prepareSpectrumVolumeTable
 	bsr.w	prepareSpectrumMuluTable
-	bsr.w	prepareSpectrumLogTable
+	bsr.w	prepareSpectrumExpTable
 
 	st	s_spectrumInitialized(a4)
 	moveq	#1,d0
@@ -46117,42 +46117,96 @@ prepareSpectrumMuluTable
 	rts
 
 
-; This creates a logarithm-like table that starts from
-; 0 and levels to about to FFT_HEIGHT, at around index 256.
-; Max index allowed is $1000, which is the FFT power value.
-; Effect:
-; Dampen high power frequencies, typically the low ones
-; Enhance low power frequencies, typically the high ones
-; Makes for a better visual, so that power output is more flat
-; and not concentrated to the left only.
+; Creates a table to for mapping FFT magnitudes into dB levels.
+; Magnitude for each value would be: sqr(real^2+image^2)
+; Maximum value for real or image is 0x7fff.
+; The end result is such that low frequencies visually not overpowering
+; and the graph is more even between frequencies.
 
-prepareSpectrumLogTable
-	move.l	s_spectrumLogTable(a4),a0
-	move	#$1000-1,d0
-	move.l	#-215,d2	; acceleration
-	move.l	#1<<16,d1 	; speed
-	moveq	#0,d3		; position
+prepareSpectrumExpTable
+	move.l	s_spectrumExpTable(a4),a2
+
+	; Do this:
+	; local s, i; s = 0; for (i = 0; i < 64; i++, s=s-0.15) print(0x7fff*exp(s));
+
+	move.l	#1000,d0
+	lore	FFP,SPFlt
+	move.l	d0,d2
+	* Adjust exponential curve shape:
+	;move.l	#155,d0
+	move.l	#160,d0
+	lob	SPFlt
+	move.l	d2,d1
+	lob	SPDiv
+	move.l	d0,d5
 	
-.l
-	move.l	d3,d4
-	swap	d4
-	* Scale to fit better in scope window height range 0..64
-	lsr	#1,d4
-	move	d4,(a0)+
+	moveq	#EXP_TABLE_LEN-1,d7
+	moveq	#FFP_zero,d6
+.loop
+	move.l	d6,d0
+	lore	MT,SPExp
+	move.l 	#FFP_7fff,d1
+	lore	FFP,SPMul
+	* Squared:
+	move.l	d0,d1
+	lob	SPMul
+	lob	SPFix
+	move.l	d0,(a2)+
 
-	; accelerate
-	add.l	d2,d1
-	bpl.b	.posSpeed
-	clr.l	d1
-.posSpeed
-	; move position
-	add.l	d1,d3
-	bpl.b	.k
-	clr.l	d3
-.k	
-	dbf	d0,.l
-	moveq	#1,d0
+	move.l	d6,d0
+	move.l	d5,d1
+	lob	SPSub
+	move.l	d0,d6
+	dbf	d7,.loop
+
+	move.l	s_spectrumExpTable(a4),a2
+	moveq	#EXP_TABLE_LEN-1-1,d7
+	* Calculate averages
+	addq.l	#4,a2
+.loop2
+	move.l	(a2),d0
+	add.l	-4(a2),d0
+	lsr.l	#1,d0
+	move.l	d0,-4(a2)
+	addq.l	#4,a2
+	dbf	d7,.loop2
 	rts
+ 
+
+; Calculate loudness values for the FFT
+;
+;in:
+; a0 = result array reals
+; a1 = result array imaginary
+;out:
+; a0 = result (overwritten input array)
+
+loudnessFFT
+	moveq	#EXP_TABLE_LEN,d5
+	move.l	s_spectrumExpTable(a4),a3
+	
+	moveq	#FFT_LENGTH/2-1,d7
+.l2
+	move	(a0)+,d0
+	muls	d0,d0
+	move	(a1)+,d1
+	muls	d1,d1
+	add.l	d1,d0
+
+	move.l	a3,a2
+	moveq	#0,d6
+.l3
+	cmp.l	(a2)+,d0
+	bhi.b	.break
+	addq	#1,d6
+	cmp	d5,d6
+	bne.b	.l3
+	* d6 gets the max value now
+.break
+	move	d6,-2(a0)
+	dbf	d7,.l2
+	rts
+
 
 * Precalculated FFP constants
 FFP_2PIper1024 	= $c90fdb39 * 2PI divided by 1024
@@ -46227,7 +46281,7 @@ runSpectrumScope
 		
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
-	bsr.w	calcFFTPower
+	bsr	loudnessFFT
 
 	bsr.w	drawFFT
 	
@@ -46499,55 +46553,37 @@ drawFFT
 	; The other half is mirror of the first.
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_draw1(a4),a1
-	addq	#2+2,a1
+	addq	#2+2,a1 ; horizontal centering
 	move.l	s_spectrumMuluTable(a4),a2
-	move.l	s_spectrumLogTable(a4),a3
 	move	#%11100000,d6
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-2,d5
-	* Clamp value for log table indexing:
-	move	#$1000-1,d4
 	
+	* High clamp 
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d3
+
 	; Take the 1st half
 	moveq	#FFT_LENGTH/2-1,d7
-.l
- if 1
- 	
-	move	(a0)+,d1
-	cmp	d4,d1
-	bls.b	.ok
-	move	d4,d1
-.ok
-	;cmp.l	max(pc),d1
-	;blo.b	.m
-	;move.l	d1,max
-;.m
-	; grab value from log table
-	add	d1,d1
-	move	(a3,d1),d1
-	;lsr	#1,d1 ;;;;;;;;;;;;
-	move	d5,d0
+.loop
+	moveq	#EXP_TABLE_LEN,d1
+	sub	(a0)+,d1
+	
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d0
 	sub	d1,d0
- else 
-;	move	d5,d0
-;	sub	(a0)+,d0
-	move	(a0)+,d1
-	lsr	#2,d1
-	move	d5,d0
-	sub	d1,d0
- endif
-	; clip test, should be unecessar though
-	bpl.b	.c
+	bpl.b	.low
 	moveq	#0,d0
-.c
+.low
+	cmp	d3,d0
+	bls.b	.high
+	move	d3,d0
+.high
 	add	d0,d0 
 	move	(a2,d0),d0
 	or.b	d6,(a1,d0)
 
 	ror.b	#4,d6
-	bpl.b	.b
+	bpl.b	.next
 	addq	#1,a1
-.b
-	dbf	d7,.l	
+.next
+	dbf	d7,.loop
 
 	rts		
 
