@@ -46076,8 +46076,7 @@ prepareSpectrumVolumeTable
 	move	d1,d2
 	ext	d2
 	muls	d0,d2
-	;asr	#6,d2
-	asr	#3,d2	* scale suitable for graph
+	; Here could do some scaling if needed to suit the graph
 	move	d2,(a0)+
 
 	addq	#1,d1
