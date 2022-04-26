@@ -46514,26 +46514,30 @@ drawFFT
 	move.l	s_draw1(a4),a1
 	addq	#2+2,a1 ; horizontal centering
 	move.l	s_spectrumMuluTable(a4),a2
+	moveq	#%00001110,d4
 	move	#%11100000,d6
 	
-	; Take the 1st half
-	moveq	#FFT_LENGTH/2-1,d7
+	; Take the 1st half, do two once
+	moveq	#FFT_LENGTH/2/2-1,d7
 .loop
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
 	sub	(a0)+,d0
 	bpl.b	.1
 	moveq	#0,d0
-.1
-	add	d0,d0 
+.1	add	d0,d0 
 	move	(a2,d0),d0
-	or.b	d6,(a1,d0)
+	move.b	d6,(a1,d0)
+	
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
+	sub	(a0)+,d0
+	bpl.b	.2
+	moveq	#0,d0
+.2	add	d0,d0 
+	move	(a2,d0),d0
+	or.b	d4,(a1,d0)
 
-	ror.b	#4,d6
-	bpl.b	.next
-	addq	#1,a1
-.next
+	addq.l	#1,a1
 	dbf	d7,.loop
-
 	rts		
 
 spectrumGetPS3MSampleData
