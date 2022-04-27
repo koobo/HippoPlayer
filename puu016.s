@@ -22232,25 +22232,26 @@ toggleScopes
 .some
 	tst.b	(a2)+
 	beq.b	.a
-	bsr	startQuadraScopeTask
+	bsr.w	startQuadraScopeTask
 .a	tst.b	(a2)+
 	beq.b	.b
-	bsr	startQuadraScopeFTask
+	bsr.w	startQuadraScopeFTask
 .b	tst.b	(a2)+
 	beq.b	.c
-	bsr	startHippoScopeTask
+	bsr.w	startHippoScopeTask
 .c	tst.b	(a2)+
 	beq.b	.d
-	bsr	startPatternScopeTask
+	bsr.w	startPatternScopeTask
 .d	tst.b	(a2)+
 	beq.b	.e
-	bsr	startSpectrumScopeTask
+	bsr.w	startSpectrumScopeTask
 .e
 	* Make prefs window show the correct status
-	bsr	updateScopeStatusesToPrefs
+	bsr.b	updateScopeStatusesToPrefs
 	bra	updateprefs
 
-
+* Update the prefs scope toggle statuses to match
+* actual runtime state.
 updateScopeStatusesToPrefs
 	tst.b	quadraScopeRunning(a5)
 	sne	prefsdata+prefs_quadraScope(a5)
@@ -22297,7 +22298,8 @@ SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
 * switch to small font.
 SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 
-; DPRINT cant be used as scope is now a task
+; DPRINT can't be used as scope is now a task,
+; DPRINT uses dos.library which is not allowed.
 SDPRINT macro
 
 	endm
@@ -22384,12 +22386,14 @@ spectrumScopeEntry
 * In:
 *   d6 = Offset to scope running flag 
 *   d7 = operating mode
+*   a2 = Address to load-from and store-to the window position
 *   a3 = window title
-*   a2 = Address to load-from and store-to  the window position
+*   a5 = global variables
 scopeEntry:
 	move.l	(a5),a6
 	SDPRINT	"Scope task started"
 
+	* Allocate local state variables
 	move.l	#sizeof_scopeVars,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
@@ -23014,14 +23018,13 @@ scopeWindowChangeHandler
 .posChange
 	move	d2,s_scopePreviousTopEdge(a4) 
 	move	d3,s_scopePreviousLeftEdge(a4)
-	bsr.w	scopeWindowChanged
-	rts
+	bra		scopeWindowChanged
+	
 .sizeChange 
 	move	d0,s_scopePreviousWidth(a4)
 	move	d1,s_scopePreviousHeight(a4)
-	bsr.w	scopeWindowSizeChanged
-	rts
-
+	bra		scopeWindowSizeChanged
+	
 
 ;scopeRefreshWindow
 ;	move.l	scopeWindowBase(a5),a0
@@ -36793,6 +36796,9 @@ p_thx
 	move	#$140,ns_replen(a0)
 	move	.ahx_pvtAudioPeriod(a1),ns_period(a0)
 	move	.ahx_pvtAudioVolume(a1),ns_tempvol(a0)
+	move	.ahx_pvtAudioVolume(a1),d1
+	CLAMPVOL d1
+	move	d1,ns_tempvol(a0)
 
 	add	#232,a1	* Next channel data 
 	add 	#ns_size,a0
