@@ -23745,7 +23745,7 @@ drawScope:
 
 .6	bsr.w	freqscope
 	lore	GFX,WaitBlit
-	bra	lever
+	bra	leverEor
 
 .7	* Protracker specific notescroller launch
 	cmp	#pt_prot,playertype(a5)
@@ -23756,11 +23756,11 @@ drawScope:
 	rts
 	
 .8	bsr.w	quadrascope
-	bra	mirrorfill
+	bra.w	mirrorfill
 
 .9	bsr.b	.8
 	lore	GFX,WaitBlit
-	bra	lever * extra gfx drawn, must wait until fill done
+	bra	leverEor * extra gfx drawn, must wait until fill done
 
 ;.other
 ;	* Fallback option!
@@ -23821,7 +23821,7 @@ drawScope:
 .22	bra	multihipposcope
 .33	bra	freqscope
 .44	bsr	multiscopefilled
-	bra	mirrorfill
+	bra.b	mirrorfill
 .55	* PS3M patternscope mode
 	tst.l	deliPatternInfo(a5) 
 	bne.w	noteScroller2
@@ -25360,21 +25360,28 @@ notescroller:
 
 ********** Palkit
 
+leverEor
+	* Flag: eor
+	moveq	#1,d4
+	bra.b	lever\.go
+
 lever
+	* Flag: or
+	moveq	#0,d4
+.go
 	lea	scopeData+scope_ch1(a5),a3
-	moveq	#4-1,d2
-	moveq	#0,d3
+	moveq	#4-1,d7
 	move.l	s_draw1(a4),a2
 .l	move.l	a2,a0
-	bsr.b	.dlever
+	bsr.b	.drawLever
 	lea	10(a2),a2
 	lea	ns_size(a3),a3
-	dbf	d2,.l
+	dbf	d7,.l
 	rts
 	
 
 * 907-108
-.dlever
+.drawLever
 	cmp	#2,ns_length(a3)
 	bls.b	.h
 	moveq	#0,d1
@@ -25408,8 +25415,6 @@ lever
 	lea	s_scopeHorizontalBarTable(a4),a1
 	movem.l	(a1,d0),d0/d1
 
-	pushm	d2/d3
-
 	move.l	#$55555555,d3
 	and.l	d3,d0
 	and.l	d3,d1
@@ -25418,6 +25423,9 @@ lever
 	move.l	d1,d3
 	roxl.l	#1,d3
 	roxl.l	#1,d2
+
+	tst.b	d4
+	bne.b	.eor
 
 	or.l	d0,(a0)+
 	or.l	d1,(a0)
@@ -25428,9 +25436,18 @@ lever
 	or.l	d2,120-4(a0)
 	or.l	d3,120(a0)
 
-	popm	d2/d3
 .h	rts
 
+.eor
+	eor.l	d0,(a0)+
+	eor.l	d1,(a0)
+	eor.l	d2,40-4(a0)
+	eor.l	d3,40(a0)
+	eor.l	d0,80-4(a0)
+	eor.l	d1,80(a0)
+	eor.l	d2,120-4(a0)
+	eor.l	d3,120(a0)
+	rts
 
 ****** taulukkoon 1-64 pix leveitä palkkeja
 
