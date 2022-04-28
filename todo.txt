@@ -70,8 +70,50 @@ PATTERNINIT - EP
 + Mugician2
 
 
+FIXED: BUG: SCREEN OVERWRITE
+- open all scopes
+- play BPSoundMon3 tunes, 
+- play BPSoundMon2 tunes
+- some tune had scratchy sounds, and channel was disabled in scope,
+- toggling scopes off with z caused chip buffer mungwall hits in hip-scope
+
+FIXED: BUG: unnecessary skipping
+- prefs: double buffering ON
+- file mode
+- play: Zzzax/Clean synth.bp3
+- wait until over
+- next tune "crypton.bp3" is skipped over after just a brief play
+- tune "crystals.bp3" plays
+- same thing even if double buffering is OFF
+- ANOTHER:
+-- toggling scopes off with z caused chip buffer mungwall hits in hip-scope
+
+FIXED: BUG: buttons are inactive
+- kick13
+- play "coop-anty/the emboldmemnt.mod"
+- many play buttons are disabled
+
+FIXED: BUG: crash
+- kick13
+- press z
+- "stopSpectrumScopeTask" 
+- press z again
+- BOOM
+
+FIXED: ENFORCER HIT
+- HIPC Wings of Death (level 1)
+-- SpectrumMixSamples, add
+-- d0 = 1fc0
+-- d1 = 40
+-- d2 = 81
+-- d3 = 29
+-- d4 = 0
+-- vol clamp error?
+-- Sample data buffer is too short?
+
 TODO - 2022 April
-- new scope toggle: darkness.s3m, patternscope, 5ch, toggling makes pattscope window too big
++ new scope toggle: darkness.s3m, patternscope, 5ch, toggling makes pattscope window too big
+  - works
 + sample scope support for StarTrekker
 + FIXED: fix kick 1.3 bevel borders
 + FIXED: mp3 IDv3 header skip

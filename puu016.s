@@ -23595,13 +23595,13 @@ drawScope:
 
 
 	cmp	#pt_sample,playertype(a5)
-	beq.b	.joa
+	beq.b	.sampleAdjustment
 
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.jaa
 	bsr	isImpulseTrackerActive
 	bne.b	.noIt
-	pushm d0-d6/a0/a1/a6
+	pushm 	d0-d6/a0/a1/a6
 	bsr	requestNormalScopeDrawArea
 	popm	d0-d6/a0/a1/a6
 	bne.b	.skippi	* wait for resize
@@ -23615,10 +23615,18 @@ drawScope:
 	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
 	blo.b	.jaa
 .joa	
-	* magic adjustment for sample?
+	* magic adjustment?!
 	addq	#4,d0
 	subq	#4,d4
 	bra.b	.jaow
+
+.sampleAdjustment
+	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
+	beq.b	.jaow
+	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
+	bne.b	.joa
+	bra.b	.jaow
+
 .jaa
 
 	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
@@ -46229,8 +46237,9 @@ runSpectrumScope
 	lore	GFX,OwnBlitter
 
 	move.l	s_draw1(a4),a0
-	addq	#2,a0 * horiz offset
-	moveq	#2,d0 * modulo
+	;addq	#2,a0 * horiz offset
+	;moveq	#2,d0 * modulo
+	moveq	#0,d0 * modulo
 	lea	40(a0),a1 * target is one line below
 	lea	$dff000,a2
 
@@ -46245,7 +46254,8 @@ runSpectrumScope
 	move.l	#$0b5a0000,$40(a2)	* D = A not C
 	* Height: 65 px
 	* Width 19*16 = 304 px
-	move	#65*64+19,$58(a2)
+	;move	#65*64+19,$58(a2)
+	move	#65*64+20,$58(a2)
 
 	jsr	_LVODisownBlitter(a6)
 
@@ -46493,13 +46503,25 @@ drawFFT
 	; The other half is mirror of the first.
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_draw1(a4),a1
-	addq	#2+2,a1 ; horizontal centering
 	move.l	s_spectrumMuluTable(a4),a2
-	moveq	#%00001110,d4
-	move	#%11100000,d6
-	
-	; Take the 1st half, do two once
-	moveq	#FFT_LENGTH/2/2-1,d7
+
+
+;%11111000 00000000
+;%00000111 11000000
+;%00000000 00111110
+;%11110000 00000001
+;%00001111 10000000
+;%00000000 00000000
+;%00000000 00000000
+;%00000000 00000000
+
+	; Bitmask to draw with
+	move	#%0111100000000000,d6
+	; Bitmask to figure out where to draw
+	move	#%1111100000000000,d5
+
+	; Take the 1st half
+	moveq	#FFT_LENGTH/2-1,d7
 .loop
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
 	sub	(a0)+,d0
@@ -46507,19 +46529,39 @@ drawFFT
 	moveq	#0,d0
 .1	add	d0,d0 
 	move	(a2,d0),d0
-	move.b	d6,(a1,d0)
+	or.w	d6,(a1,d0)
+
+	* Shift draw mask
+	ror.w 	#5,d6
+	* Shift and see if words overlap
+	ror.w	#5,d5
+	bmi.b	.2
+	
+	dbf	d7,.loop
+.x	rts		
+
+.2
+	* Draw one extra data point
+	subq	#1,d7
+	bmi.b	.x
 	
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
 	sub	(a0)+,d0
-	bpl.b	.2
+	bpl.b	.3
 	moveq	#0,d0
-.2	add	d0,d0 
+.3	add	d0,d0 
 	move	(a2,d0),d0
-	or.b	d4,(a1,d0)
 
-	addq.l	#1,a1
+	or.b	d6,1(a1,d0)
+	move	d6,d4
+	ror.w	#8,d4
+	or.b	d4,2(a1,d0)
+	addq.l	#2,a1
+
+	ror.w	#5,d5
+	ror.w 	#5,d6
 	dbf	d7,.loop
-	rts		
+	rts
 
 spectrumGetPS3MSampleData
 	move.l	ps3m_playpos(a5),a0
