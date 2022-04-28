@@ -29,8 +29,8 @@ NOTE 3: If you get errors where some module is not recognized even
 if it should be, try removing "S:HippoPlayer.prefs" first.
 
 NOTE 4: Too long didn't read
-- New Prefs options: "Button tooltips", "Favorite modules", "Keep list on exit",
-  "Big buttons", scope toggles
+- New Prefs options: "Button tooltips", "Favorite modules",
+  "Keep list on exit", "Big buttons", scope toggles
 - New list mode change button above the file slider
 - Improved scopes
 - New music formats
@@ -40,14 +40,14 @@ NOTE 4: Too long didn't read
 ------------------------------------------------------------------------------
 
 
-# Changes from v2.50 (31.12.2021) to v2.52 (?.?.2022)
+# Changes from v2.50 (31.12.2021) to v2.52 (30.4.2022)
 
 This time we skip over one version number!
 
 ## New fixes:
 
 - Simplify file loading so that compatibility with FTPMount is 
-  better (FTPMount does not seem to support file seeking properly).
+  better. FTPMount does not seem to support file seeking properly.
   FTPMount can be used to access Modland with Hippo, for example.
 
 - Fix crash with "Keep list on exit" when restarting in
@@ -58,7 +58,7 @@ This time we skip over one version number!
   of the list.
 
 - Kickstart 1.3: Fix the button and box frame graphics so that they 
-  look correct.
+  look correct in terms of depth illusion.
   
 - MP3 files with ID3v2 tag data did not get recognized and played
   previously. Now they should work.
@@ -83,7 +83,7 @@ This time we skip over one version number!
 
 ## New features:
 
-- "Big buttons" option in "Prefs/Display". This doubles the height of the two 
+- "Big buttons" option in "Prefs/Display". This doubles the height of the two
   button rows in the main window. May be helpful with higher resolution
   screens. The original icons were designed for the 640x256 resolution. 
 
@@ -95,10 +95,15 @@ This time we skip over one version number!
 - Patternscope support added to the THX/AHX format. Also shows transposes.
 
 - Patternscope now displays note and sample transpose information
-  for Future Composer and BP SoundMon formats as well.
+  for the Future Composer and the BP SoundMon formats as well.
 
-- PreTracker gets position/length display, song end detection and scope
-  support. By the way, go listen to some PreTracker tunes, do it now.
+- PreTracker support improvements:
+  - New PreTracker v1.5 replayer code
+  - Position/length display
+  - Subsongs
+  - Song end detection 
+  - Sample scopes
+  - Go listen to some PreTracker tunes!
 
 - Improved sample scope support:
   - Sample scope refers to QuadraScope, HippoScope and friends. They were 
@@ -136,14 +141,17 @@ This time we skip over one version number!
   display of deltas of consecutive sample bytes, usually boring to look
   at and not that informative.
 
-- New scope "Spectrum" was added. On the left are the low frequencies 
-  and on the right are the high frequencies. This is an assembler conversion
-  of the fixed-point fast fourier transform by Tom Roberts in 1989.
-  I converted it in 2012 to see how fast I can get it to run as it requires
-  a lot of calculations (an optimization challenge, yay!).
-  I realized it would be cool to have it in Hippo, so here goes. 
-  It does a 128-point FFT and runs ok on A500. The frequency display is 
-  linear due to small amount of points calculated.
+- A new scope "Spectrum" was added. The X-axis displays frequencies,
+  low ones on the left, high ones on the right. The Y-axis displays
+  loudness in decibels. 
+ 
+  This is an assembler conversion of the fixed-point fast fourier transform 
+  by Tom Roberts in 1989. I converted it in 2012 to see how fast I can get 
+  it to run as it requires a lot of calculations. I realized it would be cool
+  to have it in Hippo, so here goes. 
+ 
+  It does a 128-point FFT and runs ok on A500. The frequency axis is 
+  linear due to the small amount of points calculated.
 
 - Support for running multiple scopes instead of just one. There are now
   separate toggles for the five different scopes in "Prefs/Display".
@@ -153,8 +161,8 @@ This time we skip over one version number!
   saved. However, when a module is played with no scope support the scope 
   windows will no longer be automatically closed as was done previously. 
   
-  Having multiple scopes running required rather extensive changes, 
-  so there may be some new bugs lying around. Scopes are also quite
+  Having multiple scopes running required extensive changes, so
+  there may be some new bugs lying around. Scopes are also quite
   CPU and blitter intensive so having many running on A500
   will work but will also not be very smooth.
 
@@ -162,10 +170,14 @@ This time we skip over one version number!
   the currently selected module. (Plain [F] is find module.)
 
 - Kickstart 1.3: The hippo head is now displayed! 
+  It uses the kick2.0 palette color order so it is ugly on kick1.3,
+  and was never shown. Now the graphics is remapped during startup
+  to make it displayable also on kick1.3. Cool :-D
 
 
 ## Known issues:
 - Same as with v2.49
+
 
 ## Tips and tricks:
 - Enabling "Doubleclick" in Prefs makes starting playback easier
@@ -176,6 +188,10 @@ This time we skip over one version number!
 - Hippo is fully keyboard controllable. A way to browse through 
   a large mod collection is to switch to file browser using
   [SHIFT-M] and then using arrows, enter and backspace.
+
+
+## Greetings and thanks to:
+- Pink/aBYSs, Spot/UpRough, Marek Hac
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
