@@ -249,8 +249,8 @@ prefs_s3mmode2		rs.b	1
 prefs_s3mmode3		rs.b	1
 prefs_ps3mb		rs.b	1
 prefs_timeoutmode	rs.b	1
-Xprefs_quadmode		rs.b	1
-Xprefs_quadon		rs.b	1		* 1: quad oli p‰‰ll‰
+XXXprefs_quadmode	rs.b	1
+XXXprefs_quadon		rs.b	1		* 1: quad oli p‰‰ll‰
 prefs_ptmix		rs.b	1		* 0: chip, 1: fast, 2: ps3m
 prefs_xpkid		rs.b	1
 prefs_fade		rs.b	1
@@ -811,51 +811,7 @@ QUADMODE_PATTERNSCOPEXL = 5
 
 * Store the original window height to switch between
 * large and normal height mode
-* TODO
 quadWindowHeightOriginal	rs.w	1
-* Scope mode
-* TODO
-;quadmode	rs.b	1		* scopemoodi
-;		rs.b	1
-
- REM ;; SCOPE STATE REMOVED
-
-
-* Scope mode
-quadmode	rs.b	1		* scopemoodi
-* Modified scope mode internally used in scopes for jumptables
-quadmode2	rs.b	1		
-
-* Pattern scope configuration parameters for normal and large mode
-quadNoteScrollerLinesHalf	rs.w	1
-quadNoteScrollerLines		rs.l	1
-
-* Scope window draw area dimensions
-* default: 320
-scopeDrawAreaWidth		rs.w 	1
-scopeDrawAreaModulo		rs.w 	1
-* default: 64
-scopeDrawAreaHeight		rs.w 	1
-
-* Requested dimensions for new draw area,
-* to be set to above variables when resize done.
-scopeDrawAreaWidthRequest		rs.w 	1
-scopeDrawAreaHeightRequest		rs.w 	1
-* To handle iwndow size and pos detection manually,
-* previous values are needed for comparison.
-scopePreviousWidth				rs.w  	1
-scopePreviousHeight 			rs.w 	1
-scopePreviousTopEdge  			rs.w 	1 
-scopePreviousLeftEdge			rs.w 	1
-
-* When scope is in patternscope mode
-* and running the generic patternscope,
-* there is only need to update it when data changes.
-* Use these two to detect it.
-scopePreviousPattPos		rs.w	1
-scopePreviousSongPos		rs.w	1
-
-  EREM ;; SCOPE STATE REMOVED
 
 
 timeoutmode	rs.b	1
@@ -1184,7 +1140,6 @@ altbuttonsUse  rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * Runtime scope settings
-; REM
 quadraScope   rs.b 1
 quadraScopeBars   rs.b 1
 quadraScopeF   rs.b 1
@@ -1195,7 +1150,6 @@ patternScope   rs.b 1
 patternScopeXL   rs.b 1
 spectrumScope   rs.b 1
 spectrumScopeBars   rs.b 1
-; EREM
  
 * audio homman muuttujat
 acou_deviceerr	rs.l	1
@@ -1398,7 +1352,9 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	23
+xpl_versio	=	24
+
+ printt "TEST TEST: star frontier.bp3"
 
 *********************************************************************************
 *
@@ -12093,12 +12049,9 @@ saveprefs
 	move.b	s3mmode1(a5),prefs_s3mmode1(a0)
 	move.b	s3mmode2(a5),prefs_s3mmode2(a0)
 	move.b	s3mmode3(a5),prefs_s3mmode3(a0)
-	printt "todo todo"
-	;move.b	quadmode(a5),prefs_quadmode(a0)
 	move.l	windowpos(a5),prefs_mainpos1(a0)
 	move.l	windowpos2(a5),prefs_mainpos2(a0)
 	move.l	windowpos_p(a5),prefs_prefspos(a0)
-	;move.l	quadpos(a5),prefs_quadpos(a0)
 	move.b	ptmix(a5),prefs_ptmix(a0)
 	move.b	xpkid(a5),prefs_xpkid(a0)
 	move.b	fade(a5),prefs_fade(a0)
@@ -12563,16 +12516,13 @@ prefs_code
 	lea	var_b,a5
 	addq	#1,prefs_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
-	printt	"TODO TODO"
+	printt	"TODO: refactor"
 	; basereg a4 gadgets?
 
 
 	clr.b	prefs_exit(a5)		* Lippu
 
 	st	boxsize00(a5)
-
-	printt "todo todo"
-	;move.b	quadmode(a5),scopechanged(a5)
 
 * Arvot yms. v‰liaikaismuuttujiin
 	move.l	mixirate(a5),mixingrate_new(a5)
@@ -12584,8 +12534,6 @@ prefs_code
 	move.b	s3mmode1(a5),s3mmode1_new(a5)
 	move.b	s3mmode2(a5),s3mmode2_new(a5)
 	move.b	s3mmode3(a5),s3mmode3_new(a5)
-	printt "todo todo"
-	;move.b	quadmode(a5),quadmode_new(a5)
 	move.b	ptmix(a5),ptmix_new(a5)
 	move.b	xpkid(a5),xpkid_new(a5)
 	move.b	fade(a5),fade_new(a5)
@@ -13039,8 +12987,6 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	s3mmode1_new(a5),s3mmode1(a5)
 	move.b	s3mmode2_new(a5),s3mmode2(a5)
 	move.b	s3mmode3_new(a5),s3mmode3(a5)
-	printt	"todo todo"
-	;move.b	quadmode_new(a5),quadmode(a5)
 	move.b	ptmix_new(a5),ptmix(a5)
 	move.b	xpkid_new(a5),xpkid(a5)
 	move.b	fade_new(a5),fade(a5)
@@ -21070,14 +21016,6 @@ signalit
 	move.l	4.w,a6			
 	jmp	_LVOSignal(a6)
 
- REM
-dummyserver_NOTUSED
-	dc.l	0,0
-	dc.b	2,0
-	dc.l	0
-	dc.l	0
-	dc.l	0
- EREM
 
 ******************************************************************************
 *
@@ -21548,7 +21486,7 @@ rexxmessage
 	bsr.w	loadprefs2
 	jsr	setboxy
 	jsr	init_inputhandler
-	printt	"TODO TODO"
+	printt	"TODO: minor"
 ;	tst.b	quadon(a5)			* avataanko scope?
 ;	beq.b	.q
 ;	bsr.w	start_quad
@@ -44861,7 +44799,7 @@ funcENPP_PokeLen
 .nozero
 	lea	$dff0a0,a0
 	move	d0,4(a0,d2)
-; REM
+
  	* Set sample len if DMA is not enabled,
 	* otherwise set looplen
  	lea	var_b,a0
@@ -44879,7 +44817,6 @@ funcENPP_PokeLen
 .1
 	move	d0,ns_replen+scope_ch1(a0,d2)
 .2
-; EREM
 	popm	d2/d3/a0/a1
 	rts
 
@@ -47826,7 +47763,6 @@ slim2	ds	410*2
 		cnop 0,4
 * Global variables
 var_b		ds.b	size_var
-;var_scopes  ds.b    sizeof_scopeVars
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
