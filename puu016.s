@@ -39581,14 +39581,14 @@ p_pretracker
 	jmp	.stop(pc)
 	p_NOP 	
 	p_NOP
-	p_NOP
+	jmp	.song(pc)
 	p_NOP
 	p_NOP
 	p_NOP
 	jmp .id_pretracker(pc)
 	jmp	.pre_author(pc)
 	dc.w pt_pretracker
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_scope!pf_quadscopePoke!pf_poslen!pf_end
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_scope!pf_quadscopePoke!pf_poslen!pf_end!pf_song
 	dc.b	"PreTracker by Pink/aBYSs",0
 .author = *-11
  even
@@ -39596,6 +39596,7 @@ p_pretracker
 .offset_init = $20+0
 .offset_play = $20+4
 .offset_stop = $20+8
+.offset_song = $20+12
 
 .pre_author
 	pushpea	.author(pc),d0
@@ -39621,23 +39622,36 @@ p_pretracker
 	rts
 .ok3
 	jsr	setMainWindowWaitPointer
-	pushm	d1-d7/a1-a6
+	pushm	d2-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	scopeData(a5),a1
 	lea	mainvolume(a5),a2
 	lea	songover(a5),a3
 	move.l pretrackerroutines(a5),a4
 	jsr	.offset_init(a4)
-	popm	d1-d7/a1-a6
+	popm	d2-d7/a1-a6
 	jsr	clearMainWindowWaitPointer
 	tst.l	d0
 	beq.b 	.noMem
+	bmi.b	.initErr
 ;	move.l	a0,deliPatternInfo(a5)
+	subq	#1,d1
+	move	d1,maxsongs(a5)
+
+ if DEBUG
+ 	moveq	#0,d0
+	move	d1,d0
+	DPRINT	"Songs %ld"
+ endif
 	moveq	#0,d0
 	rts	
 
 .noMem
 	moveq #ier_nomem,d0
+	rts
+
+.initErr
+	moveq #ier_not_compatible,d0
 	rts
 
 .play
@@ -39658,6 +39672,13 @@ p_pretracker
 	move.l pretrackerroutines(a5),a0
 	jsr	.offset_stop(a0)
 	bra.w	vapauta_kanavat
+
+.song
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Setting subsong %ld"
+	move.l pretrackerroutines(a5),a0
+	jmp	.offset_song(a0)
 
 .id_pretracker 
 	bsr.b 	id_pretracker_
