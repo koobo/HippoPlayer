@@ -36736,10 +36736,13 @@ p_thx
 
 	moveq	#4-1,d0
 .scope
+	tst.l	ns_start(a0)
+	bne.b	.same
 	move.l	.ahx_pvtAudioPointer(a1),ns_start(a0)
 	move.l	.ahx_pvtAudioPointer(a1),ns_loopstart(a0)
 	move	#$140,ns_length(a0)
 	move	#$140,ns_replen(a0)
+.same
 	move	.ahx_pvtAudioPeriod(a1),ns_period(a0)
 	move	.ahx_pvtAudioVolume(a1),ns_tempvol(a0)
 	move	.ahx_pvtAudioVolume(a1),d1
