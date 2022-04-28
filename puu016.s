@@ -46509,18 +46509,15 @@ drawFFT
 	move.l	s_spectrumMuluTable(a4),a2
 
 
-;%11111000 00000000
-;%00000111 11000000
-;%00000000 00111110
-;%11110000 00000001
-;%00001111 10000000
-;%00000000 00000000
-;%00000000 00000000
-;%00000000 00000000
+;%11111000 00000000 ror #5
+;%00000111 11000000 ror #5
+;%00000000 00111110 ror #5
+;%11110000 00000001 ror #8
+;%00000001 11110000
 
 	; Bitmask to draw with
 	move	#%0111100000000000,d6
-	; Bitmask to figure out where to draw
+	; Bitmask to detect word boundary collisions
 	move	#%1111100000000000,d5
 
 	; Take the 1st half
@@ -46532,11 +46529,12 @@ drawFFT
 	moveq	#0,d0
 .1	add	d0,d0 
 	move	(a2,d0),d0
+	* Draw bits
 	or.w	d6,(a1,d0)
 
-	* Shift draw mask
+	* Shift bit mask
 	ror.w 	#5,d6
-	* Shift and see if words overlap
+	* Shift also this and see if should continue to following word
 	ror.w	#5,d5
 	bmi.b	.2
 	
@@ -46544,7 +46542,7 @@ drawFFT
 .x	rts		
 
 .2
-	* Draw one extra data point
+	* Draw data point which is split between words
 	subq	#1,d7
 	bmi.b	.x
 	
@@ -46555,10 +46553,13 @@ drawFFT
 .3	add	d0,d0 
 	move	(a2,d0),d0
 
+	* Bits that go into the 2nd byte
 	or.b	d6,1(a1,d0)
+	* Bits that go into the 3rd
 	move	d6,d4
 	ror.w	#8,d4
 	or.b	d4,2(a1,d0)
+	* Moving on to next 16 pixels
 	addq.l	#2,a1
 
 	ror.w	#5,d5
