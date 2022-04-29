@@ -69,6 +69,126 @@ PATTERNINIT - EP
 + KRIS
 + Mugician2
 
+
+BUG:
+- open scopes
+- save prefs
+- exit
+- open with "hip hide"
+- scopes are opened, but main window not. scopes should also be hidden
+
+FIXED: BUG: SCREEN OVERWRITE
+- open all scopes
+- play BPSoundMon3 tunes, 
+- play BPSoundMon2 tunes
+- some tune had scratchy sounds, and channel was disabled in scope,
+- toggling scopes off with z caused chip buffer mungwall hits in hip-scope
+
+FIXED: BUG: unnecessary skipping
+- prefs: double buffering ON
+- file mode
+- play: Zzzax/Clean synth.bp3
+- wait until over
+- next tune "crypton.bp3" is skipped over after just a brief play
+- tune "crystals.bp3" plays
+- same thing even if double buffering is OFF
+- ANOTHER:
+-- toggling scopes off with z caused chip buffer mungwall hits in hip-scope
+
+FIXED: BUG: buttons are inactive
+- kick13
+- play "coop-anty/the emboldmemnt.mod"
+- many play buttons are disabled
+
+FIXED: BUG: crash
+- kick13
+- press z
+- "stopSpectrumScopeTask" 
+- press z again
+- BOOM
+
+FIXED: ENFORCER HIT
+- HIPC Wings of Death (level 1)
+-- SpectrumMixSamples, add
+-- d0 = 1fc0
+-- d1 = 40
+-- d2 = 81
+-- d3 = 29
+-- d4 = 0
+-- vol clamp error?
+-- Sample data buffer is too short?
+
+TODO - 2022 April
++ new scope toggle: darkness.s3m, patternscope, 5ch, toggling makes pattscope window too big
+  - works
++ sample scope support for StarTrekker
++ FIXED: fix kick 1.3 bevel borders
++ FIXED: mp3 IDv3 header skip
++ FIXED: quadrascope support for other playroutines
++ FIXED: improved mp3 id
+- check DIGIBooster mods, mods start with "DIGI Booster module"
++ FIXED: BUG: open scope
+       play some non scope supporting mod
+       then play mp3 
+  ---> scope enforcer hits
++ BUG: play some deli module with scope
+  - with double buffering
+  - load unknown file
+  -> scope enforcer hit, read already freed module?
+  -> POSSIBLY FIXED
+
+TODO - 2022 January
+- click scope window: switch visualization mode
++ FIXED: allow changing button icon gfx and height
+
+TODO
+- AREXX: check that file adds etc are working in correct list mode
+
+TODO
+- play "cruisin.ahx", wait until until end
+--> cia errors when trying to switch tune
+--> buggy AHX code
+
+TODO: When a module has more than 1 sub-song it will go to next 
+  subsong even when in random play mode. 
+  I think in random play mode it should only play first song, since some have quite a 
+  few and most sub-songs are then short sound effects.
++ FIXED Some formats display the HippoScope, but the scope is not working at 
+  all, for example: Future Composer 1.0-1.3, 1.4, SoundFX, 
+  Art of Noice 4ch, Game Music Creator, BP Soundmon v2.0, Oktalyzer, 
+  Sonic Arranger, Chiptracker [EP]
+
+
+CRASH:
+- mortimer twang: unnamed.psid
+                  seved skee
+-- play for a while, then crash?
+--> didn't crash for me
+
+TODO:
++ hippel-coso sample scope support
+
+FIXED CRASH:
+- save state filebrowse into a VOLUME
+- restart hippo so that VOLUME is not available
+- crashh
+
+FIXED LOAD HANG:
+- use ftpmount
+- normal module load is obviously not very good, does not check for
+  -1 error code from Read
+
+CRASH:
+- AHI Mode: ForteMedia801:Fast 16 bit Stereo+
+- Only happens with "steenl", works ok with "indigolemon"
+Steps:
+- Start playback with PS3M
+- ahi_end  -> crash
+- Sampleplay: works
+
+FIXED? TODO:
+- PS3M: check if AHI enabled, skip all patternscope stuff
+
 CRASH?
 - have an ahi init error
 - press "PRG"
@@ -238,7 +358,7 @@ FIXED: BUG - kick13
 --> scope empty
 
 
-NOTES PROBLEM?
+FIXED: NOTES PROBLEM?
 - play "happy_tune-chip.xm"
 - first three notes should be maybe: C-3, D#3, B-3 
 

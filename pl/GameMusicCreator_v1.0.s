@@ -1,7 +1,27 @@
-;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
-    incdir	include:
+;APS00000001000000010000000100000001000000010000000100000001000000010000000100000001
+	incdir	include:
 	include mucro.i
 	include	misc/eagleplayer.i
+
+	* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
 
 
 testi = 0
@@ -24,32 +44,32 @@ okmod
     lea	  songover,a2
     lea   curpos,a3
     lea   maxpos,a4
-
-    jsr   MU_startmusic     ;start music
+    lea   scope_,a5
+    move.l #emptySample,d0
+    jsr	init
 loop	
     cmp.b	#$80,$dff006
     bne.b	loop
 .x  cmp.b	#$81,$dff006
     bne.b	.x
 
-    move	#$ff0,$dff180
-	jsr     MU_interrupt
-    clr	$dff180
+;    move	#$ff0,$dff180
+    jsr	play
+;    clr	$dff180
 
     btst #6,$bfe001
     bne loop 		;wait for mouseclick
 
-    jsr   MU_stopmusic      ;stop music
+    jsr stop
     rts			;EXIT program
  
 mainvolume  
-    	dc.w    64
-songover
-    	dc.w 0
-curpos 
-	dc.w	0
-maxpos
-	dc.w	0
+    	  dc.w    64
+songover  dc.w 0
+curpos 	  dc.w	0
+maxpos    dc.w	0
+scope_	  ds.b scope_size
+
 
 ; in: a4 = module
 ; out: d0 = 0, valid GMC
@@ -228,9 +248,10 @@ id_gamemusiccreator
 
     section data,data_c
 
+emptySample	dc.l	0
 mod
 MUSICDATA
- ;incbin  "sys:Music/Roots/Modules/Game Music Creator/Allister Brimble/terry's big adventure.gmc"
+ incbin  "m:exo/Game Music Creator/Allister Brimble/terry's big adventure.gmc"
 
 ; id fixed:
 ; incbin "sys:Music/Roots/Modules/Game Music Creator/- unknown/knights of the sky 4.gmc"
@@ -240,22 +261,31 @@ MUSICDATA
 * not identified properly:
  ;incbin "sys:Music/Roots/Modules/Game Music Creator/Paul McMaster/jet set willy 2 title.gmc"
  ;incbin "sys:Music/Roots/Modules/Game Music Creator/Robin Burrows/fatal mission - che bang.gmc"
- incbin "M:exo/Game Music Creator/Ten Pin Alley/covert action - finalmusic.gmc"
+ ;incbin "M:exo/Game Music Creator/Ten Pin Alley/covert action - finalmusic.gmc"
  ;incbin "sys:Music/Roots/Modules/Game Music Creator/Ten Pin Alley/covert action - thememusic.gmc"
 
 MUSICDATALEN = *-MUSICDATA
 
 
-    section gmc,code_p
+    section gmc,code_c
  endc
 
 start
 
     jmp init(pc)
+play
     jmp MU_interrupt(pc)
+stop
     jmp MU_stopmusic(pc)
 
 init
+    move.l  a1,hip_mainvolume
+    move.l  a2,hip_songover
+    move.l  a3,hip_currentpos
+    move.l  a4,hip_maxpos
+    move.l  a5,scopeAddr
+    move.l  d0,emptySampleAddr
+    
     bsr.b MU_startmusic 
     bsr.b PatternInit
     moveq #0,d0
@@ -304,11 +334,6 @@ ConvertNote
 ******** GameMusicCreator Replay-routine v1.0 *********
 *******************************************************
 MU_startmusic:
-    move.l  a1,hip_mainvolume
-    move.l  a2,hip_songover
-    move.l  a3,hip_currentpos
-    move.l  a4,hip_maxpos
-
     move.l  a0,MU_data
     move.l  a0,MU_tablepos
     move.l  a0,MU_songpointer
@@ -375,8 +400,8 @@ MU_calcit:
     add.l   d1,d0
     move.l  d0,8(a0) ;set repeat
     cmp.w   #2,12(a0)
-    bne.b     mu_looping
-    move.l  #MU_empty,8(a0)
+    bne.b   mu_looping
+    move.l  emptySampleAddr(pc),8(a0)
 mu_looping:
     clr.l   d0
     move.w  4(a0),d0 ;add sampletable
@@ -511,6 +536,17 @@ MU_setit:
     move.w  6(a6),MU_vol0
     clr.w   MU_slide0
     bset    #0,d3
+x1
+
+;	move	#$0f0,$dff180    
+    push    a0
+    move.l  scopeAddr(pc),a0
+    move.l  (a6),scope_ch1+ns_start(a0)
+    move    4(a6),scope_ch1+ns_length(a0)
+;    move.l  (a6),scope_ch1+ns_loopstart(a0)
+;    move    4(a6),scope_ch1+ns_replen(a0)
+    move    d1,scope_ch1+ns_period(a0)
+    pop     a0
     rts
 MU_conti1:
     cmp.w   #2,d2
@@ -524,6 +560,15 @@ MU_conti1:
     move.w  6(a6),MU_vol1
     clr.w   MU_slide1
     bset    #1,d3
+ 
+    push    a0
+    move.l  scopeAddr(pc),a0
+    move.l  (a6),scope_ch2+ns_start(a0)
+    move    4(a6),scope_ch2+ns_length(a0)
+;    move.l  (a6),scope_ch2+ns_loopstart(a0)
+;    move    4(a6),scope_ch2+ns_replen(a0)
+    move    d1,scope_ch2+ns_period(a0)
+    pop     a0
     rts
 MU_conti2:
     cmp.w   #3,d2
@@ -537,6 +582,15 @@ MU_conti2:
     move.w  6(a6),MU_vol2
     clr.w   MU_slide2
     bset    #2,d3
+
+    push    a0
+    move.l  scopeAddr(pc),a0
+    move.l  (a6),scope_ch3+ns_start(a0)
+    move    4(a6),scope_ch3+ns_length(a0)
+ ;   move.l  (a6),scope_ch3+ns_loopstart(a0)
+ ;   move    4(a6),scope_ch3+ns_replen(a0)
+    move    d1,scope_ch3+ns_period(a0)
+    pop     a0
     rts
 MU_conti3:
     clr.w   $dff0d8
@@ -548,6 +602,15 @@ MU_conti3:
     move.w  6(a6),MU_vol3
     clr.w   MU_slide3
     bset    #3,d3
+
+    push    a0
+    move.l  scopeAddr(pc),a0
+    move.l  (a6),scope_ch4+ns_start(a0)
+    move    4(a6),scope_ch4+ns_length(a0)
+ ;   move.l  (a6),scope_ch4+ns_loopstart(a0)
+ ;   move    4(a6),scope_ch4+ns_replen(a0)
+    move    d1,scope_ch4+ns_period(a0)
+    pop     a0
     rts
 MU_seteffect:
     move.w  d5,d6
@@ -652,6 +715,13 @@ MU_everyvert:
     move.w  MU_slide3,d0
     add.w   d0,MU_note3
     move.w  MU_note3,$dff0d6
+
+    move.l  scopeAddr(pc),a0
+    move    MU_note0(pc),scope_ch1+ns_period(a0)
+    move    MU_note1(pc),scope_ch2+ns_period(a0)
+    move    MU_note2(pc),scope_ch3+ns_period(a0)
+    move    MU_note3(pc),scope_ch4+ns_period(a0)
+
     btst    #0,MU_stop
     beq.b     MU_ok1
     bclr    #0,MU_stop
@@ -659,6 +729,15 @@ MU_everyvert:
     move.l  8(a0),$dff0a0
     move.w  12(a0),$dff0a4
     clr.l   MU_chan0
+x2
+    push    a1
+    move.l  scopeAddr(pc),a1
+;    move.l  8(a0),scope_ch1+ns_start(a1)
+;    move    12(a0),scope_ch1+ns_length(a1)
+    move.l  8(a0),scope_ch1+ns_loopstart(a1)
+    move    12(a0),scope_ch1+ns_replen(a1)
+    pop	    a1
+
 MU_ok1:
     btst    #1,MU_stop
     beq.b     MU_ok2
@@ -666,7 +745,16 @@ MU_ok1:
     move.l  MU_chan1,a0
     move.l  8(a0),$dff0b0
     move.w  12(a0),$dff0b4
-    clr.l   MU_chan1
+    clr.l   MU_chan1 
+
+    push    a1
+    move.l  scopeAddr(pc),a1
+;    move.l  8(a0),scope_ch2+ns_start(a1)
+;    move    12(a0),scope_ch2+ns_length(a1)
+    move.l  8(a0),scope_ch2+ns_loopstart(a1)
+    move    12(a0),scope_ch2+ns_replen(a1)
+    pop	    a1
+
 MU_ok2:
     btst    #2,MU_stop
     beq.b     MU_ok3
@@ -675,6 +763,15 @@ MU_ok2:
     move.l  8(a0),$dff0c0
     move.w  12(a0),$dff0c4
     clr.l   MU_chan2
+    
+    push    a1
+    move.l  scopeAddr(pc),a1
+;    move.l  8(a0),scope_ch3+ns_start(a1)
+;    move    12(a0),scope_ch3+ns_length(a1)
+    move.l  8(a0),scope_ch3+ns_loopstart(a1)
+    move    12(a0),scope_ch3+ns_replen(a1)
+    pop	    a1
+
 MU_ok3:
     btst    #3,MU_stop
     beq.b     MU_ok4
@@ -683,8 +780,17 @@ MU_ok3:
     move.l  8(a0),$dff0d0
     move.w  12(a0),$dff0d4
     clr.l   MU_chan3
+
+    push    a1
+    move.l  scopeAddr(pc),a1
+;    move.l  8(a0),scope_ch4+ns_start(a1)
+;    move    12(a0),scope_ch4+ns_length(a1)
+    move.l  8(a0),scope_ch4+ns_loopstart(a1)
+    move    12(a0),scope_ch4+ns_replen(a1)
+    pop	    a1
+
 MU_ok4:
-    move.w   #$8000,d3
+    move.w   #$8000,d3    * Collect DMA enable bits here
     cmp.l    #0,MU_chan0
     beq.b      MU_okk1
     bset     #0,MU_stop
@@ -709,26 +815,31 @@ MU_okk4:
 
     move.l  hip_mainvolume(pc),a0
     move    (a0),d3
+    move.l  scopeAddr(pc),a0
 
     move    d3,d0
     mulu    MU_vol0(pc),d0
     lsr     #6,d0
     move    d0,$dff0a8
+    move    d0,scope_ch1+ns_vol(a0)
 
     move    d3,d0
     mulu    MU_vol1(pc),d0
     lsr     #6,d0
     move    d0,$dff0b8
+    move    d0,scope_ch2+ns_vol(a0)
     
     move    d3,d0
     mulu    MU_vol2(pc),d0
     lsr     #6,d0
     move    d0,$dff0c8
+    move    d0,scope_ch3+ns_vol(a0)
   
     move    d3,d0
     mulu    MU_vol3(pc),d0
     lsr     #6,d0
     move    d0,$dff0d8
+    move    d0,scope_ch4+ns_vol(a0)
   
     ;move.w   MU_vol0,$dff0a8
     ;move.w   MU_vol1,$dff0b8
@@ -759,13 +870,15 @@ MU_patterncount: dc.w 0
 MU_songpointer: dc.l 0
 MU_tablepos: dc.l 0
 MU_pospointer: dc.l 0 
-MU_empty: blk.l 2,0
+;MU_empty: blk.l 2,0
 MU_data: dc.l  0
 
 hip_mainvolume: dc.l 0
 hip_songover:   dc.l 0
 hip_currentpos: dc.l 0
-hip_maxpos: dc.l 0
+hip_maxpos: 	dc.l 0
+emptySampleAddr: dc.l 0
+scopeAddr:  	dc.l 0
 *************************************************
 *************************************************
 

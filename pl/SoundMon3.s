@@ -2,9 +2,32 @@
 testi = 0
 
 	incdir	include:
-	INCLUDE	"Exec/Types.i"
-	include	mucro.i
+	Include	mucro.i
 	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
+	incdir
+
+
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_tempvol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
 
  ifne testi
 
@@ -17,6 +40,7 @@ testi = 0
 
 
 	move.l	#dmawait_,d0
+	move.l #scope_,d1
 	lea	data,a0
 	lea	dum(pc),a1
 	lea	dum(pc),a2
@@ -40,6 +64,7 @@ error:
 	
 vol	dc	64
 dum	dc.l	0
+scope_      ds.b scope_size
 
 dmawait_
 	pushm	d0/d1
@@ -110,7 +135,7 @@ poslen		dc.l	0
 mainvolume	dc.l	0
 volume		dc	0
 dmawait		dc.l	0
-
+scope		dc.l	0
 
 
 PatternInfo
@@ -131,6 +156,7 @@ PatternInit
 	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
 	rts
 
+
 * Called by the PI engine to get values for a particular row
 ConvertNote
 	moveq	#0,D0		; Period, Note
@@ -146,19 +172,123 @@ ConvertNote
 	move.b	1(a0),d1
 	lsr.b	#4,d1
 
+	* Sample transpose
+	lea	PI_SampleTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d1
+
+	moveq	#15,d2
+	and.b 	1(a0),d2		* cmd
+
+	cmpi.b	#10,d2    		;Option 10->transposes off
+	bne.b	.bp_do1
+	move.b	2(a0),d3
+	and.b	#240,d3	  		;Higher nibble=transpose
+	bne.b	.bp_not1
+.bp_do1
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	ext	d0
+.bp_not1	
+	* scale is 7 octaves.
+	* note 0 is the 4th octave.
+	add		#4*12,d0
+
 .optional
 	moveq	#15,d2
-	and.b 	1(a0),d2
-	move.b	2(a0),d3
+	and.b 	1(a0),d2	* cmd
+	move.b	2(a0),d3	* arg
 	rts
 
 
+
+* Scope support functions:
+
+setPeriod
+	pushm	d1/a1
+	move	a1,d1
+	sub	#$f0a0,d1
+	move.l	scope(pc),a1
+	move	d0,ns_period(a1,d1)
+	popm	d1/a1
+	rts
+
+
+setVol
+	pushm	d1/a1
+	move	a1,d1
+	sub	#$f0a0,d1
+	move.l	scope(pc),a1
+	move	d0,ns_tempvol(a1,d1)
+	popm	d1/a1
+	rts
+
+setAddr
+	pushm	d1/d2/d3/a1
+	move	a1,d1
+	move.l	scope(pc),a1
+
+	sub	#$f0a0,d1
+	move.b	d1,d2
+	lsr.b	#4,d2
+	moveq	#1,d3
+	lsl.b	d2,d3 * DMA bit
+	and.b	scope_trigger(a1),d3
+	beq.b	.dmaClr
+	* DMA set
+	move.l	d0,ns_loopstart(a1,d1)
+	bra.b	.x	
+.dmaClr
+	* DMA clear
+	move.l	d0,ns_start(a1,d1)
+.x	popm	d1/d2/d3/a1
+	rts
+
+setLen
+	pushm	d1/d2/d3/a1
+	move	a1,d1
+	move.l	scope(pc),a1
+
+	sub	#$f0a0,d1
+	move.b	d1,d2
+	lsr.b	#4,d2
+	moveq	#1,d3
+	lsl.b	d2,d3 * DMA bit
+	and.b	scope_trigger(a1),d3
+	beq.b	.dmaClr
+	move	d0,ns_replen(a1,d1)
+	bra.b	.x	
+.dmaClr
+	move	d0,ns_length(a1,d1)
+.x	popm	d1/d2/d3/a1
+	rts
+
+* In:
+*   d1 = DMA bits
+setDma
+	push	a1
+	move.l	scope(pc),a1
+	or.b  	d1,scope_trigger(a1)
+	pop a1
+	rts
+
+* In:
+*   d1 = DMA bits
+clrDma
+	push	a1
+	not.b	d1
+	move.l	scope(pc),a1
+	and.b  	d1,scope_trigger(a1)
+	pop	a1
+	rts
 
 
 *----------------------------------------------------------------------------*
 BP_InitSound:
 	movem.l	a0-a5,-(sp)
 	move.l	d0,dmawait
+	move.l	d1,scope
 ;
 ;BP_Config:	lea	BP_StartPuffer,a0
 ;		lea	BP_MerkPuffer,a1
@@ -266,11 +396,32 @@ BP_264:		move.b	12(a0),d4
 		divs.w	d4,d5
 		add.w	(a0),d5
 		move.w	d5,6(a1)
+
+		push	d0
+		move	d5,d0
+		bsr	setPeriod
+		pop	d0
+
 		bra.s	BP_28A
 
 BP_286:		move.w	(a0),6(a1)
-BP_28A:		move.l	4(a0),(a1)
+		
+		push	d0
+		move	(a0),d0
+		bsr	setPeriod
+		pop	d0
+
+BP_28A:		
+		move.l	4(a0),(a1)
 		move.w	8(a0),4(a1)
+
+		push	d0
+		move.l	4(a0),d0
+		bsr	setAddr
+		move	8(a0),d0
+		bsr	setLen
+		pop	d0
+
 		tst.b	11(a0)
 		bne.s	BP_2A0
 		tst.b	13(a0)
@@ -312,8 +463,11 @@ BP_2F6:		lea	$10(a1),a1
 BP_310:		lea	BP_B11,a0
 		move.b	BP_B12-BP_B11(a0),(a0)
 		bsr.w	BP_3A0
-		move.w	BP_DMACon,$DFF096
+		move.w	BP_DMACon(pc),$DFF096
 
+		move.w	BP_DMACon(pc),d1
+		bsr	clrDma
+	
 ;	;Wait !!!
 ;		if	Test
 ;		moveq	#$7F,d0
@@ -360,7 +514,11 @@ BP_310:		lea	BP_B11,a0
 		lea	$24(a5),a5
 		dbra	d0,.BP_372
 		ori.w	#$8000,BP_DMACon
-		move.w	BP_DMACon,$DFF096
+		move.w	BP_DMACon(pc),$DFF096
+		push	d1
+		move	BP_DMACon(pc),d1
+		bsr	setDma
+		pop	d1
 		rts
 
 BP_3A0:		clr.w	BP_DMACon
@@ -377,8 +535,8 @@ BP_3BA:		moveq	#0,d1
 		add.l	d2,d1
 		addi.l	#$200,d1
 		move.w	(a0,d1.w),d2
-		move.b	2(a0,d1.w),BP_B0F
-		move.b	3(a0,d1.w),BP_B10
+		move.b	2(a0,d1.w),BP_B0F	* SMON_ST
+		move.b	3(a0,d1.w),BP_B10	* SMON_TR
 		subq.w	#1,d2
 		mulu.w	#$30,d2
 		moveq	#0,d3
@@ -398,21 +556,29 @@ BP_3BA:		moveq	#0,d1
 		cmp.b	#1,d7
 		bne.b 	.a 
 		move.l	a2,Stripe1
+		move.b	SMON_ST(pc),PatternInfo+PI_SampleTranspose1
+		move.b	SMON_TR(pc),PatternInfo+PI_NoteTranspose1
 		bra.b	.d
 .a
 		cmp.b	#2,d7
 		bne.b 	.b 
 		move.l	a2,Stripe2
+		move.b	SMON_ST(pc),PatternInfo+PI_SampleTranspose2
+		move.b	SMON_TR(pc),PatternInfo+PI_NoteTranspose2
 		bra.b	.d
 .b
 		cmp.b	#4,d7
 		bne.b 	.c 
 		move.l	a2,Stripe3
+		move.b	SMON_ST(pc),PatternInfo+PI_SampleTranspose3
+		move.b	SMON_TR(pc),PatternInfo+PI_NoteTranspose3
 		bra.b	.d
 .c
 		cmp.b	#8,d7
 		bne.b 	.d 
 		move.l	a2,Stripe4
+		move.b	SMON_ST(pc),PatternInfo+PI_SampleTranspose4
+		move.b	SMON_TR(pc),PatternInfo+PI_NoteTranspose4
 .d
 		moveq	#0,d4
 		move.b	BP_B0E,d4
@@ -488,6 +654,12 @@ BP_4BA:		cmpi.b	#1,d3
 	mulu	volume(pc),d4
 	lsr	#6,d4
 	move.w	d4,8(a3)
+	
+		pushm	d0/a1
+		move	d4,d0
+		move.l	a3,a1
+		bsr	setVol
+		popm	d0/a1
 
 		bra.w	BP_592
 
@@ -585,6 +757,12 @@ BP_5EE:		rts
 
 BP_5F0:		bclr	#7,(a2)
 		move.w	(a2),6(a1)
+
+		push	d0
+		move	(a2),d0
+		bsr	setPeriod
+		pop	d0
+
 		moveq	#0,d7
 		move.b	3(a2),d7
 		move.l	d7,d6
@@ -599,8 +777,18 @@ BP_5F0:		bclr	#7,(a2)
 		lea	BP_WaveBuffer,a4
 		move.l	-4(a4,d6.w),d4
 		beq.s	BP_662
+		
 		move.l	d4,(a1)
 		move.w	(a3,d7.w),4(a1)
+
+		push	d0
+		move.l	d4,d0
+		bsr	setAddr
+		move	(a3,d7),d0
+		bsr	setLen
+		pop	d0
+
+
 		move.b	2(a2),9(a1)
 		cmpi.b	#$FF,2(a2)
 		bne.s	BP_646
@@ -611,6 +799,10 @@ BP_5F0:		bclr	#7,(a2)
 	mulu	volume(pc),d6
 	lsr	#6,d6
 	move	d6,8(a1)
+	push	d0
+	move	d6,d0
+	bsr	setVol
+	pop	d0
 
 BP_646:		move.w	4(a3,d7.w),8(a2)
 		moveq	#0,d6
@@ -627,10 +819,25 @@ BP_66C:		tst.w	d6
 		beq.s	BP_67A
 		add.w	8(a2),d6
 		move.w	d6,4(a1)
+
+		push	d0
+		move	d6,d0
+		bsr	setLen
+		pop	d0
+
 		bra.s	BP_684
 
-BP_67A:		move.w	8(a2),4(a1)
+BP_67A:	
+		move.w	8(a2),4(a1)
 		move.l	4(a2),(a1)
+
+		push	d0
+		move.l	4(a2),d0
+		bsr	setAddr
+		move	8(a2),d0
+		bsr	setLen
+		pop	d0
+
 BP_684:		or.w	d1,BP_DMACon
 		rts
 
@@ -661,6 +868,14 @@ BP_68C:		move.b	#1,$1B(a2)
 		move.l	a4,4(a2)
 		move.w	2(a3,d7.w),4(a1)
 		move.w	2(a3,d7.w),8(a2)
+
+		push	d0
+		move.l	a4,d0
+		bsr	setAddr
+		move	2(a3,d7.w),d0
+		bsr	setLen
+		pop	d0
+
 		tst.b	$1F(a2)
 		beq.s	BP_746
 		move.l	BP_B2E,a4
@@ -684,7 +899,10 @@ BP_736:		clr.w	d4
 	mulu	volume(pc),d3
 	lsr	#6,d3
 	move	d3,8(a1)
-	
+	push	d0
+	move	d3,d0
+	bsr	setVol
+	pop	d0
 		bra.s	BP_75A
 
 BP_746:	
@@ -696,6 +914,7 @@ BP_746:
 	mulu	volume(pc),d0
 	lsr	#6,d0
 	move	d0,8(a1)
+	bsr	setVol
 	move.l	(sp)+,d0
 
 		cmpi.b	#$FF,2(a2)
@@ -708,6 +927,7 @@ BP_746:
 	mulu	volume(pc),d0
 	lsr	#6,d0
 	move	d0,8(a1)
+	bsr	setVol
 	move.l	(sp)+,d0
 
 
@@ -730,6 +950,12 @@ BP_78E:		lea	PeriodeTable,a4
 		asl.w	#1,d4
 		move.w	-2(a4,d4.w),6(a1)
 		move.w	-2(a4,d4.w),(a0)
+
+		push	d0
+		move.w	-2(a4,d4.w),d0
+		bsr	setPeriod
+		pop	d0
+
 		rts
 
 BP_7A2:		moveq	#3,d0
@@ -772,7 +998,10 @@ BP_7D0:		clr.w	d7
 	mulu	volume(pc),d4
 	lsr	#6,d4
 	move	d4,8(a1)
-
+	push	d0
+	move	d4,d0
+	bsr	setVol
+	pop	d0
 
 		addq.w	#1,$12(a2)
 		move.w	6(a3,d7.w),d4
@@ -804,6 +1033,12 @@ BP_832:		tst.b	$1E(a2)
 BP_86A:		move.w	(a2),d5
 		add.w	d4,d5
 		move.w	d5,6(a1)
+
+		push	d0
+		move	d5,d0	
+		bsr	setPeriod
+		pop	d0
+
 		addq.w	#1,$10(a2)
 		move.w	12(a3,d7.w),d3
 		cmp.w	$10(a2),d3
@@ -992,7 +1227,10 @@ BP_B0C:		dc.b	0
 BP_B0D:		dc.b	0
 patcounter
 BP_B0E:		dc.b	0
+
+SMON_ST:
 BP_B0F:		dc.b	0
+SMON_TR:
 BP_B10:		dc.b	0
 BP_B11:		dc.b	1
 BP_B12:		dc.b	6

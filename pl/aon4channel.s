@@ -1,9 +1,30 @@
-;APS0000ACF30000D59D0000009100000091000000910000009100000091000000910000009100000091
+;APS0000ACF50000D59D0000009100000091000000910000009100000091000000910000009100000091
 	incdir	include:
 	include	exec/exec_lib.i
 	include	exec/memory.i
 	include	misc/eagleplayer.i
 	include	mucro.i
+
+
+	* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
 
 TESTI	=	0
 
@@ -13,6 +34,7 @@ TESTI	=	0
 	lea	mastervol,a1
 	lea	songend_,a2
 	lea	tempofunc,a3
+	lea	scope_,a4
 	jsr	init
 	bne	exit
 loop
@@ -38,7 +60,7 @@ tempofunc
 
 mastervol	dc	64/1
 songend_		dc	0
-
+scope_		ds.b scope_size
 
 	section	dd,data_c
 mod
@@ -59,12 +81,15 @@ master		dc.l	0
 ciasetter	dc.l 	0
 songend		dc.l 	0
 AON_leer	dc.l 	0
+scopeAddr	dc.l	0
 
 * a0 = module
 * a1 = main vol
 * a2 = songend 
 * a3 = cia timer setter func
+* a4 = scope data
 init
+	move.l	a4,scopeAddr
 	lea	master(pc),a4
 	move.l	a1,(a4)
 	lea	songend(pc),a4  
@@ -127,9 +152,10 @@ stop
 
 * Restore volume
 continue
+			push	a5
 			LEA	AON_CHANNELS(PC),A0
 			moveq	#4-1,d1
-			lea		$dff0a0,a1
+			lea	$dff0a0,a1
 .loop4		
 			moveq	#0,d0
 			move.b	aon_volume(a0),d0
@@ -137,20 +163,60 @@ continue
 			move.b	aon_synthVOL(a0),d2
 			lsr.b	#1,d2
 			mulu	d2,d0
-			lsr		#6,d0
+			lsr	#6,d0
 			mulu	aon_trackvol(a0),d0
-			lsr		#6,d0
+			lsr	#6,d0
 			move.l	master(pc),a2
 			mulu	(a2),d0
-			lsr		#6,d0
-			move	d6,8(a1)
+			lsr	#6,d0
+			move	d0,8(a1)
+
+			move.l	a1,a5
+			bsr	setVol
 
 			lea	aon_chdatasize(a0),a0
-			lea $10(a1),a1
+			lea 	$10(a1),a1
 			dbf	d1,.loop4
+			pop	a5
 			rts
 
 
+
+setVol
+	push	a5
+	sub.l	#$dff0a0,a5
+	add.l	scopeAddr(pc),a5
+	move	d0,ns_vol(a5)
+	pop	a5
+	rts
+
+setPer
+	push	a5
+	sub.l	#$dff0a0,a5
+	add.l	scopeAddr(pc),a5
+	move	d0,ns_period(a5)
+	pop	a5
+	rts
+
+setAddr
+	push	a5
+	sub.l	#$dff0a0,a5
+	add.l	scopeAddr(pc),a5
+	move.l	d0,ns_start(a5)
+	move	d1,ns_length(a5)
+	move.l	d0,ns_loopstart(a5)
+	move	d1,ns_replen(a5)
+	pop	a5
+	rts
+
+setRep
+	push	a5
+	sub.l	#$dff0a0,a5
+	add.l	scopeAddr(pc),a5
+	move.l	d0,ns_loopstart(a5)
+	move	d1,ns_replen(a5)
+	pop	a5
+	rts
 
 
 PatternInfo
@@ -1914,7 +1980,7 @@ AON_STARTINSTR.1
 			move	aon_fxCOM(a4),d0
 			and	#$0ff0,d0
 			cmp	#$0ed0,d0
-			beq.b	aon_strtinsonlyrep.1
+			beq.w	aon_strtinsonlyrep.1
 
 			btst	#1,aon_chflag(a4)	; bit1= aonflag=2 or 3
 			beq.b	aon_strtins.notset1
@@ -1936,7 +2002,9 @@ aon_strtins.notset1
 			cmp	#103,d0
 			bhs.b	.noperalert
 			moveq	#103,d0
-.noperalert		move	d0,$6(a5)
+.noperalert		
+			move	d0,$6(a5)
+			bsr	setPer
 
 			moveq	#0,d0
 			move.b	aon_volume(a4),d0
@@ -1954,13 +2022,19 @@ aon_strtins.notset1
 	move.l	(sp)+,a0
 	lsr	#6,d0
 
-			move.b	d0,$9(a5)
+			move	d0,$8(a5)
+			bsr	setVol
 
 			btst	#1,aon_chflag(a4)
 			beq.s	aon_strtinsonlyrep.1
 			move.l	aon_waveform(a4),$0(a5)
-
 			move	aon_wavelen(a4),$4(a5)
+
+			pushm	d0/d1
+			move.l	aon_waveform(a4),d0
+			move	aon_wavelen(a4),d1
+			bsr		setAddr
+			popm 	d0/d1
 
 aon_strtinsonlyrep.1
 			addq.b	#1,d7
@@ -1977,6 +2051,13 @@ AON_STARTINSTR.2
 			move.l	aon_repeatstrt(a4),(a5)
 			move	aon_replen(a4),$4(a5)
 			clr.b	aon_chflag(a4)
+
+			pushm	d0/d1
+			move.l	aon_repeatstrt(a4),d0
+			move	aon_replen(a4),d1
+			bsr		setRep
+			popm 	d0/d1
+
 			bra.b	aon_strtinsonlyrep.1
 ;========================================================================
 ;aon_dmawait		dc.b	40,0				; rastlines

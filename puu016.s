@@ -23,14 +23,16 @@ ver	macro
 ;	dc.b	"v2.49ﬂ (?.?.2021)"
 ;	dc.b	"v2.49 (29.11.2021)"
 ;	dc.b	"v2.50ﬂ (?.?.202?)"
-	dc.b	"v2.50 (31.12.2021)"
+;	dc.b	"v2.50 (31.12.2021)"
+;	dc.b	"v2.52ﬂ (?.?.202?)"
+	dc.b	"v2.52 (30.4.2022)"
 	endm	
 
 
-DEBUG	= 0
+DEBUG	= 1
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 
-asm	= 0	* 1: Run from AsmOne, 0: CLI/Workbench
+asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
 
 zoom	= 0	* 1: zoomaava hippo
 fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
@@ -40,7 +42,17 @@ TARK	= 0	* 1: tekstien tarkistus
 EFEKTI  = 0	* 1: efekti volumesliderill‰
 ANNOY	= 0 * 1: Unregistered version tekstej‰ ymp‰riins‰
 
-DELI_TEST_MODE = 0
+DELI_TEST_MODE 		= 	0
+FEATURE_FREQSCOPE	=	0
+FEATURE_SPECTRUMSCOPE	= 	1
+
+ ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
+    fail "Enable only one"
+ endif
+ 
+ ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE-2)
+    fail "Enable only one"
+ endif
 
 ; Magic constants used with playingmodule and chosenmodule
 ; Positive value:
@@ -57,17 +69,13 @@ PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
 MAX_MODULES		= $1ffff 		    * this should be enough!
 
 
-;; Random play related
-;;RANDOM_PLAY_TABLE_SIZE  = MAX_MODULES/8+1
-;;MAX_RANDOM_MASK 	= $ffff 	* output mask for the random generator
 	
-	
- ifne TARK
- ifeq asm
- printt "Onko CHECKSUMMI oikea? Molemmat!"
- printt "Onko CHECKSUMMI oikea?"
- endc
- endc
+ ;ifne TARK
+ ;ifeq asm
+ ;printt "Onko CHECKSUMMI oikea? Molemmat!"
+ ;printt "Onko CHECKSUMMI oikea?"
+ ;endc
+ ;endc
  
 
 WINX	= 2	* X ja Y lis‰ykset p‰‰ikkunan grafiikkaan
@@ -174,7 +182,6 @@ check	macro
 	include	dos/dos_lib.i
 	include	dos/dosextens.i
 
-
 	include	rexx/rxslib.i
 
 	include	devices/audio.i
@@ -211,11 +218,15 @@ check	macro
 	include	misc/deliplayer.i
 	include	misc/eagleplayer.i
 
+	include	math/mathffp_lib.i
+	include	math/mathtrans_lib.i
+	
 	incdir include/
 	include	mucro.i
 	include	med.i
 	include	Guru.i
 	include	ps3m.i
+	include	patternInfo.i
 use = 0
 	include	player61.i
 
@@ -239,8 +250,8 @@ prefs_s3mmode2		rs.b	1
 prefs_s3mmode3		rs.b	1
 prefs_ps3mb		rs.b	1
 prefs_timeoutmode	rs.b	1
-prefs_quadmode		rs.b	1
-prefs_quadon		rs.b	1		* 1: quad oli p‰‰ll‰
+XXXprefs_quadmode	rs.b	1
+XXXprefs_quadon		rs.b	1		* 1: quad oli p‰‰ll‰
 prefs_ptmix		rs.b	1		* 0: chip, 1: fast, 2: ps3m
 prefs_xpkid		rs.b	1
 prefs_fade		rs.b	1
@@ -260,7 +271,7 @@ prefs_s3mrate		rs.l	1
 prefs_mainpos1		rs.l	1
 prefs_mainpos2		rs.l	1
 prefs_prefspos		rs.l	1
-prefs_quadpos		rs.l	1
+Xprefs_quadpos		rs.l	1
 			rs	1
 prefs_alarm		rs	1
 prefs_moddir		rs.b	150
@@ -312,24 +323,60 @@ prefs_medrate		rs	1
 
 prefs_tooltips		rs.b 	1
 prefs_savestate		rs.b 	1
+prefs_altbuttons	rs.b	1
+
+prefs_quadraScope   rs.b 1
+prefs_quadraScopeBars   rs.b 1
+prefs_quadraScopeF   rs.b 1
+prefs_quadraScopeFBars   rs.b 1
+prefs_hippoScope   rs.b 1
+prefs_hippoScopeBars   rs.b 1
+prefs_patternScope   rs.b 1
+prefs_patternScopeXL   rs.b 1
+prefs_spectrumScope   rs.b 1
+prefs_spectrumScopeBars   rs.b 1
+	rs.b 1
+	
+prefs_quadraScopePos   rs.l 1
+prefs_quadraScopeFPos   rs.l 1
+prefs_hippoScopePos   rs.l 1
+prefs_patternScopePos   rs.l 1
+prefs_spectrumScopePos   rs.l 1
 
 prefs_size		rs.b	0
 
 *******************************************************************************
 *
-* Scope variables
-*
+* Scope variables for one audio channel
+* Values are copied hede from replay code internal structures.
+* Currently only Protracker supported
 
- 	rsreset
-ns_start	rs.l	1
-ns_length	rs	1
-ns_loopstart	rs.l	1
-ns_replen	rs	1
-ns_tempvol2	rs	1
-ns_period	rs	1
-ns_tempvol	rs	1
-ns_size		rs.b	0
+* Scope data for one channel
+* This should correspond go the "PTch" structure in hippoport
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_tempvol    rs         1 * Volume
+ns_period     rs         1 * Period
+;Unused:
+;ns_tempvol2	rs	1
+ns_size       rs.b       0 * = 16 bytes
 
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+ if ns_size<>16
+    fail "This is assumed to be 16 in code"
+ endif
 
 *******************************************************************************
 *
@@ -422,6 +469,8 @@ _MedPlayerBase2	rs.l	1
 _MedPlayerBase3	rs.l	1
 _MlineBase		rs.l	1
 _XFDBase	rs.l	1
+_FFPBase	rs.l 1
+_MTBase     rs.l 1
 
  ifne DEBUG
 output		rs.l	1
@@ -457,9 +506,9 @@ userport	rs.l	1		*
 windowbase2	rs.l	1		* prefs
 rastport2	rs.l	1		* 
 userport2	rs.l	1		*
-rastport3	rs.l	1		* quadrascope
-userport3	rs.l	1		* 
-scopeWindowBase	rs.l	1		* scopes window
+;rastport3	rs.l	1		* quadrascope
+;userport3	rs.l	1		* 
+;scopeWindowBase	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 minifontbase rs.l	1
@@ -506,21 +555,22 @@ infopos2	rs	2		* sampleikkunan ja sidinfon paikka
 
 screenaddr	rs.l	1		* N‰ytˆn osoite
 windowpos_p	rs	2		* Prefs ikkunan paikka
-quadpos		rs	2		* Quad-ikkunan paikka
+Xquadpos		rs	2		* Quad-ikkunan paikka
 wbkorkeus	rs	1		* Workbench n‰ytˆn korkeus
 wbleveys	rs	1
 prefs_prosessi	rs	1		* ei-0: Prefs-prosessi p‰‰ll‰
 filereq_prosessi rs	1		* ei-0: Files-prosessi p‰‰ll‰
-quad_prosessi	rs	1		* ...
+;quad_prosessi	rs	1		* ...
 info_prosessi	rs	1		* ...
 about_moodi	rs.b	1		* 0: normaali, 1: moduleinfo
 filereqmode	rs.b	1		* 0: add mode, ~0: insert mode 
 fileinsert	rs.l	1		* node jonka j‰lkeen insertti
 haluttiinuusimodi rs	1		* new-nappulaa ja play:t‰ varten
-quad_task	rs.l	1		* Scopen taski
-quadon		rs.b	1		* jos 1: quad oli p‰‰ll‰
-tapa_quad	rs.b	1		* scopelle lopetus lippu
-scopeflag	rs.b	1		* ~0: scope p‰‰ll‰
+;quad_task	rs.l	1		* Scopen taski
+;quadon		rs.b	1		* jos 1: quad oli p‰‰ll‰
+		rs.b	1
+;tapa_quad	rs.b	1		* scopelle lopetus lippu
+;scopeflag	rs.b	1		* ~0: scope p‰‰ll‰
 infoon		rs.b	1		* 1: info on
 
 exitmainprogram	rs.b	1		* <>1: poistu ohjelmasta
@@ -581,29 +631,32 @@ mousey		rs	1
 
 ******* Scope variables
 
-draw1		rs.l	1
-draw2		rs.l	1
-ch1		rs.b	ns_size
-ch2		rs.b	ns_size
-ch3		rs.b	ns_size
-ch4		rs.b	ns_size
-mtab		rs.l	1
-buffer0		rs.l	1
-buffer0w 	rs.w 	1
-buffer0h  	rs.w 	1
-buffer1		rs.l	1
-buffer2		rs.l	1
-scopeVerticalBarTable		rs.l	1
-deltab1		rs.l	1	
-deltab2		rs.l	1	
-deltab3		rs.l	1	
-deltab4		rs.l	1	
-omatrigger	rs.b	1	* kopio kplayerin usertrigist‰
+taskQuadraScope		     rs.b TC_SIZE
+taskQuadraScopeF	 rs.b TC_SIZE
+taskHippoScope		     rs.b TC_SIZE
+taskSpectrumScope	     rs.b TC_SIZE
+taskPatternScope         rs.b  TC_SIZE
+
+* Status for scope tasks:
+RUNNING_NOT       = 0
+RUNNING_YES       = 1
+* Request scope shutdown
+RUNNING_SHUT_IT   = $80
+quadraScopeRunning	     rs.b 1
+quadraScopeFRunning rs.b 1
+hippoScopeRunning        rs.b 1
+patternScopeRunning      rs.b 1
+spectrumScopeRunning     rs.b 1
+scopeToggleTable         rs.b 5 * Used by toggleScopes()
+
+;omatrigger	rs.b	1	* kopio kplayerin usertrigist‰
 * This turns to 1 if user has manually activated the scope
 * by LMB click, when scope was passivated because not being
 * visible. As this is global user does not need to do that again.
 scopeManualActivation	rs.b	1	
-multab		rs.b	512
+__pad0              rs.b  1
+
+scopeData  rs.b	 scope_size
 
 ps3mchannels	rs.l	1	* Osoitin PS3M mixer channel blockeihin
 
@@ -617,14 +670,27 @@ samplebufsiz_new	rs.b	1
 samplebufsiz0		rs.b	1
 samplebufsiz		rs.l	1
 
+* Sample playback rate, bytes per frame.
 sampleadd		rs.l	1
+* Pointer to a pointer to the sample position.
+* This is reset to zero by sample player when a buffer
+* is played through.
 samplefollow		rs.l	1
+* Sample pointer for mono samples, or the other stereo channel
 samplepointer		rs.l	1
+* Sample pointer to the other stereo channel
 samplepointer2		rs.l	1
+* Set to non-zero if sample being played is stereo
 samplestereo		rs.b	1
+
 * This is set in loadfile() to indicate a sample is found.
 * Actual loading is then skipped.
-sampleinit		rs.b	1			
+sampleinit		rs.b	1		
+* Sample format
+* 1 = IFF
+* 2 = AIFF
+* 3 = WAV
+* 4 = MP3
 sampleformat		rs.b	1
 
 * This is set in loadfile() to indicate an executable module has been 
@@ -652,7 +718,7 @@ s3mmode2_new	rs.b	1
 s3mmode3_new	rs.b	1
 stereofactor_new rs.b	1
 div_new		rs.b	1
-quadmode_new	rs.b	1
+Xquadmode_new	rs.b	1
 moduledir_new	rs.b	150
 prgdir_new	rs.b	150
 arcdir_new	rs.b	150
@@ -688,7 +754,19 @@ autosort_new	rs.b	1
 favorites_new	rs.b	1	
 tooltips_new	rs.b 	1	
 savestate_new	rs.b 	1
-
+altbuttons_new  rs.b   1
+quadraScope_new rs.b 1
+quadraScopeBars_new rs.b 1
+quadraScopeF_new rs.b 1
+quadraScopeFBars_new rs.b 1
+hippoScope_new rs.b 1
+hippoScopeBars_new rs.b 1
+patternScope_new rs.b 1
+patternScopeXL_new rs.b 1
+spectrumScope_new rs.b 1
+spectrumScopeBars_new rs.b 1
+	rs.b 1
+	
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
 mpegadiv_new	rs.b	1
@@ -699,7 +777,7 @@ medratepot_new	rs	1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
-scopechanged	rs.b	1		* scopea muutettu
+Xscopechanged	rs.b	1		* scopea muutettu
 contonerr_laskuri rs.b 1		* kuinka monta virheellist‰ lataus
 cybercalibration_new rs.b 1		* yrityst‰
 calibrationfile_new rs.b 100
@@ -731,44 +809,10 @@ QUADMODE_PATTERNSCOPE = 3
 QUADMODE_FQUADRASCOPE = 4
 QUADMODE_PATTERNSCOPEXL = 5
 
-* Scope mode
-quadmode	rs.b	1		* scopemoodi
-* Modified scope mode internally used in scopes for jumptables
-quadmode2	rs.b	1		
 
 * Store the original window height to switch between
 * large and normal height mode
 quadWindowHeightOriginal	rs.w	1
-* Pattern scope configuration parameters for normal and large mode
-quadNoteScrollerLinesHalf	rs.w	1
-quadNoteScrollerLines		rs.l	1
-
-* Scope window draw area dimensions
-* default: 320
-scopeDrawAreaWidth		rs.w 	1
-scopeDrawAreaModulo		rs.w 	1
-* default: 64
-scopeDrawAreaHeight		rs.w 	1
-
-* Requested dimensions for new draw area,
-* to be set to above variables when resize done.
-scopeDrawAreaWidthRequest		rs.w 	1
-scopeDrawAreaHeightRequest		rs.w 	1
-* To handle iwndow size and pos detection manually,
-* previous values are needed for comparison.
-scopePreviousWidth				rs.w  	1
-scopePreviousHeight 			rs.w 	1
-scopePreviousTopEdge  			rs.w 	1 
-scopePreviousLeftEdge			rs.w 	1
-
-* When scope is in patternscope mode
-* and running the generic patternscope,
-* there is only need to update it when data changes.
-* Use these two to detect it.
-scopePreviousPattPos		rs.w	1
-scopePreviousSongPos		rs.w	1
-
-
 
 
 timeoutmode	rs.b	1
@@ -866,8 +910,8 @@ cachedNodeIndex	rs.l	1
 cachedNode	rs.l	1	
 
 markedline	rs.l	1	* merkitty rivi
-					* Highlighted line inside the box, range is from 0
-					* to current boxsize
+				* Highlighted line inside the box, range is from 0
+				* to current boxsize
 
 playingmodule	rs.l	1	* index of the module that is being played
 chosenmodule	rs.l	1	* index of the chosen module in the list
@@ -1026,7 +1070,7 @@ filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 
 loading		rs.b	1		* ~0: lataus meneill‰‰n
 loading2	rs.b	1		* ~0: filejen addaus meneill‰‰n
-							* TODO: not used, remove?
+					* TODO: not used, remove?
 * List of favorite modules
 favoriteListHeader	rs.b 	MLH_SIZE
 * Flag indicates the list has changed before last save
@@ -1092,8 +1136,22 @@ ahi_use_nyt	rs.b	1
 favorites	rs.b	1
 tooltips	rs.b  	1
 savestate	rs.b    1
+altbuttons  rs.b    1
+altbuttonsUse  rs.b    1
 autosort	= prefsdata+prefs_autosort
 
+* Runtime scope settings
+quadraScope   rs.b 1
+quadraScopeBars   rs.b 1
+quadraScopeF   rs.b 1
+quadraScopeFBars   rs.b 1
+hippoScope   rs.b 1
+hippoScopeBars   rs.b 1
+patternScope   rs.b 1
+patternScopeXL   rs.b 1
+spectrumScope   rs.b 1
+spectrumScopeBars   rs.b 1
+ 
 * audio homman muuttujat
 acou_deviceerr	rs.l	1
 iorequest	rs.b	ioa_SIZEOF
@@ -1172,7 +1230,8 @@ desbuf2		rs.b	200		* muotoilupuskuri prefssille
 filename	rs.b	108		* tiedoston nimi (reqtools)
 filename2	rs.b	108		* Load/Save program-rutiineille
 tempdir		rs.b	200		* ReqToolsin hakemistopolku 
-probebuffer	rs.b	2048		* tiedoston tutkimispuskuri
+PROBE_BUFFER_LEN = 2048
+probebuffer	rs.b	PROBE_BUFFER_LEN * tiedoston tutkimispuskuri
 ptsonglist	rs.b	64		* Protrackerin songlisti
 xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkki‰)
 findpattern	rs.b	30		* find pattern
@@ -1228,8 +1287,11 @@ deliStoredSetVoices rs.l	1
 deliStoredNoteStruct rs.l 	1
 deliStoredGetPositionNr rs.l 1
 deliPath		rs.l	1
-deliPathArray		rs.l	1	
+deliPathArray		rs.l	1
+* Pattern info data returned by EP	
 deliPatternInfo		rs.l 	1
+* UPS_USER struct info returned by EP
+deliUPSStruct			rs.l 	1
 
 * Path read from auto saved modulelist comment,
 * which is the last path used to add files to list
@@ -1291,7 +1353,9 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	23
+xpl_versio	=	24
+
+ printt "TEST TEST: star frontier.bp3"
 
 *********************************************************************************
 *
@@ -1345,8 +1409,10 @@ pb_ciakelaus	=	6		* 2x = lmb, 4x = rmb
 pb_ciakelaus2	=	7		* pattern = lmb, 2x = rmb
 pb_end		=	14
 pb_poslen	=	15
-pb_scope	=	13
+pb_scope	=	13	; Replayer supports patternscope or quadscope
 pb_ahi		=	12
+pb_quadscopePoke =      11      ; Normal quadscope or EP poke interface
+pb_quadscopeUps	=  	10	; EP UPS interface
 pf_cont		=	1<<pb_cont
 pf_stop		=	1<<pb_stop
 pf_song		=	1<<pb_song
@@ -1360,6 +1426,8 @@ pf_end		=	1<<pb_end
 pf_poslen	=	1<<pb_poslen
 pf_scope	=	1<<pb_scope
 pf_ahi		=	1<<pb_ahi
+pf_quadscopeUps	=	1<<pb_quadscopeUps
+pf_quadscopePoke =	1<<pb_quadscopePoke
 
 
 *********************************************************************************
@@ -1489,11 +1557,14 @@ progstart
 	lob	GetMsg
 	move.l	d0,d5
 	move.l	d0,a0
+	move.l  sm_NumArgs(a0),d4
+	* Get WBArg array:
 	move.l	sm_ArgList(a0),d0	* nykyisen hakemiston lukko
-	beq.w	.waswb			* workbenchilt‰
-	move.l	d0,a0
-	move.l	(a0),lockhere(a5)
+	beq.b	.waswb			* workbenchilt‰
+	move.l	d0,a1
+	move.l	wa_Lock(a1),lockhere(a5)
 	DPRINT	"Start from WB"
+	bsr.w	.buildWbStartParams
 	bra.w	.waswb
 .nowb	
 	move.l	pr_CurrentDir(a3),lockhere(a5) * nykyinen hakemisto CLI:lt‰
@@ -1504,9 +1575,10 @@ progstart
 	pop	a3
 .waswb	
 
+
 	* a3 = current task
 
-	bsr.b	.getDirInfo
+	bsr.w	.getDirInfo
 	lea	portname,a1		* joko oli yksi HiP??
 	lore	Exec,FindPort
 	tst.l	d0
@@ -1557,6 +1629,80 @@ progstart
 	lob	ReplyMsg
 .nomsg
 	moveq	#0,d0
+	rts
+
+* Get parameters received by launching with project icons
+* where the tool is defined to be HiP. Multiple projects
+* can be opened simultaneously.
+*
+* This builds the command line argument array based
+* on WBArgs. The CLI arg processing will then handle
+* these as if they were entered from CLI.
+*
+* In:
+*   d4 = WBArg parameter count
+*   a1 = WBArg array
+.buildWbStartParams
+	pushm	all
+
+ if DEBUG
+ 	move.l	d4,d0
+ 	DPRINT	"sm_NumArgs=%ld"
+ endif
+
+	* Pointers to strings
+	lea	sv_argvArray(a5),a2
+	* Strings
+	lea	sv_argvBuffer(a5),a4
+	* Temporary buffer:
+	lea	ptheader,a3
+.wbArgLoop
+	* Null term it for safety
+	clr.b	(a3)
+	move.l	wa_Name(a1),d0
+	move.l	wa_Lock(a1),d1
+ if DEBUG
+	DPRINT	"wa_Name=%s wa_Lock=%lx"
+	tst.l	d1
+ endif
+	beq.b	.nullLock
+	move.l	a3,d2
+	move.l	#200,d3
+	jsr	getNameFromLock
+	tst.l	d0
+	* Skip if errors
+	beq.b	.stop
+.nullLock
+	* Store string ptr
+	move.l	a4,(a2)+
+	* Copy path based on lock
+	move.l	a3,a0
+	tst.b	(a0)
+	beq.b	.emptyPath
+.copyPath1
+	move.b	(a0)+,(a4)+
+	bne.b	.copyPath1
+	subq	#1,a4
+	cmp.b	#':',-1(a4)
+	beq.b	.noSep
+	move.b	#'/',(a4)+
+.emptyPath
+.noSep
+	* Copy filename
+	move.l	wa_Name(a1),a0
+.copyName1
+	move.b	(a0)+,(a4)+
+	bne.b	.copyName1
+
+ if DEBUG
+	move.l	-4(a2),d0
+	DPRINT	"-->%s"
+ endif
+	addq	#wa_SIZEOF,a1
+	subq	#1,d4
+	bne.b	.wbArgLoop
+.stop
+	popm	all
 	rts
 
 * in:
@@ -1886,10 +2032,10 @@ info_segment
 	dc	0 * pad
 
 
-	dc.l	16
-quad_segment
-	dc.l	0
-	jmp	quad_code
+;	dc.l	16
+;quad_segment
+;	dc.l	0
+;	jmp	quad_code
 
 ;	dc	0	* pad
 
@@ -1982,7 +2128,7 @@ about_tt
 
 
 ;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
-scrtit	dc.b	"HippoPlayer by K-P Koljonen in 1994-2000,2021",0
+scrtit	dc.b	"HippoPlayer by K-P in 1994-2000, 2021-2022",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -2015,7 +2161,7 @@ about_t1
  dc.b " as long as all the files are included",10,3
  dc.b "   unaltered. Not for commercial use",10,3
  dc.b " without a permission from the author.",10,3
- dc.b " Copyright © 1994-2021 by K-P Koljonen",10,3
+ dc.b " Copyright © 1994-2022 by K-P Koljonen",10,3
  dc.b "           *** FREEWARE ***",10,3
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
  ;dc.b "Snail mail: Kari-Pekka Koljonen",10,3
@@ -2223,13 +2369,6 @@ lelp
 
 
 
-*** Multab scopeille
-	lea	multab(a5),a0
-	moveq	#0,d0
-.mu	move	d0,(a0)+
-	add	#40,d0
-	cmp	#40*256,d0
-	bne.b	.mu
 
 
 
@@ -2241,6 +2380,7 @@ lelp
 
 	pushm	all
 	bsr.w	loadprefs
+
 	bsr.w	loadps3msettings
 	bsr.w	loadcybersoundcalibration
 	popm	all
@@ -2263,7 +2403,7 @@ lelp
 	clr	(a0)
 	move.l	topazbase(a5),fontbase(a5)
 
-	bra.b	.koh
+	bra.w	.koh
 
 .poh
 
@@ -2310,9 +2450,11 @@ lelp
 
 	* Do all kinds of adjustments to gadgets
 
-	* Add the latest "favorites" prefs button to the end of the
+	* Add the "Favorites" prefs button to the end of the
 	* list of first page of prefs gadgets
 	move.l	#prefsFavorites,bUu22
+	* Add "Button tooltips" prefs button to the page 2
+	move.l	#prefsTooltips,eskimO
 
 	lea	sivu0,a0		* Kaikkia pageja 3pix ylˆsp‰in!
 	bsr.b	.hum
@@ -2745,10 +2887,10 @@ lelp
 .purr
 
 
-	pushpea	ch1(a5),hippoport+hip_PTch1(a5)
-	pushpea	ch2(a5),hippoport+hip_PTch2(a5)
-	pushpea	ch3(a5),hippoport+hip_PTch3(a5)
-	pushpea	ch4(a5),hippoport+hip_PTch4(a5)
+	pushpea	scopeData+scope_ch1(a5),hippoport+hip_PTch1(a5)
+	pushpea	scopeData+scope_ch2(a5),hippoport+hip_PTch2(a5)
+	pushpea	scopeData+scope_ch3(a5),hippoport+hip_PTch3(a5)
+	pushpea	scopeData+scope_ch4(a5),hippoport+hip_PTch4(a5)
 	pushpea	kplbase(a5),hippoport+hip_kplbase(a5)
 	pushpea	moduleListHeader(a5),hippoport+hip_moduleListHeader(a5)
 
@@ -2763,12 +2905,8 @@ lelp
 
 	bsr.w	init_inputhandler
 	bsr.w	init_screennotify
+	jsr	startAndStopScopeTasks
 
-	tst.b	quadon(a5)			* avataanko scope?
-	beq.b	.q
-	DPRINT	"Starting scope"
-	jsr	start_quad
-.q
 	tst.b	infoon(a5)
 	beq.b	.qq
 ;	st	oli_infoa(a5)
@@ -2776,7 +2914,7 @@ lelp
 	jsr	rbutton10b
 .qq
 
-	bsr.w	inforivit_clear
+	jsr	inforivit_clear
 
 	tst	boxsize(a5)
 	beq.b	.oohi
@@ -2854,6 +2992,8 @@ lelp
 *	
 
 	DPRINT	"Entering message loop"
+
+;	jsr	startQuadraScopeTask
 
 	bra.b	msgloop
 returnmsg
@@ -3017,11 +3157,10 @@ msgloop
 	bsr.w	avaa_ikkuna2
 	bne.w	exit
 .bar2
-	tst	quad_prosessi(a5)
-	beq.b	.qer
-	jsr	sulje_quad
-	jsr	start_quad
-.qer	tst	info_prosessi(a5)
+	jsr	stopScopeTasks
+	jsr	startAndStopScopeTasks
+
+	tst	info_prosessi(a5)
 	beq.w	returnmsg
 	jsr	sulje_info
 	move.b	oli_infoa(a5),d0
@@ -3298,7 +3437,8 @@ exit
 ;	beq.b	.er2	
 
 	bsr.w	sulje_prefs
-	jsr	sulje_quad
+	;jsr	sulje_quad
+	jsr	stopScopeTasks
 	jsr	sulje_info
 
 	tst.b	hippoport+hip_opencount(a5)	* onko portilla
@@ -3453,6 +3593,10 @@ exit
 	bsr.w	closel
 	move.l	_ReqBase(a5),d0
 	bsr.w	closel
+	move.l	_FFPBase(a5),d0
+	bsr     closel
+	move.l	_MTBase(a5),d0
+	bsr     closel
 
 	bsr.w	tulostavirhe
 exit2
@@ -3515,7 +3659,7 @@ exit2
 	rts
 
 
-closel	
+closel:
 	beq.b	.notopen
 	move.l	d0,a1
 	lore	Exec,CloseLibrary
@@ -3533,8 +3677,9 @@ getsignal
 	move.l	(a5),a6
 	jmp	_LVOAllocSignal(a6)
 
-dela	pushm	all		* pienenpieni delay
-	moveq	#2,d1
+smallDelay:
+dela:	pushm	all		* pienenpieni delay
+	moveq	#1,d1
 	lore	Dos,Delay
 	popm	all
 	rts
@@ -3803,10 +3948,9 @@ iderror
 inputhandler
 	tst.b	hotkey(a1)
 	beq.b	.quit
-	pushm	d0/d1/a0/a1/a6
+	push	a0
 .handlerloop
-	move.b	ie_Class(a0),d0			* class
-	cmp.b	#IECLASS_RAWKEY,d0
+	cmp.b	#IECLASS_RAWKEY,ie_Class(a0)
 	bne.b	.cont
 	move	ie_Qualifier(a0),d0
 	and	#IEQUALIFIER_LSHIFT!IEQUALIFIER_CONTROL!IEQUALIFIER_LCOMMAND,d0
@@ -3817,15 +3961,19 @@ inputhandler
 	bmi.b	.cont				* vain jos nappula alhaalla
 	clr.b	ie_Class(a0)			* ieclass_null (syodaan pois)
 	move	d0,rawkeyinput(a1)		* a1 = var_b
+	pushm	d1/a6
 	move.b	rawKeySignal(a1),d1
 	jsr	signalit
+	popm	d1/a6
 	bra.b	.exhand
 	
-.cont	move.l	ie_NextEvent(a0),d0		* seuraava
+.cont	
+	;move.l	ie_NextEvent(a0),d0		* seuraava
+	move.l	(a0),d0		* ie_NextEvent = 0
 	move.l	d0,a0
 	bne.b	.handlerloop
 .exhand	
-	popm	d0/d1/a0/a1/a6
+	pop	a0
 .quit	move.l	a0,d0
 	rts
 
@@ -4000,14 +4148,20 @@ zipwindow
 
 
 
-avaa_ikkuna2
+avaa_ikkuna2:
 	bsr.w	sulje_ikkuna
 	not.b	kokolippu(a5)
 	
 
-avaa_ikkuna
+avaa_ikkuna:
 	bsr.w	getscreeninfo
 	bne.w	.opener
+
+	; Button config, may adjust WINSIZY
+	jsr	configureMainWindowButtonSizes
+	; Update into window structure
+	move	WINSIZX(a5),wsizex
+	move	WINSIZY(a5),wsizey
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc,a0
@@ -4411,7 +4565,7 @@ getscreeninfo
 	tst	quadWindowHeightOriginal(a5)
 	bne.b	.setAlready
 	move	quadsiz+2,quadWindowHeightOriginal(a5)
-	sub		#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,quadWindowHeightOriginal(a5)
+	sub	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,quadWindowHeightOriginal(a5)
 .setAlready
 
 	move	WINSIZX(a5),wsizex
@@ -4556,17 +4710,7 @@ wrender
 	cmp.l	#gadgetListModeChangeButton,a3
 	beq.b	.nel
 .visibleBox
-	
-	movem	4(a3),plx1/ply1/plx2/ply2
-	add	plx1,plx2
-	add	ply1,ply2
-	subq	#1,ply2
-	subq	#1,plx1
-
-	push	d3
-	move.l	rastport(a5),a1
-	bsr.w	laatikko1
-	pop	d3
+	jsr	drawButtonFrameMainWindow
 
 .nel	move.l	d3,a3
 	tst.l	d3
@@ -4691,6 +4835,12 @@ wrender
 	move	#253+WINX,plx2
 	moveq	#61+WINY,ply1
 	move	#128+WINY,ply2
+ 	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+ 	add	#16,ply1
+	add	#16,ply2
+.noAlt1
+
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	boxy(a5),ply2
@@ -4922,14 +5072,14 @@ releaseModuleList
 	popm	a0/a6
 	rts
 
-obtainModuleData
+obtainModuleData:
 	pushm	a0/a6
 	lea 	moduleDataSemaphore(a5),a0
 	lore    Exec,ObtainSemaphore
 	popm	a0/a6
 	rts
 
-releaseModuleData
+releaseModuleData:
 	pushm	a0/a6
 	lea 	moduleDataSemaphore(a5),a0
 	lore    Exec,ReleaseSemaphore
@@ -4977,6 +5127,40 @@ inithippo
 
 	check	1
 
+	tst.b	uusikick(a5)
+	bne.b	.new
+
+	* Re-map colors to be more kick13 compatible
+	* Switch colors 1 and 2
+	* %00 = %00
+	* %01 = %10
+	* %10 = %01
+	* %11 = %11
+	lea	hippohead,a0
+	lea	792(a0),a1
+	move	#96*66/8-1,d7
+.bytes
+	moveq	#$1,d2
+.bits
+	move.b	(a0),d0
+	and	d2,d0
+	move.b	(a1),d1
+	and	d2,d1
+	add d1,d0
+	cmp	d2,d0
+	bne.b	.z
+	eor.b	d2,(a0)
+	eor.b	d2,(a1)
+.z
+	add.b   d2,d2
+	bne.b	.bits
+
+	addq	#1,a0
+	addq	#1,a1
+	dbf	d7,.bytes
+
+.new
+
 	lea	bitmapHippoHead(a5),a2
 	move.l	a2,a0
 	moveq	#2,d0
@@ -4993,9 +5177,10 @@ printhippo1
 	tst	boxsize(a5)
 	beq.b	.q
 	tst.b	win(a5)
-	beq.b	.q
-	tst.b	uusikick(a5)
 	bne.b	.yep
+;	beq.b	.q
+;	tst.b	uusikick(a5)
+;	bne.b	.yep
 .q	rts
 .yep
 	pushm	d0-d7/a0-a2/a6
@@ -5047,10 +5232,11 @@ printhippo1
 printhippo1
 * zoomaava hipon p‰‰
 	tst.b	win(a5)
-	beq.b	.q
-	tst.b	uusikick(a5)
 	bne.b	.yep
-.q	rts
+	;beq.b	.q
+	;tst.b	uusikick(a5)
+	;bne.b	.yep
+.q	;rts
 .yep
 	pushm	all
 	move.b	reghippo(a5),d7
@@ -5170,24 +5356,25 @@ printhippo1
 
 ** Print into scope window
 printHippoScopeWindow
-	tst.b	uusikick(a5)
-	bne.b	.yep
-	rts
-.yep	pushm	d0-d6/a0-a2/a6
+	;tst.b	uusikick(a5)
+	;bne.b	.yep
+	;rts
+;.yep	
+	pushm	d0-d6/a0-a2/a6
 	lea	bitmapHippoHead(a5),a0
-	move.l	rastport3(a5),a1		* quad
+	move.l	s_rastport3(a4),a1		* quad
 	moveq	#0,d0	
 	moveq	#0,d1
 
 
 	* Center hippohead into scope window
-	move.l	scopeWindowBase(a5),a2 
+	move.l	s_scopeWindowBase(a4),a2 
 	move	wd_Width(a2),d2
 	lsr	#1,d2
 	sub	#HIPPOHEAD_WIDTH/2,d2
 
 	move	#14,d3
-	move	scopeDrawAreaHeight(a5),d4
+	move	s_scopeDrawAreaHeight(a4),d4
 	sub	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d4
 	asr	#1,d4
 	add	d4,d3
@@ -5384,20 +5571,32 @@ desmsgDebugAndPrint
 
 ** bevelboksit, reunat kaks pixeli‰
 
-laatikko1
+laatikko1:
 	move.l	pen_2(a5),d3
 	move.l	pen_1(a5),d2
 	bra.b	laatikko0
 
-
-laatikko2
+laatikko2:
 	move.l	pen_1(a5),d3
 	move.l	pen_2(a5),d2
+
 ;	bra.b	laatikko0
 
 
+* In:
+*   d2 = pen 1
+*   d3 = pen 2
+*   d4 = x1
+*   d5 = y1
+*   d6 = x2
+*   d7 = y2
+*   a1 = rastport 
+laatikko0:
+	tst.b	uusikick(a5)
+	bne.b	.new
+	exg	d2,d3
+.new
 
-laatikko0
 	move.l	a1,a3
 	move	d2,a4
 	move	d3,a2
@@ -5433,7 +5632,7 @@ laatikko0
 	move	ply2,d1
 	move	plx2,d2
 	move	ply2,d3
-	bsr.b	drawli
+	bsr.w	drawli
 
 	move	plx2,d0
 	move	ply2,d1
@@ -5453,14 +5652,19 @@ laatikko0
 looex	move.l	pen_1(a5),d0
 	move.l	a3,a1
 	jmp	_LVOSetAPen(a6)
-
-
+	
 ** bevelboksi, reunat 1 pix
 
 laatikko3
+
 	move.l	a1,a3
 	move.l	pen_2(a5),a2
 	move.l	pen_1(a5),a4
+
+	tst.b	uusikick(a5)
+	bne.b	.new
+	exg	a2,a4
+.new
 
 	move	a4,d0
 	move.l	a3,a1
@@ -5653,7 +5857,8 @@ poptofront
 
 * d0=koko
 * d1=tyyppi
-getmem	movem.l	d1/d3/a0/a1/a6,-(sp)
+getmem:
+	movem.l	d1/d3/a0/a1/a6,-(sp)
  ifne DEBUG
 	add.l	d0,getmemTotal
 	addq.l	#1,getmemCount
@@ -5671,7 +5876,8 @@ getmem	movem.l	d1/d3/a0/a1/a6,-(sp)
 	rts
 
 * a0=osoite
-freemem	movem.l	d0/d1/a0/a1/a6,-(sp)
+freemem:
+	movem.l	d0/d1/a0/a1/a6,-(sp)
  ifne DEBUG
 	addq.l	#1,freememCount
  endc
@@ -5717,7 +5923,7 @@ freemem	movem.l	d0/d1/a0/a1/a6,-(sp)
 
 
 
-freemodule
+freemodule:
 	movem.l	d0-a6,-(sp)
 
 	DPRINT	"freemodule obtain data"
@@ -5750,11 +5956,12 @@ freemodule
 ;	st	positionmuutos(a5)
 	clr	positionmuutos(a5)
 	clr	songnumber(a5)
-	clr maxsongs(a5)
-	clr minsong(a5)
+	clr 	maxsongs(a5)
+	clr 	minsong(a5)
 	* For non-EP players supporting patterninfo
 	clr.l	deliPatternInfo(a5) 
-
+	jsr	clearScopeData
+	
 ;	bsr.w	lootaa
 	bsr.w	inforivit_clear
 
@@ -6007,12 +6214,8 @@ buttonspressed
 	bhi.b	.y
 
 ** toggle scope with rmb when on top of suitable place
+	jsr	toggleScopes
 
-	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-	bne.b	.rew
-	jsr	start_quad		
-	rts
-.rew	jsr	sulje_quad		* suljetaan jos oli auki
 .handled
 	rts
 .y
@@ -6395,7 +6598,7 @@ omaviesti
 	bsr.w	sulje_ikkuna
 	clr.b	win(a5)
 	bsr.w	sulje_prefs
-	jsr	sulje_quad
+	jsr	stopScopeTasks
 	bsr.w	sulje_info
 	bra.w	.huh
 
@@ -6577,11 +6780,11 @@ signalreceived
 	DPRINT	"Replay end"
 
 	* Stopping playback 
-	lore  	Exec,Disable
+	bsr	obtainModuleData
 	clr.b	playing(a5)		* soitto seis
-	lore   	Exec,Enable
 	move.l	playerbase(a5),a0	* stop module
 	jsr 	p_end(a0)
+	bsr	releaseModuleData
 
 	bsr.w	freemodule
 
@@ -6690,7 +6893,7 @@ signalreceived
 
 	* SANITY CHECK: in the case where it's all dividers,
 	* stop instead of trying to find something to play.
-	bsr	calculateDividersInList
+	jsr	calculateDividersInList
 	cmp.l	modamount(a5),d0
 	beq.b	.err
 	bra.w	.repea
@@ -7195,11 +7398,11 @@ umph
 
 * on!
 	DPRINT	"Replay end"
-	lore    Exec,Disable
+	bsr	obtainModuleData
 	bsr.w	halt			* soitetaan vaan alusta
-	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr 	p_end(a0)
+	bsr	releaseModuleData
 
 	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
@@ -7236,11 +7439,11 @@ umph
 .hm1
 	DPRINT	"Replay end"
 
-	lore    Exec,Disable
+	bsr	obtainModuleData
 	bsr.w	halt			* Vapautetaan se jos on
-	lore    Exec,Enable
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
+	jsr	p_end(a0)
+	bsr	releaseModuleData
 	bsr.w	freemodule	
 
 	tst	d6
@@ -7527,6 +7730,11 @@ nappuloita
 	bsr	rlistmode
 	bra.w	.ee
 .1
+	cmp.b	#$23,d3		* f + shift
+	bne.b	.2
+	jsr	toggleFavoriteStatusForCurrentModule
+	bra	.ee
+.2
 
 
 	cmp.b	#$17,d3		* i + shift?
@@ -7691,7 +7899,7 @@ nappuloita
 	dc	$25
 	dr	.pm2	
 
-	dc	$31
+	dc	$31 * z-key
 	dr	.scopetoggle
 
 	dc	$37
@@ -7849,10 +8057,7 @@ nappuloita
 
 
 .scopetoggle
-	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-	beq.b	.startQ		
-	jmp	sulje_quad		* suljetaan jos oli auki
-.startQ	jmp	start_quad
+	jmp	toggleScopes
 
 .pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikan‰pp‰imet
 .pm0	st	hippoonbox(a5)
@@ -8038,7 +8243,7 @@ gadgetsup
 
 * Print some text into the filebox
 ** a0 = teksti, d0 = x-koordinaatti
-printbox
+printbox:
 	tst.b	win(a5)
 	beq.b	.q
 	tst	boxsize(a5)
@@ -8048,7 +8253,11 @@ printbox
 	bsr.w	clearbox		* fileboxi tyhj‰ks
 	popm	d0/a0
 	moveq	#69+WINY,d1	
-	move	boxsize(a5),d2
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+ 	add	#16,d1
+.noAlt1
+ 	move	boxsize(a5),d2
 	lsr	#1,d2
 	subq	#1,d2
 	lsl	#3,d2
@@ -9097,7 +9306,7 @@ rslider4
 * Asetetaan valitun nimen kohdalle
 *******
 
-forceRefreshList
+forceRefreshList:
 	DPRINT	"forceRefreshList"
 	st	hippoonbox(a5)
 
@@ -9246,7 +9455,7 @@ reslider
 ;	sub.l	a2,a2
 ;	moveq	#1,d0			 	* number of gadgets to refresh
 ;	lore	Intui,RefreshGList
-	bsr		refreshGadgetInA0
+	bsr	refreshGadgetInA0
 
 ;	lea	slider4,a0
 ;	move.l	gg_SpecialInfo(a0),a1
@@ -9293,7 +9502,11 @@ rbutton1
 	clr.b	movenode(a5)
 
 	bsr.w	getcurrent
-	beq.w	.nomove
+	bne.b	.gotCurrent
+	* No selection! Insert to beginning
+	bsr.w	getVisibleModuleListHeader
+	move.l	a0,a3
+.gotCurrent
 
  if DEBUG
  	move.l	l_nameaddr(a3),d0
@@ -9301,7 +9514,7 @@ rbutton1
  endc
 
 	DPRINT  "playButtonAction obtain list"
-	bsr.w		obtainModuleList
+	bsr.w	obtainModuleList
 	;lea	moduleListHeader(a5),a0	* Insertoidaan node...
 	bsr.w	getVisibleModuleListHeader
 	move.l	nodetomove(a5),a1
@@ -9446,7 +9659,7 @@ rbutton1
 	bsr.w	halt			* Vapautetaan se jos on
 	lore 	Exec,Enable
 	move.l	playerbase(a5),a0
-	jsr		p_end(a0)
+	jsr	p_end(a0)
 	bsr.w	freemodule	
 	move	(sp)+,mainvolume(a5)
 .nomod
@@ -9486,7 +9699,7 @@ rbutton1
 	bra.w	init_error
 ;	rts
 
-halt	clr.b	playing(a5)	
+halt:	clr.b	playing(a5)	
 ;	clr	songnumber(a5)
 	clr	pos_nykyinen(a5)
 	clr	positionmuutos(a5)
@@ -11481,8 +11694,8 @@ loadprefs2
 	move	#23,windowpos2+2(a5)
 	move	#42,windowpos_p(a5)
 	move	#18,windowpos_p+2(a5)
-	move	#259,quadpos(a5)
-	move	#157,quadpos+2(a5)
+	;move	#259,quadpos(a5)
+	;move	#157,quadpos+2(a5)
 	bsr.w	aseta_vakiot
 
 	pop	d1
@@ -11525,12 +11738,13 @@ loadprefs2
 	move.b	prefs_s3mmode1(a0),s3mmode1(a5)
 	move.b	prefs_s3mmode2(a0),s3mmode2(a5)
 	move.b	prefs_s3mmode3(a0),s3mmode3(a5)
-	move.b	prefs_quadmode(a0),quadmode(a5)
+	
+	;move.b	prefs_quadmode(a0),quadmode(a5)
 	move.l	prefs_mainpos1(a0),windowpos(a5)
 	move.l	prefs_mainpos2(a0),windowpos2(a5)
 	move.l	prefs_prefspos(a0),windowpos_p(a5)
-	move.l	prefs_quadpos(a0),quadpos(a5)
-	move.b	prefs_quadon(a0),quadon(a5)
+	;move.l	prefs_quadpos(a0),quadpos(a5)
+	;move.b	prefs_quadon(a0),quadon(a5)
 	move.b	prefs_ptmix(a0),ptmix(a5)
 	move.b	prefs_xpkid(a0),xpkid(a5)
 	move.b	prefs_fade(a0),fade(a5)
@@ -11585,7 +11799,21 @@ loadprefs2
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
 	move.b	prefs_savestate(a0),savestate(a5)
+	move.b  prefs_altbuttons(a0),altbuttons(a5)
 
+ REM
+	move.b prefs_quadraScope(a0),      quadraScope(a5)    
+	move.b prefs_quadraScopeBars(a0),  quadraScopeBars(a5)        
+	move.b prefs_quadraScopeF(a0),     quadraScopeF(a5)       
+	move.b prefs_quadraScopeFBars(a0), quadraScopeFBars(a5)         
+	move.b prefs_hippoScope(a0),       hippoScope(a5)       
+	move.b prefs_hippoScopeBars(a0),    hippoScopeBars(a5)       
+	move.b prefs_patternScope(a0),     patternScope(a5)       
+	move.b prefs_patternScopeXL(a0),   patternScopeXL(a5)      
+	move.b prefs_spectrumScope(a0),    spectrumScope(a5)     
+	move.b prefs_spectrumScopeBars(a0),spectrumScopeBars(a5)          
+ EREM
+ 
 	tst.b	uusikick(a5)
 	beq.b	.odeldo
 	move.l	prefs_textattr(a0),text_attr+4		* ysize jne
@@ -11801,22 +12029,9 @@ saveprefs
 	move.l	4(a0),windowpos_p(a5)
 .g	
 
-	clr.b	prefs_quadon+prefsdata(a5)
-	tst.b	scopeflag(a5)
-	beq.b	.kk
-	st	prefs_quadon+prefsdata(a5)
-.kk
-
 	tst	info_prosessi(a5)
 	sne	prefs_infoon+prefsdata(a5)
 
-
-	move.l	scopeWindowBase(a5),d0
-	beq.b	.k
-	move.l	d0,a0
-	move.l	4(a0),quadpos(a5)
-	st	prefs_quadon+prefsdata(a5)
-.k
 	move.l	swindowbase(a5),d0
 	beq.b	.gg
 	move.l	d0,a0
@@ -11835,11 +12050,9 @@ saveprefs
 	move.b	s3mmode1(a5),prefs_s3mmode1(a0)
 	move.b	s3mmode2(a5),prefs_s3mmode2(a0)
 	move.b	s3mmode3(a5),prefs_s3mmode3(a0)
-	move.b	quadmode(a5),prefs_quadmode(a0)
 	move.l	windowpos(a5),prefs_mainpos1(a0)
 	move.l	windowpos2(a5),prefs_mainpos2(a0)
 	move.l	windowpos_p(a5),prefs_prefspos(a0)
-	move.l	quadpos(a5),prefs_quadpos(a0)
 	move.b	ptmix(a5),prefs_ptmix(a0)
 	move.b	xpkid(a5),prefs_xpkid(a0)
 	move.b	fade(a5),prefs_fade(a0)
@@ -11879,6 +12092,20 @@ saveprefs
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
+	move.b	altbuttons(a5),prefs_altbuttons(a0)
+
+  REM
+ 	move.b quadraScope(a5),prefs_quadraScope(a0)
+	move.b quadraScopeBars(a5),prefs_quadraScopeBars(a0)
+	move.b quadraScopeF(a5),prefs_quadraScopeF(a0)
+	move.b quadraScopeFBars(a5),prefs_quadraScopeFBars(a0)
+	move.b hippoScope(a5),prefs_hippoScope(a0)
+	move.b hippoScopeBars(a5),prefs_hippoScopeBars(a0)
+	move.b patternScope(a5),prefs_patternScope(a0)
+	move.b patternScopeXL(a5),prefs_patternScopeXL(a0)
+	move.b spectrumScope(a5),prefs_spectrumScope(a0)
+	move.b spectrumScopeBars(a5),prefs_spectrumScopeBars(a0)
+ EREM
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
@@ -12164,7 +12391,7 @@ loadcybersoundcalibration
 ******************************************************************************
 * Piirt‰‰ tekstuurin ikkunaan
 
-drawtexture
+drawtexture:
 	movem.l	d0-a6,-(sp)
 	ext.l	d0
 	ext.l	d1
@@ -12225,8 +12452,9 @@ drawtexture
 * Luodaan erillinen prosessi
 *******
 
-updateprefs
-	DPRINT	"Update prefs"
+updateprefs:
+	; Called from scope, no logging
+	;DPRINT	"Update prefs"
 	pushm	all
 	tst	prefs_prosessi(a5)
 	beq.b	.x
@@ -12289,12 +12517,13 @@ prefs_code
 	lea	var_b,a5
 	addq	#1,prefs_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
+	printt	"TODO: refactor"
+	; basereg a4 gadgets?
+
 
 	clr.b	prefs_exit(a5)		* Lippu
 
 	st	boxsize00(a5)
-
-	move.b	quadmode(a5),scopechanged(a5)
 
 * Arvot yms. v‰liaikaismuuttujiin
 	move.l	mixirate(a5),mixingrate_new(a5)
@@ -12306,7 +12535,6 @@ prefs_code
 	move.b	s3mmode1(a5),s3mmode1_new(a5)
 	move.b	s3mmode2(a5),s3mmode2_new(a5)
 	move.b	s3mmode3(a5),s3mmode3_new(a5)
-	move.b	quadmode(a5),quadmode_new(a5)
 	move.b	ptmix(a5),ptmix_new(a5)
 	move.b	xpkid(a5),xpkid_new(a5)
 	move.b	fade(a5),fade_new(a5)
@@ -12344,6 +12572,21 @@ prefs_code
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
+	move.b	altbuttons(a5),altbuttons_new(a5)
+
+ REM
+	move.b quadraScope(a5),      quadraScope_new(a5)    
+	move.b quadraScopeF(a5),     quadraScopeF_new(a5)       
+	move.b hippoScope(a5),       hippoScope_new(a5)       
+	move.b patternScope(a5),     patternScope_new(a5)       
+	move.b patternScopeXL(a5),   patternScopeXL_new(a5)      
+	move.b spectrumScope(a5),    spectrumScope_new(a5)     
+ EREM
+	move.b quadraScopeBars(a5),  quadraScopeBars_new(a5)        
+	move.b quadraScopeFBars(a5), quadraScopeFBars_new(a5)         
+	move.b hippoScopeBars(a5),    hippoScopeBars_new(a5)       
+	move.b spectrumScopeBars(a5),spectrumScopeBars_new(a5)  
+
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -12745,7 +12988,6 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	s3mmode1_new(a5),s3mmode1(a5)
 	move.b	s3mmode2_new(a5),s3mmode2(a5)
 	move.b	s3mmode3_new(a5),s3mmode3(a5)
-	move.b	quadmode_new(a5),quadmode(a5)
 	move.b	ptmix_new(a5),ptmix(a5)
 	move.b	xpkid_new(a5),xpkid(a5)
 	move.b	fade_new(a5),fade(a5)
@@ -12793,6 +13035,32 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	favorites_new(a5),favorites(a5)
 	move.b	tooltips_new(a5),tooltips(a5)
 	move.b	savestate_new(a5),savestate(a5)
+
+	move.b	altbuttons(a5),d0
+	move.b	altbuttons_new(a5),altbuttons(a5)
+	cmp.b	altbuttons(a5),d0
+	beq.b	.1
+	DPRINT	"Alt buttons changed"
+	* magic! causes reopening of the main window:
+	clr	boxsize00(a5)
+.1
+
+
+ REM
+ 	move.b quadraScope_new(a5),quadraScope(a5) 
+	move.b quadraScopeF_new(a5),quadraScopeF(a5)   
+	move.b hippoScope_new(a5),hippoScope(a5)      
+	move.b patternScope_new(a5),patternScope(a5)  
+	move.b patternScopeXL_new(a5),patternScopeXL(a5)  
+	move.b spectrumScope_new(a5),spectrumScope(a5)   
+	move.b quadraScopeBars_new(a5),quadraScopeBars(a5) 
+	move.b quadraScopeFBars_new(a5),quadraScopeFBars(a5)
+	move.b hippoScopeBars_new(a5),hippoScopeBars(a5)  
+	move.b spectrumScopeBars_new(a5),spectrumScopeBars(a5)
+ EREM
+
+
+
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
@@ -13147,16 +13415,7 @@ prefsgads
 	subq.b	#GTYP_STRGADGET-GTYP_PROPGADGET,d7
 	beq.b	.nel	
 
-	movem	4(a3),plx1/ply1/plx2/ply2
-	add	plx1,plx2
-	add	ply1,ply2
-	subq	#1,ply2
-	subq	#1,plx1
-	push	d3
-	move.l	rastport2(a5),a1
-	bsr.w	laatikko1
-	pop	d3
-
+	jsr	drawButtonFramePrefsWindow
 
 .nel	move.l	d3,a3
 	tst.l	d3
@@ -13275,9 +13534,9 @@ pmousebuttons
 	lea	pbutton2,a0		* show
 	lea	rpbutton1_req(pc),a2
 	bsr.w	.check
-	lea	pout3,a0		* scope type
-	lea	rquadm_req(pc),a2
-	bsr.w	.check
+	;lea	pout3,a0		* scope type
+	;lea	rquadm_req(pc),a2
+	;bsr.w	.check
 	lea	bUu2,a0			* prefix cut
 	lea	rprefx_req(pc),a2
 	bsr.w	.check
@@ -13351,9 +13610,11 @@ pmousebuttons
 
 
 
-
-pupdate				* Ikkuna p‰ivitys
+* This updates the preds window to match state.
+* p-functions handle each gadget.
+pupdate:				* Ikkuna p‰ivitys
 	pushm	all
+	DPRINT	"prefs::pUpdate"
 
 	move	prefsivu(a5),d0
 	bne.b	.2
@@ -13370,23 +13631,34 @@ pupdate				* Ikkuna p‰ivitys
 	bsr.w	purealarm		* alarm slider
 	bsr.w	pautosort		* auto sort
 	bsr.w	pfavorites		* favorites
-	bsr.w	ptooltips  	     	* tooltips
 	bsr	psavestate		* savestate
 	bra.w	.x
 
 .2	subq	#1,d0
 	bne.b	.3
 
-	bsr.w	psup3			* scope mode
+	;bsr.w	psup3			* scope mode
 	bsr.w	pbox			* box size
-	bsr.w	psup0			* scope on/off
+	;bsr.w	psup0			* scope on/off
 	bsr.w	pinfosize		* info size
 	bsr.w	pupdate1		* show
 	bsr.w	pselscreen		* screen
-	bsr.w	pscopebar		* scope bars
+	;bsr.w	pscopebar		* scope bars
 	bsr.w	pprefx			* prefix cut
 	bsr.w	pfont			* fontti
 	bsr.w	pscreen			* screen refresh rates
+	bsr.w	ptooltips  	     	* tooltips
+	bsr	paltbuttons  	        * alt buttons
+	bsr	pQuadraScope
+	bsr	pQuadraScopeBars
+	bsr	pQuadraScopeF
+	bsr	pQuadraScopeFBars
+	bsr	pHippoScope
+	bsr	pHippoScopeBars
+	bsr	pPatternScope
+	bsr	pPatternScopeXL
+	bsr	pSpectrumScope
+	bsr	pSpectrumScopeBars
 	bra.w	.x
 
 .3	subq	#1,d0
@@ -13611,7 +13883,6 @@ gadgetsup2
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
 	dr	rfavorites	* favorites
-	dr      rtooltips   	* tooltips
 	dr 	rsavestate	* save state
 
 .s1
@@ -13620,11 +13891,23 @@ gadgetsup2
 	dr	rselscreen	* publicscreen
 	dr	rbox		* boxsize
 	dr	rfont		* font selector
-	dr	rquad		* scope on/off
-	dr	rquadm		* scopen moodi	* pout3
-	dr	rscopebar	* bar mode scopeille
+	;dr	rquad		* scope on/off
+	;dr	rquadm		* scopen moodi	* pout3
+	;dr	rscopebar	* bar mode scopeille
 	dr	rprefx		* prefix cut
 	dr	rinfosize	* module info size
+	dr  rtooltips     * tooltips
+	dr  raltbuttons * alt buttons
+	dr	rQuadraScope
+	dr	rQuadraScopeBars
+	dr	rQuadraScopeF
+	dr	rQuadraScopeFBars
+	dr	rHippoScope
+	dr	rHippoScopeBars
+	dr	rPatternScope
+	dr	rPatternScopeXL
+	dr	rSpectrumScope
+	dr	rSpectrumScopeBars
 
 .s2
 *** Sivu2
@@ -13704,104 +13987,129 @@ rval6	moveq	#6,d0
 
 *** Scope
 
-rquad	
-	tst	quad_prosessi(a5)	* jos ei ollu, p‰‰lle
-	beq.b	.s
-	bsr.w	sulje_quad		* suljetaan jos oli auki
-;	bra.b	psup0
-	rts
+rQuadraScope:
+	DPRINT	"rQuadrascope"
+	not.b	prefsdata+prefs_quadraScope(a5)
+	bne.b	.start
+	bsr	stopQuadraScopeTask
+	bra.b pQuadraScope
+.start	
+	bsr	startQuadraScopeTask
+	
+pQuadraScope:
+	move.b	prefsdata+prefs_quadraScope(a5),d0
+	lea	prefsQuadraScope,a0
+	bra	tickaa
 
-.s	bsr.w	start_quad
+rQuadraScopeBars:
+	DPRINT	"rQuadrascopeBars"
+	;not.b	quadraScopeBars_new(a5)
+	not.b	prefsdata+prefs_quadraScopeBars(a5)
+	bsr	restartQuadraScopeTask
 
-psup0
-	tst	quad_prosessi(a5)
-	sne	d0
-	lea	pout2,a0
+pQuadraScopeBars
+	;move.b	quadraScopeBars_new(a5),d0
+	move.b	prefsdata+prefs_quadraScopeBars(a5),d0
+	lea	prefsQuadraScopeBars,a0
+	bra.w	tickaa
+
+rQuadraScopeF
+	DPRINT	"rQuadraScopeF"
+	not.b	prefsdata+prefs_quadraScopeF(a5)
+	bne.b	.start
+	bsr	stopQuadraScopeFTask
+	bra.b	pQuadraScopeF
+.start	
+	bsr	startQuadraScopeFTask
+
+pQuadraScopeF
+	move.b	prefsdata+prefs_quadraScopeF(a5),d0
+	lea	prefsQuadraScopeF,a0
+	bra	tickaa
+
+rQuadraScopeFBars
+	DPRINT	"rQuadraScopeFBars"
+	not.b	prefsdata+prefs_quadraScopeFBars(a5)
+	bsr	restartQuadraScopeFTask
+	
+pQuadraScopeFBars
+	move.b	prefsdata+prefs_quadraScopeFBars(a5),d0
+	lea	prefsQuadraScopeFBars,a0
+	bra.w	tickaa
+
+rHippoScope
+	DPRINT	"rHippoScope"
+	not.b	prefsdata+prefs_hippoScope(a5)
+	bne.b	.start
+	bsr	stopHippoScopeTask
+	bra.b pHippoScope
+.start	
+	bsr	startHippoScopeTask
+	
+pHippoScope
+	move.b	prefsdata+prefs_hippoScope(a5),d0
+	lea	prefsHippoScope,a0
 	bra.w	tickaa
 
 
-rquadm_req
-	lea	ls00(pc),a0
-	bsr.w	listselector
-	bmi.b	.x
-	move.b	quadmode_new(a5),d1
-	and.b	#$80,d1
-	or.b	d1,d0
-	move.b	d0,quadmode_new(a5)
-	move.b	d0,quadmode(a5)
-	bsr.b	psup3
-	bra.w	quadu
+rHippoScopeBars
+	DPRINT	"rHippoScopeBars"
+	not.b	prefsdata+prefs_hippoScopeBars(a5)
+	bsr	restartHippoScopeTask
 
-.x	rts
+pHippoScopeBars
+	move.b	hippoScopeBars_new(a5),d0
+	lea	prefsHippoScopeBars,a0
+	bra.w	tickaa
 
-rquadm
-	move.b	quadmode_new(a5),d0
-	move.b	d0,d1
-	and.b	#$f,d0
-	and.b	#$80,d1
+rPatternScope
+	DPRINT	"rPatternScope"
+	not.b	prefsdata+prefs_patternScope(a5)
+	bne.b	.start
+	bsr	stopPatternScopeTask
+	bra.b 	pPatternScope
+.start	
+	bsr	startPatternScopeTask
 
-	addq.b	#1,d0
-	cmp.b	#5,d0
-	ble.b	.k
-	clr.b	d0
-.k	or.b	d1,d0
-	move.b	d0,quadmode_new(a5)
-	move.b	d0,quadmode(a5)			* vaikutus suoraan
+pPatternScope
+	move.b	prefsdata+prefs_patternScope(a5),d0
+	lea	prefsPatternScope,a0
+	bra.w	tickaa
 
-psup3	
-	lea	ls01(pc),a0
-	moveq	#$f,d0
-	and.b	quadmode_new(a5),d0
-	beq.b	.q
-	lea	ls02(pc),a0
-	subq.b	#1,d0
-	beq.b	.q
-	lea	ls03(pc),a0
-	subq.b	#1,d0
-	beq.b	.q
-	lea	ls04(pc),a0
-	subq.b	#1,d0
-	beq.b	.q
-	lea	ls05(pc),a0
-	subq.b	#1,d0
-	beq.b	.q
-	lea	ls06(pc),a0
-.q
-	lea	pout3,a1
-	bsr.w	prunt
-	bra.b	quadu
+rPatternScopeXL
+	DPRINT	"rPatternScopeXL"
+	not.b	prefsdata+prefs_patternScopeXL(a5)
+	bsr	restartPatternScopeTask
 
+pPatternScopeXL
+	move.b	prefsdata+prefs_patternScopeXL(a5),d0
+	lea	prefsPatternScopeXL,a0
+	bra.w	tickaa
 
-ls00	dc.b	14,6
-ls01	dc.b	"Quadrascope",0
-ls02	dc.b	"Hipposcope",0
-ls03	dc.b	"Freq. analyzer",0
-ls04	dc.b	"Patternscope",0
-ls05	dc.b	"F. Quadrascope",0
-ls06	dc.b	"PatternscopeXL",0
- even
+rSpectrumScope
+	DPRINT	"rSpectrumScope"
+	not.b	prefsdata+prefs_spectrumScope(a5)
+	bne.b	.start
+	bsr	stopSpectrumScopeTask
+	bra.b 	pSpectrumScope
+.start	
+	bsr	startSpectrumScopeTask
+	
+pSpectrumScope
+	move.b	prefsdata+prefs_spectrumScope(a5),d0
+	lea	prefsSpectrumScope,a0
+	bra.w	tickaa
 
-rscopebar
-	eor.b	#$80,quadmode_new(a5)
-	move.b	quadmode_new(a5),quadmode(a5)
+rSpectrumScopeBars
+	DPRINT	"rSpectrumScopeBars"
+	not.b	prefsdata+prefs_spectrumScopeBars(a5)
+	bsr	restartSpectrumScopeTask
 
-pscopebar
-	tst.b	quadmode_new(a5)
-	smi	d0
-	lea	pout3b,a0
-	bsr.w	tickaa
-
-quadu	tst	quad_prosessi(a5)
-	beq.b	.noq
-	move.b	quadmode_new(a5),quadmode(a5)
-	move.b	quadmode(a5),d0
-	cmp.b	scopechanged(a5),d0
-	beq.b	.noq
-	move.b	d0,scopechanged(a5)
-	bsr.w	sulje_quad
-	bsr.w	start_quad
-.noq	rts
-
+pSpectrumScopeBars
+	move.b	prefsdata+prefs_spectrumScopeBars(a5),d0
+	lea	prefsSpectrumScopeBars,a0
+	bra.w	tickaa
+	
 
 ** Mixingrate S3M
 rpslider1
@@ -14678,12 +14986,21 @@ ptooltips
 	lea	prefsTooltips,a0
 	bra.w	tickaa
 
-********* Tooltips
+********* Save state
 rsavestate
 	not.b	savestate_new(a5)
 psavestate
 	move.b	savestate_new(a5),d0
 	lea	prefsSaveState,a0
+	bra.w	tickaa
+
+********* Alt buttons
+raltbuttons
+	not.b	altbuttons_new(a5)
+
+paltbuttons
+	move.b	altbuttons_new(a5),d0
+	lea	prefsAltButtons,a0
 	bra.w	tickaa
 
 
@@ -15262,13 +15579,13 @@ pscreen
 	bsr.w	desmsg2
 	lea	desbuf2(a5),a0
 
-.do	moveq	#16+16,d0
-	moveq	#122,d1
+.do	moveq	#16,d0
+	move	#122+18,d1
 	bra.w	print3b
 
 
-.de	dc.b	"Screen refresh rate:",10
-	dc.b	"    %ldHz, %ldkHz",0
+.de
+	dc.b	"Screen: %ldHz/%ldkHz",0
 .dea	dc.b	"A gfx card detected.",0
  even
 
@@ -15994,8 +16311,8 @@ listselector
 	move.l	d7,a4
 	bra.w	doPrint	
 
-
-
+*******************************************************************************
+*  End of Prefs section
 *******************************************************************************
 
 *******
@@ -16012,7 +16329,7 @@ shownames2
 	moveq	#1,d4		* flag: do not center
 	bra.b	shn
 
-clearbox
+clearbox:
 	tst	boxsize(a5)
 	beq.b	.x
 	tst.b	win(a5)
@@ -16022,10 +16339,15 @@ clearbox
 	moveq	#62+WINY,d1
 	move	#251+WINX,d2
 	move	#127+WINY,d3
+ 	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d1
+	add	#16,d3  
+.noAlt1
 	add	boxy(a5),d3
 	bra.w	tyhjays
 
-shownames
+shownames:
 	moveq	#0,d4	 	* flag: center
 shn
 	tst	boxsize(a5)
@@ -16102,7 +16424,7 @@ shn
 	move.l	firstname2(a5),d7
 	move.l	d0,firstname2(a5)
 	cmp.l	d0,d7
-	beq.b	.nomods
+	beq.w	.nomods
 	sub.l	d0,d7		* d7 should be in range 0..boxsize
 	bmi.b	.alas
 
@@ -16122,6 +16444,11 @@ shn
 	move	d7,d3
 	lsl	#3,d3
 	add	#63+WINY,d3		* dest y
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d1		* source y
+	add	#16,d3		* desy y
+.noAlt1
 	bsr.w	.copy
 	move.l	firstname(a5),d0
 	moveq	#0,d1
@@ -16146,6 +16473,11 @@ shn
 	lsl	#3,d1
 	add	#63+WINY,d1		* source y	
 	moveq	#63+WINY,d3	* dest y
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt2
+	add	#16,d1		* source y
+	add	#16,d3		* dest y
+.noAlt2
 	bsr.b	.copy
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
@@ -16271,7 +16603,11 @@ doPrintNames
 	move	d4,d6
 	lsl	#3,d6
 	add	#83+WINY-14,d6		* turn line number into a Y-coordinate
-
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+ 	add	#16,d6	
+.noAlt1
+ 
 	* loop to print d5 lines 
 .looppo
 	* a4=current node
@@ -16318,6 +16654,9 @@ doPrintNames
 .nodi
 	move.l	a2,a0
 	moveq	#27-1,d0		* max kirjainten m‰‰r‰ nimess‰
+	* ENFORCER HIT HAPPENED HERE once:
+	* when right clicking in filebrowser mode, to set
+	* as fav. a1 read was illegal
 .ff	move.b	(a1)+,(a2)+
 	dbeq	d0,.ff
 	* test if buffer exhausted already
@@ -16465,7 +16804,7 @@ delete
 	beq.w	.erer
 
 	;lea	moduleListHeader(a5),a4
-	bsr.w		getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 
 	DPRINT	"delete getListNode"
@@ -17459,13 +17798,23 @@ getFileBoxIndexFromMousePosition
 	blo.b	.out
 	cmp	#251+WINX,d0
 	bhi.b	.out
-	cmp	#63+WINY,d1
+	moveq	#63+WINY,d2
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d2
+.noAlt1
+	cmp		d2,d1
+;	cmp	#63+WINY,d1
 	blo.b	.out
 	move	#126+WINY,d2
 	add	boxy(a5),d2
 	cmp	d2,d1
 	bhi.b	.out
 	sub	#63+WINY,d1
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt2
+	sub	#16,d1
+.noAlt2
 	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
 	moveq	#1,d0
 	rts
@@ -17478,7 +17827,7 @@ getFileBoxIndexFromMousePosition
 * Calculates chosenmodule, which is an index of the selected item.
 * Chosen line is highlighted and previously chosen line highlight removed.
 
-markline
+markline:
 	bsr.b getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
@@ -17590,6 +17939,10 @@ markit
 	move	d5,d1
 	lsl	#3,d1		* mulu #8,d1
 	add	#63+WINY,d1
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d1
+.noAlt1
 	moveq	#33+WINX,d0 
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -17685,7 +18038,7 @@ marklineRightMouseButton
 *    d0 = 1 if data available
 *    a3 = list node pointer
 *** Chosenmodule node A3:een
-getcurrent
+getcurrent:
 	tst.l	modamount(a5)
 	beq.b	.q
 	move.l	chosenmodule(a5),d0
@@ -17700,17 +18053,17 @@ getcurrent
 *    d0 = 0 if not found
 *    d0 = 1 if data available
 *    a3 = list node pointer
-getcurrent2
+getcurrent2:
 	bsr.b getListNode
 	move.l	a0,a3
 	rts
 
 
 * Gets the list header that corresponds to the current list mode,
-* either normal, or favorites list. 
+* either normal, or favorites list, or filebrowser list.
 * Out:
 *  a0 = list header address
-getVisibleModuleListHeader
+getVisibleModuleListHeader:
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.isFav
 	cmp.b	 #LISTMODE_BROWSER,listMode(a5)
@@ -17753,7 +18106,7 @@ listChanged
 * out:
 *   a0=list node
 *   Z=set if index is out of bounds
-getListNode
+getListNode:
 	DPRINT	"getListNode %ld"
 
 	tst.l	modamount(a5)
@@ -18771,7 +19124,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .deliFormat	
 	pushm	d0-d7
 	move.l	sp,a1
-	lea	putc(pc),a2	;merkkien siirto
+	lea	putc,a2	;merkkien siirto
 	lore 	Exec,RawDoFmt
 	popm	d0-d7
 	rts
@@ -20189,10 +20542,10 @@ rbutton10
 *******
 * a1 = teksti
 
-request
+request:
 	movem.l	d0-a6,-(sp)
 	sub.l	a4,a4
-request2
+request2:
 	lea	.ok_g(pc),a2
 	bsr.b	rawrequest
 	movem.l	(sp)+,d0-a6
@@ -20220,7 +20573,7 @@ areyousure_delete
 .y	dc.b	"_Yes|_No",0
  even
 
-rawrequest
+rawrequest:
 	jsr	get_rt
 	movem.l	a0-a4,-(sp)
 	moveq	#RT_REQINFO,D0
@@ -20450,7 +20803,7 @@ intserver
 
 	* Check if tooltip tick count is active.
 	* It it expires, trigger a signal
-	tst		tooltipTick(a5)
+	tst	tooltipTick(a5)
 	beq.b	.notActive
 	subq	#1,tooltipTick(a5)
 	bne.b	.notActive
@@ -20472,7 +20825,7 @@ intserver
 	beq.b	.novb
 	* Play some music!
 	move.l	playerbase(a5),a0
-	jsr		p_ciaroutine(a0)
+	jsr	p_ciaroutine(a0)
 	move.l	(sp),a5
 .novb
 	* Whatever happened above, let's call the VBlank-replay routine.
@@ -20505,6 +20858,7 @@ intserver
 
 	* Trigger signal for the main application loop indicating song has ended.
 	* If there is a loading operation going on, let's not signal.
+	* This tests both "loading" and "loading2"
 	tst	loading(a5)	
 	bne.b	.wasLoading
 	move.b	songHasEndedSignal(a5),d1
@@ -20518,24 +20872,34 @@ intserver
 
 	* Yes, we still are. Let's check if the playing position has changed
 	* since the last check.
-	move	pos_nykyinen(a5),d0	  	* current position
+	move	pos_nykyinen(a5),d0	* current position
 	move	positionmuutos(a5),d1	* last known position
 	cmp	d1,d0
 	beq.b	.eee
 	move	d0,positionmuutos(a5)	* was different, store new changed position
 
-	tst.b	kelattiintaakse(a5)		* check if there was some rewinding going on
+	tst.b	kelattiintaakse(a5)	* check if there was some rewinding going on
 	beq.b	.norewind
-	clr.b	kelattiintaakse(a5)		* there was, let's not check for songend based 
-									* on positions
+	clr.b	kelattiintaakse(a5)	* there was, let's not check for songend based 
+					* on positions
 	bra.b	.rewind
 .norewind
 	* If the last known position is higher than the current position,
 	* we deduce that the song has actually ended and may have restarted
 	* from the beginning.
+	* This may trigger an extra songend signal after 
+	* the above signal, so it should only be enabled for formats
+	* that have pos/len but not songend support.
+	* These are: MED, SoundFX, StarTrekker
+	move.l	playerbase(a5),a0
+	move	#pf_end,d2
+	and	p_liput(a0),d2
+	bne.b	.skipCheck
+	* Current format does not have songend support, do the check!
 	sub	d1,d0	
 	bmi.b	.songover
 .rewind
+.skipCheck
 	* Send a signal indicating that playing position has changed
 	move.b	ownsignal2(a5),d1
 	bsr.w	signalit
@@ -20652,14 +21016,6 @@ signalit
 	bset	d1,d0
 	move.l	4.w,a6			
 	jmp	_LVOSignal(a6)
-
-
-dummyserver_NOTUSED
-	dc.l	0,0
-	dc.b	2,0
-	dc.l	0
-	dc.l	0
-	dc.l	0
 
 
 ******************************************************************************
@@ -20896,7 +21252,10 @@ rexxmessage
 
 
 *** ADD	
-.add	tst.b	d0
+.add	
+	printt "TODO: normal list mode"
+
+	tst.b	d0
 	beq.w	rbutton7
 
 .add2	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
@@ -20937,6 +21296,8 @@ rexxmessage
 
 *** INSERT
 .insert
+	printt "TODO: normal list mode"
+
 	tst.b	d0
 	beq.w	rinsert
 	bsr.w	rinsert2
@@ -20947,6 +21308,8 @@ rexxmessage
 
 *** MOVE
 .move
+	printt "TODO: normal list mode"
+
 	bsr.w	a2i
 	move	d0,-(sp)
 	bsr.w	rmove
@@ -21115,7 +21478,8 @@ rexxmessage
 	push	a1
 	bsr.w	rbutton4		* eject
 	bsr.w	clearlist
-	bsr.w	sulje_quad
+	;bsr.w	sulje_quad
+	bsr	stopScopeTasks
 	bsr.b	.prefspo
 	jsr	sulje_ikkuna
 	jsr	rem_inputhandler
@@ -21123,22 +21487,16 @@ rexxmessage
 	bsr.w	loadprefs2
 	jsr	setboxy
 	jsr	init_inputhandler
-	tst.b	quadon(a5)			* avataanko scope?
-	beq.b	.q
-	bsr.w	start_quad
-.q	not.b	kokolippu(a5)
+	printt	"TODO: minor"
+;	tst.b	quadon(a5)			* avataanko scope?
+;	beq.b	.q
+;	bsr.w	start_quad
+;.q
+	not.b	kokolippu(a5)
 	jmp	avaa_ikkuna
 
 .toggleFavorite
-	tst.b	favorites(a5)
-	beq.b	.1
-	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.1
-	move.l	chosenmodule(a5),d0
-	bsr		toggleFavoriteStatus
-	beq.b	.1
-	bsr	forceRefreshList
-.1	rts
+	bra	toggleFavoriteStatusForCurrentModule
 
 * GET:
 * 	current song
@@ -21404,52 +21762,446 @@ str2msg	pushm	d0/d1/a0/a1/a6
 * Scopes
 *
 ********************************************************************************
+                              rsreset
+s_global                      rs.l       1
+s_quad_task                   rs.l       1
+s_windowTitle                 rs.l      1
+* Pointer to the running status flag
+s_runningStatusAddr            rs.l      1
+s_storedPositionAddr		rs.l 	1
+s_newWindow                   rs.b       nw_SIZEOF
+s_scopeWindowBase             rs.l       1
+s_rastport3                   rs.l       1	
+s_userport3                   rs.l       1
+;s_miniFontBase                rs.l       1
+s_buffer0                     rs.l       1
+s_buffer0w                    rs.w       1
+s_buffer0h                    rs.w       1
+s_quadmode                    rs.b       1
+s_quadmode2                   rs.b       1
+s_scopeDrawAreaWidth		rs.w 	1
+s_scopeDrawAreaModulo		rs.w 	1
+s_scopeDrawAreaWidthRequest   rs.w       1
+s_scopeDrawAreaHeightRequest  rs.w       1
+s_scopeDrawAreaHeight         rs.w       1
+s_quadNoteScrollerLines       rs.w       1
+s_quadNoteScrollerLinesHalf   rs.w       1
+s_scopePreviousLeftEdge       rs.w       1
+s_scopePreviousTopEdge        rs.w       1
+s_scopePreviousWidth          rs.w       1
+s_scopePreviousHeight         rs.w       1
+s_scopePreviousPattPos        rs.w       1
+s_scopePreviousSongPos        rs.w       1
+s_omabitmap                   rs.b      bm_SIZEOF
+s_buffer1                     rs.l       1
+s_buffer2                     rs.l       1
+s_draw1                       rs.l       1
+s_draw2                       rs.l       1
+* Triggered channel volumes for Protracker animated volume bars
+s_patternScopeVolumes	      rs.w       4
+                              ifne       FEATURE_FREQSCOPE
+s_deltab1                     rs.l       1	
+s_deltab2                     rs.l       1	
+s_deltab3                     rs.l       1	
+s_deltab4                     rs.l       1	
+                              endif
+                              ifne       FEATURE_SPECTRUMSCOPE
+s_spectrumMemory              rs.l       1
+s_spectrumVolumeTable         rs.l       1
+s_spectrumMuluTable           rs.l       1
+s_spectrumExpTable            rs.l       1
+s_spectrumSineTable           rs.l       1
+s_spectrumChannel1            rs.l       1
+s_spectrumChannel2            rs.l       1
+s_spectrumChannel3            rs.l       1
+s_spectrumChannel4            rs.l       1
+s_spectrumMixedData           rs.l       1
+s_spectrumImagData            rs.l       1
+s_spectrumInitialized         rs.w       1
+                              endif
 
-* K‰ynnistys
-start_quad
-	st	scopeflag(a5)
-start_quad2
-;	jmp	quad_code
+s_multab                      rs.w       256 * modulo multiplication table
+s_scopeHorizontalBarTable     rs.b       512
+s_mtab                        rs.b       64*256*2 * volume table for scopes
+sizeof_scopeVars              rs.b       1
 
-	move.l	a6,-(sp)
-	move.l	_DosBase(a5),a6
-	pushpea	.prn(pc),d1
-	moveq	#0,d2			* pri
-	move.l	#quad_segment,d3
-	lsr.l	#2,d3
-	move.l	#3000,d4
-	lob	CreateProc
-	tst.l	d0
-	beq.b	.error
-	addq	#1,quad_prosessi(a5)
+* Incoming volume values need to be validated or else there will
+* be over indexing mayhem and memory corruption!
+CLAMPVOL macro
+	cmp	#$40,\1
+	bls.b	*+4
+	moveq	#$40,\1
+	endm
 
-	bsr.w	updateprefs
 
-.error	move.l	(sp)+,a6
+* Structure to help task starting and stopping
+    STRUCTURE ScopeTaskDefinition,0
+        UWORD st_runningStatusOffset * Relative to a5
+        UWORD st_prefsStatusOffset * Relative to a5+prefsdata
+        UWORD st_taskOffset * Relative to a5
+        APTR st_entryPoint * Code start address
+    LABEL ScopeTaskDefinition_SIZEOF
+
+quadraScopeTaskDefinition
+	dc.w	quadraScopeRunning
+	dc.w	prefs_quadraScope
+	dc.w	taskQuadraScope
+	dc.l	quadraScopeEntry
+
+quadraScopeFTaskDefinition
+	dc.w	quadraScopeFRunning
+	dc.w	prefs_quadraScopeF
+	dc.w	taskQuadraScopeF
+	dc.l	quadraScopeFEntry
+
+hippoScopeTaskDefinition
+	dc.w	hippoScopeRunning
+	dc.w	prefs_hippoScope
+	dc.w	taskHippoScope
+	dc.l	hippoScopeEntry
+
+patternScopeTaskDefinition
+	dc.w	patternScopeRunning
+	dc.w	prefs_patternScope
+	dc.w	taskPatternScope
+	dc.l	patternScopeEntry
+
+spectrumScopeTaskDefinition
+	dc.w	spectrumScopeRunning
+	dc.w	prefs_spectrumScope
+	dc.w	taskSpectrumScope
+	dc.l	spectrumScopeEntry
+
+
+* In:
+*   a2 = Task name
+*   a3 = Task structure
+* Out:
+*   d0 = 1: ok, 0: out of mem
+initScopeTask
+	bsr.b	resetScopeTask
+
+	* Initialize ln_Node
+	move.b	#NT_TASK,LN_TYPE(a3)
+	move.b	#-30,LN_PRI(a3)
+	move.l	a2,LN_NAME(a3)
+
+	* Allocate stack
+	move.l	#3000,d0
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	jsr	getmem
+	beq.b	.x
+	move.l	d0,a0
+	move.l	a0,TC_SPLOWER(a3)
+	lea	3000(a0),a0
+	move.l	a0,TC_SPUPPER(a3)
+	move.l	a0,TC_SPREG(a3)
+	moveq	#1,d0
+.x	rts
+
+* In:
+*   a3 = Task structure
+resetScopeTask
+	* Reset task structure
+	move.l	a3,a0
+	moveq	#TC_SIZE-1,d0
+.c	clr.b	(a0)+
+	dbf	d0,.c
 	rts
 
-.prn	dc.b	"HiP-Scope",0
- even
- 
-* Sammutus
+* In:
+*  a4 = task definition
+*  d7 = capability bits, pf_samplescope/pf_patternscope
+startScopeTask:
+	pushm	d2-d7/a2-a6
+	* Check player caps, do not start
+	* scope if not supported
+;	move.l	playerbase(a5),d0
+;	beq.b	.1
+;	move.l	d0,a0
+;	move	p_liput(a0),d0
+;	and	d7,d0
+;	beq.b	.x
+;.1
 
-sulje_quad
-	clr.b	scopeflag(a5)
-sulje_quad2
-	push	a6
-	tst	quad_prosessi(a5)
-	beq.b	.tt	
+	* Check if running already
+	move	st_runningStatusOffset(a4),d7
+	tst.b 	(a5,d7)
+	bne.b	.x
 
-	move.l	quad_task(a5),a1
+	* Get task structure
+	move	st_taskOffset(a4),d0
+	lea	(a5,d0),a3
+	lea	.tn(pc),a2
+	bsr	initScopeTask
+
+	* Mark it as running
+	move.b	#RUNNING_YES,(a5,d7)
+
+	* Start
+	move.l	a3,a1
+	* initialPC
+	move.l	st_entryPoint(a4),a2
+	* finalPC (system default)
+	sub.l a3,a3		 
+	lore	Exec,AddTask
+
+	* Update prefs status as well
+	move	st_prefsStatusOffset(a4),d0
+	lea	prefsdata(a5),a0
+	st	(a0,d0)
+.x
+	popm	d2-d7/a2-a6
+	rts
+
+.tn	dc.b	"HiP-Scope",0
+	even
+
+* Sets up scopes open or close according to prefs.
+startAndStopScopeTasks
+	DPRINT	"startAndStopScopeTasks"
+	tst.b	prefsdata+prefs_quadraScope(a5)
+	beq.b	.1
+	bsr.b	startQuadraScopeTask
+	bra.b	.2
+.1	bsr.b	stopQuadraScopeTask
+.2
+	tst.b	prefsdata+prefs_quadraScopeF(a5)
+	beq.b	.3
+	bsr.w	startQuadraScopeFTask
+	bra.b	.4
+.3	bsr.w	stopQuadraScopeFTask	
+.4
+	tst.b	prefsdata+prefs_hippoScope(a5)
+	beq.b	.5
+	bsr.w	startHippoScopeTask
+	bra.b	.6
+.5	bsr.w	stopHippoScopeTask	
+.6
+	tst.b	prefsdata+prefs_patternScope(a5)
+	beq.b	.7
+	bsr.w	startPatternScopeTask
+	bra.b	.8
+.7	bsr.w	stopPatternScopeTask	
+.8
+	tst.b	prefsdata+prefs_spectrumScope(a5)
+	beq.b	.9
+	bsr.w	startSpectrumScopeTask
+	bra.b	.10
+.9	bsr.w	stopSpectrumScopeTask	
+.10
+	rts
+
+startQuadraScopeTask
+	DPRINT	"startQuadraScopeTask"
+	lea	quadraScopeTaskDefinition(pc),a4
+	;move	#pf_samplescope,d7
+	bra.w	startScopeTask
+
+stopQuadraScopeTask
+	DPRINT	"stopQuadraScopeTask"
+	lea	quadraScopeTaskDefinition(pc),a4
+	bra.w	stopScopeTask
+
+restartQuadraScopeTask
+	tst.b	quadraScopeRunning(a5)
+	beq.b	.x
+	bsr.b	stopQuadraScopeTask
+	bsr.b	startQuadraScopeTask
+.x	rts	
+
+startQuadraScopeFTask
+	DPRINT	"startQuadraScopeFTask"
+	lea	quadraScopeFTaskDefinition(pc),a4
+	bra.w	startScopeTask
+
+stopQuadraScopeFTask
+	DPRINT	"stopQuadraScopeFTask"
+	lea	quadraScopeFTaskDefinition(pc),a4
+	bra.w	stopScopeTask
+
+restartQuadraScopeFTask
+	tst.b	quadraScopeFRunning(a5)
+	beq.b	.x
+	bsr.b	stopQuadraScopeFTask
+	bsr.b	startQuadraScopeFTask
+.x	rts	
+
+startHippoScopeTask
+	DPRINT	"startHippoScopeTask"
+	lea	hippoScopeTaskDefinition(pc),a4
+	bra.w	startScopeTask
+
+stopHippoScopeTask
+	DPRINT	"stopHippoScopeTask"
+	lea	hippoScopeTaskDefinition(pc),a4
+	bra.w	stopScopeTask
+
+restartHippoScopeTask
+	tst.b	hippoScopeRunning(a5)
+	beq.b	.x
+	bsr.b	stopHippoScopeTask
+	bsr.b	startHippoScopeTask
+.x	rts	
+
+startPatternScopeTask
+	DPRINT	"startPatternScopeTask"
+	bsr	getScopeMiniFontIfNeeded
+	lea	patternScopeTaskDefinition(pc),a4
+	bra.w	startScopeTask
+
+stopPatternScopeTask
+	DPRINT	"stopPatternScopeTask"
+	lea	patternScopeTaskDefinition(pc),a4
+	bra.w	stopScopeTask
+
+restartPatternScopeTask
+	tst.b	patternScopeRunning(a5)
+	beq.b	.x
+	bsr.b	stopPatternScopeTask
+	bsr.b	startPatternScopeTask
+.x	rts	
+
+startSpectrumScopeTask
+	DPRINT	"startSpectrumScopeTask"
+
+	move.l	(a5),a6
+	tst.l	_FFPBase(a5)
+	bne.b	.1
+	lea	_FFPName,a1
+	lob	OldOpenLibrary
+	move.l	d0,_FFPBase(a5)
+	beq.b	.fail
+.1
+	tst.l	_MTBase(a5)
+	bne.b	.2
+	lea	_MTName,a1
+	lob  	OldOpenLibrary
+	move.l	d0,_MTBase(a5)
+	bne.b	.2
+.fail
+	rts
+.2
+	lea	spectrumScopeTaskDefinition(pc),a4
+	bra.w	startScopeTask
+		
+stopSpectrumScopeTask
+	DPRINT	"stopSpectrumScopeTask"
+	lea	spectrumScopeTaskDefinition(pc),a4
+	bra.b	stopScopeTask
+
+restartSpectrumScopeTask
+	tst.b	spectrumScopeRunning(a5)
+	beq.b	.x
+	bsr.b	stopSpectrumScopeTask
+	bsr.w	startSpectrumScopeTask
+.x	rts	
+
+stopScopeTasks
+	DPRINT	"stopScopeTasks"
+	bsr.w	stopQuadraScopeTask
+	bsr.w	stopQuadraScopeFTask
+	bsr.w	stopHippoScopeTask
+	bsr.w	stopPatternScopeTask
+	bra	stopSpectrumScopeTask
+
+stopScopeTask
+	* Check if running already
+	move	st_runningStatusOffset(a4),d7
+	tst.b 	(a5,d7)
+	beq.b	.x
+	DPRINT	"Shutting it"
+
+	* Get task structure
+	move	st_taskOffset(a4),d0
+	lea	(a5,d0),a1
+
+	* Raise task priority to normal
+	* so it will exit promptly
 	moveq	#0,d0
 	lore	Exec,SetTaskPri
-	st	tapa_quad(a5)		* lippu: poistu!
-.t	tst	quad_prosessi(a5)	* odotellaan
-	beq.b	.tt
-	jsr	dela
-	bra.b	.t
-.tt	clr.b	tapa_quad(a5)
-	pop	a6
+
+	* Flag indicates scope should quit
+	move.b	#RUNNING_SHUT_IT,(a5,d7)
+.loop
+	tst.b 	(a5,d7)
+	beq.b	.z
+	jsr	smallDelay
+	bra.b	.loop
+.z
+
+.x	rts
+
+
+toggleScopes
+	DPRINT	"toggleScopes"
+	lea	scopeToggleTable(a5),a2
+	* Is any scope running?
+	moveq	#0,d0
+	or.b	quadraScopeRunning(a5),d0
+	or.b	quadraScopeFRunning(a5),d0
+	or.b	hippoScopeRunning(a5),d0
+	or.b	patternScopeRunning(a5),d0
+	or.b	spectrumScopeRunning(a5),d0
+	beq.b	.start
+	* Preserve running statuses and stop all
+	move.b	quadraScopeRunning(a5),(a2)+
+	move.b	quadraScopeFRunning(a5),(a2)+
+	move.b	hippoScopeRunning(a5),(a2)+
+	move.b	patternScopeRunning(a5),(a2)+
+	move.b	spectrumScopeRunning(a5),(a2)+
+	bra.w	stopScopeTasks
+	
+.start
+	* Start scopes that were toggled off.
+	* If none were toggled off, start the default
+	* one. Test 5 bytes:
+	tst.b	(a2)
+	bne.b	.some
+	tst.b	1(a2)
+	bne.b	.some
+	tst.b	2(a2)
+	bne.b	.some
+	tst.b	3(a2)
+	bne.b	.some
+	tst.b	4(a2)
+	bne.b	.some
+	* Enable the 1st one if all are off
+	st	(a2)
+.some
+	tst.b	(a2)+
+	beq.b	.a
+	bsr.w	startQuadraScopeTask
+.a	tst.b	(a2)+
+	beq.b	.b
+	bsr.w	startQuadraScopeFTask
+.b	tst.b	(a2)+
+	beq.b	.c
+	bsr.w	startHippoScopeTask
+.c	tst.b	(a2)+
+	beq.b	.d
+	bsr.w	startPatternScopeTask
+.d	tst.b	(a2)+
+	beq.b	.e
+	bsr.w	startSpectrumScopeTask
+.e
+	* Make prefs window show the correct status
+	bsr.b	updateScopeStatusesToPrefs
+	bra	updateprefs
+
+* Update the prefs scope toggle statuses to match
+* actual runtime state.
+updateScopeStatusesToPrefs
+	tst.b	quadraScopeRunning(a5)
+	sne	prefsdata+prefs_quadraScope(a5)
+	tst.b	quadraScopeFRunning(a5)
+	sne	prefsdata+prefs_quadraScopeF(a5)
+	tst.b	hippoScopeRunning(a5)
+	sne	prefsdata+prefs_hippoScope(a5)
+	tst.b	patternScopeRunning(a5)
+	sne	prefsdata+prefs_patternScope(a5)
+	tst.b	spectrumScopeRunning(a5)
+	sne	prefsdata+prefs_spectrumScope(a5)
 	rts
 
 
@@ -21483,50 +22235,166 @@ SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
 
 * If more channels than defined here,
 * switch to small font.
-;SCOPE_SMALL_FONT_CHANNEL_LIMIT = 4
 SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 
+; DPRINT can't be used as scope is now a task,
+; DPRINT uses dos.library which is not allowed.
+SDPRINT macro
 
-quad_code
+	endm
+
+* Scope task entry points:
+
+quadraScopeEntry
 	lea	var_b,a5
-	clr.l	mtab(a5)
-	clr.l	buffer0(a5)
-	clr.l	deltab1(a5)
+	move	#quadraScopeRunning,d6
+	moveq	#QUADMODE_QUADRASCOPE,d7
+	move.b	#$80,d0
+	and.b	prefsdata+prefs_quadraScopeBars(a5),d0
+	or.b	d0,d7
+	
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_quadraScopePos(a5),a2
+	bra.w	scopeEntry
+
+.t	dc.b	"QuadraScope",0
+ even
+
+quadraScopeFEntry
+	lea	var_b,a5
+	move	#quadraScopeFRunning,d6
+	moveq	#QUADMODE_FQUADRASCOPE,d7
+	move.b	#$80,d0
+	and.b	prefsdata+prefs_quadraScopeFBars(a5),d0
+	or.b	d0,d7
+
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_quadraScopeFPos(a5),a2
+	bra.w	scopeEntry
+
+.t	dc.b	"Filled QuadraScope",0
+ even
+
+hippoScopeEntry
+	lea	var_b,a5
+	move	#hippoScopeRunning,d6
+	moveq	#QUADMODE_HIPPOSCOPE,d7
+	move.b	#$80,d0
+	and.b	prefsdata+prefs_hippoScopeBars(a5),d0
+	or.b	d0,d7
+
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_hippoScopePos(a5),a2
+	bra.b	scopeEntry
+
+.t	dc.b	"HippoScope",0
+ even
+
+patternScopeEntry
+	lea	var_b,a5
+	move	#patternScopeRunning,d6
+	moveq	#QUADMODE_PATTERNSCOPE,d7
+	tst.b	prefsdata+prefs_patternScopeXL(a5)
+	beq.b	.1
+	moveq	#QUADMODE_PATTERNSCOPEXL,d7
+.1
+	
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_patternScopePos(a5),a2
+	bra.b	scopeEntry
+
+.t	dc.b	"PatternScope",0
+ even
+
+spectrumScopeEntry
+	lea	var_b,a5
+	move	#spectrumScopeRunning,d6
+	moveq	#QUADMODE_FREQANALYZER,d7
+	move.b	#$80,d0
+	and.b	prefsdata+prefs_spectrumScopeBars(a5),d0
+	or.b	d0,d7
+
+	lea	.t(pc),a3
+	lea	prefsdata+prefs_spectrumScopePos(a5),a2
+	bra.b	scopeEntry
+
+.t	dc.b	"SpectrumScope",0
+ even
+
+* Main scope task entry point
+* In:
+*   d6 = Offset to scope running flag 
+*   d7 = operating mode
+*   a2 = Address to load-from and store-to the window position
+*   a3 = window title
+*   a5 = global variables
+scopeEntry:
+	move.l	(a5),a6
+	SDPRINT	"Scope task started"
+
+	* Allocate local state variables
+	move.l	#sizeof_scopeVars,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	jsr	getmem
+	bne.b	.gotMem
+	* Quit with error
+	lea	memerror_t(pc),a1
+	bra	request
+.gotMem
+	move.l	d0,a4
+	move.l	a5,s_global(a4)
+
+	* Store address for the running status flag to check and pass shutdown info
+	pea	(a5,d6)
+	move.l	(sp)+,s_runningStatusAddr(a4)
+	* Store requested operating mode
+	move.b	d7,s_quadmode(a4)
+	* Store window position on exit to this address
+	move.l	a2,s_storedPositionAddr(a4)
+	* Window title should be set to this
+	move.l	a3,s_windowTitle(a4)
 
 	sub.l	a1,a1
 	lore	Exec,FindTask
-	move.l	d0,quad_task(a5)
+	move.l	d0,s_quad_task(a4)
 
-	addq	#1,quad_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
+* Modulo multab 
+	lea	s_multab(a4),a0
+	moveq	#0,d0
+.mu	move	d0,(a0)+
+	add	#40,d0
+	cmp	#40*256,d0
+	bne.b	.mu
 
-	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,scopeDrawAreaWidth(a5) 
-	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,scopeDrawAreaModulo(a5)
-	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,scopeDrawAreaHeight(a5)
+	;clr.l	s_mtab(a4)
+	clr.l	s_buffer0(a4)
+  ifne FEATURE_FREQSCOPE
+	clr.l	s_deltab1(a4)
+  endif
 
-	lea	ch1(a5),a0
-	lea	4*ns_size(a0),a1
-.cl	clr	(a0)+
-	cmp.l	a1,a0
-	bne.b	.cl
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,s_scopeDrawAreaWidth(a4) 
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
+
 
  if DEBUG
 	moveq	#0,d0 
-	move.b	quadmode(a5),d0
-	DPRINT	"Quad mode: %lx"
+	move.b	s_quadmode(a4),d0
+	SDPRINT	"Quad mode: %lx"
  endif
 	* This creates a jumptable compatible value out of quadmode,
 	* where bit 8 indicates "bars enabled"
-	move.b	quadmode(a5),d0
-	move.b	d0,d1
-	and	#$f,d1
+	move.b	s_quadmode(a4),d0
+	moveq	#$f,d1
+	and.b		d0,d1
 	add.b	d1,d1
 	tst.b	d0
 	bpl.b	.e
 	addq.b	#1,d1
-.e	move.b	d1,quadmode2(a5)	* 0-9
+.e	move.b	d1,s_quadmode2(a4)	* 0-9
 
 	moveq	#0,d0
-	move.b	quadmode2(a5),d0
+	move.b	s_quadmode2(a4),d0
 	lsl	#2,d0
 	jmp	.t(pc,d0)
 
@@ -21551,115 +22419,108 @@ quad_code
 
 * Quadrascope
 .1	moveq	#0,d7
-.11	move.l	#64*256*2,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
+.11	
 	bsr.w	voltab
 	bra.w	.cont
 
 * Hipposcope
 .2
-	move.l	#64*256*2,d0
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
 	bsr.w	voltab2
 	bra.w	.cont
 
 
 .3	moveq	#0,d7
-.33	move.l	#64*256*2,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
+.33
 	bsr.w	voltab
-.wo	move.l	#512,d0		* palkkitaulu
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,scopeVerticalBarTable(a5)
-	beq.w	.memer
-	bsr.w	makeScopeVerticalBars		* tehd‰‰n palkkitaulu
+
+.wo	
+	bsr.w	makeScopeHorizontalBars		* tehd‰‰n palkkitaulu
 	bra.w	.cont
 
 
-.4	move.l	#64*256*2,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
+.4
 	bsr.w	voltab2
 	bra.b	.wo
 
-.5	move.l	#64*256,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
+.5	
+  ifne FEATURE_FREQSCOPE
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
+ endif
+ ifne FEATURE_SPECTRUMSCOPE
+	jsr	spectrumInitialize
+	beq.w	.memer
+ endif
 	bra.w	.cont
 
+  ifne FEATURE_FREQSCOPE 
 .delt	move.l	#(256+32)*4,d0
 	move.l	#MEMF_CLEAR,d1
 	jsr	getmem
-	move.l	d0,deltab1(a5)
+	move.l	d0,s_deltab1(a4)
 	beq.b	.r
 	add.l	#256+32,d0
-	move.l	d0,deltab2(a5)
+	move.l	d0,s_deltab2(a4)
 	add.l	#256+32,d0
-	move.l	d0,deltab3(a5)
+	move.l	d0,s_deltab3(a4)
 	add.l	#256+32,d0
-	move.l	d0,deltab4(a5)
+	move.l	d0,s_deltab4(a4)
 .r	rts
+  endif
 
-
-.6	move.l	#64*256,d0	* volumetaulukko
-	move.l	#MEMF_CLEAR,d1
-	jsr	getmem
-	move.l	d0,mtab(a5)
-	beq.w	.memer
+.6	
+  ifne FEATURE_FREQSCOPE 
 	bsr.w	voltab3
 	bsr.b	.delt
 	beq.w	.memer
-	bra.w	.wo
+  endif
+  if FEATURE_SPECTRUMSCOPE
+   	jsr	spectrumInitialize
+	beq.w	.memer
+  endif
+	bra.w	.wo * go to bar init
 
 .patternScopeNormal
 .patternScopeNormalBars
 	* Prevent use of _BARS enumeration in quadmode2,
 	* makes things easier. 
-	move.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
-	DPRINT	"Patternscope NORMAL"
+	move.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
+	SDPRINT	"Patternscope NORMAL"
 	bra.b	.cont
 .patternScopeXL
 .patternScopeXLBars
-	move.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
-	DPRINT	"Patternscope XL"
+	move.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
+	SDPRINT	"Patternscope XL"
 .cont
 
 	* Start with no size request active.
-	move	scopeDrawAreaWidth(a5),scopeDrawAreaWidthRequest(a5)
-	move	scopeDrawAreaHeight(a5),scopeDrawAreaHeightRequest(a5)
+	move	s_scopeDrawAreaWidth(a4),s_scopeDrawAreaWidthRequest(a4)
+	move	s_scopeDrawAreaHeight(a4),s_scopeDrawAreaHeightRequest(a4)
 		
 	* lines count for patternscope, 8px high rows
-	move	scopeDrawAreaHeight(a5),d0
+	move	s_scopeDrawAreaHeight(a4),d0
 	lsr	#3,d0 
-	move	d0,quadNoteScrollerLines(a5)
+	move	d0,s_quadNoteScrollerLines(a4)
 	lsr	#1,d0
-	move	d0,quadNoteScrollerLinesHalf(a5)
-
+	move	d0,s_quadNoteScrollerLinesHalf(a4)
 
 	move.l	_IntuiBase(a5),a6
-	lea	winstruc3,a0
+	
+	* Copy new window structure for modifications
+	lea	winstruc3,a2
+	lea	s_newWindow(a4),a1
+	move.l	a1,a0
+	moveq	#nw_SIZEOF-1,d0
+.copy	move.b	(a2)+,(a1)+
+	dbf	d0,.copy
+
 	* Restore top/left to some previous used value
-	move.l	quadpos(a5),(a0)
+	move.l	s_storedPositionAddr(a4),a1
+	move.l	(a1),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
-	add	scopeDrawAreaHeight(a5),d0
+	add	s_scopeDrawAreaHeight(a4),d0
 	move	d0,nw_Height(a0)
 
 	move	wbleveys(a5),d0		* WB:n leveys
@@ -21677,9 +22538,8 @@ quad_code
 	sub	6(a0),d0	* Jos ei mahdu ruudulle, laitetaan
 	move	d0,2(a0)	* mahdollisimman alas
 .ok2
-
 	lob	OpenWindow
-	move.l	d0,scopeWindowBase(a5)
+	move.l	d0,s_scopeWindowBase(a4)
 	bne.b	.ok3
 	lea	windowerr_t(pc),a1
 .me	bsr.w	request
@@ -21690,30 +22550,33 @@ quad_code
 
 .ok3
 	move.l	d0,a0
-	move.l	wd_RPort(a0),rastport3(a5)
-	move.l	wd_UserPort(a0),userport3(a5)
-
-	jsr	setscrtitle
-
-	move.l	quad_task(a5),a1
+	move.l	wd_RPort(a0),s_rastport3(a4)
+	move.l	wd_UserPort(a0),s_userport3(a4)
+	
+	move.l	s_windowTitle(a4),a1
+	lea	scrtit,a2
+	lore	Intui,SetWindowTitles
+	
+	move.l	s_quad_task(a4),a1
 	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
 	lore	Exec,SetTaskPri
 
 	move.l	_GFXBase(a5),a6
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	move.l	pen_1(a5),d0
 	lob	SetAPen
 
-	move.l	scopeWindowBase(a5),a0 
-	move	wd_LeftEdge(a0),scopePreviousLeftEdge(a5)
-	move	wd_TopEdge(a0),scopePreviousTopEdge(a5)
-	move	wd_Width(a0),scopePreviousWidth(a5)
-	move	wd_Height(a0),scopePreviousHeight(a5)
+	move.l	s_scopeWindowBase(a4),a0 
+	move	wd_LeftEdge(a0),s_scopePreviousLeftEdge(a4)
+	move	wd_TopEdge(a0),s_scopePreviousTopEdge(a4)
+	move	wd_Width(a0),s_scopePreviousWidth(a4)
+	move	wd_Height(a0),s_scopePreviousHeight(a4)
 
 	bsr	drawScopeWindowDecorations
 	bsr	initScopeBitmaps
-	beq.b	.memer
+	beq.w	.memer
 
+; TEST! OK
 
 	* State flag indicating whether scope has been cleared
 	moveq	#0,d7
@@ -21722,14 +22585,15 @@ quad_code
 	moveq	#0,d6	
 	bsr	patternScopeIsActive
 	bne.b	.noPatts
-	DPRINT	"Patternscope active"
-	st		d6
+	SDPRINT	"Patternscope active"
+	st	d6
 .noPatts
 
 	* Set to non-zero if LMB is pressed
 	move.b	scopeManualActivation(a5),d5
-
 	jsr	printHippoScopeWindow	
+
+; TEST: OK
 
 *********************************************************************
 * Scope main loop
@@ -21737,7 +22601,7 @@ quad_code
 
 scopeTest=0
 
-scopeLoop
+scopeLoop:
 
  ifne scopeTest
  	move	#$666,$dff180
@@ -21751,8 +22615,12 @@ scopeLoop
 	lob	WaitTOF
  endif
 
-	tst.b	tapa_quad(a5)		* pit‰‰kˆ poistua?
-	bne.w	qexit
+
+	;tst.b	tapa_quad(a5)		* pit‰‰kˆ poistua?
+	;bne.w	qexit
+	move.l	s_runningStatusAddr(a4),a0
+	tst.b	(a0)
+	bmi	qexit
 
 	* Bypass screen check if LMB has been pressed
 	tst.b 	d5
@@ -21760,7 +22628,7 @@ scopeLoop
 
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
-	move.l	scopeWindowBase(a5),a0	* ollaanko p‰‰llimm‰isen‰?
+	move.l	s_scopeWindowBase(a4),a0	* ollaanko p‰‰llimm‰isen‰?
 
 	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
@@ -21770,6 +22638,9 @@ scopeLoop
 	tst	sc_TopEdge(a1)
 	beq.w 	.continue
 .screenVisible
+
+	tst.b	playing(a5)
+	beq.b	.doNotDraw
 
 	* No scopes when AHI
 	tst.b	ahi_use_nyt(a5)
@@ -21783,8 +22654,24 @@ scopeLoop
 	btst	#pb_scope,d0 
 	beq.b	.doNotDraw
 
-	tst.b	playing(a5)
+	* Do not draw if patternmode and no pattern info
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
+	beq.b	.testPattern
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
+	bne.b	.noPattern
+.testPattern	
+	* Protracker special case
+	cmp	#pt_prot,playertype(a5)
+	beq.b	.izOk
+	* Pattern data check
+	tst.l	deliPatternInfo(a5)
+	bne.b	.izOk
+	bra.b	.doNotDraw
+.noPattern
+	* Check for sample scope support
+	and	#pf_quadscopeUps!pf_quadscopePoke,d0
 	beq.b	.doNotDraw
+.izOk
 
 	bsr	scopeDrawAreaSizeChangeRequestIsActive
 	bne.b	.doNotDraw
@@ -21793,20 +22680,17 @@ scopeLoop
 	bne.b	.doDraw
 	* This clears the hippo gfx away when starting again
 	bsr.w	scopeDrawAreaClear
-
 .doDraw
 	* Needs a clear in the future
 	moveq	#-1,d7
 
-	tst.b	d6 		* pattscope indicator bit
-	beq.b	.noPatts
-	bsr	getScopeMiniFontIfNeeded
-.noPatts
-
 	pushm	d5/d6/d7
 	jsr	obtainModuleData
+	* Final safety check
+	tst.b	playing(a5)
+	beq.b	.1
 	bsr.w	drawScope
-	jsr 	releaseModuleData
+.1	jsr 	releaseModuleData
 	popm	d5/d6/d7
 	bra.b	.continue
 
@@ -21818,15 +22702,21 @@ scopeLoop
 	moveq	#0,d7
 	bsr.w	scopeDrawAreaClear
 	jsr	printHippoScopeWindow
-	bra.w	.continue
+	;bra.w	.continue - FALL THROUGH
 
 .m
 .continue
 	* Manual size and position detection by polling.
-	bsr		scopeWindowChangeHandler
+	bsr	scopeWindowChangeHandler
+
+	* Store window position so it gets saved with prefs
+	move.l	s_scopeWindowBase(a4),a0
+	move.l	s_storedPositionAddr(a4),a1
+	move.l	4(a0),(a1)
+
 .getMoreMsg
 	* Poll for messages
-	move.l	userport3(a5),a0
+	move.l	s_userport3(a4),a0
 	lore	Exec,GetMsg
 	tst.l	d0
 	beq.w	scopeLoop
@@ -21870,52 +22760,82 @@ scopeLoop
 	bra.b	.getMoreMsg
 	
 .quit
-	clr.b	scopeflag(a5)
+	;clr.b	scopeflag(a5)
 	
 *********************************************************************
 * Scope exit
 *********************************************************************
 
-qexit	bsr.b	qflush_messages
+qexit:
+	SDPRINT	"Scope task will exit"
+	bsr.b	qflush_messages
 
-	move.l	mtab(a5),a0
-	jsr	freemem
 	bsr	freeScopeBitmaps
-	move.l	deltab1(a5),a0
+  ifne FEATURE_FREQSCOPE
+	move.l	s_deltab1(a4),a0
+	clr.l	s_deltab1(a4)
 	jsr	freemem
-	clr.l	mtab(a5)
-	clr.l	deltab1(a5)
+  endif
+  ifne FEATURE_SPECTRUMSCOPE
+	jsr	spectrumUninitialize
+  endif
 
 	move.l	_IntuiBase(a5),a6		
-	move.l	scopeWindowBase(a5),d0
+	move.l	s_scopeWindowBase(a4),d0
 	beq.b	.uh1
 	move.l	d0,a0
-	move.l	4(a0),quadpos(a5)	* koordinaatit talteen
 	lob	CloseWindow
-	clr.l	scopeWindowBase(a5)
+	clr.l	s_scopeWindowBase(a4)
 .uh1
 
+	SDPRINT	"Scope task exiting"
+	;clr	quad_prosessi(a5)	* lippu: lopetettiin
+
+	* Dangerous exit procedures!	
 	lore	Exec,Forbid
 
-	cmp	#1,prefsivu(a5)		* display prefssivu?
-	bne.b	.reer
-	bsr.w	updateprefs
-.reer
+	* Not running anymore
+	move.l	s_runningStatusAddr(a4),a0
+	clr.b	(a0)
 
-	clr	quad_prosessi(a5)	* lippu: lopetettiin
-	rts
+	* Is prefs displayed? Update as scope status changes
+	bsr.w	updateScopeStatusesToPrefs
+	cmp	#1,prefsivu(a5)		
+	bne.b	.x
+	* This will Signal()
+	bsr.w	updateprefs
+.x
+
+	move.l	s_quad_task(a4),a2
+
+	* Free local data. a4 invalid after this
+	move.l	a4,a0
+	jsr	freemem
+
+	* Free task stack. Is this safe, maybe?
+	* No mem alloc is done below or by any other
+	* task since Forbid()den.
+	move.l	TC_SPLOWER(a2),a0
+	jsr	freemem
+
+	* Remove self 
+	sub.l	a1,a1
+	jmp	_LVORemTask(a6)
+
+
+
 
 qflush_messages
-	move.l	scopeWindowBase(a5),a0 
+	move.l	s_scopeWindowBase(a4),a0 
 	bra.w	flushWindowMessages
 
 freeScopeBitmaps
-	move.l	buffer0(a5),d0
+	move.l	s_buffer0(a4),d0
 	beq.b	.noFree
 	move.l	d0,a0
-	clr.l	buffer0(a5)
-	move	buffer0w(a5),d0
-	move	buffer0h(a5),d1
+	clr.l	s_buffer0(a4)
+	move	s_buffer0w(a4),d0
+	move	s_buffer0h(a4),d1
 	lore	GFX,FreeRaster
 .noFree
 	rts
@@ -21924,87 +22844,87 @@ initScopeBitmaps
 	bsr.b 	freeScopeBitmaps
 
 	moveq	#0,d0
-	move	scopeDrawAreaWidth(a5),d0 
+	move	s_scopeDrawAreaWidth(a4),d0 
 	moveq	#0,d1
-	move	scopeDrawAreaHeight(a5),d1
+	move	s_scopeDrawAreaHeight(a4),d1
 	* allocate 6 extra rasterlines per buffer
 	addq.l	#6,d1
 	* two buffers
 	add.l	d1,d1
-	move	d0,buffer0w(a5)
-	move	d1,buffer0h(a5)
+	move	d0,s_buffer0w(a4)
+	move	d1,s_buffer0h(a4)
 	lore	GFX,AllocRaster
-	move.l	d0,buffer0(a5)
+	move.l	d0,s_buffer0(a4)
 	beq.b	.memError 
 
  	move.l	d0,a0
-	move.l	a0,buffer0(a5)
+	move.l	a0,s_buffer0(a4)
 
 	* AllocRaster does not clear memory, clear it
 	move.l 	a0,a1
-	move	scopeDrawAreaModulo(a5),d1
-	mulu	buffer0h(a5),d1
+	move	s_scopeDrawAreaModulo(a4),d1
+	mulu	s_buffer0h(a4),d1
 	lsr.l	#2,d1
 	subq	#1,d1
 .clr
 	clr.l	(a1)+
 	dbf	d1,.clr
 
-	move	scopeDrawAreaModulo(a5),d1
+	move	s_scopeDrawAreaModulo(a4),d1
 	* leave two lines spare at the top
 	add	d1,a0
 	add	d1,a0
 	;add.l	#320/8*2,d0		* yl‰‰lle 2 vararivi‰
-	move.l	a0,buffer1(a5)
+	move.l	a0,s_buffer1(a4)
 
-	move	scopeDrawAreaModulo(a5),d0
-	move	scopeDrawAreaHeight(a5),d1
+	move	s_scopeDrawAreaModulo(a4),d0
+	move	s_scopeDrawAreaHeight(a4),d1
 	* four lines spare at the botrom
 	addq	#4,d1
 	mulu	d1,d0
 	add.l	d0,a0
-	move.l	a0,buffer2(a5)
+	move.l	a0,s_buffer2(a4)
 	
 *** Initialisoidaan oma bitmappi
-	lea	omabitmap(a5),a0
+	lea	s_omabitmap(a4),a0
 	moveq	#1,d0
-	move	scopeDrawAreaWidth(a5),d1
-	move	scopeDrawAreaHeight(a5),d2
+	move	s_scopeDrawAreaWidth(a4),d1
+	move	s_scopeDrawAreaHeight(a4),d2
 	* why add 2 here? 
 	addq	#2,d2
 	lore	GFX,InitBitMap
-	move.l	buffer1(a5),omabitmap+bm_Planes(a5)
+	move.l	s_buffer1(a4),s_omabitmap+bm_Planes(a4)
  
-	move.l	buffer1(a5),draw1(a5)
-	move.l	buffer2(a5),draw2(a5)
-	move	scopeDrawAreaModulo(a5),d0
+	move.l	s_buffer1(a4),s_draw1(a4)
+	move.l	s_buffer2(a4),s_draw2(a4)
+	move	s_scopeDrawAreaModulo(a4),d0
 	* make draw buffer start at 3rd line. why?
 	mulu	#3,d0
-	add.l	d0,draw1(a5)
-	add.l	d0,draw2(a5)
+	add.l	d0,s_draw1(a4)
+	add.l	d0,s_draw2(a4)
 
 .memError
 	rts
 
 * Z is set if patternscope is active
 patternScopeIsActive
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5) 
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4) 
 	beq.b	.isPatts
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
 .isPatts
 	rts
 
 
 scopeDrawAreaClear
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	move.l	pen_0(a5),d0
 	lore	GFX,SetAPen
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	moveq	#10,d0
 	moveq	#14,d1
-	move	scopeDrawAreaWidth(a5),d2
+	move	s_scopeDrawAreaWidth(a4),d2
 	add	#10,d2
-	move	scopeDrawAreaHeight(a5),d3
+	move	s_scopeDrawAreaHeight(a4),d3
 	add	#79-64,d3
 	add	windowleft(a5),d0
 	add	windowleft(a5),d2
@@ -22019,32 +22939,31 @@ scopeDrawAreaClear
 * for some reason the IDCMP approach did not work similarly on
 * both kickstarts.
 scopeWindowChangeHandler
-	move.l	scopeWindowBase(a5),a0
+	move.l	s_scopeWindowBase(a4),a0
 	move	wd_Width(a0),d0 
 	move	wd_Height(a0),d1 
 	move	wd_TopEdge(a0),d2 
 	move	wd_LeftEdge(a0),d3
 
-	cmp	scopePreviousTopEdge(a5),d2
+	cmp	s_scopePreviousTopEdge(a4),d2
 	bne.b	.posChange
-	cmp	scopePreviousLeftEdge(a5),d3 
+	cmp	s_scopePreviousLeftEdge(a4),d3 
 	bne.b	.posChange
-	cmp	scopePreviousWidth(a5),d0 
+	cmp	s_scopePreviousWidth(a4),d0 
 	bne.b	.sizeChange
-	cmp scopePreviousHeight(a5),d1 
+	cmp 	s_scopePreviousHeight(a4),d1 
 	bne.b	.sizeChange
 	rts
 .posChange
-	move	d2,scopePreviousTopEdge(a5) 
-	move	d3,scopePreviousLeftEdge(a5)
-	bsr.w	scopeWindowChanged
-	rts
+	move	d2,s_scopePreviousTopEdge(a4) 
+	move	d3,s_scopePreviousLeftEdge(a4)
+	bra		scopeWindowChanged
+	
 .sizeChange 
-	move	d0,scopePreviousWidth(a5)
-	move	d1,scopePreviousHeight(a5)
-	bsr.w	scopeWindowSizeChanged
-	rts
-
+	move	d0,s_scopePreviousWidth(a4)
+	move	d1,s_scopePreviousHeight(a4)
+	bra		scopeWindowSizeChanged
+	
 
 ;scopeRefreshWindow
 ;	move.l	scopeWindowBase(a5),a0
@@ -22059,23 +22978,23 @@ drawScopeWindowDecorations
 	tst.b	uusikick(a5)		* uusi kick?
 	beq.b	.kick13
 
-	move.l	rastport3(a5),a2
+	move.l	s_rastport3(a4),a2
 	moveq	#4,d0
 	moveq	#11,d1
-	move	scopeDrawAreaWidth(a5),d2
+	move	s_scopeDrawAreaWidth(a4),d2
 	add	#335-320,d2
-	move	scopeDrawAreaHeight(a5),d3
+	move	s_scopeDrawAreaHeight(a4),d3
 	add	#82-64,d3
 	bsr.w	drawtexture
 
 	moveq	#8,d0
 	moveq	#13,d1
-	move	scopeDrawAreaWidth(a5),d4
+	move	s_scopeDrawAreaWidth(a4),d4
 	add	#323-320,d4
-	move	scopeDrawAreaHeight(a5),d5
+	move	s_scopeDrawAreaHeight(a4),d5
 	addq	#67-64,d5
 	moveq	#$0a,d6
-	move.l	rastport3(a5),a0
+	move.l	s_rastport3(a4),a0
 	move.l	a0,a1
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -22088,14 +23007,14 @@ drawScopeWindowDecorations
 	* Kickstart 1.3, since there is no background texture fill,
 	* the window must be cleared by other means
 	* to get rid of previous stuff after resize.
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
 	move.l	pen_0(a5),d0
 	lore	GFX,SetAPen
 	moveq	#4,d0
 	moveq	#11,d1
-	move	scopeDrawAreaWidth(a5),d2
+	move	s_scopeDrawAreaWidth(a4),d2
 	add	#335-320,d2
-	move	scopeDrawAreaHeight(a5),d3
+	move	s_scopeDrawAreaHeight(a4),d3
 	add	#82-64,d3
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -22105,17 +23024,19 @@ drawScopeWindowDecorations
 	
 .drawBox
 	moveq	#7,plx1
-	move	scopeDrawAreaWidth(a5),plx2
+	move	s_scopeDrawAreaWidth(a4),plx2
 	add	#332-320,plx2
 	moveq	#13,ply1
-	move	scopeDrawAreaHeight(a5),ply2
+	move	s_scopeDrawAreaHeight(a4),ply2
 	add	#80-64,ply2
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
 	add	windowtop(a5),ply2
-	move.l	rastport3(a5),a1
+	move.l	s_rastport3(a4),a1
+	push	a4
 	jsr	laatikko2
+	pop	a4
 	rts
 
 
@@ -22135,10 +23056,10 @@ requestNormalScopeDrawArea
 *   d0 = ~0 window will change to accommodate
 requestScopeDrawAreaChange
 
-	move	d0,scopeDrawAreaWidthRequest(a5)
-	move	d1,scopeDrawAreaHeightRequest(a5)
-	sub	scopeDrawAreaWidth(a5),d0
-	sub	scopeDrawAreaHeight(a5),d1
+	move	d0,s_scopeDrawAreaWidthRequest(a4)
+	move	d1,s_scopeDrawAreaHeightRequest(a4)
+	sub	s_scopeDrawAreaWidth(a4),d0
+	sub	s_scopeDrawAreaHeight(a4),d1
 	move	d1,d2
 	or	d0,d2
 	beq.w	.noDiff
@@ -22146,11 +23067,11 @@ requestScopeDrawAreaChange
  if DEBUG 	
 	ext.l 	d0 
 	ext.l 	d1
-	DPRINT	"Draw area change %ld %ld"
+	SDPRINT	"Draw area change %ld %ld"
  endif
 
 
-	move.l	scopeWindowBase(a5),a0
+	move.l	s_scopeWindowBase(a4),a0
 	* Calculate new right edge position for window 
 	move	wd_LeftEdge(a0),d2
 	add	wd_Width(a0),d2
@@ -22180,7 +23101,7 @@ requestScopeDrawAreaChange
  if DEBUG 
  	ext.l 	d0 
  	ext.l 	d1
-	DPRINT	"->move %ld %ld"
+	SDPRINT	"->move %ld %ld"
  endif
    
 	lore	Intui,MoveWindow
@@ -22190,24 +23111,24 @@ requestScopeDrawAreaChange
  if DEBUG 
  	ext.l 	d0 
  	ext.l 	d1
-	DPRINT	"->resize %ld %ld"
+	SDPRINT	"->resize %ld %ld"
  endif 
 
-	move.l	scopeWindowBase(a5),a0 
+	move.l	s_scopeWindowBase(a4),a0 
 	lore 	Intui,SizeWindow
 	moveq	#1,d0
 	rts
 .noDiff
-;	DPRINT	"->no change!"
+;	SDPRINT	"->no change!"
 	moveq	#0,d0
 	rts
 
 scopeDrawAreaSizeChangeRequestIsActive
-	move	scopeDrawAreaWidthRequest(a5),d0 
-	cmp	scopeDrawAreaWidth(a5),d0 
+	move	s_scopeDrawAreaWidthRequest(a4),d0 
+	cmp	s_scopeDrawAreaWidth(a4),d0 
 	bne.b 	.yes
-	move	scopeDrawAreaHeightRequest(a5),d0 
-	cmp	scopeDrawAreaHeight(a5),d0 
+	move	s_scopeDrawAreaHeightRequest(a4),d0 
+	cmp	s_scopeDrawAreaHeight(a4),d0 
 	bne.b 	.yes
 	moveq	#0,d0
 	rts
@@ -22217,9 +23138,9 @@ scopeDrawAreaSizeChangeRequestIsActive
 
 * Called when IDCMP_CHANGEWINDOW message arrives.
 scopeWindowChanged
-	DPRINT	"scopeWindowChanged"
+	SDPRINT	"scopeWindowChanged"
  if DEBUG
-	move.l	scopeWindowBase(a5),a0
+	move.l	s_scopeWindowBase(a4),a0
 	moveq	#0,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -22228,13 +23149,13 @@ scopeWindowChanged
 	move	wd_TopEdge(a0),d1
 	move	wd_Width(a0),d2
 	move	wd_Height(a0),d3
-	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+	SDPRINT	"left=%ld top=%ld width=%ld height=%ld"
  endif
 	* Request again after window move
  	bsr.w	scopeDrawAreaSizeChangeRequestIsActive
 	beq.b 	.nope 
-	move	scopeDrawAreaWidthRequest(a5),d0
-	move	scopeDrawAreaHeightRequest(a5),d1
+	move	s_scopeDrawAreaWidthRequest(a4),d0
+	move	s_scopeDrawAreaHeightRequest(a4),d1
 	bsr.w 	requestScopeDrawAreaChange
 .nope
 	rts
@@ -22243,9 +23164,9 @@ scopeWindowChanged
 * Window size change request has been fulfilled.
 scopeWindowSizeChanged
 	pushm	d2-d6
-	DPRINT	"scopeWindowSizeChanged"
+	SDPRINT	"scopeWindowSizeChanged"
  if DEBUG
-	move.l	scopeWindowBase(a5),a0
+	move.l	s_scopeWindowBase(a4),a0
 	moveq	#0,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -22254,20 +23175,20 @@ scopeWindowSizeChanged
 	move	wd_TopEdge(a0),d1
 	move	wd_Width(a0),d2
 	move	wd_Height(a0),d3
-	DPRINT	"left=%ld top=%ld width=%ld height=%ld"
+	SDPRINT	"left=%ld top=%ld width=%ld height=%ld"
  endif
-	move	scopeDrawAreaWidthRequest(a5),scopeDrawAreaWidth(a5)
-	move	scopeDrawAreaHeightRequest(a5),scopeDrawAreaHeight(a5)
-	move	scopeDrawAreaWidth(a5),d0 
+	move	s_scopeDrawAreaWidthRequest(a4),s_scopeDrawAreaWidth(a4)
+	move	s_scopeDrawAreaHeightRequest(a4),s_scopeDrawAreaHeight(a4)
+	move	s_scopeDrawAreaWidth(a4),d0 
 	lsr	#3,d0 
-	move	d0,scopeDrawAreaModulo(a5)
+	move	d0,s_scopeDrawAreaModulo(a4)
 
 	* lines count for patternscope, 8px high rows
-	move	scopeDrawAreaHeight(a5),d0
+	move	s_scopeDrawAreaHeight(a4),d0
 	lsr	#3,d0 
-	move	d0,quadNoteScrollerLines(a5)
+	move	d0,s_quadNoteScrollerLines(a4)
 	lsr	#1,d0
-	move	d0,quadNoteScrollerLinesHalf(a5)
+	move	d0,s_quadNoteScrollerLinesHalf(a4)
 
 	bsr	initScopeBitmaps
 	bsr	drawScopeWindowDecorations
@@ -22280,17 +23201,19 @@ scopeWindowSizeChanged
 * protracker replayer samples
 *********************************************************************
 
-scopeinterrupt				* a5 = var_b
+scopeinterrupt:				* a5 = var_b
 	cmp	#pt_prot,playertype(a5)
-	bne.w	.n
+	bne.w	.notProtracker
+
+	* Copy scope data from Protracker data structures
 
 	lea	kplbase(a5),a0
 	move.b	k_usertrig(a0),d0
-	or.b	d0,omatrigger(a5)
+	or.b	d0,scopeData+scope_trigger(a5)
 	clr.b	k_usertrig(a0)
 
 	lea	k_chan1temp(a0),a2
-	lea	ch1(a1),a0
+	lea	scopeData+scope_ch1(a1),a0
 	lea	hippoport+hip_PTtrigger1(a5),a3
 	moveq	#4-1,d1
 .setscope
@@ -22301,72 +23224,157 @@ scopeinterrupt				* a5 = var_b
 	move	n_length(a2),ns_length(a0)
 	move.l	n_loopstart(a2),ns_loopstart(a0)
 	move	n_replen(a2),ns_replen(a0)
-.e	move	n_period(a2),ns_period(a0)
-	move	n_tempvol(a2),ns_tempvol2(a0)
-	addq	#1,a3
+.e	move	n_period(a2),ns_period(a0)	
 
-	bsr	patternScopeIsActive
-	beq.b	.eq
+	move	n_tempvol(a2),d2
+	CLAMPVOL d2
+	move	d2,ns_tempvol(a0)
 	
-	move	n_tempvol(a2),ns_tempvol(a0)
-
-.eq	lea	n_sizeof(a2),a2
+	addq	#1,a3 * next trigger byte
+	lea	n_sizeof(a2),a2
 	lea	ns_size(a0),a0
 	dbf	d1,.setscope
 
+.quadScopeSampleFollow
+	* Update quadrascope sample data pointers based on period
+
 	moveq	#4-1,d1
-	lea	ch1(a5),a0
+	lea	scopeData+scope_ch1(a5),a0
 
 .le	moveq	#0,d0
 	tst	ns_period(a0)
 	beq.b	.noe
 	move.l	colordiv(a5),d0		* colorclock/vbtaajuus
 	divu	ns_period(a0),d0
-.noe	ext.l	d0
+	ext.l	d0
+.noe	
 	add.l	d0,ns_start(a0)
 	lsr	#1,d0
 	sub	d0,ns_length(a0)
 	bpl.b	.plu
+
+	* Negative overrun
+	move	ns_length(a0),d0
+	ext.l	d0
+	* safety check
+	move	ns_replen(a0),d2
+	bne.b	.nz
+	moveq	#1,d2
+.nz
+	* Modulo with respect to the replen
+	divs	d2,d0
+	swap	d0
+	ext.l	d0
+	* Adjust replen according to overrun, words
 	move	ns_replen(a0),ns_length(a0)
+	add	d0,ns_length(a0)	
+	* Adjust loopstart, bytes
 	move.l	ns_loopstart(a0),ns_start(a0)
+	add.l	d0,d0
+	sub.l	d0,ns_start(a0)
 .plu	
 	lea	ns_size(a0),a0
 	dbf	d1,.le
 	rts
-.n
+
+.notProtracker
 	cmp	#pt_sample,playertype(a5)
-	bne.b	.nn
+	bne.b	.notSample
+
+	* Sample scope data. Update sample follow position once per frame.
 	move.l	sampleadd(a5),d0
 	move.l	samplefollow(a5),a0
 	add.l	d0,(a0)
-.nn
 	rts
 
-* Check if scope is in normal sized mode.
-* Z is clear it true, Z set if false
-* 1: true
-* 0: false
-;scopeIsPatternXL
-;	cmp.b	#QUADMODE_PATTERNSCOPEXL,quadmode(a5)
-;	;beq.b	.large
-;	;cmp.b	#QUADMODE2_PATTERNSCOPEXL_BARS,quadmode2(a5)
-;	;beq.b	.large
-;.large
-;	rts
-;
+.notSample
+	* Check player has generic quadrascope support
+	move.l	playerbase(a5),a0
+	move	p_liput(a0),d1
+
+	* Poke method:
+	btst	#pb_quadscopePoke,d1
+	bne.b	.quadScopeSampleFollow
+	
+	* UPS method:
+	btst	#pb_quadscopeUps,d1
+	beq.b	.noScopes
+
+	* UPS struct provided by eagle player?
+	move.l	deliUPSStruct(a5),d0
+	* Unnecessary check?
+	beq.w	.quadScopeSampleFollow
+
+
+	* Handle UPS, it will provide input for normal sample follow
+	bsr.b	.handleUPS
+	bra.w	.quadScopeSampleFollow
+
+.noScopes
+	* No scopes for u this time.
+	rts
+
+.handleUPS
+	move.l	d0,a0
+	tst	UPS_Enabled(a0)
+	bne.b	.disabled
+	lea	nullsample,a1
+
+	lea	UPS_Voice1Adr(a0),a2
+	lea	scopeData+scope_ch1(a5),a3
+	moveq	#4-1,d0
+.upsLoop
+	move	UPS_Voice1Vol(a2),d1
+	CLAMPVOL d1
+	move	d1,ns_tempvol(a3)
+	move	UPS_Voice1Per(a2),d1
+	beq.b	.1
+	* New sample starts as period is non-zero
+	move	d1,ns_period(a3)
+	move.l	UPS_Voice1Adr(a2),ns_start(a3)
+	move	UPS_Voice1Len(a2),ns_length(a3)
+.1	
+	move.l	UPS_Voice1Adr(a2),d1
+	move	UPS_Voice1Len(a2),d2
+
+	tst	UPS_Voice1Repeat(a2)
+	beq.b	.11
+	* This case is very seldom used
+	move.l	a1,d1
+	moveq	#1,d2
+.11
+	move.l	d1,ns_loopstart(a3)
+	move	d2,ns_replen(a3)
+
+	lea	UPS_Modulo(a2),a2
+	lea	ns_size(a3),a3
+	dbf	d0,.upsLoop
+.disabled
+	rts
+
+
+* Clears any scope data that points into module data.
+clearScopeData
+	clr.l	deliUPSStruct(a5)
+	clr.b	scope_trigger+scopeData(a5)
+	lea	scope_ch1+scopeData(a5),a0
+	moveq	#4*ns_size/2-1,d0
+.c	clr	(a0)+
+	dbf	d0,.c
+	rts
 
 * Opens the mini font for 4+ channel notescroller if needed
 getScopeMiniFontIfNeeded
 	tst.l	minifontbase(a5)
 	bne.b	.skip
 	* See if we need the small font
-	bsr.w	patternScopeIsActive
-	bne.b	.skip
-	move.l	deliPatternInfo(a5),d0
-	beq.b	.skip
-	move.l	d0,a0
-	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a0)
-	bls.b	.skip
+;	bsr.w	patternScopeIsActive
+;	bne.b	.skip
+;	move.l	deliPatternInfo(a5),d0
+;	beq.b	.skip
+;	move.l	d0,a0
+;	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a0)
+;	bls.b	.skip
 	lea	diskfontname,a1
 	lore	Exec,OldOpenLibrary
 	tst.l 	d0 
@@ -22377,26 +23385,26 @@ getScopeMiniFontIfNeeded
 	move.l	d0,minifontbase(a5)
 	move.l	a6,a1
 	lore 	Exec,CloseLibrary
-	tst.l	minifontbase(a5)
-	bne.b	.miniOk
-	lea	.noFontMsg(pc),a1 
-	tst.b	(a1)
-	beq.b	.skip
-	bsr	request
-	* Show this only once to not be annoying
-	clr.b	(a1)	
+;	tst.l	minifontbase(a5)
+;	bne.b	.miniOk
+;	lea	.noFontMsg(pc),a1 
+;	tst.b	(a1)
+;	beq.b	.skip
+;	bsr	request
+;	* Show this only once to not be annoying
+;	clr.b	(a1)	
 .skip
 	rts
 .miniOk
 	DPRINT	"Got mini font"
 	rts
-.noFontMsg
-	dc.b	"Couldn't open 'mini4' font for patternscope!",0
-	even
+;.noFontMsg
+;	dc.b	"Couldn't open 'mini4' font for patternscope!",0;
+;	even
 
 ******* Quadrascopelle 
 voltab
-	move.l	mtab(a5),a0
+	lea	s_mtab(a4),a0
 	moveq	#$40-1,d3
 	moveq	#0,d2
 
@@ -22451,7 +23459,7 @@ voltab
 
 ******* Hipposcopelle
 voltab2
-	move.l	mtab(a5),a0
+	lea	s_mtab(a4),a0
 
 	moveq	#$40-1,d3
 	moveq	#0,d2
@@ -22499,8 +23507,9 @@ voltab2
 
 
 ***************** Freqscopelle
+  ifne FEATURE_FREQSCOPE
 voltab3
-	move.l	mtab(a5),a0
+	move.l	m_mtab(a4),a0
 	moveq	#$40-1,d3
 	moveq	#0,d2
 .olp2	moveq	#0,d0
@@ -22515,13 +23524,13 @@ voltab3
 	addq	#1,d2
 	dbf	d3,.olp2
 	rts
-
+  endif
 
 **************************************************************************
 * Scope draw
 **************************************************************************
 
-drawScope
+drawScope:
 
 	* See if the whole drawing phase can be skipped
 	bsr	patternScopeIsActive
@@ -22530,14 +23539,14 @@ drawScope
 	beq.b 	.noPattSc 
 	move.l	d0,a0
 	movem	PI_Pattpos(a0),d0/d1 
-	cmp	scopePreviousPattPos(a5),d0 
+	cmp	s_scopePreviousPattPos(a4),d0 
 	bne.b	.doUpdate
-	cmp	scopePreviousSongPos(a5),d1 
+	cmp	s_scopePreviousSongPos(a4),d1 
 	bne.b	.doUpdate
 	rts
 .doUpdate
-	move	d0,scopePreviousPattPos(a5)
-	move	d1,scopePreviousSongPos(a5)
+	move	d0,s_scopePreviousPattPos(a4)
+	move	d1,s_scopePreviousSongPos(a4)
 .noPattSc
 
 	* clear draw area
@@ -22546,102 +23555,205 @@ drawScope
 	lob	WaitBlit
 
 	lea	$dff058,a0
-	move.l	draw2(a5),$54-$58(a0)	
+	move.l	s_draw2(a4),$54-$58(a0)	
 	move	#0,$66-$58(a0)
 	move.l	#$01000000,$40-$58(a0)
 
 	* build BLTSIZ parameter
-	move	scopeDrawAreaHeight(a5),d0
+	move	s_scopeDrawAreaHeight(a4),d0
 	lsl	#6,d0
-	move	scopeDrawAreaModulo(a5),d1
+	move	s_scopeDrawAreaModulo(a4),d1
 	lsr	#1,d1	* words
 	add	d1,d0
 	move	d0,(a0)
 
 	lob	DisownBlitter
 
+	bsr.w	.render
+
+	* scope processed, deliver unto screen
+
+	* double buffer
+	move.l	s_draw1(a4),d0
+	move.l	s_draw2(a4),d1
+	move.l	d1,s_draw1(a4)
+	move.l	d0,s_draw2(a4)
+
+	lea	s_omabitmap(a4),a0
+	move.l	d0,bm_Planes(a0)
+
+	move.l	_GFXBase(a5),a6	* kopioidaan kamat ikkunaan
+	move.l	s_rastport3(a4),a1
+	moveq	#0,d0		* l‰hde x,y
+	moveq	#0,d1
+	moveq	#10,d2		* kohde x,y
+	moveq	#15,d3
+	add	windowleft(a5),d2
+	add	windowtop(a5),d3
+	move	#$c0,d6		* minterm, suora kopio a->d
+	move	s_scopeDrawAreaWidth(a4),d4
+	move	s_scopeDrawAreaHeight(a4),d5
+
+
 	cmp	#pt_sample,playertype(a5)
-	bne.b	.toot
+	beq.b	.sampleAdjustment
 
-	* Sample scope
-
-	* Get normal scope area
+	cmp	#pt_multi,playertype(a5)
+	bne.b	.jaa
+	bsr	isImpulseTrackerActive
+	bne.b	.noIt
+	pushm 	d0-d6/a0/a1/a6
 	bsr	requestNormalScopeDrawArea
-	bne.w	.skippi * wait for resize
+	popm	d0-d6/a0/a1/a6
+	bne.b	.skippi	* wait for resize
+	* Displaying sample scope, so need magic
+	bra.b	.joa
+.noIt
+	bsr	patternScopeIsActive
+	beq.b	.noMagic
+	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,s_quadmode2(a4)
+	bls.b	.joa
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
+	blo.b	.jaa
+.joa	
+	* magic adjustment?!
+	addq	#4,d0
+	subq	#4,d4
+	bra.b	.jaow
 
-	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
-	beq.b	.fil
-	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,quadmode2(a5)	
-	beq.b	.fil
-	bsr.w	samplescope
-	bra.w	.cont
-.fil
-	bsr.w	samplescopefilled
-	bsr.w	mirrorfill
+.sampleAdjustment
+	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
+	beq.b	.jaow
+	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
+	bne.b	.joa
+	bra.b	.jaow
 
-	bra.w	.cont
-.toot
+.jaa
 
+	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
+	bhs.b	.jaoww
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
+	blo.b	.jaow
+.jaoww
+	* MAGIC adjustments for protracker?
+	addq	#1,d2
+	subq	#1,d4
+.jaow
+.noMagic
+	lob	BltBitMapRastPort
+.skippi
+	rts
+
+
+.render
+	cmp	#pt_sample,playertype(a5)
+	beq.w	.renderSample
 
 	moveq	#0,d0
-	move.b	quadmode2(a5),d0
+	move.b	s_quadmode2(a4),d0
 	add	d0,d0
+
 	cmp	#pt_multi,playertype(a5)
-	beq.w	.ttt
-	cmp	#pt_prot,playertype(a5)
-	bne.w	.other
+	beq.w	.renderPS3M
+
+;	* Check for generic quadscope support
+;	move.l	playerbase(a5),a0
+;	move	#pf_quadscopeUps!pf_quadscopePoke,d1
+;	and	p_liput(a0),d1
+;	bne.b	.doit
+;	tst.l	deliPatternInfo(a5)
+;	bne.b	.doit	
+;	rts
+;.doit
 
 	* Protracker scope
+	* .. or similarly working others
 
 	jmp	.t(pc,d0)
 
 * protracker jump table
 .t	bra.b	.1 * quad
-	bra.b	.3
+	bra.b	.3 * + bars
 	bra.b	.2 * hippo
-	bra.b	.4
+	bra.b	.4 * + bars
 	bra.b	.5 * freq
-	bra.b	.6
-	bra.b	.7 * pattern
-	bra.b	.7
+	bra.b	.6 * + bars
+	bra.b	.7 * pattern normal size
+	bra.b	.7 * --""-- 
 	bra.b	.8 * fquad
-	bra.b	.9
-	bra.b	.7 * pattern xl
-	bra.b	.7
+	bra.b	.9 * + bars
+	bra.b	.7 * pattern extra large
+	bra.b	.7 * --""--
 
-.1	bsr.w	quadrascope
-	bra.w	.cont
-.2	bsr.w	hipposcope
-	bra.w	.cont
-.3	bsr.w	lever
-	bsr.w	quadrascope
-	bra.w	.cont
-.4	bsr.w	lever
-	bsr.w	hipposcope
-	bra.w	.cont
-.5	bsr.w	freqscope
-	bra.w	.cont
-.6	pushm	all
-	bsr.w	freqscope
-	bsr.w	lever2
-	popm	all
-	bra.b	.cont
-.7	bsr.w	notescroller
-	bra.b	.cont
+.3	bsr	lever
+.1	bra	quadrascope
 
+.4	bsr	lever
+.2	bra	hipposcope
+
+.5	bra	freqscope
+
+.6	bsr.w	freqscope
+	lore	GFX,WaitBlit
+	bra	leverEor
+
+.7	* Protracker specific notescroller launch
+	cmp	#pt_prot,playertype(a5)
+	beq	notescroller
+	* Generic notescroller launch
+	tst.l	deliPatternInfo(a5)
+	bne.w	noteScroller2
+	rts
+	
 .8	bsr.w	quadrascope
-	bsr.w	mirrorfill
-	bra.b	.cont
-.9	bsr.w	quadrascope
-	bsr.w	mirrorfill2
-	lob	WaitBlit
-	lob	DisownBlitter
-	bsr.w	lever
-	bra.b	.cont
+	bra.w	mirrorfill
+
+.9	bsr.b	.8
+	lore	GFX,WaitBlit
+	bra	leverEor * extra gfx drawn, must wait until fill done
+
+;.other
+;	* Fallback option!
+;	* Display notescroller if possible.
+;	* Non-Protracker formats.
+;	tst.l	deliPatternInfo(a5)
+;	beq.b	.cont
+;	bsr	noteScroller2
+;.cont
+;	rts
+
+
+* Sample scope
+.renderSample
+	* Get normal scope area
+	bsr	requestNormalScopeDrawArea
+	bne.b	.sampleSkip * wait for resize
+
+	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
+	beq.b	.fil
+	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,s_quadmode2(a4)	
+	beq.b	.fil
+	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
+	beq.w	freqscope
+	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
+	beq.w	freqscope
+	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
+	beq.b	.sampleSkip
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)	
+	beq.b	.sampleSkip
+	* Default
+	bsr.w	samplescope
+.sampleSkip
+	rts
+.fil
+	bsr.w	samplescopefilled
+	bra	mirrorfill
+
+.renderPS3M
 
 	* PS3M scope
 	* multichannel jump table
-.ttt	jmp	.tt(pc,d0)
+	jmp	.tt(pc,d0)
 .tt	bra.b	.11 * quad
 	bra.b	.11
 	bra.b	.22 * hipp
@@ -22655,114 +23767,22 @@ drawScope
 	bra.b	.55 * patt
 	bra.b	.55
 
-.22	bsr.w	multihipposcope
-	bra.b	.cont
-.11	bsr.w	multiscope
-	bra.b	.cont
-.33	bsr.w	freqscope
-	bra.b	.cont
-.44	bsr.w	multiscopefilled
-	bsr.w	mirrorfill
-	bra.b	.cont 
+.11	bra	multiscope
+.22	bra	multihipposcope
+.33	bra	freqscope
+.44	bsr	multiscopefilled
+	bra.b	mirrorfill
 .55	* PS3M patternscope mode
 	tst.l	deliPatternInfo(a5) 
-	beq.b	.11
-
-.other
-	* Generic notescroller
-	tst.l	deliPatternInfo(a5)
-	beq.b	.cont
-	bsr	noteScroller2
-
-.cont
-	* scope processed, deliver unto screen
-
-	* double buffer
-	move.l	draw1(a5),d0
-	move.l	draw2(a5),d1
-	move.l	d1,draw1(a5)
-	move.l	d0,draw2(a5)
-
-	lea	omabitmap(a5),a0
-	move.l	d0,bm_Planes(a0)
-
-	move.l	_GFXBase(a5),a6	* kopioidaan kamat ikkunaan
-	move.l	rastport3(a5),a1
-	moveq	#0,d0		* l‰hde x,y
-	moveq	#0,d1
-	moveq	#10,d2		* kohde x,y
-	moveq	#15,d3
-	add	windowleft(a5),d2
-	add	windowtop(a5),d3
-	move	#$c0,d6		* minterm, suora kopio a->d
-	move	scopeDrawAreaWidth(a5),d4
-	move	scopeDrawAreaHeight(a5),d5
-
-
-	cmp	#pt_sample,playertype(a5)
-	beq.b	.joa
-
-	cmp	#pt_multi,playertype(a5)
-	bne.b	.jaa
-	bsr	isImpulseTrackerActive
-	bne.b	.noIt
-	pushm d0-d6/a0/a1/a6
-	bsr	requestNormalScopeDrawArea
-	popm	d0-d6/a0/a1/a6
-	bne.b	.skippi	* wait for resize
-	* Displaying sample scope, so need magic
-	bra.b	.joa
-.noIt
-	bsr	patternScopeIsActive
-	beq.b	.noMagic
-	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,quadmode2(a5)
-	bls.b	.joa
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
-	blo.b	.jaa
-.joa	
-	* magic adjustment for sample?
-	addq	#4,d0
-	subq	#4,d4
-	bra.b	.jaow
-.jaa
-
-	cmp.b	#QUADMODE2_FQUADRASCOPE,quadmode2(a5)
-	bhs.b	.jaoww
-	cmp.b	#QUADMODE2_PATTERNSCOPE,quadmode2(a5)
-	blo.b	.jaow
-.jaoww
-	* MAGIC adjustments for protracker?
-	addq	#1,d2
-	subq	#1,d4
-.jaow
-.noMagic
-	lob	BltBitMapRastPort
-.skippi
+	bne.w	noteScroller2
 	rts
 
 
-;STRUCTURE   BitMap,0
-;WORD    bm_BytesPerRow
-;WORD    bm_Rows
-;BYTE    bm_Flags
-;BYTE    bm_Depth
-;WORD    bm_Pad
-;STRUCT  bm_Planes,8*4
-;LABEL   bm_SIZEOF
-
-
-mirrorfill2
-	moveq	#0,d7
-	bra.b	mirrorfill0
-
 mirrorfill
-	moveq	#1,d7
-
-mirrorfill0
 	lore	GFX,OwnBlitter
 	lob	WaitBlit
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	$dff058,a2
 
 	move.l	a0,$50-$58(a2)	* A
@@ -22785,82 +23805,188 @@ mirrorfill0
 	move.l	#$09f00000,$40-$58(a2)
 	move	#32*64+20,(a2)	
 
-	tst.b	d7
-	beq.b	.x
 	lob	DisownBlitter
-.x	rts
+	rts
 
 
-quadrascope
-	lea	ch1(a5),a3
-	move.l	draw1(a5),a0
+* In: 
+*   a3 = scope data
+* Out:
+*   d0 = sample start, or 0 if bounds check failed for any value
+*   d1 = loop start
+*   d2 = sample length
+*   d3 = repeat length
+*   
+getScopeChannelData:
+	cmp	#pt_prot,playertype(a5)
+	bne.b	.notPt
+
+	* Similar check as before
+	move.l	ns_start(a3),d0
+	beq.w	.fail
+	move.l	ns_loopstart(a3),d1
+	beq.w	.fail
+	move	ns_length(a3),d2
+	move	ns_replen(a3),d3
+	tst.l	d0
+	rts
+
+.notPt
+	* More comprehensive check for others
+ REM
+	move.l	ns_start(a3),d0
+	move.l	ns_loopstart(a3),d2
+	moveq	#0,d1
+	move	ns_length(a3),d1
+	moveq	#0,d3
+	move	ns_replen(a3),d3
+	move.l	moduleaddress(a5),d4
+	move.l	d4,d5
+	add.l	modulelength(a5),d5
+	SDPRINT	"%lx %lx %lx %lx - %lx %lx"
+ EREM
+
+	move.l	ns_start(a3),d0
+	beq.b	.fail
+	move.l	ns_loopstart(a3),d1
+	beq.b	.fail
+	move	ns_length(a3),d2
+	beq.b	.fail
+	move	ns_replen(a3),d3
+	beq.b	.fail
+	cmp.l	#1024,d0
+	blo.b	.fail
+	cmp.l	#1024,d1
+	blo.b	.fail
+
+ REM
+	
+	* This one has waveforms inside the replay code:
+	cmp	#pt_future10,playertype(a5)
+	beq.b	.skipCheck
+	;cmp	#pt_digitalmugician,playertype(a5)
+	;beq.b	.skipCheck
+
+	move.l	moduleaddress(a5),d4
+	move.l	d4,d5
+	add.l	modulelength(a5),d5
+
+	* This one has samples loaded separately:
+	cmp	#pt_robhubbard2,playertype(a5)
+	bne.b	.notRH2
+	* Samples are found elsewhere, get the bounds:
+	move.l	deliLoadFileArray(a5),d4
+	beq.b	.skipCheck
+	push	a2
+	move.l	d4,a2 
+	move.l	(a2)+,d4 * addr
+	move.l	d4,d5
+	add.l	(a2),d5 * len
+	pop	a2
+;	SDPRINT	"%lx %lx %lx %lx-%lx %lx"
+.notRH2
+
+	* Check start
+	cmp	#2,d2
+	bls.b	.shortLen
+	cmp.l	d4,d0
+	blo.b	.fail
+	cmp.l	d5,d0
+	bhs.b	.fail
+.shortLen
+
+ EREM
+ 
+ REM
+	* Check loop start
+	cmp	#2,d3
+	bls.b	.shortRepLen
+	cmp.l	d4,d1
+	blo.b	.fail
+	cmp.l	d5,d1
+	blo.b	.fail
+.shortRepLen
+ EREM
+ 
+.skipCheck
+.go
+	tst.l	d0
+	rts
+.fail
+	moveq	#0,d0
+	rts
+
+quadrascope:
+	lea	scopeData+scope_ch1(a5),a3
+	move.l	s_draw1(a4),a0
 	lea	-30(a0),a0
 	bsr.b	.scope
-	lea	ch2(a5),a3
-	move.l	draw1(a5),a0
+
+	lea	scopeData+scope_ch2(a5),a3
+	move.l	s_draw1(a4),a0
 	lea	-20(a0),a0
 	bsr.b	.scope
-	lea	ch3(a5),a3
-	move.l	draw1(a5),a0
+
+	lea	scopeData+scope_ch3(a5),a3
+	move.l	s_draw1(a4),a0
 	lea	-10(a0),a0
 	bsr.b	.scope
-	lea	ch4(a5),a3
-	move.l	draw1(a5),a0
-;	bsr.b	.scope
+
+	lea	scopeData+scope_ch4(a5),a3
+	move.l	s_draw1(a4),a0
+
+;	bsr.w	.scope
 ;	rts
 
 .scope
-	move.l	ns_loopstart(a3),d0
-	beq.b	.halt
-	move.l	ns_start(a3),d1
+	bsr	getScopeChannelData
 	bne.b	.jolt
-.halt	rts
+	rts
 
 .jolt	
-	move.l	d0,a4
-	move.l	d1,a1
-
-	move	ns_length(a3),d5
-	move	ns_replen(a3),d4
-
-
+	
+	move.l	d0,a1 * start
+	move.l	d1,a6 * loopstart
+	move	d2,d5 * len
+	move	d3,d4 * replen
+	
 	move	ns_tempvol(a3),d1
-	mulu	k_mastervolume+kplbase(a5),d1
+	mulu	mainvolume(a5),d1
 	lsr	#6,d1
-
-	tst	d1
 	bne.b	.heee
 	moveq	#1,d1
-.heee	subq	#1,d1
+.heee	
+	CLAMPVOL d1
+	subq	#1,d1
 	add	d1,d1
 	lsl.l	#8,d1
-	move.l	mtab(a5),a2
+	lea	s_mtab(a4),a2
 	add.l	d1,a2
 
 	lea	-40(a0),a3
 
-	cmp.b	#8,quadmode2(a5)
+	cmp.b	#8,s_quadmode2(a4)
 	beq.b	.iik
-	cmp.b	#9,quadmode2(a5)
+	cmp.b	#9,s_quadmode2(a4)
 	bne.b	.ook
+	* Filled quadrascope
 .iik	move.l	a0,a3
 .ook
 
-	moveq	#0,d1
+	;moveq	#0,d1
 	moveq	#80/8-1,d7
 	moveq	#1,d0
 	moveq	#0,d6
-
-	
+		
 drlo	
 
 sco	macro
-	move	d6,d2
+	moveq	#0,d2
 	move.b	(a1)+,d2
 	add	d2,d2
 	move	(a2,d2),d3
-	or.b	d0,(a3,d3)
 	or.b	d0,(a0,d3)
+	or.b	d0,(a3,d3)
 
 	ifne	\2
 	add.b	d0,d0
@@ -22869,8 +23995,8 @@ sco	macro
 	ifne	\1
 	subq	#2,d5
 	bpl.b	hm\2	* $6a04
-	move	d4,d5
-	move.l	a4,a1
+	move	d4,d5	* replen
+	move.l	a6,a1   * loop start
 hm\2
 	endc
 	endm
@@ -22884,81 +24010,80 @@ hm\2
 	sco	0,7
 	sco	1,0
 
+	* Reset bit pattern:
 	moveq	#1,d0
-	sub	d0,a0
-	sub	d0,a3
+	sub.l	d0,a0
+	sub.l	d0,a3
 	dbf	d7,drlo
+
 	rts
 
-hipposcope
-	lea	ch1(a5),a3
-	move.l	draw1(a5),a6
+hipposcope:
+	lea	scopeData+scope_ch1(a5),a3
+	move.l	s_draw1(a4),a6
 	lea	-20-95*40(a6),a6
 	bsr.b	.twirl
-
-	lea	ch2(a5),a3
-	move.l	draw1(a5),a6
-	lea	-10-95*40(a6),a6
+	* a6 is unchanged
+	
+	lea	scopeData+scope_ch2(a5),a3
+	lea	10(a6),a6
 	bsr.b	.twirl
 
-	lea	ch3(a5),a3
-	move.l	draw1(a5),a6
-	lea	0-95*40(a6),a6
+	lea	scopeData+scope_ch3(a5),a3
+	lea	10(a6),a6
 	bsr.b	.twirl
 
-	lea	ch4(a5),a3
-	move.l	draw1(a5),a6
-	lea	10-95*40(a6),a6
-;	bsr.b	.twirl
-;	rts
+	lea	scopeData+scope_ch4(a5),a3
+	lea	10(a6),a6
+	;bsr.b	.twirl
+	;rts
 
 
 .twirl
-	move.l	mtab(a5),a0
+	push 	a4
+	
 	move	ns_tempvol(a3),d0
-	muls	k_mastervolume+kplbase(a5),d0
+	mulu	mainvolume(a5),d0
 	lsr	#6,d0
+	CLAMPVOL d0
 	subq	#1,d0
 	bpl.b	.e
 	moveq	#0,d0
 .e	lsl	#8,d0
+
+	* volume multab, y-specific value
+	lea	s_mtab(a4),a0
 	lea	(a0,d0),a2
+
+	* modulo multab
+	lea	s_multab(a4),a0
+
+	* x-specific byte value is in the other half
 	lea	64*256(a2),a4
 
 
-	move.l	ns_loopstart(a3),d6
-	beq.b	.halt
-	move.l	ns_start(a3),d1
-	bne.b	.jolt
-.halt	rts
-.jolt	
-	move.l	d1,a1
-
-	move	ns_length(a3),d4
-;	move.l	ns_start(a3),a1
-	move	ns_replen(a3),d5
-
-	lea	multab(a5),a0
-	moveq	#108/4-1,d0
-
-	moveq	#0,d1
-
 lir	macro
+	* x-value
 	move.b	(a1)+,d1
 	move.b	(a4,d1),d1
 
+	* y-value
 	moveq	#0,d2
 	move.b	5(a1),d2
 	move.b	(a2,d2),d2
 
+	* modulo multab access
 	add	d2,d2
 	move	(a0,d2),d3
 
+	* plot pixel
 	move	d1,d2
 	lsr	#3,d2
 	sub	d2,d3
 	bset	d1,(a6,d3)
 
+	* progress in sample data,
+	* check every other pixel
  ifne \2
 	subq	#2,d4
 	bpl.b	.h\1
@@ -22968,14 +24093,27 @@ lir	macro
  endc
 	endm
 
+
+	bsr	getScopeChannelData
+	beq.w	.x
+
+
+	move.l	d0,a1 * start
+	move.l	d1,d6 * loopstart
+	move	d2,d4 * len
+	move	d3,d5 * replen
+
+	* plot this many pixels
+	moveq	#108/4-1,d0
+	moveq	#0,d1
 .d
 	lir	0,0
 	lir	1,1
 	lir	2,0
 	lir	3,1
-
 	dbf	d0,.d
-
+.x
+	pop	a4
 	rts
 
 
@@ -23011,6 +24149,12 @@ piup	macro
 	endm
 
 freqscope
+  ifne FEATURE_SPECTRUMSCOPE
+	jmp	runSpectrumScope
+  endif
+  
+  ifne FEATURE_FREQSCOPE
+  fail "Fix a4 accessess first"
 	moveq	#0,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -23050,28 +24194,28 @@ freqscope
 
 .protr
 
-	lea	ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3
 	move.l	deltab1(a5),a0
 	bsr.w	.tut
-	lea	ch4(a5),a3
+	lea	scopeData+scope_ch4(a5),a3
 	move.l	deltab4(a5),a0
 	bsr.w	.tut
 
-	lea	ch2(a5),a3
+	lea	scopeData+scope_ch2(a5),a3
 	move.l	deltab2(a5),a0
 	bsr.w	.tut
-	lea	ch3(a5),a3
+	lea	scopeData+scope_ch3(a5),a3
 	move.l	deltab3(a5),a0
 	bsr.w	.tut
 
-	move	ns_tempvol+ch1(a5),d1
-	move	ns_tempvol+ch4(a5),d2
+	move	ns_tempvol+scopeData+scope_ch1(a5),d1
+	move	ns_tempvol+scopeData+scope_ch4(a5),d2
 	move.l	deltab1(a5),a0
 	move.l	deltab4(a5),a1
 	bsr.w	.pre
 
-	move	ns_tempvol+ch2(a5),d1
-	move	ns_tempvol+ch3(a5),d2
+	move	ns_tempvol+scopeData+scope_ch2(a5),d1
+	move	ns_tempvol+scopeData+scope_ch3(a5),d2
 	move.l	deltab2(a5),a0
 	move.l	deltab3(a5),a1
 	bsr.b	.pre
@@ -23111,7 +24255,7 @@ freqscope
 
 
 .pre
-	mulu	k_mastervolume+kplbase(a5),d1
+	mulu	mainvolume(a5),d1
 	lsr	#6,d1
 	bne.b	.1
 	moveq	#1,d1
@@ -23120,7 +24264,7 @@ freqscope
 	move.l	mtab(a5),a2
 	add.l	d1,a2
 
-	mulu	k_mastervolume+kplbase(a5),d2
+	mulu	mainvolume(a5),d2
 	lsr	#6,d2
 	bne.b	.2
 	moveq	#1,d2
@@ -23167,7 +24311,7 @@ freqscope
 
 .tut	
 	move	ns_tempvol(a3),d4
-	mulu	k_mastervolume+kplbase(a5),d4
+	mulu	mainvolume(a5),d4
 	lsr	#6,d4
 	bne.b	.h
 	moveq	#1,d4
@@ -23175,22 +24319,34 @@ freqscope
 
 
 
-	move.l	ns_loopstart(a3),d0
-	beq.b	.halt
-	move.l	ns_start(a3),d1
-	bne.b	.jolt
-.halt	rts
+;	move.l	ns_loopstart(a3),d0
+;	beq.b	.halt
+;	move.l	ns_start(a3),d1
+;	bne.b	.jolt
+;.halt	rts
+;.jolt	
 
-.jolt	
-	move.l	d0,a4
-	move.l	d1,a1
+	bsr	getScopeChannelData
+	bne.b	.jolt
+	rts
+.jolt
+
+	;move.l	d0,a4
+	;move.l	d1,a1
+	move.l	d0,a1 * start
+	move.l	d1,a4 * loop start
 
 	moveq	#0,d4
-	move	ns_replen(a3),d4
-	add.l	d4,d4
+	move	d3,d4 * replen
 	moveq	#0,d5
-	move	ns_length(a3),d5
-	add.l	d5,d5
+	move	d2,d5 * len
+
+;	moveq	#0,d4
+;	move	ns_replen(a3),d4
+;	add.l	d4,d4
+;	moveq	#0,d5
+;	move	ns_length(a3),d5
+;	add.l	d5,d5
 
 	move	ns_period(a3),d0
 	bne.b	.noe
@@ -23274,6 +24430,7 @@ piup2	macro
 	dbf	d7,.loop11
 
 	rts
+  endif ; FEATURE_FREQSCOPE
 
 *********** Scopet PS3M
 *** stereoscope
@@ -23283,20 +24440,20 @@ multiscope
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	19(a0),a0
 	bsr.b	.h
 
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	39(a0),a0
 .h
 
 	move.l	ps3m_playpos(a5),a2
 	move.l	(a2),d5
 	lsr.l	#8,d5
-	lea	multab(a5),a2
+	lea	s_multab(a4),a2
 		
 	moveq	#160/8-1-1,d7
 	moveq	#1,d0
@@ -23337,20 +24494,20 @@ multiscopefilled
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	19(a0),a0
 	bsr.b	.h
 
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	lea	39(a0),a0
 .h
 
 	move.l	ps3m_playpos(a5),a2
 	move.l	(a2),d5
 	lsr.l	#8,d5
-	lea	multab(a5),a2
+	lea	s_multab(a4),a2
 		
 	moveq	#160/8-1-1,d7
 	moveq	#1,d0
@@ -23398,14 +24555,12 @@ hurl	macro
 
 ***** hipposcope ps3m:lle
 
-multihipposcope
-;	move.l	buff1,a1
+multihipposcope:
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
 
 	move	#240,d0
 	bsr.b	.1
-;	move.l	buff2,a1
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
 	moveq	#88,d0
@@ -23414,28 +24569,22 @@ multihipposcope
 
 	move.l	ps3m_playpos(a5),a2
 	move.l	(a2),d5
-;	move.l	playpos,d5
 	lsr.l	#8,d5
 
-	lea	multab(a5),a2
-	move.l	draw1(a5),a3
+	lea	s_multab(a4),a2
+	move.l	s_draw1(a4),a3
 	bsr.w	getps3mb
 	moveq	#32,d6
-	moveq	#120/4-1,d7
-
-;	tst.b	scopeboost(a5)
-;	beq.b	.d
-;	moveq	#240/4-1,d7
+	moveq	#120-1,d7
 .d
 
- rept 4
 	move.b	(a1,d5),d1
 	asr.b	#1,d1
 	ext	d1
 	add	d0,d1
 
 	move.b	5(a1,d5),d2
-	asr.b	#2,d2
+	asr.b	#2,d2 
 	ext	d2
 	add	d6,d2
 	add	d2,d2
@@ -23455,7 +24604,6 @@ multihipposcope
 
 	addq	#1,d5
 	and	d4,d5
- endr
 
 	dbf	d7,.d
 
@@ -23464,7 +24612,6 @@ multihipposcope
 
 getps3mb
 	push	a0
-;	move.l	buffSizeMask,d4
 	move.l	ps3m_buffSizeMask(a5),a0
 	move.l	(a0),d4
 	pop	a0
@@ -23481,10 +24628,10 @@ getps3mb
 
 noteScrollerHorizontalLines
 *** viiva
-	move.l	draw1(a5),a0
-	move	scopeDrawAreaModulo(a5),d2
+	move.l	s_draw1(a4),a0
+	move	s_scopeDrawAreaModulo(a4),d2
 	* first line at y-coordinate
-	move	scopeDrawAreaHeight(a5),d3
+	move	s_scopeDrawAreaHeight(a4),d3
 	lsr	#1,d3
 	sub	#9,d3
 	mulu	d2,d3
@@ -23495,7 +24642,7 @@ noteScrollerHorizontalLines
 	lsl	#3,d2
 	subq	#2,d2
 	* 19 times 16 pixels horizontally
-	move	scopeDrawAreaModulo(a5),d0
+	move	s_scopeDrawAreaModulo(a4),d0
 	lsr	#1,d0
 	subq	#1,d0
 	move	#$aaaa,d1
@@ -23539,18 +24686,19 @@ noteScrollerGetFont
 	move.l	tf_CharData(a2),a2		* data
 	rts
 
-patternScopePt
-noteScrollerPt
-notescroller
+
+patternScopePt:
+noteScrollerPt:
+notescroller:
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
 	bne.b 	.normHeight
 	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
 .normHeight
-	cmp	scopeDrawAreaWidth(a5),d0
+	cmp	s_scopeDrawAreaWidth(a4),d0
 	bne.b	.plz
-	cmp	scopeDrawAreaHeight(a5),d1
+	cmp	s_scopeDrawAreaHeight(a4),d1
 	beq.b	.sizeOk
 .plz	bsr	requestScopeDrawAreaChange
 	rts
@@ -23559,86 +24707,85 @@ notescroller
 	bsr.w	.notescr
 	bsr	noteScrollerHorizontalLines
 
-	lea	kplbase(a5),a0
-	lea	k_chan1temp(a0),a1
-	lea	ch1(a5),a0
+	* Volume update
+	lea	scopeData+scope_ch1(a5),a0
 	* channel bitmask
 	moveq	#1,d2
 	moveq	#4-1,d1
+	lea	s_patternScopeVolumes(a4),a2
 .setscope	
 	* see if channel bit is on
-	move.b	omatrigger(a5),d0
+	move.b	scopeData+scope_trigger(a5),d0
 	and.b	d2,d0
 	beq.b	.e	
 	* was on, clear it, and copy the volume value
 	move.b  d2,d0 	
 	not.b   d0
-	and.b  	d0,omatrigger(a5)
-	move	n_tempvol(a1),ns_tempvol(a0)
+	and.b  	d0,scopeData+scope_trigger(a5)
+	move	ns_tempvol(a0),d0
+	CLAMPVOL d0
+	move	d0,(a2)
 .e	
 	* next bit
 	add.b	d2,d2
 	lea	ns_size(a0),a0
-	lea	n_sizeof(a1),a1
+	addq	#2,a2
 	dbf	d1,.setscope
 
-
-	move	ch1+ns_tempvol(a5),d0	
+	move	s_patternScopeVolumes+0(a4),d0
 	moveq	#2,d1
 	bsr.b	.palkki
-	move	ch2+ns_tempvol(a5),d0	
+	move	s_patternScopeVolumes+2(a4),d0
 	moveq	#11,d1
 	bsr.b	.palkki
-	move	ch3+ns_tempvol(a5),d0	
+	move	s_patternScopeVolumes+4(a4),d0
 	moveq	#20,d1
 	bsr.b	.palkki
-	move	ch4+ns_tempvol(a5),d0	
+	move	s_patternScopeVolumes+6(a4),d0
 	moveq	#29,d1
 	bsr.b	.palkki
 
-	lea	ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3
 	move.b	#%11100000,d2
 	moveq	#38,d1
 	bsr.b	.palkki2
-	lea	ch2(a5),a3
+	lea	scopeData+scope_ch2(a5),a3
 	moveq	#%1110,d2
 	moveq	#38,d1
 	bsr.b	.palkki2
-	lea	ch3(a5),a3
+	lea	scopeData+scope_ch3(a5),a3
 	moveq	#39,d1
 	move.b	#%11100000,d2
 	bsr.b	.palkki2
-	lea	ch4(a5),a3
+	lea	scopeData+scope_ch4(a5),a3
 	moveq	#%1110,d2
 	moveq	#39,d1
 	bsr.b	.palkki2
 
 .ohi
 	* animate the volume bars towards bottom
-	lea	ch1(a5),a0
+	lea	s_patternScopeVolumes(a4),a0
 	moveq	#4-1,d0
-.orl	tst	ns_tempvol(a0)
+.orl	tst	(a0)+
 	beq.b	.urh
-	subq	#1,ns_tempvol(a0)
-.urh	lea	ns_size(a0),a0
-	dbf	d0,.orl
-
+	subq	#1,-2(a0)
+.urh	dbf	d0,.orl
 	rts
 
 
 ***** Volumepalkgi
 
 .palkki
-	mulu	kplbase+k_mastervolume(a5),d0
+	mulu	mainvolume(a5),d0
 	lsr	#6,d0
 
-	move.l	draw1(a5),a0
+	move.l	s_draw1(a4),a0
 	* horizontal position
 	add	d1,a0
 	* move to bottom
-	move	quadNoteScrollerLines(a5),d1
+	move	s_quadNoteScrollerLines(a4),d1
 	lsl	#3,d1
-	mulu	scopeDrawAreaModulo(a5),d1
+	mulu	s_scopeDrawAreaModulo(a4),d1
 	add.l	d1,a0
 
 	lea	.paldata(pC),a1
@@ -23666,14 +24813,14 @@ notescroller
 	sub	#108,d0
 
 	* this many vertical pixels
-	move	quadNoteScrollerLines(a5),d3
+	move	s_quadNoteScrollerLines(a4),d3
 	lsl	#3,d3
 	subq	#5,d3
 	mulu	d3,d0
 	divu	#907-108,d0
 
-	move.l	draw1(a5),a0
-	lea	multab(a5),a1
+	move.l	s_draw1(a4),a0
+	lea	s_multab(a4),a1
 	add	d0,d0
 	move	(a1,d0),d0
 	add	d0,a0
@@ -23712,7 +24859,7 @@ notescroller
 **************** Piirret‰‰n patterndata
 
 .notescr
-	pushm	a5/a6
+	pushm	a4/a5/a6
 
 	lea	kplbase(a5),a0
 	move.l	k_songdataptr(a0),a3
@@ -23725,23 +24872,24 @@ notescroller
 	add.l	d0,a3
 	lea	1084-952(a3),a3
 
-	move.l	draw1(a5),a4
-	addq	#3,a4
-
 	* draw this many lines
-	move	quadNoteScrollerLines(a5),d7
+	move	s_quadNoteScrollerLines(a4),d7
 	subq	#1,d7 * dbf
 	move	k_patternpos(a0),d6	* eka rivi?
+
+	* Target
+	move.l	s_draw1(a4),a0
+	addq	#3,a0
 
 	* figure out where to place the first line
 	move	d6,d0
 	; move the cursor in the middle
-	sub	quadNoteScrollerLinesHalf(a5),d0
+	sub	s_quadNoteScrollerLinesHalf(a4),d0
 	bpl.b	.ok
 	neg	d0
 	sub	d0,d7
 
-	move	quadNoteScrollerLinesHalf(a5),d1
+	move	s_quadNoteScrollerLinesHalf(a4),d1
 	sub	d0,d1
 	sub	d1,d6
 	lsl	#4,d1
@@ -23749,18 +24897,22 @@ notescroller
 
 	; vertical position in target 
 	mulu	#8*40,d0
-	add.l	d0,a4
+	add.l	d0,a0
 
 	bra.b	.ok2
 .ok
-	move	quadNoteScrollerLinesHalf(a5),d0
+	move	s_quadNoteScrollerLinesHalf(a4),d0
 	lsl	#4,d0
 	sub	d0,a3
-	sub	quadNoteScrollerLinesHalf(a5),d6
+	sub	s_quadNoteScrollerLinesHalf(a4),d6
 .ok2
 
-	bsr	noteScrollerGetFont
+	
+	bsr	noteScrollerGetFont * Uses d4,a2 only
 	beq	.exitNoteScroller
+
+	* Target screen addr goes in a4 
+	move.l	a0,a4
 
 	* convert row in D6 to BCD
 	moveq	#0,d0
@@ -23882,14 +25034,14 @@ notescroller
 	bsr.b	.print
 
 	* next note
-	addq	#4-1,a3
+	addq.l	#4-1,a3
 	* next horizontal position
 	;add	#9,a4
 	add	d3,a4
 	dbf	d5,.plorl2
 
 	* next vertical position
-	add	#8*40-4*9,a4
+	lea	(8*40-4*9)(a4),a4
 	* next pattern line, check if at the end
 	* clear X flag for ABCD
 	sub.b	d0,d0
@@ -23900,7 +25052,7 @@ notescroller
 	cmp.b	#$64,d6
 	dbeq d7,.plorl
 .exitNoteScroller
-	popm	a5/a6	
+	popm	a4/a5/a6	
 	rts
 
 * convert decimal number 0-9 into ASCII char
@@ -24156,41 +25308,30 @@ notescroller
 
 *******************************************************************
 
-
 ********** Palkit
-lever2
-	lea	ch1(a5),a3
-	move.l	draw1(a5),a0
-	bsr.b	dlever
-	lea	ch4(a5),a3
-	move.l	draw1(a5),a0
-	lea	10(a0),a0
-	bsr.b	dlever
-	lea	ch2(a5),a3
-	move.l	draw1(a5),a0
-	lea	20(a0),a0
-	bsr.b	dlever
-	lea	ch3(a5),a3
-	move.l	draw1(a5),a0
-	lea	30(a0),a0
-	bsr.b	dlever
-	rts
+
+leverEor
+	* Flag: eor
+	moveq	#1,d4
+	bra.b	lever\.go
 
 lever
-	lea	ch1(a5),a3
-	moveq	#4-1,d2
-	moveq	#0,d3
-	move.l	draw1(a5),a2
+	* Flag: or
+	moveq	#0,d4
+.go
+	lea	scopeData+scope_ch1(a5),a3
+	moveq	#4-1,d7
+	move.l	s_draw1(a4),a2
 .l	move.l	a2,a0
-	bsr.b	dlever
+	bsr.b	.drawLever
 	lea	10(a2),a2
-	lea	ch2-ch1(a3),a3
-	dbf	d2,.l
+	lea	ns_size(a3),a3
+	dbf	d7,.l
 	rts
 	
 
 * 907-108
-dlever
+.drawLever
 	cmp	#2,ns_length(a3)
 	bls.b	.h
 	moveq	#0,d1
@@ -24200,13 +25341,18 @@ dlever
 	lsl	#1,d1
 	divu	#27,d1		* lukualueeksi 0-59
 
-	lea	multab(a5),a1
+	* clamp
+	cmp	#59,d1
+	bls.b	.1
+	move	#59,d1
+.1
+
+	lea	s_multab(a4),a1
 	add	d1,d1
 	add	(a1,d1),a0
 
-
 	move	ns_tempvol(a3),d0
-	mulu	k_mastervolume+kplbase(a5),d0
+	mulu	mainvolume(a5),d0
 	lsr	#6,d0
 	bne.b	.pad
 	moveq	#1,d0
@@ -24216,10 +25362,8 @@ dlever
 	bpl.b	.ojdo
 	moveq	#0,d0
 .ojdo
-	move.l	scopeVerticalBarTable(a5),a1
+	lea	s_scopeHorizontalBarTable(a4),a1
 	movem.l	(a1,d0),d0/d1
-
-	pushm	d2/d3
 
 	move.l	#$55555555,d3
 	and.l	d3,d0
@@ -24230,6 +25374,9 @@ dlever
 	roxl.l	#1,d3
 	roxl.l	#1,d2
 
+	tst.b	d4
+	bne.b	.eor
+
 	or.l	d0,(a0)+
 	or.l	d1,(a0)
 	or.l	d2,40-4(a0)
@@ -24239,14 +25386,23 @@ dlever
 	or.l	d2,120-4(a0)
 	or.l	d3,120(a0)
 
-	popm	d2/d3
 .h	rts
 
+.eor
+	eor.l	d0,(a0)+
+	eor.l	d1,(a0)
+	eor.l	d2,40-4(a0)
+	eor.l	d3,40(a0)
+	eor.l	d0,80-4(a0)
+	eor.l	d1,80(a0)
+	eor.l	d2,120-4(a0)
+	eor.l	d3,120(a0)
+	rts
 
 ****** taulukkoon 1-64 pix leveit‰ palkkeja
 
-makeScopeVerticalBars	
-	move.l	scopeVerticalBarTable(a5),a0
+makeScopeHorizontalBars	
+	lea	s_scopeHorizontalBarTable(a4),a0
 	moveq	#64-1,d0
 	moveq	#0,d1
 	moveq	#0,d2
@@ -24259,10 +25415,8 @@ makeScopeVerticalBars
 	rts
 
 
-
-
-*** Sample IFF 8SVX scope
-
+*** Sample scope
+*** Any sample played by the sample player
 
 samplescope
 	bsr.b	samples0
@@ -24312,35 +25466,33 @@ samples0
 
 	move.l	samplebufsiz(a5),d4
 	subq.l	#1,d4
+
 	moveq	#1,d0
 	move	#$80,d6
 
-	lea	multab(a5),a2
-	move.l	draw1(a5),a0
+	lea	s_multab(a4),a2
+	move.l	s_draw1(a4),a0
 	rts
+
 
 *********************************************************************
 * GENERIC NOTESCROLLER
 * Note scroller supporting the PI_PatternInfo data
-patternScopeGeneric
-noteScrollerGeneric
-patternScope2
-noteScroller2
-	bsr	patternScopeIsActive
-	beq.b	.1
-	rts
-.1
+* patternScopeGeneric
+* noteScrollerGeneric
+* patternScope2
+noteScroller2:
 	move.l	deliPatternInfo(a5),a1
 	lea	PI_Stripes(a1),a0
 	move	PI_Voices(a1),d7
+	clr	PI_CurrentChannelNumber(a1)
 
 * Required height in d1
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,quadmode2(a5)
+	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
 	bne.b	.notXl
 	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
 .notXl
-
 	cmp	#4,d7
 	bhi.b	.over
 
@@ -24364,9 +25516,9 @@ noteScroller2
 	* normal font stripe
 ;	mulu	#72,d0
 	move	d0,d2 * tricky mul with 72
-	lsl		#6,d2
-	lsl		#3,d0
-	add		d2,d0
+	lsl	#6,d2
+	lsl	#3,d0
+	add	d2,d0
 	bra.b	.wide
 .narrow
 	* Test if font is available
@@ -24379,7 +25531,7 @@ noteScroller2
 	;add	#32,d0
 	* ensure divisible by 16 for blitter safety
 	;add	#15,d0
-	add		#32+15,d0
+	add	#32+15,d0
 	and	#$fff0,d0
 
 	bsr	requestScopeDrawAreaChange
@@ -24389,10 +25541,13 @@ noteScroller2
 .proceed
 
 	* magic flag: display row numbers column	 
-	lea	.pos(pc),a4
-	clr.b	(a4)
+	lea	.pos(pc),a6
+	clr.b	(a6)
 
-	move.l	draw1(a5),a4
+	* Draw here
+	move.l	s_draw1(a4),a6
+
+	* Channel count
 	subq	#1,d7
 .loop
 	pushm	d6/d7/a0/a4/a5/a6
@@ -24405,7 +25560,7 @@ noteScroller2
 	tst.b	(a2)
 	bmi.b	.wasSet
 	* jump over number column
-	addq	#3,a4
+	addq	#3,a6
 	st	(a2)
 .wasSet
 	addq	#4,a0 		* next stripe
@@ -24413,12 +25568,13 @@ noteScroller2
 	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,PI_Voices(a1)
 	bls.b	.voices4
 	* 32 pixels per stripe
-	addq	#4,a4		* next screen pos horizontal
+	addq	#4,a6		* next screen pos horizontal
 	bra.b	.continue
 .voices4
 	* 72 pixels per stripe
-	add	#9,a4
+	add	#9,a6
 .continue
+	addq	#1,PI_CurrentChannelNumber(a1)
 	dbf	d7,.loop
 
 	bsr	noteScrollerHorizontalLines
@@ -24434,7 +25590,7 @@ noteScroller2
 ;	move.l	moduleaddress(a5),d0
 ;	move.l	modulelength(a5),d1
 ;	move.l	a0,d2
-;	DPRINT	"INSANITY %lx %ld -> %lx"
+;	SDPRINT	"INSANITY %lx %ld -> %lx"
  endif
 	rts
 
@@ -24469,32 +25625,32 @@ noteScroller2
 	move.l  moduleaddress(a5),a3
    	cmp.l   a3,a0
 	bls.b	.xy
-    add.l   modulelength(a5),a3
-    cmp.l   a3,a0
+    	add.l   modulelength(a5),a3
+    	cmp.l   a3,a0
    	bhs.b   .xy
 .sane
 
 *** calculate stuff
 	
 	* draw this many lines
-	move	quadNoteScrollerLines(a5),d7
+	move	s_quadNoteScrollerLines(a4),d7
 	subq	#1,d7 * dbf
 	move	PI_Pattpos(a1),d6
 
 	* current position in data
 	move	d6,d0
 	mulu	PI_Modulo+2(a1),d0 
-	add	d0,a0
+	add.l	d0,a0
 
 	* figure out where to place the first line
 	move	d6,d0
 	; move the cursor in the middle
-	sub	quadNoteScrollerLinesHalf(a5),d0
+	sub	s_quadNoteScrollerLinesHalf(a4),d0
 	bpl.b	.ok
 	neg	d0
 	sub	d0,d7
 
-	move	quadNoteScrollerLinesHalf(a5),d1
+	move	s_quadNoteScrollerLinesHalf(a4),d1
 	sub	d0,d1
 	sub	d1,d6
 	mulu	PI_Modulo+2(a1),d1
@@ -24502,20 +25658,20 @@ noteScroller2
 	sub	d1,a0
 
 	* vertical position in target 
-	mulu	scopeDrawAreaModulo(a5),d0
+	mulu	s_scopeDrawAreaModulo(a4),d0
 	lsl.l	#3,d0
-	add.l	d0,a4
+	add.l	d0,a6
 	bra.b	.ok2
 .ok
-	move	quadNoteScrollerLinesHalf(a5),d0
+	move	s_quadNoteScrollerLinesHalf(a4),d0
 	mulu	PI_Modulo+2(a1),d0
 	sub	d0,a0
-	sub	quadNoteScrollerLinesHalf(a5),d6
+	sub	s_quadNoteScrollerLinesHalf(a4),d6
 .ok2
-	bsr	noteScrollerGetFont
+	bsr	noteScrollerGetFont * uses d4,a2
 	beq	.exitNoteScroller
 	
-
+	
 * d4 = font modulo
 * d6 = line number
 * d7 = rows to draw
@@ -24526,11 +25682,14 @@ noteScroller2
 * a4 = destination draw buffer
 
 	swap	d7
-	move	scopeDrawAreaModulo(a5),d7
+	move	s_scopeDrawAreaModulo(a4),d7
 	move	d7,d0 
 	lsl	#3,d0 	* x8, full height of font
 	swap	d7
-	
+
+	* destination draw buffer	
+	move.l	a6,a4
+
 ***********************************************************
 * Line numbers column
 ***********************************************************
@@ -24906,6 +26065,8 @@ noteScroller2
 .note	dc.b	"00000000"
 .pos	dc.b	"00"
  even
+
+; End of scopes for now
 
 ********************************************************************************
 *** SECTION ********************************************************************
@@ -25538,11 +26699,11 @@ loadfile
 	lea	probebuffer(a5),a0
 	move.l	a0,d2
 
-	move.l	#2048/4-1,d0	* tyhj‰ks
+	move.l	#PROBE_BUFFER_LEN/4-1,d0	* tyhj‰ks
 .clear	clr.l	(a0)+
 	dbf	d0,.clear
 
-	move.l	#2048,d3
+	move.l	#PROBE_BUFFER_LEN,d3
 	lob	Read
 	move.l	d0,d7
 	cmp.l	#100,d0
@@ -25720,11 +26881,21 @@ loadfile
 	move.l	d0,lod_filehandle(a5)
 	beq.w	.open_error
 
+	lea	probebuffer(a5),a0
+	move.w	#PROBE_BUFFER_LEN/4-1,d0
+.clrProbe
+	clr.l	(a0)+
+	dbf	d0,.clrProbe
+
+	* Here the full buffer is not used for some reason.
+	* Probably for optimization.
+	
 	move.l	lod_filehandle(a5),d1
 	lea	probebuffer(a5),a0
 	move.l	a0,d2
 	move.l	#1084,d3
 	lob	Read
+	DPRINT	"Probe read: %ld"
 ;	cmp.l	#1084,d0
 ;	bne.w	.read_error
 
@@ -26150,7 +27321,29 @@ loadfile
 	beq.w	.error
 
 	bsr.w	.infor
-	bsr.w	.seekstart
+
+;	bsr.w	.seekstart
+
+	* Make use of the already read data in probebuffer
+	move.l	lod_filehandle(a5),d1		
+	moveq	#0,d2
+	moveq	#OFFSET_CURRENT,d3
+	lore	Dos,Seek
+	DPRINT	"File position %ld"
+	cmp.l	#-1,d0
+	beq	.error2
+
+	move.l	lod_address(a5),a0
+
+	move.l	d0,d1
+	beq.b	.skipInitial
+
+	lea	probebuffer(a5),a1
+	subq	#1,d0
+.copyInitial
+	move.b	(a1)+,(a0)+
+	dbf	d0,.copyInitial
+.skipInitial
 
  ifeq floadpr
 	move.l	lod_filehandle(a5),d1
@@ -26163,7 +27356,7 @@ loadfile
  else
 
 *** laatukko file load progress indicator blabh
-
+	pushm	d1/a0
 	tst.b	win(a5)
 	beq.b	.eilox
 	moveq	#15+WINX,plx1
@@ -26176,43 +27369,66 @@ loadfile
 	add	windowtop(a5),ply2
 	move.l	rastport(a5),a1
 	jsr	laatikko3
-.eilox
-
+.eilox	popm	d1/a0
 
 	move.l	lod_length(a5),d4
-	move.l	lod_address(a5),d5
+	* subtract already read amount
+	sub.l	d1,d4
+	* where to load data, considering the already read amount
+	move.l	a0,d5
+	;move.l	lod_address(a5),d5
+
 
 .loadloop
+ if DEBUG
+ 	move.l	d4,d0
+	DPRINT	"Bytes to read %ld"
+ endif
+	* See if we got all of it already?
+	tst.l	d4
+	beq.w	.don
+	bmi.w	.don
+
 	move.l	lod_filehandle(a5),d1
 	move.l	d5,d2
-;	move.l	#$4000,d3
 	move.l	#$2000,d3
-;	move.l	#$1000,d3
-;	move.l	#512,d3
 	lore	Dos,Read
 
+	cmp.l	#-1,d0
+	bne.b	.noErr
+ if DEBUG
+	lob	IoErr
+	DPRINT	"IoErr=%ld"
+ endif
+	bra	.error2
+.noErr
+
+	* Subtract total bytes to be read
 	sub.l	d0,d4
 	bmi.w	.error2
 	beq.b	.don
 
+	* Advance target addres
 	add.l	d0,d5
-
 	bsr.b	.lood
-
 	bra.b	.loadloop
 
-
+* Draw progress bar
 .lood
 	tst.b	win(a5)
 	beq.b	.wxx
 	pushm	d4/d5
 
+	* File length is in d5
 	move.l	lod_length(a5),d5
 	move.l	d5,d3
 	lsr.l	#8,d3
+	* Bytes left to read is in d4
 	sub.l	d4,d5
+	* Bytes read is in d5
 	lsr.l	#8,d5
 
+	* Calculate 
 	mulu	#229,d5
 	divu	d3,d5
 	move	d5,d4
@@ -26242,7 +27458,7 @@ loadfile
 .wxx
 	rts
 .don
-
+	DPRINT	"Read done"
  endc
 
 .exit	
@@ -26287,8 +27503,12 @@ loadfile
 	moveq	#0,d2
 	moveq	#-1,d3
 	move.l	_DosBase(a5),a6
-	;lob	Seek	
-	jmp	_LVOSeek(a6)
+	lob	Seek
+ if DEBUG
+	lob	IoErr
+	DPRINT	"Seek IoErr=%ld"
+ endif	
+	rts
 
 .closeit
 	move.l	lod_filehandle(a5),d1
@@ -26318,17 +27538,23 @@ loadfile
 
 
 ***** tutkaillaan onko sample
+
+* 
+* In:
+*   a0 = probebuffer
+* Out:
+*   Z-flag set if recognized
 .samplecheck
 ** IFF
 	move.b	#1,sampleformat(a5)
 	cmp.l	#"FORM",(a0)
 	bne.b	.nosa0
 	cmp.l	#"8SVX",8(a0)
-	beq.b	.sampl
+	beq.w	.sampl
 ** AIFF
 	move.b	#2,sampleformat(a5)
 	cmp.l	#"AIFF",8(a0)
-	beq.b	.sampl
+	beq.w	.sampl
 
 .nosa0
 ** RIFF WAVE
@@ -26336,22 +27562,23 @@ loadfile
 	cmp.l	#"RIFF",(a0)
 	bne.b	.nosaa
 	cmp.l	#"WAVE",8(a0)
-	beq.b	.sampl
+	beq.w	.sampl
 .nosaa
 ** MPEG
 	move.b	#4,sampleformat(a5)
 
-	move.l	modulefilename(a5),a0
-.zu	tst.b	(a0)+
+	* Check file suffix
+	move.l	modulefilename(a5),a1
+.zu	tst.b	(a1)+
 	bne.b	.zu
-	subq.l	#1,a0
-	move.b	-(a0),d0
+	subq.l	#1,a1
+	move.b	-(a1),d0
 	ror.l	#8,d0
-	move.b	-(a0),d0
+	move.b	-(a1),d0
 	ror.l	#8,d0
-	move.b	-(a0),d0
+	move.b	-(a1),d0
 	ror.l	#8,d0
-	move.b	-(a0),d0
+	move.b	-(a1),d0
 	ror.l	#8,d0
 	and.l	#$ffdfdfff,d0
 	cmp.l	#".MP1",d0
@@ -26359,7 +27586,42 @@ loadfile
 	cmp.l	#".MP2",d0
 	beq.b	.sampl
 	cmp.l	#".MP3",d0
+	beq.b	.sampl
 
+	* Check file prefix
+	move.l	modulefilename(a5),a1
+	move.l	a1,a2
+.zu2	tst.b	(a1)+
+	bne.b	.zu2
+	subq.l	#1,a1
+.zu3	cmp.l	a1,a2
+	beq.b	.zu4
+	cmp.b	#":",-1(a1)
+	beq.b	.zu4
+	cmp.b	#"/",-1(a1)
+	beq.b	.zu4
+	subq	#1,a1
+	bra.b	.zu3
+.zu4
+	move.l	a1,d0
+
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	and.l	#$dfdfffff,d0
+	cmp.l	#"MP1.",d0
+	beq.b	.sampl
+	cmp.l	#"MP2.",d0
+	beq.b	.sampl
+	cmp.l	#"MP3.",d0
+	beq.b	.sampl
+
+	* Finally check probe buffer contents 
+	bsr	id_mp3
 
 .sampl	rts
 	
@@ -26390,8 +27652,14 @@ loadfile
 	bra.w	.exit
 
 .open_error
+ if DEBUG
+	lore	Dos,IoErr
+	DPRINT	"Open IoErr=%ld"
+ endif
+
 	move	#lod_openerr,lod_error(a5)
 	bra.w	.exit
+
 .error
 .nomem_error
 .fimp_error
@@ -26431,8 +27699,13 @@ loadfile
 
 .free	move.l	lod_address(a5),d0
 	beq.b	.eee
+	clr.l	lod_address(a5)
 	move.l	d0,a1
 	move.l	lod_length(a5),d0
+ if DEBUG
+ 	move.l	a1,d1
+	DPRINT	"Free %ld bytes at 0x%lx"
+ endif
 	move.l	(a5),a6
 	lob	FreeMem
 .eee	rts
@@ -26873,6 +28146,7 @@ tutki_moduuli
  endc
 
 
+	* Address may be null in case of sample file
 	move.l	moduleaddress(a5),a4
 	move.l	modulelength(a5),d7
 
@@ -26895,7 +28169,9 @@ tutki_moduuli
 	* Ensure no id funcs are ran on executables
 	tst.b	executablemoduleinit(a5)
 	bne.b	.ohi
-	
+	* See if there is data to check
+	move.l	a4,d0
+	beq.b	.ohi
 	bsr.w	id_protracker
 	beq.w	.protracker
 
@@ -27059,7 +28335,7 @@ tutki_moduuli
 	bra.b	.pro0
 
 .protracker	
-		clr.b	oldst(a5)
+	clr.b	oldst(a5)
 .pro0	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
 	moveq	#20-1,d0
@@ -27674,11 +28950,14 @@ whag	tst.b	win(a5)
 
 	pushm	all
 
-	tst	d0
-	beq.b	.c
-	
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d7
+
+;	tst	d0
+;	beq.b	.c
+
+; In v2.50 and older scopes were shut down here if 
+; active player didn't support it. 
 
 * if usescope=1 then open scope if flag=1
 * else
@@ -27686,19 +28965,20 @@ whag	tst.b	win(a5)
 * else
 * clear flag
 
-	tst.b	scopeflag(a5)
-	beq.b	.c
-	btst	#pb_scope,d7
-	beq.b	.notopen
-	tst	quad_prosessi(a5)
-	bne.b	.c
-	bsr.w	start_quad2
-	bra.b	.c
-.notopen
-	tst	quad_prosessi(a5)
-	beq.b	.c
-	bsr.w	sulje_quad2
-.c
+;	tst.b	scopeflag(a5)
+;	beq.b	.c
+;	btst	#pb_scope,d7
+;	beq.b	.notopen
+;	tst	quad_prosessi(a5)
+;	bne.b	.c
+;	bsr.w	start_quad2
+;	bra.b	.c
+;.notopen
+;	tst	quad_prosessi(a5)
+;	beq.b	.c
+;	bsr.w	sulje_quad2
+
+;.c
 
 ;	tst.l	keyfile+40(a5)	* datan v‰lilt‰ 38-50 pit‰‰ olla nollia
 ;	beq.b	.zz
@@ -27732,7 +29012,7 @@ whag	tst.b	win(a5)
 
 	move.l	a0,a3
 	and	#~GFLG_DISABLED,gg_Flags(a3)
-	bsr.b	redrawButtonGadget
+	bsr.w	redrawButtonGadget
 
 	lea	kela2,a0
 	cmp.l	a0,a3
@@ -27751,7 +29031,7 @@ whag	tst.b	win(a5)
 	or	#GFLG_DISABLED,gg_Flags(a3)
 	moveq	#1,d0
 	lore	Intui,RefreshGList
-	bsr.b	drawButtonFrame
+	bsr.b	drawButtonFrameMainWindow
 
 .on
 	tst	2(a4)		* enemm‰n kuin yksi kerrallaan?
@@ -27766,19 +29046,34 @@ whag	tst.b	win(a5)
 
 * in:
 *   a3 = gadget
-drawButtonFrame
-	pushm	all				* varjostus kuntoon taas
-	movem	4(a3),plx1/ply1/plx2/ply2
+drawButtonFrameMainWindow
 	cmp.l	#slider1,a3
-	beq.b	.kex
+	beq.b	.x
+	pushm	all				* varjostus kuntoon taas
+	move.l	rastport(a5),a1
+	bsr.b	doDrawButtonFrame
+	popm	all
+.x	rts
+
+
+* in:
+*   a3 = gadget
+drawButtonFramePrefsWindow
+	pushm	all				* varjostus kuntoon taas
+	move.l	rastport2(a5),a1
+	bsr.b	doDrawButtonFrame
+	popm	all
+	rts
+
+doDrawButtonFrame
+	movem	4(a3),plx1/ply1/plx2/ply2
 	add	plx1,plx2
 	add	ply1,ply2
 	subq	#1,ply2
 	subq	#1,plx1
-	move.l	rastport(a5),a1
-	jsr	laatikko1
-.kex	popm	all
-	rts
+	move.l	pen_2(a5),d3
+	move.l	pen_1(a5),d2
+	jmp	laatikko0
 
 
 * Clear button area, refresh gadget, draw button frame
@@ -27799,7 +29094,7 @@ redrawButtonGadget
 	move.l	a3,a0
 	jsr	refreshGadgetInA0
 
-	bsr.b	drawButtonFrame
+	bsr.w	drawButtonFrameMainWindow
 	rts
 
 
@@ -27823,6 +29118,20 @@ gadstate
 * Favorite list handling
 *
 *****************************************************************************
+
+toggleFavoriteStatusForCurrentModule
+	tst.b	favorites(a5)
+	beq.b	.1
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.1
+	move.l	chosenmodule(a5),d0
+	bsr.b	toggleFavoriteStatus
+	beq.b	.1
+	jsr	forceRefreshList
+.1	rts
+
+
+
 
 * Toggle favorite status for list node
 * in:
@@ -28782,13 +30091,13 @@ fileBrowserDir
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
 	move.l	d0,d6
-	beq.w	.error
+	beq.w	.error0
 
 	move.l	d6,d1
 	pushpea	fileinfoblock(a5),d2
 	lob	Examine
 	tst.l	d0
-	beq.w	.error
+	beq.w	.error0
 
 	* Copy lock for state saving
 	move.l	fileBrowserCurrentDirLock(a5),d1
@@ -28827,7 +30136,7 @@ fileBrowserDir
 	tst.l	d0
 	bne.b	.ok
 	lea	200(sp),sp
-	bra.w	.error
+	bra.w	.error0
 
 .ok
 	* Create parent entry 
@@ -28837,7 +30146,7 @@ fileBrowserDir
 	bsr.w	createNode
 	lea	200(sp),sp
 	tst.l	d0
-	beq.w	.error
+	beq.w	.error0
 
 	bsr	makeParentNode
 	* store parent node into d5 for a while
@@ -28906,10 +30215,9 @@ fileBrowserDir
 	bne.b	.scan	* stop on error
 
 .scanDone
-.doUnlock
-.error
 .lockFail
 	lea	200(sp),sp
+.error0
 
 	move.l	d6,d1
 	beq.b	.noLock
@@ -29192,7 +30500,7 @@ createio
 * out:
 *   d0 = 1 success, 0 failure
 *******
-getNameFromLock 
+getNameFromLock:
 .true		equ	1
 .false		equ	0
 .return		equr	d5
@@ -29452,6 +30760,281 @@ sortStringPtrArray
 	popm	d1/d2/d3/d6/d7/a1/a2
 .x	rts
 
+
+*******************************************************************************
+* Big buttons, normal buttons
+*******************************************************************************
+
+configureMainWindowButtonSizes
+	lea	gadgets,a4
+	basereg gadgets,a4
+
+	lea	button1im,a3
+	basereg button1im,a3
+
+	tst.b	altbuttons(a5)
+	beq.w	.useNormal
+	; Already in alt mode?
+	tst.b	altbuttonsUse(a5)
+	bne.w	.x
+	move.b	altbuttons(a5),altbuttonsUse(a5)
+	* Enlarge main window!
+	add	#16,WINSIZY(a5)
+
+; Set up double buttons
+	* 1st row
+	lea	gadgetPlayButton(a4),a0
+	lea	button1imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetInfoButton(a4),a0
+	lea	button2imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetStopButton(a4),a0
+	lea	button3imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetEjectButton(a4),a0
+	lea	button4imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetNextButton(a4),a0
+	lea	button5imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetPrevButton(a4),a0
+	lea	button6imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetNextSongButton(a4),a0
+	lea	button12imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetPrevSongButton(a4),a0
+	lea	button13imDouble(a3),a2
+	bsr.w	.double
+	lea	gadgetForwardButton(a4),a0
+	lea	kela2imDouble(a3),a2
+	bsr.b	.double
+	lea	gadgetRewindButton(a4),a0
+	lea	kela1imDouble(a3),a2
+	bsr.b	.double
+
+	* 2nd row
+	lea	gadgetAddButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetDelButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetNewButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetPrefsButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetVolumeSlider(a4),a0
+	bsr.b	.double2
+	lea	gadgetSortButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetMoveButton(a4),a0
+	bsr.b	.double2
+	lea	gadgetPrgButton(a4),a0
+	bsr.b	.double2
+
+	lea	gadgetListModeChangeButton(a4),a0
+	add	#16,gg_TopEdge(a0)
+
+	lea	gadgetFileSlider(a4),a0
+	add	#16,gg_TopEdge(a0)
+
+	lea	gadgetVolumeSlider(a4),a0
+	move.l	gg_GadgetRender(a0),a1
+	pushpea slider1imDouble(a3),ig_ImageData(a1)
+	addq	#8,ig_Height(a1)
+	bra.b	.doubleDone
+.double
+	addq	#8,gg_Height(a0)
+	move.l	gg_GadgetRender(a0),a1
+	move.l	a2,ig_ImageData(a1)
+	lsl.w	ig_Height(a1)
+	rts
+.double2
+	addq	#8,gg_Height(a0)
+	addq	#8,gg_TopEdge(a0)
+	move.l	gg_GadgetText(a0),d0
+	beq.b	.doubleNoText
+	move.l	d0,a1
+	addq	#4,it_TopEdge(a1)
+.doubleNoText
+.doubleDone
+	rts
+
+.useNormal
+	; Already in normal mode?
+	tst.b	altbuttonsUse(a5)
+	beq.w	.x
+	move.b	altbuttons(a5),altbuttonsUse(a5)
+
+	* Diminish main window!
+	sub	#16,WINSIZY(a5)
+
+; Set up normal buttons
+
+	* 1st row
+	lea	gadgetPlayButton(a4),a0
+	lea	button1im(a3),a2
+	bsr.w	.normal
+	lea	gadgetInfoButton(a4),a0
+	lea	button2im(a3),a2
+	bsr.w	.normal
+	lea	gadgetStopButton(a4),a0
+	lea	button3im(a3),a2
+	bsr.w	.normal
+	lea	gadgetEjectButton(a4),a0
+	lea	button4im(a3),a2
+	bsr.w	.normal
+	lea	gadgetNextButton(a4),a0
+	lea	button5im(a3),a2
+	bsr.w	.normal
+	lea	gadgetPrevButton(a4),a0
+	lea	button6im(a3),a2
+	bsr.w	.normal
+	lea	gadgetNextSongButton(a4),a0
+	lea	button12im(a3),a2
+	bsr.w	.normal
+	lea	gadgetPrevSongButton(a4),a0
+	lea	button13im(a3),a2
+	bsr.w	.normal
+	lea	gadgetForwardButton(a4),a0
+	lea	kela2im(a3),a2
+	bsr.b	.normal
+	lea	gadgetRewindButton(a4),a0
+	lea	kela1im(a3),a2
+	bsr.b	.normal
+
+	* 2nd row
+	lea	gadgetAddButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetDelButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetNewButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetPrefsButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetVolumeSlider(a4),a0
+	bsr.b	.normal2
+	lea	gadgetSortButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetMoveButton(a4),a0
+	bsr.b	.normal2
+	lea	gadgetPrgButton(a4),a0
+	bsr.b	.normal2
+
+	lea	gadgetListModeChangeButton(a4),a0
+	sub	#16,gg_TopEdge(a0)
+
+	lea	gadgetFileSlider(a4),a0
+	sub	#16,gg_TopEdge(a0)
+
+	lea	gadgetVolumeSlider(a4),a0
+	move.l	gg_GadgetRender(a0),a1
+	pushpea slider1im(a3),ig_ImageData(a1)
+	subq	#8,ig_Height(a1)
+	bra.b	.normalDone
+.normal
+	subq	#8,gg_Height(a0)
+	move.l	gg_GadgetRender(a0),a1
+	move.l	a2,ig_ImageData(a1)
+	lsr.w	ig_Height(a1)
+	rts
+.normal2
+	subq	#8,gg_Height(a0)
+	subq	#8,gg_TopEdge(a0)
+	move.l	gg_GadgetText(a0),d0
+	beq.b	.normalNoText
+	move.l	d0,a1
+	subq	#4,it_TopEdge(a1)
+.normalNoText
+.normalDone
+	rts
+
+.x
+	rts
+
+	endb   a3
+	endb   a4
+
+
+*******************************************************************************
+* IFF pictures to buttons
+*******************************************************************************
+ REM 
+initializeButtonImages
+	lea	iffname,a0
+	lore	Exec,OldOpenLibrary
+	tst.l	d0
+	beq.w	.x
+	move.l	d0,d7
+
+	move.l	d0,a6
+	lea	.pic(pc),a0
+	moveq	#IFFL_MODE_READ,d0
+	lob		OpenIFF
+	move.l	d0,d6
+	beq.b	.x
+
+	move.l	d6,a1
+	lob     GetBMHD
+	tst.l	d0
+	beq.b	.x
+	move.l	d0,a4
+	move	bmh_Width(a4),d1
+	move	bmh_Height(a4),d2
+	move.b	bmh_nPlanes(a4),d0
+
+	lea bitmapPlayButton(pc),a0
+	lore 	GFX,InitBitMap
+
+	move	bmh_Width(a4),d0
+	move	bmh_Height(a4),d1
+	moveq	#0,d2
+	move.b	bmh_nPlanes(a4),d2
+	mulu	d2,d1
+	lore	Exec,AllocRaster
+	tst.l	d0
+	beq.b	.x
+	move.l	d0,a0
+	lea	bitmapPlayButton+bm_Planes(pc),a1
+	* Length of one plane in bytes:
+	move	bitmapPlayButton+bm_BytesPerRow(pc),d1
+	mulu	bitmapPlayButton+bm_Rows(pc),d1
+	moveq	#0,d0
+	move.b	bitmapPlayButton+bm_Depth(pc),d0
+	subq	#1,d0
+.planes
+	move.l	a0,(a1)+
+	add	d1,a0
+	dbf	d0,.planes
+
+	move.l	d6,a1
+	lea	bitmapPlayButton(pc),a0
+	move.l	d7,a6
+	lob	DecodePic
+	tst.l	d0
+	beq.b	.x
+	
+	nop
+.x
+	tst.l	d6
+	beq.b	.1
+	move.l	d6,a1
+	lob	CloseIFF
+
+.1
+
+
+	move.l	d7,d0
+	jsr	closel
+
+	rts
+
+.pic	dc.b	"sys:HippoPlayButton.iff",0
+
+bitmapPlayButton ds.b bm_SIZEOF
+ EREM
+
+
 *******************************************************************************
 *** SECTION *******************************************************************
 *
@@ -29692,6 +31275,7 @@ rem_ciaint
 	DPRINT	"CIA Timer freed"
 	popm	all
 	rts
+
 
 *******************************************************************************
 *                                Soittorutiinit
@@ -30115,7 +31699,7 @@ p_protracker
 	p_NOP
 	dc.w pt_prot 				* type
 .flags	
- dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2
+ dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopePoke
 
 	dc.b	"Protracker",0
  even
@@ -30313,7 +31897,6 @@ p_protracker
 	lea	(a2,d2.l),a1
 
 ************************ OPT
-	printt	 Opti!
 
 	moveq	#1024/4/4-1,d2
 .look	
@@ -31233,10 +32816,39 @@ sid_addVolumePatch
 .q
 	rts
 
-; PreTracker patch is usable here
-.vol1patch	jsr	p_pretracker\.setVol1
-.vol2patch	jsr	p_pretracker\.setVol2
-.vol3patch	jsr	p_pretracker\.setVol3
+.vol1patch	jsr	.setVol1
+.vol2patch	jsr	.setVol2
+.vol3patch	jsr	.setVol3
+
+.setVol1
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0a8
+	pop 	d0
+	rts
+.setVol2
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0b8
+	pop 	d0
+	rts
+.setVol3
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0c8
+	pop 	d0
+	rts
+.setVol4
+	push	d0
+	mulu	var_b+mainvolume,d0 
+	lsr	#6,d0
+	move	d0,$dff0d8
+	pop 	d0
+	rts
+
 
 sid_remVolumePatch
 	move.l	_SIDBase(a5),a0
@@ -31536,7 +33148,7 @@ p_futurecomposer13
 	jmp .id_futurecomposer13(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future10			* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"Future Composer v1.0-1.3",0
  even
 
@@ -31558,7 +33170,7 @@ p_futurecomposer13
 	rts
 .ok2
 	lea	fc10routines(a5),a0
-	bsr.w	allocreplayer2
+	bsr.w	allocreplayer2 * Into CHIP, has waveforms in it
 	beq.b	.ok3
 	bsr.w	rem_ciaint
 	bra.w	vapauta_kanavat
@@ -31568,8 +33180,9 @@ p_futurecomposer13
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
-	move.l	fc10routines(a5),a3
-	jsr	.offset_init(a3)
+	lea	scopeData(a5),a3
+	move.l	fc10routines(a5),a4
+	jsr	.offset_init(a4)
 	popm	d0-d7/a1-a6
 	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
@@ -31614,7 +33227,7 @@ p_futurecomposer14
 	jmp .id_futurecomposer14(pc)
 	jmp	fc_author(pc)
 	dc.w pt_future14	* type
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_ciakelaus!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"Future Composer v1.4",0
 
  even
@@ -31648,8 +33261,9 @@ p_futurecomposer14
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
-	move.l	fc14routines(a5),a3
-	jsr	.offset_init(a3)
+	lea	scopeData(a5),a3
+	move.l	fc14routines(a5),a4
+	jsr	.offset_init(a4)
 	popm	d0-d7/a1-a6
 	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
@@ -31703,7 +33317,7 @@ p_soundmon
 	jmp .id_soundmon(pc)
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke
 	dc.b	"BP SoundMon v2.0",0
  even
 
@@ -31741,6 +33355,7 @@ p_soundmon
 	clr.l	(a3)
 	lea	mainvolume(a5),a4
 	pushpea	dmawait(pc),d0
+	pushpea	scopeData(a5),d1
 
 	pushm	a5/a6
 	move.l	bpsmroutines(a5),a6
@@ -31805,7 +33420,7 @@ p_soundmon3
 	jmp 	.id_soundmon3(pc)
 	jmp	bp_author(pc)
 	dc.w 	pt_soundmon3 	* type
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke
 	dc.b	"BP SoundMon 3 (v2.2)",0
  even
 
@@ -31821,7 +33436,6 @@ p_soundmon3
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
-
 	lea	bpsmroutines(a5),a0
 	bsr.w	allocreplayer
 	beq.b	.ok3
@@ -31838,6 +33452,7 @@ p_soundmon3
 	clr.l	(a3)
 	lea	mainvolume(a5),a4
 	pushpea	dmawait(pc),d0
+	pushpea	scopeData(a5),d1
 
 	pushm	a5/a6
 	move.l	bpsmroutines(a5),a6
@@ -31905,7 +33520,7 @@ p_jamcracker
 	jmp .id_jamcracker(pc)
 	jmp	.author(pc)
 	dc.w pt_jamcracker				* type
-	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope
+	dc	pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"JamCracker",0
 .a 	dc.b 	"Xag/Betrayal, Martin Kemmel",0
  even
@@ -31938,15 +33553,16 @@ p_jamcracker
 ;	rts
 
 .ok3	
-	pushm a5/a6
+	pushm 	a5/a6
 	move.l	moduleaddress(a5),a0
 	lea	dmawait(pc),a1
 	lea	songover(a5),a2
-	lea mainvolume(a5),a3 
-	lea nullsample,a4
+	lea 	mainvolume(a5),a3 
+	lea 	nullsample,a4
 	move.l	jamroutines(a5),a6
+	lea	scopeData(a5),a5
 	jsr	.offset_init(a6)
-	popm a5/a6
+	popm 	a5/a6
 	move	d0,pos_maksimi(a5)
 	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
@@ -33990,7 +35606,7 @@ p_davidwhittaker
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_davidwhittaker
-.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"David Whittaker     [EP]",0
 	        
 .path 	dc.b "david whittaker",0
@@ -34118,7 +35734,7 @@ p_hippelcoso
 	jmp id_hippelcoso(pc)
 	jmp	hippel_author(pc)
 	dc.w pt_hippelcoso
-.liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi
+.liput	dc pf_cont!pf_stop!pf_end!pf_volume!pf_song!pf_ciakelaus!pf_ahi!pf_scope!pf_quadscopePoke
 	dc.b	"Hippel-COSO",0
  even
 
@@ -34176,6 +35792,7 @@ p_hippelcoso
 	move	songnumber(a5),d0
 	addq	#1,d0
 	lea	dmawait(pc),a2
+	lea	scopeData(a5),a3
 
 	move.l	modulelength(a5),d1
 	move.b	ahi_use(a5),d2
@@ -34190,9 +35807,10 @@ p_hippelcoso
 * a0 = module
 * a1 = songend
 * a2 = dmawait
+* a3 = scope
 
-	move.l	hippelcosoroutines(a5),a3
-	jsr	$20+0(a3)
+	move.l	hippelcosoroutines(a5),a4
+	jsr	$20+0(a4)
 	tst.l	d0
 	bne.b	.ER
 
@@ -34893,12 +36511,12 @@ id_digiboosterpro_
 thx_author
 	pushpea	.a(pc),d0
 	rts
-.a 	dc.b	"Pink/aBYSs",0
+.a 	dc.b	"Dexter & Pink/aBYSs",0
 	even 
 
 p_thx
 	jmp	.init(pc)
-	jmp	.play(pc)
+	p_NOP	; Hippo CIA not used in AHX/THX
 	jmp	.vb(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
@@ -34908,13 +36526,12 @@ p_thx
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	p_NOP
-	jmp .id_thx(pc)
+	jmp 	.id_thx(pc)
 	jmp	thx_author(pc)
-	dc.w pt_thx
-	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen
+	dc.w 	pt_thx
+	dc	pf_cont!pf_stop!pf_volume!pf_end!pf_song!pf_kelaus!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"AHX Sound System",0
  even
-
 
 
 .ahxInitCIA          = 0*4
@@ -34925,16 +36542,16 @@ p_thx
 .ahxStopSong         = 5*4
 .ahxKillPlayer       = 6*4
 .ahxKillCIA          = 7*4
-.ahxNextPattern      = 8*4       ;implemented, although no-one requested it :-)
-.ahxPrevPattern      = 9*4       ;implemented, although no-one requested it :-)
+.ahxNextPattern      = 8*4   ;implemented, although no-one requested it :-)
+.ahxPrevPattern      = 9*4   ;implemented, although no-one requested it :-)
 
-.ahxBSS_P            = 10*4      ;pointer to ahx's public (fast) memory block
-.ahxBSS_C            = 11*4      ;pointer to ahx's explicit chip memory block
-.ahxBSS_Psize        = 12*4      ;size of public memory (intern use only!)
-.ahxBSS_Csize        = 13*4      ;size of chip memory (intern use only!)
-.ahxModule           = 14*4      ;pointer to ahxModule after InitModule
-.ahxIsCIA            = 15*4      ;byte flag (using ANY (intern/own) cia?)
-.ahxTempo            = 16*4      ;word to cia tempo (normally NOT needed to xs)
+.ahxBSS_P            = 10*4  ;pointer to ahx's public (fast) memory block
+.ahxBSS_C            = 11*4  ;pointer to ahx's explicit chip memory block
+.ahxBSS_Psize        = 12*4  ;size of public memory (intern use only!)
+.ahxBSS_Csize        = 13*4  ;size of chip memory (intern use only!)
+.ahxModule           = 14*4  ;pointer to ahxModule after InitModule
+.ahxIsCIA            = 15*4  ;byte flag (using ANY (intern/own) cia?)
+.ahxTempo            = 16*4  ;word to cia tempo (normally NOT needed to xs)
 
 .ahx_pExternalTiming = 0         ;byte, offset to public memory block
 .ahx_pMainVolume     = 1         ;byte, offset to public memory block
@@ -34945,6 +36562,10 @@ p_thx
 .ahx_pVoice1Temp     = 246       ;struct, current Voice 1 values
 .ahx_pVoice2Temp     = 478       ;struct, current Voice 2 values
 .ahx_pVoice3Temp     = 710       ;struct, current Voice 3 values
+
+.ahx_currentSongPos	= $448+4
+.ahx_maxSongPos 	= $44c+4
+.ahx_currentPattPos 	= $44a
 
 .ahx_pvtTrack        = 0         ;byte          (relative to ahx_pVoiceXTemp!)
 .ahx_pvtTranspose    = 1         ;byte          (relative to ahx_pVoiceXTemp!)
@@ -34987,8 +36608,8 @@ p_thx
 .vb	move.l	thxroutines(a5),a0
 	move.l	.ahxBSS_P(a0),a0
 
-	move	$448+4(a0),pos_nykyinen(a5)
-	move	$44c+4(a0),pos_maksimi(a5)
+	move	.ahx_currentSongPos(a0),pos_nykyinen(a5)
+	move	.ahx_maxSongPos(a0),pos_maksimi(a5)
 
 	tst.b	.ahx_pSongEnd(a0)
 	beq.b	.x
@@ -35000,27 +36621,21 @@ p_thx
 
 
 .init
-
-;	bsr.w	varaa_kanavat
-;	beq.b	.ok
-;	moveq	#ier_nochannels,d0
-;	rts
-;.ok	
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
 
 	lea	thxroutines(a5),a0
 	bsr.w	allocreplayer
-;	bne.w	vapauta_kanavat
+	bne.w	vapauta_kanavat
 	beq.b	.ok3
-	rts
-
-;	beq.b	.ok3
-;	bra.w	vapauta_kanavat
-;;	rts
+	bra.w	vapauta_kanavat
 
 .ok3	
-
+	DPRINT	"AHX init"
 	pushm	d1-a6
-
 
 	lea	.ahxCIAInterrupt(pc),a0
 	moveq	#0,d0
@@ -35048,7 +36663,7 @@ p_thx
 
 	move.l	thxroutines(a5),a2
 	jsr	.ahxKillCIA(a2)
-;	bsr.w	vapauta_kanavat
+	bsr.w	vapauta_kanavat
 	moveq	#ier_nomem,d0
 	bra.b	.xxx
 .ok4
@@ -35059,7 +36674,6 @@ p_thx
 	tst	d0
 	bne.b	.thxInitFailed
 
-
 	move.l	.ahxBSS_P(a2),a0
 	clr	maxsongs(a5)
 	move.b	.ahx_pSubsongs(a0),maxsongs+1(a5)
@@ -35069,10 +36683,12 @@ p_thx
 	moveq   #0,d1
 	jsr	.ahxInitSubSong(a2)
 
-
 	bsr.w	.volu
+	bsr.w	.patternInit
+
 	popm	d1-a6
 
+	pushpea	.PatternInfo(pc),deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 
@@ -35080,8 +36696,8 @@ p_thx
 	move.l	thxroutines(a5),a2
 	jsr	.ahxKillCIA(a2)
 .thxInitFailed2
-
-;	bsr.w	vapauta_kanavat
+	
+	bsr.w	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 .xxx
 	popm	d1-a6
@@ -35089,17 +36705,16 @@ p_thx
 
 
 .ahxCIAInterrupt
-.play
 	move.l	thxroutines+var_b,a0
-	jmp	.ahxInterrupt(a0)
+	jsr	.ahxInterrupt(a0)
+	bra.w	.updateStripes
 
-.end	bsr.b	.halt
-;	bra.w	vapauta_kanavat
-	rts
+.end	DPRINT	"AHX end"
+	bsr.b	.halt
+	bra.w	vapauta_kanavat
 
 .song	bsr.b	.halt
 	bra.w	.ok3
-
 
 .halt	
 	pushm	all
@@ -35112,6 +36727,177 @@ p_thx
 	
 	bra.w	clearsound
 
+* Scope support
+
+.updateScope
+	lea	scopeData+scope_ch1(a4),a0
+	move.l	thxroutines(a4),a1
+	move.l	.ahxBSS_P(a1),a1
+	lea	.ahx_pVoice0Temp(a1),a1
+
+	moveq	#4-1,d0
+.scope
+	tst.l	ns_start(a0)
+	bne.b	.same
+	move.l	.ahx_pvtAudioPointer(a1),ns_start(a0)
+	move.l	.ahx_pvtAudioPointer(a1),ns_loopstart(a0)
+	move	#$140,ns_length(a0)
+	move	#$140,ns_replen(a0)
+.same
+	move	.ahx_pvtAudioPeriod(a1),ns_period(a0)
+	move	.ahx_pvtAudioVolume(a1),ns_tempvol(a0)
+	move	.ahx_pvtAudioVolume(a1),d1
+	CLAMPVOL d1
+	move	d1,ns_tempvol(a0)
+
+	add	#232,a1	* Next channel data 
+	add 	#ns_size,a0
+	dbf	d0,.scope
+	rts
+
+
+* Pattern scope support
+
+.updateStripes
+	pushm	d0-d1/a0-a4
+	lea	var_b,a4
+	bsr.b	.updateScope
+
+	move.l	thxroutines(a4),a0
+	move.l	.ahxBSS_P(a0),a0
+
+	tst.b	.ahx_pPlaying(a0)
+	beq.b	.noUpd
+	
+	move	.ahx_currentPattPos(a0),.PatternInfo+PI_Pattpos
+	lea	.ahx_pVoice0Temp(a0),a0
+
+	move.l	moduleaddress(a4),a1
+	lea	.PatternInfo+PI_NoteTranspose1(pc),a2
+	lea	.Stripe1(pc),a3
+
+	* Get SS, number of subsongs
+	moveq	#0,d1
+	move.b	13(a1),d1
+	* Subsong list length in bytes:
+	add	d1,d1
+	* Skip over subsong list 
+	lea	14(a1,d1),a4
+	* Get LEN, length of the position list
+	move	6(a1),d1
+	and	#$fff,d1
+	* Position list length in bytes:
+	lsl	#3,d1
+	* Skip over position list,
+	* A4 now points to the 1st track data
+	add	d1,a4
+	* Get TRL, track length
+	moveq	#0,d0
+	move.b	10(a1),d0
+	* Track length in bytes
+	mulu	#3,d0
+
+	bsr.b	.doStripe
+	bsr.b	.doStripe
+	bsr.b	.doStripe
+	bsr.b	.doStripe
+.noUpd
+	popm	d0-d1/a0-a4
+	rts
+
+.doStripe
+	move.b	.ahx_pvtTranspose(a0),(a2)+
+	moveq	#0,d1
+	move.b	.ahx_pvtTrack(a0),d1
+	add	#232,a0	* Next channel data 
+
+	* If bit 7 of byte 6 is 1, track 0 is included. 
+	* If it is 0, track 0 was empty, and is
+        * therefore not saved with the module, to save space.
+	tst.b	6(a1)
+	bmi.b	.notZero
+	* Track 0 not included.
+	tst.b	d1
+	bne.b	.1
+	* Track 0 is an empty stripe
+.goZero	clr.l	(a3)+
+	rts
+.notZero
+	subq.b	#1,d1
+	bmi.b	.goZero
+.1
+
+	* Get current track offset
+	mulu	d0,d1
+	* Address of current track
+	add.l a4,d1
+	* Into the stripe array
+	move.l	d1,(a3)+
+	rts
+
+.patternInit
+	lea	.PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea	.ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	moveq	#3,D0
+	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
+	move.l	moduleaddress(a5),a1
+	move.b	10(a1),d0 		* TRL, track length 1-64
+	move.w	d0,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called by the PI engine to get values for a particular row
+* Each entry is 24 bits (3 bytes) long, and consists of
+* bits 23-18 (6 bits): The note. This ranges from 0 (no note) to 60 (B-5)
+* bits 17-12 (6 bits): The sample. This ranges from 0 to 63.
+* bits 11-8  (4 bits): The command. See list below
+* bits 7-0   (8 bits): The command's data. See list below
+
+.ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+	
+	* 01234567 01234567 01234567
+	* nnnnnnSS SSSScccc PPPPPPPP
+
+	move.b	(a0),d0
+	rol	#8,d0
+	move.b	1(a0),d0
+
+	moveq	#$f,d2
+	and.b	d0,d2 	* cmd
+	
+	lsr	#4,d0
+	moveq	#%111111,d1
+	and.b	d0,d1	* sample
+
+	lsr	#6,d0	* note
+	beq.b 	.noNote
+
+
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	ext	d0
+
+	* Up one octaves to allow negative transpose
+	add	#1*12,d0
+
+.noNote
+
+	move.b	2(a0),d3	* arg
+	rts
+
+.PatternInfo 		ds.b	PI_Stripes	
+.Stripe1		dc.l	1
+.Stripe2		dc.l	1
+.Stripe3		dc.l	1
+.Stripe4		dc.l	1
 
 .id_thx 
 	bsr.b id_thx_
@@ -35290,7 +37076,7 @@ p_aon
 	jmp 	.id_aon(pc)
 	jmp	.author(pc)
 	dc.w 	pt_aon
-	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope
+	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"Art Of Noise 4ch",0
 .a	dc.b	"Bastian Spiegel (Twice/Lego)",0
  even
@@ -35329,8 +37115,9 @@ p_aon
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2 
 	lea	ciaint_setTempoFromD0(pc),a3
-	move.l	aonroutines(a5),a4
-	jsr	.OFFSET_INIT(a4)
+	lea	scopeData(a5),a4
+	move.l	aonroutines(a5),a6
+	jsr	.OFFSET_INIT(a6)
 	tst.l	d0
 	bne.b	.noMem
 	move.l	a0,deliPatternInfo(a5)
@@ -35418,7 +37205,7 @@ p_multi	jmp	.s3init(pc)
 	jmp	.author(pc)
 	dc.w pt_multi
 .flags
- dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi
+ dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi!pf_quadscopePoke
 	dc.b	"PS3M",0
 .itPath
 	dc.b	"impulse",0
@@ -35613,13 +37400,9 @@ p_multi	jmp	.s3init(pc)
 * - position and lenght info
 * - patternscope information, if needed
 .s3poslen
-	moveq	#0,d0
-	tst.b	scopeflag(a5)
-	beq.b	.noScope 
-	* Sets Z if patternscope is active:
-	bsr		patternScopeIsActive
-	* Inform PS3M 
-	seq		d0
+	tst.b	patternScopeRunning(a5)
+	* Inform PS3M, set to zero to skip patternscope routines
+	sne		d0
 .noScope
 	move.l	ps3mroutines(a5),a0
 	jmp	poslenj(a0)
@@ -35915,20 +37698,20 @@ id_it
 
 p_sample
 	jmp	.init(pc)
-	p_NOP		* CIA
-	p_NOP		* VB
+	p_NOP	* CIA
+	p_NOP	* VB
 	jmp	.end(pc)		* end
 	jmp	.dostop(pc)		* Stop
 	jmp	.docont(pc)		* Cont
 	jmp	.vol(pc)		* volume
-	p_NOP		* Song
-	p_NOP		* Eteen
-	p_NOP		* Taakse
+	p_NOP	* Song
+	p_NOP	* Eteen
+	p_NOP	* Taakse
 	jmp	.ahiup(pc)		* AHI Update
-	jmp id_sample(pc)
-	p_NOP		* author
-	dc.w pt_sample
-	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi
+	jmp 	id_sample(pc)
+	p_NOP	* author
+	dc.w 	pt_sample
+	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .name	dc.b	"                        ",0
  even
 
@@ -35964,7 +37747,8 @@ p_sample
 
 	jsr	.s_ahinfo(a0)
 
-
+	move.l	colordiv(a5),d0
+	DPRINT	"colordiv=%ld"
 ** lis‰‰
 	moveq	#0,d0
 	cmp	#16000,horizfreq(a5)
@@ -36007,6 +37791,15 @@ p_sample
 	move.b	d2,samplestereo(a5)
 	move.l	d3,samplebufsiz(a5)
 
+ if DEBUG
+	pushm	d0-d3
+	move.l	d3,d0
+	move.l	(a1),d2
+	move.l	(a2),d3
+	DPRINT	"Bufsize=%ld add=%ld buf1=%lx buf2=%lx"
+	popm	d0-d3
+ endif
+
 	tst	d0
 	bne.b	.x
 
@@ -36031,6 +37824,96 @@ p_sample
 	jmp	.s_ahiup(a0)
 
 id_sample
+	rts
+
+* In:
+*   a0 = probebuffer, size 2048
+* Out:
+*  d0 = 0 = recognized, -1 = not
+id_mp3
+	* Check for ID3v2 header
+	move.l	(a0),d0
+	lsr.l	#8,d0
+	cmp.l	#"ID3",d0
+	bne.b	.not
+
+	cmp.b	#$ff,3(a0)
+	beq.b	.not
+	cmp.b	#$ff,4(a0)
+	beq.b	.not
+	* Low flag nybble should be zero
+	moveq	#$0f,d0
+	and.b	5(a0),d0
+	bne.b	.not
+	* synchsafe integer bytes are all 7 bits
+	cmp.b	#$80,6(a0)
+	bhs.b	.not
+	cmp.b	#$80,7(a0)
+	bhs.b	.not
+	cmp.b	#$80,8(a0)
+	bhs.b	.not
+	cmp.b	#$80,9(a0)
+	bhs.b	.not
+	bra.b	.yepID3v2
+.not
+
+	* Find MPEG sync word
+	* This is very unreliable in the sense that many other formats
+	* will be recognized as MPEG streams. Let's not do it.
+
+ REM ;;;;
+;#define SYNC_VALID( v ) ( ((v & 0xFFE00000) == 0xFFE00000) &&\
+;                          ((v & 0x00060000) != 0x00000000) &&\
+;                          ((v & 0xF000) != 0xF000) &&\
+;                          ((v & 0xF000) != 0x0000) &&\
+;                          ((v & 0x0C00) != 0x0C00) )
+	move	#PROBE_BUFFER_LEN-4-1,d1
+	move.l	a0,a1
+.loop
+	move.b	(a1)+,d2
+	lsl.l	#8,d2
+	move.b	(a1),d2
+	lsl.l	#8,d2
+	move.b	1(a1),d2
+	lsl.l	#8,d2
+	move.b	2(a1),d2
+	
+	move.l	d2,d3
+	and.l	#$FFE00000,d3
+	cmp.l	#$FFE00000,d3
+	bne.b	.next
+
+	move.l	d2,d3
+	and.l	#$00060000,d3
+	beq.b	.next
+
+	move.l	d2,d3
+	and.l	#$F000,d3
+	cmp.w	#$F000,d3
+	beq.b	.next
+
+	move.l	d2,d3
+	and.l	#$F000,d3
+	beq.b	.next
+	
+	move.l	d2,d3
+	and.l	#$0C00,d3
+	cmp.w	#$0C00,d3
+	bne.b	.yepSyncWord
+.next
+	dbf	d1,.loop
+ EREM ;;;;;;;;;
+.nope
+	moveq	#-1,d0
+	rts
+
+.yepID3v2
+	DPRINT	"MP3 ID3v2 tag found"
+	moveq	#0,d0
+	rts
+.yepSyncWord
+	DPRINT	"MP3 sync word found"
+	moveq	#0,d0
 	rts
 
 ******************************************************************************
@@ -36327,7 +38210,7 @@ p_gamemusiccreator
 	jmp id_gamemusiccreator(pc)
 	jmp	.author(pc)
 	dc.w pt_gamemusiccreator
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume!pf_scope
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_end!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"Game Music Creator",0
 .a 	dc.b "Andreas Tadic",0
  even
@@ -36353,8 +38236,7 @@ p_gamemusiccreator
 	rts
 .ok2
 	lea	gamemusiccreatorroutines(a5),a0
-	* allocate into chip mem
-	bsr.w	allocreplayer2
+	bsr.w	allocreplayer
 	beq.b	.ok3
 	bsr	rem_ciaint
 	bsr.w	vapauta_kanavat
@@ -36367,6 +38249,8 @@ p_gamemusiccreator
 	lea	pos_nykyinen(a5),a3
 	lea	pos_maksimi(a5),a4
 	move.l	gamemusiccreatorroutines(a5),a6
+	lea	scopeData(a5),a5
+	move.l	#nullsample,d0
 	jsr	.GMC_INIT(a6)
 	popm	d0-d7/a1-a6
 	move.l	a0,deliPatternInfo(a5)
@@ -36549,7 +38433,7 @@ p_digitalmugician
 	jmp .id_digitalmugician(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_digitalmugician
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope!pf_quadscopePoke
 	dc.b	"Digital Mugician    [EP]",0
 .path	dc.b	"mugician.amp",0
  even
@@ -36777,7 +38661,7 @@ p_robhubbard2
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_robhubbard2
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_scope!pf_quadscopePoke
 	dc.b	"R.Hubbard 2/Infogra.[EP]",0
 .path dc.b "rob hubbard 2",0
  even
@@ -36841,7 +38725,7 @@ p_chiptracker
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_chiptracker 
- dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2	
+ dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2!pf_quadscopeUps
 	dc.b	"ChipTracker         [EP]",0
 
 .path dc.b "chiptracker",0
@@ -37466,7 +39350,7 @@ p_soundfx
 	jmp .id_soundfx(pc)
 	jmp	.author(pc)
 	dc.w pt_soundfx
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"SoundFX",0
 .a 	dc.b	"Christian Haller, Christian A. Webber",0
  even
@@ -37504,6 +39388,7 @@ p_soundfx
 	lea	pos_nykyinen(a5),a3
 	lea 	pos_maksimi(a5),a4
 	move.l	soundfxroutines(a5),a6
+	lea	scopeData(a5),a5
 	jsr	.INIT(a6)
 	popm	d1-d7/a1-a6
 	move.l	a0,deliPatternInfo(a5)
@@ -37646,48 +39531,25 @@ p_pretracker
 	jmp	.stop(pc)
 	p_NOP 	
 	p_NOP
-	p_NOP
+	jmp	.song(pc)
 	p_NOP
 	p_NOP
 	p_NOP
 	jmp .id_pretracker(pc)
-	jmp	thx_author(pc)
+	jmp	.pre_author(pc)
 	dc.w pt_pretracker
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_scope!pf_quadscopePoke!pf_poslen!pf_end!pf_song
 	dc.b	"PreTracker by Pink/aBYSs",0
+.author = *-11
  even
 
-.mySong		dc.l  0
-.myPlayer	dc.l  0
-.chipMem	dc.l  0
+.offset_init = $20+0
+.offset_play = $20+4
+.offset_stop = $20+8
+.offset_song = $20+12
 
-.setVol1
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0a8
-	pop 	d0
-	rts
-.setVol2
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0b8
-	pop 	d0
-	rts
-.setVol3
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0c8
-	pop 	d0
-	rts
-.setVol4
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0d8
-	pop 	d0
+.pre_author
+	pushpea	.author(pc),d0
 	rts
 
 .init
@@ -37709,120 +39571,64 @@ p_pretracker
 	bsr.w	vapauta_kanavat
 	rts
 .ok3
-	move.l #16*1024,d0
-	move.l	#MEMF_PUBLIC|MEMF_CLEAR,d1 
-	jsr getmem
-	move.l d0,.mySong
-	beq.w .noMem
-	move.l #16*1024,d0
-	move.l	#MEMF_PUBLIC|MEMF_CLEAR,d1 
-	jsr getmem
-	move.l d0,.myPlayer
-	beq.w .noMem
-
-
-	pushm	d1-a6
-
-	move.l pretrackerroutines(a5),a0
-	move.l	a0,a4
-	add.l	-4(a4),a4 	* end of memory region
-.patchLoop
-* 33C0 xxxxxxxx = MOVE.L d0,xxxxxxxx
-* 4EB9 xxxxxxxx = JSR xxxxxxxx
-
-	move	(a0),d0
-	cmp		#$33c0,d0 
-	bne.b  .next 
-	cmp.l	#$dff0a8,2(a0)
-	beq.b	.1
-	cmp.l	#$dff0b8,2(a0)
-	beq.b	.2
-	cmp.l	#$dff0c8,2(a0)
-	beq.b	.3
-	cmp.l	#$dff0d8,2(a0)
-	beq.b	.4
-	bra.b 	.next
-.1	move	#$4eb9,(a0)
-	move.l	#.setVol1,2(a0)
-	bra.b 	.next
-.2	move	#$4eb9,(a0)
-	move.l	#.setVol2,2(a0)
-	bra.b 	.next
-.3	move	#$4eb9,(a0)
-	move.l	#.setVol3,2(a0)
-	bra.b 	.next
-.4	move	#$4eb9,(a0)
-	move.l	#.setVol4,2(a0)
-	;bra.b 	.next
-.next
-	addq	#2,a0
-	cmp.l	a4,a0
-	blo.b	.patchLoop
-
-	bsr.w	clearCpuCaches
-
-	move.l .myPlayer(pc),a0
-	move.l .mySong(pc),a1
-	move.l moduleaddress(a5),a2
-	move.l pretrackerroutines(a5),a3	
-	add.l	 (a3),a3
-	jsr		(a3) ; songInit
-	* in D0 returns the needed chipbuffer size
-
-	DPRINT	"Chip: %ld"
-
-	move.l	#MEMF_CHIP|MEMF_CLEAR,d1 
-	jsr getmem
-	move.l d0,.chipMem
-	beq.b .noMem
-
-	* May be slow, instrument generation 
 	jsr	setMainWindowWaitPointer
-
-	move.l pretrackerroutines(a5),a3
-	move.l	.myPlayer(pc),a0 
-	move.l  .chipMem(pc),a1 
-	move.l  .mySong(pc),a2	
-	add.l	4(a3),a3
-	jsr 	(a3)  ; playerInit
-
-	popm	d1-a6
+	pushm	d2-d7/a1-a6
+	move.l	moduleaddress(a5),a0
+	lea	scopeData(a5),a1
+	lea	mainvolume(a5),a2
+	lea	songover(a5),a3
+	move.l pretrackerroutines(a5),a4
+	jsr	.offset_init(a4)
+	popm	d2-d7/a1-a6
 	jsr	clearMainWindowWaitPointer
+	tst.l	d0
+	beq.b 	.noMem
+	bmi.b	.initErr
+;	move.l	a0,deliPatternInfo(a5)
+	subq	#1,d1
+	move	d1,maxsongs(a5)
+
+ if DEBUG
+ 	moveq	#0,d0
+	move	d1,d0
+	DPRINT	"Songs %ld"
+ endif
 	moveq	#0,d0
 	rts	
 
 .noMem
-	bsr.b .free
-	popm	d1-a6
 	moveq #ier_nomem,d0
 	rts
 
-.free 
-	move.l .mySong(pc),a0
-	jsr	freemem 
-	clr.l .mySong
-	move.l .myPlayer(pc),a0
-	jsr	freemem 
-	clr.l .myPlayer 
-	move.l .chipMem(pc),a0 
-	jsr	freemem 
-	clr.l .chipMem
+.initErr
+	moveq #ier_not_compatible,d0
 	rts
 
 .play
-	move.l pretrackerroutines(a5),a1
-	move.l	.myPlayer(pc),a0 
-	add.l	8(a1),a1
-	jmp	(a1)		; playerTick
+	push	a5
+	move.l	pretrackerroutines(a5),a0
+	jsr	.offset_play(a0)
+	pop	a5
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+	rts
 	
 .stop
 	bra.w	clearsound
 
 .end
-	bsr.b .free
 	bsr	rem_ciaint
 	bsr.w	clearsound
+	move.l pretrackerroutines(a5),a0
+	jsr	.offset_stop(a0)
 	bra.w	vapauta_kanavat
+
+.song
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Setting subsong %ld"
+	move.l pretrackerroutines(a5),a0
+	jmp	.offset_song(a0)
 
 .id_pretracker 
 	bsr.b 	id_pretracker_
@@ -38157,7 +39963,7 @@ p_startrekker
 	jmp 	.id(pc)
 	jmp	.author(pc)
 	dc.w 	pt_startrekker
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"StarTrekker AM",0
 .a 	dc.b "Bjoern Wesen/Exolon of Fairlight",0
  even
@@ -38251,11 +40057,12 @@ p_startrekker
 	lea	songover(a5),a3
 	lea	dmawait(pc),a4
 	move.l	modulelength(a5),d0
-	push	a5
-	move.l	startrekkerroutines(a5),a5
-	jsr	.INIT(a5)
+	pushm	a5/a6
+	move.l	startrekkerroutines(a5),a6
+	lea	scopeData(a5),a5
+	jsr	.INIT(a6)
 	moveq	#0,d0
-	pop 	a5
+	popm 	a5/a6
 	move.l	a0,deliPatternInfo(a5)
 	move	d1,pos_maksimi(a5)
 .x
@@ -38272,7 +40079,7 @@ p_startrekker
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	lea	startrekkerdataaddr(a5),a1
 	lea 	startrekkerdatalen(a5),a2
-	bsr.w	loadfileStraight
+	jsr	loadfileStraight
 	rts
 
 .fileErr 
@@ -38467,7 +40274,7 @@ p_quartet
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_quartet 
- 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus
+ 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Quartet             [EP]",0
 
 .path dc.b "quartet",0
@@ -38603,7 +40410,7 @@ p_richardjoseph
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_richardjoseph
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"R.Joseph/VectorDean [EP]",0
 .path dc.b "richard joseph player",0
  even
@@ -38827,7 +40634,7 @@ p_jasonbrooke
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_jasonbrooke
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Jason Brooke        [EP]",0
 	        
 .path dc.b "jason brooke",0
@@ -38908,7 +40715,7 @@ p_earache
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_earache
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"EarAche             [EP]",0
 	        
 .path dc.b "earache",0
@@ -39003,7 +40810,7 @@ p_krishatlelid
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_krishatlelid
-	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Kris Hatlelid       [EP]",0
 	        
 .path dc.b "kris hatlelid",0
@@ -39085,7 +40892,7 @@ p_richardjoseph2
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_richardjoseph2
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Richard Joseph      [EP]",0
 	
 	        
@@ -39251,7 +41058,7 @@ p_aprosys
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_aprosys
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"AProSys             [EP]",0
 		        
 .path dc.b "aprosys",0
@@ -39295,7 +41102,7 @@ p_hippelst
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_hippelst
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Jochen Hippel ST    [EP]",0	        
 .path dc.b "jochen hippel st",0
  even
@@ -39484,7 +41291,7 @@ p_tcbtracker
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_tcbtracker
-.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse
+.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse!pf_quadscopeUps
 	dc.b	"TCBTracker (ST)     [EP]",0	        
 .path dc.b "tcb tracker",0
  even
@@ -39958,7 +41765,7 @@ p_maxtrax
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_maxtrax
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"MaxTrax             [EP]",0
 	        
 .path dc.b "maxtrax",0
@@ -40027,7 +41834,7 @@ p_wallybeben
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_wallybeben
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Wally Beben         [EP]",0
 	        
 .path dc.b "wally beben",0
@@ -40098,7 +41905,7 @@ p_synthpack
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_synthpack
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Synth Pack          [EP]",0
 	        
 .path dc.b "synth pack",0
@@ -40148,7 +41955,7 @@ p_robhubbard
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_robhubbard
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Rob Hubbard         [EP]",0
 .path dc.b "rob hubbard",0
  even
@@ -40202,7 +42009,7 @@ p_jeroentel
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_jeroentel
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Jeroen Tel          [EP]",0
 .path dc.b "jeroen tel",0
  even
@@ -40275,7 +42082,7 @@ p_sonix
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_sonix
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Sonix Music Driver  [EP]",0
 .path dc.b "sonix music driver",0
  even
@@ -40417,7 +42224,7 @@ p_quartetst
 	jmp .id_quartet_st(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_quartetst
-.flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus
+.flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus!pf_scope!pf_quadscopeUps
 	dc.b	"Quartet ST          [EP]",0
 .path dc.b "quartet st",0
  even
@@ -40978,7 +42785,7 @@ p_soundcontrol
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_soundcontrol
-.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
 	dc.b	"SoundControl        [EP]",0
 	        
 .path dc.b "soundcontrol",0
@@ -41034,7 +42841,7 @@ p_themusicalenlightenment
 	jmp .id(pc)
 	jmp	deliAuthor(pc)
 	dc  pt_themusicalenlightenment
-.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse
+.flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_quadscopeUps
 	dc.b	"The Musical Enlighte[EP]",0
 	        
 .path dc.b "tme",0
@@ -41169,7 +42976,7 @@ p_timfollin2
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_timfollin2
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+ dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopePoke
 	dc.b	"Tim Follin          [EP]",0
 	        
 .path dc.b "tim follin ii",0
@@ -41244,7 +43051,7 @@ p_jasonpage
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_jasonpage
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
 	dc.b	"Jason Page          [EP]",0
 	        
 .path dc.b "jason page",0
@@ -41325,7 +43132,7 @@ p_steveturner
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_steveturner
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
 	dc.b	"Steve Turner        [EP]",0
 	        
 .path dc.b "steve turner",0
@@ -41377,7 +43184,7 @@ p_specialfx
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_specialfx
-	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2
+	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
 	dc.b	"Special FX          [EP]",0
 	        
 .path dc.b "special fx",0
@@ -41762,7 +43569,7 @@ findDeliPlayer
 	beq.w	.fail
 	rts
 
-freeDeliPlayer
+freeDeliPlayer:
 	pushm	all
 	tst.l	deliPlayer(a5)
 	beq.b	.x
@@ -41843,7 +43650,7 @@ deliCallFunc
 *   d0: deliplayer or delicustom address from loadseg
 * out:
 *   d0: 0=all ok, negative ier_-code otherwise
-deliInit
+deliInit:
 	pushm	d1-a6	
 	DPRINT	"deliInit 0x%lx"
 	move.l	d0,deliPlayer(a5)
@@ -41950,7 +43757,7 @@ deliInit
 	bsr.w	deliGetTag
 	beq.b	.noPattInit
 	bsr.w	deliCallFunc
-	move.l	a0,deliPatternInfo(a5)	
+	move.l	a0,deliPatternInfo(a5)
 .noPattInit
 
 	move.l	#EP_Flags,d0
@@ -41968,6 +43775,17 @@ deliInit
 	bne.w	.extLoadError
 .noExtLoad
 
+	move.l	#EP_StructInit,d0
+	bsr.w	deliGetTag
+	beq.b	.noUPS
+	bsr.w	deliCallFunc	
+	move.l	a0,deliUPSStruct(a5)
+	;beq.w	.noUPS
+	;move.l	playerbase(a5),a0
+	;or	#pf_scope!pf_quadscopeUps,p_liput(a0)
+;	DPRINT	"Quadscope supported"
+.noUPS
+ 
 	move.l	#DTP_InitPlayer,d0  
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc	
@@ -42294,7 +44112,7 @@ deliPlay
 	popm	a4/a5/a6
 	rts
 
-deliEnd
+deliEnd:
 	pushm	d1-a6
 	DPRINT	"deliEnd"
 	
@@ -42315,6 +44133,10 @@ deliEnd
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
 	
+	move.l	#EP_StructEnd,d0  
+	bsr.w	deliGetTag
+	bsr.w	deliCallFunc
+
 	bsr.w	clearsound
 
 	move.l	#EP_EjectPlayer,d0
@@ -42654,7 +44476,7 @@ deliAllocAudio
 	pushm	d1-a6
 	lea	var_b,a5
 	* returns d0=0 on success:
-	bsr	varaa_kanavat 
+	jsr	varaa_kanavat 
 	popm	d1-a6
 	rts
 
@@ -42662,7 +44484,7 @@ deliFreeAudio
 	DPRINT	"deliAudioFree"
 	pushm	d1-a6
 	lea	var_b,a5
-	bsr	vapauta_kanavat
+	jsr	vapauta_kanavat
 	popm	d1-a6
 	rts
 
@@ -42862,7 +44684,7 @@ eagleJumpTableEnd
 
 funcENPP_ClearCache
 	;DPRINT "ENPP_ClearCache"
-	bra.w clearCpuCaches
+	jmp clearCpuCaches
 funcENPP_GetListData
 	bra.w	deliGetListData
 funcENPP_LoadFile
@@ -42890,7 +44712,7 @@ funcENPP_SetTimer
 	jmp dtg_SetTimer(a5)
 funcENPP_WaitAudioDMA
 	;DPRINT "ENPP_WaitAudioDMA"
-	bra dmawait
+	jmp dmawait
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange"
 	bra.w	deliModuleChange
@@ -42901,68 +44723,167 @@ funcENPP_FreeAmigaAudio
 	;DPRINT "ENPP_FreeAmigaAudio"
 	bra.w deliFreeAudio
 
+* Sequence (kpl14.s):
+* - Stop channel DMAs
+* - Set sample start and sample length
+* - Large DMA wait
+* - Enable channel DMAs
+* - Small DMA wait
+* - Set loopstart and replen for enabled channels
+
+* Sequence (noteplayer):
+* - Stop channel DMAs, ENPP_DMAMask
+* - Set sample:
+*   - ENPP_PokeAdr, ENPP_PokeLen
+*   - ENPP_PokeVol, ENPP_PokePer
+* - Start channel DMAs, ENPP_DMAMask
+* - Set sample loop:
+*   - ENPP_PokeAdr, ENPP_PokeLen
+
+* In:
+*   d0 = negative: enable DMA, positive: disable DMA
+*   d1 = DMA audio flags %abcd
 funcENPP_DMAMask
+	;move	#$f00,$dff180
+
 	push	d1
-	tst		d0
-	bpl.b	.set2
-	or		#$8000,d1
-.set2
+	tst	d0
+	bpl.b	.clr
+	or	#$8000,d1
 	move	d1,$dff096
-	bsr	dmawait
+;	* Set scope trigger bits
+	or.b	d1,scopeData+scope_trigger+var_b
+	jsr	dmawait
 	pop 	d1
 	rts
 
+.clr
+	move	d1,$dff096
+	not.b	d1
+	* Clear scope trigger bits
+	and.b	d1,scopeData+scope_trigger+var_b
+	jsr	dmawait
+	pop 	d1
+	rts
+
+* In:
+*   d0 = address
+*   d1 = channel 0..3
 funcENPP_PokeAdr
-	pushm	d2/a0
-	lea	$dff0a0,a0
-	moveq	#3,d2
-	and		d1,d2
-	lsl		#4,d2
-	add		d2,a0
-	move.l	d0,(a0)
-	popm	d2/a0
-	rts
-
-funcENPP_PokeLen
-	pushm	d2/a0
-	lea	$dff0a0,a0
-	moveq	#3,d2
-	and		d1,d2
-	lsl		#4,d2
-	add		d2,a0
-	tst		d0
-	bne.b	.nozero
-	moveq	#1,d0
-.nozero
-	move	d0,4(a0)
-	popm	d2/a0
-	rts
-
-funcENPP_PokePer
-	pushm	d2/a0
-	lea	$dff0a0,a0
-	moveq	#3,d2
-	and		d1,d2
-	lsl		#4,d2
-	add		d2,a0
-	move	d0,6(a0)
-	popm	d2/a0
-	rts
-
-funcENPP_PokeVol
-	pushm	d2/a0
-	lea	$dff0a0,a0
+	pushm	d2/d3/a0/a1
 	moveq	#3,d2
 	and	d1,d2
 	lsl	#4,d2
-	add	d2,a0
-;	mulu	dtg_SndVol(a5),d0
-	mulu	mainvolume+var_b,d0
-	lsr	#6,d0
-	move	d0,8(a0)
-	popm	d2/a0
+	lea	$dff0a0,a0
+	move.l	d0,(a0,d2)
+
+	* Set sample start if DMA is not enabled,
+	* otherwise set loopstart
+ 	lea	var_b,a0
+ 	move	#pf_quadscopePoke,d3
+ 	move.l	playerbase(a0),a1
+ 	and	p_liput(a1),d3
+ 	beq.b	.2
+
+	lea	scopeData(a0),a0
+	moveq	#1,d3
+	lsl	d1,d3
+	and.b	scope_trigger(a0),d3
+	bne.b	.1
+	move.l	d0,ns_start+scope_ch1(a0,d2)
+.1
+	move.l	d0,ns_loopstart+scope_ch1(a0,d2)
+.2
+	popm	d2/d3/a0/a1
+	rts
+	
+* In:
+*   d0 = length
+*   d1 = channel 0..3
+funcENPP_PokeLen
+	pushm	d2/d3/a0/a1
+	moveq	#3,d2
+	and	d1,d2
+	lsl	#4,d2
+	tst	d0
+	bne.b	.nozero
+	moveq	#1,d0
+.nozero
+	lea	$dff0a0,a0
+	move	d0,4(a0,d2)
+
+ 	* Set sample len if DMA is not enabled,
+	* otherwise set looplen
+ 	lea	var_b,a0
+ 	move	#pf_quadscopePoke,d3
+ 	move.l	playerbase(a0),a1
+ 	and	p_liput(a1),d3
+ 	beq.b	.2
+
+	lea	scopeData(a0),a0
+	moveq	#1,d3
+	lsl	d1,d3
+	and.b	scope_trigger(a0),d3
+	bne.b 	.1
+	move	d0,ns_length+scope_ch1(a0,d2)
+.1
+	move	d0,ns_replen+scope_ch1(a0,d2)
+.2
+	popm	d2/d3/a0/a1
 	rts
 
+* In:
+*   d0 = period
+*   d1 = channel 0..3
+funcENPP_PokePer
+	pushm	d2/d3/a0/a1
+	moveq	#3,d2
+	and	d1,d2
+	lsl	#4,d2
+	lea	$dff0a0,a0
+	move	d0,6(a0,d2)
+
+	lea	var_b,a0
+ 	move	#pf_quadscopePoke,d3
+ 	move.l	playerbase(a0),a1
+ 	and	p_liput(a1),d3
+ 	beq.b	.1
+
+	lea	scopeData(a0),a0
+	move	d0,ns_period(a0,d2)
+.1
+	popm	d2/d3/a0/a1
+	rts
+
+* In:
+*   d0 = volume
+*   d1 = channel 0..3
+funcENPP_PokeVol
+	pushm	d2/d3/a0/a1
+	moveq	#3,d2
+	and	d1,d2
+	lsl	#4,d2
+	mulu	mainvolume+var_b,d0
+	lsr	#6,d0
+	lea	$dff0a0,a0
+	move	d0,8(a0,d2)
+
+ 	lea	var_b,a0
+ 	move	#pf_quadscopePoke,d3
+ 	move.l	playerbase(a0),a1
+ 	and	p_liput(a1),d3
+ 	beq.b	.1
+
+	lea	scopeData(a0),a0
+	CLAMPVOL d0
+	move	d0,ns_tempvol(a0,d2)
+.1
+	popm	d2/d3/a0/a1
+	rts
+
+* In:
+*   d0 = command
+*   d1 = parameter
 funcENPP_PokeCommand
 	;DPRINT "ENPP_PokeCommand"
 	cmp.b	#1,d0 
@@ -43908,6 +45829,11 @@ deliShowNoteStruct
 
  endif
 
+****************************************************************************
+*
+* File load and save utilities
+*
+***************************************************************************
 
 * Loads a file
 * in:
@@ -44003,6 +45929,723 @@ plainSaveFile
 	popm	d1-a6 
 	rts
 
+***************************************************************************
+*
+* Frequency spectrum scope
+* Integer FFT
+*
+***************************************************************************
+
+  ifne FEATURE_SPECTRUMSCOPE
+spectrum:
+
+	incdir
+	include	"hippo_fft.s"
+
+; Length of the mixed data, to be passed to FFT
+MIX_LENGTH = FFT_LENGTH
+
+; Sample data bytes to be copied. Should be enough so that mixing
+; process has enough data, as it interpolates according to current
+; channel period. 
+; For HIPC.WingsOfDeath (Level 1) this buffer is not long enough
+; so either make it larger or do range check using mask.
+SAMPLE_LENGTH = MIX_LENGTH*2
+SAMPLE_LENGTH_MASK = 255
+
+ if SAMPLE_LENGTH<>256
+   fail "Assumed to be 256"
+ endif
+
+spectrumInitialize
+	SDPRINT	"Spectrum init"
+
+VOLUME_TABLE_LEN = $40*$100*2
+MULU_TABLE_LEN = SCOPE_DRAW_AREA_HEIGHT_DEFAULT*2
+EXP_TABLE_LEN = SCOPE_DRAW_AREA_HEIGHT_DEFAULT
+SINE_TABLE_LEN = 1024*2
+
+SPECTRUM_TOTAL set VOLUME_TABLE_LEN+MULU_TABLE_LEN+EXP_TABLE_LEN*4+SINE_TABLE_LEN
+SPECTRUM_TOTAL set SPECTRUM_TOTAL+4*SAMPLE_LENGTH ; bytes
+SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
+
+	clr.b	s_spectrumInitialized(a4)
+
+	move.l	#SPECTRUM_TOTAL,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	jsr	getmem
+	move.l	d0,s_spectrumMemory(a4)
+	beq.b	.x
+	move.l	d0,a0
+	move.l	a0,s_spectrumVolumeTable(a4)
+	add.l	#VOLUME_TABLE_LEN,a0
+	move.l	a0,s_spectrumMuluTable(a4)
+	add	#MULU_TABLE_LEN,a0
+	move.l	a0,s_spectrumExpTable(a4)
+	add	#EXP_TABLE_LEN*4,a0
+	move.l	a0,s_spectrumSineTable(a4)
+	add	#SINE_TABLE_LEN,a0
+	move.l	a0,s_spectrumChannel1(a4)
+	add	#SAMPLE_LENGTH,a0
+	move.l	a0,s_spectrumChannel2(a4)
+	add	#SAMPLE_LENGTH,a0
+	move.l	a0,s_spectrumChannel3(a4)
+	add	#SAMPLE_LENGTH,a0
+	move.l	a0,s_spectrumChannel4(a4)
+	add	#SAMPLE_LENGTH,a0
+	move.l	a0,s_spectrumMixedData(a4)
+	add	#FFT_LENGTH*2,a0
+	move.l	a0,s_spectrumImagData(a4)
+
+	bsr.w	prepareSpectrumSineTable
+	beq.b	.x
+	bsr.b	prepareSpectrumVolumeTable
+	bsr.w	prepareSpectrumMuluTable
+	bsr.w	prepareSpectrumExpTable
+
+	st	s_spectrumInitialized(a4)
+	moveq	#1,d0
+	rts
+	
+.x	SDPRINT 	"Spectrum init failed"
+	moveq	#0,d0
+	rts
+
+
+spectrumUninitialize
+	SDPRINT	"Spectrum uninit"
+	clr.b	s_spectrumInitialized(a4)
+	move.l	s_spectrumMemory(a4),a0
+	clr.l	s_spectrumMemory(a4)
+	jsr	freemem
+	rts
+
+prepareSpectrumVolumeTable
+	move.l	s_spectrumVolumeTable(a4),a0
+	moveq	#0,d0
+.v
+	moveq	#0,d1
+.byte
+	move	d1,d2
+	ext	d2
+	muls	d0,d2
+	; Here could do some scaling if needed to suit the graph
+	move	d2,(a0)+
+
+	addq	#1,d1
+	cmp	#256,d1
+	bne.b	.byte
+
+	addq	#1,d0
+	cmp	#64,d0
+	bne.b	.v
+	moveq	#1,d0
+	rts
+
+; in:
+;    d0 = volume
+; out:
+;    a2 = table
+getSpectrumVolumeTable
+	CLAMPVOL d0
+	tst	d0
+	bne.b	.1
+	moveq	#1,d0
+.1	subq	#1,d0
+	lsl	#8,d0
+	add	d0,d0
+	move.l	s_spectrumVolumeTable(a4),a2
+	add	d0,a2
+	rts
+
+prepareSpectrumMuluTable
+	move.l	s_spectrumMuluTable(a4),a0
+	moveq	#0,d0
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d1
+.l	move	d0,(a0)+
+	add	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,d0
+	dbf	d1,.l
+	moveq	#1,d0
+	rts
+
+
+; Creates a table to for mapping FFT magnitudes into dB levels.
+; Magnitude for each value would be: sqr(real^2+image^2)
+; Maximum value for real or image is 0x7fff.
+; The end result is such that low frequencies visually not overpowering
+; and the graph is more even between frequencies.
+
+prepareSpectrumExpTable
+	move.l	s_spectrumExpTable(a4),a2
+
+	; Do this:
+	; local s, i; s = 0; for (i = 0; i < 64; i++, s=s-0.15) print(0x7fff*exp(s));
+
+	move.l	#1000,d0
+	lore	FFP,SPFlt
+	move.l	d0,d2
+	* Adjust exponential curve shape:
+	;move.l	#155,d0
+	move.l	#160,d0
+	lob	SPFlt
+	move.l	d2,d1
+	lob	SPDiv
+	move.l	d0,d5
+	
+	moveq	#EXP_TABLE_LEN-1,d7
+	moveq	#FFP_zero,d6
+.loop
+	move.l	d6,d0
+	lore	MT,SPExp
+	move.l 	#FFP_7fff,d1
+	lore	FFP,SPMul
+	* Squared:
+	move.l	d0,d1
+	lob	SPMul
+	lob	SPFix
+	move.l	d0,(a2)+
+
+	move.l	d6,d0
+	move.l	d5,d1
+	lob	SPSub
+	move.l	d0,d6
+	dbf	d7,.loop
+
+	move.l	s_spectrumExpTable(a4),a2
+	moveq	#EXP_TABLE_LEN-1-1,d7
+	* Calculate averages
+	addq.l	#4,a2
+.loop2
+	move.l	(a2),d0
+	add.l	-4(a2),d0
+	lsr.l	#1,d0
+	move.l	d0,-4(a2)
+	addq.l	#4,a2
+	dbf	d7,.loop2
+	rts
+ 
+
+; Calculate loudness values for the FFT
+;
+;in:
+; a0 = result array reals
+; a1 = result array imaginary
+;out:
+; a0 = result (overwritten input array)
+
+loudnessFFT
+	move.l	s_spectrumExpTable(a4),a3	
+	moveq	#FFT_LENGTH/2-1,d7
+.l1
+	* calculate re^2 + im^2
+	move	(a0),d0
+	muls	d0,d0
+	move	(a1)+,d1
+	muls	d1,d1
+	add.l	d1,d0
+
+	* find the slot in the table where the value lands
+	move.l	a3,a2
+	moveq	#EXP_TABLE_LEN-1,d5
+	* this loop is run 4096 times :-O
+.l2
+	cmp.l	(a2)+,d0
+	dbhi	d5,.l2
+
+	* use the DBcc value directly, neat
+	addq	#1,d5	
+	move	d5,(a0)+
+
+	dbf	d7,.l1
+	rts
+
+
+* Precalculated FFP constants
+FFP_2PIper1024 	= $c90fdb39 * 2PI divided by 1024
+FFP_7fff 	= $fffe004f
+FFP_zero        = 0
+
+* This calculates a 1024 entry sine table with 16-bit
+* range.
+prepareSpectrumSineTable
+	move.l	_FFPBase(a5),d6
+	move.l	_MTBase(a5),d5
+
+	move.l	s_spectrumSineTable(a4),a2
+ 
+	* D4 = multiplier 
+	* D3 = step
+	* D2 = current
+
+	moveq	#FFP_zero,d2
+	move.l	#FFP_2PIper1024,d3
+	move.l	#FFP_7fff,d4
+
+	move	#1024-1,d7
+.loop
+	move.l	d2,d0
+	move.l	d5,a6
+	lob	SPSin
+	move.l	d4,d1
+	move.l	d6,a6
+	lob	SPMul
+	lob	SPFix
+	move	d0,(a2)+
+
+	move.l	d2,d0
+	move.l	d3,d1
+	lob	SPAdd
+	move.l	d0,d2
+
+	dbf	d7,.loop   
+
+	moveq	#1,d0
+	rts
+
+runSpectrumScope
+	tst.b	s_spectrumInitialized(a4)
+	beq.w	.x
+
+	cmp	#pt_multi,playertype(a5)
+	beq.b	.ps3m
+	cmp	#pt_sample,playertype(a5)
+	beq.b	.sample
+	bra.b	.normal
+
+.ps3m
+	bsr	spectrumGetPS3MSampleData
+	bra.b	.go
+.sample
+	bsr	spectrumGetSampleData
+	bra.b	.go
+.normal
+	bsr.w	spectrumCopySamples
+	bsr.w	spectrumMixSamples
+.go
+	move.l	s_spectrumMixedData(a4),a0
+	move.l	s_spectrumSineTable(a4),a2
+	bsr.w	windowFFT
+
+	move.l	s_spectrumMixedData(a4),a0
+	move.l	s_spectrumImagData(a4),a1
+	move.l	s_spectrumSineTable(a4),a2
+	bsr.w	sampleFFT
+		
+	move.l	s_spectrumMixedData(a4),a0
+	move.l	s_spectrumImagData(a4),a1
+	bsr	loudnessFFT
+
+	bsr.w	drawFFT
+	
+	* Vertical fill
+	lore	GFX,OwnBlitter
+
+	move.l	s_draw1(a4),a0
+	;addq	#2,a0 * horiz offset
+	;moveq	#2,d0 * modulo
+	moveq	#0,d0 * modulo
+	lea	40(a0),a1 * target is one line below
+	lea	$dff000,a2
+
+	lob	WaitBlit
+	move.l	a0,$50(a2)	* A
+	move.l	a1,$48(a2)	* C
+	move.l	a1,$54(a2)	* D
+	move	d0,$60(a2)	* C
+	move	d0,$64(a2)	* A
+	move	d0,$66(a2)	* D
+	move.l	#-1,$44(a2) * masks
+	move.l	#$0b5a0000,$40(a2)	* D = A not C
+	* Height: 65 px
+	* Width 19*16 = 304 px
+	;move	#65*64+19,$58(a2)
+	move	#65*64+20,$58(a2)
+
+	jsr	_LVODisownBlitter(a6)
+
+.x
+	rts
+
+
+
+spectrumCopySamples
+	push	a4
+	move.l	a4,a6
+	lea	scopeData+scope_ch1(a5),a3
+	move.l	s_spectrumChannel1(a6),a4
+	bsr.b	.copySample
+	lea	scopeData+scope_ch2(a5),a3
+	move.l	s_spectrumChannel2(a6),a4
+	bsr.b	.copySample
+	lea	scopeData+scope_ch3(a5),a3
+	move.l	s_spectrumChannel3(a6),a4
+	bsr.b	.copySample
+	lea	scopeData+scope_ch4(a5),a3
+	move.l	s_spectrumChannel4(a6),a4
+	bsr.b	.copySample
+	pop	a4
+	rts
+
+* in
+*   a3 = scope channel block
+*   a4 = sample data destination buffer
+.copySample
+	; Destination buffer
+	;lea	channelData(a3),a4
+	
+	tst	ns_period(a3)
+	beq.b	.empty
+	tst	ns_tempvol(a3)
+	beq.b	.empty
+	tst.l	ns_loopstart(a3) * Always check these to avoid
+	beq.b	.empty			 * enforcer hits!
+	move.l	ns_start(a3),d0
+	bne.b	.jolt
+
+.empty
+	; empty sample
+;	moveq	#0,d0
+;	rept	SAMPLE_LENGTH/4
+;	move.l	d0,(a4)+
+;	endr
+	moveq	#SAMPLE_LENGTH/4/8-1,d1
+	moveq	#0,d0
+.c
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	move.l	d0,(a4)+
+	dbf	d1,.c
+	rts
+
+.jolt	
+	cmp.l	#1024,d0
+	blo.b	.empty
+	
+	move.l	ns_loopstart(a3),d1
+	cmp.l	#1024,d1
+	blo.b	.empty
+
+	move.l	d0,a1			* Sample start
+	move	ns_length(a3),d5	* Sample length
+	move	ns_replen(a3),d0
+.d
+	; see if enough data to copy all in one block
+	cmp	#SAMPLE_LENGTH/2,d5
+	bhs.b	.large
+	; sample length 2, ie. empty sample?
+	cmp	#2,d5
+	bls.b	.empty
+	
+	; this loop is active when there is some data to be copied
+	moveq	#SAMPLE_LENGTH/2-1,d7	* words to copy
+.small
+	; sample word
+	; source pointer can be odd
+	move.b	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+
+	
+	subq	#1,d5			* one word copied, check length
+	bpl.b	.l
+
+	cmp	#2,d0
+	bls.b	.emptyRepeat
+
+	; sample repeat	starts
+	; repeat length
+	move	d0,d5
+	; repeat data start
+	move.l	d1,a1
+.l
+	dbf	d7,.small		* Loop..
+	rts
+
+.emptyRepeat
+.er	clr	(a4)+
+	dbf	d7,.er
+	rts
+
+
+.large
+	moveq	#SAMPLE_LENGTH/4/4-1,d0
+.c2	
+ rept 4
+	move.b	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+
+	move.b	(a1)+,(a4)+	
+ endr
+	dbf	d0,.c2
+
+;	rept	SAMPLE_LENGTH/4
+;	move.b	(a1)+,(a4)+
+;	move.b	(a1)+,(a4)+
+;	move.b	(a1)+,(a4)+
+;	move.b	(a1)+,(a4)+	
+;	endr
+	rts
+
+
+; in:
+;    d0 = period
+; out:
+;    d1 = 8+8 fixed point sample skip value ff000000aa, ff = fractions
+calcSampleStep
+	* sanity check, 100 corresponds to about 35 kHz
+	cmp	#100,d0
+	bhs.b .1
+	moveq	#100,d0
+.1
+	move.l	#3546895,d1	* PAL clock
+	divu	d0,d1		* playback frequency in hertz
+	ext.l	d1
+	lsl.l	#8,d1
+	divu	#8000,d1	* resampling destination frequency
+	;divu	#16000,d1	* resampling destination frequency
+	;divu	#20000,d1	* resampling destination frequency
+	;divu	#24000,d1	* resampling destination frequency
+	;divu	#28000,d1	* resampling destination frequency
+	ext.l	d1
+	ror.l	#8,d1
+
+	; 8000 dest frequency means that the FFT scale goes
+	; from 0 to 4000.
+	rts
+
+
+
+spectrumMixSamples
+	lea	scopeData+scope_ch1(a5),a1
+	move.l	s_spectrumChannel1(a4),a0
+	moveq	#1,d4
+	bsr.b	.mixSample
+
+	lea	scopeData+scope_ch2(a5),a1
+	move.l	s_spectrumChannel2(a4),a0
+	moveq	#0,d4
+	bsr.b	.mixSample
+
+	lea	scopeData+scope_ch3(a5),a1
+	move.l	s_spectrumChannel3(a4),a0
+	moveq	#0,d4
+	bsr.b	.mixSample
+
+	lea	scopeData+scope_ch4(a5),a1
+	move.l	s_spectrumChannel4(a4),a0
+	moveq	#0,d4
+	;bsr.b	.mixSample
+	;rts
+
+.mixSample
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	; out: a2 = voltab
+
+	move	ns_period(a1),d0
+	bsr.b	calcSampleStep
+	; result in d1
+
+	move.l	s_spectrumMixedData(a4),a1
+
+	moveq	#0,d6
+	moveq	#0,d0
+	move	#SAMPLE_LENGTH_MASK,d3
+	moveq	#MIX_LENGTH/2-1,d7
+	
+	* Copy or add?
+	tst	d4
+	beq.b	.add
+.m1
+	; move to buffer (first set)
+	rept	2
+	; sample byte
+	moveq	#0,d5
+	move.b	(a0,d0.w),d5
+	; volume scaled byte
+	add	d5,d5
+	; copy
+	move.w	(a2,d5.w),(a1)+
+
+	; next source sample
+	add.l	d1,d0
+	addx.w	d6,d0
+	; safety: keep offset within data buffer
+	and	d3,d0
+	endr
+
+	dbf	d7,.m1
+	rts
+.add
+; add to buffer
+.m2
+	rept	2
+	; sample byte
+	moveq	#0,d5
+	move.b	(a0,d0.w),d5
+	; volume scaled byte
+	add	d5,d5
+	move.w	(a2,d5.w),d4
+	; add to mix buffer
+	add.w	d4,(a1)+
+
+	; next source sample
+	add.l	d1,d0
+	addx.w	d6,d0
+	; safety: keep offset within data buffer
+	and	d3,d0
+	endr
+	dbf	d7,.m2
+	rts
+
+
+drawFFT
+	; FFT data is here.
+	; The other half is mirror of the first.
+	move.l	s_spectrumMixedData(a4),a0
+	move.l	s_draw1(a4),a1
+	move.l	s_spectrumMuluTable(a4),a2
+
+
+;%11111000 00000000 ror #5
+;%00000111 11000000 ror #5
+;%00000000 00111110 ror #5
+;%11110000 00000001 ror #8
+;%00000001 11110000
+
+	; Bitmask to draw with
+	move	#%0111100000000000,d6
+	; Bitmask to detect word boundary collisions
+	move	#%1111100000000000,d5
+
+	; Take the 1st half
+	moveq	#FFT_LENGTH/2-1,d7
+.loop
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
+	sub	(a0)+,d0
+	bpl.b	.1
+	moveq	#0,d0
+.1	add	d0,d0 
+	move	(a2,d0),d0
+	* Draw bits
+	or.w	d6,(a1,d0)
+
+	* Shift bit mask
+	ror.w 	#5,d6
+	* Shift also this and see if should continue to following word
+	ror.w	#5,d5
+	bmi.b	.2
+	
+	dbf	d7,.loop
+.x	rts		
+
+.2
+	* Draw data point which is split between words
+	subq	#1,d7
+	bmi.b	.x
+	
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
+	sub	(a0)+,d0
+	bpl.b	.3
+	moveq	#0,d0
+.3	add	d0,d0 
+	move	(a2,d0),d0
+
+	* Bits that go into the 2nd byte
+	or.b	d6,1(a1,d0)
+	* Bits that go into the 3rd
+	move	d6,d4
+	ror.w	#8,d4
+	or.b	d4,2(a1,d0)
+	* Moving on to next 16 pixels
+	addq.l	#2,a1
+
+	ror.w	#5,d5
+	ror.w 	#5,d6
+	dbf	d7,.loop
+	rts
+
+spectrumGetPS3MSampleData
+	move.l	ps3m_playpos(a5),a0
+	move.l	(a0),d0
+	lsr.l	#8,d0
+	move.l	ps3m_buffSizeMask(a5),a0
+	move.l	(a0),d1
+
+	move.l	ps3m_buff1(a5),a0
+	move.l	(a0),a0
+	move.l	ps3m_buff2(a5),a1
+	move.l	(a1),a1
+	
+	move.l	s_spectrumMixedData(a4),a2
+	moveq	#FFT_LENGTH-1,d7
+.loop
+	move.b	(a0,d0.l),d2
+	move.b	(a1,d0.l),d3
+	ext	d2
+	ext	d3
+	add	d3,d2
+	asl	#4,d2   * scaling!
+	move	d2,(a2)+
+	addq	#1,d0
+	and	d1,d0
+	dbf	d7,.loop
+
+	rts
+
+spectrumGetSampleData
+	jsr	samples0
+	* d5 = follow offset
+	* d4 = buffer size mask
+
+	move.l	s_spectrumMixedData(a4),a3
+	moveq	#FFT_LENGTH/2-1,d7
+
+	move.l	samplepointer(a5),a1
+	move.l	(a1),a1
+	
+	tst.b	samplestereo(a5)
+	bne.b	.stereo
+
+	* mono	
+.mloop
+	move.b	(a1,d5.l),d2
+	ext	d2
+	asl	#5,d2 * scale
+	move	d2,(a3)+
+	
+	addq.l	#1,d5
+	cmp.l	d4,d5
+	bne.b	.1
+	moveq	#0,d5
+.1
+	dbf	d7,.mloop
+	rts
+
+.stereo
+	move.l	samplepointer2(a5),a2
+	move.l	(a2),a2
+.sloop
+	move.b	(a1,d5.l),d2
+	move.b	(a2,d5.l),d3
+	ext	d2
+	ext	d3
+	add	d3,d2
+	asl	#4,d2 * scale
+	move	d2,(a3)+
+
+	addq.l	#1,d5
+	cmp.l	d4,d5
+	bne.b	.2
+	moveq	#0,d5
+.2
+	dbf	d7,.sloop
+	rts
+
+  endif ; FEATURE_SPECTRUMSCOPE
 
 *******************************************************************************
 * Playereit‰
@@ -44016,15 +46659,17 @@ kplayer		incbin	kpl
 fimp_decr	incbin	fimp_dec.bin
 shr_decr	include	ShrinklerDecompress.s
 
-xpkname		dc.b	"xpkmaster.library",0
-ppname		dc.b	"powerpacker.library",0
-medplayername1	dc.b	"medplayer.library",0
-medplayername2	dc.b	"octaplayer.library",0
-medplayername3	dc.b	"octamixplayer.library",0
-sidname		dc.b	"playsid.library",0
-mlinename	dc.b	"mline.library",0
-xfdname		dc.b	"xfdmaster.library",0
- even
+xpkname         dc.b    "xpkmaster.library",0
+ppname          dc.b    "powerpacker.library",0
+medplayername1  dc.b    "medplayer.library",0
+medplayername2  dc.b    "octaplayer.library",0
+medplayername3  dc.b    "octamixplayer.library",0
+sidname         dc.b    "playsid.library",0
+mlinename       dc.b    "mline.library",0
+xfdname         dc.b    "xfdmaster.library",0
+_MTName         dc.b    "mathtrans.library",0
+_FFPName        dc.b    "mathffp.library",0
+                even
 
 	section	plrs,data
 
@@ -44145,7 +46790,8 @@ quadsiz	dc	340,85
 	dc.l	wflags3
 	dc.l	0
 	dc.l	0	
-quadtitl dc.l	.t
+;quadtitl
+	dc.l	.t
 	dc.l	0
 	dc.l	0	
 	dc	0,0	* min x,y
@@ -44198,92 +46844,207 @@ sivu6		include	gadgets/prefs_sivu6.s
 * the data was not exactly same as the original, creating extra stuff
 * and other odd things, so I copy-pasted the new bit here.
 
-prefsFavorites dc.l prefsTooltips
+prefsFavorites dc.l prefsSaveState
        dc.w 406,121,28,12,3,1,1
-       dc.l prefsFavoritesgr,0,prefsFavoritest,0,0
+       dc.l 0
+       dc.l 0,prefsFavoritest,0,0
        dc.w 0
        dc.l 0
-prefsFavoritesgr       dc.w 0,0
-       dc.b 2,0,1,3
-       dc.l prefsFavoritesxy,prefsFavoritesgr2
-prefsFavoritesxy       dc.w 0,11
-       dc.w 0,0
-       dc.w 27,0
-prefsFavoritesgr2      dc.w 0,0
-       dc.b 1,0,1,3
-       dc.l prefsFavoritesxy2,0
-prefsFavoritesxy2      dc.w 27,1
-       dc.w 27,11
-       dc.w 1,11
 prefsFavoritest        dc.b 1,0,1,0
        dc.w -146,2
-       dc.l 0,prefsFavoritestx,prefsFavoritest2
+       dc.l 0,prefsFavoritestx,0
 prefsFavoritestx       dc.b "Favorite modules..",0
        even
-prefsFavoritest2       dc.b 1,0,1,0
-       dc.w 0,0
-       dc.l 0,0,0
 
-
+* "Save state" button
+prefsSaveState
+       dc.l 0
+       dc.w 406,121-42,28,12,3,1,1
+       dc.l 0
+       dc.l 0,prefsSaveStatet,0,0
+       dc.w 0
+       dc.l 0
+prefsSaveStatet        dc.b 1,0,1,0
+       dc.w -146,2
+       dc.l 0,prefsSaveStatetx,0
+prefsSaveStatetx  
+	     dc.b "Keep list on exit ",0
+       even
 
 * "Button tooltips" button copypasted from above, 
 * x-coordinates adjusted manually.
 
-prefsTooltips dc.l prefsSaveState
-       dc.w 406-192,121,28,12,3,1,1
-       dc.l prefsTooltipsgr,0,prefsTooltipst,0,0
+prefsTooltips dc.l prefsAltButtons
+       dc.w 214,107,28,12,3,1,1
+       dc.l 0
+       dc.l 0,prefsTooltipst,0,0
        dc.w 0
        dc.l 0
-prefsTooltipsgr       dc.w 0,0
-       dc.b 2,0,1,3
-       dc.l prefsTooltipsxy,prefsTooltipsgr2
-prefsTooltipsxy       dc.w 0,11
-       dc.w 0,0
-       dc.w 27,0
-prefsTooltipsgr2      dc.w 0,0
-       dc.b 1,0,1,3
-       dc.l prefsTooltipsxy2,0
-prefsTooltipsxy2      dc.w 27,1
-       dc.w 27,11
-       dc.w 1,11
 prefsTooltipst        dc.b 1,0,1,0
-       dc.w -146-52,2
-       dc.l 0,prefsTooltipstx,prefsTooltipst2
-prefsTooltipstx       dc.b "Button tooltips.........",0
+       dc.w -198,2
+       dc.l 0,prefsTooltipstx,0
+prefsTooltipstx 
+       dc.b "Button tooltips.........",0
        even
-prefsTooltipst2       dc.b 1,0,1,0
-       dc.w 0,0
-       dc.l 0,0,0
 
-
-* "Save state" button
-prefsSaveState
-	dc.l 0
-       dc.w 406,121-42,28,12,3,1,1
-       dc.l prefsSaveStategr,0,prefsSaveStatet,0,0
+prefsAltButtons 
+       dc.l prefsQuadraScope
+       dc.w 214,107+14,28,12,3,1,1
+       dc.l 0
+       dc.l 0,prefsAltButtonst,0,0
        dc.w 0
        dc.l 0
-prefsSaveStategr       dc.w 0,0
-       dc.b 2,0,1,3
-       dc.l prefsSaveStatexy,prefsSaveStategr2
-prefsSaveStatexy       dc.w 0,11
-       dc.w 0,0
-       dc.w 27,0
-prefsSaveStategr2      dc.w 0,0
-       dc.b 1,0,1,3
-       dc.l prefsSaveStatexy2,0
-prefsSaveStatexy2      dc.w 27,1
-       dc.w 27,11
-       dc.w 1,11
-prefsSaveStatet        dc.b 1,0,1,0
-       dc.w -146,2
-       dc.l 0,prefsSaveStatetx,prefsSaveStatet2
-prefsSaveStatetx  
-	     dc.b "Keep list on exit ",0
+prefsAltButtonst        dc.b 1,0,1,0
+       dc.w -198,2
+       dc.l 0,prefsAltButtonstx,0
+prefsAltButtonstx 
+      ;dc.b "Bizarre buttons.........",0
+      ;dc.b "Unconventional buttons..",0
+       dc.b "Big buttons.............",0
+
+prefsBarsText
+	dc.b	"Bars",0
+	even
+
+prefsQuadraScope 
+       dc.l prefsQuadraScopeBars
+       dc.w 406-70,51+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,.t2
+.tx
+       dc.b "Quadra",0
        even
-prefsSaveStatet2       dc.b 1,0,1,0
-       dc.w 0,0
-       dc.l 0,0,0
+.t2    
+       dc.b 1,0,1,0
+       dc.w -146+70,2-14
+       dc.l 0,.tx2,0
+.tx2	dc.b	 "Scopes:",0
+ even
+
+prefsQuadraScopeBars
+       dc.l prefsQuadraScopeF
+       dc.w 406,51+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,prefsBarsText,0
+
+
+prefsQuadraScopeF
+       dc.l prefsQuadraScopeFBars
+       dc.w 406-70,51+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "Fill quad",0
+       even
+
+prefsQuadraScopeFBars
+       dc.l prefsHippoScope
+       dc.w 406,51+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,prefsBarsText,0
+
+prefsHippoScope
+       dc.l prefsHippoScopeBars
+       dc.w 406-70,51+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "Hippo",0
+       even
+
+prefsHippoScopeBars
+       dc.l prefsPatternScope
+       dc.w 406,51+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,prefsBarsText,0
+
+
+prefsPatternScope
+       dc.l prefsPatternScopeXL
+       dc.w 406-70,51+14+14+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "Pattern",0
+       even
+ even
+
+prefsPatternScopeXL
+       dc.l prefsSpectrumScope
+       dc.w 406,51+14+14+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "XL",0
+ even
+
+prefsSpectrumScope
+       dc.l prefsSpectrumScopeBars
+       dc.w 406-70,51+14+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+70,2
+       dc.l 0,.tx,0
+.tx
+       dc.b "Spectrum",0
+       even
+
+prefsSpectrumScopeBars
+       dc.l 0
+       dc.w 406,51+14+14+14+14+14,28,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -40+4,2
+       dc.l 0,prefsBarsText,0
+
+
+
 
 
 ; Gadget
@@ -44343,25 +47104,27 @@ gadgetListModeChangeButtonImagePtr
 	dc.l 0
 
 * Rename the gadgets defined above to something not crazy
+* 1st row
 gadgetPlayButton 	EQU  button1
 gadgetInfoButton	EQU  button2
 gadgetStopButton	EQU  button3
 gadgetEjectButton	EQU  button4
 gadgetNextButton	EQU  button5
 gadgetPrevButton        EQU  button6
+gadgetForwardButton     EQU  kela2
+gadgetRewindButton      EQU  kela1
+gadgetNextSongButton    EQU  button12
+gadgetPrevSongButton    EQU  button13
+* 2nd row
 gadgetAddButton         EQU  button7
 gadgetDelButton         EQU  button8
 gadgetNewButton   	EQU  button11
-gadgetNextSongButton    EQU  button12
-gadgetPrevSongButton    EQU  button13
 gadgetPrefsButton	EQU  button20
 gadgetVolumeSlider	EQU  slider1
 gadgetFileSlider        EQU  slider4
 gadgetSortButton        EQU  lilb2
 gadgetMoveButton        EQU  lilb1 
 gadgetPrgButton         EQU  plg
-gadgetForwardButton     EQU  kela2
-gadgetRewindButton      EQU  kela1
 
 gadgetFileSliderInitialHeight = 67-16+2
 
@@ -44619,7 +47382,9 @@ asciitable
 
 	section	mini,data_c
 
+* 2 bitplane image, 96x66 pixels
 hippohead	incbin	gfx/hip.raw
+
 tickdata	dc	$001c,$0030,$0060,$70c0,$3980,$1f00,$0e00
 
 * 16x4 pixeli‰
@@ -44672,6 +47437,32 @@ nAMISKA5im
 	dc.l $00000020,$00200020,$00200020,$00200020,$7FE0FFC0,$80008000
 	dc.l $80008000,$80008000,$80000000,$00000000
 
+* Width: 11 pixels
+* Height: 9 pixels
+
+slider1imDouble
+	dc.l $00000020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $00200020
+	dc.l $7FE0FFC0
+
+
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80008000
+	dc.l $80000000
+	dc.l $00000000
+
+
 
 button1im	
 	dc	%1100000000000000				
@@ -44680,7 +47471,25 @@ button1im
 	dc	%1111111000000000				
 	dc	%1111110000000000				
 	dc	%1111000000000000				
+	dc	%1100000000000000				
+	dc	%0000000000000000				
+
+button1imDouble
+
+	dc	%1000000000000000				
+	dc	%1100000000000000				
 	dc	%1110000000000000				
+	dc	%1111000000000000				
+	dc	%1111100000000000				
+	dc	%1111110000000000				
+	dc	%1111111000000000				
+	dc	%1111111000000000				
+	dc	%1111110000000000				
+	dc	%1111100000000000				
+	dc	%1111000000000000				
+	dc	%1110000000000000				
+	dc	%1100000000000000				
+	dc	%1000000000000000				
 	dc	%0000000000000000				
 
 button2im
@@ -44694,6 +47503,26 @@ button2im
 	dc	%0111000000000000				
 	dc	%1111110000000000				
 
+button2imDouble
+	dc	%0000000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0000000000000000				
+	dc	%1111000000000000				
+	dc	%1111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%0111000000000000				
+	dc	%1111110000000000				
+	dc	%1111110000000000				
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+
 button3im
 	dc	%1111001111000000				
 	dc	%1111001111000000				
@@ -44702,6 +47531,24 @@ button3im
 	dc	%1111001111000000				
 	dc	%1111001111000000				
 	dc	%1111001111000000				
+	dc	%0000000000000000				
+
+button3imDouble
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%1111001111000000				
+	dc	%0000000000000000				
 	dc	%0000000000000000				
 
 button4im
@@ -44714,6 +47561,24 @@ button4im
 	dc	%1111111111110000				
 	dc	%0000000000000000				
 
+button4imDouble
+	dc	%0000000000000000				
+	dc	%0000011000000000				
+	dc	%0000111100000000
+	dc	%0001111110000000
+	dc	%0011111111000000				
+	dc	%0111111111100000				
+	dc	%1111111111110000				
+	dc	%1111111111110000				
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+	dc	%1111111111110000				
+	dc	%1111111111110000				
+	dc	%1111111111110000				
+	dc	%1111111111110000				
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+
 button5im
 	dc	%1100000110000011
 	dc	%1111000111100011
@@ -44723,7 +47588,25 @@ button5im
 	dc	%1111000111100011
 	dc	%1100000110000011
 	dc	%0000000000000000				
-	
+
+button5imDouble
+	dc	%1000000100000011
+	dc	%1100000110000011
+	dc	%1110000111000011
+	dc	%1111000111100011
+	dc	%1111100111110011
+	dc	%1111110111111011
+	dc	%1111111111111111
+	dc	%1111111111111111
+	dc	%1111110111111011
+	dc	%1111100111110011
+	dc	%1111000111100011
+	dc	%1110000111000011
+	dc	%1100000110000011
+	dc	%1000000100000011
+	dc	%0000000000000000					
+	dc	%0000000000000000				
+
 button6im
 	dc	%1100000110000011
 	dc	%1100011110001111
@@ -44733,7 +47616,25 @@ button6im
 	dc	%1100011110001111
 	dc	%1100000110000011
 	dc	%0000000000000000				
-		
+
+button6imDouble
+	dc	%1100000010000001
+	dc	%1100000110000011
+	dc	%1100001110000111
+	dc	%1100011110001111
+	dc	%1100111110011111
+	dc	%1101111110111111
+	dc	%1111111111111111
+	dc	%1111111111111111
+	dc	%1101111110111111
+	dc	%1100111110011111
+	dc	%1100011110001111
+	dc	%1100001110000111
+	dc	%1100000110000011
+	dc	%1100000010000001
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+
 button12im
 	dc	%1100000110000000
 	dc	%1111000110000000
@@ -44743,7 +47644,25 @@ button12im
 	dc	%1111000110000000
 	dc	%1100000110000000
 	dc	%0000000000000000
-	
+
+button12imDouble
+	dc	%1000000110000000
+	dc	%1100000110000000
+	dc	%1110000110000000
+	dc	%1111000110000000
+	dc	%1111100110000000
+	dc	%1111110110000000
+	dc	%1111111110000000
+	dc	%1111111110000000
+	dc	%1111110110000000
+	dc	%1111100110000000
+	dc	%1111000110000000
+	dc	%1110000110000000
+	dc	%1100000110000000
+	dc	%1000000110000000
+	dc	%0000000000000000
+	dc	%0000000000000000	
+
 button13im
 	dc	%1100000110000000
 	dc	%1100011110000000
@@ -44752,6 +47671,24 @@ button13im
 	dc	%1101111110000000
 	dc	%1100011110000000
 	dc	%1100000110000000
+	dc	%0000000000000000				
+
+button13imDouble
+	dc	%1100000010000000
+	dc	%1100000110000000
+	dc	%1100001110000000
+	dc	%1100011110000000
+	dc	%1100111110000000
+	dc	%1101111110000000
+	dc	%1111111110000000
+	dc	%1111111110000000
+	dc	%1101111110000000
+	dc	%1100111110000000
+	dc	%1100011110000000
+	dc	%1100001110000000
+	dc	%1100000110000000
+	dc	%1100000010000000
+	dc	%0000000000000000				
 	dc	%0000000000000000				
 
 
@@ -44765,6 +47702,24 @@ kela1im
 	dc	%0000011000001100
 	dc	%0000000000000000				
 
+kela1imDouble
+	dc	%0000001000000100
+	dc	%0000011000001100
+	dc	%0000111000011100
+	dc	%0001111000111100
+	dc	%0011111001111100
+	dc	%0111111011111100
+	dc	%1111111111111100
+	dc	%1111111111111100
+	dc	%0111111011111100
+	dc	%0011111001111100
+	dc	%0001111000111100
+	dc	%0000111000011100
+	dc	%0000011000001100
+	dc	%0000001000000100
+	dc	%0000000000000000				
+	dc	%0000000000000000				
+
 kela2im	
 	dc	%1100000110000000
 	dc	%1111000111100000
@@ -44773,6 +47728,24 @@ kela2im
 	dc	%1111110111111000
 	dc	%1111000111100000
 	dc	%1100000110000000
+	dc	%0000000000000000				
+
+kela2imDouble
+	dc	%1000000100000000
+	dc	%1100000110000000
+	dc	%1110000111000000
+	dc	%1111000111100000
+	dc	%1111100111110000
+	dc	%1111110111111000
+	dc	%1111111111111100
+	dc	%1111111111111100
+	dc	%1111110111111000
+	dc	%1111100111110000
+	dc	%1111000111100000
+	dc	%1110000111000000
+	dc	%1100000110000000
+	dc	%1000000100000000
+	dc	%0000000000000000				
 	dc	%0000000000000000				
 
 
@@ -44796,6 +47769,7 @@ listImage
 	dc	%1101111111000000
 	dc	%0000000000000000
 	dc	%1101111111000000
+
 
  REM
 fileBrowserImage

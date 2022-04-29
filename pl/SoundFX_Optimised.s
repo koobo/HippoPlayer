@@ -7,6 +7,27 @@ test	=	0
 	include	mucro.i
 	include	misc/eagleplayer.i
 
+	* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+
  ifne test
 bob
 	lea	module,a0
@@ -19,6 +40,7 @@ bob
 	lea	dmawait,a2
 	lea	curpos,a3
 	lea	maxpos,a4
+	lea	scope_,a5
 	jsr	init
 	bne.b	error
 
@@ -30,6 +52,7 @@ error
 masterVol_	dc	$40/1
 curpos		dc	0
 maxpos		dc	0
+scope_		ds.b scope_size
 
 dmawait
 	pushm	d0/d1
@@ -73,6 +96,7 @@ init
 	move.l	a2,dmaWaitAddr
 	move.l	a3,curPosAddr
 	move.l	a4,maxPosAddr
+	move.l	a5,scopeAddr
 	bsr.w	fx_init
 	bsr.b	posUpdate
 	bsr.b	PatternInit
@@ -133,11 +157,50 @@ ConvertNote
 
 	rts
 
+
+setVol
+	push	a5
+	sub.l	#$dff0a0,a5
+	add.l	scopeAddr(pc),a5
+	move	d3,ns_vol(a5)
+	pop	a5
+	rts
+
+setPer
+	push	a5
+	sub.l	#$dff0a0,a5
+	add.l	scopeAddr(pc),a5
+	move	d0,ns_period(a5)
+	pop	a5
+	rts
+
+setAddr
+	push	a5
+	sub.l	#$dff0a0,a5
+	add.l	scopeAddr(pc),a5
+	move.l	d0,ns_start(a5)
+	move	d1,ns_length(a5)
+	move.l	d0,ns_loopstart(a5)
+	move	d1,ns_replen(a5)
+	pop	a5
+	rts
+
+setRep
+	push	a5
+	sub.l	#$dff0a0,a5
+	add.l	scopeAddr(pc),a5
+	move.l	d0,ns_loopstart(a5)
+	move	d1,ns_replen(a5)
+	pop	a5
+	rts
+
+
 dmaWaitAddr		dc.l 	0
 masterVolAddr		dc.l	0
 masterVol		dc	0
 curPosAddr		dc.l 0
 maxPosAddr		dc.l 0
+scopeAddr		dc.l 0
 
 fx_init:
 	move.l	a0,SongPointer
@@ -233,6 +296,7 @@ MakeEffekts:
 StepOk:
 	move	d0,6(a5)
 	MOVE	D0,2(A4)
+	bsr.w	setPer
 	rts
 
 StepItUp:
@@ -354,6 +418,11 @@ Arpe2:	clr.l	d0
 Arpe3:	move.w	16(a6),d2
 	
 Arpe6:	move.w	d2,6(a5)
+
+	push	d0
+	move 	d2,d0
+	bsr.w	setPer
+	pop	d0
 	rts
 
 pitchbend:
@@ -364,7 +433,13 @@ pitchbend:
 	beq.s	pitch2
 	add.w	d0,(a6)
 	move.w	(a6),6(a5)
+
+	push	d0
+	move	(a6),d0
+	bsr.w	setPer
+	pop	d0
 	rts
+
 pitch2:	clr.l	d0
 	move.b	3(a6),d0
 	and.b	#$0f,d0
@@ -372,6 +447,12 @@ pitch2:	clr.l	d0
 	beq.s	pitch3
 	sub.w	d0,(a6)
 	move.w	(a6),6(a5)
+
+	push	d0
+	move	(a6),d0
+	bsr.w	setPer
+	pop	d0
+	
 pitch3:	rts
 
 PlaySound:
@@ -431,6 +512,13 @@ SoundHandleLoop:
 SetRegsLoop:
 	move.l	10(A6),(a5)		;Adresse
 	move	14(A6),4(A5)		;länge
+
+	pushm	d0/d1
+	move.l	10(A6),d0
+	move	14(A6),d1
+	bsr.w	setRep
+	popm	d0/d1
+
 NoSetRegs:
 	sub	#22,a6			;nächste Daten
 	sub	#$10,a5			;nächster Kanal
@@ -527,8 +615,10 @@ SetVolume2:
 	* vol
 	mulu	masterVol(pc),d3
 	lsr	#6,d3
+
 	move	d3,8(A5)
-	
+	bsr.w	setVol
+
 NoInstr2:
 	cmp	#-3,(A6)		;Ist Note = 'PIC' ?
 	bne.s	NoPic		
@@ -559,6 +649,14 @@ NoStop:
 	move.l	4(a6),0(a5)		;Intrument Adr.
 	move.w	8(a6),4(a5)		;Länge
 	move.w	0(a6),6(a5)		;Period
+
+	pushm	d0/d1
+	move.l	4(a6),d0
+	move	8(a6),d1
+	bsr.w	setAddr
+	move	(a6),d0
+	bsr.w	setPer
+	popm	d0/d1
 Super:
 	move.w	20(a6),d0		;DMA Bit
 	or.w	d0,DmaCon		;einodern

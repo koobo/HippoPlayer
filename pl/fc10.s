@@ -1,7 +1,30 @@
 ;APS00000022000000220000002200000022000000220000002200000022000000220000002200000022
 	incdir	include:
+	Include	mucro.i
 	include	misc/eagleplayer.i
-	include mucro.i
+	incdir	include/
+	include	patternInfo.i
+	incdir
+
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
 
 testi	=	0
 
@@ -11,6 +34,7 @@ testi	=	0
 	lea 	mod,a0
 	lea	mainVol_(pc),a1
 	lea	songend_(pc),a2
+	lea	scope_(pc),a3
 	jsr	init	
 loop
 	cmp.b	#$80,$dff006
@@ -31,9 +55,11 @@ loop
 
 songend_	dc 	0
 mainVol_ 	dc 	$40/1
+scope_		ds.b scope_size
 
 	section	cc,data_c
-mod	incbin	"sys:music/modsanthology/synth/fc13/fc13.sting"
+;mod	incbin	"sys:music/modsanthology/synth/fc13/fc13.sting"
+mod	incbin	"M:exo/future composer 1.3/jesper kyd/cytax-ice02-intro.smod"
  endc
 
 
@@ -47,12 +73,14 @@ moduleAddr	dc.l 	0
 mainVolumeAddr	dc.l	0
 mainVolume	dc 	$40
 songOverAddr	dc.l 	0
+scope	dc.l	0
 
 
 init
 	move.l	a0,moduleAddr
 	move.l	a1,mainVolumeAddr 
 	move.l	a2,songOverAddr
+	move.l	a3,scope
 
 	bsr.w	fc10init
 	bsr.b	PatternInit
@@ -115,10 +143,27 @@ ConvertNote
 	moveq	#$7f,d0
 	and.b	(a0),d0
 	* zero for no note
+	beq.b	.noNote
+
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	lea	PERIOD_INDEXES(pc),a3
+	move.b	0(a3,d0.w),d0
 
 	* instrument number, would need sound transpose too
 	moveq	#$3f,d1
 	and.b	1(a0),d1
+
+	* Sample transpose
+	lea	PI_SampleTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d1
+
+	* Convert sample 0 into sample 1, so it will also
+	* be printed as number.
+	addq.b	#1,d1
+.noNote
 
 	move	#%11000000,d2
 	and.b	1(a0),d2
@@ -202,7 +247,7 @@ INIT2:
 	clr.w audtemp
 	clr.w spdtemp
 	move.w #$000f,$dff096		;Disable audio DMA
-	move.w #$0780,$dff09a		;Disable audio IRQ
+;	move.w #$0780,$dff09a		;Disable audio IRQ
 	moveq #0,d7
 	mulu #13,d0
 	moveq #4-1,d6			;Number of soundchannels-1
@@ -275,24 +320,37 @@ music_on:
 	subq.w #1,respcnt		;Decrease replayspeed counter
 	bne.s nonewnote
 	move.w repspd(pc),respcnt	;Restore replayspeed counter
-	lea V1data(pc),a0		;Point to voice1 data area
+
+	lea 	V1data(pc),a0		;Point to voice1 data area
 	lea	Stripe1(pc),a2
-	bsr.w new_note
-	lea V2data(pc),a0		;Point to voice2 data area
+	bsr.w 	new_note
+	move.b	44(a0),PatternInfo+PI_NoteTranspose1
+	move.b	22(a0),PatternInfo+PI_SampleTranspose1
+	
+	lea 	V2data(pc),a0		;Point to voice2 data area
 	lea	Stripe2(pc),a2
-	bsr.w new_note
-	lea V3data(pc),a0		;Point to voice3 data area
+	bsr.w 	new_note
+	move.b	44(a0),PatternInfo+PI_NoteTranspose2
+	move.b	22(a0),PatternInfo+PI_SampleTranspose2
+	
+	lea 	V3data(pc),a0		;Point to voice3 data area
 	lea	Stripe3(pc),a2
-	bsr.w new_note
-	lea V4data(pc),a0		;Point to voice4 data area
+	bsr.w 	new_note
+	move.b	44(a0),PatternInfo+PI_NoteTranspose3
+	move.b	22(a0),PatternInfo+PI_SampleTranspose3
+	
+	lea 	V4data(pc),a0		;Point to voice4 data area
 	lea	Stripe4(pc),a2
-	bsr.w new_note
+	bsr.w 	new_note
+	move.b	44(a0),PatternInfo+PI_NoteTranspose4
+	move.b	22(a0),PatternInfo+PI_SampleTranspose4
+	
 nonewnote:
 	clr.w audtemp
 	lea V1data(pc),a0
 	bsr.w effects
-	move.w d0,(a6)+
-	move.w d1,(a6)+
+	move.w d0,(a6)+ * per
+	move.w d1,(a6)+ * vol
 	lea V2data(pc),a0
 	bsr.w effects
 	move.w d0,(a6)+
@@ -305,9 +363,11 @@ nonewnote:
 	bsr.w effects
 	move.w d0,(a6)+
 	move.w d1,(a6)+
+	
 	lea pervol(pc),a6
 	move.w audtemp(pc),d0
 	ori.w #$8000,d0			;Set/clr bit = 1
+
 	move.w d0,-(a7)
 	moveq #0,d1
 	move.l start1(pc),d2		;Get samplepointers
@@ -327,6 +387,7 @@ nonewnote:
 	move.w ssize3(pc),d6
 	move.w ssize4(pc),d7
 	move.w (a7)+,$dff096		;Enable audio DMA
+
 chan1:
 	lea V1data(pc),a0
 	tst.w 72(a0)
@@ -337,6 +398,10 @@ chan1:
 	clr.w 72(a0)
 	move.l d2,$dff0a0		;Set soundstart
 	move.w d0,$dff0a4		;Set soundlength
+
+	move.l	scope(pc),a0
+	move.l	d2,scope_ch1+ns_loopstart(a0)
+	move	d0,scope_ch1+ns_replen(a0)
 chan2:
 	lea V2data(pc),a0
 	tst.w 72(a0)
@@ -347,6 +412,10 @@ chan2:
 	clr.w 72(a0)
 	move.l d3,$dff0b0
 	move.w d1,$dff0b4
+
+	move.l	scope(pc),a0
+	move.l	d3,scope_ch2+ns_loopstart(a0)
+	move	d1,scope_ch2+ns_replen(a0)
 chan3:
 	lea V3data(pc),a0
 	tst.w 72(a0)
@@ -357,6 +426,10 @@ chan3:
 	clr.w 72(a0)
 	move.l d4,$dff0c0
 	move.w d6,$dff0c4
+
+	move.l	scope(pc),a0
+	move.l	d4,scope_ch3+ns_loopstart(a0)
+	move	d6,scope_ch3+ns_replen(a0)
 chan4:
 	lea V4data(pc),a0
 	tst.w 72(a0)
@@ -367,6 +440,10 @@ chan4:
 	clr.w 72(a0)
 	move.l d5,$dff0d0
 	move.w d7,$dff0d4
+
+	move.l	scope(pc),a0
+	move.l	d5,scope_ch4+ns_loopstart(a0)
+	move	d7,scope_ch4+ns_replen(a0)
 setpervol:
 	movem.l	d7/a0,-(sp)
 
@@ -379,11 +456,18 @@ setpervol:
 	lsr.w #6,d0		; Delirium
 	move.w d0,2(a5)		;Set volume
 
+	move.l	scope(pc),a0
+	move	d0,scope_ch1+ns_vol(a0)
+	move	-4(a6),scope_ch1+ns_period(a0)
+
 	move.w (a6)+,16(a5)	;Set period
 	move.w (a6)+,d0		; added
 	mulu	d7,d0	
 	lsr.w #6,d0		; Delirium
 	move.w d0,18(a5)	;Set volume
+
+	move	d0,scope_ch2+ns_vol(a0)
+	move	-4(a6),scope_ch2+ns_period(a0)
 
 	move.w (a6)+,32(a5)	;Set period
 	move.w (a6)+,d0		; added
@@ -391,13 +475,17 @@ setpervol:
 	lsr.w #6,d0		; Delirium
 	move.w d0,34(a5)	;Set volume
 
+	move	d0,scope_ch3+ns_vol(a0)
+	move	-4(a6),scope_ch3+ns_period(a0)
+
 	move.w (a6)+,48(a5)	;Set period
 	move.w (a6)+,d0		; added
 	mulu	d7,d0	
 	lsr.w #6,d0		; Delirium
 	move.w d0,50(a5)	;Set volume
 
-
+	move	d0,scope_ch4+ns_vol(a0)
+	move	-4(a6),scope_ch4+ns_period(a0)
 	
 	movem.l	(sp)+,d7/a0
 	rts
@@ -440,7 +528,6 @@ nonewspd:
 	move.b (a2),d1		;Pattern to play
 	move.b 1(a2),44(a0)	;Transpose value
 	move.b 2(a2),22(a0)	;Soundtranspose value
-
 	move.w d5,40(a0)
 	lsl.w #6,d1
 	add.l PATpoint(pc),d1	;Get pattern pointer
@@ -533,7 +620,7 @@ testeffects:
 	adda.w d0,a1
 testnewsound:
 	cmpi.b #$e2,(a1)	;E2 = set waveform
-	bne.s o49c64
+	bne.w o49c64
 	moveq #0,d0
 	moveq #0,d1
 	move.b 32(a0),d1
@@ -556,6 +643,17 @@ testnewsound:
 	move.l d1,68(a0)
 	move.w 4(a4),4(a3)
 	move.l 6(a4),64(a0)
+
+	pushm	a2/a3
+	move.l	scope(pc),a2
+	sub	#$f0a0,a3
+	add	a3,a2
+	move.l	d1,ns_start(a2)
+	move	4(a4),ns_length(a2)
+	move.l	d1,ns_loopstart(a2)
+	move	4(a4),ns_replen(a2)
+	popm	a2/a3	
+
 	swap d1
 	move.w #$0003,72(a0)
 	tst.w d1
@@ -585,6 +683,16 @@ o49c64:
 	move.l d1,68(a0)
 	move.w 4(a4),4(a3)
 	move.l 6(a4),64(a0)
+
+	pushm	a2/a3
+	move.l	scope(pc),a2
+	sub	#$f0a0,a3
+	add	a3,a2
+	move.l	d1,ns_start(a2)
+	move	4(a4),ns_length(a2)
+	move.l	d1,ns_loopstart(a2)
+	move	4(a4),ns_replen(a2)
+	popm	a2/a3	
 
 	swap d1
 	move.w #$0003,72(a0)
@@ -783,17 +891,84 @@ songend	dc.l	0
 	even
 SILENT: dc.w $0100,$0000,$0000,$00e1
 
-PERIODS:dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
-	dc.w $0434,$03f8,$03c0,$038a,$0358,$0328,$02fa,$02d0
-	dc.w $02a6,$0280,$025c,$023a,$021a,$01fc,$01e0,$01c5
+PERIODS:
+    dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
+	dc.w $0434,$03f8,$03c0,$038a
+
+	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a
+	dc.w $021a,$01fc,$01e0,$01c5
+
 	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d
-	dc.w $010d,$00fe,$00f0,$00e2,$00d6,$00ca,$00be,$00b4
-	dc.w $00aa,$00a0,$0097,$008f,$0087,$007f,$0078,$0071
+	dc.w $010d,$00fe,$00f0,$00e2
+
+	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f
+	dc.w $0087,$007f,$0078,$0071
+
 	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
-	dc.w $0071,$0071,$0071,$0071,$0d60,$0ca0,$0be8,$0b40
-	dc.w $0a98,$0a00,$0970,$08e8,$0868,$07f0,$0780,$0714
+	dc.w $0071,$0071,$0071,$0071
+
+	dc.w $0d60,$0ca0,$0be8,$0b40,$0a98,$0a00,$0970,$08e8
+	dc.w $0868,$07f0,$0780,$0714
+
 	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0
 	dc.w $10d0,$0fe0,$0f00,$0e28
+
+
+OCT macro
+oc_ set (\1)*12
+	rept 12
+	dc.b	oc_
+oc_ set oc_+1
+	endr
+	endm
+
+* Map note index from pattern data into note indexes
+* suitable for PatternInfo.
+PERIOD_INDEXES:
+	* 0. octave
+	OCT 2-1
+;	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
+;	dc.w $0434,$03f8,$03c0,$038a
+	* 1. octave
+	OCT 2+0
+;	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a
+;	dc.w $021a,$01fc,$01e0,$01c5
+	* 2. octave
+	OCT 2+1
+;	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d
+;	dc.w $010d,$00fe,$00f0,$00e2
+	* 3. octave
+	OCT 2+2
+;	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f
+;	dc.b $0087,$007f,$0078,$0071
+	* 4. octave
+	OCT 2+3
+;	dc.w $0071,$0071,$0071,$0071,$0071,$0071,$0071,$0071
+;	dc.w $0071,$0071,$0071,$0071
+	* -1. octave
+	OCT 2-1
+;	dc.w $0d60,$0ca0,$0be8,$0b40,$0a98,$0a00,$0970,$08e8
+;	dc.w $0868,$07f0,$0780,$0714
+	* -2. octave
+	OCT 2-2
+;	dc.w $1ac0,$1940,$17d0,$1680,$1530,$1400,$12e0,$11d0
+;	dc.w $10d0,$0fe0,$0f00,$0e28
+	* 0. octave again
+	OCT 2+0
+;	dc.w $06b0,$0650,$05f4,$05a0,$054c,$0500,$04b8,$0474
+;	dc.w $0434,$03f8,$03c0,$038a
+	* 1. octave again
+	OCT 2+1
+;	dc.w $0358,$0328,$02fa,$02d0,$02a6,$0280,$025c,$023a
+;	dc.w $021a,$01fc,$01e0,$01c5
+	* 2. octave again
+	OCT 2+2
+;	dc.w $01ac,$0194,$017d,$0168,$0153,$0140,$012e,$011d
+;	dc.w $010d,$00fe,$00f0,$00e2
+	* 3. octave again
+	OCT 2+3
+;	dc.w $00d6,$00ca,$00be,$00b4,$00aa,$00a0,$0097,$008f
+;	dc.w $0087,$007f,$0078,$0071
 
 SOUNDINFO:
 ;Offset.l , Sound-length.w , Start-offset.w , Repeat-length.w 

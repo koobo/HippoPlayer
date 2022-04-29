@@ -4,13 +4,36 @@ TESTI	=	0
 
 
 	incdir	include:
-	INCLUDE	"Exec/Types.i"
-	include	mucro.i
+	Include	mucro.i
 	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
+	incdir
+
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_tempvol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
 
  ifne TESTI
 
 	move.l	#dmawait_,d0
+	move.l #scope_,d1
 	lea	mod,a0
 	lea	songend_,a1
 	lea	poslen_,a2
@@ -48,10 +71,12 @@ dmawait_
 mastervol	dc	64/1
 songend_	dc	0
 poslen_		dc.l	0
+scope_      ds.b scope_size
 
 	section	dd,data_c
 mod
-	incbin	"m:modsanthology/synth/soundmon/BP.Wonderworld"
+;	incbin	"m:modsanthology/synth/soundmon/BP.Wonderworld"
+	incbin	"m:exo/bp soundmon 2/allister brimble/alien breed - menu remix.bp"
 null_
 	dc.l	0
  endc
@@ -74,10 +99,12 @@ init
 * a3 = null sample
 * a4 = volume
 * d0 = dmawait
+* d1 = scope data
 
 	pushm	d1-d7/A1-a6
 	lea	SM_DataArea(pc),a6
 	move.l	d0,dmawait(a6)
+	move.l	d1,scope(a6)
 	move.l	a4,volume(a6)
 	move.l	a1,songend(a6)
 	move.l	a2,poslen(a6)
@@ -123,11 +150,116 @@ ConvertNote
 	move.b	1(a0),d1
 	lsr.b	#4,d1
 
+	* Sample transpose
+	lea	PI_SampleTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d1
+
+	moveq	#15,d2
+	and.b 	1(a0),d2		* cmd
+
+	cmpi.b	#10,d2    		;Option 10->transposes off
+	bne.b	.bp_do1
+	move.b	2(a0),d3
+	and.b	#240,d3	  		;Higher nibble=transpose
+	bne.b	.bp_not1
+.bp_do1
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	ext	d0
+.bp_not1	
+	* scale is 7 octaves.
+	* note 0 is the 4th octave.
+	add	#4*12,d0
+
 .optional
 	moveq	#15,d2
-	and.b 	1(a0),d2
-	move.b	2(a0),d3
+	and.b 	1(a0),d2	* cmd
+	move.b	2(a0),d3	* arg
 	rts
+
+
+* Scope support functions:
+
+setPeriod
+	pushm	d1/a1
+	move	a1,d1
+	sub	#$f0a0,d1
+	move.l	scope+SM_DataArea(pc),a1
+	move	d0,ns_period(a1,d1)
+	popm	d1/a1
+	rts
+
+
+setVol
+	pushm	d1/a1
+	move	a1,d1
+	sub	#$f0a0,d1
+	move.l	scope+SM_DataArea(pc),a1
+	move	d0,ns_tempvol(a1,d1)
+	popm	d1/a1
+	rts
+
+setAddr
+	pushm	d1/d2/d3/a1
+	move	a1,d1
+	move.l	scope+SM_DataArea(pc),a1
+
+	sub	#$f0a0,d1
+	move.b	d1,d2
+	lsr.b	#4,d2
+	moveq	#1,d3
+	lsl.b	d2,d3 * DMA bit
+	and.b	scope_trigger(a1),d3
+	beq.b	.dmaClr
+	* DMA set
+	move.l	d0,ns_loopstart(a1,d1)
+	bra.b	.x	
+.dmaClr
+	* DMA clear
+	move.l	d0,ns_start(a1,d1)
+.x	popm	d1/d2/d3/a1
+	rts
+
+setLen
+	pushm	d1/d2/d3/a1
+	move	a1,d1
+	move.l	scope+SM_DataArea(pc),a1
+
+	sub	#$f0a0,d1
+	move.b	d1,d2
+	lsr.b	#4,d2
+	moveq	#1,d3
+	lsl.b	d2,d3 * DMA bit
+	and.b	scope_trigger(a1),d3
+	beq.b	.dmaClr
+	move	d0,ns_replen(a1,d1)
+	bra.b	.x	
+.dmaClr
+	move	d0,ns_length(a1,d1)
+.x	popm	d1/d2/d3/a1
+	rts
+
+* In:
+*   d1 = DMA bits
+setDma
+	push	a1
+	move.l scope+SM_DataArea(pc),a1
+	or.b  d1,scope_trigger(a1)
+	pop a1
+	rts
+
+* In:
+*   d1 = DMA bits
+clrDma
+	push	a1
+	not.b	d1
+	move.l scope+SM_DataArea(pc),a1
+	and.b  d1,scope_trigger(a1)
+	pop		a1
+	rts
+
 
 
 
@@ -162,7 +294,8 @@ ConvertNote
 	APTR	volume
 	APTR	dmawait
 	APTR	null
-
+	APTR	scope
+	
 	LABEL	SoundMonStruct_SIZEOF
 ;------------------------------------------------------------------------------
 ; InitSound
@@ -299,8 +432,21 @@ bploop1		move.b	12(a0),d4
 		tst.b	$1e(a0)
 		bne.b	bplfo
 		move.w	(a0),6(a1)
-bplfo		move.l	4(a0),(a1)
+		push	d0
+		move	(a0),d0
+		bsr	setPeriod
+		pop 	d0
+bplfo		
+		move.l	4(a0),(a1)
 		move.w	8(a0),4(a1)
+		
+		push	d0
+		move.l	4(a0),d0
+		bsr	setAddr
+		move	8(a0),d0
+		bsr	setLen
+		pop	d0
+
 		tst.b	11(a0)
 		bne.b	bpdoarp
 		tst.b	13(a0)
@@ -344,7 +490,14 @@ arpnotzero	subq.b	#1,SMON_BPCount(a5)
 
 bpskip1		move.b	SMON_BPDelay(a5),SMON_BPCount(a5)
 bpplay		bsr.b	bpnext
+
+	* This clears audio DMA bits:
+
 		move.w	SMON_DMA(a5),$dff096
+
+		move	SMON_DMA(a5),d1
+		bsr		clrDma
+		
 
 ;		move.l	SMON_Global(a5),a1
 ;		move.l	APG_WaitDma(a1),a1
@@ -353,7 +506,6 @@ bpplay		bsr.b	bpnext
 
 	move.l	dmawait(a5),a1
 	jsr	(a1)
-
 
 		moveq	#3,d0
 		lea	$dff0a0,a1
@@ -409,21 +561,29 @@ bploop3		moveq	#0,d1
 		cmp.b	#1,d7
 		bne.b 	.a 
 		move.l	a2,Stripe1
+		move.b	SMON_ST(a5),PatternInfo+PI_SampleTranspose1
+		move.b	SMON_TR(a5),PatternInfo+PI_NoteTranspose1
 		bra.b	.d
 .a
 		cmp.b	#2,d7
 		bne.b 	.b 
 		move.l	a2,Stripe2
+		move.b	SMON_ST(a5),PatternInfo+PI_SampleTranspose2
+		move.b	SMON_TR(a5),PatternInfo+PI_NoteTranspose2
 		bra.b	.d
 .b
 		cmp.b	#4,d7
 		bne.b 	.c 
 		move.l	a2,Stripe3
+		move.b	SMON_ST(a5),PatternInfo+PI_SampleTranspose3
+		move.b	SMON_TR(a5),PatternInfo+PI_NoteTranspose3
 		bra.b	.d
 .c
 		cmp.b	#8,d7
 		bne.b 	.d 
 		move.l	a2,Stripe4
+		move.b	SMON_ST(a5),PatternInfo+PI_SampleTranspose4
+		move.b	SMON_TR(a5),PatternInfo+PI_NoteTranspose4
 .d
 		moveq	#0,d4
 		move.b	SMON_BPPatCount(a5),d4
@@ -496,6 +656,10 @@ notopt0		cmpi.b	#1,d3
 		move.b	d4,d0
 		bsr.w	calvol
 		move.w	d0,8(a3)
+		push	a1
+		move.l	a3,a1
+		bsr	setVol
+		pop	a1
 		move.l	(sp)+,d0
 
 bpskip3		cmpi.b	#2,d3  			; Set Speed
@@ -585,6 +749,10 @@ eg1loop		move.l	4(a5,d3.w),(a4)+	;Copy...
 		dbra	d7,eg1loop		;Copy...
 
 noeg1		move.w	(a2),6(a1)		;Period from bpcurrent
+	push	d0
+	move	 (a2),d0
+	bsr setPeriod
+	pop 	d0
 		moveq	#0,d7
 		move.b	3(a2),d7		;Instrument number
 		move.l	d7,d6 			;Also in d6
@@ -605,20 +773,29 @@ noeg1		move.w	(a2),6(a1)		;Period from bpcurrent
 		move.l	d4,(a1) 		;Sample pointer in hardware
 		move.w	(a3,d7),4(a1)		;length in hardware
 
-		movem.l	d0/a5,-(sp)
-		move.l	12(sp),a5
-		move.b	2(a2),d0
-		bsr.w	calvol
-		movem.l	(sp)+,d0/a5
+		push	d0
+		move.l	d4,d0
+		bsr	setAddr
+		move	(a3,d7),d0
+		bsr	setLen
+		pop	d0
+
+		; does nothing?
+		;movem.l	d0/a5,-(sp)
+		;move.l	12(sp),a5
+		;move.b	2(a2),d0
+		;bsr.w	calvol
+		;movem.l	(sp)+,d0/a5
 
 		cmpi.b	#$ff,2(a2)		;Use default volume
 		bne.b	skipxx 			;No ??
 
 		movem.l	d0/a5,-(sp)
-		move.l	12(sp),a5
+		;move.l	12(sp),a5
 		move.w	6(a3,d7),d0
 		bsr.w	calvol
 		move.w	d0,8(a1)
+		bsr	setVol
 		movem.l	(sp)+,d0/a5
 
 skipxx	 	move.w	4(a3,d7),8(a2)		;Length in bpcurrent
@@ -632,9 +809,16 @@ bp_nosamp	move.l	SM_DataArea+null(pc),4(a2)	;Play no sample
 		bra.b	bpskip10
 
 bpskip6		move.w	8(a2),4(a1)		;Length to hardware
-		move.l	4(a2),(a1)		;pointer to hardware
+    		move.l	4(a2),(a1)		;pointer to hardware
+	push	d0
+	move.l	4(a2),d0
+	bsr	setAddr
+	move	8(a2),d0
+	bsr	setLen
+	pop 	d0
 bpskip10	or.w	#$8000,d1		;Turn on DMA for this voice
 		move.w	d1,$dff096		;Yeah, do it
+		bsr	setDma
 		rts
 
 bpplaysynthetic	move.b	#$1,$1a(a2)		;Synthetic mode on
@@ -659,6 +843,14 @@ bpplaysynthetic	move.b	#$1,$1a(a2)		;Synthetic mode on
 		move.l	a4,(a1) 		;Sample Pointer
 		move.l	a4,4(a2)		;In bpcurrent
 		move.w	2(a3,d7.w),4(a1)	;Length in words
+	
+		push	d0
+		move.l	a4,d0
+		bsr	setAddr
+		move.w	2(a3,d7.w),d0
+		bsr	setLen
+		pop	d0
+	
 		move.w	2(a3,d7.w),8(a2)	;Length in bpcurrent
 		tst.b	4(a3,d7.w)		;Is ADSR on
 		beq.b	bpadsroff		;No ??
@@ -681,27 +873,30 @@ bpskip99	moveq	#0,d4
 		lsr.w	#6,d3 			;divide by 64
 
 		movem.l	d0/a5,-(sp)
-		move.l	12(sp),a5
+		;move.l	12(sp),a5
 		move.w	d3,d0
 		bsr.w	calvol
 		move.w	d0,8(a1)		;is new volume
+		bsr	setVol
 		movem.l	(sp)+,d0/a5
 		bra.b	bpflipper
 
 bpadsroff	movem.l	d0/a5,-(sp)
-		move.l	12(sp),a5
+		;move.l	12(sp),a5
 		move.b	2(a2),d0
 		bsr.w	calvol
 		move.w	d0,8(a1)		;is new volume
+		bsr	setVol
 		movem.l	(sp)+,d0/a5
 
 		cmpi.b	#$ff,2(a2)
 		bne.b	bpflipper		;No ADSR
 		movem.l	d0/a5,-(sp)
-		move.l	12(sp),a5
+		;move.l	12(sp),a5
 		move.b	25(a3,d7.w),d0
 		bsr.w	calvol
 		move.w	d0,8(a1)		;So use default volume
+		bsr	setVol
 		movem.l	(sp)+,d0/a5
 
 bpflipper	move.l	4(a2),a4		;Pointer on waveform
@@ -729,6 +924,10 @@ bpplayarp	lea	bpper(pc),a4
 		ext.w	d4
 		asl.w	#1,d4
 		move.w	-2(a4,d4.w),6(a1)
+		push	d0
+		move.w	-2(a4,d4.w),d0
+		bsr	setPeriod
+		pop	d0
 		rts
 
 bpsynth		move.l	a5,-(sp)
@@ -773,10 +972,11 @@ bpyessynth	moveq	#0,d7
 		lsr.w	#6,d4 			;Divide by 64=New volume
 
 		movem.l	d0/a5,-(sp)
-		move.l	12(sp),a5
+		;move.l	12(sp),a5
 		move.w	d4,d0
 		bsr.w	calvol
 		move.w	d0,8(a1)		;Volume in hardware
+		bsr	setVol
 		movem.l	(sp)+,d0/a5
 
 		addq.w	#1,$12(a2)		;Increment of ADSR pointer
@@ -812,6 +1012,10 @@ bpendadsr	tst.b	$1e(a2)			;LFO On
 bpnotx		move.w	(a2),d5 		;Period
 		add.w	d4,d5 			;New Period
 		move.w	d5,6(a1)		;In hardware
+		push	d0
+		move	d5,d0
+		bsr	setPeriod
+		pop	d0
 		addq.w	#1,$10(a2)		;Next position
 		move.w	12(a3,d7.w),d3		;LFO table Length
 		cmp.w	$10(a2),d3		;End Reached
@@ -885,6 +1089,7 @@ bpendeg		rts
 calvol
 	move.l	a0,-(sp)
 	move.l	volume+SM_DataArea(pc),a0
+	and	#$ff,d0
 	mulu	(a0),d0
 	lsr	#6,d0
 	move.l	(sp)+,a0

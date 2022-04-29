@@ -4,6 +4,27 @@
 	include mucro.i 
 	include	misc/eagleplayer.i
 
+
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol        rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
 test=0
 
  ifne test
@@ -13,14 +34,14 @@ test=0
 	section	cc,data_c
 ;mt_data		incbin	"sys:music/Modland/Startrekker AM/broom/kingkeldon.mod"
 ;mt_data		incbin	"sys:music/Modland/Startrekker AM/the wiz/link(zelda2).mod"
-mt_data		incbin	"sys:music/Modland/Startrekker AM/GTS/fa.worse face.mod"
+mt_data		incbin	"m:exo/Startrekker AM/GTS/fa.worse face.mod"
 e1
   rept	32 
    dc.l $deadbeef
   endr
 	
 ;mt_data2	incbin	"sys:music/Modland/Startrekker AM/broom/kingkeldon.mod.nt"
-mt_data2		incbin	"sys:music/Modland/Startrekker AM/GTS/fa.worse face.mod.nt"
+mt_data2		incbin	"m:exo/Startrekker AM/GTS/fa.worse face.mod.nt"
 e2
   rept	32 
    dc.l $deadbeef
@@ -43,6 +64,7 @@ TESTPLAY:
 	lea	vol,a2
 	lea songend,a3
 	lea dmawait,a4
+	lea	scope_,a5
 	move.l	#e1-mt_data,d0
 	jsr init
 
@@ -52,9 +74,9 @@ tp_loop2:
 	cmp.b	#$80,$dff006
 	beq.s	tp_loop2
 
-	move	#$f00,$dff180
+;	move	#$f00,$dff180
 	jsr play
-	move	#0,$dff180
+;	move	#0,$dff180
 	
 	btst	#6,$bfe001
 	bne.s	tp_loop
@@ -72,8 +94,9 @@ dmawait
 	popm	d0/d1
 	rts 
 
-vol 		dc $40/4
+vol 		dc $40
 songend 	dc 0
+scope_		ds.b scope_size
  endc 
 
 * in:
@@ -82,6 +105,7 @@ songend 	dc 0
 *   a2 = main volume ptr
 *   a3 = song end ptr
 *   a4 = dma wait ptr
+*   a5 = scope data ptr
 *   d0 = module len
 * out:
 *   d1 = max pos
@@ -98,9 +122,10 @@ init
 	move.l  a2,mainVolAddr 
 	move.l  a3,songEndAddr
 	move.l  a4,dmaWaitAddr
+	move.l  a5,scope
 
 	bsr.w	mt_init
-	bsr.b	PatternInit
+	bsr.w	PatternInit
 
 	move.l	moduleAddr(pc),a1 
 	moveq	#0,d1
@@ -113,6 +138,25 @@ play
 	move	(a0),mainVol
 
 	bsr.w	mt_music
+
+	* AM samples get turned off by DMA yet have valid values otherwise.
+	* Set volume to zero so scopes don't display ghost sounds.
+	move.l	scope(pc),a0
+	move	dma(pc),d0
+	ror.b	#1,d0
+	bmi.b	.1
+	clr	scope_ch1+ns_vol(a0)
+.1	ror.b	#1,d0
+	bmi.b	.2
+	clr	scope_ch2+ns_vol(a0)
+.2	ror.b	#1,d0
+	bmi.b	.3
+	clr	scope_ch3+ns_vol(a0)
+.3	ror.b	#1,d0
+	bmi.b	.4
+	clr	scope_ch4+ns_vol(a0)
+.4
+
 	moveq	#0,d0 
 	move.b	mt_songpos(pc),d0 
 	rts 
@@ -127,7 +171,8 @@ songEndAddr		dc.l 	0
 dmaWaitAddr		dc.l 	0
 mainVolAddr		dc.l 	0
 mainVol			dc.w 	0
-
+scope	                dc.l    0
+dma                     dc.w    0
 
 
 
@@ -176,7 +221,78 @@ ConvertNote
 	and	#$fff,d0
 	rts
 
-mt_init:
+
+
+
+* Scope support functions:
+
+setPer
+setPeriod
+	pushm	d1/a1
+	move	a5,d1
+	sub	#$f0a0,d1
+	move.l	scope(pc),a1
+	move	d0,ns_period(a1,d1)
+	popm	d1/a1
+	rts
+
+
+setVol
+	pushm	d1/a1
+	move	a5,d1
+	sub	#$f0a0,d1
+	move.l	scope(pc),a1
+	move	d0,ns_vol(a1,d1)
+	popm	d1/a1
+	rts
+
+setAddr
+	pushm	d1/a1
+	move	a5,d1
+	move.l	scope(pc),a1
+	sub	#$f0a0,d1
+	move.l	d0,ns_start(a1,d1)
+	popm	d1/a1
+	rts
+
+setLoopStart
+	pushm	d1/a1
+	move	a5,d1
+	move.l	scope(pc),a1
+	sub	#$f0a0,d1
+	move.l	d0,ns_loopstart(a1,d1)
+	popm	d1/a1
+	rts
+
+
+setLen
+	pushm	d1/a1
+	move	a5,d1
+	sub	#$f0a0,d1
+	move.l	scope(pc),a1
+	move	d0,ns_length(a1,d1)
+	popm	d1/a1
+	rts
+
+setRepLen
+	pushm	d1/a1
+	move	a5,d1
+	sub	#$f0a0,d1
+	move.l	scope(pc),a1
+	move	d0,ns_replen(a1,d1)
+	popm	d1/a1
+	rts
+
+setDma
+	or	d0,dma
+	rts
+
+clrDma
+	not	d0
+	and	d0,dma
+	rts
+	
+mt_init:	
 	move.l moduleAddr(pc),a0
 	lea	(a0,d0.l),a3	* end bound
 
@@ -289,6 +405,7 @@ mt_music:
 
 	bsr.w	mt_wait
 	move.w	mt_dmacon(pc),d0
+	bsr	setDma
 	or.w	#$8000,d0
 	move.w	d0,$dff096
 	bsr.w	mt_wait
@@ -297,6 +414,8 @@ mt_nodma:
 	lea	mt_voice1(pc),a4
 	move.l	$a(a4),$a0(a3)
 	move.w	$e(a4),$a4(a3)
+	bsr.w	setRep1
+
 	tst.w	30(a4)
 	bne.s	mt_nov1
 ;	move.w	$12(a4),$a8(a3)
@@ -304,9 +423,12 @@ mt_nodma:
 	mulu	mainVol(pc),d0
 	lsr	#6,d0
 	move	d0,$a8(a3)
+	bsr.w	setVol1
 mt_nov1:lea	mt_voice2(pc),a4
 	move.l	$a(a4),$b0(a3)
 	move.w	$e(a4),$b4(a3)
+	bsr.w	setRep2
+
 	tst.w	30(a4)
 	bne.s	mt_nov2
 ;	move.w	$12(a4),$b8(a3)
@@ -314,9 +436,12 @@ mt_nov1:lea	mt_voice2(pc),a4
 	mulu	mainVol(pc),d0
 	lsr	#6,d0
 	move	d0,$b8(a3)
+	bsr.w	setVol2
 mt_nov2:lea	mt_voice3(pc),a4
 	move.l	$a(a4),$c0(a3)
 	move.w	$e(a4),$c4(a3)
+	bsr.w	setRep3
+
 	tst.w	30(a4)
 	bne.s	mt_nov3
 ;	move.w	$12(a4),$c8(a3)
@@ -324,16 +449,21 @@ mt_nov2:lea	mt_voice3(pc),a4
 	mulu	mainVol(pc),d0
 	lsr	#6,d0
 	move	d0,$c8(a3)
+	bsr.w	setVol3
 mt_nov3:lea	mt_voice4(pc),a4
 	move.l	$a(a4),$d0(a3)
+	move.w	$e(a4),$d4(a3)
+	bsr.w	setRep4
+
 	tst.w	30(a4)
 	bne.s	mt_nov4
-	move.w	$e(a4),$d4(a3)
 ;	move.w	$12(a4),$d8(a3)
 	move.w	$12(a4),d0
 	mulu	mainVol(pc),d0
 	lsr	#6,d0
 	move	d0,$d8(a3)
+	bsr.w	setVol4
+
 mt_nov4:add.w	#$10,mt_pattpos
 	cmp.w	#$400,mt_pattpos
 	bne.s	mt_exit
@@ -353,6 +483,68 @@ mt_next:clr.w	mt_pattpos
 mt_exit:tst.b	mt_break
 	bne.s	mt_next
 	bra.w	mt_amhandler
+
+setRep1
+	pushm	d0/a5
+	lea	$dff0a0,a5
+	move.l	$a(a4),d0
+	bsr.w	setLoopStart
+	move.w	$e(a4),d0
+	bsr.w	setRepLen
+	popm	d0/a5
+	rts
+setRep2
+	pushm	d0/a5
+	lea	$dff0b0,a5
+	move.l	$a(a4),d0
+	bsr.w	setLoopStart
+	move.w	$e(a4),d0
+	bsr.w	setRepLen
+	popm	d0/a5
+	rts
+setRep3
+	pushm	d0/a5
+	lea	$dff0c0,a5
+	move.l	$a(a4),d0
+	bsr.w	setLoopStart
+	move.w	$e(a4),d0
+	bsr.w	setRepLen
+	popm	d0/a5
+	rts
+setRep4
+	pushm	d0/a5
+	lea	$dff0d0,a5
+	move.l	$a(a4),d0
+	bsr.w	setLoopStart
+	move.w	$e(a4),d0
+	bsr.w	setRepLen
+	popm	d0/a5
+	rts
+setVol1
+	push	a5
+	lea	$dff0a0,a5
+	bsr.w	setVol
+	pop	a5
+	rts
+setVol2
+	push	a5
+	lea	$dff0b0,a5
+	bsr.w	setVol
+	pop	a5
+	rts
+setVol3
+	push	a5
+	lea	$dff0c0,a5
+	bsr.w	setVol
+	pop	a5
+	rts
+setVol4
+	push	a5
+	lea	$dff0d0,a5
+	bsr.w	setVol
+	pop	a5
+	rts
+
 
 ;mt_wait:moveq	#4,d3		
 ;mt_wai2:move.b	$dff006,d2	
@@ -382,7 +574,7 @@ mt_nonew:
 	lea	mt_voice4(pc),a4
 	lea	$dff0d0,a5
 	bsr.w	mt_com
-	bra.s	mt_exit
+	bra.w	mt_exit
 
 mt_mulu:
 	dc.w	0,$1e,$3c,$5a,$78,$96,$b4,$d2,$f0,$10e,$12c,$14a
@@ -468,6 +660,9 @@ mt_rambo:
 	move.w	$1a(a4),$dff096
 	clr.b	$19(a4)
 
+	move.w	$1a(a4),d0
+	bsr	clrDma
+	
 	tst.w	30(a4)
 	beq.s	mt_noaminst
 	move.l	a0,-(sp)
@@ -482,8 +677,17 @@ mt_rambo:
 	lsl.w	#5,d0
 	add.l	#mt_amwaveforms,d0
 	move.l	d0,(a5)
+	
+	bsr.w	setAddr
+	bsr.w	setLoopStart
+	
 	move.w	#16,4(a5)
 	move.l	d0,$a(a4)
+	
+	moveq	#16,d0
+	bsr.w	setLen
+	bsr		setRepLen
+
 	move.w	#16,$e(a4)
 	move.w	6(a0),32(a4)
 	move.l	#1,36(a4)
@@ -493,14 +697,29 @@ mt_rambo:
 	lsl.w	d0,d1
 	move.w	d1,$10(a4)
 	move.w	d1,6(a5)
+
+	push	d0
+	move	d1,d0
+	bsr.w	setPeriod
+	pop	d0
+
 	move.w	(sp)+,d1
 	move.l	(sp)+,a0
 	bra.s	mt_juck
 
 mt_noaminst:
-	move.l	4(a4),(a5)
-	move.w	8(a4),4(a5)
-	move.w	$10(a4),6(a5)
+	move.l	4(a4),(a5) * addr
+	move.w	8(a4),4(a5) * len
+	move.w	$10(a4),6(a5) * per
+
+	push	d0
+	move.l	4(a4),d0
+	bsr.w	setAddr
+	move	8(a4),d0
+	bsr.w	setLen
+	move	$10(a4),d0
+	bsr.w	setPeriod
+	pop	d0
 
 mt_juck:move.w	$1a(a4),d0
 	or.w	d0,mt_dmacon
@@ -508,6 +727,10 @@ mt_juck:move.w	$1a(a4),d0
 
 mt_stopsound:
 	move.w	$1a(a4),$dff096
+	push	d0
+	move.w	$1a(a4),d0
+	bsr	clrDma
+	pop	d0
 	bra.w	mt_com2
 
 mt_setport:
@@ -544,6 +767,10 @@ mt_port2:
 	clr.w	$16(a4)
 mt_portok:
 	move.w	$10(a4),6(a5)
+	push	d0
+	move	$10(a4),d0
+	bsr.w	setPeriod
+	pop	d0
 mt_rts:	rts
 
 mt_sub:	sub.w	d0,$10(a4)
@@ -553,6 +780,10 @@ mt_sub:	sub.w	d0,$10(a4)
 	move.w	$16(a4),$10(a4)
 	clr.w	$16(a4)
 	move.w	$10(a4),6(a5)
+	push	d0
+	move	$10(a4),d0
+	bsr.w	setPeriod
+	pop	d0
 	rts
 
 mt_sin:	dc.b	0,$18,$31,$4a,$61,$78,$8d,$a1,$b4,$c5,$d4,$e0,$eb,$f4
@@ -580,7 +811,11 @@ mt_vib2:move.b	$19(a4),d0
 	bra.s	mt_vib3
 mt_vibsub:
 	sub.w	d2,d0
-mt_vib3:move.w	d0,6(a5)
+mt_vib3:
+	move.w	d0,6(a5)
+
+	bsr.w	setPeriod
+
 	move.b	$18(a4),d0
 	lsr.w	#2,d0
 	and.w	#$3c,d0
@@ -613,14 +848,27 @@ mt_arpdo:
 mt_arp3:cmp.w	(a0)+,d1
 	bge.s	mt_arpfound
 	dbf	d2,mt_arp3
-mt_arp0:move.w	$10(a4),6(a5)
+mt_arp0:
+	move.w	$10(a4),6(a5)
+	push	d0
+	move	$10(a4),d0
+	bsr.w	setPeriod
+	pop	d0
 	rts
 mt_arpfound:
 	move.w	-2(a0,d0.w),6(a5)
+	push	d0
+	move	-2(a0,d0.w),d0
+	bsr.w	setPeriod
+	pop	d0
 	rts
 
 mt_normper:
 	move.w	$10(a4),6(a5)
+	push	d0
+	move	$10(a4),d0
+	bsr.w	setPeriod
+	pop	d0
 	rts
 
 mt_com:	move.w	2(a4),d0
@@ -629,7 +877,7 @@ mt_com:	move.w	2(a4),d0
 	move.b	2(a4),d0
 	and.b	#$f,d0
 	tst.b	d0
-	beq.s	mt_arp
+	beq.w	mt_arp
 	cmp.b	#1,d0
 	beq.s	mt_portup
 	cmp.b	#2,d0
@@ -639,10 +887,16 @@ mt_com:	move.w	2(a4),d0
 	cmp.b	#4,d0
 	beq.w	mt_vib
 	cmp.b	#5,d0
-	beq.s	mt_volport
+	beq.w	mt_volport
 	cmp.b	#6,d0
 	beq.s	mt_volvib
 	move.w	$10(a4),6(a5)
+
+	push	d0
+	move	$10(a4),d0
+	bsr.w	setPeriod
+	pop	d0
+
 	cmp.b	#$a,d0
 	beq.s	mt_volslide
 	rts
@@ -657,6 +911,11 @@ mt_portup:
 	move.w	#$71,$10(a4)
 mt_portup2:
 	move.w	$10(a4),6(a5)
+
+	push	d0
+	move	$10(a4),d0
+	bsr.w	setPeriod
+	pop	d0
 	rts
 
 mt_portdown:
@@ -669,6 +928,10 @@ mt_portdown:
 	move.w	#$358,$10(a4)
 mt_portdown2:
 	move.w	$10(a4),6(a5)
+	push	d0
+	move	$10(a4),d0
+	bsr.w	setPeriod
+	pop	d0
 	rts
 
 mt_volvib:
@@ -691,6 +954,8 @@ mt_vol2:moveq	#0,d0
 	mulu	mainVol(pc),d0 
 	lsr	#6,d0
 	move.w	d0,8(a5)
+
+	bsr.w	setVol
 	rts
 
 mt_vol3:move.b	3(a4),d0
@@ -703,6 +968,7 @@ mt_vol4:moveq	#0,d0
 	mulu	mainVol(pc),d0 
 	lsr	#6,d0
 	move.w	d0,8(a5)
+	bsr.w	setVol
 	rts
 
 mt_com2:move.b	$2(a4),d0
@@ -748,6 +1014,7 @@ mt_sv2:	moveq	#0,d0
 	mulu	mainVol(pc),d0 
 	lsr	#6,d0
 	move.w	d0,8(a5)
+	bsr.w	setVol
 	rts
 
 mt_setspeed:
@@ -855,11 +1122,15 @@ mt_anst:move.w	24(a0),d0
 	clr.l	30(a6)
 	clr.w	38(a6)
 	move.w	26(a6),$dff096
+	move.w	26(a6),d0
+	bsr	clrDma
+
 mt_anxt:move.w	32(a6),d0
 	lsr.w	#2,d0
 	mulu  mainVol(pc),d0 
 	lsr 	#6,d0
 	move.w	d0,8(a5)
+	bsr.w	setVol
 	move.w	28(a0),d0
 	add.w	d0,16(a6)
 	move.w	30(a0),d1
@@ -878,6 +1149,10 @@ mt_vibq:lea	mt_amsinus,a2
 	neg.w	d1
 mt_nvib:add.w	16(a6),d1
 	move.w	d1,6(a5)
+	push	d0
+	move	d1,d0
+	bsr.w	setPeriod
+	pop	d0
 	move.w	32(a0),d0
 	add.w	d0,d0
 	add.w	d0,36(a6)

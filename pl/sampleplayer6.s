@@ -1,26 +1,6 @@
-;APS0000125200008D0B0000340C0000A62C0004B10C0005EBA8000428960004976D00002FEF0000BC28
-;test
-;	lea	var_b,a5
-;	move.l	4.w,(a5)
-;	move	#1,mpfreqdiv(a5)
-;	move.l	#mo,modulefilename(a5)
-;	move	#2,d1	
-;	addq.b	#2,d1
-;	moveq	#1,d0
-;	lsl	d1,d0
-;	lsl.l	#8,d0
-;	lsl.l	#2,d0
-;	cmp.l	#$20000,d0
-;	bne.b	.nfo
-;	subq.l	#8,d0
-;.nfo
-;	move.l	d0,samplebufsiz(a5)
-;	jmp	init\.mpinit
-;mo	dc.b	"m:06 - yie ar kung fu ii.mp3",0
-; even
-
-
-DEBUG	=	1
+;APS0000111100009186000035070000AAA70004B5BE0005F05A00042D4800049C1F000030E30000C0A3
+test	=	0
+DEBUG	=	0
 
 * Print to debug console, very clever.
 * Param 1: string
@@ -53,6 +33,8 @@ DPRINT macro
 
 	include	devices/ahi.i
 	include	devices/ahi_lib.i
+
+	include	utility/hooks.i
 
 	include	mucro.i
 
@@ -87,7 +69,6 @@ _LVOMPEGA_seek 		=	-48
 _LVOMPEGA_time 		=	-54
 _LVOMPEGA_find_sync	=	-60
 
-
 MPEGA_BSFUNC_OPEN  = 0
 MPEGA_BSFUNC_CLOSE = 1
 MPEGA_BSFUNC_READ  = 2
@@ -107,6 +88,45 @@ MPEGA_ERR_EOF      = (MPEGA_ERR_BASE-1)
 MPEGA_ERR_BADFRAME = (MPEGA_ERR_BASE-2)
 MPEGA_ERR_MEM      = (MPEGA_ERR_BASE-3)
 MPEGA_ERR_NO_SYNC  = (MPEGA_ERR_BASE-4)
+
+;/* Full control structure of MPEG Audio decoding */
+;typedef struct {
+;   struct Hook *bs_access;    /* NULL for default access (file I/O) or give your own bitstream access */
+;   MPEGA_LAYER layer_1_2;     /* Layer I & II settings */
+;   MPEGA_LAYER layer_3;       /* Layer III settings */
+;   WORD check_mpeg;           /* 1 to check for mpeg audio validity at start of stream, 0 otherwise */
+;   LONG stream_buffer_size;   /* size of bitstream buffer in bytes (0 -> default size) */
+;                              /* NOTE: stream_buffer_size must be multiple of 4 bytes */
+;} MPEGA_CTRL;
+
+; ULONG __saveds __asm HookFunc( register __a0 struct Hook  *hook,
+;                                  register __a2 APTR          handle,
+;                                  register __a1 MPEGA_ACCESS *access );
+;
+;   MPEGA_ACCESS struct specify bitstream access function & parameters
+;
+;   access->func == MPEGA_BSFUNC_OPEN
+;      open the bitstream
+;      access->data.open.buffer_size is the i/o block size your read function can use
+;      access->data.open.stream_size is the total size of the current stream
+;                                    (in bytes, set it to 0 if unknown)
+;      return your file handle (or NULL if failed)
+;   access->func == MPEGA_BSFUNC_CLOSE
+;      close the bitstream
+;      return 0 if ok
+;   access->func == MPEGA_BSFUNC_READ
+;      read bytes from bitstream.
+;      access->data.read.buffer is the destination buffer.
+;      access->data.read.num_bytes is the number of bytes requested for read.
+;      return # of bytes read or 0 if EOF.
+;   access->func == MPEGA_BSFUNC_SEEK
+;      seek into the bitstream
+;      access->data.seek.abs_byte_seek_pos is the absolute byte position to reach.
+;      return 0 if ok
+
+
+
+
 
 **********************
 
@@ -252,6 +272,39 @@ debugDesBuf		rs.b	1000
 
 size_var	rs.b	0
 
+
+
+; REM
+ ifne test
+	lea	var_b,a5
+	move.l	4.w,(a5)
+	move.l	(a5),a6
+	lea	.dosn(pc),a1
+	lob	OldOpenLibrary
+	move.l	d0,_DosBase(a5)
+
+	move	#1,mpfreqdiv(a5)
+	move.l	#.mo,modulefilename(a5)
+	move	#2,d1	
+	addq.b	#2,d1
+	moveq	#1,d0
+	lsl	d1,d0
+	lsl.l	#8,d0
+	lsl.l	#2,d0
+	cmp.l	#$20000,d0
+	bne.b	.nfo
+	subq.l	#8,d0
+.nfo
+	move.l	d0,samplebufsiz(a5)
+	jmp	init\.mpinit
+
+.dosn	dc.b	"dos.library",0
+;.mo	dc.b	"m:mp3/desalmados.mp3",0
+.mo	dc.b	"m:mp3/matt gray - refourmation/who knows.mp3",0
+ even
+ endif
+
+
 	jmp	init(pc)
 	jmp	endSamplePlay(pc)
 	jmp	stop(pc)
@@ -394,11 +447,11 @@ init
 	tst.l	d0
 	rts
 .doInit
-
-	move.b	13+4(sp),kutistus(a5)
-	move.l	8+4(sp),songover(a5)
-	move.l	4+4(sp),colordiv(a5)
-	move.l	4(sp),_XPKBase(a5)
+	* Two subroutine calls when getting here, hence 4+4
+	move.b	13+4+4(sp),kutistus(a5)
+	move.l	8+4+4(sp),songover(a5)
+	move.l	4+4+4(sp),colordiv(a5)
+	move.l	4+4(sp),_XPKBase(a5)
 
 	move.b	d0,samplebufsiz0(a5)
 	move.b	d1,sampleformat(a5)
@@ -737,15 +790,16 @@ init
 	move	mpqual(a5),d1
 
 	lea	.control(pc),a0
-	move	d0,.fd1-.control(a0)
-	move	d0,.fd2-.control(a0)
-	move	d0,.fd3-.control(a0)
-	move	d0,.fd4-.control(a0)
-	move	d1,.q1-.control(a0)
-	move	d1,.q2-.control(a0)
-	move	d1,.q3-.control(a0)
-	move	d1,.q4-.control(a0)
-
+	basereg	.control,a0
+	move	d0,.fd1(a0)
+	move	d0,.fd2(a0)
+	move	d0,.fd3(a0)
+	move	d0,.fd4(a0)
+	move	d1,.q1(a0)
+	move	d1,.q2(a0)
+	move	d1,.q3(a0)
+	move	d1,.q4(a0)
+	endb	a0
 
 	move.l	4.w,a6
 	lea	.mplibn(pc),a1
@@ -756,12 +810,24 @@ init
 	moveq	#ier_error,d0
 	bra.w	sampleiik
 .uzx
+	bsr	.mpega_skip_id3v2
+	
+	* Set up hook
+	lea	.mpega_hook(pc),a0
+	lea	.mpega_hook_func(pc),a1
+	move.l	a1,h_Entry(a0)
+
 	move.l	modulefilename(a5),a0
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"MPEGA_open %s"
+ endif
 	lea	.control(pc),a1	
 	lore	MPEGA,MPEGA_open
 	move.l	d0,mpstream(a5)
 	bne.b	.uz
-	DPRINT	"no MPEGA strea"
+.nostream
+	DPRINT	"no MPEGA stream"
 	moveq	#ier_filerr,d0
 	bra.w	sampleiik
 .uz
@@ -787,7 +853,7 @@ init
 	move.l	.ms_duration(a3),d0	* pituus millisekunteina
 	divu	#1000,d0
 	bsr.w	.moi_mp
-	bsr.b	.freqcheck
+	bsr.w	.freqcheck
 
 	st	mplippu(a5)
 	move.b	#2,sampleformat(a5)	* huijataan ett‰ ollaan AIFF
@@ -803,12 +869,14 @@ init
 	bra.w	sampleiik
 .wa4q
 
-	bra.b	.sampleok
+	bra.w	.sampleok
+
+
 
 
 .control	
-	dc.l	0	* no hook
-
+	dc.l	.mpega_hook	* no hook
+;	dc.l	0
 
 * layer 1 & 2
 	dc	0	* 1 = force mono
@@ -834,7 +902,7 @@ init
 	dc.l	0	* freq_max
 
 
-	dc	1	* 1 = check validity
+	dc	0	* check validity if 1 
 	dc.l	0	* stream buffer size (0=default)
 
 
@@ -844,7 +912,212 @@ init
 
 
 
+;typedef struct {
+;
+;   LONG  func;           /* MPEGA_BSFUNC_xxx */
+;   union {
+;      struct {
+;         char *stream_name; /* in */
+;         LONG buffer_size;  /* in */
+;         LONG stream_size;  /* out */
+;      } open;
+;      struct {
+;         void *buffer;      /* in/out */
+;         LONG num_bytes;    /* in */
+;      } read;
+;      struct {
+;         LONG abs_byte_seek_pos; /* out */
+;      } seek;
+;   } data;
+;
+;} MPEGA_ACCESS;
+
+.mpega_hook
+	* Hook structure from utility.i
+	ds.b	h_SIZEOF
 	
+* In:
+*   a0 = APTR hook
+*   a1 = MPEGA_ACCESS *access
+*   a2 = APTR handle
+.mpega_hook_func
+	pushm	d1-a6
+	bsr.b	.doHook
+	popm	d1-a6
+	rts
+.doHook
+	lea	var_b(pc),a5
+	move.l	_DosBase(a5),a6
+
+	;cmp.l	#MPEGA_BSFUNC_OPEN,(a1)
+	tst.l	(a1)
+	beq.b	.mpega_hook_open
+	cmp.l	#MPEGA_BSFUNC_READ,(a1)
+	beq.w	.mpega_hook_read
+	cmp.l	#MPEGA_BSFUNC_SEEK,(a1)
+	beq.w	.mpega_hook_seek
+	cmp.l	#MPEGA_BSFUNC_CLOSE,(a1)
+	beq.b	.mpega_hook_close
+	moveq	#-1,d0
+	rts
+
+.mpega_hook_open
+	DPRINT	"mpega_hook_open"
+	move.l	a1,a3
+	move.l	4(a3),d1 	 * stream_name
+
+	move.l	#MODE_OLDFILE,d2
+	lob	Open
+	move.l	d0,d7
+	beq.b	.mpega_open_error
+
+	move.l	d7,d1		* selvitet‰‰n filen pituus
+	moveq	#0,d2		* offset
+	moveq	#OFFSET_END,d3
+	lob	Seek
+	move.l	d7,d1
+	moveq	#0,d2		* offset
+	moveq	#OFFSET_END,d3
+	lob	Seek
+	move.l	d0,d6		* current position, length
+	move.l	d7,d1		
+	move.l	.mpega_sync_position(pc),d2	* offset
+	moveq	#OFFSET_BEGINNING,d3
+	lob	Seek
+
+	sub.l	.mpega_sync_position(pc),d6
+
+	;move.l	8(a3),.mpega_buffer_size
+	move.l	d6,12(a3) * stream_size
+
+	* Return Dos file handle
+	move.l	d7,d0
+.mpega_open_error
+	rts	
+
+.mpega_hook_close
+	DPRINT	"mpega_hook_close"
+	move.l	a2,d1
+	beq.b	.nullHandle
+	lob	Close
+	moveq	#0,d0	* ok
+	rts
+.nullHandle
+	moveq	#-1,d0 * not ok
+	rts	
+
+.mpega_hook_read
+ if DEBUG
+	pushm	all
+	move.l	a1,a4
+	move.l	a2,d1
+	moveq	#0,d2
+	moveq	#OFFSET_CURRENT,d3
+	lob	Seek
+	move.l	d0,d1
+
+	move.l	8(a4),d0 * length to read
+	DPRINT	"mpega_hook_read %ld at %ld"
+	popm	all
+ endif
+	move.l	a2,d1    * handle
+	move.l	4(a1),d2 * buffer addr
+	move.l	8(a1),d3 * length to read
+	lob	Read
+	* d0 = bytes read or NULL if eof
+	cmp.l	#-1,d0
+	beq.b	.mpega_read_err
+	rts	
+.mpega_read_err
+	* eof
+	moveq	#0,d0
+	rts
+
+.mpega_hook_seek
+	DPRINT	"mpega_hook_seek"
+	move.l	a2,d1
+	move.l	4(a1),d2	* abs_byte_seek_pos
+	add.l	.mpega_sync_position(pc),d2
+	moveq	#OFFSET_BEGINNING,d3
+	lob	Seek
+	cmp.l	#-1,d0
+	beq.b	.seek_err
+	moveq	#0,d0 * ok
+	rts
+.seek_err
+	rts
+
+;.mpega_buffer_size		dc.l	0
+
+.mpega_skip_id3v2
+	* sync position default
+	moveq	#0,d7
+
+	move.l	_DosBase(a5),a6
+	move.l	modulefilename(a5),d1
+	move.l	#MODE_OLDFILE,d2
+	lob	Open
+	move.l	d0,d6
+	beq.b	.mpega_skip_exit	
+
+	lea	findSyncBuffer(pc),a3
+	move.l	d6,d1
+	move.l	a3,d2
+	* Read 10 bytes, the size of the ID3v2 header
+	moveq	#10,d3
+	move.l	_DosBase(a5),a6
+	lob	Read
+	tst.l	d0
+	beq.b	.mpega_skip_exit
+
+	* Is it a ID3v2 header?
+	move.l	(a3),d0
+	lsr.l	#8,d0
+	cmp.l	#"ID3",d0
+	bne.b	.mpega_skip_exit	
+
+	* Get size, synchsafe integer, 4x 7-bit bytes
+	moveq	#0,d0
+	moveq	#$7f,d1
+	and.b	6(a3),d1
+	or.b	d1,d0
+	lsl.l	#7,d0
+
+	moveq	#$7f,d1
+	and.b	7(a3),d1
+	or.b	d1,d0
+	lsl.l	#7,d0
+
+	moveq	#$7f,d1
+	and.b	8(a3),d1
+	or.b	d1,d0
+	lsl.l	#7,d0
+
+	moveq	#$7f,d1
+	and.b	9(a3),d1
+	or.b	d1,d0	
+	
+	add.l	#10,d0	* Add header size
+	move.l	d0,d7
+	* Use this as a seek position to skip over the ID3v2
+	* stuff at the beginning. MPEGA only looks at the first 16k
+	* of data, ID3v2 can be much larger.
+
+.mpega_skip_exit
+	move.l	d6,d1
+	beq.b	.1
+	move.l	_DosBase(a5),a6
+	lob	Close
+.1
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"MPEGA sync position: %ld"
+ endif
+	move.l	d7,.mpega_sync_position
+	rts
+
+.mpega_sync_position	dc.l	0
+
 .freqcheck
 	push	d0
 	move	#60000,d0
@@ -986,6 +1259,11 @@ init
 	moveq	#0,d7
 	move	samplefreq(a5),d7
 
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"frequency=%ld"
+ endif
+
 	tst.b	kutistus(a5)
 	beq.b	.nok
 	cmp	#KUTISTUSTAAJUUS,d7
@@ -1017,7 +1295,13 @@ init
 
 	divu	d7,d4
 	move	d4,sampleper(a5)	* samplen periodi
+ if DEBUG
+	moveq	#0,d0
+	move	d4,d0
+	DPRINT	"period=%ld"
+ endif
 	move.l	colordiv(a5),d0	
+ 	DPRINT	"colordiv=%ld"
 	divu	d4,d0
 	ext.l	d0
 	move.l	d0,sampleadd(a5)	* seuranta, paljonko soitetaan framessa
@@ -1096,6 +1380,8 @@ init
 	move	mainvolume+var_b(pc),d0
 	bsr.w	vol
 
+	DPRINT	"CreateProc"
+
 ** k‰ynnistet‰‰n prosessi
 	pushpea	.pn(pc),d1
 	moveq	#0,d2			* pri
@@ -1115,6 +1401,13 @@ init
 	move.b	samplestereo(a5),d2
 	move.l	samplebufsiz(a5),d3
 
+ if DEBUG
+	pushm	all
+	move.l	d1,d0
+	move.l	d3,d1
+	DPRINT	"add=%ld buf=%ld"
+	popm	all 
+ endif
 	moveq	#0,d0
 	rts
 
@@ -3874,6 +4167,7 @@ desmsgDebugAndPrint
 
 var_b	ds.b	size_var
 
+findSyncBuffer
 mpbuffer1	ds	MPEGA_PCM_SIZE
 mpbuffer2	ds	MPEGA_PCM_SIZE
-
+FIND_SYNC_BUFFER_SIZE = *-findSyncBuffer

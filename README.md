@@ -41,12 +41,13 @@ Some custom includes and some others are included. Tested to compile with ASM-On
 Build steps:
 - Assemble _puu016.s_ to get the main binary.  It should start if you have _reqtools.library_ available. 
 - Build the _HippoPlayer.group_ replayer binary bundle.
-  - There are binaries in *pl/bin* and *eagleplayers/bin* which need to be compressed.
-  - Execute *pl/compress_im* and *eagleplayers/compress_im* in Amiga shell to get FImp data.
-  - Run *pl/compress_shr* and *eagleplayers/compress_shr* on Mac/Linux to get Shr data.
-  - Assemble file _playergroup2.s_ and save the binary. Data source can be selected. 
+  - There are binaries in *pl/bin* and *eagleplayers/bin* which need to be compressed first.
+  - Execute *pl/compress_im* and *eagleplayers/compress_im* in Amiga shell to get FImp compressed data.
+  - Run *pl/compress_shr* and *eagleplayers/compress_shr* on Mac/Linux to get Shrinkler compressed data.
+  - Assemble file _playergroup2.s_ and save the binary. Shr-files are used by default.
   
-To build the Protracker replay routine, assemble the file _kpl14.s_ and save the binary to _kpl_. To build individual replay routines, assemble one in the _pl_ and save the binary into _bin_.
+To build the Protracker replay routine, assemble the file _kpl14.s_ and save the binary as _kpl_. To build individual replay routines, assemble one in the _pl_ dir and save the binary (or executable) into _bin_. 
+**NOTE**: Most of the replay routines are saved as Amiga executables so they can be relocated properly, a few are just binary blobs of PC-relative code.
 
 # Notes
 

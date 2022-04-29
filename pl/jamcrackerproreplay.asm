@@ -4,7 +4,28 @@
 	include mucro.i
 	include	misc/eagleplayer.i
 
-testi	=	1
+
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_volume    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+testi	=	0
 
  ifne testi
 
@@ -13,6 +34,7 @@ testi	=	1
 	lea	songend_(pc),a2
 	lea	vol(pc),a3
 	lea	nullsample,a4
+	lea	scope_(pc),a5
 	jsr	init
 
 	
@@ -45,6 +67,7 @@ dmawait
 	popm	d0/d1
 	rts 
 songend_	dc	0
+scope_	ds.b	scope_size
 
 	section	cc,data_c
 nullsample	ds.l	1
@@ -62,6 +85,8 @@ mod	incbin	sys:music/modsanthology/synth/jamcrack/jam.dr-awesome-1
 *   a1 = dmawait
 *   a2 = songover
 *   a3 = main volume
+*   a4 = null sample
+*   a5 = scope data
 * out:
 *   d0 = max song pos
 
@@ -72,6 +97,7 @@ init
 	move.l	a2,songOverAddr
 	move.l	a3,mainVolAddr
 	move.l	a4,nullSampleAddr
+	move.l  a5,scope
 	bsr.w	pp_init
 	bsr.b	PatternInit
 	move	songlen(pc),d0
@@ -167,8 +193,28 @@ songOverAddr		dc.l	0
 mainVolAddr		dc.l	0
 mainVol			dc.w	0
 nullSampleAddr		dc.l	0
-
+scope		dc.l 	0
  
+
+setPer
+	pushm	a0/a1
+	sub	#$f0a0,a0
+	move.l	scope(pc),a1
+	add	a0,a1
+	move	d0,ns_period(a1)
+	popm	a0/a1
+	rts
+
+
+setVol
+	pushm	a0/a1
+	sub	#$f0a0,a0
+	move.l	scope(pc),a1
+	add	a0,a1
+	move	d0,ns_volume(a1)
+	popm	a0/a1
+	rts
+
 
 
 
@@ -408,7 +454,8 @@ pp_uvs:		move.l	pv_custbase(a1),a0
 .l1d:		cmp.w	#1019,d0
 		ble.s	.l1e
 		move.w	#1019,d0
-.l1e:		move.w	d0,6(a0)
+.l1e:		move.w	d0,6(a0) * AUDxPER	
+		bsr	setPer
 		bsr.w	pp_rot
 
 		move.w	pv_deltapor(a1),d0
@@ -437,6 +484,7 @@ pp_uvs:		move.l	pv_custbase(a1),a0
 		mulu	mainVol(pc),d0
 		lsr	#6,d0
 		move	d0,8(a0)
+		bsr	setVol
 
 		move.w	pv_deltavol(a1),d0
 		add.w	d0,pv_vol(a1)
@@ -548,11 +596,11 @@ pp_nwnt:
 		jsr	 (a1)
 
 		lea	pp_variables(PC),a1
-		bsr.s	pp_scr
+		bsr.w	pp_scr
 		lea	pp_variables+pv_sizeof(PC),a1
-		bsr.s	pp_scr
+		bsr.w	pp_scr
 		lea	pp_variables+2*pv_sizeof(PC),a1
-		bsr.s	pp_scr
+		bsr.w	pp_scr
 		lea	pp_variables+3*pv_sizeof(PC),a1
 		bsr.s	pp_scr
 
@@ -573,6 +621,16 @@ pp_nwnt:
 		move.l	pp_variables+3*pv_sizeof+pv_insaddress(PC),$D0(a6)
 		move.w	pp_variables+3*pv_sizeof+pv_inslen(PC),$D4(a6)
 
+		move.l	scope(pc),a1
+		move.l	pp_variables+pv_insaddress(PC),scope_ch1+ns_loopstart(a1)
+		move.w	pp_variables+pv_inslen(PC),scope_ch1+ns_replen(a1)
+		move.l	pp_variables+pv_sizeof+pv_insaddress(PC),scope_ch2+ns_loopstart(a1)
+		move.w	pp_variables+pv_sizeof+pv_inslen(PC),scope_ch2+ns_replen(a1)
+		move.l	pp_variables+2*pv_sizeof+pv_insaddress(PC),scope_ch3+ns_loopstart(a1)
+		move.w	pp_variables+2*pv_sizeof+pv_inslen(PC),scope_ch3+ns_replen(a1)
+		move.l	pp_variables+3*pv_sizeof+pv_insaddress(PC),scope_ch4+ns_loopstart(a1)
+		move.w	pp_variables+3*pv_sizeof+pv_inslen(PC),scope_ch4+ns_replen(a1)
+
 		rts
 
 pp_scr:		move.w	pp_tmpdmacon(PC),d0
@@ -583,12 +641,19 @@ pp_scr:		move.w	pp_tmpdmacon(PC),d0
 		move.l	pv_insaddress(a1),(a0)
 		move.w	pv_inslen(a1),4(a0)
 		move.w	pv_pers(a1),6(a0)
+
+		sub	#$f0a0,a0
+		move.l	scope(pc),a2
+		add	a0,a2		
+		move.l	pv_insaddress(a1),ns_start(a2)
+		move	pv_inslen(a1),ns_length(a2)
+		move	pv_pers(a1),ns_period(a2)
+
 		btst	#0,pv_flags(a1)
 		bne.s	.l5
 		;move.l	#pp_nullwave,pv_insaddress(a1)
 		move.l  nullSampleAddr(pc),pv_insaddress(a1)
 		move.w	#1,pv_inslen(a1)
-
 .l5:		rts
 
 pp_nnt:		move.b	(a0),d1		;nt_period
