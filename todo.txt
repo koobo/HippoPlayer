@@ -70,6 +70,13 @@ PATTERNINIT - EP
 + Mugician2
 
 
+BUG:
+- open scopes
+- save prefs
+- exit
+- open with "hip hide"
+- scopes are opened, but main window not. scopes should also be hidden
+
 FIXED: BUG: SCREEN OVERWRITE
 - open all scopes
 - play BPSoundMon3 tunes, 
