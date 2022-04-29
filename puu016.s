@@ -46588,7 +46588,7 @@ spectrumGetPS3MSampleData
 	ext	d2
 	ext	d3
 	add	d3,d2
-	asl	#4,d2
+	asl	#4,d2   * scaling!
 	move	d2,(a2)+
 	addq	#1,d0
 	and	d1,d0
