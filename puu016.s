@@ -21769,7 +21769,7 @@ s_windowTitle                 rs.l      1
 * Pointer to the running status flag
 s_runningStatusAddr            rs.l      1
 s_storedPositionAddr		rs.l 	1
-s_newWindow                   rs.b       nw_SIZEOF
+s_newWindow                   rs.b       enw_SIZEOF
 s_scopeWindowBase             rs.l       1
 s_rastport3                   rs.l       1	
 s_userport3                   rs.l       1
@@ -22511,7 +22511,7 @@ scopeEntry:
 	lea	winstruc3,a2
 	lea	s_newWindow(a4),a1
 	move.l	a1,a0
-	moveq	#nw_SIZEOF-1,d0
+	moveq	#enw_SIZEOF-1,d0
 .copy	move.b	(a2)+,(a1)+
 	dbf	d0,.copy
 
