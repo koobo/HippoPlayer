@@ -8002,9 +8002,9 @@ nappuloita
 *** Numeronäppis
 
 
-	dc	$2d
-	dr	actionPrevSong		* prev song
 	dc	$2f
+	dr	actionPrevSong		* prev song
+	dc	$2d
 	dr	actionNextSong		* next song
 	dc	$3e
 	dr	lista_ylos	* select prev
@@ -9051,18 +9051,8 @@ songSkip
 
 	move	minsong(a5),d1 
 	move	maxsongs(a5),d2
-	bsr.w		clampWord
+	bsr.w	clampWord
 
-;	moveq	#0,d0
-;	move	songnumber(a5),d0	* Numeroita 0:sta eteenpäin
-;	sub	d1,d0
-;	bpl.b	.ook
-;	moveq	#0,d0
-;.ook	
-;	cmp	maxsongs(a5),d0
-;	blo.b	.jep
-;	move	maxsongs(a5),d0
-;.jep
 	DPRINT	"New song: %ld"
 	move	d0,songnumber(a5)
 
