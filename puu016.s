@@ -7706,21 +7706,35 @@ nappilasku
 
 handleRawKeyInput
 nappuloita
-;  if DEBUG
-; 	moveq   #0,d0
-; 	move.b	d3,d0
-; 	moveq	#0,d1
-; 	move	d3,d1
-; 	DPRINT	"Raw key=%lx qual=%lx"
-;  endc 
 
+  REM
+  if DEBUG
+   	moveq   #0,d0
+    	move.b	d3,d0
+	moveq	#0,d1
+ 	move	d4,d1
+  	DPRINT	"Raw key=%lx qual=%lx"
+  endc 
+  EREM
 	and	#$ff,d3
+	* mask out non-kb qualifiers
+	and	#$ff,d4
 
 	* react only if button is down
 	tst.b	d3
 	bmi.w	.exit	* vain jos nappula alhaalla
 	movem.l	d0-a6,-(sp)
 
+	cmp	#IEQUALIFIER_CONTROL,d4
+	bne.b	.noControl
+
+	cmp.b	#$23,d3		* f + control
+	bne.b	.2
+	jsr	toggleFavoriteStatusForCurrentModule
+	bra	.ee
+.2
+
+.noControl
 
 	and.b	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.noshifts
@@ -7730,11 +7744,6 @@ nappuloita
 	bsr	rlistmode
 	bra.w	.ee
 .1
-	cmp.b	#$23,d3		* f + shift
-	bne.b	.2
-	jsr	toggleFavoriteStatusForCurrentModule
-	bra	.ee
-.2
 
 
 	cmp.b	#$17,d3		* i + shift?
