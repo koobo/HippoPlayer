@@ -23249,12 +23249,18 @@ scopeinterrupt:				* a5 = var_b
 .noe	
 	add.l	d0,ns_start(a0)
 	lsr	#1,d0
-	sub	d0,ns_length(a0)
+	moveq	#0,d2
+	move	ns_length(a0),d2
+	sub.l	d0,d2
+	move	d2,ns_length(a0)
+	move.l	d2,d0
 	bpl.b	.plu
 
 	* Negative overrun
-	move	ns_length(a0),d0
-	ext.l	d0
+	;move	ns_length(a0),d0
+	;ext.l	d0
+	;move.l	d2,d0
+
 	* safety check
 	move	ns_replen(a0),d2
 	bne.b	.nz
@@ -23265,8 +23271,10 @@ scopeinterrupt:				* a5 = var_b
 	swap	d0
 	ext.l	d0
 	* Adjust replen according to overrun, words
-	move	ns_replen(a0),ns_length(a0)
-	add	d0,ns_length(a0)	
+	moveq	#0,d2
+	move	ns_replen(a0),d2
+	add.l	d0,d2
+	move	d2,ns_length(a0)
 	* Adjust loopstart, bytes
 	move.l	ns_loopstart(a0),ns_start(a0)
 	add.l	d0,d0
@@ -23293,7 +23301,7 @@ scopeinterrupt:				* a5 = var_b
 
 	* Poke method:
 	btst	#pb_quadscopePoke,d1
-	bne.b	.quadScopeSampleFollow
+	bne.w	.quadScopeSampleFollow
 	
 	* UPS method:
 	btst	#pb_quadscopeUps,d1
@@ -23946,7 +23954,9 @@ quadrascope:
 	
 	move.l	d0,a1 * start
 	move.l	d1,a6 * loopstart
+	moveq	#0,d5
 	move	d2,d5 * len
+	moveq	#0,d4
 	move	d3,d4 * replen
 	
 	move	ns_tempvol(a3),d1
@@ -23992,9 +24002,9 @@ sco	macro
 	endc
 	
 	ifne	\1
-	subq	#2,d5
+	subq.l	#2,d5
 	bpl.b	hm\2	* $6a04
-	move	d4,d5	* replen
+	move.l	d4,d5	* replen
 	move.l	a6,a1   * loop start
 hm\2
 	endc
@@ -24084,9 +24094,9 @@ lir	macro
 	* progress in sample data,
 	* check every other pixel
  ifne \2
-	subq	#2,d4
+	subq.l	#2,d4
 	bpl.b	.h\1
-	move	d5,d4
+	move.l	d5,d4
 	move.l	d6,a1
 .h\1	
  endc
@@ -24099,9 +24109,11 @@ lir	macro
 
 	move.l	d0,a1 * start
 	move.l	d1,d6 * loopstart
+	moveq	#0,d4
 	move	d2,d4 * len
+	moveq	#0,d5
 	move	d3,d5 * replen
-
+	
 	* plot this many pixels
 	moveq	#108/4-1,d0
 	moveq	#0,d1
@@ -46322,15 +46334,17 @@ spectrumCopySamples
 	rts
 
 .jolt	
+	* Some insanity checks:
 	cmp.l	#1024,d0
 	blo.b	.empty
-	
 	move.l	ns_loopstart(a3),d1
 	cmp.l	#1024,d1
 	blo.b	.empty
 
 	move.l	d0,a1			* Sample start
+	moveq	#0,d5
 	move	ns_length(a3),d5	* Sample length
+	moveq	#0,d0
 	move	ns_replen(a3),d0
 .d
 	; see if enough data to copy all in one block
@@ -46348,7 +46362,7 @@ spectrumCopySamples
 	move.b	(a1)+,(a4)+
 	move.b	(a1)+,(a4)+
 	
-	subq	#1,d5			* one word copied, check length
+	subq.l	#1,d5			* one word copied, check length
 	bpl.b	.l
 
 	cmp	#2,d0
@@ -46356,7 +46370,7 @@ spectrumCopySamples
 
 	; sample repeat	starts
 	; repeat length
-	move	d0,d5
+	move.l	d0,d5
 	; repeat data start
 	move.l	d1,a1
 .l
