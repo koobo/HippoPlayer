@@ -20893,7 +20893,18 @@ intserver
 	move.l	playerbase(a5),a0
 	move	#pf_end,d2
 	and	p_liput(a0),d2
-	bne.b	.skipCheck
+	;bne.b	.skipCheck
+	beq.b	.noSongEnd
+	* This player supports songend. 
+	* To avoid extra songend detections, do the song position
+	* check only if the current position is non-zero.
+	* This detects PT modules that jump from the last position to 
+	* some other than position zero.
+	tst	d0
+	beq.b	.skipCheck
+
+.noSongEnd
+
 	* Current format does not have songend support, do the check!
 	sub	d1,d0	
 	bmi.b	.songover
