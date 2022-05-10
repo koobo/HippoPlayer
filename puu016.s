@@ -25,7 +25,8 @@ ver	macro
 ;	dc.b	"v2.50ß (?.?.202?)"
 ;	dc.b	"v2.50 (31.12.2021)"
 ;	dc.b	"v2.52ß (?.?.202?)"
-	dc.b	"v2.52 (30.4.2022)"
+;	dc.b	"v2.52 (30.4.2022)"
+	dc.b	"v2.53ß (?.?.2022)"
 	endm	
 
 
@@ -348,8 +349,8 @@ prefs_size		rs.b	0
 *******************************************************************************
 *
 * Scope variables for one audio channel
-* Values are copied hede from replay code internal structures.
-* Currently only Protracker supported
+* Values are copied here from replay code internal structures.
+* Originally only Protracker supported, now also many others.
 
 * Scope data for one channel
 * This should correspond go the "PTch" structure in hippoport
@@ -814,7 +815,7 @@ QUADMODE_PATTERNSCOPEXL = 5
 * large and normal height mode
 quadWindowHeightOriginal	rs.w	1
 
-
+* Timeout mode: 0=all modules, $ff=only thos with no end-detection
 timeoutmode	rs.b	1
 filterstatus	rs.b	1		* filtterin 
 modulefilterstate rs.b	1		* ..
@@ -849,6 +850,8 @@ earlyload	rs.b	1
 divdir		rs.b	1
 cybercalibration rs.b	1
 
+* Playtime in seconds when module should be stopped automatically,
+* zero if not enabled
 timeout		rs	1		* moduulin soittoaika
 
 alarm		rs	1		* alarm aika
@@ -17381,8 +17384,11 @@ lootaan_aika
 	move	timeout(a5),d1
 	beq.b	.ok0
 	mulu	#50,d1
+
 	cmp.l	d1,d0
 	blo.b	.ok0
+
+	DPRINT 	"Timeout triggered %ld"
 
 	cmp.l	#1,modamount(a5)	* 0 tai 1 modia -> ei timeouttia
 	bls.b	.ok0
