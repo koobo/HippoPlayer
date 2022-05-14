@@ -7575,7 +7575,8 @@ nupit
 * volumeboost s3m
 ;	lea	juusto,a0
 	lea	juusto-pslider2(a0),a0
-	move	#65535/9,d0
+	;move	#65535/9,d0
+	move	#65535/17,d0
 	bsr.w	setknob
 ;	move	#65535/9*0,d0
 	moveq	#0,d0
@@ -11903,7 +11904,7 @@ sliderit
 	moveq	#0,d0
 	move.b	s3mmode3(a5),d0
 	mulu	#65535,d0
-	divu	#8,d0
+	divu	#16,d0
 	bsr.w	setknob2
 
 * stereoarvo ps3m
@@ -14509,26 +14510,24 @@ ls15	dc.b	"14-bit stereo",0
 rsmode3
 pupdate7
 	lea	juusto,a2
-	moveq	#8,d0			* max
+	moveq	#16,d0			* max
 	bsr.w	nappilasku
 	move.b	d0,s3mmode3_new(a5)
-
 	bsr.w	updateps3m
 
 	moveq	#0,d0
 	move.b	s3mmode3_new(a5),d0
-	or.b	#"0",d0
+	lea	.i(pC),a0
+	bsr.w	desmsg2
 
-	lea	.sm3_t(pc),a0
-	move.b	d0,(a0)
+	lea	desbuf2(a5),a0
 ;	movem	juusto+4,d0/d1
 	movem	4(a2),d0/d1
-	sub	#16,d0
+	sub	#16+8,d0
 	addq	#8,d1
-
 	bra.w	print3b
-.sm3_t	dc.b	" ",0	* 0,1-8
-
+.i	dc.b	"%2.2ld",0
+ even
 
 *** Stereo
 
@@ -37534,7 +37533,7 @@ p_multi	jmp	.s3init(pc)
 	moveq	#0,d0
 	move.b	s3mmode3(a5),d0
 	mulu	#65535,d0
-	divu	#8,d0
+	divu	#16,d0
 	jsr	setknob2
 	popm	all
 

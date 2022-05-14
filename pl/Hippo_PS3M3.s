@@ -539,6 +539,11 @@ s3init
 .ala2	cmp	#STEREO14,pmode(a5)
 	beq.b	.bit14
 
+* channels 1: 256 bytes for each mixed input value
+*          2: 512 bytes
+*          8: 8*512
+*         32: 32*256 bytes
+
 	moveq	#0,d0
 	move	maxchan(a5),d1
 	move.l	#256,d2
@@ -2641,6 +2646,14 @@ right	lea	cha0(a5),a4
 	rts
 
 
+* either:
+*   a0 = tbuf - input words
+*   a1 = buff1 - output bytes
+*   a4 = buff3
+* or:
+*   a0 = tbuf2
+*   a1 = buff2
+*   a4 = buff4
 copybuf	move.l	bufpos(a5),d0
 	move.l	d0,d1
 	moveq	#0,d2
@@ -2657,6 +2670,7 @@ copybuf	move.l	bufpos(a5),d0
 	subq	#1,d7
 	add.l	d0,a1
 	lea	divtabs(a5),a2
+	* get channel specific 
 	move	chans(a5),d0
 	lsl	#2,d0
 	move.l	-4(a2,d0),a2
@@ -4643,6 +4657,9 @@ makedivtabs
 
 	lsl.l	#7,d2
 
+	* modify divisor, boost value makes
+	* the divisor smaller so the division
+	* is left larger, "boosted"
 	sub.l	vboost(a5),d3
 	cmp	#1,d3
 	bge.b	.laa
@@ -4654,7 +4671,8 @@ makedivtabs
 .l	move.l	d0,d1
 	add.l	d5,d1
 	sub.l	d2,d1
-	divs	d3,d1
+	* divide by number of channels to get into 0..ff range
+	divs	d3,d1 
 	cmp	#$7f,d1
 	ble.b	.d
 	move	#$7f,d1
@@ -4665,6 +4683,7 @@ makedivtabs
 	addq.l	#1,d0
 	dbf	d7,.l
 
+	* Each table will have 256 more entries than the one before
 	add	#256,d6
 	sub.l	#$80,d5
 	dbf	d4,.laa
