@@ -825,11 +825,15 @@ xpkid		rs.b	1		* 0: ei xpktunnistusta, 1:joo
 fade		rs.b	1		* 0: ei feidausta
 boxsize		rs	1		* montako nimeä mahtuu fileboksiin
 						* size of the module name box
-boxsize_new	rs	1
+* filebox slider value set in prefs, range: 2..48
+boxsize_new	rs	1		
 boxsizepot_new	rs	1
+* This value represents the y-difference compared to
+* a box of 8 lines height. Many places it is assumed that
+* the box is 8 lines, afterwards resizing was added on top of it.
 boxy		rs	1		* 8-nimisen lootaan y-kokomuutos
-boxsize0	rs	1		* ?
-boxsize00	rs	1		* ?
+boxsize0	rs	1		* previous boxsize value to detect changes
+boxsize00	rs	1		* magic flag that causes reopening the main window
 boxsizez	rs	1		* rmb + ? zoomausta varten
 						* alternative boxsize for RMB 
 doubleclick	rs.b	1		* <>0: tiedoston doubleclick-play
@@ -4890,7 +4894,7 @@ wrender
 
 
 	
-
+* Calculate y-offset related to boxsize value
 setboxy	move	boxsize(a5),d0
 	subq	#8,d0
 	muls	#8,d0
@@ -12194,6 +12198,7 @@ gzipDecompressCommand
 	
 
 aseta_vakiot
+	DPRINT	"Set defaults"
 	bsr.w	nupit
 	move	#64,mainvolume(a5)
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
@@ -23213,10 +23218,12 @@ scopeWindowSizeChanged
 
 *********************************************************************
 * Scope interrupt code, keeps track the play positions of 
-* protracker replayer samples
+* replayer samples
 *********************************************************************
 
-scopeinterrupt:				* a5 = var_b
+* in:
+*    a5 = var_b
+scopeinterrupt:				
 	cmp	#pt_prot,playertype(a5)
 	bne.w	.notProtracker
 
@@ -31160,10 +31167,10 @@ cianame	dc.b	"ciaa.resource",0
  even
 	
 * init with default tempo 
-init_ciaint
+init_ciaint:
 	moveq	#0,d0
 * init with specified tempo in d0. 0 = default
-init_ciaint_withTempo
+init_ciaint_withTempo:
 	tst.b	ciasaatu(a5)
 	bne.b	.hm
 .c	moveq	#0,d0
@@ -44083,8 +44090,8 @@ deliGetSongInfo
 	rts	
 
 * Interrupt play routine, use cached pointers to avoid tag searches
-deliInterrupt
-deliPlay	
+deliInterrupt:
+deliPlay:
 	move.l	a5,a4
 	push	a4
 	move.l	deliBase(a5),a5
@@ -46429,7 +46436,7 @@ calcSampleStep
 	bhs.b .1
 	moveq	#100,d0
 .1
-	move.l	#3546895,d1	* PAL clock
+	move.l	clockconstant(a5),d1 * PAL or NTSC clock constant
 	divu	d0,d1		* playback frequency in hertz
 	ext.l	d1
 	lsl.l	#8,d1
