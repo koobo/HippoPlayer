@@ -4144,10 +4144,6 @@ zipwindow
 ** pieni ikkuna!
 	move.l	windowbase(a5),a0
 	lea	gadgets,a1
-	tst.b	uusikick(a5)
-	beq.b	.old
-	lea	BottomSizeGadget,a1
-.old
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
@@ -4676,6 +4672,8 @@ wrender
 	* Box is minimized, skipped gadgets:
 	cmp.l	#gadgetListModeChangeButton,a3
 	beq.b	.skipClear
+	cmp.l	#gadgetResize,a3
+	beq.b	.skipClear
 	cmp.l	#slider4,a3		* fileslider
 	bne.b	.clef
 .skipClear
@@ -4691,31 +4689,17 @@ wrender
 .oru
 .vanaha
 
-	* On kick2.0 insert an invisible size gadget first
-	move.l	a4,a3
-	tst.b	uusikick(a5)
-	beq.b	.old
-	lea	BottomSizeGadget,a1
-	move.l	a4,(a1) * NextGadget points to the rest
-	move.l	a1,a3
-	move.l	windowbase(a5),a0
-	moveq	#0,d0
-	move.b	wd_BorderBottom(a0),d0
-	addq	#2,d0
-	move	d0,gg_Height(a1)
-	subq	#2,d0
-	neg	d0
-	move	d0,gg_TopEdge(a1)
-.old
+	* On kick2.0 insert an invisible size gadget last
+	bsr	configResizeGadget
 
 * sitten isket‰‰n gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
-	lea	(a3),a1
+	lea	(a4),a1
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-	lea	(a3),a0
+	lea	(a4),a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	lob	RefreshGadgets
@@ -4910,7 +4894,7 @@ wrender
 	bsr.w	reslider
 
 	move.l	windowbase(a5),a0
-	bsr.b	setscrtitle
+	bsr.w	setscrtitle
 	move.l	keycheckroutine(a5),-(sp)
 	rts
 
@@ -4962,40 +4946,65 @@ unlockscreen
 mainWindowSizeChanged
 	DPRINT	"new size"
 	move.l	windowbase(a5),a0
-	moveq	#0,d0
-	moveq	#0,d1
-	moveq	#0,d2
-	moveq	#0,d3
-	moveq	#0,d4
-	move	wd_Height(a0),d0
-	move	windowtop(a5),d1
-	move	WINSIZY(a5),d2
 	
 	* Calculate the start y-position of the filebox 
-	move.l	#62+WINY,d2
+	move	#62+WINY,d2
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt
 	add	#16,d2
 .noAlt
 	add	windowtop(a5),d2
 
-	move.l	d0,d3
-	sub	d2,d3
-	lsr	#3,d3
+	move	wd_Height(a0),d0
+	sub	d2,d0
+	lsr	#3,d0
 
-	moveq	#0,d4
-	move	boxsize(a5),d4
-
-	DPRINT	"Height=%ld top=%ld box y=%ld lines=%ld boxsize=%ld"
-
-	move	d3,boxsize(a5)
+	* Store new box size
+	move	d0,boxsize(a5)
 	
 	* Set new boxsize into prefs gadget
-	move	d3,d0
 	bsr.w	setprefsbox
-	move.b	ownsignal2(a5),d1
-	jsr	signalit	
 
+	* Signal to make changes happen
+	move.b	ownsignal2(a5),d1
+	jmp	signalit	
+
+
+disableResizeGadget
+	tst.b	uusikick(a5)
+	bne.b	.new
+	* On old kick get rid of it altogether
+	clr.l	gadgetListModeChangeButton+gg_NextGadget
+.new
+	* Hide and disable
+	lea	gadgetResize,a1
+	clr	gg_Width(a1)
+	or	#GFLG_DISABLED,gg_Flags(a1)
+	rts
+
+configResizeGadget
+	bsr.b	disableResizeGadget
+	tst	boxsize(a5)
+	beq.b	enableResizeGadget\.small
+
+enableResizeGadget
+	tst.b	uusikick(a5)
+	beq.b	.old
+	lea	gadgetResize,a1
+	move.l	a1,gadgetListModeChangeButton+gg_NextGadget
+	move.l	windowbase(a5),a0
+	moveq	#0,d0
+	move.b	wd_BorderBottom(a0),d0
+	addq	#2,d0
+	move	d0,gg_Height(a1)
+	subq	#2,d0
+	neg	d0
+	move	d0,gg_TopEdge(a1)
+	* Enable and unhide
+	and	#~GFLG_DISABLED,gg_Flags(a1)
+	move	#16,gg_Width(a1)
+.old
+.small
 	rts
 	
 *******************************************************************************
@@ -6411,9 +6420,11 @@ zoomfilebox
 	beq.b	.z
 	clr	boxsize(a5)
 	move	d0,boxsizez(a5)
+	bsr	disableResizeGadget
 	bra.b	.x
 .z
 	move	boxsizez(a5),boxsize(a5)
+	bsr	enableResizeGadget
 .x
 	bsr.w	setprefsbox
 	move.b	ownsignal2(a5),d1
@@ -47201,11 +47212,11 @@ gadgetListModeChangeButtonImagePtr
 	; ig_NextImage
 	dc.l 0
 
-BottomSizeGadget
+gadgetResize
 	; gg_Next
 	dc.l	0
 	dc.w	-16,-4	;Leftedge,Topedge
-	dc.w	16,4
+	dc.w	16,4	; Width, Height
 	dc.w	GFLG_RELRIGHT!GFLG_RELBOTTOM!GFLG_GADGHNONE
 	dc.w	0
 	dc.w	GTYP_SIZING
