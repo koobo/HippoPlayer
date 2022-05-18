@@ -1457,7 +1457,7 @@ sm_stereo14	=	5
 wflags set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags set wflags!WFLG_SMART_REFRESH!WFLG_RMBTRAP!WFLG_REPORTMOUSE
 idcmpflags set IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_CLOSEWINDOW
-idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
+idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY!IDCMP_NEWSIZE
 
 wflags2	set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags2 set wflags2!WFLG_SMART_REFRESH!WFLG_RMBTRAP
@@ -3373,6 +3373,12 @@ msgloop
 	;move.l	d2,d0
 	;DPRINT	"IDCMP=%ld"
 
+	cmp.l	#IDCMP_NEWSIZE,d2
+	bne.b	.noNewSize
+	DPRINT	"new size"
+	bra.b	.idcmpLoop
+	
+.noNewSize
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
 	bne.b	.noChangeWindow
 	bsr.w	zipwindow
@@ -3395,7 +3401,7 @@ msgloop
 	bne.b  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
 	bsr.w	mousemoving
-	bra.b	.idcmpLoop
+	bra.w	.idcmpLoop
 
 .noMouseMove
 	cmp.l	#IDCMP_GADGETUP,d2
@@ -4685,15 +4691,31 @@ wrender
 .oru
 .vanaha
 
+	* On kick2.0 insert an invisible size gadget first
+	move.l	a4,a3
+	tst.b	uusikick(a5)
+	beq.b	.old
+	lea	BottomSizeGadget,a1
+	move.l	a4,(a1) * NextGadget points to the rest
+	move.l	a1,a3
+	move.l	windowbase(a5),a0
+	moveq	#0,d0
+	move.b	wd_BorderBottom(a0),d0
+	addq	#2,d0
+	move	d0,gg_Height(a1)
+	subq	#2,d0
+	neg	d0
+	move	d0,gg_TopEdge(a1)
+.old
 
 * sitten isket‰‰n gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
-	lea	(a4),a1
+	lea	(a3),a1
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-	lea	(a4),a0
+	lea	(a3),a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	lob	RefreshGadgets
@@ -47138,6 +47160,22 @@ gadgetListModeChangeButtonImagePtr
 	dc.b 0
 	; ig_NextImage
 	dc.l 0
+
+BottomSizeGadget
+	; gg_Next
+	dc.l	0
+	dc.w	-16,-4	;Leftedge,Topedge
+	dc.w	16,4
+	dc.w	GFLG_RELRIGHT!GFLG_RELBOTTOM!GFLG_GADGHNONE
+	dc.w	0
+	dc.w	GTYP_SIZING
+	dc.l	0		;GadgetRender
+	dc.l	0		;SelectRender
+	dc.l	0		;Text
+	dc.l	0		;Mutalexclude
+	dc.l	0		;Specialinfo
+	dc.w	0		;ID
+	dc.l	0		;Userdata
 
 * Rename the gadgets defined above to something not crazy
 * 1st row
