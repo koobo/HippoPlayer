@@ -3110,11 +3110,8 @@ msgloop
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
 	bne.b	.noe
-
 	jsr	forceRefreshList
-
 .noe
-
 ** ei saa rämpätä ikkunaa jos se ei oo oikeassa koossaan!!
 
 	moveq	#0,d7
@@ -3126,7 +3123,6 @@ msgloop
 	st	d7
 
 	push	d7
-
 
 	tst.b	win(a5)
 	beq.b	.av
@@ -3268,7 +3264,7 @@ msgloop
 	
 .nwww	pop	d0
 
-	bsr.w		areMainWindowGadgetsFrozen
+	bsr.w	areMainWindowGadgetsFrozen
 	bne.w	.nwwwq
 
 	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
@@ -3375,7 +3371,7 @@ msgloop
 
 	cmp.l	#IDCMP_NEWSIZE,d2
 	bne.b	.noNewSize
-	DPRINT	"new size"
+	bsr	mainWindowSizeChanged
 	bra.b	.idcmpLoop
 	
 .noNewSize
@@ -3398,10 +3394,10 @@ msgloop
 	bne.b	.noMouseMove
 	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
-	bne.b  	.idcmpLoop
+	bne.w  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
 	bsr.w	mousemoving
-	bra.w	.idcmpLoop
+	bra.b	.idcmpLoop
 
 .noMouseMove
 	cmp.l	#IDCMP_GADGETUP,d2
@@ -4148,6 +4144,10 @@ zipwindow
 ** pieni ikkuna!
 	move.l	windowbase(a5),a0
 	lea	gadgets,a1
+	tst.b	uusikick(a5)
+	beq.b	.old
+	lea	BottomSizeGadget,a1
+.old
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
@@ -4957,7 +4957,47 @@ unlockscreen
 .q	rts
 
 
+* Called upon IDCMP_NEWSIZE after the user dragged the
+* window size gadget.
+mainWindowSizeChanged
+	DPRINT	"new size"
+	move.l	windowbase(a5),a0
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	moveq	#0,d4
+	move	wd_Height(a0),d0
+	move	windowtop(a5),d1
+	move	WINSIZY(a5),d2
+	
+	* Calculate the start y-position of the filebox 
+	move.l	#62+WINY,d2
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt
+	add	#16,d2
+.noAlt
+	add	windowtop(a5),d2
 
+	move.l	d0,d3
+	sub	d2,d3
+	lsr	#3,d3
+
+	moveq	#0,d4
+	move	boxsize(a5),d4
+
+	DPRINT	"Height=%ld top=%ld box y=%ld lines=%ld boxsize=%ld"
+
+	move	d3,boxsize(a5)
+	
+	* Set new boxsize into prefs gadget
+	move	d3,d0
+	bsr.w	setprefsbox
+	move.b	ownsignal2(a5),d1
+	jsr	signalit	
+
+	rts
+	
 *******************************************************************************
 * Asettaa ikkunan screentitlen
 * a0 = windowbase
