@@ -1457,7 +1457,7 @@ sm_stereo14	=	5
 wflags set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags set wflags!WFLG_SMART_REFRESH!WFLG_RMBTRAP!WFLG_REPORTMOUSE
 idcmpflags set IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_CLOSEWINDOW
-idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY!IDCMP_NEWSIZE
+idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
 
 wflags2	set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags2 set wflags2!WFLG_SMART_REFRESH!WFLG_RMBTRAP
@@ -2273,22 +2273,25 @@ main
 .hasHome
  endif
 
-	lea	colors,a0
+	basereg	winstruc,a2
+	lea	winstruc,a2
 	move	#$0301,d0
 ;	moveq	#$0001,d0
-	move	d0,(a0)			* Ikkunoiden v‰rit sen mukaan
-	move	d0,colors2-colors(a0)
-	move	d0,colors3-colors(a0)
+	move	d0,colors(a2)			* Ikkunoiden v‰rit sen mukaan
+	move	d0,colors2(a2)
+	move	d0,colors3(a2)
 
-	lea	winstruc,a0		* Ikkunat avautuu publiscreeneille
+	* Ikkunat avautuu publiscreeneille
+	;lea	winstruc,a0	
+	move.l	a2,a0
 	bsr.b	.boob
-	lea	winstruc2-winstruc(a0),a0
+	lea	winstruc2(a2),a0
 	bsr.b	.boob
-	lea	winstruc3-winstruc2(a0),a0
+	lea	winstruc3(a2),a0
 	bsr.b	.boob
-	lea	winlistsel-winstruc3(a0),a0
+	lea	winlistsel(a2),a0
 	bsr.b	.boob
-	lea	swinstruc-winlistsel(a0),a0
+	lea	swinstruc(a2),a0
 	bsr.b	.boob
 	bra.b	.ohib
 
@@ -2301,11 +2304,13 @@ main
 	move	WINSIZX(a5),windowpos22(a5)	* Pienen koko ZipWindowille
 	* zipped window height
 	move	#11,windowpos22+2(a5)
-	* Request events
-	or.l	#IDCMP_CHANGEWINDOW,idcmpmw	
+	* Request events for kick2.0+
+	* Zip window, window resize due to size gadget
+	or.l	#IDCMP_CHANGEWINDOW!IDCMP_NEWSIZE,idcmpmw(a2)	
 
-.vanha
-lelp
+.vanha	
+	endb	a2
+	; Above stuff for kick2.0+
 
 	* Dos has been opened in the startup code
 	
@@ -4625,7 +4630,7 @@ getscreeninfo
 
 ****** Piirret‰‰n ikkunan kamat
 
-wrender
+wrender:
 	move.l	pen_0(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
@@ -4942,21 +4947,20 @@ unlockscreen
 
 
 * Called upon IDCMP_NEWSIZE after the user dragged the
-* window size gadget.
+* window size gadget. Filebox size is set accoring to window height.
 mainWindowSizeChanged
 	DPRINT	"new size"
 	move.l	windowbase(a5),a0
-	
-	* Calculate the start y-position of the filebox 
-	move	#62+WINY,d2
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt
-	add	#16,d2
-.noAlt
-	add	windowtop(a5),d2
+	tst.b	win(a5)
+	bne.b	.y
+.x	rts
+.y
+	bsr.w	getFileboxYStartToD2
 
 	move	wd_Height(a0),d0
 	sub	d2,d0
+	bmi.b	.x
+	* Divide to 8-pixel rows
 	lsr	#3,d0
 
 	* Store new box size
@@ -4969,7 +4973,7 @@ mainWindowSizeChanged
 	move.b	ownsignal2(a5),d1
 	jmp	signalit	
 
-
+* Disables the low right bottom resize gadget by making it 0 pixel wide
 disableResizeGadget
 	tst.b	uusikick(a5)
 	bne.b	.new
@@ -4982,29 +4986,58 @@ disableResizeGadget
 	or	#GFLG_DISABLED,gg_Flags(a1)
 	rts
 
+
+* Enables or disables the resize gadget
 configResizeGadget
 	bsr.b	disableResizeGadget
+	* Check if box is visible?
 	tst	boxsize(a5)
 	beq.b	enableResizeGadget\.small
 
+* Enables the low right bottom resize gadget, on kick2.0+ only,
+* where GTYP_SIZING is available.
 enableResizeGadget
 	tst.b	uusikick(a5)
 	beq.b	.old
+	* Append as the last one in the gadget list
 	lea	gadgetResize,a1
 	move.l	a1,gadgetListModeChangeButton+gg_NextGadget
 	move.l	windowbase(a5),a0
+	* Height is a bit larger than the window bottom border
 	moveq	#0,d0
 	move.b	wd_BorderBottom(a0),d0
 	addq	#2,d0
 	move	d0,gg_Height(a1)
+	* Position at the bottom of the window
 	subq	#2,d0
 	neg	d0
 	move	d0,gg_TopEdge(a1)
+
 	* Enable and unhide
 	and	#~GFLG_DISABLED,gg_Flags(a1)
 	move	#16,gg_Width(a1)
+
+	* Set wd_MinSize to correspond to 3 rows
+	bsr.b	getFileboxYStartToD2
+	add	#3*8+6,d2
+	move	d2,wd_MinHeight(a0)
+	* Max size too
+	add	#(50-3)*8,d2
+	move	d2,wd_MaxHeight(a0)
+
 .old
 .small
+	rts
+
+
+* Calculate the start y-position of the filebox 
+getFileboxYStartToD2
+	moveq	#62+WINY,d2
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt
+	add	#16,d2
+.noAlt
+	add	windowtop(a5),d2
 	rts
 	
 *******************************************************************************
