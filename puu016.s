@@ -550,8 +550,8 @@ req_file3	rs.l	1		* prefs
 kokolippu	rs	1		* 0: pieni
 wkork		rs	1		* korkeus-vertailu zipwindowille
 windowpos	rs	2		* Ison ikkunan paikka
-windowpos2	rs	2		* Pienen ikkunan paikka (ZipWindow). Must be together
-windowpos22	rs	2		* ja koko
+windowZippedPos	rs	2	* Pienen ikkunan paikka (ZipWindow). Must be together
+windowZippedSize rs	2	* ja koko
 infopos2	rs	2		* sampleikkunan ja sidinfon paikka
 
 screenaddr	rs.l	1		* Näytön osoite
@@ -2301,12 +2301,12 @@ main
 
 .ohib
 	* Zipped window width
-	move	WINSIZX(a5),windowpos22(a5)	* Pienen koko ZipWindowille
+	move	WINSIZX(a5),windowZippedSize(a5)	* Pienen koko ZipWindowille
 	* zipped window height
-	move	#11,windowpos22+2(a5)
+	move	#11,windowZippedSize+2(a5)
 	* Request events for kick2.0+
-	* Zip window, window resize due to size gadget
-	or.l	#IDCMP_CHANGEWINDOW!IDCMP_NEWSIZE,idcmpmw(a2)	
+	* Catch zip window and window resize events
+	or.l	#IDCMP_CHANGEWINDOW,idcmpmw(a2)	
 
 .vanha	
 	endb	a2
@@ -3123,6 +3123,9 @@ msgloop
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
 	beq.b	.weew
+
+	DPRINT	"Boxsize changed"
+
 	move	d0,boxsize0(a5)
 	bsr.w	setboxy
 	st	d7
@@ -3374,16 +3377,20 @@ msgloop
 	;move.l	d2,d0
 	;DPRINT	"IDCMP=%ld"
 
-	cmp.l	#IDCMP_NEWSIZE,d2
-	bne.b	.noNewSize
-	bsr	mainWindowSizeChanged
-	bra.b	.idcmpLoop
-	
-.noNewSize
+	; Window resize events go into IDCMP_CHANGEWINDOW
+	; too.
+	;cmp.l	#IDCMP_NEWSIZE,d2
+	;bne.b	.noNewSize
+	;bsr	mainWindowSizeChanged
+	;bra.b	.idcmpLoop
+;.noNewSize
+
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
 	bne.b	.noChangeWindow
 	bsr.w	zipwindow
+	bsr	mainWindowSizeChanged
 	bra.b	.idcmpLoop
+
 .noChangeWindow
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.noRawKey
@@ -4122,7 +4129,7 @@ ply2	equr	d7
 
 *** Päivitetään ikkunan sisältö
 
-zipwindow
+zipwindow:
 	DPRINT	"ZipWindow refresh"
 	tst.b	win(a5)
 	bne.b	.onw	
@@ -4131,32 +4138,40 @@ zipwindow
 	pushm	all
 	move.l	windowbase(a5),a0
 	move	wd_Height(a0),d0
-	cmp	wkork(a5),d0
-	beq.b	.x
-	move	d0,d1
-	sub	wkork(a5),d1	* onko muutos suurempi kuin 60 pixeliä?
-	move	d0,wkork(a5)
-	tst	d1
-	bpl.b	.e
-	neg	d1
-.e	cmp	#40,d1
-	blo.b	.x
+ if DEBUG
+ 	ext.l	d0
+ 	moveq	#0,d1
+ 	move	windowZippedSize+2(a5),d1
+	DPRINT	"height=%ld zipped=%ld"
+ endif
+	cmp	windowZippedSize+2(a5),d0
+	bne.b	.biggified
 
-
-	not.b	kokolippu(a5)
-	bne.b	.big
-	move.l	4(a0),windowpos2(a5)
+	* Zipped to small size
+	tst.b	kokolippu(a5)
+	beq.b	.x * Safety: already small?
+	clr.b	kokolippu(a5)
+	* Store zipped position 
+	move.l	4(a0),windowZippedPos(a5)
 ** pieni ikkuna!
-	move.l	windowbase(a5),a0
+	;move.l	windowbase(a5),a0
 	lea	gadgets,a1
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,RemoveGList
+	DPRINT	"small"
 	bra.b	.x
-.big
+
+.biggified
+	tst.b	kokolippu(a5)
+	bne.b	.x * Already big?
+	st	kokolippu(a5)
+	DPRINT	"big"
+	* Store window position
 	move.l	4(a0),windowpos(a5)
 	bsr.w	wrender
+
 .x	popm	all
 	rts
 
@@ -4180,7 +4195,7 @@ avaa_ikkuna:
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc,a0
 
-	move.l	windowpos2(a5),(a0)		* Pienen paikka ja koko
+	move.l	windowZippedPos(a5),(a0)		* Pienen paikka ja koko
 	moveq	#11,d0
 	tst.b	uusikick(a5)
 	bne.b	.new1
@@ -4270,9 +4285,13 @@ avaa_ikkuna:
  if DEBUG
 	moveq	#0,d0
 	moveq	#0,d1
-	move	wd_Width(a0),d0
-	move	wd_Height(a0),d1
-	DPRINT	"Open window %ldx%ld"
+	moveq	#0,d2
+	moveq	#0,d3
+	move	wd_LeftEdge(a0),d0
+	move	wd_TopEdge(a0),d1
+	move	wd_Width(a0),d2
+	move	wd_Height(a0),d3
+	DPRINT	"Open window pos=%ldx%ld size=%ldx%ld"
  endif
 	move.l	rastport(a5),a1
 	move.l	fontbase(a5),a0
@@ -4555,7 +4574,7 @@ getscreeninfo
 	add	d0,winstruc2+nw_Height
 	add	d0,winstruc3+nw_Height
 	add	d0,swinstruc+nw_Height
-	add	d0,windowpos22+2(a5)	* pienen ikkunan zip-koko
+	add	d0,windowZippedSize+2(a5)	* pienen ikkunan zip-koko
 
 	move	windowleft(a5),d1
 	move	windowleft2(a5),d2
@@ -4949,11 +4968,12 @@ unlockscreen
 * Called upon IDCMP_NEWSIZE after the user dragged the
 * window size gadget. Filebox size is set accoring to window height.
 mainWindowSizeChanged
-	DPRINT	"new size"
+	DPRINT	"mainWindowSizeChanged"
 	move.l	windowbase(a5),a0
 	tst.b	win(a5)
 	bne.b	.y
-.x	rts
+.x 	DPRINT	"bail out"
+	rts
 .y
 	bsr.w	getFileboxYStartToD2
 
@@ -5078,10 +5098,17 @@ sulje_ikkuna
 
 	tst.b	kokolippu(a5)
 	bne.b	.big
-	move.l	4(a0),windowpos2(a5)	* Pienen ikkunan koordinaatit
+	move.l	4(a0),windowZippedPos(a5)	* Pienen ikkunan koordinaatit
+	DPRINT	"SMALL"
 	bra.b	.small
 .big	move.l	4(a0),windowpos(a5)	* Ison ikkunan koordinaatit
+	DPRINT	"BIG"
 .small
+ if DEBUG
+ 	movem	4(a0),d0/d1
+	DPRINT	"Close window %ldx%ld"
+ endif
+
 	move.l	46(a0),a1		* WB screen addr
 	move	14(a1),wbkorkeus(a5)	* WB:n korkeus
 	clr.l	windowbase(a5)
@@ -6438,7 +6465,7 @@ buttonspressed
 	beq.b	.xy
 	move.l	d0,a0
 	DPRINT	"Execute routine"
-	jsr		(a0)
+	jsr	(a0)
 .xy
 	clr.l	rightButtonSelectedGadget(a5)
 	clr.l	rightButtonSelectedGadgetRoutine(a5)
@@ -11803,8 +11830,8 @@ loadprefs2
 	move	#640,wbleveys(a5)
 	move	#360,windowpos(a5)		* pistetään ikkunoiden paikat
 	move	#23,windowpos+2(a5)
-	move	#360,windowpos2(a5)
-	move	#23,windowpos2+2(a5)
+	move	#360,windowZippedPos(a5)
+	move	#23,windowZippedPos+2(a5)
 	move	#42,windowpos_p(a5)
 	move	#18,windowpos_p+2(a5)
 	;move	#259,quadpos(a5)
@@ -11854,7 +11881,7 @@ loadprefs2
 	
 	;move.b	prefs_quadmode(a0),quadmode(a5)
 	move.l	prefs_mainpos1(a0),windowpos(a5)
-	move.l	prefs_mainpos2(a0),windowpos2(a5)
+	move.l	prefs_mainpos2(a0),windowZippedPos(a5)
 	move.l	prefs_prefspos(a0),windowpos_p(a5)
 	;move.l	prefs_quadpos(a0),quadpos(a5)
 	;move.b	prefs_quadon(a0),quadon(a5)
@@ -12134,7 +12161,7 @@ saveprefs
 	beq.b	.smal
 	move.l	4(a0),windowpos(a5)
 	bra.b	.h
-.smal	move.l	4(a0),windowpos2(a5)
+.smal	move.l	4(a0),windowZippedPos(a5)
 
 .h	move.l	windowbase2(a5),d0
 	beq.b	.g
@@ -12164,7 +12191,7 @@ saveprefs
 	move.b	s3mmode2(a5),prefs_s3mmode2(a0)
 	move.b	s3mmode3(a5),prefs_s3mmode3(a0)
 	move.l	windowpos(a5),prefs_mainpos1(a0)
-	move.l	windowpos2(a5),prefs_mainpos2(a0)
+	move.l	windowZippedPos(a5),prefs_mainpos2(a0)
 	move.l	windowpos_p(a5),prefs_prefspos(a0)
 	move.b	ptmix(a5),prefs_ptmix(a0)
 	move.b	xpkid(a5),prefs_xpkid(a0)
@@ -46885,7 +46912,7 @@ idcmpmw	dc.l	idcmpflags
 	dc.l	WA_PubScreenFallBack,TRUE
 	* Needed by ZipWindow (kick2.0)
 	* Pointer to four words, LeftEdge, TopEdge, Width, Height
-	dc.l	WA_Zoom,windowpos2+var_b 	
+	dc.l	WA_Zoom,windowZippedPos+var_b 	
 	dc.l	TAG_END
 
 * Main window gadgets
@@ -47192,7 +47219,7 @@ prefsSpectrumScopeBars
 ; Gadget
 gadgetListModeChangeButton
 	; gg_NextGadget
-	dc.l 0	
+	dc.l 0
 	; gg_LeftEdge
 	dc 9
 	; gg_TopEdge
