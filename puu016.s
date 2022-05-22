@@ -3406,7 +3406,7 @@ msgloop
 	bne.b	.noMouseMove
 	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
-	bne.w  	.idcmpLoop
+	bne.b  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
 	bsr.w	mousemoving
 	bra.b	.idcmpLoop
@@ -6854,18 +6854,21 @@ signalreceived
 	cmp.b	#pm_random,playmode(a5)	* Arvotaanko järjestys?
 	bne.b	.norand
 
+* Previously when a song end was detected in random play mode,
+* the next subsong was played if there were any subsongs.
+* Better would be to randomize a new module instead.
+
 ** Onko subsongeja soiteltavaks?
 ** Are there any subsongs to play next?
-	move.l	playerbase(a5),a0
-	move	p_liput(a0),d0
-	* See if this replayer supports subsongs
-	btst	#pb_song,d0
- 	beq.b	.ran
-	move	songnumber(a5),d0
-	cmp	maxsongs(a5),d0
-	bne.w	actionNextSong		* next song!
-
-.ran	
+;	move.l	playerbase(a5),a0
+;	move	p_liput(a0),d0
+;	* See if this replayer supports subsongs
+;	btst	#pb_song,d0
+; 	beq.b	.ran
+;	move	songnumber(a5),d0
+;	cmp	maxsongs(a5),d0
+;	bne.w	actionNextSong		* next song!
+;.ran	
 	* no subsongs, randomize next one
 	bra.w	.karumeininki
 
@@ -17519,7 +17522,7 @@ lootaan_aika
 
 ************* tähän timeout!
 	move	timeout(a5),d1
-	beq.b	.ok0
+	beq.w	.ok0
 	mulu	#50,d1
 
 	cmp.l	d1,d0
@@ -17544,6 +17547,11 @@ lootaan_aika
 
 	move	#$28,rawkeyinput(a5)	* NEXT!
 
+	* In random play mode let's just select the next random
+	* module instead of going through the subsongs.
+	cmp.b	#pm_random,playmode(a5)	
+	beq.b	.nosongs
+	
 	move.l	playerbase(a5),a0	
 	move	p_liput(a0),d1		
 	btst	#pb_song,d1
