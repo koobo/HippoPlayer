@@ -18509,6 +18509,7 @@ showTooltipPopup
 * Closes the tooltip popup if open.
 * Also deactivates any tooltip that is about to open.
 closeTooltipPopup
+	pushm	all
 	bsr.w	deactivateTooltip
 	move.l	tooltipPopupWindow(a5),d0
 	beq.b	.exit
@@ -18517,7 +18518,9 @@ closeTooltipPopup
 	move.l	tooltipPopupWindow(a5),a0
 	lore	Intui,CloseWindow
 	clr.l	tooltipPopupWindow(a5)
-.exit 	rts
+.exit 	
+	popm	all
+	rts
 
 
 * Flush the window message queue. This should be done before closing window.
@@ -26252,6 +26255,9 @@ noteScroller2:
 *
 
 loadmodule
+	; Popup should close so that window is visible during load
+	bsr	closeTooltipPopup
+
 	st	loading(a5)
 
 	move.b	d0,d7
