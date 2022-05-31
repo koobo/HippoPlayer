@@ -40,6 +40,56 @@ NOTE 4: Too long didn't read
 ------------------------------------------------------------------------------
 
 
+# Changes from v2.52 (30.4.2022) to v2.53 (?.?.2021) 
+
+## New fixes:
+- A new bug appeared in v2.52 which prevented scopes from opening
+  to the configured public screen. Fixed.
+
+- The new favorite key shortcut [SHIFT+F] was actually already used
+  as "find next". Restored the original functionality and changed
+  the favorite key shortcut to [CTRL+F].
+
+- Fix numberpad key shortcuts for changing subsongs being in the wrong
+  order (keys 4 and 6).
+
+- Fix sample scopes not working with samples larger than 64 kB.
+  
+- The previous version had a fix for unnecessary module skipping
+  when module end was detected. Unfortunately this also broke the 
+  detection mechanism for never ending modules. A fix for this was done.
+ 
+- The 9xx command in Protracker has a bug which makes it not work 
+  with samples longer than 64 kB, only silence is played.
+  Introduced this bug in Hippo, which it previously didn't have, 
+  for maximum compatibility.
+
+- DIGIBooster replay code now uses a less violent interrupt mechanism.
+  This may help in some obscure cases.
+
+- Random play mode: Previously Hippo would play through subsongs
+  if the module had them. Now the next randomized module is played
+  instead when an end is detected or timeout is reached. 
+
+- Fix wrong hippo graphics placement when big buttons is in use.
+
+
+## New features:
+
+ - The main window can now be resized by dragging from the lower right 
+   corner of the window. This is for kickstart 2.0+ only.
+
+ - The PS3M volume boost setting in Prefs now goes all the way up to
+   16. The old maximum 8 was not enough for modules with over 16 channels, 
+   especially with 32 channels used by ImpulseTracker. 
+   The value is not very intuitive though. Basically the max effective
+   value is determined by the amount of channels divided by two, so for a 
+   8ch module the max boost value having any effect is 4.
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
 # Changes from v2.50 (31.12.2021) to v2.52 (30.4.2022)
 
 This time we skip over one version number!

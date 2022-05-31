@@ -3,7 +3,7 @@ WISHLISH
 + Patternscope for other formats too?
 + Player group from PROGDIR
 + DONE: .gz support
-- UGLY: window size gadget
++ UGLY: window size gadget
 + favorites list
  -- button to favorite, send to another list, save list to a certain place
  -- list will show if file is favorited by checking the list
@@ -69,6 +69,23 @@ PATTERNINIT - EP
 + KRIS
 + Mugician2
 
+BUG:
+- "Registered to" text no longer visible due to listmode initilization at
+  start
+
+CRASH:
+- open MUG2.DF0 large module as startup, not enough mem to load it.
+  HiP-Info crashes 
+
+TFMX 7v:
+- Turrican 2 title plays bad on 060 with caches on,
+  has self modifying code
+
+BUG:
+- protracker fast ram player may not work with 64+ kB samples
+
+FIXED: BUG: 
+- scope windows only go to WB screen
 
 BUG:
 - open scopes
@@ -234,7 +251,7 @@ CRASH PS3M
 - play "the cosmic dog ii.mod"
 - only happened once
 
-TODO
+FIXED: TODO
 - "list mode toggle" still visible with RMB+PR
 
 CRASH
@@ -270,7 +287,7 @@ FIXED: BUG
 - toggle more
 - normal list: somes the R at different places
 
-TODO filebrowser
+DONE: TODO filebrowser
 + SHOW dir name on top, instead of "Parent"?
 - Sorting... message: use tick counter to delay it
 + BACKSPACE shortcut for "go to parent"
@@ -307,7 +324,7 @@ TODO filebrowser
 -- wait for song end?
 + KEYBOARD: shift+m: toggle list mode
 
-TODO
+FIXED: TODO
 - PS3M volume boost: improve it
 
 TODO:
