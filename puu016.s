@@ -5357,6 +5357,11 @@ printhippo1
 	beq.b	.e
 	move	#150,d2		* position when registered
 .e
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d3
+.noAlt1
+
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
 ;	move	#$ee,d6		* minterm, kopio a or d ->d
@@ -37450,7 +37455,7 @@ p_multi	jmp	.s3init(pc)
 
 	moveq	#$62,d0	* version
 	lea	.itPath(pc),a0 
-	* Distract loader so that it will not try to
+	* Distract the loader so that it will not try to
 	* load PS3M from player group, instead it will
 	* try eagleplayer loading from filesystem.
 	move	playertype(a5),-(sp)
