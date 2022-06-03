@@ -30159,6 +30159,10 @@ fileBrowserRoot
 	clr	fileBrowserSelectionHistoryIndex(a5)
 	bsr.w	freeFileBrowserList
 
+	* According to the Amiga Guru Book, access to dl_Root
+	* should always be protected as it may change.
+	lore	Exec,Forbid
+
 	move.l	_DosBase(a5),a0
 	move.l	dl_Root(a0),a0
 	move.l	rn_Info(a0),d0
@@ -30205,6 +30209,9 @@ fileBrowserRoot
 	bne.b	.devloop
 
 .error
+
+	lore	Exec,Permit
+
 	* Does not do force refresh
 	jsr	sortModuleList
 
