@@ -33196,6 +33196,7 @@ sidScopeUpdate
 	move.l	d6,ns_start(a0)
 	move.l	d6,ns_loopstart(a0)
 
+	
 .MIN_PERIOD = 123
 
 	cmp	#.MIN_PERIOD,d2
@@ -33208,8 +33209,11 @@ sidScopeUpdate
 	* d5 = fractional 16-bit step
 	* Get follow position
 	move.w	(a3,d7.w),d2
+	* This many steps per frame
+	moveq	#$40-1,d0
+.step
 	* Update fractions
-	add.w	d5,0(a2,d7.w)
+	add.w	d5,(a2,d7.w)
 	* Add bytes if enough fractions
 	addx.w	d4,d2
 .retry
@@ -33219,6 +33223,8 @@ sidScopeUpdate
 	sub.w	d1,d2
 	bra.s	.retry
 .ok
+	dbf	d0,.step
+	
 	* Updated byte position
 	move.w	d2,(a3,d7.w)
 
@@ -33233,7 +33239,7 @@ sidScopeUpdate
 	lea	ns_size(a0),a0
 	addq	#2,d7
 	cmp	#4*2,d7
-	bne.b	.loop
+	bne.w	.loop
 	rts
 
 .followPositions
