@@ -23464,9 +23464,13 @@ scopeinterrupt:
 	move.l	sampleadd(a5),d0
 	move.l	samplefollow(a5),a0
 	add.l	d0,(a0)
-	rts
+.x	rts
 
 .notSample
+	* PSID uses it's own following mechanism
+	cmp	#pt_sid,playertype(a5)
+	beq.b	.x
+
 	* Check player has generic quadrascope support
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d1
@@ -25321,7 +25325,7 @@ notescroller:
 ;	add.w	d0,d0
 ;	move.w	d0,d1
 ;	add.w	d0,d0
-;	move.l	0(a1,d0.w),a3
+;	move.l	0(a1,d0.w),a3  * dd_SampleX
 ;	add.w	d0,d0
 ;	lea	lbl006b58,a2
 ;	lea	lbl006950,a4
@@ -25330,7 +25334,7 @@ notescroller:
 ;	lea	lbl006b50,a5
 ;	moveq	#64-1,d3
 ;	move.w	#32*40,d4
-;	move.w	$20(a1,d1.w),d6
+;	move.w	$20(a1,d1.w),d6 * dd_EnveX
 ;	bne.s	.lbc006706
 
 ;.lbc0066f8	move.w	d4,(a4)+
@@ -25339,13 +25343,13 @@ notescroller:
 ;	lea	-$80(a4),a4
 ;	bra.b	.lbc006752
 
-;.lbc006706	cmp.w	#$7a,$18(a1,d1.w)
+;.lbc006706	cmp.w	#$7a,$18(a1,d1.w)  * dd_PeriodX
 ;	bls.s	.lbc0066f8
 
 ;	moveq	#0,d4
 ;	move.l	#$7b0000,d5
-;	divu	$18(a1,d1.w),d5
-;	move.w	$10(a1,d1.w),d7
+;	divu	$18(a1,d1.w),d5 * dd_PeriodX
+;	move.w	$10(a1,d1.w),d7 * dd_LengthX
 ;	move.w	0(a5,d1.w),d2
 ;.lbc006722	add.w	d5,0(a2,d1.w)
 ;	addx.w	d4,d2
@@ -32711,9 +32715,9 @@ convert_oldst
 * SID
 ******************************************************************************
 
-p_sid	jmp	.init(pc)
+p_sid:	jmp	.init(pc)
 	p_NOP
-	p_NOP
+	jmp 	sidScopeUpdate(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
@@ -32722,10 +32726,10 @@ p_sid	jmp	.init(pc)
 	jmp	.eteen(pc)
 	p_NOP
 	p_NOP
-	jmp id_sid1(pc)
+	jmp 	id_sid1(pc)
 	p_NOP
-	dc.w pt_sid 				* type
-	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume
+	dc.w 	pt_sid 				* type
+	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"PSID",0
 .flag	dc.b	0
  even
@@ -32745,8 +32749,10 @@ p_sid	jmp	.init(pc)
 	tst.b	.flag
 	bne.b	.plo
 
-;	moveq	#1,d0
-;	lob	SetDisplayEnable
+	* Enable getting data for scopes.
+	* Must have patched the display signal away first.
+	moveq	#1,d0
+	lob	SetDisplayEnable
 
 	lob	AllocEmulResource
 	tst.l	d0
@@ -32818,7 +32824,6 @@ p_sid	jmp	.init(pc)
 
 
 .free	lob	FreeEmulResource
-	bsr 	sid_remVolumePatch
 
 	clr.b	.flag
 	rts
@@ -32838,7 +32843,6 @@ p_sid	jmp	.init(pc)
 	addq	#1,d0
 	lob	StartSong
 
-	bsr.w	sid_addVolumePatch
 	rts
 
 .song	movem.l	d0/d1/a0/a1/a6,-(sp)
@@ -32876,6 +32880,8 @@ p_sid	jmp	.init(pc)
 
 
 rem_sidpatch
+;	rts
+
 	move.l	(a5),a0
 	cmp	#34,LIB_VERSION(a0)
 	bhi.b	.q
@@ -32892,9 +32898,13 @@ rem_sidpatch
 	move.l	sidlibstore1(a5),14(a1)
 	move.l	sidlibstore1+4(a5),4+14(a1)
 	bsr	clearCpuCaches
-.q	rts
+.q	
+	bsr.w	sid_remVolumePatch
+	rts
 
 init_sidpatch
+;	rts
+
 	move.l	(a5),a0
 	cmp	#34,LIB_VERSION(a0)
 	bhi.b	.q
@@ -32926,8 +32936,9 @@ init_sidpatch
 	move.l	.sidp2(pc),86(a0)
 	move.l	.sidp2+4(pc),4+86(a0)
 	bsr	clearCpuCaches
-
-.q	rts
+.q
+	bsr.w	sid_addVolumePatch
+	rts
 
 .sidp1	jsr	.sidpatch1
 	nop
@@ -33005,6 +33016,11 @@ sid_addVolumePatch
 	move.l	.vol2patch+2(pc),12+8418+2(a0)
 	move	.vol3patch(pc),12+12+8418(a0)
 	move.l	.vol3patch+2(pc),12+12+8418+2(a0)
+	* Disable DisplaySignal mechanism,
+	* alternatively could SetDisplaySignal
+	* so that when display is enabled there will be no
+	* crashhhhhh.
+	move	#$4e75,1136(a0)
 	bsr	clearCpuCaches
 .q
 	rts
@@ -33146,6 +33162,85 @@ id_sid
 .id1	dc.b	"PLAYSID",0
 .ide1
  even
+
+* Scope data update and following
+sidScopeUpdate
+	lea	scopeData+scope_ch1(a5),a0
+	moveq	#0,d7
+	move.l	_SIDBase(a5),a1
+	* DisplayData:
+	move.l	50(a1),a1
+	lea	.followPositions(pc),a3
+	lea	.followFractions(pc),a2
+	moveq	#0,d4
+.loop
+	* WORD index d7
+	moveq	#0,d1
+	move	dd_Length1(a1,d7),d1
+	move	dd_Period1(a1,d7),d2 
+	move	dd_Enve1(a1,d7),d3
+
+	move	d2,ns_period(a0)
+	move	d3,ns_tempvol(a0)
+	move	d1,d6
+	* Elsewhere these are handled as words
+	lsr	#1,d6
+	move	d6,ns_length(a0)
+	move	d6,ns_replen(a0)
+
+	* APTR index d6
+	move	d7,d6
+	add	d6,d6
+	* Set initial sample position
+	move.l	dd_Sample1(a1,d6),d6
+	move.l	d6,ns_start(a0)
+	move.l	d6,ns_loopstart(a0)
+
+.MIN_PERIOD = 123
+
+	cmp	#.MIN_PERIOD,d2
+	bhs.b	.notEmpty
+	clr	ns_tempvol(a0)
+	bra.b	.skip
+.notEmpty
+	move.l	#.MIN_PERIOD<<16,d5
+	divu	d2,d5 * dd_Period1
+	* d5 = fractional 16-bit step
+	* Get follow position
+	move.w	(a3,d7.w),d2
+	* Update fractions
+	add.w	d5,0(a2,d7.w)
+	* Add bytes if enough fractions
+	addx.w	d4,d2
+.retry
+	* Check if stepped over the end
+	cmp.w	d1,d2
+	blt.s	.ok
+	sub.w	d1,d2
+	bra.s	.retry
+.ok
+	* Updated byte position
+	move.w	d2,(a3,d7.w)
+
+	* Set final sample position and length
+	* for scopes
+	ext.l	d2
+	add.l	d2,ns_start(a0)
+	lsr	#1,d2 * words
+	sub	d2,ns_length(a0)
+	
+.skip
+	lea	ns_size(a0),a0
+	addq	#2,d7
+	cmp	#4*2,d7
+	bne.b	.loop
+	rts
+
+.followPositions
+	ds.w	4
+.followFractions
+	ds.w	4
+
 
 * Tänne väliin hämäävästi
 
