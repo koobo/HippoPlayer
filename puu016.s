@@ -594,10 +594,10 @@ vbsaatu		rs.b	1		* 1: saatiin vb intti
 prefs_task	rs.l	1		* prefs-prosessi
 
 * Prefs window will close if it receives this signal
-prefs_signal	rs.b	1		* prefs-signaali
+prefs_closeSignal	rs.b	1		* prefs-signaali
 
 * Prefs window will update contents when receiving this
-prefs_signal2	rs.b	1		* prefs-signaali 2
+prefs_updateContentsSignal	rs.b	1		* prefs-signaali 2
 
 songHasEndedSignal	rs.b	1	* Kappale soinut
 ownsignal2	rs.b	1	* position update in title bar, prefs update 
@@ -4990,7 +4990,11 @@ mainWindowSizeChanged
 
 	* Signal to make changes happen
 	move.b	ownsignal2(a5),d1
-	jmp	signalit	
+	jsr	signalit	
+	* Also update prefs window box size value.
+	* This doesn't actually update the propgadget position, 
+	* ah well.
+	bra	updateprefs
 
 * Disables the low right bottom resize gadget by making it 0 pixel wide
 disableResizeGadget
@@ -12600,6 +12604,7 @@ drawtexture:
 * Luodaan erillinen prosessi
 *******
 
+* This will signal the prefs window to update itself.
 updateprefs:
 	; Called from scope, no logging
 	;DPRINT	"Update prefs"
@@ -12610,7 +12615,7 @@ updateprefs:
 	beq.b	.x
 	move.l	d0,a1
 	moveq	#0,d0
-	move.b	prefs_signal2(a5),d1
+	move.b	prefs_updateContentsSignal(a5),d1
 	bset	d1,d0
 	lore	Exec,Signal
 .x	popm	all
@@ -12625,7 +12630,7 @@ sulje_prefs
 	beq.b	.ww
 	move.l	a6,-(sp)
 	moveq	#0,d0			* signaali prefssille lopettamisesta
-	move.b	prefs_signal(a5),d1
+	move.b	prefs_closeSignal(a5),d1
 	bset	d1,d0
 	move.l	prefs_task(a5),a1
 	lore	Exec,Signal
@@ -12991,11 +12996,11 @@ prefs_code
 
 	moveq	#-1,d0
 	lob	AllocSignal
-	move.b	d0,prefs_signal(a5)
+	move.b	d0,prefs_closeSignal(a5)
 ;	bmi.w	exprefs
 	moveq	#-1,d0
 	lob	AllocSignal
-	move.b	d0,prefs_signal2(a5)
+	move.b	d0,prefs_updateContentsSignal(a5)
 ;	bmi.w	exprefs
 
 	bsr.w	prefsgads
@@ -13025,22 +13030,24 @@ msgloop2
 	move.l	userport2(a5),a4
 	move.b	MP_SIGBIT(a4),d1	* IDCMP signalibitti
 	bset	d1,d0
-	move.b	prefs_signal(a5),d1	* oma signaali
+	move.b	prefs_closeSignal(a5),d1	* oma signaali
 	bset	d1,d0
-	move.b	prefs_signal2(a5),d1	* oma signaali ikkunan päivitykseen
+	move.b	prefs_updateContentsSignal(a5),d1	* oma signaali ikkunan päivitykseen
 	bset	d1,d0
 	lob	Wait			* Odotellaan...
 
-	move.b	prefs_signal(a5),d1	* käskeekö pääohjelma lopettamaan?
+	move.b	prefs_closeSignal(a5),d1	* käskeekö pääohjelma lopettamaan?
 	btst	d1,d0
 	bne.w	exprefs
 
-	move.b	prefs_signal2(a5),d1	* päivitys?
+	move.b	prefs_updateContentsSignal(a5),d1	* päivitys?
 	btst	d1,d0
 	beq.b	.naa
+	* Update window!
 	pushm	all
 	cmp	#4,prefsivu(a5)
 	bne.b	.er
+	* Done only for page 4?
 	bsr.w	prefsgads
 	bra.b	.er2
 .er	bsr.w	pupdate
@@ -13107,12 +13114,12 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.l	(a5),a6
 
 	moveq	#0,d0
-	move.b	prefs_signal(a5),d0
+	move.b	prefs_closeSignal(a5),d0
 	bmi.b	.yyk
 	lob	FreeSignal
 .yyk	
 	moveq	#0,d0
-	move.b	prefs_signal2(a5),d0
+	move.b	prefs_updateContentsSignal(a5),d0
 	bmi.b	.yyk2
 	lob	FreeSignal
 .yyk2
