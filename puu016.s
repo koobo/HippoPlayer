@@ -643,19 +643,18 @@ RUNNING_NOT       = 0
 RUNNING_YES       = 1
 * Request scope shutdown
 RUNNING_SHUT_IT   = $80
-quadraScopeRunning	     rs.b 1
-quadraScopeFRunning rs.b 1
-hippoScopeRunning        rs.b 1
-patternScopeRunning      rs.b 1
-spectrumScopeRunning     rs.b 1
-scopeToggleTable         rs.b 5 * Used by toggleScopes()
+quadraScopeRunning	rs.b 1
+quadraScopeFRunning 	rs.b 1
+hippoScopeRunning	rs.b 1
+patternScopeRunning     rs.b 1
+spectrumScopeRunning    rs.b 1
+scopeToggleTable        rs.b 5 * Used by toggleScopes()
 
-;omatrigger	rs.b	1	* kopio kplayerin usertrigist‰
 * This turns to 1 if user has manually activated the scope
 * by LMB click, when scope was passivated because not being
 * visible. As this is global user does not need to do that again.
-scopeManualActivation	rs.b	1	
-__pad0              rs.b  1
+scopeManualActivation	rs.b 1	
+__pad0     	        rs.b 1
 
 scopeData  rs.b	 scope_size
 
@@ -22302,16 +22301,21 @@ stopScopeTask
 .x	rts
 
 
-toggleScopes
-	DPRINT	"toggleScopes"
-	lea	scopeToggleTable(a5),a2
-	* Is any scope running?
-	moveq	#0,d0
-	or.b	quadraScopeRunning(a5),d0
+* Out:
+*   Z not set if any of the scopes is running
+anyScopeRunning
+	move.b	quadraScopeRunning(a5),d0
 	or.b	quadraScopeFRunning(a5),d0
 	or.b	hippoScopeRunning(a5),d0
 	or.b	patternScopeRunning(a5),d0
 	or.b	spectrumScopeRunning(a5),d0
+	rts
+
+toggleScopes
+	DPRINT	"toggleScopes"
+	lea	scopeToggleTable(a5),a2
+	* Is any scope running?
+	bsr.b	anyScopeRunning
 	beq.b	.start
 	* Preserve running statuses and stop all
 	move.b	quadraScopeRunning(a5),(a2)+
@@ -33164,7 +33168,12 @@ id_sid
  even
 
 * Scope data update and following
+* This is emulates what the PlaySid pplication does.
 sidScopeUpdate
+	* Skip this if not needed
+	bsr.w	anyScopeRunning
+	beq.w	.x
+
 	lea	scopeData+scope_ch1(a5),a0
 	moveq	#0,d7
 	move.l	_SIDBase(a5),a1
@@ -33195,7 +33204,6 @@ sidScopeUpdate
 	move.l	dd_Sample1(a1,d6),d6
 	move.l	d6,ns_start(a0)
 	move.l	d6,ns_loopstart(a0)
-
 	
 .MIN_PERIOD = 123
 
@@ -33240,13 +33248,12 @@ sidScopeUpdate
 	addq	#2,d7
 	cmp	#4*2,d7
 	bne.w	.loop
-	rts
+.x	rts
 
 .followPositions
 	ds.w	4
 .followFractions
 	ds.w	4
-
 
 * T‰nne v‰liin h‰m‰‰v‰sti
 
@@ -37022,7 +37029,7 @@ p_thx
 	bra.w	clearsound
 
 * Scope support
-
+* Update scope data once per vblank
 .updateScope
 	lea	scopeData+scope_ch1(a4),a0
 	move.l	thxroutines(a4),a1
@@ -37033,6 +37040,7 @@ p_thx
 .scope
 	tst.l	ns_start(a0)
 	bne.b	.same
+	* This needs tobe done only once it seems
 	move.l	.ahx_pvtAudioPointer(a1),ns_start(a0)
 	move.l	.ahx_pvtAudioPointer(a1),ns_loopstart(a0)
 	move	#$140,ns_length(a0)
@@ -37044,10 +37052,10 @@ p_thx
 	CLAMPVOL d1
 	move	d1,ns_tempvol(a0)
 
-	add	#232,a1	* Next channel data 
-	add 	#ns_size,a0
+	lea	232(a1),a1	* Next channel data 
+	lea	ns_size(a0),a0
 	dbf	d0,.scope
-	rts
+.xx	rts
 
 
 * Pattern scope support
@@ -37056,6 +37064,10 @@ p_thx
 	pushm	d0-d1/a0-a4
 	lea	var_b,a4
 	bsr.b	.updateScope
+
+	* Skip if not needed
+	tst.b	patternScopeRunning(a4)
+	beq.b	.noUpd
 
 	move.l	thxroutines(a4),a0
 	move.l	.ahxBSS_P(a0),a0
@@ -37103,7 +37115,7 @@ p_thx
 	move.b	.ahx_pvtTranspose(a0),(a2)+
 	moveq	#0,d1
 	move.b	.ahx_pvtTrack(a0),d1
-	add	#232,a0	* Next channel data 
+	lea	232(a0),a0	* Next channel data 
 
 	* If bit 7 of byte 6 is 1, track 0 is included. 
 	* If it is 0, track 0 was empty, and is
@@ -37120,11 +37132,10 @@ p_thx
 	subq.b	#1,d1
 	bmi.b	.goZero
 .1
-
 	* Get current track offset
 	mulu	d0,d1
 	* Address of current track
-	add.l a4,d1
+	add.l 	a4,d1
 	* Into the stripe array
 	move.l	d1,(a3)+
 	rts
@@ -37696,7 +37707,7 @@ p_multi	jmp	.s3init(pc)
 .s3poslen
 	tst.b	patternScopeRunning(a5)
 	* Inform PS3M, set to zero to skip patternscope routines
-	sne		d0
+	sne	d0
 .noScope
 	move.l	ps3mroutines(a5),a0
 	jmp	poslenj(a0)
