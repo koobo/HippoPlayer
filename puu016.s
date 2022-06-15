@@ -9253,12 +9253,8 @@ rbutton3
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
 
-	* The "playing" flags is polled in the interrupts, 
-	* so let's disable them for safety.
-	
-	lore    Exec,Disable
+	* The "playing" flags is polled in the interrupts.
 	clr.b	playing(a5)
-	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_stop(a0)
 	
