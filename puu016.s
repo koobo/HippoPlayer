@@ -23743,6 +23743,9 @@ drawScope:
 	move	d1,s_scopePreviousSongPos(a4)
 .noPattSc
 
+	* s_draw1 = draw scope in this buffer
+	* s_draw2 = clear this buffer
+
 	* clear draw area
 	move.l	_GFXBase(a5),a6
 	lob	OwnBlitter
@@ -23759,8 +23762,10 @@ drawScope:
 	move	s_scopeDrawAreaModulo(a4),d1
 	lsr	#1,d1	* words
 	add	d1,d0
+	* Do blit
 	move	d0,(a0)
 
+	* Continue clearing while scope is drawn into the other buffer
 	lob	DisownBlitter
 
 	bsr.w	.render
@@ -23773,6 +23778,8 @@ drawScope:
 	move.l	d1,s_draw1(a4)
 	move.l	d0,s_draw2(a4)
 
+	* Copy s_draw1 to screen
+	
 	lea	s_omabitmap(a4),a0
 	move.l	d0,bm_Planes(a0)
 
@@ -46319,7 +46326,7 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	moveq	#1,d0
 	rts
 	
-.x	SDPRINT 	"Spectrum init failed"
+.x	SDPRINT "Spectrum init failed"
 	moveq	#0,d0
 	rts
 
@@ -46582,6 +46589,9 @@ runSpectrumScope
 
 spectrumCopySamples
 	push	a4
+	* For clearing data
+	moveq	#0,d3
+
 	move.l	a4,a6
 	lea	scopeData+scope_ch1(a5),a3
 	move.l	s_spectrumChannel1(a6),a4
@@ -46615,22 +46625,16 @@ spectrumCopySamples
 	bne.b	.jolt
 
 .empty
-	; empty sample
-;	moveq	#0,d0
-;	rept	SAMPLE_LENGTH/4
-;	move.l	d0,(a4)+
-;	endr
 	moveq	#SAMPLE_LENGTH/4/8-1,d1
-	moveq	#0,d0
 .c
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
 	dbf	d1,.c
 	rts
 
@@ -46679,8 +46683,8 @@ spectrumCopySamples
 	rts
 
 .emptyRepeat
-.er	clr	(a4)+
-	dbf	d7,.er
+	move	d3,(a4)+
+	dbf	d7,.emptyRepeat
 	rts
 
 
@@ -46694,13 +46698,6 @@ spectrumCopySamples
 	move.b	(a1)+,(a4)+	
  endr
 	dbf	d0,.c2
-
-;	rept	SAMPLE_LENGTH/4
-;	move.b	(a1)+,(a4)+
-;	move.b	(a1)+,(a4)+
-;	move.b	(a1)+,(a4)+
-;	move.b	(a1)+,(a4)+	
-;	endr
 	rts
 
 

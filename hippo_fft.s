@@ -238,11 +238,12 @@ sampleFFT
 	move.l	a1,a3
 
 	moveq	#FFT_LENGTH/2/4-1,d0
+	moveq	#0,d6
 .c	
-	clr.l	(a3)+
-	clr.l	(a3)+
-	clr.l	(a3)+
-	clr.l	(a3)+
+	move.l	d6,(a3)+
+	move.l	d6,(a3)+
+	move.l	d6,(a3)+
+	move.l	d6,(a3)+
 	dbf	d0,.c
 
 ;	moveq	#0,d0
@@ -250,9 +251,10 @@ sampleFFT
 ;	move.l	d0,(a3)+
 ;	endr
 
+	; fall thru
 	;bsr.w	fix_fft
 	;rts
-	bra.w	fix_fft
+	;bra.w	fix_fft
 
 ;in
 ; a0 = result array reals
@@ -357,7 +359,10 @@ fix_fft
 
 	moveq	#.nn-1,d7 	; loop counter
 	moveq	#.nn,d3		; loop comparison
-	moveq	#0,d6		; mr
+
+; Cleared earlier:
+;	moveq	#0,d6		; mr
+
 	moveq	#1,d5		; m
 	move	#.n,d4		; preloaded constant
 
