@@ -22732,10 +22732,6 @@ scopeEntry:
 	move.l	s_windowTitle(a4),a1
 	lea	scrtit,a2
 	lore	Intui,SetWindowTitles
-	
-	move.l	s_quad_task(a4),a1
-	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
-	lore	Exec,SetTaskPri
 
 	move.l	_GFXBase(a5),a6
 	move.l	s_rastport3(a4),a1
@@ -22770,6 +22766,11 @@ scopeEntry:
 	jsr	printHippoScopeWindow	
 
 ; TEST: OK
+
+	; Ready to run	
+	move.l	s_quad_task(a4),a1
+	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
+	lore	Exec,SetTaskPri
 
 *********************************************************************
 * Scope main loop
