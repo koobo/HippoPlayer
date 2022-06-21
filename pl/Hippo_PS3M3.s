@@ -5365,8 +5365,8 @@ process	lea	c0(a5),a2
 	lsl.l	#4,d0
 	lsr.l	d1,d0	
 
+	printt "TODO: division by zero here"
 	divu	d2,d0
-
 
 	btst	#7,flgs(a2)
 	beq.b	.ei
