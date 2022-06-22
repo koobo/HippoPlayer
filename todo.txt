@@ -166,11 +166,11 @@ TODO
 --> cia errors when trying to switch tune
 --> buggy AHX code
 
-TODO: When a module has more than 1 sub-song it will go to next 
+FIXED: TODO: When a module has more than 1 sub-song it will go to next 
   subsong even when in random play mode. 
   I think in random play mode it should only play first song, since some have quite a 
   few and most sub-songs are then short sound effects.
-+ FIXED Some formats display the HippoScope, but the scope is not working at 
+FIXED: Some formats display the HippoScope, but the scope is not working at 
   all, for example: Future Composer 1.0-1.3, 1.4, SoundFX, 
   Art of Noice 4ch, Game Music Creator, BP Soundmon v2.0, Oktalyzer, 
   Sonic Arranger, Chiptracker [EP]
@@ -182,7 +182,7 @@ CRASH:
 -- play for a while, then crash?
 --> didn't crash for me
 
-TODO:
+FIXED: TODO:
 + hippel-coso sample scope support
 
 FIXED CRASH:
@@ -260,7 +260,7 @@ CRASH
 - start to play automatically
 - crashes after DeliInit call
 
-TODO
+FIXED: TODO
 - close tooltip popup when module ends
 
 ENFORCER HITS
@@ -418,7 +418,7 @@ FIXED: TODO
 - kuinka iso puskuri riittää patternInfoBufferille?
 - FIXED: Patternscope+s3m: 4kB mix buffer, fläsh
 
-TODO
+FIXED: TODO
 - mode switch for pattern scope in PS3M: disable costly patternscope
   stuff if patternscope is not used
 
@@ -438,17 +438,17 @@ FIXED: HITS
 - scope open
 - play The-Party-5_v2_3.XM
 
-TODO
+FIXED: TODO
 - AHX patterns
 
 TODO
 - FLT8 startrekker should play with ps3m
 
-REQ Feature-suggestions:
+FIXED: REQ Feature-suggestions:
 + Remember last directory where you picked your last played mod (instead of the configured directory in prefs).
 + Remember last played module. Pressing play immediately on startup plays the previously played song.
 
-REQ NEW FORMATS:
+TODO: REQ NEW FORMATS:
 + jd. - Special FX
 + dw. - David Whittaker (Some work, some don't !)
 + jpn. + smp. - Jason Page
@@ -467,7 +467,7 @@ FIXED: GFX GLITCH
 - minify window with RMB+Pr
 --> top part of favorites button is visible
 
-SCOPE BUG: activation
+FIXED: SCOPE BUG: activation
 - the scope works in multimonitor support as long as ALL modules that are played
   support it. Once a module that doesn't support the scope is loaded
   the next module that supports it does not enable it anymore.
@@ -581,17 +581,17 @@ TODO
 -> mugician 2
 -> musicmaker8
 
-TODO
+FIXED: TODO
 - soundmon3: beeping error
 
 TODO?
 - stonetracker mem leak?
 
-TODO?
+FIXED: TODO?
 - eagleplayer better error msgs
 - missing files etc
 
-TODO
+FIXED: TODO
 - test TMFX with doublebuffering
 
 TODO
