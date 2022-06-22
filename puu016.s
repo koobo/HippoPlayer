@@ -5315,13 +5315,12 @@ inithippo
  ifeq zoom
 * tavallinen hipon p‰‰
 printhippo1
+	DPRINT	"Print hippo"
+
 	tst	boxsize(a5)
 	beq.b	.q
 	tst.b	win(a5)
 	bne.b	.yep
-;	beq.b	.q
-;	tst.b	uusikick(a5)
-;	bne.b	.yep
 .q	rts
 .yep
 	pushm	d0-d7/a0-a2/a6
