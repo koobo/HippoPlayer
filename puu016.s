@@ -37993,6 +37993,13 @@ id_it
 	BNE.S	.itFail
 	MOVE.W	$2A(A0),D1			*  Cmwt: format version
 	ROR.W	#8,D1
+ if DEBUG
+	push	d0
+	moveq	#0,d0
+	move	d1,d0
+	DPRINT	"IT version: %lx"
+	pop	d0
+ endif
 	CMP.W	#$100,D1
 	BEQ.S	.itYes
 	CMP.W	#$200,D1
