@@ -38003,6 +38003,11 @@ id_it
 	BEQ.S	.itYes
 	CMP.W	#$200,D1
 	BEQ.S	.itYes
+; TEST: Fake version $214 to look like version $200
+;	CMP.W	#$214,D1
+;	Bne.S	.itFail
+;	move	#$0002,$2A(a0)
+;	bra.b	.itYes
 .itFail
 	MOVEQ	#-1,D0
 .itYes
