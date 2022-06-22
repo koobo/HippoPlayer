@@ -31561,7 +31561,7 @@ are
 	move.l	(a4),d0		* shr decompressed size
 	bra.b	.noImp
 .imp
-	moveq	#1,d5		* type flag
+	moveq	#0,d5		* type flag
 	move.l	4(a4),d0	* fimp decompressed size
 .noImp
 
@@ -46239,7 +46239,7 @@ plainSaveFile
 	move.l  d0,d7 
 
 	move.l	d6,d1 
-	lore 	Dos,Close
+	lob		Close
 .openErr 
 	move.l	d7,d0
 	popm	d1-a6 
@@ -46314,7 +46314,6 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	move.l	a0,s_spectrumImagData(a4)
 
 	bsr.w	prepareSpectrumSineTable
-	beq.b	.x
 	bsr.b	prepareSpectrumVolumeTable
 	bsr.w	prepareSpectrumMuluTable
 	bsr.w	prepareSpectrumExpTable
@@ -46333,9 +46332,8 @@ spectrumUninitialize
 	clr.b	s_spectrumInitialized(a4)
 	move.l	s_spectrumMemory(a4),a0
 	clr.l	s_spectrumMemory(a4)
-	jsr	freemem
-	rts
-
+	jmp	freemem
+	
 prepareSpectrumVolumeTable
 	move.l	s_spectrumVolumeTable(a4),a0
 	moveq	#0,d0
@@ -46381,7 +46379,6 @@ prepareSpectrumMuluTable
 .l	move	d0,(a0)+
 	add	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,d0
 	dbf	d1,.l
-	moveq	#1,d0
 	rts
 
 
@@ -46514,8 +46511,6 @@ prepareSpectrumSineTable
 	move.l	d0,d2
 
 	dbf	d7,.loop   
-
-	moveq	#1,d0
 	rts
 
 runSpectrumScope
