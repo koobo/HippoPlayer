@@ -2502,6 +2502,12 @@ main
 	; add another button as the new last one
 	move.l	#gadgetListModeChangeButton,gadgetSortButton+gg_NextGadget
 
+	tst.b	uusikick(a5)
+	bne.b	.o0
+	; Remove resize gadget for kick13
+	clr.l	gadgetListModeChangeButton+gg_NextGadget
+.o0	
+
 	move.l	_IntuiBase(a5),a6
 	* Give each gadget a gg_GadgetID,
 	* set proper text attr for ones which have text.
@@ -4195,7 +4201,7 @@ avaa_ikkuna:
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc,a0
 
-	move.l	windowZippedPos(a5),(a0)		* Pienen paikka ja koko
+	move.l	windowZippedPos(a5),(a0)	* Pienen paikka ja koko
 	moveq	#11,d0
 	tst.b	uusikick(a5)
 	bne.b	.new1
@@ -4204,6 +4210,7 @@ avaa_ikkuna:
 	move	d0,wsizey-winstruc(a0)
 	bsr.w	.leve
 
+	* What is this?
 	not.b	kokolippu(a5)
 	beq.b	.small
 
@@ -4244,8 +4251,9 @@ avaa_ikkuna:
 .okkk
 
 .small	
+
 	lea	slider4,a3		* fileboxin slideri
-	moveq	#gadgetFileSliderInitialHeight,d3		* y-koko
+	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
 	and	#~$80,gg_TopEdge(a3)
 	add	boxy(a5),d3
 	bpl.b	.r
@@ -4258,6 +4266,17 @@ avaa_ikkuna:
 	beq.b	.ded
 	subq	#3,gg_Height(a3)
 .ded
+
+	* Remove the fileslider from the gadget list
+	* if it is not visible. On kick13 there may be
+	* some gfx trash otherwise.
+	* Normal chain:
+	move.l	#slider4,slider1+gg_NextGadget
+	tst	boxsize(a5)
+	bne.b	.isBox
+	* Skip over slider4
+	move.l	#button12,slider1+gg_NextGadget
+.isBox
 
 	lob	OpenWindow
 	move.l	d0,windowbase(a5)
@@ -4691,12 +4710,15 @@ wrender:
 	bra.b	.oru
 
 .cler	
+	; This one is invisible, skip it, though
+	; its not in the list at this point anyway?
+	cmp.l	#gadgetResize,a3
+	beq.b	.skipClear
+
 	tst	boxsize(a5)
 	bne.b	.clef
 	* Box is minimized, skipped gadgets:
 	cmp.l	#gadgetListModeChangeButton,a3
-	beq.b	.skipClear
-	cmp.l	#gadgetResize,a3
 	beq.b	.skipClear
 	cmp.l	#slider4,a3		* fileslider
 	bne.b	.clef
@@ -4999,11 +5021,6 @@ mainWindowSizeChanged
 
 * Disables the low right bottom resize gadget by making it 0 pixel wide
 disableResizeGadget
-	tst.b	uusikick(a5)
-	bne.b	.new
-	* On old kick get rid of it altogether
-	clr.l	gadgetListModeChangeButton+gg_NextGadget
-.new
 	* Hide and disable
 	lea	gadgetResize,a1
 	clr	gg_Width(a1)
@@ -5023,9 +5040,7 @@ configResizeGadget
 enableResizeGadget
 	tst.b	uusikick(a5)
 	beq.b	.old
-	* Append as the last one in the gadget list
 	lea	gadgetResize,a1
-	move.l	a1,gadgetListModeChangeButton+gg_NextGadget
 	move.l	windowbase(a5),a0
 	* Height is a bit larger than the window bottom border
 	moveq	#0,d0
@@ -5048,7 +5063,6 @@ enableResizeGadget
 	* Max size too
 	add	#(50-3)*8,d2
 	move	d2,wd_MaxHeight(a0)
-
 .old
 .small
 	rts
@@ -47365,7 +47379,7 @@ prefsSpectrumScopeBars
 ; Gadget
 gadgetListModeChangeButton
 	; gg_NextGadget
-	dc.l 0
+	dc.l gadgetResize
 	; gg_LeftEdge
 	dc 9
 	; gg_TopEdge
