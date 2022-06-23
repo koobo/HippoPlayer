@@ -1512,17 +1512,12 @@ DDELAY macro
 	endm
 
 
+; Macro to check the gadget GFLG_DISABLED flag
+; GLFG_DISABLED = $0100
 skipIfGadgetDisabled macro
-	;lea	\1,a0
-	;move	#GFLG_DISABLED,d0  * $0100
-	;and	gg_Flags(a0),d0
-	;beq.b	._go
-	;btst	#0,gg_Flags(a0)
-	;beq.b	._go
 	btst	#0,gg_Flags+\1
-	beq.b	._go
+	beq.b	*+4
 	rts
-._go
 	endm
 
 *********************************************************************************
@@ -5008,6 +5003,11 @@ mainWindowSizeChanged
 	* Store new box size
 	move	d0,boxsize(a5)
 	
+ if DEBUG
+ 	ext.l	d0
+	DPRINT	"New box size=%ld"
+ endif
+
 	* Set new boxsize into prefs gadget
 	bsr.w	setprefsbox
 
@@ -6498,6 +6498,7 @@ buttonspressed
 *** Zoomataan fileboxi pois tai takasin
 *** Switch filebox size
 zoomfilebox
+	DPRINT	"Zoom filebox"
 	move	boxsize(a5),d0
 	beq.b	.z
 	clr	boxsize(a5)
@@ -12161,7 +12162,7 @@ sliderit
 
 	rts
 
-
+* Update box size slider in prefs
 setprefsbox
 * boxsize
 	lea	meloni,a0
