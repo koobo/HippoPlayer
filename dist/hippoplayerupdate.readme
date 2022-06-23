@@ -40,7 +40,7 @@ NOTE 4: Too long didn't read
 ------------------------------------------------------------------------------
 
 
-# Changes from v2.52 (30.4.2022) to v2.53 (24.6.2022) 
+# Changes from v2.52 (30.4.2022) to v2.53 (?.?.2022) 
 
 Some small summery improvements.
 
@@ -82,6 +82,12 @@ Some small summery improvements.
 - The main window can now be resized by dragging from the lower right 
   corner of the window. This is for kickstart 2.0+ only.
 
+- Sample scope support added for PSID files. These are the C64 music
+  files played by the "playsid.library". Nemesis the Warlock rulez.
+
+- Sample scopes support the THX/AHX format (already in the previous version
+  but forgot to mention it).  
+
 - The PS3M volume boost setting in Prefs now goes all the way up to
   16. The old maximum 8 was not enough for modules with over 16 channels, 
   especially with 32 channels used by ImpulseTracker. 
@@ -89,12 +95,6 @@ Some small summery improvements.
   value is determined by the amount of channels divided by two, so for a 
   8ch module the max boost value having any effect is 4.
   
-- Sample scope support added for PSID files. These are the C64 music
-  files played by the "playsid.library". Nemesis The Warlock rulez.
-
-- Sample scopes support the THX/AHX format (already in the previous version
-  but forgot to mention it).  
-
 
 ## Known issues:
 
@@ -105,7 +105,7 @@ Some small summery improvements.
 - THX/AHX pattern scope sometimes displays an empty channel
   where actual data should be displayed.
 - The TFMX 7v replayer does not sound correct on 68060 with caches enabled.
-  It uses self modifying code which does not work sufficiently large caches.
+  It uses self modifying code which is not good with large caches.
 
 
 ------------------------------------------------------------------------------
