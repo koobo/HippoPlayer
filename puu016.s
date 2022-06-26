@@ -22068,7 +22068,8 @@ initScopeTask
 
 	* Initialize ln_Node
 	move.b	#NT_TASK,LN_TYPE(a3)
-	move.b	#-30,LN_PRI(a3)
+	* Initial priority 0
+	clr.b	LN_PRI(a3)
 	move.l	a2,LN_NAME(a3)
 
 	* Allocate stack
