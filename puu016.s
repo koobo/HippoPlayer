@@ -18143,13 +18143,12 @@ marklineRightMouseButton
 	* Check if feature is enabled in prefs
 	tst.b	favorites(a5)
 	beq.b	.out
-	* No RMB marking if list is in fav mode
-	* Lets not do RMB window folding however, seems
-	* distracting
-	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.ou
 	bsr.w	 getFileBoxIndexFromMousePosition
 	beq.b  .out
+	* RMB was hit on top of the list.
+	* In fav list ignore the click.
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.ou
 	bsr.b	.doMark
 	* something marked
 .ou	moveq	#1,d0
