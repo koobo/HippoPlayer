@@ -46575,8 +46575,10 @@ runSpectrumScope
 	bra.b	.go
 .normal
 	bsr.w	spectrumCopySamples
-	bsr.w	spectrumMixSamples
+;	bsr.w	spectrumMixSamples
+	bsr.w	spectrumMixSamplesNew
 .go
+
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	windowFFT
@@ -46585,13 +46587,13 @@ runSpectrumScope
 	move.l	s_spectrumImagData(a4),a1
 	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	sampleFFT
-		
+
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
 	bsr	loudnessFFT
 
 	bsr.w	drawFFT
-	
+
 	* Vertical fill
 	lore	GFX,OwnBlitter
 
@@ -46676,10 +46678,13 @@ spectrumCopySamples
 
 .jolt	
 	* Some insanity checks:
-	cmp.l	#1024,d0
+	lea	1024.w,a1
+	;cmp.l	#1024,d0
+	cmp.l	a1,d0
 	blo.b	.empty
 	move.l	ns_loopstart(a3),d1
-	cmp.l	#1024,d1
+	;cmp.l	#1024,d1
+	cmp.l	a1,d0
 	blo.b	.empty
 
 	move.l	d0,a1			* Sample start
@@ -46764,7 +46769,7 @@ calcSampleStep
 	rts
 
 
-
+ REM ***********
 spectrumMixSamples
 	lea	scopeData+scope_ch1(a5),a1
 	move.l	s_spectrumChannel1(a4),a0
@@ -46801,14 +46806,14 @@ spectrumMixSamples
 	moveq	#0,d6
 	moveq	#0,d0
 	move	#SAMPLE_LENGTH_MASK,d3
-	moveq	#MIX_LENGTH/2-1,d7
+	moveq	#MIX_LENGTH/4-1,d7
 	
 	* Copy or add?
 	tst	d4
 	beq.b	.add
 .m1
 	; move to buffer (first set)
-	rept	2
+	rept	4
 	; sample byte
 	moveq	#0,d5
 	move.b	(a0,d0.w),d5
@@ -46820,16 +46825,17 @@ spectrumMixSamples
 	; next source sample
 	add.l	d1,d0
 	addx.w	d6,d0
+	endr
+
 	; safety: keep offset within data buffer
 	and	d3,d0
-	endr
 
 	dbf	d7,.m1
 	rts
 .add
 ; add to buffer
 .m2
-	rept	2
+	rept	4
 	; sample byte
 	moveq	#0,d5
 	move.b	(a0,d0.w),d5
@@ -46842,12 +46848,151 @@ spectrumMixSamples
 	; next source sample
 	add.l	d1,d0
 	addx.w	d6,d0
+	endr
+
 	; safety: keep offset within data buffer
 	and	d3,d0
-	endr
 	dbf	d7,.m2
 	rts
+ EREM *****************
 
+
+* Mix four channels into one for input to the FFT
+* Two channels at a time
+spectrumMixSamplesNew
+	lea	scopeData+scope_ch1(a5),a1
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	move.l	a2,a3
+	; a3 = ch1 voltab
+	move	ns_period(a1),d0
+	bsr.w	calcSampleStep
+	move.l	d1,d2
+	; d2 = ch1 step
+
+	lea	scopeData+scope_ch2(a5),a1
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	; a2 = ch2 voltab
+	move	ns_period(a1),d0
+	bsr.w	calcSampleStep
+	; d1 = ch2 step
+
+	move.l	s_spectrumChannel1(a4),a0	
+	move.l	s_spectrumChannel2(a4),a1	
+	move.l	s_spectrumMixedData(a4),a6
+
+	; ch1 pos
+	moveq	#0,d0
+	; ch2 pos
+	moveq	#0,d4
+	; addx zero
+	moveq	#0,d6
+
+	push	a5
+	lea	(SAMPLE_LENGTH_MASK).w,a5
+	exg	d1,a5
+
+	moveq	#MIX_LENGTH/2-1,d7
+.loop
+	rept	2
+	; ch1 byte
+	moveq	#0,d5
+	move.b	(a0,d0.w),d5
+	; volume scaled byte
+	add	d5,d5
+	move.w	(a3,d5.w),d5
+	
+	; ch2 byte
+	moveq	#0,d3
+	move.b	(a1,d4.w),d3
+	; volume scaled byte
+	add	d3,d3
+	add.w	(a2,d3.w),d5 * ch1+ch2
+	move	d5,(a6)+
+
+	; next ch1 sample
+	add.l	d2,d0
+	addx.w	d6,d0
+	; next ch2 sample
+	;add.l	d1,d4
+	add.l	a5,d4
+	addx.w	d6,d4
+	endr
+
+	;move	a5,d3	
+	and.w	d1,d0
+	and.w	d1,d4
+
+	dbf	d7,.loop
+
+	pop	a5
+
+	lea	scopeData+scope_ch3(a5),a1
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	move.l	a2,a3
+	; a3 = ch3 voltab
+	move	ns_period(a1),d0
+	bsr.w	calcSampleStep
+	move.l	d1,d2
+	; d2 = ch3 step
+
+	lea	scopeData+scope_ch4(a5),a1
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	; a2 = ch4 voltab
+	move	ns_period(a1),d0
+	bsr.w	calcSampleStep
+	; d1 = ch4 step
+
+	move.l	s_spectrumChannel3(a4),a0	
+	move.l	s_spectrumChannel4(a4),a1	
+	move.l	s_spectrumMixedData(a4),a6
+
+	; ch3 pos
+	moveq	#0,d0
+	; ch4 pos
+	moveq	#0,d4
+
+	push	a5
+	lea	(SAMPLE_LENGTH_MASK).w,a5
+	exg	d1,a5
+
+	moveq	#MIX_LENGTH/2-1,d7
+.loop2
+	rept	2
+	; ch3 byte
+	moveq	#0,d5
+	move.b	(a0,d0.w),d5
+	; volume scaled byte
+	add	d5,d5
+	move.w	(a3,d5.w),d5
+
+	; ch4 byte
+	moveq	#0,d3
+	move.b	(a1,d4.w),d3
+	; volume scaled byte
+	add	d3,d3
+	add.w	(a2,d3.w),d5  * ch3+ch4
+	add	d5,(a6)+      * ch1+ch2+ch3+ch4
+
+	; next ch3 sample
+	add.l	d2,d0
+	addx.w	d6,d0
+	; next ch4 sample
+	add.l	a5,d4
+	addx.w	d6,d4
+	endr
+	
+	* Safety check for buffer indexes
+	and.w	d1,d0
+	and.w	d1,d4
+	
+	dbf	d7,.loop2
+
+	pop	a5
+	rts
 
 drawFFT
 	; FFT data is here.
