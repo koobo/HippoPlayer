@@ -3230,7 +3230,7 @@ msgloop
 .nas
 
 	jsr	listChanged
-	jsr	forceRefreshList
+	bsr	forceRefreshList
 
 
 	move.b	haluttiinuusimodi(a5),d1
@@ -6709,7 +6709,7 @@ tooltipDisplayHandler
 	tst.b	tooltips(a5)
 	beq.b	.exit
 	move.l	d0,a0 
-	jsr	showTooltipPopup
+	bsr	showTooltipPopup
 .exit
 	popm all
 	rts
@@ -12747,9 +12747,9 @@ prefs_code
 	move.b patternScopeXL(a5),   patternScopeXL_new(a5)      
 	move.b spectrumScope(a5),    spectrumScope_new(a5)     
  EREM
-	move.b quadraScopeBars(a5),  quadraScopeBars_new(a5)        
-	move.b quadraScopeFBars(a5), quadraScopeFBars_new(a5)         
-	move.b hippoScopeBars(a5),    hippoScopeBars_new(a5)       
+	move.b quadraScopeBars(a5),quadraScopeBars_new(a5)        
+	move.b quadraScopeFBars(a5),quadraScopeFBars_new(a5)         
+	move.b hippoScopeBars(a5),hippoScopeBars_new(a5)       
 	move.b spectrumScopeBars(a5),spectrumScopeBars_new(a5)  
 
 
@@ -19190,7 +19190,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .jee9eg
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	jsr	desmsg4
+	bsr	desmsg4
 	bsr.w	.putcomment
 	lea	32(sp),sp
 
@@ -19306,7 +19306,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .deliFormat	
 	pushm	d0-d7
 	move.l	sp,a1
-	lea	putc,a2	;merkkien siirto
+	lea	putc(pc),a2	;merkkien siirto
 	lore 	Exec,RawDoFmt
 	popm	d0-d7
 	rts
@@ -19596,10 +19596,10 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 ** PS3M
 
 .medform 
-.form2	dc.b	`%03ld %-28.28s %6ld`,ILF,ILF2,0
+.form2	dc.b	"%03ld %-28.28s %6ld",ILF,ILF2,0
 
 .thxform
- 	dc.b	`%03ld %-35.35s`,ILF,ILF2,0
+ 	dc.b	"%03ld %-35.35s",ILF,ILF2,0
 
  even
 
@@ -21823,7 +21823,7 @@ rexxmessage
 	bra.w	i2amsg
 
 .currname
-	jsr	getcurrent
+	bsr	getcurrent
 	bne.b	.curr0
 	lea	.empty(pc),a2
 	bra.w	str2msg
@@ -21837,7 +21837,7 @@ rexxmessage
 	bne.b	.curr2
 .curr1	lea	.empty(pc),a2
 	bra.w	str2msg	
-.curr2	jsr	getcurrent2
+.curr2	bsr	getcurrent2
 	lea	l_filename(a3),a2
 	bra.w	str2msg
 
@@ -23968,7 +23968,7 @@ drawScope:
 	rts
 .fil
 	bsr.w	samplescopefilled
-	bra	mirrorfill
+	bra.b	mirrorfill
 
 .renderPS3M
 
@@ -25845,7 +25845,7 @@ noteScroller2:
 .noPattern
 	* Pointer within the module data?
 
-	cmp.l	#1024,a0
+	cmp.w	#1024,a0
 	bls.b	.xy
 	move.l  moduleaddress(a5),a3
    	cmp.l   a3,a0
@@ -28228,13 +28228,13 @@ tutki_moduuli2
 	cmp.l	#"OCTA",1080(a0)	* Fasttracker
 	beq.w	.f
 
-	cmp.l	#`Exte`,(a0)		* Fasttracker ][ XM
+	cmp.l	#"Exte",(a0)		* Fasttracker ][ XM
 	bne.b	.kala
-	cmp.l	#`nded`,4(a0)
+	cmp.l	#"nded",4(a0)
 	bne.b	.kala
-	cmp.l	#` Mod`,8(a0)
+	cmp.l	#" Mod",8(a0)
 	bne.b	.kala
-	cmp.l	#`ule:`,12(a0)
+	cmp.l	#"ule:",12(a0)
 	beq.w	.f
 
 .kala	move.l	1080(a0),d0
@@ -34816,30 +34816,30 @@ tfmx_C000338	moveq	#10,D0
 
 tfmx_L0000F0	dcb.l	$2,0
 	dc.b	2,1			* nt_interrupt, prioriteetti 1
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi1	dc.l	0
 tfmx_L000106	dcb.l	$2,0
 	dc.b	2,100
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi2	dc.l	0
 tfmx_L00011C	dcb.l	$2,0
 	dc.b	2,100
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi3	dc.l	0
 tfmx_L000132	dcb.l	$2,0
 	dc.b	2,100
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi4	dc.l	0
 tfmx_L000148	dcb.l	$2,0
 	dc.b	2,100
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi5	dc.l	0
-TFMX_Pro.MSG0 dc.b "TFMX",0
+TFMX_Pro_MSG0 dc.b "TFMX",0
  even
 
 
@@ -36624,8 +36624,8 @@ p_digibooster
 
 	move.l	digiboosterroutines(a5),a3
 	jsr	$20+0(a3)
+	pop	a5
 	tst.l	d0
-	popm	a5
 	bne.b	.er
 
 
@@ -38980,7 +38980,7 @@ p_syntracker
 
 .id
 	move.l 	a4,a0
-	LEA	.SYNTRACKERSON.MSG(PC),A1
+	LEA	.SYNTRACKERSONMSG(PC),A1
 	MOVEQ	#-1,D0
 	MOVEQ	#15,D1
 .lbC0001E0	CMPM.B	(A1)+,(A0)+
@@ -38990,7 +38990,7 @@ p_syntracker
 .lbC0001EA	
 	RTS
 
-.SYNTRACKERSON.MSG	dc.b	'SYNTRACKER-SONG:',0,0
+.SYNTRACKERSONMSG	dc.b	'SYNTRACKER-SONG:',0,0
 
 
 ******************************************************************************
@@ -41894,12 +41894,12 @@ p_activisionpro
 	MOVE.L	D0,D2
 	MOVE.L	A0,A2
 	LEA	.lbB000624(PC),A1
-	MOVE.L	#3,D1
+	MOVEq	#3,D1
 	BSR.W	.lbC0005EE
 	BNE.S	.lbC000518
 	;MOVE.L	A0,lbL0000BA
 	LEA	.lbB00062C(PC),A1
-	MOVE.L	#12,D1
+	MOVEq	#12,D1
 	BSR.W	.lbC0005EE
 	BNE.W	.lbC0005EC
 	;MOVE.L	A0,lbL0000BE
@@ -41915,12 +41915,12 @@ p_activisionpro
 .lbC000518	MOVE.L	A4,A0
 	MOVE.L	D4,D2
 	LEA	.lbB000646(PC),A1
-	MOVE.L	#9,D1
+	MOVEq	#9,D1
 	BSR.W	.lbC0005EE
 	BNE.S	.lbC00055A
 	;MOVE.L	A0,lbL0000BA
 	LEA	.lbB00065A(PC),A1
-	MOVE.L	#10,D1
+	MOVEq	#10,D1
 	BSR.B	.lbC0005EE
 	BNE.B	.lbC0005EC
 	;MOVE.L	A0,lbL0000BE
