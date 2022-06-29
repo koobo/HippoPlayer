@@ -4041,7 +4041,8 @@ printBold
 * Pääikkunaan
 * d0/d1 = x,y
 * a0 = teksti
-print	add	windowleft(a5),d0
+print:
+	add	windowleft(a5),d0
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	tst.b	win(a5)		* onko ikkunaa?
 	beq.b	.r
@@ -7138,11 +7139,14 @@ satunnaismodi
 
 * Clear random table and do force refresh of list
 * if in random mode.
-clear_random
+clear_random:
 	bsr.b	clearRandomTable
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.x
-	* Request refresh to clear out random play indicators
+	* Request refresh to clear out random play indicators.
+	* This may update list in surprising situations.
+	* For example, when selecting parent item in filebrowser,
+	* before the parent contents are refreshed into view.
 	st	hippoonbox(a5)
 	pushm	all
 	;bsr.w	shownames
@@ -7173,7 +7177,7 @@ clearRandomTable
 *      d0 = module index to test
 * out:
 *      Z is set if index is taken
-testRandomTableEntry
+testRandomTableEntry:
 	push	a0
 	bsr.b	getRandomValueTableEntry
 	beq.b	.error
@@ -7190,7 +7194,7 @@ testRandomTableEntry
 *      d0 = module index to test
 * out:
 *      a0 = index in the ranom table that should be tested 
-getRandomValueTableEntry	
+getRandomValueTableEntry:
 	push 	d1
 	tst.l	randomtable(a5) 
 	bne.b	.yesTable
@@ -9886,8 +9890,8 @@ rinsert2
 
 * etsitään listasta vastaava kohta
 	DPRINT	"insert getListNode"
-	bsr.w		getListNode
-	beq.w		rbutton7		* go to "add"
+	bsr.w	getListNode
+	beq.w	rbutton7		* go to "add"
 
 * a0 = valittu nimi
 	move.l	a0,fileinsert(a5)
@@ -10940,7 +10944,7 @@ freelist
 
 .listEmpty
 	DPRINT  "freelist release list"
-	bsr.w		releaseModuleList
+	bsr.w	releaseModuleList
 	rts
 
 
@@ -16735,8 +16739,10 @@ doPrintNames
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 
-;	DPRINT	".doNames %ld"
-
+; if DEBUG
+; 	ext.l	d2
+;	DPRINT	"doPrintNames first=%ld target=%ld amount=%ld"
+; endif
 	* d0 = module index
 	* d1 = line number to print to
 	* d2 = number of lines to print
@@ -16745,17 +16751,9 @@ doPrintNames
 	move.l	d1,d4		* move this out of the way
 	subq.l	#1,d0
 	bmi.b	.baa
-;.luuppo
-;	TSTNODE	a4,a3
-;	beq.w	.lop
-;	move.l	a3,a4
-;	subq.l #1,d0 
-;	bpl.b  .luuppo
-
-;	bsr	clearCachedNode
-;	move.l	d3,d0
 
 	bsr.w	getListNodeCached
+	beq.w	.lop	* check for z-flag error indication
 	tst.l	(a0)
 	beq.w	.lop
 	move.l	a0,a3
@@ -16843,7 +16841,7 @@ doPrintNames
 	move.l 	d3,d0 
 	bsr.w	testRandomTableEntry
 	beq.b	.fu
-	move.b	#"®",-1(a2)
+	move.b	#"®",-1(a2) * random marker!
 .fu
 	moveq	#33+WINX,d0
 	move.l	d6,d1
@@ -18297,6 +18295,9 @@ getListNode:
 	;lea	moduleListHeader(a5),a0
 	bsr.b	getVisibleModuleListHeader
 
+	move.l	a0,d2 	* Sanity check
+	beq.b	.out	
+
 	* When using dbf loop usually subtract 1, but here
 	* one SUCC is needed to get to the head element
 	* so don't subtract
@@ -18304,8 +18305,8 @@ getListNode:
 	swap	d0
 .loop
 	SUCC    a0,a0
-	dbf	 	d1,.loop
-	dbf		d0,.loop
+	dbf	d1,.loop
+	dbf	d0,.loop
 	bsr.w	releaseModuleList
 
  if DEBUG
@@ -18320,13 +18321,13 @@ getListNode:
 
 
 
-* Cached getter
+* Cached list node getter
 * in:
-*   d0=index
+*   d0 = index
 * out:
-*   a0=list node
+*   a0 = list node
+*   Z-flag = set if error (out of bounds), not set if ok
 getListNodeCached
-
 
 * algo:
 * - if index is nearer head than cached node
@@ -18335,6 +18336,11 @@ getListNodeCached
 *   - use tail as cached reference node
 * - else
 *   - use cached node as reference node
+
+	tst.l	modamount(a5)
+	beq.b	.out
+	cmp.l 	modamount(a5),d0
+	bhs.b	.out
 
 	tst.l	cachedNode(a5)
 	bne.b	.n
@@ -18350,31 +18356,17 @@ getListNodeCached
 	;DPRINT	"Getlistnode to=%ld cached=%ld"
 	move.l	cachedNode(a5),a0
 
+	* See if cached is the same as requested:
 	sub.l	d1,d0
-	;DPRINT	"->step %ld"
-	tst.l	d0
 	beq.b   .x
 	bpl.b  	.forward2
 	bra.b	.backward2
 
-; These versions support 16-bit jumps
-;.backward
-;	PRED   a0,a0
-;	tst.l	LN_PRED(a0)
-;	beq.b	.x1
-;	addq.l 	#1,d0
-;	bne.b 	.backward
-;	move.l a0,cachedNode(a5)
-.x	rts
-;
-;.forward 
-;	SUCC    a0,a0
-;	tst.l	(a0)
-;	beq.b	.x1
-;	subq.l	#1,d0
-;	bne.b	.forward
-;.x1	move.l 	a0,cachedNode(a5)
-;	rts
+.x	moveq	#1,d0
+	rts
+.out
+	moveq	#0,d0 * error
+	rts
 
 ; These allow jump to be over 16 bits
 .backward2 
@@ -18383,10 +18375,10 @@ getListNodeCached
 	move.l	d0,d1
 	swap 	d0
 .bloop
-	PRED   a0,a0
+	PRED   	a0,a0
 	dbf 	d1,.bloop 
-	dbf		d0,.bloop
-	move.l a0,cachedNode(a5)
+	dbf	d0,.bloop
+	move.l 	a0,cachedNode(a5)
 	rts 
 
 .forward2
@@ -18396,7 +18388,7 @@ getListNodeCached
 .floop
 	SUCC    a0,a0
 	dbf 	d1,.floop 
-	dbf		d0,.floop
+	dbf	d0,.floop
 	move.l 	a0,cachedNode(a5)
 	rts
 
