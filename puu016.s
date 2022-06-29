@@ -2130,7 +2130,9 @@ about_tt
 
 
 ;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
-scrtit	dc.b	"HippoPlayer by K-P in 1994-2000, 2021-2022",0
+scrtit	dc.b	"HippoPlayer "
+	ver 
+	dc.b	" by K-P in 1994-2000, 2021-2022",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
