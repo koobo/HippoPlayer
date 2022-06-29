@@ -8467,7 +8467,7 @@ sortButtonAction
 	bsr.b	sortModuleList
 	bra	forceRefreshList
 
-sortModuleList
+sortModuleList:
 	* Skip force refresh
 
 	* Let's not sort a list with 1 module, that would be silly I guess.
@@ -8556,7 +8556,7 @@ sortModuleList
 
 	move.l	d7,d0 
 	moveq	#SORT_ELEMENT_LENGTH,d1
-	bsr.w		divu_32
+	bsr.w	divu_32
 	move.l	d0,d7
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
@@ -18263,7 +18263,7 @@ getVisibleModuleListHeader:
 * content.
 * In file browser mode contents can NOT be changed.
 
-listChanged
+listChanged:
 	DPRINT "List changed"
 	bsr.w	clearCachedNode
 	bsr.w	clear_random	
@@ -18295,8 +18295,8 @@ getListNode:
 	;lea	moduleListHeader(a5),a0
 	bsr.b	getVisibleModuleListHeader
 
-	move.l	a0,d2 	* Sanity check
-	beq.b	.out	
+	move.l	a0,d1	* Sanity check
+	beq.b	.out
 
 	* When using dbf loop usually subtract 1, but here
 	* one SUCC is needed to get to the head element
@@ -18329,7 +18329,7 @@ getListNode:
 *   Z-flag = set if error (out of bounds), not set if ok
 getListNodeCached
 
-* algo:
+* algo (not actually used here):
 * - if index is nearer head than cached node
 *   - use head as cached reference node
 * - else if index is nearer tail than cached node
@@ -18362,7 +18362,8 @@ getListNodeCached
 	bpl.b  	.forward2
 	bra.b	.backward2
 
-.x	moveq	#1,d0
+.x	* Same, just return
+	moveq	#1,d0
 	rts
 .out
 	moveq	#0,d0 * error
@@ -30450,14 +30451,28 @@ fileBrowserDir
 	beq.b	.noLock
 	lore	Dos,UnLock
 .noLock
-	
+
+	* HACK! If playmode(a5) is pm_random, this happens:
+	* sortModuleList -> listChanged -> clear_random ->
+	* showNames. The sorted list is updated, then
+	* the header is added, and another refresh is done.
+	* This causes flicker and also the selected item
+	* focus can become off-by-one.
+	* Temporarily disable the random mode to prevent this.
+	 
+	move.b	playmode(a5),d6
+	move.b	#pm_repeat,playmode(a5)
+
 	* All done. Sort it. 
 	* Does not do force refresh.
 	* Destroys every register known to man.
-	pushm	d4/d5
+	pushm	d4/d5/d6
 	jsr	sortModuleList
-	popm	d4/d5
+	popm	d4/d5/d6
 
+	* Restore iiiiit	
+	move.b	d6,playmode(a5)
+	
 	* Insert parent to the top
 	tst.l	d5
 	beq.b	.noParent
