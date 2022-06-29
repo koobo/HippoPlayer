@@ -17966,30 +17966,37 @@ getFileBoxIndexFromMousePosition
 	move	mousey(a5),d1
 	sub	windowleft(a5),d0
 	sub	windowtop(a5),d1	* suhteutus fonttiin
-	
+
+	* Vertical modifier when big buttons used
+	moveq	#0,d3
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt0
+	moveq	#16,d3
+.noAlt0
+
 	cmp	#30+WINX,d0		* onko tiedostolistan p‰‰ll‰?
 	blo.b	.out
 	cmp	#251+WINX,d0
 	bhi.b	.out
-	moveq	#63+WINY,d2
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
-	add	#16,d2
-.noAlt1
-	cmp		d2,d1
+	moveq	#63+WINY,d2		* Top edge
+	add	d3,d2			* Modifier!
+
+	cmp	d2,d1
 ;	cmp	#63+WINY,d1
 	blo.b	.out
-	move	#126+WINY,d2
-	add	boxy(a5),d2
+
+	move	#126+WINY,d2		* Bottom edge
+	add	d3,d2			* Modifier!
+	add	boxy(a5),d2		* Height of box
 	cmp	d2,d1
 	bhi.b	.out
+
+	* converts y-koordinate into a line number (font is 8 pix tall)
 	sub	#63+WINY,d1
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt2
-	sub	#16,d1
-.noAlt2
-	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
-	moveq	#1,d0
+	sub	d3,d1
+
+	lsr	#3,d1	
+	moveq	#1,d0			* success
 	rts
 .out  
 	* nothing marked
