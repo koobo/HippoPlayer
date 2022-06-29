@@ -37945,12 +37945,12 @@ id_ps3m		pushm	d1-a6
 	bsr.w	id_it
 	beq.w	.it
 
-	cmp.l	#`SCRM`,44(a0)
+	cmp.l	#"SCRM",44(a0)
 	beq.b	.s3m
 
 	move.l	(a0),d0
 	lsr.l	#8,d0
-	cmp.l	#`MTM`,d0
+	cmp.l	#"MTM",d0
 	beq.b	.mtm
 
 	move.l	a0,a1
@@ -37962,27 +37962,27 @@ id_ps3m		pushm	d1-a6
 	bra.b	.xm
 
 .j	move.l	1080(a0),d0
-	cmp.l	#`OCTA`,d0
+	cmp.l	#"OCTA",d0
 	beq.b	.fast8
-	cmp.l	#`M.K.`,d0
+	cmp.l	#"M.K.",d0
 	beq.b	.pro4
-	cmp.l	#`M!K!`,d0
+	cmp.l	#"M!K!",d0
 	beq.b	.pro4
-	cmp.l	#`FLT4`,d0
+	cmp.l	#"FLT4",d0
 	beq.b	.pro4
 
 	move.l	d0,d1
 	and.l	#$ffffff,d1
-	cmp.l	#`CHN`,d1
+	cmp.l	#"CHN",d1
 	beq.b	.chn
 
 	and.l	#$ffff,d1
-	cmp.l	#`CH`,d1
+	cmp.l	#"CH",d1
 	beq.b	.ch
 
 	move.l	d0,d1
 	and.l	#$ffffff00,d1
-	cmp.l	#`TDZ<<8`,d1
+	cmp.l   #"TDZ"<<8,d1
 	beq.b	.tdz
 	moveq	#1,d0
 	bra.b	.init
@@ -38003,7 +38003,7 @@ id_ps3m		pushm	d1-a6
 	rts
 
 
-.xmsign		dc.b	`Extended Module:`
+.xmsign		dc.b	"Extended Module:"
  even
 
 ps3minitcount	dc	0
