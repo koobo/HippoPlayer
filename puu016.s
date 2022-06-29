@@ -7145,7 +7145,8 @@ clear_random
 	* Request refresh to clear out random play indicators
 	st	hippoonbox(a5)
 	pushm	all
-	bsr.w	shownames
+	;bsr.w	shownames
+	bsr	showNamesNoCentering
 	popm	all
 .x
 	rts
@@ -16491,7 +16492,7 @@ listselector
 showNamesNoCentering
 shownames2
 	moveq	#1,d4		* flag: do not center
-	bra.b	shn
+	bra.b	shownames\.doit
 
 clearbox:
 	tst	boxsize(a5)
@@ -16513,7 +16514,7 @@ clearbox:
 
 shownames:
 	moveq	#0,d4	 	* flag: center
-shn
+.doit
 	tst	boxsize(a5)
 	beq.b	.bx
 	tst.b	win(a5)		* onko ikkunaa?
