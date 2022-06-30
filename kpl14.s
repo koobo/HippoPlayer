@@ -1,5 +1,3 @@
-;APS00004234000000000000000000000000000000000000000000000000000000000000000000000000
-
 	incdir	include:
 	include	exec/exec_lib.i
 	include	exec/interrupts.i
@@ -8,7 +6,9 @@
 	include	resources/cia_lib.i
 	include	exec/ports.i
 	include	mucro.i
-	incdir
+	;incdir
+
+TEST = 0
 
 _ciaa	=	$bfe001
 _ciab	=	$bfd000
@@ -208,19 +208,19 @@ k_roundtable	rs.b	1512
 
 k_sizeof	rs.b	0		* size of k_base
 
-
+	ifne TEST
 main
 ;	move	$dff01c,-(sp)
 ;	move	#$7fff,$dff09a
 
 	lea	k_base,a0
 	lea	module,a1
-	moveq	#8,d0
+	moveq	#0,d0
 	moveq	#0,d1		* Mode
-;	moveq	#1,d1		* Mode
+	moveq	#1,d1		* Mode
 ;	moveq	#%11,d2		* flags, fastramyes, tempoyes
-	moveq	#%01,d2		* flags, tempoyes
-
+;	moveq	#%01,d2		* flags, tempoyes
+	moveq	#0,d2
 
 	bsr.b	kplayer+kp_init
  	tst.l	d0
@@ -255,7 +255,7 @@ main
 	bsr.b	kplayer+kp_end
 .error	rts
 
-
+	endif ; TEST
 
 
 *******************************************************************************
@@ -2442,6 +2442,8 @@ k_pt16	dc	862,814,768,725,684,646,610,575,543,513,484,457
 
 binend
 
+	ifne TEST
+
 	section	blah,bss_p
 
 k_base	ds.b	k_sizeof
@@ -2450,4 +2452,7 @@ k_base	ds.b	k_sizeof
 	section	po,data_c
 
 ;module	incbin	music:mod.figure
-module	incbin	sys:music/mod.sundayhangover
+module	incbin	sys:music/128k_test.mod
+;module	incbin	sys:music/mod.realdeal
+
+	endif ; TEST

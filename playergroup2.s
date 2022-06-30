@@ -5,6 +5,8 @@ SHR=1
 	incdir	include/
 	include	playerIds.i
 
+	ifnd __VASM
+
 	auto	j\
 ;	auto	wb ram:HippoPlayer.group\
 	auto	wb s:HippoPlayer.group\
@@ -16,7 +18,7 @@ SHR=1
 
 	rts
 
-
+	endif
 
 
 
