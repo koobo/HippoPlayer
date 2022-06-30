@@ -46627,8 +46627,6 @@ runSpectrumScope
 
 spectrumCopySamples
 	push	a4
-	* For clearing data
-	moveq	#0,d3
 
 	move.l	a4,a6
 	lea	scopeData+scope_ch1(a5),a3
@@ -46652,15 +46650,24 @@ spectrumCopySamples
 .copySample
 	; Destination buffer
 	;lea	channelData(a3),a4
+
+	* For clearing data
+	moveq	#0,d3
 	
 	tst	ns_period(a3)
 	beq.b	.empty
 	tst	ns_tempvol(a3)
 	beq.b	.empty
-	tst.l	ns_loopstart(a3) * Always check these to avoid
-	beq.b	.empty			 * enforcer hits!
-	move.l	ns_start(a3),d0
-	bne.b	.jolt
+
+	* Insanity check value
+	lea	1024.w,a0
+
+	move.l	ns_start(a3),a1
+	cmp.l	a0,a1 * insanity check
+	blo.b	.empty
+	move.l	ns_loopstart(a3),d1
+	cmp.l	a0,d1 * insanity check
+	bhs.b	.jolt
 
 .empty
 	moveq	#SAMPLE_LENGTH/4/8-1,d1
@@ -46677,29 +46684,22 @@ spectrumCopySamples
 	rts
 
 .jolt	
-	* Some insanity checks:
-	lea	1024.w,a1
-	;cmp.l	#1024,d0
-	cmp.l	a1,d0
-	blo.b	.empty
-	move.l	ns_loopstart(a3),d1
-	;cmp.l	#1024,d1
-	cmp.l	a1,d0
-	blo.b	.empty
-
-	move.l	d0,a1			* Sample start
+	* a1 = sample start
+	* d1 = loopstart
 	moveq	#0,d5
 	move	ns_length(a3),d5	* Sample length
-	moveq	#0,d0
-	move	ns_replen(a3),d0
-.d
+
 	; see if enough data to copy all in one block
 	cmp	#SAMPLE_LENGTH/2,d5
 	bhs.b	.large
+
 	; sample length 2, ie. empty sample?
 	cmp	#2,d5
 	bls.b	.empty
-	
+
+	moveq	#0,d0
+	move	ns_replen(a3),d0
+;	
 	; this loop is active when there is some data to be copied
 	moveq	#SAMPLE_LENGTH/2-1,d7	* words to copy
 .small
@@ -46709,8 +46709,14 @@ spectrumCopySamples
 	move.b	(a1)+,(a4)+
 	
 	subq.l	#1,d5			* one word copied, check length
-	bpl.b	.l
+	dbmi	d7,.small
 
+	* Sample data exhausted (d5 = -1), 
+	* or buffer full (d7 = -1)
+	tst	d7
+	bmi.b	.full
+
+	* Continue with loop data
 	cmp	#2,d0
 	bls.b	.emptyRepeat
 
@@ -46719,8 +46725,9 @@ spectrumCopySamples
 	move.l	d0,d5
 	; repeat data start
 	move.l	d1,a1
-.l
-	dbf	d7,.small		* Loop..
+	* continue copy 
+	bra.b	.small
+.full
 	rts
 
 .emptyRepeat
@@ -46728,20 +46735,46 @@ spectrumCopySamples
 	dbf	d7,.emptyRepeat
 	rts
 
-
 .large
-	moveq	#SAMPLE_LENGTH/4/4-1,d0
+	* CHeck source address evenness
+	move.w	a1,d0
+	ror.b	#1,d0
+	bpl.b	.evenCopy
+	moveq	#SAMPLE_LENGTH/16-1,d0
+	* copy from odd address
 .c2	
- rept 4
+ rept 16
 	move.b	(a1)+,(a4)+
-	move.b	(a1)+,(a4)+
-	move.b	(a1)+,(a4)+
-	move.b	(a1)+,(a4)+	
  endr
 	dbf	d0,.c2
 	rts
 
-
+* Copy SAMPLE_LENGTH bytes, 256 bytes that is
+	if SAMPLE_LENGTH<>256	
+		fail 256 assumed here
+	endif
+* Free: d0-d7, a0,a2,a3 = 44 bytes at a time
+.evenCopy
+	* 000-044
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,(a4)
+	* 044-088
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,44(a4)
+	* 088-132
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,44*2(a4)
+	* 132-176
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,44*3(a4)
+	* 172-220
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,44*4(a4)
+	* 220-256 (36 bytes)
+	movem.l	(a1),d0-d7/a0
+	movem.l	d0-d7/a0,44*5(a4)
+	rts
+	
 ; in:
 ;    d0 = period
 ; out:
