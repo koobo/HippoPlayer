@@ -46494,26 +46494,55 @@ loudnessFFT
 	move.l	s_spectrumExpTable(a4),a3	
 	moveq	#FFT_LENGTH/2-1,d7
 .l1
-	* calculate re^2 + im^2
+	* Calculate re^2 + im^2.
+	* This is the squared magnitude of the complex value.
 	move	(a0),d0
 	muls	d0,d0
 	move	(a1)+,d1
 	muls	d1,d1
 	add.l	d1,d0
 
-	* find the slot in the table where the value lands
+	* Find the slot in the table where the value lands.
+	* The index represents the decibel value with range 0..64
+
+* Forward search, loud values are searched first.
+* Generally the real values are not loud on average,
+* so this is wasteful.
+ REM 
 	move.l	a3,a2
-	moveq	#EXP_TABLE_LEN-1,d5
+	moveq	#EXP_TABLE_LEN-1,d1
 	* this loop is run 4096 times :-O
-.l2
-	cmp.l	(a2)+,d0
-	dbhi	d5,.l2
+
+.l2	cmp.l	(a2)+,d0
+	dbhi	d1,.l2
 
 	* use the DBcc value directly, neat
+	addq	#1,d1	
+	move	d1,(a0)+
+ EREM 
+
+* Reverse search, quiet values are searched first.
+* With a few test modules this takes much less steps
+* compared to the forward search.
+* Test with two mods, loop iteration counts:
+* normal count:  1b570b  1c53b9
+* reverse count:  cf5af   bed25
+; REM
+	lea	EXP_TABLE_LEN*4(a3),a2
+	moveq	#EXP_TABLE_LEN-1,d5
+.l3
+	cmp.l	-(a2),d0
+	dbls	d5,.l3
+	
+	* use the DBcc value directly, neat
 	addq	#1,d5	
-	move	d5,(a0)+
+	moveq	#64,d0
+	sub	d5,d0
+	move	d0,(a0)+
+; EREM
 
 	dbf	d7,.l1
+ 
 	rts
 
 
@@ -46687,9 +46716,9 @@ spectrumCopySamples
 	* a1 = sample start
 	* d1 = loopstart
 	moveq	#0,d5
-	move	ns_length(a3),d5	* Sample length
+	move	ns_length(a3),d5	* Sample length in words
 
-	; see if enough data to copy all in one block
+	; See if enough data to copy all in one block
 	cmp	#SAMPLE_LENGTH/2,d5
 	bhs.b	.large
 
@@ -46697,9 +46726,11 @@ spectrumCopySamples
 	cmp	#2,d5
 	bls.b	.empty
 
+	; Small sample, or large sample with not a lot remaining
+
 	moveq	#0,d0
 	move	ns_replen(a3),d0
-;	
+
 	; this loop is active when there is some data to be copied
 	moveq	#SAMPLE_LENGTH/2-1,d7	* words to copy
 .small
@@ -46736,17 +46767,17 @@ spectrumCopySamples
 	rts
 
 .large
-	* CHeck source address evenness
+	* Check source address evenness
 	move.w	a1,d0
 	ror.b	#1,d0
 	bpl.b	.evenCopy
 	moveq	#SAMPLE_LENGTH/16-1,d0
 	* copy from odd address
-.c2	
+.oddCopy
  rept 16
 	move.b	(a1)+,(a4)+
  endr
-	dbf	d0,.c2
+	dbf	d0,.oddCopy
 	rts
 
 * Copy SAMPLE_LENGTH bytes, 256 bytes that is
@@ -46774,7 +46805,7 @@ spectrumCopySamples
 	movem.l	(a1),d0-d7/a0
 	movem.l	d0-d7/a0,44*5(a4)
 	rts
-	
+
 ; in:
 ;    d0 = period
 ; out:
@@ -46899,7 +46930,7 @@ spectrumMixSamplesNew
 	move.l	a2,a3
 	; a3 = ch1 voltab
 	move	ns_period(a1),d0
-	bsr.w	calcSampleStep
+	bsr.b	calcSampleStep
 	move.l	d1,d2
 	; d2 = ch1 step
 
@@ -46908,7 +46939,7 @@ spectrumMixSamplesNew
 	bsr.w	getSpectrumVolumeTable
 	; a2 = ch2 voltab
 	move	ns_period(a1),d0
-	bsr.w	calcSampleStep
+	bsr.b	calcSampleStep
 	; d1 = ch2 step
 
 	move.l	s_spectrumChannel1(a4),a0	
@@ -46929,31 +46960,24 @@ spectrumMixSamplesNew
 	moveq	#MIX_LENGTH/2-1,d7
 .loop
 	rept	2
-	; ch1 byte
 	moveq	#0,d5
-	move.b	(a0,d0.w),d5
-	; volume scaled byte
+	move.b	(a0,d0.w),d5  ; ch1 byte
 	add	d5,d5
-	move.w	(a3,d5.w),d5
-	
-	; ch2 byte
-	moveq	#0,d3
-	move.b	(a1,d4.w),d3
-	; volume scaled byte
-	add	d3,d3
-	add.w	(a2,d3.w),d5 * ch1+ch2
-	move	d5,(a6)+
+	move.w	(a3,d5.w),d5  ; volume scaled byte
 
-	; next ch1 sample
-	add.l	d2,d0
+	moveq	#0,d3
+	move.b	(a1,d4.w),d3 ; ch2 byte
+	add	d3,d3
+	add.w	(a2,d3.w),d5 ; ch1+ch2
+	move	d5,(a6)+     ; to output
+
+	add.l	d2,d0 	; next ch1 byte
 	addx.w	d6,d0
-	; next ch2 sample
-	;add.l	d1,d4
-	add.l	a5,d4
+	add.l	a5,d4   ; next ch2 byte
 	addx.w	d6,d4
 	endr
 
-	;move	a5,d3	
+	; Buffer index safety
 	and.w	d1,d0
 	and.w	d1,d4
 
@@ -46995,26 +47019,20 @@ spectrumMixSamplesNew
 	moveq	#MIX_LENGTH/2-1,d7
 .loop2
 	rept	2
-	; ch3 byte
 	moveq	#0,d5
-	move.b	(a0,d0.w),d5
-	; volume scaled byte
+	move.b	(a0,d0.w),d5 ; ch3 byte
 	add	d5,d5
 	move.w	(a3,d5.w),d5
 
-	; ch4 byte
 	moveq	#0,d3
-	move.b	(a1,d4.w),d3
-	; volume scaled byte
+	move.b	(a1,d4.w),d3 ; ch4 byte
 	add	d3,d3
 	add.w	(a2,d3.w),d5  * ch3+ch4
 	add	d5,(a6)+      * ch1+ch2+ch3+ch4
 
-	; next ch3 sample
-	add.l	d2,d0
+	add.l	d2,d0 ; next ch3 sample
 	addx.w	d6,d0
-	; next ch4 sample
-	add.l	a5,d4
+	add.l	a5,d4 ; next ch4 sample
 	addx.w	d6,d4
 	endr
 	
