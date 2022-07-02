@@ -669,8 +669,6 @@ scopeStartTimeMicros	rs.l	1
 scopeStopTimeSecs		rs.l	1
 scopeStopTimeMicros		rs.l	1
 scopeFrameCounter		rs.l	1
-scopeRenderTimeMax      rs.w    1
-scopeRenderTimeMin      rs.w    1
 scopeRenderTime         rs.l    1
 ;; Timer.device stuff
 timerOpen               rs.w    1
@@ -22318,7 +22316,7 @@ stopScopeTask
 	* Check if running already
 	move	st_runningStatusOffset(a4),d7
 	tst.b 	(a5,d7)
-	beq.b	.x
+	beq.w	.x
 	DPRINT	"Shutting it"
 
 	* Get task structure
@@ -22353,19 +22351,15 @@ stopScopeTask
 	ext.l	d2
 	swap	d3
 	ext.l	d3
-	DPRINT	"Scope time=%lds frames=%ld fps=%ld.%ld"
-	moveq	#0,d0
-	moveq	#0,d1
-	move	scopeRenderTimeMin(a5),d0
-	move	scopeRenderTimeMax(a5),d1
-	move.l	scopeRenderTime(a5),d2
-	move.l	scopeFrameCounter(a5),d3
+
+	move.l	scopeRenderTime(a5),d4
+	move.l	scopeFrameCounter(a5),d5
 	bne.b	.zzz
-	moveq	#1,d3
+	moveq	#1,d5
 .zzz	
- 	divu	d3,d2
-	ext.l	d2
-	DPRINT	"Render min=%ldms max=%ldms avg=%ldms"
+ 	divu	d5,d4
+	ext.l	d4
+	DPRINT	"Scope time=%lds frames=%ld fps=%ld.%ld avg=%ld"
  endif
 .x	rts
 
@@ -22837,9 +22831,7 @@ scopeEntry:
 	lea	scopeStartTimeMicros(a5),a1
 	lore	Intui,CurrentTime
 	clr.l	scopeFrameCounter(a5)
-	clr	scopeRenderTimeMax(a5)
 	clr.l scopeRenderTime(a5)
-	move	#-1,scopeRenderTimeMin(a5)
  endif
 
 	; Ready to run	
@@ -23848,6 +23840,7 @@ drawScope:
 	lob	DisownBlitter
 
 * Scope performance measurements
+* Disaster is obvious, playing the first 40 seconds
 * - v2.52 spectrumScope on A500: 75ms average
 * - v2.53 spectrumScope on A500: 70ms average
  if DEBUG
@@ -23856,14 +23849,6 @@ drawScope:
 	bsr	.render
 	jsr	stopMeasure
 	add.l	d0,scopeRenderTime(a5)
-	cmp	scopeRenderTimeMax(a5),d0
-	blo.b	.low1
-	move	d0,scopeRenderTimeMax(a5)
-.low1
-	cmp	scopeRenderTimeMin(a5),d0
-	bhs.b	.hi1
-	move	d0,scopeRenderTimeMin(a5)
-.hi1
  else
 	bsr.w	.render
  endif
@@ -46703,24 +46688,29 @@ runSpectrumScope
 	bra.b	.go
 .normal
 	bsr.w	spectrumCopySamples
-;	bsr.w	spectrumMixSamples
+* A500 average = 2ms
 	bsr.w	spectrumMixSamplesNew
-.go
+* A500 average = 4ms
 
+.go
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	windowFFT
+* A500 average = 2ms
 
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
 	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	sampleFFT
+* A500 average = 52ms
 
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
 	bsr	loudnessFFT
+* A500 average = 8ms
 
 	bsr.w	drawFFT
+* A500 average = 1ms
 
 	* Vertical fill
 	lore	GFX,OwnBlitter
@@ -47299,7 +47289,12 @@ spectrumGetSampleData
   endif ; FEATURE_SPECTRUMSCOPE
 
 
-; Performance measurement with timer.device
+***************************************************************************
+*
+* Performance measurement with timer.device
+*
+***************************************************************************
+
  if DEBUG
 openTimer
 	move.l	(a5),a0
@@ -47308,16 +47303,20 @@ openTimer
 	blo.b	.x
 	move.l	a0,a6
 
-	lea	timerDeviceName(pc),a0
+	lea	.timerDeviceName(pc),a0
 	moveq	#UNIT_ECLOCK,d0
 	moveq	#0,d1
 	lea	timerRequest(a5),a1
 	lob	OpenDevice		; d0=0 if success
+	tst.l	d0
 	seq	timerOpen(a5)
 .x	rts
 
+.timerDeviceName dc.b	"timer.device",0
+	even
+
 closeTimer
-	tst	timerOpen(a5)
+	tst.b	timerOpen(a5)
 	beq.b	.x
 	clr.b	timerOpen(a5)
 	move.l	(a5),a6
@@ -47326,7 +47325,7 @@ closeTimer
 .x	rts
 
 startMeasure
-	tst	timerOpen(a5)
+	tst.b	timerOpen(a5)
 	beq.b	.x
 	push	a6	
 	move.l	IO_DEVICE+timerRequest(a5),a6
@@ -47337,7 +47336,7 @@ startMeasure
 
 ; out: d0: difference in millisecs
 stopMeasure
-	tst	timerOpen(a5)
+	tst.b	timerOpen(a5)
 	bne.b	.x
 	moveq	#-1,d0
 	rts
@@ -47345,98 +47344,29 @@ stopMeasure
 	move.l	IO_DEVICE+timerRequest(a5),a6
 	lea	clockEnd(a5),a0
 	lob	ReadEClock
-	; d0 = ticks/s
-	divu	#1000,d0
-	; d0 = ticks/ms
-	ext.l	d0
-	
-	move.l	EV_HI+clockEnd(a5),d1
-	move.l	EV_LO+clockEnd(a5),d2
-
-	move.l	EV_HI+clockStart(a5),d3
-	sub.l	EV_LO+clockStart(a5),d2
-	subx.l	d3,d1
-
-	pushm	d1/d2
 	move.l	d0,d2
-	popm	d0/d1
-	bsr.b	div64
+	; d2 = ticks/s
+	divu	#1000,d2
+	; d2 = ticks/ms
+	ext.l	d2
+	
+	; Calculate diff between start and stop times
+	; in 64-bits
+	move.l	EV_HI+clockEnd(a5),d0
+	move.l	EV_LO+clockEnd(a5),d1
+	move.l	EV_HI+clockStart(a5),d3
+	sub.l	EV_LO+clockStart(a5),d1
+	subx.l	d3,d0
 
+	; Turn the diff into millisecs
+	; Divide d0:d1 by d2
+	jsr	divu_64
+	; d0:d1 is now d0:d1/d2
+	; take the lower 32-bits
 	move.l	d1,d0
 	popm	d2-d4/a6
 	rts
 
-
-timerDeviceName dc.b	"timer.device",0
-	even
-
-
-* divu_32 --- d0 = d0/d1, d1=jakojaannos
-divu_32x
-lb_5f66 move.l  d3,-(a7)
-        swap    d1
-        tst.w   d1
-        bne.b   lb_5f8c
-        swap    d1
-        move.l  d1,d3
-        swap    d0
-        move.w  d0,d3
-        beq.b   lb_5f7c
-        divu.w  d1,d3
-        move.w  d3,d0
-lb_5f7c swap    d0
-        move.w  d0,d3
-        divu.w  d1,d3
-        move.w  d3,d0
-        swap    d3
-        move.w  d3,d1
-        move.l  (a7)+,d3
-        rts     
-
-lb_5f8c swap    d1
-        move.w  d2,-(a7)
-        moveq   #16-1,d3
-        move.w  d3,d2
-        move.l  d1,d3
-        move.l  d0,d1
-        clr.w   d1
-        swap    d1
-        swap    d0
-        clr.w   d0
-lb_5fa0 add.l   d0,d0
-        addx.l  d1,d1
-        cmp.l   d1,d3
-        bhi.b   lb_5fac
-        sub.l   d3,d1
-        addq.w  #1,d0
-lb_5fac dbf     d2,lb_5fa0
-        move.w  (a7)+,d2
-        move.l  (a7)+,d3
-        rts     
-
-; udivmod64 - divu.l d2,d0:d1
-div64
-	 move.l d3,-(a7)
-	 moveq #31,d3
-.loop
-	 add.l d1,d1
-	 addx.l d0,d0
-	 bcs.s .over
-	 cmp.l d2,d0
-	 bcs.s .sui
-	 sub.l d2,d0
-.re
-	 addq.b #1,d1
-.sui
-	 dbf d3,.loop
-	 move.l (a7)+,d3	; v=0
-	 rts
-.over
-	 sub.l d2,d0
-	 bcs.s .re
-	 move.l (a7)+,d3
-	 ;ori #4,ccr		; v=1
-	 rts
   endif
 
 *******************************************************************************
