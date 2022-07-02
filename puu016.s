@@ -46405,6 +46405,8 @@ prepareSpectrumVolumeTable
 ; out:
 ;    a2 = table
 getSpectrumVolumeTable
+	mulu	mainvolume(a5),d0
+	lsr	#6,d0
 	CLAMPVOL d0
 	tst	d0
 	bne.b	.1
