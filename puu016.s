@@ -46479,16 +46479,28 @@ prepareSpectrumExpTable
 	move.l	d0,-4(a2)
 	addq.l	#4,a2
 	dbf	d7,.loop2
+
+	* Reverse the table so that loudnessFFT can 
+	* use post-increment instead of pre-decrement, which
+	* is slower.
+	move.l	s_spectrumExpTable(a4),a0
+	lea	EXP_TABLE_LEN*4(a0),a1
+	moveq	#EXP_TABLE_LEN/2-1,d7
+.reverse
+	move.l	(a0),d0
+	move.l	-(a1),(a0)+
+	move.l	d0,(a1)
+	dbf	d7,.reverse
 	rts
  
 
 ; Calculate loudness values for the FFT
 ;
 ;in:
-; a0 = result array reals
-; a1 = result array imaginary
+;  a0 = result array reals
+;  a1 = result array imaginary
 ;out:
-; a0 = result (overwritten input array)
+;  a0 = result (overwritten input array)
 
 loudnessFFT
 	move.l	s_spectrumExpTable(a4),a3	
@@ -46506,20 +46518,12 @@ loudnessFFT
 	* The index represents the decibel value with range 0..64
 
 * Forward search, loud values are searched first.
-* Generally the real values are not loud on average,
-* so this is wasteful.
- REM 
-	move.l	a3,a2
-	moveq	#EXP_TABLE_LEN-1,d1
-	* this loop is run 4096 times :-O
-
-.l2	cmp.l	(a2)+,d0
-	dbhi	d1,.l2
-
-	* use the DBcc value directly, neat
-	addq	#1,d1	
-	move	d1,(a0)+
- EREM 
+* Typically forward search is wasteful since
+* on average module loudnesses are on the lower half
+* of the search table. For snare/drum hits and similar
+* forward search is better, but those happen rarely.
+* DMU.ferry_tell is exceptionally loud, for this one
+* the forward search is better.
 
 * Reverse search, quiet values are searched first.
 * With a few test modules this takes much less steps
@@ -46527,22 +46531,23 @@ loudnessFFT
 * Test with two mods, loop iteration counts:
 * normal count:  1b570b  1c53b9
 * reverse count:  cf5af   bed25
-; REM
-	lea	EXP_TABLE_LEN*4(a3),a2
-	moveq	#EXP_TABLE_LEN-1,d5
-.l3
-	cmp.l	-(a2),d0
-	dbls	d5,.l3
-	
+
+* Reverse search is used here by reversing the search table 
+* in prepareSpectrumExpTable.
+
+	move.l	a3,a2
+	moveq	#EXP_TABLE_LEN-1,d1
+	* this loop is may run 4096 times in the worst case
+.l2	
+	cmp.l	(a2)+,d0
+	dbls	d1,.l2
+
 	* use the DBcc value directly, neat
-	addq	#1,d5	
-	moveq	#64,d0
-	sub	d5,d0
+	moveq	#64-1,d0 * -1 = DBcc adjustment
+	sub	d1,d0
 	move	d0,(a0)+
-; EREM
 
 	dbf	d7,.l1
- 
 	rts
 
 
