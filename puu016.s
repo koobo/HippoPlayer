@@ -46505,10 +46505,11 @@ prepareSpectrumExpTable
 loudnessFFT
 	move.l	s_spectrumExpTable(a4),a3	
 	moveq	#FFT_LENGTH/2-1,d7
+	move.l	a0,a6
 .l1
 	* Calculate re^2 + im^2.
 	* This is the squared magnitude of the complex value.
-	move	(a0),d0
+	move	(a0)+,d0
 	muls	d0,d0
 	move	(a1)+,d1
 	muls	d1,d1
@@ -46542,10 +46543,17 @@ loudnessFFT
 	cmp.l	(a2)+,d0
 	dbls	d1,.l2
 
+	* DBcc adjustment
+	subq	#1,d1
+	
 	* use the DBcc value directly, neat
-	moveq	#64-1,d0 * -1 = DBcc adjustment
-	sub	d1,d0
-	move	d0,(a0)+
+;	moveq	#64-1,d0 * -1 = DBcc adjustment
+;	sub	d1,d0
+;	move	d1,(a0)+
+
+	* 0..64 fits into a byte
+	* Overwrite input buffer
+	move.b	d1,(a6)+
 
 	dbf	d7,.l1
 	rts
@@ -47057,7 +47065,6 @@ drawFFT
 	move.l	s_draw1(a4),a1
 	move.l	s_spectrumMuluTable(a4),a2
 
-
 ;%11111000 00000000 ror #5
 ;%00000111 11000000 ror #5
 ;%00000000 00111110 ror #5
@@ -47071,13 +47078,13 @@ drawFFT
 
 	; Take the 1st half
 	moveq	#FFT_LENGTH/2-1,d7
+	* Y-table index
+	moveq	#0,d1
 .loop
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
-	sub	(a0)+,d0
-	bpl.b	.1
-	moveq	#0,d0
-.1	add	d0,d0 
-	move	(a2,d0),d0
+	move.b	(a0)+,d1  * Get value in range 0..64
+	add.b	d1,d1     * Word index 0..128
+	* Y-address from table
+	move	(a2,d1),d0
 	* Draw bits
 	or.w	d6,(a1,d0)
 
@@ -47094,13 +47101,11 @@ drawFFT
 	* Draw data point which is split between words
 	subq	#1,d7
 	bmi.b	.x
-	
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
-	sub	(a0)+,d0
-	bpl.b	.3
-	moveq	#0,d0
-.3	add	d0,d0 
-	move	(a2,d0),d0
+
+	* Get another value	
+	move.b	(a0)+,d1
+	add.b	d1,d1
+	move	(a2,d1),d0
 
 	* Bits that go into the 2nd byte
 	or.b	d6,1(a1,d0)
