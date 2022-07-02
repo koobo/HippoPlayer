@@ -46507,6 +46507,7 @@ loudnessFFT
 	move.l	s_spectrumExpTable(a4),a3	
 	moveq	#FFT_LENGTH/2-1,d7
 	move.l	a0,a6
+	moveq	#63,d3
 .l1
 	* Calculate re^2 + im^2.
 	* This is the squared magnitude of the complex value.
@@ -46546,14 +46547,14 @@ loudnessFFT
 
 	* DBcc adjustment
 	subq	#1,d1
-	
-	* use the DBcc value directly, neat
-;	moveq	#64-1,d0 * -1 = DBcc adjustment
-;	sub	d1,d0
-;	move	d1,(a0)+
+	* Use this value directly, neat
 
-	* 0..64 fits into a byte
+	* Fits into a byte
 	* Overwrite input buffer
+	cmp.b	d3,d1
+	bls.b	.clamp
+	move.b	d3,d1
+.clamp
 	move.b	d1,(a6)+
 
 	dbf	d7,.l1
