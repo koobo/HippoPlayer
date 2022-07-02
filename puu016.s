@@ -223,6 +223,9 @@ check	macro
 	include	math/mathffp_lib.i
 	include	math/mathtrans_lib.i
 	
+	include	libraries/timer_lib.i
+	include	devices/timer.i
+
 	incdir include/
 	include	mucro.i
 	include	med.i
@@ -658,6 +661,23 @@ scopeManualActivation	rs.b 1
 __pad0     	        rs.b 1
 
 scopeData  rs.b	 scope_size
+
+ if DEBUG
+;; Scope performance measurement data
+scopeStartTimeSecs		rs.l	1
+scopeStartTimeMicros	rs.l	1
+scopeStopTimeSecs		rs.l	1
+scopeStopTimeMicros		rs.l	1
+scopeFrameCounter		rs.l	1
+scopeRenderTimeMax      rs.w    1
+scopeRenderTimeMin      rs.w    1
+scopeRenderTime         rs.l    1
+;; Timer.device stuff
+timerOpen               rs.w    1
+timerRequest	        rs.b    IOTV_SIZE
+clockStart              rs.b    EV_SIZE
+clockEnd                rs.b    EV_SIZE
+ endif
 
 ps3mchannels	rs.l	1	* Osoitin PS3M mixer channel blockeihin
 
@@ -2375,16 +2395,13 @@ main
 	lob	OpenResource
 	move.l	d0,ciabaseb(a5)
 
-
-
-
-
+ if DEBUG
+	jsr	openTimer
+ endif
 
 	lea	text_attr,a0	* tässä vaiheessa tavaalinen topaz.8
 	lore	GFX,OpenFont
-	move.l	d0,topazbase(a5)
-
-	
+	move.l	d0,topazbase(a5)	
 
 	pushm	all
 	bsr.w	loadprefs
@@ -3580,6 +3597,10 @@ exit
 
 	move.l	nilfile(a5),d1
 	lore	Dos,Close
+ 
+ if DEBUG
+	jsr	closeTimer
+ endif
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -22318,6 +22339,34 @@ stopScopeTask
 	bra.b	.loop
 .z
 
+;; Display some performance measurements when scope is stopped.
+ if DEBUG
+	move.l	scopeStopTimeSecs(a5),d0
+	sub.l	scopeStartTimeSecs(a5),d0
+	bne.b	.zz
+	moveq	#1,d0
+.zz
+	move.l	scopeFrameCounter(a5),d1
+	move.l	d1,d2
+	divu	d0,d2
+	move.l	d2,d3
+	ext.l	d2
+	swap	d3
+	ext.l	d3
+	DPRINT	"Scope time=%lds frames=%ld fps=%ld.%ld"
+	moveq	#0,d0
+	moveq	#0,d1
+	move	scopeRenderTimeMin(a5),d0
+	move	scopeRenderTimeMax(a5),d1
+	move.l	scopeRenderTime(a5),d2
+	move.l	scopeFrameCounter(a5),d3
+	bne.b	.zzz
+	moveq	#1,d3
+.zzz	
+ 	divu	d3,d2
+	ext.l	d2
+	DPRINT	"Render min=%ldms max=%ldms avg=%ldms"
+ endif
 .x	rts
 
 
@@ -22782,7 +22831,16 @@ scopeEntry:
 	move.b	scopeManualActivation(a5),d5
 	jsr	printHippoScopeWindow	
 
-; TEST: OK
+;; Scope performance measurements
+ if DEBUG
+	lea	scopeStartTimeSecs(a5),a0
+	lea	scopeStartTimeMicros(a5),a1
+	lore	Intui,CurrentTime
+	clr.l	scopeFrameCounter(a5)
+	clr	scopeRenderTimeMax(a5)
+	clr.l scopeRenderTime(a5)
+	move	#-1,scopeRenderTimeMin(a5)
+ endif
 
 	; Ready to run	
 	move.l	s_quad_task(a4),a1
@@ -22961,6 +23019,14 @@ scopeLoop:
 *********************************************************************
 
 qexit:
+
+;; Scope performance measurements
+ if DEBUG
+	lea	scopeStopTimeSecs(a5),a0
+	lea	scopeStopTimeMicros(a5),a1
+	lore	Intui,CurrentTime
+ endif
+
 	SDPRINT	"Scope task will exit"
 	bsr.b	qflush_messages
 
@@ -23756,7 +23822,6 @@ drawScope:
 	move	d0,s_scopePreviousPattPos(a4)
 	move	d1,s_scopePreviousSongPos(a4)
 .noPattSc
-
 	* s_draw1 = draw scope in this buffer
 	* s_draw2 = clear this buffer
 
@@ -23782,7 +23847,26 @@ drawScope:
 	* Continue clearing while scope is drawn into the other buffer
 	lob	DisownBlitter
 
+* Scope performance measurements
+* - v2.52 spectrumScope on A500: 75ms average
+* - v2.53 spectrumScope on A500: 70ms average
+ if DEBUG
+	addq.l	#1,scopeFrameCounter(a5)
+	jsr	startMeasure
+	bsr	.render
+	jsr	stopMeasure
+	add.l	d0,scopeRenderTime(a5)
+	cmp	scopeRenderTimeMax(a5),d0
+	blo.b	.low1
+	move	d0,scopeRenderTimeMax(a5)
+.low1
+	cmp	scopeRenderTimeMin(a5),d0
+	bhs.b	.hi1
+	move	d0,scopeRenderTimeMin(a5)
+.hi1
+ else
 	bsr.w	.render
+ endif
 
 	* scope processed, deliver unto screen
 
@@ -47213,6 +47297,147 @@ spectrumGetSampleData
 	rts
 
   endif ; FEATURE_SPECTRUMSCOPE
+
+
+; Performance measurement with timer.device
+ if DEBUG
+openTimer
+	move.l	(a5),a0
+	move	LIB_VERSION(a0),d0
+	cmp	#36,d0
+	blo.b	.x
+	move.l	a0,a6
+
+	lea	timerDeviceName(pc),a0
+	moveq	#UNIT_ECLOCK,d0
+	moveq	#0,d1
+	lea	timerRequest(a5),a1
+	lob	OpenDevice		; d0=0 if success
+	seq	timerOpen(a5)
+.x	rts
+
+closeTimer
+	tst	timerOpen(a5)
+	beq.b	.x
+	clr.b	timerOpen(a5)
+	move.l	(a5),a6
+	lea	timerRequest(a5),a1
+	lob	CloseDevice
+.x	rts
+
+startMeasure
+	tst	timerOpen(a5)
+	beq.b	.x
+	push	a6	
+	move.l	IO_DEVICE+timerRequest(a5),a6
+	lea	clockStart(a5),a0
+	lob	ReadEClock
+	pop 	a6
+.x	rts
+
+; out: d0: difference in millisecs
+stopMeasure
+	tst	timerOpen(a5)
+	bne.b	.x
+	moveq	#-1,d0
+	rts
+.x	pushm	d2-d4/a6
+	move.l	IO_DEVICE+timerRequest(a5),a6
+	lea	clockEnd(a5),a0
+	lob	ReadEClock
+	; d0 = ticks/s
+	divu	#1000,d0
+	; d0 = ticks/ms
+	ext.l	d0
+	
+	move.l	EV_HI+clockEnd(a5),d1
+	move.l	EV_LO+clockEnd(a5),d2
+
+	move.l	EV_HI+clockStart(a5),d3
+	sub.l	EV_LO+clockStart(a5),d2
+	subx.l	d3,d1
+
+	pushm	d1/d2
+	move.l	d0,d2
+	popm	d0/d1
+	bsr.b	div64
+
+	move.l	d1,d0
+	popm	d2-d4/a6
+	rts
+
+
+timerDeviceName dc.b	"timer.device",0
+	even
+
+
+* divu_32 --- d0 = d0/d1, d1=jakojaannos
+divu_32x
+lb_5f66 move.l  d3,-(a7)
+        swap    d1
+        tst.w   d1
+        bne.b   lb_5f8c
+        swap    d1
+        move.l  d1,d3
+        swap    d0
+        move.w  d0,d3
+        beq.b   lb_5f7c
+        divu.w  d1,d3
+        move.w  d3,d0
+lb_5f7c swap    d0
+        move.w  d0,d3
+        divu.w  d1,d3
+        move.w  d3,d0
+        swap    d3
+        move.w  d3,d1
+        move.l  (a7)+,d3
+        rts     
+
+lb_5f8c swap    d1
+        move.w  d2,-(a7)
+        moveq   #16-1,d3
+        move.w  d3,d2
+        move.l  d1,d3
+        move.l  d0,d1
+        clr.w   d1
+        swap    d1
+        swap    d0
+        clr.w   d0
+lb_5fa0 add.l   d0,d0
+        addx.l  d1,d1
+        cmp.l   d1,d3
+        bhi.b   lb_5fac
+        sub.l   d3,d1
+        addq.w  #1,d0
+lb_5fac dbf     d2,lb_5fa0
+        move.w  (a7)+,d2
+        move.l  (a7)+,d3
+        rts     
+
+; udivmod64 - divu.l d2,d0:d1
+div64
+	 move.l d3,-(a7)
+	 moveq #31,d3
+.loop
+	 add.l d1,d1
+	 addx.l d0,d0
+	 bcs.s .over
+	 cmp.l d2,d0
+	 bcs.s .sui
+	 sub.l d2,d0
+.re
+	 addq.b #1,d1
+.sui
+	 dbf d3,.loop
+	 move.l (a7)+,d3	; v=0
+	 rts
+.over
+	 sub.l d2,d0
+	 bcs.s .re
+	 move.l (a7)+,d3
+	 ;ori #4,ccr		; v=1
+	 rts
+  endif
 
 *******************************************************************************
 * Playereitä
