@@ -46661,13 +46661,25 @@ runSpectrumScope
 	* Width 19*16 = 304 px
 	;move	#65*64+19,$58(a2)
 	move	#65*64+20,$58(a2)
+	lob	DisownBlitter
+	
+;	bsr.b	drawScales
+	
+.x	rts
 
-	jsr	_LVODisownBlitter(a6)
-
-.x
+* Test visualization
+ REM
+drawScales
+	lob	WaitBlit
+	move.l	s_draw1(a4),a0
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT/2,d0
+	mulu	s_scopeDrawAreaModulo(a4),d0
+	add.l	d0,a0
+	moveq	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/32-1,d0
+.l	move.l	#-1,(a0)+
+	dbf	d0,.l
 	rts
-
-
+ EREM
 
 spectrumCopySamples
 	push	a4
