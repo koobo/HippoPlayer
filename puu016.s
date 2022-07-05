@@ -46620,9 +46620,9 @@ loudnessFFT
 	cmp.l	(a2)+,d0
 	dbls	d1,.l2
 
-	* DBcc adjustment
-	subq	#1,d1
 	* Use this value directly, neat
+	* DBcc adjustment
+	addq	#1,d1
 
 	* Fits into a byte
 	* Overwrite input buffer
@@ -47360,18 +47360,24 @@ stopMeasure
 	
 	; Calculate diff between start and stop times
 	; in 64-bits
-	move.l	EV_HI+clockEnd(a5),d0
+	;move.l	EV_HI+clockEnd(a5),d0
 	move.l	EV_LO+clockEnd(a5),d1
-	move.l	EV_HI+clockStart(a5),d3
+	;move.l	EV_HI+clockStart(a5),d3
 	sub.l	EV_LO+clockStart(a5),d1
-	subx.l	d3,d0
+	;subx.l	d3,d0
+
+	; Ignore the upper 32 bits, such large intervals
+	; are not needed.
+	divu	d2,d1
+	moveq	#0,d0
+	move	d1,d0
 
 	; Turn the diff into millisecs
 	; Divide d0:d1 by d2
-	jsr	divu_64
+	;jsr	divu_64
 	; d0:d1 is now d0:d1/d2
 	; take the lower 32-bits
-	move.l	d1,d0
+	;move.l	d1,d0
 	popm	d2-d4/a6
 	rts
 
