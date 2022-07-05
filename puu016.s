@@ -23841,8 +23841,9 @@ drawScope:
 
 * Scope performance measurements
 * Disaster is obvious, playing the first 40 seconds
-* - v2.52 spectrumScope on A500: 75ms average
-* - v2.53 spectrumScope on A500: 70ms average
+* - v2.52 spectrumScope on A500: 75 ms average
+* - v2.53 spectrumScope on A500: 70 ms average
+*               micro-optimized: 69 ms average
  if DEBUG
 	addq.l	#1,scopeFrameCounter(a5)
 	jsr	startMeasure
@@ -46660,6 +46661,8 @@ prepareSpectrumSineTable
 	move.l	d6,a6
 	lob	SPMul
 	lob	SPFix
+	* fix_fft uses values shifted by one
+	asr	#1,d0 
 	move	d0,(a2)+
 
 	move.l	d2,d0

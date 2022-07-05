@@ -664,7 +664,7 @@ fix_fft
 	;move.w	.m(sp),d0
 	move.w	(sp),d0
 	cmp.w	.l(sp),d0
-	blo.w	.loop4
+	blo.b	.loop4
 
 ;;                 --k;
 
