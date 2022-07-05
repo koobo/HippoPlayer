@@ -95,7 +95,7 @@ N_LOUD = 100
 ;;         set inverse to 0=dft, 1=idft
 ;; */
 
-FFT_TEST = 1
+FFT_TEST = 0
 
 	ifne FFT_TEST
 FFT_SIZE = 4
@@ -131,6 +131,7 @@ test
 * - 165
 * - 163: sine conversion ASRs removed
 * - 162: use SP for vars, a5 for another sine pointer
+* - 160: use all table indexes multiplied by two 
 
 	move.l	4.w,a6
 	jsr	_LVOEnable(a6)
@@ -286,6 +287,7 @@ fpow	ds.w	FFT_LENGTH
  endif
 
 
+ ifne FFT_TEST
 convert_sine
 	lea	Sinewave(pc),a3
 	move	#N_WAVE-1,d0
@@ -293,6 +295,8 @@ convert_sine
 	asr	(a3)+
 	dbf	d0,.loop
 	rts
+ endif
+
 
 ; in
 ;    a0 = 16-bit signed sampledata (real array)
@@ -302,7 +306,7 @@ convert_sine
 ;   a0 = result array, real (overwritten input)
 ;   a1 = result array, imaginary
 sampleFFT
-	; clear imaginary array
+	; clear first half of the imaginary array
 	move.l	a1,a3
 
 	moveq	#FFT_LENGTH/2/4-1,d0
@@ -313,7 +317,6 @@ sampleFFT
 	move.l	d6,(a3)+
 	move.l	d6,(a3)+
 	dbf	d0,.c
-
 
  
 fix_fft
@@ -335,7 +338,7 @@ fix_fft
  ifne FFT_TEST
 	lea	Sinewave(pc),a2	
  endif
- 
+	; Cosine
 	lea	N_WAVE/4*2(a2),a5
 
 
@@ -368,7 +371,7 @@ fix_fft
 ;	moveq	#0,d6		; mr
 
 	moveq	#1,d5		; m
-	moveq	#.n,d4		; preloaded constant
+	move	#.n,d4		; preloaded constant
 
 	lea	(.n*2).w,a6	; loop condition constant for loop5 preloaded
 	
@@ -458,7 +461,7 @@ fix_fft
 
 ;;         l = 1;
 
-	move.w	#1,.l(sp)
+	move.w	#1*2,.l(sp) 	* index
 
 ;;         k = LOG2_N_WAVE-1;
 
@@ -479,9 +482,9 @@ fix_fft
 ;;                    on each data point exactly once, during this pass. */
 ;;                 istep = l << 1;
 
-	move.w	.l(sp),d0
+	move.w	.l(sp),d0	* index
 	add.w	d0,d0
-	move.w	d0,.istep(sp)
+	move.w	d0,.istep(sp)	* index
 
 ;;                 for(m=0; m<l; ++m) {
 
@@ -503,13 +506,13 @@ fix_fft
 ;	move.w	.k(sp),d1
 
 	movem.w	(sp),d0/d1	; load both .m an .k, stored sequentially
-	move	d0,d6
+	move	d0,d6		* index .m
 	lsl	d1,d0
 
 ;;                         wi = -Sinewave[j];
 ;;                         wi >>= 1;
 
-	add.w	d0,d0
+	;add.w	d0,d0
 	move.w	(a2,d0.w),d1
 	neg.w	d1
 ;	asr.w	#1,d1
@@ -535,13 +538,13 @@ fix_fft
 	move	.l(sp),d7	; j 
 	add	d6,d7
 
-	add	d6,d6		; i table index
-	add	d7,d7		; j table index
+;	add	d6,d6		; i table index
+;	add	d7,d7		; j table index
 
 	; loop increment
 	; use double as d6 and d7 are word table indices
-	move	.istep(sp),d0
-	add	d0,d0
+	move	.istep(sp),d0	* index
+;	add	d0,d0
 	; loop condition is in a6
 
 .loop5
@@ -657,7 +660,7 @@ fix_fft
 	endif
 
 ;for loop: for(m=0; m<l; ++m) 	
-	addq	#1,(sp)
+	addq	#1*2,(sp)
 	;move.w	.m(sp),d0
 	move.w	(sp),d0
 	cmp.w	.l(sp),d0
@@ -676,7 +679,7 @@ fix_fft
 ; loop condition: while(l < n) 
 ;	move.w	.l(sp),d0
 ;	cmp.w	#.n,d0
-	cmp.w	#.n,.l(sp)
+	cmp.w	#.n*2,.l(sp)
 	blo.w	.loop3
 
 ;;         return scale;
