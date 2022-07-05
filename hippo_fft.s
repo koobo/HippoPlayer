@@ -602,6 +602,11 @@ fix_fft
 
  ifne FFT_ALTERNATE_ASR
 	; Tricky asr #15
+	; Calculations use 16-bit words with fixed point at bit 15.
+	; Multiplying these will yield a value where the fixed point is at 30,
+	; with one sign bit and one value bit. Doing an add.l d1,d1 could cause
+	; an overflow but in practice it seems to work fine. Much faster
+	; than asr.l #15.
 	add.l	d1,d1
 	swap	d1
  endif
@@ -776,7 +781,7 @@ windowFFT
 .for1
 	; 16384-(Sinewave(k)>>1)
 	move	(a1),d4
-	asr	#1,d4
+	;asr	#1,d4 * sinetable prescaled earlier
 	move	d2,d5
 	sub	d4,d5
 
@@ -810,7 +815,7 @@ windowFFT
 .for2
 	; 16384-(Sinewave(k)>>1)
 	move	(a1),d4
-	asr	#1,d4
+	;asr	#1,d4 * sinetable prescaled earlier
 	move	d2,d5
 	sub	d4,d5
 

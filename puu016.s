@@ -46710,7 +46710,7 @@ runSpectrumScope
 	move.l	s_spectrumImagData(a4),a1
 	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	sampleFFT
-* A500 average = 52ms
+* A500 average = 39ms (old: 52ms)
 
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
