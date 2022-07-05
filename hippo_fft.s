@@ -97,6 +97,11 @@ N_LOUD = 100
 
 FFT_TEST = 0
 
+* Enables different way to handle fixed points,
+* faster but breaks the test. Though it should still be
+* accurate.
+FFT_ALTERNATE_ASR = 1
+
 	ifne FFT_TEST
 FFT_SIZE = 4
 	else
@@ -132,6 +137,11 @@ test
 * - 163: sine conversion ASRs removed
 * - 162: use SP for vars, a5 for another sine pointer
 * - 160: use all table indexes multiplied by two 
+* - 139: do asr #15 to the sum instead of components before
+*        this breaks the unit test but probably
+*        because it is just more accurate.
+* - 125: replace asr #15 with add,swap
+* - 123: use the now free d5 as .m(sp)
 
 	move.l	4.w,a6
 	jsr	_LVOEnable(a6)
@@ -466,7 +476,9 @@ fix_fft
 ;;         k = LOG2_N_WAVE-1;
 
 	move.w	#LOG2_N_WAVE-1,.k(sp)
+ ifeq FFT_ALTERNATE_ASR
 	moveq	#15,d5		; shift for multiplications for loop 5 
+ endif
 
 ;; ------------------------------------------------------------------
 ; top level loop 
@@ -489,7 +501,11 @@ fix_fft
 ;;                 for(m=0; m<l; ++m) {
 
 ;	clr.w	.m(sp)
+ ifne FFT_ALTERNATE_ASR
+ 	moveq	#0,d5
+ else
 	clr.w	(sp)
+ endif
 	
 ;; ------------------------------------------------------------------
 .loop4
@@ -505,10 +521,16 @@ fix_fft
 ;	move.w	(sp),d0
 ;	move.w	.k(sp),d1
 
+ ifne FFT_ALTERNATE_ASR
+ 	move	d5,d0
+ 	move	d5,d6
+	move	.k(sp),d1
+	lsl	d1,d0
+ else
 	movem.w	(sp),d0/d1	; load both .m an .k, stored sequentially
 	move	d0,d6		* index .m
 	lsl	d1,d0
-
+ endif
 ;;                         wi = -Sinewave[j];
 ;;                         wi >>= 1;
 
@@ -537,7 +559,7 @@ fix_fft
 	
 	move	.l(sp),d7	; j 
 	add	d6,d7
-
+ 
 ;	add	d6,d6		; i table index
 ;	add	d7,d7		; j table index
 
@@ -567,14 +589,23 @@ fix_fft
 
 	move.w	a3,d1		; fr(j)*wr
 	muls.w	d3,d1
+ ifeq FFT_ALTERNATE_ASR
 	asr.l	d5,d1
-
+ endif
 	move.w	a4,d2		; fi(j)*wi
 	muls.w	d4,d2
+ ifeq FFT_ALTERNATE_ASR
 	asr.l	d5,d2
-
-
+ endif
+ 
 	sub.l	d2,d1
+
+ ifne FFT_ALTERNATE_ASR
+	; Tricky asr #15
+	add.l	d1,d1
+	swap	d1
+ endif
+
 	; d1 = tr
 	
 ;;                                 qr = fr[i];
@@ -584,6 +615,7 @@ fix_fft
 	asr.w	#1,d2
 	; d2 = qr
 
+	;; Use of d5 or not:
  if 0
 		;; fr[j] = qr - tr
 	move	d2,d5
@@ -593,7 +625,7 @@ fix_fft
 		;; fr[i] = qr + tr
 	add.w	d1,d2
 	move	d2,(a0,d6.w)
- endif
+ else
 		;; fr[j] = qr - tr
 	sub	d1,d2
 	move	d2,(a0,d7.w)
@@ -602,18 +634,28 @@ fix_fft
 	add.w	d1,d2
 	add.w	d1,d2
 	move	d2,(a0,d6.w)
-
+ endif
 ;;                                 ti = fix_mpy(wr,fi[j])+fix_mpy(wi,fr[j]);
 
 	move.w	a3,d1		; fi(j)*wr
 	muls.w	d4,d1
+ ifeq FFT_ALTERNATE_ASR
 	asr.l	d5,d1
-
+ endif
+ 
 	move.w	a4,d2		; fr(j)*wi
 	muls.w	d3,d2
+ ifeq FFT_ALTERNATE_ASR
 	asr.l	d5,d2
+ endif
 
 	add.l	d2,d1
+
+ ifne FFT_ALTERNATE_ASR
+ 	; Tricky asr #15
+	add.l	d1,d1
+	swap	d1
+ endif
 
 	; d1 = ti
 
@@ -624,6 +666,7 @@ fix_fft
 	; d2 = qi
 
 
+	;; Use of d5 or not:
  if 0
  		;; fi[j] = qi - ti
 	move	d2,d5
@@ -633,8 +676,8 @@ fix_fft
 		;; fi[i] = qi + ti
 	add	d1,d2
 	move	d2,(a1,d6.w)
- endif
-		;; fi[j] = qi - ti
+ else
+ 		;; fi[j] = qi - ti
 	sub	d1,d2
 	move	d2,(a1,d7.w)
 	
@@ -642,6 +685,7 @@ fix_fft
 	add	d1,d2
 	add	d1,d2
 	move	d2,(a1,d6.w)
+ endif
 
 ;;                         }
 ; for loop:  for(i=m; i<n; i+=istep) 
@@ -660,11 +704,17 @@ fix_fft
 	endif
 
 ;for loop: for(m=0; m<l; ++m) 	
+ ifne FFT_ALTERNATE_ASR
+ 	addq	#1*2,d5
+ 	cmp	.l(sp),d5
+ 	blo.b	.loop4
+ else 
 	addq	#1*2,(sp)
 	;move.w	.m(sp),d0
 	move.w	(sp),d0
 	cmp.w	.l(sp),d0
 	blo.b	.loop4
+ endif 
 
 ;;                 --k;
 

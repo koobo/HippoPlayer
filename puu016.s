@@ -23846,8 +23846,9 @@ drawScope:
 * Scope performance measurements
 * Disaster is obvious, playing the first 40 seconds
 * - v2.52 spectrumScope on A500: 75 ms average
-* - v2.53 spectrumScope on A500: 70 ms average
-*               micro-optimized: 69 ms average
+* - v2.53 spectrumScope on A500: 70 ms
+*               micro-optimized: 69 ms
+*               alternative asr: 58 ms
  if DEBUG
 	addq.l	#1,scopeFrameCounter(a5)
 	jsr	startMeasure
