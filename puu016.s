@@ -22359,7 +22359,11 @@ stopScopeTask
 .zzz	
  	divu	d5,d4
 	ext.l	d4
-	DPRINT	"Scope time=%lds frames=%ld fps=%ld.%ld avg=%ld"
+	tst.b	uusikick(a5)
+	bne.b	.zzzz
+	moveq	#-1,d4
+.zzzz
+	DPRINT	"Time=%lds frames=%ld fps=%ld.%ld avg=%ldms"
  endif
 .x	rts
 
