@@ -23884,54 +23884,40 @@ drawScope:
 	move	s_scopeDrawAreaWidth(a4),d4
 	move	s_scopeDrawAreaHeight(a4),d5
 
+	* Perform some adjustments based on mode and type
+	cmp.b	#QUADMODE_FREQANALYZER,s_quadmode(a4)
+	beq.b	.noMagic
+	cmp.b	#QUADMODE_PATTERNSCOPE,s_quadmode(a4)
+	beq.b	.pattern
+	cmp.b	#QUADMODE_PATTERNSCOPEXL,s_quadmode(a4)
+	beq.b	.pattern
 
 	cmp	#pt_sample,playertype(a5)
-	beq.b	.sampleAdjustment
-
+	beq.b	.centerStereo
 	cmp	#pt_multi,playertype(a5)
-	bne.b	.jaa
-	bsr	isImpulseTrackerActive
-	bne.b	.noIt
-	pushm 	d0-d6/a0/a1/a6
-	bsr	requestNormalScopeDrawArea
-	popm	d0-d6/a0/a1/a6
-	bne.b	.skippi	* wait for resize
-	* Displaying sample scope, so need magic
-	bra.b	.joa
-.noIt
-	bsr	patternScopeIsActive
-	beq.b	.noMagic
-	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,s_quadmode2(a4)
-	bls.b	.joa
-	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
-	blo.b	.jaa
-.joa	
-	* magic adjustment?!
-	addq	#4,d0
-	subq	#4,d4
-	bra.b	.jaow
+	bne.b	.noMagic
+	cmp.b	#QUADMODE_HIPPOSCOPE,s_quadmode(a4)
+	bne.b	.centerStereo
+	* Center PS3M + hipposcope
+	addq	#4,d2		; target x
+	subq	#4,d4		; width
+	bra.b	.noMagic
+	
+.centerStereo
+	* This will center the two wide stereo scope graphs
+	* with sample player and PS3M
+	addq	#4,d0		; source x
+	subq	#4,d4		; width
+	bra.b	.noMagic
 
-.sampleAdjustment
-	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
-	beq.b	.jaow
-	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
-	bne.b	.joa
-	bra.b	.jaow
+.pattern
+	* Move patternscope one pixel to the right
+	* to have some space on the left border.
+	addq	#1,d2		; target x
+	subq	#1,d4		; width
 
-.jaa
-
-	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
-	bhs.b	.jaoww
-	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
-	blo.b	.jaow
-.jaoww
-	* MAGIC adjustments for protracker?
-	addq	#1,d2
-	subq	#1,d4
-.jaow
 .noMagic
 	lob	BltBitMapRastPort
-.skippi
 	rts
 
 
