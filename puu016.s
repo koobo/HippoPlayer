@@ -46582,7 +46582,6 @@ loudnessFFT
 	move.l	s_spectrumExpTable(a4),a3	
 	moveq	#FFT_LENGTH/2-1,d7
 	move.l	a0,a6
-	moveq	#63,d3
 .l1
 	* Calculate re^2 + im^2.
 	* This is the squared magnitude of the complex value.
@@ -46616,20 +46615,17 @@ loudnessFFT
 	move.l	a3,a2
 	moveq	#EXP_TABLE_LEN-1,d1
 	* this loop is may run 4096 times in the worst case
-.l2	
-	cmp.l	(a2)+,d0
+.l2	cmp.l	(a2)+,d0
+	* If the 1st cmp succeeds, the loop breaks without
+	* d1 decrementing.
 	dbls	d1,.l2
 
-	* Use this value directly, neat
-	* DBcc adjustment
-	addq	#1,d1
-
-	* Fits into a byte
-	* Overwrite input buffer
-	cmp.b	d3,d1
-	bls.b	.clamp
-	move.b	d3,d1
-.clamp
+	* Use the DBcc counter directly.
+	* See if all entries were searched (not likely to happen).
+	tst	d1
+	bpl.b	.notEnd
+	moveq	#0,d1
+.notEnd
 	move.b	d1,(a6)+
 
 	dbf	d7,.l1
