@@ -42,8 +42,6 @@ NOTE 4: Too long didn't read
 
 # Changes from v2.52 (30.4.2022) to v2.53 (?.?.2022) 
 
-Some small summery improvements.
-
 ## New fixes:
 
 - A new bug appeared in v2.52 which prevented the scopes from opening
@@ -76,14 +74,33 @@ Some small summery improvements.
 
 - Fix wrong hippo graphics placement when "Big buttons" is in use.
 
+- Kickstart 1.3: When "zooming" the window smaller with RMB+Pr, sometimes
+  there would be white trash gfx on the top part of the window.
+  Fixed.
+
+- With "Big buttons" enabled, the two bottom lines in the filebox could not 
+  be selected with mouse. Fixed.
+
+- While in file browser and the "Play modules in random order" mode
+  enabled in Prefs, trying to play a module would sometimes play the 
+  previous module and not the selected one. Fixed.
+
+- Fix SpectrumScope not reacting to main volume.
+
+- SpectrumScope is now somewhat faster and may run smoother on low power
+  systems. After an unreasonable amount of effort/fun the speed increase 
+  on A500, based on the average time to calculate one frame, is 
+  about 20%, from 75 milliseconds in the previous version to 58
+  milliseconds now. 
+  
 
 ## New features:
 
 - The main window can now be resized by dragging from the lower right 
-  corner of the window. This is for kickstart 2.0+ only.
+  corner. This is for kickstart 2.0+ only.
 
 - Sample scope support added for PSID files. These are the C64 music
-  files played by the "playsid.library". Nemesis the Warlock rulez.
+  files played by the "playsid.library". Nemesis the Warlock!
 
 - Sample scopes support the THX/AHX format (already in the previous version
   but forgot to mention it).  

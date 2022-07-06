@@ -64,10 +64,48 @@ Formats
 - sound master 
 + special fx
 
-PATTERNINIT - EP
-+ TME
-+ KRIS
-+ Mugician2
+NOT BUG:
+- random play markers not shown?
+- some fonts do not have the special R-char
+
+FIXED: BUG:
+- RANDOM mode
+- open Romeo knight folder
+- play from the 1st page
+- go back
+- open Romeo knight folder
+- play from the 1st page
+- scroll down to bottom page
+- double click
+- OFF BY ONE
+
+FIXED: BUG:
+- non-asm one build
+- file browser play stuff, in RANDOM mode
+- double click file to play
+- push next to play another
+- push next to play another
+- push next to play another
+- PICK MODULE WITH INDEX HIGHER that the list being returned to
+- go back with "backspace"
+- boom -> getListNodeCached gets NULL node address
+
+FIXED: BUG:
+- kick13: RMB + Pr: small window, but Pr button disappears, also some white stuff 
+          on the left
+-- v2.52: Pr button works fine, white stuff is visible.
+          list must have stuff, slider not in top position
+-- v2.50: same. fav list has stuff, move slider to middle
+-- v2.49: same
+-- v2.48: same
+-- v2.47: same
+-- v2.45: SAME
+
+FIXED: BUG
+- RMB window zoom does not work with favs enabled
+--> RMB zip is disabled if list is in FAV MODE
+
+
 
 BUG:
 - "Registered to" text no longer visible due to listmode initilization at
@@ -155,7 +193,7 @@ TODO - 2022 April
   -> POSSIBLY FIXED
 
 TODO - 2022 January
-- click scope window: switch visualization mode
+- WONT FIX: click scope window: switch visualization mode
 + FIXED: allow changing button icon gfx and height
 
 TODO
