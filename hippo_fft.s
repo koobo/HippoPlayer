@@ -337,7 +337,6 @@ fix_fft
 .i		rs.w	1
 .l		rs.w	1
 .istep		rs.w	1
-.sineConverted  rs.w 	1
 .varsSizeof	rs.b	0
 
 	movem.l	a4/a5/a6,-(sp)
