@@ -1378,7 +1378,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	24
+xpl_versio	=	25
 
  printt "TEST TEST: star frontier.bp3"
 
@@ -26673,7 +26673,10 @@ memerror_t
 execerr_t dc.b	"External error!",0
 lockerr_t dc.b	"Can't lock on file!",0
 notafile_t dc.b	"Not a file!",0
-grouperror_t dc.b "Trouble with the player group!",0
+grouperror_t dc.b "Trouble with the player group!",10
+		dc.b "Check that the file "
+		dc.b '"HippoPlayer.group"'
+		dc.b " is up-to-date.",0
 
 windowerr_t	dc.b	"Couldn't to open window!",0
 ;extract_t	dc.b	"Extraction error!",0
