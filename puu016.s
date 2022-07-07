@@ -31650,13 +31650,13 @@ are
 	cmp.l	#"IMP!",(a4)
 	beq.b	.imp
 	moveq	#1,d5		* type flag
-	move.l	(a4),d0		* shr decompressed size
+	jsr	getDeshrinkledSize
 	bra.b	.noImp
 .imp
 	moveq	#0,d5		* type flag
 	move.l	4(a4),d0	* fimp decompressed size
 .noImp
-
+	* d0 = decompressed size
 	move.l	d6,d1		* mem type
 	jsr	getmem
 	move.l	d0,(a3)		* store pointer
@@ -31683,9 +31683,8 @@ are
 	bra.b	.wasImp
 .shr
 	DPRINT	"Deshrinklering"
-	lea	4(a4),a0
-	jsr	ShrinklerDecompress
-
+	jsr	deshrinkle
+	
 .wasImp
 	cmp	#pt_eagle_start,playertype(a5)
 	bhs.b 	.ok 
@@ -47375,7 +47374,33 @@ kplayer		incbin	kpl
 
 * FImp decruncher code
 fimp_decr	incbin	fimp_dec.bin
+
 shr_decr	include	ShrinklerDecompress.s
+
+* in:
+*    a4 = data
+* out:
+*    d0 = size
+getDeshrinkledSize
+	move.l	shr_safety_margin(a4),d0
+	bpl.b	.pos
+	moveq	#0,d0
+.pos	add.l	shr_uncompressed_size(a4),d0
+	rts
+
+* in:
+*    a4 = data in
+*    a1 = output buffer
+deshrinkle
+	move.l	a4,a0
+	moveq	#FLAG_PARITY_CONTEXT,d7
+	and.l	shr_flags(a0),d7
+	* Skip header
+	add	shr_header_size(a0),a0
+	* Skip id and header size
+	addq	#8,a0
+	bra.w	ShrinklerDecompress
+
 
 xpkname         dc.b    "xpkmaster.library",0
 ppname          dc.b    "powerpacker.library",0
