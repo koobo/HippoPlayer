@@ -85,7 +85,10 @@ NOTE 4: Too long didn't read
   enabled in Prefs, trying to play a module would sometimes play the 
   previous module and not the selected one. Fixed.
 
-- Fix SpectrumScope not reacting to main volume.
+- Fix SpectrumScope not reacting to the main volume setting.
+
+- Fix enforcer hit in the AHX/THX replayer. This happened for
+  example when playing "Wearing the inside out.ahx".
 
 - SpectrumScope is now somewhat faster and may run smoother on low power
   systems. After an unreasonable amount of effort/fun the speed increase 
@@ -113,7 +116,7 @@ NOTE 4: Too long didn't read
   8ch module the max boost value having any effect is 4.
   
 
-## Known issues:
+## Known issues recap:
 
 - Sonic Arranger module "svensktoppen" may cause a crash.
 - Oktalyzer module "1 love night dub.okta" may cause a crash.

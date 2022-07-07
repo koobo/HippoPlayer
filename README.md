@@ -15,7 +15,7 @@ Tools used in development:
   * v2.46 onwards:
     * FS-UAE on Mac, Amiga 1200 (for testing)
     * ASM-Pro v1.17
-    * Shrinkler file compressor: http://aminet.net/package/dev/cross/Shrinkler
+    * Shrinkler file compressor v4.7: http://aminet.net/package/dev/cross/Shrinkler
   
 # Files and directories
 
