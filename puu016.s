@@ -47852,18 +47852,30 @@ gadgetListModeChangeButtonImagePtr
 gadgetResize
 	; gg_Next
 	dc.l	0
-	dc.w	-16,-4	;Leftedge,Topedge
-	dc.w	16,4	; Width, Height
+	; gg_LeftEdge,  gg_TopEdge
+	dc.w	-16,-4
+	; gg_Width, gg_Height
+	dc.w	16,4
+	; gg_Flags
 	dc.w	GFLG_RELRIGHT!GFLG_RELBOTTOM!GFLG_GADGHNONE
+	; gg_Activation
 	dc.w	0
+	; gg_GadgetType
 	dc.w	GTYP_SIZING
-	dc.l	0		;GadgetRender
-	dc.l	0		;SelectRender
-	dc.l	0		;Text
-	dc.l	0		;Mutalexclude
-	dc.l	0		;Specialinfo
-	dc.w	0		;ID
-	dc.l	0		;Userdata
+	; gg_GadgetRender
+	dc.l	0
+	; gg_SelectRender
+	dc.l	0
+	; gg_GadgetText
+	dc.l	0	
+	; gg_MutualExclude
+	dc.l	0
+	; gg_SpecialInfo
+	dc.l	0
+	; gg_GadgetId
+	dc.w	0
+	; gg_UserData
+	dc.l	0
 
 * Rename the gadgets defined above to something not crazy
 * 1st row
