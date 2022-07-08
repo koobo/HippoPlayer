@@ -37048,7 +37048,7 @@ p_thx
 	move.l	thxroutines(a5),a2
 	jsr	.ahxInitCIA(a2)
 	tst	d0
-	bne.b	.thxInitFailed2
+	bne.w	.thxInitFailed2
 
 
 	moveq	#0,d0	* loadwavesfile if possible
@@ -37063,7 +37063,9 @@ p_thx
 	sub.l   a0,a0	* auto alloc fast mem
 	sub.l   a1,a1	* auto alloc chip
 	move.l	thxroutines(a5),a2
+	jsr	setMainWindowWaitPointer
 	jsr	.ahxInitPlayer(a2)
+	jsr	clearMainWindowWaitPointer
 	tst	d0
 	beq.b	.ok4
 
