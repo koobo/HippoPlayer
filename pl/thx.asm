@@ -125,6 +125,7 @@ thxroutines	dc.l	lbC000000
 module
 ;	incbin	"m:mortimer twang/jennipha.ahx"
 	incbin	"m:ahx/pink/wearing the inside out.ahx"
+;	incbin	"m:ahx/curt cool/rubber spine.ahx"
 
 	section repl,code
  endif
@@ -1033,7 +1034,8 @@ lbC000AD6	SF	$3B6(A6)
 	MOVE.W	$44E(A6),$44C(A6)
 lbC000B02	ST	$3B2(A6)
 lbC000B06	MOVEM.L	(SP)+,D0-D7/A0-A6
-	RTS
+bailOut
+		RTS
 
 ; Get new note
 lbC000B0C	TST.B	$27(A0)
@@ -1174,7 +1176,11 @@ lbC000C60	AND.W	#$3F0,D3
 	MOVEQ	#0,D4
 	MOVE.B	3(A3),D4
 	LSL.W	#8,D4
-	DIVU	D1,D4
+	tst	d1
+	bne.b	.skip
+	moveq	#1,d1
+.skip
+	DIVU	D1,D4  * DIVISION by null possible
 	MOVE.W	D4,10(A0)
 	MOVEQ	#0,D1
 	MOVE.B	4(A3),D1
@@ -1184,7 +1190,11 @@ lbC000C60	AND.W	#$3F0,D3
 	EXT.W	D4
 	ASL.W	#8,D4
 	EXT.L	D4
-	DIVS	D1,D4
+	tst	d1
+	bne.b	.skip2
+	moveq	#1,d1
+.skip2
+	DIVS	D1,D4 * DIVISION by null possible
 	MOVE.W	D4,12(A0)
 	MOVE.B	6(A3),8(A0)
 	MOVEQ	#0,D1
