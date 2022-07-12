@@ -64,6 +64,44 @@ Formats
 - sound master 
 + special fx
 
+FIXED: BUG:
+- all scopes open at the same time
+- play "rubber spine.ahx"
+- after a few secs, GURU
+- hip-scope division by zero error
+
+FIXED: BUG: AHX enforcer hit
+- play "wearing the inside out.ahx"
+- at 00:45 enforcer hit
+
+BYTE READ from 00C0E002                        PC: 40722884
+USP : 400F076A SR: 2014  (S0)(F)(-)  TCB: 400EFDC8
+Data: 0000FFFF 00000000 00000000 406C0000 00000080 0000005A 40724A90 00000002
+Addr: 40724B86 00BFE001 406CDC48 00DFF0E0 40716878 00DFF000 40724A90 400021C6
+Stck: 0000000C 00000000 40716870 401092E0 400F07BA 401070CC 0000000C ABADF00D
+Stck: 00000000 0000000B 0000026B 0000005A 00000008 00000000 407168C8 407168C8
+40722864 :  4a28 0059                  tst.b $59(a0)
+40722868 :  6612                       bne.s $4072287c
+4072286a :  bc2e 03b5                  cmp.b $3b5(a6),d6
+4072286e :  6c10                       bge.s $40722880
+40722870 :  1146 0058                  move.b d6,$58(a0)
+40722874 :  670a                       beq.s $40722880
+40722876 :  50e8 0059                  st.b $59(a0)
+4072287a :  4e75                       rts
+4072287c :  51e8 0059                  sf.b $59(a0)
+40722880 :  4a42                       tst.w d2
+40722882 :  6618                       bne.s $4072289c
+40722884 : *4a31 0802                  tst.b $2(a1,d0.l)
+40722888 :  6712                       beq.s $4072289c
+4072288a :  1a31 0802                  move.b $2(a1,d0.l),d5
+4072288e :  0245 000f                  andi.w #$f,d5
+40722892 :  0c45 0009                  cmpi.w #$9,d5
+40722896 :  6e04                       bgt.s $4072289c
+40722898 :  3d45 03bc                  move.w d5,$3bc(a6)
+4072289c :  0c42 0008                  cmpi.w #$8,d2
+407228a0 :  6606                       bne.s $407228a8
+407228a2 :  1d71 0802 0000             move.b $2(a1,d0.l),$0(a6)
+
 NOT BUG:
 - random play markers not shown?
 - some fonts do not have the special R-char
