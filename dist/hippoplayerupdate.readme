@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.52
+Version: 2.53
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -34,6 +34,97 @@ NOTE 4: Too long didn't read
 - New list mode change button above the file slider
 - Improved scopes
 - New music formats
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.52 (30.4.2022) to v2.53 (13.7.2022) 
+
+## New fixes:
+
+- A new bug appeared in v2.52 which prevented the scopes from opening
+  to the configured public screen. Fixed.
+
+- The new favorite key shortcut [SHIFT+F] was actually already used
+  as "find next". Restored the original functionality and changed
+  the favorite key shortcut to [CTRL+F].
+
+- Fix numberpad key shortcuts for changing subsongs being in the wrong
+  order (keys [4] and [6]).
+
+- Fix sample scopes not working with samples larger than 64 kB.
+  
+- The previous version had a fix for unnecessary module skipping
+  when module end was detected. Unfortunately this also broke the 
+  detection mechanism for never ending modules. A fix for this was done.
+ 
+- Protracker compatibility fix: The 9xx command in Protracker has a bug which
+  makes it not work with samples longer than 64 kB, only silence is played.
+  Introduced this bug in Hippo, which it previously didn't have, 
+  for maximum compatibility.
+
+- DIGIBooster replay code now uses a less violent interrupt mechanism.
+  This may help in some obscure cases.
+
+- Random play mode: Previously Hippo would play through subsongs
+  if the module had them. Now the next randomized module is played
+  instead when an end is detected or timeout is reached. 
+
+- Fix wrong hippo graphics placement when "Big buttons" is in use.
+
+- Kickstart 1.3: When "zooming" the window smaller with RMB+Pr, sometimes
+  there would be white trash gfx on the top part of the window.
+  Fixed.
+
+- With "Big buttons" enabled, the two bottom lines in the filebox could not 
+  be selected with mouse. Fixed.
+
+- While in file browser and the "Play modules in random order" mode
+  enabled in Prefs, trying to play a module would sometimes play the 
+  previous module and not the selected one. Fixed.
+
+- Fix SpectrumScope not reacting to the main volume setting.
+
+- Fix illegal memory read enforcer hit and a possible division-by-zero 
+  crash in the AHX/THX replayer. 
+
+- SpectrumScope is now somewhat faster and may run smoother on low power
+  systems. After an unreasonable amount of effort/fun the speed increase 
+  on A500, based on the average time to calculate one frame, is 
+  about 20%, from 75 milliseconds in the previous version to 58
+  milliseconds now. 
+  
+
+## New features:
+
+- The main window can now be resized by dragging from the lower right 
+  corner. This is for kickstart 2.0+ only.
+
+- Sample scope support added for PSID files. These are the C64 music
+  files played by the "playsid.library". Nemesis the Warlock!
+
+- Sample scopes support the THX/AHX format (already in the previous version
+  but forgot to mention it).  
+
+- The PS3M volume boost setting in Prefs now goes all the way up to
+  16. This may help with modules with over 16 channels, such as 
+  ImpulseTracker. The max effective value is determined by the amount of 
+  channels divided by two, so for a 8ch module the max boost value having any 
+  effect is 4.
+  
+
+## Known issues recap:
+
+- Sonic Arranger module "svensktoppen" may cause a crash.
+- Oktalyzer module "1 love night dub.okta" may cause a crash.
+- There are some invalid S3M modules around with an uneven 
+  length orders table. These will crash Hippo.
+- THX/AHX pattern scope sometimes displays an empty channel
+  where actual data should be displayed.
+- The TFMX 7v replayer does not sound correct on 68060 with caches enabled.
+  It uses self modifying code which is not good with large caches.
 
 
 ------------------------------------------------------------------------------
@@ -200,19 +291,25 @@ This time we skip over one version number!
 # Changes from v2.49 (29.11.2021) to v2.50 (31.12.2021)
 
 ## New fixes:
+
 - There was a bug in the sample player (which also plays MP3) in AHI
   compatibility. It could hang when playback was stopped.
   This happened especially when using AHI with the Toccata driver.
   Should work now.
+
 - Another different possible AHI related hang bug fixed which could 
   happen when pausing playback. 
+
 - When the play mode was set to "List repeatedly" and the list was full
   of dividers (a.k.a. directories), Hippo could get stuck trying to find
   a module to be played. This should be fixed now.
+
 - Possible hang/crash bug (related to a stray audio interrupt) fixed
   in Ben Daglish and Kris Hatlelid formats.
 
+
 ## New supported music formats:
+
 - Impulse Tracker, using the "Impulse" deliplayer, written by the
   Delirium team for DeliTracker.
   - Impulse plays IT formats v1.00 and v2.00. Newer formats are not supported.
@@ -232,12 +329,15 @@ This time we skip over one version number!
     Here "PROGDIR:" is the directory where the Hippo binary is installed.
   - Impulse can be found in the Aminet DeliTracker archive.
 
+
 ## New features:
+
 - There is a new list mode which can be toggled by the button on 
   top of the file slider: file browser. The list modes now are:
   - Playlist (list icon)
   - Favorites (heart icon)
   - File browser (disk icon)
+
 - File browser mode:
   - In this mode the list displays contents of directories.
   - Directories are entered by the "Play" button, return/enter key,
@@ -250,16 +350,19 @@ This time we skip over one version number!
   - If you have enabled "Keep list on exit", Hippo will return to the
     directory where you left off if you were in the file browser mode
     when exiting.
+
 - New keyboard shortcuts:
   - List mode toggle: [SHIFT+M] 
   - Navigate to parent in file browser: [BACKSPACE]
+
 
 ## New ARexx commands (for HippoPlayerIR support):
   - TOGGLEMODE: change between list modes
   - FAVORITE: toggle chosen module favorite status
 
+
 ## Known issues:
-- Same as with v2.49
+- Same as with v2.48
 
 ## Thanks for beta testing go to:
 - Spot/UpRough 
@@ -275,23 +378,32 @@ This time we skip over one version number!
 It's the pattern party edition!
 
 ## New fixes:
+
 - The font selector in Prefs had a proper bug that made it ignore user
   selected font received from the font requester. The default font
   therefore could not be changed, until now. Note: Hippo accepts
   8x8 fixed fonts only.
+
 - Fix the case where the scope window is sometimes left too tall.
+
 - When starting with empty list in random mode, ensure that the first
   module being played is actually random and not the first one.
+
 - Do not draw the new list mode change button if it doesn't fit, 
   removing the visual glitch when window is minified with RMB+Pr.
+
 - A possible hang during stopping of playback fixed. This happened
   when AHI was enabled and a non-Paula AHI mode was active.
+
 - P96 multi screen fix: when scope if manually reactivated by LMB click,
   this will be remembered until app is closed.
+
 - "Rob Hubbard 2/Infogrames" format was probably not working,
   should be ok now.
 
+
 ## New features:
+
 - Patternscope support added to the following formats:
   - Art Of Noise (4 channels)
   - BP SoundMon v2, v3 (Note and sample transposes are not shown)
@@ -310,6 +422,7 @@ It's the pattern party edition!
   - StarTrekker
   - TCBTracker (eagleplayer)
   - The Musical Enlightenment (eagleplayer)
+
 - Patternscope notes
   - Patternscope is able to display 4-18 channels side by side in both
     normal height and double height (XL) mode. The 18 channel wide scope
@@ -326,26 +439,34 @@ It's the pattern party edition!
     personal first use of binary coded decimals :-)
   - A500 can handle Oktalyzer modules with Patternscope, but struggles
     with PS3M (as usual). A1200 should generally perform ok.
+
 - New Prefs setting: "Keep list on exit". This enables the following:
   - Module list will be saved on exit and restored when Hippo is started again.
   - Last chosen module is selected and played, if it was playing.
   - File requester path that was last used to add files to 
     the list will be used the next time file requester is opened.
   
+
 ## Music format related fixes
+
 - Volume support added for PSID tunes. These are played by the 
   playsid.library which now gets a live patch to allow volume
   control.
+
 - ScreamTracker3 (S3M) replayer would crash when attempting 
   to play some modules that had an unexpected sample set up. 
   Some fixes were made to avoid crashing.
+
 - Digital Mugician upgraded to Wanted Team eagleplayer ("mugician.amp").
   Supports subsongs, pattern skipping, patternscope.
+
 - David Whittaker upgraded to Wanted Team eagleplayer ("david whittaker").
   Compared to previous this one has better support for different variants, 
   volume and songend support.
-  
+
+
 ## New Eagleplayer formats, plugin name in parentheses:
+
 - Special FX ("special fx")
   - Eagleplayer by Wanted Team
 - Jason Page ("jason page")
@@ -353,6 +474,7 @@ It's the pattern party edition!
 - Steve Turner ("steve turner")
   - "Paradroid 90"
   - Eagleplayer by Wanted Team
+
 
 ## Known issues:
 - Sometimes after the scope window has resized the right side of the
@@ -372,34 +494,45 @@ It's the pattern party edition!
 
 In this episode, we will be trying to play them all!
 
+
 ## New fixes:
+
 - File and directory scan was refactored and is now much more robust.
   This fixes some bugs caused by very long path names and
   some other corner cases, such as uncommon directory types.
   Subdirectories will also be added in alphabetical order.
   Thanks to Zoltar of the English Amiga Board for reporting 
   a nasty bug and testing a bunch of desperate fixes. 
+
 - Fix crash caused by a devious ProTracker module "Sunday Hangover" by 
   Skope/UpRough. The modules uses the "EFF" command without a sample,
   which is unexpected. Also crashes ProTracker v2.3d and other apps.
+
 - After playing a DeliCustom type module and then trying to play a 
   XPK/PP/FImp/XFD compressed module lead to the new module being recognized 
   as DeliCustom even if it wasn't, which lead to all kinds of bad things.
+
 - Fixed the case where favorites were not saved if the user exited while 
   being in the favorites view. 
+
 - If the XFDMaster library was enabled, DeliCustom modules were not
   recognized. 
+
 - For lists with only list dividers the selection would sometimes 
   go looping around the list and never stopping, making Hippo 
   unresponsive.
+
 - A new method of calculating the window bar height is now used.
   This should fix the VisualPrefs related bug where adjusting
   window and screen title bar heights caused Hippo to add extra
   vertical space at the top part of the window.
+
 - Fixed the random generator bug where the first value was not random.
   In random play mode this could result to the same first module 
   being player every time.
+
 - Clearing the favorites list with RMB+New didn't work, now does.
+
 - The sampleplayer had a nasty bug that probably made it not work 
   at all on kickstart 1.3 in most cases. There was an unnecessary 
   file seek operation done on an invalid file handle, which, at least
@@ -407,50 +540,66 @@ In this episode, we will be trying to play them all!
   Sidenote: I'm a little bit impressed how capable the sampleplayer is, 
   it handles CD-quality WAVs on 68000 nicely. The code though is quite
   horrible to look at :-) 
+
 - A few other minor issues fixed.
- 
+
+
 ## New features:
+
 - Patternscope XL, with twice the amount of rows. 
   It is available in Prefs with the other scopes.
   Generally patternscope should use less CPU now, due to some
   optimizations.
+
 - Dual monitor support is now possible with P96. In such case
   Hippo may think the scopes are invisible and stop updating them.
   Clicking the left mouse button in the scope window will 
   reactivate the scope.
+
 - Limited Eagleplayer plugin support. Hippo is now able to use
   some eagleplayers for music playback. A set of Hippo compatible
   eagleplayers have been fetched from Aminet and included in the 
   group file. See below for more info.
+
 - The "HippoPlayer.group" file, which is basically a compressed
   random access file archive, on kick2.0 or newer, 
   is now searched first from PROGDIR:, then the default (or configured) 
   location. Therefore it can be kept alongside the main Hippo binary.
+
 - NOTE! The group file is now larger than before. It's a good idea
   on low memory systems to set the group mode to "Load single" 
   in "Prefs/Play-1/Mode", so that individual replayers are loaded
   when needed instead of keeping the whole file in memory.
+
 - Group file data compression was changed from File Imploder to
   Shrinkler by Blueberry as an experiment. Much better compression
   ratio, slower decompression.
+
 - Info window will now show who created the replay code for the 
   current format, and information retrieved from the active eagleplayer
   plugin.
 
+
 ## Music format related fixes
+
 - Improved JamCracker support: added volume control and position/length info.
    - Also fixed an annoying audible *BEEP* once in a while.
      (Empty sample data was not in chip mem, my fault.)
+
 -  FutureComposer (both old and new formats) now support position/length info.
    FC1.4 replayer changed to another and a modified a bit,
    hopefully now works better with "rsi theme.fc".
+
 - Oktalyzer now also has position/length info and can be paused, which 
   previously wasn't possible.
+
 - Improved Art of Noise (4 channels) support as well: added position/length 
   info, song end detection, fast forwarding. Also uses Hippo timers now.
    - Similar *BEEP* bug fixed here as with JamCracker.
   
+
 ## New music formats:
+
 - PreTracker by Pink/aBYSs. Very noice! Samples are generated during 
   initialization which may take some time especially on slow CPUs.
 - SonicArranger
@@ -485,7 +634,9 @@ In this episode, we will be trying to play them all!
   - Based on eagleplayer by Buggs/DEFECT. Some bug fixing was needed for 
     this, plenty of illegal memory reads were happening.
 
+
 ## Supported Eagleplayer formats, plugin name in parentheses:
+
 - SynTracker ("syntracker")
   - Eagleplayer by Eagleeye/DEFECT
 - AProSys ("aprosys")
@@ -601,6 +752,7 @@ In this episode, we will be trying to play them all!
   - "Ghouls 'n' Ghosts"
   - Eagleplayer by Andy Silva and Buggs/DEFECT 
  
+
 ## Misc 
 - In the original hippo release, in the HippoSupport folder, there is a
   tool called "TerminateHiP". This is no longer compatible with Hippo. 
@@ -628,33 +780,43 @@ Here's another version, since Amiga is fun :-) In this one: new exotic
 music formats, favorite modules feature, enhanced kickstart 1.3
 support, some fixes. Check out the details below. 
 
+
 ## New fixes:
+
 - Fixed two serious crash bugs introduced in v2.46b. When starting to play the 
   next module (especially by double clicking) Hippo could get confused
   and crash. These problems were very likely to happen especially on OS 3.2. 
+
 - Tooltip fixes for buttons *Del*, *Pr*. Also increase tooltip delay a
   little bit.
+
 - Fix the case where HiP is given modules without absolute path via
   command line  or via icon launch (eg. *DefIcons*), and the added
   files can't be opened. Now works.
+
 - Another relative vs. absolute path fix. When adding files so that
   the filerequester path is relative it could be that Hippo was not
   able to open the added files.
   That is, a file was added with path "Modules/DrAwesome/mod.bud peculiar" 
   instead of "dh0:Modules/DrAwesome/mod.bud peculiar". 
+
 - The default unzip command in prefs was changed to *c:unzip >nil: -jo "%s"*, 
   this allows opening zipped modules where the module is within a subdirectory.
   Previously such modules would not be found from the zip file.
+
 - In Prefs the MPEGA settings were reported to display garbage at times, I 
   wasn't able to reproduce this but some additional checks were added, 
   maybe they will help.
 
+
 ## New (very old) known bugs:
+
 - _VisualPrefs_ tool can be used to adjust window bottom and top
   border, and window and screen title bar heights. Hippo can get
   confused and displays some extra vertical space below the window title
   bar when these are adjusted.
   
+
 ## New supported music formats:
 
 - Medley Sound and Future Player
@@ -683,6 +845,7 @@ support, some fixes. Check out the details below.
 - SidMon 2 (SidMon 1 is already supported)
 - Delta Music 1 (Delta Music 2 is already supported)
  
+
 ## New features:
 
 - _Prefs_ option for toggling button tooltips on and off. By default it is on.

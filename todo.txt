@@ -3,7 +3,7 @@ WISHLISH
 + Patternscope for other formats too?
 + Player group from PROGDIR
 + DONE: .gz support
-- UGLY: window size gadget
++ UGLY: window size gadget
 + favorites list
  -- button to favorite, send to another list, save list to a certain place
  -- list will show if file is favorited by checking the list
@@ -64,11 +64,104 @@ Formats
 - sound master 
 + special fx
 
-PATTERNINIT - EP
-+ TME
-+ KRIS
-+ Mugician2
+FIXED: BUG:
+- all scopes open at the same time
+- play "rubber spine.ahx"
+- after a few secs, GURU
+- hip-scope division by zero error
 
+FIXED: BUG: AHX enforcer hit
+- play "wearing the inside out.ahx"
+- at 00:45 enforcer hit
+
+BYTE READ from 00C0E002                        PC: 40722884
+USP : 400F076A SR: 2014  (S0)(F)(-)  TCB: 400EFDC8
+Data: 0000FFFF 00000000 00000000 406C0000 00000080 0000005A 40724A90 00000002
+Addr: 40724B86 00BFE001 406CDC48 00DFF0E0 40716878 00DFF000 40724A90 400021C6
+Stck: 0000000C 00000000 40716870 401092E0 400F07BA 401070CC 0000000C ABADF00D
+Stck: 00000000 0000000B 0000026B 0000005A 00000008 00000000 407168C8 407168C8
+40722864 :  4a28 0059                  tst.b $59(a0)
+40722868 :  6612                       bne.s $4072287c
+4072286a :  bc2e 03b5                  cmp.b $3b5(a6),d6
+4072286e :  6c10                       bge.s $40722880
+40722870 :  1146 0058                  move.b d6,$58(a0)
+40722874 :  670a                       beq.s $40722880
+40722876 :  50e8 0059                  st.b $59(a0)
+4072287a :  4e75                       rts
+4072287c :  51e8 0059                  sf.b $59(a0)
+40722880 :  4a42                       tst.w d2
+40722882 :  6618                       bne.s $4072289c
+40722884 : *4a31 0802                  tst.b $2(a1,d0.l)
+40722888 :  6712                       beq.s $4072289c
+4072288a :  1a31 0802                  move.b $2(a1,d0.l),d5
+4072288e :  0245 000f                  andi.w #$f,d5
+40722892 :  0c45 0009                  cmpi.w #$9,d5
+40722896 :  6e04                       bgt.s $4072289c
+40722898 :  3d45 03bc                  move.w d5,$3bc(a6)
+4072289c :  0c42 0008                  cmpi.w #$8,d2
+407228a0 :  6606                       bne.s $407228a8
+407228a2 :  1d71 0802 0000             move.b $2(a1,d0.l),$0(a6)
+
+NOT BUG:
+- random play markers not shown?
+- some fonts do not have the special R-char
+
+FIXED: BUG:
+- RANDOM mode
+- open Romeo knight folder
+- play from the 1st page
+- go back
+- open Romeo knight folder
+- play from the 1st page
+- scroll down to bottom page
+- double click
+- OFF BY ONE
+
+FIXED: BUG:
+- non-asm one build
+- file browser play stuff, in RANDOM mode
+- double click file to play
+- push next to play another
+- push next to play another
+- push next to play another
+- PICK MODULE WITH INDEX HIGHER that the list being returned to
+- go back with "backspace"
+- boom -> getListNodeCached gets NULL node address
+
+FIXED: BUG:
+- kick13: RMB + Pr: small window, but Pr button disappears, also some white stuff 
+          on the left
+-- v2.52: Pr button works fine, white stuff is visible.
+          list must have stuff, slider not in top position
+-- v2.50: same. fav list has stuff, move slider to middle
+-- v2.49: same
+-- v2.48: same
+-- v2.47: same
+-- v2.45: SAME
+
+FIXED: BUG
+- RMB window zoom does not work with favs enabled
+--> RMB zip is disabled if list is in FAV MODE
+
+
+
+BUG:
+- "Registered to" text no longer visible due to listmode initilization at
+  start
+
+CRASH:
+- open MUG2.DF0 large module as startup, not enough mem to load it.
+  HiP-Info crashes 
+
+TFMX 7v:
+- Turrican 2 title plays bad on 060 with caches on,
+  has self modifying code
+
+BUG:
+- protracker fast ram player may not work with 64+ kB samples
+
+FIXED: BUG: 
+- scope windows only go to WB screen
 
 BUG:
 - open scopes
@@ -138,7 +231,7 @@ TODO - 2022 April
   -> POSSIBLY FIXED
 
 TODO - 2022 January
-- click scope window: switch visualization mode
+- WONT FIX: click scope window: switch visualization mode
 + FIXED: allow changing button icon gfx and height
 
 TODO
@@ -149,11 +242,11 @@ TODO
 --> cia errors when trying to switch tune
 --> buggy AHX code
 
-TODO: When a module has more than 1 sub-song it will go to next 
+FIXED: TODO: When a module has more than 1 sub-song it will go to next 
   subsong even when in random play mode. 
   I think in random play mode it should only play first song, since some have quite a 
   few and most sub-songs are then short sound effects.
-+ FIXED Some formats display the HippoScope, but the scope is not working at 
+FIXED: Some formats display the HippoScope, but the scope is not working at 
   all, for example: Future Composer 1.0-1.3, 1.4, SoundFX, 
   Art of Noice 4ch, Game Music Creator, BP Soundmon v2.0, Oktalyzer, 
   Sonic Arranger, Chiptracker [EP]
@@ -165,7 +258,7 @@ CRASH:
 -- play for a while, then crash?
 --> didn't crash for me
 
-TODO:
+FIXED: TODO:
 + hippel-coso sample scope support
 
 FIXED CRASH:
@@ -234,7 +327,7 @@ CRASH PS3M
 - play "the cosmic dog ii.mod"
 - only happened once
 
-TODO
+FIXED: TODO
 - "list mode toggle" still visible with RMB+PR
 
 CRASH
@@ -243,7 +336,7 @@ CRASH
 - start to play automatically
 - crashes after DeliInit call
 
-TODO
+FIXED: TODO
 - close tooltip popup when module ends
 
 ENFORCER HITS
@@ -270,7 +363,7 @@ FIXED: BUG
 - toggle more
 - normal list: somes the R at different places
 
-TODO filebrowser
+DONE: TODO filebrowser
 + SHOW dir name on top, instead of "Parent"?
 - Sorting... message: use tick counter to delay it
 + BACKSPACE shortcut for "go to parent"
@@ -307,7 +400,7 @@ TODO filebrowser
 -- wait for song end?
 + KEYBOARD: shift+m: toggle list mode
 
-TODO
+FIXED: TODO
 - PS3M volume boost: improve it
 
 TODO:
@@ -401,7 +494,7 @@ FIXED: TODO
 - kuinka iso puskuri riittää patternInfoBufferille?
 - FIXED: Patternscope+s3m: 4kB mix buffer, fläsh
 
-TODO
+FIXED: TODO
 - mode switch for pattern scope in PS3M: disable costly patternscope
   stuff if patternscope is not used
 
@@ -421,17 +514,17 @@ FIXED: HITS
 - scope open
 - play The-Party-5_v2_3.XM
 
-TODO
+FIXED: TODO
 - AHX patterns
 
 TODO
 - FLT8 startrekker should play with ps3m
 
-REQ Feature-suggestions:
+FIXED: REQ Feature-suggestions:
 + Remember last directory where you picked your last played mod (instead of the configured directory in prefs).
 + Remember last played module. Pressing play immediately on startup plays the previously played song.
 
-REQ NEW FORMATS:
+TODO: REQ NEW FORMATS:
 + jd. - Special FX
 + dw. - David Whittaker (Some work, some don't !)
 + jpn. + smp. - Jason Page
@@ -450,7 +543,7 @@ FIXED: GFX GLITCH
 - minify window with RMB+Pr
 --> top part of favorites button is visible
 
-SCOPE BUG: activation
+FIXED: SCOPE BUG: activation
 - the scope works in multimonitor support as long as ALL modules that are played
   support it. Once a module that doesn't support the scope is loaded
   the next module that supports it does not enable it anymore.
@@ -564,17 +657,17 @@ TODO
 -> mugician 2
 -> musicmaker8
 
-TODO
+FIXED: TODO
 - soundmon3: beeping error
 
 TODO?
 - stonetracker mem leak?
 
-TODO?
+FIXED: TODO?
 - eagleplayer better error msgs
 - missing files etc
 
-TODO
+FIXED: TODO
 - test TMFX with doublebuffering
 
 TODO

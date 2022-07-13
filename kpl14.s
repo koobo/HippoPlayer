@@ -1671,10 +1671,11 @@ k_sampleoffset				* 900
 	move	d1,n_sampleoffset(a4)
 k_sononew
 	move	n_sampleoffset(a4),d1
-	cmp	n_length(a4),d1
-	bhs.s	k_sofskip
-	move	n_sampleoffset(a4),d1
-
+	cmp     n_length(a4),d1
+	; Using signed comparison is a bug in PT regarding
+	; 128kB samples. Preserve this bug.
+	;bhs.s   k_sofskip
+	bge.b	k_sofskip
 	sub	d1,n_length(a4)
 	add.l	d1,d1
 	add.l	d1,n_start(a4)

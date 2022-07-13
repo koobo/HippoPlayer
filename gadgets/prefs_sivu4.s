@@ -56,7 +56,7 @@ juustogr	dc.w 0,0,11,9,2
 juustot	dc.b 1,0,1,0
 	dc.w -268,2
 	dc.l 0,juustotx,0
-juustotx	dc.b "Volume boost...................",0
+juustotx	dc.b "Volume boost..................",0
 	even
 juustos	dc.w 2,0,0,0,0
 	dc.w 0,0,0,0,0,0

@@ -97,6 +97,11 @@ N_LOUD = 100
 
 FFT_TEST = 0
 
+* Enables different way to handle fixed points,
+* faster but breaks the test. Though it should still be
+* accurate.
+FFT_ALTERNATE_ASR = 1
+
 	ifne FFT_TEST
 FFT_SIZE = 4
 	else
@@ -114,9 +119,10 @@ FFT_LOOPS = 0
 	include	"exec/exec_lib.i"
 test
 	move.l	4.w,a6
-;	jsr	_LVOForbid(a6)
-;	jsr	_LVODisable(a6)
+	jsr	_LVOForbid(a6)
+	jsr	_LVODisable(a6)
 
+	bsr	convert_sine
 
 	bsr.w	.waitVBlank
 	bsr	testFFT
@@ -126,10 +132,20 @@ test
 	move.l	$dff004,d6
 	and.l	#$1ff00,d6
 	lsr.l	#8,d6
-	
+* FS-UAE A500 kick13+68000: 
+* - 165
+* - 163: sine conversion ASRs removed
+* - 162: use SP for vars, a5 for another sine pointer
+* - 160: use all table indexes multiplied by two 
+* - 139: do asr #15 to the sum instead of components before
+*        this breaks the unit test but probably
+*        because it is just more accurate.
+* - 125: replace asr #15 with add,swap
+* - 123: use the now free d5 as .m(sp)
+
 	move.l	4.w,a6
-;	jsr	_LVOEnable(a6)
-;	jsr	_LVOPermit(a6)
+	jsr	_LVOEnable(a6)
+	jsr	_LVOPermit(a6)
 	rts
 
 
@@ -147,14 +163,13 @@ testFFT
 .c	move	(a0)+,(a1)+
 	dbf	d0,.c
 
+
 	lea	fr(pc),a0
 	;bsr	windowFFT
 
 	lea	fr(pc),a0
 	lea	fi(pc),a1
 	bsr.w	sampleFFT
-
-
 
 	moveq	#-1,d7
 
@@ -175,16 +190,16 @@ testFFT
 	;; passed
 	moveq	#0,d7
 
-	lea	fr(pc),a0
-	lea	fi(pc),a1
-	bsr	loudFFT
-	rts
+;	lea	fr(pc),a0
+;	lea	fi(pc),a1
+;	bsr	loudFFT
+;	rts
 		
-	lea	fr(pc),a0
-	lea	fi(pc),a1
-	move.l	d7,-(sp)
-	bsr.w	calcFFTPower
-	move.l	(sp)+,d7
+;	lea	fr(pc),a0
+;	lea	fi(pc),a1
+;	move.l	d7,-(sp)
+;	bsr.w	calcFFTPower
+;	move.l	(sp)+,d7
 
 .error
 
@@ -226,6 +241,73 @@ prepareSquareTable
 	rts
 	endif
 
+
+
+;in
+; a0 = result array reals
+; a1 = result array imaginary
+;out
+; a0 = result (overwritten input array)
+; REM ;;;;;;;;;;;;;,
+;calcFFTPower	
+;	; Calculate for the 1st half, 2nd half is mirror of the 1st and
+;	; not used in drawing.
+;	moveq	#FFT_LENGTH/2-1,d7
+;	move.l	#$ffff,d6
+;;	lea	squareTable,a2
+;.l
+;	move	(a0),d0
+;	move	(a1)+,d1
+;	muls	d0,d0
+;	muls	d1,d1
+;	add.l	d1,d0
+;	 
+;
+;;	cmp.l	maxSqr(pc),d0
+;;	blo.b	.s
+;;	move.l	d0,maxSqr
+;;	move	(a0),temp
+;;	move	-2(a1),temp2
+;;.s
+;	; See which square root to use
+;	cmp.l	d6,d0
+;	bls.b	.16	
+;
+;	bsr.b	isqrt32
+;
+;	move	d1,(a0)+
+;	dbf	d7,.l	
+;	rts
+;.16
+;	bsr.b	isqrt16
+;	move	d1,(a0)+
+;	dbf	d7,.l	
+;	rts
+;
+;
+;	incdir	
+;	include	"isqrt16.s"
+; EREM ;;;;;;;;;;;;;;;;;
+
+
+ ifne FFT_TEST
+fi	ds.w	FFT_LENGTH
+fr	ds.w	FFT_LENGTH
+fpow	ds.w	FFT_LENGTH
+ endif
+
+
+ ifne FFT_TEST
+convert_sine
+	lea	Sinewave(pc),a3
+	move	#N_WAVE-1,d0
+.loop	
+	asr	(a3)+
+	dbf	d0,.loop
+	rts
+ endif
+
+
 ; in
 ;    a0 = 16-bit signed sampledata (real array)
 ;    a1 = imaginary array, to be overwritten
@@ -234,77 +316,18 @@ prepareSquareTable
 ;   a0 = result array, real (overwritten input)
 ;   a1 = result array, imaginary
 sampleFFT
-	; clear imaginary array
+	; clear first half of the imaginary array
 	move.l	a1,a3
 
 	moveq	#FFT_LENGTH/2/4-1,d0
+	moveq	#0,d6
 .c	
-	clr.l	(a3)+
-	clr.l	(a3)+
-	clr.l	(a3)+
-	clr.l	(a3)+
+	move.l	d6,(a3)+
+	move.l	d6,(a3)+
+	move.l	d6,(a3)+
+	move.l	d6,(a3)+
 	dbf	d0,.c
 
-;	moveq	#0,d0
-;	rept	FFT_LENGTH/2
-;	move.l	d0,(a3)+
-;	endr
-
-	;bsr.w	fix_fft
-	;rts
-	bra.w	fix_fft
-
-;in
-; a0 = result array reals
-; a1 = result array imaginary
-;out
-; a0 = result (overwritten input array)
- REM ;;;;;;;;;;;;;,
-calcFFTPower	
-	; Calculate for the 1st half, 2nd half is mirror of the 1st and
-	; not used in drawing.
-	moveq	#FFT_LENGTH/2-1,d7
-	move.l	#$ffff,d6
-;	lea	squareTable,a2
-.l
-	move	(a0),d0
-	move	(a1)+,d1
-	muls	d0,d0
-	muls	d1,d1
-	add.l	d1,d0
-	 
-
-;	cmp.l	maxSqr(pc),d0
-;	blo.b	.s
-;	move.l	d0,maxSqr
-;	move	(a0),temp
-;	move	-2(a1),temp2
-;.s
-	; See which square root to use
-	cmp.l	d6,d0
-	bls.b	.16	
-
-	bsr.b	isqrt32
-
-	move	d1,(a0)+
-	dbf	d7,.l	
-	rts
-.16
-	bsr.b	isqrt16
-	move	d1,(a0)+
-	dbf	d7,.l	
-	rts
-
-
-	incdir	
-	include	"isqrt16.s"
- EREM ;;;;;;;;;;;;;;;;;
-
- ifne FFT_TEST
-fi	ds.w	FFT_LENGTH
-fr	ds.w	FFT_LENGTH
-fpow	ds.w	FFT_LENGTH
- endif
  
 fix_fft
 
@@ -316,21 +339,16 @@ fix_fft
 .istep		rs.w	1
 .varsSizeof	rs.b	0
 
-	movem.l	a4/a5/a6,-(sp)		
-	lea	.vars(pc),a5
+	movem.l	a4/a5/a6,-(sp)
+	lea	-.varsSizeof(sp),sp
+	;lea	.vars(pc),a5
 	; m, data size 1<<7 = 128
-	move	#FFT_SIZE,.m(a5)
+	move	#FFT_SIZE,.m(sp)
  ifne FFT_TEST
 	lea	Sinewave(pc),a2	
  endif
-	bsr.b	.fix_fft2
-	movem.l	(sp)+,a4/a5/a6
-	rts
-
-.vars	ds.b	.varsSizeof
-	even
-	
-.fix_fft2
+	; Cosine
+	lea	N_WAVE/4*2(a2),a5
 
 
 ;; int fix_fft(fixed fr[], fixed fi[], int m, int inverse)
@@ -346,7 +364,7 @@ fix_fft
 ;;                 return -1;
 
 ;;         mr = 0;
-;	clr.w	.mr(a5)
+;	clr.w	.mr(sp)
 
 ;;         nn = n - 1;
 
@@ -357,7 +375,10 @@ fix_fft
 
 	moveq	#.nn-1,d7 	; loop counter
 	moveq	#.nn,d3		; loop comparison
-	moveq	#0,d6		; mr
+
+; Cleared earlier:
+;	moveq	#0,d6		; mr
+
 	moveq	#1,d5		; m
 	move	#.n,d4		; preloaded constant
 
@@ -395,7 +416,7 @@ fix_fft
 	bhi.b	.loop2
 ;; ------------------------------------------------------------------
 
-	;move.w	d0,.l(a5)
+	;move.w	d0,.l(sp)
 
 ;;                 mr = (mr & (l-1)) + l;
 
@@ -449,12 +470,14 @@ fix_fft
 
 ;;         l = 1;
 
-	move.w	#1,.l(a5)
+	move.w	#1*2,.l(sp) 	* index
 
 ;;         k = LOG2_N_WAVE-1;
 
-	move.w	#LOG2_N_WAVE-1,.k(a5)
+	move.w	#LOG2_N_WAVE-1,.k(sp)
+ ifeq FFT_ALTERNATE_ASR
 	moveq	#15,d5		; shift for multiplications for loop 5 
+ endif
 
 ;; ------------------------------------------------------------------
 ; top level loop 
@@ -470,14 +493,18 @@ fix_fft
 ;;                    on each data point exactly once, during this pass. */
 ;;                 istep = l << 1;
 
-	move.w	.l(a5),d0
+	move.w	.l(sp),d0	* index
 	add.w	d0,d0
-	move.w	d0,.istep(a5)
+	move.w	d0,.istep(sp)	* index
 
 ;;                 for(m=0; m<l; ++m) {
 
-;	clr.w	.m(a5)
-	clr.w	(a5)
+;	clr.w	.m(sp)
+ ifne FFT_ALTERNATE_ASR
+ 	moveq	#0,d5
+ else
+	clr.w	(sp)
+ endif
 	
 ;; ------------------------------------------------------------------
 .loop4
@@ -488,49 +515,57 @@ fix_fft
 ; loop 4 run 127 times when FFT_LENGTH = 128
 
 ;;                         j = m << k;
-;	move.w	.m(a5),d0
+;	move.w	.m(sp),d0
 
-;	move.w	(a5),d0
-;	move.w	.k(a5),d1
-	movem.w	(a5),d0/d1	; load both .m an .k, stored sequentially
-	move	d0,d6
-	
-	lsl.w	d1,d0
+;	move.w	(sp),d0
+;	move.w	.k(sp),d1
 
+ ifne FFT_ALTERNATE_ASR
+ 	move	d5,d0
+ 	move	d5,d6
+	move	.k(sp),d1
+	lsl	d1,d0
+ else
+	movem.w	(sp),d0/d1	; load both .m an .k, stored sequentially
+	move	d0,d6		* index .m
+	lsl	d1,d0
+ endif
 ;;                         wi = -Sinewave[j];
 ;;                         wi >>= 1;
 
-	add.w	d0,d0
+	;add.w	d0,d0
 	move.w	(a2,d0.w),d1
 	neg.w	d1
-	asr.w	#1,d1
+;	asr.w	#1,d1
 	move	d1,a4
 ;	a4 = wi
 
 ;;                         wr =  Sinewave[j+N_WAVE/4];
 ;;                         wr >>= 1;
 
-	add.w	#N_WAVE/4*2,d0
-	move.w	(a2,d0.w),d1
-	asr.w	#1,d1
-	move	d1,a3
+;	add.w	#N_WAVE/4*2,d0
+;	move.w	(a2,d0.w),d1
+;	asr.w	#1,d1
+;	move	d1,a3
+	move	(a5,d0.w),a3
+
 	; a3 = wr
 
 ;; ------------------------------------------------------------------
 ;;                         for(i=m; i<n; i+=istep) {
-	;move.w	.m(a5),d6	; i
-	;move.w	(a5),d6		; i - load a few lins above already
+	;move.w	.m(sp),d6	; i
+	;move.w	(sp),d6		; i - load a few lins above already
 	
-	move	.l(a5),d7	; j 
+	move	.l(sp),d7	; j 
 	add	d6,d7
-
-	add	d6,d6		; i table index
-	add	d7,d7		; j table index
+ 
+;	add	d6,d6		; i table index
+;	add	d7,d7		; j table index
 
 	; loop increment
 	; use double as d6 and d7 are word table indices
-	move	.istep(a5),d0
-	add	d0,d0
+	move	.istep(sp),d0	* index
+;	add	d0,d0
 	; loop condition is in a6
 
 .loop5
@@ -553,13 +588,28 @@ fix_fft
 
 	move.w	a3,d1		; fr(j)*wr
 	muls.w	d3,d1
+ ifeq FFT_ALTERNATE_ASR
 	asr.l	d5,d1
-
+ endif
 	move.w	a4,d2		; fi(j)*wi
 	muls.w	d4,d2
+ ifeq FFT_ALTERNATE_ASR
 	asr.l	d5,d2
-
+ endif
+ 
 	sub.l	d2,d1
+
+ ifne FFT_ALTERNATE_ASR
+	; Tricky asr #15
+	; Calculations use 16-bit words with fixed point at bit 15.
+	; Multiplying these will yield a value where the fixed point is at 30,
+	; with one sign bit and one value bit. Doing an add.l d1,d1 could cause
+	; an overflow but in practice it seems to work fine. Much faster
+	; than asr.l #15.
+	add.l	d1,d1
+	swap	d1
+ endif
+
 	; d1 = tr
 	
 ;;                                 qr = fr[i];
@@ -569,6 +619,7 @@ fix_fft
 	asr.w	#1,d2
 	; d2 = qr
 
+	;; Use of d5 or not:
  if 0
 		;; fr[j] = qr - tr
 	move	d2,d5
@@ -578,7 +629,7 @@ fix_fft
 		;; fr[i] = qr + tr
 	add.w	d1,d2
 	move	d2,(a0,d6.w)
- endif
+ else
 		;; fr[j] = qr - tr
 	sub	d1,d2
 	move	d2,(a0,d7.w)
@@ -587,19 +638,29 @@ fix_fft
 	add.w	d1,d2
 	add.w	d1,d2
 	move	d2,(a0,d6.w)
-
+ endif
 ;;                                 ti = fix_mpy(wr,fi[j])+fix_mpy(wi,fr[j]);
-
 
 	move.w	a3,d1		; fi(j)*wr
 	muls.w	d4,d1
+ ifeq FFT_ALTERNATE_ASR
 	asr.l	d5,d1
-
+ endif
+ 
 	move.w	a4,d2		; fr(j)*wi
 	muls.w	d3,d2
+ ifeq FFT_ALTERNATE_ASR
 	asr.l	d5,d2
+ endif
 
 	add.l	d2,d1
+
+ ifne FFT_ALTERNATE_ASR
+ 	; Tricky asr #15
+	add.l	d1,d1
+	swap	d1
+ endif
+
 	; d1 = ti
 
 		;;  qi = fi[i];
@@ -609,6 +670,7 @@ fix_fft
 	; d2 = qi
 
 
+	;; Use of d5 or not:
  if 0
  		;; fi[j] = qi - ti
 	move	d2,d5
@@ -618,8 +680,8 @@ fix_fft
 		;; fi[i] = qi + ti
 	add	d1,d2
 	move	d2,(a1,d6.w)
- endif
-		;; fi[j] = qi - ti
+ else
+ 		;; fi[j] = qi - ti
 	sub	d1,d2
 	move	d2,(a1,d7.w)
 	
@@ -627,6 +689,7 @@ fix_fft
 	add	d1,d2
 	add	d1,d2
 	move	d2,(a1,d6.w)
+ endif
 
 ;;                         }
 ; for loop:  for(i=m; i<n; i+=istep) 
@@ -645,30 +708,40 @@ fix_fft
 	endif
 
 ;for loop: for(m=0; m<l; ++m) 	
-	addq	#1,(a5)
-	;move.w	.m(a5),d0
-	move.w	(a5),d0
-	cmp.w	.l(a5),d0
-	blo.w	.loop4
+ ifne FFT_ALTERNATE_ASR
+ 	addq	#1*2,d5
+ 	cmp	.l(sp),d5
+ 	blo.b	.loop4
+ else 
+	addq	#1*2,(sp)
+	;move.w	.m(sp),d0
+	move.w	(sp),d0
+	cmp.w	.l(sp),d0
+	blo.b	.loop4
+ endif 
 
 ;;                 --k;
 
-	subq.w	#1,.k(a5)
+	subq.w	#1,.k(sp)
 
 ;;                 l = istep;
 
-	move.w	.istep(a5),.l(a5)
+	move.w	.istep(sp),.l(sp)
 
 ;;         }
 
 ; loop condition: while(l < n) 
-	move.w	.l(a5),d0
-	cmp.w	#.n,d0
+;	move.w	.l(sp),d0
+;	cmp.w	#.n,d0
+	cmp.w	#.n*2,.l(sp)
 	blo.w	.loop3
 
 ;;         return scale;
 ;; }
-.exit
+
+	; DONE
+	lea	.varsSizeof(sp),sp
+	movem.l	(sp)+,a4/a5/a6
 	rts
 
 ;; /*      window() - apply a Hanning window       */
@@ -707,7 +780,7 @@ windowFFT
 .for1
 	; 16384-(Sinewave(k)>>1)
 	move	(a1),d4
-	asr	#1,d4
+	;asr	#1,d4 * sinetable prescaled earlier
 	move	d2,d5
 	sub	d4,d5
 
@@ -741,7 +814,7 @@ windowFFT
 .for2
 	; 16384-(Sinewave(k)>>1)
 	move	(a1),d4
-	asr	#1,d4
+	;asr	#1,d4 * sinetable prescaled earlier
 	move	d2,d5
 	sub	d4,d5
 
@@ -788,70 +861,70 @@ windowFFT
 ; a1 = result array imaginary
 ;out
 ; a0 = result (overwritten input array)
- rem ;;;;;;;;;
-loudFFT
-	lea	Loudampl(pc),a2
-	lea	Loudampl2(pc),a3
-	
-	tst.l	(a3)
-	bne.b	.1
-
-	move	(a2)+,d0
-	muls	d0,d0
-	move.l	d0,(a3)+
-
-	moveq	#N_LOUD-1-1,d7
-.l1
-	move	(a2)+,d0
-	muls	d0,d0
-	move.l	d0,(a3)
-	add.l	-4(a3),d0
-	lsr.l	#1,d0
-	move.l	d0,-4(a3)
-	addq.l	#4,a3
-	dbf	d7,.l1
-.1
-
-nok
-	moveq	#FFT_LENGTH/2-1,d7
-.l2
-	move	(a0)+,d0
-	muls	d0,d0
-	move	(a1)+,d1
-	muls	d1,d1
-	add.l	d1,d0
-
-	lea	Loudampl2(pc),a2
-	moveq	#0,d6
-	moveq	#N_LOUD,d5
-.l3
-	cmp.l	(a2)+,d0
-	bhi.b	.break
-	
-	addq	#1,d6
-	;cmp	#N_LOUD,d6
-	cmp		d5,d6
-	bne.b	.l3
-
-.break
-	* d6 = dB level
-	;neg	d6
-	;addq	#6,d6
-	;bmi.b	.2
-	;moveq	#0,d6
-.2
-
-	subq	#6,d6
-	bpl.b 	.3
-	moveq	#0,d6
-.3	
-	move	d6,-2(a0)
-
-	dbf	d7,.l2
-
-
-	rts
- EREM ;;;;;;;;;;;;;;;
+; rem ;;;;;;;;;
+;loudFFT
+;	lea	Loudampl(pc),a2
+;	lea	Loudampl2(pc),a3
+;	
+;	tst.l	(a3)
+;	bne.b	.1
+;
+;	move	(a2)+,d0
+;	muls	d0,d0
+;	move.l	d0,(a3)+
+;
+;	moveq	#N_LOUD-1-1,d7
+;.l1
+;	move	(a2)+,d0
+;	muls	d0,d0
+;	move.l	d0,(a3)
+;	add.l	-4(a3),d0
+;	lsr.l	#1,d0
+;	move.l	d0,-4(a3)
+;	addq.l	#4,a3
+;	dbf	d7,.l1
+;.1
+;
+;nok
+;	moveq	#FFT_LENGTH/2-1,d7
+;.l2
+;	move	(a0)+,d0
+;	muls	d0,d0
+;	move	(a1)+,d1
+;	muls	d1,d1
+;	add.l	d1,d0
+;
+;	lea	Loudampl2(pc),a2
+;	moveq	#0,d6
+;	moveq	#N_LOUD,d5
+;.l3
+;	cmp.l	(a2)+,d0
+;	bhi.b	.break
+;	
+;	addq	#1,d6
+;	;cmp	#N_LOUD,d6
+;	cmp		d5,d6
+;	bne.b	.l3
+;
+;.break
+;	* d6 = dB level
+;	;neg	d6
+;	;addq	#6,d6
+;	;bmi.b	.2
+;	;moveq	#0,d6
+;.2
+;
+;	subq	#6,d6
+;	bpl.b 	.3
+;	moveq	#0,d6
+;.3	
+;	move	d6,-2(a0)
+;
+;	dbf	d7,.l2
+;
+;
+;	rts
+; EREM ;;;;;;;;;;;;;;;
 
 ;; /*      db_from_ampl() - find loudness (in dB) from
 ;;         the complex amplitude.
@@ -1262,36 +1335,34 @@ Sinewave
 ;; };
 
 
- REM ;;;;;
-Loudampl
-  dc.w  32767,  29203,  26027,  23197,  20674,  18426,  16422,  14636
-  ; 9
-  dc.w  13044,  11626,  10361,   9234,   8230,   7335,   6537,   5826
-  ; 17
-  dc.w   5193,   4628,   4125,   3676,   3276,   2920,   2602,   2319
-  ; 25
-  dc.w   2067,   1842,   1642,   1463,   1304,   1162,   1036,    923
-  ; 33
-  dc.w    823,    733,    653,    582,    519,    462,    412,    367
-  ; 41
-  dc.w    327,    292,    260,    231,    206,    184,    164,    146
-  ; 49
-  dc.w    130,    116,    103,     92,     82,     73,     65,     58
-  ; 57
-  dc.w     51,     46,     41,     36,     32,     29,     26,     23
-  ; 65
-  dc.w     20,     18,     16,     14,     13,     11,     10,      9
-  ; 73
-  dc.w      8,      7,      6,      5,      5,      4,      4,      3
-  dc.w      3,      2,      2,      2,      2,      1,      1,      1
-  dc.w      1,      1,      1,      0,      0,      0,      0,      0
-  dc.w      0,      0,      0,      0
-
-
-
-Loudampl2
-	ds.l	N_LOUD
- EREM ;;;;;;;;;
+;Loudampl
+;  dc.w  32767,  29203,  26027,  23197,  20674,  18426,  16422,  14636
+;  ; 9
+;  dc.w  13044,  11626,  10361,   9234,   8230,   7335,   6537,   5826
+;  ; 17
+;  dc.w   5193,   4628,   4125,   3676,   3276,   2920,   2602,   2319
+;  ; 25
+;  dc.w   2067,   1842,   1642,   1463,   1304,   1162,   1036,    923
+;  ; 33
+;  dc.w    823,    733,    653,    582,    519,    462,    412,    367
+;  ; 41
+;  dc.w    327,    292,    260,    231,    206,    184,    164,    146
+;  ; 49
+;  dc.w    130,    116,    103,     92,     82,     73,     65,     58
+;  ; 57
+;  dc.w     51,     46,     41,     36,     32,     29,     26,     23
+;  ; 65
+;  dc.w     20,     18,     16,     14,     13,     11,     10,      9
+;  ; 73
+;  dc.w      8,      7,      6,      5,      5,      4,      4,      3
+;  dc.w      3,      2,      2,      2,      2,      1,      1,      1
+;  dc.w      1,      1,      1,      0,      0,      0,      0,      0
+;  dc.w      0,      0,      0,      0
+;
+;
+;
+;Loudampl2
+;	ds.l	N_LOUD
 
 ;; #ifdef  MAIN
 

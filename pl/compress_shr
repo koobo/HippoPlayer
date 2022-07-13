@@ -1,2 +1,2 @@
 #!/bin/bash
-find bin -type f -not -iname "*.uaem" -exec ../shrinkle.sh "{}" \;
+find bin -type f -not -iname "*.uaem" -not -iname "*.md" -exec ../shrinkle.sh "{}" \;

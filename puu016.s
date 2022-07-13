@@ -25,7 +25,9 @@ ver	macro
 ;	dc.b	"v2.50ß (?.?.202?)"
 ;	dc.b	"v2.50 (31.12.2021)"
 ;	dc.b	"v2.52ß (?.?.202?)"
-	dc.b	"v2.52 (30.4.2022)"
+;	dc.b	"v2.52 (30.4.2022)"
+;	dc.b	"v2.53ß (?.?.2022)"
+	dc.b	"v2.53 (13.7.2022)"
 	endm	
 
 
@@ -221,6 +223,9 @@ check	macro
 	include	math/mathffp_lib.i
 	include	math/mathtrans_lib.i
 	
+	include	libraries/timer_lib.i
+	include	devices/timer.i
+
 	incdir include/
 	include	mucro.i
 	include	med.i
@@ -348,8 +353,8 @@ prefs_size		rs.b	0
 *******************************************************************************
 *
 * Scope variables for one audio channel
-* Values are copied hede from replay code internal structures.
-* Currently only Protracker supported
+* Values are copied here from replay code internal structures.
+* Originally only Protracker supported, now also many others.
 
 * Scope data for one channel
 * This should correspond go the "PTch" structure in hippoport
@@ -549,8 +554,8 @@ req_file3	rs.l	1		* prefs
 kokolippu	rs	1		* 0: pieni
 wkork		rs	1		* korkeus-vertailu zipwindowille
 windowpos	rs	2		* Ison ikkunan paikka
-windowpos2	rs	2		* Pienen ikkunan paikka (ZipWindow). Must be together
-windowpos22	rs	2		* ja koko
+windowZippedPos	rs	2	* Pienen ikkunan paikka (ZipWindow). Must be together
+windowZippedSize rs	2	* ja koko
 infopos2	rs	2		* sampleikkunan ja sidinfon paikka
 
 screenaddr	rs.l	1		* Näytön osoite
@@ -593,10 +598,10 @@ vbsaatu		rs.b	1		* 1: saatiin vb intti
 prefs_task	rs.l	1		* prefs-prosessi
 
 * Prefs window will close if it receives this signal
-prefs_signal	rs.b	1		* prefs-signaali
+prefs_closeSignal	rs.b	1		* prefs-signaali
 
 * Prefs window will update contents when receiving this
-prefs_signal2	rs.b	1		* prefs-signaali 2
+prefs_updateContentsSignal	rs.b	1		* prefs-signaali 2
 
 songHasEndedSignal	rs.b	1	* Kappale soinut
 ownsignal2	rs.b	1	* position update in title bar, prefs update 
@@ -642,21 +647,35 @@ RUNNING_NOT       = 0
 RUNNING_YES       = 1
 * Request scope shutdown
 RUNNING_SHUT_IT   = $80
-quadraScopeRunning	     rs.b 1
-quadraScopeFRunning rs.b 1
-hippoScopeRunning        rs.b 1
-patternScopeRunning      rs.b 1
-spectrumScopeRunning     rs.b 1
-scopeToggleTable         rs.b 5 * Used by toggleScopes()
+quadraScopeRunning	rs.b 1
+quadraScopeFRunning 	rs.b 1
+hippoScopeRunning	rs.b 1
+patternScopeRunning     rs.b 1
+spectrumScopeRunning    rs.b 1
+scopeToggleTable        rs.b 5 * Used by toggleScopes()
 
-;omatrigger	rs.b	1	* kopio kplayerin usertrigistä
 * This turns to 1 if user has manually activated the scope
 * by LMB click, when scope was passivated because not being
 * visible. As this is global user does not need to do that again.
-scopeManualActivation	rs.b	1	
-__pad0              rs.b  1
+scopeManualActivation	rs.b 1	
+__pad0     	        rs.b 1
 
 scopeData  rs.b	 scope_size
+
+ if DEBUG
+;; Scope performance measurement data
+scopeStartTimeSecs		rs.l	1
+scopeStartTimeMicros	rs.l	1
+scopeStopTimeSecs		rs.l	1
+scopeStopTimeMicros		rs.l	1
+scopeFrameCounter		rs.l	1
+scopeRenderTime         rs.l    1
+;; Timer.device stuff
+timerOpen               rs.w    1
+timerRequest	        rs.b    IOTV_SIZE
+clockStart              rs.b    EV_SIZE
+clockEnd                rs.b    EV_SIZE
+ endif
 
 ps3mchannels	rs.l	1	* Osoitin PS3M mixer channel blockeihin
 
@@ -814,7 +833,7 @@ QUADMODE_PATTERNSCOPEXL = 5
 * large and normal height mode
 quadWindowHeightOriginal	rs.w	1
 
-
+* Timeout mode: 0=all modules, $ff=only thos with no end-detection
 timeoutmode	rs.b	1
 filterstatus	rs.b	1		* filtterin 
 modulefilterstate rs.b	1		* ..
@@ -824,11 +843,15 @@ xpkid		rs.b	1		* 0: ei xpktunnistusta, 1:joo
 fade		rs.b	1		* 0: ei feidausta
 boxsize		rs	1		* montako nimeä mahtuu fileboksiin
 						* size of the module name box
-boxsize_new	rs	1
+* filebox slider value set in prefs, range: 2..48
+boxsize_new	rs	1		
 boxsizepot_new	rs	1
+* This value represents the y-difference compared to
+* a box of 8 lines height. Many places it is assumed that
+* the box is 8 lines, afterwards resizing was added on top of it.
 boxy		rs	1		* 8-nimisen lootaan y-kokomuutos
-boxsize0	rs	1		* ?
-boxsize00	rs	1		* ?
+boxsize0	rs	1		* previous boxsize value to detect changes
+boxsize00	rs	1		* magic flag that causes reopening the main window
 boxsizez	rs	1		* rmb + ? zoomausta varten
 						* alternative boxsize for RMB 
 doubleclick	rs.b	1		* <>0: tiedoston doubleclick-play
@@ -849,6 +872,8 @@ earlyload	rs.b	1
 divdir		rs.b	1
 cybercalibration rs.b	1
 
+* Playtime in seconds when module should be stopped automatically,
+* zero if not enabled
 timeout		rs	1		* moduulin soittoaika
 
 alarm		rs	1		* alarm aika
@@ -1353,7 +1378,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	24
+xpl_versio	=	25
 
  printt "TEST TEST: star frontier.bp3"
 
@@ -1505,17 +1530,12 @@ DDELAY macro
 	endm
 
 
+; Macro to check the gadget GFLG_DISABLED flag
+; GLFG_DISABLED = $0100
 skipIfGadgetDisabled macro
-	;lea	\1,a0
-	;move	#GFLG_DISABLED,d0  * $0100
-	;and	gg_Flags(a0),d0
-	;beq.b	._go
-	;btst	#0,gg_Flags(a0)
-	;beq.b	._go
 	btst	#0,gg_Flags+\1
-	beq.b	._go
+	beq.b	*+4
 	rts
-._go
 	endm
 
 *********************************************************************************
@@ -2128,7 +2148,8 @@ about_tt
 
 
 ;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
-scrtit	dc.b	"HippoPlayer by K-P in 1994-2000, 2021-2022",0
+scrtit	dc.b	"HippoPlayer"
+	dc.b	" by K-P in 1994-2000, 2021-2022",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -2266,22 +2287,25 @@ main
 .hasHome
  endif
 
-	lea	colors,a0
+	basereg	winstruc,a2
+	lea	winstruc,a2
 	move	#$0301,d0
 ;	moveq	#$0001,d0
-	move	d0,(a0)			* Ikkunoiden värit sen mukaan
-	move	d0,colors2-colors(a0)
-	move	d0,colors3-colors(a0)
+	move	d0,colors(a2)			* Ikkunoiden värit sen mukaan
+	move	d0,colors2(a2)
+	move	d0,colors3(a2)
 
-	lea	winstruc,a0		* Ikkunat avautuu publiscreeneille
+	* Ikkunat avautuu publiscreeneille
+	;lea	winstruc,a0	
+	move.l	a2,a0
 	bsr.b	.boob
-	lea	winstruc2-winstruc(a0),a0
+	lea	winstruc2(a2),a0
 	bsr.b	.boob
-	lea	winstruc3-winstruc2(a0),a0
+	lea	winstruc3(a2),a0
 	bsr.b	.boob
-	lea	winlistsel-winstruc3(a0),a0
+	lea	winlistsel(a2),a0
 	bsr.b	.boob
-	lea	swinstruc-winlistsel(a0),a0
+	lea	swinstruc(a2),a0
 	bsr.b	.boob
 	bra.b	.ohib
 
@@ -2291,14 +2315,16 @@ main
 
 .ohib
 	* Zipped window width
-	move	WINSIZX(a5),windowpos22(a5)	* Pienen koko ZipWindowille
+	move	WINSIZX(a5),windowZippedSize(a5)	* Pienen koko ZipWindowille
 	* zipped window height
-	move	#11,windowpos22+2(a5)
-	* Request events
-	or.l	#IDCMP_CHANGEWINDOW,idcmpmw	
+	move	#11,windowZippedSize+2(a5)
+	* Request events for kick2.0+
+	* Catch zip window and window resize events
+	or.l	#IDCMP_CHANGEWINDOW,idcmpmw(a2)	
 
-.vanha
-lelp
+.vanha	
+	endb	a2
+	; Above stuff for kick2.0+
 
 	* Dos has been opened in the startup code
 	
@@ -2367,16 +2393,13 @@ lelp
 	lob	OpenResource
 	move.l	d0,ciabaseb(a5)
 
-
-
-
-
+ if DEBUG
+	jsr	openTimer
+ endif
 
 	lea	text_attr,a0	* tässä vaiheessa tavaalinen topaz.8
 	lore	GFX,OpenFont
-	move.l	d0,topazbase(a5)
-
-	
+	move.l	d0,topazbase(a5)	
 
 	pushm	all
 	bsr.w	loadprefs
@@ -2489,6 +2512,12 @@ lelp
 	; The last main window button is "gadgetSortButton",
 	; add another button as the new last one
 	move.l	#gadgetListModeChangeButton,gadgetSortButton+gg_NextGadget
+
+	tst.b	uusikick(a5)
+	bne.b	.o0
+	; Remove resize gadget for kick13
+	clr.l	gadgetListModeChangeButton+gg_NextGadget
+.o0	
 
 	move.l	_IntuiBase(a5),a6
 	* Give each gadget a gg_GadgetID,
@@ -3103,23 +3132,22 @@ msgloop
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
 	bne.b	.noe
-
 	jsr	forceRefreshList
-
 .noe
-
 ** ei saa rämpätä ikkunaa jos se ei oo oikeassa koossaan!!
 
 	moveq	#0,d7
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
 	beq.b	.weew
+
+	DPRINT	"Boxsize changed"
+
 	move	d0,boxsize0(a5)
 	bsr.w	setboxy
 	st	d7
 
 	push	d7
-
 
 	tst.b	win(a5)
 	beq.b	.av
@@ -3218,7 +3246,7 @@ msgloop
 .nas
 
 	jsr	listChanged
-	jsr	forceRefreshList
+	bsr	forceRefreshList
 
 
 	move.b	haluttiinuusimodi(a5),d1
@@ -3261,7 +3289,7 @@ msgloop
 	
 .nwww	pop	d0
 
-	bsr.w		areMainWindowGadgetsFrozen
+	bsr.w	areMainWindowGadgetsFrozen
 	bne.w	.nwwwq
 
 	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
@@ -3366,10 +3394,20 @@ msgloop
 	;move.l	d2,d0
 	;DPRINT	"IDCMP=%ld"
 
+	; Window resize events go into IDCMP_CHANGEWINDOW
+	; too.
+	;cmp.l	#IDCMP_NEWSIZE,d2
+	;bne.b	.noNewSize
+	;bsr	mainWindowSizeChanged
+	;bra.b	.idcmpLoop
+;.noNewSize
+
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
 	bne.b	.noChangeWindow
 	bsr.w	zipwindow
+	bsr	mainWindowSizeChanged
 	bra.b	.idcmpLoop
+
 .noChangeWindow
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.noRawKey
@@ -3557,6 +3595,10 @@ exit
 
 	move.l	nilfile(a5),d1
 	lore	Dos,Close
+ 
+ if DEBUG
+	jsr	closeTimer
+ endif
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -4019,7 +4061,8 @@ printBold
 * Pääikkunaan
 * d0/d1 = x,y
 * a0 = teksti
-print	add	windowleft(a5),d0
+print:
+	add	windowleft(a5),d0
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	tst.b	win(a5)		* onko ikkunaa?
 	beq.b	.r
@@ -4108,7 +4151,7 @@ ply2	equr	d7
 
 *** Päivitetään ikkunan sisältö
 
-zipwindow
+zipwindow:
 	DPRINT	"ZipWindow refresh"
 	tst.b	win(a5)
 	bne.b	.onw	
@@ -4117,32 +4160,40 @@ zipwindow
 	pushm	all
 	move.l	windowbase(a5),a0
 	move	wd_Height(a0),d0
-	cmp	wkork(a5),d0
-	beq.b	.x
-	move	d0,d1
-	sub	wkork(a5),d1	* onko muutos suurempi kuin 60 pixeliä?
-	move	d0,wkork(a5)
-	tst	d1
-	bpl.b	.e
-	neg	d1
-.e	cmp	#40,d1
-	blo.b	.x
+ if DEBUG
+ 	ext.l	d0
+ 	moveq	#0,d1
+ 	move	windowZippedSize+2(a5),d1
+	DPRINT	"height=%ld zipped=%ld"
+ endif
+	cmp	windowZippedSize+2(a5),d0
+	bne.b	.biggified
 
-
-	not.b	kokolippu(a5)
-	bne.b	.big
-	move.l	4(a0),windowpos2(a5)
+	* Zipped to small size
+	tst.b	kokolippu(a5)
+	beq.b	.x * Safety: already small?
+	clr.b	kokolippu(a5)
+	* Store zipped position 
+	move.l	4(a0),windowZippedPos(a5)
 ** pieni ikkuna!
-	move.l	windowbase(a5),a0
+	;move.l	windowbase(a5),a0
 	lea	gadgets,a1
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,RemoveGList
+	DPRINT	"small"
 	bra.b	.x
-.big
+
+.biggified
+	tst.b	kokolippu(a5)
+	bne.b	.x * Already big?
+	st	kokolippu(a5)
+	DPRINT	"big"
+	* Store window position
 	move.l	4(a0),windowpos(a5)
 	bsr.w	wrender
+
 .x	popm	all
 	rts
 
@@ -4166,7 +4217,7 @@ avaa_ikkuna:
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc,a0
 
-	move.l	windowpos2(a5),(a0)		* Pienen paikka ja koko
+	move.l	windowZippedPos(a5),(a0)	* Pienen paikka ja koko
 	moveq	#11,d0
 	tst.b	uusikick(a5)
 	bne.b	.new1
@@ -4175,6 +4226,7 @@ avaa_ikkuna:
 	move	d0,wsizey-winstruc(a0)
 	bsr.w	.leve
 
+	* What is this?
 	not.b	kokolippu(a5)
 	beq.b	.small
 
@@ -4215,8 +4267,9 @@ avaa_ikkuna:
 .okkk
 
 .small	
+
 	lea	slider4,a3		* fileboxin slideri
-	moveq	#gadgetFileSliderInitialHeight,d3		* y-koko
+	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
 	and	#~$80,gg_TopEdge(a3)
 	add	boxy(a5),d3
 	bpl.b	.r
@@ -4229,6 +4282,17 @@ avaa_ikkuna:
 	beq.b	.ded
 	subq	#3,gg_Height(a3)
 .ded
+
+	* Remove the fileslider from the gadget list
+	* if it is not visible. On kick13 there may be
+	* some gfx trash otherwise.
+	* Normal chain:
+	move.l	#slider4,slider1+gg_NextGadget
+	tst	boxsize(a5)
+	bne.b	.isBox
+	* Skip over slider4
+	move.l	#button12,slider1+gg_NextGadget
+.isBox
 
 	lob	OpenWindow
 	move.l	d0,windowbase(a5)
@@ -4256,9 +4320,13 @@ avaa_ikkuna:
  if DEBUG
 	moveq	#0,d0
 	moveq	#0,d1
-	move	wd_Width(a0),d0
-	move	wd_Height(a0),d1
-	DPRINT	"Open window %ldx%ld"
+	moveq	#0,d2
+	moveq	#0,d3
+	move	wd_LeftEdge(a0),d0
+	move	wd_TopEdge(a0),d1
+	move	wd_Width(a0),d2
+	move	wd_Height(a0),d3
+	DPRINT	"Open window pos=%ldx%ld size=%ldx%ld"
  endif
 	move.l	rastport(a5),a1
 	move.l	fontbase(a5),a0
@@ -4541,7 +4609,7 @@ getscreeninfo
 	add	d0,winstruc2+nw_Height
 	add	d0,winstruc3+nw_Height
 	add	d0,swinstruc+nw_Height
-	add	d0,windowpos22+2(a5)	* pienen ikkunan zip-koko
+	add	d0,windowZippedSize+2(a5)	* pienen ikkunan zip-koko
 
 	move	windowleft(a5),d1
 	move	windowleft2(a5),d2
@@ -4616,7 +4684,7 @@ getscreeninfo
 
 ****** Piirretään ikkunan kamat
 
-wrender
+wrender:
 	move.l	pen_0(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
@@ -4658,6 +4726,11 @@ wrender
 	bra.b	.oru
 
 .cler	
+	; This one is invisible, skip it, though
+	; its not in the list at this point anyway?
+	cmp.l	#gadgetResize,a3
+	beq.b	.skipClear
+
 	tst	boxsize(a5)
 	bne.b	.clef
 	* Box is minimized, skipped gadgets:
@@ -4678,6 +4751,8 @@ wrender
 .oru
 .vanaha
 
+	* On kick2.0 insert an invisible size gadget last
+	bsr	configResizeGadget
 
 * sitten isketään gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
@@ -4881,13 +4956,13 @@ wrender
 	bsr.w	reslider
 
 	move.l	windowbase(a5),a0
-	bsr.b	setscrtitle
+	bsr.w	setscrtitle
 	move.l	keycheckroutine(a5),-(sp)
 	rts
 
 
 	
-
+* Calculate y-offset related to boxsize value
 setboxy	move	boxsize(a5),d0
 	subq	#8,d0
 	muls	#8,d0
@@ -4928,7 +5003,102 @@ unlockscreen
 .q	rts
 
 
+* Called upon IDCMP_NEWSIZE after the user dragged the
+* window size gadget. Filebox size is set accoring to window height.
+mainWindowSizeChanged
+	DPRINT	"mainWindowSizeChanged"
+	move.l	windowbase(a5),a0
+	tst.b	win(a5)
+	bne.b	.y
+.x 	DPRINT	"bail out"
+	rts
+.y
+	bsr.w	getFileboxYStartToD2
 
+	move	wd_Height(a0),d0
+	sub	d2,d0
+	bmi.b	.x
+	* Divide to 8-pixel rows
+	lsr	#3,d0
+
+	* Store new box size
+	move	d0,boxsize(a5)
+	
+ if DEBUG
+ 	ext.l	d0
+	DPRINT	"New box size=%ld"
+ endif
+
+	* Set new boxsize into prefs gadget
+	bsr.w	setprefsbox
+
+	* Signal to make changes happen
+	move.b	ownsignal2(a5),d1
+	jsr	signalit	
+	* Also update prefs window box size value.
+	* This doesn't actually update the propgadget position, 
+	* ah well.
+	bra	updateprefs
+
+* Disables the low right bottom resize gadget by making it 0 pixel wide
+disableResizeGadget
+	* Hide and disable
+	lea	gadgetResize,a1
+	clr	gg_Width(a1)
+	or	#GFLG_DISABLED,gg_Flags(a1)
+	rts
+
+
+* Enables or disables the resize gadget
+configResizeGadget
+	bsr.b	disableResizeGadget
+	* Check if box is visible?
+	tst	boxsize(a5)
+	beq.b	enableResizeGadget\.small
+
+* Enables the low right bottom resize gadget, on kick2.0+ only,
+* where GTYP_SIZING is available.
+enableResizeGadget
+	tst.b	uusikick(a5)
+	beq.b	.old
+	lea	gadgetResize,a1
+	move.l	windowbase(a5),a0
+	* Height is a bit larger than the window bottom border
+	moveq	#0,d0
+	move.b	wd_BorderBottom(a0),d0
+	addq	#2,d0
+	move	d0,gg_Height(a1)
+	* Position at the bottom of the window
+	subq	#2,d0
+	neg	d0
+	move	d0,gg_TopEdge(a1)
+
+	* Enable and unhide
+	and	#~GFLG_DISABLED,gg_Flags(a1)
+	move	#16,gg_Width(a1)
+
+	* Set wd_MinSize to correspond to 3 rows
+	bsr.b	getFileboxYStartToD2
+	add	#3*8+6,d2
+	move	d2,wd_MinHeight(a0)
+	* Max size too
+	add	#(50-3)*8,d2
+	move	d2,wd_MaxHeight(a0)
+.old
+.small
+	rts
+
+
+* Calculate the start y-position of the filebox 
+getFileboxYStartToD2
+	moveq	#62+WINY,d2
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt
+	add	#16,d2
+.noAlt
+	add	windowtop(a5),d2
+	rts
+	
 *******************************************************************************
 * Asettaa ikkunan screentitlen
 * a0 = windowbase
@@ -4967,10 +5137,17 @@ sulje_ikkuna
 
 	tst.b	kokolippu(a5)
 	bne.b	.big
-	move.l	4(a0),windowpos2(a5)	* Pienen ikkunan koordinaatit
+	move.l	4(a0),windowZippedPos(a5)	* Pienen ikkunan koordinaatit
+	DPRINT	"SMALL"
 	bra.b	.small
 .big	move.l	4(a0),windowpos(a5)	* Ison ikkunan koordinaatit
+	DPRINT	"BIG"
 .small
+ if DEBUG
+ 	movem	4(a0),d0/d1
+	DPRINT	"Close window %ldx%ld"
+ endif
+
 	move.l	46(a0),a1		* WB screen addr
 	move	14(a1),wbkorkeus(a5)	* WB:n korkeus
 	clr.l	windowbase(a5)
@@ -5174,13 +5351,12 @@ inithippo
  ifeq zoom
 * tavallinen hipon pää
 printhippo1
+	DPRINT	"Print hippo"
+
 	tst	boxsize(a5)
 	beq.b	.q
 	tst.b	win(a5)
 	bne.b	.yep
-;	beq.b	.q
-;	tst.b	uusikick(a5)
-;	bne.b	.yep
 .q	rts
 .yep
 	pushm	d0-d7/a0-a2/a6
@@ -5219,6 +5395,11 @@ printhippo1
 	beq.b	.e
 	move	#150,d2		* position when registered
 .e
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d3
+.noAlt1
+
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
 ;	move	#$ee,d6		* minterm, kopio a or d ->d
@@ -6327,7 +6508,7 @@ buttonspressed
 	beq.b	.xy
 	move.l	d0,a0
 	DPRINT	"Execute routine"
-	jsr		(a0)
+	jsr	(a0)
 .xy
 	clr.l	rightButtonSelectedGadget(a5)
 	clr.l	rightButtonSelectedGadgetRoutine(a5)
@@ -6338,13 +6519,16 @@ buttonspressed
 *** Zoomataan fileboxi pois tai takasin
 *** Switch filebox size
 zoomfilebox
+	DPRINT	"Zoom filebox"
 	move	boxsize(a5),d0
 	beq.b	.z
 	clr	boxsize(a5)
 	move	d0,boxsizez(a5)
+	bsr	disableResizeGadget
 	bra.b	.x
 .z
 	move	boxsizez(a5),boxsize(a5)
+	bsr	enableResizeGadget
 .x
 	bsr.w	setprefsbox
 	move.b	ownsignal2(a5),d1
@@ -6546,7 +6730,7 @@ tooltipDisplayHandler
 	tst.b	tooltips(a5)
 	beq.b	.exit
 	move.l	d0,a0 
-	jsr	showTooltipPopup
+	bsr	showTooltipPopup
 .exit
 	popm all
 	rts
@@ -6714,18 +6898,21 @@ signalreceived
 	cmp.b	#pm_random,playmode(a5)	* Arvotaanko järjestys?
 	bne.b	.norand
 
+* Previously when a song end was detected in random play mode,
+* the next subsong was played if there were any subsongs.
+* Better would be to randomize a new module instead.
+
 ** Onko subsongeja soiteltavaks?
 ** Are there any subsongs to play next?
-	move.l	playerbase(a5),a0
-	move	p_liput(a0),d0
-	* See if this replayer supports subsongs
-	btst	#pb_song,d0
- 	beq.b	.ran
-	move	songnumber(a5),d0
-	cmp	maxsongs(a5),d0
-	bne.w	actionNextSong		* next song!
-
-.ran	
+;	move.l	playerbase(a5),a0
+;	move	p_liput(a0),d0
+;	* See if this replayer supports subsongs
+;	btst	#pb_song,d0
+; 	beq.b	.ran
+;	move	songnumber(a5),d0
+;	cmp	maxsongs(a5),d0
+;	bne.w	actionNextSong		* next song!
+;.ran	
 	* no subsongs, randomize next one
 	bra.w	.karumeininki
 
@@ -6972,14 +7159,18 @@ satunnaismodi
 
 * Clear random table and do force refresh of list
 * if in random mode.
-clear_random
+clear_random:
 	bsr.b	clearRandomTable
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.x
-	* Request refresh to clear out random play indicators
+	* Request refresh to clear out random play indicators.
+	* This may update list in surprising situations.
+	* For example, when selecting parent item in filebrowser,
+	* before the parent contents are refreshed into view.
 	st	hippoonbox(a5)
 	pushm	all
-	bsr.w	shownames
+	;bsr.w	shownames
+	bsr	showNamesNoCentering
 	popm	all
 .x
 	rts
@@ -7006,7 +7197,7 @@ clearRandomTable
 *      d0 = module index to test
 * out:
 *      Z is set if index is taken
-testRandomTableEntry
+testRandomTableEntry:
 	push	a0
 	bsr.b	getRandomValueTableEntry
 	beq.b	.error
@@ -7023,7 +7214,7 @@ testRandomTableEntry
 *      d0 = module index to test
 * out:
 *      a0 = index in the ranom table that should be tested 
-getRandomValueTableEntry	
+getRandomValueTableEntry:
 	push 	d1
 	tst.l	randomtable(a5) 
 	bne.b	.yesTable
@@ -7572,7 +7763,8 @@ nupit
 * volumeboost s3m
 ;	lea	juusto,a0
 	lea	juusto-pslider2(a0),a0
-	move	#65535/9,d0
+	;move	#65535/9,d0
+	move	#65535/17,d0
 	bsr.w	setknob
 ;	move	#65535/9*0,d0
 	moveq	#0,d0
@@ -7706,21 +7898,35 @@ nappilasku
 
 handleRawKeyInput
 nappuloita
-;  if DEBUG
-; 	moveq   #0,d0
-; 	move.b	d3,d0
-; 	moveq	#0,d1
-; 	move	d3,d1
-; 	DPRINT	"Raw key=%lx qual=%lx"
-;  endc 
 
+  REM
+  if DEBUG
+   	moveq   #0,d0
+    	move.b	d3,d0
+	moveq	#0,d1
+ 	move	d4,d1
+  	DPRINT	"Raw key=%lx qual=%lx"
+  endc 
+  EREM
 	and	#$ff,d3
+	* mask out non-kb qualifiers
+	and	#$ff,d4
 
 	* react only if button is down
 	tst.b	d3
 	bmi.w	.exit	* vain jos nappula alhaalla
 	movem.l	d0-a6,-(sp)
 
+	cmp	#IEQUALIFIER_CONTROL,d4
+	bne.b	.noControl
+
+	cmp.b	#$23,d3		* f + control
+	bne.b	.2
+	jsr	toggleFavoriteStatusForCurrentModule
+	bra	.ee
+.2
+
+.noControl
 
 	and.b	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.noshifts
@@ -7730,11 +7936,6 @@ nappuloita
 	bsr	rlistmode
 	bra.w	.ee
 .1
-	cmp.b	#$23,d3		* f + shift
-	bne.b	.2
-	jsr	toggleFavoriteStatusForCurrentModule
-	bra	.ee
-.2
 
 
 	cmp.b	#$17,d3		* i + shift?
@@ -7993,9 +8194,9 @@ nappuloita
 *** Numeronäppis
 
 
-	dc	$2d
-	dr	actionPrevSong		* prev song
 	dc	$2f
+	dr	actionPrevSong		* prev song
+	dc	$2d
 	dr	actionNextSong		* next song
 	dc	$3e
 	dr	lista_ylos	* select prev
@@ -8286,7 +8487,7 @@ sortButtonAction
 	bsr.b	sortModuleList
 	bra	forceRefreshList
 
-sortModuleList
+sortModuleList:
 	* Skip force refresh
 
 	* Let's not sort a list with 1 module, that would be silly I guess.
@@ -8375,7 +8576,7 @@ sortModuleList
 
 	move.l	d7,d0 
 	moveq	#SORT_ELEMENT_LENGTH,d1
-	bsr.w		divu_32
+	bsr.w	divu_32
 	move.l	d0,d7
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
@@ -9042,18 +9243,8 @@ songSkip
 
 	move	minsong(a5),d1 
 	move	maxsongs(a5),d2
-	bsr.w		clampWord
+	bsr.w	clampWord
 
-;	moveq	#0,d0
-;	move	songnumber(a5),d0	* Numeroita 0:sta eteenpäin
-;	sub	d1,d0
-;	bpl.b	.ook
-;	moveq	#0,d0
-;.ook	
-;	cmp	maxsongs(a5),d0
-;	blo.b	.jep
-;	move	maxsongs(a5),d0
-;.jep
 	DPRINT	"New song: %ld"
 	move	d0,songnumber(a5)
 
@@ -9102,12 +9293,8 @@ rbutton3
 	bsr.w	fadevolumedown
 	move	d0,-(sp)
 
-	* The "playing" flags is polled in the interrupts, 
-	* so let's disable them for safety.
-	
-	lore    Exec,Disable
+	* The "playing" flags is polled in the interrupts.
 	clr.b	playing(a5)
-	lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_stop(a0)
 	
@@ -9723,8 +9910,8 @@ rinsert2
 
 * etsitään listasta vastaava kohta
 	DPRINT	"insert getListNode"
-	bsr.w		getListNode
-	beq.w		rbutton7		* go to "add"
+	bsr.w	getListNode
+	beq.w	rbutton7		* go to "add"
 
 * a0 = valittu nimi
 	move.l	a0,fileinsert(a5)
@@ -10777,7 +10964,7 @@ freelist
 
 .listEmpty
 	DPRINT  "freelist release list"
-	bsr.w		releaseModuleList
+	bsr.w	releaseModuleList
 	rts
 
 
@@ -11690,8 +11877,8 @@ loadprefs2
 	move	#640,wbleveys(a5)
 	move	#360,windowpos(a5)		* pistetään ikkunoiden paikat
 	move	#23,windowpos+2(a5)
-	move	#360,windowpos2(a5)
-	move	#23,windowpos2+2(a5)
+	move	#360,windowZippedPos(a5)
+	move	#23,windowZippedPos+2(a5)
 	move	#42,windowpos_p(a5)
 	move	#18,windowpos_p+2(a5)
 	;move	#259,quadpos(a5)
@@ -11741,7 +11928,7 @@ loadprefs2
 	
 	;move.b	prefs_quadmode(a0),quadmode(a5)
 	move.l	prefs_mainpos1(a0),windowpos(a5)
-	move.l	prefs_mainpos2(a0),windowpos2(a5)
+	move.l	prefs_mainpos2(a0),windowZippedPos(a5)
 	move.l	prefs_prefspos(a0),windowpos_p(a5)
 	;move.l	prefs_quadpos(a0),quadpos(a5)
 	;move.b	prefs_quadon(a0),quadon(a5)
@@ -11901,7 +12088,7 @@ sliderit
 	moveq	#0,d0
 	move.b	s3mmode3(a5),d0
 	mulu	#65535,d0
-	divu	#8,d0
+	divu	#16,d0
 	bsr.w	setknob2
 
 * stereoarvo ps3m
@@ -12000,7 +12187,7 @@ sliderit
 
 	rts
 
-
+* Update box size slider in prefs
 setprefsbox
 * boxsize
 	lea	meloni,a0
@@ -12021,7 +12208,7 @@ saveprefs
 	beq.b	.smal
 	move.l	4(a0),windowpos(a5)
 	bra.b	.h
-.smal	move.l	4(a0),windowpos2(a5)
+.smal	move.l	4(a0),windowZippedPos(a5)
 
 .h	move.l	windowbase2(a5),d0
 	beq.b	.g
@@ -12051,7 +12238,7 @@ saveprefs
 	move.b	s3mmode2(a5),prefs_s3mmode2(a0)
 	move.b	s3mmode3(a5),prefs_s3mmode3(a0)
 	move.l	windowpos(a5),prefs_mainpos1(a0)
-	move.l	windowpos2(a5),prefs_mainpos2(a0)
+	move.l	windowZippedPos(a5),prefs_mainpos2(a0)
 	move.l	windowpos_p(a5),prefs_prefspos(a0)
 	move.b	ptmix(a5),prefs_ptmix(a0)
 	move.b	xpkid(a5),prefs_xpkid(a0)
@@ -12191,6 +12378,7 @@ gzipDecompressCommand
 	
 
 aseta_vakiot
+	DPRINT	"Set defaults"
 	bsr.w	nupit
 	move	#64,mainvolume(a5)
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
@@ -12452,6 +12640,7 @@ drawtexture:
 * Luodaan erillinen prosessi
 *******
 
+* This will signal the prefs window to update itself.
 updateprefs:
 	; Called from scope, no logging
 	;DPRINT	"Update prefs"
@@ -12462,7 +12651,7 @@ updateprefs:
 	beq.b	.x
 	move.l	d0,a1
 	moveq	#0,d0
-	move.b	prefs_signal2(a5),d1
+	move.b	prefs_updateContentsSignal(a5),d1
 	bset	d1,d0
 	lore	Exec,Signal
 .x	popm	all
@@ -12477,7 +12666,7 @@ sulje_prefs
 	beq.b	.ww
 	move.l	a6,-(sp)
 	moveq	#0,d0			* signaali prefssille lopettamisesta
-	move.b	prefs_signal(a5),d1
+	move.b	prefs_closeSignal(a5),d1
 	bset	d1,d0
 	move.l	prefs_task(a5),a1
 	lore	Exec,Signal
@@ -12582,9 +12771,9 @@ prefs_code
 	move.b patternScopeXL(a5),   patternScopeXL_new(a5)      
 	move.b spectrumScope(a5),    spectrumScope_new(a5)     
  EREM
-	move.b quadraScopeBars(a5),  quadraScopeBars_new(a5)        
-	move.b quadraScopeFBars(a5), quadraScopeFBars_new(a5)         
-	move.b hippoScopeBars(a5),    hippoScopeBars_new(a5)       
+	move.b quadraScopeBars(a5),quadraScopeBars_new(a5)        
+	move.b quadraScopeFBars(a5),quadraScopeFBars_new(a5)         
+	move.b hippoScopeBars(a5),hippoScopeBars_new(a5)       
 	move.b spectrumScopeBars(a5),spectrumScopeBars_new(a5)  
 
 
@@ -12843,11 +13032,11 @@ prefs_code
 
 	moveq	#-1,d0
 	lob	AllocSignal
-	move.b	d0,prefs_signal(a5)
+	move.b	d0,prefs_closeSignal(a5)
 ;	bmi.w	exprefs
 	moveq	#-1,d0
 	lob	AllocSignal
-	move.b	d0,prefs_signal2(a5)
+	move.b	d0,prefs_updateContentsSignal(a5)
 ;	bmi.w	exprefs
 
 	bsr.w	prefsgads
@@ -12877,22 +13066,24 @@ msgloop2
 	move.l	userport2(a5),a4
 	move.b	MP_SIGBIT(a4),d1	* IDCMP signalibitti
 	bset	d1,d0
-	move.b	prefs_signal(a5),d1	* oma signaali
+	move.b	prefs_closeSignal(a5),d1	* oma signaali
 	bset	d1,d0
-	move.b	prefs_signal2(a5),d1	* oma signaali ikkunan päivitykseen
+	move.b	prefs_updateContentsSignal(a5),d1	* oma signaali ikkunan päivitykseen
 	bset	d1,d0
 	lob	Wait			* Odotellaan...
 
-	move.b	prefs_signal(a5),d1	* käskeekö pääohjelma lopettamaan?
+	move.b	prefs_closeSignal(a5),d1	* käskeekö pääohjelma lopettamaan?
 	btst	d1,d0
 	bne.w	exprefs
 
-	move.b	prefs_signal2(a5),d1	* päivitys?
+	move.b	prefs_updateContentsSignal(a5),d1	* päivitys?
 	btst	d1,d0
 	beq.b	.naa
+	* Update window!
 	pushm	all
 	cmp	#4,prefsivu(a5)
 	bne.b	.er
+	* Done only for page 4?
 	bsr.w	prefsgads
 	bra.b	.er2
 .er	bsr.w	pupdate
@@ -12959,12 +13150,12 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.l	(a5),a6
 
 	moveq	#0,d0
-	move.b	prefs_signal(a5),d0
+	move.b	prefs_closeSignal(a5),d0
 	bmi.b	.yyk
 	lob	FreeSignal
 .yyk	
 	moveq	#0,d0
-	move.b	prefs_signal2(a5),d0
+	move.b	prefs_updateContentsSignal(a5),d0
 	bmi.b	.yyk2
 	lob	FreeSignal
 .yyk2
@@ -14507,26 +14698,24 @@ ls15	dc.b	"14-bit stereo",0
 rsmode3
 pupdate7
 	lea	juusto,a2
-	moveq	#8,d0			* max
+	moveq	#16,d0			* max
 	bsr.w	nappilasku
 	move.b	d0,s3mmode3_new(a5)
-
 	bsr.w	updateps3m
 
 	moveq	#0,d0
 	move.b	s3mmode3_new(a5),d0
-	or.b	#"0",d0
+	lea	.i(pC),a0
+	bsr.w	desmsg2
 
-	lea	.sm3_t(pc),a0
-	move.b	d0,(a0)
+	lea	desbuf2(a5),a0
 ;	movem	juusto+4,d0/d1
 	movem	4(a2),d0/d1
-	sub	#16,d0
+	sub	#16+8,d0
 	addq	#8,d1
-
 	bra.w	print3b
-.sm3_t	dc.b	" ",0	* 0,1-8
-
+.i	dc.b	"%2.2ld",0
+ even
 
 *** Stereo
 
@@ -16327,7 +16516,7 @@ listselector
 showNamesNoCentering
 shownames2
 	moveq	#1,d4		* flag: do not center
-	bra.b	shn
+	bra.b	shownames\.doit
 
 clearbox:
 	tst	boxsize(a5)
@@ -16349,7 +16538,7 @@ clearbox:
 
 shownames:
 	moveq	#0,d4	 	* flag: center
-shn
+.doit
 	tst	boxsize(a5)
 	beq.b	.bx
 	tst.b	win(a5)		* onko ikkunaa?
@@ -16570,8 +16759,10 @@ doPrintNames
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a4
 
-;	DPRINT	".doNames %ld"
-
+; if DEBUG
+; 	ext.l	d2
+;	DPRINT	"doPrintNames first=%ld target=%ld amount=%ld"
+; endif
 	* d0 = module index
 	* d1 = line number to print to
 	* d2 = number of lines to print
@@ -16580,17 +16771,9 @@ doPrintNames
 	move.l	d1,d4		* move this out of the way
 	subq.l	#1,d0
 	bmi.b	.baa
-;.luuppo
-;	TSTNODE	a4,a3
-;	beq.w	.lop
-;	move.l	a3,a4
-;	subq.l #1,d0 
-;	bpl.b  .luuppo
-
-;	bsr	clearCachedNode
-;	move.l	d3,d0
 
 	bsr.w	getListNodeCached
+	beq.w	.lop	* check for z-flag error indication
 	tst.l	(a0)
 	beq.w	.lop
 	move.l	a0,a3
@@ -16678,7 +16861,7 @@ doPrintNames
 	move.l 	d3,d0 
 	bsr.w	testRandomTableEntry
 	beq.b	.fu
-	move.b	#"®",-1(a2)
+	move.b	#"®",-1(a2) * random marker!
 .fu
 	moveq	#33+WINX,d0
 	move.l	d6,d1
@@ -17380,10 +17563,13 @@ lootaan_aika
 
 ************* tähän timeout!
 	move	timeout(a5),d1
-	beq.b	.ok0
+	beq.w	.ok0
 	mulu	#50,d1
+
 	cmp.l	d1,d0
 	blo.b	.ok0
+
+	DPRINT 	"Timeout triggered %ld"
 
 	cmp.l	#1,modamount(a5)	* 0 tai 1 modia -> ei timeouttia
 	bls.b	.ok0
@@ -17402,6 +17588,11 @@ lootaan_aika
 
 	move	#$28,rawkeyinput(a5)	* NEXT!
 
+	* In random play mode let's just select the next random
+	* module instead of going through the subsongs.
+	cmp.b	#pm_random,playmode(a5)	
+	beq.b	.nosongs
+	
 	move.l	playerbase(a5),a0	
 	move	p_liput(a0),d1		
 	btst	#pb_song,d1
@@ -17793,30 +17984,37 @@ getFileBoxIndexFromMousePosition
 	move	mousey(a5),d1
 	sub	windowleft(a5),d0
 	sub	windowtop(a5),d1	* suhteutus fonttiin
-	
+
+	* Vertical modifier when big buttons used
+	moveq	#0,d3
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt0
+	moveq	#16,d3
+.noAlt0
+
 	cmp	#30+WINX,d0		* onko tiedostolistan päällä?
 	blo.b	.out
 	cmp	#251+WINX,d0
 	bhi.b	.out
-	moveq	#63+WINY,d2
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
-	add	#16,d2
-.noAlt1
-	cmp		d2,d1
+	moveq	#63+WINY,d2		* Top edge
+	add	d3,d2			* Modifier!
+
+	cmp	d2,d1
 ;	cmp	#63+WINY,d1
 	blo.b	.out
-	move	#126+WINY,d2
-	add	boxy(a5),d2
+
+	move	#126+WINY,d2		* Bottom edge
+	add	d3,d2			* Modifier!
+	add	boxy(a5),d2		* Height of box
 	cmp	d2,d1
 	bhi.b	.out
+
+	* converts y-koordinate into a line number (font is 8 pix tall)
 	sub	#63+WINY,d1
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt2
-	sub	#16,d1
-.noAlt2
-	lsr	#3,d1			* converts y-koordinate into a line number (font is 8 pix tall)
-	moveq	#1,d0
+	sub	d3,d1
+
+	lsr	#3,d1	
+	moveq	#1,d0			* success
 	rts
 .out  
 	* nothing marked
@@ -17971,13 +18169,12 @@ marklineRightMouseButton
 	* Check if feature is enabled in prefs
 	tst.b	favorites(a5)
 	beq.b	.out
-	* No RMB marking if list is in fav mode
-	* Lets not do RMB window folding however, seems
-	* distracting
-	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.ou
 	bsr.w	 getFileBoxIndexFromMousePosition
 	beq.b  .out
+	* RMB was hit on top of the list.
+	* In fav list ignore the click.
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.ou
 	bsr.b	.doMark
 	* something marked
 .ou	moveq	#1,d0
@@ -18086,7 +18283,7 @@ getVisibleModuleListHeader:
 * content.
 * In file browser mode contents can NOT be changed.
 
-listChanged
+listChanged:
 	DPRINT "List changed"
 	bsr.w	clearCachedNode
 	bsr.w	clear_random	
@@ -18118,6 +18315,9 @@ getListNode:
 	;lea	moduleListHeader(a5),a0
 	bsr.b	getVisibleModuleListHeader
 
+	move.l	a0,d1	* Sanity check
+	beq.b	.out
+
 	* When using dbf loop usually subtract 1, but here
 	* one SUCC is needed to get to the head element
 	* so don't subtract
@@ -18125,8 +18325,8 @@ getListNode:
 	swap	d0
 .loop
 	SUCC    a0,a0
-	dbf	 	d1,.loop
-	dbf		d0,.loop
+	dbf	d1,.loop
+	dbf	d0,.loop
 	bsr.w	releaseModuleList
 
  if DEBUG
@@ -18141,21 +18341,26 @@ getListNode:
 
 
 
-* Cached getter
+* Cached list node getter
 * in:
-*   d0=index
+*   d0 = index
 * out:
-*   a0=list node
+*   a0 = list node
+*   Z-flag = set if error (out of bounds), not set if ok
 getListNodeCached
 
-
-* algo:
+* algo (not actually used here):
 * - if index is nearer head than cached node
 *   - use head as cached reference node
 * - else if index is nearer tail than cached node
 *   - use tail as cached reference node
 * - else
 *   - use cached node as reference node
+
+	tst.l	modamount(a5)
+	beq.b	.out
+	cmp.l 	modamount(a5),d0
+	bhs.b	.out
 
 	tst.l	cachedNode(a5)
 	bne.b	.n
@@ -18171,31 +18376,18 @@ getListNodeCached
 	;DPRINT	"Getlistnode to=%ld cached=%ld"
 	move.l	cachedNode(a5),a0
 
+	* See if cached is the same as requested:
 	sub.l	d1,d0
-	;DPRINT	"->step %ld"
-	tst.l	d0
 	beq.b   .x
 	bpl.b  	.forward2
 	bra.b	.backward2
 
-; These versions support 16-bit jumps
-;.backward
-;	PRED   a0,a0
-;	tst.l	LN_PRED(a0)
-;	beq.b	.x1
-;	addq.l 	#1,d0
-;	bne.b 	.backward
-;	move.l a0,cachedNode(a5)
-.x	rts
-;
-;.forward 
-;	SUCC    a0,a0
-;	tst.l	(a0)
-;	beq.b	.x1
-;	subq.l	#1,d0
-;	bne.b	.forward
-;.x1	move.l 	a0,cachedNode(a5)
-;	rts
+.x	* Same, just return
+	moveq	#1,d0
+	rts
+.out
+	moveq	#0,d0 * error
+	rts
 
 ; These allow jump to be over 16 bits
 .backward2 
@@ -18204,10 +18396,10 @@ getListNodeCached
 	move.l	d0,d1
 	swap 	d0
 .bloop
-	PRED   a0,a0
+	PRED   	a0,a0
 	dbf 	d1,.bloop 
-	dbf		d0,.bloop
-	move.l a0,cachedNode(a5)
+	dbf	d0,.bloop
+	move.l 	a0,cachedNode(a5)
 	rts 
 
 .forward2
@@ -18217,7 +18409,7 @@ getListNodeCached
 .floop
 	SUCC    a0,a0
 	dbf 	d1,.floop 
-	dbf		d0,.floop
+	dbf	d0,.floop
 	move.l 	a0,cachedNode(a5)
 	rts
 
@@ -18367,6 +18559,7 @@ showTooltipPopup
 * Closes the tooltip popup if open.
 * Also deactivates any tooltip that is about to open.
 closeTooltipPopup
+	pushm	all
 	bsr.w	deactivateTooltip
 	move.l	tooltipPopupWindow(a5),d0
 	beq.b	.exit
@@ -18375,7 +18568,9 @@ closeTooltipPopup
 	move.l	tooltipPopupWindow(a5),a0
 	lore	Intui,CloseWindow
 	clr.l	tooltipPopupWindow(a5)
-.exit 	rts
+.exit 	
+	popm	all
+	rts
 
 
 * Flush the window message queue. This should be done before closing window.
@@ -19008,7 +19203,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .jee9eg
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	jsr	desmsg4
+	bsr	desmsg4
 	bsr.w	.putcomment
 	lea	32(sp),sp
 
@@ -19124,7 +19319,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .deliFormat	
 	pushm	d0-d7
 	move.l	sp,a1
-	lea	putc,a2	;merkkien siirto
+	lea	putc(pc),a2	;merkkien siirto
 	lore 	Exec,RawDoFmt
 	popm	d0-d7
 	rts
@@ -19414,10 +19609,10 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 ** PS3M
 
 .medform 
-.form2	dc.b	`%03ld %-28.28s %6ld`,ILF,ILF2,0
+.form2	dc.b	"%03ld %-28.28s %6ld",ILF,ILF2,0
 
 .thxform
- 	dc.b	`%03ld %-35.35s`,ILF,ILF2,0
+ 	dc.b	"%03ld %-35.35s",ILF,ILF2,0
 
  even
 
@@ -20894,7 +21089,18 @@ intserver
 	move.l	playerbase(a5),a0
 	move	#pf_end,d2
 	and	p_liput(a0),d2
-	bne.b	.skipCheck
+	;bne.b	.skipCheck
+	beq.b	.noSongEnd
+	* This player supports songend. 
+	* To avoid extra songend detections, do the song position
+	* check only if the current position is non-zero.
+	* This detects PT modules that jump from the last position to 
+	* some other than position zero.
+	tst	d0
+	beq.b	.skipCheck
+
+.noSongEnd
+
 	* Current format does not have songend support, do the check!
 	sub	d1,d0	
 	bmi.b	.songover
@@ -21630,7 +21836,7 @@ rexxmessage
 	bra.w	i2amsg
 
 .currname
-	jsr	getcurrent
+	bsr	getcurrent
 	bne.b	.curr0
 	lea	.empty(pc),a2
 	bra.w	str2msg
@@ -21644,7 +21850,7 @@ rexxmessage
 	bne.b	.curr2
 .curr1	lea	.empty(pc),a2
 	bra.w	str2msg	
-.curr2	jsr	getcurrent2
+.curr2	bsr	getcurrent2
 	lea	l_filename(a3),a2
 	bra.w	str2msg
 
@@ -21883,7 +22089,8 @@ initScopeTask
 
 	* Initialize ln_Node
 	move.b	#NT_TASK,LN_TYPE(a3)
-	move.b	#-30,LN_PRI(a3)
+	* Initial priority 0
+	clr.b	LN_PRI(a3)
 	move.l	a2,LN_NAME(a3)
 
 	* Allocate stack
@@ -22109,7 +22316,7 @@ stopScopeTask
 	* Check if running already
 	move	st_runningStatusOffset(a4),d7
 	tst.b 	(a5,d7)
-	beq.b	.x
+	beq.w	.x
 	DPRINT	"Shutting it"
 
 	* Get task structure
@@ -22130,19 +22337,52 @@ stopScopeTask
 	bra.b	.loop
 .z
 
+;; Display some performance measurements when scope is stopped.
+ if DEBUG
+	move.l	scopeStopTimeSecs(a5),d0
+	sub.l	scopeStartTimeSecs(a5),d0
+	bne.b	.zz
+	moveq	#1,d0
+.zz
+	move.l	scopeFrameCounter(a5),d1
+	move.l	d1,d2
+	divu	d0,d2
+	move.l	d2,d3
+	ext.l	d2
+	swap	d3
+	ext.l	d3
+
+	move.l	scopeRenderTime(a5),d4
+	move.l	scopeFrameCounter(a5),d5
+	bne.b	.zzz
+	moveq	#1,d5
+.zzz	
+ 	divu	d5,d4
+	ext.l	d4
+	tst.b	uusikick(a5)
+	bne.b	.zzzz
+	moveq	#-1,d4
+.zzzz
+	DPRINT	"Time=%lds frames=%ld fps=%ld.%ld avg=%ldms"
+ endif
 .x	rts
 
+
+* Out:
+*   Z not set if any of the scopes is running
+anyScopeRunning
+	move.b	quadraScopeRunning(a5),d0
+	or.b	quadraScopeFRunning(a5),d0
+	or.b	hippoScopeRunning(a5),d0
+	or.b	patternScopeRunning(a5),d0
+	or.b	spectrumScopeRunning(a5),d0
+	rts
 
 toggleScopes
 	DPRINT	"toggleScopes"
 	lea	scopeToggleTable(a5),a2
 	* Is any scope running?
-	moveq	#0,d0
-	or.b	quadraScopeRunning(a5),d0
-	or.b	quadraScopeFRunning(a5),d0
-	or.b	hippoScopeRunning(a5),d0
-	or.b	patternScopeRunning(a5),d0
-	or.b	spectrumScopeRunning(a5),d0
+	bsr.b	anyScopeRunning
 	beq.b	.start
 	* Preserve running statuses and stop all
 	move.b	quadraScopeRunning(a5),(a2)+
@@ -22556,10 +22796,6 @@ scopeEntry:
 	move.l	s_windowTitle(a4),a1
 	lea	scrtit,a2
 	lore	Intui,SetWindowTitles
-	
-	move.l	s_quad_task(a4),a1
-	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
-	lore	Exec,SetTaskPri
 
 	move.l	_GFXBase(a5),a6
 	move.l	s_rastport3(a4),a1
@@ -22593,7 +22829,19 @@ scopeEntry:
 	move.b	scopeManualActivation(a5),d5
 	jsr	printHippoScopeWindow	
 
-; TEST: OK
+;; Scope performance measurements
+ if DEBUG
+	lea	scopeStartTimeSecs(a5),a0
+	lea	scopeStartTimeMicros(a5),a1
+	lore	Intui,CurrentTime
+	clr.l	scopeFrameCounter(a5)
+	clr.l scopeRenderTime(a5)
+ endif
+
+	; Ready to run	
+	move.l	s_quad_task(a4),a1
+	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
+	lore	Exec,SetTaskPri
 
 *********************************************************************
 * Scope main loop
@@ -22767,6 +23015,14 @@ scopeLoop:
 *********************************************************************
 
 qexit:
+
+;; Scope performance measurements
+ if DEBUG
+	lea	scopeStopTimeSecs(a5),a0
+	lea	scopeStopTimeMicros(a5),a1
+	lore	Intui,CurrentTime
+ endif
+
 	SDPRINT	"Scope task will exit"
 	bsr.b	qflush_messages
 
@@ -23198,10 +23454,12 @@ scopeWindowSizeChanged
 
 *********************************************************************
 * Scope interrupt code, keeps track the play positions of 
-* protracker replayer samples
+* replayer samples
 *********************************************************************
 
-scopeinterrupt:				* a5 = var_b
+* in:
+*    a5 = var_b
+scopeinterrupt:				
 	cmp	#pt_prot,playertype(a5)
 	bne.w	.notProtracker
 
@@ -23250,12 +23508,18 @@ scopeinterrupt:				* a5 = var_b
 .noe	
 	add.l	d0,ns_start(a0)
 	lsr	#1,d0
-	sub	d0,ns_length(a0)
+	moveq	#0,d2
+	move	ns_length(a0),d2
+	sub.l	d0,d2
+	move	d2,ns_length(a0)
+	move.l	d2,d0
 	bpl.b	.plu
 
 	* Negative overrun
-	move	ns_length(a0),d0
-	ext.l	d0
+	;move	ns_length(a0),d0
+	;ext.l	d0
+	;move.l	d2,d0
+
 	* safety check
 	move	ns_replen(a0),d2
 	bne.b	.nz
@@ -23266,8 +23530,10 @@ scopeinterrupt:				* a5 = var_b
 	swap	d0
 	ext.l	d0
 	* Adjust replen according to overrun, words
-	move	ns_replen(a0),ns_length(a0)
-	add	d0,ns_length(a0)	
+	moveq	#0,d2
+	move	ns_replen(a0),d2
+	add.l	d0,d2
+	move	d2,ns_length(a0)
 	* Adjust loopstart, bytes
 	move.l	ns_loopstart(a0),ns_start(a0)
 	add.l	d0,d0
@@ -23285,16 +23551,20 @@ scopeinterrupt:				* a5 = var_b
 	move.l	sampleadd(a5),d0
 	move.l	samplefollow(a5),a0
 	add.l	d0,(a0)
-	rts
+.x	rts
 
 .notSample
+	* PSID uses it's own following mechanism
+	cmp	#pt_sid,playertype(a5)
+	beq.b	.x
+
 	* Check player has generic quadrascope support
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d1
 
 	* Poke method:
 	btst	#pb_quadscopePoke,d1
-	bne.b	.quadScopeSampleFollow
+	bne.w	.quadScopeSampleFollow
 	
 	* UPS method:
 	btst	#pb_quadscopeUps,d1
@@ -23548,6 +23818,8 @@ drawScope:
 	move	d0,s_scopePreviousPattPos(a4)
 	move	d1,s_scopePreviousSongPos(a4)
 .noPattSc
+	* s_draw1 = draw scope in this buffer
+	* s_draw2 = clear this buffer
 
 	* clear draw area
 	move.l	_GFXBase(a5),a6
@@ -23565,11 +23837,27 @@ drawScope:
 	move	s_scopeDrawAreaModulo(a4),d1
 	lsr	#1,d1	* words
 	add	d1,d0
+	* Do blit
 	move	d0,(a0)
 
+	* Continue clearing while scope is drawn into the other buffer
 	lob	DisownBlitter
 
+* Scope performance measurements
+* Disaster is obvious, playing the first 40 seconds
+* - v2.52 spectrumScope on A500: 75 ms average
+* - v2.53 spectrumScope on A500: 70 ms
+*               micro-optimized: 69 ms
+*               alternative asr: 58 ms
+ if DEBUG
+	addq.l	#1,scopeFrameCounter(a5)
+	jsr	startMeasure
+	bsr	.render
+	jsr	stopMeasure
+	add.l	d0,scopeRenderTime(a5)
+ else
 	bsr.w	.render
+ endif
 
 	* scope processed, deliver unto screen
 
@@ -23579,6 +23867,8 @@ drawScope:
 	move.l	d1,s_draw1(a4)
 	move.l	d0,s_draw2(a4)
 
+	* Copy s_draw1 to screen
+	
 	lea	s_omabitmap(a4),a0
 	move.l	d0,bm_Planes(a0)
 
@@ -23594,54 +23884,40 @@ drawScope:
 	move	s_scopeDrawAreaWidth(a4),d4
 	move	s_scopeDrawAreaHeight(a4),d5
 
+	* Perform some adjustments based on mode and type
+	cmp.b	#QUADMODE_FREQANALYZER,s_quadmode(a4)
+	beq.b	.noMagic
+	cmp.b	#QUADMODE_PATTERNSCOPE,s_quadmode(a4)
+	beq.b	.pattern
+	cmp.b	#QUADMODE_PATTERNSCOPEXL,s_quadmode(a4)
+	beq.b	.pattern
 
 	cmp	#pt_sample,playertype(a5)
-	beq.b	.sampleAdjustment
-
+	beq.b	.centerStereo
 	cmp	#pt_multi,playertype(a5)
-	bne.b	.jaa
-	bsr	isImpulseTrackerActive
-	bne.b	.noIt
-	pushm 	d0-d6/a0/a1/a6
-	bsr	requestNormalScopeDrawArea
-	popm	d0-d6/a0/a1/a6
-	bne.b	.skippi	* wait for resize
-	* Displaying sample scope, so need magic
-	bra.b	.joa
-.noIt
-	bsr	patternScopeIsActive
-	beq.b	.noMagic
-	cmp.b	#QUADMODE2_QUADRASCOPE_BARS,s_quadmode2(a4)
-	bls.b	.joa
-	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
-	blo.b	.jaa
-.joa	
-	* magic adjustment?!
-	addq	#4,d0
-	subq	#4,d4
-	bra.b	.jaow
+	bne.b	.noMagic
+	cmp.b	#QUADMODE_HIPPOSCOPE,s_quadmode(a4)
+	bne.b	.centerStereo
+	* Center PS3M + hipposcope
+	addq	#4,d2		; target x
+	subq	#4,d4		; width
+	bra.b	.noMagic
+	
+.centerStereo
+	* This will center the two wide stereo scope graphs
+	* with sample player and PS3M
+	addq	#4,d0		; source x
+	subq	#4,d4		; width
+	bra.b	.noMagic
 
-.sampleAdjustment
-	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
-	beq.b	.jaow
-	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
-	bne.b	.joa
-	bra.b	.jaow
+.pattern
+	* Move patternscope one pixel to the right
+	* to have some space on the left border.
+	addq	#1,d2		; target x
+	subq	#1,d4		; width
 
-.jaa
-
-	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
-	bhs.b	.jaoww
-	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
-	blo.b	.jaow
-.jaoww
-	* MAGIC adjustments for protracker?
-	addq	#1,d2
-	subq	#1,d4
-.jaow
 .noMagic
 	lob	BltBitMapRastPort
-.skippi
 	rts
 
 
@@ -23747,7 +24023,7 @@ drawScope:
 	rts
 .fil
 	bsr.w	samplescopefilled
-	bra	mirrorfill
+	bra.b	mirrorfill
 
 .renderPS3M
 
@@ -23947,7 +24223,9 @@ quadrascope:
 	
 	move.l	d0,a1 * start
 	move.l	d1,a6 * loopstart
+	moveq	#0,d5
 	move	d2,d5 * len
+	moveq	#0,d4
 	move	d3,d4 * replen
 	
 	move	ns_tempvol(a3),d1
@@ -23993,9 +24271,9 @@ sco	macro
 	endc
 	
 	ifne	\1
-	subq	#2,d5
+	subq.l	#2,d5
 	bpl.b	hm\2	* $6a04
-	move	d4,d5	* replen
+	move.l	d4,d5	* replen
 	move.l	a6,a1   * loop start
 hm\2
 	endc
@@ -24085,9 +24363,9 @@ lir	macro
 	* progress in sample data,
 	* check every other pixel
  ifne \2
-	subq	#2,d4
+	subq.l	#2,d4
 	bpl.b	.h\1
-	move	d5,d4
+	move.l	d5,d4
 	move.l	d6,a1
 .h\1	
  endc
@@ -24100,9 +24378,11 @@ lir	macro
 
 	move.l	d0,a1 * start
 	move.l	d1,d6 * loopstart
+	moveq	#0,d4
 	move	d2,d4 * len
+	moveq	#0,d5
 	move	d3,d5 * replen
-
+	
 	* plot this many pixels
 	moveq	#108/4-1,d0
 	moveq	#0,d1
@@ -25138,7 +25418,7 @@ notescroller:
 ;	add.w	d0,d0
 ;	move.w	d0,d1
 ;	add.w	d0,d0
-;	move.l	0(a1,d0.w),a3
+;	move.l	0(a1,d0.w),a3  * dd_SampleX
 ;	add.w	d0,d0
 ;	lea	lbl006b58,a2
 ;	lea	lbl006950,a4
@@ -25147,7 +25427,7 @@ notescroller:
 ;	lea	lbl006b50,a5
 ;	moveq	#64-1,d3
 ;	move.w	#32*40,d4
-;	move.w	$20(a1,d1.w),d6
+;	move.w	$20(a1,d1.w),d6 * dd_EnveX
 ;	bne.s	.lbc006706
 
 ;.lbc0066f8	move.w	d4,(a4)+
@@ -25156,13 +25436,13 @@ notescroller:
 ;	lea	-$80(a4),a4
 ;	bra.b	.lbc006752
 
-;.lbc006706	cmp.w	#$7a,$18(a1,d1.w)
+;.lbc006706	cmp.w	#$7a,$18(a1,d1.w)  * dd_PeriodX
 ;	bls.s	.lbc0066f8
 
 ;	moveq	#0,d4
 ;	move.l	#$7b0000,d5
-;	divu	$18(a1,d1.w),d5
-;	move.w	$10(a1,d1.w),d7
+;	divu	$18(a1,d1.w),d5 * dd_PeriodX
+;	move.w	$10(a1,d1.w),d7 * dd_LengthX
 ;	move.w	0(a5,d1.w),d2
 ;.lbc006722	add.w	d5,0(a2,d1.w)
 ;	addx.w	d4,d2
@@ -25620,7 +25900,7 @@ noteScroller2:
 .noPattern
 	* Pointer within the module data?
 
-	cmp.l	#1024,a0
+	cmp.w	#1024,a0
 	bls.b	.xy
 	move.l  moduleaddress(a5),a3
    	cmp.l   a3,a0
@@ -26085,6 +26365,9 @@ noteScroller2:
 *
 
 loadmodule
+	; Popup should close so that window is visible during load
+	bsr	closeTooltipPopup
+
 	st	loading(a5)
 
 	move.b	d0,d7
@@ -26390,7 +26673,10 @@ memerror_t
 execerr_t dc.b	"External error!",0
 lockerr_t dc.b	"Can't lock on file!",0
 notafile_t dc.b	"Not a file!",0
-grouperror_t dc.b "Trouble with the player group!",0
+grouperror_t dc.b "Trouble with the player group!",10
+		dc.b "Check that the file "
+		dc.b '"HippoPlayer.group"'
+		dc.b " is up-to-date.",0
 
 windowerr_t	dc.b	"Couldn't to open window!",0
 ;extract_t	dc.b	"Extraction error!",0
@@ -28000,13 +28286,13 @@ tutki_moduuli2
 	cmp.l	#"OCTA",1080(a0)	* Fasttracker
 	beq.w	.f
 
-	cmp.l	#`Exte`,(a0)		* Fasttracker ][ XM
+	cmp.l	#"Exte",(a0)		* Fasttracker ][ XM
 	bne.b	.kala
-	cmp.l	#`nded`,4(a0)
+	cmp.l	#"nded",4(a0)
 	bne.b	.kala
-	cmp.l	#` Mod`,8(a0)
+	cmp.l	#" Mod",8(a0)
 	bne.b	.kala
-	cmp.l	#`ule:`,12(a0)
+	cmp.l	#"ule:",12(a0)
 	beq.w	.f
 
 .kala	move.l	1080(a0),d0
@@ -29973,6 +30259,10 @@ fileBrowserRoot
 	clr	fileBrowserSelectionHistoryIndex(a5)
 	bsr.w	freeFileBrowserList
 
+	* According to the Amiga Guru Book, access to dl_Root
+	* should always be protected as it may change.
+	lore	Exec,Forbid
+
 	move.l	_DosBase(a5),a0
 	move.l	dl_Root(a0),a0
 	move.l	rn_Info(a0),d0
@@ -30019,6 +30309,9 @@ fileBrowserRoot
 	bne.b	.devloop
 
 .error
+
+	lore	Exec,Permit
+
 	* Does not do force refresh
 	jsr	sortModuleList
 
@@ -30223,14 +30516,28 @@ fileBrowserDir
 	beq.b	.noLock
 	lore	Dos,UnLock
 .noLock
-	
+
+	* HACK! If playmode(a5) is pm_random, this happens:
+	* sortModuleList -> listChanged -> clear_random ->
+	* showNames. The sorted list is updated, then
+	* the header is added, and another refresh is done.
+	* This causes flicker and also the selected item
+	* focus can become off-by-one.
+	* Temporarily disable the random mode to prevent this.
+	 
+	move.b	playmode(a5),d6
+	move.b	#pm_repeat,playmode(a5)
+
 	* All done. Sort it. 
 	* Does not do force refresh.
 	* Destroys every register known to man.
-	pushm	d4/d5
+	pushm	d4/d5/d6
 	jsr	sortModuleList
-	popm	d4/d5
+	popm	d4/d5/d6
 
+	* Restore iiiiit	
+	move.b	d6,playmode(a5)
+	
 	* Insert parent to the top
 	tst.l	d5
 	beq.b	.noParent
@@ -31133,10 +31440,10 @@ cianame	dc.b	"ciaa.resource",0
  even
 	
 * init with default tempo 
-init_ciaint
+init_ciaint:
 	moveq	#0,d0
 * init with specified tempo in d0. 0 = default
-init_ciaint_withTempo
+init_ciaint_withTempo:
 	tst.b	ciasaatu(a5)
 	bne.b	.hm
 .c	moveq	#0,d0
@@ -31346,13 +31653,13 @@ are
 	cmp.l	#"IMP!",(a4)
 	beq.b	.imp
 	moveq	#1,d5		* type flag
-	move.l	(a4),d0		* shr decompressed size
+	jsr	getDeshrinkledSize
 	bra.b	.noImp
 .imp
-	moveq	#1,d5		* type flag
+	moveq	#0,d5		* type flag
 	move.l	4(a4),d0	* fimp decompressed size
 .noImp
-
+	* d0 = decompressed size
 	move.l	d6,d1		* mem type
 	jsr	getmem
 	move.l	d0,(a3)		* store pointer
@@ -31379,9 +31686,8 @@ are
 	bra.b	.wasImp
 .shr
 	DPRINT	"Deshrinklering"
-	lea	4(a4),a0
-	jsr	ShrinklerDecompress
-
+	jsr	deshrinkle
+	
 .wasImp
 	cmp	#pt_eagle_start,playertype(a5)
 	bhs.b 	.ok 
@@ -32518,9 +32824,9 @@ convert_oldst
 * SID
 ******************************************************************************
 
-p_sid	jmp	.init(pc)
+p_sid:	jmp	.init(pc)
 	p_NOP
-	p_NOP
+	jmp 	sidScopeUpdate(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
@@ -32529,10 +32835,10 @@ p_sid	jmp	.init(pc)
 	jmp	.eteen(pc)
 	p_NOP
 	p_NOP
-	jmp id_sid1(pc)
+	jmp 	id_sid1(pc)
 	p_NOP
-	dc.w pt_sid 				* type
-	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume
+	dc.w 	pt_sid 				* type
+	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"PSID",0
 .flag	dc.b	0
  even
@@ -32552,8 +32858,10 @@ p_sid	jmp	.init(pc)
 	tst.b	.flag
 	bne.b	.plo
 
-;	moveq	#1,d0
-;	lob	SetDisplayEnable
+	* Enable getting data for scopes.
+	* Must have patched the display signal away first.
+	moveq	#1,d0
+	lob	SetDisplayEnable
 
 	lob	AllocEmulResource
 	tst.l	d0
@@ -32625,7 +32933,6 @@ p_sid	jmp	.init(pc)
 
 
 .free	lob	FreeEmulResource
-	bsr 	sid_remVolumePatch
 
 	clr.b	.flag
 	rts
@@ -32645,7 +32952,6 @@ p_sid	jmp	.init(pc)
 	addq	#1,d0
 	lob	StartSong
 
-	bsr.w	sid_addVolumePatch
 	rts
 
 .song	movem.l	d0/d1/a0/a1/a6,-(sp)
@@ -32683,6 +32989,8 @@ p_sid	jmp	.init(pc)
 
 
 rem_sidpatch
+;	rts
+
 	move.l	(a5),a0
 	cmp	#34,LIB_VERSION(a0)
 	bhi.b	.q
@@ -32699,9 +33007,13 @@ rem_sidpatch
 	move.l	sidlibstore1(a5),14(a1)
 	move.l	sidlibstore1+4(a5),4+14(a1)
 	bsr	clearCpuCaches
-.q	rts
+.q	
+	bsr.w	sid_remVolumePatch
+	rts
 
 init_sidpatch
+;	rts
+
 	move.l	(a5),a0
 	cmp	#34,LIB_VERSION(a0)
 	bhi.b	.q
@@ -32733,8 +33045,9 @@ init_sidpatch
 	move.l	.sidp2(pc),86(a0)
 	move.l	.sidp2+4(pc),4+86(a0)
 	bsr	clearCpuCaches
-
-.q	rts
+.q
+	bsr.w	sid_addVolumePatch
+	rts
 
 .sidp1	jsr	.sidpatch1
 	nop
@@ -32812,6 +33125,11 @@ sid_addVolumePatch
 	move.l	.vol2patch+2(pc),12+8418+2(a0)
 	move	.vol3patch(pc),12+12+8418(a0)
 	move.l	.vol3patch+2(pc),12+12+8418+2(a0)
+	* Disable DisplaySignal mechanism,
+	* alternatively could SetDisplaySignal
+	* so that when display is enabled there will be no
+	* crashhhhhh.
+	move	#$4e75,1136(a0)
 	bsr	clearCpuCaches
 .q
 	rts
@@ -32953,6 +33271,94 @@ id_sid
 .id1	dc.b	"PLAYSID",0
 .ide1
  even
+
+* Scope data update and following
+* This is emulates what the PlaySid pplication does.
+sidScopeUpdate
+	* Skip this if not needed
+	bsr.w	anyScopeRunning
+	beq.w	.x
+
+	lea	scopeData+scope_ch1(a5),a0
+	moveq	#0,d7
+	move.l	_SIDBase(a5),a1
+	* DisplayData:
+	move.l	50(a1),a1
+	lea	.followPositions(pc),a3
+	lea	.followFractions(pc),a2
+	moveq	#0,d4
+.loop
+	* WORD index d7
+	moveq	#0,d1
+	move	dd_Length1(a1,d7),d1
+	move	dd_Period1(a1,d7),d2 
+	move	dd_Enve1(a1,d7),d3
+
+	move	d2,ns_period(a0)
+	move	d3,ns_tempvol(a0)
+	move	d1,d6
+	* Elsewhere these are handled as words
+	lsr	#1,d6
+	move	d6,ns_length(a0)
+	move	d6,ns_replen(a0)
+
+	* APTR index d6
+	move	d7,d6
+	add	d6,d6
+	* Set initial sample position
+	move.l	dd_Sample1(a1,d6),d6
+	move.l	d6,ns_start(a0)
+	move.l	d6,ns_loopstart(a0)
+	
+.MIN_PERIOD = 123
+
+	cmp	#.MIN_PERIOD,d2
+	bhs.b	.notEmpty
+	clr	ns_tempvol(a0)
+	bra.b	.skip
+.notEmpty
+	move.l	#.MIN_PERIOD<<16,d5
+	divu	d2,d5 * dd_Period1
+	* d5 = fractional 16-bit step
+	* Get follow position
+	move.w	(a3,d7.w),d2
+	* This many steps per frame
+	moveq	#$40-1,d0
+.step
+	* Update fractions
+	add.w	d5,(a2,d7.w)
+	* Add bytes if enough fractions
+	addx.w	d4,d2
+.retry
+	* Check if stepped over the end
+	cmp.w	d1,d2
+	blt.s	.ok
+	sub.w	d1,d2
+	bra.s	.retry
+.ok
+	dbf	d0,.step
+	
+	* Updated byte position
+	move.w	d2,(a3,d7.w)
+
+	* Set final sample position and length
+	* for scopes
+	ext.l	d2
+	add.l	d2,ns_start(a0)
+	lsr	#1,d2 * words
+	sub	d2,ns_length(a0)
+	
+.skip
+	lea	ns_size(a0),a0
+	addq	#2,d7
+	cmp	#4*2,d7
+	bne.w	.loop
+.x	rts
+
+.followPositions
+	ds.w	4
+.followFractions
+	ds.w	4
 
 * Tänne väliin hämäävästi
 
@@ -34481,30 +34887,30 @@ tfmx_C000338	moveq	#10,D0
 
 tfmx_L0000F0	dcb.l	$2,0
 	dc.b	2,1			* nt_interrupt, prioriteetti 1
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi1	dc.l	0
 tfmx_L000106	dcb.l	$2,0
 	dc.b	2,100
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi2	dc.l	0
 tfmx_L00011C	dcb.l	$2,0
 	dc.b	2,100
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi3	dc.l	0
 tfmx_L000132	dcb.l	$2,0
 	dc.b	2,100
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi4	dc.l	0
 tfmx_L000148	dcb.l	$2,0
 	dc.b	2,100
-	dc.l	TFMX_Pro.MSG0
+	dc.l	TFMX_Pro_MSG0
 	dcb.w	$2,0
 tfmxi5	dc.l	0
-TFMX_Pro.MSG0 dc.b "TFMX",0
+TFMX_Pro_MSG0 dc.b "TFMX",0
  even
 
 
@@ -36289,8 +36695,8 @@ p_digibooster
 
 	move.l	digiboosterroutines(a5),a3
 	jsr	$20+0(a3)
+	pop	a5
 	tst.l	d0
-	popm	a5
 	bne.b	.er
 
 
@@ -36642,7 +37048,7 @@ p_thx
 	move.l	thxroutines(a5),a2
 	jsr	.ahxInitCIA(a2)
 	tst	d0
-	bne.b	.thxInitFailed2
+	bne.w	.thxInitFailed2
 
 
 	moveq	#0,d0	* loadwavesfile if possible
@@ -36657,7 +37063,9 @@ p_thx
 	sub.l   a0,a0	* auto alloc fast mem
 	sub.l   a1,a1	* auto alloc chip
 	move.l	thxroutines(a5),a2
+	jsr	setMainWindowWaitPointer
 	jsr	.ahxInitPlayer(a2)
+	jsr	clearMainWindowWaitPointer
 	tst	d0
 	beq.b	.ok4
 
@@ -36728,7 +37136,7 @@ p_thx
 	bra.w	clearsound
 
 * Scope support
-
+* Update scope data once per vblank
 .updateScope
 	lea	scopeData+scope_ch1(a4),a0
 	move.l	thxroutines(a4),a1
@@ -36739,6 +37147,7 @@ p_thx
 .scope
 	tst.l	ns_start(a0)
 	bne.b	.same
+	* This needs tobe done only once it seems
 	move.l	.ahx_pvtAudioPointer(a1),ns_start(a0)
 	move.l	.ahx_pvtAudioPointer(a1),ns_loopstart(a0)
 	move	#$140,ns_length(a0)
@@ -36750,10 +37159,10 @@ p_thx
 	CLAMPVOL d1
 	move	d1,ns_tempvol(a0)
 
-	add	#232,a1	* Next channel data 
-	add 	#ns_size,a0
+	lea	232(a1),a1	* Next channel data 
+	lea	ns_size(a0),a0
 	dbf	d0,.scope
-	rts
+.xx	rts
 
 
 * Pattern scope support
@@ -36762,6 +37171,10 @@ p_thx
 	pushm	d0-d1/a0-a4
 	lea	var_b,a4
 	bsr.b	.updateScope
+
+	* Skip if not needed
+	tst.b	patternScopeRunning(a4)
+	beq.b	.noUpd
 
 	move.l	thxroutines(a4),a0
 	move.l	.ahxBSS_P(a0),a0
@@ -36809,7 +37222,7 @@ p_thx
 	move.b	.ahx_pvtTranspose(a0),(a2)+
 	moveq	#0,d1
 	move.b	.ahx_pvtTrack(a0),d1
-	add	#232,a0	* Next channel data 
+	lea	232(a0),a0	* Next channel data 
 
 	* If bit 7 of byte 6 is 1, track 0 is included. 
 	* If it is 0, track 0 was empty, and is
@@ -36826,11 +37239,10 @@ p_thx
 	subq.b	#1,d1
 	bmi.b	.goZero
 .1
-
 	* Get current track offset
 	mulu	d0,d1
 	* Address of current track
-	add.l a4,d1
+	add.l 	a4,d1
 	* Into the stripe array
 	move.l	d1,(a3)+
 	rts
@@ -37269,7 +37681,7 @@ p_multi	jmp	.s3init(pc)
 
 	moveq	#$62,d0	* version
 	lea	.itPath(pc),a0 
-	* Distract loader so that it will not try to
+	* Distract the loader so that it will not try to
 	* load PS3M from player group, instead it will
 	* try eagleplayer loading from filesystem.
 	move	playertype(a5),-(sp)
@@ -37402,7 +37814,7 @@ p_multi	jmp	.s3init(pc)
 .s3poslen
 	tst.b	patternScopeRunning(a5)
 	* Inform PS3M, set to zero to skip patternscope routines
-	sne		d0
+	sne	d0
 .noScope
 	move.l	ps3mroutines(a5),a0
 	jmp	poslenj(a0)
@@ -37506,7 +37918,7 @@ p_multi	jmp	.s3init(pc)
 	moveq	#0,d0
 	move.b	s3mmode3(a5),d0
 	mulu	#65535,d0
-	divu	#8,d0
+	divu	#16,d0
 	jsr	setknob2
 	popm	all
 
@@ -37606,12 +38018,12 @@ id_ps3m		pushm	d1-a6
 	bsr.w	id_it
 	beq.w	.it
 
-	cmp.l	#`SCRM`,44(a0)
+	cmp.l	#"SCRM",44(a0)
 	beq.b	.s3m
 
 	move.l	(a0),d0
 	lsr.l	#8,d0
-	cmp.l	#`MTM`,d0
+	cmp.l	#"MTM",d0
 	beq.b	.mtm
 
 	move.l	a0,a1
@@ -37623,27 +38035,27 @@ id_ps3m		pushm	d1-a6
 	bra.b	.xm
 
 .j	move.l	1080(a0),d0
-	cmp.l	#`OCTA`,d0
+	cmp.l	#"OCTA",d0
 	beq.b	.fast8
-	cmp.l	#`M.K.`,d0
+	cmp.l	#"M.K.",d0
 	beq.b	.pro4
-	cmp.l	#`M!K!`,d0
+	cmp.l	#"M!K!",d0
 	beq.b	.pro4
-	cmp.l	#`FLT4`,d0
+	cmp.l	#"FLT4",d0
 	beq.b	.pro4
 
 	move.l	d0,d1
 	and.l	#$ffffff,d1
-	cmp.l	#`CHN`,d1
+	cmp.l	#"CHN",d1
 	beq.b	.chn
 
 	and.l	#$ffff,d1
-	cmp.l	#`CH`,d1
+	cmp.l	#"CH",d1
 	beq.b	.ch
 
 	move.l	d0,d1
 	and.l	#$ffffff00,d1
-	cmp.l	#`TDZ<<8`,d1
+	cmp.l   #"TDZ"<<8,d1
 	beq.b	.tdz
 	moveq	#1,d0
 	bra.b	.init
@@ -37664,7 +38076,7 @@ id_ps3m		pushm	d1-a6
 	rts
 
 
-.xmsign		dc.b	`Extended Module:`
+.xmsign		dc.b	"Extended Module:"
  even
 
 ps3minitcount	dc	0
@@ -37677,10 +38089,22 @@ id_it
 	BNE.S	.itFail
 	MOVE.W	$2A(A0),D1			*  Cmwt: format version
 	ROR.W	#8,D1
+ if DEBUG
+	push	d0
+	moveq	#0,d0
+	move	d1,d0
+	DPRINT	"IT version: %lx"
+	pop	d0
+ endif
 	CMP.W	#$100,D1
 	BEQ.S	.itYes
 	CMP.W	#$200,D1
 	BEQ.S	.itYes
+; TEST: Fake version $214 to look like version $200
+;	CMP.W	#$214,D1
+;	Bne.S	.itFail
+;	move	#$0002,$2A(a0)
+;	bra.b	.itYes
 .itFail
 	MOVEQ	#-1,D0
 .itYes
@@ -38629,7 +39053,7 @@ p_syntracker
 
 .id
 	move.l 	a4,a0
-	LEA	.SYNTRACKERSON.MSG(PC),A1
+	LEA	.SYNTRACKERSONMSG(PC),A1
 	MOVEQ	#-1,D0
 	MOVEQ	#15,D1
 .lbC0001E0	CMPM.B	(A1)+,(A0)+
@@ -38639,7 +39063,7 @@ p_syntracker
 .lbC0001EA	
 	RTS
 
-.SYNTRACKERSON.MSG	dc.b	'SYNTRACKER-SONG:',0,0
+.SYNTRACKERSONMSG	dc.b	'SYNTRACKER-SONG:',0,0
 
 
 ******************************************************************************
@@ -41543,12 +41967,12 @@ p_activisionpro
 	MOVE.L	D0,D2
 	MOVE.L	A0,A2
 	LEA	.lbB000624(PC),A1
-	MOVE.L	#3,D1
+	MOVEq	#3,D1
 	BSR.W	.lbC0005EE
 	BNE.S	.lbC000518
 	;MOVE.L	A0,lbL0000BA
 	LEA	.lbB00062C(PC),A1
-	MOVE.L	#12,D1
+	MOVEq	#12,D1
 	BSR.W	.lbC0005EE
 	BNE.W	.lbC0005EC
 	;MOVE.L	A0,lbL0000BE
@@ -41564,12 +41988,12 @@ p_activisionpro
 .lbC000518	MOVE.L	A4,A0
 	MOVE.L	D4,D2
 	LEA	.lbB000646(PC),A1
-	MOVE.L	#9,D1
+	MOVEq	#9,D1
 	BSR.W	.lbC0005EE
 	BNE.S	.lbC00055A
 	;MOVE.L	A0,lbL0000BA
 	LEA	.lbB00065A(PC),A1
-	MOVE.L	#10,D1
+	MOVEq	#10,D1
 	BSR.B	.lbC0005EE
 	BNE.B	.lbC0005EC
 	;MOVE.L	A0,lbL0000BE
@@ -44056,8 +44480,8 @@ deliGetSongInfo
 	rts	
 
 * Interrupt play routine, use cached pointers to avoid tag searches
-deliInterrupt
-deliPlay	
+deliInterrupt:
+deliPlay:
 	move.l	a5,a4
 	push	a4
 	move.l	deliBase(a5),a5
@@ -45923,7 +46347,7 @@ plainSaveFile
 	move.l  d0,d7 
 
 	move.l	d6,d1 
-	lore 	Dos,Close
+	lob		Close
 .openErr 
 	move.l	d7,d0
 	popm	d1-a6 
@@ -45998,7 +46422,6 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	move.l	a0,s_spectrumImagData(a4)
 
 	bsr.w	prepareSpectrumSineTable
-	beq.b	.x
 	bsr.b	prepareSpectrumVolumeTable
 	bsr.w	prepareSpectrumMuluTable
 	bsr.w	prepareSpectrumExpTable
@@ -46007,7 +46430,7 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	moveq	#1,d0
 	rts
 	
-.x	SDPRINT 	"Spectrum init failed"
+.x	SDPRINT "Spectrum init failed"
 	moveq	#0,d0
 	rts
 
@@ -46017,9 +46440,8 @@ spectrumUninitialize
 	clr.b	s_spectrumInitialized(a4)
 	move.l	s_spectrumMemory(a4),a0
 	clr.l	s_spectrumMemory(a4)
-	jsr	freemem
-	rts
-
+	jmp	freemem
+	
 prepareSpectrumVolumeTable
 	move.l	s_spectrumVolumeTable(a4),a0
 	moveq	#0,d0
@@ -46047,6 +46469,8 @@ prepareSpectrumVolumeTable
 ; out:
 ;    a2 = table
 getSpectrumVolumeTable
+	mulu	mainvolume(a5),d0
+	lsr	#6,d0
 	CLAMPVOL d0
 	tst	d0
 	bne.b	.1
@@ -46065,7 +46489,6 @@ prepareSpectrumMuluTable
 .l	move	d0,(a0)+
 	add	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,d0
 	dbf	d1,.l
-	moveq	#1,d0
 	rts
 
 
@@ -46122,39 +46545,78 @@ prepareSpectrumExpTable
 	move.l	d0,-4(a2)
 	addq.l	#4,a2
 	dbf	d7,.loop2
+
+	* Reverse the table so that loudnessFFT can 
+	* use post-increment instead of pre-decrement, which
+	* is slower.
+	move.l	s_spectrumExpTable(a4),a0
+	lea	EXP_TABLE_LEN*4(a0),a1
+	moveq	#EXP_TABLE_LEN/2-1,d7
+.reverse
+	move.l	(a0),d0
+	move.l	-(a1),(a0)+
+	move.l	d0,(a1)
+	dbf	d7,.reverse
 	rts
  
 
 ; Calculate loudness values for the FFT
 ;
 ;in:
-; a0 = result array reals
-; a1 = result array imaginary
+;  a0 = result array reals
+;  a1 = result array imaginary
 ;out:
-; a0 = result (overwritten input array)
+;  a0 = result (overwritten input array)
 
 loudnessFFT
 	move.l	s_spectrumExpTable(a4),a3	
 	moveq	#FFT_LENGTH/2-1,d7
+	move.l	a0,a6
 .l1
-	* calculate re^2 + im^2
-	move	(a0),d0
+	* Calculate re^2 + im^2.
+	* This is the squared magnitude of the complex value.
+	move	(a0)+,d0
 	muls	d0,d0
 	move	(a1)+,d1
 	muls	d1,d1
 	add.l	d1,d0
 
-	* find the slot in the table where the value lands
-	move.l	a3,a2
-	moveq	#EXP_TABLE_LEN-1,d5
-	* this loop is run 4096 times :-O
-.l2
-	cmp.l	(a2)+,d0
-	dbhi	d5,.l2
+	* Find the slot in the table where the value lands.
+	* The index represents the decibel value with range 0..64
 
-	* use the DBcc value directly, neat
-	addq	#1,d5	
-	move	d5,(a0)+
+* Forward search, loud values are searched first.
+* Typically forward search is wasteful since
+* on average module loudnesses are on the lower half
+* of the search table. For snare/drum hits and similar
+* forward search is better, but those happen rarely.
+* DMU.ferry_tell is exceptionally loud, for this one
+* the forward search is better.
+
+* Reverse search, quiet values are searched first.
+* With a few test modules this takes much less steps
+* compared to the forward search.
+* Test with two mods, loop iteration counts:
+* normal count:  1b570b  1c53b9
+* reverse count:  cf5af   bed25
+
+* Reverse search is used here by reversing the search table 
+* in prepareSpectrumExpTable.
+
+	move.l	a3,a2
+	moveq	#EXP_TABLE_LEN-1,d1
+	* this loop is may run 4096 times in the worst case
+.l2	cmp.l	(a2)+,d0
+	* If the 1st cmp succeeds, the loop breaks without
+	* d1 decrementing.
+	dbls	d1,.l2
+
+	* Use the DBcc counter directly.
+	* See if all entries were searched (not likely to happen).
+	tst	d1
+	bpl.b	.notEnd
+	moveq	#0,d1
+.notEnd
+	move.b	d1,(a6)+
 
 	dbf	d7,.l1
 	rts
@@ -46190,6 +46652,8 @@ prepareSpectrumSineTable
 	move.l	d6,a6
 	lob	SPMul
 	lob	SPFix
+	* fix_fft uses values shifted by one
+	asr	#1,d0 
 	move	d0,(a2)+
 
 	move.l	d2,d0
@@ -46198,8 +46662,6 @@ prepareSpectrumSineTable
 	move.l	d0,d2
 
 	dbf	d7,.loop   
-
-	moveq	#1,d0
 	rts
 
 runSpectrumScope
@@ -46220,23 +46682,30 @@ runSpectrumScope
 	bra.b	.go
 .normal
 	bsr.w	spectrumCopySamples
-	bsr.w	spectrumMixSamples
+* A500 average = 2ms
+	bsr.w	spectrumMixSamplesNew
+* A500 average = 4ms
+
 .go
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	windowFFT
+* A500 average = 2ms
 
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
 	move.l	s_spectrumSineTable(a4),a2
 	bsr.w	sampleFFT
-		
+* A500 average = 39ms (old: 52ms)
+
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
 	bsr	loudnessFFT
+* A500 average = 8ms
 
 	bsr.w	drawFFT
-	
+* A500 average = 1ms
+
 	* Vertical fill
 	lore	GFX,OwnBlitter
 
@@ -46260,16 +46729,29 @@ runSpectrumScope
 	* Width 19*16 = 304 px
 	;move	#65*64+19,$58(a2)
 	move	#65*64+20,$58(a2)
+	lob	DisownBlitter
+	
+;	bsr.b	drawScales
+	
+.x	rts
 
-	jsr	_LVODisownBlitter(a6)
-
-.x
+* Test visualization
+ REM
+drawScales
+	lob	WaitBlit
+	move.l	s_draw1(a4),a0
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT/2,d0
+	mulu	s_scopeDrawAreaModulo(a4),d0
+	add.l	d0,a0
+	moveq	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/32-1,d0
+.l	move.l	#-1,(a0)+
+	dbf	d0,.l
 	rts
-
-
+ EREM
 
 spectrumCopySamples
 	push	a4
+
 	move.l	a4,a6
 	lea	scopeData+scope_ch1(a5),a3
 	move.l	s_spectrumChannel1(a6),a4
@@ -46292,55 +46774,58 @@ spectrumCopySamples
 .copySample
 	; Destination buffer
 	;lea	channelData(a3),a4
+
+	* For clearing data
+	moveq	#0,d3
 	
 	tst	ns_period(a3)
 	beq.b	.empty
 	tst	ns_tempvol(a3)
 	beq.b	.empty
-	tst.l	ns_loopstart(a3) * Always check these to avoid
-	beq.b	.empty			 * enforcer hits!
-	move.l	ns_start(a3),d0
-	bne.b	.jolt
+
+	* Insanity check value
+	lea	1024.w,a0
+
+	move.l	ns_start(a3),a1
+	cmp.l	a0,a1 * insanity check
+	blo.b	.empty
+	move.l	ns_loopstart(a3),d1
+	cmp.l	a0,d1 * insanity check
+	bhs.b	.jolt
 
 .empty
-	; empty sample
-;	moveq	#0,d0
-;	rept	SAMPLE_LENGTH/4
-;	move.l	d0,(a4)+
-;	endr
 	moveq	#SAMPLE_LENGTH/4/8-1,d1
-	moveq	#0,d0
 .c
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
-	move.l	d0,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
+	move.l	d3,(a4)+
 	dbf	d1,.c
 	rts
 
 .jolt	
-	cmp.l	#1024,d0
-	blo.b	.empty
-	
-	move.l	ns_loopstart(a3),d1
-	cmp.l	#1024,d1
-	blo.b	.empty
+	* a1 = sample start
+	* d1 = loopstart
+	moveq	#0,d5
+	move	ns_length(a3),d5	* Sample length in words
 
-	move.l	d0,a1			* Sample start
-	move	ns_length(a3),d5	* Sample length
-	move	ns_replen(a3),d0
-.d
-	; see if enough data to copy all in one block
+	; See if enough data to copy all in one block
 	cmp	#SAMPLE_LENGTH/2,d5
 	bhs.b	.large
+
 	; sample length 2, ie. empty sample?
 	cmp	#2,d5
 	bls.b	.empty
-	
+
+	; Small sample, or large sample with not a lot remaining
+
+	moveq	#0,d0
+	move	ns_replen(a3),d0
+
 	; this loop is active when there is some data to be copied
 	moveq	#SAMPLE_LENGTH/2-1,d7	* words to copy
 .small
@@ -46349,46 +46834,72 @@ spectrumCopySamples
 	move.b	(a1)+,(a4)+
 	move.b	(a1)+,(a4)+
 	
-	subq	#1,d5			* one word copied, check length
-	bpl.b	.l
+	subq.l	#1,d5			* one word copied, check length
+	dbmi	d7,.small
 
+	* Sample data exhausted (d5 = -1), 
+	* or buffer full (d7 = -1)
+	tst	d7
+	bmi.b	.full
+
+	* Continue with loop data
 	cmp	#2,d0
 	bls.b	.emptyRepeat
 
 	; sample repeat	starts
 	; repeat length
-	move	d0,d5
+	move.l	d0,d5
 	; repeat data start
 	move.l	d1,a1
-.l
-	dbf	d7,.small		* Loop..
+	* continue copy 
+	bra.b	.small
+.full
 	rts
 
 .emptyRepeat
-.er	clr	(a4)+
-	dbf	d7,.er
+	move	d3,(a4)+
+	dbf	d7,.emptyRepeat
 	rts
-
 
 .large
-	moveq	#SAMPLE_LENGTH/4/4-1,d0
-.c2	
- rept 4
+	* Check source address evenness
+	move.w	a1,d0
+	ror.b	#1,d0
+	bpl.b	.evenCopy
+	moveq	#SAMPLE_LENGTH/16-1,d0
+	* copy from odd address
+.oddCopy
+ rept 16
 	move.b	(a1)+,(a4)+
-	move.b	(a1)+,(a4)+
-	move.b	(a1)+,(a4)+
-	move.b	(a1)+,(a4)+	
  endr
-	dbf	d0,.c2
-
-;	rept	SAMPLE_LENGTH/4
-;	move.b	(a1)+,(a4)+
-;	move.b	(a1)+,(a4)+
-;	move.b	(a1)+,(a4)+
-;	move.b	(a1)+,(a4)+	
-;	endr
+	dbf	d0,.oddCopy
 	rts
 
+* Copy SAMPLE_LENGTH bytes, 256 bytes that is
+	if SAMPLE_LENGTH<>256	
+		fail 256 assumed here
+	endif
+* Free: d0-d7, a0,a2,a3 = 44 bytes at a time
+.evenCopy
+	* 000-044
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,(a4)
+	* 044-088
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,44(a4)
+	* 088-132
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,44*2(a4)
+	* 132-176
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,44*3(a4)
+	* 172-220
+	movem.l	(a1)+,d0-d7/a0/a2/a3
+	movem.l	d0-d7/a0/a2/a3,44*4(a4)
+	* 220-256 (36 bytes)
+	movem.l	(a1),d0-d7/a0
+	movem.l	d0-d7/a0,44*5(a4)
+	rts
 
 ; in:
 ;    d0 = period
@@ -46400,7 +46911,7 @@ calcSampleStep
 	bhs.b .1
 	moveq	#100,d0
 .1
-	move.l	#3546895,d1	* PAL clock
+	move.l	clockconstant(a5),d1 * PAL or NTSC clock constant
 	divu	d0,d1		* playback frequency in hertz
 	ext.l	d1
 	lsl.l	#8,d1
@@ -46417,7 +46928,7 @@ calcSampleStep
 	rts
 
 
-
+ REM ***********
 spectrumMixSamples
 	lea	scopeData+scope_ch1(a5),a1
 	move.l	s_spectrumChannel1(a4),a0
@@ -46454,14 +46965,14 @@ spectrumMixSamples
 	moveq	#0,d6
 	moveq	#0,d0
 	move	#SAMPLE_LENGTH_MASK,d3
-	moveq	#MIX_LENGTH/2-1,d7
+	moveq	#MIX_LENGTH/4-1,d7
 	
 	* Copy or add?
 	tst	d4
 	beq.b	.add
 .m1
 	; move to buffer (first set)
-	rept	2
+	rept	4
 	; sample byte
 	moveq	#0,d5
 	move.b	(a0,d0.w),d5
@@ -46473,16 +46984,17 @@ spectrumMixSamples
 	; next source sample
 	add.l	d1,d0
 	addx.w	d6,d0
+	endr
+
 	; safety: keep offset within data buffer
 	and	d3,d0
-	endr
 
 	dbf	d7,.m1
 	rts
 .add
 ; add to buffer
 .m2
-	rept	2
+	rept	4
 	; sample byte
 	moveq	#0,d5
 	move.b	(a0,d0.w),d5
@@ -46495,12 +47007,138 @@ spectrumMixSamples
 	; next source sample
 	add.l	d1,d0
 	addx.w	d6,d0
+	endr
+
 	; safety: keep offset within data buffer
 	and	d3,d0
-	endr
 	dbf	d7,.m2
 	rts
+ EREM *****************
 
+
+* Mix four channels into one for input to the FFT
+* Two channels at a time
+spectrumMixSamplesNew
+	lea	scopeData+scope_ch1(a5),a1
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	move.l	a2,a3
+	; a3 = ch1 voltab
+	move	ns_period(a1),d0
+	bsr.b	calcSampleStep
+	move.l	d1,d2
+	; d2 = ch1 step
+
+	lea	scopeData+scope_ch2(a5),a1
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	; a2 = ch2 voltab
+	move	ns_period(a1),d0
+	bsr.b	calcSampleStep
+	; d1 = ch2 step
+
+	move.l	s_spectrumChannel1(a4),a0	
+	move.l	s_spectrumChannel2(a4),a1	
+	move.l	s_spectrumMixedData(a4),a6
+
+	; ch1 pos
+	moveq	#0,d0
+	; ch2 pos
+	moveq	#0,d4
+	; addx zero
+	moveq	#0,d6
+
+	push	a5
+	lea	(SAMPLE_LENGTH_MASK).w,a5
+	exg	d1,a5
+
+	moveq	#MIX_LENGTH/2-1,d7
+.loop
+	rept	2
+	moveq	#0,d5
+	move.b	(a0,d0.w),d5  ; ch1 byte
+	add	d5,d5
+	move.w	(a3,d5.w),d5  ; volume scaled byte
+
+	moveq	#0,d3
+	move.b	(a1,d4.w),d3 ; ch2 byte
+	add	d3,d3
+	add.w	(a2,d3.w),d5 ; ch1+ch2
+	move	d5,(a6)+     ; to output
+
+	add.l	d2,d0 	; next ch1 byte
+	addx.w	d6,d0
+	add.l	a5,d4   ; next ch2 byte
+	addx.w	d6,d4
+	endr
+
+	; Buffer index safety
+	and.w	d1,d0
+	and.w	d1,d4
+
+	dbf	d7,.loop
+
+	pop	a5
+
+	lea	scopeData+scope_ch3(a5),a1
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	move.l	a2,a3
+	; a3 = ch3 voltab
+	move	ns_period(a1),d0
+	bsr.w	calcSampleStep
+	move.l	d1,d2
+	; d2 = ch3 step
+
+	lea	scopeData+scope_ch4(a5),a1
+	move	ns_tempvol(a1),d0
+	bsr.w	getSpectrumVolumeTable
+	; a2 = ch4 voltab
+	move	ns_period(a1),d0
+	bsr.w	calcSampleStep
+	; d1 = ch4 step
+
+	move.l	s_spectrumChannel3(a4),a0	
+	move.l	s_spectrumChannel4(a4),a1	
+	move.l	s_spectrumMixedData(a4),a6
+
+	; ch3 pos
+	moveq	#0,d0
+	; ch4 pos
+	moveq	#0,d4
+
+	push	a5
+	lea	(SAMPLE_LENGTH_MASK).w,a5
+	exg	d1,a5
+
+	moveq	#MIX_LENGTH/2-1,d7
+.loop2
+	rept	2
+	moveq	#0,d5
+	move.b	(a0,d0.w),d5 ; ch3 byte
+	add	d5,d5
+	move.w	(a3,d5.w),d5
+
+	moveq	#0,d3
+	move.b	(a1,d4.w),d3 ; ch4 byte
+	add	d3,d3
+	add.w	(a2,d3.w),d5  * ch3+ch4
+	add	d5,(a6)+      * ch1+ch2+ch3+ch4
+
+	add.l	d2,d0 ; next ch3 sample
+	addx.w	d6,d0
+	add.l	a5,d4 ; next ch4 sample
+	addx.w	d6,d4
+	endr
+	
+	* Safety check for buffer indexes
+	and.w	d1,d0
+	and.w	d1,d4
+	
+	dbf	d7,.loop2
+
+	pop	a5
+	rts
 
 drawFFT
 	; FFT data is here.
@@ -46508,7 +47146,6 @@ drawFFT
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_draw1(a4),a1
 	move.l	s_spectrumMuluTable(a4),a2
-
 
 ;%11111000 00000000 ror #5
 ;%00000111 11000000 ror #5
@@ -46523,13 +47160,13 @@ drawFFT
 
 	; Take the 1st half
 	moveq	#FFT_LENGTH/2-1,d7
+	* Y-table index
+	moveq	#0,d1
 .loop
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
-	sub	(a0)+,d0
-	bpl.b	.1
-	moveq	#0,d0
-.1	add	d0,d0 
-	move	(a2,d0),d0
+	move.b	(a0)+,d1  * Get value in range 0..64
+	add.b	d1,d1     * Word index 0..128
+	* Y-address from table
+	move	(a2,d1),d0
 	* Draw bits
 	or.w	d6,(a1,d0)
 
@@ -46546,13 +47183,11 @@ drawFFT
 	* Draw data point which is split between words
 	subq	#1,d7
 	bmi.b	.x
-	
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d0
-	sub	(a0)+,d0
-	bpl.b	.3
-	moveq	#0,d0
-.3	add	d0,d0 
-	move	(a2,d0),d0
+
+	* Get another value	
+	move.b	(a0)+,d1
+	add.b	d1,d1
+	move	(a2,d1),d0
 
 	* Bits that go into the 2nd byte
 	or.b	d6,1(a1,d0)
@@ -46647,6 +47282,93 @@ spectrumGetSampleData
 
   endif ; FEATURE_SPECTRUMSCOPE
 
+
+***************************************************************************
+*
+* Performance measurement with timer.device
+*
+***************************************************************************
+
+ if DEBUG
+openTimer
+	move.l	(a5),a0
+	move	LIB_VERSION(a0),d0
+	cmp	#36,d0
+	blo.b	.x
+	move.l	a0,a6
+
+	lea	.timerDeviceName(pc),a0
+	moveq	#UNIT_ECLOCK,d0
+	moveq	#0,d1
+	lea	timerRequest(a5),a1
+	lob	OpenDevice		; d0=0 if success
+	tst.l	d0
+	seq	timerOpen(a5)
+.x	rts
+
+.timerDeviceName dc.b	"timer.device",0
+	even
+
+closeTimer
+	tst.b	timerOpen(a5)
+	beq.b	.x
+	clr.b	timerOpen(a5)
+	move.l	(a5),a6
+	lea	timerRequest(a5),a1
+	lob	CloseDevice
+.x	rts
+
+startMeasure
+	tst.b	timerOpen(a5)
+	beq.b	.x
+	push	a6	
+	move.l	IO_DEVICE+timerRequest(a5),a6
+	lea	clockStart(a5),a0
+	lob	ReadEClock
+	pop 	a6
+.x	rts
+
+; out: d0: difference in millisecs
+stopMeasure
+	tst.b	timerOpen(a5)
+	bne.b	.x
+	moveq	#-1,d0
+	rts
+.x	pushm	d2-d4/a6
+	move.l	IO_DEVICE+timerRequest(a5),a6
+	lea	clockEnd(a5),a0
+	lob	ReadEClock
+	move.l	d0,d2
+	; d2 = ticks/s
+	divu	#1000,d2
+	; d2 = ticks/ms
+	ext.l	d2
+	
+	; Calculate diff between start and stop times
+	; in 64-bits
+	;move.l	EV_HI+clockEnd(a5),d0
+	move.l	EV_LO+clockEnd(a5),d1
+	;move.l	EV_HI+clockStart(a5),d3
+	sub.l	EV_LO+clockStart(a5),d1
+	;subx.l	d3,d0
+
+	; Ignore the upper 32 bits, such large intervals
+	; are not needed.
+	divu	d2,d1
+	moveq	#0,d0
+	move	d1,d0
+
+	; Turn the diff into millisecs
+	; Divide d0:d1 by d2
+	;jsr	divu_64
+	; d0:d1 is now d0:d1/d2
+	; take the lower 32-bits
+	;move.l	d1,d0
+	popm	d2-d4/a6
+	rts
+
+  endif
+
 *******************************************************************************
 * Playereitä
 
@@ -46657,7 +47379,33 @@ kplayer		incbin	kpl
 
 * FImp decruncher code
 fimp_decr	incbin	fimp_dec.bin
+
 shr_decr	include	ShrinklerDecompress.s
+
+* in:
+*    a4 = data
+* out:
+*    d0 = size
+getDeshrinkledSize
+	move.l	shr_safety_margin(a4),d0
+	bpl.b	.pos
+	moveq	#0,d0
+.pos	add.l	shr_uncompressed_size(a4),d0
+	rts
+
+* in:
+*    a4 = data in
+*    a1 = output buffer
+deshrinkle
+	move.l	a4,a0
+	moveq	#FLAG_PARITY_CONTEXT,d7
+	and.l	shr_flags(a0),d7
+	* Skip header
+	add	shr_header_size(a0),a0
+	* Skip id and header size
+	addq	#8,a0
+	bra.w	ShrinklerDecompress
+
 
 xpkname         dc.b    "xpkmaster.library",0
 ppname          dc.b    "powerpacker.library",0
@@ -46743,7 +47491,7 @@ idcmpmw	dc.l	idcmpflags
 	dc.l	WA_PubScreenFallBack,TRUE
 	* Needed by ZipWindow (kick2.0)
 	* Pointer to four words, LeftEdge, TopEdge, Width, Height
-	dc.l	WA_Zoom,windowpos2+var_b 	
+	dc.l	WA_Zoom,windowZippedPos+var_b 	
 	dc.l	TAG_END
 
 * Main window gadgets
@@ -47050,7 +47798,7 @@ prefsSpectrumScopeBars
 ; Gadget
 gadgetListModeChangeButton
 	; gg_NextGadget
-	dc.l 0	
+	dc.l gadgetResize
 	; gg_LeftEdge
 	dc 9
 	; gg_TopEdge
@@ -47102,6 +47850,34 @@ gadgetListModeChangeButtonImagePtr
 	dc.b 0
 	; ig_NextImage
 	dc.l 0
+
+gadgetResize
+	; gg_Next
+	dc.l	0
+	; gg_LeftEdge,  gg_TopEdge
+	dc.w	-16,-4
+	; gg_Width, gg_Height
+	dc.w	16,4
+	; gg_Flags
+	dc.w	GFLG_RELRIGHT!GFLG_RELBOTTOM!GFLG_GADGHNONE
+	; gg_Activation
+	dc.w	0
+	; gg_GadgetType
+	dc.w	GTYP_SIZING
+	; gg_GadgetRender
+	dc.l	0
+	; gg_SelectRender
+	dc.l	0
+	; gg_GadgetText
+	dc.l	0	
+	; gg_MutualExclude
+	dc.l	0
+	; gg_SpecialInfo
+	dc.l	0
+	; gg_GadgetId
+	dc.w	0
+	; gg_UserData
+	dc.l	0
 
 * Rename the gadgets defined above to something not crazy
 * 1st row
