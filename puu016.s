@@ -4756,16 +4756,16 @@ wrender:
 
 * sitten isket‰‰n gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
-	lea	(a4),a1
+	move.l	a4,a1
 	moveq	#-1,d0
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-	lea	(a4),a0
+	
+	move.l	a4,a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	lob	RefreshGadgets
-
 
 **** paksunnetaan gadujen reunat
 
@@ -4774,10 +4774,6 @@ wrender:
 	lea	(a4),a3
 .loloop
 	move.l	(a3),d3
-	cmp.l	#slider4,a3
-	beq.b	.nel
-	cmp.l	#slider1,a3
-	beq.b	.nel
 
 	tst	boxsize(a5)
 	bne.b	.visibleBox
@@ -4786,8 +4782,8 @@ wrender:
 	beq.b	.nel
 .visibleBox
 	jsr	drawButtonFrameMainWindow
-
-.nel	move.l	d3,a3
+.nel
+	move.l	d3,a3
 	tst.l	d3
 	bne.b	.loloop
 
@@ -29330,11 +29326,21 @@ whag	tst.b	win(a5)
 	popm	all
 	rts
 
+* Draws the button frame. 
+* Check for gadgets that should be skipped so it is safe
+* to call this with all gadgets.
 * in:
 *   a3 = gadget
 drawButtonFrameMainWindow
+	* File and volume sliders
 	cmp.l	#slider1,a3
 	beq.b	.x
+	cmp.l	#slider4,a3
+	beq.b	.x
+	* Invisible resize gadget
+	cmp.l	#gadgetResize,a3
+	beq.b	.x
+
 	pushm	all				* varjostus kuntoon taas
 	move.l	rastport(a5),a1
 	bsr.b	doDrawButtonFrame
@@ -47854,8 +47860,10 @@ gadgetListModeChangeButtonImagePtr
 gadgetResize
 	; gg_Next
 	dc.l	0
-	; gg_LeftEdge,  gg_TopEdge
-	dc.w	-16,-4
+	; gg_LeftEdge: relative to right edge
+	dc.w	-16
+	; gg_TopEdge: relative to bottom edge
+	dc.w	-4
 	; gg_Width, gg_Height
 	dc.w	16,4
 	; gg_Flags
