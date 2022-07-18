@@ -5347,7 +5347,7 @@ inithippo
  ifeq zoom
 * tavallinen hipon p‰‰
 printhippo1
-	DPRINT	"Print hippo"
+;	DPRINT	"Print hippo"
 
 	tst	boxsize(a5)
 	beq.b	.q
@@ -22132,6 +22132,8 @@ startScopeTask:
 	tst.b 	(a5,d7)
 	bne.b	.x
 
+	DPRINT	"startScopeTask"
+
 	* Get task structure
 	move	st_taskOffset(a4),d0
 	lea	(a5,d0),a3
@@ -22171,38 +22173,37 @@ startAndStopScopeTasks
 .2
 	tst.b	prefsdata+prefs_quadraScopeF(a5)
 	beq.b	.3
-	bsr.w	startQuadraScopeFTask
+	bsr.b	startQuadraScopeFTask
 	bra.b	.4
-.3	bsr.w	stopQuadraScopeFTask	
+.3	bsr.b	stopQuadraScopeFTask	
 .4
 	tst.b	prefsdata+prefs_hippoScope(a5)
 	beq.b	.5
-	bsr.w	startHippoScopeTask
+	bsr.b	startHippoScopeTask
 	bra.b	.6
-.5	bsr.w	stopHippoScopeTask	
+.5	bsr.b	stopHippoScopeTask	
 .6
 	tst.b	prefsdata+prefs_patternScope(a5)
 	beq.b	.7
-	bsr.w	startPatternScopeTask
+	bsr.b	startPatternScopeTask
 	bra.b	.8
-.7	bsr.w	stopPatternScopeTask	
+.7	bsr.b	stopPatternScopeTask	
 .8
 	tst.b	prefsdata+prefs_spectrumScope(a5)
 	beq.b	.9
-	bsr.w	startSpectrumScopeTask
+	bsr.b	startSpectrumScopeTask
 	bra.b	.10
 .9	bsr.w	stopSpectrumScopeTask	
 .10
 	rts
 
 startQuadraScopeTask
-	DPRINT	"startQuadraScopeTask"
+	;DPRINT	"startQuadraScopeTask"
 	lea	quadraScopeTaskDefinition(pc),a4
-	;move	#pf_samplescope,d7
 	bra.w	startScopeTask
 
 stopQuadraScopeTask
-	DPRINT	"stopQuadraScopeTask"
+	;DPRINT	"stopQuadraScopeTask"
 	lea	quadraScopeTaskDefinition(pc),a4
 	bra.w	stopScopeTask
 
@@ -22214,12 +22215,12 @@ restartQuadraScopeTask
 .x	rts	
 
 startQuadraScopeFTask
-	DPRINT	"startQuadraScopeFTask"
+	;DPRINT	"startQuadraScopeFTask"
 	lea	quadraScopeFTaskDefinition(pc),a4
 	bra.w	startScopeTask
 
 stopQuadraScopeFTask
-	DPRINT	"stopQuadraScopeFTask"
+	;DPRINT	"stopQuadraScopeFTask"
 	lea	quadraScopeFTaskDefinition(pc),a4
 	bra.w	stopScopeTask
 
@@ -22231,12 +22232,12 @@ restartQuadraScopeFTask
 .x	rts	
 
 startHippoScopeTask
-	DPRINT	"startHippoScopeTask"
+	;DPRINT	"startHippoScopeTask"
 	lea	hippoScopeTaskDefinition(pc),a4
 	bra.w	startScopeTask
 
 stopHippoScopeTask
-	DPRINT	"stopHippoScopeTask"
+	;DPRINT	"stopHippoScopeTask"
 	lea	hippoScopeTaskDefinition(pc),a4
 	bra.w	stopScopeTask
 
@@ -22248,15 +22249,15 @@ restartHippoScopeTask
 .x	rts	
 
 startPatternScopeTask
-	DPRINT	"startPatternScopeTask"
+	;DPRINT	"startPatternScopeTask"
 	bsr	getScopeMiniFontIfNeeded
 	lea	patternScopeTaskDefinition(pc),a4
 	bra.w	startScopeTask
 
 stopPatternScopeTask
-	DPRINT	"stopPatternScopeTask"
+	;DPRINT	"stopPatternScopeTask"
 	lea	patternScopeTaskDefinition(pc),a4
-	bra.w	stopScopeTask
+	bra.b	stopScopeTask
 
 restartPatternScopeTask
 	tst.b	patternScopeRunning(a5)
@@ -22266,7 +22267,7 @@ restartPatternScopeTask
 .x	rts	
 
 startSpectrumScopeTask
-	DPRINT	"startSpectrumScopeTask"
+	;DPRINT	"startSpectrumScopeTask"
 
 	move.l	(a5),a6
 	tst.l	_FFPBase(a5)
@@ -22289,7 +22290,7 @@ startSpectrumScopeTask
 	bra.w	startScopeTask
 		
 stopSpectrumScopeTask
-	DPRINT	"stopSpectrumScopeTask"
+	;DPRINT	"stopSpectrumScopeTask"
 	lea	spectrumScopeTaskDefinition(pc),a4
 	bra.b	stopScopeTask
 
@@ -22297,7 +22298,7 @@ restartSpectrumScopeTask
 	tst.b	spectrumScopeRunning(a5)
 	beq.b	.x
 	bsr.b	stopSpectrumScopeTask
-	bsr.w	startSpectrumScopeTask
+	bsr.b	startSpectrumScopeTask
 .x	rts	
 
 stopScopeTasks
@@ -22305,15 +22306,16 @@ stopScopeTasks
 	bsr.w	stopQuadraScopeTask
 	bsr.w	stopQuadraScopeFTask
 	bsr.w	stopHippoScopeTask
-	bsr.w	stopPatternScopeTask
-	bra	stopSpectrumScopeTask
+	bsr.b	stopPatternScopeTask
+	bra.b	stopSpectrumScopeTask
 
 stopScopeTask
 	* Check if running already
 	move	st_runningStatusOffset(a4),d7
 	tst.b 	(a5,d7)
 	beq.w	.x
-	DPRINT	"Shutting it"
+
+	DPRINT	"stopScopeTask"
 
 	* Get task structure
 	move	st_taskOffset(a4),d0
