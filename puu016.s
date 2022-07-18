@@ -516,7 +516,9 @@ userport2	rs.l	1		*
 ;scopeWindowBase	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
-minifontbase rs.l	1
+helveticabase 	rs.l  	1
+minifontbase 	rs.l	1
+listfontbase	rs.l	1		* points to some font base
 notifyhandle	rs.l	1		* Screennotifylle
 windowtop	rs	1		* ikkunoiden eisysteemialueen yläreuna
 windowright	rs	1
@@ -527,6 +529,8 @@ gotscreeninfo	rs.b	1
 infolag		rs.b	1 * mitä näytetään infoikkunassa: 0=sample, ~0=about
 
 infotaz		rs.l	1 * infoikkunan datan osoite
+
+listFontHeight	rs.w	1
 
 windowtop2	rs	1
 windowleft2	rs	1
@@ -2266,6 +2270,7 @@ main
 	pushpea	poptofront(pc),poptofrontr(a5)
 
 	move	#264,WINSIZX(a5)
+	* This includes 8 lines of 8-pixel height rows
 	move	#136,WINSIZY(a5)
 	move	WINSIZX(a5),wsizex
 	move	WINSIZY(a5),wsizey
@@ -2403,11 +2408,11 @@ main
 
 	pushm	all
 	bsr.w	loadprefs
-
 	bsr.w	loadps3msettings
 	bsr.w	loadcybersoundcalibration
 	popm	all
-	bsr.w	setboxy
+
+
 
 	tst	boxsize(a5)		* jos alkukoko 0 niin laitetaan zoomiks
 	bne.b	.nzo			* 8
@@ -2442,8 +2447,18 @@ main
 	move.l	d0,fontbase(a5)
 	beq.b	.qer		* error?
 
+	lea	helvetica_text_attr,a0
+	lob	OpenDiskFont
+	move.l	d0,helveticabase(a5)
+	move.l	d0,listfontbase(a5)
+	printt "todo todo: fallback"
+	move.l	d0,a0
+	move	tf_YSize(a0),listFontHeight(a5)	
 .koh
+;	move.l	fontbase(a5),listfontbase(a5)
 
+
+	bsr.w	setboxy
 
 
 	bsr.w	createport0
@@ -3579,6 +3594,12 @@ exit
 	move.l	d0,a1
 	lore	GFX,CloseFont
 .uh3
+	move.l	helveticabase(a5),d0
+	beq.b	.uh4
+	move.l	d0,a1
+	lore	GFX,CloseFont
+.uh4
+
 	move.l	topazbase(a5),a1
 	lore	GFX,CloseFont
 
@@ -4103,7 +4124,9 @@ doPrint
 
 	tst	d7
 	beq.b	.x
-	addq	#8,d5		* next vertical line
+;	addq	#8,d5		* next vertical line
+	move.l	rp_Font(a4),a0
+	add	tf_YSize(a0),d5
 	bra.b	.luup		
 
 .x	popm	all
@@ -4959,15 +4982,35 @@ wrender:
 
 	
 * Calculate y-offset related to boxsize value
-setboxy	move	boxsize(a5),d0
+* Used in placing gfx into the main window.
+setboxy:
+	move	boxsize(a5),d0
+	* original "default" size was 8, so it is relative to that.
 	subq	#8,d0
-	muls	#8,d0
+	;muls	#8,d0
+	muls	listFontHeight(a5),d0
+
+	* All y-calculations assume that boxy(a5) includes 
+	* in it 8 rows of list box lines with 8-pixel tall font.
+	* Need to adjust accordingly here.
+	move	listFontHeight(a5),d1
+	subq	#8,d1	* difference to reference font height 8
+	asl	#3,d1
+	add	d1,d0
 
 	tst	boxsize(a5)
 	bne.b	.x
 	subq	#6,d0
 
 .x	move	d0,boxy(a5)
+ if DEBUG
+ 	ext.l	d0
+ 	moveq	#0,d1
+ 	move	boxsize(a5),d1
+ 	moveq	#0,d2
+ 	move	listFontHeight(a5),d2
+ 	DPRINT	"boxy=%ld boxsize=%ld fontheight=%ld"
+ endif
 	rts
 
 
@@ -5015,7 +5058,9 @@ mainWindowSizeChanged
 	sub	d2,d0
 	bmi.b	.x
 	* Divide to 8-pixel rows
-	lsr	#3,d0
+	;lsr	#3,d0
+	ext.l	d0
+	divu	listFontHeight(a5),d0
 
 	* Store new box size
 	move	d0,boxsize(a5)
@@ -5075,11 +5120,30 @@ enableResizeGadget
 
 	* Set wd_MinSize to correspond to 3 rows
 	bsr.b	getFileboxYStartToD2
-	add	#3*8+6,d2
+;	add	#3*8+6,d2
+	moveq	#3,d0
+	mulu	listFontHeight(a5),d0
+	addq	#6,d0	* some additional adjustment
+	add	d0,d2
 	move	d2,wd_MinHeight(a0)
-	* Max size too
-	add	#(50-3)*8,d2
+
+	* Max size too, 47 lines down, total 50
+	;add	#(50-3)*8,d2
+	moveq	#50-3,d0
+	mulu	listFontHeight(a5),d0
+	add	d0,d2
+
 	move	d2,wd_MaxHeight(a0)
+
+
+ if DEBUG
+	moveq	#0,d0
+	move	wd_MinHeight(a0),d0
+	moveq	#0,d1
+	move	wd_MaxHeight(a0),d1
+	DPRINT	"wd_MinHeight=%ld wd_MaxHeight=%ld"
+ endif
+
 .old
 .small
 	rts
@@ -9494,7 +9558,7 @@ forceRefreshList:
 	st	hippoonbox(a5)
 
 
-resh	pushm	all
+resh:	pushm	all
 	bsr.w	shownames
 	bsr.b	reslider
 	popm	all
@@ -16627,7 +16691,8 @@ shownames:
 
 	moveq	#63+WINY,d1		* source y
 	move	d7,d3
-	lsl	#3,d3
+	;lsl	#3,d3
+	mulu	listFontHeight(a5),d3
 	add	#63+WINY,d3		* dest y
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
@@ -16655,7 +16720,8 @@ shownames:
 * kohtaan boxsize-d7 d7 kpl uusia rivejä
 
 	move	d7,d1
-	lsl	#3,d1
+	;lsl	#3,d1
+	mulu	listFontHeight(a5),d1
 	add	#63+WINY,d1		* source y	
 	moveq	#63+WINY,d3	* dest y
 	tst.b	altbuttonsUse(a5)
@@ -16711,7 +16777,8 @@ shownames:
 .copy	
 	move	boxsize(a5),d5	* y size
 	sub	d7,d5
-	lsl	#3,d5
+	;lsl	#3,d5
+	mulu	listFontHeight(a5),d5
 
 	moveq	#32+WINX,d0	* source x
 	move	d0,d2		* dest x
@@ -16780,12 +16847,17 @@ doPrintNames
 	subq	#1,d5
 
 	move	d4,d6
-	lsl	#3,d6
+	;lsl	#3,d6
+	mulu	listFontHeight(a5),d6
 	add	#83+WINY-14,d6		* turn line number into a Y-coordinate
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
  	add	#16,d6	
 .noAlt1
+
+	move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont
  
 	* loop to print d5 lines 
 .looppo
@@ -16802,14 +16874,14 @@ doPrintNames
 
 	moveq	#0,d7		* clear divider flag
 	* copy name into temporary stack buffer
-	lea	-30(sp),sp
+	lea	-60(sp),sp
 	move.l	sp,a2
 
 	tst.b	l_divider(a3)
 	beq.b	.nodi
 	st	d7	* set flag: divider being handled
 	* Set color for list divider
-	pushm	a1
+	push	a1
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.1
 .3	move.l	pen_2(a5),d0
@@ -16859,9 +16931,17 @@ doPrintNames
 	beq.b	.fu
 	move.b	#"®",-1(a2) * random marker!
 .fu
+	* target x, y
 	moveq	#33+WINX,d0
 	move.l	d6,d1
-	addq.l	#8,d6
+	;addq.l	#8,d6
+	add	listFontHeight(a5),d6
+
+	; Adjust y-position according to baseline,
+	; so it will hit the exact spot
+	move.l	listfontbase(a5),a1
+	add	tf_Baseline(a1),d1
+	subq	#6,d1
 
 	* Favorites are bolded, skip this if feature disabled
 	tst.b	favorites(a5)
@@ -16876,6 +16956,8 @@ doPrintNames
 .noBold
 	bsr.w	print
 .wasFav
+	move.l	rastport(a5),a1	
+	;lore	GFX,ClearEOL
 
 	* Set ordinary colors if divider was previously printed
 	tst.b	d7
@@ -16889,11 +16971,16 @@ doPrintNames
 .nodiv
 
 	* loop until all names printed
-	lea	30(sp),sp
+	lea	60(sp),sp
 	addq.l	#1,d3 	 	* next module index
 	dbf	d5,.looppo
 .lop	
-	
+
+	* Restore normal font
+	move.l	rastport(a5),a1
+	move.l	fontbase(a5),a0
+	lore	GFX,SetFont
+
 ;	DPRINT  "shownames release list"
 	bsr.w 	releaseModuleList
 	rts
@@ -18009,7 +18096,35 @@ getFileBoxIndexFromMousePosition
 	sub	#63+WINY,d1
 	sub	d3,d1
 
-	lsr	#3,d1	
+ if DEBUG
+ 	push	d1
+ 	moveq	#0,d0
+ 	move	d1,d0
+ 	moveq	#0,d1
+	move	mousey(a5),d1
+ 	DPRINT	"hit %ld mouseY=%ld"
+ 	pop	d1
+ endif
+
+; hit 44 -> line 5
+; hit 58 -> line 7
+;     81 ->      11
+
+	* round up?
+	;move	listFontHeight(a5),d0
+	;lsr	#1,d0
+	;add	d0,d1
+
+	;lsr	#3,d1	
+	ext.l	d1
+	divu	listFontHeight(a5),d1
+
+ if DEBUG
+ 	moveq	#0,d0
+ 	move	d1,d0
+ 	DPRINT	"line %ld"
+ endif
+
 	moveq	#1,d0			* success
 	rts
 .out  
@@ -18131,7 +18246,8 @@ markit
 ;	bpl.b  .luuppo
 
 	move	d5,d1
-	lsl	#3,d1		* mulu #8,d1
+	;lsl	#3,d1		* mulu #8,d1
+	mulu	listFontHeight(a5),d1
 	add	#63+WINY,d1
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
@@ -18143,7 +18259,8 @@ markit
 	move	d0,d2
 	move	d1,d3
 	move	#216,d4
-	moveq	#8,d5
+	;moveq	#8,d5
+	move	listFontHeight(a5),d5
 	moveq	#$50,d6		* EOR
 	
 	move.l	rastport(a5),a1
@@ -47454,6 +47571,16 @@ mini_text_attr
 ;	dc.b	FPF_PROPORTIONAL * ta_Flags
 
 .mini	dc.b	"mini4.font",0
+ even
+
+helvetica_text_attr
+	dc.l	.n		* ta_Name
+	dc	9		* ta_YSize
+;	dc	16		* ta_YSize
+	dc.b	0		* ta_Style
+	dc.b	0		* ta_Flags
+
+.n	dc.b	"helvetica.font",0
  even
 
 
