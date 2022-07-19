@@ -5055,6 +5055,13 @@ unlockscreen
 mainWindowSizeChanged
 	DPRINT	"mainWindowSizeChanged"
 	move.l	windowbase(a5),a0
+	tst.b	kokolippu(a5)
+	bne.b	.z
+	* Store zipped position so it will be saved with prefs
+	movem	4(a0),d0/d1
+	DPRINT	"zipped move to %ldx%ld"
+	movem	d0/d1,windowZippedPos(a5)
+.z
 	tst.b	win(a5)
 	bne.b	.y
 .x 	DPRINT	"bail out"
