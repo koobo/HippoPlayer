@@ -1480,6 +1480,7 @@ wflags set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags set wflags!WFLG_SMART_REFRESH!WFLG_RMBTRAP!WFLG_REPORTMOUSE
 idcmpflags set IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_CLOSEWINDOW
 idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
+idcmpflags set idcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 wflags2	set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags2 set wflags2!WFLG_SMART_REFRESH!WFLG_RMBTRAP
@@ -3457,6 +3458,20 @@ msgloop
 	bne.b	.noClose
 	bra.b	exit
 .noClose
+	; When activating or inactivating the window
+	; frame will be redrawn on top of the resize gadget,
+	; so redraw it to ensure correct visual.
+	cmp.l	#IDCMP_ACTIVEWINDOW,d2
+	bne.b	.noActive
+	bsr	refreshResizeGadget
+	bra	.idcmpLoop
+.noActive
+	cmp.l	#IDCMP_INACTIVEWINDOW,d2
+	bne.b	.noInactive
+	bsr	refreshResizeGadget
+.noInactive
+
+	* All messages checked
 	bra.w	.idcmpLoop
 	
 exit	
@@ -5164,6 +5179,13 @@ enableResizeGadget
 .small
 	rts
 
+* Refresh the resize gadget if possible
+refreshResizeGadget
+	tst.b	uusikick(a5)
+	beq.b	.x
+	lea	gadgetResize,a0
+	bsr	refreshGadgetInA0
+.x	rts
 
 * Calculate the start y-position of the filebox 
 getFileboxYStartToD2
@@ -18090,7 +18112,7 @@ putnu	ext.l	d0
 *   d1 = Index of selected file
 getFileBoxIndexFromMousePosition
 	tst	boxsize(a5)
-	beq.b	.out
+	beq.w	.out
 
 	move	mousex(a5),d0
 	move	mousey(a5),d1
@@ -18166,7 +18188,7 @@ getFileBoxIndexFromMousePosition
 * Chosen line is highlighted and previously chosen line highlight removed.
 
 markline:
-	bsr.b getFileBoxIndexFromMousePosition
+	bsr.w getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
 	* something marked
@@ -48765,7 +48787,7 @@ resizeGadgetImage
 	dc	%0000010000000000
 	dc	%1111110000000000
 	; plane 2
-	dc	%1111110000000000
+	dc	%1111100000000000
 	dc	%1000000000000000
 	dc	%1000000000000000
 	dc	%1000000000000000
