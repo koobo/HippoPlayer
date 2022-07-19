@@ -6729,6 +6729,10 @@ tooltipHandler
 	* Close any tooltip that may be showing since mouse was moving.
 	bsr.w	closeTooltipPopup
 
+	* Check if window is zipped to toolbar size
+	tst.b	kokolippu(a5)
+	beq.b	.exit
+
 	* If some lengthy operation is going on lets not
 	* try to display tooltips.
 	bsr.w	areMainWindowGadgetsFrozen
