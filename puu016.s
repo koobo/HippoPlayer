@@ -5116,15 +5116,16 @@ enableResizeGadget
 	moveq	#0,d0
 	move.b	wd_BorderBottom(a0),d0
 	addq	#2,d0
-	move	d0,gg_Height(a1)
+	;move	d0,gg_Height(a1)
 	* Position at the bottom of the window
 	subq	#2,d0
 	neg	d0
-	move	d0,gg_TopEdge(a1)
+	;move	d0,gg_TopEdge(a1)
 
 	* Enable and unhide
 	and	#~GFLG_DISABLED,gg_Flags(a1)
-	move	#16,gg_Width(a1)
+	;move	#16,gg_Width(a1)
+	move	#6,gg_Width(a1)
 
 	* Set wd_MinSize to correspond to 3 rows
 	bsr.b	getFileboxYStartToD2
@@ -48007,19 +48008,19 @@ gadgetResize
 	; gg_Next
 	dc.l	0
 	; gg_LeftEdge: relative to right edge
-	dc.w	-16
+	dc.w	-5
 	; gg_TopEdge: relative to bottom edge
-	dc.w	-4
+	dc.w	-5
 	; gg_Width, gg_Height
-	dc.w	16,4
+	dc.w	6,6
 	; gg_Flags
-	dc.w	GFLG_RELRIGHT!GFLG_RELBOTTOM!GFLG_GADGHNONE
+	dc.w	GFLG_RELRIGHT!GFLG_RELBOTTOM!GFLG_GADGIMAGE
 	; gg_Activation
 	dc.w	0
 	; gg_GadgetType
 	dc.w	GTYP_SIZING
 	; gg_GadgetRender
-	dc.l	0
+	dc.l	.gadgetResizeImage
 	; gg_SelectRender
 	dc.l	0
 	; gg_GadgetText
@@ -48032,6 +48033,29 @@ gadgetResize
 	dc.w	0
 	; gg_UserData
 	dc.l	0
+
+; Image
+.gadgetResizeImage
+	; ig_LeftEdge
+	dc 0
+	; ig_TopEdge
+	dc 0
+	; ig_Width
+	dc 6
+	; ig_Height
+	dc 6
+	; ig_Depth
+	dc 2
+	; ig_ImageData
+	dc.l	resizeGadgetImage
+	; ig_PlanePick
+	dc.b %11
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
+
+
 
 * Rename the gadgets defined above to something not crazy
 * 1st row
@@ -48721,6 +48745,21 @@ fileBrowserImage
 	dc	%1011001101000000
 	dc	%1111111111000000
 
+resizeGadgetImage
+	; plane 1
+	dc	%0000010000000000
+	dc	%0001010000000000
+	dc	%0011010000000000
+	dc	%0111010000000000
+	dc	%0000010000000000
+	dc	%1111110000000000
+	; plane 2
+	dc	%1111110000000000
+	dc	%1000000000000000
+	dc	%1000000000000000
+	dc	%1000000000000000
+	dc	%1000000000000000
+	dc	%0000000000000000
 
 	section	mah,bss_c
 
