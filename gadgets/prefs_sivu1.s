@@ -38,14 +38,14 @@ melonis	dc.w 2,0,0,0,0
 gfonttou	
 	;dc.l pout2
 	dc.l bUu2
-	dc.w 120,93,122,12,0,1,1
+	dc.w 120-7*8,93,(122+6*8)/2,12,0,1,1
 	dc.l 0,0,gfonttout,0,0
 	dc.w 0
 	dc.l 0
 gfonttout	dc.b 1,0,1,0
-	dc.w -104,2
+	dc.w -104+7*8,2
 	dc.l 0,gfonttoutx,0
-gfonttoutx	dc.b "Font.........",0
+gfonttoutx	dc.b "Fonts",0
 	even
 
 ; Disable old three scope gadgets

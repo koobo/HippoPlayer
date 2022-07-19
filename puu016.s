@@ -348,6 +348,9 @@ prefs_hippoScopePos   rs.l 1
 prefs_patternScopePos   rs.l 1
 prefs_spectrumScopePos   rs.l 1
 
+prefs_listtextattr		rs.b	ta_SIZEOF-4
+prefs_listfontname		rs.b	20
+
 prefs_size		rs.b	0
 
 *******************************************************************************
@@ -511,12 +514,8 @@ userport	rs.l	1		*
 windowbase2	rs.l	1		* prefs
 rastport2	rs.l	1		* 
 userport2	rs.l	1		*
-;rastport3	rs.l	1		* quadrascope
-;userport3	rs.l	1		* 
-;scopeWindowBase	rs.l	1		* scopes window
 fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
-helveticabase 	rs.l  	1
 minifontbase 	rs.l	1
 listfontbase	rs.l	1		* points to some font base
 notifyhandle	rs.l	1		* Screennotifylle
@@ -770,7 +769,7 @@ fkeys_new	rs.b	120*10
 pubwork		rs.l	1
 xfd_new		rs.b	1
 fontname_new	rs.b	20+1
-
+listfontname_new rs.b 	20+1
 early_new	rs.b	1
 prefix_new	rs.b	1
 autosort_new	rs.b	1
@@ -788,7 +787,6 @@ patternScope_new rs.b 1
 patternScopeXL_new rs.b 1
 spectrumScope_new rs.b 1
 spectrumScopeBars_new rs.b 1
-	rs.b 1
 	
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -2403,7 +2401,8 @@ main
 	jsr	openTimer
  endif
 
-	lea	text_attr,a0	* t‰ss‰ vaiheessa tavaalinen topaz.8
+	* Get the default font for fallback cases, topaz.8
+	lea	topaz_text_attr,a0
 	lore	GFX,OpenFont
 	move.l	d0,topazbase(a5)	
 
@@ -2420,44 +2419,63 @@ main
 	move	#8,boxsizez(a5)	
 .nzo
 
-* fontti
-
-	tst.b	uusikick(a5)
-	bne.b	.poh
+* Open fonts
 
 
-.qer	lea	text_attr,a0	* vanha kick (sama fontti kun yll‰)
+.poh
+
+	* text_attr is now according to loaded prefs
+	lea	text_attr,a0	* nyt jo muutettu prefssien mukaan
+	tst.l	_DiskFontBase(a5)	* onko libbi‰?
+	beq.b	.fontProblem1
+	
+ if DEBUG
+	move.l	ta_Name(a0),d0 
+	DPRINT	"Opening main font %s"
+ endif 
+	lore	DiskFont,OpenDiskFont
+	move.l	d0,fontbase(a5)
+	bne.b	.mainFontOk
+	
+.fontProblem1
+	; Revert main font to topaz
+	DPRINT	"main topaz revert"
+	lea	text_attr,a0	
 	move.l	#topaz,(a0)+
 	move	#8,(a0)+
 	clr	(a0)
 	move.l	topazbase(a5),fontbase(a5)
 
-	bra.b	.koh
+.mainFontOk
 
-.poh
-
-	lea	text_attr,a0	* nyt jo muutettu prefssien mukaan
+	* list_text_attr is now according to loaded prefs
+	lea	list_text_attr,a0	* nyt jo muutettu prefssien mukaan
 	tst.l	_DiskFontBase(a5)	* onko libbi‰?
-	beq.b	.qer
-
+	beq.b	.fontProblem2
+	
  if DEBUG
 	move.l	ta_Name(a0),d0 
-	DPRINT	"Opening font %s"
+	DPRINT	"Opening list font %s"
  endif 
 	lore	DiskFont,OpenDiskFont
-	move.l	d0,fontbase(a5)
-	beq.b	.qer		* error?
-
-	lea	helvetica_text_attr,a0
-	lob	OpenDiskFont
-	move.l	d0,helveticabase(a5)
 	move.l	d0,listfontbase(a5)
-	printt "todo todo: fallback" 
-.koh
-	; Set font for the list
-	move.l	fontbase(a5),a0
+	bne.b	.listFontOk
+	
+.fontProblem2
+	; Revert main font to topaz
+	DPRINT	"list topaz revert"
+
+	lea	list_text_attr,a0	
+	move.l	#topaz,(a0)+
+	move	#8,(a0)+
+	clr	(a0)
+	move.l	topazbase(a5),listfontbase(a5)
+
+.listFontOk
+	move.l	listfontbase(a5),a0
 	bsr	setListFont
 
+	* Fonts set, some other stuff next
 
 	bsr.w	createport0
 	tst.b	rexxon(a5)
@@ -3595,23 +3613,25 @@ exit
 	bsr.w	freesignal
 
 	move.l	fontbase(a5),d0
-	beq.b	.uh2
+	beq.b	.uh22
 	cmp.l	topazbase(a5),d0
-	beq.b	.uh2
+	beq.b	.uh22
 	move.l	d0,a1
 	lore	GFX,CloseFont
-.uh2
+.uh22
+
 	move.l	minifontbase(a5),d0
 	beq.b	.uh3
 	move.l	d0,a1
 	lore	GFX,CloseFont
 .uh3
-	move.l	helveticabase(a5),d0
+	move.l	listfontbase(a5),d0
+	beq.b	.uh4
+	cmp.l	topazbase(a5),d0
 	beq.b	.uh4
 	move.l	d0,a1
 	lore	GFX,CloseFont
 .uh4
-
 	move.l	topazbase(a5),a1
 	lore	GFX,CloseFont
 
@@ -12090,25 +12110,11 @@ loadprefs2
 	move.b	prefs_tooltips(a0),tooltips(a5)
 	move.b	prefs_savestate(a0),savestate(a5)
 	move.b  prefs_altbuttons(a0),altbuttons(a5)
-
- REM
-	move.b prefs_quadraScope(a0),      quadraScope(a5)    
-	move.b prefs_quadraScopeBars(a0),  quadraScopeBars(a5)        
-	move.b prefs_quadraScopeF(a0),     quadraScopeF(a5)       
-	move.b prefs_quadraScopeFBars(a0), quadraScopeFBars(a5)         
-	move.b prefs_hippoScope(a0),       hippoScope(a5)       
-	move.b prefs_hippoScopeBars(a0),    hippoScopeBars(a5)       
-	move.b prefs_patternScope(a0),     patternScope(a5)       
-	move.b prefs_patternScopeXL(a0),   patternScopeXL(a5)      
-	move.b prefs_spectrumScope(a0),    spectrumScope(a5)     
-	move.b prefs_spectrumScopeBars(a0),spectrumScopeBars(a5)          
- EREM
  
-	tst.b	uusikick(a5)
-	beq.b	.odeldo
 	move.l	prefs_textattr(a0),text_attr+4		* ysize jne
 	pushpea	prefs_fontname+prefsdata(a5),text_attr
-.odeldo
+	move.l	prefs_listtextattr(a0),list_text_attr+4		* ysize jne
+	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr
 
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
@@ -12384,25 +12390,19 @@ saveprefs
 	move.b	savestate(a5),prefs_savestate(a0)
 	move.b	altbuttons(a5),prefs_altbuttons(a0)
 
-  REM
- 	move.b quadraScope(a5),prefs_quadraScope(a0)
-	move.b quadraScopeBars(a5),prefs_quadraScopeBars(a0)
-	move.b quadraScopeF(a5),prefs_quadraScopeF(a0)
-	move.b quadraScopeFBars(a5),prefs_quadraScopeFBars(a0)
-	move.b hippoScope(a5),prefs_hippoScope(a0)
-	move.b hippoScopeBars(a5),prefs_hippoScopeBars(a0)
-	move.b patternScope(a5),prefs_patternScope(a0)
-	move.b patternScopeXL(a5),prefs_patternScopeXL(a0)
-	move.b spectrumScope(a5),prefs_spectrumScope(a0)
-	move.b spectrumScopeBars(a5),prefs_spectrumScopeBars(a0)
- EREM
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
 	lea	prefs_fontname(a0),a2
 .cec	move.b	(a1)+,(a2)+
 	bne.b	.cec
-	
+
+	move.l	list_text_attr+4,prefs_listtextattr(a0)
+	move.l	list_text_attr,a1
+	lea	prefs_listfontname(a0),a2
+.cec2	move.b	(a1)+,(a2)+
+	bne.b	.cec2
+
 
 .ohi
 	move.l	_DosBase(a5),a6
@@ -12931,6 +12931,13 @@ prefs_code
 	lea	prefs_fontname+prefsdata(a5),a1
 .cc	move.b	(a1)+,(a0)+
 	bne.b	.cc
+
+	lea	listfontname_new(a5),a0
+	lea	prefs_listfontname+prefsdata(a5),a1
+.cc2	
+	move.b	(a1)+,(a0)+
+	bne.b	.cc2
+		
 		
 	lea	ack2,a3
 	lea	arclha(a5),a0
@@ -13340,18 +13347,6 @@ exprefs	move.l	_IntuiBase(a5),a6
 .1
 
 
- REM
- 	move.b quadraScope_new(a5),quadraScope(a5) 
-	move.b quadraScopeF_new(a5),quadraScopeF(a5)   
-	move.b hippoScope_new(a5),hippoScope(a5)      
-	move.b patternScope_new(a5),patternScope(a5)  
-	move.b patternScopeXL_new(a5),patternScopeXL(a5)  
-	move.b spectrumScope_new(a5),spectrumScope(a5)   
-	move.b quadraScopeBars_new(a5),quadraScopeBars(a5) 
-	move.b quadraScopeFBars_new(a5),quadraScopeFBars(a5)
-	move.b hippoScopeBars_new(a5),hippoScopeBars(a5)  
-	move.b spectrumScopeBars_new(a5),spectrumScopeBars(a5)
- EREM
 
 
 
@@ -13378,15 +13373,16 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 ** asetetaan fontti
 	tst	boxsize00(a5)
-	bne.b	.enor
+	bne.w	.enor
 	clr	boxsize0(a5)
 
 	;tst.b	uusikick(a5)
 	;beq.b	.enor
 	tst.l	_DiskFontBase(a5)	* lib?
-	beq.b	.enor
+	beq.w	.enor
 
 	lore	Exec,Forbid
+	
 	move.l	prefs_textattr+prefsdata(a5),text_attr+4
 	pushpea	prefs_fontname+prefsdata(a5),text_attr
 
@@ -13395,8 +13391,18 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lea	text_attr,a0
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
+	
+	move.l	prefs_listtextattr+prefsdata(a5),list_text_attr+4
+	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr
+
+	move.l	listfontbase(a5),a1
+	lore	GFX,CloseFont
+	lea	list_text_attr,a0
+	lore	DiskFont,OpenDiskFont
+	move.l	d0,listfontbase(a5)
 	move.l	d0,a0
 	bsr	setListFont
+
 	lore	Exec,Permit
 
 	tst	info_prosessi(a5)
@@ -13539,6 +13545,15 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lea	prefs_fontname+prefsdata(a5),a1
 .cec	move.b	(a0)+,(a1)+
 	bne.b	.cec
+
+	move.l	list_text_attr+4,prefs_listtextattr+prefsdata(a5)
+	lea	listfontname_new(a5),a0
+	lea	prefs_listfontname+prefsdata(a5),a1
+.cec2
+	move.b	(a0)+,(a1)+
+	bne.b	.cec2
+
+
 	move	boxsize(a5),boxsize0(a5)	* ei vaihdettu fonttia..
 	
 
@@ -13955,6 +13970,7 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	pPatternScopeXL
 	bsr	pSpectrumScope
 	bsr	pSpectrumScopeBars
+	bsr	pListFont
 	bra.w	.x
 
 .3	subq	#1,d0
@@ -14204,6 +14220,7 @@ gadgetsup2
 	dr	rPatternScopeXL
 	dr	rSpectrumScope
 	dr	rSpectrumScopeBars
+	dr	rListFont
 
 .s2
 *** Sivu2
@@ -15727,11 +15744,13 @@ pvbt
 
 ****** FontSelector
 
+
+
 pfont
 	lea	-20(sp),sp
 	move.l	sp,a1
 	lea	prefs_fontname+prefsdata(a5),a0
-	moveq	#14-1,d0
+	moveq	#10-1,d0
 .c	cmp.b	#'.',(a0)
 	beq.b	.cc
 	move.b	(a0)+,(a1)+
@@ -15802,6 +15821,8 @@ rfont
 	lea	prefs_fontname+prefsdata(a5),a1
 .cec	move.b	(a0)+,(a1)+
 	bne.b	.cec
+
+
 	clr	boxsize00(a5)		* avataan ja suljetaan p‰‰ikkuna
 
 
@@ -15811,7 +15832,7 @@ rfont
 	bra.w	pfont
 
 
-.tit	dc.b	"Select font",0
+.tit	dc.b	"Select main font",0
  even
 
 fontreqtags
@@ -15857,6 +15878,80 @@ fontreqtags
 	popm	d1-a6
 	rts
 
+
+rListFont
+	DPRINT	"rListFont"
+	tst.l	_DiskFontBase(a5)
+	bne.b	.y
+	rts
+.y
+	moveq	#RT_FONTREQ,d0
+	lore	Req,rtAllocRequestA
+	move.l	d0,d7
+
+	lea	.tit(pc),a3
+	lea	listfontreqtags(pc),a0
+
+	; Remove pubscreen for old kickstart to prevent crash
+	tst.b	uusikick(a5)
+	bne.b	.new
+	basereg	listfontreqtags,a0
+	clr.l	listfontreqtags\.pubScreenTag(a0)
+	endb	a0
+.new
+
+	move.l	d7,a1
+	bsr.w	pon2
+	lob	rtFontRequestA
+	bsr.w	poff2
+	tst.l	d0
+	beq.b	.ew
+
+	move.l	d7,a0
+	lea	rtfo_Attr(a0),a0
+	move.l	4(a0),prefs_listtextattr+prefsdata(a5) * YSize, Style, Flags talteen
+	move.l	(a0),a0				* Fontin nimi
+	lea	prefs_listfontname+prefsdata(a5),a1
+.cec	move.b	(a0)+,(a1)+
+	bne.b	.cec
+
+	clr	boxsize00(a5)		* avataan ja suljetaan p‰‰ikkuna
+
+.ew
+	move.l	d7,a1
+	lore	Req,rtFreeRequest
+	bra.w	pListFont
+
+
+.tit	dc.b	"Select list font",0
+ even
+
+listfontreqtags
+	dc.l	RTFO_Flags,FREQF_NOBUFFER
+	dc.l	RTFO_SampleHeight,8
+	dc.l	RTFO_MaxHeight,20
+	dc.l	RTFO_MinHeight,8
+	dc.l	RT_TextAttr,text_attr
+.pubScreenTag
+	dc.l	RT_PubScrName,pubscreen+var_b
+	dc.l	TAG_END
+
+pListFont
+	DPRINT	"pListFont"
+	lea	-20(sp),sp
+	move.l	sp,a1
+	lea	prefs_listfontname+prefsdata(a5),a0
+	moveq	#10-1,d0
+.c	cmp.b	#'.',(a0)
+	beq.b	.cc
+	move.b	(a0)+,(a1)+
+	dbeq	d0,.c
+.cc	clr.b	(a1)
+	move.l	sp,a0
+	lea	prefsListFont,a1
+	bsr.w	prunt2
+	lea	20(sp),sp
+	rts
 
 
 *** Printataan screen refresh ratetkin
@@ -19484,7 +19579,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .deliFormat	
 	pushm	d0-d7
 	move.l	sp,a1
-	lea	putc(pc),a2	;merkkien siirto
+	lea	putc,a2	;merkkien siirto
 	lore 	Exec,RawDoFmt
 	popm	d0-d7
 	rts
@@ -22144,7 +22239,6 @@ s_newWindow                   rs.b       enw_SIZEOF
 s_scopeWindowBase             rs.l       1
 s_rastport3                   rs.l       1	
 s_userport3                   rs.l       1
-;s_miniFontBase                rs.l       1
 s_buffer0                     rs.l       1
 s_buffer0w                    rs.w       1
 s_buffer0h                    rs.w       1
@@ -47606,14 +47700,21 @@ _FFPName        dc.b    "mathffp.library",0
 * - Gadgets
 *
 
+topaz_text_attr
+	dc.l	topaz		* ta_Name
+	dc	8		* ta_YSize
+	dc.b	0		* ta_Style
+	dc.b	0		* ta_Flags
+
 text_attr
 	dc.l	topaz		* ta_Name
-	dc		8		* ta_YSize
+	dc	8		* ta_YSize
 	dc.b	0		* ta_Style
 	dc.b	0		* ta_Flags
 
 topaz	dc.b	"topaz.font",0
  even
+
 
 mini_text_attr
 	dc.l	.mini	* ta_Name
@@ -47625,15 +47726,11 @@ mini_text_attr
 .mini	dc.b	"mini4.font",0
  even
 
-helvetica_text_attr
-	dc.l	.n		* ta_Name
-	dc	9		* ta_YSize
-;	dc	16		* ta_YSize
-	dc.b	0		* ta_Style
-	dc.b	0		* ta_Flags
-
-.n	dc.b	"helvetica.font",0
- even
+list_text_attr
+	dc.l	topaz	* ta_Name
+	dc	8	*	 ta_YSize
+	dc.b	0	* ta_Style
+	dc.b	0	* ta_Flags
 
 
 * Main window
@@ -47968,7 +48065,7 @@ prefsSpectrumScope
        even
 
 prefsSpectrumScopeBars
-       dc.l 0
+       dc.l prefsListFont
        dc.w 406,51+14+14+14+14+14,28,12,3,1,1
        dc.l 0,0,.t,0,0
        dc.w 0
@@ -47978,9 +48075,13 @@ prefsSpectrumScopeBars
        dc.w -40+4,2
        dc.l 0,prefsBarsText,0
 
-
-
-
+; Button to select list font, on prefs page 2
+prefsListFont
+	dc.l	0 ; LAST ONE
+	dc.w 120+37,93,(122+6*8)/2,12,0,1,1
+	dc.l 0,0,0,0,0
+	dc.w 0
+	dc.l 0
 
 ; Gadget
 gadgetListModeChangeButton
