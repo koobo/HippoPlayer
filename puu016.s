@@ -5137,12 +5137,13 @@ enableResizeGadget
 	* Height is a bit larger than the window bottom border
 	moveq	#0,d0
 	move.b	wd_BorderBottom(a0),d0
-	addq	#2,d0
+	addq	#3,d0
 	;move	d0,gg_Height(a1)
+
 	* Position at the bottom of the window
-	subq	#2,d0
+;	subq	#2,d0
 	neg	d0
-	;move	d0,gg_TopEdge(a1)
+	move	d0,gg_TopEdge(a1)
 
 	* Enable and unhide
 	and	#~GFLG_DISABLED,gg_Flags(a1)
