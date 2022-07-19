@@ -2431,7 +2431,7 @@ main
 	clr	(a0)
 	move.l	topazbase(a5),fontbase(a5)
 
-	bra.w	.koh
+	bra.b	.koh
 
 .poh
 
@@ -2452,7 +2452,7 @@ main
 	move.l	d0,helveticabase(a5)
 	move.l	d0,listfontbase(a5)
 	printt "todo todo: fallback" 
- .koh
+.koh
 	; Set font for the list
 	move.l	fontbase(a5),a0
 	bsr	setListFont
