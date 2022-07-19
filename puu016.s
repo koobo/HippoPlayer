@@ -2359,13 +2359,13 @@ main
 	lea	wbname(pc),a1
 	lob	OldOpenLibrary
 	move.l	d0,_WBBase(a5)
-	lea	diskfontname(pc),a1
-	lob	OldOpenLibrary
-	move.l	d0,_DiskFontBase(a5)
 	lea	scrnotifyname(pc),a1
 	lob	OldOpenLibrary
 	move.l	d0,_ScrNotifyBase(a5)
 .olld
+	lea	diskfontname(pc),a1
+	lob	OldOpenLibrary
+	move.l	d0,_DiskFontBase(a5)
 
 	lea	rmname(pc),a1		* Onko RexxMast p‰‰ll‰?
 	lob	FindTask
@@ -2451,14 +2451,11 @@ main
 	lob	OpenDiskFont
 	move.l	d0,helveticabase(a5)
 	move.l	d0,listfontbase(a5)
-	printt "todo todo: fallback"
-	move.l	d0,a0
-	move	tf_YSize(a0),listFontHeight(a5)	
-.koh
-;	move.l	fontbase(a5),listfontbase(a5)
-
-
-	bsr.w	setboxy
+	printt "todo todo: fallback" 
+ .koh
+	; Set font for the list
+	move.l	fontbase(a5),a0
+	bsr	setListFont
 
 
 	bsr.w	createport0
@@ -5013,6 +5010,17 @@ setboxy:
  endif
 	rts
 
+* Set font to be used for the list. Also 
+* calculates the y-offset magic for gfx placement
+* which is relative to the font.
+* in:
+*   a0 = font to set for the list
+setListFont
+	move.l	a0,listfontbase(a5)
+	; Dig height for this since it is used widely
+	move	tf_YSize(a0),listFontHeight(a5)	
+	bsr.w	setboxy
+	rts
 
 front	pushm	all
 	move.l	windowbase(a5),d7
@@ -13338,8 +13346,8 @@ exprefs	move.l	_IntuiBase(a5),a6
 	bne.b	.enor
 	clr	boxsize0(a5)
 
-	tst.b	uusikick(a5)
-	beq.b	.enor
+	;tst.b	uusikick(a5)
+	;beq.b	.enor
 	tst.l	_DiskFontBase(a5)	* lib?
 	beq.b	.enor
 
@@ -13352,6 +13360,8 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lea	text_attr,a0
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
+	move.l	d0,a0
+	bsr	setListFont
 	lore	Exec,Permit
 
 	tst	info_prosessi(a5)
@@ -15699,20 +15709,26 @@ pfont
 	rts
 
 rfont
-	tst.b	uusikick(a5)		* vain kick2.0+
-	bne.b	.enw
-.x	rts
-
-.enw
+	DPRINT	"rfont"
 	tst.l	_DiskFontBase(a5)
-	beq.b	.x
-
+	bne.b	.y
+	rts
+.y
 	moveq	#RT_FONTREQ,d0
 	lore	Req,rtAllocRequestA
 	move.l	d0,d7
 
 	lea	.tit(pc),a3
 	lea	fontreqtags(pc),a0
+
+	; Remove pubscreen for old kickstart to prevent crash
+	tst.b	uusikick(a5)
+	bne.b	.new
+	basereg	fontreqtags,a0
+	clr.l	fontreqtags\.pubScreenTag(a0)
+	endb	a0
+.new
+
 	move.l	d7,a1
 	bsr.w	pon2
 	lob	rtFontRequestA
@@ -15770,6 +15786,7 @@ fontreqtags
 	dc.l	RTFO_MinHeight,8
 	dc.l	RTFO_FilterFunc,.fontfilter
 	dc.l	RT_TextAttr,text_attr
+.pubScreenTag
 	dc.l	RT_PubScrName,pubscreen+var_b
 	dc.l	TAG_END
 
