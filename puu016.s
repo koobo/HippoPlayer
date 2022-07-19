@@ -12077,7 +12077,7 @@ loadprefs2
 	moveq	#0,d1
 	moveq	#2,d2
 	bsr.w	clampByte
-	move.b	d0,mpegaqua(a0)
+	move.b	d0,mpegaqua(a5)
 	
 	move.b	prefs_mpegadiv(a0),d0 
 	bsr.w	clampByte
