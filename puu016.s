@@ -1336,6 +1336,12 @@ fileBrowserSelectionHistory		 rs.l FILEBROWSER_HISTORY_SIZE
 * be saved to state if needed.
 fileBrowserCurrentDirLock		rs.l	1
 
+* Region used to create a clip region for the list box
+listBoxRegion		rs.l	1
+* Layers library clip region to keep list box text drawing inside,
+* useful for variable sized fonts.	
+listBoxClipRegion	rs.l	1
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -4408,7 +4414,7 @@ avaa_ikkuna:
 	lore	WB,AddAppWindowA
 	move.l	d0,appwindow(a5)
 .elderly
-	jsr	createListBoxClipRegion
+	jsr	createlistBoxRegion
 
 	bsr.w	wrender
 ;	bsr.w	front		
@@ -5068,6 +5074,7 @@ setListFont
 	bsr.w	setboxy
 	rts
 
+
 front	pushm	all
 	move.l	windowbase(a5),d7
 	beq.b	.q
@@ -5280,7 +5287,7 @@ sulje_ikkuna
  endif
 
 .small
-	jsr	disposeListBoxClipRegion
+	jsr	disposelistBoxRegion
 
 	move.l	46(a0),a1		* WB screen addr
 	move	14(a1),wbkorkeus(a5)	* WB:n korkeus
@@ -15914,7 +15921,6 @@ rListFont
 	clr.l	listfontreqtags\.pubScreenTag(a0)
 	endb	a0
 .new
-
 	move.l	d7,a1
 	bsr.w	pon2
 	lob	rtFontRequestA
@@ -47598,14 +47604,11 @@ spectrumGetSampleData
 *
 ***************************************************************************
 
-previousClipRegion	dc.l	0
-newRegion		dc.l	0
-
-createListBoxClipRegion
-	bsr	disposeListBoxClipRegion
+createlistBoxRegion
+	bsr	disposelistBoxRegion
 
 	lore	GFX,NewRegion
-	move.l	d0,newRegion
+	move.l	d0,listBoxRegion(a5)
 	beq.b	.x
 
 	lea	-ra_SIZEOF(sp),sp
@@ -47628,43 +47631,43 @@ createListBoxClipRegion
 	subq	#3,d2
 	; Adjust the start x so that font will not bleed outside
 	; the markline highlight
-	addq	#1,d0
+	addq	#1+2,d0
 
 	move	d0,ra_MinX(a1)
 	move	d1,ra_MinY(a1)
 	move	d2,ra_MaxX(a1)
 	move	d3,ra_MaxY(a1)
 
-	move.l	newRegion(pc),a0
+	move.l	listBoxRegion(a5),a0
 	lob	OrRectRegion
 	lea	ra_SIZEOF(sp),sp
-	DPRINT	"NEW REGION"
 .x	tst.l	d0
 	rts
 
 
-disposeListBoxClipRegion
+disposelistBoxRegion
 	pushm	all
-	move.l	newRegion(pc),d0
+	move.l	listBoxRegion(a5),d0
 	beq.b	.x
-	clr.l	newRegion
+	clr.l	listBoxRegion(a5)
 	move.l	d0,a0
-	DPRINT	"DISPOSE REGION"
 	lore	GFX,DisposeRegion
 .x	popm	all
 	rts
 
 setListBoxClip
 	pushm	all
+	tst.l	listBoxRegion(a5)
+	beq.b	.x
 	move.l	windowbase(a5),a0
 	move.l	wd_WLayer(a0),a0
-	move.l	newRegion(pc),a1
+	move.l	listBoxRegion(a5),a1
 	lore	Layers,InstallClipRegion
 	; d0 = previous clip region or NULL
-	move.l	d0,previousClipRegion
+	move.l	d0,listBoxClipRegion(a5)
 	; Out of memory is also possible, this
 	; is visible in some flag somewhere.
-	popm	all
+.x	popm	all
 	rts
 
 
@@ -47672,7 +47675,7 @@ removeListBoxClip
 	move.l	windowbase(a5),a0
 	move.l	wd_WLayer(a0),a0
 	; Null is ok here:
-	move.l	previousClipRegion(pc),a1
+	move.l	listBoxClipRegion(a5),a1
 	lore	Layers,InstallClipRegion
 	rts
 
