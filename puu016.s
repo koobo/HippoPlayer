@@ -17140,15 +17140,39 @@ doPrintNames
 	popm	d0/d1	; restore start x,y
 
 	* Move the x-position to the right for the marker
-	move.l	rastport(a5),a0
-	move.l	rp_Font(a0),a0	
-	sub	tf_XSize(a0),d0
+	move.l	rastport(a5),a1
+	move.l	rp_Font(a1),a1
+	lea	.marker(pc),a0
+	
+	* See if the marker has a glyph in the font
+	move	#"®",d2
+	cmp.b	tf_HiChar(a1),d2
+	bls.b	.yesRmark
+	* Use alternative
+	moveq	#"*",d2
+.yesRmark
+	move.b	d2,(a0)
+
+	* How many pixels this takes
+	tst.l	tf_CharSpace(a1)
+	beq.b	.noCharSpace
+	* Check individual char spaces, prop fonts
+	sub.b	tf_LoChar(a1),d2
+	add	d2,d2
+	move.l	tf_CharSpace(a1),a1
+	sub	(a1,d2),d0
+	bra.b	.hadCharSpace
+.noCharSpace
+	* Fixed width font
+	sub	tf_XSize(a1),d0	
+
+.hadCharSpace
+	* The right edge
 	add	#216,d0
 
-	lea	.marker(pc),a0
 	bsr	print
 	bra.b	.yesMarker
-.marker	dc.b	"®",0
+.marker	dc.b	0,0
 .noMarker
 	popm	d0/d1	; pop start x,y, not needed
 .yesMarker
