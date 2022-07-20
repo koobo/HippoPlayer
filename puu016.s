@@ -350,7 +350,9 @@ prefs_patternScopePos   rs.l 1
 prefs_spectrumScopePos   rs.l 1
 
 prefs_listtextattr		rs.b	ta_SIZEOF-4
-prefs_listfontname		rs.b	20
+prefs_listfontname		rs.b	30
+
+	printt "TODO TODO: dangerous buffer size"
 
 prefs_size		rs.b	0
 
@@ -7819,8 +7821,7 @@ umph
 	* Replay init failed.
 	* Did not get a module to play successfully.
 	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
-	bra.w	init_error
-;	rts
+	jmp	init_error
 
 
 *** Early load
@@ -15831,6 +15832,8 @@ rfont
 	move.l	4(a0),prefs_textattr+prefsdata(a5) * YSize, Style, Flags talteen
 	move.l	(a0),a0				* Fontin nimi
 	lea	prefs_fontname+prefsdata(a5),a1
+	printt "DANGER: the output buffer is just 20 chars long"
+	
 .cec	move.b	(a0)+,(a1)+
 	bne.b	.cec
 
@@ -15942,7 +15945,7 @@ listfontreqtags
 	dc.l	RTFO_Flags,FREQF_NOBUFFER
 	dc.l	RTFO_SampleHeight,8
 	dc.l	RTFO_MaxHeight,30
-	dc.l	RTFO_MinHeight,8
+	dc.l	RTFO_MinHeight,6
 	dc.l	RT_TextAttr,text_attr
 .pubScreenTag
 	dc.l	RT_PubScrName,pubscreen+var_b
