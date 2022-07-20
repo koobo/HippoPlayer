@@ -17035,12 +17035,9 @@ doPrintNames
 	
 	move.l	l_nameaddr(a3),a0
 	bsr.w	cut_prefix
-	move.l	a0,a1
+	move.l	a0,a2		* name is in a2
 
 	moveq	#0,d7		* clear divider flag
-	* copy name into temporary stack buffer
-	lea	-60(sp),sp
-	move.l	sp,a2
 
 	tst.b	l_divider(a3)
 	beq.b	.nodi
@@ -17068,37 +17065,10 @@ doPrintNames
 .2
 	pop	a1
 .nodi
-	move.l	a2,a0
-	moveq	#27-1,d0		* max kirjainten m‰‰r‰ nimess‰
-	* ENFORCER HIT HAPPENED HERE once:
-	* when right clicking in filebrowser mode, to set
-	* as fav. a1 read was illegal
-.ff	move.b	(a1)+,(a2)+
-	dbeq	d0,.ff
-	* test if buffer exhausted already
-;	tst	d0
-;	bmi.b	.fo
-	* all of the name was copied, remove trailing zero and fill with empty
-;	subq	#1,a2
-;.fi	move.b	#' ',(a2)+
-;	dbf	d0,.fi
-;.fo	
-	clr.b	(a2)			* terminate
 
- REM
-	tst.b	d7		* divider will not have a random play marker
-	bne.b	.fu
-	cmp.b	#pm_random,playmode(a5)
-	bne.b	.fu
-	* Random play mode magic check: Add a marker to the end to indicate module has been played?
-	* Here the module index is needed
-	move.l 	d3,d0 
-	bsr.w	testRandomTableEntry
-	beq.b	.fu
-	move.b	#"Æ",-1(a2) * random marker!
-.fu
- EREM
-
+	* name to print
+	move.l	a2,a0	
+	
 	* target x, y
 	moveq	#33+WINX,d0
 	move.l	d6,d1
@@ -17193,7 +17163,6 @@ doPrintNames
 .nodiv
 
 	* loop until all names printed
-	lea	60(sp),sp
 	addq.l	#1,d3 	 	* next module index
 	dbf	d5,.looppo
 .lop	
