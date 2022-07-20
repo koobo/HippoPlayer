@@ -15771,17 +15771,19 @@ pvbt
 
 
 pfont
-	lea	-20(sp),sp
-	move.l	sp,a1
 	lea	prefs_fontname+prefsdata(a5),a0
+	lea	gfonttou,a1
+
+showFontNameInGadget
+	lea	-20(sp),sp
+	move.l	sp,a2
 	moveq	#10-1,d0
 .c	cmp.b	#'.',(a0)
 	beq.b	.cc
-	move.b	(a0)+,(a1)+
+	move.b	(a0)+,(a2)+
 	dbeq	d0,.c
-.cc	clr.b	(a1)
+.cc	clr.b	(a2)
 	move.l	sp,a0
-	lea	gfonttou,a1
 	bsr.w	prunt2
 	lea	20(sp),sp
 	rts
@@ -15963,20 +15965,9 @@ listfontreqtags
 
 pListFont
 	DPRINT	"pListFont"
-	lea	-20(sp),sp
-	move.l	sp,a1
 	lea	prefs_listfontname+prefsdata(a5),a0
-	moveq	#10-1,d0
-.c	cmp.b	#'.',(a0)
-	beq.b	.cc
-	move.b	(a0)+,(a1)+
-	dbeq	d0,.c
-.cc	clr.b	(a1)
-	move.l	sp,a0
 	lea	prefsListFont,a1
-	bsr.w	prunt2
-	lea	20(sp),sp
-	rts
+	bra	showFontNameInGadget
 
 
 *** Printataan screen refresh ratetkin
@@ -21071,7 +21062,6 @@ request2:
 
 areyousure_delete
 	movem.l	d1-a6,-(sp)
-	sub.l	a4,a4
 	lea	.z(pc),a1
 	lea	.y(pc),a2
 	lea	infodefresponse(pc),a4
@@ -21132,7 +21122,7 @@ confirmFavoritesModification
 	rts
 
 .z dc.b	"Modify the favorites list?",0
-.y dc.b "_Yes|_Yes, don't ask again|_Nope!",0
+.y dc.b "_Yes|Yes, _don't ask again|_Nope!",0
  even
  
 rawrequest:
