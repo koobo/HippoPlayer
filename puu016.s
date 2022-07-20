@@ -571,17 +571,12 @@ wbkorkeus	rs	1		* Workbench n‰ytˆn korkeus
 wbleveys	rs	1
 prefs_prosessi	rs	1		* ei-0: Prefs-prosessi p‰‰ll‰
 filereq_prosessi rs	1		* ei-0: Files-prosessi p‰‰ll‰
-;quad_prosessi	rs	1		* ...
 info_prosessi	rs	1		* ...
 about_moodi	rs.b	1		* 0: normaali, 1: moduleinfo
 filereqmode	rs.b	1		* 0: add mode, ~0: insert mode 
 fileinsert	rs.l	1		* node jonka j‰lkeen insertti
 haluttiinuusimodi rs	1		* new-nappulaa ja play:t‰ varten
-;quad_task	rs.l	1		* Scopen taski
-;quadon		rs.b	1		* jos 1: quad oli p‰‰ll‰
-		rs.b	1
-;tapa_quad	rs.b	1		* scopelle lopetus lippu
-;scopeflag	rs.b	1		* ~0: scope p‰‰ll‰
+confirmFavoritesModificationDisabled		rs.b	1
 infoon		rs.b	1		* 1: info on
 
 exitmainprogram	rs.b	1		* <>1: poistu ohjelmasta
@@ -9518,6 +9513,10 @@ rbutton4a
 rbutton9
 	DPRINT	"clearListButtonAction"
 	skipIfGadgetDisabled gadgetNewButton
+	bsr	confirmFavoritesModification
+	bne.b	clearlist
+	rts
+
 clearlist
 	clr.b	movenode(a5)
 	DPRINT  "clearlist"
@@ -10151,8 +10150,13 @@ rbutton7
 	clr.b	movenode(a5)
 	tst	filereq_prosessi(a5)
 	beq.b	.ook
+.skip
 	rts
-.ook	move.l	_DosBase(a5),a6
+.ook	
+	bsr	confirmFavoritesModification
+	beq.b	.skip
+
+	move.l	_DosBase(a5),a6
 
 	;bra	filereq_code
 
@@ -17243,8 +17247,11 @@ delete
 	bsr.b	.elete
 	bsr.w	resh
 	clr.b	deleteflag(a5)
+.skip
 	rts
 .elete
+	bsr	confirmFavoritesModification
+	beq.b	.skip
 
 	clr.b	movenode(a5)
 	moveq	#PLAYING_MODULE_NONE,d0
@@ -21054,7 +21061,7 @@ request:
 	sub.l	a4,a4
 request2:
 	lea	.ok_g(pc),a2
-	bsr.b	rawrequest
+	bsr.w	rawrequest
 	movem.l	(sp)+,d0-a6
 	tst.l	d0	* not needed?!
 	rts
@@ -21070,7 +21077,7 @@ areyousure_delete
 	lea	infodefresponse(pc),a4
 	move.l	(a4),d7
 	clr.l	(a4)
-	bsr.b	rawrequest
+	bsr.w	rawrequest
 	move.l	d7,(a4)
 	movem.l	(sp)+,d1-a6
 	tst.l	d0
@@ -21080,6 +21087,54 @@ areyousure_delete
 .y	dc.b	"_Yes|_No",0
  even
 
+* Check if favorites list should be modified from the user
+* Out:
+*   d0 = 0 if modification not allowed
+*   d0 = 1 if modification allowed
+confirmFavoritesModification
+	; Check if in favorites list
+	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.favs
+	* No confirmation, all ok	
+.ok	moveq	#1,d0
+	rts
+.favs
+	tst.b	confirmFavoritesModificationDisabled(a5)
+	bne.b	.ok
+
+	push	a4
+	lea	infodefresponse(pc),a4
+	move.l	(a4),-(sp)
+	; Set "Nope" as the default response
+	clr.l	(a4)
+	lea	.z(pc),a1
+	lea	.y(pc),a2
+	bsr	rawrequest
+	move.l	(sp)+,(a4)
+	pop	a4
+	; d0 = 1: yes
+	; d0 = 2: yes, dont ask again
+	; d0 = 0: nope
+
+	; Nope
+	tst.l	d0
+	beq.b	.x
+	; Yes
+	cmp	#1,d0
+	beq.b	.ok
+	; Yes, dont ask again
+	cmp	#2,d0
+	bne.b	.x
+	st	confirmFavoritesModificationDisabled(a5)
+	bra.b	.ok
+
+.x	moveq	#0,d0
+	rts
+
+.z dc.b	"Modify the favorites list?",0
+.y dc.b "_Yes|_Yes, don't ask again|_Nope!",0
+ even
+ 
 rawrequest:
 	jsr	get_rt
 	movem.l	a0-a4,-(sp)
