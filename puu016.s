@@ -2444,7 +2444,9 @@ main
 	move.l	#topaz,(a0)+
 	move	#8,(a0)+
 	clr	(a0)
-	move.l	topazbase(a5),fontbase(a5)
+	lea	topaz_text_attr,a0
+	lore	GFX,OpenFont
+	move.l	d0,fontbase(a5)
 
 .mainFontOk
 
@@ -2469,7 +2471,9 @@ main
 	move.l	#topaz,(a0)+
 	move	#8,(a0)+
 	clr	(a0)
-	move.l	topazbase(a5),listfontbase(a5)
+	lea	topaz_text_attr,a0
+	lore	GFX,OpenFont
+	move.l	d0,listfontbase(a5)
 
 .listFontOk
 	move.l	listfontbase(a5),a0
@@ -3614,8 +3618,6 @@ exit
 
 	move.l	fontbase(a5),d0
 	beq.b	.uh22
-	cmp.l	topazbase(a5),d0
-	beq.b	.uh22
 	move.l	d0,a1
 	lore	GFX,CloseFont
 .uh22
@@ -3626,8 +3628,6 @@ exit
 	lore	GFX,CloseFont
 .uh3
 	move.l	listfontbase(a5),d0
-	beq.b	.uh4
-	cmp.l	topazbase(a5),d0
 	beq.b	.uh4
 	move.l	d0,a1
 	lore	GFX,CloseFont
@@ -15929,7 +15929,7 @@ rListFont
 listfontreqtags
 	dc.l	RTFO_Flags,FREQF_NOBUFFER
 	dc.l	RTFO_SampleHeight,8
-	dc.l	RTFO_MaxHeight,20
+	dc.l	RTFO_MaxHeight,30
 	dc.l	RTFO_MinHeight,8
 	dc.l	RT_TextAttr,text_attr
 .pubScreenTag
@@ -19463,7 +19463,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .jee9eg
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	bsr	desmsg4
+	jsr	desmsg4
 	bsr.w	.putcomment
 	lea	32(sp),sp
 
@@ -21637,7 +21637,7 @@ rexxmessage
 	dr	.rewt,rbutton_kela1
 	dr	.ffwdt,rbutton_kela2
 	dr	.movet,.move
-	dr	.sortt,rsort
+	dr	.sortt,._rsort
 	dr	.insertt,.insert
 	dr	.quitt,.quit
 	; Put these before "CHOOSE" since matcher will 
@@ -21695,6 +21695,7 @@ rexxmessage
 .favoritet dc.b "FAVORITE",0
  even
 
+._rsort	jmp	rsort
 
 *** PLAY
 .playr	
