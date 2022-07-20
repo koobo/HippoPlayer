@@ -30948,13 +30948,6 @@ makeParentNode
 	jsr	desmsg
 	pop	a0
 
-	lea	desbuf(a5),a1
-.fill	cmp.b	#" ",(a1)
-	bne.b	.x
-	move.b	#"л",(a1)+
-	bra.b	.fill
-.x	move.b	#" ",-1(a1)
-
 	lea	l_filename(a0),a1
 .end	tst.b	(a1)+
 	bne.b	.end
@@ -30962,9 +30955,7 @@ makeParentNode
 	lea	desbuf(a5),a2
 .cp	move.b	(a2)+,(a1)+
 	bne.b	.cp
-	
-;	pushpea	parentNodeLabel(pc),l_nameaddr(a0)
-
+ 
 	* magic: indicate parent divider/dir with $7f,
 	* normal divider/dir is $ff.
 	move.b	#$7f,l_divider(a0)
@@ -30976,7 +30967,7 @@ makeParentNode
  endif
 	rts
 
-.form	dc.b	"    %23.23s",0
+.form	dc.b	"ллл %s",0
  even
 
 
