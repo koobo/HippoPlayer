@@ -213,7 +213,8 @@ check	macro
 	include	libraries/xfdmaster.i
 	include	libraries/screennotify_lib.i
 	include	libraries/screennotify.i
-
+	include	graphics/layers_lib.i
+	
 	include	devices/ahi.i
 	include	devices/ahi_lib.i
 
@@ -479,7 +480,7 @@ _MlineBase		rs.l	1
 _XFDBase	rs.l	1
 _FFPBase	rs.l 1
 _MTBase     rs.l 1
-
+_LayersBase rs.l 1
  ifne DEBUG
 output		rs.l	1
  endc
@@ -2130,6 +2131,7 @@ rmname		dc.b	"RexxMaster",0
 fileprocname	dc.b	"HiP-Filereq",0
 prefsprocname	dc.b	"HiP-Prefs",0
 infoprocname	dc.b	"HiP-Info",0
+layersName	dc.b	"layers.library",0
 
 
 
@@ -2379,6 +2381,10 @@ main
 	lea 	gfxname(pc),a1		
 	lob	OldOpenLibrary
 	move.l	d0,_GFXBase(a5)
+
+	lea 	layersName(pc),a1		
+	lob	OldOpenLibrary
+	move.l	d0,_LayersBase(a5)
 
 	pushpea	nilname(pc),d1
 	move.l	#MODE_OLDFILE,d2
@@ -3692,6 +3698,8 @@ exit
 	bsr     closel
 	move.l	_MTBase(a5),d0
 	bsr     closel
+	move.l	_LayersBase(a5),d0
+	bsr		closel
 
 	bsr.w	tulostavirhe
 exit2
@@ -6113,7 +6121,7 @@ sliderlaatikko
 * d1 = y1
 * d2 = x2
 * d3 = y2
-tyhjays
+tyhjays:
 	tst.b	win(a5)
 	beq.b	.q
 	movem.l	d0-a6,-(sp)
@@ -16725,6 +16733,7 @@ shownames2
 	moveq	#1,d4		* flag: do not center
 	bra.b	shownames\.doit
 
+* Clears the filebox area
 clearbox:
 	tst	boxsize(a5)
 	beq.b	.x
@@ -17005,7 +17014,9 @@ doPrintNames
 	move.l	rastport(a5),a1
 	move.l	listfontbase(a5),a0
 	lore	GFX,SetFont
- 
+	
+	jsr	setListBoxClip
+
 	* loop to print d5 lines 
 .looppo
 	* a4=current node
@@ -17058,17 +17069,18 @@ doPrintNames
 .ff	move.b	(a1)+,(a2)+
 	dbeq	d0,.ff
 	* test if buffer exhausted already
-	tst	d0
-	bmi.b	.fo
+;	tst	d0
+;	bmi.b	.fo
 	* all of the name was copied, remove trailing zero and fill with empty
-	subq	#1,a2
-.fi	move.b	#' ',(a2)+
-	dbf	d0,.fi
-.fo	clr.b	(a2)			* terminate
+;	subq	#1,a2
+;.fi	move.b	#' ',(a2)+
+;	dbf	d0,.fi
+;.fo	
+	clr.b	(a2)			* terminate
 
+ REM
 	tst.b	d7		* divider will not have a random play marker
 	bne.b	.fu
-
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.fu
 	* Random play mode magic check: Add a marker to the end to indicate module has been played?
@@ -17078,10 +17090,12 @@ doPrintNames
 	beq.b	.fu
 	move.b	#"®",-1(a2) * random marker!
 .fu
+ EREM
+
 	* target x, y
 	moveq	#33+WINX,d0
 	move.l	d6,d1
-	;addq.l	#8,d6
+	* progress to next vertical line 
 	add	listFontHeight(a5),d6
 
 	; Adjust y-position according to baseline,
@@ -17089,6 +17103,7 @@ doPrintNames
 	move.l	listfontbase(a5),a1
 	add	tf_Baseline(a1),d1
 	subq	#6,d1
+	pushm	d0/d1	; save start x,y
 
 	* Favorites are bolded, skip this if feature disabled
 	tst.b	favorites(a5)
@@ -17103,8 +17118,37 @@ doPrintNames
 .noBold
 	bsr.w	print
 .wasFav
+	; Clear the line towards the right edge of rastport
 	move.l	rastport(a5),a1	
-	;lore	GFX,ClearEOL
+	lore	GFX,ClearEOL
+
+	; Display random marker if needed
+	tst.b	d7		* divider will not have a random play marker
+	bne.b	.noMarker
+	cmp.b	#pm_random,playmode(a5)
+	bne.b	.noMarker
+	* Random play mode magic check: Add a marker to the end to indicate module has been played?
+	* Here the module index is needed
+	move.l 	d3,d0 
+	bsr.w	testRandomTableEntry
+	beq.b	.noMarker
+
+	popm	d0/d1	; restore start x,y
+
+	* Move the x-position to the right for the marker
+	move.l	rastport(a5),a0
+	move.l	rp_Font(a0),a0	
+	sub	tf_XSize(a0),d0
+	add	#216,d0
+
+	lea	.marker(pc),a0
+	bsr	print
+	bra.b	.yesMarker
+.marker	dc.b	"®",0
+.noMarker
+	popm	d0/d1	; pop start x,y, not needed
+.yesMarker
+
 
 	* Set ordinary colors if divider was previously printed
 	tst.b	d7
@@ -17122,13 +17166,15 @@ doPrintNames
 	addq.l	#1,d3 	 	* next module index
 	dbf	d5,.looppo
 .lop	
+	* Lines printed
 
 	* Restore normal font
 	move.l	rastport(a5),a1
 	move.l	fontbase(a5),a0
 	lore	GFX,SetFont
 
-;	DPRINT  "shownames release list"
+	jsr	removeListBoxClip
+
 	bsr.w 	releaseModuleList
 	rts
 	
@@ -47554,6 +47600,85 @@ spectrumGetSampleData
 
   endif ; FEATURE_SPECTRUMSCOPE
 
+
+***************************************************************************
+*
+* Region handling
+*
+***************************************************************************
+
+previousClipRegion	dc.l	0
+newRegion		dc.l	0
+
+setListBoxClip
+	pushm	d1-a6
+
+	lore	GFX,NewRegion
+	move.l	d0,newRegion
+	beq.b	.error
+
+	lea	-ra_SIZEOF(sp),sp
+	move.l	sp,a1
+	moveq	#30+WINX,d0
+	moveq	#62+WINY,d1
+	move	#251+WINX,d2
+	move	#127+WINY,d3
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt2
+	add	#16,d1
+	add	#16,d3  
+.noAlt2
+	add	boxy(a5),d3
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+
+	; Adjust the end X so that it matches the 
+	; markline highlight
+	subq	#3,d2
+	; Adjust the start x so that font will not bleed outside
+	; the mardkline highlight
+	addq	#1,d0
+
+	move	d0,ra_MinX(a1)
+	move	d1,ra_MinY(a1)
+	move	d2,ra_MaxX(a1)
+	move	d3,ra_MaxY(a1)
+	move.l	newRegion(pc),a0
+	lob	OrRectRegion
+	tst.l	d0
+	beq.b	.error
+
+	lea	ra_SIZEOF(sp),sp
+
+	move.l	windowbase(a5),a0
+	move.l	wd_WLayer(a0),a0
+	move.l	newRegion(pc),a1
+	lore	Layers,InstallClipRegion
+	; d0 = previous clip region or NULL
+	move.l	d0,previousClipRegion
+	moveq	#1,d0
+.x	popm	d1-a6
+	rts
+
+.error
+	moveq	#0,d0
+	bra.b	.x
+
+removeListBoxClip
+	tst.l	newRegion
+	beq.b	.error
+
+	* Remove clip region
+
+	move.l	windowbase(a5),a0
+	move.l	wd_WLayer(a0),a0
+	move.l	previousClipRegion(pc),a1
+	lore	Layers,InstallClipRegion
+
+	move.l	newRegion(pc),a0
+	lore	GFX,DisposeRegion
+.error
+	rts
 
 ***************************************************************************
 *
