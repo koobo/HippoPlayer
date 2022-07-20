@@ -4406,6 +4406,7 @@ avaa_ikkuna:
 	lore	WB,AddAppWindowA
 	move.l	d0,appwindow(a5)
 .elderly
+	jsr	createListBoxClipRegion
 
 	bsr.w	wrender
 ;	bsr.w	front		
@@ -5255,7 +5256,6 @@ sulje_ikkuna
 	lore	WB,RemoveAppWindow
 	clr.l	appwindow(a5)
 .noapp
-;	bsr	freepens
 
 	move.l	_IntuiBase(a5),a6		
 	move.l	windowbase(a5),d0
@@ -5265,21 +5265,25 @@ sulje_ikkuna
 	tst.b	kokolippu(a5)
 	bne.b	.big
 	move.l	4(a0),windowZippedPos(a5)	* Pienen ikkunan koordinaatit
-	DPRINT	"SMALL"
-	bra.b	.small
-.big	move.l	4(a0),windowpos(a5)	* Ison ikkunan koordinaatit
-	DPRINT	"BIG"
-.small
  if DEBUG
  	movem	4(a0),d0/d1
-	DPRINT	"Close window %ldx%ld"
+	DPRINT	"Close small window %ldx%ld"
  endif
+	bra.b	.small
+
+.big	move.l	4(a0),windowpos(a5)	* Ison ikkunan koordinaatit
+ if DEBUG
+ 	movem	4(a0),d0/d1
+	DPRINT	"Close big window %ldx%ld"
+ endif
+
+.small
+	jsr	disposeListBoxClipRegion
 
 	move.l	46(a0),a1		* WB screen addr
 	move	14(a1),wbkorkeus(a5)	* WB:n korkeus
 	clr.l	windowbase(a5)
 	jmp	_LVOCloseWindow(a6)
-;.uh	rts
 
 
 
@@ -47610,12 +47614,12 @@ spectrumGetSampleData
 previousClipRegion	dc.l	0
 newRegion		dc.l	0
 
-setListBoxClip
-	pushm	d1-a6
+createListBoxClipRegion
+	bsr	disposeListBoxClipRegion
 
 	lore	GFX,NewRegion
 	move.l	d0,newRegion
-	beq.b	.error
+	beq.b	.x
 
 	lea	-ra_SIZEOF(sp),sp
 	move.l	sp,a1
@@ -47624,10 +47628,10 @@ setListBoxClip
 	move	#251+WINX,d2
 	move	#127+WINY,d3
 	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt2
+	beq.b	.noAlt
 	add	#16,d1
 	add	#16,d3  
-.noAlt2
+.noAlt
 	add	boxy(a5),d3
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -47636,48 +47640,53 @@ setListBoxClip
 	; markline highlight
 	subq	#3,d2
 	; Adjust the start x so that font will not bleed outside
-	; the mardkline highlight
+	; the markline highlight
 	addq	#1,d0
 
 	move	d0,ra_MinX(a1)
 	move	d1,ra_MinY(a1)
 	move	d2,ra_MaxX(a1)
 	move	d3,ra_MaxY(a1)
+
 	move.l	newRegion(pc),a0
 	lob	OrRectRegion
-	tst.l	d0
-	beq.b	.error
-
 	lea	ra_SIZEOF(sp),sp
+	DPRINT	"NEW REGION"
+.x	tst.l	d0
+	rts
 
+
+disposeListBoxClipRegion
+	pushm	all
+	move.l	newRegion(pc),d0
+	beq.b	.x
+	clr.l	newRegion
+	move.l	d0,a0
+	DPRINT	"DISPOSE REGION"
+	lore	GFX,DisposeRegion
+.x	popm	all
+	rts
+
+setListBoxClip
+	pushm	all
 	move.l	windowbase(a5),a0
 	move.l	wd_WLayer(a0),a0
 	move.l	newRegion(pc),a1
 	lore	Layers,InstallClipRegion
 	; d0 = previous clip region or NULL
 	move.l	d0,previousClipRegion
-	moveq	#1,d0
-.x	popm	d1-a6
+	; Out of memory is also possible, this
+	; is visible in some flag somewhere.
+	popm	all
 	rts
 
-.error
-	moveq	#0,d0
-	bra.b	.x
 
 removeListBoxClip
-	tst.l	newRegion
-	beq.b	.error
-
-	* Remove clip region
-
 	move.l	windowbase(a5),a0
 	move.l	wd_WLayer(a0),a0
+	; Null is ok here:
 	move.l	previousClipRegion(pc),a1
 	lore	Layers,InstallClipRegion
-
-	move.l	newRegion(pc),a0
-	lore	GFX,DisposeRegion
-.error
 	rts
 
 ***************************************************************************
