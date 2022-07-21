@@ -5485,7 +5485,7 @@ inithippo
 
  ifeq zoom
 * tavallinen hipon p‰‰
-printhippo1
+printhippo1:
 ;	DPRINT	"Print hippo"
 
 	tst	boxsize(a5)
@@ -5511,18 +5511,20 @@ printhippo1
 	moveq	#0,d1
 	moveq	#HIPPOHEAD_HEIGHT,d5		* y-koko
 
+	; Calc y-position
 	moveq	#76+WINY-14,d3
+	tst.b	altbuttonsUse(a5)
+	beq.b	.noAlt1
+	add	#16,d3
+.noAlt1
+
 	move	boxsize(a5),d6
-	subq	#8,d6
-	bmi.b	.r
-	beq.b	.rr
-	subq	#1,d6
-	beq.b	.rrr
-	lsl	#2,d6
-	add	d6,d3
-.rrr
-	moveq	#0,d1
-.rr
+	mulu	listFontHeight(a5),d6
+	sub	d5,d6
+	bmi.b	.r	; will it fit?
+	lsr	#1,d6	; center it 
+	add	d6,d3	
+
 	lea	bitmapHippoHead(a5),a0
 	move.l	rastport(a5),a1		* main
 	moveq	#92,d2		* kohde x
@@ -5530,10 +5532,6 @@ printhippo1
 	beq.b	.e
 	move	#150,d2		* position when registered
 .e
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
-	add	#16,d3
-.noAlt1
 
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
@@ -8599,7 +8597,8 @@ printbox:
  	move	boxsize(a5),d2
 	lsr	#1,d2
 	subq	#1,d2
-	lsl	#3,d2
+	mulu	listFontHeight(a5),d2
+	printt "see if this is correct"
 	add	d2,d1
 	bra.w	print
 
