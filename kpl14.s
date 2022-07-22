@@ -1,4 +1,4 @@
-;APS00004234000000000000000000000000000000000000000000000000000000000000000000000000
+;APS0000422E000000000000000000000000000000000000000000000000000000000000000000000000
 
 	incdir	include:
 	include	exec/exec_lib.i
@@ -215,11 +215,11 @@ main
 
 	lea	k_base,a0
 	lea	module,a1
-	moveq	#8,d0
+	moveq	#0,d0
 	moveq	#0,d1		* Mode
-;	moveq	#1,d1		* Mode
+	moveq	#0,d1		* Mode
 ;	moveq	#%11,d2		* flags, fastramyes, tempoyes
-	moveq	#%01,d2		* flags, tempoyes
+;	moveq	#%01,d2		* flags, tempoyes
 
 
 	bsr.b	kplayer+kp_init
@@ -236,18 +236,17 @@ main
 
 .loop	
 
-	move.l	$dff004,d0
-	lsr.l	#8,d0
-	and	#$1ff,d0
-	cmp	#100,d0
-	bne.b	.loop
+.1	cmp.b	#$60,$dff006
+	bne.b	.1
+.2	cmp.b	#$60,$dff006
+	beq.b	.2
 
 	tst.b	k_base+k_timingmode
 	bne.b	.rr
 
-	move	#$ff0,$dff180
+;	move	#$ff0,$dff180
 	bsr.w	k_music
-	clr	$dff180
+;	clr	$dff180
 .rr
 	btst	#6,$bfe001	* left
 	bne.b	.loop
@@ -1362,7 +1361,13 @@ k_jum	bra.b	k_setperiod		* 0
 	bra.b	k_setperiod		* f
 	nop
 
-k_sofs	bsr.w	k_sampleoffset
+k_sofs	
+	bsr.w	k_sampleoffset
+	; prevent sample offset being run in the below
+	; part again, which will likely set the sample length
+	; to 1 falsely. The length is set to Paula before this
+	; so playback will be fine, scopes just get confused.
+	moveq	#0,d0
 	
 k_setperiod
 	move.l	n_periodaddr(a4),d1
@@ -2450,4 +2455,5 @@ k_base	ds.b	k_sizeof
 	section	po,data_c
 
 ;module	incbin	music:mod.figure
-module	incbin	sys:music/mod.sundayhangover
+;module	incbin	sys:music/mod.realdeal
+module	incbin	sys:music/mod.test9
