@@ -226,6 +226,7 @@ check	macro
 	
 	include	libraries/timer_lib.i
 	include	devices/timer.i
+	include	intuition/sghooks.i
 
 	incdir include/
 	include	mucro.i
@@ -1336,6 +1337,9 @@ listBoxRegion		rs.l	1
 * Layers library clip region to keep list box text drawing inside,
 * useful for variable sized fonts.	
 listBoxClipRegion	rs.l	1
+
+* String extend structure to configure custom font to string gadgets on kick2.0+
+stringExtendStruct 	rs.b	sex_SIZEOF
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -2458,6 +2462,7 @@ main
 	move.l	d0,fontbase(a5)
 
 .mainFontOk
+	move.l	fontbase(a5),stringExtendStruct+sex_Font(a5)
 
 	* list_text_attr is now according to loaded prefs
 	lea	list_text_attr,a0	* nyt jo muutettu prefssien mukaan
@@ -2702,14 +2707,36 @@ main
 	cmp	#37,LIB_VERSION(a0)
 	blo.b	.faef
 	
-	* make string gadgets tab cyclable
+	* Make the prefs string gadgets tab cyclable
+	* and configure fonts. Kick2.0+ only.
 
-	move	#GFLG_TABCYCLE,d0	* string-gadgetit cyclattaviks tabilla
-	lea	gg_Flags+ack2,a0
-	or	d0,(a0)
-	or	d0,ack3-ack2(a0)
-	or	d0,ack4-ack2(a0)
-	or	d0,DuU0-ack2(a0)
+	basereg	gadgets2,a0
+	lea	gadgets2,a0
+	move	#GFLG_TABCYCLE!GFLG_STRINGEXTEND,d0
+	or	d0,gg_Flags+ack2(a0)
+	or	d0,gg_Flags+ack3(a0)
+	or	d0,gg_Flags+ack4(a0)
+	or	d0,gg_Flags+DuU0(a0)
+
+	; Build the sex struct, font will be set
+	; when it is loaded, set pens here.
+	lea	stringExtendStruct(a5),a1
+	move.b	#1,sex_Pens+0(a1)
+	; already zeroes
+	;move.b	#0,sex_Pens+1(a1)
+	move.b	#1,sex_ActivePens+0(a1)
+	;move.b	#0,sex_ActivePens+1(a1)
+
+	move.l 	gg_SpecialInfo+ack2(a0),a2
+	move.l	a1,si_Extension(a2)
+	move.l 	gg_SpecialInfo+ack3(a0),a2
+	move.l	a1,si_Extension(a2)
+	move.l 	gg_SpecialInfo+ack4(a0),a2
+	move.l	a1,si_Extension(a2)
+	move.l 	gg_SpecialInfo+DuU0(a0),a2
+	move.l	a1,si_Extension(a2)
+
+	endb	a0
 
 .faef
 
@@ -13414,6 +13441,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lea	text_attr,a0
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
+	move.l	d0,stringExtendStruct+sex_Font(a5)
 	
 	move.l	prefs_listtextattr+prefsdata(a5),list_text_attr+4
 	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr
