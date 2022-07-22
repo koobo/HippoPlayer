@@ -1390,7 +1390,6 @@ p_NOP macro
 * player group version
 xpl_versio	=	25
 
- printt "TEST TEST: star frontier.bp3"
 
 *********************************************************************************
 *
@@ -3211,9 +3210,14 @@ msgloop
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
 	beq.b	.weew
-
-	DPRINT	"Boxsize changed"
-
+	
+ if DEBUG
+ 	ext.l	d0
+ 	moveq	#0,d1
+ 	move	boxsize0(a5),d1
+	DPRINT	"Boxsize changed to %ld from %ld"
+ endif
+ 
 	move	d0,boxsize0(a5)
 	bsr.w	setboxy
 	st	d7
@@ -4488,10 +4492,14 @@ getscreeninfo
 	moveq	#0,d0
 	move.b	sc_BarHeight(a0),d0
 	moveq	#0,d1
-	move.b	sc_WBorTop(a0),d1
-	moveq	#0,d2 
-	move.b	sc_BarVBorder(a0),d2
-	DPRINT	"sc_BarHeight=%ld sc_WBorTop=%ld sc_BarVBorder=%ld fontY=%ld"
+	move.b	sc_BarVBorder(a0),d1
+	move.l	d3,d2
+	DPRINT	"sc_BarHeight=%ld sc_BarVBorder=%ld fontY=%ld"
+	moveq	#0,d0
+	move.b	sc_WBorTop(a0),d0
+	moveq	#0,d1
+	move.b	sc_WBorBottom(a0),d1
+	DPRINT	"sc_WBorTop=%ld sc_WBorBottom=%ld"
  endif
 
 	* It seems that the total height of the window
@@ -5145,6 +5153,11 @@ mainWindowSizeChanged
 	bsr.w	getFileboxYStartToD2
 
 	move	wd_Height(a0),d0
+
+	* account for bottom border
+	subq	#6,d0
+	sub	windowbottom(a5),d0
+
 	sub	d2,d0
 	bmi.b	.x
 	* Divide to 8-pixel rows
@@ -5157,7 +5170,7 @@ mainWindowSizeChanged
 	
  if DEBUG
  	ext.l	d0
-	DPRINT	"New box size=%ld"
+	DPRINT	"New boxsize=%ld"
  endif
 
 	* Set new boxsize into prefs gadget
@@ -5185,7 +5198,7 @@ configResizeGadget
 	bsr.b	disableResizeGadget
 	* Check if box is visible?
 	tst	boxsize(a5)
-	beq.b	enableResizeGadget\.small
+	beq.w	enableResizeGadget\.small
 
 * Enables the low right bottom resize gadget, on kick2.0+ only,
 * where GTYP_SIZING is available.
@@ -5215,7 +5228,10 @@ enableResizeGadget
 ;	add	#3*8+6,d2
 	moveq	#3,d0
 	mulu	listFontHeight(a5),d0
-	addq	#6,d0	* some additional adjustment
+	* some additional adjustment: bottom border?
+	addq	#6,d0
+	add	windowbottom(a5),d0
+
 	add	d0,d2
 	move	d2,wd_MinHeight(a0)
 
