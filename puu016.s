@@ -9834,10 +9834,10 @@ reslider
 	lea	slim,a0
 	lea	slim1a,a1
 	tst.b	uusikick(a5)
-	bne.b	.new
+	bne.b	.newz
 	* Select alternate gfx
 	lea	slim1a_kick13-slim1a(a1),a1
-.new
+.newz
 
 	move	(a1)+,(a0)+
 .filf	move	(a1),(a0)+
@@ -19220,9 +19220,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .vanaha
 
 	lea	gAD1,a3
-	tst.b	uusikick(a5)
-	beq.b	.nel
-
 	movem	4(a3),plx1/ply1/plx2/ply2	* slider
 	add	plx1,plx2
 	add	ply1,ply2
@@ -20495,9 +20492,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 ;	beq.b	.eiup
 
 
-	tst.b	uusikick(a5)
-	beq.b	.bar
-
 	move	gg_Height(a0),d0
 	mulu	pi_VertBody(a1),d0
 	divu	#$ffff,d0
@@ -20515,6 +20509,12 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	lea	slim2,a0
 	lea	slim1a,a1
+	tst.b	uusikick(a5)
+	bne.b	.newz
+	* Select alternate gfx
+	lea	slim1a_kick13-slim1a(a1),a1
+.newz
+
 	move	(a1)+,(a0)+
 .filf	move	(a1),(a0)+
 	dbf	d0,.filf
@@ -20882,14 +20882,14 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	
 
 
-	jsr		obtainModuleData
+	jsr	obtainModuleData
 	move.l	moduleaddress(a5),a1	* onko chipiss‰?
 	lore	Exec,TypeOfMem
-	jsr		releaseModuleData
+	jsr	releaseModuleData
 	btst	#MEMB_CHIP,d0
 	beq.w	.msgloop
 
-	jsr		obtainModuleData
+	jsr	obtainModuleData
 	move.l	moduleaddress(a5),a1
 
 	lea	952(a1),a0		* tutkitaan patternien m‰‰r‰
@@ -21047,7 +21047,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move	d3,$d4-$96(a3)
 
 	* Sample is now playing
-	jsr		releaseModuleData
+	jsr	releaseModuleData
 
 	bra.w	.msgloop
 
@@ -48621,7 +48621,7 @@ wreg1
 
  even
 
-* Slider for the module info window, I guess
+* Slider for the module info window
 gAD1	dc.l 0
 	dc.w 9,14,16,127-13*8,GFLG_GADGHNONE,9,3
 	dc.l gAD1gr,0,0,0,gAD1s
@@ -49264,10 +49264,10 @@ ps3memptysample
 nullsample	ds.l	1
 
 * tilaa filebox-sliderin imagelle
-slim	ds	410*2
+slim:	ds	410*2
 
 * sampleinfo-slideri
-slim2	ds	410*2
+slim2:	ds	410*2
 
 
 	section	udnm,bss_p
