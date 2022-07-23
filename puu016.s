@@ -2789,6 +2789,7 @@ main
 * proportional gadget visual look depending on kickstart version
 .rop
 	move.l	gg_SpecialInfo(a0),a1
+	and	#~GFLG_GADGHNONE,gg_Flags(a0) ; enable complement highlight
 
 	;moveq	#AUTOKNOB,d0		* kick1.3: vanhat autoknobit
 	;tst.b	uusikick(a5)
