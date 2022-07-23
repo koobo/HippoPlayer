@@ -2299,6 +2299,10 @@ main
 .hasHome
  endif
 
+	; Set nw_DetailPen and nw_BlockPen
+	; nw_DetailPen: prop gadget background, title bar background
+	; nw_BlockPen: prop gadget border color, title bar color
+
 	basereg	winstruc,a2
 	lea	winstruc,a2
 	move	#$0301,d0
@@ -2619,8 +2623,8 @@ main
 
 
 .gadu	move	d0,gg_GadgetID(a0)
-	tst.b	uusikick(a5)
-	beq.b	.nobo1
+	;tst.b	uusikick(a5)
+	;beq.b	.nobo1
 	cmp	#GTYP_PROPGADGET,gg_GadgetType(a0)	* vain kick2.0+
 	bne.b	.nobo1
 	or	#GFLG_GADGHNONE,gg_Flags(a0)
@@ -2642,8 +2646,8 @@ main
 .nt2	rts
 
 .eer2
-	tst.b	uusikick(a5)
-	beq.w	.ropp
+	;tst.b	uusikick(a5)
+	;beq.w	.ropp
 
 ** kick 2.0+ asetuksia
 ** Add prop gadget slider images for kick2.0
@@ -2786,9 +2790,9 @@ main
 .rop
 	move.l	gg_SpecialInfo(a0),a1
 
-	moveq	#AUTOKNOB,d0		* kick1.3: vanhat autoknobit
-	tst.b	uusikick(a5)
-	beq.b	.nova
+	;moveq	#AUTOKNOB,d0		* kick1.3: vanhat autoknobit
+	;tst.b	uusikick(a5)
+	;beq.b	.nova
 	moveq	#PROPNEWLOOK!PROPBORDERLESS,d0	* kick2.0+, newlook borderless
 
 	addq	#1,gg_TopEdge(a0)
@@ -2833,7 +2837,24 @@ main
 	tst.b	uusikick(a5)
 	bne.w	.newkick
 
+	; Copy alternative horiz prop gadget gfx for kick13
+	lea	horizPropGadgetGfxNormal,a0
+	moveq	#horizPropGadgetGfxNormal_kick13-horizPropGadgetGfxNormal,d0
+	lea	(a0,d0),a1
+	move.l	a1,a2
+.cp13	move	(a1)+,(a0)+
+	cmp.l	a0,a2
+	bne.b	.cp13
 
+	lea	horizPropGadgetGfxDouble,a0
+	moveq	#horizPropGadgetGfxDouble_kick13-horizPropGadgetGfxDouble,d0
+	lea	(a0,d0),a1
+	move.l	a1,a2
+.cp14	move	(a1)+,(a0)+
+	cmp.l	a0,a2
+	bne.b	.cp14
+ 
+ REM
 	moveq	#AUTOKNOB,d0		* kick1.3: vanhat autoknobit
 	lea	slider1s,a0
 	or	d0,(a0)
@@ -2852,7 +2873,7 @@ main
 	or	d0,ahiG4s-slider1s(a0)
 	or	d0,ahiG5s-slider1s(a0)
 	or	d0,ahiG6s-slider1s(a0)
-
+ EREM
 
 ** 3 pixeliä korkeempi infowindowin slideri
 ;	addq	#3,gg_Height+gAD1
@@ -4375,8 +4396,8 @@ avaa_ikkuna:
 .r	move	d3,gg_Height(a3)
 
 
-	tst.b	uusikick(a5)
-	beq.b	.ded
+;	tst.b	uusikick(a5)
+;	beq.b	.ded
 	subq	#3,gg_Height(a3)
 .ded
 
@@ -4892,7 +4913,7 @@ wrender:
 * Draw slider highlights
 
 	tst.b	uusikick(a5)
-	beq.b	.nelq
+;	beq.b	.nelq
 
 	tst	boxsize(a5)
 	beq.b	.nofs
@@ -6082,6 +6103,11 @@ sliderlaatikko
 	move.l	a1,a3
 	move.l	pen_1(a5),a2
 	move.l	pen_2(a5),a4
+
+	tst.b	uusikick(a5)
+	bne.b	.new
+	exg	a2,a4
+.new
 
 ** valkoset reunat
 
@@ -9787,8 +9813,8 @@ reslider
 
 	move	d0,slider4oldheight(a5)
 
-	tst.b	uusikick(a5)
-	beq.b	.bar
+;	tst.b	uusikick(a5)
+;	beq.b	.bar
 
 ;	move	gg_Height(a0),d0
 	mulu	pi_VertBody(a1),d0	* koko pixeleinä
@@ -9806,6 +9832,12 @@ reslider
 
 	lea	slim,a0
 	lea	slim1a,a1
+	tst.b	uusikick(a5)
+	bne.b	.new
+	* Select alternate gfx
+	lea	slim1a_kick13-slim1a(a1),a1
+.new
+
 	move	(a1)+,(a0)+
 .filf	move	(a1),(a0)+
 	dbf	d0,.filf
@@ -13801,8 +13833,8 @@ prefsgads
 	bra.b	.loru
 
 .sli
-	tst.b	uusikick(a5)
-	beq.b	.nel
+	;tst.b	uusikick(a5)
+	;beq.b	.nel
 
 	movem	4(a3),plx1/ply1/plx2/ply2	* fileslider
 	add	plx1,plx2
@@ -48638,13 +48670,29 @@ slim2height	dc	8	* heigh
 		dc.l	0	* nextimage
 
 
+; Vertical slider graphics, these are copied in the
+; actual output gfx buffer depending on the slider size
 
-slim1a	dc	%0000000000000000
-slim2a	dc	%0000000000000001
-slim3a	dc	%0111111111111111
-slim1b	dc	%1111111111111110
-slim2b	dc	%1000000000000000
-slim3b	dc	%0000000000000000
+; kickstart 2.0+
+; Bitplane 1
+slim1a	dc	%0000000000000000	; top line
+.slim2a	dc	%0000000000000001	; middle lines
+.slim3a	dc	%0111111111111111	; bottom line
+; Bitplane 2
+.slim1b	dc	%1111111111111110
+.slim2b	dc	%1000000000000000
+.slim3b	dc	%0000000000000000
+ 
+; kickstart 1.3
+; Bitplane 1
+slim1a_kick13
+.slim1a	dc	%1111111111111110	; top line
+.slim2a	dc	%1000000000000000	; middle lines
+.slim3a	dc	%0000000000000000	; bottom line
+; Bitplane 2
+.slim1b	dc	%0000000000000000
+.slim2b	dc	%0000000000000001
+.slim3b	dc	%0111111111111111
 
 
 ** PC -> Amiga somekinda text conversion table
@@ -48721,6 +48769,9 @@ korvadata2
 
 
 *** Slider2im
+; Vertical slider image normal size
+; Width: 11 pixels
+; Height: 9 pixels
 juustoim	
 juust0im	
 meloniim	
@@ -48736,33 +48787,129 @@ ahiG4im
 ahiG5im
 ahiG6im
 nAMISKA5im
-	dc.l $00000020,$00200020,$00200020,$00200020,$7FE0FFC0,$80008000
-	dc.l $80008000,$80008000,$80000000,$00000000
+horizPropGadgetGfxNormal
+	; bitplane 1
+	dc.w %0000000000000000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0111111111100000
+	; bitplane 2
+	dc.w %1111111111000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %0000000000000000
+
+horizPropGadgetGfxNormal_kick13
+	; bitplane 1
+	dc.w %1111111111000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	; bitplane 2
+	dc.w %0000000000000000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0111111111100000
 
 * Width: 11 pixels
-* Height: 9 pixels
+* Height: 9+8 pixels
 
 slider1imDouble
-	dc.l $00000020
-	dc.l $00200020
-	dc.l $00200020
-	dc.l $00200020
-	dc.l $00200020
-	dc.l $00200020
-	dc.l $00200020
-	dc.l $00200020
-	dc.l $7FE0FFC0
+horizPropGadgetGfxDouble
+	; bitplane 1
+	dc.w %0000000000000000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0111111111100000
+	; bitplane 2
+	dc.w %1111111111000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %0000000000000000
 
-
-	dc.l $80008000
-	dc.l $80008000
-	dc.l $80008000
-	dc.l $80008000
-	dc.l $80008000
-	dc.l $80008000
-	dc.l $80008000
-	dc.l $80000000
-	dc.l $00000000
+horizPropGadgetGfxDouble_kick13
+	; bitplane 1
+	dc.w %1111111111000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %1000000000000000
+	dc.w %0000000000000000
+	; bitplane 2
+	dc.w %0000000000000000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0000000000100000
+	dc.w %0111111111100000
 
 
 
