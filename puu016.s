@@ -552,6 +552,8 @@ pen_3		rs.l	1
 WINSIZX		rs	1		* p‰‰ikkunan koot
 WINSIZY		rs	1
 
+previousWindowWidth rs 	1
+
 eicheck		rs.b	1
 reghippo	rs.b 	1 		* ensimm‰inen hippo hieman sivummalle
 
@@ -2931,6 +2933,8 @@ main
 	bsr.w	inithippo
 	bsr.w	initkorva
 	bsr.w	initkorva2
+	jsr	initializeButtonRowLayout
+
 	st	reghippo(a5)
 
 
@@ -4824,6 +4828,7 @@ getscreeninfo
 	* Store new window size
 	move	WINSIZX(a5),wsizex
 	move	WINSIZY(a5),wsizey
+	move	WINSIZX(a5),previousWindowWidth(a5)
 
 	lea	gadgets,a0
 	bsr.b	.hum
@@ -4888,7 +4893,9 @@ wrender:
 	move.l	rastport(a5),a2
 	moveq	#4,d0
 	moveq	#11,d1
-	move	#259,d2
+;	move	#259,d2
+	move	WINSIZX(a5),d2
+	subq	#6,d2
 	move	WINSIZY(a5),d3
 	subq	#3,d3
 	add	boxy(a5),d3
@@ -4939,6 +4946,8 @@ wrender:
 
 	* On kick2.0 insert an invisible size gadget last
 	bsr	configResizeGadget
+
+	jsr	layoutButtonRow
 
 * sitten isket‰‰n gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
@@ -5089,7 +5098,10 @@ wrender:
 	tst	boxsize(a5)		* filebox
 	beq.b	.b
 	moveq	#28+WINX,plx1
-	move	#253+WINX,plx2
+;	move	#253+WINX,plx2
+	move	WINSIZX(a5),plx2
+	subq	#8,plx2
+
 	moveq	#61+WINY,ply1
 	move	#128+WINY,ply2
  	tst.b	altbuttonsUse(a5)
@@ -5107,7 +5119,10 @@ wrender:
 	bsr.w	laatikko1
 .b
 	moveq	#5+WINX,plx1		* infobox
-	move	#254+WINX,plx2
+	;move	#254+WINX,plx2
+	move	WINSIZX(a5),plx2
+	subq	#8,plx2
+
 	moveq	#10+WINY,ply1
 	moveq	#29+WINY,ply2
 	add	windowleft(a5),plx1
@@ -5220,7 +5235,6 @@ unlockscreen
 * Called upon IDCMP_NEWSIZE after the user dragged the
 * window size gadget. Filebox size is set accoring to window height.
 mainWindowSizeChanged
-	DPRINT	"mainWindowSizeChanged"
 	move.l	windowbase(a5),a0
 	tst.b	kokolippu(a5)
 	bne.b	.z
@@ -5234,8 +5248,13 @@ mainWindowSizeChanged
 .x 	DPRINT	"bail out"
 	rts
 .y
-	bsr.w	getFileboxYStartToD2
+ if DEBUG
+	movem	wd_Width(a0),d0/d1
+	movem	winstruc+nw_Width,d2/d3
+	DPRINT	"size change to %ldx%ld (orig %ldx%ld)"
+ endif
 
+	bsr.w	getFileboxYStartToD2
 	move	wd_Height(a0),d0
 
 	* account for bottom border
@@ -16888,7 +16907,10 @@ clearbox:
 .x	rts
 .r	moveq	#30+WINX,d0
 	moveq	#62+WINY,d1
-	move	#251+WINX,d2
+;	move	#251+WINX,d2
+	move	WINSIZX(a5),d2
+	sub	#10,d2
+	printt	"TODO TODO"
 	move	#127+WINY,d3
  	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
@@ -17084,7 +17106,9 @@ shownames:
 
 	moveq	#32+WINX,d0	* source x
 	move	d0,d2		* dest x
-	move	#27*8+1,d4	* x size
+	;move	#27*8+1,d4	* x size
+	move	WINSIZX(a5),d4
+	sub	#264-216-2,d4
 
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -17572,7 +17596,10 @@ inforivit_clear
 	movem.l	d0-d4,-(sp)
 	moveq	#7+WINX,d0
 	moveq	#11+WINY,d1
-	move	#252+WINX,d2
+;	move	#252+WINX,d2
+	move	WINSIZX(a5),d2
+	sub	#10,d2
+	printt	"TODO TODO TODO"
 	moveq	#28+WINY,d3
 	bsr.w	tyhjays
 	movem.l	(sp)+,d0-d4
@@ -17694,6 +17721,7 @@ inforivit_play
 
 bipb	moveq	#18+WINY,d1
 bipb2	moveq	#11+WINX,d0
+	printt "TODO: lenght check"
 	bsr.w	print
 bopb	rts
 
@@ -18593,7 +18621,10 @@ markit
 	add	windowtop(a5),d1
 	move	d0,d2
 	move	d1,d3
-	move	#216,d4
+;	move	#216,d4
+	move	WINSIZX(a5),d4
+	sub	#264-216-1,d4
+
 	;moveq	#8,d5
 	move	listFontHeight(a5),d5
 	moveq	#$50,d6		* EOR
@@ -20656,7 +20687,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	gg_SpecialInfo(a2),a0
 	move	pi_VertPot(a0),d0
 	cmp	ssliderold(a5),d0
-	bne.b	.new
+	bne.w	.new
 .q	bra.w	.returnmsg
 .new	move	d0,ssliderold(a5)
 
@@ -22631,7 +22662,7 @@ startScopeTask:
 	tst.b 	(a5,d7)
 	bne.b	.x
 
-	DPRINT	"startScopeTask"
+	;DPRINT	"startScopeTask"
 
 	* Get task structure
 	move	st_taskOffset(a4),d0
@@ -22814,7 +22845,7 @@ stopScopeTask
 	tst.b 	(a5,d7)
 	beq.w	.x
 
-	DPRINT	"stopScopeTask"
+	;DPRINT	"stopScopeTask"
 
 	* Get task structure
 	move	st_taskOffset(a4),d0
@@ -47783,7 +47814,7 @@ spectrumGetSampleData
 
 ***************************************************************************
 *
-* Region handling
+* Region and clipping for filebox
 *
 ***************************************************************************
 
@@ -47798,7 +47829,11 @@ createlistBoxRegion
 	move.l	sp,a1
 	moveq	#30+WINX,d0
 	moveq	#62+WINY,d1
-	move	#251+WINX,d2
+	printt "TODO TODO TODO TODO"
+	;move	#251+WINX,d2
+	move	WINSIZX(a5),d2
+	sub	#10,d2
+
 	move	#127+WINY,d3
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt
@@ -47861,6 +47896,184 @@ removeListBoxClip
 	move.l	listBoxClipRegion(a5),a1
 	lore	Layers,InstallClipRegion
 	rts
+
+
+***************************************************************************
+*
+* Row button layout
+*
+***************************************************************************
+layLeft		dc 	0
+layRight	dc	0
+
+initializeButtonRowLayout_
+
+
+	lea	row1Gadgets,a0
+	basereg	row1Gadgets,a0
+
+	move	gadgetPrevButton+gg_LeftEdge(a0),layLeft
+	move	gadgetInfoButton+gg_LeftEdge(a0),d0
+	add	gadgetInfoButton+gg_Width(a0),d0
+	;move	WINSIZX(a5),d1
+	move	#264,d1
+	sub	d0,d1
+	move	d1,layRight
+
+	* Space taken by the row
+	move	gadgetInfoButton+gg_LeftEdge(a0),d2
+	add	gadgetInfoButton+gg_Width(a0),d2
+	sub	gadgetPrevButton+gg_LeftEdge(a0),d2
+	sub	#2*10,d2
+	endb	a0
+
+.1	tst	(a0)
+	beq.b	.2
+	move.l	a0,a1
+	add	(a0),a1
+	;move.l	#264<<8,d0
+	moveq	#0,d0
+	move	gg_Width(a1),d0
+	lsl.l	#8,d0
+	;divu	d2,d0
+	;divu	#264,d0
+	divu	#220,d0
+	move	d0,2(a0)
+	addq	#4,a0
+	bra.b	.1
+.2
+	rts
+
+initializeButtonRowLayout
+	move	#8,layLeft
+	move	#8,layRight
+	lea	row1Gadgets,a0
+	bsr.b	.do
+	lea	row2Gadgets,a0
+	bsr.b	.do
+	rts
+	
+.do
+.1	tst	(a0)
+	beq.b	.2
+	move.l	a0,a1
+	add	(a0),a1
+	move	gg_Width(a1),2(a0)
+	move	gg_LeftEdge(a1),4(a0)
+	subq	#8,4(a0)
+	addq	#6,a0
+	bra.b	.1
+.2
+	rts
+
+; ggwidth/WINSIZX = ratio
+; ggwidth = WINSIZX*ratio
+
+
+layoutButtonRow_
+	moveq	#0,d0
+	moveq	#0,d1
+	moveq	#0,d2
+	move	layLeft(pc),d0
+	move	layRight(pc),d1
+	move	winstruc+nw_Width,d2
+	sub	d0,d2
+	sub	d1,d2
+	DPRINT	"------ lay %ld %ld space=%ld"
+
+	lea	row1Gadgets,a0
+	; x-position
+	;moveq	#0,d0
+	;add	windowleft(a5),d0
+	;addq	#8,d0
+	move	layLeft(pc),d0
+
+
+
+.1	tst	(a0)
+	beq.b	.2
+	move.l	a0,a1
+	add	(a0),a1
+	move	d0,gg_LeftEdge(a1)
+	moveq	#0,d1
+	move	winstruc+nw_Width,d1
+	; 10 buttons
+
+	move	WINSIZX(a5),d1
+	sub	layLeft(pc),d1
+	sub	layRight(pc),d1
+	sub	#2*10,d1
+
+	mulu	2(a0),d1
+	lsr.l	#8,d1
+	move	d1,gg_Width(a1)
+	addq	#2,d0
+	add	d1,d0
+
+	addq	#4,a0
+	bra.b	.1
+.2
+	rts
+
+
+layoutButtonRow
+	lea	row1Gadgets,a0
+	bsr.b	.do
+	lea	row2Gadgets,a0
+	bsr.b	.do
+	rts
+
+.do
+	; x-position
+	;moveq	#0,d0
+	;add	windowleft(a5),d0
+	;addq	#8,d0
+
+	moveq	#0,d0
+	move	layLeft(pc),d0
+	lsl.l	#8,d0
+
+
+.1	tst	(a0)
+	beq.b	.2
+	move.l	a0,a1
+	add	(a0),a1
+
+
+
+;	move.l	d0,d1
+;	lsr.l	#8,d1
+;	move	d1,gg_LeftEdge(a1)
+;
+	moveq	#0,d1
+	move	winstruc+nw_Width,d1
+	sub	#8+8,d1 
+	lsl.l	#8,d1
+	divu	#264-8-8,d1
+	move.l	d1,d2
+	
+	mulu	4(a0),d1
+	lsr.l	#8,d1
+	addq	#8,d1
+	move	d1,gg_LeftEdge(a1)
+
+	mulu	2(a0),d2
+	;move	2(a0),d2
+	;mulu	2(a0),d1
+;	add.l	d1,d0 * next position
+;	
+	lsr.l	#8,d2
+	move	d2,gg_Width(a1)
+;
+;	;add.l	#2<<8,d0
+;
+	addq	#6,a0
+	bra.b	.1
+.2
+	rts
+
+
+
 
 ***************************************************************************
 *
@@ -48498,6 +48711,7 @@ gadgetResize
 	; ig_NextImage
 	dc.l 0
 
+	
 
 
 * Rename the gadgets defined above to something not crazy
@@ -48522,6 +48736,50 @@ gadgetFileSlider        EQU  slider4
 gadgetSortButton        EQU  lilb2
 gadgetMoveButton        EQU  lilb1 
 gadgetPrgButton         EQU  plg
+
+
+row1Gadgets
+	dr	gadgetPrevButton
+	dc	0,0
+	dr	gadgetPrevSongButton
+	dc	0,0
+	dr	gadgetRewindButton
+	dc	0,0
+	dr	gadgetPlayButton
+	dc	0,0
+	dr 	gadgetForwardButton
+	dc	0,0
+	dr	gadgetNextSongButton
+	dc	0,0
+	dr	gadgetNextButton
+	dc	0,0
+	dr	gadgetStopButton
+	dc	0,0
+	dr	gadgetEjectButton
+	dc	0,0
+	dr	gadgetInfoButton
+	dc	0,0
+	dc	0 ; END
+	
+row2Gadgets
+	dr	gadgetVolumeSlider
+	dc	0,0
+	dr	gadgetNewButton
+	dc	0,0
+	dr	gadgetAddButton
+	dc	0,0
+	dr	gadgetDelButton
+	dc	0,0
+	dr	gadgetPrgButton
+	dc	0,0
+	dr	gadgetMoveButton
+	dc	0,0
+	dr	gadgetSortButton
+	dc	0,0
+	dr	gadgetPrefsButton
+	dc	0,0
+	dc	0 ; END
+
 
 gadgetFileSliderInitialHeight = 67-16+2
 
