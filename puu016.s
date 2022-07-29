@@ -4229,7 +4229,7 @@ handleSignal2
 	moveq	#1,d7
 
 	push	d7
-	bsr.b		.closeAndReopenWindow
+	bsr.b	.closeAndReopenWindow
 	pop	d7
 	tst.l	d0
 	bne.b	.error
@@ -4876,16 +4876,16 @@ getscreeninfo
 ****** Piirret‰‰n ikkunan kamat
 
 wrender:
+	jsr	layoutButtonRow
+
 	move.l	pen_0(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
 
 	lea	gadgets,a4
 
-
 	tst.b	kokolippu(a5)
 	beq.w	.pienehko
-
 
 	tst.b	uusikick(a5)		* uusi kick?
 	beq.b	.vanaha
@@ -4947,7 +4947,8 @@ wrender:
 	* On kick2.0 insert an invisible size gadget last
 	bsr	configResizeGadget
 
-	jsr	layoutButtonRow
+
+
 
 * sitten isket‰‰n gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
@@ -48021,6 +48022,11 @@ layoutButtonRow
 	bsr.b	.do
 	lea	row2Gadgets,a0
 	bsr.b	.do
+
+	; Fine tune the info button
+	lea	button2,a0
+	move.l	gg_GadgetRender(a0),a1
+	sub	#1,ig_LeftEdge(a1)
 	rts
 
 .do
@@ -48065,6 +48071,8 @@ layoutButtonRow
 	lsr.l	#8,d2
 	move	d2,gg_Width(a1)
 ;
+	bsr	.centerContent
+
 ;	;add.l	#2<<8,d0
 ;
 	addq	#6,a0
@@ -48072,7 +48080,56 @@ layoutButtonRow
 .2
 	rts
 
+; in:
+;   a1 = gadget
+.centerContent
+	tst.l	gg_GadgetText(a1)
+	bne.b	.centerText
+	move	gg_Flags(a1),d0
+	and	#GFLG_GADGIMAGE,d0
+	bne.b	.centerImage
+	rts
 
+.centerImage
+	move.l	gg_GadgetRender(a1),a2
+	
+	move	ig_Width(a2),d2
+	lsr	#1,d2
+	move	gg_Width(a1),d3
+	lsr	#1,d3
+	sub	d2,d3
+	move	d3,ig_LeftEdge(a2)
+	rts
+
+.centerText
+	push	a0
+	move.l	gg_GadgetText(a1),a2
+
+	move.l	it_IText(a2),d0
+
+	move.l	it_IText(a2),a0
+	move.l	a0,d0
+.c	tst.b	(a0)+
+	bne.b	.c
+	sub.l	d0,a0
+	subq	#1,a0
+	move.l	a0,d0
+
+	push	a1
+	move.l	rastport(a5),a1
+	move.l	it_IText(a2),a0
+	lore	GFX,TextLength
+	pop	a1
+	
+
+	move	gg_Width(a1),d3
+	lsr	#1,d3
+	lsr	#1,d0
+	sub	d0,d3
+	move	d3,it_LeftEdge(a2)
+	
+	pop	a0
+	rts
 
 
 ***************************************************************************
