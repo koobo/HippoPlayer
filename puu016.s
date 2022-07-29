@@ -5672,14 +5672,19 @@ printhippo1:
 	lsr	#1,d6	; center it 
 	add	d6,d3	
 
-	lea	bitmapHippoHead(a5),a0
-	move.l	rastport(a5),a1		* main
-	moveq	#92,d2		* kohde x
+	;moveq	#92,d2		* kohde x
+	move	WINSIZX(a5),d2
+	lsr	#1,d2
+	sub	#HIPPOHEAD_WIDTH/2-8,d2
+
 	tst.b	d7
 	beq.b	.e
 	move	#150,d2		* position when registered
 .e
 
+
+	lea	bitmapHippoHead(a5),a0
+	move.l	rastport(a5),a1		* main
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
 ;	move	#$ee,d6		* minterm, kopio a or d ->d
