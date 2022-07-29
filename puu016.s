@@ -559,7 +559,6 @@ req_file	rs.l	1		* p‰‰requesteri
 req_file2	rs.l	1		* load/save program
 req_file3	rs.l	1		* prefs
 kokolippu	rs	1		* 0: pieni
-wkork		rs	1		* korkeus-vertailu zipwindowille
 windowpos	rs	2		* Ison ikkunan paikka
 windowZippedPos	rs	2	* Pienen ikkunan paikka (ZipWindow). Must be together
 windowZippedSize rs	2	* ja koko
@@ -2513,8 +2512,8 @@ main
 	bsr.w	getsignal
 	move.b	d0,uiRefreshSignal(a5)
 	bsr.w	getsignal
-	move.b	d0,ownsignal4(a5)
-	bsr.w	getsignal
+	;move.b	d0,ownsignal4(a5)
+	;bsr.w	getsignal
 	move.b	d0,audioPortSignal(a5)
 	bsr.w	getsignal
 	move.b	d0,fileReqSignal(a5)
@@ -3142,8 +3141,8 @@ msgloop
 	bset	d1,d0
 	move.b	uiRefreshSignal(a5),d1
 	bset	d1,d0
-	move.b	ownsignal4(a5),d1
-	bset	d1,d0
+	;move.b	ownsignal4(a5),d1
+	;bset	d1,d0
 	move.b	audioPortSignal(a5),d1
 	bset	d1,d0
 	move.b	fileReqSignal(a5),d1
@@ -3168,6 +3167,7 @@ msgloop
 .nre
 	* We get signal?
 	lore	Exec,Wait		* Odotellaan...
+	* Active signals in D0
 
 	tst.b	rexxon(a5)
 	beq.b	.nrexm
@@ -3205,102 +3205,18 @@ msgloop
 * - quite ugly!
 .nowo	move.b	ownsignal2(a5),d3	* p‰ivitet‰‰n positionia
 	btst	d3,d0
-	beq.w	.nowow
-	
-
-	* Update title bar with position information
-	push	d0
-	jsr	lootaan_pos
+	beq.b	.noSignal2
+	push	d0  * save signal mask
+	bsr	handleSignal2
+	move.l	d0,d1
+	; d0 = -1 -> window error, exit
+	; d0 =  1 -> window reopened, skip rest of the event loop
+	; d0 =  0 -> continue
 	pop	d0
-
-	tst.b	prefsexit(a5)		* see if prefs window was just closed
-	beq.b	.noe
-	clr.b	prefsexit(a5)
-
-	jsr	handleFavoriteModuleConfigChange
-
-	* update filebox size and contents if it has changed
-
-	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
-	cmp	boxsize0(a5),d0
-	bne.b	.noe
-	jsr	forceRefreshList
-.noe
-** ei saa r‰mp‰t‰ ikkunaa jos se ei oo oikeassa koossaan!!
-
-	moveq	#0,d7
-	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
-	cmp	boxsize0(a5),d0
-	beq.b	.weew
-	
- if DEBUG
- 	ext.l	d0
- 	moveq	#0,d1
- 	move	boxsize0(a5),d1
-	DPRINT	"Boxsize changed to %ld from %ld"
- endif
- 
-	move	d0,boxsize0(a5)
-	bsr.w	setboxy
-	st	d7
-
-	push	d7
-
-	tst.b	win(a5)
-	beq.b	.av
-	tst.b	kokolippu(a5)
-	bne.b	.iso
-	bsr.w	sulje_ikkuna
-	clr.b	win(a5)
-.av	bsr.w	openw
-	bra.b	.bar
-.iso
-	bsr.w	avaa_ikkuna2
-.bar
-	pop	d7
-	tst.l	d0
-	bne.w	exit
-	move	boxsize(a5),boxsize0(a5)
-.weew
-
-
-** ei saa r‰mp‰t‰ ikkunaa jos se ei oo oikeassa koossaan!!
-
-	tst.b	newpubscreen(a5)	* Valittiinko prefsista uusi
-	beq.b	.noewp			* pubscreeni?
-	clr.b	newpubscreen(a5)	* siirret‰‰n ikkunat sinne
-
-	tst.b	win(a5)
-	beq.b	.av2
-	tst.b	kokolippu(a5)
-	bne.b	.iso2
-	bsr.w	sulje_ikkuna
-	clr.b	win(a5)
-.av2	bsr.w	openw
-	bra.b	.bar2
-.iso2
-	bsr.w	avaa_ikkuna2
-	bne.w	exit
-.bar2
-	jsr	stopScopeTasks
-	jsr	startAndStopScopeTasks
-
-	tst	info_prosessi(a5)
-	beq.w	returnmsg
-	jsr	sulje_info
-	move.b	oli_infoa(a5),d0
-	st	oli_infoa(a5)
-	push	d0
-	jsr	start_info
-	pop	d0
-	move.b	d0,oli_infoa(a5)
-
-	bra.w	returnmsg
-
-.noewp	tst.b	d7
-	bne.w	returnmsg
-
-.nowow
+	tst.l	d1
+	bmi	exit
+	bne	returnmsg
+.noSignal2
 
 	move.b	uiRefreshSignal(a5),d3	* p‰ivitet‰‰n...
 	btst	d3,d0
@@ -3439,15 +3355,15 @@ msgloop
 .nwwwq
 
 	* Note: signal4 does not seem to be triggered anywhere!
-	move.b	ownsignal4(a5),d3
-	btst	d3,d0
-	beq.b	.nowww
-	bsr.w	sulje_ikkuna
-	bsr.w	avaa_ikkuna
-	bne.w	exit
-	bra.w	returnmsg
-
-.nowww	
+;	move.b	ownsignal4(a5),d3
+;	btst	d3,d0
+;	beq.b	.nowww
+;	bsr.w	sulje_ikkuna
+;	bsr.w	avaa_ikkuna
+;	bne.w	exit
+;	bra.w	returnmsg
+;
+;.nowww	
 	
 	* Tooltip display signal check
 	move.b	tooltipSignal(a5),d3 
@@ -3667,8 +3583,8 @@ exit
 	bsr.w	freesignal
 	move.b	uiRefreshSignal(a5),d0
 	bsr.w	freesignal
-	move.b	ownsignal4(a5),d0
-	bsr.w	freesignal
+	;move.b	ownsignal4(a5),d0
+	;bsr.w	freesignal
 	move.b	audioPortSignal(a5),d0
 	bsr.w	freesignal
 	move.b	fileReqSignal(a5),d0
@@ -4249,7 +4165,135 @@ kirjainta4
 * Avaa ikkunan ja pikkasen alustaakin
 *******
 
-openw
+handleSignal2
+	DPRINT	"Signal 2"
+
+	* Update title bar with position information
+	jsr	lootaan_pos
+
+	* see if prefs window was just closed
+	tst.b	prefsexit(a5)
+	beq.b	.noe
+	clr.b	prefsexit(a5)
+
+	* Do this to update favorite status if settings changed
+	jsr	handleFavoriteModuleConfigChange
+
+	* Check if boxsize in prefs was changed
+	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
+	cmp	boxsize0(a5),d0
+	bne.b	.noe
+	* Do a content refresh is box size not changed
+	jsr	forceRefreshList
+.noe
+	* Prefs exit check done
+	* Check if window width changed
+
+	move.l	windowbase(a5),a0
+	move	wd_Width(a0),d0
+	cmp	previousWindowWidth(a5),d0
+	beq.b	.sameWidth
+	* Store as the new width
+	;move	d0,wsizex
+	move	d0,WINSIZX(a5)
+	move	d0,previousWindowWidth(a5)
+	* Force reopen window
+	move	#-1,boxsize0(a5)
+ if DEBUG
+	ext.l	d0
+	DPRINT	"width changed to %ld"
+ endif
+.sameWidth
+
+
+** ei saa r‰mp‰t‰ ikkunaa jos se ei oo oikeassa koossaan!!
+
+	moveq	#0,d7
+	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
+	cmp	boxsize0(a5),d0
+	beq.b	.weew
+	
+ if DEBUG
+ 	ext.l	d0
+ 	moveq	#0,d1
+ 	move	boxsize0(a5),d1
+	DPRINT	"Boxsize changed to %ld from %ld"
+ endif
+ 
+	move	d0,boxsize0(a5)
+	bsr.w	setboxy
+	moveq	#1,d7
+
+	push	d7
+	bsr.b		.closeAndReopenWindow
+	pop	d7
+	tst.l	d0
+	bne.b	.error
+	move	boxsize(a5),boxsize0(a5)
+.weew
+
+
+** ei saa r‰mp‰t‰ ikkunaa jos se ei oo oikeassa koossaan!!
+
+	tst.b	newpubscreen(a5)	* Valittiinko prefsista uusi
+	beq.b	.noewp			* pubscreeni?
+	clr.b	newpubscreen(a5)	* siirret‰‰n ikkunat sinne
+
+	bsr.b	.closeAndReopenWindow
+	bne.b	.error
+
+	; Also move scope windows to the new screen
+	jsr	stopScopeTasks
+	jsr	startAndStopScopeTasks
+
+	; And the info window
+	tst	info_prosessi(a5)
+	beq.b	.return
+	jsr	sulje_info
+	move.b	oli_infoa(a5),d0
+	st	oli_infoa(a5)
+	push	d0
+	jsr	start_info
+	pop	d0
+	move.b	d0,oli_infoa(a5)
+.return
+	moveq	#1,d0
+	rts
+;;	bra.w	returnmsg
+
+.noewp	
+	move.l	d7,d0
+	rts
+
+.closeAndReopenWindow
+	* Is a window open? If not, just open
+	tst.b	win(a5)
+	beq.b	.av2
+	* Window was open. Small or big?
+	tst.b	kokolippu(a5)
+	bne.b	.iso2
+	* Small, close
+	bsr.w	sulje_ikkuna
+	clr.b	win(a5)
+.av2	
+	* Just open, a different method?
+	bsr.w	openw
+	bne.b	.error
+	rts
+.iso2
+	* This closes and reopens the window
+	bsr.w	avaa_ikkuna2
+	bne.b	.error
+.bar2
+
+	rts
+
+.error
+	moveq	#-1,d0
+	rts
+
+
+openw:
 	tst.b	win(a5)
 	bne.b	.x
 	st	win(a5)
@@ -4317,24 +4361,36 @@ zipwindow:
 	rts
 
 
-
+* Close and reopen window
 avaa_ikkuna2:
 	bsr.w	sulje_ikkuna
 	not.b	kokolippu(a5)
 	
-
+* Open window
 avaa_ikkuna:
+	DPRINT	"Open window"
 	bsr.w	getscreeninfo
 	bne.w	.opener
 
 	; Button config, may adjust WINSIZY
 	jsr	configureMainWindowButtonSizes
 	; Update into window structure
-	move	WINSIZX(a5),wsizex
-	move	WINSIZY(a5),wsizey
+
+	lea	winstruc,a0
+	basereg	winstruc,a0
+
+	move	WINSIZX(a5),wsizex(a0)
+	move	WINSIZY(a5),wsizey(a0)
+	tst	winstruc+nw_MaxWidth(a0)
+	bne.b	.set
+	move	WINSIZX(a5),d0
+	move	d0,winstruc+nw_MinWidth(a0)
+	add	d0,d0
+	move	d0,winstruc+nw_MaxWidth(a0)
+.set
+	endb	a0
 
 	move.l	_IntuiBase(a5),a6
-	lea	winstruc,a0
 
 	move.l	windowZippedPos(a5),(a0)	* Pienen paikka ja koko
 	moveq	#11,d0
@@ -4400,7 +4456,7 @@ avaa_ikkuna:
 ;	tst.b	uusikick(a5)
 ;	beq.b	.ded
 	subq	#3,gg_Height(a3)
-.ded
+;.ded
 
 	* Remove the fileslider from the gadget list
 	* if it is not visible. On kick13 there may be
@@ -4434,7 +4490,7 @@ avaa_ikkuna:
 	move.l	d0,a0
 	move.l	wd_RPort(a0),rastport(a5)
 	move.l	wd_UserPort(a0),userport(a5)
-	move	wd_Height(a0),wkork(a5)
+	;move	wd_Height(a0),wkork(a5)
 
  if DEBUG
 	moveq	#0,d0
@@ -4729,20 +4785,23 @@ getscreeninfo
 * nw_Width   = 4
 * nw_Height  = 6
 
-	add	d0,winstruc+nw_Height		* suhteutetaan koot fonttiin
-	add	d0,winstruc2+nw_Height
-	add	d0,winstruc3+nw_Height
-	add	d0,swinstruc+nw_Height
+	lea	winstruc,a0
+	basereg	winstruc,a0
+
+	add	d0,winstruc+nw_Height(a0)		* suhteutetaan koot fonttiin
+	add	d0,winstruc2+nw_Height(a0)
+	add	d0,winstruc3+nw_Height(a0)
+	add	d0,swinstruc+nw_Height(a0)
 	add	d0,windowZippedSize+2(a5)	* pienen ikkunan zip-koko
 
 	move	windowleft(a5),d1
 	move	windowleft2(a5),d2
 	move	d1,windowleft2(a5)
 	sub	d2,d1
-	add	d1,winstruc+nw_Width
-	add	d1,winstruc2+nw_Width
-	add	d1,winstruc3+nw_Width
-	add	d1,swinstruc+nw_Width
+	add	d1,winstruc+nw_Width(a0)
+	add	d1,winstruc2+nw_Width(a0)
+	add	d1,winstruc3+nw_Width(a0)
+	add	d1,swinstruc+nw_Width(a0)
 
 	add	d1,WINSIZX(a5)
 
@@ -4751,15 +4810,18 @@ getscreeninfo
 	move	d3,windowbottom2(a5)
 	sub	d4,d3
 	add	d3,WINSIZY(a5)
-	add	d3,prefssiz+2
-	add	d3,quadsiz+2
-	add	d3,swinsiz+2
+	add	d3,prefssiz+2(a0)
+	add	d3,quadsiz+2(a0)
+	add	d3,swinsiz+2(a0)
+	endb	a0
+
 	tst	quadWindowHeightOriginal(a5)
 	bne.b	.setAlready
 	move	quadsiz+2,quadWindowHeightOriginal(a5)
 	sub	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,quadWindowHeightOriginal(a5)
 .setAlready
 
+	* Store new window size
 	move	WINSIZX(a5),wsizex
 	move	WINSIZY(a5),wsizey
 
