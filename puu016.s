@@ -47,6 +47,7 @@ ANNOY	= 0 * 1: Unregistered version tekstej‰ ymp‰riins‰
 DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
+FEATURE_HORIZ_RESIZE = 1
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -2933,7 +2934,9 @@ main
 	bsr.w	inithippo
 	bsr.w	initkorva
 	bsr.w	initkorva2
+ ifne FEATURE_HORIZ_RESIZE
 	jsr	initializeButtonRowLayout
+ endif
 
 	st	reghippo(a5)
 
@@ -4876,7 +4879,9 @@ getscreeninfo
 ****** Piirret‰‰n ikkunan kamat
 
 wrender:
-	jsr	layoutButtonRow
+ ifne FEATURE_HORIZ_RESIZE
+ 	jsr	layoutButtonRow
+ endif
 
 	move.l	pen_0(a5),d0
 	move.l	rastport(a5),a1
@@ -47909,50 +47914,11 @@ removeListBoxClip
 * Row button layout
 *
 ***************************************************************************
-layLeft		dc 	0
-layRight	dc	0
+ ifne FEATURE_HORIZ_RESIZE
 
-initializeButtonRowLayout_
-
-
-	lea	row1Gadgets,a0
-	basereg	row1Gadgets,a0
-
-	move	gadgetPrevButton+gg_LeftEdge(a0),layLeft
-	move	gadgetInfoButton+gg_LeftEdge(a0),d0
-	add	gadgetInfoButton+gg_Width(a0),d0
-	;move	WINSIZX(a5),d1
-	move	#264,d1
-	sub	d0,d1
-	move	d1,layRight
-
-	* Space taken by the row
-	move	gadgetInfoButton+gg_LeftEdge(a0),d2
-	add	gadgetInfoButton+gg_Width(a0),d2
-	sub	gadgetPrevButton+gg_LeftEdge(a0),d2
-	sub	#2*10,d2
-	endb	a0
-
-.1	tst	(a0)
-	beq.b	.2
-	move.l	a0,a1
-	add	(a0),a1
-	;move.l	#264<<8,d0
-	moveq	#0,d0
-	move	gg_Width(a1),d0
-	lsl.l	#8,d0
-	;divu	d2,d0
-	;divu	#264,d0
-	divu	#220,d0
-	move	d0,2(a0)
-	addq	#4,a0
-	bra.b	.1
-.2
-	rts
-
+; Store the original gadget gg_Widht and gg_LeftEdge 
+; for relative layouting later when window size changes.
 initializeButtonRowLayout
-	move	#8,layLeft
-	move	#8,layRight
 	lea	row1Gadgets,a0
 	bsr.b	.do
 	lea	row2Gadgets,a0
@@ -47963,60 +47929,11 @@ initializeButtonRowLayout
 .1	tst	(a0)
 	beq.b	.2
 	move.l	a0,a1
-	add	(a0),a1
-	move	gg_Width(a1),2(a0)
-	move	gg_LeftEdge(a1),4(a0)
-	subq	#8,4(a0)
-	addq	#6,a0
-	bra.b	.1
-.2
-	rts
-
-; ggwidth/WINSIZX = ratio
-; ggwidth = WINSIZX*ratio
-
-
-layoutButtonRow_
-	moveq	#0,d0
-	moveq	#0,d1
-	moveq	#0,d2
-	move	layLeft(pc),d0
-	move	layRight(pc),d1
-	move	winstruc+nw_Width,d2
-	sub	d0,d2
-	sub	d1,d2
-	DPRINT	"------ lay %ld %ld space=%ld"
-
-	lea	row1Gadgets,a0
-	; x-position
-	;moveq	#0,d0
-	;add	windowleft(a5),d0
-	;addq	#8,d0
-	move	layLeft(pc),d0
-
-
-
-.1	tst	(a0)
-	beq.b	.2
-	move.l	a0,a1
-	add	(a0),a1
-	move	d0,gg_LeftEdge(a1)
-	moveq	#0,d1
-	move	winstruc+nw_Width,d1
-	; 10 buttons
-
-	move	WINSIZX(a5),d1
-	sub	layLeft(pc),d1
-	sub	layRight(pc),d1
-	sub	#2*10,d1
-
-	mulu	2(a0),d1
-	lsr.l	#8,d1
-	move	d1,gg_Width(a1)
-	addq	#2,d0
-	add	d1,d0
-
-	addq	#4,a0
+	add	(a0)+,a1
+	move	gg_Width(a1),(a0)+
+	move	gg_LeftEdge(a1),(a0)
+	; Remove left border
+	subq	#8,(a0)+
 	bra.b	.1
 .2
 	rts
@@ -48031,55 +47948,35 @@ layoutButtonRow
 	; Fine tune the info button
 	lea	button2,a0
 	move.l	gg_GadgetRender(a0),a1
-	sub	#1,ig_LeftEdge(a1)
+	subq	#1,ig_LeftEdge(a1)
 	rts
 
 .do
-	; x-position
-	;moveq	#0,d0
-	;add	windowleft(a5),d0
-	;addq	#8,d0
-
-	moveq	#0,d0
-	move	layLeft(pc),d0
-	lsl.l	#8,d0
-
-
 .1	tst	(a0)
 	beq.b	.2
 	move.l	a0,a1
 	add	(a0),a1
 
-
-
-;	move.l	d0,d1
-;	lsr.l	#8,d1
-;	move	d1,gg_LeftEdge(a1)
-;
 	moveq	#0,d1
 	move	winstruc+nw_Width,d1
+	; remove left and right borders
 	sub	#8+8,d1 
 	lsl.l	#8,d1
+	; original width without borders
 	divu	#264-8-8,d1
 	move.l	d1,d2
 	
 	mulu	4(a0),d1
 	lsr.l	#8,d1
+	; add left border
 	addq	#8,d1
 	move	d1,gg_LeftEdge(a1)
 
 	mulu	2(a0),d2
-	;move	2(a0),d2
-	;mulu	2(a0),d1
-;	add.l	d1,d0 * next position
-;	
 	lsr.l	#8,d2
 	move	d2,gg_Width(a1)
-;
-	bsr	.centerContent
 
-;	;add.l	#2<<8,d0
-;
+	bsr.b	.centerContent
 	addq	#6,a0
 	bra.b	.1
 .2
@@ -48096,13 +47993,10 @@ layoutButtonRow
 	rts
 
 .centerImage
-	move.l	gg_GadgetRender(a1),a2
-	
-	move	ig_Width(a2),d2
-	lsr	#1,d2
+	move.l	gg_GadgetRender(a1),a2	
 	move	gg_Width(a1),d3
+	sub	ig_Width(a2),d3
 	lsr	#1,d3
-	sub	d2,d3
 	move	d3,ig_LeftEdge(a2)
 	rts
 
@@ -48110,31 +48004,32 @@ layoutButtonRow
 	push	a0
 	move.l	gg_GadgetText(a1),a2
 
-	move.l	it_IText(a2),d0
-
 	move.l	it_IText(a2),a0
 	move.l	a0,d0
 .c	tst.b	(a0)+
 	bne.b	.c
 	sub.l	d0,a0
 	subq	#1,a0
+	* string length in d0
 	move.l	a0,d0
 
+	; Calculate text lenght in pixels using
+	; the current rastport draw modes.
 	push	a1
 	move.l	rastport(a5),a1
 	move.l	it_IText(a2),a0
 	lore	GFX,TextLength
 	pop	a1
-	
 
+	; center	
 	move	gg_Width(a1),d3
-	lsr	#1,d3
-	lsr	#1,d0
 	sub	d0,d3
+	lsr	#1,d3
 	move	d3,it_LeftEdge(a2)
 	
 	pop	a0
 	rts
+ endif ; FEATURE
 
 
 ***************************************************************************
@@ -48799,7 +48694,8 @@ gadgetSortButton        EQU  lilb2
 gadgetMoveButton        EQU  lilb1 
 gadgetPrgButton         EQU  plg
 
-
+ ifne FEATURE_HORIZ_RESIZE
+; Index to gadget and the original gg_Width and gg_LeftEdge
 row1Gadgets
 	dr	gadgetPrevButton
 	dc	0,0
@@ -48841,7 +48737,7 @@ row2Gadgets
 	dr	gadgetPrefsButton
 	dc	0,0
 	dc	0 ; END
-
+ endif ; FEATURE
 
 gadgetFileSliderInitialHeight = 67-16+2
 
