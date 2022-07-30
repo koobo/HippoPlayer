@@ -23190,21 +23190,21 @@ scopeEntry:
 
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
-	lsl	#2,d0
+	lsl	#1,d0
 	jmp	.t(pc,d0)
-
-.t	jmp	.1(pc)		* quadrascope
-	jmp	.3(pc)		* quadrascope bars
-	jmp	.2(pc)		* hipposcope 
-	jmp	.4(pc)		* hipposcope bars
-	jmp	.5(pc)		* freq. analyzer
-	jmp	.6(pc)		* freq. analyzer bars
-	jmp	.patternScopeNormal(pc)	* patternscope
-	jmp	.patternScopeNormalBars(pc)	* patternscope bars (ei oo!)
-	jmp	.7(pc)		* filled quadrascope
-	jmp	.8(pc)		* filled quadrascope & bars
-	jmp	.patternScopeXL(pc)	* patternscope xl
-	jmp	.patternScopeXLBars(pc)	* patternscope xl bars (no bars available though)
+.t	
+	bra.b	.1		* quadrascope
+	bra.b	.3		* quadrascope bars
+	bra.b	.2		* hipposcope 
+	bra.b	.4		* hipposcope bars
+	bra.b	.5		* freq. analyzer
+	bra.b	.6		* freq. analyzer bars
+	bra.b	.patternScopeNormal	* patternscope
+	bra.b	.patternScopeNormalBars	* patternscope bars (ei oo!)
+	bra.b	.7		* filled quadrascope
+	bra.b	.8		* filled quadrascope & bars
+	bra.b	.patternScopeXL	* patternscope xl
+	bra.b	.patternScopeXLBars	* patternscope xl bars (no bars available though)
 
 
 .7	moveq	#-1,d7
