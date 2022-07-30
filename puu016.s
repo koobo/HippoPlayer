@@ -30,12 +30,10 @@ ver	macro
 	dc.b	"v2.54ß (?.?.2022)"
 	endm	
 
-
 DEBUG	= 1
+asm	    = 1	* 1: Run from AsmOne, 0: CLI/Workbench  
+
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
-
-asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench
-
 zoom	= 0	* 1: zoomaava hippo
 fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
 floadpr = 1	* 1: unpacked file load progress indicator
@@ -33340,7 +33338,8 @@ convert_oldst
 
 	lea	20(a3),a0		* repeat pointer jaetaan kahdella
 	moveq	#$f-1,d0
-.f	lsr	#1,26(a0)
+.f	
+	lsr	26(a0)
 	lea	30(a0),a0
 	dbf	d0,.f
 
@@ -46903,7 +46902,7 @@ plainSaveFile
   ifne FEATURE_SPECTRUMSCOPE
 spectrum:
 
-	incdir
+	;incdir
 	include	"hippo_fft.s"
 
 ; Length of the mixed data, to be passed to FFT
@@ -48121,7 +48120,7 @@ stopMeasure
 *******************************************************************************
 * Playereitä
 
-		incdir
+		;incdir
 * Protracker code
 kplayer		incbin	kpl
 		;incdir	asm:player/pl/
@@ -48258,7 +48257,7 @@ idcmpmw	dc.l	idcmpflags
 
 * Main window gadgets
 gadgets
-	incdir
+	;incdir
 	include	gadgets/gadgets16_new3.s
 
 

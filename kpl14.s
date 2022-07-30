@@ -8,7 +8,7 @@
 	include	resources/cia_lib.i
 	include	exec/ports.i
 	include	mucro.i
-	incdir
+	;incdir
 
 _ciaa	=	$bfe001
 _ciab	=	$bfd000
@@ -208,7 +208,7 @@ k_roundtable	rs.b	1512
 
 k_sizeof	rs.b	0		* size of k_base
 
-
+ ifnd __VASM
 main
 ;	move	$dff01c,-(sp)
 ;	move	#$7fff,$dff09a
@@ -253,7 +253,7 @@ main
 
 	bsr.b	kplayer+kp_end
 .error	rts
-
+ endif
 
 
 
@@ -2447,6 +2447,7 @@ k_pt16	dc	862,814,768,725,684,646,610,575,543,513,484,457
 
 binend
 
+ ifnd __VASM
 	section	blah,bss_p
 
 k_base	ds.b	k_sizeof
@@ -2457,3 +2458,4 @@ k_base	ds.b	k_sizeof
 ;module	incbin	music:mod.figure
 ;module	incbin	sys:music/mod.realdeal
 module	incbin	sys:music/mod.test9
+ endif

@@ -5,19 +5,19 @@ SHR=1
 	incdir	include/
 	include	playerIds.i
 
+ ifnd __VASM
 	auto	j\
 ;	auto	wb ram:HippoPlayer.group\
 	auto	wb s:HippoPlayer.group\
 	auto	a0\
 	auto	a1\
-	
+ 
 	lea	start(pc),a0
 	lea	pend,a1
 
 	rts
-
-
-
+ endif
+ 
 
 
 start	dc.b	"HiPxPla",25	* Tunnistus ja versio, 8 bytes
