@@ -1,9 +1,15 @@
-testi = 0
+;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
+testi = 1
 
+	incdir	include:
+	include	exec/exec_lib.i
+	include	exec/execbase.i
+	include	hardware/intbits.i
+	include	mucro.i
 
  ifne testi
 
-	section	omcwd,code_c
+	section	omcwd,code_p
 
 ;	move.l	#mdat,d0
 ;	move.l	#smpl,d1
@@ -11,6 +17,7 @@ testi = 0
 ;	moveq	#2,d3	* song
 ;	move.l	#buffer2048,d4
 
+;	jsr	clearCache
 
 	move.l	#mdat,d0
 	move.l	#smpl,d1
@@ -25,7 +32,7 @@ ee	btst	#6,$bfe001
 	jsr	start+4
 	rts
 
-	section	cc,code_c
+	section	cc,code_p
 
  endc
 
@@ -33,14 +40,151 @@ start
 	jmp	init(pc)
 	jmp	end(pc)
 	jmp	vol(pc)
+	jmp	eteen(pc)
+	jmp taakse(pc)
+	jmp	stop(pc)
+	jmp continue(pc)
+	jmp position(pc)
 
-old	dc.l	0
+SetIntVectors	
+	pushm	all
+    movea.l 4.W,A6
+    basereg	start,a5
+    lea	start(pc),a5
+    lea     StructInt(a5),A1
+    moveq   #INTB_AUD0,D0
+    jsr     _LVOSetIntVector(A6)            ; SetIntVector
+    move.l  D0,Channel0(a5)
+    lea     StructInt(a5),A1
+    moveq   #INTB_AUD1,D0
+    jsr     _LVOSetIntVector(A6)
+    move.l  D0,Channel1(a5)
+    lea     StructInt(a5),A1
+    moveq   #INTB_AUD2,D0
+    jsr     _LVOSetIntVector(A6)
+    move.l  D0,Channel2(a5)
+    lea     StructInt(PC),A1
+    moveq   #INTB_AUD3,D0
+    jsr     _LVOSetIntVector(A6)
+    move.l  D0,Channel3(a5)
+	; Start with all of these disabled
+    move    #$0780,$dff09a
+    endb a5
+	popm	all
+    rts
+ 
+ClearIntVectors
+    movea.l 4.W,A6
+    movea.l Channel0(PC),A1
+    moveq   #INTB_AUD0,D0
+    jsr     _LVOSetIntVector(A6)
+    movea.l Channel1(PC),A1
+    moveq   #INTB_AUD1,D0
+    jsr     _LVOSetIntVector(A6)
+    movea.l Channel2(PC),A1
+    moveq   #INTB_AUD2,D0
+    jsr     _LVOSetIntVector(A6)
+    movea.l Channel3(PC),A1
+    moveq   #INTB_AUD3,D0
+    jmp     _LVOSetIntVector(A6)
+	
+Channel0    dc.l    0
+Channel1	dc.l    0
+Channel2	dc.l    0
+Channel3	dc.l    0
+
+StructInt
+        dc.l    0
+        dc.l    0
+        dc.w    $205
+IntNamePtr
+        dc.l    IntName
+        dc.l    0
+IntCodePtr
+        dc.l    IntVector
+IntName
+        dc.b    'TFMX7v',0
+        even
+
+
+IntVector
+	pushm	all
+	bsr	IntVectorCode
+	popm	all
+	moveq	#0,d0
+	rts
+
+;clearCache
+;	movem.l	d0/d1/a0/a1/a6,-(sp)
+;	move.l	4.w,a6
+;	cmp	#37,LIB_VERSION(a6)
+;	blo.b	.x
+;	lea	modifiedCodeStart(pc),a0
+;	moveq	#modifiedCodeEnd-modifiedCodeStart,d0
+;	moveq	#CACRF_ClearI,d1
+;	jsr	_LVOCacheClearE(a6)
+;.x	
+;	movem.l	(sp)+,d0/d1/a0/a1/a6
+;	rts
+ 
+DMAWait
+	movem.l	d0/d1,-(SP)
+	moveq	#8,d0
+.1	move.b	$dff006,d1
+.2	cmp.b	$dff006,d1
+	beq.b	.2
+	dbf		d0,.1
+	movem.l	(SP)+,d0/d1
+	rts
+
+stop
+	lea	$dff000,a0
+	move.w	#$f,$96(a0)
+	move.w	#$400,$9a(a0)
+	move.w	#$400,$9c(a0)
+	rts
+
+continue
+	lea	$dff000,a0
+	move.w	#$800f,$96(a0)
+	move.w	#$8400,$9a(a0)
+	move.w	#$8400,$9c(a0)
+	rts
+
+
+eteen
+	pushm	d0/a0
+	lea	currentPosition(pc),a0
+	move	(a0),d0
+	addq	#2,d0
+	cmp	maxPosition(pc),d0
+	bhi.b	.og
+	subq	#1,d0
+	move	d0,(a0)
+.og	popm	d0/a0
+	rts
+
+taakse
+	push	a0
+	lea	currentPosition(pc),a0
+	subq	#1,(a0)
+	bpl.b	.gog
+	clr	(a0)
+.gog	pop	a0
+	rts
+
+position
+	move	currentPosition(pc),d0
+	move	maxPosition(pc),d1
+	rts
 
 init
+	bsr	SetIntVectors
+
 lbL00024C
-	bsr	gvbr
-	lea	old(pc),a0
-	move.l	$70(a5),(a0)
+	;bsr	gvbr
+	;lea	old(pc),a0
+	;move.l	$70(a5),(a0)
 
 	move.l	d3,-(sp)
 	move.l	d2,-(sp)
@@ -61,6 +205,8 @@ lbL00024C
 
 end
 lbL00028C
+	bsr	ClearIntVectors
+
 	lea	lbL0002D8(pc),a0
 	JSR	$0028(A0)
 	MOVEQ	#$00,D0
@@ -76,8 +222,8 @@ lbL00028C
 	lea	lbL0002D8(pc),a0
 	JSR	$0040(A0)
 
-	bsr	gvbr
-	move.l	old(pc),$70(a5)
+	;bsr	gvbr
+	;move.l	old(pc),$70(a5)
 	RTS	
 
 
@@ -149,8 +295,10 @@ lbL0002D8
 
 	bra	lbC001E78
 
+ REM
 gvbr
-lbC00035C	move.l	A6,-(SP)
+lbC00035C	
+	move.l	A6,-(SP)
 	sub.l	A5,A5
 	move.l	4.w,A6
 	btst	#0,$129(A6)
@@ -164,6 +312,8 @@ lbC000374	move.l	(SP)+,A6
 lbL000378	dc.l	$4E7AD801	* MOVEC VBR,a5
 
 	rte
+ EREM
+
 
 lbC00037E	movem.l	D0-D7/A0-A6,-(SP)
 	lea	lbL001564(PC),A6
@@ -197,6 +347,9 @@ lbC0003D4	btst	#3,D0
 
 	move.w	D1,$DFF0D6
 lbC0003E0	clr.w	$34(A6)
+
+	bsr	DMAWait
+
 lbC0003E4	move.w	$4C(A6),$DFF096
 	tst.b	$12(A6)
 	bne.s	lbC0003F6
@@ -228,6 +381,9 @@ lbC000404	lea	lbL0015F2(PC),A5
 	lea	lbL0018AE(PC),A5
 	lea	lbL002636(PC),A4
 	move.w	$58(A5),6(A4)
+
+	bsr	DMAWait
+
 	move.w	$32(A6),$DFF096
 	clr.w	$32(A6)
 lbC000478	clr.b	$1F(A6)
@@ -856,19 +1012,25 @@ lbC000AEA	move.w	14(A6),6(A5)
 	move.w	$44(A5),$DFF09A
 	bra	lbC0009D4
 
-lbC000B00	movem.l	D0/A5,-(SP)
+; Interrupt vector $70
+IntVectorCode
+	;bsr.b	lbC000B00
+	;rts
+	
+lbC000B00
+	movem.l	D0/A5,-(SP)
 	lea	lbL0015F2(PC),A5
 	move.w	$DFF01E,D0
 	and.w	$DFF01C,D0
-	btst	#7,D0
+	btst	#7,D0	; AUD0
 	bne.s	lbC000B3C
 
 	lea	lbL001656(PC),A5
-	btst	#8,D0
+	btst	#8,D0   ; AUD1
 	bne.s	lbC000B3C
 
 	lea	lbL0016BA(PC),A5
-	btst	#9,D0
+	btst	#9,D0   ; AUD2
 	bne.s	lbC000B3C
 
 	move.b	lbB00159A(PC),D0
@@ -877,14 +1039,16 @@ lbC000B00	movem.l	D0/A5,-(SP)
 	bra	lbC00202C
 
 lbC000B38	lea	lbL00171E(PC),A5
-lbC000B3C	move.w	$46(A5),$DFF09C
+lbC000B3C
+	move.w	$46(A5),$DFF09C
 	subq.w	#1,6(A5)
 	bpl.s	lbC000B58
 
 	move.b	#$FF,0(A5)
 	move.w	$46(A5),$DFF09A
 lbC000B58	movem.l	(SP)+,D0/A5
-	rte
+	;rte
+	rts
 
 lbC000B5E	move.b	13(A6),D0
 	cmp.b	5(A5),D0
@@ -1513,6 +1677,7 @@ lbC00124A	move.l	A6,-(SP)
 	move.l	(SP)+,A6
 	rts
 
+songplay
 lbC0012C8	movem.l	D1-D7/A0-A6,-(SP)
 	lea	lbL001564(PC),A6
 	move.b	D0,$19(A6)
@@ -1521,6 +1686,7 @@ lbC0012C8	movem.l	D1-D7/A0-A6,-(SP)
 	movem.l	(SP)+,D1-D7/A0-A6
 	rts
 
+playcont
 lbC0012E0	movem.l	D1-D7/A0-A6,-(SP)
 	lea	lbL001564(PC),A6
 	or.w	#$100,D0
@@ -1531,6 +1697,7 @@ lbC0012E0	movem.l	D1-D7/A0-A6,-(SP)
 	rts
 
 	lea	lbL001564(PC),A6
+songset
 lbC001300	bsr	lbC00124A
 	clr.b	$12(A6)
 	move.l	0(A6),A4
@@ -1586,9 +1753,9 @@ lbC001394	clr.b	9(A6)
 	tst.b	$36(A6)
 	beq.s	lbC0013E2
 
-	move.w	#$8208,$DFF096
-	move.w	#$C400,$DFF09A
-	move.w	#$8400,$DFF09C
+	move.w	#$8208,$DFF096 ; set, dma enable, aud3
+	move.w	#$C400,$DFF09A ; set, master enable, aud3
+	move.w	#$8400,$DFF09C ; set, aud3
 lbC0013E2	rts
 
 lbC0013E4	movem.l	A2-A6,-(SP)
@@ -1626,14 +1793,18 @@ lbC00143A	move.l	#$800,D1
 	move.l	#$600,D1
 	add.l	D0,D1
 	move.l	D1,$2A(A6)
-lbC00145E	bsr	lbC00035C
-	tst.l	$14(A6)
-	bne.s	lbC00146E
+lbC00145E	
 
-	move.l	$70(A5),$14(A6)
+	;bsr	lbC00035C - getvbr
+	;tst.l	$14(A6)
+	;bne.w	lbC00146E
+	; store old:
+	;move.l	$70(A5),$14(A6)
 lbC00146E	
-	lea	lbC000B00(PC),A4
-	move.l	A4,$70(A5)
+	;lea	IntVectorCode(PC),A4
+	; set new:
+	;move.l	A4,$70(A5)
+
 	lea	lbL001AA2(PC),A5
 	move.w	#5,6(A5)
 	lea	lbL001B6A(PC),A6
@@ -1799,14 +1970,20 @@ lbL0018AE	dcb.l	$6,0
 	dcb.l	$18,0
 	dc.l	$FF00
 	dcb.l	$2,0
-lbL001AA2	dc.l	0
-	dc.l	6
+lbL001AA2	
+	dc.w	0
+maxPosition
+	dc.w	0	
+currentPosition
+	dc.w	0
+	dc.w	6
 	dcb.l	$30,0
 lbL001B6A	dcb.l	$30,0
 lbW001C2A	dc.w	$F400
 	dc.w	0
 	dc.w	$F000
 	dc.w	0
+periodTable
 lbW001C32	dc.w	$6AE
 	dc.w	$64E
 	dc.w	$5F4
@@ -1895,7 +2072,7 @@ lbL001CB2	dc.l	$DFC0DFC
 	dc.w	$9C
 
 lbC001CE2	movem.l	D0-D7/A0-A6,-(SP)
-	move.w	#$400,$DFF09A
+	move.w	#$400,$DFF09A ; aud3
 	lea	lbL001564(PC),A6
 	lea	lbL00171E(PC),A4
 	lea	lbL0025E6(PC),A5
@@ -2151,9 +2328,11 @@ lbC00200C	mulu	#$180,D2
 	swap	D1
 	move.l	D1,(A2)
 	add.l	A3,D2
-	sub.l	A1,D2
-	subq.w	#2,D2
-	move.w	D2,2(A1)
+
+	move.l	d2,(a1)
+	;sub.l	A1,D2
+	;subq.w	#2,D2
+	;move.w	D2,2(A1)
 lbC00202A	rts
 
 lbC00202C	lea	lbL0025E6(PC),A5
@@ -2167,22 +2346,30 @@ lbC00202C	lea	lbL0025E6(PC),A5
 	lea	lbL002712(PC),A3
 	move.l	$74(A5),D3
 	lea	$20(A5),A0
-	lea	lbC00217C(PC),A1
+;	lea	lbC00217C(PC),A1 ; modify code at A1
+	lea	p1(pc),a1
 	lea	0(A5),A2
 	bsr.s	lbC001FF2
+
 	lea	$30(A5),A0
-	lea	lbC002188(PC),A1
+;	lea	lbC002188(PC),A1 ; modify code at A1
+	lea	p2(pc),a1
 	lea	4(A5),A2
 	bsr	lbC001FF2
+	
 	lea	$40(A5),A0
-	lea	lbC002196(PC),A1
+;	lea	lbC002196(PC),A1 ; modify code at A1
+	lea	p3(pc),a1
 	lea	8(A5),A2
 	bsr	lbC001FF2
+	
 	lea	$50(A5),A0
-	lea	lbC0021A4(PC),A1
+;	lea	lbC0021A4(PC),A1 ; modify code at A1
+	lea	p4(pc),a1
 	lea	12(A5),A2
 	bsr	lbC001FF2
-	lea	$20(A5),A0
+
+ 	lea	$20(A5),A0
 	lea	$78(A5),A1
 	lea	lbL002682(PC),A2
 	lea	0(A5),A3
@@ -2230,7 +2417,14 @@ lbC00211E	lea	lbL0025E6(PC),A5
 lbC002146	movem.l	(SP)+,D1-D7/A0-A4/A6
 	movem.l	(SP)+,D0/A5
 	move.w	#$400,$DFF09C
-	rte
+	;rte
+	rts
+
+p1	dc.l	lbL008592
+p2	dc.l	lbL008592
+p3	dc.l	lbL008592
+p4	dc.l	lbL008592
+
 
 lbC002158	move.l	lbL002610(PC),A0
 	sub.w	lbW002614(PC),D0
@@ -2246,18 +2440,29 @@ lbC00216C	move.l	lbL002630(PC),A2
 
 lbC002176	swap	D5
 	move.b	0(A0,D0.W),D4
-lbC00217C	lea	lbL008592(PC),SP
+modifiedCodeStart
+lbC00217C	
+	;lea	lbL008592(PC),SP
+	move.l	p1(pc),sp
 	move.b	0(SP,D4.W),D4
 	move.b	0(A1,D1.W),D5
-lbC002188	lea	lbL008592(PC),SP
+lbC002188	
+	;lea	lbL008592(PC),SP
+	move.l	p2(pc),sp
 	move.b	0(SP,D5.W),D5
 	add.w	D5,D4
 	move.b	0(A2,D2.W),D5
-lbC002196	lea	lbL008592(PC),SP
+lbC002196
+	;lea	lbL008592(PC),SP
+	move.l	p3(pc),sp
 	move.b	0(SP,D5.W),D5
 	add.w	D5,D4
 	move.b	0(A3,D3.W),D5
-lbC0021A4	lea	lbL008592(PC),SP
+lbC0021A4	
+	;lea	lbL008592(PC),SP
+	move.l	p4(pc),sp
+
+modifiedCodeEnd
 	move.b	0(SP,D5.W),D5
 	add.w	D5,D4
 	swap	D5
@@ -2423,7 +2628,7 @@ lbL008592	dcb.l	$3F,0
 	dc.w	$3F2
 
 
-stop
+
 
  ifne testi
 
@@ -2436,7 +2641,7 @@ lbL008698	ds.l	$200
 buf	ds.b	10000
 
 
-mdat	incbin	music:tfmx/mdat.turrican3_intro
-smpl	incbin	music:tfmx/smpl.turrican3_intro
+mdat	incbin	"m:exo/tfmx/chris huelsbeck/mdat.turrican 2 level 0-intro"
+smpl	incbin	"m:exo/tfmx/chris huelsbeck/smpl.turrican 2 level 0-intro"
  endc
 

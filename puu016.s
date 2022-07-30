@@ -35598,51 +35598,52 @@ TFMX_IDs
 p_tfmx7
 	jmp	.tfmxinit(pc)
 	p_NOP
-
 	jmp	.vb(pc)
-;	p_NOP
-
 	jmp	.tfmxend(pc)
-	p_NOP
-	p_NOP
+	jmp	.stop(pc)
+	jmp	.cont(pc)
 	jmp	.tfmxvol(pc)
 	jmp	.tfmxsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
 	p_NOP
-	jmp  id_TFMX7V(pc)
+	jmp 	id_TFMX7V(pc)
 	jmp	tfmx_author(pc)
-	dc.w pt_tfmx7 				* type
-	dc	pf_volume!pf_song!pf_poslen!pf_kelaus!pf_end
+	dc.w 	pt_tfmx7 	* type
+	dc	pf_volume!pf_song!pf_poslen!pf_kelaus!pf_end!pf_stop!pf_cont
 	dc.b	"TFMX 7ch",0
  even
 
+.OFFSET_INIT = 0+$20
+.OFFSET_END = 4+$20
+.OFFSET_VOL = 8+$20
+.OFFSET_FORWARD = 12+$20
+.OFFSET_BACKWARD = 16+$20
+.OFFSET_STOP = 20+$20
+.OFFSET_CONTINUE = 24+$20
+.OFFSET_POSITION = 28+$20
+
+.stop
+	move.l	tfmx7routines(a5),a0
+	jmp 	.OFFSET_STOP(a0)
+
+.cont	
+	move.l	tfmx7routines(a5),a0
+	jmp 	.OFFSET_CONTINUE(a0)
 
 .eteen
-	pushm	d0/a0
 	move.l	tfmx7routines(a5),a0
-	move	6246(a0),d0
-	addq	#2,d0
-	cmp	6244(a0),d0
-	bhi.b	.og
-	subq	#1,d0
-	move	d0,6246(a0)
-.og	popm	d0/a0
-	rts
-
+	jmp	.OFFSET_FORWARD(a0)
+	
 .taakse
-	push	a0
 	move.l	tfmx7routines(a5),a0
-	subq	#1,6246(a0)
-	bpl.b	.gog
-	clr	6246(a0)
-.gog	pop	a0
-	rts
+	jmp 	.OFFSET_BACKWARD(a0)
 
 .vb	push	a0
 	move.l	tfmx7routines(a5),a0
-	move	6244(a0),pos_maksimi(a5)
-	move	6246(a0),pos_nykyinen(a5)
+	jsr	.OFFSET_POSITION(a0)
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
 	pop	a0
 	rts
 
@@ -35651,7 +35652,7 @@ p_tfmx7
 	beq.b	.e
 	move.l	tfmx7routines(a5),a4
 	pushm	all
-	jsr	4(a4)
+	jsr	.OFFSET_END(a4)
 	popm	all
 	bsr.w	vapauta_kanavat
 	move.l	.tfmxbuf(pc),a0
@@ -35716,7 +35717,7 @@ p_tfmx7
 	move	tfmxmixingrate(a5),d2
 	move.l	.tfmxbuf(pc),d4
 	move.l	a5,-(sp)
-	jsr	(a4)
+	jsr	.OFFSET_INIT(a4)
 	move.l	(sp)+,a5
 	bsr.b	.tfmxvol
 	moveq	#0,d0
@@ -35729,7 +35730,7 @@ p_tfmx7
 	move	mainvolume(a5),d0
 	move.l	tfmx7routines(a5),a4
 	move.l	a5,-(sp)
-	jsr	8(a4)
+	jsr	.OFFSET_VOL(a4)
 	move.l	(sp)+,a5
 	rts
 
