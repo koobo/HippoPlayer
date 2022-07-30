@@ -31,7 +31,7 @@ ver	macro
 	endm	
 
 DEBUG	= 1
-asm	    = 1	* 1: Run from AsmOne, 0: CLI/Workbench  
+asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench  
 
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 zoom	= 0	* 1: zoomaava hippo
@@ -1247,8 +1247,8 @@ deleteflag	rs.b	1	* filen ja dividerin deletointiin
 keycode		rs.b	1		* 33
 keyfile		rs.b	64		* keyfile!
 
-modulename	rs.b	40		* moduulin nimi
-		rs.b	4
+INFO_MODULE_NAME_LEN = 50+10
+modulename	rs.b 	INFO_MODULE_NAME_LEN+2 * moduulin nimi
 moduletype	rs.b	40		* tyyppi tekstinä
 req_array	rs.b	0		* reqtoolsin muotoiluparametrit
 desbuf		rs.b	200		* muotoilupuskuri, temporary buffer
@@ -17623,11 +17623,26 @@ inforivit_play
 	bra.w	bopb
 	
 .huh	
-
+	; determine field length for name based on window width
+	moveq	#0,d2
+	move	WINSIZX(a5),d2
+	; left and right border, length of "Name: ", some more
+	sub	#8+8+6*8+8,d2
+	lsr	#3,d2
+	divu	#10,d2
+	or.l	#$30<<16+$30,d2
+	lea	fieldLen1(pc),a0
+	basereg	fieldLen1,a0
+	move.b	d2,fieldLen1+0(a0)
+	move.b	d2,fieldLen2+0(a0)
+	swap	d2
+	move.b	d2,fieldLen1+1(a0)
+	move.b	d2,fieldLen2+1(a0)
+	endb	a0
+	
 	moveq	#0,d2
 
 * Jos S3M, nimeä ei tartte siistiä.
-
 
 	cmp	#pt_multi,playertype(a5)
 	bne.w	.eer
@@ -17641,7 +17656,7 @@ inforivit_play
 	move.l	ps3m_mname(a5),a0
 	move.l	(a0),a0
 	lea	modulename(a5),a1
-	moveq	#28-1,d0
+	moveq	#INFO_MODULE_NAME_LEN-1,d0
 	moveq	#0,d1
 .copc	move.b	(a0)+,d1
 
@@ -17663,17 +17678,17 @@ inforivit_play
 
 	lea	.1(pc),a0
 	subq	#1,d0
-	beq.b	.hee
+	beq.b	.hee 	; s3m
 	lea	.2(pc),a0
 	subq	#1,d0
-	beq.b	.hee2
+	beq.b	.hee2	; Pro/Fasttracker
 	lea	.3(pc),a0
 	subq	#1,d0
-	beq.b	.hee
+	beq.b	.hee  	; mtm
 	lea	.4(pc),a0
 	subq	#1,d0
-	beq.b	.hee
-	moveq	#0,d2 * clear channel count for IT
+	beq.b	.hee  	; xm
+	moveq	#0,d2  	; it: clear channel count for
 	lea	 .5(pc),a0
 .hee	move.l	a0,d1
 
@@ -17685,6 +17700,7 @@ inforivit_play
 	bra.w	.leer
 
 .hee2
+	; ensure zero termination for pt mods?
 	lea	modulename(a5),a1
 	clr.b	20(a1)
 	bra.b	.hee
@@ -17697,6 +17713,7 @@ inforivit_play
  even
 
 .eer	bsr.w	siisti_nimi
+
 	move.l	playerbase(a5),a0
 	lea	p_name(a0),a0
 	move.l	a0,d1
@@ -17922,9 +17939,11 @@ siisti_nimi
 
 
 
+fieldLen1 = *+8
 tyyppi1_t	dc.b	"Name: %.24s",10
 		dc.b	"Type: %.24s",0
 
+fieldLen2 = *+8
 tyyppi2_t	dc.b	"Name: %.24s",10
 		dc.b	"Type: %.24s %ldch",0
 typpi
@@ -18336,7 +18355,7 @@ lootaan_nimi
 
 	bsr.b	logo
 	lea	modulename(a5),a1
-	moveq	#40-1,d0
+	moveq	#INFO_MODULE_NAME_LEN-1,d0
 .he	move.b	(a1)+,(a0)+
 	dbeq	d0,.he
 	clr.b	(a0)
@@ -22054,11 +22073,11 @@ rexxmessage
 
 	bsr.w	a2i
 	move	d0,-(sp)
-	bsr.w	rmove
+	jsr	rmove
 	move	(sp)+,d0
 	subq	#1,d0
 	bsr.b	.choo
-	bra.w	rmove	
+	jmp	rmove	
 
 
 *** CHOOSE
@@ -29464,8 +29483,10 @@ tee_modnimi
 	bra.b	.copy
 .eiarc
 	lea	8+fileinfoblock(a5),a0
+	moveq	#INFO_MODULE_NAME_LEN-1,d0
 .copy	move.b	(a0)+,(a1)+
-	bne.b	.copy
+	dbeq	d0,.copy
+	clr.b	(a1)
 	rts
 
 
@@ -37441,7 +37462,7 @@ p_digiboosterpro
 	move.l	moduleaddress(a5),a1
 	lea	16(a4),a1
 	moveq	#42-1,d0	
-	bsr.w		copyNameFromA1
+	bsr.w	copyNameFromA1
 	moveq	#0,d0
 .y 	rts
 
@@ -38952,7 +38973,7 @@ p_pumatracker
 	bsr.b .id_pumatracker_
 	bne.b .x 
 	moveq	#12-1,d0
-	bsr.w		copyNameFromModule
+	bsr.w	copyNameFromModule
 	moveq	#0,d0
 .x 	rts
 
