@@ -47941,8 +47941,8 @@ initializeButtonRowLayout
 	lea	row1Gadgets,a0
 	bsr.b	.do
 	lea	row2Gadgets,a0
-	bsr.b	.do
-	rts
+;	bsr.b	.do
+;	rts
 	
 .do
 .1	tst	(a0)
@@ -47962,13 +47962,8 @@ layoutButtonRow
 	lea	row1Gadgets,a0
 	bsr.b	.do
 	lea	row2Gadgets,a0
-	bsr.b	.do
-
-	; Fine tune the info button
-	lea	button2,a0
-	move.l	gg_GadgetRender(a0),a1
-	subq	#1,ig_LeftEdge(a1)
-	rts
+;	bsr.b	.do
+;	rts
 
 .do
 .1	tst	(a0)
