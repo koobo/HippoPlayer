@@ -1486,6 +1486,8 @@ wflags set wflags!WFLG_SMART_REFRESH!WFLG_RMBTRAP!WFLG_REPORTMOUSE
 idcmpflags set IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_CLOSEWINDOW
 idcmpflags set idcmpflags!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
 idcmpflags set idcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
+idcmpflags set idcmpflags!IDCMP_NEWSIZE
+
 
 wflags2	set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
 wflags2 set wflags2!WFLG_SMART_REFRESH!WFLG_RMBTRAP
@@ -2334,13 +2336,13 @@ main
 	move	WINSIZX(a5),windowZippedSize(a5)	* Pienen koko ZipWindowille
 	* zipped window height
 	move	#11,windowZippedSize+2(a5)
+
 	* Request events for kick2.0+
 	* Catch zip window and window resize events
 	or.l	#IDCMP_CHANGEWINDOW,idcmpmw(a2)	
-
 .vanha	
-	endb	a2
 	; Above stuff for kick2.0+
+	endb	a2
 
 	* Dos has been opened in the startup code
 	
@@ -2564,12 +2566,6 @@ main
 	; The last main window button is "gadgetSortButton",
 	; add another button as the new last one
 	move.l	#gadgetListModeChangeButton,gadgetSortButton+gg_NextGadget
-
-	tst.b	uusikick(a5)
-	bne.b	.o0
-	; Remove resize gadget for kick13
-	clr.l	gadgetListModeChangeButton+gg_NextGadget
-.o0	
 
 	move.l	_IntuiBase(a5),a6
 	* Give each gadget a gg_GadgetID,
@@ -3409,29 +3405,29 @@ msgloop
 
 	lob	ReplyMsg
 
-	;move.l	d2,d0
-	;DPRINT	"IDCMP=%ld"
-
-	; Window resize events go into IDCMP_CHANGEWINDOW
-	; too.
-	;cmp.l	#IDCMP_NEWSIZE,d2
-	;bne.b	.noNewSize
-	;bsr	mainWindowSizeChanged
-	;bra.b	.idcmpLoop
-;.noNewSize
-
 	cmp.l	#IDCMP_CHANGEWINDOW,d2
 	bne.b	.noChangeWindow
+	; Window resize events go into IDCMP_CHANGEWINDOW
+	; on kick 2.0+.
 	bsr.w	zipwindow
 	bsr	mainWindowSizeChanged
 	bra.b	.idcmpLoop
 
 .noChangeWindow
+	cmp.l	#IDCMP_NEWSIZE,d2
+	bne.b	.noNewSize
+	tst.b	uusikick(a5)
+	bne.b	.idcmpLoop
+	; Use this event on kick1.3, as CHANGEWINDOW is not reported there.
+	bsr	mainWindowSizeChanged
+	bra.b	.idcmpLoop
+.noNewSize
+
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.noRawKey
 	clr	userIdleTick(a5)	
 	bsr.w	nappuloita
-	bra.b	.idcmpLoop
+	bra.w	.idcmpLoop
 .noRawKey	
 	* There will be a lot of mousemove messages.
 	* To keep the load light only take the first one and filter out the
@@ -3441,10 +3437,10 @@ msgloop
 	bne.b	.noMouseMove
 	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
-	bne.b  	.idcmpLoop
+	bne.w  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
 	bsr.w	mousemoving
-	bra.b	.idcmpLoop
+	bra.w	.idcmpLoop
 
 .noMouseMove
 	cmp.l	#IDCMP_GADGETUP,d2
@@ -5310,8 +5306,6 @@ configResizeGadget
 * Enables the low right bottom resize gadget, on kick2.0+ only,
 * where GTYP_SIZING is available.
 enableResizeGadget
-	tst.b	uusikick(a5)
-	beq.b	.old
 	lea	gadgetResize,a1
 	move.l	windowbase(a5),a0
 	* Height is a bit larger than the window bottom border
@@ -5327,7 +5321,6 @@ enableResizeGadget
 
 	* Enable and unhide
 	and	#~GFLG_DISABLED,gg_Flags(a1)
-	;move	#16,gg_Width(a1)
 	move	#6,gg_Width(a1)
 
 	* Set wd_MinSize to correspond to 3 rows
@@ -5343,7 +5336,6 @@ enableResizeGadget
 	move	d2,wd_MinHeight(a0)
 
 	* Max size too, 47 lines down, total 50
-	;add	#(50-3)*8,d2
 	moveq	#50-3,d0
 	mulu	listFontHeight(a5),d0
 	add	d0,d2
@@ -17622,7 +17614,8 @@ inforivit_play
 	bpl.b	.huh
 	bra.w	bopb
 	
-.huh	
+.huh
+ ifne FEATURE_HORIZ_RESIZE	
 	; determine field length for name based on window width
 	moveq	#0,d2
 	move	WINSIZX(a5),d2
@@ -17639,7 +17632,8 @@ inforivit_play
 	move.b	d2,fieldLen1+1(a0)
 	move.b	d2,fieldLen2+1(a0)
 	endb	a0
-	
+ endif ; FEATURE
+
 	moveq	#0,d2
 
 * Jos S3M, nimeä ei tartte siistiä.
