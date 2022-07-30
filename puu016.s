@@ -6696,7 +6696,7 @@ buttonspressed
 
 ** check buttons with RMB functions defined and trigger those
 
-	DPRINT		"RMB DOWN check"
+	DPRINT	"RMB DOWN check"
 
 	lea	rightButtonActionsList,a2
 .actionLoop
@@ -6761,7 +6761,7 @@ buttonspressed
 *   a0=gadget
 *   a1=gadget function to run
 .rightButtonDownCheck
-	bsr.w		checkMouseOnGadget
+	bsr.w	checkMouseOnGadget
 	bne.b	.mouseNotOn
 	move.l	a0,rightButtonSelectedGadget(a5)
 	move.l	a1,rightButtonSelectedGadgetRoutine(a5)
@@ -18450,7 +18450,7 @@ putnu	ext.l	d0
 * Out:
 *   d0 = zero if no files hit under mouse, 1 otherwise
 *   d1 = Index of selected file
-getFileBoxIndexFromMousePosition
+getFileBoxIndexFromMousePosition:
 	tst	boxsize(a5)
 	beq.w	.out
 
@@ -18468,11 +18468,16 @@ getFileBoxIndexFromMousePosition
 
 	cmp	#30+WINX,d0		* onko tiedostolistan p‰‰ll‰?
 	blo.b	.out
-	cmp	#251+WINX,d0
+
+	; Left edge value
+	move	WINSIZX(a5),d2
+	sub	#9,d2
+	;cmp	#251+WINX,d0
+	cmp	d2,d0
 	bhi.b	.out
+	
 	moveq	#63+WINY,d2		* Top edge
 	add	d3,d2			* Modifier!
-
 	cmp	d2,d1
 ;	cmp	#63+WINY,d1
 	blo.b	.out
