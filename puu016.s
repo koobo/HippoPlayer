@@ -12285,7 +12285,12 @@ loadprefs2
 	bsr.w	clampByte
 	move.b	d0,mpegadiv(a5)
 
-	move.b	prefs_medmode(a0),medmode(a5)
+	move.b	prefs_medmode(a0),d0
+	moveq	#0,d1
+	moveq	#1,d2
+	bsr.w	clampByte
+	move.b	d0,medmode(a5)
+
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
