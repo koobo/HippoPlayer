@@ -4886,8 +4886,6 @@ wrender:
 	tst.b	kokolippu(a5)
 	beq.w	.pienehko
 
-	tst.b	uusikick(a5)		* uusi kick?
-	beq.b	.vanaha
 
 	move.l	rastport(a5),a2
 	moveq	#4,d0
@@ -4941,12 +4939,10 @@ wrender:
 	move.l	_GFXBase(a5),a6
 	jmp	_LVOClipBlit(a6)
 .oru
-.vanaha
+;.vanaha
 
-	* On kick2.0 insert an invisible size gadget last
+	* Insert an invisible size gadget last
 	bsr.w	configResizeGadget
-
-
 
 
 * sitten isket‰‰n gadgetit ikkunaan..
@@ -4961,6 +4957,13 @@ wrender:
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	lob	RefreshGadgets
+
+	tst.b	uusikick(a5)
+	bne.b	.newK
+	; Seems an extra refresh is needed here to get bg correct
+	lea	slider1,a0
+	bsr	refreshGadgetInA0
+.newK
 
 **** paksunnetaan gadujen reunat
 
@@ -12889,6 +12892,10 @@ drawtexture:
 	move.l	a2,a1
 
 	move.l	pen_3(a5),d0
+	tst.b	uusikick(a5)
+	bne.b	.n
+	move.l	pen_1(a5),d0 * kick1.3: different color
+.n
 	lob	SetBPen
 
 	movem.l	(sp)+,d0-d3
@@ -12896,6 +12903,10 @@ drawtexture:
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	add	windowleft(a5),d2
+	tst.b	uusikick(a5)
+	bne.b	.nn
+	addq	#2,d2 * kick1.3: more wider
+.nn
 	add	windowtop(a5),d3
 	lob	RectFill
 
@@ -13248,8 +13259,9 @@ prefs_code
 	bsr.w	setscrtitle
 
 
-	tst.b	uusikick(a5)
-	beq.b	.vanaha
+;	tst.b	uusikick(a5)
+;	beq.b	.vanaha
+
 	move.l	rastport2(a5),a2
 	moveq	#4,d0
 	moveq	#11,d1
@@ -13290,7 +13302,7 @@ prefs_code
 	sub	windowtop(a5),d1
 	bra.w	pcler
 .oru
-.vanaha
+;.vanaha
 
 
 	move.l	rastport2(a5),a1
@@ -19328,8 +19340,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	swindowbase(a5),a0
 	bsr.w	setscrtitle
 
-	tst.b	uusikick(a5)		* uusi kick?
-	beq.b	.vanaha
+;	tst.b	uusikick(a5)		* uusi kick?
+;	beq.b	.vanaha
 
 	move.l	srastport(a5),a2
 	moveq	#4,d0
@@ -19342,7 +19354,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	add	d4,d3
 	bsr.w	drawtexture
 
-.vanaha
+;.vanaha
 
 	lea	gAD1,a3
 	movem	4(a3),plx1/ply1/plx2/ply2	* slider
@@ -23791,9 +23803,6 @@ scopeWindowChangeHandler
 ;	rts
 
 drawScopeWindowDecorations
-	tst.b	uusikick(a5)		* uusi kick?
-	beq.b	.kick13
-
 	move.l	s_rastport3(a4),a2
 	moveq	#4,d0
 	moveq	#11,d1
@@ -23817,27 +23826,8 @@ drawScopeWindowDecorations
 	move.l	d0,d2
 	move.l	d1,d3
 	lob	ClipBlit
-	bra.b	.drawBox 
-	
-.kick13	
-	* Kickstart 1.3, since there is no background texture fill,
-	* the window must be cleared by other means
-	* to get rid of previous stuff after resize.
-	move.l	s_rastport3(a4),a1
-	move.l	pen_0(a5),d0
-	lore	GFX,SetAPen
-	moveq	#4,d0
-	moveq	#11,d1
-	move	s_scopeDrawAreaWidth(a4),d2
-	add	#335-320,d2
-	move	s_scopeDrawAreaHeight(a4),d3
-	add	#82-64,d3
-	add	windowleft(a5),d0
-	add	windowtop(a5),d1
-	add	windowleft(a5),d2
-	add	windowtop(a5),d3
-	jsr	_LVORectFill(a6)
-	
+	;bra.b	.drawBox 
+
 .drawBox
 	moveq	#7,plx1
 	move	s_scopeDrawAreaWidth(a4),plx2
