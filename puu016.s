@@ -551,7 +551,8 @@ pen_3		rs.l	1
 WINSIZX		rs	1		* p‰‰ikkunan koot
 WINSIZY		rs	1
 
-previousWindowWidth rs 	1
+previousWindowWidth 	rs 	1
+previousWindowHeight 	rs 	1
 
 eicheck		rs.b	1
 reghippo	rs.b 	1 		* ensimm‰inen hippo hieman sivummalle
@@ -4184,13 +4185,14 @@ handleSignal2
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
 	bne.b	.noe
-	* Do a content refresh is box size not changed
+	* Do a content refresh is box size not changed. Not sure why
 	jsr	forceRefreshList
 .noe
 	* Prefs exit check done
-	* Check if window width changed
 
+	* Check if window width changed
 	move.l	windowbase(a5),a0
+
 	move	wd_Width(a0),d0
 	cmp	previousWindowWidth(a5),d0
 	beq.b	.sameWidth
@@ -4206,13 +4208,12 @@ handleSignal2
  endif
 .sameWidth
 
-
 ** ei saa r‰mp‰t‰ ikkunaa jos se ei oo oikeassa koossaan!!
 
 	moveq	#0,d7
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
 	cmp	boxsize0(a5),d0
-	beq.b	.weew
+	beq.b	.boxSizeNotChanged
 	
  if DEBUG
  	ext.l	d0
@@ -4229,10 +4230,23 @@ handleSignal2
 	bsr.b	.closeAndReopenWindow
 	pop	d7
 	tst.l	d0
-	bne.b	.error
+	bne.w	.error
 	move	boxsize(a5),boxsize0(a5)
-.weew
+	bra.b	.boxSizeChanged
 
+.boxSizeNotChanged
+
+	* Check if height changed
+	move	wd_Height(a0),d0
+	cmp	previousWindowHeight(a5),d0
+	beq.b	.sameHeight
+	* Change the window size back
+	moveq	#0,d0 ; deltaX
+	move	previousWindowHeight(a5),d1
+	sub	wd_Height(a0),d1 ; deltaY
+	lore	Intui,SizeWindow
+.sameHeight
+.boxSizeChanged
 
 ** ei saa r‰mp‰t‰ ikkunaa jos se ei oo oikeassa koossaan!!
 
@@ -4521,8 +4535,10 @@ avaa_ikkuna:
 .elderly
 	jsr	createlistBoxRegion
 
+	; Store this for detecting height changes after window opened
+	move	winstruc+nw_Height,previousWindowHeight(a5)
+
 	bsr.w	wrender
-;	bsr.w	front		
 	moveq	#0,d0
 	rts
 
@@ -4814,7 +4830,6 @@ getscreeninfo
 	add	d3,prefssiz+2(a0)
 	add	d3,quadsiz+2(a0)
 	add	d3,swinsiz+2(a0)
-	endb	a0
 
 	tst	quadWindowHeightOriginal(a5)
 	bne.b	.setAlready
@@ -4823,9 +4838,11 @@ getscreeninfo
 .setAlready
 
 	* Store new window size
-	move	WINSIZX(a5),wsizex
-	move	WINSIZY(a5),wsizey
+	move	WINSIZX(a5),wsizex(a0)
+	move	WINSIZY(a5),wsizey(a0)
 	move	WINSIZX(a5),previousWindowWidth(a5)
+
+	endb	a0
 
 	lea	gadgets,a0
 	bsr.b	.hum
@@ -5276,7 +5293,7 @@ mainWindowSizeChanged
 	
  if DEBUG
  	ext.l	d0
-	DPRINT	"New boxsize=%ld"
+	DPRINT	"boxsize=%ld"
  endif
 
 	* Set new boxsize into prefs gadget
