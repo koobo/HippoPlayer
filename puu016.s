@@ -1109,7 +1109,7 @@ fileBrowserListHeader	rs.b	MLH_SIZE
 
 
 ** InfoWindow kamaa
-infosample	rs.l	1		* samplesoittajan v‰liaikaisalue
+;infosample	rs.l	1		* samplesoittajan v‰liaikaisalue
 swindowbase	rs.l	1
 suserport	rs.l	1
 srastport	rs.l	1
@@ -1120,7 +1120,7 @@ riviamount	rs	1
 oldswinsiz	rs	1
 oldsgadsiz	rs	1
 skokonaan	rs.b	1
-	rs.b	1
+		rs.b	1
 
 ******* LoadDatan muuttujia
 lod_a			rs.b	0
@@ -19297,31 +19297,43 @@ ILF2	=	$03
 swflags set WFLG_SMART_REFRESH!WFLG_NOCAREREFRESH!WFLG_DRAGBAR
 swflags set swflags!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET!WFLG_RMBTRAP
 sidcmpflags set IDCMP_CLOSEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
-sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
+sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
+sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
+
 
 	tst.b	gotscreeninfo(a5)
 	bne.b	.joo
 	jsr	getscreeninfo
 .joo
 
-.urk	lea	swinstruc,a0
-	move	nw_Height(a0),oldswinsiz(a5)
-	move	gg_Height+gAD1,oldsgadsiz(a5)
+	lea	swinstruc,a0
+	basereg swinstruc,a0
+	move	nw_Height+swinstruc(a0),oldswinsiz(a5)
+	move	gg_Height+gAD1(a0),oldsgadsiz(a5)
 
 	move	infosize(a5),d0
 	subq	#3,d0
 	lsl	#3,d0
-	add	d0,nw_Height(a0)
-	add	d0,gg_Height+gAD1
+	add	d0,nw_Height+swinstruc(a0)
+	add	d0,gg_Height+gAD1(a0)
+	endb	a0
 
+	; Set window size limits
+	; Max height 50 lines
+	move	oldswinsiz(a5),d0
+	move	d0,nw_MinHeight(a0)
+	add	#(50-3)*8,d0
+	move	d0,nw_MaxHeight(a0)
+
+	; fit into the screen
+	
 	move	wbkorkeus(a5),d2
 .lo	cmp	nw_Height(a0),d2
 	bhi.b	.fine
-
+	
 	clr	nw_TopEdge(a0)		* sijoitetaan mahd. ylˆs
 	subq	#1,infosize(a5)
 	subq	#8,nw_Height(a0)
-
 
 	move	infosize(a5),d0
 	subq	#3,d0
@@ -19330,18 +19342,15 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move	d0,gg_Height+gAD1
 	bra.b	.lo
 
-
 .fine
 	move.l	infopos2(a5),(a0)
 	bsr.w	tark_mahtu
 
 	move	#7,slim2height
-
 	lore	Intui,OpenWindow
 	move.l	d0,swindowbase(a5)
 
 	and.l	#~WFLG_ACTIVATE,sflags	* clearataan active-flaggi
-
 	move	d7,swinstruc+nw_Height
 
 	tst.l	d0
@@ -19362,9 +19371,20 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	swindowbase(a5),a0
 	bsr.w	setscrtitle
 
-;	tst.b	uusikick(a5)		* uusi kick?
-;	beq.b	.vanaha
+	; Reset slider position
+	lea	gAD1,a0
+	move.l	gg_SpecialInfo(a0),a1
+	move	pi_Flags(a1),d0
+	move.l	swindowbase(a5),a1
+	sub.l	a2,a2
+	moveq	#0,d1
+	moveq	#0,d2
+	moveq	#0,d3
+	moveq	#0,d4
+	lore	Intui,ModifyProp
 
+.redraw
+	DPRINT	"Info redraw"
 	move.l	srastport(a5),a2
 	moveq	#4,d0
 	moveq	#11,d1
@@ -19376,9 +19396,16 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	add	d4,d3
 	bsr.w	drawtexture
 
-;.vanaha
+	; set slider height
+	move	infosize(a5),d0
+	subq	#3,d0
+	lsl	#3,d0
+	add	oldsgadsiz(a5),d0
+	;move	d0,gg_Height+gAD1
 
 	lea	gAD1,a3
+	move	d0,gg_Height(a3)
+
 	movem	4(a3),plx1/ply1/plx2/ply2	* slider
 	add	plx1,plx2
 	add	ply1,ply2
@@ -19389,7 +19416,6 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	srastport(a5),a1
 	bsr.w	sliderlaatikko
 
-.nel
 .reprint
 
 	moveq	#29,plx1
@@ -19406,27 +19432,14 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	add	windowtop(a5),ply2
 	move.l	srastport(a5),a1
 
+	* Select box frame depending on if info or about window
 	lea	laatikko2(pc),a0
 	tst.b	infolag(a5)
 	bne.b	.a
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.a
-
 	lea	laatikko1(pc),a0
 .a	jsr	(a0)
-
-	pushm	all
-	lea	gAD1,a0
-	move.l	gg_SpecialInfo(a0),a1
-	move	pi_Flags(a1),d0
-	move.l	swindowbase(a5),a1
-	sub.l	a2,a2
-	moveq	#0,d1
-	moveq	#0,d2
-	moveq	#0,d3
-	moveq	#0,d4
-	lore	Intui,ModifyProp
-	popm	all
 
 	moveq	#31-2+2,d0		* tyhjennet‰‰n
 	moveq	#15-1,d1
@@ -19445,6 +19458,591 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	moveq	#$0a,d6
 	lore	GFX,ClipBlit
 	st	skokonaan(a5)
+
+	bsr	.prepareInfoWindowContent
+
+	clr	riviamount(a5)
+	move.l	infotaz(a5),a0
+.fii	tst.b	(a0)
+	beq.b	.kii
+	cmp.b	#10,(a0)+
+	bne.b	.fii
+	addq	#1,riviamount(a5)
+	bra.b	.fii
+.kii
+
+	bsr.w	.print
+
+	clr	sfirstname(a5)
+	bsr.w	.reslider
+	bsr	.refreshInfoWindowResizeGadget
+
+*** Info window message loop
+
+	bra.b	.msgLoop
+.returnmsg
+	bsr.w	.flush_messages
+.msgLoop
+	moveq	#0,d0			* viestisilmukka
+	moveq	#0,d1
+	move.l	suserport(a5),a4
+	move.b	MP_SIGBIT(a4),d1	* signalibitti
+	bset	d1,d0
+	move.b	info_signal(a5),d1
+	bset	d1,d0
+	move.b	info_signal2(a5),d1
+	bset	d1,d0
+	lore	Exec,Wait
+
+	; exit signal?
+	move.b	info_signal(a5),d1
+	btst	d1,d0
+	bne.w	.sexit
+	; content refresh signal?
+	move.b	info_signal2(a5),d1
+	btst	d1,d0
+	beq.b	.noRefresh
+	* refresh content signal
+	bsr.w	.flush_messages
+	bsr.w	.fraz
+	bra.w	.reprint
+.noRefresh
+
+.idcmpLoop	
+	move.l	a4,a0
+	lore	Exec,GetMsg
+	tst.l	d0
+	beq.b	.msgLoop
+
+	move.l	d0,a1
+	move.l	im_Class(a1),d2		* luokka	
+	move	im_Code(a1),d3		* koodi
+	move.l	im_IAddress(a1),a2 	* gadgetin tai olion osoite
+	move	im_Qualifier(a1),d4	* RAWKEY: IEQUALIFIER_?
+	move	im_MouseX(a1),d5
+	move	im_MouseY(a1),d6
+
+	lob	ReplyMsg
+
+	cmp.l	#IDCMP_ACTIVEWINDOW,d2
+	bne.b	.noActive
+	bsr.w	.refreshInfoWindowResizeGadget
+	bra.b	.idcmpLoop
+
+.noActive
+	cmp.l	#IDCMP_INACTIVEWINDOW,d2
+	bne.b	.noInactive
+	bsr.w	.refreshInfoWindowResizeGadget
+	bra.b	.idcmpLoop
+	
+.noInactive
+	cmp.l	#IDCMP_NEWSIZE,d2
+	bne.b	.noNewSize
+	bsr	.infoWindowNewSize
+	beq.b	.idcmpLoop
+	bsr.w	.flush_messages
+	bra.w	.redraw
+
+.noNewSize
+	cmp.l	#IDCMP_RAWKEY,d2
+	bne.b	.noRawKey
+	bsr	.srawkeyz
+	bne.b	.sexit
+	bra.b	.idcmpLoop
+
+.noRawKey
+	cmp.l	#IDCMP_MOUSEMOVE,d2
+	bne.b	.noMouseMove
+	bsr	.smousemoving
+	bra.b	.idcmpLoop
+
+.noMouseMove
+	cmp.l	#IDCMP_MOUSEBUTTONS,d2
+	bne.b	.noMouseButtons
+	cmp	#SELECTDOWN,d3			* vasen
+	bne.b	.noSelectDown
+	bsr.w	.samplePlay
+	bra.w	.idcmpLoop
+
+.noSelectDown
+	cmp	#MENUDOWN,d3			* oikea
+	beq.b	.sexit
+
+.noMouseButtons
+	cmp.l	#IDCMP_CLOSEWINDOW,d2
+	bne.w	.idcmpLoop
+	
+.sexit	
+	bsr.b	.flush_messages
+
+	move	oldswinsiz(a5),nw_Height+swinstruc
+	move	oldsgadsiz(a5),gg_Height+gAD1
+
+	move.l	_IntuiBase(a5),a6		
+	move.l	swindowbase(a5),d0
+	beq.b	.uh1
+	move.l	d0,a0
+	move.l	4(a0),infopos2(a5)
+	lob	CloseWindow
+	clr.l	swindowbase(a5)
+.uh1
+	bsr.b	.fraz
+
+	;bsr.w	freeinfosample
+
+	moveq	#0,d0
+	rts
+
+
+.fraz	move.l	infotaz(a5),a0
+	cmp.l	#about_t,a0
+	beq.b	.fr0z
+	jsr	freemem
+.fr0z	clr.l	infotaz(a5)
+	rts
+
+
+.flush_messages
+	move.l	swindowbase(a5),a0
+	bra.w  flushWindowMessages
+	
+.reslider
+	moveq	#0,d0
+	move	riviamount(a5),d0
+	bne.b	.xe
+	moveq	#1,d0
+.xe
+
+	moveq	#0,d1
+	move	infosize(a5),d1
+	beq.w	.eiup
+	cmp	d1,d0		* v‰h boxsize
+	bhs.b	.ok
+	move	d1,d0
+.ok
+	lsl.l	#8,d0
+	bsr.w	divu_32
+ 	
+	move.l	d0,d1
+	move.l	#65535<<8,d0
+	bsr.w	divu_32
+	move.l	d0,d1
+
+	lea	gAD1,a0
+	basereg	gAD1,a0
+
+	move.l	gg_SpecialInfo+gAD1(a0),a1
+	cmp	pi_VertBody(a1),d1
+	sne	d2
+	lsl	#8,d2
+	move	d1,pi_VertBody(a1)
+
+	move	riviamount(a5),d1
+	sub	infosize(a5),d1
+	beq.b	.pp
+	bpl.b	.p
+.pp	moveq	#1,d1
+.p	ext.l	d1
+
+	move	sfirstname(a5),d0
+	mulu	#65535,d0
+	bsr.w	divu_32
+	cmp	pi_VertPot(a1),d0
+	sne	d2
+	move	d0,pi_VertPot(a1)
+
+;	tst	d2
+;	beq.b	.eiup
+
+
+	move	gg_Height+gAD1(a0),d0
+	mulu	pi_VertBody(a1),d0
+	divu	#$ffff,d0
+	bne.b	.f
+	moveq	#8,d0
+.f
+	cmp	#8,d0
+	bhs.b	.zze
+	moveq	#8,d0
+.zze
+	move	d0,slim2height(a0)
+	subq	#2+1,d0
+	move	d0,d1
+
+	lea	slim2,a2
+	lea	slim1a(a0),a1
+	tst.b	uusikick(a5)
+	bne.b	.newz
+	* Select alternate gfx
+	lea	slim1a_kick13-slim1a(a1),a1
+.newz
+	move	(a1)+,(a2)+
+.filf	move	(a1),(a2)+
+	dbf	d0,.filf
+	addq	#2,a1
+	move	(a1)+,(a2)+
+
+	move	(a1)+,(a2)+
+.fil	move	(a1),(a2)+
+	dbf	d1,.fil
+	move	2(a1),(a2)
+.bar	
+	endb	a0
+	;lea	gAD1,a0
+	bsr.w	.refreshInfoWindowGadget
+.eiup	rts
+
+
+.infoWindowNewSize
+	DPRINT	"info newsize"
+	move.l	swindowbase(a5),a0
+	lore	Intui,RefreshWindowFrame
+	bsr.w	.refreshInfoWindowResizeGadget
+
+	move.l	swindowbase(a5),a0
+ 	move	wd_Height(a0),d0
+
+	* account for bottom border
+	subq	#6,d0
+	sub	windowbottom(a5),d0
+
+	* calculate new size
+	moveq	#11,d1
+	add	windowtop(a5),d1
+
+	sub	d1,d0
+	lsr	#3,d0
+	move	infosize(a5),d3 
+	move	d0,infosize(a5)
+
+ if DEBUG
+ 	ext.l	d0
+ 	DPRINT	"size=%ld"
+ endif
+	* adjust window height to match infosize
+	subq	#3,d0
+	lsl	#3,d0
+	add	oldswinsiz(a5),d0
+	sub	wd_Height(a0),d0
+	beq.b	.skipSize
+ if DEBUG
+ 	ext.l	d0
+	DPRINT	"adjust by %ld"
+ endif
+	move	d0,d1
+	moveq	#0,d0
+	lore	Intui,SizeWindow
+	; restore previous infosize, await for another
+	; new size event
+	move	d3,infosize(a5)
+	bra.b	.sizeNotChanged
+.skipSize
+	cmp	infosize(a5),d3
+	beq.b	.sizeNotChanged
+	bsr	updateprefs
+	; return 1: do refresh
+	moveq	#1,d0
+	rts
+.sizeNotChanged
+	; no refresh
+	moveq	#0,d0
+	rts
+
+
+.refreshInfoWindowResizeGadget
+	lea	gadgetResize,a0
+.refreshInfoWindowGadget
+	move.l	swindowbase(a5),a1
+	sub.l	a2,a2
+	moveq	#1,d0	
+	lore	Intui,RefreshGList
+	rts
+
+
+.srawkeyz
+* ylˆs: $4c
+* alas: $4d
+	cmp	#$45,d3		* ESC
+	beq.b	.rawkeyExitExit
+
+	move	infosize(a5),d0
+	cmp	riviamount(a5),d0
+	bhi.b	.rawkeyExit
+
+	moveq	#1,d0
+	and	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
+	beq.b	.nsh
+	move	infosize(a5),d0
+	lsr	#1,d0
+.nsh
+	move	sfirstname(a5),d2
+
+	cmp	#$4d,d3
+	beq.b	.alaz
+	cmp	#$4c,d3
+	bne.w	.rawkeyExit
+
+	sub	d0,sfirstname(a5)
+	bpl.b	.zoo
+	clr	sfirstname(a5)
+	bra.b	.zoo
+.alaz	
+	move	sfirstname(a5),d1
+	add	d0,d1
+	move	riviamount(a5),d0
+	sub	infosize(a5),d0
+	cmp	d0,d1
+	bls.b	.foop
+	move	d0,d1
+.foop
+	move	d1,sfirstname(a5)
+
+.zoo	
+	cmp	d2,d1
+	beq.b	.rawkeyExit
+	bsr.w	.reslider
+	bsr.b	.print
+	
+.rawkeyExit
+	moveq	#0,d0
+	rts
+
+.rawkeyExitExit
+	moveq	#1,d0
+	rts
+
+;.sgadgetsup
+;	bra.w	.returnmsg
+
+.smousemoving
+	lea	gAD1,a2
+	move.l	gg_SpecialInfo(a2),a0
+	move	pi_VertPot(a0),d0
+	cmp	ssliderold(a5),d0
+	bne.b	.new
+.q	rts
+.new	move	d0,ssliderold(a5)
+
+
+	move	riviamount(a5),d1
+	sub	infosize(a5),d1
+	bpl.b	.ye
+	moveq	#0,d1
+.ye	mulu	d1,d0
+	add.l	#32767,d0
+	divu	#65535,d0
+
+	cmp	sfirstname(a5),d0
+	beq.b	.q
+	move	d0,sfirstname(a5)
+
+	bsr.b	.print
+	rts
+
+.print
+	tst.b	skokonaan(a5)
+	beq.b	.naht
+	clr.b	skokonaan(a5)
+
+	moveq	#0,d0
+.all0	moveq	#0,d1
+	move	infosize(a5),d2
+	bra.w	.print2
+
+.all	move	sfirstname(a5),d0
+	bra.b	.all0
+	
+
+.naht
+
+	move	sfirstname(a5),d0
+	move	sfirstname2(a5),d7
+	move	d0,sfirstname2(a5)
+	cmp	d0,d7
+	beq.b	.xx
+	sub	d0,d7
+	bmi.b	.alas
+
+
+.ylos	cmp	infosize(a5),d7
+	bhs.b	.all
+
+
+* siirrytty d7 rivi‰ ylˆsp‰in:
+* kopioidaan rivit 0 -> d7 (koko: infosize-d7 r) kohtaan 0 ja printataan
+* kohtaan 0 d7 kpl uusia rivej‰
+
+	moveq	#16-1,d1		* source y
+
+	move	d7,d3
+	lsl	#3,d3
+	add	#16-1,d3		* dest y
+
+	bsr.b	.copy
+
+	move	sfirstname(a5),d0
+	moveq	#0,d1
+	move	d7,d2
+	bra.b	.print2
+
+
+
+.alas	neg	d7		
+	cmp	infosize(a5),d7
+	bhs.b	.all
+
+* siirrytty d7 rivi‰ alasp‰in:
+* kopioidaan rivit d7 -> infosize (koko: infosize-d7 r) kohtaan 0 ja printataan
+* kohtaan infosize-d7 d7 kpl uusia rivej‰
+
+	move	d7,d1
+	lsl	#3,d1
+	add	#16-1,d1		* source y	
+	moveq	#16-1,d3		* dest y
+
+	bsr.b	.copy
+
+	move	sfirstname(a5),d0
+	add	infosize(a5),d0
+	sub	d7,d0
+	move	infosize(a5),d1
+	sub	d7,d1
+	move	d7,d2
+	bsr.b	.print2
+
+	
+.xx
+	rts
+
+** kopioidaan 
+
+.copy	
+
+	move	infosize(a5),d5	* y size
+	sub	d7,d5
+	lsl	#3,d5
+
+	move.b	#$c0,d6		* minterm: a->d
+	moveq	#31-2,d0		* source x =
+	move.l	d0,d2		* dest x
+	move	#39*8+4,d4	* x size
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	add	windowleft(a5),d2
+	add	windowtop(a5),d3
+	move.l	srastport(a5),a0
+	move.l	a0,a1
+	move.l	_GFXBase(a5),a6
+	jmp	_LVOClipBlit(a6)
+
+
+
+* d0 = alkurivi
+* d1 = eka rivi ruudulla
+* d2 = printattavien rivien m‰‰r‰
+.print2
+	move.l	infotaz(a5),a3
+	subq	#1,d0
+	bmi.b	.rr
+.fle	cmp.b	#10,(a3)+
+	bne.b	.fle
+	dbf	d0,.fle
+.rr	cmp.b	#10,-1(a3)	
+	bne.b	.ra
+	addq	#1,a3		* skip ILF2
+.ra
+
+	move	d1,d7
+	lsl	#3,d7
+	add	#22-1,d7
+	
+	move	d2,d6
+	subq	#1,d6		* ???
+
+.lorp
+	lea	-50(sp),sp
+	move.l	sp,a0
+	move.l	a0,a1
+
+	move.l	a1,d0
+
+.lorp2	move.b	(a3)+,(a1)+
+	beq.b	.xp
+	
+	cmp.b	#10,-1(a1)
+	bne.b	.lorp2
+	clr.b	-1(a1)	
+	addq	#1,a3		* skipataan ILF2
+.xp	subq	#1,a1
+
+	move.l	a1,d1
+	sub.l	d0,d1
+	moveq	#39,d0
+	sub	d1,d0
+	subq	#1,d0
+	bmi.b	.xo
+.pe	move.b	#' ',(a1)+
+	dbf	d0,.pe
+	clr.b	(a1)
+.xo
+
+;	cmp.l	#"----",(a0)
+;	bne.b	.xq
+;	bsr.b	.palk
+;	bra.b	.xw
+;.xq
+
+	moveq	#35-2,d0
+	move	d7,d1
+	jsr	sprint
+
+.xw	addq	#8,d7
+	lea	50(sp),sp
+	tst.b	-1(a3)
+	beq.b	.xip
+
+	dbf	d6,.lorp
+.xip
+	rts
+	
+
+* x = 35
+* y = d7
+* x size = 39*8
+* y size = 8
+;.palk
+;	pushm	all
+;	tst.b	uusikick(a5)		* uusi kick?
+;	beq.b	.oz
+
+;	push	d7
+
+;	move	d7,ply1
+;	subq	#6,ply1
+;	moveq	#7,ply2
+;	moveq	#35,plx1
+;	move.l	#39*8-2,plx2
+;	add.l	plx1,plx2
+;	add.l	ply1,ply2
+;	bsr	.1
+
+;	pop	d7
+	
+;	move.l	srastport(a5),a2
+;	moveq	#35+1,d0
+;	subq	#5,d7
+;	move	d7,d1
+;	move	#39*8+35-3,d2
+;	moveq	#5,d3
+;	add	d7,d3
+;	bsr.w	drawtexture
+
+;.oz	popm	all
+;	rts
+
+
+.prepareInfoWindowContent
+
 
 	move.b	infolag(a5),d0
 	clr.b	infolag(a5)
@@ -19471,7 +20069,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	movem.l	d0/d1,-(sp)
 	pea	keyfile(a5)
 	move.l	sp,a1
-	bsr.w	desmsg4
+	jsr	desmsg4
 	add	#8+4,sp
 	st	eicheck(a5)
 
@@ -19491,7 +20089,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	clr	sfirstname2(a5)
 	clr.l	infotaz(a5)
 
-	bsr.w	obtainModuleData
+	jsr	obtainModuleData
 
 	tst.l	playingmodule(a5)
 	bpl.b	.bah
@@ -19546,7 +20144,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	d0,(a1)
 	move.l	a4,4(a1)
 	lea	.thxform(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 	bsr.w	.lloppu
 	lea	10(sp),sp
 	bsr.b	.fo
@@ -19591,7 +20189,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	a4,4(a1)
 
 	lea	.medform(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 
 	lea	16(sp),sp
 	bsr.w	.lloppu
@@ -19650,7 +20248,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.medform(pc),a0
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 	pop	a0
@@ -19699,7 +20297,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	lea	.form(pc),a0
 	move.l	infotaz(a5),a3
-	bsr.w	desmsg4
+	jsr	desmsg4
 	lea	42(sp),sp
 
 	bsr.w	.putcomment
@@ -20045,7 +20643,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	lea	xmNumSamples(a2),a1
 	tword	(a1)+,d2
 	tst	d2
-	beq.b	.skip
+	beq.w	.skip
 	lea	xmSmpHdrSize(a2),a1
 	tlword	(a1)+,d3
 	add.l	d0,a2
@@ -20487,521 +21085,33 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 .nomu	addq	#1,a2
 	bra.b	.clo
 .nox
-
-
-	clr	riviamount(a5)
-	move.l	infotaz(a5),a0
-.fii	tst.b	(a0)
-	beq.b	.kii
-	cmp.b	#10,(a0)+
-	bne.b	.fii
-
-	addq	#1,riviamount(a5)
-	bra.b	.fii
-.kii
-
-
-	bsr.w	.print
-
-	clr	sfirstname(a5)
-	bsr.w	.reslider
-
-
-	bra.b	.msgloop
-.returnmsg
-	bsr.w	.flush_messages
-.msgloop	
-	moveq	#0,d0			* viestisilmukka
-	moveq	#0,d1
-	move.l	suserport(a5),a4
-	move.b	MP_SIGBIT(a4),d1	* signalibitti
-	bset	d1,d0
-	move.b	info_signal(a5),d1
-	bset	d1,d0
-	move.b	info_signal2(a5),d1
-	bset	d1,d0
-	lore	Exec,Wait
-
-	move.b	info_signal(a5),d1
-	btst	d1,d0
-	bne.b	.sexit
-	move.b	info_signal2(a5),d1
-	btst	d1,d0
-	beq.b	.xcxc
-	bsr.w	.flush_messages
-	bsr.w	.fraz
-	bra.w	.reprint
-.xcxc
-
-
-	move.l	a4,a0
-	lob	GetMsg
-	tst.l	d0
-	beq.b	.msgloop
-
-	move.l	d0,a1
-	move.l	im_Class(a1),d2		* luokka	
-	move	im_Code(a1),d3		* koodi
-	move.l	im_IAddress(a1),a2 	* gadgetin tai olion osoite
-	move	im_Qualifier(a1),d4	* RAWKEY: IEQUALIFIER_?
-	move	im_MouseX(a1),d5
-	move	im_MouseY(a1),d6
-
-	lob	ReplyMsg
-
-
-	cmp.l	#IDCMP_RAWKEY,d2
-	beq.w	.srawkeyz
-	cmp.l	#IDCMP_MOUSEMOVE,d2
-	beq.w	.smousemoving
-	cmp.l	#IDCMP_GADGETUP,d2
-	beq.w	.sgadgetsup
-	cmp.l	#IDCMP_MOUSEBUTTONS,d2
-	bne.b	.cxc
-	cmp	#SELECTDOWN,d3			* vasen
-	beq.w	.sampleplay
-	cmp	#MENUDOWN,d3			* oikea
-	beq.b	.sexit
-.cxc	cmp.l	#IDCMP_CLOSEWINDOW,d2
-	bne.w	.msgloop
-	
-
-.sexit	bsr.b	.flush_messages
-
-	move	oldswinsiz(a5),nw_Height+swinstruc
-	move	oldsgadsiz(a5),gg_Height+gAD1
-
-	move.l	_IntuiBase(a5),a6		
-	move.l	swindowbase(a5),d0
-	beq.b	.uh1
-	move.l	d0,a0
-	move.l	4(a0),infopos2(a5)
-	lob	CloseWindow
-	clr.l	swindowbase(a5)
-.uh1
-	bsr.b	.fraz
-
-	bsr.w	freeinfosample
-
-	moveq	#0,d0
 	rts
-
-
-.fraz	move.l	infotaz(a5),a0
-	cmp.l	#about_t,a0
-	beq.b	.fr0z
-	jsr	freemem
-.fr0z	clr.l	infotaz(a5)
-	rts
-
-
-.flush_messages
-	move.l	swindowbase(a5),a0
-	bra.w  flushWindowMessages
-	
-
-
-
-.reslider
-	moveq	#0,d0
-	move	riviamount(a5),d0
-	bne.b	.xe
-	moveq	#1,d0
-.xe
-
-
-
-	moveq	#0,d1
-	move	infosize(a5),d1
-	beq.w	.eiup
-	cmp	d1,d0		* v‰h boxsize
-	bhs.b	.ok
-	move	d1,d0
-.ok
-	lsl.l	#8,d0
-	bsr.w	divu_32
- 	
-	move.l	d0,d1
-	move.l	#65535<<8,d0
-	bsr.w	divu_32
-	move.l	d0,d1
-
-	lea	gAD1,a0
-	move.l	gg_SpecialInfo(a0),a1
-	cmp	pi_VertBody(a1),d1
-	sne	d2
-	lsl	#8,d2
-	move	d1,pi_VertBody(a1)
-
-	move	riviamount(a5),d1
-	sub	infosize(a5),d1
-	beq.b	.pp
-	bpl.b	.p
-.pp	moveq	#1,d1
-.p	ext.l	d1
-
-	move	sfirstname(a5),d0
-	mulu	#65535,d0
-	bsr.w	divu_32
-	cmp	pi_VertPot(a1),d0
-	sne	d2
-	move	d0,pi_VertPot(a1)
-
-;	tst	d2
-;	beq.b	.eiup
-
-
-	move	gg_Height(a0),d0
-	mulu	pi_VertBody(a1),d0
-	divu	#$ffff,d0
-	bne.b	.f
-	moveq	#8,d0
-.f
-	cmp	#8,d0
-	bhs.b	.zze
-	moveq	#8,d0
-.zze
-	move	d0,slim2height
-	subq	#2+1,d0
-	move	d0,d1
-
-
-	lea	slim2,a0
-	lea	slim1a,a1
-	tst.b	uusikick(a5)
-	bne.b	.newz
-	* Select alternate gfx
-	lea	slim1a_kick13-slim1a(a1),a1
-.newz
-
-	move	(a1)+,(a0)+
-.filf	move	(a1),(a0)+
-	dbf	d0,.filf
-	addq	#2,a1
-	move	(a1)+,(a0)+
-
-	move	(a1)+,(a0)+
-.fil	move	(a1),(a0)+
-	dbf	d1,.fil
-	move	2(a1),(a0)
-
-
-.bar
-	lea	gAD1,a0
-	move.l	swindowbase(a5),a1
-	sub.l	a2,a2
-	moveq	#1,d0
-	lore	Intui,RefreshGList
-.eiup
-	rts
-
-
-
-
-
-.srawkeyz
-* ylˆs: $4c
-* alas: $4d
-	cmp	#$45,d3		* ESC
-	beq.w	.sexit
-
-	move	infosize(a5),d0
-	cmp	riviamount(a5),d0
-	bhi.w	.returnmsg
-
-	moveq	#1,d0
-	and	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
-	beq.b	.nsh
-	move	infosize(a5),d0
-	lsr	#1,d0
-.nsh
-	move	sfirstname(a5),d2
-
-	cmp	#$4d,d3
-	beq.b	.alaz
-	cmp	#$4c,d3
-	bne.w	.returnmsg
-
-	sub	d0,sfirstname(a5)
-	bpl.b	.zoo
-	clr	sfirstname(a5)
-	bra.b	.zoo
-.alaz	
-	move	sfirstname(a5),d1
-	add	d0,d1
-	move	riviamount(a5),d0
-	sub	infosize(a5),d0
-	cmp	d0,d1
-	bls.b	.foop
-	move	d0,d1
-.foop
-	move	d1,sfirstname(a5)
-
-.zoo	
-	cmp	d2,d1
-	beq.w	.returnmsg	
-	bsr.w	.reslider
-	bsr.b	.print
-	bra.w	.returnmsg
-
-
-
-.sgadgetsup
-	bra.w	.returnmsg
-.smousemoving
-	lea	gAD1,a2
-	move.l	gg_SpecialInfo(a2),a0
-	move	pi_VertPot(a0),d0
-	cmp	ssliderold(a5),d0
-	bne.b	.new
-.q	bra.w	.returnmsg
-.new	move	d0,ssliderold(a5)
-
-
-	move	riviamount(a5),d1
-	sub	infosize(a5),d1
-	bpl.b	.ye
-	moveq	#0,d1
-.ye	mulu	d1,d0
-	add.l	#32767,d0
-	divu	#65535,d0
-
-	cmp	sfirstname(a5),d0
-	beq.b	.q
-	move	d0,sfirstname(a5)
-
-	bsr.b	.print
-	bra.w	.returnmsg
-
-
-.print
-	tst.b	skokonaan(a5)
-	beq.b	.naht
-	clr.b	skokonaan(a5)
-
-	moveq	#0,d0
-.all0	moveq	#0,d1
-	move	infosize(a5),d2
-	bra.w	.print2
-
-.all	move	sfirstname(a5),d0
-	bra.b	.all0
-	
-
-.naht
-
-	move	sfirstname(a5),d0
-	move	sfirstname2(a5),d7
-	move	d0,sfirstname2(a5)
-	cmp	d0,d7
-	beq.b	.xx
-	sub	d0,d7
-	bmi.b	.alas
-
-
-.ylos	cmp	infosize(a5),d7
-	bhs.b	.all
-
-
-* siirrytty d7 rivi‰ ylˆsp‰in:
-* kopioidaan rivit 0 -> d7 (koko: infosize-d7 r) kohtaan 0 ja printataan
-* kohtaan 0 d7 kpl uusia rivej‰
-
-	moveq	#16-1,d1		* source y
-
-	move	d7,d3
-	lsl	#3,d3
-	add	#16-1,d3		* dest y
-
-	bsr.b	.copy
-
-	move	sfirstname(a5),d0
-	moveq	#0,d1
-	move	d7,d2
-	bra.b	.print2
-
-
-
-.alas	neg	d7		
-	cmp	infosize(a5),d7
-	bhs.b	.all
-
-* siirrytty d7 rivi‰ alasp‰in:
-* kopioidaan rivit d7 -> infosize (koko: infosize-d7 r) kohtaan 0 ja printataan
-* kohtaan infosize-d7 d7 kpl uusia rivej‰
-
-	move	d7,d1
-	lsl	#3,d1
-	add	#16-1,d1		* source y	
-	moveq	#16-1,d3		* dest y
-
-	bsr.b	.copy
-
-	move	sfirstname(a5),d0
-	add	infosize(a5),d0
-	sub	d7,d0
-	move	infosize(a5),d1
-	sub	d7,d1
-	move	d7,d2
-	bsr.b	.print2
-
-	
-.xx
-	rts
-
-** kopioidaan 
-
-.copy	
-
-	move	infosize(a5),d5	* y size
-	sub	d7,d5
-	lsl	#3,d5
-
-	move.b	#$c0,d6		* minterm: a->d
-	moveq	#31-2,d0		* source x =
-	move.l	d0,d2		* dest x
-	move	#39*8+4,d4	* x size
-	add	windowleft(a5),d0
-	add	windowtop(a5),d1
-	add	windowleft(a5),d2
-	add	windowtop(a5),d3
-	move.l	srastport(a5),a0
-	move.l	a0,a1
-	move.l	_GFXBase(a5),a6
-	jmp	_LVOClipBlit(a6)
-
-
-
-* d0 = alkurivi
-* d1 = eka rivi ruudulla
-* d2 = printattavien rivien m‰‰r‰
-.print2
-	move.l	infotaz(a5),a3
-	subq	#1,d0
-	bmi.b	.rr
-.fle	cmp.b	#10,(a3)+
-	bne.b	.fle
-	dbf	d0,.fle
-.rr	cmp.b	#10,-1(a3)	
-	bne.b	.ra
-	addq	#1,a3		* skip ILF2
-.ra
-
-	move	d1,d7
-	lsl	#3,d7
-	add	#22-1,d7
-	
-	move	d2,d6
-	subq	#1,d6		* ???
-
-.lorp
-	lea	-50(sp),sp
-	move.l	sp,a0
-	move.l	a0,a1
-
-	move.l	a1,d0
-
-.lorp2	move.b	(a3)+,(a1)+
-	beq.b	.xp
-	
-	cmp.b	#10,-1(a1)
-	bne.b	.lorp2
-	clr.b	-1(a1)	
-	addq	#1,a3		* skipataan ILF2
-.xp	subq	#1,a1
-
-	move.l	a1,d1
-	sub.l	d0,d1
-	moveq	#39,d0
-	sub	d1,d0
-	subq	#1,d0
-	bmi.b	.xo
-.pe	move.b	#' ',(a1)+
-	dbf	d0,.pe
-	clr.b	(a1)
-.xo
-
-;	cmp.l	#"----",(a0)
-;	bne.b	.xq
-;	bsr.b	.palk
-;	bra.b	.xw
-;.xq
-
-	moveq	#35-2,d0
-	move	d7,d1
-	jsr	sprint
-
-.xw	addq	#8,d7
-	lea	50(sp),sp
-	tst.b	-1(a3)
-	beq.b	.xip
-
-	dbf	d6,.lorp
-.xip
-	rts
-	
-
-* x = 35
-* y = d7
-* x size = 39*8
-* y size = 8
-;.palk
-;	pushm	all
-;	tst.b	uusikick(a5)		* uusi kick?
-;	beq.b	.oz
-
-;	push	d7
-
-;	move	d7,ply1
-;	subq	#6,ply1
-;	moveq	#7,ply2
-;	moveq	#35,plx1
-;	move.l	#39*8-2,plx2
-;	add.l	plx1,plx2
-;	add.l	ply1,ply2
-;	bsr	.1
-
-;	pop	d7
-	
-;	move.l	srastport(a5),a2
-;	moveq	#35+1,d0
-;	subq	#5,d7
-;	move	d7,d1
-;	move	#39*8+35-3,d2
-;	moveq	#5,d3
-;	add	d7,d3
-;	bsr.w	drawtexture
-
-;.oz	popm	all
-;	rts
-
 
 ****** PT sample play
 
-.sampleplay
+.samplePlay
 	sub	windowleft(a5),d5
 	sub	windowtop(a5),d6	* suhteutus fonttiin
 
 	cmp	#31,d5
-	blo.w	.msgloop
+	blo.w	.samplePlayExit
 	cmp	#345,d5
-	bhi.w	.msgloop
+	bhi.w	.samplePlayExit
 	cmp	#14,d6
-	blo.w	.msgloop
+	blo.w	.samplePlayExit
 	move	infosize(a5),d0
 	lsl	#3,d0
 	add	#14,d0
 	cmp	d0,d6
-	bhi.w	.msgloop
+	bhi.w	.samplePlayExit
 
 	tst.b	ahi_muutpois(a5)
-	bne.w	.msgloop
+	bne.w	.samplePlayExit
 
 	cmp	#pt_prot,playertype(a5)
-	bne.w	.msgloop
+	bne.w	.samplePlayExit
 	tst.l	playingmodule(a5)
-	bmi.w	.msgloop
-
+	bmi.w	.samplePlayExit
 
 * d5/d6 = mouse x/y
 
@@ -21010,7 +21120,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	lsr	#3,d0
 	add	sfirstname(a5),d0
 	subq	#1,d0
-	bmi.w	.msgloop
+	bmi.w	.samplePlayExit
 
 	move.l	infotaz(a5),a0
 .ff	cmp.b	#10,(a0)+
@@ -21019,13 +21129,13 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 
 	addq	#1,a0
 	cmp.b	#' ',2(a0)
-	bne.w	.msgloop
+	bne.w	.samplePlayExit
 
 	move.b	(a0)+,d0
 	cmp.b	#'0',d0
-	blo.w	.msgloop
+	blo.w	.samplePlayExit
 	cmp.b	#'3',d0
-	bhi.w	.msgloop
+	bhi.w	.samplePlayExit
 	and	#$f,d0
 	mulu	#10,d0
 	move.b	(a0)+,d1
@@ -21033,20 +21143,18 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	add	d1,d0		* d0 = samplenum
 
 	cmp	#$1f,d0
-	bhi.w	.msgloop
+	bhi.b	.samplePlayExit
 
 	move	d0,d7
 	subq	#1,d7
-	bmi.w	.msgloop
+	bmi.b	.samplePlayExit
 	
-
-
 	jsr	obtainModuleData
 	move.l	moduleaddress(a5),a1	* onko chipiss‰?
 	lore	Exec,TypeOfMem
 	jsr	releaseModuleData
 	btst	#MEMB_CHIP,d0
-	beq.w	.msgloop
+	beq.b	.samplePlayExit
 
 	jsr	obtainModuleData
 	move.l	moduleaddress(a5),a1
@@ -21088,7 +21196,8 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	bne.b	.sampleLenOk
 	;* Something wrong with the data, go back to loop
 	jsr	releaseModuleData
-	bra.w	.msgloop
+.samplePlayExit
+	rts
 
 .sampleLenOk
 
@@ -21208,7 +21317,7 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS
 	* Sample is now playing
 	jsr	releaseModuleData
 
-	bra.w	.msgloop
+	bra.w	.samplePlayExit
 
 periods
 	dc	856,808,762,720,678,640,604,570,538,508,480,453
@@ -21217,15 +21326,15 @@ periods
 periodsEnd
 
 * NOT USED
-freeinfosample
-	tst.l	infosample(a5)
-	beq.b	.x
-	pushm	all
-	move.l	infosample(a5),a0
-	clr.l	infosample(a5)
-	jsr	freemem
-	popm	all
-.x	rts
+;freeinfosample
+;	tst.l	infosample(a5)
+;	beq.b	.x
+;	pushm	all
+;	move.l	infosample(a5),a0
+;	clr.l	infosample(a5)
+;	jsr	freemem
+;	popm	all
+;.x	rts
 
 
 ****************************************************************
@@ -48942,7 +49051,8 @@ wreg1
  even
 
 * Slider for the module info window
-gAD1	dc.l 0
+gAD1	
+	dc.l gadgetResize
 	dc.w 9,14,16,127-13*8,GFLG_GADGHNONE,9,3
 	dc.l gAD1gr,0,0,0,gAD1s
 	dc.w 0
