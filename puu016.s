@@ -4227,7 +4227,7 @@ handleSignal2
 	moveq	#1,d7
 
 	push	d7
-	bsr.b	.closeAndReopenWindow
+	bsr.w	.closeAndReopenWindow
 	pop	d7
 	tst.l	d0
 	bne.w	.error
@@ -4235,6 +4235,9 @@ handleSignal2
 	bra.b	.boxSizeChanged
 
 .boxSizeNotChanged
+	* Ensures the refresh gadget looks correct
+	* after user releases it and window is not reopened
+	bsr	refreshResizeGadget
 
 	* Check if height changed
 	move	wd_Height(a0),d0
@@ -4244,6 +4247,7 @@ handleSignal2
 	moveq	#0,d0 ; deltaX
 	move	previousWindowHeight(a5),d1
 	sub	wd_Height(a0),d1 ; deltaY
+	DPRINT	"restore height"
 	lore	Intui,SizeWindow
 .sameHeight
 .boxSizeChanged
@@ -5273,7 +5277,6 @@ mainWindowSizeChanged
 	movem	winstruc+nw_Width,d2/d3
 	DPRINT	"size change to %ldx%ld (orig %ldx%ld)"
  endif
-
 	bsr.w	getFileboxYStartToD2
 	move	wd_Height(a0),d0
 
@@ -5283,7 +5286,7 @@ mainWindowSizeChanged
 
 	sub	d2,d0
 	bmi.b	.x
-	* Divide to 8-pixel rows
+	* Divide to font height pixel rows
 	;lsr	#3,d0
 	ext.l	d0
 	divu	listFontHeight(a5),d0
@@ -5379,8 +5382,10 @@ enableResizeGadget
 refreshResizeGadget
 	tst.b	uusikick(a5)
 	beq.b	.x
+	push	a0
 	lea	gadgetResize,a0
 	bsr.w	refreshGadgetInA0
+	pop	a0
 .x	rts
 
 * Calculate the start y-position of the filebox 
