@@ -6006,10 +6006,7 @@ desmsg2	movem.l	d0-d7/a0-a3/a6,-(sp)
 desmsg3	movem.l	d0-d7/a0-a3/a6,-(sp)
 	bra.b	ulppa
 
-* a3 = desbuf
-* a1 = parametrit
-desmsg4	movem.l	d0-d7/a0-a3/a6,-(sp)
-	bra.b	pulppa
+
 * a3 = desbuf
 
  if DEBUG 
@@ -13093,14 +13090,6 @@ prefs_code
 	move.b	savestate(a5),savestate_new(a5)
 	move.b	altbuttons(a5),altbuttons_new(a5)
 
- REM
-	move.b quadraScope(a5),      quadraScope_new(a5)    
-	move.b quadraScopeF(a5),     quadraScopeF_new(a5)       
-	move.b hippoScope(a5),       hippoScope_new(a5)       
-	move.b patternScope(a5),     patternScope_new(a5)       
-	move.b patternScopeXL(a5),   patternScopeXL_new(a5)      
-	move.b spectrumScope(a5),    spectrumScope_new(a5)     
- EREM
 	move.b quadraScopeBars(a5),quadraScopeBars_new(a5)        
 	move.b quadraScopeFBars(a5),quadraScopeFBars_new(a5)         
 	move.b hippoScopeBars(a5),hippoScopeBars_new(a5)       
@@ -13573,10 +13562,6 @@ exprefs	move.l	_IntuiBase(a5),a6
 	* magic! causes reopening of the main window:
 	clr	boxsize00(a5)
 .1
-
-
-
-
 
 	move.b	autosort_new(a5),autosort(a5)
 
@@ -20049,9 +20034,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;.oz	popm	all
 ;	rts
 
+* Local desmsg variant
+* in: 
+*   a3 = desbuf
+*   a1 = parametrit
+.desmsg4	
+	movem.l	d0-d7/a0-a3/a6,-(sp)
+	jmp	pulppa
 
 .prepareInfoWindowContent
-
 
 	move.b	infolag(a5),d0
 	clr.b	infolag(a5)
@@ -20078,7 +20069,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	movem.l	d0/d1,-(sp)
 	pea	keyfile(a5)
 	move.l	sp,a1
-	jsr	desmsg4
+	bsr.b	.desmsg4
 	add	#8+4,sp
 	st	eicheck(a5)
 
@@ -20153,7 +20144,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	d0,(a1)
 	move.l	a4,4(a1)
 	lea	.thxform(pc),a0
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	bsr.w	.lloppu
 	lea	10(sp),sp
 	bsr.b	.fo
@@ -20198,7 +20189,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	a4,4(a1)
 
 	lea	.medform(pc),a0
-	jsr	desmsg4
+	bsr.w	.desmsg4
 
 	lea	16(sp),sp
 	bsr.w	.lloppu
@@ -20257,7 +20248,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.medform(pc),a0
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 	pop	a0
@@ -20306,7 +20297,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	lea	.form(pc),a0
 	move.l	infotaz(a5),a3
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	lea	42(sp),sp
 
 	bsr.w	.putcomment
@@ -20352,7 +20343,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .jee9eg
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	bsr.w	.putcomment
 	lea	32(sp),sp
 
@@ -20563,7 +20554,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form0(pc),a0
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 
@@ -20617,7 +20608,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 
@@ -20678,7 +20669,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	lea	16(sp),sp
 	popm	d0-a2/a4-a6
 	bsr.w	.lloppu
@@ -20726,7 +20717,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	lea	16(sp),sp
 	bsr.w	.lloppu
 
@@ -20790,7 +20781,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	* parameters in a1
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	bsr.w	.putcomment
 	lea	32(sp),sp
 	
@@ -20991,7 +20982,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	jsr	desmsg4
+	bsr.w	.desmsg4
 	lea	32(sp),sp
 
 	bsr.w	.putcomment2
