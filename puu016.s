@@ -19723,6 +19723,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	add	oldswinsiz(a5),d0
 	sub	wd_Height(a0),d0
 	beq.b	.skipSize
+	bmi.b	.neg
+	* ensure negative change to not go over screen,
+	* kick1.3 does not do sanity checks
+	subq	#8,d0 * font height
+.neg
  if DEBUG
  	ext.l	d0
 	DPRINT	"adjust by %ld"
@@ -19735,8 +19740,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d3,infosize(a5)
 	bra.b	.sizeNotChanged
 .skipSize
-	cmp	infosize(a5),d3
-	beq.b	.sizeNotChanged
 	bsr	setPrefsInfoBox
 	bsr	updateprefs
 	; return 1: do refresh
