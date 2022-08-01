@@ -27352,7 +27352,7 @@ loadfileStraight
 	push	d7
 	move.b	xpkid(a5),d7
 	* DISABLE:
-	st		xpkid(a5)
+	st	xpkid(a5)
 	push	d7
 	bsr.b	loadfile
 	pop	d7
@@ -27916,7 +27916,9 @@ loadfile
 	tst.b	win(a5)
 	beq.b	.eilo
 	moveq	#81+WINX-1,plx1
-	move	#245+WINX+2,plx2
+	;move	#245+WINX+2,plx2
+	move	WINSIZX(a5),plx2
+	sub	#18,plx2
 	moveq	#21+WINY,ply1
 	moveq	#27+WINY,ply2
 	add	windowleft(a5),plx1
@@ -28001,7 +28003,10 @@ loadfile
 
         move.l  d0,d2
         move.l  d1,d3
-        mulu    #163,d4
+        ;mulu    #163,d4	
+		move	WINSIZX(a5),d5
+		sub	#101,d5
+		mulu	d5,d4
         divu    #100,d4
 
         moveq   #5,d5
@@ -28218,7 +28223,9 @@ loadfile
 	tst.b	win(a5)
 	beq.b	.eilox
 	moveq	#15+WINX,plx1
-	move	#245+WINX,plx2
+	;move	#245+WINX,plx2
+	move	WINSIZX(a5),plx2
+	sub	#18,plx2
 	moveq	#21+WINY,ply1
 	moveq	#27+WINY,ply2
 	add	windowleft(a5),plx1
@@ -28287,7 +28294,10 @@ loadfile
 	lsr.l	#8,d5
 
 	* Calculate 
-	mulu	#229,d5
+	;mulu	#229,d5
+	move	WINSIZX(a5),d7
+	sub	#35,d7
+	mulu	d7,d5
 	divu	d3,d5
 	move	d5,d4
 
