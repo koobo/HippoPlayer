@@ -12518,6 +12518,13 @@ setprefsbox
 	divu	#51-3,d0
 	bra.w	setknob2
 
+setPrefsInfoBox
+	lea	eskimO,a0
+	move	infosize(a5),d0
+	subq	#3,d0
+	mulu	#65535,d0
+	divu	#50-3,d0
+	bra		setknob2
 
 saveprefs
 	DPRINT	"Prefs save"
@@ -13070,6 +13077,7 @@ prefs_code
 	move.b	earlyload(a5),early_new(a5)
 	move.b	xfd(a5),xfd_new(a5)
 	move	infosize(a5),infosize_new(a5)
+	bsr		setPrefsInfoBox
 	move.b	ps3msettings(a5),ps3msettings_new(a5)
 	move.b	samplebufsiz0(a5),samplebufsiz_new(a5)
 	move.b	cybercalibration(a5),cybercalibration_new(a5)
@@ -19739,6 +19747,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .skipSize
 	cmp	infosize(a5),d3
 	beq.b	.sizeNotChanged
+	bsr	setPrefsInfoBox
 	bsr	updateprefs
 	; return 1: do refresh
 	moveq	#1,d0
