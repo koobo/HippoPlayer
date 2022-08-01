@@ -4247,6 +4247,11 @@ handleSignal2
 	moveq	#0,d0 ; deltaX
 	move	previousWindowHeight(a5),d1
 	sub	wd_Height(a0),d1 ; deltaY
+	bmi.b	.neg
+	* ensure negative change to not go over screen,
+	* kick1.3 does not do sanity checks
+	sub	listFontHeight(a5),d1
+.neg	
 	DPRINT	"restore height"
 	lore	Intui,SizeWindow
 .sameHeight
