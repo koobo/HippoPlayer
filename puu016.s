@@ -4168,7 +4168,7 @@ kirjainta4
 *******
 
 handleSignal2
-	DPRINT	"Signal 2"
+;	DPRINT	"Signal 2"
 
 	* Update title bar with position information
 	jsr	lootaan_pos
@@ -6849,20 +6849,17 @@ zoomfilebox
 
 *** Open module info window
 modinfoaaa
+	DPRINT	"modinfo"
+	* flag: display mod info
+	clr.b	infolag(a5)
 	tst	info_prosessi(a5)
-	beq.b	.zz
+	beq.b	.zz	
 	move.l	infotaz(a5),a0		* jos oli jo modinfo niin suljetaan
 	cmp.l	#about_t,a0
-	beq.b	.rrz
-	bsr.w	sulje_info
-	bra.b	.xz
-.rrz
-	bsr.w	start_info
-	bra.b	.xz
-
-.zz	clr.b	infolag(a5)
-	bsr.w	rbutton10b
-.xz	rts
+	beq	start_info
+	bra	sulje_info
+		
+.zz	bra	rbutton10b
 
 * Forces a boolean gadget to show the selected status
 * in:
@@ -8608,6 +8605,9 @@ nappuloita
 
 .infoo
 ** modinfon infon avaus
+	DPRINT	"modinfo KEY"
+	bra	modinfoaaa
+ REM
 	tst	info_prosessi(a5)
 	beq.b	.zz
 	move.l	infotaz(a5),a0		* jos oli jo modinfo niin suljetaan
@@ -8619,7 +8619,7 @@ nappuloita
 .zz	clr.b	infolag(a5)
 	bsr.w	rbutton10b
 .xz	rts
-
+ EREM
 
 
 ** stop/continue
@@ -20052,9 +20052,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .prepareInfoWindowContent
 
+	; which content to display?
 	move.b	infolag(a5),d0
-	clr.b	infolag(a5)
-	tst.b	d0
+	;clr.b	infolag(a5)
+	;tst.b	d0
 	beq.b	.modinf
 	* Display generic about text
 
@@ -21364,6 +21365,7 @@ calculateDividersInList
 
 aboutButtonAction
 rbutton10
+	DPRINT	"about"
 	movem.l	d0-a6,-(sp)
 
 * lasketaan dividereitten m‰‰r‰
@@ -21374,6 +21376,7 @@ rbutton10
 	move.l	d0,divideramount(a5)
 	DPRINT  "aboutButtonAction release list"
 
+	; set flag: info window should display the about info
 	st	infolag(a5)
 
 	tst	info_prosessi(a5)
