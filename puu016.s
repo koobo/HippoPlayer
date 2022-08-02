@@ -4429,7 +4429,9 @@ avaa_ikkuna:
 	not.b	kokolippu(a5)
 	beq.b	.small
 
-	move	#7,slimheight		* slideri pieneks, jotta ei tuu sotkuja
+	basereg	winstruc,a0
+	move	#7,slimheight(a0)	* slideri pieneks, jotta ei tuu sotkuja
+	endb	a0
 
 	move	WINSIZY(a5),d0
 	add	boxy(a5),d0
@@ -4481,18 +4483,22 @@ avaa_ikkuna:
 ;	beq.b	.ded
 	subq	#3,gg_Height(a3)
 ;.ded
+	basereg	slider4,a3
 
 	* Remove the fileslider from the gadget list
 	* if it is not visible. On kick13 there may be
 	* some gfx trash otherwise.
 	* Normal chain:
-	move.l	#slider4,slider1+gg_NextGadget
+	;move.l	#slider4,slider1+gg_NextGadget(a3)
+	move.l	a3,slider1+gg_NextGadget(a3)
 	tst	boxsize(a5)
 	bne.b	.isBox
 	* Skip over slider4
-	move.l	#button12,slider1+gg_NextGadget
+	;move.l	#button12,slider1+gg_NextGadget(a3)
+	pushpea	button12(a3),slider1+gg_NextGadget(a3)
 .isBox
-
+	endb	a3
+	
 	lob	OpenWindow
 	move.l	d0,windowbase(a5)
 	bne.b	.ok
@@ -5013,7 +5019,7 @@ wrender:
 
 * Draw slider highlights
 
-	tst.b	uusikick(a5)
+;	tst.b	uusikick(a5)
 ;	beq.b	.nelq
 
 	tst	boxsize(a5)
@@ -5039,7 +5045,7 @@ wrender:
 	move.l	rastport(a5),a1
 	bsr.w	sliderlaatikko
 
-.nelq
+;.nelq
 
 *** Piirret‰‰n korvat
 	pushm	all
@@ -5572,8 +5578,8 @@ releaseModuleData:
 
 showOutOfMemoryError
 	push	a1
-	lea		memerror_t,a1
-	jsr		request
+	lea	memerror_t,a1
+	jsr	request
 	pop 	a1 
 	rts
 
@@ -5589,7 +5595,7 @@ lockMainWindow
 unlockMainWindow
 	tst.l	mainWindowLock(a5)
 	beq.b	.x 
-	bsr.w	 	get_rt
+	bsr.w	get_rt
 	move.l	windowbase(a5),a0
 	move.l	mainWindowLock(a5),a1
 	lob 	rtUnlockWindow
@@ -5630,7 +5636,7 @@ inithippo
 	and	d2,d0
 	move.b	(a1),d1
 	and	d2,d1
-	add d1,d0
+	add 	d1,d0
 	cmp	d2,d0
 	bne.b	.z
 	eor.b	d2,(a0)
@@ -6678,7 +6684,7 @@ buttonspressed
 	rts 
 
 .test2	cmp	#MENUDOWN,d3			* right button down
-	bne.b .exit
+	bne.b 	.exit
 	bsr.b	.rightButtonDownAction
 .exit 
 	rts
@@ -6875,7 +6881,7 @@ forceSelectGadget
 
 	move.l	windowbase(a5),a0
 	moveq	#-1,d0 
-	lob		AddGadget
+	lob	AddGadget
 	move.l	d2,a0	
 	bsr.b	refreshGadget
 	rts
@@ -6895,7 +6901,7 @@ forceDeselectGadget
 
 	move.l	windowbase(a5),a0
 	moveq	#-1,d0 
-	lob		AddGadget
+	lob	AddGadget
 
 	move.l	d2,a0	
 	bsr.b	refreshGadget
@@ -6947,12 +6953,12 @@ checkMouseOnGadget
 *******
 
  STRUCTURE TooltipListEntry,0
-    APTR ttle_gadget
-    APTR ttle_tooltip
+    	APTR ttle_gadget
+    	APTR ttle_tooltip
  LABEL  ttle_SIZEOF
 
  STRUCTURE ToolTip,0
-    UBYTE tt_width
+    	UBYTE tt_width
 	UBYTE tt_height
 	APTR  tt_text
  LABEL  tt_SIZEOF
@@ -8252,6 +8258,7 @@ nappuloita
 
 	cmp.b	#$17,d3		* i + shift?
 	bne.b	.f0
+	; window will be opened active:
 	or.l	#WFLG_ACTIVATE,sflags
 	bsr.w	rbutton10b
 	bra.b	.ee
@@ -9909,7 +9916,9 @@ reslider
 
 	move	gg_Height(a0),d0
 
-	cmp	#8,slimheight
+	basereg	slider4,a0
+
+	cmp	#8,slimheight(a0)
 	blo.b	.fea
 
 	cmp	slider4oldheight(a5),d0
@@ -9923,9 +9932,6 @@ reslider
 
 	move	d0,slider4oldheight(a5)
 
-;	tst.b	uusikick(a5)
-;	beq.b	.bar
-
 ;	move	gg_Height(a0),d0
 	mulu	pi_VertBody(a1),d0	* koko pixelein‰
 	divu	#$ffff,d0
@@ -9936,48 +9942,35 @@ reslider
 	bhs.b	.zze
 	moveq	#8,d0
 .zze
-	move	d0,slimheight
+	move	d0,slimheight(a0)
 	subq	#2+1,d0
 	move	d0,d1
 
-	lea	slim,a0
-	lea	slim1a,a1
+	lea	slim,a2
+	lea	slim1a(a0),a1
 	tst.b	uusikick(a5)
 	bne.b	.newz
 	* Select alternate gfx
 	lea	slim1a_kick13-slim1a(a1),a1
 .newz
-
-	move	(a1)+,(a0)+
-.filf	move	(a1),(a0)+
+	move	(a1)+,(a2)+
+.filf	move	(a1),(a2)+
 	dbf	d0,.filf
 	addq	#2,a1
-	move	(a1)+,(a0)+
+	move	(a1)+,(a2)+
 
-	move	(a1)+,(a0)+
-.fil	move	(a1),(a0)+
+	move	(a1)+,(a2)+
+.fil	move	(a1),(a2)+
 	dbf	d1,.fil
-	move	2(a1),(a0)
+	move	2(a1),(a2)
 
 .bar
 
 	* Refresh one gadget
-	;DPRINT "Updating slider"
-	lea	slider4,a0
-;	move.l	windowbase(a5),a1
-;	sub.l	a2,a2
-;	moveq	#1,d0			 	* number of gadgets to refresh
-;	lore	Intui,RefreshGList
+	;lea	slider4,a0
+	endb	a0
 	bsr.w	refreshGadgetInA0
 
-;	lea	slider4,a0
-;	move.l	gg_SpecialInfo(a0),a1
-;	movem	(a1),d0/d1/d2/d3/d4    * Flags, HorizPot, VertPot,
-				       * HorizBody, VertBody
-;	move.l	windowbase(a5),a1
-;	moveq	#1,d5
-;	sub.l	a2,a2
-;	lore	Intui,NewModifyProp
 .eiup
 	rts
 
@@ -9988,12 +9981,12 @@ reslider
 .ok3	rts
 
 
-resetslider
-	move.l	a0,-(sp)
-	move.l	slider4+gg_SpecialInfo,a0
-	clr	pi_VertPot(a0)
-	move.l	(sp)+,a0
-	rts
+;resetslider
+;	move.l	a0,-(sp)
+;	move.l	slider4+gg_SpecialInfo,a0
+;	clr	pi_VertPot(a0)
+;	move.l	(sp)+,a0
+;	rts
 
 
 
@@ -13079,7 +13072,7 @@ prefs_code
 	move.b	earlyload(a5),early_new(a5)
 	move.b	xfd(a5),xfd_new(a5)
 	move	infosize(a5),infosize_new(a5)
-	bsr		setPrefsInfoBox
+	bsr	setPrefsInfoBox
 	move.b	ps3msettings(a5),ps3msettings_new(a5)
 	move.b	samplebufsiz0(a5),samplebufsiz_new(a5)
 	move.b	cybercalibration(a5),cybercalibration_new(a5)
@@ -13600,27 +13593,32 @@ exprefs	move.l	_IntuiBase(a5),a6
 	beq.w	.enor
 
 	lore	Exec,Forbid
-	
-	move.l	prefs_textattr+prefsdata(a5),text_attr+4
-	pushpea	prefs_fontname+prefsdata(a5),text_attr
+
+	lea	text_attr,a4
+	basereg	text_attr,a4
+
+	move.l	prefs_textattr+prefsdata(a5),text_attr+4(a4)
+	pushpea	prefs_fontname+prefsdata(a5),text_attr(a4)
 
 	move.l	fontbase(a5),a1
 	lore	GFX,CloseFont
-	lea	text_attr,a0
+	lea	text_attr(a4),a0
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
 	move.l	d0,stringExtendStruct+sex_Font(a5)
 	
-	move.l	prefs_listtextattr+prefsdata(a5),list_text_attr+4
-	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr
+	move.l	prefs_listtextattr+prefsdata(a5),list_text_attr+4(a4)
+	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr(a4)
 
 	move.l	listfontbase(a5),a1
 	lore	GFX,CloseFont
-	lea	list_text_attr,a0
+	lea	list_text_attr(a4),a0
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,listfontbase(a5)
 	move.l	d0,a0
 	bsr.w	setListFont
+
+	endb	a4
 
 	lore	Exec,Permit
 
@@ -13808,7 +13806,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 flush_messages2
 	move.l	windowbase2(a5),a0 
-	bra.w		flushWindowMessages
+	bra.w	flushWindowMessages
 
 
 
@@ -14427,8 +14425,8 @@ gadgetsup2
 	;dr	rscopebar	* bar mode scopeille
 	dr	rprefx		* prefix cut
 	dr	rinfosize	* module info size
-	dr  rtooltips     * tooltips
-	dr  raltbuttons * alt buttons
+	dr  	rtooltips     * tooltips
+	dr  	raltbuttons * alt buttons
 	dr	rQuadraScope
 	dr	rQuadraScopeBars
 	dr	rQuadraScopeF
@@ -14524,7 +14522,7 @@ rQuadraScope:
 	not.b	prefsdata+prefs_quadraScope(a5)
 	bne.b	.start
 	bsr.w	stopQuadraScopeTask
-	bra.b pQuadraScope
+	bra.b 	pQuadraScope
 .start	
 	bsr.w	startQuadraScopeTask
 	
@@ -16902,7 +16900,7 @@ listselector
 .ox
 
 	move.l	d5,a0
-	bsr.w		flushWindowMessages
+	bsr.w	flushWindowMessages
 
 	move.l	d5,d0
 	beq.b	.eek
@@ -18241,7 +18239,7 @@ lootaan_aika
 
 	move	songnumber(a5),d0
 	addq	#1,d0
-	sub		minsong(a5),d0
+	sub	minsong(a5),d0
 
 	move.b	#' ',(a0)+
 	move.b	#'#',(a0)+
@@ -19065,7 +19063,7 @@ showTooltipPopup
 	* d7 = rastport
 	* draw a bordaer
 	move.l	d7,a1
-	lea		.tooltipPopup(pc),a0
+	lea	.tooltipPopup(pc),a0
 	moveq	#0,plx1
 	move	nw_Width(a0),plx2
 	moveq	#0,ply1
@@ -19344,12 +19342,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	infopos2(a5),(a0)
 	bsr.w	tark_mahtu
 
-	move	#7,slim2height
+	move.l	a0,a2
+	basereg swinstruc,a2
+
+	move	#7,slim2height(a2)
+	
 	lore	Intui,OpenWindow
 	move.l	d0,swindowbase(a5)
 
-	and.l	#~WFLG_ACTIVATE,sflags	* clearataan active-flaggi
-	move	d7,swinstruc+nw_Height
+	and.l	#~WFLG_ACTIVATE,sflags(a2) * clearataan active-flaggi
+	move	d7,swinstruc+nw_Height(a2)
+	endb	a2
 
 	tst.l	d0
 	bne.b	.koo
