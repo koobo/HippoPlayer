@@ -19387,7 +19387,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#4,d0
 	moveq	#11,d1
 	move	#356-5-2+2,d2
-	move	#147-13*8-2,d3
+	moveq	#147-13*8-2,d3
 	move	infosize(a5),d4
 	subq	#3,d4
 	lsl	#3,d4
@@ -19419,7 +19419,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#29,plx1
 	move	#351-3,plx2
 	moveq	#13,ply1
-	move	#143-13*8,ply2
+	moveq	#143-13*8,ply2
 	move	infosize(a5),d0
 	subq	#3,d0
 	lsl	#3,d0
@@ -19442,7 +19442,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#31-2+2,d0		* tyhjennet‰‰n
 	moveq	#15-1,d1
 	move	#350-31-5+2,d4
-	move	#144-15-13*8,d5
+	moveq	#144-15-13*8,d5
 	move	infosize(a5),d6
 	subq	#3,d6
 	lsl	#3,d6
@@ -19534,7 +19534,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra.b	.idcmpLoop
 	
 .noInactive
-	cmp.l	#IDCMP_NEWSIZE,d2
+	;cmp.l	#IDCMP_NEWSIZE,d2
+	moveq	#IDCMP_NEWSIZE,d0
+	cmp.l	d0,d2
 	bne.b	.noNewSize
 	bsr	.infoWindowNewSize
 	beq.b	.idcmpLoop
@@ -19549,13 +19551,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra.b	.idcmpLoop
 
 .noRawKey
-	cmp.l	#IDCMP_MOUSEMOVE,d2
+	;cmp.l	#IDCMP_MOUSEMOVE,d2
+	moveq	#IDCMP_MOUSEMOVE,d0
+	cmp.l	d0,d2
 	bne.b	.noMouseMove
 	bsr	.smousemoving
 	bra.b	.idcmpLoop
 
 .noMouseMove
-	cmp.l	#IDCMP_MOUSEBUTTONS,d2
+	;cmp.l	#IDCMP_MOUSEBUTTONS,d2
+	moveq	#IDCMP_MOUSEBUTTONS,d0
+	cmp.l	d0,d2
 	bne.b	.noMouseButtons
 	cmp	#SELECTDOWN,d3			* vasen
 	bne.b	.noSelectDown
