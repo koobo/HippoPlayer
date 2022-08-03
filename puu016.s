@@ -4108,7 +4108,7 @@ print:
 	pushm	all
 	move.l	rastport(a5),a4
 ;uup
-doPrint	
+doPrint:
 
 	move.l	_GFXBase(a5),a6
 	move.l	a0,a2
@@ -15690,7 +15690,8 @@ purealarm
  even
 
 
-print3b	pushm	all			* Sitävarten että windowtop/left
+print3b:
+	pushm	all			* Sitävarten että windowtop/left
 	move.l	rastport2(a5),a4	* arvoja ei lisättäisi kun
 	bra.w	doPrint			* teksti on jo suhteessa gadgettiin
 
@@ -16186,6 +16187,7 @@ pscreen
 
 .do	moveq	#16,d0
 	move	#122+18,d1
+	add	windowtop(a5),d1
 	bra.w	print3b
 
 
