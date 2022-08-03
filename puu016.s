@@ -17279,7 +17279,7 @@ doPrintNames
 	move.l	listfontbase(a5),a1
 	add	tf_Baseline(a1),d1
 	subq	#6,d1
-	pushm	d0/d1	; save start x,y
+	push	d1	; save start y
 
 	* Favorites are bolded, skip this if feature disabled
 	tst.b	favorites(a5)
@@ -17298,6 +17298,8 @@ doPrintNames
 	move.l	rastport(a5),a1	
 	lore	GFX,ClearEOL
 
+	pop	d1	; restore start y
+	
 	; Display random marker if needed
 	tst.b	d7		* divider will not have a random play marker
 	bne.b	.noMarker
@@ -17306,12 +17308,14 @@ doPrintNames
 	* Random play mode magic check: Add a marker to the end to indicate module has been played?
 	* Here the module index is needed
 	move.l 	d3,d0 
-	bsr.w	testRandomTableEntry
+	bsr.w	testRandomTableEntry ; keeps d1 is safe
 	beq.b	.noMarker
 
-	popm	d0/d1	; restore start x,y
+	* marker x-pos relative to the right edge
+	moveq	#-12,d0
+	add	WINSIZX(a5),d0
 
-	* Move the x-position to the right for the marker
+	* Go back the amount of pixels for the marker
 	move.l	rastport(a5),a1
 	move.l	rp_Font(a1),a1
 	lea	.marker(pc),a0
@@ -17325,7 +17329,7 @@ doPrintNames
 .yesRmark
 	move.b	d2,(a0)
 
-	* How many pixels this takes
+	* How many pixels does it take
 	tst.l	tf_CharSpace(a1)
 	beq.b	.noCharSpace
 	* Check individual char spaces, prop fonts
@@ -17339,16 +17343,8 @@ doPrintNames
 	sub	tf_XSize(a1),d0	
 
 .hadCharSpace
-	* The right edge
-	add	#216,d0
-
-	bsr.w	print
-	bra.b	.yesMarker
-.marker	dc.b	0,0
+	bsr.w	print ; print marker to d0, d1
 .noMarker
-	popm	d0/d1	; pop start x,y, not needed
-.yesMarker
-
 
 	* Set ordinary colors if divider was previously printed
 	tst.b	d7
@@ -17377,6 +17373,7 @@ doPrintNames
 	bsr.w 	releaseModuleList
 	rts
 	
+.marker	dc.b	0,0
 
 
 ***** Katkaisee prefixin nimestä a0:ssa
