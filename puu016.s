@@ -48029,6 +48029,7 @@ createlistBoxRegion
 	add	boxy(a5),d3
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
+	add	windowtop(a5),d3
 
 	; Adjust the end X so that it matches the 
 	; markline highlight
