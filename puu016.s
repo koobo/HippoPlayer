@@ -45391,14 +45391,14 @@ buildDeliBase
 	bsr.b	freeDeliBase
 
 	rsreset 
-_eagleJumpTable rs.b 	-ENPP_SizeOf
+_eagleJumpTable 	rs.b 	-ENPP_SizeOf
 _deliBase		rs.b 	EPG_SizeOf 
 _deliPath		rs.b    200
-_deliPathArray	rs.b   	200
-_upsStructure 	rs.b  	UPS_SizeOF
+_deliPathArray		rs.b   	200
+_upsStructure 		rs.b  	UPS_SizeOF
 * Space for 128 (address, length) pairs for dtg_LoadFile 
-_loadFileArray	rs.l 	2*DELI_LIST_DATA_SLOTS
-_deliDataSize	rs.b	0
+_loadFileArray		rs.l 	2*DELI_LIST_DATA_SLOTS
+_deliDataSize		rs.b	0
 
 	move.l	#_deliDataSize,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -45426,8 +45426,6 @@ _deliDataSize	rs.b	0
 	lea	_deliPathArray(a4),a1
 	move.l	a1,deliPathArray(a5)
 	move.l	a1,dtg_PathArrayPtr(a0)
-
-
 
 	push	a0
 	jsr	getcurrent 
@@ -45471,16 +45469,17 @@ _deliDataSize	rs.b	0
 	move.l	#$10000000,dtg_AslBase(a0)
 
 	clr	dtg_SndNum(a0) * this must be correct 
-	move	#64,dtg_SndVol(a0)
-	move	#64,dtg_SndLBal(a0)
-	move	#64,dtg_SndRBal(a0)
+	moveq	#64,d0
+	move	d0,dtg_SndVol(a0)
+	move	d0,dtg_SndLBal(a0)
+	move	d0,dtg_SndRBal(a0)
 	clr	dtg_LED(a0)
 
 	move	#%1111,EPG_Voices(a0)
-	move	#64,EPG_Voice1Vol(a0)
-	move	#64,EPG_Voice2Vol(a0)
-	move	#64,EPG_Voice3Vol(a0)
-	move	#64,EPG_Voice4Vol(a0)
+	move	d0,EPG_Voice1Vol(a0)
+	move	d0,EPG_Voice2Vol(a0)
+	move	d0,EPG_Voice3Vol(a0)
+	move	d0,EPG_Voice4Vol(a0)
 	move	#255,EPG_Volume(a0)
 	move	#255,EPG_Balance(a0)
 	move	#255,EPG_LeftBalance(a0)
@@ -45534,14 +45533,15 @@ _deliDataSize	rs.b	0
 
 	* EaglePlayer negative offset jump table
 	lea	eagleJumpTableStart(pc),a1
-	lea eagleJumpTableEnd(pc),a2	
+	lea 	eagleJumpTableEnd(pc),a2	
 .jumps	
 	subq.l	#6,a0
 	move.w	(a1)+,(a0)
 	move.l	(a1)+,2(a0)
 	cmp.l	a1,a2
 	bne.b	.jumps
- 	rts
+	; Ensure jump table code is flushed
+ 	bra	clearCpuCaches
 
 .songEnd
 	* May be called from interrupt, no logging allowed
@@ -46426,8 +46426,8 @@ deliModuleChange
 	pushm	a5/a6
 	bsr.b .patch
 	popm	a5/a6
-	jsr	clearCpuCaches
-	rts
+	bra	funcENPP_ClearCache
+	
 .notSupp
 	DPRINT	"Unsupported params!"
 	rts
