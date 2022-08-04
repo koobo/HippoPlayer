@@ -47388,7 +47388,7 @@ prepareSpectrumSineTable
 	lob	SPMul
 	lob	SPFix
 	* fix_fft uses values shifted by one
-	asr	#1,d0 
+	asr.l	#1,d0 
 	move	d0,(a2)+
 
 	move.l	d2,d0
