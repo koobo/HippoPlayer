@@ -32672,8 +32672,7 @@ eagleFormats
 	dr.w	p_aprosys
 	dr.w	p_hippelst
 	dr.w	p_tcbtracker
-	; Hangs on interrupt wait loop
-	;dr.w	p_markcooksey 
+	dr.w	p_markcooksey 
 	dr.w	p_maxtrax
 	dr.w	p_wallybeben
 	dr.w	p_synthpack
@@ -42509,10 +42508,8 @@ p_tcbtracker
 
 ******************************************************************************
 * Mark Cooksey
-* NOT USED 
 ******************************************************************************
 
- REM **************************
 p_markcooksey
 	jmp	.init(pc)
 	jmp	deliPlay(pc)
@@ -42528,21 +42525,15 @@ p_markcooksey
 	jmp 	.id(pc)
 	jmp	deliAuthor(pc)
 	dc  	pt_markcooksey
-.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_song
+.flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_song!pf_quadscopeUps!pf_scope
 	dc.b	"Mark Cooksey        [EP]",0	        
 .path 	dc.b 	"mark cooksey",0
  even
 
 .init
 	lea	.path(pc),a0 
-;	move.l	#10<<16|10,d0
 	moveq	#0,d0
-	bsr.w	deliLoadAndInit
-	DPRINT	"Mark cooksey initialized"
-
-	rts 
-
-
+	bra	deliLoadAndInit
 .id
 	move.l	a4,a0
 	moveq	#-1,D0
@@ -42633,7 +42624,7 @@ p_markcooksey
 	moveq	#0,D0
 .fail2
 	rts
- EREM **************************
+; EREM **************************
 
 ******************************************************************************
 * Activision Pro
@@ -45560,7 +45551,7 @@ _deliDataSize		rs.b	0
 	* May be called from interrupt, no logging allowed
 	push	d0
 	move	dtg_Timer(a5),d0
-	bsr.w     ciaint_setTempoFromD0
+	jsr	ciaint_setTempoFromD0
 	pop 	d0 
 	rts
 
@@ -46424,9 +46415,9 @@ deliModuleChange
 	move.l 	EPG_ARG2(a5),d1 
 	
 	pushm	a5/a6
-	bsr.b .patch
+	bsr.b 	.patch
 	popm	a5/a6
-	bra	funcENPP_ClearCache
+	bra.w	funcENPP_ClearCache
 	
 .notSupp
 	DPRINT	"Unsupported params!"
@@ -46441,10 +46432,6 @@ deliModuleChange
 	lea	(a0,d1.l),a4
 	* PatchTable start at d1
 	move.l	a1,d1
- if DEBUG
-	* debug counter
-	moveq	#1,d0
- endif
 .loop
 	* find from a3 to a4
 	move.l	a0,a3
@@ -46479,8 +46466,6 @@ deliModuleChange
 	* Found correct data at a3
 	* apply patch
 	
-	DPRINT	"Patch #%ld found"
-
 	* patch address relative to patch table start
 	move.l	d1,a5
 	add	4(a1),a5
@@ -46499,18 +46484,13 @@ deliModuleChange
 	move	#$4e71,(a3)+
 	dbf	d6,.nopFill
 .NoNop	
-
-	bra.b		.next
+	* try to apply patch again, fixes Mark Cooksey
+	bra.b	.loop
 .notFound
-	DPRINT	"Patch #%ld NOT found"
-.next
- if DEBUG
-	addq	#1,d0
- endif
+	* next patch
 	addq	#6,a1
 	tst	(a1)
 	bne.b	.loop
-	
 	rts
 	
 
