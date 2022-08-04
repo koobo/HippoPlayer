@@ -46399,16 +46399,20 @@ deliModuleChange
  endif
 
 	; additional args not supported, lol!
-	move.l	EPG_ARG4(a5),d0 
-	cmp.l	#1,d0 
+	moveq	#1,d0
+	cmp.l	EPG_ARG4(a5),d0 
 	bne.b	.notSupp
-	move.l	EPG_ARG5(a5),d0 
-	cmp.l	#-2,d0 
+	
+	moveq	#-2,d0
+	cmp.l	EPG_ARG5(a5),d0 
 	bne.b 	.notSupp
+
 	tst.l	EPG_ARG1(a5)
 	beq.b	.notSupp
+
 	tst.l	EPG_ARG3(a5)
 	beq.b	.notSupp
+
 	tst.l	EPG_ARG2(a5)
 	beq.b	.notSupp
 
@@ -46429,64 +46433,80 @@ deliModuleChange
 	rts
 
 * in:
-*  a1 = patchtable
+*  a1 = patch table
 *  a0 = data
 *  d1 = len
 .patch
-	;lea	PatchTable(pc),a1
 	* End bound is at a4
 	lea	(a0,d1.l),a4
 	* PatchTable start at d1
 	move.l	a1,d1
+ if DEBUG
+	* debug counter
+	moveq	#1,d0
+ endif
 .loop
 	* find from a3 to a4
-	;move.l	ModuleAddr(pc),a0
 	move.l	a0,a3
-	;move.l	InfoBuffer+LoadSize(pc),d0
-	;move.l	d1,d0
-	;lea	(a0,d0.l),a4
 	* Get code to find
-	;lea	PatchTable(pc),a2
 	move.l	d1,a2
 	add	(a1),a2
 .findCode
 	* read data word
 	move	(a3),d7
+	* check bounds
 	cmp.l	a4,a3
 	bhs.b	.notFound
-	* compare patch word
+	* see if the 1st word is found here
 	cmp	(a2),d7
 	beq.b	.found
-.notF	addq	#2,a3
+.notF	
+	* continue search from the next word 
+	addq	#2,a3
 	bra.b	.findCode
 
 .found
-	* compare length
+	* compare the rest
+	* get length in words minus one
 	move	2(a1),d6
+	* data to search from
 	move.l	a3,a6
+	* what to search
 	move.l	a2,a5
 .cmp	cmpm.w	(a5)+,(a6)+
 	bne.b	.notF
 	dbf	d6,.cmp
 	* Found correct data at a3
 	* apply patch
+	
+	DPRINT	"Patch #%ld found"
 
-	* patch address
-; JSR x = $4eB9 xxxx xxxx
-; NOP   = $4e71
-	;lea	PatchTable(pc),a5
+	* patch address relative to patch table start
 	move.l	d1,a5
 	add	4(a1),a5
+	* length of the code to overwrite with the patch
 	move	2(a1),d6
+; JSR x = $4eB9 xxxx xxxx
+; NOP   = $4e71
+	* write "jsr <patch address>"
 	move	#$4eb9,(a3)+
 	move.l	a5,(a3)+
+	* that was three words
 	subq	#3,d6	
 	bmi.b	.NoNop
-.nopFill	move	#$4e71,(a3)+
+	* fill the rest with NOPs
+.nopFill	
+	move	#$4e71,(a3)+
 	dbf	d6,.nopFill
 .NoNop	
 
+	bra.b		.next
 .notFound
+	DPRINT	"Patch #%ld NOT found"
+.next
+ if DEBUG
+	addq	#1,d0
+ endif
 	addq	#6,a1
 	tst	(a1)
 	bne.b	.loop
