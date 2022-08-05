@@ -42534,6 +42534,7 @@ p_markcooksey
 	lea	.path(pc),a0 
 	moveq	#0,d0
 	bra	deliLoadAndInit
+
 .id
 	move.l	a4,a0
 	moveq	#-1,D0
@@ -46376,20 +46377,18 @@ deliNotePlayer
 		rts
 
 deliModuleChange
+	pushm	all
 	DPRINT	"deliModuleChange"
  if DEBUG
 	move.l	EPG_ARG1(a5),d0 
-	DPRINT	"Start %lx"
-	move.l	EPG_ARG2(a5),d0 
-	DPRINT	"Length %lx"
-	move.l	EPG_ARG3(a5),d0 
-	DPRINT	"Patches %lx"
-	move.l	EPG_ARG4(a5),d0 
-	DPRINT	"Arg4 %lx"
-	move.l	EPG_ARG5(a5),d0 
-	DPRINT	"Arg5 %lx"
+	move.l	EPG_ARG2(a5),d1 
+	move.l	EPG_ARG3(a5),d2 
+	DPRINT	"Start=%lx len=%ld patches=%lx"
+	move.l	EPG_ARG4(a5),d0
+	move.l	EPG_ARG5(a5),d1 
+	DPRINT	"arg4=%lx arg5=%lx"
  endif
-
+	
 	; additional args not supported, lol!
 	moveq	#1,d0
 	cmp.l	EPG_ARG4(a5),d0 
@@ -46415,9 +46414,16 @@ deliModuleChange
 	* Length of data to patch
 	move.l 	EPG_ARG2(a5),d1 
 	
-	pushm	a5/a6
+	* Keep within data limits
+	move.l	var_b+modulelength,d2
+	cmp.l	d2,d1
+	blo.b	.ok
+	move.l	d2,d1
+	DPRINT	"capped"
+.ok
+
 	bsr.b 	.patch
-	popm	a5/a6
+	popm	all
 	bra.w	funcENPP_ClearCache
 	
 .notSupp
