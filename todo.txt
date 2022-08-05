@@ -65,6 +65,36 @@ Formats
 + special fx
 
 FIXED: BUG:
+- set window title height to 8
+- hippo list font: xhelvetica 13
+-- listbox fails at the bottom -> clip rect problem
+- prefs/display: screen info at the wrong place
+
+FIXED: BUG:
+- move window, when released, it will reopen
+- happened with "den 6" font
+- each time moved the box size will increase by one
+
+FIXED: BUG:
+- kick 1.3: do horiz resize, volume gadget gets a shaded 
+  bg for some reason.
+
+FIXED: BUG:
+- enlarge window one pixel at a time, more and more empty appears
+  to the bottom until a new row fits
+
+BUG:
+- Impulse modules: if DTP_Check2 fails there will be a mismatched
+  freemem of the module. Normally this should not happen as check
+  is already done in id_it
+
+FIXED: BUG: 
+- play "artcore-mix4.mod"
+- interesting part: position 29
+- end half, 3rd track has multiple notes with 9xx command, this does not show correctly
+  in the sample scopes, sounds ok though.
+
+FIXED: BUG:
 - all scopes open at the same time
 - play "rubber spine.ahx"
 - after a few secs, GURU
@@ -153,7 +183,7 @@ CRASH:
 - open MUG2.DF0 large module as startup, not enough mem to load it.
   HiP-Info crashes 
 
-TFMX 7v:
+FIXED: TFMX 7v:
 - Turrican 2 title plays bad on 060 with caches on,
   has self modifying code
 

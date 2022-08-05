@@ -44463,7 +44463,7 @@ NSTF_64Bit 	EQU	1<<21
 *   d0: required version; major<<16|minor
 * out:
 *   d0: 0=all ok, negative ier_-code otherwise
-deliLoadAndInit
+deliLoadAndInit:
 	jsr	setMainWindowWaitPointer
 	bsr.b	loadDeliPlayer 
 	tst.l 	d0
@@ -44479,7 +44479,7 @@ deliLoadAndInit
 *   d0: required version; major<<16|minor
 * out:
 *   d0: loaded seglist or negative error code if fail
-loadDeliPlayer
+loadDeliPlayer:
 	move.l	d0,d5
 	move.l	a0,a3
 	* See if can reuse the old player
@@ -45526,9 +45526,10 @@ _deliDataSize		rs.b	0
 	lea	eagleJumpTableStart(pc),a1
 	lea 	eagleJumpTableEnd(pc),a2	
 .jumps	
-	subq.l	#6,a0
-	move.w	(a1)+,(a0)
-	move.l	(a1)+,2(a0)
+	move.l	a1,a3
+	add	(a1)+,a3
+	move.l	a3,-(a0)	; jmp destination
+	move	#$4ef9,-(a0) ; jmp
 	cmp.l	a1,a2
 	bne.b	.jumps
 	; Ensure jump table code is flushed
@@ -45745,71 +45746,71 @@ deliAppendStr
 
 * First negative offset is first, -6
 eagleJumpTableStart
-		jmp funcENPP_AllocSampleStruct
-		jmp funcENPP_NewLoadFile2
-		jmp funcENPP_MakeDirCorrect
-		jmp funcENPP_TestAufHide
-		jmp funcENPP_ClearCache
-		jmp funcENPP_CopyMemQuick
-		jmp funcENPP_GetPassword
-		jmp funcENPP_StringCopy2
-		jmp funcENPP_ScreenToFront
-		jmp funcENPP_WindowToFront
-		jmp funcENPP_GetListData
-		jmp funcENPP_LoadFile    **
-		jmp funcENPP_CopyDir 	 **
-		jmp funcENPP_CopyFile    **
-		jmp funcENPP_CopyString
-		jmp funcENPP_AllocAudio
-		jmp funcENPP_FreeAudio
-		jmp funcENPP_StartInterrupt
-		jmp funcENPP_StopInterrupt
-		jmp funcENPP_SongEnd
-		jmp funcENPP_CutSuffix
-		jmp funcENPP_SetTimer
-		jmp funcENPP_WaitAudioDMA
-		jmp funcENPP_SaveMem
-		jmp funcENPP_FileReq
-		jmp funcENPP_TextRequest
-		jmp funcENPP_LoadExecutable
-		jmp funcENPP_NewLoadFile
-		jmp funcENPP_ScrollText
-		jmp funcENPP_LoadPlConfig
-		jmp funcENPP_SavePlConfig
-		jmp funcENPP_FindTag
-		jmp funcENPP_FindAuthor
-		jmp funcENPP_Hexdez
-		jmp funcENPP_TypeText
-		jmp funcENPP_ModuleChange
-		jmp funcENPP_ModuleRestore
-		jmp funcENPP_StringCopy
-		jmp funcENPP_CalcStringSize
-		jmp funcENPP_StringCMP
-		jmp funcENPP_DMAMask	 	*
-		jmp funcENPP_PokeAdr		*	 
-		jmp funcENPP_PokeLen		*
-		jmp funcENPP_PokePer		*
-		jmp funcENPP_PokeVol		*
-		jmp funcENPP_PokeCommand	* filter toggle
-		jmp funcENPP_Amplifier
-		jmp funcENPP_TestAbortGadget
-		jmp funcENPP_GetEPNrfromMessage
-		jmp funcENPP_InitDisplay
-		jmp funcENPP_FillDisplay
-		jmp funcENPP_RemoveDisplay
-		jmp funcENPP_GetLocaleString
-		jmp funcENPP_SetWaitPointer
-		jmp funcENPP_ClearWaitPointer
-		jmp funcENPP_OpenCatalog
-		jmp funcENPP_CloseCatalog
-		jmp funcENPP_AllocAmigaAudio
-		jmp funcENPP_FreeAmigaAudio
-		jmp funcENPP_RawToFormat
-		jmp funcENPP_FindAmplifier
-		jmp funcENPP_UserCallup5
-		jmp funcENPP_GetLoadListData
-		jmp funcENPP_SetListData
-		jmp funcENPP_GetHardwareType
+	dr.w funcENPP_AllocSampleStruct
+	dr.w funcENPP_NewLoadFile2
+	dr.w funcENPP_MakeDirCorrect
+	dr.w funcENPP_TestAufHide
+	dr.w funcENPP_ClearCache
+	dr.w funcENPP_CopyMemQuick
+	dr.w funcENPP_GetPassword
+	dr.w funcENPP_StringCopy2
+	dr.w funcENPP_ScreenToFront
+	dr.w funcENPP_WindowToFront
+	dr.w funcENPP_GetListData
+	dr.w funcENPP_LoadFile    **
+	dr.w funcENPP_CopyDir 	 **
+	dr.w funcENPP_CopyFile    **
+	dr.w funcENPP_CopyString
+	dr.w funcENPP_AllocAudio
+	dr.w funcENPP_FreeAudio
+	dr.w funcENPP_StartInterrupt
+	dr.w funcENPP_StopInterrupt
+	dr.w funcENPP_SongEnd
+	dr.w funcENPP_CutSuffix
+	dr.w funcENPP_SetTimer
+	dr.w funcENPP_WaitAudioDMA
+	dr.w funcENPP_SaveMem
+	dr.w funcENPP_FileReq
+	dr.w funcENPP_TextRequest
+	dr.w funcENPP_LoadExecutable
+	dr.w funcENPP_NewLoadFile
+	dr.w funcENPP_ScrollText
+	dr.w funcENPP_LoadPlConfig
+	dr.w funcENPP_SavePlConfig
+	dr.w funcENPP_FindTag
+	dr.w funcENPP_FindAuthor
+	dr.w funcENPP_Hexdez
+	dr.w funcENPP_TypeText
+	dr.w funcENPP_ModuleChange
+	dr.w funcENPP_ModuleRestore
+	dr.w funcENPP_StringCopy
+	dr.w funcENPP_CalcStringSize
+	dr.w funcENPP_StringCMP
+	dr.w funcENPP_DMAMask	 	*
+	dr.w funcENPP_PokeAdr		*	 
+	dr.w funcENPP_PokeLen		*
+	dr.w funcENPP_PokePer		*
+	dr.w funcENPP_PokeVol		*
+	dr.w funcENPP_PokeCommand	* filter toggle
+	dr.w funcENPP_Amplifier
+	dr.w funcENPP_TestAbortGadget
+	dr.w funcENPP_GetEPNrfromMessage
+	dr.w funcENPP_InitDisplay
+	dr.w funcENPP_FillDisplay
+	dr.w funcENPP_RemoveDisplay
+	dr.w funcENPP_GetLocaleString
+	dr.w funcENPP_SetWaitPointer
+	dr.w funcENPP_ClearWaitPointer
+	dr.w funcENPP_OpenCatalog
+	dr.w funcENPP_CloseCatalog
+	dr.w funcENPP_AllocAmigaAudio
+	dr.w funcENPP_FreeAmigaAudio
+	dr.w funcENPP_RawToFormat
+	dr.w funcENPP_FindAmplifier
+	dr.w funcENPP_UserCallup5
+	dr.w funcENPP_GetLoadListData
+	dr.w funcENPP_SetListData
+	dr.w funcENPP_GetHardwareType
 eagleJumpTableEnd
 
 funcENPP_ClearCache
