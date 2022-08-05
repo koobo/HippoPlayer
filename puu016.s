@@ -20058,6 +20058,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	movem.l	d0-d7/a0-a3/a6,-(sp)
 	jmp	pulppa
 
+; Put line change with special line feed so that ordinary line feeds
+; can be filtered out.
+.putLineChange	
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+	rts
+
+
 .prepareInfoWindowContent
 
 	; which content to display?
@@ -20366,8 +20374,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
+	bsr.w	.putLineChange
 
 	move.l	#MI_SongName,d1
 	lea	.eagleSong(pc),a0
@@ -20411,13 +20418,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move.l	#MI_About,d1
 	lea	.eagleAbout(pc),a0
-	bsr.b	.deliPutInfo
+	bsr.w	.deliPutInfo
 
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
-
+	bsr.w	.putLineChange
+	
 	move.l	#DTP_PlayerName,d0 
 	jsr	deliGetTag 
 	beq.b 	.noPlrName 
@@ -20428,34 +20434,51 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	#DTP_Creator,d0 
 	jsr	deliGetTag 
 	beq.b 	.noCrtr
-	push	d0
 	lea	.eagleCreator(pc),a0 
-	bsr.b	.deliPutInfo2	
-	pop	a0
-	* wrap to another line if there is text
-	moveq	#30-1,d0
-.findEnd
-	tst.b	(a0)+
-	dbeq	d0,.findEnd
-	tst	d0
-	bpl.b	.noMore
-	move.l	a0,d0
-	push	a0
-	lea	.eagleCreator2(pc),a0 
-	bsr.b	.deliPutInfo2
-	pop	a0
-	* wrap to 3rd line?
-	moveq	#39-1,d0
-.findEnd2
-	tst.b	(a0)+
-	dbeq	d0,.findEnd2
-	tst	d0
-	bpl.b	.noMore
-	move.l	a0,d0
-	lea	.eagleCreator2(pc),a0 
-	bsr.b	.deliPutInfo2	
-.noMore
+	; format output buffer
+	lea	-200(sp),sp
+	move.l	sp,a3
+	jsr	desmsg3
+	move.l	sp,a0
+
+	; target output buffer
+	move.l	infotaz(a5),a3
+	bsr.w	.lloppu
+	; do three lines wrapping at space
+	bsr.b	.doLine
+	bpl.b	.ends
+	bsr.b	.doLine
+	bpl.b	.ends
+	bsr.b	.doLine
+	bra.b	.ends
+
+* Copies a line to output, cuts at space near the end of line
+* in:
+*   a0 = input text
+*   a3 = output buffer
+* out:
+*   a0 = pointer to next line if available
+*   a3 = pointer to next position in output buffer
+*   d0 = negative: all input handled
+*        positive: data left in input for the next row
+.doLine
 	
+	moveq	#39-1,d0
+.cl1	move.b	(a0)+,(a3)+
+	dbeq	d0,.cl1
+	tst	d0
+	bpl.b	.endLine
+.li1	subq	#1,a3
+	cmp.b	#" ",-(a0)
+	bne.b	.li1
+	addq	#1,a0
+	moveq	#-1,d0
+.endLine
+	bsr.w	.putLineChange
+	tst.l	d0
+	rts
+.ends
+	lea	200(sp),sp
 .noCrtr
 	bra.w	.selvis
 
@@ -20494,9 +20517,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .eagleDuration	 	dc.b	"Duration: %02ld:%02ld",ILF,ILF2,0
 .eagleAbout	     	dc.b	"About: %-32.32s",ILF,ILF2,0
 .eagleName		dc.b	"Eagleplayer: %-26.26s",ILF,ILF2,0
-.eagleCreator       	dc.b	"Creator: %-30.30s",ILF,ILF2,0
-.fullLineFormat		
-.eagleCreator2       	dc.b	"%-39.39s",ILF,ILF2,0
+.eagleCreator       	dc.b	"Creator: %s",0
  even
 
 .noeagle
@@ -20780,7 +20801,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .noo_med
 .noo
 	* DEFAULT INFO
-
+	DPRINT	"default info"
+	
 	move	#35,info_prosessi(a5)
 
 	lea	.form3(pc),a0
@@ -20808,29 +20830,23 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	tst.l	d0 
 	beq.b 	.noAuth
 
-	move.l	infotaz(a5),a3
-	bsr.w	.lloppu
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+	
-	move.l	infotaz(a5),a3
-	bsr.w	.lloppu
-	push	d0
 	lea	.author(pc),a0
+	; format output buffer
+	lea	-200(sp),sp
+	move.l	sp,a3
 	jsr	desmsg3
-	pop	a0
-	* wrap to another line if there is text
-	moveq	#31-1,d0
-.findEndA
-	tst.b	(a0)+
-	dbeq	d0,.findEndA
-	tst	d0
-	bpl.b	.noMoreA
+	move.l	sp,a0
 	move.l	a0,d0
-	lea	.fullLineFormat(pc),a0 
+
+	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
-	jsr	desmsg3
-.noMoreA
+	bsr.w	.doLine
+	bpl.b	.endA
+	bsr.w	.doLine
+	bpl.b	.endA
+	bsr.w	.doLine
+.endA	lea	200(sp),sp
 .noAuth
 	bra.w	.selvis
 
@@ -20842,8 +20858,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
 .author
-	dc.b	"Player: %-31.31s",ILF,ILF2,0
- even
+	dc.b	"Player: %s",0
+  even
 
 
 .putcomment
@@ -20858,13 +20874,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	infotaz(a5),a3
 	bsr.w	.lloppu
 	lea	filecomment(a5),a0
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"comment: %s"
+ endif
 	tst.b	(a0)
 	beq.b	.empty
 	bsr.b	.putlines
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
+	bsr.w	.putLineChange
+	bsr.w	.putLineChange
 .empty
 	popm	d0/d1/a0/a3
 	rts
@@ -20878,12 +20896,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	tst.b	(a0)
 	beq.b	.naga
 	moveq	#0,d0
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
+	bsr.w	.putLineChange
 .naga	move.b	(a0)+,(a3)+
 	bne.b	.com
+	subq	#1,a3 ; back to NULL
 	rts
-
+ 
 *************************************
 
 * writes into a4 depending on format:
@@ -21007,13 +21025,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	infotaz(a5),a3
 	bsr.b	.lloppu
 
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
+	bsr.w	.putLineChange
 	moveq	#39-1,d0
 .ca	move.b	#"­",(a3)+
 	dbf	d0,.ca
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
+	bsr.w	.putLineChange
 	clr.b	(a3)
 
 	moveq	#1,d0
@@ -34922,7 +34938,7 @@ p_sonicarranger
 	dc.w pt_sonicarranger				* type
 	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song
 	dc.b	"Sonic Arranger",0
-.a 	dc.b	"Carsten Schlote, Branko Mikic, Carsten Herbst"
+.a 	dc.b	"Carsten Schlote, Branko Mikic, Carsten Herbst",0
  even
 
 .author
