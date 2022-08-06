@@ -19188,7 +19188,7 @@ sulje_foo
 	rts
 
 *** Sulkee module infon
-sulje_info
+sulje_info:
 	cmp	#33,info_prosessi(a5)
 	bhs.b	.joo
 	clr.b	oli_infoa(a5)
@@ -19266,7 +19266,7 @@ info_code
 	lob	AllocSignal
 	move.b	d0,info_signal2(a5)
 
-	bsr.b	infocode
+	bsr.b	.infocode
 
 	move.b	info_signal(a5),d0
 	jsr	freesignal
@@ -19279,7 +19279,7 @@ info_code
 
 
 ************* Module info
-infocode
+.infocode
 
 *** Avataan ikkuna
 * 39 kirjainta mahtuu laatikkoon
@@ -19459,7 +19459,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lore	GFX,ClipBlit
 	st	skokonaan(a5)
 
+	bsr	obtainModuleData
 	bsr	.prepareInfoWindowContent
+	bsr	releaseModuleData
+	; check if got data
+	tst.l	infotaz(a5)
+	beq.w	.sexit
+
 
 	clr	riviamount(a5)
 	move.l	infotaz(a5),a0
@@ -19478,7 +19484,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.refreshInfoWindowResizeGadget
 
 *** Info window message loop
-
+.SKIP
+	DPRINT	"info msg loop"
 	bra.b	.msgLoop
 .returnmsg
 	bsr.w	.flush_messages
@@ -19579,6 +19586,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bne.w	.idcmpLoop
 	
 .sexit	
+	DPRINT	"info exit"
 	bsr.b	.flush_messages
 
 	move	oldswinsiz(a5),nw_Height+swinstruc
@@ -19588,15 +19596,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	swindowbase(a5),d0
 	beq.b	.uh1
 	move.l	d0,a0
-	move.l	4(a0),infopos2(a5)
+	move.l	4(a0),infopos2(a5) * preserve position
 	lob	CloseWindow
 	clr.l	swindowbase(a5)
 .uh1
 	bsr.b	.fraz
 
 	;bsr.w	freeinfosample
-
-	moveq	#0,d0
 	rts
 
 
@@ -19820,9 +19826,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .rawkeyExitExit
 	moveq	#1,d0
 	rts
-
-;.sgadgetsup
-;	bra.w	.returnmsg
 
 .smousemoving
 	lea	gAD1,a2
@@ -20065,6 +20068,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.b	#ILF2,(a3)+
 	rts
 
+.prepareFailed
+	DPRINT	"prepare fail"
+	rts
 
 .prepareInfoWindowContent
 
@@ -20110,22 +20116,26 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	* Display module specific information
 ******** Kehitell‰‰n infoa moduulista
 
+
 	clr	sfirstname(a5)
 	clr	sfirstname2(a5)
 	clr.l	infotaz(a5)
 
-	jsr	obtainModuleData
-
+	; safety checks
+	tst	playertype(a5)
+	beq.b	.1
+	tst.l	moduleaddress(a5)
+	beq.b	.1
 	tst.l	playingmodule(a5)
 	bpl.b	.bah
-
+.1
 	* Nothing is being played. Display "No info available".
 
 	move	#35,info_prosessi(a5)		* lipbub
 
 	moveq	#3,d5
 	bsr.w	.allo2
-	beq.w	.sexit
+	beq.w	.prepareFailed
 
 	lea	.huhe(pc),a0
 	move.l	infotaz(a5),a1
@@ -20144,13 +20154,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bne.b	.nothx
 	move	#33,info_prosessi(a5)
 
-
 	move.l	moduleaddress(a5),a4
 	moveq	#0,d5
 	move.b	12(a4),d5
 	move	d5,d7
-	bsr.w	.allo
-	beq.w	.sexit
+	bsr.w	.allo * out: a3 = output buffer
+	beq.w	.prepareFailed
 
 	move.l	moduleaddress(a5),a4
 	move.l	a4,a2
@@ -20166,8 +20175,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	-10(sp),sp
 	move.l	sp,a1
 
-	move.l	d0,(a1)
-	move.l	a4,4(a1)
+	move.l	d0,(a1)	 * param 1
+	move.l	a4,4(a1) * param 2
 	lea	.thxform(pc),a0
 	bsr.w	.desmsg4
 	bsr.w	.lloppu
@@ -20194,7 +20203,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	moveq	#31,d5
 	bsr.w	.allo
-	beq.w	.sexit
+	beq.w	.prepareFailed
 
 
 	move.l	moduleaddress(a5),a0
@@ -20250,7 +20259,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	d4,d5
 	bsr.w	.allo
-	beq.w	.sexit
+	beq.w	.prepareFailed
 
 	move.l	d7,a0
 
@@ -20317,7 +20326,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr.w	.allo2
 	bne.b	.jee9
 	lea	42(sp),sp
-	bra.w	.sexit
+	bra.w	.prepareFailed
 .jee9
 
 	lea	.form(pc),a0
@@ -20364,7 +20373,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr.w	.allo2
 	bne.b	.jee9eg
 	lea	32(sp),sp
-	bra.w	.sexit
+	bra.w	.prepareFailed
 .jee9eg
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
@@ -20554,7 +20563,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .mod	
 	moveq	#31,d5
 	bsr.w	.allo
-	beq.w	.sexit
+	beq.w	.prepareFailed
 
 	moveq	#0,d7
 	moveq	#31-1,d6
@@ -20614,7 +20623,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	insnum(a0),d5
 	iword	d5
 	bsr.w	.allo
-	beq.w	.sexit
+	beq.w	.prepareFailed
 
 * a3 = pointteri tekstipuskuriin
 
@@ -20664,7 +20673,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	xmNumInsts(a0),a0
 	tword	(a0)+,d5
 	bsr.w	.allo
-	beq.w	.sexit
+	beq.w	.prepareFailed
 
 	move.l	d4,a0
 	move.l	ps3m_xm_insts(a5),a0
@@ -20727,7 +20736,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#0,d5
 	move.b	30(a0),d5
 	bsr.w	.allo
-	beq.w	.sexit
+	beq.w	.prepareFailed
 
 	moveq	#0,d7
 .loop3	move	d7,d0
@@ -20815,7 +20824,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr.w	.allo2
 	bne.b	.jee9a
 	lea	32(sp),sp
-	bra.w	.sexit
+	bra.w	.prepareFailed
 .jee9a
 	* parameters in a1
 	move.l	sp,a1
@@ -20990,7 +20999,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	rts
 
 
-.allo
+.allo:
 	bsr.b	.allo2
 	beq.b	.xiipo
 
@@ -21041,7 +21050,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	rts
 	
 
-.allo2
+.allo2:
 ** Varataan muistia tekstipuskurille
 	move	d5,d0
 	add	#20,d0		* 20 vararivi‰ varalle
@@ -21053,7 +21062,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .selvis
 ** If we made this far the module information text has been built
-	jsr	releaseModuleData
 
 **  Karsitaan kummat merkit pois
 	move.l	infotaz(a5),a2
