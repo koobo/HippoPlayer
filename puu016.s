@@ -6725,10 +6725,12 @@ buttonspressed
 
 	lea	rightButtonActionsList,a2
 .actionLoop
-	movem.l	(a2)+,a0/a1
+	move.l	a2,a0
+	add	(a2)+,a0
+	move.l	(a2)+,a1
 	bsr.b	.rightButtonDownCheck
 	beq.b	.handled
-	tst.l	(a2) 
+	tst.w	(a2) 
 	bne.b	.actionLoop
 
 	* no RMB actions found
@@ -6953,8 +6955,8 @@ checkMouseOnGadget
 *******
 
  STRUCTURE TooltipListEntry,0
-    	APTR ttle_gadget
-    	APTR ttle_tooltip
+    	UWORD ttle_gadget
+    	UWORD ttle_tooltip
  LABEL  ttle_SIZEOF
 
  STRUCTURE ToolTip,0
@@ -7009,7 +7011,8 @@ tooltipHandler
 	* Then check if pointer is on top of some gadget
 	lea tooltipList,a3
 .loop 
-	move.l	ttle_gadget(a3),a0
+	lea	ttle_gadget(a3),a0
+	add	(a0),a0
 
 	* Check if gadget is disabled, no tooltips for those
 	move	gg_Flags(a0),d0
@@ -7020,13 +7023,12 @@ tooltipHandler
 	bne.b	.no
 	* Yes it was.
 	* Check if this gadget was not allowed to have tooltips for now
-	move.l	ttle_gadget(a3),d0
-	move.l	disableTooltipForGadget(a5),d1
-	;DPRINT	"found gadget=%lx dis=%lx"
-	cmp.l  d1,d0
+	cmp.l  disableTooltipForGadget(a5),a0
 	beq.b	.disabled
 	* Store tooltip to be displayed and activate
-	move.l	ttle_tooltip(a3),activeTooltip(a5)
+	lea	ttle_tooltip(a3),a0
+	add	(a0),a0
+	move.l	a0,activeTooltip(a5)
 	* Count down this many ticks before attempting to show tooltip
 	move	#1*50+25,tooltipTick(a5) * about 1.5 seconds	
 	rts
@@ -7034,7 +7036,7 @@ tooltipHandler
 	;DPRINT	"was disabled"
 .no 
 	addq.l	#ttle_SIZEOF,a3
-	tst.l	(a3)
+	tst.w	(a3)
 	bne.b	.loop
 .exit	rts
 
@@ -22789,38 +22791,38 @@ CLAMPVOL macro
         UWORD st_runningStatusOffset * Relative to a5
         UWORD st_prefsStatusOffset * Relative to a5+prefsdata
         UWORD st_taskOffset * Relative to a5
-        APTR st_entryPoint * Code start address
+        UWORD st_entryPoint * Code start address relative offset
     LABEL ScopeTaskDefinition_SIZEOF
 
 quadraScopeTaskDefinition
 	dc.w	quadraScopeRunning
 	dc.w	prefs_quadraScope
 	dc.w	taskQuadraScope
-	dc.l	quadraScopeEntry
+	dr.w	quadraScopeEntry
 
 quadraScopeFTaskDefinition
 	dc.w	quadraScopeFRunning
 	dc.w	prefs_quadraScopeF
 	dc.w	taskQuadraScopeF
-	dc.l	quadraScopeFEntry
+	dr.w	quadraScopeFEntry
 
 hippoScopeTaskDefinition
 	dc.w	hippoScopeRunning
 	dc.w	prefs_hippoScope
 	dc.w	taskHippoScope
-	dc.l	hippoScopeEntry
+	dr.w	hippoScopeEntry
 
 patternScopeTaskDefinition
 	dc.w	patternScopeRunning
 	dc.w	prefs_patternScope
 	dc.w	taskPatternScope
-	dc.l	patternScopeEntry
+	dr.w	patternScopeEntry
 
 spectrumScopeTaskDefinition
 	dc.w	spectrumScopeRunning
 	dc.w	prefs_spectrumScope
 	dc.w	taskSpectrumScope
-	dc.l	spectrumScopeEntry
+	dr.w	spectrumScopeEntry
 
 
 * In:
@@ -22894,7 +22896,8 @@ startScopeTask:
 	* Start
 	move.l	a3,a1
 	* initialPC
-	move.l	st_entryPoint(a4),a2
+	lea	st_entryPoint(a4),a2
+	add	(a2),a2
 	* finalPC (system default)
 	sub.l a3,a3		 
 	lore	Exec,AddTask
@@ -48947,52 +48950,60 @@ gadgetFileSliderInitialHeight = 67-16+2
 * the right mouse button actions when button is released
 rightButtonActionsList	
 	* New -> Clear
-	dc.l	gadgetNewButton,rbutton9
+	dr.w	gadgetNewButton
+	dc.l	rbutton9
 	* Prefs -> zoom file box
-	dc.l	gadgetPrefsButton,zoomfilebox
+	dr.w	gadgetPrefsButton
+	dc.l	zoomfilebox
 	* Sort -> Find
-	dc.l	gadgetSortButton,find_new
+	dr.w	gadgetSortButton
+	dc.l	find_new
 	* Move -> Add divider
-	dc.l	gadgetMoveButton,add_divider
+	dr.w	gadgetMoveButton
+	dc.l	add_divider
 	* Add -> Insert
-	dc.l 	gadgetAddButton,rinsert
+	dr.w 	gadgetAddButton
+	dc.l	rinsert
 	* Load Prg -> Save Prg
-	dc.l	gadgetPrgButton,rsaveprog
+	dr.w	gadgetPrgButton
+	dc.l	rsaveprog
 	* > -> Fast forward
-	dc.l 	gadgetForwardButton,rbutton_kela2_turbo
+	dr.w 	gadgetForwardButton
+	dc.l	rbutton_kela2_turbo
 	* Del -> Nuke file
-	dc.l	gadgetDelButton,hiiridelete  
+	dr.w	gadgetDelButton
+	dc.l	hiiridelete  
 	* i -> About
-	dc.l 	gadgetInfoButton,aboutButtonAction
+	dr.w 	gadgetInfoButton
+	dc.l	aboutButtonAction
 	* Play -> Random play
-	dc.l	gadgetPlayButton,soitamodi_random
-	* Toggle list mode -> File browser mode
-	;dc.l	gadgetListModeChangeButton,engageFileBrowserMode
-	dc.l	0 ; END
+	dr.w	gadgetPlayButton
+	dc.l	soitamodi_random
+	dc.w	0 ; END
  
 
 * Contains tooltip data for mainwindow gadgets
 tooltipList
-	dc.l 	gadgetPlayButton,.play
-	dc.l	gadgetInfoButton,.info
-	dc.l	gadgetStopButton,.stop
-	dc.l	gadgetEjectButton,.eject 
-	dc.l	gadgetNextButton,.next
-	dc.l	gadgetPrevButton,.prev
-	dc.l	gadgetAddButton,.add
-	dc.l	gadgetDelButton,.del
-	dc.l 	gadgetNewButton,.new
-	dc.l	gadgetNextSongButton,.nextSong
-	dc.l	gadgetPrevSongButton,.prevSong
-	dc.l	gadgetPrefsButton,.prefs
-	dc.l	gadgetSortButton,.sort
-	dc.l 	gadgetMoveButton,.move
-	dc.l	gadgetPrgButton,.prg 
-	dc.l	gadgetForwardButton,.forward
-	dc.l	gadgetRewindButton,.rewind
-	dc.l	gadgetListModeChangeButton,.listModeChange
-	dc.l	0 ; END
-
+	dr.w 	gadgetPlayButton,.play
+	dr.w	gadgetInfoButton,.info
+	dr.w	gadgetStopButton,.stop
+	dr.w	gadgetEjectButton,.eject 
+	dr.w	gadgetNextButton,.next
+	dr.w	gadgetPrevButton,.prev
+	dr.w	gadgetAddButton,.add
+	dr.w	gadgetDelButton,.del
+	dr.w 	gadgetNewButton,.new
+	dr.w	gadgetNextSongButton,.nextSong
+	dr.w	gadgetPrevSongButton,.prevSong
+	dr.w	gadgetPrefsButton,.prefs
+	dr.w	gadgetSortButton,.sort
+	dr.w 	gadgetMoveButton,.move
+	dr.w	gadgetPrgButton,.prg 
+	dr.w	gadgetForwardButton,.forward
+	dr.w	gadgetRewindButton,.rewind
+	dr.w	gadgetListModeChangeButton,.listModeChange
+	dc.w	0 ; END
+ 
 .play
 	dc.b	34,2
 	dc.b	"LMB: Play or restart chosen module",0
