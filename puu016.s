@@ -20484,20 +20484,29 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 *   d0 = negative: all input handled
 *        positive: data left in input for the next row
 .doLine
-	
 	moveq	#39-1,d0
-.cl1	move.b	(a0)+,(a3)+
+	moveq	#0,d1
+.cl1	cmp.b	#" ",(a0)
+	bne.b	.ns1
+	addq	#1,d1 ; keep track of spaces
+.ns1	move.b	(a0)+,(a3)+
 	dbeq	d0,.cl1
 	tst	d0
 	bpl.b	.endLine
+	; find previous space to cut from
+	; SAFETY: if there are any
+	tst	d1
+	beq.b	.endLin
 .li1	subq	#1,a3
 	cmp.b	#" ",-(a0)
 	bne.b	.li1
 	addq	#1,a0
+	move.l	a0,d0
+.endLin
 	moveq	#-1,d0
 .endLine
 	bsr.w	.putLineChange
-	tst.l	d0
+	tst	d0
 	rts
 .ends
 	lea	200(sp),sp
