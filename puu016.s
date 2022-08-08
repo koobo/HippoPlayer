@@ -2141,9 +2141,8 @@ fileprocname	dc.b	"HiP-Filereq",0
 prefsprocname	dc.b	"HiP-Prefs",0
 infoprocname	dc.b	"HiP-Info",0
 layersName	dc.b	"layers.library",0
-
-
-
+cianame	dc.b	"ciaa.resource",0
+ 
 CHECKSTART
 CHECKSUM	=	43647
 
@@ -2404,7 +2403,7 @@ main
 	lore	Dos,Open
 	move.l	d0,nilfile(a5)
 
-	lea	cianame,a1
+	lea	cianame(pc),a1
 	push	a1
 	move.b	#'a',3(a1)
 	moveq	#0,d0
@@ -2422,6 +2421,8 @@ main
 
 	* Get the default font for fallback cases, topaz.8
 	lea	topaz_text_attr,a0
+	move.l	a0,a3
+	basereg	topaz_text_attr,a3
 	lore	GFX,OpenFont
 	move.l	d0,topazbase(a5)	
 
@@ -2444,7 +2445,7 @@ main
 .poh
 
 	* text_attr is now according to loaded prefs
-	lea	text_attr,a0	* nyt jo muutettu prefssien mukaan
+	lea	text_attr(a3),a0	* nyt jo muutettu prefssien mukaan
 	tst.l	_DiskFontBase(a5)	* onko libbiä?
 	beq.b	.fontProblem1
 	
@@ -2459,11 +2460,11 @@ main
 .fontProblem1
 	; Revert main font to topaz
 	DPRINT	"main topaz revert"
-	lea	text_attr,a0	
-	move.l	#topaz,(a0)+
+	lea	text_attr(a3),a0	
+	pushpea	topaz(a3),(a0)+
 	move	#8,(a0)+
 	clr	(a0)
-	lea	topaz_text_attr,a0
+	lea	topaz_text_attr(a3),a0
 	lore	GFX,OpenFont
 	move.l	d0,fontbase(a5)
 
@@ -2471,7 +2472,7 @@ main
 	move.l	fontbase(a5),stringExtendStruct+sex_Font(a5)
 
 	* list_text_attr is now according to loaded prefs
-	lea	list_text_attr,a0	* nyt jo muutettu prefssien mukaan
+	lea	list_text_attr(a3),a0	* nyt jo muutettu prefssien mukaan
 	tst.l	_DiskFontBase(a5)	* onko libbiä?
 	beq.b	.fontProblem2
 	
@@ -2487,15 +2488,16 @@ main
 	; Revert main font to topaz
 	DPRINT	"list topaz revert"
 
-	lea	list_text_attr,a0	
-	move.l	#topaz,(a0)+
+	lea	list_text_attr(a3),a0	
+	pushpea	topaz(a3),(a0)+
 	move	#8,(a0)+
 	clr	(a0)
-	lea	topaz_text_attr,a0
+	lea	topaz_text_attr(a3),a0
 	lore	GFX,OpenFont
 	move.l	d0,listfontbase(a5)
 
 .listFontOk
+	endb	a3
 	move.l	listfontbase(a5),a0
 	bsr.w	setListFont
 
@@ -2528,13 +2530,19 @@ main
 
 	* Do all kinds of adjustments to gadgets
 
+	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
+	basereg	sivu0,a0
+
 	* Add the "Favorites" prefs button to the end of the
 	* list of first page of prefs gadgets
-	move.l	#prefsFavorites,bUu22
+	;move.l	#prefsFavorites,bUu22
+	pushpea	prefsFavorites(a0),bUu22(a0)
 	* Add "Button tooltips" prefs button to the page 2
-	move.l	#prefsTooltips,eskimO
+	;move.l	#prefsTooltips,eskimO
+	pushpea	prefsTooltips(a0),eskimO(a0)
+	endb	a0
 
-	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
+;	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
 	bsr.b	.hum
 	lea	sivu1-sivu0(a0),a0
 	bsr.b	.hum
@@ -2566,8 +2574,11 @@ main
 
 	; The last main window button is "gadgetSortButton",
 	; add another button as the new last one
-	move.l	#gadgetListModeChangeButton,gadgetSortButton+gg_NextGadget
-
+	basereg	gadgetFileSlider,a0
+	;move.l	#gadgetListModeChangeButton,gadgetSortButton+gg_NextGadget
+	pushpea	gadgetListModeChangeButton(a0),gadgetSortButton+gg_NextGadget(a0)
+	endb	a0
+	
 	move.l	_IntuiBase(a5),a6
 	* Give each gadget a gg_GadgetID,
 	* set proper text attr for ones which have text.
@@ -32176,8 +32187,7 @@ acouscll
 _ciaa	=	$bfe001
 _ciab	=	$bfd000
 
-cianame	dc.b	"ciaa.resource",0
- even
+
 	
 * init with default tempo 
 init_ciaint:
