@@ -3673,21 +3673,18 @@ exit
 	bsr.w	closel
 	move.l	_WBBase(a5),d0
 	bsr.w	closel
-	move.l	_IntuiBase(a5),d0
-	bsr.w	closel
 	move.l	_GFXBase(a5),d0
 	bsr.w	closel
 	move.l	_ReqBase(a5),d0
 	bsr.w	closel
 	move.l	_FFPBase(a5),d0
-	bsr.w     closel
+	bsr.w	closel
 	move.l	_MTBase(a5),d0
-	bsr.w     closel
+	bsr.w	closel
 	move.l	_LayersBase(a5),d0
-	bsr.w		closel
+	bsr.w	closel
 
 	bsr.w	tulostavirhe
-exit2
 	move.l	_IntuiBase(a5),d0
 	bsr.w	closel
 
@@ -3721,7 +3718,7 @@ exit2
  	beq.b	.xef
 	lob	Close
 .xef
- endc
+ endc ; DEBUG
 
  ifeq asm
 	move.l	lockhere(a5),d1		* free CurrentDir lock
