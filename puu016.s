@@ -30666,6 +30666,8 @@ engageListMode
 	rts
 
 .setButtonStatesAccordingToListMode
+	lea	gadgets,a4
+	basereg	gadgets,a4
 	cmp.b	#LISTMODE_NORMAL,listMode(a5)
 	beq.b	.normalMode
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
@@ -30675,49 +30677,50 @@ engageListMode
 	rts
 
 .normalMode
-	lea	gadgetAddButton,a0
+	lea	gadgetAddButton(a4),a0
 	bsr.w	enableButtonWithEar
-	lea	gadgetDelButton,a0
+	lea	gadgetDelButton(a4),a0
 	bsr.w	enableButtonWithEar
-	lea	gadgetNewButton,a0
+	lea	gadgetNewButton(a4),a0
 	bsr.w	enableButtonWithEar
-	lea	gadgetSortButton,a0
+	lea	gadgetSortButton(a4),a0
 	bsr.w	enableButtonWithEar
-	lea	gadgetMoveButton,a0
+	lea	gadgetMoveButton(a4),a0
 	bsr.w	enableButtonWithEar
-	lea	gadgetPrgButton,a0
+	lea	gadgetPrgButton(a4),a0
 	bsr.w	enableButtonWithEar
 	rts
 
 .favoritesMode
-	lea	gadgetPrgButton,a0
+	lea	gadgetPrgButton(a4),a0
 	bsr.w	disableButton
 	rts
 
 	
 .browserMode
-	lea	gadgetAddButton,a0
+	lea	gadgetAddButton(a4),a0
 	bsr.w	disableButton
-	lea	gadgetDelButton,a0
+	lea	gadgetDelButton(a4),a0
 	bsr.w	disableButton
-	lea	gadgetNewButton,a0
+	lea	gadgetNewButton(a4),a0
 	bsr.w	disableButton
-	lea	gadgetSortButton,a0
+	lea	gadgetSortButton(a4),a0
 	bsr.w	disableButton
-	lea	gadgetMoveButton,a0
+	lea	gadgetMoveButton(a4),a0
 	bsr.w	disableButton
-	lea	gadgetPrgButton,a0
+	lea	gadgetPrgButton(a4),a0
 	bsr.w	disableButton
+	endb	a4
 	rts
 
 .setListModeChangeButtonIcon
 	lea	listImage,a0
 	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
 	beq.b	.set
-	lea	favoriteImage,a0
+	lea	favoriteImage-listImage(a0),a0
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.set
-	lea	fileBrowserImage,a0
+	lea	fileBrowserImage-favoriteImage(a0),a0
 	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.set
 	rts
