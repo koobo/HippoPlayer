@@ -5195,6 +5195,8 @@ wrender:
 	bsr.w	lootaa
 	bsr.w	reslider
 
+	DPRINT	"wrender done"
+
 	move.l	windowbase(a5),a0
 	bsr.w	setscrtitle
 	move.l	keycheckroutine(a5),-(sp)
@@ -48169,6 +48171,19 @@ initializeButtonRowLayout
 
 
 layoutButtonRow
+  if DEBUG
+	moveq	#0,d1
+	move	winstruc+nw_Width,d1
+	move	d1,d0
+	; remove left and right borders
+	sub	#8+8,d1 
+	lsl.l	#8,d1
+	; original width without borders
+	divu	#264-8-8,d1
+	ext.l	d1
+	DPRINT	"Layout width=%ld mul=%ld"
+  endif
+
 	lea	row1Gadgets,a0
 	bsr.b	.do
 	lea	row2Gadgets,a0
