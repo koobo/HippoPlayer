@@ -22849,7 +22849,7 @@ spectrumScopeTaskDefinition
 *   a3 = Task structure
 * Out:
 *   d0 = 1: ok, 0: out of mem
-initScopeTask
+initScopeTask:
 	bsr.b	resetScopeTask
 
 	* Initialize ln_Node
@@ -22858,19 +22858,48 @@ initScopeTask
 	clr.b	LN_PRI(a3)
 	move.l	a2,LN_NAME(a3)
 
-	* Allocate stack
-	move.l	#3000,d0
-	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
-	jsr	getmem
-	beq.b	.x
-	move.l	d0,a0
-	move.l	a0,TC_SPLOWER(a3)
-	lea	3000(a0),a0
-	move.l	a0,TC_SPUPPER(a3)
-	move.l	a0,TC_SPREG(a3)
+	* Allocate stack mementry
+	lea	.memList(pc),a0
+	lore	Exec,AllocEntry
+	* Sets bit 31 on failure
+	tst.l	d0
+	bmi.b	.fail
+
+	* a1 = MemList
+	move.l	d0,a1
+	* a2 = allocated mem block
+	move.l	ML_ME+ME_ADDR(a1),a2
+
+	* Set stack pointers
+	move.l	a2,TC_SPLOWER(a3)
+	lea	3000(a2),a2
+	move.l	a2,TC_SPUPPER(a3)
+	move.l	a2,TC_SPREG(a3)
+
+	* Create mementry list in task 
+	lea	TC_MEMENTRY(a3),a0
+	NEWLIST	a0
+
+	* Add stack memory entry at a1 to the task mementry list,
+	* to be freed on task exit.
+	lob	AddHead
+
 	moveq	#1,d0
 .x	rts
 
+.fail	
+	moveq	#0,d0
+	rts
+
+.memList
+	* reserve space for list node
+	DS.B	LN_SIZE 	  
+	* number of entries
+	DC.W	1		
+    	* entry #1 - stack space
+	DC.L	MEMF_PUBLIC!MEMF_CLEAR
+	DC.L	3000
+	
 * In:
 *   a3 = Task structure
 resetScopeTask
@@ -23830,21 +23859,13 @@ qexit:
 	bsr.w	updateprefs
 .x
 
-	move.l	s_quad_task(a4),a2
 
 	* Free local data. a4 invalid after this
 	move.l	a4,a0
 	jsr	freemem
 
-	* Free task stack. Is this safe, maybe?
-	* No mem alloc is done below or by any other
-	* task since Forbid()den.
-	move.l	TC_SPLOWER(a2),a0
-	jsr	freemem
-
-	* Remove self 
-	sub.l	a1,a1
-	jmp	_LVORemTask(a6)
+	* Exit task into default task clean up
+	rts
 
 
 
