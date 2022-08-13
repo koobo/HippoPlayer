@@ -8804,7 +8804,6 @@ printbox:
 	lsr	#1,d2
 	subq	#1,d2
 	mulu	listFontHeight(a5),d2
-	printt "see if this is correct"
 	add	d2,d1
 	bra.w	print
 
@@ -13050,9 +13049,7 @@ prefs_code
 	lea	var_b,a5
 	addq	#1,prefs_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 
-	printt	"TODO: refactor"
-	; basereg a4 gadgets?
-
+	printt	"TODO: refactor prefs data handling"
 
 	clr.b	prefs_exit(a5)		* Lippu
 
@@ -14553,12 +14550,10 @@ pQuadraScope:
 
 rQuadraScopeBars:
 	DPRINT	"rQuadrascopeBars"
-	;not.b	quadraScopeBars_new(a5)
 	not.b	prefsdata+prefs_quadraScopeBars(a5)
 	bsr.w	restartQuadraScopeTask
 
 pQuadraScopeBars
-	;move.b	quadraScopeBars_new(a5),d0
 	move.b	prefsdata+prefs_quadraScopeBars(a5),d0
 	lea	prefsQuadraScopeBars,a0
 	bra.w	tickaa
@@ -16059,11 +16054,10 @@ rfont
 	move.l	4(a0),prefs_textattr+prefsdata(a5) * YSize, Style, Flags talteen
 	move.l	(a0),a0				* Fontin nimi
 	lea	prefs_fontname+prefsdata(a5),a1
-	printt "DANGER: the output buffer is just 20 chars long"
+	printt "TOOD: DANGER: the output buffer is just 20 chars long"
 	
 .cec	move.b	(a0)+,(a1)+
 	bne.b	.cec
-
 
 	clr	boxsize00(a5)		* avataan ja suljetaan p‰‰ikkuna
 
@@ -16968,7 +16962,6 @@ clearbox:
 ;	move	#251+WINX,d2
 	move	WINSIZX(a5),d2
 	sub	#10,d2
-	printt	"TODO TODO"
 	move	#127+WINY,d3
  	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
@@ -17654,7 +17647,6 @@ inforivit_clear
 ;	move	#252+WINX,d2
 	move	WINSIZX(a5),d2
 	sub	#10,d2
-	printt	"TODO TODO TODO"
 	moveq	#28+WINY,d3
 	bsr.w	tyhjays
 	movem.l	(sp)+,d0-d4
@@ -17795,7 +17787,7 @@ inforivit_play
 
 bipb	moveq	#18+WINY,d1
 bipb2	moveq	#11+WINX,d0
-	printt "TODO: lenght check"
+	printt "TODO TODO: length check"
 	bsr.w	print
 bopb	rts
 
@@ -22233,7 +22225,7 @@ rexxmessage
 
 *** ADD	
 .add	
-	printt "TODO: normal list mode"
+	printt "TODO: switch to normal list mode"
 
 	tst.b	d0
 	beq.w	rbutton7
@@ -22276,7 +22268,7 @@ rexxmessage
 
 *** INSERT
 .insert
-	printt "TODO: normal list mode"
+	printt "TODO: switch to normal list mode"
 
 	tst.b	d0
 	beq.w	rinsert
@@ -22288,7 +22280,7 @@ rexxmessage
 
 *** MOVE
 .move
-	printt "TODO: normal list mode"
+	printt "TODO: switch to normal list mode"
 
 	bsr.w	a2i
 	move	d0,-(sp)
@@ -22454,6 +22446,7 @@ rexxmessage
 
 
 **** LOADPREFS
+* This probably doesn't work perfectly
 .loadprefs
 	push	a1
 	bsr.w	rbutton4		* eject
@@ -22467,7 +22460,6 @@ rexxmessage
 	bsr.w	loadprefs2
 	jsr	setboxy
 	jsr	init_inputhandler
-	printt	"TODO: minor"
 ;	tst.b	quadon(a5)			* avataanko scope?
 ;	beq.b	.q
 ;	bsr.w	start_quad
@@ -48076,8 +48068,6 @@ createlistBoxRegion
 	move.l	sp,a1
 	moveq	#30+WINX,d0
 	moveq	#62+WINY,d1
-	printt "TODO TODO TODO TODO"
-	;move	#251+WINX,d2
 	move	WINSIZX(a5),d2
 	sub	#10,d2
 
