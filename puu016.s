@@ -3720,29 +3720,37 @@ exit
 .xef
  endc ; DEBUG
 
- ifeq asm
-	move.l	lockhere(a5),d1		* free CurrentDir lock
-	lore	Dos,UnLock
+	* free any locks
+	move.l	_DosBase(a5),a6
+	move.l	lockhere(a5),d1
+	beq.b	.noLock
+	lob		UnLock
+.noLock
 	move.l	homelock(a5),d1
 	beq.b	.noHome
 	lob     UnLock
 .noHome
-	lore	Exec,Forbid			* forbid multitasking 
-	bsr.w	vastomaviesti		* reply to any message we may have received
 
-	* Free program code hunk. After this the following code lines may become
-	* unavailable unless multitasking is disabled.
-	move.l	segment(a5),d1
-	move.l  _DosBase(a5),a6
-	jsr 	_LVOUnLoadSeg(a6)
- endc
+	lore	Exec,Forbid			* forbid multitasking 
 
 	move.l	_DosBase(a5),d0		* last library to be closed
 	bsr.b	closel
+	; safely assume DOS is still available after this
 
+ ifeq asm
+	; detached process exit
+	bsr.w	vastomaviesti		* reply to any message we may have received
+
+	* Free program segments. After this the following code lines may become
+	* unavailable.
+	move.l	segment(a5),d1
+	move.l  _DosBase(a5),a6
+	jmp 	_LVOUnLoadSeg(a6)   * end of transmission
+ else
+	; asm-one exit
 	moveq	#0,d0				* end of transmission
 	rts
-
+ endif 
 
 closel:
 	beq.b	.notopen
