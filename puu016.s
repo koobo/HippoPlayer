@@ -33758,8 +33758,6 @@ p_sid:	jmp	.init(pc)
 
 
 rem_sidpatch
-;	rts
-
 	move.l	(a5),a0
 	cmp	#34,LIB_VERSION(a0)
 	bhi.b	.q
@@ -33781,8 +33779,6 @@ rem_sidpatch
 	rts
 
 init_sidpatch
-;	rts
-
 	move.l	(a5),a0
 	cmp	#34,LIB_VERSION(a0)
 	bhi.b	.q
@@ -33818,9 +33814,13 @@ init_sidpatch
 	bsr.w	sid_addVolumePatch
 	rts
 
-.sidp1	jsr	.sidpatch1
+.sidp1	
+	dc.w	$4eb9 ; jsr
+	dc.l	.sidpatch1
 	nop
-.sidp2	jsr	.sidpatch2
+.sidp2
+	dc.w	$4eb9 ; jsr
+	dc.l	.sidpatch1
 	nop
 
 .sidpatch1
@@ -33888,24 +33888,21 @@ sid_addVolumePatch
 	bne.b	.q
 	lea	_LVOAllocEmulResource(a0),a0
 	move.l	2(a0),a0
-	move	.vol1patch(pc),8418(a0)
-	move.l	.vol1patch+2(pc),8418+2(a0)
-	move	.vol2patch(pc),12+8418(a0)
-	move.l	.vol2patch+2(pc),12+8418+2(a0)
-	move	.vol3patch(pc),12+12+8418(a0)
-	move.l	.vol3patch+2(pc),12+12+8418+2(a0)
+	
+	move	#$4eb9,8418(a0) ; jsr
+	pushpea .setVol1(pc),8418+2(a0)
+	move	#$4eb9,12+8418(a0)
+	pushpea .setVol2(pc),12+8418+2(a0)
+	move	#$4eb9,12+12+8418(a0)
+	pushpea .setVol3(pc),12+12+8418+2(a0)
 	* Disable DisplaySignal mechanism,
 	* alternatively could SetDisplaySignal
 	* so that when display is enabled there will be no
 	* crashhhhhh.
-	move	#$4e75,1136(a0)
+	move	#$4e75,1136(a0) ; rts
 	bsr.w	clearCpuCaches
 .q
 	rts
-
-.vol1patch	jsr	.setVol1
-.vol2patch	jsr	.setVol2
-.vol3patch	jsr	.setVol3
 
 .setVol1
 	push	d0
@@ -33928,13 +33925,14 @@ sid_addVolumePatch
 	move	d0,$dff0c8
 	pop 	d0
 	rts
-.setVol4
-	push	d0
-	mulu	var_b+mainvolume,d0 
-	lsr	#6,d0
-	move	d0,$dff0d8
-	pop 	d0
-	rts
+
+;.setVol4
+;	push	d0
+;	mulu	var_b+mainvolume,d0 
+;	lsr	#6,d0
+;	move	d0,$dff0d8
+;	pop 	d0
+;	rts
 
 
 sid_remVolumePatch
