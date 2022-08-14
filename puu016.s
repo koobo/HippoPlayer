@@ -11012,7 +11012,7 @@ adddivider
 	; Reserve this much chars for the actual name
 .MAX_NAME = 21
 
-	move.l	#l_size+30,d0
+	moveq	#l_size+30,d0
 	move.l	#MEMF_CLEAR,d1
 	bsr.w	getmem
 	beq.b	.meek
@@ -22939,7 +22939,7 @@ startScopeTask:
 	move	st_taskOffset(a4),d0
 	lea	(a5,d0),a3
 	lea	.tn(pc),a2
-	bsr.b	initScopeTask
+	bsr.w	initScopeTask
 
 	* Mark it as running
 	move.b	#RUNNING_YES,(a5,d7)
