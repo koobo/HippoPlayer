@@ -1,5 +1,5 @@
 ;APS000007100000000D0000000D0000000D000025DF0000000D0000000D0000000D0000000D0000000D
-testi	=	1
+testi	=	0
 
 
 
@@ -387,13 +387,13 @@ newcpu
 	move.l	sample_buff1_2(pc),chanarea+buffendadr(a0)
 	add.l	d7,chanarea+buffendadr(a0)
 	move.l	sample_buff1_3(pc),chanarea*2(a0)
-	move.l	sample_buff1_3(pc),[chanarea*2]+buffbegadr(a0)
-	move.l	sample_buff1_3(pc),[chanarea*2]+buffendadr(a0)
-	add.l	d7,[chanarea*2]+buffendadr(a0)
+	move.l	sample_buff1_3(pc),(chanarea*2)+buffbegadr(a0)
+	move.l	sample_buff1_3(pc),(chanarea*2)+buffendadr(a0)
+	add.l	d7,(chanarea*2)+buffendadr(a0)
 	move.l	sample_buff1_4(pc),chanarea*3(a0)
-	move.l	sample_buff1_4(pc),[chanarea*3]+buffbegadr(a0)
-	move.l	sample_buff1_4(pc),[chanarea*3]+buffendadr(a0)
-	add.l	d7,[chanarea*3]+buffendadr(a0)
+	move.l	sample_buff1_4(pc),(chanarea*3)+buffbegadr(a0)
+	move.l	sample_buff1_4(pc),(chanarea*3)+buffendadr(a0)
+	add.l	d7,(chanarea*3)+buffendadr(a0)
 
 	clr.b	songpos
 	clr.b	pattpos

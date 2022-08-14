@@ -8,8 +8,7 @@ TESTI	=	0
 	include	misc/eagleplayer.i
 	incdir	include/
 	include	patternInfo.i
-	incdir
-
+	
 * Scope data for one channel
               rsreset
 ns_start      rs.l       1 * Sample start address

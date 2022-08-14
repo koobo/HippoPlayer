@@ -6,7 +6,6 @@ testi = 0
 	include	misc/eagleplayer.i
 	incdir	include/
 	include	patternInfo.i
-	incdir
 
 
 * Scope data for one channel

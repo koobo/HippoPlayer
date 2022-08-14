@@ -13,10 +13,11 @@
 DEBUG	=	0
 TEST 	= 	0
 
- ifeq TEST
-	auto	wo p:pl/bin/ps3m\
- endif
-
+ ifnd __VASM
+   ifeq TEST
+      auto	wo p:pl/bin/ps3m\
+   endif
+ endif 
 
 * Print to debug console, very clever.
 * Param 1: string
@@ -115,7 +116,7 @@ tword	macro
 	endm
 
 ;sVER	macro
-;	dc.b	`Replay version 0.942/020+ / 30.10.1994 `,10,10
+;	dc.b	"Replay version 0.942/020+ / 30.10.1994 ",10,10
 ;	endm
 
 
@@ -4585,7 +4586,7 @@ detectchannels
 	cmp.b	#1,d0
 	blo.b	.skip2
 
-	cmp.b	#`Z`-`@`,d0
+	cmp.b	#"Z"-"@",d0
 	bhi.b	.skip2
 
 	st	(a2,d1)
@@ -11062,13 +11063,13 @@ allocreq	dc.l	0,0
 		dc.l	1,0,0,0,0,0,0
 		dc	0
 
-xmsign		dc.b	`Extended Module:`
+xmsign		dc.b	"Extended Module:"
 
-timerint 	dc.b	`PS3M-CIA`,0
-l4name		dc.b	`PS3M-Audio`,0
+timerint 	dc.b	"PS3M-CIA",0
+l4name		dc.b	"PS3M-Audio",0
 
-cianame		dc.b	`ciax.resource`,0
-audiodev 	dc.b	`audio.device`,0
+cianame		dc.b	"ciax.resource",0
+audiodev 	dc.b	"audio.device",0
 
 		even
 

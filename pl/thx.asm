@@ -4,7 +4,7 @@
 	include	misc/eagleplayer.i
 	incdir	include/
 	include	patternInfo.i
-	incdir
+	
 
 
 test=0

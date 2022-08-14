@@ -30,7 +30,10 @@ ver	macro
 	dc.b	"v2.54ß (?.?.2022)"
 	endm	
 
-DEBUG	= 1
+ ifnd DEBUG
+DEBUG	= 0
+ endif
+
 asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench  
 
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta

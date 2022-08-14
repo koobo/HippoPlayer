@@ -549,7 +549,7 @@ AON_END
 			clr	$dff0d8
 			rts
 ;========================================================================
-AON_PLAYCIA		movem.l	d1-a6, -(sp)
+AON_PLAYCIA		movem.l	d1-a6,-(sp)
 			lea	AON_DATA(pc),a6
 			tst.b	aon_dmaflag(a6)
 			beq.b	.setsamples
