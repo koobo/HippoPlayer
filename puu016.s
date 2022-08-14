@@ -31,10 +31,18 @@ ver	macro
 	endm	
 
  ifnd DEBUG
-DEBUG	= 0
+* Enable debug logging 
+DEBUG = 1
  endif
 
-asm	= 1	* 1: Run from AsmOne, 0: CLI/Workbench  
+ ifnd __VASM
+* 1: Run from AsmOne
+* 0: CLI/Workbench  
+asm = 1	
+ else
+asm = 0
+ endif
+
 
 BETA	= 0	* 0: ei beta, 1: public beta, 2: private beta
 zoom	= 0	* 1: zoomaava hippo
