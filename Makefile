@@ -39,3 +39,5 @@ clean:
 	cd eagleplayers && make clean
 	cd pl && make clean
 
+dist: HiP group
+	cd dist && make
