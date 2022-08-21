@@ -92,7 +92,7 @@ bin/bpsm: bpsm.S
 bin/CustomMade_v1: CustomMade_v1.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/dbpro: DBM0player_v2.16.s
-	$(ASM) $(INCLUDE) $(EXE020) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(EXE020) -nocase -o $@ "$<"
 bin/Delta1: Delta1.0.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/digi: DigiBooster16.s

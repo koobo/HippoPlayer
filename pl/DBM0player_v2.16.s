@@ -1,3 +1,4 @@
+;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
 	incdir	include:
 	include	exec/exec_lib.i
 	include libraries/gadtools_lib.i
@@ -192,7 +193,7 @@ s:
 	move.w	#128-1,d7
 .clr	jsr	ClearSongData
 	lea	ChanArea(a0),a0
-	dbf	d7,.clr
+	dbf	d7,.Clr
 
 .retry
 
@@ -210,7 +211,7 @@ s:
 	moveq	#0,d0		* OK!
 	rts
 
-.end
+
 .END
 .WASERROR
 	jsr	FreeModule
@@ -224,9 +225,7 @@ endplay
 	rts
 
 
-DosName
 DOSName:	dc.b	"dos.library",0
-ReqName
 reqname:	dc.b	'reqtools.library',0
 		even
 ExecBase:	dc.l	0
@@ -241,54 +240,37 @@ FirstTrack:	dc.w	0
 ActualTrack:	dc.w	0
 TrackNumber:	dc.w	0
 
-InsNum:
 INSNUM:		dc.w	0
-PatNum:
 PATNUM:		dc.w	0
-SngNum:
 SNGNUM:		dc.w	0
-SmpNum:
 SMPNUM:		dc.w	0
 
-ORDNUM:
 OrdNum:		dc.w	0
 
-ORDNUM0:
 OrdNum0:	dc.w	0
-ORDNUM1:
 OrdNum1:	dc.w	0
-ORDNUM2:
 OrdNum2:	dc.w	0
-ORDNUM3:
 OrdNum3:	dc.w	0
-ORDNUM4:
 OrdNum4:	dc.w	0
 
 ActualSong:	dc.w	1
 
-filehandle:
 FileHandle:	dc.l	0
 LoadModError:	dc.w	0
-Mode16biten:
 Mode16BitEn:	dc.w	0
 
 PP_LENG:	dc.w	0
 PP_ADR:		dc.l	0
 
 NoLoopEnable:	dc.w	0
-MixItEnable:
 MIXITENABLE:	dc.w	0
 
 playenable:	dc.w	0
-StopEnable:
 stopenable:	dc.w	0
 
-orgtemp:
-Orgtemp
 OrgTemp:	dc.b	0
 SPAHIENABLE	dc.b	0
 PlayPattEn:	dc.w	0
-OldSpos:
 OldSPos:	dc.w	0
 EditEnable:	dc.w	0
 ACTCHAN:	dc.w	0
@@ -544,7 +526,6 @@ CANTDO
 
 CANDO:	dc.w	0
 
-makeinstr:
 MakeInstr:
 	lea	Instruments,a0
 	move.l	#256-1,d7
@@ -555,7 +536,7 @@ MakeInstr:
 	dbf	d7,.mi
 	rts
 
-DSPparamtab:
+
 DSPParamTab:
 	dc.w	0,0,0,0
 
@@ -656,7 +637,7 @@ OpenAhiError2:
 	rts
 
 
-ReadErrorText:
+
 ReadErrorTEXT:
 	dc.b	" Read Error! ",10
 	dc.b	0
@@ -668,27 +649,22 @@ NoMemForConvert:
 	dc.b	0
 	even
 
-NoMemoryText:
 NoMemoryTEXT:
 	dc.b	" Not Enough Memory! ",10
 	dc.b	0
 	even
 
-
-OpenAhiErrorText:
 OpenAhiErrorTEXT:
 	dc.b	" Can't open AHI.device !",10
 	dc.b	0
 	even
 
-OpenAhiErrorText2:
 OpenAhiErrorTEXT2:
 	dc.b	" Can't open AHI.device !",10
 	dc.b	"       Try again.",10
 	dc.b	0
 	even
 
-OpenAhiErrorAskText:
 OpenAhiErrorASKTEXT:
 	dc.b	"_Retry |_Cancel",0
 	even
@@ -865,7 +841,7 @@ DBM0:
 	movem.l	(sp)+,d0-a6
 	rts
 
-Headers:
+
 HEADERS:
 	dc.b	"NAME"
 	dc.l	DBM0_ReadName
@@ -1395,7 +1371,6 @@ ReadMemAdr:	dc.l	0
 ReadMemEnd:	dc.l	0
 FileLen:	dc.l	0
 
-readmem:
 ReadMem:
 	movem.l	d0-a6,-(sp)
 	move.l	d2,a0
@@ -1467,8 +1442,6 @@ OldGlobalVolB	equ	7	; 1
 
 OLDVolA:	equ	8	; 2
 OLDVolB:	equ	10	; 2
-OldVolA:	equ	8	; 2
-OldVolB:	equ	10	; 2
 SlideSamOffset	equ	12	; 2
 OldSlideOffsetA	equ	14	; 1
 OldSlideOffsetB	equ	15	; 1
@@ -1476,11 +1449,9 @@ MainVol:	equ	16	; 2
 
 ;ReplaceEnable	equ	18	; 1
 
-OffEnable	equ	19	; 1
+OFFenable	equ	19	; 1
 SamOffsetA	equ	20	; 1
 SamOffsetB	equ	21	; 1
-SamoffsetA	equ	20	; 1
-SamoffsetB	equ	21	; 1
 RetraceCntA	equ	22	; 1
 RetraceCntB	equ	23	; 1
 OldInstrNumA:	equ	24	; 1
@@ -1488,7 +1459,6 @@ OldInstrNumB:	equ	25	; 1
 
 OrgPeriod	equ	26	; 2
 MainPeriod:	equ	28	; 2
-Mainperiod = MainPeriod
 OldPeriod:	equ	30	; 2
 OrgPeriodARP	equ	32	; 2
 Oldd0		equ	34	; 2
@@ -1500,14 +1470,6 @@ Oldd5		equ	44	; 2
 Oldd6		equ	46	; 2
 loopsdataschanA	equ	48	; 4
 loopsdataschanB	equ	52	; 4
-
-OldD0 = Oldd0
-OldD1 = Oldd1
-OldD2 = Oldd2
-OldD3 = Oldd3
-OldD4 = Oldd4
-OldD5 = Oldd5
-OldD6 = Oldd6
 
 EqNewSamA	equ	56	; 1
 EqNewSamB	equ	57	; 1
@@ -1553,7 +1515,7 @@ SlidePanOldB	equ	113	; 1
 LastFreq	equ	114	; 4
 ;----------------------------------------------
 
-AhiBase
+
 ahibase:	dc.l	0
 ahi_ctrl:	dc.l	0
 
@@ -1562,12 +1524,9 @@ ahi_ctrltags:
         dc.l	TAG_DONE
 ahi_tags
         dc.l	AHIA_MixFreq
-Ahi_freq
 ahi_freq
         dc.l	32600
         dc.l	AHIA_Channels
-AHI_CHAN:
-Ahi_Chan:
 ahi_chan:
         dc.l	8
         dc.l	AHIA_Sounds,1
@@ -1581,17 +1540,14 @@ ahi_audioid
         dc.l	AHIA_MaxPlayerFreq,(600*2/5)<<16
         dc.l	TAG_DONE
 
-AHI_Sound0:
-Ahi_Sound0:
 ahi_sound0:
         dc.l	AHIST_M8S
 ahi_sta	dc.l	0	        ; start
 ahi_len	dc.l	-1                ; len
 
 AHI_VOLBOOST:
-        dc.l	AHIET_MASTERVOLUME
+        dc.l	Ahiet_MasterVolume
 AHIBoost
-AhiBoost
         dc.l	$10000
         dc.l	TAG_DONE
 
@@ -2189,7 +2145,7 @@ ahi_initmain:
 	move.l	d0,AhiBoost
 .nieauto
 	move.l	ahi_ctrl,a2
-	jsr	_LVOAHI_SetEffect(a6)
+	jsr	_LVOAHI_Seteffect(a6)
 
 	movem.l	d0-a6,-(sp)
 	jsr	UpdateEffects
@@ -2222,7 +2178,6 @@ ahi_eror_allocaudio_ok:
 	moveq	#-1,d0
 	rts
 
-Ahi_End:
 ahi_end:
 	move.l	ahibase(pc),d0
 	beq.w	.exit
@@ -2231,7 +2186,7 @@ ahi_end:
 	lea	AHI_VOLBOOST,a0
 	or.l	#AHIET_CANCEL,ahie_Effect(a0)
 	move.l	ahi_ctrl(pc),a2
-	jsr	_LVOAHI_SetEffect(a6)
+	jsr	_LVOAHI_Seteffect(a6)
 	lea	AHI_VOLBOOST,a0
 	eor.l	#AHIET_CANCEL,ahie_Effect(a0)
 
@@ -2251,7 +2206,7 @@ ahi_end:
 .clr	clr.w	MainVol(a0)
 	clr.w	MainPeriod(a0)
 	lea	ChanArea(a0),a0
-	dbf	d7,.clr
+	dbf	d7,.Clr
 
 .exit
 	rts
@@ -2260,7 +2215,6 @@ ahi_end:
 
 EchoEn:		dc.w	0
 
-EchoOn:
 EchoON:
 ; ---------------------------------------;
 	move.w	Ahi_Chan+2,d7
@@ -2281,13 +2235,13 @@ EchoON:
 	move.l	ahibase,a6
 	lea	mask1struct(pc),a0
 	move.l	ahi_ctrl,a2
-	jsr	_LVOAHI_SetEffect(a6)
+	jsr	_LVOAHI_Seteffect(a6)
 
 
 	move.l	ahibase,a6
 	move.l	#AHI_DSPEFF,a0
 	move.l	ahi_ctrl,a2
-	jsr	_LVOAHI_SetEffect(a6)
+	jsr	_LVOAHI_Seteffect(a6)
 	rts
 
 
@@ -2298,7 +2252,6 @@ EchoON:
 
 
 EchoOFF:
-EchoOff:
 ; ---------------------------------------;
 	move.w	Ahi_Chan+2,d7
 	move.w	d7,mask1channels
@@ -2318,7 +2271,7 @@ EchoOffMain
 	lea	mask1struct(pc),a0
 	or.l	#AHIET_CANCEL,ahie_Effect(a0)
 	move.l	ahi_ctrl(pc),a2
-	jsr	_LVOAHI_SetEffect(a6)
+	jsr	_LVOAHI_Seteffect(a6)
 	lea	mask1struct(pc),a0
 	eor.l	#AHIET_CANCEL,ahie_Effect(a0)
 
@@ -2326,7 +2279,7 @@ EchoOffMain
 	lea	AHI_DSPEFF,a0
 	or.l	#AHIET_CANCEL,ahie_Effect(a0)
 	move.l	ahi_ctrl(pc),a2
-	jsr	_LVOAHI_SetEffect(a6)
+	jsr	_LVOAHI_Seteffect(a6)
 	lea	AHI_DSPEFF,a0
 	eor.l	#AHIET_CANCEL,ahie_Effect(a0)
 	rts
@@ -2382,16 +2335,12 @@ MC68030:
 MC68040:
 	rts
 	
-songpos: 
 SongPos:	dc.w	0
-pattpos:
 PattPos:	dc.w	0
 OldPattPos:	dc.w	0
 
 OldCPU:		dc.b	0
-Temp:
 temp:		dc.b	0
-Count:
 count:		dc.b	0
 count2:		dc.b	0
 JMPEN:		dc.b	0
@@ -2406,7 +2355,6 @@ channelenable:	dc.w	0
 MixPeriodA:	dc.w	0
 MixPeriodB:	dc.w	0
 leng:		dc.w	0
-WhichChan:
 whichchan:	dc.w	0
 CiaTempo:	dc.w	0
 CiaChanged:	dc.w	0
@@ -2488,7 +2436,6 @@ DB_musicMAIN:
 	move.w	TrackNumber,d7
 	subq	#1,d7
 channelsloopM:
-ChannelsLoopM:
 	movem.l	d0/d7/a6,-(sp)
 
 ; -------------------------------------------------------
@@ -2635,7 +2582,6 @@ NoPause:
 	clr.w	PattPos
 	addq.w	#1,SongPos
 NoNewPos:
-NoNEWPos:
 
 DoPAUSE
 	addq.b	#1,count
@@ -2650,7 +2596,6 @@ DoPAUSE
 .ok
 *
 No_NEW
-No_new
 	move.w	RealTempo,OldRealTempo
 	rts
 
@@ -2728,7 +2673,8 @@ ahi_period:
 	movem.l	(sp)+,d0/d2-a6
 
 
-	cmp.l	#2^20,d1
+	;cmp.l	#2^20,d1
+	cmp.l	#1<<20,d1
 	ble.s	.ok
 	clr.b	OffEnable(a6)
 	moveq	#AHISF_IMM,d4
@@ -3277,7 +3223,6 @@ no_CLReff2
 
 no_CLReff
 
-NothingToDo
 nothingtodo
 
 	move.l	a5,-(sp)
@@ -4209,7 +4154,6 @@ _0OFS	equ	0
 _1OFS	equ	2
 _2OFS	equ	1
 
-Loops:
 loops:
 	cmp.w	#$e60,d3
 	bne.s	no_loop
@@ -4259,7 +4203,7 @@ Pause:
 	moveq	#0,d7
 	move.b	d3,d7
 	and.b	#$0f,d7
-	beq.s	no_pause
+	beq.s	No_pause
 	moveq	#0,d3
 	move.b	Temp(pc),d3
 	mulu	d3,d7
@@ -4346,7 +4290,6 @@ pannings:
 	move.w	d7,(a5)
 	rts
 
-Pannings2:
 pannings2:
 	moveq	#0,d7
 	move.b	d3,d7
@@ -4364,7 +4307,7 @@ SlidePan:
 	moveq	#0,d7
 	move.b	d3,d7
 	cmp.w	#$10,d7
-	blt.s	PanDown
+	blt.s	Pandown
 
 	lsr.b	#4,d7
 	add.w	d7,GeneralPan(a6)
@@ -4559,7 +4502,6 @@ SetCross:
 
 Cia_temp
 
-SetAhiTempo:
 SetAHItempo:
 	move.w	d7,CiaTempo
 
@@ -4649,7 +4591,6 @@ retrno_1
 no_retrace_1
 	rts
 
-CutSample:
 cutsample:
 	moveq	#0,d7
 	move.b	d3,d7
@@ -4668,7 +4609,7 @@ cutsample:
 no_cut_sam:
 	rts
 
-DelaySample:
+
 delaysample:
 	moveq	#0,d7
 	move.b	d3,d7
@@ -5224,7 +5165,6 @@ Glisssub:
 	clr.w	4(a5)
 	bra.s	GlissOK3
 
-GlissRTS:
 Glissrts:
 	rts
 
@@ -5395,8 +5335,6 @@ Hex:
  dc.b	90,91,92,93,94,95,96,97,98,99,0,0,0,0,0,0
  even
 
-periods:
-Periods:
 PERIODS:
  dc.w	856*16,808*16,762*16,720*16,678*16,640*16,604*16,570*16,538*16,508*16,480*16,453*16
  dc.w	856*8,808*8,762*8,720*8,678*8,640*8,604*8,570*8,538*8,508*8,480*8,453*8
@@ -5407,42 +5345,28 @@ PERIODS:
  dc.w	214,202,190,180,170,160,151,143,135,127,120,113
  dc.w	214/2,202/2,190/2,180/2,170/2,160/2,151/2,143/2,135/2,127/2,120/2,113/2
 PERIODSEND:
-PeriodsEnd:
+
 
 ;	SECTION	DATA,BSS_p
 
 UnPackedData:	ds.l	128*6
-PATTAdresses:
 PattAdresses:	ds.l	1024
-PattLens:
 PATTLENS:	ds.w	1024
 
-SamVol:
 SAMVOL:		ds.b	256
 Instruments:	ds.w	256
 SampleType:	ds.b	256	; 0-8bit ; 1-16bit
 		ds.b	256	; original
 LoopTab:	ds.b	256
-samfin:
-SamFin:
 SAMFIN:		ds.l	256
-SongOrders:
 SONGORDERS:	ds.w	1024+1
 
-SongOrders0:
 SONGORDERS0:	ds.w	1024+1
-SongOrders1:
 SONGORDERS1:	ds.w	1024+1
-SongOrders2:
 SONGORDERS2:	ds.w	1024+1
-SongOrders3:
 SONGORDERS3:	ds.w	1024+1
-SongOrders4:
 SONGORDERS4:	ds.w	1024+1
 
-AHI_Samples 
-Ahi_Samples
-Ahi_samples
 ahi_samples	ds.b	(4*4)*256
 ModNameBuffer:	ds.b	44
 SongNameBuffer:	ds.b	44
@@ -5468,7 +5392,6 @@ SampleOffsetsFT	ds.b	128+2
 
 
 ; Channels
-channel1
 Channel1:	ds.b	ChanArea*128
 ahi_channels	ds.l	128
 
@@ -5489,6 +5412,6 @@ PackedPattLen:
 
 	section	dad,data_f
 
-MODULE:	incbin	music:digibooster/2.dbm
+MODULE:	incbin	"m:digibooster/## experience ##.dbm"
 MODULEE
  endc
