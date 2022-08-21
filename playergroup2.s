@@ -2,6 +2,8 @@
 
 IM=0
 SHR=1
+P61A=0
+
 	incdir	include/
 	include	playerIds.i
 
@@ -39,7 +41,9 @@ head	macro
 	head	pt_soundmon2,bpsm
 	head	pt_soundmon3,soundmon3
 	head	pt_oktalyzer,okta
+ ifne P61A
 	head	pt_player,p61a
+ endif
 	head	pt_hippelcoso,hippelcoso
 	head	pt_digibooster,digi
 	head	pt_thx,thx
@@ -137,8 +141,10 @@ soundmon32
 okta1 incbin okta.im
 okta2 
 
+ ifne P61A
 p61a1 incbin p61a.im
 p61a2
+ endif
 
 hippelcoso1 incbin hippelcoso.im
 hippelcoso2
@@ -251,8 +257,10 @@ soundmon32
 okta1 incbin okta.shr
 okta2 
 
+ ifne P61A
 p61a1 incbin p61a.shr
 p61a2
+ endif
 
 hippelcoso1 incbin hippelcoso.shr
 hippelcoso2

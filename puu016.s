@@ -57,6 +57,7 @@ DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_HORIZ_RESIZE = 1
+FEATURE_P61A        =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -27815,9 +27816,11 @@ loadfile
 	bsr.w	identifyFormatsOnly 
 	beq.b .on
 
+ ifne FEATURE_P61A
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
 	beq.b	.on
+ endif
 
 	cmp.l   #"XPKF",(a4)             * pakatut kelpaavat!
 	beq.b   .on
@@ -29357,10 +29360,12 @@ tutki_moduuli
 	bsr.w 	identifyFormats 
 	beq.b 	.ex2
 
+ ifne FEATURE_P61A
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
 	bsr.w	id_player2
 	beq.w	.player
-	
+ endif
+
 .mp
 	bsr.w	id_ps3m		
 	tst.l	d0
@@ -29445,10 +29450,12 @@ tutki_moduuli
 	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	bra.w	.ex2
 
+ ifne FEATURE_P61A
 .player
 	pushpea	p_player(pc),playerbase(a5)
 	move	#pt_player,playertype(a5)
 	bra.w	.ex
+ endif
 
 .hippelcoso
 	move	d5,maxsongs(a5)
@@ -32728,7 +32735,9 @@ groupFormats
 	dr.w 	p_sonicarranger
 	dr.w	p_startrekker
 	dr.w	p_voodoosupremesynthesizer
+ ifne FEATURE_P61A
 	dr.w 	p_player
+ endif
 	dc.w 	0
 
 
@@ -36428,13 +36437,13 @@ p_med	jmp	.medinit(pc)
 ******************************************************************************
 * The Player v6.1a
 ******************************************************************************
-
 guru_author
 	pushpea	.a(pc),d0
 	rts
 .a	dc.b	"Jarno Paananen (Guru/Sahara Surfers)"
 	even
 
+  ifne FEATURE_P61A
 p_player
 	jmp	.p60init(pc)
 	p_NOP
@@ -36544,7 +36553,7 @@ p_player
 	moveq	#ier_nomem,d0
 	bra.b	.ok2
 
-
+ 
 * TODO: both
 id_player
  	cmp.l	#'P61A',(a4)		* The player 6.1a
@@ -36554,7 +36563,7 @@ id_player2				* filename <= D0
 	and.l	#$dfffffff,d0
 	cmp.l	#'P61.',d0
 	bra.w	idtest
-	
+  endif	; FEATURE_P61A
 
 
 ******************************************************************************
