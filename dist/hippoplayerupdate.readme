@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.53
+Version: 2.54
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -34,6 +34,118 @@ NOTE 4: Too long didn't read
 - New list mode change button above the file slider
 - Improved scopes
 - New music formats
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.53 (30.4.2022) to v2.54 (?.?.2022) 
+
+## New fixes:
+
+- Fixed a severe bug that most likely occured on kickstart 2.x. 
+  During start up chip memory could be corrupted and lead to a crash.
+  This was a regression related to the window resizing mechanism.
+
+- Disabled tooltips when the window is zipped to titlebar size.
+
+- Zipped window position is saved with Prefs again. This likely broke
+  in v2.52.
+
+- MPEGA quality was not restored from saved prefs correctly. This
+  bug was introduced in a recent version.
+
+- Fixed a scope related problem. When a Protracker module uses the 9xx 
+  command with note, the scopes would often display the sample data wrongly.
+  This bug was listed as an open issue in HiP v2.45 docs.
+  The same bug is also visible in Protracker v2.3d.
+
+- Fixed some TFMX 7 voice replayer issues apparent on 68060,
+  likely also on 68040. Turrican 2 title theme now sounds correct on
+  68060. Technical: self modifying code removed, DMA waits added.
+
+- Info window: Fixed a bug where the slider movement was ignored 
+  and the content not scrolled.
+
+- Info window: Fixed a crash which would happen sometimes if
+  during start up the info window is opened while "Keep list on exit" is 
+  enabled and a module playback is started.
+
+- Info window: Fixed a text layout issue where when wrapping to
+  multiple lines the words would be broken. Now wrapping is done
+  on spaces only.
+
+- AOS4: During exit Hippo would always crash when running on AOS4,
+  the exit procedure was modified so that this probably doesn't 
+  happen anymore.
+
+
+## New features:
+
+- Added a confirmation dialog that is shown when editing the
+  favorites list. This should prevent accidentally removing
+  any carefully picked favorites (which has happened to me
+  a few times).
+  
+- There is now a small window resize gadget visible in the lower
+  right corner. The ordinary one is too big :)
+
+- The main window can now be resized horizontally as well as 
+  vertically using the resize gadget, stretching the content.
+
+- The info window can be resized vertically using the resize 
+  gadget.
+
+- The proportional gadget (slider) knobs now react visually 
+  when clicked.
+
+- Added another font change button in Prefs/Display. The 1st one 
+  changes the main font as previously, and accepts 8x8 pixel fixed 
+  width fonts only. The new 2nd one changes the module list font. 
+  It accepts fixed and proportional fonts of various sizes.
+
+- Kickstart 1.3: The vertical and horizontal sliders (prop gadgets)
+  now use the same visual style as on kickstart 2.0+.
+
+- Kickstart 1.3: A window background pattern is applied similarly as 
+  on kickstart 2.0+.
+  
+- Kickstart 1.3: Changing the font via Prefs now works. Previously it
+  was disabled because I had been too lazy back in the dayz.
+
+- Kickstart 1.3: Window resizing using the resize gadget 
+  is enabled. For some reason I assumed that kick 1.3 did not allow 
+  a custom resize gadget so I didn't even test it. I was wrong!
+
+
+## New music formats:
+
+- Mark Cooksey
+  - Eagleplayer "mark cooksey" by Wanted Team.
+  - Plays most Mark Cooksey modules that I found. I tried
+    this player earlier in v2.49 but couldn't figure out why it 
+    didn't work. Turns out there were two bugs in Hippo which caused
+    problems, now fixed.
+
+
+## Notes:
+
+Used vasm v1.9 to build Hippo for the first time. Should not cause any 
+issues hopefully. Previous versions were assembled with Asm-Pro v1.17.
+
+
+## Known issues recap:
+
+- AOS4: There are various issues when running on AOS4, I've been 
+  told. 
+- Sonic Arranger module "svensktoppen" may cause a crash.
+- Oktalyzer module "1 love night dub.okta" may cause a crash.
+- There are some invalid S3M modules around with an uneven 
+  length orders table. These will crash Hippo.
+- THX/AHX pattern scope sometimes displays an empty channel
+  where actual data should be displayed.
+
 
 
 ------------------------------------------------------------------------------
