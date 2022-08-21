@@ -28214,7 +28214,7 @@ loadfile
         move.l  d1,d3
         ;mulu    #163,d4	
 		move	WINSIZX(a5),d5
-		sub	#101,d5
+		sub	#101+2,d5
 		mulu	d5,d4
         divu    #100,d4
 
