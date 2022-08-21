@@ -37643,6 +37643,7 @@ p_digiboosterpro
 
 	popm	d1-a6
 
+	DPRINT	"DIGIBooster pro init: %ld"
 	
 	tst.l	d0
 	beq.b	.x
