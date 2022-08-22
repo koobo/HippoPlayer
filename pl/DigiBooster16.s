@@ -70,7 +70,18 @@ testi	=	0
 
 	bsr.b	init
 
-loop	btst	#6,$bfe001
+loop	
+.1	cmp.b	#$30,$dff006
+	bne.b	.1
+.2	cmp.b	#$31,$dff006
+	beq.b	.2
+	move	#$ff0,$dff180
+
+;	bsr	db_music
+
+	clr	$dff180
+
+	btst	#6,$bfe001
 	bne.b	loop
 
 	bsr.w	db_end
@@ -349,6 +360,8 @@ nofast:
 	move.l	4.w,a6	
 	move.w	296(a6),d0	
 
+	move.b	#1,oldcpu
+
 	btst	#0,d0
 	beq.s	mc68010
 	move.b	#1,oldcpu
@@ -371,6 +384,7 @@ mc68040:
 	move.w	#14-1,wdma
 	move.l	#$10002,memtype
 newcpu
+
 	bsr.w	allocmixbuffers
 	tst.b	d7
 	bne.w	exit		; if there's no mem just exit this shit
@@ -4088,5 +4102,5 @@ channel4:	ds.b	chanarea
 	section	module,data_p
 ;module:	incbin	"music:digi/religious.digi"
 ;module:	incbin	"sys:music/exo/digiboos/digi.crazy_cat"
-module:	incbin	"sys:music/exo/digiboos/digi.rave_base"
+module:	incbin	"dh2:music/exo/digiboos/digi.rave_base"
  endc

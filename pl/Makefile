@@ -4,6 +4,7 @@ INCLUDE=-I$(HOME)/A/Asm/Include -I.. -I../Include
 ASM=vasmm68k_mot
 EXE=-m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -D_test=0
 EXE020=-m68020 -no-opt -kick1hunks -Fhunkexe -nosym -D_test=0
+EXE020opt=-m68020 -kick1hunks -Fhunkexe -nosym -D_test=0
 BIN=-m68000 -no-opt -Fbin -ldots -D_test=0
 COMPRESS=shrinkler -w -p -d -9
 
@@ -92,7 +93,7 @@ bin/bpsm: bpsm.S
 bin/CustomMade_v1: CustomMade_v1.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/dbpro: DBM0player_v2.16.s
-	$(ASM) $(INCLUDE) $(EXE020) -nocase -o $@ "$<"
+	$(ASM) $(INCLUDE) $(EXE020opt) -nocase -o $@ "$<"
 bin/Delta1: Delta1.0.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/digi: DigiBooster16.s
