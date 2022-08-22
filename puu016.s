@@ -37494,6 +37494,7 @@ p_digibooster
 	lea	.stopcont(pc),a2
 	st	(a2)
 
+	DPRINT	"DIGIBooster init"
 	move.l	digiboosterroutines(a5),a3
 	jsr	$20+0(a3)
 	pop	a5
@@ -37509,6 +37510,8 @@ p_digibooster
 
 	movem.l	a0-a3,.pos
 	bsr.w	.volu
+
+	DPRINT	"ok"
 
 	moveq	#0,d0
 	rts	
