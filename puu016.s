@@ -29158,6 +29158,10 @@ tutki_moduuli2
 	bsr.w	id_digiboosterpro_
 	tst.l	d0
 	beq.b	.goPublic
+	bsr		id_aon8
+	tst.l	d0
+	beq.b	.goPublic
+	
 
 	tst.b	ahi_use(a5)
 	bne.b	.ahitun
@@ -38398,7 +38402,7 @@ p_aon8
 	p_NOP
 	p_NOP
 	p_NOP
-	jmp 	.id_aon(pc)
+	jmp 	.id(pc)
 	jmp	author_twice(pc)
 	dc.w 	pt_aon8
 	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
@@ -38479,7 +38483,14 @@ p_aon8
 	move.l	aonroutines(a5),a0
 	jmp		.OFFSET_CONT(a0)
 
-.id_aon
+.id
+	bsr.b	id_aon8
+	bne.b	.no
+	bsr.w	moveModuleToPublicMem
+	moveq	#0,d0
+.no	rts
+
+id_aon8
 	cmp.l	#"AON8",(a4)		* aon 8 channel
 	bra.w	idtest
 
