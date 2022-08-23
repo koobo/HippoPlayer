@@ -2,14 +2,16 @@
 
 INCLUDE=-I$(HOME)/A/Asm/Include -I.. -I../Include 
 ASM=vasmm68k_mot
-EXE=-m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -D_test=0
-EXE020=-m68020 -no-opt -kick1hunks -Fhunkexe -nosym -D_test=0
-EXE020opt=-m68020 -kick1hunks -Fhunkexe -nosym -D_test=0
-BIN=-m68000 -no-opt -Fbin -ldots -D_test=0
+EXE=-m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
+EXEopt=-m68000 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
+EXE020=-m68020 -no-opt -kick1hunks -Fhunkexe -nosym -DTEST=0
+EXE020opt=-m68020 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
+BIN=-m68000 -no-opt -Fbin -ldots -DTEST=0
 COMPRESS=shrinkler -w -p -d -9
 
 TARGETS=\
 	bin/Aon4 \
+	bin/Aon8 \
 	bin/CustomMade_v1 \
 	bin/DaveLowe \
 	bin/Delta1 \
@@ -41,6 +43,7 @@ TARGETS=\
 
 COMPRESSED_TARGETS=\
 	shr/Aon4.shr \
+	shr/Aon8.shr \
 	shr/CustomMade_v1.shr \
 	shr/DaveLowe.shr \
 	shr/Delta1.shr \
@@ -87,7 +90,9 @@ bin/DaveLowe: Dave\ Lowe_v3.asm
 bin/SonicArranger: Sonic\ Arranger_v1.asm
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/Aon4: aon4channel.s
-	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(EXEopt) -o $@ "$<"
+bin/Aon8: aon8_player8ch_18feb19953.s
+	$(ASM) $(INCLUDE) $(EXE020opt) -o $@ "$<"
 bin/bpsm: bpsm.S	
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/CustomMade_v1: CustomMade_v1.s
@@ -142,6 +147,8 @@ bin/vss: vss.s
 # Compress
 
 shr/Aon4.shr:             bin/Aon4
+	$(COMPRESS) "$<" "$@"
+shr/Aon8.shr:             bin/Aon8
 	$(COMPRESS) "$<" "$@"
 shr/CustomMade_v1.shr:    bin/CustomMade_v1
 	$(COMPRESS) "$<" "$@"

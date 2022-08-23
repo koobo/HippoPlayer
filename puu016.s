@@ -32738,6 +32738,7 @@ groupFormats
  ifne FEATURE_P61A
 	dr.w 	p_player
  endif
+ 	dr.w 	p_aon8
 	dc.w 	0
 
 
@@ -38291,11 +38292,10 @@ p_aon
 	p_NOP
 	p_NOP
 	jmp 	.id_aon(pc)
-	jmp	.author(pc)
+	jmp	author_twice(pc)
 	dc.w 	pt_aon
 	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"Art Of Noise 4ch",0
-.a	dc.b	"Bastian Spiegel (Twice/Lego)",0
  even
 
 .OFFSET_INIT = $20+0
@@ -38303,10 +38303,6 @@ p_aon
 .OFFSET_END  = $20+8
 .OFFSET_STOP = $20+12
 .OFFSET_CONT = $20+16
-
-.author
-	pushpea	.a(pc),d0
-	rts
 
 .init
 	bsr.w	varaa_kanavat
@@ -38371,6 +38367,116 @@ p_aon
 .id_aon
 	cmp.l	#"AON4",(a4)		* aon 4 channel
 	bra.w	idtest
+
+
+
+******************************************************************************
+* Artofnoise 8ch
+******************************************************************************
+
+author_twice	
+	pushpea	.a(pc),d0
+	rts
+.a	dc.b	"Bastian Spiegel (Twice/Lego)",0
+ even
+
+p_aon8
+	jmp	.init(pc)
+	jmp 	.play(pc)
+	p_NOP
+	jmp	.end(pc)
+	jmp	.stop(pc)
+	jmp	.cont(pc)
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	p_NOP
+	jmp 	.id_aon(pc)
+	jmp	author_twice(pc)
+	dc.w 	pt_aon8
+	dc      pf_cont!pf_stop!pf_end!pf_ciakelaus!pf_poslen!pf_volume!pf_scope!pf_quadscopePoke
+	dc.b	"Art Of Noise 8ch",0
+ even
+
+.OFFSET_INIT = $20+0
+.OFFSET_PLAY = $20+4
+.OFFSET_END  = $20+8
+.OFFSET_STOP = $20+12
+.OFFSET_CONT = $20+16
+
+.init
+	move.l	(a5),a0
+	btst	#AFB_68020,AttnFlags+1(a0)
+	bne.b	.okk
+	moveq	#ier_hardware,d0
+	rts
+.okk
+	bsr.w	varaa_kanavat
+	beq.b	.ok
+	moveq	#ier_nochannels,d0
+	rts
+.ok	
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
+	lea	aonroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	bsr.w	rem_ciaint
+	bra.w	vapauta_kanavat
+.ok3
+	pushm	d1-a6
+
+	move.l	moduleaddress(a5),a0
+	lea	mainvolume(a5),a1
+	lea	songover(a5),a2 
+	lea	ciaint_setTempoFromD0(pc),a3
+	lea	scopeData(a5),a4
+	move.l	aonroutines(a5),a6
+	jsr	.OFFSET_INIT(a6)
+	tst.l	d0
+	bne.b	.noMem
+	; Provides patterninfo but there is a visual delay due
+	; to the mix buffer mechanism, so disabled for now.
+	;move.l	a0,deliPatternInfo(a5)
+
+.x	popm	d1-a6
+	rts
+
+.noMem
+	moveq	#ier_nomem,d0
+	bra.b	.x
+
+.end
+	bsr.w	rem_ciaint
+	move.l	aonroutines(a5),a0
+	jsr	.OFFSET_END(a0)
+	bsr.w	clearsound
+	bra.w	vapauta_kanavat
+
+.play
+	move.l	aonroutines(a5),a0
+	jsr	.OFFSET_PLAY(a0)
+	move	d0,pos_nykyinen(a5) 
+	move	d1,pos_maksimi(a5)
+	rts
+
+.stop
+	move.l	aonroutines(a5),a0
+	jmp		.OFFSET_STOP(a0)
+	
+.cont	
+	move.l	aonroutines(a5),a0
+	jmp		.OFFSET_CONT(a0)
+
+.id_aon
+	cmp.l	#"AON8",(a4)		* aon 8 channel
+	bra.w	idtest
+
 
 
 ******************************************************************************

@@ -105,6 +105,7 @@ head	macro
 	head	pt_jasonpage,jasonpage
 	head	pt_specialfx,specialfx
 	head	pt_davidwhittaker,davidwhittaker
+	head	pt_aon8,aon8
 
 	dc	0
 	dc.l	0,0
@@ -277,6 +278,10 @@ sampleplay2
 aon41
 	incbin aon4.shr
 aon42
+
+aon81
+	incbin aon8.shr
+aon82
 
 dbpro1
 	incbin dbpro.shr
