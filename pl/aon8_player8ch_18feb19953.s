@@ -2429,6 +2429,8 @@ mix_play0		movem.l	d0-a6,-(sp)
 			move.l	16(a0),(a0)
 			move.l	d0,16(a0)	
 			move.l	d0,$dff0a0
+			move.l	scopeAddr(pc),a5
+			move.l	d0,ns_loopstart+scope_ch1(a5)
 			lea	mix_data+mix_datasize*0,a5
 			lea	mix_data+mix_datasize*1,a6
 			move.l	16(a0),a4
@@ -2449,6 +2451,8 @@ mix_play1		movem.l	d0-a6,-(sp)
 			move.l	16(a0),(a0)	
 			move.l	d0,16(a0)	
 			move.l	d0,$dff0b0
+			move.l	scopeAddr(pc),a5
+			move.l	d0,ns_loopstart+scope_ch2(a5)
 			lea	mix_data+mix_datasize*2,a5
 			lea	mix_data+mix_datasize*3,a6
 			move.l	16(a0),a4
@@ -2469,6 +2473,8 @@ mix_play2		movem.l	d0-a6,-(sp)
 			move.l	16(a0),(a0)	
 			move.l	d0,16(a0)	
 			move.l	d0,$dff0c0
+			move.l	scopeAddr(pc),a5
+			move.l	d0,ns_loopstart+scope_ch3(a5)
 			lea	mix_data+mix_datasize*4,a5
 			lea	mix_data+mix_datasize*5,a6
 			move.l	16(a0),a4
@@ -2489,6 +2495,8 @@ mix_play3		movem.l	d0-a6,-(sp)
 			move.l	16(a0),(a0)	
 			move.l	d0,16(a0)	
 			move.l	d0,$dff0d0
+			move.l	scopeAddr(pc),a5
+			move.l	d0,ns_loopstart+scope_ch4(a5)
 			lea	mix_data+mix_datasize*6,a5
 			lea	mix_data+mix_datasize*7,a6
 			move.l	16(a0),a4
