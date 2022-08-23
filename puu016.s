@@ -26763,6 +26763,11 @@ noteScroller2:
 	* row number in D2 as BCD
 	moveq	#0,d3
 	move	d6,d3
+	* Keep visual range at 0..99, larger won't fit
+	cmp		#100,d3
+	blo.b	.s
+	sub		#100,d3
+.s
 	divu	#10,d3 
 	lsl.b	#4,d3
 	move	d3,d2
@@ -26794,7 +26799,7 @@ noteScroller2:
 	* Next row in BCD
 	moveq	#1,d3
 	abcd.b	d3,d2
-
+	
 	* get loop counter
 	swap	d7
 
