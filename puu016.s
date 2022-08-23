@@ -35329,7 +35329,7 @@ p_oktalyzer
 	jmp 	.id(pc)
 	jmp	.author(pc)
 	dc.w 	pt_oktalyzer * type
-	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont!pf_scope
+	dc	pf_volume!pf_end!pf_poslen!pf_stop!pf_cont!pf_scope!pf_quadscopePoke
 	dc.b	"Oktalyzer",0
 .a	dc.b	"Armin Sander",0
  even
@@ -35344,7 +35344,7 @@ p_oktalyzer
 .offset_vol  = $20+12 
 
 
-.okstop	;st	playing(a5)	* ei sallita pysäyttelemistä
+.okstop	
 	move	#$f,$dff096
 	rts
 .okcont
@@ -35373,9 +35373,10 @@ p_oktalyzer
 .ok3	
 	move.l	moduleaddress(a5),a0
 	lea	songover(a5),a1
-	move.l	oktaroutines(a5),a2
+	lea	scopeData(a5),a2
+	move.l	oktaroutines(a5),a3
 	push	a5
-	jsr	.offset_init(a2)
+	jsr	.offset_init(a3)
 	pop	a5
 	tst	d0
 	bne.b	.mem

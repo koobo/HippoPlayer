@@ -8,10 +8,34 @@ testi = 0
 	include	misc/eagleplayer.i
 	include	mucro.i
 
+
+
+	* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+
  ifne testi
 
 	lea	Music,a0 
 	lea	songend_,a1
+	lea scope_,a2
 	jsr	init_
 
 	move	#$40,d0
@@ -34,6 +58,7 @@ loop
 	rts
 
 songend_	dc	0
+scope_		ds.b 	scope_size
 
 		section	dc,data_c
 
@@ -53,6 +78,7 @@ Music:		incbin	"m:exo/oktalyzer/mohr/1 love night dub.okta"
 songEndAddr		dc.l	0
 moduleAddr 		dc.l 	0
 chipAddr		dc.l	0
+scopeAddr		dc.l	0
 
 	rsreset 
 chip_18c0	rs.l 	$14
@@ -73,6 +99,7 @@ numOfVoices	dc		0
 init_ 
 	move.l	a0,moduleAddr
 	move.l	a1,songEndAddr
+	move.l	a2,scopeAddr
 
 	move.l	4.w,a6
 	move.l	#chipSize,d0
@@ -134,8 +161,122 @@ end_
 .x	rts
 
 
+setPer
+	push	a4
+	sub.l	#$dff0a0,a4
+	add.l	scopeAddr(pc),a4
+	move	d0,ns_period(a4)
+	pop		a4
+	rts
+
+setAddr
+	push	a4
+	sub.l	#$dff0a0,a4
+	add.l	scopeAddr(pc),a4
+	move.l	d2,ns_start(a4)
+	move.l	d2,ns_loopstart(a4)
+	pop	a4
+	rts
 
 
+setLen
+	push	a4
+	sub.l	#$dff0a0,a4
+	add.l	scopeAddr(pc),a4
+	move	d1,ns_length(a4)
+	move	d1,ns_replen(a4)
+	pop	a4
+	rts
+
+
+setLenB
+	push	a4
+	sub.l	#$dff0a0,a4
+	add.l	scopeAddr(pc),a4
+	move	d0,ns_length(a4)
+	move	d0,ns_replen(a4)
+	pop	a4
+	rts
+
+
+setRep
+	push	a1
+	sub.l	#$dff0a0,a1
+	add.l	scopeAddr(pc),a1
+	move.l	d1,ns_loopstart(a1)
+	move	6(a0),ns_replen(a1)
+	pop	a1
+	rts
+
+setRepLen1
+	push	a5
+	move.l	scopeAddr(pc),a5
+;	move.l	(a1),scope_ch1+ns_start(a5)
+;	move.w	4(a1),scope_ch1+ns_length(a5)
+	move.l	(a1),scope_ch1+ns_loopstart(a5)
+	move.w	4(a1),scope_ch1+ns_replen(a5)
+	pop		a5
+	rts	
+
+setRepLen2
+	push	a5
+	move.l	scopeAddr(pc),a5
+;	move.l	$1c(a1),scope_ch2+ns_start(a5)
+;	move.w	$20(a1),scope_ch2+ns_length(a5)
+	move.l	$1c(a1),scope_ch2+ns_loopstart(a5)
+	move.w	$20(a1),scope_ch2+ns_replen(a5)
+	pop		a5
+	rts	
+
+setRepLen3
+	push	a5
+	move.l	scopeAddr(pc),a5
+	;move.l	$38(a1),scope_ch3+ns_start(a5)
+	;move.w	$3c(a1),scope_ch3+ns_length(a5)
+	move.l	$38(a1),scope_ch3+ns_loopstart(a5)
+	move.w	$3c(a1),scope_ch3+ns_replen(a5)	
+	;move	#$0f0,$dff180
+	pop		a5
+	rts	
+
+
+setRepLen4
+	push	a5
+	move.l	scopeAddr(pc),a5
+;	move.l	$54(a1),scope_ch4+ns_start(a5)
+;	move.w	$58(a1),scope_ch4+ns_length(a5)
+	move.l	$54(a1),scope_ch4+ns_loopstart(a5)
+	move.w	$58(a1),scope_ch4+ns_replen(a5)
+	pop		a5
+	rts	
+
+setVol1
+	push	a1
+	move.l	scopeAddr(pc),a1
+	move	d0,ns_vol+scope_ch1(a1)
+	pop		a1
+	rts
+
+setVol2
+	push	a1
+	move.l	scopeAddr(pc),a1
+	move	d0,ns_vol+scope_ch2(a1)
+	pop		a1
+	rts
+
+setVol3
+	push	a1
+	move.l	scopeAddr(pc),a1
+	move	d0,ns_vol+scope_ch3(a1)
+	pop		a1
+	rts
+
+setVol4
+	push	a1
+	move.l	scopeAddr(pc),a1
+	move	d0,ns_vol+scope_ch4(a1)
+	pop		a1
+	rts
 
 PatternInfo
 	ds.b	PI_Stripes
@@ -163,6 +304,8 @@ PatternInit
 	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
 	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
 	rts
+
+
 
 
 FindBlock	MOVEM.L	D2/D3,-(SP)
@@ -324,22 +467,44 @@ lbC000194	OR.W	(A0)+,D1
 	ROR.W	#5,D1
 	MOVE.W	D1,lbW000202
 	LEA	$DFF000,A6
+	* Disable DMA
 	MOVE.W	#15,$96(A6)
+	move.l	scopeAddr(pc),a1
 	move.l	lbL0018C0(pc),A0
 	MOVE.L	A0,$A0(A6)
 	MOVE.L	A0,$B0(A6)
 	MOVE.L	A0,$C0(A6)
 	MOVE.L	A0,$D0(A6)
+	move.l	a0,scope_ch1+ns_start(a1)
+	move.l	a0,scope_ch2+ns_start(a1)
+	move.l	a0,scope_ch3+ns_start(a1)
+	move.l	a0,scope_ch4+ns_start(a1)
+	move.l	a0,scope_ch1+ns_loopstart(a1)
+	move.l	a0,scope_ch2+ns_loopstart(a1)
+	move.l	a0,scope_ch3+ns_loopstart(a1)
+	move.l	a0,scope_ch4+ns_loopstart(a1)
 	MOVEQ	#$29,D0
 	MOVE.W	D0,$A4(A6)
 	MOVE.W	D0,$B4(A6)
 	MOVE.W	D0,$C4(A6)
 	MOVE.W	D0,$D4(A6)
+	move	d0,scope_ch1+ns_length(a1)
+	move	d0,scope_ch2+ns_length(a1)
+	move	d0,scope_ch3+ns_length(a1)
+	move	d0,scope_ch4+ns_length(a1)
+	move	d0,scope_ch1+ns_replen(a1)
+	move	d0,scope_ch2+ns_replen(a1)
+	move	d0,scope_ch3+ns_replen(a1)
+	move	d0,scope_ch4+ns_replen(a1)
 	MOVE.W	#$358,D0
 	MOVE.W	D0,$A6(A6)
 	MOVE.W	D0,$B6(A6)
 	MOVE.W	D0,$C6(A6)
 	MOVE.W	D0,$D6(A6)
+	move	d0,scope_ch1+ns_period(a1)
+	move	d0,scope_ch2+ns_period(a1)
+	move	d0,scope_ch3+ns_period(a1)
+	move	d0,scope_ch4+ns_period(a1)
 	MOVE.W	#$FF,$9E(A6)
 	BSR.W	dmaWait
 	BSR.W	dmaWait
@@ -729,10 +894,13 @@ lbC0005CA	MOVE.W	$DFF01E,D0
 	LEA	lbL0017F0,A0
 	LEA	$DFF0A0,A1
 	MOVEQ	#3,D0
+	; loopstart?
 lbC0005EA	MOVE.L	(A0),D1
 	BEQ.S	lbC0005F6
 	MOVE.L	D1,(A1)
 	MOVE.W	6(A0),4(A1)
+	bsr		setRep
+
 lbC0005F6	LEA	$10(A0),A0
 	LEA	$10(A1),A1
 	DBRA	D0,lbC0005EA
@@ -1110,24 +1278,28 @@ lbC000972	BSR.W	lbC000B58
 	MULU	D3,D0
 	LSR.W	#6,D0
 	MOVE.W	D0,(A1)
+	bsr		setVol1
 lbC00099E	BTST	#1,D1
 	BNE.S	lbC0009B0
 	MOVE.B	1(A0),D0
 	MULU	D2,D0
 	LSR.W	#6,D0
 	MOVE.W	D0,$10(A1)
+	bsr		setVol2
 lbC0009B0	BTST	#2,D1
 	BNE.S	lbC0009C2
 	MOVE.B	2(A0),D0
 	MULU	D2,D0
 	LSR.W	#6,D0
 	MOVE.W	D0,$20(A1)
+	bsr		setVol3
 lbC0009C2	BTST	#3,D1
 	BNE.S	lbC0009D4
 	MOVE.B	3(A0),D0
 	MULU	D3,D0
 	LSR.W	#6,D0
 	MOVE.W	D0,$30(A1)
+	bsr		setVol4
 lbC0009D4	MOVE.B	lbB0010C4(PC),D0
 	BEQ.S	lbC0009E4
 	BCLR	#1,$BFE001
@@ -1165,34 +1337,38 @@ lbC000A2A	ADDQ.W	#8,A2
 
 lbC000A3E	MOVE.B	D5,D3
 	AND.B	lbB0010CA(PC),D3
-	BNE.B	lbC000ACA
+	BNE	lbC000ACA
 	MOVEQ	#0,D3
 	MOVE.B	(A2),D3
-	BEQ.B	lbC000ACA
+	BEQ	lbC000ACA
 	SUBQ.W	#1,D3
 	MOVEQ	#0,D0
 	MOVE.B	1(A2),D0
 	LSL.W	#3,D0
 	MOVE.L	0(A0,D0.W),D2
-	BEQ.B	lbC000ACA
+	BEQ		lbC000ACA
 	ADD.W	D0,D0
 	ADD.W	D0,D0
 	LEA	lbL0010D0,A1
 	ADD.W	D0,A1
 	TST.W	$1E(A1)
-	BEQ.B	lbC000ACA
+	BEQ	lbC000ACA
 	MOVE.L	$14(A1),D1
 	LSR.L	#1,D1
 	TST.W	D1
-	BEQ.B	lbC000ACA
+	BEQ	lbC000ACA
+	* DMA off
 	MOVE.W	D5,$DFF096
 	OR.W	D5,D4
+	* sample start?
 	MOVE.L	D2,(A4)
+	bsr		setAddr
 	MOVE.W	D3,8(A3)
 	ADD.W	D3,D3
 	MOVE.W	0(A6,D3.W),D0
 	MOVE.W	D0,10(A3)
 	MOVE.W	D0,6(A4)
+	bsr		setPer
 	MOVE.L	A0,-(SP)
 	LEA	lbL0010BC(PC),A0
 	MOVEQ	#0,D0
@@ -1202,6 +1378,8 @@ lbC000A3E	MOVE.B	D5,D3
 	MOVE.W	$1A(A1),D0
 	BNE.S	lbC000ACC
 	MOVE.W	D1,4(A4)
+	bsr		setLen
+		
 	MOVE.L	lbL002A94(pc),2(A3)
 	MOVE.W	#1,6(A3)
 lbC000ACA	RTS
@@ -1211,6 +1389,7 @@ lbC000ACC	MOVE.W	D0,6(A3)
 	MOVE.W	$18(A1),D1
 	ADD.W	D1,D0
 	MOVE.W	D0,4(A4)
+	bsr		setLenB
 	ADD.L	D1,D1
 	ADD.L	D2,D1
 	MOVE.L	D1,2(A3)
@@ -1222,6 +1401,7 @@ lbC000AE6	LEA	lbW0010C6(PC),A0
 	CLR.W	(A0)
 	OR.W	#$8000,D0
 	LEA	$DFF006,A0
+	* Enable DMA
 	MOVE.W	D0,$90(A0)
 	MOVE.B	(A0),D1
 lbC000B00	CMP.B	(A0),D1
@@ -1234,18 +1414,22 @@ lbC000B06	CMP.B	(A0),D1
 	BEQ.S	lbC000B20
 	MOVE.L	(A1),$9A(A0)
 	MOVE.W	4(A1),$9E(A0)
+	bsr		setRepLen1
 lbC000B20	BTST	#1,D0
 	BEQ.S	lbC000B32
 	MOVE.L	$1C(A1),$AA(A0)
 	MOVE.W	$20(A1),$AE(A0)
+	bsr		setRepLen2
 lbC000B32	BTST	#2,D0
 	BEQ.S	lbC000B44
 	MOVE.L	$38(A1),$BA(A0)
 	MOVE.W	$3C(A1),$BE(A0)
+	bsr		setRepLen3
 lbC000B44	BTST	#3,D0
 	BEQ.S	lbC000B56
 	MOVE.L	$54(A1),$CA(A0)
 	MOVE.W	$58(A1),$CE(A0)
+	bsr		setRepLen4
 lbC000B56	RTS
 
 lbC000B58	LEA	lbW001830,A2
@@ -1716,20 +1900,26 @@ lbC000FBE	MOVEM.L	D0/D1/A6,-(SP)
 	MOVE.B	lbB0010CA(PC),D1
 	MOVE.W	#15,D0
 	EOR.B	D1,D0
+	* Enable DMA
 	MOVE.W	D0,$96(A6)
+	* Zero volume
 	MOVEQ	#0,D0
 	BTST	#0,D1
 	BNE.S	lbC000FE2
 	MOVE.W	D0,$A8(A6)
+	bsr		setVol1
 lbC000FE2	BTST	#1,D1
 	BNE.S	lbC000FEC
 	MOVE.W	D0,$B8(A6)
+	bsr		setVol2
 lbC000FEC	BTST	#2,D1
 	BNE.S	lbC000FF6
 	MOVE.W	D0,$C8(A6)
+	bsr		setVol3
 lbC000FF6	BTST	#3,D1
 	BNE.S	lbC001000
 	MOVE.W	D0,$D8(A6)
+	bsr		setVol4
 lbC001000	MOVEM.L	(SP)+,D0/D1/A6
 	RTS
 

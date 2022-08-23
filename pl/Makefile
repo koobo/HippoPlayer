@@ -120,7 +120,7 @@ bin/imploder: imploder.s
 bin/jamc: jamcrackerproreplay.asm
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/okta: okta.s
-	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(EXEopt) -o $@ "$<"
 bin/ps3m: Hippo_PS3M3.s
 	$(ASM) $(INCLUDE) $(EXE020) -o $@ "$<"
 bin/pumatracker: Puma_Replay.S
