@@ -139,25 +139,26 @@ _LVOAllocMem	EQU	-$C6
 _LVOCause	EQU	-$B4
 ****************************************************************************
 binstart
-lbC000000	BRA	InitCia
+lbC000000	
+	jmp	InitCia(pc)
 
-	BRA	InitPlayer
+	jmp	InitPlayer(pc)
 
-	BRA	InitModule
+	jmp	InitModule(pc)
 
-	BRA	InitSubSong
+	jmp	InitSubSong(pc)
 
-	BRA	Interrupt
+	jmp	Interrupt(pc)
 
-	BRA	StopSong
+	jmp	StopSong(pc)
 
-	BRA	KillPlayer
+	jmp	KillPlayer(pc)
 
-	BRA	KillCia
+	jmp	KillCia(pc)
 
-	BRA	NextPattern
+	jmp	NextPattern(pc)
 
-	BRA	PrevPattern
+	jmp	PrevPattern(pc)
 
 BSS_P	dc.b	0	;Dynamic mem pointer
 	dc.b	0

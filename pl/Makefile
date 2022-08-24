@@ -7,6 +7,7 @@ EXEopt=-m68000 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 EXE020=-m68020 -no-opt -kick1hunks -Fhunkexe -nosym -DTEST=0
 EXE020opt=-m68020 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 BIN=-m68000 -no-opt -Fbin -ldots -DTEST=0
+BINopt=-m68000 -Fbin -ldots -DTEST=0
 COMPRESS=shrinkler -w -p -d -9
 
 TARGETS=\
@@ -140,7 +141,7 @@ bin/tfmx: tfmx.asm
 bin/tfmx7c: tfmx7c.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/thx: thx.asm
-	$(ASM) $(INCLUDE) $(BIN) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(BINopt) -o $@ "$<"
 bin/vss: vss.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 
