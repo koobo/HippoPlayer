@@ -1,5 +1,8 @@
 ;APS0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B
-testi = 0
+
+ ifnd TEST
+TEST = 0
+ endif
 
 
 	incdir	include:
@@ -31,7 +34,7 @@ scope_pad	  rs.b  1
 scope_size    rs.b  0
 
 
- ifne testi
+ ifne TEST
 
 	lea	Music,a0 
 	lea	songend_,a1
@@ -62,12 +65,12 @@ scope_		ds.b 	scope_size
 
 		section	dc,data_c
 
-;Music:		incbin	"m:exo/oktalyzer/captain/popcorn.okta"
-Music:		incbin	"m:exo/oktalyzer/mohr/1 love night dub.okta"
+Music:		incbin	"m:exo/oktalyzer/captain/okt.popcorn"
+;Music:		incbin	"m:exo/oktalyzer/mohr/1 love night dub.okta"
 
 
 
-	SECTION	absplay2rs000000,CODE
+	SECTION	absplay2rs000000,CODE_p
  endc
 
 	jmp	init_(pc)
@@ -169,6 +172,23 @@ setPer
 	pop		a4
 	rts
 
+setPerB
+	push	a1
+	sub.l	#$dff0a6,a1
+	add.l	scopeAddr(pc),a1
+	move	d1,ns_period(a1)
+	pop		a1
+	rts
+
+
+setPerC
+	push	a4
+	sub.l	#$dff0a0,a4
+	add.l	scopeAddr(pc),a4
+	move	10(a3),ns_period(a4)
+	pop		a4
+	rts
+
 setAddr
 	push	a4
 	sub.l	#$dff0a0,a4
@@ -205,6 +225,9 @@ setRep
 	add.l	scopeAddr(pc),a1
 	move.l	d1,ns_loopstart(a1)
 	move	6(a0),ns_replen(a1)
+	; ??
+	;move.l	d1,ns_start(a1)
+	;move	6(a0),ns_length(a1)
 	pop	a1
 	rts
 
@@ -860,12 +883,14 @@ lbC00054E	MOVE.L	A1,(A2)
 lbC00056A	MOVEM.L	D2/D3/A2,-(SP)
 	LEA	lbL0017F0,A0
 	LEA	$DFF01E,A2
+	; $DFF0A6
 	LEA	$88(A2),A1
 	MOVEQ	#3,D0
 lbC000580	MOVE.W	4(A0),D1
 	BEQ.S	lbC00058C
 	MOVE.W	D1,(A1)
 	MOVE.W	(A2),10(A0)
+	bsr		setPerB
 lbC00058C	LEA	$10(A0),A0
 	LEA	$10(A1),A1
 	DBRA	D0,lbC000580
@@ -885,8 +910,10 @@ lbC0005B4	LEA	$10(A0),A0
 	MOVEM.L	(SP)+,D2/D3/A2
 	RTS
 
+* 8 channel buffer switch magic
 lbC0005C6	MOVE.W	lbW000202(PC),D1
-lbC0005CA	MOVE.W	$DFF01E,D0
+lbC0005CA	
+	MOVE.W	$DFF01E,D0
 	AND.W	D1,D0
 	CMP.W	D1,D0
 	BNE.S	lbC0005CA
@@ -899,8 +926,9 @@ lbC0005EA	MOVE.L	(A0),D1
 	BEQ.S	lbC0005F6
 	MOVE.L	D1,(A1)
 	MOVE.W	6(A0),4(A1)
-	bsr		setRep
-
+	;move	6(a0),$104
+	bsr	setRep
+	;move	#$f00,$dff180
 lbC0005F6	LEA	$10(A0),A0
 	LEA	$10(A1),A1
 	DBRA	D0,lbC0005EA
@@ -1397,7 +1425,7 @@ lbC000ACC	MOVE.W	D0,6(A3)
 
 lbC000AE6	LEA	lbW0010C6(PC),A0
 	MOVE.W	(A0),D0
-	BEQ.S	lbC000B56
+	BEQ.W	lbC000B56
 	CLR.W	(A0)
 	OR.W	#$8000,D0
 	LEA	$DFF006,A0
@@ -1508,14 +1536,18 @@ lbC000C00	ADD.W	D1,10(A3)
 	CMP.W	#$358,10(A3)
 	BLE.S	lbC000C12
 	MOVE.W	#$358,10(A3)
-lbC000C12	MOVE.W	10(A3),6(A4)
+lbC000C12	
+	MOVE.W	10(A3),6(A4)
+	bsr		setPerC
 	RTS
 
 lbC000C1A	SUB.W	D1,10(A3)
 	CMP.W	#$71,10(A3)
 	BGE.S	lbC000C2C
 	MOVE.W	#$71,10(A3)
-lbC000C2C	MOVE.W	10(A3),6(A4)
+lbC000C2C	
+	MOVE.W	10(A3),6(A4)
+	bsr		setPerC
 	RTS
 
 lbC000C34	MOVE.W	8(A3),D2
@@ -1635,6 +1667,7 @@ lbC000D08	CMP.W	#$23,D2
 lbC000D10	ADD.W	D2,D2
 	MOVE.W	0(A6,D2.W),D0
 	MOVE.W	D0,6(A4)
+	;setPer
 	MOVE.W	D0,10(A3)
 	RTS
 
