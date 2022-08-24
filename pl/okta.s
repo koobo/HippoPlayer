@@ -1,7 +1,7 @@
 ;APS0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B0000000B
 
  ifnd TEST
-TEST = 0
+TEST = 1
  endif
 
 
@@ -65,8 +65,8 @@ scope_		ds.b 	scope_size
 
 		section	dc,data_c
 
-Music:		incbin	"m:exo/oktalyzer/captain/okt.popcorn"
-;Music:		incbin	"m:exo/oktalyzer/mohr/1 love night dub.okta"
+;Music:		incbin	"m:exo/oktalyzer/captain/okt.popcorn"
+Music:		incbin	"m:exo/oktalyzer/mohr/1 love night dub.okta"
 
 
 
@@ -421,7 +421,7 @@ lbC0000BA	MOVE.L	#$50424F44,D0
 lbC0000DC	TST.L	(A5)
 	BEQ.S	lbC0000F0
 	MOVE.L	#$53424F44,D0
-	BSR.B	FindHunk	* ENFORCER HIT
+	BSR.B	FindHunk	* ENFORCER HIT when d7=$22
 	MOVE.L	A0,(A1)
 	MOVE.L	D0,4(A1)
 lbC0000F0	ADDQ.W	#8,A1
