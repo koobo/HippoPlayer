@@ -141,8 +141,7 @@ bin/tfmx: tfmx.asm
 bin/tfmx7c: tfmx7c.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/thx: thx.asm
-	# Optimization breaks this
-	$(ASM) $(INCLUDE) $(BIN) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(BINopt) -o $@ "$<"
 bin/vss: vss.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 

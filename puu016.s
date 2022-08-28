@@ -37738,8 +37738,8 @@ thx_author
 
 p_thx
 	jmp	.init(pc)
-	p_NOP	; Hippo CIA not used in AHX/THX
-	jmp	.vb(pc)
+	jmp .ahxCIAInterrupt(pc)
+	p_NOP   ; vb not used
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
@@ -37827,7 +37827,8 @@ p_thx
 	move.b	mainvolume+1(a5),.ahx_pMainVolume(a0)
 	rts
 
-.vb	move.l	thxroutines(a5),a0
+.updateInfo
+	move.l	thxroutines(a5),a0
 	move.l	.ahxBSS_P(a0),a0
 
 	move	.ahx_currentSongPos(a0),pos_nykyinen(a5)
@@ -37848,7 +37849,12 @@ p_thx
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-
+	bsr.w	init_ciaint
+	beq.b	.ok2
+	bsr.w	vapauta_kanavat
+	moveq	#ier_nociaints,d0
+	rts
+.ok2
 	lea	thxroutines(a5),a0
 	bsr.w	allocreplayer
 	bne.w	vapauta_kanavat
@@ -37859,13 +37865,12 @@ p_thx
 	DPRINT	"AHX init"
 	pushm	d1-a6
 
-	lea	.ahxCIAInterrupt(pc),a0
-	moveq	#0,d0
-	move.l	thxroutines(a5),a2
-	jsr	.ahxInitCIA(a2)
-	tst	d0
-	bne.w	.thxInitFailed2
-
+;	lea	.ahxCIAInterrupt(pc),a0
+;	moveq	#0,d0
+;	move.l	thxroutines(a5),a2
+;	jsr	.ahxInitCIA(a2)
+;	tst	d0
+;	bne.w	.thxInitFailed2
 
 	moveq	#0,d0	* loadwavesfile if possible
 	moveq	#0,d1	* calculate filters (ei thx v 1.xx!!)
@@ -37878,15 +37883,16 @@ p_thx
 
 	sub.l   a0,a0	* auto alloc fast mem
 	sub.l   a1,a1	* auto alloc chip
-	move.l	thxroutines(a5),a2
+	lea	ciaint_setTempoFromD0(pc),a2 * pass CIA timer poke routine
+	move.l	thxroutines(a5),a3
 	jsr	setMainWindowWaitPointer
-	jsr	.ahxInitPlayer(a2)
+	jsr	.ahxInitPlayer(a3)
 	jsr	clearMainWindowWaitPointer
 	tst	d0
 	beq.b	.ok4
 
-	move.l	thxroutines(a5),a2
-	jsr	.ahxKillCIA(a2)
+;	move.l	thxroutines(a5),a3
+;	jsr	.ahxKillCIA(a3)
 	bsr.w	vapauta_kanavat
 	moveq	#ier_nomem,d0
 	bra.b	.xxx
@@ -37894,18 +37900,18 @@ p_thx
 	
 	moveq	#0,d0			* normal speed
 	move.l	moduleaddress(a5),a0
-	jsr	.ahxInitModule(a2)
+	jsr	.ahxInitModule(a3)
 	tst	d0
 	bne.b	.thxInitFailed
 
-	move.l	.ahxBSS_P(a2),a0
+	move.l	.ahxBSS_P(a3),a0
 	clr	maxsongs(a5)
 	move.b	.ahx_pSubsongs(a0),maxsongs+1(a5)
 
 	moveq	#0,d0
 	move	songnumber(a5),d0
 	moveq   #0,d1
-	jsr	.ahxInitSubSong(a2)
+	jsr	.ahxInitSubSong(a3)
 
 	bsr.w	.volu
 	bsr.w	.patternInit
@@ -37917,8 +37923,8 @@ p_thx
 	rts	
 
 .thxInitFailed
-	move.l	thxroutines(a5),a2
-	jsr	.ahxKillCIA(a2)
+;	move.l	thxroutines(a5),a2
+;	jsr	.ahxKillCIA(a2)
 .thxInitFailed2
 	
 	bsr.w	vapauta_kanavat
@@ -37929,11 +37935,14 @@ p_thx
 
 
 .ahxCIAInterrupt
-	move.l	thxroutines+var_b,a0
+	move.l	thxroutines(a5),a0
+	* All regs preserved:
 	jsr	.ahxInterrupt(a0)
+	bsr		.updateInfo
 	bra.w	.updateStripes
 
 .end	DPRINT	"AHX end"
+	bsr.w	rem_ciaint
 	bsr.b	.halt
 	bra.w	vapauta_kanavat
 
@@ -37941,10 +37950,10 @@ p_thx
 	bra.w	.ok3
 
 .halt	
-	pushm	all
-	move.l	thxroutines(a5),a2
-	jsr	.ahxKillCIA(a2)
-	popm	all
+;	pushm	all
+;	move.l	thxroutines(a5),a2
+;	jsr	.ahxKillCIA(a2)
+;	popm	all
 .halt2	move.l	thxroutines(a5),a2
 	jsr	.ahxStopSong(a2)
 	jsr	.ahxKillPlayer(a2)
@@ -37985,7 +37994,7 @@ p_thx
 
 .updateStripes
 	pushm	d0-d1/a0-a4
-	lea	var_b,a4
+	move.l	a5,a4
 	bsr.b	.updateScope
 
 	* Skip if not needed
