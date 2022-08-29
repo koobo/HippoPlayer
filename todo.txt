@@ -1,3 +1,26 @@
+BUG:
+- filebrowser
+- directory: tim follin/ghouls'n'ghosts
+- not alphabetized correctly, file names are 28 chars,
+  sort uses 24 only
+
+BUG: 3.2
+a:
+- set big font "times 24"
+- play
+- change window sizes with gadget
+- set small font "sevenalone  7"
+- window buttons are missing, can't resize, buttons not reacting
+
+b:
+- resize a bit to wider
+- play "memories.mod" 
+- set big font "times 24"
+- resize more wide
+- buttons go missing, last log entry:
+  Open window pos=x
+  wd_MinHeight=143 wd_MaxHeight=1271
+
 WISHLISH
 + Dir browser
 + Patternscope for other formats too?
@@ -58,11 +81,32 @@ Formats
 + steve turner
 
 - art of noise 8ch
-- mark cooksey
++ mark cooksey
 - MultiMediaSound
 - sound images
 - sound master 
 + special fx
+
+FIXED: BUG:
+- kick 1.3!
+- "commando.mc" as saved state start up
+- wait until plays
+- push eject with TAB
+- software error!
+- last log: "freemodule release data"
+
+- eject wORKS
+- again TAB
+- somekinda loop according to log
+
+
+FIXED: BUG: also on previous versions, eg. 2.49
+- non-debug build
+- non-asm build
+- start state: play "mutant chestnut attack.ahx"
+- open info window
+- error 80000002
+- .prepareInfoWindowContent
 
 FIXED: BUG:
 - set window title height to 8
