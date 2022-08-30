@@ -36,7 +36,9 @@ Tools used in development:
 # Build instructions
 
 The standard include files will be searched from _include:_ directory, these are not included.
-Some custom includes and some others are included. Tested to compile with ASM-One v1.28 and ASM-Pro v1.17. 
+Some custom includes and some others are included. Tested to compile with ASM-One v1.28, ASM-Pro v1.17, vasm v1.9. 
+
+## Manual
 
 Build steps:
 - Assemble _puu016.s_ to get the main binary.  It should start if you have _reqtools.library_ available. 
@@ -48,6 +50,10 @@ Build steps:
   
 To build the Protracker replay routine, assemble the file _kpl14.s_ and save the binary as _kpl_. To build individual replay routines, assemble one in the _pl_ dir and save the binary (or executable) into _bin_. 
 **NOTE**: Most of the replay routines are saved as Amiga executables so they can be relocated properly, a few are just binary blobs of PC-relative code.
+
+## Makefile
+
+Edit the include paths in the makefiles to suit your environment and ensure _vasmm68k_mot_ and _shrinkler_ are in path, then run _make_.
 
 # Notes
 

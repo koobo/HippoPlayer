@@ -1,0 +1,3 @@
+bin/*
+!bin/pretracker.bin
+!bin/p61a

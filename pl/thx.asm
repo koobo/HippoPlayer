@@ -4,12 +4,12 @@
 	include	misc/eagleplayer.i
 	incdir	include/
 	include	patternInfo.i
-	incdir
 
+ ifnd TEST
+TEST=1
+ endif
 
-test=0
-
- ifne test
+ ifne TEST
 
 ahxInitCIA          = 0*4
 ahxInitPlayer       = 1*4
@@ -47,11 +47,6 @@ ahx_pvtAudioPeriod  = 100       ;word          (relative to ahx_pVoiceXTemp!)
 ahx_pvtAudioVolume  = 102       ;word          (relative to ahx_pVoiceXTemp!)
 
 main
-	lea	ahxCIAInterrupt(pc),a0
-	moveq	#0,d0
-	move.l	thxroutines(pc),a2
-	jsr	ahxInitCIA(a2)
-
 
 	moveq	#0,d0	* loadwavesfile if possible
 	moveq	#0,d1	* calculate filters (ei thx v 1.xx!!)
@@ -64,13 +59,14 @@ main
 
 	sub.l   a0,a0	* auto alloc fast mem
 	sub.l   a1,a1	* auto alloc chip
-	move.l	thxroutines(pc),a2
-	jsr	ahxInitPlayer(a2)
+	move.l	thxroutines(pc),a6
+	lea	setCiaTimer_(pc),A2
+	jsr	ahxInitPlayer(a6)
 	tst	d0
 	beq.b	.ok4
 
 	move.l	thxroutines(pc),a2
-	jsr	ahxKillCIA(a2)
+;	jsr	ahxKillCIA(a2)
 	bra.b	.xxx
 .ok4
 	
@@ -90,13 +86,27 @@ main
 	moveq   #0,d1
 	jsr	ahxInitSubSong(a2)
 
+	lea	ahxCIAInterrupt(pc),a0
+	moveq	#0,d0
+	move.l	thxroutines(pc),a2
+;	jsr	ahxInitCIA(a2)
+	tst.l	d0
+
 .wait
+.1	cmp.b	#$60,$dff006
+	bne.b	.1
+.2	cmp.b	#$60,$dff006
+	beq.b	.2
+	move	#$0f0,$dff180
+	jsr	Interrupt
+	clr	$dff180
+
 	btst	#6,$bfe001
-	bne	.wait
+	bne.b	.wait
 
 .thxInitFailed
 	move.l	thxroutines(pc),a2
-	jsr	ahxKillCIA(a2)
+	;jsr	ahxKillCIA(a2)
 .halt2	
 	move.l	thxroutines(pc),a2
 	jsr	ahxStopSong(a2)
@@ -110,25 +120,28 @@ main
 
 
 ahxCIAInterrupt
-	;move	#$f00,$dff180
+	move	#$f00,$dff180
 	move.l	thxroutines(pc),a0
 	jsr	ahxInterrupt(a0)
-	;move	#$000,$dff180
+	move	#$000,$dff180
 	rts
 
 thxroutines	dc.l	lbC000000
+setCiaTimer_	dc.l	.dummy
+
+.dummy	rts
 
 	section da,data
 
 
-
+	incdir
 module
 ;	incbin	"m:mortimer twang/jennipha.ahx"
-	incbin	"m:ahx/pink/wearing the inside out.ahx"
-;	incbin	"m:ahx/curt cool/rubber spine.ahx"
+;	incbin	"m:ahx/pink/wearing the inside out.ahx"
+	incbin	"m:ahx/curt cool/rubber spine.ahx"
 
 	section repl,code
- endif
+ endif ; TEST
 
 
 _LVOOldOpenLibrary	EQU	-$198
@@ -139,25 +152,26 @@ _LVOAllocMem	EQU	-$C6
 _LVOCause	EQU	-$B4
 ****************************************************************************
 binstart
-lbC000000	BRA	InitCia
+lbC000000	
+	jmp	InitCia(pc)
 
-	BRA	InitPlayer
+	jmp	InitPlayer(pc)
 
-	BRA	InitModule
+	jmp	InitModule(pc)
 
-	BRA	InitSubSong
+	jmp	InitSubSong(pc)
 
-	BRA	Interrupt
+	jmp	Interrupt(pc)
 
-	BRA	StopSong
+	jmp	StopSong(pc)
 
-	BRA	KillPlayer
+	jmp	KillPlayer(pc)
 
-	BRA	KillCia
+	jmp	KillCia(pc)
 
-	BRA	NextPattern
+	jmp	NextPattern(pc)
 
-	BRA	PrevPattern
+	jmp	PrevPattern(pc)
 
 BSS_P	dc.b	0	;Dynamic mem pointer
 	dc.b	0
@@ -170,9 +184,9 @@ modulePointer	dc.b	0
 	dc.b	0
 	dc.b	0
 	dc.b	0
-lbL00003C	dc.l	0
-lbB000040	dc.b	0
-lbB000041	dc.b	$81
+ciaTimerAvailable	dc.l	0
+ciaTimerValueHi	dc.b	0
+ciaTimerValueLo	dc.b	$81
 	dc.b	0
 	dc.b	0
 	dc.b	'$'
@@ -180,26 +194,31 @@ lbB000041	dc.b	$81
 	dc.b	0
 	dc.b	$3A
 
-InitCia	LEA	lbC000000(PC),A4
+
+
+InitCia	
+	rts
+ REM
+	LEA	lbC000000(PC),A4
 	SUBQ.W	#1,D0
-	BMI.S	lbC000088
+	BMI.S	initCiaInterrupt
 	BEQ.S	lbC00007E
 	MOVEQ	#-1,D0
 	RTS
 
-lbC00007E	MOVE.L	A0,lbB000250-lbC000000(A4)
-	ST	lbL00003C-lbC000000(A4)
+lbC00007E	MOVE.L	A0,pokeCiaTimerPtr-lbC000000(A4)
+	ST	ciaTimerAvailable-lbC000000(A4)
 	RTS
 
-lbC000088	MOVE.L	A0,lbW00024C-lbC000000(A4)
-	LEA	lbC000200(PC),A0
-	MOVE.L	A0,lbB000250-lbC000000(A4)
+initCiaInterrupt	MOVE.L	A0,softIntServerCodePtr-lbC000000(A4)
+	LEA	pokeCiaTimer(PC),A0
+	MOVE.L	A0,pokeCiaTimerPtr-lbC000000(A4)
 	LEA	AHXcAbyss.MSG(PC),A0
-	MOVE.L	A0,lbW000226-lbC000000(A4)
-	LEA	lbL00023A(PC),A0
-	MOVE.L	A0,lbW00022A-lbC000000(A4)
-	LEA	lbC000232(PC),A0
-	MOVE.L	A0,lbW00022E-lbC000000(A4)
+	MOVE.L	A0,ciaIntServerName-lbC000000(A4)
+	LEA	softIntServerStruct(PC),A0
+	MOVE.L	A0,ciaIntServerData-lbC000000(A4)
+	LEA	ciaIntServerCode(PC),A0
+	MOVE.L	A0,ciaIntServerCodePtr-lbC000000(A4)
 	LEA	ciaaresource.MSG(PC),A1
 	MOVE.L	A1,-(SP)
 	MOVE.B	#$61,3(A1)
@@ -207,60 +226,60 @@ lbC000088	MOVE.L	A0,lbW00024C-lbC000000(A4)
 	MOVE.L	4.W,A6
 	JSR	_LVOOpenResource(A6)
 	LEA	lbC000000(PC),A4
-	MOVE.L	D0,lbW00025A-lbC000000(A4)
+	MOVE.L	D0,ciaaResourceBase-lbC000000(A4)
 	MOVE.L	(SP)+,A1
 	MOVE.B	#$62,3(A1)
 	MOVEQ	#0,D0
 	JSR	_LVOOpenResource(A6)
 	LEA	lbC000000(PC),A4
-	MOVE.L	D0,lbW00025E-lbC000000(A4)
-	MOVE.W	#$3781,lbB000040-lbC000000(A4)
+	MOVE.L	D0,ciabResourceBase-lbC000000(A4)
+	MOVE.W	#$3781,ciaTimerValueHi-lbC000000(A4)
 	LEA	$BFE001,A3
-	LEA	lbL00021C(PC),A4
+	LEA	ciaIntServerStruct(PC),A4
 	MOVEQ	#0,D6
-	MOVE.L	lbW00025A(PC),A6
+	MOVE.L	ciaaResourceBase(PC),A6
 	LEA	(A4),A1
 	MOVE.L	D6,D0
 	JSR	-6(A6)
 	TST.L	D0
-	BEQ.S	lbC00014C
+	BEQ.S	gotCiaTimer
 	LEA	(A4),A1
 	MOVEQ	#1,D6
 	MOVE.L	D6,D0
 	JSR	-6(A6)
 	TST.L	D0
-	BEQ.S	lbC00014C
+	BEQ.S	gotCiaTimer
 	LEA	$BFD000,A3
 	MOVEQ	#0,D6
-	MOVE.L	lbW00025E(PC),A6
+	MOVE.L	ciabResourceBase(PC),A6
 	LEA	(A4),A1
 	MOVE.L	D6,D0
 	LEA	lbC000000(PC),A4
-	MOVE.L	D0,lbB000254-lbC000000(A4)
+	MOVE.L	D0,ciaTimerNumber-lbC000000(A4)
 	JSR	-6(A6)
 	TST.L	D0
-	BEQ.S	lbC00014C
+	BEQ.S	gotCiaTimer
 	LEA	(A4),A1
 	MOVEQ	#1,D6
 	MOVE.L	D6,D0
 	LEA	lbC000000(PC),A4
-	MOVE.L	D0,lbB000254-lbC000000(A4)
+	MOVE.L	D0,ciaTimerNumber-lbC000000(A4)
 	JSR	-6(A6)
 	TST.L	D0
-	BEQ.S	lbC00014C
+	BEQ.S	gotCiaTimer
 	MOVEQ	#-1,D0
-	BRA	lbC000184
+	BRA.B	lbC000184
 
-lbC00014C	LEA	lbC000000(PC),A4
-	MOVE.L	A3,lbW000262-lbC000000(A4)
-	MOVE.L	A6,lbW000266-lbC000000(A4)
-	MOVE.B	D6,lbB00026A-lbC000000(A4)
+gotCiaTimer	LEA	lbC000000(PC),A4
+	MOVE.L	A3,activeCiaRegister-lbC000000(A4)
+	MOVE.L	A6,activeCiaResourceBase-lbC000000(A4)
+	MOVE.B	D6,activeCiaTimerNumber-lbC000000(A4)
 	LEA	$400(A3),A2
 	TST.B	D6
 	BEQ.S	lbC000168
 	LEA	$600(A3),A2
-lbC000168	MOVE.B	lbB000041(PC),(A2)
-	MOVE.B	lbB000040(PC),$100(A2)
+lbC000168	MOVE.B	ciaTimerValueLo(PC),(A2)
+	MOVE.B	ciaTimerValueHi(PC),$100(A2)
 	LEA	$E00(A3),A2
 	TST.B	D6
 	BEQ.S	lbC00017E
@@ -269,37 +288,42 @@ lbC00017E	MOVE.B	#$11,(A2)
 	CLR.L	D0
 lbC000184	LEA	lbC000000(PC),A4
 	TST.W	D0
-	SEQ	lbL00003C-lbC000000(A4)
+	SEQ	ciaTimerAvailable-lbC000000(A4)
 	ST	lbW000258-lbC000000(A4)
 	RTS
 
-KillCia	LEA	lbC000000(PC),A4
-	TST.B	lbL00003C-lbC000000(A4)
+KillCia	
+	LEA	lbC000000(PC),A4
+	TST.B	ciaTimerAvailable-lbC000000(A4)
 	BEQ.S	lbC0001D4
-	SF	lbL00003C-lbC000000(A4)
+	SF	ciaTimerAvailable-lbC000000(A4)
 	TST.B	lbW000258-lbC000000(A4)
 	BEQ.S	lbC0001D4
-	MOVE.L	lbW000262(PC),A3
-	TST.B	lbB00026A-lbC000000(A4)
+	MOVE.L	activeCiaRegister(PC),A3
+	TST.B	activeCiaTimerNumber-lbC000000(A4)
 	BNE.S	lbC0001BA
 	MOVE.B	#0,$E00(A3)
 	BRA.S	lbC0001C0
 
 lbC0001BA	MOVE.B	#0,$F00(A3)
-lbC0001C0	MOVE.L	lbW000266(PC),A6
-	LEA	lbL00021C(PC),A1
+lbC0001C0	MOVE.L	activeCiaResourceBase(PC),A6
+	LEA	ciaIntServerStruct(PC),A1
 	LEA	lbC000000(PC),A4
-	MOVE.L	lbB000254-lbC000000(A4),D0
+	MOVE.L	ciaTimerNumber-lbC000000(A4),D0
 	JSR	-12(A6)
 lbC0001D4	RTS
+ EREM
 
-lbC0001D6	MOVEM.L	D0-D7/A0-A6,-(SP)
+KillCia
+	rts
+
+setCiaTimerValue	MOVEM.L	D0-D7/A0-A6,-(SP)
 	LEA	lbW0001F8(PC),A4
 	ADD.W	D3,D3
 	MOVE.W	0(A4,D3.W),D0
 	LEA	lbC000000(PC),A3
-	MOVE.W	D0,lbB000040-lbC000000(A3)
-	MOVE.L	lbB000250-lbC000000(A3),A4
+	;MOVE.W	D0,ciaTimerValueHi-lbC000000(A3)
+	MOVE.L	pokeCiaTimerPtr-lbC000000(A3),A4
 	JSR	(A4)
 	MOVEM.L	(SP)+,D0-D7/A0-A6
 	RTS
@@ -309,7 +333,8 @@ lbW0001F8	dc.w	$3781	;CIA timer values
 	dc.w	$1280
 	dc.w	$DE0
 
-lbC000200	MOVE.L	lbW000262(PC),A4
+ REM
+pokeCiaTimer	MOVE.L	activeCiaRegister(PC),A4
 	LEA	$400(A4),A4
 	TST.B	$26A(A3)
 	BEQ.S	lbC000212
@@ -318,50 +343,55 @@ lbC000212	MOVE.B	D0,(A4)
 	LSR.W	#8,D0
 	MOVE.B	D0,$100(A4)
 	RTS
-
-lbL00021C	dc.l	0
+ 
+ciaIntServerStruct	dc.l	0
 	dc.l	0
 	dc.w	$200
-lbW000226	dc.w	0
+ciaIntServerName	dc.w	0
 	dc.w	0
-lbW00022A	dc.w	0
+ciaIntServerData	dc.w	0
 	dc.w	0
-lbW00022E	dc.w	0
+ciaIntServerCodePtr	dc.w	0
 	dc.w	0
 
-lbC000232	JSR	_LVOCause(A6)
+ciaIntServerCode	JSR	_LVOCause(A6)
 	MOVEQ	#0,D0
 	RTS
 
-lbL00023A	dc.l	0
+softIntServerStruct	dc.l	0
 	dc.l	0
 	dc.w	$200
 	dc.w	0
 	dc.w	0
 	dc.l	$BFE001
-lbW00024C	dc.w	0
+softIntServerCodePtr	dc.w	0
 	dc.w	0
-lbB000250	dc.b	0
+ EREM
+pokeCiaTimerPtr	dc.b	0
 	dc.b	0
 	dc.b	0
 	dc.b	0
-lbB000254	dc.b	0
+ REM
+ciaTimerNumber	dc.b	0
 	dc.b	0
 	dc.b	0
 	dc.b	0
 lbW000258	dc.w	0
-lbW00025A	dc.w	0
+ciaaResourceBase	dc.w	0
 	dc.w	0
-lbW00025E	dc.w	0
+ciabResourceBase	dc.w	0
 	dc.w	0
-lbW000262	dc.w	0
+activeCiaRegister	dc.w	0
 	dc.w	0
-lbW000266	dc.w	0
+activeCiaResourceBase	dc.w	0
 	dc.w	0
-lbB00026A	dc.b	0
-ciaaresource.MSG	dc.b	'ciaa.resource',0
+activeCiaTimerNumber	dc.b	0
+ciaaresource.MSG	dc.b	'ciaa.resource',0 
+ EREM
+ 
 AHXcAbyss.MSG	dc.b	'AHX (c) Abyss!',0
-
+ even
+ 
 KillPlayer	MOVEM.L	D0-D7/A0-A6,-(SP)
 	MOVE.W	#15,$DFF096
 	LEA	lbC000000(PC),A5
@@ -458,6 +488,8 @@ InitPlayer	MOVEM.L	D1-D7/A0-A6,-(SP)
 	LEA	lbC000000(PC),A5
 	MOVE.W	D0,lbB0007FC-lbC000000(A5)
 	MOVE.W	D1,lbB0007FE-lbC000000(A5)
+	move.l	a2,pokeCiaTimerPtr-lbC000000(a5) ; added
+	ST	    ciaTimerAvailable-lbC000000(A5)  ; added
 	MOVE.L	A1,BSS_C-lbC000000(A5)
 	MOVE.L	A0,BSS_P-lbC000000(A5)
 	BNE.S	lbC0003A2
@@ -467,7 +499,7 @@ InitPlayer	MOVEM.L	D1-D7/A0-A6,-(SP)
 	MOVE.L	#$10001,D1
 	JSR	_LVOAllocMem(A6)
 	MOVE.L	D0,BSS_P-lbC000000(A5)
-	BEQ	lbC0007F8
+	BEQ.W	lbC0007F8
 lbC0003A2	LEA	BSS_C(PC),A6
 	TST.L	(A6)
 	BNE.S	lbC0003C6
@@ -479,9 +511,9 @@ lbC0003A2	LEA	BSS_C(PC),A6
 	MOVE.L	D0,BSS_C-lbC000000(A5)
 lbC0003C6	SF	lbB000800-lbC000000(A5)
 	TST.W	lbB0007FC-lbC000000(A5)
-	BNE	lbC00048C
+	BNE.W	lbC00048C
 	TST.W	lbB0007FE-lbC000000(A5)
-	BNE	lbC00048C
+	BNE.W	lbC00048C
 	MOVE.L	4.W,A6
 	MOVEQ	#0,D0
 	LEA	doslibrary.MSG(PC),A1
@@ -492,7 +524,7 @@ lbC0003C6	SF	lbB000800-lbC000000(A5)
 	MOVE.L	#$3ED,D2
 	JSR	-$1E(A6)
 	MOVE.L	D0,lbB000802-lbC000000(A5)
-	BEQ	lbC000482
+	BEQ.B	lbC000482
 	MOVE.L	lbB000802(PC),D1
 	MOVE.L	BSS_P(PC),D2
 	ADD.L	#$56C,D2
@@ -512,7 +544,7 @@ lbC00043A	DBRA	D7,lbC000430
 	MOVE.L	#$3ED,D2
 	JSR	-$1E(A6)
 	MOVE.L	D0,lbB000802-lbC000000(A5)
-	BEQ	lbC000482
+	BEQ.B	lbC000482
 	MOVE.L	lbB000802(PC),D1
 	MOVE.L	BSS_P(PC),D2
 	ADD.L	#$56C,D2
@@ -526,7 +558,7 @@ lbC000482	MOVE.L	A6,A1
 	MOVE.L	4.W,A6
 	JSR	_LVOCloseLibrary(A6)
 lbC00048C	TST.B	lbB000800-lbC000000(A5)
-	BNE	lbC000708
+	BNE.W	lbC000708
 	MOVE.L	BSS_P(PC),A1
 	ADD.L	#$31AF4,A1
 	MOVEQ	#5,D3
@@ -539,7 +571,7 @@ lbC0004A2	MOVE.W	D2,D5
 	MOVE.W	D2,D4
 	LSR.W	#1,D4
 	NEG.W	D4
-	BSR	lbC000324
+	BSR.W	lbC000324
 	LSL.W	#1,D2
 	DBRA	D3,lbC0004A2
 	MOVE.W	#3,D7
@@ -620,7 +652,7 @@ lbC00059A	ROR.L	#5,D0
 	ROR.L	#3,D0
 	DBRA	D7,lbC000582
 	TST.W	lbB0007FE-lbC000000(A5)
-	BNE	lbC000708
+	BNE.W	lbC000708
 	LEA	lbW001770(PC),A4
 	LEA	$AE6(A4),A5
 	MOVE.L	BSS_P(PC),A6
@@ -741,7 +773,7 @@ lbC0006E8	MOVE.B	D3,(A3)+
 	ADD.L	#9,D5
 	ADDQ.W	#1,$56A(A6)
 	CMP.W	#$1F,$56A(A6)
-	BLT	lbC0005DC
+	BLT.W	lbC0005DC
 lbC000708	MOVE.L	BSS_P(PC),A6
 	MOVE.B	#$40,1(A6)
 	MOVE.L	A6,A0
@@ -828,7 +860,7 @@ InitModule	MOVEM.L	D2-D7/A0-A6,-(SP)
 	MOVE.L	(A0)+,D1
 	CLR.B	D1
 	CMP.L	#$54485800,D1
-	BNE	lbC0008FA
+	BNE.W	lbC0008FA
 	ADDQ.W	#2,A0
 	MOVE.W	(A0)+,D1
 	BTST	#15,D1
@@ -837,14 +869,14 @@ InitModule	MOVEM.L	D2-D7/A0-A6,-(SP)
 	ROL.W	#3,D3
 	AND.W	#3,D3
 	BNE.S	lbC00086E
-	MOVE.B	lbL00003C(PC),D7
+	MOVE.B	ciaTimerAvailable(PC),D7
 	BEQ.S	lbC00087A
-	BSR	lbC0001D6
+	BSR.W	setCiaTimerValue
 	BRA.S	lbC00087A
 
-lbC00086E	MOVE.B	lbL00003C(PC),D7
-	BEQ	lbC0008FE
-	BSR	lbC0001D6
+lbC00086E	MOVE.B	ciaTimerAvailable(PC),D7
+	BEQ.W	lbC0008FE
+	BSR.W	setCiaTimerValue
 lbC00087A	MOVE.W	D3,6(A6)
 	AND.W	#$3FF,D1
 	MOVE.W	D1,$450(A6)
@@ -918,7 +950,7 @@ lbC000926	MOVE.W	D0,$44C(A6)
 	CLR.W	$44A(A6)
 	MOVEQ	#3,D6
 	LEA	14(A6),A0
-lbC000952	BSR	lbC00096C
+lbC000952	BSR.B	lbC00096C
 	ADD.W	#$E8,A0
 	DBRA	D6,lbC000952
 	MOVEM.L	(SP)+,D0-D7/A0-A5
@@ -964,24 +996,26 @@ lbC0009E4	ST	$3B6(A6)
 	RTS
 
 *  A1 = is_data = $BFE001
-Interrupt	MOVEM.L	D0-D7/A0-A6,-(SP)
+Interrupt
+	MOVEM.L	D0-D7/A0-A6,-(SP)
+	lea	$bfe001,a1 ; added
 	MOVE.L	BSS_P(PC),D6
-	BEQ	lbC000B06
+	BEQ.W	lbC000B06
 	MOVE.L	D6,A6
 	TST.W	4(A6)
-	BEQ	lbC000B06
+	BEQ.W	lbC000B06
 	LEA	$DFF000,A5
 	LEA	14(A6),A0
 	LEA	$A0(A5),A3
 	MOVEQ	#3,D7
-lbC000A10	BSR	lbC001650
+lbC000A10	BSR.W	lbC001650
 	ADD.W	#$E8,A0
 	ADD.W	#$10,A3
 	DBRA	D7,lbC000A10
 	TST.W	$3B0(A6)
-	BNE	lbC000A94
+	BNE.B	lbC000A94
 	TST.B	$3B2(A6)
-	BEQ	lbC000A7C
+	BEQ.B	lbC000A7C
 	MOVE.L	$452(A6),A3
 	MOVE.W	$44C(A6),D2		* current position
 	MOVE.W	D2,D3
@@ -1002,24 +1036,24 @@ lbC000A44	LSL.W	#3,D2
 	SF	$3B2(A6)
 lbC000A7C	MOVEQ	#3,D7
 	LEA	14(A6),A0
-lbC000A82	BSR	lbC000B0C
+lbC000A82	BSR.W	lbC000B0C
 	ADD.W	#$E8,A0
 	DBRA	D7,lbC000A82
 	MOVE.W	$3B4(A6),$3B0(A6)
 lbC000A94	MOVEQ	#3,D7
 	LEA	14(A6),A0
-lbC000A9A	BSR	lbC000F64
+lbC000A9A	BSR.W	lbC000F64
 	ADD.W	#$E8,A0
 	DBRA	D7,lbC000A9A
 	ADDQ.L	#1,8(A6)
 	SUBQ.W	#1,$3B0(A6)
-	BNE	lbC000B06
+	BNE.B	lbC000B06
 	TST.B	$3B6(A6)
-	BNE	lbC000AD6
+	BNE.B	lbC000AD6
 	ADDQ.W	#1,$44A(A6)	* increment pattpos
 	MOVE.W	$3AE(A6),D0	* patt length
 	CMP.W	$44A(A6),D0	* at the end of pattern?
-	BNE	lbC000B06
+	BNE.B	lbC000B06
 	MOVE.W	$44C(A6),$3BC(A6)
 	ADD.W	#1,$3BC(A6)	* increment songpos
 lbC000AD6	SF	$3B6(A6)
@@ -1039,7 +1073,7 @@ bailOut
 
 ; Get new note
 lbC000B0C	TST.B	$27(A0)
-	BNE	lbC000F62
+	BNE.W	lbC000F62
 	CLR.B	$29(A0)
 	CLR.B	$2A(A0)
 	MOVEQ	#0,D0
@@ -1158,7 +1192,7 @@ lbC000C4C	MOVE.B	2(A1,D0.L),D5
 lbC000C60	AND.W	#$3F0,D3
 	LSR.W	#4,D3
 	SUBQ.W	#1,D3
-	BMI	lbC000DD4
+	BMI.W	lbC000DD4
 	MOVE.W	#$40,$1E(A0)
 	CLR.W	$2E(A0)
 	CLR.W	$30(A0)
@@ -1167,7 +1201,7 @@ lbC000C60	AND.W	#$3F0,D3
 	LEA	$45A(A6),A3
 	LSL.W	#2,D3
 	MOVE.L	0(A3,D3.W),D3
-	BEQ	lbC000DD4
+	BEQ.W	lbC000DD4
 	MOVE.L	D3,A3
 	MOVE.L	D1,-(SP)
 	MOVEQ	#0,D1
@@ -1293,10 +1327,10 @@ lbC000E16	SF	$34(A0)
 	CMP.W	#5,D2
 	BEQ.S	lbC000E36
 	CMP.W	#3,D2
-	BNE	lbC000E6E
+	BNE.B	lbC000E6E
 	MOVEQ	#0,D5
 	MOVE.B	2(A1,D0.L),D5
-	BEQ	lbC000E36
+	BEQ.B	lbC000E36
 	MOVE.W	D5,$2E(A0)
 lbC000E36	MOVE.W	D1,D4
 	ROL.W	#6,D4
@@ -1339,7 +1373,7 @@ lbC000E98	CMP.W	#2,D2
 	ST	$34(A0)
 	SF	$35(A0)
 lbC000EB0	CMP.W	#14,D2
-	BNE	lbC000F1C
+	BNE.B	lbC000F1C
 	MOVEQ	#0,D5
 	MOVE.B	2(A1,D0.L),D5
 	MOVE.W	D5,D6
@@ -1401,9 +1435,9 @@ lbC000F5E	MOVE.B	D1,$1D(A0)
 lbC000F62	RTS
 
 lbC000F64	TST.B	$27(A0)
-	BNE	lbC0014F2
+	BNE.W	lbC0014F2
 	TST.B	$2B(A0)
-	BEQ	lbC000FDE
+	BEQ.B	lbC000FDE
 	MOVEQ	#0,D0
 	MOVE.B	0(A0),D0
 	MOVE.W	$44A(A6),D1
@@ -1468,7 +1502,7 @@ lbC001032	TST.B	$59(A0)
 	BEQ.S	lbC00104A
 	TST.B	$58(A0)
 	BNE.S	lbC001044
-	BSR	lbC000B0C
+	BSR.W	lbC000B0C
 	BRA.S	lbC00104A
 
 lbC001044	SUB.B	#1,$58(A0)
@@ -1478,7 +1512,7 @@ lbC00104A	MOVE.L	$10(A0),A3
 	MOVE.W	10(A0),D0
 	ADD.W	D0,4(A0)
 	SUB.B	#1,6(A0)
-	BNE	lbC0010C2
+	BNE.B	lbC0010C2
 	MOVE.B	3(A3),D0
 	LSL.W	#8,D0
 	MOVE.W	D0,4(A0)
@@ -1567,12 +1601,12 @@ lbC001134	MOVEQ	#0,D1
 	AND.B	#$3F,$3C(A0)
 lbC001168	MOVE.L	$10(A0),A3
 	TST.L	$10(A0)
-	BEQ	lbC001218
+	BEQ.W	lbC001218
 	MOVE.B	$15(A3),D5
 	CMP.B	$51(A0),D5
-	BEQ	lbC001206
+	BEQ.W	lbC001206
 	SUB.B	#1,$53(A0)
-	BGT	lbC001204
+	BGT.B	lbC001204
 	MOVE.L	$54(A0),A2
 	MOVE.W	(A2),D0
 	LSR.W	#7,D0
@@ -1590,12 +1624,12 @@ lbC0011AC	SF	$3A(A0)
 	MOVE.W	D0,D1
 	ROL.W	#6,D0
 	AND.L	#7,D0
-	BSR	lbC001500
+	BSR.W	lbC001500
 	ADDQ.W	#1,A2
 	ROL.W	#3,D1
 	AND.L	#7,D1
 	MOVE.L	D1,D0
-	BSR	lbC001500
+	BSR.W	lbC001500
 	MOVE.L	(SP)+,A2
 	MOVE.W	(A2),D0
 	MOVE.W	D0,D1
@@ -1624,11 +1658,11 @@ lbC001218	TST.B	$3A(A0)
 	BEQ.S	lbC001230
 	ST	$26(A0)
 lbC001230	CMP.B	#2,$14(A0)
-	BNE	lbC0012B0
+	BNE.B	lbC0012B0
 	TST.B	$3F(A0)
-	BEQ	lbC0012B0
+	BEQ.B	lbC0012B0
 	SUB.B	#1,$41(A0)
-	BGT	lbC0012B0
+	BGT.B	lbC0012B0
 	MOVE.B	$42(A0),D1
 	MOVE.B	$43(A0),D2
 	MOVE.B	$44(A0),D3
@@ -1663,9 +1697,9 @@ lbC00129A	ADD.B	$45(A0),D3
 	MOVE.L	$10(A0),A3
 	MOVE.B	$12(A3),$41(A0)
 lbC0012B0	TST.B	$47(A0)
-	BEQ	lbC001346
+	BEQ.W	lbC001346
 	SUB.B	#1,$49(A0)
-	BGT	lbC001346
+	BGT.W	lbC001346
 	MOVE.B	$4A(A0),D1
 	MOVE.B	$4B(A0),D2
 	MOVE.B	$4C(A0),D3
@@ -1713,7 +1747,7 @@ lbC001342	MOVE.B	D1,$49(A0)
 lbC001346	CMP.B	#2,$14(A0)
 	BEQ.S	lbC001356
 	TST.B	$23(A0)
-	BEQ	lbC0013D8
+	BEQ.W	lbC0013D8
 lbC001356	MOVE.L	A6,A3
 	ADD.L	#$31CEC,A3
 	MOVE.B	$4C(A0),D3
@@ -1766,7 +1800,7 @@ lbC0013D8	CMP.B	#3,$14(A0)
 	BNE.S	lbC0013E4
 	ST	$22(A0)
 lbC0013E4	TST.B	$22(A0)
-	BEQ	lbC00146C
+	BEQ.W	lbC00146C
 	MOVEQ	#0,D0
 	MOVE.B	$14(A0),D0
 	LEA	$55A(A6),A3
@@ -1821,7 +1855,7 @@ lbC00146C	MOVE.W	$16(A0),D1
 	ADD.W	D0,D1
 lbC001486	LEA	lbW0016D4(PC),A3
 	CMP.W	#$3C,D1
-	BLE	lbC001496
+	BLE.B	lbC001496
 	MOVE.W	#$3C,D1
 lbC001496	ADD.W	D1,D1
 	MOVE.W	0(A3,D1.W),D1
@@ -1867,14 +1901,14 @@ lbC001500	TST.W	D0
 	TST.B	$444(A6)
 	BEQ.S	lbC00152A
 	MOVE.B	(A2),D5
-	BEQ	lbC00164E
+	BEQ.W	lbC00164E
 	TST.B	$50(A0)
 	BEQ.S	lbC00151E
 	MOVE.B	$50(A0),D5
 	CLR.B	$50(A0)
 lbC00151E	MOVE.B	D5,$4C(A0)
 	ST	$22(A0)
-	BRA	lbC00164E
+	BRA.W	lbC00164E
 
 lbC00152A	SUBQ.W	#1,D0
 	BNE.S	lbC00153E
@@ -1882,7 +1916,7 @@ lbC00152A	SUBQ.W	#1,D0
 	MOVE.B	(A2),D5
 	MOVE.W	D5,$36(A0)
 	ST	$3A(A0)
-	BRA	lbC00164E
+	BRA.W	lbC00164E
 
 lbC00153E	SUBQ.W	#1,D0
 	BNE.S	lbC001554
@@ -1891,7 +1925,7 @@ lbC00153E	SUBQ.W	#1,D0
 	NEG.W	D5
 	MOVE.W	D5,$36(A0)
 	ST	$3A(A0)
-	BRA	lbC00164E
+	BRA.W	lbC00164E
 
 lbC001554	SUBQ.W	#1,D0
 	BNE.S	lbC001578
@@ -1902,13 +1936,13 @@ lbC001554	SUBQ.W	#1,D0
 	SUB.B	$15(A0),D6
 	LSR.B	D6,D5
 	MOVE.B	D5,$44(A0)
-	BRA	lbC00164E
+	BRA.W	lbC00164E
 
 lbC001570	SF	$25(A0)
-	BRA	lbC00164E
+	BRA.W	lbC00164E
 
 lbC001578	SUBQ.W	#1,D0
-	BNE	lbC0015E0
+	BNE.B	lbC0015E0
 	TST.B	$444(A6)
 	BEQ.S	lbC001588
 	MOVE.B	(A2),D5
@@ -1916,7 +1950,7 @@ lbC001578	SUBQ.W	#1,D0
 lbC001588	NOT.B	$3F(A0)
 	MOVE.B	$3F(A0),$40(A0)
 	MOVE.B	#1,$45(A0)
-	BRA	lbC00164E
+	BRA.W	lbC00164E
 
 lbC00159C	MOVE.B	D5,D6
 	AND.B	#15,D6
@@ -1935,7 +1969,7 @@ lbC0015BE	LSR.B	#4,D5
 	CMP.B	#15,D5
 	BNE.S	lbC0015DC
 	NEG.B	$4D(A0)
-lbC0015DC	BRA	lbC00164E
+lbC0015DC	BRA.B	lbC00164E
 
 lbC0015E0	SUBQ.W	#1,D0
 	BNE.S	lbC001608
@@ -1949,7 +1983,7 @@ lbC0015E0	SUBQ.W	#1,D0
 	LSL.W	#2,D5
 	ADD.W	D5,A3
 	MOVE.L	A3,$54(A0)
-	BRA	lbC00164E
+	BRA.B	lbC00164E
 
 lbC001608	SUBQ.W	#1,D0
 	BNE.S	lbC001642
@@ -1972,7 +2006,7 @@ lbC001628	SUB.W	#$50,D5
 	BRA.S	lbC00163E
 
 lbC00163A	MOVE.B	D5,$1D(A0)
-lbC00163E	BRA	lbC00164E
+lbC00163E	BRA.B	lbC00164E
 
 lbC001642	SUBQ.W	#1,D0
 	BNE.S	lbC00164E
@@ -1981,7 +2015,7 @@ lbC001642	SUBQ.W	#1,D0
 lbC00164E	RTS
 
 lbC001650	TST.B	$27(A0)
-	BNE	lbC0016CC
+	BNE.B	lbC0016CC
 	TST.B	$26(A0)
 	BEQ.S	lbC001668
 	MOVE.W	$64(A0),6(A3)
@@ -1991,7 +2025,7 @@ lbC001668	TST.B	$22(A0)
 	MOVEM.L	D2-D7/A1/A2/A4,-(SP)
 	MOVE.L	$5C(A0),A2
 	CMP.B	#3,$14(A0)
-	BEQ	lbC0016AE
+	BEQ.B	lbC0016AE
 	MOVEQ	#1,D6
 	MOVEQ	#5,D2
 	SUB.B	$15(A0),D2
@@ -2007,7 +2041,7 @@ lbC001690	MOVE.L	$60(A0),A1
 lbC0016A0	MOVE.L	(A1)+,(A2)+
 	DBRA	D7,lbC0016A0
 	DBRA	D6,lbC001690
-	BRA	lbC0016BC
+	BRA.B	lbC0016BC
 
 lbC0016AE	MOVE.L	$60(A0),A1
 	MOVEQ	#$4F,D7
@@ -4891,7 +4925,7 @@ lbW001C4A	dc.w	0
 	dc.w	$12E3
 binend
 
- ifne test
+ ifne TEST
 emptyTrack 	ds.b	192
 PatternInfo 	ds.b	PI_Stripes	
 Stripe1		dc.l	1
@@ -5015,5 +5049,5 @@ ConvertNote
 ptheader	ds.b	256
 
 
- endif
+ endif ; TEST
 

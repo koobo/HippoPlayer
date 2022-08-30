@@ -4,7 +4,7 @@
 	include	misc/deliplayer.i
 	include	hardware/intbits.i
 
-testi	=	1
+testi	=	0
 
  ifne testi
 

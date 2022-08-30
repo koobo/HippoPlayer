@@ -2,22 +2,24 @@
 
 IM=0
 SHR=1
+P61A=0
+
 	incdir	include/
 	include	playerIds.i
 
+ ifnd __VASM
 	auto	j\
 ;	auto	wb ram:HippoPlayer.group\
 	auto	wb s:HippoPlayer.group\
 	auto	a0\
 	auto	a1\
-	
+ 
 	lea	start(pc),a0
 	lea	pend,a1
 
 	rts
-
-
-
+ endif
+ 
 
 
 start	dc.b	"HiPxPla",25	* Tunnistus ja versio, 8 bytes
@@ -39,7 +41,9 @@ head	macro
 	head	pt_soundmon2,bpsm
 	head	pt_soundmon3,soundmon3
 	head	pt_oktalyzer,okta
+ ifne P61A
 	head	pt_player,p61a
+ endif
 	head	pt_hippelcoso,hippelcoso
 	head	pt_digibooster,digi
 	head	pt_thx,thx
@@ -101,6 +105,7 @@ head	macro
 	head	pt_jasonpage,jasonpage
 	head	pt_specialfx,specialfx
 	head	pt_davidwhittaker,davidwhittaker
+	head	pt_aon8,aon8
 
 	dc	0
 	dc.l	0,0
@@ -137,8 +142,10 @@ soundmon32
 okta1 incbin okta.im
 okta2 
 
+ ifne P61A
 p61a1 incbin p61a.im
 p61a2
+ endif
 
 hippelcoso1 incbin hippelcoso.im
 hippelcoso2
@@ -251,8 +258,10 @@ soundmon32
 okta1 incbin okta.shr
 okta2 
 
+ ifne P61A
 p61a1 incbin p61a.shr
 p61a2
+ endif
 
 hippelcoso1 incbin hippelcoso.shr
 hippelcoso2
@@ -269,6 +278,10 @@ sampleplay2
 aon41
 	incbin aon4.shr
 aon42
+
+aon81
+	incbin aon8.shr
+aon82
 
 dbpro1
 	incbin dbpro.shr
