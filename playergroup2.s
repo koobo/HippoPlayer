@@ -1,7 +1,8 @@
-;APS0000008C0000008C0000008C0000008C0000008C0000008C0000015D0000008C0000008C0000008C
+;APS000000CF000000CF000000CF000000CF000000CF000000CF0000019E000000CF000000CF000000CF
 
-IM=0
-SHR=1
+
+IM=0	; Select FImp compressed files
+SHR=1	; Select Shrinkler compressed files
 P61A=0
 
 	incdir	include/
@@ -19,7 +20,6 @@ P61A=0
 
 	rts
  endif
- 
 
 
 start	dc.b	"HiPxPla",25	* Tunnistus ja versio, 8 bytes
@@ -112,6 +112,12 @@ head	macro
 
 headend
 
+*********************************************************************
+*
+* File imploder
+*
+*********************************************************************
+
  ifne IM
 	incdir	pl/im/
 
@@ -162,6 +168,10 @@ sampleplay2
 aon41
 	incbin aon4.im
 aon42
+
+aon81
+	incbin aon8.im
+aon82
 
 dbpro1
 	incbin dbpro.im
@@ -226,129 +236,10 @@ startrekker2
 vss1
 	incbin	vss.im
 vss2
-  endif
 
-  ifne SHR
- 	incdir	pl/shr/
 
-ps3m1 incbin	ps3m.shr
-ps3m2
 
-tfmx1 incbin tfmx.shr
-tfmx2 
 
-tfmx7c1 incbin tfmx7c.shr
-tfmx7c2
-
-jamc1 incbin jamc.shr
-jamc2
-
-fc101 incbin fc10.shr
-fc102 
-
-fc141 incbin fc14.shr
-fc142 
-
-bpsm1 incbin bpsm.shr
-bpsm2 
-
-soundmon31 incbin soundmon3.shr
-soundmon32 
-
-okta1 incbin okta.shr
-okta2 
-
- ifne P61A
-p61a1 incbin p61a.shr
-p61a2
- endif
-
-hippelcoso1 incbin hippelcoso.shr
-hippelcoso2
-
-digi1 incbin digi.shr
-digi2 
-
-thx1 incbin thx.shr
-thx2 
-
-sampleplay1 incbin sampleplay.shr
-sampleplay2 
-
-aon41
-	incbin aon4.shr
-aon42
-
-aon81
-	incbin aon8.shr
-aon82
-
-dbpro1
-	incbin dbpro.shr
-dbpro2 
-
-pumatracker1 
-	incbin pumatracker.shr
-pumatracker2 
-
-gmc1
-	incbin gamemusiccreator.shr
-gmc2 
-
-medley1 
-	incbin imploder.shr
-medley2
-
-futureplayer1 
-	incbin future_player.shr
-futureplayer2 
-
-bendaglish1 
-	incbin bendaglish.shr
-bendaglish2 
-
-sidmonv21
-	incbin sidmon_v2.shr
-sidmonv22
-
-delta11 
-	incbin delta1.shr
-delta12
-
-soundfx1
-	incbin soundfx.shr
-soundfx2 
-
-gluemon1 
-	incbin gluemon13.shr
-gluemon2
-
-pretracker1 
-	incbin pretracker.bin.shr
-pretracker2 
-
-custommade1 
-	incbin custommade_v1.shr
-custommade2 
-
-sonicarranger1
-	incbin sonicarranger.shr
-sonicarranger2
-
-davelowe1
-	incbin davelowe.shr
-davelowe2 
-
-startrekker1 
-	incbin startrekker.shr
-startrekker2
-
-vss1
-	incbin	vss.shr
-vss2
-	endif
-
- ifne IM
 	incdir	eagleplayers/im/
 
 synthesis1
@@ -490,10 +381,154 @@ tme2
 timfollin21
 	incbin	"tim follin ii.im"
 timfollin22	
- 	endif
+
+steveturner1
+	incbin	"steve turner.im"
+steveturner2
+
+jasonpage1
+	incbin	"jason page.im"
+jasonpage2
+
+
+specialfx1
+	incbin	"special fx.im"
+specialfx2
+
+davidwhittaker1
+	incbin	"david whittaker.im"
+davidwhittaker2
+
+ 	endif ; IMP
+
+*********************************************************************
+*
+* Shrinkler
+*
+*********************************************************************
 
 
   ifne SHR
+ 	incdir	pl/shr/
+
+ps3m1 incbin	ps3m.shr
+ps3m2
+
+tfmx1 incbin tfmx.shr
+tfmx2 
+
+tfmx7c1 incbin tfmx7c.shr
+tfmx7c2
+
+jamc1 incbin jamc.shr
+jamc2
+
+fc101 incbin fc10.shr
+fc102 
+
+fc141 incbin fc14.shr
+fc142 
+
+bpsm1 incbin bpsm.shr
+bpsm2 
+
+soundmon31 incbin soundmon3.shr
+soundmon32 
+
+okta1 incbin okta.shr
+okta2 
+
+ ifne P61A
+p61a1 incbin p61a.shr
+p61a2
+ endif
+
+hippelcoso1 incbin hippelcoso.shr
+hippelcoso2
+
+digi1 incbin digi.shr
+digi2 
+
+thx1 incbin thx.shr
+thx2 
+
+sampleplay1 incbin sampleplay.shr
+sampleplay2 
+
+aon41
+	incbin aon4.shr
+aon42
+
+aon81
+	incbin aon8.shr
+aon82
+
+dbpro1
+	incbin dbpro.shr
+dbpro2 
+
+pumatracker1 
+	incbin pumatracker.shr
+pumatracker2 
+
+gmc1
+	incbin gamemusiccreator.shr
+gmc2 
+
+medley1 
+	incbin imploder.shr
+medley2
+
+futureplayer1 
+	incbin future_player.shr
+futureplayer2 
+
+bendaglish1 
+	incbin bendaglish.shr
+bendaglish2 
+
+sidmonv21
+	incbin sidmon_v2.shr
+sidmonv22
+
+delta11 
+	incbin delta1.shr
+delta12
+
+soundfx1
+	incbin soundfx.shr
+soundfx2 
+
+gluemon1 
+	incbin gluemon13.shr
+gluemon2
+
+pretracker1 
+	incbin pretracker.bin.shr
+pretracker2 
+
+custommade1 
+	incbin custommade_v1.shr
+custommade2 
+
+sonicarranger1
+	incbin sonicarranger.shr
+sonicarranger2
+
+davelowe1
+	incbin davelowe.shr
+davelowe2 
+
+startrekker1 
+	incbin startrekker.shr
+startrekker2
+
+vss1
+	incbin	vss.shr
+vss2
+
+
+
 	incdir	eagleplayers/shr/
 
 synthesis1
@@ -636,7 +671,6 @@ tme2
 timfollin21
 	incbin	"tim follin ii.shr"
 timfollin22	
-	endif
 
 
 steveturner1
@@ -657,5 +691,6 @@ davidwhittaker1
 	incbin	"david whittaker.shr"
 davidwhittaker2
 
+ endif ; SHR
 
 pend
