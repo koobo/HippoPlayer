@@ -11,8 +11,10 @@
 ;at least 1.09 (haven't tried older) is sufficient.
 
 DEBUG	=	0
+ ifnd TEST
 TEST 	= 	0
-
+ endif
+ 
  ifnd __VASM
    ifeq TEST
       auto	wo p:pl/bin/ps3m\
