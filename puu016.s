@@ -1423,7 +1423,8 @@ l_filename	rs.b	0		* tied.nimi ja polku alkaa tästä
 					* element size is dynamically calculated based on path length.
 l_size		rs.b	0
 
-
+remote_local = 0
+remote_modland = 1
 
 *********************************************************************************
 *
@@ -11823,7 +11824,7 @@ importModuleProgramFromData:
 	bsr.w	getmem
 	bne.b	.gotMem2
 	bsr.w	showOutOfMemoryError
-	bra.b	.x2	
+	bra		.x2	
 .gotMem2
 	move.l	d0,a2
 
@@ -11854,6 +11855,18 @@ importModuleProgramFromData:
 	addq	#1,a3
 	st	l_divider(a2)
 .notDiv2
+
+	cmp.b	#"M",(a3)
+	bne.b	.notMdl
+	cmp.b	#"D",1(a3)
+	bne.b	.notMdl
+	cmp.b	#"L",2(a3)
+	bne.b	.notMdl
+	cmp.b	#";",3(a3)
+	bne.b	.notMdl
+	addq	#4,a3
+	move.b	#remote_modland,l_remote(a2)
+.notMdl
 
 .le	move.b	(a3),(a0)+
 	cmp.b	#10,(a3)+
@@ -12072,6 +12085,14 @@ exportModuleProgramToFile
 	beq.b	.noDiv
 	move.b	#DIVIDER_MAGIC,(a1)+
 .noDiv
+
+	cmp.b	#remote_modland,l_remote(a3)
+	bne.b	.local
+	move.b	#"M",(a1)+
+	move.b	#"D",(a1)+
+	move.b	#"L",(a1)+
+	move.b	#";",(a1)+
+.local
 
 .co	move.b	(a0)+,(a1)+
 	bne.b	.co
@@ -27183,7 +27204,7 @@ loadmodule:
 	tst.b	l_remote(a3)
 	beq.b	.doLoadModule
 
-	move.b	d0,d7	* doublebuffering flags
+	move.b	d0,d7	* doublebuffering flag
 	lea	-200(sp),sp	* space for output path
 	move.l	sp,a0
 	jsr	fetchRemoteFile
