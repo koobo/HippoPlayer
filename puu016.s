@@ -17334,8 +17334,26 @@ doPrintNames
 .nodi
 
 	* name to print
-	move.l	a2,a0	
+	move.l	a2,a0		
 	
+	lea	-200(sp),sp
+	tst.b	l_remote(a3)
+	beq.b	.local
+	lea		l_filename(a3),a0
+	move.l	sp,a1
+.unescape
+	move.b	(a0)+,d0
+	cmp.b	#"%",d0
+	bne.b	.noEsc
+	bsr		convertHexTextToNumber
+.noEsc
+	move.b	d0,(a1)+
+	bne		.unescape
+
+	* cleaned up name 
+	move.l	sp,a0
+.local
+
 	* target x, y
 	moveq	#33+WINX,d0
 	move.l	d6,d1
@@ -17368,6 +17386,8 @@ doPrintNames
 
 	pop	d1	; restore start y
 	
+	lea		200(sp),sp * name buffer
+
 	; Display random marker if needed
 	tst.b	d7		* divider will not have a random play marker
 	bne.b	.noMarker
@@ -17446,7 +17466,7 @@ doPrintNames
 
 ***** Katkaisee prefixin nimestä a0:ssa
 
-cut_prefix
+cut_prefix:
 ;	isListDivider (a0)		* onko divideri?
 ;	beq.b	.xx
 
@@ -17466,6 +17486,35 @@ cut_prefix
 .x	popm	d0/a1
 .xx	rts
 
+
+* in:
+*   a0 = test pointer with two chars to convert
+* out: 
+*   d0 = number
+convertHexTextToNumber
+	moveq	#2-1,d2
+	moveq	#4,d1
+	moveq	#0,d0
+.loop
+	moveq	#0,d3
+	move.b	(a0)+,d3
+	cmp.b	#"a",d3
+	bhs.b	.hih 
+	cmp.b	#"A",d3
+	bhs.b	.hi 
+	sub.b	#"0",d3
+	bra.b	.lo
+.hih
+	sub.b	#"a"-10,d3
+	bra.b	.lo
+.hi
+	sub.b	#"A"-10,d3
+.lo
+	lsl	d1,d3
+	or	d3,d0
+	subq	#4,d1
+	dbf	d2,.loop
+	rts
 
 *******************************************************************************
 * Deletoidaan yksi tiedosto listasta
@@ -48570,6 +48619,7 @@ modlandSearch
 
 	DPRINT	"Cmd len %ld"
 	;DPRINT	"Cmd: '%s'"
+	jsr		setMainWindowWaitPointer
 
 	lea		.scriptPath(pc),a0
 	move.l	a4,a1
@@ -48624,6 +48674,7 @@ modlandSearch
 	jsr		releaseModuleList
 
 .exit
+	jsr	clearMainWindowWaitPointer
 	lea 300(sp),sp
 	rts
 
