@@ -3792,7 +3792,8 @@ dela:	pushm	all		* pienenpieni delay
 
 *** Avaa ReqToolssin
 
-get_rt	lea	var_b,a5
+get_rt:
+	lea	var_b,a5
 	tst.l	_ReqBase(a5)
 	bne.b	.o
 	pushm	d0/d1/a0/a1/a6
@@ -6028,7 +6029,8 @@ tickaa	pushm	d0-d6/a0-a2/a6
 *******************************************************************************
 * Merkkijonon muotoilu
 *******
-desmsg	movem.l	d0-d7/a0-a3/a6,-(sp)
+desmsg:
+	movem.l	d0-d7/a0-a3/a6,-(sp)
 	lea	desbuf(a5),a3	;puskuri
 ulppa	move.l	sp,a1		* parametrit ovat t‰‰ll‰!
 pulppa	lea	putc(pc),a2	;merkkien siirto
@@ -6040,12 +6042,14 @@ putc	move.b	d0,(a3)+
 	rts
 
 
-desmsg2	movem.l	d0-d7/a0-a3/a6,-(sp)
+desmsg2:
+	movem.l	d0-d7/a0-a3/a6,-(sp)
 	lea	desbuf2(a5),a3
 	bra.b	ulppa
 
 * a3 = desbuf
-desmsg3	movem.l	d0-d7/a0-a3/a6,-(sp)
+desmsg3:
+	movem.l	d0-d7/a0-a3/a6,-(sp)
 	bra.b	ulppa
 
 
@@ -7370,7 +7374,7 @@ signalreceived
 
 	lea	l_filename(a3),a0	* ladataan
 	move.l	l_nameaddr(a3),solename(a5)
-	moveq	#0,d0			* no dbuf
+	moveq	#0,d0			* no double buffering
 	jsr	loadmodule
 	tst.l	d0
 	bne.b	.loader
@@ -10163,9 +10167,9 @@ rbutton1
 
 	DPRINT	"Replay end"
 * Soitetaan vaan alusta
-	lore	Exec,Disable
+	;lore	Exec,Disable
 	bsr.w	halt
-	lore    Exec,Enable
+	;lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
 	move	(sp)+,mainvolume(a5)
@@ -10193,9 +10197,9 @@ rbutton1
 	move	d0,-(sp)
 	DPRINT	"Replay end"
 
-	lore	Exec,Disable
+	;lore	Exec,Disable
 	bsr.w	halt			* Vapautetaan se jos on
-	lore 	Exec,Enable
+	;lore 	Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
 	bsr.w	freemodule	
@@ -10206,7 +10210,7 @@ rbutton1
 
 	lea	l_filename(a3),a0	* Ladataan
 	move.l	l_nameaddr(a3),solename(a5)
-	move.b	d7,d0
+	move.b	d7,d0 * double buffering flag
 	jsr	loadmodule
 	tst.l	d0
 	bne.b	.loader
@@ -11284,7 +11288,7 @@ winfile
 *******************************************************************************
 * Vapautetaan tiedostolista
 *******
-freelist
+freelist:
 	DPRINT  "freelist obtain list"
 	bsr.w		obtainModuleList
 	tst.l		modamount(a5)
@@ -17804,7 +17808,7 @@ bipb2	moveq	#11+WINX,d0
 	bsr.w	print
 bopb	rts
 
-putinfo
+putinfo:
 	bsr.w	inforivit_clear
 	bra.b	bipb
 
@@ -38217,7 +38221,7 @@ p_mline
 	move.l	a4,a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
-	bsr.w		plainSaveFile
+	bsr.w	plainSaveFile
 	bmi.b	.orr
 
 	bsr.w	get_mline
@@ -47211,7 +47215,7 @@ deliShowNoteStruct
 * out: 
 *  d0 = loaded file address, or NULL if error
 *  d1 = length
-plainLoadFile
+plainLoadFile:
 	pushm	d2-a6
 	moveq	#0,d7
 
