@@ -1417,6 +1417,7 @@ l_nameaddr	rs.l	1		* osoitin pelkk‰‰n tied.nimeen
 					* address to filename without path
 l_favorite	rs.b 	1		* favorite status for this file
 l_divider	rs.b	1		* this is a divider, ie. a path
+l_remote	rs.b    1       * 0: local file, 1: modland
 l_filename	rs.b	0		* tied.nimi ja polku alkaa t‰st‰
 					* full path to filename begins at this point
 					* element size is dynamically calculated based on path length.
@@ -8442,7 +8443,8 @@ nappuloita
 .nabs
 
 	dc	$12
-	dr	execuutti
+	;dr	execuutti
+	dr	.modlandSearch_
 
 
 	dc	$13
@@ -8590,6 +8592,9 @@ nappuloita
 
 
 .rand	bra.w	soitamodi_random
+
+.modlandSearch_
+	jmp	modlandSearch
 
 
 .qui	st	exitmainprogram(a5)
@@ -9365,6 +9370,10 @@ comment_file
 * Find module
 *******
 
+enterSearchPattern_t
+	dc.b	"Enter search pattern",0
+ even
+
 find_new
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
@@ -9375,16 +9384,13 @@ find_new
 	moveq	#27,d0
 	sub.l	a3,a3
 	lea	ftags(pc),a0
-	lea	.ti(pc),a2
+	lea	enterSearchPattern_t(pc),a2
 	bsr.w	setMainWindowWaitPointer
 	lob	rtGetStringA
 	bsr.w	clearMainWindowWaitPointer
 	tst.l	d0
 	bne.b	find_continue	
 	rts
-
-.ti	dc.b	"Enter search pattern",0
- even
 
 ftags
 	dc.l	RTGS_Width,262
@@ -11745,7 +11751,15 @@ loadprog
 * out:
 *   d0 = number of modules  
 
-importModuleProgramFromData
+importModuleProgramFromDataSkipHeader:
+	pushm	d1-a6
+	moveq	#0,d7 		* count
+	move.l	a4,d5		* use this register
+	move.l	a2,a4 		* list header here
+	moveq	#1,d6		* 1 = new format
+	bra	importModuleProgramFromData\.r1
+
+importModuleProgramFromData:
 	pushm	d1-a6
  if DEBUG
 	move.l	a3,d0 
@@ -11779,6 +11793,7 @@ importModuleProgramFromData
 	bne.w	.what
 	addq	#2,a3		* skip: moduulien m‰‰r‰
 .r1
+
 
 ;	lea	moduleListHeader(a5),a4
 ;	move.l	a5,a4
@@ -17930,6 +17945,12 @@ inforivit_extracting
 .1	dc.b	"LhA extracting...",0
 .2	dc.b	"UnZipping...",0
 .3	dc.b	"LZX extracting...",0
+ even
+
+inforivit_downloading
+	lea	.1(pc),a0
+	bra.w	putinfo
+.1	dc.b	"Downloading...",0
  even
 
 
@@ -27150,14 +27171,37 @@ noteScroller2:
 *
 * in:
 *  a0 = module file name with path
+*  a3 = list node 
 *  d0 = ~0: Use double buffering
 *
 
-loadmodule
+loadmodule:
 	; Popup should close so that window is visible during load
 	bsr.w	closeTooltipPopup
-
 	st	loading(a5)
+
+	tst.b	l_remote(a3)
+	beq.b	.doLoadModule
+
+	move.b	d0,d7	* doublebuffering flags
+	lea	-200(sp),sp	* space for output path
+	move.l	sp,a0
+	jsr	fetchRemoteFile
+  if DEBUG
+	move.l	sp,d0
+	DPRINT	"Remote loaded: %s"
+  endif
+	move.l	sp,a0
+	move.b	d7,d0 * double buffering flag
+	bsr.b	.doLoadModule
+	move.l	sp,d1
+	push	d0	* save status
+	lore	Dos,DeleteFile * delete tempfile
+	pop	d0	* status into d0
+	lea	200(sp),sp
+	rts
+
+.doLoadModule
 
 	move.b	d0,d7
 	beq.w	.nodbf
@@ -48448,6 +48492,194 @@ layoutButtonRow
 	rts
  endif ; FEATURE
 
+
+
+
+***************************************************************************
+*
+* UHC
+*
+
+; execute: modlandsearch romeo knight
+; load t:modlandsearch as module list, add "HiPPrg" + linefeed?
+; flag every item in list so that they are detected as uhc
+; unescape %20 stuff maybe, %<hexcode>
+; to load:
+; url: http://ftp.modland.com//pub/modules/ + path from above
+; execute aget "url" ram:TEMPFILE QUIET
+; 
+
+modlandSearch
+	DPRINT	"modland"
+	lea	-300(sp),sp
+	move.l	sp,a1
+	move.l	a1,a4
+	lea	.cmd(pc),a0
+.copyCmd
+	move.b	(a0)+,(a1)+
+	bne.b	.copyCmd
+	subq	#1,a1
+	; a1 at terminating NUL
+
+	jsr	get_rt
+	; a1 = string buffer
+	; d0 = max xhars
+	moveq	#80,d0
+	; a2 = requester title
+	lea		enterSearchPattern_t,a2
+	; a3 = rtReqInfo structure or null
+	sub.l	a3,a3
+	; a0 = tags, to set the public screen
+	lea	otag15,a0
+	lob		rtGetStringA
+	; d0 = true if something entered, false otherwise
+	tst.l	d0
+	beq		.exit
+
+	; add "
+	move.l	a4,a0
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+	move.b	#'"',-1(a0)
+	clr.b	(a0)
+
+	move.l	a0,d0
+	sub.l	a4,d0
+
+	DPRINT	"Cmd len %ld"
+	;DPRINT	"Cmd: '%s'"
+
+	lea		.scriptPath(pc),a0
+	move.l	a4,a1
+	jsr		plainSaveFile
+	tst.l	d0
+	bmi		.exit
+
+	move.l	#.outputPath,d1
+	lore	Dos,DeleteFile
+
+	move.l	#.executePath,d1
+	moveq	#0,d2			* input
+	move.l	nilfile(a5),d3	* output
+	lore	Dos,Execute
+	DPRINT	"Execute=%ld"
+
+	lea		.outputPath(pc),a0
+	jsr	plainLoadFile
+	tst.l	d0
+	beq		.exit
+	; d0 = data
+	; d1 = len
+	
+	DPRINT	"Importing"
+	jsr		obtainModuleList
+	pushm	all
+	jsr		freelist
+	* Ensure correct list mode
+	popm	all
+
+	; start of data
+	move.l	d0,a3
+	; end of data
+	lea		(a3,d1.l),a4
+	; destination list
+	lea moduleListHeader(a5),a2
+	jsr		importModuleProgramFromDataSkipHeader
+	move.l	d0,modamount(a5)
+
+	lea moduleListHeader(a5),a0
+.loop
+	TSTNODE	a0,a0
+	beq.b	.x
+	move.b	#1,l_remote(a0) * mark as modland
+	bra.b	.loop
+.x
+
+	move.l	a3,a0
+	jsr		freemem
+	jsr	engageNormalMode
+	jsr		forceRefreshList
+	jsr		releaseModuleList
+
+.exit
+	lea 300(sp),sp
+	rts
+
+.executePath
+	dc.b	"execute "
+.scriptPath
+	dc.b	"RAM:foob",0
+.outputPath
+	dc.b	"T:modlandsearch",0
+.cmd
+	dc.b	"path SYS:UHC/C ADD",10
+	dc.b	"path SYS:UHC/S ADD",10
+	dc.b 	'modlandsearch "',0
+	even
+
+* in:
+*   a0 = buffer for the path to the output file
+*   a3 = node
+* out:
+*   a0 = path to file, delete after loading
+fetchRemoteFile	
+	pushm	d1-a6
+	DPRINT	"fetchRemoteFile"
+
+	moveq	#0,d7
+	move.l	l_nameaddr(a3),a1
+	move.b	#"T",(a0)+
+	move.b	#":",(a0)+
+.copy
+	move.b	(a1)+,(a0)+
+	bne.b	.copy
+
+	lea		l_filename(a3),a0
+	move.l	a0,d0
+	move.l	l_nameaddr(a3),d1
+	lea		.getScript(pc),a0
+	jsr		desmsg
+
+	jsr		inforivit_downloading
+	jsr		setMainWindowWaitPointer
+
+	lea		desbuf(a5),a0
+	move.l	a0,a1
+.findEnd
+	tst.b	(a1)+
+	bne.b	.findEnd
+	sub.l	a0,a1
+	subq	#1,a1
+	move.l	a1,d0	* file len
+
+	lea		.getScriptPath(pc),a0
+	lea	desbuf(a5),a1
+	jsr		plainSaveFile
+	tst.l	d0
+	bmi		.exit
+
+	move.l	#.getScriptExecute,d1
+	moveq	#0,d2			* input
+	move.l	nilfile(a5),d3	* output
+	lore	Dos,Execute
+	DPRINT	"Execute=%ld"
+	moveq	#1,d0
+.exit
+	jsr		clearMainWindowWaitPointer
+	move.l	d7,d0
+	popm	d1-a6
+	rts
+
+
+.getScriptExecute
+	dc.b	"execute "
+.getScriptPath 
+	dc.b	"ram:getscr",0
+.getScript
+	dc.b	"path SYS:UHC/C ADD",10
+	dc.b	'aget http://ftp.modland.com//pub/modules/%s "T:%s" QUIET',0
+ even
 
 ***************************************************************************
 *
