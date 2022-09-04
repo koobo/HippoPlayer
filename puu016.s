@@ -8283,6 +8283,17 @@ nappuloita
 	jsr	toggleFavoriteStatusForCurrentModule
 	bra.w	.ee
 .2
+	cmp.b	#$37,d3	 	* m + control
+ 	bne.b	.3
+	jsr		modlandSearch
+	bra	.ee
+.3
+	cmp.b	#$20,d3	 	* a + control
+ 	bne.b	.4
+	jsr		aminetSearch
+	bra	.ee
+.4
+	
 
 .noControl
 
@@ -8445,8 +8456,7 @@ nappuloita
 .nabs
 
 	dc	$12
-	;dr	execuutti
-	dr	.modlandSearch_
+	dr	execuutti
 
 
 	dc	$13
@@ -8594,9 +8604,6 @@ nappuloita
 
 
 .rand	bra.w	soitamodi_random
-
-.modlandSearch_
-	jmp	modlandSearch
 
 
 .qui	st	exitmainprogram(a5)
@@ -48638,7 +48645,11 @@ remoteSearch
 	; d0 = max xhars
 	moveq	#80,d0
 	; a2 = requester title
-	lea		enterSearchPattern_t,a2
+	lea		.searchModland(pc),a2
+	cmp.b	#REMOTE_AMINET,d7
+	bne.b	.5
+	lea		.searchAminet(pc),a2
+.5
 	; a3 = rtReqInfo structure or null
 	sub.l	a3,a3
 	; a0 = tags, to set the public screen
@@ -48728,7 +48739,10 @@ remoteSearch
 	rts
 
 
-
+.searchModland
+	dc.b	"Search Modland",0
+.searchAminet
+	dc.b	"Search Aminet",0
 .modlandResultsPath
 	dc.b	"T:modlandsearch",0
 .aminetResultsPath
