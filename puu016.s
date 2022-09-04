@@ -9132,7 +9132,9 @@ sortModuleList:
 ;	Move.w	-2(a2),-2(a1)
 ;	Move.w	d3,-2(a2)
 
-** swap 28 bytes
+** swap 28 bytes: 
+* - node pointer
+* - 24 bytes of weight
 
 	* free:
 	* d0, d3, d6, a3, a4, a5, a6
@@ -9193,6 +9195,10 @@ sortModuleList:
 	Rts
 
 *-------------------
+
+* Calculates the weight for an item for sorting
+* out:
+*   d0-d5: 24 bytes
 
 * Lower case and strip prefix so that string is usable for sorting
 .getv	
@@ -48608,19 +48614,21 @@ layoutButtonRow
 ***************************************************************************
 
 
-* Requests a search pattern from the user,
-* then creates an executable shell script to launch
-* UHC search using the given search pattern.
-* The search result file is imported as a normal modulelist.
 modlandSearch
 	DPRINT	"modlandSearch"
 	moveq	#REMOTE_MODLAND,d7
 	bra.b	remoteSearch
 
 aminetSearch
-	DPRINT	"modlandSearch"
+	DPRINT	"aminetSearch"
 	moveq	#REMOTE_AMINET,d7
 
+
+* Requests a search pattern from the user,
+* then creates an executable shell script to launch
+* UHC search using the given search pattern.
+* The search result file is imported as a normal modulelist.
+*
 * in:
 *  d7 = remote type enumeration
 remoteSearch
@@ -48644,7 +48652,7 @@ remoteSearch
 	jsr	get_rt
 	; a1 = string buffer
 	; d0 = max xhars
-	moveq	#80,d0
+	moveq	#40,d0
 	; a2 = requester title
 	lea		.searchModland(pc),a2
 	cmp.b	#REMOTE_AMINET,d7
@@ -48717,6 +48725,7 @@ remoteSearch
 	lea		(a3,d1.l),a4
 	; destination list
 	lea moduleListHeader(a5),a2
+	; this is just a plain file without the HiPPrg header
 	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
 
