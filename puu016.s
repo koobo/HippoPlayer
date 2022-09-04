@@ -33,14 +33,16 @@ ver	macro
 	endm	
 
  ifnd DEBUG
+* AsmOne setting:
 * Enable debug logging 
 DEBUG = 1
  endif
 
  ifnd __VASM
+* AsmOne setting:
 * 1: Run from AsmOne
 * 0: CLI/Workbench  
-asm = 1	
+asm = 1
  else
 asm = 0
  endif
@@ -19530,7 +19532,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lore	GFX,SetFont	
 	
 	move.l	swindowbase(a5),a0
-	bsr.w	setscrtitle
+	jsr	setscrtitle
 
 	; Reset slider position
 	lea	gAD1,a0
@@ -19620,9 +19622,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lore	GFX,ClipBlit
 	st	skokonaan(a5)
 
-	bsr	obtainModuleData
+	jsr	obtainModuleData
 	bsr	.prepareInfoWindowContent
-	bsr	releaseModuleData
+	jsr	releaseModuleData
 	; check if got data
 	tst.l	infotaz(a5)
 	beq.w	.sexit
