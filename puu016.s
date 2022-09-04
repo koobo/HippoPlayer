@@ -1417,14 +1417,15 @@ l_nameaddr	rs.l	1		* osoitin pelkk‰‰n tied.nimeen
 					* address to filename without path
 l_favorite	rs.b 	1		* favorite status for this file
 l_divider	rs.b	1		* this is a divider, ie. a path
-l_remote	rs.b    1       * 0: local file, 1: modland
+l_remote	rs.b    1       * 0: local file, 1: modland, 2: aminet
 l_filename	rs.b	0		* tied.nimi ja polku alkaa t‰st‰
 					* full path to filename begins at this point
 					* element size is dynamically calculated based on path length.
 l_size		rs.b	0
 
-remote_local = 0
-remote_modland = 1
+REMOTE_LOCAL = 0
+REMOTE_MODLAND = 1
+REMOTE_AMINET = 2
 
 *********************************************************************************
 *
@@ -8912,6 +8913,11 @@ sortModuleList:
 
 	push	a2
 	move.l	l_nameaddr(a3),a2	
+	tst.b	l_remote(a3)
+	beq.b	.local
+	* Sort by the whole path if a remote name
+	lea		l_filename(a3),a2
+.local
 	bsr.w	.getv
 	pop	a2
 	movem.l	d0-d5,(a2)	* paino talteen
@@ -11856,6 +11862,7 @@ importModuleProgramFromData:
 	st	l_divider(a2)
 .notDiv2
 
+	* Restore remote entry 
 	cmp.b	#"M",(a3)
 	bne.b	.notMdl
 	cmp.b	#"D",1(a3)
@@ -11865,8 +11872,19 @@ importModuleProgramFromData:
 	cmp.b	#";",3(a3)
 	bne.b	.notMdl
 	addq	#4,a3
-	move.b	#remote_modland,l_remote(a2)
+	move.b	#REMOTE_MODLAND,l_remote(a2)
 .notMdl
+	cmp.b	#"A",(a3)
+	bne.b	.notAmi
+	cmp.b	#"M",1(a3)
+	bne.b	.notAmi
+	cmp.b	#"I",2(a3)
+	bne.b	.notAmi
+	cmp.b	#";",3(a3)
+	bne.b	.notAmi
+	addq	#4,a3
+	move.b	#REMOTE_AMINET,l_remote(a2)
+.notAmi
 
 .le	move.b	(a3),(a0)+
 	cmp.b	#10,(a3)+
@@ -12063,7 +12081,7 @@ exportModuleProgramToFile
 	lob	Open
 
 	move.l	d0,d6
-	beq.b	.openError	
+	beq		.openError	
 
 	move.l	d6,d1
 	lea	prgheader(pc),a0
@@ -12086,13 +12104,21 @@ exportModuleProgramToFile
 	move.b	#DIVIDER_MAGIC,(a1)+
 .noDiv
 
-	cmp.b	#remote_modland,l_remote(a3)
-	bne.b	.local
+	* Store remote entry special info
+	cmp.b	#REMOTE_MODLAND,l_remote(a3)
+	bne.b	.notMdl
 	move.b	#"M",(a1)+
 	move.b	#"D",(a1)+
 	move.b	#"L",(a1)+
 	move.b	#";",(a1)+
-.local
+.notMdl
+	cmp.b	#REMOTE_AMINET,l_remote(a3)
+	bne.b	.notAmi
+	move.b	#"A",(a1)+
+	move.b	#"M",(a1)+
+	move.b	#"I",(a1)+
+	move.b	#";",(a1)+
+.notAmi
 
 .co	move.b	(a0)+,(a1)+
 	bne.b	.co
@@ -17339,6 +17365,7 @@ doPrintNames
 	lea	-200(sp),sp
 	tst.b	l_remote(a3)
 	beq.b	.local
+	* Remote entries: display the whole path after url decoding
 	lea		l_filename(a3),a0
 	move.l	sp,a1
 .unescape
@@ -27240,7 +27267,7 @@ noteScroller2:
 * Moduulin lataus
 *
 * in:
-*  a0 = module file name with path
+*  a0 = module file name with path (not used)
 *  a3 = list node 
 *  d0 = ~0: Use double buffering
 *
@@ -27250,6 +27277,7 @@ loadmodule:
 	bsr.w	closeTooltipPopup
 	st	loading(a5)
 
+	* Check if a remote file
 	tst.b	l_remote(a3)
 	beq.b	.doLoadModule
 
@@ -48567,24 +48595,38 @@ layoutButtonRow
 
 ***************************************************************************
 *
-* UHC
+* Modland integration using UHC
 *
+***************************************************************************
 
-; execute: modlandsearch romeo knight
-; load t:modlandsearch as module list, add "HiPPrg" + linefeed?
-; flag every item in list so that they are detected as uhc
-; unescape %20 stuff maybe, %<hexcode>
-; to load:
-; url: http://ftp.modland.com//pub/modules/ + path from above
-; execute aget "url" ram:TEMPFILE QUIET
-; 
 
+* Requests a search pattern from the user,
+* then creates an executable shell script to launch
+* UHC search using the given search pattern.
+* The search result file is imported as a normal modulelist.
 modlandSearch
-	DPRINT	"modland"
-	lea	-300(sp),sp
+	DPRINT	"modlandSearch"
+	moveq	#REMOTE_MODLAND,d7
+	bra.b	remoteSearch
+
+aminetSearch
+	DPRINT	"modlandSearch"
+	moveq	#REMOTE_AMINET,d7
+
+* in:
+*  d7 = remote type enumeration
+remoteSearch
+	* Storage space for building the script
+	lea	-200(sp),sp
 	move.l	sp,a1
 	move.l	a1,a4
-	lea	.cmd(pc),a0
+
+	lea		.modlandSearchCmd(pc),a0
+	cmp.b	#REMOTE_AMINET,d7
+	bne.b	.1
+	lea		.aminetSearchCmd(pc),a0
+.1
+
 .copyCmd
 	move.b	(a0)+,(a1)+
 	bne.b	.copyCmd
@@ -48614,30 +48656,35 @@ modlandSearch
 	move.b	#'"',-1(a0)
 	clr.b	(a0)
 
+	* Find lenght for saving
 	move.l	a0,d0
 	sub.l	a4,d0
 
-	DPRINT	"Cmd len %ld"
-	;DPRINT	"Cmd: '%s'"
 	jsr		setMainWindowWaitPointer
-
-	lea		.scriptPath(pc),a0
+	lea		remoteScriptPath(pc),a0
 	move.l	a4,a1
 	jsr		plainSaveFile
 	tst.l	d0
 	bmi		.exit
 
-	move.l	#.outputPath,d1
-	lore	Dos,DeleteFile
+	* remove any previous search results
+	pushpea	.modlandResultsPath(pc),d1
+	cmp.b	#REMOTE_AMINET,d7
+	bne.b	.2
+	pushpea	.aminetResultsPath(pc),d1
+.2	lore	Dos,DeleteFile
 
-	move.l	#.executePath,d1
+	pushpea	remoteExecute(pc),d1
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3	* output
 	lore	Dos,Execute
 	DPRINT	"Execute=%ld"
 
-	lea		.outputPath(pc),a0
-	jsr	plainLoadFile
+	lea		.modlandResultsPath(pc),a0
+	cmp.b	#REMOTE_AMINET,d7
+	bne.b	.3
+	lea		.aminetResultsPath(pc),a0
+.3	jsr	plainLoadFile
 	tst.l	d0
 	beq		.exit
 	; d0 = data
@@ -48646,8 +48693,10 @@ modlandSearch
 	DPRINT	"Importing"
 	jsr		obtainModuleList
 	pushm	all
+	* free previous normal list
 	jsr		freelist
-	* Ensure correct list mode
+	* ensure the normal mode is active
+	jsr		engageNormalMode
 	popm	all
 
 	; start of data
@@ -48659,39 +48708,45 @@ modlandSearch
 	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
 
+	* Flag these to be remotes
 	lea moduleListHeader(a5),a0
 .loop
 	TSTNODE	a0,a0
 	beq.b	.x
-	move.b	#1,l_remote(a0) * mark as modland
+	move.b	d7,l_remote(a0)
 	bra.b	.loop
 .x
 
 	move.l	a3,a0
 	jsr		freemem
-	jsr	engageNormalMode
 	jsr		forceRefreshList
 	jsr		releaseModuleList
 
 .exit
 	jsr	clearMainWindowWaitPointer
-	lea 300(sp),sp
+	lea 200(sp),sp
 	rts
 
-.executePath
-	dc.b	"execute "
-.scriptPath
-	dc.b	"RAM:foob",0
-.outputPath
+
+
+.modlandResultsPath
 	dc.b	"T:modlandsearch",0
-.cmd
-	dc.b	"path SYS:UHC/C ADD",10
-	dc.b	"path SYS:UHC/S ADD",10
+.aminetResultsPath
+	dc.b	"T:aminetsearch",0
+.modlandSearchCmd
+	dc.b	"path ${UHCBIN}C ADD",10
+	dc.b	"path ${UHCBIN}S ADD",10
 	dc.b 	'modlandsearch "',0
+.aminetSearchCmd
+	dc.b	"path ${UHCBIN}C ADD",10
+	dc.b	"path ${UHCBIN}S ADD",10
+	dc.b 	'aminetsearch "',0
 	even
 
+* Loads a remote file into a tempfile using aget.
+* The url is based on the node l_filename and l_remote status.
 * in:
-*   a0 = buffer for the path to the output file
+*   a0 = buffer for the path to the output file path to be filled
 *   a3 = node
 * out:
 *   a0 = path to file, delete after loading
@@ -48699,7 +48754,9 @@ fetchRemoteFile
 	pushm	d1-a6
 	DPRINT	"fetchRemoteFile"
 
-	moveq	#0,d7
+	moveq	#0,d7	* status
+
+	* Temporary target file path
 	move.l	l_nameaddr(a3),a1
 	move.b	#"T",(a0)+
 	move.b	#":",(a0)+
@@ -48707,15 +48764,21 @@ fetchRemoteFile
 	move.b	(a1)+,(a0)+
 	bne.b	.copy
 
+	* Generate parametrized script
 	lea		l_filename(a3),a0
 	move.l	a0,d0
 	move.l	l_nameaddr(a3),d1
-	lea		.getScript(pc),a0
+	lea		.modlandGetScript(pc),a0
+	cmp.b	#REMOTE_AMINET,l_remote(a3)
+	bne.b	.notAminet
+	lea		.aminetGetScript(pc),a0
+.notAminet
 	jsr		desmsg
 
 	jsr		inforivit_downloading
 	jsr		setMainWindowWaitPointer
 
+	* Save into a file to execute
 	lea		desbuf(a5),a0
 	move.l	a0,a1
 .findEnd
@@ -48725,32 +48788,39 @@ fetchRemoteFile
 	subq	#1,a1
 	move.l	a1,d0	* file len
 
-	lea		.getScriptPath(pc),a0
+	lea		remoteScriptPath(pc),a0
 	lea	desbuf(a5),a1
 	jsr		plainSaveFile
 	tst.l	d0
 	bmi		.exit
 
-	move.l	#.getScriptExecute,d1
+	pushpea	remoteExecute(pc),d1
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3	* output
 	lore	Dos,Execute
 	DPRINT	"Execute=%ld"
-	moveq	#1,d0
+	moveq	#1,d7 * ok
 .exit
 	jsr		clearMainWindowWaitPointer
 	move.l	d7,d0
 	popm	d1-a6
 	rts
 
-
 .getScriptExecute
 	dc.b	"execute "
 .getScriptPath 
-	dc.b	"ram:getscr",0
-.getScript
-	dc.b	"path SYS:UHC/C ADD",10
-	dc.b	'aget http://ftp.modland.com//pub/modules/%s "T:%s" QUIET',0
+	dc.b	"T:hippo2",0
+.modlandGetScript
+	dc.b	"path ${UHCBIN}C ADD",10
+	dc.b	'aget http://ftp.modland.com/pub/modules/%s "T:%s" QUIET',0
+.aminetGetScript
+	dc.b	"path ${UHCBIN}C ADD",10
+	dc.b	'aget ${UHC/AMINETMIRROR}%s "T:%s" QUIET',0
+remoteExecute
+	dc.b	"execute "
+remoteScriptPath
+	dc.b	"T:hippo1",0
+
  even
 
 ***************************************************************************
