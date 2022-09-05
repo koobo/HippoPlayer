@@ -17057,7 +17057,10 @@ listselector:
 	bra.b	.done
 .noGadget
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
+	bne.b	.noButtons
+	cmp		#SELECTDOWN,d3
 	beq.b	.done
+.noButtons
 	cmp.l	#IDCMP_RAWKEY,d2
 	beq.b	.done
 	cmp.l	#IDCMP_INACTIVEWINDOW,d2
