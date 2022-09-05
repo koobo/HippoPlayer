@@ -8815,7 +8815,7 @@ gadgetsup
 	dr	rbutton_kela2	* Eteenkelaus
 	dr	rloadprog	* ohjelman lataus
 	dr	rmove		* move
-	dr	rsort		* sort
+	dr	rsearchfuncs	* search functions
 	dr	rlistmode	* listmode change
 
 * Print some text into the filebox
@@ -9388,6 +9388,40 @@ comment_file
 * Find module
 *******
 
+rsearchfuncs
+	DPRINT	"Search functions"
+	lea		.options(pc),a4
+	lea		gadgetSortButton,a0
+	move	gg_LeftEdge(a0),d6
+	move	gg_TopEdge(a0),d7
+	add		#20,d7
+	bsr		listSelectorMainWindow
+	bmi.b	.skip
+	beq		find_new
+	subq	#1,d0
+	beq		find_continue
+	subq	#1,d0
+	beq.b	.modland
+	subq	#1,d0
+	beq.b	.aminet
+.skip
+	rts
+
+.modland
+	jmp	modlandSearch
+.aminet
+	jmp	aminetSearch
+
+.options
+	* max width, rows
+	dc.b	24,4
+	dc.b	"Search list    [F]      ",0
+	dc.b	"Search next    [SHIFT+F]",0
+	dc.b	"Search Modland [CTRL+M] ",0
+	dc.b	"Search Aminet  [CTRL+A] ",0
+	even
+
+
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
  even
@@ -9514,6 +9548,8 @@ find_continue
 	bsr.w	forceRefreshList
 	moveq	#0,d0
 	rts
+
+
 
 
 *******************************************************************************
@@ -16872,30 +16908,33 @@ updateahi
 * Mieletön.
 
 wflags4 = WFLG_SMART_REFRESH!WFLG_ACTIVATE!WFLG_BORDERLESS!WFLG_RMBTRAP
-idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP
+idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
 rememberPtr
 	dc.l	0
 
+
+listSelectorMainWindow
+	pushm	d1-a6	
+	move.l	windowbase(a5),a0	* prefs-ikkuna
+	bra.b	listselector\.do
+
+
 * in: 
+*   d6 = mouse x
+*   d7 = mouse y
 *   a0 = data to show
 * out: 
 *   d0 = selected index, or -1 if cancel
 listselector:
-	pushm	d1-a6
+	pushm	d1-a6	
 	move.l	a0,a4
-
-	DPRINT	"listselector"
-
-* d6/d7 = mouse position
-
 	move.l	windowbase2(a5),a0	* prefs-ikkuna
+.do
 	add	wd_LeftEdge(a0),d6	* mousepos suhteellinen prefs-ikkunan
 	add	wd_TopEdge(a0),d7	* ylälaitaan
 
-
 	lea	winlistsel,a0		* asetetaan pointterin kohdalle
-
 
 	moveq	#0,d5
 	move.b	(a4),d5
@@ -17017,6 +17056,10 @@ listselector:
 	move	gg_GadgetID(a2),d7
 	bra.b	.done
 .noGadget
+	cmp.l	#IDCMP_MOUSEBUTTONS,d2
+	beq.b	.done
+	cmp.l	#IDCMP_RAWKEY,d2
+	beq.b	.done
 	cmp.l	#IDCMP_INACTIVEWINDOW,d2
 	bne.b	.msgloop3
 	
@@ -49741,9 +49784,9 @@ rightButtonActionsList
 	* Prefs -> zoom file box
 	dr.w	gadgetPrefsButton
 	dc.l	zoomfilebox
-	* Sort -> Find
+	* S -> Sort
 	dr.w	gadgetSortButton
-	dc.l	find_new
+	dc.l	rsort
 	* Move -> Add divider
 	dr.w	gadgetMoveButton
 	dc.l	add_divider
@@ -49835,9 +49878,12 @@ tooltipList
 	dc.b	"LMB: Open preferences",0
 	dc.b    "RMB: Zoom file box",0
 .sort
-	dc.b	16,2
-	dc.b	"LMB: Sort list",0
-	dc.b	"RMB: Find module",0
+;	dc.b	16,2
+;	dc.b	"LMB: Sort list",0
+;	dc.b	"RMB: Find module",0
+	dc.b	21,2
+	dc.b	"LMB: Search functions",0
+	dc.b	"RMB: Sort list",0
 .move
 	dc.b	26,4
 	dc.b	"LMB: Move chosen module,",0
