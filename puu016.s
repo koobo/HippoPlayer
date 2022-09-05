@@ -16872,11 +16872,20 @@ updateahi
 * Mieletön.
 
 wflags4 = WFLG_SMART_REFRESH!WFLG_ACTIVATE!WFLG_BORDERLESS!WFLG_RMBTRAP
-idcmpflags4 = IDCMP_MOUSEBUTTONS!IDCMP_INACTIVEWINDOW
+idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP
 
-listselector
+rememberPtr
+	dc.l	0
+
+* in: 
+*   a0 = data to show
+* out: 
+*   d0 = selected index, or -1 if cancel
+listselector:
 	pushm	d1-a6
 	move.l	a0,a4
+
+	DPRINT	"listselector"
 
 * d6/d7 = mouse position
 
@@ -16915,7 +16924,7 @@ listselector
 	bsr.w	tark_mahtu
 
 	lore	Intui,OpenWindow
-	move.l	d0,d5
+	move.l	d0,d6
 	beq.w	.x
 	move.l	d0,a0
 	move.l	wd_RPort(a0),d7		* rastport
@@ -16944,7 +16953,8 @@ listselector
 	subq	#1,d5
 	move.l	a4,a0
 
-	moveq	#10,d3
+	moveq	#0,d2
+	moveq	#4,d3 	* start y
 .prl	
 	move.l	a0,a1
 .fe	tst.b	(a1)+
@@ -16959,8 +16969,12 @@ listselector
 	addq	#8,d0
 
 	move	d3,d1
+	* d0 = x
+	* d1 = y
+	* a0 = text
 	bsr.w	.print
-	addq	#8,d3
+	addq	#8,d3 * next y
+	addq	#1,d2 * id number
 	move.l	a1,a0
 	dbf	d5,.prl
 
@@ -16977,8 +16991,7 @@ listselector
 	bsr.w	laatikko1
 	popm	all
 
-
-
+	moveq	#-1,d7		* selection
 .msgloop3
 	moveq	#0,d0
 	move.b	MP_SIGBIT(a3),d1	* IDCMP signalibitti
@@ -16993,48 +17006,102 @@ listselector
 	move.l	d0,a1
 	move.l	im_Class(a1),d2		* luokka	
 	move	im_Code(a1),d3		* koodi
-;	move.l	im_IAddress(a1),a2 	* gadgetin tai olion osoite
+	move.l	im_IAddress(a1),a2 	* gadgetin tai olion osoite
 ;	move	im_MouseX(a1),d6	* mousen koordinaatit
-	move	im_MouseY(a1),d7
+;	move	im_MouseY(a1),d7
 
 	lob	ReplyMsg
 
+	cmp.l	#IDCMP_GADGETUP,d2
+	bne.b	.noGadget
+	move	gg_GadgetID(a2),d7
+	bra.b	.done
+.noGadget
 	cmp.l	#IDCMP_INACTIVEWINDOW,d2
-	bne.b	.noc
-.can	moveq	#-1,d7
-	bra.b	.ox
-.noc
-	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.msgloop3
-	cmp	#MENUDOWN,d3		* oikea nappula
-	beq.b	.can
-	cmp	#SELECTDOWN,d3		* vasen nappula
-	bne.b	.msgloop3
-
-	subq	#4,d7
-	bpl.b	.ok
-	moveq	#0,d7
-.ok	lsr	#3,d7
-
-
-.ox
-
-	move.l	d5,a0
+	
+.done
+	move.l	d6,a0
 	bsr.w	flushWindowMessages
 
-	move.l	d5,d0
+	move.l	d6,d0
 	beq.b	.eek
 	move.l	d0,a0
 	lore	Intui,CloseWindow
 .eek
 .x
+	lea	rememberPtr(pc),a0
+	moveq	#1,d0 * forget all of it
+	lore	Intui,FreeRemember
+
 	move	d7,d0
 	popm	d1-a6
 	rts
 
-.print	pushm	all
-	move.l	d7,a4
-	bra.w	doPrint	
+* In:
+*   d0 = x
+*   d1 = y
+*   d2 = id
+*   a0 = text
+*   d6 = window base
+.print
+	pushm	all
+	
+	move.l	a0,a4	* save text
+	move	d0,d5
+	move	d1,d7
+	move	d2,d4
+
+	; Get NewGadget
+	lea		rememberPtr(pc),a0
+	moveq	#gg_SIZEOF,d0
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	lore	Intui,AllocRemember
+	move.l	d0,a3
+	move.l	d0,a1
+	lea	listSelectorButton1,a0
+	moveq	#gg_SIZEOF,d0
+	lore	Exec,CopyMem
+
+	move.l	d6,a0
+	move	wd_Width(a0),d0
+	sub		d5,d0
+	sub		d5,d0
+	move	d0,gg_Width(a3)
+	move	#8,gg_Height(a3)
+	move	d5,gg_LeftEdge(a3)
+	move	d7,gg_TopEdge(a3)
+	move	d4,gg_GadgetID(a3)
+
+	lea	rememberPtr(pc),a0
+	moveq	#it_SIZEOF,d0
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	lore	Intui,AllocRemember
+	move.l	d0,a2
+	move.l	a2,gg_GadgetText(a3)
+
+	lea	listSelectorIntuiText1,a0
+	move.l	d0,a1
+	moveq	#it_SIZEOF,d0
+	lore	Exec,CopyMem
+
+	move.l	a4,it_IText(a2)
+	move.l	fontbase(a5),it_ITextFont(a2)
+
+	move.l	d6,a0
+	move.l	a3,a1
+	moveq	#0,d0 * position
+	lore	Intui,AddGadget
+
+	move.l	a3,a0
+	move.l	d6,a1 * window
+	sub.l	a2,a2 * req
+	moveq	#1,d0 * numgad
+	lob		RefreshGList
+.xx
+	popm	all
+	rts
+
 
 *******************************************************************************
 *  End of Prefs section
@@ -49540,7 +49607,59 @@ gadgetResize
 	; ig_NextImage
 	dc.l 0
 
-	
+
+listSelectorButton1
+	; gg_NextGadget
+	dc.l 0
+	; gg_LeftEdge
+	dc 0
+	; gg_TopEdge
+	dc 0
+	; gg_Width
+	dc 0
+	; gg_Height
+	dc 8
+	; gg_Flags
+	dc GFLG_GADGHCOMP
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+	; gg_GadgetRender
+	dc.l 0
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+	; gg_GadgetId
+	dc.w 0
+	; gg_UserData
+	dc.l 0
+
+
+listSelectorIntuiText1
+	; it_FrontPen
+	dc.b	1	
+	; it_BackPen
+	dc.b	0
+	; it_DrawMode
+	dc.b	1
+	; it_KludgeFill0
+	dc.b	0
+	; it_LeftEdge
+	dc.w	0
+	; it_TopEdge
+	dc.w	0
+	; it_ITextFont
+	dc.l	0	; default font
+	; it_IText
+	dc.l	0
+	; it_NextText
+	dc.l	0
 
 
 * Rename the gadgets defined above to something not crazy
