@@ -6706,7 +6706,7 @@ mainpriority
 * MENUDOWN: right button down
 * MENUUP: right button up
 
-buttonspressed
+buttonspressed:
 	tst.b	win(a5)			* onko ikkuna auki?
 	beq.w	.nowindow
 
@@ -11886,6 +11886,7 @@ importModuleProgramFromData:
 	bne.b	.notMdl
 	addq	#4,a3
 	moveq	#REMOTE_MODLAND,d1
+	bra.b	.remote
 .notMdl
 	cmp.b	#"A",(a3)
 	bne.b	.notAmi
@@ -11898,6 +11899,7 @@ importModuleProgramFromData:
 	addq	#4,a3
 	moveq	#REMOTE_AMINET,d1
 .notAmi
+.remote
 
 .le	move.b	(a3),(a0)+
 	cmp.b	#10,(a3)+
