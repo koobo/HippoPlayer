@@ -8923,11 +8923,6 @@ sortModuleList:
 
 	push	a2
 	move.l	l_nameaddr(a3),a2	
-	tst.b	l_remote(a3)
-	beq.b	.local
-	* Sort by the whole path if a remote name
-	lea		l_filename(a3),a2
-.local
 	bsr.w	.getv
 	pop	a2
 	movem.l	d0-d5,(a2)	* paino talteen
@@ -11877,7 +11872,9 @@ importModuleProgramFromData:
 	addq	#1,a3
 	st	l_divider(a2)
 .notDiv2
+	
 
+	moveq	#REMOTE_LOCAL,d1
 	* Restore remote entry 
 	cmp.b	#"M",(a3)
 	bne.b	.notMdl
@@ -11888,7 +11885,7 @@ importModuleProgramFromData:
 	cmp.b	#";",3(a3)
 	bne.b	.notMdl
 	addq	#4,a3
-	move.b	#REMOTE_MODLAND,l_remote(a2)
+	moveq	#REMOTE_MODLAND,d1
 .notMdl
 	cmp.b	#"A",(a3)
 	bne.b	.notAmi
@@ -11899,7 +11896,7 @@ importModuleProgramFromData:
 	cmp.b	#";",3(a3)
 	bne.b	.notAmi
 	addq	#4,a3
-	move.b	#REMOTE_AMINET,l_remote(a2)
+	moveq	#REMOTE_AMINET,d1
 .notAmi
 
 .le	move.b	(a3),(a0)+
@@ -11917,6 +11914,16 @@ importModuleProgramFromData:
 	bsr.w	nimenalku
 .wasDiv
 	move.l	a0,l_nameaddr(a2)
+
+	tst.b	d1
+	beq.b	.local
+	; Config this node as a remote node
+	push	d7
+	move.b	d1,d7
+	move.l	a2,a0
+	jsr		configRemoteNode
+	pop		d7
+.local
 
 	* add node a1 to list a0	
 	move.l	a2,a1
@@ -11957,7 +11964,7 @@ xpk_module_program_error	 dc.b	"Could not load XPK compressed module program!",0
 *** a0 <= loppu
 *** a1 <= alku
 *** a0 => nimi
-nimenalku
+nimenalku:
 .f	move.b	-(a0),d0		* etsit‰‰n pelk‰n nimen alku
 	cmp.b	#'/',d0
 	beq.b	.fo
@@ -11967,7 +11974,7 @@ nimenalku
 	bne.b	.f
 	bra.b	.fof
 .fo	addq.l	#1,a0
-.fof	rts
+.fof rts
 
 
 rsaveprog
@@ -17381,11 +17388,18 @@ doPrintNames
 	lea	-200(sp),sp
 	tst.b	l_remote(a3)
 	beq.b	.local
-	* Remote entries: display the whole path after url decoding
-	lea		l_filename(a3),a0
+	move.l	a0,d0
+	* Remote entries: url decoding, also replace /
 	move.l	sp,a1
 .unescape
 	move.b	(a0)+,d0
+	cmp.b	#"/",d0
+	bne.b	.noSlsh
+	move.b	#" ",(a1)+
+	move.b	#"-",(a1)+
+	move.b	#" ",(a1)+
+	bra.b	.unescape
+.noSlsh
 	cmp.b	#"%",d0
 	bne.b	.noEsc
 	bsr		convertHexTextToNumber
@@ -48731,12 +48745,14 @@ remoteSearch
 	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
 
-	* Flag these to be remotes
+	* Flag these to be remotes,
+	* and set l_nameaddr so that the previous folder can be
+	* seen, that is the author's name typically.
 	lea moduleListHeader(a5),a0
 .loop
 	TSTNODE	a0,a0
 	beq.b	.x
-	move.b	d7,l_remote(a0)
+	bsr		configRemoteNode
 	bra.b	.loop
 .x
 
@@ -48769,6 +48785,34 @@ remoteSearch
 	dc.b 	'aminetsearch "',0
 	even
 
+* Set list node remote type and
+* set l_nameaddr to be proper for showing to user.
+* In:
+*   a0 = list node
+*   d7 = remote type
+configRemoteNode
+	pushm	d0/a0-a2
+	move.b	d7,l_remote(a0)
+ 
+ 	lea		l_filename(a0),a1
+	move.l	a1,a2
+.findEnd2
+	tst.b	(a1)+
+	bne.b	.findEnd2
+
+	moveq	#2-1,d0
+.findSlash
+	cmp.l	a1,a2
+	beq.b	.break * safety check
+	cmp.b	#"/",-(a1)
+	bne.b	.findSlash
+	dbf	d0,.findSlash
+	addq	#1,a1
+.break
+	move.l	a1,l_nameaddr(a0)
+	popm	d0/a0-a2
+	rts
+
 * Loads a remote file into a tempfile using aget.
 * The url is based on the node l_filename and l_remote status.
 * in:
@@ -48782,18 +48826,27 @@ fetchRemoteFile
 
 	moveq	#0,d7	* status
 
-	* Temporary target file path
+	* Temporary target file path, the last part
 	move.l	l_nameaddr(a3),a1
+.end
+	tst.b	(a1)+
+	bne.b	.end
+.sl	cmp.b	#"/",-(a1)
+	bne.b	.sl
+	addq	#1,a1
+
+	move.l	a1,a2
 	move.b	#"T",(a0)+
 	move.b	#":",(a0)+
 .copy
-	move.b	(a1)+,(a0)+
+	move.b	(a2)+,(a0)+
 	bne.b	.copy
 
 	* Generate parametrized script
 	lea		l_filename(a3),a0
 	move.l	a0,d0
-	move.l	l_nameaddr(a3),d1
+	;move.l	l_nameaddr(a3),d1
+	move.l	a1,d1
 	lea		.modlandGetScript(pc),a0
 	cmp.b	#REMOTE_AMINET,l_remote(a3)
 	bne.b	.notAminet
@@ -48835,7 +48888,7 @@ fetchRemoteFile
 .getScriptExecute
 	dc.b	"execute "
 .getScriptPath 
-	dc.b	"T:hippo2",0
+	dc.b	"T:hip",0
 .modlandGetScript
 	dc.b	"path ${UHCBIN}C ADD",10
 	dc.b	'aget http://ftp.modland.com/pub/modules/%s "T:%s" QUIET',0
@@ -48845,7 +48898,7 @@ fetchRemoteFile
 remoteExecute
 	dc.b	"execute "
 remoteScriptPath
-	dc.b	"T:hippo1",0
+	dc.b	"T:hip",0
 
  even
 
