@@ -1420,15 +1420,12 @@ l_nameaddr	rs.l	1		* osoitin pelkkään tied.nimeen
 					* address to filename without path
 l_favorite	rs.b 	1		* favorite status for this file
 l_divider	rs.b	1		* this is a divider, ie. a path
-l_remote	rs.b    1       * 0: local file, 1: modland, 2: aminet
+l_remote	rs.b    1       * 0: local file, 1: remote
 l_filename	rs.b	0		* tied.nimi ja polku alkaa tästä
 					* full path to filename begins at this point
 					* element size is dynamically calculated based on path length.
 l_size		rs.b	0
 
-REMOTE_LOCAL = 0
-REMOTE_MODLAND = 1
-REMOTE_AMINET = 2
 
 *********************************************************************************
 *
@@ -11805,13 +11802,13 @@ loadprog
 * out:
 *   d0 = number of modules  
 
-importModuleProgramFromDataSkipHeader:
-	pushm	d1-a6
-	moveq	#0,d7 		* count
-	move.l	a4,d5		* use this register
-	move.l	a2,a4 		* list header here
-	moveq	#1,d6		* 1 = new format
-	bra	importModuleProgramFromData\.r1
+;importModuleProgramFromDataSkipHeader:
+;	pushm	d1-a6
+;	moveq	#0,d7 		* count
+;	move.l	a4,d5		* use this register
+;	move.l	a2,a4 		* list header here
+;	moveq	#1,d6		* 1 = new format
+;	bra	importModuleProgramFromData\.r1
 
 importModuleProgramFromData:
 	pushm	d1-a6
@@ -11910,32 +11907,18 @@ importModuleProgramFromData:
 .notDiv2
 	
 
-	moveq	#REMOTE_LOCAL,d1
+	moveq	#0,d1
 	* Restore remote entry 
-	cmp.b	#"M",(a3)
-	bne.b	.notMdl
-	cmp.b	#"D",1(a3)
-	bne.b	.notMdl
-	cmp.b	#"L",2(a3)
-	bne.b	.notMdl
-	cmp.b	#";",3(a3)
-	bne.b	.notMdl
-	addq	#4,a3
-	moveq	#REMOTE_MODLAND,d1
-	bra.b	.remote
-.notMdl
-	cmp.b	#"A",(a3)
-	bne.b	.notAmi
-	cmp.b	#"M",1(a3)
-	bne.b	.notAmi
-	cmp.b	#"I",2(a3)
-	bne.b	.notAmi
-	cmp.b	#";",3(a3)
-	bne.b	.notAmi
-	addq	#4,a3
-	moveq	#REMOTE_AMINET,d1
-.notAmi
-.remote
+	cmp.b	#"h",(a3)
+	bne.b	.notRemote
+	cmp.b	#"t",1(a3)
+	bne.b	.notRemote
+	cmp.b	#"t",2(a3)
+	bne.b	.notRemote
+	cmp.b	#"p",3(a3)
+	bne.b	.notRemote
+	moveq	#1,d1
+.notRemote
 
 .le	move.b	(a3),(a0)+
 	cmp.b	#10,(a3)+
@@ -11956,11 +11939,8 @@ importModuleProgramFromData:
 	tst.b	d1
 	beq.b	.local
 	; Config this node as a remote node
-	push	d7
-	move.b	d1,d7
 	move.l	a2,a0
 	jsr		configRemoteNode
-	pop		d7
 .local
 
 	* add node a1 to list a0	
@@ -12165,21 +12145,6 @@ exportModuleProgramToFile
 	move.b	#DIVIDER_MAGIC,(a1)+
 .noDiv
 
-	* Store remote entry special info
-	cmp.b	#REMOTE_MODLAND,l_remote(a3)
-	bne.b	.notMdl
-	move.b	#"M",(a1)+
-	move.b	#"D",(a1)+
-	move.b	#"L",(a1)+
-	move.b	#";",(a1)+
-.notMdl
-	cmp.b	#REMOTE_AMINET,l_remote(a3)
-	bne.b	.notAmi
-	move.b	#"A",(a1)+
-	move.b	#"M",(a1)+
-	move.b	#"I",(a1)+
-	move.b	#";",(a1)+
-.notAmi
 
 .co	move.b	(a0)+,(a1)+
 	bne.b	.co
@@ -48754,15 +48719,17 @@ layoutButtonRow
 *
 ***************************************************************************
 
+SEARCH_MODLAND = 0
+SEARCH_AMINET = 1
 
 modlandSearch
 	DPRINT	"modlandSearch"
-	moveq	#REMOTE_MODLAND,d7
+	moveq	#SEARCH_MODLAND,d7
 	bra.b	remoteSearch
 
 aminetSearch
 	DPRINT	"aminetSearch"
-	moveq	#REMOTE_AMINET,d7
+	moveq	#SEARCH_AMINET,d7
 
 
 * Requests a search pattern from the user,
@@ -48773,31 +48740,23 @@ aminetSearch
 * in:
 *  d7 = remote type enumeration
 remoteSearch
+	tst.b	uusikick(a5)
+	bne.b	.go
+	; Let's not try this on kick1.3
+	rts
+.go
 	* Storage space for building the script
-	lea	-200(sp),sp
+	lea	-50(sp),sp
 	move.l	sp,a1
-	move.l	a1,a4
-
-	lea		.modlandSearchCmd(pc),a0
-	cmp.b	#REMOTE_AMINET,d7
-	bne.b	.1
-	lea		.aminetSearchCmd(pc),a0
-.1
-
-.copyCmd
-	move.b	(a0)+,(a1)+
-	bne.b	.copyCmd
-	subq	#1,a1
-	; a1 at terminating NUL
-
+	clr.b	(a1)
 	jsr	get_rt
 	; a1 = string buffer
 	; d0 = max xhars
 	moveq	#40,d0
 	; a2 = requester title
 	lea		.searchModland(pc),a2
-	cmp.b	#REMOTE_AMINET,d7
-	bne.b	.5
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.5
 	lea		.searchAminet(pc),a2
 .5
 	; a3 = rtReqInfo structure or null
@@ -48809,31 +48768,36 @@ remoteSearch
 	tst.l	d0
 	beq		.exit
 
-	; add "
-	move.l	a4,a0
+
+	lea		.modlandSearchCmd(pc),a0
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.1
+	lea		.aminetSearchCmd(pc),a0
+.1
+	move.l	sp,d0		* search word
+	jsr		desmsg
+
+	lea		desbuf(a5),a0
+	move.l	a0,a1
 .findEnd
 	tst.b	(a0)+
 	bne.b	.findEnd
-	move.b	#'"',-1(a0)
 	clr.b	(a0)
 
-	* Find lenght for saving
+	* Find length for saving
 	move.l	a0,d0
-	sub.l	a4,d0
+	sub.l	a1,d0
 
 	jsr		setMainWindowWaitPointer
 	lea		remoteScriptPath(pc),a0
-	move.l	a4,a1
+	; data in a1
 	jsr		plainSaveFile
 	tst.l	d0
 	bmi		.exit
 
 	* remove any previous search results
-	pushpea	.modlandResultsPath(pc),d1
-	cmp.b	#REMOTE_AMINET,d7
-	bne.b	.2
-	pushpea	.aminetResultsPath(pc),d1
-.2	lore	Dos,DeleteFile
+	pushpea	.resultsPath(pc),d1
+	lore	Dos,DeleteFile
 
 	pushpea	remoteExecute(pc),d1
 	moveq	#0,d2			* input
@@ -48841,11 +48805,8 @@ remoteSearch
 	lore	Dos,Execute
 	DPRINT	"Execute=%ld"
 
-	lea		.modlandResultsPath(pc),a0
-	cmp.b	#REMOTE_AMINET,d7
-	bne.b	.3
-	lea		.aminetResultsPath(pc),a0
-.3	jsr	plainLoadFile
+	lea		.resultsPath(pc),a0
+	jsr	plainLoadFile
 	tst.l	d0
 	beq		.exit
 	; d0 = data
@@ -48867,7 +48828,7 @@ remoteSearch
 	; destination list
 	lea moduleListHeader(a5),a2
 	; this is just a plain file without the HiPPrg header
-	jsr		importModuleProgramFromDataSkipHeader
+	jsr		importModuleProgramFromData ;SkipHeader
 	move.l	d0,modamount(a5)
 
 	* Flag these to be remotes,
@@ -48888,7 +48849,7 @@ remoteSearch
 
 .exit
 	jsr	clearMainWindowWaitPointer
-	lea 200(sp),sp
+	lea 50(sp),sp
 	rts
 
 
@@ -48896,28 +48857,35 @@ remoteSearch
 	dc.b	"Search Modland",0
 .searchAminet
 	dc.b	"Search Aminet",0
-.modlandResultsPath
-	dc.b	"T:modlandsearch",0
-.aminetResultsPath
-	dc.b	"T:aminetsearch",0
+.resultsPath
+	dc.b	"T:prg",0
 .modlandSearchCmd
 	dc.b	"path ${UHCBIN}C ADD",10
 	dc.b	"path ${UHCBIN}S ADD",10
-	dc.b 	'modlandsearch "',0
+	dc.b 	'modlandsearch "%s"',10
+	dc.b	"echo HiPPrg > T:prg",10
+	dc.b	'echo "" >> T:prg',10
+	dc.b	"ForEachLine T:modlandsearch",10
+	dc.b    "echo http://ftp.modland.com/pub/modules/$LINE >> T:prg",10
+	dc.b	"EndForEach",10,0
 .aminetSearchCmd
 	dc.b	"path ${UHCBIN}C ADD",10
 	dc.b	"path ${UHCBIN}S ADD",10
-	dc.b 	'aminetsearch "',0
+	dc.b 	'aminetsearch "%s"',10
+	dc.b	"echo HiPPrg > T:prg",10
+	dc.b	'echo "" >> T:prg',10
+	dc.b	"ForEachLine T:aminetsearch",10
+	dc.b    "echo http://${UHC/AMINETMIRROR}$LINE >> T:prg",10
+	dc.b	"EndForEach",10,0
 	even
 
 * Set list node remote type and
 * set l_nameaddr to be proper for showing to user.
 * In:
 *   a0 = list node
-*   d7 = remote type
 configRemoteNode
 	pushm	d0/a0-a2
-	move.b	d7,l_remote(a0)
+	st		l_remote(a0)
  
  	lea		l_filename(a0),a1
 	move.l	a1,a2
@@ -48972,11 +48940,7 @@ fetchRemoteFile
 	move.l	a0,d0
 	;move.l	l_nameaddr(a3),d1
 	move.l	a1,d1
-	lea		.modlandGetScript(pc),a0
-	cmp.b	#REMOTE_AMINET,l_remote(a3)
-	bne.b	.notAminet
-	lea		.aminetGetScript(pc),a0
-.notAminet
+	lea		.getScript(pc),a0
 	jsr		desmsg
 
 	jsr		inforivit_downloading
@@ -49011,12 +48975,9 @@ fetchRemoteFile
 	rts
 
 
-.modlandGetScript
+.getScript
 	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	'aget http://ftp.modland.com/pub/modules/%s "T:%s" QUIET',0
-.aminetGetScript
-	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	'aget ${UHC/AMINETMIRROR}%s "T:%s" QUIET',0
+	dc.b	'aget %s "T:%s" QUIET',0
 remoteExecute
 	dc.b	"execute "
 remoteScriptPath
