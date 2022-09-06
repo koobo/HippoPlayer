@@ -18154,6 +18154,19 @@ inforivit_downloading
 .1	dc.b	"Downloading...",0
  even
 
+inforivit_searching
+	lea	.1(pc),a0
+	bra.w	putinfo
+.1	dc.b	"Searching...",0
+ even
+
+inforivit_processing
+	lea	.1(pc),a0
+	bra.w	putinfo
+.1	dc.b	"Processing...",0
+ even
+
+
 
 ;inforivit_initializing
 ;	lea	.1(pc),a0
@@ -48775,22 +48788,26 @@ remoteSearch
 	move.l	a0,d0
 	sub.l	a1,d0
 
+	pushm	all
+	jsr		inforivit_searching
 	jsr		setMainWindowWaitPointer
+	popm	all
+	
 	lea		remoteScriptPath(pc),a0
 	; data in a1
 	jsr		plainSaveFile
 	tst.l	d0
 	bmi		.exit
 
-	* remove any previous search results
-	pushpea	.resultsPath(pc),d1
-	lore	Dos,DeleteFile
-
 	pushpea	remoteExecute(pc),d1
+ if DEBUG
+	move.l	d1,d0
+	DPRINT	"%s"
+ endif
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3	* output
 	lore	Dos,Execute
-	DPRINT	"Execute=%ld"
+	DPRINT	"Status=%ld"
 
 	lea		.resultsPath(pc),a0
 	jsr	plainLoadFile
@@ -48806,6 +48823,7 @@ remoteSearch
 	jsr		freelist
 	* ensure the normal mode is active
 	jsr		engageNormalMode
+	jsr		inforivit_processing
 	popm	all
 
 	; start of data
@@ -48814,8 +48832,7 @@ remoteSearch
 	lea		(a3,d1.l),a4
 	; destination list
 	lea moduleListHeader(a5),a2
-	; this is just a plain file without the HiPPrg header
-	jsr		importModuleProgramFromData ;SkipHeader
+	jsr		importModuleProgramFromData
 	move.l	d0,modamount(a5)
 
 	* Flag these to be remotes,
@@ -48833,10 +48850,10 @@ remoteSearch
 	jsr		freemem
 	jsr		forceRefreshList
 	jsr		releaseModuleList
-
 .exit
-	jsr	clearMainWindowWaitPointer
-	lea 50(sp),sp
+	jsr		inforivit_play
+	jsr		clearMainWindowWaitPointer
+	lea 	50(sp),sp
 	rts
 
 
@@ -48847,8 +48864,7 @@ remoteSearch
 .resultsPath
 	dc.b	"T:prg",0
 .modlandSearchCmd
-	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	"path ${UHCBIN}S ADD",10
+	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'modlandsearch "%s"',10
 	dc.b	"echo HiPPrg > T:prg",10
 	dc.b	'echo "" >> T:prg',10
@@ -48856,8 +48872,7 @@ remoteSearch
 	dc.b    "echo http://ftp.modland.com/pub/modules/$LINE >> T:prg",10
 	dc.b	"EndForEach",10,0
 .aminetSearchCmd
-	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	"path ${UHCBIN}S ADD",10
+	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'aminetsearch "%s"',10
 	dc.b	"echo HiPPrg > T:prg",10
 	dc.b	'echo "" >> T:prg',10
