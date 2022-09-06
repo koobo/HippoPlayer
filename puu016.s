@@ -16861,11 +16861,9 @@ rememberPtr
 
 
 listSelectorMainWindow
-
 	pushm	d1-a6	
-	move.l	windowbase(a5),a0	* prefs-ikkuna
+	move.l	windowbase(a5),a0	
 	bra.b	listselector\.do
-
 
 * in: 
 *   d6 = mouse x
@@ -16918,16 +16916,16 @@ listselector:
 	move.l	wd_RPort(a0),d7		* rastport
 	move.l	wd_UserPort(a0),a3	* userport
 
-	move.l	d7,a1
-	move.l	pen_1(a5),d0
-	lore	GFX,SetAPen
-	move.l	d7,a1
-	move.l	pen_0(a5),d0
-	lob	SetBPen
-
-	move.l	d7,a1
-	move.l	fontbase(a5),a0
-	lob	SetFont	
+;	move.l	d7,a1
+;	move.l	pen_1(a5),d0
+;	lore	GFX,SetAPen
+;	move.l	d7,a1
+;	move.l	pen_0(a5),d0
+;	lob	SetBPen
+;
+;	move.l	d7,a1
+;	move.l	fontbase(a5),a0
+;	lob	SetFont	
 
 
 	pushm	all
@@ -17056,7 +17054,7 @@ listselector:
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	lore	Intui,AllocRemember
 	tst.l	d0
-	beq.b	.xx
+	beq		.xx
 	move.l	d0,a3
 	; Only need to change these fields
 	move	#GFLG_GADGHCOMP,gg_Flags(a3)
@@ -17072,18 +17070,26 @@ listselector:
 	move	d7,gg_TopEdge(a3)
 	move	d4,gg_GadgetID(a3)
 
+	; Disable bottom two on kick1.3
+	tst.b	uusikick(a5)
+	bne.b	.n
+	cmp		#2,d4
+	blo.b	.n
+	or	#GFLG_DISABLED,gg_Flags(a3)
+.n
+
 	lea	rememberPtr(pc),a0
 	moveq	#it_SIZEOF,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	lob		AllocRemember
 	tst.l	d0
-	beq.b	.xx
+	beq		.xx
 	move.l	d0,a2
 	move.l	a2,gg_GadgetText(a3)
 	move.b	#1,it_FrontPen(a2)
 	move.b	#1,it_DrawMode(a2)
 	move.l	a4,it_IText(a2)
-	move.l	fontbase(a5),it_ITextFont(a2)
+	move.l	#text_attr,it_ITextFont(a2)
 	move	d5,it_LeftEdge(a2)	
 
 	move.l	d6,a0
