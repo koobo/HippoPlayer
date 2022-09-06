@@ -49010,10 +49010,7 @@ fetchRemoteFile
 	popm	d1-a6
 	rts
 
-.getScriptExecute
-	dc.b	"execute "
-.getScriptPath 
-	dc.b	"T:hip",0
+
 .modlandGetScript
 	dc.b	"path ${UHCBIN}C ADD",10
 	dc.b	'aget http://ftp.modland.com/pub/modules/%s "T:%s" QUIET',0
