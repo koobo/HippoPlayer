@@ -16915,6 +16915,7 @@ rememberPtr
 
 
 listSelectorMainWindow
+
 	pushm	d1-a6	
 	move.l	windowbase(a5),a0	* prefs-ikkuna
 	bra.b	listselector\.do
@@ -16927,6 +16928,8 @@ listSelectorMainWindow
 * out: 
 *   d0 = selected index, or -1 if cancel
 listselector:
+.LINE_HEIGHT = 8
+
 	pushm	d1-a6	
 	move.l	a0,a4
 	move.l	windowbase2(a5),a0	* prefs-ikkuna
@@ -16950,7 +16953,7 @@ listselector:
 
 	moveq	#0,d5
 	move.b	1(a4),d5
-	mulu	#8,d5
+	mulu	#.LINE_HEIGHT,d5
 	addq	#7,d5
 	move	d5,nw_Height(a0)
 
@@ -16985,7 +16988,7 @@ listselector:
 	
 	moveq	#0,d4
 	move.b	(a4)+,d4	* max leveys
-	lsl	#3,d4
+	lsl	#3,d4			* x8
 
 	moveq	#0,d5
 	move.b	(a4)+,d5	* vaakarivejä
@@ -17005,14 +17008,14 @@ listselector:
 	move	d4,d0
 	sub	d1,d0
 	lsr	#1,d0
-	addq	#8,d0
+	;addq	#8,d0	* right margin
 
 	move	d3,d1
 	* d0 = x
 	* d1 = y
 	* a0 = text
 	bsr.w	.print
-	addq	#8,d3 * next y
+	add		#.LINE_HEIGHT,d3 * next y
 	addq	#1,d2 * id number
 	move.l	a1,a0
 	dbf	d5,.prl
@@ -17060,6 +17063,8 @@ listselector:
 	bne.b	.noButtons
 	cmp		#SELECTDOWN,d3
 	beq.b	.done
+	cmp		#MENUDOWN,d3
+	beq.b	.done
 .noButtons
 	cmp.l	#IDCMP_RAWKEY,d2
 	beq.b	.done
@@ -17084,6 +17089,7 @@ listselector:
 	popm	d1-a6
 	rts
 
+* Makes a bool gadget 
 * In:
 *   d0 = x
 *   d1 = y
@@ -17103,47 +17109,48 @@ listselector:
 	moveq	#gg_SIZEOF,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	lore	Intui,AllocRemember
+	tst.l	d0
+	beq.b	.xx
 	move.l	d0,a3
-	move.l	d0,a1
-	lea	listSelectorButton1,a0
-	moveq	#gg_SIZEOF,d0
-	lore	Exec,CopyMem
+	; Only need to change these fields
+	move	#GFLG_GADGHCOMP,gg_Flags(a3)
+	move	#GACT_RELVERIFY,gg_Activation(a3)
+	move	#GTYP_BOOLGADGET,gg_GadgetType(a3)
 
 	move.l	d6,a0
 	move	wd_Width(a0),d0
-	sub		d5,d0
-	sub		d5,d0
+	sub		#16,d0
 	move	d0,gg_Width(a3)
-	move	#8,gg_Height(a3)
-	move	d5,gg_LeftEdge(a3)
+	move	#.LINE_HEIGHT,gg_Height(a3)
+	move	#8,gg_LeftEdge(a3)
 	move	d7,gg_TopEdge(a3)
 	move	d4,gg_GadgetID(a3)
 
 	lea	rememberPtr(pc),a0
 	moveq	#it_SIZEOF,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
-	lore	Intui,AllocRemember
+	lob		AllocRemember
+	tst.l	d0
+	beq.b	.xx
 	move.l	d0,a2
 	move.l	a2,gg_GadgetText(a3)
-
-	lea	listSelectorIntuiText1,a0
-	move.l	d0,a1
-	moveq	#it_SIZEOF,d0
-	lore	Exec,CopyMem
-
+	move.b	#1,it_FrontPen(a2)
+	move.b	#1,it_DrawMode(a2)
 	move.l	a4,it_IText(a2)
 	move.l	fontbase(a5),it_ITextFont(a2)
+	move	d5,it_LeftEdge(a2)	
 
 	move.l	d6,a0
 	move.l	a3,a1
 	moveq	#0,d0 * position
-	lore	Intui,AddGadget
+	lob		AddGadget
 
 	move.l	a3,a0
 	move.l	d6,a1 * window
 	sub.l	a2,a2 * req
 	moveq	#1,d0 * numgad
 	lob		RefreshGList
+
 .xx
 	popm	all
 	rts
@@ -30459,6 +30466,9 @@ drawButtonFramePrefsWindow
 	popm	all
 	rts
 
+* in:
+*   a1 = rastport
+*   a3 = gadget
 doDrawButtonFrame
 	movem	4(a3),plx1/ply1/plx2/ply2
 	add	plx1,plx2
@@ -49652,60 +49662,6 @@ gadgetResize
 	dc.b 0
 	; ig_NextImage
 	dc.l 0
-
-
-listSelectorButton1
-	; gg_NextGadget
-	dc.l 0
-	; gg_LeftEdge
-	dc 0
-	; gg_TopEdge
-	dc 0
-	; gg_Width
-	dc 0
-	; gg_Height
-	dc 8
-	; gg_Flags
-	dc GFLG_GADGHCOMP
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l 0
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-
-listSelectorIntuiText1
-	; it_FrontPen
-	dc.b	1	
-	; it_BackPen
-	dc.b	0
-	; it_DrawMode
-	dc.b	1
-	; it_KludgeFill0
-	dc.b	0
-	; it_LeftEdge
-	dc.w	0
-	; it_TopEdge
-	dc.w	0
-	; it_ITextFont
-	dc.l	0	; default font
-	; it_IText
-	dc.l	0
-	; it_NextText
-	dc.l	0
 
 
 * Rename the gadgets defined above to something not crazy
