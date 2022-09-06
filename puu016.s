@@ -11802,13 +11802,14 @@ loadprog
 * out:
 *   d0 = number of modules  
 
-;importModuleProgramFromDataSkipHeader:
-;	pushm	d1-a6
-;	moveq	#0,d7 		* count
-;	move.l	a4,d5		* use this register
-;	move.l	a2,a4 		* list header here
-;	moveq	#1,d6		* 1 = new format
-;	bra	importModuleProgramFromData\.r1
+importModuleProgramFromDataSkipHeader:
+	pushm	d1-a6
+	moveq	#0,d7 		* count
+	move.l	a4,d5		* use this register
+	move.l	a2,a4 		* list header here
+	moveq	#0,d4
+	moveq	#0,d6
+	bra	importModuleProgramFromData\.r1
 
 importModuleProgramFromData:
 	pushm	d1-a6
@@ -11818,56 +11819,49 @@ importModuleProgramFromData:
 	DPRINT	"importModuleProgramFromData %lx %lx"
  endif
 
+* Free:
+* d3
+* d4
+* d6
+
 	moveq	#0,d7 		* count
 	
 	move.l	a3,d0
 	beq.w	.x2
 
+	moveq	#0,d4
+	moveq	#0,d6
+
 	move.l	a4,d5		* use this register
 	move.l	a2,a4 		* list header here
 
-	moveq	#0,d6		* 0 = vanha formaatti
+	;moveq	#0,d6		* 0 = vanha formaatti
 
 	cmp.l	#"HiPP",(a3)
-	bne.b	.rr
+	bne		.what
 	cmp	#"rg",4(a3)
-	bne.b	.rr
+	bne		.what
 .r2	cmp.b	#10,(a3)+	* skipataan kaks rivinvaihtoa
 	bne.b	.r2
 	addq	#1,a3
-	moveq	#1,d6		* uusi formaatti
-	bra.b	.r1
-.rr
-	cmp.l	#"HIPP",(a3)+
-	bne.w	.what
-	cmp	#"RO",(a3)+
-	bne.w	.what
-	addq	#2,a3		* skip: moduulien määrä
 .r1
-
+	moveq	#10,d3
 
 ;	lea	moduleListHeader(a5),a4
 ;	move.l	a5,a4
 .ploop
-	tst	d6
-	bne.b	.new1
-	moveq	#0,d0
-	move.b	(a3)+,d0	* seuraavan pituus
-	lsl	#8,d0
-	move.b	(a3)+,d0
-	bra.b	.old1
-.new1
 
 	move.l	a3,a0
 .r23	
 	cmp.l	d5,a0
 	bhs.w	.x2		* upper bound check
-	cmp.b	#10,(a0)+
+	;cmp.b	#10,(a0)+
+	cmp.b	(a0)+,d3
 	bne.b	.r23
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
 
-.old1
+;.old1
 
 	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -11878,27 +11872,8 @@ importModuleProgramFromData:
 .gotMem2
 	move.l	d0,a2
 
+	* Copy filename 
 	lea	l_filename(a2),a0
-
-	tst	d6
-	bne.b	.new2
-	move.b	(a3)+,d0
-	lsl	#8,d0
-	move.b	(a3)+,d0
-
-	cmp.b	#DIVIDER_MAGIC,(a3)
-	bne.b	.notDiv1
-	addq	#1,a3
-	st	l_divider(a2)
-	subq	#1,d0
-.notDiv1
-
-	subq	#1,d0
-.cy	move.b	(a3)+,(a0)+
-	dbf	d0,.cy
-	clr.b	(a0)
-	bra.b	.old2
-.new2
 
 	cmp.b	#DIVIDER_MAGIC,(a3)
 	bne.b	.notDiv2
@@ -11906,7 +11881,7 @@ importModuleProgramFromData:
 	st	l_divider(a2)
 .notDiv2
 	
-
+	* d1 = remote flag
 	moveq	#0,d1
 	* Restore remote entry 
 	cmp.b	#"h",(a3)
@@ -11920,11 +11895,17 @@ importModuleProgramFromData:
 	moveq	#1,d1
 .notRemote
 
-.le	move.b	(a3),(a0)+
-	cmp.b	#10,(a3)+
+	* Copy chars until line change
+.le	
+	;move.b	(a3),(a0)+
+	;cmp.b	#10,(a3)+
+	move.b	(a3)+,d2
+	move.b	d2,(a0)+
+	cmp.b	d3,d2
 	bne.b	.le
+	* Replace LF with NULL
 	clr.b	-(a0)
-.old2
+;.old2
 
 	lea	l_filename(a2),a1
 	tst.b	l_divider(a2)
