@@ -17092,12 +17092,9 @@ listselector:
 	move	d7,gg_TopEdge(a3)
 	move	d4,gg_GadgetID(a3)
 
-	; Disable bottom two on kick1.3, or if UHC not available
+	; Disable bottom two if UHC not available
 	jsr		isUHCAvailable
-	beq.b	.noUHC
-	tst.b	uusikick(a5)
 	bne.b	.n
-.noUHC
 	cmp		#2,d4
 	blo.b	.n
 	or	#GFLG_DISABLED,gg_Flags(a3)
@@ -48733,7 +48730,7 @@ layoutButtonRow
 
 ***************************************************************************
 *
-* Modland integration using UHC
+* Modland, Aminet integration using UHC
 *
 ***************************************************************************
 
@@ -48762,7 +48759,7 @@ remoteSearch
 	bne.b	.go
 	rts
 .go
-	* Storage space for building the script
+	* Storage space for user input
 	lea	-50(sp),sp
 	move.l	sp,a1
 	clr.b	(a1)
@@ -48785,7 +48782,7 @@ remoteSearch
 	tst.l	d0
 	beq		.exit
 
-
+	* Prepare script into desbuf(a5)
 	lea		.modlandSearchCmd(pc),a0
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.1
@@ -48794,6 +48791,7 @@ remoteSearch
 	move.l	sp,d0		* search word
 	jsr		desmsg
 
+	* Save it into a file for execution
 	lea		desbuf(a5),a0
 	move.l	a0,a1
 .findEnd
@@ -48812,7 +48810,7 @@ remoteSearch
 	
 	lea		remoteScriptPath(pc),a0
 	; data in a1
-	jsr		plainSaveFile
+	bsr		plainSaveFile
 	tst.l	d0
 	bmi		.exit
 
@@ -48826,12 +48824,13 @@ remoteSearch
 	lore	Dos,Execute
 	DPRINT	"Status=%ld"
 
+	* Read the results file
 	lea		.modlandResultsPath(pc),a0
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.a
 	lea		.aminetResultsPath(pc),a0
 .a
-	jsr	plainLoadFile
+	bsr	plainLoadFile
 	DPRINT	"Results=%lx"
 	tst.l	d0
 	beq		.exit
@@ -48860,13 +48859,14 @@ remoteSearch
 	moveq	#.modlandLineE-.modlandLine,d4
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.2
+	* Aminet url has been determined earlier
 	move.l	uhcAminetMirrorPath(a5),d6
 	move.l	d6,a0
 .flen
 	tst.b	(a0)+
 	bne.b	.flen
 	move.l	a0,d4
-	sub.l	d6,d4
+	sub.l	d6,d4 * string length in d4
 .2
 	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
@@ -48908,7 +48908,6 @@ remoteSearch
 .modlandSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'modlandsearch "%s"',10
-
 	dc.b	0
 .aminetSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
@@ -48956,7 +48955,7 @@ fetchRemoteFile
 
 	moveq	#0,d7	* status
 
-	* Temporary target file path, the last part
+	* Temporary target file path, the last part of the url path
 	move.l	l_nameaddr(a3),a1
 .end
 	tst.b	(a1)+
@@ -48975,7 +48974,6 @@ fetchRemoteFile
 	* Generate parametrized script
 	lea		l_filename(a3),a0
 	move.l	a0,d0
-	;move.l	l_nameaddr(a3),d1
 	move.l	a1,d1
 	lea		.getScript(pc),a0
 	jsr		desmsg
@@ -48995,7 +48993,7 @@ fetchRemoteFile
 
 	lea		remoteScriptPath(pc),a0
 	lea	desbuf(a5),a1
-	jsr		plainSaveFile
+	bsr		plainSaveFile
 	tst.l	d0
 	bmi		.exit
 
@@ -49023,7 +49021,7 @@ remoteScriptPath
  even
 
 * Checks if UHC is installed by looking for the aminet mirror
-* info. Constructs the URL for aminet.
+* info. Constructs the URL for aminet for later.
 initializeUHC
 	tst.b	uusikick(a5)
 	bne.b	.go
@@ -49042,7 +49040,7 @@ initializeUHC
 	moveq	#.httpE-.http+1,d0
 	add.l	d7,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr		getmem
+	jsr		getmem
 	beq.b	.x
 	move.l	d0,uhcAminetMirrorPath(a5)
 	move.l	d0,a0
@@ -49056,7 +49054,7 @@ initializeUHC
 .c2	move.b	(a1)+,(a0)+
 	dbf		d7,.c2
 	clr.b	(a0)
-.sk
+
 	move.l	a3,a0
 	jsr		freemem
  if DEBUG
@@ -49078,7 +49076,7 @@ initializeUHC
 
 deinitUHC
 	move.l	uhcAminetMirrorPath(a5),a0
-	jmp	freemem
+	jmp		freemem
 
 isUHCAvailable
 	tst.l	uhcAminetMirrorPath(a5)
