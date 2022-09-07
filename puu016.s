@@ -11804,11 +11804,16 @@ loadprog
 
 importModuleProgramFromDataSkipHeader:
 	pushm	d1-a6
+ if DEBUG
+	move.l	a3,d0 
+	move.l	a4,d1
+	DPRINT	"importModuleProgramFromDataSkipHdr %lx %lx"
+ endif
 	moveq	#0,d7 		* count
 	move.l	a4,d5		* use this register
 	move.l	a2,a4 		* list header here
-	moveq	#0,d4
-	moveq	#0,d6
+	;moveq	#0,d4
+	;moveq	#0,d6
 	bra	importModuleProgramFromData\.r1
 
 importModuleProgramFromData:
@@ -11851,6 +11856,19 @@ importModuleProgramFromData:
 ;	move.l	a5,a4
 .ploop
 
+	moveq	#0,d1	* local
+	cmp.b	#"h",(a3)
+	bne.b	.local
+	cmp.b	#"t",1(a3)
+	bne.b	.local
+	cmp.b	#"t",2(a3)
+	bne.b	.local
+	cmp.b	#"p",3(a3)
+	bne.b	.local
+	move	#1,d1	* remote
+.local
+
+
 	move.l	a3,a0
 .r23	
 	cmp.l	d5,a0
@@ -11864,6 +11882,7 @@ importModuleProgramFromData:
 ;.old1
 
 	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
+	add.l	d4,d0	* add extra if any
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
 	bne.b	.gotMem2
@@ -11880,25 +11899,22 @@ importModuleProgramFromData:
 	addq	#1,a3
 	st	l_divider(a2)
 .notDiv2
-	
-	* d1 = remote flag
-	moveq	#0,d1
-	* Restore remote entry 
-	cmp.b	#"h",(a3)
-	bne.b	.notRemote
-	cmp.b	#"t",1(a3)
-	bne.b	.notRemote
-	cmp.b	#"t",2(a3)
-	bne.b	.notRemote
-	cmp.b	#"p",3(a3)
-	bne.b	.notRemote
-	moveq	#1,d1
-.notRemote
+
+	* See if additional header should
+	* be prepended to the line. This indicates
+	* a remote url, it is used to add the base url address.
+	tst.l	d6
+	beq.b	.noHdr
+	moveq	#1,d1	* remote!
+	move.l	d6,a6
+.copyHdr
+	move.b	(a6)+,(a0)+
+	bne.b	.copyHdr
+	subq	#1,a0 * to NULL
+.noHdr
 
 	* Copy chars until line change
 .le	
-	;move.b	(a3),(a0)+
-	;cmp.b	#10,(a3)+
 	move.b	(a3)+,d2
 	move.b	d2,(a0)+
 	cmp.b	d3,d2
@@ -11913,16 +11929,17 @@ importModuleProgramFromData:
 	move.l	a1,a0
 	bra.b	.wasDiv
 .notDiv
-	bsr.w	nimenalku
-.wasDiv
-	move.l	a0,l_nameaddr(a2)
-
 	tst.b	d1
-	beq.b	.local
+	beq.b	.wasLocal
 	; Config this node as a remote node
 	move.l	a2,a0
 	jsr		configRemoteNode
-.local
+	bra.b	.wasRemote
+.wasLocal
+	bsr.w	nimenalku
+.wasDiv
+	move.l	a0,l_nameaddr(a2)
+.wasRemote
 
 	* add node a1 to list a0	
 	move.l	a2,a1
@@ -18159,13 +18176,6 @@ inforivit_searching
 	bra.w	putinfo
 .1	dc.b	"Searching...",0
  even
-
-inforivit_processing
-	lea	.1(pc),a0
-	bra.w	putinfo
-.1	dc.b	"Processing...",0
- even
-
 
 
 ;inforivit_initializing
@@ -48809,8 +48819,13 @@ remoteSearch
 	lore	Dos,Execute
 	DPRINT	"Status=%ld"
 
-	lea		.resultsPath(pc),a0
+	lea		.modlandResultsPath(pc),a0
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.a
+	lea		.aminetResultsPath(pc),a0
+.a
 	jsr	plainLoadFile
+	DPRINT	"Results=%lx"
 	tst.l	d0
 	beq		.exit
 	; d0 = data
@@ -48823,7 +48838,6 @@ remoteSearch
 	jsr		freelist
 	* ensure the normal mode is active
 	jsr		engageNormalMode
-	jsr		inforivit_processing
 	popm	all
 
 	; start of data
@@ -48832,7 +48846,17 @@ remoteSearch
 	lea		(a3,d1.l),a4
 	; destination list
 	lea moduleListHeader(a5),a2
-	jsr		importModuleProgramFromData
+	
+	* Determine line header to use to add the "http://" -base address
+	* to each line.
+	pushpea	.modlandLine(pc),d6
+	moveq	#.modlandLineE-.modlandLine,d4
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.2
+	pushpea	.aminetLine(pc),d6
+	moveq	#.aminetLineE-.aminetLine,d4
+.2
+	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
 
 	* Flag these to be remotes,
@@ -48857,28 +48881,30 @@ remoteSearch
 	rts
 
 
+.modlandLine
+	dc.b	"http://ftp.modland.com/pub/modules/",0
+.modlandLineE
+.aminetLine
+	dc.b	"http://de.aminet.net/aminet/",0
+.aminetLineE
+
 .searchModland
 	dc.b	"Search Modland",0
 .searchAminet
 	dc.b	"Search Aminet",0
-.resultsPath
-	dc.b	"T:prg",0
+.aminetResultsPath
+	dc.b	"T:aminetsearch",0
+.modlandResultsPath
+	dc.b	"T:modlandsearch",0
 .modlandSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'modlandsearch "%s"',10
-	dc.b	"echo HiPPrg > T:prg",10
-	dc.b	'echo "" >> T:prg',10
-	dc.b	"ForEachLine T:modlandsearch",10
-	dc.b    "echo http://ftp.modland.com/pub/modules/$LINE >> T:prg",10
-	dc.b	"EndForEach",10,0
+
+	dc.b	0
 .aminetSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'aminetsearch "%s"',10
-	dc.b	"echo HiPPrg > T:prg",10
-	dc.b	'echo "" >> T:prg',10
-	dc.b	"ForEachLine T:aminetsearch",10
-	dc.b    "echo http://${UHC/AMINETMIRROR}$LINE >> T:prg",10
-	dc.b	"EndForEach",10,0
+	dc.b	0
 	even
 
 * Set list node remote type and
