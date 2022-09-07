@@ -11858,13 +11858,12 @@ importModuleProgramFromData:
 	bne.b	.r2
 	addq	#1,a3
 .r1
-	moveq	#10,d3
-
+	
 ;	lea	moduleListHeader(a5),a4
 ;	move.l	a5,a4
 .ploop
 
-	moveq	#0,d1	* local
+	moveq	#0,d3	* local
 	cmp.b	#"h",(a3)
 	bne.b	.local
 	cmp.b	#"t",1(a3)
@@ -11873,16 +11872,17 @@ importModuleProgramFromData:
 	bne.b	.local
 	cmp.b	#"p",3(a3)
 	bne.b	.local
-	move	#1,d1	* remote
+	move	#1,d3	* remote
 .local
 
 
 	move.l	a3,a0
+	moveq	#10,d1
 .r23	
 	cmp.l	d5,a0
 	bhs.w	.x2		* upper bound check
 	;cmp.b	#10,(a0)+
-	cmp.b	(a0)+,d3
+	cmp.b	(a0)+,d1
 	bne.b	.r23
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
@@ -11913,7 +11913,7 @@ importModuleProgramFromData:
 	* a remote url, it is used to add the base url address.
 	tst.l	d6
 	beq.b	.noHdr
-	moveq	#1,d1	* remote!
+	moveq	#1,d3	* remote!
 	move.l	d6,a6
 .copyHdr
 	move.b	(a6)+,(a0)+
@@ -11922,10 +11922,11 @@ importModuleProgramFromData:
 .noHdr
 
 	* Copy chars until line change
+	moveq	#10,d1
 .le	
 	move.b	(a3)+,d2
 	move.b	d2,(a0)+
-	cmp.b	d3,d2
+	cmp.b	d1,d2
 	bne.b	.le
 	* Replace LF with NULL
 	clr.b	-(a0)
@@ -11937,7 +11938,7 @@ importModuleProgramFromData:
 	move.l	a1,a0
 	bra.b	.wasDiv
 .notDiv
-	tst.b	d1
+	tst.b	d3
 	beq.b	.wasLocal
 	; Config this node as a remote node
 	move.l	a2,a0
