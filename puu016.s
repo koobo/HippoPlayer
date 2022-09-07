@@ -1358,6 +1358,13 @@ listBoxClipRegion	rs.l	1
 * String extend structure to configure custom font to string gadgets on kick2.0+
 stringExtendStruct 	rs.b	sex_SIZEOF
 
+* Popup list selector memory remember pointer
+listSelectorRememberPtr		rs.l	1
+
+* UHC aminet mirror path, if this is NULL, there's no UHC
+* installed. Should be freed on exit.
+uhcAminetMirrorPath			rs.l	1
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -3012,6 +3019,7 @@ main
 
 	jsr	inforivit_clear
 	jsr	importFavoriteModulesFromDisk
+	jsr	initializeUHC
 
 	DPRINT	"Loading group"
 
@@ -3518,7 +3526,7 @@ exit
 .exmsg2
 	jsr	exportFavoriteModulesToDisk
 	jsr	exportSavedStateModulesToDisk
-
+	jsr	deinitUHC
 * poistetaan loput prosessit...
 
 
@@ -12108,7 +12116,7 @@ filereqtitle3
 * in:
 *  a0 = filename
 *  a1 = list
-exportModuleProgramToFile
+exportModuleProgramToFile:
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"Exporting module list to %s"
@@ -16873,9 +16881,6 @@ updateahi
 wflags4 = WFLG_SMART_REFRESH!WFLG_ACTIVATE!WFLG_BORDERLESS!WFLG_RMBTRAP
 idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
-rememberPtr
-	dc.l	0
-
 
 listSelectorMainWindow
 	pushm	d1-a6	
@@ -17042,7 +17047,7 @@ listselector:
 	lore	Intui,CloseWindow
 .eek
 .x
-	lea	rememberPtr(pc),a0
+	lea	listSelectorRememberPtr(a5),a0
 	moveq	#1,d0 * forget all of it
 	lore	Intui,FreeRemember
 
@@ -17066,7 +17071,7 @@ listselector:
 	move	d2,d4
 
 	; Get NewGadget
-	lea		rememberPtr(pc),a0
+	lea	listSelectorRememberPtr(a5),a0
 	moveq	#gg_SIZEOF,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	lore	Intui,AllocRemember
@@ -17087,15 +17092,18 @@ listselector:
 	move	d7,gg_TopEdge(a3)
 	move	d4,gg_GadgetID(a3)
 
-	; Disable bottom two on kick1.3
+	; Disable bottom two on kick1.3, or if UHC not available
+	jsr		isUHCAvailable
+	beq.b	.noUHC
 	tst.b	uusikick(a5)
 	bne.b	.n
+.noUHC
 	cmp		#2,d4
 	blo.b	.n
 	or	#GFLG_DISABLED,gg_Flags(a3)
 .n
 
-	lea	rememberPtr(pc),a0
+	lea	listSelectorRememberPtr(a5),a0
 	moveq	#it_SIZEOF,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	lob		AllocRemember
@@ -48750,9 +48758,8 @@ aminetSearch
 * in:
 *  d7 = remote type enumeration
 remoteSearch
-	tst.b	uusikick(a5)
+	bsr		isUHCAvailable
 	bne.b	.go
-	; Let's not try this on kick1.3
 	rts
 .go
 	* Storage space for building the script
@@ -48853,8 +48860,13 @@ remoteSearch
 	moveq	#.modlandLineE-.modlandLine,d4
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.2
-	pushpea	.aminetLine(pc),d6
-	moveq	#.aminetLineE-.aminetLine,d4
+	move.l	uhcAminetMirrorPath(a5),d6
+	move.l	d6,a0
+.flen
+	tst.b	(a0)+
+	bne.b	.flen
+	move.l	a0,d4
+	sub.l	d6,d4
 .2
 	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
@@ -48884,9 +48896,6 @@ remoteSearch
 .modlandLine
 	dc.b	"http://ftp.modland.com/pub/modules/",0
 .modlandLineE
-.aminetLine
-	dc.b	"http://de.aminet.net/aminet/",0
-.aminetLineE
 
 .searchModland
 	dc.b	"Search Modland",0
@@ -49013,6 +49022,68 @@ remoteScriptPath
 
  even
 
+* Checks if UHC is installed by looking for the aminet mirror
+* info. Constructs the URL for aminet.
+initializeUHC
+	tst.b	uusikick(a5)
+	bne.b	.go
+	rts
+.go
+	lea	.aminetMirrorPath(pc),a0
+	bsr	plainLoadFile
+	* d0 = data
+	* d1 = length
+	tst.l	d0
+	beq.b	.f
+	move.l	d1,d7
+	move.l	d0,a3
+
+	* space for header + NULL
+	moveq	#.httpE-.http+1,d0
+	add.l	d7,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	bsr		getmem
+	beq.b	.x
+	move.l	d0,uhcAminetMirrorPath(a5)
+	move.l	d0,a0
+
+	lea		.http(pc),a1
+.c1	move.b	(a1)+,(a0)+
+	bne.b	.c1
+	subq	#1,a0
+	move.l	a3,a1
+	subq	#1,d7
+.c2	move.b	(a1)+,(a0)+
+	dbf		d7,.c2
+	clr.b	(a0)
+.sk
+	move.l	a3,a0
+	jsr		freemem
+ if DEBUG
+	move.l	uhcAminetMirrorPath(a5),d0
+	DPRINT	"UHC aminet mirror=%s"
+ endif
+.x
+	rts
+.f
+	DPRINT	"UHC not available",0
+	rts
+
+.http	dc.b	"http://",0
+.httpE
+
+.aminetMirrorPath
+	dc.b	"ENV:UHC/AMINETMIRROR",0
+	even
+
+deinitUHC
+	move.l	uhcAminetMirrorPath(a5),a0
+	jmp	freemem
+
+isUHCAvailable
+	tst.l	uhcAminetMirrorPath(a5)
+	rts
+	
 ***************************************************************************
 *
 * Performance measurement with timer.device
