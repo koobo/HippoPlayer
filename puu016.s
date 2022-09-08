@@ -9400,6 +9400,7 @@ rsearchfuncs
 	move	gg_LeftEdge(a0),d6
 	move	gg_TopEdge(a0),d7
 	add		#20,d7
+	pushpea	.callback(pc),d4
 	bsr		listSelectorMainWindow
 	bmi.b	.skip
 	beq		find_new
@@ -9416,6 +9417,20 @@ rsearchfuncs
 	jmp	modlandSearch
 .aminet
 	jmp	aminetSearch
+
+
+* in:
+*   d3 = index to check
+.callback
+	; Disable bottom two rows if UHC not available
+	cmp		#2,d3
+	blo.b	.n
+	jsr		isUHCAvailable
+	bne.b	.n
+	moveq	#0,d0
+	rts
+.n	moveq	#1,d0
+	rts
 
 .options
 	* max width, rows
@@ -13079,6 +13094,7 @@ drawtexture:
 	rts
 
 .texture dc	$5555,$aaaa
+
 
 
 *******************************************************************************
@@ -16889,16 +16905,18 @@ listSelectorMainWindow
 	bra.b	listselector\.do
 
 * in: 
+*   d4 = callback to check whether line should be enabled
 *   d6 = mouse x
 *   d7 = mouse y
 *   a0 = data to show
 * out: 
 *   d0 = selected index, or -1 if cancel
 listselector:
-.LINE_HEIGHT = 8
+.LINE_HEIGHT = 12
 
 	pushm	d1-a6	
 	move.l	a0,a4
+	moveq	#0,d4
 	move.l	windowbase2(a5),a0	* prefs-ikkuna
 .do
 	add	wd_LeftEdge(a0),d6	* mousepos suhteellinen prefs-ikkunan
@@ -16921,7 +16939,7 @@ listselector:
 	moveq	#0,d5
 	move.b	1(a4),d5
 	mulu	#.LINE_HEIGHT,d5
-	addq	#7,d5
+	addq	#8,d5
 	move	d5,nw_Height(a0)
 
 	lsr	#1,d5
@@ -16939,23 +16957,12 @@ listselector:
 	move.l	wd_RPort(a0),d7		* rastport
 	move.l	wd_UserPort(a0),a3	* userport
 
-;	move.l	d7,a1
-;	move.l	pen_1(a5),d0
-;	lore	GFX,SetAPen
-;	move.l	d7,a1
-;	move.l	pen_0(a5),d0
-;	lob	SetBPen
-;
-;	move.l	d7,a1
-;	move.l	fontbase(a5),a0
-;	lob	SetFont	
-
 
 	pushm	all
 	
-	moveq	#0,d4
-	move.b	(a4)+,d4	* max leveys
-	lsl	#3,d4			* x8
+	moveq	#0,d7
+	move.b	(a4)+,d7	* max leveys
+	lsl	#3,d7			* x8
 
 	moveq	#0,d5
 	move.b	(a4)+,d5	* vaakarivejä
@@ -16972,7 +16979,7 @@ listselector:
 	sub.l	a0,d1
 	subq	#1,d1
 	lsl	#3,d1
-	move	d4,d0
+	move	d7,d0
 	sub	d1,d0
 	lsr	#1,d0
 	;addq	#8,d0	* right margin
@@ -17061,6 +17068,7 @@ listselector:
 *   d0 = x
 *   d1 = y
 *   d2 = id
+*   d4 = callback
 *   a0 = text
 *   d6 = window base
 .print
@@ -17069,7 +17077,7 @@ listselector:
 	move.l	a0,a4	* save text
 	move	d0,d5
 	move	d1,d7
-	move	d2,d4
+	move	d2,d3
 
 	; Get NewGadget
 	lea	listSelectorRememberPtr(a5),a0
@@ -17086,20 +17094,21 @@ listselector:
 
 	move.l	d6,a0
 	move	wd_Width(a0),d0
-	sub		#16,d0
+	sub		#16-4,d0
 	move	d0,gg_Width(a3)
 	move	#.LINE_HEIGHT,gg_Height(a3)
-	move	#8,gg_LeftEdge(a3)
+	move	#8-2,gg_LeftEdge(a3)
 	move	d7,gg_TopEdge(a3)
-	move	d4,gg_GadgetID(a3)
+	move	d3,gg_GadgetID(a3)
 
-	; Disable bottom two if UHC not available
-	jsr		isUHCAvailable
-	bne.b	.n
-	cmp		#2,d4
-	blo.b	.n
+	* Enable/disable callback
+	tst.l	d4
+	beq.b	.enabled
+	move.l	d4,a0
+	jsr		(a0)
+	bne.b	.enabled
 	or	#GFLG_DISABLED,gg_Flags(a3)
-.n
+.enabled
 
 	lea	listSelectorRememberPtr(a5),a0
 	moveq	#it_SIZEOF,d0
@@ -17110,10 +17119,12 @@ listselector:
 	move.l	d0,a2
 	move.l	a2,gg_GadgetText(a3)
 	move.b	#1,it_FrontPen(a2)
-	move.b	#1,it_DrawMode(a2)
+	move.b	#RP_JAM1,it_DrawMode(a2)
 	move.l	a4,it_IText(a2)
 	move.l	#text_attr,it_ITextFont(a2)
+	addq	#2,d5
 	move	d5,it_LeftEdge(a2)	
+	move	#2,it_TopEdge(a2)
 
 	move.l	d6,a0
 	move.l	a3,a1
@@ -17126,6 +17137,10 @@ listselector:
 	moveq	#1,d0 * numgad
 	lob		RefreshGList
 
+	move.l	d6,a1
+	move.l	wd_RPort(a1),a1
+	move.l	a3,a3
+	bsr		doDrawButtonFrame
 .xx
 	popm	all
 	rts
