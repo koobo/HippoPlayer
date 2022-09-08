@@ -5541,7 +5541,7 @@ sulje_ikkuna
 * TODO: Could use rtLockWindow to replace freezegads and set wait pointer
 
 pon1
-setMainWindowWaitPointer	
+setMainWindowWaitPointer:
 	pushm	all
 	move.l	windowbase(a5),d0
 	bra.b	pon0
@@ -5556,7 +5556,7 @@ pon0	beq.b	.q
 .q	popm	all
 	rts
 
-clearMainWindowWaitPointer
+clearMainWindowWaitPointer:
 poff1
 	pushm	all
 	move.l	windowbase(a5),d0
@@ -5629,20 +5629,24 @@ showOutOfMemoryError
 lockMainWindow 
 	tst.l	windowbase(a5)
 	beq.b	.x
+	pushm	all
 	bsr.w	get_rt
 	move.l	windowbase(a5),a0
 	lob    	rtLockWindow
 	move.l	d0,mainWindowLock(a5)
+	popm	all
 .x	rts
 
 unlockMainWindow
 	tst.l	mainWindowLock(a5)
 	beq.b	.x 
+	pushm	all
 	bsr.w	get_rt
 	move.l	windowbase(a5),a0
 	move.l	mainWindowLock(a5),a1
 	lob 	rtUnlockWindow
 	clr.l	mainWindowLock(a5)
+	popm	all
 .x	rts
 
 
@@ -9398,8 +9402,8 @@ rsearchfuncs
 	lea		.options(pc),a4
 	lea		gadgetSortButton,a0
 	move	gg_LeftEdge(a0),d6
-	move	gg_TopEdge(a0),d7
-	add		#20,d7
+	moveq	#20,d7
+	add		gg_TopEdge(a0),d7
 	pushpea	.callback(pc),d4
 	bsr		listSelectorMainWindow
 	bmi.b	.skip
@@ -9439,9 +9443,7 @@ rsearchfuncs
 	dc.b	"Search next    [SHIFT+F]",0
 	dc.b	"Search Modland [CTRL+M] ",0
 	dc.b	"Search Aminet  [CTRL+A] ",0
-	even
-
-
+	
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
  even
@@ -11818,13 +11820,15 @@ loadprog
 	jsr	engageNormalMode
 	bra.b	rloadprogDoIt\.blob
 
+* Variant that skips the prg file header,
+* and adds extra data in front of every added
+* file path.
 * in:
 *   a2 = list header
 *   a3 = data read from file
 *   a4 = end address of buffer
-* out:
-*   d0 = number of modules  
-
+*   d4 = line header length
+*   d6 = line header address 
 importModuleProgramFromDataSkipHeader:
 	pushm	d1-a6
  if DEBUG
@@ -11835,10 +11839,14 @@ importModuleProgramFromDataSkipHeader:
 	moveq	#0,d7 		* count
 	move.l	a4,d5		* use this register
 	move.l	a2,a4 		* list header here
-	;moveq	#0,d4
-	;moveq	#0,d6
 	bra	importModuleProgramFromData\.r1
 
+* in:
+*   a2 = list header
+*   a3 = data read from file
+*   a4 = end address of buffer
+* out:
+*   d0 = number of modules  
 importModuleProgramFromData:
 	pushm	d1-a6
  if DEBUG
@@ -11857,8 +11865,8 @@ importModuleProgramFromData:
 	move.l	a3,d0
 	beq.w	.x2
 
-	moveq	#0,d4
-	moveq	#0,d6
+	moveq	#0,d4		* no line header
+	moveq	#0,d6		* no line header
 
 	move.l	a4,d5		* use this register
 	move.l	a2,a4 		* list header here
@@ -11878,6 +11886,7 @@ importModuleProgramFromData:
 ;	move.l	a5,a4
 .ploop
 
+	* Is this an url?
 	moveq	#0,d3	* local
 	cmp.b	#"h",(a3)
 	bne.b	.local
@@ -11890,7 +11899,6 @@ importModuleProgramFromData:
 	move	#1,d3	* remote
 .local
 
-
 	move.l	a3,a0
 	moveq	#10,d1
 .r23	
@@ -11902,10 +11910,8 @@ importModuleProgramFromData:
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
 
-;.old1
-
 	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
-	add.l	d4,d0	* add extra if any
+	add.l	d4,d0	* add extra header space if any
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
 	bne.b	.gotMem2
@@ -11945,7 +11951,6 @@ importModuleProgramFromData:
 	bne.b	.le
 	* Replace LF with NULL
 	clr.b	-(a0)
-;.old2
 
 	lea	l_filename(a2),a1
 	tst.b	l_divider(a2)
@@ -17781,6 +17786,8 @@ delete
 	moveq	#0,d6
 .noa
 	lea	l_filename(a3),a0
+	tst.b	l_remote(a3)	* can't delete remotes
+	bne.b	.nmod
 	move.l	a0,d1
 	lore	Dos,DeleteFile	
 	tst.l	d0
@@ -48775,13 +48782,15 @@ remoteSearch
 	bne.b	.go
 	rts
 .go
+	jsr		lockMainWindow
+
 	* Storage space for user input
 	lea	-50(sp),sp
 	move.l	sp,a1
 	clr.b	(a1)
-	jsr	get_rt
+	jsr		get_rt
 	; a1 = string buffer
-	; d0 = max xhars
+	; d0 = max chars
 	moveq	#40,d0
 	; a2 = requester title
 	lea		.searchModland(pc),a2
@@ -48789,14 +48798,17 @@ remoteSearch
 	beq.b	.5
 	lea		.searchAminet(pc),a2
 .5
+
 	; a3 = rtReqInfo structure or null
 	sub.l	a3,a3
 	; a0 = tags, to set the public screen
-	lea	otag15,a0
+	lea		otag15,a0
 	lob		rtGetStringA
-	; d0 = true if something entered, false otherwise
+; d0 = true if something entered, false otherwise
 	tst.l	d0
 	beq		.exit
+
+	jsr		inforivit_searching
 
 	* Prepare script into desbuf(a5)
 	lea		.modlandSearchCmd(pc),a0
@@ -48819,11 +48831,6 @@ remoteSearch
 	move.l	a0,d0
 	sub.l	a1,d0
 
-	pushm	all
-	jsr		inforivit_searching
-	jsr		setMainWindowWaitPointer
-	popm	all
-	
 	lea		remoteScriptPath(pc),a0
 	; data in a1
 	bsr		plainSaveFile
@@ -48884,19 +48891,11 @@ remoteSearch
 	move.l	a0,d4
 	sub.l	d6,d4 * string length in d4
 .2
+	* Import data
+	* This will also set l_remote and l_nameaddr
+	* to correct values for remote files.
 	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
-
-	* Flag these to be remotes,
-	* and set l_nameaddr so that the previous folder can be
-	* seen, that is the author's name typically.
-	lea moduleListHeader(a5),a0
-.loop
-	TSTNODE	a0,a0
-	beq.b	.x
-	bsr		configRemoteNode
-	bra.b	.loop
-.x
 
 	move.l	a3,a0
 	jsr		freemem
@@ -48904,7 +48903,7 @@ remoteSearch
 	jsr		releaseModuleList
 .exit
 	jsr		inforivit_play
-	jsr		clearMainWindowWaitPointer
+	jsr		unlockMainWindow
 	lea 	50(sp),sp
 	rts
 
