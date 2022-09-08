@@ -17854,7 +17854,7 @@ execuutti
 	move.l	sp,a4
 	clr.b	(a4)
 
-	bsr.w	get_rt
+	jsr	get_rt
 	moveq	#RT_FILEREQ,D0
 	sub.l	a0,a0
 	lob	rtAllocRequestA
@@ -22612,7 +22612,7 @@ rexxmessage
 	subq	#1,d0
 	move	d0,songnumber(a5)
 	moveq	#0,d1
-	bra.w	songSkip
+	jmp	songSkip
 	
 	
 
@@ -22732,7 +22732,7 @@ rexxmessage
 * This probably doesn't work perfectly
 .loadprefs
 	push	a1
-	bsr.w	rbutton4		* eject
+	jsr	rbutton4		* eject
 	bsr.w	clearlist
 	;bsr.w	sulje_quad
 	bsr.w	stopScopeTasks
