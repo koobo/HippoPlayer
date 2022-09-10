@@ -1113,7 +1113,6 @@ filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 
 loading		rs.b	1		* ~0: lataus meneill‰‰n
 loading2	rs.b	1		* ~0: filejen addaus meneill‰‰n
-					* TODO: not used, remove?
 * List of favorite modules
 favoriteListHeader	rs.b 	MLH_SIZE
 * Flag indicates the list has changed before last save
@@ -10548,7 +10547,7 @@ filereq_code
 	lea	matchp_tags(pc),a0
 	lore	Req,rtChangeReqAttrA
 
-	st	loading2(a5)			* nobody checks this! killl
+	st	loading2(a5)			* checked with loading(a5)
 
 	* launch file requester
 	lea	filereqtags(pc),a0		* tags for configuration
