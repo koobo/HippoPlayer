@@ -28785,10 +28785,10 @@ loadfile
 
 
 .loadloop
- if DEBUG
- 	move.l	d4,d0
-	DPRINT	"Bytes to read %ld"
- endif
+ ;if DEBUG
+ ;	move.l	d4,d0
+ ;	DPRINT	"Bytes to read %ld"
+ ;endif
 	* See if we got all of it already?
 	tst.l	d4
 	beq.w	.don
