@@ -15553,13 +15553,15 @@ psele	move.l	d7,a1
 
 pdup
 	lea	moduledir_new(a5),a0
+	basereg	DuU1,a1
 	lea	DuU1,a1
 	bsr.b	.o
 	lea	prgdir_new(a5),a0
-	lea	DuU2,a1
+	lea	DuU2(a1),a1
 	bsr.b	.o
 	lea	arcdir_new(a5),a0		* DISABLED!
-	lea	DuU3,a1
+	lea	DuU3(a1),a1
+	endb	a1
 	bsr.b	.o
 	rts
 
@@ -18699,11 +18701,10 @@ lootaan_kello
 	lob	AvailMem
 	move.l	d0,d5
 
-	lsr.l	#8,d4
-	lsr.l	#2,d4
-	lsr.l	#8,d5
-	lsr.l	#2,d5
-
+	moveq	#10,d1
+	lsr.l	d1,d4
+	lsr.l	d1,d5
+	
 	cmp	oldchip(a5),d4
 	bne.b	.new
 	cmp	oldfast(a5),d5
