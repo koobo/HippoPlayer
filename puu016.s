@@ -1213,7 +1213,6 @@ hippoport	rs.b	HippoPort_SIZEOF
 
 poptofrontr	rs.l	1		* rutiini esiinpullauttamiseksi
 newcommand	rs.l	1		* osoitin uuteen komentoon
-appnamebuf	rs.l	1		* appviestin nimien työpuskuri
 *******
 
 ********* ARexx
@@ -7172,7 +7171,7 @@ omaviesti
 ** AppWindow-viesti!!
 	move.l	am_NumArgs(a1),d7	* argsien määrä
 	beq		.huh
-	bsr		engageNormalMode
+	jsr		engageNormalMode
 	bsr		obtainModuleList
  if DEBUG
 	move.l	d7,d0
@@ -7284,10 +7283,7 @@ vastomaviesti
 	clr.l	omaviesti0(a5)
 	move.l	d0,a1
 	lore	Exec,ReplyMsg
-.x	move.l	appnamebuf(a5),a0
-	bsr.w	freemem
-	clr.l	appnamebuf(a5)
-	popm	d0/d1/a0/a1/a6
+.x	popm	d0/d1/a0/a1/a6
 	rts
 
 
