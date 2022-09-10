@@ -2518,6 +2518,7 @@ main
 	lea	topaz_text_attr(a3),a0
 	lore	GFX,OpenFont
 	move.l	d0,listfontbase(a5)
+	DPRINT	"revert topaz"
 
 .listFontOk
 	endb	a3
@@ -13765,6 +13766,17 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lea	list_text_attr(a4),a0
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,listfontbase(a5)
+	bne.b	.gotFont
+	
+	lea	list_text_attr(a4),a0	
+	pushpea	topaz(a4),(a0)+
+	move	#8,(a0)+
+	clr	(a0)
+	lea	topaz_text_attr(a4),a0
+	lore	GFX,OpenFont
+	move.l	d0,listfontbase(a5)
+	DPRINT	"revert topaz"
+.gotFont
 	move.l	d0,a0
 	bsr.w	setListFont
 
