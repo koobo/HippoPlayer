@@ -7166,33 +7166,26 @@ omaviesti
 
 .appw
 ** AppWindow-viesti!!
-
 	move.l	am_NumArgs(a1),d7	* argsien m‰‰r‰
-	cmp	#20,d7			* max. 10 kappaletta
-	bls.b	.oe
-	moveq	#20,d7
-.oe	subq	#1,d7
-	move.l	am_ArgList(a1),a3	* args
-	lea	sv_argvArray+4(a5),a4
+	beq		.huh
+	jsr		engageNormalMode
 
-	move.l	#4000,d0		* 20 nime‰,  ‡ 200 merkki‰
-	moveq	#MEMF_PUBLIC,d1		* varataan muistia
-	bsr.w	getmem
-	move.l	d0,appnamebuf(a5)
-	beq.b	.huh			* ERROR!
-	move.l	d0,a2
-
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"AppWindow drag'n'drop num=%ld"
+ endif
+	subq	#1,d7
+	move.l	am_ArgList(a1),a3	* WBArg array
+	lea	-200(sp),sp
+	move.l	sp,a2
 .addfiles
-.getname
 	move.l	wa_Lock(a3),d1
-	move.l	a2,d2
-	moveq	#100,d3			* max pituus
-	push	a2
-	lore	Dos,NameFromLock			* V36
-	pop	a2
+	move.l	sp,d2
+	move.l	#150,d3			* max pituus
+	jsr		getNameFromLock
 	tst.l	d0
 	beq.b	.error
-	move.l	a2,(a4)+
+	move.l	sp,a2
 .fe	tst.b	(a2)+
 	bne.b	.fe
 	subq	#1,a2
@@ -7203,14 +7196,20 @@ omaviesti
 .cp	move.b	(a0)+,(a2)+
 	bne.b	.cp
 
-.file
-
+ if DEBUG
+	move.l		sp,d0
+	DPRINT	"->%s"
+ endif
+	move.l	sp,a0
+	bsr		createListNodeAndAdd
 .error
-	lea	200(a2),a2
 	addq	#wa_SIZEOF,a3
-	dbf	d7,.addfiles
-.lop	clr.l	(a4)
-	bra.b	.app
+	dbf		d7,.addfiles
+.lop	
+	lea		200(sp),sp
+	bsr.w	listChanged
+	bsr.w	forceRefreshList
+	bra.b	.huh
 
 
 * oma viesti saapui!
@@ -11040,7 +11039,7 @@ filereq_code
 * addaa/inserttaa listaan a3:ssa olevan noden
 * in: 
 *   a3 = list node to be added into the list
-addfile	
+addfile:
 	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.exit
 
@@ -12222,7 +12221,7 @@ exportModuleProgramToFile:
 * Komentojono
 *******
 
-komentojono
+komentojono:
 	DPRINT	"Processing command line parameters"
 
 	* Ensure correct list mode before proceeding
@@ -12258,6 +12257,28 @@ komentojono
 .hmm
 
 	move.l	d5,a0
+	bsr		createListNodeAndAdd
+
+.skip	dbf	d7,.alp
+
+.end
+	bsr.w	vastomaviesti
+
+	tst.l	modamount(a5)
+	beq.b	.x
+	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
+
+	bsr.w	listChanged
+	bsr.w	forceRefreshList
+	bsr.w	rbutton1		* soitetaan 
+.x	rts
+
+
+* In:
+*   a0 = File path
+createListNodeAndAdd
+	pushm	all
+	move.l	a0,d5
 .f	tst.b	(a0)+
 	bne.b	.f
 	move.l	a0,d0
@@ -12279,33 +12300,18 @@ komentojono
 	move.l	a0,l_nameaddr(a2)
 
 	move.l	a2,a1
-	;lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
 	bsr.w	getVisibleModuleListHeader
 	lore	Exec,AddTail
 
-	pushm	a2/a3
 	* update favorite status for node a0
 	move.l	a2,a0
 	* destroys a2/a3 (no stack saving for speed there)
 	jsr	updateFavoriteStatus
-	popm	a2/a3
 
 	addq.l	#1,modamount(a5)	* m‰‰r‰++
-
-.skip	dbf	d7,.alp
-
 .end
-	bsr.w	vastomaviesti
-
-	tst.l	modamount(a5)
-	beq.b	.x
-	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
-
-	bsr.w	listChanged
-	bsr.w	forceRefreshList
-	bsr.w	rbutton1		* soitetaan 
-.x	rts
-
+	popm	all
+	rts
 
 *************
 * Tokenisoidaan file match patterni
