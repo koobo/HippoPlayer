@@ -7869,28 +7869,33 @@ findHighestBit
 *    d7 = step to move in the list, -1 to play previous, +1 to play next. 
 ****************
 
-soitamodi_random
+soitamodi_random:
 	moveq	#1,d5 		* 1: force random
 	moveq	#0,d6		* 0: allow volume fade down before startig to play new module
 	bra.b	umph
 
 * Called from "signalreceived". That is, when a module playback has ended.
-soitamodi2
+soitamodi2:
 	moveq	#-1,d6		* ~0: disable volume fade down before starting to play new module
 	moveq	#0,d5		* 0: no forced random
 	bra.b	umph
 
 * Called based on user input
-soitamodi
+soitamodi:
 	DPRINT  "Soitamodi"
 	moveq	#0,d6		* 0: allow volume fade down
 	moveq	#0,d5		* 0: no forced random
 umph	
 ;	cmp.b	#$7f,do_early(a5)	* early load p‰‰ll‰? disable!
 ;	beq	.ags
-	
+
+ if DEBUG
+	move.l	chosenmodule(a5),d0
+	DPRINT	"play mod, chosen=%ld"
+ endif
+
 	tst	d5
-	bne.b	.raaps
+	bne.b 	.raaps
 
 	cmp.b	#pm_random,playmode(a5)	* onko satunnaissoitto?
 	bne.b	.bere
@@ -7901,27 +7906,26 @@ umph
 	moveq	#0,d7
 .bere
 	* Calculate in long words to avoid possible word overflow.
-	ext.l	d7
 	move.l	modamount(a5),d1
 
 	* Calculate candidate for the next module
 	move.l	chosenmodule(a5),d0
 	add.l	d7,d0
-	;add		d7,chosenmodule(a5)
 	bpl.b	.e					* meni yli listan alkup‰‰st‰?
 	* Result is negative. Wrap to the end of the list.
-	;move	modamount(a5),d0
-	;add		d0,chosenmodule(a5)
-	add.l	d1,d0
+.getLast
+	move.l	d1,d0
+	subq.l	#1,d0
+	bra.b	.ee
 .e
-	;move	chosenmodule(a5),d0
-	;cmp		modamount(a5),d0
 	cmp.l	d1,d0
 	blt.b	.ee
-	* Result is higher than the amount of modules. Wrap to the beginning.
-	;sub		modamount(a5),d0
-	sub.l	d1,d0
-	;move	d0,chosenmodule(a5)
+	* Result is higher than the amount of modules. Wrap to the beginning,
+	* or end, depending on the movement direction.
+	tst.l	d7
+	bmi.b	.getLast
+.getFirst
+	moveq	#0,d0
 .ee
 	* Valid chosenmodule index found
 	move.l	d0,chosenmodule(a5)
@@ -7964,11 +7968,12 @@ umph
 	bsr.w	halt			* soitetaan vaan alusta
 	move.l	playerbase(a5),a0
 	jsr 	p_end(a0)
-	bsr.w	releaseModuleData
 
 	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
+	bsr.w	releaseModuleData
+
 	tst.l	d0
 	bne.w	.inierr
 
@@ -9653,6 +9658,7 @@ mousemoving
 *******************************************************************************
 * Next
 *******
+nextButtonAction:
 rbutton5
 	moveq	#1,d7		* liikutaan eteenp‰in listassa
 	bra.w	soitamodi
@@ -9660,6 +9666,7 @@ rbutton5
 *******************************************************************************
 * Prev
 *******
+prevButtonAction:
 rbutton6
 	moveq	#-1,d7		* liikutaankin taakkep‰in listassa
 	bra.w	soitamodi
