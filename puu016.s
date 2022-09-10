@@ -7170,8 +7170,8 @@ omaviesti
 ** AppWindow-viesti!!
 	move.l	am_NumArgs(a1),d7	* argsien m‰‰r‰
 	beq		.huh
-	jsr		engageNormalMode
-
+	bsr		engageNormalMode
+	bsr		obtainModuleList
  if DEBUG
 	move.l	d7,d0
 	DPRINT	"AppWindow drag'n'drop num=%ld"
@@ -7202,6 +7202,14 @@ omaviesti
 	tst.b	(a0)
 	bne.b	.file
 	DPRINT	"Directory scan"
+	move.l	sp,a0
+.1	tst.b	(a0)+
+	bne.b	.1
+	subq	#2,a0	* skip null and the 1st dir separator
+	move.l	sp,a1
+	bsr		nimenalku
+	* a0 = dir name
+	bsr.w	adddivider
 	* d2 = path
 	move.l	sp,d2
 	* d3 = path len + l_size
@@ -7231,6 +7239,7 @@ omaviesti
 	dbf		d7,.addfiles
 .lop	
 	lea		200(sp),sp
+	bsr		releaseModuleList
 	bsr.w	listChanged
 	bsr.w	forceRefreshList
 	bra.b	.huh
@@ -11099,7 +11108,7 @@ addfile:
 * a0 = hakemiston nimi
 *      directory name
 
-adddivider
+adddivider:
 	pushm	all
 	moveq	#0,d7
 
