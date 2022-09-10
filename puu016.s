@@ -7163,7 +7163,9 @@ omaviesti
 	bsr.w	openw
 	bra.w	.huh
 
-
+*********************************************
+* App window drag'n'drop handler
+*********************************************
 .appw
 ** AppWindow-viesti!!
 	move.l	am_NumArgs(a1),d7	* argsien m‰‰r‰
@@ -7184,7 +7186,8 @@ omaviesti
 	move.l	#150,d3			* max pituus
 	jsr		getNameFromLock
 	tst.l	d0
-	beq.b	.error
+	beq		.error
+
 	move.l	sp,a2
 .fe	tst.b	(a2)+
 	bne.b	.fe
@@ -7192,7 +7195,27 @@ omaviesti
 	cmp.b	#':',-1(a2)
 	beq.b	.na
 	move.b	#'/',(a2)+
-.na	move.l	wa_Name(a3),a0
+.na	clr.b	(a2)
+
+	* If this is empty, a dir was dropped
+	move.l	wa_Name(a3),a0
+	tst.b	(a0)
+	bne.b	.file
+	DPRINT	"Directory scan"
+	* d2 = path
+	move.l	sp,d2
+	* d3 = path len + l_size
+	move.l	a2,d3
+	sub.l	sp,d3
+	add.l	#l_size,d3
+
+	pushm	all
+	bsr		lockMainWindow
+	bsr		filereq_code\.scanni
+	bsr		unlockMainWindow
+	popm	all
+	bra.b	.continue
+.file
 .cp	move.b	(a0)+,(a2)+
 	bne.b	.cp
 
@@ -7202,6 +7225,7 @@ omaviesti
  endif
 	move.l	sp,a0
 	bsr		createListNodeAndAdd
+.continue
 .error
 	addq	#wa_SIZEOF,a3
 	dbf		d7,.addfiles
@@ -10890,7 +10914,11 @@ filereq_code
 ** Patternmatchaus
 	tst.b	uusikick(a5)
 	beq.b	.yas
-	pushpea	tokenizedpattern(a5),d1
+	* Check if pattern available
+	lea		tokenizedpattern(a5),a0
+	tst.b	(a0)
+	beq.b	.yas
+	move.l	a0,d1
 	pushpea	fib_FileName+fileinfoblock2(a5),d2
 	push	a6
 	lore	Dos,MatchPatternNoCase
