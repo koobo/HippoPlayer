@@ -2068,20 +2068,22 @@ parmExit:
 
 main0	jmp	main(pc)
 
+	cnop 0,4
 	dc.l	16
 filereq_segment
 	dc.l	0
 	jmp	filereq_code(pc)
 
+	cnop 0,4
 	dc.l	16
 prefs_segment
 	dc.l	0
 	jmp	prefs_code(pc)
 
+	cnop 0,4
 	dc.l	16
 info_segment
 	dc.l	0
-;	jmp	info_code(pc)
 	jmp	info_code
 
 	dc	0 * pad
@@ -30135,7 +30137,7 @@ loadplayergroup
 	moveq	#MEMF_PUBLIC,d1
 	jsr	getmem
 	move.l	d0,d7
-	beq.b	.error
+	beq		.error
 
 	move.l	d4,d1
 	move.l	d7,d2
@@ -30158,6 +30160,13 @@ loadplayergroup
 	lob	Close	
 
 	move.l	d7,a0		* onko oikee versio??
+
+ if DEBUG
+	moveq	#0,d0
+	move.b	4+3(a0),d0
+	moveq	#xpl_versio,d1
+	DPRINT	"Version: %ld, required: %ld"
+ endif
 
 	cmp.b	#xpl_versio,4+3(a0)
 	bhs.b	.xx
@@ -30270,6 +30279,15 @@ loadreplayer
 	lob	Read
 	cmp.l	#1024,d0
 	bne.w	.error	
+
+
+ if DEBUG
+	moveq	#0,d0
+	move.b	7+probebuffer+1024(a5),d0
+	moveq	#xpl_versio,d1
+	DPRINT	"Version: %ld, required: %ld"
+ endif
+
 
 	cmp.b	#xpl_versio,7+probebuffer+1024(a5)
 	blo.w	.error
