@@ -7171,6 +7171,7 @@ omaviesti
 ** AppWindow-viesti!!
 	move.l	am_NumArgs(a1),d7	* argsien määrä
 	beq		.huh
+	bsr.w	tokenizepattern
 	jsr		engageNormalMode
 	bsr		obtainModuleList
  if DEBUG
@@ -7232,8 +7233,16 @@ omaviesti
 	move.l		sp,d0
 	DPRINT	"->%s"
  endif
+	pushpea	tokenizedpattern(a5),d1
+	move.l	sp,d2
+	lore	Dos,MatchPatternNoCase
+	* 0 = did not match, skip this file if so
+	tst.l	d0
+	beq.b	.continue
+
 	move.l	sp,a0
 	bsr		createListNodeAndAdd
+
 .continue
 .error
 	addq	#wa_SIZEOF,a3
@@ -10921,11 +10930,7 @@ filereq_code
 ** Patternmatchaus
 	tst.b	uusikick(a5)
 	beq.b	.yas
-	* Check if pattern available
-	lea		tokenizedpattern(a5),a0
-	tst.b	(a0)
-	beq.b	.yas
-	move.l	a0,d1
+	pushpea	tokenizedpattern(a5),d1
 	pushpea	fib_FileName+fileinfoblock2(a5),d2
 	push	a6
 	lore	Dos,MatchPatternNoCase
@@ -14492,7 +14497,7 @@ tark_mahtu
 * a0 = teksti
 * a1 = gadgetti
 
-prunt2
+prunt2:
 	pushm	all
 	moveq	#1,d7		* ei korvaa
 	bra.b	pru0
