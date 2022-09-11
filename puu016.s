@@ -2591,6 +2591,16 @@ main
 .e0	rts
 
 .him
+	
+	; Build the sex struct, font will be set
+	; when it is loaded, set pens here.
+	lea	stringExtendStruct(a5),a1
+	move.b	#1,sex_Pens+0(a1)
+	; already zeroes
+	;move.b	#0,sex_Pens+1(a1)
+	move.b	#1,sex_ActivePens+0(a1)
+	;move.b	#0,sex_ActivePens+1(a1)
+
 	; Make space for list mode change button
 	lea	gadgetFileSlider,a0
 	add	#14,gg_TopEdge(a0)
@@ -2604,42 +2614,42 @@ main
 	endb	a0
 	
 	move.l	_IntuiBase(a5),a6
+
 	* Give each gadget a gg_GadgetID,
 	* set proper text attr for ones which have text.
-
 	moveq	#1,d0
-	lea	gadgets,a1
+	basereg	gadgets,a3
+	lea		gadgets,a3
+	lea		gadgets(a3),a1
 	bsr.b	.num
 
 ** Prefs
 	moveq	#1,d0
-	lea	gadgets2-gadgets(a1),a1
-	bsr.b	.num
-
-	moveq	#20,d0
-	lea	sivu0-gadgets2(a1),a1
+	lea		gadgets2(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu1-sivu0(a1),a1
+	lea		sivu0(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu2-sivu1(a1),a1
+	lea		sivu1(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu3-sivu2(a1),a1
+	lea		sivu2(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu4-sivu3(a1),a1
+	lea		sivu3(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu5-sivu4(a1),a1
+	lea		sivu4(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu6-sivu5(a1),a1
+	lea		sivu5(a3),a1
 	bsr.b	.num
-
-	bra.b	.eer2
-
+	moveq	#20,d0
+	lea		sivu6(a3),a1
+	bsr.b	.num
+	endb	a3
+	bra		.eer2
 
 .num
 * Numeroidaan gadgetit
@@ -2653,192 +2663,71 @@ main
 	bra.b	.er
 .eer	rts
 
+* Gives a gadget an id number
+* Adjust text gadget font
+* Adjust prop gadget 
+.gadu
+	move	d0,gg_GadgetID(a0)
+	move.l 	gg_SpecialInfo(a0),a2
+	
+	cmp	#GTYP_PROPGADGET,gg_GadgetType(a0)
+	bne.b	.noProp
+	* Proportional gadget setup!
+	* Enable complement highlight
+	* GFLG_GADGHCOMP = 0
+	and		#~GFLG_GADGHNONE,gg_Flags(a0)
+	* Adjust layout 
+	addq	#1,gg_TopEdge(a0)
+	subq	#3,gg_Height(a0)
+	subq	#1,gg_Width(a0)
+	* kick2.0+: newlook borderless
+	or		#PROPNEWLOOK!PROPBORDERLESS,pi_Flags(a2)	
+	and		#~AUTOKNOB,pi_Flags(a2)
+.noProp
 
-.gadu	move	d0,gg_GadgetID(a0)
-	;tst.b	uusikick(a5)
-	;beq.b	.nobo1
-	cmp	#GTYP_PROPGADGET,gg_GadgetType(a0)	* vain kick2.0+
-	bne.b	.nobo1
-	or	#GFLG_GADGHNONE,gg_Flags(a0)
-.nobo1	tst.l	gg_GadgetText(a0)
-	beq.b	.nt2
+	cmp		#GTYP_STRGADGET,gg_GadgetType(a0)
+	bne.b	.noStr
+	tst.b	uusikick(a5)
+	beq.b	.noStr
+	* Kick2.0 only
+	* Make string gadgets tab cyclable and set font with string extend
+	or		#GFLG_TABCYCLE!GFLG_STRINGEXTEND,gg_Flags(a0)
+	pushpea	stringExtendStruct(a5),si_Extension(a2)
 
+.noStr
+	* If contains text, set font
+	tst.l	gg_GadgetText(a0)
+	beq.b	.noTxt
 	move.l	gg_GadgetText(a0),a2	* IntuiText
-;if DEBUG
-;	ext.l	d0
-;	move.l	it_IText(a2),d1
-;	DPRINT	"Gadget id=%ld Text=%s"
-;endif
-
 	move.l	#text_attr,it_ITextFont(a2)	* fontti
 	tst.l	it_NextText(a2)
-	beq.b	.nt2
+	beq.b	.noTxt
 	move.l	it_NextText(a2),a2
 	move.l	#text_attr,it_ITextFont(a2)	* fontti
-.nt2	rts
+.noTxt	
+
+	rts
 
 .eer2
-	;tst.b	uusikick(a5)
-	;beq.w	.ropp
-
-** kick 2.0+ asetuksia
-** Add prop gadget slider images for kick2.0
-
-	lea	slider4,a0			* filebox-slideriin image
-	move.l	#slimage,gg_GadgetRender(a0)
-	move.l	gg_SpecialInfo(a0),a1
-	and	#~AUTOKNOB,pi_Flags(a1)
-
-	lea	gAD1-slider4(a0),a0		* moduleinfo-slideriin image
-	move.l	#slimage2,gg_GadgetRender(a0)
-	move.l	gg_SpecialInfo(a0),a1
-	and	#~AUTOKNOB,pi_Flags(a1)
-
-** s‰‰det‰‰n propgadgetteja
-** Manually adjust prop gadget width and height
-
-	lea	kelloke+gg_Height,a0
-	lea	gg_Width-gg_Height(a0),a1
-	subq	#3,(a0)			* gg_Height
-	subq	#1,(a1)			* gg_Width
-	subq	#3,kelloke2-kelloke(a0)
-	subq	#1,kelloke2-kelloke(a1)
-
-	subq	#3,meloni-kelloke(a0)
-	subq	#1,meloni-kelloke(a1)
-	subq	#3,eskimO-kelloke(a0)
-	subq	#1,eskimO-kelloke(a1)
-
-	subq	#3,pslider2-kelloke(a0)
-	subq	#1,pslider2-kelloke(a1)
-	subq	#3,nAMISKA5-kelloke(a0)
-	subq	#1,nAMISKA5-kelloke(a1)
-	subq	#3,sIPULI-kelloke(a0)
-	subq	#1,sIPULI-kelloke(a1)
-	subq	#3,sIPULI2-kelloke(a0)
-	subq	#1,sIPULI2-kelloke(a1)
-
-	subq	#3,pslider1-kelloke(a0)
-	subq	#1,pslider1-kelloke(a1)
-	subq	#3,juusto-kelloke(a0)
-	subq	#1,juusto-kelloke(a1)
-	subq	#3,juust0-kelloke(a0)
-	subq	#1,juust0-kelloke(a1)
-
-	subq	#3,slider1-kelloke(a0)
-	subq	#1,slider1-kelloke(a1)
-
-	subq	#3,ahiG4-kelloke(a0)
-	subq	#1,ahiG4-kelloke(a1)
-	subq	#3,ahiG5-kelloke(a0)
-	subq	#1,ahiG5-kelloke(a1)
-	subq	#3,ahiG6-kelloke(a0)
-	subq	#1,ahiG6-kelloke(a1)
-
-
-.nova0
-
-	move.l	(a5),a0
-	cmp	#37,LIB_VERSION(a0)
-	blo.b	.faef
+	* Adjust file slider a bit
+	lea		slider4,a0
+	addq	#1,gg_Height(a0)
+	addq	#1,gg_LeftEdge(a0)
+	addq	#1,gg_Width(a0)
+	move.l	#slimage,gg_GadgetRender(a0)	* filebox-slideriin image
 	
-	* Make the prefs string gadgets tab cyclable
-	* and configure fonts. Kick2.0+ only.
-
-	basereg	gadgets2,a0
-	lea	gadgets2,a0
-	move	#GFLG_TABCYCLE!GFLG_STRINGEXTEND,d0
-	or	d0,gg_Flags+ack2(a0)
-	or	d0,gg_Flags+ack3(a0)
-	or	d0,gg_Flags+ack4(a0)
-	or	d0,gg_Flags+DuU0(a0)
-
-	; Build the sex struct, font will be set
-	; when it is loaded, set pens here.
-	lea	stringExtendStruct(a5),a1
-	move.b	#1,sex_Pens+0(a1)
-	; already zeroes
-	;move.b	#0,sex_Pens+1(a1)
-	move.b	#1,sex_ActivePens+0(a1)
-	;move.b	#0,sex_ActivePens+1(a1)
-
-	move.l 	gg_SpecialInfo+ack2(a0),a2
-	move.l	a1,si_Extension(a2)
-	move.l 	gg_SpecialInfo+ack3(a0),a2
-	move.l	a1,si_Extension(a2)
-	move.l 	gg_SpecialInfo+ack4(a0),a2
-	move.l	a1,si_Extension(a2)
-	move.l 	gg_SpecialInfo+DuU0(a0),a2
-	move.l	a1,si_Extension(a2)
-
-	endb	a0
-
-.faef
-
-
-** s‰‰det‰‰n slidereit‰ edelleen
-** Even more prop gadget visual adjustments
-
-	lea	slider1,a0
-	bsr.b	.rop
-	lea	slider4-slider1(a0),a0
-	bsr.b	.rop
-
-	lea	gAD1-slider4(a0),a0
-	bsr.b	.rop
-
-	lea	pslider1-gAD1(a0),a0
-	bsr.b	.rop
-	lea	pslider2-pslider1(a0),a0
-	bsr.b	.rop
-	lea	juusto-pslider2(a0),a0
-	bsr.b	.rop
-	lea	juust0-juusto(a0),a0
-	bsr.b	.rop
-	lea	meloni-juust0(a0),a0
-	bsr.b	.rop
-	lea	eskimO-meloni(a0),a0
-	bsr.b	.rop
-	lea	kelloke-eskimO(a0),a0
-	bsr.b	.rop
-	lea	kelloke2-kelloke(a0),a0
-	bsr.b	.rop
-	lea	sIPULI-kelloke2(a0),a0
-	bsr.b	.rop
-	lea	sIPULI2-sIPULI(a0),a0
-	bsr.b	.rop
-	lea	ahiG4-sIPULI2(a0),a0
-	bsr.b	.rop
-	lea	ahiG5-ahiG4(a0),a0
-	bsr.b	.rop
-	lea	ahiG6-ahiG5(a0),a0
-	bsr.b	.rop
-	lea	nAMISKA5-ahiG6(a0),a0
-	bsr.b	.rop
-
-	bra.b	.ropp
-
-* proportional gadget visual look depending on kickstart version
-.rop
-	move.l	gg_SpecialInfo(a0),a1
-	and	#~GFLG_GADGHNONE,gg_Flags(a0) ; enable complement highlight
-
-	;moveq	#AUTOKNOB,d0		* kick1.3: vanhat autoknobit
-	;tst.b	uusikick(a5)
-	;beq.b	.nova
-	moveq	#PROPNEWLOOK!PROPBORDERLESS,d0	* kick2.0+, newlook borderless
-
-	addq	#1,gg_TopEdge(a0)
-.nova	
-	or	d0,pi_Flags(a1)
-	rts
-.ropp
-
-	* Nudge these two a bit!
-	addq	#1,gg_TopEdge+juust0
-	addq	#1,gg_LeftEdge+slider4
-
-
+	* Info window slider
+	moveq	#0,d0
+	lea		gAD1,a0
+	bsr		.gadu
+	addq	#3,gg_Height(a0)
+	addq	#1,gg_Width(a0)
+	move.l	#slimage2,gg_GadgetRender(a0) 	* moduleinfo-slideriin image
+	
+	* Nudge this a bit!
+	addq	#1,gg_TopEdge+juust0 		* ps3m stereo level
+	
+	* Gadget stuff done.
 
 	move.l	#PLAYING_MODULE_NONE,chosenmodule2(a5)
 
@@ -2887,26 +2776,7 @@ main
 	cmp.l	a0,a2
 	bne.b	.cp14
  
- REM
-	moveq	#AUTOKNOB,d0		* kick1.3: vanhat autoknobit
-	lea	slider1s,a0
-	or	d0,(a0)
-	or	d0,slider4s-slider1s(a0)
-	or	d0,pslider1s-slider1s(a0)
-	or	d0,pslider2s-slider1s(a0)
-	or	d0,juustos-slider1s(a0)
-	or	d0,juust0s-slider1s(a0)
-	or	d0,melonis-slider1s(a0)
-	or	d0,kellokes-slider1s(a0)
-	or	d0,kelloke2s-slider1s(a0)
-	or	d0,eskimOs-slider1s(a0)
-	or	d0,gAD1s-slider1s(a0)
-	or	d0,sIPULIs-slider1s(a0)
-	or	d0,sIPULI2s-slider1s(a0)
-	or	d0,ahiG4s-slider1s(a0)
-	or	d0,ahiG5s-slider1s(a0)
-	or	d0,ahiG6s-slider1s(a0)
- EREM
+
 
 ** 3 pixeli‰ korkeempi infowindowin slideri
 ;	addq	#3,gg_Height+gAD1
