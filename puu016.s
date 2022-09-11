@@ -2711,21 +2711,24 @@ main
 .eer2
 	* Adjust file slider a bit
 	lea		slider4,a0
-	addq	#1,gg_Height(a0)
-	addq	#1,gg_LeftEdge(a0)
-	addq	#1,gg_Width(a0)
-	move.l	#slimage,gg_GadgetRender(a0)	* filebox-slideriin image
-	
+	basereg	slider4,a0
+	addq	#1,slider4+gg_Height(a0)
+	addq	#1,slider4+gg_LeftEdge(a0)
+	addq	#1,slider4+gg_Width(a0)
+	move.l	#slimage,slider4+gg_GadgetRender(a0)	* filebox-slideriin image
+
+	* Nudge this a bit!
+	addq	#1,gg_TopEdge+juust0(a0) 		* ps3m stereo level
+
 	* Info window slider
 	moveq	#0,d0
-	lea		gAD1,a0
+	lea		gAD1(a0),a0
+	endb	a0
 	bsr		.gadu
 	addq	#3,gg_Height(a0)
 	addq	#1,gg_Width(a0)
 	move.l	#slimage2,gg_GadgetRender(a0) 	* moduleinfo-slideriin image
 	
-	* Nudge this a bit!
-	addq	#1,gg_TopEdge+juust0 		* ps3m stereo level
 	
 	* Gadget stuff done.
 
@@ -18002,7 +18005,7 @@ inforivit_play
 bipb	moveq	#18+WINY,d1
 bipb2	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
-	bsr.w	print
+	jsr	print
 bopb	rts
 
 putinfo:
