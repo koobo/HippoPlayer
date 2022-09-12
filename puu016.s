@@ -1027,7 +1027,9 @@ kanavatvarattu	rs	1	* 0: ei varattu, ei-0: varattu
 
 oldst		rs.b	1	* 0: pt modi, ~0: old soundtracker modi
 sidflag		rs.b	1	* songnumberin muuttamiseen
-	rs.b	1
+* Set to true if the last loaded module is a remote module.
+* Path is in "modulefilename" as usual.
+uriDecodeNameBeforeShowing	rs.b	1
 
 kelausnappi	rs.b	1	* 0: jos ei cia kelausta
 kelausvauhti	rs.b	1	* 1: 2x, 2: 4x
@@ -7299,13 +7301,12 @@ signalreceived
 	tst.b	l_divider(a3)
 	beq.b	.wasfile
 	tst	d7			* pit‰‰ olla jotain ett‰ ei j‰‰ 
-	bne.b	.eekk		* jummaamaan dividerin kohdalle
+	bne.b	.eekk		* jummaamaan dividerin kohdalle,
 	moveq	#1,d7	* step forward
 	bra.b	.eekk
 .wasfile
 
 	lea	l_filename(a3),a0	* ladataan
-	move.l	l_nameaddr(a3),solename(a5)
 	moveq	#0,d0			* no double buffering
 	jsr	loadmodule
 	tst.l	d0
@@ -7941,8 +7942,6 @@ umph
 
 	* a3 contains the list elment
 	lea	l_filename(a3),a0	* Ladataan
-	move.l	l_nameaddr(a3),solename(a5)
-
 	* load it, d7 contains double buffering flag
 	move.b	d7,d0
 	jsr	loadmodule
@@ -10226,7 +10225,6 @@ rbutton1
 	move.l	d2,playingmodule(a5)	* Uusi numero
 
 	lea	l_filename(a3),a0	* Ladataan
-	move.l	l_nameaddr(a3),solename(a5)
 	move.b	d7,d0 * double buffering flag
 	jsr	loadmodule
 	tst.l	d0
@@ -27378,7 +27376,7 @@ noteScroller2:
 * Moduulin lataus
 *
 * in:
-*  a0 = module file name with path (not used)
+*  a0 = module file name with path 
 *  a3 = list node 
 *  d0 = ~0: Use double buffering
 *
@@ -27387,9 +27385,13 @@ loadmodule:
 	; Popup should close so that window is visible during load
 	bsr.w	closeTooltipPopup
 	st	loading(a5)
-
+	* Store pointer to the name part. Used
+	* do determine what to show in the infobox, and
+	* also with the PS3M configuration file.
+	move.l	l_nameaddr(a3),solename(a5)
+	* Store this so that the name can ne urldecoded before showing.
+	move.b	l_remote(a3),uriDecodeNameBeforeShowing(a5)
 	* Check if a remote file
-	tst.b	l_remote(a3)
 	beq.b	.doLoadModule
 
 	move.b	d0,d7	* doublebuffering flag
@@ -27400,8 +27402,8 @@ loadmodule:
 	move.l	sp,d0
 	DPRINT	"Remote loaded: %s"
   endif
-	move.l	sp,a0
-	move.b	d7,d0 * double buffering flag
+	move.l	sp,a0	* path to load from
+	move.b	d7,d0   * double buffering flag
 	bsr.b	.doLoadModule
 	move.l	sp,d1
 	push	d0	* save status
@@ -27410,8 +27412,10 @@ loadmodule:
 	lea	200(sp),sp
 	rts
 
+* in:
+*   a0 = path to load from
+*   d0 = double buffering flag
 .doLoadModule
-
 	move.b	d0,d7
 	beq.w	.nodbf
 
@@ -29980,21 +29984,38 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 *******
 * Virittelee nimen tied.nimest‰
 *******
-
-tee_modnimi
-	lea	modulename(a5),a1
+tee_modnimi:
+	moveq	#INFO_MODULE_NAME_LEN-1,d1
+	lea		modulename(a5),a1
 	tst.b	lod_archive(a5)		* Paketista purettuna
-	beq.b	.eiarc			* otetaan pelkk‰ filename
+	bne.b	.arc				* otetaan pelkk‰ filename
 	move.l	solename(a5),a0
+	tst.b	uriDecodeNameBeforeShowing(a5)
+	bne.b	.decode
 	bra.b	.copy
-.eiarc
-	lea	8+fileinfoblock(a5),a0
-	moveq	#INFO_MODULE_NAME_LEN-1,d0
-.copy	move.b	(a0)+,(a1)+
-	dbeq	d0,.copy
+.arc
+	* This contains info from the last archive loaded file 
+	lea	fib_FileName+fileinfoblock(a5),a0
+.copy	
+	move.b	(a0)+,(a1)+
+	dbeq	d1,.copy
 	clr.b	(a1)
 	rts
-
+.decode
+	* This is the end part of a url, contains a path delimiter. 
+	* Don't show the path to save space.
+.3	cmp.b	#"/",(a0)+
+	bne.b	.3
+.2
+	move.b	(a0)+,d0
+	cmp.b	#"%",d0
+	bne.b	.1
+	* Converts the following 2 bytes from a0
+	bsr		convertHexTextToNumber
+.1	move.b	d0,(a1)+
+	dbeq	d1,.2
+	clr.b	(a1)
+	rts
 
 *******************************************************************************
 * Lataa ulkoisen soittorutiinirykelm‰n
