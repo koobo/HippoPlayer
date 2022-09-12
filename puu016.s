@@ -27488,9 +27488,9 @@ loadmodule:
 	jsr	fadevolumedown
 	move	d0,-(sp)
 	DPRINT	"Replay end"
-	lore    Exec,Disable
+	;lore    Exec,Disable
 	jsr	halt			* Vapautetaan se jos on
-	lore    Exec,Enable
+	;lore    Exec,Enable
 	;;;move.l	modulefilename(a5),a0
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
