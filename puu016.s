@@ -62,6 +62,7 @@ FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_HORIZ_RESIZE = 1
 FEATURE_P61A        =   0
+FEATURE_UHC_AMINET  =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -1361,7 +1362,11 @@ listSelectorRememberPtr		rs.l	1
 
 * UHC aminet mirror path, if this is NULL, there's no UHC
 * installed. Should be freed on exit.
+ ifne FEATURE_UHC_AMINET
 uhcAminetMirrorPath			rs.l	1
+ endif
+uhcAvailable				rs.b	1	
+							rs.b	1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -8217,11 +8222,13 @@ nappuloita
 	jsr		modlandSearch
 	bra	.ee
 .3
+ ifne FEATURE_UHC_AMINET
 	cmp.b	#$20,d3	 	* a + control
  	bne.b	.4
 	jsr		aminetSearch
 	bra	.ee
 .4
+ endif
 	
 
 .noControl
@@ -9329,16 +9336,19 @@ rsearchfuncs
 	beq		find_continue
 	subq	#1,d0
 	beq.b	.modland
+ ifne FEATURE_UHC_AMINET
 	subq	#1,d0
 	beq.b	.aminet
+ endif
 .skip
 	rts
 
 .modland
 	jmp	modlandSearch
+ ifne FEATURE_UHC_AMINET
 .aminet
 	jmp	aminetSearch
-
+ endif
 
 * in:
 *   d3 = index to check
@@ -9346,7 +9356,7 @@ rsearchfuncs
 	; Disable bottom two rows if UHC not available
 	cmp		#2,d3
 	blo.b	.n
-	jsr		isUHCAvailable
+	tst.b	uhcAvailable(a5)
 	bne.b	.n
 	moveq	#0,d0
 	rts
@@ -9355,12 +9365,18 @@ rsearchfuncs
 
 .options
 	* max width, rows
+ ifne FEATURE_UHC_AMINET
 	dc.b	24,4
+ else
+	dc.b	24,3
+ endif
 	dc.b	"Search list    [F]      ",0
 	dc.b	"Search next    [SHIFT+F]",0
 	dc.b	"Search Modland [CTRL+M] ",0
-	dc.b	"Search Aminet  [CTRL+A] ",0
-	
+ ifne FEATURE_UHC_AMINET
+ 	dc.b	"Search Aminet  [CTRL+A] ",0
+ endif
+
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
  even
@@ -17605,6 +17621,7 @@ cut_prefix:
 * out: 
 *   d0 = number
 convertHexTextToNumber
+	pushm	d1-d3
 	moveq	#2-1,d2
 	moveq	#4,d1
 	moveq	#0,d0
@@ -17627,6 +17644,7 @@ convertHexTextToNumber
 	or	d3,d0
 	subq	#4,d1
 	dbf	d2,.loop
+	popm	d1-d3
 	rts
 
 *******************************************************************************
@@ -29639,7 +29657,7 @@ tutki_moduuli
 	moveq	#lod_tuntematon,d0
 	rts	
 
-.ex	
+.ex
 	 bsr.w	tee_modnimi
 .ex2	
 	cmp	#pt_prot,playertype(a5)
@@ -48717,12 +48735,13 @@ SEARCH_AMINET = 1
 modlandSearch
 	DPRINT	"modlandSearch"
 	moveq	#SEARCH_MODLAND,d7
-	bra.b	remoteSearch
 
+ ifne FEATURE_UHC_AMINET
+	bra.b	remoteSearch
 aminetSearch
 	DPRINT	"aminetSearch"
 	moveq	#SEARCH_AMINET,d7
-
+ endif
 
 * Requests a search pattern from the user,
 * then creates an executable shell script to launch
@@ -48732,7 +48751,7 @@ aminetSearch
 * in:
 *  d7 = remote type enumeration
 remoteSearch
-	bsr		isUHCAvailable
+	tst.b	uhcAvailable(a5)
 	bne.b	.go
 	rts
 .go
@@ -48748,10 +48767,12 @@ remoteSearch
 	moveq	#40,d0
 	; a2 = requester title
 	lea		.searchModland(pc),a2
+ ifne FEATURE_UHC_AMINET
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.5
 	lea		.searchAminet(pc),a2
 .5
+ endif
 
 	; a3 = rtReqInfo structure or null
 	sub.l	a3,a3
@@ -48766,11 +48787,13 @@ remoteSearch
 
 	* Prepare script into desbuf(a5)
 	lea		.modlandSearchCmd(pc),a0
+ ifne FEATURE_UHC_AMINET
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.1
 	lea		.aminetSearchCmd(pc),a0
 .1
-	move.l	sp,d0		* search word
+ endif
+ 	move.l	sp,d0		* search word
 	jsr		desmsg
 
 	* Save it into a file for execution
@@ -48803,11 +48826,13 @@ remoteSearch
 
 	* Read the results file
 	lea		.modlandResultsPath(pc),a0
+ ifne FEATURE_UHC_AMINET
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.a
 	lea		.aminetResultsPath(pc),a0
 .a
-	bsr	plainLoadFile
+ endif
+ 	bsr	plainLoadFile
 	DPRINT	"Results=%lx"
 	tst.l	d0
 	beq		.exit
@@ -48834,10 +48859,14 @@ remoteSearch
 	* to each line.
 	pushpea	.modlandLine(pc),d6
 	moveq	#.modlandLineE-.modlandLine,d4
+ ifne FEATURE_UHC_AMINET
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.2
-	* Aminet url has been determined earlier
+	* Aminet mirror is populated after aminetsearch has been done,
+	* so get it here.
+	bsr		getUHCAminetMirror
 	move.l	uhcAminetMirrorPath(a5),d6
+	beq.b	.noAminet
 	move.l	d6,a0
 .flen
 	tst.b	(a0)+
@@ -48845,6 +48874,7 @@ remoteSearch
 	move.l	a0,d4
 	sub.l	d6,d4 * string length in d4
 .2
+ endif
 	* Import data
 	* This will also set l_remote and l_nameaddr
 	* to correct values for remote files.
@@ -48856,6 +48886,7 @@ remoteSearch
 	jsr		forceRefreshList
 	jsr		releaseModuleList
 .exit
+.noAminet
 	jsr		inforivit_play
 	jsr		unlockMainWindow
 	lea 	50(sp),sp
@@ -48868,20 +48899,23 @@ remoteSearch
 
 .searchModland
 	dc.b	"Search Modland",0
-.searchAminet
-	dc.b	"Search Aminet",0
-.aminetResultsPath
-	dc.b	"T:aminetsearch",0
+
 .modlandResultsPath
 	dc.b	"T:modlandsearch",0
 .modlandSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'modlandsearch "%s"',10
 	dc.b	0
+ ifne FEATURE_UHC_AMINET
+.searchAminet
+	dc.b	"Search Aminet",0
+.aminetResultsPath
+	dc.b	"T:aminetsearch",0
 .aminetSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'aminetsearch "%s"',10
 	dc.b	0
+ endif
 	even
 
 * Set list node remote type and
@@ -48961,7 +48995,7 @@ fetchRemoteFile
 	move.l	a1,d0	* file len
 
 	lea		remoteScriptPath(pc),a0
-	lea	desbuf(a5),a1
+	lea		desbuf(a5),a1
 	bsr		plainSaveFile
 	tst.l	d0
 	bmi		.exit
@@ -48989,19 +49023,38 @@ remoteScriptPath
 
  even
 
-* Checks if UHC is installed by looking for the aminet mirror
-* info. Constructs the URL for aminet for later.
+* Checks if UHC is installed
 initializeUHC
 	tst.b	uusikick(a5)
 	bne.b	.go
 	rts
 .go
+	pushpea	.uhc(pc),d1
+	moveq	#ACCESS_READ,d2
+	lore  	Dos,Lock
+	move.l	d0,d1
+	beq.b	.nope	
+	st		uhcAvailable(a5)
+	lob		UnLock
+.nope
+	rts
+
+.uhc	dc.b	"ENV:UHCBIN",0
+ even
+
+  ifne FEATURE_UHC_AMINET
+getUHCAminetMirror
+	pushm	d1-a6
+	move.l	uhcAminetMirrorPath(a5),d0
+	clr.l	uhcAminetMirrorPath(a5)
+	jsr		freemem
+
 	lea	.aminetMirrorPath(pc),a0
 	bsr	plainLoadFile
 	* d0 = data
 	* d1 = length
 	tst.l	d0
-	beq.b	.f
+	beq.b	.x
 	move.l	d1,d7
 	move.l	d0,a3
 
@@ -49031,9 +49084,7 @@ initializeUHC
 	DPRINT	"UHC aminet mirror=%s"
  endif
 .x
-	rts
-.f
-	DPRINT	"UHC not available",0
+	popm	d1-a6
 	rts
 
 .http	dc.b	"http://",0
@@ -49046,10 +49097,14 @@ initializeUHC
 deinitUHC
 	move.l	uhcAminetMirrorPath(a5),a0
 	jmp		freemem
+ else
 
-isUHCAvailable
-	tst.l	uhcAminetMirrorPath(a5)
+deinitUHC
 	rts
+
+ endif
+
+
 	
 ***************************************************************************
 *
