@@ -8783,11 +8783,17 @@ rlistmode
 *******
 
 * This creates an array of
-* 4 bytes  = node pointer to the module entry
-* 24 bytes = calculated weight based on module name
+* 4 bytes  = node pointer to the module entry,
+* 28 bytes = calculated weight based on module name,
 * sorts that, and recreates the module list.
 
-SORT_ELEMENT_LENGTH = 4+24
+SORT_WEIGHT_LENGTH = 28
+SORT_ELEMENT_LENGTH = 4+SORT_WEIGHT_LENGTH
+
+ if SORT_ELEMENT_LENGTH<>32
+	fail 
+ endif
+
 
 rsort
 sortButtonAction
@@ -8822,7 +8828,7 @@ sortModuleList:
 
 .d
 	move.l	modamount(a5),d0
-	moveq	#4+24,d1		* node address and weight
+	moveq	#SORT_ELEMENT_LENGTH,d1		* node address and weight
 	bsr.w	mulu_32		* 
 	addq.l	#8,d0			* add some empty space, this is needed when rebuilding the list
 							* to check if end is reached.
@@ -8846,6 +8852,8 @@ sortModuleList:
 
 * paino 24 bytee
 
+	* sort table in a2
+
 	move.l	(a3),a3		* MLH_HEAD
 .ploop
 	tst.l	(a3)		* check if last node?
@@ -8853,12 +8861,11 @@ sortModuleList:
 	SUCC	a3,a4		* SUCC
 	move.l	a3,(a2)+	* noden osoite taulukkoon
 
-	push	a2
-	move.l	l_nameaddr(a3),a2	
-	bsr.w	.getv
-	pop	a2
-	movem.l	d0-d5,(a2)	* paino talteen
-	lea	24(a2),a2
+	* Calculate value based on l_nameaddr in given node a3,
+	* write it in (a2)+
+	bsr.w	.getWeight
+	
+	;lea	SORT_WEIGHT_LENGTH(a2),a2
 
 	move.l	a3,a1		* poistetaan node (a1)
 	REMOVE
@@ -8866,6 +8873,7 @@ sortModuleList:
 	move.l	a4,a3
 	bra.b	.ploop
 .ep
+
 
 	move.l	sortbuf(a5),a3
 
@@ -8896,15 +8904,18 @@ sortModuleList:
 	bra.b	.ml
 
 .loph
+
 	* Start rebuilding the list with sorted nodes
 	move.l	sortbuf(a5),a3
+	bsr.w	getVisibleModuleListHeader
+	move.l	a0,a2
 .er
 	tst.l	(a3)
 	beq.b	.r			* end reached? this is the extra space mentioned above
 	move.l	(a3),a1  	* grab node address
 
-	;lea	moduleListHeader(a5),a0
-	bsr.w	getVisibleModuleListHeader
+	* Add a1 to a0
+	move.l	a2,a0
 	ADDTAIL			* lis‰t‰‰n node (a1)
 
 	lea SORT_ELEMENT_LENGTH(a3),a3	
@@ -8934,16 +8945,13 @@ sortModuleList:
 	tst.l	(a3)		* Oliko viimeinen
 	beq.b	.ep2
 	move.l	(a3),a0
-	;move.l	l_nameaddr(a0),a0	
-	;isListDivider  (a0)		* eka hitti
-	;isListDivider l_filename(a0)
 	tst.b	l_divider(a0)
 	beq.b	.jep1
 	* Ignore dividers in browser mode
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.jep1
 
-	lea	28(a3),a3
+	lea	SORT_ELEMENT_LENGTH(a3),a3
 	bra.b	.ploop2
 
 .ep2	moveq	#-1,d0
@@ -8958,16 +8966,13 @@ sortModuleList:
 	tst.l	(a3)		* Oliko viimeinen
 	beq.b	.jep1
 	move.l	(a3),a0
-;	move.l	l_nameaddr(a0),a0
 	* Ignore dividers in browser mode
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	._d
-;	isListDivider (a0)		* toka hitti
-;	isListDivider l_filename(a0)
 	tst.b	l_divider(a0)
 	bne.b	.jep1
 ._d
-	lea	28(a3),a3
+	lea	SORT_ELEMENT_LENGTH(a3),a3
 	bra.b	.ploop3
 
 
@@ -9016,18 +9021,10 @@ sortModuleList:
  ;   mulu    d5,d6
  ;   lea     (a1,d6.l),a2
 
-	* do a trick 32-bit multiply by 28
-	ifne SORT_ELEMENT_LENGTH-28
-		fail
-	endc
-	move.l	d1,d6 
-	lsl.l	#2,d6   * mul by 4
-	move.l	a1,a2
-	sub.l	d6,a2	* addr - 4*28
-	lsl.l	#3,d6 	* mul by 32
-	add.l	d6,a2	* addr + 32*28
-
-	;Subq.w	#1,d2	* dbf subtract, no not used anymore
+	move.l	d1,d6
+	lsl.l	#5,d6 * x32
+	lea		(a1,d6.l),a2
+ 
 .Loop:	
 	* Compare. 
 	* It's likely the compares after the 1st one are not often hit.
@@ -9048,6 +9045,9 @@ sortModuleList:
 	bne.b	.notokval
 	move.l	24(a1),d3
 	cmp.l	24(a2),d3
+	bne.b	.notokval
+	move.l	28(a1),d3
+	cmp.l	28(a2),d3
 	beq.b	.okval
 .notokval
 	bmi.b	.okval
@@ -9061,49 +9061,26 @@ sortModuleList:
 ;	Move.w	-2(a2),-2(a1)
 ;	Move.w	d3,-2(a2)
 
-** swap 28 bytes: 
+** swap 32 bytes: 
 * - node pointer
-* - 24 bytes of weight
+* - 28 bytes of weight
 
+	* swap 32 bytes
 	* free:
 	* d0, d3, d6, a3, a4, a5, a6
 	movem.l		(a1),d0/d3/d6/a3/a4/a5/a6
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	movem.l		d0/d3/d6/a3/a4/a5/a6,-28(a2)
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
+ 	move.l		(a2)+,(a1)+
+ 	move.l		(a2)+,(a1)+
+ 	move.l		(a2)+,(a1)+
+ 	move.l		(a2)+,(a1)+
+ 	move.l		(a2)+,(a1)+
+ 	move.l		(a2)+,(a1)+
+ 	move.l		(a2)+,(a1)+
+ 	movem.l		d0/d3/d6/a3/a4/a5/a6,-7*4(a2)
+	* swap remaining 4 bytes
+ 	move.l	(a1),d6
+	move.l	(a2),(a1)+
+	move.l	d6,(a2)+
 
 	Moveq	#1,d0
 	bra.b	.ok1
@@ -9113,7 +9090,6 @@ sortModuleList:
 	add.l	d5,a2
 .ok1
 
-	;Dbf	d2,.Loop
 	subq.l	#1,d2 
 	bne.b	.Loop
 
@@ -9126,14 +9102,14 @@ sortModuleList:
 *-------------------
 
 * Calculates the weight for an item for sorting
+* in:
+*   a3 = list node
 * out:
-*   d0-d5: 24 bytes
+*   (a2)+ = 28 bytes in this address
 
 * Lower case and strip prefix so that string is usable for sorting
-.getv	
-	moveq	#0,d0
-	moveq	#0,d1
-	moveq	#0,d2
+.getWeight	
+	move.l	l_nameaddr(a3),a0
 
 	* In normal case dividers have no value when sorting,
 	* in brower mode they should be sorted properly.
@@ -9149,54 +9125,38 @@ sortModuleList:
 .browserMode
 	tst.b	l_divider(a3)
 	beq.b	.notDiv
-	lea	-100(sp),sp
+	lea	-(SORT_WEIGHT_LENGTH+2)(sp),sp
+	move.l	sp,a1
+	moveq	#SORT_WEIGHT_LENGTH-1,d0
+	move.b	#DIVIDER_MAGIC,(a1)+
+.cp_	
+	move.b	(a0)+,(a1)+
+	dbeq	d0,.cp_
 	move.l	sp,a0
-	move.b	#DIVIDER_MAGIC,(a0)+
-.cp_	move.b	(a2)+,(a0)+
-	bne.b	.cp_
-	move.l	sp,a2
 	bsr.b	.doGetV		
-	lea	100(sp),sp
+	lea	SORT_WEIGHT_LENGTH+2(sp),sp
 	rts
 .notDiv
 .boobo
 .doGetV
-	move.l	a2,a0
+	* in/out: a0
 	bsr.w	cut_prefix
-	move.l	a0,a2
 
-	bsr.b	.bah2
-	move.l	d5,d0
-	bsr.b	.bah2
-	move.l	d5,d1
-	bsr.b	.bah2
-	move.l	d5,d2
-	bsr.b	.bah2
-	move.l	d5,d3
-	bsr.b	.bah2
-	move.l	d5,d4
-;	bsr.b	.bah2
-;	rts
-
-.bah2
-	moveq	#4-1,d6
-.g1	bsr.b	.bah
-	move.b	d7,d5
-	rol.l	#8,d5
-	dbf	d6,.g1
-	ror.l	#8,d5
-	rts
-
-.bah	tst.b	(a2)
+	moveq	#SORT_WEIGHT_LENGTH-1,d0
+.doV
+	moveq	#0,d1
+	* If null reached, rest of the weight will be null as well
+	tst.b	(a0)
 	beq.b	.z
-	move.b	(a2)+,d7
-	cmp.b	#'a',d7
-	blo.b	.j
-	cmp.b	#'z',d7
-	bhi.b	.j
-	and.b	#$df,d7
-.j	rts
-.z	clr.b	d7
+	move.b	(a0)+,d1
+	cmp.b	#'a',d1
+	blo.b	.z
+	cmp.b	#'z',d1
+	bhi.b	.z
+	* Convert chars to upper case for case insensitive comparison
+	and.b	#$df,d1
+.z	move.b	d1,(a2)+
+	dbf	d0,.doV
 	rts
 
 
