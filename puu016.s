@@ -8797,6 +8797,11 @@ SORT_ELEMENT_LENGTH = 4+SORT_WEIGHT_LENGTH
 
 rsort
 sortButtonAction
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.1
+	DPRINT	"Sort disabled in file browser"
+	rts
+.1
 	skipIfGadgetDisabled gadgetSortButton
 	bsr.b	sortModuleList
 	bra.w	forceRefreshList
@@ -8821,7 +8826,7 @@ sortModuleList:
 	
 	lea	.t(pc),a0
 	moveq	#102+WINX,d0
-	bsr.b	printbox
+	bsr		printbox
 	bra.b	.d
 .t	dc.b	"Sorting...",0
  even
@@ -31012,8 +31017,8 @@ engageListMode
 	bsr.w	disableButton
 	lea	gadgetNewButton(a4),a0
 	bsr.w	disableButton
-	lea	gadgetSortButton(a4),a0
-	bsr.w	disableButton
+	;lea	gadgetSortButton(a4),a0
+	;bsr.w	disableButton
 	lea	gadgetMoveButton(a4),a0
 	bsr.w	disableButton
 	lea	gadgetPrgButton(a4),a0
