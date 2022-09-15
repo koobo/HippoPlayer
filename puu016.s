@@ -9798,7 +9798,8 @@ volumerefresh
 .r	move	d0,mainvolume(a5)
 
 	mulu	#65535,d0
-	divu	#64,d0
+	;divu	#64,d0
+	lsr.l	#6,d0
 	lea	slider1,a0
 	move.l	gg_SpecialInfo(a0),a1
 	move	d0,d1
