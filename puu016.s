@@ -8854,31 +8854,42 @@ sortModuleList:
 	;lea	moduleListHeader(a5),a3
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
+ 
+ if DEBUG
+	clr.l	.swaps
+	clr.l	.comps
+ endif
 
 * paino 24 bytee
 
 	* sort table in a2
+	move.l	a2,a4
 
 	move.l	(a3),a3		* MLH_HEAD
 .ploop
 	tst.l	(a3)		* check if last node?
 	beq.b	.ep
-	SUCC	a3,a4		* SUCC
+
+	* Fill slot at a4
+	move.l	a4,a2
 	move.l	a3,(a2)+	* noden osoite taulukkoon
 
 	* Calculate value based on l_nameaddr in given node a3,
 	* write it in (a2)+
 	bsr.w	.getWeight
 	
-	;lea	SORT_WEIGHT_LENGTH(a2),a2
-
+	* Remove node from list
 	move.l	a3,a1		* poistetaan node (a1)
 	REMOVE
 
-	move.l	a4,a3
+	* get next node
+	SUCC	a3,a3
+	* next slot in table
+	lea		SORT_ELEMENT_LENGTH(a4),a4
 	bra.b	.ploop
 .ep
-
+	* Weights done
+	* Now sort in divider sections
 
 	move.l	sortbuf(a5),a3
 
@@ -8895,10 +8906,8 @@ sortModuleList:
 	move.l	a3,d7
 	sub.l	d5,d7		* montako nodea sortataan
 
-	move.l	d7,d0 
-	moveq	#SORT_ELEMENT_LENGTH,d1
-	bsr.w	divu_32
-	move.l	d0,d7
+	* Nodes count
+	lsr.l	#5,d7	; /32 - SORT_ELEMENT_LENGTH
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
 	cmp.l	#2,d7		* väh 2 kpl
@@ -8937,6 +8946,12 @@ sortModuleList:
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .npl	clr.l	chosenmodule(a5)
 	
+ if DEBUG
+	move.l	.swaps(pc),d1
+	move.l	.comps(pc),d0
+	DPRINT	"Compares=%ld swaps=%ld"
+ endif
+
 	DPRINT  "rsort release list"
 	bsr.w	releaseModuleList
 	bsr.w	unlockMainWindow
@@ -8985,10 +9000,18 @@ sortModuleList:
 
 .sort
 	pushm	all
-	bsr.b	.sort0
-	popm	all
+ 	bsr.b	.sort0
+ 	popm	all
 	rts
 
+ if DEBUG
+.swaps	dc.l	0
+.comps	dc.l	0
+ endif
+
+* in:
+*   a2 = start of array
+*   d7 = number of items to sort
 .sort0
 	move.l	a2,a0
 	moveq	#SORT_ELEMENT_LENGTH,d5		* element length
@@ -9027,12 +9050,15 @@ sortModuleList:
  ;   lea     (a1,d6.l),a2
 
 	move.l	d1,d6
-	lsl.l	#5,d6 * x32
+	lsl.l	#5,d6 * x32 - SORT_ELEMENT_LENGTH
 	lea		(a1,d6.l),a2
  
 .Loop:	
 	* Compare. 
 	* It's likely the compares after the 1st one are not often hit.
+ if DEBUG
+	addq.l	#1,.comps
+ endif
 	move.l	4(a1),d3
 	cmp.l	4(a2),d3
 	bne.b	.notokval
@@ -9056,6 +9082,10 @@ sortModuleList:
 	beq.b	.okval
 .notokval
 	bmi.b	.okval
+
+ if DEBUG
+	addq.l	#1,.swaps
+ endif
 
 ;	Move.w	(a1)+,d3
 ;	Cmp.w	(a2)+,d3
@@ -9148,20 +9178,22 @@ sortModuleList:
 	bsr.w	cut_prefix
 
 	moveq	#SORT_WEIGHT_LENGTH-1,d0
+	moveq	#'a',d2
+	moveq	#'z',d3
+	move.b	#$df,d4
+
+	* Copy string as upper case into the weight array
+	* for case insensitive comparison
 .doV
-	moveq	#0,d1
-	* If null reached, rest of the weight will be null as well
-	tst.b	(a0)
-	beq.b	.z
 	move.b	(a0)+,d1
-	cmp.b	#'a',d1
+	cmp.b	d2,d1
 	blo.b	.z
-	cmp.b	#'z',d1
+	cmp.b	d3,d1
 	bhi.b	.z
-	* Convert chars to upper case for case insensitive comparison
-	and.b	#$df,d1
+	* Lower case detected, convert it
+	and.b	d4,d1
 .z	move.b	d1,(a2)+
-	dbf	d0,.doV
+	dbeq	d0,.doV
 	rts
 
 
