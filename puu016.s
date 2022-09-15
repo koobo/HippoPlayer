@@ -37129,8 +37129,7 @@ p_davidwhittaker
 .init
 	lea	.path(pc),a0 
 	moveq	#0,d0
-	bsr.w	deliLoadAndInit
-	rts
+	bra		deliLoadAndInit
 
 .id
 	move.l	a4,a0
@@ -40098,8 +40097,7 @@ p_digitalmugician
 .init
 	lea	.path(pc),a0 
 	moveq	#0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 ; in: a4 = module
 ; out: d0 = 0, valid DMU
@@ -40216,8 +40214,7 @@ p_synthesis
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|11,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0 
@@ -40281,8 +40278,7 @@ p_syntracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l 	a4,a0
@@ -40326,8 +40322,7 @@ p_robhubbard2
 .init
 	lea	.path(pc),a0 
 	move.l	#2<<16|0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 ; in: a4 = module
 ;     d7 = module length
@@ -40391,8 +40386,7 @@ p_chiptracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	cmp.l   #'KRIS',952(A4)
@@ -41940,8 +41934,7 @@ p_quartet
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -42255,8 +42248,7 @@ p_instereo2
 .init
 	lea	.path(pc),a0 
 	move.l	#2<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
  	MOVEQ	#1,D0
@@ -42300,8 +42292,7 @@ p_jasonbrooke
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -42381,8 +42372,7 @@ p_earache
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -42476,8 +42466,7 @@ p_krishatlelid
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .end
 	* Safety: disable audio interrupts and clear requests
@@ -42559,8 +42548,7 @@ p_richardjoseph2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	MOVE.L	a4,A0
@@ -42619,8 +42607,7 @@ p_hippel7
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|4,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 id_hippel7
 	bsr.b	.id
@@ -42724,8 +42711,7 @@ p_aprosys
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	CMP.L	#$41445256,(A4)
@@ -42767,8 +42753,7 @@ p_hippelst
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|4,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -42956,8 +42941,7 @@ p_tcbtracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 
 .id
@@ -43174,8 +43158,7 @@ p_activisionpro
 .init
 	lea	.path(pc),a0 
 	move.l	#1<<16|8,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 
@@ -43424,8 +43407,7 @@ p_maxtrax
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	movea.l	a4,A0
@@ -43493,8 +43475,7 @@ p_wallybeben
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -43564,8 +43545,7 @@ p_synthpack
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -43613,8 +43593,7 @@ p_robhubbard
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|6,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -43667,8 +43646,7 @@ p_jeroentel
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0 
@@ -43740,8 +43718,7 @@ p_sonix
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -43882,8 +43859,7 @@ p_quartetst
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 * Quartet ST
 .id_quartet_st
@@ -43951,8 +43927,7 @@ p_coredesign
 .init
 	lea	.path(pc),a0 
 	move.l	#10<<16|10,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 * Core Design
 .id_core_design
@@ -44048,8 +44023,7 @@ p_musicmaker8
 .init
 	lea	.path(pc),a0 
 	move.l	#8<<16|5,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 
 .id_musicmaker8
@@ -44169,8 +44143,7 @@ p_musicmaker4
 .init
 	lea	.path(pc),a0 
 	move.l	#8<<16|5,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 ;EP_Check5 (FPTR) - same as DTP_Check2 but module is loaded into public
 
@@ -44272,8 +44245,7 @@ p_digitalmugician2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|8,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 * digital mugician ii ("mugician ii")
 * DTP_UserConfig
@@ -44444,8 +44416,7 @@ p_soundcontrol
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -44500,8 +44471,7 @@ p_themusicalenlightenment
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	movea.l	a4,A0
@@ -44635,8 +44605,7 @@ p_timfollin2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	MOVEQ	#-1,D0
@@ -44710,8 +44679,7 @@ p_jasonpage
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -44791,8 +44759,7 @@ p_steveturner
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -44843,9 +44810,8 @@ p_specialfx
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.b	deliLoadAndInit
-	rts 
-
+	bra		deliLoadAndInit
+	
 .id
 	move.l	a4,a0
 	MOVEQ	#-1,D0
