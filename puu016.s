@@ -48971,13 +48971,19 @@ fetchRemoteFile
 
 	* Save into a file to execute
 	lea		desbuf(a5),a0
-	move.l	a0,a1
-.findEnd
-	tst.b	(a1)+
-	bne.b	.findEnd
-	sub.l	a0,a1
-	subq	#1,a1
-	move.l	a1,d0	* file len
+;	move.l	a0,a1
+;.findEnd
+;	tst.b	(a1)+
+;	bne.b	.findEnd
+;	sub.l	a0,a1
+;	subq	#1,a1
+;	move.l	a1,d0	* file len
+
+    moveq   #-1,d0  ; phx strlen trick
+.c	tst.b   (a0)+
+	dbeq    d0,.c
+ 	not.w   d0
+	ext.l	d0
 
 	lea		remoteScriptPath(pc),a0
 	lea		desbuf(a5),a1
