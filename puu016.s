@@ -313,8 +313,9 @@ prefs_groupname		rs.b	99
 prefs_div		rs.b	1
 prefs_early		rs.b	1
 prefs_prefix		rs.b	1
-prefs_xfd		rs.b	1
-			rs.l	1
+prefs_xfd			rs.b	1
+					rs.w	1
+prefs_windowWidth	rs.w	1
 prefs_infopos2		rs.l	1
 prefs_arcdir		rs.b	150
 prefs_pattern		rs.b	70
@@ -4329,7 +4330,7 @@ avaa_ikkuna:
 	move	WINSIZY(a5),wsizey(a0)
 	tst	winstruc+nw_MaxWidth(a0)
 	bne.b	.set
-	move	WINSIZX(a5),d0
+	move	#264,d0		* default width
 	move	d0,winstruc+nw_MinWidth(a0)
 	add	d0,d0
 	move	d0,winstruc+nw_MaxWidth(a0)
@@ -12411,6 +12412,12 @@ loadprefs2
 	move.l	prefs_listtextattr(a0),list_text_attr+4		* ysize jne
 	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr
 
+	move	prefs_windowWidth+prefsdata(a5),d0
+	beq.b	.1
+	move	d0,previousWindowWidth(a5)
+	move	d0,WINSIZX(a5)
+.1
+
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
 	bsr.b	sliderit
@@ -12691,7 +12698,7 @@ saveprefs
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
 	move.b	altbuttons(a5),prefs_altbuttons(a0)
-
+	move	previousWindowWidth(a5),prefs_windowWidth(a0)
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
