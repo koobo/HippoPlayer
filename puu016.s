@@ -27406,7 +27406,8 @@ loadmodule:
 
 	move.b	d0,d7	* doublebuffering flag
 	lea	-200(sp),sp	* space for output path
-	move.l	sp,a0
+	move.l	sp,a1
+	lea	l_filename(a3),a0	
 	jsr	fetchRemoteFile
   if DEBUG
 	move.l	sp,d0
@@ -27416,8 +27417,8 @@ loadmodule:
 	* TFMX special case!
 	* See if smpl can be loaded, store the output 
 	* path here.
-	lea		100(sp),a0
-	bsr		.TFMX
+	lea		100(sp),a1
+	bsr		.loadTFMXsamples
 
 	* Then do ordinary load, this will also pick 
 	* the TFMX smpl file in the temp dir.
@@ -27442,41 +27443,25 @@ loadmodule:
 * TFMX special case!
 * Look for mdat in the url.
 * Convert url from mdat->smpl and fetch, restore url.
-.TFMX
+.loadTFMXsamples
 	* null output string to start with
-	clr.b	(a0)	
+	clr.b	(a1)	
 	lea		l_filename(a3),a2	
 .1	move.b	(a2)+,d0
 	beq.b	.no
 	cmp.l	#"mdat",d0
-	beq.b	.yesLC
-	cmp.l	#"MDAT",d0
-	beq.b	.yesUC
+	beq.b	.yes
 	rol.l	#8,d0
 	bra.b	.1
 .no	rts
 
-.yesUC
-	DPRINT	"TFMX smpl 1"
-	subq	#4,a2
-	move.b	#"S",(a2)
-	move.b	#"M",1(a2)
-	move.b	#"P",2(a2)
-	move.b	#"L",3(a2)
-	jsr		fetchRemoteFile
-	move.b	#"M",(a2)
-	move.b	#"D",1(a2)
-	move.b	#"A",2(a2)
-	move.b	#"T",3(a2)
-	rts
-
-.yesLC
-	DPRINT	"TFMX smpl 2" 
+.yes
 	subq	#4,a2
 	move.b	#"s",(a2)
 	move.b	#"m",1(a2)
 	move.b	#"p",2(a2)
 	move.b	#"l",3(a2)
+	lea		l_filename(a3),a0
 	jsr		fetchRemoteFile
 	move.b	#"m",(a2)
 	move.b	#"d",1(a2)
@@ -27894,8 +27879,47 @@ lod_xfderr	=	-17
 lod_extract	=	-18
 lod_loadsegfail = -19
 
-* Skip XPK identification
+* Load file variant 
+* - Skips XPK identification
+* - Loads remote files if url detected
 loadfileStraight:
+	cmp.b	#'h',(a0)
+	bne		.local
+	cmp.b	#'t',1(a0)
+	bne		.local
+	cmp.b	#'t',2(a0)
+	bne		.local
+	cmp.b	#'p',3(a0)
+	bne		.local
+	cmp.b	#':',4(a0)
+	bne		.local
+
+	pushm	d1-a6
+	lea		-100(sp),sp
+
+	move.l	sp,d1
+	pushm	d0/a1
+	move.l	d1,a1	* space for target file path
+	jsr		fetchRemoteFile
+	DPRINT	"remote loaded %ld"
+	popm	d0/a1
+	
+	move.l	sp,a0
+	* a0 is now the downloaded file path, 
+	* parameters unchanged
+	bsr.b	.local
+
+	move.l	d0,d7
+	move.l	sp,d1
+	lore	Dos,DeleteFile
+
+	move.l	d7,d0
+	lea		100(sp),sp
+	popm	d1-a6
+	rts
+
+.local
+
 	push	d7
 	move.b	xpkid(a5),d7
 	* DISABLE:
@@ -27907,6 +27931,7 @@ loadfileStraight:
 	pop	d7
 	rts
 
+* Ordinary load file
 loadfile:
 	movem.l	d1-a6,-(sp)
 
@@ -46220,13 +46245,38 @@ deliLoadFile
 	lea 	var_b,a5
 
 	* Find empty loadfile slot
-	bsr.b	deliFindEmptyListDataSlot
-	bne.b	.noSlots
+	bsr		deliFindEmptyListDataSlot
+	bne		.noSlots
 	lea	4(a1),a2
 
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	move.l	deliPathArray+var_b,a0
 
+	* Manipulate path so that the file part is in lowercase.
+	* Amiga filesystems are case insensitive,
+	* but this will help with Modland being lower case.
+	* Eagleplayers may add unpredictable file suffixes here,
+	* lowercase is the most likely one to work.
+	move.l	a0,a3
+.1	tst.b	(a3)+
+	bne.b	.1
+
+.2	cmp.l	a0,a3
+	beq.b	.3
+	cmp.b	#'/',-(a3)
+	beq.b	.3
+	move.b	(a3),d1
+	cmp.b	#'A',d1
+	blo.b	.2
+	cmp.b	#'Z',d1
+	bhi.b	.2
+	or.b	#$20,(a3) * lower case alphabet
+	bra.b	.2
+.3
+	
+	* a0 <= file path to load
+	* a1 <= address to store data address
+	* a2 <= address to store length
 	jsr	loadfileStraight
 	clr.l 	deliLoadFileIoErr(a5)
 	move.l	d0,d7
@@ -49010,39 +49060,46 @@ configRemoteNode
 	popm	d0/a0-a2
 	rts
 
-* Loads a remote file into a tempfile using aget.
-* The url is based on the node l_filename and l_remote status.
+*
+* Loads a remote file into a file using aget.
 * in:
-*   a0 = buffer for the path to the output file path to be filled
-*   a3 = node
+*   a0 = url
+*   a1 = buffer for output file path
 * out:
-*   a0 = path to file, delete after loading
+*   d0 = true: ok, false: could not save temp script file
 fetchRemoteFile:
 	pushm	d1-a6
-	DPRINT	"fetchRemoteFile"
-
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"fetchRemoteFile: %s"
+ endif
 	moveq	#0,d7	* status
 
-	* Temporary target file path, the last part of the url path
-	move.l	l_nameaddr(a3),a1
+	* Temporary target file path, the last part of the url
+	move.l	a0,a2
 .end
-	tst.b	(a1)+
+	tst.b	(a2)+
 	bne.b	.end
-.sl	cmp.b	#"/",-(a1)
+.sl	cmp.b	#"/",-(a2)
 	bne.b	.sl
-	addq	#1,a1
+	addq	#1,a2
 
-	move.l	a1,a2
-	move.b	#"T",(a0)+
-	move.b	#":",(a0)+
+	move.l	a1,a3
+	* Build temp file path into a3
+	move.b	#"T",(a3)+
+	move.b	#":",(a3)+
 .copy
-	move.b	(a2)+,(a0)+
+	move.b	(a2)+,(a3)+
 	bne.b	.copy
 
+	* TODO: temp file name must be 30 or less
+
+	* Source url in a0
+	* Destination file in a1
+	
 	* Generate parametrized script
-	lea		l_filename(a3),a0
 	move.l	a0,d0
-	move.l	a1,d1
+	move.l	a1,d1 
 	lea		.getScript(pc),a0
 	jsr		desmsg
 
@@ -49051,19 +49108,11 @@ fetchRemoteFile:
 
 	* Save into a file to execute
 	lea		desbuf(a5),a0
-;	move.l	a0,a1
-;.findEnd
-;	tst.b	(a1)+
-;	bne.b	.findEnd
-;	sub.l	a0,a1
-;	subq	#1,a1
-;	move.l	a1,d0	* file len
-
+	* Find length to d0
     moveq   #-1,d0  ; phx strlen trick
 .c	tst.b   (a0)+
 	dbeq    d0,.c
- 	not.w   d0
-	ext.l	d0
+ 	not.l   d0
 
 	lea		remoteScriptPath(pc),a0
 	lea		desbuf(a5),a1
@@ -49085,7 +49134,7 @@ fetchRemoteFile:
 
 .getScript
 	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	'aget %s "T:%s" QUIET',0
+	dc.b	'aget %s "%s" QUIET',0
 remoteExecute
 	dc.b	"execute "
 remoteScriptPath
