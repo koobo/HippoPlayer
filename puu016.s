@@ -27390,7 +27390,7 @@ loadmodule:
 	* Store this so that the name can ne urldecoded before showing.
 	move.b	l_remote(a3),uriDecodeNameBeforeShowing(a5)
 	* Check if a remote file
-	beq.b	.doLoadModule
+	beq		.doLoadModule
 
 	move.b	d0,d7	* doublebuffering flag
 	lea	-200(sp),sp	* space for output path
@@ -27400,15 +27400,78 @@ loadmodule:
 	move.l	sp,d0
 	DPRINT	"Remote loaded: %s"
   endif
+
+	* TFMX special case!
+	* See if smpl can be loaded, store the output 
+	* path here.
+	lea		100(sp),a0
+	bsr		.TFMX
+
+	* Then do ordinary load, this will also pick 
+	* the TFMX smpl file in the temp dir.
 	move.l	sp,a0	* path to load from
 	move.b	d7,d0   * double buffering flag
-	bsr.b	.doLoadModule
+	bsr		.doLoadModule
+	move.l	d0,d7	* save status
+
+	* Delete TFMX smpl temp file if it is there
+	lea		100(sp),a0
+	tst.b	(a0)
+	beq.b	.skip
+	move.l	a0,d1
+	lore	Dos,DeleteFile 
+.skip
 	move.l	sp,d1
-	push	d0	* save status
 	lore	Dos,DeleteFile * delete tempfile
-	pop	d0	* status into d0
 	lea	200(sp),sp
+	move.l	d7,d0	* status here
 	rts
+
+* TFMX special case!
+* Look for mdat in the url.
+* Convert url from mdat->smpl and fetch, restore url.
+.TFMX
+	* null output string to start with
+	clr.b	(a0)	
+	lea		l_filename(a3),a2	
+.1	move.b	(a2)+,d0
+	beq.b	.no
+	cmp.l	#"mdat",d0
+	beq.b	.yesLC
+	cmp.l	#"MDAT",d0
+	beq.b	.yesUC
+	rol.l	#8,d0
+	bra.b	.1
+.no	rts
+
+.yesUC
+	DPRINT	"TFMX smpl 1"
+	subq	#4,a2
+	move.b	#"S",(a2)
+	move.b	#"M",1(a2)
+	move.b	#"P",2(a2)
+	move.b	#"L",3(a2)
+	jsr		fetchRemoteFile
+	move.b	#"M",(a2)
+	move.b	#"D",1(a2)
+	move.b	#"A",2(a2)
+	move.b	#"T",3(a2)
+	rts
+
+.yesLC
+	DPRINT	"TFMX smpl 2" 
+	subq	#4,a2
+	move.b	#"s",(a2)
+	move.b	#"m",1(a2)
+	move.b	#"p",2(a2)
+	move.b	#"l",3(a2)
+	jsr		fetchRemoteFile
+	move.b	#"m",(a2)
+	move.b	#"d",1(a2)
+	move.b	#"a",2(a2)
+	move.b	#"t",3(a2)
+	rts
+
 
 * in:
 *   a0 = path to load from
@@ -27820,7 +27883,7 @@ lod_extract	=	-18
 lod_loadsegfail = -19
 
 * Skip XPK identification
-loadfileStraight
+loadfileStraight:
 	push	d7
 	move.b	xpkid(a5),d7
 	* DISABLE:
@@ -27832,7 +27895,7 @@ loadfileStraight
 	pop	d7
 	rts
 
-loadfile
+loadfile:
 	movem.l	d1-a6,-(sp)
 
 	jsr	setMainWindowWaitPointer
@@ -29269,7 +29332,7 @@ get_mline
 *   d0 = -1: not found
 *   a0 = end of last match
 
-search
+search:
 	move.l	#2048,d2
 	cmp.l	d7,d2
 	blo.b	.sea
@@ -29777,7 +29840,8 @@ tutki_moduuli
 .t	
 	moveq	#0,d0
 
-	lea	fileinfoblock+8(a5),a0		* tied.nimi: mdat.*
+	lea	fileinfoblock+fib_FileName(a5),a0		* tied.nimi: mdat.*
+ 
 	cmp.l	#'MDAT',(a0)
 	beq.b	.uq
 	cmp.l	#'mdat',(a0)
@@ -48937,7 +49001,7 @@ configRemoteNode
 *   a3 = node
 * out:
 *   a0 = path to file, delete after loading
-fetchRemoteFile	
+fetchRemoteFile:
 	pushm	d1-a6
 	DPRINT	"fetchRemoteFile"
 
@@ -48995,7 +49059,6 @@ fetchRemoteFile
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3	* output
 	lore	Dos,Execute
-	DPRINT	"Execute=%ld"
 	moveq	#1,d7 * ok
 .exit
 	jsr		clearMainWindowWaitPointer
