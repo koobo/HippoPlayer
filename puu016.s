@@ -3008,7 +3008,9 @@ main
 	* state modules.
 	tst.l 	modamount(a5)
 	bne.b	.skip
+	bsr		lockMainWindow
 	jsr	importSavedStateModulesFromDisk
+	bsr		unlockMainWindow
 .skip
 
 *********************************************************************************
