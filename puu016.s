@@ -2754,7 +2754,6 @@ main
 	NEWLIST a0
 
 	lea	.startingMsg(pc),a0
-	moveq	#102+WINX,d0
 	bsr.w	printbox
 	bra.b	.startingMsg2
 .startingMsg dc.b "Starting...",0
@@ -3387,7 +3386,6 @@ exit
 	bsr.w	setMainWindowWaitPointer	
 
 	lea	.exmsg(pc),a0
-	moveq	#102+WINX,d0
 	bsr.w	printbox
 	bra.b	.exmsg2
 .exmsg dc.b	"Exiting...",0
@@ -8739,7 +8737,7 @@ gadgetsup
 	dr	rlistmode	* listmode change
 
 * Print some text into the filebox
-** a0 = teksti, d0 = x-koordinaatti
+** a0 = teksti
 printbox:
 	tst.b	win(a5)
 	beq.b	.q
@@ -8749,6 +8747,30 @@ printbox:
 .p	pushm	d0/a0
 	bsr.w	clearbox		* fileboxi tyhjäks
 	popm	d0/a0
+
+	move.l	a0,a1
+    moveq   #-1,d0
+.c	cmp.b	#10,(a1)
+	beq.b	.cc
+	tst.b   (a1)+
+.cc	dbeq    d0,.c
+ 	not.l   d0	* strlen in d0
+
+	push	a0
+	* d0 = length of text
+	* a0 = text
+	move.l	rastport(a5),a1
+	lore	GFX,TextLength
+	pop		a0
+	* d0 = text width in pixels
+	* center in the window
+	move 	previousWindowWidth(a5),d1
+	sub		#20,d1
+	sub		d0,d1
+	lsr		#1,d1
+	move	d1,d0
+	add		#20,d0
+
 	moveq	#69+WINY,d1	
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
@@ -8813,7 +8835,6 @@ sortModuleList:
 	beq.b	.d
 	
 	lea	.t(pc),a0
-	moveq	#102+WINX,d0
 	bsr		printbox
 	bra.b	.d
 .t	dc.b	"Sorting...",0
@@ -11393,7 +11414,6 @@ rloadprogDoIt
 .showLoadingProgram
 	pushm	all
 	lea	.t(pc),a0
-	moveq	#46+WINX,d0
 	bsr.w	printbox
 	popm	all
 	rts
@@ -11983,7 +12003,6 @@ rsaveprog
 
 
 	lea	.t(pc),a0
-	moveq	#50+WINX,d0
 	bsr.w	printbox
 	bra.b	.d
 .t	dc.b	"Saving module program...",0
@@ -17156,12 +17175,10 @@ shownames:
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	bne.b	.doHippo
 	* What to show when no modules and favorites mode?
-	moveq	#90+WINX,d0
 	lea	.noFavs(pc),a0
 	tst.b	favorites(a5)
 	bne.b	.favsOn
 	lea	.noFavs2(pc),a0
-	moveq	#90-7*8+WINX,d0
 .favsOn
 	bsr.w	printbox
 	bra.b	.wasFav
@@ -17724,7 +17741,6 @@ delete
 
 	pushm	all
 	lea	.del(pc),a0
-	moveq	#37+WINX,d0
 	bsr.w	printbox
 	popm	all
 
@@ -30810,7 +30826,6 @@ exportFavoriteModulesWithMessage
 	jsr	setMainWindowWaitPointer
 	jsr	freezeMainWindowGadgets
 	lea	.msg(pc),a0
-	moveq	#68+WINX,d0
 	jsr	printbox
 	bra.b	.c
 .msg 	dc.b  	"Saving favorites...",0
