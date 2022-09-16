@@ -31189,17 +31189,17 @@ engageListMode
 *******************************************************************************
 
 importSavedStateModulesFromDisk
-	DPRINT	"importSavedStateModulesFromDisk"
 	tst.b	savestate(a5)
 	bne.b	.enabled
 .error	rts
 
 .enabled
+	DPRINT	"importSavedStateModulesFromDisk"
 	lea	savedStateModuleFileName(pc),a0
-	jsr	plainLoadFile
+ 	jsr	plainLoadFile
 	move.l	d0,d6	* address
 	beq.b	.error
-	move.l	d1,d7 	* length
+	move.l	d1,d7
 
 	lea moduleListHeader(a5),a2
 	move.l	d6,a3		* start of buffer	
@@ -45969,7 +45969,7 @@ freeDeliBase
 
 
 * Build the DeliBase structure, this is not a complete version.
-buildDeliBase
+buildDeliBase:
 	bsr.b	freeDeliBase
 
 	rsreset 
