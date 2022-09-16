@@ -2968,37 +2968,24 @@ main
 	beq.b	.oohi
 
 	lea	regtext_t(pc),a0
-	moveq	#62+WINY,d1
+	moveq	#0,d1
 	bsr.b	.rount
 
 	lea	keyfile(a5),a0
-	moveq	#72+WINY,d1
+	moveq	#8,d1
 	bsr.b	.rount
 	bra.b	.oohi
 
 .rount
 	moveq	#34+WINX,d0
-	tst.b	uusikick(a5)
-	bne.b	.uere
-	add	#28,d0
-.uere	
-	move	boxsize(a5),d2
+	move	boxsize(a5),d3
 	beq.b	.oohi
-	cmp	#7,d2
-	bhi.b	.re
-	add	#50,d0
-.re	cmp	#3,d2
-	bne.b	.r
-	addq	#6,d1
-	bra.b	.w
-
- 
-.r	lsr	#1,d2
-	subq	#1,d2
-	lsl	#3,d2
-	add	d2,d1
-.w	bra.w	print
-
+	bsr		getFileboxYStartToD2
+	add		d2,d1
+	mulu	listFontHeight(a5),d3
+	lsr		#1,d3
+	add		d3,d1
+	bra.w	print
 .oohi
 
 
@@ -31204,10 +31191,15 @@ importSavedStateModulesFromDisk
 	beq.b	.parse
 .noLock
 .exit
-	jsr	resh
 .none
-	rts
-	
+	* Avoid refreshing the box if nothing to be seen,
+	* this will leave the "Registered..." text visible.
+	tst.l	modamount(a5)
+	beq.b	.0
+	jsr	resh
+.0	rts
+
+
 .parse
 * "00000000 00 abc"
 * convert into number
