@@ -1125,7 +1125,8 @@ favoriteListChanged	rs.b	1
 
 * List for file browser
 fileBrowserListHeader	rs.b	MLH_SIZE
-
+* List for search results
+searchResultsListHeader rs.b	MLH_SIZE
 
 ** InfoWindow kamaa
 ;infosample	rs.l	1		* samplesoittajan väliaikaisalue
@@ -1306,6 +1307,7 @@ randomtable		rs.l		1 * pointer to random table, allocated when needed
 LISTMODE_NORMAL		= 0
 LISTMODE_FAVORITES 	= 1
 LISTMODE_BROWSER	= 2
+LISTMODE_SEARCH     = 3
 listMode		rs.b	1
 
 * This is set each time list has been edited by user in some way.
@@ -2752,6 +2754,8 @@ main
 	NEWLIST a0
 	lea	fileBrowserListHeader(a5),a0
 	NEWLIST a0
+	lea	searchResultsListHeader(a5),a0
+	NEWLIST a0
 
 	lea	.startingMsg(pc),a0
 	bsr.w	printbox
@@ -3447,6 +3451,7 @@ exit
 
 	jsr	freeFavoriteList
 	jsr	freeFileBrowserList
+	jsr	freeSearchList
 
 	tst.b	vbsaatu(a5)
 	beq.b	.nbv
@@ -10197,6 +10202,12 @@ rbutton7
 	bsr.w	confirmFavoritesModification
 	beq.b	.skip
 
+	* Another functionality in these list modes:
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq		copyCurrentEntryToMainList
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	beq		copyCurrentEntryToMainList
+
 	move.l	_DosBase(a5),a6
 
 	;bra	filereq_code
@@ -10955,9 +10966,31 @@ filereqtitle
  even
 
 
+* This clones the current entry and appends to the mainlist
+copyCurrentEntryToMainList
+	DPRINT	"Copy to main"
 
+	bsr		getcurrent
+	beq.b	.nope
+	tst.b	l_divider(a3)
+	bne.b	.nope
 
+	move.l	a3,a0
+	jsr		cloneListNode
 
+	move.l	a4,a1
+	lea		moduleListHeader(a5),a0
+	lore	Exec,AddTail
+
+	DPRINT	"added to main"
+	rts
+
+.nope
+	DPRINT	"Not found"
+	rts
+.div
+	DPRINT	"Not file"
+	rts
 
 
 
@@ -16974,10 +17007,19 @@ shownames:
 	pushm	all
 
 	tst.l	modamount(a5)
-	bne.b	.eper
+	bne		.eper
 
 	bsr.b	clearbox
 
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	bne.b	.noSrch
+	lea		.noSrchResults(pc),a0
+	bsr.w	printbox
+	bra.b	.wasSrch
+.noSrchResults
+	dc.b	"No search results.",0
+	even
+.noSrch
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	bne.b	.doHippo
 	* What to show when no modules and favorites mode?
@@ -16995,6 +17037,7 @@ shownames:
 .doHippo
 	bsr.w	printhippo1
 .wasFav	
+.wasSrch
 	st	hippoonbox(a5)		* koko höskän tulostus
 	bra.w	.nomods
 .eper
@@ -18875,6 +18918,8 @@ getVisibleModuleListHeader:
 	beq.b	.isFav
 	cmp.b	 #LISTMODE_BROWSER,listMode(a5)
 	beq.b	.isBrowser
+	cmp.b	 #LISTMODE_SEARCH,listMode(a5)
+	beq.b	.isSearch
 	lea	moduleListHeader(a5),a0
 	rts
 .isFav
@@ -18882,6 +18927,9 @@ getVisibleModuleListHeader:
 	rts
 .isBrowser
 	lea	fileBrowserListHeader(a5),a0
+	rts
+.isSearch
+	lea	searchResultsListHeader(a5),a0
 	rts
 	
 
@@ -21547,7 +21595,7 @@ areyousure_delete
 * Out:
 *   d0 = 0 if modification not allowed
 *   d0 = 1 if modification allowed
-confirmFavoritesModification
+confirmFavoritesModification:
 	; Check if in favorites list
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.favs
@@ -30422,7 +30470,7 @@ gadstate
 *
 *****************************************************************************
 
-toggleFavoriteStatusForCurrentModule
+toggleFavoriteStatusForCurrentModule:
 	tst.b	favorites(a5)
 	beq.b	.1
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
@@ -30466,7 +30514,7 @@ toggleFavoriteStatus
 
 * in:
 *   a0 = module list node
-addFavoriteModule
+addFavoriteModule:
 	isFavoriteModule a0
 	bne.b .exit
 
@@ -30482,7 +30530,30 @@ addFavoriteModule
 	bsr.w	findFavoriteModule
 	tst.l	d0
 	bne.b	.exit	* bail out if so
+	
+	* copy this node and add to favorite list
+	bsr		cloneListNode
+	* a4 = cloned node
 
+	* Append to list
+	move.l	a4,a1
+	lea	favoriteListHeader(a5),a0
+	lob	AddTail
+
+	st	favoriteListChanged(a5)
+ if DEBUG
+	bsr.w	logFavoriteList
+ endif
+.noMem
+.exit
+	rts
+
+* in: 
+*   a0 = list nde
+* out: 
+*   a4 = new node
+*   d0 = false: no mem, true: all ok
+cloneListNode
 	move.l	a0,a3
 
 	* copy this node and add to favorite list
@@ -30510,17 +30581,10 @@ addFavoriteModule
 	lea	l_filename(a4,d0.l),a0
 	move.l	a0,l_nameaddr(a4)
 
-	* Append to list
-	move.l	a4,a1
-	lea	favoriteListHeader(a5),a0
-	lob	AddTail
-
-	st	favoriteListChanged(a5)
- if DEBUG
-	bsr.w	logFavoriteList
- endif
-.noMem
-.exit
+	moveq	#1,d0
+	rts
+.noMem	
+	moveq	#-1,d0
 	rts
 
 * in:
@@ -30567,7 +30631,7 @@ removeFavoriteModule
 *   d0 = 1 when match, 0 when no match
 * destroys:
 *   d0,a2,a3
-findFavoriteModule
+findFavoriteModule:
 	* Find matching l_filename from favorite list
 	lea	favoriteListHeader(a5),a1
 .loop
@@ -30800,17 +30864,27 @@ handleFavoriteModuleConfigChange
 *
 ******************************************************************************
 
-toggleListMode
+toggleListMode:
 	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
 	beq.b	engageFavoritesMode
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
 	beq.w	engageFileBrowserMode
-	; falling
-	;cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	;beq.b	engageNormalMode
-	;rts
 
-engageNormalMode
+	tst.b	uhcAvailable(a5)
+	bne.b	.searchAvailable
+	
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	engageNormalMode
+	rts
+
+.searchAvailable
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq		engageSearchResultsMode
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	beq.b	engageNormalMode
+	rts
+
+engageNormalMode:
 	DPRINT	"engage normal"
 	pushm	all
 	
@@ -30836,7 +30910,7 @@ engageNormalMode
 	popm	all
 	rts	
 
-engageFavoritesMode
+engageFavoritesMode:
 	pushm	all
 	DPRINT	"engage favorites"
 	* Moving to favorite mode
@@ -30847,9 +30921,18 @@ engageFavoritesMode
 	bsr.b	engageListMode
 	popm	all
 	rts	
-	
+
+
+engageSearchResultsMode:
+	pushm	all
+	DPRINT	"engage search results"
+	move.b	#LISTMODE_SEARCH,listMode(a5)
+	bsr.b	engageListMode
+	popm	all
+	rts	
+
 * Common operations to be done after list mode change
-engageListMode
+engageListMode:
 	bsr.w	.setListModeChangeButtonIcon
 	bsr.w	.setButtonStatesAccordingToListMode
 	bsr.b	.setListState
@@ -30924,11 +31007,12 @@ engageListMode
 	beq.b	.favoritesMode
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.browserMode
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	beq.b	.searchMode
 	rts
 
 .normalMode
-	lea	gadgetAddButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr		setNormalAddTooltip
 	lea	gadgetDelButton(a4),a0
 	bsr.w	enableButtonWithEar
 	lea	gadgetNewButton(a4),a0
@@ -30944,24 +31028,36 @@ engageListMode
 .favoritesMode
 	lea	gadgetPrgButton(a4),a0
 	bsr.w	disableButton
+	bsr		setNormalAddTooltip
 	rts
-
 	
 .browserMode
-	lea	gadgetAddButton(a4),a0
-	bsr.w	disableButton
 	lea	gadgetDelButton(a4),a0
 	bsr.w	disableButton
 	lea	gadgetNewButton(a4),a0
 	bsr.w	disableButton
-	;lea	gadgetSortButton(a4),a0
-	;bsr.w	disableButton
 	lea	gadgetMoveButton(a4),a0
 	bsr.w	disableButton
 	lea	gadgetPrgButton(a4),a0
 	bsr.w	disableButton
-	endb	a4
+	bsr		setFileBrowserAddTooltip
 	rts
+
+.searchMode
+	lea	gadgetSortButton(a4),a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetMoveButton(a4),a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetDelButton(a4),a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetSortButton(a4),a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetMoveButton(a4),a0
+	bsr.w	enableButtonWithEar
+	bsr		setFileBrowserAddTooltip
+	rts
+
+	endb	a4
 
 .setListModeChangeButtonIcon
 	lea	listImage,a0
@@ -30973,6 +31069,9 @@ engageListMode
 	lea	fileBrowserImage-favoriteImage(a0),a0
 	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.set
+	lea	searchImage-fileBrowserImage(a0),a0
+	cmp.b 	#LISTMODE_SEARCH,listMode(a5)
+	beq.b	.set
 	rts
 .set
 	* Toggle listmode button icon
@@ -30980,6 +31079,21 @@ engageListMode
 	lea	gadgetListModeChangeButton,a0
 	jmp	refreshGadgetInA0
 	
+setNormalAddTooltip
+	lea		tooltipList\.addButtonToolTipOffset,a0
+	lea		tooltipList\.add,a1
+	sub.l	a0,a1
+	move	a1,(a0)
+	rts
+
+setFileBrowserAddTooltip
+setSearchAddTooltip
+	lea		tooltipList\.addButtonToolTipOffset,a0
+	lea		tooltipList\.add2,a1
+	sub.l	a0,a1
+	move	a1,(a0)
+	rts
+
 
 ********************************************************************************
 *** SECTION ********************************************************************
@@ -48761,10 +48875,10 @@ remoteSearch
 	DPRINT	"Importing"
 	jsr		obtainModuleList
 	pushm	all
-	* free previous normal list
-	jsr		freelist
-	* ensure the normal mode is active
-	jsr		engageNormalMode
+	* free previous list
+	bsr		freeSearchList
+	* ensure the correct mode is active
+	jsr		engageSearchResultsMode
 	popm	all
 
 	; start of data
@@ -48772,7 +48886,7 @@ remoteSearch
 	; end of data
 	lea		(a3,d1.l),a4
 	; destination list
-	lea moduleListHeader(a5),a2
+	lea searchResultsListHeader(a5),a2
 	
 	* Determine line header to use to add the "http://" -base address
 	* to each line.
@@ -48957,6 +49071,9 @@ remoteScriptPath
 initializeUHC
 	tst.b	uusikick(a5)
 	bne.b	.go
+	* Remove search results related tooltip
+	lea	tooltipList\.listModeChange,a0
+	move.b	#4,1(a0)
 	rts
 .go
 	pushpea	.uhc(pc),d1
@@ -49035,7 +49152,24 @@ deinitUHC
  endif
 
 
+freeSearchList
+	move.l	(a5),a6		* execbase
+	lea	searchResultsListHeader(a5),a2
+.loop
+	* a0: list, a1: destroyed, d0: node, or zero
+	move.l	a2,a0
+	lob	RemHead
+	beq.b	.listFreed
+	move.l	d0,a0
+	jsr	freemem
+	bra.b	.loop
 
+.listFreed
+	cmp.b 	#LISTMODE_SEARCH,listMode(a5)
+	bne.b	.no
+	clr.l	modamount(a5)
+.no
+	rts
 
 ***************************************************************************
 *
@@ -49943,6 +50077,7 @@ tooltipList
 	dr.w	gadgetNextButton,.next
 	dr.w	gadgetPrevButton,.prev
 	dr.w	gadgetAddButton,.add
+.addButtonToolTipOffset = *-2
 	dr.w	gadgetDelButton,.del
 	dr.w 	gadgetNewButton,.new
 	dr.w	gadgetNextSongButton,.nextSong
@@ -49980,6 +50115,10 @@ tooltipList
 	dc.b	47,2
 	dc.b	"LMB: Add new modules to the list",0
 	dc.b	"RMB: Insert new modules after the chosen module",0
+.add2
+	dc.b	41,1
+	dc.b	"LMB: Add selected module to the main list",0
+
 .del
 	dc.b	35,4
 	dc.b	"LMB: Remove chosen module",0
@@ -50033,11 +50172,12 @@ tooltipList
 ;	dc.b	"LMB: Toggle list mode",0
 ;	dc.b	"     Normal > Favorites > File browser",0
 .listModeChange
-	dc.b	22,4
+	dc.b	21,5
 	dc.b	"LMB: Toggle list mode",0
-	dc.b	"     - Normal playlist",0
-	dc.b    "     - Favorites list",0
-	dc.b    "     - File browser",0
+	dc.b	"    - Normal playlist",0
+	dc.b    "    - Favorites list",0
+	dc.b    "    - File browser",0
+	dc.b    "    - Search results",0
 
   even
 
@@ -50668,17 +50808,6 @@ listImage
 	dc	%1101111111000000
 
 
- REM
-fileBrowserImage
-	dc	%1111111000000000
-	dc	%1010010100000000				
-	dc	%1011110010000000
-	dc	%1000000010000000
-	dc	%1011111010000000
-	dc	%1011111010000000
-	dc	%1111111110000000
- EREM
- 
 fileBrowserImage
 	dc	%1111111100000000
 	dc	%1010011010000000				
@@ -50687,6 +50816,16 @@ fileBrowserImage
 	dc	%1011111101000000
 	dc	%1011001101000000
 	dc	%1111111111000000
+
+searchImage
+	dc	%0011100000000000
+	dc	%0100010000000000
+	dc	%1010001000000000
+	dc	%0100011000000000
+	dc	%0011111000000000
+	dc	%0000001100000000
+	dc	%0000000110000000
+
 
 resizeGadgetImage
 	; plane 1
