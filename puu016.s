@@ -31064,6 +31064,10 @@ engageListMode:
 	rts
 
 .searchMode
+	lea	gadgetNewButton(a4),a0
+	bsr.w	disableButton
+	lea	gadgetPrgButton(a4),a0
+	bsr.w	disableButton
 	lea	gadgetSortButton(a4),a0
 	bsr.w	enableButtonWithEar
 	lea	gadgetMoveButton(a4),a0
