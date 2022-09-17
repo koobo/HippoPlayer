@@ -48796,7 +48796,14 @@ remoteSearch
 
 	move.l	a3,a0
 	jsr		freemem
+	
+	tst.b	autosort(a5)
+	beq.b	.noSort
+	jsr		sortButtonAction
+	bra.b	.sorted
+.noSort
 	jsr		forceRefreshList
+.sorted
 	jsr		releaseModuleList
 .exit
 .noAminet
