@@ -8853,31 +8853,22 @@ sortModuleList:
 	bsr.w 	showOutOfMemoryError
 	bra.w	.error
 .okr
-
 	move.l	d0,a2
-
 
 ** Lasketaan painot jokaiselle
 	DPRINT  "rsort obtain list"
 	bsr.w	obtainModuleList
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
- 
-
-* paino 24 bytee
 
 	* sort table in a2
-	move.l	a2,a4
-
 	move.l	(a3),a3		* MLH_HEAD
 .ploop
 	tst.l	(a3)		* check if last node?
 	beq.b	.ep
 
-	* Fill slot at a4
-	;move.l	a4,a2
-	;move.l	a3,(a2)+	* noden osoite taulukkoon
-	move.l	a3,(a4)
+	* Fill slot with node address
+	move.l	a3,(a2)+
 
 	* Remove node from list
 	move.l	a3,a1		* poistetaan node (a1)
@@ -8885,8 +8876,6 @@ sortModuleList:
 
 	* get next node
 	SUCC	a3,a3
-	* next slot in table
-	lea		SORT_ELEMENT_LENGTH(a4),a4
 	bra.b	.ploop
 .ep
 	* Weights done
@@ -8927,13 +8916,11 @@ sortModuleList:
 .er
 	tst.l	(a3)
 	beq.b	.r			* end reached? this is the extra space mentioned above
-	move.l	(a3),a1  	* grab node address
+	move.l	(a3)+,a1  	* grab node address
 
 	* Add a1 to a0
 	move.l	a2,a0
 	ADDTAIL			* lis‰t‰‰n node (a1)
-
-	lea SORT_ELEMENT_LENGTH(a3),a3	
 	bra.b	.er
 .r
 	move.l	sortbuf(a5),a0
@@ -8983,7 +8970,7 @@ sortModuleList:
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.jep1
 
-	lea	SORT_ELEMENT_LENGTH(a3),a3
+	addq.l	#SORT_ELEMENT_LENGTH,a3
 	bra.b	.ploop2
 
 .ep2	moveq	#-1,d0
@@ -9004,7 +8991,7 @@ sortModuleList:
 	tst.b	l_divider(a0)
 	bne.b	.jep1
 ._d
-	lea	SORT_ELEMENT_LENGTH(a3),a3
+	addq.l	#SORT_ELEMENT_LENGTH,a3
 	bra.b	.ploop3
 
 
@@ -9026,7 +9013,6 @@ sortModuleList:
 *   d7 = number of items to sort
 .sort0
 	move.l	a2,a0
-	moveq	#SORT_ELEMENT_LENGTH,d5		* element length
 	moveq	#1,d4
 
 ; Comb sort the array.
@@ -9046,8 +9032,6 @@ sortModuleList:
 	bsr.w 	divu_32
 	move.l	d0,d1
 
-	MoveQ	#0,d0		; d0=Switch
-
 	Cmp.l	d4,d1		; if gap<1 then gap:=1
 	Bpl.b	.okgap
 	Moveq	#1,d1
@@ -9065,74 +9049,75 @@ sortModuleList:
 ;	lsl.l	#5,d6 
 ;	lea		(a1,d6.l),a2
  
-	move.l	d1,d6
+	move.l	d1,d0
 	* x4 - SORT_ELEMENT_LENGTH
-	lsl.l	#2,d6	
-	lea		(a1,d6.l),a2
+	lsl.l	#2,d0	
+	lea		(a1,d0.l),a2
+
+	MoveQ	#0,d0		; d0=Switch
+
+	* Free regs:
+	* d3,d6,a3,a4,a5,a6
 
 .Loop:	
-	* Compare. 
-	* It's likely the compares after the 1st one are not often hit.
+
  if DEBUG
 	addq.l	#1,.comps
  endif
+	* Compare nodes a1 and a2
+	* It's likely the compares after the 1st one are not often hit.
 
-	pushm	all
-	moveq	#$20,d5
-	moveq	#'A',d4
-	moveq	#'Z',d3
+	;pushm	all
 	
-
-	move.l	(a1),a1
-	move.l	(a2),a2
+	move.l	(a1),a3
+	move.l	(a2),a4
 	* Use the divider status byte as the first 
 	* comparison so that directories are sorted first.
 	* This is either: 0, $7f, $ff.
-	move.b	l_divider(a1),d6
-	move.b	l_divider(a2),d7
+	move.b	l_divider(a3),d3
+	move.b	l_divider(a4),d6
+	addq.b	#2,d3
 	addq.b	#2,d6
-	addq.b	#2,d7
 	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
 	* get to the top.
 
-	move.l	l_nameaddr(a1),a1
-	move.l	l_nameaddr(a2),a2
+	move.l	l_nameaddr(a3),a3
+	move.l	l_nameaddr(a4),a4
 	bra.b	.di
 
 .strCmp 
-	move.b	(a1)+,d6
-	move.b	(a2)+,d7
+	move.b	(a3)+,d3
+	move.b	(a4)+,d6
 .di
 	* Lower chase compared chars if possible
-	cmp.b	d4,d6
+	cmp.b	#"A",d3
 	blo.b	.l1
-	cmp.b	d3,d6
+	cmp.b	#"Z",d3
 	bhi.b	.l1
-	or.b	d5,d6
+	or.b	#$20,d3
 .l1
-	cmp.b	d4,d7
+	cmp.b	#"A",d6
 	blo.b	.l2
-	cmp.b	d3,d7
+	cmp.b	#"Z",d6
 	bhi.b	.l2
-	or.b	d5,d7
+	or.b	#$20,d6
 .l2
 
-	cmp.b	d6,d7
+	cmp.b	d3,d6
 	blo.b	.xx
+	tst.b	d3
+	beq.b	.xx
 	tst.b	d6
 	beq.b	.xx
-	tst.b	d7
-	beq.b	.xx
-	cmp.b	d6,d7
+	cmp.b	d3,d6
 	beq.b	.strCmp
-	cmp.b	d6,d7
+	cmp.b	d3,d6
 .xx
-	popm	all
+	;popm	all
 
 	;bra		.okval
 	beq		.okval
 	bhi		.okval
-
 
  if DEBUG
 	addq.l	#1,.swaps
@@ -9148,16 +9133,17 @@ sortModuleList:
 ;	Move.w	d3,-2(a2)
 
 	* swap 4 bytes entry
- 	move.l	(a1),d6
+ 	move.l	(a1),d0
 	move.l	(a2),(a1)+
-	move.l	d6,(a2)+
+	move.l	d0,(a2)+
 
+	* Set flag, something swapped
 	Moveq	#1,d0
 	bra		.ok1
 
 .okval:
-	add.l	d5,a1
-	add.l	d5,a2
+	addq.l	#SORT_ELEMENT_LENGTH,a1
+	addq.l	#SORT_ELEMENT_LENGTH,a2
 .ok1
 
 	subq.l	#1,d2 
