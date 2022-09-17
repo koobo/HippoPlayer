@@ -10984,10 +10984,23 @@ copyCurrentEntryToMainList
 
 	move.l	a3,a0
 	jsr		cloneListNode
+	* a4 = cloned node
 
 	move.l	a4,a1
 	lea		moduleListHeader(a5),a0
 	lore	Exec,AddTail
+
+	* Flash the chosen line a bit for indication
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
 
 	DPRINT	"added to main"
 	rts
