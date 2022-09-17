@@ -8807,8 +8807,8 @@ SORT_ELEMENT_LENGTH = 4+SORT_WEIGHT_LENGTH
  endif
 
 
-rsort
-sortButtonAction
+rsort:
+sortButtonAction:
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	bne.b	.1
 	DPRINT	"Sort disabled in file browser"
@@ -8820,7 +8820,6 @@ sortButtonAction
 
 sortModuleList:
 	* Skip force refresh
-
 	* Let's not sort a list with 1 module, that would be silly I guess.
 	cmp.l	#2,modamount(a5)
 	bhs.b	.so
@@ -8843,6 +8842,9 @@ sortModuleList:
  even
 
 .d
+ if DEBUG
+	jsr		startMeasure
+ endif
 	move.l	modamount(a5),d0
 	moveq	#SORT_ELEMENT_LENGTH,d1		* node address and weight
 	bsr.w	mulu_32		* 
@@ -8862,7 +8864,6 @@ sortModuleList:
 ** Lasketaan painot jokaiselle
 	DPRINT  "rsort obtain list"
 	bsr.w	obtainModuleList
-	;lea	moduleListHeader(a5),a3
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
  
@@ -8951,12 +8952,23 @@ sortModuleList:
 
 .error
 
-	bsr.w	listChanged
+ if DEBUG
+	jsr		stopMeasure
+	divu	#1000,d0
+	move.l	d0,d1
+	ext.l	d0
+	clr		d1
+	swap	d1
+	DPRINT	"Sort took %lds %ldms"
+* A500 modsanth-kick13-prg: 10s 400ms
+ endif
+
+		bsr.w	listChanged
 	tst.l	playingmodule(a5)
 	bmi.b	.npl
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .npl	clr.l	chosenmodule(a5)
-	
+
  if DEBUG
 	move.l	.swaps(pc),d1
 	move.l	.comps(pc),d0
@@ -9070,29 +9082,85 @@ sortModuleList:
  if DEBUG
 	addq.l	#1,.comps
  endif
-	move.l	4(a1),d3
-	cmp.l	4(a2),d3
-	bne.b	.notokval
-	move.l	8(a1),d3
-	cmp.l	8(a2),d3
-	bne.b	.notokval
-	move.l	12(a1),d3
-	cmp.l	12(a2),d3
-	bne.b	.notokval
-	move.l	16(a1),d3
-	cmp.l	16(a2),d3
-	bne.b	.notokval
-	move.l	20(a1),d3
-	cmp.l	20(a2),d3
-	bne.b	.notokval
-	move.l	24(a1),d3
-	cmp.l	24(a2),d3
-	bne.b	.notokval
-	move.l	28(a1),d3
-	cmp.l	28(a2),d3
-	beq.b	.okval
-.notokval
-	bmi.b	.okval
+
+	pushm	all
+	moveq	#$20,d5
+	moveq	#'A',d4
+	moveq	#'Z',d3
+	
+
+	move.l	(a1),a1
+	move.l	(a2),a2
+	* Use the divider status byte as the first 
+	* comparison so that directories are sorted first.
+	* This is either: 0, $7f, $ff.
+	move.b	l_divider(a1),d6
+	move.b	l_divider(a2),d7
+	addq.b	#2,d6
+	addq.b	#2,d7
+	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
+	* get to the top.
+
+	move.l	l_nameaddr(a1),a1
+	move.l	l_nameaddr(a2),a2
+	bra.b	.di
+
+.strCmp 
+	move.b	(a1)+,d6
+	move.b	(a2)+,d7
+.di
+	* Lower chase compared chars if possible
+	cmp.b	d4,d6
+	blo.b	.l1
+	cmp.b	d3,d6
+	bhi.b	.l1
+	or.b	d5,d6
+.l1
+	cmp.b	d4,d7
+	blo.b	.l2
+	cmp.b	d3,d7
+	bhi.b	.l2
+	or.b	d5,d7
+.l2
+
+	cmp.b	d6,d7
+	blo.b	.xx
+	tst.b	d6
+	beq.b	.xx
+	tst.b	d7
+	beq.b	.xx
+	cmp.b	d6,d7
+	beq.b	.strCmp
+	cmp.b	d6,d7
+.xx
+	popm	all
+
+	beq		.okval
+	bhi		.okval
+
+;	move.l	4(a1),d3
+;	cmp.l	4(a2),d3
+;	bne.b	.notokval
+;	move.l	8(a1),d3
+;	cmp.l	8(a2),d3
+;	bne.b	.notokval
+;	move.l	12(a1),d3
+;	cmp.l	12(a2),d3
+;	bne.b	.notokval
+;	move.l	16(a1),d3
+;	cmp.l	16(a2),d3
+;	bne.b	.notokval
+;	move.l	20(a1),d3
+;	cmp.l	20(a2),d3
+;	bne.b	.notokval
+;	move.l	24(a1),d3
+;	cmp.l	24(a2),d3
+;	bne.b	.notokval
+;	move.l	28(a1),d3
+;	cmp.l	28(a2),d3
+;	beq.b	.okval
+;.notokval
+;	bmi.b	.okval
 
  if DEBUG
 	addq.l	#1,.swaps
@@ -9129,7 +9197,7 @@ sortModuleList:
 	move.l	d6,(a2)+
 
 	Moveq	#1,d0
-	bra.b	.ok1
+	bra		.ok1
 
 .okval:
 	add.l	d5,a1
@@ -9137,7 +9205,7 @@ sortModuleList:
 .ok1
 
 	subq.l	#1,d2 
-	bne.b	.Loop
+	bne	.Loop
 
 	Cmp.l	d4,d1		; gap < 1 ?
 	Bne.w	.MoreSort
@@ -49288,24 +49356,18 @@ stopMeasure
 	
 	; Calculate diff between start and stop times
 	; in 64-bits
-	;move.l	EV_HI+clockEnd(a5),d0
+	move.l	EV_HI+clockEnd(a5),d0
 	move.l	EV_LO+clockEnd(a5),d1
-	;move.l	EV_HI+clockStart(a5),d3
+	move.l	EV_HI+clockStart(a5),d3
 	sub.l	EV_LO+clockStart(a5),d1
-	;subx.l	d3,d0
-
-	; Ignore the upper 32 bits, such large intervals
-	; are not needed.
-	divu	d2,d1
-	moveq	#0,d0
-	move	d1,d0
+	subx.l	d3,d0
 
 	; Turn the diff into millisecs
 	; Divide d0:d1 by d2
-	;jsr	divu_64
+	jsr	divu_64
 	; d0:d1 is now d0:d1/d2
 	; take the lower 32-bits
-	;move.l	d1,d0
+	move.l	d1,d0
 	popm	d2-d4/a6
 	rts
 
