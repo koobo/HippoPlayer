@@ -8837,8 +8837,8 @@ sortModuleList:
 
 .d
  if DEBUG
-	clr.l	.swaps
-	clr.l	.comps
+	clr.l	sortSwaps
+	clr.l	sortComps
  	jsr		startMeasure
  endif
 	move.l	modamount(a5),d0
@@ -8936,7 +8936,9 @@ sortModuleList:
 	clr		d1
 	swap	d1
 	DPRINT	"Sort took %lds %ldms"
-* A500 modsanth-kick13-prg: 10s 400ms
+* Old sort: A500 modsanth-kick13-prg: 10s
+* New sort: A500 modsanth-kick13-prg: 73s, sad
+
  endif
 
 		bsr.w	listChanged
@@ -8946,8 +8948,8 @@ sortModuleList:
 .npl	clr.l	chosenmodule(a5)
 
  if DEBUG
-	move.l	.swaps(pc),d1
-	move.l	.comps(pc),d0
+	move.l	sortSwaps,d1
+	move.l	sortComps,d0
 	DPRINT	"Compares=%ld swaps=%ld"
  endif
 
@@ -8999,161 +9001,9 @@ sortModuleList:
 
 .sort
 	pushm	all
- 	bsr.b	.sort0
+ 	jsr		combSortNodeArray
  	popm	all
 	rts
-
- if DEBUG
-.swaps	dc.l	0
-.comps	dc.l	0
- endif
-
-* in:
-*   a2 = start of array
-*   d7 = number of items to sort
-.sort0
-	move.l	a2,a0
-	moveq	#1,d4
-
-; Comb sort the array.
-
-;	Lea.l	List(Pc),a0
-;	Move.l	#ListSize,d7	; Number of values
-
-	Move.l	d7,d1		; d1=Gap
-.MoreSort
-;	lsl.l	#8,d1
-;	Divu.w	#333,d1		; 1.3*256 = 332.8
-;	ext.l	d1
-
-	move.l	d1,d0 
-	lsl.l	#8,d0 
-	move.l	#333,d1
-	bsr.w 	divu_32
-	move.l	d0,d1
-
-	Cmp.l	d4,d1		; if gap<1 then gap:=1
-	Bpl.b	.okgap
-	Moveq	#1,d1
-.okgap:
-	Move.l	d7,d2		; d2=Top
-	Sub.l	d1,d2		; D2=NMAX-gap
-	Move.l	a0,a1
-
- ;     Lea.l   (a1,d1.w*2),a2  ; a2=a1+gap
- ;   move    d1,d6
- ;   mulu    d5,d6
- ;   lea     (a1,d6.l),a2
-
-;	move.l	d1,d6
-;	lsl.l	#5,d6 
-;	lea		(a1,d6.l),a2
- 
-	move.l	d1,d0
-	* x4 - SORT_ELEMENT_LENGTH
-	lsl.l	#2,d0	
-	lea		(a1,d0.l),a2
-
-	MoveQ	#0,d0		; d0=Switch
-
-	* Free regs:
-	* d3,d6,a3,a4,a5,a6
-
-.Loop:	
-
- if DEBUG
-	addq.l	#1,.comps
- endif
-	* Compare nodes a1 and a2
-	* It's likely the compares after the 1st one are not often hit.
-
-	;pushm	all
-	
-	move.l	(a1),a3
-	move.l	(a2),a4
-	* Use the divider status byte as the first 
-	* comparison so that directories are sorted first.
-	* This is either: 0, $7f, $ff.
-	move.b	l_divider(a3),d3
-	move.b	l_divider(a4),d6
-	addq.b	#2,d3
-	addq.b	#2,d6
-	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
-	* get to the top.
-
-	move.l	l_nameaddr(a3),a3
-	move.l	l_nameaddr(a4),a4
-	bra.b	.di
-
-.strCmp 
-	move.b	(a3)+,d3
-	move.b	(a4)+,d6
-.di
-	* Lower chase compared chars if possible
-	cmp.b	#"A",d3
-	blo.b	.l1
-	cmp.b	#"Z",d3
-	bhi.b	.l1
-	or.b	#$20,d3
-.l1
-	cmp.b	#"A",d6
-	blo.b	.l2
-	cmp.b	#"Z",d6
-	bhi.b	.l2
-	or.b	#$20,d6
-.l2
-
-	cmp.b	d3,d6
-	blo.b	.xx
-	tst.b	d3
-	beq.b	.xx
-	tst.b	d6
-	beq.b	.xx
-	cmp.b	d3,d6
-	beq.b	.strCmp
-	cmp.b	d3,d6
-.xx
-	;popm	all
-
-	;bra		.okval
-	beq		.okval
-	bhi		.okval
-
- if DEBUG
-	addq.l	#1,.swaps
- endif
-
-;	Move.w	(a1)+,d3
-;	Cmp.w	(a2)+,d3
-;	Bmi	.okval
-;	Beq	.okval
-
-;	Move.w	-2(a1),d3	; swap
-;	Move.w	-2(a2),-2(a1)
-;	Move.w	d3,-2(a2)
-
-	* swap 4 bytes entry
- 	move.l	(a1),d0
-	move.l	(a2),(a1)+
-	move.l	d0,(a2)+
-
-	* Set flag, something swapped
-	Moveq	#1,d0
-	bra		.ok1
-
-.okval:
-	addq.l	#SORT_ELEMENT_LENGTH,a1
-	addq.l	#SORT_ELEMENT_LENGTH,a2
-.ok1
-
-	subq.l	#1,d2 
-	bne	.Loop
-
-	Cmp.l	d4,d1		; gap < 1 ?
-	Bne.w	.MoreSort
-	Tst.w	d0		; Any entries swapped ?
-	Bne.w	.MoreSort
-	Rts
 
 
 *******************************************************************************
@@ -49172,7 +49022,168 @@ deinitUHC
  endif
 
 
+
+
+***************************************************************************
+*
+* List sort algorithms
+*
+***************************************************************************
+
 	
+ if DEBUG
+sortSwaps	dc.l	0
+sortComps	dc.l	0
+ endif
+
+
+* in:
+*   a2 = start of array
+*   d7 = number of items to sort
+combSortNodeArray
+	move.l	a2,a0
+	* Constant = 1
+	lea		1.w,a6
+	* List size into a5
+	move.l	d7,a5
+
+	* Constants for case checks
+	moveq	#"A",d4
+	moveq	#"Z",d7
+
+; Comb sort the array.
+
+;	Lea.l	List(Pc),a0
+;	Move.l	#ListSize,d7	; Number of values
+
+	Move.l	a5,d1		; d1=Gap
+.MoreSort
+;	lsl.l	#8,d1
+;	Divu.w	#333,d1		; 1.3*256 = 332.8
+;	ext.l	d1
+
+	move.l	d1,d0 
+	lsl.l	#8,d0 
+	move.l	#333,d1
+	jsr	 	divu_32
+	move.l	d0,d1
+
+	Cmp.l	d6,d1		; if gap<1 then gap:=1
+	Bpl.b	.okgap
+	Moveq	#1,d1
+.okgap:
+	Move.l	a5,d2		; d2=Top
+	Sub.l	d1,d2		; D2=NMAX-gap
+	Move.l	a0,a1
+
+ ;     Lea.l   (a1,d1.w*2),a2  ; a2=a1+gap
+ ;   move    d1,d6
+ ;   mulu    d5,d6
+ ;   lea     (a1,d6.l),a2
+
+;	move.l	d1,d6
+;	lsl.l	#5,d6 
+;	lea		(a1,d6.l),a2
+ 
+	move.l	d1,d0
+	* x4 - SORT_ELEMENT_LENGTH
+	lsl.l	#2,d0	
+	lea		(a1,d0.l),a2
+
+	MoveQ	#0,d0		; d0=Switch
+
+	* Free regs:
+	* d3,d6,a3,a4,a5,a6
+
+.Loop:	
+
+ if DEBUG
+	addq.l	#1,sortComps
+ endif
+	* Compare nodes a1 and a2
+	* It's likely the compares after the 1st one are not often hit.
+
+	move.l	(a1),a3
+	move.l	(a2),a4
+	* Use the divider status byte as the first 
+	* comparison so that directories are sorted first.
+	* This is either: 0, $7f, $ff.
+	move.b	l_divider(a3),d3
+	move.b	l_divider(a4),d6
+	addq.b	#2,d3
+	addq.b	#2,d6
+	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
+	* get to the top.
+
+	move.l	l_nameaddr(a3),a3
+	move.l	l_nameaddr(a4),a4
+	bra.b	.di
+
+.strCmp 
+	move.b	(a3)+,d3
+	move.b	(a4)+,d6
+.di
+	* Lower chase compared chars if possible
+	cmp.b	d4,d3
+	blo.b	.l1
+	cmp.b	d7,d3
+	bhi.b	.l1
+	or.b	#$20,d3
+.l1
+	cmp.b	d4,d6
+	blo.b	.l2
+	cmp.b	d7,d6
+	bhi.b	.l2
+	or.b	#$20,d6
+.l2
+
+	cmp.b	d3,d6
+	blo.b	.swap
+	tst.b	d3
+	beq.b	.okval
+	tst.b	d6
+	beq.b	.okval
+	cmp.b	d3,d6
+	beq.b	.strCmp
+	;cmp.b	d3,d6
+	bhi.b	.okval
+.swap
+ if DEBUG
+	addq.l	#1,sortSwaps
+ endif
+
+;	Move.w	(a1)+,d3
+;	Cmp.w	(a2)+,d3
+;	Bmi	.okval
+;	Beq	.okval
+
+;	Move.w	-2(a1),d3	; swap
+;	Move.w	-2(a2),-2(a1)
+;	Move.w	d3,-2(a2)
+
+	* swap 4 bytes entry
+ 	move.l	(a1),d3
+	move.l	(a2),(a1)+
+	move.l	d3,(a2)+
+
+	* Set flag, something swapped
+	Moveq	#1,d0
+	bra		.ok1
+.okval:
+	addq.l	#SORT_ELEMENT_LENGTH,a1
+	addq.l	#SORT_ELEMENT_LENGTH,a2
+.ok1
+
+	subq.l	#1,d2 
+	bne	.Loop
+
+	cmp.l	a6,d1	; gap < 1 ?
+	Bne.w	.MoreSort
+	Tst.w	d0		; Any entries swapped ?
+	Bne.w	.MoreSort
+	Rts
+
+
 ***************************************************************************
 *
 * Performance measurement with timer.device
