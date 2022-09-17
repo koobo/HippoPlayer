@@ -8817,9 +8817,13 @@ sortButtonAction:
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	bne.b	.1
 	DPRINT	"Sort disabled in file browser"
-	rts
+.x	rts
 .1
 	skipIfGadgetDisabled gadgetSortButton
+
+	bsr.w	confirmFavoritesModification
+	beq.b	.x
+
 	bsr.b	sortModuleList
 	bra.w	forceRefreshList
 
@@ -9031,6 +9035,9 @@ moveButtonAction
 	blo.b	.qq
 	bsr.w	getcurrent
 	beq.b	.q
+	bsr.w	confirmFavoritesModification
+	beq.b	.qq
+
 	move.l	a3,nodetomove(a5)
  if DEBUG
 	move.l	l_nameaddr(a3),d0
