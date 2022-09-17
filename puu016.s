@@ -18754,8 +18754,8 @@ markline:
 
 * Highlight line by xorring/complementing it
 * Highlight is cleared by doing the same operation again on the same line.
-unmarkit			* pyyhitaan merkkaus pois
-markit
+unmarkit:			* pyyhitaan merkkaus pois
+markit:
 	move.l	chosenmodule(a5),d0
 
 	* Bounds check
@@ -21613,7 +21613,7 @@ confirmFavoritesModification:
 	tst.b	confirmFavoritesModificationDisabled(a5)
 	bne.b	.ok
 
-	push	a4
+	pushm	d1-a6
 	lea	infodefresponse(pc),a4
 	move.l	(a4),-(sp)
 	; Set "Nope" as the default response
@@ -21622,7 +21622,7 @@ confirmFavoritesModification:
 	lea	.y(pc),a2
 	bsr.b	rawrequest
 	move.l	(sp)+,(a4)
-	pop	a4
+	popm		d1-a6
 	; d0 = 1: yes
 	; d0 = 2: yes, dont ask again
 	; d0 = 0: nope
