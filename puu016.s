@@ -8796,15 +8796,9 @@ rlistmode
 
 * This creates an array of
 * 4 bytes  = node pointer to the module entry,
-* 28 bytes = calculated weight based on module name,
 * sorts that, and recreates the module list.
 
-SORT_WEIGHT_LENGTH = 28
-SORT_ELEMENT_LENGTH = 4+SORT_WEIGHT_LENGTH
-
- if SORT_ELEMENT_LENGTH<>32
-	fail 
- endif
+SORT_ELEMENT_LENGTH = 4
 
 
 rsort:
@@ -8843,7 +8837,9 @@ sortModuleList:
 
 .d
  if DEBUG
-	jsr		startMeasure
+	clr.l	.swaps
+	clr.l	.comps
+ 	jsr		startMeasure
  endif
 	move.l	modamount(a5),d0
 	moveq	#SORT_ELEMENT_LENGTH,d1		* node address and weight
@@ -8867,10 +8863,6 @@ sortModuleList:
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
  
- if DEBUG
-	clr.l	.swaps
-	clr.l	.comps
- endif
 
 * paino 24 bytee
 
@@ -8883,13 +8875,10 @@ sortModuleList:
 	beq.b	.ep
 
 	* Fill slot at a4
-	move.l	a4,a2
-	move.l	a3,(a2)+	* noden osoite taulukkoon
+	;move.l	a4,a2
+	;move.l	a3,(a2)+	* noden osoite taulukkoon
+	move.l	a3,(a4)
 
-	* Calculate value based on l_nameaddr in given node a3,
-	* write it in (a2)+
-	bsr.w	.getWeight
-	
 	* Remove node from list
 	move.l	a3,a1		* poistetaan node (a1)
 	REMOVE
@@ -8919,7 +8908,7 @@ sortModuleList:
 	sub.l	d5,d7		* montako nodea sortataan
 
 	* Nodes count
-	lsr.l	#5,d7	; /32 - SORT_ELEMENT_LENGTH
+	lsr.l	#2,d7	; /4 - SORT_ELEMENT_LENGTH
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
 	cmp.l	#2,d7		* väh 2 kpl
@@ -9072,10 +9061,15 @@ sortModuleList:
  ;   mulu    d5,d6
  ;   lea     (a1,d6.l),a2
 
-	move.l	d1,d6
-	lsl.l	#5,d6 * x32 - SORT_ELEMENT_LENGTH
-	lea		(a1,d6.l),a2
+;	move.l	d1,d6
+;	lsl.l	#5,d6 
+;	lea		(a1,d6.l),a2
  
+	move.l	d1,d6
+	* x4 - SORT_ELEMENT_LENGTH
+	lsl.l	#2,d6	
+	lea		(a1,d6.l),a2
+
 .Loop:	
 	* Compare. 
 	* It's likely the compares after the 1st one are not often hit.
@@ -9135,32 +9129,10 @@ sortModuleList:
 .xx
 	popm	all
 
+	;bra		.okval
 	beq		.okval
 	bhi		.okval
 
-;	move.l	4(a1),d3
-;	cmp.l	4(a2),d3
-;	bne.b	.notokval
-;	move.l	8(a1),d3
-;	cmp.l	8(a2),d3
-;	bne.b	.notokval
-;	move.l	12(a1),d3
-;	cmp.l	12(a2),d3
-;	bne.b	.notokval
-;	move.l	16(a1),d3
-;	cmp.l	16(a2),d3
-;	bne.b	.notokval
-;	move.l	20(a1),d3
-;	cmp.l	20(a2),d3
-;	bne.b	.notokval
-;	move.l	24(a1),d3
-;	cmp.l	24(a2),d3
-;	bne.b	.notokval
-;	move.l	28(a1),d3
-;	cmp.l	28(a2),d3
-;	beq.b	.okval
-;.notokval
-;	bmi.b	.okval
 
  if DEBUG
 	addq.l	#1,.swaps
@@ -9175,23 +9147,7 @@ sortModuleList:
 ;	Move.w	-2(a2),-2(a1)
 ;	Move.w	d3,-2(a2)
 
-** swap 32 bytes: 
-* - node pointer
-* - 28 bytes of weight
-
-	* swap 32 bytes
-	* free:
-	* d0, d3, d6, a3, a4, a5, a6
-	movem.l		(a1),d0/d3/d6/a3/a4/a5/a6
- 	move.l		(a2)+,(a1)+
- 	move.l		(a2)+,(a1)+
- 	move.l		(a2)+,(a1)+
- 	move.l		(a2)+,(a1)+
- 	move.l		(a2)+,(a1)+
- 	move.l		(a2)+,(a1)+
- 	move.l		(a2)+,(a1)+
- 	movem.l		d0/d3/d6/a3/a4/a5/a6,-7*4(a2)
-	* swap remaining 4 bytes
+	* swap 4 bytes entry
  	move.l	(a1),d6
 	move.l	(a2),(a1)+
 	move.l	d6,(a2)+
@@ -9212,68 +9168,6 @@ sortModuleList:
 	Tst.w	d0		; Any entries swapped ?
 	Bne.w	.MoreSort
 	Rts
-
-*-------------------
-
-* Calculates the weight for an item for sorting
-* in:
-*   a3 = list node
-* out:
-*   (a2)+ = 28 bytes in this address
-
-* Lower case and strip prefix so that string is usable for sorting
-.getWeight	
-	move.l	l_nameaddr(a3),a0
-
-	* In normal case dividers have no value when sorting,
-	* in brower mode they should be sorted properly.
-	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq.b	.browserMode
-	tst.b	l_divider(a3)
-	beq.b	.boobo
-	* dividers ignored
-	rts
-
-	* In browser mode modify name so that
-	* directories get sorted before files
-.browserMode
-	tst.b	l_divider(a3)
-	beq.b	.notDiv
-	lea	-(SORT_WEIGHT_LENGTH+2)(sp),sp
-	move.l	sp,a1
-	moveq	#SORT_WEIGHT_LENGTH-1,d0
-	move.b	#DIVIDER_MAGIC,(a1)+
-.cp_	
-	move.b	(a0)+,(a1)+
-	dbeq	d0,.cp_
-	move.l	sp,a0
-	bsr.b	.doGetV		
-	lea	SORT_WEIGHT_LENGTH+2(sp),sp
-	rts
-.notDiv
-.boobo
-.doGetV
-	* in/out: a0
-	bsr.w	cut_prefix
-
-	moveq	#SORT_WEIGHT_LENGTH-1,d0
-	moveq	#'a',d2
-	moveq	#'z',d3
-	move.b	#$df,d4
-
-	* Copy string as upper case into the weight array
-	* for case insensitive comparison
-.doV
-	move.b	(a0)+,d1
-	cmp.b	d2,d1
-	blo.b	.z
-	cmp.b	d3,d1
-	bhi.b	.z
-	* Lower case detected, convert it
-	and.b	d4,d1
-.z	move.b	d1,(a2)+
-	dbeq	d0,.doV
-	rts
 
 
 *******************************************************************************
