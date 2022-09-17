@@ -5495,9 +5495,11 @@ showOutOfMemoryError
 	pop 	a1 
 	rts
 
-lockMainWindow 
+lockMainWindow:
 	tst.l	windowbase(a5)
 	beq.b	.x
+	tst.l	mainWindowLock(a5)
+	beq.b	.already
 	pushm	all
 	bsr.w	get_rt
 	move.l	windowbase(a5),a0
@@ -5506,7 +5508,11 @@ lockMainWindow
 	popm	all
 .x	rts
 
-unlockMainWindow
+.already
+	DPRINT	"Trying to lock again!",0
+	rts
+
+unlockMainWindow:
 	tst.l	mainWindowLock(a5)
 	beq.b	.x 
 	pushm	all
