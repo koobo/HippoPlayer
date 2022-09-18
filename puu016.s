@@ -9014,9 +9014,13 @@ sortModuleList:
 
 *--------------------
 
+; Jogeir Liljedahl folder
+; comb sort:  compares=25294, swaps=9211
+; quick sort: compares=23220, swaps=11771
 .sort
 	pushm	all
- 	jsr		combSortNodeArray
+ 	;jsr		combSortNodeArray
+	jsr		quickSortNodeArray
  	popm	all
 	rts
 
@@ -49353,6 +49357,203 @@ combSortNodeArray
 	Tst.w	d0		; Any entries swapped ?
 	Bne.w	.MoreSort
 	Rts
+
+
+;; // function to find the partition position
+;; int partition(int array[], int low, int high) {
+;;   
+;;   // select the rightmost element as pivot
+;;   int pivot = array[high];
+;;   
+;;   // pointer for greater element
+;;   int i = (low - 1);
+;; 
+;;   // traverse each element of the array
+;;   // compare them with the pivot
+;;   for (int j = low; j < high; j++) {
+;;     if (array[j] <= pivot) {
+;;         
+;;       // if element smaller than pivot is found
+;;       // swap it with the greater element pointed by i
+;;       i++;
+;;       
+;;       // swap element at i with element at j
+;;       swap(&array[i], &array[j]);
+;;     }
+;;   }
+;; 
+;;   // swap the pivot element with the greater element at i
+;;   swap(&array[i + 1], &array[high]);
+;;   
+;;   // return the partition point
+;;   return (i + 1);
+;; }
+;; 
+;; void quickSort(int array[], int low, int high) {
+;;   if (low < high) {
+;;     
+;;     // find the pivot element such that
+;;     // elements smaller than pivot are on left of pivot
+;;     // elements greater than pivot are on right of pivot
+;;     int pi = partition(array, low, high);
+;;     
+;;     // recursive call on the left of pivot
+;;     quickSort(array, low, pi - 1);
+;;     
+;;     // recursive call on the right of pivot
+;;     quickSort(array, pi + 1, high);
+;;   }
+;; }
+
+
+* in:
+*   a2 = start of array
+*   d7 = number of items to sort
+* Indexes are multiples of 4 to access array of pointers
+quickSortNodeArray
+	; low
+	moveq	#0,d0	
+	; high
+	move.l	d7,d1
+	subq.l	#1,d1
+	lsl.l	#2,d1
+	move.l	a2,a0
+	bsr.b	.qs
+	rts
+
+* in: 
+*   a0 = array
+*   d0 = low index
+*   d1 = high index
+.qs
+	cmp.l	d1,d0
+	bge.b	.x
+	bsr.b	.partition
+	pushm	d0-d2
+	* d2 = partition
+	move.l	d2,d1
+	subq.l	#4,d1
+	* left partition: low, pi - 1
+	bsr.b	.qs
+	movem.l	(sp),d0-d2
+	move.l	d2,d0
+	addq.l	#4,d0
+	* right partition: pi + 1, high
+	bsr.b	.qs
+	popm	d0-d2
+.x	rts
+
+* in:
+*   a0 = array
+*   d0 = low
+*   d1 = high
+* out:
+*   d2 = partition position
+.partition
+    ; select the rightmost/high element as pivot
+	lea	(a0,d1.l),a1
+	* a1 = pivot node pointer position in table
+
+	; index for greater element, i = low - i
+	move.l	d0,d2
+	subq.l	#4,d2
+
+	; for (int j = low; j < high; j++) 
+    ; d4 = j, low
+   	move.l	d0,d4 
+.loop
+    ; if (array[j] <= pivot)
+	lea	(a0,d4.l),a2
+	bsr.b	.compareA1vsA2
+	bhi.b	.continue
+	;bls.b	.continue
+	
+    ; i++
+	addq.l	#4,d2
+    ; swap array[i], array[j]
+	bsr.b	.swapD2andD4
+
+.continue
+	* j++
+	addq.l	#4,d4
+	* loop if j < high 
+	cmp.l	d1,d4
+	blt.b	.loop
+
+	addq.l	#4,d2	* i = i + 1
+	move.l	d1,d4	* high
+    ; swap array[i+i], array[high]
+	bsr.b	.swapD2andD4
+
+	* return d2 = i + 1
+	rts
+
+.swapD2andD4
+ if DEBUG
+	addq.l	#1,sortSwaps
+ endif
+	move.l	(a0,d2.l),d5
+	move.l	(a0,d4.l),(a0,d2.l)
+	move.l	d5,(a0,d4.l)
+	rts
+	
+
+.compareA1vsA2
+ if DEBUG
+	addq.l	#1,sortComps
+ endif
+
+	pushm	all
+	move.l	(a1),a3
+	move.l	(a2),a4
+
+	* Use the divider status byte as the first 
+	* comparison so that directories are sorted first.
+	* This is either: 0, $7f, $ff.
+	move.b	l_divider(a3),d3
+	move.b	l_divider(a4),d6
+	addq.b	#2,d3
+	addq.b	#2,d6
+	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
+	* get to the top.
+
+	move.l	l_nameaddr(a3),a3
+	move.l	l_nameaddr(a4),a4
+	bra.b	.di
+
+.strCmp 
+	move.b	(a3)+,d3
+	move.b	(a4)+,d6
+.di
+;	* Lower chase compared chars if possible
+;	cmp.b	d4,d3
+;	blo.b	.l1
+;	cmp.b	d7,d3
+;	bhi.b	.l1
+;	or.b	#$20,d3
+;.l1
+;	cmp.b	d4,d6
+;	blo.b	.l2
+;	cmp.b	d7,d6
+;	bhi.b	.l2
+;	or.b	#$20,d6
+;.l2
+;
+	cmp.b	d3,d6
+	blo.b	.swap
+	tst.b	d3
+	beq.b	.okval
+	tst.b	d6
+	beq.b	.okval
+	cmp.b	d3,d6
+	beq.b	.strCmp
+	;cmp.b	d3,d6
+	bhi.b	.okval
+.swap
+	nop
+.okval
+	popm	all
+	rts
 
 
 ***************************************************************************
