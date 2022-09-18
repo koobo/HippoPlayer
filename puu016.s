@@ -10985,13 +10985,14 @@ filereqtitle
 
 
 * This clones the current entry and appends to the mainlist
+* Used when in file browser or search mode and user invokes "Add"
 copyCurrentEntryToMainList
 	DPRINT	"Copy to main"
 
 	bsr		getcurrent
 	beq.b	.nope
 	tst.b	l_divider(a3)
-	bne.b	.nope
+	bne.b	.div
 
 	move.l	a3,a0
 	jsr		cloneListNode
@@ -11001,28 +11002,82 @@ copyCurrentEntryToMainList
 	lea		moduleListHeader(a5),a0
 	lore	Exec,AddTail
 
-	* Flash the chosen line a bit for indication
-	bsr		markit
-	moveq	#2,d1
-	lore	Dos,Delay
-	bsr		markit
-	moveq	#2,d1
-	lore	Dos,Delay
-	bsr		markit
-	moveq	#2,d1
-	lore	Dos,Delay
-	bsr		markit
-
-	DPRINT	"added to main"
+	bsr		.flash
 	rts
-
 .nope
 	DPRINT	"Not found"
 	rts
 .div
-	DPRINT	"Not file"
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.addFolder
+	* Check if "parent folder", skip those
+	tst.b	l_divider(a3)
+	bmi.b	.addFolder
+	DPRINT	"Not adding parent"
 	rts
 
+	* Flash the chosen line a bit for indication
+.flash
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
+	rts
+
+.addFolder
+	lea		l_filename(a3),a0
+.1	tst.b	(a0)+
+	bne.b	.1
+	subq	#2,a0	* skip null and the 1st dir separator
+	bsr		nimenalku
+	move.l	a0,d0
+	* a0 = dir name
+	* Create divider into the main list
+	move.b	#LISTMODE_NORMAL,listMode(a5)
+	bsr		adddivider
+
+	lea		l_filename(a3),a0
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"folder %s"
+ endif
+
+	lea		-200(sp),sp
+	move.l	sp,a1
+.2	move.b	(a0)+,(a1)+
+	bne.b	.2
+	cmp.b	#"/",-2(a1)
+	beq.b	.3
+	move.b	#"/",-1(a1)
+	clr.b	(a1)
+.3
+
+	move.l	sp,d2
+	* Find length to d3
+	move.l	sp,a0
+    moveq   #-1,d3  ; phx strlen trick
+.c	tst.b   (a0)+
+	dbeq    d3,.c
+ 	not.l   d3
+	add.l	#l_size,d3
+
+	pushm	all
+	bsr		lockMainWindow
+	bsr		filereq_code\.scanni
+	bsr		unlockMainWindow
+	popm	all
+	lea		200(sp),sp
+
+	move.b	#LISTMODE_BROWSER,listMode(a5)
+	bsr.w	listChanged
+	bsr		.flash
+	rts
 
 
 
