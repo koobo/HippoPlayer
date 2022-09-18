@@ -5504,18 +5504,17 @@ lockMainWindow:
 	tst.l	windowbase(a5)
 	beq.b	.x
 	tst.l	mainWindowLock(a5)
-	beq.b	.already
-	pushm	all
+	beq.b	.y
+	DPRINT	"Locking window again!",0
+	rts
+.y	pushm	all
 	bsr.w	get_rt
 	move.l	windowbase(a5),a0
 	lob    	rtLockWindow
 	move.l	d0,mainWindowLock(a5)
 	popm	all
 .x	rts
-
-.already
-	DPRINT	"Trying to lock again!",0
-	rts
+	
 
 unlockMainWindow:
 	tst.l	mainWindowLock(a5)
