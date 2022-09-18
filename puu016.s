@@ -9024,6 +9024,15 @@ sortModuleList:
  	popm	all
 	rts
 
+* FSUAE 020
+* Modsanth-unsorted-prg
+* comb sort: 20s, comps 734000 swaps 265000
+*            sorted list: 1s
+* quick sort: 26s, comps 658000 swaps 338000
+*            sorted list: 28s
+* quick sort: 20s, comps 381000 swaps 350000
+* rand pivot     sorted list: 20s
+
 
 *******************************************************************************
 * Move
@@ -49411,6 +49420,19 @@ combSortNodeArray
 *   d7 = number of items to sort
 * Indexes are multiples of 4 to access array of pointers
 quickSortNodeArray
+* this one needs likely modamount * (d0-d3 + return address) bytes
+* of stack.
+.SIZE = 100000
+	move.l	#.SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	jsr		getmem
+	move.l	d0,.newStack	
+	move.l	sp,.oldStack
+	add.l	#.SIZE,d0
+	move.l	d0,sp
+
+	moveq	#"A",d4
+	moveq	#"Z",d5
 	; low
 	moveq	#0,d0	
 	; high
@@ -49419,13 +49441,23 @@ quickSortNodeArray
 	lsl.l	#2,d1
 	move.l	a2,a0
 	bsr.b	.qs
+
+	move.l	.oldStack(pc),sp
+	move.l	.newStack(pc),a0
+	jsr		freemem
 	rts
+
+.newStack	dc.l	0
+.oldStack	dc.l	0
+.depth	dc.l	0
 
 * in: 
 *   a0 = array
 *   d0 = low index
 *   d1 = high index
 .qs
+;	DPRINT	"qs %ld %ld"
+
 	cmp.l	d1,d0
 	bge.b	.x
 	bsr.b	.partition
@@ -49443,6 +49475,8 @@ quickSortNodeArray
 	popm	d0-d2
 .x	rts
 
+.rand	dc.l	0
+
 * in:
 *   a0 = array
 *   d0 = low
@@ -49450,8 +49484,25 @@ quickSortNodeArray
 * out:
 *   d2 = partition position
 .partition
+;	DPRINT	"part %ld %ld"
+
+; Random pivot example shown for median   p = (l+h)/2 would be used
+;  p = l + (short)(rand() % (int)(h - l + 1)); // Random partition point
+
+	add.l	#$abc1def2,.rand
+
+	move.l	d1,d2
+	addq.l	#1,d2
+	sub.l	d0,d2
+	move.l	.rand(pc),d3
+	divu	d2,d3
+	swap	d3
+	ext.l	d3
+	lea	(a0,d3.l),a1
+	
+
     ; select the rightmost/high element as pivot
-	lea	(a0,d1.l),a1
+;	lea	(a0,d1.l),a1
 	* a1 = pivot node pointer position in table
 
 	; index for greater element, i = low - i
@@ -49459,11 +49510,11 @@ quickSortNodeArray
 	subq.l	#4,d2
 
 	; for (int j = low; j < high; j++) 
-    ; d4 = j, low
-   	move.l	d0,d4 
+    ; d3 = j, low
+   	move.l	d0,d3 
 .loop
     ; if (array[j] <= pivot)
-	lea	(a0,d4.l),a2
+	lea	(a0,d3.l),a2
 	bsr.b	.compareA1vsA2
 	bhi.b	.continue
 	;bls.b	.continue
@@ -49471,49 +49522,46 @@ quickSortNodeArray
     ; i++
 	addq.l	#4,d2
     ; swap array[i], array[j]
-	bsr.b	.swapD2andD4
-
-.continue
-	* j++
-	addq.l	#4,d4
-	* loop if j < high 
-	cmp.l	d1,d4
-	blt.b	.loop
-
-	addq.l	#4,d2	* i = i + 1
-	move.l	d1,d4	* high
-    ; swap array[i+i], array[high]
-	bsr.b	.swapD2andD4
-
-	* return d2 = i + 1
-	rts
-
-.swapD2andD4
+	move.l	(a0,d2.l),a3
+	move.l	(a0,d3.l),(a0,d2.l)
+	move.l	a3,(a0,d3.l)
  if DEBUG
 	addq.l	#1,sortSwaps
  endif
-	move.l	(a0,d2.l),d5
-	move.l	(a0,d4.l),(a0,d2.l)
-	move.l	d5,(a0,d4.l)
+.continue
+	* j++
+	addq.l	#4,d3
+	* loop if j < high 
+	cmp.l	d1,d3
+	blt.b	.loop
+
+	addq.l	#4,d2	* i = i + 1
+    ; swap array[i+i], array[high]
+	move.l	(a0,d2.l),a3
+	move.l	(a0,d1.l),(a0,d2.l)
+	move.l	a3,(a0,d1.l)
+ if DEBUG
+	addq.l	#1,sortSwaps
+ endif
+	* return d2 = i + 1
 	rts
-	
 
 .compareA1vsA2
+
  if DEBUG
 	addq.l	#1,sortComps
  endif
 
-	pushm	all
 	move.l	(a1),a3
 	move.l	(a2),a4
 
 	* Use the divider status byte as the first 
 	* comparison so that directories are sorted first.
 	* This is either: 0, $7f, $ff.
-	move.b	l_divider(a3),d3
-	move.b	l_divider(a4),d6
-	addq.b	#2,d3
+	move.b	l_divider(a3),d6
+	move.b	l_divider(a4),d7
 	addq.b	#2,d6
+	addq.b	#2,d7
 	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
 	* get to the top.
 
@@ -49522,37 +49570,35 @@ quickSortNodeArray
 	bra.b	.di
 
 .strCmp 
-	move.b	(a3)+,d3
-	move.b	(a4)+,d6
+	move.b	(a3)+,d6
+	move.b	(a4)+,d7
 .di
 ;	* Lower chase compared chars if possible
-;	cmp.b	d4,d3
-;	blo.b	.l1
-;	cmp.b	d7,d3
-;	bhi.b	.l1
-;	or.b	#$20,d3
-;.l1
-;	cmp.b	d4,d6
-;	blo.b	.l2
-;	cmp.b	d7,d6
-;	bhi.b	.l2
-;	or.b	#$20,d6
-;.l2
-;
-	cmp.b	d3,d6
+	cmp.b	d4,d6
+	blo.b	.l1
+	cmp.b	d5,d6
+	bhi.b	.l1
+	or.b	#$20,d6
+.l1
+	cmp.b	d4,d7
+	blo.b	.l2
+	cmp.b	d5,d7
+	bhi.b	.l2
+	or.b	#$20,d7
+.l2
+
+	cmp.b	d6,d7
 	blo.b	.swap
-	tst.b	d3
-	beq.b	.okval
 	tst.b	d6
 	beq.b	.okval
-	cmp.b	d3,d6
+	tst.b	d7
+	beq.b	.okval
+	cmp.b	d6,d7
 	beq.b	.strCmp
 	;cmp.b	d3,d6
-	bhi.b	.okval
+	;bhi.b	.okval
 .swap
-	nop
 .okval
-	popm	all
 	rts
 
 
