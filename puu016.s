@@ -8481,7 +8481,7 @@ nappuloita
 	dr	.volup
 
 	dc	$5f
-	dr	rbutton10
+	dr	.rbutton10
 	dc	$17
 	dr	.infoo
 
@@ -8538,6 +8538,8 @@ nappuloita
 	dr	rinsert		* insert mods
 .nabse
 
+.rbutton10
+	bra	rbutton10
 
 .rand	bra.w	soitamodi_random
 
@@ -19020,7 +19022,7 @@ getListNode:
 
 	bsr.w	obtainModuleList
 	;lea	moduleListHeader(a5),a0
-	bsr.b	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 
 	move.l	a0,d1	* Sanity check
 	beq.b	.out
@@ -19600,12 +19602,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	srastport(a5),a1
 
 	* Select box frame depending on if info or about window
-	lea	laatikko2(pc),a0
+	lea	laatikko2,a0
 	tst.b	infolag(a5)
 	bne.b	.a
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.a
-	lea	laatikko1(pc),a0
+	lea	laatikko1,a0
 .a	jsr	(a0)
 
 	moveq	#31-2+2,d0		* tyhjennet‰‰n
@@ -22605,7 +22607,7 @@ rexxmessage
 .loadprefs
 	push	a1
 	jsr	rbutton4		* eject
-	bsr.w	clearlist
+	jsr	clearlist
 	;bsr.w	sulje_quad
 	bsr.w	stopScopeTasks
 	bsr.b	.prefspo
