@@ -5280,7 +5280,7 @@ enableResizeGadget
 	moveq	#3,d0
 	mulu	listFontHeight(a5),d0
 	* some additional adjustment: bottom border?
-	addq	#6,d0
+	addq	#6+1,d0
 	add	windowbottom(a5),d0
 
 	add	d0,d2
