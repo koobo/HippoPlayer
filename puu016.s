@@ -8813,7 +8813,7 @@ rlistmode
 * 4 bytes  = node pointer to the module entry,
 * sorts that, and recreates the module list.
 
-SORT_ELEMENT_LENGTH = 4
+SORT_ELEMENT_LENGTH = 8
 
 
 rsort:
@@ -8869,6 +8869,7 @@ sortModuleList:
 	bsr.w	getmem
 	move.l	d0,sortbuf(a5)
 	bne.b	.okr
+.oom
 	bsr.w 	showOutOfMemoryError
 	bra.w	.error
 .okr
@@ -8887,7 +8888,7 @@ sortModuleList:
 	beq.b	.ep
 
 	* Fill slot with node address
-	move.l	a3,(a2)+
+	move.l	a3,(a2)
 
 	* Remove node from list
 	move.l	a3,a1		* poistetaan node (a1)
@@ -8895,6 +8896,8 @@ sortModuleList:
 
 	* get next node
 	SUCC	a3,a3
+	* next slot
+	addq.l	#SORT_ELEMENT_LENGTH,a2
 	bra.b	.ploop
 .ep
 	* Weights done
@@ -8916,7 +8919,7 @@ sortModuleList:
 	sub.l	d5,d7		* montako nodea sortataan
 
 	* Nodes count
-	lsr.l	#2,d7	; /4 - SORT_ELEMENT_LENGTH
+	lsr.l	#3,d7	; /8 - SORT_ELEMENT_LENGTH
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
 	cmp.l	#2,d7		* v‰h 2 kpl
@@ -8924,6 +8927,8 @@ sortModuleList:
 
 	move.l	d5,a2
 	bsr.w	.sort
+	tst.l	d0
+	beq.b	.oom
 	bra.b	.ml
 
 .loph
@@ -8935,17 +8940,20 @@ sortModuleList:
 .er
 	tst.l	(a3)
 	beq.b	.r			* end reached? this is the extra space mentioned above
-	move.l	(a3)+,a1  	* grab node address
+	move.l	(a3),a1  	* grab node address
 
 	* Add a1 to a0
 	move.l	a2,a0
 	ADDTAIL			* lis‰t‰‰n node (a1)
+	addq.l	#SORT_ELEMENT_LENGTH,a3
 	bra.b	.er
 .r
+
+.error
+
 	move.l	sortbuf(a5),a0
 	bsr.w	freemem
 
-.error
 
  if DEBUG
 	jsr		stopMeasure
@@ -8957,6 +8965,7 @@ sortModuleList:
 	DPRINT	"Sort took %lds %ldms"
 * Old sort: A500 modsanth-kick13-prg: 10s
 * New sort: A500 modsanth-kick13-prg: 73s, sad
+* Newer sort: A500 modsanth-kick13-prg: 12s
 
  endif
 
@@ -9022,14 +9031,14 @@ sortModuleList:
 ; comb sort:  compares=25294, swaps=9211
 ; quick sort: compares=23220, swaps=11771
 .sort
-	pushm	all
+	pushm	d1-a6
  ifne FEATURE_COMBSORT
  	jsr		combSortNodeArray 
  endif
  ifne FEATURE_QUICKSORT
 	jsr		quickSortNodeArray
  endif
- 	popm	all
+ 	popm	d1-a6
 	rts
 
 * FSUAE 020
@@ -9037,6 +9046,9 @@ sortModuleList:
 
 * comb sort: 20s, comps 734000 swaps 265000
 *            sorted list: 1s
+
+* comb sort: 2s, comps 184000 swaps 22500
+* weights        sorted list: 1s
 
 * quick sort: 26s, comps 658000 swaps 338000
 *            sorted list: 28s
@@ -49240,26 +49252,81 @@ sortComps	dc.l	0
 
  ifne FEATURE_COMBSORT
 
+COMB_WEIGHT = 64
+
 * in:
-*   a2 = start of array
+*   a2 = start of array of [node pointer, empty pointer]
 *   d7 = number of items to sort
 combSortNodeArray
+	move.l	d7,d0
+	moveq	#COMB_WEIGHT,d1
+	jsr		mulu_32
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	jsr		getmem
+	move.l	d0,-(sp)	 * store for later freemem
+	beq		.exit
+	move.l	d0,a5
+	move.l	a2,a4		* input data
+	move.l	d7,d6		* input count
+	moveq	#"A",d1
+	moveq	#"Z",d2
+	
+.weights
+	* get node address
+	move.l	(a4),a3
+	* weight address at a5, store it to the empty slot beside the node pointer
+	move.l	a5,4(a4)
+	move.l	a5,a0
+
+	moveq	#COMB_WEIGHT-1,d0
+
+	* Use the divider status byte as the first 
+	* comparison so that directories are sorted first.
+	* This is either: 0, $7f, $ff.
+	move.b	l_divider(a3),d3
+	addq.b	#2,d3
+	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
+	* get to the top.
+	move.l	l_nameaddr(a3),a3
+	bra.b	.1
+.w
+	move.b	(a3)+,d3
+	beq.b	.3
+.1
+	* Lower chase compared chars if possible
+	cmp.b	d1,d3
+	blo.b	.2
+	cmp.b	d2,d3
+	bhi.b	.2
+	or.b	#$20,d3
+.2	move.b	d3,(a0)+
+	dbf		d0,.w
+.3
+	lea		COMB_WEIGHT(a5),a5
+	addq.l	#SORT_ELEMENT_LENGTH,a4
+	subq.l	#1,d6
+	bne.b	.weights
+
+	bsr.b	.doCombSort
+
+.exit
+	move.l	(sp)+,a0
+	move.l	a0,d0
+	jsr		freemem
+	tst.l	d0	* zero on out-of-mem
+	rts
+
+.doCombSort
 	move.l	a2,a0
 	* Constant = 1
-	lea		1.w,a6
-	* List size into a5
-	move.l	d7,a5
-
-	* Constants for case checks
-	moveq	#"A",d4
-	moveq	#"Z",d7
+	moveq	#1,d5
 
 ; Comb sort the array.
 
 ;	Lea.l	List(Pc),a0
 ;	Move.l	#ListSize,d7	; Number of values
 
-	Move.l	a5,d1		; d1=Gap
+	Move.l	d7,d1		; d1=Gap
 .MoreSort
 ;	lsl.l	#8,d1
 ;	Divu.w	#333,d1		; 1.3*256 = 332.8
@@ -49271,14 +49338,15 @@ combSortNodeArray
 	jsr	 	divu_32
 	move.l	d0,d1
 
-	Cmp.l	d6,d1		; if gap<1 then gap:=1
+	Cmp.l	d5,d1		; if gap<1 then gap:=1
 	Bpl.b	.okgap
 	Moveq	#1,d1
 .okgap:
-	Move.l	a5,d2		; d2=Top
+	Move.l	d7,d2		; d2=Top
 	Sub.l	d1,d2		; D2=NMAX-gap
+	
 	Move.l	a0,a1
-
+	
  ;     Lea.l   (a1,d1.w*2),a2  ; a2=a1+gap
  ;   move    d1,d6
  ;   mulu    d5,d6
@@ -49289,8 +49357,9 @@ combSortNodeArray
 ;	lea		(a1,d6.l),a2
  
 	move.l	d1,d0
-	* x4 - SORT_ELEMENT_LENGTH
-	lsl.l	#2,d0	
+	* x8 - SORT_ELEMENT_LENGTH
+	lsl.l	#3,d0	
+	move.l	d0,a2	* index
 	lea		(a1,d0.l),a2
 
 	MoveQ	#0,d0		; d0=Switch
@@ -49304,53 +49373,21 @@ combSortNodeArray
 	addq.l	#1,sortComps
  endif
 	* Compare nodes a1 and a2
-	* It's likely the compares after the 1st one are not often hit.
+	* Get weight addresses for nodes
+	move.l	4(a1),a3
+	move.l	4(a2),a4
 
-	move.l	(a1),a3
-	move.l	(a2),a4
-	* Use the divider status byte as the first 
-	* comparison so that directories are sorted first.
-	* This is either: 0, $7f, $ff.
-	move.b	l_divider(a3),d3
-	move.b	l_divider(a4),d6
-	addq.b	#2,d3
-	addq.b	#2,d6
-	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
-	* get to the top.
-
-	move.l	l_nameaddr(a3),a3
-	move.l	l_nameaddr(a4),a4
-	bra.b	.di
-
-.strCmp 
-	move.b	(a3)+,d3
-	move.b	(a4)+,d6
-.di
-	* Lower chase compared chars if possible
-	cmp.b	d4,d3
-	blo.b	.l1
-	cmp.b	d7,d3
-	bhi.b	.l1
-	or.b	#$20,d3
-.l1
-	cmp.b	d4,d6
-	blo.b	.l2
-	cmp.b	d7,d6
-	bhi.b	.l2
-	or.b	#$20,d6
-.l2
-
-	cmp.b	d3,d6
-	blo.b	.swap
-	tst.b	d3
+    * Compare weights in batches of 4 bytes 
+  rept (COMB_WEIGHT/4)-1
+  	cmpm.l	(a3)+,(a4)+
+	bne.b	.notokval
+  endr
+	cmpm.l	(a3)+,(a4)+
 	beq.b	.okval
-	tst.b	d6
-	beq.b	.okval
-	cmp.b	d3,d6
-	beq.b	.strCmp
-	;cmp.b	d3,d6
-	bhi.b	.okval
-.swap
+.notokval
+    ;bmi.b   .okval
+	bhs.b	.okval
+
  if DEBUG
 	addq.l	#1,sortSwaps
  endif
@@ -49364,15 +49401,20 @@ combSortNodeArray
 ;	Move.w	-2(a2),-2(a1)
 ;	Move.w	d3,-2(a2)
 
-	* swap 4 bytes entry
- 	move.l	(a1),d3
+	* swap 8 bytes entry [node address, weight address]
+	* Advance indexes
+	move.l	(a1),d3
+	move.l	4(a1),d6
 	move.l	(a2),(a1)+
+	move.l	4(a2),(a1)+
 	move.l	d3,(a2)+
-
+	move.l	d6,(a2)+
+	
 	* Set flag, something swapped
 	Moveq	#1,d0
 	bra		.ok1
 .okval:
+	* Advance indexes
 	addq.l	#SORT_ELEMENT_LENGTH,a1
 	addq.l	#SORT_ELEMENT_LENGTH,a2
 .ok1
@@ -49380,7 +49422,7 @@ combSortNodeArray
 	subq.l	#1,d2 
 	bne	.Loop
 
-	cmp.l	a6,d1	; gap < 1 ?
+	cmp.l	d5,d1	; gap < 1 ?
 	Bne.w	.MoreSort
 	Tst.w	d0		; Any entries swapped ?
 	Bne.w	.MoreSort
