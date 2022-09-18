@@ -627,10 +627,9 @@ prefs_closeSignal	rs.b	1		* prefs-signaali
 prefs_updateContentsSignal	rs.b	1		* prefs-signaali 2
 
 songHasEndedSignal	rs.b	1	* Kappale soinut
-ownsignal2	rs.b	1	* position update in title bar, prefs update 
+ownsignal2	rs.b	1	* window update, prefs update 
 uiRefreshSignal	rs.b	1	* lootan p‰ivitys
-ownsignal4	rs.b	1	* Sulje ja avaa ikkuna
-						* NOTE: this does not seem be used!
+posUpdateSignal	rs.b	1	
 audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
@@ -2554,8 +2553,8 @@ main
 	bsr.w	getsignal
 	move.b	d0,uiRefreshSignal(a5)
 	bsr.w	getsignal
-	;move.b	d0,ownsignal4(a5)
-	;bsr.w	getsignal
+	move.b	d0,posUpdateSignal(a5)
+	bsr.w	getsignal
 	move.b	d0,audioPortSignal(a5)
 	bsr.w	getsignal
 	move.b	d0,fileReqSignal(a5)
@@ -3054,8 +3053,8 @@ msgloop
 	bset	d1,d0
 	move.b	uiRefreshSignal(a5),d1
 	bset	d1,d0
-	;move.b	ownsignal4(a5),d1
-	;bset	d1,d0
+	move.b	posUpdateSignal(a5),d1
+	bset	d1,d0
 	move.b	audioPortSignal(a5),d1
 	bset	d1,d0
 	move.b	fileReqSignal(a5),d1
@@ -3134,26 +3133,7 @@ msgloop
 	move.b	uiRefreshSignal(a5),d3	* p‰ivitet‰‰n...
 	btst	d3,d0
 	beq.b	.wow
-	addq	#1,userIdleTick(a5)
-	push	d0
-	jsr	lootaan_aika
-	jsr	lootaan_kello
-;	bsr.w	lootaan_muisti
-	jsr	lootaan_nimi
-	; No need to call this every refresh signal, it is handled via RMB 
-	; and IDCMP-event handlers anyway:
-	;bsr.w	zipwindow
-
-	* Try to save favorite modules when user has been idle for a while
-	moveq	#0,d0 
-	move	userIdleTick(a5),d0 
-	cmp	#7,d0
-	blo.b	.notIdleEnough
-	jsr	exportFavoriteModulesWithMessage
-.notIdleEnough
-
-	pop	d0
-
+	bsr		handleUiRefreshSignal
 .wow
 
 
@@ -3267,16 +3247,11 @@ msgloop
 
 .nwwwq
 
-	* Note: signal4 does not seem to be triggered anywhere!
-;	move.b	ownsignal4(a5),d3
-;	btst	d3,d0
-;	beq.b	.nowww
-;	bsr.w	sulje_ikkuna
-;	bsr.w	avaa_ikkuna
-;	bne.w	exit
-;	bra.w	returnmsg
-;
-;.nowww	
+	move.b	posUpdateSignal(a5),d3
+	btst	d3,d0
+	beq.b	.noSig4
+	bsr		handlePosUpdateSignal
+.noSig4
 	
 	* Tooltip display signal check
 	move.b	tooltipSignal(a5),d3 
@@ -3496,8 +3471,8 @@ exit
 	bsr.w	freesignal
 	move.b	uiRefreshSignal(a5),d0
 	bsr.w	freesignal
-	;move.b	ownsignal4(a5),d0
-	;bsr.w	freesignal
+	move.b	posUpdateSignal(a5),d0
+	bsr.w	freesignal
 	move.b	audioPortSignal(a5),d0
 	bsr.w	freesignal
 	move.b	fileReqSignal(a5),d0
@@ -4084,12 +4059,37 @@ kirjainta4
 * Avaa ikkunan ja pikkasen alustaakin
 *******
 
-handleSignal2
-;	DPRINT	"Signal 2"
+handleUiRefreshSignal
+	addq	#1,userIdleTick(a5)
+	push	d0
+	jsr	lootaan_aika
+	jsr	lootaan_kello
+;	bsr.w	lootaan_muisti
+	jsr	lootaan_nimi
+	; No need to call this every refresh signal, it is handled via RMB 
+	; and IDCMP-event handlers anyway:
+	;bsr.w	zipwindow
 
+	* Try to save favorite modules when user has been idle for a while
+	moveq	#0,d0 
+	move	userIdleTick(a5),d0 
+	cmp	#7,d0
+	blo.b	.notIdleEnough
+	jsr	exportFavoriteModulesWithMessage
+.notIdleEnough
+
+	pop	d0
+	rts
+
+
+handlePosUpdateSignal
 	* Update title bar with position information
-	jsr	lootaan_pos
+	jmp	lootaan_pos
 
+handleSignal2
+	DPRINT	"Signal 2"
+
+	
 	* see if prefs window was just closed
 	tst.b	prefsexit(a5)
 	beq.b	.noe
@@ -22029,7 +22029,7 @@ intserver
 .rewind
 .skipCheck
 	* Send a signal indicating that playing position has changed
-	move.b	ownsignal2(a5),d1
+	move.b	posUpdateSignal(a5),d1
 	bsr.w	signalit
 .eee
 .notPlaying2
