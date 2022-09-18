@@ -63,6 +63,8 @@ FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_HORIZ_RESIZE = 1
 FEATURE_P61A        =   0
 FEATURE_UHC_AMINET  =   0
+FEATURE_QUICKSORT   =   0
+FEATURE_COMBSORT    =   1
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -9019,17 +9021,31 @@ sortModuleList:
 ; quick sort: compares=23220, swaps=11771
 .sort
 	pushm	all
- 	;jsr		combSortNodeArray
+ ifne FEATURE_COMBSORT
+ 	jsr		combSortNodeArray 
+ endif
+ ifne FEATURE_QUICKSORT
 	jsr		quickSortNodeArray
+ endif
  	popm	all
 	rts
 
 * FSUAE 020
 * Modsanth-unsorted-prg
+
 * comb sort: 20s, comps 734000 swaps 265000
 *            sorted list: 1s
+
 * quick sort: 26s, comps 658000 swaps 338000
 *            sorted list: 28s
+
+* quick sort: 27s, comps 704000 swaps 400000
+* tail recurs
+
+* quick sort: 22s, comps 704000 swaps 400000
+* tail recurs
+* rand pivo
+
 * quick sort: 20s, comps 381000 swaps 350000
 * rand pivot     sorted list: 20s
 
@@ -49220,6 +49236,7 @@ sortSwaps	dc.l	0
 sortComps	dc.l	0
  endif
 
+ ifne FEATURE_COMBSORT
 
 * in:
 *   a2 = start of array
@@ -49366,55 +49383,9 @@ combSortNodeArray
 	Tst.w	d0		; Any entries swapped ?
 	Bne.w	.MoreSort
 	Rts
+ endif ; FEATURE_COMBSORT
 
-
-;; // function to find the partition position
-;; int partition(int array[], int low, int high) {
-;;   
-;;   // select the rightmost element as pivot
-;;   int pivot = array[high];
-;;   
-;;   // pointer for greater element
-;;   int i = (low - 1);
-;; 
-;;   // traverse each element of the array
-;;   // compare them with the pivot
-;;   for (int j = low; j < high; j++) {
-;;     if (array[j] <= pivot) {
-;;         
-;;       // if element smaller than pivot is found
-;;       // swap it with the greater element pointed by i
-;;       i++;
-;;       
-;;       // swap element at i with element at j
-;;       swap(&array[i], &array[j]);
-;;     }
-;;   }
-;; 
-;;   // swap the pivot element with the greater element at i
-;;   swap(&array[i + 1], &array[high]);
-;;   
-;;   // return the partition point
-;;   return (i + 1);
-;; }
-;; 
-;; void quickSort(int array[], int low, int high) {
-;;   if (low < high) {
-;;     
-;;     // find the pivot element such that
-;;     // elements smaller than pivot are on left of pivot
-;;     // elements greater than pivot are on right of pivot
-;;     int pi = partition(array, low, high);
-;;     
-;;     // recursive call on the left of pivot
-;;     quickSort(array, low, pi - 1);
-;;     
-;;     // recursive call on the right of pivot
-;;     quickSort(array, pi + 1, high);
-;;   }
-;; }
-
-
+ ifne FEATURE_QUICKSORT
 * in:
 *   a2 = start of array
 *   d7 = number of items to sort
@@ -49440,7 +49411,7 @@ quickSortNodeArray
 	subq.l	#1,d1
 	lsl.l	#2,d1
 	move.l	a2,a0
-	bsr.b	.qs
+	bsr.b	.qst
 
 	move.l	.oldStack(pc),sp
 	move.l	.newStack(pc),a0
@@ -49450,6 +49421,7 @@ quickSortNodeArray
 .newStack	dc.l	0
 .oldStack	dc.l	0
 .depth	dc.l	0
+
 
 * in: 
 *   a0 = array
@@ -49473,7 +49445,49 @@ quickSortNodeArray
 	* right partition: pi + 1, high
 	bsr.b	.qs
 	popm	d0-d2
+
 .x	rts
+
+* Tail recursive
+.qst
+;	pushm	d0/d1
+;	lsr.l	#2,d0
+;	lsr.l	#2,d1
+;	DPRINT	"lo=%ld hi=%ld"
+;	popm	d0/d1
+
+	* while low < high, do:
+	cmp.l	d1,d0
+	bge.b	.xx
+
+	bsr.b	.partition
+
+	move.l	d2,d6
+	sub.l	d0,d6
+	move.l	d1,d7
+	sub.l	d2,d7
+	cmp.l	d6,d7
+	blt		.else
+
+	pushm	d0-d2
+	move.l	d2,d1
+	subq.l	#4,d1
+	bsr.b	.qst
+	popm	d0-d2
+	addq.l	#4,d0
+	bra.b	.qst
+.else
+	pushm	d0-d2
+	move.l	d2,d0
+	addq.l	#4,d0
+	bsr.b	.qst
+	popm	d0-d2
+	move.l	d2,d1
+	subq.l	#4,d1
+	bra.b	.qst
+
+.xx	rts
+
 
 .rand	dc.l	0
 
@@ -49484,25 +49498,29 @@ quickSortNodeArray
 * out:
 *   d2 = partition position
 .partition
-;	DPRINT	"part %ld %ld"
+;	pushm	d0/d1
+;	lsr.l	#2,d0
+;	lsr.l	#2,d1
+;	DPRINT	"part lo=%ld hi=%ld"
+;	popm	d0/d1
 
 ; Random pivot example shown for median   p = (l+h)/2 would be used
 ;  p = l + (short)(rand() % (int)(h - l + 1)); // Random partition point
 
-	add.l	#$abc1def2,.rand
-
-	move.l	d1,d2
-	addq.l	#1,d2
-	sub.l	d0,d2
-	move.l	.rand(pc),d3
-	divu	d2,d3
-	swap	d3
-	ext.l	d3
-	lea	(a0,d3.l),a1
+;	add.l	#$abc1def2,.rand
+;	move.l	d1,d6
+;	addq.l	#1,d6
+;	sub.l	d0,d6
+;	move.l	.rand(pc),d7
+;	divu	d6,d7
+;	clr		d7
+;	swap	d7
+;	lsl.l	#2,d7
+;	lea	(a0,d7.l),a1
 	
 
     ; select the rightmost/high element as pivot
-;	lea	(a0,d1.l),a1
+	lea	(a0,d1.l),a1
 	* a1 = pivot node pointer position in table
 
 	; index for greater element, i = low - i
@@ -49517,7 +49535,6 @@ quickSortNodeArray
 	lea	(a0,d3.l),a2
 	bsr.b	.compareA1vsA2
 	bhi.b	.continue
-	;bls.b	.continue
 	
     ; i++
 	addq.l	#4,d2
@@ -49600,7 +49617,7 @@ quickSortNodeArray
 .swap
 .okval
 	rts
-
+ endif ; FEATURE_QUICKSORT
 
 ***************************************************************************
 *
