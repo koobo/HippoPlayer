@@ -8773,12 +8773,12 @@ printbox:
 .cc	dbeq    d0,.c
  	not.l   d0	* strlen in d0
 
-	push	a0
+	pushm	a0/a6
 	* d0 = length of text
 	* a0 = text
 	move.l	rastport(a5),a1
 	lore	GFX,TextLength
-	pop		a0
+	popm	a0/a6
 	* d0 = text width in pixels
 	* center in the window
 	move 	previousWindowWidth(a5),d1
