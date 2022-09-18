@@ -31134,15 +31134,11 @@ engageListMode:
 	bsr.w	disableButton
 	lea	gadgetPrgButton(a4),a0
 	bsr.w	disableButton
-	lea	gadgetSortButton(a4),a0
-	bsr.w	enableButtonWithEar
 	lea	gadgetMoveButton(a4),a0
+	bsr.w	disableButton
+	lea	gadgetSortButton(a4),a0
 	bsr.w	enableButtonWithEar
 	lea	gadgetDelButton(a4),a0
-	bsr.w	enableButtonWithEar
-	lea	gadgetSortButton(a4),a0
-	bsr.w	enableButtonWithEar
-	lea	gadgetMoveButton(a4),a0
 	bsr.w	enableButtonWithEar
 	bsr		setFileBrowserAddTooltip
 	rts
@@ -50184,8 +50180,8 @@ tooltipList
 	dc.b	"LMB: Add new modules to the list",0
 	dc.b	"RMB: Insert new modules after the chosen module",0
 .add2
-	dc.b	41,1
-	dc.b	"LMB: Add selected module to the main list",0
+	dc.b	39,1
+	dc.b	"LMB: Add selected entry to the main list",0
 
 .del
 	dc.b	35,4
