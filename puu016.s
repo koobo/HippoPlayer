@@ -9026,41 +9026,11 @@ sortModuleList:
 
 *--------------------
 
-; Jogeir Liljedahl folder
-; comb sort:  compares=25294, swaps=9211
-; quick sort: compares=23220, swaps=11771
 .sort
 	pushm	d1-a6
- ifne FEATURE_COMBSORT
  	jsr		combSortNodeArray 
- endif
- ifne FEATURE_QUICKSORT
-	jsr		quickSortNodeArray
- endif
  	popm	d1-a6
 	rts
-
-* FSUAE 020
-* Modsanth-unsorted-prg
-
-* comb sort: 20s, comps 734000 swaps 265000
-*            sorted list: 1s
-
-* comb sort: 2s, comps 184000 swaps 22500
-* weights        sorted list: 1s
-
-* quick sort: 26s, comps 658000 swaps 338000
-*            sorted list: 28s
-
-* quick sort: 27s, comps 704000 swaps 400000
-* tail recurs
-
-* quick sort: 22s, comps 704000 swaps 400000
-* tail recurs
-* rand pivo
-
-* quick sort: 20s, comps 381000 swaps 350000
-* rand pivot     sorted list: 20s
 
 
 *******************************************************************************
@@ -32459,85 +32429,6 @@ configureMainWindowButtonSizes
 
 
 *******************************************************************************
-* IFF pictures to buttons
-*******************************************************************************
- REM 
-initializeButtonImages
-	lea	iffname,a0
-	lore	Exec,OldOpenLibrary
-	tst.l	d0
-	beq.w	.x
-	move.l	d0,d7
-
-	move.l	d0,a6
-	lea	.pic(pc),a0
-	moveq	#IFFL_MODE_READ,d0
-	lob		OpenIFF
-	move.l	d0,d6
-	beq.b	.x
-
-	move.l	d6,a1
-	lob     GetBMHD
-	tst.l	d0
-	beq.b	.x
-	move.l	d0,a4
-	move	bmh_Width(a4),d1
-	move	bmh_Height(a4),d2
-	move.b	bmh_nPlanes(a4),d0
-
-	lea bitmapPlayButton(pc),a0
-	lore 	GFX,InitBitMap
-
-	move	bmh_Width(a4),d0
-	move	bmh_Height(a4),d1
-	moveq	#0,d2
-	move.b	bmh_nPlanes(a4),d2
-	mulu	d2,d1
-	lore	Exec,AllocRaster
-	tst.l	d0
-	beq.b	.x
-	move.l	d0,a0
-	lea	bitmapPlayButton+bm_Planes(pc),a1
-	* Length of one plane in bytes:
-	move	bitmapPlayButton+bm_BytesPerRow(pc),d1
-	mulu	bitmapPlayButton+bm_Rows(pc),d1
-	moveq	#0,d0
-	move.b	bitmapPlayButton+bm_Depth(pc),d0
-	subq	#1,d0
-.planes
-	move.l	a0,(a1)+
-	add	d1,a0
-	dbf	d0,.planes
-
-	move.l	d6,a1
-	lea	bitmapPlayButton(pc),a0
-	move.l	d7,a6
-	lob	DecodePic
-	tst.l	d0
-	beq.b	.x
-	
-	nop
-.x
-	tst.l	d6
-	beq.b	.1
-	move.l	d6,a1
-	lob	CloseIFF
-
-.1
-
-
-	move.l	d7,d0
-	jsr	closel
-
-	rts
-
-.pic	dc.b	"sys:HippoPlayButton.iff",0
-
-bitmapPlayButton ds.b bm_SIZEOF
- EREM
-
-
-*******************************************************************************
 *** SECTION *******************************************************************
 *
 * Replay routines
@@ -49239,9 +49130,36 @@ freeSearchList
 
 ***************************************************************************
 *
-* List sort algorithms
+* List sort algorithm
 *
 ***************************************************************************
+
+
+; Jogeir Liljedahl folder
+; comb sort:  compares=25294, swaps=9211
+; quick sort: compares=23220, swaps=11771
+
+* FSUAE 020
+* Modsanth-unsorted-prg
+
+* comb sort: 20s, comps 734000 swaps 265000
+*            sorted list: 1s
+
+* comb sort: 2s, comps 184000 swaps 22500
+* weights        sorted list: 1s
+
+* quick sort: 26s, comps 658000 swaps 338000
+*            sorted list: 28s
+
+* quick sort: 27s, comps 704000 swaps 400000
+* tail recurs
+
+* quick sort: 22s, comps 704000 swaps 400000
+* tail recurs
+* rand pivo
+
+* quick sort: 20s, comps 381000 swaps 350000
+* rand pivot     sorted list: 20s
 
 	
  if DEBUG
@@ -49249,12 +49167,11 @@ sortSwaps	dc.l	0
 sortComps	dc.l	0
  endif
 
- ifne FEATURE_COMBSORT
-
+* Weight is 64 chars
 COMB_WEIGHT = 64
 
 * in:
-*   a2 = start of array of [node pointer, empty pointer]
+*   a2 = start of array of [node pointer, empty pointer] to sort
 *   d7 = number of items to sort
 combSortNodeArray
 	move.l	d7,d0
@@ -49275,6 +49192,7 @@ combSortNodeArray
 	move.l	(a4),a3
 	* weight address at a5, store it to the empty slot beside the node pointer
 	move.l	a5,4(a4)
+	* filln weight
 	move.l	a5,a0
 
 	moveq	#COMB_WEIGHT-1,d0
@@ -49363,8 +49281,7 @@ combSortNodeArray
 
 	MoveQ	#0,d0		; d0=Switch
 
-	* Free regs:
-	* d3,d6,a3,a4,a5,a6
+
 
 .Loop:	
 
@@ -49426,241 +49343,7 @@ combSortNodeArray
 	Tst.w	d0		; Any entries swapped ?
 	Bne.w	.MoreSort
 	Rts
- endif ; FEATURE_COMBSORT
 
- ifne FEATURE_QUICKSORT
-* in:
-*   a2 = start of array
-*   d7 = number of items to sort
-* Indexes are multiples of 4 to access array of pointers
-quickSortNodeArray
-* this one needs likely modamount * (d0-d3 + return address) bytes
-* of stack.
-.SIZE = 100000
-	move.l	#.SIZE,d0
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	jsr		getmem
-	move.l	d0,.newStack	
-	move.l	sp,.oldStack
-	add.l	#.SIZE,d0
-	move.l	d0,sp
-
-	moveq	#"A",d4
-	moveq	#"Z",d5
-	; low
-	moveq	#0,d0	
-	; high
-	move.l	d7,d1
-	subq.l	#1,d1
-	lsl.l	#2,d1
-	move.l	a2,a0
-	bsr.b	.qst
-
-	move.l	.oldStack(pc),sp
-	move.l	.newStack(pc),a0
-	jsr		freemem
-	rts
-
-.newStack	dc.l	0
-.oldStack	dc.l	0
-.depth	dc.l	0
-
-
-* in: 
-*   a0 = array
-*   d0 = low index
-*   d1 = high index
-.qs
-;	DPRINT	"qs %ld %ld"
-
-	cmp.l	d1,d0
-	bge.b	.x
-	bsr.b	.partition
-	pushm	d0-d2
-	* d2 = partition
-	move.l	d2,d1
-	subq.l	#4,d1
-	* left partition: low, pi - 1
-	bsr.b	.qs
-	movem.l	(sp),d0-d2
-	move.l	d2,d0
-	addq.l	#4,d0
-	* right partition: pi + 1, high
-	bsr.b	.qs
-	popm	d0-d2
-
-.x	rts
-
-* Tail recursive
-.qst
-;	pushm	d0/d1
-;	lsr.l	#2,d0
-;	lsr.l	#2,d1
-;	DPRINT	"lo=%ld hi=%ld"
-;	popm	d0/d1
-
-	* while low < high, do:
-	cmp.l	d1,d0
-	bge.b	.xx
-
-	bsr.b	.partition
-
-	move.l	d2,d6
-	sub.l	d0,d6
-	move.l	d1,d7
-	sub.l	d2,d7
-	cmp.l	d6,d7
-	blt		.else
-
-	pushm	d0-d2
-	move.l	d2,d1
-	subq.l	#4,d1
-	bsr.b	.qst
-	popm	d0-d2
-	addq.l	#4,d0
-	bra.b	.qst
-.else
-	pushm	d0-d2
-	move.l	d2,d0
-	addq.l	#4,d0
-	bsr.b	.qst
-	popm	d0-d2
-	move.l	d2,d1
-	subq.l	#4,d1
-	bra.b	.qst
-
-.xx	rts
-
-
-.rand	dc.l	0
-
-* in:
-*   a0 = array
-*   d0 = low
-*   d1 = high
-* out:
-*   d2 = partition position
-.partition
-;	pushm	d0/d1
-;	lsr.l	#2,d0
-;	lsr.l	#2,d1
-;	DPRINT	"part lo=%ld hi=%ld"
-;	popm	d0/d1
-
-; Random pivot example shown for median   p = (l+h)/2 would be used
-;  p = l + (short)(rand() % (int)(h - l + 1)); // Random partition point
-
-;	add.l	#$abc1def2,.rand
-;	move.l	d1,d6
-;	addq.l	#1,d6
-;	sub.l	d0,d6
-;	move.l	.rand(pc),d7
-;	divu	d6,d7
-;	clr		d7
-;	swap	d7
-;	lsl.l	#2,d7
-;	lea	(a0,d7.l),a1
-	
-
-    ; select the rightmost/high element as pivot
-	lea	(a0,d1.l),a1
-	* a1 = pivot node pointer position in table
-
-	; index for greater element, i = low - i
-	move.l	d0,d2
-	subq.l	#4,d2
-
-	; for (int j = low; j < high; j++) 
-    ; d3 = j, low
-   	move.l	d0,d3 
-.loop
-    ; if (array[j] <= pivot)
-	lea	(a0,d3.l),a2
-	bsr.b	.compareA1vsA2
-	bhi.b	.continue
-	
-    ; i++
-	addq.l	#4,d2
-    ; swap array[i], array[j]
-	move.l	(a0,d2.l),a3
-	move.l	(a0,d3.l),(a0,d2.l)
-	move.l	a3,(a0,d3.l)
- if DEBUG
-	addq.l	#1,sortSwaps
- endif
-.continue
-	* j++
-	addq.l	#4,d3
-	* loop if j < high 
-	cmp.l	d1,d3
-	blt.b	.loop
-
-	addq.l	#4,d2	* i = i + 1
-    ; swap array[i+i], array[high]
-	move.l	(a0,d2.l),a3
-	move.l	(a0,d1.l),(a0,d2.l)
-	move.l	a3,(a0,d1.l)
- if DEBUG
-	addq.l	#1,sortSwaps
- endif
-	* return d2 = i + 1
-	rts
-
-.compareA1vsA2
-
- if DEBUG
-	addq.l	#1,sortComps
- endif
-
-	move.l	(a1),a3
-	move.l	(a2),a4
-
-	* Use the divider status byte as the first 
-	* comparison so that directories are sorted first.
-	* This is either: 0, $7f, $ff.
-	move.b	l_divider(a3),d6
-	move.b	l_divider(a4),d7
-	addq.b	#2,d6
-	addq.b	#2,d7
-	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
-	* get to the top.
-
-	move.l	l_nameaddr(a3),a3
-	move.l	l_nameaddr(a4),a4
-	bra.b	.di
-
-.strCmp 
-	move.b	(a3)+,d6
-	move.b	(a4)+,d7
-.di
-;	* Lower chase compared chars if possible
-	cmp.b	d4,d6
-	blo.b	.l1
-	cmp.b	d5,d6
-	bhi.b	.l1
-	or.b	#$20,d6
-.l1
-	cmp.b	d4,d7
-	blo.b	.l2
-	cmp.b	d5,d7
-	bhi.b	.l2
-	or.b	#$20,d7
-.l2
-
-	cmp.b	d6,d7
-	blo.b	.swap
-	tst.b	d6
-	beq.b	.okval
-	tst.b	d7
-	beq.b	.okval
-	cmp.b	d6,d7
-	beq.b	.strCmp
-	;cmp.b	d3,d6
-	;bhi.b	.okval
-.swap
-.okval
-	rts
- endif ; FEATURE_QUICKSORT
 
 ***************************************************************************
 *
