@@ -63,8 +63,6 @@ FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_HORIZ_RESIZE = 1
 FEATURE_P61A        =   0
 FEATURE_UHC_AMINET  =   0
-FEATURE_QUICKSORT   =   0
-FEATURE_COMBSORT    =   1
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -8869,7 +8867,6 @@ sortModuleList:
 	bsr.w	getmem
 	move.l	d0,sortbuf(a5)
 	bne.b	.okr
-.oom
 	bsr.w 	showOutOfMemoryError
 	bra.w	.error
 .okr
@@ -8927,9 +8924,11 @@ sortModuleList:
 
 	move.l	d5,a2
 	bsr.w	.sort
+	* check if ran out of mem
 	tst.l	d0
-	beq.b	.oom
-	bra.b	.ml
+	bne.b	 .ml
+	* show error and stop, list will be partially sorted or not at all
+	bsr.w 	showOutOfMemoryError
 
 .loph
 
