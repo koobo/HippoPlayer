@@ -11691,6 +11691,7 @@ loadprog
 *   a4 = end address of buffer
 *   d4 = line header length
 *   d6 = line header address 
+*   a0 = filter routine address, for remote url entries
 importModuleProgramFromDataSkipHeader:
 	pushm	d1-a6
  if DEBUG
@@ -11698,6 +11699,7 @@ importModuleProgramFromDataSkipHeader:
 	move.l	a4,d1
 	DPRINT	"importModuleProgramFromDataSkipHdr %lx %lx"
  endif
+	move.l	a0,a6
 	moveq	#0,d7 		* count
 	move.l	a4,d5		* use this register
 	move.l	a2,a4 		* list header here
@@ -11727,6 +11729,7 @@ importModuleProgramFromData:
 	move.l	a3,d0
 	beq.w	.x2
 
+	sub.l	a6,a6		* no filter
 	moveq	#0,d4		* no line header
 	moveq	#0,d6		* no line header
 
@@ -11747,6 +11750,26 @@ importModuleProgramFromData:
 ;	lea	moduleListHeader(a5),a4
 ;	move.l	a5,a4
 .ploop
+
+	* See if additional header should
+	* be prepended to the line. This indicates
+	* a remote url, it is used to add the base url address.
+	tst.l	d6
+	beq.b	.accepted
+	* A remote it is, run filter if available
+	move.l	a6,d3
+	beq.b	.accepted
+	jsr		(a6)
+	bne.b	.accepted
+.skipToNext
+	* Skip to next entry
+	cmp.l	d5,a3
+	bhs.w	.x2		* upper bound check
+	cmp.b	#10,(a3)+
+	bne.b	.skipToNext
+	bra		.next
+.accepted
+
 
 	* Is this an url?
 	moveq	#0,d3	* local
@@ -11797,9 +11820,9 @@ importModuleProgramFromData:
 	tst.l	d6
 	beq.b	.noHdr
 	moveq	#1,d3	* remote!
-	move.l	d6,a6
+	move.l	d6,a1
 .copyHdr
-	move.b	(a6)+,(a0)+
+	move.b	(a1)+,(a0)+
 	bne.b	.copyHdr
 	subq	#1,a0 * to NULL
 .noHdr
@@ -11835,7 +11858,9 @@ importModuleProgramFromData:
 	* add node a1 to list a0	
 	move.l	a2,a1
 	move.l	a4,a0
+	push	a6
 	lore	Exec,AddTail
+	pop		a6
 	addq.l	#1,d7
 
 	move.l	a2,a0
@@ -11847,7 +11872,7 @@ importModuleProgramFromData:
 
 	cmp.l	#MAX_MODULES,d7
 	bhs.b	.x2
-
+.next
 	* Go until at the end of given buffer
 	cmp.l	d5,a3
 	blo.w	.ploop
@@ -48893,6 +48918,7 @@ remoteSearch
 	* Import data
 	* This will also set l_remote and l_nameaddr
 	* to correct values for remote files.
+	lea		.filter(pc),a0
 	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
 
@@ -48914,6 +48940,10 @@ remoteSearch
 	lea 	50(sp),sp
 	rts
 
+.filter
+	* Set Z to reject, clear Z to accept
+	moveq	#1,d0
+	rts
 
 .modlandLine
 	dc.b	"http://ftp.modland.com/pub/modules/",0
