@@ -1027,9 +1027,7 @@ kanavatvarattu	rs	1	* 0: ei varattu, ei-0: varattu
 
 oldst		rs.b	1	* 0: pt modi, ~0: old soundtracker modi
 sidflag		rs.b	1	* songnumberin muuttamiseen
-* Set to true if the last loaded module is a remote module.
-* Path is in "modulefilename" as usual.
-uriDecodeNameBeforeShowing	rs.b	1
+			rs.b	1
 
 kelausnappi	rs.b	1	* 0: jos ei cia kelausta
 kelausvauhti	rs.b	1	* 1: 2x, 2: 4x
@@ -17403,7 +17401,7 @@ doPrintNames
 	tst.b	l_remote(a3)
 	beq.b	.local
 	move.l	a0,d0
-	* Remote entries: url decoding, also replace /
+	* Remote entries: replace /
 	move.l	sp,a1
 .unescape
 	move.b	(a0)+,d0
@@ -17412,14 +17410,9 @@ doPrintNames
 	move.b	#" ",(a1)+
 	move.b	#"-",(a1)+
 	move.b	#" ",(a1)+
-	bra.b	.unescape
 .noSlsh
-	cmp.b	#"%",d0
-	bne.b	.noEsc
-	bsr		convertHexTextToNumber
-.noEsc
 	move.b	d0,(a1)+
-	bne		.unescape
+	bne.b	.unescape
 
 	* cleaned up name 
 	move.l	sp,a0
@@ -17562,32 +17555,32 @@ cut_prefix:
 *   a0 = test pointer with two chars to convert
 * out: 
 *   d0 = number
-convertHexTextToNumber
-	pushm	d1-d3
-	moveq	#2-1,d2
-	moveq	#4,d1
-	moveq	#0,d0
-.loop
-	moveq	#0,d3
-	move.b	(a0)+,d3
-	cmp.b	#"a",d3
-	bhs.b	.hih 
-	cmp.b	#"A",d3
-	bhs.b	.hi 
-	sub.b	#"0",d3
-	bra.b	.lo
-.hih
-	sub.b	#"a"-10,d3
-	bra.b	.lo
-.hi
-	sub.b	#"A"-10,d3
-.lo
-	lsl	d1,d3
-	or	d3,d0
-	subq	#4,d1
-	dbf	d2,.loop
-	popm	d1-d3
-	rts
+;convertHexTextToNumber
+;	pushm	d1-d3
+;	moveq	#2-1,d2
+;	moveq	#4,d1
+;	moveq	#0,d0
+;.loop
+;	moveq	#0,d3
+;	move.b	(a0)+,d3
+;	cmp.b	#"a",d3
+;	bhs.b	.hih 
+;	cmp.b	#"A",d3
+;	bhs.b	.hi 
+;	sub.b	#"0",d3
+;	bra.b	.lo
+;.hih
+;	sub.b	#"a"-10,d3
+;	bra.b	.lo
+;.hi
+;	sub.b	#"A"-10,d3
+;.lo
+;	lsl	d1,d3
+;	or	d3,d0
+;	subq	#4,d1
+;	dbf	d2,.loop
+;	popm	d1-d3
+;	rts
 
 *******************************************************************************
 * Deletoidaan yksi tiedosto listasta
@@ -27337,8 +27330,6 @@ loadmodule:
 	* do determine what to show in the infobox, and
 	* also with the PS3M configuration file.
 	move.l	l_nameaddr(a3),solename(a5)
-	* Store this so that the name can ne urldecoded before showing.
-	move.b	l_remote(a3),uriDecodeNameBeforeShowing(a5)
 	* Check if a remote file
 	beq		.doLoadModule
 
@@ -30027,8 +30018,6 @@ tee_modnimi:
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	bne.b	.arc				* otetaan pelkkä filename
 	move.l	solename(a5),a0
-	tst.b	uriDecodeNameBeforeShowing(a5)
-	bne.b	.decode
 	bra.b	.copy
 .arc
 	* This contains info from the last archive loaded file 
@@ -30038,21 +30027,7 @@ tee_modnimi:
 	dbeq	d1,.copy
 	clr.b	(a1)
 	rts
-.decode
-	* This is the end part of a url, contains a path delimiter. 
-	* Don't show the path to save space.
-.3	cmp.b	#"/",(a0)+
-	bne.b	.3
-.2
-	move.b	(a0)+,d0
-	cmp.b	#"%",d0
-	bne.b	.1
-	* Converts the following 2 bytes from a0
-	bsr		convertHexTextToNumber
-.1	move.b	d0,(a1)+
-	dbeq	d1,.2
-	clr.b	(a1)
-	rts
+
 
 *******************************************************************************
 * Lataa ulkoisen soittorutiinirykelmän
