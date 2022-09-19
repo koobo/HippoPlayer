@@ -11762,7 +11762,7 @@ importModuleProgramFromData:
 	move.l	a6,d3
 	beq.b	.accepted
 	jsr		(a6)
-	bne.b	.accepted
+	beq.b	.accepted
 .skipToNext
 	* Skip to next entry
 	cmp.l	d5,a3
@@ -48949,10 +48949,45 @@ remoteSearch
 	lea 	50(sp),sp
 	rts
 
-.filter
-	* Set Z to reject, clear Z to accept
-	moveq	#1,d0
+
+* In:
+*   a3 = name to check, ends with 10 or 0
+* Out:
+*   Z or no Z
+.modlandFilter
+	pushm	a0/a1
+	lea		.modlandPostfixes(pc),a0
+	lea		.modlandPrefixes(pc),a1
+	bsr		filterName
+	popm	a0/a1
 	rts
+
+* adcs; 4 char pfix?
+.modlandPostfixes
+	dc.l	"ahx "
+	dc.l	"thx "
+	dc.l	"aps "
+	dc.l	"avp "
+	dc.l	"aon "
+	dc.l	"adsc"
+	dc.l	"bp  "
+	dc.l	"bd  "
+	dc.l	"cm  "
+	dc.l	"dz  "
+	dc.l	"dl  "
+	dc.l	"dln "
+	dc.l	"bp3 "
+	dc.l	"bss "
+	dc.l	"xm  "
+	dc.l	"it  "
+	dc.l	"mod "
+	dc.l	"psid"
+	dc.l	0
+
+.modlandPrefixes
+	dc.l	"mdat"
+	dc.l	0
+
 
 .modlandLine
 	dc.b	"http://ftp.modland.com/pub/modules/",0
@@ -49191,6 +49226,109 @@ freeSearchList
 	clr.l	modamount(a5)
 .no
 	rts
+
+
+
+
+* In:
+*   a0 = acceptable postfixes
+*   a1 = acceptable prefixes
+*   a3 = name to check, ends with 10 or 0
+* Out:
+*   Z or no Z
+
+filterName:
+	pushm	d0/d6/d7
+	* From a3:
+	bsr	getPreAndPostfixFromPath
+
+.1	move.l	(a0)+,d0
+	beq.b	.2
+	cmp.l	d0,d6
+	beq.b	.ok
+	bra.b	.1
+.2
+
+.3	move.l	(a1)+,d0
+	beq.b	.4
+	cmp.l	d0,d7
+	beq.b	.ok
+	bra.b	.3
+.4
+	* not found
+	moveq	#1,d6
+.ok
+	popm	d0/d6/d7
+	* Set Z to reject, clear Z to accept
+	rts
+
+* in:
+*   a3 = path
+* out:
+*   d6 = postfix
+*   d7 = prefix   
+getPreAndPostfixFromPath
+	pushm	d0-d5/a0-a6
+	move.l	a3,a4	* start address, low bound
+.1
+	move.b	(a3)+,d0
+	beq.b	.2
+	cmp.b	#10,d0
+	bne.b	.1
+.2
+	move.l	a3,a5	* end address, high bound
+
+	* Find the start of the name 
+	move.l	a3,a0	* 
+	move.l	a4,a1	* start address for boundary check
+	jsr		nimenalku
+
+	* Build 4 chars prefix into d7
+	moveq	#0,d7
+	moveq	#4-1,d0
+.p1
+	cmp.l	a5,a0	* check for high bound
+	beq.b	.p2
+	rol.l	#8,d7
+	move.b	(a0)+,d7
+	dbf		d0,.p1
+.p2
+
+	* Build 4 chars postfix into d6
+	moveq	#0,d6
+	moveq	#4-1,d0
+	subq	#1,a3	* back up to NULL or 10
+.p3	cmp.l	a4,a3 * low bound check
+	beq.b	.p4
+	move.b	-(a3),d1
+	cmp.b	#".",d1
+	beq.b	.p4
+	ror.l	#8,d6
+	move.b	d1,d6
+	dbf		d0,.p3
+.p6
+	tst		d0
+	bmi.b	.p4
+.p5	
+	ror.l	#8,d6
+	dbf	d0,.p5
+.p4
+	ror.l	#8,d6
+
+	* Force lowercase
+	move.l	#$20202020,d0
+	or.l	d0,d6
+	or.l	d0,d7
+
+;	move.l	d6,.bob
+;	move.l	#.bob,d0
+;	move.l	d6,d1
+;	DPRINT	"post=%s %lx"
+
+	popm	d0-d5/a0-a6
+	rts
+
+;.bob	ds.b	10
 
 ***************************************************************************
 *
