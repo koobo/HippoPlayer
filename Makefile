@@ -5,6 +5,8 @@ ASM=vasmm68k_mot
 
 all: HiP HiP-debug group
 
+d: HiP-debug
+
 # Main app
 HiP: puu016.s kpl playerIds.i
 	$(ASM) $(INCLUDE) -m68000 -kick1hunks -Fhunkexe -nosym -DDEBUG=0 -o $@ $<
