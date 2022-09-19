@@ -62,7 +62,7 @@ FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_HORIZ_RESIZE = 1
 FEATURE_P61A        =   0
-FEATURE_UHC_AMINET  =   0
+FEATURE_UHC_AMINET  =   1
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -199,6 +199,7 @@ check	macro
 
 	include	dos/dos_lib.i
 	include	dos/dosextens.i
+	include	dos/var.i
 
 	include	rexx/rxslib.i
 
@@ -48871,9 +48872,22 @@ remoteSearch
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3	* output
 	lore	Dos,Execute
-	DPRINT	"Status=%ld"
+	DPRINT	"Execute status=%ld"
 
-	* Read the results file
+	* Prepare results path into stack
+	lea		-100(sp),sp
+
+	pushpea	.uhcTempDirVar(pc),d1
+	move.l	sp,d2
+	moveq	#50,d3
+	move.l	#GVF_GLOBAL_ONLY,d4
+	lob		GetVar
+	tst.l	d0
+	bpl.b	.gotVar
+	moveq	#0,d0
+	bra.b	.bail
+.gotVar
+
 	lea		.modlandResultsPath(pc),a0
  ifne FEATURE_UHC_AMINET
 	cmp.b	#SEARCH_MODLAND,d7
@@ -48881,8 +48895,20 @@ remoteSearch
 	lea		.aminetResultsPath(pc),a0
 .a
  endif
+
+	* Jump to after the variable
+	lea		(sp,d0.l),a1
+.co	move.b	(a0)+,(a1)+
+	bne.b	.co
+
+	* Read the results file
+	move.l	sp,a0
+	move.l	a0,d0
+	DPRINT	"loading %s"
  	bsr	plainLoadFile
+	lea		100(sp),sp	* get rid of results path
 	DPRINT	"Results=%lx"
+.bail
 	tst.l	d0
 	beq		.exit
 	; d0 = data
@@ -48927,8 +48953,11 @@ remoteSearch
 	* Import data
 	* This will also set l_remote and l_nameaddr
 	* to correct values for remote files.
-	lea		.filter(pc),a0
-	jsr		importModuleProgramFromDataSkipHeader
+	lea		.modlandFilter(pc),a0
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.3
+	sub.l	a0,a0
+.3	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
 
 	move.l	a3,a0
@@ -48996,8 +49025,11 @@ remoteSearch
 .searchModland
 	dc.b	"Search Modland",0
 
+.uhcTempDirVar
+	dc.b	"UHC/TEMPDIR",0
+
 .modlandResultsPath
-	dc.b	"T:modlandsearch",0
+	dc.b	"modlandsearch",0
 .modlandSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'modlandsearch "%s"',10
@@ -49006,10 +49038,10 @@ remoteSearch
 .searchAminet
 	dc.b	"Search Aminet",0
 .aminetResultsPath
-	dc.b	"T:aminetsearch",0
+	dc.b	"aminetsearch",0
 .aminetSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
-	dc.b 	'aminetsearch "%s"',10
+	dc.b 	'aminetsearch "mods/ %s"',10
 	dc.b	0
  endif
 	even
@@ -49105,17 +49137,30 @@ fetchRemoteFile:
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3	* output
 	lore	Dos,Execute
-	moveq	#1,d7 * ok
+	
+	* Check out status from the output file
+	lea		.agetOut(pc),a0
+	bsr		plainLoadFile
+	tst.l	d0
+	beq.b	.exit
+	tst.l	d1
+	beq.b	.1
+	move.l	d0,a1
+	jsr		request
+.1	move.l	d0,a0
+	jsr		freemem
 .exit
 	jsr		clearMainWindowWaitPointer
 	move.l	d7,d0
 	popm	d1-a6
 	rts
 
+.agetOut
+	dc.b	"T:agetout",0
 
 .getScript
 	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	'aget "%s" "%s" QUIET',0
+	dc.b	'aget "%sX" "%s" QUIET >T:agetout',0
 remoteExecute
 	dc.b	"execute "
 remoteScriptPath
@@ -49152,36 +49197,26 @@ getUHCAminetMirror
 	clr.l	uhcAminetMirrorPath(a5)
 	jsr		freemem
 
-	lea	.aminetMirrorPath(pc),a0
-	bsr	plainLoadFile
-	* d0 = data
-	* d1 = length
-	tst.l	d0
-	beq.b	.x
-	move.l	d1,d7
+	moveq	#100,d0
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	jsr		getmem
+	move.l	d0,uhcAminetMirrorPath(a5)
 	move.l	d0,a3
 
-	* space for header + NULL
-	moveq	#.httpE-.http+1,d0
-	add.l	d7,d0
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	jsr		getmem
-	beq.b	.x
-	move.l	d0,uhcAminetMirrorPath(a5)
-	move.l	d0,a0
+	pushpea	.aminetMirrorPath(pc),d1
+	move.l	d0,d2
+	addq.l	#.httpE-.http,d2
+	moveq	#90,d3
+	move.l	#GVF_GLOBAL_ONLY,d4
+	lore	Dos,GetVar
+	tst.l	d0
+	bmi.b	.x
 
 	lea		.http(pc),a1
-.c1	move.b	(a1)+,(a0)+
-	bne.b	.c1
-	subq	#1,a0
-	move.l	a3,a1
-	subq	#1,d7
-.c2	move.b	(a1)+,(a0)+
-	dbf		d7,.c2
-	clr.b	(a0)
-
-	move.l	a3,a0
-	jsr		freemem
+	moveq	#.httpE-.http,d0
+.c1	move.b	(a1)+,(a3)+
+	dbf	d0,.c1
+	
  if DEBUG
 	move.l	uhcAminetMirrorPath(a5),d0
 	DPRINT	"UHC aminet mirror=%s"
@@ -49190,11 +49225,11 @@ getUHCAminetMirror
 	popm	d1-a6
 	rts
 
-.http	dc.b	"http://",0
+.http	dc.b	"http://"
 .httpE
 
 .aminetMirrorPath
-	dc.b	"ENV:UHC/AMINETMIRROR",0
+	dc.b	"UHC/AMINETMIRROR",0
 	even
 
 deinitUHC
