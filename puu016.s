@@ -49041,7 +49041,7 @@ fetchRemoteFile:
 
 .getScript
 	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	'aget %s "%s" QUIET',0
+	dc.b	'aget "%s" "%s" QUIET',0
 remoteExecute
 	dc.b	"execute "
 remoteScriptPath
