@@ -1027,7 +1027,9 @@ kanavatvarattu	rs	1	* 0: ei varattu, ei-0: varattu
 
 oldst		rs.b	1	* 0: pt modi, ~0: old soundtracker modi
 sidflag		rs.b	1	* songnumberin muuttamiseen
-			rs.b	1
+* Set to true if the last loaded module is a remote module.
+* Path is in "modulefilename" as usual.
+lastLoadedModuleWasRemote    rs.b    1
 
 kelausnappi	rs.b	1	* 0: jos ei cia kelausta
 kelausvauhti	rs.b	1	* 1: 2x, 2: 4x
@@ -17435,6 +17437,7 @@ doPrintNames
 	move.b	#" ",(a1)+
 	move.b	#"-",(a1)+
 	move.b	#" ",(a1)+
+	bra.b	.unescape
 .noSlsh
 	move.b	d0,(a1)+
 	bne.b	.unescape
@@ -27355,6 +27358,7 @@ loadmodule:
 	* do determine what to show in the infobox, and
 	* also with the PS3M configuration file.
 	move.l	l_nameaddr(a3),solename(a5)
+	move.b	l_remote(a3),lastLoadedModuleWasRemote(a5)
 	* Check if a remote file
 	beq		.doLoadModule
 
@@ -30043,6 +30047,11 @@ tee_modnimi:
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	bne.b	.arc				* otetaan pelkkä filename
 	move.l	solename(a5),a0
+	tst.b	lastLoadedModuleWasRemote(a5)
+	beq.b	.copy
+.slash
+	cmp.b	#"/",(a0)+
+	bne.b	.slash
 	bra.b	.copy
 .arc
 	* This contains info from the last archive loaded file 
