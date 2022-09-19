@@ -49200,8 +49200,9 @@ COMB_WEIGHT = 64
 *   d7 = number of items to sort
 combSortNodeArray
 	move.l	d7,d0
-	moveq	#COMB_WEIGHT,d1
-	jsr		mulu_32
+	;moveq	#COMB_WEIGHT,d1
+	;jsr		mulu_32
+	lsl.l	#6,d0  	* x64
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
 	jsr		getmem
 	move.l	d0,-(sp)	 * store for later freemem
@@ -49217,7 +49218,7 @@ combSortNodeArray
 	move.l	(a4),a3
 	* weight address at a5, store it to the empty slot beside the node pointer
 	move.l	a5,4(a4)
-	* filln weight
+	* fill in weight
 	move.l	a5,a0
 
 	moveq	#COMB_WEIGHT-1,d0
@@ -49301,7 +49302,6 @@ combSortNodeArray
 	move.l	d1,d0
 	* x8 - SORT_ELEMENT_LENGTH
 	lsl.l	#3,d0	
-	move.l	d0,a2	* index
 	lea		(a1,d0.l),a2
 
 	MoveQ	#0,d0		; d0=Switch
@@ -49344,8 +49344,7 @@ combSortNodeArray
 
 	* swap 8 bytes entry [node address, weight address]
 	* Advance indexes
-	move.l	(a1),d3
-	move.l	4(a1),d6
+	movem.l	(a1),d3/d6
 	move.l	(a2),(a1)+
 	move.l	4(a2),(a1)+
 	move.l	d3,(a2)+
