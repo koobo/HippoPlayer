@@ -1367,9 +1367,7 @@ listSelectorRememberPtr		rs.l	1
 
 * UHC aminet mirror path, if this is NULL, there's no UHC
 * installed. Should be freed on exit.
- ifne FEATURE_UHC_AMINET
 uhcAminetMirrorPath			rs.l	1
- endif
 uhcAvailable				rs.b	1	
 							rs.b	1
 
@@ -8220,13 +8218,13 @@ nappuloita
 	jsr		modlandSearch
 	bra	.ee
 .3
- ifne FEATURE_UHC_AMINET
-	cmp.b	#$20,d3	 	* a + control
- 	bne.b	.4
-	jsr		aminetSearch
-	bra	.ee
-.4
- endif
+; ifne FEATURE_UHC_AMINET
+;	cmp.b	#$20,d3	 	* a + control
+; 	bne.b	.4
+;	jsr		aminetSearch
+;	bra	.ee
+;.4
+; endif
 	
 
 .noControl
@@ -9171,19 +9169,19 @@ rsearchfuncs
 	beq		find_continue
 	subq	#1,d0
 	beq.b	.modland
- ifne FEATURE_UHC_AMINET
 	subq	#1,d0
 	beq.b	.aminet
- endif
+	subq	#1,d0
+	beq.b	.modules
 .skip
 	rts
 
 .modland
 	jmp	modlandSearch
- ifne FEATURE_UHC_AMINET
 .aminet
 	jmp	aminetSearch
- endif
+.modules
+	jmp	modulesSearch
 
 * in:
 *   d3 = index to check
@@ -9201,16 +9199,17 @@ rsearchfuncs
 .options
 	* max width, rows
  ifne FEATURE_UHC_AMINET
-	dc.b	24,4
+	dc.b	24,5
  else
-	dc.b	24,3
+	dc.b	24,4
  endif
 	dc.b	"Search list    [F]      ",0
 	dc.b	"Search next    [SHIFT+F]",0
 	dc.b	"Search Modland [CTRL+M] ",0
  ifne FEATURE_UHC_AMINET
- 	dc.b	"Search Aminet  [CTRL+A] ",0
+ 	dc.b	"Search Aminet           ",0
  endif
+	dc.b	"Search Modules.pl       ",0
 
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
@@ -48781,17 +48780,23 @@ layoutButtonRow
 
 SEARCH_MODLAND = 0
 SEARCH_AMINET = 1
+SEARCH_MODULES = 2
 
 modlandSearch
 	DPRINT	"modlandSearch"
 	moveq	#SEARCH_MODLAND,d7
-
- ifne FEATURE_UHC_AMINET
 	bra.b	remoteSearch
+
 aminetSearch
 	DPRINT	"aminetSearch"
 	moveq	#SEARCH_AMINET,d7
- endif
+	bra.b	remoteSearch
+
+modulesSearch
+	DPRINT	"aminetModules"
+	moveq	#SEARCH_MODULES,d7
+;	bra.b	remoteSearch
+
 
 * Requests a search pattern from the user,
 * then creates an executable shell script to launch
@@ -48816,13 +48821,16 @@ remoteSearch
 	; d0 = max chars
 	moveq	#40,d0
 	; a2 = requester title
+
 	lea		.searchModland(pc),a2
- ifne FEATURE_UHC_AMINET
-	cmp.b	#SEARCH_MODLAND,d7
+ 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.5
 	lea		.searchAminet(pc),a2
+	cmp.b	#SEARCH_AMINET,d7
+	beq.b	.5
+	lea		.searchModules(pc),a2
 .5
- endif
+ 
 
 	; a3 = rtReqInfo structure or null
 	sub.l	a3,a3
@@ -48837,12 +48845,14 @@ remoteSearch
 
 	* Prepare script into desbuf(a5)
 	lea		.modlandSearchCmd(pc),a0
- ifne FEATURE_UHC_AMINET
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.1
 	lea		.aminetSearchCmd(pc),a0
+	cmp.b	#SEARCH_AMINET,d7
+	beq.b	.1
+	lea		.modulesSearchCmd(pc),a0
 .1
- endif
+
  	move.l	sp,d0		* search word
 	jsr		desmsg
 
@@ -48865,10 +48875,6 @@ remoteSearch
 	bmi		.exit
 
 	pushpea	remoteExecute(pc),d1
- if DEBUG
-	move.l	d1,d0
-	DPRINT	"%s"
- endif
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3	* output
 	lore	Dos,Execute
@@ -48889,12 +48895,13 @@ remoteSearch
 .gotVar
 
 	lea		.modlandResultsPath(pc),a0
- ifne FEATURE_UHC_AMINET
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.a
 	lea		.aminetResultsPath(pc),a0
+	cmp.b	#SEARCH_AMINET,d7
+	beq.b	.a
+	lea		.modulesResultsPath(pc),a0
 .a
- endif
 
 	* Jump to after the variable
 	lea		(sp,d0.l),a1
@@ -48934,9 +48941,14 @@ remoteSearch
 	* to each line.
 	pushpea	.modlandLine(pc),d6
 	moveq	#.modlandLineE-.modlandLine,d4
- ifne FEATURE_UHC_AMINET
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.2
+	cmp.b	#SEARCH_AMINET,d7
+	beq.b	.aa
+	pushpea	.modulesLine(pc),d6
+	moveq	#.modulesLineE-.modulesLine,d4	
+	bra.b	.2
+.aa
 	* Aminet mirror is populated after aminetsearch has been done,
 	* so get it here.
 	bsr		getUHCAminetMirror
@@ -48949,7 +48961,9 @@ remoteSearch
 	move.l	a0,d4
 	sub.l	d6,d4 * string length in d4
 .2
- endif
+
+
+
 	* Import data
 	* This will also set l_remote and l_nameaddr
 	* to correct values for remote files.
@@ -49022,6 +49036,12 @@ remoteSearch
 	dc.b	"http://ftp.modland.com/pub/modules/",0
 .modlandLineE
 
+
+.modulesLine
+	dc.b	"http://www.modules.pl/",0
+.modulesLineE
+
+
 .searchModland
 	dc.b	"Search Modland",0
 
@@ -49034,7 +49054,6 @@ remoteSearch
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'modlandsearch "%s"',10
 	dc.b	0
- ifne FEATURE_UHC_AMINET
 .searchAminet
 	dc.b	"Search Aminet",0
 .aminetResultsPath
@@ -49043,8 +49062,17 @@ remoteSearch
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'aminetsearch "mods/ %s"',10
 	dc.b	0
- endif
-	even
+
+
+.searchModules
+	dc.b	"Search Modules.pl",0
+.modulesResultsPath
+	dc.b	"modulessearch",0
+.modulesSearchCmd
+	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
+	dc.b 	'modulessearch "%s"',10
+	dc.b	0
+ even
 
 * Set list node remote type and
 * set l_nameaddr to be proper for showing to user.
@@ -49160,7 +49188,7 @@ fetchRemoteFile:
 
 .getScript
 	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	'aget "%sX" "%s" QUIET >T:agetout',0
+	dc.b	'aget "%s" "%s" QUIET >T:agetout',0
 remoteExecute
 	dc.b	"execute "
 remoteScriptPath
@@ -49190,7 +49218,7 @@ initializeUHC
 .uhc	dc.b	"ENV:UHCBIN",0
  even
 
-  ifne FEATURE_UHC_AMINET
+
 getUHCAminetMirror
 	pushm	d1-a6
 	move.l	uhcAminetMirrorPath(a5),d0
@@ -49217,10 +49245,6 @@ getUHCAminetMirror
 .c1	move.b	(a1)+,(a3)+
 	dbf	d0,.c1
 	
- if DEBUG
-	move.l	uhcAminetMirrorPath(a5),d0
-	DPRINT	"UHC aminet mirror=%s"
- endif
 .x
 	popm	d1-a6
 	rts
@@ -49235,14 +49259,7 @@ getUHCAminetMirror
 deinitUHC
 	move.l	uhcAminetMirrorPath(a5),a0
 	jmp		freemem
- else
-
-deinitUHC
-	rts
-
- endif
-
-
+ 
 freeSearchList
 	move.l	(a5),a6		* execbase
 	lea	searchResultsListHeader(a5),a2
