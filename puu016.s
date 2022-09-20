@@ -22958,9 +22958,15 @@ s_newWindow                   rs.b       enw_SIZEOF
 s_scopeWindowBase             rs.l       1
 s_rastport3                   rs.l       1	
 s_userport3                   rs.l       1
+* Draw raster buffer address
 s_buffer0                     rs.l       1
+* Buffer width
 s_buffer0w                    rs.w       1
+* Buffer height rasterlines
 s_buffer0h                    rs.w       1
+* Set to true if draw buffer is in CHIP
+s_bufferIsChip                rs.b       1
+                              rs.b       1
 s_quadmode                    rs.b       1
 s_quadmode2                   rs.b       1
 s_scopeDrawAreaWidth		rs.w 	1
@@ -24113,7 +24119,7 @@ initScopeBitmaps
 	move	d1,s_buffer0h(a4)
 	lore	GFX,AllocRaster
 	move.l	d0,s_buffer0(a4)
-	beq.b	.memError 
+	beq		.memError 
 
  	move.l	d0,a0
 	move.l	a0,s_buffer0(a4)
@@ -24161,6 +24167,12 @@ initScopeBitmaps
 	add.l	d0,s_draw1(a4)
 	add.l	d0,s_draw2(a4)
 
+	move.l	s_buffer0(a4),a1
+	lore	Exec,TypeOfMem
+	btst	#MEMB_CHIP,d0
+	sne		s_bufferIsChip(a4)
+
+	moveq	#1,d0 * ok
 .memError
 	rts
 
@@ -24255,7 +24267,7 @@ drawScopeWindowDecorations
 	add	windowtop(a5),d1
 	move.l	d0,d2
 	move.l	d1,d3
-	lob	ClipBlit
+	lore	GFX,ClipBlit
 	;bra.b	.drawBox 
 
 .drawBox
@@ -24802,6 +24814,9 @@ drawScope:
 	* s_draw2 = clear this buffer
 
 	* clear draw area
+	tst.b	s_bufferIsChip(a4)
+	beq.b	.cpuClear
+
 	move.l	_GFXBase(a5),a6
 	lob	OwnBlitter
 	lob	WaitBlit
@@ -24822,6 +24837,21 @@ drawScope:
 
 	* Continue clearing while scope is drawn into the other buffer
 	lob	DisownBlitter
+	bra.b	.c1
+
+.cpuClear
+	move.l	s_draw2(a4),a0
+	move	s_scopeDrawAreaHeight(a4),d0
+	mulu	s_scopeDrawAreaModulo(a4),d0
+	lsr.l	#4,d0
+	subq	#1,d0
+.c2	clr.l	(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	dbf		d0,.c2
+.c1
+
 
 * Scope performance measurements
 * Disaster is obvious, playing the first 40 seconds
@@ -25035,6 +25065,9 @@ drawScope:
 
 
 mirrorfill
+	tst.b	s_bufferIsChip(a4)
+	beq.b	.cpuMirrorFill
+
 	lore	GFX,OwnBlitter
 	lob	WaitBlit
 
@@ -25063,6 +25096,36 @@ mirrorfill
 
 	lob	DisownBlitter
 	rts
+
+.cpuMirrorFill
+	moveq	#31,d1
+	bsr.b	cpuVerticalFill
+	move.l	s_draw1(a4),a0
+	lea		63*40(a0),a1
+	moveq	#32-1,d1
+.y	moveq	#320/64-1,d0
+.x	move.l	(a0)+,(a1)+
+	move.l	(a0)+,(a1)+
+	dbf		d0,.x
+	lea		-80(a1),a1
+	dbf		d1,.y
+	rts
+
+* In:
+*   d1 = height
+cpuVerticalFill
+	move.l	s_draw1(a4),a0
+	lea		40(a0),a1 * target line
+	mulu	#320/64,d1
+	subq	#1,d1
+.loop
+	move.l	(a0)+,d2
+	eor.l	d2,(a1)+
+	move.l	(a0)+,d2
+	eor.l	d2,(a1)+
+	dbf		d1,.loop
+	rts
+
 
 
 * In: 
@@ -47978,6 +48041,10 @@ runSpectrumScope
 * A500 average = 1ms
 
 	* Vertical fill
+	
+	tst.b	s_bufferIsChip(a4)
+	beq.b	.cpuFill
+
 	lore	GFX,OwnBlitter
 
 	move.l	s_draw1(a4),a0
@@ -48005,6 +48072,10 @@ runSpectrumScope
 ;	bsr.b	drawScales
 	
 .x	rts
+
+.cpuFill
+	moveq	#65,d1
+	jmp		cpuVerticalFill
 
 * Test visualization
  REM
