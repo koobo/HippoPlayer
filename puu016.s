@@ -27425,29 +27425,42 @@ loadmodule:
 	* Check if a remote file
 	beq		.doLoadModule
 
-	move.b	d0,d7	* doublebuffering flag
+	move.b	d0,d6	* doublebuffering flag
+	moveq	#lod_remote,d7	* status: fail
+
 	lea	-200(sp),sp	* space for output path
 	move.l	sp,a1
 	lea	l_filename(a3),a0	
 	jsr	fetchRemoteFile
-  if DEBUG
-	move.l	sp,d0
-	DPRINT	"Remote loaded: %s"
-  endif
-
+	DPRINT	"fetchRemote1 %ld"
+	tst.l	d0
+	bne		.ok1
+	move.l	d7,d0
+	bsr		loaderr
+	bsr.w	inforivit_clear
+	bra		.skip
+.ok1
+	
 	* TFMX special case!
 	* See if smpl can be loaded, store the output 
 	* path here.
 	lea		100(sp),a1
 	bsr		.loadTFMXsamples
-
+	tst.l	d0
+	bne.b	.ok2
+	move.l	d7,d0
+	bsr		loaderr
+	bsr.w	inforivit_clear
+	bra		.skip2
+.ok2
+	
 	* Then do ordinary load, this will also pick 
 	* the TFMX smpl file in the temp dir.
 	move.l	sp,a0	* path to load from
-	move.b	d7,d0   * double buffering flag
+	move.b	d6,d0   * double buffering flag
 	bsr		.doLoadModule
 	move.l	d0,d7	* save status
-
+.skip2
 	* Delete TFMX smpl temp file if it is there
 	lea		100(sp),a0
 	tst.b	(a0)
@@ -27643,7 +27656,7 @@ loadmodule:
 	lea	modulelength(a5),a2
 	moveq	#0,d1			* kommentti talteen
 	bsr.w	loadfile
-	move.l	d0,-(sp)
+	move.l	d0,-(sp)		* NULL or lod_??? code
 	clr.b	loading(a5)		* lataus loppu
 
 	clr.b	songover(a5)	* varmistuksia, hölmöo
@@ -27731,7 +27744,7 @@ loadmodule:
 .err	
 	tst.b	contonerr(a5)		* Continue on error?
 	bne.b	.iik
-loaderr
+loaderr:
 	cmp	#lod_xpkerr,d0
 	beq.w	xpkvirhe
 	cmp	#lod_xfderr,d0
@@ -27746,6 +27759,7 @@ loaderr
 	add	(a1),a1
 	bra.w	request			* requesteri
 
+* Table to map lod_??? error codes
 .ertab2	dr	openerror_t
 	dr	readerror_t
 	dr	memerror_t
@@ -27765,6 +27779,7 @@ loaderr
 	dr	error_t
 	dr	extract_t
 	dr  readerror_t  * loadseg failure 
+	dr	remoteerror_t 
 
 cryptederror_t
 ;	dc.b	"File is encrypted!",0
@@ -27807,6 +27822,8 @@ windowerr_t	dc.b	"Couldn't to open window!",0
 ;extract_t	dc.b	"Extraction error!",0
 extract_t	dc.b	"Extraction error!",10
 		dc.b	"No known files found in archive.",0
+remoteerror_t
+	dc.b	"Error downloading file!",0
  even	
 
 
@@ -27899,6 +27916,7 @@ lod_openerr2	=	-16
 lod_xfderr	=	-17
 lod_extract	=	-18
 lod_loadsegfail = -19
+lod_remote		= -20
 
 * Load file variant 
 * - Skips XPK identification
@@ -27917,24 +27935,34 @@ loadfileStraight:
 
 	pushm	d1-a6
 	lea		-100(sp),sp
+	moveq	#0,d7	* status ok
 
 	move.l	sp,d1
 	pushm	d0/a1
 	move.l	d1,a1	* space for target file path
 	jsr		fetchRemoteFile
-	DPRINT	"remote loaded %ld"
+	DPRINT	"fetchRemote2 %ld"
+	moveq	#0,d7 * status: ok
+	tst.l	d0
+	bne.b	.fetchOk
+	moveq	#lod_remote,d7 * status: fail
+.fetchOk
 	popm	d0/a1
-	
+
+	tst.l	d7
+	bne.b	.remoteErr
+
 	move.l	sp,a0
 	* a0 is now the downloaded file path, 
 	* parameters unchanged
 	bsr.b	.local
 
-	move.l	d0,d7
+.remoteErr
+	move.l	d0,d7	* save status
 	move.l	sp,d1
 	lore	Dos,DeleteFile
 
-	move.l	d7,d0
+	move.l	d7,d0	* restore status
 	lea		100(sp),sp
 	popm	d1-a6
 	rts
@@ -47661,7 +47689,7 @@ plainLoadFile:
 *  d0 = data length
 * out: 
 *  d0 = Written bytes or -1 if error
-plainSaveFile
+plainSaveFile:
 	pushm	d1-a6
 	moveq	#-1,d7
 	move.l	a1,d4
@@ -49178,15 +49206,15 @@ configRemoteNode
 *   a0 = url
 *   a1 = buffer for output file path
 * out:
-*   d0 = true: ok, false: could not save temp script file
+*   d0 = true: ok, false: some error
 fetchRemoteFile:
 	pushm	d1-a6
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"fetchRemoteFile: %s"
  endif
-	moveq	#0,d7	* status
-
+	moveq	#0,d7	* status: fail
+	
 	* Temporary target file path, the last part of the url
 	move.l	a0,a2
 .end
@@ -49226,17 +49254,24 @@ fetchRemoteFile:
 	dbeq    d0,.c
  	not.l   d0
 
+
 	lea		remoteScriptPath(pc),a0
 	lea		desbuf(a5),a1
 	bsr		plainSaveFile
+	moveq	#-1,d0
 	tst.l	d0
-	bmi		.exit
+	bmi		.exit * can't save temp file
 
 	pushpea	remoteExecute(pc),d1
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3	* output
 	lore	Dos,Execute
-	
+	* d0 = true if was able to run the script
+	move.l	d0,d7
+	beq.b	.exit
+	* Set status to ok
+	moveq	#1,d7 
+
 	* Check out status from the output file
 	lea		.agetOut(pc),a0
 	bsr		plainLoadFile
@@ -49244,8 +49279,24 @@ fetchRemoteFile:
 	beq.b	.exit
 	tst.l	d1
 	beq.b	.1
-	move.l	d0,a1
+	* Mangle a null terminated line changed error msg, horrible
+	lea		-200(sp),sp
+	move.l	sp,a1
+	move.l	d0,a0
+	moveq	#60,d2
+.e	move.b	(a0)+,(a1)+
+	subq	#1,d2
+	bne.b	.f
+	move.b	#10,(a1)+
+	moveq	#60,d2
+.f	subq	#1,d1
+	bne.b	.e
+	clr.b	(a1)
+	move.l	sp,a1
 	jsr		request
+	lea		200(sp),sp
+	* Status to fail
+	moveq	#0,d7
 .1	move.l	d0,a0
 	jsr		freemem
 .exit
@@ -49276,17 +49327,18 @@ initializeUHC
 	move.b	#4,1(a0)
 	rts
 .go
-	pushpea	.uhc(pc),d1
-	moveq	#ACCESS_READ,d2
-	lore  	Dos,Lock
-	move.l	d0,d1
-	beq.b	.nope	
-	st		uhcAvailable(a5)
-	lob		UnLock
-.nope
+	lea		-30(sp),sp
+	pushpea	.uhcBinVar(pc),d1
+	move.l	sp,d2
+	moveq	#29,d3
+	move.l	#GVF_GLOBAL_ONLY,d4
+	lore	Dos,GetVar
+	lea		30(sp),sp
+	tst.l	d0
+	spl		uhcAvailable(a5)
 	rts
 
-.uhc	dc.b	"ENV:UHCBIN",0
+.uhcBinVar	dc.b	"UHCBIN",0
  even
 
 
