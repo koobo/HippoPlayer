@@ -49258,7 +49258,6 @@ fetchRemoteFile:
 	lea		remoteScriptPath(pc),a0
 	lea		desbuf(a5),a1
 	bsr		plainSaveFile
-	moveq	#-1,d0
 	tst.l	d0
 	bmi		.exit * can't save temp file
 
@@ -49344,7 +49343,7 @@ initializeUHC
 
 getUHCAminetMirror
 	pushm	d1-a6
-	move.l	uhcAminetMirrorPath(a5),d0
+	move.l	uhcAminetMirrorPath(a5),a0
 	clr.l	uhcAminetMirrorPath(a5)
 	jsr		freemem
 
