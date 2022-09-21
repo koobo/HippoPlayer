@@ -10,11 +10,14 @@
 ;ASM-ONE 1.20 or newer is required unless disable020 is set to 1, when
 ;at least 1.09 (haven't tried older) is sufficient.
 
+ ifnd DEBUG
 DEBUG	=	0
+ endif
+ 
  ifnd TEST
 TEST 	= 	0
  endif
- 
+
  ifnd __VASM
    ifeq TEST
       auto	wo p:pl/bin/ps3m\
