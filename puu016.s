@@ -17429,17 +17429,22 @@ doPrintNames
 	tst.b	l_remote(a3)
 	beq.b	.local
 	move.l	a0,d0
-	* Remote entries: replace /
+	* Remote entries formatting
 	move.l	sp,a1
 .unescape
 	move.b	(a0)+,d0
-	cmp.b	#"/",d0
-	bne.b	.noSlsh
-	move.b	#" ",(a1)+
-	move.b	#"-",(a1)+
+	cmp.b	#"_",d0
+	bne.b	.noU
 	move.b	#" ",(a1)+
 	bra.b	.unescape
-.noSlsh
+	;move.b	#":",(a1)+
+	;move.b	#" ",(a1)+
+;	move.b	#" ",(a1)+
+;	move.b	#"-",(a1)+
+;	move.b	#" ",(a1)+
+;	bra.b	.unescape
+;.noSlsh
+.noU
 	move.b	d0,(a1)+
 	bne.b	.unescape
 
@@ -49276,6 +49281,17 @@ configRemoteNode
 	bne.b	.findEnd2
 
 	moveq	#2-1,d0
+
+	* l_filename is odd
+	cmp.l	#"modu",11(a2)
+	bne.b	.1
+	cmp.l	#"les.",15(a2)
+	bne.b	.1
+	* For modules.pl take the last file part only to avoid redundancy
+	* "captain/captain_-_space_debris"
+	moveq	#1-1,d0
+.1
+
 .findSlash
 	cmp.l	a1,a2
 	beq.b	.break * safety check
