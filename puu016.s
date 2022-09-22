@@ -46042,6 +46042,19 @@ _deliDataSize		rs.b	0
 	* Grab path and file parts
 	* Name without path to A1
 	move.l	l_nameaddr(a3),a1
+
+	tst.b	l_remote(a3)
+	beq.b	.notRemote
+	* Remote l_nameaddr may contain an extra
+	* path part: part1/part2.ext. Skip this
+	* as it will confuse file loading later.
+.r1	tst.b	(a1)+
+	bne.b	.r1
+.r2	cmp.b	#"/",-(a1)
+	bne.b	.r2
+	addq	#1,a1
+.notRemote
+
 	move.l	a1,dtg_FileArrayPtr(a0)
 	* Full path to A2
 	lea	l_filename(a3),a2
