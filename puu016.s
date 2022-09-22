@@ -11762,7 +11762,8 @@ importModuleProgramFromData:
 	move.l	a6,d3
 	beq.b	.accepted
 	jsr		(a6)
-	beq.b	.accepted
+	tst.l	d0
+	bne.b	.accepted
 .skipToNext
 	* Skip to next entry
 	cmp.l	d5,a3
@@ -49108,39 +49109,113 @@ remoteSearch
 * In:
 *   a3 = name to check, ends with 10 or 0
 * Out:
-*   Z or no Z
+*   d0 = true if ok, false otherwise
 .modlandFilter
 	pushm	a0/a1
 	lea		.modlandPostfixes(pc),a0
 	lea		.modlandPrefixes(pc),a1
 	bsr		filterName
+
+ if DEBUG
+	tst.l	d0
+	bne.b	.ok
+	DPRINT	"->REJECTED"
+.ok
+ endif
+
 	popm	a0/a1
 	rts
 
-* adcs; 4 char pfix?
 .modlandPostfixes
+	dc.l	"adsc"
 	dc.l	"ahx "
-	dc.l	"thx "
+	dc.l	"aon "
 	dc.l	"aps "
 	dc.l	"avp "
-	dc.l	"aon "
-	dc.l	"adsc"
-	dc.l	"bp  "
 	dc.l	"bd  "
-	dc.l	"cm  "
-	dc.l	"dz  "
-	dc.l	"dl  "
-	dc.l	"dln "
+	dc.l	"bp  "
 	dc.l	"bp3 "
 	dc.l	"bss "
-	dc.l	"xm  "
+	dc.l	"cm  "
+	dc.l	"cus "
+	dc.l	"dbm0"
+	dc.l	"digi"
+	dc.l	"dl  "
+	dc.l	"dln "
+	dc.l	"dm  "
+	dc.l	"dm2" 
+	dc.l	"dmu "
+	dc.l	"dum "
+	dc.l	"dw  "
+	dc.l	"dz  "
+	dc.l	"ea  "
+	dc.l	"fc  "
+	dc.l	"fp  "
+	dc.l	"fred"
+	dc.l	"ftm "
+	dc.l	"glue"
+	dc.l	"gmc "
+	dc.l	"hip "
+	dc.l	"hip7"
+	dc.l	"hipc"
+	dc.l	"is  "
+	dc.l	"is20"
 	dc.l	"it  "
+	dc.l	"jam "
+	dc.l	"jb  "
+	dc.l	"jd  "
+	dc.l	"jpo "
+	dc.l	"jt  "
+	dc.l	"kh  "
+	dc.l	"ma  "
+	dc.l	"mc  "
+	dc.l	"mk2 "
+	dc.l	"ml  "
+	dc.l	"mm8 "
+	dc.l	"mmd0"
+	dc.l	"mmd1"
+	dc.l	"mmd2"
+	dc.l	"mmd3"
+	dc.l	"mmdc"
 	dc.l	"mod "
+	dc.l	"mod "
+	dc.l	"mon "
+	dc.l	"mtm "
+	dc.l	"mug "
+	dc.l	"mxtx"
+	dc.l	"okta"
+	dc.l	"osp "
+	dc.l	"prt "
 	dc.l	"psid"
+	dc.l	"rh  "
+	dc.l	"s3m "
+	dc.l	"sa  "
+	dc.l	"sc  "
+	dc.l	"sfx "
+	dc.l	"sid "
+	dc.l	"sid2"
+	dc.l	"smod"
+	dc.l	"sng "
+	dc.l	"soc "
+	dc.l	"sog "
+	dc.l	"spn "
+	dc.l	"sqt "
+	dc.l	"sun "
+	dc.l	"tcb "
+	dc.l	"tf  "
+	dc.l	"thx "
+	dc.l	"vss "
+	dc.l	"wb  "
+	dc.l    "tme "
+	dc.l	"xm  "
 	dc.l	0
+;todo: synmod
 
 .modlandPrefixes
 	dc.l	"mdat"
+	dc.l	"jpn."
+	dc.l	"mcr."
+	dc.l	"qts."
 	dc.l	0
 
 
@@ -49425,27 +49500,28 @@ freeSearchList
 *   Z or no Z
 
 filterName:
-	pushm	d0/d6/d7
+	pushm	d1/d6/d7
 	* From a3:
 	bsr	getPreAndPostfixFromPath
-
-.1	move.l	(a0)+,d0
+	moveq	#1,d0 * resut: true
+	
+.1	move.l	(a0)+,d1
 	beq.b	.2
-	cmp.l	d0,d6
+	cmp.l	d1,d6
 	beq.b	.ok
 	bra.b	.1
 .2
 
-.3	move.l	(a1)+,d0
+.3	move.l	(a1)+,d1
 	beq.b	.4
-	cmp.l	d0,d7
+	cmp.l	d1,d7
 	beq.b	.ok
 	bra.b	.3
 .4
-	* not found
-	moveq	#1,d6
+	* result: false, not found
+	moveq	#0,d0
 .ok
-	popm	d0/d6/d7
+	popm	d1/d6/d7
 	* Set Z to reject, clear Z to accept
 	rts
 
