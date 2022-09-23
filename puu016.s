@@ -16183,7 +16183,7 @@ rfont
 	bra.w	pfont
 
 
-.tit	dc.b	"Select main font",0
+.tit	dc.b	"Select secondary font",0
  even
 
 fontreqtags
@@ -16273,7 +16273,7 @@ rListFont
 	bra.b	pListFont
 
 
-.tit	dc.b	"Select list font",0
+.tit	dc.b	"Select main window font",0
  even
 
 listfontreqtags
@@ -18283,7 +18283,7 @@ siisti_nimi
 	and.b	#$df,3(a0)
 .m	rts
 
-
+	printt	"todo: align name and type for extra nicety"
 
 tyyppi1_t	dc.b	"Name: %s",10
 		dc.b	"Type: %s",0
