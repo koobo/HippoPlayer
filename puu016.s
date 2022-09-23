@@ -16274,7 +16274,7 @@ rListFont
 listfontreqtags
 	dc.l	RTFO_Flags,FREQF_NOBUFFER
 	dc.l	RTFO_SampleHeight,8
-	dc.l	RTFO_MaxHeight,30
+	dc.l	RTFO_MaxHeight,20 * Not too large to overflow the button gadgets
 	dc.l	RTFO_MinHeight,6
 	dc.l	RT_TextAttr,text_attr
 .pubScreenTag
@@ -49017,6 +49017,9 @@ layoutGadgetsHorizontal
 	; center	
 	move	gg_Width(a1),d3
 	sub	d0,d3
+	bpl.b	.p
+	moveq	#0,d3
+.p
 	lsr	#1,d3
 	move	d3,it_LeftEdge(a2)
 	
