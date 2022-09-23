@@ -1371,6 +1371,23 @@ uhcAminetMirrorPath			rs.l	1
 uhcAvailable				rs.b	1	
 							rs.b	1
 
+infoBoxOrigTopEdge			rs.w	1
+infoBoxOrigHeight			rs.w	1
+buttonRow1OrigTopEdge		rs.w	1
+buttonRow1OrigHeight		rs.w	1
+buttonRow2OrigTopEdge		rs.w	1
+buttonRow2OrigHeight		rs.w	1
+fileBoxOrigTopEdge			rs.w	1	
+
+infoBoxTopEdge			rs.w	1
+infoBoxHeight			rs.w	1
+buttonRow1TopEdge		rs.w	1
+buttonRow1Height		rs.w	1
+buttonRow2TopEdge		rs.w	1
+buttonRow2Height		rs.w	1
+fileBoxTopEdge			rs.w	1	
+
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -2961,7 +2978,9 @@ main
 
 	lea	banner_t(pc),a0			* registered to..
 	moveq	#11+WINX,d0
-	moveq	#18+WINY,d1
+	;moveq	#18+WINY,d1
+	move	infoBoxTopEdge(a5),d1
+	addq	#7,d1
 	bsr.w	print
 
 	; ei annoytekstia vaikkei rekisteroity
@@ -4310,6 +4329,33 @@ avaa_ikkuna:
 	bsr.w	getscreeninfo
 	bne.w	.opener
 
+	tst		infoBoxOrigTopEdge(a5)
+	bne.b	.1
+	* Store original dimensions 
+	move	gadgetPlayButton+gg_TopEdge,buttonRow1TopEdge(a5)
+	move	#10,buttonRow1Height(a5)
+	move	gadgetPrefsButton+gg_TopEdge,buttonRow2TopEdge(a5)
+	move	#10,buttonRow2Height(a5)
+	move	#11+WINY,infoBoxOrigTopEdge(a5)
+	move	#28-11,infoBoxOrigHeight(a5)
+	;move	#8+63+WINY,fileBoxOrigTopEdge(a5)
+	move	#63+WINY,fileBoxOrigTopEdge(a5)
+
+	* Original WINSIZY: 136
+	* Added to this to get total height:
+	* - windowtop
+	* - boxy
+	* Boxy is calculated in setboxy(), in loadprefs()
+	* or in setListFont().
+
+	;add	#5,infoBoxOrigTopEdge(a5)
+
+	move	infoBoxOrigTopEdge(a5),infoBoxTopEdge(a5)
+	move	infoBoxOrigHeight(a5),infoBoxHeight(a5)
+	move	fileBoxOrigTopEdge(a5),fileBoxTopEdge(a5)
+	;move	fileBoxOrigHeight(a5),fileBoxHeight(a5)
+.1
+
 	; Button config, may adjust WINSIZY
 	jsr	configureMainWindowButtonSizes
 	; Update into window structure
@@ -4348,6 +4394,12 @@ avaa_ikkuna:
 	endb	a0
 
 	move	WINSIZY(a5),d0
+
+	; Adjust
+	add		fileBoxTopEdge(a5),d0
+	sub		#63+WINY,d0
+	;add		#10,d0
+
 	add	boxy(a5),d0
 	add	windowtop(a5),d0
 	move	d0,wsizey-winstruc(a0)	* Ison koko ja paikka
@@ -4773,6 +4825,9 @@ getscreeninfo
 
 	endb	a0
 
+	* Move gadgets down by d0,
+	* right by d1
+
 	lea	gadgets,a0
 	bsr.b	.hum
 	lea	gadgets2-gadgets(a0),a0
@@ -4795,6 +4850,8 @@ getscreeninfo
 	bsr.b	.hum
 
 
+
+
 	bsr.w	unlockscreen
 	moveq	#0,d0
 	rts
@@ -4804,8 +4861,8 @@ getscreeninfo
 
 .hum
 	move.l	a0,a1
-.lop0	add	d0,6(a1)
-	add	d1,4(a1)
+.lop0	add	d0,gg_TopEdge(a1)
+	add	d1,gg_LeftEdge(a1)
 	tst.l	(a1)
 	beq.b	.e0
 	move.l	(a1),a1
@@ -5051,8 +5108,13 @@ wrender:
 	move	WINSIZX(a5),plx2
 	subq	#8,plx2
 
-	moveq	#61+WINY,ply1
-	move	#128+WINY,ply2
+	;moveq	#61+WINY,ply1
+	move	fileBoxTopEdge(a5),ply1
+	sub		#2,ply1 * magic offset
+	;move	#128+WINY,ply2
+	move	fileBoxTopEdge(a5),ply2
+	add		#128-61-2,ply2 * magic offset
+
  	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
  	add	#16,ply1
@@ -5072,8 +5134,14 @@ wrender:
 	move	WINSIZX(a5),plx2
 	subq	#8,plx2
 
-	moveq	#10+WINY,ply1
-	moveq	#29+WINY,ply2
+	;moveq	#10+WINY,ply1
+	;moveq	#29+WINY,ply2
+	move	infoBoxTopEdge(a5),ply1
+	subq	#1,ply1
+	;move	infoBoxTopEdge(a5),ply2
+	move	ply1,ply2
+	add		#29-10,ply2
+
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -17092,11 +17160,15 @@ clearbox:
 	bne.b	.r
 .x	rts
 .r	moveq	#30+WINX,d0
-	moveq	#62+WINY,d1
+	;moveq	#62+WINY,d1
+	move	fileBoxTopEdge(a5),d1
+	subq	#1,d1
 ;	move	#251+WINX,d2
 	move	WINSIZX(a5),d2
 	sub	#10,d2
-	move	#127+WINY,d3
+	;move	#127+WINY,d3
+	move	fileBoxTopEdge(a5),d3
+	add		#127-62-1,d3 * magic constant
  	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
 	add	#16,d1
@@ -17206,11 +17278,11 @@ shownames:
 * kopioidaan rivit 0 -> d7 (koko: boxsize-d7 r) kohtaan 0 ja printataan
 * kohtaan 0 d7 kpl uusia rivej‰
 
-	moveq	#63+WINY,d1		* source y
+	move	fileBoxTopEdge(a5),d1		* source y
 	move	d7,d3
 	;lsl	#3,d3
 	mulu	listFontHeight(a5),d3
-	add	#63+WINY,d3		* dest y
+	add		fileBoxTopEdge(a5),d3		* dest y
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
 	add	#16,d1		* source y
@@ -17239,8 +17311,8 @@ shownames:
 	move	d7,d1
 	;lsl	#3,d1
 	mulu	listFontHeight(a5),d1
-	add	#63+WINY,d1		* source y	
-	moveq	#63+WINY,d3	* dest y
+	add		fileBoxTopEdge(a5),d1		* source y
+	move	fileBoxTopEdge(a5),d3	* dest y
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt2
 	add	#16,d1		* source y
@@ -17334,7 +17406,7 @@ shownames:
 * d0 = alkurivi
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien m‰‰r‰
-doPrintNames
+doPrintNames:
 ;	DPRINT  "shownames obtain list"
 	bsr.w  obtainModuleList
 	;lea	moduleListHeader(a5),a4	
@@ -17368,7 +17440,10 @@ doPrintNames
 	move	d4,d6
 	;lsl	#3,d6
 	mulu	listFontHeight(a5),d6
-	add	#83+WINY-14,d6		* turn line number into a Y-coordinate
+	;add	#83+WINY-14,d6		
+	* turn line number into a Y-coordinate
+	add	fileBoxTopEdge(a5),d6
+	add		#83-14-64,d6 * magic offset
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
  	add	#16,d6	
@@ -17843,14 +17918,22 @@ execuutti
 *******
 * 30 merkki‰ leve‰ alue
 
-inforivit_clear
+inforivit_clear:
 	movem.l	d0-d4,-(sp)
 	moveq	#7+WINX,d0
-	moveq	#11+WINY,d1
+;	moveq	#11+WINY,d1
+	move	infoBoxTopEdge(a5),d1
+	move	d1,d3
+	add		infoBoxHeight(a5),d3
+
+;	addq	#1,d1
+	;addq		#1,d3
+
+
 ;	move	#252+WINX,d2
 	move	WINSIZX(a5),d2
-	sub	#10,d2
-	moveq	#28+WINY,d3
+	sub		#10,d2	* side margin
+	;moveq	#28+WINY,d3
 	bsr.w	tyhjays
 	movem.l	(sp)+,d0-d4
 	rts
@@ -17988,8 +18071,12 @@ inforivit_play
 	bne.b	.cep
 	clr.b	(a1)
 
-bipb	moveq	#18+WINY,d1
-bipb2	moveq	#11+WINX,d0
+bipb
+	;moveq	#18+WINY,d1
+	move	infoBoxTopEdge(a5),d1
+bipb2	
+	addq	#7,d1 * magic offset
+	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
 	jsr	print
 bopb	rts
@@ -17998,8 +18085,11 @@ putinfo:
 	bsr.w	inforivit_clear
 	bra.b	bipb
 
-putinfo2
-	moveq	#26+WINY,d1
+* 2nd row
+putinfo2:
+	;moveq	#26+WINY,d1
+	move	infoBoxTopEdge(a5),d1
+	addq	#8,d1 * TODO: 8 pix font assumption for now
 	bra.b	bipb2	
 
 infolines_loadToChipMemory
@@ -18730,20 +18820,24 @@ getFileBoxIndexFromMousePosition:
 	cmp	d2,d0
 	bhi.b	.out
 	
-	moveq	#63+WINY,d2		* Top edge
+	move	fileBoxTopEdge(a5),d2		* Top edge
 	add	d3,d2			* Modifier!
 	cmp	d2,d1
 ;	cmp	#63+WINY,d1
 	blo.b	.out
 
-	move	#126+WINY,d2		* Bottom edge
+	move	fileBoxTopEdge(a5),d2
+	* use original height - original top edge to
+	* get bottom edge:
+	add		#126-63,d2	
+	;move	#126+WINY,d2		* Bottom edge
 	add	d3,d2			* Modifier!
 	add	boxy(a5),d2		* Height of box
 	cmp	d2,d1
 	bhi.b	.out
 
 	* converts y-koordinate into a line number (font is 8 pix tall)
-	sub	#63+WINY,d1
+	sub	fileBoxTopEdge(a5),d1
 	sub	d3,d1
 
  if DEBUG
@@ -18898,7 +18992,7 @@ markit:
 	move	d5,d1
 	;lsl	#3,d1		* mulu #8,d1
 	mulu	listFontHeight(a5),d1
-	add	#63+WINY,d1
+	add		fileBoxTopEdge(a5),d1
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
 	add	#16,d1
@@ -28548,8 +28642,15 @@ loadfile:
 	;move	#245+WINX+2,plx2
 	move	WINSIZX(a5),plx2
 	sub	#18,plx2
-	moveq	#21+WINY,ply1
-	moveq	#27+WINY,ply2
+	;moveq	#21+WINY,ply1
+	;moveq	#27+WINY,ply2
+	move	infoBoxTopEdge(a5),ply1
+	move	infoBoxHeight(a5),d7
+	lsr		#1,d7
+	add		d7,ply1
+	move	ply1,ply2
+	addq	#6,ply2
+
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -28626,7 +28727,14 @@ loadfile:
         move.b	#%11,rp_Mask(a0)
 
         moveq   #82+WINX,d0
-        moveq   #22+WINY,d1
+
+		move	infoBoxTopEdge(a5),d1
+		move	infoBoxHeight(a5),d2
+		lsr		#1,d2
+		add		d2,d1
+		addq	#1,d1
+	
+    ;    moveq   #22+WINY,d1
         add     windowleft(a5),d0
         add     windowtop(a5),d1
 
@@ -28855,8 +28963,16 @@ loadfile:
 	;move	#245+WINX,plx2
 	move	WINSIZX(a5),plx2
 	sub	#18,plx2
-	moveq	#21+WINY,ply1
-	moveq	#27+WINY,ply2
+	move	infoBoxTopEdge(a5),ply1
+	move	infoBoxHeight(a5),d7
+	lsr		#1,d7
+	add		d7,ply1
+	
+	;addq	#8,ply1
+	move	ply1,ply2
+	addq	#6,ply2
+;;	moveq	#21+WINY,ply1
+;	moveq	#27+WINY,ply2
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -28928,7 +29044,7 @@ loadfile:
 	sub	#35,d7
 	mulu	d7,d5
 	divu	d3,d5
-	move	d5,d4
+	move	d5,d4 * XSize
 
         move.l  rastport(a5),a0
         move.l  a0,a1
@@ -28937,15 +29053,22 @@ loadfile:
         move.b	#%11,rp_Mask(a0)
 
         moveq   #16+WINX,d0
-        moveq   #22+WINY,d1
-        add     windowleft(a5),d0
+        ;moveq   #22+WINY,d1
+		move	infoBoxTopEdge(a5),d1
+		move	infoBoxHeight(a5),d2
+		lsr		#1,d2
+		add		d2,d1
+		addq	#1,d1
+		add     windowleft(a5),d0
         add     windowtop(a5),d1
 
-        move.l  d0,d2
-        move.l  d1,d3
+        move.l  d0,d2	* DestX = SrcX
+        move.l  d1,d3   * DestY = SrcY
 
-        moveq   #5,d5
+        moveq   #5,d5   * YSize
         move    #$f0,d6
+ ;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+;          A0   D0    D1    A1    D2     D3     D4     D5     D6
         lore    GFX,ClipBlit
 
         move.l  rastport(a5),a0
@@ -48688,11 +48811,15 @@ createlistBoxRegion
 	lea	-ra_SIZEOF(sp),sp
 	move.l	sp,a1
 	moveq	#30+WINX,d0
-	moveq	#62+WINY,d1
+	;moveq	#62+WINY,d1
+	move	fileBoxTopEdge(a5),d1
 	move	WINSIZX(a5),d2
 	sub	#10,d2
 
-	move	#127+WINY,d3
+	;move	#127+WINY,d3
+	move	fileBoxTopEdge(a5),d3
+	add		#127-62-1,d3 * magic constant
+
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt
 	add	#16,d1
