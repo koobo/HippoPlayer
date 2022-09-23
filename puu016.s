@@ -8604,7 +8604,7 @@ nappuloita
 .nabse
 
 .rbutton10
-	bra	rbutton10
+	jmp	rbutton10
 
 .rand	bra.w	soitamodi_random
 
@@ -22453,8 +22453,8 @@ rexxmessage
 	dr	.addt,.add
 	dr	.delt,rbutton8
 	dr	.volt,.volume
-	dr	.rewt,rbutton_kela1
-	dr	.ffwdt,rbutton_kela2
+	dr	.rewt,._rbutton_kela1
+	dr	.ffwdt,._rbutton_kela2
 	dr	.movet,.move
 	dr	.sortt,._rsort
 	dr	.insertt,.insert
@@ -22514,7 +22514,12 @@ rexxmessage
 .favoritet dc.b "FAVORITE",0
  even
 
-._rsort	jmp	rsort
+._rbutton_kela1
+	jmp	rbutton_kela1
+._rbutton_kela2
+	jmp	rbutton_kela2
+._rsort	
+	jmp	rsort
 
 *** PLAY
 .playr	
