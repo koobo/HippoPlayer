@@ -2980,9 +2980,8 @@ main
 	moveq	#11+WINX,d0
 	;moveq	#18+WINY,d1
 	move	infoBoxTopEdge(a5),d1
-	addq	#7,d1
-	bsr.w	print
-
+	jsr		infoBoxPrint
+	
 	; ei annoytekstia vaikkei rekisteroity
 	cmp.b	#' ',keyfile(a5)
 	beq.b	.oohi
@@ -3005,7 +3004,7 @@ main
 	mulu	listFontHeight(a5),d3
 	lsr		#1,d3
 	add		d3,d1
-	bra.w	print
+	bra		infoBoxPrint
 .oohi
 
 
@@ -5145,7 +5144,9 @@ wrender:
 	subq	#1,ply1
 	;move	infoBoxTopEdge(a5),ply2
 	move	ply1,ply2
-	add		#29-10,ply2
+	;add		#29-10,ply2
+	add		infoBoxHeight(a5),ply2
+	addq	#2,ply2
 
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
@@ -8849,6 +8850,7 @@ printbox:
 	move 	previousWindowWidth(a5),d1
 	sub		#20,d1
 	sub		d0,d1
+	addq	#1,d1 * round up, looks nicer
 	lsr		#1,d1
 	move	d1,d0
 	add		#20,d0
@@ -18057,47 +18059,66 @@ bipb
 	;moveq	#18+WINY,d1
 	move	infoBoxTopEdge(a5),d1
 bipb2	
-	addq	#7,d1 * magic offset
+	;addq	#7,d1 * magic offset
 	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
-	jsr		setInfoBoxClip
-	jsr		print
-	jsr		removeInfoBoxClip
+	bsr		infoBoxPrint
 bopb	rts
 
 putinfo:
 	bsr.w	inforivit_clear
 	bra.b	bipb
 
+printInfoBox:
+infoBoxPrint:
+	jsr		setInfoBoxClip
+	pushm	all
+	move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont
+	popm	all	
+	move.l	listfontbase(a5),a1
+	add		tf_Baseline(a1),d1
+	subq	#6,d1
+	addq	#7,d1
+	jsr		print
+	move.l	rastport(a5),a1
+	move.l	fontbase(a5),a0
+	lore	GFX,SetFont	
+	jsr		removeInfoBoxClip
+	rts
+
 * 2nd row
 putinfo2:
 	;moveq	#26+WINY,d1
 	move	infoBoxTopEdge(a5),d1
-	addq	#8,d1 * TODO: 8 pix font assumption for now
+	;addq	#8,d1 * TODO: 8 pix font assumption for now
+	move.l	listfontbase(a5),a1
+	add		tf_YSize(a1),d1	* to 2nd row
 	bra.b	bipb2	
 
 infolines_loadToChipMemory
 	lea	.1(pc),a0
-	bra.b	putinfo
+	bra		putinfo
 .1	dc.b	"Loading to chip memory...",0
  even
 
 infolines_loadToPublicMemory
 	lea	.1(pc),a0
-	bra.b	putinfo
+	bra		putinfo
 .1	dc.b	"Loading to public memory...",0
  even
 
  
 inforivit_tfmxload
 	lea	.1(pc),a0
-	bra.b	putinfo
+	bra		putinfo
 .1	dc.b	"Loading TFMX samples...",0
  even
 
 inforivit_ppload
 	lea	.1(pc),a0
-	bra.b	putinfo2
+	bra		putinfo2
 .1	dc.b	"PowerPacker file",0
  even
 
@@ -48858,7 +48879,7 @@ createInfoBoxRegion
 	;moveq	#62+WINY,d1
 	move	infoBoxTopEdge(a5),d1
 	move	WINSIZX(a5),d2
-	sub		#10,d2 * margin
+	sub		#10+1,d2 * margin
 
 	move	d1,d3	
 	add		infoBoxHeight(a5),d3
@@ -49093,6 +49114,15 @@ layoutGadgetsHorizontal
 ***************************************************************************
 
 layoutGadgetsVertical:
+	DPRINT	"layoutGadgetVertical +++++++++++++++++++++++++++++++++"
+
+	move	listFontHeight(a5),d0
+	ext.l	d0
+	DPRINT	"listFontHeight=%ld"
+	add		d0,d0
+	addq	#1,d0
+	move	d0,infoBoxHeight(a5)
+	DPRINT	"infoBoxHeight=%ld"
 
 	*** Infobox
 
@@ -49126,11 +49156,11 @@ layoutGadgetsVertical:
 .norm2
 	* ..or font height if it is taller
 	move	listFontHeight(a5),d2
-	addq	#5,d2
 	cmp		d2,d1
 	bhs.b	.3
 	move	d2,d1
 .3	
+
 
 ;	move	buttonRow2Height(a5),d1
 	lea		row2Gadgets,a0
@@ -49177,6 +49207,7 @@ layoutGadgetsVertical:
 	move.l	#list_text_attr,it_ITextFont(a3)
 	move.l	it_ITextFont(a3),a4
 	sub		ta_YSize(a4),d3
+	addq	#1,d3 * round up
 	lsr		#1,d3
 	move	d3,it_TopEdge(a3)
 .noText
