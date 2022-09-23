@@ -1356,6 +1356,10 @@ listBoxRegion		rs.l	1
 * Layers library clip region to keep list box text drawing inside,
 * useful for variable sized fonts.	
 listBoxClipRegion	rs.l	1
+* Same stuff for info box at the top
+infoBoxRegion		rs.l	1
+infoBoxClipRegion	rs.l	1
+
 
 * String extend structure to configure custom font to string gadgets on kick2.0+
 stringExtendStruct 	rs.b	sex_SIZEOF
@@ -4513,6 +4517,7 @@ avaa_ikkuna:
 	move.l	d0,appwindow(a5)
 .elderly
 	jsr	createlistBoxRegion
+	jsr	createInfoBoxRegion
 
 	; Store this for detecting height changes after window opened
 	move	winstruc+nw_Height,previousWindowHeight(a5)
@@ -5446,7 +5451,8 @@ sulje_ikkuna
  endif
 
 .small
-	jsr	disposelistBoxRegion
+	jsr	disposeListBoxRegion
+	jsr	disposeInfoBoxRegion
 
 	move.l	46(a0),a1		* WB screen addr
 	move	14(a1),wbkorkeus(a5)	* WB:n korkeus
@@ -17941,24 +17947,6 @@ inforivit_play
 	bra.w	bopb
 	
 .huh
-; ifne FEATURE_HORIZ_RESIZE	
-	; determine field length for name based on window width
-	moveq	#0,d2
-	move	WINSIZX(a5),d2
-	; left and right border, length of "Name: ", some more
-	sub	#8+8+6*8+8,d2
-	lsr	#3,d2
-	divu	#10,d2
-	or.l	#$30<<16+$30,d2
-	lea	fieldLen1(pc),a0
-	basereg	fieldLen1,a0
-	move.b	d2,fieldLen1+0(a0)
-	move.b	d2,fieldLen2+0(a0)
-	swap	d2
-	move.b	d2,fieldLen1+1(a0)
-	move.b	d2,fieldLen2+1(a0)
-	endb	a0
- ;endif ; FEATURE
 
 	moveq	#0,d2
 
@@ -18072,7 +18060,9 @@ bipb2
 	addq	#7,d1 * magic offset
 	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
-	jsr	print
+	jsr		setInfoBoxClip
+	jsr		print
+	jsr		removeInfoBoxClip
 bopb	rts
 
 putinfo:
@@ -18278,13 +18268,11 @@ siisti_nimi
 
 
 
-fieldLen1 = *+8
-tyyppi1_t	dc.b	"Name: %.24s",10
-		dc.b	"Type: %.24s",0
+tyyppi1_t	dc.b	"Name: %s",10
+		dc.b	"Type: %s",0
 
-fieldLen2 = *+8
-tyyppi2_t	dc.b	"Name: %.24s",10
-		dc.b	"Type: %.24s %ldch",0
+tyyppi2_t	dc.b	"Name: %s",10
+		dc.b	"Type: %s %ldch",0
 typpi
  even
 
@@ -48801,7 +48789,7 @@ spectrumGetSampleData
 ***************************************************************************
 
 createlistBoxRegion
-	bsr.b	disposelistBoxRegion
+	bsr.b	disposeListBoxRegion
 
 	lore	GFX,NewRegion
 	move.l	d0,listBoxRegion(a5)
@@ -48848,11 +48836,60 @@ createlistBoxRegion
 	rts
 
 
-disposelistBoxRegion
+disposeListBoxRegion
 	pushm	all
 	move.l	listBoxRegion(a5),d0
 	beq.b	.x
 	clr.l	listBoxRegion(a5)
+	move.l	d0,a0
+	lore	GFX,DisposeRegion
+.x	popm	all
+	rts
+
+createInfoBoxRegion
+	bsr		disposeInfoBoxRegion
+	lore	GFX,NewRegion
+	move.l	d0,infoBoxRegion(a5)
+	beq.b	.x
+
+	lea	-ra_SIZEOF(sp),sp
+	move.l	sp,a1
+	moveq	#7+WINX,d0
+	;moveq	#62+WINY,d1
+	move	infoBoxTopEdge(a5),d1
+	move	WINSIZX(a5),d2
+	sub		#10,d2 * margin
+
+	move	d1,d3	
+	add		infoBoxHeight(a5),d3
+
+;	tst.b	altbuttonsUse(a5)
+;	beq.b	.noAlt
+;	add	#16,d1
+;	add	#16,d3  
+;.noAlt
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	add	windowtop(a5),d3
+
+
+	move	d0,ra_MinX(a1)
+	move	d1,ra_MinY(a1)
+	move	d2,ra_MaxX(a1)
+	move	d3,ra_MaxY(a1)
+	
+	move.l	infoBoxRegion(a5),a0
+	lob	OrRectRegion
+	lea	ra_SIZEOF(sp),sp
+.x	tst.l	d0
+	rts
+
+
+disposeInfoBoxRegion
+	pushm	all
+	move.l	infoBoxRegion(a5),d0
+	beq.b	.x
+	clr.l	infoBoxRegion(a5)
 	move.l	d0,a0
 	lore	GFX,DisposeRegion
 .x	popm	all
@@ -48882,6 +48919,29 @@ removeListBoxClip
 	lore	Layers,InstallClipRegion
 	rts
 
+setInfoBoxClip
+	pushm	all
+	tst.l	infoBoxRegion(a5)
+	beq.b	.x
+	move.l	windowbase(a5),a0
+	move.l	wd_WLayer(a0),a0
+	move.l	infoBoxRegion(a5),a1
+	lore	Layers,InstallClipRegion
+	; d0 = previous clip region or NULL
+	move.l	d0,infoBoxClipRegion(a5)
+	; Out of memory is also possible, this
+	; is visible in some flag somewhere.
+.x	popm	all
+	rts
+
+
+removeInfoBoxClip
+	move.l	windowbase(a5),a0
+	move.l	wd_WLayer(a0),a0
+	; Null is ok here:
+	move.l	infoBoxClipRegion(a5),a1
+	lore	Layers,InstallClipRegion
+	rts
 
 ***************************************************************************
 *
