@@ -4347,16 +4347,13 @@ avaa_ikkuna:
 	* Boxy is calculated in setboxy(), in loadprefs()
 	* or in setListFont().
 
-	;add	#5,infoBoxOrigTopEdge(a5)
 
 	move	infoBoxOrigTopEdge(a5),infoBoxTopEdge(a5)
 	move	infoBoxOrigHeight(a5),infoBoxHeight(a5)
 	move	fileBoxOrigTopEdge(a5),fileBoxTopEdge(a5)
-	;move	fileBoxOrigHeight(a5),fileBoxHeight(a5)
 .1
 
-	; Button config, may adjust WINSIZY
-;	jsr	configureMainWindowButtonSizes
+	; may adjust WINSIZY
 	jsr	layoutGadgetsVertical
  
 	
@@ -18079,8 +18076,7 @@ infoBoxPrint:
 	popm	all	
 	move.l	listfontbase(a5),a1
 	add		tf_Baseline(a1),d1
-	subq	#6,d1
-	addq	#7,d1
+	addq	#1,d1 * magic constant
 	jsr		print
 	move.l	rastport(a5),a1
 	move.l	fontbase(a5),a0
@@ -32518,201 +32514,6 @@ sortStringPtrArray
 	bne.b 	.sortLoopOuter
 	popm	d1/d2/d3/d6/d7/a1/a2
 .x	rts
-
-
-*******************************************************************************
-* Big buttons, normal buttons
-*******************************************************************************
-
-configureMainWindowButtonSizes
-	lea	gadgets,a4
-	basereg gadgets,a4
-
-	lea	button1im,a3
-	basereg button1im,a3
-
-	tst.b	altbuttons(a5)
-	beq.w	.useNormal
-	; Already in alt mode?
-	tst.b	altbuttonsUse(a5)
-	bne.w	.x
-	move.b	altbuttons(a5),altbuttonsUse(a5)
-	* Enlarge main window!
-	add	#16,WINSIZY(a5)
-
-; Set up double buttons
-	* 1st row
-	lea	gadgetPlayButton(a4),a0
-	lea	button1imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetInfoButton(a4),a0
-	lea	button2imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetStopButton(a4),a0
-	lea	button3imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetEjectButton(a4),a0
-	lea	button4imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetNextButton(a4),a0
-	lea	button5imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetPrevButton(a4),a0
-	lea	button6imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetNextSongButton(a4),a0
-	lea	button12imDouble(a3),a2
-	bsr.b	.double
-	lea	gadgetPrevSongButton(a4),a0
-	lea	button13imDouble(a3),a2
-	bsr.b	.double
-	lea	gadgetForwardButton(a4),a0
-	lea	kela2imDouble(a3),a2
-	bsr.b	.double
-	lea	gadgetRewindButton(a4),a0
-	lea	kela1imDouble(a3),a2
-	bsr.b	.double
-
-	* 2nd row
-	lea	gadgetAddButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetDelButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetNewButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetPrefsButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetVolumeSlider(a4),a0
-	bsr.b	.double2
-	lea	gadgetSortButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetMoveButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetPrgButton(a4),a0
-	bsr.b	.double2
-
-	lea	gadgetListModeChangeButton(a4),a0
-	add	#16,gg_TopEdge(a0)
-
-	lea	gadgetFileSlider(a4),a0
-	add	#16,gg_TopEdge(a0)
-
-	lea	gadgetVolumeSlider(a4),a0
-	move.l	gg_GadgetRender(a0),a1
-	pushpea slider1imDouble(a3),ig_ImageData(a1)
-	addq	#8,ig_Height(a1)
-	bra.b	.doubleDone
-.double
-	addq	#8,gg_Height(a0)
-	move.l	gg_GadgetRender(a0),a1
-	move.l	a2,ig_ImageData(a1)
-	lsl.w	ig_Height(a1)
-	rts
-.double2
-	addq	#8,gg_Height(a0)
-	addq	#8,gg_TopEdge(a0)
-	move.l	gg_GadgetText(a0),d0
-	beq.b	.doubleNoText
-	move.l	d0,a1
-	addq	#4,it_TopEdge(a1)
-.doubleNoText
-.doubleDone
-	rts
-
-.useNormal
-	; Already in normal mode?
-	tst.b	altbuttonsUse(a5)
-	beq.w	.x
-	move.b	altbuttons(a5),altbuttonsUse(a5)
-
-	* Diminish main window!
-	sub	#16,WINSIZY(a5)
-
-; Set up normal buttons
-
-	* 1st row
-	lea	gadgetPlayButton(a4),a0
-	lea	button1im(a3),a2
-	bsr.w	.normal
-	lea	gadgetInfoButton(a4),a0
-	lea	button2im(a3),a2
-	bsr.w	.normal
-	lea	gadgetStopButton(a4),a0
-	lea	button3im(a3),a2
-	bsr.w	.normal
-	lea	gadgetEjectButton(a4),a0
-	lea	button4im(a3),a2
-	bsr.w	.normal
-	lea	gadgetNextButton(a4),a0
-	lea	button5im(a3),a2
-	bsr.w	.normal
-	lea	gadgetPrevButton(a4),a0
-	lea	button6im(a3),a2
-	bsr.w	.normal
-	lea	gadgetNextSongButton(a4),a0
-	lea	button12im(a3),a2
-	bsr.b	.normal
-	lea	gadgetPrevSongButton(a4),a0
-	lea	button13im(a3),a2
-	bsr.b	.normal
-	lea	gadgetForwardButton(a4),a0
-	lea	kela2im(a3),a2
-	bsr.b	.normal
-	lea	gadgetRewindButton(a4),a0
-	lea	kela1im(a3),a2
-	bsr.b	.normal
-
-	* 2nd row
-	lea	gadgetAddButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetDelButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetNewButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetPrefsButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetVolumeSlider(a4),a0
-	bsr.b	.normal2
-	lea	gadgetSortButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetMoveButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetPrgButton(a4),a0
-	bsr.b	.normal2
-
-	lea	gadgetListModeChangeButton(a4),a0
-	sub	#16,gg_TopEdge(a0)
-
-	lea	gadgetFileSlider(a4),a0
-	sub	#16,gg_TopEdge(a0)
-
-	lea	gadgetVolumeSlider(a4),a0
-	move.l	gg_GadgetRender(a0),a1
-	pushpea slider1im(a3),ig_ImageData(a1)
-	subq	#8,ig_Height(a1)
-	bra.b	.normalDone
-.normal
-	subq	#8,gg_Height(a0)
-	move.l	gg_GadgetRender(a0),a1
-	move.l	a2,ig_ImageData(a1)
-	lsr.w	ig_Height(a1)
-	rts
-.normal2
-	subq	#8,gg_Height(a0)
-	subq	#8,gg_TopEdge(a0)
-	move.l	gg_GadgetText(a0),d0
-	beq.b	.normalNoText
-	move.l	d0,a1
-	subq	#4,it_TopEdge(a1)
-.normalNoText
-.normalDone
-	rts
-
-.x
-	rts
-
-	endb   a3
-	endb   a4
 
 
 *******************************************************************************
@@ -49213,6 +49014,7 @@ layoutGadgetsVertical:
 .noText
 	rts
 
+	printt	"TODO: basereg"
 .setButtonImages
 	lea		gadgetPlayButton,a0
 	lea		button1im,a1
