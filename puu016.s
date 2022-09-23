@@ -48913,6 +48913,18 @@ initializeButtonRowLayout
 
 
 layoutGadgetsHorizontal
+	* Set correct font for calculating text widths for buttons
+	move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont	
+	bsr.b	.it
+	move.l	rastport(a5),a1
+	move.l	fontbase(a5),a0
+	lore	GFX,SetFont	
+	rts
+
+.it
+	
   if DEBUG
 	moveq	#0,d1
 	move	winstruc+nw_Width,d1
@@ -49019,29 +49031,61 @@ layoutGadgetsHorizontal
 
 layoutGadgetsVertical:
 
+	*** Infobox
+
 	move	infoBoxTopEdge(a5),d0
 	add		infoBoxHeight(a5),d0
 	addq	#4,d0 ; margin
 
+	*** Button row 1
+
 	move	d0,buttonRow1TopEdge(a5)
 
-
-
-	moveq	#2*13,d1
-	lea	row1Gadgets,a0
-	bsr.b	.setTopEdgeAndHeight
+	moveq	#13,d1
+	tst.b	altbuttons(a5)
+	beq.b	.norm1
+	add		d1,d1
+.norm1
+	lea		.setTopAndHeight(pc),a2
+	lea		row1Gadgets,a0
+	bsr		.forEachGadget
+	
+	*** Button row 2
 
 	add		d1,d0
 	add		#1,d0 ; margin
 
-	moveq	#2*13,d1
-;	move	buttonRow2Height(a5),d1
-	lea	row2Gadgets,a0
-	bsr.b	.setTopEdgeAndHeight
+	* Height is either normal or double
+	moveq	#13,d1
+	tst.b	altbuttons(a5)
+	beq.b	.norm2
+	add		d1,d1
+.norm2
+	* ..or font height if it is taller
+	move	listFontHeight(a5),d2
+	addq	#5,d2
+	cmp		d2,d1
+	bhs.b	.3
+	move	d2,d1
+.3	
 
+;	move	buttonRow2Height(a5),d1
+	lea		row2Gadgets,a0
+	bsr		.forEachGadget
+
+	lea		.centerTextVertical(pc),a2
+	lea		row2Gadgets,a0
+	bsr		.forEachGadget
+
+	bsr		.setButtonImages
+
+	*** Filebox
+	
 	add		d1,d0
 	addq	#4,d0 ; margin
 	move	d0,fileBoxTopEdge(a5)
+
+	*** Left side gadgets
 
 	* Align mode button and file slider with filebox
 	lea		gadgetListModeChangeButton,a0
@@ -49053,24 +49097,106 @@ layoutGadgetsVertical:
 	move	d0,gg_TopEdge(a1)
 	rts
 	
-.setTopEdgeAndHeight
+.setTopAndHeight:
+	move	d0,gg_TopEdge(a1)
+	move	d1,gg_Height(a1)
+	cmp.l	#gadgetVolumeSlider,a1
+	bne.b	.x
+	addq	#2,gg_TopEdge(a1)
+	subq	#4,gg_Height(a1)
+.x	rts
+
+.centerTextVertical
+	tst.l	gg_GadgetText(a1)
+	beq.b	.noText
+	move	gg_Height(a1),d3
+	move.l	gg_GadgetText(a1),a3
+	move.l	#list_text_attr,it_ITextFont(a3)
+	move.l	it_ITextFont(a3),a4
+	sub		ta_YSize(a4),d3
+	lsr		#1,d3
+	move	d3,it_TopEdge(a3)
+.noText
+	rts
+
+.setButtonImages
+	lea		gadgetPlayButton,a0
+	lea		button1im,a1
+	lea		button1imDouble,a2
+	bsr		.setImage
+	lea		gadgetInfoButton,a0
+	lea		button2im,a1
+	lea		button2imDouble,a2
+	bsr		.setImage
+	lea		gadgetStopButton,a0
+	lea		button3im,a1
+	lea		button3imDouble,a2
+	bsr		.setImage
+	lea		gadgetEjectButton,a0
+	lea		button4im,a1
+	lea		button4imDouble,a2
+	bsr		.setImage
+	lea		gadgetNextButton,a0
+	lea		button5im,a1
+	lea		button5imDouble,a2
+	bsr		.setImage
+	lea		gadgetPrevButton,a0
+	lea		button6im,a1
+	lea		button6imDouble,a2
+	bsr		.setImage
+	lea		gadgetNextSongButton,a0
+	lea		button12im,a1
+	lea		button12imDouble,a2
+	bsr		.setImage
+	lea		gadgetPrevSongButton,a0
+	lea		button13im,a1
+	lea		button13imDouble,a2
+	bsr		.setImage
+	lea		gadgetForwardButton,a0
+	lea		kela2im,a1
+	lea		kela2imDouble,a2
+	bsr		.setImage
+	lea		gadgetRewindButton,a0
+	lea		kela1im,a1
+	lea		kela1imDouble,a2
+	bsr		.setImage
+
+	rts
+
+.setImage
+	move.l	gg_GadgetRender(a0),a3
+	tst.b	altbuttons(a5)
+	bne.b	.useLarge
+	move.l	a1,ig_ImageData(a3)
+	move	#8,ig_Height(a3)
+	move	#3,ig_TopEdge(a3)
+	cmp.l	#button2im,a1
+	bne.b	.notI
+	* One is 1 pix taller
+	addq	#1,ig_Height(a3)
+	subq	#1,ig_TopEdge(a3)
+.notI
+	rts
+.useLarge
+	move.l	a2,ig_ImageData(a3)
+	move	#15,ig_Height(a3)
+	move	#5,ig_TopEdge(a3)
+	rts
+
+
+* in:
+*   a0 = gadget row
+*   a2 = callback with a1=gadget
+.forEachGadget
 .1	tst	(a0)
 	beq.b	.2
 	move.l	a0,a1
 	add	(a0),a1
 	addq	#6,a0
-
-	* a1 = gadget
-	move	d0,gg_TopEdge(a1)
-	move	d1,gg_Height(a1)
-
-	cmp.l	#gadgetVolumeSlider,a1
-	bne.b	.1
-	addq	#2,gg_TopEdge(a1)
-	subq	#4,gg_Height(a1)
+	jsr		(a2)
 	bra.b	.1
-.2
-	rts
+.2	rts
+
 
 ***************************************************************************
 *
