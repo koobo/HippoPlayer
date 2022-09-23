@@ -60,9 +60,7 @@ ANNOY	= 0 * 1: Unregistered version tekstejä ympäriinsä
 DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
-FEATURE_HORIZ_RESIZE = 1
 FEATURE_P61A        =   0
-FEATURE_UHC_AMINET  =   1
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -2863,9 +2861,7 @@ main
 	bsr.w	inithippo
 	bsr.w	initkorva
 	bsr.w	initkorva2
- ifne FEATURE_HORIZ_RESIZE
 	jsr	initializeButtonRowLayout
- endif
 
 	st	reghippo(a5)
 
@@ -8286,15 +8282,7 @@ nappuloita
  	bne.b	.3
 	jsr		modlandSearch
 	bra	.ee
-.3
-; ifne FEATURE_UHC_AMINET
-;	cmp.b	#$20,d3	 	* a + control
-; 	bne.b	.4
-;	jsr		aminetSearch
-;	bra	.ee
-;.4
-; endif
-	
+.3	
 
 .noControl
 
@@ -9267,17 +9255,11 @@ rsearchfuncs
 
 .options
 	* max width, rows
- ifne FEATURE_UHC_AMINET
 	dc.b	24,5
- else
-	dc.b	24,4
- endif
 	dc.b	"Search list    [F]      ",0
 	dc.b	"Search next    [SHIFT+F]",0
 	dc.b	"Search Modland [CTRL+M] ",0
- ifne FEATURE_UHC_AMINET
  	dc.b	"Search Aminet           ",0
- endif
 	dc.b	"Search Modules.pl       ",0
 
 enterSearchPattern_t
@@ -17948,7 +17930,7 @@ inforivit_play
 	bra.w	bopb
 	
 .huh
- ifne FEATURE_HORIZ_RESIZE	
+; ifne FEATURE_HORIZ_RESIZE	
 	; determine field length for name based on window width
 	moveq	#0,d2
 	move	WINSIZX(a5),d2
@@ -17965,7 +17947,7 @@ inforivit_play
 	move.b	d2,fieldLen1+1(a0)
 	move.b	d2,fieldLen2+1(a0)
 	endb	a0
- endif ; FEATURE
+ ;endif ; FEATURE
 
 	moveq	#0,d2
 
@@ -48895,8 +48877,7 @@ removeListBoxClip
 * Row button layout
 *
 ***************************************************************************
- ifne FEATURE_HORIZ_RESIZE
-
+ 
 ; Store the original gadget gg_Widht and gg_LeftEdge 
 ; for relative layouting later when window size changes.
 initializeButtonRowLayout
@@ -49018,9 +48999,7 @@ layoutGadgetsHorizontal
 	
 	pop	a0
 	rts
- endif ; FEATURE
-
-
+	
 ***************************************************************************
 *
 * Layout
@@ -50661,7 +50640,6 @@ gadgetSortButton        EQU  lilb2
 gadgetMoveButton        EQU  lilb1 
 gadgetPrgButton         EQU  plg
 
- ifne FEATURE_HORIZ_RESIZE
 ; Index to gadget and the original gg_Width and gg_LeftEdge
 row1Gadgets
 	dr	gadgetPrevButton
@@ -50704,7 +50682,7 @@ row2Gadgets
 	dr	gadgetPrefsButton
 	dc	0,0
 	dc	0 ; END
- endif ; FEATURE
+
 
 gadgetFileSliderInitialHeight = 67-16+2
 
