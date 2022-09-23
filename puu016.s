@@ -4357,9 +4357,11 @@ avaa_ikkuna:
 .1
 
 	; Button config, may adjust WINSIZY
-	jsr	configureMainWindowButtonSizes
+;	jsr	configureMainWindowButtonSizes
+	jsr	layoutGadgetsVertical
+ 
+	
 	; Update into window structure
-
 	lea	winstruc,a0
 	basereg	winstruc,a0
 
@@ -4518,6 +4520,8 @@ avaa_ikkuna:
 
 	; Store this for detecting height changes after window opened
 	move	winstruc+nw_Height,previousWindowHeight(a5)
+
+	jsr		layoutGadgetsHorizontal
 
 	bsr.w	wrender
 	moveq	#0,d0
@@ -4876,10 +4880,7 @@ getscreeninfo
 ****** Piirret‰‰n ikkunan kamat
 
 wrender:
- ifne FEATURE_HORIZ_RESIZE
- 	jsr	layoutButtonRow
- endif
-
+	
 	move.l	pen_0(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
@@ -17443,7 +17444,7 @@ doPrintNames:
 	;add	#83+WINY-14,d6		
 	* turn line number into a Y-coordinate
 	add	fileBoxTopEdge(a5),d6
-	add		#83-14-64,d6 * magic offset
+	add		#83-14-64+1,d6 * magic offset
 	tst.b	altbuttonsUse(a5)
 	beq.b	.noAlt1
  	add	#16,d6	
@@ -48914,7 +48915,7 @@ initializeButtonRowLayout
 	rts
 
 
-layoutButtonRow
+layoutGadgetsHorizontal
   if DEBUG
 	moveq	#0,d1
 	move	winstruc+nw_Width,d1
@@ -48996,7 +48997,7 @@ layoutButtonRow
 	* string length in d0
 	move.l	a0,d0
 
-	; Calculate text lenght in pixels using
+	; Calculate text length in pixels using
 	; the current rastport draw modes.
 	push	a1
 	move.l	rastport(a5),a1
@@ -49015,7 +49016,56 @@ layoutButtonRow
  endif ; FEATURE
 
 
+***************************************************************************
+*
+* Layout
+*
+***************************************************************************
 
+layoutGadgetsVertical:
+
+	move	infoBoxTopEdge(a5),d0
+	add		infoBoxHeight(a5),d0
+	addq	#4,d0 ; margin
+
+	move	d0,buttonRow1TopEdge(a5)
+	moveq	#1*13,d1
+	lea	row1Gadgets,a0
+	bsr.b	.setTopEdgeAndHeight
+
+	add		d1,d0
+	add		#1,d0 ; margin
+
+	moveq	#13,d1
+;	move	buttonRow2Height(a5),d1
+	lea	row2Gadgets,a0
+	bsr.b	.setTopEdgeAndHeight
+
+	add		d1,d0
+	addq	#4,d0 ; margin
+	add		#10,d0
+	move	d0,fileBoxTopEdge(a5)
+
+	rts
+	
+.setTopEdgeAndHeight
+.1	tst	(a0)
+	beq.b	.2
+	move.l	a0,a1
+	add	(a0),a1
+	addq	#6,a0
+
+	* a1 = gadget
+	move	d0,gg_TopEdge(a1)
+	move	d1,gg_Height(a1)
+
+	cmp.l	#gadgetVolumeSlider,a1
+	bne.b	.1
+	addq	#2,gg_TopEdge(a1)
+	subq	#4,gg_Height(a1)
+	bra.b	.1
+.2
+	rts
 
 ***************************************************************************
 *
