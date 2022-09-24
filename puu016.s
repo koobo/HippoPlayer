@@ -48957,67 +48957,72 @@ layoutGadgetsVertical:
 .noText
 	rts
 
-	printt	"TODO: basereg"
 .setButtonImages
-	lea		gadgetPlayButton,a0
-	lea		button1im,a1
-	lea		button1imDouble,a2
-	bsr		.setImage
-	lea		gadgetInfoButton,a0
-	lea		button2im,a1
-	lea		button2imDouble,a2
-	bsr		.setImage
-	lea		gadgetStopButton,a0
-	lea		button3im,a1
-	lea		button3imDouble,a2
-	bsr		.setImage
-	lea		gadgetEjectButton,a0
-	lea		button4im,a1
-	lea		button4imDouble,a2
-	bsr		.setImage
-	lea		gadgetNextButton,a0
-	lea		button5im,a1
-	lea		button5imDouble,a2
-	bsr		.setImage
-	lea		gadgetPrevButton,a0
-	lea		button6im,a1
-	lea		button6imDouble,a2
-	bsr		.setImage
-	lea		gadgetNextSongButton,a0
-	lea		button12im,a1
-	lea		button12imDouble,a2
-	bsr		.setImage
-	lea		gadgetPrevSongButton,a0
-	lea		button13im,a1
-	lea		button13imDouble,a2
-	bsr		.setImage
-	lea		gadgetForwardButton,a0
-	lea		kela2im,a1
-	lea		kela2imDouble,a2
-	bsr		.setImage
-	lea		gadgetRewindButton,a0
-	lea		kela1im,a1
-	lea		kela1imDouble,a2
-	bsr		.setImage
+	lea		gadgets,a3
+	basereg	gadgets,a3
+	lea		button1im,a4
+	basereg	button1im,a4
 
+	lea		gadgetPlayButton(a3),a0
+	lea		button1im(a4),a1
+	lea		button1imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetInfoButton(a3),a0
+	lea		button2im(a4),a1
+	lea		button2imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetStopButton(a3),a0
+	lea		button3im(a4),a1
+	lea		button3imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetEjectButton(a3),a0
+	lea		button4im(a4),a1
+	lea		button4imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetNextButton(a3),a0
+	lea		button5im(a4),a1
+	lea		button5imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetPrevButton(a3),a0
+	lea		button6im(a4),a1
+	lea		button6imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetNextSongButton(a3),a0
+	lea		button12im(a4),a1
+	lea		button12imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetPrevSongButton(a3),a0
+	lea		button13im(a4),a1
+	lea		button13imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetForwardButton(a3),a0
+	lea		kela2im(a4),a1
+	lea		kela2imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetRewindButton(a3),a0
+	lea		kela1im(a4),a1
+	lea		kela1imDouble(a4),a2
+	bsr		.setImage
+	endb	a3
+	endb	a4	
 	rts
 
 .setImage
-	move.l	gg_GadgetRender(a0),a3
+	move.l	gg_GadgetRender(a0),a6
 	tst.b	altbuttons(a5)
 	bne.b	.useLarge
-	move.l	a1,ig_ImageData(a3)
-	move	#8,ig_Height(a3)
-	move	#3,ig_TopEdge(a3)
+	move.l	a1,ig_ImageData(a6)
+	move	#8,ig_Height(a6)
+	move	#3,ig_TopEdge(a6)
 	cmp.l	#button2im,a1
 	bne.b	.notI
 	* One is 1 pix taller
-	addq	#1,ig_Height(a3)
-	subq	#1,ig_TopEdge(a3)
+	addq	#1,ig_Height(a6)
+	subq	#1,ig_TopEdge(a6)
 .notI
 	rts
 .useLarge
-	move.l	a2,ig_ImageData(a3)
+	move.l	a6,ig_ImageData(a3)
 	move	#15,ig_Height(a3)
 	move	#5,ig_TopEdge(a3)
 	rts
