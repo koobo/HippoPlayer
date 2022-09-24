@@ -48903,7 +48903,6 @@ layoutGadgetsVertical:
 	bsr		.forEachGadget
 
 	bsr		.makeVolumeSliderKnob
-	
 	bsr		.setButtonImages
 
 	add		d1,d0
@@ -49023,9 +49022,9 @@ layoutGadgetsVertical:
 .notI
 	rts
 .useLarge
-	move.l	a6,ig_ImageData(a3)
-	move	#15,ig_Height(a3)
-	move	#5,ig_TopEdge(a3)
+	move.l	a2,ig_ImageData(a6)
+	move	#15,ig_Height(a6)
+	move	#5,ig_TopEdge(a6)
 	rts
 
 
