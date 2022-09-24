@@ -1182,7 +1182,7 @@ favorites	rs.b	1
 tooltips	rs.b  	1
 savestate	rs.b    1
 altbuttons  rs.b    1
-altbuttonsUse  rs.b    1
+ 			rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * Runtime scope settings
@@ -4352,8 +4352,6 @@ avaa_ikkuna:
 	move	infoBoxOrigHeight(a5),infoBoxHeight(a5)
 	move	fileBoxOrigTopEdge(a5),fileBoxTopEdge(a5)
 .1
-
-	; may adjust WINSIZY
 	jsr	layoutGadgetsVertical
  
 	
@@ -5116,12 +5114,6 @@ wrender:
 	move	fileBoxTopEdge(a5),ply2
 	add		#128-61-2,ply2 * magic offset
 
-; 	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt1
-; 	add	#16,ply1
-;	add	#16,ply2
-;.noAlt1
-
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	boxy(a5),ply2
@@ -5391,10 +5383,7 @@ getFileboxYStartToD2
 	move	fileBoxTopEdge(a5),d2
 	subq	#1,d2 * magic constant
 ;	moveq	#62+WINY,d2
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt
-;	add	#16,d2
-;.noAlt
+
 	add	windowtop(a5),d2
 	rts
 	
@@ -5690,11 +5679,6 @@ printhippo1:
 
 	; Calc y-position
 	move	fileBoxTopEdge(a5),d3
-;	moveq	#76+WINY-14,d3
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt1
-;	add	#16,d3
-;.noAlt1
 
 	move	boxsize(a5),d6
 	mulu	listFontHeight(a5),d6
@@ -8856,10 +8840,6 @@ printbox:
 	move	fileBoxTopEdge(a5),d1
 	addq	#6,d1 * magic constant
 
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt1
-; 	add	#16,d1
-;.noAlt1
  	move	boxsize(a5),d2
 	lsr	#1,d2
 	subq	#1,d2
@@ -17168,11 +17148,7 @@ clearbox:
 	;move	#127+WINY,d3
 	move	fileBoxTopEdge(a5),d3
 	add		#127-62-1,d3 * magic constant
-; 	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt1
-;	add	#16,d1
-;	add	#16,d3  
-;.noAlt1
+
 	add	boxy(a5),d3
 	bra.w	tyhjays
 
@@ -17282,11 +17258,6 @@ shownames:
 	;lsl	#3,d3
 	mulu	listFontHeight(a5),d3
 	add		fileBoxTopEdge(a5),d3		* dest y
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt1
-;	add	#16,d1		* source y
-;	add	#16,d3		* desy y
-;.noAlt1
 	bsr.w	.copy
 	move.l	firstname(a5),d0
 	moveq	#0,d1
@@ -17312,11 +17283,6 @@ shownames:
 	mulu	listFontHeight(a5),d1
 	add		fileBoxTopEdge(a5),d1		* source y
 	move	fileBoxTopEdge(a5),d3	* dest y
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt2
-;	add	#16,d1		* source y
-;	add	#16,d3		* dest y
-;.noAlt2
 	bsr.b	.copy
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
@@ -17443,11 +17409,6 @@ doPrintNames:
 	* turn line number into a Y-coordinate
 	add	fileBoxTopEdge(a5),d6
 	add		#83-14-64+1,d6 * magic offset
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt1
-; 	add	#16,d6	
-;.noAlt1
-
 	move.l	rastport(a5),a1
 	move.l	listfontbase(a5),a0
 	lore	GFX,SetFont
@@ -18069,11 +18030,11 @@ putinfo:
 printInfoBox:
 infoBoxPrint:
 	jsr		setInfoBoxClip
-	pushm	all
+	pushm	d0/d1/a0
 	move.l	rastport(a5),a1
 	move.l	listfontbase(a5),a0
 	lore	GFX,SetFont
-	popm	all	
+	popm	d0/d1/a0
 	move.l	listfontbase(a5),a1
 	add		tf_Baseline(a1),d1
 	addq	#1,d1 * magic constant
@@ -18802,13 +18763,6 @@ getFileBoxIndexFromMousePosition:
 	sub	windowleft(a5),d0
 	sub	windowtop(a5),d1	* suhteutus fonttiin
 
-	* Vertical modifier when big buttons used
-	moveq	#0,d3
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt0
-;	moveq	#16,d3
-;.noAlt0
-
 	cmp	#30+WINX,d0		* onko tiedostolistan p‰‰ll‰?
 	blo.b	.out
 
@@ -18820,7 +18774,6 @@ getFileBoxIndexFromMousePosition:
 	bhi.b	.out
 	
 	move	fileBoxTopEdge(a5),d2		* Top edge
-	add	d3,d2			* Modifier!
 	cmp	d2,d1
 ;	cmp	#63+WINY,d1
 	blo.b	.out
@@ -18830,14 +18783,12 @@ getFileBoxIndexFromMousePosition:
 	* get bottom edge:
 	add		#126-63,d2	
 	;move	#126+WINY,d2		* Bottom edge
-	add	d3,d2			* Modifier!
 	add	boxy(a5),d2		* Height of box
 	cmp	d2,d1
 	bhi.b	.out
 
 	* converts y-koordinate into a line number (font is 8 pix tall)
 	sub	fileBoxTopEdge(a5),d1
-	sub	d3,d1
 
  if DEBUG
  	push	d1
@@ -18992,10 +18943,7 @@ markit:
 	;lsl	#3,d1		* mulu #8,d1
 	mulu	listFontHeight(a5),d1
 	add		fileBoxTopEdge(a5),d1
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt1
-;	add	#16,d1
-;.noAlt1
+
 	moveq	#33+WINX,d0 
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -48629,11 +48577,6 @@ createlistBoxRegion
 	move	fileBoxTopEdge(a5),d3
 	add		#127-62-1,d3 * magic constant
 
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt
-;	add	#16,d1
-;	add	#16,d3  
-;.noAlt
 	add	boxy(a5),d3
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -48685,11 +48628,6 @@ createInfoBoxRegion
 	move	d1,d3	
 	add		infoBoxHeight(a5),d3
 
-;	tst.b	altbuttonsUse(a5)
-;	beq.b	.noAlt
-;	add	#16,d1
-;	add	#16,d3  
-;.noAlt
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	add	windowtop(a5),d3
@@ -48734,10 +48672,11 @@ setListBoxClip
 
 
 removeListBoxClip
+	move.l	listBoxClipRegion(a5),a1
+removeClip
 	move.l	windowbase(a5),a0
 	move.l	wd_WLayer(a0),a0
-	; Null is ok here:
-	move.l	listBoxClipRegion(a5),a1
+	; Null is ok here for a1
 	lore	Layers,InstallClipRegion
 	rts
 
@@ -48758,13 +48697,9 @@ setInfoBoxClip
 
 
 removeInfoBoxClip
-	move.l	windowbase(a5),a0
-	move.l	wd_WLayer(a0),a0
-	; Null is ok here:
 	move.l	infoBoxClipRegion(a5),a1
-	lore	Layers,InstallClipRegion
-	rts
-
+	bra		removeClip
+	
 ***************************************************************************
 *
 * Row button layout
@@ -48910,12 +48845,12 @@ layoutGadgetsHorizontal
 	
 ***************************************************************************
 *
-* Layout
+* Vertica layout
 *
 ***************************************************************************
 
 layoutGadgetsVertical:
-	DPRINT	"layoutGadgetVertical +++++++++++++++++++++++++++++++++"
+	DPRINT	"layoutGadgetVertical"
 
 	move	listFontHeight(a5),d0
 	ext.l	d0
@@ -48962,8 +48897,6 @@ layoutGadgetsVertical:
 	move	d2,d1
 .3	
 
-
-;	move	buttonRow2Height(a5),d1
 	lea		row2Gadgets,a0
 	bsr		.forEachGadget
 
