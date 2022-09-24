@@ -48837,7 +48837,8 @@ layoutGadgetsHorizontal
 	bpl.b	.p
 	moveq	#0,d3
 .p
-	lsr	#1,d3
+	addq	#1,d3 * round up
+	lsr		#1,d3
 	move	d3,it_LeftEdge(a2)
 	
 	pop	a0
