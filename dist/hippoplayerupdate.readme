@@ -30,12 +30,106 @@ if it should be, try removing "S:HippoPlayer.prefs" first.
 
 NOTE 4: Too long didn't read
 - New Prefs options: "Button tooltips", "Favorite modules", 
- "Keep list on exit", "Big buttons", list font selector, scope toggles
-- New list mode change button above the file slider, window size gadget
+ "Keep list on exit", "Big buttons", new font selector, scope toggles
+- New list mode change button above the file slider
+- Window resize gadgets
 - Improved scopes
 - New music formats
+- "S"-gadget search functions popup, remote search with UHCTools
 
 
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.54 (30.8.2022) to v2.55 (?.?.2022) 
+
+
+## New fixes:
+
+- The new list button font selector introduced a bug that could
+  cause playlist contents to disappear or be trashed and
+  make the window resizing inoperable. A way to get this is 
+  in Prefs if the secondary font selector is empty, "Big buttons" 
+  is selected, then "Use" is pressed.
+
+- The top infobox would show a shortened filename in certain
+  cases instead of the whole filename.
+  
+- List sort is improved, now uses 64 chars instead of 24 chars for sorting. 
+  This solves my problem with "TF.Ghouls 'n' Ghosts Level 1" 
+  and "TF.Ghouls 'n' Ghosts Level 2" being displayed in the wrong order.
+
+- The "S" button was wrongfully disabled in file browser mode. 
+  Fixed it so what searching can be done.
+
+- Window width was not saved when Prefs was saved, now it is.
+
+- The window would not stay zipped to to title bar size,
+  it would resize itself back after a moment. Fixed.
+
+- The window could sometimes be resized to two rows even though
+  three should be the minimum, causing the slider to look weird. 
+
+- With some graphics patch combination it was possible to  
+  make the scopes not draw correcty. Possibly FBlit and CyberBugFix. 
+  Should work now.
+
+## New features:
+
+- Drag'n'dropping icons on the Hippo window now supports folders as 
+  well, previously only files worked. The folders will be recursively
+  scanned and the file match pattern used.
+
+- The 2nd font change button in Prefs now changes, in addition to the 
+  main window list font, also the other fonts used in the main
+  window: infobox font and the button font. The 1st font change button
+  works as previously, it affects the fonts used in the other windows.
+
+- The popup selector used in Prefs with RMB for some settings was
+  redone to use button gadgets for improved user experience. It is now
+  also used with the "S"-button.
+
+- The "S"-button was changed. Previously it provided "sort" with
+  LMB and "find" with RMB. Now it opens a search function popup with LMB,
+  and "sorts" with RMB. The popup provides the following:
+  - Search playlist, the previous find functionality, also with [F].
+  - Continue searching using the previous search word, this was 
+    available as a key shortcut [SHIFT+F] only in earlier versions.
+  - Search Modland
+  - Search Aminet
+  - Search Modules.pl
+
+- Search and download from some module internet sites.
+  This feature uses the excellent UHCTools to do the actual work, 
+  so ensure you have it installed and some internet connectivity.
+  Greetings to the UHC team!
+  
+  Search results go to a new view, the search results view. 
+  This is identified by a magnifying glass icon in the list
+  mode change button. The list can be toggled as previously
+  between the different views.
+  
+  Files are downloaded to temporary local storage before playback.
+  Search is accessed with the "S" button. There's a key shortcut
+  for Modland search: [CTRL+M]. 
+  
+  Modland search results will be filtered so that only Hippo compatible 
+  files are accepted. Aminet search will only return hits from the
+  "mods" subhierarchy.
+
+  Remote files are stored in playlists as URLs. Playlists
+  that only contain URLs could also be shared with other people.
+
+- The "Add" button (and the key shortcut [A]), while the file browser
+  or the search view is active, will copy the selected module or folder
+  into the main playlist. Folder contents will be scanned. This allows
+  you to pick modules from directory hierarchies or search results for 
+  later. 
+
+
+  
+ 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
