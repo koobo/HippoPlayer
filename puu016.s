@@ -28917,12 +28917,17 @@ loadfile:
 	sub	#18,plx2
 	move	infoBoxTopEdge(a5),ply1
 	move	infoBoxHeight(a5),d7
+	* vertically center
 	lsr		#1,d7
 	add		d7,ply1
-	
+	subq	#6,d7
+	lsr		#1,d7
+	add		d7,ply1	
+	addq	#1,ply1
+
 	;addq	#8,ply1
 	move	ply1,ply2
-	addq	#6,ply2
+	addq	#6,ply2		* 6 pix tall box
 ;;	moveq	#21+WINY,ply1
 ;	moveq	#27+WINY,ply2
 	add	windowleft(a5),plx1
@@ -29010,7 +29015,11 @@ loadfile:
 		move	infoBoxHeight(a5),d2
 		lsr		#1,d2
 		add		d2,d1
-		addq	#1,d1
+		subq	#5,d2
+		lsr		#1,d2
+		add		d2,d1
+		addq	#2,d1
+
 		add     windowleft(a5),d0
         add     windowtop(a5),d1
 
