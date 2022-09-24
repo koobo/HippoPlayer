@@ -3004,7 +3004,7 @@ main
 	mulu	listFontHeight(a5),d3
 	lsr		#1,d3
 	add		d3,d1
-	bra		infoBoxPrint
+	bra		print
 .oohi
 
 
