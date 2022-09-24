@@ -2798,14 +2798,14 @@ main
 .cp13	move	(a1)+,(a0)+
 	cmp.l	a0,a2
 	bne.b	.cp13
-
-	lea	horizPropGadgetGfxDouble,a0
-	moveq	#horizPropGadgetGfxDouble_kick13-horizPropGadgetGfxDouble,d0
-	lea	(a0,d0),a1
-	move.l	a1,a2
-.cp14	move	(a1)+,(a0)+
-	cmp.l	a0,a2
-	bne.b	.cp14
+;
+;	lea	horizPropGadgetGfxDouble,a0
+;	moveq	#horizPropGadgetGfxDouble_kick13-horizPropGadgetGfxDouble,d0
+;	lea	(a0,d0),a1
+;	move.l	a1,a2
+;.cp14	move	(a1)+,(a0)+
+;	cmp.l	a0,a2
+;	bne.b	.cp14
  
 
 
@@ -48852,18 +48852,15 @@ layoutGadgetsHorizontal
 layoutGadgetsVertical:
 	DPRINT	"layoutGadgetVertical"
 
-	move	listFontHeight(a5),d0
-	ext.l	d0
-	DPRINT	"listFontHeight=%ld"
-	add		d0,d0
-	addq	#1,d0
-	move	d0,infoBoxHeight(a5)
-	DPRINT	"infoBoxHeight=%ld"
-
 	*** Infobox
 
+	move	listFontHeight(a5),d1
+	add		d1,d1
+	addq	#1,d1
+	move	d1,infoBoxHeight(a5)
+
 	move	infoBoxTopEdge(a5),d0
-	add		infoBoxHeight(a5),d0
+	add		d1,d0
 	addq	#4,d0 ; margin
 
 	*** Button row 1
@@ -48904,10 +48901,10 @@ layoutGadgetsVertical:
 	lea		row2Gadgets,a0
 	bsr		.forEachGadget
 
+	bsr		.makeVolumeSliderKnob
+	
 	bsr		.setButtonImages
 
-	*** Filebox
-	
 	add		d1,d0
 	addq	#4,d0 ; margin
 	move	d0,fileBoxTopEdge(a5)
@@ -48924,6 +48921,19 @@ layoutGadgetsVertical:
 	move	d0,gg_TopEdge(a1)
 	rts
 	
+* in:
+*   a0 = gadget row
+*   a2 = callback with a1=gadget
+.forEachGadget
+.1	tst	(a0)
+	beq.b	.2
+	move.l	a0,a1
+	add	(a0),a1
+	addq	#6,a0
+	jsr		(a2)
+	bra.b	.1
+.2	rts
+
 .setTopAndHeight:
 	move	d0,gg_TopEdge(a1)
 	move	d1,gg_Height(a1)
@@ -49014,17 +49024,43 @@ layoutGadgetsVertical:
 
 
 * in:
-*   a0 = gadget row
-*   a2 = callback with a1=gadget
-.forEachGadget
-.1	tst	(a0)
-	beq.b	.2
-	move.l	a0,a1
-	add	(a0),a1
-	addq	#6,a0
-	jsr		(a2)
-	bra.b	.1
-.2	rts
+*   d1 = row height
+.makeVolumeSliderKnob
+	* Make slider knob for volume slider
+	move	d1,d3
+
+    lea     gadgetVolumeSlider,a1
+    move.l  gg_GadgetRender(a1),a1
+	subq	#4,d3 * magic constant
+	move	d3,ig_Height(a1)
+
+	* Soure data
+	lea		horizPropGadgetGfxNormal,a2
+	tst		uusikick(a5)
+	bne.b	.newKnob
+	lea		horizPropGadgetGfxNormal_kick13,a2
+.newKnob
+	* Target buffer
+	lea		slider1im,a3
+
+	* d2 = offset to 2nd plane in destination
+	move	d3,d2
+	add		d2,d2
+
+	move	9*2(a2),(a3,d2) * line 0, bpl 2
+	move	(a2)+,(a3)+ * line 0, bpl 1
+	subq	#1,d3
+.lineLoop
+	move	9*2(a2),(a3,d2) * line n, bpl 2
+	move	(a2),(a3)+ * line n, bpl 1
+	subq	#1,d3
+	cmp		#1,d3
+	bne.b	.lineLoop
+	add		#7*2,a2	* get to the last data line
+	move	9*2(a2),(a3,d2) * line last, bpl 2
+	move	(a2),(a3)+ * line last, bpl 1
+	rts
+
 
 
 ***************************************************************************
@@ -51005,22 +51041,22 @@ pslider1im
 pslider2im
 sIPULIim
 sIPULI2im
-slider1im
 ahiG4im
 ahiG5im
 ahiG6im
 nAMISKA5im
+
 horizPropGadgetGfxNormal
 	; bitplane 1
-	dc.w %0000000000000000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0111111111100000
+	dc.w %0000000000000000 * row 1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0111111111100000 * row n
 	; bitplane 2
 	dc.w %1111111111000000
 	dc.w %1000000000000000
@@ -51056,85 +51092,85 @@ horizPropGadgetGfxNormal_kick13
 
 * Width: 11 pixels
 * Height: 9+8 pixels
-
-slider1imDouble
-horizPropGadgetGfxDouble
-	; bitplane 1
-	dc.w %0000000000000000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0111111111100000
-	; bitplane 2
-	dc.w %1111111111000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %0000000000000000
-
-horizPropGadgetGfxDouble_kick13
-	; bitplane 1
-	dc.w %1111111111000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %0000000000000000
-	; bitplane 2
-	dc.w %0000000000000000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0111111111100000
-
-
+;
+;slider1imDouble
+;horizPropGadgetGfxDouble
+;	; bitplane 1
+;	dc.w %0000000000000000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0111111111100000
+;	; bitplane 2
+;	dc.w %1111111111000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %0000000000000000
+;
+;horizPropGadgetGfxDouble_kick13
+;	; bitplane 1
+;	dc.w %1111111111000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %0000000000000000
+;	; bitplane 2
+;	dc.w %0000000000000000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0111111111100000
+;
+;
 
 button1im	
 	dc	%1100000000000000				
@@ -51491,6 +51527,10 @@ slim:	ds	410*2
 * sampleinfo-slideri
 slim2:	ds	410*2
 
+* volume slider image
+slider1im
+	* Space for 30 rows, 16 pixels, two bitplanes
+	ds.w	30*2
 
 	section	udnm,bss_p
 
