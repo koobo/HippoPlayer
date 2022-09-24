@@ -16163,7 +16163,7 @@ rfont
 	bra.w	pfont
 
 
-.tit	dc.b	"Select secondary font",0
+.tit	dc.b	"Font for other windows",0
  even
 
 fontreqtags
@@ -16253,7 +16253,7 @@ rListFont
 	bra.b	pListFont
 
 
-.tit	dc.b	"Select main window font",0
+.tit	dc.b	"Font for main window",0
  even
 
 listfontreqtags
