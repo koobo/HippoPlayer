@@ -5,11 +5,14 @@ ASM=vasmm68k_mot
 FLAGS=
 TARGET=
 
-all: HiP group
+# Normal and debug build of the main app
+all: HiP HiP-debug group
 
+# Same as above with debug build of the group as well.
+# This enables logging with PS3M and sampleplayer.
 debug: FLAGS+=-DDEBUG=1
 debug: TARGET=debug
-debug: HiP-debug group
+debug: all
 
 # Main app
 HiP: puu016.s kpl playerIds.i
