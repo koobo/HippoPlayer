@@ -1367,9 +1367,9 @@ stringExtendStruct 	rs.b	sex_SIZEOF
 * Popup list selector memory remember pointer
 listSelectorRememberPtr		rs.l	1
 
-* UHC aminet mirror path, if this is NULL, there's no UHC
-* installed. Should be freed on exit.
-uhcAminetMirrorPath			rs.l	1
+;* UHC aminet mirror path, if this is NULL, there's no UHC
+;* installed. Should be freed on exit.
+;uhcAminetMirrorPath			rs.l	1
 uhcAvailable				rs.b	1	
 							rs.b	1
 
@@ -49271,17 +49271,20 @@ remoteSearch
 	moveq	#.modulesLineE-.modulesLine,d4	
 	bra.b	.2
 .aa
-	* Aminet mirror is populated after aminetsearch has been done,
-	* so get it here.
-	bsr		getUHCAminetMirror
-	move.l	uhcAminetMirrorPath(a5),d6
-	beq.b	.noAminet
-	move.l	d6,a0
-.flen
-	tst.b	(a0)+
-	bne.b	.flen
-	move.l	a0,d4
-	sub.l	d6,d4 * string length in d4
+	pushpea	.aminetLine(pc),d6
+	moveq	#.aminetLineE-.aminetLine,d4	
+
+;	* Aminet mirror is populated after aminetsearch has been done,
+;	* so get it here.
+;	bsr		getUHCAminetMirror
+;	move.l	uhcAminetMirrorPath(a5),d6
+;	beq.b	.noAminet
+;	move.l	d6,a0
+;.flen
+;	tst.b	(a0)+
+;	bne.b	.flen
+;	move.l	a0,d4
+;	sub.l	d6,d4 * string length in d4
 .2
 
 
@@ -49427,16 +49430,17 @@ remoteSearch
 	dc.l	"qts."
 	dc.l	0
 
+.aminetLine
+	dc.b	"http://de.aminet.net/aminet/",0
+.aminetLineE
 
 .modlandLine
 	dc.b	"http://ftp.modland.com/pub/modules/",0
 .modlandLineE
 
-
 .modulesLine
 	dc.b	"http://www.modules.pl/",0
 .modulesLineE
-
 
 .searchModland
 	dc.b	"Search Modland",0
@@ -49649,47 +49653,48 @@ initializeUHC
  even
 
 
-getUHCAminetMirror
-	pushm	d1-a6
-	move.l	uhcAminetMirrorPath(a5),a0
-	clr.l	uhcAminetMirrorPath(a5)
-	jsr		freemem
-
-	moveq	#100,d0
-	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
-	jsr		getmem
-	move.l	d0,uhcAminetMirrorPath(a5)
-	move.l	d0,a3
-
-	pushpea	.aminetMirrorPath(pc),d1
-	move.l	d0,d2
-	addq.l	#.httpE-.http,d2
-	moveq	#90,d3
-	move.l	#GVF_GLOBAL_ONLY,d4
-	lore	Dos,GetVar
-	tst.l	d0
-	bmi.b	.x
-
-	lea		.http(pc),a1
-	moveq	#.httpE-.http,d0
-.c1	move.b	(a1)+,(a3)+
-	dbf	d0,.c1
-	
-.x
-	popm	d1-a6
-	rts
-
-.http	dc.b	"http://"
-.httpE
-
-.aminetMirrorPath
-	dc.b	"UHC/AMINETMIRROR",0
-	even
+;getUHCAminetMirror
+;	pushm	d1-a6
+;	move.l	uhcAminetMirrorPath(a5),a0
+;	clr.l	uhcAminetMirrorPath(a5)
+;	jsr		freemem
+;
+;	moveq	#100,d0
+;	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+;	jsr		getmem
+;	move.l	d0,uhcAminetMirrorPath(a5)
+;	move.l	d0,a3
+;
+;	pushpea	.aminetMirrorPath(pc),d1
+;	move.l	d0,d2
+;	addq.l	#.httpE-.http,d2
+;	moveq	#90,d3
+;	move.l	#GVF_GLOBAL_ONLY,d4
+;	lore	Dos,GetVar
+;	tst.l	d0
+;	bmi.b	.x
+;
+;	lea		.http(pc),a1
+;	moveq	#.httpE-.http,d0
+;.c1	move.b	(a1)+,(a3)+
+;	dbf	d0,.c1
+;	
+;.x
+;	popm	d1-a6
+;	rts
+;
+;.http	dc.b	"http://"
+;.httpE
+;
+;.aminetMirrorPath
+;	dc.b	"UHC/AMINETMIRROR",0
+;	even
 
 deinitUHC
-	move.l	uhcAminetMirrorPath(a5),a0
-	jmp		freemem
- 
+;	move.l	uhcAminetMirrorPath(a5),a0
+;	jmp		freemem
+	rts
+	
 freeSearchList
 	move.l	(a5),a6		* execbase
 	lea	searchResultsListHeader(a5),a2
