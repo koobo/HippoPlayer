@@ -29422,6 +29422,14 @@ get_sid	move.l	_SIDBase(a5),d0
 	move.l	(sp)+,a6
 	move.l	d0,_SIDBase(a5)
 	beq.b	.q
+ if DEBUG
+    move.l  d0,a0
+    moveq   #0,d0
+    moveq   #0,d1
+    move.w  LIB_VERSION(a0),d0
+    move.w  LIB_REVISION(a0),d1
+    DPRINT  "Opened playsid.library %ld.%ld"
+ endif
 	bsr.w	init_sidpatch
 	moveq	#1,d0
 .q	rts
@@ -33963,7 +33971,7 @@ p_sid:	jmp	.init(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
-	p_NOP
+	jmp .volume(pc)
 	jmp	.song(pc)
 	jmp	.eteen(pc)
 	p_NOP
@@ -33975,6 +33983,7 @@ p_sid:	jmp	.init(pc)
 	dc.b	"PSID",0
 .flag	dc.b	0
  even
+
 
 .init
 	bsr.w	get_sid
@@ -33989,12 +33998,17 @@ p_sid:	jmp	.init(pc)
 	move.l	_SIDBase(a5),a6
 
 	tst.b	.flag
-	bne.b	.plo
+	bne  	.plo
+
+    bsr     isRESID
+    bne     .resid1
 
 	* Enable getting data for scopes.
 	* Must have patched the display signal away first.
 	moveq	#1,d0
 	lob	SetDisplayEnable
+
+.resid1
 
 	lob	AllocEmulResource
 	tst.l	d0
@@ -34117,6 +34131,16 @@ p_sid:	jmp	.init(pc)
 	lore	SID,ForwardSong
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
+
+.volume
+    bsr     isRESID
+    beq.b   .11
+    move.l	_SIDBase(a5),a6
+    move    mainvolume(a5),d0
+    jsr     _LVOSetRESIDVolume(a6)
+.11
+    rts
+
 
 *** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
 
@@ -34410,6 +34434,9 @@ sidScopeUpdate
 	bsr.w	anyScopeRunning
 	beq.w	.x
 
+    bsr     isRESID
+    bne     .resid
+
 	lea	scopeData+scope_ch1(a5),a0
 	moveq	#0,d7
 	move.l	_SIDBase(a5),a1
@@ -34490,6 +34517,43 @@ sidScopeUpdate
 	ds.w	4
 .followFractions
 	ds.w	4
+
+.resid
+	move.l	_SIDBase(a5),a6
+    jsr     _LVOGetRESIDAudioBuffer(a6)
+    * d0 = buffer len
+    * d1 = playback period
+    lsr     #1,d0
+   
+	lea	scopeData+scope_ch1(a5),a1
+    moveq   #4-1,d2
+.bob
+    move.l  a0,ns_start(a1)
+    move.l  a0,ns_loopstart(a1)
+    move    d0,ns_length(a1)
+    move    d0,ns_replen(a1)
+    move    d1,ns_period(a1)
+    move    #$40,ns_tempvol(a1)
+    lea	    ns_size(a1),a1
+    dbf     d2,.bob
+    rts
+
+
+isRESID
+    push    a0
+    move.l	_SIDBase(a5),a0
+	cmp	#1,LIB_VERSION(a0)
+	bne.b	.noRESID
+	cmp	#3,LIB_REVISION(a0)
+	bne.b	.noRESID
+    pop     a0
+    moveq   #1,d0
+    rts
+.noRESID
+    pop     a0
+    moveq   #1,d0
+    rts
+
 
 * T‰nne v‰liin h‰m‰‰v‰sti
 
