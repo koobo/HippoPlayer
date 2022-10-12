@@ -34583,11 +34583,11 @@ isPlaysidReSID:
     bne.b   .noRESID
     cmp.b   #"3",18(a0)
     bne.b   .noRESID
-    cmp.b   #" ",18(a0)
+    cmp.b   #" ",19(a0)
     bne.b   .noRESID
-    cmp.b   #"r",19(a0)
+    cmp.b   #"r",20(a0)
     bne.b   .noRESID
-    cmp.b   #"e",20(a0)
+    cmp.b   #"e",21(a0)
     bne.b   .noRESID
    ; "playsid.library 1.3 reSID (October 2022)",1
     pop     a0
@@ -34595,7 +34595,7 @@ isPlaysidReSID:
     rts
 .noRESID
     pop     a0
-    moveq   #1,d0
+    moveq   #0,d0
     rts
 
 
