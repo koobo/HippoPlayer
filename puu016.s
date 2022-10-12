@@ -4509,14 +4509,10 @@ avaa_ikkuna:
 
 	lea	slider4,a3		* fileboxin slideri
 	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
-	and	#~$80,gg_TopEdge(a3)
 	add	boxy(a5),d3
-	bpl.b	.r
-	or	#$80,gg_TopEdge(a3)
-	clr	d3
-.r	move	d3,gg_Height(a3)
-
+	move	d3,gg_Height(a3)
 	subq	#3,gg_Height(a3)
+
 	basereg	slider4,a3
 
 	* Remove the fileslider from the gadget list
@@ -4915,7 +4911,8 @@ wrender:
 	move.l	windowbase(a5),a3
 	move	wd_Height(a3),d3	
 	sub		windowbottom(a5),d3
-	sub		#3,d3 * magic constant
+	subq    #3,d3 * magic constant
+    sub     windowtop(a5),d3
 	bsr.w	drawtexture
 
 
@@ -48846,7 +48843,8 @@ initializeButtonRowLayout
 	rts
 
 
-layoutGadgetsHorizontal
+layoutGadgetsHorizontal:
+horizontalLayout:
 	* Set correct font for calculating text widths for buttons
 	move.l	rastport(a5),a1
 	move.l	listfontbase(a5),a0
@@ -48968,6 +48966,7 @@ layoutGadgetsHorizontal
 ***************************************************************************
 
 layoutGadgetsVertical:
+verticalLayout:
 	DPRINT	"layoutGadgetVertical"
 
 	*** Infobox
@@ -48982,7 +48981,7 @@ layoutGadgetsVertical:
 	addq	#4,d0 ; margin
 
 	*** Button row 1
-
+    add     windowtop(a5),d0
 	move	d0,buttonRow1TopEdge(a5)
 
 	moveq	#13,d1
@@ -49024,10 +49023,12 @@ layoutGadgetsVertical:
 
 	add		d1,d0
 	addq	#4,d0 ; margin
+    sub     windowtop(a5),d0
 	move	d0,fileBoxTopEdge(a5)
 
 	*** Left side gadgets
 
+    add     windowtop(a5),d0
 	* Align mode button and file slider with filebox
 	lea		gadgetListModeChangeButton,a0
 	subq	#2,d0
