@@ -49261,8 +49261,8 @@ remoteSearch
     beq.b   .1
     lea     .hvscSearchCmd(pc),a0
 .1
-
- 	move.l	sp,d0		* search word
+    pushpea .pathCmd(pc),d0  * path setting
+ 	move.l	sp,d1		* search word
 	jsr		desmsg
 
 	* Save it into a file for execution
@@ -49535,34 +49535,37 @@ remoteSearch
 .modulesLineE
 
 .hvscLine
-    dc.b    "http://www.hvsc.c64.org/download/C64Music/",0"
+    dc.b    "http://www.hvsc.c64.org/download/C64Music/",0
 .hvscLineE
 
 .uhcTempDirVar
 	dc.b	"UHC/TEMPDIR",0
 
+.pathCmd
+    dc.b    "path ${UHCBIN}C ${UHCBIN}S ADD",0
+
 .modlandResultsPath
 	dc.b	"modlandsearch",0
 .modlandSearchCmd
-	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
+	dc.b	"%s",10
 	dc.b 	'modlandsearch "%s"',10
 	dc.b	0
 .aminetResultsPath
 	dc.b	"aminetsearch",0
 .aminetSearchCmd
-	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
+	dc.b	"%s",10
 	dc.b 	'aminetsearch "mods/ %s"',10
 	dc.b	0
 .modulesResultsPath
 	dc.b	"modulessearch",0
 .modulesSearchCmd
-	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
+	dc.b	"%s",10
 	dc.b 	'modulessearch "%s"',10
 	dc.b	0
 .hvscResultsPath
 	dc.b	"hvscsearch",0
 .hvscSearchCmd
-	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
+	dc.b	"%s",10
 	dc.b 	'hvscsearch "%s"',10
 	dc.b	0
  even
