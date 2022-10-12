@@ -4383,85 +4383,64 @@ avaa_ikkuna:
 
 	* What is this?
 	not.b	kokolippu(a5)
-	beq.b	.small
+	beq 	.small
 
-	basereg	winstruc,a0
-	move	#7,slimheight(a0)	* slideri pieneks, jotta ei tuu sotkuja
-	endb	a0
+	move	#7,slimheight	* slideri pieneks, jotta ei tuu sotkuja
 
+    *
+    *
+    * Next up we try to open a window. If it won't fit, make it smaller.
+    *
+    *
+    
+.windowOpenLoop
+	lea	winstruc,a0
+
+    * Calculate window height proposal
 	move	WINSIZY(a5),d0
 
 	; Adjust
-	add		fileBoxTopEdge(a5),d0
-	sub		#63+WINY,d0
-	;add		#10,d0
+	add     fileBoxTopEdge(a5),d0
+	sub     #63+WINY,d0
+	;add    #10,d0
 
-	add	boxy(a5),d0
-	add	windowtop(a5),d0
-	move	d0,wsizey-winstruc(a0)	* Ison koko ja paikka
-	move.l	windowpos(a5),(a0)
-	bsr.w	.leve
+	add	    boxy(a5),d0
+	add	    windowtop(a5),d0
+	move    d0,nw_Height(a0)
 
-	move	wbkorkeus(a5),d6	* Mahtuuko ruudulle pystysuunnassa?
-	sub	WINSIZY(a5),d6
-	sub	windowtop(a5),d6
-.uudest
-	move	d6,d0
-	sub	boxy(a5),d0		* mahtuuko fileboxi?
-	bmi.b	.negatiivi
+    * Calculate left edge so that window fits
+    move.l  windowpos(a5),nw_LeftEdge(a0)
+	bsr.w   .leve
 
-	cmp	2(a0),d0
-	bge.b	.okkk
-	move	d0,2(a0)
-	bra.b	.okkk
 
-.negatiivi
+ if DEBUG
+    pushm   d0-d3
+    moveq   #0,d0
+    moveq   #0,d1
+    moveq   #0,d2
+    moveq   #0,d3
+    move    nw_Width(a0),d0
+    move    nw_Height(a0),d1
+    move    nw_LeftEdge(a0),d2
+    move    nw_TopEdge(a0),d3
+    DPRINT  "Trying to open %ldx%ld at %ld,%ld"
+    popm    d0-d3
+ endif
+
+    lob     OpenWindow
+    tst.l   d0
+    bne     .gotWindow
+
+    DPRINT  "Window open failed! Retry smaller."
 	subq	#1,boxsize(a5)		* Pienennet‰‰n fileboksia..
 	subq	#1,boxsize0(a5)
 	bsr.w	setboxy
-	move	d6,d0
-	sub	boxy(a5),d0
-	bmi.b	.negatiivi
-	move	WINSIZY(a5),d0
-	add	windowtop(a5),d0
-	add	boxy(a5),d0
-	move	d0,wsizey-winstruc(a0)	* Ison koko ja paikka
-	bra.b	.uudest
-.okkk
+    bra     .windowOpenLoop
+
 
 .small	
-
-	lea	slider4,a3		* fileboxin slideri
-	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
-	and	#~$80,gg_TopEdge(a3)
-	add	boxy(a5),d3
-	bpl.b	.r
-	or	#$80,gg_TopEdge(a3)
-	clr	d3
-.r	move	d3,gg_Height(a3)
-
-
-;	tst.b	uusikick(a5)
-;	beq.b	.ded
-	subq	#3,gg_Height(a3)
-;.ded
-	basereg	slider4,a3
-
-	* Remove the fileslider from the gadget list
-	* if it is not visible. On kick13 there may be
-	* some gfx trash otherwise.
-	* Normal chain:
-	;move.l	#slider4,slider1+gg_NextGadget(a3)
-	move.l	a3,slider1+gg_NextGadget(a3)
-	tst	boxsize(a5)
-	bne.b	.isBox
-	* Skip over slider4
-	;move.l	#button12,slider1+gg_NextGadget(a3)
-	pushpea	button12(a3),slider1+gg_NextGadget(a3)
-.isBox
-	endb	a3
-	
 	lob	OpenWindow
+.gotWindow
 	move.l	d0,windowbase(a5)
 	bne.b	.ok
 	bsr.w	unlockscreen
@@ -4469,13 +4448,14 @@ avaa_ikkuna:
 .opener	moveq	#-1,d0			* Ei auennut!
 	rts
 
-.leve	move	wbleveys(a5),d0		* WB:n leveys
-	move	(a0),d1			* Ikkunan x-paikka
-	add	4(a0),d1		* Ikkunan oikea laita
+.leve	
+    move	wbleveys(a5),d0     * WB:n leveys
+	move	nw_LeftEdge(a0),d1  * Ikkunan x-paikka
+	add	    nw_Width(a0),d1     * Ikkunan oikea laita
 	cmp	d0,d1
 	bls.b	.okk
-	sub	4(a0),d0	* Jos ei mahdu ruudulle, laitetaan
-	move	d0,(a0)		* mahdollisimman oikealle
+	sub	nw_Width(a0),d0	        * Jos ei mahdu ruudulle, laitetaan
+	move	d0,nw_LeftEdge(a0)  * mahdollisimman oikealle
 .okk	rts
 
 .ok
@@ -4515,6 +4495,34 @@ avaa_ikkuna:
 
 	; Store this for detecting height changes after window opened
 	move	winstruc+nw_Height,previousWindowHeight(a5)
+
+    ; Do some gadget hacking
+
+	lea	slider4,a3		* fileboxin slideri
+	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
+	and	#~$80,gg_TopEdge(a3)
+	add	boxy(a5),d3
+	bpl.b	.r
+	or	#$80,gg_TopEdge(a3)
+	clr	d3
+.r	move	d3,gg_Height(a3)
+
+	subq	#3,gg_Height(a3)
+	basereg	slider4,a3
+
+	* Remove the fileslider from the gadget list
+	* if it is not visible. On kick13 there may be
+	* some gfx trash otherwise.
+	* Normal chain:
+	;move.l	#slider4,slider1+gg_NextGadget(a3)
+	move.l	a3,slider1+gg_NextGadget(a3)
+	tst	boxsize(a5)
+	bne.b	.isBox
+	* Skip over slider4
+	;move.l	#button12,slider1+gg_NextGadget(a3)
+	pushpea	button12(a3),slider1+gg_NextGadget(a3)
+.isBox
+	endb	a3
 
 	jsr		layoutGadgetsHorizontal
 
