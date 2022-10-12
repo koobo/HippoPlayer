@@ -9232,6 +9232,8 @@ rsearchfuncs
 	beq.b	.aminet
 	subq	#1,d0
 	beq.b	.modules
+	subq	#1,d0
+	beq.b	.hvsc
 .skip
 	rts
 
@@ -9241,6 +9243,8 @@ rsearchfuncs
 	jmp	aminetSearch
 .modules
 	jmp	modulesSearch
+.hvsc
+	jmp	hvscSearch
 
 * in:
 *   d3 = index to check
@@ -9257,12 +9261,13 @@ rsearchfuncs
 
 .options
 	* max width, rows
-	dc.b	24,5
+	dc.b	24,6
 	dc.b	"Search list    [F]      ",0
 	dc.b	"Search next    [SHIFT+F]",0
 	dc.b	"Search Modland [CTRL+M] ",0
  	dc.b	"Search Aminet           ",0
 	dc.b	"Search Modules.pl       ",0
+	dc.b	"Search HVSC             ",0
 
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
@@ -49178,22 +49183,24 @@ layoutGadgetsVertical:
 ***************************************************************************
 
 SEARCH_MODLAND = 0
-SEARCH_AMINET = 1
+SEARCH_AMINET  = 1
 SEARCH_MODULES = 2
+SEARCH_HVSC    = 3
 
 modlandSearch
-	DPRINT	"modlandSearch"
 	moveq	#SEARCH_MODLAND,d7
 	bra.b	remoteSearch
 
 aminetSearch
-	DPRINT	"aminetSearch"
 	moveq	#SEARCH_AMINET,d7
 	bra.b	remoteSearch
 
 modulesSearch
-	DPRINT	"aminetModules"
 	moveq	#SEARCH_MODULES,d7
+	bra.b	remoteSearch
+
+hvscSearch
+	moveq	#SEARCH_HVSC,d7
 ;	bra.b	remoteSearch
 
 
@@ -49221,16 +49228,7 @@ remoteSearch
 	moveq	#40,d0
 	; a2 = requester title
 
-	lea		.searchModland(pc),a2
- 	cmp.b	#SEARCH_MODLAND,d7
-	beq.b	.5
-	lea		.searchAminet(pc),a2
-	cmp.b	#SEARCH_AMINET,d7
-	beq.b	.5
-	lea		.searchModules(pc),a2
-.5
- 
-
+    lea     enterSearchPattern_t,a2 
 	; a3 = rtReqInfo structure or null
 	sub.l	a3,a3
 	; a0 = tags, to set the public screen
@@ -49250,6 +49248,9 @@ remoteSearch
 	cmp.b	#SEARCH_AMINET,d7
 	beq.b	.1
 	lea		.modulesSearchCmd(pc),a0
+    cmp.b   #SEARCH_MODULES,d7
+    beq.b   .1
+    lea     .hvscSearchCmd(pc),a0
 .1
 
  	move.l	sp,d0		* search word
@@ -49300,6 +49301,9 @@ remoteSearch
 	cmp.b	#SEARCH_AMINET,d7
 	beq.b	.a
 	lea		.modulesResultsPath(pc),a0
+    cmp.b   #SEARCH_MODULES,d7
+    beq.b   .a
+    lea     .hvscResultsPath(pc),a0
 .a
 
 	* Jump to after the variable
@@ -49346,6 +49350,10 @@ remoteSearch
 	beq.b	.aa
 	pushpea	.modulesLine(pc),d6
 	moveq	#.modulesLineE-.modulesLine,d4	
+    cmp.b   #SEARCH_MODULES,d7
+    beq.b   .2
+	pushpea	.hvscLine(pc),d6
+	moveq	#.hvscLineE-.hvscLine,d4	
 	bra.b	.2
 .aa
 	pushpea	.aminetLine(pc),d6
@@ -49363,8 +49371,6 @@ remoteSearch
 ;	move.l	a0,d4
 ;	sub.l	d6,d4 * string length in d4
 .2
-
-
 
 	* Import data
 	* This will also set l_remote and l_nameaddr
@@ -49405,12 +49411,12 @@ remoteSearch
 	lea		.modlandPrefixes(pc),a1
 	bsr		filterName
 
- if DEBUG
-	tst.l	d0
-	bne.b	.ok
-	DPRINT	"->REJECTED"
-.ok
- endif
+; if DEBUG
+;	tst.l	d0
+;	bne.b	.ok
+;	DPRINT	"->REJECTED"
+;.ok
+; endif
 
 	popm	a0/a1
 	rts
@@ -49519,8 +49525,9 @@ remoteSearch
 	dc.b	"http://www.modules.pl/",0
 .modulesLineE
 
-.searchModland
-	dc.b	"Search Modland",0
+.hvscLine
+    dc.b    "http://www.hvsc.c64.org/download/C64Music/",0"
+.hvscLineE
 
 .uhcTempDirVar
 	dc.b	"UHC/TEMPDIR",0
@@ -49531,23 +49538,23 @@ remoteSearch
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'modlandsearch "%s"',10
 	dc.b	0
-.searchAminet
-	dc.b	"Search Aminet",0
 .aminetResultsPath
 	dc.b	"aminetsearch",0
 .aminetSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'aminetsearch "mods/ %s"',10
 	dc.b	0
-
-
-.searchModules
-	dc.b	"Search Modules.pl",0
 .modulesResultsPath
 	dc.b	"modulessearch",0
 .modulesSearchCmd
 	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
 	dc.b 	'modulessearch "%s"',10
+	dc.b	0
+.hvscResultsPath
+	dc.b	"hvscsearch",0
+.hvscSearchCmd
+	dc.b	"path ${UHCBIN}C ${UHCBIN}S ADD",10
+	dc.b 	'hvscsearch "%s"',10
 	dc.b	0
  even
 
