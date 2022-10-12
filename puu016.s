@@ -29428,7 +29428,8 @@ get_sid	move.l	_SIDBase(a5),d0
     moveq   #0,d1
     move.w  LIB_VERSION(a0),d0
     move.w  LIB_REVISION(a0),d1
-    DPRINT  "Opened playsid.library %ld.%ld"
+    move.l  LIB_IDSTRING(a0),d2
+    DPRINT  "Opened playsid: %ld.%ld - %s"
  endif
 	bsr.w	init_sidpatch
 	moveq	#1,d0
@@ -33980,7 +33981,11 @@ p_sid:	jmp	.init(pc)
 	p_NOP
 	dc.w 	pt_sid 				* type
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume!pf_scope!pf_quadscopePoke
-	dc.b	"PSID",0
+	dc.b	"PSID"
+.residTitle
+    dc.b    0
+    dc.b    "- reSID 6581",0
+
 .flag	dc.b	0
  even
 
@@ -34000,8 +34005,11 @@ p_sid:	jmp	.init(pc)
 	tst.b	.flag
 	bne  	.plo
 
-    bsr     isRESID
+    lea     .residTitle(pc),a0
+    move.b  #" ",(a0)
+    bsr     isPlaysidReSID
     bne     .resid1
+    clr.b   (a0)
 
 	* Enable getting data for scopes.
 	* Must have patched the display signal away first.
@@ -34133,7 +34141,7 @@ p_sid:	jmp	.init(pc)
 	rts
 
 .volume
-    bsr     isRESID
+    bsr     isPlaysidReSID
     beq.b   .11
     move.l	_SIDBase(a5),a6
     move    mainvolume(a5),d0
@@ -34434,7 +34442,7 @@ sidScopeUpdate
 	bsr.w	anyScopeRunning
 	beq.w	.x
 
-    bsr     isRESID
+    bsr     isPlaysidReSID
     bne     .resid
 
 	lea	scopeData+scope_ch1(a5),a0
@@ -34523,10 +34531,10 @@ sidScopeUpdate
     jsr     _LVOGetRESIDAudioBuffer(a6)
     * d0 = buffer len
     * d1 = playback period
-    lsr     #1,d0
-   
+    lsr     #1,d0   * length in words
+
 	lea	scopeData+scope_ch1(a5),a1
-    moveq   #4-1,d2
+    moveq   #4-1,d4
 .bob
     move.l  a0,ns_start(a1)
     move.l  a0,ns_loopstart(a1)
@@ -34535,17 +34543,31 @@ sidScopeUpdate
     move    d1,ns_period(a1)
     move    #$40,ns_tempvol(a1)
     lea	    ns_size(a1),a1
-    dbf     d2,.bob
+    dbf     d4,.bob
     rts
 
 
-isRESID
+* Checks whether the opened playsid.library
+* is the reSID variant
+isPlaysidReSID:
     push    a0
     move.l	_SIDBase(a5),a0
-	cmp	#1,LIB_VERSION(a0)
-	bne.b	.noRESID
-	cmp	#3,LIB_REVISION(a0)
-	bne.b	.noRESID
+	cmp     #1,LIB_VERSION(a0)
+	bne.b   .noRESID
+	cmp     #3,LIB_REVISION(a0)
+	bne.b   .noRESID
+    move.l  LIB_IDSTRING(a0),a0
+    cmp.b   #"1",16(a0)
+    bne.b   .noRESID
+    cmp.b   #"3",18(a0)
+    bne.b   .noRESID
+    cmp.b   #" ",18(a0)
+    bne.b   .noRESID
+    cmp.b   #"r",19(a0)
+    bne.b   .noRESID
+    cmp.b   #"e",20(a0)
+    bne.b   .noRESID
+   ; "playsid.library 1.3 reSID (October 2022)",1
     pop     a0
     moveq   #1,d0
     rts
