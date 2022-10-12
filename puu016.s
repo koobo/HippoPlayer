@@ -4409,6 +4409,7 @@ avaa_ikkuna:
 	move    d0,nw_Height(a0)
 
     * Calculate left edge so that window fits
+    * Set nw_LeftEdge, nw_TopEdge
     move.l  windowpos(a5),nw_LeftEdge(a0)
 	bsr.w   .leve
 
@@ -4432,6 +4433,14 @@ avaa_ikkuna:
     bne     .gotWindow
 
     DPRINT  "Window open failed! Retry smaller."
+    * If at 3, move the window to the top and hope for the best.
+    cmp     #3,boxsize(a5)
+    bne     .smaller
+    * Reset stored window y-coordinate to zero
+    clr     windowpos+2(a5)
+    bra     .windowOpenLoop
+
+.smaller
 	subq	#1,boxsize(a5)		* Pienennet‰‰n fileboksia..
 	subq	#1,boxsize0(a5)
 	bsr.w	setboxy
