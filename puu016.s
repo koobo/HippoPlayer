@@ -34097,6 +34097,7 @@ p_sid:	jmp	.init(pc)
 
 
 .init
+    DPRINT  "PlaySID init"
 	bsr.w	get_sid
 	bne.b	.ok
 	moveq	#ier_nosid,d0
@@ -34127,6 +34128,21 @@ p_sid:	jmp	.init(pc)
 	lob	AllocEmulResource
 	tst.l	d0
 	bne.w	.error1
+
+    cmp.b   #1,sidmode(a5)
+    beq     .m1
+    cmp.b   #2,sidmode(a5)
+    beq     .m2
+    move    #OM_NORMAL,d0
+    bra     .mode
+.m1
+    moveq   #OM_RESID_6581,d0
+    bra     .mode
+.m2
+    moveq   #OM_RESID_8580,d0
+.mode
+    DPRINT  "Operating mode=%ld"
+    lob     SetOperatingMode
 
 	move.l	moduleaddress(a5),a0
 	cmp.l	#"PSID",(a0)
@@ -34251,7 +34267,7 @@ p_sid:	jmp	.init(pc)
     beq.b   .11
     move.l	_SIDBase(a5),a6
     move    mainvolume(a5),d0
-    jsr     _LVOSetRESIDVolume(a6)
+    jsr     _LVOSetVolume(a6)
 .11
     rts
 
