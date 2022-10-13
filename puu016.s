@@ -16725,9 +16725,9 @@ psidmode
 
 sidmode00	dc.b	11,4
 sidmode01	dc.b	"Normal",0
-sidmode02	dc.b	"reSID 6851",0
+sidmode02	dc.b	"reSID 6581",0
 sidmode03	dc.b	"reSID 8580",0
-sidmode04	dc.b	"External",0
+sidmode04	dc.b	"SIDBlaster",0
  even
 
 
@@ -34090,7 +34090,7 @@ p_sid:	jmp	.init(pc)
 	dc.b	"PSID"
 .residTitle
     dc.b    0
-    dc.b    "- reSID 6581",0
+    dc.b    "- reSID",0
 
 .flag	dc.b	0
  even
@@ -34117,13 +34117,17 @@ p_sid:	jmp	.init(pc)
     bsr     isPlaysidReSID
     bne     .resid1
     clr.b   (a0)
+.resid1
 
 	* Enable getting data for scopes.
-	* Must have patched the display signal away first.
+    * Library wants to signal a given task when data is ready.
+    * Provide task but null signal mask, so no signals will be sent.
+    move.l  owntask(a5),a0
+    moveq   #0,d0
+    lob     SetDisplaySignal
 	moveq	#1,d0
-	lob	SetDisplayEnable
+	lob	    SetDisplayEnable
 
-.resid1
 
 	lob	AllocEmulResource
 	tst.l	d0
@@ -34133,6 +34137,9 @@ p_sid:	jmp	.init(pc)
     beq     .m1
     cmp.b   #2,sidmode(a5)
     beq     .m2
+    cmp.b   #3,sidmode(a5)
+    beq     .m3
+    * Default option
     move    #OM_NORMAL,d0
     bra     .mode
 .m1
@@ -34140,6 +34147,10 @@ p_sid:	jmp	.init(pc)
     bra     .mode
 .m2
     moveq   #OM_RESID_8580,d0
+    bra     .mode
+.m3
+    moveq   #OM_SIDBLASTER_USB,d0
+
 .mode
     DPRINT  "Operating mode=%ld"
     lob     SetOperatingMode
@@ -34413,12 +34424,6 @@ sid_addVolumePatch
 	pushpea .setVol2(pc),12+8418+2(a0)
 	move	#$4eb9,12+12+8418(a0)
 	pushpea .setVol3(pc),12+12+8418+2(a0)
-	* Disable DisplaySignal mechanism,
-	* alternatively could SetDisplaySignal
-	* so that when display is enabled there will be no
-	* crashhhhhh.
-	move	#$4e75,1136(a0) ; rts
-	bsr.w	clearCpuCaches
 .q
 	rts
 
@@ -34565,8 +34570,21 @@ sidScopeUpdate
 	beq.w	.x
 
     bsr     isPlaysidReSID
-    bne     .resid
+    beq     .noResid
+    push    a6
+    move.l  _SIDBase(a5),a6
+    lob     GetOperatingMode
+    pop     a6
+    tst     d0
+    beq     .noResid
+    cmp     #OM_RESID_6581,d0
+    beq     .resid
+    cmp     #OM_RESID_8580,d0
+    beq     .resid
+    * Not supported SID mode
+    rts
 
+.noResid
 	lea	scopeData+scope_ch1(a5),a0
 	moveq	#0,d7
 	move.l	_SIDBase(a5),a1
