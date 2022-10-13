@@ -4513,6 +4513,17 @@ avaa_ikkuna:
 	move	d3,gg_Height(a3)
 	subq	#3,gg_Height(a3)
 
+;    Old (weird) piece of code:
+;
+;    lea     slider4,a3              * fileboxin slideri
+;    moveq   #gadgetFileSliderInitialHeight,d3       * y-koko
+;    and     #~$80,gg_TopEdge(a3)
+;    add     boxy(a5),d3
+;    bpl.b   .r
+;    or      #$80,gg_TopEdge(a3)
+;    clr     d3
+;.r  move    d3,gg_Height(a3)
+
 	basereg	slider4,a3
 
 	* Remove the fileslider from the gadget list
