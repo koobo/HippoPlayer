@@ -358,7 +358,7 @@ prefs_patternScope   rs.b 1
 prefs_patternScopeXL   rs.b 1
 prefs_spectrumScope   rs.b 1
 prefs_spectrumScopeBars   rs.b 1
-	rs.b 1
+prefs_sidmode		rs.b	1
 	
 prefs_quadraScopePos   rs.l 1
 prefs_quadraScopeFPos   rs.l 1
@@ -810,7 +810,8 @@ mpegadiv_new	rs.b	1
 medmode_new	rs.b	1
 medrate_new	rs	1
 medratepot_new	rs	1
-
+sidmode_new     rs.b    1
+                rs.b    1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
@@ -907,6 +908,8 @@ mpegaqua	rs.b	1		* MPEGA quality
 mpegadiv	rs.b	1		* MPEGA freq. division
 medmode		rs.b	1		* MED mode
 medrate		rs	1		* MED mixing rate
+sidmode     rs.b    1
+            rs.b    1
 
 
 *******
@@ -2591,6 +2594,8 @@ main
 	* Add "Button tooltips" prefs button to the page 2
 	;move.l	#prefsTooltips,eskimO
 	pushpea	prefsTooltips(a0),eskimO(a0)
+    ; Add sid mode button after the "MED rate" button
+    pushpea prefsPlaySidMode(a0),nAMISKA5(a0)
 	endb	a0
 
 ;	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
@@ -12434,6 +12439,7 @@ loadprefs2
 	move.b	d0,medmode(a5)
 
 	move	prefs_medrate(a0),medrate(a5)
+	move.b	prefs_sidmode(a0),sidmode(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
 	move.b	prefs_savestate(a0),savestate(a5)
@@ -12726,6 +12732,7 @@ saveprefs
 	move.b	mpegadiv(a5),prefs_mpegadiv(a0)
 	move.b	medmode(a5),prefs_medmode(a0)
 	move	medrate(a5),prefs_medrate(a0)
+	move.b	sidmode(a5),prefs_sidmode(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
@@ -13212,6 +13219,7 @@ prefs_code
 	move.b	mpegadiv(a5),mpegadiv_new(a5)
 	move.b	medmode(a5),medmode_new(a5)
 	move	medrate(a5),medrate_new(a5)
+	move.b	sidmode(a5),sidmode_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
@@ -13669,6 +13677,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	mpegadiv_new(a5),mpegadiv(a5)
 	move.b	medmode_new(a5),medmode(a5)
 	move	medrate_new(a5),medrate(a5)
+	move.b	sidmode_new(a5),sidmode(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
 	move	ahi_mastervol_new(a5),ahi_mastervol(a5)
@@ -14208,20 +14217,20 @@ pmousebuttons
 	lea	bUu2,a0			* prefix cut
 	lea	rprefx_req(pc),a2
 	bsr.w	.check
-	bra.b	.xx
+	bra     .xx
 
 .2	subq	#1,d0
 	bne.b	.3
 
 	lea	pout1,a0		* filter control
 	lea	rpfilt_req(pc),a2
-	bsr.b	.check
+	bsr 	.check
 	lea	laren1,a0		* pt replayer
 	lea	rptmix_req(pc),a2
-	bsr.b	.check
+	bsr    	.check
 	lea	PoU2,a0
 	lea	rpgmode_req(pc),a2
-	bsr.b	.check
+	bsr 	.check
 	bra.b	.xx
 
 .3	subq	#2,d0
@@ -14252,6 +14261,9 @@ pmousebuttons
 	bsr.b	.check
 	lea	nAMISKA4,a0
 	lea	rmedmode_req(pc),a2	* med mode
+	bsr.b	.check
+	lea     prefsPlaySidMode,a0
+	lea	    rsidmode_req(pc),a2	    * sid mode
 	bsr.b	.check
 
 
@@ -14331,7 +14343,7 @@ pupdate:				* Ikkuna päivitys
 	bra.w	.x
 
 .3	subq	#1,d0
-	bne.b	.4
+	bne 	.4
 
 	bsr.w	pipm			* pt replayer
 	bsr.w	pupf			* filter
@@ -14342,10 +14354,10 @@ pupdate:				* Ikkuna päivitys
 	bsr.w	ppgmode			* pgmode
 	bsr.w	ppgstat			* pgstatus
 	bsr.w	pdbf			* volume fade
-	bra.b	.x
+	bra 	.x
 
 .4	subq	#1,d0
-	bne.b	.5
+	bne 	.5
 
 	bsr.w	pux			* xpk id
 	bsr.w	pdbuf			* doublebuffering
@@ -14388,7 +14400,7 @@ pupdate:				* Ikkuna päivitys
 	bsr.w	pmpegaqua		* MPEGA quality
 	bsr.w	pmpegadiv		* MPEGA freq division
 	bsr.w	pmedmode		* med mode
-
+    bsr     psidmode        * SID mode
 
 .x	popm	all
 	rts
@@ -14636,6 +14648,7 @@ gadgetsup2
 	dr	rmpegadiv	* mpeda freq division
 	dr	rmedmode	* med mode
 	dr	rmedrate	* med rate
+    dr  rsidmode    * sid mode
 
 
 
@@ -16659,6 +16672,64 @@ rmedrate
 	bra.w	print3b
 
 
+** MED mode
+
+rsidmode_req
+	lea	sidmode00(pc),a0
+
+    pushpea .callback(pc),d4
+	bsr 	listSelectorPrefsWindowWithCallback
+	bmi.b	.x
+	move.b	d0,sidmode_new(a5)
+	bra.b	psidmode
+.x	rts
+
+    * in:
+*   d3 = index to check
+.callback
+    tst     d3
+    bhi     .2
+    moveq   #1,d0
+    rts
+.2  
+    bsr     isPlaysidReSID
+    rts
+
+rsidmode
+	addq.b	#1,sidmode_new(a5)
+	cmp.b	#4,sidmode_new(a5)
+	bne.b	.1
+	clr.b	sidmode_new(a5)
+.1
+    bsr     isPlaysidReSID
+    bne     .2
+	clr.b	sidmode_new(a5)
+.2
+
+psidmode
+    lea     sidmode01(pc),a0
+	move.b	sidmode_new(a5),d0
+    beq.b   .1
+    lea     sidmode02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     sidmode03(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     sidmode04(pc),a0
+.1 
+    lea	    prefsPlaySidMode,a1
+	bra.w	prunt
+
+
+
+sidmode00	dc.b	11,4
+sidmode01	dc.b	"Normal",0
+sidmode02	dc.b	"reSID 6851",0
+sidmode03	dc.b	"reSID 8580",0
+sidmode04	dc.b	"External",0
+ even
+
 
 
 ***************************************
@@ -16896,10 +16967,14 @@ wflags4 = WFLG_SMART_REFRESH!WFLG_ACTIVATE!WFLG_BORDERLESS!WFLG_RMBTRAP
 idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
 
-listSelectorMainWindow
+listSelectorMainWindow:
 	pushm	d1-a6	
 	move.l	windowbase(a5),a0	
 	bra.b	listselector\.do
+
+listSelectorPrefsWindowWithCallback:
+	pushm	d1-a6	
+	bra.b	listselector\.dop
 
 * in: 
 *   d4 = callback to check whether line should be enabled
@@ -16912,8 +16987,9 @@ listselector:
 .LINE_HEIGHT = 12
 
 	pushm	d1-a6	
-	move.l	a0,a4
 	moveq	#0,d4
+.dop
+	move.l	a0,a4
 	move.l	windowbase2(a5),a0	* prefs-ikkuna
 .do
 	add	wd_LeftEdge(a0),d6	* mousepos suhteellinen prefs-ikkunan
@@ -34580,7 +34656,9 @@ sidScopeUpdate
 * Checks whether the opened playsid.library
 * is the reSID variant
 isPlaysidReSID:
-    push    a0
+    pushm   all
+    bsr     get_sid
+    beq     .noRESID
     move.l	_SIDBase(a5),a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
@@ -34598,11 +34676,11 @@ isPlaysidReSID:
     cmp.b   #"e",21(a0)
     bne.b   .noRESID
    ; "playsid.library 1.3 reSID (October 2022)",1
-    pop     a0
+    popm    all
     moveq   #1,d0
     rts
 .noRESID
-    pop     a0
+    popm    all
     moveq   #0,d0
     rts
 
@@ -50664,6 +50742,22 @@ prefsListFont
 	dc.l 0,0,0,0,0
 	dc.w 0
 	dc.l 0
+
+
+prefsPlaySidMode dc.l 0
+    ; left, top, width, height
+       dc.w 214-80+4,107,100-8,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        dc.b 1,0,1,0
+       dc.w -198+80-4,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "PlaySid mode...",0
+       even
+
 
 ; Gadget
 gadgetListModeChangeButton
