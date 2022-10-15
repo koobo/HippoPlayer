@@ -46,10 +46,12 @@ compress:
 	cd pl && bash ./compress_shr
 	cd eagleplayers && bash ./compress_shr
 
-clean:
-	rm HiP HiP-debug kpl HippoPlayer.group
+cleaner: clean
 	cd eagleplayers && make clean
 	cd pl && make clean
+
+clean:	
+	rm -f HiP HiP-debug 
 
 dist: HiP HiP-debug group
 	cd dist && make
