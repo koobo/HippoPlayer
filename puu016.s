@@ -8902,7 +8902,7 @@ sortButtonAction:
 .1
 	skipIfGadgetDisabled gadgetSortButton
 
-	bsr.w	confirmFavoritesModification
+	jsr	confirmFavoritesModification
 	beq.b	.x
 
 	bsr.b	sortModuleList
@@ -16692,7 +16692,7 @@ rsidmode_req
     moveq   #1,d0
     rts
 .2  
-    bsr     isPlaysidReSID
+    jsr     isPlaysidReSID
     rts
 
 rsidmode
@@ -16701,8 +16701,8 @@ rsidmode
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
-    bsr     isPlaysidReSID
-    bne     .2
+        jsr     isPlaysidReSID
+        bne     .2
 	clr.b	sidmode_new(a5)
 .2
 
@@ -16973,7 +16973,7 @@ listSelectorMainWindow:
 	bra.b	listselector\.do
 
 listSelectorPrefsWindowWithCallback:
-	pushm	d1-a6	
+	movem.l	d1-a6,-(sp)
 	bra.b	listselector\.dop
 
 * in: 
@@ -19229,7 +19229,7 @@ getListNode:
 	cmp.l 	modamount(a5),d0
 	bhs.b	.out
 
-	bsr.w	obtainModuleList
+	jsr	obtainModuleList
 	;lea	moduleListHeader(a5),a0
 	bsr.w	getVisibleModuleListHeader
 
@@ -19245,7 +19245,7 @@ getListNode:
 	SUCC    a0,a0
 	dbf	d1,.loop
 	dbf	d0,.loop
-	bsr.w	releaseModuleList
+	jsr	releaseModuleList
 
  if DEBUG
  	move.l	l_nameaddr(a0),d0
@@ -19792,7 +19792,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	subq	#2,ply1
 	addq	#1,ply2
 	move.l	srastport(a5),a1
-	bsr.w	sliderlaatikko
+	jsr	sliderlaatikko
 
 .reprint
 
@@ -22579,7 +22579,7 @@ rexxmessage
 	beq.w	rbutton1
 	move.l	a1,sv_argvArray+4(a5)
 	clr.l	sv_argvArray+8(a5)
-	bsr.w	clearlist
+	jsr	clearlist
 	bra.w	komentojono
 
 *** LOADPRG
@@ -22691,7 +22691,7 @@ rexxmessage
 *** VOLUME
 .volume
 	bsr.w	a2i
-	bra.w	volumerefresh
+	jmp	volumerefresh
 
 
 *** PLAYSONG
