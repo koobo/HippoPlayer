@@ -29518,10 +29518,12 @@ get_pp	move.l	_PPBase(a5),d0
 	move.l	d0,_PPBase(a5)
 	rts
 
-get_sid	move.l	_SIDBase(a5),d0
+get_sid:
+	move.l	_SIDBase(a5),d0
 	beq.b	.noep
 	rts
-.noep	lea 	sidname,a1		
+.noep
+    lea 	sidname,a1		
 	move.l	a6,-(sp)
 	move.l	(a5),a6
 	lob	OldOpenLibrary
@@ -34087,14 +34089,13 @@ p_sid:	jmp	.init(pc)
 	p_NOP
 	dc.w 	pt_sid 				* type
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume!pf_scope!pf_quadscopePoke
-	dc.b	"PSID"
-.residTitle
+	dc.b	"PSID "
+.title
+    dc.b    "             "
+.zero
     dc.b    0
-    dc.b    "- reSID",0
-
 .flag	dc.b	0
  even
-
 
 .init
     DPRINT  "PlaySID init"
@@ -34112,13 +34113,6 @@ p_sid:	jmp	.init(pc)
 	tst.b	.flag
 	bne  	.plo
 
-    lea     .residTitle(pc),a0
-    move.b  #" ",(a0)
-    bsr     isPlaysidReSID
-    bne     .resid1
-    clr.b   (a0)
-.resid1
-
 	* Enable getting data for scopes.
     * Library wants to signal a given task when data is ready.
     * Provide task but null signal mask, so no signals will be sent.
@@ -34128,11 +34122,10 @@ p_sid:	jmp	.init(pc)
 	moveq	#1,d0
 	lob	    SetDisplayEnable
 
+    bsr     isPlaysidReSID
+    beq     .skip
 
-	lob	AllocEmulResource
-	tst.l	d0
-	bne.w	.error1
-
+    ; Before AllocEmulResource set the operating mode
     cmp.b   #1,sidmode(a5)
     beq     .m1
     cmp.b   #2,sidmode(a5)
@@ -34141,19 +34134,35 @@ p_sid:	jmp	.init(pc)
     beq     .m3
     * Default option
     move    #OM_NORMAL,d0
+    lea     .zero(pc),a0
     bra     .mode
 .m1
+    lea     sidmode02,a0
     moveq   #OM_RESID_6581,d0
     bra     .mode
 .m2
+    lea     sidmode03,a0
     moveq   #OM_RESID_8580,d0
     bra     .mode
+
+
 .m3
+    lea     sidmode04,a0
     moveq   #OM_SIDBLASTER_USB,d0
 
 .mode
+    lea     .title(pc),a1
+.a  move.b  (a0)+,(a1)+
+    bne.b   .a
+
     DPRINT  "Operating mode=%ld"
     lob     SetOperatingMode
+.skip
+
+	lob	AllocEmulResource
+    DPRINT  "AllocEmulResource=%ld"
+	tst.l	d0
+	bne.w	.error1
 
 	move.l	moduleaddress(a5),a0
 	cmp.l	#"PSID",(a0)
@@ -34239,6 +34248,7 @@ p_sid:	jmp	.init(pc)
 	move	songnumber(a5),d0
 	addq	#1,d0
 	lob	StartSong
+    ; This will return an error code in d0
 
 	rts
 
@@ -34262,6 +34272,7 @@ p_sid:	jmp	.init(pc)
 
 .cont	movem.l	d0/d1/a0/a1/a6,-(sp)
 	lore	SID,ContinueSong
+    ; This will return an error code in d0
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
 
@@ -34288,6 +34299,7 @@ p_sid:	jmp	.init(pc)
 
 rem_sidpatch
 	move.l	(a5),a0
+    * Patch for kick1.3 and lib version 1.1
 	cmp	#34,LIB_VERSION(a0)
 	bhi.b	.q
 	move.l	_SIDBase(a5),a6
@@ -34669,6 +34681,7 @@ sidScopeUpdate
 .resid
 	move.l	_SIDBase(a5),a6
     jsr     _LVOGetRESIDAudioBuffer(a6)
+    * a0 = buffer ptr
     * d0 = buffer len
     * d1 = playback period
     lsr     #1,d0   * length in words
@@ -34709,7 +34722,7 @@ isPlaysidReSID:
     bne.b   .noRESID
     cmp.b   #"e",21(a0)
     bne.b   .noRESID
-   ; "playsid.library 1.3 reSID (October 2022)",1
+   ; "playsid.library 1.3 reSID+SIDBlaster"
     popm    all
     moveq   #1,d0
     rts
