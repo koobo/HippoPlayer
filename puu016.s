@@ -34216,6 +34216,13 @@ p_sid:	jmp	.init(pc)
 
 
 .error1
+    cmp     #SID_NOSIDBLASTER,d0
+    bne.b   .sb
+    lea     .blasterMsg(pc),a1
+    jsr     request
+    moveq   #ier_error,d0
+    bra.b   .er
+.sb
 	moveq	#ier_nomem,d0
 	bra.b	.er
 
@@ -34292,6 +34299,11 @@ p_sid:	jmp	.init(pc)
     jsr     _LVOSetVolume(a6)
 .11
     rts
+
+
+.blasterMsg
+    dc.b    "Couldn't initialize SIDBlaster!",0
+    even
 
 
 *** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
