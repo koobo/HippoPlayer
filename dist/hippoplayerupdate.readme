@@ -75,20 +75,18 @@ NOTE 4: Too long didn't read
   make the scopes not draw correcty. Possibly FBlit and CyberBugFix. 
   Should work now.
 
+
 ## New features:
 
 - Drag'n'dropping icons on the Hippo window now supports folders as 
   well, previously only files worked. The folders will be recursively
   scanned and the file match pattern used.
 
-- The 2nd font change button in Prefs now changes, in addition to the 
+- All of the fonts in the main window can be changed now.
+  The 2nd font change button in Prefs now changes, in addition to the 
   main window list font, also the other fonts used in the main
   window: infobox font and the button font. The 1st font change button
   works as previously, it affects the fonts used in the other windows.
-
-- The popup selector used in Prefs with RMB for some settings was
-  redone to use button gadgets for improved user experience. It is now
-  also used with the "S"-button.
 
 - The "S"-button was changed. Previously it provided "sort" with
   LMB and "find" with RMB. Now it opens a search function popup with LMB,
@@ -99,7 +97,8 @@ NOTE 4: Too long didn't read
   - Search Modland
   - Search Aminet
   - Search Modules.pl
-
+  - Search HVSC (High Voltage SID Collection)
+  
 - Search and download from some module internet sites.
   This feature uses the excellent UHCTools to do the actual work, 
   so ensure you have it installed and some internet connectivity.
@@ -118,16 +117,25 @@ NOTE 4: Too long didn't read
   files are accepted. Aminet search will only return hits from the
   "mods" subhierarchy.
 
-  Remote files are stored in playlists as URLs. Playlists
-  that only contain URLs could also be shared with other people.
-
+  Remote files are stored in playlists as URLs, so they could
+  also be shared with other people :-)
+  
 - The "Add" button (and the key shortcut [A]), while the file browser
   or the search view is active, will copy the selected module or folder
-  into the main playlist. Folder contents will be scanned. This allows
-  you to pick modules from directory hierarchies or search results for 
-  later. 
+  into the main playlist. This allows you to pick and save modules from 
+  directory hierarchies or search results.
 
-
+- Support added for the updated playsid.library. This is included in the
+  lha, for more info see playsid.library.readme. 
+  In "Prefs/Play-2" there's a new entry "PlaySid mode" where you can 
+  configure the sound output mode for playing PSID files:
+  - Normal mode, the original PlaySid mode compatible with 68000. 
+  - reSID 6851: Accurate emulation of SID chip 6581
+  - reSID 8580: Accurate emulation of SID chip 8580 (found in C128)
+  - SIDBlaster: Use the USB device SIDBlaster for sound output
+  Note that the reSID emulation engine requires a 68060 or something 
+  comparable. Your system will become unresponsive if not powerful
+  enough.
   
  
 ------------------------------------------------------------------------------
