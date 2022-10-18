@@ -359,7 +359,7 @@ prefs_patternScopeXL   rs.b 1
 prefs_spectrumScope   rs.b 1
 prefs_spectrumScopeBars   rs.b 1
 prefs_sidmode		rs.b	1
-	
+
 prefs_quadraScopePos   rs.l 1
 prefs_quadraScopeFPos   rs.l 1
 prefs_hippoScopePos   rs.l 1
@@ -368,8 +368,10 @@ prefs_spectrumScopePos   rs.l 1
 
 prefs_listtextattr		rs.b	ta_SIZEOF-4
 prefs_listfontname		rs.b	30
-
 	printt "TODO TODO: dangerous buffer size"
+
+prefs_xmaplay   rs.b   1
+                rs.b    1
 
 prefs_size		rs.b	0
 
@@ -811,7 +813,7 @@ medmode_new	rs.b	1
 medrate_new	rs	1
 medratepot_new	rs	1
 sidmode_new     rs.b    1
-                rs.b    1
+xmaplay_new     rs.b    1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
@@ -909,7 +911,7 @@ mpegadiv	rs.b	1		* MPEGA freq. division
 medmode		rs.b	1		* MED mode
 medrate		rs	1		* MED mixing rate
 sidmode     rs.b    1
-            rs.b    1
+xmaplay     rs.b    1
 
 
 *******
@@ -12440,6 +12442,7 @@ loadprefs2
 
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_sidmode(a0),sidmode(a5)
+	move.b	prefs_xmaplay(a0),xmaplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
 	move.b	prefs_savestate(a0),savestate(a5)
@@ -12733,6 +12736,7 @@ saveprefs
 	move.b	medmode(a5),prefs_medmode(a0)
 	move	medrate(a5),prefs_medrate(a0)
 	move.b	sidmode(a5),prefs_sidmode(a0)
+	move.b	xmaplay(a5),prefs_xmaplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
@@ -13220,6 +13224,7 @@ prefs_code
 	move.b	medmode(a5),medmode_new(a5)
 	move	medrate(a5),medrate_new(a5)
 	move.b	sidmode(a5),sidmode_new(a5)
+	move.b	xmaplay(a5),xmaplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
@@ -13678,6 +13683,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	medmode_new(a5),medmode(a5)
 	move	medrate_new(a5),medrate(a5)
 	move.b	sidmode_new(a5),sidmode(a5)
+	move.b	xmaplay_new(a5),xmaplay(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
 	move	ahi_mastervol_new(a5),ahi_mastervol(a5)
@@ -14401,6 +14407,8 @@ pupdate:				* Ikkuna päivitys
 	bsr.w	pmpegadiv		* MPEGA freq division
 	bsr.w	pmedmode		* med mode
     bsr     psidmode        * SID mode
+    bsr     pxmaplay        * XMAPlay
+
 
 .x	popm	all
 	rts
@@ -14649,7 +14657,8 @@ gadgetsup2
 	dr	rmedmode	* med mode
 	dr	rmedrate	* med rate
     dr  rsidmode    * sid mode
-
+    dr  rxmaplay    * xmaplay
+    
 
 
 rval0	moveq	#0,d0
@@ -16672,7 +16681,7 @@ rmedrate
 	bra.w	print3b
 
 
-** MED mode
+** SID mode
 
 rsidmode_req
 	lea	sidmode00(pc),a0
@@ -16730,6 +16739,14 @@ sidmode03	dc.b	"reSID 8580",0
 sidmode04	dc.b	"SIDBlaster",0
  even
 
+*** XMAPlay toggle
+
+rxmaplay
+	not.b	xmaplay_new(a5)
+pxmaplay
+	move.b	xmaplay_new(a5),d0
+	lea	    prefsEnableXMAPlay,a0
+	bra.w	tickaa
 
 
 ***************************************
@@ -50803,20 +50820,34 @@ prefsListFont
 	dc.l 0
 
 
-prefsPlaySidMode dc.l 0
-    ; left, top, width, height
+prefsPlaySidMode 
+       dc.l prefsEnableXMAPlay
+       ; left, top, width, height
        dc.w 214-80+4,107,100-8,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
        dc.l 0
-.t        dc.b 1,0,1,0
+.t     dc.b 1,0,1,0
        dc.w -198+80-4,2
        dc.l 0,.tx,0
 .tx 
        dc.b "PlaySid mode...",0
        even
 
+prefsEnableXMAPlay dc.l 0
+       ; left, top, width, height
+       dc.w 214-80+4+64,107-12-2,28,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4-64,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "Enable XMAPlay060......",0
+       even
 
 ; Gadget
 gadgetListModeChangeButton
