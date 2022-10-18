@@ -1081,6 +1081,7 @@ startrekkerroutines rs.l 0
 voodooroutines	rs.l	0
 sonicroutines	rs.l	0
 tfmxroutines	rs.l	0
+xmaplayroutines rs.l    0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
 startrekkerdataaddr rs.l 0
@@ -16710,8 +16711,8 @@ rsidmode
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
-        jsr     isPlaysidReSID
-        bne     .2
+    jsr     isPlaysidReSID
+     bne     .2
 	clr.b	sidmode_new(a5)
 .2
 
@@ -20948,9 +20949,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .yes	move.l	#ptheader,d4
 	bra.b	.mod
 .nop
-	cmp	#pt_multi,playertype(a5)
-	bne.w	.noo
+
 	move.l	moduleaddress(a5),d4
+	cmp	    #pt_multi,playertype(a5)
+	bne.w	.noo
 
 	move.l	ps3m_mtype(a5),a0
 	cmp	#mtMOD,(a0)
@@ -21108,8 +21110,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .skip	
 ;	move.l	d1,(a4)+	* size
 
-
-
 	pushm	d0-a2/a4-a6
 	move.l	d1,d2
 	and.l	#$7ffff,d2
@@ -21125,8 +21125,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	popm	d0-a2/a4-a6
 	bsr.w	.lloppu
 
-
-	addq.l	#1,d7
+  	addq.l	#1,d7
 	cmp	d5,d7
 	blo.w	.loop0
 
@@ -25077,11 +25076,13 @@ drawScope:
 	cmp.b	#QUADMODE_PATTERNSCOPEXL,s_quadmode(a4)
 	beq.b	.pattern
 
-	cmp	#pt_sample,playertype(a5)
+	cmp	    #pt_sample,playertype(a5)
 	beq.b	.centerStereo
+    cmp     #pt_xmaplay,playertype(a5)
+    beq.b   .x1
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.noMagic
-	cmp.b	#QUADMODE_HIPPOSCOPE,s_quadmode(a4)
+.x1	cmp.b	#QUADMODE_HIPPOSCOPE,s_quadmode(a4)
 	bne.b	.centerStereo
 	* Center PS3M + hipposcope
 	addq	#4,d2		; target x
@@ -25107,14 +25108,16 @@ drawScope:
 
 
 .render
-	cmp	#pt_sample,playertype(a5)
-	beq.b	.renderSample
+	cmp	    #pt_sample,playertype(a5)
+	beq 	.renderSample
 
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
-	add	d0,d0
+	add	    d0,d0
 
-	cmp	#pt_multi,playertype(a5)
+	cmp 	#pt_multi,playertype(a5)
+	beq.w	.renderPS3M
+	cmp	    #pt_xmaplay,playertype(a5)
 	beq.w	.renderPS3M
 
 ;	* Check for generic quadscope support
@@ -25670,7 +25673,6 @@ freqscope
 
 
 *** PS3M freqscope
-
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.protr
 
@@ -28374,6 +28376,9 @@ loadfile:
 	bsr.w	id_protracker
 	beq.w	.on
 
+    jsr     id_xmaplay
+    beq     .on
+
 	bsr.w	id_ps3m		
 	tst.l	d0
 	beq.w	.on
@@ -30009,6 +30014,10 @@ tutki_moduuli
  endif
 
 .mp
+    move.l  a4,a0
+    jsr     id_xmaplay
+    beq     .xmaplay
+
 	bsr.w	id_ps3m		
 	tst.l	d0
 	beq.w	.multi
@@ -30063,8 +30072,10 @@ tutki_moduuli
 	bsr.w	copyNameFromModule
 	bra.b	.ex2
 
-.multi	pushpea	p_multi(pc),playerbase(a5)
+.multi	
+    pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
+.moveData
 	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 
 	move.l	moduleaddress(a5),a1	* tutkaillaan onko miss‰ muistissa
@@ -30085,7 +30096,10 @@ tutki_moduuli
 	lore	Dos,Delay
 	bra.w	.ex2
 
-
+.xmaplay
+    move.l  #p_xmaplay,playerbase(a5)
+	move	#pt_xmaplay,playertype(a5)
+    bra     .moveData
 
 .sid	pushpea	p_sid(pc),playerbase(a5)
 	move	#pt_sid,playertype(a5)
@@ -30264,7 +30278,8 @@ tutki_moduuli
 *   Z-flag
 * Out:
 *   d0 = 0, if Z set, -1 if not
-idtest	beq.b	.y
+idtest:
+	beq.b	.y
 	moveq	#-1,d0
 	rts
 .y	moveq	#0,d0
@@ -34121,6 +34136,7 @@ p_sid:	jmp	.init(pc)
 	moveq	#ier_nosid,d0
 	rts
 
+
 .ok
 	movem.l	d1-a6,-(sp)
 
@@ -34142,6 +34158,7 @@ p_sid:	jmp	.init(pc)
     bsr     isPlaysidReSID
     beq     .skip
 
+
     ; Before AllocEmulResource set the operating mode
     cmp.b   #1,sidmode(a5)
     beq     .m1
@@ -34156,16 +34173,23 @@ p_sid:	jmp	.init(pc)
 .m1
     lea     sidmode02,a0
     moveq   #OM_RESID_6581,d0
-    bra     .mode
+    bra     .cpuCheck
 .m2
     lea     sidmode03,a0
     moveq   #OM_RESID_8580,d0
-    bra     .mode
-
+    bra     .cpuCheck
 
 .m3
     lea     sidmode04,a0
     moveq   #OM_SIDBLASTER_USB,d0
+    bra     .mode
+
+.cpuCheck
+	move.l	(a5),a1
+	btst	#AFB_68020,AttnFlags+1(a1)
+	bne.b	.mode
+	moveq	#ier_hardware,d0
+	bra     .er
 
 .mode
     lea     .title(pc),a1
@@ -39129,7 +39153,8 @@ isImpulseTrackerActive
 .yes	moveq	#0,d0
 	bra.b	.x
 
-p_multi	jmp	.s3init(pc)
+p_multi:
+    jmp	.s3init(pc)
 	p_NOP		* CIA
 	jmp	.s3poslen(pc)		* VB
 	jmp	.s3end(pc)
@@ -39553,15 +39578,11 @@ id_ps3m		pushm	d1-a6
 	cmp.l	#"MTM",d0
 	beq.b	.mtm
 
-	move.l	a0,a1
-	lea	.xmsign(pc),a2
-	moveq	#3,d0
-.l	cmpm.l	(a1)+,(a2)+
-	bne.b	.j
-	dbf	d0,.l
-	bra.b	.xm
+    bsr     id_xm
+    bne     .xm
 
-.j	move.l	1080(a0),d0
+.j
+    move.l	1080(a0),d0
 	cmp.l	#"OCTA",d0
 	beq.b	.fast8
 	cmp.l	#"M.K.",d0
@@ -39602,7 +39623,21 @@ id_ps3m		pushm	d1-a6
 	popm	d1-a6
 	rts
 
-
+* In:
+*   a0 = data 
+* Out:
+*   d0 = 0: not XM, 1: yes XM
+id_xm:
+	move.l	a0,a1
+	lea	.xmsign(pc),a2
+	moveq	#3,d0
+.l	cmpm.l	(a1)+,(a2)+
+	bne.b	.j
+	dbf	d0,.l
+	moveq   #1,d0
+    rts
+.j  moveq   #0,d0
+    rts
 .xmsign		dc.b	"Extended Module:"
  even
 
@@ -45155,6 +45190,198 @@ p_specialfx
 	MOVEQ	#0,D0
 .lbC0003C6	RTS
 
+
+
+******************************************************************************
+* XMAPlay060
+******************************************************************************
+
+
+p_xmaplay:
+    jmp      .init(pc)
+    p_NOP                        * CIA
+    jmp      .poslen(pc)         * VB
+    jmp      .end(pc)
+    jmp      .stop(pc)
+    jmp      .cont(pc)
+    jmp      .vol(pc)
+    p_NOP                       * Song
+    jmp      .eteen(pc)
+    jmp      .taakse(pc)
+    p_NOP                       * ahiupdate
+    jmp      id_xmaplay(pc)
+    jmp      .author(pc)
+    dc.w     pt_xmaplay
+.flags
+    dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_quadscopePoke
+	dc.b    "FastTracker2 xmaplay060",0
+ even
+
+.author 
+    pushpea .a(pc),d0
+    rts
+.a  dc.b    "8bitbubsy",0
+    even
+    
+    rsset $20
+.xmaInit        rs.l    1
+.xmaEnd         rs.l    1
+.xmaStop        rs.l    1
+.xmaCont        rs.l    1
+.xmaForward     rs.l    1 
+.xmaBackward    rs.l    1   
+.xmaGetPosLen   rs.l    1
+.xmaSetVolume   rs.l    1
+.xmaGetBuffer   rs.l    1
+
+.tempFile   dc.b    "T:hippo-xm",0
+    even
+
+.init
+    DPRINT  "xmaplay init"
+	move.l	(a5),a0
+	btst	#AFB_68020,AttnFlags+1(a0)
+	bne.b	.okk
+	moveq	#ier_hardware,d0
+	rts
+.okk
+	lea	    xmaplayroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	rts
+.ok3
+
+    * Save into a file for XMAplay
+    lea     .tempFile(pc),a0
+	move.l	moduleaddress(a5),a1
+	move.l	modulelength(a5),d0
+	bsr.w	plainSaveFile
+	bmi 	.saveError
+
+    DPRINT  "temp file saved"
+
+    lea     .tempFile(pc),a0
+    lea     songover(a5),a1
+    move.l  xmaplayroutines(a5),a3
+    jsr     .xmaInit(a3)
+    * d0 = status, 1 = OK, 0 = fail
+    * a0 = message or NULL
+ if DEBUG
+    DPRINT  "xmaInit=%ld mask=%lx"
+    push    d0
+    move.l  a0,d0
+    beq.b   .1
+    DPRINT  "msg=%s"
+.1  pop     d0
+ endif
+
+    pushm   all
+    * Rid the temp file
+    pushpea .tempFile(pc),d1
+    lore    Dos,DeleteFile
+    popm    all
+
+    tst.l   d0
+    beq    .initError
+    
+    * d1 = position mask 16.16 FP
+    clr.w   d1
+    swap    d1
+    move.l  d1,.posMask
+    pushpea .posMask(pc),ps3m_buffSizeMask(a5)
+
+ if DEBUG
+    move.l  a2,d0
+    DPRINT  "buf1=%lx"
+    move.l  a3,d0
+    DPRINT  "buf2=%lx"
+ endif
+
+    * a1 = pointer to position of 16.16 FP
+    move.l  a1,.posPtr
+    * a2 = pointer to buf1 
+    move.l  a2,.buf1Ptr
+    * a3 = pointer to buf2 
+    move.l  a3,.buf2Ptr
+
+    pushpea .ps3mPos(pc),ps3m_playpos(a5)
+    pushpea .buf1Ptr(pc),ps3m_buff1(a5)
+    pushpea .buf2Ptr(pc),ps3m_buff2(a5)
+
+    bsr     .vol
+
+    DPRINT  "xmaplay init ok"
+    moveq   #0,d0
+    rts
+
+.initError
+.saveError
+    moveq   #ier_error,d0
+    rts
+
+* xmaplay
+.posPtr     dc.l    0 
+.posMask    dc.l    0
+.buf1Ptr    dc.l    0
+.buf2Ptr    dc.l    0
+.ps3mPos    dc.l    0
+
+.poslen
+    move.l  xmaplayroutines(a5),a0
+    jsr     .xmaGetPosLen(a0)
+    move    d0,pos_nykyinen(a5)
+    move    d1,pos_maksimi(a5)
+
+    * Update play position 
+    * Convert to match PS3M similar value
+    * 16.16 FP
+    move.l  .posPtr(pc),d0
+    beq.b    .2
+    move.l  d0,a0
+    move.l  (a0),d0
+    * to 24.8 FP
+    lsr.l   #8,d0
+    move.l  d0,.ps3mPos
+.2
+    rts
+.stop
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaStop(a0)
+.cont
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaCont(a0)
+.vol
+    move    mainvolume(a5),d0
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaSetVolume(a0)
+.eteen
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaForward(a0)
+.taakse
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaBackward(a0)
+.end
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaEnd(a0)
+
+* Out:
+*    d0 = 0 if accepted and XMAPlay enabled
+id_xmaplay  
+    tst.b   xmaplay(a5)
+    beq.b   .no
+    jsr     id_xm
+    tst.l   d0
+    beq.b   .no
+    move.l  moduleaddress(a5),a1
+	lea 	xmName(a1),a1
+    moveq   #20-1,d0
+    jsr     copyNameFromA1
+    moveq   #0,d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
 *******************************************************************************
 *** SECTION *******************************************************************
 *
@@ -46029,7 +46256,7 @@ deliEnd:
 	
 	move.l	deliStoredInterrupt(a5),d0
 	beq.b	.noIntUsed
-	bsr.w	rem_ciaint
+	jsr    	rem_ciaint
 .noIntUsed
 
 	move.l	#DTP_StopInt,d0
@@ -46280,7 +46507,7 @@ _deliDataSize		rs.b	0
 	move.l	(sp)+,dtg_AudioAlloc(a0)
 	pea	deliFreeAudio(pc)
 	move.l	(sp)+,dtg_AudioFree(a0)
-	pea	dmawait(pc)
+	pea	dmawait
 	move.l	(sp)+,dtg_WaitAudioDMA(a0)
 	pea	.startInt(pc)
 	move.l	(sp)+,dtg_StartInt(a0)
@@ -46327,7 +46554,7 @@ _deliDataSize		rs.b	0
 	cmp.l	a1,a2
 	bne.b	.jumps
 	; Ensure jump table code is flushed
- 	bra	clearCpuCaches
+ 	jmp     clearCpuCaches
 
 .songEnd
 	* May be called from interrupt, no logging allowed
@@ -48210,6 +48437,8 @@ runSpectrumScope
 
 	cmp	#pt_multi,playertype(a5)
 	beq.b	.ps3m
+    cmp     #pt_xmaplay,playertype(a5)
+    beq.b   .ps3m
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.sample
 	bra.b	.normal

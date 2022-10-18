@@ -106,6 +106,7 @@ head	macro
 	head	pt_specialfx,specialfx
 	head	pt_davidwhittaker,davidwhittaker
 	head	pt_aon8,aon8
+    head    pt_xmaplay,xmaplay
 
 	dc	0
 	dc.l	0,0
@@ -399,6 +400,10 @@ davidwhittaker1
 	incbin	"david whittaker.im"
 davidwhittaker2
 
+xmaplay1
+	incbin	"xmaplay060.im"
+xmaplay2
+
  	endif ; IMP
 
 *********************************************************************
@@ -690,6 +695,10 @@ specialfx2
 davidwhittaker1
 	incbin	"david whittaker.shr"
 davidwhittaker2
+
+xmaplay1
+	incbin	"xmaplay060.shr"
+xmaplay2
 
  endif ; SHR
 
