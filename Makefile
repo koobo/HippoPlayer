@@ -1,7 +1,7 @@
 # Experimental makefile
 
 INCLUDE=-I$(HOME)/A/Asm/Include -I. -I./Include 
-ASM=vasmm68k_mot
+ASM=~/Prj/vbcc/bin/vasmm68k_mot
 FLAGS=
 TARGET=
 
