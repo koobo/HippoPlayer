@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.54
+Version: 2.55
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -35,7 +35,9 @@ NOTE 4: Too long didn't read
 - Window resize gadgets
 - Improved scopes
 - New music formats
-- "S"-gadget search functions popup, remote search with UHCTools
+- "S"-button search functions popup
+- Enhanced PlaySid support ("Prefs/Play-2")
+- Alternative HQ FastTracker 2 replayer by 8bitbubsy ("Prefs/Play-2")
 
 
 ------------------------------------------------------------------------------
@@ -43,7 +45,6 @@ NOTE 4: Too long didn't read
 
 
 # Changes from v2.54 (30.8.2022) to v2.55 (?.?.2022) 
-
 
 ## New fixes:
 
@@ -61,7 +62,7 @@ NOTE 4: Too long didn't read
   and "TF.Ghouls 'n' Ghosts Level 2" being displayed in the wrong order.
 
 - The "S" button was wrongfully disabled in file browser mode. 
-  Fixed it so what searching can be done.
+  Fixed it so that searching can be done.
 
 - Window width was not saved when Prefs was saved, now it is.
 
@@ -72,8 +73,7 @@ NOTE 4: Too long didn't read
   three should be the minimum, causing the slider to look weird. 
 
 - With some graphics patch combination it was possible to  
-  make the scopes not draw correcty. Possibly FBlit and CyberBugFix. 
-  Should work now.
+  make the scopes not draw correcty. Should work now.
 
 
 ## New features:
@@ -82,17 +82,17 @@ NOTE 4: Too long didn't read
   well, previously only files worked. The folders will be recursively
   scanned and the file match pattern used.
 
-- All of the fonts in the main window can be changed now.
+- All of the fonts in the main window can be changed.
   The 2nd font change button in Prefs now changes, in addition to the 
-  main window list font, also the other fonts used in the main
-  window: infobox font and the button font. The 1st font change button
+  main window list font, also the other fonts used in the main window: 
+  the infobox font and the button font. The 1st font change button
   works as previously, it affects the fonts used in the other windows.
 
 - The "S"-button was changed. Previously it provided "sort" with
   LMB and "find" with RMB. Now it opens a search function popup with LMB,
   and "sorts" with RMB. The popup provides the following:
   - Search playlist, the previous find functionality, also with [F].
-  - Continue searching using the previous search word, this was 
+  - Continue searching using the previous search word. This was 
     available as a key shortcut [SHIFT+F] only in earlier versions.
   - Search Modland
   - Search Aminet
@@ -129,15 +129,30 @@ NOTE 4: Too long didn't read
   lha, for more info see playsid.library.readme. 
   In "Prefs/Play-2" there's a new entry "PlaySid mode" where you can 
   configure the sound output mode for playing PSID files:
-  - Normal mode, the original PlaySid mode compatible with 68000. 
+  - Normal mode, the original PlaySid mode compatible with 68000
   - reSID 6851: Accurate emulation of SID chip 6581
   - reSID 8580: Accurate emulation of SID chip 8580 (found in C128)
   - SIDBlaster: Use the USB device SIDBlaster for sound output
   Note that the reSID emulation engine requires a 68060 or something 
   comparable. Your system will become unresponsive if not powerful
-  enough.
-  
- 
+  enough. SIDBlaster support requires the Poseidon USB stack.
+
+- Added 8bitbubsy's high quality FastTracker 2 replayer xmaplay060. 
+  Enable it from "Prefs/Play-2/Enable xmaplay060". It will then be used 
+  instead of the buggy default XM replayer (PS3M). It provides full 
+  support for XM modules.
+  Features:
+  - 32 stereo channels with 11-bit input volumes (left/right)
+  - Free voice panning with an 8-bit range
+  - Full FT2 volume ramping (16-bit fractional precision)
+  - 32-bit mixing with linear interpolation (16-bit fractional precision)
+  - Supports 8-bit and 16-bit samples
+  - 14-bit output
+  Note that this also requires a 68060 or something comparable. In
+  case your system is not powerful enough it will not become 
+  unresponsive. Scopes work with the exception of the patternscope.
+
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
