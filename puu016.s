@@ -28773,9 +28773,16 @@ loadfile:
 	move	infoBoxTopEdge(a5),ply1
 	move	infoBoxHeight(a5),d7
 	lsr		#1,d7
-	add		d7,ply1
+    add     d7,ply1
+    move	infoBoxHeight(a5),d7
+    lsr     #1,d7
+    subq    #6,d7
+    lsr     #1,d7
+    add     d7,ply1   
+    addq    #1,ply1
+    
 	move	ply1,ply2
-	addq	#6,ply2
+	addq	#6,ply2     * height
 
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
@@ -28858,7 +28865,12 @@ loadfile:
 		move	infoBoxHeight(a5),d2
 		lsr		#1,d2
 		add		d2,d1
-		addq	#1,d1
+		move	infoBoxHeight(a5),d2
+        lsr     #1,d2
+        subq    #6,d2
+        lsr     #1,d2
+        add     d2,d1
+		addq	#2,d1
 	
     ;    moveq   #22+WINY,d1
         add     windowleft(a5),d0
@@ -29189,7 +29201,7 @@ loadfile:
 		move	infoBoxHeight(a5),d2
 		lsr		#1,d2
 		add		d2,d1
-		subq	#5,d2
+		subq	#6,d2
 		lsr		#1,d2
 		add		d2,d1
 		addq	#2,d1
