@@ -18005,21 +18005,31 @@ execuutti
 inforivit_clear:
 	movem.l	d0-d4,-(sp)
 	moveq	#7+WINX,d0
-;	moveq	#11+WINY,d1
 	move	infoBoxTopEdge(a5),d1
 	move	d1,d3
 	add		infoBoxHeight(a5),d3
-
-;	addq	#1,d1
-	;addq		#1,d3
-
-
-;	move	#252+WINX,d2
 	move	WINSIZX(a5),d2
 	sub		#10,d2	* side margin
 	;moveq	#28+WINY,d3
 	bsr.w	tyhjays
 	movem.l	(sp)+,d0-d4
+	rts
+
+inforivit_clear_2ndrow:
+	movem.l	d0-d4/a0,-(sp)
+	moveq	#7+WINX,d0
+	move	infoBoxTopEdge(a5),d1
+	move	d1,d3
+	add		infoBoxHeight(a5),d3
+	move	WINSIZX(a5),d2
+	sub		#10,d2	* side margin
+
+    move    infoBoxHeight(a5),d4
+    lsr     #1,d4
+    add     d4,d1
+    
+	bsr.w	tyhjays
+	movem.l	(sp)+,d0-d4/a0
 	rts
 
 inforivit_killerps3m
@@ -18171,12 +18181,45 @@ infoBoxPrint:
 
 * 2nd row
 putinfo2:
-	;moveq	#26+WINY,d1
 	move	infoBoxTopEdge(a5),d1
-	;addq	#8,d1 * TODO: 8 pix font assumption for now
 	move.l	listfontbase(a5),a1
 	add		tf_YSize(a1),d1	* to 2nd row
 	bra.b	bipb2	
+
+
+putinfo2centered:
+    pushm   d0/a0
+    move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont
+    popm    d0/a0
+    move.l  a0,a2
+    move.l  rastport(a5),a1
+    lob     TextLength
+    * d0 = pixels
+
+
+    * Complicated centering logic
+	moveq	#7+WINX,d1
+    add     windowleft(a5),d1
+    move    WINSIZX(a5),d2
+    sub     #10,d2
+    sub     d1,d2
+    sub     d0,d2
+    bpl.b   .1
+    moveq   #0,d2
+.1
+    lsr     #1,d2
+    move    d2,d0
+    add     #11+WINX,d0
+
+    move.l  a2,a0
+	move	infoBoxTopEdge(a5),d1
+	move.l	listfontbase(a5),a1
+	add		tf_YSize(a1),d1	* to 2nd row
+    bsr     inforivit_clear_2ndrow
+    * Will also set and restore font:
+	bra		infoBoxPrint
 
 infolines_loadToChipMemory
 	lea	.1(pc),a0
@@ -18205,10 +18248,13 @@ inforivit_ppload
 
 inforivit_pause
 	lea	.1(pc),a0
-	bra.w	putinfo2
+    moveq   #.1e-.1,d0
+	bra.w	putinfo2centered
 ;.1	dc.b	"        *** Paused ***        ",0
 .1	dc.b	"-=-=-=-=-=- Paused -=-=-=-=-=-",0
+.1e
  even
+
 
 inforivit_xpkload
 	lea	.1(pc),a0
