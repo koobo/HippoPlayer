@@ -34184,7 +34184,11 @@ p_sid:	jmp	.init(pc)
     dc.b    "             "
 .zero
     dc.b    0
-.flag	dc.b	0
+
+* This is set when AllocEmulResource is called to avoid redoing it again.
+.flag       dc.b	0
+* Set when perf measurement has been done
+.perfDone   dc.b    0
  even
 
 .init
@@ -34197,7 +34201,6 @@ p_sid:	jmp	.init(pc)
 
 .ok
 	movem.l	d1-a6,-(sp)
-
 
 	move.l	_SIDBase(a5),a6
 
@@ -34245,9 +34248,32 @@ p_sid:	jmp	.init(pc)
 .cpuCheck
 	move.l	(a5),a1
 	btst	#AFB_68020,AttnFlags+1(a1)
-	bne.b	.mode
-	moveq	#ier_hardware,d0
+	bne.b	.cpuOk
+    moveq	#ier_hardware,d0
 	bra     .er
+.cpuOk
+    lea     .perfDone(pc),a2
+    tst.b   (a2)
+    bne.b   .perfOk
+    pushm   d0/a0/a1/a2
+    lob     MeasureRESIDPerformance
+    DPRINT  "Perf test: %ld ms"
+    move    d0,d2
+    cmp     #20,d2
+    popm    d0/a0/a1/a2
+    bls.b   .perfOk
+    pushm   all
+    moveq   #0,d0
+    move    d2,d0
+    bsr     .performanceRequest
+    tst.l   d0
+    popm    all
+    bne.b   .perfOk
+    moveq   #ier_error,d0
+    bra     .er
+
+.perfOk
+    st      (a2)
 
 .mode
     lea     .title(pc),a1
@@ -34335,7 +34361,9 @@ p_sid:	jmp	.init(pc)
 	bra.b	.er
 
 
-.free	lob	FreeEmulResource
+.free	
+    DPRINT  "FreeEmulResource"
+    lob	FreeEmulResource
 
 	clr.b	.flag
 	rts
@@ -34404,6 +34432,22 @@ p_sid:	jmp	.init(pc)
     dc.b    "Couldn't initialize SIDBlaster!",0
     even
 
+.performanceRequest
+    * d0 = value
+    lea     .perfReqTxt(pc),a0
+    jsr     desmsg
+    lea     desbuf(a5),a1
+    lea     .perfReqButtons(pc),a2
+    jmp     rawrequest
+
+.perfReqTxt
+    dc.b    "Your Amiga could be too slow for",10
+    dc.b    "reSID and become unresponsive.",10
+    dc.b    "Performance: %ld/20 ms",0
+
+.perfReqButtons
+    dc.b    "_Continue anyway|_Stop!",0
+    even
 
 *** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
 
@@ -50640,6 +50684,7 @@ stopMeasure
 	move.l	IO_DEVICE+timerRequest(a5),a6
 	lea	clockEnd(a5),a0
 	lob	ReadEClock
+    * D0 will be 709379 for PAL.
 	move.l	d0,d2
 	; d2 = ticks/s
 	divu	#1000,d2
