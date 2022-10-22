@@ -49770,11 +49770,11 @@ remoteSearch
 .findEnd
 	tst.b	(a0)+
 	bne.b	.findEnd
-	clr.b	(a0)
-
+    
 	* Find length for saving
 	move.l	a0,d0
 	sub.l	a1,d0
+    subq.l  #1,d0 * exclude terminating zero
 
 	lea		remoteScriptPath(pc),a0
 	; data in a1
@@ -50216,7 +50216,7 @@ fetchRemoteFile:
 
 .getScript
 	dc.b	"path ${UHCBIN}C ADD",10
-	dc.b	'aget "%s" "%s" QUIET >T:agetout',0
+	dc.b	'aget "%s" "%s" QUIET >T:agetout',10,0
 remoteExecute
 	dc.b	"execute "
 remoteScriptPath
