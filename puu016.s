@@ -45355,7 +45355,7 @@ p_xmaplay:
     dc.w     pt_xmaplay
 .flags
     dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_quadscopePoke
-	dc.b    "FastTracker2  xmaplay060",0
+	dc.b    "FastTracker2 xmaplay060",0
  even
 
 .author 
