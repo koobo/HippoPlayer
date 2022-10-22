@@ -49131,6 +49131,7 @@ spectrumGetPS3MSampleData
 	lsr.l	#8,d0
 	move.l	ps3m_buffSizeMask(a5),a0
 	move.l	(a0),d1
+    moveq   #4,d4   * scale factor
 
     * For reSID the mask is not a bitmask, instead 
     * it is around 140. Force to it to be 127 here.
@@ -49138,6 +49139,7 @@ spectrumGetPS3MSampleData
     beq.b   .skipz
     bmi.b   .skipz
     moveq   #FFT_LENGTH-1,d1
+    moveq   #5,d4   * Scale factor
 .skipz
 
 	move.l	ps3m_buff1(a5),a0
@@ -49153,7 +49155,7 @@ spectrumGetPS3MSampleData
 	ext	d2
 	ext	d3
 	add	d3,d2
-	asl	#4,d2   * scaling!
+	asl	d4,d2   * scaling!
 	move	d2,(a2)+
 	addq	#1,d0
 	and	d1,d0   * mask must be a bitmask 
