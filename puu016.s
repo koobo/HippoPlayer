@@ -25127,6 +25127,8 @@ drawScope:
 	beq.b	.centerStereo
     cmp     #pt_xmaplay,playertype(a5)
     beq.b   .x1
+    jsr     checkPlaySidMode
+    bpl.b   .x1
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.noMagic
 .x1	cmp.b	#QUADMODE_HIPPOSCOPE,s_quadmode(a4)
@@ -25166,6 +25168,8 @@ drawScope:
 	beq.w	.renderPS3M
 	cmp	    #pt_xmaplay,playertype(a5)
 	beq.w	.renderPS3M
+    jsr     checkPlaySidMode
+    bpl     .renderPS3M
 
 ;	* Check for generic quadscope support
 ;	move.l	playerbase(a5),a0
@@ -34305,7 +34309,7 @@ p_sid:	jmp	.init(pc)
 	lea	sidheader(a5),a1
 	lob	ReadIcon	
 	tst.l	d0
-	bne.b	.error2
+	bne 	.error2
 
 .h2
 	lea	sidheader(a5),a0
@@ -34331,15 +34335,46 @@ p_sid:	jmp	.init(pc)
 	subq	#1,songnumber(a5)
 .plo
 
-	bsr.b	.sanko
+
+	bsr  	.sanko
 	tst.l	d0
-	bne.b	.error3	
+	bne 	.error3	
+
+    * Fake PS3M scope variables
+    bsr     checkPlaySidMode
+    beq.b   .skipz
+    bmi.b   .skipz
+    * Audio buffer is valid after song was started
+    lob     GetRESIDAudioBuffer
+    * a0 = buffer ptr
+    * d0 = buffer length
+    * d1 = period value
+    subq.l  #2,d0   * removes statics pixel from scope
+    move.l  d0,.posMask
+    move.l  a0,.bufPtr
+ if DEBUG
+    move.l  a0,d1
+    DPRINT  "length=%ld buffer=%lx"
+ endif
+    pushpea .bufPtr(pc),ps3m_buff1(a5)
+    pushpea .bufPtr(pc),ps3m_buff2(a5)
+    pushpea .bufPos(pc),ps3m_playpos(a5)
+    pushpea .posMask(pc),ps3m_buffSizeMask(a5)
+.skipz
+
 
 	bset	#1,$bfe001
 	moveq	#0,d0
 .er	movem.l	(sp)+,d1-a6
 	rts
 
+* Fake PS3M scope variables
+* multiscope draws 160 per segment
+* reSID 200Hz buffer size is 140 bytes
+* it will repeat 20 bytes
+.bufPos     dc.l    0
+.bufPtr     dc.l    0
+.posMask    dc.l    $7f 
 
 .error1
     cmp     #SID_NOSIDBLASTER,d0
@@ -34737,19 +34772,11 @@ sidScopeUpdate
 	bsr.w	anyScopeRunning
 	beq.w	.x
 
-    bsr     isPlaysidReSID
-    beq     .noResid
-    push    a6
-    move.l  _SIDBase(a5),a6
-    lob     GetOperatingMode
-    pop     a6
-    tst     d0
-    beq     .noResid
-    cmp     #OM_RESID_6581,d0
-    beq     .resid
-    cmp     #OM_RESID_8580,d0
-    beq     .resid
-    * Not supported SID mode
+    bsr     checkPlaySidMode
+    beq.b   .noResid
+    * Zero: normal
+    * Positive: resid
+    * Negative: something else, like SIDBlaster
     rts
 
 .noResid
@@ -34834,35 +34861,16 @@ sidScopeUpdate
 .followFractions
 	ds.w	4
 
-.resid
-	move.l	_SIDBase(a5),a6
-    jsr     _LVOGetRESIDAudioBuffer(a6)
-    * a0 = buffer ptr
-    * d0 = buffer len
-    * d1 = playback period
-    lsr     #1,d0   * length in words
-
-	lea	scopeData+scope_ch1(a5),a1
-    moveq   #4-1,d4
-.bob
-    move.l  a0,ns_start(a1)
-    move.l  a0,ns_loopstart(a1)
-    move    d0,ns_length(a1)
-    move    d0,ns_replen(a1)
-    move    d1,ns_period(a1)
-    move    #$40,ns_tempvol(a1)
-    lea	    ns_size(a1),a1
-    dbf     d4,.bob
-    rts
-
 
 * Checks whether the opened playsid.library
 * is the reSID variant
+* Out:
+*   d0 = 1 if reSID variant, 0 otherwise
 isPlaysidReSID:
-    pushm   all
-    bsr     get_sid
-    beq     .noRESID
-    move.l	_SIDBase(a5),a0
+    push    a0
+    move.l  _SIDBase(a5),d0
+    beq.b   .noRESID
+    move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
 	cmp     #3,LIB_REVISION(a0)
@@ -34879,14 +34887,43 @@ isPlaysidReSID:
     cmp.b   #"e",21(a0)
     bne.b   .noRESID
    ; "playsid.library 1.3 reSID+SIDBlaster"
-    popm    all
+    pop     a0
     moveq   #1,d0
     rts
 .noRESID
-    popm    all
+    pop     a0
     moveq   #0,d0
     rts
 
+* Checks whether playsid is operating in reSID mode
+* Out:
+*   status flags set as
+*   d0 = 0 if normal SID, 1 if resid, -1 if something else
+checkPlaySidMode:
+    movem.l d0/a6,-(sp)
+    cmp     #pt_sid,playertype(a5)
+    bne.b   .noResid
+    bsr     isPlaysidReSID
+    beq     .noResid
+    move.l  _SIDBase(a5),a6
+    lob     GetOperatingMode
+    tst     d0
+    beq     .noResid
+    cmp     #OM_RESID_6581,d0
+    beq     .resid
+    cmp     #OM_RESID_8580,d0
+    beq     .resid
+    moveq   #-1,d0
+    movem.l (sp)+,d0/a6
+    rts
+.noResid
+    moveq   #0,d0
+    movem.l (sp)+,d0/a6
+    rts
+.resid
+    moveq   #1,d0
+    movem.l (sp)+,d0/a6
+    rts
 
 * T‰nne v‰liin h‰m‰‰v‰sti
 
@@ -48544,6 +48581,8 @@ runSpectrumScope
 	beq.b	.ps3m
     cmp     #pt_xmaplay,playertype(a5)
     beq.b   .ps3m
+    jsr     checkPlaySidMode
+    bpl.b   .ps3m
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.sample
 	bra.b	.normal
@@ -49092,6 +49131,14 @@ spectrumGetPS3MSampleData
 	move.l	ps3m_buffSizeMask(a5),a0
 	move.l	(a0),d1
 
+    * For reSID the mask is not a bitmask, instead 
+    * it is around 140. Force to it to be 127 here.
+    bsr     checkPlaySidMode
+    beq.b   .skipz
+    bmi.b   .skipz
+    moveq   #FFT_LENGTH-1,d1
+.skipz
+
 	move.l	ps3m_buff1(a5),a0
 	move.l	(a0),a0
 	move.l	ps3m_buff2(a5),a1
@@ -49108,7 +49155,7 @@ spectrumGetPS3MSampleData
 	asl	#4,d2   * scaling!
 	move	d2,(a2)+
 	addq	#1,d0
-	and	d1,d0
+	and	d1,d0   * mask must be a bitmask 
 	dbf	d7,.loop
 
 	rts
