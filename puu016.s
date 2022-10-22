@@ -50042,31 +50042,31 @@ remoteSearch
 	dc.b	"UHC/TEMPDIR",0
 
 .pathCmd
-    dc.b    "path ${UHCBIN}C ${UHCBIN}S ADD",0
+    dc.b    'path "${UHCBIN}C" "${UHCBIN}S" ADD',0
 
 .modlandResultsPath
 	dc.b	"modlandsearch",0
 .modlandSearchCmd
 	dc.b	"%s",10
-	dc.b 	'modlandsearch "%s"',10
+	dc.b 	'modlandsearch %s',10
 	dc.b	0
 .aminetResultsPath
 	dc.b	"aminetsearch",0
 .aminetSearchCmd
 	dc.b	"%s",10
-	dc.b 	'aminetsearch "mods/ %s"',10
+	dc.b 	'aminetsearch mods/ %s',10
 	dc.b	0
 .modulesResultsPath
 	dc.b	"modulessearch",0
 .modulesSearchCmd
 	dc.b	"%s",10
-	dc.b 	'modulessearch "%s"',10
+	dc.b 	'modulessearch %s',10
 	dc.b	0
 .hvscResultsPath
 	dc.b	"hvscsearch",0
 .hvscSearchCmd
 	dc.b	"%s",10
-	dc.b 	'hvscsearch "%s"',10
+	dc.b 	'hvscsearch %s',10
 	dc.b	0
  even
 
