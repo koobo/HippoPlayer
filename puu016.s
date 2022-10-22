@@ -34260,16 +34260,16 @@ p_sid:	jmp	.init(pc)
     lea     .perfDone(pc),a2
     tst.b   (a2)
     bne.b   .perfOk
+    DPRINT  "Start perf test"
     pushm   d0/a0/a1/a2
     lob     MeasureRESIDPerformance
-    DPRINT  "Perf test: %ld ms"
-    move    d0,d2
-    cmp     #20,d2
+    DPRINT  "Perf test: %ld/%ld ms"
+    move.l  d0,d2
+    cmp     d1,d2
     popm    d0/a0/a1/a2
     bls.b   .perfOk
     pushm   all
-    moveq   #0,d0
-    move    d2,d0
+    move.l  d2,d0
     bsr     .performanceRequest
     tst.l   d0
     popm    all
@@ -34470,6 +34470,7 @@ p_sid:	jmp	.init(pc)
 
 .performanceRequest
     * d0 = value
+    * d1 = limit
     lea     .perfReqTxt(pc),a0
     jsr     desmsg
     lea     desbuf(a5),a1
@@ -34479,7 +34480,7 @@ p_sid:	jmp	.init(pc)
 .perfReqTxt
     dc.b    "Your Amiga could be too slow for",10
     dc.b    "reSID and become unresponsive.",10
-    dc.b    "Performance: %ld/20 ms",0
+    dc.b    "Performance: %ld ms, need <= %ld ms",0
 
 .perfReqButtons
     dc.b    "_Continue anyway|_Stop!",0
