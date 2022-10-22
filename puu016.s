@@ -18019,7 +18019,8 @@ inforivit_clear_2ndrow:
 	movem.l	d0-d4/a0,-(sp)
 	moveq	#7+WINX,d0
 	move	infoBoxTopEdge(a5),d1
-	move	d1,d3
+  	move	d1,d3
+    addq    #1,d1 * magic
 	add		infoBoxHeight(a5),d3
 	move	WINSIZX(a5),d2
 	sub		#10,d2	* side margin
