@@ -26129,12 +26129,12 @@ multihipposcope:
 	moveq	#120-1,d7
 .d
 
-	move.b	(a1,d5),d1
+	move.b	(a1,d5.l),d1
 	asr.b	#1,d1
 	ext	d1
 	add	d0,d1
 
-	move.b	5(a1,d5),d2
+	move.b	5(a1,d5.l),d2
 	asr.b	#2,d2 
 	ext	d2
 	add	d6,d2
@@ -26153,8 +26153,11 @@ multihipposcope:
 	sub	d2,d3
 	bset	d1,39(a3,d3)
 
-	addq	#1,d5
-	and	d4,d5
+	addq.l	#1,d5
+
+	cmp.l	d4,d5
+	bne.b	*+4
+	moveq	#0,d5
 
 	dbf	d7,.d
 
