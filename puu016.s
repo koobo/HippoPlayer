@@ -50088,7 +50088,7 @@ remoteSearch
 .modulesLineE
 
 .hvscLine
-    dc.b    "http://www.hvsc.c64.org/download/C64Music/",0
+    dc.b    "http://hvsc.csdb.dk/",0     
 .hvscLineE
 
 .uhcTempDirVar
