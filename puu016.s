@@ -50262,7 +50262,7 @@ fetchRemoteFile:
 	dc.b	"T:agetout",0
 
 .getScript
-	dc.b	"path "${UHCBIN}C" ADD",10
+	dc.b	'path "${UHCBIN}C" ADD',10
 	dc.b	'aget "%s" "%s" QUIET >T:agetout',10,0
 remoteExecute
 	dc.b	"execute "
