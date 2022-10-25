@@ -16702,6 +16702,7 @@ rsidmode_req
     moveq   #1,d0
     rts
 .2  
+    bsr     get_sid
     jsr     isPlaysidReSID
     rts
 
@@ -16711,8 +16712,9 @@ rsidmode
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
+    bsr     get_sid
     jsr     isPlaysidReSID
-     bne     .2
+    bne     .2
 	clr.b	sidmode_new(a5)
 .2
 
