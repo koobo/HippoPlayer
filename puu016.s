@@ -249,8 +249,8 @@ check	macro
 	include	Guru.i
 	include	ps3m.i
 	include	patternInfo.i
-use = 0
-	include	player61.i
+;use = 0
+	;include	player61.i
 
 	include	playerIds.i
 	include	kpl_offsets.S
@@ -17804,8 +17804,9 @@ rbutton8
 deleteButtonAction
 delete
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq.w	fileBrowserGoToParent
-
+	bne.b	.9
+	jmp	fileBrowserGoToParent
+.9
 	skipIfGadgetDisabled gadgetDelButton
 	moveq	#0,d7
 	bsr.b	.elete
@@ -21755,7 +21756,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	beq.b	.s1
 	pushm	all
 	* Pause playback first
-	bsr.w	stopcont		* pausetaan
+	jsr	stopcont		* pausetaan
 	popm	all
 .s1
 
@@ -22563,9 +22564,9 @@ rexxmessage
 .komennot
 	dr	.playt,.playr
 	dr	.cleart,clearlist
-	dr	.contt,actionContinue
-	dr	.stopt,actionStopButton
-	dr	.ejectt,rbutton4
+	dr	.contt,._actionContinue
+	dr	.stopt,._actionStopButton
+	dr	.ejectt,._rbutton4
 	dr	.lprgt,.loadprg
 	dr	.addt,.add
 	dr	.delt,rbutton8
@@ -22631,6 +22632,12 @@ rexxmessage
 .favoritet dc.b "FAVORITE",0
  even
 
+._rbutton4
+	jmp	rbutton4
+._actionStopButton
+	jmp	actionStopButton
+._actionContinue
+        jmp     actionContinue
 ._rbutton_kela1
 	jmp	rbutton_kela1
 ._rbutton_kela2
@@ -22698,7 +22705,7 @@ rexxmessage
 	bpl.b	.ee
 	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennest‰‰n
 .ee	
-	bsr.w	forceRefreshList
+	jsr	forceRefreshList
 	rts
 
 
@@ -22732,7 +22739,7 @@ rexxmessage
 	bsr.w	a2i
 	subq.l	#1,d0
 	bsr.b	.choo
-	bra.w	resh
+	jmp	resh
 
 *** valitaan d0:ssa olevan numeron tiedosto
 .choo
@@ -49132,7 +49139,7 @@ spectrumGetPS3MSampleData
 
     * For reSID the mask is not a bitmask, instead 
     * it is around 140. Force to it to be 127 here.
-    bsr     playSidInRESIDMode
+    jsr     playSidInRESIDMode
     beq.b   .skipz
     moveq   #FFT_LENGTH-1,d1
     moveq   #5,d4   * Scale factor
