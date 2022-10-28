@@ -370,8 +370,8 @@ prefs_listtextattr		rs.b	ta_SIZEOF-4
 prefs_listfontname		rs.b	30
 	printt "TODO TODO: dangerous buffer size"
 
-prefs_xmaplay   rs.b   1
-                rs.b    1
+prefs_xmaplay    rs.b   1
+prefs_residmode  rs.b    1
 
 prefs_size		rs.b	0
 
@@ -813,8 +813,10 @@ medmode_new	rs.b	1
 medrate_new	rs	1
 medratepot_new	rs	1
 sidmode_new     rs.b    1
+residmode_new   rs.b    1
 xmaplay_new     rs.b    1
 alarmpot_new	rs.l	1
+                rs.b    1 * pad
 alarm_new	rs	1
 vbtimer_new	rs.b	1
 Xscopechanged	rs.b	1		* scopea muutettu
@@ -911,8 +913,9 @@ mpegadiv	rs.b	1		* MPEGA freq. division
 medmode		rs.b	1		* MED mode
 medrate		rs	1		* MED mixing rate
 sidmode     rs.b    1
+residmode   rs.b    1
 xmaplay     rs.b    1
-
+            rs.b    1  * pad
 
 *******
 
@@ -12443,6 +12446,7 @@ loadprefs2
 
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_sidmode(a0),sidmode(a5)
+	move.b	prefs_residmode(a0),residmode(a5)
 	move.b	prefs_xmaplay(a0),xmaplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
@@ -12737,6 +12741,7 @@ saveprefs
 	move.b	medmode(a5),prefs_medmode(a0)
 	move	medrate(a5),prefs_medrate(a0)
 	move.b	sidmode(a5),prefs_sidmode(a0)
+	move.b	residmode(a5),prefs_residmode(a0)
 	move.b	xmaplay(a5),prefs_xmaplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
@@ -13225,6 +13230,7 @@ prefs_code
 	move.b	medmode(a5),medmode_new(a5)
 	move	medrate(a5),medrate_new(a5)
 	move.b	sidmode(a5),sidmode_new(a5)
+	move.b	residmode(a5),residmode_new(a5)
 	move.b	xmaplay(a5),xmaplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
@@ -13684,6 +13690,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	medmode_new(a5),medmode(a5)
 	move	medrate_new(a5),medrate(a5)
 	move.b	sidmode_new(a5),sidmode(a5)
+	move.b	residmode_new(a5),residmode(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
@@ -14272,6 +14279,9 @@ pmousebuttons
 	lea     prefsPlaySidMode,a0
 	lea	    rsidmode_req(pc),a2	    * sid mode
 	bsr.b	.check
+	lea     prefsResidMode,a0
+	lea	    rresidmode_req(pc),a2	   * resid mode
+	bsr.b	.check
 
 
 .xx	popm	all
@@ -14409,6 +14419,7 @@ pupdate:				* Ikkuna päivitys
 	bsr.w	pmedmode		* med mode
     bsr     psidmode        * SID mode
     bsr     pxmaplay        * XMAPlay
+    bsr     presidmode      * reSID mode
 
 
 .x	popm	all
@@ -14659,6 +14670,7 @@ gadgetsup2
 	dr	rmedrate	* med rate
     dr  rsidmode    * sid mode
     dr  rxmaplay    * xmaplay
+    dr  rresidmode  * resid mode
     
 
 
@@ -16687,7 +16699,7 @@ rmedrate
 rsidmode_req
 	lea	sidmode00(pc),a0
 
-    pushpea .callback(pc),d4
+    pushpea sidmode_callback(pc),d4
 	bsr 	listSelectorPrefsWindowWithCallback
 	bmi.b	.x
 	move.b	d0,sidmode_new(a5)
@@ -16696,7 +16708,7 @@ rsidmode_req
 
     * in:
 *   d3 = index to check
-.callback
+sidmode_callback
     tst     d3
     bhi     .2
     moveq   #1,d0
@@ -16740,6 +16752,53 @@ sidmode01	dc.b	"Normal",0
 sidmode02	dc.b	"reSID 6581",0
 sidmode03	dc.b	"reSID 8580",0
 sidmode04	dc.b	"SIDBlaster",0
+ even
+
+rresidmode_req
+	lea	residmode00(pc),a0
+
+    pushpea sidmode_callback(pc),d4
+	bsr 	listSelectorPrefsWindowWithCallback
+	bmi.b	.x
+	move.b	d0,residmode_new(a5)
+	bra.b	presidmode
+.x	rts
+
+
+rresidmode
+	addq.b	#1,residmode_new(a5)
+	cmp.b	#4,residmode_new(a5)
+	bne.b	.1
+	clr.b	residmode_new(a5)
+.1
+    bsr     get_sid
+    jsr     isPlaysidReSID
+    bne     .2
+	clr.b	residmode_new(a5)
+.2
+
+presidmode
+    lea     residmode01(pc),a0
+	move.b	residmode_new(a5),d0
+    beq.b   .1
+    lea     residmode02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residmode03(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residmode04(pc),a0
+.1 
+    lea	    prefsResidMode,a1
+	bra.w	prunt
+
+
+
+residmode00	dc.b	13,4
+residmode01	dc.b	"Normal",0
+residmode02	dc.b	"Oversample 2x",0
+residmode03	dc.b	"Oversample 4x",0
+residmode04	dc.b	"Interpolate",0
  even
 
 *** XMAPlay toggle
@@ -51211,7 +51270,7 @@ prefsListFont
 prefsPlaySidMode 
        dc.l prefsEnableXMAPlay
        ; left, top, width, height
-       dc.w 214-80+4,107,100-8,12,3,1,1
+       dc.w 214-80+4,107+28-14,100-8,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -51223,7 +51282,22 @@ prefsPlaySidMode
        dc.b "PlaySid mode...",0
        even
 
-prefsEnableXMAPlay dc.l 0
+prefsResidMode
+       dc.l 0 ; END
+       ; left, top, width, height
+       dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "reSID mode....",0
+       even
+
+prefsEnableXMAPlay dc.l prefsResidMode
        ; left, top, width, height
        dc.w 214-80+4+64,107-12-2,28,12,3,1,1
        dc.l 0

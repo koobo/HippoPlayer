@@ -1,5 +1,5 @@
 pslider2	dc.l sIPULI
-	dc.w 402-20+2,121+8+8,70-20,12,7,9,3
+	dc.w 402-20+2,121+8+8-2,70-20,12,7,9,3
 	dc.l pslider2gr,0,pslider2t,0,pslider2s
 	dc.w 0
 	dc.l 0
