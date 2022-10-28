@@ -1,5 +1,5 @@
 pslider2	dc.l sIPULI
-	dc.w 160,121,70,12,7,9,3
+	dc.w 402-20+2,121+8+8,70-20,12,7,9,3
 	dc.l pslider2gr,0,pslider2t,0,pslider2s
 	dc.w 0
 	dc.l 0
@@ -8,9 +8,9 @@ pslider2gr	dc.w 0,0,11,9,2
 	dc.b 3,0
 	dc.l 0
 pslider2t	dc.b 1,0,1,0
-	dc.w -144,2
+	dc.w -144+8+8+2,2
 	dc.l 0,pslider2tx,0
-pslider2tx	dc.b "TFMX rate...",0
+pslider2tx	dc.b "TFMX rate",0
 	even
 pslider2s	dc.w 2,0,0,0,0
 	dc.w 0,0,0,0,0,0
