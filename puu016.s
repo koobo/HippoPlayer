@@ -34356,7 +34356,10 @@ p_sid:	jmp	.init(pc)
 .a  move.b  (a0)+,(a1)+
     bne.b   .a
 
-    DPRINT  "Operating mode=%ld"
+    moveq   #0,d1
+    move.b  residmode(a5),d1
+ 
+    DPRINT  "Operating mode=%ld resid=%ld" 
     lob     SetOperatingMode
 .skip
 
