@@ -16767,7 +16767,7 @@ rresidmode_req
 
 rresidmode
 	addq.b	#1,residmode_new(a5)
-	cmp.b	#4,residmode_new(a5)
+	cmp.b	#5,residmode_new(a5)
 	bne.b	.1
 	clr.b	residmode_new(a5)
 .1
@@ -16783,17 +16783,21 @@ presidmode
     subq.b  #1,d0
     beq.b   .1
     lea     residmode04(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residmode05(pc),a0
 .1 
     lea	    prefsResidMode,a1
 	bra.w	prunt
 
 
 
-residmode00	dc.b	13,4
+residmode00	dc.b	13,5
 residmode01	dc.b	"Normal",0
 residmode02	dc.b	"Oversample 2x",0
-residmode03	dc.b	"Oversample 4x",0
-residmode04	dc.b	"Interpolate",0
+residmode03	dc.b	"Oversample 3x",0
+residmode04	dc.b	"Oversample 4x",0
+residmode05	dc.b	"Interpolate",0
  even
 
 *** XMAPlay toggle

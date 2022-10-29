@@ -138,10 +138,11 @@ NOTE 4: Too long didn't read
   In "Prefs/Play-2" there's also another new entry: "reSID mode".
   This can be used to select the reSID sampling mode to use.
   - Normal: Fastest, produces sampling noise with some tunes
-  - Oversample 2x: Heavy, better sound quality, less noise
-  - Oversample 4x: Heaviest, better sound quality, less noise
-  - Interpolate: Heavier, better sound quality, less noise
-  
+  - Oversample 2x: Heavy, better quality, less noise
+  - Oversample 3x: Heavier, better quality, less noise
+  - Oversample 4x: Heaviest, better quality, less noise
+  - Interpolate: Heavy, better quality, less noise
+
   Note that the reSID emulation engine requires a 68060 or something
   comparable. The "Normal" mode takes about 50-80% CPU on a 
   50 MHz 68060. Before playback is started, a performance test
