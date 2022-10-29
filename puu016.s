@@ -16758,7 +16758,7 @@ rresidmode_req
 	lea	residmode00(pc),a0
 
     pushpea sidmode_callback(pc),d4
-	bsr 	listSelectorPrefsWindowWithCallback
+    bsr     listselector
 	bmi.b	.x
 	move.b	d0,residmode_new(a5)
 	bra.b	presidmode
@@ -16771,11 +16771,6 @@ rresidmode
 	bne.b	.1
 	clr.b	residmode_new(a5)
 .1
-    bsr     get_sid
-    jsr     isPlaysidReSID
-    bne     .2
-	clr.b	residmode_new(a5)
-.2
 
 presidmode
     lea     residmode01(pc),a0
@@ -34295,7 +34290,7 @@ p_sid:	jmp	.init(pc)
     bsr     isPlaysidReSID
     beq     .skip
 
-
+    ; -----------------------
     ; Before AllocEmulResource set the operating mode
     cmp.b   #1,sidmode(a5)
     beq     .m1
@@ -34320,7 +34315,7 @@ p_sid:	jmp	.init(pc)
     lea     sidmode04,a0
     moveq   #OM_SIDBLASTER_USB,d0
     bra     .mode
-
+    ; -----------------------
 .cpuCheck
 	move.l	(a5),a1
 	btst	#AFB_68020,AttnFlags+1(a1)
@@ -34328,11 +34323,13 @@ p_sid:	jmp	.init(pc)
     moveq	#ier_hardware,d0
 	bra     .er
 .cpuOk
+    ; -----------------------
     lea     .perfDone(pc),a2
     tst.b   (a2)
     bne.b   .perfOk
     DPRINT  "Start perf test"
     pushm   d0/a0/a1/a2
+    move.b  residmode(a5),d0
     lob     MeasureRESIDPerformance
     DPRINT  "Perf test: %ld/%ld ms"
     move.l  d0,d2
@@ -34347,10 +34344,13 @@ p_sid:	jmp	.init(pc)
     bne.b   .perfOk
     moveq   #ier_error,d0
     bra     .er
+    ; -----------------------
 
 .perfOk
-    st      (a2)
+    ; Set flag so that perf test is not done again
+    ;st      (a2)
 
+    ; -----------------------
 .mode
     lea     .title(pc),a1
 .a  move.b  (a0)+,(a1)+
@@ -34362,6 +34362,7 @@ p_sid:	jmp	.init(pc)
     DPRINT  "Operating mode=%ld resid=%ld" 
     lob     SetOperatingMode
 .skip
+    ; -----------------------
 
 	lob	AllocEmulResource
     DPRINT  "AllocEmulResource=%ld"
@@ -51297,7 +51298,7 @@ prefsResidMode
        dc.w -198+80-4+16,2
        dc.l 0,.tx,0
 .tx 
-       dc.b "reSID mode....",0
+       dc.b "reSID mode...",0
        even
 
 prefsEnableXMAPlay dc.l prefsResidMode
