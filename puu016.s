@@ -34268,6 +34268,8 @@ p_sid:	jmp	.init(pc)
 .flag       dc.b	0
 * Set when perf measurement has been done
 .perfDone   dc.b    0
+* reSID mode where the perf test was done
+.perfMode   dc.b    0
  even
 
 .init
@@ -34333,11 +34335,18 @@ p_sid:	jmp	.init(pc)
 .cpuOk
     ; -----------------------
     lea     .perfDone(pc),a2
+    move.b  residmode(a5),d3
+    cmp.b   .perfMode(pc),d3
+    beq.b   .modeSame
+    ; Run perf test it mode has changed
+    clr.b   (a2)
+.modeSame
     tst.b   (a2)
     bne.b   .perfOk
     DPRINT  "Start perf test"
     pushm   d0/a0/a1/a2
     move.b  residmode(a5),d0
+    move.b  d0,.perfMode
     lob     MeasureRESIDPerformance
     DPRINT  "Perf test: %ld/%ld ms"
     move.l  d0,d2
@@ -34356,7 +34365,7 @@ p_sid:	jmp	.init(pc)
 
 .perfOk
     ; Set flag so that perf test is not done again
-    ;st      (a2)
+    st      (a2)
 
     ; -----------------------
 .mode
