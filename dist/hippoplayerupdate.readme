@@ -164,7 +164,8 @@ NOTE 4: Too long didn't read
   - 14-bit output
   
   Note that this also requires a 68060 or something comparable. Trying this
-  with a lower powered CPU is not dangerous, though.
+  with a lower powered CPU is not dangerous, though. Playing "dope.xm"
+  uses about 20-40% CPU on a 50MHz 68060.
 
   Scopes work with the exception of the patternscope. AHI support not 
   available.
