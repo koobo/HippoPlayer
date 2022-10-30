@@ -12459,10 +12459,14 @@ loadprefs2
 	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr
 
 	move	prefs_windowWidth+prefsdata(a5),d0
-	beq.b	.1
+    * Min width check
+    cmp     #264,d0
+    bhs.b   .wOk
+    move    #264,d0
+.wOk
 	move	d0,previousWindowWidth(a5)
 	move	d0,WINSIZX(a5)
-.1
+
 
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
