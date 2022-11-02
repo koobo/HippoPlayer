@@ -26077,33 +26077,42 @@ multiscope
 	lsr.l	#8,d5
 	lea	s_multab(a4),a2
 		
+    * 160 pixels minus one?
 	moveq	#160/8-1-1,d7
 	moveq	#1,d0
 	move	#$80,d6
+    * This returns the buffer mask or size limit in d4
 	bsr.w	getps3mb
 
 multiscope0
 
 .drlo	
- 
+    * Do 8 horizontal pixels
  rept 8
+    * Get one data byte, adjust with $80
+    * turns it from -128..127 to 0..256 I guess
  	move	d6,d2
 	add.b	(a1,d5.l),d2
+    * scale to 0..63
 	lsr.b	#2,d2
+    * Multiply by screen modulo using a table
 	add	d2,d2
 	move	(a2,d2),d2
+    * Write two pixels on top of each other
 	or.b	d0,-40(a0,d2)
 	or.b	d0,(a0,d2)
+    * Next pixel to the left
 	add.b	d0,d0
-
+    * Advance one byte in source data
 	addq.l	#1,d5
-;	and.l	d4,d5
+    * Check if buffer limit reached, start over if so
 	cmp.l	d4,d5
 	bne.b	*+4
 	moveq	#0,d5
  endr
-	
+	* Reset pixel to right
 	moveq	#1,d0
+    * Jump 8 pixels to left
 	sub	d0,a0
 	dbf	d7,.drlo
 	rts
