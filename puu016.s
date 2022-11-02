@@ -34578,8 +34578,9 @@ p_sid:	jmp	.init(pc)
     jmp     rawrequest
 
 .perfReqTxt
-    dc.b    "Your Amiga could be too slow for",10
-    dc.b    "reSID and become unresponsive.",10
+    dc.b    "Your Amiga could be too slow!",10
+    dc.b    "The sound may become distorted and",10
+    dc.b    "the system unesponsive.",10
     dc.b    "Performance: %ld ms, need <= %ld ms",0
 
 .perfReqButtons
