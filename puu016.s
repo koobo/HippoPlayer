@@ -51329,7 +51329,7 @@ prefsEnableXMAPlay dc.l prefsResidMode
        dc.w -198+80-4-64,2
        dc.l 0,.tx,0
 .tx 
-       dc.b "Enable XMAPlay060......",0
+       dc.b "Enable xmaplay060......",0
        even
 
 ; Gadget
