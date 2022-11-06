@@ -134,27 +134,25 @@ NOTE 4: Too long didn't read
   - reSID 6851: Accurate emulation of SID 6581
   - reSID 8580: Accurate emulation of SID 8580
   - SIDBlaster: Use the USB device SIDBlaster for sound output
-  
-  In "Prefs/Play-2" there's also another new entry: "reSID mode".
-  This can be used to select the reSID sampling mode to use.
-  - Normal: Fastest, produces sampling noise with some tunes
-  - Oversample 2x: Heavy, better quality, less noise
-  - Oversample 3x: Heavier, better quality, less noise
-  - Oversample 4x: Heaviest, better quality, less noise
-  - Interpolate: Heavy, better quality, less noise
 
-  Note that the reSID emulation engine requires a 68060 or something
-  comparable. The "Normal" mode takes about 50-80% CPU on a 
-  50 MHz 68060. Before playback is started, a performance test
-  is done and a warning is issued if necessary. Your system will 
-  become unresponsive if not powerful enough. 
-  
+  reSID produces an authentic sound. It also requires a 68060 or 
+  something comparable. The "Normal" mode takes about 50-80% CPU on 
+  a 50 MHz 68060. Before playback is started, a performance test
+  is done and a warning issued if necessary. If there's not enough 
+  CPU power available, data will be skipped, leading to distorted sound.
+
+  In "Prefs/Play-2" there's also another new entry: "reSID mode".
+  This can be used to select the reSID sampling mode to use. The
+  "Normal" mode is the fastest but produces sampling noise. The
+  other modes are heavier and produce a better sound. These may not
+  run on a 50 MHz 68060.
+
   SIDBlaster support requires the Poseidon USB stack to be installed.
 
-- Added 8bitbubsy's high quality FastTracker 2 replayer xmaplay060. 
+- Added 8bitbubsy's high quality FastTracker 2 replayer: xmaplay060. 
   Enable it from "Prefs/Play-2/Enable xmaplay060". It will then be used 
   instead of the buggy default XM replayer (PS3M). It provides full 
-  support for XM modules with a much better mixing quality.
+  support for XM modules with a much better sound quality.
   Features:
   - 32 stereo channels with 11-bit input volumes (left/right)
   - Free voice panning with an 8-bit range
@@ -163,9 +161,9 @@ NOTE 4: Too long didn't read
   - Supports 8-bit and 16-bit samples
   - 14-bit output
   
-  Note that this also requires a 68060 or something comparable. Trying this
-  with a lower powered CPU is not dangerous, though. Playing "dope.xm"
-  uses about 20-40% CPU on a 50MHz 68060.
+  Note that this also requires a 68060 or something comparable.  
+  Playing "dope (onward).xm", which is a 28 channel module, uses about 
+  20-40% CPU on a 50MHz 68060.
 
   Scopes work with the exception of the patternscope. AHI support not 
   available.
