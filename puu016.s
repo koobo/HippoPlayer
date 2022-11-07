@@ -822,8 +822,8 @@ medratepot_new	rs	1
 sidmode_new     rs.b    1
 residmode_new   rs.b    1
 xmaplay_new     rs.b    1
-alarmpot_new	rs.l	1
                 rs.b    1 * pad
+alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
 Xscopechanged	rs.b	1		* scopea muutettu
