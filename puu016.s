@@ -17759,7 +17759,7 @@ doPrintNames:
 	sub	tf_XSize(a1),d0	
 
 .hadCharSpace
-	bsr.w	print ; print marker to d0, d1
+	jsr	print ; print marker to d0, d1
 .noMarker
 
 	* Set ordinary colors if divider was previously printed
@@ -19584,7 +19584,7 @@ showTooltipPopup
 	move	nw_Height(a0),ply2
 	subq	#1,ply2
 	subq	#1,plx2
-	bsr.w	laatikko1
+	jsr	laatikko1
 .x
 	popm	all
 	rts
@@ -22632,7 +22632,7 @@ rexxmessage
 
 .komennot
 	dr	.playt,.playr
-	dr	.cleart,clearlist
+	dr	.cleart,._clearlist
 	dr	.contt,._actionContinue
 	dr	.stopt,._actionStopButton
 	dr	.ejectt,._rbutton4
@@ -22701,6 +22701,8 @@ rexxmessage
 .favoritet dc.b "FAVORITE",0
  even
 
+._clearlist
+	jmp	clearlist
 ._rbutton4
 	jmp	rbutton4
 ._actionStopButton
@@ -46247,7 +46249,7 @@ deliInit:
  
 	* interrupt routine provided, set up an interrupt
 	move	dtg_Timer(a4),d0
-	bsr.w	init_ciaint_withTempo
+	jsr	init_ciaint_withTempo
 	beq.b	.gotCia
 	DPRINT	"cia error"
 
@@ -46566,7 +46568,7 @@ deliStop
 	move.l	#DTP_StopInt,d0
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
-	bsr.w	clearsound
+	jsr	clearsound
 	;move	#$f,$dff096
 	rts
 
@@ -49610,7 +49612,7 @@ horizontalLayout:
 	
 ***************************************************************************
 *
-* Vertica layout
+* Vertical layout
 *
 ***************************************************************************
 
