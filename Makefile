@@ -21,7 +21,7 @@ HiP: puu016.s kpl playerIds.i
 
 # Debug logging version 
 HiP-debug: puu016.s kpl playerIds.i
-	$(ASM) $(INCLUDE) -m68000 -kick1hunks -Fhunkexe -nosym -DDEBUG=1 -o $@ $<
+	$(ASM) $(INCLUDE) -m68000 -kick1hunks -Fhunkexe -nosym -DDEBUG=1 -L $@.txt -o $@ $<
 	@echo Built $@
 
 # Protracker replayer binary

@@ -174,7 +174,9 @@ check	macro
 
 	endm
 
-
+  ifd __VASM
+	NOLIST
+  endif
  	incdir	include:
 	include	exec/exec_lib.i
 	include	exec/ports.i
@@ -254,6 +256,11 @@ check	macro
 
 	include	playerIds.i
 	include	kpl_offsets.S
+
+
+  ifd __VASM
+	LIST
+  endif
 
 *******************************************************************************
 *
