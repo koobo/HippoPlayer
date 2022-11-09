@@ -34275,6 +34275,7 @@ p_sid:	jmp	.init(pc)
 	jmp 	id_sid1(pc)
 	p_NOP
 	dc.w 	pt_sid 				* type
+.flags 
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume!pf_scope!pf_quadscopePoke
 	dc.b	"PSID "
 .title
@@ -34557,9 +34558,17 @@ p_sid:	jmp	.init(pc)
 
 .eteen
 	movem.l	d0/d1/a0/a1/a6,-(sp)
+    * Do not ffwd with special modes, they don't seem to work
+    bsr     isPlaysidReSID
+    beq     .1
+    lore    SID,GetOperatingMode
+    tst     d0
+    bne.b   .2
+.1
 ;	moveq	#4,d0
 	moveq	#6,d0
 	lore	SID,ForwardSong
+.2
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
 
