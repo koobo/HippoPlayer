@@ -36,15 +36,15 @@ NOTE 4: Too long didn't read
 - Improved scopes
 - New music formats
 - "S"-button search functions popup
-- Enhanced PlaySid support (Prefs/Play-2)
-- Alternative HQ FastTracker 2 replayer by 8bitbubsy (Prefs/Play-2)
+- Enhanced PlaySid support
+- Alternative HQ FastTracker 2 replayer by 8bitbubsy
 
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
 
-# Changes from v2.54 (30.8.2022) to v2.55 (?.?.2022) 
+# Changes from v2.54 (30.8.2022) to v2.55 (10.11.2022) 
 
 ## New fixes:
 
@@ -73,7 +73,7 @@ NOTE 4: Too long didn't read
   three should be the minimum, causing the slider to look weird. 
 
 - With some graphics patch combination it was possible to  
-  make the scopes not draw correcty. Should work now.
+  make the scopes not draw correctly. Should work now.
 
 
 ## New features:
@@ -170,7 +170,7 @@ NOTE 4: Too long didn't read
 
 
 Thanks and greetz go to:
-- Spot, 8bitbubsy, Erique, Patrik, Mr. Hac
+- Spot, 8bitbubsy, Erique, Patrik, Mr. Hac, Mike
 
 
 ------------------------------------------------------------------------------

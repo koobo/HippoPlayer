@@ -1,4 +1,16 @@
-BUG:
+FIXED: TODO?:
+- set a narrow font, like xhelvetica 9
+- window opens so narrow that the infobox texts don't fit, like "No search resuts."
+- also hippo logo is positioned on the right border
+
+TODO:
+- limit search term size, min 3 letters?
+
+FIXED: BUG:
+- if window cant be opened, boom
+-- TODO redo window open logic with size checking
+
+FIXED: BUG:
 - filebrowser
 - directory: tim follin/ghouls'n'ghosts
 - not alphabetized correctly, file names are 28 chars,
@@ -554,8 +566,8 @@ CRASH
 
 FIXED: 
 - alloc scope bitplanes with AllocRaster
-- kuinka iso puskuri riittää patternInfoBufferille?
-- Patternscope+s3m: 4kB mix buffer, fläsh
+- kuinka iso puskuri riittï¿½ï¿½ patternInfoBufferille?
+- Patternscope+s3m: 4kB mix buffer, flï¿½sh
 
 TODO
 - AHX
@@ -565,8 +577,8 @@ FIXED: CRASH
 
 FIXED: TODO
 - alloc scope bitplanes with AllocRaster
-- kuinka iso puskuri riittää patternInfoBufferille?
-- FIXED: Patternscope+s3m: 4kB mix buffer, fläsh
+- kuinka iso puskuri riittï¿½ï¿½ patternInfoBufferille?
+- FIXED: Patternscope+s3m: 4kB mix buffer, flï¿½sh
 
 FIXED: TODO
 - mode switch for pattern scope in PS3M: disable costly patternscope
@@ -748,7 +760,7 @@ TODO
 - add divider to fav list -> disappears
 
 FIXED
-- GMC. pitänee olla fastissa?
+- GMC. pitï¿½nee olla fastissa?
 - piip! 
 
 FIXED
@@ -924,27 +936,27 @@ FIXED
 -- Set Window title bar height to 8 -> all ok
 
 TODO
-- cräshäsi joku moduuli zipattu: HeHasNoFace, DataJack
-- RMB window fold: ei toimi enää?
+- crï¿½shï¿½si joku moduuli zipattu: HeHasNoFace, DataJack
+- RMB window fold: ei toimi enï¿½ï¿½?
 - Hippon keskitys ei pela 
-- WindowPrefs: jos titlebarin korkeutta säätää, RMB fold ei keskitä?
--- Toimiiko enää mitkään napit?
+- WindowPrefs: jos titlebarin korkeutta sï¿½ï¿½tï¿½ï¿½, RMB fold ei keskitï¿½?
+-- Toimiiko enï¿½ï¿½ mitkï¿½ï¿½n napit?
 
 MODS ANTHOLOGY synth not supported formats
 - aprosys
  - sidmon2
-- sonicarranger:tämän pitäisi olla tuettu, ei toimi?
+- sonicarranger:tï¿½mï¿½n pitï¿½isi olla tuettu, ei toimi?
 - "ST11";
 - SidMon2
--- tunnistus, etsitään "SIDMON II" stringi
+-- tunnistus, etsitï¿½ï¿½n "SIDMON II" stringi
 - PUMA tracker
--- etsitään taikasanoja 
+-- etsitï¿½ï¿½n taikasanoja 
 
 BUG
 - Prefs zip-komento; jos editoi, ei tallennu, ei vaikutusta muutenkaan
 
 FRED
-- FuzzBall-InGame, Fuzzball-Title -> enforcer hittejä
+- FuzzBall-InGame, Fuzzball-Title -> enforcer hittejï¿½
 - Saattaa olla KingCon-probleemakin
 
 SonicArranger
@@ -976,28 +988,28 @@ FIXED
 
 ; FIXED
 ; iso lista
-; select module and play: ei jää ihan keskelle
-; heiluta hiirtä, soitettava kappale pykälä keskeltä alemmas?
-; joku eventti jäänyt käsittelemättä, esim. nuoli ylös, tulee
-; käsiteltäväksi sitten kun seuraava mousemove event tulee?
+; select module and play: ei jï¿½ï¿½ ihan keskelle
+; heiluta hiirtï¿½, soitettava kappale pykï¿½lï¿½ keskeltï¿½ alemmas?
+; joku eventti jï¿½ï¿½nyt kï¿½sittelemï¿½ttï¿½, esim. nuoli ylï¿½s, tulee
+; kï¿½siteltï¿½vï¿½ksi sitten kun seuraava mousemove event tulee?
 ; 
-; ongelma lienee se, että "firstname" ja sliderin vertpot
+; ongelma lienee se, ettï¿½ "firstname" ja sliderin vertpot
 ; ei vastaa toisiaan, kun uusi firstname lasketaan mousemoven
-; jälkeen vertpotista, on niissä pieni ero, ja näkyy hyppäyksenä
-; ehkä 1-bit scale pitää poistaa? -> rslider4
+; jï¿½lkeen vertpotista, on niissï¿½ pieni ero, ja nï¿½kyy hyppï¿½yksenï¿½
+; ehkï¿½ 1-bit scale pitï¿½ï¿½ poistaa? -> rslider4
 
 ; TODO
-; saatu räplättyä aikaan niin että ei voi sammuttaa,
-; valittaa että filereq on muka päällä?
+; saatu rï¿½plï¿½ttyï¿½ aikaan niin ettï¿½ ei voi sammuttaa,
+; valittaa ettï¿½ filereq on muka pï¿½ï¿½llï¿½?
 
 ; FIXED
-; startissa a500:lla aika hidasta? mihkä aika menee
+; startissa a500:lla aika hidasta? mihkï¿½ aika menee
 
 ; FIXED
-; Filebox prop gadget ei toimi "mediumlista":lla, loppupäästä;
+; Filebox prop gadget ei toimi "mediumlista":lla, loppupï¿½ï¿½stï¿½;
 
 ; FIXED
-; Aika hidasta nuolinäppisselailu mediumlistalla puolen välin paikkeilta alaspäin; 68000
+; Aika hidasta nuolinï¿½ppisselailu mediumlistalla puolen vï¿½lin paikkeilta alaspï¿½in; 68000
 
 ; WONTFIX
 ; Poista WA_ReportMouse, sen sijaan IDCMP_INTUITICKS
@@ -1075,7 +1087,7 @@ FIXED
 * bug:
 * - add XTD
 * - sort
-* - väärä järjestys
+* - vï¿½ï¿½rï¿½ jï¿½rjestys
 
 * FIXED
 * bug:
