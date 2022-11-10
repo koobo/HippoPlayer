@@ -1,7 +1,7 @@
 # Experimental makefile
 
 INCLUDE=-I$(HOME)/A/Asm/Include -I.. -I../Include 
-ASM=vasmm68k_mot
+ASM=~/Prj/vbcc/bin/vasmm68k_mot
 EXE=-m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 EXEopt=-m68000 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 EXE020=-m68020 -no-opt -kick1hunks -Fhunkexe -nosym -DTEST=0
@@ -40,7 +40,8 @@ TARGETS=\
 	bin/tfmx \
 	bin/tfmx7c \
 	bin/thx \
-	bin/vss
+	bin/vss \
+	bin/xmaplay060
 
 COMPRESSED_TARGETS=\
 	shr/Aon4.shr \
@@ -74,10 +75,15 @@ COMPRESSED_TARGETS=\
 	shr/thx.shr \
 	shr/vss.shr \
 	shr/p61a.shr \
-	shr/pretracker.bin.shr
+	shr/pretracker.bin.shr \
+	shr/xmaplay060.shr
 
 all: $(COMPRESSED_TARGETS)
 
+# Turn logging on in PS3M and sampleplayer
+debug: EXE020 += -DDEBUG=1
+debug: all
+	
 clean:
 	rm -f $(TARGETS) 
 	rm -f $(COMPRESSED_TARGETS)
@@ -144,6 +150,8 @@ bin/thx: thx.asm
 	$(ASM) $(INCLUDE) $(BINopt) -o $@ "$<"
 bin/vss: vss.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
+bin/xmaplay060: xmaplay060.s
+	$(ASM) $(INCLUDE) $(EXE020opt) -o $@ "$<"
 
 # Compress
 
@@ -210,4 +218,6 @@ shr/vss.shr:              bin/vss
 shr/p61a.shr:             bin/p61a
 	$(COMPRESS) "$<" "$@"
 shr/pretracker.bin.shr:   bin/pretracker.bin
+	$(COMPRESS) "$<" "$@"
+shr/xmaplay060.shr:       bin/xmaplay060
 	$(COMPRESS) "$<" "$@"

@@ -1,0 +1,3 @@
+[submodule "playsid.library"]
+	path = playsid.library
+	url = git@github.com:koobo/playsid.library.git

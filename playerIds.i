@@ -53,6 +53,7 @@ pt_davelowe		rs.b	1
 pt_startrekker		rs.b 	1
 pt_voodoosupremesynthesizer rs.b  1
 pt_aon8		rs.b	1
+pt_xmaplay      rs.b    1
 
 * These have the eagleplayer included in the group file
 pt_eagle_start = 150

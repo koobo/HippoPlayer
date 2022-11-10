@@ -1,6 +1,10 @@
 ;APS0000111100009186000035070000AAA70004B5BE0005F05A00042D4800049C1F000030E30000C0A3
+
 test	=	0
+
+ ifnd DEBUG
 DEBUG	=	0
+ endif
 
 * Print to debug console, very clever.
 * Param 1: string

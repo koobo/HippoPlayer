@@ -28,18 +28,22 @@ ver	macro
 ;	dc.b	"v2.52 (30.4.2022)"
 ;	dc.b	"v2.53 (13.7.2022)"
 ;	dc.b	"v2.54ﬂ (?.?.2022)"
-	dc.b	"v2.54 (30.8.2022)"
+;	dc.b	"v2.54 (30.8.2022)"
+;	dc.b	"v2.55ﬂ (?.?.2022)"
+	dc.b	"v2.55 (10.11.2022)"
 	endm	
 
  ifnd DEBUG
+* AsmOne setting:
 * Enable debug logging 
 DEBUG = 1
  endif
 
  ifnd __VASM
+* AsmOne setting:
 * 1: Run from AsmOne
 * 0: CLI/Workbench  
-asm = 1	
+asm = 1
  else
 asm = 0
  endif
@@ -57,7 +61,6 @@ ANNOY	= 0 * 1: Unregistered version tekstej‰ ymp‰riins‰
 DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
-FEATURE_HORIZ_RESIZE = 1
 FEATURE_P61A        =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
@@ -172,7 +175,9 @@ check	macro
 
 	endm
 
-
+  ifd __VASM
+	NOLIST
+  endif
  	incdir	include:
 	include	exec/exec_lib.i
 	include	exec/ports.i
@@ -195,6 +200,7 @@ check	macro
 
 	include	dos/dos_lib.i
 	include	dos/dosextens.i
+	include	dos/var.i
 
 	include	rexx/rxslib.i
 
@@ -246,11 +252,16 @@ check	macro
 	include	Guru.i
 	include	ps3m.i
 	include	patternInfo.i
-use = 0
-	include	player61.i
+;use = 0
+	;include	player61.i
 
 	include	playerIds.i
 	include	kpl_offsets.S
+
+
+  ifd __VASM
+	LIST
+  endif
 
 *******************************************************************************
 *
@@ -309,8 +320,9 @@ prefs_groupname		rs.b	99
 prefs_div		rs.b	1
 prefs_early		rs.b	1
 prefs_prefix		rs.b	1
-prefs_xfd		rs.b	1
-			rs.l	1
+prefs_xfd			rs.b	1
+					rs.w	1
+prefs_windowWidth	rs.w	1
 prefs_infopos2		rs.l	1
 prefs_arcdir		rs.b	150
 prefs_pattern		rs.b	70
@@ -354,8 +366,8 @@ prefs_patternScope   rs.b 1
 prefs_patternScopeXL   rs.b 1
 prefs_spectrumScope   rs.b 1
 prefs_spectrumScopeBars   rs.b 1
-	rs.b 1
-	
+prefs_sidmode		rs.b	1
+
 prefs_quadraScopePos   rs.l 1
 prefs_quadraScopeFPos   rs.l 1
 prefs_hippoScopePos   rs.l 1
@@ -364,8 +376,10 @@ prefs_spectrumScopePos   rs.l 1
 
 prefs_listtextattr		rs.b	ta_SIZEOF-4
 prefs_listfontname		rs.b	30
-
 	printt "TODO TODO: dangerous buffer size"
+
+prefs_xmaplay    rs.b   1
+prefs_residmode  rs.b    1
 
 prefs_size		rs.b	0
 
@@ -620,10 +634,9 @@ prefs_closeSignal	rs.b	1		* prefs-signaali
 prefs_updateContentsSignal	rs.b	1		* prefs-signaali 2
 
 songHasEndedSignal	rs.b	1	* Kappale soinut
-ownsignal2	rs.b	1	* position update in title bar, prefs update 
+ownsignal2	rs.b	1	* window update, prefs update 
 uiRefreshSignal	rs.b	1	* lootan p‰ivitys
-ownsignal4	rs.b	1	* Sulje ja avaa ikkuna
-						* NOTE: this does not seem be used!
+posUpdateSignal	rs.b	1	
 audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
@@ -807,7 +820,10 @@ mpegadiv_new	rs.b	1
 medmode_new	rs.b	1
 medrate_new	rs	1
 medratepot_new	rs	1
-
+sidmode_new     rs.b    1
+residmode_new   rs.b    1
+xmaplay_new     rs.b    1
+                rs.b    1 * pad
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
@@ -904,7 +920,10 @@ mpegaqua	rs.b	1		* MPEGA quality
 mpegadiv	rs.b	1		* MPEGA freq. division
 medmode		rs.b	1		* MED mode
 medrate		rs	1		* MED mixing rate
-
+sidmode     rs.b    1
+residmode   rs.b    1
+xmaplay     rs.b    1
+            rs.b    1  * pad
 
 *******
 
@@ -1023,7 +1042,9 @@ kanavatvarattu	rs	1	* 0: ei varattu, ei-0: varattu
 
 oldst		rs.b	1	* 0: pt modi, ~0: old soundtracker modi
 sidflag		rs.b	1	* songnumberin muuttamiseen
-	rs.b	1
+* Set to true if the last loaded module is a remote module.
+* Path is in "modulefilename" as usual.
+lastLoadedModuleWasRemote    rs.b    1
 
 kelausnappi	rs.b	1	* 0: jos ei cia kelausta
 kelausvauhti	rs.b	1	* 1: 2x, 2: 4x
@@ -1071,6 +1092,7 @@ startrekkerroutines rs.l 0
 voodooroutines	rs.l	0
 sonicroutines	rs.l	0
 tfmxroutines	rs.l	0
+xmaplayroutines rs.l    0
 tfmx7routines	rs.l	1	* Soittorutiini purettuna (TFMX 7ch)
 player60samples	rs.l	1	* P60A:n samplejen osoite
 startrekkerdataaddr rs.l 0
@@ -1110,7 +1132,6 @@ filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 
 loading		rs.b	1		* ~0: lataus meneill‰‰n
 loading2	rs.b	1		* ~0: filejen addaus meneill‰‰n
-					* TODO: not used, remove?
 * List of favorite modules
 favoriteListHeader	rs.b 	MLH_SIZE
 * Flag indicates the list has changed before last save
@@ -1119,7 +1140,8 @@ favoriteListChanged	rs.b	1
 
 * List for file browser
 fileBrowserListHeader	rs.b	MLH_SIZE
-
+* List for search results
+searchResultsListHeader rs.b	MLH_SIZE
 
 ** InfoWindow kamaa
 ;infosample	rs.l	1		* samplesoittajan v‰liaikaisalue
@@ -1177,7 +1199,7 @@ favorites	rs.b	1
 tooltips	rs.b  	1
 savestate	rs.b    1
 altbuttons  rs.b    1
-altbuttonsUse  rs.b    1
+ 			rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * Runtime scope settings
@@ -1211,7 +1233,6 @@ hippoport	rs.b	HippoPort_SIZEOF
 
 poptofrontr	rs.l	1		* rutiini esiinpullauttamiseksi
 newcommand	rs.l	1		* osoitin uuteen komentoon
-appnamebuf	rs.l	1		* appviestin nimien tyˆpuskuri
 *******
 
 ********* ARexx
@@ -1301,6 +1322,7 @@ randomtable		rs.l		1 * pointer to random table, allocated when needed
 LISTMODE_NORMAL		= 0
 LISTMODE_FAVORITES 	= 1
 LISTMODE_BROWSER	= 2
+LISTMODE_SEARCH     = 3
 listMode		rs.b	1
 
 * This is set each time list has been edited by user in some way.
@@ -1351,9 +1373,39 @@ listBoxRegion		rs.l	1
 * Layers library clip region to keep list box text drawing inside,
 * useful for variable sized fonts.	
 listBoxClipRegion	rs.l	1
+* Same stuff for info box at the top
+infoBoxRegion		rs.l	1
+infoBoxClipRegion	rs.l	1
+
 
 * String extend structure to configure custom font to string gadgets on kick2.0+
 stringExtendStruct 	rs.b	sex_SIZEOF
+
+* Popup list selector memory remember pointer
+listSelectorRememberPtr		rs.l	1
+
+;* UHC aminet mirror path, if this is NULL, there's no UHC
+;* installed. Should be freed on exit.
+;uhcAminetMirrorPath			rs.l	1
+uhcAvailable				rs.b	1	
+							rs.b	1
+
+infoBoxOrigTopEdge			rs.w	1
+infoBoxOrigHeight			rs.w	1
+buttonRow1OrigTopEdge		rs.w	1
+buttonRow1OrigHeight		rs.w	1
+buttonRow2OrigTopEdge		rs.w	1
+buttonRow2OrigHeight		rs.w	1
+fileBoxOrigTopEdge			rs.w	1	
+
+infoBoxTopEdge			rs.w	1
+infoBoxHeight			rs.w	1
+buttonRow1TopEdge		rs.w	1
+buttonRow1Height		rs.w	1
+buttonRow2TopEdge		rs.w	1
+buttonRow2Height		rs.w	1
+fileBoxTopEdge			rs.w	1	
+
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -1417,11 +1469,11 @@ l_nameaddr	rs.l	1		* osoitin pelkk‰‰n tied.nimeen
 					* address to filename without path
 l_favorite	rs.b 	1		* favorite status for this file
 l_divider	rs.b	1		* this is a divider, ie. a path
+l_remote	rs.b    1       * 0: local file, 1: remote
 l_filename	rs.b	0		* tied.nimi ja polku alkaa t‰st‰
 					* full path to filename begins at this point
 					* element size is dynamically calculated based on path length.
 l_size		rs.b	0
-
 
 
 *********************************************************************************
@@ -2059,20 +2111,22 @@ parmExit:
 
 main0	jmp	main(pc)
 
+	cnop 0,4
 	dc.l	16
 filereq_segment
 	dc.l	0
 	jmp	filereq_code(pc)
 
+	cnop 0,4
 	dc.l	16
 prefs_segment
 	dc.l	0
 	jmp	prefs_code(pc)
 
+	cnop 0,4
 	dc.l	16
 info_segment
 	dc.l	0
-;	jmp	info_code(pc)
 	jmp	info_code
 
 	dc	0 * pad
@@ -2192,7 +2246,7 @@ about_t
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
  dc.b "≠≠≠  HippoPlayer "
  ver
- dc.b "  ≠≠≠",10,3
+ dc.b " ≠≠≠",10,3
  dc.b "≠≠          by K-P Koljonen          ≠≠",10,3
  dc.b "≠≠≠       Hippopotamus Design       ≠≠≠",10,3
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
@@ -2508,6 +2562,7 @@ main
 	lea	topaz_text_attr(a3),a0
 	lore	GFX,OpenFont
 	move.l	d0,listfontbase(a5)
+	DPRINT	"revert topaz"
 
 .listFontOk
 	endb	a3
@@ -2531,8 +2586,8 @@ main
 	bsr.w	getsignal
 	move.b	d0,uiRefreshSignal(a5)
 	bsr.w	getsignal
-	;move.b	d0,ownsignal4(a5)
-	;bsr.w	getsignal
+	move.b	d0,posUpdateSignal(a5)
+	bsr.w	getsignal
 	move.b	d0,audioPortSignal(a5)
 	bsr.w	getsignal
 	move.b	d0,fileReqSignal(a5)
@@ -2553,6 +2608,8 @@ main
 	* Add "Button tooltips" prefs button to the page 2
 	;move.l	#prefsTooltips,eskimO
 	pushpea	prefsTooltips(a0),eskimO(a0)
+    ; Add sid mode button after the "MED rate" button
+    pushpea prefsPlaySidMode(a0),nAMISKA5(a0)
 	endb	a0
 
 ;	lea	sivu0,a0		* Kaikkia pageja 3pix ylˆsp‰in!
@@ -2580,6 +2637,16 @@ main
 .e0	rts
 
 .him
+	
+	; Build the sex struct, font will be set
+	; when it is loaded, set pens here.
+	lea	stringExtendStruct(a5),a1
+	move.b	#1,sex_Pens+0(a1)
+	; already zeroes
+	;move.b	#0,sex_Pens+1(a1)
+	move.b	#1,sex_ActivePens+0(a1)
+	;move.b	#0,sex_ActivePens+1(a1)
+
 	; Make space for list mode change button
 	lea	gadgetFileSlider,a0
 	add	#14,gg_TopEdge(a0)
@@ -2593,42 +2660,42 @@ main
 	endb	a0
 	
 	move.l	_IntuiBase(a5),a6
+
 	* Give each gadget a gg_GadgetID,
 	* set proper text attr for ones which have text.
-
 	moveq	#1,d0
-	lea	gadgets,a1
+	basereg	gadgets,a3
+	lea		gadgets,a3
+	lea		gadgets(a3),a1
 	bsr.b	.num
 
 ** Prefs
 	moveq	#1,d0
-	lea	gadgets2-gadgets(a1),a1
-	bsr.b	.num
-
-	moveq	#20,d0
-	lea	sivu0-gadgets2(a1),a1
+	lea		gadgets2(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu1-sivu0(a1),a1
+	lea		sivu0(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu2-sivu1(a1),a1
+	lea		sivu1(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu3-sivu2(a1),a1
+	lea		sivu2(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu4-sivu3(a1),a1
+	lea		sivu3(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu5-sivu4(a1),a1
+	lea		sivu4(a3),a1
 	bsr.b	.num
 	moveq	#20,d0
-	lea	sivu6-sivu5(a1),a1
+	lea		sivu5(a3),a1
 	bsr.b	.num
-
-	bra.b	.eer2
-
+	moveq	#20,d0
+	lea		sivu6(a3),a1
+	bsr.b	.num
+	endb	a3
+	bra		.eer2
 
 .num
 * Numeroidaan gadgetit
@@ -2642,192 +2709,74 @@ main
 	bra.b	.er
 .eer	rts
 
+* Gives a gadget an id number
+* Adjust text gadget font
+* Adjust prop gadget 
+.gadu
+	move	d0,gg_GadgetID(a0)
+	move.l 	gg_SpecialInfo(a0),a2
+	
+	cmp	#GTYP_PROPGADGET,gg_GadgetType(a0)
+	bne.b	.noProp
+	* Proportional gadget setup!
+	* Enable complement highlight
+	* GFLG_GADGHCOMP = 0
+	and		#~GFLG_GADGHNONE,gg_Flags(a0)
+	* Adjust layout 
+	addq	#1,gg_TopEdge(a0)
+	subq	#3,gg_Height(a0)
+	subq	#1,gg_Width(a0)
+	* kick2.0+: newlook borderless
+	or		#PROPNEWLOOK!PROPBORDERLESS,pi_Flags(a2)	
+	and		#~AUTOKNOB,pi_Flags(a2)
+.noProp
 
-.gadu	move	d0,gg_GadgetID(a0)
-	;tst.b	uusikick(a5)
-	;beq.b	.nobo1
-	cmp	#GTYP_PROPGADGET,gg_GadgetType(a0)	* vain kick2.0+
-	bne.b	.nobo1
-	or	#GFLG_GADGHNONE,gg_Flags(a0)
-.nobo1	tst.l	gg_GadgetText(a0)
-	beq.b	.nt2
+	cmp		#GTYP_STRGADGET,gg_GadgetType(a0)
+	bne.b	.noStr
+	tst.b	uusikick(a5)
+	beq.b	.noStr
+	* Kick2.0 only
+	* Make string gadgets tab cyclable and set font with string extend
+	or		#GFLG_TABCYCLE!GFLG_STRINGEXTEND,gg_Flags(a0)
+	pushpea	stringExtendStruct(a5),si_Extension(a2)
 
+.noStr
+	* If contains text, set font
+	tst.l	gg_GadgetText(a0)
+	beq.b	.noTxt
 	move.l	gg_GadgetText(a0),a2	* IntuiText
-;if DEBUG
-;	ext.l	d0
-;	move.l	it_IText(a2),d1
-;	DPRINT	"Gadget id=%ld Text=%s"
-;endif
-
 	move.l	#text_attr,it_ITextFont(a2)	* fontti
 	tst.l	it_NextText(a2)
-	beq.b	.nt2
+	beq.b	.noTxt
 	move.l	it_NextText(a2),a2
 	move.l	#text_attr,it_ITextFont(a2)	* fontti
-.nt2	rts
+.noTxt	
+
+	rts
 
 .eer2
-	;tst.b	uusikick(a5)
-	;beq.w	.ropp
+	* Adjust file slider a bit
+	lea		slider4,a0
+	basereg	slider4,a0
+	addq	#1,slider4+gg_Height(a0)
+	addq	#1,slider4+gg_LeftEdge(a0)
+	addq	#1,slider4+gg_Width(a0)
+	move.l	#slimage,slider4+gg_GadgetRender(a0)	* filebox-slideriin image
 
-** kick 2.0+ asetuksia
-** Add prop gadget slider images for kick2.0
+	* Nudge this a bit!
+	addq	#1,gg_TopEdge+juust0(a0) 		* ps3m stereo level
 
-	lea	slider4,a0			* filebox-slideriin image
-	move.l	#slimage,gg_GadgetRender(a0)
-	move.l	gg_SpecialInfo(a0),a1
-	and	#~AUTOKNOB,pi_Flags(a1)
-
-	lea	gAD1-slider4(a0),a0		* moduleinfo-slideriin image
-	move.l	#slimage2,gg_GadgetRender(a0)
-	move.l	gg_SpecialInfo(a0),a1
-	and	#~AUTOKNOB,pi_Flags(a1)
-
-** s‰‰det‰‰n propgadgetteja
-** Manually adjust prop gadget width and height
-
-	lea	kelloke+gg_Height,a0
-	lea	gg_Width-gg_Height(a0),a1
-	subq	#3,(a0)			* gg_Height
-	subq	#1,(a1)			* gg_Width
-	subq	#3,kelloke2-kelloke(a0)
-	subq	#1,kelloke2-kelloke(a1)
-
-	subq	#3,meloni-kelloke(a0)
-	subq	#1,meloni-kelloke(a1)
-	subq	#3,eskimO-kelloke(a0)
-	subq	#1,eskimO-kelloke(a1)
-
-	subq	#3,pslider2-kelloke(a0)
-	subq	#1,pslider2-kelloke(a1)
-	subq	#3,nAMISKA5-kelloke(a0)
-	subq	#1,nAMISKA5-kelloke(a1)
-	subq	#3,sIPULI-kelloke(a0)
-	subq	#1,sIPULI-kelloke(a1)
-	subq	#3,sIPULI2-kelloke(a0)
-	subq	#1,sIPULI2-kelloke(a1)
-
-	subq	#3,pslider1-kelloke(a0)
-	subq	#1,pslider1-kelloke(a1)
-	subq	#3,juusto-kelloke(a0)
-	subq	#1,juusto-kelloke(a1)
-	subq	#3,juust0-kelloke(a0)
-	subq	#1,juust0-kelloke(a1)
-
-	subq	#3,slider1-kelloke(a0)
-	subq	#1,slider1-kelloke(a1)
-
-	subq	#3,ahiG4-kelloke(a0)
-	subq	#1,ahiG4-kelloke(a1)
-	subq	#3,ahiG5-kelloke(a0)
-	subq	#1,ahiG5-kelloke(a1)
-	subq	#3,ahiG6-kelloke(a0)
-	subq	#1,ahiG6-kelloke(a1)
-
-
-.nova0
-
-	move.l	(a5),a0
-	cmp	#37,LIB_VERSION(a0)
-	blo.b	.faef
-	
-	* Make the prefs string gadgets tab cyclable
-	* and configure fonts. Kick2.0+ only.
-
-	basereg	gadgets2,a0
-	lea	gadgets2,a0
-	move	#GFLG_TABCYCLE!GFLG_STRINGEXTEND,d0
-	or	d0,gg_Flags+ack2(a0)
-	or	d0,gg_Flags+ack3(a0)
-	or	d0,gg_Flags+ack4(a0)
-	or	d0,gg_Flags+DuU0(a0)
-
-	; Build the sex struct, font will be set
-	; when it is loaded, set pens here.
-	lea	stringExtendStruct(a5),a1
-	move.b	#1,sex_Pens+0(a1)
-	; already zeroes
-	;move.b	#0,sex_Pens+1(a1)
-	move.b	#1,sex_ActivePens+0(a1)
-	;move.b	#0,sex_ActivePens+1(a1)
-
-	move.l 	gg_SpecialInfo+ack2(a0),a2
-	move.l	a1,si_Extension(a2)
-	move.l 	gg_SpecialInfo+ack3(a0),a2
-	move.l	a1,si_Extension(a2)
-	move.l 	gg_SpecialInfo+ack4(a0),a2
-	move.l	a1,si_Extension(a2)
-	move.l 	gg_SpecialInfo+DuU0(a0),a2
-	move.l	a1,si_Extension(a2)
-
+	* Info window slider
+	moveq	#0,d0
+	lea		gAD1(a0),a0
 	endb	a0
-
-.faef
-
-
-** s‰‰det‰‰n slidereit‰ edelleen
-** Even more prop gadget visual adjustments
-
-	lea	slider1,a0
-	bsr.b	.rop
-	lea	slider4-slider1(a0),a0
-	bsr.b	.rop
-
-	lea	gAD1-slider4(a0),a0
-	bsr.b	.rop
-
-	lea	pslider1-gAD1(a0),a0
-	bsr.b	.rop
-	lea	pslider2-pslider1(a0),a0
-	bsr.b	.rop
-	lea	juusto-pslider2(a0),a0
-	bsr.b	.rop
-	lea	juust0-juusto(a0),a0
-	bsr.b	.rop
-	lea	meloni-juust0(a0),a0
-	bsr.b	.rop
-	lea	eskimO-meloni(a0),a0
-	bsr.b	.rop
-	lea	kelloke-eskimO(a0),a0
-	bsr.b	.rop
-	lea	kelloke2-kelloke(a0),a0
-	bsr.b	.rop
-	lea	sIPULI-kelloke2(a0),a0
-	bsr.b	.rop
-	lea	sIPULI2-sIPULI(a0),a0
-	bsr.b	.rop
-	lea	ahiG4-sIPULI2(a0),a0
-	bsr.b	.rop
-	lea	ahiG5-ahiG4(a0),a0
-	bsr.b	.rop
-	lea	ahiG6-ahiG5(a0),a0
-	bsr.b	.rop
-	lea	nAMISKA5-ahiG6(a0),a0
-	bsr.b	.rop
-
-	bra.b	.ropp
-
-* proportional gadget visual look depending on kickstart version
-.rop
-	move.l	gg_SpecialInfo(a0),a1
-	and	#~GFLG_GADGHNONE,gg_Flags(a0) ; enable complement highlight
-
-	;moveq	#AUTOKNOB,d0		* kick1.3: vanhat autoknobit
-	;tst.b	uusikick(a5)
-	;beq.b	.nova
-	moveq	#PROPNEWLOOK!PROPBORDERLESS,d0	* kick2.0+, newlook borderless
-
-	addq	#1,gg_TopEdge(a0)
-.nova	
-	or	d0,pi_Flags(a1)
-	rts
-.ropp
-
-	* Nudge these two a bit!
-	addq	#1,gg_TopEdge+juust0
-	addq	#1,gg_LeftEdge+slider4
-
-
+	bsr		.gadu
+	addq	#3,gg_Height(a0)
+	addq	#1,gg_Width(a0)
+	move.l	#slimage2,gg_GadgetRender(a0) 	* moduleinfo-slideriin image
+	
+	
+	* Gadget stuff done.
 
 	move.l	#PLAYING_MODULE_NONE,chosenmodule2(a5)
 
@@ -2841,9 +2790,10 @@ main
 	NEWLIST a0
 	lea	fileBrowserListHeader(a5),a0
 	NEWLIST a0
+	lea	searchResultsListHeader(a5),a0
+	NEWLIST a0
 
 	lea	.startingMsg(pc),a0
-	moveq	#102+WINX,d0
 	bsr.w	printbox
 	bra.b	.startingMsg2
 .startingMsg dc.b "Starting...",0
@@ -2867,35 +2817,16 @@ main
 .cp13	move	(a1)+,(a0)+
 	cmp.l	a0,a2
 	bne.b	.cp13
-
-	lea	horizPropGadgetGfxDouble,a0
-	moveq	#horizPropGadgetGfxDouble_kick13-horizPropGadgetGfxDouble,d0
-	lea	(a0,d0),a1
-	move.l	a1,a2
-.cp14	move	(a1)+,(a0)+
-	cmp.l	a0,a2
-	bne.b	.cp14
+;
+;	lea	horizPropGadgetGfxDouble,a0
+;	moveq	#horizPropGadgetGfxDouble_kick13-horizPropGadgetGfxDouble,d0
+;	lea	(a0,d0),a1
+;	move.l	a1,a2
+;.cp14	move	(a1)+,(a0)+
+;	cmp.l	a0,a2
+;	bne.b	.cp14
  
- REM
-	moveq	#AUTOKNOB,d0		* kick1.3: vanhat autoknobit
-	lea	slider1s,a0
-	or	d0,(a0)
-	or	d0,slider4s-slider1s(a0)
-	or	d0,pslider1s-slider1s(a0)
-	or	d0,pslider2s-slider1s(a0)
-	or	d0,juustos-slider1s(a0)
-	or	d0,juust0s-slider1s(a0)
-	or	d0,melonis-slider1s(a0)
-	or	d0,kellokes-slider1s(a0)
-	or	d0,kelloke2s-slider1s(a0)
-	or	d0,eskimOs-slider1s(a0)
-	or	d0,gAD1s-slider1s(a0)
-	or	d0,sIPULIs-slider1s(a0)
-	or	d0,sIPULI2s-slider1s(a0)
-	or	d0,ahiG4s-slider1s(a0)
-	or	d0,ahiG5s-slider1s(a0)
-	or	d0,ahiG6s-slider1s(a0)
- EREM
+
 
 ** 3 pixeli‰ korkeempi infowindowin slideri
 ;	addq	#3,gg_Height+gAD1
@@ -2953,9 +2884,7 @@ main
 	bsr.w	inithippo
 	bsr.w	initkorva
 	bsr.w	initkorva2
- ifne FEATURE_HORIZ_RESIZE
 	jsr	initializeButtonRowLayout
- endif
 
 	st	reghippo(a5)
 
@@ -3009,6 +2938,7 @@ main
 
 	jsr	inforivit_clear
 	jsr	importFavoriteModulesFromDisk
+	jsr	initializeUHC
 
 	DPRINT	"Loading group"
 
@@ -3067,45 +2997,33 @@ main
 
 	lea	banner_t(pc),a0			* registered to..
 	moveq	#11+WINX,d0
-	moveq	#18+WINY,d1
-	bsr.w	print
-
+	;moveq	#18+WINY,d1
+	move	infoBoxTopEdge(a5),d1
+	jsr		infoBoxPrint
+	
 	; ei annoytekstia vaikkei rekisteroity
 	cmp.b	#' ',keyfile(a5)
 	beq.b	.oohi
 
 	lea	regtext_t(pc),a0
-	moveq	#62+WINY,d1
+	moveq	#0,d1
 	bsr.b	.rount
 
 	lea	keyfile(a5),a0
-	moveq	#72+WINY,d1
+	moveq	#8,d1
 	bsr.b	.rount
 	bra.b	.oohi
 
 .rount
 	moveq	#34+WINX,d0
-	tst.b	uusikick(a5)
-	bne.b	.uere
-	add	#28,d0
-.uere	
-	move	boxsize(a5),d2
+	move	boxsize(a5),d3
 	beq.b	.oohi
-	cmp	#7,d2
-	bhi.b	.re
-	add	#50,d0
-.re	cmp	#3,d2
-	bne.b	.r
-	addq	#6,d1
-	bra.b	.w
-
- 
-.r	lsr	#1,d2
-	subq	#1,d2
-	lsl	#3,d2
-	add	d2,d1
-.w	bra.w	print
-
+	bsr		getFileboxYStartToD2
+	add		d2,d1
+	mulu	listFontHeight(a5),d3
+	lsr		#1,d3
+	add		d3,d1
+	bra		print
 .oohi
 
 
@@ -3129,7 +3047,9 @@ main
 	* state modules.
 	tst.l 	modamount(a5)
 	bne.b	.skip
+	bsr		lockMainWindow
 	jsr	importSavedStateModulesFromDisk
+	bsr		unlockMainWindow
 .skip
 
 *********************************************************************************
@@ -3167,8 +3087,8 @@ msgloop
 	bset	d1,d0
 	move.b	uiRefreshSignal(a5),d1
 	bset	d1,d0
-	;move.b	ownsignal4(a5),d1
-	;bset	d1,d0
+	move.b	posUpdateSignal(a5),d1
+	bset	d1,d0
 	move.b	audioPortSignal(a5),d1
 	bset	d1,d0
 	move.b	fileReqSignal(a5),d1
@@ -3247,26 +3167,7 @@ msgloop
 	move.b	uiRefreshSignal(a5),d3	* p‰ivitet‰‰n...
 	btst	d3,d0
 	beq.b	.wow
-	addq	#1,userIdleTick(a5)
-	push	d0
-	jsr	lootaan_aika
-	jsr	lootaan_kello
-;	bsr.w	lootaan_muisti
-	jsr	lootaan_nimi
-	; No need to call this every refresh signal, it is handled via RMB 
-	; and IDCMP-event handlers anyway:
-	;bsr.w	zipwindow
-
-	* Try to save favorite modules when user has been idle for a while
-	moveq	#0,d0 
-	move	userIdleTick(a5),d0 
-	cmp	#7,d0
-	blo.b	.notIdleEnough
-	jsr	exportFavoriteModulesWithMessage
-.notIdleEnough
-
-	pop	d0
-
+	bsr		handleUiRefreshSignal
 .wow
 
 
@@ -3380,16 +3281,11 @@ msgloop
 
 .nwwwq
 
-	* Note: signal4 does not seem to be triggered anywhere!
-;	move.b	ownsignal4(a5),d3
-;	btst	d3,d0
-;	beq.b	.nowww
-;	bsr.w	sulje_ikkuna
-;	bsr.w	avaa_ikkuna
-;	bne.w	exit
-;	bra.w	returnmsg
-;
-;.nowww	
+	move.b	posUpdateSignal(a5),d3
+	btst	d3,d0
+	beq.b	.noSig4
+	bsr		handlePosUpdateSignal
+.noSig4
 	
 	* Tooltip display signal check
 	move.b	tooltipSignal(a5),d3 
@@ -3507,7 +3403,6 @@ exit
 	bsr.w	setMainWindowWaitPointer	
 
 	lea	.exmsg(pc),a0
-	moveq	#102+WINX,d0
 	bsr.w	printbox
 	bra.b	.exmsg2
 .exmsg dc.b	"Exiting...",0
@@ -3515,7 +3410,7 @@ exit
 .exmsg2
 	jsr	exportFavoriteModulesToDisk
 	jsr	exportSavedStateModulesToDisk
-
+	jsr	deinitUHC
 * poistetaan loput prosessit...
 
 
@@ -3567,6 +3462,7 @@ exit
 
 	jsr	freeFavoriteList
 	jsr	freeFileBrowserList
+	jsr	freeSearchList
 
 	tst.b	vbsaatu(a5)
 	beq.b	.nbv
@@ -3609,8 +3505,8 @@ exit
 	bsr.w	freesignal
 	move.b	uiRefreshSignal(a5),d0
 	bsr.w	freesignal
-	;move.b	ownsignal4(a5),d0
-	;bsr.w	freesignal
+	move.b	posUpdateSignal(a5),d0
+	bsr.w	freesignal
 	move.b	audioPortSignal(a5),d0
 	bsr.w	freesignal
 	move.b	fileReqSignal(a5),d0
@@ -3792,7 +3688,8 @@ dela:	pushm	all		* pienenpieni delay
 
 *** Avaa ReqToolssin
 
-get_rt	lea	var_b,a5
+get_rt:
+	lea	var_b,a5
 	tst.l	_ReqBase(a5)
 	bne.b	.o
 	pushm	d0/d1/a0/a1/a6
@@ -4196,12 +4093,37 @@ kirjainta4
 * Avaa ikkunan ja pikkasen alustaakin
 *******
 
-handleSignal2
-;	DPRINT	"Signal 2"
+handleUiRefreshSignal
+	addq	#1,userIdleTick(a5)
+	push	d0
+	jsr	lootaan_aika
+	jsr	lootaan_kello
+;	bsr.w	lootaan_muisti
+	jsr	lootaan_nimi
+	; No need to call this every refresh signal, it is handled via RMB 
+	; and IDCMP-event handlers anyway:
+	;bsr.w	zipwindow
 
+	* Try to save favorite modules when user has been idle for a while
+	moveq	#0,d0 
+	move	userIdleTick(a5),d0 
+	cmp	#7,d0
+	blo.b	.notIdleEnough
+	jsr	exportFavoriteModulesWithMessage
+.notIdleEnough
+
+	pop	d0
+	rts
+
+
+handlePosUpdateSignal
 	* Update title bar with position information
-	jsr	lootaan_pos
+	jmp	lootaan_pos
 
+handleSignal2
+	DPRINT	"Signal 2"
+
+	
 	* see if prefs window was just closed
 	tst.b	prefsexit(a5)
 	beq.b	.noe
@@ -4425,10 +4347,34 @@ avaa_ikkuna:
 	bsr.w	getscreeninfo
 	bne.w	.opener
 
-	; Button config, may adjust WINSIZY
-	jsr	configureMainWindowButtonSizes
-	; Update into window structure
+	tst		infoBoxOrigTopEdge(a5)
+	bne.b	.1
+	* Store original dimensions 
+	move	gadgetPlayButton+gg_TopEdge,buttonRow1TopEdge(a5)
+	move	#10,buttonRow1Height(a5)
+	move	gadgetPrefsButton+gg_TopEdge,buttonRow2TopEdge(a5)
+	move	#10,buttonRow2Height(a5)
+	move	#11+WINY,infoBoxOrigTopEdge(a5)
+	move	#28-11,infoBoxOrigHeight(a5)
+	;move	#8+63+WINY,fileBoxOrigTopEdge(a5)
+	move	#63+WINY,fileBoxOrigTopEdge(a5)
 
+	* Original WINSIZY: 136
+	* Added to this to get total height:
+	* - windowtop
+	* - boxy
+	* Boxy is calculated in setboxy(), in loadprefs()
+	* or in setListFont().
+
+
+	move	infoBoxOrigTopEdge(a5),infoBoxTopEdge(a5)
+	move	infoBoxOrigHeight(a5),infoBoxHeight(a5)
+	move	fileBoxOrigTopEdge(a5),fileBoxTopEdge(a5)
+.1
+	jsr	layoutGadgetsVertical
+ 
+	
+	; Update into window structure
 	lea	winstruc,a0
 	basereg	winstruc,a0
 
@@ -4436,7 +4382,7 @@ avaa_ikkuna:
 	move	WINSIZY(a5),wsizey(a0)
 	tst	winstruc+nw_MaxWidth(a0)
 	bne.b	.set
-	move	WINSIZX(a5),d0
+	move	#264,d0		* default width
 	move	d0,winstruc+nw_MinWidth(a0)
 	add	d0,d0
 	move	d0,winstruc+nw_MaxWidth(a0)
@@ -4456,79 +4402,73 @@ avaa_ikkuna:
 
 	* What is this?
 	not.b	kokolippu(a5)
-	beq.b	.small
+	beq 	.small
 
-	basereg	winstruc,a0
-	move	#7,slimheight(a0)	* slideri pieneks, jotta ei tuu sotkuja
-	endb	a0
+	move	#7,slimheight	* slideri pieneks, jotta ei tuu sotkuja
 
+    *
+    *
+    * Next up we try to open a window. If it won't fit, make it smaller.
+    *
+    *
+    
+.windowOpenLoop
+	lea	winstruc,a0
+
+    * Calculate window height proposal
 	move	WINSIZY(a5),d0
-	add	boxy(a5),d0
-	add	windowtop(a5),d0
-	move	d0,wsizey-winstruc(a0)	* Ison koko ja paikka
-	move.l	windowpos(a5),(a0)
-	bsr.w	.leve
 
-	move	wbkorkeus(a5),d6	* Mahtuuko ruudulle pystysuunnassa?
-	sub	WINSIZY(a5),d6
-	sub	windowtop(a5),d6
-.uudest
-	move	d6,d0
-	sub	boxy(a5),d0		* mahtuuko fileboxi?
-	bmi.b	.negatiivi
+	; Adjust
+	add     fileBoxTopEdge(a5),d0
+	sub     #63+WINY,d0
+	;add    #10,d0
 
-	cmp	2(a0),d0
-	bge.b	.okkk
-	move	d0,2(a0)
-	bra.b	.okkk
+	add	    boxy(a5),d0
+	add	    windowtop(a5),d0
+	move    d0,nw_Height(a0)
 
-.negatiivi
+    * Calculate left edge so that window fits
+    * Set nw_LeftEdge, nw_TopEdge
+    move.l  windowpos(a5),nw_LeftEdge(a0)
+	bsr.w   .leve
+
+
+ if DEBUG
+    pushm   d0-d3
+    moveq   #0,d0
+    moveq   #0,d1
+    moveq   #0,d2
+    moveq   #0,d3
+    move    nw_Width(a0),d0
+    move    nw_Height(a0),d1
+    move    nw_LeftEdge(a0),d2
+    move    nw_TopEdge(a0),d3
+    DPRINT  "Trying to open %ldx%ld at %ld,%ld"
+    popm    d0-d3
+ endif
+
+    lob     OpenWindow
+    tst.l   d0
+    bne     .gotWindow
+
+    DPRINT  "Window open failed! Retry smaller."
+    * If at 3, move the window to the top and hope for the best.
+    cmp     #3,boxsize(a5)
+    bne     .smaller
+    * Reset stored window y-coordinate to zero
+    clr     windowpos+2(a5)
+    bra     .windowOpenLoop
+
+.smaller
 	subq	#1,boxsize(a5)		* Pienennet‰‰n fileboksia..
 	subq	#1,boxsize0(a5)
 	bsr.w	setboxy
-	move	d6,d0
-	sub	boxy(a5),d0
-	bmi.b	.negatiivi
-	move	WINSIZY(a5),d0
-	add	windowtop(a5),d0
-	add	boxy(a5),d0
-	move	d0,wsizey-winstruc(a0)	* Ison koko ja paikka
-	bra.b	.uudest
-.okkk
+    bra     .windowOpenLoop
+
 
 .small	
-
-	lea	slider4,a3		* fileboxin slideri
-	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
-	and	#~$80,gg_TopEdge(a3)
-	add	boxy(a5),d3
-	bpl.b	.r
-	or	#$80,gg_TopEdge(a3)
-	clr	d3
-.r	move	d3,gg_Height(a3)
-
-
-;	tst.b	uusikick(a5)
-;	beq.b	.ded
-	subq	#3,gg_Height(a3)
-;.ded
-	basereg	slider4,a3
-
-	* Remove the fileslider from the gadget list
-	* if it is not visible. On kick13 there may be
-	* some gfx trash otherwise.
-	* Normal chain:
-	;move.l	#slider4,slider1+gg_NextGadget(a3)
-	move.l	a3,slider1+gg_NextGadget(a3)
-	tst	boxsize(a5)
-	bne.b	.isBox
-	* Skip over slider4
-	;move.l	#button12,slider1+gg_NextGadget(a3)
-	pushpea	button12(a3),slider1+gg_NextGadget(a3)
-.isBox
-	endb	a3
-	
 	lob	OpenWindow
+.gotWindow
 	move.l	d0,windowbase(a5)
 	bne.b	.ok
 	bsr.w	unlockscreen
@@ -4536,13 +4476,14 @@ avaa_ikkuna:
 .opener	moveq	#-1,d0			* Ei auennut!
 	rts
 
-.leve	move	wbleveys(a5),d0		* WB:n leveys
-	move	(a0),d1			* Ikkunan x-paikka
-	add	4(a0),d1		* Ikkunan oikea laita
+.leve	
+    move	wbleveys(a5),d0     * WB:n leveys
+	move	nw_LeftEdge(a0),d1  * Ikkunan x-paikka
+	add	    nw_Width(a0),d1     * Ikkunan oikea laita
 	cmp	d0,d1
 	bls.b	.okk
-	sub	4(a0),d0	* Jos ei mahdu ruudulle, laitetaan
-	move	d0,(a0)		* mahdollisimman oikealle
+	sub	nw_Width(a0),d0	        * Jos ei mahdu ruudulle, laitetaan
+	move	d0,nw_LeftEdge(a0)  * mahdollisimman oikealle
 .okk	rts
 
 .ok
@@ -4578,9 +4519,47 @@ avaa_ikkuna:
 	move.l	d0,appwindow(a5)
 .elderly
 	jsr	createlistBoxRegion
+	jsr	createInfoBoxRegion
 
 	; Store this for detecting height changes after window opened
 	move	winstruc+nw_Height,previousWindowHeight(a5)
+
+    ; Do some gadget hacking
+
+	lea	slider4,a3		* fileboxin slideri
+	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
+	add	boxy(a5),d3
+	move	d3,gg_Height(a3)
+	subq	#3,gg_Height(a3)
+
+;    Old (weird) piece of code:
+;
+;    lea     slider4,a3              * fileboxin slideri
+;    moveq   #gadgetFileSliderInitialHeight,d3       * y-koko
+;    and     #~$80,gg_TopEdge(a3)
+;    add     boxy(a5),d3
+;    bpl.b   .r
+;    or      #$80,gg_TopEdge(a3)
+;    clr     d3
+;.r  move    d3,gg_Height(a3)
+
+	basereg	slider4,a3
+
+	* Remove the fileslider from the gadget list
+	* if it is not visible. On kick13 there may be
+	* some gfx trash otherwise.
+	* Normal chain:
+	;move.l	#slider4,slider1+gg_NextGadget(a3)
+	move.l	a3,slider1+gg_NextGadget(a3)
+	tst	boxsize(a5)
+	bne.b	.isBox
+	* Skip over slider4
+	;move.l	#button12,slider1+gg_NextGadget(a3)
+	pushpea	button12(a3),slider1+gg_NextGadget(a3)
+.isBox
+	endb	a3
+
+	jsr		layoutGadgetsHorizontal
 
 	bsr.w	wrender
 	moveq	#0,d0
@@ -4888,6 +4867,9 @@ getscreeninfo
 
 	endb	a0
 
+	* Move gadgets down by d0,
+	* right by d1
+
 	lea	gadgets,a0
 	bsr.b	.hum
 	lea	gadgets2-gadgets(a0),a0
@@ -4910,6 +4892,8 @@ getscreeninfo
 	bsr.b	.hum
 
 
+
+
 	bsr.w	unlockscreen
 	moveq	#0,d0
 	rts
@@ -4919,8 +4903,8 @@ getscreeninfo
 
 .hum
 	move.l	a0,a1
-.lop0	add	d0,6(a1)
-	add	d1,4(a1)
+.lop0	add	d0,gg_TopEdge(a1)
+	add	d1,gg_LeftEdge(a1)
 	tst.l	(a1)
 	beq.b	.e0
 	move.l	(a1),a1
@@ -4934,10 +4918,7 @@ getscreeninfo
 ****** Piirret‰‰n ikkunan kamat
 
 wrender:
- ifne FEATURE_HORIZ_RESIZE
- 	jsr	layoutButtonRow
- endif
-
+	
 	move.l	pen_0(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
@@ -4954,10 +4935,14 @@ wrender:
 ;	move	#259,d2
 	move	WINSIZX(a5),d2
 	subq	#6,d2
-	move	WINSIZY(a5),d3
-	subq	#3,d3
-	add	boxy(a5),d3
-	sub	windowbottom(a5),d3
+	;move	WINSIZY(a5),d3
+	;subq	#3,d3
+	;add	boxy(a5),d3
+	move.l	windowbase(a5),a3
+	move	wd_Height(a3),d3	
+	sub		windowbottom(a5),d3
+	subq    #3,d3 * magic constant
+    sub     windowtop(a5),d3
 	bsr.w	drawtexture
 
 
@@ -5166,13 +5151,12 @@ wrender:
 	move	WINSIZX(a5),plx2
 	subq	#8,plx2
 
-	moveq	#61+WINY,ply1
-	move	#128+WINY,ply2
- 	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
- 	add	#16,ply1
-	add	#16,ply2
-.noAlt1
+	;moveq	#61+WINY,ply1
+	move	fileBoxTopEdge(a5),ply1
+	sub		#2,ply1 * magic offset
+	;move	#128+WINY,ply2
+	move	fileBoxTopEdge(a5),ply2
+	add		#128-61-2,ply2 * magic offset
 
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
@@ -5187,8 +5171,16 @@ wrender:
 	move	WINSIZX(a5),plx2
 	subq	#8,plx2
 
-	moveq	#10+WINY,ply1
-	moveq	#29+WINY,ply2
+	;moveq	#10+WINY,ply1
+	;moveq	#29+WINY,ply2
+	move	infoBoxTopEdge(a5),ply1
+	subq	#1,ply1
+	;move	infoBoxTopEdge(a5),ply2
+	move	ply1,ply2
+	;add		#29-10,ply2
+	add		infoBoxHeight(a5),ply2
+	addq	#2,ply2
+
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -5394,7 +5386,7 @@ enableResizeGadget
 	moveq	#3,d0
 	mulu	listFontHeight(a5),d0
 	* some additional adjustment: bottom border?
-	addq	#6,d0
+	addq	#6+1,d0
 	add	windowbottom(a5),d0
 
 	add	d0,d2
@@ -5432,11 +5424,10 @@ refreshResizeGadget
 
 * Calculate the start y-position of the filebox 
 getFileboxYStartToD2
-	moveq	#62+WINY,d2
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt
-	add	#16,d2
-.noAlt
+	move	fileBoxTopEdge(a5),d2
+	subq	#1,d2 * magic constant
+;	moveq	#62+WINY,d2
+
 	add	windowtop(a5),d2
 	rts
 	
@@ -5491,7 +5482,8 @@ sulje_ikkuna
  endif
 
 .small
-	jsr	disposelistBoxRegion
+	jsr	disposeListBoxRegion
+	jsr	disposeInfoBoxRegion
 
 	move.l	46(a0),a1		* WB screen addr
 	move	14(a1),wbkorkeus(a5)	* WB:n korkeus
@@ -5529,7 +5521,7 @@ sulje_ikkuna
 * TODO: Could use rtLockWindow to replace freezegads and set wait pointer
 
 pon1
-setMainWindowWaitPointer	
+setMainWindowWaitPointer:
 	pushm	all
 	move.l	windowbase(a5),d0
 	bra.b	pon0
@@ -5544,7 +5536,7 @@ pon0	beq.b	.q
 .q	popm	all
 	rts
 
-clearMainWindowWaitPointer
+clearMainWindowWaitPointer:
 poff1
 	pushm	all
 	move.l	windowbase(a5),d0
@@ -5614,23 +5606,32 @@ showOutOfMemoryError
 	pop 	a1 
 	rts
 
-lockMainWindow 
+lockMainWindow:
 	tst.l	windowbase(a5)
 	beq.b	.x
+	tst.l	mainWindowLock(a5)
+	beq.b	.y
+	DPRINT	"Locking window again!",0
+	rts
+.y	pushm	all
 	bsr.w	get_rt
 	move.l	windowbase(a5),a0
 	lob    	rtLockWindow
 	move.l	d0,mainWindowLock(a5)
+	popm	all
 .x	rts
+	
 
-unlockMainWindow
+unlockMainWindow:
 	tst.l	mainWindowLock(a5)
 	beq.b	.x 
+	pushm	all
 	bsr.w	get_rt
 	move.l	windowbase(a5),a0
 	move.l	mainWindowLock(a5),a1
 	lob 	rtUnlockWindow
 	clr.l	mainWindowLock(a5)
+	popm	all
 .x	rts
 
 
@@ -5721,11 +5722,7 @@ printhippo1:
 	moveq	#HIPPOHEAD_HEIGHT,d5		* y-koko
 
 	; Calc y-position
-	moveq	#76+WINY-14,d3
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
-	add	#16,d3
-.noAlt1
+	move	fileBoxTopEdge(a5),d3
 
 	move	boxsize(a5),d6
 	mulu	listFontHeight(a5),d6
@@ -6028,7 +6025,8 @@ tickaa	pushm	d0-d6/a0-a2/a6
 *******************************************************************************
 * Merkkijonon muotoilu
 *******
-desmsg	movem.l	d0-d7/a0-a3/a6,-(sp)
+desmsg:
+	movem.l	d0-d7/a0-a3/a6,-(sp)
 	lea	desbuf(a5),a3	;puskuri
 ulppa	move.l	sp,a1		* parametrit ovat t‰‰ll‰!
 pulppa	lea	putc(pc),a2	;merkkien siirto
@@ -6040,12 +6038,14 @@ putc	move.b	d0,(a3)+
 	rts
 
 
-desmsg2	movem.l	d0-d7/a0-a3/a6,-(sp)
+desmsg2:
+	movem.l	d0-d7/a0-a3/a6,-(sp)
 	lea	desbuf2(a5),a3
 	bra.b	ulppa
 
 * a3 = desbuf
-desmsg3	movem.l	d0-d7/a0-a3/a6,-(sp)
+desmsg3:
+	movem.l	d0-d7/a0-a3/a6,-(sp)
 	bra.b	ulppa
 
 
@@ -6696,7 +6696,7 @@ mainpriority
 * MENUDOWN: right button down
 * MENUUP: right button up
 
-buttonspressed
+buttonspressed:
 	tst.b	win(a5)			* onko ikkuna auki?
 	beq.w	.nowindow
 
@@ -7144,54 +7144,95 @@ omaviesti
 	bsr.w	openw
 	bra.w	.huh
 
-
+*********************************************
+* App window drag'n'drop handler
+*********************************************
 .appw
 ** AppWindow-viesti!!
-
 	move.l	am_NumArgs(a1),d7	* argsien m‰‰r‰
-	cmp	#20,d7			* max. 10 kappaletta
-	bls.b	.oe
-	moveq	#20,d7
-.oe	subq	#1,d7
-	move.l	am_ArgList(a1),a3	* args
-	lea	sv_argvArray+4(a5),a4
-
-	move.l	#4000,d0		* 20 nime‰,  ‡ 200 merkki‰
-	moveq	#MEMF_PUBLIC,d1		* varataan muistia
-	bsr.w	getmem
-	move.l	d0,appnamebuf(a5)
-	beq.b	.huh			* ERROR!
-	move.l	d0,a2
-
+	beq		.huh
+	bsr.w	tokenizepattern
+	jsr		engageNormalMode
+	bsr		obtainModuleList
+ if DEBUG
+	move.l	d7,d0
+	DPRINT	"AppWindow drag'n'drop num=%ld"
+ endif
+	subq	#1,d7
+	move.l	am_ArgList(a1),a3	* WBArg array
+	lea	-200(sp),sp
+	move.l	sp,a2
 .addfiles
-.getname
 	move.l	wa_Lock(a3),d1
-	move.l	a2,d2
-	moveq	#100,d3			* max pituus
-	push	a2
-	lore	Dos,NameFromLock			* V36
-	pop	a2
+	move.l	sp,d2
+	move.l	#150,d3			* max pituus
+	jsr		getNameFromLock
 	tst.l	d0
-	beq.b	.error
-	move.l	a2,(a4)+
+	beq		.error
+
+	move.l	sp,a2
 .fe	tst.b	(a2)+
 	bne.b	.fe
 	subq	#1,a2
 	cmp.b	#':',-1(a2)
 	beq.b	.na
 	move.b	#'/',(a2)+
-.na	move.l	wa_Name(a3),a0
+.na	clr.b	(a2)
+
+	* If this is empty, a dir was dropped
+	move.l	wa_Name(a3),a0
+	tst.b	(a0)
+	bne.b	.file
+	DPRINT	"Directory scan"
+	move.l	sp,a0
+.1	tst.b	(a0)+
+	bne.b	.1
+	subq	#2,a0	* skip null and the 1st dir separator
+	move.l	sp,a1
+	bsr		nimenalku
+	* a0 = dir name
+	bsr.w	adddivider
+	* d2 = path
+	move.l	sp,d2
+	* d3 = path len + l_size
+	move.l	a2,d3
+	sub.l	sp,d3
+	add.l	#l_size,d3
+
+	pushm	all
+	bsr		lockMainWindow
+	bsr		filereq_code\.scanni
+	bsr		unlockMainWindow
+	popm	all
+	bra.b	.continue
+.file
 .cp	move.b	(a0)+,(a2)+
 	bne.b	.cp
 
-.file
+ if DEBUG
+	move.l		sp,d0
+	DPRINT	"->%s"
+ endif
+	pushpea	tokenizedpattern(a5),d1
+	move.l	sp,d2
+	lore	Dos,MatchPatternNoCase
+	* 0 = did not match, skip this file if so
+	tst.l	d0
+	beq.b	.continue
 
+	move.l	sp,a0
+	bsr		createListNodeAndAdd
+
+.continue
 .error
-	lea	200(a2),a2
 	addq	#wa_SIZEOF,a3
-	dbf	d7,.addfiles
-.lop	clr.l	(a4)
-	bra.b	.app
+	dbf		d7,.addfiles
+.lop	
+	lea		200(sp),sp
+	bsr		releaseModuleList
+	bsr.w	listChanged
+	bsr.w	forceRefreshList
+	bra.b	.huh
 
 
 * oma viesti saapui!
@@ -7231,10 +7272,7 @@ vastomaviesti
 	clr.l	omaviesti0(a5)
 	move.l	d0,a1
 	lore	Exec,ReplyMsg
-.x	move.l	appnamebuf(a5),a0
-	bsr.w	freemem
-	clr.l	appnamebuf(a5)
-	popm	d0/d1/a0/a1/a6
+.x	popm	d0/d1/a0/a1/a6
 	rts
 
 
@@ -7363,14 +7401,13 @@ signalreceived
 	tst.b	l_divider(a3)
 	beq.b	.wasfile
 	tst	d7			* pit‰‰ olla jotain ett‰ ei j‰‰ 
-	bne.b	.eekk		* jummaamaan dividerin kohdalle
+	bne.b	.eekk		* jummaamaan dividerin kohdalle,
 	moveq	#1,d7	* step forward
 	bra.b	.eekk
 .wasfile
 
 	lea	l_filename(a3),a0	* ladataan
-	move.l	l_nameaddr(a3),solename(a5)
-	moveq	#0,d0			* no dbuf
+	moveq	#0,d0			* no double buffering
 	jsr	loadmodule
 	tst.l	d0
 	bne.b	.loader
@@ -7850,28 +7887,33 @@ findHighestBit
 *    d7 = step to move in the list, -1 to play previous, +1 to play next. 
 ****************
 
-soitamodi_random
+soitamodi_random:
 	moveq	#1,d5 		* 1: force random
 	moveq	#0,d6		* 0: allow volume fade down before startig to play new module
 	bra.b	umph
 
 * Called from "signalreceived". That is, when a module playback has ended.
-soitamodi2
+soitamodi2:
 	moveq	#-1,d6		* ~0: disable volume fade down before starting to play new module
 	moveq	#0,d5		* 0: no forced random
 	bra.b	umph
 
 * Called based on user input
-soitamodi
+soitamodi:
 	DPRINT  "Soitamodi"
 	moveq	#0,d6		* 0: allow volume fade down
 	moveq	#0,d5		* 0: no forced random
 umph	
 ;	cmp.b	#$7f,do_early(a5)	* early load p‰‰ll‰? disable!
 ;	beq	.ags
-	
+
+ if DEBUG
+	move.l	chosenmodule(a5),d0
+	DPRINT	"play mod, chosen=%ld"
+ endif
+
 	tst	d5
-	bne.b	.raaps
+	bne.b 	.raaps
 
 	cmp.b	#pm_random,playmode(a5)	* onko satunnaissoitto?
 	bne.b	.bere
@@ -7882,27 +7924,26 @@ umph
 	moveq	#0,d7
 .bere
 	* Calculate in long words to avoid possible word overflow.
-	ext.l	d7
 	move.l	modamount(a5),d1
 
 	* Calculate candidate for the next module
 	move.l	chosenmodule(a5),d0
 	add.l	d7,d0
-	;add		d7,chosenmodule(a5)
 	bpl.b	.e					* meni yli listan alkup‰‰st‰?
 	* Result is negative. Wrap to the end of the list.
-	;move	modamount(a5),d0
-	;add		d0,chosenmodule(a5)
-	add.l	d1,d0
+.getLast
+	move.l	d1,d0
+	subq.l	#1,d0
+	bra.b	.ee
 .e
-	;move	chosenmodule(a5),d0
-	;cmp		modamount(a5),d0
 	cmp.l	d1,d0
 	blt.b	.ee
-	* Result is higher than the amount of modules. Wrap to the beginning.
-	;sub		modamount(a5),d0
-	sub.l	d1,d0
-	;move	d0,chosenmodule(a5)
+	* Result is higher than the amount of modules. Wrap to the beginning,
+	* or end, depending on the movement direction.
+	tst.l	d7
+	bmi.b	.getLast
+.getFirst
+	moveq	#0,d0
 .ee
 	* Valid chosenmodule index found
 	move.l	d0,chosenmodule(a5)
@@ -7945,11 +7986,12 @@ umph
 	bsr.w	halt			* soitetaan vaan alusta
 	move.l	playerbase(a5),a0
 	jsr 	p_end(a0)
-	bsr.w	releaseModuleData
 
 	DPRINT	"Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
+	bsr.w	releaseModuleData
+
 	tst.l	d0
 	bne.w	.inierr
 
@@ -8000,8 +8042,6 @@ umph
 
 	* a3 contains the list elment
 	lea	l_filename(a3),a0	* Ladataan
-	move.l	l_nameaddr(a3),solename(a5)
-
 	* load it, d7 contains double buffering flag
 	move.b	d7,d0
 	jsr	loadmodule
@@ -8276,6 +8316,11 @@ nappuloita
 	jsr	toggleFavoriteStatusForCurrentModule
 	bra.w	.ee
 .2
+	cmp.b	#$37,d3	 	* m + control
+ 	bne.b	.3
+	jsr		modlandSearch
+	bra	.ee
+.3	
 
 .noControl
 
@@ -8527,7 +8572,7 @@ nappuloita
 	dr	.volup
 
 	dc	$5f
-	dr	rbutton10
+	dr	.rbutton10
 	dc	$17
 	dr	.infoo
 
@@ -8584,6 +8629,8 @@ nappuloita
 	dr	rinsert		* insert mods
 .nabse
 
+.rbutton10
+	jmp	rbutton10
 
 .rand	bra.w	soitamodi_random
 
@@ -8794,11 +8841,11 @@ gadgetsup
 	dr	rbutton_kela2	* Eteenkelaus
 	dr	rloadprog	* ohjelman lataus
 	dr	rmove		* move
-	dr	rsort		* sort
+	dr	rsearchfuncs	* search functions
 	dr	rlistmode	* listmode change
 
 * Print some text into the filebox
-** a0 = teksti, d0 = x-koordinaatti
+** a0 = teksti
 printbox:
 	tst.b	win(a5)
 	beq.b	.q
@@ -8808,11 +8855,35 @@ printbox:
 .p	pushm	d0/a0
 	bsr.w	clearbox		* fileboxi tyhj‰ks
 	popm	d0/a0
-	moveq	#69+WINY,d1	
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
- 	add	#16,d1
-.noAlt1
+
+	move.l	a0,a1
+    moveq   #-1,d0
+.c	cmp.b	#10,(a1)
+	beq.b	.cc
+	tst.b   (a1)+
+.cc	dbeq    d0,.c
+ 	not.l   d0	* strlen in d0
+
+	pushm	a0/a6
+	* d0 = length of text
+	* a0 = text
+	move.l	rastport(a5),a1
+	lore	GFX,TextLength
+	popm	a0/a6
+	* d0 = text width in pixels
+	* center in the window
+	move 	previousWindowWidth(a5),d1
+	sub		#20,d1
+	sub		d0,d1
+	addq	#1,d1 * round up, looks nicer
+	lsr		#1,d1
+	move	d1,d0
+	add		#20,d0
+
+;	moveq	#69+WINY,d1	
+	move	fileBoxTopEdge(a5),d1
+	addq	#6,d1 * magic constant
+
  	move	boxsize(a5),d2
 	lsr	#1,d2
 	subq	#1,d2
@@ -8830,21 +8901,29 @@ rlistmode
 *******
 
 * This creates an array of
-* 4 bytes  = node pointer to the module entry
-* 24 bytes = calculated weight based on module name
+* 4 bytes  = node pointer to the module entry,
 * sorts that, and recreates the module list.
 
-SORT_ELEMENT_LENGTH = 4+24
+SORT_ELEMENT_LENGTH = 8
 
-rsort
-sortButtonAction
+
+rsort:
+sortButtonAction:
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.1
+	DPRINT	"Sort disabled in file browser"
+.x	rts
+.1
 	skipIfGadgetDisabled gadgetSortButton
+
+	jsr	confirmFavoritesModification
+	beq.b	.x
+
 	bsr.b	sortModuleList
 	bra.w	forceRefreshList
 
 sortModuleList:
 	* Skip force refresh
-
 	* Let's not sort a list with 1 module, that would be silly I guess.
 	cmp.l	#2,modamount(a5)
 	bhs.b	.so
@@ -8861,15 +8940,19 @@ sortModuleList:
 	beq.b	.d
 	
 	lea	.t(pc),a0
-	moveq	#102+WINX,d0
-	bsr.b	printbox
+	bsr		printbox
 	bra.b	.d
 .t	dc.b	"Sorting...",0
  even
 
 .d
+ if DEBUG
+	clr.l	sortSwaps
+	clr.l	sortComps
+ 	jsr		startMeasure
+ endif
 	move.l	modamount(a5),d0
-	moveq	#4+24,d1		* node address and weight
+	moveq	#SORT_ELEMENT_LENGTH,d1		* node address and weight
 	bsr.w	mulu_32		* 
 	addq.l	#8,d0			* add some empty space, this is needed when rebuilding the list
 							* to check if end is reached.
@@ -8880,39 +8963,35 @@ sortModuleList:
 	bsr.w 	showOutOfMemoryError
 	bra.w	.error
 .okr
-
 	move.l	d0,a2
-
 
 ** Lasketaan painot jokaiselle
 	DPRINT  "rsort obtain list"
 	bsr.w	obtainModuleList
-	;lea	moduleListHeader(a5),a3
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
 
-* paino 24 bytee
-
+	* sort table in a2
 	move.l	(a3),a3		* MLH_HEAD
 .ploop
 	tst.l	(a3)		* check if last node?
 	beq.b	.ep
-	SUCC	a3,a4		* SUCC
-	move.l	a3,(a2)+	* noden osoite taulukkoon
 
-	push	a2
-	move.l	l_nameaddr(a3),a2	
-	bsr.w	.getv
-	pop	a2
-	movem.l	d0-d5,(a2)	* paino talteen
-	lea	24(a2),a2
+	* Fill slot with node address
+	move.l	a3,(a2)
 
+	* Remove node from list
 	move.l	a3,a1		* poistetaan node (a1)
 	REMOVE
 
-	move.l	a4,a3
+	* get next node
+	SUCC	a3,a3
+	* next slot
+	addq.l	#SORT_ELEMENT_LENGTH,a2
 	bra.b	.ploop
 .ep
+	* Weights done
+	* Now sort in divider sections
 
 	move.l	sortbuf(a5),a3
 
@@ -8929,10 +9008,8 @@ sortModuleList:
 	move.l	a3,d7
 	sub.l	d5,d7		* montako nodea sortataan
 
-	move.l	d7,d0 
-	moveq	#SORT_ELEMENT_LENGTH,d1
-	bsr.w	divu_32
-	move.l	d0,d7
+	* Nodes count
+	lsr.l	#3,d7	; /8 - SORT_ELEMENT_LENGTH
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
 	cmp.l	#2,d7		* v‰h 2 kpl
@@ -8940,34 +9017,62 @@ sortModuleList:
 
 	move.l	d5,a2
 	bsr.w	.sort
-	bra.b	.ml
+	* check if ran out of mem
+	tst.l	d0
+	bne.b	 .ml
+	* show error and stop, list will be partially sorted or not at all
+	bsr.w 	showOutOfMemoryError
 
 .loph
+
 	* Start rebuilding the list with sorted nodes
 	move.l	sortbuf(a5),a3
+	bsr.w	getVisibleModuleListHeader
+	move.l	a0,a2
 .er
 	tst.l	(a3)
 	beq.b	.r			* end reached? this is the extra space mentioned above
 	move.l	(a3),a1  	* grab node address
 
-	;lea	moduleListHeader(a5),a0
-	bsr.w	getVisibleModuleListHeader
+	* Add a1 to a0
+	move.l	a2,a0
 	ADDTAIL			* lis‰t‰‰n node (a1)
-
-	lea SORT_ELEMENT_LENGTH(a3),a3	
+	addq.l	#SORT_ELEMENT_LENGTH,a3
 	bra.b	.er
 .r
-	move.l	sortbuf(a5),a0
-	bsr.w	freemem
 
 .error
 
-	bsr.w	listChanged
+	move.l	sortbuf(a5),a0
+	bsr.w	freemem
+
+
+ if DEBUG
+	jsr		stopMeasure
+	divu	#1000,d0
+	move.l	d0,d1
+	ext.l	d0
+	clr		d1
+	swap	d1
+	DPRINT	"Sort took %lds %ldms"
+* Old sort: A500 modsanth-kick13-prg: 10s
+* New sort: A500 modsanth-kick13-prg: 73s, sad
+* Newer sort: A500 modsanth-kick13-prg: 12s
+
+ endif
+
+		bsr.w	listChanged
 	tst.l	playingmodule(a5)
 	bmi.b	.npl
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .npl	clr.l	chosenmodule(a5)
-	
+
+ if DEBUG
+	move.l	sortSwaps,d1
+	move.l	sortComps,d0
+	DPRINT	"Compares=%ld swaps=%ld"
+ endif
+
 	DPRINT  "rsort release list"
 	bsr.w	releaseModuleList
 	bsr.w	unlockMainWindow
@@ -8981,16 +9086,13 @@ sortModuleList:
 	tst.l	(a3)		* Oliko viimeinen
 	beq.b	.ep2
 	move.l	(a3),a0
-	;move.l	l_nameaddr(a0),a0	
-	;isListDivider  (a0)		* eka hitti
-	;isListDivider l_filename(a0)
 	tst.b	l_divider(a0)
 	beq.b	.jep1
 	* Ignore dividers in browser mode
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.jep1
 
-	lea	28(a3),a3
+	addq.l	#SORT_ELEMENT_LENGTH,a3
 	bra.b	.ploop2
 
 .ep2	moveq	#-1,d0
@@ -9005,239 +9107,22 @@ sortModuleList:
 	tst.l	(a3)		* Oliko viimeinen
 	beq.b	.jep1
 	move.l	(a3),a0
-;	move.l	l_nameaddr(a0),a0
 	* Ignore dividers in browser mode
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	._d
-;	isListDivider (a0)		* toka hitti
-;	isListDivider l_filename(a0)
 	tst.b	l_divider(a0)
 	bne.b	.jep1
 ._d
-	lea	28(a3),a3
+	addq.l	#SORT_ELEMENT_LENGTH,a3
 	bra.b	.ploop3
 
 
 *--------------------
 
 .sort
-	pushm	all
-	bsr.b	.sort0
-	popm	all
-	rts
-
-.sort0
-	move.l	a2,a0
-	moveq	#SORT_ELEMENT_LENGTH,d5		* element length
-	moveq	#1,d4
-
-; Comb sort the array.
-
-;	Lea.l	List(Pc),a0
-;	Move.l	#ListSize,d7	; Number of values
-
-	Move.l	d7,d1		; d1=Gap
-.MoreSort
-;	lsl.l	#8,d1
-;	Divu.w	#333,d1		; 1.3*256 = 332.8
-;	ext.l	d1
-
-	move.l	d1,d0 
-	lsl.l	#8,d0 
-	move.l	#333,d1
-	bsr.w 	divu_32
-	move.l	d0,d1
-
-	MoveQ	#0,d0		; d0=Switch
-
-	Cmp.l	d4,d1		; if gap<1 then gap:=1
-	Bpl.b	.okgap
-	Moveq	#1,d1
-.okgap:
-	Move.l	d7,d2		; d2=Top
-	Sub.l	d1,d2		; D2=NMAX-gap
-	Move.l	a0,a1
-
- ;     Lea.l   (a1,d1.w*2),a2  ; a2=a1+gap
- ;   move    d1,d6
- ;   mulu    d5,d6
- ;   lea     (a1,d6.l),a2
-
-	* do a trick 32-bit multiply by 28
-	ifne SORT_ELEMENT_LENGTH-28
-		fail
-	endc
-	move.l	d1,d6 
-	lsl.l	#2,d6   * mul by 4
-	move.l	a1,a2
-	sub.l	d6,a2	* addr - 4*28
-	lsl.l	#3,d6 	* mul by 32
-	add.l	d6,a2	* addr + 32*28
-
-	;Subq.w	#1,d2	* dbf subtract, no not used anymore
-.Loop:	
-	* Compare. 
-	* It's likely the compares after the 1st one are not often hit.
-	move.l	4(a1),d3
-	cmp.l	4(a2),d3
-	bne.b	.notokval
-	move.l	8(a1),d3
-	cmp.l	8(a2),d3
-	bne.b	.notokval
-	move.l	12(a1),d3
-	cmp.l	12(a2),d3
-	bne.b	.notokval
-	move.l	16(a1),d3
-	cmp.l	16(a2),d3
-	bne.b	.notokval
-	move.l	20(a1),d3
-	cmp.l	20(a2),d3
-	bne.b	.notokval
-	move.l	24(a1),d3
-	cmp.l	24(a2),d3
-	beq.b	.okval
-.notokval
-	bmi.b	.okval
-
-;	Move.w	(a1)+,d3
-;	Cmp.w	(a2)+,d3
-;	Bmi	.okval
-;	Beq	.okval
-
-;	Move.w	-2(a1),d3	; swap
-;	Move.w	-2(a2),-2(a1)
-;	Move.w	d3,-2(a2)
-
-** swap 28 bytes
-
-	* free:
-	* d0, d3, d6, a3, a4, a5, a6
-	movem.l		(a1),d0/d3/d6/a3/a4/a5/a6
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	move.l		(a2)+,(a1)+
-	movem.l		d0/d3/d6/a3/a4/a5/a6,-28(a2)
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	; move.l	(a1),d6
-	; move.l	(a2),(a1)+
-	; move.l	d6,(a2)+
-
-	Moveq	#1,d0
-	bra.b	.ok1
-
-.okval:
-	add.l	d5,a1
-	add.l	d5,a2
-.ok1
-
-	;Dbf	d2,.Loop
-	subq.l	#1,d2 
-	bne.b	.Loop
-
-	Cmp.l	d4,d1		; gap < 1 ?
-	Bne.w	.MoreSort
-	Tst.w	d0		; Any entries swapped ?
-	Bne.w	.MoreSort
-	Rts
-
-*-------------------
-
-* Lower case and strip prefix so that string is usable for sorting
-.getv	
-	moveq	#0,d0
-	moveq	#0,d1
-	moveq	#0,d2
-
-	* In normal case dividers have no value when sorting,
-	* in brower mode they should be sorted properly.
-	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq.b	.browserMode
-	tst.b	l_divider(a3)
-	beq.b	.boobo
-	* dividers ignored
-	rts
-
-	* In browser mode modify name so that
-	* directories get sorted before files
-.browserMode
-	tst.b	l_divider(a3)
-	beq.b	.notDiv
-	lea	-100(sp),sp
-	move.l	sp,a0
-	move.b	#DIVIDER_MAGIC,(a0)+
-.cp_	move.b	(a2)+,(a0)+
-	bne.b	.cp_
-	move.l	sp,a2
-	bsr.b	.doGetV		
-	lea	100(sp),sp
-	rts
-.notDiv
-.boobo
-.doGetV
-	move.l	a2,a0
-	bsr.w	cut_prefix
-	move.l	a0,a2
-
-	bsr.b	.bah2
-	move.l	d5,d0
-	bsr.b	.bah2
-	move.l	d5,d1
-	bsr.b	.bah2
-	move.l	d5,d2
-	bsr.b	.bah2
-	move.l	d5,d3
-	bsr.b	.bah2
-	move.l	d5,d4
-;	bsr.b	.bah2
-;	rts
-
-.bah2
-	moveq	#4-1,d6
-.g1	bsr.b	.bah
-	move.b	d7,d5
-	rol.l	#8,d5
-	dbf	d6,.g1
-	ror.l	#8,d5
-	rts
-
-.bah	tst.b	(a2)
-	beq.b	.z
-	move.b	(a2)+,d7
-	cmp.b	#'a',d7
-	blo.b	.j
-	cmp.b	#'z',d7
-	bhi.b	.j
-	and.b	#$df,d7
-.j	rts
-.z	clr.b	d7
+	pushm	d1-a6
+ 	jsr		combSortNodeArray 
+ 	popm	d1-a6
 	rts
 
 
@@ -9255,6 +9140,9 @@ moveButtonAction
 	blo.b	.qq
 	bsr.w	getcurrent
 	beq.b	.q
+	bsr.w	confirmFavoritesModification
+	beq.b	.qq
+
 	move.l	a3,nodetomove(a5)
  if DEBUG
 	move.l	l_nameaddr(a3),d0
@@ -9361,6 +9249,66 @@ comment_file
 * Find module
 *******
 
+rsearchfuncs
+	DPRINT	"Search functions"
+	lea		.options(pc),a4
+	lea		gadgetSortButton,a0
+	move	gg_LeftEdge(a0),d6
+	moveq	#20,d7
+	add		gg_TopEdge(a0),d7
+	pushpea	.callback(pc),d4
+	bsr		listSelectorMainWindow
+	bmi.b	.skip
+	beq		find_new
+	subq	#1,d0
+	beq		find_continue
+	subq	#1,d0
+	beq.b	.modland
+	subq	#1,d0
+	beq.b	.aminet
+	subq	#1,d0
+	beq.b	.modules
+	subq	#1,d0
+	beq.b	.hvsc
+.skip
+	rts
+
+.modland
+	jmp	modlandSearch
+.aminet
+	jmp	aminetSearch
+.modules
+	jmp	modulesSearch
+.hvsc
+	jmp	hvscSearch
+
+* in:
+*   d3 = index to check
+.callback
+	; Disable bottom two rows if UHC not available
+	cmp		#2,d3
+	blo.b	.n
+	tst.b	uhcAvailable(a5)
+	bne.b	.n
+	moveq	#0,d0
+	rts
+.n	moveq	#1,d0
+	rts
+
+.options
+	* max width, rows
+	dc.b	24,6
+	dc.b	"Search list    [F]      ",0
+	dc.b	"Search next    [SHIFT+F]",0
+	dc.b	"Search Modland [CTRL+M] ",0
+ 	dc.b	"Search Aminet           ",0
+	dc.b	"Search Modules.pl       ",0
+	dc.b	"Search HVSC             ",0
+
+enterSearchPattern_t
+	dc.b	"Enter search pattern",0
+ even
+
 find_new
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
@@ -9371,16 +9319,13 @@ find_new
 	moveq	#27,d0
 	sub.l	a3,a3
 	lea	ftags(pc),a0
-	lea	.ti(pc),a2
+	lea	enterSearchPattern_t(pc),a2
 	bsr.w	setMainWindowWaitPointer
 	lob	rtGetStringA
 	bsr.w	clearMainWindowWaitPointer
 	tst.l	d0
 	bne.b	find_continue	
 	rts
-
-.ti	dc.b	"Enter search pattern",0
- even
 
 ftags
 	dc.l	RTGS_Width,262
@@ -9488,6 +9433,8 @@ find_continue
 	rts
 
 
+
+
 *******************************************************************************
 * Kelaus
 *******
@@ -9567,6 +9514,7 @@ mousemoving
 *******************************************************************************
 * Next
 *******
+nextButtonAction:
 rbutton5
 	moveq	#1,d7		* liikutaan eteenp‰in listassa
 	bra.w	soitamodi
@@ -9574,6 +9522,7 @@ rbutton5
 *******************************************************************************
 * Prev
 *******
+prevButtonAction:
 rbutton6
 	moveq	#-1,d7		* liikutaankin taakkep‰in listassa
 	bra.w	soitamodi
@@ -9781,7 +9730,8 @@ volumerefresh
 .r	move	d0,mainvolume(a5)
 
 	mulu	#65535,d0
-	divu	#64,d0
+	;divu	#64,d0
+	lsr.l	#6,d0
 	lea	slider1,a0
 	move.l	gg_SpecialInfo(a0),a1
 	move	d0,d1
@@ -10163,9 +10113,9 @@ rbutton1
 
 	DPRINT	"Replay end"
 * Soitetaan vaan alusta
-	lore	Exec,Disable
+	;lore	Exec,Disable
 	bsr.w	halt
-	lore    Exec,Enable
+	;lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
 	move	(sp)+,mainvolume(a5)
@@ -10193,9 +10143,9 @@ rbutton1
 	move	d0,-(sp)
 	DPRINT	"Replay end"
 
-	lore	Exec,Disable
+	;lore	Exec,Disable
 	bsr.w	halt			* Vapautetaan se jos on
-	lore 	Exec,Enable
+	;lore 	Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
 	bsr.w	freemodule	
@@ -10205,8 +10155,7 @@ rbutton1
 	move.l	d2,playingmodule(a5)	* Uusi numero
 
 	lea	l_filename(a3),a0	* Ladataan
-	move.l	l_nameaddr(a3),solename(a5)
-	move.b	d7,d0
+	move.b	d7,d0 * double buffering flag
 	jsr	loadmodule
 	tst.l	d0
 	bne.b	.loader
@@ -10365,6 +10314,12 @@ rbutton7
 	bsr.w	confirmFavoritesModification
 	beq.b	.skip
 
+	* Another functionality in these list modes:
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq		copyCurrentEntryToMainList
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	beq		copyCurrentEntryToMainList
+
 	move.l	_DosBase(a5),a6
 
 	;bra	filereq_code
@@ -10461,7 +10416,7 @@ filereq_code
 	lea	matchp_tags(pc),a0
 	lore	Req,rtChangeReqAttrA
 
-	st	loading2(a5)			* nobody checks this! killl
+	st	loading2(a5)			* checked with loading(a5)
 
 	* launch file requester
 	lea	filereqtags(pc),a0		* tags for configuration
@@ -10947,7 +10902,7 @@ filereq_code
 * addaa/inserttaa listaan a3:ssa olevan noden
 * in: 
 *   a3 = list node to be added into the list
-addfile	
+addfile:
 	cmp.l	#MAX_MODULES,modamount(a5)
 	bhs.b	.exit
 
@@ -10979,7 +10934,7 @@ addfile
 * a0 = hakemiston nimi
 *      directory name
 
-adddivider
+adddivider:
 	pushm	all
 	moveq	#0,d7
 
@@ -11123,10 +11078,100 @@ filereqtitle
  even
 
 
+* This clones the current entry and appends to the mainlist
+* Used when in file browser or search mode and user invokes "Add"
+copyCurrentEntryToMainList
+	DPRINT	"Copy to main"
 
+	bsr		getcurrent
+	beq.b	.nope
+	tst.b	l_divider(a3)
+	bne.b	.div
 
+	move.l	a3,a0
+	jsr		cloneListNode
+	* a4 = cloned node
 
+	move.l	a4,a1
+	lea		moduleListHeader(a5),a0
+	lore	Exec,AddTail
 
+	bsr		.flash
+	rts
+.nope
+	DPRINT	"Not found"
+	rts
+.div
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	bne.b	.addFolder
+	* Check if "parent folder", skip those
+	tst.b	l_divider(a3)
+	bmi.b	.addFolder
+	DPRINT	"Not adding parent"
+	rts
+
+	* Flash the chosen line a bit for indication
+.flash
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
+	moveq	#2,d1
+	lore	Dos,Delay
+	bsr		markit
+	rts
+
+.addFolder
+	lea		l_filename(a3),a0
+.1	tst.b	(a0)+
+	bne.b	.1
+	subq	#2,a0	* skip null and the 1st dir separator
+	bsr		nimenalku
+	move.l	a0,d0
+	* a0 = dir name
+	* Create divider into the main list
+	move.b	#LISTMODE_NORMAL,listMode(a5)
+	bsr		adddivider
+
+	lea		l_filename(a3),a0
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"folder %s"
+ endif
+
+	lea		-200(sp),sp
+	move.l	sp,a1
+.2	move.b	(a0)+,(a1)+
+	bne.b	.2
+	cmp.b	#"/",-2(a1)
+	beq.b	.3
+	move.b	#"/",-1(a1)
+	clr.b	(a1)
+.3
+
+	move.l	sp,d2
+	* Find length to d3
+	move.l	sp,a0
+    moveq   #-1,d3  ; phx strlen trick
+.c	tst.b   (a0)+
+	dbeq    d3,.c
+ 	not.l   d3
+	add.l	#l_size,d3
+
+	pushm	all
+	bsr		lockMainWindow
+	bsr		filereq_code\.scanni
+	bsr		unlockMainWindow
+	popm	all
+	lea		200(sp),sp
+
+	move.b	#LISTMODE_BROWSER,listMode(a5)
+	bsr.w	listChanged
+	bsr		.flash
+	rts
 
 
 
@@ -11284,7 +11329,7 @@ winfile
 *******************************************************************************
 * Vapautetaan tiedostolista
 *******
-freelist
+freelist:
 	DPRINT  "freelist obtain list"
 	bsr.w		obtainModuleList
 	tst.l		modamount(a5)
@@ -11388,7 +11433,6 @@ rloadprogDoIt
 .showLoadingProgram
 	pushm	all
 	lea	.t(pc),a0
-	moveq	#46+WINX,d0
 	bsr.w	printbox
 	popm	all
 	rts
@@ -11734,14 +11778,36 @@ loadprog
 	jsr	engageNormalMode
 	bra.b	rloadprogDoIt\.blob
 
+* Variant that skips the prg file header,
+* and adds extra data in front of every added
+* file path.
+* in:
+*   a2 = list header
+*   a3 = data read from file
+*   a4 = end address of buffer
+*   d4 = line header length
+*   d6 = line header address 
+*   a0 = filter routine address, for remote url entries
+importModuleProgramFromDataSkipHeader:
+	pushm	d1-a6
+ if DEBUG
+	move.l	a3,d0 
+	move.l	a4,d1
+	DPRINT	"importModuleProgramFromDataSkipHdr %lx %lx"
+ endif
+	move.l	a0,a6
+	moveq	#0,d7 		* count
+	move.l	a4,d5		* use this register
+	move.l	a2,a4 		* list header here
+	bra	importModuleProgramFromData\.r1
+
 * in:
 *   a2 = list header
 *   a3 = data read from file
 *   a4 = end address of buffer
 * out:
 *   d0 = number of modules  
-
-importModuleProgramFromData
+importModuleProgramFromData:
 	pushm	d1-a6
  if DEBUG
 	move.l	a3,d0 
@@ -11749,86 +11815,95 @@ importModuleProgramFromData
 	DPRINT	"importModuleProgramFromData %lx %lx"
  endif
 
+* Free:
+* d3
+* d4
+* d6
+
 	moveq	#0,d7 		* count
 	
 	move.l	a3,d0
 	beq.w	.x2
 
+	sub.l	a6,a6		* no filter
+	moveq	#0,d4		* no line header
+	moveq	#0,d6		* no line header
+
 	move.l	a4,d5		* use this register
 	move.l	a2,a4 		* list header here
 
-	moveq	#0,d6		* 0 = vanha formaatti
+	;moveq	#0,d6		* 0 = vanha formaatti
 
 	cmp.l	#"HiPP",(a3)
-	bne.b	.rr
+	bne		.what
 	cmp	#"rg",4(a3)
-	bne.b	.rr
+	bne		.what
 .r2	cmp.b	#10,(a3)+	* skipataan kaks rivinvaihtoa
 	bne.b	.r2
 	addq	#1,a3
-	moveq	#1,d6		* uusi formaatti
-	bra.b	.r1
-.rr
-	cmp.l	#"HIPP",(a3)+
-	bne.w	.what
-	cmp	#"RO",(a3)+
-	bne.w	.what
-	addq	#2,a3		* skip: moduulien m‰‰r‰
 .r1
-
+	
 ;	lea	moduleListHeader(a5),a4
 ;	move.l	a5,a4
 .ploop
-	tst	d6
-	bne.b	.new1
-	moveq	#0,d0
-	move.b	(a3)+,d0	* seuraavan pituus
-	lsl	#8,d0
-	move.b	(a3)+,d0
-	bra.b	.old1
-.new1
+
+	* See if additional header should
+	* be prepended to the line. This indicates
+	* a remote url, it is used to add the base url address.
+	tst.l	d6
+	beq.b	.accepted
+	* A remote it is, run filter if available
+	move.l	a6,d3
+	beq.b	.accepted
+	jsr		(a6)
+	tst.l	d0
+	bne.b	.accepted
+.skipToNext
+	* Skip to next entry
+	cmp.l	d5,a3
+	bhs.w	.x2		* upper bound check
+	cmp.b	#10,(a3)+
+	bne.b	.skipToNext
+	bra		.next
+.accepted
+
+
+	* Is this an url?
+	moveq	#0,d3	* local
+	cmp.b	#"h",(a3)
+	bne.b	.local
+	cmp.b	#"t",1(a3)
+	bne.b	.local
+	cmp.b	#"t",2(a3)
+	bne.b	.local
+	cmp.b	#"p",3(a3)
+	bne.b	.local
+	move	#1,d3	* remote
+.local
 
 	move.l	a3,a0
+	moveq	#10,d1
 .r23	
 	cmp.l	d5,a0
 	bhs.w	.x2		* upper bound check
-	cmp.b	#10,(a0)+
+	;cmp.b	#10,(a0)+
+	cmp.b	(a0)+,d1
 	bne.b	.r23
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
 
-.old1
-
 	add.l	#1+l_size,d0	* nolla nimen per‰‰n ja listayksikˆn pituus
+	add.l	d4,d0	* add extra header space if any
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
 	bne.b	.gotMem2
 	bsr.w	showOutOfMemoryError
-	bra.b	.x2	
+	bra		.x2	
 .gotMem2
 	move.l	d0,a2
 
+	* Copy filename 
 	lea	l_filename(a2),a0
-
-	tst	d6
-	bne.b	.new2
-	move.b	(a3)+,d0
-	lsl	#8,d0
-	move.b	(a3)+,d0
-
-	cmp.b	#DIVIDER_MAGIC,(a3)
-	bne.b	.notDiv1
-	addq	#1,a3
-	st	l_divider(a2)
-	subq	#1,d0
-.notDiv1
-
-	subq	#1,d0
-.cy	move.b	(a3)+,(a0)+
-	dbf	d0,.cy
-	clr.b	(a0)
-	bra.b	.old2
-.new2
 
 	cmp.b	#DIVIDER_MAGIC,(a3)
 	bne.b	.notDiv2
@@ -11836,11 +11911,28 @@ importModuleProgramFromData
 	st	l_divider(a2)
 .notDiv2
 
-.le	move.b	(a3),(a0)+
-	cmp.b	#10,(a3)+
+	* See if additional header should
+	* be prepended to the line. This indicates
+	* a remote url, it is used to add the base url address.
+	tst.l	d6
+	beq.b	.noHdr
+	moveq	#1,d3	* remote!
+	move.l	d6,a1
+.copyHdr
+	move.b	(a1)+,(a0)+
+	bne.b	.copyHdr
+	subq	#1,a0 * to NULL
+.noHdr
+
+	* Copy chars until line change
+	moveq	#10,d1
+.le	
+	move.b	(a3)+,d2
+	move.b	d2,(a0)+
+	cmp.b	d1,d2
 	bne.b	.le
+	* Replace LF with NULL
 	clr.b	-(a0)
-.old2
 
 	lea	l_filename(a2),a1
 	tst.b	l_divider(a2)
@@ -11848,14 +11940,24 @@ importModuleProgramFromData
 	move.l	a1,a0
 	bra.b	.wasDiv
 .notDiv
+	tst.b	d3
+	beq.b	.wasLocal
+	; Config this node as a remote node
+	move.l	a2,a0
+	jsr		configRemoteNode
+	bra.b	.wasRemote
+.wasLocal
 	bsr.w	nimenalku
 .wasDiv
 	move.l	a0,l_nameaddr(a2)
+.wasRemote
 
 	* add node a1 to list a0	
 	move.l	a2,a1
 	move.l	a4,a0
+	push	a6
 	lore	Exec,AddTail
+	pop		a6
 	addq.l	#1,d7
 
 	move.l	a2,a0
@@ -11867,7 +11969,7 @@ importModuleProgramFromData
 
 	cmp.l	#MAX_MODULES,d7
 	bhs.b	.x2
-
+.next
 	* Go until at the end of given buffer
 	cmp.l	d5,a3
 	blo.w	.ploop
@@ -11891,7 +11993,7 @@ xpk_module_program_error	 dc.b	"Could not load XPK compressed module program!",0
 *** a0 <= loppu
 *** a1 <= alku
 *** a0 => nimi
-nimenalku
+nimenalku:
 .f	move.b	-(a0),d0		* etsit‰‰n pelk‰n nimen alku
 	cmp.b	#'/',d0
 	beq.b	.fo
@@ -11901,7 +12003,7 @@ nimenalku
 	bne.b	.f
 	bra.b	.fof
 .fo	addq.l	#1,a0
-.fof	rts
+.fof rts
 
 
 rsaveprog
@@ -11946,7 +12048,6 @@ rsaveprog
 
 
 	lea	.t(pc),a0
-	moveq	#50+WINX,d0
 	bsr.w	printbox
 	bra.b	.d
 .t	dc.b	"Saving module program...",0
@@ -12019,7 +12120,7 @@ filereqtitle3
 * in:
 *  a0 = filename
 *  a1 = list
-exportModuleProgramToFile
+exportModuleProgramToFile:
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"Exporting module list to %s"
@@ -12031,7 +12132,7 @@ exportModuleProgramToFile
 	lob	Open
 
 	move.l	d0,d6
-	beq.b	.openError	
+	beq		.openError	
 
 	move.l	d6,d1
 	lea	prgheader(pc),a0
@@ -12053,6 +12154,7 @@ exportModuleProgramToFile
 	beq.b	.noDiv
 	move.b	#DIVIDER_MAGIC,(a1)+
 .noDiv
+
 
 .co	move.b	(a0)+,(a1)+
 	bne.b	.co
@@ -12096,7 +12198,7 @@ exportModuleProgramToFile
 * Komentojono
 *******
 
-komentojono
+komentojono:
 	DPRINT	"Processing command line parameters"
 
 	* Ensure correct list mode before proceeding
@@ -12132,6 +12234,28 @@ komentojono
 .hmm
 
 	move.l	d5,a0
+	bsr		createListNodeAndAdd
+
+.skip	dbf	d7,.alp
+
+.end
+	bsr.w	vastomaviesti
+
+	tst.l	modamount(a5)
+	beq.b	.x
+	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
+
+	bsr.w	listChanged
+	bsr.w	forceRefreshList
+	bsr.w	rbutton1		* soitetaan 
+.x	rts
+
+
+* In:
+*   a0 = File path
+createListNodeAndAdd
+	pushm	all
+	move.l	a0,d5
 .f	tst.b	(a0)+
 	bne.b	.f
 	move.l	a0,d0
@@ -12153,33 +12277,18 @@ komentojono
 	move.l	a0,l_nameaddr(a2)
 
 	move.l	a2,a1
-	;lea	moduleListHeader(a5),a0	* lis‰t‰‰n listaan
 	bsr.w	getVisibleModuleListHeader
 	lore	Exec,AddTail
 
-	pushm	a2/a3
 	* update favorite status for node a0
 	move.l	a2,a0
 	* destroys a2/a3 (no stack saving for speed there)
 	jsr	updateFavoriteStatus
-	popm	a2/a3
 
 	addq.l	#1,modamount(a5)	* m‰‰r‰++
-
-.skip	dbf	d7,.alp
-
 .end
-	bsr.w	vastomaviesti
-
-	tst.l	modamount(a5)
-	beq.b	.x
-	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
-
-	bsr.w	listChanged
-	bsr.w	forceRefreshList
-	bsr.w	rbutton1		* soitetaan 
-.x	rts
-
+	popm	all
+	rts
 
 *************
 * Tokenisoidaan file match patterni
@@ -12344,6 +12453,9 @@ loadprefs2
 	move.b	d0,medmode(a5)
 
 	move	prefs_medrate(a0),medrate(a5)
+	move.b	prefs_sidmode(a0),sidmode(a5)
+	move.b	prefs_residmode(a0),residmode(a5)
+	move.b	prefs_xmaplay(a0),xmaplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
 	move.b	prefs_savestate(a0),savestate(a5)
@@ -12353,6 +12465,16 @@ loadprefs2
 	pushpea	prefs_fontname+prefsdata(a5),text_attr
 	move.l	prefs_listtextattr(a0),list_text_attr+4		* ysize jne
 	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr
+
+	move	prefs_windowWidth+prefsdata(a5),d0
+    * Min width check
+    cmp     #264,d0
+    bhs.b   .wOk
+    move    #264,d0
+.wOk
+	move	d0,previousWindowWidth(a5)
+	move	d0,WINSIZX(a5)
+
 
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
@@ -12630,11 +12752,14 @@ saveprefs
 	move.b	mpegadiv(a5),prefs_mpegadiv(a0)
 	move.b	medmode(a5),prefs_medmode(a0)
 	move	medrate(a5),prefs_medrate(a0)
+	move.b	sidmode(a5),prefs_sidmode(a0)
+	move.b	residmode(a5),prefs_residmode(a0)
+	move.b	xmaplay(a5),prefs_xmaplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
 	move.b	altbuttons(a5),prefs_altbuttons(a0)
-
+	move	previousWindowWidth(a5),prefs_windowWidth(a0)
 
 	move.l	text_attr+4,prefs_textattr(a0)
 	move.l	text_attr,a1
@@ -12927,12 +13052,14 @@ loadcybersoundcalibration
 ******************************************************************************
 * Piirt‰‰ tekstuurin ikkunaan
 
+* in: 
+*   d0 = xmin
+*   d1 = ymin
+*   d2 = xmax
+*   d3 = ymax
+
 drawtexture:
 	movem.l	d0-a6,-(sp)
-	ext.l	d0
-	ext.l	d1
-	ext.l	d2
-	ext.l	d3
 	movem.l	d0-d3,-(sp)
 
 	move.l	rp_AreaPtrn(a2),d6
@@ -12980,6 +13107,7 @@ drawtexture:
 	rts
 
 .texture dc	$5555,$aaaa
+
 
 
 *******************************************************************************
@@ -13113,6 +13241,9 @@ prefs_code
 	move.b	mpegadiv(a5),mpegadiv_new(a5)
 	move.b	medmode(a5),medmode_new(a5)
 	move	medrate(a5),medrate_new(a5)
+	move.b	sidmode(a5),sidmode_new(a5)
+	move.b	residmode(a5),residmode_new(a5)
+	move.b	xmaplay(a5),xmaplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
@@ -13570,6 +13701,9 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	mpegadiv_new(a5),mpegadiv(a5)
 	move.b	medmode_new(a5),medmode(a5)
 	move	medrate_new(a5),medrate(a5)
+	move.b	sidmode_new(a5),sidmode(a5)
+	move.b	residmode_new(a5),residmode(a5)
+	move.b	xmaplay_new(a5),xmaplay(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
 	move	ahi_mastervol_new(a5),ahi_mastervol(a5)
@@ -13645,6 +13779,17 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lea	list_text_attr(a4),a0
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,listfontbase(a5)
+	bne.b	.gotFont
+	
+	lea	list_text_attr(a4),a0	
+	pushpea	topaz(a4),(a0)+
+	move	#8,(a0)+
+	clr	(a0)
+	lea	topaz_text_attr(a4),a0
+	lore	GFX,OpenFont
+	move.l	d0,listfontbase(a5)
+	DPRINT	"revert topaz"
+.gotFont
 	move.l	d0,a0
 	bsr.w	setListFont
 
@@ -14098,20 +14243,20 @@ pmousebuttons
 	lea	bUu2,a0			* prefix cut
 	lea	rprefx_req(pc),a2
 	bsr.w	.check
-	bra.b	.xx
+	bra     .xx
 
 .2	subq	#1,d0
 	bne.b	.3
 
 	lea	pout1,a0		* filter control
 	lea	rpfilt_req(pc),a2
-	bsr.b	.check
+	bsr 	.check
 	lea	laren1,a0		* pt replayer
 	lea	rptmix_req(pc),a2
-	bsr.b	.check
+	bsr    	.check
 	lea	PoU2,a0
 	lea	rpgmode_req(pc),a2
-	bsr.b	.check
+	bsr 	.check
 	bra.b	.xx
 
 .3	subq	#2,d0
@@ -14142,6 +14287,12 @@ pmousebuttons
 	bsr.b	.check
 	lea	nAMISKA4,a0
 	lea	rmedmode_req(pc),a2	* med mode
+	bsr.b	.check
+	lea     prefsPlaySidMode,a0
+	lea	    rsidmode_req(pc),a2	    * sid mode
+	bsr.b	.check
+	lea     prefsResidMode,a0
+	lea	    rresidmode_req(pc),a2	   * resid mode
 	bsr.b	.check
 
 
@@ -14221,7 +14372,7 @@ pupdate:				* Ikkuna p‰ivitys
 	bra.w	.x
 
 .3	subq	#1,d0
-	bne.b	.4
+	bne 	.4
 
 	bsr.w	pipm			* pt replayer
 	bsr.w	pupf			* filter
@@ -14232,10 +14383,10 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr.w	ppgmode			* pgmode
 	bsr.w	ppgstat			* pgstatus
 	bsr.w	pdbf			* volume fade
-	bra.b	.x
+	bra 	.x
 
 .4	subq	#1,d0
-	bne.b	.5
+	bne 	.5
 
 	bsr.w	pux			* xpk id
 	bsr.w	pdbuf			* doublebuffering
@@ -14278,6 +14429,9 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr.w	pmpegaqua		* MPEGA quality
 	bsr.w	pmpegadiv		* MPEGA freq division
 	bsr.w	pmedmode		* med mode
+    bsr     psidmode        * SID mode
+    bsr     pxmaplay        * XMAPlay
+    bsr     presidmode      * reSID mode
 
 
 .x	popm	all
@@ -14313,7 +14467,7 @@ tark_mahtu
 * a0 = teksti
 * a1 = gadgetti
 
-prunt2
+prunt2:
 	pushm	all
 	moveq	#1,d7		* ei korvaa
 	bra.b	pru0
@@ -14526,7 +14680,10 @@ gadgetsup2
 	dr	rmpegadiv	* mpeda freq division
 	dr	rmedmode	* med mode
 	dr	rmedrate	* med rate
-
+    dr  rsidmode    * sid mode
+    dr  rxmaplay    * xmaplay
+    dr  rresidmode  * resid mode
+    
 
 
 rval0	moveq	#0,d0
@@ -15374,13 +15531,15 @@ psele	move.l	d7,a1
 
 pdup
 	lea	moduledir_new(a5),a0
+	basereg	DuU1,a1
 	lea	DuU1,a1
 	bsr.b	.o
 	lea	prgdir_new(a5),a0
-	lea	DuU2,a1
+	lea	DuU2(a1),a1
 	bsr.b	.o
 	lea	arcdir_new(a5),a0		* DISABLED!
-	lea	DuU3,a1
+	lea	DuU3(a1),a1
+	endb	a1
 	bsr.b	.o
 	rts
 
@@ -16081,7 +16240,7 @@ rfont
 	bra.w	pfont
 
 
-.tit	dc.b	"Select main font",0
+.tit	dc.b	"Font for other windows",0
  even
 
 fontreqtags
@@ -16171,13 +16330,13 @@ rListFont
 	bra.b	pListFont
 
 
-.tit	dc.b	"Select list font",0
+.tit	dc.b	"Font for main window",0
  even
 
 listfontreqtags
 	dc.l	RTFO_Flags,FREQF_NOBUFFER
 	dc.l	RTFO_SampleHeight,8
-	dc.l	RTFO_MaxHeight,30
+	dc.l	RTFO_MaxHeight,20 * Not too large to overflow the button gadgets
 	dc.l	RTFO_MinHeight,6
 	dc.l	RT_TextAttr,text_attr
 .pubScreenTag
@@ -16547,6 +16706,120 @@ rmedrate
 	bra.w	print3b
 
 
+** SID mode
+
+rsidmode_req
+	lea	sidmode00(pc),a0
+
+    pushpea sidmode_callback(pc),d4
+	bsr 	listSelectorPrefsWindowWithCallback
+	bmi.b	.x
+	move.b	d0,sidmode_new(a5)
+	bra.b	psidmode
+.x	rts
+
+    * in:
+*   d3 = index to check
+sidmode_callback
+    tst     d3
+    bhi     .2
+    moveq   #1,d0
+    rts
+.2  
+    bsr     get_sid
+    jsr     isPlaysidReSID
+    rts
+
+rsidmode
+	addq.b	#1,sidmode_new(a5)
+	cmp.b	#4,sidmode_new(a5)
+	bne.b	.1
+	clr.b	sidmode_new(a5)
+.1
+    bsr     get_sid
+    jsr     isPlaysidReSID
+    bne     .2
+	clr.b	sidmode_new(a5)
+.2
+
+psidmode
+    lea     sidmode01(pc),a0
+	move.b	sidmode_new(a5),d0
+    beq.b   .1
+    lea     sidmode02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     sidmode03(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     sidmode04(pc),a0
+.1 
+    lea	    prefsPlaySidMode,a1
+	bra.w	prunt
+
+
+
+sidmode00	dc.b	11,4
+sidmode01	dc.b	"Normal",0
+sidmode02	dc.b	"reSID 6581",0
+sidmode03	dc.b	"reSID 8580",0
+sidmode04	dc.b	"SIDBlaster",0
+ even
+
+rresidmode_req
+	lea	residmode00(pc),a0
+
+    pushpea sidmode_callback(pc),d4
+    bsr     listselector
+	bmi.b	.x
+	move.b	d0,residmode_new(a5)
+	bra.b	presidmode
+.x	rts
+
+
+rresidmode
+	addq.b	#1,residmode_new(a5)
+	cmp.b	#5,residmode_new(a5)
+	bne.b	.1
+	clr.b	residmode_new(a5)
+.1
+
+presidmode
+    lea     residmode01(pc),a0
+	move.b	residmode_new(a5),d0
+    beq.b   .1
+    lea     residmode02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residmode03(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residmode04(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residmode05(pc),a0
+.1 
+    lea	    prefsResidMode,a1
+	bra.w	prunt
+
+
+
+residmode00	dc.b	13,5
+residmode01	dc.b	"Normal",0
+residmode02	dc.b	"Oversample 2x",0
+residmode03	dc.b	"Oversample 3x",0
+residmode04	dc.b	"Oversample 4x",0
+residmode05	dc.b	"Interpolate",0
+ even
+
+*** XMAPlay toggle
+
+rxmaplay
+	not.b	xmaplay_new(a5)
+pxmaplay
+	move.b	xmaplay_new(a5),d0
+	lea	    prefsEnableXMAPlay,a0
+	bra.w	tickaa
 
 
 ***************************************
@@ -16781,21 +17054,38 @@ updateahi
 * Mieletˆn.
 
 wflags4 = WFLG_SMART_REFRESH!WFLG_ACTIVATE!WFLG_BORDERLESS!WFLG_RMBTRAP
-idcmpflags4 = IDCMP_MOUSEBUTTONS!IDCMP_INACTIVEWINDOW
+idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
-listselector
-	pushm	d1-a6
+
+listSelectorMainWindow:
+	pushm	d1-a6	
+	move.l	windowbase(a5),a0	
+	bra.b	listselector\.do
+
+listSelectorPrefsWindowWithCallback:
+	movem.l	d1-a6,-(sp)
+	bra.b	listselector\.dop
+
+* in: 
+*   d4 = callback to check whether line should be enabled
+*   d6 = mouse x
+*   d7 = mouse y
+*   a0 = data to show
+* out: 
+*   d0 = selected index, or -1 if cancel
+listselector:
+.LINE_HEIGHT = 12
+
+	pushm	d1-a6	
+	moveq	#0,d4
+.dop
 	move.l	a0,a4
-
-* d6/d7 = mouse position
-
 	move.l	windowbase2(a5),a0	* prefs-ikkuna
+.do
 	add	wd_LeftEdge(a0),d6	* mousepos suhteellinen prefs-ikkunan
 	add	wd_TopEdge(a0),d7	* yl‰laitaan
 
-
 	lea	winlistsel,a0		* asetetaan pointterin kohdalle
-
 
 	moveq	#0,d5
 	move.b	(a4),d5
@@ -16811,8 +17101,8 @@ listselector
 
 	moveq	#0,d5
 	move.b	1(a4),d5
-	mulu	#8,d5
-	addq	#7,d5
+	mulu	#.LINE_HEIGHT,d5
+	addq	#8,d5
 	move	d5,nw_Height(a0)
 
 	lsr	#1,d5
@@ -16824,36 +17114,26 @@ listselector
 	bsr.w	tark_mahtu
 
 	lore	Intui,OpenWindow
-	move.l	d0,d5
+	move.l	d0,d6
 	beq.w	.x
 	move.l	d0,a0
 	move.l	wd_RPort(a0),d7		* rastport
 	move.l	wd_UserPort(a0),a3	* userport
 
-	move.l	d7,a1
-	move.l	pen_1(a5),d0
-	lore	GFX,SetAPen
-	move.l	d7,a1
-	move.l	pen_0(a5),d0
-	lob	SetBPen
-
-	move.l	d7,a1
-	move.l	fontbase(a5),a0
-	lob	SetFont	
-
 
 	pushm	all
 	
-	moveq	#0,d4
-	move.b	(a4)+,d4	* max leveys
-	lsl	#3,d4
+	moveq	#0,d7
+	move.b	(a4)+,d7	* max leveys
+	lsl	#3,d7			* x8
 
 	moveq	#0,d5
 	move.b	(a4)+,d5	* vaakarivej‰
 	subq	#1,d5
 	move.l	a4,a0
 
-	moveq	#10,d3
+	moveq	#0,d2
+	moveq	#4,d3 	* start y
 .prl	
 	move.l	a0,a1
 .fe	tst.b	(a1)+
@@ -16862,14 +17142,18 @@ listselector
 	sub.l	a0,d1
 	subq	#1,d1
 	lsl	#3,d1
-	move	d4,d0
+	move	d7,d0
 	sub	d1,d0
 	lsr	#1,d0
-	addq	#8,d0
+	;addq	#8,d0	* right margin
 
 	move	d3,d1
+	* d0 = x
+	* d1 = y
+	* a0 = text
 	bsr.w	.print
-	addq	#8,d3
+	add		#.LINE_HEIGHT,d3 * next y
+	addq	#1,d2 * id number
 	move.l	a1,a0
 	dbf	d5,.prl
 
@@ -16886,8 +17170,7 @@ listselector
 	bsr.w	laatikko1
 	popm	all
 
-
-
+	moveq	#-1,d7		* selection
 .msgloop3
 	moveq	#0,d0
 	move.b	MP_SIGBIT(a3),d1	* IDCMP signalibitti
@@ -16902,48 +17185,129 @@ listselector
 	move.l	d0,a1
 	move.l	im_Class(a1),d2		* luokka	
 	move	im_Code(a1),d3		* koodi
-;	move.l	im_IAddress(a1),a2 	* gadgetin tai olion osoite
+	move.l	im_IAddress(a1),a2 	* gadgetin tai olion osoite
 ;	move	im_MouseX(a1),d6	* mousen koordinaatit
-	move	im_MouseY(a1),d7
+;	move	im_MouseY(a1),d7
 
 	lob	ReplyMsg
 
-	cmp.l	#IDCMP_INACTIVEWINDOW,d2
-	bne.b	.noc
-.can	moveq	#-1,d7
-	bra.b	.ox
-.noc
+	cmp.l	#IDCMP_GADGETUP,d2
+	bne.b	.noGadget
+	move	gg_GadgetID(a2),d7
+	bra.b	.done
+.noGadget
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
+	bne.b	.noButtons
+	cmp		#SELECTDOWN,d3
+	beq.b	.done
+	cmp		#MENUDOWN,d3
+	beq.b	.done
+.noButtons
+	cmp.l	#IDCMP_RAWKEY,d2
+	beq.b	.done
+	cmp.l	#IDCMP_INACTIVEWINDOW,d2
 	bne.b	.msgloop3
-	cmp	#MENUDOWN,d3		* oikea nappula
-	beq.b	.can
-	cmp	#SELECTDOWN,d3		* vasen nappula
-	bne.b	.msgloop3
-
-	subq	#4,d7
-	bpl.b	.ok
-	moveq	#0,d7
-.ok	lsr	#3,d7
-
-
-.ox
-
-	move.l	d5,a0
+	
+.done
+	move.l	d6,a0
 	bsr.w	flushWindowMessages
 
-	move.l	d5,d0
+	move.l	d6,d0
 	beq.b	.eek
 	move.l	d0,a0
 	lore	Intui,CloseWindow
 .eek
 .x
+	lea	listSelectorRememberPtr(a5),a0
+	moveq	#1,d0 * forget all of it
+	lore	Intui,FreeRemember
+
 	move	d7,d0
 	popm	d1-a6
 	rts
 
-.print	pushm	all
-	move.l	d7,a4
-	bra.w	doPrint	
+* Makes a bool gadget 
+* In:
+*   d0 = x
+*   d1 = y
+*   d2 = id
+*   d4 = callback
+*   a0 = text
+*   d6 = window base
+.print
+	pushm	all
+	
+	move.l	a0,a4	* save text
+	move	d0,d5
+	move	d1,d7
+	move	d2,d3
+
+	; Get NewGadget
+	lea	listSelectorRememberPtr(a5),a0
+	moveq	#gg_SIZEOF,d0
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	lore	Intui,AllocRemember
+	tst.l	d0
+	beq		.xx
+	move.l	d0,a3
+	; Only need to change these fields
+	move	#GFLG_GADGHCOMP,gg_Flags(a3)
+	move	#GACT_RELVERIFY,gg_Activation(a3)
+	move	#GTYP_BOOLGADGET,gg_GadgetType(a3)
+
+	move.l	d6,a0
+	move	wd_Width(a0),d0
+	sub		#16-4,d0
+	move	d0,gg_Width(a3)
+	move	#.LINE_HEIGHT,gg_Height(a3)
+	move	#8-2,gg_LeftEdge(a3)
+	move	d7,gg_TopEdge(a3)
+	move	d3,gg_GadgetID(a3)
+
+	* Enable/disable callback
+	tst.l	d4
+	beq.b	.enabled
+	move.l	d4,a0
+	jsr		(a0)
+	bne.b	.enabled
+	or	#GFLG_DISABLED,gg_Flags(a3)
+.enabled
+
+	lea	listSelectorRememberPtr(a5),a0
+	moveq	#it_SIZEOF,d0
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	lob		AllocRemember
+	tst.l	d0
+	beq		.xx
+	move.l	d0,a2
+	move.l	a2,gg_GadgetText(a3)
+	move.b	#1,it_FrontPen(a2)
+	move.b	#RP_JAM1,it_DrawMode(a2)
+	move.l	a4,it_IText(a2)
+	move.l	#text_attr,it_ITextFont(a2)
+	addq	#2,d5
+	move	d5,it_LeftEdge(a2)	
+	move	#2,it_TopEdge(a2)
+
+	move.l	d6,a0
+	move.l	a3,a1
+	moveq	#0,d0 * position
+	lob		AddGadget
+
+	move.l	a3,a0
+	move.l	d6,a1 * window
+	sub.l	a2,a2 * req
+	moveq	#1,d0 * numgad
+	lob		RefreshGList
+
+	move.l	d6,a1
+	move.l	wd_RPort(a1),a1
+	move.l	a3,a3
+	bsr		doDrawButtonFrame
+.xx
+	popm	all
+	rts
+
 
 *******************************************************************************
 *  End of Prefs section
@@ -16971,16 +17335,16 @@ clearbox:
 	bne.b	.r
 .x	rts
 .r	moveq	#30+WINX,d0
-	moveq	#62+WINY,d1
+	;moveq	#62+WINY,d1
+	move	fileBoxTopEdge(a5),d1
+	subq	#1,d1
 ;	move	#251+WINX,d2
 	move	WINSIZX(a5),d2
 	sub	#10,d2
-	move	#127+WINY,d3
- 	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
-	add	#16,d1
-	add	#16,d3  
-.noAlt1
+	;move	#127+WINY,d3
+	move	fileBoxTopEdge(a5),d3
+	add		#127-62-1,d3 * magic constant
+
 	add	boxy(a5),d3
 	bra.w	tyhjays
 
@@ -16998,19 +17362,26 @@ shownames:
 	pushm	all
 
 	tst.l	modamount(a5)
-	bne.b	.eper
+	bne		.eper
 
 	bsr.b	clearbox
 
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	bne.b	.noSrch
+	lea		.noSrchResults(pc),a0
+	bsr.w	printbox
+	bra.b	.wasSrch
+.noSrchResults
+	dc.b	"No search results.",0
+	even
+.noSrch
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	bne.b	.doHippo
 	* What to show when no modules and favorites mode?
-	moveq	#90+WINX,d0
 	lea	.noFavs(pc),a0
 	tst.b	favorites(a5)
 	bne.b	.favsOn
 	lea	.noFavs2(pc),a0
-	moveq	#90-7*8+WINX,d0
 .favsOn
 	bsr.w	printbox
 	bra.b	.wasFav
@@ -17021,6 +17392,7 @@ shownames:
 .doHippo
 	bsr.w	printhippo1
 .wasFav	
+.wasSrch
 	st	hippoonbox(a5)		* koko hˆsk‰n tulostus
 	bra.w	.nomods
 .eper
@@ -17077,16 +17449,11 @@ shownames:
 * kopioidaan rivit 0 -> d7 (koko: boxsize-d7 r) kohtaan 0 ja printataan
 * kohtaan 0 d7 kpl uusia rivej‰
 
-	moveq	#63+WINY,d1		* source y
+	move	fileBoxTopEdge(a5),d1		* source y
 	move	d7,d3
 	;lsl	#3,d3
 	mulu	listFontHeight(a5),d3
-	add	#63+WINY,d3		* dest y
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
-	add	#16,d1		* source y
-	add	#16,d3		* desy y
-.noAlt1
+	add		fileBoxTopEdge(a5),d3		* dest y
 	bsr.w	.copy
 	move.l	firstname(a5),d0
 	moveq	#0,d1
@@ -17110,13 +17477,8 @@ shownames:
 	move	d7,d1
 	;lsl	#3,d1
 	mulu	listFontHeight(a5),d1
-	add	#63+WINY,d1		* source y	
-	moveq	#63+WINY,d3	* dest y
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt2
-	add	#16,d1		* source y
-	add	#16,d3		* dest y
-.noAlt2
+	add		fileBoxTopEdge(a5),d1		* source y
+	move	fileBoxTopEdge(a5),d3	* dest y
 	bsr.b	.copy
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
@@ -17205,7 +17567,7 @@ shownames:
 * d0 = alkurivi
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien m‰‰r‰
-doPrintNames
+doPrintNames:
 ;	DPRINT  "shownames obtain list"
 	bsr.w  obtainModuleList
 	;lea	moduleListHeader(a5),a4	
@@ -17239,12 +17601,10 @@ doPrintNames
 	move	d4,d6
 	;lsl	#3,d6
 	mulu	listFontHeight(a5),d6
-	add	#83+WINY-14,d6		* turn line number into a Y-coordinate
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
- 	add	#16,d6	
-.noAlt1
-
+	;add	#83+WINY-14,d6		
+	* turn line number into a Y-coordinate
+	add	fileBoxTopEdge(a5),d6
+	add		#83-14-64+1,d6 * magic offset
 	move.l	rastport(a5),a1
 	move.l	listfontbase(a5),a0
 	lore	GFX,SetFont
@@ -17294,8 +17654,35 @@ doPrintNames
 .nodi
 
 	* name to print
-	move.l	a2,a0	
+	move.l	a2,a0		
 	
+	lea	-200(sp),sp
+	tst.b	l_remote(a3)
+	beq.b	.local
+	move.l	a0,d0
+	* Remote entries formatting
+	move.l	sp,a1
+.unescape
+	move.b	(a0)+,d0
+	cmp.b	#"_",d0
+	bne.b	.noU
+	move.b	#" ",(a1)+
+	bra.b	.unescape
+	;move.b	#":",(a1)+
+	;move.b	#" ",(a1)+
+;	move.b	#" ",(a1)+
+;	move.b	#"-",(a1)+
+;	move.b	#" ",(a1)+
+;	bra.b	.unescape
+;.noSlsh
+.noU
+	move.b	d0,(a1)+
+	bne.b	.unescape
+
+	* cleaned up name 
+	move.l	sp,a0
+.local
+
 	* target x, y
 	moveq	#33+WINX,d0
 	move.l	d6,d1
@@ -17328,6 +17715,8 @@ doPrintNames
 
 	pop	d1	; restore start y
 	
+	lea		200(sp),sp * name buffer
+
 	; Display random marker if needed
 	tst.b	d7		* divider will not have a random play marker
 	bne.b	.noMarker
@@ -17371,7 +17760,7 @@ doPrintNames
 	sub	tf_XSize(a1),d0	
 
 .hadCharSpace
-	bsr.w	print ; print marker to d0, d1
+	jsr	print ; print marker to d0, d1
 .noMarker
 
 	* Set ordinary colors if divider was previously printed
@@ -17406,7 +17795,7 @@ doPrintNames
 
 ***** Katkaisee prefixin nimest‰ a0:ssa
 
-cut_prefix
+cut_prefix:
 ;	isListDivider (a0)		* onko divideri?
 ;	beq.b	.xx
 
@@ -17426,6 +17815,37 @@ cut_prefix
 .x	popm	d0/a1
 .xx	rts
 
+
+* in:
+*   a0 = test pointer with two chars to convert
+* out: 
+*   d0 = number
+;convertHexTextToNumber
+;	pushm	d1-d3
+;	moveq	#2-1,d2
+;	moveq	#4,d1
+;	moveq	#0,d0
+;.loop
+;	moveq	#0,d3
+;	move.b	(a0)+,d3
+;	cmp.b	#"a",d3
+;	bhs.b	.hih 
+;	cmp.b	#"A",d3
+;	bhs.b	.hi 
+;	sub.b	#"0",d3
+;	bra.b	.lo
+;.hih
+;	sub.b	#"a"-10,d3
+;	bra.b	.lo
+;.hi
+;	sub.b	#"A"-10,d3
+;.lo
+;	lsl	d1,d3
+;	or	d3,d0
+;	subq	#4,d1
+;	dbf	d2,.loop
+;	popm	d1-d3
+;	rts
 
 *******************************************************************************
 * Deletoidaan yksi tiedosto listasta
@@ -17454,8 +17874,9 @@ rbutton8
 deleteButtonAction
 delete
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq.w	fileBrowserGoToParent
-
+	bne.b	.9
+	jmp	fileBrowserGoToParent
+.9
 	skipIfGadgetDisabled gadgetDelButton
 	moveq	#0,d7
 	bsr.b	.elete
@@ -17514,7 +17935,6 @@ delete
 
 	pushm	all
 	lea	.del(pc),a0
-	moveq	#37+WINX,d0
 	bsr.w	printbox
 	popm	all
 
@@ -17523,6 +17943,8 @@ delete
 	moveq	#0,d6
 .noa
 	lea	l_filename(a3),a0
+	tst.b	l_remote(a3)	* can't delete remotes
+	bne.b	.nmod
 	move.l	a0,d1
 	lore	Dos,DeleteFile	
 	tst.l	d0
@@ -17596,7 +18018,7 @@ execuutti
 	move.l	sp,a4
 	clr.b	(a4)
 
-	bsr.w	get_rt
+	jsr	get_rt
 	moveq	#RT_FILEREQ,D0
 	sub.l	a0,a0
 	lob	rtAllocRequestA
@@ -17653,16 +18075,35 @@ execuutti
 *******
 * 30 merkki‰ leve‰ alue
 
-inforivit_clear
+inforivit_clear:
 	movem.l	d0-d4,-(sp)
 	moveq	#7+WINX,d0
-	moveq	#11+WINY,d1
-;	move	#252+WINX,d2
+	move	infoBoxTopEdge(a5),d1
+	move	d1,d3
+	add		infoBoxHeight(a5),d3
 	move	WINSIZX(a5),d2
-	sub	#10,d2
-	moveq	#28+WINY,d3
+	sub		#10,d2	* side margin
+	;moveq	#28+WINY,d3
 	bsr.w	tyhjays
 	movem.l	(sp)+,d0-d4
+	rts
+
+inforivit_clear_2ndrow:
+	movem.l	d0-d4/a0,-(sp)
+	moveq	#7+WINX,d0
+	move	infoBoxTopEdge(a5),d1
+  	move	d1,d3
+    addq    #1,d1 * magic
+	add		infoBoxHeight(a5),d3
+	move	WINSIZX(a5),d2
+	sub		#10,d2	* side margin
+
+    move    infoBoxHeight(a5),d4
+    lsr     #1,d4
+    add     d4,d1
+    
+	bsr.w	tyhjays
+	movem.l	(sp)+,d0-d4/a0
 	rts
 
 inforivit_killerps3m
@@ -17674,24 +18115,6 @@ inforivit_play
 	bra.w	bopb
 	
 .huh
- ifne FEATURE_HORIZ_RESIZE	
-	; determine field length for name based on window width
-	moveq	#0,d2
-	move	WINSIZX(a5),d2
-	; left and right border, length of "Name: ", some more
-	sub	#8+8+6*8+8,d2
-	lsr	#3,d2
-	divu	#10,d2
-	or.l	#$30<<16+$30,d2
-	lea	fieldLen1(pc),a0
-	basereg	fieldLen1,a0
-	move.b	d2,fieldLen1+0(a0)
-	move.b	d2,fieldLen2+0(a0)
-	swap	d2
-	move.b	d2,fieldLen1+1(a0)
-	move.b	d2,fieldLen2+1(a0)
-	endb	a0
- endif ; FEATURE
 
 	moveq	#0,d2
 
@@ -17798,51 +18221,114 @@ inforivit_play
 	bne.b	.cep
 	clr.b	(a1)
 
-bipb	moveq	#18+WINY,d1
-bipb2	moveq	#11+WINX,d0
+bipb
+	;moveq	#18+WINY,d1
+	move	infoBoxTopEdge(a5),d1
+bipb2	
+	;addq	#7,d1 * magic offset
+	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
-	bsr.w	print
+	bsr		infoBoxPrint
 bopb	rts
 
-putinfo
+putinfo:
 	bsr.w	inforivit_clear
 	bra.b	bipb
 
-putinfo2
-	moveq	#26+WINY,d1
+printInfoBox:
+infoBoxPrint:
+	jsr		setInfoBoxClip
+	pushm	d0/d1/a0
+	move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont
+	popm	d0/d1/a0
+	move.l	listfontbase(a5),a1
+	add		tf_Baseline(a1),d1
+	addq	#1,d1 * magic constant
+	jsr		print
+	move.l	rastport(a5),a1
+	move.l	fontbase(a5),a0
+	lore	GFX,SetFont	
+	jsr		removeInfoBoxClip
+	rts
+
+* 2nd row
+putinfo2:
+	move	infoBoxTopEdge(a5),d1
+	move.l	listfontbase(a5),a1
+	add		tf_YSize(a1),d1	* to 2nd row
 	bra.b	bipb2	
+
+
+putinfo2centered:
+    pushm   d0/a0
+    move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont
+    popm    d0/a0
+    move.l  a0,a2
+    move.l  rastport(a5),a1
+    lob     TextLength
+    * d0 = pixels
+
+
+    * Complicated centering logic
+	moveq	#7+WINX,d1
+    add     windowleft(a5),d1
+    move    WINSIZX(a5),d2
+    sub     #10,d2
+    sub     d1,d2
+    sub     d0,d2
+    bpl.b   .1
+    moveq   #0,d2
+.1
+    lsr     #1,d2
+    move    d2,d0
+    add     #11+WINX,d0
+
+    move.l  a2,a0
+	move	infoBoxTopEdge(a5),d1
+	move.l	listfontbase(a5),a1
+	add		tf_YSize(a1),d1	* to 2nd row
+    bsr     inforivit_clear_2ndrow
+    * Will also set and restore font:
+	bra		infoBoxPrint
 
 infolines_loadToChipMemory
 	lea	.1(pc),a0
-	bra.b	putinfo
+	bra		putinfo
 .1	dc.b	"Loading to chip memory...",0
  even
 
 infolines_loadToPublicMemory
 	lea	.1(pc),a0
-	bra.b	putinfo
+	bra		putinfo
 .1	dc.b	"Loading to public memory...",0
  even
 
  
 inforivit_tfmxload
 	lea	.1(pc),a0
-	bra.b	putinfo
+	bra		putinfo
 .1	dc.b	"Loading TFMX samples...",0
  even
 
 inforivit_ppload
 	lea	.1(pc),a0
-	bra.b	putinfo2
+	bra		putinfo2
 .1	dc.b	"PowerPacker file",0
  even
 
 inforivit_pause
 	lea	.1(pc),a0
-	bra.w	putinfo2
+    moveq   #.1e-.1,d0
+	bra.w	putinfo2centered
 ;.1	dc.b	"        *** Paused ***        ",0
 .1	dc.b	"-=-=-=-=-=- Paused -=-=-=-=-=-",0
+.1e
  even
+
 
 inforivit_xpkload
 	lea	.1(pc),a0
@@ -17928,6 +18414,18 @@ inforivit_extracting
 .3	dc.b	"LZX extracting...",0
  even
 
+inforivit_downloading
+	lea	.1(pc),a0
+	bra.w	putinfo
+.1	dc.b	"Downloading...",0
+ even
+
+inforivit_searching
+	lea	.1(pc),a0
+	bra.w	putinfo
+.1	dc.b	"Searching...",0
+ even
+
 
 ;inforivit_initializing
 ;	lea	.1(pc),a0
@@ -17990,15 +18488,13 @@ siisti_nimi
 	and.b	#$df,3(a0)
 .m	rts
 
+	printt	"todo: align name and type for extra nicety"
 
+tyyppi1_t	dc.b	"Name: %s",10
+		dc.b	"Type: %s",0
 
-fieldLen1 = *+8
-tyyppi1_t	dc.b	"Name: %.24s",10
-		dc.b	"Type: %.24s",0
-
-fieldLen2 = *+8
-tyyppi2_t	dc.b	"Name: %.24s",10
-		dc.b	"Type: %.24s %ldch",0
+tyyppi2_t	dc.b	"Name: %s",10
+		dc.b	"Type: %s %ldch",0
 typpi
  even
 
@@ -18363,11 +18859,10 @@ lootaan_kello
 	lob	AvailMem
 	move.l	d0,d5
 
-	lsr.l	#8,d4
-	lsr.l	#2,d4
-	lsr.l	#8,d5
-	lsr.l	#2,d5
-
+	moveq	#10,d1
+	lsr.l	d1,d4
+	lsr.l	d1,d5
+	
 	cmp	oldchip(a5),d4
 	bne.b	.new
 	cmp	oldfast(a5),d5
@@ -18512,13 +19007,6 @@ getFileBoxIndexFromMousePosition:
 	sub	windowleft(a5),d0
 	sub	windowtop(a5),d1	* suhteutus fonttiin
 
-	* Vertical modifier when big buttons used
-	moveq	#0,d3
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt0
-	moveq	#16,d3
-.noAlt0
-
 	cmp	#30+WINX,d0		* onko tiedostolistan p‰‰ll‰?
 	blo.b	.out
 
@@ -18529,21 +19017,22 @@ getFileBoxIndexFromMousePosition:
 	cmp	d2,d0
 	bhi.b	.out
 	
-	moveq	#63+WINY,d2		* Top edge
-	add	d3,d2			* Modifier!
+	move	fileBoxTopEdge(a5),d2		* Top edge
 	cmp	d2,d1
 ;	cmp	#63+WINY,d1
 	blo.b	.out
 
-	move	#126+WINY,d2		* Bottom edge
-	add	d3,d2			* Modifier!
+	move	fileBoxTopEdge(a5),d2
+	* use original height - original top edge to
+	* get bottom edge:
+	add		#126-63,d2	
+	;move	#126+WINY,d2		* Bottom edge
 	add	boxy(a5),d2		* Height of box
 	cmp	d2,d1
 	bhi.b	.out
 
 	* converts y-koordinate into a line number (font is 8 pix tall)
-	sub	#63+WINY,d1
-	sub	d3,d1
+	sub	fileBoxTopEdge(a5),d1
 
  if DEBUG
  	push	d1
@@ -18659,8 +19148,8 @@ markline:
 
 * Highlight line by xorring/complementing it
 * Highlight is cleared by doing the same operation again on the same line.
-unmarkit			* pyyhitaan merkkaus pois
-markit
+unmarkit:			* pyyhitaan merkkaus pois
+markit:
 	move.l	chosenmodule(a5),d0
 
 	* Bounds check
@@ -18697,11 +19186,8 @@ markit
 	move	d5,d1
 	;lsl	#3,d1		* mulu #8,d1
 	mulu	listFontHeight(a5),d1
-	add	#63+WINY,d1
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt1
-	add	#16,d1
-.noAlt1
+	add		fileBoxTopEdge(a5),d1
+
 	moveq	#33+WINX,d0 
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -18830,6 +19316,8 @@ getVisibleModuleListHeader:
 	beq.b	.isFav
 	cmp.b	 #LISTMODE_BROWSER,listMode(a5)
 	beq.b	.isBrowser
+	cmp.b	 #LISTMODE_SEARCH,listMode(a5)
+	beq.b	.isSearch
 	lea	moduleListHeader(a5),a0
 	rts
 .isFav
@@ -18837,6 +19325,9 @@ getVisibleModuleListHeader:
 	rts
 .isBrowser
 	lea	fileBrowserListHeader(a5),a0
+	rts
+.isSearch
+	lea	searchResultsListHeader(a5),a0
 	rts
 	
 
@@ -18876,9 +19367,9 @@ getListNode:
 	cmp.l 	modamount(a5),d0
 	bhs.b	.out
 
-	bsr.w	obtainModuleList
+	jsr	obtainModuleList
 	;lea	moduleListHeader(a5),a0
-	bsr.b	getVisibleModuleListHeader
+	bsr.w	getVisibleModuleListHeader
 
 	move.l	a0,d1	* Sanity check
 	beq.b	.out
@@ -18892,7 +19383,7 @@ getListNode:
 	SUCC    a0,a0
 	dbf	d1,.loop
 	dbf	d0,.loop
-	bsr.w	releaseModuleList
+	jsr	releaseModuleList
 
  if DEBUG
  	move.l	l_nameaddr(a0),d0
@@ -19094,7 +19585,7 @@ showTooltipPopup
 	move	nw_Height(a0),ply2
 	subq	#1,ply2
 	subq	#1,plx2
-	bsr.w	laatikko1
+	jsr	laatikko1
 .x
 	popm	all
 	rts
@@ -19394,7 +19885,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lore	GFX,SetFont	
 	
 	move.l	swindowbase(a5),a0
-	bsr.w	setscrtitle
+	jsr	setscrtitle
 
 	; Reset slider position
 	lea	gAD1,a0
@@ -19439,7 +19930,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	subq	#2,ply1
 	addq	#1,ply2
 	move.l	srastport(a5),a1
-	bsr.w	sliderlaatikko
+	jsr	sliderlaatikko
 
 .reprint
 
@@ -19458,12 +19949,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	srastport(a5),a1
 
 	* Select box frame depending on if info or about window
-	lea	laatikko2(pc),a0
+	lea	laatikko2,a0
 	tst.b	infolag(a5)
 	bne.b	.a
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.a
-	lea	laatikko1(pc),a0
+	lea	laatikko1,a0
 .a	jsr	(a0)
 
 	moveq	#31-2+2,d0		* tyhjennet‰‰n
@@ -19484,9 +19975,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lore	GFX,ClipBlit
 	st	skokonaan(a5)
 
-	bsr	obtainModuleData
+	jsr	obtainModuleData
 	bsr	.prepareInfoWindowContent
-	bsr	releaseModuleData
+	jsr	releaseModuleData
 	; check if got data
 	tst.l	infotaz(a5)
 	beq.w	.sexit
@@ -20578,9 +21069,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .yes	move.l	#ptheader,d4
 	bra.b	.mod
 .nop
-	cmp	#pt_multi,playertype(a5)
-	bne.w	.noo
+
 	move.l	moduleaddress(a5),d4
+	cmp	    #pt_multi,playertype(a5)
+	bne.w	.noo
 
 	move.l	ps3m_mtype(a5),a0
 	cmp	#mtMOD,(a0)
@@ -20738,8 +21230,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .skip	
 ;	move.l	d1,(a4)+	* size
 
-
-
 	pushm	d0-a2/a4-a6
 	move.l	d1,d2
 	and.l	#$7ffff,d2
@@ -20755,8 +21245,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	popm	d0-a2/a4-a6
 	bsr.w	.lloppu
 
-
-	addq.l	#1,d7
+  	addq.l	#1,d7
 	cmp	d5,d7
 	blo.w	.loop0
 
@@ -21337,7 +21826,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	beq.b	.s1
 	pushm	all
 	* Pause playback first
-	bsr.w	stopcont		* pausetaan
+	jsr	stopcont		* pausetaan
 	popm	all
 .s1
 
@@ -21502,7 +21991,7 @@ areyousure_delete
 * Out:
 *   d0 = 0 if modification not allowed
 *   d0 = 1 if modification allowed
-confirmFavoritesModification
+confirmFavoritesModification:
 	; Check if in favorites list
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.favs
@@ -21513,7 +22002,7 @@ confirmFavoritesModification
 	tst.b	confirmFavoritesModificationDisabled(a5)
 	bne.b	.ok
 
-	push	a4
+	pushm	d1-a6
 	lea	infodefresponse(pc),a4
 	move.l	(a4),-(sp)
 	; Set "Nope" as the default response
@@ -21522,7 +22011,7 @@ confirmFavoritesModification
 	lea	.y(pc),a2
 	bsr.b	rawrequest
 	move.l	(sp)+,(a4)
-	pop	a4
+	popm		d1-a6
 	; d0 = 1: yes
 	; d0 = 2: yes, dont ask again
 	; d0 = 0: nope
@@ -21885,7 +22374,7 @@ intserver
 .rewind
 .skipCheck
 	* Send a signal indicating that playing position has changed
-	move.b	ownsignal2(a5),d1
+	move.b	posUpdateSignal(a5),d1
 	bsr.w	signalit
 .eee
 .notPlaying2
@@ -22144,16 +22633,16 @@ rexxmessage
 
 .komennot
 	dr	.playt,.playr
-	dr	.cleart,clearlist
-	dr	.contt,actionContinue
-	dr	.stopt,actionStopButton
-	dr	.ejectt,rbutton4
+	dr	.cleart,._clearlist
+	dr	.contt,._actionContinue
+	dr	.stopt,._actionStopButton
+	dr	.ejectt,._rbutton4
 	dr	.lprgt,.loadprg
 	dr	.addt,.add
 	dr	.delt,rbutton8
 	dr	.volt,.volume
-	dr	.rewt,rbutton_kela1
-	dr	.ffwdt,rbutton_kela2
+	dr	.rewt,._rbutton_kela1
+	dr	.ffwdt,._rbutton_kela2
 	dr	.movet,.move
 	dr	.sortt,._rsort
 	dr	.insertt,.insert
@@ -22213,7 +22702,20 @@ rexxmessage
 .favoritet dc.b "FAVORITE",0
  even
 
-._rsort	jmp	rsort
+._clearlist
+	jmp	clearlist
+._rbutton4
+	jmp	rbutton4
+._actionStopButton
+	jmp	actionStopButton
+._actionContinue
+        jmp     actionContinue
+._rbutton_kela1
+	jmp	rbutton_kela1
+._rbutton_kela2
+	jmp	rbutton_kela2
+._rsort	
+	jmp	rsort
 
 *** PLAY
 .playr	
@@ -22221,7 +22723,7 @@ rexxmessage
 	beq.w	rbutton1
 	move.l	a1,sv_argvArray+4(a5)
 	clr.l	sv_argvArray+8(a5)
-	bsr.w	clearlist
+	jsr	clearlist
 	bra.w	komentojono
 
 *** LOADPRG
@@ -22275,7 +22777,7 @@ rexxmessage
 	bpl.b	.ee
 	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennest‰‰n
 .ee	
-	bsr.w	forceRefreshList
+	jsr	forceRefreshList
 	rts
 
 
@@ -22309,7 +22811,7 @@ rexxmessage
 	bsr.w	a2i
 	subq.l	#1,d0
 	bsr.b	.choo
-	bra.w	resh
+	jmp	resh
 
 *** valitaan d0:ssa olevan numeron tiedosto
 .choo
@@ -22333,7 +22835,7 @@ rexxmessage
 *** VOLUME
 .volume
 	bsr.w	a2i
-	bra.w	volumerefresh
+	jmp	volumerefresh
 
 
 *** PLAYSONG
@@ -22342,7 +22844,7 @@ rexxmessage
 	subq	#1,d0
 	move	d0,songnumber(a5)
 	moveq	#0,d1
-	bra.w	songSkip
+	jmp	songSkip
 	
 	
 
@@ -22462,8 +22964,8 @@ rexxmessage
 * This probably doesn't work perfectly
 .loadprefs
 	push	a1
-	bsr.w	rbutton4		* eject
-	bsr.w	clearlist
+	jsr	rbutton4		* eject
+	jsr	clearlist
 	;bsr.w	sulje_quad
 	bsr.w	stopScopeTasks
 	bsr.b	.prefspo
@@ -22758,9 +23260,15 @@ s_newWindow                   rs.b       enw_SIZEOF
 s_scopeWindowBase             rs.l       1
 s_rastport3                   rs.l       1	
 s_userport3                   rs.l       1
+* Draw raster buffer address
 s_buffer0                     rs.l       1
+* Buffer width
 s_buffer0w                    rs.w       1
+* Buffer height rasterlines
 s_buffer0h                    rs.w       1
+* Set to true if draw buffer is in CHIP
+s_bufferIsChip                rs.b       1
+                              rs.b       1
 s_quadmode                    rs.b       1
 s_quadmode2                   rs.b       1
 s_scopeDrawAreaWidth		rs.w 	1
@@ -23913,7 +24421,7 @@ initScopeBitmaps
 	move	d1,s_buffer0h(a4)
 	lore	GFX,AllocRaster
 	move.l	d0,s_buffer0(a4)
-	beq.b	.memError 
+	beq		.memError 
 
  	move.l	d0,a0
 	move.l	a0,s_buffer0(a4)
@@ -23961,6 +24469,12 @@ initScopeBitmaps
 	add.l	d0,s_draw1(a4)
 	add.l	d0,s_draw2(a4)
 
+	move.l	s_buffer0(a4),a1
+	lore	Exec,TypeOfMem
+	btst	#MEMB_CHIP,d0
+	sne		s_bufferIsChip(a4)
+
+	moveq	#1,d0 * ok
 .memError
 	rts
 
@@ -24055,7 +24569,7 @@ drawScopeWindowDecorations
 	add	windowtop(a5),d1
 	move.l	d0,d2
 	move.l	d1,d3
-	lob	ClipBlit
+	lore	GFX,ClipBlit
 	;bra.b	.drawBox 
 
 .drawBox
@@ -24602,6 +25116,9 @@ drawScope:
 	* s_draw2 = clear this buffer
 
 	* clear draw area
+	tst.b	s_bufferIsChip(a4)
+	beq.b	.cpuClear
+
 	move.l	_GFXBase(a5),a6
 	lob	OwnBlitter
 	lob	WaitBlit
@@ -24622,6 +25139,21 @@ drawScope:
 
 	* Continue clearing while scope is drawn into the other buffer
 	lob	DisownBlitter
+	bra.b	.c1
+
+.cpuClear
+	move.l	s_draw2(a4),a0
+	move	s_scopeDrawAreaHeight(a4),d0
+	mulu	s_scopeDrawAreaModulo(a4),d0
+	lsr.l	#4,d0
+	subq	#1,d0
+.c2	clr.l	(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	dbf		d0,.c2
+.c1
+
 
 * Scope performance measurements
 * Disaster is obvious, playing the first 40 seconds
@@ -24672,11 +25204,15 @@ drawScope:
 	cmp.b	#QUADMODE_PATTERNSCOPEXL,s_quadmode(a4)
 	beq.b	.pattern
 
-	cmp	#pt_sample,playertype(a5)
+	cmp	    #pt_sample,playertype(a5)
 	beq.b	.centerStereo
+    cmp     #pt_xmaplay,playertype(a5)
+    beq.b   .x1
+    jsr     playSidInRESIDMode
+    bne     .x1
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.noMagic
-	cmp.b	#QUADMODE_HIPPOSCOPE,s_quadmode(a4)
+.x1	cmp.b	#QUADMODE_HIPPOSCOPE,s_quadmode(a4)
 	bne.b	.centerStereo
 	* Center PS3M + hipposcope
 	addq	#4,d2		; target x
@@ -24702,15 +25238,19 @@ drawScope:
 
 
 .render
-	cmp	#pt_sample,playertype(a5)
-	beq.b	.renderSample
+	cmp	    #pt_sample,playertype(a5)
+	beq 	.renderSample
 
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
-	add	d0,d0
+	add	    d0,d0
 
-	cmp	#pt_multi,playertype(a5)
+	cmp 	#pt_multi,playertype(a5)
 	beq.w	.renderPS3M
+	cmp	    #pt_xmaplay,playertype(a5)
+	beq.w	.renderPS3M
+    jsr     playSidInRESIDMode
+    bne     .renderPS3M
 
 ;	* Check for generic quadscope support
 ;	move.l	playerbase(a5),a0
@@ -24835,6 +25375,9 @@ drawScope:
 
 
 mirrorfill
+	tst.b	s_bufferIsChip(a4)
+	beq.b	.cpuMirrorFill
+
 	lore	GFX,OwnBlitter
 	lob	WaitBlit
 
@@ -24863,6 +25406,36 @@ mirrorfill
 
 	lob	DisownBlitter
 	rts
+
+.cpuMirrorFill
+	moveq	#31,d1
+	bsr.b	cpuVerticalFill
+	move.l	s_draw1(a4),a0
+	lea		63*40(a0),a1
+	moveq	#32-1,d1
+.y	moveq	#320/64-1,d0
+.x	move.l	(a0)+,(a1)+
+	move.l	(a0)+,(a1)+
+	dbf		d0,.x
+	lea		-80(a1),a1
+	dbf		d1,.y
+	rts
+
+* In:
+*   d1 = height
+cpuVerticalFill
+	move.l	s_draw1(a4),a0
+	lea		40(a0),a1 * target line
+	mulu	#320/64,d1
+	subq	#1,d1
+.loop
+	move.l	(a0)+,d2
+	eor.l	d2,(a1)+
+	move.l	(a0)+,d2
+	eor.l	d2,(a1)+
+	dbf		d1,.loop
+	rts
+
 
 
 * In: 
@@ -25232,7 +25805,6 @@ freqscope
 
 
 *** PS3M freqscope
-
 	cmp	#pt_multi,playertype(a5)
 	bne.b	.protr
 
@@ -25515,33 +26087,42 @@ multiscope
 	lsr.l	#8,d5
 	lea	s_multab(a4),a2
 		
+    * 160 pixels minus one?
 	moveq	#160/8-1-1,d7
 	moveq	#1,d0
 	move	#$80,d6
+    * This returns the buffer mask or size limit in d4
 	bsr.w	getps3mb
 
 multiscope0
 
 .drlo	
- 
+    * Do 8 horizontal pixels
  rept 8
+    * Get one data byte, adjust with $80
+    * turns it from -128..127 to 0..256 I guess
  	move	d6,d2
 	add.b	(a1,d5.l),d2
+    * scale to 0..63
 	lsr.b	#2,d2
+    * Multiply by screen modulo using a table
 	add	d2,d2
 	move	(a2,d2),d2
+    * Write two pixels on top of each other
 	or.b	d0,-40(a0,d2)
 	or.b	d0,(a0,d2)
+    * Next pixel to the left
 	add.b	d0,d0
-
+    * Advance one byte in source data
 	addq.l	#1,d5
-;	and.l	d4,d5
+    * Check if buffer limit reached, start over if so
 	cmp.l	d4,d5
 	bne.b	*+4
 	moveq	#0,d5
  endr
-	
+	* Reset pixel to right
 	moveq	#1,d0
+    * Jump 8 pixels to left
 	sub	d0,a0
 	dbf	d7,.drlo
 	rts
@@ -25638,12 +26219,12 @@ multihipposcope:
 	moveq	#120-1,d7
 .d
 
-	move.b	(a1,d5),d1
+	move.b	(a1,d5.l),d1
 	asr.b	#1,d1
 	ext	d1
 	add	d0,d1
 
-	move.b	5(a1,d5),d2
+	move.b	5(a1,d5.l),d2
 	asr.b	#2,d2 
 	ext	d2
 	add	d6,d2
@@ -25662,8 +26243,11 @@ multihipposcope:
 	sub	d2,d3
 	bset	d1,39(a3,d3)
 
-	addq	#1,d5
-	and	d4,d5
+	addq.l	#1,d5
+
+	cmp.l	d4,d5
+	bne.b	*+4
+	moveq	#0,d5
 
 	dbf	d7,.d
 
@@ -27145,16 +27729,106 @@ noteScroller2:
 * Moduulin lataus
 *
 * in:
-*  a0 = module file name with path
+*  a0 = module file name with path 
+*  a3 = list node 
 *  d0 = ~0: Use double buffering
 *
 
-loadmodule
+loadmodule:
 	; Popup should close so that window is visible during load
 	bsr.w	closeTooltipPopup
-
 	st	loading(a5)
+	* Store pointer to the name part. Used
+	* do determine what to show in the infobox, and
+	* also with the PS3M configuration file.
+	move.l	l_nameaddr(a3),solename(a5)
+	move.b	l_remote(a3),lastLoadedModuleWasRemote(a5)
+	* Check if a remote file
+	beq		.doLoadModule
 
+	move.b	d0,d6	* doublebuffering flag
+	moveq	#lod_remote,d7	* status: fail
+
+	lea	-200(sp),sp	* space for output path
+	move.l	sp,a1
+	lea	l_filename(a3),a0	
+	jsr	fetchRemoteFile
+	DPRINT	"fetchRemote1 %ld"
+	tst.l	d0
+	bne		.ok1
+	move.l	d7,d0
+	bsr		loaderr
+	bsr.w	inforivit_clear
+	bra		.skip
+.ok1
+	
+	* TFMX special case!
+	* See if smpl can be loaded, store the output 
+	* path here.
+	lea		100(sp),a1
+	bsr		.loadTFMXsamples
+	tst.l	d0
+	bne.b	.ok2
+	move.l	d7,d0
+	bsr		loaderr
+	bsr.w	inforivit_clear
+	bra		.skip2
+.ok2
+	
+	* Then do ordinary load, this will also pick 
+	* the TFMX smpl file in the temp dir.
+	move.l	sp,a0	* path to load from
+	move.b	d6,d0   * double buffering flag
+	bsr		.doLoadModule
+	move.l	d0,d7	* save status
+.skip2
+	* Delete TFMX smpl temp file if it is there
+	lea		100(sp),a0
+	tst.b	(a0)
+	beq.b	.skip
+	move.l	a0,d1
+	lore	Dos,DeleteFile 
+.skip
+	move.l	sp,d1
+	lore	Dos,DeleteFile * delete tempfile
+	lea	200(sp),sp
+	move.l	d7,d0	* status here
+	rts
+
+* TFMX special case!
+* Look for mdat in the url.
+* Convert url from mdat->smpl and fetch, restore url.
+.loadTFMXsamples
+	* null output string to start with
+	clr.b	(a1)	
+	lea		l_filename(a3),a2	
+.1	move.b	(a2)+,d0
+	beq.b	.no
+	cmp.l	#"mdat",d0
+	beq.b	.yes
+	rol.l	#8,d0
+	bra.b	.1
+.no	rts
+
+.yes
+	subq	#4,a2
+	move.b	#"s",(a2)
+	move.b	#"m",1(a2)
+	move.b	#"p",2(a2)
+	move.b	#"l",3(a2)
+	lea		l_filename(a3),a0
+	jsr		fetchRemoteFile
+	move.b	#"m",(a2)
+	move.b	#"d",1(a2)
+	move.b	#"a",2(a2)
+	move.b	#"t",3(a2)
+	rts
+
+
+* in:
+*   a0 = path to load from
+*   d0 = double buffering flag
+.doLoadModule
 	move.b	d0,d7
 	beq.w	.nodbf
 
@@ -27227,9 +27901,9 @@ loadmodule
 	jsr	fadevolumedown
 	move	d0,-(sp)
 	DPRINT	"Replay end"
-	lore    Exec,Disable
+	;lore    Exec,Disable
 	jsr	halt			* Vapautetaan se jos on
-	lore    Exec,Enable
+	;lore    Exec,Enable
 	;;;move.l	modulefilename(a5),a0
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
@@ -27303,7 +27977,7 @@ loadmodule
 	lea	modulelength(a5),a2
 	moveq	#0,d1			* kommentti talteen
 	bsr.w	loadfile
-	move.l	d0,-(sp)
+	move.l	d0,-(sp)		* NULL or lod_??? code
 	clr.b	loading(a5)		* lataus loppu
 
 	clr.b	songover(a5)	* varmistuksia, hˆlmˆo
@@ -27391,7 +28065,7 @@ loadmodule
 .err	
 	tst.b	contonerr(a5)		* Continue on error?
 	bne.b	.iik
-loaderr
+loaderr:
 	cmp	#lod_xpkerr,d0
 	beq.w	xpkvirhe
 	cmp	#lod_xfderr,d0
@@ -27406,6 +28080,7 @@ loaderr
 	add	(a1),a1
 	bra.w	request			* requesteri
 
+* Table to map lod_??? error codes
 .ertab2	dr	openerror_t
 	dr	readerror_t
 	dr	memerror_t
@@ -27425,6 +28100,7 @@ loaderr
 	dr	error_t
 	dr	extract_t
 	dr  readerror_t  * loadseg failure 
+	dr	remoteerror_t 
 
 cryptederror_t
 ;	dc.b	"File is encrypted!",0
@@ -27467,6 +28143,8 @@ windowerr_t	dc.b	"Couldn't to open window!",0
 ;extract_t	dc.b	"Extraction error!",0
 extract_t	dc.b	"Extraction error!",10
 		dc.b	"No known files found in archive.",0
+remoteerror_t
+	dc.b	"Error downloading file!",0
  even	
 
 
@@ -27559,9 +28237,59 @@ lod_openerr2	=	-16
 lod_xfderr	=	-17
 lod_extract	=	-18
 lod_loadsegfail = -19
+lod_remote		= -20
 
-* Skip XPK identification
-loadfileStraight
+* Load file variant 
+* - Skips XPK identification
+* - Loads remote files if url detected
+loadfileStraight:
+	cmp.b	#'h',(a0)
+	bne		.local
+	cmp.b	#'t',1(a0)
+	bne		.local
+	cmp.b	#'t',2(a0)
+	bne		.local
+	cmp.b	#'p',3(a0)
+	bne		.local
+	cmp.b	#':',4(a0)
+	bne		.local
+
+	pushm	d1-a6
+	lea		-100(sp),sp
+	moveq	#0,d7	* status ok
+
+	move.l	sp,d1
+	pushm	d0/a1
+	move.l	d1,a1	* space for target file path
+	jsr		fetchRemoteFile
+	DPRINT	"fetchRemote2 %ld"
+	moveq	#0,d7 * status: ok
+	tst.l	d0
+	bne.b	.fetchOk
+	moveq	#lod_remote,d7 * status: fail
+.fetchOk
+	popm	d0/a1
+
+	tst.l	d7
+	bne.b	.remoteErr
+
+	move.l	sp,a0
+	* a0 is now the downloaded file path, 
+	* parameters unchanged
+	bsr.b	.local
+
+.remoteErr
+	move.l	d0,d7	* save status
+	move.l	sp,d1
+	lore	Dos,DeleteFile
+
+	move.l	d7,d0	* restore status
+	lea		100(sp),sp
+	popm	d1-a6
+	rts
+
+.local
+
 	push	d7
 	move.b	xpkid(a5),d7
 	* DISABLE:
@@ -27573,7 +28301,8 @@ loadfileStraight
 	pop	d7
 	rts
 
-loadfile
+* Ordinary load file
+loadfile:
 	movem.l	d1-a6,-(sp)
 
 	jsr	setMainWindowWaitPointer
@@ -27790,6 +28519,9 @@ loadfile
 	move.l	a0,a4
 	bsr.w	id_protracker
 	beq.w	.on
+
+    jsr     id_xmaplay
+    beq     .on
 
 	bsr.w	id_ps3m		
 	tst.l	d0
@@ -28134,8 +28866,22 @@ loadfile
 	;move	#245+WINX+2,plx2
 	move	WINSIZX(a5),plx2
 	sub	#18,plx2
-	moveq	#21+WINY,ply1
-	moveq	#27+WINY,ply2
+	;moveq	#21+WINY,ply1
+	;moveq	#27+WINY,ply2
+	move	infoBoxTopEdge(a5),ply1
+	move	infoBoxHeight(a5),d7
+	lsr		#1,d7
+    add     d7,ply1
+    move	infoBoxHeight(a5),d7
+    lsr     #1,d7
+    subq    #6,d7
+    lsr     #1,d7
+    add     d7,ply1   
+    addq    #1,ply1
+    
+	move	ply1,ply2
+	addq	#6,ply2     * height
+
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -28212,7 +28958,19 @@ loadfile
         move.b	#%11,rp_Mask(a0)
 
         moveq   #82+WINX,d0
-        moveq   #22+WINY,d1
+
+		move	infoBoxTopEdge(a5),d1
+		move	infoBoxHeight(a5),d2
+		lsr		#1,d2
+		add		d2,d1
+		move	infoBoxHeight(a5),d2
+        lsr     #1,d2
+        subq    #6,d2
+        lsr     #1,d2
+        add     d2,d1
+		addq	#2,d1
+	
+    ;    moveq   #22+WINY,d1
         add     windowleft(a5),d0
         add     windowtop(a5),d1
 
@@ -28441,8 +29199,21 @@ loadfile
 	;move	#245+WINX,plx2
 	move	WINSIZX(a5),plx2
 	sub	#18,plx2
-	moveq	#21+WINY,ply1
-	moveq	#27+WINY,ply2
+	move	infoBoxTopEdge(a5),ply1
+	move	infoBoxHeight(a5),d7
+	* vertically center
+	lsr		#1,d7
+	add		d7,ply1
+	subq	#6,d7
+	lsr		#1,d7
+	add		d7,ply1	
+	addq	#1,ply1
+
+	;addq	#8,ply1
+	move	ply1,ply2
+	addq	#6,ply2		* 6 pix tall box
+;;	moveq	#21+WINY,ply1
+;	moveq	#27+WINY,ply2
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
 	add	windowtop(a5),ply1
@@ -28460,10 +29231,10 @@ loadfile
 
 
 .loadloop
- if DEBUG
- 	move.l	d4,d0
-	DPRINT	"Bytes to read %ld"
- endif
+ ;if DEBUG
+ ;	move.l	d4,d0
+ ;	DPRINT	"Bytes to read %ld"
+ ;endif
 	* See if we got all of it already?
 	tst.l	d4
 	beq.w	.don
@@ -28514,7 +29285,7 @@ loadfile
 	sub	#35,d7
 	mulu	d7,d5
 	divu	d3,d5
-	move	d5,d4
+	move	d5,d4 * XSize
 
         move.l  rastport(a5),a0
         move.l  a0,a1
@@ -28523,15 +29294,26 @@ loadfile
         move.b	#%11,rp_Mask(a0)
 
         moveq   #16+WINX,d0
-        moveq   #22+WINY,d1
-        add     windowleft(a5),d0
+        ;moveq   #22+WINY,d1
+		move	infoBoxTopEdge(a5),d1
+		move	infoBoxHeight(a5),d2
+		lsr		#1,d2
+		add		d2,d1
+		subq	#6,d2
+		lsr		#1,d2
+		add		d2,d1
+		addq	#2,d1
+
+		add     windowleft(a5),d0
         add     windowtop(a5),d1
 
-        move.l  d0,d2
-        move.l  d1,d3
+        move.l  d0,d2	* DestX = SrcX
+        move.l  d1,d3   * DestY = SrcY
 
-        moveq   #5,d5
+        moveq   #5,d5   * YSize
         move    #$f0,d6
+ ;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+;          A0   D0    D1    A1    D2     D3     D4     D5     D6
         lore    GFX,ClipBlit
 
         move.l  rastport(a5),a0
@@ -28914,16 +29696,27 @@ get_pp	move.l	_PPBase(a5),d0
 	move.l	d0,_PPBase(a5)
 	rts
 
-get_sid	move.l	_SIDBase(a5),d0
+get_sid:
+	move.l	_SIDBase(a5),d0
 	beq.b	.noep
 	rts
-.noep	lea 	sidname,a1		
+.noep
+    lea 	sidname,a1		
 	move.l	a6,-(sp)
 	move.l	(a5),a6
 	lob	OldOpenLibrary
 	move.l	(sp)+,a6
 	move.l	d0,_SIDBase(a5)
 	beq.b	.q
+ if DEBUG
+    move.l  d0,a0
+    moveq   #0,d0
+    moveq   #0,d1
+    move.w  LIB_VERSION(a0),d0
+    move.w  LIB_REVISION(a0),d1
+    move.l  LIB_IDSTRING(a0),d2
+    DPRINT  "Opened playsid: %ld.%ld - %s"
+ endif
 	bsr.w	init_sidpatch
 	moveq	#1,d0
 .q	rts
@@ -29010,7 +29803,7 @@ get_mline
 *   d0 = -1: not found
 *   a0 = end of last match
 
-search
+search:
 	move.l	#2048,d2
 	cmp.l	d7,d2
 	blo.b	.sea
@@ -29377,6 +30170,10 @@ tutki_moduuli
  endif
 
 .mp
+    move.l  a4,a0
+    jsr     id_xmaplay
+    beq     .xmaplay
+
 	bsr.w	id_ps3m		
 	tst.l	d0
 	beq.w	.multi
@@ -29400,7 +30197,7 @@ tutki_moduuli
 	moveq	#lod_tuntematon,d0
 	rts	
 
-.ex	
+.ex
 	 bsr.w	tee_modnimi
 .ex2	
 	cmp	#pt_prot,playertype(a5)
@@ -29431,8 +30228,10 @@ tutki_moduuli
 	bsr.w	copyNameFromModule
 	bra.b	.ex2
 
-.multi	pushpea	p_multi(pc),playerbase(a5)
+.multi	
+    pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
+.moveData
 	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 
 	move.l	moduleaddress(a5),a1	* tutkaillaan onko miss‰ muistissa
@@ -29453,7 +30252,10 @@ tutki_moduuli
 	lore	Dos,Delay
 	bra.w	.ex2
 
-
+.xmaplay
+    move.l  #p_xmaplay,playerbase(a5)
+	move	#pt_xmaplay,playertype(a5)
+    bra     .moveData
 
 .sid	pushpea	p_sid(pc),playerbase(a5)
 	move	#pt_sid,playertype(a5)
@@ -29518,7 +30320,8 @@ tutki_moduuli
 .t	
 	moveq	#0,d0
 
-	lea	fileinfoblock+8(a5),a0		* tied.nimi: mdat.*
+	lea	fileinfoblock+fib_FileName(a5),a0		* tied.nimi: mdat.*
+ 
 	cmp.l	#'MDAT',(a0)
 	beq.b	.uq
 	cmp.l	#'mdat',(a0)
@@ -29631,7 +30434,8 @@ tutki_moduuli
 *   Z-flag
 * Out:
 *   d0 = 0, if Z set, -1 if not
-idtest	beq.b	.y
+idtest:
+	beq.b	.y
 	moveq	#-1,d0
 	rts
 .y	moveq	#0,d0
@@ -29723,18 +30527,24 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 *******
 * Virittelee nimen tied.nimest‰
 *******
-
-tee_modnimi
-	lea	modulename(a5),a1
+tee_modnimi:
+	moveq	#INFO_MODULE_NAME_LEN-1,d1
+	lea		modulename(a5),a1
 	tst.b	lod_archive(a5)		* Paketista purettuna
-	beq.b	.eiarc			* otetaan pelkk‰ filename
+	bne.b	.arc				* otetaan pelkk‰ filename
 	move.l	solename(a5),a0
+	tst.b	lastLoadedModuleWasRemote(a5)
+	beq.b	.copy
+.slash
+	cmp.b	#"/",(a0)+
+	bne.b	.slash
 	bra.b	.copy
-.eiarc
-	lea	8+fileinfoblock(a5),a0
-	moveq	#INFO_MODULE_NAME_LEN-1,d0
-.copy	move.b	(a0)+,(a1)+
-	dbeq	d0,.copy
+.arc
+	* This contains info from the last archive loaded file 
+	lea	fib_FileName+fileinfoblock(a5),a0
+.copy	
+	move.b	(a0)+,(a1)+
+	dbeq	d1,.copy
 	clr.b	(a1)
 	rts
 
@@ -29773,7 +30583,7 @@ loadplayergroup
 	moveq	#MEMF_PUBLIC,d1
 	jsr	getmem
 	move.l	d0,d7
-	beq.b	.error
+	beq		.error
 
 	move.l	d4,d1
 	move.l	d7,d2
@@ -29796,6 +30606,13 @@ loadplayergroup
 	lob	Close	
 
 	move.l	d7,a0		* onko oikee versio??
+
+ if DEBUG
+	moveq	#0,d0
+	move.b	4+3(a0),d0
+	moveq	#xpl_versio,d1
+	DPRINT	"Version: %ld, required: %ld"
+ endif
 
 	cmp.b	#xpl_versio,4+3(a0)
 	bhs.b	.xx
@@ -29908,6 +30725,15 @@ loadreplayer
 	lob	Read
 	cmp.l	#1024,d0
 	bne.w	.error	
+
+
+ if DEBUG
+	moveq	#0,d0
+	move.b	7+probebuffer+1024(a5),d0
+	moveq	#xpl_versio,d1
+	DPRINT	"Version: %ld, required: %ld"
+ endif
+
 
 	cmp.b	#xpl_versio,7+probebuffer+1024(a5)
 	blo.w	.error
@@ -30168,6 +30994,9 @@ drawButtonFramePrefsWindow
 	popm	all
 	rts
 
+* in:
+*   a1 = rastport
+*   a3 = gadget
 doDrawButtonFrame
 	movem	4(a3),plx1/ply1/plx2/ply2
 	add	plx1,plx2
@@ -30222,7 +31051,7 @@ gadstate
 *
 *****************************************************************************
 
-toggleFavoriteStatusForCurrentModule
+toggleFavoriteStatusForCurrentModule:
 	tst.b	favorites(a5)
 	beq.b	.1
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
@@ -30266,7 +31095,7 @@ toggleFavoriteStatus
 
 * in:
 *   a0 = module list node
-addFavoriteModule
+addFavoriteModule:
 	isFavoriteModule a0
 	bne.b .exit
 
@@ -30282,7 +31111,30 @@ addFavoriteModule
 	bsr.w	findFavoriteModule
 	tst.l	d0
 	bne.b	.exit	* bail out if so
+	
+	* copy this node and add to favorite list
+	bsr		cloneListNode
+	* a4 = cloned node
 
+	* Append to list
+	move.l	a4,a1
+	lea	favoriteListHeader(a5),a0
+	lob	AddTail
+
+	st	favoriteListChanged(a5)
+ if DEBUG
+	bsr.w	logFavoriteList
+ endif
+.noMem
+.exit
+	rts
+
+* in: 
+*   a0 = list nde
+* out: 
+*   a4 = new node
+*   d0 = false: no mem, true: all ok
+cloneListNode
 	move.l	a0,a3
 
 	* copy this node and add to favorite list
@@ -30310,17 +31162,10 @@ addFavoriteModule
 	lea	l_filename(a4,d0.l),a0
 	move.l	a0,l_nameaddr(a4)
 
-	* Append to list
-	move.l	a4,a1
-	lea	favoriteListHeader(a5),a0
-	lob	AddTail
-
-	st	favoriteListChanged(a5)
- if DEBUG
-	bsr.w	logFavoriteList
- endif
-.noMem
-.exit
+	moveq	#1,d0
+	rts
+.noMem	
+	moveq	#-1,d0
 	rts
 
 * in:
@@ -30367,7 +31212,7 @@ removeFavoriteModule
 *   d0 = 1 when match, 0 when no match
 * destroys:
 *   d0,a2,a3
-findFavoriteModule
+findFavoriteModule:
 	* Find matching l_filename from favorite list
 	lea	favoriteListHeader(a5),a1
 .loop
@@ -30457,7 +31302,6 @@ exportFavoriteModulesWithMessage
 	jsr	setMainWindowWaitPointer
 	jsr	freezeMainWindowGadgets
 	lea	.msg(pc),a0
-	moveq	#68+WINX,d0
 	jsr	printbox
 	bra.b	.c
 .msg 	dc.b  	"Saving favorites...",0
@@ -30601,17 +31445,27 @@ handleFavoriteModuleConfigChange
 *
 ******************************************************************************
 
-toggleListMode
+toggleListMode:
 	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
 	beq.b	engageFavoritesMode
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
 	beq.w	engageFileBrowserMode
-	; falling
-	;cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	;beq.b	engageNormalMode
-	;rts
 
-engageNormalMode
+	tst.b	uhcAvailable(a5)
+	bne.b	.searchAvailable
+	
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	engageNormalMode
+	rts
+
+.searchAvailable
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq		engageSearchResultsMode
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	beq.b	engageNormalMode
+	rts
+
+engageNormalMode:
 	DPRINT	"engage normal"
 	pushm	all
 	
@@ -30637,7 +31491,7 @@ engageNormalMode
 	popm	all
 	rts	
 
-engageFavoritesMode
+engageFavoritesMode:
 	pushm	all
 	DPRINT	"engage favorites"
 	* Moving to favorite mode
@@ -30648,9 +31502,18 @@ engageFavoritesMode
 	bsr.b	engageListMode
 	popm	all
 	rts	
-	
+
+
+engageSearchResultsMode:
+	pushm	all
+	DPRINT	"engage search results"
+	move.b	#LISTMODE_SEARCH,listMode(a5)
+	bsr.b	engageListMode
+	popm	all
+	rts	
+
 * Common operations to be done after list mode change
-engageListMode
+engageListMode:
 	bsr.w	.setListModeChangeButtonIcon
 	bsr.w	.setButtonStatesAccordingToListMode
 	bsr.b	.setListState
@@ -30725,11 +31588,12 @@ engageListMode
 	beq.b	.favoritesMode
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.browserMode
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	beq.b	.searchMode
 	rts
 
 .normalMode
-	lea	gadgetAddButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr		setNormalAddTooltip
 	lea	gadgetDelButton(a4),a0
 	bsr.w	enableButtonWithEar
 	lea	gadgetNewButton(a4),a0
@@ -30745,24 +31609,36 @@ engageListMode
 .favoritesMode
 	lea	gadgetPrgButton(a4),a0
 	bsr.w	disableButton
+	bsr		setNormalAddTooltip
 	rts
-
 	
 .browserMode
-	lea	gadgetAddButton(a4),a0
-	bsr.w	disableButton
 	lea	gadgetDelButton(a4),a0
 	bsr.w	disableButton
 	lea	gadgetNewButton(a4),a0
-	bsr.w	disableButton
-	lea	gadgetSortButton(a4),a0
 	bsr.w	disableButton
 	lea	gadgetMoveButton(a4),a0
 	bsr.w	disableButton
 	lea	gadgetPrgButton(a4),a0
 	bsr.w	disableButton
-	endb	a4
+	bsr		setFileBrowserAddTooltip
 	rts
+
+.searchMode
+	lea	gadgetNewButton(a4),a0
+	bsr.w	disableButton
+	lea	gadgetPrgButton(a4),a0
+	bsr.w	disableButton
+	lea	gadgetMoveButton(a4),a0
+	bsr.w	disableButton
+	lea	gadgetSortButton(a4),a0
+	bsr.w	enableButtonWithEar
+	lea	gadgetDelButton(a4),a0
+	bsr.w	enableButtonWithEar
+	bsr		setFileBrowserAddTooltip
+	rts
+
+	endb	a4
 
 .setListModeChangeButtonIcon
 	lea	listImage,a0
@@ -30774,6 +31650,9 @@ engageListMode
 	lea	fileBrowserImage-favoriteImage(a0),a0
 	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.set
+	lea	searchImage-fileBrowserImage(a0),a0
+	cmp.b 	#LISTMODE_SEARCH,listMode(a5)
+	beq.b	.set
 	rts
 .set
 	* Toggle listmode button icon
@@ -30781,6 +31660,21 @@ engageListMode
 	lea	gadgetListModeChangeButton,a0
 	jmp	refreshGadgetInA0
 	
+setNormalAddTooltip
+	lea		tooltipList\.addButtonToolTipOffset,a0
+	lea		tooltipList\.add,a1
+	sub.l	a0,a1
+	move	a1,(a0)
+	rts
+
+setFileBrowserAddTooltip
+setSearchAddTooltip
+	lea		tooltipList\.addButtonToolTipOffset,a0
+	lea		tooltipList\.add2,a1
+	sub.l	a0,a1
+	move	a1,(a0)
+	rts
+
 
 ********************************************************************************
 *** SECTION ********************************************************************
@@ -30794,17 +31688,17 @@ engageListMode
 *******************************************************************************
 
 importSavedStateModulesFromDisk
-	DPRINT	"importSavedStateModulesFromDisk"
 	tst.b	savestate(a5)
 	bne.b	.enabled
 .error	rts
 
 .enabled
+	DPRINT	"importSavedStateModulesFromDisk"
 	lea	savedStateModuleFileName(pc),a0
-	jsr	plainLoadFile
+ 	jsr	plainLoadFile
 	move.l	d0,d6	* address
 	beq.b	.error
-	move.l	d1,d7 	* length
+	move.l	d1,d7
 
 	lea moduleListHeader(a5),a2
 	move.l	d6,a3		* start of buffer	
@@ -30838,10 +31732,15 @@ importSavedStateModulesFromDisk
 	beq.b	.parse
 .noLock
 .exit
-	jsr	resh
 .none
-	rts
-	
+	* Avoid refreshing the box if nothing to be seen,
+	* this will leave the "Registered..." text visible.
+	tst.l	modamount(a5)
+	beq.b	.0
+	jsr	resh
+.0	rts
+
+
 .parse
 * "00000000 00 abc"
 * convert into number
@@ -31877,280 +32776,6 @@ sortStringPtrArray
 	bne.b 	.sortLoopOuter
 	popm	d1/d2/d3/d6/d7/a1/a2
 .x	rts
-
-
-*******************************************************************************
-* Big buttons, normal buttons
-*******************************************************************************
-
-configureMainWindowButtonSizes
-	lea	gadgets,a4
-	basereg gadgets,a4
-
-	lea	button1im,a3
-	basereg button1im,a3
-
-	tst.b	altbuttons(a5)
-	beq.w	.useNormal
-	; Already in alt mode?
-	tst.b	altbuttonsUse(a5)
-	bne.w	.x
-	move.b	altbuttons(a5),altbuttonsUse(a5)
-	* Enlarge main window!
-	add	#16,WINSIZY(a5)
-
-; Set up double buttons
-	* 1st row
-	lea	gadgetPlayButton(a4),a0
-	lea	button1imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetInfoButton(a4),a0
-	lea	button2imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetStopButton(a4),a0
-	lea	button3imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetEjectButton(a4),a0
-	lea	button4imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetNextButton(a4),a0
-	lea	button5imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetPrevButton(a4),a0
-	lea	button6imDouble(a3),a2
-	bsr.w	.double
-	lea	gadgetNextSongButton(a4),a0
-	lea	button12imDouble(a3),a2
-	bsr.b	.double
-	lea	gadgetPrevSongButton(a4),a0
-	lea	button13imDouble(a3),a2
-	bsr.b	.double
-	lea	gadgetForwardButton(a4),a0
-	lea	kela2imDouble(a3),a2
-	bsr.b	.double
-	lea	gadgetRewindButton(a4),a0
-	lea	kela1imDouble(a3),a2
-	bsr.b	.double
-
-	* 2nd row
-	lea	gadgetAddButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetDelButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetNewButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetPrefsButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetVolumeSlider(a4),a0
-	bsr.b	.double2
-	lea	gadgetSortButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetMoveButton(a4),a0
-	bsr.b	.double2
-	lea	gadgetPrgButton(a4),a0
-	bsr.b	.double2
-
-	lea	gadgetListModeChangeButton(a4),a0
-	add	#16,gg_TopEdge(a0)
-
-	lea	gadgetFileSlider(a4),a0
-	add	#16,gg_TopEdge(a0)
-
-	lea	gadgetVolumeSlider(a4),a0
-	move.l	gg_GadgetRender(a0),a1
-	pushpea slider1imDouble(a3),ig_ImageData(a1)
-	addq	#8,ig_Height(a1)
-	bra.b	.doubleDone
-.double
-	addq	#8,gg_Height(a0)
-	move.l	gg_GadgetRender(a0),a1
-	move.l	a2,ig_ImageData(a1)
-	lsl.w	ig_Height(a1)
-	rts
-.double2
-	addq	#8,gg_Height(a0)
-	addq	#8,gg_TopEdge(a0)
-	move.l	gg_GadgetText(a0),d0
-	beq.b	.doubleNoText
-	move.l	d0,a1
-	addq	#4,it_TopEdge(a1)
-.doubleNoText
-.doubleDone
-	rts
-
-.useNormal
-	; Already in normal mode?
-	tst.b	altbuttonsUse(a5)
-	beq.w	.x
-	move.b	altbuttons(a5),altbuttonsUse(a5)
-
-	* Diminish main window!
-	sub	#16,WINSIZY(a5)
-
-; Set up normal buttons
-
-	* 1st row
-	lea	gadgetPlayButton(a4),a0
-	lea	button1im(a3),a2
-	bsr.w	.normal
-	lea	gadgetInfoButton(a4),a0
-	lea	button2im(a3),a2
-	bsr.w	.normal
-	lea	gadgetStopButton(a4),a0
-	lea	button3im(a3),a2
-	bsr.w	.normal
-	lea	gadgetEjectButton(a4),a0
-	lea	button4im(a3),a2
-	bsr.w	.normal
-	lea	gadgetNextButton(a4),a0
-	lea	button5im(a3),a2
-	bsr.w	.normal
-	lea	gadgetPrevButton(a4),a0
-	lea	button6im(a3),a2
-	bsr.w	.normal
-	lea	gadgetNextSongButton(a4),a0
-	lea	button12im(a3),a2
-	bsr.b	.normal
-	lea	gadgetPrevSongButton(a4),a0
-	lea	button13im(a3),a2
-	bsr.b	.normal
-	lea	gadgetForwardButton(a4),a0
-	lea	kela2im(a3),a2
-	bsr.b	.normal
-	lea	gadgetRewindButton(a4),a0
-	lea	kela1im(a3),a2
-	bsr.b	.normal
-
-	* 2nd row
-	lea	gadgetAddButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetDelButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetNewButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetPrefsButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetVolumeSlider(a4),a0
-	bsr.b	.normal2
-	lea	gadgetSortButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetMoveButton(a4),a0
-	bsr.b	.normal2
-	lea	gadgetPrgButton(a4),a0
-	bsr.b	.normal2
-
-	lea	gadgetListModeChangeButton(a4),a0
-	sub	#16,gg_TopEdge(a0)
-
-	lea	gadgetFileSlider(a4),a0
-	sub	#16,gg_TopEdge(a0)
-
-	lea	gadgetVolumeSlider(a4),a0
-	move.l	gg_GadgetRender(a0),a1
-	pushpea slider1im(a3),ig_ImageData(a1)
-	subq	#8,ig_Height(a1)
-	bra.b	.normalDone
-.normal
-	subq	#8,gg_Height(a0)
-	move.l	gg_GadgetRender(a0),a1
-	move.l	a2,ig_ImageData(a1)
-	lsr.w	ig_Height(a1)
-	rts
-.normal2
-	subq	#8,gg_Height(a0)
-	subq	#8,gg_TopEdge(a0)
-	move.l	gg_GadgetText(a0),d0
-	beq.b	.normalNoText
-	move.l	d0,a1
-	subq	#4,it_TopEdge(a1)
-.normalNoText
-.normalDone
-	rts
-
-.x
-	rts
-
-	endb   a3
-	endb   a4
-
-
-*******************************************************************************
-* IFF pictures to buttons
-*******************************************************************************
- REM 
-initializeButtonImages
-	lea	iffname,a0
-	lore	Exec,OldOpenLibrary
-	tst.l	d0
-	beq.w	.x
-	move.l	d0,d7
-
-	move.l	d0,a6
-	lea	.pic(pc),a0
-	moveq	#IFFL_MODE_READ,d0
-	lob		OpenIFF
-	move.l	d0,d6
-	beq.b	.x
-
-	move.l	d6,a1
-	lob     GetBMHD
-	tst.l	d0
-	beq.b	.x
-	move.l	d0,a4
-	move	bmh_Width(a4),d1
-	move	bmh_Height(a4),d2
-	move.b	bmh_nPlanes(a4),d0
-
-	lea bitmapPlayButton(pc),a0
-	lore 	GFX,InitBitMap
-
-	move	bmh_Width(a4),d0
-	move	bmh_Height(a4),d1
-	moveq	#0,d2
-	move.b	bmh_nPlanes(a4),d2
-	mulu	d2,d1
-	lore	Exec,AllocRaster
-	tst.l	d0
-	beq.b	.x
-	move.l	d0,a0
-	lea	bitmapPlayButton+bm_Planes(pc),a1
-	* Length of one plane in bytes:
-	move	bitmapPlayButton+bm_BytesPerRow(pc),d1
-	mulu	bitmapPlayButton+bm_Rows(pc),d1
-	moveq	#0,d0
-	move.b	bitmapPlayButton+bm_Depth(pc),d0
-	subq	#1,d0
-.planes
-	move.l	a0,(a1)+
-	add	d1,a0
-	dbf	d0,.planes
-
-	move.l	d6,a1
-	lea	bitmapPlayButton(pc),a0
-	move.l	d7,a6
-	lob	DecodePic
-	tst.l	d0
-	beq.b	.x
-	
-	nop
-.x
-	tst.l	d6
-	beq.b	.1
-	move.l	d6,a1
-	lob	CloseIFF
-
-.1
-
-
-	move.l	d7,d0
-	jsr	closel
-
-	rts
-
-.pic	dc.b	"sys:HippoPlayButton.iff",0
-
-bitmapPlayButton ds.b bm_SIZEOF
- EREM
 
 
 *******************************************************************************
@@ -33643,7 +34268,7 @@ p_sid:	jmp	.init(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
-	p_NOP
+	jmp .volume(pc)
 	jmp	.song(pc)
 	jmp	.eteen(pc)
 	p_NOP
@@ -33651,32 +34276,133 @@ p_sid:	jmp	.init(pc)
 	jmp 	id_sid1(pc)
 	p_NOP
 	dc.w 	pt_sid 				* type
+.flags 
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume!pf_scope!pf_quadscopePoke
-	dc.b	"PSID",0
-.flag	dc.b	0
+	dc.b	"PSID "
+.title
+    dc.b    "             "
+.zero
+    dc.b    0
+
+* This is set when AllocEmulResource is called to avoid redoing it again.
+.flag       dc.b	0
+* Set when perf measurement has been done
+.perfDone   dc.b    0
+* reSID mode where the perf test was done
+.perfMode   dc.b    0
  even
 
 .init
+    DPRINT  "PlaySID init"
 	bsr.w	get_sid
 	bne.b	.ok
 	moveq	#ier_nosid,d0
 	rts
 
+
 .ok
 	movem.l	d1-a6,-(sp)
-
 
 	move.l	_SIDBase(a5),a6
 
 	tst.b	.flag
-	bne.b	.plo
+	bne  	.plo
 
 	* Enable getting data for scopes.
-	* Must have patched the display signal away first.
+    * Library wants to signal a given task when data is ready.
+    * Provide task but null signal mask, so no signals will be sent.
+    move.l  owntask(a5),a0
+    moveq   #0,d0
+    lob     SetDisplaySignal
 	moveq	#1,d0
-	lob	SetDisplayEnable
+	lob	    SetDisplayEnable
+
+    bsr     isPlaysidReSID
+    beq     .skip
+
+    ; -----------------------
+    ; Before AllocEmulResource set the operating mode
+    cmp.b   #1,sidmode(a5)
+    beq     .m1
+    cmp.b   #2,sidmode(a5)
+    beq     .m2
+    cmp.b   #3,sidmode(a5)
+    beq     .m3
+    * Default option
+    move    #OM_NORMAL,d0
+    lea     .zero(pc),a0
+    bra     .mode
+.m1
+    lea     sidmode02,a0
+    moveq   #OM_RESID_6581,d0
+    bra     .cpuCheck
+.m2
+    lea     sidmode03,a0
+    moveq   #OM_RESID_8580,d0
+    bra     .cpuCheck
+
+.m3
+    lea     sidmode04,a0
+    moveq   #OM_SIDBLASTER_USB,d0
+    bra     .mode
+    ; -----------------------
+.cpuCheck
+	move.l	(a5),a1
+	btst	#AFB_68020,AttnFlags+1(a1)
+	bne.b	.cpuOk
+    moveq	#ier_hardware,d0
+	bra     .er
+.cpuOk
+    ; -----------------------
+    lea     .perfDone(pc),a2
+    move.b  residmode(a5),d3
+    cmp.b   .perfMode(pc),d3
+    beq.b   .modeSame
+    ; Run perf test it mode has changed
+    clr.b   (a2)
+.modeSame
+    tst.b   (a2)
+    bne.b   .perfOk
+    DPRINT  "Start perf test"
+    pushm   d0/a0/a1/a2
+    move.b  residmode(a5),d0
+    move.b  d0,.perfMode
+    lob     MeasureRESIDPerformance
+    DPRINT  "Perf test: %ld/%ld ms"
+    move.l  d0,d2
+    cmp     d1,d2
+    popm    d0/a0/a1/a2
+    bls.b   .perfOk
+    pushm   all
+    move.l  d2,d0
+    bsr     .performanceRequest
+    tst.l   d0
+    popm    all
+    bne.b   .perfOk
+    moveq   #ier_error,d0
+    bra     .er
+    ; -----------------------
+
+.perfOk
+    ; Set flag so that perf test is not done again
+    st      (a2)
+
+    ; -----------------------
+.mode
+    lea     .title(pc),a1
+.a  move.b  (a0)+,(a1)+
+    bne.b   .a
+
+    moveq   #0,d1
+    move.b  residmode(a5),d1
+ 
+    DPRINT  "Operating mode=%ld resid=%ld" 
+    lob     SetOperatingMode
+.skip
+    ; -----------------------
 
 	lob	AllocEmulResource
+    DPRINT  "AllocEmulResource=%ld"
 	tst.l	d0
 	bne.w	.error1
 
@@ -33695,7 +34421,7 @@ p_sid:	jmp	.init(pc)
 	lea	sidheader(a5),a1
 	lob	ReadIcon	
 	tst.l	d0
-	bne.b	.error2
+	bne 	.error2
 
 .h2
 	lea	sidheader(a5),a0
@@ -33721,17 +34447,54 @@ p_sid:	jmp	.init(pc)
 	subq	#1,songnumber(a5)
 .plo
 
-	bsr.b	.sanko
+
+	bsr  	.sanko
 	tst.l	d0
-	bne.b	.error3	
+	bne 	.error3	
+
+    * Fake PS3M scope variables
+    bsr     playSidInRESIDMode
+    beq.b   .skipz
+    * Audio buffer is valid after song was started
+    lob     GetRESIDAudioBuffer
+    * a0 = buffer ptr
+    * d0 = buffer length
+    * d1 = period value
+    subq.l  #2,d0   * removes static pixels from scope
+    move.l  d0,.posMask
+    move.l  a0,.bufPtr
+ if DEBUG
+    move.l  a0,d1
+    DPRINT  "length=%ld buffer=%lx"
+ endif
+    pushpea .bufPtr(pc),ps3m_buff1(a5)
+    pushpea .bufPtr(pc),ps3m_buff2(a5)
+    pushpea .bufPos(pc),ps3m_playpos(a5)
+    pushpea .posMask(pc),ps3m_buffSizeMask(a5)
+.skipz
+
 
 	bset	#1,$bfe001
 	moveq	#0,d0
 .er	movem.l	(sp)+,d1-a6
 	rts
 
+* Fake PS3M scope variables
+* multiscope draws 160 per segment
+* reSID 200Hz buffer size is 140 bytes
+* it will repeat 20 bytes
+.bufPos     dc.l    0
+.bufPtr     dc.l    0
+.posMask    dc.l    $7f 
 
 .error1
+    cmp     #SID_NOSIDBLASTER,d0
+    bne.b   .sb
+    lea     .blasterMsg(pc),a1
+    jsr     request
+    moveq   #ier_error,d0
+    bra.b   .er
+.sb
 	moveq	#ier_nomem,d0
 	bra.b	.er
 
@@ -33745,7 +34508,9 @@ p_sid:	jmp	.init(pc)
 	bra.b	.er
 
 
-.free	lob	FreeEmulResource
+.free	
+    DPRINT  "FreeEmulResource"
+    lob	FreeEmulResource
 
 	clr.b	.flag
 	rts
@@ -33764,6 +34529,7 @@ p_sid:	jmp	.init(pc)
 	move	songnumber(a5),d0
 	addq	#1,d0
 	lob	StartSong
+    ; This will return an error code in d0
 
 	rts
 
@@ -33787,22 +34553,65 @@ p_sid:	jmp	.init(pc)
 
 .cont	movem.l	d0/d1/a0/a1/a6,-(sp)
 	lore	SID,ContinueSong
+    ; This will return an error code in d0
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
 
 .eteen
 	movem.l	d0/d1/a0/a1/a6,-(sp)
+    * Do not ffwd with special modes, they don't seem to work
+    bsr     isPlaysidReSID
+    beq     .1
+    lore    SID,GetOperatingMode
+    tst     d0
+    bne.b   .2
+.1
 ;	moveq	#4,d0
 	moveq	#6,d0
 	lore	SID,ForwardSong
+.2
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
+
+.volume
+    bsr     isPlaysidReSID
+    beq.b   .11
+    move.l	_SIDBase(a5),a6
+    move    mainvolume(a5),d0
+    jsr     _LVOSetVolume(a6)
+.11
+    rts
+
+
+.blasterMsg
+    dc.b    "Couldn't initialize SIDBlaster!",0
+    even
+
+.performanceRequest
+    * d0 = value
+    * d1 = limit
+    lea     .perfReqTxt(pc),a0
+    jsr     desmsg
+    lea     desbuf(a5),a1
+    lea     .perfReqButtons(pc),a2
+    jmp     rawrequest
+
+.perfReqTxt
+    dc.b    "Your Amiga could be too slow!",10
+    dc.b    "The sound may become distorted and",10
+    dc.b    "the system unesponsive.",10
+    dc.b    "Performance: %ld ms, need <= %ld ms",0
+
+.perfReqButtons
+    dc.b    "_Continue anyway|_Stop!",0
+    even
 
 *** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
 
 
 rem_sidpatch
 	move.l	(a5),a0
+    * Patch for kick1.3 and lib version 1.1
 	cmp	#34,LIB_VERSION(a0)
 	bhi.b	.q
 	move.l	_SIDBase(a5),a6
@@ -33939,12 +34748,6 @@ sid_addVolumePatch
 	pushpea .setVol2(pc),12+8418+2(a0)
 	move	#$4eb9,12+12+8418(a0)
 	pushpea .setVol3(pc),12+12+8418+2(a0)
-	* Disable DisplaySignal mechanism,
-	* alternatively could SetDisplaySignal
-	* so that when display is enabled there will be no
-	* crashhhhhh.
-	move	#$4e75,1136(a0) ; rts
-	bsr.w	clearCpuCaches
 .q
 	rts
 
@@ -34090,6 +34893,11 @@ sidScopeUpdate
 	bsr.w	anyScopeRunning
 	beq.w	.x
 
+    bsr     playSidInRESIDMode
+    beq.b   .1
+    rts
+
+.1
 	lea	scopeData+scope_ch1(a5),a0
 	moveq	#0,d7
 	move.l	_SIDBase(a5),a1
@@ -34170,6 +34978,66 @@ sidScopeUpdate
 	ds.w	4
 .followFractions
 	ds.w	4
+
+
+* Checks whether the opened playsid.library
+* is the reSID variant
+* Out:
+*   d0 = 1 if reSID variant, 0 otherwise
+isPlaysidReSID:
+    push    a0
+    move.l  _SIDBase(a5),d0
+    beq.b   .noRESID
+    move.l  d0,a0
+	cmp     #1,LIB_VERSION(a0)
+	bne.b   .noRESID
+	cmp     #3,LIB_REVISION(a0)
+	bne.b   .noRESID
+    move.l  LIB_IDSTRING(a0),a0
+    cmp.b   #"1",16(a0)
+    bne.b   .noRESID
+    cmp.b   #"3",18(a0)
+    bne.b   .noRESID
+    cmp.b   #" ",19(a0)
+    bne.b   .noRESID
+    cmp.b   #"r",20(a0)
+    bne.b   .noRESID
+    cmp.b   #"e",21(a0)
+    bne.b   .noRESID
+   ; "playsid.library 1.3 reSID+SIDBlaster"
+    pop     a0
+    moveq   #1,d0
+    rts
+.noRESID
+    pop     a0
+    moveq   #0,d0
+    rts
+
+* Checks whether playsid is operating in reSID mode
+playSidInRESIDMode:
+    movem.l d0/a6,-(sp)
+    cmp     #pt_sid,playertype(a5)
+    bne.b   .no
+    bsr     isPlaysidReSID
+    beq     .no
+    move.l  _SIDBase(a5),a6
+    lob     GetOperatingMode
+    tst     d0
+    beq     .no
+    cmp     #OM_RESID_6581,d0
+    beq     .y
+    cmp     #OM_RESID_8580,d0
+    bne     .no
+.y
+    moveq   #1,d0
+    movem.l (sp)+,d0/a6
+    rts
+.no
+    moveq   #0,d0
+    movem.l (sp)+,d0/a6
+    rts
+
+
 
 * T‰nne v‰liin h‰m‰‰v‰sti
 
@@ -36834,8 +37702,7 @@ p_davidwhittaker
 .init
 	lea	.path(pc),a0 
 	moveq	#0,d0
-	bsr.w	deliLoadAndInit
-	rts
+	bra		deliLoadAndInit
 
 .id
 	move.l	a4,a0
@@ -38217,7 +39084,7 @@ p_mline
 	move.l	a4,a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
-	bsr.w		plainSaveFile
+	bsr.w	plainSaveFile
 	bmi.b	.orr
 
 	bsr.w	get_mline
@@ -38540,7 +39407,8 @@ isImpulseTrackerActive
 .yes	moveq	#0,d0
 	bra.b	.x
 
-p_multi	jmp	.s3init(pc)
+p_multi:
+    jmp	.s3init(pc)
 	p_NOP		* CIA
 	jmp	.s3poslen(pc)		* VB
 	jmp	.s3end(pc)
@@ -38964,15 +39832,11 @@ id_ps3m		pushm	d1-a6
 	cmp.l	#"MTM",d0
 	beq.b	.mtm
 
-	move.l	a0,a1
-	lea	.xmsign(pc),a2
-	moveq	#3,d0
-.l	cmpm.l	(a1)+,(a2)+
-	bne.b	.j
-	dbf	d0,.l
-	bra.b	.xm
+    bsr     id_xm
+    bne     .xm
 
-.j	move.l	1080(a0),d0
+.j
+    move.l	1080(a0),d0
 	cmp.l	#"OCTA",d0
 	beq.b	.fast8
 	cmp.l	#"M.K.",d0
@@ -39013,7 +39877,21 @@ id_ps3m		pushm	d1-a6
 	popm	d1-a6
 	rts
 
-
+* In:
+*   a0 = data 
+* Out:
+*   d0 = 0: not XM, 1: yes XM
+id_xm:
+	move.l	a0,a1
+	lea	.xmsign(pc),a2
+	moveq	#3,d0
+.l	cmpm.l	(a1)+,(a2)+
+	bne.b	.j
+	dbf	d0,.l
+	moveq   #1,d0
+    rts
+.j  moveq   #0,d0
+    rts
 .xmsign		dc.b	"Extended Module:"
  even
 
@@ -39803,8 +40681,7 @@ p_digitalmugician
 .init
 	lea	.path(pc),a0 
 	moveq	#0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 ; in: a4 = module
 ; out: d0 = 0, valid DMU
@@ -39921,8 +40798,7 @@ p_synthesis
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|11,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0 
@@ -39986,8 +40862,7 @@ p_syntracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l 	a4,a0
@@ -40031,8 +40906,7 @@ p_robhubbard2
 .init
 	lea	.path(pc),a0 
 	move.l	#2<<16|0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 ; in: a4 = module
 ;     d7 = module length
@@ -40096,8 +40970,7 @@ p_chiptracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	cmp.l   #'KRIS',952(A4)
@@ -41645,8 +42518,7 @@ p_quartet
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -41960,8 +42832,7 @@ p_instereo2
 .init
 	lea	.path(pc),a0 
 	move.l	#2<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
  	MOVEQ	#1,D0
@@ -42005,8 +42876,7 @@ p_jasonbrooke
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -42086,8 +42956,7 @@ p_earache
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -42181,8 +43050,7 @@ p_krishatlelid
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .end
 	* Safety: disable audio interrupts and clear requests
@@ -42264,8 +43132,7 @@ p_richardjoseph2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	MOVE.L	a4,A0
@@ -42324,8 +43191,7 @@ p_hippel7
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|4,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 id_hippel7
 	bsr.b	.id
@@ -42429,8 +43295,7 @@ p_aprosys
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	CMP.L	#$41445256,(A4)
@@ -42472,8 +43337,7 @@ p_hippelst
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|4,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -42661,8 +43525,7 @@ p_tcbtracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 
 .id
@@ -42879,8 +43742,7 @@ p_activisionpro
 .init
 	lea	.path(pc),a0 
 	move.l	#1<<16|8,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 
@@ -43129,8 +43991,7 @@ p_maxtrax
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	movea.l	a4,A0
@@ -43198,8 +44059,7 @@ p_wallybeben
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -43269,8 +44129,7 @@ p_synthpack
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -43318,8 +44177,7 @@ p_robhubbard
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|6,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -43372,8 +44230,7 @@ p_jeroentel
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0 
@@ -43445,8 +44302,7 @@ p_sonix
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -43587,8 +44443,7 @@ p_quartetst
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 * Quartet ST
 .id_quartet_st
@@ -43656,8 +44511,7 @@ p_coredesign
 .init
 	lea	.path(pc),a0 
 	move.l	#10<<16|10,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 * Core Design
 .id_core_design
@@ -43753,8 +44607,7 @@ p_musicmaker8
 .init
 	lea	.path(pc),a0 
 	move.l	#8<<16|5,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 
 .id_musicmaker8
@@ -43874,8 +44727,7 @@ p_musicmaker4
 .init
 	lea	.path(pc),a0 
 	move.l	#8<<16|5,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 ;EP_Check5 (FPTR) - same as DTP_Check2 but module is loaded into public
 
@@ -43977,8 +44829,7 @@ p_digitalmugician2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|8,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 * digital mugician ii ("mugician ii")
 * DTP_UserConfig
@@ -44149,8 +45000,7 @@ p_soundcontrol
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -44205,8 +45055,7 @@ p_themusicalenlightenment
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|3,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	movea.l	a4,A0
@@ -44340,8 +45189,7 @@ p_timfollin2
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	MOVEQ	#-1,D0
@@ -44415,8 +45263,7 @@ p_jasonpage
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -44496,8 +45343,7 @@ p_steveturner
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.w	deliLoadAndInit
-	rts 
+	bra		deliLoadAndInit 
 
 .id
 	move.l	a4,a0
@@ -44548,9 +45394,8 @@ p_specialfx
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|0,d0
-	bsr.b	deliLoadAndInit
-	rts 
-
+	bra		deliLoadAndInit
+	
 .id
 	move.l	a4,a0
 	MOVEQ	#-1,D0
@@ -44598,6 +45443,200 @@ p_specialfx
 	BNE.S	.lbC0003C6
 	MOVEQ	#0,D0
 .lbC0003C6	RTS
+
+
+
+******************************************************************************
+* XMAPlay060
+******************************************************************************
+
+
+p_xmaplay:
+    jmp      .init(pc)
+    p_NOP                        * CIA
+    jmp      .poslen(pc)         * VB
+    jmp      .end(pc)
+    jmp      .stop(pc)
+    jmp      .cont(pc)
+    jmp      .vol(pc)
+    p_NOP                       * Song
+    jmp      .eteen(pc)
+    jmp      .taakse(pc)
+    p_NOP                       * ahiupdate
+    jmp      id_xmaplay(pc)
+    jmp      .author(pc)
+    dc.w     pt_xmaplay
+.flags
+    dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_quadscopePoke
+	dc.b    "FastTracker2 xmaplay060",0
+ even
+
+.author 
+    pushpea .a(pc),d0
+    rts
+.a  dc.b    "8bitbubsy",0
+    even
+    
+    rsset $20
+.xmaInit        rs.l    1
+.xmaEnd         rs.l    1
+.xmaStop        rs.l    1
+.xmaCont        rs.l    1
+.xmaForward     rs.l    1 
+.xmaBackward    rs.l    1   
+.xmaGetPosLen   rs.l    1
+.xmaSetVolume   rs.l    1
+.xmaGetBuffer   rs.l    1
+
+.tempFile   dc.b    "T:hippo-xm",0
+    even
+
+.init
+    DPRINT  "xmaplay init"
+	move.l	(a5),a0
+	btst	#AFB_68020,AttnFlags+1(a0)
+	bne.b	.okk
+	moveq	#ier_hardware,d0
+	rts
+.okk
+	lea	    xmaplayroutines(a5),a0
+	bsr.w	allocreplayer
+	beq.b	.ok3
+	rts
+.ok3
+
+    * Save into a file for XMAplay
+    lea     .tempFile(pc),a0
+	move.l	moduleaddress(a5),a1
+	move.l	modulelength(a5),d0
+	bsr.w	plainSaveFile
+	bmi 	.saveError
+
+    DPRINT  "temp file saved"
+
+    lea     .tempFile(pc),a0
+    lea     songover(a5),a1
+    move.l  xmaplayroutines(a5),a3
+    jsr     .xmaInit(a3)
+    * d0 = status, 1 = OK, 0 = fail
+    * a0 = message or NULL
+ if DEBUG
+    DPRINT  "xmaInit=%ld mask=%lx"
+    push    d0
+    move.l  a0,d0
+    beq.b   .1
+    DPRINT  "msg=%s"
+.1  pop     d0
+ endif
+
+    pushm   all
+    * Rid the temp file
+    pushpea .tempFile(pc),d1
+    lore    Dos,DeleteFile
+    popm    all
+
+    tst.l   d0
+    beq    .initError
+    
+    * d1 = position mask 16.16 FP
+    clr.w   d1
+    swap    d1
+    move.l  d1,.posMask
+    pushpea .posMask(pc),ps3m_buffSizeMask(a5)
+
+ if DEBUG
+    move.l  a2,d0
+    DPRINT  "buf1=%lx"
+    move.l  a3,d0
+    DPRINT  "buf2=%lx"
+ endif
+
+    * a1 = pointer to position of 16.16 FP
+    move.l  a1,.posPtr
+    * a2 = pointer to buf1 
+    move.l  a2,.buf1Ptr
+    * a3 = pointer to buf2 
+    move.l  a3,.buf2Ptr
+
+    pushpea .ps3mPos(pc),ps3m_playpos(a5)
+    pushpea .buf1Ptr(pc),ps3m_buff1(a5)
+    pushpea .buf2Ptr(pc),ps3m_buff2(a5)
+
+    bsr     .vol
+
+    DPRINT  "xmaplay init ok"
+    moveq   #0,d0
+    rts
+
+.initError
+    moveq   #ier_error,d0
+    rts
+.saveError
+    moveq   #ier_nomem,d0
+    rts
+
+* xmaplay
+.posPtr     dc.l    0 
+.posMask    dc.l    0
+.buf1Ptr    dc.l    0
+.buf2Ptr    dc.l    0
+.ps3mPos    dc.l    0
+
+.poslen
+    move.l  xmaplayroutines(a5),a0
+    jsr     .xmaGetPosLen(a0)
+    move    d0,pos_nykyinen(a5)
+    move    d1,pos_maksimi(a5)
+
+    * Update play position 
+    * Convert to match PS3M similar value
+    * 16.16 FP
+    move.l  .posPtr(pc),d0
+    beq.b    .2
+    move.l  d0,a0
+    move.l  (a0),d0
+    * to 24.8 FP
+    lsr.l   #8,d0
+    move.l  d0,.ps3mPos
+.2
+    rts
+.stop
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaStop(a0)
+.cont
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaCont(a0)
+.vol
+    move    mainvolume(a5),d0
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaSetVolume(a0)
+.eteen
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaForward(a0)
+.taakse
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaBackward(a0)
+.end
+    move.l  xmaplayroutines(a5),a0
+    jmp     .xmaEnd(a0)
+
+* Out:
+*    d0 = 0 if accepted and XMAPlay enabled
+id_xmaplay  
+    tst.b   xmaplay(a5)
+    beq.b   .no
+    jsr     id_xm
+    tst.l   d0
+    beq.b   .no
+    move.l  moduleaddress(a5),a1
+	lea 	xmName(a1),a1
+    moveq   #20-1,d0
+    jsr     copyNameFromA1
+    moveq   #0,d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
 
 *******************************************************************************
 *** SECTION *******************************************************************
@@ -45220,7 +46259,7 @@ deliInit:
  
 	* interrupt routine provided, set up an interrupt
 	move	dtg_Timer(a4),d0
-	bsr.w	init_ciaint_withTempo
+	jsr	init_ciaint_withTempo
 	beq.b	.gotCia
 	DPRINT	"cia error"
 
@@ -45473,7 +46512,7 @@ deliEnd:
 	
 	move.l	deliStoredInterrupt(a5),d0
 	beq.b	.noIntUsed
-	bsr.w	rem_ciaint
+	jsr    	rem_ciaint
 .noIntUsed
 
 	move.l	#DTP_StopInt,d0
@@ -45539,7 +46578,7 @@ deliStop
 	move.l	#DTP_StopInt,d0
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
-	bsr.w	clearsound
+	jsr	clearsound
 	;move	#$f,$dff096
 	rts
 
@@ -45603,7 +46642,7 @@ freeDeliBase
 
 
 * Build the DeliBase structure, this is not a complete version.
-buildDeliBase
+buildDeliBase:
 	bsr.b	freeDeliBase
 
 	rsreset 
@@ -45651,6 +46690,19 @@ _deliDataSize		rs.b	0
 	* Grab path and file parts
 	* Name without path to A1
 	move.l	l_nameaddr(a3),a1
+
+	tst.b	l_remote(a3)
+	beq.b	.notRemote
+	* Remote l_nameaddr may contain an extra
+	* path part: part1/part2.ext. Skip this
+	* as it will confuse file loading later.
+.r1	tst.b	(a1)+
+	bne.b	.r1
+.r2	cmp.b	#"/",-(a1)
+	bne.b	.r2
+	addq	#1,a1
+.notRemote
+
 	move.l	a1,dtg_FileArrayPtr(a0)
 	* Full path to A2
 	lea	l_filename(a3),a2
@@ -45711,7 +46763,7 @@ _deliDataSize		rs.b	0
 	move.l	(sp)+,dtg_AudioAlloc(a0)
 	pea	deliFreeAudio(pc)
 	move.l	(sp)+,dtg_AudioFree(a0)
-	pea	dmawait(pc)
+	pea	dmawait
 	move.l	(sp)+,dtg_WaitAudioDMA(a0)
 	pea	.startInt(pc)
 	move.l	(sp)+,dtg_StartInt(a0)
@@ -45758,7 +46810,7 @@ _deliDataSize		rs.b	0
 	cmp.l	a1,a2
 	bne.b	.jumps
 	; Ensure jump table code is flushed
- 	bra	clearCpuCaches
+ 	jmp     clearCpuCaches
 
 .songEnd
 	* May be called from interrupt, no logging allowed
@@ -45879,13 +46931,38 @@ deliLoadFile
 	lea 	var_b,a5
 
 	* Find empty loadfile slot
-	bsr.b	deliFindEmptyListDataSlot
-	bne.b	.noSlots
+	bsr		deliFindEmptyListDataSlot
+	bne		.noSlots
 	lea	4(a1),a2
 
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	move.l	deliPathArray+var_b,a0
 
+	* Manipulate path so that the file part is in lowercase.
+	* Amiga filesystems are case insensitive,
+	* but this will help with Modland being lower case.
+	* Eagleplayers may add unpredictable file suffixes here,
+	* lowercase is the most likely one to work.
+	move.l	a0,a3
+.1	tst.b	(a3)+
+	bne.b	.1
+
+.2	cmp.l	a0,a3
+	beq.b	.3
+	cmp.b	#'/',-(a3)
+	beq.b	.3
+	move.b	(a3),d1
+	cmp.b	#'A',d1
+	blo.b	.2
+	cmp.b	#'Z',d1
+	bhi.b	.2
+	or.b	#$20,(a3) * lower case alphabet
+	bra.b	.2
+.3
+	
+	* a0 <= file path to load
+	* a1 <= address to store data address
+	* a2 <= address to store length
 	jsr	loadfileStraight
 	clr.l 	deliLoadFileIoErr(a5)
 	move.l	d0,d7
@@ -47211,7 +48288,7 @@ deliShowNoteStruct
 * out: 
 *  d0 = loaded file address, or NULL if error
 *  d1 = length
-plainLoadFile
+plainLoadFile:
 	pushm	d2-a6
 	moveq	#0,d7
 
@@ -47273,7 +48350,7 @@ plainLoadFile
 *  d0 = data length
 * out: 
 *  d0 = Written bytes or -1 if error
-plainSaveFile
+plainSaveFile:
 	pushm	d1-a6
 	moveq	#-1,d7
 	move.l	a1,d4
@@ -47616,6 +48693,10 @@ runSpectrumScope
 
 	cmp	#pt_multi,playertype(a5)
 	beq.b	.ps3m
+    cmp     #pt_xmaplay,playertype(a5)
+    beq.b   .ps3m
+    jsr     playSidInRESIDMode
+    bne.b   .ps3m
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.sample
 	bra.b	.normal
@@ -47653,6 +48734,10 @@ runSpectrumScope
 * A500 average = 1ms
 
 	* Vertical fill
+	
+	tst.b	s_bufferIsChip(a4)
+	beq.b	.cpuFill
+
 	lore	GFX,OwnBlitter
 
 	move.l	s_draw1(a4),a0
@@ -47680,6 +48765,10 @@ runSpectrumScope
 ;	bsr.b	drawScales
 	
 .x	rts
+
+.cpuFill
+	moveq	#65,d1
+	jmp		cpuVerticalFill
 
 * Test visualization
  REM
@@ -48155,6 +49244,15 @@ spectrumGetPS3MSampleData
 	lsr.l	#8,d0
 	move.l	ps3m_buffSizeMask(a5),a0
 	move.l	(a0),d1
+    moveq   #4,d4   * scale factor
+
+    * For reSID the mask is not a bitmask, instead 
+    * it is around 140. Force to it to be 127 here.
+    jsr     playSidInRESIDMode
+    beq.b   .skipz
+    moveq   #FFT_LENGTH-1,d1
+    moveq   #5,d4   * Scale factor
+.skipz
 
 	move.l	ps3m_buff1(a5),a0
 	move.l	(a0),a0
@@ -48169,10 +49267,10 @@ spectrumGetPS3MSampleData
 	ext	d2
 	ext	d3
 	add	d3,d2
-	asl	#4,d2   * scaling!
+	asl	d4,d2   * scaling!
 	move	d2,(a2)+
 	addq	#1,d0
-	and	d1,d0
+	and	d1,d0   * mask must be a bitmask 
 	dbf	d7,.loop
 
 	rts
@@ -48236,7 +49334,7 @@ spectrumGetSampleData
 ***************************************************************************
 
 createlistBoxRegion
-	bsr.b	disposelistBoxRegion
+	bsr.b	disposeListBoxRegion
 
 	lore	GFX,NewRegion
 	move.l	d0,listBoxRegion(a5)
@@ -48245,16 +49343,15 @@ createlistBoxRegion
 	lea	-ra_SIZEOF(sp),sp
 	move.l	sp,a1
 	moveq	#30+WINX,d0
-	moveq	#62+WINY,d1
+	;moveq	#62+WINY,d1
+	move	fileBoxTopEdge(a5),d1
 	move	WINSIZX(a5),d2
 	sub	#10,d2
 
-	move	#127+WINY,d3
-	tst.b	altbuttonsUse(a5)
-	beq.b	.noAlt
-	add	#16,d1
-	add	#16,d3  
-.noAlt
+	;move	#127+WINY,d3
+	move	fileBoxTopEdge(a5),d3
+	add		#127-62-1,d3 * magic constant
+
 	add	boxy(a5),d3
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -48279,11 +49376,55 @@ createlistBoxRegion
 	rts
 
 
-disposelistBoxRegion
+disposeListBoxRegion
 	pushm	all
 	move.l	listBoxRegion(a5),d0
 	beq.b	.x
 	clr.l	listBoxRegion(a5)
+	move.l	d0,a0
+	lore	GFX,DisposeRegion
+.x	popm	all
+	rts
+
+createInfoBoxRegion
+	bsr		disposeInfoBoxRegion
+	lore	GFX,NewRegion
+	move.l	d0,infoBoxRegion(a5)
+	beq.b	.x
+
+	lea	-ra_SIZEOF(sp),sp
+	move.l	sp,a1
+	moveq	#7+WINX,d0
+	;moveq	#62+WINY,d1
+	move	infoBoxTopEdge(a5),d1
+	move	WINSIZX(a5),d2
+	sub		#10+1,d2 * margin
+
+	move	d1,d3	
+	add		infoBoxHeight(a5),d3
+
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	add	windowtop(a5),d3
+
+
+	move	d0,ra_MinX(a1)
+	move	d1,ra_MinY(a1)
+	move	d2,ra_MaxX(a1)
+	move	d3,ra_MaxY(a1)
+	
+	move.l	infoBoxRegion(a5),a0
+	lob	OrRectRegion
+	lea	ra_SIZEOF(sp),sp
+.x	tst.l	d0
+	rts
+
+
+disposeInfoBoxRegion
+	pushm	all
+	move.l	infoBoxRegion(a5),d0
+	beq.b	.x
+	clr.l	infoBoxRegion(a5)
 	move.l	d0,a0
 	lore	GFX,DisposeRegion
 .x	popm	all
@@ -48306,21 +49447,40 @@ setListBoxClip
 
 
 removeListBoxClip
+	move.l	listBoxClipRegion(a5),a1
+removeClip
 	move.l	windowbase(a5),a0
 	move.l	wd_WLayer(a0),a0
-	; Null is ok here:
-	move.l	listBoxClipRegion(a5),a1
+	; Null is ok here for a1
 	lore	Layers,InstallClipRegion
 	rts
 
+setInfoBoxClip
+	pushm	all
+	tst.l	infoBoxRegion(a5)
+	beq.b	.x
+	move.l	windowbase(a5),a0
+	move.l	wd_WLayer(a0),a0
+	move.l	infoBoxRegion(a5),a1
+	lore	Layers,InstallClipRegion
+	; d0 = previous clip region or NULL
+	move.l	d0,infoBoxClipRegion(a5)
+	; Out of memory is also possible, this
+	; is visible in some flag somewhere.
+.x	popm	all
+	rts
 
+
+removeInfoBoxClip
+	move.l	infoBoxClipRegion(a5),a1
+	bra		removeClip
+	
 ***************************************************************************
 *
 * Row button layout
 *
 ***************************************************************************
- ifne FEATURE_HORIZ_RESIZE
-
+ 
 ; Store the original gadget gg_Widht and gg_LeftEdge 
 ; for relative layouting later when window size changes.
 initializeButtonRowLayout
@@ -48344,7 +49504,20 @@ initializeButtonRowLayout
 	rts
 
 
-layoutButtonRow
+layoutGadgetsHorizontal:
+horizontalLayout:
+	* Set correct font for calculating text widths for buttons
+	move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont	
+	bsr.b	.it
+	move.l	rastport(a5),a1
+	move.l	fontbase(a5),a0
+	lore	GFX,SetFont	
+	rts
+
+.it
+	
   if DEBUG
 	moveq	#0,d1
 	move	winstruc+nw_Width,d1
@@ -48426,7 +49599,7 @@ layoutButtonRow
 	* string length in d0
 	move.l	a0,d0
 
-	; Calculate text lenght in pixels using
+	; Calculate text length in pixels using
 	; the current rastport draw modes.
 	push	a1
 	move.l	rastport(a5),a1
@@ -48437,12 +49610,1186 @@ layoutButtonRow
 	; center	
 	move	gg_Width(a1),d3
 	sub	d0,d3
-	lsr	#1,d3
+	bpl.b	.p
+	moveq	#0,d3
+.p
+	addq	#1,d3 * round up
+	lsr		#1,d3
 	move	d3,it_LeftEdge(a2)
 	
 	pop	a0
 	rts
- endif ; FEATURE
+	
+***************************************************************************
+*
+* Vertical layout
+*
+***************************************************************************
+
+layoutGadgetsVertical:
+verticalLayout:
+	DPRINT	"layoutGadgetVertical"
+
+	*** Infobox
+
+	move	listFontHeight(a5),d1
+	add		d1,d1
+	addq	#1,d1
+	move	d1,infoBoxHeight(a5)
+
+	move	infoBoxTopEdge(a5),d0
+	add		d1,d0
+	addq	#4,d0 ; margin
+
+	*** Button row 1
+    add     windowtop(a5),d0
+	move	d0,buttonRow1TopEdge(a5)
+
+	moveq	#13,d1
+	tst.b	altbuttons(a5)
+	beq.b	.norm1
+	add		d1,d1
+.norm1
+	lea		.setTopAndHeight(pc),a2
+	lea		row1Gadgets,a0
+	bsr		.forEachGadget
+	
+	*** Button row 2
+
+	add		d1,d0
+	add		#1,d0 ; margin
+
+	* Height is either normal or double
+	moveq	#13,d1
+	tst.b	altbuttons(a5)
+	beq.b	.norm2
+	add		d1,d1
+.norm2
+	* ..or font height if it is taller
+	move	listFontHeight(a5),d2
+	cmp		d2,d1
+	bhs.b	.3
+	move	d2,d1
+.3	
+
+	lea		row2Gadgets,a0
+	bsr		.forEachGadget
+
+	lea		.centerTextVertical(pc),a2
+	lea		row2Gadgets,a0
+	bsr		.forEachGadget
+
+	bsr		.makeVolumeSliderKnob
+	bsr		.setButtonImages
+
+	add		d1,d0
+	addq	#4,d0 ; margin
+    sub     windowtop(a5),d0
+	move	d0,fileBoxTopEdge(a5)
+
+	*** Left side gadgets
+
+    add     windowtop(a5),d0
+	* Align mode button and file slider with filebox
+	lea		gadgetListModeChangeButton,a0
+	subq	#2,d0
+	move	d0,gg_TopEdge(a0)
+	lea		gadgetFileSlider,a1
+	add		gg_Height(a0),d0
+	addq	#3,d0
+	move	d0,gg_TopEdge(a1)
+	rts
+	
+* in:
+*   a0 = gadget row
+*   a2 = callback with a1=gadget
+.forEachGadget
+.1	tst	(a0)
+	beq.b	.2
+	move.l	a0,a1
+	add	(a0),a1
+	addq	#6,a0
+	jsr		(a2)
+	bra.b	.1
+.2	rts
+
+.setTopAndHeight:
+	move	d0,gg_TopEdge(a1)
+	move	d1,gg_Height(a1)
+	cmp.l	#gadgetVolumeSlider,a1
+	bne.b	.x
+	addq	#2,gg_TopEdge(a1)
+	subq	#4,gg_Height(a1)
+.x	rts
+
+.centerTextVertical
+	tst.l	gg_GadgetText(a1)
+	beq.b	.noText
+	move	gg_Height(a1),d3
+	move.l	gg_GadgetText(a1),a3
+	move.l	#list_text_attr,it_ITextFont(a3)
+	move.l	it_ITextFont(a3),a4
+	sub		ta_YSize(a4),d3
+	addq	#1,d3 * round up
+	lsr		#1,d3
+	move	d3,it_TopEdge(a3)
+.noText
+	rts
+
+.setButtonImages
+	lea		gadgets,a3
+	basereg	gadgets,a3
+	lea		button1im,a4
+	basereg	button1im,a4
+
+	lea		gadgetPlayButton(a3),a0
+	lea		button1im(a4),a1
+	lea		button1imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetInfoButton(a3),a0
+	lea		button2im(a4),a1
+	lea		button2imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetStopButton(a3),a0
+	lea		button3im(a4),a1
+	lea		button3imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetEjectButton(a3),a0
+	lea		button4im(a4),a1
+	lea		button4imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetNextButton(a3),a0
+	lea		button5im(a4),a1
+	lea		button5imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetPrevButton(a3),a0
+	lea		button6im(a4),a1
+	lea		button6imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetNextSongButton(a3),a0
+	lea		button12im(a4),a1
+	lea		button12imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetPrevSongButton(a3),a0
+	lea		button13im(a4),a1
+	lea		button13imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetForwardButton(a3),a0
+	lea		kela2im(a4),a1
+	lea		kela2imDouble(a4),a2
+	bsr		.setImage
+	lea		gadgetRewindButton(a3),a0
+	lea		kela1im(a4),a1
+	lea		kela1imDouble(a4),a2
+	bsr		.setImage
+	endb	a3
+	endb	a4	
+	rts
+
+.setImage
+	move.l	gg_GadgetRender(a0),a6
+	tst.b	altbuttons(a5)
+	bne.b	.useLarge
+	move.l	a1,ig_ImageData(a6)
+	move	#8,ig_Height(a6)
+	move	#3,ig_TopEdge(a6)
+	cmp.l	#button2im,a1
+	bne.b	.notI
+	* One is 1 pix taller
+	addq	#1,ig_Height(a6)
+	subq	#1,ig_TopEdge(a6)
+.notI
+	rts
+.useLarge
+	move.l	a2,ig_ImageData(a6)
+	move	#15,ig_Height(a6)
+	move	#5,ig_TopEdge(a6)
+	rts
+
+
+* in:
+*   d1 = row height
+.makeVolumeSliderKnob
+	* Make slider knob for volume slider
+	move	d1,d3
+
+    lea     gadgetVolumeSlider,a1
+    move.l  gg_GadgetRender(a1),a1
+	subq	#4,d3 * magic constant
+	move	d3,ig_Height(a1)
+
+	* Soure data
+	lea		horizPropGadgetGfxNormal,a2
+	tst		uusikick(a5)
+	bne.b	.newKnob
+	lea		horizPropGadgetGfxNormal_kick13,a2
+.newKnob
+	* Target buffer
+	lea		slider1im,a3
+
+	* d2 = offset to 2nd plane in destination
+	move	d3,d2
+	add		d2,d2
+
+	move	9*2(a2),(a3,d2) * line 0, bpl 2
+	move	(a2)+,(a3)+ * line 0, bpl 1
+	subq	#1,d3
+.lineLoop
+	move	9*2(a2),(a3,d2) * line n, bpl 2
+	move	(a2),(a3)+ * line n, bpl 1
+	subq	#1,d3
+	cmp		#1,d3
+	bne.b	.lineLoop
+	add		#7*2,a2	* get to the last data line
+	move	9*2(a2),(a3,d2) * line last, bpl 2
+	move	(a2),(a3)+ * line last, bpl 1
+	rts
+
+
+
+***************************************************************************
+*
+* Modland, Aminet integration using UHC
+*
+***************************************************************************
+
+SEARCH_MODLAND = 0
+SEARCH_AMINET  = 1
+SEARCH_MODULES = 2
+SEARCH_HVSC    = 3
+
+modlandSearch
+	moveq	#SEARCH_MODLAND,d7
+	bra.b	remoteSearch
+
+aminetSearch
+	moveq	#SEARCH_AMINET,d7
+	bra.b	remoteSearch
+
+modulesSearch
+	moveq	#SEARCH_MODULES,d7
+	bra.b	remoteSearch
+
+hvscSearch
+	moveq	#SEARCH_HVSC,d7
+;	bra.b	remoteSearch
+
+
+* Requests a search pattern from the user,
+* then creates an executable shell script to launch
+* UHC search using the given search pattern.
+* The search result file is imported as a normal modulelist.
+*
+* in:
+*  d7 = remote type enumeration
+remoteSearch
+	tst.b	uhcAvailable(a5)
+	bne.b	.go
+	rts
+.go
+	jsr		lockMainWindow
+
+	* Storage space for user input
+	lea	-50(sp),sp
+	move.l	sp,a1
+	clr.b	(a1)
+	jsr		get_rt
+	; a1 = string buffer
+	; d0 = max chars
+	moveq	#40,d0
+	; a2 = requester title
+
+    lea     enterSearchPattern_t,a2 
+	; a3 = rtReqInfo structure or null
+	sub.l	a3,a3
+	; a0 = tags, to set the public screen
+	lea		otag15,a0
+	lob		rtGetStringA
+; d0 = true if something entered, false otherwise
+	tst.l	d0
+	beq		.exit
+
+	jsr		inforivit_searching
+
+	* Prepare script into desbuf(a5)
+	lea		.modlandSearchCmd(pc),a0
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.1
+	lea		.aminetSearchCmd(pc),a0
+	cmp.b	#SEARCH_AMINET,d7
+	beq.b	.1
+	lea		.modulesSearchCmd(pc),a0
+    cmp.b   #SEARCH_MODULES,d7
+    beq.b   .1
+    lea     .hvscSearchCmd(pc),a0
+.1
+    pushpea .pathCmd(pc),d0  * path setting
+ 	move.l	sp,d1		* search word
+	jsr		desmsg
+
+	* Save it into a file for execution
+	lea		desbuf(a5),a0
+	move.l	a0,a1
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+    
+	* Find length for saving
+	move.l	a0,d0
+	sub.l	a1,d0
+    subq.l  #1,d0 * exclude terminating zero
+
+	lea		remoteScriptPath(pc),a0
+	; data in a1
+	bsr		plainSaveFile
+	tst.l	d0
+	bmi		.exit
+
+	pushpea	remoteExecute(pc),d1
+	moveq	#0,d2			* input
+	move.l	nilfile(a5),d3	* output
+	lore	Dos,Execute
+	DPRINT	"Execute status=%ld"
+
+	* Prepare results path into stack
+	lea		-100(sp),sp
+
+	pushpea	.uhcTempDirVar(pc),d1
+	move.l	sp,d2
+	moveq	#50,d3
+	move.l	#GVF_GLOBAL_ONLY,d4
+	lob		GetVar
+	tst.l	d0
+	bpl.b	.gotVar
+	moveq	#0,d0
+	bra.b	.bail
+.gotVar
+
+	lea		.modlandResultsPath(pc),a0
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.a
+	lea		.aminetResultsPath(pc),a0
+	cmp.b	#SEARCH_AMINET,d7
+	beq.b	.a
+	lea		.modulesResultsPath(pc),a0
+    cmp.b   #SEARCH_MODULES,d7
+    beq.b   .a
+    lea     .hvscResultsPath(pc),a0
+.a
+
+	* Jump to after the variable
+	lea		(sp,d0.l),a1
+.co	move.b	(a0)+,(a1)+
+	bne.b	.co
+
+	* Read the results file
+	move.l	sp,a0
+	move.l	a0,d0
+	DPRINT	"loading %s"
+ 	bsr	plainLoadFile
+	lea		100(sp),sp	* get rid of results path
+	DPRINT	"Results=%lx"
+.bail
+	tst.l	d0
+	beq		.exit
+	; d0 = data
+	; d1 = len
+	
+	DPRINT	"Importing"
+	jsr		obtainModuleList
+	pushm	all
+	* free previous list
+	bsr		freeSearchList
+	* ensure the correct mode is active
+	jsr		engageSearchResultsMode
+	popm	all
+
+	; start of data
+	move.l	d0,a3
+	; end of data
+	lea		(a3,d1.l),a4
+	; destination list
+	lea searchResultsListHeader(a5),a2
+	
+	* Determine line header to use to add the "http://" -base address
+	* to each line.
+	pushpea	.modlandLine(pc),d6
+	moveq	#.modlandLineE-.modlandLine,d4
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.2
+	cmp.b	#SEARCH_AMINET,d7
+	beq.b	.aa
+	pushpea	.modulesLine(pc),d6
+	moveq	#.modulesLineE-.modulesLine,d4	
+    cmp.b   #SEARCH_MODULES,d7
+    beq.b   .2
+	pushpea	.hvscLine(pc),d6
+	moveq	#.hvscLineE-.hvscLine,d4	
+	bra.b	.2
+.aa
+	pushpea	.aminetLine(pc),d6
+	moveq	#.aminetLineE-.aminetLine,d4	
+
+;	* Aminet mirror is populated after aminetsearch has been done,
+;	* so get it here.
+;	bsr		getUHCAminetMirror
+;	move.l	uhcAminetMirrorPath(a5),d6
+;	beq.b	.noAminet
+;	move.l	d6,a0
+;.flen
+;	tst.b	(a0)+
+;	bne.b	.flen
+;	move.l	a0,d4
+;	sub.l	d6,d4 * string length in d4
+.2
+
+	* Import data
+	* This will also set l_remote and l_nameaddr
+	* to correct values for remote files.
+	lea		.modlandFilter(pc),a0
+	cmp.b	#SEARCH_MODLAND,d7
+	beq.b	.3
+	sub.l	a0,a0
+.3	jsr		importModuleProgramFromDataSkipHeader
+	move.l	d0,modamount(a5)
+
+	move.l	a3,a0
+	jsr		freemem
+	
+	tst.b	autosort(a5)
+	beq.b	.noSort
+	jsr		sortButtonAction
+	bra.b	.sorted
+.noSort
+	jsr		forceRefreshList
+.sorted
+	jsr		releaseModuleList
+.exit
+.noAminet
+	jsr		inforivit_play
+	jsr		unlockMainWindow
+	lea 	50(sp),sp
+	rts
+
+
+* In:
+*   a3 = name to check, ends with 10 or 0
+* Out:
+*   d0 = true if ok, false otherwise
+.modlandFilter
+	pushm	a0/a1
+	lea		.modlandPostfixes(pc),a0
+	lea		.modlandPrefixes(pc),a1
+	bsr		filterName
+
+; if DEBUG
+;	tst.l	d0
+;	bne.b	.ok
+;	DPRINT	"->REJECTED"
+;.ok
+; endif
+
+	popm	a0/a1
+	rts
+
+.modlandPostfixes
+	dc.l	"adsc"
+	dc.l	"ahx "
+	dc.l	"aon "
+	dc.l	"aps "
+	dc.l	"avp "
+	dc.l	"bd  "
+	dc.l	"bp  "
+	dc.l	"bp3 "
+	dc.l	"bss "
+	dc.l	"cm  "
+	dc.l	"cus "
+	dc.l	"dbm0"
+	dc.l	"digi"
+	dc.l	"dl  "
+	dc.l	"dln "
+	dc.l	"dm  "
+	dc.l	"dm2" 
+	dc.l	"dmu "
+	dc.l	"dum "
+	dc.l	"dw  "
+	dc.l	"dz  "
+	dc.l	"ea  "
+	dc.l	"fc  "
+	dc.l	"fp  "
+	dc.l	"fred"
+	dc.l	"ftm "
+	dc.l	"glue"
+	dc.l	"gmc "
+	dc.l	"hip "
+	dc.l	"hip7"
+	dc.l	"hipc"
+	dc.l	"is  "
+	dc.l	"is20"
+	dc.l	"it  "
+	dc.l	"jam "
+	dc.l	"jb  "
+	dc.l	"jd  "
+	dc.l	"jpo "
+	dc.l	"jt  "
+	dc.l	"kh  "
+	dc.l	"ma  "
+	dc.l	"mc  "
+	dc.l	"mk2 "
+	dc.l	"ml  "
+	dc.l	"mm8 "
+	dc.l	"mmd0"
+	dc.l	"mmd1"
+	dc.l	"mmd2"
+	dc.l	"mmd3"
+	dc.l	"mmdc"
+	dc.l	"mod "
+	dc.l	"mod "
+	dc.l	"mon "
+	dc.l	"mtm "
+	dc.l	"mug "
+	dc.l	"mxtx"
+	dc.l	"okta"
+	dc.l	"osp "
+	dc.l	"prt "
+	dc.l	"psid"
+	dc.l	"rh  "
+	dc.l	"s3m "
+	dc.l	"sa  "
+	dc.l	"sc  "
+	dc.l	"sfx "
+	dc.l	"sid "
+	dc.l	"sid2"
+	dc.l	"smod"
+	dc.l	"sng "
+	dc.l	"soc "
+	dc.l	"sog "
+	dc.l	"spn "
+	dc.l	"sqt "
+	dc.l	"sun "
+	dc.l	"tcb "
+	dc.l	"tf  "
+	dc.l	"thx "
+	dc.l	"vss "
+	dc.l	"wb  "
+	dc.l    "tme "
+	dc.l	"xm  "
+	dc.l	0
+;todo: synmod
+
+.modlandPrefixes
+	dc.l	"mdat"
+	dc.l	"jpn."
+	dc.l	"mcr."
+	dc.l	"qts."
+	dc.l	0
+
+.aminetLine
+	dc.b	"http://de.aminet.net/aminet/",0
+.aminetLineE
+
+.modlandLine
+	dc.b	"http://ftp.modland.com/pub/modules/",0
+.modlandLineE
+
+.modulesLine
+	dc.b	"http://www.modules.pl/",0
+.modulesLineE
+
+.hvscLine
+    dc.b    "http://hvsc.csdb.dk/",0     
+.hvscLineE
+
+.uhcTempDirVar
+	dc.b	"UHC/TEMPDIR",0
+
+.pathCmd
+    dc.b    'path "${UHCBIN}C" "${UHCBIN}S" ADD',0
+
+.modlandResultsPath
+	dc.b	"modlandsearch",0
+.modlandSearchCmd
+	dc.b	"%s",10
+	dc.b 	'modlandsearch %s',10
+	dc.b	0
+.aminetResultsPath
+	dc.b	"aminetsearch",0
+.aminetSearchCmd
+	dc.b	"%s",10
+	dc.b 	'aminetsearch mods/ %s',10
+	dc.b	0
+.modulesResultsPath
+	dc.b	"modulessearch",0
+.modulesSearchCmd
+	dc.b	"%s",10
+	dc.b 	'modulessearch %s',10
+	dc.b	0
+.hvscResultsPath
+	dc.b	"hvscsearch",0
+.hvscSearchCmd
+	dc.b	"%s",10
+	dc.b 	'hvscsearch %s',10
+	dc.b	0
+ even
+
+* Set list node remote type and
+* set l_nameaddr to be proper for showing to user.
+* In:
+*   a0 = list node
+configRemoteNode
+	pushm	d0/a0-a2
+	st		l_remote(a0)
+ 
+ 	lea		l_filename(a0),a1
+	move.l	a1,a2
+.findEnd2
+	tst.b	(a1)+
+	bne.b	.findEnd2
+
+	moveq	#2-1,d0
+
+	* l_filename is odd
+	cmp.l	#"modu",11(a2)
+	bne.b	.1
+	cmp.l	#"les.",15(a2)
+	bne.b	.1
+	* For modules.pl take the last file part only to avoid redundancy
+	* "captain/captain_-_space_debris"
+	moveq	#1-1,d0
+.1
+
+.findSlash
+	cmp.l	a1,a2
+	beq.b	.break * safety check
+	cmp.b	#"/",-(a1)
+	bne.b	.findSlash
+	dbf	d0,.findSlash
+	addq	#1,a1
+.break
+	move.l	a1,l_nameaddr(a0)
+	popm	d0/a0-a2
+	rts
+
+*
+* Loads a remote file into a file using aget.
+* in:
+*   a0 = url
+*   a1 = buffer for output file path
+* out:
+*   d0 = true: ok, false: some error
+fetchRemoteFile:
+	pushm	d1-a6
+ if DEBUG
+	move.l	a0,d0
+	DPRINT	"fetchRemoteFile: %s"
+ endif
+	moveq	#0,d7	* status: fail
+	
+	* Temporary target file path, the last part of the url
+	move.l	a0,a2
+.end
+	tst.b	(a2)+
+	bne.b	.end
+.sl	cmp.b	#"/",-(a2)
+	bne.b	.sl
+	addq	#1,a2
+
+	move.l	a1,a3
+	* Build temp file path into a3
+	move.b	#"T",(a3)+
+	move.b	#":",(a3)+
+.copy
+	move.b	(a2)+,(a3)+
+	bne.b	.copy
+
+	* TODO: temp file name must be 30 or less
+
+	* Source url in a0
+	* Destination file in a1
+	
+	* Generate parametrized script
+	move.l	a0,d0
+	move.l	a1,d1 
+	lea		.getScript(pc),a0
+	jsr		desmsg
+
+	jsr		inforivit_downloading
+	jsr		setMainWindowWaitPointer
+
+	* Save into a file to execute
+	lea		desbuf(a5),a0
+	* Find length to d0
+    moveq   #-1,d0  ; phx strlen trick
+.c	tst.b   (a0)+
+	dbeq    d0,.c
+ 	not.l   d0
+
+
+	lea		remoteScriptPath(pc),a0
+	lea		desbuf(a5),a1
+	bsr		plainSaveFile
+	tst.l	d0
+	bmi		.exit * can't save temp file
+
+	pushpea	remoteExecute(pc),d1
+	moveq	#0,d2			* input
+	move.l	nilfile(a5),d3	* output
+	lore	Dos,Execute
+	* d0 = true if was able to run the script
+	move.l	d0,d7
+	beq.b	.exit
+	* Set status to ok
+	moveq	#1,d7 
+
+	* Check out status from the output file
+	lea		.agetOut(pc),a0
+	bsr		plainLoadFile
+	tst.l	d0
+	beq.b	.exit
+	tst.l	d1
+	beq.b	.1
+	* Mangle a null terminated line changed error msg, horrible
+	lea		-200(sp),sp
+	move.l	sp,a1
+	move.l	d0,a0
+	moveq	#60,d2
+.e	move.b	(a0)+,(a1)+
+	subq	#1,d2
+	bne.b	.f
+	move.b	#10,(a1)+
+	moveq	#60,d2
+.f	subq	#1,d1
+	bne.b	.e
+	clr.b	(a1)
+	move.l	sp,a1
+	jsr		request
+	lea		200(sp),sp
+	* Status to fail
+	moveq	#0,d7
+.1	move.l	d0,a0
+	jsr		freemem
+.exit
+	jsr		clearMainWindowWaitPointer
+	move.l	d7,d0
+	popm	d1-a6
+	rts
+
+.agetOut
+	dc.b	"T:agetout",0
+
+.getScript
+	dc.b	'path "${UHCBIN}C" ADD',10
+	dc.b	'aget "%s" "%s" QUIET >T:agetout',10,0
+remoteExecute
+	dc.b	"execute "
+remoteScriptPath
+	dc.b	"T:hip",0
+
+ even
+
+* Checks if UHC is installed
+initializeUHC
+	tst.b	uusikick(a5)
+	bne.b	.go
+	* Remove search results related tooltip
+	lea	tooltipList\.listModeChange,a0
+	move.b	#4,1(a0)
+	rts
+.go
+	lea		-30(sp),sp
+	pushpea	.uhcBinVar(pc),d1
+	move.l	sp,d2
+	moveq	#29,d3
+	move.l	#GVF_GLOBAL_ONLY,d4
+	lore	Dos,GetVar
+	lea		30(sp),sp
+	tst.l	d0
+	spl		uhcAvailable(a5)
+	rts
+
+.uhcBinVar	dc.b	"UHCBIN",0
+ even
+
+
+;getUHCAminetMirror
+;	pushm	d1-a6
+;	move.l	uhcAminetMirrorPath(a5),a0
+;	clr.l	uhcAminetMirrorPath(a5)
+;	jsr		freemem
+;
+;	moveq	#100,d0
+;	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+;	jsr		getmem
+;	move.l	d0,uhcAminetMirrorPath(a5)
+;	move.l	d0,a3
+;
+;	pushpea	.aminetMirrorPath(pc),d1
+;	move.l	d0,d2
+;	addq.l	#.httpE-.http,d2
+;	moveq	#90,d3
+;	move.l	#GVF_GLOBAL_ONLY,d4
+;	lore	Dos,GetVar
+;	tst.l	d0
+;	bmi.b	.x
+;
+;	lea		.http(pc),a1
+;	moveq	#.httpE-.http,d0
+;.c1	move.b	(a1)+,(a3)+
+;	dbf	d0,.c1
+;	
+;.x
+;	popm	d1-a6
+;	rts
+;
+;.http	dc.b	"http://"
+;.httpE
+;
+;.aminetMirrorPath
+;	dc.b	"UHC/AMINETMIRROR",0
+;	even
+
+deinitUHC
+;	move.l	uhcAminetMirrorPath(a5),a0
+;	jmp		freemem
+	rts
+	
+freeSearchList
+	move.l	(a5),a6		* execbase
+	lea	searchResultsListHeader(a5),a2
+.loop
+	* a0: list, a1: destroyed, d0: node, or zero
+	move.l	a2,a0
+	lob	RemHead
+	beq.b	.listFreed
+	move.l	d0,a0
+	jsr	freemem
+	bra.b	.loop
+
+.listFreed
+	cmp.b 	#LISTMODE_SEARCH,listMode(a5)
+	bne.b	.no
+	clr.l	modamount(a5)
+.no
+	rts
+
+
+
+
+* In:
+*   a0 = acceptable postfixes
+*   a1 = acceptable prefixes
+*   a3 = name to check, ends with 10 or 0
+* Out:
+*   Z or no Z
+
+filterName:
+	pushm	d1/d6/d7
+	* From a3:
+	bsr	getPreAndPostfixFromPath
+	moveq	#1,d0 * resut: true
+	
+.1	move.l	(a0)+,d1
+	beq.b	.2
+	cmp.l	d1,d6
+	beq.b	.ok
+	bra.b	.1
+.2
+
+.3	move.l	(a1)+,d1
+	beq.b	.4
+	cmp.l	d1,d7
+	beq.b	.ok
+	bra.b	.3
+.4
+	* result: false, not found
+	moveq	#0,d0
+.ok
+	popm	d1/d6/d7
+	* Set Z to reject, clear Z to accept
+	rts
+
+* in:
+*   a3 = path
+* out:
+*   d6 = postfix
+*   d7 = prefix   
+getPreAndPostfixFromPath
+	pushm	d0-d5/a0-a6
+	move.l	a3,a4	* start address, low bound
+.1
+	move.b	(a3)+,d0
+	beq.b	.2
+	cmp.b	#10,d0
+	bne.b	.1
+.2
+	move.l	a3,a5	* end address, high bound
+
+	* Find the start of the name 
+	move.l	a3,a0	* 
+	move.l	a4,a1	* start address for boundary check
+	jsr		nimenalku
+
+	* Build 4 chars prefix into d7
+	moveq	#0,d7
+	moveq	#4-1,d0
+.p1
+	cmp.l	a5,a0	* check for high bound
+	beq.b	.p2
+	rol.l	#8,d7
+	move.b	(a0)+,d7
+	dbf		d0,.p1
+.p2
+
+	* Build 4 chars postfix into d6
+	moveq	#0,d6
+	moveq	#4-1,d0
+	subq	#1,a3	* back up to NULL or 10
+.p3	cmp.l	a4,a3 * low bound check
+	beq.b	.p4
+	move.b	-(a3),d1
+	cmp.b	#".",d1
+	beq.b	.p4
+	ror.l	#8,d6
+	move.b	d1,d6
+	dbf		d0,.p3
+.p6
+	tst		d0
+	bmi.b	.p4
+.p5	
+	ror.l	#8,d6
+	dbf	d0,.p5
+.p4
+	ror.l	#8,d6
+
+	* Force lowercase
+	move.l	#$20202020,d0
+	or.l	d0,d6
+	or.l	d0,d7
+
+;	move.l	d6,.bob
+;	move.l	#.bob,d0
+;	move.l	d6,d1
+;	DPRINT	"post=%s %lx"
+
+	popm	d0-d5/a0-a6
+	rts
+
+;.bob	ds.b	10
+
+***************************************************************************
+*
+* List sort algorithm
+*
+***************************************************************************
+
+
+; Jogeir Liljedahl folder
+; comb sort:  compares=25294, swaps=9211
+; quick sort: compares=23220, swaps=11771
+
+* FSUAE 020
+* Modsanth-unsorted-prg
+
+* comb sort: 20s, comps 734000 swaps 265000
+*            sorted list: 1s
+
+* comb sort: 2s, comps 184000 swaps 22500
+* weights        sorted list: 1s
+
+* quick sort: 26s, comps 658000 swaps 338000
+*            sorted list: 28s
+
+* quick sort: 27s, comps 704000 swaps 400000
+* tail recurs
+
+* quick sort: 22s, comps 704000 swaps 400000
+* tail recurs
+* rand pivo
+
+* quick sort: 20s, comps 381000 swaps 350000
+* rand pivot     sorted list: 20s
+
+	
+ if DEBUG
+sortSwaps	dc.l	0
+sortComps	dc.l	0
+ endif
+
+* Weight is 64 chars
+COMB_WEIGHT = 64
+
+* in:
+*   a2 = start of array of [node pointer, empty pointer] to sort
+*   d7 = number of items to sort
+combSortNodeArray
+	move.l	d7,d0
+	;moveq	#COMB_WEIGHT,d1
+	;jsr		mulu_32
+	lsl.l	#6,d0  	* x64
+	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
+	jsr		getmem
+	move.l	d0,-(sp)	 * store for later freemem
+	beq		.exit
+	move.l	d0,a5
+	move.l	a2,a4		* input data
+	move.l	d7,d6		* input count
+	moveq	#"A",d1
+	moveq	#"Z",d2
+	
+.weights
+	* get node address
+	move.l	(a4),a3
+	* weight address at a5, store it to the empty slot beside the node pointer
+	move.l	a5,4(a4)
+	* fill in weight
+	move.l	a5,a0
+
+	moveq	#COMB_WEIGHT-1,d0
+
+	* Use the divider status byte as the first 
+	* comparison so that directories are sorted first.
+	* This is either: 0, $7f, $ff.
+	move.b	l_divider(a3),d3
+	addq.b	#2,d3
+	* Now it is: 2, $81, $03. Normal file is a 2, so dividers
+	* get to the top.
+	move.l	l_nameaddr(a3),a3
+	bra.b	.1
+.w
+	move.b	(a3)+,d3
+	beq.b	.3
+.1
+	* Lower chase compared chars if possible
+	cmp.b	d1,d3
+	blo.b	.2
+	cmp.b	d2,d3
+	bhi.b	.2
+	or.b	#$20,d3
+.2	move.b	d3,(a0)+
+	dbf		d0,.w
+.3
+	lea		COMB_WEIGHT(a5),a5
+	addq.l	#SORT_ELEMENT_LENGTH,a4
+	subq.l	#1,d6
+	bne.b	.weights
+
+	bsr.b	.doCombSort
+
+.exit
+	move.l	(sp)+,a0
+	move.l	a0,d0
+	jsr		freemem
+	tst.l	d0	* zero on out-of-mem
+	rts
+
+.doCombSort
+	move.l	a2,a0
+	* Constant = 1
+	moveq	#1,d5
+
+; Comb sort the array.
+
+;	Lea.l	List(Pc),a0
+;	Move.l	#ListSize,d7	; Number of values
+
+	Move.l	d7,d1		; d1=Gap
+.MoreSort
+;	lsl.l	#8,d1
+;	Divu.w	#333,d1		; 1.3*256 = 332.8
+;	ext.l	d1
+
+	move.l	d1,d0 
+	lsl.l	#8,d0 
+	move.l	#333,d1
+	jsr	 	divu_32
+	move.l	d0,d1
+
+	Cmp.l	d5,d1		; if gap<1 then gap:=1
+	Bpl.b	.okgap
+	Moveq	#1,d1
+.okgap:
+	Move.l	d7,d2		; d2=Top
+	Sub.l	d1,d2		; D2=NMAX-gap
+	
+	Move.l	a0,a1
+	
+ ;     Lea.l   (a1,d1.w*2),a2  ; a2=a1+gap
+ ;   move    d1,d6
+ ;   mulu    d5,d6
+ ;   lea     (a1,d6.l),a2
+
+;	move.l	d1,d6
+;	lsl.l	#5,d6 
+;	lea		(a1,d6.l),a2
+ 
+	move.l	d1,d0
+	* x8 - SORT_ELEMENT_LENGTH
+	lsl.l	#3,d0	
+	lea		(a1,d0.l),a2
+
+	MoveQ	#0,d0		; d0=Switch
+
+
+
+.Loop:	
+
+ if DEBUG
+	addq.l	#1,sortComps
+ endif
+	* Compare nodes a1 and a2
+	* Get weight addresses for nodes
+	move.l	4(a1),a3
+	move.l	4(a2),a4
+
+    * Compare weights in batches of 4 bytes 
+  rept (COMB_WEIGHT/4)-1
+  	cmpm.l	(a3)+,(a4)+
+	bne.b	.notokval
+  endr
+	cmpm.l	(a3)+,(a4)+
+	beq.b	.okval
+.notokval
+    ;bmi.b   .okval
+	bhs.b	.okval
+
+ if DEBUG
+	addq.l	#1,sortSwaps
+ endif
+
+;	Move.w	(a1)+,d3
+;	Cmp.w	(a2)+,d3
+;	Bmi	.okval
+;	Beq	.okval
+
+;	Move.w	-2(a1),d3	; swap
+;	Move.w	-2(a2),-2(a1)
+;	Move.w	d3,-2(a2)
+
+	* swap 8 bytes entry [node address, weight address]
+	* Advance indexes
+	movem.l	(a1),d3/d6
+	move.l	(a2),(a1)+
+	move.l	4(a2),(a1)+
+	move.l	d3,(a2)+
+	move.l	d6,(a2)+
+	
+	* Set flag, something swapped
+	Moveq	#1,d0
+	bra		.ok1
+.okval:
+	* Advance indexes
+	addq.l	#SORT_ELEMENT_LENGTH,a1
+	addq.l	#SORT_ELEMENT_LENGTH,a2
+.ok1
+
+	subq.l	#1,d2 
+	bne	.Loop
+
+	cmp.l	d5,d1	; gap < 1 ?
+	Bne.w	.MoreSort
+	Tst.w	d0		; Any entries swapped ?
+	Bne.w	.MoreSort
+	Rts
 
 
 ***************************************************************************
@@ -48500,6 +50847,7 @@ stopMeasure
 	move.l	IO_DEVICE+timerRequest(a5),a6
 	lea	clockEnd(a5),a0
 	lob	ReadEClock
+    * D0 will be 709379 for PAL.
 	move.l	d0,d2
 	; d2 = ticks/s
 	divu	#1000,d2
@@ -48508,24 +50856,18 @@ stopMeasure
 	
 	; Calculate diff between start and stop times
 	; in 64-bits
-	;move.l	EV_HI+clockEnd(a5),d0
+	move.l	EV_HI+clockEnd(a5),d0
 	move.l	EV_LO+clockEnd(a5),d1
-	;move.l	EV_HI+clockStart(a5),d3
+	move.l	EV_HI+clockStart(a5),d3
 	sub.l	EV_LO+clockStart(a5),d1
-	;subx.l	d3,d0
-
-	; Ignore the upper 32 bits, such large intervals
-	; are not needed.
-	divu	d2,d1
-	moveq	#0,d0
-	move	d1,d0
+	subx.l	d3,d0
 
 	; Turn the diff into millisecs
 	; Divide d0:d1 by d2
-	;jsr	divu_64
+	jsr	divu_64
 	; d0:d1 is now d0:d1/d2
 	; take the lower 32-bits
-	;move.l	d1,d0
+	move.l	d1,d0
 	popm	d2-d4/a6
 	rts
 
@@ -48974,6 +51316,51 @@ prefsListFont
 	dc.w 0
 	dc.l 0
 
+
+prefsPlaySidMode 
+       dc.l prefsEnableXMAPlay
+       ; left, top, width, height
+       dc.w 214-80+4,107+28-14,100-8,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "PlaySid mode...",0
+       even
+
+prefsResidMode
+       dc.l 0 ; END
+       ; left, top, width, height
+       dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "reSID mode...",0
+       even
+
+prefsEnableXMAPlay dc.l prefsResidMode
+       ; left, top, width, height
+       dc.w 214-80+4+64,107-12-2,28,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4-64,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "Enable xmaplay060......",0
+       even
+
 ; Gadget
 gadgetListModeChangeButton
 	; gg_NextGadget
@@ -49081,8 +51468,6 @@ gadgetResize
 	; ig_NextImage
 	dc.l 0
 
-	
-
 
 * Rename the gadgets defined above to something not crazy
 * 1st row
@@ -49107,7 +51492,6 @@ gadgetSortButton        EQU  lilb2
 gadgetMoveButton        EQU  lilb1 
 gadgetPrgButton         EQU  plg
 
- ifne FEATURE_HORIZ_RESIZE
 ; Index to gadget and the original gg_Width and gg_LeftEdge
 row1Gadgets
 	dr	gadgetPrevButton
@@ -49150,7 +51534,7 @@ row2Gadgets
 	dr	gadgetPrefsButton
 	dc	0,0
 	dc	0 ; END
- endif ; FEATURE
+
 
 gadgetFileSliderInitialHeight = 67-16+2
 
@@ -49163,9 +51547,9 @@ rightButtonActionsList
 	* Prefs -> zoom file box
 	dr.w	gadgetPrefsButton
 	dc.l	zoomfilebox
-	* Sort -> Find
+	* S -> Sort
 	dr.w	gadgetSortButton
-	dc.l	find_new
+	dc.l	rsort
 	* Move -> Add divider
 	dr.w	gadgetMoveButton
 	dc.l	add_divider
@@ -49199,6 +51583,7 @@ tooltipList
 	dr.w	gadgetNextButton,.next
 	dr.w	gadgetPrevButton,.prev
 	dr.w	gadgetAddButton,.add
+.addButtonToolTipOffset = *-2
 	dr.w	gadgetDelButton,.del
 	dr.w 	gadgetNewButton,.new
 	dr.w	gadgetNextSongButton,.nextSong
@@ -49236,6 +51621,10 @@ tooltipList
 	dc.b	47,2
 	dc.b	"LMB: Add new modules to the list",0
 	dc.b	"RMB: Insert new modules after the chosen module",0
+.add2
+	dc.b	39,1
+	dc.b	"LMB: Add selected entry to the main list",0
+
 .del
 	dc.b	35,4
 	dc.b	"LMB: Remove chosen module",0
@@ -49257,9 +51646,12 @@ tooltipList
 	dc.b	"LMB: Open preferences",0
 	dc.b    "RMB: Zoom file box",0
 .sort
-	dc.b	16,2
-	dc.b	"LMB: Sort list",0
-	dc.b	"RMB: Find module",0
+;	dc.b	16,2
+;	dc.b	"LMB: Sort list",0
+;	dc.b	"RMB: Find module",0
+	dc.b	21,2
+	dc.b	"LMB: Search functions",0
+	dc.b	"RMB: Sort list",0
 .move
 	dc.b	26,4
 	dc.b	"LMB: Move chosen module,",0
@@ -49286,11 +51678,12 @@ tooltipList
 ;	dc.b	"LMB: Toggle list mode",0
 ;	dc.b	"     Normal > Favorites > File browser",0
 .listModeChange
-	dc.b	22,4
+	dc.b	21,5
 	dc.b	"LMB: Toggle list mode",0
-	dc.b	"     - Normal playlist",0
-	dc.b    "     - Favorites list",0
-	dc.b    "     - File browser",0
+	dc.b	"    - Normal playlist",0
+	dc.b    "    - Favorites list",0
+	dc.b    "    - File browser",0
+	dc.b    "    - Search results",0
 
   even
 
@@ -49483,22 +51876,22 @@ pslider1im
 pslider2im
 sIPULIim
 sIPULI2im
-slider1im
 ahiG4im
 ahiG5im
 ahiG6im
 nAMISKA5im
+
 horizPropGadgetGfxNormal
 	; bitplane 1
-	dc.w %0000000000000000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0111111111100000
+	dc.w %0000000000000000 * row 1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0000000000100000 * row 2..n-1
+	dc.w %0111111111100000 * row n
 	; bitplane 2
 	dc.w %1111111111000000
 	dc.w %1000000000000000
@@ -49534,85 +51927,85 @@ horizPropGadgetGfxNormal_kick13
 
 * Width: 11 pixels
 * Height: 9+8 pixels
-
-slider1imDouble
-horizPropGadgetGfxDouble
-	; bitplane 1
-	dc.w %0000000000000000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0111111111100000
-	; bitplane 2
-	dc.w %1111111111000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %0000000000000000
-
-horizPropGadgetGfxDouble_kick13
-	; bitplane 1
-	dc.w %1111111111000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %1000000000000000
-	dc.w %0000000000000000
-	; bitplane 2
-	dc.w %0000000000000000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0000000000100000
-	dc.w %0111111111100000
-
-
+;
+;slider1imDouble
+;horizPropGadgetGfxDouble
+;	; bitplane 1
+;	dc.w %0000000000000000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0111111111100000
+;	; bitplane 2
+;	dc.w %1111111111000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %0000000000000000
+;
+;horizPropGadgetGfxDouble_kick13
+;	; bitplane 1
+;	dc.w %1111111111000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %1000000000000000
+;	dc.w %0000000000000000
+;	; bitplane 2
+;	dc.w %0000000000000000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0000000000100000
+;	dc.w %0111111111100000
+;
+;
 
 button1im	
 	dc	%1100000000000000				
@@ -49921,17 +52314,6 @@ listImage
 	dc	%1101111111000000
 
 
- REM
-fileBrowserImage
-	dc	%1111111000000000
-	dc	%1010010100000000				
-	dc	%1011110010000000
-	dc	%1000000010000000
-	dc	%1011111010000000
-	dc	%1011111010000000
-	dc	%1111111110000000
- EREM
- 
 fileBrowserImage
 	dc	%1111111100000000
 	dc	%1010011010000000				
@@ -49940,6 +52322,17 @@ fileBrowserImage
 	dc	%1011111101000000
 	dc	%1011001101000000
 	dc	%1111111111000000
+
+searchImage
+	dc	%0001110000000000
+	dc	%0010001000000000
+	dc	%0101000100000000
+	dc	%0100000100000000
+	dc	%0010001100000000
+	dc	%0001111100000000
+	dc	%0000000110000000
+	;dc	%0000000011000000
+
 
 resizeGadgetImage
 	; plane 1
@@ -49969,6 +52362,10 @@ slim:	ds	410*2
 * sampleinfo-slideri
 slim2:	ds	410*2
 
+* volume slider image
+slider1im
+	* Space for 30 rows, 16 pixels, two bitplanes
+	ds.w	30*2
 
 	section	udnm,bss_p
 
