@@ -35713,12 +35713,41 @@ p_musicassembler
 	rts
 .ok2
 
+    * This one has a volume write bug similar with Imploder tunes
+    * MOVE.B	D6,8(A3)  
+    * will result silence on 68040/68060, should be:
+    * MOVE.W	D6,8(A3)  
+    * patch it:
+    move.l  moduleaddress(a5),a0
+    move.l  a0,a1
+    add.l   modulelength(a0),a1
+    subq.l  #8,a1
+    move.l  .findPatch(pc),d1
+.patch
+    cmp.l   (a0),d1
+    bne.b   .1
+    cmp.w   #$4e75,8(a0) * also check for RTS to be sure
+    bne     .1
+    move.l  .replacePatch(pc),(a0)
+    bra     .2
+.1  addq.l  #2,a0
+    cmp.l   a1,a0
+    blo     .patch
+.2  jsr     clearCpuCaches
+
+    
 	moveq	#0,d0
 .minit	move.l	moduleaddress(a5),a0
 	jsr	(a0)
 	bsr.b	.massvolume
 	moveq	#0,d0
 	rts	
+
+* Patch length: 4 bytes
+.findPatch
+    MOVE.B	D6,8(A3)  
+.replacePatch
+    MOVE.W	D6,8(A3)  
 
 .massplay
 	move.l	moduleaddress(a5),a0
