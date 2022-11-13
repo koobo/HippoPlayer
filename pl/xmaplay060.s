@@ -1,6 +1,6 @@
 ; ==============================================================================
 ; xmaplay060 - Port of Fasttracker II's XM replayer for 68060 Amigas
-; by 8bitbubsy, aug. 2020 - oct 2022. Syntax is Asm-Pro.
+; by 8bitbubsy, aug. 2020 - nov 2022. Syntax is Asm-Pro.
 ;
 ; Because of lack of 14-bit calibration support, there will be quite a bit of
 ; static noise in the audio on some songs on a real Amiga. It will sound good
@@ -226,22 +226,18 @@ swap32	MACRO
 	
 	; warning: trashes d0!
 swap16a	MACRO
-	move.l	d0,-(sp)
 	move.w	\1,d0
 	rol.w	#8,d0
 	move.w	d0,\1
-	move.l	(sp)+,d0
 	ENDM
 	
 	; warning: trashes d0!
 swap32a	MACRO
-	move.l	d0,-(sp)
 	move.l	\1,d0
 	rol.w	#8,d0
 	swap	d0
 	rol.w	#8,d0
 	move.l	d0,\1
-	move.l	(sp)+,d0
 	ENDM
 
 ;------------------------------------------------------------------------------
@@ -492,7 +488,7 @@ SMP_HDR_SIZE	EQU 40
 	;SECTION maincode,CODE
 	
 	bra.w	MAIN
-	dc.b "\\0$VER: 0.40"
+	dc.b "\\0$VER: 0.41"
 	EVEN
 	
 	;-------------------------------------------------
@@ -5168,7 +5164,7 @@ GetFrequenceValue
 ; ------------------
 
 ; 8-bit stereo mixing w/ linear interpolation
-MIX8_S	MACRO
+MIX8_S	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l),d4
 	move.b	d4,d5
 	clr.b	d4
@@ -5180,18 +5176,18 @@ MIX8_S	MACRO
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	move.w	d5,d4		; copy of sample
 	; ---------------------
-	muls.w	d6,d5		; d6.w(0..2047) * d5.w(-32768..32765) -> d5.l(-67076096..67069955)
-	add.l	d5,(a5)+
-	; ---------------------	
 	add.w	a4,d7
 	addx.l	d1,d2
+	; ---------------------
+	muls.w	d6,d5		; d6.w(0..2047) * d5.w(-32768..32765) -> d5.l(-67076096..67069955)
+	add.l	d5,(a5)+
 	; ---------------------	
 	muls.w	d0,d4		; d0.w(0..2047) * d4.w(-32768..32767) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
 	ENDM
 	
 ; 8-bit center mixing w/ linear interpolation
-MIX8_C	MACRO
+MIX8_C	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l),d4
 	move.b	d4,d5
 	clr.b	d4
@@ -5204,13 +5200,15 @@ MIX8_C	MACRO
 	; ---------------------
 	muls.w	d0,d5		; d0.w(0..2047) * d5.w(-32768..32765) -> d5.l(-67076096..67069955)
 	add.l	d5,(a5)+
+	; ---------------------	
 	add.w	a4,d7
 	addx.l	d1,d2
+	; ---------------------	
 	add.l	d5,(a5)+
 	ENDM
 	
 ; 16-bit stereo mixing w/ linear interpolation
-MIX16_S	MACRO
+MIX16_S	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l*2),d4/d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
@@ -5229,7 +5227,7 @@ MIX16_S	MACRO
 	ENDM
 	
 ; 16-bit center mixing w/ linear interpolation
-MIX16_C	MACRO
+MIX16_C	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l*2),d4/d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
@@ -5238,8 +5236,10 @@ MIX16_C	MACRO
 	; ---------------------
 	muls.w	d0,d5		; d0.w(0..2047) * d5.w(-32768..32765) -> d5.l(-67076096..67069955)
 	add.l	d5,(a5)+
+	; ---------------------	
 	add.w	a4,d7
 	addx.l	d1,d2
+	; ---------------------	
 	add.l	d5,(a5)+
 	ENDM
 
@@ -5248,7 +5248,7 @@ MIX16_C	MACRO
 ; ------------------
 
 ; 8-bit stereo mixing w/ linear interpolation & volume ramping
-MIX8_RS	MACRO
+MIX8_RS	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l),d4
 	move.b	d4,d5
 	clr.b	d4
@@ -5263,20 +5263,21 @@ MIX8_RS	MACRO
 	swap	d4		; d4.w = volL integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32765) * d5.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
-	add.l	a1,d6		; add volL ramp delta to curr. volL
 	; ---------------------	
 	move.l	d0,d4
 	swap	d4		; d4.w = volR integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32767) * d4.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
-	add.l	a2,d0		; add volR ramp delta to curr. volR
 	; ---------------------
 	add.w	a4,d7
 	addx.l	d1,d2
+	; ---------------------	
+	add.l	a1,d6		; add volL ramp delta to curr. volL
+	add.l	a2,d0		; add volR ramp delta to curr. volR
 	ENDM
 
 ; 8-bit center mixing w/ linear interpolation & volume ramping
-MIX8_RC	MACRO
+MIX8_RC	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l),d4
 	move.b	d4,d5
 	clr.b	d4
@@ -5291,15 +5292,16 @@ MIX8_RC	MACRO
 	swap	d4		; d4.w = volL integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32765) * d4.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
-	add.l	a1,d6		; add volL ramp delta to curr. volL
-	add.l	d4,(a5)+
 	; ---------------------
 	add.w	a4,d7
 	addx.l	d1,d2
+	; ---------------------	
+	add.l	d4,(a5)+
+	add.l	a1,d6		; add volL ramp delta to curr. volL
 	ENDM
 	
 ; 16-bit stereo mixing w/ linear interpolation & volume ramping
-MIX16_RS	MACRO
+MIX16_RS	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l*2),d4/d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
@@ -5310,20 +5312,21 @@ MIX16_RS	MACRO
 	swap	d4		; d4.w = volL integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32765) * d5.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
-	add.l	a1,d6		; add volL ramp delta to curr. volL
 	; ---------------------
 	move.l	d0,d4
 	swap	d4		; d4.w = volR integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32767) * d4.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
-	add.l	a2,d0		; add volR ramp delta to curr. volR
 	; ---------------------
 	add.w	a4,d7
 	addx.l	d1,d2
+	; ---------------------
+	add.l	a1,d6		; add volL ramp delta to curr. volL
+	add.l	a2,d0		; add volR ramp delta to curr. volR
 	ENDM
 	
 ; 16-bit center mixing w/ linear interpolation & volume ramping
-MIX16_RC	MACRO
+MIX16_RC	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l*2),d4/d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
@@ -5334,11 +5337,12 @@ MIX16_RC	MACRO
 	swap	d4		; d4.w = volL integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32765) * d4.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
-	add.l	a1,d6		; add volL ramp delta to curr. volL
-	add.l	d4,(a5)+
 	; ---------------------
 	add.w	a4,d7
 	addx.l	d1,d2
+	; ---------------------	
+	add.l	d4,(a5)+
+	add.l	a1,d6		; add volL ramp delta to curr. volL
 	ENDM
 		
 ; -----------------------------------------------------------------------------
@@ -6405,7 +6409,7 @@ GetSongName
 ; ------------------------------------------------------------------------------
 
 HeaderText	dc.b "--------------------------------------------------------",$a
-		dc.b " xmaplay060 v0.40 ("
+		dc.b " xmaplay060 v0.41 ("
 	IF _14BIT
 		dc.b "14-bit"
 	ELSE
