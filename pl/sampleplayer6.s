@@ -42,7 +42,9 @@ DPRINT macro
 
 	include	mucro.i
 
-KUTISTUSTAAJUUS	=	28603
+;KUTISTUSTAAJUUS	=	28603
+KUTISTUSTAAJUUS	=	27710
+
 
 ier_error	=	-1
 ier_nochannels	=	-2
@@ -72,6 +74,7 @@ _LVOMPEGA_decode 	=	-42
 _LVOMPEGA_seek 		=	-48
 _LVOMPEGA_time 		=	-54
 _LVOMPEGA_find_sync	=	-60
+_LVOMPEGA_scale	   =	-66
 
 MPEGA_BSFUNC_OPEN  = 0
 MPEGA_BSFUNC_CLOSE = 1
@@ -386,7 +389,7 @@ endSamplePlay
  if DEBUG
 	move.l	output(a5),d1
 	beq.b	.noDbg
-	move.l	#4*50,d1
+	move.l	#2*50,d1
 	lore	Dos,Delay
 	move.l	output(a5),d1
 	clr.l	output(a5)
@@ -410,6 +413,9 @@ vol
 	tst.b	ahi(a5)
 	bne.w	ahivol
 
+    tst     mplippu(a5)
+    bne     .mp3vol
+
 	lea	$dff0a8,a0
 
 	move.b	samplecyberset(a5),d1
@@ -426,6 +432,22 @@ vol
 	move	#$40,$20(a0)
 	move	#$40,$30(a0)
 	rts
+
+    * For mp3 volume use the scale mechanism, keep paula volume constant
+    * to allow 14-bit output to work
+.mp3vol
+    tst.l 	_MPEGABase(a5)
+    beq.b 	.x
+    lea	$dff0a8,a0
+    bsr     .volc
+    * turn into 0..100 percentage
+    mulu    #100,d0
+    lsr     #6,d0
+    move.l	mpstream(a5),a0
+    lore    MPEGA,MPEGA_scale
+.x
+    rts
+
 
 cont	clr.b	samplestop+var_b
 	rts
@@ -517,8 +539,9 @@ init
 ;	subq.l	#8,d0
 ;.nfo
 
+    ; range 4-128 kB
 	move.l	d0,samplebufsiz(a5)
-
+    DPRINT  "sample buffer=%ld"
 
 
 *** Kiskaistaan sample auki jotta saadaan tietoa
@@ -861,6 +884,14 @@ init
 
 	st	mplippu(a5)
 	move.b	#2,sampleformat(a5)	* huijataan että ollaan AIFF
+    * Enforce 14-bit output for MP3 if high quality settings
+    cmp     #1,mpfreqdiv(a5)
+    bne.b   .lq
+    tst.b   samplestereo(a5)
+    beq.b   .lq
+    st      cybercalibration(a5)
+    DPRINT  "Enabling 14-bit mp3 output"
+.lq
 
 	move.l	samplebufsiz(a5),d0
 	lsl.l	#2,d0
@@ -1186,6 +1217,16 @@ init
 	divu	#1000,d3
 	ext.l	d3
 
+    moveq   #8,d4
+    tst.b   samplestereo(a5)
+    beq.b   .lqq
+    cmp     #44100,samplefreq(a5)
+    blo.b   .lqq
+    tst.b   cpu(a5)
+    beq.b   .lqq
+    moveq   #14,d4
+.lqq
+
 	lea	.form(pc),a0
 	tst	mplippu(a5)
 	beq.b	.nomp2
@@ -1221,7 +1262,7 @@ init
 	tst.b	samplebits(a5)
 	beq.b	.es2
 	tst.l	calibrationaddr(a5)
-	beq.b	.es2
+	;beq.b	.es2
 	st	samplecyberset(a5)
 	add	d6,d6				* 8 kpl
 .es2
@@ -1272,6 +1313,7 @@ init
 	beq.b	.nok
 	cmp	#KUTISTUSTAAJUUS,d7
 	blo.b	.nok
+    DPRINT  "need resampling"
 	move	#KUTISTUSTAAJUUS,d7
 
 	move.l	samplebufsiz(a5),d0	* kutistukselle
@@ -1438,7 +1480,7 @@ init
 .t3	dc.b	"RIFF WAVE",0
 .t4	dc.b	"MP",0
 .form	dc.b	"%s %ld-bit %lc %2ldkHz",0
-.form2	dc.b	"MP%ld %ldkBit %lc %2ldkHz",0
+.form2	dc.b	"MP%ld %ldkB %lc %2ldkHz %ld-bit",0
 .pn	dc.b	"HiP-Sample",0
  even
 
@@ -2679,6 +2721,7 @@ sample_code
 
 
 **** AHI, AIFF/WAV stereo
+	DPRINT	"AHI AIFF/WAV STEREO"
 
 	move.l	samplework(a5),a4
 	lea	ahisample1(a5),a3
@@ -2698,7 +2741,7 @@ sample_code
 
 .loopahi1
 
-	bsr.w	.wavread2
+	bsr.w	wavread2
 	beq.w	quit
 
 	movem.l	(a3),a0/a1	
@@ -2782,7 +2825,17 @@ sample_code
 ********** AIFF/WAV STEREO
 
 	DPRINT	"AIFF/WAV STEREO"
+
+    * Detect mp3 special case: 44.1kHz stereo, 68020 cpu
+    tst.b   kutistus(a5)
+    beq.b   .wl2
+    tst.b   cpu(a5)
+    beq.b   .wl2
+    tst     mplippu(a5)
+    bne     decodeMp3
 .wl2
+
+ 
 	bsr.w	clrsamplebuf
 
 	move.l	samplework(a5),a4
@@ -2803,7 +2856,7 @@ sample_code
 
 .loopw2
 	
-	bsr.w	.wavread2
+	bsr.w	wavread2
 	beq.w	quit
 
 	tst.b	samplecyberset(a5)
@@ -2820,7 +2873,7 @@ sample_code
 
 	move.l	d6,d0
 	move.l	a4,a0
-	bsr.w	.convert_stereo
+	bsr.w	convert_stereo
 
 	tst.b	kutistus(a5)
 	beq.b	.h1
@@ -2871,12 +2924,14 @@ sample_code
 		move.l	a3,a4
 		add.l	samplebufsiz(a5),a4
 .j0
-	bsr.w	.convert_stereo_14bit
+    DPRINT  "convert stereo 14bit"
+	bsr.w	convert_stereo_14bit
 
 	movem.l	(sp),a3/a4/a6
 
 	tst.b	kutistus(a5)
 	beq.b	.j1
+        DPRINT  "downsample"
 		move.l	(a3),a1			* kohde
 		move.l	samplework2(a5),a0 	* lähde
 		move.l	d6,d2			* pituus
@@ -2929,12 +2984,13 @@ sample_code
 
 	bsr.w	wait
 	bsr.w	songoverr
+    * Start from the beginning?
 	bra.w	.wl2
 	
 
 	
 
-.wavread2	
+wavread2	
 	move.l	a4,d2
 	move.l	samplebufsiz(a5),d3
 	add.l	d3,d3			* stereo
@@ -2964,7 +3020,7 @@ sample_code
 	rts
 
 
-.convert_stereo
+convert_stereo
 * a0 = source
 * a1 = dest 1 
 * a2 = dest 2
@@ -3032,13 +3088,16 @@ sample_code
 
 
 
-.convert_stereo_14bit
+convert_stereo_14bit
 * a0 = source
 * a1 = dest 1 
 * a2 = dest 2
 * a3 = dest 3
 * a4 = dest 4
 * d0 = len
+
+    tst.l   samplecyber(a5)
+    beq     .ordinary_stereo_14bit
 
 	move.l	samplecyber(a5),a6
 
@@ -3124,8 +3183,225 @@ sample_code
 	rts
 
 
+.ordinary_stereo_14bit
+  	lsr.l	#2,d0
+	subq	#1,d0
+
+.o_w1214_020
+ rept 4
+	move	(a0)+,d1
+    lsr.b   #2,d1
+    move.b  d1,(a1)+
+	ror	#8,d1
+    move.b  d1,(a3)+
+
+	move	(a0)+,d1
+    lsr.b   #2,d1
+    move.b  d1,(a2)+
+	ror	#8,d1
+    move.b  d1,(a4)+
+ endr
+ 	dbf	d0,.o_w1214_020
+	rts
 
 
+
+; -----------------
+    * Special case for stereo mp3
+decodeMp3
+.wl2
+    DPRINT  "mp3 loop"
+	bsr.w	clrsamplebuf
+
+	move.l	samplework(a5),a4
+	lea	samplebuffer(a5),a3
+
+	bsr.w	mp_start
+
+	clr.l	samplefollow(a5)
+	move.l	8(a3),samplepointer(a5)
+	move.l	12(a3),samplepointer2(a5)
+
+.loopw2
+
+	move.l	a4,d2
+	move.l	samplebufsiz(a5),d3
+	;add.l	d3,d3			* stereo
+	;add.l	d3,d3       * 16-bits
+	;lsr.l	#2,d3
+    ;----------------------------------
+    ; read mp3
+	movem.l	d1-a6,-(a7)
+
+	move.l	d2,a3
+
+	move.l	d3,d7	;len
+	moveq	#0,d5	;already read
+
+.xloop	tst.l	d7
+	bgt.b	.go_on
+.eof	
+	move.l	d5,d0
+	bra.b	.exit
+
+.go_on	move.l	mpbuffcontent(a5),d0
+	ble.b	.read
+	sub.l	d0,d7
+	bge.b	.copy
+	add.l	d0,d7
+	move.l	d7,d0
+	moveq	#0,d7
+.copy	
+
+	move.l	mpbuffpos(a5),d1
+	add.l	d0,d5
+	add.l	d0,mpbuffpos(a5)
+	sub.l	d0,mpbuffcontent(a5)
+
+	lea	mpbuffer1(pc),a0
+	lea	mpbuffer2(pc),a1
+	add.l	d1,d1
+	add.l	d1,a0
+	add.l	d1,a1
+
+	subq	#1,d0
+
+.co	move	(a0)+,(a3)+
+	move	(a1)+,(a3)+
+	dbf	d0,.co
+	bra.b	.xloop
+
+.read
+	clr.l	mpbuffpos(a5)
+
+	pushm	d1-a6
+	move.l	mpstream(a5),a0
+	lea	.pcm(pc),a1
+	lore	MPEGA,MPEGA_decode
+	popm	d1-a6
+    * 1152 bytes decoded at a time
+    move.l	d0,mpbuffcontent(a5)
+	bmi.b	.eof
+	bra.b	.xloop
+
+.pcm	dc.l	mpbuffer1
+	dc.l	mpbuffer2
+
+.exit	movem.l	(a7)+,d1-a6
+    bra     .continue
+
+    ;----------------------------------
+.continue
+	lsl.l	#2,d0
+	move.l	d0,d6
+	lsr.l	#2,d6
+	beq.w	quit
+
+	move.l	d6,d0       * input length
+	move.l	a4,a0
+
+	pushm	a3/a4/a6
+	movem.l	(a3),a1/a2		* vas oik LSB kanavat
+	movem.l	16(a3),a3/a4		* vas oik MSB kanavat
+
+   DPRINT  "convert and reample stereo 14bit"
+
+    * dest length = (target freq * source length)/source freq
+    move.l  #KUTISTUSTAAJUUS,d0
+    mulu.l  d6,d0
+    moveq   #0,d1
+    move    samplefreq(a5),d1
+    divu.l  d1,d0
+    * d0 = target length
+    push    d0
+
+    * Calculate fractional step with 12-bit fractions
+    * fffxxxxx.
+    * Divide (target frequency)<<12 by destination frequency 
+    lsl.l   #8,d1
+    lsl.l   #4,d1
+    divu.w  #KUTISTUSTAAJUUS,d1
+    ext.l   d1
+    ror.l	#8,d1
+	ror.l	#4,d1
+
+    sub.l   d2,d2
+    ; Index mask
+    move.l	#$0003ffff,d3
+    ; Mask to clear two LSB bits from both right and left
+    move.l  #%11111111111111001111111111111100,d5
+    lsr.l   #1,d0
+    subq    #1,d0
+.bob
+ rept 2
+    * Index into d4
+    move.l  d2,d4
+    and.l   d3,d4
+    * Next sample
+	addx.l	d1,d2
+
+    * ror does not change X, lsr does, can't use it here
+    * LLLLLLLLllllllllRRRRRRRRrrrrrrrr
+    move.l  (a0,d4.l*4),d4
+    * LLLLLLLLllllll00RRRRRRRRrrrrrr00
+    and.l   d5,d4
+    ror.b   #2,d4
+    move.b  d4,(a2)+        * right LSB
+    ror.w	#8,d4
+    move.b  d4,(a4)+        * right MSB
+    swap    d4
+    ror.b   #2,d4
+    move.b  d4,(a1)+        * left LSB
+    ror.w   #8,d4
+    move.b  d4,(a3)+        * left MSB
+
+ endr
+    dbf     d0,.bob
+
+    pop     d0
+
+.ohi
+
+	movem.l	(sp),a3/a4/a6
+
+.j2	lsr.l	#1,d0
+    DPRINT  "play words=%ld"
+	movem.l	(a3),a0/a1
+	movem.l	16(a3),a2/a3
+	bsr.w	playblock_14bit
+
+	popm	a3/a4/a6
+	
+	bsr.w	wait
+	bne.w	quit
+
+	clr.l	samplefollow(a5)
+	move.l	16(a3),samplepointer(a5)
+	move.l	16+4(a3),samplepointer2(a5)
+
+	movem.l	(a3),d0/d1/d2/d3
+	exg	d0,d2
+	exg	d1,d3
+	movem.l	d0/d1/d2/d3,(a3)
+
+	movem.l	16(a3),d0/d1/d2/d3
+	exg	d0,d2
+	exg	d1,d3
+	movem.l	d0/d1/d2/d3,16(a3)
+
+
+.loh
+	
+	cmp.l	samplebufsiz(a5),d6
+	beq.w	.loopw2
+
+	bsr.w	wait
+	bsr.w	songoverr
+    * Start from the beginning?
+	bra.w	.wl2
+	
+
+; -----------------
 
 
 quit
@@ -3375,6 +3651,15 @@ mp_start
 	lore	MPEGA,MPEGA_seek
 	clr.l	mpbuffpos(a5)
 	clr.l	mpbuffcontent(a5)
+
+    * Set initial volume for mp3
+    move    mainvolume(a5),d0
+    bne.b   .y1
+    moveq   #$40,d0 
+.y1
+    bsr     vol
+
+
 	popm	all
 .x	
 	rts
@@ -3410,36 +3695,50 @@ mp_close
 * ulos:
 * d0 = kohdepituus
 
-truncate
+truncate:
 * max taajuus noin 28600, period 124
 
 	pushm	d1-a6
 
-	moveq	#0,d0
+    moveq	#0,d0
 	move	samplefreq(a5),d0
 	move.l	#KUTISTUSTAAJUUS,d1
 
+    DPRINT  "resample %ld->%ld in=%ld bytes"
+
+    * source length d2 range is max 128kB
+    * calculate target length based on ratio of frequencies
 	movem.l	d0/d1,-(sp)
+    * mul target frequency by source length
 	move.l	d2,d0
 	bsr.w	mulu_32
 	move.l	(sp),d1
+    * divide result by source frequency
 	bsr.w	divu_32
 	move.l	d0,d7	
 	move.l	d7,d6			* kohdepituus
 	movem.l	(sp)+,d0/d1
-	
+
+    * Calculate fractional step with 12-bit fractions
+    * fffxxxxx.
 	lsl.l	#8,d0
-	divu	d1,d0	
+    lsl.l	#4,d0
+    divu	d1,d0	
 	ext.l	d0
 	ror.l	#8,d0
+	ror.l	#4,d0
 
-	moveq	#0,d2
-	add.l	d2,d2
+    * Fractional index at d2 to zero and clear the x-flag
+    sub.l   d2,d2
 
+    ; Do two bytes at a time, this matches with
+    ; paula word accuacy
 	lsr.l	#1,d7
 	subq	#1,d7
 	
-	move.l	#$00ffffff,d3
+    * max integer range: 128kB -> 17 bits
+    * Mask with one extra bit just to be sure
+	move.l	#$0003ffff,d3
 .lop
 	move.l	d2,d4
 	and.l	d3,d4
@@ -3454,8 +3753,12 @@ truncate
 	dbf	d7,.lop
 
 	move.l	d6,d0
+    DPRINT  "out=%ld bytes"
 	popm	d1-a6
 	rts	
+
+calculateResamplingConstant:
+    rts
 
 
 
