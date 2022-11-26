@@ -736,11 +736,12 @@ samplestereo		rs.b	1
 * Actual loading is then skipped.
 sampleinit		rs.b	1		
 * Sample format
-* 1 = IFF
-* 2 = AIFF
-* 3 = WAV
-* 4 = MP3
-sampleformat		rs.b	1
+SAMPLE_FORMAT_NONE = 0
+SAMPLE_FORMAT_IFF  = 1
+SAMPLE_FORMAT_AIFF = 2
+SAMPLE_FORMAT_WAV  = 3
+SAMPLE_FORMAT_MP3  = 4
+sampleformat   rs.b    1
 
 * This is set in loadfile() to indicate an executable module has been 
 * loaded with LoadSeg(). Value can be 0 for normal processing,
@@ -9271,6 +9272,8 @@ rsearchfuncs
 	beq.b	.modules
 	subq	#1,d0
 	beq.b	.hvsc
+	subq	#1,d0
+	beq.b	.amigaRemix
 .skip
 	rts
 
@@ -9282,6 +9285,8 @@ rsearchfuncs
 	jmp	modulesSearch
 .hvsc
 	jmp	hvscSearch
+.amigaRemix
+	jmp	amigaRemixSearch
 
 * in:
 *   d3 = index to check
@@ -9298,13 +9303,14 @@ rsearchfuncs
 
 .options
 	* max width, rows
-	dc.b	24,6
+	dc.b	24,7
 	dc.b	"Search list    [F]      ",0
 	dc.b	"Search next    [SHIFT+F]",0
 	dc.b	"Search Modland [CTRL+M] ",0
  	dc.b	"Search Aminet           ",0
 	dc.b	"Search Modules.pl       ",0
 	dc.b	"Search HVSC             ",0
+	dc.b	"Search AmigaRemix       ",0
 
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
@@ -27747,10 +27753,19 @@ loadmodule:
 	* Check if a remote file
 	beq		.doLoadModule
 
+    * Special case check: remote mp3 files go through as if
+    * they were normal files, no remote fetching
+    pushm   d0/a0
+    lea     l_filename(a3),a0
+    bsr     id_mp3filename
+    tst.l   d0
+    popm    d0/a0
+    beq     .doLoadModule
+
 	move.b	d0,d6	* doublebuffering flag
 	moveq	#lod_remote,d7	* status: fail
 
-	lea	-200(sp),sp	* space for output path
+	lea	-100(sp),sp	* space for output path
 	move.l	sp,a1
 	lea	l_filename(a3),a0	
 	jsr	fetchRemoteFile
@@ -27792,7 +27807,7 @@ loadmodule:
 .skip
 	move.l	sp,d1
 	lore	Dos,DeleteFile * delete tempfile
-	lea	200(sp),sp
+	lea	100(sp),sp
 	move.l	d7,d0	* status here
 	rts
 
@@ -28638,6 +28653,16 @@ loadfile:
 .nope
 	* Ordinary file load below, archive extraction above.
 
+    * mp3 shortcut check to allow remote mp3 files to 
+    * bypass filesystem operations and allow remote mp3 files. 
+    * This loses local file comments too but that's not too bad.
+	move.l	lod_filename(a5),a0
+    bsr     id_mp3filename
+    tst.l   d0
+    beq     .sampleCheck
+
+    * Get info on the file
+     
 	move.l	_DosBase(a5),a6
 	move.l	lod_filename(a5),d1
 	moveq	#ACCESS_READ,d2
@@ -28751,10 +28776,12 @@ loadfile:
 
 ** Is this a sample file, stop loading if so.
 ** Jos havaitaan file sampleks, ei ladata enemp‰‰
+.sampleCheck
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
 	bsr.w	.samplecheck
 	bne.b	.nosa
+    DPRINT  "sample detected"
 	st	sampleinit(a5)
 	bra.w	.exit
 
@@ -29386,11 +29413,11 @@ loadfile:
 
 
 .checkm
-        bsr.w   tutki_moduuli2
+    bsr.w   tutki_moduuli2
 	cmp.b	#2,d0
 	beq.w	.ptfoo
-        cmp.b   #-1,d0
-        beq.b   .nofast
+    cmp.b   #-1,d0
+    beq.b   .nofast
 
 .publl  move.l   #MEMF_PUBLIC!MEMF_CLEAR,d0
 	DPRINT	"Loading to PUBLIC memory"
@@ -29410,81 +29437,35 @@ loadfile:
 *   a0 = probebuffer
 * Out:
 *   Z-flag set if recognized
-.samplecheck
+.samplecheck:
+    DPRINT  "sample check"
 ** IFF
-	move.b	#1,sampleformat(a5)
+	move.b	#SAMPLE_FORMAT_IFF,sampleformat(a5)
 	cmp.l	#"FORM",(a0)
 	bne.b	.nosa0
 	cmp.l	#"8SVX",8(a0)
 	beq.w	.sampl
 ** AIFF
-	move.b	#2,sampleformat(a5)
+	move.b	#SAMPLE_FORMAT_AIFF,sampleformat(a5)
 	cmp.l	#"AIFF",8(a0)
 	beq.w	.sampl
 
 .nosa0
 ** RIFF WAVE
-	move.b	#3,sampleformat(a5)
+	move.b	#SAMPLE_FORMAT_WAV,sampleformat(a5)
 	cmp.l	#"RIFF",(a0)
 	bne.b	.nosaa
 	cmp.l	#"WAVE",8(a0)
 	beq.w	.sampl
 .nosaa
 ** MPEG
-	move.b	#4,sampleformat(a5)
-
-	* Check file suffix
-	move.l	modulefilename(a5),a1
-.zu	tst.b	(a1)+
-	bne.b	.zu
-	subq.l	#1,a1
-	move.b	-(a1),d0
-	ror.l	#8,d0
-	move.b	-(a1),d0
-	ror.l	#8,d0
-	move.b	-(a1),d0
-	ror.l	#8,d0
-	move.b	-(a1),d0
-	ror.l	#8,d0
-	and.l	#$ffdfdfff,d0
-	cmp.l	#".MP1",d0
-	beq.b	.sampl
-	cmp.l	#".MP2",d0
-	beq.b	.sampl
-	cmp.l	#".MP3",d0
-	beq.b	.sampl
-
-	* Check file prefix
-	move.l	modulefilename(a5),a1
-	move.l	a1,a2
-.zu2	tst.b	(a1)+
-	bne.b	.zu2
-	subq.l	#1,a1
-.zu3	cmp.l	a1,a2
-	beq.b	.zu4
-	cmp.b	#":",-1(a1)
-	beq.b	.zu4
-	cmp.b	#"/",-1(a1)
-	beq.b	.zu4
-	subq	#1,a1
-	bra.b	.zu3
-.zu4
-	move.l	a1,d0
-
-	move.b	(a1)+,d0
-	rol.l	#8,d0
-	move.b	(a1)+,d0
-	rol.l	#8,d0
-	move.b	(a1)+,d0
-	rol.l	#8,d0
-	move.b	(a1)+,d0
-	and.l	#$dfdfffff,d0
-	cmp.l	#"MP1.",d0
-	beq.b	.sampl
-	cmp.l	#"MP2.",d0
-	beq.b	.sampl
-	cmp.l	#"MP3.",d0
-	beq.b	.sampl
+	move.b	#SAMPLE_FORMAT_MP3,sampleformat(a5)
+    push    a0
+	move.l	modulefilename(a5),a0
+    bsr     id_mp3filename
+    pop     a0
+    tst.l   d0
+    beq     .sampl
 
 	* Finally check probe buffer contents 
 	bsr.w	id_mp3
@@ -30292,7 +30273,7 @@ tutki_moduuli
 	bra.w	.ex
 
 **** Oliko  sample??
-.sample
+.sample:
 	pushpea	p_sample(pC),playerbase(a5)
 	move	#pt_sample,playertype(a5)
 	bra.w	.ex
@@ -40023,6 +40004,7 @@ p_sample
 	moveq	#0,d0
 	cmp	#16000,horizfreq(a5)
 	slo	d0
+    DPRINT  "resample needed: %ld"
 	move	d0,-(sp)
 	pea	songover(a5)
 	move.l	colordiv(a5),-(sp)
@@ -40035,6 +40017,13 @@ p_sample
 	move.l	_GFXBase(a5),a2
 	lea	.name(pc),a3
 	move.l	modulefilename(a5),a4
+
+ if DEBUG
+    push    d0
+    move.l  a4,d0
+    DPRINT  "sample file: %s"
+    pop     d0
+ endif
 
 	pushpea	varaa_kanavat(pc),d2
 	pushpea	vapauta_kanavat(pc),d3
@@ -40064,8 +40053,16 @@ p_sample
  if DEBUG
 	pushm	d0-d3
 	move.l	d3,d0
+    moveq   #0,d2
+    moveq   #0,d3 
+    cmp.w   #0,a1
+    beq.b   .k1
 	move.l	(a1),d2
+.k1
+    cmp.w   #0,a2
+    beq.b   .k2
 	move.l	(a2),d3
+.k2
 	DPRINT	"Bufsize=%ld add=%ld buf1=%lx buf2=%lx"
 	popm	d0-d3
  endif
@@ -40185,6 +40182,71 @@ id_mp3
 	DPRINT	"MP3 sync word found"
 	moveq	#0,d0
 	rts
+
+* in:
+*   a0 = file path
+* out:
+*   d0 = -1: not mp3 filename, 0: yes mp3 filename
+id_mp3filename
+	* Check file suffix
+    move.l  a0,a1
+;	move.l	modulefilename(a5),a1
+.zu	tst.b	(a1)+
+	bne.b	.zu
+	subq.l	#1,a1
+	move.b	-(a1),d0
+	ror.l	#8,d0
+	move.b	-(a1),d0
+	ror.l	#8,d0
+	move.b	-(a1),d0
+	ror.l	#8,d0
+	move.b	-(a1),d0
+	ror.l	#8,d0
+	and.l	#$ffdfdfff,d0
+	cmp.l	#".MP1",d0
+	beq.b	.sampl
+	cmp.l	#".MP2",d0
+	beq.b	.sampl
+	cmp.l	#".MP3",d0
+	beq.b	.sampl
+
+	* Check file prefix
+;	move.l	modulefilename(a5),a1
+    move.l  a0,a1
+	move.l	a1,a2
+.zu2	tst.b	(a1)+
+	bne.b	.zu2
+	subq.l	#1,a1
+.zu3	cmp.l	a1,a2
+	beq.b	.zu4
+	cmp.b	#":",-1(a1)
+	beq.b	.zu4
+	cmp.b	#"/",-1(a1)
+	beq.b	.zu4
+	subq	#1,a1
+	bra.b	.zu3
+.zu4
+	move.l	a1,d0
+
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	and.l	#$dfdfffff,d0
+	cmp.l	#"MP1.",d0
+	beq.b	.sampl
+	cmp.l	#"MP2.",d0
+	beq.b	.sampl
+	cmp.l	#"MP3.",d0
+	beq.b	.sampl
+    moveq   #-1,d0
+    rts
+.sampl
+    moveq   #0,d0
+    rts
 
 ******************************************************************************
 * PumaTracker
@@ -46561,7 +46623,7 @@ deliEnd:
 	bsr.w	deliGetTag
 	bsr.w	deliCallFunc
 
-	bsr.w	clearsound
+	jsr  	clearsound
 
 	move.l	#EP_EjectPlayer,d0
 	bsr.w	deliGetTag
@@ -49883,26 +49945,31 @@ verticalLayout:
 *
 ***************************************************************************
 
-SEARCH_MODLAND = 0
-SEARCH_AMINET  = 1
-SEARCH_MODULES = 2
-SEARCH_HVSC    = 3
+SEARCH_MODLAND    = 0
+SEARCH_AMINET     = 1
+SEARCH_MODULES    = 2
+SEARCH_HVSC       = 3
+SEARCH_AMIGAREMIX = 4
 
 modlandSearch
 	moveq	#SEARCH_MODLAND,d7
-	bra.b	remoteSearch
+	bra 	remoteSearch
 
 aminetSearch
 	moveq	#SEARCH_AMINET,d7
-	bra.b	remoteSearch
+	bra 	remoteSearch
 
 modulesSearch
 	moveq	#SEARCH_MODULES,d7
-	bra.b	remoteSearch
+	bra 	remoteSearch
 
 hvscSearch
 	moveq	#SEARCH_HVSC,d7
-;	bra.b	remoteSearch
+	bra 	remoteSearch
+
+amigaRemixSearch
+	moveq	#SEARCH_AMIGAREMIX,d7
+	bra 	remoteSearch
 
 
 * Requests a search pattern from the user,
@@ -49952,6 +50019,9 @@ remoteSearch
     cmp.b   #SEARCH_MODULES,d7
     beq.b   .1
     lea     .hvscSearchCmd(pc),a0
+    cmp.b   #SEARCH_HVSC,d7
+    beq.b   .1
+    lea     .amigaRemixSearchCmd(pc),a0
 .1
     pushpea .pathCmd(pc),d0  * path setting
  	move.l	sp,d1		* search word
@@ -50005,6 +50075,9 @@ remoteSearch
     cmp.b   #SEARCH_MODULES,d7
     beq.b   .a
     lea     .hvscResultsPath(pc),a0
+    cmp.b   #SEARCH_HVSC,d7
+    beq.b   .a
+    lea     .amigaRemixResultsPath(pc),a0
 .a
 
 	* Jump to after the variable
@@ -50055,6 +50128,10 @@ remoteSearch
     beq.b   .2
 	pushpea	.hvscLine(pc),d6
 	moveq	#.hvscLineE-.hvscLine,d4	
+    cmp.b   #SEARCH_HVSC,d7
+    beq.b   .2
+	pushpea	.amigaRemixLine(pc),d6
+	moveq	#.amigaRemixLineE-.amigaRemixLine,d4	
 	bra.b	.2
 .aa
 	pushpea	.aminetLine(pc),d6
@@ -50230,6 +50307,10 @@ remoteSearch
     dc.b    "http://hvsc.csdb.dk/",0     
 .hvscLineE
 
+.amigaRemixLine
+    dc.b    "http://uhc.amigaremix.com/",0
+.amigaRemixLineE
+
 .uhcTempDirVar
 	dc.b	"UHC/TEMPDIR",0
 
@@ -50248,17 +50329,26 @@ remoteSearch
 	dc.b	"%s",10
 	dc.b 	'aminetsearch mods/ %s',10
 	dc.b	0
+
 .modulesResultsPath
 	dc.b	"modulessearch",0
 .modulesSearchCmd
 	dc.b	"%s",10
 	dc.b 	'modulessearch %s',10
 	dc.b	0
+
 .hvscResultsPath
 	dc.b	"hvscsearch",0
 .hvscSearchCmd
 	dc.b	"%s",10
 	dc.b 	'hvscsearch %s',10
+	dc.b	0
+
+.amigaRemixResultsPath
+	dc.b	"amigaremixsearch",0
+.amigaRemixSearchCmd
+	dc.b	"%s",10
+	dc.b 	'amigaremixsearch %s',10
 	dc.b	0
  even
 
@@ -50320,6 +50410,7 @@ fetchRemoteFile:
 .end
 	tst.b	(a2)+
 	bne.b	.end
+    move.l  a2,a4
 .sl	cmp.b	#"/",-(a2)
 	bne.b	.sl
 	addq	#1,a2
@@ -50328,15 +50419,35 @@ fetchRemoteFile:
 	* Build temp file path into a3
 	move.b	#"T",(a3)+
 	move.b	#":",(a3)+
+    * Max 24 chars to be friendly to fhe file system
+    moveq   #24-1,d1
+    moveq   #0,d0
 .copy
+    addq    #1,d0
 	move.b	(a2)+,(a3)+
-	bne.b	.copy
+	dbeq	d1,.copy
+    cmp     #4,d0
+    bls.b   .skip
+    * Then copy four chars from the end of the original string
+    * to the end, this will preserve the file extension
+    * and include null
+    move.b  -(a4),-(a3)
+    move.b  -(a4),-(a3)
+    move.b  -(a4),-(a3)
+    move.b  -(a4),-(a3)
+    move.b  -(a4),-(a3)
+.skip
 
 	* TODO: temp file name must be 30 or less
 
 	* Source url in a0
 	* Destination file in a1
-	
+
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "dest=%s"
+ endif
+
 	* Generate parametrized script
 	move.l	a0,d0
 	move.l	a1,d1 

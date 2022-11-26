@@ -543,6 +543,8 @@ init
 	move.l	d0,samplebufsiz(a5)
     DPRINT  "sample buffer=%ld"
 
+    bsr     isRemoteSample
+    bne     .remote
 
 *** Kiskaistaan sample auki jotta saadaan tietoa
 	lea	fh1(a5),a0
@@ -561,7 +563,7 @@ init
 	lea	fh1(a5),a0
 	bsr.w	_xclose
 *************
-
+.remote
 
 	cmp.b	#2,sampleformat(a5)
 	beq.w	.aiffinit
@@ -667,6 +669,7 @@ init
 .moi1	divu	samplefreq(a5),d0
 
 .moi_mp
+    DPRINT  "format duration %ld secs"
 	ext.l	d0
 	divu	#60,d0
 
@@ -844,6 +847,12 @@ init
 	move.l	a1,h_Entry(a0)
 
 	move.l	modulefilename(a5),a0
+    bsr     isRemoteSample
+    beq     .local
+    DPRINT  "open PIPE:",0
+    lea     .pipefile(pc),a0
+.local
+
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"MPEGA_open %s"
@@ -875,9 +884,20 @@ init
 	move.l	.frequency(a3),d0
 	divu	mpfreqdiv(a5),d0
 	move	d0,samplefreq(a5)
+ 
+ if DEBUG
+	move.l	.frequency(a3),d0
+    DPRINT  "freq=%ld Hz"
+	move.l	.ms_duration(a3),d0	
+    DPRINT  "duration=%ld ms"
+ endif
 
+    moveq   #0,d0
+    bsr     isRemoteSample
+    bne     .remote2
 	move.l	.ms_duration(a3),d0	* pituus millisekunteina
-	divu	#1000,d0
+ 	divu	#1000,d0
+.remote2
 	bsr.w	.moi_mp
 	bsr.w	.freqcheck
 
@@ -942,6 +962,7 @@ init
 
 
 .mplibn	dc.b	"mpega.library",0
+.pipefile   dc.b    "PIPE:hipposample",0
  even
 
 
@@ -983,13 +1004,12 @@ init
 	lea	var_b(pc),a5
 	move.l	_DosBase(a5),a6
 
-	;cmp.l	#MPEGA_BSFUNC_OPEN,(a1)
-	tst.l	(a1)
+	cmp.l	#MPEGA_BSFUNC_OPEN,(a1)
 	beq 	.mpega_hook_open
 	cmp.l	#MPEGA_BSFUNC_READ,(a1)
-	beq.w	.mpega_hook_read
+	beq 	.mpega_hook_read
 	cmp.l	#MPEGA_BSFUNC_SEEK,(a1)
-	beq.w	.mpega_hook_seek
+	beq 	.mpega_hook_seek
 	cmp.l	#MPEGA_BSFUNC_CLOSE,(a1)
 	beq 	.mpega_hook_close
 	moveq	#-1,d0
@@ -1006,6 +1026,8 @@ init
 	beq 	.mpega_open_error
 
     bsr     .mpega_skip_id3v2_stream
+
+	clr.l   12(a3) * stream_size
 
     move.l  d7,d1
     lob     IsInteractive
@@ -1034,11 +1056,7 @@ init
     * so that any skipped data is not included
     sub.l   d4,d0 
 	move.l	d0,12(a3) * stream_size
-
- if DEBUG
-    divu.l  #1024,d0
-    DPRINT  "length = %ld kB"
- endif
+    DPRINT  "stream size = %ld"
  
 .cantSeek
 	* Return Dos file handle
@@ -1100,8 +1118,10 @@ init
 	rts
 
 
-* In: d0 = file handle when it is a stream
+* In: 
+*   d0 = file handle when it is a stream
 .mpega_skip_id3v2_stream
+    pushm   all
 	move.l	d0,d6
 
 	lea	findSyncBuffer(pc),a3
@@ -1161,11 +1181,12 @@ init
     DPRINT  "Not skipped: %ld"
  endif
 .mpega_skip_exit_stream
+    popm    all
 	rts
 
 .mpega_sync_position    dc.l    0
 
-.freqcheck
+.freqcheck:
 	push	d0
 	move	#60000,d0
 	cmp	samplefreq(a5),d0
@@ -1496,6 +1517,27 @@ init
 .pn	dc.b	"HiP-Sample",0
  even
 
+isRemoteSample
+    pushm   d0/a0
+	move.l	modulefilename(a5),a0
+    cmp.b   #"h",(a0)
+    bne     .local
+    cmp.b   #"t",1(a0)
+    bne     .local
+    cmp.b   #"t",2(a0)
+    bne     .local
+    cmp.b   #"p",3(a0)
+    bne     .local
+    cmp.b   #":",4(a0)
+    bne     .local
+    DPRINT  "remote file"
+    moveq   #1,d0
+    popm    d0/a0
+    rts
+.local
+    moveq   #0,d0
+    popm    d0/a0
+    rts
 
 
 *******************************************************************************
@@ -3305,7 +3347,12 @@ decodeMp3
 	lsl.l	#2,d0
 	move.l	d0,d6
 	lsr.l	#2,d6
-	beq.w	quit
+;	beq.w	quit
+    bne     .gotData
+    DPRINT  "no more data!"
+    bsr     songoverr
+    bra     quit
+.gotData
 
 	move.l	d6,d0       * input length
 	move.l	a4,a0
@@ -3413,6 +3460,12 @@ decodeMp3
 
 .loh
 	
+ if DEBUG
+    move.l  d6,d0
+    move.l  samplebufsiz(a5),d1
+    DPRINT  "last read=%ld buffer=%ld"
+ endif
+
 	cmp.l	samplebufsiz(a5),d6
 	beq.w	.loopw2
 
@@ -3425,11 +3478,11 @@ decodeMp3
 ; -----------------
 
 
-quit
+quit:
 	DPRINT	"quit"
 	bsr.b	wait
 
-quit2	
+quit2:	
 	bsr.w	sampleiik
 	lore	Exec,Forbid
 	clr	sample_prosessi(a5)
@@ -3437,7 +3490,7 @@ quit2
 	rts
 
 
-wait
+wait:
 	lore	GFX,WaitTOF
 	tst.b	killsample(a5)
 	bne.b	.q
@@ -3778,12 +3831,7 @@ truncate:
 	popm	d1-a6
 	rts	
 
-calculateResamplingConstant:
-    rts
-
-
-
-songoverr
+songoverr:
 	move.l	songover+var_b(pc),a0
 	st	(a0)
 	rts
