@@ -2826,11 +2826,9 @@ sample_code
 
 	DPRINT	"AIFF/WAV STEREO"
 
-    * Detect mp3 special case: 44.1kHz stereo, 68020 cpu
-    tst.b   kutistus(a5)
-    beq.b   .wl2
-    tst.b   cpu(a5)
-    beq.b   .wl2
+    * Detect mp3 special case when no cybersound calibration used
+    tst.l   samplecyber(a5)
+    bne.b   .wl2
     tst     mplippu(a5)
     bne     decodeMp3
 .wl2
@@ -3304,13 +3302,22 @@ decodeMp3
 	movem.l	(a3),a1/a2		* vas oik LSB kanavat
 	movem.l	16(a3),a3/a4		* vas oik MSB kanavat
 
-   DPRINT  "convert and reample stereo 14bit"
+    DPRINT  "convert and resample stereo 14bit"
 
-    * dest length = (target freq * source length)/source freq
-    move.l  #KUTISTUSTAAJUUS,d0
-    mulu.l  d6,d0
+    * Detemine resampling target frequency
+    * In case no resampling needed, ratio will be 1:1 and step 1
+    * Sample freq into d1 and d2
     moveq   #0,d1
     move    samplefreq(a5),d1
+    move.l  d1,d2
+    tst.b   kutistus(a5)
+    beq.b   .do1
+    move.l  #KUTISTUSTAAJUUS,d2
+.do1
+
+    * dest length = (target freq * source length)/source freq
+    move.l  d2,d0
+    mulu.l  d6,d0
     divu.l  d1,d0
     * d0 = target length
     push    d0
@@ -3320,16 +3327,18 @@ decodeMp3
     * Divide (target frequency)<<12 by destination frequency 
     lsl.l   #8,d1
     lsl.l   #4,d1
-    divu.w  #KUTISTUSTAAJUUS,d1
+    divu.w  d2,d1
     ext.l   d1
     ror.l	#8,d1
 	ror.l	#4,d1
 
+    ; Start with index 0, X cleared
     sub.l   d2,d2
     ; Index mask
     move.l	#$0003ffff,d3
     ; Mask to clear two LSB bits from both right and left
     move.l  #%11111111111111001111111111111100,d5
+    ; Two bytes, ie. a word, at a time
     lsr.l   #1,d0
     subq    #1,d0
 .bob
