@@ -837,8 +837,7 @@ init
 	moveq	#ier_error,d0
 	bra.w	sampleiik
 .uzx
-	bsr	.mpega_skip_id3v2
-	
+
 	* Set up hook
 	lea	.mpega_hook(pc),a0
 	lea	.mpega_hook_func(pc),a1
@@ -986,13 +985,13 @@ init
 
 	;cmp.l	#MPEGA_BSFUNC_OPEN,(a1)
 	tst.l	(a1)
-	beq.b	.mpega_hook_open
+	beq 	.mpega_hook_open
 	cmp.l	#MPEGA_BSFUNC_READ,(a1)
 	beq.w	.mpega_hook_read
 	cmp.l	#MPEGA_BSFUNC_SEEK,(a1)
 	beq.w	.mpega_hook_seek
 	cmp.l	#MPEGA_BSFUNC_CLOSE,(a1)
-	beq.b	.mpega_hook_close
+	beq 	.mpega_hook_close
 	moveq	#-1,d0
 	rts
 
@@ -1004,27 +1003,44 @@ init
 	move.l	#MODE_OLDFILE,d2
 	lob	Open
 	move.l	d0,d7
-	beq.b	.mpega_open_error
+	beq 	.mpega_open_error
 
-	move.l	d7,d1		* selvitet‰‰n filen pituus
-	moveq	#0,d2		* offset
-	moveq	#OFFSET_END,d3
-	lob	Seek
+    bsr     .mpega_skip_id3v2_stream
+
+    move.l  d7,d1
+    lob     IsInteractive
+    tst.l   d0
+    bne     .cantSeek
+
+    * Get current position
 	move.l	d7,d1
-	moveq	#0,d2		* offset
+    moveq	#0,d2		* offset
+	moveq	#OFFSET_CURRENT,d3
+	lob	Seek
+    move.l  d0,d4
+    DPRINT  "current=%ld"
+    * Seek to end
+	move.l	d7,d1	
+    moveq	#0,d2		* offset
 	moveq	#OFFSET_END,d3
 	lob	Seek
-	move.l	d0,d6		* current position, length
-	move.l	d7,d1		
-	move.l	.mpega_sync_position(pc),d2	* offset
+    * Go back to current position
+	move.l	d7,d1	
+    move.l  d4,d2
 	moveq	#OFFSET_BEGINNING,d3
 	lob	Seek
+    * d0 = old position, the end
+    * subtract the original current position
+    * so that any skipped data is not included
+    sub.l   d4,d0 
+	move.l	d0,12(a3) * stream_size
 
-	sub.l	.mpega_sync_position(pc),d6
-
-	;move.l	8(a3),.mpega_buffer_size
-	move.l	d6,12(a3) * stream_size
-
+ if DEBUG
+    divu.l  #1024,d0
+    DPRINT  "length = %ld kB"
+ endif
+ 
+.cantSeek
 	* Return Dos file handle
 	move.l	d7,d0
 .mpega_open_error
@@ -1080,20 +1096,13 @@ init
 	moveq	#0,d0 * ok
 	rts
 .seek_err
+    DPRINT  "seek failed!"
 	rts
 
-;.mpega_buffer_size		dc.l	0
 
-.mpega_skip_id3v2
-	* sync position default
-	moveq	#0,d7
-
-	move.l	_DosBase(a5),a6
-	move.l	modulefilename(a5),d1
-	move.l	#MODE_OLDFILE,d2
-	lob	Open
+* In: d0 = file handle when it is a stream
+.mpega_skip_id3v2_stream
 	move.l	d0,d6
-	beq.b	.mpega_skip_exit	
 
 	lea	findSyncBuffer(pc),a3
 	move.l	d6,d1
@@ -1103,13 +1112,13 @@ init
 	move.l	_DosBase(a5),a6
 	lob	Read
 	tst.l	d0
-	beq.b	.mpega_skip_exit
+	beq 	.mpega_skip_exit_stream
 
 	* Is it a ID3v2 header?
 	move.l	(a3),d0
 	lsr.l	#8,d0
 	cmp.l	#"ID3",d0
-	bne.b	.mpega_skip_exit	
+	bne 	.mpega_skip_exit_stream
 
 	* Get size, synchsafe integer, 4x 7-bit bytes
 	moveq	#0,d0
@@ -1131,27 +1140,30 @@ init
 	moveq	#$7f,d1
 	and.b	9(a3),d1
 	or.b	d1,d0	
-	
-	add.l	#10,d0	* Add header size
-	move.l	d0,d7
-	* Use this as a seek position to skip over the ID3v2
-	* stuff at the beginning. MPEGA only looks at the first 16k
-	* of data, ID3v2 can be much larger.
-
-.mpega_skip_exit
+    move.l  d0,d3
+    beq.b   .mpega_skip_exit_stream
+    * d3 is the amount of data to skip now
+    DPRINT  "Skipping %ld bytes in stream"
+    add.l   #10,d0
+    move.l  d0,.mpega_sync_position
+.skipLoop
 	move.l	d6,d1
-	beq.b	.1
-	move.l	_DosBase(a5),a6
-	lob	Close
-.1
- if DEBUG
-	move.l	d7,d0
-	DPRINT	"MPEGA sync position: %ld"
+    lob     FGetC
+    * d0 = 0-255 or -1 if error
+    tst.l   d0
+    bmi     .skipError
+    subq.l  #1,d3
+    bne.b   .skipLoop
+   
+.skipError
+ if DEBUG   
+    move.l  d3,d0
+    DPRINT  "Not skipped: %ld"
  endif
-	move.l	d7,.mpega_sync_position
+.mpega_skip_exit_stream
 	rts
 
-.mpega_sync_position	dc.l	0
+.mpega_sync_position    dc.l    0
 
 .freqcheck
 	push	d0
