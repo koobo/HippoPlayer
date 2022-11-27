@@ -30,6 +30,8 @@ DPRINT macro
 	include	exec/memory.i
 	include	dos/dos_lib.i
 	include	dos/dosextens.i
+	include	dos/dostags.i
+    include	dos/var.i
 	include	graphics/graphics_lib.i
 
 	include	libraries/xpkmaster_lib.i
@@ -272,6 +274,9 @@ ahisample2	rs.l	1
 ahisample3	rs.l	1
 ahisample4	rs.l	1
 
+mainTask        rs.l    1
+mpStreamerTask  rs.l    1
+
  if DEBUG
 output			rs.l 	1
 debugDesBuf		rs.b	1000
@@ -369,7 +374,7 @@ ahinfo
 
 	rts
 
-endSamplePlay
+endSamplePlay:
 	pushm	all
 	DPRINT	"end sample play"
 	lea	var_b(pc),a5
@@ -454,7 +459,7 @@ cont	clr.b	samplestop+var_b
 stop	st	samplestop+var_b
 	rts
 
-init
+init:
 	lea	var_b(pc),a5
 	bsr.b	.doInit
 	DPRINT	"init status=%ld"
@@ -849,8 +854,9 @@ init
 	move.l	modulefilename(a5),a0
     bsr     isRemoteSample
     beq     .local
+    bsr     mp_start_streaming
     DPRINT  "open PIPE:",0
-    lea     .pipefile(pc),a0
+    lea     pipefile(pc),a0
 .local
 
  if DEBUG
@@ -962,7 +968,6 @@ init
 
 
 .mplibn	dc.b	"mpega.library",0
-.pipefile   dc.b    "PIPE:hipposample",0
  even
 
 
@@ -1890,7 +1895,7 @@ ahiunhalt
 
 
 
-sampleiik
+sampleiik:
 
 	pushm	all
 	
@@ -3481,7 +3486,7 @@ decodeMp3
 quit:
 	DPRINT	"quit"
 	bsr.b	wait
-
+    bsr     mp_stop_streaming
 quit2:	
 	bsr.w	sampleiik
 	lore	Exec,Forbid
@@ -3489,40 +3494,55 @@ quit2:
 	clr.b	killsample(a5)
 	rts
 
-
+* Wait a short while and check if should exit and clean up.
+* Out:
+*    Z clear: should stop and quit
+*    Z set: should continue playback
 wait:
 	lore	GFX,WaitTOF
 	tst.b	killsample(a5)
-	bne.b	.q
+	bne.b	.q          * status: Z clear, exit 
 
+    * Test for stop/pause 
 	tst.b	samplestop(a5)
 	beq.b	.nos
+    * Should stop/pause now
 
 	tst.b	ahi(a5)
 	beq.b	.screw
+    * Stop pause AHI
 	bsr.w	ahi_stopsound
 	bra.b	.screa
 .screw
+    * Stop/pause Paula
 	move	#$f,$dff096
-.screa	st	samplebarf(a5)
+.screa	
+    * Continue waiting, set flag
+    st	samplebarf(a5)
 	bra.b	wait
 .nos
+    * Should continue from stopped/paused state
 
 	tst.b	ahi(a5)
 	beq.b	.screw2
-	bsr.w	ahi_enablesound
+
+    * Continue AHI sound 
+    bsr.w	ahi_enablesound
 
 	tst.b	ahitrigger(a5)
 	beq.b	wait
 	clr.b	ahitrigger(a5)
 	bra.b	.screa2
-.screw2
-	move	#$800f,$dff096
 
+.screw2
+    * Continue Paula sound
+	move	#$800f,$dff096
+    * This waits for the next audio interrupt, why?
 	move	$dff01e,d0
 	and	#$0780,d0
 	beq.b	wait
 .screa2
+    * Clear pause/stopped status flag
 	tst.b	samplebarf(a5)
 	beq.b	.qw
 	clr.b	samplebarf(a5)
@@ -3531,9 +3551,11 @@ wait:
 
 	tst.b	ahi(a5)
 	bne.b	.aqq
-
+    * Clear audio interrupt requests
 	move	#$0780,$dff09c
-.qq	moveq	#0,d0
+.qq	
+    * Status: Z set, continue
+    moveq	#0,d0
 .q	rts
 
 .aqq	clr.b	ahitrigger(a5)
@@ -3866,6 +3888,212 @@ closesample
 
 
 
+pipefile   dc.b    "PIPE:hipposample",0
+    even
+
+mp_start_streaming
+    pushm   all
+    tst.l   mpStreamerTask(a5)
+    bne     .x
+    DPRINT  "----------- mp_start_streaming"
+
+    move.l  4.w,a6
+    sub.l   a1,a1
+    lob     FindTask
+    move.l  d0,mainTask(a5)
+
+    moveq   #0,d0
+    moveq   #SIGF_SINGLE,d1
+    jsr     _LVOSetSignal(a6)
+
+    move.l  #.tags,d1
+    lore    Dos,CreateNewProc
+    DPRINT  "CrateNewProc=%ld"
+
+    * Wait here until the task is fully running
+    move.l  4.w,a6
+    moveq   #SIGF_SINGLE,d0
+    jsr     _LVOWait(a6)
+
+    DPRINT  "started"
+.x
+    popm    all
+    rts
+
+.tags
+    dc.l    NP_Entry,mp_streamer_task
+    dc.l    NP_Name,.name
+    dc.l    TAG_END
+
+.name   
+    dc.b    "HiP-streamer",0
+    even
+
+mp_streamer_task
+
+    rsreset
+.uhcPathFormatted   rs.b    50
+.agetCmdFormatted   rs.b    100
+.agetArgsFormatted  rs.b    200
+.varsSize           rs.b    0
+   
+    lea     var_b,a5
+    lea     -.varsSize(sp),sp
+    move.l  sp,a4
+
+    DPRINT  "mp_streamer_task start"
+
+    move.l  4.w,a6
+    sub.l   a1,a1
+    lob     FindTask
+    move.l  d0,mpStreamerTask(a5)
+    move.l  d0,a0
+    move.l  LN_NAME(a0),d1
+    DPRINT  "%lx %s"
+  
+    move.l  #.envVarName,d1     * variable name
+    pushpea .uhcPathFormatted(a4),d2     * output buffer
+    moveq   #50-1,d3            * space available
+    move.l  #GVF_GLOBAL_ONLY,d4 * global variable
+    lore    Dos,GetVar
+    
+    pushpea .uhcPathFormatted(a4),d0
+    DPRINT  "UHCBIN=%s"
+
+    lea     .agetCmd(pc),a0
+    lea     .agetCmdFormatted(a4),a3
+    bsr     desmsg2
+
+    pushpea .agetCmdFormatted(a4),d0
+    DPRINT  "cmd=%s"
+
+    pushpea .agetCmdFormatted(a4),d1
+    lore    Dos,LoadSeg
+    move.l  d0,d6
+    beq     .exit
+    DPRINT  "LoadSeg=%lx"
+
+    move.l	modulefilename(a5),d0
+    lea     .args(pc),a0
+    lea     .agetArgsFormatted(a4),a3
+    bsr     desmsg2
+    
+    * length of args
+    lea     .agetArgsFormatted(a4),a0
+    move.l  a0,a1
+.fe   
+    tst.b   (a0)+
+    bne.b   .fe
+    move.l  a0,d4
+    sub.l   a1,d4
+    subq.l  #1,d4   
+
+ ifne DEBUG
+    pushpea .agetArgsFormatted(a4),d0
+    DPRINT  "args=%s"
+    move.l  d4,d0
+    DPRINT  "len=%ld"
+ endif
+
+    ; Notify main task
+    move.l  4.w,a6
+    move.l  mainTask(a5),a1
+    moveq   #SIGF_SINGLE,d0
+    jsr     _LVOSignal(a6)
+
+    move.l  d6,d1       * seglist
+    move.l  #4096,d2    * stack size
+    pushpea .agetArgsFormatted(a4),d3 * argptr
+                          * d4 = arg size
+    lore    Dos,RunCommand
+    DPRINT  "runCommand=%lx"
+    
+    move.l  d6,d1
+    beq.b   .a
+    lore    Dos,UnLoadSeg
+.a
+
+.exit
+    DPRINT  "mp_streamer_task stopped"
+
+    lea     .varsSize(sp),sp
+    lore    Exec,Forbid
+    clr.l   mpStreamerTask(a5)
+    rts
+
+.envVarName
+    dc.b    "UHCBIN",0
+
+.agetCmd
+    dc.b	'%sC/aget',0
+
+.args
+	dc.b	'"%s" PIPE:hipposample/16384/8',0
+;	dc.b	'"%s" PIPE:hipposample//8',0
+.testScript
+    dc.b    'copy sys:music/arkanoid.mp3 PIPE:hipposample/16384/4',0
+
+.tags
+    dc.l    NP_Name,.name
+    dc.l    TAG_END
+
+.name   dc.b    "HiP-aget",0
+    even
+
+mp_stop_streaming
+    tst.l   mpStreamerTask(a5)
+    beq    .1
+    DPRINT  "--------------- mp_stop_streaming"
+    bsr     mp_close
+
+    move.l  mpStreamerTask(a5),a1
+    move.l  #SIGBREAKF_CTRL_C,d0
+    move.l  4.w,a6
+    lob     Signal 
+ 
+    DPRINT  "signal sent"
+
+    move.l  #pipefile,d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "Pipe=%lx"
+    move.l  d0,d7
+
+    * Wait until read fails, this indicates
+    * the sender has reacted to CTRL_C
+    moveq   #0,d6
+    moveq   #0,d5
+.loop   
+    tst.l   d5
+    bmi.b   .skip
+    move.l  d7,d1
+    lore    Dos,FGetC
+    addq.l  #1,d6
+    move.l  d0,d5
+    bra     .cont
+.skip  
+    moveq   #1,d1
+    lore    Dos,Delay
+.cont
+    tst.l   mpStreamerTask(a5)
+    bne.b   .loop
+
+ if DEBUG
+    move.l  d6,d0
+    DPRINT  "task closed, flushed %ld bytes" 
+ endif
+   
+.1
+    move.l  d7,d1
+    beq.b   .2
+    lore    Dos,Close
+.2
+    DPRINT  "mp streaming stopped"
+    rts
+
+
+
+
 
 initsamplecyber
 	moveq	#1,d0
@@ -4060,8 +4288,13 @@ sea	lea	(a4,d2.l),a3	 * Etsit‰‰n kaksi kilotavua tai modin pituus
 *******************************************************************************
 * Merkkijonon muotoilu
 *******
+desmsg2	movem.l	d0-d7/a0-a3/a6,-(sp)
+	    ;lea	desbuf(a5),a3	;puskuri
+        bra     desmsg0
+
 desmsg	movem.l	d0-d7/a0-a3/a6,-(sp)
 	lea	desbuf(a5),a3	;puskuri
+desmsg0
 	move.l	sp,a1		* parametrit ovat t‰‰ll‰!
 	lea	.putc(pc),a2	;merkkien siirto
 	move.l	(a5),a6
