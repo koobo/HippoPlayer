@@ -20580,7 +20580,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * in: 
 *   a3 = desbuf
 *   a1 = parametrit
-.desmsg4	
+.desmsg4:
 	movem.l	d0-d7/a0-a3/a6,-(sp)
 	jmp	pulppa
 
@@ -20647,9 +20647,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; safety checks
 	tst	playertype(a5)
 	beq.b	.1
+	cmp	    #pt_sample,playertype(a5)
+	beq.b   .2 ; no address for samples
 	tst.l	moduleaddress(a5)
 	beq.b	.1
-	tst.l	playingmodule(a5)
+.2	tst.l	playingmodule(a5)
 	bpl.b	.bah
 .1
 	* Nothing is being played. Display "No info available".
@@ -20671,6 +20673,27 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	* Something is being played.
 	* Check supported types.
 
+******************* Sample
+	cmp	#pt_sample,playertype(a5)
+	bne.b	.nosample
+    jsr     hasMp3TagText
+    beq     .nosample
+    DPRINT  "sample info"
+    move	#33,info_prosessi(a5)
+
+    * lines to allocate
+    moveq   #10,d5 
+    bsr     .allo2
+    beq     .prepareFailed
+    move.l  infotaz(a5),a3
+
+    move.l  a3,a0
+    jsr     getMp3TagText
+
+    move.l  a3,d0
+    bra     .selvis
+
+.nosample
 ******************* THX
 
 	cmp	#pt_thx,playertype(a5)
@@ -21528,7 +21551,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	popm	d0/d1
 	rts
 
-
+* In:
+*   d5 = lines to allocate
+* Out:
+*   a3 = buffer
 .allo:
 	bsr.b	.allo2
 	beq.b	.xiipo
@@ -21574,7 +21600,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#1,d0
 .xiipo	rts
 
-.lloppu	tst.b	(a3)+
+* Progresses to the next line in text buffer
+.lloppu:
+	tst.b	(a3)+
 	bne.b	.lloppu
 	subq	#1,a3
 	rts
@@ -21590,7 +21618,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	d0,infotaz(a5)
 	rts
 
-.selvis
+.selvis:
 ** If we made this far the module information text has been built
 
 **  Karsitaan kummat merkit pois
@@ -39966,15 +39994,18 @@ p_sample
 .name	dc.b	"                        ",0
  even
 
-	rsset	$20
-.s_init		rs.l	1
-.s_end		rs.l	1
-.s_stop		rs.l	1
-.s_cont		rs.l	1
-.s_vol		rs.l	1
-.s_ahiup	rs.l	1
-.s_ahinfo	rs.l	1
-	
+               rsset    $20
+.s_init        rs.l     1
+.s_end         rs.l     1
+.s_stop        rs.l     1
+.s_cont        rs.l     1
+.s_vol         rs.l     1
+.s_ahiup       rs.l     1
+.s_ahinfo      rs.l     1
+.s_hasMp3Text  rs.l     1
+.s_getMp3Text  rs.l     1
+
+
 .init
 	lea	sampleroutines(a5),a0
 	bsr.w	allocreplayer
@@ -40092,6 +40123,18 @@ p_sample
 
 id_sample
 	rts
+
+hasMp3TagText
+	move.l	sampleroutines(a5),a0
+	jmp 	p_sample\.s_hasMp3Text(a0)
+
+
+* in: 
+*  a0 = buffer to write to
+getMp3TagText 
+	move.l	sampleroutines(a5),a1
+	jmp     p_sample\.s_getMp3Text(a1)
+    
 
 * In:
 *   a0 = probebuffer, size 2048
