@@ -276,6 +276,8 @@ ahisample4	rs.l	1
 
 mainTask        rs.l    1
 mpStreamerTask  rs.l    1
+id3v2Data       rs.l    1
+mpega_sync_position rs.l 1
 
  if DEBUG
 output			rs.l 	1
@@ -1030,7 +1032,8 @@ init:
 	move.l	d0,d7
 	beq 	.mpega_open_error
 
-    bsr     .mpega_skip_id3v2_stream
+    bsr     mpega_skip_id3v2_stream
+    bsr     mpega_parse_id3v2
 
 	clr.l   12(a3) * stream_size
 
@@ -1111,7 +1114,7 @@ init:
 	DPRINT	"mpega_hook_seek"
 	move.l	a2,d1
 	move.l	4(a1),d2	* abs_byte_seek_pos
-	add.l	.mpega_sync_position(pc),d2
+	add.l	mpega_sync_position(a5),d2
 	moveq	#OFFSET_BEGINNING,d3
 	lob	Seek
 	cmp.l	#-1,d0
@@ -1123,73 +1126,6 @@ init:
 	rts
 
 
-* In: 
-*   d0 = file handle when it is a stream
-.mpega_skip_id3v2_stream
-    pushm   all
-	move.l	d0,d6
-
-	lea	findSyncBuffer(pc),a3
-	move.l	d6,d1
-	move.l	a3,d2
-	* Read 10 bytes, the size of the ID3v2 header
-	moveq	#10,d3
-	move.l	_DosBase(a5),a6
-	lob	Read
-	tst.l	d0
-	beq 	.mpega_skip_exit_stream
-
-	* Is it a ID3v2 header?
-	move.l	(a3),d0
-	lsr.l	#8,d0
-	cmp.l	#"ID3",d0
-	bne 	.mpega_skip_exit_stream
-
-	* Get size, synchsafe integer, 4x 7-bit bytes
-	moveq	#0,d0
-	moveq	#$7f,d1
-	and.b	6(a3),d1
-	or.b	d1,d0
-	lsl.l	#7,d0
-
-	moveq	#$7f,d1
-	and.b	7(a3),d1
-	or.b	d1,d0
-	lsl.l	#7,d0
-
-	moveq	#$7f,d1
-	and.b	8(a3),d1
-	or.b	d1,d0
-	lsl.l	#7,d0
-
-	moveq	#$7f,d1
-	and.b	9(a3),d1
-	or.b	d1,d0	
-    move.l  d0,d3
-    beq.b   .mpega_skip_exit_stream
-    * d3 is the amount of data to skip now
-    DPRINT  "Skipping %ld bytes in stream"
-    add.l   #10,d0
-    move.l  d0,.mpega_sync_position
-.skipLoop
-	move.l	d6,d1
-    lob     FGetC
-    * d0 = 0-255 or -1 if error
-    tst.l   d0
-    bmi     .skipError
-    subq.l  #1,d3
-    bne.b   .skipLoop
-   
-.skipError
- if DEBUG   
-    move.l  d3,d0
-    DPRINT  "Not skipped: %ld"
- endif
-.mpega_skip_exit_stream
-    popm    all
-	rts
-
-.mpega_sync_position    dc.l    0
 
 .freqcheck:
 	push	d0
@@ -3763,6 +3699,10 @@ mp_start
 
 mp_close
 	pushm	all
+    move.l  id3v2Data(a5),a0
+    clr.l   id3v2Data(a5)
+    bsr     freemem
+
 	tst	mplippu(a5)
 	beq.b	.hx
 	move.l	mpstream(a5),d0
@@ -4028,10 +3968,7 @@ mp_streamer_task
     dc.b	'%sC/aget',0
 
 .args
-	dc.b	'"%s" PIPE:hipposample/16384/8',0
-;	dc.b	'"%s" PIPE:hipposample//8',0
-.testScript
-    dc.b    'copy sys:music/arkanoid.mp3 PIPE:hipposample/16384/4',0
+	dc.b	'"%s" PIPE:hipposample/65536/2',0
 
 .tags
     dc.l    NP_Name,.name
@@ -4696,7 +4633,228 @@ _xclose
 	movem.l	(a7)+,d1-a6
 	rts
 
+*********************************************************************
+*
+* ID3v2 tag handling
+*
+*********************************************************************
 
+* In: 
+*   d0 = file handle when it is a stream
+mpega_skip_id3v2_stream
+    pushm   all
+	move.l	d0,d6
+
+    move.l  id3v2Data(a5),a0
+    clr.l   id3v2Data(a5)
+    bsr     freemem
+
+	lea	findSyncBuffer(pc),a3
+	move.l	d6,d1
+	move.l	a3,d2
+	* Read 10 bytes, the size of the ID3v2 header
+	moveq	#10,d3
+	move.l	_DosBase(a5),a6
+	lob	Read
+	tst.l	d0
+	beq 	.mpega_skip_exit_stream
+
+	* Is it a ID3v2 header?
+	move.l	(a3),d0
+	lsr.l	#8,d0
+	cmp.l	#"ID3",d0
+	bne 	.mpega_skip_exit_stream
+
+	* Get size, synchsafe integer, 4x 7-bit bytes
+    lea     6(a3),a0
+    bsr     get_syncsafe_integer
+    DPRINT  "ID3 header length=%ld"
+    move.l  d0,d3
+    beq.b   .mpega_skip_exit_stream
+
+    * Grab data into a buffer
+    move.l  d3,d0
+    moveq   #MEMF_PUBLIC,d1    
+    bsr     getmem
+    move.l  d0,id3v2Data(a5)
+    move.l  d0,a3
+
+    * d3 is the amount of data to skip now
+    move.l  d3,d0
+    add.l   #10,d0
+    move.l  d0,mpega_sync_position(a5)
+.skipLoop
+	move.l	d6,d1
+    lob     FGetC
+    * d0 = 0-255 or -1 if error
+    tst.l   d0
+    bmi     .skipError
+    cmp.w   #0,a3
+    beq.b   .s1
+    move.b  d0,(a3)+
+.s1
+    subq.l  #1,d3
+    bne.b   .skipLoop
+   
+.skipError
+ if DEBUG   
+    move.l  d3,d0
+    DPRINT  "Not skipped: %ld"
+ endif
+.mpega_skip_exit_stream
+    popm    all
+	rts
+
+
+
+
+
+mpega_parse_id3v2
+    pushm   all
+    tst.l   id3v2Data(a5)
+    beq     .xit
+    move.l  id3v2Data(a5),a3
+    moveq   #0,d0
+    move.b  findSyncBuffer+3,d0
+    DPRINT  "parse ID3v2, version=%ld"
+    cmp.b   #3,d0
+    blo     .xit
+
+    * End pointer to a4
+    move.l  a3,a4
+    add.l   -4(a3),a4
+
+    * Check flags from header read earlier
+    move.b  findSyncBuffer+5,d7
+
+    move.l  #$80,d0
+    and.b   d7,d0
+    DPRINT  "Sync: %lx"
+    tst.b   d0
+    bne     .xit
+    move.l  #$40,d0
+    and.b   d7,d0
+    DPRINT  "Extended hdr: %lx"
+    tst.b    d0
+    beq     .p1
+    bsr     get_syncsafe_integer
+    DPRINT  "Extended header size: %ld"
+    add.l   d0,a3
+.p1
+
+    * Frame size is 10 bytes
+    lea     -10(a4),a4
+.loop
+    cmp.b   #"A",(a3)
+    blo     .xit    
+    cmp.b   #"Z",(a3)
+    bhi     .xit    
+    
+    lea     .name(pc),a2
+    move.b  (a3),(a2)+
+    move.b  1(a3),(a2)+
+    move.b  2(a3),(a2)+
+    move.b  3(a3),(a2)+
+    lea     4(a3),a0
+    bsr     get_syncsafe_integer
+    move.l  d0,d1
+
+    move.l  #.name,d0
+    DPRINT  "Frame=%s length=%ld"
+
+    * Overflow check
+    move.l  a3,d0
+    add.l   d1,d0
+    
+    cmp.l   a4,d0
+    bhs     .xit
+
+    move.l  .name(pc),d0
+    lea     10(a3),a0
+
+    rol.l   #8,d0
+    cmp.b   #"T",d0
+    bne     .1
+    bsr     .getText
+    bra     .c
+.1
+
+.c
+
+    * Skip over the frame header + frame
+    lea     10(a3,d1.l),a3
+
+    cmp.l   a4,a3
+    blo     .loop
+
+.xit
+    popm    all
+    rts
+
+.name   ds.b    6
+
+* in:
+*    a0 = data
+*    d1 = len
+
+;; Encoding:
+;; $00   ISO-8859-1 [ISO-8859-1]. Terminated with $00.
+;; $01   UTF-16 [UTF-16] encoded Unicode [UNICODE] with BOM. All
+;;       strings in the same frame SHALL have the same byteorder.
+;;       Terminated with $00 00.
+;; $02   UTF-16BE [UTF-16] encoded Unicode [UNICODE] without BOM.
+;;       Terminated with $00 00.
+;; $03   UTF-8
+
+.getText
+    push    d1
+    cmp.l   #2,d1
+    blo     .x
+
+    moveq   #0,d0
+    move.b  (a0)+,d0
+    DPRINT  "Encoding=%ld len=%ld"
+    cmp.b   #0,d0
+    beq.b   .ok
+    cmp.b   #3,d0
+    bne     .x
+.ok
+    subq.l  #1,d1
+
+    sub.l   d1,sp
+    subq.l  #2,sp   * NULL + one extra byte
+    move.l  sp,a1
+    move.l  d1,d2
+    subq.l  #1,d2
+.c1
+    move.b  (a0)+,(a1)+
+    dbf     d2,.c1
+    clr.b   (a1)
+
+    move.l  sp,d0
+    DPRINT  "Text=%s"
+
+    add.l   d1,sp
+    addq.l  #2,sp
+.x
+    pop     d1
+    rts
+
+
+    
+* in:
+*   a0 = data
+get_syncsafe_integer:
+	* Get size, synchsafe integer, 4x 7-bit bytes
+	moveq	#0,d0
+	or.b	(a0),d0
+	lsl.l	#7,d0
+	or.b	1(a0),d0
+	lsl.l	#7,d0
+	or.b	2(a0),d0
+	lsl.l	#7,d0
+	or.b	3(a0),d0
+    rts
 
  if DEBUG
 PRINTOUT_DEBUGBUFFER
