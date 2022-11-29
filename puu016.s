@@ -30538,17 +30538,23 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 * Virittelee nimen tied.nimestä
 *******
 tee_modnimi:
-	moveq	#INFO_MODULE_NAME_LEN-1,d1
+ 	moveq	#INFO_MODULE_NAME_LEN-1,d1
 	lea		modulename(a5),a1
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	bne.b	.arc				* otetaan pelkkä filename
 	move.l	solename(a5),a0
 	tst.b	lastLoadedModuleWasRemote(a5)
 	beq.b	.copy
+    move.l  a0,a2
+    * Remote file, go forward to next slash if possible.
+    * If NULL reached, do nothing
 .slash
-	cmp.b	#"/",(a0)+
+    tst.b   (a2)
+    beq.b   .copy
+	cmp.b	#"/",(a2)+
 	bne.b	.slash
-	bra.b	.copy
+    move.l  a2,a0
+    bra     .copy
 .arc
 	* This contains info from the last archive loaded file 
 	lea	fib_FileName+fileinfoblock(a5),a0
@@ -50412,12 +50418,21 @@ configRemoteNode
 	moveq	#2-1,d0
 
 	* l_filename is odd
+
+	* For modules.pl and amigaremix
+    * take the last file part only to avoid redundancy
+	* "captain/captain_-_space_debris"
+
+    cmp.l   #"amig",11(a2)
+    bne.b   .2
+    cmp.l   #"arem",15(a2)
+    beq.b   .3
+.2
 	cmp.l	#"modu",11(a2)
 	bne.b	.1
 	cmp.l	#"les.",15(a2)
 	bne.b	.1
-	* For modules.pl take the last file part only to avoid redundancy
-	* "captain/captain_-_space_debris"
+.3
 	moveq	#1-1,d0
 .1
 
