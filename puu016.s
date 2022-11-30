@@ -18427,12 +18427,6 @@ inforivit_downloading
 .1	dc.b	"Downloading...",0
  even
 
-inforivit_searching
-	lea	.1(pc),a0
-	bra.w	putinfo
-.1	dc.b	"Searching...",0
- even
-
 
 ;inforivit_initializing
 ;	lea	.1(pc),a0
@@ -50068,7 +50062,13 @@ remoteSearch
 	tst.l	d0
 	beq		.exit
 
-	jsr		inforivit_searching
+	lea	.srh(pc),a0
+	jsr		printbox
+	bra.b	.srhh
+.srh
+	dc.b	"Searching...",0
+ even
+.srhh
 
 	* Prepare script into desbuf(a5)
 	lea		.modlandSearchCmd(pc),a0
@@ -50235,7 +50235,6 @@ remoteSearch
 	jsr		releaseModuleList
 .exit
 .noAminet
-	jsr		inforivit_play
 	jsr		unlockMainWindow
 	lea 	50(sp),sp
 	rts
