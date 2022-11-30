@@ -225,8 +225,8 @@ check	macro
 	include	libraries/reqtools_lib.i
 	include	libraries/xpk.i
 	include	libraries/xpkmaster_lib.i
-	include	libraries/playsidbase.i
-	include	libraries/playsid_lib.i
+	include	playsid.library/playsidbase.i
+	include	playsid.library/playsid_lib.i
 	include	libraries/xfdmaster_lib.i
 	include	libraries/xfdmaster.i
 	include	libraries/screennotify_lib.i
