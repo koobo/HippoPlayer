@@ -9966,6 +9966,7 @@ mt_dmacontemp	dc 0
 ;; ImpulseTracker
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+	IFND DTN_NoteStruct
  STRUCTURE DTN_NoteStruct,0
 	APTR	nst_Channels		;pointer to a list of notechannels */
 	ULONG	nst_Flags		;misc flags (see below) */
@@ -9973,8 +9974,10 @@ mt_dmacontemp	dc 0
 	UWORD	nst_MaxVolume		;max. volume of this player (in most cases 64) */
 	STRUCT	nst_Reserved,18		;reserved for future use (must be 0 for now) */
 	LABEL	DTN_NoteStruct_SIZEOF
+	ENDC
 
 
+	IFND DTN_NoteChannel
  STRUCTURE DTN_NoteChannel,0
 	APTR	nch_NextChannel		;next channel in the list (NULL if last) */
 	ULONG	nch_NotePlayer		;for use by the noteplayer (the deliplayer must ignore this) */
@@ -9991,6 +9994,7 @@ mt_dmacontemp	dc 0
 	UWORD	nch_Volume		;volume of sample */
 	STRUCT	nch_Reserved1,26	;reserved for future use (must be 0 for now) */
 	LABEL	DTN_NoteChannel_SIZEOF
+	ENDC
 
 deliPlayer		dc.l	0
 deliBase		dc.l	0
