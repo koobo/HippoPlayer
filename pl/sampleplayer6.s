@@ -4772,8 +4772,8 @@ mpega_parse_id3v2
     * Frame size is 10 bytes, end bound
     lea     -10(a4),a4
 
-    move.b  #ILF,(a2)+
-    move.b  #ILF2,(a2)+
+    lea     .titleFormat(pc),a0
+    bsr     appendWithFormat
     
     move.l  #"TPE1",d0
     lea     .tpe1Format(pc),a0
@@ -4849,6 +4849,9 @@ mpega_parse_id3v2
     popm    all
     rts
 
+.titleFormat
+    dc.b    ILF,ILF2
+    dc.b    " --- MP3 info ---",ILF,ILF2,ILF,ILF2,0
 .tpe1Format
     dc.b    " Artist:",ILF,ILF2
     dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
