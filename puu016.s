@@ -32410,7 +32410,10 @@ createNode
 	add	#l_size,a0
 	cmp.b	#.PARENT,d7
 	bne.b	.notPar
-	add	#30,a0		* additional space for list item name
+    * parent item, add
+    * additional space for list item name, to be safe use maximum
+    * based on what fileinfoblock can hold
+	add     #108,a0	
 .notPar
 	move.l	a0,d0
 	move.l	#MEMF_CLEAR,d1
