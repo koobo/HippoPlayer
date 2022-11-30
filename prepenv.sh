@@ -18,6 +18,7 @@ mkdir -p "$DL"
 cd "$DL" && wget -nc -nv http://aminet.net/dev/misc/NDK3.2.lha
 cd "$DL" && wget -nc -nv http://aminet.net/mus/play/Eagleplayer2.04-Sources.zip
 cd "$DL" && wget -nc -nv http://sun.hasenbraten.de/vasm/release/vasm.tar.gz
+cd "$DL" && wget -nc -nv  --content-disposition  https://github.com/askeksa/Shrinkler/archive/refs/heads/master.zip
 
 mkdir -p "$TMP"
 
@@ -26,6 +27,8 @@ cd "$TMP" && lha xfq "$DL/ReqToolsDev.lha"
 cd "$TMP" && unzip -oq "$DL/Eagleplayer2.04-Sources.zip"
 cd "$TMP" && tar xfz "$DL/vasm.tar.gz"
 cd "$TMP/vasm" && make -j4 CPU=m68k SYNTAX=mot
+cd "$TMP" && unzip -oq "$DL/Shrinkler-master.zip"
+cd "$TMP/Shrinkler-master" && make
 
 mkdir -p "$INC"
 
