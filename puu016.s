@@ -1284,7 +1284,7 @@ deleteflag	rs.b	1	* filen ja dividerin deletointiin
 keycode		rs.b	1		* 33
 keyfile		rs.b	64		* keyfile!
 
-INFO_MODULE_NAME_LEN = 50+10
+INFO_MODULE_NAME_LEN = 128
 modulename	rs.b 	INFO_MODULE_NAME_LEN+2 * moduulin nimi
 moduletype	rs.b	40		* tyyppi tekstinä
 req_array	rs.b	0		* reqtoolsin muotoiluparametrit
@@ -18139,7 +18139,7 @@ inforivit_play
 	move.l	ps3m_mname(a5),a0
 	move.l	(a0),a0
 	lea	modulename(a5),a1
-	moveq	#INFO_MODULE_NAME_LEN-1,d0
+	move.l	#INFO_MODULE_NAME_LEN-1,d0
 	moveq	#0,d1
 .copc	move.b	(a0)+,d1
 
@@ -18910,7 +18910,7 @@ lootaan_nimi
 
 	bsr.b	logo
 	lea	modulename(a5),a1
-	moveq	#INFO_MODULE_NAME_LEN-1,d0
+	move.l	#INFO_MODULE_NAME_LEN-1,d0
 .he	move.b	(a1)+,(a0)+
 	dbeq	d0,.he
 	clr.b	(a0)
@@ -30538,7 +30538,7 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 * Virittelee nimen tied.nimestä
 *******
 tee_modnimi:
- 	moveq	#INFO_MODULE_NAME_LEN-1,d1
+ 	move.l  #INFO_MODULE_NAME_LEN-1,d1
 	lea		modulename(a5),a1
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	bne.b	.arc				* otetaan pelkkä filename
