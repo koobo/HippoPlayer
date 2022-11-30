@@ -461,11 +461,11 @@ sampleplay1 incbin sampleplay.shr
 sampleplay2 
 
 aon41
-	incbin aon4.shr
+	incbin Aon4.shr
 aon42
 
 aon81
-	incbin aon8.shr
+	incbin Aon8.shr
 aon82
 
 dbpro1
@@ -493,11 +493,11 @@ bendaglish1
 bendaglish2 
 
 sidmonv21
-	incbin sidmon_v2.shr
+	incbin SidMon_v2.shr
 sidmonv22
 
 delta11 
-	incbin delta1.shr
+	incbin Delta1.shr
 delta12
 
 soundfx1
@@ -513,19 +513,19 @@ pretracker1
 pretracker2 
 
 custommade1 
-	incbin custommade_v1.shr
+	incbin CustomMade_v1.shr
 custommade2 
 
 sonicarranger1
-	incbin sonicarranger.shr
+	incbin SonicArranger.shr
 sonicarranger2
 
 davelowe1
-	incbin davelowe.shr
+	incbin DaveLowe.shr
 davelowe2 
 
 startrekker1 
-	incbin startrekker.shr
+	incbin StarTrekker.shr
 startrekker2
 
 vss1

@@ -1,6 +1,6 @@
 # Experimental makefile
 
-INCLUDE=-I.. -I../Include -I./sys-include
+INCLUDE=-I.. -I../Include -I../sys-include
 ASM=../temp/vasm/vasmm68k_mot
 EXE=-m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 EXEopt=-m68000 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0

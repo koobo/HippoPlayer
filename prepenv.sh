@@ -138,4 +138,18 @@ cat <<EOF >> "$INC/rexx/rxslib.i"
 	 LIBDEF   _LVOCVs2i
 EOF
 
-cp -R "$TMP/Eagleplayer2.04/Include/misc" "$INC/Misc"
+mkdir -p "$INC/misc/"
+cp "$TMP/Eagleplayer2.04/Include/misc/DeliPlayer.i" "$INC/misc/deliplayer.i"
+cp "$TMP/Eagleplayer2.04/Include/misc/EaglePlayer.i" "$INC/misc/eagleplayer.i"
+cd "$INC" && patch -p0 <<EOF
+--- misc/eagleplayer.i	2022-11-30 11:26:35.382115229 +0100
++++ misc/eagleplayer.i	2022-11-30 11:30:17.099611433 +0100
+@@ -15,7 +15,7 @@
+ EAGLEPLAYER_I	SET	1
+ 
+ 	IFND	DeliTracker_Player_i
+-		Include	"Misc/DeliPlayer.i"
++		Include	"misc/deliplayer.i"
+ 	ENDC
+ 
+EOF
