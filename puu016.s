@@ -9195,6 +9195,10 @@ moveButtonAction
 comment_file
 	bsr.w	getcurrent
 	beq.b	.x
+    * Only local files considered:
+    tst.b   l_remote(a3)
+    bne     .x
+
 	move.l	a3,a4
 
 ** kaapataan vanha kommentti
