@@ -6,8 +6,8 @@
 
 ver	macro
 ;	dc.b	"v2.30 (5.8.1996)"
-;	dc.b	"v2.31ï¿½A (24.8.-96)"
-;	dc.b	"v2.31ï¿½C (?.?.1996)"
+;	dc.b	"v2.31ßA (24.8.-96)"
+;	dc.b	"v2.31ßC (?.?.1996)"
 ;	dc.b	"v2.35 (23.11.1996)"
 ;	dc.b	"v2.37 (31.12.1996)"
 ;	dc.b	"v2.38 (9.2.1997)"
@@ -17,19 +17,19 @@ ver	macro
 ;	dc.b	"v2.44 (16.8.1998)"
 ;	dc.b	"v2.44 (16.8.1998)"
 ;	dc.b	"v2.45 (10.1.2000)"
-;	dc.b	"v2.47ï¿½ (?.?.2021)"
+;	dc.b	"v2.47ß (?.?.2021)"
 ;	dc.b	"v2.47 (31.8.2021)"
 ;	dc.b	"v2.48 (31.10.2021)"
-;	dc.b	"v2.49ï¿½ (?.?.2021)"
+;	dc.b	"v2.49ß (?.?.2021)"
 ;	dc.b	"v2.49 (29.11.2021)"
-;	dc.b	"v2.50ï¿½ (?.?.202?)"
+;	dc.b	"v2.50ß (?.?.202?)"
 ;	dc.b	"v2.50 (31.12.2021)"
-;	dc.b	"v2.52ï¿½ (?.?.202?)"
+;	dc.b	"v2.52ß (?.?.202?)"
 ;	dc.b	"v2.52 (30.4.2022)"
 ;	dc.b	"v2.53 (13.7.2022)"
-;	dc.b	"v2.54ï¿½ (?.?.2022)"
+;	dc.b	"v2.54ß (?.?.2022)"
 ;	dc.b	"v2.54 (30.8.2022)"
-;	dc.b	"v2.55ï¿½ (?.?.2022)"
+;	dc.b	"v2.55ß (?.?.2022)"
 	dc.b	"v2.55 (10.11.2022)"
 	endm	
 
@@ -55,8 +55,8 @@ fprog	= 0 * 1: file add progress indicator, ei oikein toimi (kaataa)
 floadpr = 1	* 1: unpacked file load progress indicator
 PILA	= 0	* 1: pikku pila niille joilla on wRECin key muttei 060:aa
 TARK	= 0	* 1: tekstien tarkistus
-EFEKTI  = 0	* 1: efekti volumesliderillï¿½
-ANNOY	= 0 * 1: Unregistered version tekstejï¿½ ympï¿½riinsï¿½
+EFEKTI  = 0	* 1: efekti volumesliderillä
+ANNOY	= 0 * 1: Unregistered version tekstejä ympäriinsä
 
 DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
@@ -95,11 +95,11 @@ MAX_MODULES		= $1ffff 		    * this should be enough!
  ;endc
  
 
-WINX	= 2	* X ja Y lisï¿½ykset pï¿½ï¿½ikkunan grafiikkaan
+WINX	= 2	* X ja Y lisäykset pääikkunan grafiikkaan
 WINY	= 3
 
 * This char as the first char in filename indicates a list divider
-DIVIDER_MAGIC = 'ï¿½'
+DIVIDER_MAGIC = '÷'
 
 ;isListDivider macro 
 ;	cmp.b 	#DIVIDER_MAGIC,\1
@@ -145,7 +145,7 @@ tword	macro
 	ror	#8,\2
 	endm
 
-***** Tarkistaa rekisterï¿½itymiseen liittyvï¿½t tekstit
+***** Tarkistaa rekisteröitymiseen liittyvät tekstit
 
 
 check	macro
@@ -281,7 +281,7 @@ prefs_s3mmode3		rs.b	1
 prefs_ps3mb		rs.b	1
 prefs_timeoutmode	rs.b	1
 XXXprefs_quadmode	rs.b	1
-XXXprefs_quadon		rs.b	1		* 1: quad oli pï¿½ï¿½llï¿½
+XXXprefs_quadon		rs.b	1		* 1: quad oli päällä
 prefs_ptmix		rs.b	1		* 0: chip, 1: fast, 2: ps3m
 prefs_xpkid		rs.b	1
 prefs_fade		rs.b	1
@@ -523,7 +523,7 @@ homelock	rs.l 	1		* homedir-lock (V36)
 cli			rs.l	1
 segment		rs.l	1	* Toisiks ekan hunkin segmentti
 * Fileinfoblock used by main task
-fileinfoblock	rs.b	260		* 4:llï¿½ jaollisessa osoitteessa!
+fileinfoblock	rs.b	260		* 4:llä jaollisessa osoitteessa!
 * Fileinfoblock used by file req task
 fileinfoblock2	rs.b	260		
 
@@ -535,7 +535,7 @@ fileinfoblock2	rs.b	260
  endif
 
 filecomment	rs.b	80+4		* tiedoston kommentti
-windowbase	rs.l	1		* pï¿½ï¿½ohjelma
+windowbase	rs.l	1		* pääohjelma
 mainWindowLock rs.l 1
 appwindow	rs.l	1		* appwindowbase
 screenlock	rs.l	1
@@ -549,13 +549,13 @@ topazbase	rs.l	1
 minifontbase 	rs.l	1
 listfontbase	rs.l	1		* points to some font base
 notifyhandle	rs.l	1		* Screennotifylle
-windowtop	rs	1		* ikkunoiden eisysteemialueen ylï¿½reuna
+windowtop	rs	1		* ikkunoiden eisysteemialueen yläreuna
 windowright	rs	1
 windowleft	rs	1
 windowbottom	rs	1
 windowtopb	rs	1		* sc_BorTop
 gotscreeninfo	rs.b	1
-infolag		rs.b	1 * mitï¿½ nï¿½ytetï¿½ï¿½n infoikkunassa: 0=sample, ~0=about
+infolag		rs.b	1 * mitä näytetään infoikkunassa: 0=sample, ~0=about
 
 infotaz		rs.l	1 * infoikkunan datan osoite
 
@@ -570,21 +570,21 @@ nilfile		rs.l	1		* NIL:
 
 keycheckroutine	rs.l	1		* check_keyfile rutiinin osoite
 
-pen_0		rs.l	1		* piirtokynï¿½t
+pen_0		rs.l	1		* piirtokynät
 pen_1		rs.l	1
 pen_2		rs.l	1
 pen_3		rs.l	1
 
-WINSIZX		rs	1		* pï¿½ï¿½ikkunan koot
+WINSIZX		rs	1		* pääikkunan koot
 WINSIZY		rs	1
 
 previousWindowWidth 	rs 	1
 previousWindowHeight 	rs 	1
 
 eicheck		rs.b	1
-reghippo	rs.b 	1 		* ensimmï¿½inen hippo hieman sivummalle
+reghippo	rs.b 	1 		* ensimmäinen hippo hieman sivummalle
 
-req_file	rs.l	1		* pï¿½ï¿½requesteri
+req_file	rs.l	1		* päärequesteri
 req_file2	rs.l	1		* load/save program
 req_file3	rs.l	1		* prefs
 kokolippu	rs	1		* 0: pieni
@@ -593,28 +593,28 @@ windowZippedPos	rs	2	* Pienen ikkunan paikka (ZipWindow). Must be together
 windowZippedSize rs	2	* ja koko
 infopos2	rs	2		* sampleikkunan ja sidinfon paikka
 
-screenaddr	rs.l	1		* Nï¿½ytï¿½n osoite
+screenaddr	rs.l	1		* Näytön osoite
 windowpos_p	rs	2		* Prefs ikkunan paikka
 Xquadpos		rs	2		* Quad-ikkunan paikka
-wbkorkeus	rs	1		* Workbench nï¿½ytï¿½n korkeus
+wbkorkeus	rs	1		* Workbench näytön korkeus
 wbleveys	rs	1
-prefs_prosessi	rs	1		* ei-0: Prefs-prosessi pï¿½ï¿½llï¿½
-filereq_prosessi rs	1		* ei-0: Files-prosessi pï¿½ï¿½llï¿½
+prefs_prosessi	rs	1		* ei-0: Prefs-prosessi päällä
+filereq_prosessi rs	1		* ei-0: Files-prosessi päällä
 info_prosessi	rs	1		* ...
 about_moodi	rs.b	1		* 0: normaali, 1: moduleinfo
 filereqmode	rs.b	1		* 0: add mode, ~0: insert mode 
-fileinsert	rs.l	1		* node jonka jï¿½lkeen insertti
-haluttiinuusimodi rs	1		* new-nappulaa ja play:tï¿½ varten
+fileinsert	rs.l	1		* node jonka jälkeen insertti
+haluttiinuusimodi rs	1		* new-nappulaa ja play:tä varten
 confirmFavoritesModificationDisabled		rs.b	1
 infoon		rs.b	1		* 1: info on
 
 exitmainprogram	rs.b	1		* <>1: poistu ohjelmasta
-startuperror	rs.b	1		* virhe kï¿½ynnistyksessï¿½
+startuperror	rs.b	1		* virhe käynnistyksessä
 oldchip		rs	1		* free memille vertailua varten
 oldfast		rs	1		* ...
 
-prefsexit	rs.b	1		* ~0: prefssistï¿½ poistuttu
-lprgadd		rs.b	1		* ~0: loadprg addaa vanhan perï¿½ï¿½n (join)
+prefsexit	rs.b	1		* ~0: prefssistä poistuttu
+lprgadd		rs.b	1		* ~0: loadprg addaa vanhan perään (join)
 prefsivu	rs	1		* 0..5: sivu prefs-ikkunassa
 prefsivugads	rs.l	1		* vastaavien gadgettien alkuosoite
 
@@ -635,30 +635,30 @@ prefs_updateContentsSignal	rs.b	1		* prefs-signaali 2
 
 songHasEndedSignal	rs.b	1	* Kappale soinut
 ownsignal2	rs.b	1	* window update, prefs update 
-uiRefreshSignal	rs.b	1	* lootan pï¿½ivitys
+uiRefreshSignal	rs.b	1	* lootan päivitys
 posUpdateSignal	rs.b	1	
 audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
-info_signal	rs.b	1	* about signaali infojen pï¿½ivitykseen
-info_signal2	rs.b	1	* about signaali infojen pï¿½ivitykseen
+info_signal	rs.b	1	* about signaali infojen päivitykseen
+info_signal2	rs.b	1	* about signaali infojen päivitykseen
 tooltipSignal	rs.b  	1	* signal for opening tooltip popup
 
 * Flag used to discard unnecessary mousemove IDCMP-messages
 ignoreMouseMoveMessage 	rs.b  	1
 
-oli_infoa	rs.b	1	* freemodulea ennen inforequn tila (0:eipï¿½ï¿½llï¿½)
+oli_infoa	rs.b	1	* freemodulea ennen inforequn tila (0:eipäällä)
 
 info_task	rs.l	1	* infoikkunan taski
 
 ciabasea	rs.l	1	* ciaa resource base
 ciabaseb	rs.l	1	* ciab
-ciabase		rs.l	1	* jompikumpi kumpi on kï¿½ytï¿½ssï¿½
+ciabase		rs.l	1	* jompikumpi kumpi on käytössä
 ciaddr		rs.l	1	* ...
 timerhi		rs.b	1	* timerin arvo
 timerlo		rs.b	1	* ...
 whichtimer	rs.b	1	* Kumpi cia timeri
-kelattiintaakse	rs.b	1	* <>0: kelattiin taakkeppï¿½in
+kelattiintaakse	rs.b	1	* <>0: kelattiin taakkeppäin
 
 mousex		rs	1		* hiiren paikka x,y
 mousey		rs	1
@@ -746,7 +746,7 @@ sampleformat		rs.b	1
 * or p_delicustom or p_futureplayer.
 executablemoduleinit		rs.b	1
 
-****** Prefs asetukset, joita kï¿½sitellï¿½ï¿½n
+****** Prefs asetukset, joita käsitellään
 
 mixingrate_new	rs.l	1		* Prefs-uudet arvot kaikille
 ps3mb_new	rs.b	1
@@ -828,8 +828,8 @@ alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
 Xscopechanged	rs.b	1		* scopea muutettu
-contonerr_laskuri rs.b 1		* kuinka monta virheellistï¿½ lataus
-cybercalibration_new rs.b 1		* yritystï¿½
+contonerr_laskuri rs.b 1		* kuinka monta virheellistä lataus
+cybercalibration_new rs.b 1		* yritystä
 calibrationfile_new rs.b 100
 newcalibrationfile rs.b	1
 
@@ -840,8 +840,8 @@ prefs_exit	rs.b	1		* Prefs exit-flaggi
 slider4oldheight rs	1
 slider1old	rs	1		* previous VertPot value to detect changes
 slider4old	rs	1		* previous VertPot value to detect changes
-mainvolume	rs	1		* pï¿½ï¿½-ï¿½ï¿½nenvoimakkuus
-mixirate	rs.l	1		* miksaustaajuus S3M:ï¿½lle
+mainvolume	rs	1		* pää-äänenvoimakkuus
+mixirate	rs.l	1		* miksaustaajuus S3M:älle
 textchecksum	rs	1
 priority	rs.l	1		* ohjelman prioriteetti
 tfmxmixingrate	rs	1		* rate 1-22
@@ -849,7 +849,7 @@ s3mmode1	rs.b	1		* prioriteetti / killeri
 s3mmode2	rs.b	1	* surround,stereo,mono,real surround,14-bit
 s3mmode3	rs.b	1		* Volume boost
 stereofactor	rs.b	1		* stereofactor
-xfd		rs.b	1		* ~0: kï¿½ytetï¿½ï¿½n xfdmaster.libbï¿½ï¿½
+xfd		rs.b	1		* ~0: käytetään xfdmaster.libb¡ä
 ps3mb		rs.b	1
 
 QUADMODE_QUADRASCOPE = 0
@@ -872,7 +872,7 @@ ptmix		rs.b	1		* 0: normi ptreplay, 1:mixireplay
 xpkid		rs.b	1		* 0: ei xpktunnistusta, 1:joo
 							* seems to be that 0 enables xpkid here
 fade		rs.b	1		* 0: ei feidausta
-boxsize		rs	1		* montako nimeï¿½ mahtuu fileboksiin
+boxsize		rs	1		* montako nimeä mahtuu fileboksiin
 						* size of the module name box
 * filebox slider value set in prefs, range: 2..48
 boxsize_new	rs	1		
@@ -887,11 +887,11 @@ boxsizez	rs	1		* rmb + ? zoomausta varten
 						* alternative boxsize for RMB 
 doubleclick	rs.b	1		* <>0: tiedoston doubleclick-play
 tabularasa	rs.b	1		* aloitettiinko tyhjalla modilistalla?
-startuponoff	rs.b	1		* <>0: startupsoitto pï¿½ï¿½llï¿½
-hotkey		rs.b	1		* <>0: hotkeyt pï¿½ï¿½llï¿½
+startuponoff	rs.b	1		* <>0: startupsoitto päällä
+hotkey		rs.b	1		* <>0: hotkeyt päällä
 contonerr	rs.b	1		* <>0: jatketaan latauserrorin sattuessa
-vbtimer		rs.b	1		* ~0: Kï¿½ytetï¿½ï¿½n vb ajastusta	
-vbtimeruse	rs.b	1		* ~0: tï¿½mï¿½n hetkinen
+vbtimer		rs.b	1		* ~0: Käytetään vb ajastusta	
+vbtimeruse	rs.b	1		* ~0: tämän hetkinen
 groupmode_new	rs.b	1
 groupname_new	rs.b	100
 infosize_new	rs	1		* module infon koko
@@ -908,14 +908,14 @@ cybercalibration rs.b	1
 timeout		rs	1		* moduulin soittoaika
 
 alarm		rs	1		* alarm aika
-do_alarm	rs.b	1		* ~0: herï¿½tys! :)
+do_alarm	rs.b	1		* ~0: herätys! :)
 
-new		rs.b	1		* onko painettu New:iï¿½?
-new2		rs.b	1		* onko painettu New:iï¿½?
+new		rs.b	1		* onko painettu New:iä?
+new2		rs.b	1		* onko painettu New:iä?
 
-gfxcard		rs.b 	1		* jos ~0, kï¿½ytï¿½ssï¿½ nï¿½yttï¿½kortti
+gfxcard		rs.b 	1		* jos ~0, käytössä näyttökortti
 
-samplecyber	rs.b	1		* ~0: sampleplayer kï¿½yttï¿½ï¿½ cybercalibr.
+samplecyber	rs.b	1		* ~0: sampleplayer käyttää cybercalibr.
 mpegaqua	rs.b	1		* MPEGA quality
 mpegadiv	rs.b	1		* MPEGA freq. division
 medmode		rs.b	1		* MED mode
@@ -957,8 +957,8 @@ userIdleTick rs  1	* refresh counter updated each ui refresh tick, cleared on mo
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
 
-modamount		rs.l	1	* modien mï¿½ï¿½rï¿½
-divideramount	rs.l	1	* dividereitten mï¿½ï¿½rï¿½ (info window)
+modamount		rs.l	1	* modien määrä
+divideramount	rs.l	1	* dividereitten määrä (info window)
 firstname		rs.l	1	* nimi ikkunan ekan nimen numero
 firstname2		rs.l	1	* 
 
@@ -981,15 +981,15 @@ GROUPMODE_DISABLE = 2
 GROUPMODE_LOAD_SINGLE = 3
 groupmode	rs.b	1	* player group handling mode
 
-movenode	rs.b	1	* ~0: move pï¿½ï¿½llï¿½
-nodetomove	rs.l	1	* tï¿½tï¿½ nodea siirretï¿½ï¿½n
+movenode	rs.b	1	* ~0: move päällä
+nodetomove	rs.l	1	* tätä nodea siirretään
 
 chosenmodule2	rs.l	1	* TODO: what is this
-hippoonbox	rs.b	1	* ~0: shownames pï¿½ivittï¿½ï¿½ koko nï¿½ytï¿½n
-dontmark	rs.b	1	* ei merkata nimeï¿½ listassa
+hippoonbox	rs.b	1	* ~0: shownames päivittää koko näytön
+dontmark	rs.b	1	* ei merkata nimeä listassa
 
 clickmodule	rs.l	1	* doubleklikattumodule
-clicksecs	rs.l	1	* aika CurrentTime()ltï¿½ DoubleClick()ille
+clicksecs	rs.l	1	* aika CurrentTime()ltä DoubleClick()ille
 clickmicros	rs.l	1
 
 playerbase	rs.l	1	* soittorutiinin base
@@ -1019,7 +1019,7 @@ filterstore	rs.b	1	* filtterin tila
 
 keyfilechecked	rs.b	1	* ~0: keyfile tarkistettu
 
-songnumber	rs	1	* modin sisï¿½isen kappaleen numero
+songnumber	rs	1	* modin sisäisen kappaleen numero
 maxsongs	rs	1	* maximi songnumber
 minsong  	rs 	1   * min songnumber
 
@@ -1028,7 +1028,7 @@ moduleaddress	rs.l	1	* modin osoite
 moduleaddress2	rs.l	1	* modin osoite ladattaessa doublebufferingilla
 modulelength	rs.l	1	* modin pituus
 modulefilename	rs.l	1	* modin tiedoston nimi
-solename	rs.l	1	* osoitin pelkkï¿½ï¿½n tied.nimeen
+solename	rs.l	1	* osoitin pelkkään tied.nimeen
 kanavatvarattu	rs	1	* 0: ei varattu, ei-0: varattu
 
 ;earlymoduleaddress	rs.l	1	*
@@ -1102,7 +1102,7 @@ tfmxsampleslen	rs.l	1	* TFMX:n samplejen pituus
 medrelocced	rs.b	1	* ei-0: Med-modi relocatoitu
 medtype		rs.b	1	* 0: 1-4, 1: 5-8, 2: 1-64
 
-ps3m_mname	rs.l	1	* ps3m:n informaation vï¿½litystï¿½ varten
+ps3m_mname	rs.l	1	* ps3m:n informaation välitystä varten
 ps3m_numchans	rs.l	1
 ps3m_mtype	rs.l	1
 ps3m_samples	rs.l	1
@@ -1130,8 +1130,8 @@ ahi_name_new		rs.b	44
 moduleListHeader	rs.b	MLH_SIZE	* tiedostolistan headeri
 filelistaddr	rs.l	1		* REQToolsin tiedostolistan osoite
 
-loading		rs.b	1		* ~0: lataus meneillï¿½ï¿½n
-loading2	rs.b	1		* ~0: filejen addaus meneillï¿½ï¿½n
+loading		rs.b	1		* ~0: lataus meneillään
+loading2	rs.b	1		* ~0: filejen addaus meneillään
 * List of favorite modules
 favoriteListHeader	rs.b 	MLH_SIZE
 * Flag indicates the list has changed before last save
@@ -1144,7 +1144,7 @@ fileBrowserListHeader	rs.b	MLH_SIZE
 searchResultsListHeader rs.b	MLH_SIZE
 
 ** InfoWindow kamaa
-;infosample	rs.l	1		* samplesoittajan vï¿½liaikaisalue
+;infosample	rs.l	1		* samplesoittajan väliaikaisalue
 swindowbase	rs.l	1
 suserport	rs.l	1
 srastport	rs.l	1
@@ -1284,7 +1284,7 @@ keyfile		rs.b	64		* keyfile!
 
 INFO_MODULE_NAME_LEN = 50+10
 modulename	rs.b 	INFO_MODULE_NAME_LEN+2 * moduulin nimi
-moduletype	rs.b	40		* tyyppi tekstinï¿½
+moduletype	rs.b	40		* tyyppi tekstinä
 req_array	rs.b	0		* reqtoolsin muotoiluparametrit
 desbuf		rs.b	200		* muotoilupuskuri, temporary buffer
 desbuf2		rs.b	200		* muotoilupuskuri prefssille
@@ -1294,7 +1294,7 @@ tempdir		rs.b	200		* ReqToolsin hakemistopolku
 PROBE_BUFFER_LEN = 2048
 probebuffer	rs.b	PROBE_BUFFER_LEN * tiedoston tutkimispuskuri
 ptsonglist	rs.b	64		* Protrackerin songlisti
-xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkkiï¿½)
+xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkkiä)
 findpattern	rs.b	30		* find pattern
 divider		rs.b	26		* divider
 
@@ -1310,7 +1310,7 @@ moduleDataSemaphore		rs.b	SS_SIZE
 							* Semaphore to protect access to the module list
 moduleListSemaphore 	rs.b 	SS_SIZE
 
-ARGVSLOTS	=	16		* max. parametrejï¿½
+ARGVSLOTS	=	16		* max. parametrejä
 sv_argvArray	rs.l	ARGVSLOTS	* pointers to zero terminated strings
 sv_argvBuffer	rs.b	256			* strings are here
 
@@ -1459,18 +1459,18 @@ xpl_versio	=	25
 
 *********************************************************************************
 *
-* Tiedostolistan yhden yksikï¿½n rakenne
+* Tiedostolistan yhden yksikön rakenne
 * Mudule list node element
 *
 
 	rsreset
 		rs.b	MLN_SIZE	* Minimal node 
-l_nameaddr	rs.l	1		* osoitin pelkkï¿½ï¿½n tied.nimeen
+l_nameaddr	rs.l	1		* osoitin pelkkään tied.nimeen
 					* address to filename without path
 l_favorite	rs.b 	1		* favorite status for this file
 l_divider	rs.b	1		* this is a divider, ie. a path
 l_remote	rs.b    1       * 0: local file, 1: remote
-l_filename	rs.b	0		* tied.nimi ja polku alkaa tï¿½stï¿½
+l_filename	rs.b	0		* tied.nimi ja polku alkaa tästä
 					* full path to filename begins at this point
 					* element size is dynamically calculated based on path length.
 l_size		rs.b	0
@@ -1544,7 +1544,7 @@ sm_stereo14	=	5
 
 *********************************************************************************
 *
-* Pï¿½ï¿½- ja prefsikkunan liput
+* Pää- ja prefsikkunan liput
 *
 
 wflags set WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET
@@ -1647,7 +1647,7 @@ progstart
 	move.l	d0,a3
 
 	moveq	#0,d5
-	tst.l	pr_CLI(a3)	* ajettiinko WB:stï¿½
+	tst.l	pr_CLI(a3)	* ajettiinko WB:stä
 	bne.b	.nowb
 	lea	pr_MsgPort(a3),a0
 	lob	WaitPort
@@ -1658,14 +1658,14 @@ progstart
 	move.l  sm_NumArgs(a0),d4
 	* Get WBArg array:
 	move.l	sm_ArgList(a0),d0	* nykyisen hakemiston lukko
-	beq.b	.waswb			* workbenchiltï¿½
+	beq.b	.waswb			* workbenchiltä
 	move.l	d0,a1
 	move.l	wa_Lock(a1),lockhere(a5)
 	DPRINT	"Start from WB"
 	bsr.w	.buildWbStartParams
 	bra.b	.waswb
 .nowb	
-	move.l	pr_CurrentDir(a3),lockhere(a5) * nykyinen hakemisto CLI:ltï¿½
+	move.l	pr_CurrentDir(a3),lockhere(a5) * nykyinen hakemisto CLI:ltä
 	DPRINT	"Start from CLI"
 
 	push	a3
@@ -1834,7 +1834,7 @@ progstart
 	rts
 
 .poptofront
-	tst.l	sv_argvArray+4(a5)	* oliko parametrejï¿½?
+	tst.l	sv_argvArray+4(a5)	* oliko parametrejä?
 	bne.b	.huh			* jos ei, pullautetaan hip!
 
 	move.l	d0,a0
@@ -1842,12 +1842,12 @@ progstart
 	jsr	(a0)								* what is this evil magic?
 	bra.w	.eien
 
-* Oli! Lï¿½hetetï¿½ï¿½n hipille!
+* Oli! Lähetetään hipille!
 .huh
 	* Let us send a message to an already existing hippo with command line marguments passed
 	* here.
 
-	move.l	d0,a3			* pï¿½ï¿½llï¿½olevan hipin portti
+	move.l	d0,a3			* päälläolevan hipin portti
 
 	sub.l	a1,a1
 	lore	Exec,FindTask
@@ -1885,7 +1885,7 @@ progstart
 	move.l	#MESSAGE_MAGIC_ID,HM_Identifier(a1) 			* magic identifier
 	pushpea	sv_argvArray(a5),HM_Arguments(a1) 		  * cmdline parameter array
 	* MN_SIZE is left unset
-	pushpea	hippoport(a5),MN_REPLYPORT(a1)	* tï¿½hï¿½n porttiin vastaus
+	pushpea	hippoport(a5),MN_REPLYPORT(a1)	* tähän porttiin vastaus
 	lob	PutMsg
 
 	lea	hippoport(a5),a0	* odotellaan vastausta
@@ -2222,12 +2222,12 @@ about_tt
  
  dc.b "This program is registered to          ",10,3
  dc.b "%39s",10,3
- dc.b "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",10,3
+ dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
  dc.b " List has %5ld files,  %5ld dividers ",10,3
  dc.b 0
 
 
-;scrtit	dc.b	"HippoPlayer - Copyright ï¿½ 1994-2021 K-P Koljonen",0
+;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
 scrtit	dc.b	"HippoPlayer"
 	dc.b	" by K-P in 1994-2000, 2021-2022",0
 	dc.b	"$VER: "
@@ -2243,13 +2243,13 @@ no_one	 dc.b	"   no-one",0
 
 
 about_t
- dc.b "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",10,3
- dc.b "ï¿½ï¿½ï¿½  HippoPlayer "
+ dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
+ dc.b "­­­  HippoPlayer "
  ver
- dc.b " ï¿½ï¿½ï¿½",10,3
- dc.b "ï¿½ï¿½          by K-P Koljonen          ï¿½ï¿½",10,3
- dc.b "ï¿½ï¿½ï¿½       Hippopotamus Design       ï¿½ï¿½ï¿½",10,3
- dc.b "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",10,3
+ dc.b " ­­­",10,3
+ dc.b "­­          by K-P Koljonen          ­­",10,3
+ dc.b "­­­       Hippopotamus Design       ­­­",10,3
+ dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
 
 about_t1
  dc.b "    This program is not registered!    ",10,3
@@ -2257,17 +2257,17 @@ about_t1
  dc.b "    software and to reward the poor    ",10,3
  dc.b "       author from his hard work.      ",10,3
   
- dc.b "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",10,3
+ dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
  dc.b " HippoPlayer can be freely distributed",10,3
  dc.b " as long as all the files are included",10,3
  dc.b "   unaltered. Not for commercial use",10,3
  dc.b " without a permission from the author.",10,3
- dc.b " Copyright ï¿½ 1994-2022 by K-P Koljonen",10,3
+ dc.b " Copyright © 1994-2022 by K-P Koljonen",10,3
  dc.b "           *** FREEWARE ***",10,3
- dc.b "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",10,3
+ dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
  ;dc.b "Snail mail: Kari-Pekka Koljonen",10,3
  ;dc.b "            Torikatu 31",10,3
- ;dc.b "            FIN-40900 Sï¿½ynï¿½tsalo",10,3
+ ;dc.b "            FIN-40900 Säynätsalo",10,3
  ;dc.b "            Finland",10,3
  ;dc.b 10,3
  ;dc.b "E-mail:     kpk@cc.tut.fi",10,3
@@ -2276,7 +2276,7 @@ about_t1
  ;dc.b 10,3
  ;dc.b "WWW:        www.students.tut.fi/~kpk",10,3
  ;dc.b "IRC:        K-P",10,3,10,3
- dc.b "ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",10,3
+ dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
  dc.b "    Hippopothamos the river-horse",10,3
  dc.b "    Hippopotamus  amphibius:   a  large",10,3
  dc.b "herbivorous   mammal,  having  a  thick",10,3
@@ -2336,7 +2336,7 @@ main
 
 	not.l	idopen(a5)		* -1 = input.devide ei avattu
 
-;	move	#0,pen_0+2(a5)		* kick2.0+ vï¿½rit
+;	move	#0,pen_0+2(a5)		* kick2.0+ värit
 	clr	pen_0+2(a5)
 	move	#1,pen_1+2(a5)
 	move	#2,pen_2+2(a5)
@@ -2352,7 +2352,7 @@ main
 	move	WINSIZY(a5),wsizey
 
 
-	cmp	#34,LIB_VERSION(a6)		* vï¿½rit kickstartin mukaan
+	cmp	#34,LIB_VERSION(a6)		* värit kickstartin mukaan
 	ble.b	.vanha
 	st	uusikick(a5)		* Uusi kickstart
 
@@ -2376,7 +2376,7 @@ main
 	lea	winstruc,a2
 	move	#$0301,d0
 ;	moveq	#$0001,d0
-	move	d0,colors(a2)			* Ikkunoiden vï¿½rit sen mukaan
+	move	d0,colors(a2)			* Ikkunoiden värit sen mukaan
 	move	d0,colors2(a2)
 	move	d0,colors3(a2)
 
@@ -2447,7 +2447,7 @@ main
 	lob	OldOpenLibrary
 	move.l	d0,_DiskFontBase(a5)
 
-	lea	rmname(pc),a1		* Onko RexxMast pï¿½ï¿½llï¿½?
+	lea	rmname(pc),a1		* Onko RexxMast päällä?
 	lob	FindTask
 	tst.l	d0
 	beq.b	.norexx
@@ -2513,7 +2513,7 @@ main
 
 	* text_attr is now according to loaded prefs
 	lea	text_attr(a3),a0	* nyt jo muutettu prefssien mukaan
-	tst.l	_DiskFontBase(a5)	* onko libbiï¿½?
+	tst.l	_DiskFontBase(a5)	* onko libbiä?
 	beq.b	.fontProblem1
 	
  if DEBUG
@@ -2540,7 +2540,7 @@ main
 
 	* list_text_attr is now according to loaded prefs
 	lea	list_text_attr(a3),a0	* nyt jo muutettu prefssien mukaan
-	tst.l	_DiskFontBase(a5)	* onko libbiï¿½?
+	tst.l	_DiskFontBase(a5)	* onko libbiä?
 	beq.b	.fontProblem2
 	
  if DEBUG
@@ -2598,7 +2598,7 @@ main
 
 	* Do all kinds of adjustments to gadgets
 
-	lea	sivu0,a0		* Kaikkia pageja 3pix ylï¿½spï¿½in!
+	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
 	basereg	sivu0,a0
 
 	* Add the "Favorites" prefs button to the end of the
@@ -2612,7 +2612,7 @@ main
     pushpea prefsPlaySidMode(a0),nAMISKA5(a0)
 	endb	a0
 
-;	lea	sivu0,a0		* Kaikkia pageja 3pix ylï¿½spï¿½in!
+;	lea	sivu0,a0		* Kaikkia pageja 3pix ylöspäin!
 	bsr.b	.hum
 	lea	sivu1-sivu0(a0),a0
 	bsr.b	.hum
@@ -2828,10 +2828,10 @@ main
  
 
 
-** 3 pixeliï¿½ korkeempi infowindowin slideri
+** 3 pixeliä korkeempi infowindowin slideri
 ;	addq	#3,gg_Height+gAD1
 
-* kick1.3 vï¿½rit
+* kick1.3 värit
 ;	move	#0,pen_0+2(a5)	
 	clr	pen_0+2(a5)
 	move	#1,pen_1+2(a5)
@@ -2900,7 +2900,7 @@ main
 .pal	move.l	d0,clockconstant(a5)
 
 	bsr.w	divu_32
-	move.l	d0,colordiv(a5)		* 50Hz tai 60Hz nï¿½ytï¿½lle
+	move.l	d0,colordiv(a5)		* 50Hz tai 60Hz näytölle
 
 	move	#15600,horizfreq(a5)
 	move	#50,vertfreq(a5)
@@ -2922,7 +2922,7 @@ main
 	bsr.w	get_rt
 
 	st	win(a5)
-	bsr.w	avaa_ikkuna		* palauttaa d4:ssï¿½ keycheckin~
+	bsr.w	avaa_ikkuna		* palauttaa d4:ssä keycheckin~
 	beq.b	.go3
 	clr.b	win(a5)
 	move.b	#i_nowindow,startuperror(a5)
@@ -2930,7 +2930,7 @@ main
 .go3
 
 
-* ikkuna avattu.. katotaan pitï¿½ï¿½ko olla pieni
+* ikkuna avattu.. katotaan pitääko olla pieni
 	tst.b	prefsdata+prefs_kokolippu(a5)
 	beq.b	.hid
 	bsr.w	zipMainWindow
@@ -2947,7 +2947,7 @@ main
 	jsr	loadplayergroup
 	move.l	d0,externalplayers(a5)
 ;	bne.b	.purr
-;	lea	grouperror_t,a1		* ei valiteta vaikka ei lï¿½ydykkï¿½ï¿½n
+;	lea	grouperror_t,a1		* ei valiteta vaikka ei löydykkään
 ;	bsr.w	request
 
 
@@ -3054,7 +3054,7 @@ main
 
 *********************************************************************************
 *
-* Pï¿½ï¿½silmukka
+* Pääsilmukka
 *	
 
 	DPRINT	"Entering message loop"
@@ -3069,7 +3069,7 @@ msgloop
 	bne.w	exit
 
 	cmp.b	#1,do_alarm(a5)
-	bne.b	.noal				* herï¿½tys!
+	bne.b	.noal				* herätys!
 	addq.b	#1,do_alarm(a5)
 	lea	startup(a5),a0
 	tst.b	(a0)
@@ -3124,7 +3124,7 @@ msgloop
 	bra.w		returnmsg
 
 .nrexm
-* Tuliko viestiï¿½ porttiin?
+* Tuliko viestiä porttiin?
 	move.b	hippoport+MP_SIGBIT(a5),d3
 	btst	d3,d0
 	beq.b	.ow
@@ -3142,14 +3142,14 @@ msgloop
 	popm	all
 
 
-*** Poistuttiinko preffsistï¿½?
+*** Poistuttiinko preffsistä?
 * Prefs window was just closed? Do stuff!
 * Probably this bit handles things like:
 * - move windows to a newly set public screen
 * - update filebox size according to prefs changes
 * - update titlebar information
 * - quite ugly!
-.nowo	move.b	ownsignal2(a5),d3	* pï¿½ivitetï¿½ï¿½n positionia
+.nowo	move.b	ownsignal2(a5),d3	* päivitetään positionia
 	btst	d3,d0
 	beq.b	.noSignal2
 	push	d0  * save signal mask
@@ -3164,7 +3164,7 @@ msgloop
 	bne.w	returnmsg
 .noSignal2
 
-	move.b	uiRefreshSignal(a5),d3	* pï¿½ivitetï¿½ï¿½n...
+	move.b	uiRefreshSignal(a5),d3	* päivitetään...
 	btst	d3,d0
 	beq.b	.wow
 	bsr		handleUiRefreshSignal
@@ -3205,10 +3205,10 @@ msgloop
 	;clr.b	haluttiinuusimodi(a5)
 
 
-* Tï¿½nne tullaan sillon, kun on painettu playtï¿½ eikï¿½ ollut modeja,
+* Tänne tullaan sillon, kun on painettu playtä eikä ollut modeja,
 * filereq-prosessin signaalista. Eli aletaan soittaa ekaa valittua modia.
 
-	tst.l	modamount(a5)		* Ei modeja edelleenkï¿½ï¿½n
+	tst.l	modamount(a5)		* Ei modeja edelleenkään
 	beq.b	.nwww
 
 	movem.l	d0-a6,-(sp)
@@ -3414,7 +3414,7 @@ exit
 * poistetaan loput prosessit...
 
 
-* onko prosessien kï¿½ynnistys kesken?
+* onko prosessien käynnistys kesken?
 ;	cmp	#1,prefs_prosessi(a5)
 ;	beq.b	.er2	
 ;	cmp	#1,quad_prosessi(a5)
@@ -3428,9 +3428,9 @@ exit
 	jsr	sulje_info
 
 	tst.b	hippoport+hip_opencount(a5)	* onko portilla
-	beq.b	.joer				* kï¿½yttï¿½jiï¿½?
+	beq.b	.joer				* käyttäjiä?
 
-** kï¿½sketï¿½ï¿½n niitï¿½ sammumaan.
+** käsketään niitä sammumaan.
 	st	hippoport+hip_quit(a5)
 
 
@@ -3440,17 +3440,17 @@ exit
 	bsr.w	dela
 	dbf	d7,.jorl
 	bra.b	.er
-	clr.b	hippoport+hip_quit(a5)	* ei enï¿½ï¿½ quittia jos ei onnistunu.
+	clr.b	hippoport+hip_quit(a5)	* ei enää quittia jos ei onnistunu.
 
 .joer
 
-* nï¿½itï¿½ ei voida niin vaan poistaakaan.
+* näitä ei voida niin vaan poistaakaan.
 	tst	filereq_prosessi(a5)
 	beq.b	.ex
 
 .er	lea	.clo(pc),a1
 .req	jsr	request
-	clr.b	exitmainprogram(a5)	* ei enï¿½ï¿½ exittiï¿½.	
+	clr.b	exitmainprogram(a5)	* ei enää exittiä.	
 	bra.w	msgloop
 .clo	dc.b	"Close all requesters & external programs and try again!",0
  even
@@ -4019,7 +4019,7 @@ printBold
 	 
 	rts
 
-* Pï¿½ï¿½ikkunaan
+* Pääikkunaan
 * d0/d1 = x,y
 * a0 = teksti
 print:
@@ -4027,7 +4027,7 @@ print:
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	tst.b	win(a5)		* onko ikkunaa?
 	beq.b	.r
-	tst.b	kokolippu(a5)	* ei tulosteta, jos ikkuna pienenï¿½
+	tst.b	kokolippu(a5)	* ei tulosteta, jos ikkuna pienenä
 	bne.b	.e
 .r	rts
 .e
@@ -4159,7 +4159,7 @@ handleSignal2
  endif
 .sameWidth
 
-** ei saa rï¿½mpï¿½tï¿½ ikkunaa jos se ei oo oikeassa koossaan!!
+** ei saa rämpätä ikkunaa jos se ei oo oikeassa koossaan!!
 
 	moveq	#0,d7
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
@@ -4208,11 +4208,11 @@ handleSignal2
 .sameHeight
 .boxSizeChanged
 
-** ei saa rï¿½mpï¿½tï¿½ ikkunaa jos se ei oo oikeassa koossaan!!
+** ei saa rämpätä ikkunaa jos se ei oo oikeassa koossaan!!
 
 	tst.b	newpubscreen(a5)	* Valittiinko prefsista uusi
 	beq.b	.noewp			* pubscreeni?
-	clr.b	newpubscreen(a5)	* siirretï¿½ï¿½n ikkunat sinne
+	clr.b	newpubscreen(a5)	* siirretään ikkunat sinne
 
 	bsr.b	.closeAndReopenWindow
 	bne.b	.error
@@ -4287,7 +4287,7 @@ ply2	equr	d7
 
 *** Painettiin Zoom-gadgettia
 
-*** Pï¿½ivitetï¿½ï¿½n ikkunan sisï¿½ltï¿½
+*** Päivitetään ikkunan sisältö
 
 zipwindow:
 	DPRINT	"ZipWindow refresh"
@@ -4460,7 +4460,7 @@ avaa_ikkuna:
     bra     .windowOpenLoop
 
 .smaller
-	subq	#1,boxsize(a5)		* Pienennetï¿½ï¿½n fileboksia..
+	subq	#1,boxsize(a5)		* Pienennetään fileboksia..
 	subq	#1,boxsize0(a5)
 	bsr.w	setboxy
     bra     .windowOpenLoop
@@ -4507,7 +4507,7 @@ avaa_ikkuna:
 	move.l	fontbase(a5),a0
 	lore	GFX,SetFont	
 
-	tst.b	uusikick(a5)	* jos kickstart 2.0+, pistetï¿½ï¿½n ikkuna
+	tst.b	uusikick(a5)	* jos kickstart 2.0+, pistetään ikkuna
 	beq.b	.elderly	* appwindowiksi.
 
 	moveq	#0,d0		* ID
@@ -4572,7 +4572,7 @@ avaa_ikkuna:
 getscreeninfo
 	st	gotscreeninfo(a5)
 
-*** Selvitetï¿½ï¿½n ikkunan nï¿½ytï¿½n ominaisuudet
+*** Selvitetään ikkunan näytön ominaisuudet
 *** Uusi kick 
 	tst.b	uusikick(a5)
 	beq.w	.olde
@@ -4589,8 +4589,8 @@ getscreeninfo
 	move.l	d0,a0
 
 	move.l	d0,screenaddr(a5)
-	move	sc_Width(a0),wbleveys(a5)	* Nï¿½ytï¿½n leveys
-	move	sc_Height(a0),wbkorkeus(a5)	* Nï¿½ytï¿½n korkeus
+	move	sc_Width(a0),wbleveys(a5)	* Näytön leveys
+	move	sc_Height(a0),wbkorkeus(a5)	* Näytön korkeus
 	clr	windowtop(a5)
 	clr	windowtopb(a5)
 	clr	windowbottom(a5)
@@ -4663,7 +4663,7 @@ getscreeninfo
 	move	windowtopb(a5),d0
 	add	d0,windowtop(a5)
 
-	subq	#4,windowleft(a5)		* saattaa mennï¿½ negatiiviseksi
+	subq	#4,windowleft(a5)		* saattaa mennä negatiiviseksi
 	subq	#4,windowright(a5)
 	subq	#2,windowtop(a5)
 	subq	#2,windowbottom(a5)
@@ -4673,7 +4673,7 @@ getscreeninfo
 ;	subq	#2,windowbottom(a5)
 
 
-** Tutkaillaan nï¿½ytï¿½n tyyppiï¿½!
+** Tutkaillaan näytön tyyppiä!
 * Talteen oikea hz scopeja varten
 
 
@@ -4811,7 +4811,7 @@ getscreeninfo
 	;bpl.b	.olde
 	;clr	windowtop(a5)
 	
-*** Sï¿½ï¿½detï¿½ï¿½n ikkunat ja gadgetit otsikkopalkin koon mukaan
+*** Säädetään ikkunat ja gadgetit otsikkopalkin koon mukaan
 
 .olde
 	; This does some magic that is needed for the layout.
@@ -4915,7 +4915,7 @@ getscreeninfo
 	
 
 
-****** Piirretï¿½ï¿½n ikkunan kamat
+****** Piirretään ikkunan kamat
 
 wrender:
 	
@@ -4946,7 +4946,7 @@ wrender:
 	bsr.w	drawtexture
 
 
-* tyhjennetï¿½ï¿½n...
+* tyhjennetään...
 * laatikoitten alueet
 
 ;	lea	gadgets,a3
@@ -4991,7 +4991,7 @@ wrender:
 	bsr.w	configResizeGadget
 
 
-* sitten isketï¿½ï¿½n gadgetit ikkunaan..
+* sitten isketään gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
 	move.l	a4,a1
 	moveq	#-1,d0
@@ -5061,7 +5061,7 @@ wrender:
 
 ;.nelq
 
-*** Piirretï¿½ï¿½n korvat
+*** Piirretään korvat
 	pushm	all
 	lea	button7,a0		* Add
 	bsr.w	printkorva
@@ -5087,7 +5087,7 @@ wrender:
 
  ifd abda
 
-*** Piirretï¿½ï¿½n 'underlinet'
+*** Piirretään 'underlinet'
 
 
 	move.l	pen_1(a5),d0
@@ -5694,7 +5694,7 @@ inithippo
 	rts
 
  ifeq zoom
-* tavallinen hipon pï¿½ï¿½
+* tavallinen hipon pää
 printhippo1:
 ;	DPRINT	"Print hippo"
 
@@ -5717,7 +5717,7 @@ printhippo1:
 .az
 
 
-	moveq	#0,d0		* lï¿½hde x,y
+	moveq	#0,d0		* lähde x,y
 	moveq	#0,d1
 	moveq	#HIPPOHEAD_HEIGHT,d5		* y-koko
 
@@ -5755,7 +5755,7 @@ printhippo1:
  else
 
 printhippo1
-* zoomaava hipon pï¿½ï¿½
+* zoomaava hipon pää
 	tst.b	win(a5)
 	bne.b	.yep
 	;beq.b	.q
@@ -5838,7 +5838,7 @@ printhippo1
 	lob	BitMapScale
 
 
-	moveq	#0,d0		* lï¿½hde x
+	moveq	#0,d0		* lähde x
 	moveq	#0,d1		* y
 	moveq	#79+1,d3	* y
 	move	bsa_DestWidth(a3),d4
@@ -5967,7 +5967,7 @@ pkor
 	add	gg_Width(a0),d2
 	subq	#4,d2
 
-	moveq	#0,d0		* lï¿½hde x,y
+	moveq	#0,d0		* lähde x,y
 	moveq	#0,d1
 	moveq	#5,d4		* x-koko
 	moveq	#4,d5		* y-koko
@@ -5991,7 +5991,7 @@ inittick
 	move.l	#tickdata,bm_Planes(a2)
 	rts
 
-* d0 = <>0: aseta merkki, muutoin tyhjennï¿½ alue
+* d0 = <>0: aseta merkki, muutoin tyhjennä alue
 * d2/d3 = kohde x,y
 
 tickaa	pushm	d0-d6/a0-a2/a6
@@ -6009,7 +6009,7 @@ tickaa	pushm	d0-d6/a0-a2/a6
 	
 	lea	omabitmap3(a5),a0
 	move.l	rastport2(a5),a1		* prefs
-	moveq	#0,d0				* lï¿½hde x,y
+	moveq	#0,d0				* lähde x,y
 	moveq	#0,d1
 	moveq	#16,d4				* koko x,y
 	moveq	#7,d5
@@ -6028,7 +6028,7 @@ tickaa	pushm	d0-d6/a0-a2/a6
 desmsg:
 	movem.l	d0-d7/a0-a3/a6,-(sp)
 	lea	desbuf(a5),a3	;puskuri
-ulppa	move.l	sp,a1		* parametrit ovat tï¿½ï¿½llï¿½!
+ulppa	move.l	sp,a1		* parametrit ovat täällä!
 pulppa	lea	putc(pc),a2	;merkkien siirto
 	move.l	(a5),a6
 	lob	RawDoFmt
@@ -6094,7 +6094,7 @@ desmsgDebugAndPrint
 
 
 
-** bevelboksit, reunat kaks pixeliï¿½
+** bevelboksit, reunat kaks pixeliä
 
 laatikko1:
 	move.l	pen_2(a5),d3
@@ -6337,7 +6337,7 @@ sliderlaatikko
 
 
 *******************************************************************************
-* Tyhjentï¿½ï¿½ alueen ikkunasta
+* Tyhjentää alueen ikkunasta
 *******
 * d0 = x1
 * d1 = y1
@@ -6366,7 +6366,7 @@ tyhjays:
 
 
 *******************************************************************************
-* Pullautetaan ikkuna pï¿½ï¿½limmï¿½iseksi
+* Pullautetaan ikkuna päälimmäiseksi
 *******
 poptofront
 	movem.l	d0-a6,-(sp)
@@ -6382,7 +6382,7 @@ poptofront
 
 
 *******************************************************************************
-* Muistin kï¿½sittelyï¿½
+* Muistin käsittelyä
 *******
 
 * d0=koko
@@ -6533,7 +6533,7 @@ freemodule:
 	clr.l	moduleaddress(a5)
 	clr.l	modulelength(a5)
 
-;	tst.l	keyfile+44(a5)	* datan vï¿½liltï¿½ 38-50 pitï¿½ï¿½ olla nollia
+;	tst.l	keyfile+44(a5)	* datan väliltä 38-50 pitää olla nollia
 ;	beq.b	.zz
 ;	move.l	tempexec(a5),a0
 ;	addq.l	#1,IVVERTB+IV_DATA(a0)
@@ -6670,12 +6670,12 @@ fadevolumeup
 
 
 *******************************************************************************
-* Asettaa pï¿½ï¿½ohjelman prioriteetin
+* Asettaa pääohjelman prioriteetin
 ******** 
 
 mainpriority
 	pushm	d0/d1/a0/a1/a6
-	move.l	owntask(a5),a1		* asetetaan pï¿½ï¿½ohjelman prioriteetin
+	move.l	owntask(a5),a1		* asetetaan pääohjelman prioriteetin
 	move.l	priority(a5),d0
 	lore	Exec,SetTaskPri
 	popm	d0/d1/a0/a1/a6
@@ -6722,12 +6722,12 @@ buttonspressed:
 	
 .rightButtonDownAction
 
-* Oikeata nappulaa painettu. Tutkitaan oliko rmbfunktio-nappuloiden pï¿½ï¿½llï¿½
+* Oikeata nappulaa painettu. Tutkitaan oliko rmbfunktio-nappuloiden päällä
 
-	tst.b	kokolippu(a5)		* onko pienenï¿½?
+	tst.b	kokolippu(a5)		* onko pienenä?
 	beq.b	.nowindow
 
-** onko lootan pï¿½ï¿½llï¿½
+** onko lootan päällä
 ** on top of the filebox?
 	move	mousex(a5),d0
 	move	mousey(a5),d1
@@ -6789,7 +6789,7 @@ buttonspressed:
 
 .leftButtonDownAction
 
-* jos oli lootan pï¿½ï¿½llï¿½ niin avataan info ikkuna!
+* jos oli lootan päällä niin avataan info ikkuna!
 	move	mousex(a5),d0
 	move	mousey(a5),d1
 	sub	windowleft(a5),d0
@@ -6806,7 +6806,7 @@ buttonspressed:
 
 	* mouse not on top of info box, try marking files
 
-.x	bsr.w	markline		* merkitï¿½ï¿½n modulenimi
+.x	bsr.w	markline		* merkitään modulenimi
 	rts
 
 .yea
@@ -6883,7 +6883,7 @@ zoomfilebox
 .x
 	bsr.w	setprefsbox
 	move.b	ownsignal2(a5),d1
-	jmp	signalit		* prefspï¿½ivitys-signaali
+	jmp	signalit		* prefspäivitys-signaali
 	
 
 *** Open module info window
@@ -7149,7 +7149,7 @@ omaviesti
 *********************************************
 .appw
 ** AppWindow-viesti!!
-	move.l	am_NumArgs(a1),d7	* argsien mï¿½ï¿½rï¿½
+	move.l	am_NumArgs(a1),d7	* argsien määrä
 	beq		.huh
 	bsr.w	tokenizepattern
 	jsr		engageNormalMode
@@ -7282,10 +7282,10 @@ vastomaviesti
 signalreceived
 	DPRINT	"Song end signal"
 
-	moveq	#1,d7			* mennï¿½ï¿½n listassa eteenpï¿½in
+	moveq	#1,d7			* mennään listassa eteenpäin
 					* step forward in the list
 
-	cmp.b	#pm_random,playmode(a5)	* Arvotaanko jï¿½rjestys?
+	cmp.b	#pm_random,playmode(a5)	* Arvotaanko järjestys?
 	bne.b	.norand
 
 * Previously when a song end was detected in random play mode,
@@ -7313,10 +7313,10 @@ signalreceived
 	beq.w	.reet			* If module repeat on, just exit
 	
 	cmp.l	#1,modamount(a5) * Jos vain yksi modi,
-	bne.b	.notone		* jatketaan soittoa keskeytyksettï¿½.
+	bne.b	.notone		* jatketaan soittoa keskeytyksettä.
 	cmp.l	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Listassa yksi modi, joka on uusi.
 	bne.b	.oon			* Soitetaan se.
-	moveq	#0,d7			* ei lisï¿½tï¿½ eikï¿½ vï¿½hennetï¿½
+	moveq	#0,d7			* ei lisätä eikä vähennetä
 					* no stepping in the list
 	bra.b	.notone
 .oon
@@ -7336,7 +7336,7 @@ signalreceived
 
 .notone
 
-	tst.l	playingmodule(a5)	* soitettiinko edes mitï¿½ï¿½n
+	tst.l	playingmodule(a5)	* soitettiinko edes mitään
 	bmi.w	.err
 
 	cmp.b	#pm_module,playmode(a5)	* Play mode was "module", stop after playing 
@@ -7368,7 +7368,7 @@ signalreceived
 	tst.l	modamount(a5)		* onko modeja?
 	beq.w	.err
 
-	cmp.l	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Lista tyhjï¿½tty? Soitetaan eka modi.
+	cmp.l	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Lista tyhjätty? Soitetaan eka modi.
 	bne.b	.eekk
 	moveq	#0,d7				* no stepping in the list
 	clr.l	chosenmodule(a5)
@@ -7400,7 +7400,7 @@ signalreceived
 
 	tst.b	l_divider(a3)
 	beq.b	.wasfile
-	tst	d7			* pitï¿½ï¿½ olla jotain ettï¿½ ei jï¿½ï¿½ 
+	tst	d7			* pitää olla jotain että ei jää 
 	bne.b	.eekk		* jummaamaan dividerin kohdalle,
 	moveq	#1,d7	* step forward
 	bra.b	.eekk
@@ -7413,7 +7413,7 @@ signalreceived
 	bne.b	.loader
 
 	DPRINT	"Replay init"
-	move.l	playerbase(a5),a0	* soitto pï¿½ï¿½lle
+	move.l	playerbase(a5),a0	* soitto päälle
 	jsr	p_init(a0)
 	tst.l	d0
 	bne.b	.mododo
@@ -7442,14 +7442,14 @@ signalreceived
 	bra.b	.reet
 
 .err	
-	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* ei modeja mitï¿½ soittaa
+	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* ei modeja mitä soittaa
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	rts
 
 .stop  	bsr.w	actionStopButton		* stop!
 	bra.b	.reet
 
-* modit loppui, mitï¿½ tehdï¿½ï¿½n?
+* modit loppui, mitä tehdään?
 * No modules left to play
 .erer	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 
@@ -7477,7 +7477,7 @@ signalreceived
 * Shuffle-soitto
 .karumeininki
 	move.l	modamount(a5),d0
-	beq.w	.reet		* jos ei yhtï¿½ï¿½n, jatketaan entisen soittoa
+	beq.w	.reet		* jos ei yhtään, jatketaan entisen soittoa
 	cmp.l	#1,d0		* Jos vain yksi, jatketaan soittoa
 	beq.w	.reet
 	bra.w	soitamodi2
@@ -7501,7 +7501,7 @@ satunnaismodi
 	rts
 .nof
 	* High bound check
-	cmp.l	#MAX_MODULES,d0		* jos liikaa, ei yllï¿½pidetï¿½ listaa
+	cmp.l	#MAX_MODULES,d0		* jos liikaa, ei ylläpidetä listaa
 	bhi.b	.onviela
 	subq.l	#1,d0			* for dbf
 
@@ -7904,7 +7904,7 @@ soitamodi:
 	moveq	#0,d6		* 0: allow volume fade down
 	moveq	#0,d5		* 0: no forced random
 umph	
-;	cmp.b	#$7f,do_early(a5)	* early load pï¿½ï¿½llï¿½? disable!
+;	cmp.b	#$7f,do_early(a5)	* early load päällä? disable!
 ;	beq	.ags
 
  if DEBUG
@@ -7929,7 +7929,7 @@ umph
 	* Calculate candidate for the next module
 	move.l	chosenmodule(a5),d0
 	add.l	d7,d0
-	bpl.b	.e					* meni yli listan alkupï¿½ï¿½stï¿½?
+	bpl.b	.e					* meni yli listan alkupäästä?
 	* Result is negative. Wrap to the end of the list.
 .getLast
 	move.l	d1,d0
@@ -7955,7 +7955,7 @@ umph
 ;	st	hippoonbox(a5)
 	bsr.w	resh
 
-* etsitï¿½ï¿½n listasta vastaava tiedosto
+* etsitään listasta vastaava tiedosto
 * find the corresponding file from the list
 
 	DPRINT	"soitamodi getListNode"
@@ -7966,7 +7966,7 @@ umph
 	* This might be a list divider. Try again in that case.
 	;isListDivider l_filename(a3)	* onko divideri?
 	tst.b	l_divider(a3)
-	beq.b	.noDiv		* kokeillaan edellistï¿½/seuraavaa/rnd
+	beq.b	.noDiv		* kokeillaan edellistä/seuraavaa/rnd
 
 	* try next one until at end of the list
 	TSTNODE	a3,a0
@@ -8007,13 +8007,13 @@ umph
 	* New module to be played.
 
 	moveq	#0,d7			* flag for double buffering (0: no db)
-	tst.l	playingmodule(a5)	* Oliko soitettavana mitï¿½ï¿½n?
+	tst.l	playingmodule(a5)	* Oliko soitettavana mitään?
 							* Was something being played?							
 	bmi.b	.nomod
 
 	* Yes. Stop and free it.
 
-	tst	d6			* ei fadea jos signalreceivedistï¿½
+	tst	d6			* ei fadea jos signalreceivedistä
 	bne.b	.hm1
 
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
@@ -8282,7 +8282,7 @@ nappilasku
 
 
 *******************************************************************************
-* Nappulaa painettu, tehdï¿½ï¿½n vastaava (gadgetti) toiminto
+* Nappulaa painettu, tehdään vastaava (gadgetti) toiminto
 *******
 * d3 = rawkey
 * d4 = iequalifier
@@ -8368,7 +8368,7 @@ nappuloita
 	bra.b	.ee
 
 .not_f
-	cmp.b	#$50,d3		* Oliko funktionï¿½ppï¿½imiï¿½??
+	cmp.b	#$50,d3		* Oliko funktionäppäimiä??
 	blo.b	.f1
 	cmp.b	#$59,d3
 	bhi.b	.f1
@@ -8399,7 +8399,7 @@ nappuloita
 * $13 r 	prefs
 
 * return $44	play
-* *, $2b (returnin vieressï¿½) play random module
+* *, $2b (returnin vieressä) play random module
 * ylos $4c	lista ylos
 * alas $4d	lista alas
 
@@ -8454,7 +8454,7 @@ nappuloita
 
 
 ********
-* numeronï¿½ppis
+* numeronäppis
 * [ ] / *
 * 7 8 9 -
 * 4 5 6 +
@@ -8588,7 +8588,7 @@ nappuloita
 	dc	$18
 	dr	comment_file
 
-*** Numeronï¿½ppis
+*** Numeronäppis
 
 
 	dc	$2f
@@ -8659,7 +8659,7 @@ nappuloita
 .scopetoggle
 	jmp	toggleScopes
 
-.pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikanï¿½ppï¿½imet
+.pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikanäppäimet
 .pm0	st	hippoonbox(a5)
 	bra.w	shownames
 .pm2	move.b	#pm_random,playmode(a5)
@@ -8772,7 +8772,7 @@ zipMainWindow	tst.b	uusikick(a5)
 	move.l	_IntuiBase(a5),a6
 	jmp	_LVOZipWindow(a6)
 
-************************************** Funktionï¿½ppï¿½imet!
+************************************** Funktionäppäimet!
 
 fkeyaction
 	sub.b	#$50,d3
@@ -8794,7 +8794,7 @@ fkeyaction
 
 
 *******************************************************************************
-* Jotain gadgettia painettu, tehdï¿½ï¿½n vastaava toiminto
+* Jotain gadgettia painettu, tehdään vastaava toiminto
 * Gadget activated
 *******
 * in:
@@ -8853,7 +8853,7 @@ printbox:
 	bne.b	.p
 .q	rts
 .p	pushm	d0/a0
-	bsr.w	clearbox		* fileboxi tyhjï¿½ks
+	bsr.w	clearbox		* fileboxi tyhjäks
 	popm	d0/a0
 
 	move.l	a0,a1
@@ -9012,7 +9012,7 @@ sortModuleList:
 	lsr.l	#3,d7	; /8 - SORT_ELEMENT_LENGTH
 
 ;	subq	#1,d7		* 1 pois (listan loppu tai seuraava divideri)
-	cmp.l	#2,d7		* vï¿½h 2 kpl
+	cmp.l	#2,d7		* väh 2 kpl
 	blo.b	.ml
 
 	move.l	d5,a2
@@ -9036,7 +9036,7 @@ sortModuleList:
 
 	* Add a1 to a0
 	move.l	a2,a0
-	ADDTAIL			* lisï¿½tï¿½ï¿½n node (a1)
+	ADDTAIL			* lisätään node (a1)
 	addq.l	#SORT_ELEMENT_LENGTH,a3
 	bra.b	.er
 .r
@@ -9079,7 +9079,7 @@ sortModuleList:
 	rts
 
 * a3 = lista
-* Hakee ensimmï¿½isen nimen, joka ei ole divideri
+* Hakee ensimmäisen nimen, joka ei ole divideri
 
 .eka
 .ploop2
@@ -9133,7 +9133,7 @@ rmove
 moveButtonAction
 	skipIfGadgetDisabled gadgetMoveButton
 
-	tst.b	movenode(a5)	* Jos toistamiseen painetaan, mennï¿½ï¿½n "play"hin
+	tst.b	movenode(a5)	* Jos toistamiseen painetaan, mennään "play"hin
 	bne.w	rbutton1
 
 	cmp.l	#2,modamount(a5)
@@ -9162,7 +9162,7 @@ moveButtonAction
 
 
 
-* etsitï¿½ï¿½n listasta vastaava kohta
+* etsitään listasta vastaava kohta
 ;	DPRINT  "getcurrent obtain list"
 ; 	bsr.w		obtainModuleList
 ; 	lea	er(a5),a4
@@ -9373,7 +9373,7 @@ find_continue
 	bne.b	.luuppo
 	bra.b	.q
 .qq
-* lista lï¿½pi eikï¿½ lï¿½ytyny. kï¿½ydï¿½ï¿½n alusta lï¿½htï¿½kohtaan.
+* lista läpi eikä löytyny. käydään alusta lähtökohtaan.
 
 	moveq	#-1,d7
 	bsr.w	getVisibleModuleListHeader
@@ -9497,7 +9497,7 @@ rbutton11
 
 
 *******************************************************************************
-* Pï¿½ivitetï¿½ï¿½n propgadgetteja, kun liikutaan hiirellï¿½
+* Päivitetään propgadgetteja, kun liikutaan hiirellä
 *******
 mousemoving
 	movem.l	d0-a6,-(sp)
@@ -9516,7 +9516,7 @@ mousemoving
 *******
 nextButtonAction:
 rbutton5
-	moveq	#1,d7		* liikutaan eteenpï¿½in listassa
+	moveq	#1,d7		* liikutaan eteenpäin listassa
 	bra.w	soitamodi
 
 *******************************************************************************
@@ -9524,7 +9524,7 @@ rbutton5
 *******
 prevButtonAction:
 rbutton6
-	moveq	#-1,d7		* liikutaankin taakkepï¿½in listassa
+	moveq	#-1,d7		* liikutaankin taakkepäin listassa
 	bra.w	soitamodi
 
 
@@ -9533,7 +9533,7 @@ rbutton6
 *******
 actionNextSong
 rbutton12
-	moveq	#1,d1		* lisï¿½tï¿½ï¿½n songnumberia
+	moveq	#1,d1		* lisätään songnumberia
 
 songSkip
 	tst.l	playingmodule(a5)
@@ -9572,7 +9572,7 @@ songSkip
 *******
 actionPrevSong
 rbutton13
-	moveq	#-1,d1			* vï¿½hennetï¿½ï¿½n songnumberia
+	moveq	#-1,d1			* vähennetään songnumberia
 	bra.b	songSkip
 
 
@@ -9674,7 +9674,7 @@ rbutton4a
 
 
 *******************************************************************************
-* Tyhjennetï¿½ï¿½n moduulista
+* Tyhjennetään moduulista
 *******
 rbutton9
 	DPRINT	"clearListButtonAction"
@@ -9722,7 +9722,7 @@ rslider1
 
 
 *** D0 = volume
-*** Uusi volumearvo ja sliderin pï¿½ivitys
+*** Uusi volumearvo ja sliderin päivitys
 volumerefresh
 	cmp	#64,d0
 	blo.b	.r
@@ -9798,7 +9798,7 @@ rslider4
 	bra.w	showNamesNoCentering
 
 *******************************************************************************
-* Suhteutetaan nuppi tiedostojen mï¿½ï¿½rï¿½ï¿½n
+* Suhteutetaan nuppi tiedostojen määrään
 * Asetetaan valitun nimen kohdalle
 *******
 
@@ -9825,7 +9825,7 @@ reslider
 	move	boxsize(a5),d1
 	beq.w	.eiup
 
-	cmp.l	d1,d0		* vï¿½h boxsize
+	cmp.l	d1,d0		* väh boxsize
 	bhs.b	.ok
 	move.l	d1,d0
 .ok
@@ -9915,7 +9915,7 @@ reslider
 	move	d0,slider4oldheight(a5)
 
 ;	move	gg_Height(a0),d0
-	mulu	pi_VertBody(a1),d0	* koko pixeleinï¿½
+	mulu	pi_VertBody(a1),d0	* koko pixeleinä
 	divu	#$ffff,d0
 	bne.b	.f
 	moveq	#8,d0			* onko < 1? minimiksi 8
@@ -9986,7 +9986,7 @@ rbutton1
 	tst.b	movenode(a5)
 	beq.w	.nomove
 
-**** Onko move pï¿½ï¿½llï¿½?
+**** Onko move päällä?
 	clr.b	movenode(a5)
 
 	bsr.w	getcurrent
@@ -10030,7 +10030,7 @@ rbutton1
 	st	haluttiinuusimodi(a5)
 	bra.w	rbutton7		* jos ei, ladataan...
 
-.huh	move.l	chosenmodule(a5),d0	* onko valittua nimeï¿½
+.huh	move.l	chosenmodule(a5),d0	* onko valittua nimeä
 	bpl.b	.ere
 	moveq	#0,d0			* jos ei, otetaan eka
 .ere	
@@ -10054,10 +10054,10 @@ rbutton1
 	;bsr.w	shownames
 .xa
 
-	bsr.w	clear_random		* Tyhjï¿½x
-	bsr.w	setRandomTableEntry		* merkitï¿½ï¿½n...
+	bsr.w	clear_random		* Tyhjäx
+	bsr.w	setRandomTableEntry		* merkitään...
 
-* etsitï¿½ï¿½n listasta vastaava tiedosto
+* etsitään listasta vastaava tiedosto
 
 	DPRINT	"playbutton getListNode"
 	bsr.w	getListNode
@@ -10133,10 +10133,10 @@ rbutton1
 	;rts
 
 .new	moveq	#0,d7
-	tst.l	playingmodule(a5)	* Onko soitettavana mitï¿½ï¿½n?
+	tst.l	playingmodule(a5)	* Onko soitettavana mitään?
 	bmi.b	.nomod
 
-	move.b	doublebuf(a5),d7	* Onko doublebufferinki pï¿½ï¿½llï¿½?
+	move.b	doublebuf(a5),d7	* Onko doublebufferinki päällä?
 	bne.b	.nomod
 
 	bsr.w	fadevolumedown
@@ -10208,7 +10208,7 @@ rinsert
 rinsert2
 	move.l	chosenmodule(a5),d0
 
-* etsitï¿½ï¿½n listasta vastaava kohta
+* etsitään listasta vastaava kohta
 	DPRINT	"insert getListNode"
 	bsr.w	getListNode
 	beq.w	rbutton7		* go to "add"
@@ -10343,7 +10343,7 @@ rbutton7
 
 filereq_code
 	lea	var_b,a5
-	addq	#1,filereq_prosessi(a5)	* Lippu: prosessi pï¿½ï¿½llï¿½
+	addq	#1,filereq_prosessi(a5)	* Lippu: prosessi päällä
 	moveq	#0,d7
 
 	tst.l	modamount(a5)
@@ -10366,7 +10366,7 @@ filereq_code
 	clr	filereq_prosessi(a5)	* Lippu: prosessi poistettu
 	rts
 	
-* Varsinainen operaatio alkaa tï¿½stï¿½..
+* Varsinainen operaatio alkaa tästä..
 .filer
 	bsr.w	tokenizepattern
 
@@ -10467,7 +10467,7 @@ filereq_code
 	bsr	openfilewin
  endc
 
-	bsr.w	parsereqdir		* Tehdï¿½ï¿½n hakemistopolku..
+	bsr.w	parsereqdir		* Tehdään hakemistopolku..
 
 * We will now normalize the directory given to us by ReqTools
 * This creates consistent paths everytime,
@@ -10487,12 +10487,12 @@ filereq_code
 .f	addq.l	#1,d4
 	tst.b	(a0)+
 	bne.b	.f
-;	subq.l	#1,d4			* -1, nolla pois perï¿½stï¿½
-;	add.l	#l_size,d4		* listayksikï¿½n koko
+;	subq.l	#1,d4			* -1, nolla pois perästä
+;	add.l	#l_size,d4		* listayksikön koko
 	add.l	#l_size-1,d4
 .buildlist
 
-***** Kï¿½sitellï¿½ï¿½n valitut hakemistot 
+***** Käsitellään valitut hakemistot 
 
 	cmp.l	#-1,rtfl_StrLen(a4)	* onko hakemisto?????
 	bne.w	.file				* reqtools-listan file
@@ -10523,7 +10523,7 @@ filereq_code
 
 	move.l	a3,d3			* hakemiston pituus
 	sub.l	sp,d3
-	add.l	#l_size,d3		* listayksikï¿½n koko
+	add.l	#l_size,d3		* listayksikön koko
 
 * d3 = dir len + l_size
 * sp = dir
@@ -10586,7 +10586,7 @@ filereq_code
 	beq.w	.errd
 
 
-.loopo	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enempï¿½ï¿½ kuin ~16000
+.loopo	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enempää kuin ~16000
 	bhs.w	.errd
 
 	move.l	d6,d1
@@ -10620,7 +10620,7 @@ filereq_code
 	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
 	;beq.b	.loopo
 
-* otetaan kyseisen hakemiston nimi talteen myï¿½hempï¿½ï¿½ kï¿½yttï¿½ï¿½ varten
+* otetaan kyseisen hakemiston nimi talteen myöhempää käyttöä varten
 * build a full path for this dir entry
 .MAX_PATH_LEN = 200
 	move.l	#.MAX_PATH_LEN,d0
@@ -10678,7 +10678,7 @@ filereq_code
 	DPRINT	"Unsupported entry: %ld"
 	bra.w	.loopo
 
-**** skannattuamme yhden hakemiston tutkitaan siinï¿½ olleet muut hakemistot
+**** skannattuamme yhden hakemiston tutkitaan siinä olleet muut hakemistot
 * Files scanned, now check the subdirs.
 .dodirs
 	* ExNext failed, then we come here.
@@ -10758,7 +10758,7 @@ filereq_code
 	push	a6
 	lore	Dos,MatchPatternNoCase
 	pop	a6
-	tst.l	d0			* kelpaako vaiko eikï¿½?
+	tst.l	d0			* kelpaako vaiko eikø?
 	beq.w	.loopo
 .yas
 
@@ -10827,7 +10827,7 @@ filereq_code
 .file
 	;DPRINT 	"Adding file at .file"
 
-	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enempï¿½ï¿½ kuin 16383
+	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enempää kuin 16383
 	bhs.b	.overload
 
 	move.l	d4,d0				* listunit,polku,nimi pituus
@@ -10848,7 +10848,7 @@ filereq_code
 	move.b	(a0)+,(a1)+		* kopioidaan polku
 	bne.b	.copy
 	subq.l	#1,a1			* remove zero
-	move.l	a1,l_nameaddr(a3)	* pelkï¿½n nimen osoite
+	move.l	a1,l_nameaddr(a3)	* pelkän nimen osoite
 	movem.l	rtfl_StrLen(a4),d0/a0	* StrLen/Name
 	subq	#1,d0
 .copy2
@@ -10872,7 +10872,7 @@ filereq_code
 
 	tst.l	chosenmodule(a5)
 	bpl.b	.ee
-	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennestï¿½ï¿½n
+	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennestään
 .ee
 
 	clr.b	loading2(a5)
@@ -10920,7 +10920,7 @@ addfile:
 	jsr	updateFavoriteStatus
 	rts
  
-.insert	move.l	fileinsert(a5),a2	* minkï¿½ filen perï¿½ï¿½n insertataan
+.insert	move.l	fileinsert(a5),a2	* minkä filen perään insertataan
 	lob	Insert
 
 	move.l	a3,a0
@@ -10930,7 +10930,7 @@ addfile:
 
 
 
-*** Lisï¿½tï¿½ï¿½n divideri hakemistolle
+*** Lisätään divideri hakemistolle
 * a0 = hakemiston nimi
 *      directory name
 
@@ -10943,7 +10943,7 @@ adddivider:
 	beq.w	.meek
 	move.l	a0,a2
 
-** testataan onko dirdivideri? jos on, pistetï¿½ï¿½n sen pï¿½ï¿½lle
+** testataan onko dirdivideri? jos on, pistetään sen päälle
 	;lea	moduleListHeader(a5),a3
 	bsr.w	getVisibleModuleListHeader
 	move.l	a0,a3
@@ -10990,7 +10990,7 @@ adddivider:
 	move.l	a2,l_nameaddr(a3)
 
 	* first insert divider magic marker
-	;move.b	#DIVIDER_MAGIC,(a2)+	* divider merkintï¿½
+	;move.b	#DIVIDER_MAGIC,(a2)+	* divider merkintä
 	st	l_divider(a3)
 
 	* a0 = directory name
@@ -11056,7 +11056,7 @@ adddivider:
 ** Asetetaan hakemisto requesteriin
 newdir_tags
 	dc.l	RTFI_Dir
-	dc.l	0			* Uuden hakemiston osoite tï¿½hï¿½n
+	dc.l	0			* Uuden hakemiston osoite tähän
 	dc.l	TAG_END
 
 
@@ -11302,7 +11302,7 @@ closefilewin
 winfile
 	dc	0,0	* paikka 
 	dc	0,0	* koko
-	dc.b	0,0	;palkin vï¿½rit
+	dc.b	0,0	;palkin värit
 	dc.l	idcmpflags4
 	dc.l	wflags4
 	dc.l	0
@@ -11382,7 +11382,7 @@ parsereqdir2
 	bne.b	.dij
 	clr	(a1)
 	rts
-.dij	move.b	(a0)+,(a1)+		* tehdï¿½ï¿½n hakemisto
+.dij	move.b	(a0)+,(a1)+		* tehdään hakemisto
 	bne.b	.dij
 	subq.l	#2,a1
 	cmp.b	#':',(a1)
@@ -11402,7 +11402,7 @@ parsereqdir2
 rloadprog2
 	bra.b	rloadprogDoIt
 
-* LoadProgram joka AddTailaa vanhan listan perï¿½ï¿½n.
+* LoadProgram joka AddTailaa vanhan listan perään.
 * Only from keyboard.
 rloadprog0		
 	st	lprgadd(a5)
@@ -11463,7 +11463,7 @@ rloadprogDoIt
 
 	lea	.tags(pc),a0
 	move.l	req_file2(a5),a1
-	lea	filename(a5),a2		* Tï¿½nne tiedoston polku ja nimi
+	lea	filename(a5),a2		* Tänne tiedoston polku ja nimi
 	clr.b	(a2)
 
 	lea	filereqtitle2(pc),a3
@@ -11518,7 +11518,7 @@ rloadprogDoIt
 	move.l	d0,d6
 	beq.w	.openerr
 
-	move.l	d6,d1		* selvitetï¿½ï¿½n filen pituus
+	move.l	d6,d1		* selvitetään filen pituus
 	moveq	#0,d2	
 	moveq	#1,d3
 	lob	Seek
@@ -11583,7 +11583,7 @@ rloadprogDoIt
 	bne.w	.x2
 
 ** A3:ssa moduulilista
-** jos on xpk pakattu, pitï¿½ï¿½ purkaakkin.
+** jos on xpk pakattu, pitää purkaakkin.
 
 	cmp.l	#"XPKF",(a3)
 	bne.w	.nox
@@ -11648,7 +11648,7 @@ rloadprogDoIt
 .nox
 
 
-***************** ALoitetaan kï¿½sittely
+***************** ALoitetaan käsittely
 
 
 
@@ -11723,12 +11723,12 @@ rloadprogDoIt
 
 .ext
 * ladattiin ohjelma komentojonon kautta, soitetaan eka tai satunnainen
-* riippuen prefs-sï¿½ï¿½dï¿½istï¿½.
-* Jos ohjelmaa ei saatu ladattua, niin pistetï¿½ï¿½n filerequesteri.
+* riippuen prefs-säädöistä.
+* Jos ohjelmaa ei saatu ladattua, niin pistetään filerequesteri.
 
 	bsr.w	vastomaviesti
 
-	cmp	#1,a4	* avausvirhe? -> ei tehdï¿½ mitï¿½ï¿½n
+	cmp	#1,a4	* avausvirhe? -> ei tehdä mitään
 	bne.b	.r
 	moveq	#lod_openerr,d0
 	rts
@@ -11892,7 +11892,7 @@ importModuleProgramFromData:
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
 
-	add.l	#1+l_size,d0	* nolla nimen perï¿½ï¿½n ja listayksikï¿½n pituus
+	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
 	add.l	d4,d0	* add extra header space if any
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr.w	getmem
@@ -11989,12 +11989,12 @@ xpk_module_program_error	 dc.b	"Could not load XPK compressed module program!",0
  even
 
 
-*** Etsii tiedoston nimestï¿½ (polku/nimi) pelkï¿½n tiedoston nimen alun
+*** Etsii tiedoston nimestä (polku/nimi) pelkän tiedoston nimen alun
 *** a0 <= loppu
 *** a1 <= alku
 *** a0 => nimi
 nimenalku:
-.f	move.b	-(a0),d0		* etsitï¿½ï¿½n pelkï¿½n nimen alku
+.f	move.b	-(a0),d0		* etsitään pelkän nimen alku
 	cmp.b	#'/',d0
 	beq.b	.fo
 	cmp.b	#':',d0
@@ -12057,7 +12057,7 @@ rsaveprog
 	lea	.tags(pc),a0
 	
 	move.l	req_file2(a5),a1
-	lea	filename(a5),a2		* Tï¿½nne tiedoston polku ja nimi
+	lea	filename(a5),a2		* Tänne tiedoston polku ja nimi
 
 	lea	filereqtitle3(pc),a3
 	lob	rtFileRequestA		* ReqToolsin tiedostovalikko
@@ -12206,9 +12206,9 @@ komentojono:
 
 	lea	sv_argvArray+4(a5),a3	* ei ekaa
 	moveq	#ARGVSLOTS-1-1,d7
-	move.l	modamount(a5),d6	* vanha mï¿½ï¿½rï¿½ talteen
+	move.l	modamount(a5),d6	* vanha määrä talteen
 
-* HIDEstï¿½ ja QUITista ei vï¿½litetï¿½!
+* HIDEstä ja QUITista ei välitetä!
 
 *** Silmukka
 .alp
@@ -12243,7 +12243,7 @@ komentojono:
 
 	tst.l	modamount(a5)
 	beq.b	.x
-	move.l	d6,chosenmodule(a5)	* ensimmï¿½inen uusi moduuli valituksi
+	move.l	d6,chosenmodule(a5)	* ensimmäinen uusi moduuli valituksi
 
 	bsr.w	listChanged
 	bsr.w	forceRefreshList
@@ -12261,7 +12261,7 @@ createListNodeAndAdd
 	move.l	a0,d0
 	sub.l	d5,d0			* pituus
 
-	add.l	#l_size,d0		* listayksikï¿½n pituus
+	add.l	#l_size,d0		* listayksikön pituus
 	move.l	#MEMF_CLEAR,d1
 	bsr.w	getmem
 	beq.b	.end
@@ -12285,7 +12285,7 @@ createListNodeAndAdd
 	* destroys a2/a3 (no stack saving for speed there)
 	jsr	updateFavoriteStatus
 
-	addq.l	#1,modamount(a5)	* mï¿½ï¿½rï¿½++
+	addq.l	#1,modamount(a5)	* määrä++
 .end
 	popm	all
 	rts
@@ -12321,7 +12321,7 @@ loadprefs
 	pushpea	prefsfilename(pc),d7
 
 ;	move.l	(a5),a0			* Kokeillaan ladata preffsi
-;	cmp	#36,LIB_VERSION(a0)	* PROGDIR:istï¿½
+;	cmp	#36,LIB_VERSION(a0)	* PROGDIR:istä
 ;	blo.b	.nah
 ;	move.l	#prefsfilename2,d1
 ;	move.l	d1,d4
@@ -12340,7 +12340,7 @@ loadprefs2
 	push	d7
 	move	#200,wbkorkeus(a5)
 	move	#640,wbleveys(a5)
-	move	#360,windowpos(a5)		* pistetï¿½ï¿½n ikkunoiden paikat
+	move	#360,windowpos(a5)		* pistetään ikkunoiden paikat
 	move	#23,windowpos+2(a5)
 	move	#360,windowZippedPos(a5)
 	move	#23,windowZippedPos+2(a5)
@@ -12380,7 +12380,7 @@ loadprefs2
 
 	DPRINT	"Set values"
 
-* Pistetï¿½ï¿½n ladatut arvot yms. paikoilleen
+* Pistetään ladatut arvot yms. paikoilleen
 	lea	prefsdata(a5),a0
 	move.l	prefs_s3mrate(a0),mixirate(a5)
 	move.b	prefs_play(a0),playmode(a5)
@@ -12948,7 +12948,7 @@ loadps3msettings
 	move.l	d0,d4
 	beq.b	.xx
 .ok
-	move.l	d4,d1		* selvitetï¿½ï¿½n filen pituus
+	move.l	d4,d1		* selvitetään filen pituus
 	moveq	#0,d2	
 	moveq	#1,d3
 	lob	Seek
@@ -13050,7 +13050,7 @@ loadcybersoundcalibration
  even
 
 ******************************************************************************
-* Piirtï¿½ï¿½ tekstuurin ikkunaan
+* Piirtää tekstuurin ikkunaan
 
 * in: 
 *   d0 = xmin
@@ -13141,7 +13141,7 @@ updateprefs:
 .x	popm	all
 	rts
 
-* Tï¿½mï¿½ aiheutti enforcer-hitin jos ei ollut prefs-taskia!
+* Tämä aiheutti enforcer-hitin jos ei ollut prefs-taskia!
 
 sulje_prefs
 	tst	prefs_prosessi(a5)
@@ -13164,7 +13164,7 @@ sulje_prefs
 rbutton20
 ;	bra.b	prefs_code
 
-	tst	prefs_prosessi(a5)	* sammutus jos oli pï¿½ï¿½llï¿½
+	tst	prefs_prosessi(a5)	* sammutus jos oli päällä
 	bne.b	sulje_prefs
 
 .ook	
@@ -13188,7 +13188,7 @@ rbutton20
 	
 prefs_code
 	lea	var_b,a5
-	addq	#1,prefs_prosessi(a5)	* Lippu: prosessi pï¿½ï¿½llï¿½
+	addq	#1,prefs_prosessi(a5)	* Lippu: prosessi päällä
 
 	printt	"TODO: refactor prefs data handling"
 
@@ -13196,7 +13196,7 @@ prefs_code
 
 	st	boxsize00(a5)
 
-* Arvot yms. vï¿½liaikaismuuttujiin
+* Arvot yms. väliaikaismuuttujiin
 	move.l	mixirate(a5),mixingrate_new(a5)
 	move	tfmxmixingrate(a5),tfmxmixingrate_new(a5)
 	move	lootamoodi(a5),lootamoodi_new(a5)
@@ -13490,7 +13490,7 @@ prefs_code
 
 
 
-* sitten isketï¿½ï¿½n gadgetit ikkunaan..
+* sitten isketään gadgetit ikkunaan..
 	move.l	windowbase2(a5),a0
 	lea	gadgets2,a1
 	moveq	#-1,d0
@@ -13554,15 +13554,15 @@ msgloop2
 	bset	d1,d0
 	move.b	prefs_closeSignal(a5),d1	* oma signaali
 	bset	d1,d0
-	move.b	prefs_updateContentsSignal(a5),d1	* oma signaali ikkunan pï¿½ivitykseen
+	move.b	prefs_updateContentsSignal(a5),d1	* oma signaali ikkunan päivitykseen
 	bset	d1,d0
 	lob	Wait			* Odotellaan...
 
-	move.b	prefs_closeSignal(a5),d1	* kï¿½skeekï¿½ pï¿½ï¿½ohjelma lopettamaan?
+	move.b	prefs_closeSignal(a5),d1	* käskeekö pääohjelma lopettamaan?
 	btst	d1,d0
 	bne.w	exprefs
 
-	move.b	prefs_updateContentsSignal(a5),d1	* pï¿½ivitys?
+	move.b	prefs_updateContentsSignal(a5),d1	* päivitys?
 	btst	d1,d0
 	beq.b	.naa
 	* Update window!
@@ -13890,7 +13890,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 .cancelled
 	DPRINT	"Prefs cancel"
-* Pistetï¿½ï¿½n vanhat asennot propgadgetteihin
+* Pistetään vanhat asennot propgadgetteihin
 ;	move.l	pslider1+gg_SpecialInfo,a0
 ;	move	s3mmixpot_new(a5),pi_HorizPot(a0)
 ;	move.l	pslider2+gg_SpecialInfo,a0
@@ -13968,7 +13968,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	bsr.w	mainpriority
 
 	move.b	ownsignal2(a5),d1
-	bsr.w	signalit		* signaali: poistutaan preffsistï¿½..
+	bsr.w	signalit		* signaali: poistutaan preffsistä..
 
 	st	prefsexit(a5)
 
@@ -14004,7 +14004,7 @@ pcler
 
 
 ****************************************************************
-*** Tï¿½rï¿½ytetï¿½ï¿½n ikkunaan oikean sivun gadgetit
+*** Täräytetään ikkunaan oikean sivun gadgetit
 
 
 prefsgads2
@@ -14109,7 +14109,7 @@ prefsgads
 ;	and	gg_GadgetType(a3),d7	* tyyppi
 ;	cmp.b	#GTYP_PROPGADGET,d7	* ei kosketa slidereihim
 ;	beq.b	.sli
-;	cmp.b	#GTYP_STRGADGET,d7	* eikï¿½ stringeihin
+;	cmp.b	#GTYP_STRGADGET,d7	* eikä stringeihin
 ;	beq.b	.nel
 
 	move	gg_GadgetType(a3),d7
@@ -14161,7 +14161,7 @@ prefsgads
 
 ****************** 
 
-mousemoving2			* Pï¿½ivitetï¿½ï¿½n propgadgetteja
+mousemoving2			* Päivitetään propgadgetteja
 	movem.l	d0-a6,-(sp)
 
 	move	prefsivu(a5),d0
@@ -14208,7 +14208,7 @@ mousemoving2			* Pï¿½ivitetï¿½ï¿½n propgadgetteja
 	bra.w	returnmsg2
 
 
-*** Oikeata nappulaa painettu. Tutkitaan oliko gadgetin pï¿½ï¿½llï¿½ jolla on
+*** Oikeata nappulaa painettu. Tutkitaan oliko gadgetin päällä jolla on
 *** requesteri.
 pmousebuttons
 	cmp	#MENUDOWN,d3		* oikea nappula
@@ -14321,7 +14321,7 @@ pmousebuttons
 
 * This updates the preds window to match state.
 * p-functions handle each gadget.
-pupdate:				* Ikkuna pï¿½ivitys
+pupdate:				* Ikkuna päivitys
 	pushm	all
 	DPRINT	"prefs::pUpdate"
 
@@ -14463,7 +14463,7 @@ tark_mahtu
 
 
 **************************
-* Tulostaa tekstiï¿½ gadgetin sisï¿½lle
+* Tulostaa tekstiä gadgetin sisälle
 * a0 = teksti
 * a1 = gadgetti
 
@@ -14567,7 +14567,7 @@ gadgetsup2
 
 
 .gadlist
-*** Pï¿½ï¿½gadgetit
+*** Päägadgetit
 	dr	rpbutton14	* save
 	dr	rpbutton6	* use
 	dr	rpbutton7	* cancel
@@ -14584,7 +14584,7 @@ gadgetsup2
 	dr	rpbutton2	* play		* pbutton1
 	dr	rtimeoutmode	* timeoutmoodi
 	dr	rtimeoutslider	* timeout
-	dr	ralarm		* herï¿½tyskello
+	dr	ralarm		* herätyskello
 	dr	rstartup	* startup
 	dr	rstartuponoff	* startup on/off
 	dr	rfkeys		* fkeys
@@ -15020,7 +15020,7 @@ rpbutton7
 
 
 
-** Show; Mitï¿½ nï¿½ytetï¿½ï¿½n otsikkopalkissa
+** Show; Mitä näytetään otsikkopalkissa
 
 rpbutton1_req
 	lea	ls1(pc),a0
@@ -15054,7 +15054,7 @@ pupdate1
 	lea	pbutton2,a1
 	bra.w	prunt
 
-ls1	dc.b	22,4	* leveys/korkeus merkkeinï¿½
+ls1	dc.b	22,4	* leveys/korkeus merkkeinä
 ls2 	dc.b	"Time, pos/len, song",0
 ls3 	dc.b	"Clock, free memory",0
 ls4	dc.b	"Module name",0
@@ -15341,7 +15341,7 @@ pcyber
 ***** cyber calibration file name
 rcybername
 	lea	calibrationfile_new(a5),a0
-	move.l	a0,a1			* mihin hakemistoon mennï¿½ï¿½n
+	move.l	a0,a1			* mihin hakemistoon mennään
 	lea	.t(pc),a2
 	bsr.w	pgetfile
 	st	newcalibrationfile(a5)
@@ -15521,7 +15521,7 @@ rpbutton10
 .ee	
 	move.l	d7,a0
 	lea	moduledir_new(a5),a1
-	bsr.w	parsereqdir2		* Tehdï¿½ï¿½n hakemistopolku..
+	bsr.w	parsereqdir2		* Tehdään hakemistopolku..
 	st	newdirectory(a5)
 
 psele	move.l	d7,a1
@@ -15577,7 +15577,7 @@ rselprgdir
 .ee	
 	move.l	d7,a0
 	lea	prgdir_new(a5),a1
-	bsr.w	parsereqdir2		* Tehdï¿½ï¿½n hakemistopolku..
+	bsr.w	parsereqdir2		* Tehdään hakemistopolku..
 	st	newdirectory2(a5)
 	bra.b	psele
 
@@ -15589,7 +15589,7 @@ rselarcdir
 .ee	
 	move.l	d7,a0
 	lea	arcdir_new(a5),a1
-	bsr.w	parsereqdir2		* Tehdï¿½ï¿½n hakemistopolku..
+	bsr.w	parsereqdir2		* Tehdään hakemistopolku..
 	bra.w	psele
 
 
@@ -15747,7 +15747,7 @@ pstartuponoff
 
 rstartup
 	lea	startup_new(a5),a0
-	move.l	a0,a1			* mihin hakemistoon mennï¿½ï¿½n
+	move.l	a0,a1			* mihin hakemistoon mennään
 	sub.l	a2,a2
 
 pgetfile
@@ -15878,8 +15878,8 @@ purealarm
 
 
 print3b:
-	pushm	all			* Sitï¿½varten ettï¿½ windowtop/left
-	move.l	rastport2(a5),a4	* arvoja ei lisï¿½ttï¿½isi kun
+	pushm	all			* Sitävarten että windowtop/left
+	move.l	rastport2(a5),a4	* arvoja ei lisättäisi kun
 	bra.w	doPrint			* teksti on jo suhteessa gadgettiin
 
 
@@ -15916,7 +15916,7 @@ rfkeys
 	lea	fkeys_new(a5),a0
 	mulu	#120,d0
 	add.l	d0,a0
-	move.l	a0,a1		* jos ei ole ennestï¿½ï¿½n tiedostoa,
+	move.l	a0,a1		* jos ei ole ennestään tiedostoa,
 	tst.b	(a1)		* otetaan hakemistoksi oletusmusahakemisto
 	bne.b	.jep
 	lea	moduledir(a5),a1	
@@ -16231,7 +16231,7 @@ rfont
 .cec	move.b	(a0)+,(a1)+
 	bne.b	.cec
 
-	clr	boxsize00(a5)		* avataan ja suljetaan pï¿½ï¿½ikkuna
+	clr	boxsize00(a5)		* avataan ja suljetaan pääikkuna
 
 
 .ew
@@ -16265,12 +16265,12 @@ fontreqtags
 	pushm	d1-a6		
 	lea	var_b,a5
 	moveq	#FALSE,d7
-	cmp	#8,ta_YSize(a1)		* 8 pixeliï¿½ korkee?
+	cmp	#8,ta_YSize(a1)		* 8 pixeliä korkee?
 	bne.b	.x
 	btst	#FPB_PROPORTIONAL,ta_Flags(a1)	* Onko proportional?
 	bne.b	.x	
 
-	move.l	a1,a0			* tutkitaan onko leveys 8 pixeliï¿½
+	move.l	a1,a0			* tutkitaan onko leveys 8 pixeliä
 	lore	DiskFont,OpenDiskFont
 	tst.l	d0
 	beq.b	.x
@@ -16322,7 +16322,7 @@ rListFont
 .cec	move.b	(a0)+,(a1)+
 	bne.b	.cec
 
-	clr	boxsize00(a5)		* avataan ja suljetaan pï¿½ï¿½ikkuna
+	clr	boxsize00(a5)		* avataan ja suljetaan pääikkuna
 
 .ew
 	move.l	d7,a1
@@ -16387,7 +16387,7 @@ pscreen
 
 rpgfile
 	lea	groupname_new(a5),a0
-	move.l	a0,a1			* mihin hakemistoon mennï¿½ï¿½n
+	move.l	a0,a1			* mihin hakemistoon mennään
 	lea	.tit(pc),a2
 	bsr.w	pgetfile
 	bra.b	ppgfile
@@ -17051,7 +17051,7 @@ updateahi
 **************** Listselector
 ********************************
 
-* Mieletï¿½n.
+* Mieletön.
 
 wflags4 = WFLG_SMART_REFRESH!WFLG_ACTIVATE!WFLG_BORDERLESS!WFLG_RMBTRAP
 idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
@@ -17083,7 +17083,7 @@ listselector:
 	move.l	windowbase2(a5),a0	* prefs-ikkuna
 .do
 	add	wd_LeftEdge(a0),d6	* mousepos suhteellinen prefs-ikkunan
-	add	wd_TopEdge(a0),d7	* ylï¿½laitaan
+	add	wd_TopEdge(a0),d7	* ylälaitaan
 
 	lea	winlistsel,a0		* asetetaan pointterin kohdalle
 
@@ -17128,7 +17128,7 @@ listselector:
 	lsl	#3,d7			* x8
 
 	moveq	#0,d5
-	move.b	(a4)+,d5	* vaakarivejï¿½
+	move.b	(a4)+,d5	* vaakarivejä
 	subq	#1,d5
 	move.l	a4,a0
 
@@ -17314,7 +17314,7 @@ listselector:
 *******************************************************************************
 
 *******
-* Kirjoitetaan nï¿½kyvï¿½t tiedoston nimet ikkunaan
+* Kirjoitetaan näkyvät tiedoston nimet ikkunaan
 * Writes the filenames into the box
 *******
 
@@ -17393,11 +17393,11 @@ shownames:
 	bsr.w	printhippo1
 .wasFav	
 .wasSrch
-	st	hippoonbox(a5)		* koko hï¿½skï¿½n tulostus
+	st	hippoonbox(a5)		* koko höskän tulostus
 	bra.w	.nomods
 .eper
 
-	tst	d4		* ei minkï¿½ï¿½nlaista uudelleensijoitusta
+	tst	d4		* ei minkäänlaista uudelleensijoitusta
 	bne.b	.nob
 
 	moveq	#0,d2
@@ -17445,9 +17445,9 @@ shownames:
 
 	bsr.w	.unmark
 
-* siirrytty d7 riviï¿½ ylï¿½spï¿½in:
+* siirrytty d7 riviä ylöspäin:
 * kopioidaan rivit 0 -> d7 (koko: boxsize-d7 r) kohtaan 0 ja printataan
-* kohtaan 0 d7 kpl uusia rivejï¿½
+* kohtaan 0 d7 kpl uusia rivejä
 
 	move	fileBoxTopEdge(a5),d1		* source y
 	move	d7,d3
@@ -17470,9 +17470,9 @@ shownames:
 
 	bsr.w	.unmark
 
-* siirrytty d7 riviï¿½ alaspï¿½in:
+* siirrytty d7 riviä alaspäin:
 * kopioidaan rivit d7 -> boxsizee (koko: boxsize-d7 r) kohtaan 0 ja printataan
-* kohtaan boxsize-d7 d7 kpl uusia rivejï¿½
+* kohtaan boxsize-d7 d7 kpl uusia rivejä
 
 	move	d7,d1
 	;lsl	#3,d1
@@ -17501,7 +17501,7 @@ shownames:
 	bmi.b	.huh
 	sub.l	firstname(a5),d0
 	bmi.b	.huh
-	move.l	d0,markedline(a5)		* merkitï¿½ï¿½n valittu nimi
+	move.l	d0,markedline(a5)		* merkitään valittu nimi
 	bsr.w	markit
 .huh
 	move.l	chosenmodule(a5),chosenmodule2(a5)
@@ -17566,7 +17566,7 @@ shownames:
 
 * d0 = alkurivi
 * d1 = eka rivi ruudulla
-* d2 = printattavien rivien mï¿½ï¿½rï¿½
+* d2 = printattavien rivien määrä
 doPrintNames:
 ;	DPRINT  "shownames obtain list"
 	bsr.w  obtainModuleList
@@ -17738,7 +17738,7 @@ doPrintNames:
 	lea	.marker(pc),a0
 	
 	* See if the marker has a glyph in the font
-	move	#"ï¿½",d2
+	move	#"®",d2
 	cmp.b	tf_HiChar(a1),d2
 	bls.b	.yesRmark
 	* Use alternative
@@ -17793,7 +17793,7 @@ doPrintNames:
 .marker	dc.b	0,0
 
 
-***** Katkaisee prefixin nimestï¿½ a0:ssa
+***** Katkaisee prefixin nimestä a0:ssa
 
 cut_prefix:
 ;	isListDivider (a0)		* onko divideri?
@@ -17958,7 +17958,7 @@ delete
 	bne.b	.noa
 
 	pushm	d5/d6
-	bsr.w	rbutton4	* ejektoidaan ja yritetï¿½ï¿½n uusiks
+	bsr.w	rbutton4	* ejektoidaan ja yritetään uusiks
 	popm	d5/d6
 	bra.b	.noa
 
@@ -18003,7 +18003,7 @@ delete
 .erer	clr.b	deleteflag(a5)
 	rts
 
-.del	dc.b	"-ï¿½ï¿½>> Deleting file! <<ï¿½ï¿½-",0
+.del	dc.b	"-»»>> Deleting file! <<««-",0
  even	
 
 
@@ -18071,9 +18071,9 @@ execuutti
  even
 
 *******************************************************************************
-* Kahden ylimmï¿½isen tekstirivin hommat (loota)
+* Kahden ylimmäisen tekstirivin hommat (loota)
 *******
-* 30 merkkiï¿½ leveï¿½ alue
+* 30 merkkiä leveä alue
 
 inforivit_clear:
 	movem.l	d0-d4,-(sp)
@@ -18118,7 +18118,7 @@ inforivit_play
 
 	moveq	#0,d2
 
-* Jos S3M, nimeï¿½ ei tartte siistiï¿½.
+* Jos S3M, nimeä ei tartte siistiä.
 
 	cmp	#pt_multi,playertype(a5)
 	bne.w	.eer
@@ -18439,7 +18439,7 @@ inforivit_searching
 ;.1	dc.b	"Identifying...",0
 ; even
 ;
-* Siistitï¿½ï¿½n moduulin nimi 
+* Siistitään moduulin nimi 
 
 siisti_nimi
 	lea	modulename-1(a5),a0
@@ -18525,7 +18525,7 @@ settimestart
 * 3=		4*8,"Module name",0
 
 
-lootaa					* pï¿½ivitetï¿½ï¿½n kaikki
+lootaa					* päivitetään kaikki
 
 	bsr.w	lootaan_kello
 ;	bsr.w	lootaan_muisti
@@ -18547,13 +18547,13 @@ lootaan_aika
 	rts
 .ook	
 	pushm	all
-	clr.b	do_alarm(a5)		* sammutetaan herï¿½tys
+	clr.b	do_alarm(a5)		* sammutetaan herätys
 
 	clr	lootassa(a5)		
 
-* ajan pï¿½ivitys (datestamp-magic)
+* ajan päivitys (datestamp-magic)
 
-	tst	d0			* mitï¿½ tï¿½ï¿½ tekee?
+	tst	d0			* mitä tää tekee?
 	bne.b	.npa
 
 	move.l	aika2(a5),d3
@@ -18584,7 +18584,7 @@ lootaan_aika
 
 	move.l	d0,hippoport+hip_playtime(a5)
 
-************* tï¿½hï¿½n timeout!
+************* tähän timeout!
 	move	timeout(a5),d1
 	beq.w	.ok0
 	mulu	#50,d1
@@ -18604,10 +18604,10 @@ lootaan_aika
 	move	p_liput(a0),d1		* end-detectia.
 	btst	#pb_end,d1		* onko end-detect?
 	bne.b	.ok0			* -> on
-	btst	#pb_poslen,d1		* poslenistï¿½ voidaan pï¿½ï¿½tellï¿½ end-detect
+	btst	#pb_poslen,d1		* poslenistä voidaan päätellä end-detect
 	bne.b	.ok0
 
-.all	push	d0			* painetaan 'next'iï¿½ :)
+.all	push	d0			* painetaan 'next'iä :)
 
 	move	#$28,rawkeyinput(a5)	* NEXT!
 
@@ -18637,7 +18637,7 @@ lootaan_aika
 	tst.b	playing(a5)
 	beq.b	.noerl
 
-	tst.b	do_early(a5)		* joko oli pï¿½ï¿½llï¿½?
+	tst.b	do_early(a5)		* joko oli päällä?
 	bne.b	.noerl
 
 	move	pos_maksimi(a5),d2
@@ -18767,7 +18767,7 @@ lootaan_aika
 
 	cmp	#pt_prot,playertype(a5)		* ei maxsongeja
 	bne.b	.nptr
-	cmp.b	#$ff,ptsonglist+1(a5)	* onko enemmï¿½n kuin yksi songi??
+	cmp.b	#$ff,ptsonglist+1(a5)	* onko enemmän kuin yksi songi??
 	bne.b	.nptr
 .ql	cmp.b	#'#',-(a0)		* jos vain yksi, ei songnumberia!
 	bne.b	.ql
@@ -18786,13 +18786,13 @@ lootaan_aika
 
 ;	cmp.b	#' ',-1(a0)
 ;	beq.b	.piz
-;	move.b	#' ',(a0)+		* tungetaan aina modnimi vï¿½liin
+;	move.b	#' ',(a0)+		* tungetaan aina modnimi väliin
 ;.piz	lea	modulename(a5),a1
 ;	moveq	#40-1,d0
 ;.he	move.b	(a1)+,(a0)+
 ;	dbeq	d0,.he
 
-;.eisitten	* vanhalla kickillï¿½ ei, koska se sotkee gadgetit jos liian pitkï¿½
+;.eisitten	* vanhalla kickillä ei, koska se sotkee gadgetit jos liian pitkä
 		* uudella tulee errori amigaguidella scrollailtaessa jos
 		* teksti menee reunuksen yli.. kai. 
 		
@@ -18898,7 +18898,7 @@ lootaan_nimi
 	rts
 .ook
 	pushm	all
-	clr.b	do_alarm(a5)		* sammutetaan herï¿½tys
+	clr.b	do_alarm(a5)		* sammutetaan herätys
 	move	#2,lootassa(a5)
 
 	bsr.b	logo
@@ -18960,8 +18960,8 @@ logo	lea	desbuf(a5),a0
 ;.hip	dc.b	"HiP ",0
 ; even
 
-* a0 = mihinkï¿½ laitetaan
-* d0 = luku joka kï¿½ï¿½nnetï¿½ï¿½n ASCIIksi
+* a0 = mihinkä laitetaan
+* d0 = luku joka käännetään ASCIIksi
 putnumber2
 	st	d1
 	bra.b	putnu
@@ -18991,8 +18991,8 @@ putnu	ext.l	d0
 
 
 *******************************************************************************
-* Hiiren nappuloita painettu, tutkitaan oliko tiedostojen pï¿½ï¿½llï¿½
-* ja pistetï¿½ï¿½n palkki
+* Hiiren nappuloita painettu, tutkitaan oliko tiedostojen päällä
+* ja pistetään palkki
 *******
 
 * Out:
@@ -19007,7 +19007,7 @@ getFileBoxIndexFromMousePosition:
 	sub	windowleft(a5),d0
 	sub	windowtop(a5),d1	* suhteutus fonttiin
 
-	cmp	#30+WINX,d0		* onko tiedostolistan pï¿½ï¿½llï¿½?
+	cmp	#30+WINX,d0		* onko tiedostolistan päällä?
 	blo.b	.out
 
 	; Left edge value
@@ -19171,7 +19171,7 @@ markit:
 ;	move.l	d5,d1
 ;	bsr.w	 obtainModuleList
 ;	lea	moduleListHeader(a5),a4	
-;	move.l	chosenmodule(a5),d0	* etsitï¿½ï¿½n kohta
+;	move.l	chosenmodule(a5),d0	* etsitään kohta
 ;.luuppo
 	* a4=current node
 	* a3=next node
@@ -19203,7 +19203,7 @@ markit:
 	
 	move.l	rastport(a5),a1
 	move.b	rp_Mask(a1),d7
-	move.b	#%11,rp_Mask(a1)	* Kï¿½sitellï¿½ï¿½n kahta alinta bittitasoa.
+	move.b	#%11,rp_Mask(a1)	* Käsitellään kahta alinta bittitasoa.
 	move.l	a1,a0
 	lore	GFX,ClipBlit
 
@@ -19557,7 +19557,7 @@ showTooltipPopup
 	lsl	#3,d4
 
 	moveq	#0,d5
-	move.b	(a4)+,d5	* vaakarivejï¿½
+	move.b	(a4)+,d5	* vaakarivejä
 	subq	#1,d5
 	move.l	a4,a0
 
@@ -19599,7 +19599,7 @@ showTooltipPopup
 .tooltipPopup
 	dc	0,0	* paikka 
 	dc	0,0	* koko
-	dc.b	0,0	;palkin vï¿½rit
+	dc.b	0,0	;palkin värit
 	dc.l	.idcmpflags
 	dc.l	.wflags
 	dc.l	0
@@ -19736,7 +19736,7 @@ start_info
 .j
 	tst	info_prosessi(a5)
 	beq.b	rbutton10b
-	move.l	info_task(a5),a1		* Pï¿½ivityspyyntï¿½!
+	move.l	info_task(a5),a1		* Päivityspyyntö!
 	moveq	#0,d0
 	move.b	info_signal2(a5),d1
 	bset	d1,d0
@@ -19799,8 +19799,8 @@ info_code
 
 *** Avataan ikkuna
 * 39 kirjainta mahtuu laatikkoon
-* Linefeedi ILF joka myï¿½hemmin korvataan 10:llï¿½. Sitï¿½varten ettï¿½ voidaan
-* karsia ylimï¿½ï¿½rï¿½set linefeedit pois.
+* Linefeedi ILF joka myöhemmin korvataan 10:llä. Sitävarten että voidaan
+* karsia ylimääräset linefeedit pois.
 
 ILF	=	$83
 ILF2	=	$03
@@ -19842,7 +19842,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .lo	cmp	nw_Height(a0),d2
 	bhi.b	.fine
 	
-	clr	nw_TopEdge(a0)		* sijoitetaan mahd. ylï¿½s
+	clr	nw_TopEdge(a0)		* sijoitetaan mahd. ylös
 	subq	#1,infosize(a5)
 	subq	#8,nw_Height(a0)
 
@@ -19957,7 +19957,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	laatikko1,a0
 .a	jsr	(a0)
 
-	moveq	#31-2+2,d0		* tyhjennetï¿½ï¿½n
+	moveq	#31-2+2,d0		* tyhjennetään
 	moveq	#15-1,d1
 	move	#350-31-5+2,d4
 	moveq	#144-15-13*8,d5
@@ -20144,7 +20144,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#0,d1
 	move	infosize(a5),d1
 	beq.w	.eiup
-	cmp	d1,d0		* vï¿½h boxsize
+	cmp	d1,d0		* väh boxsize
 	bhs.b	.ok
 	move	d1,d0
 .ok
@@ -20292,7 +20292,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .srawkeyz
-* ylï¿½s: $4c
+* ylös: $4c
 * alas: $4d
 	cmp	#$45,d3		* ESC
 	beq.b	.rawkeyExitExit
@@ -20397,9 +20397,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bhs.b	.all
 
 
-* siirrytty d7 riviï¿½ ylï¿½spï¿½in:
+* siirrytty d7 riviä ylöspäin:
 * kopioidaan rivit 0 -> d7 (koko: infosize-d7 r) kohtaan 0 ja printataan
-* kohtaan 0 d7 kpl uusia rivejï¿½
+* kohtaan 0 d7 kpl uusia rivejä
 
 	moveq	#16-1,d1		* source y
 
@@ -20420,9 +20420,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	cmp	infosize(a5),d7
 	bhs.b	.all
 
-* siirrytty d7 riviï¿½ alaspï¿½in:
+* siirrytty d7 riviä alaspäin:
 * kopioidaan rivit d7 -> infosize (koko: infosize-d7 r) kohtaan 0 ja printataan
-* kohtaan infosize-d7 d7 kpl uusia rivejï¿½
+* kohtaan infosize-d7 d7 kpl uusia rivejä
 
 	move	d7,d1
 	lsl	#3,d1
@@ -20468,7 +20468,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 * d0 = alkurivi
 * d1 = eka rivi ruudulla
-* d2 = printattavien rivien mï¿½ï¿½rï¿½
+* d2 = printattavien rivien määrä
 .print2
 	move.l	infotaz(a5),a3
 	subq	#1,d0
@@ -20623,14 +20623,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a0
 .c	move.b	(a0)+,(a4)+
 	bne.b	.c
-	move.b	#'ï¿½',-1(a4)
+	move.b	#'­',-1(a4)
 
 	lea	200(sp),sp
 	bra.w	.nox
 
 .modinf
 	* Display module specific information
-******** Kehitellï¿½ï¿½n infoa moduulista
+******** Kehitellään infoa moduulista
 
 
 	clr	sfirstname(a5)
@@ -20760,7 +20760,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	#33,info_prosessi(a5)		* lipub
 
 ***************** MED
-	tst.b	medrelocced(a5)		* pitï¿½ï¿½ olla relokatoitu
+	tst.b	medrelocced(a5)		* pitäæ olla relokatoitu
 	beq.w	.noo
 
 	move.l	moduleaddress(a5),a0
@@ -20768,7 +20768,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	tst.l	20(a1)
 	beq.w	.noo_med
 	move.l	20(a1),a2		* MMDInstrInfo (samplenamet)
-	move	24(a1),d4		* samplejen mï¿½ï¿½rï¿½
+	move	24(a1),d4		* samplejen määrä
 	move	26(a1),d6		* entry size
 
 	move.l	24(a0),d7		* insthdr
@@ -20855,7 +20855,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .form	dc.b	"PSID-module",ILF,ILF2
-	dc.b	"ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½",ILF,ILF2
+	dc.b	"­­­­­­­­­­­",ILF,ILF2
 	dc.b	"Name: %-33.33s",ILF,ILF2
 	dc.b	"Author: %-31.31s",ILF,ILF2
 	dc.b	"Copyright: %-28.28s",ILF,ILF2
@@ -21456,7 +21456,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	cmp.b	#2,medtype(a5)		* Med 1-64ch?
 	bne.b	.lee
 
-	move.l	moduleaddress(a5),a1	* onko samplenimiï¿½?
+	move.l	moduleaddress(a5),a1	* onko samplenimiæ?
 	move.l	32(a1),a1		* MMD0exp
 	tst.l	20(a1)
 	bne.b	.rrqq
@@ -21483,7 +21483,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move.l	modulelength(a5),(a4)
 
-	tst.b	lod_xpkfile(a5)		* vï¿½hennetï¿½ï¿½n xpk:n turvapuskurin koko
+	tst.b	lod_xpkfile(a5)		* vähennetään xpk:n turvapuskurin koko
 	beq.b	.noxp
 	sub.l	#256,(a4)
 .noxp
@@ -21500,7 +21500,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	tfmxsampleslen(a5),d0
 	add.l	d0,-4(a4)
 
-* tfmx? pistetï¿½ï¿½n mdat ja smpl alkuosoitteet
+* tfmx? pistetään mdat ja smpl alkuosoitteet
 	move.l	moduleaddress(a5),(a4)+
 	move.l	tfmxsamplesaddr(a5),(a4)+
 	bra.b	.xop
@@ -21538,7 +21538,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	beq.b	.okod
 ;	move.l	moduleaddress(a5),a0
 ;	move.l	32(a0),a0		* MMD0exp
-;	tst.l	20(a0)			* onko samplenimiï¿½?
+;	tst.l	20(a0)			* onko samplenimiä?
 ;	beq.b	.okod
 .nee
 	cmp	#pt_multi,playertype(a5)
@@ -21559,7 +21559,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	bsr.w	.putLineChange
 	moveq	#39-1,d0
-.ca	move.b	#"ï¿½",(a3)+
+.ca	move.b	#"­",(a3)+
 	dbf	d0,.ca
 	bsr.w	.putLineChange
 	clr.b	(a3)
@@ -21576,7 +21576,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .allo2:
 ** Varataan muistia tekstipuskurille
 	move	d5,d0
-	add	#20,d0		* 20 varariviï¿½ varalle
+	add	#20,d0		* 20 varariviä varalle
 	mulu	#40,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	jsr	getmem
@@ -21593,7 +21593,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	asciitable,a0
 	moveq	#0,d0
 	moveq	#0,d1
-	move.b	#'ï¿½',d2
+	move.b	#'­',d2
 
 .clo	tst.b	(a2)
 	beq.b	.nox
@@ -21609,7 +21609,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 * charset conversion s3m, xm
-* tehdï¿½ï¿½n vasta ï¿½ï¿½ï¿½ï¿½ï¿½ rivin jï¿½lkeen
+* tehdään vasta ­­­­­ rivin jälkeen
 
 	tst.b	d1
 	bne.b	.conve
@@ -21714,7 +21714,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bmi.b	.samplePlayExit
 	
 	jsr	obtainModuleData
-	move.l	moduleaddress(a5),a1	* onko chipissï¿½?
+	move.l	moduleaddress(a5),a1	* onko chipissä?
 	lore	Exec,TypeOfMem
 	jsr	releaseModuleData
 	btst	#MEMB_CHIP,d0
@@ -21723,7 +21723,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	jsr	obtainModuleData
 	move.l	moduleaddress(a5),a1
 
-	lea	952(a1),a0		* tutkitaan patternien mï¿½ï¿½rï¿½
+	lea	952(a1),a0		* tutkitaan patternien määrä
 	moveq	#128-1,d0
 	moveq	#0,d1
 .k_lop1
@@ -21733,7 +21733,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.b	d2,d1
 .k_lop2	dbf	d0,.k_lop1
 	addq	#1,d1
-	mulu	#1024,d1		* Eka sample patternien jï¿½lkeen
+	mulu	#1024,d1		* Eka sample patternien jälkeen
 	lea	1084(a1),a0
 	add.l	d1,a0
 
@@ -21923,7 +21923,7 @@ rbutton10
 	DPRINT	"about"
 	movem.l	d0-a6,-(sp)
 
-* lasketaan dividereitten mï¿½ï¿½rï¿½
+* lasketaan dividereitten määrä
 	DPRINT  "aboutButtonAction obtain list"
 	* calculate the amount of list dividers in the list
 	;lea	moduleListHeader(a5),a4
@@ -22614,8 +22614,8 @@ rexxmessage
 	bne.b	.loop
 	move.l	(a4),a1
 	add.l	d3,a1
-	cmp.b	#' ',(a1)+	* Onko komennon jï¿½lkeen SPACE?
-	seq	d0		* Lippu pï¿½ï¿½lle jos on.
+	cmp.b	#' ',(a1)+	* Onko komennon jälkeen SPACE?
+	seq	d0		* Lippu päälle jos on.
 	move.l	a3,a0
 	addq	#2,a0
 	add	(a0),a0
@@ -22745,7 +22745,7 @@ rexxmessage
 	tst.b	d0
 	beq.w	rbutton7
 
-.add2	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enempï¿½ï¿½ kuin ~16000
+.add2	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enempää kuin ~16000
 	bhs.b	.exit
 
 	move.l	a1,a2
@@ -22768,14 +22768,14 @@ rexxmessage
 	move.l	a0,a1
 	move.l	a2,a0
 	bsr.w	nimenalku
-	move.l	a0,l_nameaddr(a3)	* pelkï¿½n nimen osoite
+	move.l	a0,l_nameaddr(a3)	* pelkän nimen osoite
 
 	bsr.w	addfile
 	bsr.w	listChanged
 
 	tst.l	chosenmodule(a5)
 	bpl.b	.ee
-	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennestï¿½ï¿½n
+	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennestään
 .ee	
 	jsr	forceRefreshList
 	rts
@@ -23206,7 +23206,7 @@ i2amsg2	pushm	d0/d1/a0/a1/a6
 	popm	d0/d1/a0/a1/a6
 	rts
 
-** a2:ssa oleva tekstinpï¿½tkï¿½ rexxviestiksi
+** a2:ssa oleva tekstinpätkä rexxviestiksi
 str2msg	pushm	d0/d1/a0/a1/a6
 	move.l	a2,a0
 	lore	Rexx,Strlen
@@ -23992,7 +23992,7 @@ scopeEntry:
 	bsr.w	voltab
 
 .wo	
-	bsr.w	makeScopeHorizontalBars		* tehdï¿½ï¿½n palkkitaulu
+	bsr.w	makeScopeHorizontalBars		* tehdään palkkitaulu
 	bra.b	.cont
 
 
@@ -24182,7 +24182,7 @@ scopeLoop:
  endif
 
 
-	;tst.b	tapa_quad(a5)		* pitï¿½ï¿½kï¿½ poistua?
+	;tst.b	tapa_quad(a5)		* pitääkö poistua?
 	;bne.w	qexit
 	move.l	s_runningStatusAddr(a4),a0
 	tst.b	(a0)
@@ -24194,7 +24194,7 @@ scopeLoop:
 
 	move.l	_IntuiBase(a5),a1
 	move.l	ib_FirstScreen(a1),a1
-	move.l	s_scopeWindowBase(a4),a0	* ollaanko pï¿½ï¿½llimmï¿½isenï¿½?
+	move.l	s_scopeWindowBase(a4),a0	* ollaanko päällimmäisenä?
 
 	* Scope screen is the active screen?
 	cmp.l	wd_WScreen(a0),a1
@@ -24440,7 +24440,7 @@ initScopeBitmaps
 	* leave two lines spare at the top
 	add	d1,a0
 	add	d1,a0
-	;add.l	#320/8*2,d0		* ylï¿½ï¿½lle 2 varariviï¿½
+	;add.l	#320/8*2,d0		* yläälle 2 varariviä
 	move.l	a0,s_buffer1(a4)
 
 	move	s_scopeDrawAreaModulo(a4),d0
@@ -25186,7 +25186,7 @@ drawScope:
 
 	move.l	_GFXBase(a5),a6	* kopioidaan kamat ikkunaan
 	move.l	s_rastport3(a4),a1
-	moveq	#0,d0		* lï¿½hde x,y
+	moveq	#0,d0		* lähde x,y
 	moveq	#0,d1
 	moveq	#10,d2		* kohde x,y
 	moveq	#15,d3
@@ -26500,7 +26500,7 @@ notescroller:
 .paldata
 
 
-**************** Piirretï¿½ï¿½n patterndata
+**************** Piirretään patterndata
 
 .notescr
 	pushm	a4/a5/a6
@@ -27043,7 +27043,7 @@ lever
 	eor.l	d3,120(a0)
 	rts
 
-****** taulukkoon 1-64 pix leveitï¿½ palkkeja
+****** taulukkoon 1-64 pix leveitä palkkeja
 
 makeScopeHorizontalBars	
 	lea	s_scopeHorizontalBarTable(a4),a0
@@ -27980,7 +27980,7 @@ loadmodule:
 	move.l	d0,-(sp)		* NULL or lod_??? code
 	clr.b	loading(a5)		* lataus loppu
 
-	clr.b	songover(a5)	* varmistuksia, hï¿½lmï¿½o
+	clr.b	songover(a5)	* varmistuksia, hölmöo
 
 
 .diddbf	bsr.w	inforivit_clear
@@ -28018,7 +28018,7 @@ loadmodule:
 	bne.b	.cop
 
 	jsr	freemodule
-	jsr	clearlist	* lista tyhjï¿½ks
+	jsr	clearlist	* lista tyhjäks
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 
 	move.l	sp,a0			* ohjelman nimi
@@ -28030,18 +28030,18 @@ loadmodule:
 .nip
 	bsr.w	tutki_moduuli
 	tst.l	d0
-	bne.b	.unk_err		* epï¿½mï¿½ï¿½rï¿½inen tiedosto
+	bne.b	.unk_err		* epämääräinen tiedosto
 
 	clr.b	contonerr_laskuri(a5)	* nollataan virhelaskuri
 	rts	
 
-**** Virhe, ja pitï¿½isi ladata toinen moduuli.
+**** Virhe, ja pitäisi ladata toinen moduuli.
 .iik
 	cmp.l	#1,modamount(a5)
 	beq.b	loaderr
 
-	addq.b	#1,contonerr_laskuri(a5) 	* jos sattuu viisi perï¿½kkï¿½istï¿½ 
-	cmp.b	#5,contonerr_laskuri(a5) 	* virhettï¿½, keskeytetï¿½ï¿½n
+	addq.b	#1,contonerr_laskuri(a5) 	* jos sattuu viisi peräkkäistä 
+	cmp.b	#5,contonerr_laskuri(a5) 	* virhettä, keskeytetään
 	bne.b	.iik2				* contonerror-toiminto
 	clr.b	contonerr_laskuri(a5)
 	bra.b	loaderr
@@ -28149,7 +28149,7 @@ remoteerror_t
 
 
 
-xpkvirhe			* Nï¿½ytetï¿½ï¿½n XPK:n oma virheilmoitus.
+xpkvirhe			* Näytetään XPK:n oma virheilmoitus.
 	movem.l	d0-a6,-(sp)
 	lea	.x(pc),a1
 	lea	xarray(pc),a4
@@ -28162,7 +28162,7 @@ xpkvirhe			* Nï¿½ytetï¿½ï¿½n XPK:n oma virheilmoitus.
 
 xarray	dc.l	0
 
-xfdvirhe			* Nï¿½ytetï¿½ï¿½n XFD:n oma virheilmoitus.
+xfdvirhe			* Näytetään XFD:n oma virheilmoitus.
 	movem.l	d0-a6,-(sp)
 	move	lod_xfderror(a5),d0
 	lore	XFD,xfdGetErrorText
@@ -28214,8 +28214,8 @@ tuntematonvirhe
 ****
 * a0 <= nimi
 * d0 <= muistin tyyppi
-* a1 <= mihin pistetï¿½ï¿½n alkuosoite
-* a2 <= mihin pistetï¿½ï¿½n pituus
+* a1 <= mihin pistetään alkuosoite
+* a2 <= mihin pistetään pituus
 * d0 => 0 tai virhe
 
 * Virheet (d0:ssa):
@@ -28389,7 +28389,7 @@ loadfile:
 
 	st	lod_archive(a5)		* lippu!!
 
-* SP = RAM:ï¿½HiPï¿½
+* SP = RAM:°HiP°
 
 	lea	-160(sp),sp
 	move.l	sp,a1
@@ -28403,7 +28403,7 @@ loadfile:
 	lea	tdir(pc),a0
 	jsr	copyb
 
-** vanha kick: kopioidaan parametrin perï¿½ï¿½n RAM:ï¿½HiPï¿½/
+** vanha kick: kopioidaan parametrin perään RAM:°HiP°/
 	tst.b	uusikick(a5)
 	bne.b	.nu
 	lea	lod_buf(a5),a1
@@ -28463,7 +28463,7 @@ loadfile:
 	lob	CurrentDir
 
 
-*** Skannataan dirrin filï¿½t
+*** Skannataan dirrin filét
 
 	move.l	d7,d1
 	pushpea	fileinfoblock(a5),d2
@@ -28499,7 +28499,7 @@ loadfile:
 	lea	probebuffer(a5),a0
 	move.l	a0,d2
 
-	move.l	#PROBE_BUFFER_LEN/4-1,d0	* tyhjï¿½ks
+	move.l	#PROBE_BUFFER_LEN/4-1,d0	* tyhjäks
 .clear	clr.l	(a0)+
 	dbf	d0,.clear
 
@@ -28509,7 +28509,7 @@ loadfile:
 	cmp.l	#100,d0
 	bls.w	.nah
 
-*** Tsekataan tyyppiï¿½
+*** Tsekataan tyyppiä
 
 	lea	probebuffer(a5),a0
 
@@ -28628,7 +28628,7 @@ loadfile:
 	tst	d5
 	bne.b	.nope
 
-* oliko sopivaa fileï¿½?
+* oliko sopivaa fileä?
 	move	#lod_extract,lod_error(a5)
 	bra.w	.exit
 
@@ -28749,7 +28749,7 @@ loadfile:
 
 
 ** Is this a sample file, stop loading if so.
-** Jos havaitaan file sampleks, ei ladata enempï¿½ï¿½
+** Jos havaitaan file sampleks, ei ladata enempää
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
 	bsr.w	.samplecheck
@@ -28788,7 +28788,7 @@ loadfile:
 * Ladataan eka XPK-hunkki tiedostosta ja katsotaan voidaanko se
 * ladata fastiin.
 
-	tst.b	xpkid(a5)	* Oliko XPK id pï¿½ï¿½llï¿½?
+	tst.b	xpkid(a5)	* Oliko XPK id päällä?
 	bne.w	.noid
 
 	bsr.w	inforivit_xpkload2
@@ -28936,7 +28936,7 @@ loadfile:
 
 
 
-** Printataan infoa ladattaessa xpk filettï¿½
+** Printataan infoa ladattaessa xpk filettä
 .hookroutine
 * a1 = progress report structure
 	pushm	d1-d7/a0/a1/a5/a6
@@ -29055,7 +29055,7 @@ loadfile:
 .wasnt_fimp
 
 *	Next up, try loading with XFDMaster if it is enabled
-********* Lataus XFDmaster.libillï¿½
+********* Lataus XFDmaster.libillä
 
 	tst.b	xfd(a5)
 	beq.w	.wasnt_xfd
@@ -29063,7 +29063,7 @@ loadfile:
 	bsr.w	get_xfd
 	beq.w	.wasnt_xfd
 
-** Tavallinen lataus tï¿½ssï¿½ vï¿½lissï¿½
+** Tavallinen lataus tässä välissä
 
 	bsr.w	.alloc
 	move.l	d0,lod_address(a5)
@@ -29083,14 +29083,14 @@ loadfile:
 	lore	XFD,xfdAllocBufferInfo	
 	move.l	d0,a3	
 	tst.l	d0
-	beq.w	.exit		* Error: menee tavallisena filenï¿½
+	beq.w	.exit		* Error: menee tavallisena filenä
 
 	move.l	lod_address(a5),xfdbi_SourceBuffer(a3)
 	move.l	lod_length(a5),xfdbi_SourceBufLen(a3)
 	move.l	a3,a0
 	lob	xfdRecogBuffer
 	tst.l	d0
-	bne.b	.xok1		* Error: tavallisena filenï¿½
+	bne.b	.xok1		* Error: tavallisena filenä
 
 .xok0	move.l	a3,a1
 	lob	xfdFreeBufferInfo
@@ -29101,7 +29101,7 @@ loadfile:
 
 	move	xfdbi_PackerFlags(a3),d0
 	and	#XFDPFF_PASSWORD!XFDPFF_RELOC!XFDPFF_ADDR,d0
-	beq.b	.xok2		* Pakkerityyppi vï¿½ï¿½rï¿½.. Ei kelpaa!
+	beq.b	.xok2		* Pakkerityyppi väärä.. Ei kelpaa!
 	move	#lod_tuntematon,lod_error(a5)
 	bra.b	.xok0
 .xok2
@@ -29670,7 +29670,7 @@ remarctemp
 .del1	dc.b	"c:delete ",0
 .del2	dc.b	" ALL QUIET",0 ;FORCE
 
-tdir	dc.b	"ï¿½HiPï¿½",0
+tdir	dc.b	"°HiP°",0
  even
 
 
@@ -29794,9 +29794,9 @@ get_mline
 * Search
 *******
 * in:
-*   a1 = etsittï¿½vï¿½
-*   a4 = mistï¿½ etsitï¿½ï¿½n
-*   d0 = etsittï¿½vï¿½n pituus
+*   a1 = etsittävä
+*   a4 = mistä etsitään
+*   d0 = etsittävän pituus
 *   d7 = modin pituus
 * out:
 *   d0 =  0: found
@@ -29809,7 +29809,7 @@ search:
 	blo.b	.sea
 	move.l	d7,d2		
 .sea	
-	lea	(a4,d2.l),a3	 * Etsitï¿½ï¿½n kaksi kilotavua tai modin pituus
+	lea	(a4,d2.l),a3	 * Etsitään kaksi kilotavua tai modin pituus
 
 	move	d0,d2
 	subq	#2,d2
@@ -30034,7 +30034,7 @@ tutki_moduuli
 	* - hippel
 	* - activision pro
 
-;	tst.b	keyfile+49(a5)	* datan vï¿½liltï¿½ 38-50 pitï¿½ï¿½ olla nollia
+;	tst.b	keyfile+49(a5)	* datan väliltä 38-50 pitää olla nollia
 ;	beq.b	.zz
 ;	move.l	(a5),a2
 ;	addq.l	#1,IVSOFTINT+IV_CODE(a2)
@@ -30232,15 +30232,15 @@ tutki_moduuli
     pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
 .moveData
-	bsr.w	moveModuleToPublicMem		* siirretï¿½ï¿½n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirretään fastiin jos mahdollista
 
-	move.l	moduleaddress(a5),a1	* tutkaillaan onko missï¿½ muistissa
+	move.l	moduleaddress(a5),a1	* tutkaillaan onko missä muistissa
 	lore	Exec,TypeOfMem
 	and.l	#MEMF_CHIP,d0
 	beq.w	.ex2
 
 ** Arf! Ladattiin chippiin!
-** Onko vehkeessï¿½ fastia laisinkaan? Jos on, pistetï¿½ï¿½n warn-tekstinpï¿½tkï¿½.
+** Onko vehkeessä fastia laisinkaan? Jos on, pistetään warn-tekstinpätkä.
 
 	moveq	#MEMF_FAST,d1
 	lob	AvailMem
@@ -30259,7 +30259,7 @@ tutki_moduuli
 
 .sid	pushpea	p_sid(pc),playerbase(a5)
 	move	#pt_sid,playertype(a5)
-	bsr.w	moveModuleToPublicMem		* siirretï¿½ï¿½n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirretään fastiin jos mahdollista
 	bra.w	.ex2
 
  ifne FEATURE_P61A
@@ -30342,7 +30342,7 @@ tutki_moduuli
 	rol.l	#8,d0
 	move.b	-(a0),d0
 	and.l	#$dfdfdfdf,d0
-	cmp.l	#'TADM',d0	* MDAT nurinpï¿½i
+	cmp.l	#'TADM',d0	* MDAT nurinpäi
 	bne.w	.er
 	cmp.b	#'.',-(a0)
 	bne.w	.er
@@ -30362,7 +30362,7 @@ tutki_moduuli
 	bne.b	.cop
 
 	lea	(sp),a0
-.leep	lea	.tfmxid(pc),a1			* Etsitï¿½ï¿½n nimestï¿½ 'mdat'
+.leep	lea	.tfmxid(pc),a1			* Etsitään nimestä 'mdat'
 .luup	move.b	(a1)+,d1
 	beq.b	.olioikea
 	move.b	(a0)+,d0
@@ -30396,7 +30396,7 @@ tutki_moduuli
 	lea	tfmxsamplesaddr(a5),a1
 	lea	tfmxsampleslen(a5),a2
 	moveq	#1,d1			* Ei oteta filen kommenttia talteen
-	move.b	xpkid(a5),d4		* ei XPK ID:tï¿½ samplefileille
+	move.b	xpkid(a5),d4		* ei XPK ID:tä samplefileille
 	st	xpkid(a5)
 	bsr.w	loadfile
 	move.b	d4,xpkid(a5)
@@ -30515,7 +30515,7 @@ copyNameFromA1
 * D0 => 0 jos moduuli on tunnettu
 * D0 => -1 jos moduuli ei tunnetti
 * 
-* Jotkut palauttavat myï¿½s muuta informaatiota rekistereissï¿½,
+* Jotkut palauttavat myös muuta informaatiota rekistereissä,
 * kuten D5 => maxsong
 *
  
@@ -30525,13 +30525,13 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 
 
 *******
-* Virittelee nimen tied.nimestï¿½
+* Virittelee nimen tied.nimestä
 *******
 tee_modnimi:
 	moveq	#INFO_MODULE_NAME_LEN-1,d1
 	lea		modulename(a5),a1
 	tst.b	lod_archive(a5)		* Paketista purettuna
-	bne.b	.arc				* otetaan pelkkï¿½ filename
+	bne.b	.arc				* otetaan pelkkä filename
 	move.l	solename(a5),a0
 	tst.b	lastLoadedModuleWasRemote(a5)
 	beq.b	.copy
@@ -30550,7 +30550,7 @@ tee_modnimi:
 
 
 *******************************************************************************
-* Lataa ulkoisen soittorutiinirykelmï¿½n
+* Lataa ulkoisen soittorutiinirykelmän
 *******
 
 loadplayergroup
@@ -30564,7 +30564,7 @@ loadplayergroup
 	bsr.w		openPlayerGroupFile
 	beq.w	.error
 .ok
-	move.l	d4,d1		* selvitetï¿½ï¿½n filen pituus
+	move.l	d4,d1		* selvitetään filen pituus
 	moveq	#0,d2	
 	moveq	#1,d3
 	lob	Seek
@@ -30685,7 +30685,7 @@ progdir
 
 
 
-* lataa yksittï¿½isen replayerin playergroupista
+* lataa yksittäisen replayerin playergroupista
 * d1 = muistin tyyppi
 
 loadreplayer
@@ -30760,7 +30760,7 @@ loadreplayer
 	pop	d2
  endif
 
-	move.l	d4,d1		* hypï¿½tï¿½ï¿½n oikeaan kohtaan
+	move.l	d4,d1		* hypätään oikeaan kohtaan
 	moveq	#-1,d3
 	lob	Seek
 
@@ -30806,7 +30806,7 @@ loadreplayer
 
 
 *******************************************************************************
-* Enabloidaan kï¿½ytetyt gadgetit ja disabloidaan kï¿½yttï¿½mï¿½ttï¿½mï¿½t
+* Enabloidaan käytetyt gadgetit ja disabloidaan käyttämättömät
 * Scope kanssa
 *******
 
@@ -30899,7 +30899,7 @@ whag	tst.b	win(a5)
 
 ;.c
 
-;	tst.l	keyfile+40(a5)	* datan vï¿½liltï¿½ 38-50 pitï¿½ï¿½ olla nollia
+;	tst.l	keyfile+40(a5)	* datan väliltä 38-50 pitää olla nollia
 ;	beq.b	.zz
 ;	move.l	tempexec(a5),a1
 ;	addq.l	#1,IVVERTB+IV_DATA(a1)
@@ -30914,7 +30914,7 @@ whag	tst.b	win(a5)
 .rep
 	lea	gadstate(pc),a4
 
-	ror	#1,d7		* ei vï¿½litetï¿½ ekasta (joskus oli cont)
+	ror	#1,d7		* ei välitetä ekasta (joskus oli cont)
 
 	moveq	#5-1,d6
 .loop
@@ -30926,7 +30926,7 @@ whag	tst.b	win(a5)
 	ror	#1,d7
 	bpl.b	.off
 
-	tst.b	-8(a4)		* oliko ennestï¿½ï¿½n pï¿½ï¿½llï¿½?
+	tst.b	-8(a4)		* oliko ennestään päällä?
 	bne.b	.on
 
 	move.l	a0,a3
@@ -30943,7 +30943,7 @@ whag	tst.b	win(a5)
 	st	-8(a4)
 	bra.b	.on
 
-.off	tst.b	-8(a4)		* oliko pois pï¿½ï¿½ltï¿½?
+.off	tst.b	-8(a4)		* oliko pois päältä?
 	beq.b	.on
 	clr.b	-8(a4)
 	move.l	a0,a3
@@ -30953,7 +30953,7 @@ whag	tst.b	win(a5)
 	bsr.b	drawButtonFrameMainWindow
 
 .on
-	tst	2(a4)		* enemmï¿½n kuin yksi kerrallaan?
+	tst	2(a4)		* enemmän kuin yksi kerrallaan?
 	bne.b	.l
 	rol	#1,d7
 	bra.b	.loop
@@ -32368,7 +32368,7 @@ makeParentNode
  endif
 	rts
 
-.form	dc.b	"ï¿½ï¿½ï¿½ %s",0
+.form	dc.b	"««« %s",0
  even
 
 
@@ -32462,7 +32462,7 @@ popFileBrowserSelectionHistoryItem
 
 
 ;parentNodeLabel
-;	dc.b 	"  ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Parent ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½  "
+;	dc.b 	"  ««««««« Parent »»»»»»»»  "
 ;		    ;0123456789123456789012345678
 ;	even
 
@@ -32517,13 +32517,13 @@ createio
 * out:
 *   d0 = 1 success, 0 failure
 *******
+_return		equr	d5
+_fl_lock	equr	d6
+_fl_lock2	equr	d7
+_fib		equr	d4
 getNameFromLock:
 .true		equ	1
 .false		equ	0
-.return		equr	d5
-.fl_lock	equr	d6
-.fl_lock2	equr	d7
-.fib		equr	d4
 
 	tst.l 	d1
 	bne.b	.lockOk
@@ -32551,13 +32551,13 @@ getNameFromLock:
 .old
 
 	* Use this one as the working fib, probably fine.
-	pushpea	fileinfoblock2(a5),.fib
+	pushpea	fileinfoblock2(a5),_fib
 
 	* save start of output buffer to a3 for later
 	move.l	d2,a3	
 
 	* initial return code status: false
-	moveq	#.false,.return
+	moveq	#.false,_return
 
 	* clear output buffer
 	move.l	d3,d0			
@@ -32572,15 +32572,15 @@ getNameFromLock:
 
 	* First, copy the lock
 	lob 	DupLock
-	move.l	d0,.fl_lock
+	move.l	d0,_fl_lock
 .loop	
-	move.l	.fl_lock,d1
+	move.l	_fl_lock,d1
 	lob  	ParentDir
-	move.l	d0,.fl_lock2
+	move.l	d0,_fl_lock2
 	beq.b	.loopEnd
 
-	move.l	.fl_lock,d1
-	move.l	.fib,d2
+	move.l	_fl_lock,d1
+	move.l	_fib,d2
 	lob 	Examine
 	tst.l	d0
 	beq.b	.cleanup
@@ -32592,7 +32592,7 @@ getNameFromLock:
 	beq.b	.noSpace
 	move.b	#'/',-(a4)
 .noSep
-	move.l	.fib,a0
+	move.l	_fib,a0
 	lea	fib_FileName(a0),a0
 	move.l	a0,a1
 .findEnd
@@ -32607,10 +32607,10 @@ getNameFromLock:
 	bne.b	.copyPart
 	
 	* done with this lock, go looping
-	move.l	.fl_lock,d1
+	move.l	_fl_lock,d1
 	lob UnLock
 
-	move.l .fl_lock2,.fl_lock
+	move.l _fl_lock2,_fl_lock
 	bra.b	.loop
 .loopEnd
 	* next comes the name for the device
@@ -32619,7 +32619,7 @@ getNameFromLock:
 	move.b	#':',-(a4)
 
 	* Dig into the lock, first convert BPTR to APTR.
-	move.l	.fl_lock,a0
+	move.l	_fl_lock,a0
 	add.l	a0,a0 
 	add.l 	a0,a0
 	move.l 	fl_Volume(a0),a0
@@ -32657,14 +32657,14 @@ getNameFromLock:
 
 
 	* indicate success
-	moveq 	#.true,.return
+	moveq 	#.true,_return
 .noSpace
 .cleanup
-	move.l	.fl_lock,d1
+	move.l	_fl_lock,d1
 	lob UnLock
 	
 	* return status
-	move.l	.return,d0
+	move.l	_return,d0
  if DEBUG
 	bne.b	.ok 
 	DPRINT	"GetNameFromLock FAILED!"
@@ -32884,10 +32884,10 @@ init_ciaint_withTempo:
 .c	moveq	#0,d0
 	rts
 
-.hm	clr.b	vbtimeruse(a5)		* kï¿½ytetï¿½ï¿½n ciaa
-	tst.b	vbtimer(a5)		* onko vblank kï¿½ytï¿½ssï¿½?
+.hm	clr.b	vbtimeruse(a5)		* käytetään ciaa
+	tst.b	vbtimer(a5)		* onko vblank käytössä?
 	beq.b	.ci
-	st	vbtimeruse(a5)		* kï¿½ytetï¿½ï¿½n vblankia
+	st	vbtimeruse(a5)		* käytetään vblankia
 	bra.b	.c
 .ci
 	pushm	d1-a6
@@ -32942,7 +32942,7 @@ init_ciaint_withTempo:
 	beq.b	.gottimer
 .nob
 	popm	d1-a6
-	moveq	#-1,d0			* ERROR! Ei saatu varattua timeriï¿½.
+	moveq	#-1,d0			* ERROR! Ei saatu varattua timeriä.
 	rts
 
 .gottimer
@@ -33013,7 +33013,7 @@ rem_ciaint
 	move.l	ciabase(a5),a6
 	lea	ciaserver(pc),a1
 	lob	RemICRVector
-	st	ciasaatu(a5)		* ei keskeytystï¿½!
+	st	ciasaatu(a5)		* ei keskeytystä!
 	DPRINT	"CIA Timer freed"
 	popm	all
 	rts
@@ -33039,7 +33039,7 @@ allocreplayer
 	moveq	#MEMF_PUBLIC,d6
 are	
 
-	tst.l	(a0)			* onko jo ennestï¿½ï¿½n?
+	tst.l	(a0)			* onko jo ennestään?
 	bne.w	.alreadyHaveIt
 
 	jsr	setMainWindowWaitPointer
@@ -33051,7 +33051,7 @@ are
 	cmp.b	#GROUPMODE_LOAD_SINGLE,groupmode(a5)
 	bne.b	.nah
 
-** Ladataan yksi kipale replayereitï¿½ groupista
+** Ladataan yksi kipale replayereitä groupista
 	bsr.w	loadreplayer
 * a1 = replayeri pakattuna
 * d7 = pakatun pituus
@@ -33154,13 +33154,13 @@ clearCpuCaches
 	move.l	(a5),a6
 	cmp	#37,LIB_VERSION(a6)
 	blo.b	.vanha
-	lob	CacheClearU	* cachet tyhjix, ei gurua 68040:llï¿½!
+	lob	CacheClearU	* cachet tyhjix, ei gurua 68040:llä!
 .vanha
 	popm 	all
 	rts
 
 **
-* Reloc rutiini ilmeisesti pelkï¿½lle ajettavalle code_hunkille
+* Reloc rutiini ilmeisesti pelkälle ajettavalle code_hunkille
 **
 * a0 = hunkki
 reloc	pushm	d0-d2/a0/a1
@@ -33199,7 +33199,7 @@ freereplayer
 	clr.l	(a0)
 .x
 	cmp.b	#GROUPMODE_DISABLE,groupmode(a5)	* jos playerfile disabloitu,
-	blo.b	.xx			* vapautetaan se ejectin yhteydessï¿½
+	blo.b	.xx			* vapautetaan se ejectin yhteydessä
 					* tai load single moodina
 	move.l	externalplayers(a5),a0		
 	clr.l	externalplayers(a5)
@@ -33207,7 +33207,7 @@ freereplayer
 .xx	rts
 
 *************
-* Tarkistaa onko moduuli fastissa. Jos on, siirtï¿½ï¿½ sen chippiin
+* Tarkistaa onko moduuli fastissa. Jos on, siirtää sen chippiin
 
 moveModuleToChipMem
 siirra_moduuli
@@ -33245,7 +33245,7 @@ sirerro	moveq	#ier_nomem,d0
 
 
 *************
-* Tarkistaa onko moduuli chipissï¿½. Jos on, siirtï¿½ï¿½ sen fastiin (jos on).
+* Tarkistaa onko moduuli chipissä. Jos on, siirtää sen fastiin (jos on).
 
 moveModuleToPublicMem
 siirra_moduuli2
@@ -33457,7 +33457,7 @@ p_protracker
 
 	move.l	moduleaddress(a5),a0	* Onko konvertattu?
 
-	tst.b	950(a0)			* song len vï¿½h. 1
+	tst.b	950(a0)			* song len väh. 1
 	bne.b	.ce
 	move.b	#1,950(a0)
 .ce
@@ -33595,7 +33595,7 @@ p_protracker
 .yee	rts
 
 
-* Tutkii koko songin, ja kattoo jos olisi erillisiï¿½ songeja.
+* Tutkii koko songin, ja kattoo jos olisi erillisiä songeja.
 .getsongs
 	move.l	moduleaddress(a5),a0
 	cmp.b	#'K',951(a0)
@@ -33941,8 +33941,8 @@ modlen
 
 .mt_PositionJump
 	push	d1
-	MOVE.B	.mt_SongPos(a5),D1		* hyvï¿½ksytï¿½ï¿½n jos jumppi
-	addq.b	#1,d1				* viimeisessï¿½ patternissa
+	MOVE.B	.mt_SongPos(a5),D1		* hyväksytään jos jumppi
+	addq.b	#1,d1				* viimeisessä patternissa
 	MOVE.L	.mt_SongDataPtr(a5),a0
 	cmp.b	950(a0),d1
 	bne.b	.nre
@@ -34107,7 +34107,7 @@ id_protracker
 
 
 *******
-* Tunnistetaan Old Soundtracker piisit (15 samplea). Tarttee n. 1700 byteï¿½
+* Tunnistetaan Old Soundtracker piisit (15 samplea). Tarttee n. 1700 byteä
 *******
 id_oldst
 
@@ -34168,7 +34168,7 @@ id_oldst
 	move	(a0)+,d1
 
 	move	d0,d2
-	and	#$f000,d2		* pitï¿½s olla tyhjï¿½ï¿½
+	and	#$f000,d2		* pitäs olla tyhjää
 	bne.b	.fail
 
 	move	d1,d2			* tutkaillaan komentoa
@@ -34220,7 +34220,7 @@ convert_oldst
 .c1	move	(a0)+,(a1)+
 	dbf	d0,.c1
 
-	lea	16*30(a1),a1		* 16 tyhjï¿½ï¿½ samplee
+	lea	16*30(a1),a1		* 16 tyhjää samplee
 
 	moveq	#(128+1+1)/2-1,d0
 .c2	move	(a0)+,(a1)+
@@ -34812,7 +34812,7 @@ sid_remVolumePatch
 id_sid1 
 	bsr.b	id_sid1_
 	bne.b 	.no
-	bsr.w	moveModuleToPublicMem		* siirretï¿½ï¿½n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirretään fastiin jos mahdollista
 	moveq	#0,d0 
 .no 
 	rts
@@ -35039,11 +35039,11 @@ playSidInRESIDMode:
 
 
 
-* Tï¿½nne vï¿½liin hï¿½mï¿½ï¿½vï¿½sti
+* Tänne väliin hämäävästi
 
 *******************************************************************************
-* Tarkistaa keyfilen. Muuttaa rekisterï¿½ijï¿½n nimen tekstiksi ja palauttaa
-* keycheck(a5):ssï¿½ nollan, jos aito.
+* Tarkistaa keyfilen. Muuttaa rekisteröijän nimen tekstiksi ja palauttaa
+* keycheck(a5):ssä nollan, jos aito.
 *******
 
 check_keyfile
@@ -36436,9 +36436,9 @@ p_tfmx
 	add.l	10(a0),d1		* SMPL
 	btst	#0,d1		* onko parittomassa osoitteessa?
 	beq.b	.un
-	addq.l	#1,d1		* on, vï¿½ï¿½nnetï¿½ï¿½n se parilliseksi
+	addq.l	#1,d1		* on, väännetään se parilliseksi
 	move.l	d1,a0
-	clr.l	(a0)		* alusta nollaa tyhjï¿½ks
+	clr.l	(a0)		* alusta nollaa tyhjäks
 	bra.b	.un
 .noo
 
@@ -36594,7 +36594,7 @@ TFMX_Pro_MSG0 dc.b "TFMX",0
  even
 
 
-* palauttaa songien mï¿½ï¿½rï¿½n d0:ssa
+* palauttaa songien määrän d0:ssa
 gettfmxsongs
 	move.l	moduleaddress(a5),a0
 	lea	$0100(a0),a0
@@ -37106,12 +37106,12 @@ p_med	jmp	.medinit(pc)
 ;	cmp.b	#2,medtype(a5)
 ;	bne.b	.yeep
 
-	move.l	moduleaddress(a5),a0	* pistetï¿½ï¿½nkï¿½ fastiin?
+	move.l	moduleaddress(a5),a0	* pistetäänkö fastiin?
 	btst	#0,20(a0)		* mmdflags; MMD_LOADTOFASTMEM
 	beq.b	.yeep
 
-** jos on octamixplayerillï¿½ soitettava ja sijaitsee chipissï¿½, koitetaan
-** siirtï¿½ï¿½ fastiin:
+** jos on octamixplayerillä soitettava ja sijaitsee chipissä, koitetaan
+** siirtää fastiin:
 	bsr.w	moveModuleToPublicMem
 
 
@@ -38004,7 +38004,7 @@ id_hippelcoso
 
 ;	cmp.l	d1,d2
 ;;	slt	LoadSamp			; set load-samples flag
-;	blt.b	.ChkFail		* ei hyvï¿½ksytï¿½ modeja joissa erilliset samplet
+;	blt.b	.ChkFail		* ei hyväksytä modeja joissa erilliset samplet
 
 
 ;	add.l	#1024,d1
@@ -38430,7 +38430,7 @@ p_digibooster
 .id_digibooster
 	bsr.b 	id_digibooster_
 	bne.b 	.x 
-	bsr.w	moveModuleToPublicMem		* siirretï¿½ï¿½n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirretään fastiin jos mahdollista
 	lea	610(a4),a1
 	moveq	#30-1,d0
 	bsr.w	copyNameFromA1
@@ -38582,7 +38582,7 @@ p_digiboosterpro
 .id_digiboosterpro
 	bsr.b 	id_digiboosterpro_
 	bne.b 	.y 
-	bsr.w	moveModuleToPublicMem		* siirretï¿½ï¿½n fastiin jos mahdollista
+	bsr.w	moveModuleToPublicMem		* siirretään fastiin jos mahdollista
 	move.l	moduleaddress(a5),a1
 	lea	16(a4),a1
 	moveq	#42-1,d0	
@@ -38746,7 +38746,7 @@ p_thx
 	move.l	moduleaddress(a5),a0
 	tst.b	3(a0)
 	bne.b	.new
-	moveq	#1,d1	* ei filttereitï¿½!
+	moveq	#1,d1	* ei filttereitä!
 .new
 
 	sub.l   a0,a0	* auto alloc fast mem
@@ -39145,7 +39145,7 @@ p_mline
 	move.l	_MlineBase(a5),a6
 	jmp	._LVOSelectTune(a6)
 
-.foo	dc.b	"ï¿½ï¿½HiP-MLine",0
+.foo	dc.b	"°°HiP-MLine",0
  even
 
 
@@ -39508,7 +39508,7 @@ p_multi:
 
 	move	mixirate+2(a5),hip_ps3mrate+hippoport(a5)
 
-* vï¿½litetï¿½ï¿½n tietoa ps3m:lle ja hankitaan sitï¿½ siltï¿½
+* välitetään tietoa ps3m:lle ja hankitaan sitä siltä
 
 	move.b	cybercalibration(a5),d0
 	move.l	calibrationaddr(a5),d1
@@ -39556,7 +39556,7 @@ p_multi:
 	lea	songover(a5),a4		* kappale loppuu-lippu
 	move.l	_GFXBase(a5),a6
 	pushpea	pos_nykyinen(a5),d6	* songpos -osoite
-	pushpea	.adjustroutine(pc),d7	* asetusten sï¿½ï¿½tï¿½rutiini
+	pushpea	.adjustroutine(pc),d7	* asetusten säätörutiini
 	move.l	ps3mroutines(a5),a5
 	pea	.updateps3m3(pc)	* updaterutiini, surroundin stereo
 	jsr	init0j(a5)
@@ -39592,7 +39592,7 @@ p_multi:
 	popm	d1-a6
 	cmp	#333,d0		* killermoden koodi
 	bne.b	.e
-	addq	#4,sp		* killer: hypï¿½tï¿½ï¿½n play-aliohjelman 'ohi'
+	addq	#4,sp		* killer: hypätään play-aliohjelman 'ohi'
 .e	rts
 
 * Failed to init eagleplayer
@@ -39646,21 +39646,21 @@ p_multi:
 	jmp	taaksej(a0)
 
 
-******** Asetukset kanavamï¿½ï¿½rï¿½n mukaan
-* tï¿½nne hypï¿½tï¿½ï¿½n initin jï¿½lkeen. d0:ssa on kanavien mï¿½ï¿½rï¿½.
+******** Asetukset kanavamäärän mukaan
+* tänne hypätään initin jälkeen. d0:ssa on kanavien määrä.
 
 .adjustroutine
 	pushm	d2/d6-a6
 	lea	var_b,a5
 	moveq	#0,d6			* -1: vaikuttaa, 0: ei vaikuta
 	cmp	#1,ps3minitcount	* asetustiedosto vaikuttaa vain
-	bne.w	.xei			* ensimmï¿½iseen inittiin latauksen
-					* jï¿½lkeen
+	bne.w	.xei			* ensimmäiseen inittiin latauksen
+					* jälkeen
 
-	tst.b	ps3msettings(a5)	* kï¿½ytetï¿½ï¿½nkï¿½ vai ei?
+	tst.b	ps3msettings(a5)	* käytetäänkö vai ei?
 	beq.w	.xei
 
-	move	d0,d7			* kanavien mï¿½ï¿½rï¿½
+	move	d0,d7			* kanavien määrä
 
 	move.l	ps3msettingsfile(a5),d0
 	beq.w	.xei
@@ -39669,7 +39669,7 @@ p_multi:
 
 	moveq	#-1,d6
 
-	lea	32*13(a0),a1		* file asetukset tï¿½ï¿½llï¿½
+	lea	32*13(a0),a1		* file asetukset täällä
 
 	move	d7,d0			* ensin asetukset kanavataulukosta
 	subq	#1,d0
@@ -39678,7 +39678,7 @@ p_multi:
 	addq	#3,a0
 	bsr.w	.gets
 
-	move.l	a1,a0			* tï¿½htirivien ohi
+	move.l	a1,a0			* tähtirivien ohi
 	bsr.w	.tah
 
 	move.l	solename(a5),a1
@@ -39690,7 +39690,7 @@ p_multi:
 
 .filel
 	addq	#1,a0
-	cmp.b	#'ï¿½',(a0)		* loppumerkki?
+	cmp.b	#'ø',(a0)		* loppumerkki?
 	beq.b	.golly
 	move	d2,d5
 	subq	#1,d5
@@ -39711,7 +39711,7 @@ p_multi:
 
 
 
-***** nappulat prefsissï¿½
+***** nappulat prefsissä
 	pushm	all
 	move.l	mixirate(a5),d0
 	sub.l	#5000,d0
@@ -39972,7 +39972,7 @@ p_sample
 .ok
 	pushm	a5/a6
 
-** vï¿½litetï¿½ï¿½n infoa
+** välitetään infoa
 
 	move.b	ahi_use(a5),d0
 	move.l	ahi_rate(a5),d1
@@ -39981,7 +39981,7 @@ p_sample
 	move.l	ahi_mode(a5),d4
 	move.l	sampleroutines(a5),a0
 
-*** lisï¿½ï¿½ï¿½
+*** lisäää
 	move.b	mpegaqua(a5),d5
 	move.b	mpegadiv(a5),d6
 
@@ -39989,7 +39989,7 @@ p_sample
 
 	move.l	colordiv(a5),d0
 	DPRINT	"colordiv=%ld"
-** lisï¿½ï¿½
+** lisää
 	moveq	#0,d0
 	cmp	#16000,horizfreq(a5)
 	slo	d0
@@ -43532,7 +43532,7 @@ p_tcbtracker
 	move.l	a4,a0 
 	move.l	d7,d0
 	
-	lea	(a0,d0.l),a2		; pour tests ultï¿½rieurs
+	lea	(a0,d0.l),a2		; pour tests ultérieurs
 	cmpi.l	 #$132,d0
 	blo.b	.ohno			; trop petit
 	cmpi.l	#"AN C",(a0)
@@ -43548,13 +43548,13 @@ p_tcbtracker
 	bne.s	.ohno
 .hm
 	move.l	8(a0),d1
-	cmpi.l	#127,d1			; nb patt : pas plus de 127, quand mï¿½me ?
+	cmpi.l	#127,d1			; nb patt : pas plus de 127, quand même ?
 	bhi.s	.ohno
 	cmpi.b	#15,12(a0)		; speed en 16-n donc <16
 	bhi.s	.ohno
-	tst.b	13(a0)			; ï¿½ priori toujours 0
+	tst.b	13(a0)			; à priori toujours 0
 	bne.s	.ohno
-	tst.b	$8e(a0)			; taille seq (peut pas ï¿½tre 0 ou >7f)
+	tst.b	$8e(a0)			; taille seq (peut pas être 0 ou >7f)
 	ble.s	.ohno
 	lea	$110(a0),a1		; patt
 	tst.b	d3
@@ -43570,7 +43570,7 @@ p_tcbtracker
 	bhs.s	.ohno
 ;	move.l	(a1),d3			; taille totale d'ici
 ;	add.l	d3,a1
-;	cmp.l	a2,a1			; tronquï¿½ !
+;	cmp.l	a2,a1			; tronqué !
 ;	bhi.s	.ohno
 	cmpi.l	#-1,-8(a3)		; FFFFFFFF
 	bne.s	.ohno
@@ -43578,10 +43578,10 @@ p_tcbtracker
 	bne.s	.ohno
 	cmpi.l	#$d4,-$90(a3)		; 1er spl toujours en +$d4
 	bne.s	.ohno
-; todo : vï¿½rifier que les effets <>0 ou <>13 ne sont pas utilisï¿½s
+; todo : vérifier que les effets <>0 ou <>13 ne sont pas utilisés
 ;.loop
 
-; bon, ï¿½a devrait suffire...
+; bon, ça devrait suffire...
 ; ok
 	moveq	#0,d0
 	rts
@@ -50878,7 +50878,7 @@ stopMeasure
   endif
 
 *******************************************************************************
-* Playereitï¿½
+* Playereitä
 
 		;incdir
 * Protracker code
@@ -50974,7 +50974,7 @@ list_text_attr
 * STRUCTURE NewWindow
 winstruc
 	* nw_LeftEdge
-	dc	360	;vas.ylï¿½k.x-koord.
+	dc	360	;vas.yläk.x-koord.
 	* nw_TopEdge
 	dc	23	;---""--- y-koord
 	* nw_Width
@@ -50982,7 +50982,7 @@ wsizex	dc	0	* sizex
 	* nw_Height
 wsizey	dc	0	* 181+25 ja 11
 	* nw_DetailPen, nw_BlockPen
-colors	dc.b	2,1	;palkin vï¿½rit
+colors	dc.b	2,1	;palkin värit
 	* nw_IDCMPFlags
 idcmpmw	dc.l	idcmpflags
 	* nw_Flags
@@ -51054,7 +51054,7 @@ winstruc3
 	dc	259
 	dc	157
 quadsiz	dc	340,85
-	dc.b	2,1	;palkin vï¿½rit
+	dc.b	2,1	;palkin värit
 	dc.l	idcmpflags3
 	dc.l	wflags3
 	dc.l	0
@@ -51082,8 +51082,8 @@ winlistsel
 	dc	0,0	* paikka 
 winlistsiz
 	dc	0,0	* koko
-;	dc.b	2,1	;palkin vï¿½rit
-	dc.b	0,0	;palkin vï¿½rit
+;	dc.b	2,1	;palkin värit
+	dc.b	0,0	;palkin värit
 	dc.l	idcmpflags4
 	dc.l	wflags4
 	dc.l	0
@@ -51693,10 +51693,10 @@ tooltipList
 
 *** Samplename ikkuna
 swinstruc
-	dc	0	;vas.ylï¿½k.x-koord.
+	dc	0	;vas.yläk.x-koord.
 	dc	0	;---""--- y-koord
 swinsiz	dc	361-5,150-13*8-2
-colors3	dc.b	2,1	;palkin vï¿½rit
+colors3	dc.b	2,1	;palkin värit
 	dc.l	sidcmpflags
 sflags	dc.l	swflags
 	dc.l	gAD1	;1. gadgetti
@@ -51835,7 +51835,7 @@ hippohead	incbin	gfx/hip.raw
 
 tickdata	dc	$001c,$0030,$0060,$70c0,$3980,$1f00,$0e00
 
-* 16x4 pixeliï¿½
+* 16x4 pixeliä
 
 * %00 = tausta
 * %10 = musta
@@ -52356,7 +52356,7 @@ resizeGadgetImage
 
 	section	mah,bss_c
 
-* Tyhjï¿½ sample PS3M:lle ja BPSoundMon2.0:lle.
+* Tyhjä sample PS3M:lle ja BPSoundMon2.0:lle.
 ps3memptysample
 nullsample	ds.l	1
 
