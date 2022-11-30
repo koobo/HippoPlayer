@@ -20681,8 +20681,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     DPRINT  "sample info"
     move	#33,info_prosessi(a5)
 
-    * lines to allocate
-    moveq   #10,d5 
+    * lines to allocate, max tags 20, 3 lines per one
+    moveq   #3*20,d5 
     bsr     .allo2
     beq     .prepareFailed
     move.l  infotaz(a5),a3
@@ -20690,6 +20690,16 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  a3,a0
     jsr     getMp3TagText
 
+    move.l  infotaz(a5),a3
+    tst.b   (a3)
+    bne     .yesText
+    
+    * Free buffer if nothing got 
+    move.l  a3,a0
+    jsr     freemem
+    clr.l   infotaz(a5)
+    bra     .nosample
+.yesText
     move.l  a3,d0
     bra     .selvis
 
