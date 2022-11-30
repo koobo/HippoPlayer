@@ -4796,9 +4796,18 @@ mpega_parse_id3v2
     move.l  #"TIT1",d0
     lea     .tit1Format(pc),a0
     bsr     findAndAppendWithFormat
+
     move.l  #"TIT2",d0
     lea     .tit2Format(pc),a0
     bsr     findAndAppendWithFormat
+
+    move.l  #"TIT2",d0
+    bsr     findFrameByName
+    beq.b   .11
+    move.l  d0,a0
+    bsr     appendWithWrap
+.11
+ 
     move.l  #"TIT3",d0
     lea     .tit3Format(pc),a0
     bsr     findAndAppendWithFormat
@@ -4835,7 +4844,7 @@ mpega_parse_id3v2
     move.l  #"TRSN",d0
     lea     .trsnFormat(pc),a0
     bsr     findAndAppendWithFormat
-
+    
 .xit
     popm    all
     rts
@@ -4861,9 +4870,11 @@ mpega_parse_id3v2
 .tit1Format
     dc.b    " Content:",ILF,ILF2
     dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+;.tit2Format
+;    dc.b    " Title:",ILF,ILF2
+;    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
 .tit2Format
-    dc.b    " Title:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    " Title:",ILF,ILF2,0
 .tit3Format
     dc.b    " Subtitle:",ILF,ILF2
     dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
@@ -4914,6 +4925,77 @@ appendWithFormat:
     subq    #1,a2
     rts
 
+* In:
+*   a0 =  string
+*   a2 = buffer to append
+appendWithWrap:
+    pushm   d0-a1/a3-a6
+    move.l  a2,a3
+    move.b  #" ",(a3)+
+    bsr     .doLine
+    bpl     .ends
+    move.b  #" ",(a3)+
+    bsr     .doLine
+    bpl     .ends
+    move.b  #" ",(a3)+
+    bsr     .doLine
+.ends
+    move.l  a3,a2
+    popm    d0-a1/a3-a6
+    rts
+
+
+* Copies a line to output, cuts at space near the end of line
+* in:
+*   a0 = input text
+*   a3 = output buffer
+* out:
+*   a0 = pointer to next line if available
+*   a3 = pointer to next position in output buffer
+*   d0 = negative: all input handled
+*        positive: data left in input for the next row
+.doLine
+    move.l  a0,d0
+	moveq	#37-1,d0
+	moveq	#0,d1
+.cl1
+    cmp.b   #"_",(a0)
+    beq     .ys1
+    cmp.b	#" ",(a0)
+	bne.b	.ns1
+.ys1
+	addq	#1,d1 ; keep track of spaces
+.ns1	    
+    move.b	(a0)+,(a3)+
+	dbeq	d0,.cl1
+	tst	d0
+	bpl.b	.endLine
+	; find previous space to cut from
+	; SAFETY: if there are any
+	tst	d1
+	beq.b	.endLin
+.li1	
+    subq	#1,a3
+    cmp.b   #"_",-(a0)
+    beq     .ys2
+	cmp.b	#" ",(a0)
+	bne.b	.li1
+.ys2
+	addq	#1,a0
+	move.l	a0,d0
+.endLin
+	moveq	#-1,d0
+.endLine
+	bsr.w	.putLineChange
+	tst	d0
+	rts
+
+; Put line change with special line feed so that ordinary line feeds
+; can be filtered out.
+.putLineChange	
+	move.b	#ILF,(a3)+
+	move.b	#ILF2,(a3)+
+	rts
 * In: 
 *    d0 = 4-char frame name to find
 *    a3 = start of data
@@ -5003,7 +5085,7 @@ getFrameText
 .ok
     lea     textBuffer(a5),a1
     * Limit of chars on one line in infowindow is 40
-    moveq   #40-1,d2
+    moveq   #3*40-1,d2
 
     * subtract char encoding and one for dbcc
     subq.l  #1+1,d1
