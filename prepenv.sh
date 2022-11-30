@@ -49,6 +49,7 @@ cp "$INC/lvo/mathffp_lib.i" "$INC/math/"
 cp "$INC/lvo/mathtrans_lib.i" "$INC/math/"
 cp "$INC/lvo/timer_lib.i" "$INC/libraries/"
 
+cp "$INC/lvo/gadtools_lib.i" "$INC/libraries/"
 
 cat <<EOF >> "$INC/rexx/rxslib.i" 
 	 ; The library entry point offsets
