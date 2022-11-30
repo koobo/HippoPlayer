@@ -207,7 +207,8 @@ ahiflags	rs.l	1
 modulefilename	rs.l	1
 probebuffer	rs.b	500
 kokonaisaika	rs.l	1
-desbuf		rs.b	200
+desbuf		rs.b	256
+textBuffer  rs.b    128
 colordiv	rs.l	1
 sample_prosessi	rs	1
 mainvolume	rs	1
@@ -326,6 +327,8 @@ size_var	rs.b	0
 	jmp	vol(pc)
 	jmp	ahi_update(pc)
 	jmp	ahinfo(pc)
+    jmp hasMp3TagText(pc)
+    jmp getMp3TagText(pc)
 
 	dc.l	16
 sample_segment
@@ -1030,11 +1033,10 @@ init:
 	move.l	#MODE_OLDFILE,d2
 	lob	Open
 	move.l	d0,d7
-	beq 	.mpega_open_error
+	beq 	.mpega_open_error 
 
     bsr     mpega_skip_id3v2_stream
-    bsr     mpega_parse_id3v2
-
+   
 	clr.l   12(a3) * stream_size
 
     move.l  d7,d1
@@ -4225,11 +4227,13 @@ sea	lea	(a4,d2.l),a3	 * Etsit‰‰n kaksi kilotavua tai modin pituus
 *******************************************************************************
 * Merkkijonon muotoilu
 *******
-desmsg2	movem.l	d0-d7/a0-a3/a6,-(sp)
+desmsg2:
+    	movem.l	d0-d7/a0-a3/a6,-(sp)
 	    ;lea	desbuf(a5),a3	;puskuri
         bra     desmsg0
 
-desmsg	movem.l	d0-d7/a0-a3/a6,-(sp)
+desmsg:
+	movem.l	d0-d7/a0-a3/a6,-(sp)
 	lea	desbuf(a5),a3	;puskuri
 desmsg0
 	move.l	sp,a1		* parametrit ovat t‰‰ll‰!
@@ -4674,6 +4678,7 @@ mpega_skip_id3v2_stream
 
     * Grab data into a buffer
     move.l  d3,d0
+    addq.l  #8,d0 * add some extra for safety
     moveq   #MEMF_PUBLIC,d1    
     bsr     getmem
     move.l  d0,id3v2Data(a5)
@@ -4707,8 +4712,30 @@ mpega_skip_id3v2_stream
 
 
 
+* Out:
+*   d0 = non-zero: has text, zero: no text
+hasMp3TagText:
+    lea     var_b,a0
+    move.l  id3v2Data(a0),d0
+    DPRINT  "hasMp3TagText=%lx "
+    rts
 
+ILF	=	$83
+ILF2	=	$03
 
+* In:
+*   a0 = info window text buffer
+getMp3TagText:
+    pushm   all
+    lea     var_b,a5
+    move.l  a0,a2
+    bsr     mpega_parse_id3v2
+    popm    all
+    rts
+    
+
+* In:
+*  a2 = info window text buffer
 mpega_parse_id3v2
     pushm   all
     tst.l   id3v2Data(a5)
@@ -4742,25 +4769,177 @@ mpega_parse_id3v2
     add.l   d0,a3
 .p1
 
-    * Frame size is 10 bytes
+    * Frame size is 10 bytes, end bound
     lea     -10(a4),a4
+
+    move.b  #ILF,(a2)+
+    move.b  #ILF2,(a2)+
+    
+    move.l  #"TPE1",d0
+    lea     .tpe1Format(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TPE2",d0
+    lea     .tpe2Format(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TPE3",d0
+    lea     .tpe3Format(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TPE4",d0
+    lea     .tpe4Format(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TCOM",d0
+    lea     .tcomFormat(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TOPE",d0
+    lea     .topeFormat(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TIT1",d0
+    lea     .tit1Format(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TIT2",d0
+    lea     .tit2Format(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TIT3",d0
+    lea     .tit3Format(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TALB",d0
+    lea     .talbFormat(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TYER",d0
+    lea     .tyerFormat(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TDAT",d0
+    lea     .tdatFormat(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TDRC",d0
+    lea     .tdrcFormat(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TDRL",d0
+    lea     .tdrlFormat(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TRCK",d0
+    lea     .trckFormat(pc),a0
+    bsr     findAndAppendWithFormat
+
+    move.l  #"TLEN",d0
+    bsr     findFrameByName
+    beq.b   .1
+    bsr     convertMsString
+    lea     .tlenFormat(pc),a0
+    bsr     appendWithFormat
+.1
+
+    move.l  #"TMOO",d0
+    lea     .tmooFormat(pc),a0
+    bsr     findAndAppendWithFormat
+    move.l  #"TRSN",d0
+    lea     .trsnFormat(pc),a0
+    bsr     findAndAppendWithFormat
+
+.xit
+    popm    all
+    rts
+
+.tpe1Format
+    dc.b    " Artist:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tpe2Format
+    dc.b    " Band:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tpe3Format
+    dc.b    " Conductor:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tpe4Format
+    dc.b    " Remixed by:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tcomFormat
+    dc.b    " Composer:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.topeFormat
+    dc.b    " Original artist:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tit1Format
+    dc.b    " Content:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tit2Format
+    dc.b    " Title:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tit3Format
+    dc.b    " Subtitle:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.talbFormat
+    dc.b    " Album:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tyerFormat
+    dc.b    " Year:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tdatFormat
+    dc.b    " Date:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tdrcFormat
+    dc.b    " Recording time:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tdrlFormat
+    dc.b    " Release time:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.trckFormat
+    dc.b    " Track number:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.tlenFormat
+    dc.b    " Length:",ILF,ILF2
+    dc.b    " %ld:%02ld",ILF,ILF2,ILF,ILF2,0
+.tmooFormat
+    dc.b    " Mood:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+.trsnFormat
+    dc.b    " Radio station:",ILF,ILF2
+    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+
+ even
+
+* In:
+*   d0 = frame name 4-cbar
+*   a0 = format string
+*   a2 = buffer to append
+findAndAppendWithFormat
+    bsr     findFrameByName
+    bne.b   .1
+    rts
+.1
+appendWithFormat:
+    bsr     desmsg
+    lea     desbuf(a5),a0
+.cc move.b  (a0)+,(a2)+
+    bne     .cc
+    subq    #1,a2
+    rts
+
+* In: 
+*    d0 = 4-char frame name to find
+*    a3 = start of data
+*    a4 = end of data
+* Out:
+*    d0 = NULL or pointer to frame text
+findFrameByName
+    pushm   d1-a6
+    moveq   #0,d7    
+    move.l  d0,d6
 .loop
     cmp.b   #"A",(a3)
     blo     .xit    
     cmp.b   #"Z",(a3)
     bhi     .xit    
     
-    lea     .name(pc),a2
-    move.b  (a3),(a2)+
-    move.b  1(a3),(a2)+
-    move.b  2(a3),(a2)+
-    move.b  3(a3),(a2)+
+    move.b  (a3),d2
+    rol.l   #8,d2
+    move.b  1(a3),d2
+    rol.l   #8,d2
+    move.b  2(a3),d2
+    rol.l   #8,d2
+    move.b  3(a3),d2
     lea     4(a3),a0
     bsr     get_syncsafe_integer
     move.l  d0,d1
-
-    move.l  #.name,d0
-    DPRINT  "Frame=%s length=%ld"
 
     * Overflow check
     move.l  a3,d0
@@ -4769,33 +4948,28 @@ mpega_parse_id3v2
     cmp.l   a4,d0
     bhs     .xit
 
-    move.l  .name(pc),d0
+    cmp.l   d2,d6
+    bne     .next
+
+    * Frame data start
     lea     10(a3),a0
-
-    rol.l   #8,d0
-    cmp.b   #"T",d0
-    bne     .1
-    bsr     .getText
-    bra     .c
-.1
-
-.c
-
-    * Skip over the frame header + frame
+    bsr     getFrameText
+    bne.b   .found 
+.next
+    * Skip over the frame header + frame to the next one
     lea     10(a3,d1.l),a3
 
     cmp.l   a4,a3
     blo     .loop
-
 .xit
-    popm    all
+    moveq   #0,d0
+.x
+    popm    d1-a6
     rts
 
-.name   ds.b    6
-
-* in:
-*    a0 = data
-*    d1 = len
+.found
+    pushpea textBuffer(a5),d0
+    bra     .x
 
 ;; Encoding:
 ;; $00   ISO-8859-1 [ISO-8859-1]. Terminated with $00.
@@ -4805,43 +4979,47 @@ mpega_parse_id3v2
 ;; $02   UTF-16BE [UTF-16] encoded Unicode [UNICODE] without BOM.
 ;;       Terminated with $00 00.
 ;; $03   UTF-8
+ 
 
-.getText
-    push    d1
+
+
+* in:
+*    a0 = data
+*    d1 = len
+getFrameText
+    pushm   d1-a6
+    clr.b   textBuffer(a5)
+    * check length
     cmp.l   #2,d1
     blo     .x
 
-    moveq   #0,d0
-    move.b  (a0)+,d0
-    DPRINT  "Encoding=%ld len=%ld"
-    cmp.b   #0,d0
+    * check encoding
+    moveq   #0,d2
+    move.b  (a0)+,d2
+    cmp.b   #0,d2
     beq.b   .ok
-    cmp.b   #3,d0
+    cmp.b   #3,d2
     bne     .x
 .ok
-    subq.l  #1,d1
+    lea     textBuffer(a5),a1
+    * Limit of chars on one line in infowindow is 40
+    moveq   #40-1,d2
 
-    sub.l   d1,sp
-    subq.l  #2,sp   * NULL + one extra byte
-    move.l  sp,a1
-    move.l  d1,d2
-    subq.l  #1,d2
-.c1
-    move.b  (a0)+,(a1)+
-    dbf     d2,.c1
+    * subtract char encoding and one for dbcc
+    subq.l  #1+1,d1
+.c1 move.b  (a0)+,(a1)+
+    subq    #1,d2
+    dbeq    d1,.c1
     clr.b   (a1)
-
-    move.l  sp,d0
-    DPRINT  "Text=%s"
-
-    add.l   d1,sp
-    addq.l  #2,sp
+    moveq   #1,d0
+    bra.b   .y
 .x
-    pop     d1
+    moveq   #0,d0
+.y
+    popm   d1-a6
     rts
 
 
-    
 * in:
 *   a0 = data
 get_syncsafe_integer:
@@ -4855,6 +5033,37 @@ get_syncsafe_integer:
 	lsl.l	#7,d0
 	or.b	3(a0),d0
     rts
+
+
+* in:
+*   a0 = string with milliseconds as text
+* out:
+*   d0 = seconds
+*   d1 = minutes
+convertMsString:
+    moveq   #0,d0
+    move.l  a0,a1
+.1
+    tst.b   (a1)+
+    bne     .1
+    subq    #1,a1
+
+    moveq   #1,d2
+.loop
+    cmp.l   a0,a1
+    beq     .x
+    moveq   #$f,d3
+    and.b   -(a1),d3
+
+    mulu.l  d2,d3
+    add.l   d3,d0
+    mulu.l  #10,d2
+    bra     .loop
+.x
+    divu.l  #1000,d0
+    divul.l #60,d1:d0
+    rts
+
 
  if DEBUG
 PRINTOUT_DEBUGBUFFER
@@ -4935,6 +5144,6 @@ desmsgDebugAndPrint
 var_b	ds.b	size_var
 
 findSyncBuffer
+            ds.b    10
 mpbuffer1	ds	MPEGA_PCM_SIZE
 mpbuffer2	ds	MPEGA_PCM_SIZE
-FIND_SYNC_BUFFER_SIZE = *-findSyncBuffer
