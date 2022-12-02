@@ -27810,7 +27810,7 @@ loadmodule:
 	move.b	d0,d6	* doublebuffering flag
 	moveq	#lod_remote,d7	* status: fail
 
-	lea	-100(sp),sp	* space for output path
+	lea	-200(sp),sp	* space for output path
 	move.l	sp,a1
 	lea	l_filename(a3),a0	
 	jsr	fetchRemoteFile
@@ -27852,7 +27852,7 @@ loadmodule:
 .skip
 	move.l	sp,d1
 	lore	Dos,DeleteFile * delete tempfile
-	lea	100(sp),sp
+	lea	200(sp),sp
 	move.l	d7,d0	* status here
 	rts
 
