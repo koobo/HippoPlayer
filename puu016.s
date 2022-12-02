@@ -9151,7 +9151,7 @@ moveButtonAction
 	blo.b	.qq
 	bsr.w	getcurrent
 	beq.b	.q
-	bsr.w	confirmFavoritesModification
+	jsr	confirmFavoritesModification
 	beq.b	.qq
 
 	move.l	a3,nodetomove(a5)
@@ -17723,11 +17723,11 @@ doPrintNames:
 	beq.b	.noFav
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.noBold
-	bsr.w	printBold
+	jsr	printBold
 	bra.b	.wasFav
 .noFav
 .noBold
-	bsr.w	print
+	jsr	print
 .wasFav
 	; Clear the line towards the right edge of rastport
 	move.l	rastport(a5),a1	
