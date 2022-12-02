@@ -63,6 +63,7 @@ DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_P61A        =   0
+FEATURE_LIST_TABS   =   1
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -8844,10 +8845,12 @@ gadgetsup
 	dr	rmove		* move
 	dr	rsearchfuncs	* search functions
 	dr	rlistmode	* listmode change
+ ifne FEATURE_LIST_TABS
     dr  rlistmode1
     dr  rlistmode2
     dr  rlistmode3
     dr  rlistmode4
+ endif
 
 * Print some text into the filebox
 ** a0 = teksti
@@ -8898,6 +8901,8 @@ printbox:
 
 rlistmode:
 	jmp	toggleListMode
+
+  ifne FEATURE_LIST_TABS
 rlistmode1:
     jmp engageNormalMode
 rlistmode2:
@@ -8906,6 +8911,7 @@ rlistmode3:
     jmp engageFileBrowserMode
 rlistmode4:
     jmp engageSearchResultsMode
+ endif
 
 *******************************************************************************
 * Sortti
@@ -31550,7 +31556,9 @@ engageListMode:
 	bsr.w	.setListModeChangeButtonIcon
 	bsr.w	.setButtonStatesAccordingToListMode
 	bsr.b	.setListState
+  ifne FEATURE_LIST_TABS
     bsr     updateListModeTabs
+  endif
 	* Playing module should be invalidated,
 	* it is not compatible between the two lists.
 	tst.l	playingmodule(a5) 
@@ -31709,6 +31717,7 @@ setSearchAddTooltip
 	move	a1,(a0)
 	rts
 
+  ifne FEATURE_LIST_TABS
 updateListModeTabs:
     lea     gadgetListModeTab1Button,a0
     basereg gadgetListModeTab1Button,a0
@@ -31758,6 +31767,7 @@ refreshListModeTabs:
 	moveq	#4,d0	
 	lore	Intui,RefreshGList
     rts
+  endif
 
 
 ********************************************************************************
@@ -49700,9 +49710,11 @@ initializeButtonRowLayout
 	bsr.b	.do
 	lea	row2Gadgets,a0
 	bsr.b	.do
+  ifne FEATURE_LIST_TABS
 	lea	row3Gadgets,a0
-;	bsr.b	.do
-;	rts
+	bsr.b	.do
+  endif
+    rts
 	
 .do
 .1	tst	(a0)
@@ -49749,9 +49761,11 @@ horizontalLayout:
 	bsr.b	.do
 	lea	row2Gadgets,a0
 	bsr.b	.do
+  ifne FEATURE_LIST_TABS
 	lea	row3Gadgets,a0
-;	bsr.b	.do
-;	rts
+	bsr.b	.do
+  endif
+	rts
 
 .do
 .1	tst	(a0)
@@ -49901,7 +49915,9 @@ verticalLayout:
 	add		d1,d0
 	addq	#4,d0 ; margin
     sub     windowtop(a5),d0
+  ifne FEATURE_LIST_TABS    
     add    #14,d0   ; space for tab!
+  endif
 	move	d0,fileBoxTopEdge(a5)
 
 	*** Left side gadgets
@@ -50674,8 +50690,10 @@ initializeUHC
 	* Remove search results related tooltip
 	lea	tooltipList\.listModeChange,a0
 	move.b	#4,1(a0)
+  ifne FEATURE_LIST_TABS
     lea     gadgetListModeTab4Button,a0
     jsr     disableButton
+  endif
 	rts
 .go
 	lea		-30(sp),sp
@@ -51643,6 +51661,7 @@ prefsEnableXMAPlay dc.l prefsResidMode
        dc.b "Enable xmaplay060......",0
        even
 
+ ifne FEATURE_LIST_TABS
 ; Gadget
 gadgetListModeTab1Button:
 	; gg_NextGadget
@@ -51860,14 +51879,17 @@ gadgetListModeTab4Button:
 	dc.b 0
 	; ig_NextImage
 	dc.l 0
-
+  endif
 
 
 ; Gadget
 gadgetListModeChangeButton:
 	; gg_NextGadget
-	;dc.l gadgetResize
+  ifne FEATURE_LIST_TABS
     dc.l gadgetListModeTab1Button
+  else
+	dc.l gadgetResize
+  endif
 	; gg_LeftEdge
 	dc 9
 	; gg_TopEdge
@@ -52038,6 +52060,7 @@ row2Gadgets
 	dc	0,0
 	dc	0 ; END
 
+  ifne FEATURE_LIST_TABS  
 row3Gadgets
 	dr	gadgetListModeTab1Button
 	dc	0,0
@@ -52048,7 +52071,7 @@ row3Gadgets
 	dr	gadgetListModeTab4Button
 	dc	0,0
 	dc	0 ; END
-
+  endif
 
 
 gadgetFileSliderInitialHeight = 67-16+2
