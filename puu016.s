@@ -31749,6 +31749,7 @@ setListModeTabsToDefaultColor:
     move.l  gadgetListModeTab4Button+gg_GadgetRender(a0),a1
     move.b  #1,ig_PlanePick(a1)
     rts
+    endb    a0
 
 refreshListModeTabs:
   ;  lea     gadgetListModeTab1Button(a0),a0
