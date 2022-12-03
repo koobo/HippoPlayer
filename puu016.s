@@ -203,6 +203,7 @@ check	macro
 	include	dos/dos_lib.i
 	include	dos/dosextens.i
 	include	dos/var.i
+	include	dos/dostags.i
 
 	include	rexx/rxslib.i
 
@@ -40346,7 +40347,7 @@ id_mp3
 *   a0 = file path
 * out:
 *   d0 = -1: not mp3 filename, 0: yes mp3 filename
-id_mp3filename
+id_mp3filename:
 	* Check file suffix
     move.l  a0,a1
 ;	move.l	modulefilename(a5),a1
