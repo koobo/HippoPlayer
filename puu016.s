@@ -40147,9 +40147,11 @@ p_sample:
     tst.b   lastLoadedModuleWasRemote(a4)
     beq.b   .notRemote
     DPRINT  "remote sample"
+    pushm   d0-d7/a1-a6
     move.l  a4,a0
     bsr     startStreaming
     tst.l   d0
+    popm    d0-d7/a1-a6
     bne.b   .streamOk
     moveq   #-1,d0
 	popm	a5/a6
