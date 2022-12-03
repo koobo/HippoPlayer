@@ -920,6 +920,8 @@ init:
     bne.b   .lq
     tst.b   samplestereo(a5)
     beq.b   .lq
+    tst.b   ahi(a5)
+    bne     .lq
     st      cybercalibration(a5)
     DPRINT  "Enabling 14-bit mp3 output"
 .lq
@@ -1207,7 +1209,11 @@ init:
 	lea	.form(pc),a0
 	tst	mplippu(a5)
 	beq.b	.nomp2
-	lea	.form2(pc),a0
+	lea	    .form3(pc),a0
+    tst.b   ahi(a5)
+    bne.b   .aa1
+    lea     .form2(pc),a0
+.aa1
 .nomp2
 	bsr.w	desmsg
 
