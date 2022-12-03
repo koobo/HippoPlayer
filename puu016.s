@@ -1409,6 +1409,10 @@ buttonRow2TopEdge		rs.w	1
 buttonRow2Height		rs.w	1
 fileBoxTopEdge			rs.w	1	
 
+* Address of the aget file streamer task if active
+streamerTask            rs.l    1
+* Pointer to the url to stream
+streamerUrl             rs.l    1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -27820,7 +27824,10 @@ loadmodule:
 	move.l	sp,a1
 	lea	l_filename(a3),a0	
 	jsr	fetchRemoteFile
-	DPRINT	"fetchRemote1 %ld"
+ if DEBUG
+    move.l  sp,d1
+	DPRINT	"fetchRemote=%ld %s"
+ endif
 	tst.l	d0
 	bne		.ok1
 	move.l	d7,d0
@@ -50496,6 +50503,11 @@ remoteSearch
 	dc.b	"%s",10
 	dc.b 	'amigaremixsearch %s',10
 	dc.b	0
+
+remoteExecute
+       dc.b    "execute "
+remoteScriptPath
+       dc.b    "T:hip",0
  even
 
 * Set list node remote type and
@@ -50574,7 +50586,7 @@ fetchRemoteFile:
 	* Build temp file path into a3
 	move.b	#"T",(a3)+
 	move.b	#":",(a3)+
-    * Max 24 chars to be friendly to fhe file system
+    * Max 24 chars to be friendly to the file system
     moveq   #24-1,d1
     moveq   #0,d0
 .copy
@@ -50593,49 +50605,93 @@ fetchRemoteFile:
     move.b  -(a4),-(a3)
 .skip
 
-	* TODO: temp file name must be 30 or less
-
 	* Source url in a0
 	* Destination file in a1
 
+    moveq   #0,d5
+    moveq   #0,d6
+    move.l  a0,d4
+
+    * Get a temp buffer    
+    move.l  #$10000,d0
+    moveq   #MEMF_PUBLIC,d1
+    jsr     getmem
+    move.l  d0,a4
+    tst.l   d0
+    beq     .memError
+
  if DEBUG
     move.l  a1,d0
-    DPRINT  "dest=%s"
+    DPRINT  "output=%s"
  endif
+    move.l  a1,d1
+	move.l	#MODE_NEWFILE,d2
+	lore	Dos,Open
+    DPRINT  "output open=%lx"
+	move.l	d0,d5
+    beq     .writeError
+    * d5 = output file
 
-	* Generate parametrized script
-	move.l	a0,d0
-	move.l	a1,d1 
-	lea		.getScript(pc),a0
-	jsr		desmsg
-
+    push    d4
 	jsr		inforivit_downloading
 	jsr		setMainWindowWaitPointer
+    pop     a0
 
-	* Save into a file to execute
-	lea		desbuf(a5),a0
-	* Find length to d0
-    moveq   #-1,d0  ; phx strlen trick
-.c	tst.b   (a0)+
-	dbeq    d0,.c
- 	not.l   d0
+    * a0 = url
+    jsr     startStreaming
+    DPRINT  "startStreaming=%lx"
+    tst.l   d0
+    beq     .streamError
+
+    move.l  a0,d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "input open=%lx"
+    move.l  d0,d6
+    beq     .readError
 
 
-	lea		remoteScriptPath(pc),a0
-	lea		desbuf(a5),a1
-	bsr		plainSaveFile
-	tst.l	d0
-	bmi		.exit * can't save temp file
+    * d6 = stream handle
+    * a4 = temporary buffer
+.loop
+    * Read from input
+    move.l  d6,d1       * in file
+    move.l  a4,d2       * buffer
+    move.l  #$10000,d3  * length
+    lore    Dos,Read
+    DPRINT  "read=%lx"
+    move.l  d0,d4       * bytes read
+    * d0 = bytes read, 0 = EOF, -1 = error
+    bmi.b   .readError
 
-	pushpea	remoteExecute(pc),d1
-	moveq	#0,d2			* input
-	move.l	nilfile(a5),d3	* output
-	lore	Dos,Execute
-	* d0 = true if was able to run the script
-	move.l	d0,d7
-	beq.b	.exit
+    move.l  d5,d1       * out file
+    move.l  a4,d2       * buffer
+    move.l  d4,d3       * length
+    lob     Write
+    tst.l   d0
+    bmi     .writeError
+    cmp.l   d0,d4
+    bne     .writeError
+    cmp.l   #$10000,d4
+    beq     .loop
+
+    DPRINT  "read and write ok"
 	* Set status to ok
 	moveq	#1,d7 
+
+.memError
+.streamError
+.writeError  
+.readError
+    move.l  d6,d1
+    beq.b   .x1
+    lore    Dos,Close
+.x1 move.l  d5,d1
+    beq     .x2
+    lore    Dos,Close
+.x2
+    move.l  a4,a0
+    jsr     freemem
 
 	* Check out status from the output file
 	lea		.agetOut(pc),a0
@@ -50672,14 +50728,6 @@ fetchRemoteFile:
 
 .agetOut
 	dc.b	"T:agetout",0
-
-.getScript
-	dc.b	'path "${UHCBIN}C" ADD',10
-	dc.b	'aget "%s" "%s" QUIET >T:agetout',10,0
-remoteExecute
-	dc.b	"execute "
-remoteScriptPath
-	dc.b	"T:hip",0
 
  even
 
@@ -51090,6 +51138,248 @@ combSortNodeArray
 	Tst.w	d0		; Any entries swapped ?
 	Bne.w	.MoreSort
 	Rts
+
+
+***************************************************************************
+*
+* Network data streaming using aget and pipe
+*
+***************************************************************************
+
+streamPipeFile  dc.b    "PIPE:hippoStream",0
+    even
+
+* Starts streaming given url into the name pipe using a separate process
+* In:
+*   a0 = url
+* Out:
+*   d0 = file handle to read from, NULL if error
+startStreaming:
+    pushm   d1-d7/a1-a6
+    moveq   #0,d0
+    tst.l   streamerTask(a5)
+    bne     .x
+    DPRINT  "startStreaming"
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "url=%s"
+ endif
+
+    move.l  a0,a1
+.1  tst.b   (a1)+
+    bne     .1
+    move.l  a1,d0
+    sub.l   a0,d0
+    moveq   #MEMF_PUBLIC,d1
+    jsr     getmem
+    move.l  d0,streamerUrl(a5)
+    beq   .x
+    move.l  d0,a1
+.2  move.b  (a0)+,(a1)+
+    bne     .2
+
+    moveq   #0,d0
+    moveq   #SIGF_SINGLE,d1
+    lore    Exec,SetSignal
+
+    pushpea .output(pc),d1
+    move.l  #MODE_NEWFILE,d2
+    lore    Dos,Open
+    DPRINT  "output open=%lx"
+    move.l  d0,.outputHandle
+    beq     .x
+
+    pushpea .tags(pc),d1
+    lore    Dos,CreateNewProc
+    DPRINT  "CrateNewProc=%lx"
+    tst.l   d0
+    beq     .error
+
+    * Wait here until the task is fully running
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Wait
+
+    DPRINT  "started"
+    lea     streamPipeFile(pc),a0
+    move.l  #1,d0
+.x
+    popm    d1-d7/a1-a6
+    rts
+
+.error
+    move.l  .outputHandle(pc),d1
+    beq.b   .er
+    lore    Dos,Close
+.er
+    move.l  d7,d1
+    beq.b   .x
+    lore    Dos,Close
+    moveq   #0,d0
+    bra     .x
+
+.tags
+    dc.l    NP_Entry,streamerTaskEntry
+    dc.l    NP_Name,.name
+    dc.l    NP_Output
+.outputHandle
+    dc.l    0
+    dc.l    TAG_END
+
+.name   
+    dc.b    "HiP-streamer",0
+.output
+    dc.b    "T:agetout",0
+    even
+
+streamerTaskEntry:
+
+    rsreset
+.uhcPathFormatted   rs.b    50
+.agetCmdFormatted   rs.b    100
+.agetArgsFormatted  rs.b    200
+.varsSize           rs.b    0
+   
+    lea     var_b,a5
+    lea     -.varsSize(sp),sp
+    move.l  sp,a4
+
+    DPRINT  "s:streamer task start"
+    sub.l   a1,a1
+    lore    Exec,FindTask
+    move.l  d0,streamerTask(a5)
+  
+    pushpea .envVarName(pc),d1     * variable name
+    pushpea .uhcPathFormatted(a4),d2     * output buffer
+    moveq   #50-1,d3            * space available
+    move.l  #GVF_GLOBAL_ONLY,d4 * global variable
+    lore    Dos,GetVar
+    
+    pushpea .uhcPathFormatted(a4),d0
+    DPRINT  "s:UHCBIN=%s"
+
+    lea     .agetCmd(pc),a0
+    lea     .agetCmdFormatted(a4),a3
+    jsr     desmsg3
+
+    pushpea .agetCmdFormatted(a4),d0
+    DPRINT  "s:cmd=%s"
+
+    pushpea .agetCmdFormatted(a4),d1
+    lore    Dos,LoadSeg
+    move.l  d0,d6
+    beq     .exit
+    DPRINT  "s:LoadSeg=%lx"
+
+    move.l	streamerUrl(a5),d0
+    lea     .args(pc),a0
+    lea     .agetArgsFormatted(a4),a3
+    jsr     desmsg3
+
+    lea     streamerUrl(a5),a1
+    move.l  (a1),a0
+    clr.l   (a1)
+    jsr     freemem
+
+    * length of args
+    lea     .agetArgsFormatted(a4),a0
+    move.l  a0,a1
+.fe   
+    tst.b   (a0)+
+    bne.b   .fe
+    move.l  a0,d4
+    sub.l   a1,d4
+    subq.l  #1,d4   
+
+ ifne DEBUG
+    pushpea .agetArgsFormatted(a4),d0
+    DPRINT  "s:args=%s"
+    move.l  d4,d0
+    DPRINT  "s:len=%ld"
+ endif
+
+    ; Notify main task
+    move.l  owntask(a5),a1
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Signal
+
+    move.l  d6,d1       * seglist
+    move.l  #4096,d2    * stack size
+    pushpea .agetArgsFormatted(a4),d3 * argptr
+                          * d4 = arg size
+    lore    Dos,RunCommand
+    DPRINT  "s:runCommand=%lx"
+    
+    move.l  d6,d1
+    beq.b   .a
+    lore    Dos,UnLoadSeg
+.a
+
+.exit
+    DPRINT  "s:streamer task stopped"
+
+    lea     .varsSize(sp),sp
+    lore    Exec,Forbid
+    clr.l   streamerTask(a5)
+    rts
+
+.envVarName
+    dc.b    "UHCBIN",0
+
+.agetCmd
+    dc.b	'%sC/aget',0
+
+.args
+	dc.b	'"%s" PIPE:hippoStream/65536/2 QUIET',0
+ven
+
+stopStreaming:
+    tst.l   streamerTask(a5)
+    beq    .1
+    DPRINT  "stop streaming"
+
+    move.l  streamerTask(a5),a1
+    move.l  #SIGBREAKF_CTRL_C,d0
+    lore    Exec,Signal 
+ 
+    DPRINT  "signal sent"
+
+    move.l  #streamPipeFile,d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "Pipe=%lx"
+    move.l  d0,d7
+
+    * Wait until read fails, this indicates
+    * the sender has reacted to CTRL_C
+    moveq   #0,d6
+    moveq   #0,d5
+.loop   
+    tst.l   d5
+    bmi.b   .skip
+    move.l  d7,d1
+    lore    Dos,FGetC
+    addq.l  #1,d6
+    move.l  d0,d5
+    bra     .cont
+.skip  
+    moveq   #1,d1
+    lore    Dos,Delay
+.cont
+    tst.l   streamerTask(a5)
+    bne.b   .loop
+
+ if DEBUG
+    move.l  d6,d0
+    DPRINT  "task closed, flushed %ld bytes" 
+ endif
+   
+.1
+    move.l  d7,d1
+    beq.b   .2
+    lore    Dos,Close
+.2
+    DPRINT  "streaming stopped"
+    rts
 
 
 ***************************************************************************
