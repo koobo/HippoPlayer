@@ -40069,7 +40069,7 @@ id_it
 * Sampleplayer
 ******************************************************************************
 
-p_sample
+p_sample:
 	jmp	.init(pc)
 	p_NOP	* CIA
 	p_NOP	* VB
@@ -40143,6 +40143,20 @@ p_sample
 	lea	.name(pc),a3
 	move.l	modulefilename(a5),a4
 
+    tst.b   lastLoadedModuleWasRemote(a4)
+    beq.b   .notRemote
+    DPRINT  "remote sample"
+    move.l  a4,a0
+    bsr     startStreaming
+    tst.l   d0
+    bne.b   .streamOk
+    moveq   #-1,d0
+	popm	a5/a6
+    bra     .xx
+.streamOk
+    move.l  a0,a4
+.notRemote
+
  if DEBUG
     push    d0
     move.l  a4,d0
@@ -40192,6 +40206,7 @@ p_sample
 	popm	d0-d3
  endif
 
+.xx
 	tst	d0
 	bne.b	.x
 
@@ -40199,13 +40214,20 @@ p_sample
 	moveq	#0,d0
 .x	rts
 
-.end	move.l	sampleroutines(a5),a0
-	jmp	.s_end(a0)
+.end	
+    DPRINT  "sample end"
+    move.l	sampleroutines(a5),a0
+	jsr 	.s_end(a0)
+    bra     stopStreaming
 
-.dostop	move.l	sampleroutines(a5),a0
-	jmp	.s_stop(a0)
+.dostop	
+    DPRINT  "sample stop"
+    move.l	sampleroutines(a5),a0
+	jmp 	.s_stop(a0)
 
-.docont	move.l	sampleroutines(a5),a0
+.docont	
+    DPRINT  "sample continue"
+    move.l	sampleroutines(a5),a0
 	jmp	.s_cont(a0)
 
 .vol	move	mainvolume(a5),d0
@@ -51153,7 +51175,8 @@ streamPipeFile  dc.b    "PIPE:hippoStream",0
 * In:
 *   a0 = url
 * Out:
-*   d0 = file handle to read from, NULL if error
+*   a0 = stream name to read from
+*   d0 = true, or false if error
 startStreaming:
     pushm   d1-d7/a1-a6
     moveq   #0,d0
@@ -51297,10 +51320,7 @@ streamerTaskEntry:
     DPRINT  "s:len=%ld"
  endif
 
-    ; Notify main task
-    move.l  owntask(a5),a1
-    moveq   #SIGF_SINGLE,d0
-    lore    Exec,Signal
+    bsr     .notify
 
     move.l  d6,d1       * seglist
     move.l  #4096,d2    * stack size
@@ -51322,6 +51342,13 @@ streamerTaskEntry:
     clr.l   streamerTask(a5)
     rts
 
+.notify
+    ; Notify main task
+    move.l  owntask(a5),a1
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Signal
+    rts
+
 .envVarName
     dc.b    "UHCBIN",0
 
@@ -51336,6 +51363,7 @@ stopStreaming:
     tst.l   streamerTask(a5)
     beq    .1
     DPRINT  "stop streaming"
+	jsr	setMainWindowWaitPointer
 
     move.l  streamerTask(a5),a1
     move.l  #SIGBREAKF_CTRL_C,d0
@@ -51346,13 +51374,14 @@ stopStreaming:
     move.l  #streamPipeFile,d1
     move.l  #MODE_OLDFILE,d2
     lore    Dos,Open
-    DPRINT  "Pipe=%lx"
+    DPRINT  "flushing pipe=%lx"
     move.l  d0,d7
 
     * Wait until read fails, this indicates
     * the sender has reacted to CTRL_C
     moveq   #0,d6
     moveq   #0,d5
+    moveq   #0,d4
 .loop   
     tst.l   d5
     bmi.b   .skip
@@ -51364,13 +51393,17 @@ stopStreaming:
 .skip  
     moveq   #1,d1
     lore    Dos,Delay
-.cont
+    addq.l  #1,d4
+    cmp.l   #10*50,d4
+    bhs     .jammed
+.cont   
     tst.l   streamerTask(a5)
     bne.b   .loop
 
  if DEBUG
     move.l  d6,d0
-    DPRINT  "task closed, flushed %ld bytes" 
+    move.l  d5,d1
+    DPRINT  "task closed, flushed %ld bytes, waited %ld ticks" 
  endif
    
 .1
@@ -51379,8 +51412,13 @@ stopStreaming:
     lore    Dos,Close
 .2
     DPRINT  "streaming stopped"
+    jsr	clearMainWindowWaitPointer
     rts
 
+.jammed
+    DPRINT  "streamer stop timeout! abandoning task"
+    clr.l   streamerTask(a5)
+    bra     .1
 
 ***************************************************************************
 *

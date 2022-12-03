@@ -858,12 +858,12 @@ init:
 	move.l	a1,h_Entry(a0)
 
 	move.l	modulefilename(a5),a0
-    bsr     isRemoteSample
-    beq     .local
-    bsr     mp_start_streaming
-    DPRINT  "open PIPE:",0
-    lea     pipefile(pc),a0
-.local
+;    bsr     isRemoteSample
+;    beq     .local
+;    bsr     mp_start_streaming
+;    DPRINT  "open PIPE:",0
+;    lea     pipefile(pc),a0
+;.local
 
  if DEBUG
 	move.l	a0,d0
@@ -1464,19 +1464,20 @@ init:
 .t4	dc.b	"MP",0
 .form	dc.b	"%s %ld-bit %lc %2ldkHz",0
 .form2	dc.b	"MP%ld %ldkB %lc %2ldkHz %ld-bit",0
+.form3	dc.b	"MP%ld %ldkB %lc %2ldkHz AHI",0
 .pn	dc.b	"HiP-Sample",0
  even
 
 isRemoteSample
     pushm   d0/a0
 	move.l	modulefilename(a5),a0
-    cmp.b   #"h",(a0)
+    cmp.b   #"P",(a0)
     bne     .local
-    cmp.b   #"t",1(a0)
+    cmp.b   #"I",1(a0)
     bne     .local
-    cmp.b   #"t",2(a0)
+    cmp.b   #"P",2(a0)
     bne     .local
-    cmp.b   #"p",3(a0)
+    cmp.b   #"E",3(a0)
     bne     .local
     cmp.b   #":",4(a0)
     bne     .local
@@ -3311,7 +3312,6 @@ decodeMp3
 	movem.l	(a3),a1/a2		* vas oik LSB kanavat
 	movem.l	16(a3),a3/a4		* vas oik MSB kanavat
 
-    DPRINT  "convert and resample stereo 14bit"
 
     * Detemine resampling target frequency
     * In case no resampling needed, ratio will be 1:1 and step 1
@@ -3383,7 +3383,6 @@ decodeMp3
 	movem.l	(sp),a3/a4/a6
 
 .j2	lsr.l	#1,d0
-    DPRINT  "play words=%ld"
 	movem.l	(a3),a0/a1
 	movem.l	16(a3),a2/a3
 	bsr.w	playblock_14bit
@@ -3410,11 +3409,11 @@ decodeMp3
 
 .loh
 	
- if DEBUG
-    move.l  d6,d0
-    move.l  samplebufsiz(a5),d1
-    DPRINT  "last read=%ld buffer=%ld"
- endif
+; if DEBUG
+;    move.l  d6,d0
+;    move.l  samplebufsiz(a5),d1
+;    DPRINT  "last read=%ld buffer=%ld"
+; endif
 
 	cmp.l	samplebufsiz(a5),d6
 	beq.w	.loopw2
@@ -3431,7 +3430,7 @@ decodeMp3
 quit:
 	DPRINT	"quit"
 	bsr.b	wait
-    bsr     mp_stop_streaming
+    ;bsr     mp_stop_streaming
 quit2:	
 	bsr.w	sampleiik
 	lore	Exec,Forbid
