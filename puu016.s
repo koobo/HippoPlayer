@@ -40153,7 +40153,9 @@ p_sample:
     tst.l   d0
     popm    d0-d7/a1-a6
     bne.b   .streamOk
+    * Exiting, align stack to avoid mayhem
     moveq   #-1,d0
+	add	#14,sp
 	popm	a5/a6
     bra     .xx
 .streamOk
@@ -51208,6 +51210,7 @@ startStreaming:
     moveq   #SIGF_SINGLE,d1
     lore    Exec,SetSignal
 
+    * Capture aget output into a file
     pushpea .output(pc),d1
     move.l  #MODE_NEWFILE,d2
     lore    Dos,Open
@@ -51221,14 +51224,26 @@ startStreaming:
     tst.l   d0
     beq     .error
 
+    DPRINT  "waiting"
+
     * Wait here until the task is fully running
     moveq   #SIGF_SINGLE,d0
     lore    Exec,Wait
 
-    DPRINT  "started"
+    DPRINT  "wait over"
+
+    tst.l   streamerTask(a5)
+    bne.b   .ok
+    DPRINT  "Streamer task failed to start"
+    bra     .error
+.ok
+
+    DPRINT  "streamer started"
     lea     streamPipeFile(pc),a0
-    move.l  #1,d0
+    moveq   #1,d0
 .x
+
+
     popm    d1-d7/a1-a6
     rts
 
@@ -51238,14 +51253,17 @@ startStreaming:
     lore    Dos,Close
 .er
     move.l  d7,d1
-    beq.b   .x
+    beq.b   .err
     lore    Dos,Close
+.err 
+ 
     moveq   #0,d0
     bra     .x
 
 .tags
     dc.l    NP_Entry,streamerTaskEntry
     dc.l    NP_Name,.name
+    * By default output handle is closed by CreateNewProc
     dc.l    NP_Output
 .outputHandle
     dc.l    0
@@ -51262,7 +51280,7 @@ streamerTaskEntry:
     rsreset
 .uhcPathFormatted   rs.b    50
 .agetCmdFormatted   rs.b    100
-.agetArgsFormatted  rs.b    200
+.agetArgsFormatted  rs.b    300
 .varsSize           rs.b    0
    
     lea     var_b,a5
@@ -51279,6 +51297,8 @@ streamerTaskEntry:
     moveq   #50-1,d3            * space available
     move.l  #GVF_GLOBAL_ONLY,d4 * global variable
     lore    Dos,GetVar
+    tst.l   d0
+    bmi     .error
     
     pushpea .uhcPathFormatted(a4),d0
     DPRINT  "s:UHCBIN=%s"
@@ -51293,7 +51313,7 @@ streamerTaskEntry:
     pushpea .agetCmdFormatted(a4),d1
     lore    Dos,LoadSeg
     move.l  d0,d6
-    beq     .exit
+    beq     .error
     DPRINT  "s:LoadSeg=%lx"
 
     move.l	streamerUrl(a5),d0
@@ -51351,6 +51371,12 @@ streamerTaskEntry:
     moveq   #SIGF_SINGLE,d0
     lore    Exec,Signal
     rts
+
+.error
+    DPRINT  "s:streamer start error"
+    lore    Exec,Forbid
+    bsr     .notify
+    bra     .exit
 
 .envVarName
     dc.b    "UHCBIN",0
