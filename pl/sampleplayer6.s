@@ -843,7 +843,8 @@ init:
 
 	move.l	4.w,a6
 	lea	.mplibn(pc),a1
-	lob	OldOpenLibrary
+    moveq   #2,d0
+	lob	    OpenLibrary
 	move.l	d0,_MPEGABase(a5)
 	bne.b	.uzx
 	DPRINT	"no MPEGA"
