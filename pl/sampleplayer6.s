@@ -3835,7 +3835,7 @@ closesample
 	rts
 
 
-
+  REM *************** Streaming provided by main app
 pipefile   dc.b    "PIPE:hipposample",0
     even
 
@@ -4035,7 +4035,7 @@ mp_stop_streaming
 .2
     DPRINT  "mp streaming stopped"
     rts
-
+  EREM ************************
 
 
 
