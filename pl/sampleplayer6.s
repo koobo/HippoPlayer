@@ -6,6 +6,11 @@ test	=	0
 DEBUG	=	0
  endif
 
+ ifnd SERIALDEBUG
+SERIALDEBUG = 1
+ endif
+
+
 * Print to debug console, very clever.
 * Param 1: string
 * d0-d6:    formatting parameters, d7 is reserved
@@ -5200,7 +5205,7 @@ PRINTOUT
 	move.l	(sp)+,(sp)
 	rts
  
-desmsgDebugAndPrint
+desmsgDebugAndPrint:
 	* sp contains the return address, which is
 	* the string to print
 	movem.l	d0-d7/a0-a3/a6,-(sp)
@@ -5221,15 +5226,37 @@ desmsgDebugAndPrint
 
 	lea	debugDesBuf+var_b,a3
 	move.l	sp,a1	
-	lea	.putc(pc),a2	
+ ifne SERIALDEBUG
+    lea     putCharSerial(pc),a2
+    move.b	#"S",d0
+    bsr     putCharSerial
+    move.b	#"m",d0
+    bsr     putCharSerial
+    move.b	#"p",d0
+    bsr     putCharSerial
+    move.b	#":",d0
+    bsr     putCharSerial
+ else
+	lea	putc(pc),a2	
+ endif
 	move.l	4.w,a6
 	lob	RawDoFmt
 	movem.l	(sp)+,d0-d7/a0-a3/a6
-	bsr.w	PRINTOUT_DEBUGBUFFER
+ ifeq SERIALDEBUG
+	bsr	PRINTOUT_DEBUGBUFFER
+ endif
 	rts	* teleport!
-.putc	
+putc	
 	move.b	d0,(a3)+	
 	rts
+
+putCharSerial
+    ;_LVORawPutChar
+    ; output char in d0 to serial
+    move.l  4.w,a6
+    jsr     -516(a6)
+    rts
+
  endif
 
 var_b	ds.b	size_var

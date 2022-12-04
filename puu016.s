@@ -40,6 +40,10 @@ ver	macro
 DEBUG = 1
  endif
 
+ ifnd SERIALDEBUG
+SERIALDEBUG = 1
+ endif
+
  ifnd __VASM
 * AsmOne setting:
 * 1: Run from AsmOne
@@ -6071,7 +6075,9 @@ desmsg3:
 * a3 = desbuf
 
  if DEBUG 
-desmsgDebugAndPrint
+
+
+desmsgDebugAndPrint:
 	* sp contains the return address, which is
 	* the string to print
 	movem.l	d0-d7/a0-a3/a6,-(sp)
@@ -6092,12 +6098,34 @@ desmsgDebugAndPrint
 
 	lea	debugDesBuf+var_b,a3
 	move.l	sp,a1	
+ ifne SERIALDEBUG
+    lea     putCharSerial(pc),a2
+    move.b	#"H",d0
+    bsr     putCharSerial
+    move.b	#"i",d0
+    bsr     putCharSerial
+    move.b	#"P",d0
+    bsr     putCharSerial
+    move.b	#":",d0
+    bsr     putCharSerial
+ else
 	lea	putc(pc),a2	
+ endif
 	move.l	4.w,a6
 	lob	RawDoFmt
 	movem.l	(sp)+,d0-d7/a0-a3/a6
+ ifeq SERIALDEBUG
 	bsr	PRINTOUT_DEBUGBUFFER
+ endif
 	rts	* teleport!
+
+putCharSerial
+    ;_LVORawPutChar
+    ; output char in d0 to serial
+    move.l  4.w,a6
+    jsr     -516(a6)
+    rts
+
  endif
 
 *******************************************************************************
