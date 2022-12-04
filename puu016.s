@@ -30035,7 +30035,7 @@ tutki_moduuli2
 
 
 
-tutki_moduuli
+tutki_moduuli:
 	DPRINT	"Identify module"
 ;	bsr	inforivit_identifying
  ifne PILA
@@ -30165,7 +30165,9 @@ tutki_moduuli
 	bne.b	.mpa
 
 ** AHIa tukevat replayerit
-	bsr.w	id_hippelcoso
+    tst.b   sampleinit(a5)
+    bne     .sample
+    bsr.w	id_hippelcoso
 	beq.w	.hippelcoso
 
 	bra.b	.mp
@@ -39948,7 +39950,8 @@ mtIT  = 5
 
 
 * Initti vaihe 1. Jos d0<>0, moduuli ei kelpaa.
-id_ps3m		pushm	d1-a6
+id_ps3m:
+	pushm	d1-a6
 ;	clr	PS3M_reinit
 ;	clr	ps3minitcount
 
@@ -45879,6 +45882,8 @@ p_xmaplay:
 * Out:
 *    d0 = 0 if accepted and XMAPlay enabled
 id_xmaplay  
+    tst.b   ahi_muutpois(a5)
+    bne     .no
     tst.b   xmaplay(a5)
     beq.b   .no
     jsr     id_xm
