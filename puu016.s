@@ -40159,7 +40159,7 @@ p_sample:
 	lea	.name(pc),a3
 	move.l	modulefilename(a5),a4
 
-    tst.b   lastLoadedModuleWasRemote(a4)
+    tst.b   lastLoadedModuleWasRemote(a5)
     beq.b   .notRemote
     DPRINT  "remote sample"
     pushm   d0-d7/a1-a6
