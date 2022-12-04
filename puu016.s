@@ -51246,17 +51246,15 @@ startStreaming:
 
     pushpea .tags(pc),d1
     lore    Dos,CreateNewProc
-    DPRINT  "CrateNewProc=%lx"
+    DPRINT  "CreateNewProc=%lx"
     tst.l   d0
     beq     .error
 
-    DPRINT  "waiting"
+    DPRINT  "waiting for streamer start"
 
     * Wait here until the task is fully running
     moveq   #SIGF_SINGLE,d0
     lore    Exec,Wait
-
-    DPRINT  "wait over"
 
     tst.l   streamerTask(a5)
     bne.b   .ok
@@ -51274,6 +51272,7 @@ startStreaming:
     rts
 
 .error
+    DPRINT  "error!"
     move.l  .outputHandle(pc),d1
     beq.b   .er
     lore    Dos,Close
