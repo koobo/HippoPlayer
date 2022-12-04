@@ -4539,6 +4539,10 @@ avaa_ikkuna:
 	move	d3,gg_Height(a3)
 	subq	#3,gg_Height(a3)
 
+ ifne FEATURE_LIST_TABS
+    sub #4*14,gg_Height(a3)
+ endif
+ 
 ;    Old (weird) piece of code:
 ;
 ;    lea     slider4,a3              * fileboxin slideri
@@ -5228,6 +5232,14 @@ wrender:
 * Used in placing gfx into the main window.
 setboxy:
 	move	boxsize(a5),d0
+
+ ifne FEATURE_LIST_TABS
+    cmp     #8,d0
+    bhs.b   .1
+    moveq   #8,d0
+.1
+ endif
+
 	* original "default" size was 8, so it is relative to that.
 	subq	#8,d0
 	;muls	#8,d0
@@ -49748,12 +49760,7 @@ initializeButtonRowLayout
 	lea	row1Gadgets,a0
 	bsr.b	.do
 	lea	row2Gadgets,a0
-	bsr.b	.do
-  ifne FEATURE_LIST_TABS
-	lea	row3Gadgets,a0
-	bsr.b	.do
-  endif
-    rts
+;	bsr.b	.do
 	
 .do
 .1	tst	(a0)
@@ -49799,12 +49806,8 @@ horizontalLayout:
 	lea	row1Gadgets,a0
 	bsr.b	.do
 	lea	row2Gadgets,a0
-	bsr.b	.do
-  ifne FEATURE_LIST_TABS
-	lea	row3Gadgets,a0
-	bsr.b	.do
-  endif
-	rts
+;	bsr.b	.do
+
 
 .do
 .1	tst	(a0)
@@ -49954,9 +49957,6 @@ verticalLayout:
 	add		d1,d0
 	addq	#4,d0 ; margin
     sub     windowtop(a5),d0
-  ifne FEATURE_LIST_TABS    
-    add    #14,d0   ; space for tab!
-  endif
 	move	d0,fileBoxTopEdge(a5)
 
 	*** Left side gadgets
@@ -49966,11 +49966,32 @@ verticalLayout:
 	lea		gadgetListModeChangeButton,a0
 	subq	#2,d0
 	move	d0,gg_TopEdge(a0)
+;	lea		gadgetFileSlider,a1
+;	add		gg_Height(a0),d0
+;	addq	#3,d0
+;	move	d0,gg_TopEdge(a1)
+
+	lea		gadgetListModeChangeButton,a0
+    move    gg_TopEdge(a0),d0
+    add     #14,d0
+    lea     gadgetListModeTab1Button,a1
+    move    d0,gg_TopEdge(a1)
+    add     #14,d0
+    lea     gadgetListModeTab2Button,a1
+    move    d0,gg_TopEdge(a1)
+    add     #14,d0
+    lea     gadgetListModeTab3Button,a1
+    move    d0,gg_TopEdge(a1)
+    add     #14,d0
+    lea     gadgetListModeTab4Button,a1
+    move    d0,gg_TopEdge(a1)
+
 	lea		gadgetFileSlider,a1
 	add		gg_Height(a0),d0
 	addq	#3,d0
 	move	d0,gg_TopEdge(a1)
-	rts
+
+ 	rts
 	
 * in:
 *   a0 = gadget row
@@ -52029,11 +52050,11 @@ gadgetListModeTab1Button:
 	; gg_NextGadget
 	dc.l gadgetListModeTab2Button
 	; gg_LeftEdge
-	dc 9+22
+	dc 9
 	; gg_TopEdge
-	dc 64+6
+	dc 64
 	; gg_Width
-	dc 54
+	dc 18
 	; gg_Height
 	dc 13
 	; gg_Flags
@@ -52083,11 +52104,11 @@ gadgetListModeTab2Button:
 	; gg_NextGadget
 	dc.l gadgetListModeTab3Button
 	; gg_LeftEdge
-	dc 9+22+54+3
+	dc 9
 	; gg_TopEdge
-	dc 64+6
+	dc 64+14
 	; gg_Width
-	dc 54
+	dc 18
 	; gg_Height
 	dc 13
 	; gg_Flags
@@ -52137,14 +52158,13 @@ gadgetListModeTab3Button:
 	; gg_NextGadget
 	dc.l gadgetListModeTab4Button
 	; gg_LeftEdge
-	dc 9+22+54+54+6
+	dc 9
 	; gg_TopEdge
-	dc 64+6
+	dc 64+14+14
 	; gg_Width
-	dc 54
+	dc 18
 	; gg_Height
 	dc 13
-	; gg_Flags
 	dc GFLG_GADGIMAGE
 	; gg_Activation
 	dc GACT_RELVERIFY
@@ -52193,11 +52213,11 @@ gadgetListModeTab4Button:
 	;dc.l gadgetListModeChangeButton
     dc.l gadgetResize
 	; gg_LeftEdge
-	dc 9+22+54+54+54+9
+	dc 9
 	; gg_TopEdge
-	dc 64+6
+	dc 64+14+14+14
 	; gg_Width
-	dc 54
+	dc 18
 	; gg_Height
 	dc 13
 	; gg_Flags
@@ -52422,18 +52442,6 @@ row2Gadgets
 	dc	0,0
 	dc	0 ; END
 
-  ifne FEATURE_LIST_TABS  
-row3Gadgets
-	dr	gadgetListModeTab1Button
-	dc	0,0
-	dr	gadgetListModeTab2Button
-	dc	0,0
-	dr	gadgetListModeTab3Button
-	dc	0,0
-	dr	gadgetListModeTab4Button
-	dc	0,0
-	dc	0 ; END
-  endif
 
 
 gadgetFileSliderInitialHeight = 67-16+2
