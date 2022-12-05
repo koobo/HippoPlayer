@@ -51424,10 +51424,10 @@ streamerEntry:
     bsr     .notify
 
     move.l  d6,d1       * seglist
-    move.l  #4096,d2    * stack size
+    move.l  #4096*2,d2  * stack size, 8k recommended for aget
     pushpea .agetArgsFormatted(a4),d3 * argptr
                           * d4 = arg size
-    lob     RunCommand
+    lore    Dos,RunCommand
     * aget return code in d0, 0 = OK
     move.l  d0,d5
     DPRINT  "s:runCommand=%ld (0=OK)"
@@ -51493,7 +51493,7 @@ streamerEntry:
     dc.b	'%sC/aget',0
 
 .args
-	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS',0
+	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS',10,0
  even
 
 
