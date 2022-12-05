@@ -67,7 +67,7 @@ DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_P61A        =   0
-FEATURE_LIST_TABS   =   1
+FEATURE_LIST_TABS   =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -2663,6 +2663,8 @@ main
 	;move.b	#0,sex_ActivePens+1(a1)
 
 	; Make space for list mode change button
+    ; NOTE: this is recalculated in avaa_ikkuna and
+    ; layoutGadgetsVertical
 	lea	gadgetFileSlider,a0
 	add	#14,gg_TopEdge(a0)
 	sub	#18,gg_Height(a0)
@@ -49998,11 +50000,14 @@ verticalLayout:
 	lea		gadgetListModeChangeButton,a0
 	subq	#2,d0
 	move	d0,gg_TopEdge(a0)
-;	lea		gadgetFileSlider,a1
-;	add		gg_Height(a0),d0
-;	addq	#3,d0
-;	move	d0,gg_TopEdge(a1)
+ ifeq FEATURE_LIST_TABS
+	lea		gadgetFileSlider,a1
+	add		gg_Height(a0),d0
+	addq	#3,d0
+	move	d0,gg_TopEdge(a1)
+ endif
 
+ ifne FEATURE_LIST_TABS
 	lea		gadgetListModeChangeButton,a0
     move    gg_TopEdge(a0),d0
     add     #14,d0
@@ -50022,7 +50027,7 @@ verticalLayout:
 	add		gg_Height(a0),d0
 	addq	#3,d0
 	move	d0,gg_TopEdge(a1)
-
+ endif
  	rts
 	
 * in:
