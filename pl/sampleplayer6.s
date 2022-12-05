@@ -347,7 +347,7 @@ flash1	move	#$f00,d0
 flash2	move	#$0f0,d0
 	bra.b	fla
 flash3	move	#$00f,d0
-	bra.w	fla
+	bra	fla
 
 fla	move	d0,$dff180
 	btst	#6,$bfe001
@@ -426,7 +426,7 @@ vol
 	move	d0,mainvolume(a5)
 
 	tst.b	ahi(a5)
-	bne.w	ahivol
+	bne	ahivol
 
     tst     mplippu(a5)
     bne     .mp3vol
@@ -527,8 +527,8 @@ init:
 
 	tst	sample_prosessi(a5)
 	bne.b	.q
-	bsr.w	varaa_kanavat
-	beq.w	.ok
+	bsr	varaa_kanavat
+	beq	.ok
 	DPRINT	"No audio"
 	moveq	#ier_nochannels,d0
 .q	rts
@@ -564,29 +564,29 @@ init:
 *** Kiskaistaan sample auki jotta saadaan tietoa
 	lea	fh1(a5),a0
 	move.l	modulefilename(a5),mfh_filename(a0)
-	bsr.w	_xopen
+	bsr	_xopen
 	tst.l	d0
-	bne.w	.orok
+	bne	.orok
 
 	pushpea	probebuffer(a5),d2
 	move.l	#200,d3
 	lea	fh1(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 	tst.l	d0
-	bmi.w	.orok
+	bmi	.orok
 
 	lea	fh1(a5),a0
-	bsr.w	_xclose
+	bsr	_xclose
 *************
 .remote
 
 	cmp.b	#2,sampleformat(a5)
-	beq.w	.aiffinit
+	beq	.aiffinit
 	cmp.b	#3,sampleformat(a5)
-	beq.w	.wavinit
+	beq	.wavinit
 
 	cmp.b	#4,sampleformat(a5)
-	beq.w	.mpinit
+	beq	.mpinit
 
 
 ***** IFF INIT
@@ -597,19 +597,19 @@ init:
 	moveq	#4,d0
 	lea	probebuffer(a5),a4
 	lea	.v(pc),a1
-	bsr.w	sea
-	bne.w	.vaara
+	bsr	sea
+	bne	.vaara
 
 	tst.b	15+4(a0)		* onko sCompression?
-	bne.w	.vaara
+	bne	.vaara
 	move	12+4(a0),samplefreq(a5)
 
 	move.l	#200,d2
 	moveq	#4,d0
 	lea	probebuffer(a5),a4
 	lea	.v2(pc),a1
-	bsr.w	sea
-	bne.w	.vaara
+	bsr	sea
+	bne	.vaara
 
 	move.l	(a0)+,samplebodysize(a5)
 	move.l	a0,d0			* alkuoffsetti
@@ -617,11 +617,11 @@ init:
 	move.l	d0,samplestart(a5)
 
 	move.l	samplebodysize(a5),d0
-	bsr.w	.moi
+	bsr	.moi
 
 	lea	fh1(a5),a0
 	move.l	modulefilename(a5),mfh_filename(a0)
-	bsr.w	_xopen
+	bsr	_xopen
 	bne.b	.orok
 
 ;	move.l	modulefilename(a5),d1
@@ -634,10 +634,10 @@ init:
 	moveq	#4,d0
 	lea	probebuffer(a5),a4
 	lea	.v3(pc),a1
-	bsr.w	sea
-	bne.w	.sampleok
+	bsr	sea
+	bne	.sampleok
 	cmp.l	#6,4(a0)
-	bne.w	.sampleok
+	bne	.sampleok
 
 * jaahas, se on stereo
 	st	samplestereo(a5)
@@ -647,19 +647,19 @@ init:
 
 	lea	fh2(a5),a0
 	move.l	modulefilename(a5),mfh_filename(a0)
-	bsr.w	_xopen
-	beq.w	.sampleok
+	bsr	_xopen
+	beq	.sampleok
 
 ;	move.l	modulefilename(a5),d1
 ;	move.l	#MODE_OLDFILE,d2
 ;	lore	Dos,Open
 ;	move.l	d0,samplehandle2(a5)
-;	bne.w	.sampleok
+;	bne	.sampleok
 
 .orok
 	DPRINT	"ier_filerr"
 	moveq	#ier_filerr,d0
-	bra.w	sampleiik
+	bra	sampleiik
 	
 
 .v	dc.b	"VHDR",0
@@ -673,7 +673,7 @@ init:
 
 
 .moi	
-	bsr.w	.freqcheck
+	bsr	.freqcheck
 
 	tst.b	samplebits(a5)		* lasketaan kestoaika
 	beq.b	.moi0
@@ -702,15 +702,15 @@ init:
 	moveq	#4,d0
 	lea	probebuffer(a5),a4
 	lea	.w0(pc),a1
-	bsr.w	sea
-	bne.w	.vaara
+	bsr	sea
+	bne	.vaara
 
 	cmp	#$0100,4(a0)	* onko WAVE_FORMAT_PCM?
-	bne.w	.vaara
+	bne	.vaara
 	cmp	#$0100,6(a0)
 	beq.b	.wavm
 	cmp	#$0200,6(a0)
-	bne.w	.vaara
+	bne	.vaara
 	st	samplestereo(a5)
 .wavm
 
@@ -723,19 +723,19 @@ init:
 
 	beq.b	.wa1
 	cmp.b	#16,d0
-	bne.w	.vaara
+	bne	.vaara
 	st	samplebits(a5)
 .wa1
 	lea	.w2(pc),a1
 	move.l	#200,d2
 	moveq	#4,d0
 	lea	probebuffer(a5),a4
-	bsr.w	sea
-	bne.w	.vaara
+	bsr	sea
+	bne	.vaara
 
 	tlword	(a0)+,d0
 .wah
-	bsr.w	.moi
+	bsr	.moi
 
 	move.l	a0,d0			* alkuoffsetti
 	sub.l	a4,d0
@@ -750,26 +750,26 @@ init:
 	add.l	d0,d0
 .wa3
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1	* AIFF/WAVille työpuskureita
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,samplework(a5)
 	bne.b	.wa4
 	DPRINT	"ier_nomem"
 	moveq	#ier_nomem,d0
-	bra.w	sampleiik
+	bra	sampleiik
 .wa4
 
 	lea	fh1(a5),a0
 	move.l	modulefilename(a5),mfh_filename(a0)
-	bsr.w	_xopen
-	bne.w	.orok
+	bsr	_xopen
+	bne	.orok
 
 ;	move.l	modulefilename(a5),d1
 ;	move.l	#MODE_OLDFILE,d2
 ;	lore	Dos,Open
 ;	move.l	d0,samplehandle(a5)
-;	beq.w	.orok
+;	beq	.orok
 
-	bra.w	.sampleok
+	bra	.sampleok
 
 *********** AIFF init
 
@@ -778,20 +778,20 @@ init:
 	moveq	#4,d0
 	lea	probebuffer(a5),a4
 	lea	.ai0(pc),a1
-	bsr.w	sea
-	bne.w	.vaara
+	bsr	sea
+	bne	.vaara
 
 	cmp	#1,4(a0)
 	beq.b	.aimo
 	cmp	#2,4(a0)
-	bne.w	.vaara
+	bne	.vaara
 	st	samplestereo(a5)
 .aimo
 
 	cmp	#8,10(a0)
 	beq.b	.aim0
 	cmp	#16,10(a0)
-	bne.w	.vaara
+	bne	.vaara
 	st	samplebits(a5)
 .aim0
 
@@ -807,11 +807,11 @@ init:
 	move.l	#200,d2
 	moveq	#4,d0
 	lea	probebuffer(a5),a4
-	bsr.w	sea
-	bne.w	.vaara
+	bsr	sea
+	bne	.vaara
 
 	move.l	(a0)+,d0
-	bra.w	.wah
+	bra	.wah
 
 
 *********** MP init
@@ -854,7 +854,7 @@ init:
 	bne.b	.uzx
 	DPRINT	"no MPEGA"
 	moveq	#ier_error,d0
-	bra.w	sampleiik
+	bra	sampleiik
 .uzx
 
 	* Set up hook
@@ -881,7 +881,7 @@ init:
 .nostream
 	DPRINT	"no MPEGA stream"
 	moveq	#ier_filerr,d0
-	bra.w	sampleiik
+	bra	sampleiik
 .uz
 	move.l	d0,a3
 
@@ -915,8 +915,8 @@ init:
 	move.l	.ms_duration(a3),d0	* pituus millisekunteina
  	divu	#1000,d0
 .remote2
-	bsr.w	.moi_mp
-	bsr.w	.freqcheck
+	bsr	.moi_mp
+	bsr	.freqcheck
 
 	st	mplippu(a5)
 	move.b	#2,sampleformat(a5)	* huijataan että ollaan AIFF
@@ -934,15 +934,15 @@ init:
 	move.l	samplebufsiz(a5),d0
 	lsl.l	#2,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,samplework(a5)
 	bne.b	.wa4q
 	DPRINT	"ier_nomem"
 	moveq	#ier_nomem,d0
-	bra.w	sampleiik
+	bra	sampleiik
 .wa4q
 
-	bra.w	.sampleok
+	bra	.sampleok
 
 
 
@@ -1040,6 +1040,7 @@ init:
 
 	move.l	#MODE_OLDFILE,d2
 	lob	Open
+    DPRINT  "Open=%lx"
 	move.l	d0,d7
 	beq 	.mpega_open_error 
 
@@ -1220,7 +1221,7 @@ init:
     lea     .form2(pc),a0
 .aa1
 .nomp2
-	bsr.w	desmsg
+	bsr	desmsg
 
 	lea	desbuf(a5),a0
 	move.l	pname(a5),a1
@@ -1262,12 +1263,12 @@ init:
 .allocloo
 	move.l	samplebufsiz(a5),d0
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,(a3)+
 	beq.b	.memerr
 	dbf	d6,.allocloo
 
-	bsr.w	initsamplecyber
+	bsr	initsamplecyber
 	beq.b	.memerr
 
 	bra.b	.ok2
@@ -1275,7 +1276,7 @@ init:
 .memerr
 	DPRINT	"ier_nochip"
 	moveq	#ier_nochip,d0
-	bra.w	sampleiik
+	bra	sampleiik
 .ok2
 
 
@@ -1317,12 +1318,12 @@ init:
 .iffku1
 
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,samplework2(a5)
 	bne.b	.nik
 	DPRINT	"ier_nomem"
 	moveq	#ier_nomem,d0
-	bra.w	sampleiik
+	bra	sampleiik
 
 .nok	clr.b	kutistus(a5)		* ei tartte kutistaa
 .nik	
@@ -1343,7 +1344,7 @@ init:
 **** ahi? tarvitaan puskureita..
 
 	tst.b	ahi(a5)
-	beq.w	.nika
+	beq	.nika
 
 	cmp.b	#1,sampleformat(a5)	* jos AHI ja IFF, pari työpurskuria
 	bne.b	.naiff
@@ -1352,7 +1353,7 @@ init:
 	beq.b	.naod
 	add.l	d0,d0
 .naod	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,samplework(a5)
 	beq.b	.nomo
 .naiff
@@ -1369,7 +1370,7 @@ init:
 	move.l	d0,d4
 
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,(a3)+
 	beq.b	.nomo
 	dbf	d3,.alco
@@ -1377,7 +1378,7 @@ init:
 .nomo
 	DPRINT	"ier_nomem"
 	moveq	#ier_nomem,d0
-	bra.w	sampleiik
+	bra	sampleiik
 
 *** ahi init
 
@@ -1405,14 +1406,14 @@ init:
 ;	beq.b	.noaf
 ;	bsr	ahi_end
 ;.noaf
-	bsr.w	ahi_alustus
+	bsr	ahi_alustus
 	bne.b	.ahi_error
 
 
 .nika
 
 	move	mainvolume+var_b(pc),d0
-	bsr.w	vol
+	bsr	vol
 
 	DPRINT	"CreateProc"
 
@@ -1446,21 +1447,21 @@ init:
 	rts
 
 .ahi_error
-	bsr.w	ahi_end
+	bsr	ahi_end
 	DPRINT	"ier_ahi"
 	moveq	#ier_ahi,d0
-	bra.w	sampleiik
+	bra	sampleiik
 
 
 .error	
 	DPRINT	"ier_noprocess"
 	moveq	#ier_noprocess,d0
-	bra.w	sampleiik
+	bra	sampleiik
 
 .vaara
 	DPRINT	"ier_unknown"
 	moveq	#ier_unknown,d0
-	bra.w	sampleiik
+	bra	sampleiik
 
 
 .t1	dc.b	"IFF 8SVX",0
@@ -1510,13 +1511,13 @@ ahi_alustus
 
 	OPENAHI	1
 	move.l	d0,ahibase(a5)
-	beq.w	.ahi_error		* oudosti tämä bugaa välillä.
+	beq	.ahi_error		* oudosti tämä bugaa välillä.
 	move.l	d0,a6
 
 	lea	ahi_tags(pc),a1
 	jsr	_LVOAHI_AllocAudioA(a6)
 	move.l	d0,ahi_ctrl(a5)
-	beq.w	.ahi_error
+	beq	.ahi_error
 	move.l	d0,a2
 
 	moveq	#0,d0				;sample 1
@@ -1524,36 +1525,36 @@ ahi_alustus
 	lea	ahi_sound1(pc),a0
 	jsr	_LVOAHI_LoadSound(a6)
 	tst.l	d0
-	bne.w	.ahi_error
+	bne	.ahi_error
 
 	moveq	#1,d0				;sample 2
 	moveq	#AHIST_DYNAMICSAMPLE,d1
 	lea	ahi_sound2(pc),a0
 	jsr	_LVOAHI_LoadSound(a6)
 	tst.l	d0
-	bne.w	.ahi_error
+	bne	.ahi_error
 
 	moveq	#2,d0				;sample 3
 	moveq	#AHIST_DYNAMICSAMPLE,d1
 	lea	ahi_sound3(pc),a0
 	jsr	_LVOAHI_LoadSound(a6)
 	tst.l	d0
-	bne.w	.ahi_error
+	bne	.ahi_error
 
 	moveq	#3,d0				;sample 4
 	moveq	#AHIST_DYNAMICSAMPLE,d1
 	lea	ahi_sound4(pc),a0
 	jsr	_LVOAHI_LoadSound(a6)
 	tst.l	d0
-	bne.w	.ahi_error
+	bne	.ahi_error
 
 	move.l	ahimode(pc),d0
 	lea	getattr_tags(pc),a1
 	jsr	_LVOAHI_GetAudioAttrsA(a6)
 
-	bsr.w	ahi_setmastervol
+	bsr	ahi_setmastervol
 	move	mainvolume+var_b(pc),d0
-	bsr.w	vol
+	bsr	vol
 
 **** frequency
 	moveq	#0,d0		* channel
@@ -1805,7 +1806,7 @@ ahihalt	pushm	all
 	bsr.b	ahi_setvolume
 	moveq	#0,d0
 	moveq	#1,d6
-	bsr.w	ahi_setvolume
+	bsr	ahi_setvolume
 
 .x
 	popm	all
@@ -1832,10 +1833,10 @@ ahiunhalt
 
 	move	mainvolume+var_b(pc),d0
 	moveq	#0,d6
-	bsr.w	ahi_setvolume
+	bsr	ahi_setvolume
 	move	mainvolume+var_b(pc),d0
 	moveq	#1,d6
-	bsr.w	ahi_setvolume
+	bsr	ahi_setvolume
 
 
 .x	popm	all
@@ -1850,20 +1851,20 @@ sampleiik:
 
 	pushm	all
 	
-	bsr.w	clearsound
-	bsr.w	vapauta_kanavat
-	bsr.w	closesample
+	bsr	clearsound
+	bsr	vapauta_kanavat
+	bsr	closesample
 
-	bsr.w	ahi_end
+	bsr	ahi_end
 
 	move.l	samplework(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	clr.l	samplework(a5)
 	move.l	samplework2(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	clr.l	samplework2(a5)
 	move.l	samplecyber(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	clr.l	samplecyber(a5)
 
 
@@ -1872,19 +1873,19 @@ sampleiik:
 	beq.b	.b
 	move.l	d0,a0
 
-	bsr.w	freemem
+	bsr	freemem
 	clr.l	-4(a3)
 	bra.b	.f
 .b
 
 	move.l	ahisample1(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	move.l	ahisample2(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	move.l	ahisample3(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	move.l	ahisample4(a5),a0	* mis-aligned freemem??
-	bsr.w	freemem	
+	bsr	freemem	
 
 	clr.l	ahisample1(a5)
 	clr.l	ahisample2(a5)
@@ -1918,7 +1919,7 @@ sample_code
 ;	bra	quit2
 ;.zee
 ;	move	mainvolume+var_b(pc),d0
-;	bsr.w	vol
+;	bsr	vol
 
 
 ;	moveq	#10,d1
@@ -1927,7 +1928,7 @@ sample_code
 ;	dbf	d0,.e
 ;	dbf	d1,.ee
 
-;	bsr.w	sampleiik
+;	bsr	sampleiik
 ;	lore	Exec,Forbid
 ;	clr	sample_prosessi(a5)
 ;	clr.b	killsample(a5)
@@ -1937,13 +1938,13 @@ sample_code
 
 ************ IFF
 	cmp.b	#2,sampleformat(a5)
-	beq.w	.aiff
+	beq	.aiff
 	cmp.b	#3,sampleformat(a5)
-	beq.w	.wav
+	beq	.wav
 .iff
 
 	tst.b	samplestereo(a5)
-	bne.w	.iffs
+	bne	.iffs
 
 **** AHI IFF mono
 
@@ -1965,7 +1966,7 @@ sample_code
 	lea	fh1(a5),a0
 	move.l	samplestart(a5),d2		* bodyn alkuun
 	moveq	#OFFSET_BEGINNING,d3
-	bsr.w	_xseek
+	bsr	_xseek
 
 
 .loopahi3
@@ -1975,10 +1976,10 @@ sample_code
 ;	lore	Dos,Read	
 
 	lea	fh1(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 
 	move.l	d0,d6
-	beq.w	quit
+	beq	quit
 
 	movem.l	(a3),a0/a1	
 	move.l	a4,a2
@@ -1991,22 +1992,22 @@ sample_code
 	move	d1,(a1)+	* ja toinen
 	dbf	d0,.mahmo
 
-	bsr.w	ahiunhalt
+	bsr	ahiunhalt
 
-	bsr.w	ahiplay
+	bsr	ahiplay
 
-	bsr.w	wait
-	bne.w	quit
+	bsr	wait
+	bne	quit
 
-	bsr.w	ahiswap
+	bsr	ahiswap
 
 	cmp.l	samplebufsiz(a5),d6
 	beq.b	.loopahi3
 
-	bsr.w	wait
-	bsr.w	songoverr
+	bsr	wait
+	bsr	songoverr
 
-	bsr.w	ahihalt
+	bsr	ahihalt
 	
 	bra.b	.llpopo3
 
@@ -2019,7 +2020,7 @@ sample_code
 
 
 .loop0
-	bsr.w	clrsamplebuf
+	bsr	clrsamplebuf
 
 
 	lea	samplebuffer(a5),a3
@@ -2038,7 +2039,7 @@ sample_code
 	lea	fh1(a5),a0
 	move.l	samplestart(a5),d2		* bodyn alkuun
 	moveq	#OFFSET_BEGINNING,d3
-	bsr.w	_xseek
+	bsr	_xseek
 
 ;	bsr	flash2
 
@@ -2055,29 +2056,29 @@ sample_code
 
 
 	lea	fh1(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 
 
 ;	bsr	flash3
 
 	move.l	d0,d6
-	beq.w	quit
+	beq	quit
 
 	tst.b	kutistus(a5)
 	beq.b	.nk2
 		move.l	(a3),a1		* kohde
 		move.l	samplework2(a5),a0 * lähde
 		move.l	d6,d2		* pituus
-		bsr.w	truncate	* kutistetaan, uusi pituus = d0
+		bsr	truncate	* kutistetaan, uusi pituus = d0
 		bra.b	.nk3
 .nk2
 	move.l	d6,d0
 .nk3	lsr.l	#1,d0
 	move.l	(a3),a0
 	move.l	(a3),a1
-	bsr.w	playblock
-	bsr.w	wait
-	bne.w	quit
+	bsr	playblock
+	bsr	wait
+	bne	quit
 
 	clr.l	samplefollow(a5)
 	move.l	(a3),samplepointer(a5)
@@ -2089,9 +2090,9 @@ sample_code
 	cmp.l	samplebufsiz(a5),d6
 	beq.b	.loop
 
-	bsr.w	wait
-	bsr.w	songoverr
-	bra.w	.loop0
+	bsr	wait
+	bsr	songoverr
+	bra	.loop0
 	
 
 
@@ -2102,7 +2103,7 @@ sample_code
 **** AHI IFF stereo
 
 	tst.b	ahi(a5)
-	beq.w	.iffss
+	beq	.iffss
 
 	move.l	samplework(a5),a4
 	lea	ahisample1(a5),a3
@@ -2119,7 +2120,7 @@ sample_code
 	lea	fh1(a5),a0
 	move.l	samplestart(a5),d2		* bodyn alkuun
 	moveq	#OFFSET_BEGINNING,d3
-	bsr.w	_xseek
+	bsr	_xseek
 
 ;	move.l	samplehandle2(a5),d1
 ;	move.l	samplestart(a5),d2		* bodyn alkuun
@@ -2136,7 +2137,7 @@ sample_code
 	add.l	d3,d2
 
 	moveq	#OFFSET_BEGINNING,d3
-	bsr.w	_xseek
+	bsr	_xseek
 
 
 
@@ -2147,10 +2148,10 @@ sample_code
 ;	lore	Dos,Read	
 
 	lea	fh1(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 
 	tst.l	d0
-	beq.w	quit
+	beq	quit
 
 	move.l	a4,d2
 	move.l	samplebufsiz(a5),d3
@@ -2159,10 +2160,10 @@ sample_code
 ;	lore	Dos,Read	
 
 	lea	fh2(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 
 	move.l	d0,d6
-	beq.w	quit
+	beq	quit
 
 	push	a6
 
@@ -2180,24 +2181,24 @@ sample_code
 
 	pop	a6
 
-	bsr.w	ahiunhalt
+	bsr	ahiunhalt
 
-	bsr.w	ahiplay
+	bsr	ahiplay
 
-	bsr.w	wait
-	bne.w	quit
+	bsr	wait
+	bne	quit
 
-	bsr.w	ahiswap
+	bsr	ahiswap
 
 	cmp.l	samplebufsiz(a5),d6
 	beq.b	.loopahi4
 
-	bsr.w	wait
-	bsr.w	songoverr
+	bsr	wait
+	bsr	songoverr
 
-	bsr.w	ahihalt
+	bsr	ahihalt
 	
-	bra.w	.llpopo4
+	bra	.llpopo4
 
 
 
@@ -2207,7 +2208,7 @@ sample_code
 *********** IFF stereo
 
 
-	bsr.w	clrsamplebuf
+	bsr	clrsamplebuf
 
 
 	lea	samplebuffer(a5),a3
@@ -2225,7 +2226,7 @@ sample_code
 	lea	fh1(a5),a0
 	move.l	samplestart(a5),d2		* bodyn alkuun
 	moveq	#OFFSET_BEGINNING,d3
-	bsr.w	_xseek
+	bsr	_xseek
 
 ;	move.l	samplehandle2(a5),d1
 ;	move.l	samplestart(a5),d2		* bodyn alkuun
@@ -2241,7 +2242,7 @@ sample_code
 	lsr.l	#1,d3
 	add.l	d3,d2
 	moveq	#OFFSET_BEGINNING,d3
-	bsr.w	_xseek
+	bsr	_xseek
 
 
 .loops
@@ -2255,17 +2256,17 @@ sample_code
 ;	lore	Dos,Read	
 
 	lea	fh1(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 
 	tst.l	d0
-	beq.w	quit
+	beq	quit
 
 	tst.b	kutistus(a5)
 	beq.b	.nks1
 		move.l	(a3),a1		* kohde
 		move.l	samplework2(a5),a0 * lähde
 		move.l	d0,d2		* pituus
-		bsr.w	truncate	* kutistetaan, uusi pituus = d0
+		bsr	truncate	* kutistetaan, uusi pituus = d0
 .nks1
 
 
@@ -2280,17 +2281,17 @@ sample_code
 ;	lore	Dos,Read	
 
 	lea	fh2(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 
 	move.l	d0,d6
-	beq.w	quit
+	beq	quit
 
 	tst.b	kutistus(a5)
 	beq.b	.nks3
 		move.l	4(a3),a1	* kohde
 		move.l	samplework2(a5),a0 * lähde
 		move.l	d6,d2		* pituus
-		bsr.w	truncate	* kutistetaan, uusi pituus = d0
+		bsr	truncate	* kutistetaan, uusi pituus = d0
 		bra.b	.nks4
 .nks3
 
@@ -2298,9 +2299,9 @@ sample_code
 	move.l	d6,d0
 .nks4	lsr.l	#1,d0
 	movem.l	(a3),a0/a1
-	bsr.w	playblock
-	bsr.w	wait
-	bne.w	quit
+	bsr	playblock
+	bsr	wait
+	bne	quit
 
 	clr.l	samplefollow(a5)
 	move.l	(a3),samplepointer(a5)
@@ -2312,11 +2313,11 @@ sample_code
 	movem.l	d0/d1/d2/d3,(a3)
 
 	cmp.l	samplebufsiz(a5),d6
-	beq.w	.loops
+	beq	.loops
 
-	bsr.w	wait
-	bsr.w	songoverr
-	bra.w	.iffs
+	bsr	wait
+	bsr	songoverr
+	bra	.iffs
 
 
 ************* WAV / AIFF
@@ -2328,13 +2329,13 @@ sample_code
 	moveq	#0,d5
 
 .wow	tst.b	samplestereo(a5)
-	bne.w	.wavs
+	bne	.wavs
 
 
 ******** AHI AIFF/WAV mono
 
 	tst.b	ahi(a5)
-	beq.w	.wl
+	beq	.wl
 
 
 	move.l	samplework(a5),a4
@@ -2352,12 +2353,12 @@ sample_code
 ;	moveq	#-1,d3
 ;	lore	Dos,Seek
 ;.yi1
-	bsr.w	mp_start
+	bsr	mp_start
 
 .loopahi2
 
-	bsr.w	.wavread
-	beq.w	quit
+	bsr	.wavread
+	beq	quit
 
 	movem.l	(a3),a0/a1	
 	move.l	a4,a2
@@ -2413,24 +2414,24 @@ sample_code
 
 .ahacm
 
-	bsr.w	ahiunhalt
+	bsr	ahiunhalt
 
-	bsr.w	ahiplay
+	bsr	ahiplay
 
-	bsr.w	wait
-	bne.w	quit
+	bsr	wait
+	bne	quit
 
-	bsr.w	ahiswap
+	bsr	ahiswap
 
 	cmp.l	samplebufsiz(a5),d6
-	beq.w	.loopahi2
+	beq	.loopahi2
 
-	bsr.w	wait
-	bsr.w	songoverr
+	bsr	wait
+	bsr	songoverr
 
-	bsr.w	ahihalt
+	bsr	ahihalt
 	
-	bra.w	.llpopo2
+	bra	.llpopo2
 
 
 
@@ -2441,7 +2442,7 @@ sample_code
 .wl
 	DPRINT	"AIFF WAV/MONO"
 
-	bsr.w	clrsamplebuf
+	bsr	clrsamplebuf
 
 	lea	samplebuffer(a5),a3
 
@@ -2457,12 +2458,12 @@ sample_code
 ;	moveq	#-1,d3
 ;	lore	Dos,Seek
 ;.yi2
-	bsr.w	mp_start
+	bsr	mp_start
 
 .loopw
 
-	bsr.w	.wavread
-	beq.w	quit
+	bsr	.wavread
+	beq	quit
 
 	tst.b	samplecyberset(a5)
 	bne.b	.14bitmono
@@ -2474,14 +2475,14 @@ sample_code
 .nkw0
 	move.l	d6,d0
 	move.l	a4,a0
-	bsr.w	.convert_mono
+	bsr	.convert_mono
 
 	tst.b	kutistus(a5)
 	beq.b	.nkw1
 		move.l	(a3),a1		* kohde
 		move.l	samplework2(a5),a0 * lähde
 		move.l	d6,d2		* pituus
-		bsr.w	truncate	* kutistetaan, uusi pituus = d0
+		bsr	truncate	* kutistetaan, uusi pituus = d0
 		bra.b	.nkw3
 .nkw1
 
@@ -2489,9 +2490,9 @@ sample_code
 .nkw3	lsr.l	#1,d0
 	move.l	(a3),a0
 	move.l	(a3),a1
-	bsr.w	playblock
-	bsr.w	wait
-	bne.w	quit
+	bsr	playblock
+	bsr	wait
+	bne	quit
 
 	clr.l	samplefollow(a5)
 	move.l	(a3),samplepointer(a5)
@@ -2500,7 +2501,7 @@ sample_code
 	exg	d0,d1
 	movem.l	d0/d1,(a3)
 
-	bra.w	.oba
+	bra	.oba
 
 
 .14bitmono
@@ -2519,7 +2520,7 @@ sample_code
 .g0
 
 	push	a6
-	bsr.w	.convert_mono_14bit
+	bsr	.convert_mono_14bit
 	pop	a6
 
 	tst.b	kutistus(a5)
@@ -2527,11 +2528,11 @@ sample_code
 		move.l	(a3),a1			* kohde
 		move.l	samplework2(a5),a0 	* lähde
 		move.l	d6,d2			* pituus
-		bsr.w	truncate		* kutistetaan, uusi pituus = d0
+		bsr	truncate		* kutistetaan, uusi pituus = d0
 
 		move.l	8(a3),a1		* kohde
 		add.l	samplebufsiz(a5),a0
-		bsr.w	truncate		* kutistetaan, uusi pituus = d0
+		bsr	truncate		* kutistetaan, uusi pituus = d0
 		bra.b	.g2
 .g1
 	
@@ -2543,11 +2544,11 @@ sample_code
 	move.l	8(a3),a2
 	push	a3
 	move.l	a2,a3
-	bsr.w	playblock_14bit
+	bsr	playblock_14bit
 	pop	a3
 	
-	bsr.w	wait
-	bne.w	quit
+	bsr	wait
+	bne	quit
 
 	clr.l	samplefollow(a5)
 	move.l	8(a3),samplepointer(a5)
@@ -2567,11 +2568,11 @@ sample_code
 .oba
 
 	cmp.l	samplebufsiz(a5),d6
-	beq.w	.loopw
+	beq	.loopw
 
-	bsr.w	wait
-	bsr.w	songoverr
-	bra.w	.wl
+	bsr	wait
+	bsr	songoverr
+	bra	.wl
 	
 .wavread	
 	move.l	a4,d2
@@ -2586,12 +2587,12 @@ sample_code
 	tst	mplippu(a5)
 	beq.b	.em1
 	lsr.l	#1,d3
-	bsr.w	read_mp_mono
+	bsr	read_mp_mono
 	add.l	d0,d0
 	bra.b	.emm1
 .em1
 	lea	fh1(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 
 .emm1
 	move.l	d0,d6
@@ -2668,7 +2669,7 @@ sample_code
 	moveq	#0,d1
 
 	tst	d5
-	bne.w	.aiffc14
+	bne	.aiffc14
 
 	tst.b	cpu(a5)
 	bne.b	.w214_020
@@ -2727,7 +2728,7 @@ sample_code
 
 .wavs	
 	tst.b	ahi(a5)
-	beq.w	.noah
+	beq	.noah
 
 
 **** AHI, AIFF/WAV stereo
@@ -2747,12 +2748,12 @@ sample_code
 ;	moveq	#-1,d3
 ;	lore	Dos,Seek
 .yi3
-	bsr.w	mp_start
+	bsr	mp_start
 
 .loopahi1
 
-	bsr.w	wavread2
-	beq.w	quit
+	bsr	wavread2
+	beq	quit
 
 	movem.l	(a3),a0/a1	
 	move.l	a4,a2
@@ -2810,24 +2811,24 @@ sample_code
 
 .ahac
 
-	bsr.w	ahiunhalt
+	bsr	ahiunhalt
 
-	bsr.w	ahiplay
+	bsr	ahiplay
 
-	bsr.w	wait
-	bne.w	quit
+	bsr	wait
+	bne	quit
 
-	bsr.w	ahiswap
+	bsr	ahiswap
 
 	cmp.l	samplebufsiz(a5),d6
-	beq.w	.loopahi1
+	beq	.loopahi1
 
-	bsr.w	wait
-	bsr.w	songoverr
+	bsr	wait
+	bsr	songoverr
 
-	bsr.w	ahihalt
+	bsr	ahihalt
 	
-	bra.w	.llpopo
+	bra	.llpopo
 
 ************************
 .noah
@@ -2844,7 +2845,7 @@ sample_code
 .wl2
 
  
-	bsr.w	clrsamplebuf
+	bsr	clrsamplebuf
 
 	move.l	samplework(a5),a4
 	lea	samplebuffer(a5),a3
@@ -2856,7 +2857,7 @@ sample_code
 ;	moveq	#-1,d3
 ;	lore	Dos,Seek
 ;.yi4	
-	bsr.w	mp_start
+	bsr	mp_start
 
 	clr.l	samplefollow(a5)
 	move.l	8(a3),samplepointer(a5)
@@ -2864,8 +2865,8 @@ sample_code
 
 .loopw2
 	
-	bsr.w	wavread2
-	beq.w	quit
+	bsr	wavread2
+	beq	quit
 
 	tst.b	samplecyberset(a5)
 	bne.b	.14bit0
@@ -2881,27 +2882,27 @@ sample_code
 
 	move.l	d6,d0
 	move.l	a4,a0
-	bsr.w	convert_stereo
+	bsr	convert_stereo
 
 	tst.b	kutistus(a5)
 	beq.b	.h1
 		move.l	(a3),a1			* kohde
 		move.l	samplework2(a5),a0 	* lähde
 		move.l	d6,d2			* pituus
-		bsr.w	truncate		* kutistetaan, uusi pituus = d0
+		bsr	truncate		* kutistetaan, uusi pituus = d0
 
 		move.l	4(a3),a1		* kohde
 		add.l	samplebufsiz(a5),a0
-		bsr.w	truncate		* kutistetaan, uusi pituus = d0
+		bsr	truncate		* kutistetaan, uusi pituus = d0
 		bra.b	.h2
 .h1
 
 	move.l	d6,d0
 .h2	lsr.l	#1,d0
 	movem.l	(a3),a0/a1
-	bsr.w	playblock
-	bsr.w	wait
-	bne.w	quit
+	bsr	playblock
+	bsr	wait
+	bne	quit
 
 	clr.l	samplefollow(a5)
 	move.l	(a3),samplepointer(a5)
@@ -2911,7 +2912,7 @@ sample_code
 	exg	d0,d2
 	exg	d1,d3
 	movem.l	d0/d1/d2/d3,(a3)
-	bra.w	.loh
+	bra	.loh
 
 .14bit0
 
@@ -2933,7 +2934,7 @@ sample_code
 		add.l	samplebufsiz(a5),a4
 .j0
     DPRINT  "convert stereo 14bit"
-	bsr.w	convert_stereo_14bit
+	bsr	convert_stereo_14bit
 
 	movem.l	(sp),a3/a4/a6
 
@@ -2943,19 +2944,19 @@ sample_code
 		move.l	(a3),a1			* kohde
 		move.l	samplework2(a5),a0 	* lähde
 		move.l	d6,d2			* pituus
-		bsr.w	truncate		* kutistetaan, uusi pituus = d0
+		bsr	truncate		* kutistetaan, uusi pituus = d0
 
 		move.l	4(a3),a1		* kohde
 		add.l	samplebufsiz(a5),a0
-		bsr.w	truncate		* kutistetaan, uusi pituus = d0
+		bsr	truncate		* kutistetaan, uusi pituus = d0
 
 		move.l	16(a3),a1		* kohde
 		add.l	samplebufsiz(a5),a0
-		bsr.w	truncate		* kutistetaan, uusi pituus = d0
+		bsr	truncate		* kutistetaan, uusi pituus = d0
 
 		move.l	20(a3),a1		* kohde
 		add.l	samplebufsiz(a5),a0
-		bsr.w	truncate		* kutistetaan, uusi pituus = d0
+		bsr	truncate		* kutistetaan, uusi pituus = d0
 		bra.b	.j2
 .j1
 
@@ -2963,12 +2964,12 @@ sample_code
 .j2	lsr.l	#1,d0
 	movem.l	(a3),a0/a1
 	movem.l	16(a3),a2/a3
-	bsr.w	playblock_14bit
+	bsr	playblock_14bit
 
 	popm	a3/a4/a6
 	
-	bsr.w	wait
-	bne.w	quit
+	bsr	wait
+	bne	quit
 
 	clr.l	samplefollow(a5)
 	move.l	16(a3),samplepointer(a5)
@@ -2988,12 +2989,12 @@ sample_code
 .loh
 	
 	cmp.l	samplebufsiz(a5),d6
-	beq.w	.loopw2
+	beq	.loopw2
 
-	bsr.w	wait
-	bsr.w	songoverr
+	bsr	wait
+	bsr	songoverr
     * Start from the beginning?
-	bra.w	.wl2
+	bra	.wl2
 	
 
 	
@@ -3012,12 +3013,12 @@ wavread2
 	tst	mplippu(a5)
 	beq.b	.em2
 	lsr.l	#2,d3
-	bsr.w	read_mp_stereo
+	bsr	read_mp_stereo
 	lsl.l	#2,d0
 	bra.b	.emm2
 .em2
 	lea	fh1(a5),a0
-	bsr.w	_xread
+	bsr	_xread
 
 .emm2
 	move.l	d0,d6
@@ -3114,10 +3115,10 @@ convert_stereo_14bit
 	moveq	#0,d1
 
 	tst	d5
-	bne.w	.aiffc214
+	bne	.aiffc214
 
 	tst.b	cpu(a5)
-	bne.w	.w1214_020
+	bne	.w1214_020
 .w1214
  rept 4
 	moveq	#0,d1
@@ -3219,12 +3220,12 @@ convert_stereo_14bit
 decodeMp3
 .wl2
     DPRINT  "mp3 loop"
-	bsr.w	clrsamplebuf
+	bsr	clrsamplebuf
 
 	move.l	samplework(a5),a4
 	lea	samplebuffer(a5),a3
 
-	bsr.w	mp_start
+	bsr	mp_start
 
 	clr.l	samplefollow(a5)
 	move.l	8(a3),samplepointer(a5)
@@ -3303,7 +3304,7 @@ decodeMp3
 	lsl.l	#2,d0
 	move.l	d0,d6
 	lsr.l	#2,d6
-;	beq.w	quit
+;	beq	quit
     bne     .gotData
     DPRINT  "no more data!"
     bsr     songoverr
@@ -3390,12 +3391,12 @@ decodeMp3
 .j2	lsr.l	#1,d0
 	movem.l	(a3),a0/a1
 	movem.l	16(a3),a2/a3
-	bsr.w	playblock_14bit
+	bsr	playblock_14bit
 
 	popm	a3/a4/a6
 	
-	bsr.w	wait
-	bne.w	quit
+	bsr	wait
+	bne	quit
 
 	clr.l	samplefollow(a5)
 	move.l	16(a3),samplepointer(a5)
@@ -3421,12 +3422,12 @@ decodeMp3
 ; endif
 
 	cmp.l	samplebufsiz(a5),d6
-	beq.w	.loopw2
+	beq	.loopw2
 
-	bsr.w	wait
-	bsr.w	songoverr
+	bsr	wait
+	bsr	songoverr
     * Start from the beginning?
-	bra.w	.wl2
+	bra	.wl2
 	
 
 ; -----------------
@@ -3437,7 +3438,7 @@ quit:
 	bsr.b	wait
     ;bsr     mp_stop_streaming
 quit2:	
-	bsr.w	sampleiik
+	bsr	sampleiik
 	lore	Exec,Forbid
 	clr	sample_prosessi(a5)
 	clr.b	killsample(a5)
@@ -3460,7 +3461,7 @@ wait:
 	tst.b	ahi(a5)
 	beq.b	.screw
     * Stop pause AHI
-	bsr.w	ahi_stopsound
+	bsr	ahi_stopsound
 	bra.b	.screa
 .screw
     * Stop/pause Paula
@@ -3476,7 +3477,7 @@ wait:
 	beq.b	.screw2
 
     * Continue AHI sound 
-    bsr.w	ahi_enablesound
+    bsr	ahi_enablesound
 
 	tst.b	ahitrigger(a5)
 	beq.b	wait
@@ -3760,10 +3761,10 @@ truncate:
 	movem.l	d0/d1,-(sp)
     * mul target frequency by source length
 	move.l	d2,d0
-	bsr.w	mulu_32
+	bsr	mulu_32
 	move.l	(sp),d1
     * divide result by source frequency
-	bsr.w	divu_32
+	bsr	divu_32
 	move.l	d0,d7	
 	move.l	d7,d6			* kohdepituus
 	movem.l	(sp)+,d0/d1
@@ -3819,11 +3820,11 @@ closesample
 	bne.b	.c
 
 	lea	fh1(a5),a0
-	bsr.w	_xclose
+	bsr	_xclose
 	lea	fh2(a5),a0
-	bsr.w	_xclose
+	bsr	_xclose
 
-.c	bsr.w	mp_close
+.c	bsr	mp_close
 
 
 
@@ -4054,7 +4055,7 @@ initsamplecyber
 
 	move.l	#$20000,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,samplecyber(a5)
 	beq.b	.nocy
 
@@ -4373,7 +4374,7 @@ _xopen
 ;	move.l	(loadallvec,pc),a0
 ;	cmp.l	#"XPKF",(a0)
 ;	beq.b	.xla
-;	bra.w	.end_ok
+;	bra	.end_ok
 ;.notloadall
 
 	move.l	(mfh_filename,a5),d1
@@ -4385,7 +4386,7 @@ _xopen
 	move.l	d0,(a5)
 	bne.b	.open_ok
 	moveq	#-1,d0			;-1=DOS_OPEN_ERROR
-	bra.w	.exit
+	bra	.exit
 .open_ok
 	move.l	d0,d1
 	lea	(.xpkf_test,pc),a0
@@ -4440,7 +4441,7 @@ _xopen
 	move.l	d0,(mfh_xbuffsize,a5)
 	add.l	#XPK_MARGIN,d0
 	moveq	#0,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,(mfh_xbuff,a5)
 	bne.b	.end_ok
 	moveq	#-4,d0			;-4=MEM_ERROR
@@ -4611,9 +4612,9 @@ _xseek
 	beq.b	.eof
 	bgt.b	.seek_loop
 	move.l	d0,(xpk_error)
-	bra.w	.exit
+	bra	.exit
 .eof	moveq	#-1,d0			;ERROR (EOF)
-	bra.w	.exit
+	bra	.exit
 
 
 
@@ -4643,7 +4644,7 @@ _xclose
 	beq.b	.no_xbuff
 	clr.l	(a0)
 	move.l	d0,a0
-	bsr.w	freemem
+	bsr	freemem
 .no_xbuff
 	movem.l	(a7)+,d1-a6
 	rts
@@ -5013,7 +5014,7 @@ appendWithWrap:
 .endLin
 	moveq	#-1,d0
 .endLine
-	bsr.w	.putLineChange
+	bsr	.putLineChange
 	tst	d0
 	rts
 
