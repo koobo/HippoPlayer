@@ -1418,6 +1418,9 @@ fileBoxTopEdge			rs.w	1
 streamerTask            rs.l    1
 * Pointer to the url to stream
 streamerUrl             rs.l    1
+* Pointer to streamer error data, aget output 
+streamerError           rs.l    1
+streamerErrorLength     rs.l    1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -8070,14 +8073,14 @@ umph
 	move	d0,-(sp)
 .hm1
 	DPRINT	"Replay end"
-
+    pushm    d6/d7          * preserve double buffering flag
 	bsr	obtainModuleData
 	bsr	halt			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
 	bsr	releaseModuleData
 	bsr	freemodule	
-
+    popm    d6/d7
 	tst	d6
 	bne.b	.hm2
 	move	(sp)+,mainvolume(a5)
@@ -10213,13 +10216,12 @@ rbutton1
 	bsr	fadevolumedown
 	move	d0,-(sp)
 	DPRINT	"Replay end"
-
-	;lore	Exec,Disable
+    push    d7          * save this!
 	bsr	halt			* Vapautetaan se jos on
-	;lore 	Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
 	bsr	freemodule	
+    pop     d7
 	move	(sp)+,mainvolume(a5)
 .nomod
 
@@ -40197,6 +40199,8 @@ p_sample:
     popm    d0-d7/a1-a6
     bne.b   .streamOk
     * Exiting, align stack to avoid mayhem
+    DPRINT  "startStreaming failed" 
+    bsr     showStreamerError
     moveq   #-1,d0
 	add	#14,sp
 	popm	a5/a6
@@ -50774,43 +50778,17 @@ fetchRemoteFile:
     move.l  a4,a0
     jsr     freemem
 
-	* Check out status from the output file
-	lea		.agetOut(pc),a0
-	bsr		plainLoadFile
-	tst.l	d0
-	beq.b	.exit
-	tst.l	d1
-	beq.b	.1
-	* Mangle a null terminated line changed error msg, horrible
-	lea		-200(sp),sp
-	move.l	sp,a1
-	move.l	d0,a0
-	moveq	#60,d2
-.e	move.b	(a0)+,(a1)+
-	subq	#1,d2
-	bne.b	.f
-	move.b	#10,(a1)+
-	moveq	#60,d2
-.f	subq	#1,d1
-	bne.b	.e
-	clr.b	(a1)
-	move.l	sp,a1
-	jsr		request
-	lea		200(sp),sp
-	* Status to fail
-	moveq	#0,d7
-.1	move.l	d0,a0
-	jsr		freemem
+    * See if there was an error message
+    bsr     showStreamerError
+    tst.l   d0
+    beq     .exit
+    * status: error 
+    moveq   #0,d7
 .exit
 	jsr		clearMainWindowWaitPointer
 	move.l	d7,d0
 	popm	d1-a6
 	rts
-
-.agetOut
-	dc.b	"T:agetout",0
-
- even
 
 * Checks if UHC is installed
 initializeUHC
@@ -51238,6 +51216,10 @@ streamPipeFile  dc.b    "PIPE:hippoStream",0
 *   d0 = true, or false if error
 startStreaming:
     pushm   d1-d7/a1-a6
+ if DEBUG
+    move.l  streamerTask(a5),d0
+    DPRINT  "startStreaming task=%lx"
+ endif
     moveq   #0,d0
     tst.l   streamerTask(a5)
     bne     .x
@@ -51265,17 +51247,16 @@ startStreaming:
     lore    Exec,SetSignal
 
     * Capture aget output into a file
-    pushpea .output(pc),d1
+    pushpea agetOutputFile(pc),d1
     move.l  #MODE_NEWFILE,d2
     lore    Dos,Open
-    DPRINT  "output open=%lx"
-    move.l  d0,.outputHandle
+    DPRINT  "aget output open=%lx"
+    move.l  d0,streamerProcessOutputHandle
     beq     .x
 
-    pushpea .tags(pc),d1
-    lore    Dos,CreateNewProc
+    pushpea streamerProcessTags(pc),d1
+    lob     CreateNewProc
     DPRINT  "CreateNewProc=%lx"
-    tst.l   d0
     beq     .error
 
     DPRINT  "waiting for streamer start"
@@ -51290,18 +51271,49 @@ startStreaming:
     bra     .error
 .ok
 
+
+    * Wait here until things are looking good
+    DPRINT  "verify stream"
+.verifyLoop
+    moveq   #1*25,d1
+    lore    Dos,Delay
+
+    * Test #1: Is it running anymore?
+    tst.l   streamerTask(a5)
+    bne     .runs
+    * Nope, is there an error? 
+    tst.l   streamerError(a5)
+    beq     .done
+    * There was, stop here
+    DPRINT  "streamer erroneus stop!"
+    moveq   #0,d0
+    bra     .x
+.runs  
+
+    * Test #2: is there some output in the stdout?
+    * There should be either progress info or an error msg.
+    move.l  streamerProcessOutputHandle(pc),d1
+	moveq	#0,d2
+	moveq	#OFFSET_CURRENT,d3
+    lob     Seek
+    DPRINT  "Seek=%ld"
+    tst.l   d0
+    bne     .outputWritten
+    bra     .verifyLoop
+
+.outputWritten
+.done
+
     DPRINT  "streamer started"
     lea     streamPipeFile(pc),a0
     moveq   #1,d0
 .x
-
-
     popm    d1-d7/a1-a6
     rts
 
 .error
     DPRINT  "error!"
-    move.l  .outputHandle(pc),d1
+    move.l  streamerProcessOutputHandle(pc),d1
     beq.b   .er
     lore    Dos,Close
 .er
@@ -51313,22 +51325,29 @@ startStreaming:
     moveq   #0,d0
     bra     .x
 
-.tags
-    dc.l    NP_Entry,streamerTaskEntry
-    dc.l    NP_Name,.name
-    * By default output handle is closed by CreateNewProc
+streamerProcessTags
+    dc.l    NP_Entry,streamerEntry
     dc.l    NP_Output
-.outputHandle
+streamerProcessOutputHandle
     dc.l    0
+    * By default output handle is closed by CreateNewProc
+    * Close it ourselves
+    dc.l    NP_CloseOutput,0
+    dc.l    NP_Name,.name
     dc.l    TAG_END
 
 .name   
     dc.b    "HiP-streamer",0
-.output
+agetOutputFile
     dc.b    "T:agetout",0
     even
 
-streamerTaskEntry:
+*
+*
+* Streamer process
+*
+*
+streamerEntry:
 
     rsreset
 .uhcPathFormatted   rs.b    50
@@ -51345,6 +51364,8 @@ streamerTaskEntry:
     lore    Exec,FindTask
     move.l  d0,streamerTask(a5)
   
+    bsr     freeStreamerError
+
     pushpea .envVarName(pc),d1     * variable name
     pushpea .uhcPathFormatted(a4),d2     * output buffer
     moveq   #50-1,d3            * space available
@@ -51364,7 +51385,7 @@ streamerTaskEntry:
     DPRINT  "s:cmd=%s"
 
     pushpea .agetCmdFormatted(a4),d1
-    lore    Dos,LoadSeg
+    lob     LoadSeg
     move.l  d0,d6
     beq     .error
     DPRINT  "s:LoadSeg=%lx"
@@ -51395,26 +51416,55 @@ streamerTaskEntry:
     move.l  d4,d0
     DPRINT  "s:len=%ld"
  endif
-
     bsr     .notify
 
     move.l  d6,d1       * seglist
     move.l  #4096,d2    * stack size
     pushpea .agetArgsFormatted(a4),d3 * argptr
                           * d4 = arg size
-    lore    Dos,RunCommand
-    DPRINT  "s:runCommand=%lx"
-    
+    lob     RunCommand
+    * aget return code in d0, 0 = OK
+    move.l  d0,d5
+    DPRINT  "s:runCommand=%ld (0=OK)"
+
     move.l  d6,d1
     beq.b   .a
-    lore    Dos,UnLoadSeg
+    lob     UnLoadSeg
 .a
 
 .exit
+
+    * Manual closing of the output file handle, so it can be read below.
+    lea     streamerProcessOutputHandle(pc),a0
+    move.l  (a0),d1
+    clr.l   (a0)
+    lob     Close
+
+    * Check aget output for errors.
+    moveq   #0,d7
+    tst.l   d5
+    beq     .t
+
+    * Read the file
+	lea		agetOutputFile(pc),a0
+	bsr		plainLoadFile
+    DPRINT  "s:aget message grabbed, addr=%lx len=%ld"
+    move.l  d1,streamerErrorLength(a5)
+    move.l  d0,d7
+	beq.b	.t
+    tst.l   d1
+    bne     .t
+    * It shoud never be empty, free it and quit
+    move.l  d7,a0
+    jsr     freemem
+    moveq   #0,d7
+.t
+
     DPRINT  "s:streamer task stopped"
 
     lea     .varsSize(sp),sp
     lore    Exec,Forbid
+    move.l  d7,streamerError(a5)
     clr.l   streamerTask(a5)
     rts
 
@@ -51438,26 +51488,46 @@ streamerTaskEntry:
     dc.b	'%sC/aget',0
 
 .args
-	dc.b	'"%s" PIPE:hippoStream/65536/2 QUIET',0
-ven
+	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS',0
+ even
+
+
+freeStreamerError:
+    * Free previous aget error if any
+    move.l  streamerError(a5),a0
+    clr.l   streamerError(a5)
+    jsr     freemem
+    rts
 
 stopStreaming:
-    tst.l   streamerTask(a5)
-    beq    .1
-    DPRINT  "stop streaming"
-	jsr	setMainWindowWaitPointer
+  if DEBUG
+    move.l streamerTask(a5),d0
+    DPRINT  "stopStreaming, task=%lx"
+  endif
 
+    moveq   #0,d7
+    lore    Exec,Forbid
+    tst.l   streamerTask(a5)
+    bne     .3
+    lob     Permit
+    DPRINT  "task not running"
+    bra     .4
+.3
     move.l  streamerTask(a5),a1
     move.l  #SIGBREAKF_CTRL_C,d0
-    lore    Exec,Signal 
+    lob     Signal 
  
+    lob     Permit
+
     DPRINT  "signal sent"
+	jsr	setMainWindowWaitPointer
 
     move.l  #streamPipeFile,d1
     move.l  #MODE_OLDFILE,d2
     lore    Dos,Open
     DPRINT  "flushing pipe=%lx"
     move.l  d0,d7
+    beq     .1  
 
     * Wait until read fails, this indicates
     * the sender has reacted to CTRL_C
@@ -51465,23 +51535,24 @@ stopStreaming:
     moveq   #0,d5
     moveq   #0,d4
 .loop   
+    tst.l   streamerTask(a5)
+    beq     .continue
     tst.l   d5
     bmi.b   .skip
     move.l  d7,d1
     lore    Dos,FGetC
     addq.l  #1,d6
     move.l  d0,d5
-    bra     .cont
+    bra     .loop
 .skip  
     moveq   #1,d1
     lore    Dos,Delay
     addq.l  #1,d4
     cmp.l   #10*50,d4
     bhs     .jammed
-.cont   
-    tst.l   streamerTask(a5)
-    bne.b   .loop
-
+    bra     .loop
+.continue   
+    
  if DEBUG
     move.l  d6,d0
     move.l  d5,d1
@@ -51495,12 +51566,53 @@ stopStreaming:
 .2
     DPRINT  "streaming stopped"
     jsr	clearMainWindowWaitPointer
+.4
     rts
 
 .jammed
     DPRINT  "streamer stop timeout! abandoning task"
     clr.l   streamerTask(a5)
     bra     .1
+
+
+* Display streamer error and free it
+* Out:
+*   d0 = true: error was shown, false: no error
+showStreamerError:
+    pushm   d1-a6
+    move.l  streamerError(a5),d0
+	tst.l	d0
+	beq.b	.exit
+    move.l  streamerErrorLength(a5),d7 
+    beq     .exit
+	* Mangle a null terminated line changed error msg, horrible
+	lea		-200(sp),sp
+	move.l	sp,a1
+	move.l	d0,a0
+    move    #200-1,d6   * total allowed length
+
+.f	moveq	#60,d2      * row length
+.e	move.b	(a0)+,(a1)+
+    subq    #1,d6
+    beq     .g
+    subq    #1,d7
+    beq     .g
+	subq	#1,d2
+	bne.b	.e
+	move.b	#10,(a1)+
+    bra     .f
+    
+.g	clr.b	(a1)
+	move.l	sp,a1
+	jsr		request
+	lea		200(sp),sp
+
+	bsr     freeStreamerError
+	* Status: error shown
+	moveq	#1,d0
+.exit
+    popm    d1-a6
+    rts
 
 ***************************************************************************
 *

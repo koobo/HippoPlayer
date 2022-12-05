@@ -4658,28 +4658,38 @@ _xclose
 *   d0 = file handle when it is a stream
 mpega_skip_id3v2_stream
     pushm   all
+    DPRINT  "mpega_skip_id3v2_stream, handle=%lx"
 	move.l	d0,d6
 
     move.l  id3v2Data(a5),a0
     clr.l   id3v2Data(a5)
     bsr     freemem
 
+	* Read total 10 bytes, the size of the ID3v2 header 
 	lea	findSyncBuffer(pc),a3
 	move.l	d6,d1
 	move.l	a3,d2
-	* Read 10 bytes, the size of the ID3v2 header
-	moveq	#10,d3
+	moveq	#3,d3
 	move.l	_DosBase(a5),a6
-	lob	Read
+	lob	    Read
+    DPRINT  "read=%ld"
 	tst.l	d0
 	beq 	.mpega_skip_exit_stream
 
-	* Is it a ID3v2 header?
-	move.l	(a3),d0
-	lsr.l	#8,d0
-	cmp.l	#"ID3",d0
+    move.l  (a3),d0
+    lsr.l   #8,d0
+    cmp.l   #"ID3",d0
 	bne 	.mpega_skip_exit_stream
 
+	move.l	d6,d1
+	move.l	a3,d2
+    addq.l  #3,d2
+	moveq	#7,d3
+	lob	    Read
+    DPRINT  "read=%ld"
+	tst.l	d0
+	beq 	.mpega_skip_exit_stream
+    
 	* Get size, synchsafe integer, 4x 7-bit bytes
     lea     6(a3),a0
     bsr     get_syncsafe_integer
