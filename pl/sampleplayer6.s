@@ -411,7 +411,7 @@ endSamplePlay:
 	lore	Dos,Close
 .noDbg
  endif
-
+    DPRINT  "sample playing ended"
 	popm	all
 	rts
 	
@@ -4693,7 +4693,7 @@ mpega_skip_id3v2_stream
 	* Get size, synchsafe integer, 4x 7-bit bytes
     lea     6(a3),a0
     bsr     get_syncsafe_integer
-    DPRINT  "ID3 header length=%ld"
+    DPRINT  "ID3vX data found, size=%ld"
     move.l  d0,d3
     beq.b   .mpega_skip_exit_stream
 
@@ -4723,9 +4723,12 @@ mpega_skip_id3v2_stream
     bne.b   .skipLoop
    
 .skipError
- if DEBUG   
+ if DEBUG  
+    tst.l   d3
+    beq     .y
     move.l  d3,d0
     DPRINT  "Not skipped: %ld"
+.y
  endif
 .mpega_skip_exit_stream
     popm    all
