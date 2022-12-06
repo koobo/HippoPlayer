@@ -40267,16 +40267,26 @@ p_sample:
 
 .xx
 	tst	d0
-	bne.b	.x
+	bne 	.x
 
-	bsr.b	.vol
-	moveq	#0,d0
-.x	rts
+	bsr 	.vol
+    DPRINT  "sample init ok"
+ 	moveq	#0,d0
+    rts
+
+.x	
+    DPRINT  "sample init failed %ld"
+    push    d0
+    bsr     stopStreaming
+    pop     d0
+    rts
 
 .end	
     DPRINT  "sample end"
+    jsr     setMainWindowWaitPointer
     move.l	sampleroutines(a5),a0
 	jsr 	.s_end(a0)
+    jsr     clearMainWindowWaitPointer
     bra     stopStreaming
 
 .dostop	
