@@ -51539,50 +51539,61 @@ stopStreaming:
  
     lob     Permit
 
-    DPRINT  "signal sent"
+    DPRINT  "ctrl+c sent"
 	jsr	setMainWindowWaitPointer
+
+    move.l  _DosBase(a5),a6
+    moveq   #0,d7
+    moveq   #-1,d5  * FGetC return code
+
+    * 3.1.4 and 3.2 do not need pipe flushing
+    cmp.w   #46,LIB_VERSION(a6)
+    bhs.b   .314_32
 
     move.l  #streamPipeFile,d1
     move.l  #MODE_OLDFILE,d2
-    lore    Dos,Open
+    lob     Open
     DPRINT  "flushing pipe=%lx"
     move.l  d0,d7
     beq     .1  
 
+    moveq   #0,d5  * FGetC return code
+.314_32
+
     * Wait until read fails, this indicates
     * the sender has reacted to CTRL_C
-    moveq   #0,d6
-    moveq   #0,d5
-    moveq   #0,d4
+    moveq   #0,d6   * num of FGetC calls
+    moveq   #0,d4   * num of Delay calls
 .loop   
     tst.l   streamerTask(a5)
     beq     .continue
     tst.l   d5
     bmi.b   .skip
     move.l  d7,d1
-    lore    Dos,FGetC
+    lob     FGetC
     addq.l  #1,d6
     move.l  d0,d5
     bra     .loop
 .skip  
-    moveq   #1,d1
-    lore    Dos,Delay
+    DPRINT  "wait"
+    moveq   #50*1,d1
+    lob     Delay
     addq.l  #1,d4
-    cmp.l   #10*50,d4
+    cmp.l   #10,d4
     bhs     .jammed
     bra     .loop
 .continue   
     
  if DEBUG
     move.l  d6,d0
-    move.l  d5,d1
+    move.l  d4,d1
     DPRINT  "task closed, flushed %ld bytes, waited %ld ticks" 
  endif
    
 .1
     move.l  d7,d1
     beq.b   .2
-    lore    Dos,Close
+    lob     Close
 .2
     DPRINT  "streaming stopped"
     jsr	clearMainWindowWaitPointer
