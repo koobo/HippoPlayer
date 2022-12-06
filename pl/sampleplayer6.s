@@ -3429,6 +3429,7 @@ decodeMp3
 	cmp.l	samplebufsiz(a5),d6
 	beq	.loopw2
 
+    DPRINT  "mp3 loop ended"
 	bsr	wait
 	bsr	songoverr
     * Start from the beginning?
@@ -3813,6 +3814,7 @@ truncate:
 	rts	
 
 songoverr:
+    DPRINT  "+++ song end detected! +++"
 	move.l	songover+var_b(pc),a0
 	st	(a0)
 	rts
