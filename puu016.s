@@ -46161,7 +46161,7 @@ loadDeliPlayer:
 	move.l 	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3 
-	bsr	getNameFromLock
+	jsr 	getNameFromLock
 	beq.b 	.err2
 
  if DEBUG
