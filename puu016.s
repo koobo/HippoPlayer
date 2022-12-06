@@ -7409,6 +7409,7 @@ signalreceived
 	DPRINT	"Replay end"
 
 	* Stopping playback 
+    push    d7              * save step index
 	bsr	obtainModuleData
 	clr.b	playing(a5)		* soitto seis
 	move.l	playerbase(a5),a0	* stop module
@@ -7416,6 +7417,7 @@ signalreceived
 	bsr	releaseModuleData
 
 	bsr	freemodule
+    pop     d7
 
 	tst.l	modamount(a5)		* onko modeja?
 	beq	.err
