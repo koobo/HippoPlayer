@@ -22223,6 +22223,7 @@ init_error
 	dr	ier_mlederr_t
 	dr	ier_not_compatible_t
 	dr	ier_eagleplayer_t
+    dr  ier_mpega_t
 
 ier_error	=	-1
 ier_nochannels	=	-2
@@ -22247,8 +22248,8 @@ ier_nomled	=	-20
 ier_mlederr	=	-21
 ier_not_compatible = 	-22
 ier_eagleplayer	= 	-23
+ier_mpega       =   -24
 
-;hardware_t
 ier_playererr_t
 ier_error_t
 	dc.b	"Init error!?",0
@@ -22283,6 +22284,8 @@ ier_not_compatible_t
 	dc.b	"Unsupported module type!",0
 ier_eagleplayer_t
 	dc.b	"Couldn't load eagleplayer!",0
+ier_mpega_t
+    dc.b    "Couldn't open mpega.library!",0
  even
 
 

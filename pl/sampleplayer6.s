@@ -53,7 +53,7 @@ DPRINT macro
 KUTISTUSTAAJUUS	=	27710
 
 
-ier_error	=	-1
+er_error	=	-1
 ier_nochannels	=	-2
 ier_nociaints	=	-3
 ier_noaudints	=	-4
@@ -72,6 +72,11 @@ ier_grouperror	=	-16
 ier_filerr	=	-17
 ier_hardware	=	-18
 ier_ahi		=	-19
+ier_nomled	=	-20
+ier_mlederr	=	-21
+ier_not_compatible = 	-22
+ier_eagleplayer	= 	-23
+ier_mpega       =   -24
 
 ****************** MPEGA library
 
@@ -816,7 +821,7 @@ init:
 
 *********** MP init
 
-.mpinit
+.mpinit:
 	DPRINT	"MPEGA init"
 
 * mpega stream
@@ -853,7 +858,7 @@ init:
 	move.l	d0,_MPEGABase(a5)
 	bne.b	.uzx
 	DPRINT	"no MPEGA"
-	moveq	#ier_error,d0
+	moveq	#ier_mpega,d0
 	bra	sampleiik
 .uzx
 
