@@ -51379,7 +51379,7 @@ streamerEntry:
     lea     -.varsSize(sp),sp
     move.l  sp,a4
 
-    DPRINT  "s:streamer task start"
+    DPRINT  "stream:task started"
     sub.l   a1,a1
     lore    Exec,FindTask
     move.l  d0,streamerTask(a5)
@@ -51395,20 +51395,20 @@ streamerEntry:
     bmi     .error
     
     pushpea .uhcPathFormatted(a4),d0
-    DPRINT  "s:UHCBIN=%s"
+    DPRINT  "stream:UHCBIN=%s"
 
     lea     .agetCmd(pc),a0
     lea     .agetCmdFormatted(a4),a3
     jsr     desmsg3
 
     pushpea .agetCmdFormatted(a4),d0
-    DPRINT  "s:cmd=%s"
+    DPRINT  "stream:cmd=%s"
 
     pushpea .agetCmdFormatted(a4),d1
     lob     LoadSeg
     move.l  d0,d6
     beq     .error
-    DPRINT  "s:LoadSeg=%lx"
+    DPRINT  "stream:LoadSeg=%lx"
 
     move.l	streamerUrl(a5),d0
     lea     .args(pc),a0
@@ -51432,9 +51432,9 @@ streamerEntry:
 
  ifne DEBUG
     pushpea .agetArgsFormatted(a4),d0
-    DPRINT  "s:args=%s"
+    DPRINT  "stream:args=%s"
     move.l  d4,d0
-    DPRINT  "s:len=%ld"
+    DPRINT  "stream:len=%ld"
  endif
     bsr     .notify
 
@@ -51445,7 +51445,7 @@ streamerEntry:
     lore    Dos,RunCommand
     * aget return code in d0, 0 = OK
     move.l  d0,d5
-    DPRINT  "s:runCommand=%ld (0=OK)"
+    DPRINT  "stream:runCommand=%ld (0=OK)"
 
     move.l  d6,d1
     beq.b   .a
@@ -51468,7 +51468,7 @@ streamerEntry:
     * Read the file
 	lea		agetOutputFile(pc),a0
 	bsr		plainLoadFile
-    DPRINT  "s:aget message grabbed, addr=%lx len=%ld"
+    DPRINT  "stream:aget message grabbed, addr=%lx len=%ld"
     move.l  d1,streamerErrorLength(a5)
     move.l  d0,d7
 	beq.b	.t
@@ -51480,7 +51480,7 @@ streamerEntry:
     moveq   #0,d7
 .t
 
-    DPRINT  "s:streamer task stopped"
+    DPRINT  "stream:task stopped"
 
     lea     .varsSize(sp),sp
     lore    Exec,Forbid
@@ -51496,7 +51496,7 @@ streamerEntry:
     rts
 
 .error
-    DPRINT  "s:streamer start error"
+    DPRINT  "stream:start error"
     lore    Exec,Forbid
     bsr     .notify
     bra     .exit
@@ -51530,7 +51530,7 @@ stopStreaming:
     tst.l   streamerTask(a5)
     bne     .3
     lob     Permit
-    DPRINT  "task not running"
+    DPRINT  "streamer not running"
     bra     .4
 .3
     move.l  streamerTask(a5),a1
