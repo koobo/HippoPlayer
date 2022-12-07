@@ -289,6 +289,7 @@ mainTask        rs.l    1
 mpStreamerTask  rs.l    1
 id3v2Data       rs.l    1
 mpega_sync_position rs.l 1
+streamLength    rs.l    1
 
  if DEBUG
 output			rs.l 	1
@@ -494,10 +495,11 @@ init:
 	rts
 .doInit
 	* Two subroutine calls when getting here, hence 4+4
-	move.b	13+4+4(sp),kutistus(a5)
-	move.l	8+4+4(sp),songover(a5)
-	move.l	4+4+4(sp),colordiv(a5)
-	move.l	4+4(sp),_XPKBase(a5)
+	move.b	13+4+4+4(sp),kutistus(a5)
+	move.l	8+4+4+4(sp),songover(a5)
+	move.l	4+4+4+4(sp),colordiv(a5)
+	move.l	4+4+4(sp),_XPKBase(a5)
+    move.l  4+4(sp),streamLength(a5)
 
 	move.b	d0,samplebufsiz0(a5)
 	move.b	d1,sampleformat(a5)
@@ -916,10 +918,13 @@ init:
 
     moveq   #0,d0
     bsr     isRemoteSample
-    bne     .remote2
+    beq     .notRemote
+    tst.l   streamLength(a5)
+    beq     .noLength
+.notRemote
 	move.l	.ms_duration(a3),d0	* pituus millisekunteina
  	divu	#1000,d0
-.remote2
+.noLength
 	bsr	.moi_mp
 	bsr	.freqcheck
 
@@ -1082,9 +1087,13 @@ init:
     * so that any skipped data is not included
     sub.l   d4,d0 
 	move.l	d0,12(a3) * stream_size
-    DPRINT  "stream size=%ld"
- 
+    DPRINT  "local stream size=%ld"
+    bra     .go
 .cantSeek
+    move.l  streamLength(a5),d0
+    DPRINT  "remote stream size=%ld"
+    move.l  d0,12(a3)
+.go
 	* Return Dos file handle
 	move.l	d7,d0
 .mpega_open_error

@@ -40228,6 +40228,8 @@ p_sample:
 	pea	songover(a5)
 	move.l	colordiv(a5),-(sp)
 	move.l	_XPKBase(a5),-(sp)
+    bsr     streamGetContentLength
+    move.l  d0,-(sp)
 
 	move.b	samplebufsiz0(a5),d0
 	move.b	sampleformat(a5),d1
@@ -40250,7 +40252,7 @@ p_sample:
     DPRINT  "startStreaming failed" 
     bsr     showStreamerError
     moveq   #-1,d0
-	add	#14,sp
+	add     #18,sp
 	popm	a5/a6
     bra     .xx
 .streamOk
@@ -40278,7 +40280,7 @@ p_sample:
 	move.l	sampleroutines(a5),a0
 	jsr	.s_init(a0)
    
-	add	#14,sp
+	add     #18,sp
 
 	popm	a5/a6
 
@@ -51688,7 +51690,7 @@ showStreamerError:
 *    d0 = HTTP headers in ReadArgs format
 *    d1 = length of data
 * Out:
-*    d0 = 
+*    d0 = true if succeeded
 parseAgetHeaders:
     pushm   d1-a6
     DPRINT  "parseAgetHeaders data=%lx len=%ld"
