@@ -208,6 +208,7 @@ check	macro
 	include	dos/dosextens.i
 	include	dos/var.i
 	include	dos/dostags.i
+    include dos/rdargs.i
 
 	include	rexx/rxslib.i
 
@@ -1421,6 +1422,7 @@ streamerUrl             rs.l    1
 * Pointer to streamer error data, aget output 
 streamerError           rs.l    1
 streamerErrorLength     rs.l    1
+streamHeaderArgs        rs.l    1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -6606,7 +6608,7 @@ freemodule:
 	clr.l	tfmxsamplesaddr(a5)
 	clr.l	tfmxsampleslen(a5)
 	clr.b	lod_tfmx(a5)
-
+    jsr     freeStreamHeaderArgs
 	DPRINT	"freemodule release data"
 	bsr	releaseModuleData
 
@@ -27845,11 +27847,11 @@ noteScroller2:
 *  a3 = list node 
 *  d0 = ~0: Use double buffering
 *
-
 loadmodule:
+    DPRINT  "loadmodule"
 	; Popup should close so that window is visible during load
 	bsr	closeTooltipPopup
-	st	loading(a5)
+    st	loading(a5)
 	* Store pointer to the name part. Used
 	* do determine what to show in the infobox, and
 	* also with the PS3M configuration file.
@@ -27858,17 +27860,37 @@ loadmodule:
 	* Check if a remote file
 	beq		.doLoadModule
 
+    * This is a remote file.
+    * Open up a stream.
+    lea     l_filename(a3),a0
+    push    d0
+    jsr     startStreaming
+    move.l  d0,d1
+    pop     d0
+    tst.l   d1
+    bne     .streamOk
+    moveq   #lod_remoteError,d0
+    rts
+.streamOk
+
     * Special case check: remote mp3 files go through as if
     * they were normal files, no remote fetching
+;    pushm   d0/a0
+;    lea     l_filename(a3),a0
+;    bsr     id_mp3filename
+;    tst.l   d0
+;    popm    d0/a0
+;    beq     .doLoadModule
+
     pushm   d0/a0
-    lea     l_filename(a3),a0
-    bsr     id_mp3filename
+    jsr     streamIsMpegAudio
+    DPRINT  "is mpeg=%ld"
     tst.l   d0
     popm    d0/a0
-    beq     .doLoadModule
+    bne     .doLoadModule
 
 	move.b	d0,d6	* doublebuffering flag
-	moveq	#lod_remote,d7	* status: fail
+	moveq	#lod_remoteError,d7	* status: fail
 
 	lea	-200(sp),sp	* space for output path
 	move.l	sp,a1
@@ -28361,11 +28383,14 @@ lod_openerr2	=	-16
 lod_xfderr	=	-17
 lod_extract	=	-18
 lod_loadsegfail = -19
-lod_remote		= -20
+lod_remoteError		= -20
+
 
 * Load file variant 
 * - Skips XPK identification
 * - Loads remote files if url detected
+* Used to load StarTrekker data file.
+* Used by deliplayers to load data files.
 loadfileStraight:
 	cmp.b	#'h',(a0)
 	bne		.local
@@ -28390,7 +28415,7 @@ loadfileStraight:
 	moveq	#0,d7 * status: ok
 	tst.l	d0
 	bne.b	.fetchOk
-	moveq	#lod_remote,d7 * status: fail
+	moveq	#lod_remoteError,d7 * status: fail
 .fetchOk
 	popm	d0/a1
 
@@ -28764,10 +28789,16 @@ loadfile:
     * mp3 shortcut check to allow remote mp3 files to 
     * bypass filesystem operations and allow remote mp3 files. 
     * This loses local file comments too but that's not too bad.
-	move.l	lod_filename(a5),a0
-    bsr     id_mp3filename
-    tst.l   d0
-    beq     .sampleCheck
+;     move.l  lod_filename(a5),a0
+;     bsr     id_mp3filename
+;     tst.l   d0
+;     beq     .sampleCheck
+
+    jsr     streamIsAlive
+    beq     .notRemote
+    jsr     streamIsMpegAudio
+    bne     .sampleCheck
+.notRemote
 
     * Get info on the file
      
@@ -28810,6 +28841,7 @@ loadfile:
 	dbeq	d0,.cece
 	clr.b	(a1)
 .noc
+
 	* Read some bytes of data into the probebuffer
 
 	DPRINT	"Probing"
@@ -28887,7 +28919,7 @@ loadfile:
 .sampleCheck
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
-	bsr	.samplecheck
+	bsr	.dosamplecheck
 	bne.b	.nosa
     DPRINT  "sample detected"
 	st	sampleinit(a5)
@@ -28911,7 +28943,7 @@ loadfile:
 ** file on xpk, katsotaan jos se on sample:
 	lea	probebuffer+16(a5),a0
 	clr.b	sampleinit(a5)
-	bsr	.samplecheck
+	bsr	.dosamplecheck
 	bne.b	.nosa2
 	st	sampleinit(a5)
 	bra	.exit
@@ -29462,7 +29494,7 @@ loadfile:
 	DPRINT	"Read done"
  endc
 
-.exit	
+.exit:
 
 	bsr.b	.closeit
 
@@ -29511,7 +29543,7 @@ loadfile:
  endif	
 	rts
 
-.closeit
+.closeit:
 	move.l	lod_filehandle(a5),d1
 	beq.b	.em
 	move.l	_DosBase(a5),a6
@@ -29545,7 +29577,7 @@ loadfile:
 *   a0 = probebuffer
 * Out:
 *   Z-flag set if recognized
-.samplecheck:
+.dosamplecheck:
     DPRINT  "sample check"
 ** IFF
 	move.b	#SAMPLE_FORMAT_IFF,sampleformat(a5)
@@ -29568,6 +29600,11 @@ loadfile:
 .nosaa
 ** MPEG
 	move.b	#SAMPLE_FORMAT_MP3,sampleformat(a5)
+    jsr     streamIsAlive
+    beq     .noStream
+    jsr     streamIsMpegAudio
+    bne     .mpegaStream
+.noStream
     push    a0
 	move.l	modulefilename(a5),a0
     bsr     id_mp3filename
@@ -29579,6 +29616,10 @@ loadfile:
 	bsr	id_mp3
 
 .sampl	rts
+
+.mpegaStream
+    moveq   #0,d0
+    rts
 	
 
 ** Ladataan PT file fastiin jos ei mahdu chipppppiin
@@ -40236,7 +40277,7 @@ p_sample:
 
 	move.l	sampleroutines(a5),a0
 	jsr	.s_init(a0)
-
+   
 	add	#14,sp
 
 	popm	a5/a6
@@ -50743,6 +50784,7 @@ fetchRemoteFile:
 	jsr		setMainWindowWaitPointer
     pop     a0
 
+    * Streamer could have been started earlier
     * a0 = url
     jsr     startStreaming
     DPRINT  "startStreaming=%lx"
@@ -51227,6 +51269,7 @@ combSortNodeArray
 ***************************************************************************
 
 streamPipeFile  dc.b    "PIPE:hippoStream",0
+agetHeadersFile dc.b    "T:agetheaders",0
     even
 
 * Starts streaming given url into the name pipe using a separate process
@@ -51243,7 +51286,7 @@ startStreaming:
  endif
     moveq   #0,d0
     tst.l   streamerTask(a5)
-    bne     .x
+    bne     .y
     DPRINT  "startStreaming"
  if DEBUG
     move.l  a0,d0
@@ -51298,7 +51341,7 @@ startStreaming:
 .verifyLoop
     moveq   #1*25,d1
     lore    Dos,Delay
-
+    DPRINT  "delay"
     * Test #1: Is it running anymore?
     tst.l   streamerTask(a5)
     bne     .runs
@@ -51324,8 +51367,27 @@ startStreaming:
 
 .outputWritten
 .done
+    lea     agetHeadersFile(pc),a0
+    bsr     plainLoadFile
+    tst.l   d0
+    bne     .gotHeaders
+    DPRINT  "no header data"
+    bra     .error
+.gotHeaders
+    push    d0
+    bsr     parseAgetHeaders
+    pop     a0
+    jsr     freemem
 
-    DPRINT  "streamer started"
+ if DEBUG
+    bsr     streamIsMpegAudio
+    push    d0
+    bsr     streamGetContentLength
+    pop     d1
+    DPRINT  "streamer started! length=%ld mpeg/audio=%ld"
+ endif
+
+.y
     lea     streamPipeFile(pc),a0
     moveq   #1,d0
 .x
@@ -51358,6 +51420,10 @@ agetOutputFile
     dc.b    "T:agetout",0
     even
 
+streamIsAlive:
+    move.l  streamerTask(a5),d0
+    DPRINT  "streamIsAlive %lx"
+    rts
 *
 *
 * Streamer process
@@ -51382,14 +51448,19 @@ streamerEntry:
   
     bsr     freeStreamerError
 
+    * Remove previous headers if any
+    pushpea agetHeadersFile(pc),d1
+    lore    Dos,DeleteFile
+
     pushpea .envVarName(pc),d1     * variable name
     pushpea .uhcPathFormatted(a4),d2     * output buffer
     moveq   #50-1,d3            * space available
     move.l  #GVF_GLOBAL_ONLY,d4 * global variable
-    lore    Dos,GetVar
+    lob     GetVar
     tst.l   d0
     bmi     .error
     
+
     pushpea .uhcPathFormatted(a4),d0
     DPRINT  "stream:UHCBIN=%s"
 
@@ -51407,6 +51478,7 @@ streamerEntry:
     DPRINT  "stream:LoadSeg=%lx"
 
     move.l	streamerUrl(a5),d0
+    pushpea agetHeadersFile(pc),d1
     lea     .args(pc),a0
     lea     .agetArgsFormatted(a4),a3
     jsr     desmsg3
@@ -51446,20 +51518,24 @@ streamerEntry:
     move.l  d6,d1
     beq.b   .a
     lob     UnLoadSeg
+    DPRINT  "stream:UnLoadSeg"
 .a
-
-.exit
 
     * Manual closing of the output file handle, so it can be read below.
     lea     streamerProcessOutputHandle(pc),a0
     move.l  (a0),d1
     clr.l   (a0)
-    lob     Close
+    tst.l    d1
+    beq.b   .b
+    lob      Close
+    DPRINT  "stream:Close agetout"
+.b
 
     * Check aget output for errors.
     moveq   #0,d7
     tst.l   d5
     beq     .t
+    DPRINT  "stream:load output"
 
     * Read the file
 	lea		agetOutputFile(pc),a0
@@ -51503,7 +51579,7 @@ streamerEntry:
     dc.b	'%sC/aget',0
 
 .args
-	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS',10,0
+	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
  even
 
 
@@ -51528,6 +51604,7 @@ stopStreaming:
     move.l  streamerTask(a5),a1
     move.l  #SIGBREAKF_CTRL_C,d0
     lob     Signal 
+    DPRINT  "signal sent"
 .4 
     lob     Permit
     rts
@@ -51545,7 +51622,7 @@ awaitStreamer:
     beq     .continue
     DPRINT  "wait"
     moveq   #50*1,d1
-    lob     Delay
+    lore    Dos,Delay
     addq.w  #1,d4
     cmp.w   #10,d4
     bhs     .jammed
@@ -51605,6 +51682,124 @@ showStreamerError:
 .exit
     popm    d1-a6
     rts
+
+
+* In:
+*    d0 = HTTP headers in ReadArgs format
+*    d1 = length of data
+* Out:
+*    d0 = 
+parseAgetHeaders:
+    pushm   d1-a6
+    DPRINT  "parseAgetHeaders data=%lx len=%ld"
+    move.l  d0,d6
+    move.l  d1,d7
+
+    move.l  _DosBase(a5),a6
+
+    bsr     freeStreamHeaderArgs
+
+    pushpea .template(pc),d1
+    pushpea streamHeaderArray(pc),d2
+    pushpea .rdArgs(pc),d3
+
+    move.l  d2,a1
+    clr.l   (a1)+
+    clr.l   (a1)+
+    clr.l   (a1)+
+    clr.l   (a1)+
+    clr.l   (a1)+
+
+    move.l  d3,a1
+    moveq   #RDA_SIZEOF-1,d0
+.c  clr.b   (a1)+
+    dbf     d0,.c
+
+    move.l  d3,a1
+    move.l  d6,RDA_Source+CS_Buffer(a1)
+    move.l  d7,RDA_Source+CS_Length(a1)
+
+    lob     ReadArgs
+    DPRINT  "ReadArgs=%lx"
+
+  if DEBUG
+    move.l  streamHeaderArray(pc),d0
+    beq.b   .1
+    move.l  d0,a0
+    move.l  (a0),d0
+    DPRINT  "Content-Length: %ld"
+.1  move.l  streamHeaderArray+4(pc),d0
+    beq.b   .2
+    DPRINT  "Content-Type: %s"
+.2  move.l  streamHeaderArray+8(pc),d0
+    beq     .3  
+    DPRINT  "Icy-Name: %s"
+.3  move.l  streamHeaderArray+12(pc),d0
+    beq     .4
+    DPRINT  "Icy-Description: %s"
+.4
+  endif
+
+    popm    d1-a6
+    rts
+
+.rdArgs
+    ds.b    RDA_SIZEOF
+
+
+.template
+     dc.b "CONTENT-LENGTH/K/N,CONTENT-TYPE/K,ICY-NAME/K,ICY-DESCRIPTION/K,REST/M",0
+    even
+
+streamHeaderArray  
+streamHeaderContentLength
+    dc.l    0
+streamHeaderContentType
+    dc.l    0
+streamHeaderIcyName
+    dc.l    0
+streamHeaderIcyDescription
+    dc.l    0
+.rest   
+    dc.l    0
+    
+
+freeStreamHeaderArgs:
+    move.l  streamHeaderArgs(a5),d1
+    clr.l   streamHeaderArgs(a5)
+    lore    Dos,FreeArgs
+    rts
+
+
+streamGetContentLength:
+    moveq   #0,d0
+    move.l  streamHeaderContentLength(pc),d1
+    beq.b   .x
+    move.l  d1,a0
+    move.l  (a0),d0
+.x  rts
+
+streamIsMpegAudio:
+    moveq   #0,d0
+    move.l  streamHeaderContentType(pc),d1
+    beq     .x 
+    move.l  d1,a0
+    lea     .mimeAudioMpega(pc),a1
+.cmp
+    cmpm.b  (a1)+,(a0)+
+    bne     .x
+    tst.b   (a1)
+    bne     .cmp
+    tst.b   (a0)
+    bne     .x
+    moveq   #1,d0
+.x  tst.l   d0
+    rts
+
+.mimeAudioMpega
+    dc.b    "audio/mpeg",0
+
+ even
 
 ***************************************************************************
 *
