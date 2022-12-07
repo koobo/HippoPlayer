@@ -1099,15 +1099,18 @@ init:
     bsr     isRemoteSample
     beq     .notPipe
 
-    DPRINT  "flushing pipe before closing"
+    DPRINT  "flushing pipe before closing"    
     moveq   #0,d5
 .flush
     move.l  d4,d1
-    lob     FGetC
-    tst.l   d0
-    bmi     .flushOver
-    addq.l  #1,d5
-    bra     .flush
+    move.l  #mpbuffer1,d2
+    move.l  #MPEGA_PCM_SIZE*4,d3
+    lob     Read
+    DPRINT  "Pipe read=%ld"
+    add.l   d0,d5
+    cmp.l   #MPEGA_PCM_SIZE*4,d0
+    beq     .flush
+
 .flushOver
  if DEBUG
     move.l  d5,d0
