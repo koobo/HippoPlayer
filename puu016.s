@@ -51767,10 +51767,12 @@ streamHeaderIcyDescription
     
 
 freeStreamHeaderArgs:
+    * Avoid crashing on kick 1.3
     move.l  streamHeaderArgs(a5),d1
+    beq.b   .x
     clr.l   streamHeaderArgs(a5)
     lore    Dos,FreeArgs
-    rts
+.x  rts
 
 
 streamGetContentLength:
