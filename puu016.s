@@ -40284,12 +40284,13 @@ p_sample:
 .end	
     DPRINT  "sample end"
     jsr     setMainWindowWaitPointer
+    bsr     stopStreaming
     move.l	sampleroutines(a5),a0
 	jsr 	.s_end(a0)
     jsr     clearMainWindowWaitPointer
-    bra     stopStreaming
-
-.dostop	
+    bra     awaitStreamer
+    
+.dostop:
     DPRINT  "sample stop"
     move.l	sampleroutines(a5),a0
 	jmp 	.s_stop(a0)
@@ -51337,11 +51338,6 @@ startStreaming:
     beq.b   .er
     lore    Dos,Close
 .er
-    move.l  d7,d1
-    beq.b   .err
-    lore    Dos,Close
-.err 
- 
     moveq   #0,d0
     bra     .x
 
@@ -51474,14 +51470,14 @@ streamerEntry:
 	beq.b	.t
     tst.l   d1
     bne     .t
-    * It shoud never be empty, free it and quit
+    * It should never be empty, free it and quit
     move.l  d7,a0
     jsr     freemem
     moveq   #0,d7
 .t
 
     DPRINT  "stream:task stopped"
-
+.x
     lea     .varsSize(sp),sp
     lore    Exec,Forbid
     move.l  d7,streamerError(a5)
@@ -51497,9 +51493,8 @@ streamerEntry:
 
 .error
     DPRINT  "stream:start error"
-    lore    Exec,Forbid
     bsr     .notify
-    bra     .exit
+    bra     .x
 
 .envVarName
     dc.b    "UHCBIN",0
@@ -51512,90 +51507,56 @@ streamerEntry:
  even
 
 
+* Frees the previous aget error if any
 freeStreamerError:
-    * Free previous aget error if any
     move.l  streamerError(a5),a0
     clr.l   streamerError(a5)
     jsr     freemem
     rts
 
-stopStreaming:
-  if DEBUG
-    move.l streamerTask(a5),d0
-    DPRINT  "stopStreaming, task=%lx"
-  endif
 
-    moveq   #0,d7
+* Sends the ctrl+c signal to the streamer task if it is running
+stopStreaming:
+    DPRINT  "stopStreaming"
+
     lore    Exec,Forbid
     tst.l   streamerTask(a5)
     bne     .3
-    lob     Permit
     DPRINT  "streamer not running"
     bra     .4
 .3
     move.l  streamerTask(a5),a1
     move.l  #SIGBREAKF_CTRL_C,d0
     lob     Signal 
- 
+.4 
     lob     Permit
+    rts
 
-    DPRINT  "ctrl+c sent"
-	jsr	setMainWindowWaitPointer
+* Waits for the streamer task to exit if it is running
+awaitStreamer:
+    tst.l   streamerTask(a5)
+    beq     .4
+    DPRINT  "await streamer"
+    jsr	    setMainWindowWaitPointer
 
-    move.l  _DosBase(a5),a6
-    moveq   #0,d7
-    moveq   #-1,d5  * FGetC return code
-
-    * 3.1.4 and 3.2 do not need pipe flushing
-    cmp.w   #46,LIB_VERSION(a6)
-    bhs.b   .314_32
-
-    move.l  #streamPipeFile,d1
-    move.l  #MODE_OLDFILE,d2
-    lob     Open
-    DPRINT  "flushing pipe=%lx"
-    move.l  d0,d7
-    beq     .1  
-
-    moveq   #0,d5  * FGetC return code
-.314_32
-
-    * Wait until read fails, this indicates
-    * the sender has reacted to CTRL_C
-    moveq   #0,d6   * num of FGetC calls
     moveq   #0,d4   * num of Delay calls
 .loop   
     tst.l   streamerTask(a5)
     beq     .continue
-    tst.l   d5
-    bmi.b   .skip
-    move.l  d7,d1
-    lob     FGetC
-    addq.l  #1,d6
-    move.l  d0,d5
-    bra     .loop
-.skip  
     DPRINT  "wait"
     moveq   #50*1,d1
     lob     Delay
-    addq.l  #1,d4
-    cmp.l   #10,d4
+    addq.w  #1,d4
+    cmp.w   #10,d4
     bhs     .jammed
     bra     .loop
 .continue   
     
  if DEBUG
-    move.l  d6,d0
-    move.l  d4,d1
-    DPRINT  "task closed, flushed %ld bytes, waited %ld ticks" 
+    move.l  d4,d0
+    DPRINT  "task closed, waited %ld ticks" 
  endif
-   
 .1
-    move.l  d7,d1
-    beq.b   .2
-    lob     Close
-.2
-    DPRINT  "streaming stopped"
     jsr	clearMainWindowWaitPointer
 .4
     rts

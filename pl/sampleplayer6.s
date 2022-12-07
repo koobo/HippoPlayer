@@ -1039,8 +1039,12 @@ init:
 	rts
 
 .mpega_hook_open
-	DPRINT	"mpega_hook_open"
 	move.l	a1,a3
+
+ if DEBUG
+	move.l	4(a3),d0
+	DPRINT	"mpega_hook_open %s"
+ endif
 	move.l	4(a3),d1 	 * stream_name
 
 	move.l	#MODE_OLDFILE,d2
@@ -1053,11 +1057,9 @@ init:
    
 	clr.l   12(a3) * stream_size
 
-    move.l  d7,d1
-    lob     IsInteractive
-    tst.l   d0
+    bsr     isRemoteSample
     bne     .cantSeek
-
+    
     * Get current position
 	move.l	d7,d1
     moveq	#0,d2		* offset
@@ -1080,7 +1082,7 @@ init:
     * so that any skipped data is not included
     sub.l   d4,d0 
 	move.l	d0,12(a3) * stream_size
-    DPRINT  "stream size = %ld"
+    DPRINT  "stream size=%ld"
  
 .cantSeek
 	* Return Dos file handle
@@ -1090,8 +1092,29 @@ init:
 
 .mpega_hook_close
 	DPRINT	"mpega_hook_close"
-	move.l	a2,d1
-	beq.b	.nullHandle
+
+    move.l	a2,d4
+	beq 	.nullHandle
+
+    bsr     isRemoteSample
+    beq     .notPipe
+
+    DPRINT  "flushing pipe before closing"
+    moveq   #0,d5
+.flush
+    move.l  d4,d1
+    lob     FGetC
+    tst.l   d0
+    bmi     .flushOver
+    addq.l  #1,d5
+    bra     .flush
+.flushOver
+ if DEBUG
+    move.l  d5,d0
+    DPRINT  "flushed %ld bytes"
+ endif
+.notPipe
+    move.l  d4,d1
 	lob	Close
 	moveq	#0,d0	* ok
 	rts
@@ -1479,9 +1502,7 @@ init:
 .pn	dc.b	"HiP-Sample",0
  even
 
-isRemoteSample
-    pushm   d0/a0
-	move.l	modulefilename(a5),a0
+isPipe:
     cmp.b   #"P",(a0)
     bne     .local
     cmp.b   #"I",1(a0)
@@ -1492,12 +1513,17 @@ isRemoteSample
     bne     .local
     cmp.b   #":",4(a0)
     bne     .local
-    DPRINT  "remote file"
     moveq   #1,d0
-    popm    d0/a0
     rts
 .local
     moveq   #0,d0
+    rts
+
+
+isRemoteSample:
+    pushm   d0/a0
+	move.l	modulefilename(a5),a0
+    bsr     isPipe
     popm    d0/a0
     rts
 
