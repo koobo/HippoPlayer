@@ -5127,8 +5127,6 @@ findFrameByName
 ;; $03   UTF-8
  
 
-
-
 * in:
 *    a0 = data
 *    d1 = len
@@ -5140,12 +5138,9 @@ getFrameText
     blo     .x
 
     * check encoding
-    moveq   #0,d2
-    move.b  (a0)+,d2
-    cmp.b   #0,d2
-    beq.b   .ok
-    cmp.b   #3,d2
-    bne     .x
+    move.b  (a0)+,d7
+    cmp.b   #3,d7
+    bhi     .x
 .ok
     lea     textBuffer(a5),a1
     * Limit of chars on one line in infowindow is 40
@@ -5153,7 +5148,21 @@ getFrameText
 
     * subtract char encoding and one for dbcc
     subq.l  #1+1,d1
-.c1 move.b  (a0)+,(a1)+
+.c1 
+    tst.b   d7  
+    beq     .iso8859
+    cmp.b   #3,d7
+    beq     .utf8
+    ;cmp.b   #1,d7
+    ;cmp.b   #2,d7
+.utf16
+    move.b  1(a0),(a1)+
+    addq    #2,a0
+    bra     .continue
+.utf8
+.iso8859
+    move.b  (a0)+,(a1)+
+.continue
     subq    #1,d2
     dbeq    d1,.c1
     clr.b   (a1)
