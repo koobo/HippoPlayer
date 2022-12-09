@@ -51464,6 +51464,8 @@ startStreaming:
     moveq   #0,d0
     tst.l   streamerTask(a5)
     bne     .y
+    jsr     setMainWindowWaitPointer
+
     DPRINT  "startStreaming"
  if DEBUG
     move.l  a0,d0
@@ -51516,9 +51518,8 @@ startStreaming:
     * Wait here until things are looking good
     DPRINT  "verify stream"
 .verifyLoop
-    moveq   #1*25,d1
+    moveq   #1*50,d1
     lore    Dos,Delay
-    DPRINT  "delay"
     * Test #1: Is it running anymore?
     tst.l   streamerTask(a5)
     bne     .runs
@@ -51539,14 +51540,13 @@ startStreaming:
     lob     Seek
     DPRINT  "Seek=%ld"
     tst.l   d0
-    bne     .outputWritten
-    bra     .verifyLoop
+    beq     .verifyLoop
 
-.outputWritten
 .done
     lea     agetHeadersFile(pc),a0
     bsr     plainLoadFile
-    tst.l   d0
+    DPRINT  "load headers=%lx len=%ld"
+    tst.l   d1
     bne     .gotHeaders
     DPRINT  "no header data"
     bra     .error
@@ -51555,6 +51555,18 @@ startStreaming:
     bsr     parseAgetHeaders
     pop     a0
     jsr     freemem
+
+
+    bsr     streamIsMpegAudio
+    bne.b   .isMpeg
+    bsr     streamGetContentLength
+    tst.l   d0
+    bne.b   .gotLen
+    ; Not mpeg, does not have length, alert alert
+    DPRINT  "unsupported streaming format"
+    bra     .error
+.gotLen
+.isMpeg 
 
  if DEBUG
     bsr     streamIsMpegAudio
@@ -51566,8 +51578,9 @@ startStreaming:
 
 .y
     lea     streamPipeFile(pc),a0
-    moveq   #1,d0
+    moveq   #1,d0   * status: ok
 .x
+    jsr     clearMainWindowWaitPointer
     popm    d1-d7/a1-a6
     rts
 
@@ -51577,7 +51590,7 @@ startStreaming:
     beq.b   .er
     lore    Dos,Close
 .er
-    moveq   #0,d0
+    moveq   #0,d0   * sttaus: error
     bra     .x
 
 streamerProcessTags
