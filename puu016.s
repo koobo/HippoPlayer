@@ -9347,6 +9347,10 @@ rsearchfuncs
 	beq.b	.hvsc
 	subq	#1,d0
 	beq.b	.amigaRemix
+	subq	#1,d0
+	beq.b	.rko
+	subq	#1,d0
+	beq.b	.stations
 .skip
 	rts
 
@@ -9360,6 +9364,10 @@ rsearchfuncs
 	jmp	hvscSearch
 .amigaRemix
 	jmp	amigaRemixSearch
+.rko
+    jmp rkoSearch
+.stations
+    jmp stationsSearch
 
 * in:
 *   d3 = index to check
@@ -9376,7 +9384,7 @@ rsearchfuncs
 
 .options
 	* max width, rows
-	dc.b	24,7
+	dc.b	24,9
 	dc.b	"Search list    [F]      ",0
 	dc.b	"Search next    [SHIFT+F]",0
 	dc.b	"Search Modland [CTRL+M] ",0
@@ -9384,6 +9392,8 @@ rsearchfuncs
 	dc.b	"Search Modules.pl       ",0
 	dc.b	"Search HVSC             ",0
 	dc.b	"Search AmigaRemix       ",0
+	dc.b	"Search Remix.Kwed.Org   ",0
+	dc.b	"Search Radio Stations   ",0
 
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
@@ -30629,7 +30639,7 @@ doIdentifyFormats
 copyNameFromModule
 	move.l	moduleaddress(a5),a1
 * From pointer in A1:
-copyNameFromA1
+copyNameFromA1:
 	lea	modulename(a5),a0
 .co	move.b	(a1)+,(a0)+
 	dbeq	d0,.co
@@ -40228,7 +40238,7 @@ p_sample:
 	pea	songover(a5)
 	move.l	colordiv(a5),-(sp)
 	move.l	_XPKBase(a5),-(sp)
-    bsr     streamGetContentLength
+    jsr     streamGetContentLength
     move.l  d0,-(sp)
 
 	move.b	samplebufsiz0(a5),d0
@@ -40313,6 +40323,14 @@ p_sample:
 	bne 	.x
 
 	bsr 	.vol
+
+    move.l  streamHeaderIcyName(pc),d0
+    beq     .no1
+    move.l  d0,a1
+ 	move.l  #INFO_MODULE_NAME_LEN-1,d1
+	bsr     copyNameFromA1
+.no1   
+
     DPRINT  "sample init ok"
  	moveq	#0,d0
     rts
@@ -48657,6 +48675,7 @@ deliShowNoteStruct
 plainLoadFile:
 	pushm	d2-a6
 	moveq	#0,d7
+    moveq   #0,d5
 
 	move.l	_DosBase(a5),a6
 	move.l	a0,d1
@@ -50247,6 +50266,8 @@ SEARCH_AMINET     = 1
 SEARCH_MODULES    = 2
 SEARCH_HVSC       = 3
 SEARCH_AMIGAREMIX = 4
+SEARCH_RKO        = 5
+SEARCH_STATIONS   = 6
 
 modlandSearch
 	moveq	#SEARCH_MODLAND,d7
@@ -50267,6 +50288,15 @@ hvscSearch
 amigaRemixSearch
 	moveq	#SEARCH_AMIGAREMIX,d7
 	bra 	remoteSearch
+
+rkoSearch
+	moveq	#SEARCH_RKO,d7
+	bra 	remoteSearch
+
+stationsSearch
+	moveq	#SEARCH_STATIONS,d7
+	bra 	remoteSearch
+
 
 
 * Requests a search pattern from the user,
@@ -50325,6 +50355,12 @@ remoteSearch
     cmp.b   #SEARCH_HVSC,d7
     beq.b   .1
     lea     .amigaRemixSearchCmd(pc),a0
+    cmp.b   #SEARCH_AMIGAREMIX,d7
+    beq     .1
+    lea     .rkoSearchCmd(pc),a0
+    cmp.b   #SEARCH_RKO,d7
+    beq.b   .1
+    lea     .stationsSearchCmd(pc),a0
 .1
     pushpea .pathCmd(pc),d0  * path setting
  	move.l	sp,d1		* search word
@@ -50348,11 +50384,20 @@ remoteSearch
 	tst.l	d0
 	bmi		.exit
 
+    pushpea searchOut(pc),d1
+    move.l  #MODE_NEWFILE,d2
+    lore    Dos,Open
+    move.l  d0,d4
+    beq     .exit
+
 	pushpea	remoteExecute(pc),d1
-	moveq	#0,d2			* input
-	move.l	nilfile(a5),d3	* output
-	lore	Dos,Execute
+	moveq	#0,d2       * input
+	move.l	d4,d3	    * output
+	lob     Execute
 	DPRINT	"Execute status=%ld"
+
+    move.l  d4,d1
+    lob     Close
 
 	* Prepare results path into stack
 	lea		-100(sp),sp
@@ -50381,6 +50426,12 @@ remoteSearch
     cmp.b   #SEARCH_HVSC,d7
     beq.b   .a
     lea     .amigaRemixResultsPath(pc),a0
+    cmp.b   #SEARCH_AMIGAREMIX,d7
+    beq     .a
+    lea     .rkoResultsPath(pc),a0
+    cmp.b   #SEARCH_RKO,d7
+    beq     .a
+    lea     .stationsResultsPath(pc),a0
 .a
 
 	* Jump to after the variable
@@ -50435,6 +50486,14 @@ remoteSearch
     beq.b   .2
 	pushpea	.amigaRemixLine(pc),d6
 	moveq	#.amigaRemixLineE-.amigaRemixLine,d4	
+    cmp.b   #SEARCH_AMIGAREMIX,d7
+    beq     .2
+	pushpea	.rkoLine(pc),d6
+	moveq	#.rkoLineE-.rkoLine,d4	
+    cmp.b   #SEARCH_RKO,d7
+    beq     .2
+    moveq   #0,d6   * No base header to prepend
+    moveq   #50,d4  * Base header length, add extra space in this case
 	bra.b	.2
 .aa
 	pushpea	.aminetLine(pc),d6
@@ -50452,10 +50511,12 @@ remoteSearch
 ;	move.l	a0,d4
 ;	sub.l	d6,d4 * string length in d4
 .2
+    ; ---------------------------------
 
 	* Import data
 	* This will also set l_remote and l_nameaddr
 	* to correct values for remote files.
+    push    d7
 	lea		.modlandFilter(pc),a0
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.3
@@ -50466,6 +50527,63 @@ remoteSearch
 	move.l	a3,a0
 	jsr		freemem
 	
+    pop     d7
+
+    ; ---------------------------------
+    ; Stations: get readable name from search results
+    cmp.b   #SEARCH_STATIONS,d7
+    bne     .s2
+    lea     searchOut(pc),a0
+    jsr     plainLoadFile
+    move.l  d0,d3
+    beq     .s2
+    tst.l   d1
+    beq     .s2
+    move.l  d3,a2
+    * skip header, 1st line starts with "0"
+.s0 cmp.b   #"0",(a2)+
+    bne     .s0
+    subq    #1,a2
+
+    * Postprocess stations
+    jsr     getVisibleModuleListHeader
+    move.l  a0,a3
+.s1
+	TSTNODE	a3,a3
+	beq.b	.s2
+    st      l_remote(a3)
+    lea     l_filename(a3),a1
+    
+    * Find end of filename, after it there's 50 extra bytes
+    * Make it the visible name, also add separator so that
+    * the entry can be recreated from a saved list
+.s4 tst.b   (a1)+
+    bne     .s4
+    subq    #1,a1
+    move.b  #"#",(a1)+
+    move.b  #"#",(a1)+
+    move.b  #"#",(a1)+
+    move.b  #"#",(a1)+
+    move.l  a1,l_nameaddr(a3)
+
+    * Copy name
+    add     #55,a2
+    moveq   #29-1,d2
+.s7 move.b  (a2)+,(a1)+
+    dbf     d2,.s7
+    clr.b   (a1)
+
+    * Skip to next line
+.s3 cmp.b   #10,(a2)+
+    bne     .s3
+	bra.b	.s1
+.s2
+
+    move.l  d3,a0
+    jsr     freemem
+
+    ; ---------------------------------
+
 	tst.b	autosort(a5)
 	beq.b	.noSort
 	jsr		sortButtonAction
@@ -50613,6 +50731,10 @@ remoteSearch
     dc.b    "http://uhc.amigaremix.com/",0
 .amigaRemixLineE
 
+.rkoLine
+    dc.b    "http://uhc.remix.kwed.org/",0
+.rkoLineE
+
 .uhcTempDirVar
 	dc.b	"UHC/TEMPDIR",0
 
@@ -50653,34 +50775,86 @@ remoteSearch
 	dc.b 	'amigaremixsearch %s',10
 	dc.b	0
 
+.rkoResultsPath
+	dc.b	"rkosearch",0
+.rkoSearchCmd
+	dc.b	"%s",10
+	dc.b 	'rkosearch %s',10
+	dc.b	0
+
+
+.stationsResultsPath
+	dc.b	"stationsearch",0
+.stationsSearchCmd
+	dc.b	"%s",10
+	dc.b 	'uhcmirrorsearch stationsearch %s',10
+	dc.b	0
+
+
+
 remoteExecute
        dc.b    "execute "
 remoteScriptPath
        dc.b    "T:hip",0
+
+searchOut
+        dc.b    "T:searchout",0
  even
 
 * Set list node remote type and
 * set l_nameaddr to be proper for showing to user.
 * In:
 *   a0 = list node
-configRemoteNode
-	pushm	d0/a0-a2
+configRemoteNode:
+	pushm	d0/a0-a4
 	st		l_remote(a0)
- 
+
+
  	lea		l_filename(a0),a1
 	move.l	a1,a2
 .findEnd2
 	tst.b	(a1)+
 	bne.b	.findEnd2
 
-	moveq	#2-1,d0
+    ; check if there is "####" somewhere.
+    ; before it is the url, after it a visible name
+    ; end bound:
+    move.l  a1,a3
+    subq    #4,a3
+    move.l  a2,a4
+.hash1
+    cmp.l   a4,a3
+    beq     .noHash
+    cmp.b   #"#",(a4)+
+    bne     .hash1
+    cmp.b   #"#",0(a4)
+    bne     .hash1
+    cmp.b   #"#",1(a4)
+    bne     .hash1
+    cmp.b   #"#",2(a4)
+    bne     .hash1
+    ; found it!
+    ; terminate file path and store nameaddr
+    clr.b   -1(a4)
+    addq    #3,a4
+    move.l  a4,l_nameaddr(a0)
+    bra     .x
+.noHash
 
+
+	moveq	#2-1,d0
 	* l_filename is odd
 
 	* For modules.pl and amigaremix
     * take the last file part only to avoid redundancy
 	* "captain/captain_-_space_debris"
 
+
+    cmp.l   #"remi",11(a2)
+    bne.b   .4
+    cmp.l   #"x.kw",15(a2)
+    beq.b   .3
+.4
     cmp.l   #"amig",11(a2)
     bne.b   .2
     cmp.l   #"arem",15(a2)
@@ -50703,7 +50877,8 @@ configRemoteNode
 	addq	#1,a1
 .break
 	move.l	a1,l_nameaddr(a0)
-	popm	d0/a0-a2
+.x
+	popm	d0/a0-a4
 	rts
 
 *
@@ -50809,7 +50984,7 @@ fetchRemoteFile:
     move.l  a4,d2       * buffer
     move.l  #$10000,d3  * length
     lore    Dos,Read
-    DPRINT  "read=%lx"
+    DPRINT  "read=%ld bytes"
     move.l  d0,d4       * bytes read
     * d0 = bytes read, 0 = EOF, -1 = error
     bmi.b   .readError
