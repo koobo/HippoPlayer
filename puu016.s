@@ -50610,6 +50610,31 @@ remoteSearch
     tst.l   d1
     beq     .s2
     move.l  d3,a2
+
+    ; Find column for "Name"
+.z1 cmp.b   #"N",(a2)+
+    bne.b   .z1
+    cmp.b   #"a",(a2)
+    bne.b   .z1
+    cmp.b   #"m",1(a2)
+    bne.b   .z1
+    cmp.b   #"e",2(a2)
+    bne.b   .z1
+    * d0 = Name start column
+    move.l  a2,d0
+    subq.l  #1,d0
+    addq    #3,a2
+.z2 cmp.b   #" ",(a2)+
+    beq     .z2
+    * d1 = name end column
+    move.l  a2,d1
+    * d1 = name length
+    sub.l   d0,d1
+    subq.l  #1,d1
+    * d0 = name offset
+    sub.l   d3,d0
+    subq.l  #4,d0
+    
     * skip header, 1st line starts with "0"
 .s0 cmp.b   #"0",(a2)+
     bne     .s0
@@ -50628,7 +50653,7 @@ remoteSearch
     * the entry can be recreated from a saved list
 .s4 tst.b   (a1)+
     bne     .s4
-    subq    #1,a1
+    ;subq    #1,a1
     ; #song=
     ; #name=
     move.b  #"#",(a1)+
@@ -50639,11 +50664,14 @@ remoteSearch
     move.b  #"=",(a1)+
     move.l  a1,l_nameaddr(a3)
 
+    printt "ensure that url#name=bla goes not get into aget stream"
+
     * Copy name, starts here
-    add     #55,a2
-    moveq   #29-1,d2
+    add     d0,a2
+    move    d1,d2
 .s7 move.b  (a2)+,(a1)+
-    dbf     d2,.s7
+    subq    #1,d2
+    bne     .s7
     clr.b   (a1)
 
     * Skip to next line
