@@ -1484,9 +1484,10 @@ xpl_versio	=	26
 		rs.b	MLN_SIZE	* Minimal node 
 l_nameaddr	rs.l	1		* osoitin pelkk‰‰n tied.nimeen
 					* address to filename without path
-l_favorite	rs.b 	1		* favorite status for this file
+l_favorite	rs.b 	1		* 0: not favorite, non-zero: favorite
 l_divider	rs.b	1		* this is a divider, ie. a path
-l_remote	rs.b    1       * 0: local file, 1: remote
+l_remote	rs.b    1       * 0: local file, non-zero: remote
+l_favSong   rs.b    1       * 0 or song number when node was favorited
 l_filename	rs.b	0		* tied.nimi ja polku alkaa t‰st‰
 					* full path to filename begins at this point
 					* element size is dynamically calculated based on path length.
@@ -12017,6 +12018,33 @@ importModuleProgramFromData:
 	moveq	#10,d1
 .le	
 	move.b	(a3)+,d2
+    * Painfully check for "#song=x"
+    cmp.b   #"#",d2
+    bne.b   .1
+    cmp.b   (a3),d1
+    beq     .1
+    cmp.b   #"s",(a3)
+    bne     .1
+    cmp.b   1(a3),d1
+    beq     .1
+    cmp.b   #"o",1(a3)
+    bne     .1
+    cmp.b   2(a3),d1
+    beq     .1
+    cmp.b   #"n",2(a3)
+    bne     .1
+    cmp.b   3(a3),d1
+    beq     .1
+    cmp.b   #"g",3(a3)
+    bne     .1
+    moveq   #$f,d0
+    and.b   5(a3),d0
+    DPRINT  "FavSong restored=%ld" 
+    move.b  d0,l_favSong(a2)
+    * Replace with LF to ignore the rest
+    move.b  d1,d2
+    addq    #7,a3
+.1
 	move.b	d2,(a0)+
 	cmp.b	d1,d2
 	bne.b	.le
@@ -12235,7 +12263,7 @@ exportModuleProgramToFile:
 	beq.b	.exit
 	move.l	a3,a4
 
-	lea	-200(sp),sp
+	lea	-300(sp),sp
 	move.l	sp,a1
 
 	lea	l_filename(a3),a0
@@ -12248,6 +12276,30 @@ exportModuleProgramToFile:
 .co	move.b	(a0)+,(a1)+
 	bne.b	.co
 	subq	#1,a1
+
+    ; Is there some additional data after the path?
+    ; That's the #name, output it 
+    cmp.b   #"n",(a0)
+    bne     .noAdd
+    move.b  #"#",(a1)+
+.c2 move.b  (a0)+,(a1)+
+    bne.b   .c2
+	subq	#1,a1
+
+.noAdd
+    * Output fav song!
+    move.b  l_favSong(a3),d0
+    beq     .noFavSong
+    move.b  #"#",(a1)+
+    move.b  #"s",(a1)+
+    move.b  #"o",(a1)+
+    move.b  #"n",(a1)+
+    move.b  #"g",(a1)+
+    move.b  #"=",(a1)+
+    or.b    #$30,d0
+    move.b  d0,(a1)+
+.noFavSong
+
 	move.b	#10,(a1)+
 
 	move.l	a1,d3
@@ -12256,7 +12308,7 @@ exportModuleProgramToFile:
 	move.l	d6,d1		* tallennetaan nimi
 	lob	Write	
 
-	lea	200(sp),sp
+	lea	300(sp),sp
 
 	cmp.l	d3,d0
 	bne.b	.writeError
@@ -17744,7 +17796,7 @@ doPrintNames:
 
 	* name to print
 	move.l	a2,a0		
-	
+
 	lea	-200(sp),sp
 	tst.b	l_remote(a3)
 	beq.b	.local
@@ -31220,8 +31272,17 @@ toggleFavoriteStatusForCurrentModule:
 * out:
 *	d0 = 0 on failure, 1 on OK
 toggleFavoriteStatus
+    * Grab song number if favoriting the currently playing module
+    moveq   #0,d1
+    cmp.l   playingmodule(a5),d0
+    bne     .1
+    move    songnumber(a5),d1
+.1
 	* Get the actual node into a0
-	bsr	getListNode
+    push    d1
+	bsr	    getListNode
+    pop     d1
+    tst.l   d0
 	beq.b	.notFound
 
 	tst.b	l_divider(a0)
@@ -31230,9 +31291,17 @@ toggleFavoriteStatus
 	* Toggle favorite status
 	isFavoriteModule a0 
 	bne.b	.wasFavorite
+    * Store current song number or set to NULL
+    move.b  d1,l_favSong(a0)
+ if DEBUG
+    moveq   #0,d0
+    move.b  d1,d0
+    DPRINT  "Storing favSong=%ld"
+ endif
 	bsr.b	addFavoriteModule
 	bra.b	.wasNotFavorite
 .wasFavorite
+    clr.b   l_favSong(a0)
 	bsr	removeFavoriteModule
 .wasNotFavorite
 	moveq	#1,d0
@@ -50530,6 +50599,7 @@ remoteSearch
     pop     d7
 
     ; ---------------------------------
+    * Postprocess stations
     ; Stations: get readable name from search results
     cmp.b   #SEARCH_STATIONS,d7
     bne     .s2
@@ -50545,7 +50615,6 @@ remoteSearch
     bne     .s0
     subq    #1,a2
 
-    * Postprocess stations
     jsr     getVisibleModuleListHeader
     move.l  a0,a3
 .s1
@@ -50560,13 +50629,17 @@ remoteSearch
 .s4 tst.b   (a1)+
     bne     .s4
     subq    #1,a1
+    ; #song=
+    ; #name=
     move.b  #"#",(a1)+
-    move.b  #"#",(a1)+
-    move.b  #"#",(a1)+
-    move.b  #"#",(a1)+
+    move.b  #"n",(a1)+
+    move.b  #"a",(a1)+
+    move.b  #"m",(a1)+
+    move.b  #"e",(a1)+
+    move.b  #"=",(a1)+
     move.l  a1,l_nameaddr(a3)
 
-    * Copy name
+    * Copy name, starts here
     add     #55,a2
     moveq   #29-1,d2
 .s7 move.b  (a2)+,(a1)+
@@ -50819,24 +50892,30 @@ configRemoteNode:
     ; check if there is "####" somewhere.
     ; before it is the url, after it a visible name
     ; end bound:
-    move.l  a1,a3
-    subq    #4,a3
+    move.l  a1,d0
+    subq.l  #8,d0
+    bmi     .noHash * very short string?
+    move.l  d0,a3
     move.l  a2,a4
 .hash1
     cmp.l   a4,a3
     beq     .noHash
     cmp.b   #"#",(a4)+
     bne     .hash1
-    cmp.b   #"#",0(a4)
+    cmp.b   #"n",0(a4)
     bne     .hash1
-    cmp.b   #"#",1(a4)
+    cmp.b   #"a",1(a4)
     bne     .hash1
-    cmp.b   #"#",2(a4)
+    cmp.b   #"m",2(a4)
+    bne     .hash1
+    cmp.b   #"e",3(a4)
+    bne     .hash1
+    cmp.b   #"=",4(a4)
     bne     .hash1
     ; found it!
     ; terminate file path and store nameaddr
     clr.b   -1(a4)
-    addq    #3,a4
+    addq    #5,a4
     move.l  a4,l_nameaddr(a0)
     bra     .x
 .noHash
