@@ -1424,6 +1424,8 @@ streamerUrl             rs.l    1
 streamerError           rs.l    1
 streamerErrorLength     rs.l    1
 streamHeaderArgs        rs.l    1
+* Set to -1 when starting, set to aget return code when aget exists
+streamReturnCode        rs.w    1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -27969,6 +27971,8 @@ loadmodule:
     * Open up a stream.
     lea     l_filename(a3),a0
     push    d0
+    * Reset the aget return code to uninitialized value
+    move.w  #-1,streamReturnCode(a5)
     jsr     startStreaming
     move.l  d0,d1
     pop     d0
@@ -40442,7 +40446,7 @@ p_sample:
 
 	bsr 	.vol
 
-    move.l  streamHeaderIcyName(pc),d0
+    move.l  streamHeaderIcyName,d0
     beq     .no1
     move.l  d0,a1
  	move.l  #INFO_MODULE_NAME_LEN-1,d1
@@ -51124,7 +51128,8 @@ fetchRemoteFile:
 	jsr		setMainWindowWaitPointer
     pop     a0
 
-    * Streamer could have been started earlier
+    * Streamer could have been started earlier.
+    * It may also have finished already by now, if file is small.
     * a0 = url
     jsr     startStreaming
     DPRINT  "startStreaming=%lx"
@@ -51620,13 +51625,34 @@ agetHeadersFile dc.b    "T:agetheaders",0
 *   d0 = true, or false if error
 startStreaming:
     pushm   d1-d7/a1-a6
- if DEBUG
-    move.l  streamerTask(a5),d0
-    DPRINT  "startStreaming task=%lx"
- endif
+    DPRINT  "*** startStreaming ***"
+
     moveq   #0,d0
-    tst.l   streamerTask(a5)
+
+    lore    Exec,Forbid
+    move.l  streamerTask(a5),d6
+    move.w  streamReturnCode(a5),d7
+    lob     Permit
+
+ if DEBUG
+    push    d0
+    move.l  d6,d0
+    move    d7,d1
+    ext.l   d1
+    DPRINT  "task=%lx returnCode=%ld"
+    pop     d0
+ endif
+
+    * Task is already running?
+    tst.l   d6
     bne     .y
+    * Task is not running, did it finish the previous operation?
+    * streamReturnCode(a5) is -1 if not done.
+    tst.w   d7
+    bpl     .y
+
+;    tst.l   streamerTask(a5)
+;    bne     .y
     jsr     setMainWindowWaitPointer
 
     DPRINT  "startStreaming"
@@ -51909,6 +51935,7 @@ streamerEntry:
 .x
     lea     .varsSize(sp),sp
     lore    Exec,Forbid
+    move.w  d5,streamReturnCode(a5)
     move.l  d7,streamerError(a5)
     clr.l   streamerTask(a5)
     rts
