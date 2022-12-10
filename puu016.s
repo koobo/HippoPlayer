@@ -1489,6 +1489,7 @@ l_favorite	rs.b 	1		* 0: not favorite, non-zero: favorite
 l_divider	rs.b	1		* this is a divider, ie. a path
 l_remote	rs.b    1       * 0: local file, non-zero: remote
 l_favSong   rs.b    1       * 0 or song number when node was favorited
+l_separateName rs.b 1       * set if l_nameaddr points to "#name=<name>""
 l_filename	rs.b	0		* tied.nimi ja polku alkaa tästä
 					* full path to filename begins at this point
 					* element size is dynamically calculated based on path length.
@@ -12002,9 +12003,9 @@ importModuleProgramFromData:
 	bne.b	.local
 	cmp.b	#"p",3(a3)
 	bne.b	.local
-	move	#1,d3	* remote
+	moveq	#1,d3	* remote
 .local
-
+    
 	move.l	a3,a0
 	moveq	#10,d1
 .r23	
@@ -12018,6 +12019,7 @@ importModuleProgramFromData:
 
 	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
 	add.l	d4,d0	* add extra header space if any
+
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr	getmem
 	bne.b	.gotMem2
@@ -12294,7 +12296,7 @@ exportModuleProgramToFile:
 .saveloop
 	* Get next and test for end
 	TSTNODE	a4,a3
-	beq.b	.exit
+	beq 	.exit
 	move.l	a3,a4
 
 	lea	-300(sp),sp
@@ -12311,16 +12313,20 @@ exportModuleProgramToFile:
 	bne.b	.co
 	subq	#1,a1
 
-    ; Is there some additional data after the path?
-    ; That's the #name, output it 
-    cmp.b   #"n",(a0)
-    bne     .noAdd
+    tst.b   l_separateName(a3)
+    beq.b   .noAdd
     move.b  #"#",(a1)+
+    move.b  #"n",(a1)+
+    move.b  #"a",(a1)+
+    move.b  #"m",(a1)+
+    move.b  #"e",(a1)+
+    move.b  #"=",(a1)+
+    move.l  l_nameaddr(a3),a0
 .c2 move.b  (a0)+,(a1)+
     bne.b   .c2
 	subq	#1,a1
-
 .noAdd
+
     * Output fav song!
     move.b  l_favSong(a3),d0
     beq     .noFavSong
@@ -12346,7 +12352,7 @@ exportModuleProgramToFile:
 
 	cmp.l	d3,d0
 	bne.b	.writeError
-	bra.b	.saveloop
+	bra    	.saveloop
 	
 .exit
 	move.l	d6,d1
@@ -17788,13 +17794,14 @@ doPrintNames:
 
 	* loop to print d5 lines 
 .looppo
+
 	* a4=current node
 	* a3=next node
 	* test if at end
 	TSTNODE	a4,a3
 	beq	.lop			* joko loppui
 	move.l	a3,a4
-	
+
 	move.l	l_nameaddr(a3),a0
 	bsr	cut_prefix
 	move.l	a0,a2		* name is in a2
@@ -17831,7 +17838,7 @@ doPrintNames:
 	* name to print
 	move.l	a2,a0		
 
-	lea	-200(sp),sp
+	lea	-300(sp),sp
 	tst.b	l_remote(a3)
 	beq.b	.local
 	move.l	a0,d0
@@ -17890,7 +17897,7 @@ doPrintNames:
 
 	pop	d1	; restore start y
 	
-	lea		200(sp),sp * name buffer
+	lea		300(sp),sp * name buffer
 
 	; Display random marker if needed
 	tst.b	d7		* divider will not have a random play marker
@@ -22930,7 +22937,9 @@ rexxmessage
 *** PLAY
 .playr	
 	tst.b	d0
-	beq	rbutton1
+	bne .nx
+    jmp rbutton1
+.nx
 	move.l	a1,sv_argvArray+4(a5)
 	clr.l	sv_argvArray+8(a5)
 	jsr	clearlist
@@ -31386,7 +31395,7 @@ addFavoriteModule:
 * out: 
 *   a4 = new node
 *   d0 = false: no mem, true: all ok
-cloneListNode
+cloneListNode:
 	move.l	a0,a3
 
 	* copy this node and add to favorite list
@@ -50609,7 +50618,8 @@ remoteSearch
     cmp.b   #SEARCH_RKO,d7
     beq     .2
     moveq   #0,d6   * No base header to prepend
-    moveq   #50,d4  * Base header length, add extra space in this case
+    * Additional space for readable name
+    moveq   #100,d4  * Base header length, add extra space in this case
 	bra.b	.2
 .aa
 	pushpea	.aminetLine(pc),d6
@@ -50632,7 +50642,6 @@ remoteSearch
 	* Import data
 	* This will also set l_remote and l_nameaddr
 	* to correct values for remote files.
-    push    d7
 	lea		.modlandFilter(pc),a0
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.3
@@ -50640,14 +50649,14 @@ remoteSearch
 .3	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
 
-	move.l	a3,a0
+	move.l	a3,a0   
 	jsr		freemem
-	
-    pop     d7
 
     ; ---------------------------------
     * Postprocess stations
     ; Stations: get readable name from search results
+
+    moveq   #0,d3
     cmp.b   #SEARCH_STATIONS,d7
     bne     .s2
     lea     searchOut(pc),a0
@@ -50678,6 +50687,12 @@ remoteSearch
     * d1 = name length
     sub.l   d0,d1
     subq.l  #1,d1
+    * Set upper limit to not overflow buffer,
+    * this was allocated earlier.
+    cmp.l   #99,d1
+    bls.b   .z3
+    moveq   #99,d1
+.z3
     * d0 = name offset
     sub.l   d3,d0
     subq.l  #4,d0
@@ -50700,18 +50715,9 @@ remoteSearch
     * the entry can be recreated from a saved list
 .s4 tst.b   (a1)+
     bne     .s4
-    ;subq    #1,a1
-    ; #song=
-    ; #name=
-    move.b  #"#",(a1)+
-    move.b  #"n",(a1)+
-    move.b  #"a",(a1)+
-    move.b  #"m",(a1)+
-    move.b  #"e",(a1)+
-    move.b  #"=",(a1)+
+    ; after the NULL put the extra name
     move.l  a1,l_nameaddr(a3)
-
-    printt "ensure that url#name=bla goes not get into aget stream"
+    st      l_separateName(a3)
 
     * Copy name, starts here
     add     d0,a2
@@ -50737,7 +50743,7 @@ remoteSearch
 	jsr		sortButtonAction
 	bra.b	.sorted
 .noSort
-	jsr		forceRefreshList
+    jsr		forceRefreshList
 .sorted
 	jsr		releaseModuleList
 .exit
@@ -50957,14 +50963,13 @@ configRemoteNode:
 	pushm	d0/a0-a4
 	st		l_remote(a0)
 
-
  	lea		l_filename(a0),a1
 	move.l	a1,a2
 .findEnd2
 	tst.b	(a1)+
 	bne.b	.findEnd2
 
-    ; check if there is "####" somewhere.
+    ; check if there is "#name=" somewhere.
     ; before it is the url, after it a visible name
     ; end bound:
     move.l  a1,d0
@@ -50992,6 +50997,11 @@ configRemoteNode:
     clr.b   -1(a4)
     addq    #5,a4
     move.l  a4,l_nameaddr(a0)
+    st      l_separateName(a0)
+ if DEBUG
+    move.l  a4,d0
+    DPRINT  "#name=%s"
+ endif
     bra     .x
 .noHash
 
@@ -50999,10 +51009,9 @@ configRemoteNode:
 	moveq	#2-1,d0
 	* l_filename is odd
 
-	* For modules.pl and amigaremix
+    * For some remote sites 
     * take the last file part only to avoid redundancy
 	* "captain/captain_-_space_debris"
-
 
     cmp.l   #"remi",11(a2)
     bne.b   .4
