@@ -1029,8 +1029,9 @@ filterstore	rs.b	1	* filtterin tila
 keyfilechecked	rs.b	1	* ~0: keyfile tarkistettu
 
 songnumber	rs	1	* modin sis‰isen kappaleen numero
+                    * subsong number, first one is 0
 maxsongs	rs	1	* maximi songnumber
-minsong  	rs 	1   * min songnumber
+minsong  	rs 	1   * min songnumber, used some deliplayers
 
 
 moduleaddress	rs.l	1	* modin osoite
@@ -7465,11 +7466,18 @@ signalreceived
 
 	lea	l_filename(a3),a0	* ladataan
 	moveq	#0,d0			* no double buffering
+    push    a3
 	jsr	loadmodule
+    pop     a3
 	tst.l	d0
 	bne.b	.loader
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  "--- fav song: %ld"
+
+	DPRINT	"--- Replay init"
 	move.l	playerbase(a5),a0	* soitto p‰‰lle
 	jsr	p_init(a0)
 	tst.l	d0
@@ -8032,7 +8040,7 @@ umph
 .noDiv
 
 	cmp.l	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
-	bne.b	.new
+	bne 	.new
 
 	* It was the same one which already was playing.
 	* Restart it from beginning.
@@ -8042,9 +8050,16 @@ umph
 	bsr	obtainModuleData
 	bsr	halt			* soitetaan vaan alusta
 	move.l	playerbase(a5),a0
+    push    a3
 	jsr 	p_end(a0)
+    pop     a3
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  "+++ fav song: %ld"
+
+	DPRINT	"+++ Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	bsr	releaseModuleData
@@ -8101,11 +8116,18 @@ umph
 	lea	l_filename(a3),a0	* Ladataan
 	* load it, d7 contains double buffering flag
 	move.b	d7,d0
+    push    a3
 	jsr	loadmodule
+    pop     a3
 	tst.l	d0
 	bne.b	.loader
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  "=== fav song: %ld"
+
+	DPRINT	"=== Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -10181,7 +10203,7 @@ rbutton1
 	* load these modules again before restarting.
 	cmp	#pt_delicustom,playertype(a5)
 	beq	.new
-	* Same with all EaglePlayers to be save.
+	* Same with all EaglePlayers to be safe.
 	* At least Tim Follin crashes.
 	cmp	#pt_eagle_start,playertype(a5)
 	bhs	.new
@@ -10204,14 +10226,19 @@ rbutton1
 
 	DPRINT	"Replay end"
 * Soitetaan vaan alusta
-	;lore	Exec,Disable
+    push    a3
 	bsr	halt
-	;lore    Exec,Enable
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
+    pop     a3
 	move	(sp)+,mainvolume(a5)
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  "/// fav song: %ld"
+
+	DPRINT	"/// Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -10246,11 +10273,18 @@ rbutton1
 
 	lea	l_filename(a3),a0	* Ladataan
 	move.b	d7,d0 * double buffering flag
+    push    a3
 	jsr	loadmodule
+    pop     a3
 	tst.l	d0
 	bne.b	.loader
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  ":;: fav song: %ld"
+
+	DPRINT	":;: Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
@@ -31574,12 +31608,14 @@ favoriteModuleFileName
 
 * in:
 *  a0 = list node
-updateFavoriteStatus
+updateFavoriteStatus:
 	tst.b	l_divider(a0)
 	bne.b	.skipDivs
 	bsr	findFavoriteModule
 	* a matching favorite module was found? set flag 
 	sne	l_favorite(a0)
+    * also copy the fav song over
+    move.b  l_favSong(a1),l_favSong(a0)
 .skipDivs
 	rts
 
@@ -34718,7 +34754,11 @@ p_sid:	jmp	.init(pc)
 
 	tst.b	sidflag(a5)
 	bne.b	.plo
-	st	sidflag(a5)
+	st	    sidflag(a5)
+    * See if there is a preset song number
+    tst     songnumber(a5)
+    bne     .plo
+    * Otherwise use default provided by song
 	move	sidh_defsong+sidheader(a5),songnumber(a5)
 	subq	#1,songnumber(a5)
 .plo
@@ -40273,7 +40313,7 @@ p_sample:
 .s_getMp3Text  rs.l     1
 
 
-.init
+.init:
 	lea	sampleroutines(a5),a0
 	bsr	allocreplayer
 	beq.b	.ok
@@ -42410,11 +42450,13 @@ p_custommade
 *   d3 = timer value
 
 	subq	#1,d2 
-	clr	songnumber(a5)
+;	clr	songnumber(a5)
 	move	d2,maxsongs(a5)
 
 	move	d3,d0 
 	bsr	ciaint_setTempoFromD0
+
+    bsr     .song
 
 	popm	d1-a6
 	* INIT returns 0 on success
@@ -46645,7 +46687,12 @@ deliInit:
 	bsr	clearCpuCaches  ; Extra safety
 
 	* set default song number
-	bsr	deliGetSongInfo
+	bsr	    deliGetSongInfo
+    tst     songnumber(a5)
+    beq     .def
+    * Use previosly set songnumber if available
+    move    songnumber(a5),d0
+.def
 	* d0 = def, d1 = min, d2 = max	
 	move.l	deliBase(a5),a0
 	move	d0,dtg_SndNum(a0)
