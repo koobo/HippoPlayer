@@ -27989,10 +27989,12 @@ loadmodule:
     lea     l_filename(a3),a0
     push    d0
     jsr     startNewStreaming
+    DPRINT  "startStreaming=%ld"
     move.l  d0,d1
     pop     d0
     tst.l   d1
     bne     .streamOk
+    jsr     showStreamerError
     moveq   #lod_remoteError,d0
     rts
 .streamOk
@@ -51183,7 +51185,7 @@ fetchRemoteFile:
     * d6 = stream handle
     * a4 = temporary buffer
 .loop
-    * Read from input
+    * Read from input 
     move.l  d6,d1       * in file
     move.l  a4,d2       * buffer
     move.l  #$10000,d3  * length
@@ -51204,7 +51206,7 @@ fetchRemoteFile:
     cmp.l   #$10000,d4
     beq     .loop
 
-    DPRINT  "read and write ok"
+    DPRINT  "pipe written to local file"
 	* Set status to ok
 	moveq	#1,d7 
 
@@ -51842,10 +51844,18 @@ agetOutputFile
     dc.b    "T:agetout",0
     even
 
+* Checks whether streamer is alive
+* Out:
+*    d0 = True if alive, false if not
 streamIsAlive:
     move.l  streamerTask(a5),d0
  if DEBUG
-    DPRINT  "streamIsAlive %lx"
+    beq.b   .1
+    DPRINT  "stream check: it's alive"
+    tst.l   d0
+    rts
+.1
+    DPRINT  "stream check: NOT alive"
     tst.l   d0
  endif   
     rts
@@ -52119,7 +52129,7 @@ showStreamerError:
 *    d0 = true if succeeded
 parseAgetHeaders:
     pushm   d1-a6
-    DPRINT  "parseAgetHeaders data=%lx len=%ld"
+    DPRINT  "parseAgetHeaders"
     move.l  d0,d6
     move.l  d1,d7
 
