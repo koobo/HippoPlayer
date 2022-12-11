@@ -3575,6 +3575,8 @@ exit
  if DEBUG
 	jsr	closeTimer
  endif
+    jsr     freeStreamHeaderArgs
+    jsr     freeStreamerError
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -6613,7 +6615,6 @@ freemodule:
 	clr.l	tfmxsamplesaddr(a5)
 	clr.l	tfmxsampleslen(a5)
 	clr.b	lod_tfmx(a5)
-    jsr     freeStreamHeaderArgs
 	DPRINT	"freemodule release data"
 	bsr	releaseModuleData
 
@@ -27955,7 +27956,12 @@ noteScroller2:
 *  d0 = ~0: Use double buffering
 *
 loadmodule:
-    DPRINT  "loadmodule"
+ if DEBUG
+    push    d0
+    pushpea l_filename(a3),d0
+    DPRINT  "loadmodule %s"
+    pop     d0
+ endif
 	; Popup should close so that window is visible during load
 	bsr	closeTooltipPopup
     st	loading(a5)
@@ -27971,9 +27977,7 @@ loadmodule:
     * Open up a stream.
     lea     l_filename(a3),a0
     push    d0
-    * Reset the aget return code to uninitialized value
-    move.w  #-1,streamReturnCode(a5)
-    jsr     startStreaming
+    jsr     startNewStreaming
     move.l  d0,d1
     pop     d0
     tst.l   d1
@@ -28090,7 +28094,12 @@ loadmodule:
 *****************************************************************
 * Double buffer load
 *****************************************************************
-	DPRINT	"Double buffer load"
+  if DEBUG
+    push    d0
+    move.l  a0,d0
+	DPRINT	"Double buffer load: %s"
+    pop     d0
+  endif
 
 	* Load with double buffering.
 	* Module being played is preserved while new one is loaded.
@@ -28562,6 +28571,7 @@ loadfileStraight:
 * Ordinary load file
 loadfile:
 	movem.l	d1-a6,-(sp)
+    DPRINT  "loadfile"
 
 	jsr	setMainWindowWaitPointer
 
@@ -40327,6 +40337,7 @@ p_sample:
 
 
 .init:
+    DPRINT  "sample init"
 	lea	sampleroutines(a5),a0
 	bsr	allocreplayer
 	beq.b	.ok
@@ -40372,11 +40383,25 @@ p_sample:
 	move.l	modulefilename(a5),a4
 
     tst.b   lastLoadedModuleWasRemote(a5)
-    beq.b   .notRemote
-    DPRINT  "remote sample"
+    beq     .notRemote
     pushm   d0-d7/a1-a6
+    * If stream is alive, startStreaming will just return the pipe path
+    bsr     streamIsAlive
+    bne     .alive
+    DPRINT  "stream not alive"
+    * If stream is not alive, a valid url should be provided.
+    jsr     getcurrent
+    beq     .noCurrent
+    lea     l_filename(a3),a4
+ if DEBUG
+    move.l  a4,d0
+    DPRINT  "current filename=%s"
+ endif
+.alive
     move.l  a4,a0
     bsr     startStreaming
+.noCurrent
+    * a0 = filename to read from
     tst.l   d0
     popm    d0-d7/a1-a6
     bne.b   .streamOk
@@ -40464,7 +40489,7 @@ p_sample:
     pop     d0
     rts
 
-.end	
+.end:
     DPRINT  "sample end"
     jsr     setMainWindowWaitPointer
     bsr     stopStreaming
@@ -51617,7 +51642,14 @@ streamPipeFile  dc.b    "PIPE:hippoStream",0
 agetHeadersFile dc.b    "T:agetheaders",0
     even
 
+
+startNewStreaming:
+    * Reset the aget return code to uninitialized value
+    move.w  #-1,streamReturnCode(a5)
+    ; ... fall through
+
 * Starts streaming given url into the name pipe using a separate process
+* Returns if streaming is ongoing already or has been finished.
 * In:
 *   a0 = url
 * Out:
@@ -51801,7 +51833,10 @@ agetOutputFile
 
 streamIsAlive:
     move.l  streamerTask(a5),d0
+ if DEBUG
     DPRINT  "streamIsAlive %lx"
+    tst.l   d0
+ endif   
     rts
 *
 *
@@ -51967,13 +52002,13 @@ streamerEntry:
 freeStreamerError:
     move.l  streamerError(a5),a0
     clr.l   streamerError(a5)
-    jsr     freemem
-    rts
+    jmp     freemem
+    
 
 
 * Sends the ctrl+c signal to the streamer task if it is running
 stopStreaming:
-    DPRINT  "stopStreaming"
+    DPRINT  "*** stopStreaming"
 
     lore    Exec,Forbid
     tst.l   streamerTask(a5)
@@ -51993,7 +52028,7 @@ stopStreaming:
 awaitStreamer:
     tst.l   streamerTask(a5)
     beq     .4
-    DPRINT  "await streamer"
+    DPRINT  "*** await streamer" 
     jsr	    setMainWindowWaitPointer
 
     moveq   #0,d4   * num of Delay calls
@@ -52016,6 +52051,8 @@ awaitStreamer:
 .1
     jsr	clearMainWindowWaitPointer
 .4
+    * After awaiting a new stream should be started
+    move    #-1,streamReturnCode(a5)
     rts
 
 .jammed
@@ -52083,13 +52120,6 @@ parseAgetHeaders:
     pushpea streamHeaderArray(pc),d2
     pushpea .rdArgs(pc),d3
 
-    move.l  d2,a1
-    clr.l   (a1)+
-    clr.l   (a1)+
-    clr.l   (a1)+
-    clr.l   (a1)+
-    clr.l   (a1)+
-
     move.l  d3,a1
     moveq   #RDA_SIZEOF-1,d0
 .c  clr.b   (a1)+
@@ -52145,12 +52175,20 @@ streamHeaderIcyDescription
     
 
 freeStreamHeaderArgs:
+    DPRINT  "freeStreamHeaderArgs"
     * Avoid crashing on kick 1.3
     move.l  streamHeaderArgs(a5),d1
     beq.b   .x
     clr.l   streamHeaderArgs(a5)
     lore    Dos,FreeArgs
-.x  rts
+.x  
+    lea     streamHeaderArray(pc),a0
+    clr.l   (a0)+
+    clr.l   (a0)+
+    clr.l   (a0)+
+    clr.l   (a0)+
+    clr.l   (a0)+
+    rts
 
 
 streamGetContentLength:
