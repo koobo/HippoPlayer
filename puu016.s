@@ -18765,19 +18765,30 @@ lootaan_aika
 
 ************* tähän timeout!
 	move	timeout(a5),d1
-	beq	.ok0
+	beq     .ok0
 	mulu	#50,d1
 
 	cmp.l	d1,d0
-	blo.b	.ok0
+	blo    	.ok0
 
 	DPRINT 	"Timeout triggered %ld"
 
 	cmp.l	#1,modamount(a5)	* 0 tai 1 modia -> ei timeouttia
-	bls.b	.ok0
+	bls 	.ok0
 
 	tst.b	timeoutmode(a5)		* timeout-moodi
-	beq.b	.all			* -> kaikille modeille
+	beq 	.all			* -> kaikille modeille
+
+    * Special case check:
+    * Streamed sample with no content length
+    * should not be interrupted with a timeout
+    cmp     #pt_sample,playertype(a5)
+    bne     .notSample
+    jsr     streamIsAlive
+    beq     .notSample
+    jsr     streamGetContentLength
+    beq     .ok0
+.notSample  
 
 	move.l	playerbase(a5),a0	* vain niille, joilla ei ole
 	move	p_liput(a0),d1		* end-detectia.
