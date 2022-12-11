@@ -27994,9 +27994,17 @@ loadmodule:
     pop     d0
     tst.l   d1
     bne     .streamOk
+    jsr     stopStreaming
     jsr     showStreamerError
+    jsr     awaitStreamer
+    lea     .msg(pc),a1
+    jsr     request
     moveq   #lod_remoteError,d0
     rts
+.msg
+    dc.b    "Error downloading data!",0
+    even
+
 .streamOk
 
     * Special case check: remote mp3 files go through as if
@@ -51820,11 +51828,11 @@ startStreaming:
 
 .error
     DPRINT  "error!"
-    move.l  streamerProcessOutputHandle(pc),d1
-    beq.b   .er
-    lore    Dos,Close
+    ;move.l  streamerProcessOutputHandle(pc),d1
+    ;beq.b   .er
+    ;lore    Dos,Close
 .er
-    moveq   #0,d0   * sttaus: error
+    moveq   #0,d0   * status: error
     bra     .x
 
 streamerProcessTags
