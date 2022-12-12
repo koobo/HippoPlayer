@@ -1423,10 +1423,20 @@ streamerUrl             rs.l    1
 * Pointer to streamer error data, aget output 
 streamerError           rs.l    1
 streamerErrorLength     rs.l    1
-streamHeaderArgs        rs.l    1
+* Data returned by RDArgs
+streamHeaderRDArgs      rs.l    1
 * Set to -1 when starting, set to aget return code when aget exists
 * Used to detect if stream has finished in certain cases.
 streamReturnCode        rs.w    1
+* Data sturcture for ReadArgs, specifies the input
+streamRDA               rs.b    RDA_SIZEOF
+* Output parsed data from ReadArgs
+streamHeaderArray           rs.l       0
+streamHeaderContentLength   rs.l       1
+streamHeaderContentType     rs.l       1
+streamHeaderIcyName         rs.l       1
+streamHeaderIcyDescription  rs.l       1
+streamHeaderRest            rs.l       1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -5235,7 +5245,7 @@ wrender:
 .pienehko
 	st	lootassa(a5)
 	clr.b	wintitl2(a5)
-	bsr	lootaa
+	jsr	lootaa
 	bsr	reslider
 
 	DPRINT	"wrender done"
@@ -40428,7 +40438,7 @@ p_sample:
     bne.b   .streamOk
     * Exiting, align stack to avoid mayhem
     DPRINT  "startStreaming failed" 
-    bsr     showStreamerError
+    jsr     showStreamerError
     moveq   #-1,d0
 	add     #18,sp
 	popm	a5/a6
@@ -40492,7 +40502,7 @@ p_sample:
 
 	bsr 	.vol
 
-    move.l  streamHeaderIcyName,d0
+    move.l  streamHeaderIcyName(a5),d0
     beq     .no1
     move.l  d0,a1
  	move.l  #INFO_MODULE_NAME_LEN-1,d1
@@ -52043,12 +52053,12 @@ stopStreaming:
     DPRINT  "*** stopStreaming"
 
     lore    Exec,Forbid
-    tst.l   streamerTask(a5)
+    move.l  streamerTask(a5),d0
     bne     .3
     DPRINT  "streamer not running"
     bra     .4
 .3
-    move.l  streamerTask(a5),a1
+    move.l  d0,a1
     move.l  #SIGBREAKF_CTRL_C,d0
     lob     Signal 
     DPRINT  "signal sent"
@@ -52179,8 +52189,8 @@ parseAgetHeaders:
     bsr     freeStreamHeaderArgs
 
     pushpea .template(pc),d1
-    pushpea streamHeaderArray(pc),d2
-    pushpea .rdArgs(pc),d3
+    pushpea streamHeaderArray(a5),d2
+    pushpea streamRDA(a5),d3
 
     move.l  d3,a1
     moveq   #RDA_SIZEOF-1,d0
@@ -52192,21 +52202,22 @@ parseAgetHeaders:
     move.l  d7,RDA_Source+CS_Length(a1)
 
     lob     ReadArgs
+    move.l  d0,streamHeaderRDArgs(a5)
     DPRINT  "ReadArgs=%lx"
 
   if DEBUG
-    move.l  streamHeaderArray(pc),d0
+    move.l  streamHeaderArray(a5),d0
     beq.b   .1
     move.l  d0,a0
     move.l  (a0),d0
     DPRINT  "Content-Length: %ld"
-.1  move.l  streamHeaderArray+4(pc),d0
+.1  move.l  streamHeaderArray+4(a5),d0
     beq.b   .2
     DPRINT  "Content-Type: %s"
-.2  move.l  streamHeaderArray+8(pc),d0
+.2  move.l  streamHeaderArray+8(a5),d0
     beq     .3  
     DPRINT  "Icy-Name: %s"
-.3  move.l  streamHeaderArray+12(pc),d0
+.3  move.l  streamHeaderArray+12(a5),d0
     beq     .4
     DPRINT  "Icy-Description: %s"
 .4
@@ -52215,36 +52226,21 @@ parseAgetHeaders:
     popm    d1-a6
     rts
 
-.rdArgs
-    ds.b    RDA_SIZEOF
-
 
 .template
      dc.b "CONTENT-LENGTH/K/N,CONTENT-TYPE/K,ICY-NAME/K,ICY-DESCRIPTION/K,REST/M",0
     even
 
-streamHeaderArray  
-streamHeaderContentLength
-    dc.l    0
-streamHeaderContentType
-    dc.l    0
-streamHeaderIcyName
-    dc.l    0
-streamHeaderIcyDescription
-    dc.l    0
-.rest   
-    dc.l    0
-    
 
 freeStreamHeaderArgs:
     DPRINT  "freeStreamHeaderArgs"
     * Avoid crashing on kick 1.3
-    move.l  streamHeaderArgs(a5),d1
+    move.l  streamHeaderRDArgs(a5),d1
     beq.b   .x
-    clr.l   streamHeaderArgs(a5)
+    clr.l   streamHeaderRDArgs(a5)
     lore    Dos,FreeArgs
 .x  
-    lea     streamHeaderArray(pc),a0
+    lea     streamHeaderArray(a5),a0
     clr.l   (a0)+
     clr.l   (a0)+
     clr.l   (a0)+
@@ -52258,19 +52254,19 @@ freeStreamHeaderArgs:
 *    d0 = length, or NULL if not available
 streamGetContentLength:
     moveq   #0,d0
-    move.l  streamHeaderContentLength(pc),d1
+    move.l  streamHeaderContentLength(a5),d1
     beq.b   .x
     move.l  d1,a0
     move.l  (a0),d0
 .x  rts
 
 
-* Checks Content-Type. It it starts with "audio/mpeg" returns true
+* Checks Content-Type. If it starts with "audio/mpeg" returns true
 * Out:
 *    d0 = true if "audio/mpeg", false otherwise
 streamIsMpegAudio:
     moveq   #0,d0
-    move.l  streamHeaderContentType(pc),d1
+    move.l  streamHeaderContentType(a5),d1
     beq     .x 
     move.l  d1,a0
     lea     .mimeAudioMpega(pc),a1
