@@ -1425,6 +1425,7 @@ streamerError           rs.l    1
 streamerErrorLength     rs.l    1
 streamHeaderArgs        rs.l    1
 * Set to -1 when starting, set to aget return code when aget exists
+* Used to detect if stream has finished in certain cases.
 streamReturnCode        rs.w    1
 
  if DEBUG
@@ -28018,7 +28019,6 @@ loadmodule:
 
     pushm   d0/a0
     jsr     streamIsMpegAudio
-    DPRINT  "is mpeg=%ld"
     tst.l   d0
     popm    d0/a0
     bne     .doLoadModule
@@ -51232,6 +51232,9 @@ fetchRemoteFile:
     move.l  a4,a0
     jsr     freemem
 
+    * This stream job is finished.
+    move    #-1,streamReturnCode(a5)
+
     * See if there was an error message
     bsr     showStreamerError
     tst.l   d0
@@ -52054,32 +52057,62 @@ stopStreaming:
     rts
 
 * Waits for the streamer task to exit if it is running
+* Used after startStreaming failure and when 
+* stopping sample playback.
 awaitStreamer:
     tst.l   streamerTask(a5)
     beq     .4
     DPRINT  "*** await streamer" 
     jsr	    setMainWindowWaitPointer
 
+    * Flush pipe file if possible
+    move.l  _DosBase(a5),a6
+    pushpea streamPipeFile(pc),d1
+	move.l	#MODE_OLDFILE,d2
+    lob     Open
+    move.l  d0,d5
+
     moveq   #0,d4   * num of Delay calls
+    moveq   #0,d3   * num of bytes flushed
+    moveq   #0,d6   * FGetC return code
 .loop   
+
+.5 
     tst.l   streamerTask(a5)
     beq     .continue
+    tst.l   d6
+    bmi     .6
+    tst.l   d5
+    beq     .6
+    move.l  d5,d1
+    lob     FGetC
+    addq.l  #1,d3
+    move.l  d0,d6
+    bpl     .5
+.6
     DPRINT  "wait"
     moveq   #50*1,d1
-    lore    Dos,Delay
+    lob     Delay
     addq.w  #1,d4
     cmp.w   #10,d4
     bhs     .jammed
     bra     .loop
 .continue   
-    
+
+    move.l  d5,d1
+    beq.b   .3
+    lob     Close
+.3
+
  if DEBUG
-    move.l  d4,d0
-    DPRINT  "task closed, waited %ld ticks" 
+    move.l  d3,d0
+    move.l  d4,d1
+    DPRINT  "task closed, flushed %ld, waited %ld" 
  endif
 .1
     jsr	clearMainWindowWaitPointer
 .4
+    * This stream job is done.
     * After awaiting a new stream should be started
     move    #-1,streamReturnCode(a5)
     rts
@@ -52220,6 +52253,9 @@ freeStreamHeaderArgs:
     rts
 
 
+* Returns the content length based on HTTP headers.
+* Out:
+*    d0 = length, or NULL if not available
 streamGetContentLength:
     moveq   #0,d0
     move.l  streamHeaderContentLength(pc),d1
@@ -52228,6 +52264,10 @@ streamGetContentLength:
     move.l  (a0),d0
 .x  rts
 
+
+* Checks Content-Type. It it starts with "audio/mpeg" returns true
+* Out:
+*    d0 = true if "audio/mpeg", false otherwise
 streamIsMpegAudio:
     moveq   #0,d0
     move.l  streamHeaderContentType(pc),d1
@@ -52239,8 +52279,6 @@ streamIsMpegAudio:
     bne     .x
     tst.b   (a1)
     bne     .cmp
-    tst.b   (a0)
-    bne     .x
     moveq   #1,d0
 .x  tst.l   d0
     rts
