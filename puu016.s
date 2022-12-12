@@ -22725,7 +22725,7 @@ intserver
 
 
 * d1 = signal number sent to the main task
-signalit
+signalit:
 	move.l	owntask+var_b,a1
 	moveq	#0,d0
 	bset	d1,d0
@@ -28341,15 +28341,27 @@ loadmodule:
 	clr.b	contonerr_laskuri(a5)
 	bra.b	loaderr
 .iik2
-	bsr	inforivit_errc		* Skipping -teksti
+    DPRINT  "Continue on error activated"
+	bsr	inforivit_errc		* Skipping -teksti   
+    
 	moveq	#50,d1
 	lore	Dos,Delay
-
+    
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
-	moveq	#1,d7			* seuraava piisi!
-	jsr	soitamodi
-	addq	#4,sp			* ei samaan paluuosoitteeseen!
-	rts
+
+    * Fake "Next" keyboard event
+    move    #$28,rawkeyinput(a5)
+	move.b	rawKeySignal(a5),d1
+	bsr 	signalit
+
+    moveq   #-1,d0 * status: load error
+    rts
+
+; Historical piece of code preserved, which started crashing recently:
+;	moveq	#1,d7			* seuraava piisi!
+;   jsr	soitamodi
+;	addq	#4,sp			* ei samaan paluuosoitteeseen!
+;	rts
 
 
 .unk_err
@@ -28361,6 +28373,7 @@ loadmodule:
 	tst.b	contonerr(a5)		* Continue on error?
 	bne.b	.iik
 loaderr:
+    DPRINT  "load error"
 	cmp	#lod_xpkerr,d0
 	beq	xpkvirhe
 	cmp	#lod_xfderr,d0
