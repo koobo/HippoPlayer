@@ -20869,9 +20869,18 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ******************* Sample
 	cmp	#pt_sample,playertype(a5)
-	bne.b	.nosample
-    jsr     hasMp3TagText
+	bne 	.nosample
+    
+    ;----------------------------------
+    ; Provide information about MP3 stuff,
+    ; no extra info on other sample formats available.
+
+    jsr     streamIsAlive
     beq     .nosample
+    jsr     streamIsMpegAudio
+    beq     .nosample
+    ;jsr     hasMp3TagText
+    ;beq     .nosample
     DPRINT  "sample info"
     move	#33,info_prosessi(a5)
 
@@ -20883,6 +20892,24 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
     move.l  a3,a0
     jsr     getMp3TagText
+
+    ;----------------------------------
+    lea	-200(sp),sp
+    move.l  streamHeaderIcyName(a5),d0
+    beq.b   .noIcyName
+    move.l  sp,a3
+    lea     .icyForm1(pc),a0
+    bsr     .putIcy
+.noIcyName
+    move.l  streamHeaderIcyDescription(a5),d0
+    beq.b   .noIcyDesc
+    move.l  sp,a3
+    lea     .icyForm2(pc),a0
+    bsr     .putIcy
+.noIcyDesc
+    move.l  infotaz(a5),d0
+    lea     200(sp),sp
+    ;----------------------------------
 
     move.l  infotaz(a5),a3
     tst.b   (a3)
@@ -20896,6 +20923,32 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .yesText
     move.l  a3,d0
     bra     .selvis
+
+; Icy specific putter
+.putIcy
+    push    a3
+    jsr     desmsg3
+    pop     a0
+	; target output buffer
+	move.l	infotaz(a5),a3
+	bsr	.lloppu
+	; do three lines wrapping at space
+	bsr    	.doLine
+	bpl    	.ic1
+	bsr    	.doLine
+	bpl    	.ic1
+	bsr    	.doLine
+.ic1   
+    rts
+
+
+.icyForm1
+    dc.b    ILF,ILF2,"Name:",ILF,ILF2
+    dc.b    "%s",ILF,ILF2,0
+.icyForm2
+    dc.b    ILF,ILF2,"Description:",ILF,ILF2
+    dc.b    "%s",ILF,ILF2,0
+ even
 
 .nosample
 ******************* THX
@@ -40564,7 +40617,9 @@ id_sample
 
 hasMp3TagText
 	move.l	sampleroutines(a5),a0
-	jmp 	p_sample\.s_hasMp3Text(a0)
+	jsr 	p_sample\.s_hasMp3Text(a0)
+    tst.l   d0
+    rts
 
 
 * in: 
@@ -52219,18 +52274,18 @@ parseAgetHeaders:
     DPRINT  "ReadArgs=%lx"
 
   if DEBUG
-    move.l  streamHeaderArray(a5),d0
+    move.l  streamHeaderContentLength(a5),d0
     beq.b   .1
     move.l  d0,a0
     move.l  (a0),d0
     DPRINT  "Content-Length: %ld"
-.1  move.l  streamHeaderArray+4(a5),d0
+.1  move.l  streamHeaderContentType(a5),d0
     beq.b   .2
     DPRINT  "Content-Type: %s"
-.2  move.l  streamHeaderArray+8(a5),d0
+.2  move.l  streamHeaderIcyName(a5),d0
     beq     .3  
     DPRINT  "Icy-Name: %s"
-.3  move.l  streamHeaderArray+12(a5),d0
+.3  move.l  streamHeaderIcyDescription(a5),d0
     beq     .4
     DPRINT  "Icy-Description: %s"
 .4
