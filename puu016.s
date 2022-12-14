@@ -20943,19 +20943,21 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; do three lines wrapping at space
 	bsr    	.doLine
 	bpl    	.ic1
+    move.b  #" ",(a3)+
 	bsr    	.doLine
 	bpl    	.ic1
+    move.b  #" ",(a3)+
 	bsr    	.doLine
 .ic1   
     rts
 
 
 .icyForm1
-    dc.b    ILF,ILF2,"Name:",ILF,ILF2
-    dc.b    "%s",ILF,ILF2,0
+    dc.b    ILF,ILF2," Name:",ILF,ILF2
+    dc.b    " %s",ILF,ILF2,0
 .icyForm2
-    dc.b    ILF,ILF2,"Description:",ILF,ILF2
-    dc.b    "%s",ILF,ILF2,0
+    dc.b    ILF,ILF2," Description:",ILF,ILF2
+    dc.b    " %s",ILF,ILF2,0
  even
 
 .nosample
@@ -21281,7 +21283,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 *   a3 = pointer to next position in output buffer
 *   d0 = negative: all input handled
 *        positive: data left in input for the next row
-.doLine
+.doLine:
 	moveq	#39-1,d0
 	moveq	#0,d1
 .cl1	cmp.b	#" ",(a0)
