@@ -9375,6 +9375,9 @@ rsearchfuncs
 	beq		find_new
 	subq	#1,d0
 	beq		find_continue
+
+    lea     modlandSearch,a0
+    basereg modlandSearch,a0
 	subq	#1,d0
 	beq.b	.modland
 	subq	#1,d0
@@ -9389,23 +9392,28 @@ rsearchfuncs
 	beq.b	.rko
 	subq	#1,d0
 	beq.b	.stations
+	subq	#1,d0
+	beq.b	.recentPlaylists
 .skip
 	rts
 
 .modland
-	jmp	modlandSearch
+	jmp	modlandSearch(a0)
 .aminet
-	jmp	aminetSearch
+	jmp	aminetSearch(a0)
 .modules
-	jmp	modulesSearch
+	jmp	modulesSearch(a0)
 .hvsc
-	jmp	hvscSearch
+	jmp	hvscSearch(a0)
 .amigaRemix
-	jmp	amigaRemixSearch
+	jmp	amigaRemixSearch(a0)
 .rko
-    jmp rkoSearch
+    jmp rkoSearch(a0)
 .stations
-    jmp stationsSearch
+    jmp stationsSearch(a0) 
+.recentPlaylists
+    jmp recentPlaylistsSearch(a0) 
+    endb    a0
 
 * in:
 *   d3 = index to check
