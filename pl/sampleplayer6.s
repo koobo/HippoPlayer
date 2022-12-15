@@ -46,6 +46,8 @@ DPRINT macro
 	include	devices/ahi_lib.i
 
 	include	utility/hooks.i
+	include	libraries/timer_lib.i
+	include	devices/timer.i
 
 	include	mucro.i
 
@@ -294,6 +296,11 @@ streamLength    rs.l    1
  if DEBUG
 output			rs.l 	1
 debugDesBuf		rs.b	1000
+;; Timer.device stuff
+timerOpen               rs.w    1
+timerRequest	        rs.b    IOTV_SIZE
+clockStart              rs.b    EV_SIZE
+clockEnd                rs.b    EV_SIZE
  endif
 
 size_var	rs.b	0
@@ -863,6 +870,9 @@ init:
 	moveq	#ier_mpega,d0
 	bra	sampleiik
 .uzx
+ if DEBUG
+    bsr     openTimer
+ endif
 
 	* Set up hook
 	lea	.mpega_hook(pc),a0
@@ -1049,6 +1059,7 @@ init:
  if DEBUG
 	move.l	4(a3),d0
 	DPRINT	"mpega_hook_open %s"
+    clr.l   .readCounter
  endif
 	move.l	4(a3),d1 	 * stream_name
 
@@ -1135,24 +1146,22 @@ init:
 	rts	
 
 .mpega_hook_read
- if DEBUG
-	pushm	all
-	move.l	a1,a4
-	move.l	a2,d1
-	moveq	#0,d2
-	moveq	#OFFSET_CURRENT,d3
-	lob	Seek
-	move.l	d0,d1
-
-	move.l	8(a4),d0 * length to read
-	DPRINT	"mpega_hook_read %ld at %ld"
-	popm	all
- endif
 	move.l	a2,d1    * handle
 	move.l	4(a1),d2 * buffer addr
 	move.l	8(a1),d3 * length to read
 	lob	Read
 	* d0 = bytes read or NULL if eof
+ if DEBUG
+    push    d0
+    add.l   d0,.readCounter
+    move.l  .readCounter(pc),d1
+    lsr.l   #8,d0
+    lsr.l   #2,d0
+    lsr.l   #8,d1
+    lsr.l   #2,d1
+    DPRINT  "mpega_hook_read read=%ldkB total=%ldkB"
+    pop     d0
+ endif
 	cmp.l	#-1,d0
 	beq.b	.mpega_read_err
 	rts	
@@ -1176,6 +1185,9 @@ init:
     DPRINT  "seek failed!"
 	rts
 
+ if DEBUG
+.readCounter    dc.l    0
+ endif
 
 
 .freqcheck:
@@ -1942,6 +1954,9 @@ sampleiik:
 	lore	Exec,CloseLibrary
 	clr.l	_MPEGABase(a5)
 .x
+ if DEBUG
+    bsr     closeTimer
+ endif
 
 	popm	all
 	rts
@@ -5329,6 +5344,113 @@ putCharSerial
     rts
 
  endif
+
+
+
+***************************************************************************
+*
+* Performance measurement with timer.device
+*
+***************************************************************************
+
+ if DEBUG
+openTimer
+	move.l	(a5),a0
+	move	LIB_VERSION(a0),d0
+	cmp	#36,d0
+	blo.b	.x
+	move.l	a0,a6
+
+	lea	.timerDeviceName(pc),a0
+	moveq	#UNIT_ECLOCK,d0
+	moveq	#0,d1
+	lea	timerRequest(a5),a1
+	lob	OpenDevice		; d0=0 if success
+	tst.l	d0
+	seq	timerOpen(a5)
+.x	rts
+
+.timerDeviceName dc.b	"timer.device",0
+	even
+
+closeTimer
+	tst.b	timerOpen(a5)
+	beq.b	.x
+	clr.b	timerOpen(a5)
+	move.l	(a5),a6
+	lea	timerRequest(a5),a1
+	lob	CloseDevice
+.x	rts
+
+startMeasure
+	tst.b	timerOpen(a5)
+	beq.b	.x
+	push	a6	
+	move.l	IO_DEVICE+timerRequest(a5),a6
+	lea	clockStart(a5),a0
+	lob	ReadEClock
+	pop 	a6
+.x	rts
+
+; out: d0: difference in millisecs
+stopMeasure
+	tst.b	timerOpen(a5)
+	bne.b	.x
+	moveq	#-1,d0
+	rts
+.x	pushm	d2-d4/a6
+	move.l	IO_DEVICE+timerRequest(a5),a6
+	lea	clockEnd(a5),a0
+	lob	ReadEClock
+    * D0 will be 709379 for PAL.
+	move.l	d0,d2
+	; d2 = ticks/s
+	divu	#1000,d2
+	; d2 = ticks/ms
+	ext.l	d2
+	
+	; Calculate diff between start and stop times
+	; in 64-bits
+	move.l	EV_HI+clockEnd(a5),d0
+	move.l	EV_LO+clockEnd(a5),d1
+	move.l	EV_HI+clockStart(a5),d3
+	sub.l	EV_LO+clockStart(a5),d1
+	subx.l	d3,d0
+
+	; Turn the diff into millisecs
+	; Divide d0:d1 by d2
+	jsr	divu_64
+	; d0:d1 is now d0:d1/d2
+	; take the lower 32-bits
+	move.l	d1,d0
+	popm	d2-d4/a6
+	rts
+
+; udivmod64 - divu.l d2,d0:d1
+; by Meynaf/English Amiga Board
+divu_64
+	move.l d3,-(a7)
+ 	moveq #31,d3
+.loop
+	 add.l d1,d1
+	 addx.l d0,d0
+ 	bcs.s .over
+ 	cmp.l d2,d0
+ 	bcs.s .sui
+ 	sub.l d2,d0
+.re
+ 	addq.b #1,d1
+.sui
+ 	dbf d3,.loop
+ 	move.l (a7)+,d3	; v=0
+ 	rts
+.over
+ 	sub.l d2,d0
+ 	bcs.s .re
+ 	move.l (a7)+,d3
+ 	or.b #4,ccr		; v=1
+ 	rts
+  endif
 
 var_b	ds.b	size_var
 
