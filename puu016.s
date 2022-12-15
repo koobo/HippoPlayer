@@ -50886,8 +50886,9 @@ remoteSearch
     ; Stations: get readable name from search results
 
     moveq   #0,d3
-   ; cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
-   ; beq     .s22
+   
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+    beq     .s22
     cmp.b   #SEARCH_STATIONS,d7
     bne     .s2
 .s22
@@ -50900,8 +50901,25 @@ remoteSearch
     beq     .s2
     move.l  d3,a2
 
-    ; Find column for "Name"
-.z1 cmp.b   #"N",(a2)+
+    ; Find column for "Name" for radio stations
+    ; Find column for "Title" for playlists
+    ; This loop does not have boundary checks!
+.z1 
+    cmp.b   #SEARCH_STATIONS,d7
+    beq     .rs1
+    moveq   #5-1,d1 * chars to skip over
+    cmp.b   #"T",(a2)+
+    bne.b   .z1
+    cmp.b   #"i",(a2)
+    bne.b   .z1
+    cmp.b   #"t",1(a2)
+    bne.b   .z1
+    cmp.b   #"l",2(a2)
+    beq.b   .pl1
+    bra     .z1
+.rs1
+    moveq   #4-1,d1 * chars to skip over
+    cmp.b   #"N",(a2)+
     bne.b   .z1
     cmp.b   #"a",(a2)
     bne.b   .z1
@@ -50909,10 +50927,11 @@ remoteSearch
     bne.b   .z1
     cmp.b   #"e",2(a2)
     bne.b   .z1
+.pl1
     * d0 = Name start column
     move.l  a2,d0
     subq.l  #1,d0
-    addq    #3,a2
+    add     d1,a2   * skip to the next space to find out the next column
 .z2 cmp.b   #" ",(a2)+
     beq     .z2
     * d1 = name end column
