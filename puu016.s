@@ -28407,7 +28407,7 @@ loadmodule:
     bsr     engageNormalMode
     jsr     freelist
 
-
+    jsr     obtainModuleList
     lea	    moduleListHeader(a5),a2
     move.l  moduleaddress(a5),a3
     move.l  a3,a4
@@ -28418,7 +28418,14 @@ loadmodule:
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	clr.l	chosenmodule(a5)
     jsr     listChanged
+    tst.b   autosort(a5)
+    beq     .noSort
+    jsr     sortButtonAction
+    bra     .sorted
+.noSort
 	jsr	    forceRefreshList
+.sorted
+	jsr		releaseModuleList
 
     * Return error here so that the playback process is stopped.
     * The list gets invalidated and any node that is to be played
@@ -28429,8 +28436,7 @@ loadmodule:
 
     move    #$44,rawkeyinput(a5)
 	move.b	rawKeySignal(a5),d1
-    printt  "XAX ------------"
-	;;;;;;;;bsr 	signalit
+	bsr 	signalit
 
     moveq   #-1,d0   * status: failed
     rts
