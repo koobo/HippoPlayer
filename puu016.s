@@ -50717,6 +50717,8 @@ remoteSearch
 	tst.l	d0
 	bmi		.exit
 
+    ; Redirect output to file, this contains error messages.
+    ; TODO: Not used at the moment.
     pushpea searchOut(pc),d1
     move.l  #MODE_NEWFILE,d2
     lore    Dos,Open
@@ -50899,7 +50901,7 @@ remoteSearch
     bne     .s2
 .s22
 
-    lea     searchOut(pc),a0
+    lea     searchResultsOut(pc),a0
     jsr     plainLoadFile
     move.l  d0,d3
     beq     .s2
@@ -51187,14 +51189,14 @@ remoteSearch
 	dc.b	"stationsearch",0
 .stationsSearchCmd
 	dc.b	"%s",10
-	dc.b 	'uhcmirrorsearch stationsearch %s',10
+	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults stationsearch %s',10
 	dc.b	0
 
 .recentPlaylistsResultsPath
 	dc.b	"playlistrecent",0
 .recentPlaylistsSearchCmd
 	dc.b	"%s",10
-	dc.b 	'uhcmirrorsearch playlistrecent',10
+	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults playlistrecent',10
 	dc.b	0
 
 
@@ -51205,6 +51207,8 @@ remoteScriptPath
 
 searchOut
         dc.b    "T:searchout",0
+searchResultsOut
+        dc.b    "T:searchresults",0
  even
 
 * Set list node remote type and
