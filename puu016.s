@@ -50765,7 +50765,7 @@ remoteSearch
     cmp.b   #SEARCH_RKO,d7
     beq     .a
     lea     .stationsResultsPath(pc),a0
-    cmp.b   #SEARCH_STATIONS,d0
+    cmp.b   #SEARCH_STATIONS,d7
     beq     .a
     lea     .recentPlaylistsResultsPath(pc),a0
 .a
