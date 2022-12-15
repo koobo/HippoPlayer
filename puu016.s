@@ -40540,7 +40540,17 @@ p_sample:
     jsr     streamGetContentLength
     move.l  d0,-(sp)
 
+    * Content length zero and stream active? it's a radio station
+    tst.l   d0
+    bne     .cl1
+    bsr     streamIsAlive
+    beq     .cl2
+    DPRINT  "stream is a radio station, enforce small buffer"
+    moveq   #1,d0
+    bra     .cl2
+.cl1
 	move.b	samplebufsiz0(a5),d0
+.cl2
 	move.b	sampleformat(a5),d1
 
 	move.l	_DosBase(a5),a1
@@ -40617,17 +40627,7 @@ p_sample:
  if DEBUG
 	pushm	d0-d3
 	move.l	d3,d0
-    moveq   #0,d2
-    moveq   #0,d3 
-    cmp.w   #0,a1
-    beq.b   .k1
-	move.l	(a1),d2
-.k1
-    cmp.w   #0,a2
-    beq.b   .k2
-	move.l	(a2),d3
-.k2
-	DPRINT	"Bufsize=%ld add=%ld buf1=%lx buf2=%lx"
+	DPRINT	"Bufsize=%ld add=%ld"
 	popm	d0-d3
  endif
 
@@ -52068,18 +52068,16 @@ agetOutputFile
 
 * Checks whether streamer is alive
 * Out:
-*    d0 = True if alive, false if not
+*    Z clear: alive, Z set: not alive
 streamIsAlive:
-    move.l  streamerTask(a5),d0
+    tst.l    streamerTask(a5)
  if DEBUG
-    beq.b   .1
-    DPRINT  "stream check: it's alive"
+    pushm   d0
+    move.l  streamerTask(a5),d0
+    DPRINT  "streamIsAlive=%lx"
     tst.l   d0
-    rts
-.1
-    DPRINT  "stream check: NOT alive"
-    tst.l   d0
- endif   
+    popm    d0
+ endif
     rts
 *
 *
@@ -52237,7 +52235,11 @@ streamerEntry:
     dc.b	'%sC/aget',0
 
 .args
-	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=2048',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
+;	dc.b	'"%s" PIPE:hippoStream/8192/8 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=2048',10,0
+	dc.b	'"%s" PIPE:hippoStream/16384/4 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
  even
 
 
