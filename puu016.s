@@ -9430,16 +9430,17 @@ rsearchfuncs
 
 .options
 	* max width, rows
-	dc.b	24,9
-	dc.b	"Search list    [F]      ",0
-	dc.b	"Search next    [SHIFT+F]",0
-	dc.b	"Search Modland [CTRL+M] ",0
- 	dc.b	"Search Aminet           ",0
-	dc.b	"Search Modules.pl       ",0
-	dc.b	"Search HVSC             ",0
-	dc.b	"Search AmigaRemix       ",0
-	dc.b	"Search Remix.Kwed.Org   ",0
-	dc.b	"Search Radio Stations   ",0
+	dc.b	27,10
+	dc.b	"Search list             [F]",0
+	dc.b	"Search next       [SHIFT+F]",0
+	dc.b	"Search Modland     [CTRL+M]",0
+ 	dc.b	"Search Aminet              ",0
+	dc.b	"Search Modules.pl          ",0
+	dc.b	"Search HVSC           (SID)",0
+	dc.b	"Search AmigaRemix     (MP3)",0
+	dc.b	"Search Remix.Kwed.Org (MP3)",0
+	dc.b	"Search radio stations (MP3)",0
+	dc.b	"Browse shared playlists    ",0
 
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
@@ -11642,7 +11643,7 @@ rloadprogDoIt
 	move.l	d7,a0
 .ewew
 	moveq	#0,d4
-.loadp
+.loadp:
 	move.b	lprgadd(a5),d7
 	clr.b	lprgadd(a5)
 
@@ -11919,8 +11920,13 @@ otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
 *   a0 = module program file name
 *   d4 = some magic flag?
 *   d7 = some other magic flag?
-loadprog
-	DPRINT	"loadprog"
+loadprog:
+ if DEBUG
+    push    d0
+    move.l  a0,d0
+	DPRINT	"loadprog %s"
+    pop     d0
+ endif
 	* Ensure correct list mode
 	jsr	engageNormalMode
 	bra.b	rloadprogDoIt\.blob
@@ -12014,7 +12020,6 @@ importModuleProgramFromData:
 	bra		.next
 .accepted
 
-
 	* Is this an url?
 	moveq	#0,d3	* local
 	cmp.b	#"h",(a3)
@@ -12040,7 +12045,7 @@ importModuleProgramFromData:
 	sub.l	a3,d0	* pituus
 
 	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
-	add.l	d4,d0	* add extra header space if any
+    add.l	d4,d0	* add extra header space if any
 
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr	getmem
@@ -12053,11 +12058,22 @@ importModuleProgramFromData:
 	* Copy filename 
 	lea	l_filename(a2),a0
 
+    * UTF8 encoding for divider magic: $c3b7
+    cmp.b   #$c3,(a3)
+    bne     .div0
+    cmp.b   #$b7,1(a3)
+    bne     .div0
+	addq	#2,a3
+	st	    l_divider(a2)
+    bra     .utf8div
+.div0
+    * Amiga encoding:
 	cmp.b	#DIVIDER_MAGIC,(a3)
 	bne.b	.notDiv2
 	addq	#1,a3
 	st	l_divider(a2)
 .notDiv2
+.utf8div
 
 	* See if additional header should
 	* be prepended to the line. This indicates
@@ -28353,38 +28369,75 @@ loadmodule:
 
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
-	bne.b	.nip
-	tst.b	executablemoduleinit(a5)
-	bne.b	.nip
+	bne 	.nip
+	tst 	executablemoduleinit(a5)
+	bne 	.nip
 
 	move.l	moduleaddress(a5),a0	* Oliko moduleprogram??
 	cmp.l	#"HiPP",(a0)
-	bne.b	.nipz
+	bne 	.nipz
 	cmp	#"rg",4(a0)
-	beq.b	.nipa
+	beq 	.nipa
 .nipz
 	cmp.l	#"HIPP",(a0)
-	bne.b	.nip
+	bne 	.nip
 	cmp	#"RO",4(a0)
-	bne.b	.nip
+	bne 	.nip
 
 .nipa
-	lea	-150(sp),sp
-	move.l	sp,a3
-	move.l	modulefilename(a5),a0
-.cop	move.b	(a0)+,(a3)+
-	bne.b	.cop
+    DPRINT  "module program detected"
 
-	jsr	freemodule
-	jsr	clearlist	* lista tyhjäks
+;       lea     -150(sp),sp
+;       move.l  sp,a3
+;       move.l  modulefilename(a5),a0
+;.cop   move.b  (a0)+,(a3)+
+;       bne.b   .cop
+;
+;       jsr     freemodule
+;       jsr     clearlist       * lista tyhj<E4>ks
+;
+;      move.l  sp,a0                   * ohjelman nimi
+;      moveq   #-1,d4                  * lippu
+;      jsr     loadprog                * ladataan moduuliohjelma
+;      lea     150+4(sp),sp
+;
+;    rts
+
+    * The list data is already loaded, use it
+    bsr     engageNormalMode
+    jsr     freelist
+
+
+    lea	    moduleListHeader(a5),a2
+    move.l  moduleaddress(a5),a3
+    move.l  a3,a4
+    add.l   modulelength(a5),a4
+    jsr     importModuleProgramFromData
+    move.l	d0,modamount(a5)
+    DPRINT  "modamount=%ld"
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
+	clr.l	chosenmodule(a5)
+    jsr     listChanged
+	jsr	    forceRefreshList
 
-	move.l	sp,a0			* ohjelman nimi
-	moveq	#-1,d4			* lippu
-	jsr	loadprog		* ladataan moduuliohjelma
-	lea	150+4(sp),sp
-;	addq	#4,sp			* ei palata samaan aliohjelmaan!
-	rts
+    * Return error here so that the playback process is stopped.
+    * The list gets invalidated and any node that is to be played
+    * will also be.
+
+    * Send an event to start the playback later with the new
+    * list contents. Fake the "play" key event.
+
+    move    #$44,rawkeyinput(a5)
+	move.b	rawKeySignal(a5),d1
+    printt  "XAX ------------"
+	;;;;;;;;bsr 	signalit
+
+    moveq   #-1,d0   * status: failed
+    rts
+
+
+
+
 .nip
 	bsr	tutki_moduuli
 	tst.l	d0
@@ -50524,13 +50577,14 @@ verticalLayout:
 *
 ***************************************************************************
 
-SEARCH_MODLAND    = 0
-SEARCH_AMINET     = 1
-SEARCH_MODULES    = 2
-SEARCH_HVSC       = 3
-SEARCH_AMIGAREMIX = 4
-SEARCH_RKO        = 5
-SEARCH_STATIONS   = 6
+SEARCH_MODLAND          = 0
+SEARCH_AMINET           = 1
+SEARCH_MODULES          = 2
+SEARCH_HVSC             = 3
+SEARCH_AMIGAREMIX       = 4
+SEARCH_RKO              = 5
+SEARCH_STATIONS         = 6
+SEARCH_RECENT_PLAYLISTS = 7
 
 modlandSearch
 	moveq	#SEARCH_MODLAND,d7
@@ -50560,6 +50614,9 @@ stationsSearch
 	moveq	#SEARCH_STATIONS,d7
 	bra 	remoteSearch
 
+recentPlaylistsSearch
+	moveq	#SEARCH_RECENT_PLAYLISTS,d7
+	bra 	remoteSearch
 
 
 * Requests a search pattern from the user,
@@ -50578,6 +50635,10 @@ remoteSearch
 
 	* Storage space for user input
 	lea	-50(sp),sp
+
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+    beq     .srh0
+
 	move.l	sp,a1
 	clr.b	(a1)
 	jsr		get_rt
@@ -50595,7 +50656,7 @@ remoteSearch
 ; d0 = true if something entered, false otherwise
 	tst.l	d0
 	beq		.exit
-
+.srh0
 	lea	.srh(pc),a0
 	jsr		printbox
 	bra.b	.srhh
@@ -50624,6 +50685,9 @@ remoteSearch
     cmp.b   #SEARCH_RKO,d7
     beq.b   .1
     lea     .stationsSearchCmd(pc),a0
+    cmp.b   #SEARCH_STATIONS,d7
+    beq     .1
+    lea     .recentPlaylistsSearchCmd(pc),a0
 .1
     pushpea .pathCmd(pc),d0  * path setting
  	move.l	sp,d1		* search word
@@ -50673,7 +50737,7 @@ remoteSearch
 	tst.l	d0
 	bpl.b	.gotVar
 	moveq	#0,d0
-	bra.b	.bail
+	bra     .bail
 .gotVar
 
 	lea		.modlandResultsPath(pc),a0
@@ -50695,6 +50759,9 @@ remoteSearch
     cmp.b   #SEARCH_RKO,d7
     beq     .a
     lea     .stationsResultsPath(pc),a0
+    cmp.b   #SEARCH_STATIONS,d0
+    beq     .a
+    lea     .recentPlaylistsResultsPath(pc),a0
 .a
 
 	* Jump to after the variable
@@ -50758,6 +50825,12 @@ remoteSearch
     moveq   #0,d6   * No base header to prepend
     * Additional space for readable name
     moveq   #100,d4  * Base header length, add extra space in this case
+    cmp.b   #SEARCH_STATIONS,d7
+    beq     .2
+    * RECENT_PLAYLISTS
+    pushpea	.recentPlaylistsLine(pc),d6 
+    * Add extra space for visible name
+	move.l	#.recentPlaylistsLineE-.recentPlaylistsLine+100,d4	
 	bra.b	.2
 .aa
 	pushpea	.aminetLine(pc),d6
@@ -50790,13 +50863,35 @@ remoteSearch
 	move.l	a3,a0   
 	jsr		freemem
 
+    bsr     .postProcessSearchResults
+
+	tst.b	autosort(a5)
+	beq.b	.noSort
+	jsr		sortButtonAction
+	bra.b	.sorted
+.noSort
+    jsr		forceRefreshList
+.sorted
+	jsr		releaseModuleList
+.exit
+	jsr		unlockMainWindow
+    * User input buffer restore
+	lea 	50(sp),sp
+	rts
+
+
+.postProcessSearchResults
     ; ---------------------------------
     * Postprocess stations
     ; Stations: get readable name from search results
 
     moveq   #0,d3
+   ; cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+   ; beq     .s22
     cmp.b   #SEARCH_STATIONS,d7
     bne     .s2
+.s22
+
     lea     searchOut(pc),a0
     jsr     plainLoadFile
     move.l  d0,d3
@@ -50848,9 +50943,8 @@ remoteSearch
     st      l_remote(a3)
     lea     l_filename(a3),a1
     
-    * Find end of filename, after it there's 50 extra bytes
-    * Make it the visible name, also add separator so that
-    * the entry can be recreated from a saved list
+    * Find end of filename, after it there are extra bytes
+    * for the visible name.
 .s4 tst.b   (a1)+
     bne     .s4
     ; after the NULL put the extra name
@@ -50871,24 +50965,10 @@ remoteSearch
 	bra.b	.s1
 .s2
 
+    * Free loaded searchout file data
     move.l  d3,a0
     jsr     freemem
-
-    ; ---------------------------------
-
-	tst.b	autosort(a5)
-	beq.b	.noSort
-	jsr		sortButtonAction
-	bra.b	.sorted
-.noSort
-    jsr		forceRefreshList
-.sorted
-	jsr		releaseModuleList
-.exit
-.noAminet
-	jsr		unlockMainWindow
-	lea 	50(sp),sp
-	rts
+    rts
 
 
 * In:
@@ -51027,6 +51107,10 @@ remoteSearch
     dc.b    "http://uhc.remix.kwed.org/",0
 .rkoLineE
 
+.recentPlaylistsLine
+	dc.b	"http://asciiarena.se/",0
+.recentPlaylistsLineE
+
 .uhcTempDirVar
 	dc.b	"UHC/TEMPDIR",0
 
@@ -51074,7 +51158,6 @@ remoteSearch
 	dc.b 	'rkosearch %s',10
 	dc.b	0
 
-
 .stationsResultsPath
 	dc.b	"stationsearch",0
 .stationsSearchCmd
@@ -51082,6 +51165,12 @@ remoteSearch
 	dc.b 	'uhcmirrorsearch stationsearch %s',10
 	dc.b	0
 
+.recentPlaylistsResultsPath
+	dc.b	"playlistrecent",0
+.recentPlaylistsSearchCmd
+	dc.b	"%s",10
+	dc.b 	'uhcmirrorsearch playlistrecent',10
+	dc.b	0
 
 
 remoteExecute
@@ -51100,7 +51189,8 @@ searchOut
 configRemoteNode:
 	pushm	d0/a0-a4
 	st		l_remote(a0)
-
+    ;DPRINT  "configRemoteNode"
+    
  	lea		l_filename(a0),a1
 	move.l	a1,a2
 .findEnd2
@@ -51178,6 +51268,10 @@ configRemoteNode:
 	addq	#1,a1
 .break
 	move.l	a1,l_nameaddr(a0)
+
+;    move.l  a1,d0
+;    DPRINT  "nameaddr=%s"
+
 .x
 	popm	d0/a0-a4
 	rts
