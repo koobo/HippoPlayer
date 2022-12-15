@@ -5164,9 +5164,12 @@ getFrameText
     beq     .utf8
     ;cmp.b   #1,d7
     ;cmp.b   #2,d7
-.utf16
-    move.b  1(a0),(a1)+
-    addq    #2,a0
+.utf16 
+    move.b  (a0),d4
+    cmp.b   #$ff,d4 * skip this one, utf magic
+    beq.b   .b
+    move.b  d4,(a1)+
+.b  addq    #2,a0
     bra     .continue
 .utf8
 .iso8859
