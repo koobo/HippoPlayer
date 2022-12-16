@@ -20956,7 +20956,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
-	; do three lines wrapping at space
+	; do 4 lines wrapping at space
+	bsr    	.doLine
+    bpl    	.ic1
+    move.b  #" ",(a3)+
 	bsr    	.doLine
 	bpl    	.ic1
     move.b  #" ",(a3)+
@@ -21266,12 +21269,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	jsr	deliGetTag 
 	beq.b 	.noPlrName 
 	lea	.eagleName(pc),a0 
-	bsr.b	.deliPutInfo2	
+	bsr 	.deliPutInfo2	
 .noPlrName 
 	* Creator, 1-3 lines
 	move.l	#DTP_Creator,d0 
 	jsr	deliGetTag 
-	beq.b 	.noCrtr
+	beq 	.noCrtr
 	lea	.eagleCreator(pc),a0 
 	; format output buffer
 	lea	-200(sp),sp
@@ -21283,12 +21286,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	; do three lines wrapping at space
-	bsr.b	.doLine
-	bpl.b	.ends
-	bsr.b	.doLine
-	bpl.b	.ends
-	bsr.b	.doLine
-	bra.b	.ends
+	bsr 	.doLine
+	bpl 	.ends
+	bsr 	.doLine
+	bpl 	.ends
+	bsr 	.doLine
+	bra 	.ends
 
 * Copies a line to output, cuts at space near the end of line
 * in:
@@ -21300,16 +21303,24 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 *   d0 = negative: all input handled
 *        positive: data left in input for the next row
 .doLine:
-	moveq	#39-1,d0
+ 	moveq	#39-1,d0
 	moveq	#0,d1
 .cl1	cmp.b	#" ",(a0)
 	bne.b	.ns1
 	addq	#1,d1 ; keep track of spaces
-.ns1	move.b	(a0)+,(a3)+
+.ns1	
+    move.b  (a0)+,d2
+    cmp.b   #ILF2,d2
+    bne.b   .noIlf2
+    * Line change resets the counter
+    moveq	#39-1,d0    
+.noIlf2
+    move.b  d2,(a3)+
 	dbeq	d0,.cl1
-	tst	d0
-	bpl.b	.endLine
-	; find previous space to cut from
+    ; d0 = -1, all chars copied
+ 	tst 	d0
+	bpl	    .endLine
+ 	; find previous space to cut from
 	; SAFETY: if there are any
 	tst	d1
 	beq.b	.endLin

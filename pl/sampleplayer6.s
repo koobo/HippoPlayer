@@ -5054,7 +5054,13 @@ appendWithWrap:
 .ys1
 	addq	#1,d1 ; keep track of spaces
 .ns1	    
-    move.b	(a0)+,(a3)+
+    move.b  (a0)+,d2
+    cmp.b   #ILF2,d2
+    bne.b   .noIlf2
+    * Line change resets the counter
+    moveq	#37-1,d0    
+.noIlf2
+    move.b  d2,(a3)+
 	dbeq	d0,.cl1
 	tst	d0
 	bpl.b	.endLine
