@@ -40564,12 +40564,22 @@ p_sample:
     tst.l   d0
     bne     .cl1
     bsr     streamIsAlive
-    beq     .cl2
-    DPRINT  "stream is a radio station, enforce small buffer"
-    moveq   #1,d0
+    beq     .cl1
+    * 0 = 4k
+    * 1 = 8k
+    * 2 = 16k
+    * 3 = 32k
+    * 4 = 64k
+    * 5 = 128k
+    ; Buffer can't be too large for throttled stations
+    move.b	samplebufsiz0(a5),d0
+    cmp.b   #2,d0
+    bls     .cl2
+    moveq   #2,d0
+    DPRINT  "stream is radio, enforcer buffer"
     bra     .cl2
 .cl1
-	move.b	samplebufsiz0(a5),d0
+    move.b	samplebufsiz0(a5),d0
 .cl2
 	move.b	sampleformat(a5),d1
 
@@ -52039,6 +52049,16 @@ startStreaming:
     DPRINT  "streamer started! length=%ld mpeg/audio=%ld"
  endif
 
+    ; Allow aget to fill pipe for a while so mpega
+    ; will not starve for streams that are throttled.
+    bsr     streamIsRadioStation
+    beq     .notRadio
+    DPRINT  "Radio buffering!"
+    move.l  #2*50,d1
+    lore    Dos,Delay
+.notRadio
+
+
 .y
     lea     streamPipeFile(pc),a0
     moveq   #1,d0   * status: ok
@@ -52243,10 +52263,11 @@ streamerEntry:
 
 .args
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
-;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=2048',10,0
-;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
-;	dc.b	'"%s" PIPE:hippoStream/8192/8 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=2048',10,0
-	dc.b	'"%s" PIPE:hippoStream/16384/4 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
+	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/16384/4 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
+;	dc.b	'"%s" PIPE:hippoStream/32768/4 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/8 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
  even
 
 
@@ -52458,6 +52479,20 @@ freeStreamHeaderArgs:
     clr.l   (a0)+
     rts
 
+* Returns true if the current stream is a radio station.
+* Out: 
+*   d0 = true or false
+streamIsRadioStation:
+    bsr     streamIsMpegAudio
+    beq     .no
+    bsr     streamGetContentLength
+    tst.l   d0
+    bne     .no
+    moveq   #1,d0
+    rts
+.no
+    moveq   #0,d0
+    rts
 
 * Returns the content length based on HTTP headers.
 * Out:
