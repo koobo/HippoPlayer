@@ -18639,6 +18639,11 @@ inforivit_downloading
 	bra	putinfo
 .1	dc.b	"Downloading...",0
  even
+inforivit_connecting
+	lea	.1(pc),a0
+	bra	putinfo
+.1	dc.b	"Connecting...",0
+ even
 
 
 ;inforivit_initializing
@@ -28089,6 +28094,9 @@ loadmodule:
     * Open up a stream.
     lea     l_filename(a3),a0
     push    d0
+    push    a0
+    bsr     inforivit_connecting
+    pop     a0
     jsr     startNewStreaming
     DPRINT  "startStreaming=%ld"
     move.l  d0,d1
@@ -28100,6 +28108,7 @@ loadmodule:
     jsr     awaitStreamer
     lea     .msg(pc),a1
     jsr     request
+	jsr	    inforivit_clear
     moveq   #lod_remoteError,d0
     rts
 .msg

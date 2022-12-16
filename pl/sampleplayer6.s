@@ -428,7 +428,7 @@ endSamplePlay:
 	popm	all
 	rts
 	
-vol	
+vol:
 	pushm	all
 	lea	var_b(pc),a5
 	bsr.b	.b
@@ -3290,6 +3290,11 @@ decodeMp3
 	move.l	12(a3),samplepointer2(a5)
 
 .loopw2
+ 
+ ; if DEBUG
+;	move.l	samplebufsiz(a5),d0
+ ;   DPRINT  "requesting %ld samples"
+ ; endif
 
 	move.l	a4,d2
 	move.l	samplebufsiz(a5),d3
@@ -3449,6 +3454,7 @@ decodeMp3
 .j2	lsr.l	#1,d0
 	movem.l	(a3),a0/a1
 	movem.l	16(a3),a2/a3
+   ; DPRINT  "play block and wait for paula" 
 	bsr	playblock_14bit
 
 	popm	a3/a4/a6
@@ -3525,6 +3531,7 @@ wait:
 .screw
     * Stop/pause Paula
 	move	#$f,$dff096
+    ;bsr     clearsound
 .screa	
     * Continue waiting, set flag
     st	samplebarf(a5)
@@ -3545,8 +3552,11 @@ wait:
 
 .screw2
     * Continue Paula sound
+    ;bsr     vol
 	move	#$800f,$dff096
-    * This waits for the next audio interrupt, why?
+    * This waits for the next audio interrupt.
+    * This indicates when the next buffer can be loaded
+    * into paula registers
 	move	$dff01e,d0
 	and	#$0780,d0
 	beq.b	wait
@@ -3614,7 +3624,7 @@ goa	move    d0,$a4-$a0(a4)
 	rts
 	
 
-playblock_14bit
+playblock_14bit:
 	push	a4
 	lea     $dff0a0,a4
 	move.l  a0,(a4)
