@@ -50672,31 +50672,37 @@ remoteSearch
 .srhh
 
 	* Prepare script into desbuf(a5)
-	lea		.modlandSearchCmd(pc),a0
+
+    lea     .genericSearchCmd(pc),a0
+	lea 	.modlandResultsPath(pc),a1
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.1
-	lea		.aminetSearchCmd(pc),a0
-	cmp.b	#SEARCH_AMINET,d7
-	beq.b	.1
-	lea		.modulesSearchCmd(pc),a0
+	lea 	.modulesResultsPath(pc),a1
     cmp.b   #SEARCH_MODULES,d7
     beq.b   .1
-    lea     .hvscSearchCmd(pc),a0
+	lea 	.hvscResultsPath(pc),a1
     cmp.b   #SEARCH_HVSC,d7
     beq.b   .1
-    lea     .amigaRemixSearchCmd(pc),a0
+	lea 	.amigaRemixResultsPath(pc),a1
     cmp.b   #SEARCH_AMIGAREMIX,d7
     beq     .1
-    lea     .rkoSearchCmd(pc),a0
+	lea 	.rkoResultsPath(pc),a1
     cmp.b   #SEARCH_RKO,d7
     beq.b   .1
-    lea     .stationsSearchCmd(pc),a0
+	lea		.stationsSearchCmd(pc),a0
+	lea 	.stationsResultsPath(pc),a1
     cmp.b   #SEARCH_STATIONS,d7
     beq     .1
-    lea     .recentPlaylistsSearchCmd(pc),a0
+	lea		.recentPlaylistsSearchCmd(pc),a0
+	lea 	.recentPlaylistsResultsPath(pc),a1
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+    beq     .1
+	lea		.aminetSearchCmd(pc),a0
+	lea 	.aminetResultsPath(pc),a1
 .1
-    pushpea .pathCmd(pc),d0  * path setting
- 	move.l	sp,d1		* search word
+    pushpea .pathCmd(pc),d0  * path cmd
+    move.l  a1,d1       * search cmd/search name
+ 	move.l	sp,d2		* search terms
 	jsr		desmsg
 
 	* Save it into a file for execution
@@ -50890,8 +50896,9 @@ remoteSearch
 
 .postProcessSearchResults
     ; ---------------------------------
-    * Postprocess stations
-    ; Stations: get readable name from search results
+    * Postprocess step
+    ; Get readable name from search results
+    ; for stations, playlists
 
     moveq   #0,d3
    
@@ -50994,7 +51001,7 @@ remoteSearch
 
     * Free loaded searchout file data
     move.l  d3,a0
-    jsr     freemem
+    jmp     freemem
     rts
 
 
@@ -51144,59 +51151,39 @@ remoteSearch
 .pathCmd
     dc.b    'path "${UHCBIN}C" "${UHCBIN}S" ADD',0
 
+.genericSearchCmd
+	dc.b	"%s",10     ; path
+	dc.b 	'%s %s',10  ; search, terms
+	dc.b	0
+
 .modlandResultsPath
 	dc.b	"modlandsearch",0
-.modlandSearchCmd
-	dc.b	"%s",10
-	dc.b 	'modlandsearch %s',10
-	dc.b	0
 .aminetResultsPath
 	dc.b	"aminetsearch",0
 .aminetSearchCmd
 	dc.b	"%s",10
-	dc.b 	'aminetsearch mods/ %s',10
+	dc.b 	'%s mods/ %s',10
 	dc.b	0
 
 .modulesResultsPath
 	dc.b	"modulessearch",0
-.modulesSearchCmd
-	dc.b	"%s",10
-	dc.b 	'modulessearch %s',10
-	dc.b	0
-
 .hvscResultsPath
 	dc.b	"hvscsearch",0
-.hvscSearchCmd
-	dc.b	"%s",10
-	dc.b 	'hvscsearch %s',10
-	dc.b	0
-
 .amigaRemixResultsPath
 	dc.b	"amigaremixsearch",0
-.amigaRemixSearchCmd
-	dc.b	"%s",10
-	dc.b 	'amigaremixsearch %s',10
-	dc.b	0
-
 .rkoResultsPath
 	dc.b	"rkosearch",0
-.rkoSearchCmd
-	dc.b	"%s",10
-	dc.b 	'rkosearch %s',10
-	dc.b	0
-
 .stationsResultsPath
 	dc.b	"stationsearch",0
 .stationsSearchCmd
 	dc.b	"%s",10
-	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults stationsearch %s',10
+	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s %s',10
 	dc.b	0
-
 .recentPlaylistsResultsPath
 	dc.b	"playlistrecent",0
 .recentPlaylistsSearchCmd
 	dc.b	"%s",10
-	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults playlistrecent',10
+	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s',10
 	dc.b	0
 
 
