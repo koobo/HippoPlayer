@@ -28105,7 +28105,7 @@ loadmodule:
     bne     .streamOk
     jsr     stopStreaming
     jsr     showStreamerError
-    jsr     awaitStreamer
+    jsr     awaitStreamerAndFlush
     lea     .msg(pc),a1
     jsr     request
 	jsr	    inforivit_clear
@@ -52297,21 +52297,36 @@ stopStreaming:
     lob     Permit
     rts
 
-* Waits for the streamer task to exit if it is running
-* Used after startStreaming failure and when 
-* stopping sample playback.
+* Waits for the streamer task to exit if it is running.
+* Used after startStreaming failure.
+awaitStreamerAndFlush:
+    moveq   #1,d0
+    bra     awaitStreamer0
+
+* Waits for the streamer task to exit if it is running.
+* Used after sample playing stopped to confirm the
+* streamer is done. No flushing as sample task will
+* do it by itself.
 awaitStreamer:
+    moveq   #0,d0
+
+awaitStreamer0:
+    DPRINT  "*** await streamer, flush=%ld" 
     tst.l   streamerTask(a5)
     beq     .4
-    DPRINT  "*** await streamer" 
+    DPRINT  "awaiting!" 
     jsr	    setMainWindowWaitPointer
-
-    * Flush pipe file if possible
     move.l  _DosBase(a5),a6
+
+    moveq   #0,d5
+    * Flush pipe file if possible if requested
+    tst.b   d0
+    beq     .noFlush
     pushpea streamPipeFile(pc),d1
 	move.l	#MODE_OLDFILE,d2
     lob     Open
     move.l  d0,d5
+.noFlush
 
     moveq   #0,d4   * num of Delay calls
     moveq   #0,d3   * num of bytes flushed
@@ -52321,10 +52336,10 @@ awaitStreamer:
 .5 
     tst.l   streamerTask(a5)
     beq     .continue
-    tst.l   d6
-    bmi     .6
     tst.l   d5
     beq     .6
+    tst.l   d6
+    bmi     .6
     move.l  d5,d1
     lob     FGetC
     addq.l  #1,d3
