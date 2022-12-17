@@ -51335,6 +51335,9 @@ fetchRemoteFile:
 	move.l	a0,d0
 	DPRINT	"fetchRemoteFile: %s"
  endif
+    tst.b   uhcAvailable(a5)
+    beq     .exit
+
 	moveq	#0,d7	* status: fail
 	
 	* Temporary target file path, the last part of the url
@@ -51475,19 +51478,11 @@ fetchRemoteFile:
 	popm	d1-a6
 	rts
 
-* Checks if UHC is installed
+* Checks if UHC is installed, also checks version
 initializeUHC
 	tst.b	uusikick(a5)
-	bne.b	.go
-	* Remove search results related tooltip
-	lea	tooltipList\.listModeChange,a0
-	move.b	#4,1(a0)
-  ifne FEATURE_LIST_TABS
-    lea     gadgetListModeTab4Button,a0
-    jsr     disableButton
-  endif
-	rts
-.go
+	beq     .no
+
 	lea		-30(sp),sp
 	pushpea	.uhcBinVar(pc),d1
 	move.l	sp,d2
@@ -51496,10 +51491,36 @@ initializeUHC
 	lore	Dos,GetVar
 	lea		30(sp),sp
 	tst.l	d0
-	spl		uhcAvailable(a5)
+    bmi     .no
+
+    pushpea .versCmd(pc),d1
+    pushpea .tags(pc),d2
+    lob     SystemTagList
+    * d0 = version return code, 0 if OK, 5 if WARN
+    seq     uhcAvailable(a5)    
+.no
+    tst.b   uhcAvailable(a5)
+    bne     .really
+	* Remove search results related tooltip
+	lea	tooltipList\.listModeChange,a0
+	move.b	#4,1(a0)
+  ifne FEATURE_LIST_TABS
+    lea     gadgetListModeTab4Button,a0
+    jsr     disableButton
+  endif
+.really
+ if DEBUG   
+    moveq   #1,d0
+    and.b   uhcAvailable(a5),d0
+    DPRINT  "uhc available: %lx"
+ endif
 	rts
 
-.uhcBinVar	dc.b	"UHCBIN",0
+.tags
+    dc.l    TAG_END
+
+.versCmd        dc.b    "version UHC:C/aget 0 83 >NIL:",0
+.uhcBinVar	    dc.b	"UHCBIN",0
  even
 
 
@@ -51910,6 +51931,9 @@ startNewStreaming:
 startStreaming:
     pushm   d1-d7/a1-a6
     DPRINT  "*** startStreaming ***"
+
+    tst.b   uhcAvailable(a5)
+    beq     .x
 
     moveq   #0,d0
 
