@@ -301,6 +301,8 @@ timerOpen               rs.w    1
 timerRequest	        rs.b    IOTV_SIZE
 clockStart              rs.b    EV_SIZE
 clockEnd                rs.b    EV_SIZE
+clockStart2              rs.b    EV_SIZE
+clockEnd2                rs.b    EV_SIZE
  endif
 
 size_var	rs.b	0
@@ -921,7 +923,7 @@ init:
  
  if DEBUG
 	move.l	.frequency(a3),d0
-    DPRINT  "freq=%ld Hz"
+    DPRINT  "mp3 frequency=%ld Hz"
 	move.l	.ms_duration(a3),d0	
     DPRINT  "duration=%ld ms"
  endif
@@ -1146,22 +1148,58 @@ init:
 	rts	
 
 .mpega_hook_read
+    move.l  a1,a4    
+
+ if DEBUG
+    pushm   all
+    bsr     startMeasure
+    popm    all
+ endif
+
 	move.l	a2,d1    * handle
 	move.l	4(a1),d2 * buffer addr
 	move.l	8(a1),d3 * length to read
 	lob	Read
-	* d0 = bytes read or NULL if eof
+
+
  if DEBUG
-    push    d0
-    add.l   d0,.readCounter
-    move.l  .readCounter(pc),d1
-    lsr.l   #8,d0
-    lsr.l   #2,d0
-    lsr.l   #8,d1
-    lsr.l   #2,d1
-    DPRINT  "mpega_hook_read read=%ldkB total=%ldkB"
-    pop     d0
+    tst.l   d0
+    bmi     .ab1
+    add.l   d0,readIoCount
+.ab1
+    pushm   all
+    bsr     stopMeasure
+;    DPRINT  "read=%ldms"
+    add.l   d0,readIoMeasurement
+    popm    all
  endif
+
+	* d0 = bytes read or NULL if eof
+; if DEBUG
+;    pushm   all
+;    add.l   d0,.readCounter
+;    move.l  .readCounter(pc),d1
+;    lsr.l   #8,d0
+;    lsr.l   #2,d0
+;    lsr.l   #8,d1
+;    lsr.l   #2,d1
+;    move.l  d1,d3
+;    move.l  d0,d2
+;    pushm   d2-d3
+;    bsr     stopMeasure
+;    popm    d2-d3
+;    move.l  d2,d1
+;    move.l  d0,d7
+;    divu.w  #1000,d7 * to secs
+;    tst.w   d7
+;    bne     .aaa
+;    moveq   #1,d7
+;.aaa
+;    divu    d7,d1
+;    ext.l   d1
+;    DPRINT  "mpega_hook_read time=%ldms speed=%ldkB/s read=%ldkB total=%ldkB"
+;    popm    all
+; endif
 	cmp.l	#-1,d0
 	beq.b	.mpega_read_err
 	rts	
@@ -1339,6 +1377,10 @@ init:
 ;	move.l	#3579545,d4
 	move	#$9E99,d4
 .nx	
+  if DEBUG
+    move.l  d4,d0
+    DPRINT  "clock constant=%ld"
+  endif
 
 *** kutistus? varataan työtilaa sillekkin jos tarvis
 
@@ -1385,7 +1427,7 @@ init:
  if DEBUG
 	moveq	#0,d0
 	move	d4,d0
-	DPRINT	"period=%ld"
+	DPRINT	"paula period=%ld"
  endif
 	move.l	colordiv(a5),d0	
  	DPRINT	"colordiv=%ld"
@@ -3296,6 +3338,10 @@ decodeMp3
  ;   DPRINT  "requesting %ld samples"
  ; endif
 
+ if DEBUG
+    bsr     startMeasure2
+ endif
+
 	move.l	a4,d2
 	move.l	samplebufsiz(a5),d3
 	;add.l	d3,d3			* stereo
@@ -3392,11 +3438,40 @@ decodeMp3
     beq.b   .do1
     move.l  #KUTISTUSTAAJUUS,d2
 .do1
+    * case:   in 48000
+    *         out 27710
+    * buffer: 16384 
+    * target size: 9458.3466 bytes
+    *       words: 4729.1734 -> 4730
 
     * dest length = (target freq * source length)/source freq
     move.l  d2,d0
     mulu.l  d6,d0
+
+    * division: round up
+    * int pageCount = (records + recordsPerPage - 1) / recordsPerPage;
+    move.l  d1,d3
+    subq.l  #1,d3
+    add.l   d3,d0
+   
     divu.l  d1,d0
+
+    * d0 is used to calculate output length in words
+    * round updwards so we don't lose any bytes,
+    * causing speed to be a little too fast
+    * lsr shift: round up
+    addq.l  #1,d0
+
+
+; if DEBUG
+;    pushm   d0/d1
+;    move.l  d0,d1
+;    lsr.l   #1,d1
+;    move.l  d6,d0
+;    DPRINT  "in=%ld bytes out=%ld words"
+;    popm    d0/d1
+; endif
+
     * d0 = target length
     push    d0
 
@@ -3446,19 +3521,81 @@ decodeMp3
     dbf     d0,.bob
 
     pop     d0
-
-.ohi
-
 	movem.l	(sp),a3/a4/a6
 
-.j2	lsr.l	#1,d0
+    * paula length in words
+    lsr.l	#1,d0
 	movem.l	(a3),a0/a1
 	movem.l	16(a3),a2/a3
    ; DPRINT  "play block and wait for paula" 
+
+ if DEBUG
+    push    d0
+ endif
 	bsr	playblock_14bit
+ if DEBUG
+    pop    d0
+ endif
+
+ if DEBUG
+    pushm   all
+    push    d0
+    bsr     stopMeasure2
+    move.l  d0,d4 * total fill time
+
+    move.l  readIoMeasurement,d0
+    clr.l   readIoMeasurement
+    move.l  d0,d3 * io time
+    pop     d0
+    add.l   d0,d0
+
+
+    moveq   #0,d7
+    move    samplefreq(a5),d7
+    tst.b   kutistus(a5)
+    beq.b   .do1_
+    move.l  #KUTISTUSTAAJUUS,d7
+.do1_
+    move.l  d0,d1
+    mulu.l  #1000,d1
+    divu.w  d7,d1
+    ext.l   d1
+    lsr.l   #8,d0 
+    lsr.l   #2,d0
+    move.l  readIoCount,d2
+    clr.l   readIoCount
+    lsr.l   #8,d2
+    lsr.l   #2,d2
+;    DPRINT  "buffer=%ldkB,%ldms fill time=%ldms"
+    cmp.l   d1,d4
+    bls     .ok1
+    *                  d0        d1            d2      d3              d4
+    DPRINT  "buffer=%04.4ldkB,%04.4ldms io=%04.4ldkB,%04.4ldms fill=%04.4ldms WARN"
+    bra     .ok3
+.ok1
+
+    cmp.l   #20000,samplebufsiz(a5)
+    bhs.b   .ok4
+    pushm   d0/d1
+    move.l  samplebufsiz(a5),d0
+    lsr.l   #8,d0
+    lsr.l   #3,d0
+    moveq   #11,d1
+    sub.l   d0,d1
+    addq.l  #1,logCount
+    cmp.l   logCount,d1
+    popm    d0/d1
+    bne     .ok3
+    clr.l   logCount
+.ok4
+    DPRINT  "buffer=%04.4ldkB,%04.4ldms io=%04.4ldkB,%04.4ldms fill=%04.4ldms OK"
+.ok3
+ endif
+    popm    all
 
 	popm	a3/a4/a6
 	
+
 	bsr	wait
 	bne	quit
 
@@ -3495,6 +3632,12 @@ decodeMp3
 	bra	.wl2
 	
 
+ if DEBUG
+readIoMeasurement   dc.l    0
+readIoCount         dc.l    0
+logCount            dc.l    0
+ endif
+ 
 ; -----------------
 
 
@@ -5398,26 +5541,48 @@ closeTimer
 	lob	CloseDevice
 .x	rts
 
-startMeasure
+
+startMeasure:
+    lea     clockStart(a5),a0
+    bra doStartMeasure
+
+startMeasure2:
+    lea     clockStart2(a5),a0
+    bra doStartMeasure
+
+stopMeasure:
+	lea	    clockStart(a5),a0
+	lea	    clockEnd(a5),a1
+    bra     doStopMeasure
+
+stopMeasure2:
+	lea	    clockStart2(a5),a0
+	lea	    clockEnd2(a5),a1
+    bra     doStopMeasure
+
+doStartMeasure:
 	tst.b	timerOpen(a5)
 	beq.b	.x
 	push	a6	
 	move.l	IO_DEVICE+timerRequest(a5),a6
-	lea	clockStart(a5),a0
+;	lea	clockStart(a5),a0
 	lob	ReadEClock
 	pop 	a6
 .x	rts
 
 ; out: d0: difference in millisecs
-stopMeasure
+doStopMeasure
 	tst.b	timerOpen(a5)
 	bne.b	.x
 	moveq	#-1,d0
 	rts
-.x	pushm	d2-d4/a6
+.x	pushm	d2-d4/a3/a6
 	move.l	IO_DEVICE+timerRequest(a5),a6
-	lea	clockEnd(a5),a0
+    pushm   a0/a1
+;	lea	clockEnd(a5),a0
+    move.l  a1,a0
 	lob	ReadEClock
+    popm     a0/a1
     * D0 will be 709379 for PAL.
 	move.l	d0,d2
 	; d2 = ticks/s
@@ -5427,10 +5592,10 @@ stopMeasure
 	
 	; Calculate diff between start and stop times
 	; in 64-bits
-	move.l	EV_HI+clockEnd(a5),d0
-	move.l	EV_LO+clockEnd(a5),d1
-	move.l	EV_HI+clockStart(a5),d3
-	sub.l	EV_LO+clockStart(a5),d1
+	move.l	EV_HI(a1),d0
+	move.l	EV_LO(a1),d1
+	move.l	EV_HI(a0),d3
+	sub.l	EV_LO(a0),d1
 	subx.l	d3,d0
 
 	; Turn the diff into millisecs
@@ -5439,7 +5604,7 @@ stopMeasure
 	; d0:d1 is now d0:d1/d2
 	; take the lower 32-bits
 	move.l	d1,d0
-	popm	d2-d4/a6
+	popm	d2-d4/a3/a6
 	rts
 
 ; udivmod64 - divu.l d2,d0:d1
@@ -5474,3 +5639,4 @@ findSyncBuffer
             ds.b    10
 mpbuffer1	ds	MPEGA_PCM_SIZE
 mpbuffer2	ds	MPEGA_PCM_SIZE
+
