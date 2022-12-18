@@ -1076,8 +1076,19 @@ init:
 	clr.l   12(a3) * stream_size
 
     bsr     isRemoteSample
+    beq     .notRemotex
+    tst.l   streamLength(a5)
     bne     .cantSeek
-    
+    * This seems to be a radio station, 
+    * a remote stream without length.
+    * Wait a while to buffer data into pipe.
+    * This allows throttled streams to work better.
+    DPRINT  "Radio station, buffering for 2 secs!"
+    moveq   #2*50,d1
+    lob     Delay
+    bra     .cantSeek
+.notRemotex
+
     * Get current position
 	move.l	d7,d1
     moveq	#0,d2		* offset

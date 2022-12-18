@@ -40561,6 +40561,7 @@ p_sample:
     move.l  d0,-(sp)
 
     * Content length zero and stream active? it's a radio station
+ REM
     tst.l   d0
     bne     .cl1
     bsr     streamIsAlive
@@ -40579,6 +40580,7 @@ p_sample:
     DPRINT  "stream is radio, enforcer buffer"
     bra     .cl2
 .cl1
+ EREM
     move.b	samplebufsiz0(a5),d0
 .cl2
 	move.b	sampleformat(a5),d1
@@ -52073,14 +52075,14 @@ startStreaming:
     DPRINT  "streamer started! length=%ld mpeg/audio=%ld"
  endif
 
-    ; Allow aget to fill pipe for a while so mpega
-    ; will not starve for streams that are throttled.
-    bsr     streamIsRadioStation
-    beq     .notRadio
-    DPRINT  "Radio buffering!"
-    move.l  #2*50,d1
-    lore    Dos,Delay
-.notRadio
+;    ; Allow aget to fill pipe for a while so mpega
+;    ; will not starve for streams that are throttled.
+;    bsr     streamIsRadioStation
+;    beq     .notRadio
+;    DPRINT  "Radio buffering!"
+;    move.l  #2*50,d1
+;    lore    Dos,Delay
+;.notRadio
 
 
 .y
@@ -52287,11 +52289,15 @@ streamerEntry:
 
 .args
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
-	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
 ;	dc.b	'"%s" PIPE:hippoStream/16384/4 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
 ;	dc.b	'"%s" PIPE:hippoStream/32768/4 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
 ;	dc.b	'"%s" PIPE:hippoStream/65536/8 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192',10,0
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=131072',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/4096/128 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=262144',10,0
+	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192',10,0
  even
 
 
