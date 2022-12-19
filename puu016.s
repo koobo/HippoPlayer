@@ -20923,7 +20923,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     jsr     getMp3TagText
 
     ;----------------------------------
-    lea	-200(sp),sp
+    lea	-300(sp),sp
     move.l  streamHeaderIcyName(a5),d0
     beq.b   .noIcyName
     move.l  sp,a3
@@ -20937,7 +20937,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr     .putIcy
 .noIcyDesc
     move.l  infotaz(a5),d0
-    lea     200(sp),sp
+    lea     300(sp),sp
     ;----------------------------------
 
     move.l  infotaz(a5),a3
@@ -20961,7 +20961,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
-	; do 4 lines wrapping at space
+    ; do 4 lines wrapping at space
 	bsr    	.doLine
     bpl    	.ic1
     move.b  #" ",(a3)+
@@ -20981,7 +20981,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     dc.b    " %s",ILF,ILF2,0
 .icyForm2
     dc.b    ILF,ILF2," Description:",ILF,ILF2
-    dc.b    " %s",ILF,ILF2,0
+    dc.b    " %-.250s",ILF,ILF2,0
  even
 
 .nosample
@@ -21340,6 +21340,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.putLineChange
 	tst	d0
 	rts
+
 .ends
 	lea	200(sp),sp
 .noCrtr
@@ -52481,6 +52482,15 @@ parseAgetHeaders:
     move.l  d0,streamHeaderRDArgs(a5)
     DPRINT  "ReadArgs=%lx"
 
+    move.l  streamHeaderIcyName(a5),d0
+    beq     .11
+    bsr     .clean
+.11
+    move.l  streamHeaderIcyDescription(a5),d0
+    beq     .22
+    bsr     .clean
+.22
+
   if DEBUG
     move.l  streamHeaderContentLength(a5),d0
     beq.b   .1
@@ -52499,9 +52509,19 @@ parseAgetHeaders:
 .4
   endif
 
+   
     popm    d1-a6
     rts
 
+.clean
+    move.l  d0,a0
+.loop
+    cmp.b   #$80,(a0)
+    blo     .l
+    move.b  #"_",(a0)
+.l  tst.b   (a0)+
+    bne     .loop
+    rts
 
 .template
      dc.b "CONTENT-LENGTH/K/N,CONTENT-TYPE/K,ICY-NAME/K,ICY-DESCRIPTION/K,REST/M",0
