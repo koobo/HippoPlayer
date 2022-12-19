@@ -5355,8 +5355,20 @@ getFrameText
     beq.b   .b
     move.b  d4,(a1)+
 .b  addq    #2,a0
+    subq    #1,d1
+    subq    #1,d2
     bra     .continue
 .utf8
+    pushm   d1/d2
+    bsr     utf8ToLatin1Char
+    move    d1,d5
+    popm    d1/d2
+    move.b  d0,(a1)+
+    * d5 = bytes advanced, 1-6
+    subq    #1,d5
+    sub     d5,d1
+    sub     d5,d2
+    bra     .continue
 .iso8859
     move.b  (a0)+,(a1)+
 .continue
@@ -5415,6 +5427,58 @@ convertMsString:
     divu.l  #1000,d0
     divul.l #60,d1:d0
     rts
+
+
+
+
+* In:
+*   a0 = pointer to utf8 char
+* Out:
+*   d0 = latin1 char
+*   a0 = pointer to next utf8 char
+utf8ToLatin1Char:
+    moveq   #0,d0
+
+    * Get utf8 char length to d1
+    moveq   #1,d1
+    move.b  (a0),d0
+    bpl     .x * 1 byte
+    moveq   #2,d1  
+    moveq   #$20,d2
+    and.b   d0,d2
+    beq     .2 * 2 byte
+    moveq   #3,d1
+    moveq   #$10,d2
+    and.b   d0,d2
+    beq     .y
+    moveq   #4,d1
+    moveq   #$08,d2
+    and.b   d0,d2
+    beq     .y
+    moveq   #5,d1
+    moveq   #$04,d2
+    and.b   d0,d2
+    beq     .y
+    moveq   #6,d1
+    bra     .y
+.2
+    * Two bytes
+    and	    #$1f,d0
+    lsl     #6,d0
+    moveq   #0,d2
+    move.b  1(a0),d2
+    sub.w   #$80,d2
+    or.w    d2,d0
+    bra     .x
+.y
+    moveq   #"_",d0
+.x
+    cmp     #$ff,d0
+    bhi     .y
+
+    add.l   d1,a0
+    rts
+
 
 
  if DEBUG
