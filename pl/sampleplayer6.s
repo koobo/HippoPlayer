@@ -5342,19 +5342,34 @@ getFrameText
 
     * subtract char encoding and one for dbcc
     subq.l  #1+1,d1
+    
+    * Check for UTF16 BOM
+    moveq   #0,d6   * utf16 shift
+    cmp.b   #1,d7
+    bne     .notUtf16Bom
+    * utf16bom, read it
+    move.b  (a0)+,d4
+    lsl.w   #8,d4
+    move.b  (a0)+,d4
+    cmp.w   #$feff,d4
+    beq.b   .bom1
+    moveq   #8,d6
+.bom1
+    subq    #2,d1   * 2 bytes consumed
+.notUtf16Bom
+
+
 .c1 
     tst.b   d7  
     beq     .iso8859
     cmp.b   #3,d7
     beq     .utf8
-    ;cmp.b   #1,d7
-    ;cmp.b   #2,d7
-.utf16 
-    move.b  (a0),d4
-    cmp.b   #$ff,d4 * skip this one, utf magic
-    beq.b   .b
+    * 1 = utf16 bom, 2 = utf16 no bom
+    move.b  (a0)+,d4
+    lsl.w   #8,d4
+    move.b  (a0)+,d4
+    ror.w   d6,d4
     move.b  d4,(a1)+
-.b  addq    #2,a0
     subq    #1,d1
     subq    #1,d2
     bra     .continue
