@@ -28401,7 +28401,7 @@ loadmodule:
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
 	bne 	.nip
-	tst 	executablemoduleinit(a5)
+	tst.b 	executablemoduleinit(a5)
 	bne 	.nip
 
 	move.l	moduleaddress(a5),a0	* Oliko moduleprogram??
