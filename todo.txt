@@ -1,10 +1,165 @@
+TODO:
+- 68000 kaatuu kun load file
+- link+nlnk
+
+TODO:
+Huomasin ettei Hippo + AHI combolla jostain syystä MOD-tiedostoja soitettaessa
+Pause toimi, kappale jää soimaan vaikka info-kentässä lukee Paused.
+
+Muiden formaattejen kanssa en tähän ole törmännyt ja ongelma ei esiinny jos
+äänen ulostulona ei ole AHI.
+
+TODO:
+- 68020 check for MP3
+
+TODO:
+Loading of "next module" crashes 8000 0003 on 68000 when HiP GUI is hidden (rx
+"hide 0") #17 Seems to be a bug introduced in 2.55, at least I cannot recall
+having this before.
+
+Tested and confirmed on both Minimig 1.1 with 68SEC000 and A600 with 68000 I
+have not tried on 020+, 0003 suggests that it might not be a problem on 020+.
+
+
+FIXED: TODO
+- "Dendy collection" station, open info -> boom
+
+
+FIXED: TODO
+- use SEARCRESULTTO for stations/playlists for output
+- uhc version check
+
+FIXED: TODO:
+- make note of mpega.library vs mpega + libmad
+
+
+TODO:
+- list mode change button RMB popup
+
+TODO:
+- optional list mode TAB
+
+
+TODO:
+- now playing a MMD3-format MED file results in a Software Failure 8000 0005, which seems to be a "division by zero" 
+
+
+TODO:
+- default module program dir issue
+I think I found a bug in HiP 68k:
+- In Prefs/Loading I set the path for both "Modules" and "Programs" to 
+my dir called "VonBeat" by clicking the button and selecting it.
+- On the buttons it now says "VonBeat" (without "SYS:" or so)
+- Clicking "Add" to add a module, the path can be found --> works as expected:
+- But clicking "Prg" to load a program I get a directory error:
+--> the default path for programs needs a full path (like "SYS:VonBeat") 
+to work correctly, which is not the case when just selecting a dir, which is the most forward thing to do
+
+TODO:
+- limit search term size, min 3 letters?
+
+
+------------------------------------------------------------------------------
+
+
+TODO:
+- update prefs state when g/o keys are pressed to change playmode
+
+
+
+FIXED: TODO:
+- try radio that doesnt return headers
+-- "Death.FM"
+-- unsupported stream format
+-- stop streaming
+-- await streamer: timeouts
+-- TODO: pipe flush?
+
+FIXED: TODO:
+- remote TFMX loading
+
+FIXED: TODO:
+"possible" bug found, perhaps an old one rather than recent? used the HVSC
+search to look for "MEGA APOC", to find Mega Apocalypse tunes, 4 show up, of
+those 4, the topmost DAZZ/Mega Apocalypse Remix tune works as does the bottm
+MC/Mega Apocalypse tune, the middle 2 however error out and skip. so the first
+problem here is that 2 of those files are not recognised as sid music tunes,
+confirmed by manually aquiring the files and trying to load them, they say
+unknown format and ask you to remove from list/etc, the 2nd entry is the
+official rob hubbard sid tune, so surprised that one doesnt get recognised tbh
+(Delitracker and Eagleplayer also fails to recognise it). 
+
+second problem is that if i play the above 2 tunes that DO work, then thats
+fine, they download/load/play no issue, but now those 2 non working ones in the
+search list? if i start with the official rob hubbard tune, it loads/fails to
+play and hippo says "Skipping", it skips to Mac EK/Mega Apocalypse, which also
+isnt recognised and that file skips as well, skips to the last in the list which
+is the previously working MC/Mega Apocalypse, which now however locks up my
+emulated system completely. So starting with 2 not recognised files which then
+skip down the list to a known working one causes an emulated system lockup
+(Tested on FS-UAE) when it eventually tries to play the previous working sid
+tune.
+
+
+FIXED: TODO:
+- play same remote mp3 file wile it is playing, will try to play "pipe:", WRONG URL
+
+FIXED: TODO:
+- timeout should not work on never-ending mp3 streams
+
+FIXED: TODO:
+- mp3 stream song over detection
+
+FIXED: TODO:
+- 3.2, Doublebuffering, play mp3 and switch to next, it will call
+  p_end code through null pointer
+
+DONE: TODO:
+- remove all ".w"s from all branches, vasm will optimize them in this case
+
+TODO: CRASH:
+- Press "Add" on filebrowser root level
+
+FIXED: TODO:
+- always use PIPE for remotes
+- with Content-Length header
+-- can have progress indicator
+---- this would break lha/zip case, not worth it
+-- check headers when available: redirect to file or to mpega
+
+FIXED: TODO:
+- check xmaplay not working after update?
+
+FIXED: TODO:
+- mp3 streaming with named pipe
+
+FIXED: TODO
+- id3v2 tag display
+
+FIXED?: TODO:
+- mp3: figure out why it clicks and crackles
+
+FIXED: TODO:
+- mp3: skip unnecessary buffer mangling when emulating wav
+
+FIXED: TODO:
+- play some module
+- pause it (shows "---- Paused ----"  string in info box)
+- search something on modland (shows "Searching..." in info box)
+- when finished the "---- Paused ----" string in the info box is not restored.
+
+FIXED: TODO: try to "comment" a remote file with "o"
+- @koobo Here's another small one:
+- pressing 'o' (for file comment) results in:
+
+FIXED: TODO:
+- "Searching" text should not be in the top infobox, instead in the filebox?
+
+
 FIXED: TODO?:
 - set a narrow font, like xhelvetica 9
 - window opens so narrow that the infobox texts don't fit, like "No search resuts."
 - also hippo logo is positioned on the right border
-
-TODO:
-- limit search term size, min 3 letters?
 
 FIXED: BUG:
 - if window cant be opened, boom
