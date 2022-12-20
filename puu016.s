@@ -18457,6 +18457,8 @@ putinfo:
 
 printInfoBox:
 infoBoxPrint:
+    tst.b   win(a5)
+    beq     .x
 	jsr		setInfoBoxClip
 	pushm	d0/d1/a0
 	move.l	rastport(a5),a1
@@ -18471,7 +18473,7 @@ infoBoxPrint:
 	move.l	fontbase(a5),a0
 	lore	GFX,SetFont	
 	jsr		removeInfoBoxClip
-	rts
+.x	rts
 
 * 2nd row
 putinfo2:
