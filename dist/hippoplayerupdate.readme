@@ -44,6 +44,70 @@ NOTE 4: Too long didn't read
 ------------------------------------------------------------------------------
 
 
+# Changes from v2.55 (10.11.2022) to v2.56 (?.?.202?) 
+
+## New fixes:
+
+- Fix MusicAssembler modules being silent on 68040/68060.
+
+- The included playsid.library has a reSID related bug fixed which caused
+  some tunes to have small pauses. Example tune: Hawaii by JCH.
+
+- The "Continue on error" mode available in Prefs could crash in 
+  certain situations, this should be fixed now.
+
+- Fixed a memory corruption problem in file browser which could
+  happen with long directory names.
+
+- A few other small fixes.
+
+
+## New features and improvements:
+
+- When favoriting a module (with RMB) the currently playing subsong is also 
+  stored. The next time you play this particular module the favorited 
+  subsong will be played first.
+
+- Improved MP3 support: Data will be streamed over the network.
+  This allows listening to MP3 files without downloading them first, 
+  and also allows listening to radio station streams. "aget" from
+  UHCTools is used for network transfers.
+
+- Added new search sources for MP3s provided by UHCTools, access these 
+  with the "S" button.
+  - https://amigaremix.com/ 
+  - https://remix.kwed.org/
+  - Radio station search
+  
+- Added "Browse shared playlists" to the "S"-button menu. This fetches
+  a list of shared playlists to be checked out. For example, you'll find
+  favorite lists and lists with certain musical themes. The lists will be 
+  updated periodically, administration by Spot/Up Rough. Cool!
+  
+- Info window improvements: 
+  - Show MP3 file tag information
+  - Show MP3 radio stream information
+
+- MP3 playback improvement for Paula (not AHI): When using the high quality
+  MPEGA settings, instead of 8-bit output the 14-bit mode is used, and the
+  conversion step is improved. The HQ settings in Prefs are: 
+  Mpega quality: Hi, Freq.Div: 1.   
+
+- 8bitbubsy's xmaplay060 updated. The mixing routines are now faster.
+
+- Note 1: MP3 playback is handled using the mpega.library. There's 
+  an alternative implementation of this library available, 
+  the libmad mpega.library. It doesn't seem to work reliably with
+  streamed data.
+  
+- Note 2: If UHCTools is missing or too old, the search and download
+  functionalities will be disabled
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
 # Changes from v2.54 (30.8.2022) to v2.55 (10.11.2022) 
 
 ## New fixes:
