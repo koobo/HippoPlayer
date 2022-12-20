@@ -40618,7 +40618,10 @@ p_sample:
     move.l  a4,d0
     DPRINT  "current filename=%s"
  endif
+    bra     .notAlive
 .alive
+    jsr     inforivit_connecting
+.notAlive
     move.l  a4,a0
     bsr     startStreaming
 .noCurrent
