@@ -20908,7 +20908,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
     * Local?
     move.l	modulefilename(a5),a0
-    bsr     id_mp3filename
+    jsr     id_mp3filename
     beq     .wazMp3
     * Remote?
     jsr     streamIsAlive
@@ -51512,6 +51512,7 @@ initializeUHC
     pushpea .tags(pc),d2
     lob     SystemTagList
     * d0 = version return code, 0 if OK, 5 if WARN
+    tst.l   d0
     seq     uhcAvailable(a5)    
 .no
     tst.b   uhcAvailable(a5)
