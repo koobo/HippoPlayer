@@ -862,6 +862,13 @@ init:
 	move	d1,.q4(a0)
 	endb	a0
 
+    tst.b   cpu(a5)
+    bne     .cpuGood
+    moveq   #ier_hardware,d0
+    bra     sampleiik
+
+.cpuGood
+
 	move.l	4.w,a6
 	lea	.mplibn(pc),a1
     moveq   #2,d0
