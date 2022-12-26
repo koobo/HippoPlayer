@@ -125,6 +125,27 @@ tword	macro
 ;	endm
 
 
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_tempvol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+
  ifne TEST
 TESTMODE
 	move.l	4.w,a6
@@ -368,6 +389,7 @@ init2r
 
 	move.l	d0,deliPlayer
 	move.l	d1,deliBase
+    move.l  d2,scopeData
 	move.l	#buff1,(a0)
 	move.l	#buff2,(a1)
 	move.l	#mixingperiod,(a2)
@@ -1566,7 +1588,7 @@ ahi_playmusic
 	subq	#1,d7
 	moveq	#0,d6
 .chl
-	bsr.b	ahi_volume
+	bsr 	ahi_volume
 	bsr.w	ahi_period
 	bsr.w	ahi_setrepeat
 
@@ -1579,8 +1601,11 @@ ahi_playmusic
 	bne.b	.ty
 	addq.l	#1,mFPos(a4)
 	bsr.w	ahi_sample
+    bsr     ahi_sample_scope
 .ty
 .hiljaa
+    bsr     ahi_data_scope
+
 	lea	mChanBlock_SIZE(a4),a4
 	addq	#1,d6
 	dbf	d7,.chl
@@ -1591,6 +1616,66 @@ ahi_playmusic
 ;.hiljaa
 ;	bsr.b	ahi_quiet
 ;	bra.b	.ty
+
+* Set scope data for the first 4 channels when AHI is used
+* In:
+*   d6 = channel number
+*   a4 = channel data block
+ahi_sample_scope:
+    cmp     #3,d6
+    bls     .ok
+    rts
+.ok
+    move.l  scopeData,a0
+    move    d6,d0
+    lsl     #4,d0
+    add     d0,a0
+
+    move.l  mStart(a4),ns_start(a0)
+    move.l  mLength(a4),d0
+    lsr.l   #1,d0
+    move    d0,ns_length(a0)
+    rts
+
+
+* Set scope data for the first 4 channels when AHI is used
+* In:
+*   d6 = channel number
+*   a4 = channel data block
+ahi_data_scope:
+    cmp     #3,d6
+    bls     .ok
+    rts
+.ok
+    move.l  scopeData,a0
+    move    d6,d0
+    lsl     #4,d0
+    add     d0,a0
+
+    move    mVolume(a4),ns_tempvol(a0)
+    * mPeriod is 4x, convert back
+    move    mPeriod(a4),d0
+    lsr     #2,d0
+    move    d0,ns_period(a0)
+
+    clr.l   ns_loopstart(a0)
+    clr.w   ns_replen(a0)
+
+	tst.b	mLoop(a4)
+	beq 	.noLoop
+    move.l  mLStart(a4),ns_loopstart(a0)
+    move.l  mLLength(a4),d0
+    lsr.l   #1,d0
+    move    d0,ns_replen(a0)
+
+.noLoop
+    tst.l   ns_loopstart(a0)
+    bne.b   .1
+    move.l  #emptyScopeWord,ns_loopstart(a0)
+.1  tst.w   ns_replen(a0)
+    bne     .2
+    move.w  #1,ns_replen(a0)
+.2  rts
 
 
 
@@ -1605,7 +1690,7 @@ ahi_playmusic
 ahi_volume:
 	movem.l	d0-d3/d6/a0-a2/a6,-(sp)
 
-	tst.b	Pro4
+    move.b	Pro4(pc),d1
 	beq.b	.n
 	lea	chantab(pc),a6
 	move.b	(a6,d6),d6
@@ -1636,7 +1721,7 @@ ahi_volume:
 ahi_quiet
 	movem.l	d0-d3/d6/a0-a2/a6,-(sp)
 
-	tst.b	Pro4
+	move.b	Pro4(pc),d1
 	beq.b	.n
 	lea	chantab(pc),a6
 	move.b	(a6,d6),d6
@@ -1656,12 +1741,12 @@ ahi_quiet
 
 ;in:
 * d0	period
-* da6 	channel
+* d6 	channel
 ahi_period:
 
 	movem.l	d0-d2/d6/a0-a2/a6,-(sp)
 
-	tst.b	Pro4
+	move.b	Pro4(pc),d1
 	beq.b	.n
 	lea	chantab(pc),a6
 	move.b	(a6,d6),d6
@@ -1692,7 +1777,7 @@ ahi_period:
 ahi_setrepeat
 	move.l	d6,d0
 
-	tst.b	Pro4
+	move.b	Pro4(pc),d1
 	beq.b	.n
 	lea	chantab(pc),a0
 	move.b	(a0,d0),d0
@@ -1715,9 +1800,9 @@ ahi_setrepeat
 ;in:
 * d6	channel
 ahi_sample:
-	movem.l	d0-d4/d6/a0-a2/a6,-(sp)
+	movem.l d0-d4/d6/a0-a2/a6,-(sp)
 
-	tst.b	Pro4
+	move.b	Pro4(pc),d2
 	beq.b	.n
 	lea	chantab(pc),a6
 	move.b	(a6,d6),d6
@@ -1739,7 +1824,8 @@ ahi_sample:
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_SetSound(a6)
-	movem.l	(sp)+,d0-d4/d6/a0-a2/a6
+
+	movem.l (sp)+,d0-d4/d6/a0-a2/a6
 	rts
 
 
@@ -1749,7 +1835,7 @@ ahi_sample:
 * a1	struct AHISoundMessage *
 * a2	struct AHIAudioCtrl *
 soundfunc:
-	movem.l	d2-d4/a6,-(sp)
+	movem.l d2-d4/a6,-(sp)
 
 	move	ahism_Channel(a1),d0
 	move	d0,d2
@@ -1770,7 +1856,7 @@ soundfunc:
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_SetSound(a6)
 
-	movem.l	(sp)+,d2-d4/a6
+	movem.l (sp)+,d2-d4/a6
 	rts
 
 
@@ -11112,6 +11198,10 @@ unpackedPatternPtr
 unpackedPatternPosition
 	dc.w	-1
 
+
+* Pointer to hippo scope data structure
+scopeData       dc.l     0
+emptyScopeWord  dc.l    0
 
  if DEBUG
 PRINTOUT_DEBUGBUFFER

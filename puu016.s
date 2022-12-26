@@ -24532,7 +24532,7 @@ scopeEntry:
 	lore	Exec,SetTaskPri
 
 *********************************************************************
-* Scope main loop
+* Scope main loop, scope loop, main scope loop, scope main loop
 *********************************************************************
 
 scopeTest=0
@@ -24579,8 +24579,8 @@ scopeLoop:
 	beq.b	.doNotDraw
 
 	* No scopes when AHI
-	tst.b	ahi_use_nyt(a5)
-	bne.b	.doNotDraw
+	;tst.b	ahi_use_nyt(a5)
+	;bne.b	.doNotDraw
 
 	* Does the active player support scopes?
 	move.l	playerbase(a5),d0
@@ -25615,22 +25615,18 @@ drawScope:
 	move.b	s_quadmode2(a4),d0
 	add	    d0,d0
 
-	cmp 	#pt_multi,playertype(a5)
-	beq	.renderPS3M
+    * PS3M + AHI is handled like a ordinary 4ch poke scope
+    cmp 	#pt_multi,playertype(a5)
+    bne.b   .notMulti
+    tst.b   ahi_use_nyt(a5)
+    bne     .goAhi
+    bra     .renderPS3M
+.notMulti
 	cmp	    #pt_xmaplay,playertype(a5)
 	beq	.renderPS3M
     jsr     playSidInRESIDMode
     bne     .renderPS3M
-
-;	* Check for generic quadscope support
-;	move.l	playerbase(a5),a0
-;	move	#pf_quadscopeUps!pf_quadscopePoke,d1
-;	and	p_liput(a0),d1
-;	bne.b	.doit
-;	tst.l	deliPatternInfo(a5)
-;	bne.b	.doit	
-;	rts
-;.doit
+.goAhi
 
 	* Protracker scope
 	* .. or similarly working others
@@ -25716,7 +25712,6 @@ drawScope:
 	bra.b	mirrorfill
 
 .renderPS3M
-
 	* PS3M scope
 	* multichannel jump table
 	jmp	.tt(pc,d0)
@@ -40055,6 +40050,7 @@ p_multi:
 
 .ok3	
 	pushm	d1-a6
+    DPRINT  "ps3m init 1"
 
 	* IT deliplayer will clear the "poslen" flag, so make sure
 	* it is available for other formats.
@@ -40116,6 +40112,8 @@ p_multi:
 	move.l	ps3mroutines(a5),a6
 	jsr	init1j(a6)
 
+    DPRINT  "ps3m init 2"
+
 	;pushpea	CHECKSTART,d0		* tarkistussummaa varten
 	lea	ps3m_buff1(a5),a0
 	lea	ps3m_buff2(a5),a1
@@ -40125,8 +40123,11 @@ p_multi:
 	move.l	ps3mroutines(a5),a6
 	move.l	deliPlayer(a5),d0
 	move.l	deliBase(a5),d1
+    pushpea	scopeData(a5),d2
 	jsr	init2j(a6)
 	move.l	d0,ps3mchannels(a5)
+
+    DPRINT  "ps3m init 3"
 
 	move.l	mixirate(a5),d0	
 	move.b	s3mmode3(a5),d1		* volumeboost
@@ -49468,7 +49469,10 @@ runSpectrumScope
 	beq	.x
 
 	cmp	#pt_multi,playertype(a5)
-	beq.b	.ps3m
+    bne.b   .notMulti
+    tst.b   ahi_use_nyt(a5)
+    beq.b   .ps3m
+.notMulti
     cmp     #pt_xmaplay,playertype(a5)
     beq.b   .ps3m
     jsr     playSidInRESIDMode
