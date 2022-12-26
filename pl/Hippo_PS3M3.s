@@ -496,18 +496,9 @@ s3init
 	basereg	data,a5
 
 	move.l	4.w,a6
+    bsr     allocPatternBuffers
+    beq     .memerr
 
-	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	lob	AllocMem
-	move.l	d0,patternInfoBufferPtr(a5)
-	beq	.memerr
-
-	move.l	#UNPACKED_PATTERN_SIZE,d0
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	lob	AllocMem
-	move.l	d0,unpackedPatternPtr(a5)
-	beq	.memerr
 
 ;	move.b	ps3mb+var_b,d1
 	move.l	#4096,d0
@@ -704,6 +695,13 @@ pushPatternInfo
 *  d0 = song position 
 *  d1 = pattern position
 getPatternInfo
+    move.b  ahi_use(pc),d0
+    beq.b   .do
+    * For AHI get the current values instead of the time delayed ones
+    move	activeSongPos(a5),d0
+	move	activePattPos(a5),d1
+    rts
+.do
 	pushm	d2/d3/d4/a0
 	* Calculate index based on current play position
 	move.l	mrate50(a5),d4
@@ -742,7 +740,10 @@ getPatternInfo
 * into the buffer, ahead of time relative
 * to what is being played.
 updatePatternInfoBuffer
-	
+	move.b  ahi_use(pc),d3
+    beq.b   .do
+    rts
+.do
 	move.l	mrate50(a5),d3
 	beq.b	.skip
 	move.l	buffSize(a5),d4
@@ -855,7 +856,7 @@ updatePatternInfoData
 	beq.w	.xm
 	rts 
 .mod
-	move.l	mt_songdataptr(pc),a0
+	move.l	mt_songdataptr,a0
 	lea	952(a0),a2	;pattpo
 	lea	1084(a0),a0	;patterndata
 
@@ -1303,7 +1304,43 @@ s3end
 	clr.l	dtab(a5)
 
 .eimem6	
+    bsr     freePatternBuffers
 
+.closeDebugWindow
+ ifne DEBUG
+	move.l	#1*50,d1
+	move.l	dosbase,a6
+	lob 	Delay
+	move.l	output,d1
+	beq.b	.noDbg
+	clr.l	output
+	lob	Close
+.noDbg
+ endif
+	rts
+
+allocPatternBuffers
+    push    a5
+	lea	    data,a5
+	move.l	4.w,a6
+	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	lob	AllocMem
+	move.l	d0,patternInfoBufferPtr(a5)
+	beq	.memerr
+
+	move.l	#UNPACKED_PATTERN_SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	lob	AllocMem
+	move.l	d0,unpackedPatternPtr(a5)
+.memerr
+    popm    a5
+    rts
+
+freePatternBuffers
+    push    a5
+	lea	    data,a5
+	move.l	4.w,a6
 	move.l	patternInfoBufferPtr(a5),d0
 	beq.b	.e1
 	move.l	d0,a1
@@ -1318,20 +1355,8 @@ s3end
 	move.l	#UNPACKED_PATTERN_SIZE,d0
 	lob	FreeMem
 	clr.l	unpackedPatternPtr(a5)
-.e2
-
-.closeDebugWindow
- ifne DEBUG
-	move.l	#1*50,d1
-	move.l	dosbase,a6
-	lob 	Delay
-	move.l	output,d1
-	beq.b	.noDbg
-	clr.l	output
-	lob	Close
-.noDbg
- endif
-	rts
+.e2 popm    a5
+    rts
 
 	endb	a5
 
@@ -1402,8 +1427,11 @@ ps3m_task	dc.l	0
 
 
 ********************** AHI liittymä
-ahi_init
+ahi_init:
 	DPRINT	"ahi_init"
+
+    bsr     allocPatternBuffers
+    beq     .erro2
 
 	bsr.w	init
 	bsr.w	FinalInit
@@ -1418,13 +1446,17 @@ ahi_init
 	bne.b	.erro
 .x
 	popm	d1-d7/a2-a6
-	sub.l	a0,a0 
-	sub.l	a1,a1
+;	sub.l	a0,a0 
+;	sub.l	a1,a1
+
+	lea	    PatternInfo(pc),a0
+	move.l	unpackedPatternPtr,a1
 	rts
 
 .erro	push	d0
 	bsr.w	ahi_end
 	pop	d0
+.erro2
 	moveq	#ier_ahi,d0
 	bra.b	.x
 
@@ -1468,9 +1500,13 @@ ahi_init0
 
 	tst.l	d0
 	bne.b	.ahi_error
+
+
+
 	moveq	#0,d0
 	rts
 .ahi_error:
+    DPRINT  "ahi error: %ld"
 	moveq	#-1,d0
 	rts
 
@@ -1495,6 +1531,7 @@ ahi_end
 	jsr	_LVOAHI_FreeAudio(a6)
 	CLOSEAHI
 .1
+    bsr     freePatternBuffers
 	rts
 
 
@@ -1963,6 +2000,7 @@ PatternInfo
 Stripe1	ds.l	32
 
 PatternInit
+    DPRINT  "PatternInit"
 	lea	PatternInfo(PC),A0
 	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
 	pea	ConvertNote(pc) 
