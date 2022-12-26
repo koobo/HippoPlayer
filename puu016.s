@@ -25614,13 +25614,23 @@ drawScope:
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
 	add	    d0,d0
-
+    ; ---------------------------------
     * PS3M + AHI is handled like a ordinary 4ch poke scope
     cmp 	#pt_multi,playertype(a5)
     bne.b   .notMulti
     tst.b   ahi_use_nyt(a5)
-    bne     .goAhi
-    bra     .renderPS3M
+    beq     .renderPS3M
+    * Check if more than 4 voices, bail out if so
+    move.l  deliPatternInfo(a5),d1
+    bne     .ah1
+.bail
+    rts
+.ah1
+    move.l  d1,a0
+    cmp     #4,PI_Voices(a0)
+    bhi     .bail
+    bra     .goAhi
+    ; ---------------------------------
 .notMulti
 	cmp	    #pt_xmaplay,playertype(a5)
 	beq	.renderPS3M
