@@ -2691,6 +2691,9 @@ main
 	; add another button as the new last one
 	basereg	gadgetFileSlider,a0
 	pushpea	gadgetListModeChangeButton(a0),gadgetSortButton+gg_NextGadget(a0)
+ ifne FEATURE_LIST_TABS
+	pushpea	gadgetListModeTab1Button(a0),gadgetSortButton+gg_NextGadget(a0)
+ endif
 	endb	a0
 	
 	move.l	_IntuiBase(a5),a6
@@ -4569,7 +4572,7 @@ avaa_ikkuna:
 	subq	#3,gg_Height(a3)
 
  ifne FEATURE_LIST_TABS
-    sub #4*14,gg_Height(a3)
+    sub #3*14,gg_Height(a3)
  endif
  
 ;    Old (weird) piece of code:
@@ -5005,15 +5008,25 @@ wrender:
 	; This one is invisible, skip it, though
 	; its not in the list at this point anyway?
 	cmp.l	#gadgetResize,a3
-	beq.b	.skipClear
+	beq 	.skipClear
 
 	tst	boxsize(a5)
-	bne.b	.clef
+	bne 	.clef
 	* Box is minimized, skipped gadgets:
 	cmp.l	#gadgetListModeChangeButton,a3
-	beq.b	.skipClear
+	beq 	.skipClear
+ ifne FEATURE_LIST_TABS
+	cmp.l	#gadgetListModeTab1Button,a3
+	beq 	.skipClear
+	cmp.l	#gadgetListModeTab2Button,a3
+	beq 	.skipClear
+	cmp.l	#gadgetListModeTab3Button,a3
+	beq 	.skipClear
+	cmp.l	#gadgetListModeTab4Button,a3
+	beq 	.skipClear
+ endif
 	cmp.l	#slider4,a3		* fileslider
-	bne.b	.clef
+	bne 	.clef
 .skipClear
 	rts	
 .clef
@@ -5248,7 +5261,10 @@ wrender:
 	jsr	lootaa
 	bsr	reslider
 
-	DPRINT	"wrender done"
+  ifne FEATURE_LIST_TABS
+    jsr updateListModeTabs
+  endif
+	 DPRINT	"wrender done"
 
 	move.l	windowbase(a5),a0
 	bsr	setscrtitle
@@ -5263,9 +5279,9 @@ setboxy:
 	move	boxsize(a5),d0
 
  ifne FEATURE_LIST_TABS
-    cmp     #8,d0
+    cmp     #10,d0
     bhs.b   .1
-    moveq   #8,d0
+    moveq   #10,d0
 .1
  endif
 
@@ -8936,7 +8952,9 @@ gadgetsup
 	dr	rloadprog	* ohjelman lataus
 	dr	rmove		* move
 	dr	rsearchfuncs	* search functions
+ ifeq FEATURE_LIST_TABS
 	dr	rlistmode	* listmode change
+ endif
  ifne FEATURE_LIST_TABS
     dr  rlistmode1
     dr  rlistmode2
@@ -32137,8 +32155,11 @@ engageListMode:
 	* Toggle listmode button icon
 	move.l	a0,gadgetListModeChangeButtonImagePtr
 	lea	gadgetListModeChangeButton,a0
-	jmp	refreshGadgetInA0
-	
+ ifeq FEATURE_LIST_TABS
+	jsr refreshGadgetInA0
+ endif
+    rts
+
 setNormalAddTooltip
 	lea		tooltipList\.addButtonToolTipOffset,a0
 	lea		tooltipList\.add,a1
@@ -50458,7 +50479,7 @@ verticalLayout:
  ifne FEATURE_LIST_TABS
 	lea		gadgetListModeChangeButton,a0
     move    gg_TopEdge(a0),d0
-    add     #14,d0
+   ; add     #14,d0
     lea     gadgetListModeTab1Button,a1
     move    d0,gg_TopEdge(a1)
     add     #14,d0
