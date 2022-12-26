@@ -1442,12 +1442,7 @@ ahi_init0
 	move	tempo,d0
 	bsr.w	ahi_tempo
 
-	lea	ahi_ctrltags(pc),a1
-	move.b	#1,setpause-ahi_ctrltags(a1)
-	move.l	ahi_ctrl(pc),a2
-	jsr	_LVOAHI_ControlAudioA(a6)
-
-	DPRINT	"->%ld"
+    bsr     ahi_cont
 
 	tst.l	d0
 	bne.b	.ahi_error
@@ -1523,17 +1518,25 @@ ahi_setmastervol
 	rts
 
 
-ahi_stop
-ahi_cont
-	pushm	d0/d1/a0-a2/a6
+ahi_stop:
+    DPRINT  "ahi stop"
+    clr.b   setpause
+    bra     ahi_stopcont
+
+ahi_cont:
+    DPRINT  "ahi cont"
+    st      setpause
+
+ahi_stopcont
+	pushm	d1/a0-a2/a6
 
 	lea	ahi_ctrltags(pc),a1
-	eor.b	#1,setpause-ahi_ctrltags(a1)
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_ControlAudioA(a6)
+    DPRINT  "AHI_ControlAudioA=%ld"
 
-	popm	d0/d1/a0-a2/a6
+	popm	d1/a0-a2/a6
 	rts
 
 
