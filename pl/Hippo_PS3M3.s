@@ -24,6 +24,13 @@ TEST 	= 	0
    endif
  endif 
 
+ ifd __VASM
+    opt o-   ; disable all
+    opt o1+  ; optimize branches
+    opt o2+  ; optimize displacements
+    ;opt ow+ ; display 
+ endif
+
 * Print to debug console, very clever.
 * Param 1: string
 * d0-d6:    formatting parameters, d7 is reserved
