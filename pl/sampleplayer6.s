@@ -1452,6 +1452,7 @@ init:
 	divu	d4,d0
 	ext.l	d0
 	move.l	d0,sampleadd(a5)	* seuranta, paljonko soitetaan framessa
+    DPRINT  "sampleadd=%ld"
 
 **** ahi? tarvitaan puskureita..
 
@@ -1547,6 +1548,11 @@ init:
 	lea	samplepointer2(a5),a2
 	move.b	samplestereo(a5),d2
 	move.l	samplebufsiz(a5),d3
+    moveq   #8,d4
+    tst.b   samplebits(a5)
+    beq.b   .888
+    moveq   #16,d4
+.888
 
  if DEBUG
 	pushm	all
@@ -2072,6 +2078,8 @@ sample_code
 	move.l	samplework(a5),a4
 	lea	ahisample1(a5),a3
 
+    bsr     ahi_setScopePointers
+
 .llpopo3
 	move.l	#AHISF_IMM,ahiflags(a5)
 	moveq	#0,d7
@@ -2225,6 +2233,8 @@ sample_code
 
 	move.l	samplework(a5),a4
 	lea	ahisample1(a5),a3
+
+    bsr  ahi_setScopePointers
 
 .llpopo4
 	move.l	#AHISF_IMM,ahiflags(a5)
@@ -2459,6 +2469,7 @@ sample_code
 	move.l	samplework(a5),a4
 	lea	ahisample1(a5),a3
 
+    bsr  ahi_setScopePointers
 .llpopo2
 	move.l	#AHISF_IMM,ahiflags(a5)
 	moveq	#0,d7
@@ -2855,6 +2866,7 @@ sample_code
 	move.l	samplework(a5),a4
 	lea	ahisample1(a5),a3
 
+    bsr  ahi_setScopePointers
 .llpopo
 	move.l	#AHISF_IMM,ahiflags(a5)
 	moveq	#0,d7
@@ -3797,7 +3809,7 @@ playblock_14bit:
 ahiplay
 	DPRINT	"ahi_play"
 	move	#0,d0		* channel
-	move.l	d7,d1		* samplebank	
+	move.l	d7,d1		* samplebank: 0 or 2
 	moveq	#0,d2		* offset
 	move.l	d6,d3		* samples to play
 	move.l	ahiflags(a5),d4
@@ -3805,7 +3817,7 @@ ahiplay
 	move.l	ahibase(a5),a6
 	lob	AHI_SetSound
 	moveq	#1,d0		* channel
-	move.l	d7,d1		* samplebank	
+	move.l	d7,d1		* samplebank:1 or 3
 	addq	#1,d1
 	moveq	#0,d2		* offset
 	move.l	d6,d3		* samples to play
@@ -3813,7 +3825,23 @@ ahiplay
 	clr.l	ahiflags(a5)
 	move.l	ahi_ctrl(a5),a2
 	lob	AHI_SetSound
+    ;rts
+
+* Sets the pointers to buffers AHI will play.
+* Also used to set the initial pointers when starting up.
+ahi_setScopePointers
+    clr.l   samplefollow(a5)
+    tst.b   d7
+    bne.b   .bank2
+    move.l  ahi_sound1+4(pc),samplepointer(a5)
+    move.l  ahi_sound2+4(pc),samplepointer2(a5)
 	rts
+
+.bank2  
+    move.l  ahi_sound3+4(pc),samplepointer(a5)
+    move.l  ahi_sound4+4(pc),samplepointer2(a5)
+    rts
+
 
 ahiswap	movem.l	(a3),d0/d1/d2/d3
 	exg	d0,d2
