@@ -1520,7 +1520,7 @@ init:
 ;	bsr	ahi_end
 ;.noaf
 	bsr	ahi_alustus
-	bne.b	.ahi_error
+	bne	.ahi_error
 
 
 .nika
@@ -3561,12 +3561,13 @@ decodeMp3
 
  if DEBUG
     push    d0
- endif
 	bsr	playblock_14bit
- if DEBUG
-    pop    d0
+    push    d0
+ else
+	bsr	playblock_14bit
  endif
 
+    ; ---------------------------------
  if DEBUG
     pushm   all
     push    d0
@@ -3620,8 +3621,10 @@ decodeMp3
 .ok4
     DPRINT  "buffer=%04.4ldkB,%04.4ldms io=%04.4ldkB,%04.4ldms fill=%04.4ldms OK"
 .ok3
- endif
     popm    all
+ endif ; DEBUG
+    ; ---------------------------------
+
 
 	popm	a3/a4/a6
 	
