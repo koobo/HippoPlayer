@@ -51189,6 +51189,7 @@ remoteSearch
 	dc.l	"bss "
 	dc.l	"cm  "
 	dc.l	"cus "
+	dc.l	"dbm "
 	dc.l	"dbm0"
 	dc.l	"digi"
 	dc.l	"dl  "
