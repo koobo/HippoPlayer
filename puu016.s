@@ -25620,21 +25620,16 @@ drawScope:
 	move.b	s_quadmode2(a4),d0
 	add	    d0,d0
     ; ---------------------------------
-    * PS3M + AHI is handled like a ordinary 4ch poke scope
     cmp 	#pt_multi,playertype(a5)
     bne.b   .notMulti
+    * PS3M without AHI?
     tst.b   ahi_use_nyt(a5)
     beq     .renderPS3M
-    * Check if more than 4 voices, bail out if so
-    move.l  deliPatternInfo(a5),d1
-    bne     .ah1
-.bail
+    * PS3M + AHI is handled like a ordinary 4ch poke scope
+    jsr     ahiWith4ChannelsActive
+    bne     .goAhi
+    * Too many AHI voices, do not draw 
     rts
-.ah1
-    move.l  d1,a0
-    cmp     #4,PI_Voices(a0)
-    bhi     .bail
-    bra     .goAhi
     ; ---------------------------------
 .notMulti
 	cmp	    #pt_xmaplay,playertype(a5)
@@ -40542,8 +40537,28 @@ id_it
 	tst.l	d0
 	RTS
 
-
-
+* Checks if AHI is active and there are max 4 voices in use.
+* In this case the scopes can be used in AHI mode.
+* Out:
+*   Z: set if false, clear if true
+ahiWith4ChannelsActive:
+    tst.b   ahi_use_nyt(a5)
+    beq     .no
+    * Check if more than 4 voices, bail out if so
+    tst.l   deliPatternInfo(a5)
+    beq     .no
+    push    a0
+    move.l  deliPatternInfo(a5),a0
+    cmp     #4,PI_Voices(a0)
+    popm    a0
+    bhi     .no
+    * Ok: clear Z
+    and.b	#~(1<<2),ccr
+    rts
+.no
+    * Error: set Z
+    or.b	#(1<<2),ccr
+    rts
 
 
 ******************************************************************************
