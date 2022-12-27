@@ -738,6 +738,10 @@ samplepointer		rs.l	1
 samplepointer2		rs.l	1
 * Set to non-zero if sample being played is stereo
 samplestereo		rs.b	1
+* How many bytes to skip to get to next sample in data,
+* 1 for 8-bit data 2 for 16-bit. Used when accessing AHI sample
+* data, which can be both.
+ahiSampleModulo      rs.w    1
 
 * This is set in loadfile() to indicate a sample is found.
 * Actual loading is then skipped.
@@ -25214,6 +25218,7 @@ scopeinterrupt:
 	* Sample scope data. Update sample follow position once per frame.
 	move.l	sampleadd(a5),d0
 	move.l	samplefollow(a5),a0
+    printt  "TODO: check ahi 16-bit mode, should do double"
 	add.l	d0,(a0)
 .x	rts
 
@@ -26468,7 +26473,7 @@ multiscope
 	move	#$80,d6
     * This returns the buffer mask or size limit in d4
 	bsr	getps3mb
-
+    lea     1.w,a6       * sample modulo 8-bit
 multiscope0
 
 .drlo	
@@ -26489,10 +26494,10 @@ multiscope0
     * Next pixel to the left
 	add.b	d0,d0
     * Advance one byte in source data
-	addq.l	#1,d5
+    add.l   a6,d5
     * Check if buffer limit reached, start over if so
 	cmp.l	d4,d5
-	bne.b	*+4
+	blo.b	*+4
 	moveq	#0,d5
  endr
 	* Reset pixel to right
@@ -26530,6 +26535,8 @@ multiscopefilled
 	move	#$80,d6
 	bsr	getps3mb
 
+    lea     1.w,a6       * sample modulo 8-bit
+
 multiscopefilled0
 
 hurl	macro 
@@ -26543,11 +26550,10 @@ hurl	macro
 	move	(a2,d2),d2
 	or.b	d0,(a0,d2)
 	add.b	d0,d0
-	addq.l	#1,d5
+	add.l	a6,d5
 
-;	and.l	d4,d5
 	cmp.l	d4,d5
-	bne.b	*+4
+	blo.b	*+4
 	moveq	#0,d5
 	endm
 
@@ -27437,8 +27443,10 @@ makeScopeHorizontalBars
 *** Sample scope
 *** Any sample played by the sample player
 
-samplescope
+samplescope:
 	bsr.b	samples0
+    jsr     getSampleDataModulo
+    move.l  d0,a6 * a6 = 1 or 2
 	move.l	samplepointer(a5),a1
 	move.l	(a1),a1
 	tst.b	samplestereo(a5)
@@ -27459,6 +27467,8 @@ samplescope
 
 samplescopefilled
 	bsr.b	samples0
+    jsr     getSampleDataModulo
+    move.l  d0,a6 * a6 = 1 or 2
 	move.l	samplepointer(a5),a1
 	move.l	(a1),a1
 	tst.b	samplestereo(a5)
@@ -27478,13 +27488,17 @@ samplescopefilled
 	bra	multiscopefilled0
 
 
-samples0
+* Gets some parameters needed for drawing sample scopes
+* Out:
+*   
+samples0:
 	move.l	samplefollow(a5),a0
 	move.l	(a0),d5
 ;	move.l	samplefollow(a5),d5
 
 	move.l	samplebufsiz(a5),d4
 	subq.l	#1,d4
+    printt  "TODO: AHI 16-bit size, double?"
 
 	moveq	#1,d0
 	move	#$80,d6
@@ -40703,11 +40717,17 @@ p_sample:
 	move.l	a2,samplepointer2(a5)
 	move.b	d2,samplestereo(a5)
 	move.l	d3,samplebufsiz(a5)
+    ; d4 = sample bits 8 or 16
+    lsr     #3,d4
+    move    d4,ahiSampleModulo(a5)
+    ; d4 samplebits
+
 
  if DEBUG
 	pushm	d0-d3
 	move.l	d3,d0
-	DPRINT	"Bufsize=%ld add=%ld"
+    move.l  d4,d2
+	DPRINT	"Bufsize=%ld add=%ld mod=%ld"
 	popm	d0-d3
  endif
 
@@ -40932,6 +40952,20 @@ id_mp3filename:
 .sampl
     moveq   #0,d0
     rts
+
+* Returns the modulo to advance in sample data for scopes.
+* This is needed when accessing AHI sample buffers
+* which can be either 8-bit or 16-bit data.
+* Out:
+*   d0 = 1 if 8-bit, 2 if 16-bit
+getSampleDataModulo:
+    moveq   #1,d0
+    tst.b   ahi_use_nyt(a5)
+    beq     .1
+    move    ahiSampleModulo(a5),d0
+.1
+    rts
+
 
 ******************************************************************************
 * PumaTracker
@@ -50070,6 +50104,9 @@ spectrumGetSampleData
 	* d5 = follow offset
 	* d4 = buffer size mask
 
+    bsr     getSampleDataModulo
+    * d0 = sample data modulo, 1 or 2
+
 	move.l	s_spectrumMixedData(a4),a3
 	moveq	#FFT_LENGTH/2-1,d7
 
@@ -50086,9 +50123,9 @@ spectrumGetSampleData
 	asl	#5,d2 * scale
 	move	d2,(a3)+
 	
-	addq.l	#1,d5
+	add.l	d0,d5
 	cmp.l	d4,d5
-	bne.b	.1
+	blo.b	.1
 	moveq	#0,d5
 .1
 	dbf	d7,.mloop
@@ -50106,9 +50143,9 @@ spectrumGetSampleData
 	asl	#4,d2 * scale
 	move	d2,(a3)+
 
-	addq.l	#1,d5
+	add.l	d0,d5
 	cmp.l	d4,d5
-	bne.b	.2
+	blo.b	.2
 	moveq	#0,d5
 .2
 	dbf	d7,.sloop
