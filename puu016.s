@@ -25216,9 +25216,8 @@ scopeinterrupt:
 	bne.b	.notSample
 
 	* Sample scope data. Update sample follow position once per frame.
-	move.l	sampleadd(a5),d0
+    jsr     getSampleDataAdd
 	move.l	samplefollow(a5),a0
-    printt  "TODO: check ahi 16-bit mode, should do double"
 	add.l	d0,(a0)
 .x	rts
 
@@ -27492,9 +27491,16 @@ samples0:
 ;	move.l	samplefollow(a5),d5
 
 	move.l	samplebufsiz(a5),d4
-	subq.l	#1,d4
-    printt  "TODO: AHI 16-bit size, double?"
 
+    * Check if AHI 16-bit buffer
+    tst.b   ahi_use_nyt(a5)
+    beq     .noA
+    cmp     #2,ahiSampleModulo(a5)
+    bne     .noA
+    add.l   d4,d4
+.noA
+	subq.l	#1,d4
+    
 	moveq	#1,d0
 	move	#$80,d6
 
@@ -40732,10 +40738,9 @@ p_sample:
 	move.l	a2,samplepointer2(a5)
 	move.b	d2,samplestereo(a5)
 	move.l	d3,samplebufsiz(a5)
-    ; d4 = sample bits 8 or 16
+    ; d4 = sample bits 8 or 16, convert to 1 and 2
     lsr     #3,d4
     move    d4,ahiSampleModulo(a5)
-    ; d4 samplebits
 
 
  if DEBUG
@@ -40980,6 +40985,18 @@ getSampleDataModulo:
     move    ahiSampleModulo(a5),d0
 .1
     rts
+
+* Returns the step in bytes to advance in sample data
+* each VBlank frame. Special case check for AHI
+* 16-bit buffers.
+getSampleDataAdd:
+    move.l	sampleadd(a5),d0
+    tst.b   ahi_use_nyt(a5)
+    beq     .1
+    cmp     #2,ahiSampleModulo(a5)
+    bne     .1
+    add.l   d0,d0
+.1  rts
 
 
 ******************************************************************************
