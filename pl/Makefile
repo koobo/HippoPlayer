@@ -82,6 +82,7 @@ all: $(COMPRESSED_TARGETS)
 
 # Turn logging on in PS3M and sampleplayer
 debug: EXE020 += -DDEBUG=1
+debug: EXE020opt += -DDEBUG=1
 debug: all
 	
 clean:
