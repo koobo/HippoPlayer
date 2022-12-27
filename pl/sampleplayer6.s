@@ -22,6 +22,12 @@ DPRINT macro
 	endc
 	endm
 
+ ifd __VASM
+    opt o-   ; disable all
+    opt o1+  ; optimize branches
+    opt o2+  ; optimize displacements
+    ;opt ow+ ; display 
+ endif
 
 **** Sample player
 
@@ -356,7 +362,7 @@ sample_segment
 	jmp	sample_code
 
 
- ifd DEBUG
+ if DEBUG
 flash1	move	#$f00,d0
 	bra.b	fla
 flash2	move	#$0f0,d0

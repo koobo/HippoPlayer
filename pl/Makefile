@@ -129,11 +129,11 @@ bin/jamc: jamcrackerproreplay.asm
 bin/okta: okta.s
 	$(ASM) $(INCLUDE) $(EXEopt) -o $@ "$<"
 bin/ps3m: Hippo_PS3M3.s
-	$(ASM) $(INCLUDE) $(EXE020) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(EXE020opt) -o $@ "$<"
 bin/pumatracker: Puma_Replay.S
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/sampleplay: sampleplayer6.s
-	$(ASM) $(INCLUDE) $(EXE020) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(EXE020opt) -o $@ "$<"
 bin/SidMon_v2: SidMon_v2.0.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/soundfx: SoundFX_Optimised.s
