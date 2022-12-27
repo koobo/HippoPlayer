@@ -3841,7 +3841,7 @@ ahiplay
 ahi_setScopePointers
     clr.l   samplefollow(a5)
     tst.b   d7
-    bne.b   .bank2
+    beq      .bank2
     move.l  ahi_sound1+4(pc),samplepointer(a5)
     move.l  ahi_sound2+4(pc),samplepointer2(a5)
 	rts
