@@ -110,9 +110,17 @@ stopcont
 
 	lea	ahi_ctrltags_(pc),a1
 	eor.b	#1,setpause-ahi_ctrltags_(a1)
+    bne     .cont
+    bsr     ahi_clearFreqs
+.cont
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_ControlAudioA(a6)
+
+    move.b  setpause(pc),d0
+    beq     .stop
+    bsr     ahi_restoreFreqs
+.stop
 
 	popm	d0/d1/a0-a2/a6
 	rts
@@ -1982,6 +1990,9 @@ lastinstrnum:	dc.w	0
 mmusic:
 	movem.l	d0-a6,-(sp)
 
+    move.b  setpause(pc),d0
+    beq     No_clr_volumes
+
 	move.l	mainvolume(pc),a0
 	move	(a0),MasterVol
 
@@ -2703,6 +2714,49 @@ ahi_period:
 
 	movem.l	(sp)+,d0-d2/a0-a2/a6
 	rts
+
+ahi_clearFreqs:
+    movem.l d0-a6,-(sp)
+	lea	Channel1,a4
+    moveq   #0,d6
+	move.w	TrackNumber,d7
+	subq	#1,d7
+.l
+    move.l  d6,d0
+    moveq   #0,d1   * NULL freq
+	move.l	ahibase,a6
+	moveq	#AHISF_IMM,d2
+	move.l	ahi_ctrl,a2
+	jsr	_LVOAHI_SetFreq(a6)
+
+	lea	ChanArea(a4),a4
+	addq	#1,d6
+    dbf     d7,.l
+
+    movem.l  (sp)+,d0-a6
+    rts
+
+ahi_restoreFreqs:
+    movem.l d0-a6,-(sp)
+	lea	Channel1,a4
+    moveq   #0,d6
+	move.w	TrackNumber,d7
+	subq	#1,d7
+.l
+    move.l  d6,d0
+    move.l  LastFreq(a4),d1  
+    move.l	ahibase,a6
+	moveq	#AHISF_IMM,d2
+	move.l	ahi_ctrl,a2
+	jsr	_LVOAHI_SetFreq(a6)
+
+	lea	ChanArea(a4),a4
+	addq	#1,d6
+    dbf     d7,.l
+
+    movem.l  (sp)+,d0-a6
+    rts
+
 
 RealCiaTempo	dc.w	125
 RealTempo:	dc.w	125

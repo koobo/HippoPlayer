@@ -1587,12 +1587,15 @@ ahi_setmastervol
 ahi_stop:
     DPRINT  "ahi stop"
     clr.b   setpause
+    bsr     ahi_stopChannels
     bra     ahi_stopcont
 
 ahi_cont:
     DPRINT  "ahi cont"
     st      setpause
-
+    bsr     ahi_stopcont
+    bra     ahi_restoreChannels
+    
 ahi_stopcont
 	pushm	d1/a0-a2/a6
 
@@ -1605,9 +1608,46 @@ ahi_stopcont
 	popm	d1/a0-a2/a6
 	rts
 
+ahi_stopChannels:
+    pushm   all
+	lea	    cha0,a4
+	move	numchans,d7
+	subq	#1,d7
+	moveq	#0,d6
+.chl
+    move.l  d6,d0
+    moveq   #0,d1   * NULL freq
+	moveq	#AHISF_IMM,d2
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr	_LVOAHI_SetFreq(a6)
+
+	lea 	mChanBlock_SIZE(a4),a4
+	addq	#1,d6
+	dbf	d7,.chl
+    popm     all
+    rts
+
+ahi_restoreChannels:
+    pushm   all
+	lea	    cha0,a4
+	move	numchans,d7
+	subq	#1,d7
+	moveq	#0,d6
+.chl
+    bsr     ahi_period
+	lea 	mChanBlock_SIZE(a4),a4
+	addq	#1,d6
+	dbf	d7,.chl
+    popm     all
+    rts
 
 
 ahi_playmusic
+    move.b  setpause(pc),d0
+    bne.b   .1
+    rts
+.1
 	pushm	d2-d7/a2-a6
 
 	bsr	s3vol
