@@ -34983,7 +34983,37 @@ p_sid:	jmp	.init(pc)
 
 	move.l	moduleaddress(a5),a0
 	cmp.l	#"PSID",(a0)
-	bne.b	.noheader
+	bne 	.noheader
+
+ if DEBUG
+    moveq   #0,d0
+    move    sidh_version(a0),d0
+    move.l  d0,d2
+    DPRINT  "SID header version=%ld"
+    cmp     #2,d2
+    blo     .v1
+    ; Header v2
+    move    sidh_flags(a0),d0
+    DPRINT  "Flags=%lx"
+    move.l  d0,d1
+    lsr     #4,d0
+    and     #%11,d0
+    DPRINT  "SID version=%ld"
+    cmp     #3,d2
+    blo     .v2
+    ; Header v3
+    move.l  d1,d0
+    lsr     #6,d0
+    and     #%11,d0
+    DPRINT  "2nd SID version=%ld"
+    moveq   #0,d0
+    move.b  $7a(a0),d0
+    lsl     #4,d0
+    add.l   #$d000,d0
+    DPRINT  "2nd SID address=%lx"
+.v2
+.v1    
+ endif
 
 	lea	sidheader(a5),a1
 	moveq	#sidh_sizeof-1,d0
@@ -47078,7 +47108,7 @@ deliInit:
 	* Does not return error code
 
 	DPRINT	"InitSound ok"
-	bsr	clearCpuCaches  ; Extra safety
+	jsr	clearCpuCaches  ; Extra safety
 
 	* Get position info if available
 	bsr	deliUpdatePositionInfo
