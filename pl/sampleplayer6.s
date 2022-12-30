@@ -3568,7 +3568,7 @@ decodeMp3
  if DEBUG
     push    d0
 	bsr	playblock_14bit
-    push    d0
+    pop     d0
  else
 	bsr	playblock_14bit
  endif
@@ -3607,7 +3607,7 @@ decodeMp3
     cmp.l   d1,d4
     bls     .ok1
     *                  d0        d1            d2      d3              d4
-    DPRINT  "buffer=%04.4ldkB,%04.4ldms io=%04.4ldkB,%04.4ldms fill=%04.4ldms WARN"
+    DPRINT  "buffer=%04.4ldkB,%04.4ldms io=%04.4ldkB,%04.4ldms fill=%05.5ldms WARN"
     bra     .ok3
 .ok1
 
@@ -3625,7 +3625,7 @@ decodeMp3
     bne     .ok3
     clr.l   logCount
 .ok4
-    DPRINT  "buffer=%04.4ldkB,%04.4ldms io=%04.4ldkB,%04.4ldms fill=%04.4ldms OK"
+    DPRINT  "buffer=%04.4ldkB,%04.4ldms io=%04.4ldkB,%04.4ldms fill=%05.5ldms OK"
 .ok3
     popm    all
  endif ; DEBUG
