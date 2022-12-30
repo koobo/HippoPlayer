@@ -2240,7 +2240,6 @@ scrnotifyname	dc.b	"screennotify.library",0
 idname		dc.b	"input.device",0
 nilname		dc.b	"NIL:",0
 portname	dc.b	"HiP-Port",0
-rmname		dc.b	"RexxMaster",0
 fileprocname	dc.b	"HiP-Filereq",0
 prefsprocname	dc.b	"HiP-Prefs",0
 infoprocname	dc.b	"HiP-Info",0
@@ -2484,15 +2483,6 @@ main
 	lob	OldOpenLibrary
 	move.l	d0,_DiskFontBase(a5)
 
-	lea	rmname(pc),a1		* Onko RexxMast p‰‰ll‰?
-	lob	FindTask
-	tst.l	d0
-	beq.b	.norexx
-	lea	rexxname(pc),a1		* jos on, avataan rexxsyslib
-	lob	OldOpenLibrary
-	move.l	d0,_RexxBase(a5)
-	sne	rexxon(a5)		* Lippu
-.norexx
 
 	lea 	gfxname(pc),a1		
 	lob	OldOpenLibrary
@@ -2609,11 +2599,7 @@ main
 	* Fonts set, some other stuff next
 
 	bsr	createport0
-	tst.b	rexxon(a5)
-	beq.b	.nor1
 	bsr	createrexxport
-.nor1
-
 
 
 	bsr	getsignal
@@ -3836,6 +3822,7 @@ flush_messages
 
 
 createrexxport	pushm	all
+        st      rexxon(a5)
 		lea	.p(pc),a4
 		lea	rexxport(a5),a2
 		bra.b	createport1
@@ -22954,7 +22941,15 @@ rexxmessage
 	lea	rexxport(a5),a0
 	lore	Exec,GetMsg
 	move.l	d0,rexxmsg(a5)
-	beq.b	.nomsg
+	beq 	.nomsg
+
+    tst.l   _RexxBase(a5)
+    bne     .1
+    * This shouldn't fail as an ARexx msg was received
+	lea	rexxname,a1
+    lob	OldOpenLibrary
+	move.l	d0,_RexxBase(a5)
+.1
 
 	move.l	rexxmsg(a5),a1
 	clr.l	rm_Result1(a5)
