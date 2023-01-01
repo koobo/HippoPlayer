@@ -34952,6 +34952,10 @@ p_sid:	jmp	.init(pc)
 
     ; -----------------------
     ; Before AllocEmulResource set the operating mode
+    ; 0 = normal
+    ; 1 = resid 6581
+    ; 2 = resid 8580
+    ; 3 = sidblaster
     cmp.b   #1,sidmode(a5)
     beq     .m1
     cmp.b   #2,sidmode(a5)
@@ -35051,28 +35055,10 @@ p_sid:	jmp	.init(pc)
 	bne	.error1
 
     ; -----------------------
-    * Filter settings - after AllocEmulResource
-    moveq   #1,d0   * int on
-    moveq   #0,d1   * ext off
-    * 0 = internal on
-    move.b  residfilter(a5),d2
-    beq.b   .goFilt
-    * 1 = int+ext
-    moveq   #1,d1   * ext on
-    subq.b  #1,d2
-    beq.b   .goFilt
-    * 2 = off
-    moveq   #0,d0   * int off
-    moveq   #0,d1   * ext off
-.goFilt
-    DPRINT  "Filter=%ld ExtFilter=%ld"
-    lob     SetRESIDFilter 
 
-    ; -----------------------
-
-	move.l	moduleaddress(a5),a0
-	cmp.l	#"PSID",(a0)
-	bne 	.noheader
+    move.l  moduleaddress(a5),a0
+    cmp.l   #"PSID",(a0)
+    bne     .noheader
 
     * Change title if stereo sid
     move    sidh_version(a0),d0
@@ -35127,6 +35113,33 @@ p_sid:	jmp	.init(pc)
 	bne 	.error2
 
 .h2
+
+    ; -----------------------
+    * reSID Filter settings - after AllocEmulResource
+    cmp.b   #1,sidmode(a5)
+    beq     .rsf
+    cmp.b   #2,sidmode(a5)
+    bne     .nrsf
+.rsf
+    moveq   #1,d0   * int on
+    moveq   #0,d1   * ext off
+    * 0 = internal on
+    move.b  residfilter(a5),d2
+    beq.b   .goFilt
+    * 1 = int+ext
+    moveq   #1,d1   * ext on
+    subq.b  #1,d2
+    beq.b   .goFilt
+    * 2 = off
+    moveq   #0,d0   * int off
+    moveq   #0,d1   * ext off
+.goFilt
+    DPRINT  "Filter=%ld ExtFilter=%ld"
+    lob     SetRESIDFilter 
+.nrsf
+    ; -----------------------
+
+
 	lea	sidheader(a5),a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
