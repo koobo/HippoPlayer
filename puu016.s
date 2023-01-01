@@ -34848,6 +34848,7 @@ p_sid:	jmp	.init(pc)
 	dc.w 	pt_sid 				* type
 .flags 
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume!pf_scope!pf_quadscopePoke
+.title0
 	dc.b	"PSID "
 .title
     dc.b    "             "
@@ -34875,8 +34876,16 @@ p_sid:	jmp	.init(pc)
 
 	move.l	_SIDBase(a5),a6
 
-	tst.b	.flag
+    lea     p_sid(pc),a0
+    basereg p_sid,a0
+
+    * Default title "PSID"
+    move.b  #"P",.title0(a0)
+
+	tst.b	.flag(a0)
 	bne  	.plo
+
+    endb    a0
 
 	* Enable getting data for scopes.
     * Library wants to signal a given task when data is ready.
@@ -34979,6 +34988,15 @@ p_sid:	jmp	.init(pc)
 	move.l	moduleaddress(a5),a0
 	cmp.l	#"PSID",(a0)
 	bne 	.noheader
+
+    * Change title if stereo sid
+    move    sidh_version(a0),d0
+    cmp     #3,d0
+    blo.b   .s1
+    tst.b   $7a(a0)
+    beq.b   .s1
+    move.b  #"2",.title0
+.s1
 
  if DEBUG
     moveq   #0,d0
