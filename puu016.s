@@ -388,7 +388,8 @@ prefs_listfontname		rs.b	30
 
 prefs_xmaplay    rs.b   1
 prefs_residmode  rs.b    1
-
+prefs_residfilter rs.b   1
+                rs.b    1 * pad
 prefs_size		rs.b	0
 
 *******************************************************************************
@@ -836,7 +837,7 @@ medratepot_new	rs	1
 sidmode_new     rs.b    1
 residmode_new   rs.b    1
 xmaplay_new     rs.b    1
-                rs.b    1 * pad
+residfilter_new rs.b    1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
@@ -936,7 +937,7 @@ medrate		rs	1		* MED mixing rate
 sidmode     rs.b    1
 residmode   rs.b    1
 xmaplay     rs.b    1
-            rs.b    1  * pad
+residfilter rs.b    1
 
 *******
 
@@ -12683,6 +12684,7 @@ loadprefs2
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_sidmode(a0),sidmode(a5)
 	move.b	prefs_residmode(a0),residmode(a5)
+	move.b	prefs_residfilter(a0),residfilter(a5)
 	move.b	prefs_xmaplay(a0),xmaplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
@@ -12982,6 +12984,7 @@ saveprefs
 	move	medrate(a5),prefs_medrate(a0)
 	move.b	sidmode(a5),prefs_sidmode(a0)
 	move.b	residmode(a5),prefs_residmode(a0)
+	move.b	residfilter(a5),prefs_residfilter(a0)
 	move.b	xmaplay(a5),prefs_xmaplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
@@ -13471,6 +13474,7 @@ prefs_code
 	move	medrate(a5),medrate_new(a5)
 	move.b	sidmode(a5),sidmode_new(a5)
 	move.b	residmode(a5),residmode_new(a5)
+	move.b	residfilter(a5),residfilter_new(a5)
 	move.b	xmaplay(a5),xmaplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
@@ -13931,6 +13935,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move	medrate_new(a5),medrate(a5)
 	move.b	sidmode_new(a5),sidmode(a5)
 	move.b	residmode_new(a5),residmode(a5)
+	move.b	residfilter_new(a5),residfilter(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
@@ -14522,6 +14527,9 @@ pmousebuttons
 	lea     prefsResidMode,a0
 	lea	    rresidmode_req(pc),a2	   * resid mode
 	bsr.b	.check
+	lea     prefsResidFilter,a0
+	lea	    rresidfilter_req(pc),a2	   * resid mode
+	bsr.b	.check
 
 
 .xx	popm	all
@@ -14660,6 +14668,7 @@ pupdate:				* Ikkuna päivitys
     bsr     psidmode        * SID mode
     bsr     pxmaplay        * XMAPlay
     bsr     presidmode      * reSID mode
+    bsr     presidfilter    * reSID filter
 
 
 .x	popm	all
@@ -14911,7 +14920,7 @@ gadgetsup2
     dr  rsidmode    * sid mode
     dr  rxmaplay    * xmaplay
     dr  rresidmode  * resid mode
-    
+    dr  rresidfilter * resid filter
 
 
 rval0	moveq	#0,d0
@@ -17007,6 +17016,16 @@ rresidmode_req
 .x	rts
 
 
+rresidfilter_req
+	lea	residfilter00(pc),a0
+
+    pushpea sidmode_callback(pc),d4
+    bsr     listselector
+	bmi.b	.x
+	move.b	d0,residfilter_new(a5)
+	bra 	presidfilter
+.x	rts
+
 rresidmode
 	addq.b	#1,residmode_new(a5)
 	cmp.b	#5,residmode_new(a5)
@@ -17041,6 +17060,36 @@ residmode03	dc.b	"Oversample 3x",0
 residmode04	dc.b	"Oversample 4x",0
 residmode05	dc.b	"Interpolate",0
  even
+
+
+
+rresidfilter
+	addq.b	#1,residfilter_new(a5)
+	cmp.b	#3,residfilter_new(a5)
+	bne.b	.1
+	clr.b	residfilter_new(a5)
+.1
+
+presidfilter
+    lea     residfilter01(pc),a0
+	move.b	residfilter_new(a5),d0
+    beq.b   .1
+    lea     residfilter02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residfilter03(pc),a0
+.1 
+    lea	    prefsResidFilter,a1
+	bra	prunt
+
+
+
+residfilter00	dc.b    12,3
+residfilter01	dc.b	"Internal on",0
+residfilter02	dc.b	"Internal+Ext",0
+residfilter03	dc.b	"All off",0
+ even
+
 
 *** XMAPlay toggle
 
@@ -34936,7 +34985,7 @@ p_sid:	jmp	.init(pc)
 .cpuOk
     ; -----------------------
     lea     .perfDone(pc),a2
-    move.b  residmode(a5),d3
+    bsr     .getCombinedResidMode
     cmp.b   .perfMode(pc),d3
     beq.b   .modeSame
     ; Run perf test it mode has changed
@@ -34946,8 +34995,22 @@ p_sid:	jmp	.init(pc)
     bne.b   .perfOk
     DPRINT  "Start perf test"
     pushm   d0/a0/a1/a2
-    move.b  residmode(a5),d0
-    move.b  d0,.perfMode
+    bsr     .getCombinedResidMode
+    move.b  d3,.perfMode
+    * Filter settings
+    moveq   #1,d1   * int on
+    moveq   #0,d2   * ext off
+    * 0 = internal on
+    move.b  residfilter(a5),d3
+    beq.b   .goFilt_
+    * 1 = int+ext
+    moveq   #1,d2   * ext on
+    subq.b  #1,d3
+    beq.b   .goFilt_
+    * 2 = off
+    moveq   #0,d1   * int off
+    moveq   #0,d2   * ext off
+.goFilt_
     lob     MeasureRESIDPerformance
     DPRINT  "Perf test: %ld/%ld ms"
     move.l  d0,d2
@@ -34986,6 +35049,26 @@ p_sid:	jmp	.init(pc)
     DPRINT  "AllocEmulResource=%ld"
 	tst.l	d0
 	bne	.error1
+
+    ; -----------------------
+    * Filter settings - after AllocEmulResource
+    moveq   #1,d0   * int on
+    moveq   #0,d1   * ext off
+    * 0 = internal on
+    move.b  residfilter(a5),d2
+    beq.b   .goFilt
+    * 1 = int+ext
+    moveq   #1,d1   * ext on
+    subq.b  #1,d2
+    beq.b   .goFilt
+    * 2 = off
+    moveq   #0,d0   * int off
+    moveq   #0,d1   * ext off
+.goFilt
+    DPRINT  "Filter=%ld ExtFilter=%ld"
+    lob     SetRESIDFilter 
+
+    ; -----------------------
 
 	move.l	moduleaddress(a5),a0
 	cmp.l	#"PSID",(a0)
@@ -35229,6 +35312,13 @@ p_sid:	jmp	.init(pc)
 .perfReqButtons
     dc.b    "_Continue anyway|_Stop!",0
     even
+
+* Combine resid mode and filter mode into one for easy comparison
+.getCombinedResidMode
+    move.b  residfilter(a5),d3
+    lsl.b   #4,d3
+    or.b    residmode(a5),d3
+    rts
 
 *** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
 
@@ -47081,7 +47171,7 @@ deliInit:
 	bne	.initError
 	DPRINT	"initPlayer ok"
 
-	bsr	clearCpuCaches  ; Extra safety
+	jsr	clearCpuCaches  ; Extra safety
 
 	* set default song number
 	bsr	    deliGetSongInfo
@@ -53339,7 +53429,7 @@ prefsListFont
 prefsPlaySidMode 
        dc.l prefsEnableXMAPlay
        ; left, top, width, height
-       dc.w 214-80+4,107+28-14,100-8,12,3,1,1
+       dc.w 214-80+4,107+28-14-12-2,100-8,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -53352,6 +53442,21 @@ prefsPlaySidMode
        even
 
 prefsResidMode
+       dc.l prefsResidFilter
+       ; left, top, width, height
+       dc.w 214-80+4-16,107+28-12-2,100-8+16,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "reSID mode...",0
+       even
+
+prefsResidFilter
        dc.l 0 ; END
        ; left, top, width, height
        dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
@@ -53363,7 +53468,7 @@ prefsResidMode
        dc.w -198+80-4+16,2
        dc.l 0,.tx,0
 .tx 
-       dc.b "reSID mode...",0
+       dc.b "reSID filter",0
        even
 
 prefsEnableXMAPlay dc.l prefsResidMode
