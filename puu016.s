@@ -14907,7 +14907,7 @@ gadgetsup2
 	dr	rmpegaqua	* mpega quality
 	dr	rmpegadiv	* mpeda freq division
 	dr	rmedmode	* med mode
-	dr	rmedrate	* med rate
+	dr	rmedrate	* med mixing rate
     dr  rsidmode    * sid mode
     dr  rxmaplay    * xmaplay
     dr  rresidmode  * resid mode
@@ -16929,8 +16929,10 @@ rmedrate
 	bsr	desmsg2
 	lea	desbuf2(a5),a0
 	movem	4(a2),d0/d1
-	add	#118,d0
-	subq	#6,d1
+	;add	#118,d0
+	add     #-7*8-2-4,d0
+    addq    #6,d1
+   ; subq	#6,d1
 	bra	print3b
 
 
@@ -53366,16 +53368,18 @@ prefsResidMode
 
 prefsEnableXMAPlay dc.l prefsResidMode
        ; left, top, width, height
-       dc.w 214-80+4+64,107-12-2,28,12,3,1,1
+       ;dc.w 214-80+4+64,107-12-2,28,12,3,1,1
+       dc.w 214-80+4+64+160+40+4,107-12-2+14+14,28,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
        dc.l 0
 .t     dc.b 1,0,1,0
-       dc.w -198+80-4-64,2
+       dc.w -198+80-4-64+32+4+2,2
        dc.l 0,.tx,0
 .tx 
-       dc.b "Enable xmaplay060......",0
+;       dc.b "Enable xmaplay060......",0
+       dc.b "Enable xmaplay060",0
        even
 
  ifne FEATURE_LIST_TABS
