@@ -908,6 +908,7 @@ init:
  endif
 	lea	.control(pc),a1	
 	lore	MPEGA,MPEGA_open
+    DPRINT  "MPEGA_open=%lx"
 	move.l	d0,mpstream(a5)
 	bne.b	.uz
 .nostream
@@ -1133,6 +1134,7 @@ init:
 .go
 	* Return Dos file handle
 	move.l	d7,d0
+    DPRINT  "handle=%lx"
 .mpega_open_error
 	rts	
 
@@ -1145,9 +1147,27 @@ init:
     bsr     isRemoteSample
     beq     .notPipe
 
+    lea     -12(sp),sp
+    move.l  sp,d1
+    lob     DateStamp
+    move.l  ds_Tick(sp),d7
+
     DPRINT  "flushing pipe before closing"    
     moveq   #0,d5
 .flush
+    move.l  sp,d1
+    lob     DateStamp
+    move.l  ds_Tick(sp),d0
+    sub.l   d7,d0
+    bpl.b   .pos
+    neg.l   d0
+.pos
+    cmp.l   #5*50,d0
+    blo.b   .gog
+    DPRINT  "timeout!"
+    bra     .flushOver
+.gog
+
     move.l  d4,d1
     move.l  #mpbuffer1,d2
     move.l  #MPEGA_PCM_SIZE*4,d3
@@ -1158,6 +1178,8 @@ init:
     beq     .flush
 
 .flushOver
+    lea     12(sp),sp
+
  if DEBUG
     move.l  d5,d0
     DPRINT  "flushed %ld bytes"
