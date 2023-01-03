@@ -40785,6 +40785,10 @@ p_sample:
 .ok
 	pushm	a5/a6
 
+    ; By default end can be detected
+    lea     .flags(pc),a0
+    or      #pf_end,(a0)
+
 ** v‰litet‰‰n infoa
 
 	move.b	ahi_use(a5),d0
@@ -40937,6 +40941,15 @@ p_sample:
  	move.l  #INFO_MODULE_NAME_LEN-1,d1
 	bsr     copyNameFromA1
 .no1   
+
+    jsr     streamIsRadioStation
+    beq     .notRadio
+    * End can't be detected from radio streams
+    lea     .flags(pc),a0
+    and.w   #~pf_end,(a0)
+    DPRINT  "Disable end detect"
+.notRadio
+
 
     DPRINT  "sample init ok"
  	moveq	#0,d0
@@ -47162,7 +47175,7 @@ deliInit:
 .noCheck5
 
 .checksOk
-	bsr	clearCpuCaches  ; Extra safety
+	jsr	clearCpuCaches  ; Extra safety
 
 	move.l	#EP_InitAmplifier,d0 
 	bsr	deliGetTag 
@@ -52370,16 +52383,6 @@ startStreaming:
     pop     d1
     DPRINT  "streamer started! length=%ld mpeg/audio=%ld"
  endif
-
-;    ; Allow aget to fill pipe for a while so mpega
-;    ; will not starve for streams that are throttled.
-;    bsr     streamIsRadioStation
-;    beq     .notRadio
-;    DPRINT  "Radio buffering!"
-;    move.l  #2*50,d1
-;    lore    Dos,Delay
-;.notRadio
-
 
 .y
     lea     streamPipeFile(pc),a0
