@@ -34996,7 +34996,7 @@ p_sid:	jmp	.init(pc)
     clr.b   (a2)
 .modeSame
     tst.b   (a2)
-    bne.b   .perfOk
+    bne     .perfOk
     DPRINT  "Start perf test"
     pushm   d0/a0/a1/a2
     bsr     .getCombinedResidMode
@@ -35016,6 +35016,12 @@ p_sid:	jmp	.init(pc)
     moveq   #0,d2   * ext off
 .goFilt_
     lob     MeasureRESIDPerformance
+    bsr     .sidIsStereo
+    beq     .noSt2
+    * Halve the reference value in case stereo sid to match
+    * the double CPU load.
+    lsr.w   #1,d1
+.noSt2
     DPRINT  "Perf test: %ld/%ld ms"
     move.l  d0,d2
     cmp     d1,d2
@@ -35061,13 +35067,10 @@ p_sid:	jmp	.init(pc)
     bne     .noheader
 
     * Change title if stereo sid
-    move    sidh_version(a0),d0
-    cmp     #3,d0
-    blo.b   .s1
-    tst.b   $7a(a0)
-    beq.b   .s1
+    bsr     .sidIsStereo
+    beq     .noSt
     move.b  #"2",.title0
-.s1
+.noSt
 
  if DEBUG
     moveq   #0,d0
@@ -35177,18 +35180,19 @@ p_sid:	jmp	.init(pc)
     beq.b   .skipz
     * Audio buffer is valid after song was started
     lob     GetRESIDAudioBuffer
-    * a0 = buffer ptr
+    * a0 = buffer ptr 1
+    * a1 = buffer ptr 2 (could be same as 1)
     * d0 = buffer length
     * d1 = period value
     subq.l  #2,d0   * removes static pixels from scope
     move.l  d0,.posMask
-    move.l  a0,.bufPtr
+    movem.l a0/a1,.bufPtr1
  if DEBUG
     move.l  a0,d1
     DPRINT  "length=%ld buffer=%lx"
  endif
-    pushpea .bufPtr(pc),ps3m_buff1(a5)
-    pushpea .bufPtr(pc),ps3m_buff2(a5)
+    pushpea .bufPtr1(pc),ps3m_buff1(a5)
+    pushpea .bufPtr2(pc),ps3m_buff2(a5)
     pushpea .bufPos(pc),ps3m_playpos(a5)
     pushpea .posMask(pc),ps3m_buffSizeMask(a5)
 .skipz
@@ -35204,7 +35208,8 @@ p_sid:	jmp	.init(pc)
 * reSID 200Hz buffer size is 140 bytes
 * it will repeat 20 bytes
 .bufPos     dc.l    0
-.bufPtr     dc.l    0
+.bufPtr1    dc.l    0
+.bufPtr2    dc.l    0
 .posMask    dc.l    $7f 
 
 .error1
@@ -35326,12 +35331,33 @@ p_sid:	jmp	.init(pc)
     dc.b    "_Continue anyway|_Stop!",0
     even
 
-* Combine resid mode and filter mode into one for easy comparison
+* Combine resid mode, filter mode, mono/stereo into one for easy comparison
 .getCombinedResidMode
+    * 0,1,2
     move.b  residfilter(a5),d3
     lsl.b   #4,d3
+    * 0,1,2,3
     or.b    residmode(a5),d3
+    bsr     .sidIsStereo
+    beq.b   .77
+    or.b    #$80,d3
+.77
     rts
+
+.sidIsStereo
+    pushm   d0/a0
+    move.l  moduleaddress(a5),a0
+    cmp.l   #"PSID",(a0)
+    bne     .no
+    cmp     #3,sidh_version(a0)
+    blo.b   .no
+     * SID2 base address should be non-zero
+    tst.b   $7a(a0)
+.x  popm    d0/a0
+    rts
+.no moveq   #0,d0
+    bra.b   .x
+    
 
 *** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
 
