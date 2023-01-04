@@ -46653,6 +46653,8 @@ p_xmaplay:
     move.l  xmaplayroutines(a5),a0
     jmp     .xmaEnd(a0)
 
+* In:
+*    a0, a4 = data
 * Out:
 *    d0 = 0 if accepted and XMAPlay enabled
 id_xmaplay  
@@ -46660,11 +46662,12 @@ id_xmaplay
     bne     .no
     tst.b   xmaplay(a5)
     beq.b   .no
+    push    a0
     jsr     id_xm
+    pop     a0
     tst.l   d0
     beq.b   .no
-    move.l  moduleaddress(a5),a1
-	lea 	xmName(a1),a1
+    lea 	xmName(a0),a1
     moveq   #20-1,d0
     jsr     copyNameFromA1
     moveq   #0,d0
