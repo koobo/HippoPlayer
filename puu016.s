@@ -40760,6 +40760,7 @@ p_sample:
 	jmp 	id_sample(pc)
 	p_NOP	* author
 	dc.w 	pt_sample
+.flags
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .name	dc.b	"                        ",0
  even
