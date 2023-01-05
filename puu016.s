@@ -91,7 +91,7 @@ PLAYING_MODULE_NONE 	= -1	 	* needs to be negative
 PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
 MAX_MODULES		= $1ffff 		    * this should be enough!
 
-
+SEARCH_BOXSIZE_DELTA = 1
 	
  ;ifne TARK
  ;ifeq asm
@@ -1443,6 +1443,10 @@ streamHeaderIcyName         rs.l       1
 streamHeaderIcyDescription  rs.l       1
 streamHeaderRest            rs.l       1
 
+
+BOTTOM_MARGIN   rs.w  1
+
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -2350,7 +2354,7 @@ flash
 *
 * Main program entry point
 *
-main
+main:
 	* Global variables are in a5
 	lea	var_b,a5
 	move.l	4.w,a6
@@ -2359,6 +2363,8 @@ main
 	* Copy of exec for use in level1 software interrupt
 	move.l	a6,exeksi
 
+    clr     BOTTOM_MARGIN(a5)   
+    
 	sub.l	a1,a1
 	lob	FindTask
 	move.l	d0,owntask(a5)
@@ -3045,9 +3051,13 @@ main
 .rount
 	moveq	#34+WINX,d0
 	move	boxsize(a5),d3
-	beq.b	.oohi
 	bsr		getFileboxYStartToD2
 	add		d2,d1
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d2
+.lm1
+
 	mulu	listFontHeight(a5),d3
 	lsr		#1,d3
 	add		d3,d1
@@ -4454,9 +4464,11 @@ avaa_ikkuna:
 	sub     #63+WINY,d0
 	;add    #10,d0
 
-	add	    boxy(a5),d0
+    add	    boxy(a5),d0
 	add	    windowtop(a5),d0
 	move    d0,nw_Height(a0)
+
+
 
     * Calculate left edge so that window fits
     * Set nw_LeftEdge, nw_TopEdge
@@ -4560,6 +4572,7 @@ avaa_ikkuna:
 	lea	slider4,a3		* fileboxin slideri
 	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
 	add	boxy(a5),d3
+    sub     BOTTOM_MARGIN(a5),d3
 	move	d3,gg_Height(a3)
 	subq	#3,gg_Height(a3)
 
@@ -5083,16 +5096,7 @@ wrender:
 
 	tst	boxsize(a5)
 	beq.b	.nofs
-
-	movem	slider4+4,plx1/ply1/plx2/ply2	* fileslider
-	add	plx1,plx2
-	add	ply1,ply2
-	subq	#2,plx1
-	addq	#1,plx2
-	subq	#2,ply1
-	addq	#1,ply2
-	move.l	rastport(a5),a1
-	bsr	sliderlaatikko
+    bsr     drawFileSlider
 .nofs
 	movem	slider1+4,plx1/ply1/plx2/ply2	* volumeslider
 	add	plx1,plx2
@@ -5188,29 +5192,8 @@ wrender:
 
 	bsr	inforivit_clear
 
+    bsr     drawFileBoxFrame
 
-	tst	boxsize(a5)		* filebox
-	beq.b	.b
-	moveq	#28+WINX,plx1
-;	move	#253+WINX,plx2
-	move	WINSIZX(a5),plx2
-	subq	#8,plx2
-
-	;moveq	#61+WINY,ply1
-	move	fileBoxTopEdge(a5),ply1
-	sub		#2,ply1 * magic offset
-	;move	#128+WINY,ply2
-	move	fileBoxTopEdge(a5),ply2
-	add		#128-61-2,ply2 * magic offset
-
-	add	windowleft(a5),plx1
-	add	windowleft(a5),plx2
-	add	boxy(a5),ply2
-	add	windowtop(a5),ply1
-	add	windowtop(a5),ply2
-	move.l	rastport(a5),a1
-	bsr	laatikko1
-.b
 	moveq	#5+WINX,plx1		* infobox
 	;move	#254+WINX,plx2
 	move	WINSIZX(a5),plx2
@@ -5263,8 +5246,66 @@ wrender:
 	move.l	keycheckroutine(a5),-(sp)
 	rts
 
+drawFileBoxFrame:
+	tst	boxsize(a5)		* filebox
+	beq.b	.b
+	moveq	#28+WINX,plx1
+;	move	#253+WINX,plx2
+	move	WINSIZX(a5),plx2
+	subq	#8,plx2
 
-	
+	;moveq	#61+WINY,ply1
+	move	fileBoxTopEdge(a5),ply1
+	sub		#2,ply1 * magic offset
+	;move	#128+WINY,ply2
+	move	fileBoxTopEdge(a5),ply2
+	add		#128-61-2,ply2 * magic offset
+
+	add	windowleft(a5),plx1
+	add	windowleft(a5),plx2
+	add	boxy(a5),ply2
+    sub BOTTOM_MARGIN(a5),ply2
+	add	windowtop(a5),ply1
+	add	windowtop(a5),ply2
+	move.l	rastport(a5),a1
+	bsr	laatikko1
+.b  rts
+
+drawFileSlider:
+	movem	slider4+4,plx1/ply1/plx2/ply2	* fileslider
+	add	plx1,plx2
+	add	ply1,ply2
+	subq	#2,plx1
+	addq	#1,plx2
+	subq	#2,ply1
+	addq	#1,ply2
+	move.l	rastport(a5),a1
+	bra	sliderlaatikko
+    
+refreshFileSlider:
+    lea     gadgetFileSlider,a0
+    bra	    refreshGadgetInA0
+
+drawTextureBottomMargin:
+    tst     BOTTOM_MARGIN(a5)
+    beq     .x
+	move.l	rastport(a5),a2
+	moveq	#4,d0
+	moveq	#11,d1
+	move	WINSIZX(a5),d2
+	subq	#6,d2
+	move.l	windowbase(a5),a3
+	move	wd_Height(a3),d3	
+	sub		windowbottom(a5),d3
+	subq    #3,d3 * magic constant
+    move    d3,d1
+    sub     BOTTOM_MARGIN(a5),d1
+    subq    #4,d1 * more magic
+    sub     windowtop(a5),d3
+	bsr 	drawtexture
+.x  rts
+
+
 * Calculate y-offset related to boxsize value
 * Used in placing gfx into the main window.
 setboxy:
@@ -5479,7 +5520,7 @@ refreshResizeGadget
 .x	rts
 
 * Calculate the start y-position of the filebox 
-getFileboxYStartToD2
+getFileboxYStartToD2:
 	move	fileBoxTopEdge(a5),d2
 	subq	#1,d2 * magic constant
 ;	moveq	#62+WINY,d2
@@ -5781,6 +5822,11 @@ printhippo1:
 	move	fileBoxTopEdge(a5),d3
 
 	move	boxsize(a5),d6
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d6
+.lm1
+
 	mulu	listFontHeight(a5),d6
 	sub	d5,d6
 	bmi.b	.r	; will it fit?
@@ -7022,8 +7068,8 @@ forceDeselectGadget
 * Redraws gadget
 * in:
 *   a0=gadget
-refreshGadget
-refreshGadgetInA0
+refreshGadget:
+refreshGadgetInA0:
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	moveq	#1,d0	
@@ -9961,7 +10007,7 @@ resh:	pushm	all
 	rts
 
 * Resizes the box slider gadget according to the amount of modules in it
-reslider
+reslider:
 
 	* Calculate pi_vertBody, the vertical size of the prop gadget.
 	move.l	modamount(a5),d0
@@ -17625,6 +17671,7 @@ clearbox:
 	add		#127-62-1,d3 * magic constant
 
 	add	boxy(a5),d3
+    sub BOTTOM_MARGIN(a5),d3
 	bra	tyhjays
 
 shownames:
@@ -17681,6 +17728,10 @@ shownames:
 
 	moveq	#0,d2
 	move	boxsize(a5),d2
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d2
+.lm1
 	move.l	d2,d3
 	lsr	#1,d2		* center chosenmodule in the middle of the box
 	
@@ -17719,6 +17770,10 @@ shownames:
 .ylos
 	moveq	#0,d1 
 	move	boxsize(a5),d1
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm9
+    subq    #SEARCH_BOXSIZE_DELTA,d1
+.lm9
 	cmp.l	d1,d7
 	bhs	.all
 
@@ -17743,6 +17798,10 @@ shownames:
 .alas	
 	moveq	#0,d1 
 	move	boxsize(a5),d1
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm2
+    subq    #SEARCH_BOXSIZE_DELTA,d1
+.lm2
 	neg.l  	d7 
 	cmp.l	d1,d7 
 	bhs.b	.all
@@ -17758,13 +17817,23 @@ shownames:
 	mulu	listFontHeight(a5),d1
 	add		fileBoxTopEdge(a5),d1		* source y
 	move	fileBoxTopEdge(a5),d3	* dest y
-	bsr.b	.copy
+	bsr 	.copy
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm3
+    subq    #SEARCH_BOXSIZE_DELTA,d0
+.lm3
+
 	add.l 	firstname(a5),d0
 	sub.l	d7,d0
 	moveq	#0,d1 
 	move	boxsize(a5),d1
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm4
+    subq    #SEARCH_BOXSIZE_DELTA,d1
+.lm4
+
 	sub.l   d7,d1
 	move.l	d7,d2
 
@@ -17772,7 +17841,7 @@ shownames:
 	bra.b	.huh2
 
 .nomods	
-	bsr.b	.unmark
+	bsr 	.unmark
 .huh2
 .xx
 	move.l	#-1,markedline(a5)
@@ -17798,6 +17867,10 @@ shownames:
 	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	boxsize(a5),d2
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm5
+    subq    #SEARCH_BOXSIZE_DELTA,d2
+.lm5
 	bsr.b	doPrintNames
 	bra.b	.huh2
 
@@ -17805,6 +17878,10 @@ shownames:
 
 .copy	
 	move	boxsize(a5),d5	* y size
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm8
+    subq    #SEARCH_BOXSIZE_DELTA,d5
+.lm8
 	sub	d7,d5
 	;lsl	#3,d5
 	mulu	listFontHeight(a5),d5
@@ -19320,6 +19397,7 @@ getFileBoxIndexFromMousePosition:
 	add		#126-63,d2	
 	;move	#126+WINY,d2		* Bottom edge
 	add	boxy(a5),d2		* Height of box
+    sub     BOTTOM_MARGIN(a5),d2
 	cmp	d2,d1
 	bhi.b	.out
 
@@ -19452,6 +19530,10 @@ markit:
 	bmi.b	.outside
 	moveq	#0,d0
 	move	boxsize(a5),d0
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d0
+.lm1
 	cmp.l	d0,d5
 	bhs.b	.outside
 	tst.b	win(a5)
@@ -32045,10 +32127,10 @@ engageNormalMode:
 
 .wasNotFav
 	move.b	#LISTMODE_NORMAL,listMode(a5)
-	bsr.b	engageListMode
-
+	bsr 	engageListMode
 .skip
-	popm	all
+    bsr     switchToNormalLayout
+    popm	all
 	rts	
 
 engageFavoritesMode:
@@ -32059,7 +32141,8 @@ engageFavoritesMode:
 	* any subsequent user edits.
 	clr.b	moduleListChanged(a5)
 	move.b	#LISTMODE_FAVORITES,listMode(a5)
-	bsr.b	engageListMode
+	bsr     engageListMode
+    bsr     switchToNormalLayout
 	popm	all
 	rts	
 
@@ -32068,9 +32151,13 @@ engageSearchResultsMode:
 	pushm	all
 	DPRINT	"engage search results"
 	move.b	#LISTMODE_SEARCH,listMode(a5)
-	bsr.b	engageListMode
+	bsr 	engageListMode
+
+    bsr     switchToSearchLayout
 	popm	all
 	rts	
+
+
 
 * Common operations to be done after list mode change
 engageListMode:
@@ -32292,6 +32379,58 @@ refreshListModeTabs:
 	lore	Intui,RefreshGList
     rts
   endif
+
+switchToSearchLayout:
+    cmp      #12,BOTTOM_MARGIN(a5)
+    beq     .skip
+    DPRINT  "SWITCH TO SEARCH"
+
+    move    #12,BOTTOM_MARGIN(a5)
+    jsr     drawTextureBottomMargin
+    jsr     drawFileBoxFrame
+    jsr     refreshResizeGadget
+
+    lea		gadgetFileSlider,a0
+    sub     #12,gg_Height(a0)
+    jsr     drawFileSlider
+    clr     slider4oldheight(a5) ; force know redraw
+    jsr     reslider
+
+ ; XAX
+    ; modify boxsizedelta(a5) to -1
+    ; modify margin
+    ; modify fileslider
+    ; redraw bottom bg
+    ; redraw fileslider frame
+    ; refresh fileslider
+    ; redraw filebox frame
+    ; redraw contens
+    ; vertical layout
+    ; horizontal layout
+    ;move    #12,BOTTOM_MARGIN(a5)
+    ;subq    #1,boxsize(a5)
+    ;bsr     wrender
+.skip
+    rts
+
+switchToNormalLayout:
+    tst     BOTTOM_MARGIN(a5)
+    beq     .skip
+    DPRINT  "SWITCH TO NORMAL"
+
+    jsr     drawTextureBottomMargin
+    clr.w   BOTTOM_MARGIN(a5)
+    jsr     drawFileBoxFrame
+    jsr     forceRefreshList
+    jsr     refreshResizeGadget
+
+    lea		gadgetFileSlider,a0
+    add     #12,gg_Height(a0)
+    jsr     drawFileSlider
+    clr     slider4oldheight(a5) ; force know redraw
+    jsr     reslider
+.skip
+    rts 
 
 
 ********************************************************************************
@@ -32577,6 +32716,7 @@ engageFileBrowserMode
 	bsr.b	countFileBrowserFiles
 	move.l	d0,modamount(a5)
 	bsr	engageListMode
+    bsr     switchToNormalLayout
 	tst.l	modamount(a5)
 	bne.b	.notRootView
 	moveq	#0,d0	* initial chosen item
@@ -50403,6 +50543,7 @@ createlistBoxRegion
 	add		#127-62-1,d3 * magic constant
 
 	add	boxy(a5),d3
+    sub BOTTOM_MARGIN(a5),d3
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	add	windowtop(a5),d3
@@ -50672,6 +50813,9 @@ horizontalLayout:
 ***************************************************************************
 *
 * Vertical layout
+* Layout vertical
+* VerticalLayout
+* LayooutVertical
 *
 ***************************************************************************
 
