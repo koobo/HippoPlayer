@@ -47321,7 +47321,7 @@ deliInit:
 .noCheck5
 
 .checksOk
-	jsr	clearCpuCaches  ; Extra safety
+	bsr	funcENPP_ClearCache  ; Extra safety
 
 	move.l	#EP_InitAmplifier,d0 
 	bsr	deliGetTag 
@@ -47369,7 +47369,7 @@ deliInit:
 	bne	.initError
 	DPRINT	"initPlayer ok"
 
-	jsr	clearCpuCaches  ; Extra safety
+	bsr	funcENPP_ClearCache  ; Extra safety
 
 	* set default song number
 	bsr	    deliGetSongInfo
@@ -47411,7 +47411,7 @@ deliInit:
 	* Does not return error code
 
 	DPRINT	"InitSound ok"
-	jsr	clearCpuCaches  ; Extra safety
+	bsr	funcENPP_ClearCache  ; Extra safety
 
 	* Get position info if available
 	bsr	deliUpdatePositionInfo
@@ -47995,7 +47995,7 @@ _deliDataSize		rs.b	0
 	cmp.l	a1,a2
 	bne.b	.jumps
 	; Ensure jump table code is flushed
- 	jmp     clearCpuCaches
+	bra 	funcENPP_ClearCache
 
 .songEnd
 	* May be called from interrupt, no logging allowed
@@ -49459,7 +49459,7 @@ deliShowNoteStruct
 	rts
 
 
- endif
+ endif ; DEBUG
 
 ****************************************************************************
 *
@@ -51733,8 +51733,8 @@ configRemoteNode:
     move.l  a4,l_nameaddr(a0)
     st      l_separateName(a0)
  if DEBUG
-    move.l  a4,d0
-    DPRINT  "#name=%s"
+    ;move.l  a4,d0
+    ;DPRINT  "#name=%s"
  endif
     bra     .x
 .noHash
