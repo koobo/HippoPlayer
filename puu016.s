@@ -32387,13 +32387,16 @@ switchToSearchLayout:
     beq     .skip
     DPRINT  "SWITCH TO SEARCH"
 
-    move    #12,BOTTOM_MARGIN(a5)
+    move    listFontHeight(a5),d0
+    move    d0,BOTTOM_MARGIN(a5)
+    
     jsr     drawTextureBottomMargin
     jsr     drawFileBoxFrame
     jsr     refreshResizeGadget
 
+    move    BOTTOM_MARGIN(a5),d0
     lea		gadgetFileSlider,a0
-    sub     #12,gg_Height(a0)
+    sub     d0,gg_Height(a0)
     jsr     drawFileSlider
     clr     slider4oldheight(a5) ; force know redraw
     jsr     reslider
@@ -32426,8 +32429,9 @@ switchToNormalLayout:
     jsr     forceRefreshList
     jsr     refreshResizeGadget
 
+    move    listFontHeight(a5),d0
     lea		gadgetFileSlider,a0
-    add     #12,gg_Height(a0)
+    add     d0,gg_Height(a0)
     jsr     drawFileSlider
     clr     slider4oldheight(a5) ; force know redraw
     jsr     reslider
