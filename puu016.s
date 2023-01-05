@@ -23288,8 +23288,10 @@ rexxmessage
 	printt "TODO: switch to normal list mode"
 
 	tst.b	d0
-	beq	rinsert
-	bsr	rinsert2
+	bne	    .rinsert0
+    jmp     rinsert
+.rinsert0
+	jsr     rinsert2
 	bsr.b	.add2
 	clr.b	filereqmode(a5)
 	rts
