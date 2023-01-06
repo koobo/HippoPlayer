@@ -12286,6 +12286,12 @@ importModuleProgramFromData:
 	bne.b	.r23
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
+    cmp.l   #5,d0
+    bhi     .lenOk
+    add.l   d0,a3
+    bra     .next
+
+.lenOk
 
 	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
     add.l	d4,d0	* add extra header space if any
