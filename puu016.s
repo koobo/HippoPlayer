@@ -3402,7 +3402,7 @@ msgloop
 	bne.b	.noMouseMove
 	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
-	bne.b  	.idcmpLoop
+	bne  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
 	bsr	mousemoving
 	bra	.idcmpLoop
@@ -6833,6 +6833,8 @@ buttonspressed:
 
 	* Any button activity should first close any active tooltip
 	bsr	closeTooltipPopup
+    * Get rid of the find bar if possible
+    jsr     switchToNormalLayoutIfPossible
 
 	cmp	#SELECTDOWN,d3		* left button down
 	bne.b	.test1
@@ -9640,43 +9642,46 @@ activateSearchStringGadget:
 
 * in:
 *   d3 = index to check
-listSelectorUhcCallback
-	; Disable rows from 2 onwards UHC not available
-	cmp		#2,d3
-	blo.b	.n
-	tst.b	uhcAvailable(a5)
-	bne.b	.n
-	moveq	#0,d0
-	rts
-.n	moveq	#1,d0
-	rts
+;listSelectorUhcCallback
+;	; Disable rows from 2 onwards UHC not available
+;	cmp		#2,d3
+;	blo.b	.n
+;	tst.b	uhcAvailable(a5)
+;	bne.b	.n
+;	moveq	#0,d0
+;	rts
+;.n	moveq	#1,d0
+;	rts
 
 
 
-enterSearchPattern_t
-	dc.b	"Enter search pattern",0
- even
+;enterSearchPattern_t
+;	dc.b	"Enter search pattern",0
+; even
 
 gadgetFindAction:
     DPRINT  "gadgetFindAction"
     lea     gadgetLocalSearchStringBuffer,a0
     bsr     beepIfSearchStringIsSmall
     bne     .1
-    bsr     activateSearchStringGadget
-    rts
+    * Activate again to get a better search string
+    bra     activateSearchStringGadget
 .1
+    * Find!
+    lea     gadgetLocalSearchStringBuffer,a0
+    lea     findpattern(a5),a1
+.c  move.b  (a0)+,(a1)+
+    bne     .c
+    bsr     do_find_continue
+
     * Return the layout to whatever it was
     jsr     switchToNormalLayout
     bsr     isSearchLayoutActive      
     bne     .norm
     jsr     switchToSearchLayout
-.norm
+.norm   
+    rts
 
-    lea     gadgetLocalSearchStringBuffer,a0
-    lea     findpattern(a5),a1
-.c  move.b  (a0)+,(a1)+
-    bne     .c
-    bra     find_continue
 
 find_new:
 	cmp.l	#3,modamount(a5)
@@ -9685,32 +9690,37 @@ find_new:
 .ok
     jmp     switchToLocalSearchLayout
     
-	bsr	get_rt
-	lea	findpattern(a5),a1	
-	moveq	#27,d0
-	sub.l	a3,a3
-	lea	ftags(pc),a0
-	lea	enterSearchPattern_t(pc),a2
-	bsr	setMainWindowWaitPointer
-	lob	rtGetStringA
-	bsr	clearMainWindowWaitPointer
-	tst.l	d0
-	bne.b	find_continue	
-	rts
-
+;	bsr	get_rt
+;	lea	findpattern(a5),a1	
+;	moveq	#27,d0
+;	sub.l	a3,a3
+;	lea	ftags(pc),a0
+;	lea	enterSearchPattern_t(pc),a2
+;	bsr	setMainWindowWaitPointer
+;	lob	rtGetStringA
+;	bsr	clearMainWindowWaitPointer
+;	tst.l	d0
+;	bne.b	find_continue	
+;	rts
+;
 ftags
 	dc.l	RTGS_Width,262
 	dc.l	RT_TextAttr,text_attr
 otag15	dc.l	RT_PubScrName,pubscreen+var_b
 	dc.l	TAG_END
 	
-
-
 find_continue
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
 	rts
 .ok
+    bsr     do_find_continue
+    bne     .notFound
+	bsr	forceRefreshList
+.notFound
+    rts
+
+do_find_continue
 	bsr	setMainWindowWaitPointer
 	pea	clearMainWindowWaitPointer(pc)
 
@@ -9799,7 +9809,6 @@ find_continue
 	move.l	d7,d0
 	DPRINT	"Found module at %ld"
  endc
-	bsr	forceRefreshList
 	moveq	#0,d0
 	rts
 
@@ -32372,6 +32381,7 @@ handleFavoriteModuleConfigChange
 *** SECTION ********************************************************************
 *
 * List mode operations
+* Layout for the bottom find/search bar 
 *
 ******************************************************************************
 
@@ -32673,6 +32683,12 @@ switchToSearchLayoutIfNeeded:
     beq     switchToSearchLayout
     rts
 
+switchToNormalLayoutIfPossible:
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    beq     .1
+    bsr     switchToNormalLayout   
+.1
+    rts
 
 switchToSearchLayout:
     tst.b   uhcAvailable(a5)
