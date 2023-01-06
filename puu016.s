@@ -9597,7 +9597,6 @@ searchActivate:
 .x
     * Activate popup
     bsr     gadgetSearchSourceAction
-    bsr     refreshGadgetSearchSource
     cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     beq     .y
     * Then activate string gadget
@@ -14179,7 +14178,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
 	move.l	d0,stringExtendStruct+sex_Font(a5)
-	
+  	
 	move.l	prefs_listtextattr+prefsdata(a5),list_text_attr+4(a4)
 	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr(a4)
 
@@ -51469,37 +51468,6 @@ remoteSearch
 .go
 	jsr		lockMainWindow
 
-	* Storage space for user input
-	lea	-50(sp),sp
-
-    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
-    beq     .srh0
-
-	move.l	sp,a1
-	clr.b	(a1)
-
-    lea     gadgetSearchStringBuffer,a0
-.sku  
-    move.b  (a0)+,(a1)+
-    bne     .sku
-    bra .srh0
-
-	jsr		get_rt
-	; a1 = string buffer
-	; d0 = max chars
-	moveq	#40,d0
-	; a2 = requester title
-
-    lea     enterSearchPattern_t,a2 
-	; a3 = rtReqInfo structure or null
-	sub.l	a3,a3
-	; a0 = tags, to set the public screen
-	lea		otag15,a0
-	lob		rtGetStringA
-; d0 = true if something entered, false otherwise
-	tst.l	d0
-	beq		.exit
-.srh0
 	lea	.srh(pc),a0
 	jsr		printbox
 	bra.b	.srhh
@@ -51539,7 +51507,7 @@ remoteSearch
 .1
     pushpea .pathCmd(pc),d0  * path cmd
     move.l  a1,d1       * search cmd/search name
- 	move.l	sp,d2		* search terms
+ 	move.l	#gadgetSearchStringBuffer,d2		* search terms
 	jsr		desmsg
 
 	* Save it into a file for execution
@@ -51725,11 +51693,8 @@ remoteSearch
 .sorted
 	jsr		releaseModuleList
 .exit
-	jsr		unlockMainWindow
-    * User input buffer restore
-	lea 	50(sp),sp
-	rts
-
+	jmp		unlockMainWindow
+    
 
 .postProcessSearchResults
     ; ---------------------------------
