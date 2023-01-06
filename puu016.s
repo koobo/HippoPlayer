@@ -8441,8 +8441,8 @@ nappilasku
 * d3 = rawkey
 * d4 = iequalifier
 
-handleRawKeyInput
-nappuloita
+handleRawKeyInput:
+nappuloita:
 
   REM
   if DEBUG
@@ -8470,11 +8470,16 @@ nappuloita
 	jsr	toggleFavoriteStatusForCurrentModule
 	bra	.ee
 .2
-	cmp.b	#$37,d3	 	* m + control
- 	bne.b	.3
-	jsr		modlandSearch
+;	cmp.b	#$37,d3	 	* m + control
+; 	bne.b	.3
+;	jsr		modlandSearch
+;	bra	.ee
+;.3	
+	cmp.b	#$21,d3	 	* s + control
+ 	bne.b	.4
+	jsr		searchActivate
 	bra	.ee
-.3	
+.4
 
 .noControl
 
@@ -9440,11 +9445,27 @@ comment_file
 
 gadgetSearchStringAction:
     move    selectedSearch(a5),d0
+    lea     gadgetSearchStringBuffer,a0
+ if DEBUG
     ext.l   d0
-    lea gadgetSearchString\.buffer,a0
     move.l  a0,d1
     DPRINT  "search string action %ld %s"
+ endif
+    * Beep display if search term is too small
+    move.l  a0,a1
+.len  
+    tst.b   (a1)+
+    bne     .len
+    sub.l   a0,a1
 
+    cmp     #4,a1   * strlen=3
+    bhs.b   .1
+    move.l  windowbase(a5),a0
+    move.l  wd_WScreen(a0),a0
+    lore    Intui,DisplayBeep
+    rts
+.1
+    
     lea     modlandSearch,a0
     basereg modlandSearch,a0
     tst.w   d0
@@ -9562,7 +9583,107 @@ rsearchfuncs
 	dc.b	"Search AmigaRemix     (MP3)",0
 	dc.b	"Search Remix.Kwed.Org (MP3)",0
 	dc.b	"Search radio stations (MP3)",0
-	dc.b	"Browse shared playlists    ",0
+;	dc.b	"Browse shared playlists    ",0
+
+gadgetSearchSourceAction:
+	lea		gadgeSearchSourceOptions(pc),a4
+	lea		gadgetSearchSource,a0
+	move	gg_LeftEdge(a0),d6
+	moveq	#20,d7
+	add		gg_TopEdge(a0),d7
+	;pushpea	listSelectorUhcCallback(pc),d4
+    moveq   #0,d4   * no callbackkkkk
+    move    selectedSearch(a5),d0
+	bsr		listSelectorMainWindowPreselect
+	bmi 	.skip
+    move    d0,selectedSearch(a5)
+    bsr     refreshGadgetSearchSource
+
+.skip
+    rts
+
+refreshGadgetSearchSource:
+    move    selectedSearch(a5),d0
+    mulu    #15,d0
+    lea     gadgetSearchSourceOption1(pc,d0),a0
+    move.l  a0,d0
+    DPRINT  "selected=%s"
+
+    move.l  a0,gadgetSearchSourceTextPtr    
+
+    lea     gadgetSearchSource,a3
+    bsr     clearGadgetInA3
+    
+    lea     gadgetSearchSource,a0
+    bsr     refreshGadgetInA0
+
+    lea     gadgetSearchSource,a3
+    bsr     drawButtonFrameMainWindow
+
+    cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    bne     .1
+    lea     gadgetSearchString,a0
+    bsr     disableGadget
+    jmp     recentPlaylistsSearch
+.1
+    lea     gadgetSearchString,a0
+    and	    #~GFLG_DISABLED,gg_Flags(a0)
+    jmp     refreshGadgetInA0
+
+
+gadgeSearchSourceOptions:
+	* max width, rows
+	dc.b	15,8
+gadgetSearchSourceOption1:
+	dc.b	"Modland       ",0
+    dc.b	"Aminet        ",0
+    dc.b	"Modules.pl    ",0
+	dc.b	"HVSC          ",0
+	dc.b	"AmigaRemix    ",0
+	dc.b	"Remix.Kwed.org",0
+	dc.b	"Radio stations",0
+	dc.b	"Shared lists  ",0
+
+
+searchActivate:
+    DPRINT  "search activate"
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    beq     .x
+    * Switch to search view 
+    jsr     engageSearchResultsMode
+.x
+    * Activate popup
+    bsr     gadgetSearchSourceAction
+    bsr     refreshGadgetSearchSource
+    cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    beq     .y
+    * Then activate string gadget
+    clr.b   gadgetSearchStringBuffer
+    lea     gadgetSearchString,a0
+    move.l  windowbase(a5),a1
+    sub.l   a2,a2
+    lore    Intui,ActivateGadget
+.y
+    rts
+
+
+
+
+
+* in:
+*   d3 = index to check
+listSelectorUhcCallback
+	; Disable rows from 2 onwards UHC not available
+	cmp		#2,d3
+	blo.b	.n
+	tst.b	uhcAvailable(a5)
+	bne.b	.n
+	moveq	#0,d0
+	rts
+.n	moveq	#1,d0
+	rts
+
+
 
 enterSearchPattern_t
 	dc.b	"Enter search pattern",0
@@ -17447,10 +17568,16 @@ updateahi
 wflags4 = WFLG_SMART_REFRESH!WFLG_ACTIVATE!WFLG_BORDERLESS!WFLG_RMBTRAP
 idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
+listSelectorMainWindowPreselect:
+	pushm	d1-a6	
+	move.l	windowbase(a5),a0	
+	bra.b	listselector\.do
+
 
 listSelectorMainWindow:
 	pushm	d1-a6	
 	move.l	windowbase(a5),a0	
+    moveq   #-1,d0
 	bra.b	listselector\.do
 
 listSelectorPrefsWindowWithCallback:
@@ -17468,15 +17595,18 @@ listselector:
 .LINE_HEIGHT = 12
 
 	pushm	d1-a6
+    moveq   #-1,d0
 	moveq	#0,d4
 .dop
+    moveq   #-1,d0
 	move.l	a0,a4
 	move.l	windowbase2(a5),a0	* prefs-ikkuna
 .do
 	add	wd_LeftEdge(a0),d6	* mousepos suhteellinen prefs-ikkunan
 	add	wd_TopEdge(a0),d7	* ylälaitaan
 
-    move    #-1,.arrowSelection	
+;    move    #-1,.arrowSelection	
+    move    d0,.arrowSelection
 
 	lea	winlistsel,a0		* asetetaan pointterin kohdalle
 
@@ -17563,6 +17693,12 @@ listselector:
 	subq	#1,plx2
 	bsr	laatikko1
 	popm	all
+
+    * Preselection?
+    move    .arrowSelection(pc),d0
+    bmi.b   .zzz
+    bsr     .doSelect
+.zzz
 
 	moveq	#-1,d7		* selection
 .msgloop3
@@ -51401,7 +51537,7 @@ remoteSearch
 	move.l	sp,a1
 	clr.b	(a1)
 
-    lea gadgetSearchString\.buffer,a0
+    lea     gadgetSearchStringBuffer,a0
 .sku  
     move.b  (a0)+,(a1)+
     bne     .sku
@@ -54315,7 +54451,7 @@ gadgetSearchString:
 	dc.l 0
 
 .stringInfo
-    dc.l    .buffer     ; si_Buffer
+    dc.l    gadgetSearchStringBuffer     ; si_Buffer
     dc.l    0   ; si_UndoBuffer
     dc.w    0   ; si_BufferPos
     dc.w    19  ; si_MaxChars
@@ -54328,9 +54464,6 @@ gadgetSearchString:
     dc.l    .extension ; si_Extension
     dc.l    0   ; si_LongInt
 
-.buffer     
-    dc.b    "search terms"
-    ds.b    20
 
 .extension  dc.l    0   ; sex_Font
             dc.b    1,0 ; sex_Pens
@@ -54339,6 +54472,10 @@ gadgetSearchString:
             dc.l    0   ; sex_EditHook
             dc.l    0   ; sex_WorkBuffer
             ds.b    16  ; sex_Reserved
+
+gadgetSearchStringBuffer:     
+    dc.b    "search terms"
+    ds.b    20
 
 gadgetSearchSource:
     ; gg_NextGadget
@@ -54358,7 +54495,7 @@ gadgetSearchSource:
 	; gg_GadgetType
 	dc GTYP_BOOLGADGET
     ; gg_GadgetRender
-	dc.l .image
+	dc.l 0 ;.image
 	; gg_SelectRender
 	dc.l 0
 	; gg_GadgetText
@@ -54372,25 +54509,25 @@ gadgetSearchSource:
 	; gg_UserData
 	dc.l 0
 
-.image
-	; ig_LeftEdge
-	dc 108
-	; ig_TopEdge
-	dc 1
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	searchImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
+;.image
+;	; ig_LeftEdge
+;	dc 108
+;	; ig_TopEdge
+;	dc 1
+;	; ig_Width
+;	dc 9+1
+;	; ig_Height
+;	dc 7
+;	; ig_Depth
+;	dc 1
+;	; ig_ImageData
+;	dc.l 	cycleImage
+;	; ig_PlanePick
+;	dc.b 1
+;	; ig_PlaneOff
+;	dc.b 0
+;	; ig_NextImage
+;	dc.l 0
 
 
 .itext
@@ -54398,11 +54535,11 @@ gadgetSearchSource:
     dc.b    0   ; it_BackPen
     dc.b    0 ;RP_JAM1  ; it_DrawMode
     dc.b    0   ; it_KludgeFill00
-    dc.w    2   ; it_LeftEdge
+    dc.w    3   ; it_LeftEdge
     dc.w    1   ; it_TopEdge
     dc.l    list_text_attr  ; it_ITextFont
 gadgetSearchSourceTextPtr:
-    dc.l    gadgetSearchSourceAction\.option1  ; it_IText
+    dc.l    gadgetSearchSourceOption1  ; it_IText
     dc.l    0   ; it_NextText
 
 .text
