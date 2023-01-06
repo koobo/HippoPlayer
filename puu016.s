@@ -9512,78 +9512,21 @@ rsearchfuncs
 	move	gg_LeftEdge(a0),d6
 	moveq	#20,d7
 	add		gg_TopEdge(a0),d7
-	pushpea	.callback(pc),d4
+    moveq   #0,d4
 	bsr		listSelectorMainWindow
 	bmi.b	.skip
 	beq		find_new
 	subq	#1,d0
 	beq		find_continue
-
-    lea     modlandSearch,a0
-    basereg modlandSearch,a0
-	subq	#1,d0
-	beq.b	.modland
-	subq	#1,d0
-	beq.b	.aminet
-	subq	#1,d0
-	beq.b	.modules
-	subq	#1,d0
-	beq.b	.hvsc
-	subq	#1,d0
-	beq.b	.amigaRemix
-	subq	#1,d0
-	beq.b	.rko
-	subq	#1,d0
-	beq.b	.stations
-	subq	#1,d0
-	beq.b	.recentPlaylists
 .skip
 	rts
 
-.modland
-	jmp	modlandSearch(a0)
-.aminet
-	jmp	aminetSearch(a0)
-.modules
-	jmp	modulesSearch(a0)
-.hvsc
-	jmp	hvscSearch(a0)
-.amigaRemix
-	jmp	amigaRemixSearch(a0)
-.rko
-    jmp rkoSearch(a0)
-.stations
-    jmp stationsSearch(a0) 
-.recentPlaylists
-    jmp recentPlaylistsSearch(a0) 
-    endb    a0
-
-* in:
-*   d3 = index to check
-.callback
-	; Disable bottom two rows if UHC not available
-	cmp		#2,d3
-	blo.b	.n
-	tst.b	uhcAvailable(a5)
-	bne.b	.n
-	moveq	#0,d0
-	rts
-.n	moveq	#1,d0
-	rts
 
 .options
 	* max width, rows
-	dc.b	27,10
-	dc.b	"Search list             [F]",0
-	dc.b	"Search next       [SHIFT+F]",0
-	dc.b	"Search Modland     [CTRL+M]",0
- 	dc.b	"Search Aminet              ",0
-	dc.b	"Search Modules.pl          ",0
-	dc.b	"Search HVSC           (SID)",0
-	dc.b	"Search AmigaRemix     (MP3)",0
-	dc.b	"Search Remix.Kwed.Org (MP3)",0
-	dc.b	"Search radio stations (MP3)",0
-;	dc.b	"Browse shared playlists    ",0
+	dc.b	19,2
+	dc.b	"Find            [F]",0
+	dc.b	"Find next [SHIFT+F]",0
 
 gadgetSearchSourceAction:
 	lea		gadgeSearchSourceOptions(pc),a4
@@ -54735,11 +54678,9 @@ tooltipList
 	dc.b    "     the moved module",0
 	dc.b	"RMB: Add divider",0
 .prg
-	dc.b	24+5,4
+	dc.b	24,2
 	dc.b	"LMB: Load module program",0
 	dc.b	"RMB: Save module program",0
-	dc.b	"Favorite modules are saved to",0
-	dc.b	34,"S:HippoFavorites.prg",34,0
 .forward
 	dc.b	36,4
 	dc.b	"LMB: Skip module forward",0
