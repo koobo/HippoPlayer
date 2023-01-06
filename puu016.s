@@ -17467,7 +17467,7 @@ listSelectorPrefsWindowWithCallback:
 listselector:
 .LINE_HEIGHT = 12
 
-	pushm	d1-a6	
+	pushm	d1-a6
 	moveq	#0,d4
 .dop
 	move.l	a0,a4
@@ -17475,6 +17475,8 @@ listselector:
 .do
 	add	wd_LeftEdge(a0),d6	* mousepos suhteellinen prefs-ikkunan
 	add	wd_TopEdge(a0),d7	* ylälaitaan
+
+    move    #-1,.arrowSelection	
 
 	lea	winlistsel,a0		* asetetaan pointterin kohdalle
 
@@ -17520,10 +17522,11 @@ listselector:
 
 	moveq	#0,d5
 	move.b	(a4)+,d5	* vaakarivejä
+    move    d5,.lineCount
 	subq	#1,d5
 	move.l	a4,a0
 
-	moveq	#0,d2
+	moveq	#0,d2   * id counter
 	moveq	#4,d3 	* start y
 .prl	
 	move.l	a0,a1
@@ -17583,21 +17586,37 @@ listselector:
 	lob	ReplyMsg
 
 	cmp.l	#IDCMP_GADGETUP,d2
-	bne.b	.noGadget
+	bne 	.noGadget
 	move	gg_GadgetID(a2),d7
-	bra.b	.done
+	bra 	.done
 .noGadget
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
-	bne.b	.noButtons
+	bne 	.noButtons
 	cmp		#SELECTDOWN,d3
-	beq.b	.done
+	beq 	.done
 	cmp		#MENUDOWN,d3
-	beq.b	.done
+	beq 	.done
 .noButtons
 	cmp.l	#IDCMP_RAWKEY,d2
-	beq.b	.done
-	cmp.l	#IDCMP_INACTIVEWINDOW,d2
-	bne.b	.msgloop3
+	bne 	.noRawKey
+    tst.b   d3
+    bmi     .msgloop3
+    cmp.b   #$4c,d3
+    bne.b   .1
+    bsr     .selectUp
+    bra     .msgloop3
+.1  cmp.b   #$4d,d3
+    bne     .2
+    bsr     .selectDown
+    bra     .msgloop3
+.2  cmp.b   #$44,d3
+    bne     .done
+    * RETURN
+    move    .arrowSelection(pc),d7
+    bra     .done
+.noRawKey  
+    cmp.l	#IDCMP_INACTIVEWINDOW,d2
+	bne 	.msgloop3
 	
 .done
 	move.l	d6,a0
@@ -17682,7 +17701,7 @@ listselector:
 
 	move.l	d6,a0
 	move.l	a3,a1
-	moveq	#0,d0 * position
+	moveq	#-1,d0 * position = last
 	lob		AddGadget
 
 	move.l	a3,a0
@@ -17699,6 +17718,79 @@ listselector:
 	popm	all
 	rts
 
+* d6 = window
+.selectDown
+    bsr     .deselect
+
+    move    .arrowSelection(pc),d0
+    bpl.b   .s1
+    moveq   #-1,d0
+.s1 addq    #1,d0
+    cmp     .lineCount(pc),d0
+    bne     .s2
+    moveq   #0,d0
+.s2 move    d0,.arrowSelection
+
+.doSelect
+    move.l  d6,a0
+    move.l  wd_FirstGadget(a0),a0
+.f  cmp     gg_GadgetID(a0),d0
+    beq.b   .f2
+    move.l  gg_NextGadget(a0),d1
+    beq     .f3
+    move.l  d1,a0
+    bra     .f
+.f2
+    * found it
+    move.l  gg_GadgetText(a0),a1
+    move.b  #2,it_FrontPen(a1)
+
+    move.l  d6,a1
+    sub.l   a2,a2
+    moveq   #1,d0
+    lore    Intui,RefreshGList
+
+.f3
+    rts 
+
+.selectUp
+    bsr     .deselect
+
+    move    .arrowSelection(pc),d0
+    bpl.b   .z1
+    move    .lineCount(pc),d0
+.z1 subq     #1,d0
+    bpl     .z2
+    move    .lineCount(pc),d0
+    subq    #1,d0
+.z2 move    d0,.arrowSelection
+    bra     .doSelect
+
+.deselect
+    push    a3
+    move.l  d6,a3
+    move.l  wd_FirstGadget(a3),d0
+.de1
+    beq     .de2
+    move.l  d0,a3
+    move.l  gg_GadgetText(a3),a0
+    cmp.b   #1,it_FrontPen(a0)
+    beq     .de3
+    move.b  #1,it_FrontPen(a0)
+    move.l  a3,a0
+    move.l  d6,a1
+    sub.l   a2,a2
+    moveq   #1,d0
+    lore    Intui,RefreshGList
+.de3
+    move.l  gg_NextGadget(a3),d0
+    bra     .de1
+.de2
+    pop     a3
+    rts
+
+.arrowSelection dc.w    -1
+.lineCount      dc.w    0
 
 *******************************************************************************
 *  End of Prefs section
