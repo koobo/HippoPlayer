@@ -2692,6 +2692,7 @@ main:
  ifne FEATURE_LIST_TABS
 	pushpea	gadgetListModeTab1Button(a0),gadgetSortButton+gg_NextGadget(a0)
  endif
+
 	endb	a0
 	
 	move.l	_IntuiBase(a5),a6
@@ -3054,7 +3055,7 @@ main:
 	move	boxsize(a5),d3
 	bsr		getFileboxYStartToD2
 	add		d2,d1
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive   
     bne.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm1
@@ -5823,7 +5824,7 @@ printhippo1:
 	move	fileBoxTopEdge(a5),d3
 
 	move	boxsize(a5),d6
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive   
     bne.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d6
 .lm1
@@ -6997,7 +6998,7 @@ buttonspressed:
 *** Switch filebox size
 zoomfilebox
 	DPRINT	"Zoom filebox"
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive      
     bne .1
     * Disable this for search mode, there are extra controls at the bottom
     rts
@@ -9609,7 +9610,7 @@ gadgetSearchSourceOption1:
 
 searchActivate:
     DPRINT  "search activate"
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive      
     beq     .x
     * Switch to search view 
     jsr     engageSearchResultsMode
@@ -9662,7 +9663,7 @@ gadgetFindAction:
 .1
     * Return the layout to whatever it was
     jsr     switchToNormalLayout
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive      
     bne     .norm
     jsr     switchToSearchLayout
 .norm
@@ -18008,7 +18009,7 @@ shownames:
 
 	moveq	#0,d2
 	move	boxsize(a5),d2
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive      
     bne.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm1
@@ -18050,7 +18051,7 @@ shownames:
 .ylos
 	moveq	#0,d1 
 	move	boxsize(a5),d1
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive      
     bne.b   .lm9
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm9
@@ -18078,7 +18079,7 @@ shownames:
 .alas	
 	moveq	#0,d1 
 	move	boxsize(a5),d1
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive      
     bne.b   .lm2
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm2
@@ -18100,7 +18101,7 @@ shownames:
 	bsr 	.copy
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive   
     bne.b   .lm3
     subq    #SEARCH_BOXSIZE_DELTA,d0
 .lm3
@@ -18109,7 +18110,7 @@ shownames:
 	sub.l	d7,d0
 	moveq	#0,d1 
 	move	boxsize(a5),d1
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive   
     bne.b   .lm4
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm4
@@ -18147,7 +18148,7 @@ shownames:
 	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	boxsize(a5),d2
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive   
     bne.b   .lm5
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm5
@@ -18158,7 +18159,7 @@ shownames:
 
 .copy	
 	move	boxsize(a5),d5	* y size
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive   
     bne.b   .lm8
     subq    #SEARCH_BOXSIZE_DELTA,d5
 .lm8
@@ -19810,7 +19811,7 @@ markit:
 	bmi.b	.outside
 	moveq	#0,d0
 	move	boxsize(a5),d0
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive   
     bne.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d0
 .lm1
@@ -32664,12 +32665,14 @@ refreshListModeTabs:
   endif
 
 switchToSearchLayoutIfNeeded:
-    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bsr     isSearchLayoutActive   
     beq     switchToSearchLayout
     rts
 
 
 switchToSearchLayout:
+    tst.b   uhcAvailable(a5)
+    beq     .skip
     tst.w   BOTTOM_MARGIN(a5)
     bne     .skip
     DPRINT  "switch to search layout"
@@ -32820,6 +32823,17 @@ removeSearchLayoutGadgets:
     move.l  windowbase(a5),a0
     lea     gadgetSearchSource,a1
     lob     RemoveGadget
+    rts
+
+
+
+isSearchLayoutActive:
+    pushm   d0
+    ;cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    tst.w   BOTTOM_MARGIN(a5)
+    seq     d0
+    tst.b   d0
+    popm    d0
     rts
 
 switchToLocalSearchLayout:
