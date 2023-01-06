@@ -5349,7 +5349,7 @@ setboxy:
 *   a0 = font to set for the list
 setListFont:
 	move.l	a0,listfontbase(a5)
-    move.l  a0,gadgetSearchString\.extension+sex_Font
+    move.l  a0,gadgetSearchStringStringInfo\.extension+sex_Font
 
 	; Dig height for this since it is used widely
 	move	tf_YSize(a0),listFontHeight(a5)	
@@ -8979,13 +8979,18 @@ gadgetsup:
     cmp     #1000,d0
     bne     .1
     bsr     gadgetSearchStringAction
-    bra     .x
-    
-.1  cmp     #1001,d0
+    bra     .x    
+.1 
+    cmp     #1001,d0
     bne     .2
-    bsr    gadgetSearchSourceAction
+    bsr     gadgetSearchSourceAction
     bra     .x
 .2
+    cmp     #1002,d0
+    bne     .3
+    bsr     gadgetFindAction
+    bra     .x
+.3
 	add	d0,d0
 	lea	.gadlist-2(pc,d0),a0
 	add	(a0),a0
@@ -9443,15 +9448,9 @@ comment_file
 * Find module
 *******
 
-gadgetSearchStringAction:
-    move    selectedSearch(a5),d0
-    lea     gadgetSearchStringBuffer,a0
- if DEBUG
-    ext.l   d0
-    move.l  a0,d1
-    DPRINT  "search string action %ld %s"
- endif
+beepIfSearchStringIsSmall:
     * Beep display if search term is too small
+;    lea     gadgetSearchStringBuffer,a0
     move.l  a0,a1
 .len  
     tst.b   (a1)+
@@ -9463,9 +9462,25 @@ gadgetSearchStringAction:
     move.l  windowbase(a5),a0
     move.l  wd_WScreen(a0),a0
     lore    Intui,DisplayBeep
+    moveq   #0,d0
+    rts
+.1  moveq   #1,d0
+    rts
+
+gadgetSearchStringAction:
+ if DEBUG
+    lea     gadgetSearchStringBuffer,a0
+    ext.l   d0
+    move.l  a0,d1
+    DPRINT  "search string action %ld %s"
+ endif
+    lea     gadgetSearchStringBuffer,a0
+    bsr     beepIfSearchStringIsSmall
+    bne     .1
     rts
 .1
     
+    move    selectedSearch(a5),d0
     lea     modlandSearch,a0
     basereg modlandSearch,a0
     tst.w   d0
@@ -9539,6 +9554,10 @@ gadgetSearchSourceAction:
     move    selectedSearch(a5),d0
 	bsr		listSelectorMainWindowPreselect
 	bmi 	.skip
+ if DEBUG
+    ext.l   d0
+    DPRINT  "selected source=%ld"
+ endif
     move    d0,selectedSearch(a5)
     bsr     refreshGadgetSearchSource
 
@@ -9600,14 +9619,16 @@ searchActivate:
     cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     beq     .y
     * Then activate string gadget
-    clr.b   gadgetSearchStringBuffer
+    bsr     activateSearchStringGadget
+.y
+    rts
+
+activateSearchStringGadget:
     lea     gadgetSearchString,a0
     move.l  windowbase(a5),a1
     sub.l   a2,a2
     lore    Intui,ActivateGadget
-.y
     rts
-
 
 
 
@@ -9631,11 +9652,34 @@ enterSearchPattern_t
 	dc.b	"Enter search pattern",0
  even
 
-find_new
+gadgetFindAction:
+    DPRINT  "gadgetFindAction"
+    lea     gadgetLocalSearchStringBuffer,a0
+    bsr     beepIfSearchStringIsSmall
+    bne     .1
+    bsr     activateSearchStringGadget
+    rts
+.1
+    * Return the layout to whatever it was
+    jsr     switchToNormalLayout
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne     .norm
+    jsr     switchToSearchLayout
+.norm
+
+    lea     gadgetLocalSearchStringBuffer,a0
+    lea     findpattern(a5),a1
+.c  move.b  (a0)+,(a1)+
+    bne     .c
+    bra     find_continue
+
+find_new:
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
 	rts
 .ok
+    jmp     switchToLocalSearchLayout
+    
 	bsr	get_rt
 	lea	findpattern(a5),a1	
 	moveq	#27,d0
@@ -32624,8 +32668,8 @@ switchToSearchLayoutIfNeeded:
     beq     switchToSearchLayout
     rts
 
-switchToSearchLayout:
 
+switchToSearchLayout:
     tst.w   BOTTOM_MARGIN(a5)
     bne     .skip
     DPRINT  "switch to search layout"
@@ -32671,10 +32715,12 @@ switchToSearchLayout:
     move.l  windowbase(a5),a0
     lore    Intui,AddGadget
 
-
     ; search string gadget
 
     lea     gadgetSearchString,a1
+    move.l  #gadgetSearchStringBuffer,gadgetSearchStringStringInfo
+    move    #1000,gg_GadgetID(a1)
+
     move    gg_TopEdge(a2),d0
     addq    #2,d0
     move    d0,gg_TopEdge(a1)
@@ -32715,6 +32761,7 @@ switchToSearchLayout:
 
 .skip
     rts
+
 
 clearGadgetInA3:
 	movem	4(a3),d0/d1/d4/d5
@@ -32774,6 +32821,76 @@ removeSearchLayoutGadgets:
     lea     gadgetSearchSource,a1
     lob     RemoveGadget
     rts
+
+switchToLocalSearchLayout:
+    bsr     switchToNormalLayout
+
+
+    tst.w   BOTTOM_MARGIN(a5)
+    bne     .skip
+    DPRINT  "switch to local search layout"
+
+    move    listFontHeight(a5),d0
+    add     d0,d0
+    move    d0,BOTTOM_MARGIN(a5)
+    
+    jsr     drawTextureBottomMargin
+    jsr     drawFileBoxFrame
+    jsr     refreshResizeGadget
+
+    move    BOTTOM_MARGIN(a5),d0
+    lea		gadgetFileSlider,a0
+    push    a0
+    sub     d0,gg_Height(a0)
+    jsr     drawFileSlider
+    clr     slider4oldheight(a5) ; force knob redraw
+    jsr     reslider
+    pop     a2
+    
+    ; search string gadget
+    lea     gadgetFileSlider,a2
+
+    lea     gadgetSearchString,a1
+    move.l  #gadgetLocalSearchStringBuffer,gadgetSearchStringStringInfo
+    move    #1002,gg_GadgetID(a1)
+    move    gg_TopEdge(a2),d0
+    add     gg_Height(a2),d0
+    addq    #6,d0
+    move    d0,gg_TopEdge(a1)
+    move    #123-1,gg_Width(a1)
+
+    move    listFontHeight(a5),d0
+    move    d0,gg_Height(a1)
+
+    move    gg_LeftEdge(a2),d0
+    addq    #1,d0
+    move    d0,gg_LeftEdge(a1)
+
+    moveq   #-1,d0 * last
+    move.l  windowbase(a5),a0
+    lore    Intui,AddGadget
+
+
+    lea     gadgetSearchString,a0
+    jsr     refreshGadgetInA0
+
+
+	movem	gadgetSearchString+4,plx1/ply1/plx2/ply2
+	add	plx1,plx2
+	add	ply1,ply2
+	subq	#2,plx1
+	addq	#1,plx2
+	subq	#2,ply1
+	addq	#1,ply2
+	move.l	rastport(a5),a1
+	jsr 	sliderlaatikko
+
+    bsr     activateSearchStringGadget
+
+.skip
+
+    rts
+
 
 ********************************************************************************
 *** SECTION ********************************************************************
@@ -54350,13 +54467,14 @@ gadgetSearchString:
 	; gg_MutualExclude
 	dc.l 0
 	; gg_SpecialInfo
-	dc.l .stringInfo
+	dc.l gadgetSearchStringStringInfo
 	; gg_GadgetId
 	dc.w 1000
 	; gg_UserData
 	dc.l 0
 
-.stringInfo
+
+gadgetSearchStringStringInfo:
     dc.l    gadgetSearchStringBuffer     ; si_Buffer
     dc.l    0   ; si_UndoBuffer
     dc.w    0   ; si_BufferPos
@@ -54380,7 +54498,8 @@ gadgetSearchString:
             ds.b    16  ; sex_Reserved
 
 gadgetSearchStringBuffer:     
-    dc.b    "search terms"
+    ds.b    20
+gadgetLocalSearchStringBuffer:     
     ds.b    20
 
 gadgetSearchSource:
