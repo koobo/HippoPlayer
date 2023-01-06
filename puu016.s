@@ -41,7 +41,7 @@ DEBUG = 1
  endif
 
  ifnd SERIALDEBUG
-SERIALDEBUG = 1
+SERIALDEBUG = 0
  endif
 
  ifnd __VASM
@@ -1443,8 +1443,12 @@ streamHeaderIcyName         rs.l       1
 streamHeaderIcyDescription  rs.l       1
 streamHeaderRest            rs.l       1
 
+* Remote search popup stores the selected search mode here
+* SEARCH_MODLAND etc etc
 selectedSearch  rs.w  1
 
+* This is used to adjust so that the search layout ui gadgets
+* fit at the bottom of the window. Normal value is 0.
 BOTTOM_MARGIN   rs.w  1
 
 
