@@ -91,7 +91,7 @@ PLAYING_MODULE_NONE 	= -1	 	* needs to be negative
 PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
 MAX_MODULES		= $1ffff 		    * this should be enough!
 
-SEARCH_BOXSIZE_DELTA = 1
+SEARCH_BOXSIZE_DELTA = 2
 	
  ;ifne TARK
  ;ifeq asm
@@ -32689,6 +32689,7 @@ switchToSearchLayout:
     DPRINT  "switch to search layout"
 
     move    listFontHeight(a5),d0
+    add     d0,d0
     move    d0,BOTTOM_MARGIN(a5)
     
     jsr     drawTextureBottomMargin
@@ -32712,16 +32713,16 @@ switchToSearchLayout:
 
     move    gg_TopEdge(a2),d0
     add     gg_Height(a2),d0
-    addq    #2,d0
+    addq    #2+2,d0
     move    d0,gg_TopEdge(a1)
 
     move    listFontHeight(a5),d0
-    addq    #2,d0
+    addq    #2+2,d0
     move    d0,gg_Height(a1)
     move.w  gg_LeftEdge(a2),d0
     subq    #1,d0
     move    d0,gg_LeftEdge(a1)
-    move    #120,gg_Width(a1)
+    move    #120-2+1,gg_Width(a1)
     move.l  a1,a2
 
     moveq   #-1,d0 * last
@@ -32733,15 +32734,16 @@ switchToSearchLayout:
 
     lea     gadgetSearchString,a1
     move    gg_TopEdge(a2),d0
-    addq    #1,d0
+    addq    #2,d0
     move    d0,gg_TopEdge(a1)
-    move    #123,gg_Width(a1)
+    move    #123-1,gg_Width(a1)
 
-    move    listFontHeight(a5),gg_Height(a1)
+    move    listFontHeight(a5),d0
+    move    d0,gg_Height(a1)
 
     move    gg_LeftEdge(a2),d0
     add     gg_Width(a2),d0
-    addq    #4,d0
+    addq    #4+2-1,d0
     move    d0,gg_LeftEdge(a1)
 
     moveq   #-1,d0 * last
@@ -32759,22 +32761,16 @@ switchToSearchLayout:
     lea     gadgetSearchSource,a3
     bsr     drawButtonFrameMainWindow
 
+	movem	gadgetSearchString+4,plx1/ply1/plx2/ply2
+	add	plx1,plx2
+	add	ply1,ply2
+	subq	#2,plx1
+	addq	#1,plx2
+	subq	#2,ply1
+	addq	#1,ply2
+	move.l	rastport(a5),a1
+	jsr 	sliderlaatikko
 
-
- ; XAX
-    ; modify boxsizedelta(a5) to -1
-    ; modify margin
-    ; modify fileslider
-    ; redraw bottom bg
-    ; redraw fileslider frame
-    ; refresh fileslider
-    ; redraw filebox frame
-    ; redraw contens
-    ; vertical layout
-    ; horizontal layout
-    ;move    #12,BOTTOM_MARGIN(a5)
-    ;subq    #1,boxsize(a5)
-    ;bsr     wrender
 .skip
     rts
 
@@ -32805,6 +32801,7 @@ doSwitchToNormalLayout:
     bne.b   .refresh
     clr.w   BOTTOM_MARGIN(a5)
     move    listFontHeight(a5),d0
+    add     d0,d0
     add     d0,gg_Height+gadgetFileSlider
     bra     .1
 
@@ -32816,6 +32813,7 @@ doSwitchToNormalLayout:
     jsr     refreshResizeGadget
 
     move    listFontHeight(a5),d0
+    add     d0,d0
     add     d0,gg_Height+gadgetFileSlider
     jsr     drawFileSlider
     clr     slider4oldheight(a5) ; force knob redraw
@@ -54536,7 +54534,7 @@ gadgetSearchSource:
     dc.b    0 ;RP_JAM1  ; it_DrawMode
     dc.b    0   ; it_KludgeFill00
     dc.w    3   ; it_LeftEdge
-    dc.w    1   ; it_TopEdge
+    dc.w    2   ; it_TopEdge
     dc.l    list_text_attr  ; it_ITextFont
 gadgetSearchSourceTextPtr:
     dc.l    gadgetSearchSourceOption1  ; it_IText
