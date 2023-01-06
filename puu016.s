@@ -1443,6 +1443,7 @@ streamHeaderIcyName         rs.l       1
 streamHeaderIcyDescription  rs.l       1
 streamHeaderRest            rs.l       1
 
+selectedSearch  rs.w  1
 
 BOTTOM_MARGIN   rs.w  1
 
@@ -4361,6 +4362,7 @@ zipwindow:
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,RemoveGList
+    jsr     switchToNormalLayoutNoRefresh
 	DPRINT	"small"
 	bra.b	.x
 
@@ -5056,11 +5058,11 @@ wrender:
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-	
+.skip
 	move.l	a4,a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
-	lob	RefreshGadgets
+	lore    Intui,RefreshGadgets
 
 	tst.b	uusikick(a5)
 	bne.b	.newK
@@ -5239,7 +5241,8 @@ wrender:
   ifne FEATURE_LIST_TABS
     jsr updateListModeTabs
   endif
-	 DPRINT	"wrender done"
+    jsr switchToSearchLayoutIfNeeded
+	DPRINT	"wrender done"
 
 	move.l	windowbase(a5),a0
 	bsr	setscrtitle
@@ -5311,13 +5314,6 @@ drawTextureBottomMargin:
 setboxy:
 	move	boxsize(a5),d0
 
- ifne FEATURE_LIST_TABS
-    cmp     #10,d0
-    bhs.b   .1
-    moveq   #10,d0
-.1
- endif
-
 	* original "default" size was 8, so it is relative to that.
 	subq	#8,d0
 	;muls	#8,d0
@@ -5351,8 +5347,10 @@ setboxy:
 * which is relative to the font.
 * in:
 *   a0 = font to set for the list
-setListFont
+setListFont:
 	move.l	a0,listfontbase(a5)
+    move.l  a0,gadgetSearchString\.extension+sex_Font
+
 	; Dig height for this since it is used widely
 	move	tf_YSize(a0),listFontHeight(a5)	
 	bsr.b	setboxy
@@ -5480,7 +5478,9 @@ enableResizeGadget
 	* Set wd_MinSize to correspond to 3 rows
 	bsr.b	getFileboxYStartToD2
 ;	add	#3*8+6,d2
-	moveq	#3,d0
+    * NOTE: raise minsize to 5 due to extra space required
+    * for search controls and/or list mode buttons
+	moveq	#3+2,d0
 	mulu	listFontHeight(a5),d0
 	* some additional adjustment: bottom border?
 	addq	#6+1,d0
@@ -5544,7 +5544,7 @@ setscrtitle
 *******************************************************************************
 * Sulkee ikkunan
 *******
-sulje_ikkuna
+sulje_ikkuna:
 	tst.b	win(a5)
 	bne.b	.x
 .uh	rts
@@ -5579,7 +5579,8 @@ sulje_ikkuna
  endif
 
 .small
-	jsr	disposeListBoxRegion
+    jsr switchToNormalLayoutNoRefresh
+  	jsr	disposeListBoxRegion
 	jsr	disposeInfoBoxRegion
 
 	move.l	46(a0),a1		* WB screen addr
@@ -6996,6 +6997,11 @@ buttonspressed:
 *** Switch filebox size
 zoomfilebox
 	DPRINT	"Zoom filebox"
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne .1
+    * Disable this for search mode, there are extra controls at the bottom
+    rts
+.1
 	move	boxsize(a5),d0
 	beq.b	.z
 	clr	boxsize(a5)
@@ -8948,7 +8954,7 @@ fkeyaction
 * in:
 *   a2 = intuition gadget
 
-gadgetsup
+gadgetsup:
 	bsr	    areMainWindowGadgetsFrozen
 	bne.b 	.exit
 
@@ -8961,11 +8967,25 @@ gadgetsup
 	bsr	closeTooltipPopup
 
 	move	gg_GadgetID(a2),d0
+
+    ext.l   d0
+    DPRINT  "gadgetId=%ld"
+
+    cmp     #1000,d0
+    bne     .1
+    bsr     gadgetSearchStringAction
+    bra     .x
+    
+.1  cmp     #1001,d0
+    bne     .2
+    bsr    gadgetSearchSourceAction
+    bra     .x
+.2
 	add	d0,d0
 	lea	.gadlist-2(pc,d0),a0
 	add	(a0),a0
 	jsr	(a0)
-
+.x
 	movem.l	(sp)+,d0-a6
 .exit 
 	rts
@@ -9417,6 +9437,52 @@ comment_file
 *******************************************************************************
 * Find module
 *******
+
+gadgetSearchStringAction:
+    move    selectedSearch(a5),d0
+    ext.l   d0
+    lea gadgetSearchString\.buffer,a0
+    move.l  a0,d1
+    DPRINT  "search string action %ld %s"
+
+    lea     modlandSearch,a0
+    basereg modlandSearch,a0
+    tst.w   d0
+	beq.b	.modland
+	subq	#1,d0
+	beq.b	.aminet
+	subq	#1,d0
+	beq.b	.modules
+	subq	#1,d0
+	beq.b	.hvsc
+	subq	#1,d0
+	beq.b	.amigaRemix
+	subq	#1,d0
+	beq.b	.rko
+	subq	#1,d0
+	beq.b	.stations
+	subq	#1,d0
+	beq.b	.recentPlaylists
+.skip
+	rts
+
+.modland
+	jmp	modlandSearch(a0)
+.aminet
+	jmp	aminetSearch(a0)
+.modules
+	jmp	modulesSearch(a0)
+.hvsc
+	jmp	hvscSearch(a0)
+.amigaRemix
+	jmp	amigaRemixSearch(a0)
+.rko
+    jmp rkoSearch(a0)
+.stations
+    jmp stationsSearch(a0) 
+.recentPlaylists
+    jmp recentPlaylistsSearch(a0) 
+    endb    a0
 
 rsearchfuncs
 	DPRINT	"Search functions"
@@ -31439,7 +31505,8 @@ loadreplayer
 * Disables a button gadget
 * in:
 *   a0 = button gadget
-disableButton
+disableGadget:
+disableButton:
 	move	#GFLG_DISABLED,d0
 	and	gg_Flags(a0),d0
 	bne.b	.alreadyDisabled
@@ -31451,7 +31518,7 @@ disableButton
 * Enables a button gadget
 * in:
 *   a0 = button gadget
-enableButton
+enableButton:
 	move	#GFLG_DISABLED,d0
 	and	gg_Flags(a0),d0
 	beq.b	.alreadyEnabled
@@ -31593,7 +31660,7 @@ whag	tst.b	win(a5)
 * to call this with all gadgets.
 * in:
 *   a3 = gadget
-drawButtonFrameMainWindow
+drawButtonFrameMainWindow:
 	* File and volume sliders
 	cmp.l	#slider1,a3
 	beq.b	.x
@@ -32175,7 +32242,7 @@ engageListMode:
 	bmi.b	.not
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .not
-	rts
+    rts
 
 
 .setListState
@@ -32382,10 +32449,16 @@ refreshListModeTabs:
     rts
   endif
 
+switchToSearchLayoutIfNeeded:
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    beq     switchToSearchLayout
+    rts
+
 switchToSearchLayout:
-    cmp      #12,BOTTOM_MARGIN(a5)
-    beq     .skip
-    DPRINT  "SWITCH TO SEARCH"
+
+    tst.w   BOTTOM_MARGIN(a5)
+    bne     .skip
+    DPRINT  "switch to search layout"
 
     move    listFontHeight(a5),d0
     move    d0,BOTTOM_MARGIN(a5)
@@ -32396,10 +32469,69 @@ switchToSearchLayout:
 
     move    BOTTOM_MARGIN(a5),d0
     lea		gadgetFileSlider,a0
+    push    a0
     sub     d0,gg_Height(a0)
     jsr     drawFileSlider
-    clr     slider4oldheight(a5) ; force know redraw
+    clr     slider4oldheight(a5) ; force knob redraw
     jsr     reslider
+    pop     a2
+    
+
+
+    ; search source gadget
+
+    lea     gadgetSearchSource,a1
+
+    move    gg_TopEdge(a2),d0
+    add     gg_Height(a2),d0
+    addq    #2,d0
+    move    d0,gg_TopEdge(a1)
+
+    move    listFontHeight(a5),d0
+    addq    #2,d0
+    move    d0,gg_Height(a1)
+    move.w  gg_LeftEdge(a2),d0
+    subq    #1,d0
+    move    d0,gg_LeftEdge(a1)
+    move    #120,gg_Width(a1)
+    move.l  a1,a2
+
+    moveq   #-1,d0 * last
+    move.l  windowbase(a5),a0
+    lore    Intui,AddGadget
+
+
+    ; search string gadget
+
+    lea     gadgetSearchString,a1
+    move    gg_TopEdge(a2),d0
+    addq    #1,d0
+    move    d0,gg_TopEdge(a1)
+    move    #123,gg_Width(a1)
+
+    move    listFontHeight(a5),gg_Height(a1)
+
+    move    gg_LeftEdge(a2),d0
+    add     gg_Width(a2),d0
+    addq    #4,d0
+    move    d0,gg_LeftEdge(a1)
+
+    moveq   #-1,d0 * last
+    move.l  windowbase(a5),a0
+    lore    Intui,AddGadget
+
+    lea     gadgetSearchSource,a3
+    bsr     clearGadgetInA3
+
+    lea     gadgetSearchString,a0
+    jsr     refreshGadgetInA0
+    lea     gadgetSearchSource,a0
+    jsr     refreshGadgetInA0
+
+    lea     gadgetSearchSource,a3
+    bsr     drawButtonFrameMainWindow
+
+
 
  ; XAX
     ; modify boxsizedelta(a5) to -1
@@ -32418,11 +32550,37 @@ switchToSearchLayout:
 .skip
     rts
 
+clearGadgetInA3:
+	movem	4(a3),d0/d1/d4/d5
+	move.l	rastport(a5),a1
+    move.l  a1,a0
+	move	d0,d2
+	move	d1,d3
+	moveq	#$0a,d6
+	move.l	_GFXBase(a5),a6
+	jmp	_LVOClipBlit(a6)
+
+switchToNormalLayoutNoRefresh:
+    moveq   #0,d0
+    bra     doSwitchToNormalLayout
+
 switchToNormalLayout:
+    moveq   #1,d0
+
+doSwitchToNormalLayout:
+    pushm   all
     tst     BOTTOM_MARGIN(a5)
     beq     .skip
-    DPRINT  "SWITCH TO NORMAL"
+    DPRINT  "switch to normal layout"
 
+    tst.b   d0
+    bne.b   .refresh
+    clr.w   BOTTOM_MARGIN(a5)
+    move    listFontHeight(a5),d0
+    add     d0,gg_Height+gadgetFileSlider
+    bra     .1
+
+.refresh
     jsr     drawTextureBottomMargin
     clr.w   BOTTOM_MARGIN(a5)
     jsr     drawFileBoxFrame
@@ -32430,14 +32588,24 @@ switchToNormalLayout:
     jsr     refreshResizeGadget
 
     move    listFontHeight(a5),d0
-    lea		gadgetFileSlider,a0
-    add     d0,gg_Height(a0)
+    add     d0,gg_Height+gadgetFileSlider
     jsr     drawFileSlider
-    clr     slider4oldheight(a5) ; force know redraw
+    clr     slider4oldheight(a5) ; force knob redraw
     jsr     reslider
+.1
+    bsr     removeSearchLayoutGadgets
 .skip
+    popm   all
     rts 
 
+removeSearchLayoutGadgets:
+    move.l  windowbase(a5),a0
+    lea     gadgetSearchString,a1
+    lore    Intui,RemoveGadget
+    move.l  windowbase(a5),a0
+    lea     gadgetSearchSource,a1
+    lob     RemoveGadget
+    rts
 
 ********************************************************************************
 *** SECTION ********************************************************************
@@ -51140,6 +51308,13 @@ remoteSearch
 
 	move.l	sp,a1
 	clr.b	(a1)
+
+    lea gadgetSearchString\.buffer,a0
+.sku  
+    move.b  (a0)+,(a1)+
+    bne     .sku
+    bra .srh0
+
 	jsr		get_rt
 	; a1 = string buffer
 	; d0 = max chars
@@ -54015,6 +54190,133 @@ gadgetResize
 	dc.l 0
 
 
+gadgetSearchString:
+	; gg_NextGadget
+	dc.l 0
+	; gg_LeftEdge
+	dc 0
+	; gg_TopEdge
+	dc 64
+	; gg_Width
+	dc 50
+	; gg_Height
+	dc 10
+	; gg_Flags
+	dc GFLG_STRINGEXTEND
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_STRGADGET
+    ; gg_GadgetRender
+	dc.l 0
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l .stringInfo
+	; gg_GadgetId
+	dc.w 1000
+	; gg_UserData
+	dc.l 0
+
+.stringInfo
+    dc.l    .buffer     ; si_Buffer
+    dc.l    0   ; si_UndoBuffer
+    dc.w    0   ; si_BufferPos
+    dc.w    19  ; si_MaxChars
+    dc.w    0   ; si_DispPos
+    dc.w    0   ; si_UndoPos
+    dc.w    0   ; si_NumChars
+    dc.w    0   ; si_DispCount
+    dc.w    0   ; si_CLeft
+    dc.w    0   ; si_CTop
+    dc.l    .extension ; si_Extension
+    dc.l    0   ; si_LongInt
+
+.buffer     
+    dc.b    "search terms"
+    ds.b    20
+
+.extension  dc.l    0   ; sex_Font
+            dc.b    1,0 ; sex_Pens
+            dc.b    1,0 ; sex_ActivePens
+            dc.l    0   ; sex_InitialModes
+            dc.l    0   ; sex_EditHook
+            dc.l    0   ; sex_WorkBuffer
+            ds.b    16  ; sex_Reserved
+
+gadgetSearchSource:
+    ; gg_NextGadget
+	dc.l 0
+	; gg_LeftEdge
+	dc 0
+	; gg_TopEdge
+	dc 64
+	; gg_Width
+	dc 100
+	; gg_Height
+	dc 13
+	; gg_Flags
+	dc GFLG_GADGIMAGE
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+    ; gg_GadgetRender
+	dc.l .image
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l .itext
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+  	; gg_GadgetId
+	dc.w 1001
+	; gg_UserData
+	dc.l 0
+
+.image
+	; ig_LeftEdge
+	dc 108
+	; ig_TopEdge
+	dc 1
+	; ig_Width
+	dc 9+1
+	; ig_Height
+	dc 7
+	; ig_Depth
+	dc 1
+	; ig_ImageData
+	dc.l	searchImage
+	; ig_PlanePick
+	dc.b 1
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
+
+
+.itext
+    dc.b    1   ; it_FrontPen
+    dc.b    0   ; it_BackPen
+    dc.b    0 ;RP_JAM1  ; it_DrawMode
+    dc.b    0   ; it_KludgeFill00
+    dc.w    2   ; it_LeftEdge
+    dc.w    1   ; it_TopEdge
+    dc.l    list_text_attr  ; it_ITextFont
+gadgetSearchSourceTextPtr:
+    dc.l    gadgetSearchSourceAction\.option1  ; it_IText
+    dc.l    0   ; it_NextText
+
+.text
+    dc.b    "modland!",0
+    even
+
 * Rename the gadgets defined above to something not crazy
 * 1st row
 gadgetPlayButton 	EQU  button1
@@ -54169,7 +54471,7 @@ tooltipList
 	dc.b	"LMB: Add new modules to the list",0
 	dc.b	"RMB: Insert new modules after the chosen module",0
 .add2
-	dc.b	39,1
+	dc.b	40,1
 	dc.b	"LMB: Add selected entry to the main list",0
 
 .del
@@ -54842,7 +55144,7 @@ kela2imDouble
 * height 8
 * width 16
 
-favoriteImage
+favoriteImage:
 	dc	%0111011100000000				
 	dc	%1111111110000000				
 	dc	%1111111110000000				
@@ -54851,7 +55153,7 @@ favoriteImage
 	dc	%0001110000000000				
 	dc	%0000100000000000				
 
-listImage
+listImage:
 	dc	%1101111111000000
 	dc	%0000000000000000				
 	dc	%1101111111000000
@@ -54861,7 +55163,7 @@ listImage
 	dc	%1101111111000000
 
 
-fileBrowserImage
+fileBrowserImage:
 	dc	%1111111100000000
 	dc	%1010011010000000				
 	dc	%1011111001000000
@@ -54870,7 +55172,7 @@ fileBrowserImage
 	dc	%1011001101000000
 	dc	%1111111111000000
 
-searchImage
+searchImage:
 	dc	%0001110000000000
 	dc	%0010001000000000
 	dc	%0101000100000000
@@ -54881,7 +55183,7 @@ searchImage
 	;dc	%0000000011000000
 
 
-resizeGadgetImage
+resizeGadgetImage:
 	; plane 1
 	dc	%0000010000000000
 	dc	%0001010000000000
