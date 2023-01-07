@@ -9474,9 +9474,12 @@ beepIfSearchStringIsSmall:
     bne     .len
     sub.l   a0,a1
 
-    cmp     #2+1,a1   * strlen=2
+    cmp     #2+1,a1 * strlen=2 or more -> ok
     bhs.b   .1
-    bsr     beep
+    cmp     #1,a1   * strlen=0 -> cancel
+    beq     .2
+    bsr     beep    * strlen=1 -> beep
+.2
     moveq   #0,d0
     rts
 .1  moveq   #1,d0
@@ -9498,8 +9501,9 @@ gadgetSearchStringAction:
     lea     gadgetSearchStringBuffer,a0
     bsr     beepIfSearchStringIsSmall
     bne     .1
-    bra     activateSearchStringGadget
-    
+    DPRINT  "canceled"
+    bra     switchToNormalLayoutIfPossible
+
 .1
     
     move    selectedSearch(a5),d0
@@ -9685,8 +9689,8 @@ gadgetFindAction:
     lea     gadgetLocalSearchStringBuffer,a0
     bsr     beepIfSearchStringIsSmall
     bne     .1
-    * Activate again to get a better search string
-    bra     activateSearchStringGadget
+    DPRINT  "canceled"
+    bra     switchToNormalLayoutIfPossible
 .1
     * Find!
     lea     gadgetLocalSearchStringBuffer,a0
