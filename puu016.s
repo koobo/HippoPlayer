@@ -32915,13 +32915,16 @@ prepareSearchLayout2:
 
     tst.b   uusikick(a5)
     bne     .n
+    * Adjust for kick 1.3
     subq    #1,gg_TopEdge(a3)
 .n
 	movem	gadgetSearchString+4(a3),plx1/ply1/plx2/ply2
 
     tst.b   uusikick(a5)
     bne     .n2
+    * Adjust for kick 1.3
     addq    #3,ply2
+    subq    #2,plx2
 .n2
 
 	add	plx1,plx2
