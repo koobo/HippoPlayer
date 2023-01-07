@@ -3064,7 +3064,7 @@ main:
 	move	boxsize(a5),d3
 	bsr		getFileboxYStartToD2
 	add		d2,d1
-    bsr     isSearchLayoutActive   
+    tst.w     searchLayoutActive(a5)   
     beq.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm1
@@ -5236,7 +5236,7 @@ wrender:
 
 	tst.b	playing(a5)
 	bne.b	.npl
-	bsr	inforivit_pause
+	jsr	inforivit_pause
 
 .npl	st	hippoonbox(a5)
 	bsr	shownames
@@ -5833,7 +5833,7 @@ printhippo1:
 	move	fileBoxTopEdge(a5),d3
 
 	move	boxsize(a5),d6
-    bsr     isSearchLayoutActive   
+    tst.w   searchLayoutActive(a5)   
     beq.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d6
 .lm1
@@ -6676,7 +6676,7 @@ freemodule:
 ;	addq.l	#1,IVVERTB+IV_DATA(a0)
 ;.zz
 
-	bsr	sulje_foo	
+	jsr	sulje_foo	
 
 .ee	
 
@@ -6837,7 +6837,7 @@ buttonspressed:
 	beq	.nowindow
 
 	* Any button activity should first close any active tooltip
-	bsr	closeTooltipPopup
+	jsr	closeTooltipPopup
 
 	cmp	#SELECTDOWN,d3		* left button down
 	bne.b	.test1
@@ -7010,7 +7010,7 @@ buttonspressed:
 *** Switch filebox size
 zoomfilebox
 	DPRINT	"Zoom filebox"
-    bsr     isSearchLayoutActive      
+    tst.w   searchLayoutActive(a5)      
     beq .1
     * Disable this for search mode, there are extra controls at the bottom
     rts
@@ -8989,17 +8989,17 @@ gadgetsup:
     ext.l   d0
     DPRINT  "gadgetId=%ld"
 
-    cmp     #1000,d0
+    cmp     #GADGET_ID_SEARCH_STRING,d0
     bne     .1
     bsr     gadgetSearchStringAction
     bra     .x    
 .1 
-    cmp     #1001,d0
+    cmp     #GADGET_ID_SEARCH_SOURCE,d0
     bne     .2
     bsr     gadgetSearchSourceAction
     bra     .x
 .2
-    cmp     #1002,d0
+    cmp     #GADGET_ID_LOCAL_SEARCH_STRING,d0
     bne     .3
     bsr     gadgetFindAction
     bra     .x
@@ -9602,18 +9602,18 @@ refreshGadgetSearchSource:
     move.l  a0,gadgetSearchSourceTextPtr(a4)    
 
     lea     gadgetSearchSource(a4),a3
-    bsr     clearGadgetInA3
+    jsr     clearGadgetInA3
     
     lea     gadgetSearchSource(a4),a0
     bsr     refreshGadgetInA0
 
     lea     gadgetSearchSource(a4),a3
-    bsr     drawButtonFrameMainWindow
+    jsr     drawButtonFrameMainWindow
 
     cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     bne     .1
     lea     gadgetSearchString(a4),a0
-    bsr     disableGadget
+    jsr     disableGadget
     jmp     recentPlaylistsSearch
 .1
     lea     gadgetSearchString(a4),a0
@@ -9637,7 +9637,7 @@ gadgetSearchSourceOption1:
 
 searchActivate:
     DPRINT  "search activate"
-    bsr     isSearchLayoutActive      
+    tst.w   searchLayoutActive(a5)      
     bne     .x
     * Switch to search view 
     jsr     engageSearchResultsMode
@@ -18066,7 +18066,7 @@ shownames:
 
 	moveq	#0,d2
 	move	boxsize(a5),d2
-    bsr     isSearchLayoutActive      
+    tst.w   searchLayoutActive(a5)      
     beq.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm1
@@ -18108,7 +18108,7 @@ shownames:
 .ylos
 	moveq	#0,d1 
 	move	boxsize(a5),d1
-    bsr     isSearchLayoutActive      
+    tst.w   searchLayoutActive(a5)      
     beq.b   .lm9
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm9
@@ -18136,7 +18136,7 @@ shownames:
 .alas	
 	moveq	#0,d1 
 	move	boxsize(a5),d1
-    bsr     isSearchLayoutActive      
+    tst.w   searchLayoutActive(a5)      
     beq.b   .lm2
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm2
@@ -18158,7 +18158,7 @@ shownames:
 	bsr 	.copy
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
-    bsr     isSearchLayoutActive   
+    tst.w   searchLayoutActive(a5)   
     beq.b   .lm3
     subq    #SEARCH_BOXSIZE_DELTA,d0
 .lm3
@@ -18167,7 +18167,7 @@ shownames:
 	sub.l	d7,d0
 	moveq	#0,d1 
 	move	boxsize(a5),d1
-    bsr     isSearchLayoutActive   
+    tst.w   searchLayoutActive(a5)   
     beq.b   .lm4
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm4
@@ -18205,7 +18205,7 @@ shownames:
 	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	boxsize(a5),d2
-    bsr     isSearchLayoutActive   
+    tst.w   searchLayoutActive(a5)   
     beq.b   .lm5
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm5
@@ -18216,7 +18216,7 @@ shownames:
 
 .copy	
 	move	boxsize(a5),d5	* y size
-    bsr     isSearchLayoutActive   
+    tst.w   searchLayoutActive(a5)   
     beq.b   .lm8
     subq    #SEARCH_BOXSIZE_DELTA,d5
 .lm8
@@ -19591,7 +19591,7 @@ lootaan_kello
 	move	d4,d1
 	move	d5,d2
 	lea	.form(pc),a0
-	bsr	desmsg
+	jsr	desmsg
 	lea	10(sp),sp
 
 	bra.b	lootaus
@@ -19868,7 +19868,7 @@ markit:
 	bmi.b	.outside
 	moveq	#0,d0
 	move	boxsize(a5),d0
-    bsr     isSearchLayoutActive   
+    tst.w   searchLayoutActive(a5)   
     beq.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d0
 .lm1
@@ -32723,7 +32723,7 @@ refreshListModeTabs:
   endif
 
 switchToSearchLayoutIfNeeded:
-    bsr     isSearchLayoutActive   
+    tst.w   searchLayoutActive(a5)   
     bne     switchToSearchLayout
     rts
 
@@ -32785,7 +32785,7 @@ switchToSearchLayout:
 
     lea     gadgetSearchString(a4),a1
     pushpea gadgetSearchStringBuffer(a4),gadgetSearchStringStringInfo(a4)
-    move    #1000,gg_GadgetID(a1)
+    move    #GADGET_ID_SEARCH_STRING,gg_GadgetID(a1)
 
     move    gg_TopEdge(a2),d0
     addq    #2,d0
@@ -32882,16 +32882,6 @@ removeSearchLayoutGadgets:
     rts
 
 
-
-isSearchLayoutActive:
-    push    d0
-    ;cmp.b   #LISTMODE_SEARCH,listMode(a5)
-    tst.w   BOTTOM_MARGIN(a5)
-;    seq     d0
-;    tst.b   d0
-    popm    d0
-    rts
-
 * Does some setup when preparing to switch to search layout
 prepareSearchLayout:
     * Set margin to be two lines tall
@@ -32964,7 +32954,7 @@ switchToLocalSearchLayout:
 
     lea     gadgetSearchString(a4),a1
     pushpea gadgetLocalSearchStringBuffer(a4),gadgetSearchStringStringInfo(a4)
-    move    #1002,gg_GadgetID(a1)
+    move    #GADGET_ID_LOCAL_SEARCH_STRING,gg_GadgetID(a1)
     move    gg_TopEdge(a2),d0
     add     gg_Height(a2),d0
     addq    #6,d0
@@ -32983,7 +32973,7 @@ switchToLocalSearchLayout:
     lore    Intui,AddGadget
 
     bsr     prepareSearchLayout2
-    bsr     activateSearchStringGadget
+    jsr     activateSearchStringGadget
     ;;bsr     refreshResizeGadget ;???
 
 .skip
@@ -52020,8 +52010,7 @@ remoteSearch
     * Free loaded searchout file data
     move.l  d3,a0
     jmp     freemem
-    rts
-
+    
 
 * In:
 *   a3 = name to check, ends with 10 or 0
@@ -54539,6 +54528,10 @@ gadgetResize
 	; ig_NextImage
 	dc.l 0
 
+
+GADGET_ID_SEARCH_STRING       = 1000
+GADGET_ID_SEARCH_SOURCE       = 1001
+GADGET_ID_LOCAL_SEARCH_STRING = 1002
 
 gadgetSearchString:
 	; gg_NextGadget
