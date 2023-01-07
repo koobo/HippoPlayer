@@ -12623,7 +12623,8 @@ exportModuleProgramToFile:
 	beq 	.exit
 	move.l	a3,a4
 
-	lea	-300(sp),sp
+    * For very big radio station urls
+	lea	-1000(sp),sp
 	move.l	sp,a1
 
 	lea	l_filename(a3),a0
@@ -12672,7 +12673,7 @@ exportModuleProgramToFile:
 	move.l	d6,d1		* tallennetaan nimi
 	lob	Write	
 
-	lea	300(sp),sp
+	lea	1000(sp),sp
 
 	cmp.l	d3,d0
 	bne.b	.writeError
@@ -53119,7 +53120,7 @@ streamerEntry:
     rsreset
 .uhcPathFormatted   rs.b    50
 .agetCmdFormatted   rs.b    100
-.agetArgsFormatted  rs.b    300
+.agetArgsFormatted  rs.b    1000
 .varsSize           rs.b    0
    
     lea     var_b,a5
@@ -53162,8 +53163,8 @@ streamerEntry:
     beq     .error
     DPRINT  "stream:LoadSeg=%lx"
 
-    move.l	streamerUrl(a5),d0
-    pushpea agetHeadersFile(pc),d1
+    pushpea agetHeadersFile(pc),d0
+    move.l	streamerUrl(a5),d1
     lea     .args(pc),a0
     lea     .agetArgsFormatted(a4),a3
     jsr     desmsg3
@@ -53274,7 +53275,7 @@ streamerEntry:
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=131072',10,0
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
 ;	dc.b	'"%s" PIPE:hippoStream/4096/128 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=262144',10,0
-	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192',10,0
+	dc.b	'TO=PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192 URL="%s"',10,0
  even
 
 
