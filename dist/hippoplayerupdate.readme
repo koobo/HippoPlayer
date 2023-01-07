@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.55
+Version: 2.56
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -59,6 +59,14 @@ NOTE 4: Too long didn't read
 - Fixed a memory corruption problem in file browser which could
   happen with long directory names.
 
+- A crash bug from the previous version fixed. This one happened
+  when the main windows was hidden.
+
+- Modland search falsely filtered out "DIGIBooster Pro" modules, fixed.
+
+- Pausing playback while using AHI was modified. This fixes
+  the situation with the ZZ9000AX driver where pause didn't work.
+
 - A few other small fixes.
 
 
@@ -68,41 +76,76 @@ NOTE 4: Too long didn't read
   stored. The next time you play this particular module the favorited 
   subsong will be played first.
 
+- Added limited scope support when using AHI for sound output:
+   - Scopes for sample files (MP3, Wav, etc)
+   - Scopes for modules played with PS3M (PT, XM, S3M, etc). Note
+     that only four channels are supported. More channels would need
+     additional mixing for scope visuals, this is not done at the moment.
+   - Patternscope for all PS3M supported modules, no channel limitation.
+
+- PSID support improvements with the included updated playsid.library:
+   - Stereo SID (2SID) files are now supported. 
+   - This only works in reSID mode. In the normal mode only the first 
+     SID output is heard.
+   - Playing these will require a 68060 or something comparable.
+   - It's now possible to toggle the reSID filters in "Prefs/Play-2":
+     - "Internal on": normal filter mode
+     - "Internal+Ext": also enable the external filter, does not
+       have a big effect on the sound. Uses more CPU.
+     - "All off": no filters, less CPU usage.
+   - You can find 2SID tunes in HVSC.
+
 - Improved MP3 support: Data will be streamed over the network.
   This allows listening to MP3 files without downloading them first, 
   and also allows listening to radio station streams. "aget" from
   UHCTools is used for network transfers.
-
-- Added new search sources for MP3s provided by UHCTools, access these 
-  with the "S" button.
+  NOTE: the libmad variant of mpega.library doesn't work reliably
+  when streaming.
+  
+- Added new search sources for MP3s provided by UHCTools:
   - https://amigaremix.com/ 
   - https://remix.kwed.org/
   - Radio station search
-  
-- Added "Browse shared playlists" to the "S"-button menu. This fetches
-  a list of shared playlists to be checked out. For example, you'll find
-  favorite lists and lists with certain musical themes. The lists will be 
+  - NOTE: If UHCTools is missing or too old, the search and download
+    functionalities will be disabled.
+
+- Added "Shared lists" search source. This fetches a list of shared 
+  playlists to be checked out. For example, you'll find favorite lists,
+  top lists, and lists with certain musical themes. The lists will be 
   updated periodically, administration by Spot/Up Rough. Cool!
-  
+
 - Info window improvements: 
   - Show MP3 file tag information
   - Show MP3 radio stream information
 
-- MP3 playback improvement for Paula (not AHI): When using the high quality
-  MPEGA settings, instead of 8-bit output the 14-bit mode is used, and the
-  conversion step is improved. The HQ settings in Prefs are: 
+- MP3 playback improvement for Paula output: When using the high quality
+  MPEGA settings, instead of 8-bit output the Paula 14-bit mode is used, 
+  and the conversion step is improved. The HQ settings in Prefs are: 
   Mpega quality: Hi, Freq.Div: 1.   
 
+- User interface changes related to searching remote files and finding
+  stuff in playlist:
+  - The search results view now contains a search source selection button
+    and a search terms string gadget. The view is accessible using the list 
+    mode change button on the left as usual.
+  - All remote search stuff from the "S"-button popup were moved over to the
+    search view.
+  - To search, select a source using the button and then type search words
+    into the string gadget, and hit enter.
+  - [CTRL+S] is the keyboard shortcut for the remote search flow. No need
+    to use the mouse.
+
+- Finding items in lists:
+  - The "S"-button popup contains "Find" and "Find next" as before.
+  - Activating "Find" form the popup (or with [F]) now brings up a
+    string gadget below the list instead of a ReqTools requester.
+    "Find next" (or [SHIFT-F]) works as before.
+
+- The popup item selector is now keyboard controllable with 
+  arrows up, down, and enter. 
+
 - 8bitbubsy's xmaplay060 updated. The mixing routines are now faster.
-
-- Note 1: MP3 playback is handled using the mpega.library. There's 
-  an alternative implementation of this library available, 
-  the libmad mpega.library. It doesn't seem to work reliably with
-  streamed data.
   
-- Note 2: If UHCTools is missing or too old, the search and download
-  functionalities will be disabled
-
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
