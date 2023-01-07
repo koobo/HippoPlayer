@@ -1447,6 +1447,11 @@ streamHeaderRest            rs.l       1
 * SEARCH_MODLAND etc etc
 selectedSearch  rs.w  1
 
+* Flags to indicate the bottom search layout state
+* Tested with .w!
+searchLayoutActive      rs.b    1
+localSearchLayoutActive rs.b    1
+
 * This is used to adjust so that the search layout ui gadgets
 * fit at the bottom of the window. Normal value is 0.
 BOTTOM_MARGIN   rs.w  1
@@ -3060,7 +3065,7 @@ main:
 	bsr		getFileboxYStartToD2
 	add		d2,d1
     bsr     isSearchLayoutActive   
-    bne.b   .lm1
+    beq.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm1
 
@@ -5829,7 +5834,7 @@ printhippo1:
 
 	move	boxsize(a5),d6
     bsr     isSearchLayoutActive   
-    bne.b   .lm1
+    beq.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d6
 .lm1
 
@@ -6833,12 +6838,13 @@ buttonspressed:
 
 	* Any button activity should first close any active tooltip
 	bsr	closeTooltipPopup
-    * Get rid of the find bar if possible
-    jsr     switchToNormalLayoutIfPossible
 
 	cmp	#SELECTDOWN,d3		* left button down
 	bne.b	.test1
 	bsr	.leftButtonDownAction
+
+    * Get rid of the find bar if possible
+    jsr     switchToNormalLayoutIfPossible
 	rts
 
 .test1
@@ -7005,7 +7011,7 @@ buttonspressed:
 zoomfilebox
 	DPRINT	"Zoom filebox"
     bsr     isSearchLayoutActive      
-    bne .1
+    beq .1
     * Disable this for search mode, there are extra controls at the bottom
     rts
 .1
@@ -9455,6 +9461,10 @@ comment_file
 * Find module
 *******
 
+* In:
+*    a0 = search string
+* Out:
+*    d0 = true if not too small
 beepIfSearchStringIsSmall:
     * Beep display if search term is too small
 ;    lea     gadgetSearchStringBuffer,a0
@@ -9464,14 +9474,18 @@ beepIfSearchStringIsSmall:
     bne     .len
     sub.l   a0,a1
 
-    cmp     #4,a1   * strlen=3
+    cmp     #2+1,a1   * strlen=2
     bhs.b   .1
-    move.l  windowbase(a5),a0
-    move.l  wd_WScreen(a0),a0
-    lore    Intui,DisplayBeep
+    bsr     beep
     moveq   #0,d0
     rts
 .1  moveq   #1,d0
+    rts
+
+beep:
+    move.l  windowbase(a5),a0
+    move.l  wd_WScreen(a0),a0
+    lore    Intui,DisplayBeep
     rts
 
 gadgetSearchStringAction:
@@ -9484,26 +9498,27 @@ gadgetSearchStringAction:
     lea     gadgetSearchStringBuffer,a0
     bsr     beepIfSearchStringIsSmall
     bne     .1
-    rts
+    bra     activateSearchStringGadget
+    
 .1
     
     move    selectedSearch(a5),d0
     lea     modlandSearch,a0
     basereg modlandSearch,a0
     tst.w   d0
-	beq.b	.modland
+	beq.b	.amigaRemix
 	subq	#1,d0
 	beq.b	.aminet
 	subq	#1,d0
-	beq.b	.modules
-	subq	#1,d0
 	beq.b	.hvsc
 	subq	#1,d0
-	beq.b	.amigaRemix
+	beq.b	.modland
 	subq	#1,d0
-	beq.b	.rko
+	beq.b	.modules
 	subq	#1,d0
 	beq.b	.stations
+	subq	#1,d0
+	beq.b	.rko
 	subq	#1,d0
 	beq.b	.recentPlaylists
 .skip
@@ -9527,6 +9542,8 @@ gadgetSearchStringAction:
     jmp recentPlaylistsSearch(a0) 
     endb    a0
 
+
+
 rsearchfuncs
 	DPRINT	"Search functions"
 	lea		.options(pc),a4
@@ -9543,12 +9560,12 @@ rsearchfuncs
 .skip
 	rts
 
-
 .options
 	* max width, rows
 	dc.b	19,2
 	dc.b	"Find            [F]",0
 	dc.b	"Find next [SHIFT+F]",0
+    even
 
 gadgetSearchSourceAction:
 	lea		gadgeSearchSourceOptions(pc),a4
@@ -9556,7 +9573,6 @@ gadgetSearchSourceAction:
 	move	gg_LeftEdge(a0),d6
 	moveq	#20,d7
 	add		gg_TopEdge(a0),d7
-	;pushpea	listSelectorUhcCallback(pc),d4
     moveq   #0,d4   * no callbackkkkk
     move    selectedSearch(a5),d0
 	bsr		listSelectorMainWindowPreselect
@@ -9567,7 +9583,9 @@ gadgetSearchSourceAction:
  endif
     move    d0,selectedSearch(a5)
     bsr     refreshGadgetSearchSource
-
+    cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    beq     .skip
+    bra     activateSearchStringGadget
 .skip
     rts
 
@@ -9578,46 +9596,49 @@ refreshGadgetSearchSource:
     move.l  a0,d0
     DPRINT  "selected=%s"
 
-    move.l  a0,gadgetSearchSourceTextPtr    
+    lea     gadgetSearchSource,a4
+    basereg gadgetSearchSource,a4
 
-    lea     gadgetSearchSource,a3
+    move.l  a0,gadgetSearchSourceTextPtr(a4)    
+
+    lea     gadgetSearchSource(a4),a3
     bsr     clearGadgetInA3
     
-    lea     gadgetSearchSource,a0
+    lea     gadgetSearchSource(a4),a0
     bsr     refreshGadgetInA0
 
-    lea     gadgetSearchSource,a3
+    lea     gadgetSearchSource(a4),a3
     bsr     drawButtonFrameMainWindow
 
     cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     bne     .1
-    lea     gadgetSearchString,a0
+    lea     gadgetSearchString(a4),a0
     bsr     disableGadget
     jmp     recentPlaylistsSearch
 .1
-    lea     gadgetSearchString,a0
+    lea     gadgetSearchString(a4),a0
     and	    #~GFLG_DISABLED,gg_Flags(a0)
     jmp     refreshGadgetInA0
-
+    endb    a4
 
 gadgeSearchSourceOptions:
 	* max width, rows
 	dc.b	15,8
 gadgetSearchSourceOption1:
-	dc.b	"Modland       ",0
-    dc.b	"Aminet        ",0
-    dc.b	"Modules.pl    ",0
-	dc.b	"HVSC          ",0
-	dc.b	"AmigaRemix    ",0
-	dc.b	"Remix.Kwed.org",0
-	dc.b	"Radio stations",0
-	dc.b	"Shared lists  ",0
+    dc.b    "AmigaRemix    ",0 ; 4
+    dc.b    "Aminet        ",0 ; 1
+    dc.b    "HVSC          ",0 ; 3
+    dc.b    "Modland       ",0 ; 0
+    dc.b    "Modules.pl    ",0 ; 2 
+    dc.b    "Radio stations",0 ; 6
+    dc.b    "Remix.Kwed.org",0 ; 5
+    dc.b    "Shared lists  ",0 ; 7
 
 
 searchActivate:
     DPRINT  "search activate"
     bsr     isSearchLayoutActive      
-    beq     .x
+    bne     .x
     * Switch to search view 
     jsr     engageSearchResultsMode
 .x
@@ -9672,15 +9693,24 @@ gadgetFindAction:
     lea     findpattern(a5),a1
 .c  move.b  (a0)+,(a1)+
     bne     .c
+    move.l  chosenmodule(a5),-(sp)
     bsr     do_find_continue
+    move.l  (sp)+,d0
+    cmp.l   chosenmodule(a5),d0
+    bne     .found
+    bsr     beep
+.found
 
+    DPRINT  "restore layout"
     * Return the layout to whatever it was
-    jsr     switchToNormalLayout
-    bsr     isSearchLayoutActive      
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
     bne     .norm
+    jsr     switchToNormalLayoutNoRefresh
     jsr     switchToSearchLayout
+    ; Refresh to update search results
+    bra     forceRefreshList
 .norm   
-    rts
+    jmp     switchToNormalLayout
 
 
 find_new:
@@ -9709,17 +9739,22 @@ ftags
 otag15	dc.l	RT_PubScrName,pubscreen+var_b
 	dc.l	TAG_END
 	
-find_continue
+find_continue:
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
 	rts
 .ok
+    move.l  chosenmodule(a5),-(sp)
     bsr     do_find_continue
-    bne     .notFound
-	bsr	forceRefreshList
+    move.l  (sp)+,d0
+    cmp.l   chosenmodule(a5),d0
+    beq     .notFound
+    DPRINT  "found"
+	bra	forceRefreshList
 .notFound
-    rts
-
+    DPRINT  "not found"
+    bra     beep
+    
 do_find_continue
 	bsr	setMainWindowWaitPointer
 	pea	clearMainWindowWaitPointer(pc)
@@ -12286,13 +12321,15 @@ importModuleProgramFromData:
 	bne.b	.r23
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
+
+    * Too short? Skip
     cmp.l   #5,d0
-    bhi     .lenOk
+    bhi     .len1
+.lenSkip
     add.l   d0,a3
     bra     .next
-
-.lenOk
-
+.len1
+    
 	add.l	#1+l_size,d0	* nolla nimen perään ja listayksikön pituus
     add.l	d4,d0	* add extra header space if any
 
@@ -18029,7 +18066,7 @@ shownames:
 	moveq	#0,d2
 	move	boxsize(a5),d2
     bsr     isSearchLayoutActive      
-    bne.b   .lm1
+    beq.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm1
 	move.l	d2,d3
@@ -18071,7 +18108,7 @@ shownames:
 	moveq	#0,d1 
 	move	boxsize(a5),d1
     bsr     isSearchLayoutActive      
-    bne.b   .lm9
+    beq.b   .lm9
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm9
 	cmp.l	d1,d7
@@ -18099,7 +18136,7 @@ shownames:
 	moveq	#0,d1 
 	move	boxsize(a5),d1
     bsr     isSearchLayoutActive      
-    bne.b   .lm2
+    beq.b   .lm2
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm2
 	neg.l  	d7 
@@ -18121,7 +18158,7 @@ shownames:
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
     bsr     isSearchLayoutActive   
-    bne.b   .lm3
+    beq.b   .lm3
     subq    #SEARCH_BOXSIZE_DELTA,d0
 .lm3
 
@@ -18130,7 +18167,7 @@ shownames:
 	moveq	#0,d1 
 	move	boxsize(a5),d1
     bsr     isSearchLayoutActive   
-    bne.b   .lm4
+    beq.b   .lm4
     subq    #SEARCH_BOXSIZE_DELTA,d1
 .lm4
 
@@ -18168,7 +18205,7 @@ shownames:
 	moveq	#0,d1
 	move	boxsize(a5),d2
     bsr     isSearchLayoutActive   
-    bne.b   .lm5
+    beq.b   .lm5
     subq    #SEARCH_BOXSIZE_DELTA,d2
 .lm5
 	bsr.b	doPrintNames
@@ -18179,7 +18216,7 @@ shownames:
 .copy	
 	move	boxsize(a5),d5	* y size
     bsr     isSearchLayoutActive   
-    bne.b   .lm8
+    beq.b   .lm8
     subq    #SEARCH_BOXSIZE_DELTA,d5
 .lm8
 	sub	d7,d5
@@ -19831,7 +19868,7 @@ markit:
 	moveq	#0,d0
 	move	boxsize(a5),d0
     bsr     isSearchLayoutActive   
-    bne.b   .lm1
+    beq.b   .lm1
     subq    #SEARCH_BOXSIZE_DELTA,d0
 .lm1
 	cmp.l	d0,d5
@@ -32686,45 +32723,44 @@ refreshListModeTabs:
 
 switchToSearchLayoutIfNeeded:
     bsr     isSearchLayoutActive   
-    beq     switchToSearchLayout
+    bne     switchToSearchLayout
     rts
 
 switchToNormalLayoutIfPossible:
+    DPRINT  "switchToNormalLayoutIfPossible"
     cmp.b   #LISTMODE_SEARCH,listMode(a5)
     beq     .1
-    bsr     switchToNormalLayout   
-.1
-    rts
+    bra     switchToNormalLayout   
+.1  
+    moveq   #0,d0
+    move.b  localSearchLayoutActive(a5),d0
+    DPRINT  "XAX=%ld"
 
+    * Search view + local search layout?  
+    tst.b   localSearchLayoutActive(a5)
+    beq     .2
+    bsr     switchToNormalLayoutNoRefresh
+    bsr     switchToSearchLayout
+.2  rts
+
+* Remote search layout:
+* search source button, search string gadget
 switchToSearchLayout:
     tst.b   uhcAvailable(a5)
     beq     .skip
     tst.w   BOTTOM_MARGIN(a5)
     bne     .skip
+
     DPRINT  "switch to search layout"
+    st      searchLayoutActive(a5)
 
-    move    listFontHeight(a5),d0
-    add     d0,d0
-    move    d0,BOTTOM_MARGIN(a5)
-    
-    jsr     drawTextureBottomMargin
-    jsr     drawFileBoxFrame
-    jsr     refreshResizeGadget
-
-    move    BOTTOM_MARGIN(a5),d0
-    lea		gadgetFileSlider,a0
-    push    a0
-    sub     d0,gg_Height(a0)
-    jsr     drawFileSlider
-    clr     slider4oldheight(a5) ; force knob redraw
-    jsr     reslider
-    pop     a2
-    
-
+    bsr     prepareSearchLayout
 
     ; search source gadget
 
-    lea     gadgetSearchSource,a1
+    lea     gadgetSearchSource,a4
+    basereg gadgetSearchSource,a4
+    move.l  a4,a1
 
     move    gg_TopEdge(a2),d0
     add     gg_Height(a2),d0
@@ -32746,8 +32782,8 @@ switchToSearchLayout:
 
     ; search string gadget
 
-    lea     gadgetSearchString,a1
-    move.l  #gadgetSearchStringBuffer,gadgetSearchStringStringInfo
+    lea     gadgetSearchString(a4),a1
+    pushpea gadgetSearchStringBuffer(a4),gadgetSearchStringStringInfo(a4)
     move    #1000,gg_GadgetID(a1)
 
     move    gg_TopEdge(a2),d0
@@ -32767,30 +32803,22 @@ switchToSearchLayout:
     move.l  windowbase(a5),a0
     lore    Intui,AddGadget
 
-    lea     gadgetSearchSource,a3
+    lea     gadgetSearchSource(a4),a3
     bsr     clearGadgetInA3
 
-    lea     gadgetSearchString,a0
-    jsr     refreshGadgetInA0
-    lea     gadgetSearchSource,a0
+    lea     gadgetSearchSource(a4),a0
     jsr     refreshGadgetInA0
 
-    lea     gadgetSearchSource,a3
+    lea     gadgetSearchSource(a4),a3
     bsr     drawButtonFrameMainWindow
 
-	movem	gadgetSearchString+4,plx1/ply1/plx2/ply2
-	add	plx1,plx2
-	add	ply1,ply2
-	subq	#2,plx1
-	addq	#1,plx2
-	subq	#2,ply1
-	addq	#1,ply2
-	move.l	rastport(a5),a1
-	jsr 	sliderlaatikko
+    bsr     prepareSearchLayout2
 
+    ; boxin alin pikselirivi jää päivittämättä, jos ei tee tätä
+;    jsr forceRefreshList
 .skip
     rts
-
+    endb    a4
 
 clearGadgetInA3:
 	movem	4(a3),d0/d1/d4/d5
@@ -32814,6 +32842,7 @@ doSwitchToNormalLayout:
     tst     BOTTOM_MARGIN(a5)
     beq     .skip
     DPRINT  "switch to normal layout"
+    clr.w   searchLayoutActive(a5)   * .w!
 
     tst.b   d0
     bne.b   .refresh
@@ -32854,30 +32883,27 @@ removeSearchLayoutGadgets:
 
 
 isSearchLayoutActive:
-    pushm   d0
+    push    d0
     ;cmp.b   #LISTMODE_SEARCH,listMode(a5)
     tst.w   BOTTOM_MARGIN(a5)
-    seq     d0
-    tst.b   d0
+;    seq     d0
+;    tst.b   d0
     popm    d0
     rts
 
-switchToLocalSearchLayout:
-    bsr     switchToNormalLayout
-
-
-    tst.w   BOTTOM_MARGIN(a5)
-    bne     .skip
-    DPRINT  "switch to local search layout"
-
+* Does some setup when preparing to switch to search layout
+prepareSearchLayout:
+    * Set margin to be two lines tall
     move    listFontHeight(a5),d0
     add     d0,d0
     move    d0,BOTTOM_MARGIN(a5)
     
+    * Refresh some gfx accordinly
     jsr     drawTextureBottomMargin
     jsr     drawFileBoxFrame
     jsr     refreshResizeGadget
 
+    * File slider height and knob
     move    BOTTOM_MARGIN(a5),d0
     lea		gadgetFileSlider,a0
     push    a0
@@ -32886,12 +32912,57 @@ switchToLocalSearchLayout:
     clr     slider4oldheight(a5) ; force knob redraw
     jsr     reslider
     pop     a2
-    
-    ; search string gadget
-    lea     gadgetFileSlider,a2
+    rts
 
-    lea     gadgetSearchString,a1
-    move.l  #gadgetLocalSearchStringBuffer,gadgetSearchStringStringInfo
+* Do some stuff to finish preparing search layout
+prepareSearchLayout2:
+
+    lea     gadgetSearchString,a3
+    basereg gadgetSearchString,a3
+    move.l  a3,a0
+    jsr     refreshGadgetInA0
+
+    tst.b   uusikick(a5)
+    bne     .n
+    subq    #1,gg_TopEdge(a3)
+.n
+	movem	gadgetSearchString+4(a3),plx1/ply1/plx2/ply2
+
+    tst.b   uusikick(a5)
+    bne     .n2
+    addq    #3,ply2
+.n2
+
+	add	plx1,plx2
+	add	ply1,ply2
+	subq	#2,plx1
+	addq	#1,plx2
+	subq	#2,ply1
+	addq	#1,ply2
+	move.l	rastport(a5),a1
+	jmp 	sliderlaatikko
+    endb    a3
+
+* Local search layout: one string gadget
+switchToLocalSearchLayout:
+    bsr     switchToNormalLayoutNoRefresh
+
+    tst.w   BOTTOM_MARGIN(a5)
+    bne     .skip
+
+    DPRINT  "switch to local search layout"
+    st      localSearchLayoutActive(a5)
+
+    bsr     prepareSearchLayout
+
+    lea     gadgetSearchSource,a4
+    basereg gadgetSearchSource,a4
+
+    ; search string gadget
+    lea     gadgetFileSlider(a4),a2
+
+    lea     gadgetSearchString(a4),a1
+    pushpea gadgetLocalSearchStringBuffer(a4),gadgetSearchStringStringInfo(a4)
     move    #1002,gg_GadgetID(a1)
     move    gg_TopEdge(a2),d0
     add     gg_Height(a2),d0
@@ -32910,26 +32981,13 @@ switchToLocalSearchLayout:
     move.l  windowbase(a5),a0
     lore    Intui,AddGadget
 
-
-    lea     gadgetSearchString,a0
-    jsr     refreshGadgetInA0
-
-
-	movem	gadgetSearchString+4,plx1/ply1/plx2/ply2
-	add	plx1,plx2
-	add	ply1,ply2
-	subq	#2,plx1
-	addq	#1,plx2
-	subq	#2,ply1
-	addq	#1,ply2
-	move.l	rastport(a5),a1
-	jsr 	sliderlaatikko
-
+    bsr     prepareSearchLayout2
     bsr     activateSearchStringGadget
+    ;;bsr     refreshResizeGadget ;???
 
 .skip
-
     rts
+    endb    a4
 
 
 ********************************************************************************
@@ -54824,7 +54882,7 @@ tooltipList
 	dc.b	"    - Normal playlist",0
 	dc.b    "    - Favorites list",0
 	dc.b    "    - File browser",0
-	dc.b    "    - Search results",0
+	dc.b    "    - Search view",0
 
   even
 
