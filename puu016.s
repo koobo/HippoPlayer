@@ -8608,6 +8608,7 @@ nappuloita:
 * b $35		volume up
 
 
+* del $46	delete module
 * help $5f	about etc.
 * c $33		clear list
 * ~` $0		window shrink/expand
@@ -8728,6 +8729,9 @@ nappuloita:
 	dr	rbutton8
 	dc	$41
 	dr	rbutton8
+	dc	$46 * DEL
+	dr	rbutton8
+
 
 	dc	$42
 	dr	rbutton4
