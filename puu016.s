@@ -32717,7 +32717,7 @@ switchToNormalLayoutIfPossible:
     cmp.b   #LISTMODE_SEARCH,listMode(a5)
     beq     .1
     bsr     switchToNormalLayout   
-    bra     forceRefreshList
+    jmp     forceRefreshList
 .1  
     * Search view + local search layout?  
     tst.b   localSearchLayoutActive(a5)
@@ -33146,12 +33146,17 @@ importSavedStateModulesFromDisk
 	beq.b	.favMode
 	cmp.b	#"2",2(a0)
 	beq.b	.browserMode
+	cmp.b	#"3",2(a0)
+	beq.b	.searchMode
 	* default
 	bsr	engageNormalMode
 	bra.b	.engaged
 .favMode
 	bsr	engageFavoritesMode
 	bra.b	.engaged
+.searchMode
+    bsr     engageSearchResultsMode
+    bra     .engaged
 .browserMode
 	bsr	engageFileBrowserMode
 	cmp.b	#" ",3(a0)
