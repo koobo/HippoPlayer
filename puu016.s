@@ -9045,7 +9045,8 @@ gadgetsup:
 	dr	rmove		* move
 	dr	rsearchfuncs	* search functions
  ifeq FEATURE_LIST_TABS
-	dr	rlistmode	* listmode change
+	;dr	rlistmode	* listmode change
+    dr  rlistmodePop
  endif
  ifne FEATURE_LIST_TABS
     dr  rlistmode1
@@ -9103,6 +9104,8 @@ printbox:
 
 rlistmode:
 	jmp	toggleListMode
+rlistmodePop:
+    jmp toggleListModePopup
 
   ifne FEATURE_LIST_TABS
 rlistmode1:
@@ -9621,7 +9624,7 @@ gadgetSearchSourceOption1:
 
 searchActivate:
     DPRINT  "search activate"
-    tst.b   uusikick(a5)
+    tst.b   uhcAvailable(a5)
     bne     .1
     rts
 .1
@@ -9646,7 +9649,7 @@ searchActivate:
 *   d3 = index to check
 ;listSelectorUhcCallback
 ;	; Disable rows from 2 onwards UHC not available
-;	cmp		#2,d3
+;	cmp		#3,d3
 ;	blo.b	.n
 ;	tst.b	uhcAvailable(a5)
 ;	bne.b	.n
@@ -32428,18 +32431,58 @@ storeListModeChosenModule:
 
 
 
+toggleListModePopup:
+	DPRINT	"List mode"
+	lea		toggleListModePopupOptions(pc),a4
+	lea		gadgetListModeChangeButton,a0
+	move	gg_LeftEdge(a0),d6
+	moveq	#20,d7
+	add		gg_TopEdge(a0),d7
+    moveq   #0,d4
+    moveq   #0,d0
+    move.b  listMode(a5),d0
+	jsr		listSelectorMainWindowPreselect
+	bmi.b	.skip
+	beq		engageNormalMode
+    subq	#1,d0
+	beq		engageFavoritesMode
+    subq    #1,d0
+    beq     engageFileBrowserMode
+    subq    #1,d0
+    beq     engageSearchResultsMode
+    subq    #1,d0
+    bne     .skip
+    * Shortcut to shared lists
+    move    #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    jsr     engageSearchResultsMode
+    jsr     refreshGadgetSearchSource
+    jsr     recentPlaylistsSearch
+.skip
+	rts
+
+toggleListModePopupOptions:
+	* max width, rows
+	dc.b	12,5
+	dc.b	"Main list   ",0
+	dc.b	"Favorites   ",0
+    dc.b    "File browser",0
+    dc.b    "Search      ",0
+    dc.b    "Shared lists",0
+    even
+
+
 
 toggleListMode:
 	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
-	beq.b	engageFavoritesMode
+	beq 	engageFavoritesMode
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
-	beq	engageFileBrowserMode
+	beq	    engageFileBrowserMode
 
 	tst.b	uhcAvailable(a5)
-	bne.b	.searchAvailable
+	bne 	.searchAvailable
 	
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq.b	engageNormalMode
+	beq 	engageNormalMode
 	rts
 
 .searchAvailable
@@ -52615,6 +52658,8 @@ initializeUHC
 .no
     tst.b   uhcAvailable(a5)
     bne     .really
+    * Remove search and list options from list mode toggle popup
+    move.b  #3,toggleListModePopupOptions+1
 	* Remove search results related tooltip
 	lea	tooltipList\.listModeChange,a0
 	move.b	#4,1(a0)
