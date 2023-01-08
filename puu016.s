@@ -35704,7 +35704,9 @@ p_sid:	jmp	.init(pc)
 .title0
 	dc.b	"PSID "
 .title
-    dc.b    "             "
+    dc.b    "           14-bit"
+           ;"reSID 8580 14-bit"
+           ;"SIDBlaster       "
 .zero
     dc.b    0
 
@@ -35849,9 +35851,16 @@ p_sid:	jmp	.init(pc)
 .a  move.b  (a0)+,(a1)+
     bne.b   .a
 
+    cmp.b   #OM_RESID_6581,d0
+    beq     .o1
+    cmp.b   #OM_RESID_8580,d0
+    bne     .o2
+.o1 
+    * Show additional "14-bit" with reSID
+    move.b  #" ",-1(a1)
+.o2
     moveq   #0,d1
     move.b  residmode(a5),d1
- 
     DPRINT  "Operating mode=%ld resid=%ld" 
     lob     SetOperatingMode
 .skip
