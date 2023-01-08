@@ -32812,6 +32812,16 @@ switchToNormalLayoutIfPossible:
     bsr     switchToSearchLayout
 .2  rts
 
+getFontHeightForSearchLayout:
+    move    listFontHeight(a5),d0
+    tst.b   uusikick(a5)
+    bne     .n
+    * Kick 1.3 string gadgets use system default font.
+    * Assume it is 8 pixels, which it might not be
+    moveq   #8,d0
+.n
+  rts
+
 * Remote search layout:
 * search source button, search string gadget
 switchToSearchLayout:
@@ -32832,16 +32842,16 @@ switchToSearchLayout:
     basereg gadgetSearchSource,a4
     move.l  a4,a1
 
-    move    gg_TopEdge(a2),d0
-    add     gg_Height(a2),d0
-    addq    #1,d0
+    move    gg_TopEdge(a2),d1
+    add     gg_Height(a2),d1
+    addq    #1,d1
 
-    move    listFontHeight(a5),d1
-    lsr     #1,d1
-    add     d1,d0
-    move    d0,gg_TopEdge(a1)
+    bsr     getFontHeightForSearchLayout
+    lsr     #1,d0
+    add     d0,d1
+    move    d1,gg_TopEdge(a1)
 
-    move    listFontHeight(a5),d0
+    bsr     getFontHeightForSearchLayout
     addq    #4,d0
     move    d0,gg_Height(a1)
 
@@ -32868,8 +32878,7 @@ switchToSearchLayout:
     sub     #146+7,d0
     move    d0,gg_Width(a1)
 
-
-    move    listFontHeight(a5),d0
+    bsr     getFontHeightForSearchLayout
     move    d0,gg_Height(a1)
 
     move    gg_LeftEdge(a2),d0
@@ -32925,7 +32934,7 @@ doSwitchToNormalLayout:
     tst.b   d0
     bne.b   .refresh
     clr.w   BOTTOM_MARGIN(a5)
-    move    listFontHeight(a5),d0
+    bsr     getFontHeightForSearchLayout
     add     d0,d0
     add     d0,gg_Height+gadgetFileSlider
     bra     .1
@@ -32937,7 +32946,7 @@ doSwitchToNormalLayout:
     ;;;;jsr     forceRefreshList
     jsr     refreshResizeGadget
  
-    move    listFontHeight(a5),d0
+    bsr     getFontHeightForSearchLayout
     add     d0,d0
     add     d0,gg_Height+gadgetFileSlider
     jsr     drawFileSlider
@@ -32962,8 +32971,14 @@ removeSearchLayoutGadgets:
 * Does some setup when preparing to switch to search layout
 prepareSearchLayout:
     * Set margin to two list lines
-    move    listFontHeight(a5),d0
+    bsr     getFontHeightForSearchLayout
     add     d0,d0
+    tst.b   uusikick(a5)
+    bne.b   .1
+    * Kick 1.3 string gadgets use system default font.
+    * Assume it is 8 pixels, which it might not be
+    moveq   #8+8,d0
+.1
     move    d0,BOTTOM_MARGIN(a5)
     
     * Refresh some gfx accordinly
@@ -33007,7 +33022,7 @@ prepareSearchLayout2:
     tst.b   uusikick(a5)
     bne     .n2
     * Adjust for kick 1.3
-    addq    #3,ply2
+    addq    #3-2,ply2
     subq    #2,plx2
 .n2
 
@@ -33042,20 +33057,26 @@ switchToLocalSearchLayout:
     lea     gadgetSearchString(a4),a1
     pushpea gadgetLocalSearchStringBuffer(a4),gadgetSearchStringStringInfo(a4)
     move    #GADGET_ID_LOCAL_SEARCH_STRING,gg_GadgetID(a1)
-    move    gg_TopEdge(a2),d0
-    add     gg_Height(a2),d0
-    addq    #3,d0
+    move    gg_TopEdge(a2),d1
+    add     gg_Height(a2),d1
+    addq    #3,d1
     
-    move    listFontHeight(a5),d1   
-    lsr     #1,d1
-    add     d1,d0
-    move    d0,gg_TopEdge(a1)
+    bsr     getFontHeightForSearchLayout
+    lsr     #1,d0
+    add     d0,d1
+    move    d1,gg_TopEdge(a1)
     
     move    WINSIZX(a5),d0
     sub     #20-1,d0
     move    d0,gg_Width(a1)
+    tst.b   uusikick(a5)
+    bne     .n
+    * For kick 1.3 use a fixed width. There the full width is
+    * not cleared, only the amount of characters that fit.
+    move    #21*8-6,gg_Width(a1)
+.n
 
-    move    listFontHeight(a5),d0
+    bsr     getFontHeightForSearchLayout
     move    d0,gg_Height(a1)
 
     move    gg_LeftEdge(a2),d0
