@@ -3181,7 +3181,7 @@ SetEnvelopePos
 	bne.b	.EnvVL1
 	subq.w	#4,d2	
 .EnvVSkip
-	clr.w	cEnvVIPValue
+	clr.w	cEnvVIPValue(a5)
 	moveq	#0,d0
 	move.b	3(a1,d2.w),d0
 	move.w	d0,cEnvVAmp(a5)
