@@ -17899,6 +17899,10 @@ listselector:
     * found it
     move.l  gg_GadgetText(a0),a1
     move.b  #2,it_FrontPen(a1)
+    tst.b   uusikick(a5)
+    bne     .k1
+    move.b  #3,it_FrontPen(a1)
+.k1
 
     move.l  d6,a1
     sub.l   a2,a2
