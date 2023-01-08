@@ -1456,6 +1456,13 @@ localSearchLayoutActive rs.b    1
 * fit at the bottom of the window. Normal value is 0.
 BOTTOM_MARGIN   rs.w  1
 
+* Keep track of chosen items in different lists so it can
+* be rechosen when coming back to the view
+normalModeChosenModule      rs.l    1
+favoritesModeChosenModule   rs.l    1
+fileBrowserChosenModule     rs.l    1
+searchResultsChosenModule   rs.l    1
+
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -32410,6 +32417,18 @@ handleFavoriteModuleConfigChange
 *
 ******************************************************************************
 
+
+storeListModeChosenModule:     
+    moveq   #0,d0
+    move.b  listMode(a5),d0
+    lsl     #2,d0
+    lea     normalModeChosenModule(a5),a0
+    move.l  chosenmodule(a5),(a0,d0.w)
+    rts
+
+
+
+
 toggleListMode:
 	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
 	beq.b	engageFavoritesMode
@@ -32432,7 +32451,8 @@ toggleListMode:
 
 engageNormalMode:
 	DPRINT	"** engage normal"
-	pushm	all
+    pushm	all
+    bsr     storeListModeChosenModule
 	
 	cmp.b	#LISTMODE_NORMAL,listMode(a5)
 	beq.b	.skip
@@ -32458,22 +32478,24 @@ engageNormalMode:
 	rts	
 
 engageFavoritesMode:
-	pushm	all
 	DPRINT	"** engage favorites"
+	pushm	all
+    bsr     storeListModeChosenModule
 	* Moving to favorite mode
 	* moduleListChanged must be cleared initially to catch
 	* any subsequent user edits.
 	clr.b	moduleListChanged(a5)
 	move.b	#LISTMODE_FAVORITES,listMode(a5)
-	bsr     engageListMode
     bsr     switchToNormalLayout
+	bsr     engageListMode
 	popm	all
 	rts	
 
 
 engageSearchResultsMode:
-	pushm	all
 	DPRINT	"** engage search results"
+	pushm	all
+    bsr     storeListModeChosenModule
 	move.b	#LISTMODE_SEARCH,listMode(a5)
 
     bsr     switchToSearchLayout
@@ -32552,6 +32574,18 @@ engageListMode:
 	move.l	d3,d0
 	DPRINT	"Modamount=%ld"
  endif
+
+    * Select the item that was chosen last time
+    moveq   #0,d1
+    move.b  listMode(a5),d1
+    lsl     #2,d1
+    lea     normalModeChosenModule(a5),a0
+    move.l  (a0,d1.w),d1
+    cmp.l   d0,d1
+    bhi.b   .over
+    move.l  d1,chosenmodule(a5)
+.over
+
 	jsr	releaseModuleList
 	jsr	clearMainWindowWaitPointer
  	jsr	forceRefreshList
@@ -33339,6 +33373,7 @@ countFileBrowserFiles
 engageFileBrowserMode:
 	DPRINT	"** engage file browser"
 	pushm	all
+    bsr     storeListModeChosenModule
 	move.b	#LISTMODE_BROWSER,listMode(a5)
 	bsr.b	countFileBrowserFiles
 	move.l	d0,modamount(a5)
