@@ -9688,7 +9688,7 @@ gadgetFindAction:
 find_new:
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
-	rts
+	bra     beep
 .ok
     jmp     switchToLocalSearchLayout
     
@@ -9717,7 +9717,7 @@ otag15	dc.l	RT_PubScrName,pubscreen+var_b
 find_continue:
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
-	rts
+    bra     beep
 .ok
     move.l  chosenmodule(a5),-(sp)
     bsr     do_find_continue
