@@ -9591,8 +9591,10 @@ gadgetSearchSourceAction:
     move    d0,selectedSearch(a5)
     jsr     refreshGadgetSearchSource
     cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
-    beq     .skip
+    beq     .1
     jmp     activateSearchStringGadget
+.1  
+    jmp     recentPlaylistsSearch
 .skip
     rts
 
@@ -32382,7 +32384,7 @@ handleFavoriteModuleConfigChange
 	bne.b	.noFav
 	* If disabled from prefs must toggle to normal mode
 	;bsr.b	toggleListMode
-	bsr.b	engageNormalMode
+	bsr 	engageNormalMode
 .noFav
 	
 	* favorites are not enabled
@@ -32713,15 +32715,18 @@ switchToSearchLayoutIfNeeded:
     rts
     
 switchToNormalLayoutIfPossible:
-    DPRINT  "switchToNormalLayoutIfPossible"
     cmp.b   #LISTMODE_SEARCH,listMode(a5)
     beq     .1
+    tst.w   searchLayoutActive(a5)
+    beq     .2
+    DPRINT  "switchToNormalLayoutIfPossible"
     bsr     switchToNormalLayout   
     jmp     forceRefreshList
 .1  
     * Search view + local search layout?  
     tst.b   localSearchLayoutActive(a5)
     beq     .2
+    DPRINT  "switchToNormalLayoutIfPossible"
     bsr     switchToNormalLayoutNoRefresh
     bsr     switchToSearchLayout
 .2  rts
@@ -33032,8 +33037,9 @@ refreshGadgetSearchSource:
     cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     bne     .1
     lea     gadgetSearchString(a4),a0
-    jsr     disableGadget
-    jmp     recentPlaylistsSearch
+    jmp     disableGadget
+   ;;; rts
+    ;;;;;;;jmp     recentPlaylistsSearch
 .1
     lea     gadgetSearchString(a4),a0
     and	    #~GFLG_DISABLED,gg_Flags(a0)
@@ -51892,8 +51898,6 @@ remoteSearch
 	pushm	all
 	* free previous list
 	bsr		freeSearchList
-	* ensure the correct mode is active
-	jsr		engageSearchResultsMode
 	popm	all
 
 	; start of data
@@ -51970,15 +51974,22 @@ remoteSearch
 
     bsr     .postProcessSearchResults
 
+    
 	tst.b	autosort(a5)
 	beq.b	.noSort
+	jsr		engageSearchResultsMode
+    * Sort will select the 1st item
+    * engageSearcuResultsMode will clear the selection,
+    * so do it in this order?
 	jsr		sortButtonAction
-	bra.b	.sorted
+	jsr		releaseModuleList
+    bra     .sortX
 .noSort
-    jsr		forceRefreshList
 .sorted
 	jsr		releaseModuleList
 .exit
+	jsr		engageSearchResultsMode
+.sortX
 	jmp		unlockMainWindow
     
 
