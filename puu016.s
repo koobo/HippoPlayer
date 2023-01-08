@@ -5311,10 +5311,14 @@ drawTextureBottomMargin:
 	move	wd_Height(a3),d3	
 	sub		windowbottom(a5),d3
 	subq    #3,d3 * magic constant
+    sub     windowtop(a5),d3
     move    d3,d1
     sub     BOTTOM_MARGIN(a5),d1
-    subq    #4,d1 * more magic
-    sub     windowtop(a5),d3
+    subq    #2,d1 * more magic
+    * d0 = x start
+    * d1 = y start
+    * d2 = x end
+    * d3 = y end
 	bsr 	drawtexture
 .x  rts
 
@@ -9502,14 +9506,13 @@ gadgetSearchStringAction:
     bsr     beepIfSearchStringIsSmall
     bne     .1
     DPRINT  "canceled"
-    bra     switchToNormalLayoutIfPossible
+    jmp     switchToNormalLayoutIfPossible
 
 .1
     
-    move    selectedSearch(a5),d0
     lea     modlandSearch,a0
     basereg modlandSearch,a0
-    tst.w   d0
+    move    selectedSearch(a5),d0
 	beq.b	.amigaRemix
 	subq	#1,d0
 	beq.b	.aminet
@@ -9586,61 +9589,33 @@ gadgetSearchSourceAction:
     DPRINT  "selected source=%ld"
  endif
     move    d0,selectedSearch(a5)
-    bsr     refreshGadgetSearchSource
+    jsr     refreshGadgetSearchSource
     cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     beq     .skip
-    bra     activateSearchStringGadget
+    jmp     activateSearchStringGadget
 .skip
     rts
-
-refreshGadgetSearchSource:
-    move    selectedSearch(a5),d0
-    mulu    #15,d0
-    lea     gadgetSearchSourceOption1(pc,d0),a0
-    move.l  a0,d0
-    DPRINT  "selected=%s"
-
-    lea     gadgetSearchSource,a4
-    basereg gadgetSearchSource,a4
-
-    move.l  a0,gadgetSearchSourceTextPtr(a4)    
-
-    lea     gadgetSearchSource(a4),a3
-    jsr     clearGadgetInA3
-    
-    lea     gadgetSearchSource(a4),a0
-    bsr     refreshGadgetInA0
-
-    lea     gadgetSearchSource(a4),a3
-    jsr     drawButtonFrameMainWindow
-
-    cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
-    bne     .1
-    lea     gadgetSearchString(a4),a0
-    jsr     disableGadget
-    jmp     recentPlaylistsSearch
-.1
-    lea     gadgetSearchString(a4),a0
-    and	    #~GFLG_DISABLED,gg_Flags(a0)
-    jmp     refreshGadgetInA0
-    endb    a4
 
 gadgeSearchSourceOptions:
 	* max width, rows
 	dc.b	15,8
 gadgetSearchSourceOption1:
-    dc.b    "AmigaRemix    ",0 ; 4
-    dc.b    "Aminet        ",0 ; 1
-    dc.b    "HVSC          ",0 ; 3
-    dc.b    "Modland       ",0 ; 0
-    dc.b    "Modules.pl    ",0 ; 2 
+    dc.b    "AmigaRemix",0 ; 4
+    dc.b    "Aminet",0 ; 1
+    dc.b    "HVSC",0 ; 3
+    dc.b    "Modland",0 ; 0
+    dc.b    "Modules.pl",0 ; 2 
     dc.b    "Radio stations",0 ; 6
     dc.b    "Remix.Kwed.org",0 ; 5
-    dc.b    "Shared lists  ",0 ; 7
-
+    dc.b    "Shared lists",0 ; 7   
+    even
 
 searchActivate:
     DPRINT  "search activate"
+    tst.b   uusikick(a5)
+    bne     .1
+    rts
+.1
     tst.w   searchLayoutActive(a5)      
     bne     .x
     * Switch to search view 
@@ -9651,15 +9626,8 @@ searchActivate:
     cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     beq     .y
     * Then activate string gadget
-    bsr     activateSearchStringGadget
+    jsr     activateSearchStringGadget
 .y
-    rts
-
-activateSearchStringGadget:
-    lea     gadgetSearchString,a0
-    move.l  windowbase(a5),a1
-    sub.l   a2,a2
-    lore    Intui,ActivateGadget
     rts
 
 
@@ -9686,16 +9654,16 @@ activateSearchStringGadget:
 
 gadgetFindAction:
     DPRINT  "gadgetFindAction"
-    lea     gadgetLocalSearchStringBuffer,a0
+    lea     gadgetLocalSearchStringBuffer,a3
+    move.l  a3,a0
     bsr     beepIfSearchStringIsSmall
     bne     .1
     DPRINT  "canceled"
-    bra     switchToNormalLayoutIfPossible
+    jmp     switchToNormalLayoutIfPossible
 .1
     * Find!
-    lea     gadgetLocalSearchStringBuffer,a0
     lea     findpattern(a5),a1
-.c  move.b  (a0)+,(a1)+
+.c  move.b  (a3)+,(a1)+
     bne     .c
     move.l  chosenmodule(a5),-(sp)
     bsr     do_find_continue
@@ -9714,8 +9682,8 @@ gadgetFindAction:
     ; Refresh to update search results
     bra     forceRefreshList
 .norm   
-    jmp     switchToNormalLayout
-
+    jsr     switchToNormalLayout
+    bra     forceRefreshList
 
 find_new:
 	cmp.l	#3,modamount(a5)
@@ -9743,6 +9711,9 @@ ftags
 otag15	dc.l	RT_PubScrName,pubscreen+var_b
 	dc.l	TAG_END
 	
+
+
+
 find_continue:
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
@@ -32454,7 +32425,7 @@ toggleListMode:
 	rts
 
 engageNormalMode:
-	DPRINT	"engage normal"
+	DPRINT	"** engage normal"
 	pushm	all
 	
 	cmp.b	#LISTMODE_NORMAL,listMode(a5)
@@ -32472,16 +32443,17 @@ engageNormalMode:
 	clr.b	moduleListChanged(a5)
 
 .wasNotFav
-	move.b	#LISTMODE_NORMAL,listMode(a5)
+ 	move.b	#LISTMODE_NORMAL,listMode(a5)
+    bsr     switchToNormalLayout
 	bsr 	engageListMode
 .skip
-    bsr     switchToNormalLayout
+;    bsr     switchToNormalLayout
     popm	all
 	rts	
 
 engageFavoritesMode:
 	pushm	all
-	DPRINT	"engage favorites"
+	DPRINT	"** engage favorites"
 	* Moving to favorite mode
 	* moduleListChanged must be cleared initially to catch
 	* any subsequent user edits.
@@ -32495,11 +32467,15 @@ engageFavoritesMode:
 
 engageSearchResultsMode:
 	pushm	all
-	DPRINT	"engage search results"
+	DPRINT	"** engage search results"
 	move.b	#LISTMODE_SEARCH,listMode(a5)
-	bsr 	engageListMode
 
     bsr     switchToSearchLayout
+	bsr 	engageListMode
+
+;    bsr     switchToSearchLayout
+;    jsr	forceRefreshList
+
 	popm	all
 	rts	
 
@@ -32572,7 +32548,7 @@ engageListMode:
  endif
 	jsr	releaseModuleList
 	jsr	clearMainWindowWaitPointer
-	jsr	forceRefreshList
+ 	jsr	forceRefreshList
 	rts
 
 .setButtonStatesAccordingToListMode
@@ -32727,20 +32703,18 @@ refreshListModeTabs:
   endif
 
 switchToSearchLayoutIfNeeded:
-    tst.w   searchLayoutActive(a5)   
-    bne     switchToSearchLayout
+    DPRINT  "switch to search layout if needed"
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    beq     switchToSearchLayout
     rts
-
+    
 switchToNormalLayoutIfPossible:
     DPRINT  "switchToNormalLayoutIfPossible"
     cmp.b   #LISTMODE_SEARCH,listMode(a5)
     beq     .1
-    bra     switchToNormalLayout   
+    bsr     switchToNormalLayout   
+    bra     forceRefreshList
 .1  
-    moveq   #0,d0
-    move.b  localSearchLayoutActive(a5),d0
-    DPRINT  "XAX=%ld"
-
     * Search view + local search layout?  
     tst.b   localSearchLayoutActive(a5)
     beq     .2
@@ -32760,6 +32734,7 @@ switchToSearchLayout:
     st      searchLayoutActive(a5)
 
     bsr     prepareSearchLayout
+    * a2 = gadgetFileSlider
 
     ; search source gadget
 
@@ -32769,16 +32744,21 @@ switchToSearchLayout:
 
     move    gg_TopEdge(a2),d0
     add     gg_Height(a2),d0
-    addq    #2+2,d0
+    addq    #1,d0
+
+    move    listFontHeight(a5),d1
+    lsr     #1,d1
+    add     d1,d0
     move    d0,gg_TopEdge(a1)
 
     move    listFontHeight(a5),d0
-    addq    #2+2,d0
+    addq    #4,d0
     move    d0,gg_Height(a1)
+
     move.w  gg_LeftEdge(a2),d0
     subq    #1,d0
     move    d0,gg_LeftEdge(a1)
-    move    #120-2+1,gg_Width(a1)
+    move    #130,gg_Width(a1)
     move.l  a1,a2
 
     moveq   #-1,d0 * last
@@ -32794,7 +32774,10 @@ switchToSearchLayout:
     move    gg_TopEdge(a2),d0
     addq    #2,d0
     move    d0,gg_TopEdge(a1)
-    move    #123-1,gg_Width(a1)
+    move    WINSIZX(a5),d0
+    sub     #146+7,d0
+    move    d0,gg_Width(a1)
+
 
     move    listFontHeight(a5),d0
     move    d0,gg_Height(a1)
@@ -32861,9 +32844,9 @@ doSwitchToNormalLayout:
     jsr     drawTextureBottomMargin
     clr.w   BOTTOM_MARGIN(a5)
     jsr     drawFileBoxFrame
-    jsr     forceRefreshList
+    ;;;;jsr     forceRefreshList
     jsr     refreshResizeGadget
-
+ 
     move    listFontHeight(a5),d0
     add     d0,d0
     add     d0,gg_Height+gadgetFileSlider
@@ -32888,7 +32871,7 @@ removeSearchLayoutGadgets:
 
 * Does some setup when preparing to switch to search layout
 prepareSearchLayout:
-    * Set margin to be two lines tall
+    * Set margin to two list lines
     move    listFontHeight(a5),d0
     add     d0,d0
     move    d0,BOTTOM_MARGIN(a5)
@@ -32896,7 +32879,6 @@ prepareSearchLayout:
     * Refresh some gfx accordinly
     jsr     drawTextureBottomMargin
     jsr     drawFileBoxFrame
-    jsr     refreshResizeGadget
 
     * File slider height and knob
     move    BOTTOM_MARGIN(a5),d0
@@ -32911,11 +32893,19 @@ prepareSearchLayout:
 
 * Do some stuff to finish preparing search layout
 prepareSearchLayout2:
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne     .1
+    * Update the search source button contents
+    bsr     refreshGadgetSearchSource
+.1
+    jsr     refreshResizeGadget
 
     lea     gadgetSearchString,a3
     basereg gadgetSearchString,a3
     move.l  a3,a0
     jsr     refreshGadgetInA0
+
+    ; Set up frame for the string gadget
 
     tst.b   uusikick(a5)
     bne     .n
@@ -32952,27 +32942,33 @@ switchToLocalSearchLayout:
     st      localSearchLayoutActive(a5)
 
     bsr     prepareSearchLayout
+    * a2 = gadgetFileSlider
 
     lea     gadgetSearchSource,a4
     basereg gadgetSearchSource,a4
 
     ; search string gadget
-    lea     gadgetFileSlider(a4),a2
 
     lea     gadgetSearchString(a4),a1
     pushpea gadgetLocalSearchStringBuffer(a4),gadgetSearchStringStringInfo(a4)
     move    #GADGET_ID_LOCAL_SEARCH_STRING,gg_GadgetID(a1)
     move    gg_TopEdge(a2),d0
     add     gg_Height(a2),d0
-    addq    #6,d0
+    addq    #3,d0
+    
+    move    listFontHeight(a5),d1   
+    lsr     #1,d1
+    add     d1,d0
     move    d0,gg_TopEdge(a1)
-    move    #123-1,gg_Width(a1)
+    
+    move    WINSIZX(a5),d0
+    sub     #20-1,d0
+    move    d0,gg_Width(a1)
 
     move    listFontHeight(a5),d0
     move    d0,gg_Height(a1)
 
     move    gg_LeftEdge(a2),d0
-    addq    #1,d0
     move    d0,gg_LeftEdge(a1)
 
     moveq   #-1,d0 * last
@@ -32981,11 +32977,72 @@ switchToLocalSearchLayout:
 
     bsr     prepareSearchLayout2
     jsr     activateSearchStringGadget
-    ;;bsr     refreshResizeGadget ;???
 
 .skip
     rts
     endb    a4
+
+
+
+refreshGadgetSearchSource:
+    move    selectedSearch(a5),d0
+    lea     gadgetSearchSourceOption1,a0
+.find   
+    tst     d0
+    beq     .found
+.ff tst.b   (a0)+
+    bne.b   .ff
+    subq    #1,d0
+    bra     .find
+.found
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "selected=%s"
+ endif
+
+    lea     gadgetSearchSource,a4
+    basereg gadgetSearchSource,a4
+
+    move.l  a0,gadgetSearchSourceTextPtr(a4)    
+    ; ---------------------------------
+	move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont	
+
+    move.l  a4,a1
+    jsr     centerGadgetText
+
+	move.l	rastport(a5),a1
+	move.l	fontbase(a5),a0
+	lore	GFX,SetFont	
+    ; ---------------------------------
+    lea     gadgetSearchSource(a4),a3
+    jsr     clearGadgetInA3
+    ; ---------------------------------
+    lea     gadgetSearchSource(a4),a0
+    jsr     refreshGadgetInA0
+
+    lea     gadgetSearchSource(a4),a3
+    jsr     drawButtonFrameMainWindow
+
+    cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    bne     .1
+    lea     gadgetSearchString(a4),a0
+    jsr     disableGadget
+    jmp     recentPlaylistsSearch
+.1
+    lea     gadgetSearchString(a4),a0
+    and	    #~GFLG_DISABLED,gg_Flags(a0)
+    jmp     refreshGadgetInA0
+    endb    a4
+
+activateSearchStringGadget:
+    lea     gadgetSearchString,a0
+    move.l  windowbase(a5),a1
+    sub.l   a2,a2
+    lore    Intui,ActivateGadget
+    rts
+
 
 
 ********************************************************************************
@@ -33264,14 +33321,14 @@ countFileBrowserFiles
 	jsr	releaseModuleList
 	rts
 
-engageFileBrowserMode
-	DPRINT	"engage file browser"
+engageFileBrowserMode:
+	DPRINT	"** engage file browser"
 	pushm	all
 	move.b	#LISTMODE_BROWSER,listMode(a5)
 	bsr.b	countFileBrowserFiles
 	move.l	d0,modamount(a5)
-	bsr	engageListMode
     bsr     switchToNormalLayout
+	bsr	    engageListMode
 	tst.l	modamount(a5)
 	bne.b	.notRootView
 	moveq	#0,d0	* initial chosen item
@@ -51317,7 +51374,7 @@ horizontalLayout:
 ;   a1 = gadget
 .centerContent
 	tst.l	gg_GadgetText(a1)
-	bne.b	.centerText
+	bne.b	centerGadgetText
 	move	gg_Flags(a1),d0
 	and	#GFLG_GADGIMAGE,d0
 	bne.b	.centerImage
@@ -51331,7 +51388,9 @@ horizontalLayout:
 	move	d3,ig_LeftEdge(a2)
 	rts
 
-.centerText
+* In:
+*   a1 = gadget
+centerGadgetText:
 	push	a0
 	move.l	gg_GadgetText(a1),a2
 
@@ -51351,6 +51410,11 @@ horizontalLayout:
 	move.l	it_IText(a2),a0
 	lore	GFX,TextLength
 	pop	a1
+
+    push    d0
+	move	gg_Width(a1),d0
+    ext.l   d0
+    pop d0
 
 	; center	
 	move	gg_Width(a1),d3
@@ -53101,8 +53165,9 @@ streamIsAlive:
  if DEBUG
     pushm   d0
     move.l  streamerTask(a5),d0
+    beq.b   .1
     DPRINT  "streamIsAlive=%lx"
-    tst.l   d0
+.1  tst.l   d0
     popm    d0
  endif
     rts
@@ -54568,7 +54633,7 @@ gadgetSearchString:
 	; gg_SpecialInfo
 	dc.l gadgetSearchStringStringInfo
 	; gg_GadgetId
-	dc.w 1000
+	dc.w GADGET_ID_SEARCH_STRING
 	; gg_UserData
 	dc.l 0
 
@@ -54623,38 +54688,18 @@ gadgetSearchSource:
 	; gg_SelectRender
 	dc.l 0
 	; gg_GadgetText
-	dc.l .itext
+	dc.l gadgetSearchSoureIText
 	; gg_MutualExclude
 	dc.l 0
 	; gg_SpecialInfo
 	dc.l 0
   	; gg_GadgetId
-	dc.w 1001
+	dc.w GADGET_ID_SEARCH_SOURCE
 	; gg_UserData
 	dc.l 0
 
-;.image
-;	; ig_LeftEdge
-;	dc 108
-;	; ig_TopEdge
-;	dc 1
-;	; ig_Width
-;	dc 9+1
-;	; ig_Height
-;	dc 7
-;	; ig_Depth
-;	dc 1
-;	; ig_ImageData
-;	dc.l 	cycleImage
-;	; ig_PlanePick
-;	dc.b 1
-;	; ig_PlaneOff
-;	dc.b 0
-;	; ig_NextImage
-;	dc.l 0
 
-
-.itext
+gadgetSearchSoureIText
     dc.b    1   ; it_FrontPen
     dc.b    0   ; it_BackPen
     dc.b    0 ;RP_JAM1  ; it_DrawMode
@@ -54663,12 +54708,9 @@ gadgetSearchSource:
     dc.w    2   ; it_TopEdge
     dc.l    list_text_attr  ; it_ITextFont
 gadgetSearchSourceTextPtr:
-    dc.l    gadgetSearchSourceOption1  ; it_IText
+    dc.l    0   ; it_IText
     dc.l    0   ; it_NextText
 
-.text
-    dc.b    "modland!",0
-    even
 
 * Rename the gadgets defined above to something not crazy
 * 1st row
