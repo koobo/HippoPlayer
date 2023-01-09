@@ -32872,7 +32872,7 @@ switchToSearchLayout:
     ; search string gadget
 
     lea     gadgetSearchString(a4),a1
-    pushpea gadgetSearchStringBuffer(a4),gadgetSearchStringStringInfo(a4)
+    move.l  #gadgetSearchStringBuffer,gadgetSearchStringStringInfo(a4)
     move    #GADGET_ID_SEARCH_STRING,gg_GadgetID(a1)
 
     move    gg_TopEdge(a2),d0
@@ -33059,7 +33059,7 @@ switchToLocalSearchLayout:
     ; search string gadget
 
     lea     gadgetSearchString(a4),a1
-    pushpea gadgetLocalSearchStringBuffer(a4),gadgetSearchStringStringInfo(a4)
+    move.l  #gadgetLocalSearchStringBuffer,gadgetSearchStringStringInfo(a4)
     move    #GADGET_ID_LOCAL_SEARCH_STRING,gg_GadgetID(a1)
     move    gg_TopEdge(a2),d1
     add     gg_Height(a2),d1
@@ -33077,7 +33077,7 @@ switchToLocalSearchLayout:
     bne     .n
     * For kick 1.3 use a fixed width. There the full width is
     * not cleared, only the amount of characters that fit.
-    move    #21*8-6,gg_Width(a1)
+    move    #242+4,gg_Width(a1)
 .n
 
     bsr     getFontHeightForSearchLayout
@@ -54780,7 +54780,7 @@ gadgetSearchStringStringInfo:
     dc.l    gadgetSearchStringBuffer     ; si_Buffer
     dc.l    0   ; si_UndoBuffer
     dc.w    0   ; si_BufferPos
-    dc.w    19  ; si_MaxChars
+    dc.w    49  ; si_MaxChars
     dc.w    0   ; si_DispPos
     dc.w    0   ; si_UndoPos
     dc.w    0   ; si_NumChars
@@ -54799,10 +54799,6 @@ gadgetSearchStringStringInfo:
             dc.l    0   ; sex_WorkBuffer
             ds.b    16  ; sex_Reserved
 
-gadgetSearchStringBuffer:     
-    ds.b    20
-gadgetLocalSearchStringBuffer:     
-    ds.b    20
 
 gadgetSearchSource:
     ; gg_NextGadget
@@ -55752,6 +55748,11 @@ slider1im
 		cnop 0,4
 * Global variables
 var_b		ds.b	size_var
+
+gadgetSearchStringBuffer:     
+    ds.b    50
+gadgetLocalSearchStringBuffer:     
+    ds.b    50
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950
