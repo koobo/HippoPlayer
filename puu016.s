@@ -8089,6 +8089,10 @@ umph
 .bere
 	* Calculate in long words to avoid possible word overflow.
 	move.l	modamount(a5),d1
+    bne     .is
+    DPRINT  "empty list"
+    rts
+.is 
 
 	* Calculate candidate for the next module
 	move.l	chosenmodule(a5),d0
