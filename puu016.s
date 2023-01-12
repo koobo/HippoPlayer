@@ -52708,7 +52708,7 @@ initializeUHC
 .tags
     dc.l    TAG_END
 
-.versCmd        dc.b    "version UHC:C/aget 0 83 >NIL:",0
+.versCmd        dc.b    "version UHC:C/aget 0 84 >NIL:",0
 .uhcBinVar	    dc.b	"UHCBIN",0
  even
 
