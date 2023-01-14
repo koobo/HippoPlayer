@@ -1982,6 +1982,8 @@ progstart
 	beq.b	.wasCommand 
 	cmp.l	#MESSAGE_COMMAND_PRG,d0
 	beq.b	.wasCommand 
+    cmp.l   #"HTTP",d0
+    beq     .wasRemote
 
 * consider this a file. let's try to get a lock on it.
 	move.l 	d3,d1
@@ -2016,6 +2018,7 @@ progstart
  	* Temp buffer position to hold the next possible path+filename
  	move.l	a1,a4
 
+.wasRemote
 .wasCommand
 .noLock
 .error
@@ -4132,7 +4135,7 @@ doPrint:
 	rts
 
 *** A0:sta 4 ascii-kirjainta D0:aan 
-kirjainta4
+kirjainta4:
 	move.b	(a0)+,d0
 	beq.b	.x
 	lsl.l	#8,d0
@@ -10389,8 +10392,8 @@ reslider:
 * TODO: obtainModuleList
 * TODO: most of this is duplicated elsewhere? in signalreceived?
 
-playButtonAction
-rbutton1
+playButtonAction:
+rbutton1:
 	DPRINT  "playButtonAction"
 
 	tst.b	movenode(a5)
@@ -12754,7 +12757,7 @@ komentojono:
 
 * In:
 *   a0 = File path
-createListNodeAndAdd
+createListNodeAndAdd:
 	pushm	all
 	move.l	a0,d5
 .f	tst.b	(a0)+
@@ -12774,11 +12777,25 @@ createListNodeAndAdd
 	bne.b	.c
 
 	lea	l_filename(a2),a1
+
+	cmp.b	#"h",(a1)
+	bne.b	.local
+	cmp.b	#"t",1(a1)
+	bne.b	.local
+	cmp.b	#"t",2(a1)
+	bne.b	.local
+	cmp.b	#"p",3(a1)
+	bne.b	.local
+    move.l  a2,a0
+    jsr     configRemoteNode
+    bra     .remote
+.local
 	bsr	nimenalku
 	move.l	a0,l_nameaddr(a2)
-
+.remote
 	move.l	a2,a1
-	bsr	getVisibleModuleListHeader
+	lea	    moduleListHeader(a5),a0
+    * Add to the main list
 	lore	Exec,AddTail
 
 	* update favorite status for node a0
@@ -23562,8 +23579,9 @@ rexxmessage
 .nx
 	move.l	a1,sv_argvArray+4(a5)
 	clr.l	sv_argvArray+8(a5)
-	jsr	clearlist
-	bra	komentojono
+    jsr     engageNormalMode
+    jsr     clearlist
+    bra	    komentojono
 
 *** LOADPRG
 .loadprg
@@ -23579,7 +23597,7 @@ rexxmessage
 
 *** ADD	
 .add	
-	printt "TODO: switch to normal list mode"
+    jsr     engageNormalMode
 
 	tst.b	d0
 	beq	rbutton7
@@ -23622,7 +23640,7 @@ rexxmessage
 
 *** INSERT
 .insert
-	printt "TODO: switch to normal list mode"
+    jsr     engageNormalMode
 
 	tst.b	d0
 	bne	    .rinsert0
@@ -23636,7 +23654,7 @@ rexxmessage
 
 *** MOVE
 .move
-	printt "TODO: switch to normal list mode"
+    jsr     engageNormalMode
 
 	bsr	a2i
 	move	d0,-(sp)
