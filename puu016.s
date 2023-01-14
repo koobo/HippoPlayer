@@ -5536,9 +5536,12 @@ enableResizeGadget
 	rts
 
 * Refresh the resize gadget if possible
-refreshResizeGadget
+refreshResizeGadget:
 	tst.b	uusikick(a5)
 	beq.b	.x
+    * Do if large window
+    tst.b   kokolippu(a5)
+    beq.b   .x
 	push	a0
 	lea	gadgetResize,a0
 	bsr	refreshGadgetInA0
