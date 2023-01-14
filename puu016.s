@@ -35933,6 +35933,9 @@ p_sid:	jmp	.init(pc)
     pushm   d0/a0/a1/a2
     bsr     .getCombinedResidMode
     move.b  d3,.perfMode
+    * reSID mode
+    moveq   #0,d0
+    move.b  residmode(a5),d0
     * Filter settings
     moveq   #1,d1   * int on
     moveq   #0,d2   * ext off
@@ -35947,6 +35950,7 @@ p_sid:	jmp	.init(pc)
     moveq   #0,d1   * int off
     moveq   #0,d2   * ext off
 .goFilt_
+    DPRINT  "mode=%ld infilt=%ld extfilt=%ld"
     lob     MeasureRESIDPerformance
     bsr     .sidIsStereo
     beq     .noSt2
