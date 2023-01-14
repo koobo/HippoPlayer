@@ -8579,7 +8579,11 @@ nappuloita:
 	addq.l	#2,a0
 	cmp.l	#.nabse,a0
 	bne.b	.checke
-	DPRINT	"No action for key"
+ if DEBUG
+    moveq   #0,d0
+    move.b  d3,d0
+	DPRINT	"No action for key %lx"
+ endif
 .ee	movem.l	(sp)+,d0-a6
 .sd	
 .exit
