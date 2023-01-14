@@ -32493,12 +32493,17 @@ toggleListModePopup:
 
 toggleListModePopupOptions:
 	* max width, rows
-	dc.b	12,5
-	dc.b	"Main list   ",0
-	dc.b	"Favorites   ",0
-    dc.b    "File browser",0
-    dc.b    "Search      ",0
-    dc.b    "Shared lists",0
+;	dc.b	12,5
+;	dc.b	"Main list   ",0
+;	dc.b	"Favorites   ",0
+;    dc.b    "File browser",0
+;    dc.b    "Search      ",0
+;    dc.b    "Shared lists",0
+	dc.b	15,4
+	dc.b	" Main list    ",0
+	dc.b	" Favorites    ",0
+    dc.b    " File browser ",0
+    dc.b    " Search view  ",0
     even
 
 
