@@ -1442,6 +1442,8 @@ streamHeaderContentType     rs.l       1
 streamHeaderIcyName         rs.l       1
 streamHeaderIcyDescription  rs.l       1
 streamHeaderRest            rs.l       1
+disableShowStreamerError    rs.b       1
+                            rs.b       1
 
 * Remote search popup stores the selected search mode here
 * SEARCH_MODLAND etc etc
@@ -28677,7 +28679,7 @@ loadmodule:
 	jsr	fetchRemoteFile
  if DEBUG
     move.l  sp,d1
-	DPRINT	"fetchRemote=%ld %s"
+	DPRINT	"fetchRemoteFile=%ld %s"
  endif
 	tst.l	d0
 	bne		.ok1
@@ -29242,6 +29244,7 @@ loadfileStraight:
 	bne		.local
 	cmp.b	#':',4(a0)
 	bne		.local
+    DPRINT  "loadfileStraight REMOTE"
 
 	pushm	d1-a6
 	lea		-100(sp),sp
@@ -29251,10 +29254,10 @@ loadfileStraight:
 	pushm	d0/a1
 	move.l	d1,a1	* space for target file path
 	jsr		fetchRemoteFile
-	DPRINT	"fetchRemote2 %ld"
 	moveq	#0,d7 * status: ok
 	tst.l	d0
 	bne.b	.fetchOk
+    DPRINT  "lod_remoteError %ld"
 	moveq	#lod_remoteError,d7 * status: fail
 .fetchOk
 	popm	d0/a1
@@ -29275,9 +29278,11 @@ loadfileStraight:
 	move.l	d7,d0	* restore status
 	lea		100(sp),sp
 	popm	d1-a6
+    DPRINT  "loadfileStraight status=%ld"
 	rts
 
 .local
+    DPRINT  "loadfileStraight LOCAL"
 
 	push	d7
 	move.b	xpkid(a5),d7
@@ -44188,6 +44193,10 @@ p_startrekker
 	move.b	#"t",(a1)+
 	clr.b	(a1)
 
+    * These data files are optional, so let's not
+    * show error dialogs if they are not found.
+    st      disableShowStreamerError(a5)
+
 	move.l	sp,a0
 	bsr.b	.loadExtraFile
 	* d0 = 0 if success
@@ -44235,6 +44244,7 @@ p_startrekker
 	move.l	a0,deliPatternInfo(a5)
 	move	d1,pos_maksimi(a5)
 .x
+    clr.b   disableShowStreamerError(a5)
 	popm	d1-a6
 	tst.l	d0
 	* INIT returns 0 on success
@@ -44245,11 +44255,13 @@ p_startrekker
 	move.l	a0,d0
 	DPRINT	"Loading %ls"
  endif
+    * HACK! Eensure new stream job will be started
+    move    #-1,streamReturnCode(a5)
+
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	lea	startrekkerdataaddr(a5),a1
 	lea 	startrekkerdatalen(a5),a2
-	jsr	loadfileStraight
-	rts
+	jmp 	loadfileStraight
 
 .fileErr 
 	* No extra data file tound. Proceed as Protracker
@@ -52680,6 +52692,7 @@ fetchRemoteFile:
 	jsr		clearMainWindowWaitPointer
 	move.l	d7,d0
 	popm	d1-a6
+    DPRINT	"fetchRemoteFile status=%ld"
 	rts
 
 * Checks if UHC is installed, also checks version
@@ -53610,9 +53623,13 @@ awaitStreamer0:
 *   d0 = true: error was shown, false: no error
 showStreamerError:
     pushm   d1-a6
+    moveq   #0,d0
+    tst.b   disableShowStreamerError(a5)
+    bne     .exit
     move.l  streamerError(a5),d0
 	tst.l	d0
 	beq.b	.exit
+    DPRINT  "showStreamerError"
     move.l  streamerErrorLength(a5),d7 
     beq     .exit
 	* Mangle a null terminated line changed error msg, horrible
