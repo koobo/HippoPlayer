@@ -55097,7 +55097,7 @@ tooltipList
 .listModeChange
 	dc.b	21,5
 	dc.b	"LMB: Toggle list mode",0
-	dc.b	"    - Normal playlist",0
+	dc.b	"    - Main playlist",0
 	dc.b    "    - Favorites list",0
 	dc.b    "    - File browser",0
 	dc.b    "    - Search view",0
