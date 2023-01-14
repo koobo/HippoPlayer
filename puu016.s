@@ -8200,6 +8200,11 @@ umph
 	bne.b	.hm1
 
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
+    tst.b   l_remote(a3)
+    beq.b   .notRem1
+    moveq   #0,d7   * disable for remotes!
+.notRem1
+    tst.b   d7
 	bne.b	.nomod
 
 	bsr	fadevolumedown
@@ -8223,10 +8228,16 @@ umph
 	* Store index of the new module being played
 	move.l	d2,playingmodule(a5)	* Uusi numero
 
+
 	* a3 contains the list elment
 	lea	l_filename(a3),a0	* Ladataan
 	* load it, d7 contains double buffering flag
 	move.b	d7,d0
+    tst.b   l_remote(a3)
+    beq.b   .notRem
+    moveq   #0,d0     * disable for remotes!
+    DPRINT  "DISABLE double buffering 2"
+.notRem
     push    a3
 	jsr	loadmodule
     pop     a3
@@ -10564,6 +10575,11 @@ rbutton1:
 	bmi.b	.nomod
 
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki p‰‰ll‰?
+    tst.b   l_remote(a3)
+    beq.b   .notRem1
+    moveq   #0,d7 * disable for remotes!
+.notRem1
+    tst.b   d7
 	bne.b	.nomod
 
 	bsr	fadevolumedown
@@ -10582,6 +10598,11 @@ rbutton1:
 
 	lea	l_filename(a3),a0	* Ladataan
 	move.b	d7,d0 * double buffering flag
+    tst.b   l_remote(a3)
+    beq.b   .notRem2
+    moveq   #0,d7 * disable for remotes!
+    DPRINT  "DISABLE double buffering 1"
+.notRem2
     push    a3
 	jsr	loadmodule
     pop     a3
