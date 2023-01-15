@@ -11548,14 +11548,13 @@ copyCurrentEntryToMainList
 
 	move.l	a3,a0
 	jsr		cloneListNode
+    * NOTE: d0 status not checked 
 	* a4 = cloned node
 
 	move.l	a4,a1
 	lea		moduleListHeader(a5),a0
 	lore	Exec,AddTail
-
-	bsr		.flash
-	rts
+	bra		.flash
 .nope
 	DPRINT	"Not found"
 	rts
@@ -11579,9 +11578,8 @@ copyCurrentEntryToMainList
 	bsr		markit
 	moveq	#2,d1
 	lore	Dos,Delay
-	bsr		markit
-	rts
-
+	bra		markit
+	
 .addFolder
 	lea		l_filename(a3),a0
 .1	tst.b	(a0)+
@@ -11628,8 +11626,7 @@ copyCurrentEntryToMainList
 
 	move.b	#LISTMODE_BROWSER,listMode(a5)
 	bsr	listChanged
-	bsr		.flash
-	rts
+	bra		.flash
 
 
 
@@ -32200,7 +32197,7 @@ cloneListNode:
 	moveq	#1,d0
 	rts
 .noMem	
-	moveq	#-1,d0
+	moveq	#0,d0
 	rts
 
 * in:
