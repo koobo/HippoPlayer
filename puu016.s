@@ -54886,17 +54886,17 @@ gadgetSearchSource:
 	; gg_Height
 	dc 13
 	; gg_Flags
-	dc GFLG_GADGIMAGE
+	dc 0
 	; gg_Activation
 	dc GACT_RELVERIFY
 	; gg_GadgetType
 	dc GTYP_BOOLGADGET
     ; gg_GadgetRender
-	dc.l 0 ;.image
+	dc.l 0
 	; gg_SelectRender
 	dc.l 0
 	; gg_GadgetText
-	dc.l gadgetSearchSoureIText
+	dc.l gadgetSearchSourceIText
 	; gg_MutualExclude
 	dc.l 0
 	; gg_SpecialInfo
@@ -54907,7 +54907,7 @@ gadgetSearchSource:
 	dc.l 0
 
 
-gadgetSearchSoureIText
+gadgetSearchSourceIText
     dc.b    1   ; it_FrontPen
     dc.b    0   ; it_BackPen
     dc.b    0 ;RP_JAM1  ; it_DrawMode
