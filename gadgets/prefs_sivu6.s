@@ -84,7 +84,7 @@ nAMISKA4	dc.l nAMISKA5
 nAMISKA4t	dc.b 1,0,1,0
 	dc.w -148,2
 	dc.l 0,nAMISKA4tx,0
-nAMISKA4tx	dc.b "MED output mode....",0
+nAMISKA4tx	dc.b "MED output mode...",0
 	even
 nAMISKA5	dc.l 0
 	dc.w 260+120+8-4*8,107-12,174-120-8+4*8,12,7,9,3
@@ -96,7 +96,7 @@ nAMISKA5gr	dc.w 0,0,11,9,2
 	dc.b 3,0
 	dc.l 0
 nAMISKA5t	dc.b 1,0,1,0
-	dc.w -2-120-8+4*8-1,0
+	dc.w -2-120-8+4*8,0
 	dc.l 0,nAMISKA5tx,0
 nAMISKA5tx	dc.b "Rate",0
 	even
