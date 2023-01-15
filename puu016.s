@@ -5156,7 +5156,11 @@ wrender:
 	bsr	printkorva
 	lea	button1-button20(a0),a0 * play
 	bsr	printkorva
-
+    tst boxsize(a5)
+    beq .sk
+	lea	gadgetListModeChangeButton,a0
+    bsr	printkorva
+.sk
 
  ifd abda
 
@@ -9076,8 +9080,8 @@ gadgetsup:
 	dr	rmove		* move
 	dr	rsearchfuncs	* search functions
  ifeq FEATURE_LIST_TABS
-	;dr	rlistmode	* listmode change
-    dr  rlistmodePop
+	dr	rlistmode	* listmode change
+    ;dr  rlistmodePop
  endif
  ifne FEATURE_LIST_TABS
     dr  rlistmode1
@@ -9135,8 +9139,8 @@ printbox:
 
 rlistmode:
 	jmp	toggleListMode
-rlistmodePop:
-    jmp toggleListModePopup
+;rlistmodePop:
+;    jmp toggleListModePopup
 
   ifne FEATURE_LIST_TABS
 rlistmode1:
@@ -55022,6 +55026,9 @@ rightButtonActionsList
 	* Play -> Random play
 	dr.w	gadgetPlayButton
 	dc.l	soitamodi_random
+    * List mode change -> popup
+    dr.w    gadgetListModeChangeButton
+    dc.l    toggleListModePopup
 	dc.w	0 ; END
  
 
@@ -55100,8 +55107,8 @@ tooltipList
 ;	dc.b	16,2
 ;	dc.b	"LMB: Sort list",0
 ;	dc.b	"RMB: Find module",0
-	dc.b	21,2
-	dc.b	"LMB: Search functions",0
+	dc.b    15,2
+	dc.b	"LMB: Find items",0
 	dc.b	"RMB: Sort list",0
 .move
 	dc.b	26,4
@@ -55127,13 +55134,13 @@ tooltipList
 ;	dc.b	"LMB: Toggle list mode",0
 ;	dc.b	"     Normal > Favorites > File browser",0
 .listModeChange
-	dc.b	21,5
+	dc.b	21,6
 	dc.b	"LMB: Toggle list mode",0
 	dc.b	"    - Main playlist",0
 	dc.b    "    - Favorites list",0
 	dc.b    "    - File browser",0
 	dc.b    "    - Search view",0
-
+    dc.b    "RMB: Open popup",0 
   even
 
 *** Samplename ikkuna
