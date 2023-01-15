@@ -802,6 +802,7 @@ MAIN
 	move.l	d0,ArgStrLen
 	; ----------------------------
 	bsr.w	OpenDOSLib
+	bsr.w	OpenGraphicsLib
 	; ----------------------------
 	move.l	#HeaderText,d1
 	bsr.w	PutStr
@@ -826,7 +827,6 @@ MAIN
 	bsr.w	StartMixing
 	bne.w	mainErr
 	; ----------------------------
-	bsr.w	OpenGraphicsLib
 	bsr.w	StartTask
     bra     mainRts
 ;.mainLoop
@@ -1587,8 +1587,14 @@ DisableAudioMixer
 	clr.w	$dff0d8
 	; ---------------------------
 	sf	AudioMixFlag
-.loop	tst.b	AudioMixRunning(pc)	; wait until mixer is done
-	bne.b	.loop
+    movem.l  d0-a6,-(sp)
+    move.l	 GraphicsBase(pc),a6
+.loop	
+    tst.b	AudioMixRunning(pc)	; wait until mixer is done
+	beq.b   .1
+	jsr     _LVOWaitTOF(a6)	; let other tasks run
+    bra.b   .loop
+.1  movem.l (sp)+,d0-a6
 	rts
 
 FreeChipBuffers
