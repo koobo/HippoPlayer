@@ -7192,19 +7192,19 @@ tooltipHandler
 	move	gg_TopEdge(a0),d2
 	cmp	d1,d2
 	blo.b	.under
-	* Mouse is over the "Play" button, exit	
+	* Mouse is above the "Play" button, exit	
 	rts
 .under		
-	* Check if below the "New" button
-	;lea	gadgetNewButton,a0
-	lea	gadgetListModeChangeButton,a0
-	move	gg_TopEdge(a0),d2
-	add	gg_Height(a0),d2
-	cmp	d1,d2
-	bhi.b	.below
-	* Mouse is below the "New" button, exit
-	rts
-.below
+;	* Check if below the "New" button
+;	;lea	gadgetNewButton,a0
+;	lea	gadgetListModeChangeButton,a0
+;	move	gg_TopEdge(a0),d2
+;	add	gg_Height(a0),d2
+;	cmp	d1,d2
+;	bhi.b	.below
+;	* Mouse is below the "New" button, exit
+;	rts
+;.below
 
 	* Then check if pointer is on top of some gadget
 	lea tooltipList,a3
@@ -55050,6 +55050,9 @@ tooltipList
 	dr.w	gadgetForwardButton,.forward
 	dr.w	gadgetRewindButton,.rewind
 	dr.w	gadgetListModeChangeButton,.listModeChange
+    * This should be before source, as it may overlap the source button
+	dr.w	gadgetSearchString,.searchString 
+	dr.w	gadgetSearchSource,.searchSource
 	dc.w	0 ; END
  
 .play
@@ -55138,6 +55141,13 @@ tooltipList
 	dc.b    "    - File browser",0
 	dc.b    "    - Search view",0
     dc.b    "RMB: Open popup",0 
+.searchSource
+	dc.b	20,2
+	dc.b	"Select search source",0
+    dc.b    "to search from",0
+.searchString
+	dc.b	18,1
+	dc.b	"Enter search terms",0
   even
 
 *** Samplename ikkuna
