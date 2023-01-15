@@ -28,16 +28,34 @@ same directory with the HiP binary, too, if you're using kick2.0 or newer.
 NOTE 3: If you get errors where some module is not recognized even 
 if it should be, try removing "S:HippoPlayer.prefs" first.
 
-NOTE 4: Too long didn't read
-- New Prefs options: "Button tooltips", "Favorite modules", 
- "Keep list on exit", "Big buttons", new font selector, new scope toggles
-- New list mode change button above the file slider
-- Window resize gadgets
-- Improved scopes
-- New music formats
-- "S"-button search functions popup
-- Enhanced PlaySid support
-- Alternative HQ FastTracker 2 replayer by 8bitbubsy
+
+Major changes since v2.45
+--------------------------
+- List mode toggle button to switch between the list modes
+  - Main list
+  - Favorites: your favorited modules
+  - File browser: browse file system for modules
+  - Search view: search internet sites, browse shared playlists
+- New Prefs options:
+  - "Button tooltips": Hover mouse over gadgets to get help
+  - "Favorites": Right click modules to favorite them
+  - "Keep list on exit": Continue where you left off 
+  - "Big buttons": Larger buttons
+  - "Enable xmaplay060": Enable a high quality XM replayer
+  - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
+- Resizable main and info windows
+- Improved font support for the main window
+- Support for many new music formats
+- Improved scopes: support for more music formats, run multiple scopes,
+  spectrum scope, patternscope with two sizes and up to 18 channels
+- Support for MP3 streaming, radio stations
+- "Add" button in file browser or search view: copy items to main list
+
+New keyboard shortcuts:
+- Favorite module: [CTRL+F]
+- Toggle list mode: [SHIFT+M]
+- Navigate to parent in file browser: [BACKSPACE]
+- Search modules: [CTRL+S]
 
 
 ------------------------------------------------------------------------------
@@ -56,16 +74,21 @@ NOTE 4: Too long didn't read
 - The "Continue on error" mode available in Prefs could crash in 
   certain situations, this should be fixed now.
 
-- Fixed a memory corruption problem in file browser which could
-  happen with long directory names.
+- A crash fixed which happened when the main windows was hidden.
 
-- A crash bug from the previous version fixed. This one happened
-  when the main windows was hidden.
-
-- Modland search falsely filtered out "DIGIBooster Pro" modules, fixed.
+- Modland search whitelist had some issues, the following formats
+  are now also found:
+  - Delta Music 2
+  - DIGIBooster Pro
+  - Synthesis
 
 - Pausing playback while using AHI was modified. This fixes
-  the situation with the ZZ9000AX driver where pause didn't work.
+  pause not working with the ZZ9000AX driver.
+  
+- Fixed a possible crash on 68000 when "Prefs/Play-1/Mode" was 
+  set to "All on startup" or "All on demand".
+
+- Allow adding urls with command line and ARexx.
 
 - A few other small fixes.
 
@@ -76,29 +99,30 @@ NOTE 4: Too long didn't read
   stored. The next time you play this particular module the favorited 
   subsong will be played first.
 
-- Added limited scope support when using AHI for sound output:
+- AHI: added limited scope support when using AHI for sound output
    - Scopes for sample files (MP3, Wav, etc)
    - Scopes for modules played with PS3M (PT, XM, S3M, etc). Note
      that only four channels are supported. More channels would need
      additional mixing for scope visuals, this is not done at the moment.
    - Patternscope for all PS3M supported modules, no channel limitation.
 
-- PSID support improvements with the included updated playsid.library:
-   - Stereo SID (2SID) files are now supported. 
-   - This only works in reSID mode. In the normal mode only the first 
-     SID output is heard.
-   - Playing these will require a 68060 or something comparable.
+- PSID improvements with the included updated playsid.library:
+   - Stereo SID (2SID) files are now supported. This only works in 
+     reSID mode. Playing 2SIDs requires a 68060 or something comparable.
+     Jammer's "Yet Bigger Beat" plays on my A1200+060 with filters on
+     if running at 60 MHz. Turning off filters will help.
+   - You can find 2SID tunes in HVSC.
    - It's now possible to toggle the reSID filters in "Prefs/Play-2":
      - "Internal on": normal filter mode
-     - "Internal+Ext": also enable the external filter, does not
-       have a big effect on the sound. Uses more CPU.
+     - "Internal+Ext": also enable the external filter, 
+        may reduce noise, uses more CPU.
      - "All off": no filters, less CPU usage.
-   - You can find 2SID tunes in HVSC.
-
+   - reSID is now a little bit faster due to optimizations.
+  
 - Improved MP3 support: Data will be streamed over the network.
   This allows listening to MP3 files without downloading them first, 
-  and also allows listening to radio station streams. "aget" from
-  UHCTools is used for network transfers.
+  and also allows listening to radio station streams. UHCTools is 
+  used for network transfers.
   NOTE: the libmad variant of mpega.library doesn't work reliably
   when streaming.
   
@@ -119,19 +143,19 @@ NOTE 4: Too long didn't read
   - Show MP3 radio stream information
 
 - MP3 playback improvement for Paula output: When using the high quality
-  MPEGA settings, instead of 8-bit output the Paula 14-bit mode is used, 
-  and the conversion step is improved. The HQ settings in Prefs are: 
-  Mpega quality: Hi, Freq.Div: 1.   
+  MPEGA settings, instead of 8-bit output the Paula 14-bit mode is used
+  by default and the downscampling step is more accurate. 
+  The HQ settings in Prefs are: Mpega quality: Hi, Freq.Div: 1.   
 
 - User interface changes related to searching remote files and finding
-  stuff in playlist:
+  stuff in playlists:
   - The search results view now contains a search source selection button
     and a search terms string gadget. The view is accessible using the list 
-    mode change button on the left as usual.
+    mode change button as usual.
   - All remote search stuff from the "S"-button popup were moved over to the
     search view.
-  - To search, select a source using the button and then type search words
-    into the string gadget, and hit enter.
+  - To search, activate the search view, select a source using the button and 
+    then type search words into the string gadget, and hit enter.
   - [CTRL+S] is the keyboard shortcut for the remote search flow. No need
     to use the mouse.
 
@@ -139,12 +163,15 @@ NOTE 4: Too long didn't read
   - The "S"-button popup contains "Find" and "Find next" as before.
   - Activating "Find" form the popup (or with [F]) now brings up a
     string gadget below the list instead of a ReqTools requester.
-    "Find next" (or [SHIFT-F]) works as before.
+    "Find next" (or [SHIFT+F]) works as before.
 
 - The popup item selector is now keyboard controllable with 
   arrows up, down, and enter. 
 
-- 8bitbubsy's xmaplay060 updated. The mixing routines are now faster.
+- The list mode change button now has a popup item selector with RMB.
+
+- 8bitbubsy's xmaplay060 updated. The mixing routines are now faster
+  and a few bugs are fixed.
   
 
 ------------------------------------------------------------------------------
