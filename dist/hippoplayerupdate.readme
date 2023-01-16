@@ -11,7 +11,7 @@ Here you will find binaries with changes done after the original
 development stopped. 
 
 To use, copy the files over the files that you have from an existing
-installation. Check out aminet for the original package:
+installation. Check out aminet for the original archive:
 https://aminet.net/mus/play/hippoplayer.lha
 
 Or, just copy HiP somewhere and "HippoPlayer.group" to S:, then run
@@ -24,9 +24,6 @@ NOTE 2: Ensure that "HippoPlayer.group" gets updated, as old versions will
 not work. The default placement is the S: directory, which is a bit silly
 (location can be changed in Prefs). You can also place the file in the 
 same directory with the HiP binary, too, if you're using kick2.0 or newer.
-
-NOTE 3: If you get errors where some module is not recognized even 
-if it should be, try removing "S:HippoPlayer.prefs" first.
 
 
 Major changes since v2.45
@@ -44,9 +41,9 @@ Major changes since v2.45
   - "Enable xmaplay060": Enable a high quality XM replayer
   - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
 - Resizable main and info windows
-- Improved font support for the main window
+- Main window font can be changed
 - Support for many new music formats
-- Improved scopes: support for more music formats, run multiple scopes,
+- Improved scopes: support for more music formats, multiple scopes,
   spectrum scope, patternscope with two sizes and up to 18 channels
 - Support for MP3 streaming, radio stations
 - "Add" button in file browser or search view: copy items to main list
@@ -99,53 +96,33 @@ New keyboard shortcuts:
   stored. The next time you play this particular module the favorited 
   subsong will be played first.
 
-- AHI: added limited scope support when using AHI for sound output
-   - Scopes for sample files (MP3, Wav, etc)
-   - Scopes for modules played with PS3M (PT, XM, S3M, etc). Note
-     that only four channels are supported. More channels would need
-     additional mixing for scope visuals, this is not done at the moment.
-   - Patternscope for all PS3M supported modules, no channel limitation.
-
 - PSID improvements with the included updated playsid.library:
    - Stereo SID (2SID) files are now supported. This only works in 
      reSID mode. Playing 2SIDs requires a 68060 or something comparable.
      Jammer's "Yet Bigger Beat" plays on my A1200+060 with filters on
-     if running at 60 MHz. Turning off filters will help.
-   - You can find 2SID tunes in HVSC.
-   - It's now possible to toggle the reSID filters in "Prefs/Play-2":
+     if running at 60 MHz. 
+   - reSID filters can be toggled in "Prefs/Play-2":
      - "Internal on": normal filter mode
      - "Internal+Ext": also enable the external filter, 
         may reduce noise, uses more CPU.
      - "All off": no filters, less CPU usage.
-   - reSID is now a little bit faster due to optimizations.
+   - reSID is now a little bit faster due to some optimizations.
+   - You can find 2SID tunes in the HVSC.
   
 - Improved MP3 support: Data will be streamed over the network.
   This allows listening to MP3 files without downloading them first, 
   and also allows listening to radio station streams. UHCTools is 
   used for network transfers.
-  NOTE: the libmad variant of mpega.library doesn't work reliably
-  when streaming.
   
 - Added new search sources for MP3s provided by UHCTools:
   - https://amigaremix.com/ 
   - https://remix.kwed.org/
   - Radio station search
-  - NOTE: If UHCTools is missing or too old, the search and download
-    functionalities will be disabled.
 
 - Added "Shared lists" search source. This fetches a list of shared 
   playlists to be checked out. For example, you'll find favorite lists,
   top lists, and lists with certain musical themes. The lists will be 
   updated periodically, administration by Spot/Up Rough. Cool!
-
-- Info window improvements: 
-  - Show MP3 file tag information
-  - Show MP3 radio stream information
-
-- MP3 playback improvement for Paula output: When using the high quality
-  MPEGA settings, instead of 8-bit output the Paula 14-bit mode is used
-  by default and the downscampling step is more accurate. 
-  The HQ settings in Prefs are: Mpega quality: Hi, Freq.Div: 1.   
 
 - User interface changes related to searching remote files and finding
   stuff in playlists:
@@ -156,23 +133,45 @@ New keyboard shortcuts:
     search view.
   - To search, activate the search view, select a source using the button and 
     then type search words into the string gadget, and hit enter.
-  - [CTRL+S] is the keyboard shortcut for the remote search flow. No need
-    to use the mouse.
+  - [CTRL+S] is the keyboard shortcut remote search.
 
 - Finding items in lists:
   - The "S"-button popup contains "Find" and "Find next" as before.
-  - Activating "Find" form the popup (or with [F]) now brings up a
+  - Activating "Find" from the popup (or with [F]) now brings up a
     string gadget below the list instead of a ReqTools requester.
     "Find next" (or [SHIFT+F]) works as before.
 
-- The popup item selector is now keyboard controllable with 
-  arrows up, down, and enter. 
+- The popup selector is now keyboard controllable with arrows up, down, 
+  and enter. 
 
-- The list mode change button now has a popup item selector with RMB.
+- The list mode change button now has a popup selector with RMB.
 
+- Info window improvements: 
+  - Show MP3 file tag information
+  - Show MP3 radio stream information
+
+- MP3 playback improvement for Paula output: When using the high quality
+  MPEGA settings, instead of 8-bit output the Paula 14-bit mode is used
+  by default and the downscaling step is more accurate. 
+  The HQ settings in Prefs are: Mpega quality: Hi, Freq.Div: 1.   
+
+- AHI: Added limited scope support when using AHI for sound output
+   - Scopes for sample files (MP3, Wav, etc)
+   - Scopes for modules played with PS3M (PT, XM, S3M, etc), at the 
+     moment only four scope channels supported.
+   - Patternscope supported without limitations.
+   
 - 8bitbubsy's xmaplay060 updated. The mixing routines are now faster
   and a few bugs are fixed.
-  
+
+- NOTES: 
+  - The libmad variant of mpega.library doesn't work reliably when streaming.
+  - If UHCTools is missing or too old, the search and download 
+    functionalities will be disabled.
+
+Thanks and greetz go to in no order:
+- Spot, 8bitbubsy, Erique, Patrik, Mr. Hac, Mike, Ziphoid, AceMan
+
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
