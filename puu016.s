@@ -36141,17 +36141,17 @@ p_sid:	jmp	.init(pc)
     * a1 = buffer ptr 2 (could be same as 1)
     * d0 = buffer length
     * d1 = period value
-    subq.l  #2,d0   * removes static pixels from scope
-    move.l  d0,.posMask
-    movem.l a0/a1,.bufPtr1
+    ;subq.l  #2,d0   * removes static pixels from scope
+    move.l  d0,residPosMask
+    movem.l a0/a1,residBufPtr1
  if DEBUG
     move.l  a0,d1
     DPRINT  "length=%ld buffer=%lx"
  endif
-    pushpea .bufPtr1(pc),ps3m_buff1(a5)
-    pushpea .bufPtr2(pc),ps3m_buff2(a5)
-    pushpea .bufPos(pc),ps3m_playpos(a5)
-    pushpea .posMask(pc),ps3m_buffSizeMask(a5)
+    pushpea residBufPtr1(pc),ps3m_buff1(a5)
+    pushpea residBufPtr2(pc),ps3m_buff2(a5)
+    pushpea residBufPos(pc),ps3m_playpos(a5)
+    pushpea residPosMask(pc),ps3m_buffSizeMask(a5)
 .skipz
 
 
@@ -36159,15 +36159,6 @@ p_sid:	jmp	.init(pc)
 	moveq	#0,d0
 .er	movem.l	(sp)+,d1-a6
 	rts
-
-* Fake PS3M scope variables
-* multiscope draws 160 per segment
-* reSID 200Hz buffer size is 140 bytes
-* it will repeat 20 bytes
-.bufPos     dc.l    0
-.bufPtr1    dc.l    0
-.bufPtr2    dc.l    0
-.posMask    dc.l    $7f 
 
 .error1
     cmp     #SID_NOSIDBLASTER,d0
@@ -36605,6 +36596,15 @@ sidScopeUpdate
 
     bsr     playSidInRESIDMode
     beq.b   .1
+
+    * reSID, update the buffer size as it may change 
+	move.l	_SIDBase(a5),a6
+    lob     GetRESIDAudioBuffer
+    * a0 = buffer ptr 1
+    * a1 = buffer ptr 2 (could be same as 1)
+    * d0 = buffer length
+    * d1 = period value
+    move.l  d0,residPosMask
     rts
 
 .1
@@ -36747,6 +36747,15 @@ playSidInRESIDMode:
     movem.l (sp)+,d0/d1/a6
     rts
 
+
+* Fake PS3M scope variables
+* multiscope draws 160 per segment
+* reSID 200Hz buffer size is 140 bytes
+* it will repeat 20 bytes
+residBufPos     dc.l    0
+residBufPtr1    dc.l    0
+residBufPtr2    dc.l    0
+residPosMask    dc.l    $7f 
 
 
 * T‰nne v‰liin h‰m‰‰v‰sti
