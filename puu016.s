@@ -36725,13 +36725,13 @@ isPlaysidReSID:
 
 * Checks whether playsid is operating in reSID mode
 playSidInRESIDMode:
-    movem.l d0/a6,-(sp)
+    movem.l d0/d1/a6,-(sp)
     cmp     #pt_sid,playertype(a5)
     bne.b   .no
     bsr     isPlaysidReSID
     beq     .no
     move.l  _SIDBase(a5),a6
-    lob     GetOperatingMode
+    lob     GetOperatingMode * output in d0, d1
     tst     d0
     beq     .no
     cmp     #OM_RESID_6581,d0
@@ -36740,11 +36740,11 @@ playSidInRESIDMode:
     bne     .no
 .y
     moveq   #1,d0
-    movem.l (sp)+,d0/a6
+    movem.l (sp)+,d0/d1/a6
     rts
 .no
     moveq   #0,d0
-    movem.l (sp)+,d0/a6
+    movem.l (sp)+,d0/d1/a6
     rts
 
 
