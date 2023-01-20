@@ -26983,12 +26983,14 @@ multiscope
 	move	#$80,d6
     * This returns the buffer mask or size limit in d4
 	bsr	getps3mb
-    lea     1.w,a6       * sample modulo 8-bit
+    moveq   #1,d3   * sample modulo, ping pong
 multiscope0
 
 .drlo	
     * Do 8 horizontal pixels
- rept 8
+    moveq   #2-1,d1
+.p8
+    rept 4
     * Get one data byte, adjust with $80
     * turns it from -128..127 to 0..256 I guess
  	move	d6,d2
@@ -27004,12 +27006,23 @@ multiscope0
     * Next pixel to the left
 	add.b	d0,d0
     * Advance one byte in source data
-    add.l   a6,d5
-    * Check if buffer limit reached, start over if so
+
+    add.l   d3,d5
+    ;bpl.b   .2
+    bpl.b   *+6
+    * Beginning bound check
+    neg.l   d3
+    moveq   #0,d5
+;.2
 	cmp.l	d4,d5
-	blo.b	*+4
-	moveq	#0,d5
- endr
+;	blo.b	.1
+    blo.b   *+6
+    * End bound check
+    neg.l   d3
+    subq.l  #1,d5
+;.1
+    endr 
+    dbf d1,.p8
 	* Reset pixel to right
 	moveq	#1,d0
     * Jump 8 pixels to left
@@ -51244,21 +51257,16 @@ spectrumGetPS3MSampleData
 	move.l	(a0),d1
     moveq   #4,d4   * scale factor
 
-    * For reSID the mask is not a bitmask, instead 
-    * it is around 140. Force to it to be 127 here.
-    jsr     playSidInRESIDMode
-    beq.b   .skipz
-    moveq   #FFT_LENGTH-1,d1
-    moveq   #5,d4   * Scale factor
-.skipz
-
 	move.l	ps3m_buff1(a5),a0
 	move.l	(a0),a0
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
-	
 	move.l	s_spectrumMixedData(a4),a2
-	moveq	#FFT_LENGTH-1,d7
+	moveq	#FFT_LENGTH-1,d7    * = 128
+
+    jsr     playSidInRESIDMode
+    bne    .resid
+
 .loop
 	move.b	(a0,d0.l),d2
 	move.b	(a1,d0.l),d3
@@ -51267,11 +51275,32 @@ spectrumGetPS3MSampleData
 	add	d3,d2
 	asl	d4,d2   * scaling!
 	move	d2,(a2)+
-	addq	#1,d0
-	and	d1,d0   * mask must be a bitmask 
+	addq.l	#1,d0
+    * End bound check
+    and.l   d1,d0
 	dbf	d7,.loop
-
 	rts
+
+.resid  
+    * buffer size is in d1, it can be 277
+    * or down to 46.
+
+.rloop
+	move.b	(a0,d0.l),d2
+	move.b	(a1,d0.l),d3
+	ext	d2
+	ext	d3
+	add	d3,d2
+	asl	    #5,d2   * scaling!
+    move	d2,(a2)+
+	addq.l	#1,d0
+    * See if data ran out:
+    cmp.l   d1,d0
+    blo.b   .2
+    moveq   #0,d0
+.2
+	dbf	d7,.rloop
+    rts
 
 spectrumGetSampleData
 	jsr	samples0
