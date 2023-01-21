@@ -36215,7 +36215,8 @@ p_sid:	jmp	.init(pc)
 	addq	#1,d0
 	lob	StartSong
     ; This will return an error code in d0
-
+    
+    bsr     .volume
 	rts
 
 .song	movem.l	d0/d1/a0/a1/a6,-(sp)
@@ -36259,12 +36260,14 @@ p_sid:	jmp	.init(pc)
 	rts
 
 .volume
+    push    d0
     bsr     isPlaysidReSID
     beq.b   .11
     move.l	_SIDBase(a5),a6
     move    mainvolume(a5),d0
     jsr     _LVOSetVolume(a6)
 .11
+    pop     d0
     rts
 
 
