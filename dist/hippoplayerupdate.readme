@@ -85,6 +85,9 @@ New keyboard shortcuts:
 - Fixed a possible crash on 68000 when "Prefs/Play-1/Mode" was 
   set to "All on startup" or "All on demand".
 
+- Fix PSID volume with reSID always starting with the max setting
+  when changing modules or subsongs.
+
 - Allow adding urls with command line and ARexx.
 
 - A few other small fixes.
@@ -96,18 +99,19 @@ New keyboard shortcuts:
   stored. The next time you play this particular module the favorited 
   subsong will be played first.
 
-- PSID improvements with the included updated playsid.library:
-   - Stereo SID (2SID) files are now supported. This only works in 
-     reSID mode. Playing 2SIDs requires a 68060 or something comparable.
-     Jammer's "Yet Bigger Beat" plays on my A1200+060 with filters on
-     if running at 60 MHz. 
+- PSID playback improvements using reSID with the updated playsid.library:
+   - Stereo SID (2SID) files are now supported. The 68060 at 50 MHz can 
+     handle most 2SIDs with filters enabled. 
+   - Proper support for multispeed tunes added. Previously only up to 
+     4-speed tunes worked, now Jeff's "12-speed tune" also plays fine.
    - reSID filters can be toggled in "Prefs/Play-2":
      - "Internal on": normal filter mode
      - "Internal+Ext": also enable the external filter, 
         may reduce noise, uses more CPU.
      - "All off": no filters, less CPU usage.
-   - reSID is now a little bit faster due to some optimizations.
-   - You can find 2SID tunes in the HVSC.
+   - reSID is now faster due to code optimizations. The "Oversample x2"
+     mode should work on 50 MHz with normal SIDs.
+   - 2SID tunes can be foind in the HVSC.
   
 - Improved MP3 support: Data will be streamed over the network.
   This allows listening to MP3 files without downloading them first, 
