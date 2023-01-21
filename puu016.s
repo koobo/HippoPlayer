@@ -35970,9 +35970,21 @@ p_sid:	jmp	.init(pc)
     beq     .noSt2
     * Halve the reference value in case stereo sid to match
     * the double CPU load.
-    lsr.w   #1,d1
+    lsr.l   #1,d1
 .noSt2
-    DPRINT  "Perf test: %ld/%ld ms"
+ if DEBUG
+    pushm   d0-d2
+    move.l  d1,d2
+    divu    #10,d2
+    ext.l   d2
+    divu    #10,d0
+    move.l  d0,d1
+    swap    d1
+    ext.l   d0
+    ext.l   d1
+    DPRINT  "Perf test: %ld.%1.1ld/%ld ms"
+    popm    d0-d2
+ endif
     move.l  d0,d2
     cmp     d1,d2
     popm    d0/a0/a1/a2
@@ -36263,6 +36275,14 @@ p_sid:	jmp	.init(pc)
 .performanceRequest
     * d0 = value
     * d1 = limit
+    move.l  d1,d2
+    divu    #10,d2
+    ext.l   d2
+    divu    #10,d0
+    move.l  d0,d1
+    ext.l   d0
+    swap    d1
+    ext.l   d1
     lea     .perfReqTxt(pc),a0
     jsr     desmsg
     lea     desbuf(a5),a1
@@ -36273,7 +36293,7 @@ p_sid:	jmp	.init(pc)
     dc.b    "Your Amiga could be too slow!",10
     dc.b    "The sound may become distorted and",10
     dc.b    "the system unesponsive.",10
-    dc.b    "Performance: %ld ms, need <= %ld ms",0
+    dc.b    "Performance: %ld.%1.1ld ms, need <= %ld ms",0
 
 .perfReqButtons
     dc.b    "_Continue anyway|_Stop!",0
