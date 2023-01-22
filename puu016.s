@@ -9831,26 +9831,38 @@ do_find_continue
 	bsr 	releaseModuleList
 	rts
 
-
+* String matchng: convert to uppercase, space equals underscore
 .find
 	move.l	l_nameaddr(a3),a0
 
 .flop1	lea	findpattern(a5),a1
 	move.b	(a1)+,d0
-	and.b	d2,d0
+    cmp.b   #"_",d0
+    bne.b   .3
+    moveq   #" ",d0
+.3	and.b	d2,d0
 
 .flop2	move.b	(a0)+,d1
 	beq.b	.notfound
-	and.b	d2,d1
+    cmp.b   #"_",d1
+    bne.b   .1
+    moveq   #" ",d1
+.1	and.b	d2,d1
 	cmp.b	d0,d1
 	bne.b	.flop2
 	
 .flop3	move.b	(a1)+,d0
 	beq.b	.found
-	and.b	d2,d0
+    cmp.b   #"_",d0
+    bne.b   .4
+    moveq   #" ",d0
+.4	and.b	d2,d0
 	move.b	(a0)+,d1
 	beq.b	.notfound
-	and.b	d2,d1
+    cmp.b   #"_",d1
+    bne.b   .2
+    moveq   #" ",d1
+.2  and.b	d2,d1
 	cmp.b	d0,d1
 	beq.b	.flop3
 	subq	#1,a0
