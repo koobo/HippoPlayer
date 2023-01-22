@@ -22964,7 +22964,8 @@ init_error
 	* Eagle related error messages shown elsewhere
 	cmp	#ier_eagleplayer,d0 
 	beq.b 	.skip
-	
+	cmp #ier_error_nomsg,d0
+    beq     .skip
 	neg	d0
 	add	d0,d0
 	lea	.ertab-2(pc,d0),a1
@@ -23002,30 +23003,31 @@ init_error
 	dr	ier_eagleplayer_t
     dr  ier_mpega_t
 
-ier_error	=	-1
-ier_nochannels	=	-2
-ier_nociaints	=	-3
-ier_noaudints	=	-4
-ier_nomedplayerlib =	-5
-ier_nomedplayerlib2 =	-6
-ier_mederr	=	-7
-ier_playererr	=	-8
-ier_nomem	=	-9
-ier_nosid	=	-10
-ier_sidicon	=	-11
-ier_sidinit	=	-12
-ier_noprocess	=	-13
-ier_nochip	=	-14
-ier_unknown	=	-15
-ier_grouperror	=	-16
-ier_filerr	=	-17
-ier_hardware	=	-18
-ier_ahi		=	-19
-ier_nomled	=	-20
-ier_mlederr	=	-21
-ier_not_compatible = 	-22
-ier_eagleplayer	= 	-23
-ier_mpega       =   -24
+ier_error           = -1
+ier_nochannels      = -2
+ier_nociaints       = -3
+ier_noaudints       = -4
+ier_nomedplayerlib  = -5
+ier_nomedplayerlib2 = -6
+ier_mederr          = -7
+ier_playererr       = -8
+ier_nomem           = -9
+ier_nosid           = -10
+ier_sidicon         = -11
+ier_sidinit         = -12
+ier_noprocess       = -13
+ier_nochip          = -14
+ier_unknown         = -15
+ier_grouperror      = -16
+ier_filerr          = -17
+ier_hardware        = -18
+ier_ahi             = -19
+ier_nomled          = -20
+ier_mlederr         = -21
+ier_not_compatible  = -22
+ier_eagleplayer     = -23
+ier_mpega           = -24
+ier_error_nomsg     = -25 ; error code without shownig a message
 
 ier_playererr_t
 ier_error_t
@@ -36007,7 +36009,7 @@ p_sid:	jmp	.init(pc)
     tst.l   d0
     popm    all
     bne.b   .perfOk
-    moveq   #ier_error,d0
+    moveq   #ier_error_nomsg,d0 * fail withough extra msg
     bra     .er
     ; -----------------------
 
@@ -36029,6 +36031,15 @@ p_sid:	jmp	.init(pc)
     * Show additional "14-bit" with reSID
     move.b  #" ",-1(a1)
 .o2
+    tst.w   d0
+    bne.b   .o3
+    * Normal mode + stereo: not supported
+    bsr     .sidIsStereo
+    beq     .o3
+    moveq   #ier_not_compatible,d0
+    bra     .er
+.o3
+
     moveq   #0,d1
     move.b  residmode(a5),d1
     DPRINT  "Operating mode=%ld resid=%ld" 
