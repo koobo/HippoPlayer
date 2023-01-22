@@ -8495,6 +8495,14 @@ nappilasku
 handleRawKeyInput:
 nappuloita:
 
+; The following keys can exist on CDTV, CD32 and "multimedia" keyboards:
+.RAWKEY_MEDIA_STOP       = $72
+.RAWKEY_MEDIA_PLAY_PAUSE = $73
+.RAWKEY_MEDIA_PREV_TRACK = $74
+.RAWKEY_MEDIA_NEXT_TRACK = $75
+.RAWKEY_MEDIA_SHUFFLE    = $76
+.RAWKEY_MEDIA_REPEAT     = $77
+
   REM
   if DEBUG
    	moveq   #0,d0
@@ -8738,6 +8746,11 @@ nappuloita:
 	dc	$4f
 	dr	actionNextSong	* next song
 
+    dr  .RAWKEY_MEDIA_PREV_TRACK
+    dr  prevButtonAction
+    dr  .RAWKEY_MEDIA_NEXT_TRACK
+    dr  nextButtonAction
+
 	dc	7
 	dr	.showtime
 	dc	8
@@ -8756,6 +8769,9 @@ nappuloita:
 	dc	$40
 	dr	stopcont
 
+    dr  .RAWKEY_MEDIA_PLAY_PAUSE
+    dr  playButtonAction 
+
 	dc	$22
 	dr	rbutton8
 	dc	$41
@@ -8765,7 +8781,10 @@ nappuloita:
 
 
 	dc	$42
-	dr	rbutton4
+	dr	rbutton4    
+    
+    dc  .RAWKEY_MEDIA_STOP
+    dr  ejectButtonAction
 
 	dc	$38
 	dr	rbutton_kela1
