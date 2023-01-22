@@ -18092,10 +18092,15 @@ shownames:
 	cmp.b	#LISTMODE_SEARCH,listMode(a5)
 	bne.b	.noSrch
 	lea		.noSrchResults(pc),a0
+    tst.b   uhcAvailable(a5)
+    bne.b   .s1
+    lea     .noUhc(pc),a0
+.s1
 	bsr	printbox
-	bra.b	.wasSrch
-.noSrchResults
-	dc.b	"No search results.",0
+	bra 	.wasSrch
+.noSrchResults  dc.b	"No search results.",0
+.noUhc          dc.b    "Search disabled! UHCTools",10
+                dc.b    "missing or too old.",0
 	even
 .noSrch
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
@@ -32569,19 +32574,12 @@ toggleListMode:
 	beq 	engageFavoritesMode
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
 	beq	    engageFileBrowserMode
-
-	tst.b	uhcAvailable(a5)
-	bne 	.searchAvailable
-	
-	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq 	engageNormalMode
-	rts
-
-.searchAvailable
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq		engageSearchResultsMode
 	cmp.b	#LISTMODE_SEARCH,listMode(a5)
-	beq.b	engageNormalMode
+	beq.b	engageNormalMode	
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq 	engageNormalMode
 	rts
 
 engageNormalMode:
@@ -32913,8 +32911,6 @@ getFontHeightForSearchLayout:
 * Remote search layout:
 * search source button, search string gadget
 switchToSearchLayout:
-    tst.b   uhcAvailable(a5)
-    beq     .skip
     tst.w   BOTTOM_MARGIN(a5)
     bne     .skip
 
@@ -32929,6 +32925,11 @@ switchToSearchLayout:
     lea     gadgetSearchSource,a4
     basereg gadgetSearchSource,a4
     move.l  a4,a1
+
+    tst.b   uhcAvailable(a5)
+    bne.b   .u1
+    or      #GFLG_DISABLED,gg_Flags(a1)
+.u1
 
     move    gg_TopEdge(a2),d1
     add     gg_Height(a2),d1
@@ -32973,6 +32974,11 @@ switchToSearchLayout:
     add     gg_Width(a2),d0
     addq    #4+2-1,d0
     move    d0,gg_LeftEdge(a1)
+
+    tst.b   uhcAvailable(a5)
+    bne.b   .u2
+    or      #GFLG_DISABLED,gg_Flags(a1)
+.u2
 
     moveq   #-1,d0 * last
     move.l  windowbase(a5),a0
@@ -33231,6 +33237,10 @@ refreshGadgetSearchSource:
    ;;; rts
     ;;;;;;;jmp     recentPlaylistsSearch
 .1
+    tst.b   uhcAvailable(a5)
+    bne.b   .2
+    rts
+.2
     lea     gadgetSearchString(a4),a0
     and	    #~GFLG_DISABLED,gg_Flags(a0)
     jmp     refreshGadgetInA0
@@ -52839,18 +52849,13 @@ initializeUHC
     tst.l   d0
     seq     uhcAvailable(a5)    
 .no
+  ifne FEATURE_LIST_TABS
     tst.b   uhcAvailable(a5)
     bne     .really
-    * Remove search and list options from list mode toggle popup
-    move.b  #3,toggleListModePopupOptions+1
-	* Remove search results related tooltip
-	lea	tooltipList\.listModeChange,a0
-	move.b	#4,1(a0)
-  ifne FEATURE_LIST_TABS
     lea     gadgetListModeTab4Button,a0
     jsr     disableButton
-  endif
 .really
+  endif
  if DEBUG   
     moveq   #1,d0
     and.b   uhcAvailable(a5),d0
