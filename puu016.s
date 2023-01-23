@@ -7065,7 +7065,8 @@ modinfoaaa
 	beq	start_info
 	bra	sulje_info
 		
-.zz	bra	rbutton10b
+.zz	
+    jmp	rbutton10b
 
 * Forces a boolean gadget to show the selected status
 * in:
@@ -21715,8 +21716,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	#33,info_prosessi(a5)		* PSID info-lippu
 
+    jsr     sid_getSongSpeed
+    * d0 = speed number 
+    * d1 = speed hz 
 
-	lea	-42(sp),sp
+	lea	-50(sp),sp
 	move.l	sp,a1
 	pushpea	sidheader+sidh_name(a5),(a1)+
 	pushpea	sidheader+sidh_author(a5),(a1)+
@@ -21725,6 +21729,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	clr.l	(a1)+
 	move	sidheader+sidh_number(a5),-6(a1)
 	move	sidheader+sidh_defsong(a5),-2(a1)
+    move.l  d0,(a1)+    * song speed
+    move.l  d1,(a1)+    * song speed hz
 	move.l	modulelength(a5),(a1)+
 	move.l	moduleaddress(a5),d0
 	move.l	d0,(a1)+
@@ -21734,17 +21740,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	clr.l	(a1)
 
 	move.l	sp,a1
-	moveq	#11,d5
+	moveq	#12,d5
 	bsr	.allo2
 	bne.b	.jee9
-	lea	42(sp),sp
+	lea	50(sp),sp
 	bra	.prepareFailed
 .jee9
 
 	lea	.form(pc),a0
 	move.l	infotaz(a5),a3
 	bsr	.desmsg4
-	lea	42(sp),sp
+	lea	50(sp),sp
 
 	bsr	.putcomment
 	bra	.selvis
@@ -21756,6 +21762,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Author: %-31.31s",ILF,ILF2
 	dc.b	"Copyright: %-28.28s",ILF,ILF2
 	dc.b	"Songs: %ld (default %ld)",ILF,ILF2
+    dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2
 	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
  even
@@ -30662,7 +30669,7 @@ loadfile:
 	bra.b	.exeOk 
 
 .notDeliCustom 
-	bsr	id_davelowe
+	jsr	id_davelowe
 	bne.b	.notDl
 	move	#pt_davelowe,d7
 	bra.b	.exeOk
@@ -35921,6 +35928,8 @@ p_sid:	jmp	.init(pc)
 
     * Default title "PSID"
     move.b  #"P",.title0(a0)
+    * No extra words
+    clr.b   .title(a0)
 
 	tst.b	.flag(a0)
 	bne  	.plo
@@ -36218,8 +36227,12 @@ p_sid:	jmp	.init(pc)
     pushpea residPosMask(pc),ps3m_buffSizeMask(a5)
 .skipz
 
-
 	bset	#1,$bfe001
+
+    * Wait a bit so that song speed data is available
+    moveq   #5,d1
+    lore    Dos,Delay
+
 	moveq	#0,d0
 .er	movem.l	(sp)+,d1-a6
 	rts
@@ -36381,6 +36394,25 @@ p_sid:	jmp	.init(pc)
 .no moveq   #0,d0
     bra.b   .x
     
+
+* Calculate song speed and Hz
+* Out:
+*   d0 = song speed, 1..12
+*   d1 = update rate in Hz
+sid_getSongSpeed:
+    move.l  _SIDBase(a5),a0
+    move.w	262(a0),d1 ;psb_TimerConstB(a0),d1
+    bne.b   .1
+    move    #28419/2,d1
+.1  move.l  #(709379+28419/4),d0
+    divu    d1,d0
+    ext.l   d0
+    move    d0,d1
+    divu    #50,d0
+    ext.l   d0
+    divu    #10,d1
+    mulu    #10,d1
+    rts
 
 *** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
 
