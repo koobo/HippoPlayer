@@ -26,8 +26,8 @@ not work. The default placement is the S: directory, which is a bit silly
 same directory with the HiP binary, too, if you're using kick2.0 or newer.
 
 
-Major changes since v2.45
---------------------------
+Quick overview of major changes since v2.45
+-------------------------------------------
 - List mode toggle button to switch between the list modes
   - Main list
   - Favorites: your favorited modules
@@ -38,10 +38,10 @@ Major changes since v2.45
   - "Favorites": Right click modules to favorite them
   - "Keep list on exit": Continue where you left off 
   - "Big buttons": Larger buttons
-  - "Enable xmaplay060": Enable a high quality XM replayer
   - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
+  - "Enable xmaplay060": Enable a high quality XM replayer
 - Resizable main and info windows
-- Main window font can be changed
+- Main window font can be changed to any font
 - Support for many new music formats
 - Improved scopes: support for more music formats, multiple scopes,
   spectrum scope, patternscope with two sizes and up to 18 channels
@@ -65,8 +65,10 @@ New keyboard shortcuts:
 
 - Fix MusicAssembler modules being silent on 68040/68060.
 
-- The included playsid.library has a reSID related bug fixed which caused
-  some tunes to have small pauses. Example tune: Hawaii by JCH.
+- Fixes in the included playsid.library:
+   - A reSID related bug fixed which caused some tunes to have small pauses. 
+     Example tune: Hawaii by JCH.
+   - Fix a possible freeze bug when pausing PSID playback.
 
 - The "Continue on error" mode available in Prefs could crash in 
   certain situations, this should be fixed now.
@@ -95,6 +97,37 @@ New keyboard shortcuts:
 
 ## New features and improvements:
 
+- Improved MP3 support: Data will be streamed over the network.
+  This allows listening to MP3 files without downloading them first, 
+  and also allows listening to radio station streams. UHCTools is 
+  used for network transfers.
+  
+- Added new search sources for MP3s provided by UHCTools:
+  - https://amigaremix.com/ 
+  - https://remix.kwed.org/
+  - Radio station search
+
+- Added "Shared lists" search source. This fetches a list of shared 
+  playlists to be checked out. For example, you'll find favorite lists,
+  top lists, and lists with certain musical themes. The lists will be 
+  updated periodically, administration by Spot/Up Rough. Cool!
+
+- User interface changes related to searching remote files:
+  - The search results view now contains a search source selection button
+    and a search terms string gadget. The view is accessible using the list 
+    mode change button as usual.
+  - All remote search stuff from the "S"-button popup were moved over to the
+    search view.
+  - To search, activate the search view, select a source using the button and 
+    then type search words into the string gadget, and hit enter.
+  - [CTRL+S] is the keyboard shortcut remote search.
+
+- Finding items in lists:
+  - The "S"-button popup contains "Find" and "Find next" as before.
+  - Activating "Find" from the popup (or with [F]) now brings up a
+    string gadget below the list instead of a ReqTools requester.
+    "Find next" (or [SHIFT+F]) works as before.
+
 - When favoriting a module (with RMB) the currently playing subsong is also 
   stored. The next time you play this particular module the favorited 
   subsong will be played first.
@@ -111,40 +144,8 @@ New keyboard shortcuts:
      - "All off": no filters, less CPU usage.
    - reSID is now faster due to code optimizations. The "Oversample x2"
      mode should work on 50 MHz with normal SIDs.
-   - 2SID tunes can be foind in the HVSC.
+   - 2SID tunes can be found in the HVSC.
   
-- Improved MP3 support: Data will be streamed over the network.
-  This allows listening to MP3 files without downloading them first, 
-  and also allows listening to radio station streams. UHCTools is 
-  used for network transfers.
-  
-- Added new search sources for MP3s provided by UHCTools:
-  - https://amigaremix.com/ 
-  - https://remix.kwed.org/
-  - Radio station search
-
-- Added "Shared lists" search source. This fetches a list of shared 
-  playlists to be checked out. For example, you'll find favorite lists,
-  top lists, and lists with certain musical themes. The lists will be 
-  updated periodically, administration by Spot/Up Rough. Cool!
-
-- User interface changes related to searching remote files and finding
-  stuff in playlists:
-  - The search results view now contains a search source selection button
-    and a search terms string gadget. The view is accessible using the list 
-    mode change button as usual.
-  - All remote search stuff from the "S"-button popup were moved over to the
-    search view.
-  - To search, activate the search view, select a source using the button and 
-    then type search words into the string gadget, and hit enter.
-  - [CTRL+S] is the keyboard shortcut remote search.
-
-- Finding items in lists:
-  - The "S"-button popup contains "Find" and "Find next" as before.
-  - Activating "Find" from the popup (or with [F]) now brings up a
-    string gadget below the list instead of a ReqTools requester.
-    "Find next" (or [SHIFT+F]) works as before.
-
 - The popup selector is now keyboard controllable with arrows up, down, 
   and enter. 
 
@@ -153,6 +154,8 @@ New keyboard shortcuts:
 - Info window improvements: 
   - Show MP3 file tag information
   - Show MP3 radio stream information
+  - Show PSID play speed which tells how often SID parameters
+    are updated. Range 1..12 corresponds to 50..600 Hz update rate.
 
 - MP3 playback improvement for Paula output: When using the high quality
   MPEGA settings, instead of 8-bit output the Paula 14-bit mode is used
@@ -164,14 +167,12 @@ New keyboard shortcuts:
    - Scopes for modules played with PS3M (PT, XM, S3M, etc), at the 
      moment only four scope channels supported.
    - Patternscope supported without limitations.
-   
+
+- Some keys from CDTV, CD32 were added as key shortcuts:
+  stop, play, prev, next.   
+
 - 8bitbubsy's xmaplay060 updated. The mixing routines are now faster
   and a few bugs are fixed.
-
-- NOTES: 
-  - The libmad variant of mpega.library doesn't work reliably when streaming.
-  - If UHCTools is missing or too old, the search and download 
-    functionalities will be disabled.
 
 Thanks and greetz go to in no order:
 - Spot, 8bitbubsy, Erique, Patrik, Mr. Hac, Mike, Ziphoid, AceMan
