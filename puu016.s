@@ -27028,8 +27028,8 @@ multiscope
 	move	#$80,d6
     * This returns the buffer mask or size limit in d4
 	bsr	getps3mb
-    moveq   #1,d3   * sample modulo, ping pong
 multiscope0
+    moveq   #1,d3   * sample modulo, ping pong
 
 .drlo	
     * Do 8 horizontal pixels
