@@ -36230,7 +36230,7 @@ p_sid:	jmp	.init(pc)
 	bset	#1,$bfe001
 
     * Wait a bit so that song speed data is available
-    moveq   #5,d1
+    moveq   #2,d1
     lore    Dos,Delay
 
 	moveq	#0,d0
