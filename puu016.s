@@ -36149,6 +36149,8 @@ p_sid:	jmp	.init(pc)
 
     ; -----------------------
     * reSID Filter settings - after AllocEmulResource
+    bsr     isPlaysidReSID
+    beq     .nrsf
     cmp.b   #1,sidmode(a5)
     beq     .rsf
     cmp.b   #2,sidmode(a5)
