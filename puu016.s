@@ -36385,8 +36385,6 @@ p_sid:	jmp	.init(pc)
 .sidIsStereo
     pushm   d0/a0
     move.l  moduleaddress(a5),a0
-    cmp.l   #"PSID",(a0)
-    bne     .no
     cmp     #3,sidh_version(a0)
     blo.b   .no
      * SID2 base address should be non-zero
