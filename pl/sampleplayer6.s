@@ -346,6 +346,10 @@ size_var	rs.b	0
  endif
 
 
+*********************************************************************
+* Jump table
+*********************************************************************
+
 	jmp	init(pc)
 	jmp	endSamplePlay(pc)
 	jmp	stop(pc)
@@ -385,7 +389,11 @@ fla	move	d0,$dff180
 	rts
  endc
 
-ahinfo
+*********************************************************************
+* AHI info
+*********************************************************************
+
+ahinfo:
 	move.b	d0,ahi+var_b
 	move.l	d1,ahirate
 	move	d2,ahi_mastervol
@@ -404,6 +412,10 @@ ahinfo
 	move	d0,mpfreqdiv+var_b
 
 	rts
+
+*********************************************************************
+* End
+*********************************************************************
 
 endSamplePlay:
 	pushm	all
@@ -435,7 +447,11 @@ endSamplePlay:
     DPRINT  "sample playing ended"
 	popm	all
 	rts
-	
+
+*********************************************************************
+* Volume
+*********************************************************************
+
 vol:
 	pushm	all
 	lea	var_b(pc),a5
@@ -484,11 +500,21 @@ vol:
 .x
     rts
 
+*********************************************************************
+* Stop/continue
+*********************************************************************
 
-cont	clr.b	samplestop+var_b
+cont:
+	clr.b	samplestop+var_b
 	rts
-stop	st	samplestop+var_b
+
+stop:
+	st	samplestop+var_b
 	rts
+
+*********************************************************************
+* Init
+*********************************************************************
 
 init:
 	lea	var_b(pc),a5
@@ -611,7 +637,10 @@ init:
 	beq	.mpinit
 
 
-***** IFF INIT
+*********************************************************************
+* Init
+* IFF INIT
+*********************************************************************
 
 .iffinit
 
@@ -718,7 +747,11 @@ init:
 	pop	a0
 	rts
 
-****** WAV INIT
+*********************************************************************
+* Init
+* WAV INIT
+*********************************************************************
+
 .wavinit
 	move.l	#200,d2
 	moveq	#4,d0
@@ -793,7 +826,10 @@ init:
 
 	bra	.sampleok
 
-*********** AIFF init
+*********************************************************************
+* Init
+* AIFF INIT
+*********************************************************************
 
 .aiffinit
 	move.l	#200,d2
@@ -835,8 +871,10 @@ init:
 	move.l	(a0)+,d0
 	bra	.wah
 
-
-*********** MP init
+*********************************************************************
+* Init
+* MP3 INIT
+*********************************************************************
 
 .mpinit:
 	DPRINT	"MPEGA init"
@@ -850,7 +888,6 @@ init:
 .frequency	rs.l	1	* in Hz
 .channels	rs	1	* 1 or 2
 .ms_duration	rs.l	1	* duration in ms
-
 
 
 	move	mpfreqdiv(a5),d0
@@ -1290,10 +1327,11 @@ init:
 	rts
 
 
-
+*********************************************************************
+* Initialization finished
+*********************************************************************
 
 ******* Ok. Let's soitetaan
-
 
 .sampleok
 	bsr.b	.freqcheck
@@ -1646,7 +1684,11 @@ isRemoteSample:
     rts
 
 
-*******************************************************************************
+
+*********************************************************************
+* AHI
+*********************************************************************
+
 * AHI kamat
 
 ahi_alustus
@@ -1835,8 +1877,11 @@ ahi_stereolev	dc	0
 attr_stereo	dc.l	0
 attr_panning	dc.l	0
 
+*********************************************************************
+* AHI update
+*********************************************************************
 
-ahi_update
+ahi_update:
 
 	move	d0,ahi_mastervol
 	mulu	#$8000,d1
@@ -1992,9 +2037,10 @@ ahiunhalt
 	rts
 
 
-*******************************************************************************
-
-
+*********************************************************************
+* Initialization failed
+* Clean up
+*********************************************************************
 
 sampleiik:
 
@@ -2055,7 +2101,10 @@ sampleiik:
 	popm	all
 	rts
 
-**************** 
+
+*********************************************************************
+* Sample process
+*********************************************************************
 
 sample_code
 	lea	var_b(pc),a5
@@ -4131,209 +4180,6 @@ closesample
 	rts
 
 
-  REM *************** Streaming provided by main app
-pipefile   dc.b    "PIPE:hipposample",0
-    even
-
-mp_start_streaming
-    pushm   all
-    tst.l   mpStreamerTask(a5)
-    bne     .x
-    DPRINT  "----------- mp_start_streaming"
-
-    move.l  4.w,a6
-    sub.l   a1,a1
-    lob     FindTask
-    move.l  d0,mainTask(a5)
-
-    moveq   #0,d0
-    moveq   #SIGF_SINGLE,d1
-    jsr     _LVOSetSignal(a6)
-
-    move.l  #.tags,d1
-    lore    Dos,CreateNewProc
-    DPRINT  "CrateNewProc=%ld"
-
-    * Wait here until the task is fully running
-    move.l  4.w,a6
-    moveq   #SIGF_SINGLE,d0
-    jsr     _LVOWait(a6)
-
-    DPRINT  "started"
-.x
-    popm    all
-    rts
-
-.tags
-    dc.l    NP_Entry,mp_streamer_task
-    dc.l    NP_Name,.name
-    dc.l    TAG_END
-
-.name   
-    dc.b    "HiP-streamer",0
-    even
-
-mp_streamer_task
-
-    rsreset
-.uhcPathFormatted   rs.b    50
-.agetCmdFormatted   rs.b    100
-.agetArgsFormatted  rs.b    200
-.varsSize           rs.b    0
-   
-    lea     var_b,a5
-    lea     -.varsSize(sp),sp
-    move.l  sp,a4
-
-    DPRINT  "mp_streamer_task start"
-
-    move.l  4.w,a6
-    sub.l   a1,a1
-    lob     FindTask
-    move.l  d0,mpStreamerTask(a5)
-    move.l  d0,a0
-    move.l  LN_NAME(a0),d1
-    DPRINT  "%lx %s"
-  
-    move.l  #.envVarName,d1     * variable name
-    pushpea .uhcPathFormatted(a4),d2     * output buffer
-    moveq   #50-1,d3            * space available
-    move.l  #GVF_GLOBAL_ONLY,d4 * global variable
-    lore    Dos,GetVar
-    
-    pushpea .uhcPathFormatted(a4),d0
-    DPRINT  "UHCBIN=%s"
-
-    lea     .agetCmd(pc),a0
-    lea     .agetCmdFormatted(a4),a3
-    bsr     desmsg2
-
-    pushpea .agetCmdFormatted(a4),d0
-    DPRINT  "cmd=%s"
-
-    pushpea .agetCmdFormatted(a4),d1
-    lore    Dos,LoadSeg
-    move.l  d0,d6
-    beq     .exit
-    DPRINT  "LoadSeg=%lx"
-
-    move.l	modulefilename(a5),d0
-    lea     .args(pc),a0
-    lea     .agetArgsFormatted(a4),a3
-    bsr     desmsg2
-    
-    * length of args
-    lea     .agetArgsFormatted(a4),a0
-    move.l  a0,a1
-.fe   
-    tst.b   (a0)+
-    bne.b   .fe
-    move.l  a0,d4
-    sub.l   a1,d4
-    subq.l  #1,d4   
-
- ifne DEBUG
-    pushpea .agetArgsFormatted(a4),d0
-    DPRINT  "args=%s"
-    move.l  d4,d0
-    DPRINT  "len=%ld"
- endif
-
-    ; Notify main task
-    move.l  4.w,a6
-    move.l  mainTask(a5),a1
-    moveq   #SIGF_SINGLE,d0
-    jsr     _LVOSignal(a6)
-
-    move.l  d6,d1       * seglist
-    move.l  #4096,d2    * stack size
-    pushpea .agetArgsFormatted(a4),d3 * argptr
-                          * d4 = arg size
-    lore    Dos,RunCommand
-    DPRINT  "runCommand=%lx"
-    
-    move.l  d6,d1
-    beq.b   .a
-    lore    Dos,UnLoadSeg
-.a
-
-.exit
-    DPRINT  "mp_streamer_task stopped"
-
-    lea     .varsSize(sp),sp
-    lore    Exec,Forbid
-    clr.l   mpStreamerTask(a5)
-    rts
-
-.envVarName
-    dc.b    "UHCBIN",0
-
-.agetCmd
-    dc.b	'%sC/aget',0
-
-.args
-	dc.b	'"%s" PIPE:hipposample/65536/2',0
-
-.tags
-    dc.l    NP_Name,.name
-    dc.l    TAG_END
-
-.name   dc.b    "HiP-aget",0
-    even
-
-mp_stop_streaming
-    tst.l   mpStreamerTask(a5)
-    beq    .1
-    DPRINT  "--------------- mp_stop_streaming"
-    bsr     mp_close
-
-    move.l  mpStreamerTask(a5),a1
-    move.l  #SIGBREAKF_CTRL_C,d0
-    move.l  4.w,a6
-    lob     Signal 
- 
-    DPRINT  "signal sent"
-
-    move.l  #pipefile,d1
-    move.l  #MODE_OLDFILE,d2
-    lore    Dos,Open
-    DPRINT  "Pipe=%lx"
-    move.l  d0,d7
-
-    * Wait until read fails, this indicates
-    * the sender has reacted to CTRL_C
-    moveq   #0,d6
-    moveq   #0,d5
-.loop   
-    tst.l   d5
-    bmi.b   .skip
-    move.l  d7,d1
-    lore    Dos,FGetC
-    addq.l  #1,d6
-    move.l  d0,d5
-    bra     .cont
-.skip  
-    moveq   #1,d1
-    lore    Dos,Delay
-.cont
-    tst.l   mpStreamerTask(a5)
-    bne.b   .loop
-
- if DEBUG
-    move.l  d6,d0
-    DPRINT  "task closed, flushed %ld bytes" 
- endif
-   
-.1
-    move.l  d7,d1
-    beq.b   .2
-    lore    Dos,Close
-.2
-    DPRINT  "mp streaming stopped"
-    rts
-  EREM ************************
-
-
 
 
 initsamplecyber
@@ -4639,6 +4485,12 @@ divu_32	move.l	d3,-(a7)
 
 
 *****************************
+
+*********************************************************************
+*
+* File access that also handles XPK
+*
+*********************************************************************
 
 
 
