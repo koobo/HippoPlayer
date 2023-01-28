@@ -36817,11 +36817,11 @@ isPlaysidReSID:
     bne.b   .noRESID
     cmp.b   #" ",19(a0)
     bne.b   .noRESID
-    cmp.b   #"r",20(a0)
+    cmp.b   #"r",32(a0)
     bne.b   .noRESID
-    cmp.b   #"e",21(a0)
+    cmp.b   #"e",33(a0)
     bne.b   .noRESID
-   ; "playsid.library 1.3 reSID+SIDBlaster"
+   ; "playsid.library 1.3 (29.3.2023) reSID+SIDBlaster"
     pop     a0
     moveq   #1,d0
     rts
