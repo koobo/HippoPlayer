@@ -52893,8 +52893,13 @@ initializeUHC
 	tst.l	d0
     bmi     .no
 
+    lea     .tags(pc),a0
+    basereg .tags,a0
+    move.l  nilfile(a5),.out(a0)
+    move.l  a0,d2
+    endb    a0
+
     pushpea .versCmd(pc),d1
-    pushpea .tags(pc),d2
     lob     SystemTagList
     * d0 = version return code, 0 if OK, 5 if WARN
     tst.l   d0
@@ -52915,9 +52920,11 @@ initializeUHC
 	rts
 
 .tags
+    dc.l    SYS_Output,0
+.out = *-4
     dc.l    TAG_END
 
-.versCmd        dc.b    "version UHC:C/aget 0 84 >NIL:",0
+.versCmd        dc.b    "version UHC:C/aget 0 84",0
 .uhcBinVar	    dc.b	"UHCBIN",0
  even
 
