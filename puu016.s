@@ -364,33 +364,35 @@ prefs_tooltips		rs.b 	1
 prefs_savestate		rs.b 	1
 prefs_altbuttons	rs.b	1
 
-prefs_quadraScope   rs.b 1
-prefs_quadraScopeBars   rs.b 1
-prefs_quadraScopeF   rs.b 1
-prefs_quadraScopeFBars   rs.b 1
-prefs_hippoScope   rs.b 1
-prefs_hippoScopeBars   rs.b 1
-prefs_patternScope   rs.b 1
-prefs_patternScopeXL   rs.b 1
-prefs_spectrumScope   rs.b 1
-prefs_spectrumScopeBars   rs.b 1
-prefs_sidmode		rs.b	1
+prefs_quadraScope        rs.b    1
+prefs_quadraScopeBars    rs.b    1
+prefs_quadraScopeF       rs.b    1
+prefs_quadraScopeFBars   rs.b    1
+prefs_hippoScope         rs.b    1
+prefs_hippoScopeBars     rs.b    1
+prefs_patternScope       rs.b    1
+prefs_patternScopeXL     rs.b    1
+prefs_spectrumScope      rs.b    1
+prefs_spectrumScopeBars  rs.b    1
+prefs_sidmode            rs.b    1
 
-prefs_quadraScopePos   rs.l 1
-prefs_quadraScopeFPos   rs.l 1
-prefs_hippoScopePos   rs.l 1
-prefs_patternScopePos   rs.l 1
-prefs_spectrumScopePos   rs.l 1
+prefs_quadraScopePos     rs.l    1
+prefs_quadraScopeFPos    rs.l    1
+prefs_hippoScopePos      rs.l    1
+prefs_patternScopePos    rs.l    1
+prefs_spectrumScopePos   rs.l    1
 
-prefs_listtextattr		rs.b	ta_SIZEOF-4
-prefs_listfontname		rs.b	30
-	printt "TODO TODO: dangerous buffer size"
+prefs_listtextattr      rs.b      ta_SIZEOF-4
+prefs_listfontname      rs.b      30
+    printt    "TODO TODO: dangerous buffer size"
 
-prefs_xmaplay    rs.b   1
-prefs_residmode  rs.b    1
-prefs_residfilter rs.b   1
-                rs.b    1 * pad
-prefs_size		rs.b	0
+prefs_xmaplay         rs.b      1
+prefs_residmode       rs.b      1
+prefs_residfilter     rs.b      1
+* This does not have a prefs setting, instead it serves as a way to persist
+* the search selection.
+prefs_selectedSearch  rs.b      1 
+prefs_size            rs.b      0
 
 *******************************************************************************
 *
@@ -1447,7 +1449,7 @@ disableShowStreamerError    rs.b       1
 
 * Remote search popup stores the selected search mode here
 * SEARCH_MODLAND etc etc
-selectedSearch  rs.w  1
+selectedSearch = prefsdata+prefs_selectedSearch
 
 * Flags to indicate the bottom search layout state
 * Tested with .w!
@@ -9577,21 +9579,21 @@ gadgetSearchStringAction:
     
     lea     modlandSearch,a0
     basereg modlandSearch,a0
-    move    selectedSearch(a5),d0
+    move.b  selectedSearch(a5),d0
 	beq.b	.amigaRemix
-	subq	#1,d0
+	subq.b	#1,d0
 	beq.b	.aminet
-	subq	#1,d0
+	subq.b	#1,d0
 	beq.b	.hvsc
-	subq	#1,d0
+	subq.b	#1,d0
 	beq.b	.modland
-	subq	#1,d0
+	subq.b	#1,d0
 	beq.b	.modules
-	subq	#1,d0
+	subq.b	#1,d0
 	beq.b	.stations
-	subq	#1,d0
+	subq.b	#1,d0
 	beq.b	.rko
-	subq	#1,d0
+	subq.b	#1,d0
 	beq.b	.recentPlaylists
 .skip
 	rts
@@ -9646,16 +9648,17 @@ gadgetSearchSourceAction:
 	moveq	#20,d7
 	add		gg_TopEdge(a0),d7
     moveq   #0,d4   * no callbackkkkk
-    move    selectedSearch(a5),d0
+    moveq   #0,d0
+    move.b  selectedSearch(a5),d0
 	bsr		listSelectorMainWindowPreselect
 	bmi 	.skip
  if DEBUG
     ext.l   d0
     DPRINT  "selected source=%ld"
  endif
-    move    d0,selectedSearch(a5)
+    move.b  d0,selectedSearch(a5)
     jsr     refreshGadgetSearchSource
-    cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     beq     .1
     jmp     activateSearchStringGadget
 .1  
@@ -9690,7 +9693,7 @@ searchActivate:
 .x
     * Activate popup
     bsr     gadgetSearchSourceAction
-    cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     beq     .y
     * Then activate string gadget
     jsr     activateSearchStringGadget
@@ -32574,7 +32577,7 @@ toggleListModePopup:
     subq    #1,d0
     bne     .skip
     * Shortcut to shared lists
-    move    #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    move.b  #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     jsr     engageSearchResultsMode
     jsr     refreshGadgetSearchSource
     jsr     recentPlaylistsSearch
@@ -32663,9 +32666,14 @@ engageSearchResultsMode:
     bsr     switchToSearchLayout
 	bsr 	engageListMode
 
-;    bsr     switchToSearchLayout
-;    jsr	forceRefreshList
-
+    * Special case check
+    * Trigger recent playlist fetch if needed.
+    tst.l   modamount(a5)
+    bne     .1
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    bne     .1
+    jsr     recentPlaylistsSearch
+.1  
 	popm	all
 	rts	
 
@@ -33219,14 +33227,14 @@ switchToLocalSearchLayout:
 
 
 refreshGadgetSearchSource:
-    move    selectedSearch(a5),d0
+    move.b  selectedSearch(a5),d0
     lea     gadgetSearchSourceOption1,a0
 .find   
-    tst     d0
+    tst.b   d0
     beq     .found
 .ff tst.b   (a0)+
     bne.b   .ff
-    subq    #1,d0
+    subq.b  #1,d0
     bra     .find
 .found
  if DEBUG
@@ -33259,7 +33267,7 @@ refreshGadgetSearchSource:
     lea     gadgetSearchSource(a4),a3
     jsr     drawButtonFrameMainWindow
 
-    cmp     #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     bne     .1
     lea     gadgetSearchString(a4),a0
     jmp     disableGadget
