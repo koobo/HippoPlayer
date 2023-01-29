@@ -27028,9 +27028,10 @@ multiscope
 	move	#$80,d6
     * This returns the buffer mask or size limit in d4
 	bsr	getps3mb
+    moveq   #1,d3
 multiscope0
-    moveq   #1,d3   * sample modulo, ping pong
-
+    * d3 = sample modulo
+   
 .drlo	
     * Do 8 horizontal pixels
     moveq   #2-1,d1
@@ -27053,6 +27054,7 @@ multiscope0
     * Advance one byte in source data
 
     add.l   d3,d5
+
     ;bpl.b   .2
     bpl.b   *+6
     * Beginning bound check
@@ -27064,8 +27066,8 @@ multiscope0
     blo.b   *+6
     * End bound check
     neg.l   d3
-    subq.l  #1,d5
-;.1
+    add.l   d3,d5
+; .1
     endr 
     dbf d1,.p8
 	* Reset pixel to right
@@ -27103,7 +27105,8 @@ multiscopefilled
 	move	#$80,d6
 	bsr	getps3mb
 
-    lea     1.w,a6       * sample modulo 8-bit
+     * sample modulo 8-bit
+    moveq   #1,d3   
 
 multiscopefilled0
 
@@ -27118,7 +27121,7 @@ hurl	macro
 	move	(a2,d2),d2
 	or.b	d0,(a0,d2)
 	add.b	d0,d0
-	add.l	a6,d5
+	add.l	d3,d5
 
 	cmp.l	d4,d5
 	blo.b	*+4
@@ -28014,7 +28017,7 @@ makeScopeHorizontalBars
 samplescope:
 	bsr.b	samples0
     jsr     getSampleDataModulo
-    move.l  d0,a6 * a6 = 1 or 2
+    move.l  d0,d3 * d3 = 1 or 2
 	move.l	samplepointer(a5),a1
 	move.l	(a1),a1
 	tst.b	samplestereo(a5)
@@ -28036,7 +28039,7 @@ samplescope:
 samplescopefilled
 	bsr.b	samples0
     jsr     getSampleDataModulo
-    move.l  d0,a6 * a6 = 1 or 2
+    move.l  d0,d3 * d3 = 1 or 2
 	move.l	samplepointer(a5),a1
 	move.l	(a1),a1
 	tst.b	samplestereo(a5)
