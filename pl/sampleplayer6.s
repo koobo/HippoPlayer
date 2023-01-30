@@ -55,13 +55,16 @@ DPRINT macro
 	include	libraries/timer_lib.i
 	include	devices/timer.i
 
+    include misc/mhi_lib.i
+    include misc/mhi.i
+
 	include	mucro.i
 
 ;KUTISTUSTAAJUUS	=	28603
 KUTISTUSTAAJUUS	=	27710
 
 
-er_error	=	-1
+ier_error	=	-1
 ier_nochannels	=	-2
 ier_nociaints	=	-3
 ier_noaudints	=	-4
@@ -299,6 +302,18 @@ id3v2Data       rs.l    1
 mpega_sync_position rs.l 1
 streamLength    rs.l    1
 
+; Set to true to use MHI for mp3 playback
+mhi             rs.b    1
+mhiSignal       rs.b    1
+mhiPlaying      rs.b    1
+mhiNoMoreData   rs.b    1
+mhiReady        rs.b    1
+mhiTask         rs.l    1
+mhiLib          rs.l    1
+mhiFile         rs.l    1
+mhiStreamSize   rs.l    1
+mhiHandle       rs.l    1
+
  if DEBUG
 output			rs.l 	1
 debugDesBuf		rs.b	1000
@@ -435,6 +450,7 @@ endSamplePlay:
 	bsr	ahi_end
 
  if DEBUG
+    DPRINT  "sample playing ended"
 	move.l	output(a5),d1
 	beq.b	.noDbg
 	move.l	#2*50,d1
@@ -444,8 +460,7 @@ endSamplePlay:
 	lore	Dos,Close
 .noDbg
  endif
-    DPRINT  "sample playing ended"
-	popm	all
+  	popm	all
 	rts
 
 *********************************************************************
@@ -461,6 +476,9 @@ vol:
 
 .b	
 	move	d0,mainvolume(a5)
+
+    tst.b   mhi(a5)
+    bne     mhiVolume
 
 	tst.b	ahi(a5)
 	bne	ahivol
@@ -518,6 +536,9 @@ stop:
 
 init:
 	lea	var_b(pc),a5
+
+    st      mhi(a5)
+
 	bsr.b	.doInit
 	DPRINT	"init status=%ld"
  if DEBUG
@@ -911,6 +932,15 @@ init:
     bra     sampleiik
 
 .cpuGood
+    tst.b   mhi(a5)
+    beq     ._2
+    bsr     mhiInit
+    DPRINT  "mhiInit=%ld"
+    tst.l   d0
+    beq     .sampleok
+    printt  "TODO: some error code"
+    bra     sampleiik
+._2  
 
 	move.l	4.w,a6
 	lea	.mplibn(pc),a1
@@ -1333,7 +1363,7 @@ init:
 
 ******* Ok. Let's soitetaan
 
-.sampleok
+.sampleok:
 	bsr.b	.freqcheck
 
 ** muotoillaan inforivi hipolle
@@ -1411,6 +1441,8 @@ init:
 
 	tst.b	ahi(a5)		* jos ahi, ei tarvita näitä puskureita
 	bne.b	.ok2
+    tst.b   mhi(a5)
+    bne     .ok2
 
 	moveq	#2,d6				* kaksi puskuria monolle
 
@@ -1524,6 +1556,8 @@ init:
 
 	tst.b	ahi(a5)
 	beq	.nika
+    tst.b   mhi(a5)
+    bne     .nika
 
 	cmp.b	#1,sampleformat(a5)	* jos AHI ja IFF, pari työpurskuria
 	bne.b	.naiff
@@ -1619,6 +1653,12 @@ init:
     beq.b   .888
     moveq   #16,d4
 .888
+
+    tst.b   mhi(a5)
+    beq     .999
+    * Returning NULL samplefollow should disable stuff 
+    sub.l   a0,a0
+.999
 
  if DEBUG
 	pushm	all
@@ -2106,7 +2146,7 @@ sampleiik:
 * Sample process
 *********************************************************************
 
-sample_code
+sample_code:
 	lea	var_b(pc),a5
 	addq	#1,sample_prosessi(a5)
 
@@ -2135,7 +2175,11 @@ sample_code
 ;	clr.b	killsample(a5)
 ;	rts
 
-
+    tst.b   mhi(a5)
+    beq     .nomhi  
+    bsr     mhiStart
+    bra     quit2
+.nomhi
 
 ************ IFF
 	cmp.b	#2,sampleformat(a5)
@@ -3756,6 +3800,7 @@ quit:
 	bsr.b	wait
     ;bsr     mp_stop_streaming
 quit2:	
+	DPRINT	"quit2"
 	bsr	sampleiik
 	lore	Exec,Forbid
 	clr	sample_prosessi(a5)
@@ -4309,7 +4354,15 @@ _CreateTable	movem.l	a2/d2-d6,-(sp)
 *******
 * d0=koko
 * d1=tyyppi
-getmem	movem.l	d1/d3/a0/a1/a6,-(sp)
+getmem:
+	movem.l	d1/d3/a0/a1/a6,-(sp)
+ if DEBUG
+    push    d0
+    lsr.l   #8,d0
+    lsr.l   #2,d0
+    DPRINT  "AllocMem %ldkB type=%lx"
+    pop     d0
+ endif
 	addq.l	#4,d0
 	move.l	d0,d3
 	move.l	4.w,a6
@@ -5512,7 +5565,434 @@ putCharSerial
 
  endif
 
+***************************************************************************
+*
+* MHI
+*
+***************************************************************************
 
+MHI_BUFSIZE = 16*1024
+MHI_BUFCOUNT = 8
+
+mhiInit:
+    DPRINT  "mhiInit"
+
+    lea     mhiLibName(pc),a1
+    lore    Exec,OldOpenLibrary
+    DPRINT  "mhi library=%lx"
+    move.l  d0,mhiLib(a5)
+    beq     .noLib
+
+    * Have two buffers
+    move.l	#MHI_BUFSIZE*MHI_BUFCOUNT,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	bsr	getmem
+	move.l	d0,samplework(a5)
+    beq     .mem
+    
+	move.l	modulefilename(a5),d0
+    DPRINT  "Opening %s"
+    move.l  d0,d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    move.l  d0,mhiFile(a5)  
+    beq     .fileError
+    move.l  d0,d7
+
+    bsr     mpega_skip_id3v2_stream
+
+    bsr     isRemoteSample
+    beq     .notRemotex
+    tst.l   streamLength(a5)
+    bne     .cantSeek
+    * This seems to be a radio station, 
+    * a remote stream without length.
+    * Wait a while to buffer data into pipe.
+    * This allows throttled streams to work better.
+    DPRINT  "Radio station, buffering for 2 secs!"
+    moveq   #2*50,d1
+    lob     Delay
+    bra     .cantSeek
+.notRemotex
+    * Get current position
+	move.l	d7,d1
+    moveq	#0,d2		* offset
+	moveq	#OFFSET_CURRENT,d3
+	lob	Seek
+    move.l  d0,d4
+    DPRINT  "current=%ld"
+    * Seek to end
+	move.l	d7,d1	
+    moveq	#0,d2		* offset
+	moveq	#OFFSET_END,d3
+	lob	Seek
+    * Go back to current position
+	move.l	d7,d1	
+    move.l  d4,d2
+	moveq	#OFFSET_BEGINNING,d3
+	lob	Seek
+    * d0 = old position, the end
+    * subtract the original current position
+    * so that any skipped data is not included
+    sub.l   d4,d0 
+	;move.l	d0,12(a3) * stream_size
+    DPRINT  "local stream size=%ld"
+    move.l  d0,mhiStreamSize(a5)
+    bra     .go
+.cantSeek
+    move.l  streamLength(a5),d0
+    move.l  d0,mhiStreamSize(a5)
+    DPRINT  "remote stream size=%ld"
+.go
+
+    ; Stash some default values, might be incorrect
+    clr.b   kutistus(a5)    * no resampling
+    st      samplebits(a5)
+    st      samplestereo(a5)
+    move    #44100,samplefreq(a5)
+
+    moveq   #0,d0   * ok
+    rts
+
+.mem   
+    bsr     mhiDeinit
+    moveq   #ier_nomem,d0
+    rts
+
+.noLib
+    bsr     mhiDeinit
+    moveq   #ier_error,d0
+    rts
+
+.fileError
+    bsr     mhiDeinit
+    moveq   #ier_filerr,d0
+    rts
+
+mhiLibName
+    ;dc.b    "libs:mhi/mhimaspro.library",0
+    ;dc.b    "libs:mhi/mhizz9000.library",0
+    dc.b    "libs:mhi/mhimdev.library",0
+    even
+
+mhiStart:
+    DPRINT  "mhiStart"
+    clr.b   mhiNoMoreData(a5)
+    clr.b   mhiReady(a5)
+
+    sub.l   a1,a1
+    lore    Exec,FindTask
+    move.l  a0,mhiTask(a5)
+
+;    lea     mhiLibName(pc),a1
+;    lore    Exec,OldOpenLibrary
+;    DPRINT  "mhi library=%lx"
+;    move.l  d0,mhiLib(a5)
+;    beq     .mhiExit
+
+
+    moveq	#-1,d0
+	lore    Exec,AllocSignal
+    move.b  d0,mhiSignal(a5)
+    move.b  d0,d1
+
+    move.l  mhiLib(a5),a6
+    moveq   #0,d0
+    bset    d1,d0
+    move.l  mhiTask(a5),a0
+    DPRINT  "signal mask=%lx"
+    lob     MHIAllocDecoder
+    DPRINT  "MHIAllocDecoder=%lx"
+    move.l  d0,mhiHandle(a5)
+
+    move.l  #MHIQ_DECODER_NAME,d0
+    lob     MHIQuery
+    tst.l   d0
+    beq.b   .n1
+    DPRINT  "NAME=%s"
+.n1
+    move.l  #MHIQ_CAPABILITIES,d0
+    lob     MHIQuery
+    tst.l   d0
+    beq     .n2
+    DPRINT  "CAPS=%s"
+.n2
+    move.l  mhiHandle(a5),a3
+    lob     MHIGetStatus
+    DPRINT  "MHIGetStatus=%ld"
+
+    bsr     mhiInitBuffers
+
+    DPRINT  "MHIPlay"
+    move.l  mhiLib(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIPlay
+
+    st      mhiReady(a5)
+
+    tst.b   mhiNoMoreData(a5)
+    bne     .flush
+
+.loop
+	lore	GFX,WaitTOF
+	tst.b	killsample(a5)
+	bne.b	.stop
+
+    ; Check and clear mhiSignal(a5)
+    moveq   #0,d0
+    moveq   #0,d1
+    move.b  mhiSignal(a5),d2
+    bset    d2,d1
+    move.l  d1,d3
+    lore    Exec,SetSignal
+    and.l   d3,d0
+    beq     .2
+    bsr     mhiFillEmptyBuffers
+    tst.b   mhiNoMoreData(a5)
+    bne     .eof
+.2
+    tst.b   samplestop(a5)
+    beq     .1
+    bsr     mhiStop
+    bra     .loop
+.1  bsr     mhiCont
+    bra     .loop
+
+.eof
+    ; Exiting
+    DPRINT  "Flushing buffers"
+
+.flush
+    move.l  mhiHandle(a5),a3
+    move.l  mhiLib(a5),a6
+    lob     MHIGetStatus
+    cmp.l   #MHIF_PLAYING,d0
+    bne     .stop
+	lore	GFX,WaitTOF
+    bra     .flush
+.stop
+    DPRINT  "stop"
+    move.l  mhiHandle(a5),a3
+    move.l  mhiLib(a5),a6
+    lob     MHIGetStatus
+    cmp.l   #MHIF_STOPPED,d0
+    bne     .3
+    move.l  mhiHandle(a5),a3
+    lob     MHIStop
+.3
+
+    tst.b   mhiNoMoreData(a5)
+    beq     .4
+    bsr     songoverr
+.4
+
+
+.mhiExit
+    DPRINT  "mhiExit"
+    bsr     mhiDeinit
+    rts
+
+mhiDeinit:
+    DPRINT  "mhiDeinit"
+    bsr     mhiClose
+    move.b  mhiSignal(a5),d0
+    bmi.b   .5
+    lore    Exec,FreeSignal
+.5  st      mhiSignal(a5)
+
+    move.l  mhiHandle(a5),d0
+    beq     .2
+    move.l  d0,a3
+    move.l  mhiLib(a5),a6
+    lob     MHIFreeDecoder
+.2  clr.l   mhiHandle(a5)
+
+    move.l  mhiLib(a5),d0
+    beq     .3
+    move.l  d0,a1
+    lore    Exec,CloseLibrary
+.3  clr.l   mhiLib(a5)
+    rts
+
+mhiClose:
+    DPRINT  "mhiClose"
+    move.l  mhiFile(a5),d4
+	beq 	.nullHandle
+    clr.l   mhiFile(a5)
+
+    move.l  _DosBase(a5),a6
+    
+    bsr     isRemoteSample
+    beq     .notPipe
+
+    lea     -12(sp),sp
+    move.l  sp,d1
+    lob     DateStamp
+    move.l  ds_Tick(sp),d7
+
+    DPRINT  "flushing pipe before closing"    
+    moveq   #0,d5
+.flush
+    move.l  sp,d1
+    lob     DateStamp
+    move.l  ds_Tick(sp),d0
+    sub.l   d7,d0
+    bpl.b   .pos
+    neg.l   d0
+.pos
+    cmp.l   #5*50,d0
+    blo.b   .gog
+    DPRINT  "timeout!"
+    bra     .flushOver
+.gog
+
+    move.l  d4,d1
+    move.l  #mpbuffer1,d2
+    move.l  #MPEGA_PCM_SIZE*4,d3
+    lob     Read
+    DPRINT  "Pipe read=%ld"
+    add.l   d0,d5
+    cmp.l   #MPEGA_PCM_SIZE*4,d0
+    beq     .flush
+
+.flushOver
+    lea     12(sp),sp
+
+ if DEBUG
+    move.l  d5,d0
+    DPRINT  "flushed %ld bytes"
+ endif
+.notPipe
+    move.l  d4,d1
+	lob     Close
+	moveq	#0,d0	* ok
+	rts
+.nullHandle
+	moveq	#-1,d0 * not ok
+	rts	
+
+mhiStop:
+    tst.b   mhiReady(a5)
+    beq     .1
+    move.l  mhiHandle(a5),a3
+    move.l  mhiLib(a5),a6
+    lob     MHIGetStatus
+    cmp.l   #MHIF_PLAYING,d0
+    bne     .1
+    DPRINT  "MHIPause"
+    move.l  mhiHandle(a5),a3
+    lob     MHIPause
+.1  
+    rts
+
+mhiCont:
+    tst.b   mhiReady(a5)
+    beq     .1
+    move.l  mhiHandle(a5),a3
+    move.l  mhiLib(a5),a6
+    lob     MHIGetStatus
+    cmp.l   #MHIF_PAUSED,d0
+    bne     .1
+    DPRINT  "MHIPlay"
+    move.l  mhiHandle(a5),a3
+    lob     MHIPlay
+.1  
+    rts
+
+mhiVolume:
+    DPRINT  "mhiVolume"
+    tst.b   mhiReady(a5)
+    beq     .1
+    moveq   #MHIP_VOLUME,d0
+    moveq   #100,d1
+    mulu    mainvolume(a5),d1
+    lsr.l   #6,d1
+    move.l  mhiHandle(a5),a3
+    move.l  mhiLib(a5),a6
+    lob     MHISetParam
+.1
+    rts
+
+mhiInitBuffers:
+    DPRINT  "mhiInitBuffers"
+    move.l  samplework(a5),a4
+    moveq   #MHI_BUFCOUNT-1,d7
+.loop
+    move.l  a4,a0
+    bsr     mhiFillBuffer
+    tst.l   d0
+    beq     .eof
+    bmi     .eof
+    move.l  a4,a0
+    move.l  mhiLib(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIQueueBuffer
+    DPRINT  "MHIQueueBuffer=%ld"
+.eof
+    tst.b   mhiNoMoreData(a5)
+    bne     .eof2
+    lea     MHI_BUFSIZE(a4),a4
+    dbf     d7,.loop
+.eof2
+    rts
+
+
+mhiFillEmptyBuffers:
+    DPRINT  "mhiFillEmptyBuffers"
+
+.loop
+    move.l  mhiLib(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIGetEmpty
+    tst.l   d0
+    beq     .done
+    
+    move.l  d0,a4
+    move.l  d0,a0
+    bsr     mhiFillBuffer
+    tst.l   d0
+    beq     .eof
+    bmi     .eof
+
+    move.l  a4,a0
+    move.l  mhiLib(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIQueueBuffer
+    DPRINT  "MHIQueueBuffer=%ld"
+    bra     .loop
+.done
+
+    * Restart if needed
+    move.l  mhiLib(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIGetStatus
+    cmp.l   #MHIF_OUT_OF_DATA,d0
+    bne     .1
+    move.l  mhiHandle(a5),a3
+    lob     MHIPlay
+.1
+.eof
+    rts
+
+* in:
+*   a0 = output buffer
+* Out:
+*   d0 = bytes read, or NULL for EOF, or -1 for error
+mhiFillBuffer:
+    move.l  mhiFile(a5),d1
+    move.l  a0,d2
+    move.l  #MHI_BUFSIZE,d3
+    lore    Dos,Read
+    DPRINT  "Read=%ld"
+    cmp.l   #MHI_BUFSIZE,d0
+    sne     mhiNoMoreData(a5)
+ ifne DEBUG
+    tst.b   mhiNoMoreData(a5)
+    beq     .1
+    DPRINT  "no more data!"
+.1
+ endif
+    rts
 
 ***************************************************************************
 *
