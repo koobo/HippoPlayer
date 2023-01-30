@@ -25781,7 +25781,9 @@ scopeinterrupt:
 
 	* Sample scope data. Update sample follow position once per frame.
     jsr     getSampleDataAdd
-	move.l	samplefollow(a5),a0
+	move.l	samplefollow(a5),d1
+    beq     .x
+    move.l  d1,a0
 	add.l	d0,(a0)
 .x	rts
 
@@ -28019,6 +28021,9 @@ makeScopeHorizontalBars
 
 samplescope:
 	bsr.b	samples0
+    bne     .hasData
+    rts
+.hasData
     jsr     getSampleDataModulo
     move.l  d0,d3 * d3 = 1 or 2
 	move.l	samplepointer(a5),a1
@@ -28041,6 +28046,9 @@ samplescope:
 
 samplescopefilled
 	bsr.b	samples0
+    bne     .hasData
+    rts
+.hasData
     jsr     getSampleDataModulo
     move.l  d0,d3 * d3 = 1 or 2
 	move.l	samplepointer(a5),a1
@@ -28066,7 +28074,9 @@ samplescopefilled
 * Out:
 *   
 samples0:
-	move.l	samplefollow(a5),a0
+	move.l	samplefollow(a5),d5
+    beq     .error
+    move.l  d5,a0
 	move.l	(a0),d5
 ;	move.l	samplefollow(a5),d5
 
@@ -28086,6 +28096,7 @@ samples0:
 
 	lea	s_multab(a4),a2
 	move.l	s_draw1(a4),a0
+.error
 	rts
 
 
@@ -50844,6 +50855,7 @@ runSpectrumScope
 	bra.b	.go
 .sample
 	bsr	spectrumGetSampleData
+    beq     .x 
 	bra.b	.go
 .normal
 	bsr	spectrumCopySamples
@@ -51431,6 +51443,9 @@ spectrumGetPS3MSampleData
 
 spectrumGetSampleData
 	jsr	samples0
+    bne .gotData
+    rts
+.gotData
 	* d5 = follow offset
 	* d4 = buffer size mask
 
@@ -51459,6 +51474,7 @@ spectrumGetSampleData
 	moveq	#0,d5
 .1
 	dbf	d7,.mloop
+    moveq   #1,d0
 	rts
 
 .stereo
