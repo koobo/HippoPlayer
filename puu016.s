@@ -13486,15 +13486,19 @@ aseta_vakiot
 
 	lea	.defdir2(pc),a0
 	lea	arcdir(a5),a1
-	bsr.b	copyb
+	bsr	copyb
+
+	lea	.defdir1(pc),a0
+	lea	mhiLib(a5),a1
+	bsr	copyb
 
 	lea	.wb(pc),a0
 	lea	pubscreen(a5),a1
-	bsr.b	copyb
+	bsr	copyb
 
 	lea	.pat(pc),a0
 	lea	pattern(a5),a1
-	bsr.b	copyb
+	bsr	copyb
 
 	move.l	a2,keycheckroutine(a5)
 
