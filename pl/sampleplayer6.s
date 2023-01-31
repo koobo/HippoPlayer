@@ -1432,7 +1432,7 @@ init:
 	lea	.form(pc),a0
 	tst	mplippu(a5)
 	beq.b	.nomp2
-    lea     .form4mhi(pc),a0
+    lea     .form4(pc),a0
     tst.b   mhiEnable(a5)
     bne     .aa1
 	lea	    .form3(pc),a0
@@ -1711,8 +1711,7 @@ init:
 .form	dc.b	"%s %ld-bit %lc %2ldkHz",0
 .form2	dc.b	"MP%ld %ldkB %lc %2ldkHz %ld-bit",0
 .form3	dc.b	"MP%ld %ldkB %lc %2ldkHz AHI",0
-.form4mhi
-    	dc.b	"MP3 MHI",0
+.form4	dc.b	"MP%ld %ldkB %lc %2ldkHz MHI",0
 
 .pn	dc.b	"HiP-Sample",0
  even
@@ -5667,17 +5666,64 @@ mhiInit:
     move.l  d0,mhiStreamSize(a5)
     DPRINT  "remote stream size=%ld"
 .go
+    * Read a little to parse properties
+    move.l  d7,d1
+    move.l  #mpbuffer1,d2
+    move.l  #MPEGA_PCM_SIZE,d3
+    lob     Read
+    DPRINT  "Read=%ld"
 
     ; Stash some default values, might be incorrect
     clr.b   kutistus(a5)    * no resampling
     st      samplebits(a5)
     st      samplestereo(a5)
+    clr     mpbitrate(a5)
     move    #44100,samplefreq(a5)
     st      mplippu(a5)
     move    #3,mplayer(a5)
 
+    ; Find actual values from the 1st frame
+    lea     mpbuffer1,a0
+    bsr     findMpegSync
+    beq     .no
+
+    ;bfextu  (a0){11+2:2},d0
+    ;DPRINT  "Layer=%ld"
+
+    bfextu  (a0){11+2+2+1:4},d0
+    move.w  .bitrates(pc,d0.w*2),mpbitrate(a5)
+    DPRINT  "Bitrate=%ld"
+
+    bfextu  (a0){11+2+2+1+4:2},d0
+    DPRINT  "Sampling frequency=%ld"
+    tst.b   d0
+    beq.b   .r
+    move    #48000,samplefreq(a5)
+.r
+    bfextu  (a0){11+2+2+1+4+2+1+1:2},d0
+    DPRINT  "Channel mode=%ld"
+    cmp.b   #%11,d0
+    sne     samplestereo(a5)
+.stereo
+
+    move.l  mhiStreamSize(a5),d0
+    beq.b   .2
+    lsl.l   #3,d0 * bytes to bits
+    move    mpbitrate(a5),d1
+    beq.b   .2      * variable? skip
+    mulu    #1024,d1    * kBits to bits
+    divu.l  d1,d0   * into seconds
+    * Put it
+    bsr     init\.moi_mp
+.2
+
+.no
+
     moveq   #0,d0   * ok
     rts
+
+.bitrates
+    dc.w    0,32,40,48,56,64,80,96,112,128,160,192,224,256,320
 
 .mem   
     bsr     mhiDeinit
@@ -6070,18 +6116,19 @@ mhiFillBuffer:
 
 * in:
 *   a0 = buffer
- REM
+* Out:
+*   d0 = true if found
+*   d2 = header 32-bits
 findMpegSync:
-	move	#MHI_BUFLEN-4-1,d1
-	move.l	a0,a1
+	move	#MPEGA_PCM_SIZE-4-1,d1
 .loop
-	move.b	(a1),d2
+	move.b	(a0),d2
 	lsl.l	#8,d2
-	move.b	1(a1),d2
+	move.b	1(a0),d2
 	lsl.l	#8,d2
-	move.b	2(a1),d2
+	move.b	2(a0),d2
 	lsl.l	#8,d2
-	move.b	3(a1),d2
+	move.b	3(a0),d2
 	
 	move.l	d2,d3
 	and.l	#$FFE00000,d3
@@ -6101,15 +6148,18 @@ findMpegSync:
 	and.l	#$F000,d3
 	beq.b	.next
 	
-	move.l	d2,d3
-	and.l	#$0C00,d3
+	move.w	d2,d3
+	and.w	#$0C00,d3
 	cmp.w	#$0C00,d3
 	bne.b	.yepSyncWord
 .next
-    addq    #1,a1
+    addq    #1,a0
 	dbf	d1,.loop
+    moveq   #0,d0
     rts
- EREM
+.yepSyncWord
+    moveq   #1,d0
+    rts
 
 ***************************************************************************
 *
