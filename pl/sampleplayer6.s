@@ -5605,7 +5605,7 @@ mhiInit:
     move.l  d0,mhiBase(a5)
     beq     .noLib
 
-    * Have two buffers
+    * Have buffers
     move.l	#MHI_BUFSIZE*MHI_BUFCOUNT,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr	getmem
@@ -5704,14 +5704,13 @@ mhiInit:
     DPRINT  "Channel mode=%ld"
     cmp.b   #%11,d0
     sne     samplestereo(a5)
-.stereo
+
 
     move.l  mhiStreamSize(a5),d0
     beq.b   .2
-    lsl.l   #3,d0 * bytes to bits
     move    mpbitrate(a5),d1
     beq.b   .2      * variable? skip
-    mulu    #1024,d1    * kBits to bits
+    mulu    #1024/8,d1    * kBits to bits
     divu.l  d1,d0   * into seconds
     * Put it
     bsr     init\.moi_mp
@@ -5764,7 +5763,6 @@ mhiStart:
     moveq	#-1,d0
 	lob     AllocSignal
     move.b  d0,mhiSignal(a5)
-    move.b  d0,d1
 
     move.l  mhiBase(a5),a6
 
@@ -5772,16 +5770,17 @@ mhiStart:
     lob     MHIQuery
     tst.l   d0
     beq.b   .n1
-    DPRINT  "NAME=%s"
+    DPRINT  "name=%s"
 .n1
     move.l  #MHIQ_CAPABILITIES,d0
     lob     MHIQuery
     tst.l   d0
     beq     .n2
-    DPRINT  "CAPS=%s"
+    DPRINT  "caps=%s"
 .n2
 
     moveq   #0,d0
+    move.b  mhiSignal(a5),d1
     bset    d1,d0
     move.l  mhiTask(a5),a0
     DPRINT  "signal mask=%lx"
@@ -5789,6 +5788,7 @@ mhiStart:
     DPRINT  "MHIAllocDecoder=%lx"
     move.l  d0,mhiHandle(a5)
     beq     .mhiExit
+
     move.l  mhiHandle(a5),a3
     lob     MHIGetStatus
     DPRINT  "MHIGetStatus=%ld"
@@ -6118,7 +6118,7 @@ mhiFillBuffer:
 *   a0 = buffer
 * Out:
 *   d0 = true if found
-*   d2 = header 32-bits
+*   a0 = address of the header
 findMpegSync:
 	move	#MPEGA_PCM_SIZE-4-1,d1
 .loop
