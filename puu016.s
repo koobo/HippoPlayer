@@ -392,6 +392,9 @@ prefs_residfilter     rs.b      1
 * This does not have a prefs setting, instead it serves as a way to persist
 * the search selection.
 prefs_selectedSearch  rs.b      1 
+prefs_mhiEnable       rs.b      1
+MHILIB_SIZE         =   29
+prefs_mhiLib          rs.b      MHILIB_SIZE
 prefs_size            rs.b      0
 
 *******************************************************************************
@@ -848,6 +851,9 @@ contonerr_laskuri rs.b 1		* kuinka monta virheellist‰ lataus
 cybercalibration_new rs.b 1		* yrityst‰
 calibrationfile_new rs.b 100
 newcalibrationfile rs.b	1
+
+mhiEnable_new   rs.b 1
+mhiLib_new      rs.b MHILIB_SIZE
 
 prefs_exit	rs.b	1		* Prefs exit-flaggi
 
@@ -1450,6 +1456,9 @@ disableShowStreamerError    rs.b       1
 * Remote search popup stores the selected search mode here
 * SEARCH_MODLAND etc etc
 selectedSearch = prefsdata+prefs_selectedSearch
+
+mhiEnable      = prefsdata+prefs_mhiEnable
+mhiLib         = prefsdata+prefs_mhiLib
 
 * Flags to indicate the bottom search layout state
 * Tested with .w!
@@ -7064,9 +7073,11 @@ modinfoaaa
 	beq.b	.zz	
 	move.l	infotaz(a5),a0		* jos oli jo modinfo niin suljetaan
 	cmp.l	#about_t,a0
-	beq	start_info
-	bra	sulje_info
-		
+	beq	.start
+    jmp	sulje_info
+.start
+    jmp start_info
+
 .zz	
     jmp	rbutton10b
 
@@ -13835,6 +13846,7 @@ prefs_code
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
 	move.b	altbuttons(a5),altbuttons_new(a5)
+	move.b	mhiEnable(a5),mhiEnable_new(a5)
 
 	move.b quadraScopeBars(a5),quadraScopeBars_new(a5)        
 	move.b quadraScopeFBars(a5),quadraScopeFBars_new(a5)         
@@ -13914,12 +13926,12 @@ prefs_code
 	lea	ack4-ack3(a3),a3
 	lea	arclzx(a5),a0
 	lea	arclzx_new(a5),a1
-	bsr.b	.copy
+	bsr	.copy
 
 	lea	DuU0-ack4(a3),a3
 	lea	pattern(a5),a0
 	lea	pattern_new(a5),a1
-	bsr.b	.copy
+	bsr	.copy
 
 
 	lea	pubscreen_new(a5),a1
@@ -13951,6 +13963,11 @@ prefs_code
 	lea	startup_new(a5),a1
 	lea	startup(a5),a0
 	moveq	#120-1,d0
+	bsr.b	.cp2
+
+	lea	mhiLib_new(a5),a1
+	lea	mhiLib(a5),a0
+	moveq	#MHILIB_SIZE-1,d0
 	bsr.b	.cp2
 
 	lea	calibrationfile(a5),a0
@@ -13991,14 +14008,19 @@ prefs_code
 
 
 	move	#GFLG_DISABLED,d0
-
 	tst.b	uusikick(a5)		* uusi kick?
 	bne.b	.uusi
+    lea     VaL6,a0
+    basereg VaL6,a0
 ** Disabloidaan screengadgetti!
 ;	or	d0,gg_Flags+pbutton13
 ** Disabloidaan ahi-valinta
-	or	d0,gg_Flags+VaL6
+	or	d0,gg_Flags+VaL6(a0)
 
+    * Disable MHI gadgtes
+	or	d0,gg_Flags+prefsMHIEnable(a0)
+	or	d0,gg_Flags+prefsMHILib(a0)
+    endb    a0
 .uusi
 
 	move.l	_IntuiBase(a5),a6
@@ -14292,6 +14314,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	residmode_new(a5),residmode(a5)
 	move.b	residfilter_new(a5),residfilter(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
+    move.b  mhiEnable_new(a5),mhiEnable(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
 	move	ahi_mastervol_new(a5),ahi_mastervol(a5)
@@ -14419,33 +14442,38 @@ exprefs	move.l	_IntuiBase(a5),a6
 	bsr	.copy
 	lea	pattern_new(a5),a0
 	lea	pattern(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	pubscreen_new(a5),a0
 	lea	pubscreen(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	groupname_new(a5),a0
 	lea	groupname(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	calibrationfile_new(a5),a0
 	lea	calibrationfile(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	ahi_name_new(a5),a0
 	lea	ahi_name(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	startup_new(a5),a0
 	lea	startup(a5),a1
 	moveq	#120-1,d0
-	bsr.b	.copy2
+	bsr 	.copy2
+
+	lea	mhiLib_new(a5),a0
+	lea	mhiLib(a5),a1
+	moveq	#MHILIB_SIZE-1,d0
+	bsr 	.copy2
 
 	lea	fkeys_new(a5),a0
 	lea	fkeys(a5),a1
 	move	#10*120-1,d0
-	bsr.b	.copy2
+	bsr 	.copy2
 
 
 * ladataan caib fle jos tarpeen
@@ -14983,7 +15011,7 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	pdbuf			* doublebuffering
 	bsr	pdup			* mod/prg/arc dirrit
 	bsr	pxfd			* xfdmaster
-	bra.b	.x
+	bra	.x
 
 .5	subq	#1,d0
 	bne.b	.6
@@ -14997,7 +15025,7 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	psettings		* settings file
 	bsr	pcyber			* cyber calibration
 	bsr	pcybername		* cyber calibration file name
-	bra.b	.x
+	bra	.x
 
 .6	subq.b	#1,d0
 	bne.b	.7
@@ -15008,7 +15036,7 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	pahi4			* ahi mixing rate
 	bsr	pahi5			* ahi master volume
 	bsr	pahi6			* ahi stereo level
-	bra.b	.x
+	bra	.x
 
 
 .7
@@ -15016,15 +15044,16 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	psup2b			* samplebufsize
 	bsr	psup2c			* sampleforcerate
 	bsr	pupmedrate		* med mixing rate
-	bsr	psamplecyber		* sample cyber
+	bsr	psamplecyber	* sample cyber
 	bsr	pmpegaqua		* MPEGA quality
 	bsr	pmpegadiv		* MPEGA freq division
 	bsr	pmedmode		* med mode
-    bsr     psidmode        * SID mode
-    bsr     pxmaplay        * XMAPlay
-    bsr     presidmode      * reSID mode
-    bsr     presidfilter    * reSID filter
-
+    bsr psidmode        * SID mode
+    bsr pxmaplay        * XMAPlay
+    bsr presidmode      * reSID mode
+    bsr presidfilter    * reSID filter
+    bsr pmhienable      * MHI enable
+    bsr pmhilib         * MHI library
 
 .x	popm	all
 	rts
@@ -15276,6 +15305,8 @@ gadgetsup2
     dr  rxmaplay    * xmaplay
     dr  rresidmode  * resid mode
     dr  rresidfilter * resid filter
+    dr  rmhienable  * mhi enable
+    dr  rmhilib     * mhi lib
 
 
 rval0	moveq	#0,d0
@@ -17454,6 +17485,54 @@ pxmaplay
 	move.b	xmaplay_new(a5),d0
 	lea	    prefsEnableXMAPlay,a0
 	bra	tickaa
+
+*** MHI toggle, lib
+
+rmhienable
+	not.b	mhiEnable_new(a5)
+pmhienable
+    tst.b   uusikick(a5)
+    beq     .x
+	move.b	mhiEnable_new(a5),d0
+	lea	    prefsMHIEnable,a0
+	bra	tickaa
+.x  rts
+
+rmhilib
+	lea	mhiLib_new(a5),a0
+	move.l	a0,a1			* mihin hakemistoon menn‰‰n
+	lea	.t(pc),a2
+	bsr	pgetfile
+	lea	mhiLib_new(a5),a0
+    move.l  a0,d0
+    DPRINT  "got=%ls"
+	bra.b	pmhilib
+
+.t	dc.b	"Select MHI driver",0
+ even
+
+pmhilib
+    tst.b   uusikick(a5)
+    beq     .x
+    pushpea mhiLib_new(a5),d1
+    lore    Dos,FilePart
+    move.l  d0,a0
+
+	lea	-30(sp),sp
+    move.l  sp,a1
+.c	move.b  (a0)+,d1
+    beq     .cc
+    cmp.b   #".",d1
+    beq     .cc
+    move.b  d1,(a1)+
+    bra     .c
+.cc clr.b   (a1)
+	move.l	sp,a0
+	lea	prefsMHILib,a1
+	bsr	prunt2	
+	lea	30(sp),sp
+.x
+	rts
 
 
 ***************************************
@@ -23679,7 +23758,9 @@ rexxmessage
     jsr     engageNormalMode
 
 	tst.b	d0
-	beq	rbutton7
+    bne .__1
+    jmp     rbutton8
+.__1
 
 .add2	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
 	bhs.b	.exit
@@ -41900,8 +41981,6 @@ p_sample:
 
 	jsr	.s_ahinfo(a0)
 
-	move.l	colordiv(a5),d0
-	DPRINT	"colordiv=%ld"
 ** lis‰‰
 	moveq	#0,d0
 	cmp	#16000,horizfreq(a5)
@@ -41913,6 +41992,11 @@ p_sample:
 	move.l	_XPKBase(a5),-(sp)
     jsr     streamGetContentLength
     move.l  d0,-(sp)
+    moveq   #0,d1
+    move.b  mhiEnable(a5),d1
+    move.w  d1,-(sp)
+    pushpea mhiLib(a5),-(sp)
+
 
     * Content length zero and stream active? it's a radio station
  REM
@@ -42002,7 +42086,7 @@ p_sample:
 	move.l	sampleroutines(a5),a0
 	jsr	.s_init(a0)
    
-	add     #18,sp
+	add     #24,sp
 
 	popm	a5/a6
 
@@ -54625,7 +54709,7 @@ prefsResidMode
        even
 
 prefsResidFilter
-       dc.l 0 ; END
+       dc.l prefsMHIEnable
        ; left, top, width, height
        dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
        dc.l 0
@@ -54638,6 +54722,31 @@ prefsResidFilter
 .tx 
        dc.b "reSID filter",0
        even
+
+prefsMHIEnable
+       dc.l prefsMHILib
+       ; left, top, width, height
+       dc.w 214-80+4-12-12-6,107+28-14-12-2-14,28,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16+14,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "Enable MHI",0
+       even
+
+prefsMHILib
+       dc.l 0 ; END
+       ; left, top, width, height
+       dc.w 214-80+4,107+28-14-12-2-14,100-8,12,3,1,1
+       dc.l 0
+       dc.l 0,0,0,0
+       dc.w 0
+       dc.l 0
+
 
 prefsEnableXMAPlay dc.l prefsResidMode
        ; left, top, width, height
