@@ -303,16 +303,22 @@ mpega_sync_position rs.l 1
 streamLength    rs.l    1
 
 ; Set to true to use MHI for mp3 playback
-mhi             rs.b    1
+mhiEnable       rs.b    1
 mhiSignal       rs.b    1
+mhiKillSignal   rs.b    1
+mhiStopSignal   rs.b    1
+mhiContSignal   rs.b    1
+mhiVolumeSignal rs.b    1
 mhiPlaying      rs.b    1
 mhiNoMoreData   rs.b    1
 mhiReady        rs.b    1
+                rs.b    1
 mhiTask         rs.l    1
-mhiLib          rs.l    1
+mhiBase         rs.l    1
 mhiFile         rs.l    1
 mhiStreamSize   rs.l    1
 mhiHandle       rs.l    1
+mhiLibName      rs.l    1
 
  if DEBUG
 output			rs.l 	1
@@ -477,7 +483,7 @@ vol:
 .b	
 	move	d0,mainvolume(a5)
 
-    tst.b   mhi(a5)
+    tst.b   mhiEnable(a5)
     bne     mhiVolume
 
 	tst.b	ahi(a5)
@@ -537,8 +543,6 @@ stop:
 init:
 	lea	var_b(pc),a5
 
-    st      mhi(a5)
-
 	bsr.b	.doInit
 	DPRINT	"init status=%ld"
  if DEBUG
@@ -556,13 +560,6 @@ init:
 	tst.l	d0
 	rts
 .doInit
-	* Two subroutine calls when getting here, hence 4+4
-	move.b	13+4+4+4(sp),kutistus(a5)
-	move.l	8+4+4+4(sp),songover(a5)
-	move.l	4+4+4+4(sp),colordiv(a5)
-	move.l	4+4+4(sp),_XPKBase(a5)
-    move.l  4+4(sp),streamLength(a5)
-
 	move.b	d0,samplebufsiz0(a5)
 	move.b	d1,sampleformat(a5)
 
@@ -582,6 +579,19 @@ init:
 	move.l	a4,modulefilename(a5)
 
 	move	a6,sampleforcerate(a5)
+
+	* Two subroutine calls when getting here, hence 4+4
+    lea 4+4(sp),a1
+    move.l  (a1)+,mhiLibName(a5)
+    move.w  (a1)+,d0
+    move.b  d0,mhiEnable(a5)
+    ; enable mhi
+    move.l  (a1)+,streamLength(a5)
+    move.l  (a1)+,_XPKBase(a5)
+    move.l  (a1)+,colordiv(a5)
+    move.l  (a1)+,songover(a5)
+    move.w  (a1)+,d0
+    move.b  d0,kutistus(a5)
 
 	tst.b	ahi(a5)		* jos AHI, ei kutistusta eikä calibrationia
 	beq.b	.noz
@@ -932,7 +942,7 @@ init:
     bra     sampleiik
 
 .cpuGood
-    tst.b   mhi(a5)
+    tst.b   mhiEnable(a5)
     beq     ._2
     bsr     mhiInit
     DPRINT  "mhiInit=%ld"
@@ -1153,8 +1163,11 @@ init:
 	beq 	.mpega_open_error 
 
     bsr     mpega_skip_id3v2_stream
-   
-	clr.l   12(a3) * stream_size
+
+   	moveq	#0,d2
+	moveq	#OFFSET_CURRENT,d3
+    lob     Seek
+    move.l  d0,d6
 
     bsr     isRemoteSample
     beq     .notRemotex
@@ -1419,6 +1432,9 @@ init:
 	lea	.form(pc),a0
 	tst	mplippu(a5)
 	beq.b	.nomp2
+    lea     .form4mhi(pc),a0
+    tst.b   mhiEnable(a5)
+    bne     .aa1
 	lea	    .form3(pc),a0
     tst.b   ahi(a5)
     bne.b   .aa1
@@ -1441,7 +1457,7 @@ init:
 
 	tst.b	ahi(a5)		* jos ahi, ei tarvita näitä puskureita
 	bne.b	.ok2
-    tst.b   mhi(a5)
+    tst.b   mhiEnable(a5)
     bne     .ok2
 
 	moveq	#2,d6				* kaksi puskuria monolle
@@ -1556,7 +1572,7 @@ init:
 
 	tst.b	ahi(a5)
 	beq	.nika
-    tst.b   mhi(a5)
+    tst.b   mhiEnable(a5)
     bne     .nika
 
 	cmp.b	#1,sampleformat(a5)	* jos AHI ja IFF, pari työpurskuria
@@ -1654,7 +1670,7 @@ init:
     moveq   #16,d4
 .888
 
-    tst.b   mhi(a5)
+    tst.b   mhiEnable(a5)
     beq     .999
     * Returning NULL samplefollow should disable stuff 
     sub.l   a0,a0
@@ -1695,6 +1711,9 @@ init:
 .form	dc.b	"%s %ld-bit %lc %2ldkHz",0
 .form2	dc.b	"MP%ld %ldkB %lc %2ldkHz %ld-bit",0
 .form3	dc.b	"MP%ld %ldkB %lc %2ldkHz AHI",0
+.form4mhi
+    	dc.b	"MP3 MHI",0
+
 .pn	dc.b	"HiP-Sample",0
  even
 
@@ -2175,7 +2194,7 @@ sample_code:
 ;	clr.b	killsample(a5)
 ;	rts
 
-    tst.b   mhi(a5)
+    tst.b   mhiEnable(a5)
     beq     .nomhi  
     bsr     mhiStart
     bra     quit2
@@ -5577,10 +5596,14 @@ MHI_BUFCOUNT = 8
 mhiInit:
     DPRINT  "mhiInit"
 
-    lea     mhiLibName(pc),a1
+    move.l     mhiLibName(a5),a1
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "Opening driver=%s"
+ endif  
     lore    Exec,OldOpenLibrary
     DPRINT  "mhi library=%lx"
-    move.l  d0,mhiLib(a5)
+    move.l  d0,mhiBase(a5)
     beq     .noLib
 
     * Have two buffers
@@ -5650,6 +5673,8 @@ mhiInit:
     st      samplebits(a5)
     st      samplestereo(a5)
     move    #44100,samplefreq(a5)
+    st      mplippu(a5)
+    move    #3,mplayer(a5)
 
     moveq   #0,d0   * ok
     rts
@@ -5669,12 +5694,6 @@ mhiInit:
     moveq   #ier_filerr,d0
     rts
 
-mhiLibName
-    ;dc.b    "libs:mhi/mhimaspro.library",0
-    ;dc.b    "libs:mhi/mhizz9000.library",0
-    dc.b    "libs:mhi/mhimdev.library",0
-    even
-
 mhiStart:
     DPRINT  "mhiStart"
     clr.b   mhiNoMoreData(a5)
@@ -5684,26 +5703,24 @@ mhiStart:
     lore    Exec,FindTask
     move.l  a0,mhiTask(a5)
 
-;    lea     mhiLibName(pc),a1
-;    lore    Exec,OldOpenLibrary
-;    DPRINT  "mhi library=%lx"
-;    move.l  d0,mhiLib(a5)
-;    beq     .mhiExit
-
-
     moveq	#-1,d0
 	lore    Exec,AllocSignal
+    move.b  d0,mhiKillSignal(a5)
+    moveq	#-1,d0
+	lob     AllocSignal
+    move.b  d0,mhiStopSignal(a5)
+    moveq	#-1,d0
+	lob     AllocSignal
+    move.b  d0,mhiContSignal(a5)
+    moveq	#-1,d0
+	lob     AllocSignal
+    move.b  d0,mhiVolumeSignal(a5)
+    moveq	#-1,d0
+	lob     AllocSignal
     move.b  d0,mhiSignal(a5)
     move.b  d0,d1
 
-    move.l  mhiLib(a5),a6
-    moveq   #0,d0
-    bset    d1,d0
-    move.l  mhiTask(a5),a0
-    DPRINT  "signal mask=%lx"
-    lob     MHIAllocDecoder
-    DPRINT  "MHIAllocDecoder=%lx"
-    move.l  d0,mhiHandle(a5)
+    move.l  mhiBase(a5),a6
 
     move.l  #MHIQ_DECODER_NAME,d0
     lob     MHIQuery
@@ -5717,6 +5734,15 @@ mhiStart:
     beq     .n2
     DPRINT  "CAPS=%s"
 .n2
+
+    moveq   #0,d0
+    bset    d1,d0
+    move.l  mhiTask(a5),a0
+    DPRINT  "signal mask=%lx"
+    lob     MHIAllocDecoder
+    DPRINT  "MHIAllocDecoder=%lx"
+    move.l  d0,mhiHandle(a5)
+    beq     .mhiExit
     move.l  mhiHandle(a5),a3
     lob     MHIGetStatus
     DPRINT  "MHIGetStatus=%ld"
@@ -5724,7 +5750,7 @@ mhiStart:
     bsr     mhiInitBuffers
 
     DPRINT  "MHIPlay"
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
     lob     MHIPlay
 
@@ -5734,28 +5760,46 @@ mhiStart:
     bne     .flush
 
 .loop
-	lore	GFX,WaitTOF
-	tst.b	killsample(a5)
-	bne.b	.stop
-
-    ; Check and clear mhiSignal(a5)
     moveq   #0,d0
-    moveq   #0,d1
-    move.b  mhiSignal(a5),d2
-    bset    d2,d1
-    move.l  d1,d3
-    lore    Exec,SetSignal
-    and.l   d3,d0
-    beq     .2
+    move.b  mhiSignal(a5),d1
+    bset    d1,d0
+    move.b  mhiKillSignal(a5),d1
+    bset    d1,d0
+    move.b  mhiStopSignal(a5),d1
+    bset    d1,d0
+    move.b  mhiContSignal(a5),d1
+    bset    d1,d0
+    move.b  mhiVolumeSignal(a5),d1
+    bset    d1,d0
+    lore    Exec,Wait
+    
+    move.l  d0,d7
+    move.b  mhiSignal(a5),d0
+    btst    d0,d7
+    beq.b   .s1
     bsr     mhiFillEmptyBuffers
     tst.b   mhiNoMoreData(a5)
     bne     .eof
-.2
-    tst.b   samplestop(a5)
-    beq     .1
-    bsr     mhiStop
-    bra     .loop
-.1  bsr     mhiCont
+.s1
+    move.b  mhiKillSignal(a5),d0
+    btst    d0,d7
+    bne     .stop
+
+    move.b  mhiStopSignal(a5),d0
+    btst    d0,d7
+    beq.b   .s3
+    bsr     mhiDoStop
+.s3
+    move.b  mhiContSignal(a5),d0
+    btst    d0,d7
+    beq.b   .s4
+    bsr     mhiDoCont
+.s4
+    move.b  mhiVolumeSignal(a5),d0
+    btst    d0,d7
+    beq.b   .s5
+    bsr     mhiDoVolume
+.s5
     bra     .loop
 
 .eof
@@ -5764,7 +5808,7 @@ mhiStart:
 
 .flush
     move.l  mhiHandle(a5),a3
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     lob     MHIGetStatus
     cmp.l   #MHIF_PLAYING,d0
     bne     .stop
@@ -5773,7 +5817,7 @@ mhiStart:
 .stop
     DPRINT  "stop"
     move.l  mhiHandle(a5),a3
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     lob     MHIGetStatus
     cmp.l   #MHIF_STOPPED,d0
     bne     .3
@@ -5795,23 +5839,19 @@ mhiStart:
 mhiDeinit:
     DPRINT  "mhiDeinit"
     bsr     mhiClose
-    move.b  mhiSignal(a5),d0
-    bmi.b   .5
-    lore    Exec,FreeSignal
-.5  st      mhiSignal(a5)
 
     move.l  mhiHandle(a5),d0
     beq     .2
     move.l  d0,a3
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     lob     MHIFreeDecoder
 .2  clr.l   mhiHandle(a5)
 
-    move.l  mhiLib(a5),d0
+    move.l  mhiBase(a5),d0
     beq     .3
     move.l  d0,a1
     lore    Exec,CloseLibrary
-.3  clr.l   mhiLib(a5)
+.3  clr.l   mhiBase(a5)
     rts
 
 mhiClose:
@@ -5871,11 +5911,29 @@ mhiClose:
 	moveq	#-1,d0 * not ok
 	rts	
 
+mhiSetSignal:
+    move.l  mhiTask(a5),d0
+    beq     .x
+    move.l  d0,a1
+    moveq   #0,d0
+    bset    d1,d0
+    lore    Exec,Signal
+.x
+    rts
+
+mhiKill:
+    move.b  mhiKillSignal(a5),d1
+    bra     mhiSetSignal
+
 mhiStop:
+    move.b  mhiStopSignal(a5),d1
+    bra     mhiSetSignal
+
+mhiDoStop:
     tst.b   mhiReady(a5)
     beq     .1
     move.l  mhiHandle(a5),a3
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     lob     MHIGetStatus
     cmp.l   #MHIF_PLAYING,d0
     bne     .1
@@ -5886,10 +5944,14 @@ mhiStop:
     rts
 
 mhiCont:
+    move.b  mhiContSignal(a5),d1
+    bra     mhiSetSignal
+
+mhiDoCont:
     tst.b   mhiReady(a5)
     beq     .1
     move.l  mhiHandle(a5),a3
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     lob     MHIGetStatus
     cmp.l   #MHIF_PAUSED,d0
     bne     .1
@@ -5900,6 +5962,10 @@ mhiCont:
     rts
 
 mhiVolume:
+    move.b  mhiVolumeSignal(a5),d1
+    bra     mhiSetSignal
+
+mhiDoVolume:
     DPRINT  "mhiVolume"
     tst.b   mhiReady(a5)
     beq     .1
@@ -5908,7 +5974,7 @@ mhiVolume:
     mulu    mainvolume(a5),d1
     lsr.l   #6,d1
     move.l  mhiHandle(a5),a3
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     lob     MHISetParam
 .1
     rts
@@ -5924,7 +5990,7 @@ mhiInitBuffers:
     beq     .eof
     bmi     .eof
     move.l  a4,a0
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
     lob     MHIQueueBuffer
     DPRINT  "MHIQueueBuffer=%ld"
@@ -5941,7 +6007,7 @@ mhiFillEmptyBuffers:
     DPRINT  "mhiFillEmptyBuffers"
 
 .loop
-    move.l  mhiLib(a5),a6
+    move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
     lob     MHIGetEmpty
     tst.l   d0
@@ -5955,15 +6021,14 @@ mhiFillEmptyBuffers:
     bmi     .eof
 
     move.l  a4,a0
-    move.l  mhiLib(a5),a6
     move.l  mhiHandle(a5),a3
+    move.l  mhiBase(a5),a6
     lob     MHIQueueBuffer
     DPRINT  "MHIQueueBuffer=%ld"
     bra     .loop
 .done
 
     * Restart if needed
-    move.l  mhiLib(a5),a6
     move.l  mhiHandle(a5),a3
     lob     MHIGetStatus
     cmp.l   #MHIF_OUT_OF_DATA,d0
@@ -5993,6 +6058,58 @@ mhiFillBuffer:
 .1
  endif
     rts
+
+
+* Find MPEG sync word
+
+;#define SYNC_VALID( v ) ( ((v & 0xFFE00000) == 0xFFE00000) &&\
+;                          ((v & 0x00060000) != 0x00000000) &&\
+;                          ((v & 0xF000) != 0xF000) &&\
+;                          ((v & 0xF000) != 0x0000) &&\
+;                          ((v & 0x0C00) != 0x0C00) )
+
+* in:
+*   a0 = buffer
+ REM
+findMpegSync:
+	move	#MHI_BUFLEN-4-1,d1
+	move.l	a0,a1
+.loop
+	move.b	(a1),d2
+	lsl.l	#8,d2
+	move.b	1(a1),d2
+	lsl.l	#8,d2
+	move.b	2(a1),d2
+	lsl.l	#8,d2
+	move.b	3(a1),d2
+	
+	move.l	d2,d3
+	and.l	#$FFE00000,d3
+	cmp.l	#$FFE00000,d3
+	bne.b	.next
+
+	move.l	d2,d3
+	and.l	#$00060000,d3
+	beq.b	.next
+
+	move.l	d2,d3
+	and.l	#$F000,d3
+	cmp.w	#$F000,d3
+	beq.b	.next
+
+	move.l	d2,d3
+	and.l	#$F000,d3
+	beq.b	.next
+	
+	move.l	d2,d3
+	and.l	#$0C00,d3
+	cmp.w	#$0C00,d3
+	bne.b	.yepSyncWord
+.next
+    addq    #1,a1
+	dbf	d1,.loop
+    rts
+ EREM
 
 ***************************************************************************
 *
