@@ -443,6 +443,7 @@ endSamplePlay:
 	DPRINT	"end sample play"
 	lea	var_b(pc),a5
 	st	killsample(a5)
+    bsr     mhiKill
 .w	
 	* Wait for the process to exit
 	moveq	#2,d1
@@ -529,11 +530,19 @@ vol:
 *********************************************************************
 
 cont:
-	clr.b	samplestop+var_b
+    push    a5
+    lea     var_b(pc),a5
+	clr.b	samplestop(a5)
+    bsr     mhiCont
+    pop     a5
 	rts
 
 stop:
-	st	samplestop+var_b
+    push    a5
+    lea     var_b(pc),a5
+	st  	samplestop(a5)
+    bsr     mhiStop
+    pop     a5
 	rts
 
 *********************************************************************
@@ -5740,16 +5749,19 @@ mhiInit:
     rts
 
 mhiStart:
-    DPRINT  "mhiStart"
+    DPRINT  "*** mhiStart ***"
     clr.b   mhiNoMoreData(a5)
     clr.b   mhiReady(a5)
 
     sub.l   a1,a1
     lore    Exec,FindTask
-    move.l  a0,mhiTask(a5)
+    move.l  d0,mhiTask(a5)
 
     moveq	#-1,d0
 	lore    Exec,AllocSignal
+    move.b  d0,mhiSignal(a5)
+    moveq	#-1,d0
+	lob     AllocSignal
     move.b  d0,mhiKillSignal(a5)
     moveq	#-1,d0
 	lob     AllocSignal
@@ -5760,16 +5772,14 @@ mhiStart:
     moveq	#-1,d0
 	lob     AllocSignal
     move.b  d0,mhiVolumeSignal(a5)
-    moveq	#-1,d0
-	lob     AllocSignal
-    move.b  d0,mhiSignal(a5)
 
     move.l  mhiBase(a5),a6
 
+ if DEBUG
     move.l  #MHIQ_DECODER_NAME,d0
     lob     MHIQuery
     tst.l   d0
-    beq.b   .n1
+    beq    .n1
     DPRINT  "name=%s"
 .n1
     move.l  #MHIQ_CAPABILITIES,d0
@@ -5778,6 +5788,7 @@ mhiStart:
     beq     .n2
     DPRINT  "caps=%s"
 .n2
+ endif
 
     moveq   #0,d0
     move.b  mhiSignal(a5),d1
@@ -5818,8 +5829,8 @@ mhiStart:
     move.b  mhiVolumeSignal(a5),d1
     bset    d1,d0
     lore    Exec,Wait
-    
     move.l  d0,d7
+
     move.b  mhiSignal(a5),d0
     btst    d0,d7
     beq.b   .s1
@@ -5957,7 +5968,7 @@ mhiClose:
 	moveq	#-1,d0 * not ok
 	rts	
 
-mhiSetSignal:
+mhiSetSignal:   
     move.l  mhiTask(a5),d0
     beq     .x
     move.l  d0,a1
@@ -5976,6 +5987,7 @@ mhiStop:
     bra     mhiSetSignal
 
 mhiDoStop:
+    DPRINT  "mhiDoStop"
     tst.b   mhiReady(a5)
     beq     .1
     move.l  mhiHandle(a5),a3
@@ -5994,6 +6006,7 @@ mhiCont:
     bra     mhiSetSignal
 
 mhiDoCont:
+    DPRINT  "mhiDoCont"
     tst.b   mhiReady(a5)
     beq     .1
     move.l  mhiHandle(a5),a3
@@ -6012,7 +6025,7 @@ mhiVolume:
     bra     mhiSetSignal
 
 mhiDoVolume:
-    DPRINT  "mhiVolume"
+    DPRINT  "mhiDoVolume"
     tst.b   mhiReady(a5)
     beq     .1
     moveq   #MHIP_VOLUME,d0
