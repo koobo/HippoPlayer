@@ -5800,9 +5800,12 @@ mhiStart:
     move.l  d0,mhiHandle(a5)
     beq     .mhiExit
 
+ if DEBUG
     move.l  mhiHandle(a5),a3
     lob     MHIGetStatus
+    and.l   #$ff,d0
     DPRINT  "MHIGetStatus=%ld"
+ endif
 
     bsr     mhiInitBuffers
 
@@ -5817,6 +5820,7 @@ mhiStart:
     bne     .flush
 
 .loop
+
     moveq   #0,d0
     move.b  mhiSignal(a5),d1
     bset    d1,d0
@@ -5867,7 +5871,7 @@ mhiStart:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
-    cmp.l   #MHIF_PLAYING,d0
+    cmp.b   #MHIF_PLAYING,d0
     bne     .stop
 	lore	GFX,WaitTOF
     bra     .flush
@@ -5876,7 +5880,7 @@ mhiStart:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
-    cmp.l   #MHIF_STOPPED,d0
+    cmp.b   #MHIF_STOPPED,d0
     bne     .3
     move.l  mhiHandle(a5),a3
     lob     MHIStop
@@ -5993,7 +5997,7 @@ mhiDoStop:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
-    cmp.l   #MHIF_PLAYING,d0
+    cmp.b   #MHIF_PLAYING,d0
     bne     .1
     DPRINT  "MHIPause"
     move.l  mhiHandle(a5),a3
@@ -6012,7 +6016,7 @@ mhiDoCont:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
-    cmp.l   #MHIF_PAUSED,d0
+    cmp.b   #MHIF_PAUSED,d0
     bne     .1
     DPRINT  "MHIPlay"
     move.l  mhiHandle(a5),a3
@@ -6063,7 +6067,7 @@ mhiInitBuffers:
 
 
 mhiFillEmptyBuffers:
-    DPRINT  "mhiFillEmptyBuffers"
+    ;DPRINT  "mhiFillEmptyBuffers"
 
 .loop
     move.l  mhiBase(a5),a6
@@ -6090,7 +6094,7 @@ mhiFillEmptyBuffers:
     * Restart if needed
     move.l  mhiHandle(a5),a3
     lob     MHIGetStatus
-    cmp.l   #MHIF_OUT_OF_DATA,d0
+    cmp.b   #MHIF_OUT_OF_DATA,d0
     bne     .1
     move.l  mhiHandle(a5),a3
     lob     MHIPlay
@@ -6107,7 +6111,6 @@ mhiFillBuffer:
     move.l  a0,d2
     move.l  #MHI_BUFSIZE,d3
     lore    Dos,Read
-    DPRINT  "Read=%ld"
     cmp.l   #MHI_BUFSIZE,d0
     sne     mhiNoMoreData(a5)
  ifne DEBUG
