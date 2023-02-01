@@ -5876,7 +5876,7 @@ mhiStart:
 	lore	GFX,WaitTOF
     bra     .flush
 .stop
-    DPRINT  "stop"
+    DPRINT  "stopping MHI"
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
@@ -6016,8 +6016,11 @@ mhiDoCont:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
+    cmp.b   #MHIF_OUT_OF_DATA,d0
+    beq.b   .2
     cmp.b   #MHIF_PAUSED,d0
     bne     .1
+.2
     DPRINT  "MHIPlay"
     move.l  mhiHandle(a5),a3
     lob     MHIPlay
@@ -6070,6 +6073,10 @@ mhiFillEmptyBuffers:
     ;DPRINT  "mhiFillEmptyBuffers"
 
 .loop
+    * Poll for stop sign to abort the fill process
+    tst.b   samplestop(a5)
+    bne     mhiDoStop
+    
     move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
     lob     MHIGetEmpty
