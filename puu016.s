@@ -393,7 +393,7 @@ prefs_residfilter     rs.b      1
 * the search selection.
 prefs_selectedSearch  rs.b      1 
 prefs_mhiEnable       rs.b      1
-MHILIB_SIZE         =   29
+MHILIB_SIZE         =   39
 prefs_mhiLib          rs.b      MHILIB_SIZE
 prefs_size            rs.b      0
 
