@@ -88,6 +88,8 @@ ier_mlederr	=	-21
 ier_not_compatible = 	-22
 ier_eagleplayer	= 	-23
 ier_mpega       =   -24
+ier_mhi             = -25
+ier_error_nomsg     = -26 ; error code without showning a message
 
 ****************** MPEGA library
 
@@ -296,8 +298,6 @@ ahisample2	rs.l	1
 ahisample3	rs.l	1
 ahisample4	rs.l	1
 
-mainTask        rs.l    1
-mpStreamerTask  rs.l    1
 id3v2Data       rs.l    1
 mpega_sync_position rs.l 1
 streamLength    rs.l    1
@@ -555,6 +555,7 @@ init:
 	bsr.b	.doInit
 	DPRINT	"init status=%ld"
  if DEBUG
+    push   d0
 	tst.l	d0
 	beq.b	._1
 	move.l	output(a5),d1
@@ -565,6 +566,7 @@ init:
 	clr.l	output(a5)
 	lore	Dos,Close
 ._1
+    pop     d0
  endif
 	tst.l	d0
 	rts
@@ -957,7 +959,6 @@ init:
     DPRINT  "mhiInit=%ld"
     tst.l   d0
     beq     .sampleok
-    printt  "TODO: some error code"
     bra     sampleiik
 ._2  
 
@@ -5601,6 +5602,20 @@ mhiInit:
     move.l  d0,mhiBase(a5)
     beq     .noLib
 
+    ; Test open the decoder
+	sub.l	a1,a1
+	lob FindTask
+
+    move.l  d0,a0
+    moveq   #SIGF_SINGLE,d1
+    move.l  mhiBase(a5),a6
+    lob     MHIAllocDecoder
+    DPRINT  "MHIAllocDecoder=%lx"
+    tst.l   d0
+    beq     .noDecoder
+    move.l  d0,a3
+    lob     MHIFreeDecoder
+
     * Have buffers
     move.l	#MHI_BUFSIZE*MHI_BUFCOUNT,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -5725,9 +5740,10 @@ mhiInit:
     moveq   #ier_nomem,d0
     rts
 
+.noDecoder
 .noLib
     bsr     mhiDeinit
-    moveq   #ier_error,d0
+    moveq   #ier_mhi,d0
     rts
 
 .fileError

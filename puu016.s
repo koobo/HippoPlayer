@@ -23119,6 +23119,7 @@ init_error
 	dr	ier_not_compatible_t
 	dr	ier_eagleplayer_t
     dr  ier_mpega_t
+    dr  ier_mhi_t
 
 ier_error           = -1
 ier_nochannels      = -2
@@ -23144,7 +23145,8 @@ ier_mlederr         = -21
 ier_not_compatible  = -22
 ier_eagleplayer     = -23
 ier_mpega           = -24
-ier_error_nomsg     = -25 ; error code without shownig a message
+ier_mhi             = -25
+ier_error_nomsg     = -26 ; error code without showning a message
 
 ier_playererr_t
 ier_error_t
@@ -23182,6 +23184,8 @@ ier_eagleplayer_t
 	dc.b	"Couldn't load eagleplayer!",0
 ier_mpega_t
     dc.b    "Couldn't open mpega.library!",0
+ier_mhi_t
+    dc.b    "Couldn't initialize MHI!",0
  even
 
 
