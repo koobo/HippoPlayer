@@ -40,6 +40,7 @@ Quick overview of major changes since v2.45
   - "Big buttons": Larger buttons
   - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
   - "Enable xmaplay060": Enable a high quality XM replayer
+  - "Enable MHI": Play MP3s with extenal hardware
 - Resizable main and info windows
 - Main window font can be changed to any font
 - Support for many new music formats
@@ -92,6 +93,11 @@ New keyboard shortcuts:
 
 - Allow adding urls with command line and ARexx.
 
+- Fix getting stuck if started from the "Execute command" dialog
+
+- Sometimes starting an MP3 playback was slow due, should be
+  better now.
+
 - A few other small fixes.
 
 
@@ -121,6 +127,7 @@ New keyboard shortcuts:
   - To search, activate the search view, select a source using the button and 
     then type search words into the string gadget, and hit enter.
   - [CTRL+S] is the keyboard shortcut remote search.
+  - The selected search source is saved with "Prefs/Save"
 
 - Finding items in lists:
   - The "S"-button popup contains "Find" and "Find next" as before.
@@ -145,6 +152,10 @@ New keyboard shortcuts:
    - reSID is now faster due to code optimizations. The "Oversample x2"
      mode should work on 50 MHz with normal SIDs.
    - 2SID tunes can be found in the HVSC.
+
+- MHI support: Enabling this and selecting a suitable driver in 
+  "Prefs/Play-2" allows MP3 playback using external hardware. 
+  This will override MPEGA and AHI for MP3 files.
   
 - The popup selector is now keyboard controllable with arrows up, down, 
   and enter. 
@@ -152,9 +163,10 @@ New keyboard shortcuts:
 - The list mode change button now has a popup selector with RMB.
 
 - Info window improvements: 
-  - Show MP3 file tag information
+  - Show MP3 file ID3v2 tag information, old tag versions 
+    (2 or older) not supported
   - Show MP3 radio stream information
-  - Show PSID play speed which tells how often SID parameters
+  - Show PSID play speed which tells how often the SID parameters
     are updated. Range 1..12 corresponds to 50..600 Hz update rate.
 
 - MP3 playback improvement for Paula output: When using the high quality
@@ -175,7 +187,8 @@ New keyboard shortcuts:
   and a few bugs are fixed.
 
 Thanks and greetz go to in no order:
-- Spot, 8bitbubsy, Erique, Patrik, Mr. Hac, Mike, Ziphoid, AceMan
+- Spot, 8bitbubsy, Erique, Patrik, Mr. Hac, Mike, Ziphoid, AceMan, 
+  Mr. Sallinen
 
 
 ------------------------------------------------------------------------------
