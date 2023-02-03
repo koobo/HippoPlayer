@@ -2177,7 +2177,7 @@ sample_code:
 	lea	var_b(pc),a5
 	addq	#1,sample_prosessi(a5)
 
-	DPRINT	"Process"
+	DPRINT	"*** Process ***"
 
 ;	bsr	ahi_alustus
 ;	beq	.zee
@@ -3829,6 +3829,7 @@ quit:
 quit2:	
 	DPRINT	"quit2"
 	bsr	sampleiik
+    DPRINT  "task exiting"
 	lore	Exec,Forbid
 	clr	sample_prosessi(a5)
 	clr.b	killsample(a5)
@@ -5817,7 +5818,7 @@ mhiStart:
     st      mhiReady(a5)
 
     tst.b   mhiNoMoreData(a5)
-    bne     .flush
+    bne     .stop
 
 .loop
 
@@ -5835,6 +5836,10 @@ mhiStart:
     lore    Exec,Wait
     move.l  d0,d7
 
+    move.b  mhiKillSignal(a5),d0
+    btst    d0,d7
+    bne     .stop
+
     move.b  mhiSignal(a5),d0
     btst    d0,d7
     beq.b   .s1
@@ -5842,10 +5847,6 @@ mhiStart:
     tst.b   mhiNoMoreData(a5)
     bne     .eof
 .s1
-    move.b  mhiKillSignal(a5),d0
-    btst    d0,d7
-    bne     .stop
-
     move.b  mhiStopSignal(a5),d0
     btst    d0,d7
     beq.b   .s3
@@ -5864,30 +5865,27 @@ mhiStart:
     bra     .loop
 
 .eof
-    ; Exiting
     DPRINT  "Flushing buffers"
 
-.flush
-    move.l  mhiHandle(a5),a3
-    move.l  mhiBase(a5),a6
-    lob     MHIGetStatus
-    cmp.b   #MHIF_PLAYING,d0
-    bne     .stop
-	lore	GFX,WaitTOF
-    bra     .flush
+    moveq   #0,d0
+    move.b  mhiSignal(a5),d1
+    bset    d1,d0
+    move.b  mhiKillSignal(a5),d1
+    bset    d1,d0
+    lore    Exec,Wait
+
 .stop
     DPRINT  "stopping MHI"
-    move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
-    lob     MHIGetStatus
-    cmp.b   #MHIF_STOPPED,d0
-    bne     .3
     move.l  mhiHandle(a5),a3
     lob     MHIStop
-.3
 
+    * Detect song end
     tst.b   mhiNoMoreData(a5)
     beq     .4
+    tst.b   killsample(a5)
+    bne     .4
+    DPRINT  "Sending song over"
     bsr     songoverr
 .4
 
@@ -5983,6 +5981,7 @@ mhiSetSignal:
     rts
 
 mhiKill:
+    DPRINT  "mhiKill"
     move.b  mhiKillSignal(a5),d1
     bra     mhiSetSignal
 
@@ -6075,7 +6074,10 @@ mhiFillEmptyBuffers:
 .loop
     * Poll for stop sign to abort the fill process
     tst.b   samplestop(a5)
-    bne     mhiDoStop
+    beq     .go
+    DPRINT  "filling aborted"
+    bra     mhiDoStop
+.go
     
     move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
@@ -6103,6 +6105,7 @@ mhiFillEmptyBuffers:
     lob     MHIGetStatus
     cmp.b   #MHIF_OUT_OF_DATA,d0
     bne     .1
+    DPRINT  "restarting"
     move.l  mhiHandle(a5),a3
     lob     MHIPlay
 .1
@@ -6118,6 +6121,7 @@ mhiFillBuffer:
     move.l  a0,d2
     move.l  #MHI_BUFSIZE,d3
     lore    Dos,Read
+    DPRINT  "Read=%ld"
     cmp.l   #MHI_BUFSIZE,d0
     sne     mhiNoMoreData(a5)
  ifne DEBUG
