@@ -4933,27 +4933,13 @@ mpega_skip_id3v2_stream
     move.l  d3,d0
     add.l   #10,d0
     move.l  d0,mpega_sync_position(a5)
-.skipLoop
-	move.l	d6,d1
-    lob     FGetC
-    * d0 = 0-255 or -1 if error
-    tst.l   d0
-    bmi     .skipError
-    cmp.w   #0,a3
-    beq.b   .s1
-    move.b  d0,(a3)+
-.s1
-    subq.l  #1,d3
-    bne.b   .skipLoop
-   
-.skipError
- if DEBUG  
-    tst.l   d3
-    beq     .y
-    move.l  d3,d0
-    DPRINT  "Not skipped: %ld"
-.y
- endif
+
+    move.l  d6,d1   * FH
+    move.l  a3,d2   * output buffer
+    move.l  d3,d3   * bytes to read
+    lore    Dos,Read
+    DPRINT  "read=%ld"
+
 .mpega_skip_exit_stream
     popm    all
 	rts
