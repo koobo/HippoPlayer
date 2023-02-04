@@ -6991,12 +6991,19 @@ buttonspressed:
 * in:
 *   a0=gadget
 *   a1=gadget function to run
+* out:
+*  Z-flag set: event handled
 .rightButtonDownCheck
 	bsr	checkMouseOnGadget
 	bne.b	.mouseNotOn
+    * RMB on a disabled gadget eats the event
+    move.w  gg_Flags(a0),d0     
+    and.w   #GFLG_DISABLED,d0
+    bne     .rmbHandled
 	move.l	a0,rightButtonSelectedGadget(a5)
 	move.l	a1,rightButtonSelectedGadgetRoutine(a5)
 	bsr	forceSelectGadget
+.rmbHandled
 	moveq	#0,d0
 .mouseNotOn
 	rts
