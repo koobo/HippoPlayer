@@ -4935,9 +4935,21 @@ mpega_skip_id3v2_stream
     add.l   #10,d0
     move.l  d0,mpega_sync_position(a5)
 
+    cmp.w   #0,a3
+    bne     .read
+    * Didn't get the buffer, just skip
+    * NOTE: seek will fail for streams
+
+    move.l  d6,d1   * FH
+    move.l  d3,d2   * Jump this many
+    moveq   #OFFSET_CURRENT,d3
+    lore    Dos,Seek
+
+    bra     .mpega_skip_exit_stream
+.read
     move.l  d6,d1   * FH
     move.l  a3,d2   * output buffer
-    move.l  d3,d3   * bytes to read
+    ;move.l  d3,d3   * bytes to read
     lore    Dos,Read
     DPRINT  "read=%ld"
 
@@ -4978,7 +4990,7 @@ mpega_parse_id3v2
     move.l  id3v2Data(a5),a3
     moveq   #0,d0
     move.b  findSyncBuffer+3,d0
-    DPRINT  "parse ID3v2, version=%ld"
+    DPRINT  "parse ID3v2, version=%ld, supports >=3"
     cmp.b   #3,d0
     blo     .xit
 
