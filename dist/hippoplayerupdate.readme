@@ -149,8 +149,9 @@ New keyboard shortcuts:
      - "Internal+Ext": also enable the external filter, 
         may reduce noise, uses more CPU.
      - "All off": no filters, less CPU usage.
-   - reSID is now faster due to code optimizations. The "Oversample x2"
-     mode should work on 50 MHz with normal SIDs.
+   - reSID is now faster due to code optimizations. The oversample mode
+     x2 should work on most (non-stereo) tunes with 50 MHz 060, for 
+     improved sound. Also the x3 mode seems be fine with many tunes.
    - 2SID tunes can be found in the HVSC.
 
 - MHI support: Enabling this and selecting a suitable driver in 
