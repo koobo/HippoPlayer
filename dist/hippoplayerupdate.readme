@@ -95,9 +95,6 @@ New keyboard shortcuts:
 
 - Fix getting stuck if started from the "Execute command" dialog
 
-- Sometimes starting an MP3 playback was slow due, should be
-  better now.
-
 - A few other small fixes.
 
 
