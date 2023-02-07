@@ -9092,8 +9092,8 @@ gadgetsup:
 
 	move	gg_GadgetID(a2),d0
 
-    ext.l   d0
-    DPRINT  "gadgetId=%ld"
+   ; ext.l   d0
+   ; DPRINT  "gadgetId=%ld"
 
     cmp     #GADGET_ID_SEARCH_STRING,d0
     bne     .1
