@@ -12675,10 +12675,17 @@ filereqtitle3
 
 
 
+exportModuleProgramToFileWithSongMetaData:
+    moveq   #1,d7
+    bra     doExportModuleProgramToFile
+
 * in:
 *  a0 = filename
 *  a1 = list
+*  d0 = 1: export #song data, 0: don't export #song data
 exportModuleProgramToFile:
+    moveq   #0,d7
+doExportModuleProgramToFile:
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"Exporting module list to %s"
@@ -12734,6 +12741,8 @@ exportModuleProgramToFile:
 .noAdd
 
     * Output fav song!
+    tst.b   d7
+    beq.b   .noFavSong
     move.b  l_favSong(a3),d0
     beq     .noFavSong
     move.b  #"#",(a1)+
@@ -32549,7 +32558,7 @@ exportFavoriteModulesToDisk
 	beq.b	.x
 	lea	favoriteModuleFileName(pc),a0
 	lea	favoriteListHeader(a5),a1
-	jsr 	exportModuleProgramToFile
+	jsr 	exportModuleProgramToFileWithSongMetaData
 	clr.b	favoriteListChanged(a5)
 .x	rts
 
