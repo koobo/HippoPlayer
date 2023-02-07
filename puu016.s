@@ -9743,8 +9743,7 @@ searchActivate:
 gadgetFindAction:
     DPRINT  "gadgetFindAction"
     lea     gadgetLocalSearchStringBuffer,a3
-    move.l  a3,a0
-    bsr     beepIfSearchStringIsSmall
+    tst.b   (a3)
     bne     .1
     DPRINT  "canceled"
     jmp     switchToNormalLayoutIfPossible
