@@ -9826,6 +9826,9 @@ find_continue:
 	bhi.b	.ok
     bra     beep
 .ok
+    tst.b   findpattern(a5)
+    beq     beep
+
     move.l  chosenmodule(a5),-(sp)
     bsr     do_find_continue
     move.l  (sp)+,d0
