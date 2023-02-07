@@ -5229,7 +5229,7 @@ wrender:
 	popm	all
 
 
-	bsr	inforivit_clear
+	jsr	inforivit_clear
 
     bsr     drawFileBoxFrame
 
@@ -5259,7 +5259,7 @@ wrender:
 
 	tst.l	playingmodule(a5)
 	bmi.b	.npl
-	bsr	inforivit_play
+	jsr	inforivit_play
 
 	tst.b	playing(a5)
 	bne.b	.npl
@@ -5329,6 +5329,12 @@ refreshFileSlider:
 drawTextureBottomMargin:
     tst     BOTTOM_MARGIN(a5)
     beq     .x
+    bsr     getBottomMarginParams
+	bsr 	drawtexture
+.x  rts
+
+* Common parms for above and bottom routins
+getBottomMarginParams:
 	move.l	rastport(a5),a2
 	moveq	#4,d0
 	moveq	#11,d1
@@ -5346,7 +5352,21 @@ drawTextureBottomMargin:
     * d1 = y start
     * d2 = x end
     * d3 = y end
-	bsr 	drawtexture
+    rts
+
+* Same as above but clear and clear one top row more,
+* also clear only inside the filebox aread
+clearBottomMargin:
+    tst     BOTTOM_MARGIN(a5)
+    beq     .x
+    bsr     getBottomMarginParams
+    subq    #1,d1
+
+    moveq	#30+WINX,d0
+	move    WINSIZX(a5),d2
+    sub     #10,d2
+
+	bsr 	tyhjays
 .x  rts
 
 
@@ -18168,7 +18188,8 @@ clearbox:
 	tst.b	win(a5)
 	bne.b	.r
 .x	rts
-.r	moveq	#30+WINX,d0
+.r	
+    moveq	#30+WINX,d0
 	;moveq	#62+WINY,d1
 	move	fileBoxTopEdge(a5),d1
 	subq	#1,d1
@@ -33210,15 +33231,16 @@ prepareSearchLayout:
     * Set margin to two list lines
     bsr     getFontHeightForSearchLayout
     add     d0,d0
-    tst.b   uusikick(a5)
-    bne.b   .1
-    * Kick 1.3 string gadgets use system default font.
-    * Assume it is 8 pixels, which it might not be
-    moveq   #8+8,d0
-.1
+;    tst.b   uusikick(a5)
+;    bne.b   .1
+;    * Kick 1.3 string gadgets use system default font.
+;    * Assume it is 8 pixels, which it might not be
+;    moveq   #8+8,d0
+;.1
     move    d0,BOTTOM_MARGIN(a5)
     
     * Refresh some gfx accordinly
+    jsr     clearBottomMargin
     jsr     drawTextureBottomMargin
     jsr     drawFileBoxFrame
 
