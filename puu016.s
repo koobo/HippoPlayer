@@ -52298,21 +52298,21 @@ remoteSearch
 
     ; Redirect output to file, this contains error messages.
     ; Output is not used here!
-;    pushpea searchOut(pc),d1
-;    move.l  #MODE_NEWFILE,d2
-;    lore    Dos,Open
-;    move.l  d0,d4
-;    beq     .exit
+    move.l  #searchOut,d1
+    move.l  #MODE_NEWFILE,d2
+    lore    Dos,Open
+    move.l  d0,d4
+    beq     .exit
 
 	pushpea	remoteExecute(pc),d1
 	moveq	#0,d2       * input
-	;move.l	d4,d3	    * output to NIL:
+	move.l	d4,d3	    * output
     move.l  nilfile(a5),d3
 	lob     Execute
 	DPRINT	"Execute status=%ld"
 
-;    move.l  d4,d1
-;    lob     Close
+    move.l  d4,d1
+    lob     Close
 
 	* Prepare results path into stack
 	lea		-100(sp),sp
@@ -52769,6 +52769,7 @@ remoteExecute
 remoteScriptPath
        dc.b    "T:hip",0
 
+searchOut = nilname
 ;searchOut
 ;        dc.b    "T:searchout",0
 searchResultsOut
