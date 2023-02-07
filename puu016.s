@@ -35192,6 +35192,7 @@ p_protracker
 
 
 .proinit
+    DPRINT  "Protracker init"
 	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
@@ -35212,8 +35213,14 @@ p_protracker
 	dbf	d0,.cl
 .c
 
-
 	bsr	.getsongs
+
+ if DEBUG
+    moveq   #0,d0
+    move.w  maxsongs(a5),d0
+    DPRINT  "Subsongs=%ld"
+ endif
+
 	bsr	whatgadgets
 
 	lea	kplbase(a5),a0
@@ -35223,6 +35230,15 @@ p_protracker
 	move.b	950(a1),d0
 	move	d0,pos_maksimi(a5)
 
+    * Start position, defaults to 0
+    bsr     .getSongStartPosition
+
+ if DEBUG
+    and.l   #$ff,d0
+    moveq   #0,d1
+    move    songnumber(a5),d1
+    DPRINT  "Start position=%ld song=%ld"
+ endif
 	bsr.b	.init
 
 	cmp	#-1,d0
@@ -35243,6 +35259,7 @@ p_protracker
 
 
 .init
+    * Start pattern
 	moveq	#0,d0
 .init1
 	moveq	#1,d1			* cia
@@ -35339,7 +35356,7 @@ p_protracker
 
 
 * Tutkii koko songin, ja kattoo jos olisi erillisiä songeja.
-.getsongs
+.getsongs:
 	move.l	moduleaddress(a5),a0
 	cmp.b	#'K',951(a0)
 	beq.b	.yee
@@ -35452,23 +35469,37 @@ p_protracker
 	bra.b	.next
 
 
+* Out:
+*   d0 = song start position or 0 
+.getSongStartPosition
+    moveq   #0,d0
+	lea	ptsonglist(a5),a0
+	cmp.b	#-1,1(a0)
+	beq.b	.noSong_
+	move	songnumber(a5),d0
+	move.b	(a0,d0),d0
+	bmi.b	.noSong_
+    rts
+.noSong_
+    moveq   #0,d0
+    rts
+
 .prosong
 	movem.l	d0-a1,-(Sp)
 
-	lea	ptsonglist(a5),a0
-	cmp.b	#-1,1(a0)
-	beq.b	.nosong
+    bsr     .getSongStartPosition
+    beq     .nosong
 
-	move	songnumber(a5),d7
-	move.b	(a0,d7),d7
-	bmi.b	.nosong
-
+    push    d0
 	jsr	kplayer+kp_end
 	
 	lea	kplbase(a5),a0
 	move.l	moduleaddress(a5),a1
-	move.l	d7,d0
+    pop     d0
+    
+    DPRINT  "position=%ld"
 
+    * Song start position is in d0
 	bsr	.init1
 	bsr	.provolume
 
