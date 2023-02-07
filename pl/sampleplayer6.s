@@ -4930,11 +4930,14 @@ mpega_skip_id3v2_stream
     move.l  d0,id3v2Data(a5)
     move.l  d0,a3
 
-    * d3 is the amount of data to skip now
+    * d3 is the size of the header, amount of data to skip
     move.l  d3,d0
+    
+    * This stores the file position where the actual data starts:
+    * ID3 header + ID3 data. Not used at the moment.
     add.l   #10,d0
     move.l  d0,mpega_sync_position(a5)
-
+    
     cmp.w   #0,a3
     bne     .read
     * Didn't get the buffer, just skip
