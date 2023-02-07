@@ -9138,7 +9138,7 @@ gadgetsup:
 	dr	rbutton_kela2	* Eteenkelaus
 	dr	rloadprog	* ohjelman lataus
 	dr	rmove		* move
-	dr	rsearchfuncs	* search functions
+	dr	rsort       * sort
  ifeq FEATURE_LIST_TABS
 	dr	rlistmode	* listmode change
     ;dr  rlistmodePop
@@ -9655,29 +9655,6 @@ gadgetSearchStringAction:
     endb    a0
 
 
-
-rsearchfuncs
-	DPRINT	"Search functions"
-	lea		.options(pc),a4
-	lea		gadgetSortButton,a0
-	move	gg_LeftEdge(a0),d6
-	moveq	#20,d7
-	add		gg_TopEdge(a0),d7
-    moveq   #0,d4
-	bsr		listSelectorMainWindow
-	bmi.b	.skip
-	beq		find_new
-	subq	#1,d0
-	beq		find_continue
-.skip
-	rts
-
-.options
-	* max width, rows
-	dc.b	19,2
-	dc.b	"Find            [F]",0
-	dc.b	"Find next [SHIFT+F]",0
-    even
 
 gadgetSearchSourceAction:
 	lea		gadgeSearchSourceOptions(pc),a4
@@ -55323,9 +55300,9 @@ rightButtonActionsList
 	* Prefs -> zoom file box
 	dr.w	gadgetPrefsButton
 	dc.l	zoomfilebox
-	* S -> Sort
+	* S -> Find in list 
 	dr.w	gadgetSortButton
-	dc.l	rsort
+    dc.l	find_new
 	* Move -> Add divider
 	dr.w	gadgetMoveButton
 	dc.l	add_divider
@@ -55428,12 +55405,10 @@ tooltipList
 	dc.b	"LMB: Open preferences",0
 	dc.b    "RMB: Zoom file box",0
 .sort
-;	dc.b	16,2
-;	dc.b	"LMB: Sort list",0
-;	dc.b	"RMB: Find module",0
-	dc.b    15,2
-	dc.b	"LMB: Find items",0
-	dc.b	"RMB: Sort list",0
+	dc.b	25,3
+	dc.b	"LMB: Sort list   [S]",0
+	dc.b	"RMB: Find module [F]",0
+    dc.b    "     Find next   [CTRL+F]"
 .move
 	dc.b	26,4
 	dc.b	"LMB: Move chosen module,",0
