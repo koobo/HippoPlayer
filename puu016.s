@@ -9081,6 +9081,8 @@ fkeyaction
 gadgetsup:
 	bsr	    areMainWindowGadgetsFrozen
 	bne.b 	.exit
+    ; Close the search layout if open
+    jsr     switchToNormalLayoutIfPossible
 
 	movem.l	d0-a6,-(sp)
 
