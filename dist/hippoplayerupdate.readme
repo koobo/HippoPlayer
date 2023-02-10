@@ -127,9 +127,10 @@ New keyboard shortcuts:
   - The selected search source is saved with "Prefs/Save"
 
 - Finding items in lists:
-  - The "S"-button popup contains "Find" and "Find next" as before.
-  - Activating "Find" from the popup (or with [F]) now brings up a
-    string gadget below the list instead of a ReqTools requester.
+  - The "S"-button popup was returned to original: LMB sorts the list
+    and RMB activates "Find" from the module list.
+  - Activating "Find" from the button (or with key [F]) now brings up 
+    a string gadget below the list instead of a ReqTools requester.
     "Find next" (or [SHIFT+F]) works as before.
 
 - When favoriting a module (with RMB) the currently playing subsong is also 
@@ -137,8 +138,8 @@ New keyboard shortcuts:
   subsong will be played first.
 
 - PSID playback improvements using reSID with the updated playsid.library:
-   - Stereo SID (2SID) files are now supported. The 68060 at 50 MHz can 
-     handle most 2SIDs with filters enabled. 
+   - Stereo SID (2SID) files are now supported. The 68060 at 50 MHz 
+     can handle most 2SIDs with filters enabled. 
    - Proper support for multispeed tunes added. Previously only up to 
      4-speed tunes worked, now Jeff's "12-speed tune" also plays fine.
    - reSID filters can be toggled in "Prefs/Play-2":
@@ -146,9 +147,10 @@ New keyboard shortcuts:
      - "Internal+Ext": also enable the external filter, 
         may reduce noise, uses more CPU.
      - "All off": no filters, less CPU usage.
-   - reSID is now faster due to code optimizations. The oversample mode
-     x2 should work on most (non-stereo) tunes with 50 MHz 060, for 
-     improved sound. Also the x3 mode seems be fine with many tunes.
+   - reSID is now about 20% faster due to code optimizations. 
+     The oversample mode x2 should work on most (non-stereo) tunes 
+     with 060@50, for improved sound. Also the x3 mode seems be 
+     fine with many tunes.
    - 2SID tunes can be found in the HVSC.
 
 - MHI support: Enabling this and selecting a suitable driver in 
@@ -179,10 +181,16 @@ New keyboard shortcuts:
    - Patternscope supported without limitations.
 
 - Some keys from CDTV, CD32 were added as key shortcuts:
-  stop, play, prev, next.   
+  stop, play, prev, next.  
+
+- Pressing the [DEL] key now acts similarly as [BACKSPACE] and [D]:
+  delete list item, or navigate to parent in file browser view.
 
 - 8bitbubsy's xmaplay060 updated. The mixing routines are now faster
   and a few bugs are fixed.
+
+- Thomas Winischhofer has updated his MusicMakerV8 players to
+  version 5.09, added these.
 
 Thanks and greetz go to in no order:
 - Spot, 8bitbubsy, Erique, Patrik, Mr. Hac, Mike, Ziphoid, AceMan, 

@@ -1,44 +1,3 @@
-TODO:
-- 68000 kaatuu kun load file
-- link+nlnk
-
-TODO:
-Huomasin ettei Hippo + AHI combolla jostain syyst채 MOD-tiedostoja soitettaessa
-Pause toimi, kappale j채채 soimaan vaikka info-kent채ss채 lukee Paused.
-
-Muiden formaattejen kanssa en t채h채n ole t철rm채nnyt ja ongelma ei esiinny jos
-채채nen ulostulona ei ole AHI.
-
-TODO:
-- 68020 check for MP3
-
-TODO:
-Loading of "next module" crashes 8000 0003 on 68000 when HiP GUI is hidden (rx
-"hide 0") #17 Seems to be a bug introduced in 2.55, at least I cannot recall
-having this before.
-
-Tested and confirmed on both Minimig 1.1 with 68SEC000 and A600 with 68000 I
-have not tried on 020+, 0003 suggests that it might not be a problem on 020+.
-
-
-FIXED: TODO
-- "Dendy collection" station, open info -> boom
-
-
-FIXED: TODO
-- use SEARCRESULTTO for stations/playlists for output
-- uhc version check
-
-FIXED: TODO:
-- make note of mpega.library vs mpega + libmad
-
-
-TODO:
-- list mode change button RMB popup
-
-TODO:
-- optional list mode TAB
-
 
 TODO:
 - now playing a MMD3-format MED file results in a Software Failure 8000 0005, which seems to be a "division by zero" 
@@ -55,11 +14,122 @@ my dir called "VonBeat" by clicking the button and selecting it.
 --> the default path for programs needs a full path (like "SYS:VonBeat") 
 to work correctly, which is not the case when just selecting a dir, which is the most forward thing to do
 
-TODO:
-- limit search term size, min 3 letters?
 
+TODO: CRASH:
+- Press "Add" on filebrowser root level
 
 ------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+FIXED: TODO: fav subsong for mods
+
+FIXED: TODO: Found a bug: in search mode, button "Prg" is disabled. Still, right clicking on
+it opens the save program dialog. Generally, disabled buttons are right
+clickable.
+
+FIXED: TODO: open bottom search layout, resize window, list bottom row will have some previous
+      text
+
+TODO:
+- kick13, orig playsid, get 81000005 corrupted mem list
+
+FIXED: TODO:
+New or old bug? not sure, cant believe it took me this long to even notice. Play
+any SID tune, let it play, then drag down the volume to anything noticably lower
+volume, click Next Song and bam, the volume slider stays where it is but the
+volume actually resets to max volume.
+
+FIXED: TODO:
+- double buffering on
+- play local mp3
+- then start a remote mp3 
+--> jammed, on a1200
+
+FIXED: TODO:
+- title bar zipped window STILL HAS resize gadget
+-- appears when title bar is deactivated by clicking outside
+
+TODO:
+- fix timeout not really working on radio stations
+
+
+FIXED: TODO:
+- key shortcuts for prev/next crash on emptylist
+  k,l
+
+FIXED: TODO:
+- preserve chosenmodule for listmodes
+
+FIXED: TODO
+- do not show "no search results" while parsing
+
+FIXED: TODO:
+- Jim power title 7ch
+- play with kick 1.3 + 68000
+- play Logical title -> crash when loading
+
+FIXED: TODO
+- 68000
+- load group on startup
+- have startup module
+- play "Jim Power 1" -> should crash?
+
+FIXED: TODO:
+- load group "all on startup"
+- does startup module work?
+
+FIXED: TODO:
+- OK: display 14-bit for reSID info
+- OK: keyboard control for popup
+- OK: search "aaa" radio station -> hang
+- OK: open search view, resize window -> search gadgets disappera
+- OK: open favs, ctrl+s -> crash
+- OK: DISABLE ctrl+s onn kick13
+
+- OK: exit local find layout while in SEARCH VIEW with mouse click
+- jotain roskaa j狎 fileboxin alimmalle riville kun vaihtelee searc
+  view <-> muut viewit
+
+FIXED: TODO:
+- 68000 kaatuu kun load file
+
+FIXED: TODO:
+- 68020 check for MP3
+
+FIXED: TODO:
+Loading of "next module" crashes 8000 0003 on 68000 when HiP GUI is hidden (rx
+"hide 0") #17 Seems to be a bug introduced in 2.55, at least I cannot recall
+having this before.
+
+Tested and confirmed on both Minimig 1.1 with 68SEC000 and A600 with 68000 I
+have not tried on 020+, 0003 suggests that it might not be a problem on 020+.
+
+-> commit: Initial vertical layout, looks same as before
+
+
+FIXED: TODO
+- "Dendy collection" station, open info -> boom
+
+
+FIXED: TODO
+- use SEARCRESULTTO for stations/playlists for output
+- uhc version check
+
+FIXED: TODO:
+- make note of mpega.library vs mpega + libmad
+
+FIXED: TODO:
+- list mode change button RMB popup
+
+TODO:
+- optional list mode TAB
+
+
+FIXED: TODO:
+- limit search term size, min 3 letters?
+
 
 
 TODO:
@@ -116,9 +186,6 @@ FIXED: TODO:
 
 DONE: TODO:
 - remove all ".w"s from all branches, vasm will optimize them in this case
-
-TODO: CRASH:
-- Press "Add" on filebrowser root level
 
 FIXED: TODO:
 - always use PIPE for remotes
