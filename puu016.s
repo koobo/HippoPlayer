@@ -35239,7 +35239,7 @@ p_protracker
     move    songnumber(a5),d1
     DPRINT  "Start position=%ld song=%ld"
  endif
-	bsr.b	.init
+	bsr.b	.init1
 
 	cmp	#-1,d0
 	beq.b	.eok
@@ -35477,6 +35477,7 @@ p_protracker
 	cmp.b	#-1,1(a0)
 	beq.b	.noSong_
 	move	songnumber(a5),d0
+    DPRINT  "songnumber=%ld"
 	move.b	(a0,d0),d0
 	bmi.b	.noSong_
     rts
@@ -35488,7 +35489,6 @@ p_protracker
 	movem.l	d0-a1,-(Sp)
 
     bsr     .getSongStartPosition
-    beq     .nosong
 
     push    d0
 	jsr	kplayer+kp_end
