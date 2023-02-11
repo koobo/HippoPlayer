@@ -6964,7 +6964,7 @@ buttonspressed:
 
 	* no RMB actions found
 	* try line marking
-	bsr	marklineRightMouseButton
+	jsr	marklineRightMouseButton
 	beq.b	.nothingMarked
 	rts
 
@@ -7219,7 +7219,7 @@ tooltipHandler
 	bsr	deactivateTooltip
 	
 	* Close any tooltip that may be showing since mouse was moving.
-	bsr	closeTooltipPopup
+	jsr	closeTooltipPopup
 
 	* Check if window is zipped to toolbar size
 	tst.b	kokolippu(a5)
@@ -7348,7 +7348,7 @@ omaviesti
 	clr.b	win(a5)
 	bsr	sulje_prefs
 	jsr	stopScopeTasks
-	bsr	sulje_info
+	jsr	sulje_info
 	bra	.huh
 
 .open	
@@ -8603,7 +8603,7 @@ nappuloita:
 	; window will be opened active:
 	or.l	#WFLG_ACTIVATE,sflags
 	bsr	rbutton10b
-	bra.b	.ee
+	bra 	.ee
 .f0
 	cmp.b	#$41,d3		* backspace + shift?
 	beq.b	.fid
@@ -8792,9 +8792,9 @@ nappuloita:
 	dc	$4f
 	dr	actionNextSong	* next song
 
-    dr  .RAWKEY_MEDIA_PREV_TRACK
+    dc  .RAWKEY_MEDIA_PREV_TRACK
     dr  prevButtonAction
-    dr  .RAWKEY_MEDIA_NEXT_TRACK
+    dc  .RAWKEY_MEDIA_NEXT_TRACK
     dr  nextButtonAction
 
 	dc	7
@@ -8815,7 +8815,7 @@ nappuloita:
 	dc	$40
 	dr	stopcont
 
-    dr  .RAWKEY_MEDIA_PLAY_PAUSE
+    dc  .RAWKEY_MEDIA_PLAY_PAUSE
     dr  playButtonAction 
 
 	dc	$22
@@ -10175,7 +10175,7 @@ rbutton4a
 rbutton9
 	DPRINT	"clearListButtonAction"
 	skipIfGadgetDisabled gadgetNewButton
-	bsr	confirmFavoritesModification
+	jsr	confirmFavoritesModification
 	bne.b	clearlist
 	rts
 
@@ -20521,7 +20521,7 @@ showTooltipPopup
 * Also deactivates any tooltip that is about to open.
 closeTooltipPopup
 	pushm	all
-	bsr	deactivateTooltip
+	jsr	deactivateTooltip
 	move.l	tooltipPopupWindow(a5),d0
 	beq.b	.exit
 	move.l	d0,a0
@@ -28132,7 +28132,7 @@ makeScopeHorizontalBars
 *** Any sample played by the sample player
 
 samplescope:
-	bsr.b	samples0
+	bsr 	samples0
     bne     .hasData
     rts
 .hasData
@@ -33270,7 +33270,7 @@ prepareSearchLayout2:
     tst.b   uusikick(a5)
     bne     .n
     * Adjust for kick 1.3
-    subq    #1,gg_TopEdge(a3)
+    subq    #1,gg_TopEdge+gadgetSearchString(a3)
 .n
 	movem	gadgetSearchString+4(a3),plx1/ply1/plx2/ply2
 
@@ -48155,7 +48155,7 @@ findDeliPlayer
 	move.l	sp,a0
 	* initialize to zero, important
 	clr.l	(a0) 
-	bsr	allocreplayer
+	jsr	allocreplayer
 	move.l	(sp),a1
 	lea	4(sp),sp
 	tst.l	d0
