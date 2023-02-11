@@ -22,7 +22,7 @@ P61A=0
  endif
 
 
-start	dc.b	"HiPxPla",27	* Tunnistus ja versio, 8 bytes
+start	dc.b	"HiPxPla",28	* Tunnistus ja versio, 8 bytes
 
 head	macro
 	dc.w	\1
