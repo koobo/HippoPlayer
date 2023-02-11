@@ -52757,7 +52757,7 @@ remoteSearch
 
 .genericSearchCmd
 	dc.b	"%s",10     ; path
-	dc.b 	'%s %s',10  ; search, terms
+	dc.b 	'%s SEARCHLIMIT=10000 %s',10  ; search, terms
 	dc.b	0
 
 .modlandResultsPath
@@ -52781,7 +52781,7 @@ remoteSearch
 	dc.b	"stationsearch",0
 .stationsSearchCmd
 	dc.b	"%s",10
-	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s %s',10
+	dc.b 	'uhcmirrorsearch SEARCHLIMIT=1000 SEARCHRESULTTO=T:searchresults %s %s',10
 	dc.b	0
 .recentPlaylistsResultsPath
 	dc.b	"playlistrecent",0
