@@ -737,8 +737,12 @@ samplebufsiz_new	rs.b	1
 samplebufsiz0		rs.b	1
 samplebufsiz		rs.l	1
 
+* How many bytes to skip to get to next sample in data,
+* 1 for 8-bit data 2 for 16-bit. Used when accessing AHI sample
+* data, which can be both.
+ahiSampleModulo      rs.w    1
 * Sample playback rate, bytes per frame.
-sampleadd		rs.l	1
+sampleadd		    rs.l	1
 * Pointer to a pointer to the sample position.
 * This is reset to zero by sample player when a buffer
 * is played through.
@@ -749,10 +753,6 @@ samplepointer		rs.l	1
 samplepointer2		rs.l	1
 * Set to non-zero if sample being played is stereo
 samplestereo		rs.b	1
-* How many bytes to skip to get to next sample in data,
-* 1 for 8-bit data 2 for 16-bit. Used when accessing AHI sample
-* data, which can be both.
-ahiSampleModulo      rs.w    1
 
 * This is set in loadfile() to indicate a sample is found.
 * Actual loading is then skipped.
