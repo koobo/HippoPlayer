@@ -44253,11 +44253,10 @@ p_custommade
 	bra	clearsound
 
 .song
- if DEBUG
 	moveq	#0,d0
 	move	songnumber(a5),d0
 	DPRINT	"Song %ld"
- endif
+
 	* starts from 1, not 0
 	addq	#1,d0
 	move.l	custommaderoutines(a5),a0
