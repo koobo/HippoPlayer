@@ -60,7 +60,7 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 
 
-# Changes from v2.55 (10.11.2022) to v2.56 (?.?.202?) 
+# Changes from v2.55 (10.11.2022) to v2.56 (15.2.2023) 
 
 ## New fixes:
 
@@ -93,7 +93,9 @@ New keyboard shortcuts:
 
 - Allow adding urls with command line and ARexx.
 
-- Fix getting stuck if started from the "Execute command" dialog
+- Fix getting stuck if started from the "Execute command" dialog.
+
+- Fix crash when playing CustomMade modules.
 
 - A few other small fixes.
 
@@ -103,7 +105,7 @@ New keyboard shortcuts:
 - Improved MP3 support: Data will be streamed over the network.
   This allows listening to MP3 files without downloading them first, 
   and also allows listening to radio station streams. UHCTools is 
-  used for network transfers.
+  used for network transfers. Remember to update UHCTools to latest!
   
 - Added new search sources for MP3s provided by UHCTools:
   - https://amigaremix.com/ 
@@ -113,7 +115,8 @@ New keyboard shortcuts:
 - Added "Shared lists" search source. This fetches a list of shared 
   playlists to be checked out. For example, you'll find favorite lists,
   top lists, and lists with certain musical themes. The lists will be 
-  updated periodically, administration by Spot/Up Rough. Cool!
+  updated periodically, and new community created lists added. 
+  Administration by Spot/Up Rough. Cool!
 
 - User interface changes related to searching remote files:
   - The search results view now contains a search source selection button
@@ -127,7 +130,7 @@ New keyboard shortcuts:
   - The selected search source is saved with "Prefs/Save"
 
 - Finding items in lists:
-  - The "S"-button popup was returned to original: LMB sorts the list
+  - The "S"-button was returned to the original state: LMB sorts the list
     and RMB activates "Find" from the module list.
   - Activating "Find" from the button (or with key [F]) now brings up 
     a string gadget below the list instead of a ReqTools requester.
@@ -155,7 +158,7 @@ New keyboard shortcuts:
 
 - MHI support: Enabling this and selecting a suitable driver in 
   "Prefs/Play-2" allows MP3 playback using external hardware. 
-  This will override MPEGA and AHI for MP3 files.
+  This will override MPEGA and AHI settings for MP3 files.
   
 - The popup selector is now keyboard controllable with arrows up, down, 
   and enter. 
@@ -188,6 +191,8 @@ New keyboard shortcuts:
 
 - 8bitbubsy's xmaplay060 updated. The mixing routines are now faster
   and a few bugs are fixed.
+
+- GlueMon module format: Added position/length and scope support
 
 - Thomas Winischhofer has updated his MusicMakerV8 players to
   version 5.09, added these.
