@@ -43947,7 +43947,7 @@ p_gluemon
 	jmp .id_gluemon(pc)
 	jmp	.author(pc)
 	dc.w pt_gluemon
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"GlueMon",0
 .a	dc.b	"Lars Malmborg (GlueMaster/North Star)",0
  even
@@ -43986,6 +43986,7 @@ p_gluemon
 	lea 	pos_maksimi(a5),a3
 	lea	pos_nykyinen(a5),a4
 	move.l	gluemonroutines(a5),a6
+    pushpea scopeData(a5),d0
 	jsr	.INIT(a6)
 	popm	d1-a6
 	moveq	#0,d0
