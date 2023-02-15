@@ -1,7 +1,12 @@
+TODO:
+- kick1.3: font "polarsmall", search layout toggle: still some garbage on screen
+  -> polarsmall ok on kick3
+- FIXED: kick1.3: play wav -> crash, fine with previous version
+           no crash on kick3+020
+- battle squadron title.cm -> crash
 
 TODO:
 - now playing a MMD3-format MED file results in a Software Failure 8000 0005, which seems to be a "division by zero" 
-
 
 TODO:
 - default module program dir issue
@@ -14,7 +19,6 @@ my dir called "VonBeat" by clicking the button and selecting it.
 --> the default path for programs needs a full path (like "SYS:VonBeat") 
 to work correctly, which is not the case when just selecting a dir, which is the most forward thing to do
 
-
 TODO: CRASH:
 - Press "Add" on filebrowser root level
 
@@ -22,6 +26,11 @@ TODO: CRASH:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
+DONE: TODO:
+- SEARCHLIMIT=100 uhcsearch
+
+DONE: TODO:
+- test kick 1.3 search layout
 
 FIXED: TODO: fav subsong for mods
 
