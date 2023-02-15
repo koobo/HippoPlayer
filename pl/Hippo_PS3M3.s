@@ -24,6 +24,13 @@ TEST 	= 	0
    endif
  endif 
 
+ ifd __VASM
+    opt o-   ; disable all
+    opt o1+  ; optimize branches
+    opt o2+  ; optimize displacements
+    ;opt ow+ ; display 
+ endif
+
 * Print to debug console, very clever.
 * Param 1: string
 * d0-d6:    formatting parameters, d7 is reserved
@@ -123,6 +130,27 @@ tword	macro
 ;sVER	macro
 ;	dc.b	"Replay version 0.942/020+ / 30.10.1994 ",10,10
 ;	endm
+
+
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_tempvol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
 
 
  ifne TEST
@@ -368,6 +396,7 @@ init2r
 
 	move.l	d0,deliPlayer
 	move.l	d1,deliBase
+    move.l  d2,scopeData
 	move.l	#buff1,(a0)
 	move.l	#buff2,(a1)
 	move.l	#mixingperiod,(a2)
@@ -380,11 +409,11 @@ init2r
 
 boosto
 	tst.b	ahi_use
-	bne.w	ahi_update
+	bne	ahi_update
 
 	move.b	d0,vboost+3
 	lea	data,a5
-	bra.w	makedivtabs
+	bra	makedivtabs
 
 * This is called in VERTB/VBLANK interrupt
 * in: 
@@ -399,8 +428,8 @@ s3poslen
 	move	positioneita(a5),(a0)
 	tst.b	d0 
 	beq.b	.noPatternScope
-	bsr.w	updatePatternInfoBuffer
-	bsr.w	updatePatternInfoData
+	bsr	updatePatternInfoBuffer
+	bsr	updatePatternInfoData
 .noPatternScope
 .skip
 	rts
@@ -439,7 +468,7 @@ s3init
 	move.l	a6,gfxbase
 
 	tst.b	ahi_use
-	bne.w	ahi_init
+	bne	ahi_init
 
 	clr	system
 	cmp.b	#5,d4
@@ -447,9 +476,9 @@ s3init
 	move	#1,system		* killer!
 .fr
 	push	d5
-	bsr.w	init
+	bsr	init
 
-	bsr.w	s3vol
+	bsr	s3vol
 
  ifeq TEST
 	move	numchans,d0
@@ -474,18 +503,9 @@ s3init
 	basereg	data,a5
 
 	move.l	4.w,a6
+    bsr     allocPatternBuffers
+    beq     .memerr
 
-	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	lob	AllocMem
-	move.l	d0,patternInfoBufferPtr(a5)
-	beq	.memerr
-
-	move.l	#UNPACKED_PATTERN_SIZE,d0
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	lob	AllocMem
-	move.l	d0,unpackedPatternPtr(a5)
-	beq	.memerr
 
 ;	move.b	ps3mb+var_b,d1
 	move.l	#4096,d0
@@ -507,7 +527,7 @@ s3init
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	lob	AllocMem
 	move.l	d0,tbuf(a5)
-	beq.w	.memerr
+	beq	.memerr
 	add.l	#1024*4,d0
 	move.l	d0,tbuf2(a5)	
 
@@ -515,13 +535,13 @@ s3init
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
 	lob	AllocMem
 	move.l	d0,buff1(a5)
-	beq.w	.memerr
+	beq	.memerr
 
 	move.l	buffSize(a5),d0
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d1
 	lob	AllocMem
 	move.l	d0,buff2(a5)
-	beq.w	.memerr
+	beq	.memerr
 
 	move.l	#66*256,d7			; Volume tab size
 
@@ -578,7 +598,7 @@ s3init
 	move.l	d0,buff14(a5)
 	bne.b	.alavaraa
 
-.memerr	bsr.w	s3end
+.memerr	bsr	s3end
 	popm	d1-d7/a2-a6
 	moveq	#ier_nomem,d0
 	rts
@@ -605,7 +625,7 @@ s3init
 
 .kala	
 	jsr	s3mPlay
-	bsr.w	s3end
+	bsr	s3end
 	move.l	var_playing(pc),a0
 	clr.b	(a0)
 	move.l	inforivit(pc),a0
@@ -638,7 +658,7 @@ s3init
 	tst.l	d0
 	bne.b	.ne
 	moveq	#ier_noprocess,d0
-	bsr.w	s3end
+	bsr	s3end
 	bra.b	.en
 .ne	
 	moveq	#0,d0
@@ -682,6 +702,13 @@ pushPatternInfo
 *  d0 = song position 
 *  d1 = pattern position
 getPatternInfo
+    move.b  ahi_use(pc),d0
+    beq.b   .do
+    * For AHI get the current values instead of the time delayed ones
+    move	activeSongPos(a5),d0
+	move	activePattPos(a5),d1
+    rts
+.do
 	pushm	d2/d3/d4/a0
 	* Calculate index based on current play position
 	move.l	mrate50(a5),d4
@@ -720,7 +747,10 @@ getPatternInfo
 * into the buffer, ahead of time relative
 * to what is being played.
 updatePatternInfoBuffer
-	
+	move.b  ahi_use(pc),d3
+    beq.b   .do
+    rts
+.do
 	move.l	mrate50(a5),d3
 	beq.b	.skip
 	move.l	buffSize(a5),d4
@@ -811,7 +841,7 @@ updatePatternInfoBuffer
 * This updates the information in PatternInfo structure
 * to correspond to what is being played currently
 updatePatternInfoData
-	bsr.w	getPatternInfo
+	bsr	getPatternInfo
 	* d0 = song pos
 	* d1 = patt pos
 
@@ -828,12 +858,12 @@ updatePatternInfoData
 	cmp	#mtMTM,mtype(a5)
 	beq.b 	.mtm
 	cmp	#mtS3M,mtype(a5)
-	beq.w	.s3m
+	beq	.s3m
 	cmp	#mtXM,mtype(a5)
-	beq.w	.xm
+	beq	.xm
 	rts 
 .mod
-	move.l	mt_songdataptr(pc),a0
+	move.l	mt_songdataptr,a0
 	lea	952(a0),a2	;pattpo
 	lea	1084(a0),a0	;patterndata
 
@@ -903,21 +933,21 @@ updatePatternInfoData
 	move.b	orders(a0,d0),d0
 
 	cmp.b	#$fe,d0				; marker that is skipped
-	beq.w	.skip
+	beq	.skip
 	cmp.b	#$ff,d0				; end of tune mark
-	beq.w	.skip
+	beq	.skip
 	cmp	pats(a5),d0
-	bhs.w	.skip 
+	bhs	.skip 
 
 	add	d0,d0
 	move.l	patts(a5),a1
 	move	(a1,d0),d0
-	beq.w	.skip
+	beq	.skip
 	iword	d0
 
 	* Unpack once if same
 	cmp	unpackedPatternPosition(a5),d0 
-	beq.w	.skip 
+	beq	.skip 
 	move	d0,unpackedPatternPosition(a5)
 	DPRINT	"Unpack %lx"
 
@@ -1026,12 +1056,12 @@ updatePatternInfoData
 	moveq	#0,d1
 	move.b	xmOrders(a0,d0),d1	
 	cmp.b	xmNumPatts(a0),d1	* limit check
-	bhs.w	.xmSkip
+	bhs	.xmSkip
 
 	* Unpack once if same
 	move.l	d1,d0
 	cmp	unpackedPatternPosition(a5),d0
-	beq.w	.xmSkip
+	beq	.xmSkip
 	move	d0,unpackedPatternPosition(a5)
 	DPRINT	"Unpack %ld"
 
@@ -1125,7 +1155,7 @@ updatePatternInfoData
 
 * Pattern is unpacked, points stripes into it
 .xmSkip
-	bra.w	.putStripes
+	bra	.putStripes
 	rts
 
 .xmEmptyPattern
@@ -1142,19 +1172,19 @@ s3vol
 
 s3stop	
 	tst.b	ahi_use
-	bne.w	ahi_stop
+	bne	ahi_stop
 
 	pushm	all
 	lea	data,a5
 	st	PS3M_paused-data(a5)
-	bsr.w	PS3M_pause
+	bsr	PS3M_pause
 	st	jjo
 	popm	all
 	rts
 
 
 s3cont	tst.b	ahi_use
-	bne.w	ahi_cont
+	bne	ahi_cont
 
 	tst	jjo
 	bne.b	.jm
@@ -1162,7 +1192,7 @@ s3cont	tst.b	ahi_use
 .jm	pushm	all
 	lea	data,a5
 	clr	PS3M_paused-data(a5)
-	bsr.w	PS3M_pause
+	bsr	PS3M_pause
 	clr	jjo
 	popm	all
 	rts
@@ -1173,8 +1203,8 @@ s3end
 
 	tst.b	ahi_use
 	beq.b	.noAhi
-	bsr.w	ahi_end
-	bra.w	.closeDebugWindow
+	bsr	ahi_end
+	bra	.closeDebugWindow
 .noAhi
 
 	pushm	all
@@ -1281,22 +1311,7 @@ s3end
 	clr.l	dtab(a5)
 
 .eimem6	
-
-	move.l	patternInfoBufferPtr(a5),d0
-	beq.b	.e1
-	move.l	d0,a1
-	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
-	lob	FreeMem
-	clr.l	patternInfoBufferPtr(a5)
-.e1
-
-	move.l	unpackedPatternPtr(a5),d0
-	beq.b	.e2
-	move.l	d0,a1
-	move.l	#UNPACKED_PATTERN_SIZE,d0
-	lob	FreeMem
-	clr.l	unpackedPatternPtr(a5)
-.e2
+    bsr     freePatternBuffers
 
 .closeDebugWindow
  ifne DEBUG
@@ -1311,6 +1326,45 @@ s3end
  endif
 	rts
 
+allocPatternBuffers
+    push    a5
+	lea	    data,a5
+	move.l	4.w,a6
+	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	lob	AllocMem
+	move.l	d0,patternInfoBufferPtr(a5)
+	beq	.memerr
+
+	move.l	#UNPACKED_PATTERN_SIZE,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	lob	AllocMem
+	move.l	d0,unpackedPatternPtr(a5)
+.memerr
+    popm    a5
+    rts
+
+freePatternBuffers
+    push    a5
+	lea	    data,a5
+	move.l	4.w,a6
+	move.l	patternInfoBufferPtr(a5),d0
+	beq.b	.e1
+	move.l	d0,a1
+	move.l	#PATTERN_INFO_BUFFER_SIZE,d0
+	lob	FreeMem
+	clr.l	patternInfoBufferPtr(a5)
+.e1
+
+	move.l	unpackedPatternPtr(a5),d0
+	beq.b	.e2
+	move.l	d0,a1
+	move.l	#UNPACKED_PATTERN_SIZE,d0
+	lob	FreeMem
+	clr.l	unpackedPatternPtr(a5)
+.e2 popm    a5
+    rts
+
 	endb	a5
 
 
@@ -1324,8 +1378,8 @@ eteen	pushm	all
 	cmp	#mtIT,mtype
 	bne.b	.noIt
 	move.l	#DTP_NextPatt,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	bra.b	.bb
 .noIt
 
@@ -1337,7 +1391,7 @@ eteen	pushm	all
 	cmp	d1,d0
 	blo.b	.a
 	clr	d0
-.a	bsr.w	setPosition
+.a	bsr	setPosition
 .bb	popm	all
 	rts
 
@@ -1348,15 +1402,15 @@ taakse	pushm	all
 	cmp	#mtIT,mtype
 	bne.b	.noIt
 	move.l	#DTP_PrevPatt,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	bra.b	.x
 .noIt
 	move	PS3M_position,d0
 	subq	#1,d0
 	bpl.b	.b
 	clr	d0
-.b	bsr.w	setPosition
+.b	bsr	setPosition
 .x	popm	all
 	rts
 
@@ -1380,11 +1434,14 @@ ps3m_task	dc.l	0
 
 
 ********************** AHI liittymä
-ahi_init
+ahi_init:
 	DPRINT	"ahi_init"
 
-	bsr.w	init
-	bsr.w	FinalInit
+    bsr     allocPatternBuffers
+    beq     .erro2
+
+	bsr	init
+	bsr	FinalInit
 
 	move	numchans,setchannels
 	move.l	ahi_rate(pc),setfreq
@@ -1396,13 +1453,17 @@ ahi_init
 	bne.b	.erro
 .x
 	popm	d1-d7/a2-a6
-	sub.l	a0,a0 
-	sub.l	a1,a1
+;	sub.l	a0,a0 
+;	sub.l	a1,a1
+
+	lea	    PatternInfo(pc),a0
+	move.l	unpackedPatternPtr,a1
 	rts
 
 .erro	push	d0
-	bsr.w	ahi_end
+	bsr	ahi_end
 	pop	d0
+.erro2
 	moveq	#ier_ahi,d0
 	bra.b	.x
 
@@ -1417,13 +1478,13 @@ ahi_init0
 
 	OPENAHI	1
 	move.l	d0,ahibase
-	beq.w	.ahi_error
+	beq	.ahi_error
 	move.l	d0,a6
 
 	lea	ahi_tags(pc),a1
 	jsr	_LVOAHI_AllocAudioA(a6)
 	move.l	d0,ahi_ctrl
-	beq.w	.ahi_error
+	beq	.ahi_error
 
 	move.l	d0,a2
 	moveq	#0,d0				;Load module as one sound!
@@ -1437,23 +1498,22 @@ ahi_init0
 	lea	getattr_tags(pc),a1
 	jsr	_LVOAHI_GetAudioAttrsA(a6)
 
-	bsr.w	ahi_setmastervol
+	bsr	ahi_setmastervol
 
 	move	tempo,d0
-	bsr.w	ahi_tempo
+	bsr	ahi_tempo
 
-	lea	ahi_ctrltags(pc),a1
-	move.b	#1,setpause-ahi_ctrltags(a1)
-	move.l	ahi_ctrl(pc),a2
-	jsr	_LVOAHI_ControlAudioA(a6)
-
-	DPRINT	"->%ld"
+    bsr     ahi_cont
 
 	tst.l	d0
 	bne.b	.ahi_error
+
+
+
 	moveq	#0,d0
 	rts
 .ahi_error:
+    DPRINT  "ahi error: %ld"
 	moveq	#-1,d0
 	rts
 
@@ -1478,6 +1538,7 @@ ahi_end
 	jsr	_LVOAHI_FreeAudio(a6)
 	CLOSEAHI
 .1
+    bsr     freePatternBuffers
 	rts
 
 
@@ -1523,25 +1584,73 @@ ahi_setmastervol
 	rts
 
 
-ahi_stop
-ahi_cont
-	pushm	d0/d1/a0-a2/a6
+ahi_stop:
+    DPRINT  "ahi stop"
+    clr.b   setpause
+    bsr     ahi_stopChannels
+    bra     ahi_stopcont
+
+ahi_cont:
+    DPRINT  "ahi cont"
+    st      setpause
+    bsr     ahi_stopcont
+    bra     ahi_restoreChannels
+    
+ahi_stopcont
+	pushm	d1/a0-a2/a6
 
 	lea	ahi_ctrltags(pc),a1
-	eor.b	#1,setpause-ahi_ctrltags(a1)
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_ControlAudioA(a6)
+    DPRINT  "AHI_ControlAudioA=%ld"
 
-	popm	d0/d1/a0-a2/a6
+	popm	d1/a0-a2/a6
 	rts
 
+ahi_stopChannels:
+    pushm   all
+	lea	    cha0,a4
+	move	numchans,d7
+	subq	#1,d7
+	moveq	#0,d6
+.chl
+    move.l  d6,d0
+    moveq   #0,d1   * NULL freq
+	moveq	#AHISF_IMM,d2
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr	_LVOAHI_SetFreq(a6)
+
+	lea 	mChanBlock_SIZE(a4),a4
+	addq	#1,d6
+	dbf	d7,.chl
+    popm     all
+    rts
+
+ahi_restoreChannels:
+    pushm   all
+	lea	    cha0,a4
+	move	numchans,d7
+	subq	#1,d7
+	moveq	#0,d6
+.chl
+    bsr     ahi_period
+	lea 	mChanBlock_SIZE(a4),a4
+	addq	#1,d6
+	dbf	d7,.chl
+    popm     all
+    rts
 
 
 ahi_playmusic
+    move.b  setpause(pc),d0
+    bne.b   .1
+    rts
+.1
 	pushm	d2-d7/a2-a6
 
-	bsr.w	s3vol
+	bsr	s3vol
 
 	move	mtype,d0
 	lea	s3m_music(pc),a0
@@ -1563,9 +1672,9 @@ ahi_playmusic
 	subq	#1,d7
 	moveq	#0,d6
 .chl
-	bsr.b	ahi_volume
-	bsr.w	ahi_period
-	bsr.w	ahi_setrepeat
+	bsr 	ahi_volume
+	bsr	ahi_period
+	bsr	ahi_setrepeat
 
 	tst	mPeriod(a4)
 	beq.b	.hiljaa
@@ -1575,9 +1684,12 @@ ahi_playmusic
 	tst.l	mFPos(a4)
 	bne.b	.ty
 	addq.l	#1,mFPos(a4)
-	bsr.w	ahi_sample
+	bsr	ahi_sample
+    bsr     ahi_sample_scope
 .ty
 .hiljaa
+    bsr     ahi_data_scope
+
 	lea	mChanBlock_SIZE(a4),a4
 	addq	#1,d6
 	dbf	d7,.chl
@@ -1588,6 +1700,66 @@ ahi_playmusic
 ;.hiljaa
 ;	bsr.b	ahi_quiet
 ;	bra.b	.ty
+
+* Set scope data for the first 4 channels when AHI is used
+* In:
+*   d6 = channel number
+*   a4 = channel data block
+ahi_sample_scope:
+    cmp     #3,d6
+    bls     .ok
+    rts
+.ok
+    move.l  scopeData,a0
+    move    d6,d0
+    lsl     #4,d0
+    add     d0,a0
+
+    move.l  mStart(a4),ns_start(a0)
+    move.l  mLength(a4),d0
+    lsr.l   #1,d0
+    move    d0,ns_length(a0)
+    rts
+
+
+* Set scope data for the first 4 channels when AHI is used
+* In:
+*   d6 = channel number
+*   a4 = channel data block
+ahi_data_scope:
+    cmp     #3,d6
+    bls     .ok
+    rts
+.ok
+    move.l  scopeData,a0
+    move    d6,d0
+    lsl     #4,d0
+    add     d0,a0
+
+    move    mVolume(a4),ns_tempvol(a0)
+    * mPeriod is 4x, convert back
+    move    mPeriod(a4),d0
+    lsr     #2,d0
+    move    d0,ns_period(a0)
+
+    clr.l   ns_loopstart(a0)
+    clr.w   ns_replen(a0)
+
+	tst.b	mLoop(a4)
+	beq 	.noLoop
+    move.l  mLStart(a4),ns_loopstart(a0)
+    move.l  mLLength(a4),d0
+    lsr.l   #1,d0
+    move    d0,ns_replen(a0)
+
+.noLoop
+    tst.l   ns_loopstart(a0)
+    bne.b   .1
+    move.l  #emptyScopeWord,ns_loopstart(a0)
+.1  tst.w   ns_replen(a0)
+    bne     .2
+    move.w  #1,ns_replen(a0)
+.2  rts
 
 
 
@@ -1602,7 +1774,7 @@ ahi_playmusic
 ahi_volume:
 	movem.l	d0-d3/d6/a0-a2/a6,-(sp)
 
-	tst.b	Pro4
+    move.b	Pro4(pc),d1
 	beq.b	.n
 	lea	chantab(pc),a6
 	move.b	(a6,d6),d6
@@ -1633,7 +1805,7 @@ ahi_volume:
 ahi_quiet
 	movem.l	d0-d3/d6/a0-a2/a6,-(sp)
 
-	tst.b	Pro4
+	move.b	Pro4(pc),d1
 	beq.b	.n
 	lea	chantab(pc),a6
 	move.b	(a6,d6),d6
@@ -1653,12 +1825,12 @@ ahi_quiet
 
 ;in:
 * d0	period
-* da6 	channel
+* d6 	channel
 ahi_period:
 
 	movem.l	d0-d2/d6/a0-a2/a6,-(sp)
 
-	tst.b	Pro4
+	move.b	Pro4(pc),d1
 	beq.b	.n
 	lea	chantab(pc),a6
 	move.b	(a6,d6),d6
@@ -1670,7 +1842,7 @@ ahi_period:
 	move.l	clock,d0
 	lsl.l	#2,d0
 
-	bsr.w	divu_32
+	bsr	divu_32
 	move.l	d0,d1
 
 	move.l	d6,d0
@@ -1689,7 +1861,7 @@ ahi_period:
 ahi_setrepeat
 	move.l	d6,d0
 
-	tst.b	Pro4
+	move.b	Pro4(pc),d1
 	beq.b	.n
 	lea	chantab(pc),a0
 	move.b	(a0,d0),d0
@@ -1712,9 +1884,9 @@ ahi_setrepeat
 ;in:
 * d6	channel
 ahi_sample:
-	movem.l	d0-d4/d6/a0-a2/a6,-(sp)
+	movem.l d0-d4/d6/a0-a2/a6,-(sp)
 
-	tst.b	Pro4
+	move.b	Pro4(pc),d2
 	beq.b	.n
 	lea	chantab(pc),a6
 	move.b	(a6,d6),d6
@@ -1736,7 +1908,8 @@ ahi_sample:
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_SetSound(a6)
-	movem.l	(sp)+,d0-d4/d6/a0-a2/a6
+
+	movem.l (sp)+,d0-d4/d6/a0-a2/a6
 	rts
 
 
@@ -1746,7 +1919,7 @@ ahi_sample:
 * a1	struct AHISoundMessage *
 * a2	struct AHIAudioCtrl *
 soundfunc:
-	movem.l	d2-d4/a6,-(sp)
+	movem.l d2-d4/a6,-(sp)
 
 	move	ahism_Channel(a1),d0
 	move	d0,d2
@@ -1767,7 +1940,7 @@ soundfunc:
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_SetSound(a6)
 
-	movem.l	(sp)+,d2-d4/a6
+	movem.l (sp)+,d2-d4/a6
 	rts
 
 
@@ -1874,6 +2047,7 @@ PatternInfo
 Stripe1	ds.l	32
 
 PatternInit
+    DPRINT  "PatternInit"
 	lea	PatternInfo(PC),A0
 	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
 	pea	ConvertNote(pc) 
@@ -1924,13 +2098,13 @@ ConvertNote
 	subq	#1,d0
 	beq.b	.mtS3M
 	subq	#1,d0
-	beq.w	.mtMOD
+	beq	.mtMOD
 	subq	#1,d0
 	beq.b	.mtMTM
 	subq	#1,d0
 	beq.b	.mtXM
 ;	cmp 	#mtMOD,d0
-;	beq.w	.mtMOD
+;	beq	.mtMOD
 ;	cmp	#mtMTM,d0 
 ;	beq.b	.mtMTM
 ;	cmp	#mtS3M,d0 
@@ -2143,14 +2317,14 @@ play	;movem.l	d0-a6,-(sp)
 	add.l	d0,d1
 
 	sub.l	d1,d2
-	bmi.w	.ei
+	bmi	.ei
 
 	moveq	#1,d0
 	and.l	d2,d0
 	add	d0,d2
 
 	cmp.l	#16,d2
-	blt.w	.ei
+	blt	.ei
 
 	move	d2,todobytes(a5)
 
@@ -2163,7 +2337,7 @@ play	;movem.l	d0-a6,-(sp)
 	move	d0,bytes2do(a5)
 	beq.b	.q
 	
-	bsr.w	domix
+	bsr	domix
 
 .q	tst	PS3M_paused
 	bne.b	.o
@@ -2173,14 +2347,14 @@ play	;movem.l	d0-a6,-(sp)
 
 	cmp	#mtS3M,mtype(a5)
 	bne.b	.xm
-	bsr.w	s3m_music
+	bsr	s3m_music
 	lea	data,a5
 	bra.b	.o
 
 .xm	cmp	#mtXM,mtype(a5)
 	bne.b	.noXM
 	
-	bsr.w	xm_music
+	bsr	xm_music
 	lea	data,a5
 	bra.b	.o
 
@@ -2190,7 +2364,7 @@ play	;movem.l	d0-a6,-(sp)
 	bsr	it_music
 	bra.b	.o
 .mod
-	bsr.w	mt_music			; Also with MTMs
+	bsr	mt_music			; Also with MTMs
 
 .o	move	bytesperframe(a5),d0
 	add	d0,bytes2music(a5)
@@ -2201,7 +2375,7 @@ play	;movem.l	d0-a6,-(sp)
 	move	d0,bytes2do(a5)
 	beq.b	.q2
 
-	bsr.w	domix
+	bsr	domix
 
 .q2	lea	data,a5
 .ei	moveq	#0,d7
@@ -2213,7 +2387,7 @@ play	;movem.l	d0-a6,-(sp)
 init	
 	DPRINT	"init"
 	bsr.b 	.doInit 
-	bsr.w	PatternInit
+	bsr	PatternInit
 	rts
 .doInit
 	lea	data,a5
@@ -2221,12 +2395,12 @@ init
 
 	move.l	s3m(a5),a0
 	cmp.l	#'SCRM',44(a0)
-	beq.w	.s3m
+	beq	.s3m
 
 	move.l	(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#'MTM',d0
-	beq.w	.mtm
+	beq	.mtm
 
 	move.l	a0,a1
 	lea	xmsign(a5),a2
@@ -2234,17 +2408,17 @@ init
 .ll	cmpm.l	(a1)+,(a2)+
 	bne.b	.jj
 	dbf	d0,.ll
-	bra.w	.xm
+	bra	.xm
 
 .jj	move.l	1080(a0),d0
 	cmp.l	#'OCTA',d0
-	beq.w	.fast8
+	beq	.fast8
 	cmp.l	#'M.K.',d0
-	beq.w	.pro4
+	beq	.pro4
 	cmp.l	#'M!K!',d0
-	beq.w	.pro4
+	beq	.pro4
 	cmp.l	#'FLT4',d0
-	beq.w	.pro4
+	beq	.pro4
 
 	move.l	d0,d1
 	and.l	#$ffffff,d1
@@ -2261,9 +2435,9 @@ init
 	beq.b	.tdz
 	
 	bsr	id_it
-	beq.w	.it
+	beq	.it
 
-	bra.w	.error
+	bra	.error
 
 .chn	move.l	d0,d1
 	swap	d1
@@ -2274,7 +2448,7 @@ init
 	addq	#1,d1
 	lsr	d1
 	move	d1,maxchan(a5)
-	bra.w	.init
+	bra	.init
 
 .ch	move.l	d0,d1
 	swap	d1
@@ -2316,7 +2490,7 @@ init
 	bra.b	.init
 
 .xm	cmp	#$401,xmVersion(a0)		; Kool turbo-optimizin'...
-	bne.w	.jj
+	bne	.jj
 	move	#mtXM,mtype(a5)
 	bra.b	.init
 
@@ -2340,16 +2514,16 @@ init
 	beq.b	.error
 
 	cmp	#mtS3M,mtype(a5)
-	beq.w	s3m_init
+	beq	s3m_init
 
 	cmp	#mtMOD,mtype(a5)
-	beq.w	mt_init
+	beq	mt_init
 
 	cmp	#mtMTM,mtype(a5)
-	beq.w	mtm_init
+	beq	mtm_init
 
 	cmp	#mtXM,mtype(a5)
-	beq.w	xm_init
+	beq	xm_init
 
 	cmp	#mtIT,mtype(a5)
 	beq	it_init
@@ -2385,7 +2559,7 @@ FinalInit
 
 .boing
 	tst	PS3M_cont(a5)
-	bne.w	.q
+	bne	.q
 
 .huu	lea	cha0(a5),a0
 	move	#mChanBlock_SIZE*16-1,d7
@@ -2398,7 +2572,7 @@ FinalInit
 	dbf	d7,.cl3
 
 	tst.b	ahi_use
-	bne.w	.boing2
+	bne	.boing2
 
 	move	tempo(a5),d0
 	bne.b	.qw
@@ -2418,8 +2592,8 @@ FinalInit
 
 	bset	#1,$bfe001
 
-	bsr.w	makedivtabs
-	bsr.w	Makevoltable
+	bsr	makedivtabs
+	bsr	Makevoltable
 
 	ifeq	disable020
 	
@@ -2464,7 +2638,7 @@ FinalInit
 
 	move.l	#copybuf14,cbufad(a5)
 
-	bsr.w	do14tab
+	bsr	do14tab
 	bra.b	.q
 
 .nop	cmp	#REAL,pmode(a5)
@@ -2501,7 +2675,7 @@ setPosition
 	clr.b	mt_counter
 	
 	movem.l	d0-d4/a0-a6,-(sp)
-	bra.w	mt_nextposition
+	bra	mt_nextposition
 
 ; S3M
 .s3m	subq	#1,d0
@@ -2513,7 +2687,7 @@ setPosition
 	moveq	#6,d0
 .ok	move	d0,spd(a5)
 	clr	cn(a5)
-	bra.w	burk
+	bra	burk
 
 ; XM
 .xm	subq	#1,d0
@@ -2521,7 +2695,7 @@ setPosition
 	move.l  s3m(a5),a0
 	clr	rows(a5)
 	clr	cn(a5)
-	bra.w	burki
+	bra	burki
 
 PS3M_pause
 	tst	PS3M_paused(a5)
@@ -2885,12 +3059,12 @@ mix	moveq	#0,d7
 	subq	#1,d7
 	
 	tst	mPeriod(a4)
-	beq.w	.ty
+	beq	.ty
 	tst.b	mOnOff(a4)
-	bne.w	.ty			;sound off
+	bne	.ty			;sound off
 
 	tst	mVolume(a4)
-	beq.w	.vol0
+	beq	.vol0
 
 .dw	move.l	clock(a5),d4
 	divu	mPeriod(a4),d4
@@ -2939,7 +3113,7 @@ mix	moveq	#0,d7
 	cmp	d6,d1
 	bhs.b	.lep
 	pea	.leii(pc)
-	bra.w	.mix32
+	bra	.mix32
 
 .lep	move.b	(a0,d0),d2
 	move.l	d2,a1
@@ -3051,7 +3225,7 @@ mix	moveq	#0,d7
 	movem.l	d0/d1,-(sp)
 	move.l	d7,d1
 	move.l	d4,d0
-	bsr.w	mulu_32
+	bsr	mulu_32
 	move.l	d0,d4
 	movem.l	(sp)+,d0/d1
 
@@ -3068,14 +3242,14 @@ mix	moveq	#0,d7
 	move.l	a0,(a4)
 	move.l	d0,mFPos(a4)
 	sub.l	d1,mLength(a4)
-	bpl.w	.ty			; OK, Done!
+	bpl	.ty			; OK, Done!
 
 ; We're about to mix past the end of the sample
 
 	tst.b	mLoop(a4)
 	bne.b	.q3
 	st	mOnOff(a4)
-	bra.w	.ty
+	bra	.ty
 
 .q3	move.l	mLLength(a4),d6
 .loop	sub.l	d6,a0
@@ -3084,7 +3258,7 @@ mix	moveq	#0,d7
 	beq.b	.loop
 
 	move.l	a0,(a4)
-	bra.w	.ty
+	bra	.ty
 
 
 
@@ -3094,12 +3268,12 @@ mix2	moveq	#0,d7
 	move	bytes2do(a5),d7
 
 	tst	mPeriod(a4)
-	beq.w	.ty
+	beq	.ty
 	tst.b	mOnOff(a4)
-	bne.w	.ty			;noloop
+	bne	.ty			;noloop
 
 	tst	mVolume(a4)
-	beq.w	.vol0
+	beq	.vol0
 
 .dw	subq	#1,d7
 
@@ -3150,7 +3324,7 @@ mix2	moveq	#0,d7
 	cmp	d6,d1
 	bhs.b	.lep
 	pea	.leii(pc)
-	bra.w	.mix32
+	bra	.mix32
 
 .lep	move.b	(a0,d0),d2
 	move.l	d2,a1
@@ -3260,7 +3434,7 @@ mix2	moveq	#0,d7
 	movem.l	d0/d1,-(sp)
 	move.l	d7,d1
 	move.l	d4,d0
-	bsr.w	mulu_32
+	bsr	mulu_32
 	move.l	d0,d4
 	movem.l	(sp)+,d0/d1
 
@@ -3276,14 +3450,14 @@ mix2	moveq	#0,d7
 	move.l	a0,(a4)
 	move.l	d0,mFPos(a4)
 	sub.l	d1,mLength(a4)
-	bpl.w	.ty			; OK, Done!
+	bpl	.ty			; OK, Done!
 
 ; We're about to mix past the end of the sample
 
 	tst.b	mLoop(a4)
 	bne.b	.q3
 	st	mOnOff(a4)
-	bra.w	.ty
+	bra	.ty
 
 .q3	move.l	mLLength(a4),d6
 .loop	sub.l	d6,a0
@@ -3292,7 +3466,7 @@ mix2	moveq	#0,d7
 	beq.b	.loop
 
 	move.l	a0,(a4)
-	bra.w	.ty
+	bra	.ty
 
 
 ; 16-bit mixing routine for first channel (moves data)
@@ -3302,12 +3476,12 @@ mix16	moveq	#0,d7
 	subq	#1,d7
 
 	tst	mPeriod(a4)
-	beq.w	.ty
+	beq	.ty
 	tst.b	mOnOff(a4)
-	bne.w	.ty
+	bne	.ty
 
 	tst	mVolume(a4)
-	beq.w	.vol0
+	beq	.vol0
 
 .dw	move.l	clock(a5),d4
 	divu	mPeriod(a4),d4
@@ -3357,7 +3531,7 @@ mix16	moveq	#0,d7
 	cmp	d6,d1
 	bhs.b	.lep
 	pea	.leii(pc)
-	bra.w	.mix32
+	bra	.mix32
 
 .lep	moveq	#0,d2
 	move.b	(a0,d0),d2
@@ -3464,7 +3638,7 @@ mix16	moveq	#0,d7
 	movem.l	d0/d1,-(sp)
 	move.l	d7,d1
 	move.l	d4,d0
-	bsr.w	mulu_32
+	bsr	mulu_32
 	move.l	d0,d4
 	movem.l	(sp)+,d0/d1
 
@@ -3481,14 +3655,14 @@ mix16	moveq	#0,d7
 	move.l	a0,(a4)
 	move.l	d0,mFPos(a4)
 	sub.l	d1,mLength(a4)
-	bpl.w	.ty			; OK, Done!
+	bpl	.ty			; OK, Done!
 
 ; We're about to mix past the end of the sample
 
 	tst.b	mLoop(a4)
 	bne.b	.q3
 	st	mOnOff(a4)
-	bra.w	.ty
+	bra	.ty
 
 .q3	move.l	mLLength(a4),d6
 .loop	sub.l	d6,a0
@@ -3497,7 +3671,7 @@ mix16	moveq	#0,d7
 	beq.b	.loop
 
 	move.l	a0,(a4)
-	bra.w	.ty
+	bra	.ty
 
 
 
@@ -3507,12 +3681,12 @@ mix162	moveq	#0,d7
 	move	bytes2do(a5),d7
 
 	tst	mPeriod(a4)
-	beq.w	.ty
+	beq	.ty
 	tst.b	mOnOff(a4)
-	bne.w	.ty
+	bne	.ty
 
 	tst	mVolume(a4)
-	beq.w	.vol0
+	beq	.vol0
 
 .dw	subq	#1,d7
 
@@ -3564,7 +3738,7 @@ mix162	moveq	#0,d7
 	cmp	d6,d1
 	bhs.b	.lep
 	pea	.leii(pc)
-	bra.w	.mix32
+	bra	.mix32
 
 .lep	moveq	#0,d2
 	move.b	(a0,d0),d2
@@ -3659,7 +3833,7 @@ mix162	moveq	#0,d7
 	movem.l	d0/d1,-(sp)
 	move.l	d7,d1
 	move.l	d4,d0
-	bsr.w	mulu_32
+	bsr	mulu_32
 	move.l	d0,d4
 	movem.l	(sp)+,d0/d1
 
@@ -3675,14 +3849,14 @@ mix162	moveq	#0,d7
 	move.l	a0,(a4)
 	move.l	d0,mFPos(a4)
 	sub.l	d1,mLength(a4)
-	bpl.w	.ty			; OK, Done!
+	bpl	.ty			; OK, Done!
 
 ; We're about to mix past the end of the sample
 
 	tst.b	mLoop(a4)
 	bne.b	.q3
 	st	mOnOff(a4)
-	bra.w	.ty
+	bra	.ty
 
 .q3	move.l	mLLength(a4),d6
 .loop	sub.l	d6,a0
@@ -3691,7 +3865,7 @@ mix162	moveq	#0,d7
 	beq.b	.loop
 
 	move.l	a0,(a4)
-	bra.w	.ty
+	bra	.ty
 
 
 
@@ -3706,12 +3880,12 @@ mix162	moveq	#0,d7
 mix_020	moveq	#0,d7
 	move	bytes2do(a5),d7
 	tst	mPeriod(a4)
-	beq.w	.ty
+	beq	.ty
 	tst.b	mOnOff(a4)
-	bne.w	.ty
+	bne	.ty
 
 	tst	mVolume(a4)
-	beq.w	.vol0
+	beq	.vol0
 
 .dw	move.l	clock(a5),d4
 	moveq	#0,d0
@@ -3739,7 +3913,7 @@ mix_020	moveq	#0,d7
 	move.l	mFPos(a4),d0		;fpos
 
 	move.l	mLength(a4),d6		;len
-	beq.w	.resloop
+	beq	.resloop
 
 	cmp.l	#$ffff,d6
 	bls.b	.restart
@@ -3789,7 +3963,7 @@ mix_020	moveq	#0,d7
 .mend	tst	d7
 	beq.b	.done
 	tst.l	d6
-	bne.w	.mixloop
+	bne	.mixloop
 
 .resloop
 	tst.b	mLoop(a4)
@@ -3809,7 +3983,7 @@ mix_020	moveq	#0,d7
 	bls.b	.j
 	move	#$ffff,d6
 .j	clr	d0			;reset integer part
-	bra.w	.restart
+	bra	.restart
 
 .done	moveq	#0,d1
 	move	d0,d1
@@ -3899,12 +4073,12 @@ mix2_020
 	moveq	#0,d7
 	move	bytes2do(a5),d7
 	tst	mPeriod(a4)
-	beq.w	.ty
+	beq	.ty
 	tst.b	mOnOff(a4)
-	bne.w	.ty
+	bne	.ty
 
 	tst	mVolume(a4)
-	beq.w	.vol0
+	beq	.vol0
 
 .dw	move.l	clock(a5),d4
 	moveq	#0,d0
@@ -3933,7 +4107,7 @@ mix2_020
 	move.l	mFPos(a4),d0
 
 	move.l	mLength(a4),d6
-	beq.w	.resloop
+	beq	.resloop
 
 	cmp.l	#$ffff,d6
 	bls.b	.restart
@@ -3981,7 +4155,7 @@ mix2_020
 .mend	tst	d7
 	beq.b	.done
 	tst.l	d6
-	bne.w	.mixloop
+	bne	.mixloop
 
 .resloop
 	tst.b	mLoop(a4)
@@ -4001,7 +4175,7 @@ mix2_020
 	bls.b	.j
 	move	#$ffff,d6
 .j	clr	d0			;reset integer part
-	bra.w	.restart
+	bra	.restart
 
 .done	moveq	#0,d1
 	move	d0,d1
@@ -4095,12 +4269,12 @@ mix16_020
 	moveq	#0,d7
 	move	bytes2do(a5),d7
 	tst	mPeriod(a4)
-	beq.w	.ty
+	beq	.ty
 	tst.b	mOnOff(a4)
-	bne.w	.ty
+	bne	.ty
 
 	tst	mVolume(a4)
-	beq.w	.vol0
+	beq	.vol0
 
 .dw	move.l	clock(a5),d4
 	moveq	#0,d0
@@ -4129,7 +4303,7 @@ mix16_020
 	move.l	mFPos(a4),d0		;fpos
 
 	move.l	mLength(a4),d6		;len
-	beq.w	.resloop
+	beq	.resloop
 
 	cmp.l	#$ffff,d6
 	bls.b	.restart
@@ -4178,7 +4352,7 @@ mix16_020
 .mend	tst	d7
 	beq.b	.done
 	tst.l	d6
-	bne.w	.mixloop
+	bne	.mixloop
 
 .resloop
 	tst.b	mLoop(a4)
@@ -4198,7 +4372,7 @@ mix16_020
 	bls.b	.j
 	move	#$ffff,d6
 .j	clr	d0			;reset integer part
-	bra.w	.restart
+	bra	.restart
 
 .done	moveq	#0,d1
 	move	d0,d1
@@ -4290,12 +4464,12 @@ mix162_020
 	moveq	#0,d7
 	move	bytes2do(a5),d7
 	tst	mPeriod(a4)
-	beq.w	.ty
+	beq	.ty
 	tst.b	mOnOff(a4)
-	bne.w	.ty
+	bne	.ty
 
 	tst	mVolume(a4)
-	beq.w	.vol0
+	beq	.vol0
 
 .dw	move.l	clock(a5),d4
 	moveq	#0,d0
@@ -4325,7 +4499,7 @@ mix162_020
 	move.l	mFPos(a4),d0
 
 	move.l	mLength(a4),d6
-	beq.w	.resloop
+	beq	.resloop
 
 	cmp.l	#$ffff,d6
 	bls.b	.restart
@@ -4374,7 +4548,7 @@ mix162_020
 .mend	tst	d7
 	beq.b	.done
 	tst.l	d6
-	bne.w	.mixloop
+	bne	.mixloop
 
 .resloop
 	tst.b	mLoop(a4)
@@ -4394,7 +4568,7 @@ mix162_020
 	bls.b	.j
 	move	#$ffff,d6
 .j	clr	d0			;reset integer part
-	bra.w	.restart
+	bra	.restart
 
 .done	moveq	#0,d1
 	move	d0,d1
@@ -5139,7 +5313,7 @@ s3m_init
 	bhs.b	.oflow
 	eor.b	d2,(a3)+
 	dbf	d1,.kon2
-	bra.w	.kon0
+	bra	.kon0
 
 .oflow
 	DPRINT	"overflow"
@@ -5173,7 +5347,7 @@ s3m_init
 	clr	pbrkflag(a5)
 	clr	pbrkrow(a5)
 
-	bsr.w	detectchannels
+	bsr	detectchannels
 
 	move.l	#14317056/4,clock(a5)		; Clock constant
 	move	#64,globalVol(a5)
@@ -5281,18 +5455,18 @@ process	lea	c0(a5),a2
 	endb	a5
 
 .lloo	tst.b	flgs(a2)
-	beq.w	.evol
+	beq	.evol
 
 	moveq	#32,d0
 	and.b	flgs(a2),d0
-	beq.w	.f
+	beq	.f
 
 	move.b	inst(a2),d0
-	beq.w	.esmp
-	bmi.w	.esmp
+	beq	.esmp
+	bmi	.esmp
 
 	cmp	inss,d0
-	bgt.w	.mute
+	bgt	.mute
 
 	btst	#7,flgs(a2)
 	beq.b	.eii
@@ -5301,7 +5475,7 @@ process	lea	c0(a5),a2
 	move.b	info(a2),d1
 	and	#$f0,d1
 	cmp	#$d0,d1
-	beq.w	.evol
+	beq	.evol
 
 .eii	add	d0,d0
 	move	-2(a5,d0),d0
@@ -5339,16 +5513,16 @@ process	lea	c0(a5),a2
 
 
 .mute	st	mOnOff(a4)
-	bra.w	.f
+	bra	.f
 
 .eloo	clr.b	mLoop(a4)
 .esmp	moveq	#0,d0
 	move.b	(a2),d0
-	beq.w	.f
+	beq	.f
 	cmp.b	#254,d0
 	beq.b	.mute
 	cmp.b	#255,d0
-	beq.w	.f
+	beq	.f
 
 	move.b	d0,note(a2)
 	move	d0,d1
@@ -5359,7 +5533,7 @@ process	lea	c0(a5),a2
 
 	; This can be zero!
 	move.l	sample(a2),d2
-	beq.w	.zeroSam
+	beq	.zeroSam
 
 	move.l	d2,a1
 	move.l	$20(a1),d2
@@ -5434,7 +5608,7 @@ process	lea	c0(a5),a2
 	cmp.b	#'H'-'@',cmd(a2)
 	beq.b	.vib
 
-.eivib	bsr.w	checklimits
+.eivib	bsr	checklimits
 .vib
 
 	btst	#7,flgs(a2)
@@ -5477,7 +5651,7 @@ process	lea	c0(a5),a2
 	beq.b	.oke
 
 	subq	#1,pdelaycnt(a5)
-	bra.w	xm_exit
+	bra	xm_exit
 .oke
 	addq	#1,rows(a5)
 
@@ -5493,7 +5667,7 @@ process	lea	c0(a5),a2
 	bne.b	.newpos
 
 	tst	pbrkflag(a5)
-	beq.w	dee
+	beq	dee
 	bra.b	cont
 .newpos
 	move	pbrkrow(a5),rows(a5)
@@ -5565,7 +5739,7 @@ cont
 .setp
 	move.l	a1,ppos(a5)
 
-dee	bra.w	xm_dee
+dee	bra	xm_dee
 	endb	a5
 
 
@@ -5996,11 +6170,11 @@ arpeggio
 .qq	rts
 
 
-pvslide	bsr.w	notchange
-	bra.w	vslide
+pvslide	bsr	notchange
+	bra	vslide
 
-vvslide	bsr.w	vibrato2
-	bra.w	vslide
+vvslide	bsr	vibrato2
+	bra	vslide
 
 soffset	moveq	#32,d0
 	and.b	flgs(a2),d0
@@ -6046,7 +6220,7 @@ retrig	move.b	retrigcn(a2),d0
 	rts
 
 .retrig	move.l	sample(a2),d0
-	beq.w	.f
+	beq	.f
 	move.l	d0,a1
 	moveq	#0,d1
 	move	insmemseg(a1),d1
@@ -6151,11 +6325,11 @@ specials
 	
 	moveq	#32,d0
 	and.b	flgs(a2),d0
-	beq.w	.f
+	beq	.f
 
 	move.b	inst(a2),d0
-	beq.w	.esmp
-	bmi.w	.esmp
+	beq	.esmp
+	bmi	.esmp
 
 	cmp	inss,d0
 	bgt.b	.dd
@@ -6253,7 +6427,7 @@ stempo	moveq	#0,d0
 	bls.b	.e
 
 	tst.b	ahi_use
-	bne.w	ahi_tempo
+	bne	ahi_tempo
 
 	move.l	mrate,d1
 	move.l	d1,d2
@@ -6322,7 +6496,7 @@ xm_init
 	move	d0,sflags(a5)
 
 	tst	PS3M_reinit(a5)
-	bne.w	xm_skipinit
+	bne	xm_skipinit
 
 	move	xmSongLength(a0),d0
 	iword	d0
@@ -6484,7 +6658,7 @@ xm_music
 	addq	#1,cn(a5)
 	move	cn(a5),d0
 	cmp	spd(a5),d0
-	beq.w	xm_newrow
+	beq	xm_newrow
 
 xm_ccmds
 	lea	c0(a5),a2
@@ -6535,14 +6709,14 @@ xm_runEnvelopes
 	subq	#1,d7
 .envloop
 	move.l	sample(a2),d1
-	beq.w	.skip
+	beq	.skip
 
 	move.l	d1,a1	
 
 	move	rVolume(a2),d0
 
 			btst	#xmEnvOn,xmVolType(a1)
-			beq.w	.0BAE
+			beq	.0BAE
 			moveq	#0,d1
 			move.b	xmNumVolPnts(a1),d1
 			lea	xmVolEnv(a1),a3
@@ -6688,7 +6862,7 @@ xm_runEnvelopes
 	lsr.l	d1,d0
 	move.l	d0,d1
 	move.l	#8363*1712,d0
-	bsr.w	divu_32
+	bsr	divu_32
 
 	move	d0,mPeriod(a4)
 	bra.b	.k
@@ -6716,7 +6890,7 @@ xm_newrow
 	;;;;;;;;;;;;
 
 	tst	pdelaycnt(a5)
-	bne.w	.process
+	bne	.process
 
 	move	pos(a5),d0
 	moveq	#0,d1
@@ -6783,10 +6957,10 @@ xm_newrow
 	subq	#1,d7
 .channelloop
 	tst	pdelaycnt(a5)
-	bne.w	.skip
+	bne	.skip
 
 	tst	(a2)
-	beq.w	.skip
+	beq	.skip
 
 	moveq	#0,d0
 	move.b	(a2),d0
@@ -6808,7 +6982,7 @@ xm_newrow
 	move.l	a1,sample(a2)
 	bra.b	.ju
 .esmp	move.l	sample(a2),d2
-	beq.w	.skip
+	beq	.skip
 	move.l	d2,a1
 
 .ju	moveq	#$f,d1
@@ -6818,13 +6992,13 @@ xm_newrow
 	move.b	info(a2),d1
 	and	#$f0,d1
 	cmp	#$d0,d1
-	beq.w	.skip
+	beq	.skip
 
-.s	bsr.w	xm_getInst
-	beq.w	.skip
+.s	bsr	xm_getInst
+	beq	.skip
 
 	tst.b	inst(a2)
-	beq.w	.smpok
+	beq	.smpok
 
 ; Handle envelopes
 	move	#$ffff,fadeOut(a2)
@@ -6832,7 +7006,7 @@ xm_newrow
 	clr.b	keyoff(a2)
 
 	move.l	sample(a2),d2
-	beq.w	.skip
+	beq	.skip
 	move.l	d2,a3
 
 	btst	#xmEnvOn,xmVolType(a3)
@@ -6888,17 +7062,17 @@ xm_newrow
 	sne	mLoop(a4)
 
 .smpok	tst.b	(a2)
-	beq.w	.skip
+	beq	.skip
 
 	cmp.b	#97,(a2)			; Key off -note
-	beq.w	.keyoff
+	beq	.keyoff
 
-	bsr.w	xm_getPeriod
+	bsr	xm_getPeriod
 
 	cmp.b	#3,cmd(a2)
-	beq.w	.tonep
+	beq	.tonep
 	cmp.b	#5,cmd(a2)
-	beq.w	.tonep
+	beq	.tonep
 
 	move	d0,rPeriod(a2)
 	move	d0,period(a2)
@@ -7017,7 +7191,7 @@ xm_newrow
 	beq.b	.oke
 
 	subq	#1,pdelaycnt(a5)
-	bra.w	xm_exit
+	bra	xm_exit
 
 .oke	addq	#1,rows(a5)		; incr. linecounter
 
@@ -7034,7 +7208,7 @@ xm_newrow
 	bne.b	.newpos
 
 	tst.w	pbrkflag(a5)
-	beq.w	xm_dee
+	beq	xm_dee
 	moveq	#0,d2
 	bra.b	conti
 .newpos
@@ -7263,7 +7437,7 @@ xm_arpeggio
 	beq.b	.skip
 	move.l	d2,a1
 
-	bsr.w	xm_getInst
+	bsr	xm_getInst
 	beq.b	.skip
 
 	moveq	#0,d2
@@ -7284,7 +7458,7 @@ xm_arpeggio
 	lsr.b	#4,d2
 	add.b	d2,d0
 
-.f	bsr.w	xm_getPeriod
+.f	bsr	xm_getPeriod
 	move	d0,mPeriod(a4)
 .skip	rts
 
@@ -7425,7 +7599,7 @@ xm_vibrato2
 ; Command 5 - Tone portamento and volume slide
 
 xm_tpvsl
-	bsr.w	xm_tonepnoch
+	bsr	xm_tonepnoch
 	bra.b	xm_vslide
 
 ; Command 6 - Vibrato and volume slide
@@ -7589,20 +7763,20 @@ xm_pattloop
 
 xm_retrig
 	subq.b	#1,retrigcn(a2)
-	bne.w	xm_eret
+	bne	xm_eret
 
 	move.l	sample(a2),d2
-	beq.w	xm_eret
+	beq	xm_eret
 	move.l	d2,a1
 
 	move	d1,-(sp)
 
 	moveq	#0,d0
 	move.b	note(a2),d0
-	beq.w	xm_sretrig
+	beq	xm_sretrig
 
-	bsr.w	xm_getInst
-	beq.w	.skip
+	bsr	xm_getInst
+	beq	.skip
 
 	clr.l	mFPos(a4)
 ; Handle envelopes
@@ -7673,14 +7847,14 @@ xm_ndelay
 	bne.b	xm_eret
 
 	tst	(a2)
-	beq.w	.skip
+	beq	.skip
 
 	moveq	#0,d0
 	move.b	(a2),d0
-	beq.w	.skip
+	beq	.skip
 
 	cmp.b	#97,d0				; Key off -note
-	beq.w	.keyoff
+	beq	.keyoff
 
 	move.b	d0,note(a2)
 
@@ -7698,11 +7872,11 @@ xm_ndelay
 	move.l	a1,sample(a2)
 	bra.b	.ju
 .esmp	move.l	sample(a2),d2
-	beq.w	.skip
+	beq	.skip
 	move.l	d2,a1
 
-.ju	bsr.w	xm_getInst
-	beq.w	.skip
+.ju	bsr	xm_getInst
+	beq	.skip
 
 	tst.b	inst(a2)
 	beq.b	.smpok
@@ -7737,7 +7911,7 @@ xm_ndelay
 	move	#64,volume(a2)
 .e	move	volume(a2),rVolume(a2)
 
-.smpok	bsr.w	xm_getPeriod
+.smpok	bsr	xm_getPeriod
 
 	move	d0,rPeriod(a2)
 	move	d0,period(a2)
@@ -7836,7 +8010,7 @@ xm_spd	cmp	#$20,d1
 
 	move	d1,d0
 	tst.b	ahi_use
-	bne.w	ahi_tempo
+	bne	ahi_tempo
 
 	move.l	mrate(a5),d0
 	move.l	d0,d2
@@ -7913,19 +8087,19 @@ xm_setenvpos
 
 xm_rretrig
 	subq.b	#1,retrigcn(a2)
-	bne.w	xm_eret
+	bne	xm_eret
 
 	move.l	sample(a2),d2
-	beq.w	xm_eret
+	beq	xm_eret
 	move.l	d2,a1
 
 	move	d1,-(sp)
 
 	moveq	#0,d0
 	move.b	note(a2),d0
-	beq.w	xm_srretrig
+	beq	xm_srretrig
 
-	bsr.w	xm_getInst
+	bsr	xm_getInst
 	beq.b	.skip
 
 	clr.l	mFPos(a4)
@@ -8011,9 +8185,9 @@ xm_xfinesld
 	cmp.b	#$10,d1
 	blo.b	.q
 	cmp.b	#$20,d1
-	blo.w	xm_xslideup
+	blo	xm_xslideup
 	cmp.b	#$30,d1
-	blo.w	xm_xslidedwn
+	blo	xm_xslidedwn
 .q	rts
 
 	dc	960,954,948,940,934,926,920,914
@@ -8619,11 +8793,11 @@ mt_music
 	tst.b	mt_pattdeltime2
 	beq.b	mt_getnewnote
 	bsr.b	mt_nonewallchannels
-	bra.w	mt_dskip
+	bra	mt_dskip
 
 mt_nonewnote
 	bsr.b	mt_nonewallchannels
-	bra.w	mt_nonewposyet
+	bra	mt_nonewposyet
 
 mt_nonewallchannels
 	move	numchans,d7
@@ -8631,7 +8805,7 @@ mt_nonewallchannels
 	lea	cha0,a5
 	lea	mt_chan1temp(pc),a6
 .loo	move	d7,-(sp)
-	bsr.w	mt_checkefx
+	bsr	mt_checkefx
 	move	(sp)+,d7
 	lea	mChanBlock_SIZE(a5),a5
 	lea	44(a6),a6			; Size of MT_chanxtemp
@@ -8659,7 +8833,7 @@ mt_getnewnote
 	move	mt_patternpos(pc),d1
 	divu	numchans(pc),d1
 	lsr	#2,d1
-	bsr.w	pushPatternInfo
+	bsr	pushPatternInfo
 	popm	d0/d1
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -8681,19 +8855,19 @@ mt_getnewnote
 	move	d7,-(sp)
 	tst.l	(a6)
 	bne.b	.mt_plvskip
-	bsr.w	mt_pernop
+	bsr	mt_pernop
 .mt_plvskip
 	bsr.b	getnew
 
 	push	a4
-	bsr.w	mt_playvoice
+	bsr	mt_playvoice
 	pop 	a4
 	move	(sp)+,d7
 	lea	mChanBlock_SIZE(a5),a5
 	lea	44(a6),a6			; Size of MT_chanxtemp
 	dbf	d7,.loo
 
-	bra.w	mt_setdma
+	bra	mt_setdma
 
 getnew	cmp	#mtMOD,mtype
 	bne.b	.mtm
@@ -8783,7 +8957,7 @@ mt_playvoice
 	and.b	#$f0,d0
 	or.b	d0,d2
 	tst.b	d2
-	beq.w	mt_setregs
+	beq	mt_setregs
 	moveq	#0,d3
 	lea	mt_sampleinfos(pc),a1
 	move	d2,d4
@@ -8824,7 +8998,7 @@ mt_noloop
 mt_setregs
 	move	(a6),d0
 	and	#$fff,d0
-	beq.w	mt_checkmoreefx	; if no note
+	beq	mt_checkmoreefx	; if no note
 	move	2(a6),d0
 	and	#$ff0,d0
 	cmp	#$e50,d0
@@ -8837,16 +9011,16 @@ mt_setregs
 	beq.b	mt_chktoneporta
 	cmp.b	#9,d0	; sample offset
 	bne.b	mt_setperiod
-	bsr.w	mt_checkmoreefx
+	bsr	mt_checkmoreefx
 	bra.b	mt_setperiod
 
 mt_dosetfinetune
-	bsr.w	mt_setfinetune
+	bsr	mt_setfinetune
 	bra.b	mt_setperiod
 
 mt_chktoneporta
-	bsr.w	mt_settoneporta
-	bra.w	mt_checkmoreefx
+	bsr	mt_settoneporta
+	bra	mt_checkmoreefx
 
 mt_setperiod
 	movem.l	d0-d1/a0-a1,-(sp)
@@ -8872,7 +9046,7 @@ mt_ftufound
 	move	2(a6),d0
 	and	#$ff0,d0
 	cmp	#$ed0,d0 ; notedelay
-	beq.w	mt_checkmoreefx
+	beq	mt_checkmoreefx
 
 	btst	#2,n_wavecontrol(a6)
 	bne.b	mt_vibnoc
@@ -8893,7 +9067,7 @@ mt_trenoc
 
 	clr.b	mOnOff(a5)		; turn on
 	clr.l	mFPos(a5)		; retrig
-	bra.w	mt_checkmoreefx
+	bra	mt_checkmoreefx
 
  
 mt_setdma
@@ -8903,7 +9077,7 @@ mt_setdma
 	lea	mt_chan1temp(pc),a6
 .loo	
 	;move	d7,-(sp)
-	bsr.w	setreg
+	bsr	setreg
 	;move	(sp)+,d7
 	lea	mChanBlock_SIZE(a5),a5
 	lea	44(a6),a6			; Size of MT_chanxtemp
@@ -8984,7 +9158,7 @@ setreg	move.l	n_loopstart(a6),mLStart(a5)
 
 
 mt_checkefx
-	bsr.w	mt_updatefunk
+	bsr	mt_updatefunk
 	move	n_cmd(a6),d0
 	and	#$fff,d0
 	beq.b	mt_pernop
@@ -8992,26 +9166,26 @@ mt_checkefx
 	and.b	#$f,d0
 	beq.b	mt_arpeggio
 	cmp.b	#1,d0
-	beq.w	mt_portaup
+	beq	mt_portaup
 	cmp.b	#2,d0
-	beq.w	mt_portadown
+	beq	mt_portadown
 	cmp.b	#3,d0
-	beq.w	mt_toneportamento
+	beq	mt_toneportamento
 	cmp.b	#4,d0
-	beq.w	mt_vibrato
+	beq	mt_vibrato
 	cmp.b	#5,d0
-	beq.w	mt_toneplusvolslide
+	beq	mt_toneplusvolslide
 	cmp.b	#6,d0
-	beq.w	mt_vibratoplusvolslide
+	beq	mt_vibratoplusvolslide
 	cmp.b	#$e,d0
-	beq.w	mt_e_commands
+	beq	mt_e_commands
 setback	move	n_period(a6),d2
 	lsl	#2,d2
 	move	d2,mPeriod(a5)
 	cmp.b	#7,d0
-	beq.w	mt_tremolo
+	beq	mt_tremolo
 	cmp.b	#$a,d0
-	beq.w	mt_volumeslide
+	beq	mt_volumeslide
 mt_return2
 	rts
 
@@ -9072,7 +9246,7 @@ mt_arpeggio4
 
 mt_fineportaup
 	tst.b	mt_counter
-	bne.w	mt_return2
+	bne	mt_return2
 	move.b	#$f,mt_lowmask
 mt_portaup
 	moveq	#0,d0
@@ -9096,7 +9270,7 @@ mt_portauskip
  
 mt_fineportadown
 	tst.b	mt_counter
-	bne.w	mt_return2
+	bne	mt_return2
 	move.b	#$f,mt_lowmask
 mt_portadown
 	clr	d0
@@ -9151,7 +9325,7 @@ mt_stpgoss
 	clr.b	n_toneportdirec(a6)
 	cmp	d0,d2
 	beq.b	mt_cleartoneporta
-	bge.w	mt_return2
+	bge	mt_return2
 	move.b	#1,n_toneportdirec(a6)
 	rts
 
@@ -9166,7 +9340,7 @@ mt_toneportamento
 	clr.b	n_cmdlo(a6)
 mt_toneportnochange
 	tst	n_wantedperiod(a6)
-	beq.w	mt_return2
+	beq	mt_return2
 	moveq	#0,d0
 	move.b	n_toneportspeed(a6),d0
 	tst.b	n_toneportdirec(a6)
@@ -9277,12 +9451,12 @@ mt_vibrato3
 	rts
 
 mt_toneplusvolslide
-	bsr.w	mt_toneportnochange
-	bra.w	mt_volumeslide
+	bsr	mt_toneportnochange
+	bra	mt_volumeslide
 
 mt_vibratoplusvolslide
 	bsr.b	mt_vibrato2
-	bra.w	mt_volumeslide
+	bra	mt_volumeslide
 
 mt_tremolo
 	move.b	n_cmdlo(a6),d0
@@ -9453,7 +9627,7 @@ mt_setspeed
 
 mt_settempo
 	tst.b	ahi_use
-	bne.w	ahi_tempo
+	bne	ahi_tempo
 
 	move.l	d1,-(sp)
 	move.l	mrate,d1
@@ -9470,40 +9644,40 @@ mt_settempo
 	rts
 
 mt_checkmoreefx
-	bsr.w	mt_updatefunk
+	bsr	mt_updatefunk
 	move.b	2(a6),d0
 	and.b	#$f,d0
 	cmp.b	#$9,d0
-	beq.w	mt_sampleoffset
+	beq	mt_sampleoffset
 	cmp.b	#$b,d0
-	beq.w	mt_positionjump
+	beq	mt_positionjump
 	cmp.b	#$d,d0
-	beq.w	mt_patternbreak
+	beq	mt_patternbreak
 	cmp.b	#$e,d0
 	beq.b	mt_e_commands
 	cmp.b	#$f,d0
-	beq.w	mt_setspeed
+	beq	mt_setspeed
 	cmp.b	#$c,d0
-	beq.w	mt_volumechange
+	beq	mt_volumechange
 
 	cmp	#mtMOD,mtype
-	beq.w	mt_pernop
+	beq	mt_pernop
 
 ; MTM runs these also in set frames
 
 	cmp.b	#1,d0
-	beq.w	mt_portaup
+	beq	mt_portaup
 	cmp.b	#2,d0
-	beq.w	mt_portadown
+	beq	mt_portadown
 	cmp.b	#3,d0
-	beq.w	mt_toneportamento
+	beq	mt_toneportamento
 	cmp.b	#4,d0
-	beq.w	mt_vibrato
+	beq	mt_vibrato
 	cmp.b	#5,d0
-	beq.w	mt_toneplusvolslide
+	beq	mt_toneplusvolslide
 	cmp.b	#6,d0
-	beq.w	mt_vibratoplusvolslide
-	bra.w	mt_pernop
+	beq	mt_vibratoplusvolslide
+	bra	mt_pernop
 
 
 mt_e_commands
@@ -9512,33 +9686,33 @@ mt_e_commands
 	lsr.b	#4,d0
 ;	beq.b	mt_filteronoff
 	cmp.b	#1,d0
-	beq.w	mt_fineportaup
+	beq	mt_fineportaup
 	cmp.b	#2,d0
-	beq.w	mt_fineportadown
+	beq	mt_fineportadown
 	cmp.b	#3,d0
 	beq.b	mt_setglisscontrol
 	cmp.b	#4,d0
-	beq.w	mt_setvibratocontrol
+	beq	mt_setvibratocontrol
 	cmp.b	#5,d0
-	beq.w	mt_setfinetune
+	beq	mt_setfinetune
 	cmp.b	#6,d0
-	beq.w	mt_jumploop
+	beq	mt_jumploop
 	cmp.b	#7,d0
-	beq.w	mt_settremolocontrol
+	beq	mt_settremolocontrol
 	cmp.b	#9,d0
-	beq.w	mt_retrignote
+	beq	mt_retrignote
 	cmp.b	#$a,d0
-	beq.w	mt_volumefineup
+	beq	mt_volumefineup
 	cmp.b	#$b,d0
-	beq.w	mt_volumefinedown
+	beq	mt_volumefinedown
 	cmp.b	#$c,d0
-	beq.w	mt_notecut
+	beq	mt_notecut
 	cmp.b	#$d,d0
-	beq.w	mt_notedelay
+	beq	mt_notedelay
 	cmp.b	#$e,d0
-	beq.w	mt_patterndelay
+	beq	mt_patterndelay
 	cmp.b	#$f,d0
-	beq.w	mt_funkit
+	beq	mt_funkit
 	rts
 
 mt_filteronoff
@@ -9571,14 +9745,14 @@ mt_setfinetune
 
 mt_jumploop
 	tst.b	mt_counter
-	bne.w	mt_return2
+	bne	mt_return2
 	move.b	n_cmdlo(a6),d0
 	and.b	#$f,d0
 	beq.b	mt_setloop
 	tst.b	n_loopcount(a6)
 	beq.b	mt_jumpcnt
 	subq.b	#1,n_loopcount(a6)
-	beq.w	mt_return2
+	beq	mt_return2
 mt_jmploop
 	move.b	n_pattpos(a6),mt_pbreakpos
 	st	mt_pbreakflag
@@ -9648,24 +9822,24 @@ mt_rtnend
 
 mt_volumefineup
 	tst.b	mt_counter
-	bne.w	mt_return2
+	bne	mt_return2
 	moveq	#$f,d0
 	and.b	n_cmdlo(a6),d0
-	bra.w	mt_volslideup
+	bra	mt_volslideup
 
 mt_volumefinedown
 	tst.b	mt_counter
-	bne.w	mt_return2
+	bne	mt_return2
 	moveq	#0,d0
 	move.b	n_cmdlo(a6),d0
 	and.b	#$f,d0
-	bra.w	mt_volslidedown2
+	bra	mt_volslidedown2
 
 mt_notecut
 	moveq	#$f,d0
 	and.b	n_cmdlo(a6),d0
 	cmp.b	mt_counter(pc),d0
-	bne.w	mt_return2
+	bne	mt_return2
 	clr.b	n_volume(a6)
 	clr	mVolume(a5)
 	rts
@@ -9674,36 +9848,36 @@ mt_notedelay
 	moveq	#$f,d0
 	and.b	n_cmdlo(a6),d0
 	cmp.b	mt_counter(pc),d0
-	bne.w	mt_return2
+	bne	mt_return2
 	move	(a6),d0
-	beq.w	mt_return2
+	beq	mt_return2
 
 	move	n_period(a6),d0
 	lsl	#2,d0
 	move	d0,mPeriod(a5)		; set period
 	move.l	d1,-(sp)
-	bra.w	mt_doretrig
+	bra	mt_doretrig
 
 mt_patterndelay
 	tst.b	mt_counter
-	bne.w	mt_return2
+	bne	mt_return2
 	moveq	#$f,d0
 	and.b	n_cmdlo(a6),d0
 	tst.b	mt_pattdeltime2
-	bne.w	mt_return2
+	bne	mt_return2
 	addq.b	#1,d0
 	move.b	d0,mt_pattdeltime
 	rts
 
 mt_funkit
 	tst.b	mt_counter
-	bne.w	mt_return2
+	bne	mt_return2
 	move.b	n_cmdlo(a6),d0
 	lsl.b	#4,d0
 	and.b	#$f,n_glissfunk(a6)
 	or.b	d0,n_glissfunk(a6)
 	tst.b	d0
-	beq.w	mt_return2
+	beq	mt_return2
 mt_updatefunk
 	movem.l	a0/d1,-(sp)
 	moveq	#0,d0
@@ -10153,7 +10327,7 @@ it_setTimer
 	move	d0,tempo
 	
 	tst.b	ahi_use
-	bne.w	ahi_tempo
+	bne	ahi_tempo
 
 	move.l	mrate(pc),d1
 	beq.b	.x
@@ -10173,8 +10347,8 @@ it_music
  ifeq TEST
 
 	move.l	#DTP_Interrupt,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	bsr.b	.notePlayer
  else
 	move	#$800,$dff180	
@@ -10193,7 +10367,7 @@ it_music
 	lea	mChanBlock_SIZE(a6),a6
 	dbf	d2,.testLoop
  endif
-	;;;bsr.w	it_setTimer
+	;;;bsr	it_setTimer
 	popm	a5/a6
 	rts
 	
@@ -10203,14 +10377,14 @@ it_music
 * IT specific noteplayer
 .notePlayer
 	move.l	#DTP_NoteStruct,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	* This is an address to the struct
 	move.l	d0,a0
 	move.l	(a0),a4
 	move.l	nst_Flags(a4),d7	* Flags
 	moveq	#32-1,d6
 	move.l	(a4),d0	* get 1st channel data
-	beq.w	.x
+	beq	.x
 	move.l	d0,a0
 	lea	cha0(pc),a6
 .chLoop
@@ -10328,7 +10502,7 @@ syss3mPlay
 	moveq	#-1,d0
 	CALL	AllocSignal
 	move.b	d0,sigbit(a5)
-	bmi.w	exiz
+	bmi	exiz
 
 	lea	allocport(a5),a1
 	move.b	d0,15(a1)
@@ -10349,7 +10523,7 @@ syss3mPlay
 	moveq	#0,d1
 	CALL	OpenDevice
 	tst.b	d0
-	bne.w	exiz
+	bne	exiz
 	st.b	audioopen(a5)
 
 	endc
@@ -10427,7 +10601,7 @@ openciares
 tryCIAB
 	lea	cianame(a5),a1
 	cmp.b	#'a',3(a1)
-	bne.w	exits
+	bne	exits
 	addq.b	#1,3(a1)
 	moveq	#0,d3
 	bra.b	openciares
@@ -10496,7 +10670,7 @@ timerB
 	jsr	(a0)
 	popm	all
 
-	bra.w	.ohiis
+	bra	.ohiis
 
 .nosurround
 	subq	#1,d0
@@ -10741,7 +10915,7 @@ s3mPlay	movem.l	d0-a6,-(sp)
 	move	d1,$b8(a6)
 	move	d2,$c8(a6)
 	move	d2,$d8(a6)
-	bra.w	.ohiis
+	bra	.ohiis
 
 .nosurround
 	subq	#1,d0
@@ -11110,6 +11284,10 @@ unpackedPatternPosition
 	dc.w	-1
 
 
+* Pointer to hippo scope data structure
+scopeData       dc.l     0
+emptyScopeWord  dc.l    0
+
  if DEBUG
 PRINTOUT_DEBUGBUFFER
 	pea	debugDesBuf(pc)
@@ -11119,7 +11297,7 @@ PRINTOUT_DEBUGBUFFER
 PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
 	move.l	output(pc),d1
-	bne.w	.open
+	bne	.open
 
 	* try tall window firsr
 	move.l	#.bmb,d1
@@ -11187,7 +11365,7 @@ desmsgDebugAndPrint
 	move.l	4.w,a6
 	lob	RawDoFmt
 	movem.l	(sp)+,d0-d7/a0-a3/a6
-	bsr.w	PRINTOUT_DEBUGBUFFER
+	bsr	PRINTOUT_DEBUGBUFFER
 	rts	* teleport!
 .putc	
 	move.b	d0,(a3)+	

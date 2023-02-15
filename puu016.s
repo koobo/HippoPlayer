@@ -30,13 +30,19 @@ ver	macro
 ;	dc.b	"v2.54ﬂ (?.?.2022)"
 ;	dc.b	"v2.54 (30.8.2022)"
 ;	dc.b	"v2.55ﬂ (?.?.2022)"
-	dc.b	"v2.55 (10.11.2022)"
+;	dc.b	"v2.55 (10.11.2022)"
+;	dc.b	"v2.56ﬂ (?.?.202?)"
+	dc.b	"v2.56 (15.2.2023)"
 	endm	
 
  ifnd DEBUG
 * AsmOne setting:
 * Enable debug logging 
 DEBUG = 1
+ endif
+
+ ifnd SERIALDEBUG
+SERIALDEBUG = 0
  endif
 
  ifnd __VASM
@@ -62,6 +68,7 @@ DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_P61A        =   0
+FEATURE_LIST_TABS   =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -85,7 +92,7 @@ PLAYING_MODULE_NONE 	= -1	 	* needs to be negative
 PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
 MAX_MODULES		= $1ffff 		    * this should be enough!
 
-
+SEARCH_BOXSIZE_DELTA = 2
 	
  ;ifne TARK
  ;ifeq asm
@@ -201,6 +208,8 @@ check	macro
 	include	dos/dos_lib.i
 	include	dos/dosextens.i
 	include	dos/var.i
+	include	dos/dostags.i
+    include dos/rdargs.i
 
 	include	rexx/rxslib.i
 
@@ -225,8 +234,13 @@ check	macro
 	include	libraries/reqtools_lib.i
 	include	libraries/xpk.i
 	include	libraries/xpkmaster_lib.i
+  ifd __VASM
+	include	playsid.library/playsidbase.i
+	include	playsid.library/playsid_lib.i
+  else
 	include	libraries/playsidbase.i
 	include	libraries/playsid_lib.i
+  endif
 	include	libraries/xfdmaster_lib.i
 	include	libraries/xfdmaster.i
 	include	libraries/screennotify_lib.i
@@ -356,32 +370,38 @@ prefs_tooltips		rs.b 	1
 prefs_savestate		rs.b 	1
 prefs_altbuttons	rs.b	1
 
-prefs_quadraScope   rs.b 1
-prefs_quadraScopeBars   rs.b 1
-prefs_quadraScopeF   rs.b 1
-prefs_quadraScopeFBars   rs.b 1
-prefs_hippoScope   rs.b 1
-prefs_hippoScopeBars   rs.b 1
-prefs_patternScope   rs.b 1
-prefs_patternScopeXL   rs.b 1
-prefs_spectrumScope   rs.b 1
-prefs_spectrumScopeBars   rs.b 1
-prefs_sidmode		rs.b	1
+prefs_quadraScope        rs.b    1
+prefs_quadraScopeBars    rs.b    1
+prefs_quadraScopeF       rs.b    1
+prefs_quadraScopeFBars   rs.b    1
+prefs_hippoScope         rs.b    1
+prefs_hippoScopeBars     rs.b    1
+prefs_patternScope       rs.b    1
+prefs_patternScopeXL     rs.b    1
+prefs_spectrumScope      rs.b    1
+prefs_spectrumScopeBars  rs.b    1
+prefs_sidmode            rs.b    1
 
-prefs_quadraScopePos   rs.l 1
-prefs_quadraScopeFPos   rs.l 1
-prefs_hippoScopePos   rs.l 1
-prefs_patternScopePos   rs.l 1
-prefs_spectrumScopePos   rs.l 1
+prefs_quadraScopePos     rs.l    1
+prefs_quadraScopeFPos    rs.l    1
+prefs_hippoScopePos      rs.l    1
+prefs_patternScopePos    rs.l    1
+prefs_spectrumScopePos   rs.l    1
 
-prefs_listtextattr		rs.b	ta_SIZEOF-4
-prefs_listfontname		rs.b	30
-	printt "TODO TODO: dangerous buffer size"
+prefs_listtextattr      rs.b      ta_SIZEOF-4
+prefs_listfontname      rs.b      30
+    printt    "TODO TODO: dangerous buffer size"
 
-prefs_xmaplay    rs.b   1
-prefs_residmode  rs.b    1
-
-prefs_size		rs.b	0
+prefs_xmaplay         rs.b      1
+prefs_residmode       rs.b      1
+prefs_residfilter     rs.b      1
+* This does not have a prefs setting, instead it serves as a way to persist
+* the search selection.
+prefs_selectedSearch  rs.b      1 
+prefs_mhiEnable       rs.b      1
+MHILIB_SIZE         =   39
+prefs_mhiLib          rs.b      MHILIB_SIZE
+prefs_size            rs.b      0
 
 *******************************************************************************
 *
@@ -718,8 +738,12 @@ samplebufsiz_new	rs.b	1
 samplebufsiz0		rs.b	1
 samplebufsiz		rs.l	1
 
+* How many bytes to skip to get to next sample in data,
+* 1 for 8-bit data 2 for 16-bit. Used when accessing AHI sample
+* data, which can be both.
+ahiSampleModulo      rs.w    1
 * Sample playback rate, bytes per frame.
-sampleadd		rs.l	1
+sampleadd		    rs.l	1
 * Pointer to a pointer to the sample position.
 * This is reset to zero by sample player when a buffer
 * is played through.
@@ -735,11 +759,12 @@ samplestereo		rs.b	1
 * Actual loading is then skipped.
 sampleinit		rs.b	1		
 * Sample format
-* 1 = IFF
-* 2 = AIFF
-* 3 = WAV
-* 4 = MP3
-sampleformat		rs.b	1
+SAMPLE_FORMAT_NONE = 0
+SAMPLE_FORMAT_IFF  = 1
+SAMPLE_FORMAT_AIFF = 2
+SAMPLE_FORMAT_WAV  = 3
+SAMPLE_FORMAT_MP3  = 4
+sampleformat   rs.b    1
 
 * This is set in loadfile() to indicate an executable module has been 
 * loaded with LoadSeg(). Value can be 0 for normal processing,
@@ -823,7 +848,7 @@ medratepot_new	rs	1
 sidmode_new     rs.b    1
 residmode_new   rs.b    1
 xmaplay_new     rs.b    1
-                rs.b    1 * pad
+residfilter_new rs.b    1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
@@ -832,6 +857,9 @@ contonerr_laskuri rs.b 1		* kuinka monta virheellist‰ lataus
 cybercalibration_new rs.b 1		* yrityst‰
 calibrationfile_new rs.b 100
 newcalibrationfile rs.b	1
+
+mhiEnable_new   rs.b 1
+mhiLib_new      rs.b MHILIB_SIZE
 
 prefs_exit	rs.b	1		* Prefs exit-flaggi
 
@@ -923,7 +951,7 @@ medrate		rs	1		* MED mixing rate
 sidmode     rs.b    1
 residmode   rs.b    1
 xmaplay     rs.b    1
-            rs.b    1  * pad
+residfilter rs.b    1
 
 *******
 
@@ -1020,8 +1048,9 @@ filterstore	rs.b	1	* filtterin tila
 keyfilechecked	rs.b	1	* ~0: keyfile tarkistettu
 
 songnumber	rs	1	* modin sis‰isen kappaleen numero
+                    * subsong number, first one is 0
 maxsongs	rs	1	* maximi songnumber
-minsong  	rs 	1   * min songnumber
+minsong  	rs 	1   * min songnumber, used some deliplayers
 
 
 moduleaddress	rs.l	1	* modin osoite
@@ -1282,7 +1311,7 @@ deleteflag	rs.b	1	* filen ja dividerin deletointiin
 keycode		rs.b	1		* 33
 keyfile		rs.b	64		* keyfile!
 
-INFO_MODULE_NAME_LEN = 50+10
+INFO_MODULE_NAME_LEN = 128
 modulename	rs.b 	INFO_MODULE_NAME_LEN+2 * moduulin nimi
 moduletype	rs.b	40		* tyyppi tekstin‰
 req_array	rs.b	0		* reqtoolsin muotoiluparametrit
@@ -1406,6 +1435,53 @@ buttonRow2TopEdge		rs.w	1
 buttonRow2Height		rs.w	1
 fileBoxTopEdge			rs.w	1	
 
+* Address of the aget file streamer task if active
+streamerTask            rs.l    1
+* Pointer to the url to stream
+streamerUrl             rs.l    1
+* Pointer to streamer error data, aget output 
+streamerError           rs.l    1
+streamerErrorLength     rs.l    1
+* Data returned by RDArgs
+streamHeaderRDArgs      rs.l    1
+* Set to -1 when starting, set to aget return code when aget exists
+* Used to detect if stream has finished in certain cases.
+streamReturnCode        rs.w    1
+* Data sturcture for ReadArgs, specifies the input
+streamRDA               rs.b    RDA_SIZEOF
+* Output parsed data from ReadArgs
+streamHeaderArray           rs.l       0
+streamHeaderContentLength   rs.l       1
+streamHeaderContentType     rs.l       1
+streamHeaderIcyName         rs.l       1
+streamHeaderIcyDescription  rs.l       1
+streamHeaderRest            rs.l       1
+disableShowStreamerError    rs.b       1
+                            rs.b       1
+
+* Remote search popup stores the selected search mode here
+* SEARCH_MODLAND etc etc
+selectedSearch = prefsdata+prefs_selectedSearch
+
+mhiEnable      = prefsdata+prefs_mhiEnable
+mhiLib         = prefsdata+prefs_mhiLib
+
+* Flags to indicate the bottom search layout state
+* Tested with .w!
+searchLayoutActive      rs.b    1
+localSearchLayoutActive rs.b    1
+
+* This is used to adjust so that the search layout ui gadgets
+* fit at the bottom of the window. Normal value is 0.
+BOTTOM_MARGIN   rs.w  1
+
+* Keep track of chosen items in different lists so it can
+* be rechosen when coming back to the view
+normalModeChosenModule      rs.l    1
+favoritesModeChosenModule   rs.l    1
+fileBrowserChosenModule     rs.l    1
+searchResultsChosenModule   rs.l    1
+
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -1454,7 +1530,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	25
+xpl_versio	=	28
 
 
 *********************************************************************************
@@ -1467,9 +1543,11 @@ xpl_versio	=	25
 		rs.b	MLN_SIZE	* Minimal node 
 l_nameaddr	rs.l	1		* osoitin pelkk‰‰n tied.nimeen
 					* address to filename without path
-l_favorite	rs.b 	1		* favorite status for this file
+l_favorite	rs.b 	1		* 0: not favorite, non-zero: favorite
 l_divider	rs.b	1		* this is a divider, ie. a path
-l_remote	rs.b    1       * 0: local file, 1: remote
+l_remote	rs.b    1       * 0: local file, non-zero: remote
+l_favSong   rs.b    1       * 0 or song number when node was favorited
+l_separateName rs.b 1       * set if l_nameaddr points to "#name=<name>""
 l_filename	rs.b	0		* tied.nimi ja polku alkaa t‰st‰
 					* full path to filename begins at this point
 					* element size is dynamically calculated based on path length.
@@ -1662,25 +1740,25 @@ progstart
 	move.l	d0,a1
 	move.l	wa_Lock(a1),lockhere(a5)
 	DPRINT	"Start from WB"
-	bsr.w	.buildWbStartParams
+	bsr	.buildWbStartParams
 	bra.b	.waswb
 .nowb	
 	move.l	pr_CurrentDir(a3),lockhere(a5) * nykyinen hakemisto CLI:lt‰
 	DPRINT	"Start from CLI"
 
 	push	a3
-	bsr.w	CLIparms
+	bsr	CLIparms
 	pop	a3
 .waswb	
 
 
 	* a3 = current task
 
-	bsr.w	.getDirInfo
+	bsr	.getDirInfo
 	lea	portname,a1		* joko oli yksi HiP??
 	lore	Exec,FindPort
 	tst.l	d0
-	bne.w	.poptofront
+	bne	.poptofront
 
 	* There was no hip already running, launch a new one
 
@@ -1840,7 +1918,7 @@ progstart
 	move.l	d0,a0
 	move.l	poptofrontr-hippoport(a0),a0	* pullautusrutiini
 	jsr	(a0)								* what is this evil magic?
-	bra.w	.eien
+	bra	.eien
 
 * Oli! L‰hetet‰‰n hipille!
 .huh
@@ -1893,7 +1971,7 @@ progstart
 
 	jsr	deleteport0
 
-	bra.w	.eien
+	bra	.eien
 
 * This checks the command line parameters and adds a fully qualified path 
 * to filenames if possible. Uses V36 DOS functions as it would be quite
@@ -1923,6 +2001,8 @@ progstart
 	beq.b	.wasCommand 
 	cmp.l	#MESSAGE_COMMAND_PRG,d0
 	beq.b	.wasCommand 
+    cmp.l   #"HTTP",d0
+    beq     .wasRemote
 
 * consider this a file. let's try to get a lock on it.
 	move.l 	d3,d1
@@ -1957,6 +2037,7 @@ progstart
  	* Temp buffer position to hold the next possible path+filename
  	move.l	a1,a4
 
+.wasRemote
 .wasCommand
 .noLock
 .error
@@ -2203,7 +2284,6 @@ scrnotifyname	dc.b	"screennotify.library",0
 idname		dc.b	"input.device",0
 nilname		dc.b	"NIL:",0
 portname	dc.b	"HiP-Port",0
-rmname		dc.b	"RexxMaster",0
 fileprocname	dc.b	"HiP-Filereq",0
 prefsprocname	dc.b	"HiP-Prefs",0
 infoprocname	dc.b	"HiP-Info",0
@@ -2229,7 +2309,7 @@ about_tt
 
 ;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
 scrtit	dc.b	"HippoPlayer"
-	dc.b	" by K-P in 1994-2000, 2021-2022",0
+	dc.b	" by K-P in 1994-2000, 2021-2023",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -2246,6 +2326,7 @@ about_t
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
  dc.b "≠≠≠  HippoPlayer "
  ver
+ dc.b " " ; padding
  dc.b " ≠≠≠",10,3
  dc.b "≠≠          by K-P Koljonen          ≠≠",10,3
  dc.b "≠≠≠       Hippopotamus Design       ≠≠≠",10,3
@@ -2262,7 +2343,7 @@ about_t1
  dc.b " as long as all the files are included",10,3
  dc.b "   unaltered. Not for commercial use",10,3
  dc.b " without a permission from the author.",10,3
- dc.b " Copyright © 1994-2022 by K-P Koljonen",10,3
+ dc.b " Copyright © 1994-2023 by K-P Koljonen",10,3
  dc.b "           *** FREEWARE ***",10,3
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
  ;dc.b "Snail mail: Kari-Pekka Koljonen",10,3
@@ -2313,7 +2394,7 @@ flash
 *
 * Main program entry point
 *
-main
+main:
 	* Global variables are in a5
 	lea	var_b,a5
 	move.l	4.w,a6
@@ -2322,6 +2403,8 @@ main
 	* Copy of exec for use in level1 software interrupt
 	move.l	a6,exeksi
 
+    clr     BOTTOM_MARGIN(a5)   
+    
 	sub.l	a1,a1
 	lob	FindTask
 	move.l	d0,owntask(a5)
@@ -2447,15 +2530,6 @@ main
 	lob	OldOpenLibrary
 	move.l	d0,_DiskFontBase(a5)
 
-	lea	rmname(pc),a1		* Onko RexxMast p‰‰ll‰?
-	lob	FindTask
-	tst.l	d0
-	beq.b	.norexx
-	lea	rexxname(pc),a1		* jos on, avataan rexxsyslib
-	lob	OldOpenLibrary
-	move.l	d0,_RexxBase(a5)
-	sne	rexxon(a5)		* Lippu
-.norexx
 
 	lea 	gfxname(pc),a1		
 	lob	OldOpenLibrary
@@ -2494,9 +2568,9 @@ main
 	move.l	d0,topazbase(a5)	
 
 	pushm	all
-	bsr.w	loadprefs
-	bsr.w	loadps3msettings
-	bsr.w	loadcybersoundcalibration
+	bsr	loadprefs
+	bsr	loadps3msettings
+	bsr	loadcybersoundcalibration
 	popm	all
 
 
@@ -2567,33 +2641,29 @@ main
 .listFontOk
 	endb	a3
 	move.l	listfontbase(a5),a0
-	bsr.w	setListFont
+	bsr	setListFont
 
 	* Fonts set, some other stuff next
 
-	bsr.w	createport0
-	tst.b	rexxon(a5)
-	beq.b	.nor1
-	bsr.w	createrexxport
-.nor1
+	bsr	createport0
+	bsr	createrexxport
 
 
-
-	bsr.w	getsignal
+	bsr	getsignal
 	move.b	d0,songHasEndedSignal(a5)
-	bsr.w	getsignal
+	bsr	getsignal
 	move.b	d0,ownsignal2(a5)
-	bsr.w	getsignal
+	bsr	getsignal
 	move.b	d0,uiRefreshSignal(a5)
-	bsr.w	getsignal
+	bsr	getsignal
 	move.b	d0,posUpdateSignal(a5)
-	bsr.w	getsignal
+	bsr	getsignal
 	move.b	d0,audioPortSignal(a5)
-	bsr.w	getsignal
+	bsr	getsignal
 	move.b	d0,fileReqSignal(a5)
-	bsr.w	getsignal
+	bsr	getsignal
 	move.b	d0,rawKeySignal(a5)
-	bsr.w	getsignal
+	bsr	getsignal
 	move.b	d0,tooltipSignal(a5)
 
 	* Do all kinds of adjustments to gadgets
@@ -2648,6 +2718,8 @@ main
 	;move.b	#0,sex_ActivePens+1(a1)
 
 	; Make space for list mode change button
+    ; NOTE: this is recalculated in avaa_ikkuna and
+    ; layoutGadgetsVertical
 	lea	gadgetFileSlider,a0
 	add	#14,gg_TopEdge(a0)
 	sub	#18,gg_Height(a0)
@@ -2655,8 +2727,11 @@ main
 	; The last main window button is "gadgetSortButton",
 	; add another button as the new last one
 	basereg	gadgetFileSlider,a0
-	;move.l	#gadgetListModeChangeButton,gadgetSortButton+gg_NextGadget
 	pushpea	gadgetListModeChangeButton(a0),gadgetSortButton+gg_NextGadget(a0)
+ ifne FEATURE_LIST_TABS
+	pushpea	gadgetListModeTab1Button(a0),gadgetSortButton+gg_NextGadget(a0)
+ endif
+
 	endb	a0
 	
 	move.l	_IntuiBase(a5),a6
@@ -2794,7 +2869,7 @@ main
 	NEWLIST a0
 
 	lea	.startingMsg(pc),a0
-	bsr.w	printbox
+	bsr	printbox
 	bra.b	.startingMsg2
 .startingMsg dc.b "Starting...",0
  even
@@ -2807,7 +2882,7 @@ main
 
 ******* Vanha kick: otsikkopalkin ja WB-nayton koko
 	tst.b	uusikick(a5)
-	bne.w	.newkick
+	bne	.newkick
 
 	; Copy alternative horiz prop gadget gfx for kick13
 	lea	horizPropGadgetGfxNormal,a0
@@ -2868,7 +2943,7 @@ main
 	tst.l	d0
 	bne.b	.go2
 	move.b	#i_nowindow,startuperror(a5)
-	bra.w	exit
+	bra	exit
 .go2	
 	move.l	d0,a0
 	move.l	wd_WScreen(a0),a1		* WB screen addr
@@ -2881,9 +2956,9 @@ main
 	sub	#10,windowtop(a5)
 .newkick
 
-	bsr.w	inithippo
-	bsr.w	initkorva
-	bsr.w	initkorva2
+	bsr	inithippo
+	bsr	initkorva
+	bsr	initkorva2
 	jsr	initializeButtonRowLayout
 
 	st	reghippo(a5)
@@ -2899,13 +2974,13 @@ main
 	move	#$9E99,d0
 .pal	move.l	d0,clockconstant(a5)
 
-	bsr.w	divu_32
+	bsr	divu_32
 	move.l	d0,colordiv(a5)		* 50Hz tai 60Hz n‰ytˆlle
 
 	move	#15600,horizfreq(a5)
 	move	#50,vertfreq(a5)
 	
-	bsr.w	srand			* randomgeneratorin seed!
+	bsr	srand			* randomgeneratorin seed!
 
 
 
@@ -2913,27 +2988,27 @@ main
 	tst.l	(a3)
 	beq.b	.nohide
 	move.l	(a3),a0
-	bsr.w	kirjainta4
+	bsr	kirjainta4
 	cmp.l	#MESSAGE_COMMAND_HIDE,d0		* oliko komento 'HIDE'??
 	bne.b	.nohide
 	clr.b	win(a5)
 	bra.b	.hid
 .nohide
-	bsr.w	get_rt
+	bsr	get_rt
 
 	st	win(a5)
-	bsr.w	avaa_ikkuna		* palauttaa d4:ss‰ keycheckin~
+	bsr	avaa_ikkuna		* palauttaa d4:ss‰ keycheckin~
 	beq.b	.go3
 	clr.b	win(a5)
 	move.b	#i_nowindow,startuperror(a5)
-	bra.w	exit
+	bra	exit
 .go3
 
 
 * ikkuna avattu.. katotaan pit‰‰ko olla pieni
 	tst.b	prefsdata+prefs_kokolippu(a5)
 	beq.b	.hid
-	bsr.w	zipMainWindow
+	bsr	zipMainWindow
 .hid
 
 	jsr	inforivit_clear
@@ -2948,7 +3023,7 @@ main
 	move.l	d0,externalplayers(a5)
 ;	bne.b	.purr
 ;	lea	grouperror_t,a1		* ei valiteta vaikka ei lˆydykk‰‰n
-;	bsr.w	request
+;	bsr	request
 
 
 * ladataan playerlibitkin samantien
@@ -2979,8 +3054,8 @@ main
 	st	ciasaatu(a5)
 	st	vbsaatu(a5)
 
-	bsr.w	init_inputhandler
-	bsr.w	init_screennotify
+	bsr	init_inputhandler
+	bsr	init_screennotify
 	jsr	startAndStopScopeTasks
 
 	tst.b	infoon(a5)
@@ -3017,9 +3092,13 @@ main
 .rount
 	moveq	#34+WINX,d0
 	move	boxsize(a5),d3
-	beq.b	.oohi
 	bsr		getFileboxYStartToD2
 	add		d2,d1
+    tst.w     searchLayoutActive(a5)   
+    beq.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d2
+.lm1
+
 	mulu	listFontHeight(a5),d3
 	lsr		#1,d3
 	add		d3,d1
@@ -3040,7 +3119,7 @@ main
 	pushpea	startup(a5),sv_argvArray+4(a5) * Parametriksi startupmoduuli
 	clr.l	sv_argvArray+8(a5)
 .komento0
-	bsr.w	komentojono			* tutkitaan komentojono.
+	bsr	komentojono			* tutkitaan komentojono.
 
 	* Command line and startup modules handled,
 	* if none of these provided stuff, try the saved
@@ -3063,10 +3142,10 @@ main
 
 	bra.b	msgloop
 returnmsg
-	bsr.w	flush_messages
+	bsr	flush_messages
 msgloop	
 	tst.b	exitmainprogram(a5)
-	bne.w	exit
+	bne	exit
 
 	cmp.b	#1,do_alarm(a5)
 	bne.b	.noal				* her‰tys!
@@ -3076,7 +3155,7 @@ msgloop
 	beq.b	.noal				* onko moduulia??
 	move.l	a0,sv_argvArray+4(a5)		* Parametriksi startupmoduuli
 	clr.l	sv_argvArray+8(a5)
-	bsr.w	komentojono
+	bsr	komentojono
 	bra.b	returnmsg
 .noal
 
@@ -3121,7 +3200,7 @@ msgloop
 	btst	d3,d0
 	beq.b	.nrexm
 	jsr	rexxmessage
-	bra.w		returnmsg
+	bra		returnmsg
 
 .nrexm
 * Tuliko viesti‰ porttiin?
@@ -3129,7 +3208,7 @@ msgloop
 	btst	d3,d0
 	beq.b	.ow
 	push	d0
-	bsr.w	omaviesti
+	bsr	omaviesti
 	pop	d0
 .ow
 
@@ -3138,7 +3217,7 @@ msgloop
 	btst	d3,d0
 	beq.b	.nowo
 	pushm	all
-	bsr.w	signalreceived
+	bsr	signalreceived
 	popm	all
 
 
@@ -3153,15 +3232,15 @@ msgloop
 	btst	d3,d0
 	beq.b	.noSignal2
 	push	d0  * save signal mask
-	bsr.w	handleSignal2
+	bsr	handleSignal2
 	move.l	d0,d1
 	; d0 = -1 -> window error, exit
 	; d0 =  1 -> window reopened, skip rest of the event loop
 	; d0 =  0 -> continue
 	pop	d0
 	tst.l	d1
-	bmi.w	exit
-	bne.w	returnmsg
+	bmi	exit
+	bne	returnmsg
 .noSignal2
 
 	move.b	uiRefreshSignal(a5),d3	* p‰ivitet‰‰n...
@@ -3182,11 +3261,11 @@ msgloop
 
 	tst.b	autosort(a5)		* automaattinen sorttaus?
 	beq.b	.nas
-	bsr.w	rsort
+	bsr	rsort
 .nas
 
 	jsr	listChanged
-	bsr.w	forceRefreshList
+	bsr	forceRefreshList
 
 
 	move.b	haluttiinuusimodi(a5),d1
@@ -3220,21 +3299,21 @@ msgloop
 .ee	
 	cmp.b	#pm_random,playmode(a5)
 	bne.b	.noRand
-	bsr.w	soitamodi_random
+	bsr	soitamodi_random
 	bra.b	.wasRand
 .noRand
-	bsr.w	rbutton1
+	bsr	rbutton1
 .wasRand
 	movem.l	(sp)+,d0-a6
 	
 .nwww	pop	d0
 
-	bsr.w	areMainWindowGadgetsFrozen
-	bne.w	.nwwwq
+	bsr	areMainWindowGadgetsFrozen
+	bne	.nwwwq
 
 	move.b	rawKeySignal(a5),d3	* rawkey inputhandlerilta
 	btst	d3,d0
-	beq.w	.nwwwq
+	beq	.nwwwq
 	DPRINT	"rawkey from input handler"
 	moveq	#0,d4
 	move	rawkeyinput(a5),d3
@@ -3243,30 +3322,30 @@ msgloop
 	cmp	#$01,d3			* '1'? -> iconify
 	bne.b	.nico
 	moveq	#0,d3			* muutetaan -> ~`
-	bsr.w	nappuloita
-	bra.w	returnmsg
+	bsr	nappuloita
+	bra	returnmsg
 .nico
 
 	tst	d3
 	beq.b  .noKeys
-	bsr.w nappuloita
-	bra.w	returnmsg
+	bsr nappuloita
+	bra	returnmsg
 .noKeys
 
 	tst.b	win(a5)
 	bne.b	.obh
 .open	
-	bsr.w	openw
-	bne.w	exit
-	bra.w	returnmsg
+	bsr	openw
+	bne	exit
+	bra	returnmsg
 
 .obh	
 * painettiinko zip windowi ei-ikkunassa? pullautetaan..
 	tst.b	kokolippu(a5)
 	beq.b	.op
-	bsr.w	front
+	bsr	front
 	bra.b	.nwwwq
-.op	bsr.w	sulje_ikkuna
+.op	bsr	sulje_ikkuna
 	clr.b	win(a5)
 	bra.b	.open
 
@@ -3274,9 +3353,9 @@ msgloop
 .hide
 	tst.b	win(a5)
 	beq.b	.open
-	bsr.w	sulje_ikkuna
+	bsr	sulje_ikkuna
 	clr.b	win(a5)
-	bra.w	returnmsg
+	bra	returnmsg
 
 
 .nwwwq
@@ -3291,7 +3370,7 @@ msgloop
 	move.b	tooltipSignal(a5),d3 
 	btst	d3,d0 
 	beq.b	.noTooltipSignal
-	bsr.w	tooltipDisplayHandler
+	bsr	tooltipDisplayHandler
 .noTooltipSignal
 
 * Vastataan IDCMP:n viestiin
@@ -3299,12 +3378,12 @@ msgloop
 	
 ;getmoremsg
 	tst.b	win(a5)
-	beq.w	msgloop
+	beq	msgloop
 
 	* Ignore any ui actions if window is frozen
 	* Flush any remaining messages 
-	bsr.w	areMainWindowGadgetsFrozen
-	bne.w	returnmsg		
+	bsr	areMainWindowGadgetsFrozen
+	bne	returnmsg		
 
 * Process IDCMP messages if any
 	clr.b	ignoreMouseMoveMessage(a5)
@@ -3314,7 +3393,7 @@ msgloop
 	lore Exec,GetMsg
 	* Go back to mainloop if no more messages left
 	tst.l	d0
-	beq.w	msgloop
+	beq	msgloop
 
 	move.l	d0,a1
 	move.l	im_Class(a1),d2		* luokka	
@@ -3330,8 +3409,8 @@ msgloop
 	bne.b	.noChangeWindow
 	; Window resize events go into IDCMP_CHANGEWINDOW
 	; on kick 2.0+.
-	bsr.w	zipwindow
-	bsr.w	mainWindowSizeChanged
+	bsr	zipwindow
+	bsr	mainWindowSizeChanged
 	bra.b	.idcmpLoop
 
 .noChangeWindow
@@ -3340,14 +3419,14 @@ msgloop
 	tst.b	uusikick(a5)
 	bne.b	.idcmpLoop
 	; Use this event on kick1.3, as CHANGEWINDOW is not reported there.
-	bsr.w	mainWindowSizeChanged
+	bsr	mainWindowSizeChanged
 	bra.b	.idcmpLoop
 .noNewSize
 
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.noRawKey
 	clr	userIdleTick(a5)	
-	bsr.w	nappuloita
+	bsr	nappuloita
 	bra.b	.idcmpLoop
 .noRawKey	
 	* There will be a lot of mousemove messages.
@@ -3358,23 +3437,23 @@ msgloop
 	bne.b	.noMouseMove
 	clr	userIdleTick(a5)		* clear user idle counter, user is moving mouse
 	tst.b	ignoreMouseMoveMessage(a5) 
-	bne.b  	.idcmpLoop
+	bne  	.idcmpLoop
 	st	ignoreMouseMoveMessage(a5)
-	bsr.w	mousemoving
-	bra.w	.idcmpLoop
+	bsr	mousemoving
+	bra	.idcmpLoop
 
 .noMouseMove
 	cmp.l	#IDCMP_GADGETUP,d2
 	bne.b	.noGadgetUp
 	clr	userIdleTick(a5)	
-	bsr.w	gadgetsup
-	bra.w	.idcmpLoop
+	bsr	gadgetsup
+	bra	.idcmpLoop
 .noGadgetUp
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	bne.b	.noMouseButtons
 	clr	userIdleTick(a5)	
-	bsr.w	buttonspressed
-	bra.w	.idcmpLoop
+	bsr	buttonspressed
+	bra	.idcmpLoop
 .noMouseButtons	
 	cmp.l	#IDCMP_CLOSEWINDOW,d2
 	bne.b	.noClose
@@ -3385,25 +3464,25 @@ msgloop
 	; so redraw it to ensure correct visual.
 	cmp.l	#IDCMP_ACTIVEWINDOW,d2
 	bne.b	.noActive
-	bsr.w	refreshResizeGadget
-	bra.w	.idcmpLoop
+	bsr	refreshResizeGadget
+	bra	.idcmpLoop
 .noActive
 	cmp.l	#IDCMP_INACTIVEWINDOW,d2
 	bne.b	.noInactive
-	bsr.w	refreshResizeGadget
+	bsr	refreshResizeGadget
 .noInactive
 
 	* All messages checked
-	bra.w	.idcmpLoop
+	bra	.idcmpLoop
 	
 exit	
 	lea	var_b,a5
 
 	DPRINT "Hippo is exiting"
-	bsr.w	setMainWindowWaitPointer	
+	bsr	setMainWindowWaitPointer	
 
 	lea	.exmsg(pc),a0
-	bsr.w	printbox
+	bsr	printbox
 	bra.b	.exmsg2
 .exmsg dc.b	"Exiting...",0
  even
@@ -3422,7 +3501,7 @@ exit
 ;	cmp	#1,filereq_prosessi(a5)
 ;	beq.b	.er2	
 
-	bsr.w	sulje_prefs
+	bsr	sulje_prefs
 	;jsr	sulje_quad
 	jsr	stopScopeTasks
 	jsr	sulje_info
@@ -3437,7 +3516,7 @@ exit
 	moveq	#3*25-1,d7		* odotetaan max 2 sekkaa
 .jorl	tst.b	hippoport+hip_opencount(a5)
 	beq.b	.joer
-	bsr.w	dela
+	bsr	dela
 	dbf	d7,.jorl
 	bra.b	.er
 	clr.b	hippoport+hip_quit(a5)	* ei en‰‰ quittia jos ei onnistunu.
@@ -3451,13 +3530,13 @@ exit
 .er	lea	.clo(pc),a1
 .req	jsr	request
 	clr.b	exitmainprogram(a5)	* ei en‰‰ exitti‰.	
-	bra.w	msgloop
+	bra	msgloop
 .clo	dc.b	"Close all requesters & external programs and try again!",0
  even
 
 .ex
-	bsr.w	rbutton4b		* eject /wo fade
-	bsr.w	freelist		* vapautetaan lista
+	bsr	rbutton4b		* eject /wo fade
+	bsr	freelist		* vapautetaan lista
 	jsr	rem_ciaint
 
 	jsr	freeFavoriteList
@@ -3478,43 +3557,43 @@ exit
 	bclr	#1,$bfe001
 .ee
 	jsr	vapauta_kanavat
-	bsr.w	rem_inputhandler
-	bsr.w	rem_screennotify
+	bsr	rem_inputhandler
+	bsr	rem_screennotify
 
 	move.l	externalplayers(a5),a0		* vapautetaan playerit
-	bsr.w	freemem
+	bsr	freemem
 
 	move.l	xplayer(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	move.l	ps3msettingsfile(a5),a0		* vapautetaan ps3masetustied.
-	bsr.w	freemem
+	bsr	freemem
 	move.l	calibrationaddr(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	move.l	randomtable(a5),a0
-	bsr.w 	freemem
+	bsr 	freemem
 	move.l	lastStoredFileReqDirectory(a5),a0 
-	bsr.w	freemem
+	bsr	freemem
 
 	jsr	closeTooltipPopup
-	bsr.w	flush_messages
-	bsr.w	sulje_ikkuna
+	bsr	flush_messages
+	bsr	sulje_ikkuna
 
 	move.b	songHasEndedSignal(a5),d0
-	bsr.w	freesignal
+	bsr	freesignal
 	move.b	ownsignal2(a5),d0
-	bsr.w	freesignal
+	bsr	freesignal
 	move.b	uiRefreshSignal(a5),d0
-	bsr.w	freesignal
+	bsr	freesignal
 	move.b	posUpdateSignal(a5),d0
-	bsr.w	freesignal
+	bsr	freesignal
 	move.b	audioPortSignal(a5),d0
-	bsr.w	freesignal
+	bsr	freesignal
 	move.b	fileReqSignal(a5),d0
-	bsr.w	freesignal
+	bsr	freesignal
 	move.b	rawKeySignal(a5),d0
-	bsr.w	freesignal
+	bsr	freesignal
 	move.b	tooltipSignal(a5),d0
-	bsr.w	freesignal
+	bsr	freesignal
 
 	move.l	fontbase(a5),d0
 	beq.b	.uh22
@@ -3543,8 +3622,8 @@ exit
 
 	tst.b	rexxon(a5)
 	beq.b	.nor2
-	bsr.w	deleterexxport
-.nor2	bsr.w	deleteport0
+	bsr	deleterexxport
+.nor2	bsr	deleteport0
 
 	move.l	nilfile(a5),d1
 	lore	Dos,Close
@@ -3552,6 +3631,8 @@ exit
  if DEBUG
 	jsr	closeTimer
  endif
+    jsr     freeStreamHeaderArgs
+    jsr     freeStreamerError
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -3560,42 +3641,42 @@ exit
 	lore	Exec,CloseLibrary
 .nahf	
 	move.l	_MedPlayerBase1(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_MedPlayerBase2(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_MedPlayerBase3(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_MlineBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 
 	move.l	_PPBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_XPKBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_XFDBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_ScrNotifyBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_RexxBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_DiskFontBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_WBBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_GFXBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_ReqBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_FFPBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_MTBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 	move.l	_LayersBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 
-	bsr.w	tulostavirhe
+	bsr	tulostavirhe
 	move.l	_IntuiBase(a5),d0
-	bsr.w	closel
+	bsr	closel
 
 	move.l	fileBrowserCurrentDirLock(a5),d1
 	beq.b	._1
@@ -3617,7 +3698,7 @@ exit
 	bne.b	.nz
 	moveq	#1,d1
 .nz
-	bsr.w		divu_32
+	bsr		divu_32
 	DPRINT "Getmem avg: %ld bytes"
 
 	move.l	#(1)*50,d1
@@ -3648,7 +3729,7 @@ exit
 
  ifeq asm
 	; detached process exit
-	bsr.w	vastomaviesti		* reply to any message we may have received
+	bsr	vastomaviesti		* reply to any message we may have received
 
 	* Free program segments. After this the following code lines may become
 	* unavailable.
@@ -3793,6 +3874,7 @@ flush_messages
 
 
 createrexxport	pushm	all
+        st      rexxon(a5)
 		lea	.p(pc),a4
 		lea	rexxport(a5),a2
 		bra.b	createport1
@@ -3872,7 +3954,7 @@ init_inputhandler
 	moveq	#0,d1			* flags
 	lore	Exec,OpenDevice
 	move.l	d0,idopen(a5)
-	bne.w	iderror	
+	bne	iderror	
 
 	lea	idmsgport(a5),a2
 	move.b	#NT_MSGPORT,LN_TYPE(a2)
@@ -4073,7 +4155,7 @@ doPrint:
 	rts
 
 *** A0:sta 4 ascii-kirjainta D0:aan 
-kirjainta4
+kirjainta4:
 	move.b	(a0)+,d0
 	beq.b	.x
 	lsl.l	#8,d0
@@ -4098,11 +4180,11 @@ handleUiRefreshSignal
 	push	d0
 	jsr	lootaan_aika
 	jsr	lootaan_kello
-;	bsr.w	lootaan_muisti
+;	bsr	lootaan_muisti
 	jsr	lootaan_nimi
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
-	;bsr.w	zipwindow
+	;bsr	zipwindow
 
 	* Try to save favorite modules when user has been idle for a while
 	moveq	#0,d0 
@@ -4174,14 +4256,14 @@ handleSignal2
  endif
  
 	move	d0,boxsize0(a5)
-	bsr.w	setboxy
+	bsr	setboxy
 	moveq	#1,d7
 
 	push	d7
-	bsr.w	.closeAndReopenWindow
+	bsr	.closeAndReopenWindow
 	pop	d7
 	tst.l	d0
-	bne.w	.error
+	bne	.error
 	move	boxsize(a5),boxsize0(a5)
 	bra.b	.boxSizeChanged
 
@@ -4234,7 +4316,7 @@ handleSignal2
 .return
 	moveq	#1,d0
 	rts
-;;	bra.w	returnmsg
+;;	bra	returnmsg
 
 .noewp	
 	move.l	d7,d0
@@ -4248,7 +4330,7 @@ handleSignal2
 	tst.b	kokolippu(a5)
 	bne.b	.iso2
 	* Small, close
-	bsr.w	sulje_ikkuna
+	bsr	sulje_ikkuna
 	clr.b	win(a5)
 .av2	
 	* Just open, a different method?
@@ -4257,7 +4339,7 @@ handleSignal2
 	rts
 .iso2
 	* This closes and reopens the window
-	bsr.w	avaa_ikkuna2
+	bsr	avaa_ikkuna2
 	bne.b	.error
 .bar2
 
@@ -4273,7 +4355,7 @@ openw:
 	bne.b	.x
 	st	win(a5)
 	clr.b	kokolippu(a5)		* pieni -> iso
-	bsr.w	avaa_ikkuna
+	bsr	avaa_ikkuna
 	bne.b	.x
 	jsr	whatgadgets2
 	moveq	#0,d0
@@ -4320,6 +4402,7 @@ zipwindow:
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,RemoveGList
+    jsr     switchToNormalLayoutNoRefresh
 	DPRINT	"small"
 	bra.b	.x
 
@@ -4330,7 +4413,7 @@ zipwindow:
 	DPRINT	"big"
 	* Store window position
 	move.l	4(a0),windowpos(a5)
-	bsr.w	wrender
+	bsr	wrender
 
 .x	popm	all
 	rts
@@ -4338,14 +4421,14 @@ zipwindow:
 
 * Close and reopen window
 avaa_ikkuna2:
-	bsr.w	sulje_ikkuna
+	bsr	sulje_ikkuna
 	not.b	kokolippu(a5)
 	
 * Open window
 avaa_ikkuna:
 	DPRINT	"Open window"
-	bsr.w	getscreeninfo
-	bne.w	.opener
+	bsr	getscreeninfo
+	bne	.opener
 
 	tst		infoBoxOrigTopEdge(a5)
 	bne.b	.1
@@ -4398,7 +4481,7 @@ avaa_ikkuna:
 	moveq	#10,d0				* kick1.3
 .new1	add	windowtop(a5),d0
 	move	d0,wsizey-winstruc(a0)
-	bsr.w	.leve
+	bsr	.leve
 
 	* What is this?
 	not.b	kokolippu(a5)
@@ -4423,14 +4506,16 @@ avaa_ikkuna:
 	sub     #63+WINY,d0
 	;add    #10,d0
 
-	add	    boxy(a5),d0
+    add	    boxy(a5),d0
 	add	    windowtop(a5),d0
 	move    d0,nw_Height(a0)
+
+
 
     * Calculate left edge so that window fits
     * Set nw_LeftEdge, nw_TopEdge
     move.l  windowpos(a5),nw_LeftEdge(a0)
-	bsr.w   .leve
+	bsr   .leve
 
 
  if DEBUG
@@ -4462,7 +4547,7 @@ avaa_ikkuna:
 .smaller
 	subq	#1,boxsize(a5)		* Pienennet‰‰n fileboksia..
 	subq	#1,boxsize0(a5)
-	bsr.w	setboxy
+	bsr	setboxy
     bra     .windowOpenLoop
 
 
@@ -4471,7 +4556,7 @@ avaa_ikkuna:
 .gotWindow
 	move.l	d0,windowbase(a5)
 	bne.b	.ok
-	bsr.w	unlockscreen
+	bsr	unlockscreen
 
 .opener	moveq	#-1,d0			* Ei auennut!
 	rts
@@ -4529,9 +4614,14 @@ avaa_ikkuna:
 	lea	slider4,a3		* fileboxin slideri
 	moveq	#gadgetFileSliderInitialHeight,d3	* y-koko
 	add	boxy(a5),d3
+    sub     BOTTOM_MARGIN(a5),d3
 	move	d3,gg_Height(a3)
 	subq	#3,gg_Height(a3)
 
+ ifne FEATURE_LIST_TABS
+    sub #3*14,gg_Height(a3)
+ endif
+ 
 ;    Old (weird) piece of code:
 ;
 ;    lea     slider4,a3              * fileboxin slideri
@@ -4561,7 +4651,7 @@ avaa_ikkuna:
 
 	jsr		layoutGadgetsHorizontal
 
-	bsr.w	wrender
+	bsr	wrender
 	moveq	#0,d0
 	rts
 
@@ -4575,7 +4665,7 @@ getscreeninfo
 *** Selvitet‰‰n ikkunan n‰ytˆn ominaisuudet
 *** Uusi kick 
 	tst.b	uusikick(a5)
-	beq.w	.olde
+	beq	.olde
 
 	lea	pubscreen(a5),a0
 	lore	Intui,LockPubScreen
@@ -4584,7 +4674,7 @@ getscreeninfo
 	sub.l	a0,a0
 	lob	LockPubScreen
 	move.l	d0,screenlock(a5)
-	beq.w	.opener
+	beq	.opener
 .ok1
 	move.l	d0,a0
 
@@ -4683,7 +4773,7 @@ getscreeninfo
 	and.l	#$40000000,d0		* onko native amiga screeni?
 	beq.b	.nogfxcard
 	st	gfxcard(a5)
-	bra.w	.ba	
+	bra	.ba	
 .nogfxcard
 
 
@@ -4717,14 +4807,14 @@ getscreeninfo
 	move.l	#1000000000,d0
 ;	divu.l	d5,d0		* pixelclock in Hz
 	move.l	d5,d1
-	bsr.w	divu_32
+	bsr	divu_32
 	
 	move.l	#280,d1
 	divu	d5,d1		* pixelclocks/280ns colorclock
 	mulu	d7,d1		* pixelclocks per line
 	
 ;	divu.l	d1,d0		* linefrequency in Hz
-	bsr.w	divu_32
+	bsr	divu_32
 
 	move.l	d0,d1
 	divu	d6,d1		* vertical frequency
@@ -4734,7 +4824,7 @@ getscreeninfo
 
 	move.l	clockconstant(a5),d0
 	ext.l	d1
-	bsr.w	divu_32
+	bsr	divu_32
 	move.l	d0,colordiv(a5)
 	bra.b	.ba
 
@@ -4752,7 +4842,7 @@ getscreeninfo
 
 ;	move.l	(a5),a1
 ;	cmp	#39,LIB_VERSION(a1)
-;	blo.w	.kick2
+;	blo	.kick2
 
 ;	move.l	screenaddr(a5),a0
 ;	lea	sc_ViewPort(a0),a3
@@ -4894,7 +4984,7 @@ getscreeninfo
 
 
 
-	bsr.w	unlockscreen
+	bsr	unlockscreen
 	moveq	#0,d0
 	rts
 .opener	moveq	#-1,d0
@@ -4926,7 +5016,7 @@ wrender:
 	lea	gadgets,a4
 
 	tst.b	kokolippu(a5)
-	beq.w	.pienehko
+	beq	.pienehko
 
 
 	move.l	rastport(a5),a2
@@ -4943,7 +5033,7 @@ wrender:
 	sub		windowbottom(a5),d3
 	subq    #3,d3 * magic constant
     sub     windowtop(a5),d3
-	bsr.w	drawtexture
+	bsr	drawtexture
 
 
 * tyhjennet‰‰n...
@@ -4965,15 +5055,25 @@ wrender:
 	; This one is invisible, skip it, though
 	; its not in the list at this point anyway?
 	cmp.l	#gadgetResize,a3
-	beq.b	.skipClear
+	beq 	.skipClear
 
 	tst	boxsize(a5)
-	bne.b	.clef
+	bne 	.clef
 	* Box is minimized, skipped gadgets:
 	cmp.l	#gadgetListModeChangeButton,a3
-	beq.b	.skipClear
+	beq 	.skipClear
+ ifne FEATURE_LIST_TABS
+	cmp.l	#gadgetListModeTab1Button,a3
+	beq 	.skipClear
+	cmp.l	#gadgetListModeTab2Button,a3
+	beq 	.skipClear
+	cmp.l	#gadgetListModeTab3Button,a3
+	beq 	.skipClear
+	cmp.l	#gadgetListModeTab4Button,a3
+	beq 	.skipClear
+ endif
 	cmp.l	#slider4,a3		* fileslider
-	bne.b	.clef
+	bne 	.clef
 .skipClear
 	rts	
 .clef
@@ -4988,7 +5088,7 @@ wrender:
 ;.vanaha
 
 	* Insert an invisible size gadget last
-	bsr.w	configResizeGadget
+	bsr	configResizeGadget
 
 
 * sitten isket‰‰n gadgetit ikkunaan..
@@ -4998,11 +5098,11 @@ wrender:
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-	
+.skip
 	move.l	a4,a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
-	lob	RefreshGadgets
+	lore    Intui,RefreshGadgets
 
 	tst.b	uusikick(a5)
 	bne.b	.newK
@@ -5038,16 +5138,7 @@ wrender:
 
 	tst	boxsize(a5)
 	beq.b	.nofs
-
-	movem	slider4+4,plx1/ply1/plx2/ply2	* fileslider
-	add	plx1,plx2
-	add	ply1,ply2
-	subq	#2,plx1
-	addq	#1,plx2
-	subq	#2,ply1
-	addq	#1,ply2
-	move.l	rastport(a5),a1
-	bsr.w	sliderlaatikko
+    bsr     drawFileSlider
 .nofs
 	movem	slider1+4,plx1/ply1/plx2/ply2	* volumeslider
 	add	plx1,plx2
@@ -5057,33 +5148,37 @@ wrender:
 	subq	#2,ply1
 	addq	#1,ply2
 	move.l	rastport(a5),a1
-	bsr.w	sliderlaatikko
+	bsr	sliderlaatikko
 
 ;.nelq
 
 *** Piirret‰‰n korvat
 	pushm	all
 	lea	button7,a0		* Add
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	lilb1-button7(a0),a0	* M
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	lilb2-lilb1(a0),a0	* S
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	kela2-lilb2(a0),a0	* >, forward
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	plg-kela2(a0),a0	* Prg
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	button8-plg(a0),a0	* Del
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	button2-button8(a0),a0	* i
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	button11-button2(a0),a0	* new
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	button20-button11(a0),a0 * pr
-	bsr.w	printkorva
+	bsr	printkorva
 	lea	button1-button20(a0),a0 * play
-	bsr.w	printkorva
-
+	bsr	printkorva
+    tst boxsize(a5)
+    beq .sk
+	lea	gadgetListModeChangeButton,a0
+    bsr	printkorva
+.sk
 
  ifd abda
 
@@ -5141,31 +5236,10 @@ wrender:
 	popm	all
 
 
-	bsr.w	inforivit_clear
+	jsr	inforivit_clear
 
+    bsr     drawFileBoxFrame
 
-	tst	boxsize(a5)		* filebox
-	beq.b	.b
-	moveq	#28+WINX,plx1
-;	move	#253+WINX,plx2
-	move	WINSIZX(a5),plx2
-	subq	#8,plx2
-
-	;moveq	#61+WINY,ply1
-	move	fileBoxTopEdge(a5),ply1
-	sub		#2,ply1 * magic offset
-	;move	#128+WINY,ply2
-	move	fileBoxTopEdge(a5),ply2
-	add		#128-61-2,ply2 * magic offset
-
-	add	windowleft(a5),plx1
-	add	windowleft(a5),plx2
-	add	boxy(a5),ply2
-	add	windowtop(a5),ply1
-	add	windowtop(a5),ply2
-	move.l	rastport(a5),a1
-	bsr.w	laatikko1
-.b
 	moveq	#5+WINX,plx1		* infobox
 	;move	#254+WINX,plx2
 	move	WINSIZX(a5),plx2
@@ -5186,41 +5260,128 @@ wrender:
 	add	windowtop(a5),ply1
 	add	windowtop(a5),ply2
 	move.l	rastport(a5),a1
-	bsr.w	laatikko2
+	bsr	laatikko2
 
 
 
 	tst.l	playingmodule(a5)
 	bmi.b	.npl
-	bsr.w	inforivit_play
+	jsr	inforivit_play
 
 	tst.b	playing(a5)
 	bne.b	.npl
-	bsr.w	inforivit_pause
+	jsr	inforivit_pause
 
 .npl	st	hippoonbox(a5)
-	bsr.w	shownames
+	bsr	shownames
 
 
 .pienehko
 	st	lootassa(a5)
 	clr.b	wintitl2(a5)
-	bsr.w	lootaa
-	bsr.w	reslider
+	jsr	lootaa
+	bsr	reslider
 
+  ifne FEATURE_LIST_TABS
+    jsr updateListModeTabs
+  endif
+    jsr switchToSearchLayoutIfNeeded
 	DPRINT	"wrender done"
 
 	move.l	windowbase(a5),a0
-	bsr.w	setscrtitle
+	bsr	setscrtitle
 	move.l	keycheckroutine(a5),-(sp)
 	rts
 
+drawFileBoxFrame:
+	tst	boxsize(a5)		* filebox
+	beq.b	.b
+	moveq	#28+WINX,plx1
+;	move	#253+WINX,plx2
+	move	WINSIZX(a5),plx2
+	subq	#8,plx2
 
-	
+	;moveq	#61+WINY,ply1
+	move	fileBoxTopEdge(a5),ply1
+	sub		#2,ply1 * magic offset
+	;move	#128+WINY,ply2
+	move	fileBoxTopEdge(a5),ply2
+	add		#128-61-2,ply2 * magic offset
+
+	add	windowleft(a5),plx1
+	add	windowleft(a5),plx2
+	add	boxy(a5),ply2
+    sub BOTTOM_MARGIN(a5),ply2
+	add	windowtop(a5),ply1
+	add	windowtop(a5),ply2
+	move.l	rastport(a5),a1
+	bsr	laatikko1
+.b  rts
+
+drawFileSlider:
+	movem	slider4+4,plx1/ply1/plx2/ply2	* fileslider
+	add	plx1,plx2
+	add	ply1,ply2
+	subq	#2,plx1
+	addq	#1,plx2
+	subq	#2,ply1
+	addq	#1,ply2
+	move.l	rastport(a5),a1
+	bra	sliderlaatikko
+    
+refreshFileSlider:
+    lea     gadgetFileSlider,a0
+    bra	    refreshGadgetInA0
+
+drawTextureBottomMargin:
+    tst     BOTTOM_MARGIN(a5)
+    beq     .x
+    bsr     getBottomMarginParams
+	bsr 	drawtexture
+.x  rts
+
+* Common parms for above and bottom routins
+getBottomMarginParams:
+	move.l	rastport(a5),a2
+	moveq	#4,d0
+	moveq	#11,d1
+	move	WINSIZX(a5),d2
+	subq	#6,d2
+	move.l	windowbase(a5),a3
+	move	wd_Height(a3),d3	
+	sub		windowbottom(a5),d3
+	subq    #3,d3 * magic constant
+    sub     windowtop(a5),d3
+    move    d3,d1
+    sub     BOTTOM_MARGIN(a5),d1
+    subq    #2,d1 * more magic
+    * d0 = x start
+    * d1 = y start
+    * d2 = x end
+    * d3 = y end
+    rts
+
+* Same as above but clear and clear one top row more,
+* also clear only inside the filebox aread
+clearBottomMargin:
+    tst     BOTTOM_MARGIN(a5)
+    beq     .x
+    bsr     getBottomMarginParams
+    subq    #1,d1
+
+    moveq	#30+WINX,d0
+	move    WINSIZX(a5),d2
+    sub     #10,d2
+
+	bsr 	tyhjays
+.x  rts
+
+
 * Calculate y-offset related to boxsize value
 * Used in placing gfx into the main window.
 setboxy:
 	move	boxsize(a5),d0
+
 	* original "default" size was 8, so it is relative to that.
 	subq	#8,d0
 	;muls	#8,d0
@@ -5254,8 +5415,10 @@ setboxy:
 * which is relative to the font.
 * in:
 *   a0 = font to set for the list
-setListFont
+setListFont:
 	move.l	a0,listfontbase(a5)
+    move.l  a0,gadgetSearchStringStringInfo\.extension+sex_Font
+
 	; Dig height for this since it is used widely
 	move	tf_YSize(a0),listFontHeight(a5)	
 	bsr.b	setboxy
@@ -5270,13 +5433,13 @@ front	pushm	all
 	move.l	d7,a0
 	lob	ActivateWindow
 	move.l	d7,a0
-	bsr.w	get_rt
+	bsr	get_rt
 	move.l	wd_WScreen(a0),a0
 	lob	rtScreenToFrontSafely
 .qq	popm	all
 	rts
 
-.q	bsr.w	avaa_ikkuna2	
+.q	bsr	avaa_ikkuna2	
 	move.l	windowbase(a5),d7
 	bne.b	.a
 	bra.b	.qq
@@ -5311,7 +5474,7 @@ mainWindowSizeChanged
 	movem	winstruc+nw_Width,d2/d3
 	DPRINT	"size change to %ldx%ld (orig %ldx%ld)"
  endif
-	bsr.w	getFileboxYStartToD2
+	bsr	getFileboxYStartToD2
 	move	wd_Height(a0),d0
 
 	* account for bottom border
@@ -5334,7 +5497,7 @@ mainWindowSizeChanged
  endif
 
 	* Set new boxsize into prefs gadget
-	bsr.w	setprefsbox
+	bsr	setprefsbox
 
 	* Signal to make changes happen
 	move.b	ownsignal2(a5),d1
@@ -5342,7 +5505,7 @@ mainWindowSizeChanged
 	* Also update prefs window box size value.
 	* This doesn't actually update the propgadget position, 
 	* ah well.
-	bra.w	updateprefs
+	bra	updateprefs
 
 * Disables the low right bottom resize gadget by making it 0 pixel wide
 disableResizeGadget
@@ -5383,7 +5546,9 @@ enableResizeGadget
 	* Set wd_MinSize to correspond to 3 rows
 	bsr.b	getFileboxYStartToD2
 ;	add	#3*8+6,d2
-	moveq	#3,d0
+    * NOTE: raise minsize to 5 due to extra space required
+    * for search controls and/or list mode buttons
+	moveq	#3+2,d0
 	mulu	listFontHeight(a5),d0
 	* some additional adjustment: bottom border?
 	addq	#6+1,d0
@@ -5413,17 +5578,20 @@ enableResizeGadget
 	rts
 
 * Refresh the resize gadget if possible
-refreshResizeGadget
+refreshResizeGadget:
 	tst.b	uusikick(a5)
 	beq.b	.x
+    * Do if large window
+    tst.b   kokolippu(a5)
+    beq.b   .x
 	push	a0
 	lea	gadgetResize,a0
-	bsr.w	refreshGadgetInA0
+	bsr	refreshGadgetInA0
 	pop	a0
 .x	rts
 
 * Calculate the start y-position of the filebox 
-getFileboxYStartToD2
+getFileboxYStartToD2:
 	move	fileBoxTopEdge(a5),d2
 	subq	#1,d2 * magic constant
 ;	moveq	#62+WINY,d2
@@ -5447,12 +5615,12 @@ setscrtitle
 *******************************************************************************
 * Sulkee ikkunan
 *******
-sulje_ikkuna
+sulje_ikkuna:
 	tst.b	win(a5)
 	bne.b	.x
 .uh	rts
 .x	
-	bsr.w	flush_messages
+	bsr	flush_messages
 	
 	move.l	appwindow(a5),d0
 	beq.b	.noapp
@@ -5482,7 +5650,8 @@ sulje_ikkuna
  endif
 
 .small
-	jsr	disposeListBoxRegion
+    jsr switchToNormalLayoutNoRefresh
+  	jsr	disposeListBoxRegion
 	jsr	disposeInfoBoxRegion
 
 	move.l	46(a0),a1		* WB screen addr
@@ -5531,7 +5700,7 @@ pon2	pushm	all
 
 pon0	beq.b	.q
 	move.l	d0,a0
-	bsr.w	get_rt
+	bsr	get_rt
 	lob	rtSetWaitPointer
 .q	popm	all
 	rts
@@ -5614,7 +5783,7 @@ lockMainWindow:
 	DPRINT	"Locking window again!",0
 	rts
 .y	pushm	all
-	bsr.w	get_rt
+	bsr	get_rt
 	move.l	windowbase(a5),a0
 	lob    	rtLockWindow
 	move.l	d0,mainWindowLock(a5)
@@ -5626,7 +5795,7 @@ unlockMainWindow:
 	tst.l	mainWindowLock(a5)
 	beq.b	.x 
 	pushm	all
-	bsr.w	get_rt
+	bsr	get_rt
 	move.l	windowbase(a5),a0
 	move.l	mainWindowLock(a5),a1
 	lob 	rtUnlockWindow
@@ -5725,6 +5894,11 @@ printhippo1:
 	move	fileBoxTopEdge(a5),d3
 
 	move	boxsize(a5),d6
+    tst.w   searchLayoutActive(a5)   
+    beq.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d6
+.lm1
+
 	mulu	listFontHeight(a5),d6
 	sub	d5,d6
 	bmi.b	.r	; will it fit?
@@ -5777,13 +5951,13 @@ printhippo1
 	dbf	d0,.cl
 
 	tst	boxsize(a5)
-	beq.w	.r
+	beq	.r
 
 	move.l	#224,d0
 	move.l	#400*2,d1		* 2 planea
 	lore	GFX,AllocRaster
 	tst.l	d0
-	beq.w	.r
+	beq	.r
 	move.l	d0,a2
 
 	move.l	a4,a0
@@ -6052,7 +6226,9 @@ desmsg3:
 * a3 = desbuf
 
  if DEBUG 
-desmsgDebugAndPrint
+
+
+desmsgDebugAndPrint:
 	* sp contains the return address, which is
 	* the string to print
 	movem.l	d0-d7/a0-a3/a6,-(sp)
@@ -6073,12 +6249,34 @@ desmsgDebugAndPrint
 
 	lea	debugDesBuf+var_b,a3
 	move.l	sp,a1	
+ ifne SERIALDEBUG
+    lea     putCharSerial(pc),a2
+    move.b	#"H",d0
+    bsr     putCharSerial
+    move.b	#"i",d0
+    bsr     putCharSerial
+    move.b	#"P",d0
+    bsr     putCharSerial
+    move.b	#":",d0
+    bsr     putCharSerial
+ else
 	lea	putc(pc),a2	
+ endif
 	move.l	4.w,a6
 	lob	RawDoFmt
 	movem.l	(sp)+,d0-d7/a0-a3/a6
-	bsr.w	PRINTOUT_DEBUGBUFFER
+ ifeq SERIALDEBUG
+	bsr	PRINTOUT_DEBUGBUFFER
+ endif
 	rts	* teleport!
+
+putCharSerial
+    ;_LVORawPutChar
+    ; output char in d0 to serial
+    move.l  4.w,a6
+    jsr     -516(a6)
+    rts
+
  endif
 
 *******************************************************************************
@@ -6137,14 +6335,14 @@ laatikko0:
 	move	ply1,d1		* y1
 	move	plx1,d2		* x2
 	move	ply1,d3		* y2
-	bsr.w	drawli
+	bsr	drawli
 
 	move	plx1,d0		* x1
 	move	ply1,d1		* y1
 	move	plx1,d2
 	addq	#1,d2
 	move	ply2,d3
-	bsr.w	drawli
+	bsr	drawli
 	
 ** mustat reunat
 
@@ -6312,7 +6510,7 @@ sliderlaatikko
 	move	plx1,d2
 	addq	#1,d2
 	move	ply2,d3
-	bsr.w	drawli
+	bsr	drawli
 
 	move	plx1,d0
 	addq	#1,d0
@@ -6321,7 +6519,7 @@ sliderlaatikko
 	addq	#1,d2
 	move	ply1,d3
 	addq	#1,d3
-	bsr.w	drawli
+	bsr	drawli
 
 	move	plx1,d0
 	addq	#1,d0
@@ -6331,9 +6529,9 @@ sliderlaatikko
 	subq	#1,d2
 	move	ply1,d3
 	addq	#1,d3
-	bsr.w	drawli
+	bsr	drawli
 
-	bra.w	looex
+	bra	looex
 
 
 *******************************************************************************
@@ -6457,10 +6655,10 @@ freemodule:
 	movem.l	d0-a6,-(sp)
 
 	DPRINT	"freemodule obtain data"
-	bsr.w	obtainModuleData
+	bsr	obtainModuleData
 
 	* Check if need to do UnLoadSeg
-	bsr.w	moduleIsExecutable
+	bsr	moduleIsExecutable
 	move.b	d0,d7
 
 	* IT hack!
@@ -6492,8 +6690,8 @@ freemodule:
 	clr.l	deliPatternInfo(a5) 
 	jsr	clearScopeData
 	
-;	bsr.w	lootaa
-	bsr.w	inforivit_clear
+;	bsr	lootaa
+	bsr	inforivit_clear
 
 	* free replay code, this label here is silly
 	* all of them are in the same address
@@ -6539,7 +6737,7 @@ freemodule:
 ;	addq.l	#1,IVVERTB+IV_DATA(a0)
 ;.zz
 
-	bsr.w	sulje_foo	
+	jsr	sulje_foo	
 
 .ee	
 
@@ -6554,9 +6752,8 @@ freemodule:
 	clr.l	tfmxsamplesaddr(a5)
 	clr.l	tfmxsampleslen(a5)
 	clr.b	lod_tfmx(a5)
-
 	DPRINT	"freemodule release data"
-	bsr.w	releaseModuleData
+	bsr	releaseModuleData
 
 	movem.l	(sp)+,d0-a6
 	rts
@@ -6600,7 +6797,7 @@ fadevolumedown
 	bne.b	.loop
 	move.l	priority(a5),d5
 	move.b	#10,priority+3(a5)
-	bsr.w	mainpriority
+	bsr	mainpriority
 .loop
 	moveq	#1,d1
 	lore	Dos,Delay
@@ -6698,20 +6895,23 @@ mainpriority
 
 buttonspressed:
 	tst.b	win(a5)			* onko ikkuna auki?
-	beq.w	.nowindow
+	beq	.nowindow
 
 	* Any button activity should first close any active tooltip
-	bsr.w	closeTooltipPopup
+	jsr	closeTooltipPopup
 
 	cmp	#SELECTDOWN,d3		* left button down
 	bne.b	.test1
-	bsr.w	.leftButtonDownAction
+	bsr	.leftButtonDownAction
+
+    * Get rid of the find bar if possible
+    jsr     switchToNormalLayoutIfPossible
 	rts
 
 .test1
 	cmp	#MENUUP,d3
 	bne.b	.test2
-	bsr.w	.rightButtonUpAction		* right button up
+	bsr	.rightButtonUpAction		* right button up
 	rts 
 
 .test2	cmp	#MENUDOWN,d3			* right button down
@@ -6766,7 +6966,7 @@ buttonspressed:
 
 	* no RMB actions found
 	* try line marking
-	bsr.w	marklineRightMouseButton
+	jsr	marklineRightMouseButton
 	beq.b	.nothingMarked
 	rts
 
@@ -6777,8 +6977,8 @@ buttonspressed:
 
 	tst.b	uusikick(a5)
 	bne.b	.new
-	bsr.w	sulje_ikkuna		* Vaihdetaan ikkunan kokoa (kick1.3)
-	bsr.w	avaa_ikkuna
+	bsr	sulje_ikkuna		* Vaihdetaan ikkunan kokoa (kick1.3)
+	bsr	avaa_ikkuna
 	rts
 
 .new	
@@ -6806,24 +7006,31 @@ buttonspressed:
 
 	* mouse not on top of info box, try marking files
 
-.x	bsr.w	markline		* merkit‰‰n modulenimi
+.x	bsr	markline		* merkit‰‰n modulenimi
 	rts
 
 .yea
 
 ** modinfon infon avaus
-	bsr.w	modinfoaaa
+	bsr	modinfoaaa
 	rts
 
 * in:
 *   a0=gadget
 *   a1=gadget function to run
+* out:
+*  Z-flag set: event handled
 .rightButtonDownCheck
-	bsr.w	checkMouseOnGadget
+	bsr	checkMouseOnGadget
 	bne.b	.mouseNotOn
+    * RMB on a disabled gadget eats the event
+    move.w  gg_Flags(a0),d0     
+    and.w   #GFLG_DISABLED,d0
+    bne     .rmbHandled
 	move.l	a0,rightButtonSelectedGadget(a5)
 	move.l	a1,rightButtonSelectedGadgetRoutine(a5)
-	bsr.w	forceSelectGadget
+	bsr	forceSelectGadget
+.rmbHandled
 	moveq	#0,d0
 .mouseNotOn
 	rts
@@ -6844,14 +7051,14 @@ buttonspressed:
 	* Toggling select and deselect again results in a neutral
 	* toggle button look.
 	move.l	d2,a0
-	bsr.w	forceDeselectGadget
+	bsr	forceDeselectGadget
 	move.l	d2,a0
-	bsr.w	forceSelectGadget
+	bsr	forceSelectGadget
 	move.l	d2,a0
-	bsr.w	forceDeselectGadget
+	bsr	forceDeselectGadget
 	
 	move.l	d2,a0
-	bsr.w 	checkMouseOnGadget
+	bsr 	checkMouseOnGadget
 	bne.b	.xy	
 
 	* Pointer was on top, run the routine
@@ -6871,17 +7078,22 @@ buttonspressed:
 *** Switch filebox size
 zoomfilebox
 	DPRINT	"Zoom filebox"
+    tst.w   searchLayoutActive(a5)      
+    beq .1
+    * Disable this for search mode, there are extra controls at the bottom
+    rts
+.1
 	move	boxsize(a5),d0
 	beq.b	.z
 	clr	boxsize(a5)
 	move	d0,boxsizez(a5)
-	bsr.w	disableResizeGadget
+	bsr	disableResizeGadget
 	bra.b	.x
 .z
 	move	boxsizez(a5),boxsize(a5)
-	bsr.w	enableResizeGadget
+	bsr	enableResizeGadget
 .x
-	bsr.w	setprefsbox
+	bsr	setprefsbox
 	move.b	ownsignal2(a5),d1
 	jmp	signalit		* prefsp‰ivitys-signaali
 	
@@ -6895,10 +7107,13 @@ modinfoaaa
 	beq.b	.zz	
 	move.l	infotaz(a5),a0		* jos oli jo modinfo niin suljetaan
 	cmp.l	#about_t,a0
-	beq	start_info
-	bra	sulje_info
-		
-.zz	bra	rbutton10b
+	beq	.start
+    jmp	sulje_info
+.start
+    jmp start_info
+
+.zz	
+    jmp	rbutton10b
 
 * Forces a boolean gadget to show the selected status
 * in:
@@ -6943,8 +7158,8 @@ forceDeselectGadget
 * Redraws gadget
 * in:
 *   a0=gadget
-refreshGadget
-refreshGadgetInA0
+refreshGadget:
+refreshGadgetInA0:
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	moveq	#1,d0	
@@ -7003,10 +7218,10 @@ tooltipHandler
 	;DPRINT	"tooltiphandler"
 
 	* First, inactivate incoming tooltip
-	bsr.w	deactivateTooltip
+	bsr	deactivateTooltip
 	
 	* Close any tooltip that may be showing since mouse was moving.
-	bsr.w	closeTooltipPopup
+	jsr	closeTooltipPopup
 
 	* Check if window is zipped to toolbar size
 	tst.b	kokolippu(a5)
@@ -7014,7 +7229,7 @@ tooltipHandler
 
 	* If some lengthy operation is going on lets not
 	* try to display tooltips.
-	bsr.w	areMainWindowGadgetsFrozen
+	bsr	areMainWindowGadgetsFrozen
 	bne.b	.exit
 
 	* Skip further checks if mouse is not over the main button area
@@ -7025,19 +7240,19 @@ tooltipHandler
 	move	gg_TopEdge(a0),d2
 	cmp	d1,d2
 	blo.b	.under
-	* Mouse is over the "Play" button, exit	
+	* Mouse is above the "Play" button, exit	
 	rts
 .under		
-	* Check if below the "New" button
-	;lea	gadgetNewButton,a0
-	lea	gadgetListModeChangeButton,a0
-	move	gg_TopEdge(a0),d2
-	add	gg_Height(a0),d2
-	cmp	d1,d2
-	bhi.b	.below
-	* Mouse is below the "New" button, exit
-	rts
-.below
+;	* Check if below the "New" button
+;	;lea	gadgetNewButton,a0
+;	lea	gadgetListModeChangeButton,a0
+;	move	gg_TopEdge(a0),d2
+;	add	gg_Height(a0),d2
+;	cmp	d1,d2
+;	bhi.b	.below
+;	* Mouse is below the "New" button, exit
+;	rts
+;.below
 
 	* Then check if pointer is on top of some gadget
 	lea tooltipList,a3
@@ -7082,7 +7297,7 @@ tooltipDisplayHandler
 	tst.b	tooltips(a5)
 	beq.b	.exit
 	move.l	d0,a0 
-	bsr.w	showTooltipPopup
+	bsr	showTooltipPopup
 .exit
 	popm all
 	rts
@@ -7103,18 +7318,18 @@ omaviesti
 	lea	hippoport(a5),a0
 	lore	Exec,GetMsg
 	tst.l	d0
-	beq.w	.huh
+	beq	.huh
 	move.l	d0,a1
 	move.l	a1,omaviesti0(a5)
 
 	;cmp.l	#"KILL",MN_LENGTH+2(a1)	* ????????
-	;beq.w	.killeri
+	;beq	.killeri
 
 	* What kind of a message is this?
 
 	* Sent by another hippo?
 	cmp.l	#MESSAGE_MAGIC_ID,HM_Identifier(a1)
-	beq.w	.oma
+	beq	.oma
 
 	* App window message?
 	* This is likely kick2.0 feature, dropping icons
@@ -7125,24 +7340,24 @@ omaviesti
 	* Screen notify message?
 	movem.l	snm_Type(a1),d3/d4
 	cmp.l	#SCREENNOTIFY_TYPE_WORKBENCH,d3
-	bne.w	.huh
+	bne	.huh
 	tst.l	d4
 	bne.b	.open
 
 	tst.b	win(a5)			* HIDE!
-	beq.w	.huh
-	bsr.w	sulje_ikkuna
+	beq	.huh
+	bsr	sulje_ikkuna
 	clr.b	win(a5)
-	bsr.w	sulje_prefs
+	bsr	sulje_prefs
 	jsr	stopScopeTasks
-	bsr.w	sulje_info
-	bra.w	.huh
+	jsr	sulje_info
+	bra	.huh
 
 .open	
 	tst.b	win(a5)
-	bne.w	.huh
-	bsr.w	openw
-	bra.w	.huh
+	bne	.huh
+	bsr	openw
+	bra	.huh
 
 *********************************************
 * App window drag'n'drop handler
@@ -7151,7 +7366,7 @@ omaviesti
 ** AppWindow-viesti!!
 	move.l	am_NumArgs(a1),d7	* argsien m‰‰r‰
 	beq		.huh
-	bsr.w	tokenizepattern
+	bsr	tokenizepattern
 	jsr		engageNormalMode
 	bsr		obtainModuleList
  if DEBUG
@@ -7191,7 +7406,7 @@ omaviesti
 	move.l	sp,a1
 	bsr		nimenalku
 	* a0 = dir name
-	bsr.w	adddivider
+	bsr	adddivider
 	* d2 = path
 	move.l	sp,d2
 	* d3 = path len + l_size
@@ -7230,8 +7445,8 @@ omaviesti
 .lop	
 	lea		200(sp),sp
 	bsr		releaseModuleList
-	bsr.w	listChanged
-	bsr.w	forceRefreshList
+	bsr	listChanged
+	bsr	forceRefreshList
 	bra.b	.huh
 
 
@@ -7245,14 +7460,14 @@ omaviesti
 
 	* Check out the first parameter 
 	move.l	sv_argvArray+4(a5),a0
-	bsr.w	kirjainta4
+	bsr	kirjainta4
 	cmp.l	#MESSAGE_COMMAND_QUIT,d0
 	bne.b	.app
 	st	exitmainprogram(a5)
 	bra.b	.huh
 
 .app
-	bsr.w	komentojono		* tutkitaan uudet komennot
+	bsr	komentojono		* tutkitaan uudet komennot
 .huh	bsr.b	vastomaviesti
 
 
@@ -7301,16 +7516,16 @@ signalreceived
 ; 	beq.b	.ran
 ;	move	songnumber(a5),d0
 ;	cmp	maxsongs(a5),d0
-;	bne.w	actionNextSong		* next song!
+;	bne	actionNextSong		* next song!
 ;.ran	
 	* no subsongs, randomize next one
-	bra.w	.karumeininki
+	bra	.karumeininki
 
 .norand
 	* Play mode is not random. 
 
 	cmp.b	#pm_repeatmodule,playmode(a5) 	* Jatketaanko soittoa?
-	beq.w	.reet			* If module repeat on, just exit
+	beq	.reet			* If module repeat on, just exit
 	
 	cmp.l	#1,modamount(a5) * Jos vain yksi modi,
 	bne.b	.notone		* jatketaan soittoa keskeytyksett‰.
@@ -7328,19 +7543,19 @@ signalreceived
 	move.l	playerbase(a5),a0
 	move	p_liput(a0),d0
 	btst	#pb_song,d0
- 	beq.w	.reet
+ 	beq	.reet
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
-	bne.w	rbutton13		* next song!
-	bra.w	.reet
+	bne	rbutton13		* next song!
+	bra	.reet
 
 .notone
 
 	tst.l	playingmodule(a5)	* soitettiinko edes mit‰‰n
-	bmi.w	.err
+	bmi	.err
 
 	cmp.b	#pm_module,playmode(a5)	* Play mode was "module", stop after playing 
-	beq.w	.stop
+	beq	.stop
 
 ** Onko subsongeja soiteltavaks?
 * Check for subsongs
@@ -7350,23 +7565,25 @@ signalreceived
  	beq.b	.eipa
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
-	bne.w	rbutton13		* next song!
+	bne	rbutton13		* next song!
 	
 
 .eipa
 	DPRINT	"Replay end"
 
 	* Stopping playback 
-	bsr.w	obtainModuleData
+    push    d7              * save step index
+	bsr	obtainModuleData
 	clr.b	playing(a5)		* soitto seis
 	move.l	playerbase(a5),a0	* stop module
 	jsr 	p_end(a0)
-	bsr.w	releaseModuleData
+	bsr	releaseModuleData
 
-	bsr.w	freemodule
+	bsr	freemodule
+    pop     d7
 
 	tst.l	modamount(a5)		* onko modeja?
-	beq.w	.err
+	beq	.err
 
 	cmp.l	#PLAYING_MODULE_REMOVED,playingmodule(a5) * Lista tyhj‰tty? Soitetaan eka modi.
 	bne.b	.eekk
@@ -7391,11 +7608,11 @@ signalreceived
 	move.l	chosenmodule(a5),playingmodule(a5)
 	move.l	playingmodule(a5),d0
 
-	bsr.w	forceRefreshList
+	bsr	forceRefreshList
 
 	DPRINT	"signalreceived getListNode"
-	bsr.w	getListNode
-	beq.w	.erer 
+	bsr	getListNode
+	beq	.erer 
 	move.l	a0,a3
 
 	tst.b	l_divider(a3)
@@ -7408,20 +7625,27 @@ signalreceived
 
 	lea	l_filename(a3),a0	* ladataan
 	moveq	#0,d0			* no double buffering
+    push    a3
 	jsr	loadmodule
+    pop     a3
 	tst.l	d0
 	bne.b	.loader
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  "--- fav song: %ld"
+
+	DPRINT	"--- Replay init"
 	move.l	playerbase(a5),a0	* soitto p‰‰lle
 	jsr	p_init(a0)
 	tst.l	d0
 	bne.b	.mododo
 
-	bsr.w	settimestart
+	bsr	settimestart
 .reet0	st	playing(a5)
-	bsr.w	inforivit_play
-	bsr.w	start_info
+	bsr	inforivit_play
+	bsr	start_info
 .reet
 	rts
 
@@ -7446,7 +7670,7 @@ signalreceived
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
 	rts
 
-.stop  	bsr.w	actionStopButton		* stop!
+.stop  	bsr	actionStopButton		* stop!
 	bra.b	.reet
 
 * modit loppui, mit‰ tehd‰‰n?
@@ -7458,8 +7682,8 @@ signalreceived
 	* select last module
 	move.l	modamount(a5),chosenmodule(a5)
 	subq.l	#1,chosenmodule(a5)
-	bsr.w	resh
-	bra.w	.reet
+	bsr	resh
+	bra	.reet
 
 .hm	
 	* In "pm_through" mode start over from the first module
@@ -7472,15 +7696,15 @@ signalreceived
 	jsr	calculateDividersInList
 	cmp.l	modamount(a5),d0
 	beq.b	.err
-	bra.w	.repea
+	bra	.repea
 
 * Shuffle-soitto
 .karumeininki
 	move.l	modamount(a5),d0
-	beq.w	.reet		* jos ei yht‰‰n, jatketaan entisen soittoa
+	beq	.reet		* jos ei yht‰‰n, jatketaan entisen soittoa
 	cmp.l	#1,d0		* Jos vain yksi, jatketaan soittoa
-	beq.w	.reet
-	bra.w	soitamodi2
+	beq	.reet
+	bra	soitamodi2
 
 
 ******************************************************************************
@@ -7508,7 +7732,7 @@ satunnaismodi
 	* Loop as much as we have modules and test if the random table 
 	* has free slots left.
 
-.h	bsr.w	testRandomTableEntry
+.h	bsr	testRandomTableEntry
 	beq.b	.onviela
 	;dbf	d0,.h
 	subq.l	#1,d0 
@@ -7526,7 +7750,7 @@ satunnaismodi
 	* Next get a random value in the range [0, number of modules-1].
 	move.l	modamount(a5),d3
 	subq.l	#1,d3
-.a	bsr.w	getRandomValue
+.a	bsr	getRandomValue
 	* Function returns 0..MAX_RANDOM_MASK,
 	* which may be larger than modamount(a5). 
 	* Accept only random values in range.
@@ -7539,7 +7763,7 @@ satunnaismodi
 	bsr.b	testRandomTableEntry
 	bne.b	.a
 	* Was free. Take it.
-	bsr.w	setRandomTableEntry
+	bsr	setRandomTableEntry
 
 	* I choose you, module in index d1
 	move.l	d1,chosenmodule(a5)
@@ -7558,8 +7782,8 @@ clear_random:
 	* before the parent contents are refreshed into view.
 	st	hippoonbox(a5)
 	pushm	all
-	;bsr.w	shownames
-	bsr.w	showNamesNoCentering
+	;bsr	shownames
+	bsr	showNamesNoCentering
 	popm	all
 .x
 	rts
@@ -7568,16 +7792,16 @@ clear_random:
 clearRandomTable
 	pushm	d0/a0
 	DPRINT  "clearRandomTable"
-	bsr.w	 obtainModuleList
+	bsr	 obtainModuleList
 	clr.l	randomValueMask(a5)
 	tst.l	randomtable(a5)
 	beq.b	.noList
 	move.l	randomtable(a5),a0 
-	bsr.w 	freemem 
+	bsr 	freemem 
 	move.l	randomtable(a5),d0
 	clr.l	randomtable(a5)
 .noList
-	bsr.w	releaseModuleList
+	bsr	releaseModuleList
 	popm	d0/a0
 	rts
 
@@ -7618,11 +7842,11 @@ getRandomValueTableEntry:
 	lsr.l	#3,d0
 	addq.l	#1,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	
 	move.l	d0,randomtable(a5)
 	bne.b	.ok
-	bsr.w	showOutOfMemoryError
+	bsr	showOutOfMemoryError
 .ok
 	pop     d0
 		
@@ -7649,7 +7873,7 @@ setRandomTableEntry
 	DPRINT  "setRandomTableEntry %ld"
 	
 	* Set it in the table
-	bsr.w	getRandomValueTableEntry
+	bsr	getRandomValueTableEntry
 	beq.b	.error
 	bset	d0,(a0)
 .error
@@ -7710,7 +7934,7 @@ getRandomValue
         lsr.l   d1,d0
 		
 	move.l	d0,d1 
-	bsr.w	getRandomValueMask
+	bsr	getRandomValueMask
 	and.l	d0,d1
 
 	pop	d0
@@ -7919,12 +8143,16 @@ umph
 	bne.b	.bere
 .raaps	
 	* randomize a module in chosenmodule(a5)
-	bsr.w	satunnaismodi
+	bsr	satunnaismodi
 	* set step to zero
 	moveq	#0,d7
 .bere
 	* Calculate in long words to avoid possible word overflow.
 	move.l	modamount(a5),d1
+    bne     .is
+    DPRINT  "empty list"
+    rts
+.is 
 
 	* Calculate candidate for the next module
 	move.l	chosenmodule(a5),d0
@@ -7950,17 +8178,17 @@ umph
 	DPRINT "->chosenmodule %ld"
 	* Take a slot in the random table as well
 	move.l	d0,d2					* store copy for later
-	bsr.w	setRandomTableEntry		* Merkataan listaan..
+	bsr	setRandomTableEntry		* Merkataan listaan..
 
 ;	st	hippoonbox(a5)
-	bsr.w	resh
+	bsr	resh
 
 * etsit‰‰n listasta vastaava tiedosto
 * find the corresponding file from the list
 
 	DPRINT	"soitamodi getListNode"
-	bsr.w	getListNode
-	beq.w	.erer
+	bsr	getListNode
+	beq	.erer
 	move.l	a0,a3
 
 	* This might be a list divider. Try again in that case.
@@ -7970,35 +8198,42 @@ umph
 
 	* try next one until at end of the list
 	TSTNODE	a3,a0
-	bne.w	umph
-	bra.w	.erer
+	bne	umph
+	bra	.erer
 .noDiv
 
 	cmp.l	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
-	bne.b	.new
+	bne 	.new
 
 	* It was the same one which already was playing.
 	* Restart it from beginning.
 
 * on!
 	DPRINT	"Replay end"
-	bsr.w	obtainModuleData
-	bsr.w	halt			* soitetaan vaan alusta
+	bsr	obtainModuleData
+	bsr	halt			* soitetaan vaan alusta
 	move.l	playerbase(a5),a0
+    push    a3
 	jsr 	p_end(a0)
+    pop     a3
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  "+++ fav song: %ld"
+
+	DPRINT	"+++ Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
-	bsr.w	releaseModuleData
+	bsr	releaseModuleData
 
 	tst.l	d0
-	bne.w	.inierr
+	bne	.inierr
 
 	st	playing(a5)		* Ei varmaan tuu initerroria
-	bsr.w	inforivit_play
-	bsr.w	settimestart
-	bsr.w	start_info
+	bsr	inforivit_play
+	bsr	settimestart
+	bsr	start_info
 	rts
 	
 .new
@@ -8017,20 +8252,25 @@ umph
 	bne.b	.hm1
 
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
+    tst.b   l_remote(a3)
+    beq.b   .notRem1
+    moveq   #0,d7   * disable for remotes!
+.notRem1
+    tst.b   d7
 	bne.b	.nomod
 
-	bsr.w	fadevolumedown
+	bsr	fadevolumedown
 	move	d0,-(sp)
 .hm1
 	DPRINT	"Replay end"
-
-	bsr.w	obtainModuleData
-	bsr.w	halt			* Vapautetaan se jos on
+    pushm    d6/d7          * preserve double buffering flag
+	bsr	obtainModuleData
+	bsr	halt			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
-	bsr.w	releaseModuleData
-	bsr.w	freemodule	
-
+	bsr	releaseModuleData
+	bsr	freemodule	
+    popm    d6/d7
 	tst	d6
 	bne.b	.hm2
 	move	(sp)+,mainvolume(a5)
@@ -8040,27 +8280,40 @@ umph
 	* Store index of the new module being played
 	move.l	d2,playingmodule(a5)	* Uusi numero
 
+
 	* a3 contains the list elment
 	lea	l_filename(a3),a0	* Ladataan
 	* load it, d7 contains double buffering flag
 	move.b	d7,d0
+    tst.b   l_remote(a3)
+    beq.b   .notRem
+    moveq   #0,d0     * disable for remotes!
+    DPRINT  "DISABLE double buffering 2"
+.notRem
+    push    a3
 	jsr	loadmodule
+    pop     a3
 	tst.l	d0
 	bne.b	.loader
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  "=== fav song: %ld"
+
+	DPRINT	"=== Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
 	bne.b	.inierr
 
-	bsr.w	settimestart
+	bsr	settimestart
 	st	playing(a5)
-	bsr.w	inforivit_play
-	bsr.w	start_info
+	bsr	inforivit_play
+	bsr	start_info
 
 .erer
-;	bsr.w	shownames
+;	bsr	shownames
 	rts
 
 .loader	
@@ -8099,7 +8352,7 @@ umph
 ;	lea	moduleaddress(a5),a1
 ;	lea	modulelength(a5),a2
 ;	moveq	#0,d1			* kommentti talteen
-;	bsr.w	loadfile
+;	bsr	loadfile
 ;	tst.l	d0
 ;	beq	.ok
 
@@ -8119,14 +8372,14 @@ nupit
 * volume
 	lea	slider1,a0
 	move	#65535/64,d0		* 65535/max
-	bsr.w	setknob
+	bsr	setknob
  ifeq EFEKTI
 ;	move	#65535*64/64,d0		* 65535*arvo/max
 	moveq	#-1,d0
  else
 	moveq	#0,d0
  endc
-	bsr.w	setknob2
+	bsr	setknob2
 
 ;	lea	slider4,a0
 	lea	slider4-slider1(a0),a0
@@ -8139,44 +8392,44 @@ nupit
 ;	lea	pslider1,a0
 	lea	pslider1-slider4(a0),a0
 	moveq	#65535/(580-50),d0	* 65535/max
-	bsr.w	setknob
+	bsr	setknob
 	move	#65535*50/(580-50),d0	* 65535*arvo/max
-	bsr.w	setknob2
+	bsr	setknob2
 
 * mixingrate tfmx
 ;	lea	pslider2,a0
 	lea	pslider2-pslider1(a0),a0
 	move	#65535/(22-1),d0		* 65535/max
-	bsr.w	setknob
+	bsr	setknob
 	move	#65535*11/21,d0		* 65535*arvo/max
-	bsr.w	setknob2
+	bsr	setknob2
 
 * volumeboost s3m
 ;	lea	juusto,a0
 	lea	juusto-pslider2(a0),a0
 	;move	#65535/9,d0
 	move	#65535/17,d0
-	bsr.w	setknob
+	bsr	setknob
 ;	move	#65535/9*0,d0
 	moveq	#0,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * stereoarvo s3m
 ;	lea	juust0,a0
 	lea	juust0-juusto(a0),a0
 	move	#65535/64,d0
-	bsr.w	setknob
+	bsr	setknob
 ;	move	#65535/32*0,d0
 	moveq	#0,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * boxsize
 ;	lea	meloni,a0
 	lea	meloni-juust0(a0),a0
 	move	#65535/(51-3),d0		* 65535/max
-	bsr.w	setknob
+	bsr	setknob
 	move	#65535*(8-3)/(51-3),d0		* 65535*arvo/max
-	bsr.w	setknob2
+	bsr	setknob2
 
 * infosize
 ;	lea	eskimO,a0
@@ -8287,8 +8540,16 @@ nappilasku
 * d3 = rawkey
 * d4 = iequalifier
 
-handleRawKeyInput
-nappuloita
+handleRawKeyInput:
+nappuloita:
+
+; The following keys can exist on CDTV, CD32 and "multimedia" keyboards:
+.RAWKEY_MEDIA_STOP       = $72
+.RAWKEY_MEDIA_PLAY_PAUSE = $73
+.RAWKEY_MEDIA_PREV_TRACK = $74
+.RAWKEY_MEDIA_NEXT_TRACK = $75
+.RAWKEY_MEDIA_SHUFFLE    = $76
+.RAWKEY_MEDIA_REPEAT     = $77
 
   REM
   if DEBUG
@@ -8305,7 +8566,7 @@ nappuloita
 
 	* react only if button is down
 	tst.b	d3
-	bmi.w	.exit	* vain jos nappula alhaalla
+	bmi	.exit	* vain jos nappula alhaalla
 	movem.l	d0-a6,-(sp)
 
 	cmp	#IEQUALIFIER_CONTROL,d4
@@ -8314,13 +8575,18 @@ nappuloita
 	cmp.b	#$23,d3		* f + control
 	bne.b	.2
 	jsr	toggleFavoriteStatusForCurrentModule
-	bra.w	.ee
-.2
-	cmp.b	#$37,d3	 	* m + control
- 	bne.b	.3
-	jsr		modlandSearch
 	bra	.ee
-.3	
+.2
+;	cmp.b	#$37,d3	 	* m + control
+; 	bne.b	.3
+;	jsr		modlandSearch
+;	bra	.ee
+;.3	
+	cmp.b	#$21,d3	 	* s + control
+ 	bne.b	.4
+	jsr		searchActivate
+	bra	.ee
+.4
 
 .noControl
 
@@ -8329,8 +8595,8 @@ nappuloita
 
 	cmp.b	#$37,d3		* m + shift
 	bne.b	.1
-	bsr.w	rlistmode
-	bra.w	.ee
+	bsr	rlistmode
+	bra	.ee
 .1
 
 
@@ -8338,14 +8604,14 @@ nappuloita
 	bne.b	.f0
 	; window will be opened active:
 	or.l	#WFLG_ACTIVATE,sflags
-	bsr.w	rbutton10b
-	bra.b	.ee
+	bsr	rbutton10b
+	bra 	.ee
 .f0
 	cmp.b	#$41,d3		* backspace + shift?
 	beq.b	.fid
 	cmp.b	#$22,d3		* d + shift?
 	bne.b	.fi
-.fid	bsr.w	rbutton8b
+.fid	bsr	rbutton8b
 	bra.b	.ee
 .fi
 
@@ -8353,7 +8619,7 @@ nappuloita
 	beq.b	.if
 	cmp.b	#$1f,d3
 	bne.b	.no1f
-.if	bsr.w	rbutton_kela2_turbo
+.if	bsr	rbutton_kela2_turbo
 	bra.b	.ee
 .no1f
 
@@ -8362,9 +8628,9 @@ nappuloita
 	bne.b	.not_f
 	tst.b	d4
 	bne.b	.fi_c
-	bsr.w	find_new
+	bsr	find_new
 	bra.b	.ee
-.fi_c	bsr.w	find_continue
+.fi_c	bsr	find_continue
 	bra.b	.ee
 
 .not_f
@@ -8372,7 +8638,7 @@ nappuloita
 	blo.b	.f1
 	cmp.b	#$59,d3
 	bhi.b	.f1
-	bsr.w	fkeyaction
+	bsr	fkeyaction
 	bra.b	.ee
 .f1
 
@@ -8384,7 +8650,11 @@ nappuloita
 	addq.l	#2,a0
 	cmp.l	#.nabse,a0
 	bne.b	.checke
-	DPRINT	"No action for key"
+ if DEBUG
+    moveq   #0,d0
+    move.b  d3,d0
+	DPRINT	"No action for key %lx"
+ endif
 .ee	movem.l	(sp)+,d0-a6
 .sd	
 .exit
@@ -8425,6 +8695,7 @@ nappuloita
 * b $35		volume up
 
 
+* del $46	delete module
 * help $5f	about etc.
 * c $33		clear list
 * ~` $0		window shrink/expand
@@ -8523,6 +8794,11 @@ nappuloita
 	dc	$4f
 	dr	actionNextSong	* next song
 
+    dc  .RAWKEY_MEDIA_PREV_TRACK
+    dr  prevButtonAction
+    dc  .RAWKEY_MEDIA_NEXT_TRACK
+    dr  nextButtonAction
+
 	dc	7
 	dr	.showtime
 	dc	8
@@ -8541,13 +8817,22 @@ nappuloita
 	dc	$40
 	dr	stopcont
 
+    dc  .RAWKEY_MEDIA_PLAY_PAUSE
+    dr  playButtonAction 
+
 	dc	$22
 	dr	rbutton8
 	dc	$41
 	dr	rbutton8
+	dc	$46 * DEL
+	dr	rbutton8
+
 
 	dc	$42
-	dr	rbutton4
+	dr	rbutton4    
+    
+    dc  .RAWKEY_MEDIA_STOP
+    dr  ejectButtonAction
 
 	dc	$38
 	dr	rbutton_kela1
@@ -8632,28 +8917,28 @@ nappuloita
 .rbutton10
 	jmp	rbutton10
 
-.rand	bra.w	soitamodi_random
+.rand	bra	soitamodi_random
 
 
 .qui	st	exitmainprogram(a5)
 	rts
 
-.ocl	bra.w	zipMainWindow
+.ocl	bra	zipMainWindow
 
 
 
 .showtime
 	clr	lootamoodi(a5)
-	bra.w	lootaa
+	bra	lootaa
 .showclock
 	move	#1,lootamoodi(a5)
-	bra.w	lootaa
+	bra	lootaa
 .showname
 	move	#2,lootamoodi(a5)
-	bra.w	lootaa
+	bra	lootaa
 .showtime2
 	move	#3,lootamoodi(a5)
-	bra.w	lootaa
+	bra	lootaa
 
 
 .scopetoggle
@@ -8661,7 +8946,7 @@ nappuloita
 
 .pm1	move.b	#pm_repeat,playmode(a5)	* playmode pikan‰pp‰imet
 .pm0	st	hippoonbox(a5)
-	bra.w	shownames
+	bra	shownames
 .pm2	move.b	#pm_random,playmode(a5)
 	bra.b	.pm0
 
@@ -8687,7 +8972,7 @@ nappuloita
 .vo1	move	d0,mainvolume(a5)
 	bne.b	.ere
 	moveq	#1,d0
-.ere	bra.w	volumerefresh
+.ere	bra	volumerefresh
 
 
 .infoo
@@ -8700,11 +8985,11 @@ nappuloita
 	move.l	infotaz(a5),a0		* jos oli jo modinfo niin suljetaan
 	cmp.l	#about_t,a0
 	beq.b	.rrz
-	bsr.w	sulje_info
+	bsr	sulje_info
 	bra.b	.xz
-.rrz	bra.w	start_info
+.rrz	bra	start_info
 .zz	clr.b	infolag(a5)
-	bsr.w	rbutton10b
+	bsr	rbutton10b
 .xz	rts
  EREM
 
@@ -8713,8 +8998,8 @@ nappuloita
 
 stopcont
 	tst.b	playing(a5)
-	beq.w	actionContinue
-	bra.w	actionStopButton
+	beq	actionContinue
+	bra	actionStopButton
 
 
 lista_ylos				* shiftin kanssa nopeempi!
@@ -8733,10 +9018,10 @@ lista_ylos				* shiftin kanssa nopeempi!
 	bpl.b	.wasOk
 	move.l	modamount(a5),chosenmodule(a5)
 	subq.l	#1,chosenmodule(a5)
-	bra.w		resh
+	bra		resh
 .wasOk
 	move.l	d1,chosenmodule(a5)
-	bra.w	resh
+	bra	resh
 
 lista_alas
 	moveq	#1,d0		* lines to skip down
@@ -8759,15 +9044,15 @@ lista_alas
 	;clr	chosenmodule(a5)
 .ee	
 	move.l	d1,chosenmodule(a5)
-	bra.w	resh
+	bra	resh
 
 
 ********* Window zip
 
 zipMainWindow	tst.b	uusikick(a5)
 	bne.b	.newo
-	bsr.w	sulje_ikkuna		* Vaihdetaan ikkunan kokoa
-	bra.w	avaa_ikkuna
+	bsr	sulje_ikkuna		* Vaihdetaan ikkunan kokoa
+	bra	avaa_ikkuna
 .newo	move.l	windowbase(a5),a0	* Kick2.0+
 	move.l	_IntuiBase(a5),a6
 	jmp	_LVOZipWindow(a6)
@@ -8787,10 +9072,10 @@ fkeyaction
 .oli	move.l	a0,sv_argvArray+4(a5)		* Parametri!
 	clr.l	sv_argvArray+8(a5)
 
-	bsr.w	rbutton9		* freelist & shownames
-	bsr.w	rbutton4		* EJECT!
+	bsr	rbutton9		* freelist & shownames
+	bsr	rbutton4		* EJECT!
 
-	bra.w	komentojono			* tutkitaan komentojono.
+	bra	komentojono			* tutkitaan komentojono.
 
 
 *******************************************************************************
@@ -8800,9 +9085,11 @@ fkeyaction
 * in:
 *   a2 = intuition gadget
 
-gadgetsup
-	bsr.w	    areMainWindowGadgetsFrozen
+gadgetsup:
+	bsr	    areMainWindowGadgetsFrozen
 	bne.b 	.exit
+    ; Close the search layout if open
+    jsr     switchToNormalLayoutIfPossible
 
 	movem.l	d0-a6,-(sp)
 
@@ -8810,14 +9097,33 @@ gadgetsup
 	* until some other gadget tooltip gets shown.
 	move.l	a2,disableTooltipForGadget(a5)
 	* Any button activity should first close any active tooltip
-	bsr.w	closeTooltipPopup
+	bsr	closeTooltipPopup
 
 	move	gg_GadgetID(a2),d0
+
+   ; ext.l   d0
+   ; DPRINT  "gadgetId=%ld"
+
+    cmp     #GADGET_ID_SEARCH_STRING,d0
+    bne     .1
+    bsr     gadgetSearchStringAction
+    bra     .x    
+.1 
+    cmp     #GADGET_ID_SEARCH_SOURCE,d0
+    bne     .2
+    bsr     gadgetSearchSourceAction
+    bra     .x
+.2
+    cmp     #GADGET_ID_LOCAL_SEARCH_STRING,d0
+    bne     .3
+    bsr     gadgetFindAction
+    bra     .x
+.3
 	add	d0,d0
 	lea	.gadlist-2(pc,d0),a0
 	add	(a0),a0
 	jsr	(a0)
-
+.x
 	movem.l	(sp)+,d0-a6
 .exit 
 	rts
@@ -8841,8 +9147,17 @@ gadgetsup
 	dr	rbutton_kela2	* Eteenkelaus
 	dr	rloadprog	* ohjelman lataus
 	dr	rmove		* move
-	dr	rsearchfuncs	* search functions
+	dr	rsort       * sort
+ ifeq FEATURE_LIST_TABS
 	dr	rlistmode	* listmode change
+    ;dr  rlistmodePop
+ endif
+ ifne FEATURE_LIST_TABS
+    dr  rlistmode1
+    dr  rlistmode2
+    dr  rlistmode3
+    dr  rlistmode4
+ endif
 
 * Print some text into the filebox
 ** a0 = teksti
@@ -8853,7 +9168,7 @@ printbox:
 	bne.b	.p
 .q	rts
 .p	pushm	d0/a0
-	bsr.w	clearbox		* fileboxi tyhj‰ks
+	bsr	clearbox		* fileboxi tyhj‰ks
 	popm	d0/a0
 
 	move.l	a0,a1
@@ -8889,12 +9204,23 @@ printbox:
 	subq	#1,d2
 	mulu	listFontHeight(a5),d2
 	add	d2,d1
-	bra.w	print
+	bra	print
 
-rlistmode
+rlistmode:
 	jmp	toggleListMode
+;rlistmodePop:
+;    jmp toggleListModePopup
 
-
+  ifne FEATURE_LIST_TABS
+rlistmode1:
+    jmp engageNormalMode
+rlistmode2:
+    jmp engageFavoritesMode
+rlistmode3:
+    jmp engageFileBrowserMode
+rlistmode4:
+    jmp engageSearchResultsMode
+ endif
 
 *******************************************************************************
 * Sortti
@@ -8920,7 +9246,7 @@ sortButtonAction:
 	beq.b	.x
 
 	bsr.b	sortModuleList
-	bra.w	forceRefreshList
+	bra	forceRefreshList
 
 sortModuleList:
 	* Skip force refresh
@@ -8929,7 +9255,7 @@ sortModuleList:
 	bhs.b	.so
 	rts
 .so
-	bsr.w	lockMainWindow
+	bsr	lockMainWindow
 
 	* Skip info display in these cases
 	cmp.l	#100,modamount(a5)
@@ -8953,22 +9279,22 @@ sortModuleList:
  endif
 	move.l	modamount(a5),d0
 	moveq	#SORT_ELEMENT_LENGTH,d1		* node address and weight
-	bsr.w	mulu_32		* 
+	bsr	mulu_32		* 
 	addq.l	#8,d0			* add some empty space, this is needed when rebuilding the list
 							* to check if end is reached.
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,sortbuf(a5)
 	bne.b	.okr
-	bsr.w 	showOutOfMemoryError
-	bra.w	.error
+	bsr 	showOutOfMemoryError
+	bra	.error
 .okr
 	move.l	d0,a2
 
 ** Lasketaan painot jokaiselle
 	DPRINT  "rsort obtain list"
-	bsr.w	obtainModuleList
-	bsr.w	getVisibleModuleListHeader
+	bsr	obtainModuleList
+	bsr	getVisibleModuleListHeader
 	move.l	a0,a3
 
 	* sort table in a2
@@ -8998,12 +9324,12 @@ sortModuleList:
 .ml	moveq	#0,d5		* 1. sortattava node
 	moveq	#0,d6		* viimeinen sortattava node
 
-	bsr.w	.eka
+	bsr	.eka
 	bne.b	.loph
 
 	move.l	a3,d5
 
-	bsr.w	.toka
+	bsr	.toka
 
 	move.l	a3,d7
 	sub.l	d5,d7		* montako nodea sortataan
@@ -9016,18 +9342,18 @@ sortModuleList:
 	blo.b	.ml
 
 	move.l	d5,a2
-	bsr.w	.sort
+	bsr	.sort
 	* check if ran out of mem
 	tst.l	d0
 	bne.b	 .ml
 	* show error and stop, list will be partially sorted or not at all
-	bsr.w 	showOutOfMemoryError
+	bsr 	showOutOfMemoryError
 
 .loph
 
 	* Start rebuilding the list with sorted nodes
 	move.l	sortbuf(a5),a3
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	a0,a2
 .er
 	tst.l	(a3)
@@ -9044,7 +9370,7 @@ sortModuleList:
 .error
 
 	move.l	sortbuf(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 
 
  if DEBUG
@@ -9061,7 +9387,7 @@ sortModuleList:
 
  endif
 
-		bsr.w	listChanged
+		bsr	listChanged
 	tst.l	playingmodule(a5)
 	bmi.b	.npl
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
@@ -9074,8 +9400,8 @@ sortModuleList:
  endif
 
 	DPRINT  "rsort release list"
-	bsr.w	releaseModuleList
-	bsr.w	unlockMainWindow
+	bsr	releaseModuleList
+	bsr	unlockMainWindow
 	rts
 
 * a3 = lista
@@ -9134,13 +9460,13 @@ moveButtonAction
 	skipIfGadgetDisabled gadgetMoveButton
 
 	tst.b	movenode(a5)	* Jos toistamiseen painetaan, menn‰‰n "play"hin
-	bne.w	rbutton1
+	bne	rbutton1
 
 	cmp.l	#2,modamount(a5)
 	blo.b	.qq
-	bsr.w	getcurrent
+	bsr	getcurrent
 	beq.b	.q
-	bsr.w	confirmFavoritesModification
+	jsr	confirmFavoritesModification
 	beq.b	.qq
 
 	move.l	a3,nodetomove(a5)
@@ -9152,19 +9478,19 @@ moveButtonAction
 	move.l	a3,a1
 	lore	Exec,Remove
 	subq.l	#1,modamount(a5)
-	bsr.w	listChanged
+	bsr	listChanged
 	tst.l	playingmodule(a5)
 	bmi.b	.q
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .q	
-	bsr.w	forceRefreshList
+	bsr	forceRefreshList
 .qq	rts
 
 
 
 * etsit‰‰n listasta vastaava kohta
 ;	DPRINT  "getcurrent obtain list"
-; 	bsr.w		obtainModuleList
+; 	bsr		obtainModuleList
 ; 	lea	er(a5),a4
 ; .luuppo
 ; 	TSTNODE	a4,a3
@@ -9174,13 +9500,13 @@ moveButtonAction
 ; 	subq.l	#1,d0 
 ; 	bpl.b  .luuppo
 ; 	DPRINT  "getcurrent release list 1"
-; 	bsr.w		releaseModuleList
+; 	bsr		releaseModuleList
 * a3 = valittu nimi
 ; 	moveq	#1,d0
 ; 	rts
 ; .q	
 ; 	DPRINT  "getcurrent release list 2"
-; ;	bsr.w		releaseModuleList
+; ;	bsr		releaseModuleList
 ; 	moveq	#0,d0
 ; 	rts
 
@@ -9191,8 +9517,12 @@ moveButtonAction
 *******
 
 comment_file
-	bsr.w	getcurrent
+	bsr	getcurrent
 	beq.b	.x
+    * Only local files considered:
+    tst.b   l_remote(a3)
+    bne     .x
+
 	move.l	a3,a4
 
 ** kaapataan vanha kommentti
@@ -9213,7 +9543,7 @@ comment_file
 	lob	UnLock
 .ne
 
-	bsr.w	get_rt
+	bsr	get_rt
 	lea	-90(sp),sp
 
 ** initial string
@@ -9227,7 +9557,7 @@ comment_file
 	sub.l	a3,a3
 	lea	ftags(pc),a0
 	lea	.ti(pc),a2
-	bsr.w	setMainWindowWaitPointer
+	bsr	setMainWindowWaitPointer
 	lob	rtGetStringA
 	tst.l	d0
 	beq.b	.xx
@@ -9236,7 +9566,7 @@ comment_file
 	move.l	sp,d2
 	lore	Dos,SetComment
 	
-.xx	bsr.w	clearMainWindowWaitPointer
+.xx	bsr	clearMainWindowWaitPointer
 	lea	90(sp),sp
 .x	rts
 
@@ -9249,84 +9579,225 @@ comment_file
 * Find module
 *******
 
-rsearchfuncs
-	DPRINT	"Search functions"
-	lea		.options(pc),a4
-	lea		gadgetSortButton,a0
-	move	gg_LeftEdge(a0),d6
-	moveq	#20,d7
-	add		gg_TopEdge(a0),d7
-	pushpea	.callback(pc),d4
-	bsr		listSelectorMainWindow
-	bmi.b	.skip
-	beq		find_new
-	subq	#1,d0
-	beq		find_continue
-	subq	#1,d0
-	beq.b	.modland
-	subq	#1,d0
+* In:
+*    a0 = search string
+* Out:
+*    d0 = true if not too small
+beepIfSearchStringIsSmall:
+    * Beep display if search term is too small
+;    lea     gadgetSearchStringBuffer,a0
+    move.l  a0,a1
+.len  
+    tst.b   (a1)+
+    bne     .len
+    sub.l   a0,a1
+
+    cmp     #2+1,a1 * strlen=2 or more -> ok
+    bhs.b   .1
+    cmp     #1,a1   * strlen=0 -> cancel
+    beq     .2
+    bsr     beep    * strlen=1 -> beep
+.2
+    moveq   #0,d0
+    rts
+.1  moveq   #1,d0
+    rts
+
+beep:
+    move.l  windowbase(a5),a0
+    move.l  wd_WScreen(a0),a0
+    lore    Intui,DisplayBeep
+    rts
+
+gadgetSearchStringAction:
+ if DEBUG
+    lea     gadgetSearchStringBuffer,a0
+    ext.l   d0
+    move.l  a0,d1
+    DPRINT  "search string action %ld %s"
+ endif
+    lea     gadgetSearchStringBuffer,a0
+    bsr     beepIfSearchStringIsSmall
+    bne     .1
+    DPRINT  "canceled"
+    jmp     switchToNormalLayoutIfPossible
+
+.1
+    
+    lea     modlandSearch,a0
+    basereg modlandSearch,a0
+    move.b  selectedSearch(a5),d0
+	beq.b	.amigaRemix
+	subq.b	#1,d0
 	beq.b	.aminet
-	subq	#1,d0
-	beq.b	.modules
-	subq	#1,d0
+	subq.b	#1,d0
 	beq.b	.hvsc
+	subq.b	#1,d0
+	beq.b	.modland
+	subq.b	#1,d0
+	beq.b	.modules
+	subq.b	#1,d0
+	beq.b	.stations
+	subq.b	#1,d0
+	beq.b	.rko
+	subq.b	#1,d0
+	beq.b	.recentPlaylists
 .skip
 	rts
 
 .modland
-	jmp	modlandSearch
+	jmp	modlandSearch(a0)
 .aminet
-	jmp	aminetSearch
+	jmp	aminetSearch(a0)
 .modules
-	jmp	modulesSearch
+	jmp	modulesSearch(a0)
 .hvsc
-	jmp	hvscSearch
+	jmp	hvscSearch(a0)
+.amigaRemix
+	jmp	amigaRemixSearch(a0)
+.rko
+    jmp rkoSearch(a0)
+.stations
+    jmp stationsSearch(a0) 
+.recentPlaylists
+    jmp recentPlaylistsSearch(a0) 
+    endb    a0
+
+
+
+gadgetSearchSourceAction:
+	lea		gadgeSearchSourceOptions(pc),a4
+	lea		gadgetSearchSource,a0
+	move	gg_LeftEdge(a0),d6
+	moveq	#20,d7
+	add		gg_TopEdge(a0),d7
+    moveq   #0,d4   * no callbackkkkk
+    moveq   #0,d0
+    move.b  selectedSearch(a5),d0
+	bsr		listSelectorMainWindowPreselect
+	bmi 	.skip
+ if DEBUG
+    ext.l   d0
+    DPRINT  "selected source=%ld"
+ endif
+    move.b  d0,selectedSearch(a5)
+    jsr     refreshGadgetSearchSource
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    beq     .1
+    jmp     activateSearchStringGadget
+.1  
+    jmp     recentPlaylistsSearch
+.skip
+    rts
+
+gadgeSearchSourceOptions:
+	* max width, rows
+	dc.b	15,8
+gadgetSearchSourceOption1:
+    dc.b    "AmigaRemix",0 ; 4
+    dc.b    "Aminet",0 ; 1
+    dc.b    "HVSC",0 ; 3
+    dc.b    "Modland",0 ; 0
+    dc.b    "Modules.pl",0 ; 2 
+    dc.b    "Radio stations",0 ; 6
+    dc.b    "Remix.Kwed.org",0 ; 5
+    dc.b    "Shared lists",0 ; 7   
+    even
+
+searchActivate:
+    DPRINT  "search activate"
+    tst.b   uhcAvailable(a5)
+    bne     .1
+    rts
+.1
+    tst.w   searchLayoutActive(a5)      
+    bne     .x
+    * Switch to search view 
+    jsr     engageSearchResultsMode
+.x
+    * Activate popup
+    bsr     gadgetSearchSourceAction
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    beq     .y
+    * Then activate string gadget
+    jsr     activateSearchStringGadget
+.y
+    rts
+
+
+
 
 * in:
 *   d3 = index to check
-.callback
-	; Disable bottom two rows if UHC not available
-	cmp		#2,d3
-	blo.b	.n
-	tst.b	uhcAvailable(a5)
-	bne.b	.n
-	moveq	#0,d0
-	rts
-.n	moveq	#1,d0
-	rts
+;listSelectorUhcCallback
+;	; Disable rows from 2 onwards UHC not available
+;	cmp		#3,d3
+;	blo.b	.n
+;	tst.b	uhcAvailable(a5)
+;	bne.b	.n
+;	moveq	#0,d0
+;	rts
+;.n	moveq	#1,d0
+;	rts
 
-.options
-	* max width, rows
-	dc.b	24,6
-	dc.b	"Search list    [F]      ",0
-	dc.b	"Search next    [SHIFT+F]",0
-	dc.b	"Search Modland [CTRL+M] ",0
- 	dc.b	"Search Aminet           ",0
-	dc.b	"Search Modules.pl       ",0
-	dc.b	"Search HVSC             ",0
 
-enterSearchPattern_t
-	dc.b	"Enter search pattern",0
- even
 
-find_new
+;enterSearchPattern_t
+;	dc.b	"Enter search pattern",0
+; even
+
+gadgetFindAction:
+    DPRINT  "gadgetFindAction"
+    lea     gadgetLocalSearchStringBuffer,a3
+    tst.b   (a3)
+    bne     .1
+    DPRINT  "canceled"
+    jmp     switchToNormalLayoutIfPossible
+.1
+    * Find!
+    lea     findpattern(a5),a1
+.c  move.b  (a3)+,(a1)+
+    bne     .c
+    move.l  chosenmodule(a5),-(sp)
+    bsr     do_find_continue
+    move.l  (sp)+,d0
+    cmp.l   chosenmodule(a5),d0
+    bne     .found
+    bsr     beep
+.found
+
+    DPRINT  "restore layout"
+    * Return the layout to whatever it was
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne     .norm
+    jsr     switchToNormalLayoutNoRefresh
+    jsr     switchToSearchLayout
+    ; Refresh to update search results
+    bra     forceRefreshList
+.norm   
+    jsr     switchToNormalLayout
+    bra     forceRefreshList
+
+find_new:
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
-	rts
+	bra     beep
 .ok
-	bsr.w	get_rt
-	lea	findpattern(a5),a1	
-	moveq	#27,d0
-	sub.l	a3,a3
-	lea	ftags(pc),a0
-	lea	enterSearchPattern_t(pc),a2
-	bsr.w	setMainWindowWaitPointer
-	lob	rtGetStringA
-	bsr.w	clearMainWindowWaitPointer
-	tst.l	d0
-	bne.b	find_continue	
-	rts
-
+    jmp     switchToLocalSearchLayout
+    
+;	bsr	get_rt
+;	lea	findpattern(a5),a1	
+;	moveq	#27,d0
+;	sub.l	a3,a3
+;	lea	ftags(pc),a0
+;	lea	enterSearchPattern_t(pc),a2
+;	bsr	setMainWindowWaitPointer
+;	lob	rtGetStringA
+;	bsr	clearMainWindowWaitPointer
+;	tst.l	d0
+;	bne.b	find_continue	
+;	rts
+;
 ftags
 	dc.l	RTGS_Width,262
 	dc.l	RT_TextAttr,text_attr
@@ -9335,25 +9806,41 @@ otag15	dc.l	RT_PubScrName,pubscreen+var_b
 	
 
 
-find_continue
+
+find_continue:
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
-	rts
+    bra     beep
 .ok
-	bsr.w	setMainWindowWaitPointer
+    tst.b   findpattern(a5)
+    beq     beep
+
+    move.l  chosenmodule(a5),-(sp)
+    bsr     do_find_continue
+    move.l  (sp)+,d0
+    cmp.l   chosenmodule(a5),d0
+    beq     .notFound
+    DPRINT  "found"
+	bra	forceRefreshList
+.notFound
+    DPRINT  "not found"
+    bra     beep
+    
+do_find_continue
+	bsr	setMainWindowWaitPointer
 	pea	clearMainWindowWaitPointer(pc)
 
 	; Use chosen module as starting point of seardh
 
 	DPRINT  "find_continue obtain list"
-	bsr.w	obtainModuleList
+	bsr	obtainModuleList
 
-	bsr.w	getcurrent		* a0 => chosen module listnode
+	bsr	getcurrent		* a0 => chosen module listnode
 	tst.l	d0 
 	bne.b	.foundCurrent
 	* start from beginning
 	clr.l	chosenmodule(a5)
-	bsr.w	getcurrent
+	bsr	getcurrent
 .foundCurrent
 
 	move.l	a0,a3
@@ -9376,7 +9863,7 @@ find_continue
 * lista l‰pi eik‰ lˆytyny. k‰yd‰‰n alusta l‰htˆkohtaan.
 
 	moveq	#-1,d7
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	a0,a4
 .luuppo2
 	addq.l	#1,d7
@@ -9390,29 +9877,41 @@ find_continue
 
 .q	
 	DPRINT  "find_continue release list"
-	bsr.w 	releaseModuleList
+	bsr 	releaseModuleList
 	rts
 
-
+* String matchng: convert to uppercase, space equals underscore
 .find
 	move.l	l_nameaddr(a3),a0
 
 .flop1	lea	findpattern(a5),a1
 	move.b	(a1)+,d0
-	and.b	d2,d0
+    cmp.b   #"_",d0
+    bne.b   .3
+    moveq   #" ",d0
+.3	and.b	d2,d0
 
 .flop2	move.b	(a0)+,d1
 	beq.b	.notfound
-	and.b	d2,d1
+    cmp.b   #"_",d1
+    bne.b   .1
+    moveq   #" ",d1
+.1	and.b	d2,d1
 	cmp.b	d0,d1
 	bne.b	.flop2
 	
 .flop3	move.b	(a1)+,d0
 	beq.b	.found
-	and.b	d2,d0
+    cmp.b   #"_",d0
+    bne.b   .4
+    moveq   #" ",d0
+.4	and.b	d2,d0
 	move.b	(a0)+,d1
 	beq.b	.notfound
-	and.b	d2,d1
+    cmp.b   #"_",d1
+    bne.b   .2
+    moveq   #" ",d1
+.2  and.b	d2,d1
 	cmp.b	d0,d1
 	beq.b	.flop3
 	subq	#1,a0
@@ -9428,7 +9927,6 @@ find_continue
 	move.l	d7,d0
 	DPRINT	"Found module at %ld"
  endc
-	bsr.w	forceRefreshList
 	moveq	#0,d0
 	rts
 
@@ -9492,8 +9990,8 @@ newButtonAction
 rbutton11
 	skipIfGadgetDisabled gadgetNewButton
 	st	new(a5)
-;	bsr.w	rbutton9		* Clear list
-	bra.w	rbutton1		* Play
+;	bsr	rbutton9		* Clear list
+	bra	rbutton1		* Play
 
 
 *******************************************************************************
@@ -9503,10 +10001,10 @@ mousemoving
 	movem.l	d0-a6,-(sp)
 ;	DPRINT	"mousemove"
 	lea	slider1,a2
-	bsr.w	rslider1
+	bsr	rslider1
 	lea	slider4,a2
-	bsr.w	rslider4
-	bsr.w	tooltipHandler
+	bsr	rslider4
+	bsr	tooltipHandler
 	movem.l	(sp)+,d0-a6
 	rts
 
@@ -9517,7 +10015,7 @@ mousemoving
 nextButtonAction:
 rbutton5
 	moveq	#1,d7		* liikutaan eteenp‰in listassa
-	bra.w	soitamodi
+	bra	soitamodi
 
 *******************************************************************************
 * Prev
@@ -9525,7 +10023,7 @@ rbutton5
 prevButtonAction:
 rbutton6
 	moveq	#-1,d7		* liikutaankin taakkep‰in listassa
-	bra.w	soitamodi
+	bra	soitamodi
 
 
 *******************************************************************************
@@ -9547,7 +10045,7 @@ songSkip
 
 	move	minsong(a5),d1 
 	move	maxsongs(a5),d2
-	bsr.w	clampWord
+	bsr	clampWord
 
 	DPRINT	"New song: %ld"
 	move	d0,songnumber(a5)
@@ -9558,11 +10056,11 @@ songSkip
 	jsr	p_song(a0)
 	st	playing(a5)
 	st	kelattiintaakse(a5)
-	bsr.w	settimestart
+	bsr	settimestart
 
-	bsr.w	inforivit_play
+	bsr	inforivit_play
 .err	
-	bsr.w	lootaan_aika
+	bsr	lootaan_aika
 .nosong
 	rts
 
@@ -9594,7 +10092,7 @@ rbutton3
 	and	p_liput(a0),d0
 	beq.b	.hehe
 
-	bsr.w	fadevolumedown
+	bsr	fadevolumedown
 	move	d0,-(sp)
 
 	* The "playing" flags is polled in the interrupts.
@@ -9604,7 +10102,7 @@ rbutton3
 	
 	move	(sp)+,mainvolume(a5)
 
-	bra.w	inforivit_pause
+	bra	inforivit_pause
 ;.hehe	rts
 
 *******************************************************************************
@@ -9628,9 +10126,9 @@ actionContinue
 	move.l	playerbase(a5),a0
 	jsr	p_cont(a0)
 
-	bsr.w	fadevolumeup
+	bsr	fadevolumeup
 
-	bra.w	inforivit_play
+	bra	inforivit_play
 ;	rts
 	
 *******************************************************************************
@@ -9649,25 +10147,25 @@ rbutton4a
 
 	tst.l	playingmodule(a5)
 	bpl.b	.hu
-	bra.w	freemodule
+	bra	freemodule
 .hu	
 	tst	d0
 	bne.b	.nofa
 
-	bsr.w	fadevolumedown
+	bsr	fadevolumedown
 
 .nofa	move	d0,-(sp)
 	DPRINT	"Replay end (eject)"
 
 	lore    Exec,Disable
-	bsr.w	halt
+	bsr	halt
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	lore    Exec,Enable
 	move.l	playerbase(a5),d0
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
 	
-	bsr.w	freemodule
+	bsr	freemodule
 	move	(sp)+,mainvolume(a5)
 	clr.b	movenode(a5)
 	rts
@@ -9679,24 +10177,24 @@ rbutton4a
 rbutton9
 	DPRINT	"clearListButtonAction"
 	skipIfGadgetDisabled gadgetNewButton
-	bsr.w	confirmFavoritesModification
+	jsr	confirmFavoritesModification
 	bne.b	clearlist
 	rts
 
 clearlist
 	clr.b	movenode(a5)
 	DPRINT  "clearlist"
-	bsr.w	setMainWindowWaitPointer
+	bsr	setMainWindowWaitPointer
 	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.isFav
-	bsr.w	freelist
+	bsr	freelist
 	bra.b	.done 
 .isFav
 	jsr	freeFavoriteList
 .done
 	DPRINT "clearlist done"
-	bsr.w	clearMainWindowWaitPointer
-	bra.w	shownames
+	bsr	clearMainWindowWaitPointer
+	bra	shownames
 
 *******************************************************************************
 * Volumegadgetti
@@ -9709,7 +10207,7 @@ rslider1
 	rts
 .new	move	d0,slider1old(a5)
 	moveq	#64,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	move	d0,mainvolume(a5)
 
 	tst.l	playingmodule(a5)
@@ -9787,15 +10285,15 @@ rslider4
 	bpl.b	.e
 	moveq	#0,d1
 .e
-	bsr.w 	mulu_32
+	bsr 	mulu_32
 	add.l	#32767>>1,d0		* round upwards
 	move.l	#65535>>1,d1 
-	bsr.w	divu_32
+	bsr	divu_32
 
 	cmp.l	firstname(a5),d0
 	beq.b	.q
 	move.l	d0,firstname(a5)
-	bra.w	showNamesNoCentering
+	bra	showNamesNoCentering
 
 *******************************************************************************
 * Suhteutetaan nuppi tiedostojen m‰‰r‰‰n
@@ -9808,13 +10306,13 @@ forceRefreshList:
 
 
 resh:	pushm	all
-	bsr.w	shownames
+	bsr	shownames
 	bsr.b	reslider
 	popm	all
 	rts
 
 * Resizes the box slider gadget according to the amount of modules in it
-reslider
+reslider:
 
 	* Calculate pi_vertBody, the vertical size of the prop gadget.
 	move.l	modamount(a5),d0
@@ -9823,20 +10321,20 @@ reslider
 .e
 	moveq	#0,d1
 	move	boxsize(a5),d1
-	beq.w	.eiup
+	beq	.eiup
 
 	cmp.l	d1,d0		* v‰h boxsize
 	bhs.b	.ok
 	move.l	d1,d0
 .ok
 	lsl.l	#8,d0
-	bsr.w	divu_32
+	bsr	divu_32
  	
 	move.l	d0,d1
 	move.l	#65535<<8,d0
-	bsr.w	divu_32
+	bsr	divu_32
 	move.l	d0,d1
-	bsr.w	.ch
+	bsr	.ch
 
  	; VertPot should be in range 0..$ffff
 
@@ -9866,8 +10364,8 @@ reslider
 	* scale down, +1 is needed to round upwards
 	* as the fractions get floored off
 	move.l	#65535,d1  * scale 
-	;bsr.w	mulu_32
-	bsr.w	mulu_64
+	;bsr	mulu_32
+	bsr	mulu_64
 	* d0:d1 now has a 64-bit value 
 
 	move.l	modamount(a5),d2
@@ -9878,12 +10376,12 @@ reslider
 	moveq	#1,d2	 	* avoid zero division
 .positive
 
-;	bsr.w	divu_32  * d0=d0/d1
-	bsr.w	divu_64	 
+;	bsr	divu_32  * d0=d0/d1
+	bsr	divu_64	 
 	* d0:d1 is now d0:d1/d2
 	* take the lower 32 bits
 	move.l	d1,d0	
-	bsr.w	.ch
+	bsr	.ch
 
 	cmp	pi_VertPot(a1),d0
 	sne	d4		* did it change compared to previous?
@@ -9951,7 +10449,7 @@ reslider
 	* Refresh one gadget
 	;lea	slider4,a0
 	endb	a0
-	bsr.w	refreshGadgetInA0
+	bsr	refreshGadgetInA0
 
 .eiup
 	rts
@@ -9979,20 +10477,20 @@ reslider
 * TODO: obtainModuleList
 * TODO: most of this is duplicated elsewhere? in signalreceived?
 
-playButtonAction
-rbutton1
+playButtonAction:
+rbutton1:
 	DPRINT  "playButtonAction"
 
 	tst.b	movenode(a5)
-	beq.w	.nomove
+	beq	.nomove
 
 **** Onko move p‰‰ll‰?
 	clr.b	movenode(a5)
 
-	bsr.w	getcurrent
+	bsr	getcurrent
 	bne.b	.gotCurrent
 	* No selection! Insert to beginning
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	a0,a3
 .gotCurrent
 
@@ -10002,9 +10500,9 @@ rbutton1
  endc
 
 	DPRINT  "playButtonAction obtain list"
-	bsr.w	obtainModuleList
+	bsr	obtainModuleList
 	;lea	moduleListHeader(a5),a0	* Insertoidaan node...
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	nodetomove(a5),a1
 	move.l	a3,a2
 	
@@ -10012,9 +10510,9 @@ rbutton1
 	addq.l	#1,modamount(a5)
 	addq.l	#1,chosenmodule(a5)	* valitaan movetettu node
 	DPRINT  "playButtonAction release list"
-	bsr.w	releaseModuleList
-	bsr.w	listChanged
-	bsr.w	forceRefreshList
+	bsr	releaseModuleList
+	bsr	listChanged
+	bsr	forceRefreshList
 	rts
 
 .nomove
@@ -10028,7 +10526,7 @@ rbutton1
 
 .newoe	;st	new2(a5)
 	st	haluttiinuusimodi(a5)
-	bra.w	rbutton7		* jos ei, ladataan...
+	bra	rbutton7		* jos ei, ladataan...
 
 .huh	move.l	chosenmodule(a5),d0	* onko valittua nime‰
 	bpl.b	.ere
@@ -10047,21 +10545,21 @@ rbutton1
 	move.b	tabularasa(a5),d3
 	clr.b	tabularasa(a5)
 	tst.b	d3
-	bne.w	soitamodi_random
+	bne	soitamodi_random
 
 	;tst.b	d1
-	;bne.w	soitamodi_random * soita randomi, now 'New' ja randomplay
-	;bsr.w	shownames
+	;bne	soitamodi_random * soita randomi, now 'New' ja randomplay
+	;bsr	shownames
 .xa
 
-	bsr.w	clear_random		* Tyhj‰x
-	bsr.w	setRandomTableEntry		* merkit‰‰n...
+	bsr	clear_random		* Tyhj‰x
+	bsr	setRandomTableEntry		* merkit‰‰n...
 
 * etsit‰‰n listasta vastaava tiedosto
 
 	DPRINT	"playbutton getListNode"
-	bsr.w	getListNode
-	beq.w	.erer
+	bsr	getListNode
+	beq	.erer
 	move.l 	a0,a3
 
 	* Is it a divider?
@@ -10077,23 +10575,23 @@ rbutton1
 
 	* skip over to the next module if this was a divider
 	TSTNODE	a3,a3
-	beq.w	.erer			* end of list reached?
+	beq	.erer			* end of list reached?
 							* try the next one
 	addq.l	#1,chosenmodule(a5)
-	bsr.w	resh
-	bra.w	.huh
+	bsr	resh
+	bra	.huh
 .je
 	cmp.l 	playingmodule(a5),d2	* onko sama kuin juuri soitettava??
-	bne.w	.new
+	bne	.new
 	* Special case: some delicustoms, SUNTronic modules,
 	* can't handle being started over, to be safe
 	* load these modules again before restarting.
 	cmp	#pt_delicustom,playertype(a5)
-	beq.w	.new
-	* Same with all EaglePlayers to be save.
+	beq	.new
+	* Same with all EaglePlayers to be safe.
 	* At least Tim Follin crashes.
 	cmp	#pt_eagle_start,playertype(a5)
-	bhs.w	.new
+	bhs	.new
 	* Similar case with SonicArranger with built-in
 	* replayer code. Data is modified upon init so that
 	* subsequent inits with same data will fail as
@@ -10103,33 +10601,38 @@ rbutton1
 	* Check for "compact" SA module
 	move.l  moduleaddress(a5),a0 
 	cmp.l	#'SOAR',(a0)
-	bne.w 	.new
+	bne 	.new
 .notSoar
 	DPRINT	"Restarting the same module!"
 ;.early
-	bsr.w	fadevolumedown
+	bsr	fadevolumedown
 	move	d0,-(sp)
 
 
 	DPRINT	"Replay end"
 * Soitetaan vaan alusta
-	;lore	Exec,Disable
-	bsr.w	halt
-	;lore    Exec,Enable
+    push    a3
+	bsr	halt
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
+    pop     a3
 	move	(sp)+,mainvolume(a5)
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  "/// fav song: %ld"
+
+	DPRINT	"/// Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
-	bne.w	.inierr
+	bne	.inierr
 
 	st	playing(a5)		* Ei varmaan tuu initerroria
-	bsr.w	settimestart
-	bsr.w	inforivit_play
-	bra.w	start_info
+	bsr	settimestart
+	bsr	inforivit_play
+	bra	start_info
 	;rts
 
 .new	moveq	#0,d7
@@ -10137,18 +10640,22 @@ rbutton1
 	bmi.b	.nomod
 
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki p‰‰ll‰?
+    tst.b   l_remote(a3)
+    beq.b   .notRem1
+    moveq   #0,d7 * disable for remotes!
+.notRem1
+    tst.b   d7
 	bne.b	.nomod
 
-	bsr.w	fadevolumedown
+	bsr	fadevolumedown
 	move	d0,-(sp)
 	DPRINT	"Replay end"
-
-	;lore	Exec,Disable
-	bsr.w	halt			* Vapautetaan se jos on
-	;lore 	Exec,Enable
+    push    d7          * save this!
+	bsr	halt			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
-	bsr.w	freemodule	
+	bsr	freemodule	
+    pop     d7
 	move	(sp)+,mainvolume(a5)
 .nomod
 
@@ -10156,20 +10663,32 @@ rbutton1
 
 	lea	l_filename(a3),a0	* Ladataan
 	move.b	d7,d0 * double buffering flag
+    tst.b   l_remote(a3)
+    beq.b   .notRem2
+    moveq   #0,d7 * disable for remotes!
+    DPRINT  "DISABLE double buffering 1"
+.notRem2
+    push    a3
 	jsr	loadmodule
+    pop     a3
 	tst.l	d0
 	bne.b	.loader
 
-	DPRINT	"Replay init"
+    moveq   #0,d0
+    move.b  l_favSong(a3),d0
+    move    d0,songnumber(a5)
+    DPRINT  ":;: fav song: %ld"
+
+	DPRINT	":;: Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
 	tst.l	d0
 	bne.b	.inierr
 
-	bsr.w	settimestart
+	bsr	settimestart
 .reet0	st	playing(a5)
-	bsr.w	inforivit_play
-	bsr.w	start_info
+	bsr	inforivit_play
+	bsr	start_info
 .erer
 	rts
 
@@ -10183,7 +10702,7 @@ rbutton1
 .inierr	
 	DPRINT	"Replay init ERROR"
 	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
-	bra.w	init_error
+	bra	init_error
 ;	rts
 
 halt:	clr.b	playing(a5)	
@@ -10201,17 +10720,17 @@ halt:	clr.b	playing(a5)
 insertButtonAction
 rinsert
 	tst.l	modamount(a5)
-	beq.w	rbutton7
+	beq	rbutton7
 	bsr.b	rinsert2
-	bra.w	rbutton7
+	bra	rbutton7
 
 rinsert2
 	move.l	chosenmodule(a5),d0
 
 * etsit‰‰n listasta vastaava kohta
 	DPRINT	"insert getListNode"
-	bsr.w	getListNode
-	beq.w	rbutton7		* go to "add"
+	bsr	getListNode
+	beq	rbutton7		* go to "add"
 
 * a0 = valittu nimi
 	move.l	a0,fileinsert(a5)
@@ -10228,19 +10747,19 @@ add_divider
 	skipIfGadgetDisabled gadgetMoveButton
 	
 	DPRINT  "add_divider obtain list"
-	bsr.w	obtainModuleList
+	bsr	obtainModuleList
 	tst.l	modamount(a5)
-	beq.w	.x
+	beq	.x
 	move.l	chosenmodule(a5),d0
-	bmi.w	.x
+	bmi	.x
 ;	subq	#1,d0			* valitun nimen edellinen node
 
 	DPRINT	"addDivider getListNode"
-	bsr.w	getListNode
+	bsr	getListNode
 	beq.b	.x
 	move.l	a0,a3
 
-	bsr.w	get_rt
+	bsr	get_rt
 
 	push	a3
 	lea	divider(a5),a1	
@@ -10248,9 +10767,9 @@ add_divider
 	sub.l	a3,a3
 	lea	.tags(pc),a0
 	lea	.ti(pc),a2
-	bsr.w	setMainWindowWaitPointer
+	bsr	setMainWindowWaitPointer
 	lob	rtGetStringA
-	bsr.w	clearMainWindowWaitPointer
+	bsr	clearMainWindowWaitPointer
 	pop	a3
 	tst.l	d0
 	beq.b	.x
@@ -10260,7 +10779,7 @@ add_divider
 	* Divider, reserve 30 bytes for the name. 27 bytes from above, one char from below
 	moveq	#l_size+30,d0
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	beq.b	.x
 	move.l	d0,a1
 
@@ -10273,15 +10792,15 @@ add_divider
 	
 * a1 = insertattava nimi
 ;	lea	moduleListHeader(a5),a0
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	a3,a2
 	lore	Exec,Insert
-	bsr.w	listChanged
-	bsr.w	forceRefreshList
+	bsr	listChanged
+	bsr	forceRefreshList
 
 .x	
 	DPRINT  "add_divider release list"
-	bsr.w		releaseModuleList
+	bsr		releaseModuleList
 	rts
 
 .ti	dc.b	"Add divider",0
@@ -10311,7 +10830,7 @@ rbutton7
 .skip
 	rts
 .ook	
-	bsr.w	confirmFavoritesModification
+	bsr	confirmFavoritesModification
 	beq.b	.skip
 
 	* Another functionality in these list modes:
@@ -10360,7 +10879,7 @@ filereq_code
 	lore	Exec,Forbid
 
 	move.b	fileReqSignal(a5),d1	* Send signal, all done
-	bsr.w	signalit
+	bsr	signalit
 	clr.b	filereqmode(a5)
 
 	clr	filereq_prosessi(a5)	* Lippu: prosessi poistettu
@@ -10368,9 +10887,9 @@ filereq_code
 	
 * Varsinainen operaatio alkaa t‰st‰..
 .filer
-	bsr.w	tokenizepattern
+	bsr	tokenizepattern
 
-	bsr.w	get_rt
+	bsr	get_rt
 	tst.l	req_file(a5)
 	bne.b	.onfi
 	moveq	#RT_FILEREQ,D0
@@ -10407,7 +10926,7 @@ filereq_code
 	* When set once, filereq will remember the 
 	* last user dir.
 	move.l	lastStoredFileReqDirectory(a5),a0 
-	bsr.w		freemem
+	bsr		freemem
 	clr.l	lastStoredFileReqDirectory(a5)
 
 .eimuut
@@ -10431,8 +10950,8 @@ filereq_code
 	* the list structure.
 
 	DPRINT  "filereq_code obtain list"
-	bsr.w		obtainModuleList
-	bsr.w		lockMainWindow
+	bsr		obtainModuleList
+	bsr		lockMainWindow
 	pop 	d0
 	bsr.b	.processResult
 
@@ -10445,8 +10964,8 @@ filereq_code
 .noFileList
 
 	DPRINT  "filereq_code release list"
-	bsr.w		releaseModuleList
-	bsr.w		unlockMainWindow
+	bsr		releaseModuleList
+	bsr		unlockMainWindow
 	rts
 
 .processResult
@@ -10455,19 +10974,19 @@ filereq_code
 	bne.b	.val
 
 	move.b	#$7f,new(a5)		* new-lippu: cancel
-	bra.w	.fileReqCancelled
+	bra	.fileReqCancelled
 .val
 
 	tst.b	new(a5)			* jos 'new', clearataan lista.
 	beq.b	.non1
-	bsr.w	clearlist
+	bsr	clearlist
 .non1
 
  ifne fprog
 	bsr	openfilewin
  endc
 
-	bsr.w	parsereqdir		* Tehd‰‰n hakemistopolku..
+	bsr	parsereqdir		* Tehd‰‰n hakemistopolku..
 
 * We will now normalize the directory given to us by ReqTools
 * This creates consistent paths everytime,
@@ -10495,10 +11014,10 @@ filereq_code
 ***** K‰sitell‰‰n valitut hakemistot 
 
 	cmp.l	#-1,rtfl_StrLen(a4)	* onko hakemisto?????
-	bne.w	.file				* reqtools-listan file
+	bne	.file				* reqtools-listan file
 
 	move.l	rtfl_Name(a4),a0	* hakemiston nimi
-	bsr.w	adddivider
+	bsr	adddivider
 
 * rtfl_Name(a4)	= hakemisto 2
 * tempdir(a5) = hakemisto 1
@@ -10534,8 +11053,8 @@ filereq_code
 	popm	all
 	lea	200(sp),sp
 
-	bsr.w	.dirdiv
-	bra.w	.skip
+	bsr	.dirdiv
+	bra	.skip
 
 
 * recursively scan directory
@@ -10557,15 +11076,15 @@ filereq_code
 	* space for counter and path pointers	
 	move.l	#.MAX_SUBDIRS_TO_SCAN*4+2,d0	
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,d7
-	beq.w	.errd
+	beq	.errd
 
 	* Get a lock on dir.
 	* This will succeed even on an empty string, it will then
 	* be a lock on SYS:. Add a paranoia check for that.
 	tst.b	(a4)
-	beq.w	.errd
+	beq	.errd
 	move.l	a4,d1
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
@@ -10573,9 +11092,9 @@ filereq_code
   if DEBUG
 	bne.b	.lockOk
 	DPRINT	"Lock failed!"
-	bra.w 	.errd
+	bra 	.errd
   else 
-	beq.w	.errd
+	beq	.errd
   endif
 .lockOk
 	* Examine it
@@ -10583,18 +11102,18 @@ filereq_code
 	pushpea	fileinfoblock2(a5),d2
 	lob	Examine
 	tst.l	d0
-	beq.w	.errd
+	beq	.errd
 
 
 .loopo	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
-	bhs.w	.errd
+	bhs	.errd
 
 	move.l	d6,d1
 	pushpea	fileinfoblock2(a5),d2
 	lore	Dos,ExNext
 	* No more items to check in directory?
 	tst.l	d0
-	beq.w	.dodirs	
+	beq	.dodirs	
 
 	* Success! What is it?
 	* ST_ROOT=1
@@ -10607,11 +11126,11 @@ filereq_code
 
 	move.l	fib_DirEntryType+fileinfoblock2(a5),d0
 	cmp.l	#ST_FILE,d0
-	beq.w	.filetta
+	beq	.filetta
 	cmp.l	#ST_LINKFILE,d0
-	beq.w	.filetta
+	beq	.filetta
 	cmp.l	#ST_USERDIR,d0
-	bne.w	.unsupportedEntry
+	bne	.unsupportedEntry
 
 	* It was a directory. Store it for later, this way
 	* files in the directory get placed first in the list,
@@ -10625,7 +11144,7 @@ filereq_code
 .MAX_PATH_LEN = 200
 	move.l	#.MAX_PATH_LEN,d0
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,a1
 	tst.l	d0
 	beq.b	.lc0
@@ -10663,20 +11182,20 @@ filereq_code
  endif
 
 	cmp	#.MAX_SUBDIRS_TO_SCAN,d1
-	bhs.w	.loopo
+	bhs	.loopo
 	* add one path pointer and increment counter
 	addq	#1,(a0)+
 	lsl	#2,d1
 	move.l	d0,(a0,d1)
 .lc0
-	bra.w	.loopo
+	bra	.loopo
 
 .pathOverflow
 	DPRINT	"Path name overflow!"
-	bra.w	.loopo
+	bra	.loopo
 .unsupportedEntry
 	DPRINT	"Unsupported entry: %ld"
-	bra.w	.loopo
+	bra	.loopo
 
 **** skannattuamme yhden hakemiston tutkitaan siin‰ olleet muut hakemistot
 * Files scanned, now check the subdirs.
@@ -10691,7 +11210,7 @@ filereq_code
 .io
  endif
 	;tst.b	uusikick(a5)		* rekursiivinen vain kick2.0+
-	;beq.w	.errd
+	;beq	.errd
 	* Allow recursion into directories with kick1.3 too!
 	pushm	all
 
@@ -10718,7 +11237,7 @@ filereq_code
 	move.l	a0,d3	* store this for later
 	move.l	d6,a1
 	subq	#2,a0	* skip last NULL and separator
-	bsr.w	nimenalku
+	bsr	nimenalku
 	* a0 = last part of the path
 
 	* Add a named divider from a0
@@ -10726,7 +11245,7 @@ filereq_code
 	move.l	d3,a1
 	move.b	-2(a1),d0
 	clr.b	-2(a1)
-	bsr.w	adddivider	* all regs preserved
+	bsr	adddivider	* all regs preserved
 	move.b	d0,-2(a1)
 
 	pushm	all
@@ -10736,9 +11255,9 @@ filereq_code
 	* path to scan
 	move.l	d6,d2
 	* scan it
-	bsr.w	.scanni
+	bsr	.scanni
 	; Add end-of-directory divider
-	bsr.w	.dirdiv
+	bsr	.dirdiv
 	popm	all
 	dbf	d5,.dodirsLoop
 
@@ -10759,7 +11278,7 @@ filereq_code
 	lore	Dos,MatchPatternNoCase
 	pop	a6
 	tst.l	d0			* kelpaako vaiko eik¯?
-	beq.w	.loopo
+	beq	.loopo
 .yas
 
 	* allocate memory for list node
@@ -10775,9 +11294,9 @@ filereq_code
 	add.l	a1,d0
 	move.l	d0,d2		* TODO: whats this
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1
-	bsr.w	getmem
+	bsr	getmem
 	bne.b	.gotMem2
-	bsr.w	showOutOfMemoryError
+	bsr	showOutOfMemoryError
 	bra.b	.errd
 .gotMem2
 	move.l	d0,a3		* a3 = listunit
@@ -10794,8 +11313,8 @@ filereq_code
 	move.b	(a0)+,(a1)+
 	bne.b	.c3
 
-	bsr.w	addfile
-	bra.w	.loopo
+	bsr	addfile
+	bra	.loopo
 
 .errd	
 	move.l	d6,d1
@@ -10813,11 +11332,11 @@ filereq_code
 	subq	#1,d3
 
 .erde2	move.l	(a3)+,a0
-	bsr.w	freemem
+	bsr	freemem
 	dbf	d3,.erde2
 .erde1
 	move.l	d7,a0		
-	bsr.w	freemem
+	bsr	freemem
 .erde0
 	rts
 
@@ -10835,9 +11354,9 @@ filereq_code
 	addq.l	#1,d0				* space for terminating zero
 
 	move.l	#MEMF_CLEAR!MEMF_PUBLIC,d1		* varataan muistia
-	bsr.w	getmem
+	bsr	getmem
 	bne.b	.gotMem
-	bsr.w	showOutOfMemoryError
+	bsr	showOutOfMemoryError
 	bra.b	.whoops2
 .gotMem
 	move.l	d0,a3
@@ -10863,7 +11382,7 @@ filereq_code
 	move.l	rtfl_Next(a4),d0	* Joko loppui?
 	beq.b	.whoops3
 	move.l	d0,a4
-	bra.w	.buildlist
+	bra	.buildlist
 
 .whoops2
 .whoops	
@@ -10886,7 +11405,7 @@ filereq_code
 
 .overload
 	lea	.t(pc),a1
-	bsr.w	request
+	bsr	request
 	bra.b	.whoops
 
 
@@ -10908,7 +11427,7 @@ addfile:
 
 	addq.l	#1,modamount(a5)
 	move.l	(a5),a6
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	a3,a1
 
 	tst.b	filereqmode(a5)		* onko add vai insert?
@@ -10940,12 +11459,12 @@ adddivider:
 
 	* Check configuration flag for automatically added dividers
 	tst.b	divdir(a5)
-	beq.w	.meek
+	beq	.meek
 	move.l	a0,a2
 
 ** testataan onko dirdivideri? jos on, pistet‰‰n sen p‰‰lle
 	;lea	moduleListHeader(a5),a3
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	a0,a3
 	move.l	MLH_TAILPRED(a3),d0    * this points to the last element of the list
 	beq.b	.pehe
@@ -10979,7 +11498,7 @@ adddivider:
 
 	moveq	#l_size+30,d0
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	beq.b	.meek
 
 	move.l	d0,a3
@@ -11043,7 +11562,7 @@ adddivider:
 	clr.b	(a2)
 	tst.b	d7		* did we overwrite an old one? 
 	bne.b	.noAdd
-	bsr.w	addfile		* no, let's add
+	bsr	addfile		* no, let's add
 .noAdd
 
 .meek	popm	all
@@ -11090,14 +11609,13 @@ copyCurrentEntryToMainList
 
 	move.l	a3,a0
 	jsr		cloneListNode
+    * NOTE: d0 status not checked 
 	* a4 = cloned node
 
 	move.l	a4,a1
 	lea		moduleListHeader(a5),a0
 	lore	Exec,AddTail
-
-	bsr		.flash
-	rts
+	bra		.flash
 .nope
 	DPRINT	"Not found"
 	rts
@@ -11121,9 +11639,8 @@ copyCurrentEntryToMainList
 	bsr		markit
 	moveq	#2,d1
 	lore	Dos,Delay
-	bsr		markit
-	rts
-
+	bra		markit
+	
 .addFolder
 	lea		l_filename(a3),a0
 .1	tst.b	(a0)+
@@ -11169,9 +11686,8 @@ copyCurrentEntryToMainList
 	lea		200(sp),sp
 
 	move.b	#LISTMODE_BROWSER,listMode(a5)
-	bsr.w	listChanged
-	bsr		.flash
-	rts
+	bsr	listChanged
+	bra		.flash
 
 
 
@@ -11191,7 +11707,7 @@ openfilewin
 	pushm	all
 
 	move.l	screenaddr(a5),d0
-	beq.w	.x
+	beq	.x
 	move.l	d0,a0
 
 	move	sc_MouseX(a0),d6
@@ -11213,11 +11729,11 @@ openfilewin
 
 
 
-	bsr.w	tark_mahtu
+	bsr	tark_mahtu
 
 	lore	Intui,OpenWindow
 	move.l	d0,d5
-	beq.w	.x
+	beq	.x
 	move.l	d0,a0
 	move.l	wd_RPort(a0),d7		* rastport
 
@@ -11244,7 +11760,7 @@ openfilewin
 	move	nw_Height(a0),ply2
 	subq	#1,ply2
 	subq	#1,plx2
-	bsr.w	laatikko2
+	bsr	laatikko2
 
 	move	modamount(a5),fileamount
 
@@ -11331,7 +11847,7 @@ winfile
 *******
 freelist:
 	DPRINT  "freelist obtain list"
-	bsr.w		obtainModuleList
+	bsr		obtainModuleList
 	tst.l		modamount(a5)
 	beq.b	.listEmpty
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
@@ -11349,23 +11865,23 @@ freelist:
 	beq.b	.listFreed
 	move.l	d0,a0
 
-	bsr.w	freemem
+	bsr	freemem
 	bra.b	.freelist_loop
 
 .listFreed
 	* no longer modules in list, at all
 	clr.l	modamount(a5) 
 	* need to reset random table to nothingness as well
-	bsr.w	clear_random
-	bsr.w	clearCachedNode
+	bsr	clear_random
+	bsr	clearCachedNode
 
 	* reset list slider and list box 
 	clr.l	firstname(a5)	
-	bsr.w	reslider
+	bsr	reslider
 
 .listEmpty
 	DPRINT  "freelist release list"
-	bsr.w	releaseModuleList
+	bsr	releaseModuleList
 	rts
 
 
@@ -11414,18 +11930,18 @@ rloadprog
 
 rloadprogDoIt
 
-	bsr.w 	setMainWindowWaitPointer
+	bsr 	setMainWindowWaitPointer
 	DPRINT  "rloadprog obtain list"
-	bsr.w	obtainModuleList
+	bsr	obtainModuleList
 	bsr.b 	.doLoadProgram
-	bsr.w	 clearMainWindowWaitPointer
+	bsr	 clearMainWindowWaitPointer
 	DPRINT  "rloadprog release list"
-	bsr.w	releaseModuleList
+	bsr	releaseModuleList
 	rts
 
 .doLoadProgram
 	tst	filereq_prosessi(a5)
-	bne.w	.kex
+	bne	.kex
 
 	bsr.b	.showLoadingProgram
 	bra.b	.dd
@@ -11433,7 +11949,7 @@ rloadprogDoIt
 .showLoadingProgram
 	pushm	all
 	lea	.t(pc),a0
-	bsr.w	printbox
+	bsr	printbox
 	popm	all
 	rts
 .t	dc.b	"Loading module program...",0
@@ -11445,12 +11961,12 @@ rloadprogDoIt
 	tst.l	d7
 	bne.b	.loe
 
-	bsr.w	get_rt
+	bsr	get_rt
 	moveq	#RT_FILEREQ,D0
 	sub.l	a0,a0
 	lob	rtAllocRequestA
 	move.l	d0,req_file2(a5)
-	beq.w	.kex
+	beq	.kex
 
 	move.l	d0,a1			* Vaihdetaan hakemistoa...
 	lea	newdir_tags(pc),a0
@@ -11469,9 +11985,9 @@ rloadprogDoIt
 	lea	filereqtitle2(pc),a3
 	lob	rtFileRequestA		* ReqToolsin tiedostovalikko
 	tst.l	d0
-	beq.w	.kex
+	beq	.kex
 	move.l	req_file2(a5),a0
-	bsr.w	parsereqdir3
+	bsr	parsereqdir3
 
 	lea	tempdir(a5),a0		* kopioidaan polku ja nimi yhdeksi
 	lea	filename2(a5),a1
@@ -11486,7 +12002,7 @@ rloadprogDoIt
 .loe	
 	tst.b	lprgadd(a5)		* ei putsata jos addataan
 	bne.b	.yad
-	bsr.w	freelist		* putsataan vanha lista
+	bsr	freelist		* putsataan vanha lista
 .yad
 
 	lea	filename2(a5),a0
@@ -11495,7 +12011,7 @@ rloadprogDoIt
 	move.l	d7,a0
 .ewew
 	moveq	#0,d4
-.loadp
+.loadp:
 	move.b	lprgadd(a5),d7
 	clr.b	lprgadd(a5)
 
@@ -11516,7 +12032,7 @@ rloadprogDoIt
 	move.l	#1005,d2
 	lob	Open
 	move.l	d0,d6
-	beq.w	.openerr
+	beq	.openerr
 
 	move.l	d6,d1		* selvitet‰‰n filen pituus
 	moveq	#0,d2	
@@ -11536,7 +12052,7 @@ rloadprogDoIt
 	move.l	d5,d0		* muistia listalle
 	DPRINT	"Allocating %ld for list"
 	moveq	#MEMF_PUBLIC,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,a3
 	bne.b	.gotMem
 
@@ -11544,10 +12060,10 @@ rloadprogDoIt
 .bailOut
 	moveq	#0,d5	* memory address for freemem 
 .bailOut2
-	bsr.w	showOutOfMemoryError
+	bsr	showOutOfMemoryError
 	move.l	d6,d1
 	lob	Close
-	bra.w	.x2
+	bra	.x2
 .gotMem
 	* We will need at least another d5 since
 	* the list needs to be created.
@@ -11580,16 +12096,16 @@ rloadprogDoIt
 	lob	Close
 
 	cmp.l	(sp)+,d5	* read error?
-	bne.w	.x2
+	bne	.x2
 
 ** A3:ssa moduulilista
 ** jos on xpk pakattu, pit‰‰ purkaakkin.
 
 	cmp.l	#"XPKF",(a3)
-	bne.w	.nox
+	bne	.nox
 
 	jsr	get_xpk
-	beq.w	.what
+	beq	.what
 
 	cmp.l	#"HiPP",16(a3)	* uusi formaatti?
 	bne.b	.nu
@@ -11597,13 +12113,13 @@ rloadprogDoIt
 	beq.b	.nyy
 .nu
 	cmp.l	#"HIPP",16(a3)	* tunnistus, vanha formaatti?
-	bne.w	.what
+	bne	.what
 	cmp	#"RO",20(a3)
-	bne.w	.what
+	bne	.what
 .nyy
 
 	move.l	a3,a0
-	bsr.w	freemem
+	bsr	freemem
 
 	lea	.tagz(pc),a0
 	clr.l	.len-.tagz(a0)
@@ -11614,8 +12130,8 @@ rloadprogDoIt
 	* no freeing later:
 	moveq	#0,d5
 	lea	xpk_module_program_error(pc),a1
-	bsr.w	request
-	bra.w	.x2
+	bsr	request
+	bra	.x2
 .xpkOk
 
 	move.l	.addr(pc),a3
@@ -11658,7 +12174,7 @@ rloadprogDoIt
 	pushm 	d1-a6
 	lea		moduleListHeader(a5),a2
 	move.l	.loppu(pc),a4 
-	bsr.w	importModuleProgramFromData
+	bsr	importModuleProgramFromData
 	DPRINT 	"Imported %ld files"
 	popm	d1-a6
 
@@ -11688,7 +12204,7 @@ rloadprogDoIt
 .xx0
 	
 	move.l	d5,a0
-	bsr.w	freemem
+	bsr	freemem
 .xxx
 
 	sub.l	a4,a4
@@ -11704,19 +12220,19 @@ rloadprogDoIt
 .ex
 
 	clr.l	chosenmodule(a5)	* moduuliksi eka
-.kex	bsr.w	listChanged
-	bsr.w	forceRefreshList
+.kex	bsr	listChanged
+	bsr	forceRefreshList
 	rts
 
 .what
 	lea	unknown_module_program_error(pc),a1
-	bsr.w	request
+	bsr	request
 	bra.b	.x2
 
 .openerr
 	move	#1,a4			* lippu
 	lea	openerror_t,a1
-	bsr.w	request
+	bsr	request
 	bra.b	.x1
 
 
@@ -11726,7 +12242,7 @@ rloadprogDoIt
 * riippuen prefs-s‰‰dˆist‰.
 * Jos ohjelmaa ei saatu ladattua, niin pistet‰‰n filerequesteri.
 
-	bsr.w	vastomaviesti
+	bsr	vastomaviesti
 
 	cmp	#1,a4	* avausvirhe? -> ei tehd‰ mit‰‰n
 	bne.b	.r
@@ -11740,12 +12256,12 @@ rloadprogDoIt
 	bhi.b	.noran
 	
 	subq.l	#1,d0
-.b	bsr.w	getRandomValue
+.b	bsr	getRandomValue
 	cmp.l	d0,d1
 	bhi.b	.b
 		
 	move.l	d1,d0
-	bsr.w	setRandomTableEntry
+	bsr	setRandomTableEntry
 
 	move.l	d1,chosenmodule(a5)
 	bra.b	.eh
@@ -11753,11 +12269,11 @@ rloadprogDoIt
 .noran	clr.l	chosenmodule(a5)
 
 .eh	
-	bsr.w	forceRefreshList
-	bra.w	rbutton1	* Play
+	bsr	forceRefreshList
+	bra	rbutton1	* Play
 
-.blob	bsr.w	.showLoadingProgram
-	bra.w	.loadp
+.blob	bsr	.showLoadingProgram
+	bra	.loadp
 
 
 .tags
@@ -11772,8 +12288,13 @@ otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
 *   a0 = module program file name
 *   d4 = some magic flag?
 *   d7 = some other magic flag?
-loadprog
-	DPRINT	"loadprog"
+loadprog:
+ if DEBUG
+    push    d0
+    move.l  a0,d0
+	DPRINT	"loadprog %s"
+    pop     d0
+ endif
 	* Ensure correct list mode
 	jsr	engageNormalMode
 	bra.b	rloadprogDoIt\.blob
@@ -11823,7 +12344,7 @@ importModuleProgramFromData:
 	moveq	#0,d7 		* count
 	
 	move.l	a3,d0
-	beq.w	.x2
+	beq	.x2
 
 	sub.l	a6,a6		* no filter
 	moveq	#0,d4		* no line header
@@ -11861,12 +12382,11 @@ importModuleProgramFromData:
 .skipToNext
 	* Skip to next entry
 	cmp.l	d5,a3
-	bhs.w	.x2		* upper bound check
+	bhs	.x2		* upper bound check
 	cmp.b	#10,(a3)+
 	bne.b	.skipToNext
 	bra		.next
 .accepted
-
 
 	* Is this an url?
 	moveq	#0,d3	* local
@@ -11878,26 +12398,35 @@ importModuleProgramFromData:
 	bne.b	.local
 	cmp.b	#"p",3(a3)
 	bne.b	.local
-	move	#1,d3	* remote
+	moveq	#1,d3	* remote
 .local
-
+    
 	move.l	a3,a0
 	moveq	#10,d1
 .r23	
 	cmp.l	d5,a0
-	bhs.w	.x2		* upper bound check
+	bhs	.x2		* upper bound check
 	;cmp.b	#10,(a0)+
 	cmp.b	(a0)+,d1
 	bne.b	.r23
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
 
+    * Too short? Skip
+    cmp.l   #5,d0
+    bhi     .len1
+.lenSkip
+    add.l   d0,a3
+    bra     .next
+.len1
+    
 	add.l	#1+l_size,d0	* nolla nimen per‰‰n ja listayksikˆn pituus
-	add.l	d4,d0	* add extra header space if any
+    add.l	d4,d0	* add extra header space if any
+
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	bne.b	.gotMem2
-	bsr.w	showOutOfMemoryError
+	bsr	showOutOfMemoryError
 	bra		.x2	
 .gotMem2
 	move.l	d0,a2
@@ -11905,11 +12434,22 @@ importModuleProgramFromData:
 	* Copy filename 
 	lea	l_filename(a2),a0
 
+    * UTF8 encoding for divider magic: $c3b7
+    cmp.b   #$c3,(a3)
+    bne     .div0
+    cmp.b   #$b7,1(a3)
+    bne     .div0
+	addq	#2,a3
+	st	    l_divider(a2)
+    bra     .utf8div
+.div0
+    * Amiga encoding:
 	cmp.b	#DIVIDER_MAGIC,(a3)
 	bne.b	.notDiv2
 	addq	#1,a3
 	st	l_divider(a2)
 .notDiv2
+.utf8div
 
 	* See if additional header should
 	* be prepended to the line. This indicates
@@ -11928,6 +12468,33 @@ importModuleProgramFromData:
 	moveq	#10,d1
 .le	
 	move.b	(a3)+,d2
+    * Painfully check for "#song=x"
+    cmp.b   #"#",d2
+    bne.b   .1
+    cmp.b   (a3),d1
+    beq     .1
+    cmp.b   #"s",(a3)
+    bne     .1
+    cmp.b   1(a3),d1
+    beq     .1
+    cmp.b   #"o",1(a3)
+    bne     .1
+    cmp.b   2(a3),d1
+    beq     .1
+    cmp.b   #"n",2(a3)
+    bne     .1
+    cmp.b   3(a3),d1
+    beq     .1
+    cmp.b   #"g",3(a3)
+    bne     .1
+    moveq   #$f,d0
+    and.b   5(a3),d0
+    DPRINT  "FavSong restored=%ld" 
+    move.b  d0,l_favSong(a2)
+    * Replace with LF to ignore the rest
+    move.b  d1,d2
+    addq    #7,a3
+.1
 	move.b	d2,(a0)+
 	cmp.b	d1,d2
 	bne.b	.le
@@ -11947,7 +12514,7 @@ importModuleProgramFromData:
 	jsr		configRemoteNode
 	bra.b	.wasRemote
 .wasLocal
-	bsr.w	nimenalku
+	bsr	nimenalku
 .wasDiv
 	move.l	a0,l_nameaddr(a2)
 .wasRemote
@@ -11972,7 +12539,7 @@ importModuleProgramFromData:
 .next
 	* Go until at the end of given buffer
 	cmp.l	d5,a3
-	blo.w	.ploop
+	blo	.ploop
 .x2
 	move.l	d7,d0
 	popm	d1-a6
@@ -11981,7 +12548,7 @@ importModuleProgramFromData:
 * unknown format
 .what
 	lea	unknown_module_program_error(pc),a1
-	bsr.w	request
+	bsr	request
 	bra.b  	.x2
 
 unknown_module_program_error  dc.b	"Not a module program!",0
@@ -12012,29 +12579,29 @@ rsaveprog
 	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.x
 	DPRINT  "rsaveprog obtain list"
-	bsr.w 	obtainModuleList
-	bsr.w	 setMainWindowWaitPointer
+	bsr 	obtainModuleList
+	bsr	 setMainWindowWaitPointer
 	bsr.b	.doSaveProg
-	bsr.w 	clearMainWindowWaitPointer
+	bsr 	clearMainWindowWaitPointer
 	DPRINT  "rloadprog release list"
-	bsr.w 	releaseModuleList
+	bsr 	releaseModuleList
 .x	rts
 
 .doSaveProg
 	clr.b	movenode(a5)
 
 	tst	filereq_prosessi(a5)
-	bne.w	.ex
+	bne	.ex
 
 	tst.l	modamount(a5)
-	beq.w	.nomods
+	beq	.nomods
 
-	bsr.w	get_rt
+	bsr	get_rt
 	moveq	#RT_FILEREQ,D0
 	sub.l	a0,a0
 	lob	rtAllocRequestA
 	move.l	d0,req_file2(a5)
-	beq.w	.ex
+	beq	.ex
 
 	move.l	d0,a1			* Vaihdetaan hakemistoa...
 	lea	newdir_tags(pc),a0
@@ -12048,7 +12615,7 @@ rsaveprog
 
 
 	lea	.t(pc),a0
-	bsr.w	printbox
+	bsr	printbox
 	bra.b	.d
 .t	dc.b	"Saving module program...",0
  even
@@ -12064,7 +12631,7 @@ rsaveprog
 	tst.l	d0
 	beq.b	.ex
 	move.l	req_file2(a5),a0
-	bsr.w	parsereqdir3
+	bsr	parsereqdir3
 
 	lea	tempdir(a5),a0		* kopioidaan polku ja nimi yhdeksi
 	lea	filename2(a5),a1
@@ -12091,11 +12658,11 @@ rsaveprog
 	lob	rtFreeRequest
 .ex
 
-	bsr.w	forceRefreshList
+	bsr	forceRefreshList
 	rts
 
 .nomods	lea	.lerr(pc),a1
-	bra.w	request
+	bra	request
 
 .lerr	dc.b	"No program to save!",0
  even
@@ -12117,10 +12684,17 @@ filereqtitle3
 
 
 
+exportModuleProgramToFileWithSongMetaData:
+    moveq   #1,d7
+    bra     doExportModuleProgramToFile
+
 * in:
 *  a0 = filename
 *  a1 = list
+*  d0 = 1: export #song data, 0: don't export #song data
 exportModuleProgramToFile:
+    moveq   #0,d7
+doExportModuleProgramToFile:
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"Exporting module list to %s"
@@ -12143,10 +12717,11 @@ exportModuleProgramToFile:
 .saveloop
 	* Get next and test for end
 	TSTNODE	a4,a3
-	beq.b	.exit
+	beq 	.exit
 	move.l	a3,a4
 
-	lea	-200(sp),sp
+    * For very big radio station urls
+	lea	-1000(sp),sp
 	move.l	sp,a1
 
 	lea	l_filename(a3),a0
@@ -12159,6 +12734,36 @@ exportModuleProgramToFile:
 .co	move.b	(a0)+,(a1)+
 	bne.b	.co
 	subq	#1,a1
+
+    tst.b   l_separateName(a3)
+    beq.b   .noAdd
+    move.b  #"#",(a1)+
+    move.b  #"n",(a1)+
+    move.b  #"a",(a1)+
+    move.b  #"m",(a1)+
+    move.b  #"e",(a1)+
+    move.b  #"=",(a1)+
+    move.l  l_nameaddr(a3),a0
+.c2 move.b  (a0)+,(a1)+
+    bne.b   .c2
+	subq	#1,a1
+.noAdd
+
+    * Output fav song!
+    tst.b   d7
+    beq.b   .noFavSong
+    move.b  l_favSong(a3),d0
+    beq     .noFavSong
+    move.b  #"#",(a1)+
+    move.b  #"s",(a1)+
+    move.b  #"o",(a1)+
+    move.b  #"n",(a1)+
+    move.b  #"g",(a1)+
+    move.b  #"=",(a1)+
+    or.b    #$30,d0
+    move.b  d0,(a1)+
+.noFavSong
+
 	move.b	#10,(a1)+
 
 	move.l	a1,d3
@@ -12167,11 +12772,11 @@ exportModuleProgramToFile:
 	move.l	d6,d1		* tallennetaan nimi
 	lob	Write	
 
-	lea	200(sp),sp
+	lea	1000(sp),sp
 
 	cmp.l	d3,d0
 	bne.b	.writeError
-	bra.b	.saveloop
+	bra    	.saveloop
 	
 .exit
 	move.l	d6,d1
@@ -12182,12 +12787,12 @@ exportModuleProgramToFile:
 
 .writeError
 	lea	.err(pc),a1
-	bsr.w	request
+	bsr	request
 	bra.b	.exit
 
 .openError
 	lea	openerror_t,a1
-	bsr.w	request
+	bsr	request
 	bra.b	.exit
 
 .err	dc.b	"Error while writing module program!",0
@@ -12213,7 +12818,7 @@ komentojono:
 *** Silmukka
 .alp
 	move.l	(a3)+,d5
-	beq.w	.end
+	beq	.end
 
  if DEBUG
 	move.l	d5,d0
@@ -12221,7 +12826,7 @@ komentojono:
  endif
 
 	move.l	d5,a0
-	bsr.w	kirjainta4
+	bsr	kirjainta4
 	cmp.l	#MESSAGE_COMMAND_HIDE,d0
 	beq.b	.skip
 	cmp.l	#MESSAGE_COMMAND_QUIT,d0
@@ -12230,7 +12835,7 @@ komentojono:
 	bne.b	.hmm
 	move.l	(a3),a0			* ohjelman nimi
 	moveq	#-1,d4			* lippu
-	bra.w	loadprog
+	bra	loadprog
 .hmm
 
 	move.l	d5,a0
@@ -12239,21 +12844,21 @@ komentojono:
 .skip	dbf	d7,.alp
 
 .end
-	bsr.w	vastomaviesti
+	bsr	vastomaviesti
 
 	tst.l	modamount(a5)
 	beq.b	.x
 	move.l	d6,chosenmodule(a5)	* ensimm‰inen uusi moduuli valituksi
 
-	bsr.w	listChanged
-	bsr.w	forceRefreshList
-	bsr.w	rbutton1		* soitetaan 
+	bsr	listChanged
+	bsr	forceRefreshList
+	bsr	rbutton1		* soitetaan 
 .x	rts
 
 
 * In:
 *   a0 = File path
-createListNodeAndAdd
+createListNodeAndAdd:
 	pushm	all
 	move.l	a0,d5
 .f	tst.b	(a0)+
@@ -12263,7 +12868,7 @@ createListNodeAndAdd
 
 	add.l	#l_size,d0		* listayksikˆn pituus
 	move.l	#MEMF_CLEAR,d1
-	bsr.w	getmem
+	bsr	getmem
 	beq.b	.end
 	move.l	d0,a2
 
@@ -12273,11 +12878,25 @@ createListNodeAndAdd
 	bne.b	.c
 
 	lea	l_filename(a2),a1
-	bsr.w	nimenalku
-	move.l	a0,l_nameaddr(a2)
 
+	cmp.b	#"h",(a1)
+	bne.b	.local
+	cmp.b	#"t",1(a1)
+	bne.b	.local
+	cmp.b	#"t",2(a1)
+	bne.b	.local
+	cmp.b	#"p",3(a1)
+	bne.b	.local
+    move.l  a2,a0
+    jsr     configRemoteNode
+    bra     .remote
+.local
+	bsr	nimenalku
+	move.l	a0,l_nameaddr(a2)
+.remote
 	move.l	a2,a1
-	bsr.w	getVisibleModuleListHeader
+	lea	    moduleListHeader(a5),a0
+    * Add to the main list
 	lore	Exec,AddTail
 
 	* update favorite status for node a0
@@ -12348,7 +12967,7 @@ loadprefs2
 	move	#18,windowpos_p+2(a5)
 	;move	#259,quadpos(a5)
 	;move	#157,quadpos+2(a5)
-	bsr.w	aseta_vakiot
+	bsr	aseta_vakiot
 
 	pop	d1
 
@@ -12356,7 +12975,7 @@ loadprefs2
 	move.l	#1005,d2
 	lob	Open
 	move.l	d0,d4
-	beq.w	.nope
+	beq	.nope
 	lea	prefsdata(a5),a0
 	move.l	a0,d2
 	move.l	d0,d1
@@ -12370,13 +12989,13 @@ loadprefs2
 
 * Vanha prefssi?
 * Laitetaan defaultti archivejutut 
-	bsr.w	defarc
+	bsr	defarc
 * when migrating to a new prefs version I want the tooltips
 * to be on by default!
 	st	prefs_tooltips+prefsdata(a5)
 .q
 	cmp.l	#prefs_size,d0
-	bhi.w	.eeee
+	bhi	.eeee
 
 	DPRINT	"Set values"
 
@@ -12439,22 +13058,23 @@ loadprefs2
 	move.b	prefs_mpegaqua(a0),d0
 	moveq	#0,d1
 	moveq	#2,d2
-	bsr.w	clampByte
+	bsr	clampByte
 	move.b	d0,mpegaqua(a5)
 	
 	move.b	prefs_mpegadiv(a0),d0 
-	bsr.w	clampByte
+	bsr	clampByte
 	move.b	d0,mpegadiv(a5)
 
 	move.b	prefs_medmode(a0),d0
 	moveq	#0,d1
 	moveq	#1,d2
-	bsr.w	clampByte
+	bsr	clampByte
 	move.b	d0,medmode(a5)
 
 	move	prefs_medrate(a0),medrate(a5)
 	move.b	prefs_sidmode(a0),sidmode(a5)
 	move.b	prefs_residmode(a0),residmode(a5)
+	move.b	prefs_residfilter(a0),residfilter(a5)
 	move.b	prefs_xmaplay(a0),xmaplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
@@ -12479,8 +13099,8 @@ loadprefs2
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
 	bsr.b	sliderit
-	bsr.w	setprefsbox
-	bsr.w	mainpriority
+	bsr	setprefsbox
+	bsr	mainpriority
 
 .eee	
 	move.l	d4,d1
@@ -12496,10 +13116,10 @@ loadprefs2
 	dbf	d0,.zapit
 
 	bsr.b	.eee
-	bsr.w	aseta_vakiot
+	bsr	aseta_vakiot
 
 	lea	.err(pc),a1
-	bra.w	request
+	bra	request
 
 
 .err	dc.b	"Trouble with the prefs file (wrong version?).",0
@@ -12542,7 +13162,7 @@ sliderit
 	divu	#580-50,d0
 
 	lea	pslider1,a0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * mixingrate tfmx
 	lea	pslider2-pslider1(a0),a0
@@ -12550,7 +13170,7 @@ sliderit
 	subq	#1,d0
 	mulu	#65535,d0
 	divu	#21,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * volumeboost ps3m
 	lea	juusto-pslider2(a0),a0
@@ -12558,7 +13178,7 @@ sliderit
 	move.b	s3mmode3(a5),d0
 	mulu	#65535,d0
 	divu	#16,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * stereoarvo ps3m
 	lea	juust0-juusto(a0),a0
@@ -12566,14 +13186,14 @@ sliderit
 	move.b	stereofactor(a5),d0
 	mulu	#65535,d0
 	divu	#64,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * timeout
 	lea	kelloke-juust0(a0),a0
 	move	timeout(a5),d0
 	mulu	#65535,d0
 	divu	#1800,d0		* 10*60 sekkaa
-	bsr.w	setknob2
+	bsr	setknob2
 
 * alarm
 	lea	kelloke2-kelloke(a0),a0
@@ -12586,7 +13206,7 @@ sliderit
 
 	mulu	#65535,d0
 	divu	#1440,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * moduleinfo
 	lea	eskimO-kelloke2(a0),a0
@@ -12594,7 +13214,7 @@ sliderit
 	subq	#3,d0
 	mulu	#65535,d0
 	divu	#50-3,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 
 * samplebuffersize
@@ -12603,7 +13223,7 @@ sliderit
 	move.b	samplebufsiz0(a5),d0
 	mulu	#65535,d0
 	divu	#5,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * sampleforcerate
 	lea	sIPULI2-sIPULI(a0),a0
@@ -12611,7 +13231,7 @@ sliderit
 	move	sampleforcerate(a5),d0
 	mulu	#65535,d0
 	divu	#600-9,d0
-	bsr.w	setknob2
+	bsr	setknob2
 
 
 
@@ -12623,7 +13243,7 @@ sliderit
 	divu	#580-50,d0
 
 	lea	ahiG4-sIPULI2(a0),a0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * ahi master volume
 	moveq	#0,d0
@@ -12632,7 +13252,7 @@ sliderit
 	divu	#1000,d0
 
 	lea	ahiG5-ahiG4(a0),a0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * ahi stereo level
 	moveq	#0,d0
@@ -12641,7 +13261,7 @@ sliderit
 	divu	#100,d0
 
 	lea	ahiG6-ahiG5(a0),a0
-	bsr.w	setknob2
+	bsr	setknob2
 
 * mixingrate med
 
@@ -12652,7 +13272,7 @@ sliderit
 	mulu	#65535,d0
 	divu	#580-50,d0
 	lea	nAMISKA5-ahiG6(a0),a0
-	bsr.w	setknob2
+	bsr	setknob2
 
 	rts
 
@@ -12665,7 +13285,7 @@ setprefsbox
 	subq	#2,d0
 .x	mulu	#65535,d0
 	divu	#51-3,d0
-	bra.w	setknob2
+	bra	setknob2
 
 setPrefsInfoBox
 	lea	eskimO,a0
@@ -12754,6 +13374,7 @@ saveprefs
 	move	medrate(a5),prefs_medrate(a0)
 	move.b	sidmode(a5),prefs_sidmode(a0)
 	move.b	residmode(a5),prefs_residmode(a0)
+	move.b	residfilter(a5),prefs_residfilter(a0)
 	move.b	xmaplay(a5),prefs_xmaplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
@@ -12794,7 +13415,7 @@ saveprefs
 
 .eeef	bsr.b	.clc
 	lea	.errr(pc),a1
-	bra.w	request
+	bra	request
 
 .errr	dc.b	"Couldn't save prefs file!",0
 
@@ -12808,19 +13429,19 @@ prefsfilename dc.b	"S:HippoPlayer.prefs",0
 defarc
 	lea	.lha(pc),a0
 	lea	arclha(a5),a1
-	bsr.w	copyb
+	bsr	copyb
 
 	lea	.zip(pc),a0
 	lea	arczip(a5),a1
-	bsr.w	copyb
+	bsr	copyb
 
 	lea	.lzx(pc),a0
 	lea	arclzx(a5),a1
-	bsr.w	copyb
+	bsr	copyb
 
 	lea	.arc(pc),a0
 	lea	arcdir(a5),a1
-	bra.w	copyb
+	bra	copyb
 ;	rts
 
 .arc	dc.b	"RAM:",0
@@ -12852,7 +13473,7 @@ gzipDecompressCommand
 
 aseta_vakiot
 	DPRINT	"Set defaults"
-	bsr.w	nupit
+	bsr	nupit
 	move	#64,mainvolume(a5)
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	move.l	#PLAYING_MODULE_NONE,chosenmodule(a5)
@@ -12876,32 +13497,36 @@ aseta_vakiot
 
 	lea	defgroup(pc),a0
 	lea	groupname(a5),a1
-	bsr.w	copyb
+	bsr	copyb
 	
 	st	newdirectory(a5)
 	lea	.defdir1(pc),a0
 	lea	moduledir(a5),a1
-	bsr.w	copyb
+	bsr	copyb
 
 	lea	.defdir1(pc),a0
 	lea	prgdir(a5),a1
-	bsr.w	copyb
+	bsr	copyb
 
 	lea	.defdir2(pc),a0
 	lea	arcdir(a5),a1
-	bsr.b	copyb
+	bsr	copyb
+
+	lea	.defdir1(pc),a0
+	lea	mhiLib(a5),a1
+	bsr	copyb
 
 	lea	.wb(pc),a0
 	lea	pubscreen(a5),a1
-	bsr.b	copyb
+	bsr	copyb
 
 	lea	.pat(pc),a0
 	lea	pattern(a5),a1
-	bsr.b	copyb
+	bsr	copyb
 
 	move.l	a2,keycheckroutine(a5)
 
-	bra.w	defarc
+	bra	defarc
 ;	rts
 
 .defdir1 dc.b	"SYS:",0
@@ -12965,7 +13590,7 @@ loadps3msettings
 
 	move.l	d5,d0
 	moveq	#MEMF_PUBLIC,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,d7
 	beq.b	.x
 
@@ -12980,7 +13605,7 @@ loadps3msettings
 	bra.b	.x
 .er
 	move.l	d7,a0
-	bsr.w	freemem
+	bsr	freemem
 
 .x	move.l	d4,d1
 	beq.b	.xx
@@ -13015,13 +13640,13 @@ loadcybersoundcalibration
 	bne.b	.ok
 
 .err	lea	.er1(pc),a1
-	bsr.w	request
+	bsr	request
 	bra.b	.x
 .ok
 
 	move.l	#256,d0
 	moveq	#MEMF_PUBLIC,d1
-	bsr.w	getmem
+	bsr	getmem
 	move.l	d0,d7
 	beq.b	.err
 
@@ -13039,7 +13664,7 @@ loadcybersoundcalibration
 	tst.l	d7
 	beq.b	.kos
 	move.l	d7,a0
-	bsr.w	freemem
+	bsr	freemem
 .kos
 	move.l	d4,d1
 	beq.b	.xx
@@ -13157,7 +13782,7 @@ sulje_prefs
 	move.l	(sp)+,a6
 .w	tst	prefs_prosessi(a5)	* odotellaan..
 	beq.b	.ww
-	bsr.w	dela
+	bsr	dela
 	bra.b	.w
 .ww	rts
 
@@ -13213,7 +13838,7 @@ prefs_code
 	move.b	doubleclick(a5),dclick_new(a5)
 	move.b	startuponoff(a5),startuponoff_new(a5)
 	move	boxsize(a5),boxsize_new(a5)
-	bsr.w	setprefsbox
+	bsr	setprefsbox
 	move	timeout(a5),timeout_new(a5)
 	move.b	hotkey(a5),hotkey_new(a5)
 	move.b	contonerr(a5),cerr_new(a5)
@@ -13243,11 +13868,13 @@ prefs_code
 	move	medrate(a5),medrate_new(a5)
 	move.b	sidmode(a5),sidmode_new(a5)
 	move.b	residmode(a5),residmode_new(a5)
+	move.b	residfilter(a5),residfilter_new(a5)
 	move.b	xmaplay(a5),xmaplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
 	move.b	altbuttons(a5),altbuttons_new(a5)
+	move.b	mhiEnable(a5),mhiEnable_new(a5)
 
 	move.b quadraScopeBars(a5),quadraScopeBars_new(a5)        
 	move.b quadraScopeFBars(a5),quadraScopeFBars_new(a5)         
@@ -13317,22 +13944,22 @@ prefs_code
 	lea	ack2,a3
 	lea	arclha(a5),a0
 	lea	arclha_new(a5),a1
-	bsr.w	.copy
+	bsr	.copy
 
 	lea	ack3-ack2(a3),a3
 	lea	arczip(a5),a0
 	lea	arczip_new(a5),a1
-	bsr.w	.copy
+	bsr	.copy
 
 	lea	ack4-ack3(a3),a3
 	lea	arclzx(a5),a0
 	lea	arclzx_new(a5),a1
-	bsr.b	.copy
+	bsr	.copy
 
 	lea	DuU0-ack4(a3),a3
 	lea	pattern(a5),a0
 	lea	pattern_new(a5),a1
-	bsr.b	.copy
+	bsr	.copy
 
 
 	lea	pubscreen_new(a5),a1
@@ -13364,6 +13991,11 @@ prefs_code
 	lea	startup_new(a5),a1
 	lea	startup(a5),a0
 	moveq	#120-1,d0
+	bsr.b	.cp2
+
+	lea	mhiLib_new(a5),a1
+	lea	mhiLib(a5),a0
+	moveq	#MHILIB_SIZE-1,d0
 	bsr.b	.cp2
 
 	lea	calibrationfile(a5),a0
@@ -13400,18 +14032,23 @@ prefs_code
 .ohi
 
 
-	bsr.w	inittick
+	bsr	inittick
 
 
 	move	#GFLG_DISABLED,d0
-
 	tst.b	uusikick(a5)		* uusi kick?
 	bne.b	.uusi
+    lea     VaL6,a0
+    basereg VaL6,a0
 ** Disabloidaan screengadgetti!
 ;	or	d0,gg_Flags+pbutton13
 ** Disabloidaan ahi-valinta
-	or	d0,gg_Flags+VaL6
+	or	d0,gg_Flags+VaL6(a0)
 
+    * Disable MHI gadgtes
+	or	d0,gg_Flags+prefsMHIEnable(a0)
+	or	d0,gg_Flags+prefsMHILib(a0)
+    endb    a0
 .uusi
 
 	move.l	_IntuiBase(a5),a6
@@ -13424,17 +14061,17 @@ prefs_code
 
 	move.l	windowpos_p(a5),(a0)	* Paikka
 
-	bsr.w	tark_mahtu
+	bsr	tark_mahtu
 
 	lob	OpenWindow
 	move.l	d0,windowbase2(a5)
-	beq.w	exprefs
+	beq	exprefs
 
 	move.l	d0,a0
 	move.l	wd_RPort(a0),rastport2(a5)
 	move.l	wd_UserPort(a0),userport2(a5)
 
-	bsr.w	setscrtitle
+	bsr	setscrtitle
 
 
 ;	tst.b	uusikick(a5)
@@ -13445,7 +14082,7 @@ prefs_code
 	moveq	#11,d1
 	move	#452-6,d2
 	move	#182-15,d3
-	bsr.w	drawtexture
+	bsr	drawtexture
 
 .ohih
 
@@ -13478,7 +14115,7 @@ prefs_code
 	movem	4(a0),d0/d1/d4/d5
 	sub	windowleft(a5),d0
 	sub	windowtop(a5),d1
-	bra.w	pcler
+	bra	pcler
 .oru
 ;.vanaha
 
@@ -13519,13 +14156,13 @@ prefs_code
 	moveq	#-1,d0
 	lob	AllocSignal
 	move.b	d0,prefs_closeSignal(a5)
-;	bmi.w	exprefs
+;	bmi	exprefs
 	moveq	#-1,d0
 	lob	AllocSignal
 	move.b	d0,prefs_updateContentsSignal(a5)
-;	bmi.w	exprefs
+;	bmi	exprefs
 
-	bsr.w	prefsgads
+	bsr	prefsgads
 
 
 	moveq	#12,d4			* laatikko
@@ -13537,15 +14174,15 @@ prefs_code
 	add	windowtop(a5),d5
 	add	windowtop(a5),d7
 	move.l	rastport2(a5),a1
-	bsr.w	laatikko3
+	bsr	laatikko3
 
 
 	bra.b	msgloop2
 returnmsg2
-	bsr.w	flush_messages2
+	bsr	flush_messages2
 msgloop2
 	tst.b	prefs_exit(a5)
-	bne.w	exprefs
+	bne	exprefs
 
 	move.l	(a5),a6
 	moveq	#0,d0
@@ -13560,7 +14197,7 @@ msgloop2
 
 	move.b	prefs_closeSignal(a5),d1	* k‰skeekˆ p‰‰ohjelma lopettamaan?
 	btst	d1,d0
-	bne.w	exprefs
+	bne	exprefs
 
 	move.b	prefs_updateContentsSignal(a5),d1	* p‰ivitys?
 	btst	d1,d0
@@ -13570,9 +14207,9 @@ msgloop2
 	cmp	#4,prefsivu(a5)
 	bne.b	.er
 	* Done only for page 4?
-	bsr.w	prefsgads
+	bsr	prefsgads
 	bra.b	.er2
-.er	bsr.w	pupdate
+.er	bsr	pupdate
 .er2	popm	all
 .naa
 
@@ -13596,22 +14233,22 @@ msgloop2
 	cmp.l	#IDCMP_RAWKEY,d2
 	bne.b	.nr
 	tst.b	d3
-	bmi.w	returnmsg2
+	bmi	returnmsg2
 	move	d3,rawkeyinput(a5)
 	move.b	rawKeySignal(a5),d1
-	bsr.w	signalit
-	bra.w	returnmsg2
+	bsr	signalit
+	bra	returnmsg2
 .nr
 	cmp.l	#IDCMP_MOUSEMOVE,d2
-	beq.w	mousemoving2
+	beq	mousemoving2
 	cmp.l	#IDCMP_GADGETUP,d2
-	beq.w	gadgetsup2
+	beq	gadgetsup2
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
-	beq.w	pmousebuttons
+	beq	pmousebuttons
 	cmp.l	#IDCMP_CLOSEWINDOW,d2
-	bne.w	msgloop2
+	bne	msgloop2
 
-	bsr.w	flush_messages2
+	bsr	flush_messages2
 
 exprefs	move.l	_IntuiBase(a5),a6		
 
@@ -13646,13 +14283,13 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lob	FreeSignal
 .yyk2
 
-	bsr.w	freepubwork		* Vapautetaan mahd. pubscreenlocki
+	bsr	freepubwork		* Vapautetaan mahd. pubscreenlocki
 	clr.l	pubwork(a5)
 
 	tst.b	prefs_exit(a5)
-	beq.w	.cancelled
+	beq	.cancelled
 	cmp.b	#-1,prefs_exit(a5)	* Cancel
-	beq.w	.cancelled
+	beq	.cancelled
 
 ** USE
 	DPRINT	"Prefs use"
@@ -13703,7 +14340,9 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move	medrate_new(a5),medrate(a5)
 	move.b	sidmode_new(a5),sidmode(a5)
 	move.b	residmode_new(a5),residmode(a5)
+	move.b	residfilter_new(a5),residfilter(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
+    move.b  mhiEnable_new(a5),mhiEnable(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
 	move	ahi_mastervol_new(a5),ahi_mastervol(a5)
@@ -13736,11 +14375,11 @@ exprefs	move.l	_IntuiBase(a5),a6
 	tst	info_prosessi(a5)
 	beq.b	.eimu
 ** updatetaan infoikkunaa
-	bsr.w	sulje_info
+	bsr	sulje_info
 	move.b	oli_infoa(a5),d7
 	st	oli_infoa(a5)
 	push	d7
-	bsr.w	start_info
+	bsr	start_info
 	pop	d7
 	move.b	d7,oli_infoa(a5)
 
@@ -13748,13 +14387,13 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 ** asetetaan fontti
 	tst	boxsize00(a5)
-	bne.w	.enor
+	bne	.enor
 	clr	boxsize0(a5)
 
 	;tst.b	uusikick(a5)
 	;beq.b	.enor
 	tst.l	_DiskFontBase(a5)	* lib?
-	beq.w	.enor
+	beq	.enor
 
 	lore	Exec,Forbid
 
@@ -13770,7 +14409,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lore	DiskFont,OpenDiskFont
 	move.l	d0,fontbase(a5)
 	move.l	d0,stringExtendStruct+sex_Font(a5)
-	
+  	
 	move.l	prefs_listtextattr+prefsdata(a5),list_text_attr+4(a4)
 	pushpea	prefs_listfontname+prefsdata(a5),list_text_attr(a4)
 
@@ -13791,7 +14430,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	DPRINT	"revert topaz"
 .gotFont
 	move.l	d0,a0
-	bsr.w	setListFont
+	bsr	setListFont
 
 	endb	a4
 
@@ -13799,8 +14438,8 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 	tst	info_prosessi(a5)
 	beq.b	.enor
-	bsr.w	rbutton10b
-	bsr.w	rbutton10b
+	bsr	rbutton10b
+	bsr	rbutton10b
 .enor
 
 
@@ -13808,56 +14447,61 @@ exprefs	move.l	_IntuiBase(a5),a6
 	beq.b	.aaps
 	lea	moduledir_new(a5),a0
 	lea	moduledir(a5),a1
-	bsr.w	.copy
+	bsr	.copy
 .aaps
 	tst.b	newdirectory2(a5)
 	beq.b	.aaps2
 	lea	prgdir_new(a5),a0
 	lea	prgdir(a5),a1
-	bsr.w	.copy
+	bsr	.copy
 .aaps2
 	lea	arcdir_new(a5),a0
 	lea	arcdir(a5),a1
-	bsr.w	.copy
+	bsr	.copy
 
 	lea	arclha_new(a5),a0
 	lea	arclha(a5),a1
-	bsr.w	.copy
+	bsr	.copy
 	lea	arczip_new(a5),a0
 	lea	arczip(a5),a1
-	bsr.w	.copy
+	bsr	.copy
 	lea	arclzx_new(a5),a0
 	lea	arclzx(a5),a1
-	bsr.w	.copy
+	bsr	.copy
 	lea	pattern_new(a5),a0
 	lea	pattern(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	pubscreen_new(a5),a0
 	lea	pubscreen(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	groupname_new(a5),a0
 	lea	groupname(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	calibrationfile_new(a5),a0
 	lea	calibrationfile(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	ahi_name_new(a5),a0
 	lea	ahi_name(a5),a1
-	bsr.b	.copy
+	bsr 	.copy
 
 	lea	startup_new(a5),a0
 	lea	startup(a5),a1
 	moveq	#120-1,d0
-	bsr.b	.copy2
+	bsr 	.copy2
+
+	lea	mhiLib_new(a5),a0
+	lea	mhiLib(a5),a1
+	moveq	#MHILIB_SIZE-1,d0
+	bsr 	.copy2
 
 	lea	fkeys_new(a5),a0
 	lea	fkeys(a5),a1
 	move	#10*120-1,d0
-	bsr.b	.copy2
+	bsr 	.copy2
 
 
 * ladataan caib fle jos tarpeen
@@ -13869,17 +14513,17 @@ exprefs	move.l	_IntuiBase(a5),a6
 	tst.b	newcalibrationfile(a5)
 	beq.b	.dw
 	move.l	calibrationaddr(a5),a0
-	bsr.w	freemem
+	bsr	freemem
 	clr.l	calibrationaddr(a5)
-.dw2	bsr.w	loadcybersoundcalibration
+.dw2	bsr	loadcybersoundcalibration
 .dw	clr.b	newcalibrationfile(a5)
 
 
 
 	cmp.b	#2,prefs_exit(a5)	* Tallennetaanko??
-	bne.w	.jee
-	bsr.w	saveprefs
-	bra.w	.jee
+	bne	.jee
+	bsr	saveprefs
+	bra	.jee
 
 .copy	move.b	(a0)+,(a1)+
 	bne.b	.copy
@@ -13950,13 +14594,13 @@ exprefs	move.l	_IntuiBase(a5),a6
 	
 
 	move.b	s3mmode3(a5),s3mmode3_new(a5)
-	bsr.w	updateps3m
+	bsr	updateps3m
 	move.b	stereofactor(a5),stereofactor_new(a5)
-	bsr.w	updateps3m2
+	bsr	updateps3m2
 
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
 	move	ahi_stereolev(a5),ahi_stereolev_new(a5)
-	bsr.w	updateahi
+	bsr	updateahi
 
 	
 
@@ -13965,10 +14609,10 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 	lore	Exec,Forbid		* kielletaan muut taskit!
 
-	bsr.w	mainpriority
+	bsr	mainpriority
 
 	move.b	ownsignal2(a5),d1
-	bsr.w	signalit		* signaali: poistutaan preffsist‰..
+	bsr	signalit		* signaali: poistutaan preffsist‰..
 
 	st	prefsexit(a5)
 
@@ -13981,7 +14625,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 flush_messages2
 	move.l	windowbase2(a5),a0 
-	bra.w	flushWindowMessages
+	bra	flushWindowMessages
 
 
 
@@ -14045,7 +14689,7 @@ prefsgads
 	move	#146,d5
 	sub	d0,d4
 	sub	d1,d5
-	bsr.w	pcler
+	bsr	pcler
 
 	move.l	windowbase2(a5),a0
 	move.l	prefsivugads(a5),d0
@@ -14098,7 +14742,7 @@ prefsgads
 
 
 ;	tst.b	uusikick(a5)
-;	beq.w	.loru
+;	beq	.loru
 
 *** Gadgettien reunojen vahvistus
 	lea	gadgets2,a3
@@ -14138,7 +14782,7 @@ prefsgads
 	addq	#1,ply2
 	push	d3
 	move.l	rastport2(a5),a1
-	bsr.w	sliderlaatikko
+	bsr	sliderlaatikko
 	pop	d3
 
 	bra.b	.nel
@@ -14155,7 +14799,7 @@ prefsgads
 	lob	SetBPen
 
 
-	bra.w	pupdate
+	bra	pupdate
 	
 
 
@@ -14166,14 +14810,14 @@ mousemoving2			* P‰ivitet‰‰n propgadgetteja
 
 	move	prefsivu(a5),d0
 	bne.b	.x	
-	bsr.w	psup4		* timeout
-	bsr.w	purealarm	* alarm
+	bsr	psup4		* timeout
+	bsr	purealarm	* alarm
 	bra.b	.z
 .x
 	subq	#1,d0
 	bne.b	.2
-	bsr.w	pbox		* box size
-	bsr.w	pinfosize
+	bsr	pbox		* box size
+	bsr	pinfosize
 	bra.b	.z
 .2
 	subq	#1,d0
@@ -14183,36 +14827,36 @@ mousemoving2			* P‰ivitet‰‰n propgadgetteja
 	subq	#2,d0
 	bne.b	.4
 	
-	bsr.w	pupdate7	* ps3m volboost
-	bsr.w	pupdate7b	* ps3m stereo
-	bsr.w	psup1		* ps3m mixingrate
+	bsr	pupdate7	* ps3m volboost
+	bsr	pupdate7b	* ps3m stereo
+	bsr	psup1		* ps3m mixingrate
 	bra.b	.z
 
 .4
 	subq	#1,d0
 	bne.b	.5
 	
-	bsr.w	pahi4		* ahi mixing rate
-	bsr.w	pahi5		* ahi master volume
-	bsr.w	pahi6		* ahi stereolev
+	bsr	pahi4		* ahi mixing rate
+	bsr	pahi5		* ahi master volume
+	bsr	pahi6		* ahi stereolev
 	bra.b	.z
 
 .5
-	bsr.w	psup2		* tfmx mixingrate
-	bsr.w	psup2b		* samplebufsiz
-	bsr.w	psup2c		* sampleforcerate
-	bsr.w	pupmedrate	* med mixing rate
+	bsr	psup2		* tfmx mixingrate
+	bsr	psup2b		* samplebufsiz
+	bsr	psup2c		* sampleforcerate
+	bsr	pupmedrate	* med mixing rate
 	
 
 .z	movem.l	(sp)+,d0-a6
-	bra.w	returnmsg2
+	bra	returnmsg2
 
 
 *** Oikeata nappulaa painettu. Tutkitaan oliko gadgetin p‰‰ll‰ jolla on
 *** requesteri.
 pmousebuttons
 	cmp	#MENUDOWN,d3		* oikea nappula
-	bne.w	returnmsg2
+	bne	returnmsg2
 
 	pushm	all
 
@@ -14221,28 +14865,28 @@ pmousebuttons
 
 	lea	pbutton1,a0		* play
 	lea	rpbutton2_req(pc),a2
-	bsr.w	.check
+	bsr	.check
 	lea	tomaatti,a0		* priority
 	lea	rpri_req(pc),a2
-	bsr.w	.check
+	bsr	.check
 ; Early load has been disabled 
 ;	lea	bUu3,a0
 ;	lea	rearly_req(pc),a2
-;	bsr.w	.check
-	bra.w	.xx
+;	bsr	.check
+	bra	.xx
 
 .1	subq	#1,d0
 	bne.b	.2
 
 	lea	pbutton2,a0		* show
 	lea	rpbutton1_req(pc),a2
-	bsr.w	.check
+	bsr	.check
 	;lea	pout3,a0		* scope type
 	;lea	rquadm_req(pc),a2
-	;bsr.w	.check
+	;bsr	.check
 	lea	bUu2,a0			* prefix cut
 	lea	rprefx_req(pc),a2
-	bsr.w	.check
+	bsr	.check
 	bra     .xx
 
 .2	subq	#1,d0
@@ -14294,10 +14938,13 @@ pmousebuttons
 	lea     prefsResidMode,a0
 	lea	    rresidmode_req(pc),a2	   * resid mode
 	bsr.b	.check
+	lea     prefsResidFilter,a0
+	lea	    rresidfilter_req(pc),a2	   * resid mode
+	bsr.b	.check
 
 
 .xx	popm	all
-	bra.w	returnmsg2
+	bra	returnmsg2
 
 .check	movem	4(a0),d0-d3
 	subq	#1,d3
@@ -14328,111 +14975,113 @@ pupdate:				* Ikkuna p‰ivitys
 	move	prefsivu(a5),d0
 	bne.b	.2
 
-	bsr.w	pupdate2		* play
-	bsr.w	ppri			* priority
-	bsr.w	pdclick			* doubleclick
-	bsr.w	pstartuponoff		* startup
-	bsr.w	psup4			* timeoutslider
-	bsr.w	phot			* hotkey
-	bsr.w	perr			* cont on err
-	bsr.w	pdiv			* divider dir
-	bsr.w	pearly			* early load
-	bsr.w	purealarm		* alarm slider
-	bsr.w	pautosort		* auto sort
-	bsr.w	pfavorites		* favorites
-	bsr.w	psavestate		* savestate
-	bra.w	.x
+	bsr	pupdate2		* play
+	bsr	ppri			* priority
+	bsr	pdclick			* doubleclick
+	bsr	pstartuponoff		* startup
+	bsr	psup4			* timeoutslider
+	bsr	phot			* hotkey
+	bsr	perr			* cont on err
+	bsr	pdiv			* divider dir
+	bsr	pearly			* early load
+	bsr	purealarm		* alarm slider
+	bsr	pautosort		* auto sort
+	bsr	pfavorites		* favorites
+	bsr	psavestate		* savestate
+	bra	.x
 
 .2	subq	#1,d0
 	bne.b	.3
 
-	;bsr.w	psup3			* scope mode
-	bsr.w	pbox			* box size
-	;bsr.w	psup0			* scope on/off
-	bsr.w	pinfosize		* info size
-	bsr.w	pupdate1		* show
-	bsr.w	pselscreen		* screen
-	;bsr.w	pscopebar		* scope bars
-	bsr.w	pprefx			* prefix cut
-	bsr.w	pfont			* fontti
-	bsr.w	pscreen			* screen refresh rates
-	bsr.w	ptooltips  	     	* tooltips
-	bsr.w	paltbuttons  	        * alt buttons
-	bsr.w	pQuadraScope
-	bsr.w	pQuadraScopeBars
-	bsr.w	pQuadraScopeF
-	bsr.w	pQuadraScopeFBars
-	bsr.w	pHippoScope
-	bsr.w	pHippoScopeBars
-	bsr.w	pPatternScope
-	bsr.w	pPatternScopeXL
-	bsr.w	pSpectrumScope
-	bsr.w	pSpectrumScopeBars
-	bsr.w	pListFont
-	bra.w	.x
+	;bsr	psup3			* scope mode
+	bsr	pbox			* box size
+	;bsr	psup0			* scope on/off
+	bsr	pinfosize		* info size
+	bsr	pupdate1		* show
+	bsr	pselscreen		* screen
+	;bsr	pscopebar		* scope bars
+	bsr	pprefx			* prefix cut
+	bsr	pfont			* fontti
+	bsr	pscreen			* screen refresh rates
+	bsr	ptooltips  	     	* tooltips
+	bsr	paltbuttons  	        * alt buttons
+	bsr	pQuadraScope
+	bsr	pQuadraScopeBars
+	bsr	pQuadraScopeF
+	bsr	pQuadraScopeFBars
+	bsr	pHippoScope
+	bsr	pHippoScopeBars
+	bsr	pPatternScope
+	bsr	pPatternScopeXL
+	bsr	pSpectrumScope
+	bsr	pSpectrumScopeBars
+	bsr	pListFont
+	bra	.x
 
 .3	subq	#1,d0
 	bne 	.4
 
-	bsr.w	pipm			* pt replayer
-	bsr.w	pupf			* filter
-	bsr.w	pupdate3		* pt tempo
-	bsr.w	pvbt			* vblank timer
-	bsr.w	pnasty			* nasty audio
-	bsr.w	ppgfile			* pgfilename
-	bsr.w	ppgmode			* pgmode
-	bsr.w	ppgstat			* pgstatus
-	bsr.w	pdbf			* volume fade
+	bsr	pipm			* pt replayer
+	bsr	pupf			* filter
+	bsr	pupdate3		* pt tempo
+	bsr	pvbt			* vblank timer
+	bsr	pnasty			* nasty audio
+	bsr	ppgfile			* pgfilename
+	bsr	ppgmode			* pgmode
+	bsr	ppgstat			* pgstatus
+	bsr	pdbf			* volume fade
 	bra 	.x
 
 .4	subq	#1,d0
 	bne 	.5
 
-	bsr.w	pux			* xpk id
-	bsr.w	pdbuf			* doublebuffering
-	bsr.w	pdup			* mod/prg/arc dirrit
-	bsr.w	pxfd			* xfdmaster
-	bra.b	.x
+	bsr	pux			* xpk id
+	bsr	pdbuf			* doublebuffering
+	bsr	pdup			* mod/prg/arc dirrit
+	bsr	pxfd			* xfdmaster
+	bra	.x
 
 .5	subq	#1,d0
 	bne.b	.6
 
-	bsr.w	pupdate5		* ps3m priority
-	bsr.w	pupdate6		* ps3m playmode
-	bsr.w	pupdate7		* ps3m volboost
-	bsr.w	psup1			* ps3m mixingrate
-	bsr.w	pps3mb			* ps3m buffer
-	bsr.w	pupdate7b		* stereo
-	bsr.w	psettings		* settings file
-	bsr.w	pcyber			* cyber calibration
-	bsr.w	pcybername		* cyber calibration file name
-	bra.b	.x
+	bsr	pupdate5		* ps3m priority
+	bsr	pupdate6		* ps3m playmode
+	bsr	pupdate7		* ps3m volboost
+	bsr	psup1			* ps3m mixingrate
+	bsr	pps3mb			* ps3m buffer
+	bsr	pupdate7b		* stereo
+	bsr	psettings		* settings file
+	bsr	pcyber			* cyber calibration
+	bsr	pcybername		* cyber calibration file name
+	bra	.x
 
 .6	subq.b	#1,d0
 	bne.b	.7
 	
-	bsr.w	pahi1			* ahi use
-	bsr.w	pahi2			* ahi disable others
-	bsr.w	pahi3			* ahi select mod
-	bsr.w	pahi4			* ahi mixing rate
-	bsr.w	pahi5			* ahi master volume
-	bsr.w	pahi6			* ahi stereo level
-	bra.b	.x
+	bsr	pahi1			* ahi use
+	bsr	pahi2			* ahi disable others
+	bsr	pahi3			* ahi select mod
+	bsr	pahi4			* ahi mixing rate
+	bsr	pahi5			* ahi master volume
+	bsr	pahi6			* ahi stereo level
+	bra	.x
 
 
 .7
-	bsr.w	psup2			* tfmx mixingrate
-	bsr.w	psup2b			* samplebufsize
-	bsr.w	psup2c			* sampleforcerate
-	bsr.w	pupmedrate		* med mixing rate
-	bsr.w	psamplecyber		* sample cyber
-	bsr.w	pmpegaqua		* MPEGA quality
-	bsr.w	pmpegadiv		* MPEGA freq division
-	bsr.w	pmedmode		* med mode
-    bsr     psidmode        * SID mode
-    bsr     pxmaplay        * XMAPlay
-    bsr     presidmode      * reSID mode
-
+	bsr	psup2			* tfmx mixingrate
+	bsr	psup2b			* samplebufsize
+	bsr	psup2c			* sampleforcerate
+	bsr	pupmedrate		* med mixing rate
+	bsr	psamplecyber	* sample cyber
+	bsr	pmpegaqua		* MPEGA quality
+	bsr	pmpegadiv		* MPEGA freq division
+	bsr	pmedmode		* med mode
+    bsr psidmode        * SID mode
+    bsr pxmaplay        * XMAPlay
+    bsr presidmode      * reSID mode
+    bsr presidfilter    * reSID filter
+    bsr pmhienable      * MHI enable
+    bsr pmhilib         * MHI library
 
 .x	popm	all
 	rts
@@ -14512,7 +15161,7 @@ pru0
 	tst	d7
 	bne.b	.nok
 	move.l	a1,a0
-	bsr.w	printkorva2
+	bsr	printkorva2
 .nok
 	popm	all
 	rts
@@ -14520,7 +15169,7 @@ pru0
 .pr	pushm	all
 	addq	#8,d1
 	move.l	rastport2(a5),a4
-	bra.w	doPrint
+	bra	doPrint
 
 
 ** Suoritetaan gadgettia vastaava toiminto
@@ -14540,7 +15189,7 @@ gadgetsup2
 .x	add	(a0),a0
 	jsr	(a0)
 	movem.l	(sp)+,d0-a6
-	bra.w	returnmsg2
+	bra	returnmsg2
 
 .pag
 ;	sub	#10*2,d0
@@ -14679,27 +15328,29 @@ gadgetsup2
 	dr	rmpegaqua	* mpega quality
 	dr	rmpegadiv	* mpeda freq division
 	dr	rmedmode	* med mode
-	dr	rmedrate	* med rate
+	dr	rmedrate	* med mixing rate
     dr  rsidmode    * sid mode
     dr  rxmaplay    * xmaplay
     dr  rresidmode  * resid mode
-    
+    dr  rresidfilter * resid filter
+    dr  rmhienable  * mhi enable
+    dr  rmhilib     * mhi lib
 
 
 rval0	moveq	#0,d0
-	bra.w	prefsgads2
+	bra	prefsgads2
 rval1	moveq	#1,d0
-	bra.w	prefsgads2
+	bra	prefsgads2
 rval2	moveq	#2,d0
-	bra.w	prefsgads2
+	bra	prefsgads2
 rval3	moveq	#3,d0
-	bra.w	prefsgads2
+	bra	prefsgads2
 rval4	moveq	#4,d0
-	bra.w	prefsgads2
+	bra	prefsgads2
 rval5	moveq	#5,d0
-	bra.w	prefsgads2
+	bra	prefsgads2
 rval6	moveq	#6,d0
-	bra.w	prefsgads2
+	bra	prefsgads2
 
 
 *** Scope
@@ -14708,122 +15359,122 @@ rQuadraScope:
 	DPRINT	"rQuadrascope"
 	not.b	prefsdata+prefs_quadraScope(a5)
 	bne.b	.start
-	bsr.w	stopQuadraScopeTask
+	bsr	stopQuadraScopeTask
 	bra.b 	pQuadraScope
 .start	
-	bsr.w	startQuadraScopeTask
+	bsr	startQuadraScopeTask
 	
 pQuadraScope:
 	move.b	prefsdata+prefs_quadraScope(a5),d0
 	lea	prefsQuadraScope,a0
-	bra.w	tickaa
+	bra	tickaa
 
 rQuadraScopeBars:
 	DPRINT	"rQuadrascopeBars"
 	not.b	prefsdata+prefs_quadraScopeBars(a5)
-	bsr.w	restartQuadraScopeTask
+	bsr	restartQuadraScopeTask
 
 pQuadraScopeBars
 	move.b	prefsdata+prefs_quadraScopeBars(a5),d0
 	lea	prefsQuadraScopeBars,a0
-	bra.w	tickaa
+	bra	tickaa
 
 rQuadraScopeF
 	DPRINT	"rQuadraScopeF"
 	not.b	prefsdata+prefs_quadraScopeF(a5)
 	bne.b	.start
-	bsr.w	stopQuadraScopeFTask
+	bsr	stopQuadraScopeFTask
 	bra.b	pQuadraScopeF
 .start	
-	bsr.w	startQuadraScopeFTask
+	bsr	startQuadraScopeFTask
 
 pQuadraScopeF
 	move.b	prefsdata+prefs_quadraScopeF(a5),d0
 	lea	prefsQuadraScopeF,a0
-	bra.w	tickaa
+	bra	tickaa
 
 rQuadraScopeFBars
 	DPRINT	"rQuadraScopeFBars"
 	not.b	prefsdata+prefs_quadraScopeFBars(a5)
-	bsr.w	restartQuadraScopeFTask
+	bsr	restartQuadraScopeFTask
 	
 pQuadraScopeFBars
 	move.b	prefsdata+prefs_quadraScopeFBars(a5),d0
 	lea	prefsQuadraScopeFBars,a0
-	bra.w	tickaa
+	bra	tickaa
 
 rHippoScope
 	DPRINT	"rHippoScope"
 	not.b	prefsdata+prefs_hippoScope(a5)
 	bne.b	.start
-	bsr.w	stopHippoScopeTask
+	bsr	stopHippoScopeTask
 	bra.b pHippoScope
 .start	
-	bsr.w	startHippoScopeTask
+	bsr	startHippoScopeTask
 	
 pHippoScope
 	move.b	prefsdata+prefs_hippoScope(a5),d0
 	lea	prefsHippoScope,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 rHippoScopeBars
 	DPRINT	"rHippoScopeBars"
 	not.b	prefsdata+prefs_hippoScopeBars(a5)
-	bsr.w	restartHippoScopeTask
+	bsr	restartHippoScopeTask
 
 pHippoScopeBars
 	move.b	hippoScopeBars_new(a5),d0
 	lea	prefsHippoScopeBars,a0
-	bra.w	tickaa
+	bra	tickaa
 
 rPatternScope
 	DPRINT	"rPatternScope"
 	not.b	prefsdata+prefs_patternScope(a5)
 	bne.b	.start
-	bsr.w	stopPatternScopeTask
+	bsr	stopPatternScopeTask
 	bra.b 	pPatternScope
 .start	
-	bsr.w	startPatternScopeTask
+	bsr	startPatternScopeTask
 
 pPatternScope
 	move.b	prefsdata+prefs_patternScope(a5),d0
 	lea	prefsPatternScope,a0
-	bra.w	tickaa
+	bra	tickaa
 
 rPatternScopeXL
 	DPRINT	"rPatternScopeXL"
 	not.b	prefsdata+prefs_patternScopeXL(a5)
-	bsr.w	restartPatternScopeTask
+	bsr	restartPatternScopeTask
 
 pPatternScopeXL
 	move.b	prefsdata+prefs_patternScopeXL(a5),d0
 	lea	prefsPatternScopeXL,a0
-	bra.w	tickaa
+	bra	tickaa
 
 rSpectrumScope
 	DPRINT	"rSpectrumScope"
 	not.b	prefsdata+prefs_spectrumScope(a5)
 	bne.b	.start
-	bsr.w	stopSpectrumScopeTask
+	bsr	stopSpectrumScopeTask
 	bra.b 	pSpectrumScope
 .start	
-	bsr.w	startSpectrumScopeTask
+	bsr	startSpectrumScopeTask
 	
 pSpectrumScope
 	move.b	prefsdata+prefs_spectrumScope(a5),d0
 	lea	prefsSpectrumScope,a0
-	bra.w	tickaa
+	bra	tickaa
 
 rSpectrumScopeBars
 	DPRINT	"rSpectrumScopeBars"
 	not.b	prefsdata+prefs_spectrumScopeBars(a5)
-	bsr.w	restartSpectrumScopeTask
+	bsr	restartSpectrumScopeTask
 
 pSpectrumScopeBars
 	move.b	prefsdata+prefs_spectrumScopeBars(a5),d0
 	lea	prefsSpectrumScopeBars,a0
-	bra.w	tickaa
+	bra	tickaa
 	
 
 ** Mixingrate S3M
@@ -14831,7 +15482,7 @@ rpslider1
 psup1
 	lea	pslider1,a2
 	move	#580-050,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	add	#50,d0
 	mulu	#100,d0
 	move.l	d0,mixingrate_new(a5)
@@ -14844,13 +15495,13 @@ psup1
 	swap	d0
 
 	lea	info2_t(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 ;	movem	pslider1+4,d0/d1
 	movem	4(a2),d0/d1
 	sub	#65,d0
 	addq	#8,d1
-	bra.w	print3b
+	bra	print3b
 
 info2_t dc.b	"%2.2ld.%1.1ldkHz",0
  even
@@ -14859,7 +15510,7 @@ info2_t dc.b	"%2.2ld.%1.1ldkHz",0
 
 rps3mb_req
 	lea	.b(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,ps3mb_new(a5)
 	bra.b	pps3mb
@@ -14885,10 +15536,10 @@ pps3mb
 	moveq	#4,d0
 	lsl	d1,d0
 	lea	.f(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 	lea	jommo,a1
-	bra.w	prunt
+	bra	prunt
 
 .f	dc.b	"%ldkB",0
  even
@@ -14899,18 +15550,18 @@ rpslider2
 psup2
 	lea	pslider2,a2
 	moveq	#22-1,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	addq	#1,d0
 	move	d0,tfmxmixingrate_new(a5)
 	
 	lea	.info3_t(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 ;	movem	pslider2+4,d0/d1
 	movem	4(a2),d0/d1
 	sub	#48,d0
 	addq	#8,d1
-	bra.w	print3b
+	bra	print3b
 
 .info3_t dc.b	"%2.2ldkHz",0
  even
@@ -14922,7 +15573,7 @@ rpslider2b
 psup2b
 	lea	sIPULI,a2
 	moveq	#5,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	move.b	d0,samplebufsiz_new(a5)
 
 	move	d0,d1
@@ -14931,14 +15582,14 @@ psup2b
 	lsl	d1,d0
 
 	lea	.t(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 ;	movem	sIPULI+4,d0/d1
 	movem	4(a2),d0/d1
 	sub	#44,d0
 	addq	#8,d1
 
-	bra.w	print3b
+	bra	print3b
 
 .t 	dc.b	"%3.3ldkB",0
  even
@@ -14949,7 +15600,7 @@ rpslider2c
 psup2c
 	lea	sIPULI2,a2
 	move	#600-9,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	move	d0,sampleforcerate_new(a5)
 	bne.b	.m
 
@@ -14964,7 +15615,7 @@ psup2c
 	ext.l	d0
 	
 	lea	.t(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 .p	
 ;	movem	sIPULI2+4,d0/d1
@@ -14972,7 +15623,7 @@ psup2c
 	add	#149,d0
 	subq	#6,d1
 
-	bra.w	print3b
+	bra	print3b
 
 .of	dc.b	".....off",0
 .t	dc.b	" %2.2ld.%1.1ldkHz",0
@@ -15024,7 +15675,7 @@ rpbutton7
 
 rpbutton1_req
 	lea	ls1(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move	d0,lootamoodi_new(a5)
 	bra.b	pupdate1
@@ -15052,7 +15703,7 @@ pupdate1
 .n	
 
 	lea	pbutton2,a1
-	bra.w	prunt
+	bra	prunt
 
 ls1	dc.b	22,4	* leveys/korkeus merkkein‰
 ls2 	dc.b	"Time, pos/len, song",0
@@ -15068,7 +15719,7 @@ ls44 	dc.b	"Time/duration, pos/len",0
 
 rpbutton2_req
 	lea	ls50(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	addq.b	#1,d0
 	move.b	d0,playmode_new(a5)
@@ -15099,7 +15750,7 @@ pupdate2
 	lea	ls9(pc),a0
 .ee	
 	lea	pbutton1,a1
-	bra.w	prunt 
+	bra	prunt 
 
 ls50	dc.b	23,5
 ls5 dc.b	"List repeatedly",0
@@ -15118,14 +15769,14 @@ pupdate3
 	tst.b	tempoflag_new(a5)
 	seq	d0
 	lea	pbutton3,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 ** S3M moodit 1,2,3
 
 rsmode1_req
 	lea	ls51(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,s3mmode1_new(a5)
 	bra.b	pupdate5
@@ -15157,7 +15808,7 @@ pupdate5
 	lea	ls54(pc),a0
 .e	
 	lea	smode2,a1
-	bra.w	prunt
+	bra	prunt
 
 * -10, -3, 0, +3, +10
 
@@ -15173,7 +15824,7 @@ ls54	dc.b	"Killer",0		* 5
 
 rsmode2_req
 	lea	ls10(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	addq.b	#1,d0
 	move.b	d0,s3mmode2_new(a5)
@@ -15206,7 +15857,7 @@ pupdate6
 
 .e	
 	lea	smode1,a1
-	bra.w	prunt
+	bra	prunt
 
 
 ls10	dc.b	13,5
@@ -15223,21 +15874,21 @@ rsmode3
 pupdate7
 	lea	juusto,a2
 	moveq	#16,d0			* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	move.b	d0,s3mmode3_new(a5)
-	bsr.w	updateps3m
+	bsr	updateps3m
 
 	moveq	#0,d0
 	move.b	s3mmode3_new(a5),d0
 	lea	.i(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 
 	lea	desbuf2(a5),a0
 ;	movem	juusto+4,d0/d1
 	movem	4(a2),d0/d1
 	sub	#16+8,d0
 	addq	#8,d1
-	bra.w	print3b
+	bra	print3b
 .i	dc.b	"%2.2ld",0
  even
 
@@ -15247,7 +15898,7 @@ rsmode4
 pupdate7b
 	lea	juust0,a2
 	moveq	#64,d0			* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	move.b	d0,stereofactor_new(a5)
 
 	bsr.b	updateps3m2
@@ -15255,7 +15906,7 @@ pupdate7b
 	mulu	#100,d0
 	lsr.l	#6,d0		* x/64
 	lea	.i(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 
 
 ;	movem	juust0+4,d0/d1
@@ -15265,13 +15916,13 @@ pupdate7b
 	movem	d0/d1,-(sp)
 
 	lea	.ii(pc),a0
-	bsr.w	print3b
+	bsr	print3b
 
 	lea	desbuf2(a5),a0
 	movem	(sp)+,d0/d1
 
 
-	bra.w	print3b
+	bra	print3b
 .i	dc.b	"%3.3ld%%",0
 .ii	dc.b	"  ",0
  even
@@ -15321,7 +15972,7 @@ psettings
 ;	sne	d0
 	move.b	ps3msettings_new(a5),d0
 	lea	Fruit,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 
@@ -15334,7 +15985,7 @@ pcyber
 ;	sne	d0
 	move.b	cybercalibration_new(a5),d0
 	lea	bENDER1,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 
@@ -15343,7 +15994,7 @@ rcybername
 	lea	calibrationfile_new(a5),a0
 	move.l	a0,a1			* mihin hakemistoon menn‰‰n
 	lea	.t(pc),a2
-	bsr.w	pgetfile
+	bsr	pgetfile
 	st	newcalibrationfile(a5)
 	bra.b	pcybername
 
@@ -15365,7 +16016,7 @@ pcybername
 .cx	
 	move.l	a1,a0
 	lea	bENDER2,a1
-	bsr.w	prunt2	
+	bsr	prunt2	
 	lea	30(sp),sp
 	rts
 
@@ -15377,7 +16028,7 @@ pcybername
 ** Filtteri
 rpfilt_req
 	lea	ls16(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,filterstatus(a5)
 	bra.b	pupf
@@ -15407,7 +16058,7 @@ pupf
 	lea	ls19(pc),a0
 .pr	
 	lea	pout1,a1
-	bra.w	prunt
+	bra	prunt
 
 ls16	dc.b	6,3
 ls17	dc.b	"Module",0
@@ -15417,7 +16068,7 @@ ls19	dc.b	"On",0
 
 rptmix_req
 	lea	ls20(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,ptmix_new(a5)
 	bra.b	pipm
@@ -15439,7 +16090,7 @@ pipm
 	lea	ls23(pc),a0
 .n	
 	lea	laren1,a1
-	bra.w	prunt
+	bra	prunt
 
 ls20	dc.b	7,3
 ls21	dc.b	"Normal",0
@@ -15454,7 +16105,7 @@ pux
 	tst.b	xpkid_new(a5)
 	seq	d0
 	lea	makkara,a0
-	bra.w	tickaa
+	bra	tickaa
 
 	
 **** XFDmaster
@@ -15463,7 +16114,7 @@ pxfd	;tst.b	xfd_new(a5)
 	;sne	d0
 	move.b	xfd_new(a5),d0
 	lea	nappU2,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 *** volumefade
@@ -15473,13 +16124,13 @@ pdbf	;tst.b	fade_new(a5)
 	;sne	d0
 	move.b	fade_new(a5),d0
 	lea	kinkku,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 **** Prioriteetti
 rpri_req
 	lea	ls200(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	subq.b	#1,d0
 	move.b	d0,pri_new(a5)
@@ -15505,7 +16156,7 @@ ppri
 	lea	ls203(pc),a0
 
 .0	lea	tomaatti,a1
-	bra.w	prunt
+	bra	prunt
 
 ls200	dc.b	2,3
 ls201	dc.b	"-1",0
@@ -15515,13 +16166,13 @@ ls203	dc.b	"+1",0
 
 ** Valitaan hakemisto moddir
 rpbutton10
-	bsr.w	dir_req
+	bsr	dir_req
 	bne.b	.ee
 	rts
 .ee	
 	move.l	d7,a0
 	lea	moduledir_new(a5),a1
-	bsr.w	parsereqdir2		* Tehd‰‰n hakemistopolku..
+	bsr	parsereqdir2		* Tehd‰‰n hakemistopolku..
 	st	newdirectory(a5)
 
 psele	move.l	d7,a1
@@ -15564,7 +16215,7 @@ pdup
 	dbf	d0,.c
 .cc	
 	move.l	a2,a0
-	bsr.w	prunt2
+	bsr	prunt2
 	lea	32(sp),sp
 	rts
 
@@ -15577,7 +16228,7 @@ rselprgdir
 .ee	
 	move.l	d7,a0
 	lea	prgdir_new(a5),a1
-	bsr.w	parsereqdir2		* Tehd‰‰n hakemistopolku..
+	bsr	parsereqdir2		* Tehd‰‰n hakemistopolku..
 	st	newdirectory2(a5)
 	bra.b	psele
 
@@ -15589,26 +16240,26 @@ rselarcdir
 .ee	
 	move.l	d7,a0
 	lea	arcdir_new(a5),a1
-	bsr.w	parsereqdir2		* Tehd‰‰n hakemistopolku..
-	bra.w	psele
+	bsr	parsereqdir2		* Tehd‰‰n hakemistopolku..
+	bra	psele
 
 
 
 ** Hakemisto requesteri
-dir_req	bsr.w	get_rt
+dir_req	bsr	get_rt
 	moveq	#RT_FILEREQ,D0
 	sub.l	a0,a0
 	lob	rtAllocRequestA
 	move.l	d0,d7
 	beq.b	.eek
-	bsr.w	pon2		* waitpointer
+	bsr	pon2		* waitpointer
 
 	lea	.dirtags(pc),a0
 	move.l	d7,a1
 	lea	desbuf2(a5),a2		* Kunhan jonnekkin laitetaan..
 	lea	.dirreqtitle(pc),a3
 	lob	rtFileRequestA		* ReqToolsin tiedostovalikko
-	bsr.w	poff2
+	bsr	poff2
 	tst.l	d0
 .eek	rts
 
@@ -15632,14 +16283,14 @@ rbox
 pbox
 	lea	meloni,a2
 	moveq	#51-3,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	beq.b	.fe
 	addq	#2,d0
 
 .fe	move	d0,boxsize_new(a5)
 
 	lea	.i(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 
 ;	movem	meloni+4,d0/d1
@@ -15647,7 +16298,7 @@ pbox
 	sub	#26,d0
 	addq	#8,d1
 
-	bra.w	print3b
+	bra	print3b
 
 .i dc.b	"%-2.2ld",0
  even
@@ -15656,12 +16307,12 @@ rinfosize
 pinfosize
 	lea	eskimO,a2
 	moveq	#50-3,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	addq.l	#3,d0
 	move	d0,infosize_new(a5)
 
 	lea	.i(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 
 ;	movem	eskimO+4,d0/d1
@@ -15669,7 +16320,7 @@ pinfosize
 	sub	#26,d0
 	addq	#8,d1
 
-	bra.w	print3b
+	bra	print3b
 
 .i dc.b	"%-2.2ld",0
  even
@@ -15683,7 +16334,7 @@ pdclick
 	;sne	d0
 	move.b	dclick_new(a5),d0
 	lea	eins2,a0
-	bra.w	tickaa
+	bra	tickaa
 
 ********* Favorite
 rfavorites
@@ -15691,7 +16342,7 @@ rfavorites
 pfavorites
 	move.b	favorites_new(a5),d0
 	lea	prefsFavorites,a0
-	bra.w	tickaa
+	bra	tickaa
 
 ********* Tooltips
 rtooltips
@@ -15699,7 +16350,7 @@ rtooltips
 ptooltips
 	move.b	tooltips_new(a5),d0
 	lea	prefsTooltips,a0
-	bra.w	tickaa
+	bra	tickaa
 
 ********* Save state
 rsavestate
@@ -15707,7 +16358,7 @@ rsavestate
 psavestate
 	move.b	savestate_new(a5),d0
 	lea	prefsSaveState,a0
-	bra.w	tickaa
+	bra	tickaa
 
 ********* Alt buttons
 raltbuttons
@@ -15716,7 +16367,7 @@ raltbuttons
 paltbuttons
 	move.b	altbuttons_new(a5),d0
 	lea	prefsAltButtons,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 ********* Autosort
@@ -15727,7 +16378,7 @@ pautosort
 	;sne	d0
 	move.b	autosort_new(a5),d0
 	lea	bUu22,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 
@@ -15739,7 +16390,7 @@ pstartuponoff
 	;sne	d0
 	move.b	startuponoff_new(a5),d0
 	lea	salaatti3,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 ********* Startup
@@ -15752,7 +16403,7 @@ rstartup
 
 pgetfile
 	move.l	a2,d4		 * title
-	bsr.w	get_rt
+	bsr	get_rt
 	move.l	a0,d6
 	move.l	a1,d5
 	moveq	#RT_FILEREQ,D0
@@ -15766,7 +16417,7 @@ pgetfile
 .f0	tst.b	(a0)+
 	bne.b	.f0
 	move.l	d5,a1
-	bsr.w	nimenalku
+	bsr	nimenalku
 
 	move.l	a0,a2
 	lea	desbuf2(a5),a3		* nimi
@@ -15796,17 +16447,17 @@ pgetfile
 	move.l	d4,a3
 .noti
 
-	bsr.w	pon2		* waitpointer
+	bsr	pon2		* waitpointer
 
 	lore	Req,rtFileRequestA	* ReqToolsin tiedostovalikko
-	bsr.w	poff2
+	bsr	poff2
 	tst.l	d0
 	beq.b	.eek
 
 
 	move.l	req_file3(a5),a0
 	move.l	d6,a1
-	bsr.w	parsereqdir2
+	bsr	parsereqdir2
 
 	addq	#1,a1
 	lea	desbuf2(a5),a0
@@ -15838,7 +16489,7 @@ purealarm
 	move.l	gg_SpecialInfo(a2),a0
 	move	pi_HorizPot(a0),d0
 	move	#1440,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 
 	divu	#60,d0
 	moveq	#0,d1
@@ -15857,7 +16508,7 @@ purealarm
 	and	#$ff,d1
 
 	lea	.t(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 .r
 ;	movem	kelloke2+4,d0/d1
@@ -15880,7 +16531,7 @@ purealarm
 print3b:
 	pushm	all			* Sit‰varten ett‰ windowtop/left
 	move.l	rastport2(a5),a4	* arvoja ei lis‰tt‰isi kun
-	bra.w	doPrint			* teksti on jo suhteessa gadgettiin
+	bra	doPrint			* teksti on jo suhteessa gadgettiin
 
 
 ******* FKeys
@@ -15900,10 +16551,10 @@ rfkeys
 	lea	.gad(pc),a2
 	lea	.tags(pc),a0
 	sub.l	a3,a3
-	bsr.w	get_rt
-	bsr.w	pon2
+	bsr	get_rt
+	bsr	pon2
 	lob	rtEZRequestA
-	bsr.w	poff2
+	bsr	poff2
 	tst.l	d0
 	bne.b	.e
 	moveq	#11,d0
@@ -15922,7 +16573,7 @@ rfkeys
 	lea	moduledir(a5),a1	
 .jep
 	sub.l	a2,a2
-	bsr.w	pgetfile
+	bsr	pgetfile
 	bra.b	rfkeys
 
 .x	rts
@@ -15957,7 +16608,7 @@ rtimeoutslider
 psup4
 	lea	kelloke,a2
 	move	#1800,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	move	d0,timeout_new(a5)
 	beq.b	.nl
 
@@ -15968,7 +16619,7 @@ psup4
 	ext.l	d0
 
 	lea	.t(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 .r	
 ;	movem	kelloke+4,d0/d1
@@ -15977,7 +16628,7 @@ psup4
 	addq	#8,d1
 
 
-	bra.w	print3b
+	bra	print3b
 
 .nl
 	lea	.nil(pc),a0
@@ -16016,12 +16667,12 @@ rtimeoutmode
 pselector
 	sub.l	a4,a4
 pselector2
-	bsr.w	get_rt
+	bsr	get_rt
 	lea	.tags(pc),a0
 	sub.l	a3,a3
-	bsr.w	pon2
+	bsr	pon2
 	lob	rtEZRequestA
-	bsr.w	poff2
+	bsr	poff2
 	tst.l	d0
 	rts
 
@@ -16045,7 +16696,7 @@ phot
 	;sne	d0
 	move.b	hotkey_new(a5),d0
 	lea	kaktus,a0
-	bra.w	tickaa
+	bra	tickaa
 
 **** Cont on error
 rerr
@@ -16055,7 +16706,7 @@ perr
 	;sne	d0
 	move.b	cerr_new(a5),d0
 	lea	luuta,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 
@@ -16112,7 +16763,7 @@ pselscreen
 	clr.b	(a1)
 
 .rpo	lea	pbutton13,a1
-	bra.w	prunt2
+	bra	prunt2
 	
 
 
@@ -16124,7 +16775,7 @@ pdbuf
 	;sne	d0
 	move.b	dbf_new(a5),d0
 	lea	nappu1,a0
-	bra.w	tickaa
+	bra	tickaa
 
 **** nasty audio
 rnasty
@@ -16134,7 +16785,7 @@ pnasty
 	;sne	d0
 	move.b	nasty_new(a5),d0
 	lea	nappu2,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 rvbtimer
@@ -16144,7 +16795,7 @@ pvbt
 	;sne	d0
 	move.b	vbtimer_new(a5),d0
 	lea	nApPu,a0	
-	bra.w	tickaa
+	bra	tickaa
 
 
 ****** FontSelector
@@ -16165,7 +16816,7 @@ showFontNameInGadget
 	dbeq	d0,.c
 .cc	clr.b	(a2)
 	move.l	sp,a0
-	bsr.w	prunt2
+	bsr	prunt2
 	lea	20(sp),sp
 	rts
 
@@ -16191,9 +16842,9 @@ rfont
 .new
 
 	move.l	d7,a1
-	bsr.w	pon2
+	bsr	pon2
 	lob	rtFontRequestA
-	bsr.w	poff2
+	bsr	poff2
 	tst.l	d0
 	beq.b	.ew
 
@@ -16237,7 +16888,7 @@ rfont
 .ew
 	move.l	d7,a1
 	lore	Req,rtFreeRequest
-	bra.w	pfont
+	bra	pfont
 
 
 .tit	dc.b	"Font for other windows",0
@@ -16308,9 +16959,9 @@ rListFont
 	endb	a0
 .new
 	move.l	d7,a1
-	bsr.w	pon2
+	bsr	pon2
 	lob	rtFontRequestA
-	bsr.w	poff2
+	bsr	poff2
 	tst.l	d0
 	beq.b	.ew
 
@@ -16347,7 +16998,7 @@ pListFont
 	DPRINT	"pListFont"
 	lea	prefs_listfontname+prefsdata(a5),a0
 	lea	prefsListFont,a1
-	bra.w	showFontNameInGadget
+	bra	showFontNameInGadget
 
 
 *** Printataan screen refresh ratetkin
@@ -16368,13 +17019,13 @@ pscreen
 	ext.l	d1
 
 	lea	.de(pc),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 
 .do	moveq	#16,d0
 	move	#122+18,d1
 	add	windowtop(a5),d1
-	bra.w	print3b
+	bra	print3b
 
 
 .de
@@ -16389,7 +17040,7 @@ rpgfile
 	lea	groupname_new(a5),a0
 	move.l	a0,a1			* mihin hakemistoon menn‰‰n
 	lea	.tit(pc),a2
-	bsr.w	pgetfile
+	bsr	pgetfile
 	bra.b	ppgfile
 
 .tit	dc.b	"Select player group file",0
@@ -16410,7 +17061,7 @@ ppgfile
 .cx	
 	move.l	a1,a0
 	lea	RoU1,a1
-	bsr.w	prunt2	
+	bsr	prunt2	
 	lea	30(sp),sp
 	rts
 
@@ -16419,7 +17070,7 @@ ppgfile
 
 rpgmode_req
 	lea	ls300(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,groupmode_new(a5)
 	bra.b	ppgmode
@@ -16447,7 +17098,7 @@ ppgmode
 	lea	ls304(pc),a0
 	
 .0	lea	PoU2,a1
-	bra.w	prunt
+	bra	prunt
 
 ls300	dc.b	14,4
 ls301	dc.b	"All on startup",0
@@ -16467,7 +17118,7 @@ ppgstat
 	movem	PoU2+4,d0/d1
 	add	#40,d0
 	subq	#6,d1
-	bra.w	print3b
+	bra	print3b
 
 .2	dc.b	"not loaded",0
 .1 	dc.b	"....loaded",0
@@ -16482,13 +17133,13 @@ pdiv
 	;sne	d0
 	move.b	div_new(a5),d0
 	lea	bUu1,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 **** Prefix cut
 rprefx_req
 	lea	ls299(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,prefix_new(a5)
 	cmp.b	#7,d0
@@ -16511,7 +17162,7 @@ pprefx
 	add	d0,d0
 	lea	ls299+2(pc,d0),a0
 	lea	bUu2,a1
-	bra.w	prunt
+	bra	prunt
 
 ls299	dc.b	1,7
 	dc.b	"0",0
@@ -16529,7 +17180,7 @@ rearly
 pearly	rts
 ;rearly_req
 ;	lea	ls400(pc),a0
-;	bsr.w	listselector
+;	bsr	listselector
 ;	bmi.b	.x
 ;	move.b	d0,early_new(a5)
 ;	cmp.b	#11,d0
@@ -16551,7 +17202,7 @@ pearly	rts
 ;	add	d0,d0
 ;	lea	ls400+2(pc,d0),a0
 ;	lea	bUu3,a1
-;	bra.w	prunt
+;	bra	prunt
 ;
 ;
 ;
@@ -16593,14 +17244,14 @@ rsamplecyber
 psamplecyber
 	move.b	samplecyber_new(a5),d0
 	lea	nAMISKA1,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 ** MPEGA quality
 
 rmpegaqua_req
 	lea	ls500(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,mpegaqua_new(a5)
 	bra.b	pmpegaqua
@@ -16616,7 +17267,7 @@ pmpegaqua
 	lsl	#2,d0
 	lea	ls501(pc,d0),a0
 	lea	nAMISKA2,a1
-	bra.w	prunt
+	bra	prunt
 ls500	dc.b	4,3
 ls501	dc.b	"Low",0
 ls502	dc.b	"Med",0
@@ -16627,7 +17278,7 @@ ls503	dc.b	"Hi ",0
 
 rmpegadiv_req
 	lea	ls600(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,mpegadiv_new(a5)
 	bra.b	pmpegadiv
@@ -16643,7 +17294,7 @@ pmpegadiv
 	add	d0,d0
 	lea	ls601(pc,d0),a0
 	lea	nAMISKA3,a1
-	bra.w	prunt
+	bra	prunt
 ls600	dc.b	2,3
 ls601	dc.b	"1",0
 ls602	dc.b	"2",0
@@ -16656,7 +17307,7 @@ ls603	dc.b	"4",0
 
 rmedmode_req
 	lea	ls700(pc),a0
-	bsr.w	listselector
+	bsr	listselector
 	bmi.b	.x
 	move.b	d0,medmode_new(a5)
 	bra.b	pmedmode
@@ -16672,7 +17323,7 @@ pmedmode
 	add	d0,d0
 	lea	ls701(pc,d0),a0
 	lea	nAMISKA4,a1
-	bra.w	prunt
+	bra	prunt
 ls700	dc.b	2,2
 ls701	dc.b	"8",0
 ls702	dc.b	"14",0
@@ -16685,7 +17336,7 @@ pupmedrate
 rmedrate
 	lea	nAMISKA5,a2
 	move	#580-050,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	add	#50,d0
 	mulu	#100,d0
 	move	d0,medrate_new(a5)
@@ -16698,12 +17349,14 @@ rmedrate
 	swap	d0
 
 	lea	info2_t(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 	movem	4(a2),d0/d1
-	add	#118,d0
-	subq	#6,d1
-	bra.w	print3b
+	;add	#118,d0
+	add     #-7*8-2-4,d0
+    addq    #6,d1
+   ; subq	#6,d1
+	bra	print3b
 
 
 ** SID mode
@@ -16755,7 +17408,7 @@ psidmode
     lea     sidmode04(pc),a0
 .1 
     lea	    prefsPlaySidMode,a1
-	bra.w	prunt
+	bra	prunt
 
 
 
@@ -16776,6 +17429,16 @@ rresidmode_req
 	bra.b	presidmode
 .x	rts
 
+
+rresidfilter_req
+	lea	residfilter00(pc),a0
+
+    pushpea sidmode_callback(pc),d4
+    bsr     listselector
+	bmi.b	.x
+	move.b	d0,residfilter_new(a5)
+	bra 	presidfilter
+.x	rts
 
 rresidmode
 	addq.b	#1,residmode_new(a5)
@@ -16800,7 +17463,7 @@ presidmode
     lea     residmode05(pc),a0
 .1 
     lea	    prefsResidMode,a1
-	bra.w	prunt
+	bra	prunt
 
 
 
@@ -16812,6 +17475,36 @@ residmode04	dc.b	"Oversample 4x",0
 residmode05	dc.b	"Interpolate",0
  even
 
+
+
+rresidfilter
+	addq.b	#1,residfilter_new(a5)
+	cmp.b	#3,residfilter_new(a5)
+	bne.b	.1
+	clr.b	residfilter_new(a5)
+.1
+
+presidfilter
+    lea     residfilter01(pc),a0
+	move.b	residfilter_new(a5),d0
+    beq.b   .1
+    lea     residfilter02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residfilter03(pc),a0
+.1 
+    lea	    prefsResidFilter,a1
+	bra	prunt
+
+
+
+residfilter00	dc.b    12,3
+residfilter01	dc.b	"Internal on",0
+residfilter02	dc.b	"Internal+Ext",0
+residfilter03	dc.b	"All off",0
+ even
+
+
 *** XMAPlay toggle
 
 rxmaplay
@@ -16819,7 +17512,55 @@ rxmaplay
 pxmaplay
 	move.b	xmaplay_new(a5),d0
 	lea	    prefsEnableXMAPlay,a0
-	bra.w	tickaa
+	bra	tickaa
+
+*** MHI toggle, lib
+
+rmhienable
+	not.b	mhiEnable_new(a5)
+pmhienable
+    tst.b   uusikick(a5)
+    beq     .x
+	move.b	mhiEnable_new(a5),d0
+	lea	    prefsMHIEnable,a0
+	bra	tickaa
+.x  rts
+
+rmhilib
+	lea	mhiLib_new(a5),a0
+	move.l	a0,a1			* mihin hakemistoon menn‰‰n
+	lea	.t(pc),a2
+	bsr	pgetfile
+	lea	mhiLib_new(a5),a0
+    move.l  a0,d0
+    DPRINT  "got=%ls"
+	bra.b	pmhilib
+
+.t	dc.b	"Select MHI driver",0
+ even
+
+pmhilib
+    tst.b   uusikick(a5)
+    beq     .x
+    pushpea mhiLib_new(a5),d1
+    lore    Dos,FilePart
+    move.l  d0,a0
+
+	lea	-30(sp),sp
+    move.l  sp,a1
+.c	move.b  (a0)+,d1
+    beq     .cc
+    cmp.b   #".",d1
+    beq     .cc
+    move.b  d1,(a1)+
+    bra     .c
+.cc clr.b   (a1)
+	move.l	sp,a0
+	lea	prefsMHILib,a1
+	bsr	prunt2	
+	lea	30(sp),sp
+.x
+	rts
 
 
 ***************************************
@@ -16831,7 +17572,7 @@ pahi1	;tst.b	ahi_use_new(a5)
 	;sne	d0
 	move.b	ahi_use_new(a5),d0
 	lea	ahiG2,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 *** ahi disable muut
@@ -16840,14 +17581,14 @@ pahi2	;tst.b	ahi_muutpois_new(a5)
 	;sne	d0
 	move.b	ahi_muutpois_new(a5),d0
 	lea	ahiG3,a0
-	bra.w	tickaa
+	bra	tickaa
 
 
 *** ahi select mode
 rahi3
 	OPENAHI	1
 	move.l	d0,d7
-	beq.w	rahi3_e
+	beq	rahi3_e
 	move.l	d0,a6
 
 	lea	audioreqtags(pc),a0
@@ -16915,14 +17656,14 @@ pahi3	lea	ahi_name_new(a5),a0
 .y	movem	ahiG1+4,d0/d1
 	add	#10,d0
 	addq	#8,d1
-	bra.w	print3b
+	bra	print3b
 
 .non	dc.b	"NONE",0
  even
 
 rahi3_e
 	lea	.e(pc),a1
-	bra.w	request
+	bra	request
 .e	dc.b	"Couldn't open AHI device!",0
  even
 
@@ -16954,7 +17695,7 @@ pahi4
 rahi4
 	lea	ahiG4,a2
 	move	#580-050,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	add	#50,d0
 	mulu	#100,d0
 	move.l	d0,ahi_rate_new(a5)
@@ -16967,30 +17708,30 @@ rahi4
 	swap	d0
 
 	lea	info2_t(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 ;	movem	ahiG4+4,d0/d1
 	movem	4(a2),d0/d1
 	sub	#65,d0
 	addq	#8,d1
-	bra.w	print3b
+	bra	print3b
 
 *** master volume
 pahi5
 rahi5	
 	lea	ahiG5,a2
 	move	#1000,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	move	d0,ahi_mastervol_new(a5)
 
 	lea	.i(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 ;	movem	ahiG5+4,d0/d1
 	movem	4(a2),d0/d1
 	sub	#49,d0
 	addq	#8,d1
-	bsr.w	print3b
+	bsr	print3b
 	bra.b	updateahi
 
 .i	dc.b	".%4.4ld",0
@@ -17001,17 +17742,17 @@ pahi6
 rahi6	
 	lea	ahiG6,a2
 	moveq	#100,d0		* max
-	bsr.w	nappilasku
+	bsr	nappilasku
 	move	d0,ahi_stereolev_new(a5)
 
 	lea	.i(pC),a0
-	bsr.w	desmsg2
+	bsr	desmsg2
 	lea	desbuf2(a5),a0
 ;	movem	ahiG6+4,d0/d1
 	movem	4(a2),d0/d1
 	sub	#41,d0
 	addq	#8,d1
-	bsr.w	print3b
+	bsr	print3b
 	bra.b	updateahi
 	
 
@@ -17056,10 +17797,16 @@ updateahi
 wflags4 = WFLG_SMART_REFRESH!WFLG_ACTIVATE!WFLG_BORDERLESS!WFLG_RMBTRAP
 idcmpflags4 = IDCMP_INACTIVEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEBUTTONS!IDCMP_RAWKEY
 
+listSelectorMainWindowPreselect:
+	pushm	d1-a6	
+	move.l	windowbase(a5),a0	
+	bra.b	listselector\.do
+
 
 listSelectorMainWindow:
 	pushm	d1-a6	
 	move.l	windowbase(a5),a0	
+    moveq   #-1,d0
 	bra.b	listselector\.do
 
 listSelectorPrefsWindowWithCallback:
@@ -17076,14 +17823,19 @@ listSelectorPrefsWindowWithCallback:
 listselector:
 .LINE_HEIGHT = 12
 
-	pushm	d1-a6	
+	pushm	d1-a6
+    moveq   #-1,d0
 	moveq	#0,d4
 .dop
+    moveq   #-1,d0
 	move.l	a0,a4
 	move.l	windowbase2(a5),a0	* prefs-ikkuna
 .do
 	add	wd_LeftEdge(a0),d6	* mousepos suhteellinen prefs-ikkunan
 	add	wd_TopEdge(a0),d7	* yl‰laitaan
+
+;    move    #-1,.arrowSelection	
+    move    d0,.arrowSelection
 
 	lea	winlistsel,a0		* asetetaan pointterin kohdalle
 
@@ -17111,11 +17863,11 @@ listselector:
 	moveq	#0,d7
 .oee	move	d7,nw_TopEdge(a0)
 
-	bsr.w	tark_mahtu
+	bsr	tark_mahtu
 
 	lore	Intui,OpenWindow
 	move.l	d0,d6
-	beq.w	.x
+	beq	.x
 	move.l	d0,a0
 	move.l	wd_RPort(a0),d7		* rastport
 	move.l	wd_UserPort(a0),a3	* userport
@@ -17129,10 +17881,11 @@ listselector:
 
 	moveq	#0,d5
 	move.b	(a4)+,d5	* vaakarivej‰
+    move    d5,.lineCount
 	subq	#1,d5
 	move.l	a4,a0
 
-	moveq	#0,d2
+	moveq	#0,d2   * id counter
 	moveq	#4,d3 	* start y
 .prl	
 	move.l	a0,a1
@@ -17151,7 +17904,7 @@ listselector:
 	* d0 = x
 	* d1 = y
 	* a0 = text
-	bsr.w	.print
+	bsr	.print
 	add		#.LINE_HEIGHT,d3 * next y
 	addq	#1,d2 * id number
 	move.l	a1,a0
@@ -17167,8 +17920,14 @@ listselector:
 	move	nw_Height(a0),ply2
 	subq	#1,ply2
 	subq	#1,plx2
-	bsr.w	laatikko1
+	bsr	laatikko1
 	popm	all
+
+    * Preselection?
+    move    .arrowSelection(pc),d0
+    bmi.b   .zzz
+    bsr     .doSelect
+.zzz
 
 	moveq	#-1,d7		* selection
 .msgloop3
@@ -17192,25 +17951,41 @@ listselector:
 	lob	ReplyMsg
 
 	cmp.l	#IDCMP_GADGETUP,d2
-	bne.b	.noGadget
+	bne 	.noGadget
 	move	gg_GadgetID(a2),d7
-	bra.b	.done
+	bra 	.done
 .noGadget
 	cmp.l	#IDCMP_MOUSEBUTTONS,d2
-	bne.b	.noButtons
+	bne 	.noButtons
 	cmp		#SELECTDOWN,d3
-	beq.b	.done
+	beq 	.done
 	cmp		#MENUDOWN,d3
-	beq.b	.done
+	beq 	.done
 .noButtons
 	cmp.l	#IDCMP_RAWKEY,d2
-	beq.b	.done
-	cmp.l	#IDCMP_INACTIVEWINDOW,d2
-	bne.b	.msgloop3
+	bne 	.noRawKey
+    tst.b   d3
+    bmi     .msgloop3
+    cmp.b   #$4c,d3
+    bne.b   .1
+    bsr     .selectUp
+    bra     .msgloop3
+.1  cmp.b   #$4d,d3
+    bne     .2
+    bsr     .selectDown
+    bra     .msgloop3
+.2  cmp.b   #$44,d3
+    bne     .done
+    * RETURN
+    move    .arrowSelection(pc),d7
+    bra     .done
+.noRawKey  
+    cmp.l	#IDCMP_INACTIVEWINDOW,d2
+	bne 	.msgloop3
 	
 .done
 	move.l	d6,a0
-	bsr.w	flushWindowMessages
+	bsr	flushWindowMessages
 
 	move.l	d6,d0
 	beq.b	.eek
@@ -17291,7 +18066,7 @@ listselector:
 
 	move.l	d6,a0
 	move.l	a3,a1
-	moveq	#0,d0 * position
+	moveq	#-1,d0 * position = last
 	lob		AddGadget
 
 	move.l	a3,a0
@@ -17308,6 +18083,83 @@ listselector:
 	popm	all
 	rts
 
+* d6 = window
+.selectDown
+    bsr     .deselect
+
+    move    .arrowSelection(pc),d0
+    bpl.b   .s1
+    moveq   #-1,d0
+.s1 addq    #1,d0
+    cmp     .lineCount(pc),d0
+    bne     .s2
+    moveq   #0,d0
+.s2 move    d0,.arrowSelection
+
+.doSelect
+    move.l  d6,a0
+    move.l  wd_FirstGadget(a0),a0
+.f  cmp     gg_GadgetID(a0),d0
+    beq.b   .f2
+    move.l  gg_NextGadget(a0),d1
+    beq     .f3
+    move.l  d1,a0
+    bra     .f
+.f2
+    * found it
+    move.l  gg_GadgetText(a0),a1
+    move.b  #2,it_FrontPen(a1)
+    tst.b   uusikick(a5)
+    bne     .k1
+    move.b  #3,it_FrontPen(a1)
+.k1
+
+    move.l  d6,a1
+    sub.l   a2,a2
+    moveq   #1,d0
+    lore    Intui,RefreshGList
+
+.f3
+    rts 
+
+.selectUp
+    bsr     .deselect
+
+    move    .arrowSelection(pc),d0
+    bpl.b   .z1
+    move    .lineCount(pc),d0
+.z1 subq     #1,d0
+    bpl     .z2
+    move    .lineCount(pc),d0
+    subq    #1,d0
+.z2 move    d0,.arrowSelection
+    bra     .doSelect
+
+.deselect
+    push    a3
+    move.l  d6,a3
+    move.l  wd_FirstGadget(a3),d0
+.de1
+    beq     .de2
+    move.l  d0,a3
+    move.l  gg_GadgetText(a3),a0
+    cmp.b   #1,it_FrontPen(a0)
+    beq     .de3
+    move.b  #1,it_FrontPen(a0)
+    move.l  a3,a0
+    move.l  d6,a1
+    sub.l   a2,a2
+    moveq   #1,d0
+    lore    Intui,RefreshGList
+.de3
+    move.l  gg_NextGadget(a3),d0
+    bra     .de1
+.de2
+    pop     a3
+    rts
+
+.arrowSelection dc.w    -1
+.lineCount      dc.w    0
 
 *******************************************************************************
 *  End of Prefs section
@@ -17334,7 +18186,8 @@ clearbox:
 	tst.b	win(a5)
 	bne.b	.r
 .x	rts
-.r	moveq	#30+WINX,d0
+.r	
+    moveq	#30+WINX,d0
 	;moveq	#62+WINY,d1
 	move	fileBoxTopEdge(a5),d1
 	subq	#1,d1
@@ -17346,7 +18199,8 @@ clearbox:
 	add		#127-62-1,d3 * magic constant
 
 	add	boxy(a5),d3
-	bra.w	tyhjays
+    sub BOTTOM_MARGIN(a5),d3
+	bra	tyhjays
 
 shownames:
 	moveq	#0,d4	 	* flag: center
@@ -17369,10 +18223,15 @@ shownames:
 	cmp.b	#LISTMODE_SEARCH,listMode(a5)
 	bne.b	.noSrch
 	lea		.noSrchResults(pc),a0
-	bsr.w	printbox
-	bra.b	.wasSrch
-.noSrchResults
-	dc.b	"No search results.",0
+    tst.b   uhcAvailable(a5)
+    bne.b   .s1
+    lea     .noUhc(pc),a0
+.s1
+	bsr	printbox
+	bra 	.wasSrch
+.noSrchResults  dc.b	"No search results.",0
+.noUhc          dc.b    "Search disabled! UHCTools",10
+                dc.b    "missing or too old.",0
 	even
 .noSrch
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
@@ -17383,18 +18242,18 @@ shownames:
 	bne.b	.favsOn
 	lea	.noFavs2(pc),a0
 .favsOn
-	bsr.w	printbox
+	bsr	printbox
 	bra.b	.wasFav
 .noFavs 	dc.b 	"No favorites!",10
 		dc.b	"Add with RMB.",0
 .noFavs2	dc.b	"Favorites feature disabled!",0
 		even
 .doHippo
-	bsr.w	printhippo1
+	bsr	printhippo1
 .wasFav	
 .wasSrch
 	st	hippoonbox(a5)		* koko hˆsk‰n tulostus
-	bra.w	.nomods
+	bra	.nomods
 .eper
 
 	tst	d4		* ei mink‰‰nlaista uudelleensijoitusta
@@ -17402,6 +18261,10 @@ shownames:
 
 	moveq	#0,d2
 	move	boxsize(a5),d2
+    tst.w   searchLayoutActive(a5)      
+    beq.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d2
+.lm1
 	move.l	d2,d3
 	lsr	#1,d2		* center chosenmodule in the middle of the box
 	
@@ -17427,23 +18290,27 @@ shownames:
 	tst.b	hippoonbox(a5)
 	beq.b	.eh
 	clr.b	hippoonbox(a5)
-	bra.w	.neen
+	bra	.neen
 .eh
 	move.l	firstname(a5),d0
 	move.l	firstname2(a5),d7
 	move.l	d0,firstname2(a5)
 	cmp.l	d0,d7
-	beq.w	.nomods
+	beq	.nomods
 	sub.l	d0,d7		* d7 should be in range 0..boxsize
 	bmi.b	.alas
 
 .ylos
 	moveq	#0,d1 
 	move	boxsize(a5),d1
+    tst.w   searchLayoutActive(a5)      
+    beq.b   .lm9
+    subq    #SEARCH_BOXSIZE_DELTA,d1
+.lm9
 	cmp.l	d1,d7
-	bhs.w	.all
+	bhs	.all
 
-	bsr.w	.unmark
+	bsr	.unmark
 
 * siirrytty d7 rivi‰ ylˆsp‰in:
 * kopioidaan rivit 0 -> d7 (koko: boxsize-d7 r) kohtaan 0 ja printataan
@@ -17454,7 +18321,7 @@ shownames:
 	;lsl	#3,d3
 	mulu	listFontHeight(a5),d3
 	add		fileBoxTopEdge(a5),d3		* dest y
-	bsr.w	.copy
+	bsr	.copy
 	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	d7,d2
@@ -17464,11 +18331,15 @@ shownames:
 .alas	
 	moveq	#0,d1 
 	move	boxsize(a5),d1
+    tst.w   searchLayoutActive(a5)      
+    beq.b   .lm2
+    subq    #SEARCH_BOXSIZE_DELTA,d1
+.lm2
 	neg.l  	d7 
 	cmp.l	d1,d7 
 	bhs.b	.all
 
-	bsr.w	.unmark
+	bsr	.unmark
 
 * siirrytty d7 rivi‰ alasp‰in:
 * kopioidaan rivit d7 -> boxsizee (koko: boxsize-d7 r) kohtaan 0 ja printataan
@@ -17479,21 +18350,31 @@ shownames:
 	mulu	listFontHeight(a5),d1
 	add		fileBoxTopEdge(a5),d1		* source y
 	move	fileBoxTopEdge(a5),d3	* dest y
-	bsr.b	.copy
+	bsr 	.copy
 	moveq	#0,d0 
 	move 	boxsize(a5),d0 
+    tst.w   searchLayoutActive(a5)   
+    beq.b   .lm3
+    subq    #SEARCH_BOXSIZE_DELTA,d0
+.lm3
+
 	add.l 	firstname(a5),d0
 	sub.l	d7,d0
 	moveq	#0,d1 
 	move	boxsize(a5),d1
+    tst.w   searchLayoutActive(a5)   
+    beq.b   .lm4
+    subq    #SEARCH_BOXSIZE_DELTA,d1
+.lm4
+
 	sub.l   d7,d1
 	move.l	d7,d2
 
-.rcr	bsr.w	doPrintNames
+.rcr	bsr	doPrintNames
 	bra.b	.huh2
 
 .nomods	
-	bsr.b	.unmark
+	bsr 	.unmark
 .huh2
 .xx
 	move.l	#-1,markedline(a5)
@@ -17502,7 +18383,7 @@ shownames:
 	sub.l	firstname(a5),d0
 	bmi.b	.huh
 	move.l	d0,markedline(a5)		* merkit‰‰n valittu nimi
-	bsr.w	markit
+	bsr	markit
 .huh
 	move.l	chosenmodule(a5),chosenmodule2(a5)
 	move.l	firstname(a5),firstname2(a5)
@@ -17514,11 +18395,15 @@ shownames:
 .all
 .neen
 	* clear and print all names
-	bsr.w	clearbox
+	bsr	clearbox
 
 	move.l	firstname(a5),d0
 	moveq	#0,d1
 	move	boxsize(a5),d2
+    tst.w   searchLayoutActive(a5)   
+    beq.b   .lm5
+    subq    #SEARCH_BOXSIZE_DELTA,d2
+.lm5
 	bsr.b	doPrintNames
 	bra.b	.huh2
 
@@ -17526,6 +18411,10 @@ shownames:
 
 .copy	
 	move	boxsize(a5),d5	* y size
+    tst.w   searchLayoutActive(a5)   
+    beq.b   .lm8
+    subq    #SEARCH_BOXSIZE_DELTA,d5
+.lm8
 	sub	d7,d5
 	;lsl	#3,d5
 	mulu	listFontHeight(a5),d5
@@ -17559,7 +18448,7 @@ shownames:
 	push	d7
 	move.l	chosenmodule(a5),-(sp)
 	move.l	chosenmodule2(a5),chosenmodule(a5)
-	bsr.w	unmarkit
+	bsr	unmarkit
 	move.l	(sp)+,chosenmodule(a5)
 	pop	d7
 .huh22	rts
@@ -17569,9 +18458,9 @@ shownames:
 * d2 = printattavien rivien m‰‰r‰
 doPrintNames:
 ;	DPRINT  "shownames obtain list"
-	bsr.w  obtainModuleList
+	bsr  obtainModuleList
 	;lea	moduleListHeader(a5),a4	
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	a0,a4
 
 ; if DEBUG
@@ -17587,10 +18476,10 @@ doPrintNames:
 	subq.l	#1,d0
 	bmi.b	.baa
 
-	bsr.w	getListNodeCached
-	beq.w	.lop	* check for z-flag error indication
+	bsr	getListNodeCached
+	beq	.lop	* check for z-flag error indication
 	tst.l	(a0)
-	beq.w	.lop
+	beq	.lop
 	move.l	a0,a3
 	move.l	a0,a4
 .baa
@@ -17613,15 +18502,16 @@ doPrintNames:
 
 	* loop to print d5 lines 
 .looppo
+
 	* a4=current node
 	* a3=next node
 	* test if at end
 	TSTNODE	a4,a3
-	beq.w	.lop			* joko loppui
+	beq	.lop			* joko loppui
 	move.l	a3,a4
-	
+
 	move.l	l_nameaddr(a3),a0
-	bsr.w	cut_prefix
+	bsr	cut_prefix
 	move.l	a0,a2		* name is in a2
 
 	moveq	#0,d7		* clear divider flag
@@ -17655,8 +18545,8 @@ doPrintNames:
 
 	* name to print
 	move.l	a2,a0		
-	
-	lea	-200(sp),sp
+
+	lea	-300(sp),sp
 	tst.b	l_remote(a3)
 	beq.b	.local
 	move.l	a0,d0
@@ -17703,11 +18593,11 @@ doPrintNames:
 	beq.b	.noFav
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.noBold
-	bsr.w	printBold
+	jsr	printBold
 	bra.b	.wasFav
 .noFav
 .noBold
-	bsr.w	print
+	jsr	print
 .wasFav
 	; Clear the line towards the right edge of rastport
 	move.l	rastport(a5),a1	
@@ -17715,7 +18605,7 @@ doPrintNames:
 
 	pop	d1	; restore start y
 	
-	lea		200(sp),sp * name buffer
+	lea		300(sp),sp * name buffer
 
 	; Display random marker if needed
 	tst.b	d7		* divider will not have a random play marker
@@ -17725,7 +18615,7 @@ doPrintNames:
 	* Random play mode magic check: Add a marker to the end to indicate module has been played?
 	* Here the module index is needed
 	move.l 	d3,d0 
-	bsr.w	testRandomTableEntry ; keeps d1 is safe
+	bsr	testRandomTableEntry ; keeps d1 is safe
 	beq.b	.noMarker
 
 	* marker x-pos relative to the right edge
@@ -17787,7 +18677,7 @@ doPrintNames:
 
 	jsr	removeListBoxClip
 
-	bsr.w 	releaseModuleList
+	bsr 	releaseModuleList
 	rts
 	
 .marker	dc.b	0,0
@@ -17856,7 +18746,7 @@ hiiridelete
 	skipIfGadgetDisabled gadgetDelButton
 	tst.l	chosenmodule(a5)
 	bmi.b	.noChosen
-	bsr.w	areyousure_delete
+	bsr	areyousure_delete
 	tst.l	d0
 	bne.b	rbutton8b
 .noChosen
@@ -17868,7 +18758,7 @@ rbutton8b
 	bsr.b	delete\.elete
 	tst.b	deleteflag(a5)
 	bne.b	.l
-	bra.w	resh
+	bra	resh
 
 rbutton8
 deleteButtonAction
@@ -17880,22 +18770,22 @@ delete
 	skipIfGadgetDisabled gadgetDelButton
 	moveq	#0,d7
 	bsr.b	.elete
-	bsr.w	resh
+	bsr	resh
 	clr.b	deleteflag(a5)
 .skip
 	rts
 .elete
-	bsr.w	confirmFavoritesModification
+	bsr	confirmFavoritesModification
 	beq.b	.skip
 
 	clr.b	movenode(a5)
 	moveq	#PLAYING_MODULE_NONE,d0
 	move.l	d0,chosenmodule2(a5)
 	st	hippoonbox(a5)
-	bsr.w	listChanged
+	bsr	listChanged
 
 	move.l	chosenmodule(a5),d0
-	bmi.w	.erer
+	bmi	.erer
 
 	tst.l	playingmodule(a5)
 	bmi.b	.huh	
@@ -17908,15 +18798,15 @@ delete
 .sama	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 
 .huh	tst.l	modamount(a5)
-	beq.w	.erer
+	beq	.erer
 
 	;lea	moduleListHeader(a5),a4
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	a0,a4
 
 	DPRINT	"delete getListNode"
-	bsr.w	getListNode
-	beq.w	.erer
+	bsr	getListNode
+	beq	.erer
 	move.l	a0,a3
 	
 	tst.l	d7
@@ -17927,7 +18817,7 @@ delete
 	tst.b	l_divider(a3)
 	beq.b	.de
 	not.b	deleteflag(a5)		 * Deleting a divider! Special action
-	beq.w	.nmodo
+	beq	.nmodo
 	bra.b	.ni
 .de
 	tst.b	deleteflag(a5)
@@ -17935,7 +18825,7 @@ delete
 
 	pushm	all
 	lea	.del(pc),a0
-	bsr.w	printbox
+	bsr	printbox
 	popm	all
 
 
@@ -17958,7 +18848,7 @@ delete
 	bne.b	.noa
 
 	pushm	d5/d6
-	bsr.w	rbutton4	* ejektoidaan ja yritet‰‰n uusiks
+	bsr	rbutton4	* ejektoidaan ja yritet‰‰n uusiks
 	popm	d5/d6
 	bra.b	.noa
 
@@ -17981,7 +18871,7 @@ delete
  endc
 
 
-	bsr.w	freemem
+	bsr	freemem
 
 	subq.l	#1,modamount(a5)
 	bpl.b	.ak
@@ -17997,7 +18887,7 @@ delete
 .ee
 .nmodo
 	st	hippoonbox(a5)
-	bra.w	shownames
+	bra	shownames
 ;	rts
 
 .erer	clr.b	deleteflag(a5)
@@ -18048,7 +18938,7 @@ execuutti
 	move.l	d7,a0
 	lea	100(a4),a1
 	move.l	#'run ',(a1)+
-	bsr.w	parsereqdir2
+	bsr	parsereqdir2
 	addq	#1,a1
 .c	move.b	(a4)+,(a1)+
 	bne.b	.c
@@ -18084,7 +18974,7 @@ inforivit_clear:
 	move	WINSIZX(a5),d2
 	sub		#10,d2	* side margin
 	;moveq	#28+WINY,d3
-	bsr.w	tyhjays
+	bsr	tyhjays
 	movem.l	(sp)+,d0-d4
 	rts
 
@@ -18102,7 +18992,7 @@ inforivit_clear_2ndrow:
     lsr     #1,d4
     add     d4,d1
     
-	bsr.w	tyhjays
+	bsr	tyhjays
 	movem.l	(sp)+,d0-d4/a0
 	rts
 
@@ -18112,7 +19002,7 @@ inforivit_play
 	bsr.b	inforivit_clear
 	tst.l	playingmodule(a5)
 	bpl.b	.huh
-	bra.w	bopb
+	bra	bopb
 	
 .huh
 
@@ -18121,7 +19011,7 @@ inforivit_play
 * Jos S3M, nime‰ ei tartte siisti‰.
 
 	cmp	#pt_multi,playertype(a5)
-	bne.w	.eer
+	bne	.eer
 
 	move.l	ps3m_mtype(a5),a0
 	cmp	#mtMOD,(a0)		* MODeissa ei konvertointia
@@ -18132,7 +19022,7 @@ inforivit_play
 	move.l	ps3m_mname(a5),a0
 	move.l	(a0),a0
 	lea	modulename(a5),a1
-	moveq	#INFO_MODULE_NAME_LEN-1,d0
+	move.l	#INFO_MODULE_NAME_LEN-1,d0
 	moveq	#0,d1
 .copc	move.b	(a0)+,d1
 
@@ -18169,11 +19059,11 @@ inforivit_play
 .hee	move.l	a0,d1
 
 	cmp	#mtMOD,d3
-	bne.w	.leer
+	bne	.leer
 	pushm	d1/d2
-	bsr.w	siisti_nimi
+	bsr	siisti_nimi
 	popm	d1/d2
-	bra.w	.leer
+	bra	.leer
 
 .hee2
 	; ensure zero termination for pt mods?
@@ -18188,7 +19078,7 @@ inforivit_play
 .5	dc.b	"ImpulseTracker      [DP]",0
  even
 
-.eer	bsr.w	siisti_nimi
+.eer	bsr	siisti_nimi
 
 	move.l	playerbase(a5),a0
 	lea	p_name(a0),a0
@@ -18209,7 +19099,7 @@ inforivit_play
 	tst	d2			* PS3M channel count
 	beq.b	.ic
 	lea	tyyppi2_t(pc),a0
-.ic	bsr.w	desmsg
+.ic	bsr	desmsg
 
 	lea	desbuf(a5),a2		* moduletyyppi talteen
 	move.l	a2,a0
@@ -18232,11 +19122,13 @@ bipb2
 bopb	rts
 
 putinfo:
-	bsr.w	inforivit_clear
+	bsr	inforivit_clear
 	bra.b	bipb
 
 printInfoBox:
 infoBoxPrint:
+    tst.b   win(a5)
+    beq     .x
 	jsr		setInfoBoxClip
 	pushm	d0/d1/a0
 	move.l	rastport(a5),a1
@@ -18251,7 +19143,7 @@ infoBoxPrint:
 	move.l	fontbase(a5),a0
 	lore	GFX,SetFont	
 	jsr		removeInfoBoxClip
-	rts
+.x	rts
 
 * 2nd row
 putinfo2:
@@ -18323,7 +19215,7 @@ inforivit_ppload
 inforivit_pause
 	lea	.1(pc),a0
     moveq   #.1e-.1,d0
-	bra.w	putinfo2centered
+	bra	putinfo2centered
 ;.1	dc.b	"        *** Paused ***        ",0
 .1	dc.b	"-=-=-=-=-=- Paused -=-=-=-=-=-",0
 .1e
@@ -18334,35 +19226,35 @@ inforivit_xpkload
 	lea	.1(pc),a0
 	lea	probebuffer+8(a5),a1
 	move.l	a1,d0
-	bsr.w	desmsg
+	bsr	desmsg
 	lea	desbuf(a5),a0
-	bra.w	putinfo2
+	bra	putinfo2
 .1	dc.b	"XPK %4s",0
  even
 
 inforivit_xpkload2
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"Identifying XPK file...",0
  even
 
 inforivit_fimpload
 	lea	.1(pc),a0
-	bra.w	putinfo2
+	bra	putinfo2
 .1	dc.b	"FImp file",0
  even
 
 inforivit_fimpdecr
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"Exploding...",0
  even
 
 inforivit_xfd
 	lea	.1(pc),a0
-	bsr.w	desmsg	
+	bsr	desmsg	
 	lea	desbuf(a5),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"XFD decrunching...",10
 	dc.b	"%-30s",0
  even
@@ -18370,33 +19262,33 @@ inforivit_xfd
 
 inforivit_errc
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"*** ERROR ***",10
 	dc.b	"Skipping...",0
  even
 
 inforivit_initerror
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"Initialization error!",0
  even
 
 inforivit_warn
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"*** Warning! ***",10
 	dc.b	"File was loaded in chip ram! ",0
  even
 
 inforivit_group
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"Loading player group...",0
  even
 
 inforivit_group2
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"Loading replayer...",0
  even
 
@@ -18408,7 +19300,7 @@ inforivit_extracting
 	subq	#1,d6
 	beq.b	.q
 	lea	.3(pc),a0
-.q	bra.w	putinfo
+.q	bra	putinfo
 .1	dc.b	"LhA extracting...",0
 .2	dc.b	"UnZipping...",0
 .3	dc.b	"LZX extracting...",0
@@ -18416,26 +19308,25 @@ inforivit_extracting
 
 inforivit_downloading
 	lea	.1(pc),a0
-	bra.w	putinfo
+	bra	putinfo
 .1	dc.b	"Downloading...",0
  even
-
-inforivit_searching
+inforivit_connecting
 	lea	.1(pc),a0
-	bra.w	putinfo
-.1	dc.b	"Searching...",0
+	bra	putinfo
+.1	dc.b	"Connecting...",0
  even
 
 
 ;inforivit_initializing
 ;	lea	.1(pc),a0
-;	bra.w	putinfo2
+;	bra	putinfo2
 ;.1	dc.b	"Initializing...",0
 ; even
 ;
 ;inforivit_identifying
 ;	lea	.1(pc),a0
-;	bra.w	putinfo
+;	bra	putinfo
 ;.1	dc.b	"Identifying...",0
 ; even
 ;
@@ -18527,9 +19418,9 @@ settimestart
 
 lootaa					* p‰ivitet‰‰n kaikki
 
-	bsr.w	lootaan_kello
-;	bsr.w	lootaan_muisti
-	bsr.w	lootaan_nimi
+	bsr	lootaan_kello
+;	bsr	lootaan_muisti
+	bsr	lootaan_nimi
 ;	bsr.b	lootaan_aika		
 ;	rts
 
@@ -18586,19 +19477,30 @@ lootaan_aika
 
 ************* t‰h‰n timeout!
 	move	timeout(a5),d1
-	beq.w	.ok0
+	beq     .ok0
 	mulu	#50,d1
 
 	cmp.l	d1,d0
-	blo.b	.ok0
+	blo    	.ok0
 
 	DPRINT 	"Timeout triggered %ld"
 
 	cmp.l	#1,modamount(a5)	* 0 tai 1 modia -> ei timeouttia
-	bls.b	.ok0
+	bls 	.ok0
 
 	tst.b	timeoutmode(a5)		* timeout-moodi
-	beq.b	.all			* -> kaikille modeille
+	beq 	.all			* -> kaikille modeille
+
+    * Special case check:
+    * Streamed sample with no content length
+    * should not be interrupted with a timeout
+    cmp     #pt_sample,playertype(a5)
+    bne     .notSample
+    jsr     streamIsAlive
+    beq     .notSample
+    jsr     streamGetContentLength
+    beq     .ok0
+.notSample  
 
 	move.l	playerbase(a5),a0	* vain niille, joilla ei ole
 	move	p_liput(a0),d1		* end-detectia.
@@ -18627,7 +19529,7 @@ lootaan_aika
 .nosongs
 
 	move.b	rawKeySignal(a5),d1
-	bsr.w	signalit
+	bsr	signalit
 	pop	d0
 .ok0
 
@@ -18649,7 +19551,7 @@ lootaan_aika
 	move	#$28,rawkeyinput(a5)
 	move.b	rawKeySignal(a5),d1
 	pushm	all
-	bsr.w	signalit
+	bsr	signalit
 	popm	all
 .noerl
 
@@ -18657,7 +19559,7 @@ lootaan_aika
 
 	cmp.l	#99*60*50,d0		* onko aika 99:59?
 	blo.b	.ok
-	bsr.w	settimestart
+	bsr	settimestart
 	moveq	#0,d0
 .ok
 
@@ -18670,7 +19572,7 @@ lootaan_aika
 	clr	d0
 	swap	d0
 
-	bsr.w	logo
+	bsr	logo
 	divu	#10,d0
 	add.b	#'0',d0
 	move.b	d0,(a0)+
@@ -18728,7 +19630,7 @@ lootaan_aika
 
 *****
 	tst.l	playingmodule(a5)
-	bmi.w	.jaa
+	bmi	.jaa
 
 	move.l	playerbase(a5),a1
 	move	p_liput(a1),d0
@@ -18738,10 +19640,10 @@ lootaan_aika
 	move.b	#" ",(a0)+
 .lootaan_pos
 	move	pos_nykyinen(a5),d0
-	bsr.w	putnumber
+	bsr	putnumber
 	move.b	#'/',(a0)+
 	move	pos_maksimi(a5),d0
-	bsr.w	putnumber
+	bsr	putnumber
 
 
 .lootaan_song
@@ -18763,7 +19665,7 @@ lootaan_aika
 
 	move.b	#' ',(a0)+
 	move.b	#'#',(a0)+
-	bsr.w	putnumber
+	bsr	putnumber
 
 	cmp	#pt_prot,playertype(a5)		* ei maxsongeja
 	bne.b	.nptr
@@ -18778,7 +19680,7 @@ lootaan_aika
 	move	maxsongs(a5),d0
 	addq	#1,d0
 	sub		minsong(a5),d0
-	bsr.w	putnumber
+	bsr	putnumber
 .jaa	
 
 ;	tst.b	uusikick(a5)	
@@ -18798,7 +19700,7 @@ lootaan_aika
 		
 
 	clr.b	(a0)
-	bra.w	lootaus
+	bra	lootaus
 
 
 
@@ -18835,12 +19737,12 @@ lootaan_kello
 	lea	-10(sp),sp
 	move.l	sp,a0
 	move	d1,d0
-	bsr.w	putnumber2
+	bsr	putnumber2
 	move.b	#":",(a0)+
 	move.l	d2,d0
 	swap	d0
 	add	d0,d3
-	bsr.w	putnumber2
+	bsr	putnumber2
 	clr.b	(a0)
 	move.l	sp,a3
 
@@ -18875,7 +19777,7 @@ lootaan_kello
 	cmp	#2,d7
 	bne.b	.pr
 	lea	10(sp),sp
-	bra.w	xloota
+	bra	xloota
 .pr
 
 	move.l	a3,d0
@@ -18884,7 +19786,7 @@ lootaan_kello
 	move	d4,d1
 	move	d5,d2
 	lea	.form(pc),a0
-	bsr.w	desmsg
+	jsr	desmsg
 	lea	10(sp),sp
 
 	bra.b	lootaus
@@ -18903,7 +19805,7 @@ lootaan_nimi
 
 	bsr.b	logo
 	lea	modulename(a5),a1
-	moveq	#INFO_MODULE_NAME_LEN-1,d0
+	move.l	#INFO_MODULE_NAME_LEN-1,d0
 .he	move.b	(a1)+,(a0)+
 	dbeq	d0,.he
 	clr.b	(a0)
@@ -19000,7 +19902,7 @@ putnu	ext.l	d0
 *   d1 = Index of selected file
 getFileBoxIndexFromMousePosition:
 	tst	boxsize(a5)
-	beq.w	.out
+	beq	.out
 
 	move	mousex(a5),d0
 	move	mousey(a5),d1
@@ -19028,6 +19930,7 @@ getFileBoxIndexFromMousePosition:
 	add		#126-63,d2	
 	;move	#126+WINY,d2		* Bottom edge
 	add	boxy(a5),d2		* Height of box
+    sub     BOTTOM_MARGIN(a5),d2
 	cmp	d2,d1
 	bhi.b	.out
 
@@ -19075,7 +19978,7 @@ getFileBoxIndexFromMousePosition:
 * Chosen line is highlighted and previously chosen line highlight removed.
 
 markline:
-	bsr.w getFileBoxIndexFromMousePosition
+	bsr getFileBoxIndexFromMousePosition
 	beq.b  .out
 	bsr.b	.doMark
 	* something marked
@@ -19134,7 +20037,7 @@ markline:
 * Tiedostoa doubleclickattu! Soitetaan...
 * Double click detected
 	tst.b	doubleclick(a5)		* onko sallittua?
-	bne.w	rbutton1		* Play!
+	bne	rbutton1		* Play!
 	rts
 
 .nodouble
@@ -19142,8 +20045,8 @@ markline:
 	lea	clickmicros(a5),a1
 	lore	Intui,CurrentTime
 .double
-	bsr.w	showNamesNoCentering
-	bsr.w	reslider
+	bsr	showNamesNoCentering
+	bsr	reslider
 	rts
 
 * Highlight line by xorring/complementing it
@@ -19160,6 +20063,10 @@ markit:
 	bmi.b	.outside
 	moveq	#0,d0
 	move	boxsize(a5),d0
+    tst.w   searchLayoutActive(a5)   
+    beq.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d0
+.lm1
 	cmp.l	d0,d5
 	bhs.b	.outside
 	tst.b	win(a5)
@@ -19169,7 +20076,7 @@ markit:
 ;       to highlight lines
 	; Why is the above done? remove?
 ;	move.l	d5,d1
-;	bsr.w	 obtainModuleList
+;	bsr	 obtainModuleList
 ;	lea	moduleListHeader(a5),a4	
 ;	move.l	chosenmodule(a5),d0	* etsit‰‰n kohta
 ;.luuppo
@@ -19211,7 +20118,7 @@ markit:
 	move.b	d7,rp_Mask(a1)
 
 .nomods
-;	bsr.w	 releaseModuleList
+;	bsr	 releaseModuleList
 
 .outside	
 	rts
@@ -19220,7 +20127,7 @@ marklineRightMouseButton
 	* Check if feature is enabled in prefs
 	tst.b	favorites(a5)
 	beq.b	.out
-	bsr.w	 getFileBoxIndexFromMousePosition
+	bsr	 getFileBoxIndexFromMousePosition
 	beq.b  .out
 	* RMB was hit on top of the list.
 	* In fav list ignore the click.
@@ -19247,7 +20154,7 @@ marklineRightMouseButton
 	move.l	d0,d4
 
 	* Toggle for node at index d0
-	bsr.w	toggleFavoriteStatus
+	bsr	toggleFavoriteStatus
 	beq.b	.failed
 
 	move.l	d4,d0
@@ -19255,7 +20162,7 @@ marklineRightMouseButton
 	move	d3,d1 	* target y-line
 	moveq	#1,d2   * just do one line
 	push 	d3
-	bsr.w	doPrintNames
+	bsr	doPrintNames
 	pop 	d3
 
 	* see if this line happened to be chosen already.
@@ -19263,7 +20170,7 @@ marklineRightMouseButton
 	* wiped away above.
 	cmp.l	 markedline(a5),d3	
 	bne.b	.different
-	bsr.w	markit
+	bsr	markit
 .different
 	rts	
 .notFile
@@ -19341,8 +20248,8 @@ getVisibleModuleListHeader:
 
 listChanged:
 	DPRINT "List changed"
-	bsr.w	clearCachedNode
-	bsr.w	clear_random	
+	bsr	clearCachedNode
+	bsr	clear_random	
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.browser
 	st	moduleListChanged(a5)
@@ -19369,7 +20276,7 @@ getListNode:
 
 	jsr	obtainModuleList
 	;lea	moduleListHeader(a5),a0
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 
 	move.l	a0,d1	* Sanity check
 	beq.b	.out
@@ -19421,7 +20328,7 @@ getListNodeCached
 	tst.l	cachedNode(a5)
 	bne.b	.n
 	* Get head node from the minimal list header
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	move.l	MLH_HEAD(a0),cachedNode(a5)
 	;move.l	moduleListHeader+MLH_HEAD(a5),cachedNode(a5)
 	clr.l	cachedNodeIndex(a5)
@@ -19531,11 +20438,11 @@ showTooltipPopup
 	move	d7,nw_TopEdge(a0)
 
 	* see if it fits on screen and adjust
-	bsr.w	tark_mahtu
+	bsr	tark_mahtu
 
 	lore	Intui,OpenWindow
 	move.l	d0,d5
-	beq.w	.x
+	beq	.x
 	DPRINT	"Tooltip opened %lx"
 	move.l	d0,a0
 	move.l	wd_RPort(a0),d7		* rastport
@@ -19616,7 +20523,7 @@ showTooltipPopup
 * Also deactivates any tooltip that is about to open.
 closeTooltipPopup
 	pushm	all
-	bsr.w	deactivateTooltip
+	jsr	deactivateTooltip
 	move.l	tooltipPopupWindow(a5),d0
 	beq.b	.exit
 	move.l	d0,a0
@@ -19855,7 +20762,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .fine
 	move.l	infopos2(a5),(a0)
-	bsr.w	tark_mahtu
+	bsr	tark_mahtu
 
 	move.l	a0,a2
 	basereg swinstruc,a2
@@ -19872,8 +20779,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	tst.l	d0
 	bne.b	.koo
 	lea	windowerr_t(pc),a1
-	bsr.w	request
-	bra.w	.sexit
+	bsr	request
+	bra	.sexit
 .koo
 
 	move.l	d0,a0
@@ -19910,7 +20817,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	subq	#3,d4
 	lsl	#3,d4
 	add	d4,d3
-	bsr.w	drawtexture
+	bsr	drawtexture
 
 	; set slider height
 	move	infosize(a5),d0
@@ -19980,7 +20887,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	jsr	releaseModuleData
 	; check if got data
 	tst.l	infotaz(a5)
-	beq.w	.sexit
+	beq	.sexit
 
 
 	clr	riviamount(a5)
@@ -19993,10 +20900,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra.b	.fii
 .kii
 
-	bsr.w	.print
+	bsr	.print
 
 	clr	sfirstname(a5)
-	bsr.w	.reslider
+	bsr	.reslider
 	bsr	.refreshInfoWindowResizeGadget
 
 *** Info window message loop
@@ -20004,7 +20911,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	DPRINT	"info msg loop"
 	bra.b	.msgLoop
 .returnmsg
-	bsr.w	.flush_messages
+	bsr	.flush_messages
 .msgLoop
 	moveq	#0,d0			* viestisilmukka
 	moveq	#0,d1
@@ -20020,15 +20927,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; exit signal?
 	move.b	info_signal(a5),d1
 	btst	d1,d0
-	bne.w	.sexit
+	bne	.sexit
 	; content refresh signal?
 	move.b	info_signal2(a5),d1
 	btst	d1,d0
 	beq.b	.noRefresh
 	* refresh content signal
-	bsr.w	.flush_messages
-	bsr.w	.fraz
-	bra.w	.reprint
+	bsr	.flush_messages
+	bsr	.fraz
+	bra	.reprint
 .noRefresh
 
 .idcmpLoop	
@@ -20049,13 +20956,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	cmp.l	#IDCMP_ACTIVEWINDOW,d2
 	bne.b	.noActive
-	bsr.w	.refreshInfoWindowResizeGadget
+	bsr	.refreshInfoWindowResizeGadget
 	bra.b	.idcmpLoop
 
 .noActive
 	cmp.l	#IDCMP_INACTIVEWINDOW,d2
 	bne.b	.noInactive
-	bsr.w	.refreshInfoWindowResizeGadget
+	bsr	.refreshInfoWindowResizeGadget
 	bra.b	.idcmpLoop
 	
 .noInactive
@@ -20065,8 +20972,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bne.b	.noNewSize
 	bsr	.infoWindowNewSize
 	beq.b	.idcmpLoop
-	bsr.w	.flush_messages
-	bra.w	.redraw
+	bsr	.flush_messages
+	bra	.redraw
 
 .noNewSize
 	cmp.l	#IDCMP_RAWKEY,d2
@@ -20090,8 +20997,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bne.b	.noMouseButtons
 	cmp	#SELECTDOWN,d3			* vasen
 	bne.b	.noSelectDown
-	bsr.w	.samplePlay
-	bra.w	.idcmpLoop
+	bsr	.samplePlay
+	bra	.idcmpLoop
 
 .noSelectDown
 	cmp	#MENUDOWN,d3			* oikea
@@ -20099,7 +21006,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .noMouseButtons
 	cmp.l	#IDCMP_CLOSEWINDOW,d2
-	bne.w	.idcmpLoop
+	bne	.idcmpLoop
 	
 .sexit	
 	DPRINT	"info exit"
@@ -20118,7 +21025,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .uh1
 	bsr.b	.fraz
 
-	;bsr.w	freeinfosample
+	;bsr	freeinfosample
 	rts
 
 
@@ -20132,7 +21039,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .flush_messages
 	move.l	swindowbase(a5),a0
-	bra.w  flushWindowMessages
+	bra  flushWindowMessages
 	
 .reslider
 	moveq	#0,d0
@@ -20143,17 +21050,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	moveq	#0,d1
 	move	infosize(a5),d1
-	beq.w	.eiup
+	beq	.eiup
 	cmp	d1,d0		* v‰h boxsize
 	bhs.b	.ok
 	move	d1,d0
 .ok
 	lsl.l	#8,d0
-	bsr.w	divu_32
+	bsr	divu_32
  	
 	move.l	d0,d1
 	move.l	#65535<<8,d0
-	bsr.w	divu_32
+	bsr	divu_32
 	move.l	d0,d1
 
 	lea	gAD1,a0
@@ -20174,7 +21081,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	sfirstname(a5),d0
 	mulu	#65535,d0
-	bsr.w	divu_32
+	bsr	divu_32
 	cmp	pi_VertPot(a1),d0
 	sne	d2
 	move	d0,pi_VertPot(a1)
@@ -20217,7 +21124,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .bar	
 	endb	a0
 	;lea	gAD1,a0
-	bsr.w	.refreshInfoWindowGadget
+	bsr	.refreshInfoWindowGadget
 .eiup	rts
 
 
@@ -20225,7 +21132,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	DPRINT	"info newsize"
 	move.l	swindowbase(a5),a0
 	lore	Intui,RefreshWindowFrame
-	bsr.w	.refreshInfoWindowResizeGadget
+	bsr	.refreshInfoWindowResizeGadget
 
 	move.l	swindowbase(a5),a0
  	move	wd_Height(a0),d0
@@ -20312,7 +21219,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	cmp	#$4d,d3
 	beq.b	.alaz
 	cmp	#$4c,d3
-	bne.w	.rawkeyExit
+	bne	.rawkeyExit
 
 	sub	d0,sfirstname(a5)
 	bpl.b	.zoo
@@ -20332,7 +21239,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .zoo	
 	cmp	d2,d1
 	beq.b	.rawkeyExit
-	bsr.w	.reslider
+	bsr	.reslider
 	bsr.b	.print
 	
 .rawkeyExit
@@ -20376,7 +21283,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#0,d0
 .all0	moveq	#0,d1
 	move	infosize(a5),d2
-	bra.w	.print2
+	bra	.print2
 
 .all	move	sfirstname(a5),d0
 	bra.b	.all0
@@ -20564,7 +21471,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;	move	#39*8+35-3,d2
 ;	moveq	#5,d3
 ;	add	d7,d3
-;	bsr.w	drawtexture
+;	bsr	drawtexture
 
 ;.oz	popm	all
 ;	rts
@@ -20573,7 +21480,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * in: 
 *   a3 = desbuf
 *   a1 = parametrit
-.desmsg4	
+.desmsg4:
 	movem.l	d0-d7/a0-a3/a6,-(sp)
 	jmp	pulppa
 
@@ -20603,7 +21510,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	a0,infotaz(a5)
 	* Displays some statistics with correct keyfile.
 	* tst.b	keycheck(a5)
-	* bne.w	.nox
+	* bne	.nox
 	
 	lea	(about_t1-about_t)(a0),a4
 	lea	(about_tt-about_t1)(a4),a0
@@ -20626,7 +21533,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.b	#'≠',-1(a4)
 
 	lea	200(sp),sp
-	bra.w	.nox
+	bra	.nox
 
 .modinf
 	* Display module specific information
@@ -20640,9 +21547,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; safety checks
 	tst	playertype(a5)
 	beq.b	.1
+	cmp	    #pt_sample,playertype(a5)
+	beq.b   .2 ; no address for samples
 	tst.l	moduleaddress(a5)
 	beq.b	.1
-	tst.l	playingmodule(a5)
+.2	tst.l	playingmodule(a5)
 	bpl.b	.bah
 .1
 	* Nothing is being played. Display "No info available".
@@ -20650,20 +21559,119 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	#35,info_prosessi(a5)		* lipbub
 
 	moveq	#3,d5
-	bsr.w	.allo2
-	beq.w	.prepareFailed
+	bsr	.allo2
+	beq	.prepareFailed
 
 	lea	.huhe(pc),a0
 	move.l	infotaz(a5),a1
 .faz	move.b	(a0)+,(a1)+
 	bne.b	.faz
 
-	bra.w	.selvis
+	bra	.selvis
 
 .bah
 	* Something is being played.
 	* Check supported types.
 
+******************* Sample
+	cmp	#pt_sample,playertype(a5)
+	bne 	.nosample
+    
+    ;----------------------------------
+    ; Provide information about MP3 stuff,
+    ; no extra info on other sample formats available.
+
+    * Local?
+    move.l	modulefilename(a5),a0
+    jsr     id_mp3filename
+    beq     .wazMp3
+    * Remote?
+    jsr     streamIsAlive
+    beq     .nosample
+    jsr     streamIsMpegAudio
+    beq     .nosample
+.wazMp3
+    DPRINT  "sample info"
+    move	#33,info_prosessi(a5)
+
+    * lines to allocate, max tags 20, 3 lines per one
+    moveq   #3*20,d5 
+    bsr     .allo2
+    beq     .prepareFailed
+    move.l  infotaz(a5),a3
+
+    move.l  a3,a0
+    jsr     getMp3TagText
+
+    ;----------------------------------
+    lea	-300(sp),sp
+    move.l  streamHeaderIcyName(a5),d0
+    beq.b   .noIcyName
+    move.l  sp,a3
+    lea     .icyForm1(pc),a0
+    bsr     .putIcy
+.noIcyName
+    move.l  streamHeaderIcyDescription(a5),d0
+    beq.b   .noIcyDesc
+    move.l  sp,a3
+    lea     .icyForm2(pc),a0
+    bsr     .putIcy
+.noIcyDesc
+    move.l  infotaz(a5),d0
+    lea     300(sp),sp
+    ;----------------------------------
+
+    move.l  infotaz(a5),a3
+    tst.b   (a3)
+    bne     .yesText
+    
+    * Free buffer if nothing got 
+    move.l  a3,a0
+    jsr     freemem
+    clr.l   infotaz(a5)
+    bra     .nosample
+.yesText
+    move.l  a3,d0
+    bra     .selvis
+
+; Icy specific putter
+.putIcy
+    push    a3
+    jsr     desmsg3
+    pop     a0
+	; target output buffer
+	move.l	infotaz(a5),a3
+	bsr	.lloppu
+    ; do ines wrapping at space
+	bsr    	.doLine
+    bpl    	.ic1
+    move.b  #" ",(a3)+
+	bsr    	.doLine
+	bpl    	.ic1
+    move.b  #" ",(a3)+
+	bsr    	.doLine
+	bpl    	.ic1
+    move.b  #" ",(a3)+
+	bsr    	.doLine
+	bpl    	.ic1
+    move.b  #" ",(a3)+
+	bsr    	.doLine
+	bpl    	.ic1
+    move.b  #" ",(a3)+
+	bsr    	.doLine
+.ic1   
+    rts
+
+
+.icyForm1
+    dc.b    ILF,ILF2," Name:",ILF,ILF2
+    dc.b    " %s",ILF,ILF2,0
+.icyForm2
+    dc.b    ILF,ILF2," Description:",ILF,ILF2
+    dc.b    " %-.250s",ILF,ILF2,0
+ even
+
+.nosample
 ******************* THX
 
 	cmp	#pt_thx,playertype(a5)
@@ -20674,8 +21682,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#0,d5
 	move.b	12(a4),d5
 	move	d5,d7
-	bsr.w	.allo * out: a3 = output buffer
-	beq.w	.prepareFailed
+	bsr	.allo * out: a3 = output buffer
+	beq	.prepareFailed
 
 	move.l	moduleaddress(a5),a4
 	move.l	a4,a2
@@ -20694,15 +21702,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	d0,(a1)	 * param 1
 	move.l	a4,4(a1) * param 2
 	lea	.thxform(pc),a0
-	bsr.w	.desmsg4
-	bsr.w	.lloppu
+	bsr	.desmsg4
+	bsr	.lloppu
 	lea	10(sp),sp
 	bsr.b	.fo
 	
 	addq	#1,d0
 	dbf	d7,.thxb
 
-	bra.w	.selvis
+	bra	.selvis
 
 .fo	cmp.l	a2,a4
 	beq.b	.fox
@@ -20718,8 +21726,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	#33,info_prosessi(a5)
 
 	moveq	#31,d5
-	bsr.w	.allo
-	beq.w	.prepareFailed
+	bsr	.allo
+	beq	.prepareFailed
 
 
 	move.l	moduleaddress(a5),a0
@@ -20739,17 +21747,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	a4,4(a1)
 
 	lea	.medform(pc),a0
-	bsr.w	.desmsg4
+	bsr	.desmsg4
 
 	lea	16(sp),sp
-	bsr.w	.lloppu
+	bsr	.lloppu
 
 	lea	30(a4),a4
 	
 	addq	#1,d0
 	dbf	d7,.digib
 
-	bra.w	.selvis
+	bra	.selvis
 
 
 .nobooster
@@ -20761,12 +21769,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ***************** MED
 	tst.b	medrelocced(a5)		* pit‰Ê olla relokatoitu
-	beq.w	.noo
+	beq	.noo
 
 	move.l	moduleaddress(a5),a0
 	move.l	32(a0),a1		* MMD0exp
 	tst.l	20(a1)
-	beq.w	.noo_med
+	beq	.noo_med
 	move.l	20(a1),a2		* MMDInstrInfo (samplenamet)
 	move	24(a1),d4		* samplejen m‰‰r‰
 	move	26(a1),d6		* entry size
@@ -20774,8 +21782,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	24(a0),d7		* insthdr
 
 	move	d4,d5
-	bsr.w	.allo
-	beq.w	.prepareFailed
+	bsr	.allo
+	beq	.prepareFailed
 
 	move.l	d7,a0
 
@@ -20798,29 +21806,32 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.medform(pc),a0
-	bsr.w	.desmsg4
+	bsr	.desmsg4
 	lea	16(sp),sp
-	bsr.w	.lloppu
+	bsr	.lloppu
 	pop	a0
 
 	add	d6,a2
 	addq	#1,d0
 	dbf	d4,.medl
 
-	bra.w	.selvis
+	bra	.selvis
 
 
 
 .nomed
 	cmp	#pt_sid,playertype(a5)		* PSID
-	bne.w	.nosid
+	bne	.nosid
 
 * SID piisista infoa
 
 	move	#33,info_prosessi(a5)		* PSID info-lippu
 
+    jsr     sid_getSongSpeed
+    * d0 = speed number 
+    * d1 = speed hz 
 
-	lea	-42(sp),sp
+	lea	-50(sp),sp
 	move.l	sp,a1
 	pushpea	sidheader+sidh_name(a5),(a1)+
 	pushpea	sidheader+sidh_author(a5),(a1)+
@@ -20829,6 +21840,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	clr.l	(a1)+
 	move	sidheader+sidh_number(a5),-6(a1)
 	move	sidheader+sidh_defsong(a5),-2(a1)
+    move.l  d0,(a1)+    * song speed
+    move.l  d1,(a1)+    * song speed hz
 	move.l	modulelength(a5),(a1)+
 	move.l	moduleaddress(a5),d0
 	move.l	d0,(a1)+
@@ -20838,20 +21851,20 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	clr.l	(a1)
 
 	move.l	sp,a1
-	moveq	#11,d5
-	bsr.w	.allo2
+	moveq	#12,d5
+	bsr	.allo2
 	bne.b	.jee9
-	lea	42(sp),sp
-	bra.w	.prepareFailed
+	lea	50(sp),sp
+	bra	.prepareFailed
 .jee9
 
 	lea	.form(pc),a0
 	move.l	infotaz(a5),a3
-	bsr.w	.desmsg4
-	lea	42(sp),sp
+	bsr	.desmsg4
+	lea	50(sp),sp
 
-	bsr.w	.putcomment
-	bra.w	.selvis
+	bsr	.putcomment
+	bra	.selvis
 
 
 .form	dc.b	"PSID-module",ILF,ILF2
@@ -20860,6 +21873,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Author: %-31.31s",ILF,ILF2
 	dc.b	"Copyright: %-28.28s",ILF,ILF2
 	dc.b	"Songs: %ld (default %ld)",ILF,ILF2
+    dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2
 	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
  even
@@ -20876,58 +21890,58 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	jsr	isImpulseTrackerActive
 	beq.b	.yesIT
 	cmp	#pt_eagle_start,playertype(a5)		* eagleplayer
-	blo.w	.noeagle
+	blo	.noeagle
 .yesIT
 	move	#33,info_prosessi(a5)		* some magic flag
 
 	lea	.form3(pc),a0
 	lea	-32(sp),sp
 	move.l	sp,a4
-	bsr.w	.namtypsizcom
+	bsr	.namtypsizcom
 
 	moveq	#10+20,d5
-	bsr.w	.allo2
+	bsr	.allo2
 	bne.b	.jee9eg
 	lea	32(sp),sp
-	bra.w	.prepareFailed
+	bra	.prepareFailed
 .jee9eg
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	bsr.w	.desmsg4
-	bsr.w	.putcomment
+	bsr	.desmsg4
+	bsr	.putcomment
 	lea	32(sp),sp
 
 	move.l	infotaz(a5),a3
-	bsr.w	.lloppu
-	bsr.w	.putLineChange
+	bsr	.lloppu
+	bsr	.putLineChange
 
 	move.l	#MI_SongName,d1
 	lea	.eagleSong(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 	move.l	#MI_AuthorName,d1
 	lea	.eagleAuthor(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 	move.l	#MI_SubSongs,d1
 	lea	.eagleSubsongs(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 	move.l	#MI_Prefix,d1
 	lea	.eaglePrefix(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 	move.l	#MI_Samples,d1
 	lea	.eagleSamples(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 	move.l	#MI_SynthSamples,d1
 	lea	.eagleSynthSamples(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 	move.l	#MI_Songsize,d1
 	lea	.eagleSongSize(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 	move.l	#MI_SamplesSize,d1
 	lea	.eagleSamplesSize(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 	move.l	#MI_Voices,d1
 	lea	.eagleVoices(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 
 	move.l	#MI_Duration,d1
 	jsr	deliFindInfoValue
@@ -20938,27 +21952,27 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	ext.l 	d0 
 	ext.l 	d1
 	lea	.eagleDuration(pc),a0
-	bsr.w	.deliPutInfo2
+	bsr	.deliPutInfo2
 .noEagleDur
 
 	move.l	#MI_About,d1
 	lea	.eagleAbout(pc),a0
-	bsr.w	.deliPutInfo
+	bsr	.deliPutInfo
 
 	move.l	infotaz(a5),a3
-	bsr.w	.lloppu
-	bsr.w	.putLineChange
+	bsr	.lloppu
+	bsr	.putLineChange
 	
 	move.l	#DTP_PlayerName,d0 
 	jsr	deliGetTag 
 	beq.b 	.noPlrName 
 	lea	.eagleName(pc),a0 
-	bsr.b	.deliPutInfo2	
+	bsr 	.deliPutInfo2	
 .noPlrName 
 	* Creator, 1-3 lines
 	move.l	#DTP_Creator,d0 
 	jsr	deliGetTag 
-	beq.b 	.noCrtr
+	beq 	.noCrtr
 	lea	.eagleCreator(pc),a0 
 	; format output buffer
 	lea	-200(sp),sp
@@ -20968,14 +21982,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	; target output buffer
 	move.l	infotaz(a5),a3
-	bsr.w	.lloppu
+	bsr	.lloppu
 	; do three lines wrapping at space
-	bsr.b	.doLine
-	bpl.b	.ends
-	bsr.b	.doLine
-	bpl.b	.ends
-	bsr.b	.doLine
-	bra.b	.ends
+	bsr 	.doLine
+	bpl 	.ends
+	bsr 	.doLine
+	bpl 	.ends
+	bsr 	.doLine
+	bra 	.ends
 
 * Copies a line to output, cuts at space near the end of line
 * in:
@@ -20986,17 +22000,25 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 *   a3 = pointer to next position in output buffer
 *   d0 = negative: all input handled
 *        positive: data left in input for the next row
-.doLine
-	moveq	#39-1,d0
+.doLine:
+ 	moveq	#39-1,d0
 	moveq	#0,d1
 .cl1	cmp.b	#" ",(a0)
 	bne.b	.ns1
 	addq	#1,d1 ; keep track of spaces
-.ns1	move.b	(a0)+,(a3)+
+.ns1	
+    move.b  (a0)+,d2
+    cmp.b   #ILF2,d2
+    bne.b   .noIlf2
+    * Line change resets the counter
+    moveq	#39-1,d0    
+.noIlf2
+    move.b  d2,(a3)+
 	dbeq	d0,.cl1
-	tst	d0
-	bpl.b	.endLine
-	; find previous space to cut from
+    ; d0 = -1, all chars copied
+ 	tst 	d0
+	bpl	    .endLine
+ 	; find previous space to cut from
 	; SAFETY: if there are any
 	tst	d1
 	beq.b	.endLin
@@ -21008,13 +22030,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .endLin
 	moveq	#-1,d0
 .endLine
-	bsr.w	.putLineChange
+	bsr	.putLineChange
 	tst	d0
 	rts
+
 .ends
 	lea	200(sp),sp
 .noCrtr
-	bra.w	.selvis
+	bra	.selvis
 
 .deliPutInfo
 	push 	a0
@@ -21025,7 +22048,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	ble.b	.noInfo
 .deliPutInfo2
 	move.l	infotaz(a5),a3
-	bsr.w	.lloppu
+	bsr	.lloppu
 	bsr.b	.deliFormat
 .noInfo
 	rts
@@ -21072,24 +22095,24 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move.l	moduleaddress(a5),d4
 	cmp	    #pt_multi,playertype(a5)
-	bne.w	.noo
+	bne	.noo
 
 	move.l	ps3m_mtype(a5),a0
 	cmp	#mtMOD,(a0)
 	beq.b	.mod
 	cmp	#mtS3M,(a0)
-	beq.w	.s3m
+	beq	.s3m
 	cmp	#mtMTM,(a0)
-	beq.w	.mtm
+	beq	.mtm
 	cmp	#mtXM,(a0)
-	beq.w	.xm
-	bra.w	.noo
+	beq	.xm
+	bra	.noo
 
 
 .mod	
 	moveq	#31,d5
-	bsr.w	.allo
-	beq.w	.prepareFailed
+	bsr	.allo
+	beq	.prepareFailed
 
 	moveq	#0,d7
 	moveq	#31-1,d6
@@ -21127,15 +22150,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form0(pc),a0
-	bsr.w	.desmsg4
+	bsr	.desmsg4
 	lea	16(sp),sp
-	bsr.w	.lloppu
+	bsr	.lloppu
 
 	lea	24(sp),sp
 
 	addq	#1,d7
 	dbf	d6,.loop2
-	bra.w	.selvis
+	bra	.selvis
 
 
 
@@ -21148,8 +22171,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	d4,a0
 	move	insnum(a0),d5
 	iword	d5
-	bsr.w	.allo
-	beq.w	.prepareFailed
+	bsr	.allo
+	beq	.prepareFailed
 
 * a3 = pointteri tekstipuskuriin
 
@@ -21181,15 +22204,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	bsr.w	.desmsg4
+	bsr	.desmsg4
 	lea	16(sp),sp
-	bsr.w	.lloppu
+	bsr	.lloppu
 
 	addq	#1,d7
 	cmp	d5,d7
 	blo.b	.loop
 .pois	
-	bra.w	.selvis
+	bra	.selvis
 
 
 ***** XM
@@ -21198,8 +22221,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	d4,a0
 	lea	xmNumInsts(a0),a0
 	tword	(a0)+,d5
-	bsr.w	.allo
-	beq.w	.prepareFailed
+	bsr	.allo
+	beq	.prepareFailed
 
 	move.l	d4,a0
 	move.l	ps3m_xm_insts(a5),a0
@@ -21216,7 +22239,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	xmNumSamples(a2),a1
 	tword	(a1)+,d2
 	tst	d2
-	beq.w	.skip
+	beq	.skip
 	lea	xmSmpHdrSize(a2),a1
 	tlword	(a1)+,d3
 	add.l	d0,a2
@@ -21240,16 +22263,16 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	bsr.w	.desmsg4
+	bsr	.desmsg4
 	lea	16(sp),sp
 	popm	d0-a2/a4-a6
-	bsr.w	.lloppu
+	bsr	.lloppu
 
   	addq.l	#1,d7
 	cmp	d5,d7
-	blo.w	.loop0
+	blo	.loop0
 
-	bra.w	.selvis
+	bra	.selvis
 
 
 ***** multitracker
@@ -21258,8 +22281,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	d4,a0
 	moveq	#0,d5
 	move.b	30(a0),d5
-	bsr.w	.allo
-	beq.w	.prepareFailed
+	bsr	.allo
+	beq	.prepareFailed
 
 	moveq	#0,d7
 .loop3	move	d7,d0
@@ -21287,15 +22310,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1
 	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
-	bsr.w	.desmsg4
+	bsr	.desmsg4
 	lea	16(sp),sp
-	bsr.w	.lloppu
+	bsr	.lloppu
 
 
 	addq.l	#1,d7
 	cmp	d5,d7
 	blo.b	.loop3
-	bra.w	.pois
+	bra	.pois
 
 
 
@@ -21341,19 +22364,19 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	lea	-32(sp),sp
 	move.l	sp,a4
-	bsr.w	.namtypsizcom
+	bsr	.namtypsizcom
 
 	moveq	#10,d5
-	bsr.w	.allo2
+	bsr	.allo2
 	bne.b	.jee9a
 	lea	32(sp),sp
-	bra.w	.prepareFailed
+	bra	.prepareFailed
 .jee9a
 	* parameters in a1
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	bsr.w	.desmsg4
-	bsr.w	.putcomment
+	bsr	.desmsg4
+	bsr	.putcomment
 	lea	32(sp),sp
 	
 	moveq	#0,d0 
@@ -21372,15 +22395,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	; target output buffer
 	move.l	infotaz(a5),a3
-	bsr.w	.lloppu
-	bsr.w	.doLine
+	bsr	.lloppu
+	bsr	.doLine
 	bpl.b	.endA
-	bsr.w	.doLine
+	bsr	.doLine
 	bpl.b	.endA
-	bsr.w	.doLine
+	bsr	.doLine
 .endA	lea	200(sp),sp
 .noAuth
-	bra.w	.selvis
+	bra	.selvis
 
 
 .form3	
@@ -21404,7 +22427,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#30+1,d1
 .puct
 	move.l	infotaz(a5),a3
-	bsr.w	.lloppu
+	bsr	.lloppu
 	lea	filecomment(a5),a0
  if DEBUG
 	move.l	a0,d0
@@ -21413,8 +22436,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	tst.b	(a0)
 	beq.b	.empty
 	bsr.b	.putlines
-	bsr.w	.putLineChange
-	bsr.w	.putLineChange
+	bsr	.putLineChange
+	bsr	.putLineChange
 .empty
 	popm	d0/d1/a0/a3
 	rts
@@ -21428,7 +22451,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	tst.b	(a0)
 	beq.b	.naga
 	moveq	#0,d0
-	bsr.w	.putLineChange
+	bsr	.putLineChange
 .naga	move.b	(a0)+,(a3)+
 	bne.b	.com
 	subq	#1,a3 ; back to NULL
@@ -21521,14 +22544,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	popm	d0/d1
 	rts
 
-
+* In:
+*   d5 = lines to allocate
+* Out:
+*   a3 = buffer
 .allo:
 	bsr.b	.allo2
 	beq.b	.xiipo
 
 	lea	-32(sp),sp
 	move.l	sp,a4
-	bsr.w	.namtypsizcom
+	bsr	.namtypsizcom
 
 	lea	.form1(pc),a0
 
@@ -21549,25 +22575,27 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move.l	sp,a1
 	move.l	infotaz(a5),a3
-	bsr.w	.desmsg4
+	bsr	.desmsg4
 	lea	32(sp),sp
 
-	bsr.w	.putcomment2
+	bsr	.putcomment2
 	
 	move.l	infotaz(a5),a3
 	bsr.b	.lloppu
 
-	bsr.w	.putLineChange
+	bsr	.putLineChange
 	moveq	#39-1,d0
 .ca	move.b	#"≠",(a3)+
 	dbf	d0,.ca
-	bsr.w	.putLineChange
+	bsr	.putLineChange
 	clr.b	(a3)
 
 	moveq	#1,d0
 .xiipo	rts
 
-.lloppu	tst.b	(a3)+
+* Progresses to the next line in text buffer
+.lloppu:
+	tst.b	(a3)+
 	bne.b	.lloppu
 	subq	#1,a3
 	rts
@@ -21583,7 +22611,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	d0,infotaz(a5)
 	rts
 
-.selvis
+.selvis:
 ** If we made this far the module information text has been built
 
 **  Karsitaan kummat merkit pois
@@ -21658,24 +22686,24 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	sub	windowtop(a5),d6	* suhteutus fonttiin
 
 	cmp	#31,d5
-	blo.w	.samplePlayExit
+	blo	.samplePlayExit
 	cmp	#345,d5
-	bhi.w	.samplePlayExit
+	bhi	.samplePlayExit
 	cmp	#14,d6
-	blo.w	.samplePlayExit
+	blo	.samplePlayExit
 	move	infosize(a5),d0
 	lsl	#3,d0
 	add	#14,d0
 	cmp	d0,d6
-	bhi.w	.samplePlayExit
+	bhi	.samplePlayExit
 
 	tst.b	ahi_muutpois(a5)
-	bne.w	.samplePlayExit
+	bne	.samplePlayExit
 
 	cmp	#pt_prot,playertype(a5)
-	bne.w	.samplePlayExit
+	bne	.samplePlayExit
 	tst.l	playingmodule(a5)
-	bmi.w	.samplePlayExit
+	bmi	.samplePlayExit
 
 * d5/d6 = mouse x/y
 
@@ -21684,7 +22712,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lsr	#3,d0
 	add	sfirstname(a5),d0
 	subq	#1,d0
-	bmi.w	.samplePlayExit
+	bmi	.samplePlayExit
 
 	move.l	infotaz(a5),a0
 .ff	cmp.b	#10,(a0)+
@@ -21693,13 +22721,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	addq	#1,a0
 	cmp.b	#' ',2(a0)
-	bne.w	.samplePlayExit
+	bne	.samplePlayExit
 
 	move.b	(a0)+,d0
 	cmp.b	#'0',d0
-	blo.w	.samplePlayExit
+	blo	.samplePlayExit
 	cmp.b	#'3',d0
-	bhi.w	.samplePlayExit
+	bhi	.samplePlayExit
 	and	#$f,d0
 	mulu	#10,d0
 	move.b	(a0)+,d1
@@ -21881,7 +22909,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	* Sample is now playing
 	jsr	releaseModuleData
 
-	bra.w	.samplePlayExit
+	bra	.samplePlayExit
 
 periods
 	dc	856,808,762,720,678,640,604,570,538,508,480,453
@@ -21907,7 +22935,7 @@ periodsEnd
 
 calculateDividersInList
 	jsr	obtainModuleList
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	moveq	#0,d0
 .l	TSTNODE	a0,a0
 	beq.b	.e
@@ -21940,13 +22968,13 @@ rbutton10
 	move.l	infotaz(a5),a0		* jos oli jo aboutti niin suljetaan
 	cmp.l	#about_t,a0
 	bne.b	.rr
-	bsr.w	sulje_info
+	bsr	sulje_info
 	bra.b	.x
 .rr
-	bsr.w	start_info
+	bsr	start_info
 	bra.b	.x
 
-.z	bsr.w	rbutton10b
+.z	bsr	rbutton10b
 
 .x	movem.l	(sp)+,d0-a6
 	rts
@@ -21962,7 +22990,7 @@ request:
 	sub.l	a4,a4
 request2:
 	lea	.ok_g(pc),a2
-	bsr.w	rawrequest
+	bsr	rawrequest
 	movem.l	(sp)+,d0-a6
 	tst.l	d0	* not needed?!
 	rts
@@ -21977,7 +23005,7 @@ areyousure_delete
 	lea	infodefresponse(pc),a4
 	move.l	(a4),d7
 	clr.l	(a4)
-	bsr.w	rawrequest
+	bsr	rawrequest
 	move.l	d7,(a4)
 	movem.l	(sp)+,d1-a6
 	tst.l	d0
@@ -22078,17 +23106,18 @@ init_error
 	* Eagle related error messages shown elsewhere
 	cmp	#ier_eagleplayer,d0 
 	beq.b 	.skip
-	
+	cmp #ier_error_nomsg,d0
+    beq     .skip
 	neg	d0
 	add	d0,d0
 	lea	.ertab-2(pc,d0),a1
 	add	(a1),a1
-	bsr.w	request
+	bsr	request
 .skip
 * vapautetaan moduuli
 	jsr	freemodule
 * printataan infoa
-	bra.w	inforivit_initerror
+	bra	inforivit_initerror
 
 
 .ertab	dr	ier_error_t
@@ -22114,32 +23143,36 @@ init_error
 	dr	ier_mlederr_t
 	dr	ier_not_compatible_t
 	dr	ier_eagleplayer_t
+    dr  ier_mpega_t
+    dr  ier_mhi_t
 
-ier_error	=	-1
-ier_nochannels	=	-2
-ier_nociaints	=	-3
-ier_noaudints	=	-4
-ier_nomedplayerlib =	-5
-ier_nomedplayerlib2 =	-6
-ier_mederr	=	-7
-ier_playererr	=	-8
-ier_nomem	=	-9
-ier_nosid	=	-10
-ier_sidicon	=	-11
-ier_sidinit	=	-12
-ier_noprocess	=	-13
-ier_nochip	=	-14
-ier_unknown	=	-15
-ier_grouperror	=	-16
-ier_filerr	=	-17
-ier_hardware	=	-18
-ier_ahi		=	-19
-ier_nomled	=	-20
-ier_mlederr	=	-21
-ier_not_compatible = 	-22
-ier_eagleplayer	= 	-23
+ier_error           = -1
+ier_nochannels      = -2
+ier_nociaints       = -3
+ier_noaudints       = -4
+ier_nomedplayerlib  = -5
+ier_nomedplayerlib2 = -6
+ier_mederr          = -7
+ier_playererr       = -8
+ier_nomem           = -9
+ier_nosid           = -10
+ier_sidicon         = -11
+ier_sidinit         = -12
+ier_noprocess       = -13
+ier_nochip          = -14
+ier_unknown         = -15
+ier_grouperror      = -16
+ier_filerr          = -17
+ier_hardware        = -18
+ier_ahi             = -19
+ier_nomled          = -20
+ier_mlederr         = -21
+ier_not_compatible  = -22
+ier_eagleplayer     = -23
+ier_mpega           = -24
+ier_mhi             = -25
+ier_error_nomsg     = -26 ; error code without showning a message
 
-;hardware_t
 ier_playererr_t
 ier_error_t
 	dc.b	"Init error!?",0
@@ -22174,6 +23207,10 @@ ier_not_compatible_t
 	dc.b	"Unsupported module type!",0
 ier_eagleplayer_t
 	dc.b	"Couldn't load eagleplayer!",0
+ier_mpega_t
+    dc.b    "Couldn't open mpega.library!",0
+ier_mhi_t
+    dc.b    "Couldn't initialize MHI!",0
  even
 
 
@@ -22270,7 +23307,7 @@ intserver
 	subq	#1,tooltipTick(a5)
 	bne.b	.notActive
 	move.b	tooltipSignal(a5),d1
-	bsr.w	signalit
+	bsr	signalit
 .notActive
 
 	* Are we playing something?
@@ -22297,7 +23334,7 @@ intserver
 
 	* Call scope interrupt code.
 	* This will keep track of sample playback positions for drawing.
-	bsr.w	scopeinterrupt
+	bsr	scopeinterrupt
 
 	* Set filter 
 	move.b	filterstatus(a5),d0
@@ -22324,7 +23361,7 @@ intserver
 	tst	loading(a5)	
 	bne.b	.wasLoading
 	move.b	songHasEndedSignal(a5),d1
-	bsr.w	signalit
+	bsr	signalit
 .huh
 .notPlaying
 .wasLoading
@@ -22375,7 +23412,7 @@ intserver
 .skipCheck
 	* Send a signal indicating that playing position has changed
 	move.b	posUpdateSignal(a5),d1
-	bsr.w	signalit
+	bsr	signalit
 .eee
 .notPlaying2
 
@@ -22395,12 +23432,12 @@ intserver
 	bhi.b	.nope
 	clr	ticktack(a5)
 	move.b	uiRefreshSignal(a5),d1
-	bsr.w	signalit
+	bsr	signalit
 .nope
 
 	* YET ANOTHER TEST!
 	tst.b	playing(a5)	
-	beq.w	.notPlaying4
+	beq	.notPlaying4
 	tst.b	vbtimeruse(a5)
 	bne.b	.eir
 	* Yes we are still playing and actually using CIA-timers
@@ -22483,7 +23520,7 @@ intserver
 
 
 * d1 = signal number sent to the main task
-signalit
+signalit:
 	move.l	owntask+var_b,a1
 	moveq	#0,d0
 	bset	d1,d0
@@ -22582,7 +23619,15 @@ rexxmessage
 	lea	rexxport(a5),a0
 	lore	Exec,GetMsg
 	move.l	d0,rexxmsg(a5)
-	beq.b	.nomsg
+	beq 	.nomsg
+
+    tst.l   _RexxBase(a5)
+    bne     .1
+    * This shouldn't fail as an ARexx msg was received
+	lea	rexxname,a1
+    lob	OldOpenLibrary
+	move.l	d0,_RexxBase(a5)
+.1
 
 	move.l	rexxmsg(a5),a1
 	clr.l	rm_Result1(a5)
@@ -22720,18 +23765,21 @@ rexxmessage
 *** PLAY
 .playr	
 	tst.b	d0
-	beq.w	rbutton1
+	bne .nx
+    jmp rbutton1
+.nx
 	move.l	a1,sv_argvArray+4(a5)
 	clr.l	sv_argvArray+8(a5)
-	jsr	clearlist
-	bra.w	komentojono
+    jsr     engageNormalMode
+    jsr     clearlist
+    bra	    komentojono
 
 *** LOADPRG
 .loadprg
 	tst.b	d0
-	beq.w	rloadprog
+	beq	rloadprog
 	move.l	a1,d7
-	bra.w	rloadprog2
+	bra	rloadprog2
 
 *** QUIT
 .quit	st	exitmainprogram(a5)
@@ -22740,10 +23788,12 @@ rexxmessage
 
 *** ADD	
 .add	
-	printt "TODO: switch to normal list mode"
+    jsr     engageNormalMode
 
 	tst.b	d0
-	beq.w	rbutton7
+    bne .__1
+    jmp     rbutton8
+.__1
 
 .add2	cmp.l	#MAX_MODULES,modamount(a5)	* Ei enemp‰‰ kuin ~16000
 	bhs.b	.exit
@@ -22767,11 +23817,11 @@ rexxmessage
 
 	move.l	a0,a1
 	move.l	a2,a0
-	bsr.w	nimenalku
+	bsr	nimenalku
 	move.l	a0,l_nameaddr(a3)	* pelk‰n nimen osoite
 
-	bsr.w	addfile
-	bsr.w	listChanged
+	bsr	addfile
+	bsr	listChanged
 
 	tst.l	chosenmodule(a5)
 	bpl.b	.ee
@@ -22783,11 +23833,13 @@ rexxmessage
 
 *** INSERT
 .insert
-	printt "TODO: switch to normal list mode"
+    jsr     engageNormalMode
 
 	tst.b	d0
-	beq.w	rinsert
-	bsr.w	rinsert2
+	bne	    .rinsert0
+    jmp     rinsert
+.rinsert0
+	jsr     rinsert2
 	bsr.b	.add2
 	clr.b	filereqmode(a5)
 	rts
@@ -22795,9 +23847,9 @@ rexxmessage
 
 *** MOVE
 .move
-	printt "TODO: switch to normal list mode"
+    jsr     engageNormalMode
 
-	bsr.w	a2i
+	bsr	a2i
 	move	d0,-(sp)
 	jsr	rmove
 	move	(sp)+,d0
@@ -22808,7 +23860,7 @@ rexxmessage
 
 *** CHOOSE
 .choose
-	bsr.w	a2i
+	bsr	a2i
 	subq.l	#1,d0
 	bsr.b	.choo
 	jmp	resh
@@ -22834,13 +23886,13 @@ rexxmessage
 	
 *** VOLUME
 .volume
-	bsr.w	a2i
+	bsr	a2i
 	jmp	volumerefresh
 
 
 *** PLAYSONG
 .playsong
-	bsr.w	a2i
+	bsr	a2i
 	subq	#1,d0
 	move	d0,songnumber(a5)
 	moveq	#0,d1
@@ -22855,7 +23907,7 @@ rexxmessage
 
 *** HIDE
 .hide
-	bsr.w	a2i		* d0 = 0 tai 1
+	bsr	a2i		* d0 = 0 tai 1
 	tst.b	d0
 	beq.b	.hide_hide
 	tst.b	win(a5)
@@ -22868,7 +23920,7 @@ rexxmessage
 .hide1	move	#$25,rawkeyinput(a5)
 .hide2
 	move.b	rawKeySignal(a5),d1
-	bra.w	signalit
+	bra	signalit
 
 
 *** SIZE
@@ -22877,7 +23929,7 @@ rexxmessage
 ;	lore	Intui,ZipWindow
 	
 .size
-	bsr.w	a2i
+	bsr	a2i
 	tst.b	d0
 	beq.b	.size_small
 	tst.b	kokolippu(a5)
@@ -22896,7 +23948,7 @@ rexxmessage
 	jmp	_LVOZipWindow(a6)
 
 .oldk	jsr	sulje_ikkuna		* kick1.2+
-;	bra.w	avaa_ikkuna
+;	bra	avaa_ikkuna
 	jmp	avaa_ikkuna
 
 
@@ -22912,37 +23964,37 @@ rexxmessage
 	bne.b	.c123
 	st	newpubscreen(a5)
 	move.b	ownsignal2(a5),d1
-	bra.w	signalit
+	bra	signalit
 
 *** TIMEOUT
 .timeout
 	bsr.b	.prefspo
-	bsr.w	a2i
+	bsr	a2i
 	cmp	#600,d0
 	bls.b	.ok32
 	move	#600,d0
 .ok32	move	d0,timeout(a5)
-	bra.w	sliderit
+	bra	sliderit
 
 *** PS3M
 .ps3mmode
 	bsr.b	.prefspo
-	bsr.w	a2i
+	bsr	a2i
 	move.b	d0,s3mmode2(a5)
 	rts
 
 .ps3mboost
 	bsr.b	.prefspo
-	bsr.w	a2i
+	bsr	a2i
 	cmp.b	#8,d0
 	bls.b	.ok12
 	moveq	#8,d0
 .ok12	move.b	d0,s3mmode3(a5)
-	bra.w	sliderit
+	bra	sliderit
 
 .ps3mrate
 	bsr.b	.prefspo
-	bsr.w	a2i
+	bsr	a2i
 	cmp.l	#5000,d0
 	bhs.b	.ok55
 	move.l	#5000,d0
@@ -22950,11 +24002,11 @@ rexxmessage
 	bls.b	.ok76
 	move.l	#58000,d0
 .ok76	move.l	d0,mixirate(a5)
-	bra.w	sliderit
+	bra	sliderit
 
 .prefspo
 	push	a1
-	bsr.w	sulje_prefs
+	bsr	sulje_prefs
 	pop	a1
 	rts
 
@@ -22966,24 +24018,24 @@ rexxmessage
 	push	a1
 	jsr	rbutton4		* eject
 	jsr	clearlist
-	;bsr.w	sulje_quad
-	bsr.w	stopScopeTasks
+	;bsr	sulje_quad
+	bsr	stopScopeTasks
 	bsr.b	.prefspo
 	jsr	sulje_ikkuna
 	jsr	rem_inputhandler
 	pop	d7
-	bsr.w	loadprefs2
+	bsr	loadprefs2
 	jsr	setboxy
 	jsr	init_inputhandler
 ;	tst.b	quadon(a5)			* avataanko scope?
 ;	beq.b	.q
-;	bsr.w	start_quad
+;	bsr	start_quad
 ;.q
 	not.b	kokolippu(a5)
 	jmp	avaa_ikkuna
 
 .toggleFavorite
-	bra.w	toggleFavoriteStatusForCurrentModule
+	bra	toggleFavoriteStatusForCurrentModule
 
 * GET:
 * 	current song
@@ -23064,7 +24116,7 @@ rexxmessage
 .getplay
 	moveq	#1,d0
 	and.b	playing(a5),d0
-	bra.w	i2amsg
+	bra	i2amsg
 
 .getcfil
 	move.l	chosenmodule(a5),d0
@@ -23072,57 +24124,57 @@ rexxmessage
 	cmp.l	#PLAYING_MODULE_REMOVED,d0
 	beq.b	.getcfil0
 	addq.l	#1,d0
-	bra.w	i2amsg2
+	bra	i2amsg2
 .getcfil0
 	moveq	#0,d0
-	bra.w	i2amsg
+	bra	i2amsg
 
 .getnfil
 	move.l	modamount(a5),d0
-	bra.w	i2amsg2
+	bra	i2amsg2
 
 .getcsng
 	move	songnumber(a5),d0
 	addq	#1,d0
-	bra.w	i2amsg
+	bra	i2amsg
 
 .getnsng
 	move	maxsongs(a5),d0
 	addq	#1,d0
-	bra.w	i2amsg
+	bra	i2amsg
 
 .getcspo
 	move	pos_nykyinen(a5),d0
-	bra.w	i2amsg
+	bra	i2amsg
 
 .getmspo
 	move	pos_maksimi(a5),d0
-	bra.w	i2amsg
+	bra	i2amsg
 
 .getname
 	lea	modulename(a5),a2
-	bra.w	str2msg
+	bra	str2msg
 
 .gettype
 	lea	moduletype(a5),a2
-	bra.w	str2msg
+	bra	str2msg
 
 .getcurrent
 	move.l	playingmodule(a5),d0
 	bmi.b	.getc0
 	addq.l	#1,d0
 	cmp.l	#PLAYING_MODULE_REMOVED+1,d0
-	bne.w	i2amsg2
+	bne	i2amsg2
 .getc0	moveq	#0,d0
-	bra.w	i2amsg
+	bra	i2amsg
 
 .currname
-	bsr.w	getcurrent
+	bsr	getcurrent
 	bne.b	.curr0
 	lea	.empty(pc),a2
-	bra.w	str2msg
+	bra	str2msg
 .curr0	lea	l_filename(a3),a2
-	bra.w	str2msg
+	bra	str2msg
 
 .fullname
 	move.l	playingmodule(a5),d0
@@ -23130,14 +24182,14 @@ rexxmessage
 	cmp.l	#PLAYING_MODULE_REMOVED,d0
 	bne.b	.curr2
 .curr1	lea	.empty(pc),a2
-	bra.w	str2msg	
-.curr2	bsr.w	getcurrent2
+	bra	str2msg	
+.curr2	bsr	getcurrent2
 	lea	l_filename(a3),a2
-	bra.w	str2msg
+	bra	str2msg
 
 .getcomment
 	lea	filecomment(a5),a2
-	bra.w	str2msg
+	bra	str2msg
 
 .getsize
 	move.l	modulelength(a5),d0
@@ -23220,7 +24272,7 @@ str2msg	pushm	d0/d1/a0/a1/a6
 
 
 ;	move.l	rm_Args(a1),a0	; test for different commands here!
-;	bsr.w	CLI_Write	; you must parse the parameters yourself
+;	bsr	CLI_Write	; you must parse the parameters yourself
 
 ;	move.l	_RexxSysLibBase(pc),a6
 ;	lea	ret_string(pc),a0
@@ -23457,7 +24509,7 @@ startScopeTask:
 	move	st_taskOffset(a4),d0
 	lea	(a5,d0),a3
 	lea	.tn(pc),a2
-	bsr.w	initScopeTask
+	bsr	initScopeTask
 
 	* Mark it as running
 	move.b	#RUNNING_YES,(a5,d7)
@@ -23513,19 +24565,19 @@ startAndStopScopeTasks
 	beq.b	.9
 	bsr.b	startSpectrumScopeTask
 	bra.b	.10
-.9	bsr.w	stopSpectrumScopeTask	
+.9	bsr	stopSpectrumScopeTask	
 .10
 	rts
 
 startQuadraScopeTask
 	;DPRINT	"startQuadraScopeTask"
 	lea	quadraScopeTaskDefinition(pc),a4
-	bra.w	startScopeTask
+	bra	startScopeTask
 
 stopQuadraScopeTask
 	;DPRINT	"stopQuadraScopeTask"
 	lea	quadraScopeTaskDefinition(pc),a4
-	bra.w	stopScopeTask
+	bra	stopScopeTask
 
 restartQuadraScopeTask
 	tst.b	quadraScopeRunning(a5)
@@ -23537,12 +24589,12 @@ restartQuadraScopeTask
 startQuadraScopeFTask
 	;DPRINT	"startQuadraScopeFTask"
 	lea	quadraScopeFTaskDefinition(pc),a4
-	bra.w	startScopeTask
+	bra	startScopeTask
 
 stopQuadraScopeFTask
 	;DPRINT	"stopQuadraScopeFTask"
 	lea	quadraScopeFTaskDefinition(pc),a4
-	bra.w	stopScopeTask
+	bra	stopScopeTask
 
 restartQuadraScopeFTask
 	tst.b	quadraScopeFRunning(a5)
@@ -23554,12 +24606,12 @@ restartQuadraScopeFTask
 startHippoScopeTask
 	;DPRINT	"startHippoScopeTask"
 	lea	hippoScopeTaskDefinition(pc),a4
-	bra.w	startScopeTask
+	bra	startScopeTask
 
 stopHippoScopeTask
 	;DPRINT	"stopHippoScopeTask"
 	lea	hippoScopeTaskDefinition(pc),a4
-	bra.w	stopScopeTask
+	bra	stopScopeTask
 
 restartHippoScopeTask
 	tst.b	hippoScopeRunning(a5)
@@ -23570,9 +24622,9 @@ restartHippoScopeTask
 
 startPatternScopeTask
 	;DPRINT	"startPatternScopeTask"
-	bsr.w	getScopeMiniFontIfNeeded
+	bsr	getScopeMiniFontIfNeeded
 	lea	patternScopeTaskDefinition(pc),a4
-	bra.w	startScopeTask
+	bra	startScopeTask
 
 stopPatternScopeTask
 	;DPRINT	"stopPatternScopeTask"
@@ -23607,7 +24659,7 @@ startSpectrumScopeTask
 	rts
 .2
 	lea	spectrumScopeTaskDefinition(pc),a4
-	bra.w	startScopeTask
+	bra	startScopeTask
 		
 stopSpectrumScopeTask
 	;DPRINT	"stopSpectrumScopeTask"
@@ -23623,9 +24675,9 @@ restartSpectrumScopeTask
 
 stopScopeTasks
 	DPRINT	"stopScopeTasks"
-	bsr.w	stopQuadraScopeTask
-	bsr.w	stopQuadraScopeFTask
-	bsr.w	stopHippoScopeTask
+	bsr	stopQuadraScopeTask
+	bsr	stopQuadraScopeFTask
+	bsr	stopHippoScopeTask
 	bsr.b	stopPatternScopeTask
 	bra.b	stopSpectrumScopeTask
 
@@ -23633,7 +24685,7 @@ stopScopeTask
 	* Check if running already
 	move	st_runningStatusOffset(a4),d7
 	tst.b 	(a5,d7)
-	beq.w	.x
+	beq	.x
 
 	;DPRINT	"stopScopeTask"
 
@@ -23708,7 +24760,7 @@ toggleScopes
 	move.b	hippoScopeRunning(a5),(a2)+
 	move.b	patternScopeRunning(a5),(a2)+
 	move.b	spectrumScopeRunning(a5),(a2)+
-	bra.w	stopScopeTasks
+	bra	stopScopeTasks
 	
 .start
 	* Start scopes that were toggled off.
@@ -23729,23 +24781,23 @@ toggleScopes
 .some
 	tst.b	(a2)+
 	beq.b	.a
-	bsr.w	startQuadraScopeTask
+	bsr	startQuadraScopeTask
 .a	tst.b	(a2)+
 	beq.b	.b
-	bsr.w	startQuadraScopeFTask
+	bsr	startQuadraScopeFTask
 .b	tst.b	(a2)+
 	beq.b	.c
-	bsr.w	startHippoScopeTask
+	bsr	startHippoScopeTask
 .c	tst.b	(a2)+
 	beq.b	.d
-	bsr.w	startPatternScopeTask
+	bsr	startPatternScopeTask
 .d	tst.b	(a2)+
 	beq.b	.e
-	bsr.w	startSpectrumScopeTask
+	bsr	startSpectrumScopeTask
 .e
 	* Make prefs window show the correct status
 	bsr.b	updateScopeStatusesToPrefs
-	bra.w	updateprefs
+	bra	updateprefs
 
 * Update the prefs scope toggle statuses to match
 * actual runtime state.
@@ -23813,7 +24865,7 @@ quadraScopeEntry
 	
 	lea	.t(pc),a3
 	lea	prefsdata+prefs_quadraScopePos(a5),a2
-	bra.w	scopeEntry
+	bra	scopeEntry
 
 .t	dc.b	"QuadraScope",0
  even
@@ -23828,7 +24880,7 @@ quadraScopeFEntry
 
 	lea	.t(pc),a3
 	lea	prefsdata+prefs_quadraScopeFPos(a5),a2
-	bra.w	scopeEntry
+	bra	scopeEntry
 
 .t	dc.b	"Filled QuadraScope",0
  even
@@ -23897,7 +24949,7 @@ scopeEntry:
 	bne.b	.gotMem
 	* Quit with error
 	lea	memerror_t(pc),a1
-	bra.w	request
+	bra	request
 .gotMem
 	move.l	d0,a4
 	move.l	a5,s_global(a4)
@@ -23978,37 +25030,37 @@ scopeEntry:
 * Quadrascope
 .1	moveq	#0,d7
 .11	
-	bsr.w	voltab
+	bsr	voltab
 	bra.b	.cont
 
 * Hipposcope
 .2
-	bsr.w	voltab2
+	bsr	voltab2
 	bra.b	.cont
 
 
 .3	moveq	#0,d7
 .33
-	bsr.w	voltab
+	bsr	voltab
 
 .wo	
-	bsr.w	makeScopeHorizontalBars		* tehd‰‰n palkkitaulu
+	bsr	makeScopeHorizontalBars		* tehd‰‰n palkkitaulu
 	bra.b	.cont
 
 
 .4
-	bsr.w	voltab2
+	bsr	voltab2
 	bra.b	.wo
 
 .5	
   ifne FEATURE_FREQSCOPE
-	bsr.w	voltab3
+	bsr	voltab3
 	bsr.b	.delt
-	beq.w	.memer
+	beq	.memer
  endif
  ifne FEATURE_SPECTRUMSCOPE
 	jsr	spectrumInitialize
-	beq.w	.memer
+	beq	.memer
  endif
 	bra.b	.cont
 
@@ -24029,13 +25081,13 @@ scopeEntry:
 
 .6	
   ifne FEATURE_FREQSCOPE 
-	bsr.w	voltab3
+	bsr	voltab3
 	bsr.b	.delt
-	beq.w	.memer
+	beq	.memer
   endif
   if FEATURE_SPECTRUMSCOPE
    	jsr	spectrumInitialize
-	beq.w	.memer
+	beq	.memer
   endif
 	bra.b	.wo * go to bar init
 
@@ -24100,8 +25152,8 @@ scopeEntry:
 	move.l	d0,s_scopeWindowBase(a4)
 	bne.b	.ok3
 	lea	windowerr_t(pc),a1
-.me	bsr.w	request
-	bra.w	qexit
+.me	bsr	request
+	bra	qexit
 
 .memer	lea	memerror_t(pc),a1
 	bra.b	.me
@@ -24126,8 +25178,8 @@ scopeEntry:
 	move	wd_Width(a0),s_scopePreviousWidth(a4)
 	move	wd_Height(a0),s_scopePreviousHeight(a4)
 
-	bsr.w	drawScopeWindowDecorations
-	bsr.w	initScopeBitmaps
+	bsr	drawScopeWindowDecorations
+	bsr	initScopeBitmaps
 	beq.b	.memer
 
 ; TEST! OK
@@ -24137,7 +25189,7 @@ scopeEntry:
 	* State flag indicating font request has been shown 
 	* Up bit for patternscope
 	moveq	#0,d6	
-	bsr.w	patternScopeIsActive
+	bsr	patternScopeIsActive
 	bne.b	.noPatts
 	SDPRINT	"Patternscope active"
 	st	d6
@@ -24162,7 +25214,7 @@ scopeEntry:
 	lore	Exec,SetTaskPri
 
 *********************************************************************
-* Scope main loop
+* Scope main loop, scope loop, main scope loop, scope main loop
 *********************************************************************
 
 scopeTest=0
@@ -24183,10 +25235,10 @@ scopeLoop:
 
 
 	;tst.b	tapa_quad(a5)		* pit‰‰kˆ poistua?
-	;bne.w	qexit
+	;bne	qexit
 	move.l	s_runningStatusAddr(a4),a0
 	tst.b	(a0)
-	bmi.w	qexit
+	bmi	qexit
 
 	* Bypass screen check if LMB has been pressed
 	tst.b 	d5
@@ -24202,15 +25254,15 @@ scopeLoop:
 	* Scope screen is not active, but screen might be partially
 	* visible? sc_TopEdge==0 means it can't be partially visible.
 	tst	sc_TopEdge(a1)
-	beq.w 	.continue
+	beq 	.continue
 .screenVisible
 
 	tst.b	playing(a5)
 	beq.b	.doNotDraw
 
 	* No scopes when AHI
-	tst.b	ahi_use_nyt(a5)
-	bne.b	.doNotDraw
+	;tst.b	ahi_use_nyt(a5)
+	;bne.b	.doNotDraw
 
 	* Does the active player support scopes?
 	move.l	playerbase(a5),d0
@@ -24239,13 +25291,13 @@ scopeLoop:
 	beq.b	.doNotDraw
 .izOk
 
-	bsr.w	scopeDrawAreaSizeChangeRequestIsActive
+	bsr	scopeDrawAreaSizeChangeRequestIsActive
 	bne.b	.doNotDraw
 
 	tst.b	d7
 	bne.b	.doDraw
 	* This clears the hippo gfx away when starting again
-	bsr.w	scopeDrawAreaClear
+	bsr	scopeDrawAreaClear
 .doDraw
 	* Needs a clear in the future
 	moveq	#-1,d7
@@ -24255,7 +25307,7 @@ scopeLoop:
 	* Final safety check
 	tst.b	playing(a5)
 	beq.b	.1
-	bsr.w	drawScope
+	bsr	drawScope
 .1	jsr 	releaseModuleData
 	popm	d5/d6/d7
 	bra.b	.continue
@@ -24266,14 +25318,14 @@ scopeLoop:
 	beq.b	.continue
 	* Request fulfilled
 	moveq	#0,d7
-	bsr.w	scopeDrawAreaClear
+	bsr	scopeDrawAreaClear
 	jsr	printHippoScopeWindow
-	;bra.w	.continue - FALL THROUGH
+	;bra	.continue - FALL THROUGH
 
 .m
 .continue
 	* Manual size and position detection by polling.
-	bsr.w	scopeWindowChangeHandler
+	bsr	scopeWindowChangeHandler
 
 	* Store window position so it gets saved with prefs
 	move.l	s_scopeWindowBase(a4),a0
@@ -24285,7 +25337,7 @@ scopeLoop:
 	move.l	s_userport3(a4),a0
 	lore	Exec,GetMsg
 	tst.l	d0
-	beq.w	scopeLoop
+	beq	scopeLoop
 	move.l	d0,a1
 
 	move.l	im_Class(a1),d2		* luokka	
@@ -24294,7 +25346,7 @@ scopeLoop:
 
 ;	cmp.l	#IDCMP_REFRESHWINDOW,d2 
 ;	bne.b 	.noRefresh
-;	bsr.w	scopeRefreshWindow
+;	bsr	scopeRefreshWindow
 ;	bra.b	.getMoreMsg
 ;.noRefresh
 ;	cmp.l	#IDCMP_CHANGEWINDOW,d2 
@@ -24304,7 +25356,7 @@ scopeLoop:
 ;.noChangeWindow
 ;	cmp.l	#IDCMP_NEWSIZE,d2 
 ;	bne.b 	.noNewSize
-;	bsr.w	scopeWindowSizeChanged
+;	bsr	scopeWindowSizeChanged
 ;	bra.b	.getMoreMsg
 ;.noNewSize
 
@@ -24373,11 +25425,11 @@ qexit:
 	clr.b	(a0)
 
 	* Is prefs displayed? Update as scope status changes
-	bsr.w	updateScopeStatusesToPrefs
+	bsr	updateScopeStatusesToPrefs
 	cmp	#1,prefsivu(a5)		
 	bne.b	.x
 	* This will Signal()
-	bsr.w	updateprefs
+	bsr	updateprefs
 .x
 
 
@@ -24393,7 +25445,7 @@ qexit:
 
 qflush_messages
 	move.l	s_scopeWindowBase(a4),a0 
-	bra.w	flushWindowMessages
+	bra	flushWindowMessages
 
 freeScopeBitmaps
 	move.l	s_buffer0(a4),d0
@@ -24529,12 +25581,12 @@ scopeWindowChangeHandler
 .posChange
 	move	d2,s_scopePreviousTopEdge(a4) 
 	move	d3,s_scopePreviousLeftEdge(a4)
-	bra.w		scopeWindowChanged
+	bra		scopeWindowChanged
 	
 .sizeChange 
 	move	d0,s_scopePreviousWidth(a4)
 	move	d1,s_scopePreviousHeight(a4)
-	bra.w		scopeWindowSizeChanged
+	bra		scopeWindowSizeChanged
 	
 
 ;scopeRefreshWindow
@@ -24554,7 +25606,7 @@ drawScopeWindowDecorations
 	add	#335-320,d2
 	move	s_scopeDrawAreaHeight(a4),d3
 	add	#82-64,d3
-	bsr.w	drawtexture
+	bsr	drawtexture
 
 	moveq	#8,d0
 	moveq	#13,d1
@@ -24706,7 +25758,7 @@ scopeWindowChanged
 	beq.b 	.nope 
 	move	s_scopeDrawAreaWidthRequest(a4),d0
 	move	s_scopeDrawAreaHeightRequest(a4),d1
-	bsr.w 	requestScopeDrawAreaChange
+	bsr 	requestScopeDrawAreaChange
 .nope
 	rts
 
@@ -24740,8 +25792,8 @@ scopeWindowSizeChanged
 	lsr	#1,d0
 	move	d0,s_quadNoteScrollerLinesHalf(a4)
 
-	bsr.w	initScopeBitmaps
-	bsr.w	drawScopeWindowDecorations
+	bsr	initScopeBitmaps
+	bsr	drawScopeWindowDecorations
 	popm	d2-d6
 	rts
 
@@ -24755,7 +25807,7 @@ scopeWindowSizeChanged
 *    a5 = var_b
 scopeinterrupt:				
 	cmp	#pt_prot,playertype(a5)
-	bne.w	.notProtracker
+	bne	.notProtracker
 
 	* Copy scope data from Protracker data structures
 
@@ -24842,8 +25894,10 @@ scopeinterrupt:
 	bne.b	.notSample
 
 	* Sample scope data. Update sample follow position once per frame.
-	move.l	sampleadd(a5),d0
-	move.l	samplefollow(a5),a0
+    jsr     getSampleDataAdd
+	move.l	samplefollow(a5),d1
+    beq     .x
+    move.l  d1,a0
 	add.l	d0,(a0)
 .x	rts
 
@@ -24858,7 +25912,7 @@ scopeinterrupt:
 
 	* Poke method:
 	btst	#pb_quadscopePoke,d1
-	bne.w	.quadScopeSampleFollow
+	bne	.quadScopeSampleFollow
 	
 	* UPS method:
 	btst	#pb_quadscopeUps,d1
@@ -24867,12 +25921,12 @@ scopeinterrupt:
 	* UPS struct provided by eagle player?
 	move.l	deliUPSStruct(a5),d0
 	* Unnecessary check?
-	beq.w	.quadScopeSampleFollow
+	beq	.quadScopeSampleFollow
 
 
 	* Handle UPS, it will provide input for normal sample follow
 	bsr.b	.handleUPS
-	bra.w	.quadScopeSampleFollow
+	bra	.quadScopeSampleFollow
 
 .noScopes
 	* No scopes for u this time.
@@ -24932,7 +25986,7 @@ getScopeMiniFontIfNeeded
 	tst.l	minifontbase(a5)
 	bne.b	.skip
 	* See if we need the small font
-;	bsr.w	patternScopeIsActive
+;	bsr	patternScopeIsActive
 ;	bne.b	.skip
 ;	move.l	deliPatternInfo(a5),d0
 ;	beq.b	.skip
@@ -25097,7 +26151,7 @@ voltab3
 drawScope:
 
 	* See if the whole drawing phase can be skipped
-	bsr.w	patternScopeIsActive
+	bsr	patternScopeIsActive
 	bne.b	.noPattSc
 	move.l	deliPatternInfo(a5),d0 
 	beq.b 	.noPattSc 
@@ -25164,11 +26218,11 @@ drawScope:
  if DEBUG
 	addq.l	#1,scopeFrameCounter(a5)
 	jsr	startMeasure
-	bsr.w	.render
+	bsr	.render
 	jsr	stopMeasure
 	add.l	d0,scopeRenderTime(a5)
  else
-	bsr.w	.render
+	bsr	.render
  endif
 
 	* scope processed, deliver unto screen
@@ -25244,23 +26298,24 @@ drawScope:
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
 	add	    d0,d0
-
-	cmp 	#pt_multi,playertype(a5)
-	beq.w	.renderPS3M
+    ; ---------------------------------
+    cmp 	#pt_multi,playertype(a5)
+    bne.b   .notMulti
+    * PS3M without AHI?
+    tst.b   ahi_use_nyt(a5)
+    beq     .renderPS3M
+    * PS3M + AHI is handled like a ordinary 4ch poke scope
+    jsr     ahiWith4ChannelsActive
+    bne     .goAhi
+    * Too many AHI voices, do not draw 
+    rts
+    ; ---------------------------------
+.notMulti
 	cmp	    #pt_xmaplay,playertype(a5)
-	beq.w	.renderPS3M
+	beq	.renderPS3M
     jsr     playSidInRESIDMode
     bne     .renderPS3M
-
-;	* Check for generic quadscope support
-;	move.l	playerbase(a5),a0
-;	move	#pf_quadscopeUps!pf_quadscopePoke,d1
-;	and	p_liput(a0),d1
-;	bne.b	.doit
-;	tst.l	deliPatternInfo(a5)
-;	bne.b	.doit	
-;	rts
-;.doit
+.goAhi
 
 	* Protracker scope
 	* .. or similarly working others
@@ -25281,32 +26336,32 @@ drawScope:
 	bra.b	.7 * pattern extra large
 	bra.b	.7 * --""--
 
-.3	bsr.w	lever
-.1	bra.w	quadrascope
+.3	bsr	lever
+.1	bra	quadrascope
 
-.4	bsr.w	lever
-.2	bra.w	hipposcope
+.4	bsr	lever
+.2	bra	hipposcope
 
-.5	bra.w	freqscope
+.5	bra	freqscope
 
-.6	bsr.w	freqscope
+.6	bsr	freqscope
 	lore	GFX,WaitBlit
-	bra.w	leverEor
+	bra	leverEor
 
 .7	* Protracker specific notescroller launch
 	cmp	#pt_prot,playertype(a5)
-	beq.w	notescroller
+	beq	notescroller
 	* Generic notescroller launch
 	tst.l	deliPatternInfo(a5)
-	bne.w	noteScroller2
+	bne	noteScroller2
 	rts
 	
-.8	bsr.w	quadrascope
-	bra.w	mirrorfill
+.8	bsr	quadrascope
+	bra	mirrorfill
 
 .9	bsr.b	.8
 	lore	GFX,WaitBlit
-	bra.w	leverEor * extra gfx drawn, must wait until fill done
+	bra	leverEor * extra gfx drawn, must wait until fill done
 
 ;.other
 ;	* Fallback option!
@@ -25322,7 +26377,7 @@ drawScope:
 * Sample scope
 .renderSample
 	* Get normal scope area
-	bsr.w	requestNormalScopeDrawArea
+	bsr	requestNormalScopeDrawArea
 	bne.b	.sampleSkip * wait for resize
 
 	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
@@ -25330,23 +26385,22 @@ drawScope:
 	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,s_quadmode2(a4)	
 	beq.b	.fil
 	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
-	beq.w	freqscope
+	beq	freqscope
 	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
-	beq.w	freqscope
+	beq	freqscope
 	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
 	beq.b	.sampleSkip
 	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)	
 	beq.b	.sampleSkip
 	* Default
-	bsr.w	samplescope
+	bsr	samplescope
 .sampleSkip
 	rts
 .fil
-	bsr.w	samplescopefilled
+	bsr	samplescopefilled
 	bra.b	mirrorfill
 
 .renderPS3M
-
 	* PS3M scope
 	* multichannel jump table
 	jmp	.tt(pc,d0)
@@ -25363,14 +26417,14 @@ drawScope:
 	bra.b	.55 * patt
 	bra.b	.55
 
-.11	bra.w	multiscope
-.22	bra.w	multihipposcope
-.33	bra.w	freqscope
-.44	bsr.w	multiscopefilled
+.11	bra	multiscope
+.22	bra	multihipposcope
+.33	bra	freqscope
+.44	bsr	multiscopefilled
 	bra.b	mirrorfill
 .55	* PS3M patternscope mode
 	tst.l	deliPatternInfo(a5) 
-	bne.w	noteScroller2
+	bne	noteScroller2
 	rts
 
 
@@ -25564,11 +26618,11 @@ quadrascope:
 	lea	scopeData+scope_ch4(a5),a3
 	move.l	s_draw1(a4),a0
 
-;	bsr.w	.scope
+;	bsr	.scope
 ;	rts
 
 .scope
-	bsr.w	getScopeChannelData
+	bsr	getScopeChannelData
 	bne.b	.jolt
 	rts
 
@@ -25725,8 +26779,8 @@ lir	macro
 	endm
 
 
-	bsr.w	getScopeChannelData
-	beq.w	.x
+	bsr	getScopeChannelData
+	beq	.x
 
 
 	move.l	d0,a1 * start
@@ -25813,14 +26867,14 @@ freqscope
 	move.l	(a1),a1
 
 	move.l	deltab1(a5),a0
-	bsr.w	.tutps3m
+	bsr	.tutps3m
 
 ;	move.l	buff2,a1
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
 
 	move.l	deltab2(a5),a0
-	bsr.w	.tutps3m
+	bsr	.tutps3m
 
 	bra.b	.drl
 
@@ -25828,23 +26882,23 @@ freqscope
 
 	lea	scopeData+scope_ch1(a5),a3
 	move.l	deltab1(a5),a0
-	bsr.w	.tut
+	bsr	.tut
 	lea	scopeData+scope_ch4(a5),a3
 	move.l	deltab4(a5),a0
-	bsr.w	.tut
+	bsr	.tut
 
 	lea	scopeData+scope_ch2(a5),a3
 	move.l	deltab2(a5),a0
-	bsr.w	.tut
+	bsr	.tut
 	lea	scopeData+scope_ch3(a5),a3
 	move.l	deltab3(a5),a0
-	bsr.w	.tut
+	bsr	.tut
 
 	move	ns_tempvol+scopeData+scope_ch1(a5),d1
 	move	ns_tempvol+scopeData+scope_ch4(a5),d2
 	move.l	deltab1(a5),a0
 	move.l	deltab4(a5),a1
-	bsr.w	.pre
+	bsr	.pre
 
 	move	ns_tempvol+scopeData+scope_ch2(a5),d1
 	move	ns_tempvol+scopeData+scope_ch3(a5),d2
@@ -25855,12 +26909,12 @@ freqscope
 .drl	move.l	deltab1(a5),a0
 	move.l	draw1(a5),a1
 	addq	#3,a1
-	bsr.w	.dr
+	bsr	.dr
 
 	move.l	deltab2(a5),a0
 	move.l	draw1(a5),a1
 	lea	21(a1),a1
-	bsr.w	.dr
+	bsr	.dr
 
 * Pystyfillaus
 	lore	GFX,OwnBlitter
@@ -26043,7 +27097,7 @@ freqscope
 	pop	a0
 		
 	lsr.l	#8,d5
-	bsr.w	getps3mb
+	bsr	getps3mb
 
 piup2	macro
 	move.b	(a1,d5.l),d0
@@ -26092,13 +27146,16 @@ multiscope
 	moveq	#1,d0
 	move	#$80,d6
     * This returns the buffer mask or size limit in d4
-	bsr.w	getps3mb
-
+	bsr	getps3mb
+    moveq   #1,d3
 multiscope0
-
+    * d3 = sample modulo
+   
 .drlo	
     * Do 8 horizontal pixels
- rept 8
+    moveq   #2-1,d1
+.p8
+    rept 4
     * Get one data byte, adjust with $80
     * turns it from -128..127 to 0..256 I guess
  	move	d6,d2
@@ -26114,12 +27171,24 @@ multiscope0
     * Next pixel to the left
 	add.b	d0,d0
     * Advance one byte in source data
-	addq.l	#1,d5
-    * Check if buffer limit reached, start over if so
+
+    add.l   d3,d5
+
+    ;bpl.b   .2
+    bpl.b   *+6
+    * Beginning bound check
+    neg.l   d3
+    moveq   #0,d5
+;.2
 	cmp.l	d4,d5
-	bne.b	*+4
-	moveq	#0,d5
- endr
+;	blo.b	.1
+    blo.b   *+6
+    * End bound check
+    neg.l   d3
+    add.l   d3,d5
+; .1
+    endr 
+    dbf d1,.p8
 	* Reset pixel to right
 	moveq	#1,d0
     * Jump 8 pixels to left
@@ -26153,7 +27222,10 @@ multiscopefilled
 	moveq	#160/8-1-1,d7
 	moveq	#1,d0
 	move	#$80,d6
-	bsr.w	getps3mb
+	bsr	getps3mb
+
+     * sample modulo 8-bit
+    moveq   #1,d3   
 
 multiscopefilled0
 
@@ -26168,11 +27240,10 @@ hurl	macro
 	move	(a2,d2),d2
 	or.b	d0,(a0,d2)
 	add.b	d0,d0
-	addq.l	#1,d5
+	add.l	d3,d5
 
-;	and.l	d4,d5
 	cmp.l	d4,d5
-	bne.b	*+4
+	blo.b	*+4
 	moveq	#0,d5
 	endm
 
@@ -26344,12 +27415,12 @@ notescroller:
 	bne.b	.plz
 	cmp	s_scopeDrawAreaHeight(a4),d1
 	beq.b	.sizeOk
-.plz	bsr.w	requestScopeDrawAreaChange
+.plz	bsr	requestScopeDrawAreaChange
 	rts
 .sizeOk
 
-	bsr.w	.notescr
-	bsr.w	noteScrollerHorizontalLines
+	bsr	.notescr
+	bsr	noteScrollerHorizontalLines
 
 	* Volume update
 	lea	scopeData+scope_ch1(a5),a0
@@ -26552,8 +27623,8 @@ notescroller:
 .ok2
 
 	
-	bsr.w	noteScrollerGetFont * Uses d4,a2 only
-	beq.w	.exitNoteScroller
+	bsr	noteScrollerGetFont * Uses d4,a2 only
+	beq	.exitNoteScroller
 
 	* Target screen addr goes in a4 
 	move.l	a0,a4
@@ -26587,7 +27658,7 @@ notescroller:
 	move.l	a4,a1
 	subq	#3,a1
 	moveq	#2-1,d1
-	bsr.w	.print
+	bsr	.print
 
 	* horizontal loop
 	* print 4 horizontal notes	
@@ -26767,7 +27838,7 @@ notescroller:
 ;	moveq	#0,d0
 ;	bsr.b	.1
 ;	bsr.b	.1
-;	bsr.w	.1
+;	bsr	.1
 
 ;.1	bsr.b	.2
 ;	add	#10,a0
@@ -27062,60 +28133,84 @@ makeScopeHorizontalBars
 *** Sample scope
 *** Any sample played by the sample player
 
-samplescope
-	bsr.b	samples0
+samplescope:
+	bsr 	samples0
+    bne     .hasData
+    rts
+.hasData
+    jsr     getSampleDataModulo
+    move.l  d0,d3 * d3 = 1 or 2
 	move.l	samplepointer(a5),a1
 	move.l	(a1),a1
 	tst.b	samplestereo(a5)
 	bne.b	.st
 	lea	39(a0),a0
 	moveq	#39-1,d7
-	bra.w	multiscope0
+	bra	multiscope0
 .st	
 	lea	19(a0),a0
 	moveq	#19-1,d7
-	bsr.w	multiscope0
+	bsr	multiscope0
 	bsr.b	samples0
 	lea	39(a0),a0
 	move.l	samplepointer2(a5),a1
 	move.l	(a1),a1
 	moveq	#19-1,d7
-	bra.w	multiscope0
+	bra	multiscope0
 
 samplescopefilled
 	bsr.b	samples0
+    bne     .hasData
+    rts
+.hasData
+    jsr     getSampleDataModulo
+    move.l  d0,d3 * d3 = 1 or 2
 	move.l	samplepointer(a5),a1
 	move.l	(a1),a1
 	tst.b	samplestereo(a5)
 	bne.b	.st
 	lea	39(a0),a0
 	moveq	#39-1,d7
-	bra.w	multiscopefilled0
+	bra	multiscopefilled0
 .st	
 	lea	19(a0),a0
 	moveq	#19-1,d7
-	bsr.w	multiscopefilled0
+	bsr	multiscopefilled0
 	bsr.b	samples0
 	lea	39(a0),a0
 	move.l	samplepointer2(a5),a1
 	move.l	(a1),a1
 	moveq	#19-1,d7
-	bra.w	multiscopefilled0
+	bra	multiscopefilled0
 
 
-samples0
-	move.l	samplefollow(a5),a0
+* Gets some parameters needed for drawing sample scopes
+* Out:
+*   
+samples0:
+	move.l	samplefollow(a5),d5
+    beq     .error
+    move.l  d5,a0
 	move.l	(a0),d5
 ;	move.l	samplefollow(a5),d5
 
 	move.l	samplebufsiz(a5),d4
-	subq.l	#1,d4
 
+    * Check if AHI 16-bit buffer
+    tst.b   ahi_use_nyt(a5)
+    beq     .noA
+    cmp     #2,ahiSampleModulo(a5)
+    bne     .noA
+    add.l   d4,d4
+.noA
+	subq.l	#1,d4
+    
 	moveq	#1,d0
 	move	#$80,d6
 
 	lea	s_multab(a4),a2
 	move.l	s_draw1(a4),a0
+.error
 	rts
 
 
@@ -27141,7 +28236,7 @@ noteScroller2:
 	bhi.b	.over
 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
-	bsr.w	requestScopeDrawAreaChange
+	bsr	requestScopeDrawAreaChange
 	beq.b	.proceed
 	* resize will happen later
 	rts
@@ -27178,7 +28273,7 @@ noteScroller2:
 	add	#32+15,d0
 	and	#$fff0,d0
 
-	bsr.w	requestScopeDrawAreaChange
+	bsr	requestScopeDrawAreaChange
 	beq.b	.proceed
 	rts
 
@@ -27221,7 +28316,7 @@ noteScroller2:
 	addq	#1,PI_CurrentChannelNumber(a1)
 	dbf	d7,.loop
 
-	bsr.w	noteScrollerHorizontalLines
+	bsr	noteScrollerHorizontalLines
 .x	rts
 
 .xy	
@@ -27312,8 +28407,8 @@ noteScroller2:
 	sub	d0,a0
 	sub	s_quadNoteScrollerLinesHalf(a4),d6
 .ok2
-	bsr.w	noteScrollerGetFont * uses d4,a2
-	beq.w	.exitNoteScroller
+	bsr	noteScrollerGetFont * uses d4,a2
+	beq	.exitNoteScroller
 	
 	
 * d4 = font modulo
@@ -27372,7 +28467,7 @@ noteScroller2:
 
 	move.l	a4,a5
 	moveq	#2-1,d3
-	bsr.w	.print
+	bsr	.print
 	subq	#2,a3 	* restore a3
 
 	* next vertical draw position, one font height down
@@ -27625,7 +28720,7 @@ noteScroller2:
 	* even position
 
 	move.b	(a3)+,d5
-	beq.w	.evenCharSkip * space check
+	beq	.evenCharSkip * space check
 
 	* get char pixels
 	* check which source nibble to use
@@ -27669,7 +28764,7 @@ noteScroller2:
 	* odd position
 
 	move.b	(a3)+,d5
-	beq.w	.oddCharDone	* space check
+	beq	.oddCharDone	* space check
 
 	* get char pixels
 	ror.l	#1,d5
@@ -27733,11 +28828,16 @@ noteScroller2:
 *  a3 = list node 
 *  d0 = ~0: Use double buffering
 *
-
 loadmodule:
+ if DEBUG
+    push    d0
+    pushpea l_filename(a3),d0
+    DPRINT  "loadmodule %s"
+    pop     d0
+ endif
 	; Popup should close so that window is visible during load
-	bsr.w	closeTooltipPopup
-	st	loading(a5)
+	bsr	closeTooltipPopup
+    st	loading(a5)
 	* Store pointer to the name part. Used
 	* do determine what to show in the infobox, and
 	* also with the PS3M configuration file.
@@ -27746,19 +28846,64 @@ loadmodule:
 	* Check if a remote file
 	beq		.doLoadModule
 
+    * This is a remote file.
+    * Open up a stream.
+    lea     l_filename(a3),a0
+    push    d0
+    push    a0
+    bsr     inforivit_connecting
+    pop     a0
+    jsr     startNewStreaming
+    DPRINT  "startStreaming=%ld"
+    move.l  d0,d1
+    pop     d0
+    tst.l   d1
+    bne     .streamOk
+    jsr     stopStreaming
+    jsr     showStreamerError
+    jsr     awaitStreamerAndFlush
+    lea     .msg(pc),a1
+    jsr     request
+	jsr	    inforivit_clear
+    moveq   #lod_remoteError,d0
+    rts
+.msg
+    dc.b    "Error downloading data!",0
+    even
+
+.streamOk
+
+    * Special case check: remote mp3 files go through as if
+    * they were normal files, no remote fetching
+;    pushm   d0/a0
+;    lea     l_filename(a3),a0
+;    bsr     id_mp3filename
+;    tst.l   d0
+;    popm    d0/a0
+;    beq     .doLoadModule
+
+    pushm   d0/a0
+    jsr     streamIsMpegAudio
+    tst.l   d0
+    popm    d0/a0
+    bne     .doLoadModule
+
 	move.b	d0,d6	* doublebuffering flag
-	moveq	#lod_remote,d7	* status: fail
+	moveq	#lod_remoteError,d7	* status: fail
 
 	lea	-200(sp),sp	* space for output path
 	move.l	sp,a1
 	lea	l_filename(a3),a0	
 	jsr	fetchRemoteFile
-	DPRINT	"fetchRemote1 %ld"
+ if DEBUG
+    move.l  sp,d1
+	DPRINT	"fetchRemoteFile=%ld %s"
+ endif
 	tst.l	d0
 	bne		.ok1
 	move.l	d7,d0
 	bsr		loaderr
-	bsr.w	inforivit_clear
+	bsr	inforivit_clear
 	bra		.skip
 .ok1
 	
@@ -27771,7 +28916,7 @@ loadmodule:
 	bne.b	.ok2
 	move.l	d7,d0
 	bsr		loaderr
-	bsr.w	inforivit_clear
+	bsr	inforivit_clear
 	bra		.skip2
 .ok2
 	
@@ -27830,12 +28975,17 @@ loadmodule:
 *   d0 = double buffering flag
 .doLoadModule
 	move.b	d0,d7
-	beq.w	.nodbf
+	beq	.nodbf
 
 *****************************************************************
 * Double buffer load
 *****************************************************************
-	DPRINT	"Double buffer load"
+  if DEBUG
+    push    d0
+    move.l  a0,d0
+	DPRINT	"Double buffer load: %s"
+    pop     d0
+  endif
 
 	* Load with double buffering.
 	* Module being played is preserved while new one is loaded.
@@ -27866,7 +29016,7 @@ loadmodule:
 	lea	moduleaddress2(a5),a1
 	lea	modulelength(a5),a2
 	moveq	#0,d1			* kommentti talteen
-	bsr.w	loadfile
+	bsr	loadfile
 	move.l	d0,d7			* store loadfile status
 
 	clr.b	loading(a5)		* lataus loppu
@@ -27976,59 +29126,102 @@ loadmodule:
 	lea	moduleaddress(a5),a1
 	lea	modulelength(a5),a2
 	moveq	#0,d1			* kommentti talteen
-	bsr.w	loadfile
+	bsr	loadfile
 	move.l	d0,-(sp)		* NULL or lod_??? code
 	clr.b	loading(a5)		* lataus loppu
 
 	clr.b	songover(a5)	* varmistuksia, hˆlmˆo
 
 
-.diddbf	bsr.w	inforivit_clear
+.diddbf	bsr	inforivit_clear
 	jsr	reslider
 
 	move.l	(sp)+,d0
 	tst	d0
-	bne.w	.err			* virhe lataamisessa
+	bne	.err			* virhe lataamisessa
 
 	* Grab exe load status from loader
 	move.b 	lod_exefile(a5),executablemoduleinit(a5)
 
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
-	bne.b	.nip
-	tst.b	executablemoduleinit(a5)
-	bne.b	.nip
+	bne 	.nip
+	tst.b 	executablemoduleinit(a5)
+	bne 	.nip
 
 	move.l	moduleaddress(a5),a0	* Oliko moduleprogram??
 	cmp.l	#"HiPP",(a0)
-	bne.b	.nipz
+	bne 	.nipz
 	cmp	#"rg",4(a0)
-	beq.b	.nipa
+	beq 	.nipa
 .nipz
 	cmp.l	#"HIPP",(a0)
-	bne.b	.nip
+	bne 	.nip
 	cmp	#"RO",4(a0)
-	bne.b	.nip
+	bne 	.nip
 
 .nipa
-	lea	-150(sp),sp
-	move.l	sp,a3
-	move.l	modulefilename(a5),a0
-.cop	move.b	(a0)+,(a3)+
-	bne.b	.cop
+    DPRINT  "module program detected"
 
-	jsr	freemodule
-	jsr	clearlist	* lista tyhj‰ks
+;       lea     -150(sp),sp
+;       move.l  sp,a3
+;       move.l  modulefilename(a5),a0
+;.cop   move.b  (a0)+,(a3)+
+;       bne.b   .cop
+;
+;       jsr     freemodule
+;       jsr     clearlist       * lista tyhj<E4>ks
+;
+;      move.l  sp,a0                   * ohjelman nimi
+;      moveq   #-1,d4                  * lippu
+;      jsr     loadprog                * ladataan moduuliohjelma
+;      lea     150+4(sp),sp
+;
+;    rts
+
+    * The list data is already loaded, use it
+    bsr     engageNormalMode
+    jsr     freelist
+
+    jsr     obtainModuleList
+    lea	    moduleListHeader(a5),a2
+    move.l  moduleaddress(a5),a3
+    move.l  a3,a4
+    add.l   modulelength(a5),a4
+    jsr     importModuleProgramFromData
+    move.l	d0,modamount(a5)
+    DPRINT  "modamount=%ld"
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
+	clr.l	chosenmodule(a5)
+    jsr     listChanged
+    tst.b   autosort(a5)
+    beq     .noSort
+    jsr     sortButtonAction
+    bra     .sorted
+.noSort
+	jsr	    forceRefreshList
+.sorted
+	jsr		releaseModuleList
 
-	move.l	sp,a0			* ohjelman nimi
-	moveq	#-1,d4			* lippu
-	jsr	loadprog		* ladataan moduuliohjelma
-	lea	150+4(sp),sp
-;	addq	#4,sp			* ei palata samaan aliohjelmaan!
-	rts
+    * Return error here so that the playback process is stopped.
+    * The list gets invalidated and any node that is to be played
+    * will also be.
+
+    * Send an event to start the playback later with the new
+    * list contents. Fake the "play" key event.
+
+    move    #$44,rawkeyinput(a5)
+	move.b	rawKeySignal(a5),d1
+	bsr 	signalit
+
+    moveq   #-1,d0   * status: failed
+    rts
+
+
+
+
 .nip
-	bsr.w	tutki_moduuli
+	bsr	tutki_moduuli
 	tst.l	d0
 	bne.b	.unk_err		* ep‰m‰‰r‰inen tiedosto
 
@@ -28046,15 +29239,27 @@ loadmodule:
 	clr.b	contonerr_laskuri(a5)
 	bra.b	loaderr
 .iik2
-	bsr.w	inforivit_errc		* Skipping -teksti
+    DPRINT  "Continue on error activated"
+	bsr	inforivit_errc		* Skipping -teksti   
+    
 	moveq	#50,d1
 	lore	Dos,Delay
-
+    
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
-	moveq	#1,d7			* seuraava piisi!
-	jsr	soitamodi
-	addq	#4,sp			* ei samaan paluuosoitteeseen!
-	rts
+
+    * Fake "Next" keyboard event
+    move    #$28,rawkeyinput(a5)
+	move.b	rawKeySignal(a5),d1
+	bsr 	signalit
+
+    moveq   #-1,d0 * status: load error
+    rts
+
+; Historical piece of code preserved, which started crashing recently:
+;	moveq	#1,d7			* seuraava piisi!
+;   jsr	soitamodi
+;	addq	#4,sp			* ei samaan paluuosoitteeseen!
+;	rts
 
 
 .unk_err
@@ -28066,19 +29271,20 @@ loadmodule:
 	tst.b	contonerr(a5)		* Continue on error?
 	bne.b	.iik
 loaderr:
+    DPRINT  "load error"
 	cmp	#lod_xpkerr,d0
-	beq.w	xpkvirhe
+	beq	xpkvirhe
 	cmp	#lod_xfderr,d0
-	beq.w	xfdvirhe
+	beq	xfdvirhe
 	cmp	#lod_tuntematon,d0
-	beq.w	tuntematonvirhe
+	beq	tuntematonvirhe
 
 	move	d0,d1
 	neg	d1
 	add	d1,d1
 	lea	.ertab2-2(pc,d1),a1
 	add	(a1),a1
-	bra.w	request			* requesteri
+	bra	request			* requesteri
 
 * Table to map lod_??? error codes
 .ertab2	dr	openerror_t
@@ -28154,7 +29360,7 @@ xpkvirhe			* N‰ytet‰‰n XPK:n oma virheilmoitus.
 	lea	.x(pc),a1
 	lea	xarray(pc),a4
 	pushpea	xpkerror(a5),(a4)
-	bra.w	request2
+	bra	request2
 
 .x	dc.b	"XPK error:",10
 	dc.b	"%s",0
@@ -28169,7 +29375,7 @@ xfdvirhe			* N‰ytet‰‰n XFD:n oma virheilmoitus.
 	lea	.x(pc),a1
 	lea	xarray(pc),a4
 	move.l	d0,(a4)
-	bra.w	request2
+	bra	request2
 
 .x	dc.b	"XFD error:",10
 	dc.b	"%s",0
@@ -28195,13 +29401,13 @@ tuntematonvirhe
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	bne.b	.noBr	
 	lea	.onlyOk(pc),a2
-	bsr.w	rawrequest
+	bsr	rawrequest
 	bra.b	.w
 .noBr
-	bsr.w	rawrequest
+	bsr	rawrequest
 	tst.l	d0
 	beq.b	.w	
-	bsr.w	delete
+	bsr	delete
 .w	movem.l	(sp)+,d0-a6
 	rts
 
@@ -28237,11 +29443,14 @@ lod_openerr2	=	-16
 lod_xfderr	=	-17
 lod_extract	=	-18
 lod_loadsegfail = -19
-lod_remote		= -20
+lod_remoteError		= -20
+
 
 * Load file variant 
 * - Skips XPK identification
 * - Loads remote files if url detected
+* Used to load StarTrekker data file.
+* Used by deliplayers to load data files.
 loadfileStraight:
 	cmp.b	#'h',(a0)
 	bne		.local
@@ -28253,6 +29462,7 @@ loadfileStraight:
 	bne		.local
 	cmp.b	#':',4(a0)
 	bne		.local
+    DPRINT  "loadfileStraight REMOTE"
 
 	pushm	d1-a6
 	lea		-100(sp),sp
@@ -28262,11 +29472,11 @@ loadfileStraight:
 	pushm	d0/a1
 	move.l	d1,a1	* space for target file path
 	jsr		fetchRemoteFile
-	DPRINT	"fetchRemote2 %ld"
 	moveq	#0,d7 * status: ok
 	tst.l	d0
 	bne.b	.fetchOk
-	moveq	#lod_remote,d7 * status: fail
+    DPRINT  "lod_remoteError %ld"
+	moveq	#lod_remoteError,d7 * status: fail
 .fetchOk
 	popm	d0/a1
 
@@ -28286,9 +29496,11 @@ loadfileStraight:
 	move.l	d7,d0	* restore status
 	lea		100(sp),sp
 	popm	d1-a6
+    DPRINT  "loadfileStraight status=%ld"
 	rts
 
 .local
+    DPRINT  "loadfileStraight LOCAL"
 
 	push	d7
 	move.b	xpkid(a5),d7
@@ -28304,6 +29516,7 @@ loadfileStraight:
 * Ordinary load file
 loadfile:
 	movem.l	d1-a6,-(sp)
+    DPRINT  "loadfile"
 
 	jsr	setMainWindowWaitPointer
 
@@ -28358,7 +29571,7 @@ loadfile:
 	* ".gzX"
 	and.l	#$ffdfdf00,d0
 	cmp.l	#'.GZ'<<8,d0
-	bne.w	.nope
+	bne	.nope
 	lea	gzipDecompressCommand,a0
 	moveq	#1,d6	* "Unzipping" message
 	bra.b	.unp
@@ -28376,8 +29589,8 @@ loadfile:
 
 	pushm	all
 	* takes type in d6
-	bsr.w	inforivit_extracting
-	bsr.w	remarctemp	* varmuuden vuoksi poistetan tempdirri jos on
+	bsr	inforivit_extracting
+	bsr	remarctemp	* varmuuden vuoksi poistetan tempdirri jos on
 	popm	all
 
 	* lod_buf will contain the command line to Execute
@@ -28443,7 +29656,7 @@ loadfile:
 	lob	Lock
 
 	move.l	d0,d7
-	beq.w	.x
+	beq	.x
 
 *** CD dirriin
 
@@ -28469,7 +29682,7 @@ loadfile:
 	pushpea	fileinfoblock(a5),d2
 	lob	Examine
 	tst.l	d0
-	beq.w	 .x
+	beq	 .x
 
  if DEBUG
 	pushpea	fib_FileName+fileinfoblock(a5),d0
@@ -28480,7 +29693,7 @@ loadfile:
 	move.l	d7,d1
 	lob	ExNext
 	tst.l	d0
-	beq.w	.x
+	beq	.x
 
 	pushm	all
 
@@ -28492,7 +29705,7 @@ loadfile:
 	move.l	#MODE_OLDFILE,d2
 	lob	Open
 	move.l	d0,d4
-	beq.w	.bah
+	beq	.bah
 
 	move.l	d4,d1
 
@@ -28507,7 +29720,7 @@ loadfile:
 	lob	Read
 	move.l	d0,d7
 	cmp.l	#100,d0
-	bls.w	.nah
+	bls	.nah
 
 *** Tsekataan tyyppi‰
 
@@ -28517,46 +29730,46 @@ loadfile:
 
 	pushm	d4/a4
 	move.l	a0,a4
-	bsr.w	id_protracker
-	beq.w	.on
+	bsr	id_protracker
+	beq	.on
 
     jsr     id_xmaplay
     beq     .on
 
-	bsr.w	id_ps3m		
+	bsr	id_ps3m		
 	tst.l	d0
-	beq.w	.on
+	beq	.on
 
-	bsr.w	id_tfmxunion
-	beq.w	.on
+	bsr	id_tfmxunion
+	beq	.on
 
-	bsr.w	id_TFMX_PRO
+	bsr	id_TFMX_PRO
 	tst	d0
 	beq.b	.on
 
-	bsr.w	id_TFMX7V
+	bsr	id_TFMX7V
 	tst	d0
 	beq.b	.on
 
-	bsr.w	id_tfmx
+	bsr	id_tfmx
 	beq.b	.on
 
 	DPRINT	"Internal"
 	lea	internalFormats(pc),a3 
-	bsr.w	identifyFormatsOnly 
+	bsr	identifyFormatsOnly 
 	beq.b .on
 	DPRINT	"Group"
 	lea	groupFormats(pc),a3 
-	bsr.w	identifyFormatsOnly 
+	bsr	identifyFormatsOnly 
 	beq.b .on
 	DPRINT	"Eagle"
 	lea	eagleFormats(pc),a3 
-	bsr.w	identifyFormatsOnly 
+	bsr	identifyFormatsOnly 
 	beq.b .on
 
  ifne FEATURE_P61A
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
-	bsr.w	id_player2
+	bsr	id_player2
 	beq.b	.on
  endif
 
@@ -28567,7 +29780,7 @@ loadfile:
 	cmp.l   #"PP20",(a4)
 	beq.b	.on
 
-;	bsr.w	id_oldst		* oldst tunnistus viimeiseksi
+;	bsr	id_oldst		* oldst tunnistus viimeiseksi
 ;	beq.b	.on
 
 	moveq	#-1,d0
@@ -28612,7 +29825,7 @@ loadfile:
 	lob	Close
 .bah
 	popm	all
-	bra.w	.loop
+	bra	.loop
 
 .x
 	move.l	d6,d1
@@ -28630,19 +29843,35 @@ loadfile:
 
 * oliko sopivaa file‰?
 	move	#lod_extract,lod_error(a5)
-	bra.w	.exit
+	bra	.exit
 
 
 
 .nope
 	* Ordinary file load below, archive extraction above.
 
+    * mp3 shortcut check to allow remote mp3 files to 
+    * bypass filesystem operations and allow remote mp3 files. 
+    * This loses local file comments too but that's not too bad.
+;     move.l  lod_filename(a5),a0
+;     bsr     id_mp3filename
+;     tst.l   d0
+;     beq     .sampleCheck
+
+    jsr     streamIsAlive
+    beq     .notRemote
+    jsr     streamIsMpegAudio
+    bne     .sampleCheck
+.notRemote
+
+    * Get info on the file
+     
 	move.l	_DosBase(a5),a6
 	move.l	lod_filename(a5),d1
 	moveq	#ACCESS_READ,d2
 	lob	Lock			
 	move.l	d0,d3
-	beq.w	.open_error
+	beq	.open_error
 	move.l	d0,d1
 	lea	fileinfoblock(a5),a3
 	move.l	a3,d2
@@ -28651,21 +29880,21 @@ loadfile:
 	bne.b 	.exOk
 	move.l	d3,d1
 	lob	UnLock
-	bra.w	.open_error
+	bra	.open_error
 .exOk
 	move.l	d3,d1
 	lob	UnLock
 
 	;tst.l	fib_DirEntryType(a3)	* onko tiedosto vai hakemisto?
-	;bpl.w	.nofile_err
+	;bpl	.nofile_err
 	cmp.l	#ST_FILE,fib_DirEntryType(a3)
 	beq.b	.isFile
 	cmp.l	#ST_LINKFILE,fib_DirEntryType(a3)
-	bne.w	.nofile_err
+	bne	.nofile_err
 .isFile
 
 	move.l	124(a3),lod_length(a5)	* tiedoston pituus
-	beq.w	.open_error		* jos 0 -> errori
+	beq	.open_error		* jos 0 -> errori
 
 	tst.b	lod_kommentti(a5)
 	bne.b	.noc
@@ -28676,6 +29905,7 @@ loadfile:
 	dbeq	d0,.cece
 	clr.b	(a1)
 .noc
+
 	* Read some bytes of data into the probebuffer
 
 	DPRINT	"Probing"
@@ -28684,7 +29914,7 @@ loadfile:
 	move.l	lod_filename(a5),d1
 	lob	Open
 	move.l	d0,lod_filehandle(a5)
-	beq.w	.open_error
+	beq	.open_error
 
 	lea	probebuffer(a5),a0
 	move.w	#PROBE_BUFFER_LEN/4-1,d0
@@ -28702,7 +29932,7 @@ loadfile:
 	lob	Read
 	DPRINT	"Probe read: %ld"
 ;	cmp.l	#1084,d0
-;	bne.w	.read_error
+;	bne	.read_error
 
 * Check if this is an archive file
 *** onko lha, lzx, zip?
@@ -28714,17 +29944,17 @@ loadfile:
 	cmp.b	#$20,3+probebuffer(a5)
 	bhs.b	.nozip
 
-	bsr.w	.closeit
+	bsr	.closeit
 	clr.l	lod_filehandle(a5)
-	bra.w	.zip
+	bra	.zip
 .nozip
 
 	cmp.l	#"LZX"<<8,probebuffer(a5)
 	bne.b	.nolzx
 
-	bsr.w	.closeit
+	bsr	.closeit
 	clr.l	lod_filehandle(a5)
-	bra.w	.lzx
+	bra	.lzx
 .nolzx
 
 	cmp	#'-l',2+probebuffer(a5)
@@ -28735,50 +29965,52 @@ loadfile:
 	cmp.l	#$68002d00,d0
 	bne.b	.nolha
 
-	bsr.w	.closeit
+	bsr	.closeit
 	clr.l	lod_filehandle(a5)
-	bra.w	.lha
+	bra	.lha
 
 .nolha
 
-	bsr.w	.handleExecutableModuleLoading
+	bsr	.handleExecutableModuleLoading
 	* Skip the rest if LoadSeg above went fine
 	;tst.b	executablemoduleinit(a5)
 	tst.b 	lod_exefile(a5)
-	bne.w	.exit
+	bne	.exit
 
 
 ** Is this a sample file, stop loading if so.
 ** Jos havaitaan file sampleks, ei ladata enemp‰‰
+.sampleCheck
 	lea	probebuffer(a5),a0
 	clr.b	sampleinit(a5)
-	bsr.w	.samplecheck
+	bsr	.dosamplecheck
 	bne.b	.nosa
+    DPRINT  "sample detected"
 	st	sampleinit(a5)
-	bra.w	.exit
+	bra	.exit
 
 .nosa	clr.b	sampleformat(a5)
 
 	* This checks whether the file should be loaded into FAST ram
 
 	lea	probebuffer(a5),a0	* Kannattaako ladata fastiin??
-	bsr.w	.checkm
+	bsr	.checkm
 
 	* XPK compressed file check
 
 	cmp.l	#"XPKF",probebuffer(a5)
-	bne.w	.wasnt_xpk
+	bne	.wasnt_xpk
 
-	bsr.w	get_xpk
-	beq.w	.lib_error1
+	bsr	get_xpk
+	beq	.lib_error1
 
 ** file on xpk, katsotaan jos se on sample:
 	lea	probebuffer+16(a5),a0
 	clr.b	sampleinit(a5)
-	bsr.w	.samplecheck
+	bsr	.dosamplecheck
 	bne.b	.nosa2
 	st	sampleinit(a5)
-	bra.w	.exit
+	bra	.exit
 
 .nosa2	clr.b	sampleformat(a5)
 
@@ -28789,16 +30021,16 @@ loadfile:
 * ladata fastiin.
 
 	tst.b	xpkid(a5)	* Oliko XPK id p‰‰ll‰?
-	bne.w	.noid
+	bne	.noid
 
-	bsr.w	inforivit_xpkload2
+	bsr	inforivit_xpkload2
 
 	lea	.xpktags2(pc),a1
 	move.l	lod_filename(a5),.in2-.xpktags2(a1)
 	lea	.xfhpointerp(pc),a0
 	lore	XPK,XpkOpen
  	tst.l	d0
-	bne.w	.xpk_error
+	bne	.xpk_error
 
 	move.l	.xfhpointerp(pc),a0	* Varataan ekalle hunkille muistia.
 	move.l	xf_NLen(a0),d0
@@ -28809,7 +30041,7 @@ loadfile:
 
 	move.l	.xfhpointerp(pc),a0
 	lob	XpkClose
-	bra.w	.nomem_error
+	bra	.nomem_error
 .ok
 
 
@@ -28826,7 +30058,7 @@ loadfile:
 	move.l	d4,a0
 	jsr	freemem
 	pop	d0
-	bra.w	.xpk_error
+	bra	.xpk_error
 .oka
 
 	move.l	.xfhpointerp(pc),a0
@@ -28836,7 +30068,7 @@ loadfile:
 	move.l	12+probebuffer(a5),lod_length(a5)	* unXPKed length
 
 	move.l	d4,a0
-	bsr.w	.checkm
+	bsr	.checkm
 	move.l	(sp)+,lod_length(a5)
 
 	move.l	d4,a0
@@ -28857,8 +30089,8 @@ loadfile:
 .oo
 .noid
 
-	bsr.w	.infor
-	bsr.w	inforivit_xpkload
+	bsr	.infor
+	bsr	inforivit_xpkload
 
 	tst.b	win(a5)
 	beq.b	.eilo
@@ -28901,8 +30133,8 @@ loadfile:
 	move.l	_XPKBase(a5),a6
 	lob	XpkUnpack
 	tst.l	d0
-	bne.w	.xpk_error
-	bra.w	.exit
+	bne	.xpk_error
+	bra	.exit
 
 .xpktags
 		dc.l	XPK_InName
@@ -29002,11 +30234,11 @@ loadfile:
 	cmp.l	#"PP20",probebuffer(a5)
 	bne.b	.wasnt_pp
 
-	bsr.w	infolines_loadToChipMemory
-	bsr.w	inforivit_ppload
+	bsr	infolines_loadToChipMemory
+	bsr	inforivit_ppload
 
-	bsr.w	get_pp
-	beq.w	.lib_error2
+	bsr	get_pp
+	beq	.lib_error2
 
 	move.l	d0,a6
 	move.l	lod_filename(a5),a0		* filename
@@ -29017,8 +30249,8 @@ loadfile:
 	sub.l	a3,a3
 	lob	ppLoadData
 	tst.l	d0
-	beq.w	.exit
-	bra.w	.pp_error	
+	beq	.exit
+	bra	.pp_error	
 .wasnt_pp
 
 	* FImp compressed file?
@@ -29026,17 +30258,17 @@ loadfile:
 	cmp.l	#"IMP!",probebuffer(a5)
 	bne.b	.wasnt_fimp
 
-	bsr.w	infolines_loadToChipMemory
-	bsr.w	inforivit_fimpload
+	bsr	infolines_loadToChipMemory
+	bsr	inforivit_fimpload
 
 	move.l	lod_length(a5),d4
 	move.l	4+probebuffer(a5),lod_length(a5)
 
-	bsr.w	.alloc
+	bsr	.alloc
 	move.l	d0,lod_address(a5)
-	beq.w	.fimp_error
+	beq	.fimp_error
 
-	bsr.w	.seekstart
+	bsr	.seekstart
 
 	move.l	_DosBase(a5),a6
 	move.l	lod_filehandle(a5),d1
@@ -29044,13 +30276,13 @@ loadfile:
 	move.l	d4,d3
 	lob	Read
 	cmp.l	d4,d0
-	bne.w	.fimp_error2
+	bne	.fimp_error2
 
-	bsr.w	inforivit_fimpdecr
+	bsr	inforivit_fimpdecr
 
 	move.l	lod_address(a5),a0
 	jsr	fimp_decr	
-	bra.w	.exit
+	bra	.exit
 
 .wasnt_fimp
 
@@ -29058,19 +30290,19 @@ loadfile:
 ********* Lataus XFDmaster.libill‰
 
 	tst.b	xfd(a5)
-	beq.w	.wasnt_xfd
+	beq	.wasnt_xfd
 
-	bsr.w	get_xfd
-	beq.w	.wasnt_xfd
+	bsr	get_xfd
+	beq	.wasnt_xfd
 
 ** Tavallinen lataus t‰ss‰ v‰liss‰
 
-	bsr.w	.alloc
+	bsr	.alloc
 	move.l	d0,lod_address(a5)
-	beq.w	.error
+	beq	.error
 
-	bsr.w	.infor
-	bsr.w	.seekstart
+	bsr	.infor
+	bsr	.seekstart
 
 	move.l	lod_filehandle(a5),d1
 	move.l	lod_address(a5),d2
@@ -29078,12 +30310,12 @@ loadfile:
 	move.l	_DosBase(a5),a6
 	lob	Read
 	cmp.l	lod_length(a5),d0
-	bne.w	.error2
+	bne	.error2
 
 	lore	XFD,xfdAllocBufferInfo	
 	move.l	d0,a3	
 	tst.l	d0
-	beq.w	.exit		* Error: menee tavallisena filen‰
+	beq	.exit		* Error: menee tavallisena filen‰
 
 	move.l	lod_address(a5),xfdbi_SourceBuffer(a3)
 	move.l	lod_length(a5),xfdbi_SourceBufLen(a3)
@@ -29094,10 +30326,10 @@ loadfile:
 
 .xok0	move.l	a3,a1
 	lob	xfdFreeBufferInfo
-	bra.w	.exit
+	bra	.exit
 .xok1
 	move.l	xfdbi_PackerName(a3),d0
-	bsr.w	inforivit_xfd
+	bsr	inforivit_xfd
 
 	move	xfdbi_PackerFlags(a3),d0
 	and	#XFDPFF_PASSWORD!XFDPFF_RELOC!XFDPFF_ADDR,d0
@@ -29114,10 +30346,10 @@ loadfile:
 	bne.b	.xok3
 	move	xfdbi_Error(a3),lod_xfderror(a5) * error numba talteen
 	move	#lod_xfderr,lod_error(a5)
-	bsr.w	.free			* Vapautetaan pakattu file
+	bsr	.free			* Vapautetaan pakattu file
 	bra.b	.xok0
 .xok3
-	bsr.w	.free			* Vapautetaan pakattu file
+	bsr	.free			* Vapautetaan pakattu file
 
 	move.l	xfdbi_TargetBuffer(a3),lod_address(a5)	* Puretun tiedot
 	move.l	xfdbi_TargetBufLen(a3),lod_length(a5)
@@ -29125,7 +30357,7 @@ loadfile:
 	move.l	a3,a1
 	lore	XFD,xfdFreeBufferInfo
 ** OK!
-	bra.w	.exit
+	bra	.exit
 
 
 .wasnt_xfd
@@ -29140,7 +30372,7 @@ loadfile:
  	
 	pushm d0/a0
 	lea	probebuffer(a5),a0
-	bsr.w	id_it
+	bsr	id_it
 	popm d0/a0
 	bne.b	.wasNotIt
 	DPRINT	"IT hack 1!"
@@ -29151,14 +30383,14 @@ loadfile:
 	bra.b	.itAlloc
 .wasNotIt
 
-	bsr.w	.alloc
+	bsr	.alloc
 .itAlloc
 	move.l	d0,lod_address(a5)
-	beq.w	.error
+	beq	.error
 
-	bsr.w	.infor
+	bsr	.infor
 
-;	bsr.w	.seekstart
+;	bsr	.seekstart
 
 	* Make use of the already read data in probebuffer
 	move.l	lod_filehandle(a5),d1		
@@ -29167,7 +30399,7 @@ loadfile:
 	lore	Dos,Seek
 	DPRINT	"File position %ld"
 	cmp.l	#-1,d0
-	beq.w	.error2
+	beq	.error2
 
 	move.l	lod_address(a5),a0
 
@@ -29188,7 +30420,7 @@ loadfile:
 	move.l	_DosBase(a5),a6
 	lob	Read
 	cmp.l	lod_length(a5),d0
-	bne.w	.error2
+	bne	.error2
  else
 
 *** laatukko file load progress indicator blabh
@@ -29237,8 +30469,8 @@ loadfile:
  ;endif
 	* See if we got all of it already?
 	tst.l	d4
-	beq.w	.don
-	bmi.w	.don
+	beq	.don
+	bmi	.don
 
 	move.l	lod_filehandle(a5),d1
 	move.l	d5,d2
@@ -29251,12 +30483,12 @@ loadfile:
 	lob	IoErr
 	DPRINT	"IoErr=%ld"
  endif
-	bra.w	.error2
+	bra	.error2
 .noErr
 
 	* Subtract total bytes to be read
 	sub.l	d0,d4
-	bmi.w	.error2
+	bmi	.error2
 	beq.b	.don
 
 	* Advance target addres
@@ -29326,7 +30558,7 @@ loadfile:
 	DPRINT	"Read done"
  endc
 
-.exit	
+.exit:
 
 	bsr.b	.closeit
 
@@ -29334,13 +30566,13 @@ loadfile:
 	beq.b	.eiarc
 	tst.b	lod_tfmx(a5)		* jos oli tfmx, ei dellata
 	bne.b	.eiarc
-	bsr.w	remarctemp
+	bsr	remarctemp
 .eiarc
 
 	tst	lod_error(a5)
 	beq.b	.okk
 
-	bsr.w	.free
+	bsr	.free
 
 ;	tst.l	lod_address(a5)
 ;	beq.b	.noko
@@ -29375,7 +30607,7 @@ loadfile:
  endif	
 	rts
 
-.closeit
+.closeit:
 	move.l	lod_filehandle(a5),d1
 	beq.b	.em
 	move.l	_DosBase(a5),a6
@@ -29385,11 +30617,11 @@ loadfile:
 
 
 .checkm
-        bsr.w   tutki_moduuli2
+    bsr   tutki_moduuli2
 	cmp.b	#2,d0
-	beq.w	.ptfoo
-        cmp.b   #-1,d0
-        beq.b   .nofast
+	beq	.ptfoo
+    cmp.b   #-1,d0
+    beq.b   .nofast
 
 .publl  move.l   #MEMF_PUBLIC!MEMF_CLEAR,d0
 	DPRINT	"Loading to PUBLIC memory"
@@ -29409,112 +30641,75 @@ loadfile:
 *   a0 = probebuffer
 * Out:
 *   Z-flag set if recognized
-.samplecheck
+.dosamplecheck:
+    DPRINT  "sample check"
 ** IFF
-	move.b	#1,sampleformat(a5)
+	move.b	#SAMPLE_FORMAT_IFF,sampleformat(a5)
 	cmp.l	#"FORM",(a0)
 	bne.b	.nosa0
 	cmp.l	#"8SVX",8(a0)
-	beq.w	.sampl
+	beq	.sampl
 ** AIFF
-	move.b	#2,sampleformat(a5)
+	move.b	#SAMPLE_FORMAT_AIFF,sampleformat(a5)
 	cmp.l	#"AIFF",8(a0)
-	beq.w	.sampl
+	beq	.sampl
 
 .nosa0
 ** RIFF WAVE
-	move.b	#3,sampleformat(a5)
+	move.b	#SAMPLE_FORMAT_WAV,sampleformat(a5)
 	cmp.l	#"RIFF",(a0)
 	bne.b	.nosaa
 	cmp.l	#"WAVE",8(a0)
-	beq.w	.sampl
+	beq	.sampl
 .nosaa
 ** MPEG
-	move.b	#4,sampleformat(a5)
-
-	* Check file suffix
-	move.l	modulefilename(a5),a1
-.zu	tst.b	(a1)+
-	bne.b	.zu
-	subq.l	#1,a1
-	move.b	-(a1),d0
-	ror.l	#8,d0
-	move.b	-(a1),d0
-	ror.l	#8,d0
-	move.b	-(a1),d0
-	ror.l	#8,d0
-	move.b	-(a1),d0
-	ror.l	#8,d0
-	and.l	#$ffdfdfff,d0
-	cmp.l	#".MP1",d0
-	beq.b	.sampl
-	cmp.l	#".MP2",d0
-	beq.b	.sampl
-	cmp.l	#".MP3",d0
-	beq.b	.sampl
-
-	* Check file prefix
-	move.l	modulefilename(a5),a1
-	move.l	a1,a2
-.zu2	tst.b	(a1)+
-	bne.b	.zu2
-	subq.l	#1,a1
-.zu3	cmp.l	a1,a2
-	beq.b	.zu4
-	cmp.b	#":",-1(a1)
-	beq.b	.zu4
-	cmp.b	#"/",-1(a1)
-	beq.b	.zu4
-	subq	#1,a1
-	bra.b	.zu3
-.zu4
-	move.l	a1,d0
-
-	move.b	(a1)+,d0
-	rol.l	#8,d0
-	move.b	(a1)+,d0
-	rol.l	#8,d0
-	move.b	(a1)+,d0
-	rol.l	#8,d0
-	move.b	(a1)+,d0
-	and.l	#$dfdfffff,d0
-	cmp.l	#"MP1.",d0
-	beq.b	.sampl
-	cmp.l	#"MP2.",d0
-	beq.b	.sampl
-	cmp.l	#"MP3.",d0
-	beq.b	.sampl
+	move.b	#SAMPLE_FORMAT_MP3,sampleformat(a5)
+    jsr     streamIsAlive
+    beq     .noStream
+    jsr     streamIsMpegAudio
+    bne     .mpegaStream
+.noStream
+    push    a0
+	move.l	modulefilename(a5),a0
+    bsr     id_mp3filename
+    pop     a0
+    tst.l   d0
+    beq     .sampl
 
 	* Finally check probe buffer contents 
-	bsr.w	id_mp3
+	bsr	id_mp3
 
 .sampl	rts
+
+.mpegaStream
+    moveq   #0,d0
+    rts
 	
 
 ** Ladataan PT file fastiin jos ei mahdu chipppppiin
 .ptfoo
 	tst.b	ahi_use(a5)		* AHI? -> public
-	bne.w	.publl
+	bne	.publl
 	cmp.b	#2,ptmix(a5)		* PS3M? -> public
-	beq.w	.publl
+	beq	.publl
 
 	pushm	all
 	move.l	#MEMF_LARGEST!MEMF_CHIP,d1
 	lore	Exec,AvailMem
 	cmp.l	lod_length(a5),d0
 	popm	all
-	blo.w	.publl
+	blo	.publl
 	rts
 
 .infor	
 	move.l	lod_memtype(a5),d0
 	btst	#MEMB_PUBLIC,d0
-	bne.w	infolines_loadToPublicMemory
-	bra.w	infolines_loadToChipMemory
+	bne	infolines_loadToPublicMemory
+	bra	infolines_loadToChipMemory
 
 .nofile_err
 	move	#lod_notafile,lod_error(a5)
-	bra.w	.exit
+	bra	.exit
 
 .open_error
  if DEBUG
@@ -29523,35 +30718,35 @@ loadfile:
  endif
 
 	move	#lod_openerr,lod_error(a5)
-	bra.w	.exit
+	bra	.exit
 
 .error
 .nomem_error
 .fimp_error
 	move	#lod_nomemory,lod_error(a5)
-	bra.w	.exit
+	bra	.exit
 
 .fimp_error2
 .error2	
 	bsr.b	.free
 .read_error
 	move	#lod_readerr,lod_error(a5)
-	bra.w	.exit
+	bra	.exit
 .lib_error1
 	move	#lod_noxpk,lod_error(a5)
-	bra.w	.exit
+	bra	.exit
 .lib_error2
 	move	#lod_nopp,lod_error(a5)
-	bra.w	.exit
+	bra	.exit
 .xpk_error
 	move	#lod_xpkerr,lod_error(a5)
 	move	d0,lod_xpkerror(a5)
-;	bra.w	.exit
-	bra.w	.noko	
+;	bra	.exit
+	bra	.noko	
 
 .pp_error
 	move	d0,lod_error(a5)	* PP:n virhekoodi (yhteensopiva)
-	bra.w	.exit
+	bra	.exit
 
 
 .alloc	
@@ -29586,26 +30781,26 @@ loadfile:
 	clr.b	lod_exefile(a5)
 	* There are no AHI supported exe type modules
 	tst.b	ahi_muutpois(a5)
-	bne.w	.ahiSkip
+	bne	.ahiSkip
 	pushm 	d1-a6
 	lea	probebuffer(a5),a4
 	move.l	#1084,d7
 
 	* Test for known exe formats
 
-	bsr.w	id_futureplayer
+	bsr	id_futureplayer
 	bne.b	.notFuturePlayer
 	moveq	#pt_futureplayer,d7
 	bra.b	.exeOk
 
 .notFuturePlayer
-	bsr.w	id_delicustom
+	bsr	id_delicustom
 	bne.b	.notDeliCustom
 	moveq	#pt_delicustom,d7
 	bra.b	.exeOk 
 
 .notDeliCustom 
-	bsr.w	id_davelowe
+	jsr	id_davelowe
 	bne.b	.notDl
 	move	#pt_davelowe,d7
 	bra.b	.exeOk
@@ -29613,7 +30808,7 @@ loadfile:
 	bra.b	.notKnown
 .exeOk
 	move.l	#MEMF_PUBLIC,lod_memtype(a5)
-	bsr.w	.infor
+	bsr	.infor
 	move.l	lod_filename(a5),d1
 	lore	Dos,LoadSeg
 	tst.l	d0
@@ -29717,7 +30912,7 @@ get_sid:
     move.l  LIB_IDSTRING(a0),d2
     DPRINT  "Opened playsid: %ld.%ld - %s"
  endif
-	bsr.w	init_sidpatch
+	bsr	init_sidpatch
 	moveq	#1,d0
 .q	rts
 
@@ -29860,21 +31055,21 @@ tutki_moduuli2
 	cmp.b	#2,ptmix(a5)
 	beq.b	.er
 
-	bsr.w	.ptch		* fast
-	beq.w	.rf
+	bsr	.ptch		* fast
+	beq	.rf
 	bra.b	.nom
 
-.er	bsr.w	.ptch		* 
-	beq.w	.ff
+.er	bsr	.ptch		* 
+	beq	.ff
 
 .nom
 ;	bsr	id_ps3m
 ;	tst.l	d0
-;	beq.w	.goPublic
+;	beq	.goPublic
 	cmp.l	#'SCRM',44(a0)		* Screamtracker ]I[
-	beq.w	.f
+	beq	.f
 	cmp.l	#"OCTA",1080(a0)	* Fasttracker
-	beq.w	.f
+	beq	.f
 
 	cmp.l	#"Exte",(a0)		* Fasttracker ][ XM
 	bne.b	.kala
@@ -29883,24 +31078,24 @@ tutki_moduuli2
 	cmp.l	#" Mod",8(a0)
 	bne.b	.kala
 	cmp.l	#"ule:",12(a0)
-	beq.w	.f
+	beq	.f
 
 .kala	move.l	1080(a0),d0
 	and.l	#$ffffff,d0		* fast
 	cmp.l	#"CHN",d0
-	beq.w	.f
+	beq	.f
 	cmp	#"CH",1082(a0)		* fast
-	beq.w	.f
+	beq	.f
 	move.l	(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#'MTM',d0		* multi
-	beq.w	.f
+	beq	.f
 	move.l	1080(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#"TDZ",d0		* take
 	beq.b	.f
 
-	bsr.w	id_it			 * IT
+	bsr	id_it			 * IT
 	beq.b	.f
 
 
@@ -29916,19 +31111,19 @@ tutki_moduuli2
 	cmp.l	#"tfmx",(a4)
 	beq.b	.goPublic
 
-	bsr.w	id_oktalyzer8ch
+	bsr	id_oktalyzer8ch
 	beq.b	.goPublic
 
 	cmp.l	#'PSID',(a4)		* PSID-tiedosto
 	beq.b	.goPublic
 
-	bsr.w	id_thx_
+	bsr	id_thx_
 	tst.l	d0
 	beq.B	.goPublic
-	bsr.w	id_pretracker_
+	bsr	id_pretracker_
 	tst.l	d0
 	beq.B	.goPublic
-	bsr.w	id_mline
+	bsr	id_mline
 	tst.l	d0
 	beq.b	.goPublic
 	jsr	id_musicmaker8_
@@ -29946,10 +31141,10 @@ tutki_moduuli2
 	bne.b	.goPublic
 .nome
 
-	bsr.w	id_digibooster_
+	bsr	id_digibooster_
 	tst.l	d0
 	beq.b	.goPublic
-	bsr.w	id_digiboosterpro_
+	bsr	id_digiboosterpro_
 	tst.l	d0
 	beq.b	.goPublic
 	bsr		id_aon8
@@ -29984,7 +31179,7 @@ tutki_moduuli2
 	pushm	all
 
 	move.l	a0,a4
-	bsr.w	id_hippelcoso
+	bsr	id_hippelcoso
 	beq.b	.ok
 	moveq	#-1,d0
 
@@ -29994,7 +31189,7 @@ tutki_moduuli2
 
 
 
-tutki_moduuli
+tutki_moduuli:
 	DPRINT	"Identify module"
 ;	bsr	inforivit_identifying
  ifne PILA
@@ -30005,7 +31200,7 @@ tutki_moduuli
 	lea	.aag_id(pc),a1		 * onko AAG'97 keyfile?
 	moveq	#4,d0
 	moveq	#40,d7
-	bsr.w	search
+	bsr	search
 	pop	a0
 	beq.b	.screw
 
@@ -30052,8 +31247,8 @@ tutki_moduuli
 	* See if there is data to check
 	move.l	a4,d0
 	beq.b	.ohi
-	bsr.w	id_protracker
-	beq.w	.protracker
+	bsr	id_protracker
+	beq	.protracker
 
 .ohi
 	* Test for formats that do not require an external
@@ -30063,7 +31258,7 @@ tutki_moduuli
 	* First test for exe modules, skip the rest
 	* of the checks since moduledata is a seglist
 	cmp.b	#pt_delicustom,executablemoduleinit(a5)
-	beq.w	.delicustom
+	beq	.delicustom
 
 	tst.b	sampleinit(a5)
 	bne.b	.noop
@@ -30079,37 +31274,37 @@ tutki_moduuli
 
 	DPRINT	"Internal"
 	lea	internalFormats(pc),a3 
-	bsr.w	identifyFormats
-	beq.w 	.ex2
+	bsr	identifyFormats
+	beq 	.ex2
 
 ;	DPRINT	"Eagle"
 ;	lea	eagleFormats(pc),a3
 ;	bsr 	identifyFormats 
-;	beq.w 	.ex2
+;	beq 	.ex2
 
 	***********************************
 
 	tst.l	externalplayers(a5)
 	bne.b	.noop
 
-	bsr.w	id_sid
-	beq.w	.sid
+	bsr	id_sid
+	beq	.sid
 
-	bsr.w	id_oldst
-	beq.w	.oldst
+	bsr	id_oldst
+	beq	.oldst
 .noop
 
 	tst.l	externalplayers(a5)	* ladataan playerit
 	bne.b	.rite
 	cmp.b	#GROUPMODE_DISABLE,groupmode(a5)	* onko disabled
-	beq.w	.nopl
+	beq	.nopl
 
 	cmp.b	#GROUPMODE_LOAD_SINGLE,groupmode(a5)	* tarpeen vaatiessa 1 replayeri?
 	bne.b	.rote
 	st	external(a5)		* Lippu!
 	bra.b	.rite
 .rote
-	bsr.w	loadplayergroup
+	bsr	loadplayergroup
 	move.l	d0,externalplayers(a5)
 	bne.b	.rite
 	moveq	#lod_grouperror,d0
@@ -30124,49 +31319,51 @@ tutki_moduuli
 	bne.b	.mpa
 
 ** AHIa tukevat replayerit
-	bsr.w	id_hippelcoso
-	beq.w	.hippelcoso
+    tst.b   sampleinit(a5)
+    bne     .sample
+    bsr	id_hippelcoso
+	beq	.hippelcoso
 
 	bra.b	.mp
 .mpa
 	* First test for exe modules, skip the rest
 	* of the checks since moduledata is a seglist
 	cmp.b	#pt_futureplayer,executablemoduleinit(a5)
-	beq.w	.futureplayer
+	beq	.futureplayer
 	cmp.b	#pt_davelowe,executablemoduleinit(a5)
-	beq.w	.davelowe
+	beq	.davelowe
 
 	tst.b	sampleinit(a5)		* sample??
-	bne.w	.sample
+	bne	.sample
 
-	bsr.w	id_TFMX_PRO
+	bsr	id_TFMX_PRO
 	tst	d0
-	beq.w	.tfmx
+	beq	.tfmx
 
-	bsr.w	id_TFMX7V
+	bsr	id_TFMX7V
 	tst	d0
-	beq.w	.tfmx7
+	beq	.tfmx7
 
-	bsr.w	id_tfmx
-	beq.w	.tfmx
+	bsr	id_tfmx
+	beq	.tfmx
 
-	bsr.w	id_tfmxunion
-	beq.w	.tfmxunion
+	bsr	id_tfmxunion
+	beq	.tfmxunion
 
 	DPRINT	"Group"
 	lea	groupFormats(pc),a3 
-	bsr.w	identifyFormats
+	bsr	identifyFormats
 	beq.b .ex2
 
 	DPRINT	"Eagle"
 	lea	eagleFormats(pc),a3
-	bsr.w 	identifyFormats 
+	bsr 	identifyFormats 
 	beq.b 	.ex2
 
  ifne FEATURE_P61A
 	move.l	fileinfoblock+8(a5),d0	* Tied.nimen 4 ekaa kirjainta
-	bsr.w	id_player2
-	beq.w	.player
+	bsr	id_player2
+	beq	.player
  endif
 
 .mp
@@ -30174,9 +31371,9 @@ tutki_moduuli
     jsr     id_xmaplay
     beq     .xmaplay
 
-	bsr.w	id_ps3m		
+	bsr	id_ps3m		
 	tst.l	d0
-	beq.w	.multi
+	beq	.multi
 
 	clr.b	external(a5)
 .nope
@@ -30185,10 +31382,10 @@ tutki_moduuli
 	tst.b	ahi_muutpois(a5)
 	bne.b	.er
 
-	bsr.w	id_sid
-	beq.w	.sid
+	bsr	id_sid
+	beq	.sid
 
-	bsr.w	id_oldst
+	bsr	id_oldst
 	beq.b	.oldst
 
 
@@ -30198,13 +31395,13 @@ tutki_moduuli
 	rts	
 
 .ex
-	 bsr.w	tee_modnimi
+	 bsr	tee_modnimi
 .ex2	
 	cmp	#pt_prot,playertype(a5)
 	beq.b	.wew
 	cmp	#pt_med,playertype(a5)
 	beq.b	.wew
-	bsr.w	whatgadgets
+	bsr	whatgadgets
 .wew
  if DEBUG
 	moveq	#0,d0
@@ -30217,7 +31414,7 @@ tutki_moduuli
 	rts
 
 .oldst	st	oldst(a5)
-	bsr.w	convert_oldst
+	bsr	convert_oldst
 	bra.b	.pro0
 
 .protracker	
@@ -30225,19 +31422,19 @@ tutki_moduuli
 .pro0	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
 	moveq	#20-1,d0
-	bsr.w	copyNameFromModule
+	bsr	copyNameFromModule
 	bra.b	.ex2
 
 .multi	
     pushpea	p_multi(pc),playerbase(a5)
 	move	#pt_multi,playertype(a5)
 .moveData
-	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 
 	move.l	moduleaddress(a5),a1	* tutkaillaan onko miss‰ muistissa
 	lore	Exec,TypeOfMem
 	and.l	#MEMF_CHIP,d0
-	beq.w	.ex2
+	beq	.ex2
 
 ** Arf! Ladattiin chippiin!
 ** Onko vehkeess‰ fastia laisinkaan? Jos on, pistet‰‰n warn-tekstinp‰tk‰.
@@ -30245,12 +31442,12 @@ tutki_moduuli
 	moveq	#MEMF_FAST,d1
 	lob	AvailMem
 	tst.l	d0
-	beq.w	.ex2
+	beq	.ex2
 
-	bsr.w	inforivit_warn
+	bsr	inforivit_warn
 	moveq	#65,d1
 	lore	Dos,Delay
-	bra.w	.ex2
+	bra	.ex2
 
 .xmaplay
     move.l  #p_xmaplay,playerbase(a5)
@@ -30259,42 +31456,42 @@ tutki_moduuli
 
 .sid	pushpea	p_sid(pc),playerbase(a5)
 	move	#pt_sid,playertype(a5)
-	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
-	bra.w	.ex2
+	bsr	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bra	.ex2
 
  ifne FEATURE_P61A
 .player
 	pushpea	p_player(pc),playerbase(a5)
 	move	#pt_player,playertype(a5)
-	bra.w	.ex
+	bra	.ex
  endif
 
 .hippelcoso
 	move	d5,maxsongs(a5)
 	pushpea	p_hippelcoso(pc),playerbase(a5)
 	move	#pt_hippelcoso,playertype(a5)
-	bra.w	.ex
+	bra	.ex
 
 .delicustom
 	pushpea	p_delicustom(pc),playerbase(a5)
 	move	#pt_delicustom,playertype(a5)
-	bra.w	.ex
+	bra	.ex
 
 .futureplayer
 	pushpea	p_futureplayer(pc),playerbase(a5)
 	move	#pt_futureplayer,playertype(a5)
-	bra.w	.ex
+	bra	.ex
 
 .davelowe
 	pushpea	p_davelowe(pc),playerbase(a5)
 	move	#pt_davelowe,playertype(a5)
-	bra.w	.ex
+	bra	.ex
 
 **** Oliko  sample??
-.sample
+.sample:
 	pushpea	p_sample(pC),playerbase(a5)
 	move	#pt_sample,playertype(a5)
-	bra.w	.ex
+	bra	.ex
 
 
 
@@ -30307,7 +31504,7 @@ tutki_moduuli
 	cmp.b	#3,d0
 	beq.b	.t7
 	moveq	#1,d7
-.t7	bra.w	.ok
+.t7	bra	.ok
 
 
 
@@ -30343,9 +31540,9 @@ tutki_moduuli
 	move.b	-(a0),d0
 	and.l	#$dfdfdfdf,d0
 	cmp.l	#'TADM',d0	* MDAT nurinp‰i
-	bne.w	.er
+	bne	.er
 	cmp.b	#'.',-(a0)
-	bne.w	.er
+	bne	.er
 
 .ook
 	
@@ -30366,7 +31563,7 @@ tutki_moduuli
 .luup	move.b	(a1)+,d1
 	beq.b	.olioikea
 	move.b	(a0)+,d0
-	beq.w	.er
+	beq	.er
 	bset	#5,d0			* pieneksi kirjaimeksi	
 	cmp.b	d1,d0
 	bne.b	.leep
@@ -30384,7 +31581,7 @@ tutki_moduuli
 * TFMX module
 *	bsr	request		
 
-	bsr.w	inforivit_tfmxload
+	bsr	inforivit_tfmxload
 
 	clr.b	lod_tfmx(a5)
 
@@ -30398,17 +31595,17 @@ tutki_moduuli
 	moveq	#1,d1			* Ei oteta filen kommenttia talteen
 	move.b	xpkid(a5),d4		* ei XPK ID:t‰ samplefileille
 	st	xpkid(a5)
-	bsr.w	loadfile
+	bsr	loadfile
 	move.b	d4,xpkid(a5)
 	move.l	d0,-(sp)
 
 ;	tst.b	lod_archive(a5)
 	tst.b	d6
 	beq.b	.bar
-	bsr.w	remarctemp
+	bsr	remarctemp
 .bar
 
-	bsr.w	inforivit_clear
+	bsr	inforivit_clear
 
 	move.l	(sp)+,d0
 	lea	150(sp),sp
@@ -30419,10 +31616,10 @@ tutki_moduuli
 .ok	pushpea	p_tfmx(pc),playerbase(a5)
 	move	#pt_tfmx,playertype(a5)
 	tst	d7
-	bne.w	.ex
+	bne	.ex
 	pushpea	p_tfmx7(pc),playerbase(a5)
 	move	#pt_tfmx7,playertype(a5)
-	bra.w	.ex
+	bra	.ex
 
 ;.tfmxid	dc.b	"mdat.",0
 .tfmxid		dc.b	"mdat",0
@@ -30496,7 +31693,7 @@ doIdentifyFormats
 copyNameFromModule
 	move.l	moduleaddress(a5),a1
 * From pointer in A1:
-copyNameFromA1
+copyNameFromA1:
 	lea	modulename(a5),a0
 .co	move.b	(a1)+,(a0)+
 	dbeq	d0,.co
@@ -30528,17 +31725,23 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 * Virittelee nimen tied.nimest‰
 *******
 tee_modnimi:
-	moveq	#INFO_MODULE_NAME_LEN-1,d1
+ 	move.l  #INFO_MODULE_NAME_LEN-1,d1
 	lea		modulename(a5),a1
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	bne.b	.arc				* otetaan pelkk‰ filename
 	move.l	solename(a5),a0
 	tst.b	lastLoadedModuleWasRemote(a5)
 	beq.b	.copy
+    move.l  a0,a2
+    * Remote file, go forward to next slash if possible.
+    * If NULL reached, do nothing
 .slash
-	cmp.b	#"/",(a0)+
+    tst.b   (a2)
+    beq.b   .copy
+	cmp.b	#"/",(a2)+
 	bne.b	.slash
-	bra.b	.copy
+    move.l  a2,a0
+    bra     .copy
 .arc
 	* This contains info from the last archive loaded file 
 	lea	fib_FileName+fileinfoblock(a5),a0
@@ -30558,11 +31761,11 @@ loadplayergroup
 	pushm	d1-a6
 
 
-	bsr.w	inforivit_group
+	bsr	inforivit_group
 
 	moveq	#0,d7
-	bsr.w		openPlayerGroupFile
-	beq.w	.error
+	bsr		openPlayerGroupFile
+	beq	.error
 .ok
 	move.l	d4,d1		* selvitet‰‰n filen pituus
 	moveq	#0,d2	
@@ -30622,7 +31825,7 @@ loadplayergroup
 	moveq	#0,d7
 
 .xx	
-	;bsr.w	inforivit_clear
+	;bsr	inforivit_clear
 
  if DEBUG 
 	move.l	d7,a0 
@@ -30714,17 +31917,17 @@ loadreplayer
 	jsr	freemem
 	clr.l	xplayer(a5)
 
-	bsr.w	inforivit_group2
+	bsr	inforivit_group2
 
-	bsr.w	openPlayerGroupFile
-	beq.w	.error
+	bsr	openPlayerGroupFile
+	beq	.error
 
 	move.l	d4,d1
 	pushpea	probebuffer+1024(a5),d2
 	move.l	#1024,d3
 	lob	Read
 	cmp.l	#1024,d0
-	bne.w	.error	
+	bne	.error	
 
 
  if DEBUG
@@ -30736,13 +31939,13 @@ loadreplayer
 
 
 	cmp.b	#xpl_versio,7+probebuffer+1024(a5)
-	blo.w	.error
+	blo	.error
 
 	lea	probebuffer+8+1024(a5),a0
 	move	playertype(a5),d0
 .find
 	tst	(a0)
-	beq.w 	.error
+	beq 	.error
 	cmp	(a0),d0 
 	beq.b 	.found 
 	lea	2+4+4(a0),a0 
@@ -30789,7 +31992,7 @@ loadreplayer
 
 
 .xx	
-;	bsr.w	inforivit_clear
+;	bsr	inforivit_clear
 
 	move.l	d7,d0
 	move.l	xplayer(a5),a1
@@ -30814,7 +32017,8 @@ loadreplayer
 * Disables a button gadget
 * in:
 *   a0 = button gadget
-disableButton
+disableGadget:
+disableButton:
 	move	#GFLG_DISABLED,d0
 	and	gg_Flags(a0),d0
 	bne.b	.alreadyDisabled
@@ -30826,7 +32030,7 @@ disableButton
 * Enables a button gadget
 * in:
 *   a0 = button gadget
-enableButton
+enableButton:
 	move	#GFLG_DISABLED,d0
 	and	gg_Flags(a0),d0
 	beq.b	.alreadyEnabled
@@ -30835,7 +32039,7 @@ enableButton
 	* the disabled shadow
 	move.l	a0,a3
 	push	a0
-	bsr.w	redrawButtonGadget	
+	bsr	redrawButtonGadget	
 	pop	a0
 	moveq	#1,d0
 .alreadyEnabled
@@ -30890,12 +32094,12 @@ whag	tst.b	win(a5)
 ;	beq.b	.notopen
 ;	tst	quad_prosessi(a5)
 ;	bne.b	.c
-;	bsr.w	start_quad2
+;	bsr	start_quad2
 ;	bra.b	.c
 ;.notopen
 ;	tst	quad_prosessi(a5)
 ;	beq.b	.c
-;	bsr.w	sulje_quad2
+;	bsr	sulje_quad2
 
 ;.c
 
@@ -30931,7 +32135,7 @@ whag	tst.b	win(a5)
 
 	move.l	a0,a3
 	and	#~GFLG_DISABLED,gg_Flags(a3)
-	bsr.w	redrawButtonGadget
+	bsr	redrawButtonGadget
 
 	lea	kela2,a0
 	cmp.l	a0,a3
@@ -30968,7 +32172,7 @@ whag	tst.b	win(a5)
 * to call this with all gadgets.
 * in:
 *   a3 = gadget
-drawButtonFrameMainWindow
+drawButtonFrameMainWindow:
 	* File and volume sliders
 	cmp.l	#slider1,a3
 	beq.b	.x
@@ -31026,7 +32230,7 @@ redrawButtonGadget
 	move.l	a3,a0
 	jsr	refreshGadgetInA0
 
-	bsr.w	drawButtonFrameMainWindow
+	bsr	drawButtonFrameMainWindow
 	rts
 
 
@@ -31071,8 +32275,17 @@ toggleFavoriteStatusForCurrentModule:
 * out:
 *	d0 = 0 on failure, 1 on OK
 toggleFavoriteStatus
+    * Grab song number if favoriting the currently playing module
+    moveq   #0,d1
+    cmp.l   playingmodule(a5),d0
+    bne     .1
+    move    songnumber(a5),d1
+.1
 	* Get the actual node into a0
-	bsr.w	getListNode
+    push    d1
+	bsr	    getListNode
+    pop     d1
+    tst.l   d0
 	beq.b	.notFound
 
 	tst.b	l_divider(a0)
@@ -31081,10 +32294,18 @@ toggleFavoriteStatus
 	* Toggle favorite status
 	isFavoriteModule a0 
 	bne.b	.wasFavorite
+    * Store current song number or set to NULL
+    move.b  d1,l_favSong(a0)
+ if DEBUG
+    moveq   #0,d0
+    move.b  d1,d0
+    DPRINT  "Storing favSong=%ld"
+ endif
 	bsr.b	addFavoriteModule
 	bra.b	.wasNotFavorite
 .wasFavorite
-	bsr.w	removeFavoriteModule
+    clr.b   l_favSong(a0)
+	bsr	removeFavoriteModule
 .wasNotFavorite
 	moveq	#1,d0
 	rts
@@ -31108,7 +32329,7 @@ addFavoriteModule:
 	st	l_favorite(a0)
 	
 	* see if for some reason a0 is already in the favorite list
-	bsr.w	findFavoriteModule
+	bsr	findFavoriteModule
 	tst.l	d0
 	bne.b	.exit	* bail out if so
 	
@@ -31123,7 +32344,7 @@ addFavoriteModule:
 
 	st	favoriteListChanged(a5)
  if DEBUG
-	bsr.w	logFavoriteList
+	bsr	logFavoriteList
  endif
 .noMem
 .exit
@@ -31134,7 +32355,7 @@ addFavoriteModule:
 * out: 
 *   a4 = new node
 *   d0 = false: no mem, true: all ok
-cloneListNode
+cloneListNode:
 	move.l	a0,a3
 
 	* copy this node and add to favorite list
@@ -31165,7 +32386,7 @@ cloneListNode
 	moveq	#1,d0
 	rts
 .noMem	
-	moveq	#-1,d0
+	moveq	#0,d0
 	rts
 
 * in:
@@ -31201,7 +32422,7 @@ removeFavoriteModule
 	bra.b	.loop
 .exit
  if DEBUG
-	bsr.w	logFavoriteList
+	bsr	logFavoriteList
  endif
 	rts
 
@@ -31282,16 +32503,16 @@ importFavoriteModulesFromDisk
 	move.l	d6,a0
 	jsr	freemem
 .noData
-	bsr.w	logFavoriteList
+	bsr	logFavoriteList
 	rts
 
 
 exportFavoriteModulesWithMessage
 	pushm	all
 	tst.b	favorites(a5)
-	beq.w	.x
+	beq	.x
 	tst.b	favoriteListChanged(a5)
-	beq.w	.x
+	beq	.x
 
 	* storage for two intuitimes
 	lea	-16(sp),sp
@@ -31346,7 +32567,7 @@ exportFavoriteModulesToDisk
 	beq.b	.x
 	lea	favoriteModuleFileName(pc),a0
 	lea	favoriteListHeader(a5),a1
-	jsr 	exportModuleProgramToFile
+	jsr 	exportModuleProgramToFileWithSongMetaData
 	clr.b	favoriteListChanged(a5)
 .x	rts
 
@@ -31356,12 +32577,14 @@ favoriteModuleFileName
 
 * in:
 *  a0 = list node
-updateFavoriteStatus
+updateFavoriteStatus:
 	tst.b	l_divider(a0)
 	bne.b	.skipDivs
-	bsr.w	findFavoriteModule
+	bsr	findFavoriteModule
 	* a matching favorite module was found? set flag 
 	sne	l_favorite(a0)
+    * also copy the fav song over
+    move.b  l_favSong(a1),l_favSong(a0)
 .skipDivs
 	rts
 
@@ -31398,14 +32621,14 @@ handleFavoriteModuleConfigChange
 	DPRINT	"->populating"
 
 * if list is empty, try importing data
-	bsr.w	importFavoriteModulesFromDisk
+	bsr	importFavoriteModulesFromDisk
 * then the current list should be updated to contain favorite statuses
 	lea	moduleListHeader(a5),a0
 .loop
 	TSTNODE	a0,a0
 	beq.b	.end
 	* find if node a0 is in favorite module list
-	bsr.w	findFavoriteModule
+	bsr	findFavoriteModule
 	* Use the return status to update favorite status for this node 
 	move.b	d0,l_favorite(a0)
 	bra.b	.loop
@@ -31415,12 +32638,12 @@ handleFavoriteModuleConfigChange
 
 .noFavs
 	DPRINT	"handleFavoriteModuleConfigChange: disabled"
-	;bsr.w	disableListModeChangeButton
+	;bsr	disableListModeChangeButton
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	bne.b	.noFav
 	* If disabled from prefs must toggle to normal mode
 	;bsr.b	toggleListMode
-	bsr.b	engageNormalMode
+	bsr 	engageNormalMode
 .noFav
 	
 	* favorites are not enabled
@@ -31430,7 +32653,7 @@ handleFavoriteModuleConfigChange
 	* there's some stuff in the list, free it and refresh view
 	* l_favorite need not be cleaned since they won't be displayed
 	* anyway if feature is disabled
-	bsr.w	freeFavoriteList
+	bsr	freeFavoriteList
 .refresh
 	jsr	forceRefreshList
 
@@ -31442,32 +32665,84 @@ handleFavoriteModuleConfigChange
 *** SECTION ********************************************************************
 *
 * List mode operations
+* Layout for the bottom find/search bar 
 *
 ******************************************************************************
 
-toggleListMode:
-	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
-	beq.b	engageFavoritesMode
-	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
-	beq.w	engageFileBrowserMode
 
-	tst.b	uhcAvailable(a5)
-	bne.b	.searchAvailable
-	
-	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq.b	engageNormalMode
+storeListModeChosenModule:     
+    moveq   #0,d0
+    move.b  listMode(a5),d0
+    lsl     #2,d0
+    lea     normalModeChosenModule(a5),a0
+    move.l  chosenmodule(a5),(a0,d0.w)
+    rts
+
+
+
+toggleListModePopup:
+	DPRINT	"List mode"
+	lea		toggleListModePopupOptions(pc),a4
+	lea		gadgetListModeChangeButton,a0
+	move	gg_LeftEdge(a0),d6
+	moveq	#20,d7
+	add		gg_TopEdge(a0),d7
+    moveq   #0,d4
+    moveq   #0,d0
+    move.b  listMode(a5),d0
+	jsr		listSelectorMainWindowPreselect
+	bmi.b	.skip
+	beq		engageNormalMode
+    subq	#1,d0
+	beq		engageFavoritesMode
+    subq    #1,d0
+    beq     engageFileBrowserMode
+    subq    #1,d0
+    beq     engageSearchResultsMode
+    subq    #1,d0
+    bne     .skip
+    * Shortcut to shared lists
+    move.b  #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    jsr     engageSearchResultsMode
+    jsr     refreshGadgetSearchSource
+    jsr     recentPlaylistsSearch
+.skip
 	rts
 
-.searchAvailable
+toggleListModePopupOptions:
+	* max width, rows
+;	dc.b	12,5
+;	dc.b	"Main list   ",0
+;	dc.b	"Favorites   ",0
+;    dc.b    "File browser",0
+;    dc.b    "Search      ",0
+;    dc.b    "Shared lists",0
+	dc.b	15,4
+	dc.b	" Main list    ",0
+	dc.b	" Favorites    ",0
+    dc.b    " File browser ",0
+    dc.b    " Search view  ",0
+    even
+
+
+
+toggleListMode:
+	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
+	beq 	engageFavoritesMode
+	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
+	beq	    engageFileBrowserMode
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	beq		engageSearchResultsMode
 	cmp.b	#LISTMODE_SEARCH,listMode(a5)
-	beq.b	engageNormalMode
+	beq.b	engageNormalMode	
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq 	engageNormalMode
 	rts
 
 engageNormalMode:
-	DPRINT	"engage normal"
-	pushm	all
+	DPRINT	"** engage normal"
+    pushm	all
+    bsr     storeListModeChosenModule
 	
 	cmp.b	#LISTMODE_NORMAL,listMode(a5)
 	beq.b	.skip
@@ -31484,46 +32759,66 @@ engageNormalMode:
 	clr.b	moduleListChanged(a5)
 
 .wasNotFav
-	move.b	#LISTMODE_NORMAL,listMode(a5)
-	bsr.b	engageListMode
-
+ 	move.b	#LISTMODE_NORMAL,listMode(a5)
+    bsr     switchToNormalLayout
+	bsr 	engageListMode
 .skip
-	popm	all
+;    bsr     switchToNormalLayout
+    popm	all
 	rts	
 
 engageFavoritesMode:
+	DPRINT	"** engage favorites"
 	pushm	all
-	DPRINT	"engage favorites"
+    bsr     storeListModeChosenModule
 	* Moving to favorite mode
 	* moduleListChanged must be cleared initially to catch
 	* any subsequent user edits.
 	clr.b	moduleListChanged(a5)
 	move.b	#LISTMODE_FAVORITES,listMode(a5)
-	bsr.b	engageListMode
+    bsr     switchToNormalLayout
+	bsr     engageListMode
 	popm	all
 	rts	
 
 
 engageSearchResultsMode:
+	DPRINT	"** engage search results"
 	pushm	all
-	DPRINT	"engage search results"
+    bsr     storeListModeChosenModule
 	move.b	#LISTMODE_SEARCH,listMode(a5)
-	bsr.b	engageListMode
+
+    bsr     switchToSearchLayout
+	bsr 	engageListMode
+
+    * Special case check
+    * Trigger recent playlist fetch if needed.
+    tst.l   modamount(a5)
+    bne     .1
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    bne     .1
+    jsr     recentPlaylistsSearch
+.1  
 	popm	all
 	rts	
 
+
+
 * Common operations to be done after list mode change
 engageListMode:
-	bsr.w	.setListModeChangeButtonIcon
-	bsr.w	.setButtonStatesAccordingToListMode
+	bsr	.setListModeChangeButtonIcon
+	bsr	.setButtonStatesAccordingToListMode
 	bsr.b	.setListState
+  ifne FEATURE_LIST_TABS
+    bsr     updateListModeTabs
+  endif
 	* Playing module should be invalidated,
 	* it is not compatible between the two lists.
 	tst.l	playingmodule(a5) 
 	bmi.b	.not
 	move.l	#PLAYING_MODULE_REMOVED,playingmodule(a5)
 .not
-	rts
+    rts
 
 
 .setListState
@@ -31533,8 +32828,8 @@ engageListMode:
 	jsr	obtainModuleList	
 	jsr	clearRandomTable
 	
-	bsr.w	clearCachedNode
-	bsr.w	getVisibleModuleListHeader
+	bsr	clearCachedNode
+	bsr	getVisibleModuleListHeader
 	move.l	a0,a4
 	* set d1 to FF if list is in normal mode
 	cmp.b	#LISTMODE_NORMAL,listMode(a5)
@@ -31564,7 +32859,7 @@ engageListMode:
 	tst.b	d2
 	beq.b	.noChange
 	move.l	a4,a0
-	bsr.w	updateFavoriteStatus
+	bsr	updateFavoriteStatus
 .noChange
 	addq.l	#1,d3
 	bra.b	.count
@@ -31574,9 +32869,21 @@ engageListMode:
 	move.l	d3,d0
 	DPRINT	"Modamount=%ld"
  endif
+
+    * Select the item that was chosen last time
+    moveq   #0,d1
+    move.b  listMode(a5),d1
+    lsl     #2,d1
+    lea     normalModeChosenModule(a5),a0
+    move.l  (a0,d1.w),d1
+    cmp.l   d0,d1
+    bhi.b   .over
+    move.l  d1,chosenmodule(a5)
+.over
+
 	jsr	releaseModuleList
 	jsr	clearMainWindowWaitPointer
-	jsr	forceRefreshList
+ 	jsr	forceRefreshList
 	rts
 
 .setButtonStatesAccordingToListMode
@@ -31595,46 +32902,46 @@ engageListMode:
 .normalMode
 	bsr		setNormalAddTooltip
 	lea	gadgetDelButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr	enableButtonWithEar
 	lea	gadgetNewButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr	enableButtonWithEar
 	lea	gadgetSortButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr	enableButtonWithEar
 	lea	gadgetMoveButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr	enableButtonWithEar
 	lea	gadgetPrgButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr	enableButtonWithEar
 	rts
 
 .favoritesMode
 	lea	gadgetPrgButton(a4),a0
-	bsr.w	disableButton
+	bsr	disableButton
 	bsr		setNormalAddTooltip
 	rts
 	
 .browserMode
 	lea	gadgetDelButton(a4),a0
-	bsr.w	disableButton
+	bsr	disableButton
 	lea	gadgetNewButton(a4),a0
-	bsr.w	disableButton
+	bsr	disableButton
 	lea	gadgetMoveButton(a4),a0
-	bsr.w	disableButton
+	bsr	disableButton
 	lea	gadgetPrgButton(a4),a0
-	bsr.w	disableButton
+	bsr	disableButton
 	bsr		setFileBrowserAddTooltip
 	rts
 
 .searchMode
 	lea	gadgetNewButton(a4),a0
-	bsr.w	disableButton
+	bsr	disableButton
 	lea	gadgetPrgButton(a4),a0
-	bsr.w	disableButton
+	bsr	disableButton
 	lea	gadgetMoveButton(a4),a0
-	bsr.w	disableButton
+	bsr	disableButton
 	lea	gadgetSortButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr	enableButtonWithEar
 	lea	gadgetDelButton(a4),a0
-	bsr.w	enableButtonWithEar
+	bsr	enableButtonWithEar
 	bsr		setFileBrowserAddTooltip
 	rts
 
@@ -31658,8 +32965,11 @@ engageListMode:
 	* Toggle listmode button icon
 	move.l	a0,gadgetListModeChangeButtonImagePtr
 	lea	gadgetListModeChangeButton,a0
-	jmp	refreshGadgetInA0
-	
+ ifeq FEATURE_LIST_TABS
+	jsr refreshGadgetInA0
+ endif
+    rts
+
 setNormalAddTooltip
 	lea		tooltipList\.addButtonToolTipOffset,a0
 	lea		tooltipList\.add,a1
@@ -31674,6 +32984,438 @@ setSearchAddTooltip
 	sub.l	a0,a1
 	move	a1,(a0)
 	rts
+
+  ifne FEATURE_LIST_TABS
+updateListModeTabs:
+    lea     gadgetListModeTab1Button,a0
+    basereg gadgetListModeTab1Button,a0
+    bsr     setListModeTabsToDefaultColor
+	cmp.b	#LISTMODE_NORMAL,listMode(a5)
+	beq.b	.normalMode
+	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.favoritesMode
+	cmp.b	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.browserMode
+	cmp.b	#LISTMODE_SEARCH,listMode(a5)
+	beq.b	.searchMode
+    rts
+.normalMode
+    move.l  gadgetListModeTab1Button+gg_GadgetRender(a0),a1
+    move.b  #2,ig_PlanePick(a1)
+    bra refreshListModeTabs
+.favoritesMode
+    move.l  gadgetListModeTab2Button+gg_GadgetRender(a0),a1
+    move.b  #2,ig_PlanePick(a1)
+    bra refreshListModeTabs
+.browserMode
+    move.l  gadgetListModeTab3Button+gg_GadgetRender(a0),a1
+    move.b  #2,ig_PlanePick(a1)
+    bra refreshListModeTabs
+.searchMode
+    move.l  gadgetListModeTab4Button+gg_GadgetRender(a0),a1
+    move.b  #2,ig_PlanePick(a1)
+    bra refreshListModeTabs
+
+setListModeTabsToDefaultColor:
+    move.l  gadgetListModeTab1Button+gg_GadgetRender(a0),a1
+    move.b  #1,ig_PlanePick(a1)
+    move.l  gadgetListModeTab2Button+gg_GadgetRender(a0),a1
+    move.b  #1,ig_PlanePick(a1)
+    move.l  gadgetListModeTab3Button+gg_GadgetRender(a0),a1
+    move.b  #1,ig_PlanePick(a1)
+    move.l  gadgetListModeTab4Button+gg_GadgetRender(a0),a1
+    move.b  #1,ig_PlanePick(a1)
+    rts
+    endb    a0
+
+refreshListModeTabs:
+  ;  lea     gadgetListModeTab1Button(a0),a0
+    move.l	windowbase(a5),a1
+	sub.l	a2,a2
+	moveq	#4,d0	
+	lore	Intui,RefreshGList
+    rts
+  endif
+
+switchToSearchLayoutIfNeeded:
+    DPRINT  "switch to search layout if needed"
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    beq     switchToSearchLayout
+    rts
+    
+switchToNormalLayoutIfPossible:
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    beq     .1
+    tst.w   searchLayoutActive(a5)
+    beq     .2
+    DPRINT  "switchToNormalLayoutIfPossible"
+    bsr     switchToNormalLayout   
+    jmp     forceRefreshList
+.1  
+    * Search view + local search layout?  
+    tst.b   localSearchLayoutActive(a5)
+    beq     .2
+    DPRINT  "switchToNormalLayoutIfPossible"
+    bsr     switchToNormalLayoutNoRefresh
+    bsr     switchToSearchLayout
+.2  rts
+
+getFontHeightForSearchLayout:
+    move    listFontHeight(a5),d0
+    tst.b   uusikick(a5)
+    bne     .n
+    * Kick 1.3 string gadgets use system default font.
+    * Assume it is 8 pixels, which it might not be
+    moveq   #8,d0
+.n
+  rts
+
+* Remote search layout:
+* search source button, search string gadget
+switchToSearchLayout:
+    tst.w   BOTTOM_MARGIN(a5)
+    bne     .skip
+
+    DPRINT  "switch to search layout"
+    st      searchLayoutActive(a5)
+
+    bsr     prepareSearchLayout
+    * a2 = gadgetFileSlider
+
+    ; search source gadget
+
+    lea     gadgetSearchSource,a4
+    basereg gadgetSearchSource,a4
+    move.l  a4,a1
+
+    tst.b   uhcAvailable(a5)
+    bne.b   .u1
+    or      #GFLG_DISABLED,gg_Flags(a1)
+.u1
+
+    move    gg_TopEdge(a2),d1
+    add     gg_Height(a2),d1
+    addq    #1,d1
+
+    bsr     getFontHeightForSearchLayout
+    lsr     #1,d0
+    add     d0,d1
+    move    d1,gg_TopEdge(a1)
+
+    bsr     getFontHeightForSearchLayout
+    addq    #4,d0
+    move    d0,gg_Height(a1)
+
+    move.w  gg_LeftEdge(a2),d0
+    subq    #1,d0
+    move    d0,gg_LeftEdge(a1)
+    move    #130,gg_Width(a1)
+    move.l  a1,a2
+
+    moveq   #-1,d0 * last
+    move.l  windowbase(a5),a0
+    lore    Intui,AddGadget
+
+    ; search string gadget
+
+    lea     gadgetSearchString(a4),a1
+    move.l  #gadgetSearchStringBuffer,gadgetSearchStringStringInfo(a4)
+    move    #GADGET_ID_SEARCH_STRING,gg_GadgetID(a1)
+
+    move    gg_TopEdge(a2),d0
+    addq    #2,d0
+    move    d0,gg_TopEdge(a1)
+    move    WINSIZX(a5),d0
+    sub     #146+7,d0
+    move    d0,gg_Width(a1)
+
+    bsr     getFontHeightForSearchLayout
+    move    d0,gg_Height(a1)
+
+    move    gg_LeftEdge(a2),d0
+    add     gg_Width(a2),d0
+    addq    #4+2-1,d0
+    move    d0,gg_LeftEdge(a1)
+
+    tst.b   uhcAvailable(a5)
+    bne.b   .u2
+    or      #GFLG_DISABLED,gg_Flags(a1)
+.u2
+
+    moveq   #-1,d0 * last
+    move.l  windowbase(a5),a0
+    lore    Intui,AddGadget
+
+    lea     gadgetSearchSource(a4),a3
+    bsr     clearGadgetInA3
+
+    lea     gadgetSearchSource(a4),a0
+    jsr     refreshGadgetInA0
+
+    lea     gadgetSearchSource(a4),a3
+    bsr     drawButtonFrameMainWindow
+
+    bsr     prepareSearchLayout2
+
+    ; boxin alin pikselirivi j‰‰ p‰ivitt‰m‰tt‰, jos ei tee t‰t‰
+;    jsr forceRefreshList
+.skip
+    rts
+    endb    a4
+
+clearGadgetInA3:
+	movem	4(a3),d0/d1/d4/d5
+	move.l	rastport(a5),a1
+    move.l  a1,a0
+	move	d0,d2
+	move	d1,d3
+	moveq	#$0a,d6
+	move.l	_GFXBase(a5),a6
+	jmp	_LVOClipBlit(a6)
+
+switchToNormalLayoutNoRefresh:
+    moveq   #0,d0
+    bra     doSwitchToNormalLayout
+
+switchToNormalLayout:
+    moveq   #1,d0
+
+doSwitchToNormalLayout:
+    pushm   all
+    tst     BOTTOM_MARGIN(a5)
+    beq     .skip
+    DPRINT  "switch to normal layout"
+    clr.w   searchLayoutActive(a5)   * .w!
+
+    tst.b   d0
+    bne.b   .refresh
+    clr.w   BOTTOM_MARGIN(a5)
+    bsr     getFontHeightForSearchLayout
+    add     d0,d0
+    add     d0,gg_Height+gadgetFileSlider
+    bra     .1
+
+.refresh
+    jsr     drawTextureBottomMargin
+    clr.w   BOTTOM_MARGIN(a5)
+    jsr     drawFileBoxFrame
+    ;;;;jsr     forceRefreshList
+    jsr     refreshResizeGadget
+ 
+    bsr     getFontHeightForSearchLayout
+    add     d0,d0
+    add     d0,gg_Height+gadgetFileSlider
+    jsr     drawFileSlider
+    clr     slider4oldheight(a5) ; force knob redraw
+    jsr     reslider
+.1
+    bsr     removeSearchLayoutGadgets
+.skip
+    popm   all
+    rts 
+
+removeSearchLayoutGadgets:
+    move.l  windowbase(a5),a0
+    lea     gadgetSearchString,a1
+    lore    Intui,RemoveGadget
+    move.l  windowbase(a5),a0
+    lea     gadgetSearchSource,a1
+    lob     RemoveGadget
+    rts
+
+
+* Does some setup when preparing to switch to search layout
+prepareSearchLayout:
+    * Set margin to two list lines
+    bsr     getFontHeightForSearchLayout
+    add     d0,d0
+;    tst.b   uusikick(a5)
+;    bne.b   .1
+;    * Kick 1.3 string gadgets use system default font.
+;    * Assume it is 8 pixels, which it might not be
+;    moveq   #8+8,d0
+;.1
+    move    d0,BOTTOM_MARGIN(a5)
+    
+    * Refresh some gfx accordinly
+    jsr     clearBottomMargin
+    jsr     drawTextureBottomMargin
+    jsr     drawFileBoxFrame
+
+    * File slider height and knob
+    move    BOTTOM_MARGIN(a5),d0
+    lea		gadgetFileSlider,a0
+    push    a0
+    sub     d0,gg_Height(a0)
+    jsr     drawFileSlider
+    clr     slider4oldheight(a5) ; force knob redraw
+    jsr     reslider
+    pop     a2
+    rts
+
+* Do some stuff to finish preparing search layout
+prepareSearchLayout2:
+    cmp.b   #LISTMODE_SEARCH,listMode(a5)
+    bne     .1
+    * Update the search source button contents
+    bsr     refreshGadgetSearchSource
+.1
+    jsr     refreshResizeGadget
+
+    lea     gadgetSearchString,a3
+    basereg gadgetSearchString,a3
+    move.l  a3,a0
+    jsr     refreshGadgetInA0
+
+    ; Set up frame for the string gadget
+
+    tst.b   uusikick(a5)
+    bne     .n
+    * Adjust for kick 1.3
+    subq    #1,gg_TopEdge+gadgetSearchString(a3)
+.n
+	movem	gadgetSearchString+4(a3),plx1/ply1/plx2/ply2
+
+    tst.b   uusikick(a5)
+    bne     .n2
+    * Adjust for kick 1.3
+    addq    #3-2,ply2
+    subq    #2,plx2
+.n2
+
+	add	plx1,plx2
+	add	ply1,ply2
+	subq	#2,plx1
+	addq	#1,plx2
+	subq	#2,ply1
+	addq	#1,ply2
+	move.l	rastport(a5),a1
+	jmp 	sliderlaatikko
+    endb    a3
+
+* Local search layout: one string gadget
+switchToLocalSearchLayout:
+    bsr     switchToNormalLayoutNoRefresh
+
+    tst.w   BOTTOM_MARGIN(a5)
+    bne     .skip
+
+    DPRINT  "switch to local search layout"
+    st      localSearchLayoutActive(a5)
+
+    bsr     prepareSearchLayout
+    * a2 = gadgetFileSlider
+
+    lea     gadgetSearchSource,a4
+    basereg gadgetSearchSource,a4
+
+    ; search string gadget
+
+    lea     gadgetSearchString(a4),a1
+    move.l  #gadgetLocalSearchStringBuffer,gadgetSearchStringStringInfo(a4)
+    move    #GADGET_ID_LOCAL_SEARCH_STRING,gg_GadgetID(a1)
+    move    gg_TopEdge(a2),d1
+    add     gg_Height(a2),d1
+    addq    #3,d1
+    
+    bsr     getFontHeightForSearchLayout
+    lsr     #1,d0
+    add     d0,d1
+    move    d1,gg_TopEdge(a1)
+    
+    move    WINSIZX(a5),d0
+    sub     #20-1,d0
+    move    d0,gg_Width(a1)
+    tst.b   uusikick(a5)
+    bne     .n
+    * For kick 1.3 use a fixed width. There the full width is
+    * not cleared, only the amount of characters that fit.
+    move    #242+4,gg_Width(a1)
+.n
+
+    bsr     getFontHeightForSearchLayout
+    move    d0,gg_Height(a1)
+
+    move    gg_LeftEdge(a2),d0
+    move    d0,gg_LeftEdge(a1)
+
+    moveq   #-1,d0 * last
+    move.l  windowbase(a5),a0
+    lore    Intui,AddGadget
+
+    bsr     prepareSearchLayout2
+    jsr     activateSearchStringGadget
+
+.skip
+    rts
+    endb    a4
+
+
+
+refreshGadgetSearchSource:
+    move.b  selectedSearch(a5),d0
+    lea     gadgetSearchSourceOption1,a0
+.find   
+    tst.b   d0
+    beq     .found
+.ff tst.b   (a0)+
+    bne.b   .ff
+    subq.b  #1,d0
+    bra     .find
+.found
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "selected=%s"
+ endif
+
+    lea     gadgetSearchSource,a4
+    basereg gadgetSearchSource,a4
+
+    move.l  a0,gadgetSearchSourceTextPtr(a4)    
+    ; ---------------------------------
+	move.l	rastport(a5),a1
+	move.l	listfontbase(a5),a0
+	lore	GFX,SetFont	
+
+    move.l  a4,a1
+    jsr     centerGadgetText
+
+	move.l	rastport(a5),a1
+	move.l	fontbase(a5),a0
+	lore	GFX,SetFont	
+    ; ---------------------------------
+    lea     gadgetSearchSource(a4),a3
+    jsr     clearGadgetInA3
+    ; ---------------------------------
+    lea     gadgetSearchSource(a4),a0
+    jsr     refreshGadgetInA0
+
+    lea     gadgetSearchSource(a4),a3
+    jsr     drawButtonFrameMainWindow
+
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    bne     .1
+    lea     gadgetSearchString(a4),a0
+    jmp     disableGadget
+   ;;; rts
+    ;;;;;;;jmp     recentPlaylistsSearch
+.1
+    tst.b   uhcAvailable(a5)
+    bne.b   .2
+    rts
+.2
+    lea     gadgetSearchString(a4),a0
+    and	    #~GFLG_DISABLED,gg_Flags(a0)
+    jmp     refreshGadgetInA0
+    endb    a4
+
+activateSearchStringGadget:
+    lea     gadgetSearchString,a0
+    move.l  windowbase(a5),a1
+    sub.l   a2,a2
+    lore    Intui,ActivateGadget
+    rts
+
 
 
 ********************************************************************************
@@ -31773,14 +33515,19 @@ importSavedStateModulesFromDisk
 	beq.b	.favMode
 	cmp.b	#"2",2(a0)
 	beq.b	.browserMode
+	cmp.b	#"3",2(a0)
+	beq.b	.searchMode
 	* default
-	bsr.w	engageNormalMode
+	bsr	engageNormalMode
 	bra.b	.engaged
 .favMode
-	bsr.w	engageFavoritesMode
+	bsr	engageFavoritesMode
 	bra.b	.engaged
+.searchMode
+    bsr     engageSearchResultsMode
+    bra     .engaged
 .browserMode
-	bsr.w	engageFileBrowserMode
+	bsr	engageFileBrowserMode
 	cmp.b	#" ",3(a0)
 	bne.b	.engaged
 	tst.b	4(a0)
@@ -31788,7 +33535,7 @@ importSavedStateModulesFromDisk
 	* Pass path into a0
 	addq	#4,a0
 	pushm	d3/d7
-	bsr.w	fileBrowserDirWithPath	
+	bsr	fileBrowserDirWithPath	
 	popm	d3/d7
 	bra.b	.fbInit
 
@@ -31827,7 +33574,7 @@ importSavedStateModulesFromDisk
 
 	* Finally, either just refresh or play.
 	tst.b	d7
-	beq.w	.exit
+	beq	.exit
 	jsr	resh
 	tst.l	modamount(a5)
 	beq.b	.empty
@@ -31838,7 +33585,7 @@ importSavedStateModulesFromDisk
 exportSavedStateModulesToDisk
 	DPRINT	"exportSavedStateModulesToDisk"
 	tst.b	savestate(a5)
-	beq.w	.x
+	beq	.x
 
 	lea	savedStateModuleFileName(pc),a0
 	lea	moduleListHeader(a5),a1
@@ -31855,7 +33602,7 @@ exportSavedStateModulesToDisk
 
 	pushpea	probebuffer(a5),d2	* temp buffer
 	move.l	#200,d3
-	bsr.w		getNameFromLock
+	bsr		getNameFromLock
 	tst.l	d0
 	beq.b	.notBrowser
 	pushpea	probebuffer(a5),d3
@@ -31952,13 +33699,15 @@ countFileBrowserFiles
 	jsr	releaseModuleList
 	rts
 
-engageFileBrowserMode
-	DPRINT	"engage file browser"
+engageFileBrowserMode:
+	DPRINT	"** engage file browser"
 	pushm	all
+    bsr     storeListModeChosenModule
 	move.b	#LISTMODE_BROWSER,listMode(a5)
 	bsr.b	countFileBrowserFiles
 	move.l	d0,modamount(a5)
-	bsr.w	engageListMode
+    bsr     switchToNormalLayout
+	bsr	    engageListMode
 	tst.l	modamount(a5)
 	bne.b	.notRootView
 	moveq	#0,d0	* initial chosen item
@@ -31976,7 +33725,7 @@ fileBrowserRoot
 	jsr	setMainWindowWaitPointer
 	jsr	obtainModuleList
 	clr	fileBrowserSelectionHistoryIndex(a5)
-	bsr.w	freeFileBrowserList
+	bsr	freeFileBrowserList
 
 	* According to the Amiga Guru Book, access to dl_Root
 	* should always be protected as it may change.
@@ -32020,7 +33769,7 @@ fileBrowserRoot
 	move.b	#":",(a0)+
 	clr.b	(a0)
 
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	ADDTAIL	* add node (a1)
 	addq.l	#1,modamount(a5)
 .next
@@ -32064,7 +33813,7 @@ fileBrowserDir
 	* Chosen module status in d4
 	moveq	#-1,d4
 	move.l	a3,a0
-	bsr.w	isFileBrowserParentNode
+	bsr	isFileBrowserParentNode
 	beq.b	.notParent
  if DEBUG
  	pushpea	l_filename(a3),d0
@@ -32072,7 +33821,7 @@ fileBrowserDir
 	DPRINT	"->ENTERING parent %s -> %s"
  endif
 	* When entering parent pop the selection from history
-	bsr.w	popFileBrowserSelectionHistoryItem
+	bsr	popFileBrowserSelectionHistoryItem
 	move.l	d0,d4
 .notParent
 
@@ -32081,7 +33830,7 @@ fileBrowserDir
 
 	* Check if empty path, this means the root level
 	tst.b	l_filename(a3)
-	beq.w	fileBrowserRoot
+	beq	fileBrowserRoot
 
 .plainPath
 	jsr	obtainModuleList
@@ -32091,7 +33840,7 @@ fileBrowserDir
 	tst.l	d4
 	bpl.b	.goingToParent
 	* Entering a new dir, push previous selection,
-	bsr.w	pushFileBrowserSelectionHistoryItem
+	bsr	pushFileBrowserSelectionHistoryItem
 	* ... then select first item.
 	moveq	#0,d4
 .goingToParent
@@ -32103,13 +33852,13 @@ fileBrowserDir
 	moveq	#ACCESS_READ,d2
 	lore	Dos,Lock
 	move.l	d0,d6
-	beq.w	.error0
+	beq	.error0
 
 	move.l	d6,d1
 	pushpea	fileinfoblock(a5),d2
 	lob	Examine
 	tst.l	d0
-	beq.w	.error0
+	beq	.error0
 
 	* Copy lock for state saving
 	move.l	fileBrowserCurrentDirLock(a5),d1
@@ -32120,7 +33869,7 @@ fileBrowserDir
 	move.l	d0,fileBrowserCurrentDirLock(a5)
 
 	* Empty whatever we had previously
-	bsr.w	freeFileBrowserList
+	bsr	freeFileBrowserList
 
 	*********************************************
 	* Construct "Parent"
@@ -32140,7 +33889,7 @@ fileBrowserDir
 .notNull
 	move.l	sp,d2		* buf
 	move.l	#200,d3		* len
-	bsr.w	getNameFromLock
+	bsr	getNameFromLock
 	push	d0
 	move.l	d7,d1
 	lore 	Dos,UnLock
@@ -32148,19 +33897,19 @@ fileBrowserDir
 	tst.l	d0
 	bne.b	.ok
 	lea	200(sp),sp
-	bra.w	.error0
+	bra	.error0
 
 .ok
 	* Create parent entry 
 
 	move.l	sp,a0
 	moveq	#createNode\.PARENT,d7	 * make parent node
-	bsr.w	createNode
+	bsr	createNode
 	lea	200(sp),sp
 	tst.l	d0
-	beq.w	.error0
+	beq	.error0
 
-	bsr.w	makeParentNode
+	bsr	makeParentNode
 	* store parent node into d5 for a while
 	move.l	a0,d5
 	
@@ -32173,7 +33922,7 @@ fileBrowserDir
 	move.l	d6,d1		* lock
 	move.l	sp,d2		* buf
 	move.l	#160,d3		* len, leave 40 for filename
-	bsr.w	getNameFromLock
+	bsr	getNameFromLock
 	tst.l	d0
 	beq.b	.lockFail
 
@@ -32260,7 +34009,7 @@ fileBrowserDir
 	* Insert parent to the top
 	tst.l	d5
 	beq.b	.noParent
-	bsr.w	getVisibleModuleListHeader
+	bsr	getVisibleModuleListHeader
 	* get parent node
 	move.l	d5,a1
 	* Insert a1 into a0
@@ -32296,7 +34045,7 @@ fileBrowserDir
 
 	move.l	a3,a0
 	* Create node using path in a0
-	bsr.w createNode
+	bsr createNode
 	beq.b	.error_
 
 	pushm	a3/a4
@@ -32315,13 +34064,13 @@ fileBrowserGoToParent
 	DPRINT	"Go to parent"
 	* Get the 1st node
 	moveq	#0,d0
-	bsr.w	getListNode
+	bsr	getListNode
 	beq.b	.x
 	move.l	a0,a3	* save this
 	bsr.b	isFileBrowserParentNode
 	beq.b	.x
 	* Enter into node a3
-	bsr.w	fileBrowserDir
+	bsr	fileBrowserDir
 .x
 	rts
 
@@ -32394,7 +34143,10 @@ createNode
 	add	#l_size,a0
 	cmp.b	#.PARENT,d7
 	bne.b	.notPar
-	add	#30,a0		* additional space for list item name
+    * parent item, add
+    * additional space for list item name, to be safe use maximum
+    * based on what fileinfoblock can hold
+	add     #108,a0	
 .notPar
 	move.l	a0,d0
 	move.l	#MEMF_CLEAR,d1
@@ -32704,7 +34456,7 @@ normalizeFilePath
 	move.l	d4,d1
 	move.l	sp,d2
 	move.l	#200,d3
-	bsr.w  	getNameFromLock
+	bsr  	getNameFromLock
 	tst.l	d0 
 	beq.b	.noName
 	move.l	sp,a0
@@ -32809,8 +34561,8 @@ varaa_kanavat
 	bne.b	.na
 .naa
 
-	bsr.w	createport
-	bsr.w	createio
+	bsr	createport
+	bsr	createio
 
 	lea	iorequest(a5),a1
 	lea	.adname(pc),a0
@@ -33040,19 +34792,19 @@ allocreplayer
 are	
 
 	tst.l	(a0)			* onko jo ennest‰‰n?
-	bne.w	.alreadyHaveIt
+	bne	.alreadyHaveIt
 
 	jsr	setMainWindowWaitPointer
 
 ;	push 	a0
-;	bsr.w	inforivit_group2
+;	bsr	inforivit_group2
 ;	pop 	a0
 
 	cmp.b	#GROUPMODE_LOAD_SINGLE,groupmode(a5)
 	bne.b	.nah
 
 ** Ladataan yksi kipale replayereit‰ groupista
-	bsr.w	loadreplayer
+	bsr	loadreplayer
 * a1 = replayeri pakattuna
 * d7 = pakatun pituus
 	bne.b	.contti
@@ -33449,7 +35201,8 @@ p_protracker
 
 
 .proinit
-	bsr.w	varaa_kanavat
+    DPRINT  "Protracker init"
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
@@ -33469,9 +35222,15 @@ p_protracker
 	dbf	d0,.cl
 .c
 
+	bsr	.getsongs
 
-	bsr.w	.getsongs
-	bsr.w	whatgadgets
+ if DEBUG
+    moveq   #0,d0
+    move.w  maxsongs(a5),d0
+    DPRINT  "Subsongs=%ld"
+ endif
+
+	bsr	whatgadgets
 
 	lea	kplbase(a5),a0
 	move.l	moduleaddress(a5),a1
@@ -33480,26 +35239,36 @@ p_protracker
 	move.b	950(a1),d0
 	move	d0,pos_maksimi(a5)
 
-	bsr.b	.init
+    * Start position, defaults to 0
+    bsr     .getSongStartPosition
+
+ if DEBUG
+    and.l   #$ff,d0
+    moveq   #0,d1
+    move    songnumber(a5),d1
+    DPRINT  "Start position=%ld song=%ld"
+ endif
+	bsr.b	.init1
 
 	cmp	#-1,d0
 	beq.b	.eok
 	cmp	#-2,d0
 	beq.b	.eok3
-	bsr.w	.provolume
+	bsr	.provolume
 	moveq	#0,d0
 .eok2	movem.l	(sp)+,d1-d2/a0/a1
 	rts
 
-.eok	bsr.w	vapauta_kanavat
+.eok	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	bra.b	.eok2
-.eok3	bsr.w	vapauta_kanavat
+.eok3	bsr	vapauta_kanavat
 	moveq	#ier_nomem,d0
 	bra.b	.eok2
 
 
 .init
+    * Start pattern
 	moveq	#0,d0
 .init1
 	moveq	#1,d1			* cia
@@ -33531,7 +35300,7 @@ p_protracker
 .proend	move.l	d0,-(sp)
 	jsr	kplayer+kp_end
 	move.l	(sp)+,d0
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 
 .prostop
 	move.l	d0,-(Sp)
@@ -33596,7 +35365,7 @@ p_protracker
 
 
 * Tutkii koko songin, ja kattoo jos olisi erillisi‰ songeja.
-.getsongs
+.getsongs:
 	move.l	moduleaddress(a5),a0
 	cmp.b	#'K',951(a0)
 	beq.b	.yee
@@ -33608,7 +35377,7 @@ p_protracker
 	move.l	moduleaddress(a5),a0
 	move.b	tempoflag(a5),d0
 	not.b	d0
-	bsr.w	modlen		* moduulin kesto ajallisesti
+	bsr	modlen		* moduulin kesto ajallisesti
 	popm	d2-a6
 	move	d0,kokonaisaika(a5)	* mins
 	move	d1,kokonaisaika+2(a5)	* secs
@@ -33709,25 +35478,39 @@ p_protracker
 	bra.b	.next
 
 
+* Out:
+*   d0 = song start position or 0 
+.getSongStartPosition
+    moveq   #0,d0
+	lea	ptsonglist(a5),a0
+	cmp.b	#-1,1(a0)
+	beq.b	.noSong_
+	move	songnumber(a5),d0
+    DPRINT  "songnumber=%ld"
+	move.b	(a0,d0),d0
+	bmi.b	.noSong_
+    rts
+.noSong_
+    moveq   #0,d0
+    rts
+
 .prosong
 	movem.l	d0-a1,-(Sp)
 
-	lea	ptsonglist(a5),a0
-	cmp.b	#-1,1(a0)
-	beq.b	.nosong
+    bsr     .getSongStartPosition
 
-	move	songnumber(a5),d7
-	move.b	(a0,d7),d7
-	bmi.b	.nosong
-
+    push    d0
 	jsr	kplayer+kp_end
 	
 	lea	kplbase(a5),a0
 	move.l	moduleaddress(a5),a1
-	move.l	d7,d0
+    pop     d0
+    
+    DPRINT  "position=%ld"
 
-	bsr.w	.init1
-	bsr.w	.provolume
+    * Song start position is in d0
+	bsr	.init1
+	bsr	.provolume
 
 .nosong	movem.l	(sp)+,d0-a1
 	rts
@@ -33845,7 +35628,7 @@ modlen
 	moveq	#$f,d0
 	and.b	nl_cmd(A6),D0
 	CMP.B	#$E,D0
-	BEQ.W	.mt_E_Commands
+	BEQ	.mt_E_Commands
 .mt_Return
 	RTS
 
@@ -33880,13 +35663,13 @@ modlen
 .mt_PlayVoice
 	MOVE.L	(A0,D1.L),(A6)
 	ADDQ.L	#4,D1
-	Bra.w	.mt_CheckMoreEfx
+	Bra	.mt_CheckMoreEfx
 
 
 .mt_SetDMA
 .mt_dskip
 	tst.b	.songend(a5)
-	bne.w	.mt_exit
+	bne	.mt_exit
 
 	ADD.W	#16,.mt_PatternPos(a5)
 	MOVE.B	.mt_PattDelTime(a5),D0
@@ -34004,7 +35787,7 @@ modlen
 	moveq	#$f,d0
 	and.b	2(a6),d0
 	CMP.B	#$B,D0
-	BEQ.W	.mt_PositionJump
+	BEQ	.mt_PositionJump
 	CMP.B	#$D,D0
 	BEQ.S	.mt_PatternBreak
 	CMP.B	#$E,D0
@@ -34025,14 +35808,14 @@ modlen
 
 .mt_JumpLoop
 	TST.B	.mt_counter(a5)
-	BNE.W	.mt_Return
+	BNE	.mt_Return
 	moveq	#$f,d0
 	and.b	nl_cmdlo(A6),D0
 	BEQ.S	.mt_SetLoop
 	TST.B	nl_loopcount(A6)
 	BEQ.S	.mt_jumpcnt
 	SUBQ.B	#1,nl_loopcount(A6)
-	BEQ.W	.mt_Return
+	BEQ	.mt_Return
 .mt_jmploop	MOVE.B	nl_pattpos(A6),.mt_PBreakPos(a5)
 	ST	.mt_PBreakFlag(a5)
 	RTS
@@ -34050,11 +35833,11 @@ modlen
 
 .mt_PatternDelay
 	TST.B	.mt_counter(a5)
-	BNE.W	.mt_Return
+	BNE	.mt_Return
 	MOVEQ	#$f,D0
 	and.b	nl_cmdlo(A6),D0
 	TST.B	.mt_PattDelTime2(a5)
-	BNE.W	.mt_Return
+	BNE	.mt_Return
 	ADDQ.B	#1,D0
 	MOVE.B	D0,.mt_PattDelTime(a5)
 .qq	RTS
@@ -34098,7 +35881,7 @@ id_protracker
 	cmp.l	#'M!K!',1080(a4)	* Protracker 100 patterns
 	beq.b	.p	
 ;	cmp.l	#'FLT4',1080(a4)	* Startrekker
-;	bra.w	idtest
+;	bra	idtest
 	moveq	#-1,d0 
 	rts
 	
@@ -34118,13 +35901,13 @@ id_oldst
 	moveq	#15-1,d1
 .l1
 	cmp	22(a0),d2	* samplelen
-	blo.w	.fail
+	blo	.fail
 	cmp	#1,22(a0)
 	bhi.b	.f0
 	addq	#1,d0
 .f0
 	cmp.b	#64,25(a0)	* volume
-	bhi.w	.fail	
+	bhi	.fail	
 	cmp	26(a0),d2	* repeat point
 	blo.b	.fail
 	cmp	28(a0),d2	* repeat length
@@ -34278,9 +36061,12 @@ p_sid:	jmp	.init(pc)
 	dc.w 	pt_sid 				* type
 .flags 
 	dc	pf_cont!pf_stop!pf_song!pf_kelauseteen!pf_volume!pf_scope!pf_quadscopePoke
+.title0
 	dc.b	"PSID "
 .title
-    dc.b    "             "
+    dc.b    "           14-bit"
+           ;"reSID 8580 14-bit"
+           ;"SIDBlaster       "
 .zero
     dc.b    0
 
@@ -34294,7 +36080,7 @@ p_sid:	jmp	.init(pc)
 
 .init
     DPRINT  "PlaySID init"
-	bsr.w	get_sid
+	bsr	get_sid
 	bne.b	.ok
 	moveq	#ier_nosid,d0
 	rts
@@ -34305,8 +36091,18 @@ p_sid:	jmp	.init(pc)
 
 	move.l	_SIDBase(a5),a6
 
-	tst.b	.flag
+    lea     p_sid(pc),a0
+    basereg p_sid,a0
+
+    * Default title "PSID"
+    move.b  #"P",.title0(a0)
+    * No extra words
+    clr.b   .title(a0)
+
+	tst.b	.flag(a0)
 	bne  	.plo
+
+    endb    a0
 
 	* Enable getting data for scopes.
     * Library wants to signal a given task when data is ready.
@@ -34322,6 +36118,10 @@ p_sid:	jmp	.init(pc)
 
     ; -----------------------
     ; Before AllocEmulResource set the operating mode
+    ; 0 = normal
+    ; 1 = resid 6581
+    ; 2 = resid 8580
+    ; 3 = sidblaster
     cmp.b   #1,sidmode(a5)
     beq     .m1
     cmp.b   #2,sidmode(a5)
@@ -34355,20 +36155,56 @@ p_sid:	jmp	.init(pc)
 .cpuOk
     ; -----------------------
     lea     .perfDone(pc),a2
-    move.b  residmode(a5),d3
+    bsr     .getCombinedResidMode
     cmp.b   .perfMode(pc),d3
     beq.b   .modeSame
     ; Run perf test it mode has changed
     clr.b   (a2)
 .modeSame
     tst.b   (a2)
-    bne.b   .perfOk
+    bne     .perfOk
     DPRINT  "Start perf test"
     pushm   d0/a0/a1/a2
+    bsr     .getCombinedResidMode
+    move.b  d3,.perfMode
+    * reSID mode
+    moveq   #0,d0
     move.b  residmode(a5),d0
-    move.b  d0,.perfMode
+    * Filter settings
+    moveq   #1,d1   * int on
+    moveq   #0,d2   * ext off
+    * 0 = internal on
+    move.b  residfilter(a5),d3
+    beq.b   .goFilt_
+    * 1 = int+ext
+    moveq   #1,d2   * ext on
+    subq.b  #1,d3
+    beq.b   .goFilt_
+    * 2 = off
+    moveq   #0,d1   * int off
+    moveq   #0,d2   * ext off
+.goFilt_
+    DPRINT  "mode=%ld infilt=%ld extfilt=%ld"
     lob     MeasureRESIDPerformance
-    DPRINT  "Perf test: %ld/%ld ms"
+    bsr     .sidIsStereo
+    beq     .noSt2
+    * Halve the reference value in case stereo sid to match
+    * the double CPU load.
+    lsr.l   #1,d1
+.noSt2
+ if DEBUG
+    pushm   d0-d2
+    move.l  d1,d2
+    divu    #10,d2
+    ext.l   d2
+    divu    #10,d0
+    move.l  d0,d1
+    swap    d1
+    ext.l   d0
+    ext.l   d1
+    DPRINT  "Perf test: %ld.%1.1ld/%ld ms"
+    popm    d0-d2
+ endif
     move.l  d0,d2
     cmp     d1,d2
     popm    d0/a0/a1/a2
@@ -34379,7 +36215,7 @@ p_sid:	jmp	.init(pc)
     tst.l   d0
     popm    all
     bne.b   .perfOk
-    moveq   #ier_error,d0
+    moveq   #ier_error_nomsg,d0 * fail withough extra msg
     bra     .er
     ; -----------------------
 
@@ -34393,9 +36229,25 @@ p_sid:	jmp	.init(pc)
 .a  move.b  (a0)+,(a1)+
     bne.b   .a
 
+    cmp.b   #OM_RESID_6581,d0
+    beq     .o1
+    cmp.b   #OM_RESID_8580,d0
+    bne     .o2
+.o1 
+    * Show additional "14-bit" with reSID
+    move.b  #" ",-1(a1)
+.o2
+    tst.w   d0
+    bne.b   .o3
+    * Normal mode + stereo: not supported
+    bsr     .sidIsStereo
+    beq     .o3
+    moveq   #ier_not_compatible,d0
+    bra     .er
+.o3
+
     moveq   #0,d1
     move.b  residmode(a5),d1
- 
     DPRINT  "Operating mode=%ld resid=%ld" 
     lob     SetOperatingMode
 .skip
@@ -34404,11 +36256,49 @@ p_sid:	jmp	.init(pc)
 	lob	AllocEmulResource
     DPRINT  "AllocEmulResource=%ld"
 	tst.l	d0
-	bne.w	.error1
+	bne	.error1
 
-	move.l	moduleaddress(a5),a0
-	cmp.l	#"PSID",(a0)
-	bne.b	.noheader
+    ; -----------------------
+
+    move.l  moduleaddress(a5),a0
+    cmp.l   #"PSID",(a0)
+    bne     .noheader
+
+    * Change title if stereo sid
+    bsr     .sidIsStereo
+    beq     .noSt
+    move.b  #"2",.title0
+.noSt
+
+ if DEBUG
+    moveq   #0,d0
+    move    sidh_version(a0),d0
+    move.l  d0,d2
+    DPRINT  "SID header version=%ld"
+    cmp     #2,d2
+    blo     .v1
+    ; Header v2
+    move    sidh_flags(a0),d0
+    DPRINT  "Flags=%lx"
+    move.l  d0,d1
+    lsr     #4,d0
+    and     #%11,d0
+    DPRINT  "SID version=%ld"
+    cmp     #3,d2
+    blo     .v2
+    ; Header v3
+    move.l  d1,d0
+    lsr     #6,d0
+    and     #%11,d0
+    DPRINT  "2nd SID version=%ld"
+    moveq   #0,d0
+    move.b  $7a(a0),d0
+    lsl     #4,d0
+    add.l   #$d000,d0
+    DPRINT  "2nd SID address=%lx"
+.v2
+.v1    
+ endif
 
 	lea	sidheader(a5),a1
 	moveq	#sidh_sizeof-1,d0
@@ -34424,6 +36314,35 @@ p_sid:	jmp	.init(pc)
 	bne 	.error2
 
 .h2
+
+    ; -----------------------
+    * reSID Filter settings - after AllocEmulResource
+    bsr     isPlaysidReSID
+    beq     .nrsf
+    cmp.b   #1,sidmode(a5)
+    beq     .rsf
+    cmp.b   #2,sidmode(a5)
+    bne     .nrsf
+.rsf
+    moveq   #1,d0   * int on
+    moveq   #0,d1   * ext off
+    * 0 = internal on
+    move.b  residfilter(a5),d2
+    beq.b   .goFilt
+    * 1 = int+ext
+    moveq   #1,d1   * ext on
+    subq.b  #1,d2
+    beq.b   .goFilt
+    * 2 = off
+    moveq   #0,d0   * int off
+    moveq   #0,d1   * ext off
+.goFilt
+    DPRINT  "Filter=%ld ExtFilter=%ld"
+    lob     SetRESIDFilter 
+.nrsf
+    ; -----------------------
+
+
 	lea	sidheader(a5),a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
@@ -34442,7 +36361,11 @@ p_sid:	jmp	.init(pc)
 
 	tst.b	sidflag(a5)
 	bne.b	.plo
-	st	sidflag(a5)
+	st	    sidflag(a5)
+    * See if there is a preset song number
+    tst     songnumber(a5)
+    bne     .plo
+    * Otherwise use default provided by song
 	move	sidh_defsong+sidheader(a5),songnumber(a5)
 	subq	#1,songnumber(a5)
 .plo
@@ -34457,35 +36380,32 @@ p_sid:	jmp	.init(pc)
     beq.b   .skipz
     * Audio buffer is valid after song was started
     lob     GetRESIDAudioBuffer
-    * a0 = buffer ptr
+    * a0 = buffer ptr 1
+    * a1 = buffer ptr 2 (could be same as 1)
     * d0 = buffer length
     * d1 = period value
-    subq.l  #2,d0   * removes static pixels from scope
-    move.l  d0,.posMask
-    move.l  a0,.bufPtr
+    ;subq.l  #2,d0   * removes static pixels from scope
+    move.l  d0,residPosMask
+    movem.l a0/a1,residBufPtr1
  if DEBUG
     move.l  a0,d1
     DPRINT  "length=%ld buffer=%lx"
  endif
-    pushpea .bufPtr(pc),ps3m_buff1(a5)
-    pushpea .bufPtr(pc),ps3m_buff2(a5)
-    pushpea .bufPos(pc),ps3m_playpos(a5)
-    pushpea .posMask(pc),ps3m_buffSizeMask(a5)
+    pushpea residBufPtr1(pc),ps3m_buff1(a5)
+    pushpea residBufPtr2(pc),ps3m_buff2(a5)
+    pushpea residBufPos(pc),ps3m_playpos(a5)
+    pushpea residPosMask(pc),ps3m_buffSizeMask(a5)
 .skipz
 
-
 	bset	#1,$bfe001
+
+    * Wait a bit so that song speed data is available
+    moveq   #2,d1
+    lore    Dos,Delay
+
 	moveq	#0,d0
 .er	movem.l	(sp)+,d1-a6
 	rts
-
-* Fake PS3M scope variables
-* multiscope draws 160 per segment
-* reSID 200Hz buffer size is 140 bytes
-* it will repeat 20 bytes
-.bufPos     dc.l    0
-.bufPtr     dc.l    0
-.posMask    dc.l    $7f 
 
 .error1
     cmp     #SID_NOSIDBLASTER,d0
@@ -34530,7 +36450,8 @@ p_sid:	jmp	.init(pc)
 	addq	#1,d0
 	lob	StartSong
     ; This will return an error code in d0
-
+    
+    bsr     .volume
 	rts
 
 .song	movem.l	d0/d1/a0/a1/a6,-(sp)
@@ -34574,12 +36495,14 @@ p_sid:	jmp	.init(pc)
 	rts
 
 .volume
+    push    d0
     bsr     isPlaysidReSID
     beq.b   .11
     move.l	_SIDBase(a5),a6
     move    mainvolume(a5),d0
     jsr     _LVOSetVolume(a6)
 .11
+    pop     d0
     rts
 
 
@@ -34590,6 +36513,14 @@ p_sid:	jmp	.init(pc)
 .performanceRequest
     * d0 = value
     * d1 = limit
+    move.l  d1,d2
+    divu    #10,d2
+    ext.l   d2
+    divu    #10,d0
+    move.l  d0,d1
+    ext.l   d0
+    swap    d1
+    ext.l   d1
     lea     .perfReqTxt(pc),a0
     jsr     desmsg
     lea     desbuf(a5),a1
@@ -34600,11 +36531,56 @@ p_sid:	jmp	.init(pc)
     dc.b    "Your Amiga could be too slow!",10
     dc.b    "The sound may become distorted and",10
     dc.b    "the system unesponsive.",10
-    dc.b    "Performance: %ld ms, need <= %ld ms",0
+    dc.b    "Performance: %ld.%1.1ld ms, need <= %ld ms",0
 
 .perfReqButtons
     dc.b    "_Continue anyway|_Stop!",0
     even
+
+* Combine resid mode, filter mode, mono/stereo into one for easy comparison
+.getCombinedResidMode
+    * 0,1,2
+    move.b  residfilter(a5),d3
+    lsl.b   #4,d3
+    * 0,1,2,3
+    or.b    residmode(a5),d3
+    bsr     .sidIsStereo
+    beq.b   .77
+    or.b    #$80,d3
+.77
+    rts
+
+.sidIsStereo
+    pushm   d0/a0
+    move.l  moduleaddress(a5),a0
+    cmp     #3,sidh_version(a0)
+    blo.b   .no
+     * SID2 base address should be non-zero
+    tst.b   $7a(a0)
+.x  popm    d0/a0
+    rts
+.no moveq   #0,d0
+    bra.b   .x
+    
+
+* Calculate song speed and Hz
+* Out:
+*   d0 = song speed, 1..12
+*   d1 = update rate in Hz
+sid_getSongSpeed:
+    move.l  _SIDBase(a5),a0
+    move.w	262(a0),d1 ;psb_TimerConstB(a0),d1
+    bne.b   .1
+    move    #28419/2,d1
+.1  move.l  #(709379+28419/4),d0
+    divu    d1,d0
+    ext.l   d0
+    move    d0,d1
+    divu    #50,d0
+    ext.l   d0
+    divu    #10,d1
+    mulu    #10,d1
+    rts
 
 *** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
 
@@ -34626,9 +36602,9 @@ rem_sidpatch
 	move.l	sidlibstore2+4(a5),4+86(a0)
 	move.l	sidlibstore1(a5),14(a1)
 	move.l	sidlibstore1+4(a5),4+14(a1)
-	bsr.w	clearCpuCaches
+	bsr	clearCpuCaches
 .q	
-	bsr.w	sid_remVolumePatch
+	bsr	sid_remVolumePatch
 	rts
 
 init_sidpatch
@@ -34662,9 +36638,9 @@ init_sidpatch
 	move.l	.sidp1+4(pc),4+14(a1)
 	move.l	.sidp2(pc),86(a0)
 	move.l	.sidp2+4(pc),4+86(a0)
-	bsr.w	clearCpuCaches
+	bsr	clearCpuCaches
 .q
-	bsr.w	sid_addVolumePatch
+	bsr	sid_addVolumePatch
 	rts
 
 .sidp1	
@@ -34796,7 +36772,7 @@ sid_remVolumePatch
 	move.l	.vol2orig+2(pc),12+8418+2(a0)
 	move	.vol3orig(pc),12+12+8418(a0)
 	move.l	.vol3orig+2(pc),12+12+8418+2(a0)
-	bsr.w	clearCpuCaches
+	bsr	clearCpuCaches
 .q
 	rts
 
@@ -34812,7 +36788,7 @@ sid_remVolumePatch
 id_sid1 
 	bsr.b	id_sid1_
 	bne.b 	.no
-	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	moveq	#0,d0 
 .no 
 	rts
@@ -34828,7 +36804,7 @@ id_sid1_
 
 id_sid
 	bsr.b	id_sid1
-	beq.w	.yea
+	beq	.yea
 
 	move.l	modulefilename(a5),a0
 	lea	desbuf(a5),a1
@@ -34890,11 +36866,20 @@ id_sid
 * This is emulates what the PlaySid pplication does.
 sidScopeUpdate
 	* Skip this if not needed
-	bsr.w	anyScopeRunning
-	beq.w	.x
+	bsr	anyScopeRunning
+	beq	.x
 
     bsr     playSidInRESIDMode
     beq.b   .1
+
+    * reSID, update the buffer size as it may change 
+	move.l	_SIDBase(a5),a6
+    lob     GetRESIDAudioBuffer
+    * a0 = buffer ptr 1
+    * a1 = buffer ptr 2 (could be same as 1)
+    * d0 = buffer length
+    * d1 = period value
+    move.l  d0,residPosMask
     rts
 
 .1
@@ -34991,20 +36976,20 @@ isPlaysidReSID:
     move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
-	cmp     #3,LIB_REVISION(a0)
+	cmp     #4,LIB_REVISION(a0)
 	bne.b   .noRESID
     move.l  LIB_IDSTRING(a0),a0
     cmp.b   #"1",16(a0)
     bne.b   .noRESID
-    cmp.b   #"3",18(a0)
+    cmp.b   #"4",18(a0)
     bne.b   .noRESID
     cmp.b   #" ",19(a0)
     bne.b   .noRESID
-    cmp.b   #"r",20(a0)
+    cmp.b   #"r",32(a0)
     bne.b   .noRESID
-    cmp.b   #"e",21(a0)
+    cmp.b   #"e",33(a0)
     bne.b   .noRESID
-   ; "playsid.library 1.3 reSID+SIDBlaster"
+   ; "playsid.library 1.4 (11.2.2023) reSID+SIDBlaster"
     pop     a0
     moveq   #1,d0
     rts
@@ -35015,13 +37000,13 @@ isPlaysidReSID:
 
 * Checks whether playsid is operating in reSID mode
 playSidInRESIDMode:
-    movem.l d0/a6,-(sp)
+    movem.l d0/d1/a6,-(sp)
     cmp     #pt_sid,playertype(a5)
     bne.b   .no
     bsr     isPlaysidReSID
     beq     .no
     move.l  _SIDBase(a5),a6
-    lob     GetOperatingMode
+    lob     GetOperatingMode * output in d0, d1
     tst     d0
     beq     .no
     cmp     #OM_RESID_6581,d0
@@ -35030,13 +37015,22 @@ playSidInRESIDMode:
     bne     .no
 .y
     moveq   #1,d0
-    movem.l (sp)+,d0/a6
+    movem.l (sp)+,d0/d1/a6
     rts
 .no
     moveq   #0,d0
-    movem.l (sp)+,d0/a6
+    movem.l (sp)+,d0/d1/a6
     rts
 
+
+* Fake PS3M scope variables
+* multiscope draws 160 per segment
+* reSID 200Hz buffer size is 140 bytes
+* it will repeat 20 bytes
+residBufPos     dc.l    0
+residBufPtr1    dc.l    0
+residBufPtr2    dc.l    0
+residPosMask    dc.l    $7f 
 
 
 * T‰nne v‰liin h‰m‰‰v‰sti
@@ -35153,14 +37147,14 @@ p_deltamusic
 	rts
 
 .deltainit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
@@ -35178,11 +37172,11 @@ p_deltamusic
 	bra.b	.delt
 
 .deltaend
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 .deltastop
-	bra.w	clearsound
+	bra	clearsound
 
 .deltavolume
 	movem.l	d0-a6,-(sp)
@@ -35198,8 +37192,8 @@ p_deltamusic
 .id_deltamusic
 	lea	.delta_id(pc),a1	* Delta Music 2
 	moveq	#.delend-.delta_id,d0
-	bsr.w	search
-	bra.w	idtest
+	bsr	search
+	bra	idtest
 
 .delta_id
 	dc.b	"DELTA MUSIC"
@@ -35243,22 +37237,22 @@ p_futurecomposer13
 
 
 .fc10init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	fc10routines(a5),a0
-	bsr.w	allocreplayer2 * Into CHIP, has waveforms in it
+	bsr	allocreplayer2 * Into CHIP, has waveforms in it
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 
 .ok3
 	pushm	d0-d7/a1-a6
@@ -35282,15 +37276,15 @@ p_futurecomposer13
 	rts
 
 .fc10end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 .fc10stop
-	bra.w	clearsound
+	bra	clearsound
 
 .id_futurecomposer13
 	cmp.l	#'SMOD',(a4)		* Futurecomposer 1.0-1.3
-	bra.w	idtest
+	bra	idtest
 
 ******************************************************************************
 * Future Composer 1.4
@@ -35323,22 +37317,22 @@ p_futurecomposer14
 
 
 .fc10init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	fc14routines(a5),a0
-	bsr.w	allocreplayer2
+	bsr	allocreplayer2
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 ;	rts
 
 .ok3	
@@ -35363,15 +37357,15 @@ p_futurecomposer14
 	rts
 
 .fc10end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 .fc10stop
-	bra.w	clearsound
+	bra	clearsound
 
 .id_futurecomposer14
 	cmp.l	#'FC14',(a4)		* Futurecomposer 1.4
-	bra.w	idtest
+	bra	idtest
 
 
 
@@ -35413,22 +37407,22 @@ p_soundmon
 
 
 .bpsminit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	bpsmroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 ;	rts
 .ok3
 
@@ -35453,12 +37447,12 @@ p_soundmon
 	move.l	bpsmroutines(a5),a0
 	jmp	.offset_play(a0)
 .bpsmend
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .bpsmstop
-	bra.w	clearsound
+	bra	clearsound
 
 .eteen
 	move.l	bpsmroutines(a5),a0
@@ -35474,7 +37468,7 @@ p_soundmon
 	bsr.b 	.id_soundmon_
 	bne.b 	.x 
 	moveq	#25-1,d0
-	bsr.w	copyNameFromModule
+	bsr	copyNameFromModule
 	moveq	#0,d0
 .x	rts
 
@@ -35482,7 +37476,7 @@ p_soundmon
 	move.l	26(a4),d0		* Soundmon
 	lsr.l	#8,d0
 	cmp.l	#'V.2',d0
-	bra.w	idtest
+	bra	idtest
 
 
 
@@ -35510,22 +37504,22 @@ p_soundmon3
  even
 
 .bpsminit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	bpsmroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 ;	rts
 .ok3
 
@@ -35550,12 +37544,12 @@ p_soundmon3
 	move.l	bpsmroutines(a5),a0
 	jmp	$20+4(a0)
 .bpsmend
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .bpsmstop
-	bra.w	clearsound
+	bra	clearsound
 
 .taakse
 	move.l	bpsmroutines(a5),a0
@@ -35570,7 +37564,7 @@ p_soundmon3
 	bsr.b 	.id_soundmon3_
 	bne.b 	.x 
 	moveq	#25-1,d0
-	bsr.w	copyNameFromModule
+	bsr	copyNameFromModule
 	moveq	#0,d0
 .x	rts
 
@@ -35580,7 +37574,7 @@ p_soundmon3
 	cmp.l	#'V.3',d0
 	beq.b	.y
 	cmp.l	#'BPS',d0
-	bra.w	idtest
+	bra	idtest
 
 .y	moveq	#0,d0
 	rts
@@ -35619,22 +37613,22 @@ p_jamcracker
 	rts 
 
 .jaminit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	jamroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 ;	rts
 
 .ok3	
@@ -35660,17 +37654,17 @@ p_jamcracker
 	rts
 
 .jamend
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .jamstop
-	bra.w	clearsound
+	bra	clearsound
 
 
 .id_jamcracker
 	cmp.l	#'BeEp',(a4)		* JamCracker
-	bra.w	idtest
+	bra	idtest
 
 ******************************************************************************
 * Music Assembler
@@ -35701,18 +37695,41 @@ p_musicassembler
 	rts
 
 .massinit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 
+    * This one has a volume write bug similar with Imploder tunes
+    * MOVE.B	D6,8(A3)  
+    * will result silence on 68040/68060, should be:
+    * MOVE.W	D6,8(A3)  
+    * patch it:
+    move.l  moduleaddress(a5),a0
+    move.l  a0,a1
+    add.l   modulelength(a0),a1
+    subq.l  #8,a1
+    move.l  .findPatch(pc),d1
+.patch
+    cmp.l   (a0),d1
+    bne.b   .1
+    cmp.w   #$4e75,8(a0) * also check for RTS to be sure
+    bne     .1
+    move.l  .replacePatch(pc),(a0)
+    bra     .2
+.1  addq.l  #2,a0
+    cmp.l   a1,a0
+    blo     .patch
+.2  jsr     clearCpuCaches
+
+    
 	moveq	#0,d0
 .minit	move.l	moduleaddress(a5),a0
 	jsr	(a0)
@@ -35720,20 +37737,26 @@ p_musicassembler
 	moveq	#0,d0
 	rts	
 
+* Patch length: 4 bytes
+.findPatch
+    MOVE.B	D6,8(A3)  
+.replacePatch
+    MOVE.W	D6,8(A3)  
+
 .massplay
 	move.l	moduleaddress(a5),a0
 	jmp	12(a0)
 
 .massend
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	moduleaddress(a5),a0
 	jsr	4(a0)
 	popm	all
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 
 .massstop
-	bra.w	clearsound
+	bra	clearsound
 
 
 .massvolume
@@ -35754,8 +37777,8 @@ p_musicassembler
 .id_musicassembler
 	lea	.muass_id(pc),a1	* Music Assembler
 	moveq	#.muassend-.muass_id,d0
-	bsr.w	search
-	bra.w	idtest
+	bsr	search
+	bra	idtest
 
 
 .muass_id
@@ -35792,14 +37815,14 @@ p_fred
 	rts
 	
 .fredinit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
@@ -35817,15 +37840,15 @@ p_fred
 	jmp	4(a0)
 
 .fredend
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	movem.l	d0-a6,-(sp)
 	move.l	moduleaddress(a5),a0
 	jsr	8(a0)
 	movem.l	(sp)+,d0-a6
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 
 .fredstop
-	bra.w	clearsound
+	bra	clearsound
 
 
 .fredsong
@@ -35903,22 +37926,22 @@ p_sonicarranger
 .offset_backward 	= $20+20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	sonicroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 .ok3
 	;bra	.skip
 
@@ -35939,7 +37962,7 @@ p_sonicarranger
 	move	d3,maxsongs(a5)
 
 	move	d2,d0
-	bsr.w	ciaint_setTempoFromD0
+	bsr	ciaint_setTempoFromD0
 .skip
 	moveq	#0,d0
 	rts	
@@ -35951,14 +37974,14 @@ p_sonicarranger
 	rts
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	move.l	sonicroutines(a5),a0
 	jsr	.offset_end(a0)
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 	
 .song
 	move	songnumber(a5),d0
@@ -36000,10 +38023,10 @@ p_sonicarranger
 	bne.b	.NoSong
 	addq.l	#4,A0
 	cmp.l	#'V1.0',(A0)+
-	bne.w	.Fault
+	bne	.Fault
 	cmp.l	#'STBL',(A0)
-	bne.w	.Fault
-	bra.w	.Found
+	bne	.Fault
+	bra	.Found
 .NoSong
 	cmp.w	#$4EFA,(A0)
 	bne.b	.NoRepa
@@ -36097,14 +38120,14 @@ p_sidmon1
  even
 
 .sm10init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
@@ -36112,7 +38135,7 @@ p_sidmon1
 	; The id routine does code modification to the module
 	; provided replay routine, for safety clear caches
 	; before calling.
-	bsr.w	clearCpuCaches
+	bsr	clearCpuCaches
 	move.l	sid10init(pc),a0
 	jsr	(a0)
 	movem.l	(sp)+,d0-a6
@@ -36124,11 +38147,11 @@ p_sidmon1
 	jmp	(a0)
 
 .sm10end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 .sm10stop
-	bra.w	clearsound
+	bra	clearsound
 
 
 
@@ -36230,23 +38253,23 @@ p_oktalyzer
 	rts
 	
 .okinit	
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 
 	lea	oktaroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 
 .ok3	
 	move.l	moduleaddress(a5),a0
@@ -36282,12 +38305,12 @@ p_oktalyzer
 	rts
 
 .okend	
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	oktaroutines(a5),a0
 	jsr	.offset_end(a0)
 	popm	all
-.oke	bra.w	vapauta_kanavat
+.oke	bra	vapauta_kanavat
 
 .okvolume
 	moveq	#0,d0
@@ -36300,7 +38323,7 @@ p_oktalyzer
 	bsr.b	id_oktalyzer8ch 
 	bne.b	id_oktalyzer
 
-	bsr.w	moveModuleToPublicMem
+	bsr	moveModuleToPublicMem
 	moveq	#0,d0 
 	rts
 
@@ -36308,7 +38331,7 @@ id_oktalyzer
 	cmp.l	#'OKTA',(a4)		* Oktalyzer
 	bne.b	.nok
 	cmp.l	#'SONG',4(a4)
-	bra.w	idtest
+	bra	idtest
 
 .nok	moveq	#-1,d0
 	rts
@@ -36387,15 +38410,15 @@ p_tfmx
 	rts
 
 .tfmxinit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok
 	lea	tfmxroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok2
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 ;	rts
 .ok2
 	move.l	tfmxroutines(a5),a0
@@ -36413,16 +38436,16 @@ p_tfmx
 	move.l	a0,tfmxi4-tfmxi1(a2)
 	move.l	a0,tfmxi5-tfmxi1(a2)
 
-	bsr.w	tfmx_varaa
+	bsr	tfmx_varaa
 	beq.b	.ok3
 ;	move.l	tfmxroutines(a5),a0
-;	bsr.w	freereplayer
-	bsr.w	vapauta_kanavat
+;	bsr	freereplayer
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 
 .ok3
-	bsr.w	gettfmxsongs
+	bsr	gettfmxsongs
 	move	d0,maxsongs(a5)
 
 
@@ -36466,7 +38489,7 @@ p_tfmx
 
 .tfmxstop
 	bclr	#0,$bfdf00
-	bra.w	clearsound
+	bra	clearsound
 
 
 .tfmxsong
@@ -36481,10 +38504,10 @@ p_tfmx
 
 .tfmxend
 	pushm	all
-	bsr.w	tfmx_vapauta
+	bsr	tfmx_vapauta
 	bsr.b	.tfmxe
 	popm	all
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 	
 .tfmxe	bsr.b	.tfmxstop
 	move.l	tfmxroutines(a5),A0
@@ -36613,13 +38636,13 @@ gettfmxsongs
 
 id_tfmxunion
 	cmp.l	#'TFHD',(a4)		* Yhdistetty TFMX formaatti
-	bra.w	idtest
+	bra	idtest
 
 id_tfmx
 	cmp.l	#"TFMX",(a4)
 	beq.b	.y
 	cmp.l	#"tfmx",(a4)
-	bra.w	idtest
+	bra	idtest
 
 .y	moveq	#0,d0
 	rts
@@ -36775,7 +38798,7 @@ p_tfmx7
 	pushm	all
 	jsr	.OFFSET_END(a4)
 	popm	all
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	move.l	.tfmxbuf(pc),a0
 	jsr	freemem
 	clr.l	.tfmxbuf
@@ -36783,10 +38806,10 @@ p_tfmx7
 
 .tfmxsong
 	bsr.b	.tfmxend
-;	bra.w	.tfmxinit
+;	bra	.tfmxinit
 
 .tfmxinit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.okk
 	moveq	#ier_nochannels,d0
 	rts
@@ -36798,7 +38821,7 @@ p_tfmx7
 
 .eh
 	lea	tfmx7routines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok
 	rts
 .ok
@@ -36808,12 +38831,12 @@ p_tfmx7
 	move.l	d0,.tfmxbuf
 	bne.b	.ok2
 ;	lea	tfmx7routines(a5),a0
-;	bsr.w	freereplayer
+;	bsr	freereplayer
 	moveq	#ier_nomem,d0
 	rts
 .ok2	
 
-	bsr.w	gettfmxsongs
+	bsr	gettfmxsongs
 	move	d0,maxsongs(a5)
 
 
@@ -37014,7 +39037,7 @@ p_med	jmp	.medinit(pc)
 	movem.l	d1-a6,-(sp)
 
 	move.l	_MedPlayerBase(a5),d0
-	bne.w	.ook
+	bne	.ook
 
 ;	move	#30,maxsongs(a5)
 
@@ -37027,7 +39050,7 @@ p_med	jmp	.medinit(pc)
 	blo.b	.olde
 	and	#~pf_kelaus!pf_poslen,(a1)
 .olde
-	bsr.w	whatgadgets
+	bsr	whatgadgets
 
 	move.l	moduleaddress(a5),a0
 	moveq	#0,d0
@@ -37035,7 +39058,7 @@ p_med	jmp	.medinit(pc)
 	move	d0,maxsongs(a5)
 
 	tst.b	medrelocced(a5)		* oliko jo relokatoitu??
-	bne.w	.yeep
+	bne	.yeep
 
 
 	move.l	moduleaddress(a5),a0
@@ -37112,7 +39135,7 @@ p_med	jmp	.medinit(pc)
 
 ** jos on octamixplayerill‰ soitettava ja sijaitsee chipiss‰, koitetaan
 ** siirt‰‰ fastiin:
-	bsr.w	moveModuleToPublicMem
+	bsr	moveModuleToPublicMem
 
 
 .yeep
@@ -37295,8 +39318,8 @@ p_med	jmp	.medinit(pc)
 
 
 .medsong
-	bsr.w	.medend
-	bra.w	.medinit
+	bsr	.medend
+	bra	.medinit
 
 .id_med 	
 	bsr.b 	.id_med_ 
@@ -37309,7 +39332,7 @@ p_med	jmp	.medinit(pc)
 	move.l	(a4),d0			* MED
 	lsr.l	#8,d0
 	cmp.l	#'MMD',d0
-	bra.w	idtest
+	bra	idtest
 
 
 
@@ -37366,7 +39389,7 @@ p_player
 .p60stop
 	move.l	p60routines(a5),a0
 	clr	P61_PlayFlag(a0)
-	bra.w	clearsound
+	bra	clearsound
 .p60cont
 	move.l	p60routines(a5),a0
 	st	P61_PlayFlag+1(a0)
@@ -37381,7 +39404,7 @@ p_player
 
 .p60init
 	lea	p60routines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok
 	rts
 .ok
@@ -37421,15 +39444,15 @@ p_player
 	tst	d0
 	beq.b	.ok2
 ;	lea	p60routines(a5),a0
-;	bsr.w	freereplayer
-	bsr.w	.frees
+;	bsr	freereplayer
+	bsr	.frees
 	moveq	#ier_playererr,d0
 .ok2	movem.l	(sp)+,d1-a6
 	rts
 
 .memerr	
 ;	lea	p60routines(a5),a0
-;	bsr.w	freereplayer
+;	bsr	freereplayer
 	moveq	#ier_nomem,d0
 	bra.b	.ok2
 
@@ -37437,12 +39460,12 @@ p_player
 * TODO: both
 id_player
  	cmp.l	#'P61A',(a4)		* The player 6.1a
-	bra.w	idtest
+	bra	idtest
 
 id_player2				* filename <= D0
 	and.l	#$dfffffff,d0
 	cmp.l	#'P61.',d0
-	bra.w	idtest
+	bra	idtest
   endif	; FEATURE_P61A
 
 
@@ -37475,14 +39498,14 @@ p_markii
 	rts
 
 .markinit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
@@ -37507,9 +39530,9 @@ p_markii
 	moveq.l	#1,d0
 	moveq.l	#1,d1
 	jsr	(a0)
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bsr	vapauta_kanavat
 	popm	all
 	rts
 
@@ -37571,14 +39594,14 @@ p_mon	jmp	.moninit(pc)
 	rts
 
 .moninit
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
@@ -37613,13 +39636,13 @@ p_mon	jmp	.moninit(pc)
 	move.l	moduleaddress(a5),a0
 	jmp	4(a0)
 
-.monend	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+.monend	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 .monsong
-	bsr.w	clearsound
+	bsr	clearsound
 	bra.b	.init
 
 
@@ -37826,7 +39849,7 @@ p_hippelcoso
 
 .stop
 	tst.b	ahi_use_nyt(a5)
-	beq.w	clearsound
+	beq	clearsound
 
 .a	move.l	hippelcosoroutines(a5),a0
 	jmp	$20+20(a0)
@@ -37842,33 +39865,33 @@ p_hippelcoso
 
 	or	#pf_ciakelaus,.liput
 
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	hippelcosoroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-.gog	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+.gog	bsr	rem_ciaint
+	bra	vapauta_kanavat
 ;	rts
 
 .ahi	and	#~pf_ciakelaus,.liput
 
 	lea	hippelcosoroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok4
 	rts
 
 .ok3	
-	bsr.w	siirra_moduuli
+	bsr	siirra_moduuli
 	bne.b	.gog
 .ok4
 
@@ -37912,13 +39935,13 @@ p_hippelcoso
 	tst.b	ahi_use_nyt(a5)
 	bne.b	.ahien
 
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	hippelcosoroutines(a5),a0
 	jsr	$20+8(a0)
 	popm	all
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .ahien	move.l	hippelcosoroutines(a5),a0
 	jmp	$20+8(a0)
@@ -37934,8 +39957,8 @@ p_hippelcoso
 	jsr	$20+8(a0)
 	tst.b	ahi_use_nyt(a5)
 	bne.b	.sa
-	bsr.w	clearsound
-.sa	bra.w	.ok3
+	bsr	clearsound
+.sa	bra	.ok3
 
 
 
@@ -38053,14 +40076,14 @@ p_hippel
  even
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
@@ -38078,14 +40101,14 @@ p_hippel
 	jmp	(a0)
 
 .end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 
 .song
-	bsr.w	clearsound
+	bsr	clearsound
 	bra.b	.ok2
 
 
@@ -38122,7 +40145,7 @@ id_hippel
 	move.l	d7,d0
 
 	cmp.l	#100,d0
-	blo.w	.lbC000288
+	blo	.lbC000288
 
 	move.l	a4,a0
 	move.l	a4,a1
@@ -38130,7 +40153,7 @@ id_hippel
 	lea	$10(a0),a0
 .loop	addq	#1,a0	
 	cmp.l	a0,a1
-	beq.w	.ChkFail
+	beq	.ChkFail
 	cmp.b	#"T",(a0)
 	bne.b	.loop
 	cmp.b	#"F",1(a0)
@@ -38353,16 +40376,16 @@ p_digibooster
 
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
 
 	lea	digiboosterroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 ;	rts
 
 .ok3	
@@ -38388,7 +40411,7 @@ p_digibooster
 * 	a3 = vol
 
 	movem.l	a0-a3,.pos
-	bsr.w	.volu
+	bsr	.volu
 
 	DPRINT	"ok"
 
@@ -38408,7 +40431,7 @@ p_digibooster
 ; d7 = -2  cant alloc cia timers
 
 
-.er	bsr.w	vapauta_kanavat
+.er	bsr	vapauta_kanavat
 
 	addq	#1,d0
 	bne.b	.cia
@@ -38424,16 +40447,16 @@ p_digibooster
 	move.l	digiboosterroutines(a5),a0
 	jsr	$20+4(a0)
 	popm	all
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 
 
 .id_digibooster
 	bsr.b 	id_digibooster_
 	bne.b 	.x 
-	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	lea	610(a4),a1
 	moveq	#30-1,d0
-	bsr.w	copyNameFromA1
+	bsr	copyNameFromA1
 	moveq	#0,d0
 .x 	rts
 
@@ -38443,7 +40466,7 @@ id_digibooster_
 	cmp.l	#' Boo',4(a4)
 	bne.b	.nd
 	cmp.l	#'ster',8(a4)
-	bra.w	idtest
+	bra	idtest
 
 .nd	moveq	#-1,d0
 	rts
@@ -38502,7 +40525,7 @@ p_digiboosterpro
 
 
 	lea	digiboosterproroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	bne.b	.x
 
 	move.l	moduleaddress(a5),a0
@@ -38582,17 +40605,17 @@ p_digiboosterpro
 .id_digiboosterpro
 	bsr.b 	id_digiboosterpro_
 	bne.b 	.y 
-	bsr.w	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
+	bsr	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	move.l	moduleaddress(a5),a1
 	lea	16(a4),a1
 	moveq	#42-1,d0	
-	bsr.w	copyNameFromA1
+	bsr	copyNameFromA1
 	moveq	#0,d0
 .y 	rts
 
 id_digiboosterpro_
 	cmp.l	#'DBM0',(a4)
-	bra.w	idtest
+	bra	idtest
 
 ******************************************************************************
 * THX
@@ -38712,22 +40735,22 @@ p_thx
 
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	thxroutines(a5),a0
-	bsr.w	allocreplayer
-	bne.w	vapauta_kanavat
+	bsr	allocreplayer
+	bne	vapauta_kanavat
 	beq.b	.ok3
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 
 .ok3	
 	DPRINT	"AHX init"
@@ -38738,7 +40761,7 @@ p_thx
 ;	move.l	thxroutines(a5),a2
 ;	jsr	.ahxInitCIA(a2)
 ;	tst	d0
-;	bne.w	.thxInitFailed2
+;	bne	.thxInitFailed2
 
 	moveq	#0,d0	* loadwavesfile if possible
 	moveq	#0,d1	* calculate filters (ei thx v 1.xx!!)
@@ -38761,7 +40784,7 @@ p_thx
 
 ;	move.l	thxroutines(a5),a3
 ;	jsr	.ahxKillCIA(a3)
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nomem,d0
 	bra.b	.xxx
 .ok4
@@ -38781,8 +40804,8 @@ p_thx
 	moveq   #0,d1
 	jsr	.ahxInitSubSong(a3)
 
-	bsr.w	.volu
-	bsr.w	.patternInit
+	bsr	.volu
+	bsr	.patternInit
 
 	popm	d1-a6
 
@@ -38795,7 +40818,7 @@ p_thx
 ;	jsr	.ahxKillCIA(a2)
 .thxInitFailed2
 	
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 .xxx
 	popm	d1-a6
@@ -38807,15 +40830,15 @@ p_thx
 	* All regs preserved:
 	jsr	.ahxInterrupt(a0)
 	bsr		.updateInfo
-	bra.w	.updateStripes
+	bra	.updateStripes
 
 .end	DPRINT	"AHX end"
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	bsr.b	.halt
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 
 .song	bsr.b	.halt
-	bra.w	.ok3
+	bra	.ok3
 
 .halt	
 ;	pushm	all
@@ -38826,7 +40849,7 @@ p_thx
 	jsr	.ahxStopSong(a2)
 	jsr	.ahxKillPlayer(a2)
 	
-	bra.w	clearsound
+	bra	clearsound
 
 * Scope support
 * Update scope data once per vblank
@@ -39010,7 +41033,7 @@ p_thx
 	move.l	moduleaddress(a5),a1
 	add	4(a1),a1		* modulename
 	moveq	#25-1,d0
-	bsr.w	copyNameFromA1
+	bsr	copyNameFromA1
 	moveq	#0,d0
 .y 	rts
 
@@ -39018,7 +41041,7 @@ id_thx_
 	move.l	(a4),d0			* THX
 	lsr.l	#8,d0
 	cmp.l	#"THX",d0
-	bra.w	idtest
+	bra	idtest
 
 
 ******************************************************************************
@@ -39084,10 +41107,10 @@ p_mline
 	move.l	a4,a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
-	bsr.w	plainSaveFile
+	bsr	plainSaveFile
 	bmi.b	.orr
 
-	bsr.w	get_mline
+	bsr	get_mline
 	bne.b	.ok0
 	lea	200(sp),sp
 	moveq	#ier_nomled,d0
@@ -39154,7 +41177,7 @@ id_mline
 	cmp.l	#"MLED",(a4)		* musicline editor
 	bne.b	.nd
 	cmp.l	#"MODL",4(a4)
-	bra.w	idtest
+	bra	idtest
 
 .nd	moveq	#-1,d0
 	rts
@@ -39192,22 +41215,22 @@ p_aon
 .OFFSET_CONT = $20+16
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	aonroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 .ok3
 	pushm	d1-a6
 
@@ -39230,11 +41253,11 @@ p_aon
 	bra.b	.x
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	move.l	aonroutines(a5),a0
 	jsr	.OFFSET_END(a0)
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .play
 	move.l	aonroutines(a5),a0
@@ -39253,7 +41276,7 @@ p_aon
 
 .id_aon
 	cmp.l	#"AON4",(a4)		* aon 4 channel
-	bra.w	idtest
+	bra	idtest
 
 
 
@@ -39299,22 +41322,22 @@ p_aon8
 	moveq	#ier_hardware,d0
 	rts
 .okk
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	aonroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bra	vapauta_kanavat
 .ok3
 	pushm	d1-a6
 
@@ -39339,11 +41362,11 @@ p_aon8
 	bra.b	.x
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	move.l	aonroutines(a5),a0
 	jsr	.OFFSET_END(a0)
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .play
 	move.l	aonroutines(a5),a0
@@ -39363,13 +41386,13 @@ p_aon8
 .id
 	bsr.b	id_aon8
 	bne.b	.no
-	bsr.w	moveModuleToPublicMem
+	bsr	moveModuleToPublicMem
 	moveq	#0,d0
 .no	rts
 
 id_aon8
 	cmp.l	#"AON8",(a4)		* aon 8 channel
-	bra.w	idtest
+	bra	idtest
 
 
 
@@ -39432,8 +41455,8 @@ p_multi:
 .author
 	move.l	ps3m_mtype(a5),a0
 	cmp	#mtIT,(a0)
-	bne.w	guru_author
-	bra.w	deliAuthor
+	bne	guru_author
+	bra	deliAuthor
 
 
 ;init1j	jmp	init1r(pc)
@@ -39448,25 +41471,26 @@ p_multi:
 
 * This does test resource allocation and frees them right after.
 .s3init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
-.ok	bsr.w	vapauta_kanavat
+.ok	bsr	vapauta_kanavat
 
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
 	moveq	#ier_nociaints,d0
 	rts
-.ok2	bsr.w	rem_ciaint
+.ok2	bsr	rem_ciaint
 
 	lea	ps3mroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
 	rts
 
 .ok3	
 	pushm	d1-a6
+    DPRINT  "ps3m init 1"
 
 	* IT deliplayer will clear the "poslen" flag, so make sure
 	* it is available for other formats.
@@ -39474,7 +41498,7 @@ p_multi:
 	or	#pf_poslen,(a0)
 
 	move.l	moduleaddress(a5),a0
-	bsr.W 	id_it
+	bsr 	id_it
 	bne.b	.notIt
 	DPRINT "IT detected"
 
@@ -39482,7 +41506,7 @@ p_multi:
 	btst	#AFB_68020,AttnFlags+1(a0)
 	bne.b	.cpuOk
 	moveq	#ier_hardware,d0
-	bra.w	.itError
+	bra	.itError
 .cpuOk
 
 	moveq	#$62,d0	* version
@@ -39493,14 +41517,14 @@ p_multi:
 	move	playertype(a5),-(sp)
 	move	#-1,playertype(a5)
 	jsr	setMainWindowWaitPointer
-	bsr.w	loadDeliPlayer 
+	bsr	loadDeliPlayer 
 	move	(sp)+,playertype(a5)
 	tst.l 	d0
-	bmi.w 	.itError
-	bsr.w	deliInit
+	bmi 	.itError
+	bsr	deliInit
 	jsr 	clearMainWindowWaitPointer
 	tst.l	d0
-	bne.w	.itError
+	bne	.itError
 .notIt
 
 
@@ -39528,6 +41552,8 @@ p_multi:
 	move.l	ps3mroutines(a5),a6
 	jsr	init1j(a6)
 
+    DPRINT  "ps3m init 2"
+
 	;pushpea	CHECKSTART,d0		* tarkistussummaa varten
 	lea	ps3m_buff1(a5),a0
 	lea	ps3m_buff2(a5),a1
@@ -39537,8 +41563,11 @@ p_multi:
 	move.l	ps3mroutines(a5),a6
 	move.l	deliPlayer(a5),d0
 	move.l	deliBase(a5),d1
+    pushpea	scopeData(a5),d2
 	jsr	init2j(a6)
 	move.l	d0,ps3mchannels(a5)
+
+    DPRINT  "ps3m init 3"
 
 	move.l	mixirate(a5),d0	
 	move.b	s3mmode3(a5),d1		* volumeboost
@@ -39564,7 +41593,7 @@ p_multi:
 
 	lea	var_b,a5
 
-	bsr.w	isImpulseTrackerActive
+	bsr	isImpulseTrackerActive
 	bne.b	.notIT
 	* No patternscope for this one	
 	sub.l	a0,a0
@@ -39654,18 +41683,18 @@ p_multi:
 	lea	var_b,a5
 	moveq	#0,d6			* -1: vaikuttaa, 0: ei vaikuta
 	cmp	#1,ps3minitcount	* asetustiedosto vaikuttaa vain
-	bne.w	.xei			* ensimm‰iseen inittiin latauksen
+	bne	.xei			* ensimm‰iseen inittiin latauksen
 					* j‰lkeen
 
 	tst.b	ps3msettings(a5)	* k‰ytet‰‰nkˆ vai ei?
-	beq.w	.xei
+	beq	.xei
 
 	move	d0,d7			* kanavien m‰‰r‰
 
 	move.l	ps3msettingsfile(a5),d0
-	beq.w	.xei
+	beq	.xei
 	move.l	d0,a0
-	bsr.w	.tah
+	bsr	.tah
 
 	moveq	#-1,d6
 
@@ -39676,10 +41705,10 @@ p_multi:
 	mulu	#13,d0
 	add	d0,a0
 	addq	#3,a0
-	bsr.w	.gets
+	bsr	.gets
 
 	move.l	a1,a0			* t‰htirivien ohi
-	bsr.w	.tah
+	bsr	.tah
 
 	move.l	solename(a5),a1
 .fine	tst.b	(a1)+
@@ -39814,15 +41843,16 @@ mtIT  = 5
 
 
 * Initti vaihe 1. Jos d0<>0, moduuli ei kelpaa.
-id_ps3m		pushm	d1-a6
+id_ps3m:
+	pushm	d1-a6
 ;	clr	PS3M_reinit
 ;	clr	ps3minitcount
 
 	move.l	a4,a0
 ;	move.l	moduleaddress(a5),a0
 
-	bsr.w	id_it
-	beq.w	.it
+	bsr	id_it
+	beq	.it
 
 	cmp.l	#"SCRM",44(a0)
 	beq.b	.s3m
@@ -39928,15 +41958,35 @@ id_it
 	tst.l	d0
 	RTS
 
-
-
+* Checks if AHI is active and there are max 4 voices in use.
+* In this case the scopes can be used in AHI mode.
+* Out:
+*   Z: set if false, clear if true
+ahiWith4ChannelsActive:
+    tst.b   ahi_use_nyt(a5)
+    beq     .no
+    * Check if more than 4 voices, bail out if so
+    tst.l   deliPatternInfo(a5)
+    beq     .no
+    push    a0
+    move.l  deliPatternInfo(a5),a0
+    cmp     #4,PI_Voices(a0)
+    popm    a0
+    bhi     .no
+    * Ok: clear Z
+    and.b	#~(1<<2),ccr
+    rts
+.no
+    * Error: set Z
+    or.b	#(1<<2),ccr
+    rts
 
 
 ******************************************************************************
 * Sampleplayer
 ******************************************************************************
 
-p_sample
+p_sample:
 	jmp	.init(pc)
 	p_NOP	* CIA
 	p_NOP	* VB
@@ -39951,26 +42001,35 @@ p_sample
 	jmp 	id_sample(pc)
 	p_NOP	* author
 	dc.w 	pt_sample
+.flags
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .name	dc.b	"                        ",0
  even
 
-	rsset	$20
-.s_init		rs.l	1
-.s_end		rs.l	1
-.s_stop		rs.l	1
-.s_cont		rs.l	1
-.s_vol		rs.l	1
-.s_ahiup	rs.l	1
-.s_ahinfo	rs.l	1
-	
-.init
+               rsset    $20
+.s_init        rs.l     1
+.s_end         rs.l     1
+.s_stop        rs.l     1
+.s_cont        rs.l     1
+.s_vol         rs.l     1
+.s_ahiup       rs.l     1
+.s_ahinfo      rs.l     1
+.s_hasMp3Text  rs.l     1
+.s_getMp3Text  rs.l     1
+
+
+.init:
+    DPRINT  "sample init"
 	lea	sampleroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok
 	rts
 .ok
 	pushm	a5/a6
+
+    ; By default end can be detected
+    lea     .flags(pc),a0
+    or      #pf_end,(a0)
 
 ** v‰litet‰‰n infoa
 
@@ -39987,24 +42046,96 @@ p_sample
 
 	jsr	.s_ahinfo(a0)
 
-	move.l	colordiv(a5),d0
-	DPRINT	"colordiv=%ld"
 ** lis‰‰
 	moveq	#0,d0
 	cmp	#16000,horizfreq(a5)
 	slo	d0
+    DPRINT  "resample needed: %ld"
 	move	d0,-(sp)
 	pea	songover(a5)
 	move.l	colordiv(a5),-(sp)
 	move.l	_XPKBase(a5),-(sp)
+    jsr     streamGetContentLength
+    move.l  d0,-(sp)
+    moveq   #0,d1
+    move.b  mhiEnable(a5),d1
+    move.w  d1,-(sp)
+    pushpea mhiLib(a5),-(sp)
 
-	move.b	samplebufsiz0(a5),d0
+
+    * Content length zero and stream active? it's a radio station
+ REM
+    tst.l   d0
+    bne     .cl1
+    bsr     streamIsAlive
+    beq     .cl1
+    * 0 = 4k
+    * 1 = 8k
+    * 2 = 16k
+    * 3 = 32k
+    * 4 = 64k
+    * 5 = 128k
+    ; Buffer can't be too large for throttled stations
+    move.b	samplebufsiz0(a5),d0
+    cmp.b   #2,d0
+    bls     .cl2
+    moveq   #2,d0
+    DPRINT  "stream is radio, enforcer buffer"
+    bra     .cl2
+.cl1
+ EREM
+    move.b	samplebufsiz0(a5),d0
+.cl2
 	move.b	sampleformat(a5),d1
 
 	move.l	_DosBase(a5),a1
 	move.l	_GFXBase(a5),a2
 	lea	.name(pc),a3
 	move.l	modulefilename(a5),a4
+
+    tst.b   lastLoadedModuleWasRemote(a5)
+    beq     .notRemote
+    pushm   d0-d7/a1-a6
+    * If stream is alive, startStreaming will just return the pipe path
+    bsr     streamIsAlive
+    bne     .alive
+    DPRINT  "stream not alive"
+    * If stream is not alive, a valid url should be provided.
+    jsr     getcurrent
+    beq     .noCurrent
+    lea     l_filename(a3),a4
+ if DEBUG
+    move.l  a4,d0
+    DPRINT  "current filename=%s"
+ endif
+    bra     .notAlive
+.alive
+    jsr     inforivit_connecting
+.notAlive
+    move.l  a4,a0
+    bsr     startStreaming
+.noCurrent
+    * a0 = filename to read from
+    tst.l   d0
+    popm    d0-d7/a1-a6
+    bne.b   .streamOk
+    * Exiting, align stack to avoid mayhem
+    DPRINT  "startStreaming failed" 
+    jsr     showStreamerError
+    moveq   #-1,d0
+	add     #18,sp
+	popm	a5/a6
+    bra     .xx
+.streamOk
+    move.l  a0,a4
+.notRemote
+
+ if DEBUG
+    push    d0
+    move.l  a4,d0
+    DPRINT  "sample file: %s"
+    pop     d0
+ endif
 
 	pushpea	varaa_kanavat(pc),d2
 	pushpea	vapauta_kanavat(pc),d3
@@ -40019,8 +42150,8 @@ p_sample
 
 	move.l	sampleroutines(a5),a0
 	jsr	.s_init(a0)
-
-	add	#14,sp
+   
+	add     #24,sp
 
 	popm	a5/a6
 
@@ -40030,30 +42161,69 @@ p_sample
 	move.l	a2,samplepointer2(a5)
 	move.b	d2,samplestereo(a5)
 	move.l	d3,samplebufsiz(a5)
+    ; d4 = sample bits 8 or 16, convert to 1 and 2
+    lsr     #3,d4
+    move    d4,ahiSampleModulo(a5)
+
 
  if DEBUG
 	pushm	d0-d3
 	move.l	d3,d0
-	move.l	(a1),d2
-	move.l	(a2),d3
-	DPRINT	"Bufsize=%ld add=%ld buf1=%lx buf2=%lx"
+    move.l  d4,d2
+	DPRINT	"Bufsize=%ld add=%ld mod=%ld"
 	popm	d0-d3
  endif
 
+.xx
 	tst	d0
-	bne.b	.x
+	bne 	.x
 
-	bsr.b	.vol
-	moveq	#0,d0
-.x	rts
+	bsr 	.vol
 
-.end	move.l	sampleroutines(a5),a0
-	jmp	.s_end(a0)
+    move.l  streamHeaderIcyName(a5),d0
+    beq     .no1
+    move.l  d0,a1
+ 	move.l  #INFO_MODULE_NAME_LEN-1,d1
+	bsr     copyNameFromA1
+.no1   
 
-.dostop	move.l	sampleroutines(a5),a0
-	jmp	.s_stop(a0)
+    jsr     streamIsRadioStation
+    beq     .notRadio
+    * End can't be detected from radio streams
+    lea     .flags(pc),a0
+    and.w   #~pf_end,(a0)
+    DPRINT  "Disable end detect"
+.notRadio
 
-.docont	move.l	sampleroutines(a5),a0
+
+    DPRINT  "sample init ok"
+ 	moveq	#0,d0
+    rts
+
+.x	
+    DPRINT  "sample init failed %ld"
+    push    d0
+    bsr     stopStreaming
+    pop     d0
+    rts
+
+.end:
+    DPRINT  "sample end"
+    jsr     setMainWindowWaitPointer
+    bsr     stopStreaming
+    move.l	sampleroutines(a5),a0
+	jsr 	.s_end(a0)
+    jsr     clearMainWindowWaitPointer
+    bra     awaitStreamer
+    
+.dostop:
+    DPRINT  "sample stop"
+    move.l	sampleroutines(a5),a0
+	jmp 	.s_stop(a0)
+
+.docont	
+    DPRINT  "sample continue"
+    move.l	sampleroutines(a5),a0
 	jmp	.s_cont(a0)
 
 .vol	move	mainvolume(a5),d0
@@ -40065,6 +42235,20 @@ p_sample
 
 id_sample
 	rts
+
+hasMp3TagText
+	move.l	sampleroutines(a5),a0
+	jsr 	p_sample\.s_hasMp3Text(a0)
+    tst.l   d0
+    rts
+
+
+* in: 
+*  a0 = buffer to write to
+getMp3TagText 
+	move.l	sampleroutines(a5),a1
+	jmp     p_sample\.s_getMp3Text(a1)
+    
 
 * In:
 *   a0 = probebuffer, size 2048
@@ -40156,6 +42340,97 @@ id_mp3
 	moveq	#0,d0
 	rts
 
+* in:
+*   a0 = file path
+* out:
+*   d0 = -1: not mp3 filename, 0: yes mp3 filename
+id_mp3filename:
+	* Check file suffix
+    move.l  a0,a1
+;	move.l	modulefilename(a5),a1
+.zu	tst.b	(a1)+
+	bne.b	.zu
+	subq.l	#1,a1
+	move.b	-(a1),d0
+	ror.l	#8,d0
+	move.b	-(a1),d0
+	ror.l	#8,d0
+	move.b	-(a1),d0
+	ror.l	#8,d0
+	move.b	-(a1),d0
+	ror.l	#8,d0
+	and.l	#$ffdfdfff,d0
+	cmp.l	#".MP1",d0
+	beq.b	.sampl
+	cmp.l	#".MP2",d0
+	beq.b	.sampl
+	cmp.l	#".MP3",d0
+	beq.b	.sampl
+
+	* Check file prefix
+;	move.l	modulefilename(a5),a1
+    move.l  a0,a1
+	move.l	a1,a2
+.zu2	tst.b	(a1)+
+	bne.b	.zu2
+	subq.l	#1,a1
+.zu3	cmp.l	a1,a2
+	beq.b	.zu4
+	cmp.b	#":",-1(a1)
+	beq.b	.zu4
+	cmp.b	#"/",-1(a1)
+	beq.b	.zu4
+	subq	#1,a1
+	bra.b	.zu3
+.zu4
+	move.l	a1,d0
+
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	rol.l	#8,d0
+	move.b	(a1)+,d0
+	and.l	#$dfdfffff,d0
+	cmp.l	#"MP1.",d0
+	beq.b	.sampl
+	cmp.l	#"MP2.",d0
+	beq.b	.sampl
+	cmp.l	#"MP3.",d0
+	beq.b	.sampl
+    moveq   #-1,d0
+    rts
+.sampl
+    moveq   #0,d0
+    rts
+
+* Returns the modulo to advance in sample data for scopes.
+* This is needed when accessing AHI sample buffers
+* which can be either 8-bit or 16-bit data.
+* Out:
+*   d0 = 1 if 8-bit, 2 if 16-bit
+getSampleDataModulo:
+    moveq   #1,d0
+    tst.b   ahi_use_nyt(a5)
+    beq     .1
+    move    ahiSampleModulo(a5),d0
+.1
+    rts
+
+* Returns the step in bytes to advance in sample data
+* each VBlank frame. Special case check for AHI
+* 16-bit buffers.
+getSampleDataAdd:
+    move.l	sampleadd(a5),d0
+    tst.b   ahi_use_nyt(a5)
+    beq     .1
+    cmp     #2,ahiSampleModulo(a5)
+    bne     .1
+    add.l   d0,d0
+.1  rts
+
+
 ******************************************************************************
 * PumaTracker
 ******************************************************************************
@@ -40185,23 +42460,23 @@ p_pumatracker
 	rts
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	pumatrackerroutines(a5),a0
 	* allocate into chip mem
-	bsr.w	allocreplayer2
+	bsr	allocreplayer2
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	all
@@ -40217,19 +42492,19 @@ p_pumatracker
 	jmp	$20+4(a0)
 	rts
 .end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 
 .id_pumatracker 
 	bsr.b .id_pumatracker_
 	bne.b .x 
 	moveq	#12-1,d0
-	bsr.w	copyNameFromModule
+	bsr	copyNameFromModule
 	moveq	#0,d0
 .x 	rts
 
@@ -40256,7 +42531,7 @@ p_pumatracker
 	* Find some magic words that should be there
 	lea		.patt(pc),a1
 	moveq	#.patte-.patt,d0
-	bsr.w	search
+	bsr	search
 	bne.b	.notPuma
 
 	* search "patt" again after the first instance
@@ -40264,7 +42539,7 @@ p_pumatracker
 	move.l	a0,a4
 	lea		.patt(pc),a1
 	moveq	#.patte-.patt,d0
-	bsr.w	search
+	bsr	search
 	pop 	a4
 	tst.l	d0 
 	bne.b	.notPuma
@@ -40324,14 +42599,14 @@ p_beathoven
 .BEAT_AUTHOR = 40+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
@@ -40378,16 +42653,16 @@ p_beathoven
 	
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	bsr.b	.deInit
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .song
 	bsr.b	.deInit
-	bsr.w	.doInit
+	bsr	.doInit
 	rts
 
 .id_beathoven
@@ -40396,7 +42671,7 @@ p_beathoven
 	move.l	moduleaddress(a5),a1
 	move.l	$20+36(a1),a1
 	moveq	#30-1,d0
-	bsr.w	copyNameFromA1
+	bsr	copyNameFromA1
 	moveq	#0,d0
 .x 	rts
 
@@ -40418,10 +42693,10 @@ p_beathoven
     bne.b   .notBeat
     * looks good, relocate it
     move.l  a4,a0
-    bsr.w reloc
+    bsr reloc
 	* clear the hunk id for safety to avoid reloccing again
 	clr.l	(a4)
-	bsr.w	clearCpuCaches
+	bsr	clearCpuCaches
     moveq   #0,d0
     rts
 .notBeat    
@@ -40464,22 +42739,22 @@ p_gamemusiccreator
 .GMC_END   = $20+8
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	gamemusiccreatorroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d0-d7/a1-a6
@@ -40502,14 +42777,14 @@ p_gamemusiccreator
 	jmp	.GMC_PLAY(a0)
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	move.l	gamemusiccreatorroutines(a5),a0
 	jsr	.GMC_END(a0)
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 ; in: a4 = module
 ; out: d0 = 0, valid GMC
@@ -40525,12 +42800,12 @@ id_gamemusiccreator
 .sampleLoop
 	* sample vol check probably
 	cmp.b   #$40,7(a0)
-    	bhi.w   .notGmc
+    	bhi   .notGmc
 
     * sample len
  	move    4(a0),d1 
     	cmp     #$7fff,d1
-    	bhi.w   .notGmc
+    	bhi   .notGmc
 
     	add     d1,d1
     * loop length (?), must be less than total length
@@ -40617,7 +42892,7 @@ id_gamemusiccreator
 ;    cmp.b   #3,d0
 ;    bne.b   .c3
 ;    cmp.b   #$40,3(a0)
-;	bhi.w   .notGmc3
+;	bhi   .notGmc3
 ;.c3
 
 	move.l  (a0),d0
@@ -40689,8 +42964,8 @@ p_digitalmugician
 .id_digitalmugician
 	lea	.id_start(pc),a1	
 	moveq	#.id_end-.id_start,d0
-	bsr.w	search
-	bra.w	idtest
+	bsr	search
+	bra	idtest
 
 .id_start
 	dc.b	' MUGICIAN/SOFTEYES 1990 '
@@ -40723,21 +42998,21 @@ p_delicustom
 .init
 	move.l	moduleaddress(a5),d0
 	lsl.l	#2,d0
-	bsr.w	deliInit
+	bsr	deliInit
 	rts
 
 id_delicustom
 	lea	.id1_start(pc),a1	
 	moveq	#.id1_end-.id1_start,d0
-	bsr.w	search
+	bsr	search
 	bne.b	.notDeli
 	lea	.id2_start(pc),a1	
 	moveq	#.id2_end-.id2_start,d0
-	bsr.w	search
+	bsr	search
 	bne.b	.notDeli
 	lea	.id3_start(pc),a1	
 	moveq	#.id3_end-.id3_start,d0
-	bsr.w	search
+	bsr	search
 	bne.b	.notDeli
 
 	* search() leaves with a0 pointing
@@ -41011,22 +43286,22 @@ p_medley
 .MEDLEY_SONG  = 12+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	medleyroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -41048,7 +43323,7 @@ p_medley
 	jmp	.MEDLEY_PLAY(a0)
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .song
  if DEBUG
@@ -41061,13 +43336,13 @@ p_medley
 	rts
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	medleyroutines(a5),a0
 	jsr	.MEDLEY_END(a0)
 	popm	all
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 
@@ -41143,22 +43418,22 @@ p_futureplayer
 .FP_SONG  = 12+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	futureplayerroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -41194,7 +43469,7 @@ p_futureplayer
 	jmp	.FP_PLAY(a0)
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .song
  if DEBUG
@@ -41207,13 +43482,13 @@ p_futureplayer
 	rts
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	futureplayerroutines(a5),a0
 	jsr	.FP_END(a0)
 	popm	all
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 ; in: a4 = module
@@ -41277,22 +43552,22 @@ p_bendaglish
 .BD_SONG  = 12+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	bendaglishroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -41311,7 +43586,7 @@ p_bendaglish
 	jmp	.BD_PLAY(a0)
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .song
  if DEBUG
@@ -41328,7 +43603,7 @@ p_bendaglish
 	rts
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	* Safety: disable audio interrupts and clear requests
 	* which this replayer uses. Pending interrupts
@@ -41337,8 +43612,8 @@ p_bendaglish
 	move.l	bendaglishroutines(a5),a0
 	jsr	.BD_END(a0)
 	popm	all
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 ; in: a4 = module
@@ -41417,22 +43692,22 @@ p_sidmon2
 .PLAY  = 4+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	sidmon2routines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -41450,12 +43725,12 @@ p_sidmon2
 	jmp	.PLAY(a0)
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 ; in: a4 = module
@@ -41465,7 +43740,7 @@ p_sidmon2
 .id_sidmon2
 	lea		.idStart(pc),a1
 	moveq	#.idEnd-.idStart,d0
-	bra.w 	search
+	bra 	search
 
 .idStart	dc.b	'SIDMON II - THE MIDI VERSION'
 .idEnd 
@@ -41504,22 +43779,22 @@ p_deltamusic1
 .PLAY  = 4+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	deltamusic1routines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -41537,12 +43812,12 @@ p_deltamusic1
 	jmp	.PLAY(a0)
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 ; in: a4 = module
@@ -41598,22 +43873,22 @@ p_soundfx
 .PLAY  = 4+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	soundfxroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-d7/a1-a6
@@ -41635,12 +43910,12 @@ p_soundfx
 	jmp	.PLAY(a0)
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 ; in: a4 = module
@@ -41674,7 +43949,7 @@ p_gluemon
 	jmp .id_gluemon(pc)
 	jmp	.author(pc)
 	dc.w pt_gluemon
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_poslen!pf_scope!pf_quadscopePoke
 	dc.b	"GlueMon",0
 .a	dc.b	"Lars Malmborg (GlueMaster/North Star)",0
  even
@@ -41688,22 +43963,22 @@ p_gluemon
 .END   = 8+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea 	gluemonroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -41713,6 +43988,7 @@ p_gluemon
 	lea 	pos_maksimi(a5),a3
 	lea	pos_nykyinen(a5),a4
 	move.l	gluemonroutines(a5),a6
+    pushpea scopeData(a5),d0
 	jsr	.INIT(a6)
 	popm	d1-a6
 	moveq	#0,d0
@@ -41729,15 +44005,15 @@ p_gluemon
 	move	d0,$b8-$96(a0)
 	move	d0,$c8-$96(a0)
 	move	d0,$d8-$96(a0)
-	;bra.w	clearsound
+	;bra	clearsound
 	rts
 
 .end
 	move.l	gluemonroutines(a5),a0
 	jsr	.END(a0)
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 ; in: a4 = module
@@ -41788,22 +44064,22 @@ p_pretracker
 	rts
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea 	pretrackerroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	jsr	setMainWindowWaitPointer
@@ -41849,14 +44125,14 @@ p_pretracker
 	rts
 	
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
+	bsr	rem_ciaint
+	bsr	clearsound
 	move.l pretrackerroutines(a5),a0
 	jsr	.offset_stop(a0)
-	bra.w	vapauta_kanavat
+	bra	vapauta_kanavat
 
 .song
 	moveq	#0,d0
@@ -41870,7 +44146,7 @@ p_pretracker
 	bne.b .x
 	lea	$14(a4),a1
 	moveq	#20-1,d0
-	bsr.w	copyNameFromA1
+	bsr	copyNameFromA1
 	moveq	#0,d0
 .x  rts
 
@@ -41929,22 +44205,22 @@ p_custommade
 .SONG  = 8+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	custommaderoutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -41959,11 +44235,13 @@ p_custommade
 *   d3 = timer value
 
 	subq	#1,d2 
-	clr	songnumber(a5)
+;	clr	songnumber(a5)
 	move	d2,maxsongs(a5)
 
 	move	d3,d0 
-	bsr.w	ciaint_setTempoFromD0
+	bsr	ciaint_setTempoFromD0
+
+    bsr     .song
 
 	popm	d1-a6
 	* INIT returns 0 on success
@@ -41975,14 +44253,13 @@ p_custommade
 	jmp	.PLAY(a0)
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .song
- if DEBUG
 	moveq	#0,d0
 	move	songnumber(a5),d0
 	DPRINT	"Song %ld"
- endif
+
 	* starts from 1, not 0
 	addq	#1,d0
 	move.l	custommaderoutines(a5),a0
@@ -41990,9 +44267,9 @@ p_custommade
 	rts
 
 .end
-	bsr.w	rem_ciaint
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 ; in: a4 = module
@@ -42007,7 +44284,7 @@ p_custommade
 	beq.b	.Later
 	cmp.w	#$4EB9,(A0)		; jsr
 	beq.b	.Later
-	cmp.w	#$6000,(A0)		; bra.w
+	cmp.w	#$6000,(A0)		; bra
 	bne.b	.Fault
 	cmp.w	#$6000,4(A0)
 	beq.b	.More
@@ -42071,22 +44348,22 @@ p_davelowe
 .SONG  = 12+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	daveloweroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -42126,7 +44403,7 @@ p_davelowe
 	rts
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .song
  if DEBUG
@@ -42139,13 +44416,13 @@ p_davelowe
 	jmp .SONG(a0)
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	pushm	all
 	move.l	daveloweroutines(a5),a0
 	jsr	.END(a0)
 	popm	all
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 
 ; in: a4 = module
@@ -42213,22 +44490,22 @@ p_startrekker
 
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	startrekkerroutines(a5),a0
-	bsr.w	allocreplayer2
+	bsr	allocreplayer2
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -42253,6 +44530,10 @@ p_startrekker
 	move.b	#"n",(a1)+
 	move.b	#"t",(a1)+
 	clr.b	(a1)
+
+    * These data files are optional, so let's not
+    * show error dialogs if they are not found.
+    st      disableShowStreamerError(a5)
 
 	move.l	sp,a0
 	bsr.b	.loadExtraFile
@@ -42301,6 +44582,7 @@ p_startrekker
 	move.l	a0,deliPatternInfo(a5)
 	move	d1,pos_maksimi(a5)
 .x
+    clr.b   disableShowStreamerError(a5)
 	popm	d1-a6
 	tst.l	d0
 	* INIT returns 0 on success
@@ -42311,17 +44593,19 @@ p_startrekker
 	move.l	a0,d0
 	DPRINT	"Loading %ls"
  endif
+    * HACK! Eensure new stream job will be started
+    move    #-1,streamReturnCode(a5)
+
 	move.l	#MEMF_CHIP!MEMF_CLEAR,d0
 	lea	startrekkerdataaddr(a5),a1
 	lea 	startrekkerdatalen(a5),a2
-	jsr	loadfileStraight
-	rts
+	jmp 	loadfileStraight
 
 .fileErr 
 	* No extra data file tound. Proceed as Protracker
 	DPRINT	"Revert to Protracker"
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	pushpea	p_protracker(pc),playerbase(a5)
 	move	#pt_prot,playertype(a5)
 	moveq	#0,d0 
@@ -42338,20 +44622,20 @@ p_startrekker
 	rts
 
 .stop
-	bra.w	clearsound
+	bra	clearsound
 
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	move.l	startrekkerroutines(a5),a0
 	jsr	.END(a0)
-	bsr.w	clearsound
-	bra.w	vapauta_kanavat
+	bsr	clearsound
+	bra	vapauta_kanavat
 
 .id
 	bsr.b	.id_
 	bne.b 	.nok
 	moveq	#20-1,d0
-	bsr.w	copyNameFromModule
+	bsr	copyNameFromModule
 	moveq	#0,d0	
 .nok	rts
 
@@ -42406,22 +44690,22 @@ p_voodoosupremesynthesizer
 .SONG  = 16+$20
 
 .init
-	bsr.w	varaa_kanavat
+	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
 	rts
 .ok	
-	bsr.w	init_ciaint
+	bsr	init_ciaint
 	beq.b	.ok2
-	bsr.w	vapauta_kanavat
+	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	lea	voodooroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
-	bsr.w	rem_ciaint
-	bsr.w	vapauta_kanavat
+	bsr	rem_ciaint
+	bsr	vapauta_kanavat
 	rts
 .ok3
 	move.l	moduleaddress(a5),a0
@@ -42444,11 +44728,11 @@ p_voodoosupremesynthesizer
 	moveq	#ier_nomem,d0
 	rts
 .end
-	bsr.w	rem_ciaint
+	bsr	rem_ciaint
 	move.l	voodooroutines(a5),a0
 	jsr	.END(a0)
-	bsr.w	clearsound
-	bsr.w	vapauta_kanavat
+	bsr	clearsound
+	bsr	vapauta_kanavat
 	rts
 
 .play
@@ -42456,7 +44740,7 @@ p_voodoosupremesynthesizer
 	jsr	.PLAY(a0)
 	rts
 .stop
-	bra.w	clearsound
+	bra	clearsound
 .cont
 	rts
 .vol
@@ -42587,7 +44871,7 @@ p_facethemusic
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|7,d0
-	bsr.w	deliLoadAndInit
+	bsr	deliLoadAndInit
 	bne.b	.error
 
 	* Some tunes seem to end prematurely, try this
@@ -42599,7 +44883,7 @@ p_facethemusic
 
 
 .end
-	bsr.w	deliEnd
+	bsr	deliEnd
 	* Extra safety:
 	move.l  #$07800780,$dff09a
 	rts
@@ -42607,7 +44891,7 @@ p_facethemusic
 .id
 	bsr.b	.do
 	bne.b	.not 
-	bsr.w 	moveModuleToPublicMem
+	bsr 	moveModuleToPublicMem
 	moveq	#0,d0
 .not		
 	rts
@@ -42623,7 +44907,7 @@ p_facethemusic
 .ftmVBlank
 	* Need to call this so that volume and voices are updated.
 	* FTM uses it's own interrupt otherwise.
-	bra.w	deliInterrupt
+	bra	deliInterrupt
 
 ******************************************************************************
 * Richard Joseph
@@ -42652,7 +44936,7 @@ p_richardjoseph
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|2,d0
-	bsr.w	deliLoadAndInit
+	bsr	deliLoadAndInit
 	bne.b	.error
 
 	* Some tunes seem to end prematurely, try this
@@ -42714,8 +44998,8 @@ p_instereo1
 
 	* First, find it.
 	lea	.path(pc),a3
-	bsr.w	findDeliPlayer
-	beq.w	.error 
+	bsr	findDeliPlayer
+	beq	.error 
 	move.l d0,d7 	* lock
 
 	* Get the path
@@ -42723,18 +45007,18 @@ p_instereo1
 	move.l 	d7,d1
 	move.l	sp,d2
 	moveq	#100,d3 
-	bsr.w	getNameFromLock
+	bsr	getNameFromLock
 	move.l  d0,d6 
 
 	move.l	d7,d1
 	lore  Dos,UnLock
 
 	tst.l	d6 
-	beq.w 	.nameFromLockErr
+	beq 	.nameFromLockErr
 	
 	* Read it
 	move.l	sp,a0
-	bsr.w	plainLoadFile 
+	bsr	plainLoadFile 
 	lea	100(sp),sp 
 	tst.l  d0 
 	beq.b  .fileError 
@@ -42760,7 +45044,7 @@ p_instereo1
 .c	move.b	(a2)+,(a0)+
 	bne.b	.c
 	move.l	sp,a0
-	bsr.w	plainSaveFile 
+	bsr	plainSaveFile 
 	lea	100(sp),sp
 
 	move.l	d3,a0 
@@ -42777,7 +45061,7 @@ p_instereo1
 	* filesystem, finding the above patched player.
 	move	playertype(a5),-(sp)
 	move	#-1,playertype(a5)
-	bsr.w	deliLoadAndInit
+	bsr	deliLoadAndInit
 	move	(sp)+,playertype(a5)
 	tst.l	d0
 
@@ -43057,7 +45341,7 @@ p_krishatlelid
 	* which this replayer uses. Pending interrupts
 	* may trigger after code is in wrong state or deallocated.
 	move.l  #$07800780,$dff09a
-	bra.w	deliEnd
+	bra	deliEnd
 
 .id
 	move.l	a4,a0
@@ -43198,7 +45482,7 @@ id_hippel7
 	bne.b	.not
 	* This is identified as TFMX song data which goes into
 	* public mem, fix it.
-	bsr.w	moveModuleToChipMem
+	bsr	moveModuleToChipMem
 	moveq	#0,d0
 .not
 	rts
@@ -43761,13 +46045,13 @@ p_activisionpro
 	MOVE.L	A0,A2
 	LEA	.lbB000624(PC),A1
 	MOVEq	#3,D1
-	BSR.W	.lbC0005EE
+	BSR	.lbC0005EE
 	BNE.S	.lbC000518
 	;MOVE.L	A0,lbL0000BA
 	LEA	.lbB00062C(PC),A1
 	MOVEq	#12,D1
-	BSR.W	.lbC0005EE
-	BNE.W	.lbC0005EC
+	BSR	.lbC0005EE
+	BNE	.lbC0005EC
 	;MOVE.L	A0,lbL0000BE
 	MOVEQ	#0,D1
 	CMP.W	#$4E75,$28(A2)
@@ -43776,13 +46060,13 @@ p_activisionpro
 .lbC00050C	
 	;MOVE.L	D1,lbL0000C2
 	MOVEQ	#0,D0
-	BRA.W	.lbC0005EC
+	BRA	.lbC0005EC
 
 .lbC000518	MOVE.L	A4,A0
 	MOVE.L	D4,D2
 	LEA	.lbB000646(PC),A1
 	MOVEq	#9,D1
-	BSR.W	.lbC0005EE
+	BSR	.lbC0005EE
 	BNE.S	.lbC00055A
 	;MOVE.L	A0,lbL0000BA
 	LEA	.lbB00065A(PC),A1
@@ -44311,7 +46595,7 @@ p_sonix
 	move.l	d7,d4
 	move.l	A0,A1
 	cmp.l	#'FORM',(A0)
-	beq.w	.SmusCheck
+	beq	.SmusCheck
 	move.w	(A0),D1
 	and.w	#$00F0,D1
 	bne.b	.TinyCheck
@@ -44392,27 +46676,27 @@ p_sonix
 	bclr	#0,D1
 	add.l	D1,A1
 	cmp.l	#'SNX1',(A1)+
-	bne.w	.fault
+	bne	.fault
 	move.l	(A1)+,D1
-	bmi.w	.fault
+	bmi	.fault
 	addq.l	#1,D1
 	bclr	#0,D1
 	add.l	D1,A1
 .MoreIns
 	cmp.l	#'INS1',(A1)+
-	bne.w	.fault
+	bne	.fault
 	move.l	(A1)+,D1
-	bmi.w	.fault
+	bmi	.fault
 	addq.l	#1,D1
 	bclr	#0,D1
 	cmp.b	#63,(A1)			; real sample number
-	bhi.w	.fault
+	bhi	.fault
 	tst.b	1(A1)				; MIDI check
-	bne.w	.fault
+	bne	.fault
 	add.l	D1,A1
 	cmp.l	#'TRAK',(A1)
 	bne.b	.MoreIns
-	bra.w	.found
+	bra	.found
 
 
 
@@ -44613,7 +46897,7 @@ p_musicmaker8
 .id_musicmaker8
 	bsr.b	id_musicmaker8_
 	bne.b	.no
-	bsr.w	moveModuleToPublicMem
+	bsr	moveModuleToPublicMem
 	moveq	#0,d0
 .no
 	rts
@@ -44754,14 +47038,14 @@ id_musicmaker4
 	CMP.L	#$4D4D5638,8(A0)	; MMV8
 	BNE.S	.lbC000498
 	MOVE.L	#$53444154,D0
-	BSR.W	MM_SearchLongWord
+	BSR	MM_SearchLongWord
 	TST.L	D0
 	BMI.b	.lbC0005BA
 	ADDQ.L	#4,A0
 	MOVEQ	#-1,D7
 .lbC000498	CMP.W	#$5345,(A0)	; SE
 	BNE.B	.lbC0005BA
-	bSR.w	MM4_8_ExtraCheck
+	bSR	MM4_8_ExtraCheck
 	BEQ.B	.lbC0005BA
 	MOVE.B	$17(A0),D0
 	CMP.B	#$10,D0
@@ -44774,7 +47058,7 @@ id_musicmaker4
 ;	MOVE.L	$24(A5),A0
 	move.l	a4,a0
 	MOVE.L	#$494E5354,D0		; INST
-	BSR.w MM_SearchLongWord
+	BSR MM_SearchLongWord
 	TST.L	D0
 	BMI.S	.lbC0004DE
 	TST.L	D5
@@ -44785,12 +47069,12 @@ id_musicmaker4
 ;	MOVE.L	$24(A5),A0
 	move.l	a4,a0
 	MOVE.L	#$50494E53,D0		; PINS
-	BSR.w	MM_SearchLongWord
+	BSR	MM_SearchLongWord
 	TST.L	D0
 	BMI.b	.lbC0005BA
 	TST.L	D5
 	BNE.b	.lbC0005BA
-	BRA.w	.lbC0005B2
+	BRA	.lbC0005B2
 
 .Ok
 .lbC0005B2	MOVEM.L	(SP)+,d5/D6/D7
@@ -44884,7 +47168,7 @@ p_stonetracker
 .init
 	lea	.path(pc),a0 
 	moveq	#0<<16|1,d0
-	bsr.w	deliLoadAndInit
+	bsr	deliLoadAndInit
 	bmi.b	.not
 .MHD_Name = 4
 	move.l	moduleaddress(a5),a0
@@ -44905,7 +47189,7 @@ id_stonetracker
 	pop	a4
 	tst.l 	d0 
 	bne.b .not 
-	bsr.w	moveModuleToPublicMem
+	bsr	moveModuleToPublicMem
 	moveq	#0,d0
 .not
 	rts
@@ -45500,7 +47784,7 @@ p_xmaplay:
 	rts
 .okk
 	lea	    xmaplayroutines(a5),a0
-	bsr.w	allocreplayer
+	bsr	allocreplayer
 	beq.b	.ok3
 	rts
 .ok3
@@ -45509,7 +47793,7 @@ p_xmaplay:
     lea     .tempFile(pc),a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
-	bsr.w	plainSaveFile
+	bsr	plainSaveFile
 	bmi 	.saveError
 
     DPRINT  "temp file saved"
@@ -45620,16 +47904,21 @@ p_xmaplay:
     move.l  xmaplayroutines(a5),a0
     jmp     .xmaEnd(a0)
 
+* In:
+*    a0, a4 = data
 * Out:
 *    d0 = 0 if accepted and XMAPlay enabled
 id_xmaplay  
+    tst.b   ahi_muutpois(a5)
+    bne     .no
     tst.b   xmaplay(a5)
     beq.b   .no
+    push    a0
     jsr     id_xm
+    pop     a0
     tst.l   d0
     beq.b   .no
-    move.l  moduleaddress(a5),a1
-	lea 	xmName(a1),a1
+    lea 	xmName(a0),a1
     moveq   #20-1,d0
     jsr     copyNameFromA1
     moveq   #0,d0
@@ -45732,7 +48021,7 @@ deliLoadAndInit:
 	bsr.b	loadDeliPlayer 
 	tst.l 	d0
 	bmi.b 	.loadErr 
-	bsr.w	deliInit
+	bsr	deliInit
 .loadErr	
 	jsr 	clearMainWindowWaitPointer
 	tst.l	d0
@@ -45750,14 +48039,14 @@ loadDeliPlayer:
 	move	playertype(a5),d0
 	beq.b	.noMod
 	cmp	deliPlayerType(a5),d0
-	beq.w	.useOld
+	beq	.useOld
 .noMod
-	bsr.w	freeDeliPlayer
+	bsr	freeDeliPlayer
 
-	bsr.w 	findDeliPlayer
+	bsr 	findDeliPlayer
 	move.l	d0,d4
-	bmi.w	.err
-	bsr.w	.load 
+	bmi	.err
+	bsr	.load 
 	move.l	d0,d3
 	move.l	d4,d1
 	lore 	Dos,UnLock
@@ -45775,7 +48064,7 @@ loadDeliPlayer:
 	lsl.l	#2,d0
 	move.l	d0,a0 
 	move.l	#DTP_PlayerVersion,d0
-	bsr.w	deliGetTagFromA0
+	bsr	deliGetTagFromA0
 	beq.b	.noVersion 
 	move.l	d0,d6
 
@@ -45839,7 +48128,7 @@ loadDeliPlayer:
 	move.l 	d4,d1
 	move.l	sp,d2
 	moveq	#100,d3 
-	bsr.w	getNameFromLock
+	jsr 	getNameFromLock
 	beq.b 	.err2
 
  if DEBUG
@@ -45868,14 +48157,14 @@ findDeliPlayer
 	move.l	sp,a0
 	* initialize to zero, important
 	clr.l	(a0) 
-	bsr.w	allocreplayer
+	jsr	allocreplayer
 	move.l	(sp),a1
 	lea	4(sp),sp
 	tst.l	d0
-	beq.w	.epFromGroup
+	beq	.epFromGroup
 
 	lea 	.searchPath1(pc),a2 
-	bsr.w 	.tryLock
+	bsr 	.tryLock
 	bne.b	.ok 
 	
 * PROGDIR not available on kick13 or asm
@@ -45949,18 +48238,18 @@ findDeliPlayer
 	* To get data size this must be subtracted
 	move.l	-4(a1),d0
 	subq.l	#4,d0
-	bsr.w	plainSaveFile
+	bsr	plainSaveFile
 	pop 	a0 
 	jsr	freemem
 
 	tst.l	d0
-	beq.w	.fail
+	beq	.fail
 
 	pushpea	epPath(pc),d1
 	moveq	#ACCESS_READ,d2
  	lore 	Dos,Lock
 	tst.l	d0 
-	beq.w	.fail
+	beq	.fail
 	rts
 
 freeDeliPlayer:
@@ -45980,7 +48269,7 @@ freeDeliPlayer:
 	clr	deliPlayerType(a5)
 .x
 	bsr.b	.freeDeliLoadedFile
-	bsr.w	freeDeliBase
+	bsr	freeDeliBase
 	popm	all
 	rts
 
@@ -46049,9 +48338,9 @@ deliInit:
 	DPRINT	"deliInit 0x%lx"
 	move.l	d0,deliPlayer(a5)
 	move	playertype(a5),deliPlayerType(a5)
-	bsr.w	buildDeliBase
+	bsr	buildDeliBase
 	tst.l	d0
-	beq.w	.noMemError
+	beq	.noMemError
 	move.l	deliBase(a5),a4
 
 	* Quite important to clear the old ones away
@@ -46066,13 +48355,13 @@ deliInit:
 	
  if DEBUG
  	move.l	#DTP_PlayerName,d0 
-	bsr.w	deliGetTag 
+	bsr	deliGetTag 
 	beq.b	.noPlr
 	DPRINT	"Name: %s"
 .noPlr
 
-	bsr.w	deliShowTags
-	bsr.w	deliShowFlags
+	bsr	deliShowTags
+	bsr	deliShowFlags
  endif
 
 	* Order in DT
@@ -46085,114 +48374,119 @@ deliInit:
 	* SubSongRange	
 
 	move.l	#DTP_DeliBase,d0
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noDBTag
 	move.l	d0,a0 
 	move.l	a4,(a0)
 .noDBTag
 
 	move.l	#EP_EagleBase,d0
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noEBTag
 	move.l	d0,a0 
 	move.l	a4,(a0)
 .noEBTag
 
 	move.l	#DTP_Config,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 
 	* For ImpulseTracker support:
 	move.l	#DTP_InitNote,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 
 	move.l	#DTP_CustomPlayer,d0
-	bsr.w	deliGetTag
-	bne.w	.checksOk
+	bsr	deliGetTag
+	bne	.checksOk
 
 	* Checks! Run through known ones
 	* and accept if one of these accepts.
 	
 	move.l	#DTP_Check2,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noCheck2
-	bsr.w	deliCallFunc
+	bsr	deliCallFunc
 	DPRINT	"DTP_Check2: %ld"
 	tst.l	d0
 	beq.b	.checksOk
 .noCheck2	
 	move.l	#EP_Check3,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noCheck3
-	bsr.w	deliCallFunc
+	bsr	deliCallFunc
 	DPRINT	"EP_Check3: %ld"
 	tst.l	d0
 	beq.b	.checksOk
 .noCheck3
 	move.l	#EP_Check5,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	;beq.b	.noCheck5
-	beq.w	.checkError
-	bsr.w	deliCallFunc
+	beq	.checkError
+	bsr	deliCallFunc
 	DPRINT	"EP_Check5: %ld"
 	tst.l	d0
-	bne.w	.checkError
+	bne	.checkError
 .noCheck5
 
 .checksOk
-	bsr.w	clearCpuCaches  ; Extra safety
+	bsr	funcENPP_ClearCache  ; Extra safety
 
 	move.l	#EP_InitAmplifier,d0 
-	bsr.w	deliGetTag 
-	bsr.w	deliCallFunc
+	bsr	deliGetTag 
+	bsr	deliCallFunc
 
 	move.l	#EP_PatternInit,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noPattInit
-	bsr.w	deliCallFunc
+	bsr	deliCallFunc
 	move.l	a0,deliPatternInfo(a5)
 .noPattInit
 
 	move.l	#EP_Flags,d0
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noFlags
-	bsr.w	deliHandleFlags
+	bsr	deliHandleFlags
 .noFlags
 
 	move.l	#DTP_ExtLoad,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noExtLoad
-	bsr.w	deliCallFunc
+	bsr	deliCallFunc
 	DPRINT	"DTP_ExtLoad: %lx"
 	tst.l	d0
-	bne.w	.extLoadError
+	bne	.extLoadError
 .noExtLoad
 
 	move.l	#EP_StructInit,d0
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noUPS
-	bsr.w	deliCallFunc	
+	bsr	deliCallFunc	
 	move.l	a0,deliUPSStruct(a5)
-	;beq.w	.noUPS
+	;beq	.noUPS
 	;move.l	playerbase(a5),a0
 	;or	#pf_scope!pf_quadscopeUps,p_liput(a0)
 ;	DPRINT	"Quadscope supported"
 .noUPS
  
 	move.l	#DTP_InitPlayer,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc	
+	bsr	deliGetTag
+	bsr	deliCallFunc	
 	* Status is returned in d0, can't rely on status flags
 	* here. d0=0 if ok, else not ok
 	tst.l	d0
-	bne.w	.initError
+	bne	.initError
 	DPRINT	"initPlayer ok"
 
-	bsr.w	clearCpuCaches  ; Extra safety
+	bsr	funcENPP_ClearCache  ; Extra safety
 
 	* set default song number
-	bsr.w	deliGetSongInfo
+	bsr	    deliGetSongInfo
+    tst     songnumber(a5)
+    beq     .def
+    * Use previosly set songnumber if available
+    move    songnumber(a5),d0
+.def
 	* d0 = def, d1 = min, d2 = max	
 	move.l	deliBase(a5),a0
 	move	d0,dtg_SndNum(a0)
@@ -46201,45 +48495,45 @@ deliInit:
 	move	d2,maxsongs(a5)	
 
 	move.l	#DTP_Volume,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	move.l	d0,deliStoredSetVolume(a5)
 
 	move.l	#EP_Voices,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	move.l	d0,deliStoredSetVoices(a5)
 
 	move.l	#DTP_NoteStruct,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b 	.noNoteStruct
 	* This is an address to the struct
 	move.l	d0,a0
 	move.l	(a0),a0
 	move.l	a0,deliStoredNoteStruct(a5)
  if DEBUG 
-	bsr.w	deliShowNoteStruct
+	bsr	deliShowNoteStruct
  endif 
 .noNoteStruct
 
 	move.l	#DTP_InitSound,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc	
+	bsr	deliGetTag
+	bsr	deliCallFunc	
 	* Does not return error code
 
 	DPRINT	"InitSound ok"
-	bsr.w	clearCpuCaches  ; Extra safety
+	bsr	funcENPP_ClearCache  ; Extra safety
 
 	* Get position info if available
-	bsr.w	deliUpdatePositionInfo
+	bsr	deliUpdatePositionInfo
 
 	move.l	#DTP_Interrupt,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	move.l	d0,deliStoredInterrupt(a5)	
 
 	move.l	#DTP_StartInt,d0
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noStartInt
 	DPRINT	"using module interrupt"
-	bsr.w	deliCallFunc
+	bsr	deliCallFunc
 	* DTP_StartInt overrides DTP_Interrupt
 	clr.l	deliStoredInterrupt(a5)
 	bra.b	.skip
@@ -46265,11 +48559,11 @@ deliInit:
 
 	* try to clean up
 	move.l	#DTP_EndSound,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc	
+	bsr	deliGetTag
+	bsr	deliCallFunc	
 	move.l	#DTP_EndPlayer,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc	
+	bsr	deliGetTag
+	bsr	deliCallFunc	
 
 	moveq	#ier_nociaints,d0
 	bra.b	.ciaError
@@ -46365,13 +48659,13 @@ deliInit:
 *   d0: value, or -1 if not found
 deliFindInfoValue
 	move.l	#EP_Get_ModuleInfo,d0
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b 	.tryAnother
-	bsr.w	deliCallFunc
+	bsr	deliCallFunc
 	bra.b	.gotIt
 .tryAnother
 	move.l	#EP_NewModuleInfo,d0 
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b 	.notFound
 	move.l	d0,a0
 .gotIt
@@ -46395,7 +48689,7 @@ deliFindInfoValue
 deliUpdatePositionInfo	
 	clr	pos_maksimi(a5)
 	move.l	#EP_GetPositionNr,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	move.l	d0,deliStoredGetPositionNr(a5) 
 	beq.b	.noPos
 	move.l	#MI_Length,d1
@@ -46419,9 +48713,9 @@ deliUpdatePositionInfo
 *  d2=max song
 deliGetSongInfo
 	move.l	#DTP_SubSongRange,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noSubSongs1
-	bsr.w	deliCallFunc
+	bsr	deliCallFunc
 	move.l	d1,d2
 	move.l	d0,d1
 	move.l	playerbase(a5),a0 
@@ -46431,7 +48725,7 @@ deliGetSongInfo
 
 .noSubSongs1
 	move.l	#DTP_NewSubSongRange,d0  
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	beq.b	.noSubSongs2
 	move.l	d0,a0
 	movem	(a0),d0/d1/d2
@@ -46502,7 +48796,7 @@ deliPlay:
 	
 	pushm	a4/a5/a6
 	move.l	deliStoredNoteStruct(a4),d0 
-	bsr.w	deliNotePlayer
+	bsr	deliNotePlayer
 	popm	a4/a5/a6
 	rts
 
@@ -46516,33 +48810,33 @@ deliEnd:
 .noIntUsed
 
 	move.l	#DTP_StopInt,d0
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 
 	move.l	#DTP_EndSound,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 
 	move.l	#DTP_EndPlayer,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	
 	move.l	#EP_StructEnd,d0  
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 
-	bsr.w	clearsound
+	jsr  	clearsound
 
 	move.l	#EP_EjectPlayer,d0
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	
 	popm	d1-a6
 	rts
 
 deliSong
 	bsr.b	deliStop
-	bsr.w	deliGetSongInfo
+	bsr	deliGetSongInfo
 	* returns
 	* d1 = min song
 	* d2 = max song
@@ -46560,12 +48854,12 @@ deliSong
 	move	d0,dtg_SndNum(a0)
 
 	move.l	#DTP_InitSound,d0
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	move.l	#DTP_StartInt,d0
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
-	bsr.w	deliUpdatePositionInfo
+	bsr	deliGetTag
+	bsr	deliCallFunc
+	bsr	deliUpdatePositionInfo
 	rts
 
 * Not sure what exactly should be done with these two.
@@ -46573,11 +48867,11 @@ deliSong
 deliStop
 	DPRINT	"deliStop"
 	move.l	#DTP_EndSound,d0
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	;bsr	deliCallFunc	;;**
 	move.l	#DTP_StopInt,d0
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	jsr	clearsound
 	;move	#$f,$dff096
 	rts
@@ -46585,26 +48879,26 @@ deliStop
 deliCont
 	DPRINT	"deliCont"
 	move.l	#DTP_InitSound,d0
-	bsr.w	deliGetTag
+	bsr	deliGetTag
 	;bsr	.callFunc
 	move.l	#DTP_StartInt,d0
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	move	#$800f,$dff096
 	rts
 
 deliForward
 	DPRINT	"deliForward"
 	move.l	#DTP_NextPatt,d0
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	rts
 
 deliBackward
 	DPRINT	"deliBackward"
 	move.l	#DTP_PrevPatt,d0
-	bsr.w	deliGetTag
-	bsr.w	deliCallFunc
+	bsr	deliGetTag
+	bsr	deliCallFunc
 	rts
 
 deliVolume	
@@ -46810,7 +49104,7 @@ _deliDataSize		rs.b	0
 	cmp.l	a1,a2
 	bne.b	.jumps
 	; Ensure jump table code is flushed
- 	jmp     clearCpuCaches
+	bra 	funcENPP_ClearCache
 
 .songEnd
 	* May be called from interrupt, no logging allowed
@@ -46857,7 +49151,7 @@ _deliDataSize		rs.b	0
 	lea	var_b,a5
 	move.l	d0,d6
 	move.l	d1,d7
-	bsr.w	deliFindEmptyListDataSlot
+	bsr	deliFindEmptyListDataSlot
 	bne.b	.err
 	move.l	a1,a3 
 	move.l	d6,d0
@@ -46897,7 +49191,7 @@ deliFreeAudio
 	rts
 
 deliCopyString move.l a0,d0
-	bsr.w	deliAppendStr
+	bsr	deliAppendStr
  if DEBUG
 	move.l	deliPathArray+var_b,d1
 	DPRINT	"copyString %s path=%s"
@@ -46906,7 +49200,7 @@ deliCopyString move.l a0,d0
 	rts
 deliCopyFile 
 	move.l	dtg_FileArrayPtr(a5),a0
-	bsr.w	deliAppendStr
+	bsr	deliAppendStr
  if DEBUG
 	move.l	deliPathArray+var_b,d0
 	DPRINT	"copyFile path=%s"
@@ -46915,7 +49209,7 @@ deliCopyFile
 	rts
 deliCopyDir 
 	move.l	dtg_DirArrayPtr(a5),a0
-	bsr.w	deliAppendStr
+	bsr	deliAppendStr
  if DEBUG
 	move.l	deliPathArray+var_b,d0
 	DPRINT	"copyDir path=%s"
@@ -47119,24 +49413,24 @@ funcENPP_ClearCache
 	;DPRINT "ENPP_ClearCache"
 	jmp clearCpuCaches
 funcENPP_GetListData
-	bra.w	deliGetListData
+	bra	deliGetListData
 funcENPP_LoadFile
-	bra.w	deliLoadFile
+	bra	deliLoadFile
 funcENPP_CopyDir
 	DPRINT "ENPP_CopyDir"
-	bra.w	deliCopyDir
+	bra	deliCopyDir
 funcENPP_CopyFile
 	DPRINT "ENPP_CopyFile"
-	bra.w	 deliCopyFile
+	bra	 deliCopyFile
 funcENPP_CopyString
 	DPRINT "ENPP_CopyString"
-	bra.w	deliCopyString
+	bra	deliCopyString
 funcENPP_AllocAudio
 	DPRINT "ENPP_AllocAudio"
-	bra.w deliAllocAudio
+	bra deliAllocAudio
 funcENPP_FreeAudio
 	DPRINT "ENPP_FreeAudio"
-	bra.w deliFreeAudio
+	bra deliFreeAudio
 funcENPP_SongEnd
 	;DPRINT "ENPP_SongEnd"
 	jmp	 dtg_SongEnd(a5)
@@ -47148,13 +49442,13 @@ funcENPP_WaitAudioDMA
 	jmp dmawait
 funcENPP_ModuleChange
 	DPRINT "ENPP_ModuleChange"
-	bra.w	deliModuleChange
+	bra	deliModuleChange
 funcENPP_AllocAmigaAudio
 	;DPRINT "ENPP_AllocAmigaAudio"
-	bra.w	deliAllocAudio
+	bra	deliAllocAudio
 funcENPP_FreeAmigaAudio
 	;DPRINT "ENPP_FreeAmigaAudio"
-	bra.w deliFreeAudio
+	bra deliFreeAudio
 
 * Sequence (kpl14.s):
 * - Stop channel DMAs
@@ -47530,12 +49824,12 @@ deliNotePlayer
 		;movem.l	a4-a6,-(a7)
 		;move.l	PufferAdr(pc),a5
 		;move.l	DT_NoteStruct(a5),d0
-		;beq.w	.Return
+		;beq	.Return
 		move.l	d0,a4
 		move.l	4(a4),d7	;Flags
 				
 		move.l	(a4),d0
-		beq.w	.Return
+		beq	.Return
 		move.l	d0,a4
 
 		*--------- neue Note (= DMA off) ---------*
@@ -47725,7 +50019,7 @@ deliModuleChange
 
 	bsr.b 	.patch
 	popm	all
-	bra.w	funcENPP_ClearCache
+	bra	funcENPP_ClearCache
 	
 .notSupp
 	DPRINT	"Unsupported params!"
@@ -48099,8 +50393,8 @@ EEP_SamplePlayer    dc.b "EP_SamplePlayer",0
 
 deliShowFlags
 	move.l	#EP_Flags,d0
-	bsr.w	deliGetTag
-	beq.w	.noFlags
+	bsr	deliGetTag
+	beq	.noFlags
 	btst	#EPF_Songend,d0
 	beq.b	.f10
 	DPRINT	"EPF_Songend"
@@ -48187,7 +50481,7 @@ deliShowFlags
 
 deliShowNoteStruct
 	move.l	deliStoredNoteStruct(a5),d0
-	beq.w 	.x
+	beq 	.x
 
 	DPRINT	"NoteStruct: %lx"
 
@@ -48274,7 +50568,7 @@ deliShowNoteStruct
 	rts
 
 
- endif
+ endif ; DEBUG
 
 ****************************************************************************
 *
@@ -48291,6 +50585,7 @@ deliShowNoteStruct
 plainLoadFile:
 	pushm	d2-a6
 	moveq	#0,d7
+    moveq   #0,d5
 
 	move.l	_DosBase(a5),a6
 	move.l	a0,d1
@@ -48444,7 +50739,7 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	add	#FFT_LENGTH*2,a0
 	move.l	a0,s_spectrumImagData(a4)
 
-	bsr.w	prepareSpectrumSineTable
+	bsr	prepareSpectrumSineTable
 	bsr.b	prepareSpectrumVolumeTable
 	bsr.b	prepareSpectrumMuluTable
 	bsr.b	prepareSpectrumExpTable
@@ -48689,10 +50984,13 @@ prepareSpectrumSineTable
 
 runSpectrumScope
 	tst.b	s_spectrumInitialized(a4)
-	beq.w	.x
+	beq	.x
 
 	cmp	#pt_multi,playertype(a5)
-	beq.b	.ps3m
+    bne.b   .notMulti
+    tst.b   ahi_use_nyt(a5)
+    beq.b   .ps3m
+.notMulti
     cmp     #pt_xmaplay,playertype(a5)
     beq.b   .ps3m
     jsr     playSidInRESIDMode
@@ -48702,35 +51000,36 @@ runSpectrumScope
 	bra.b	.normal
 
 .ps3m
-	bsr.w	spectrumGetPS3MSampleData
+	bsr	spectrumGetPS3MSampleData
 	bra.b	.go
 .sample
-	bsr.w	spectrumGetSampleData
+	bsr	spectrumGetSampleData
+    beq     .x 
 	bra.b	.go
 .normal
-	bsr.w	spectrumCopySamples
+	bsr	spectrumCopySamples
 * A500 average = 2ms
-	bsr.w	spectrumMixSamplesNew
+	bsr	spectrumMixSamplesNew
 * A500 average = 4ms
 
 .go
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumSineTable(a4),a2
-	bsr.w	windowFFT
+	bsr	windowFFT
 * A500 average = 2ms
 
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
 	move.l	s_spectrumSineTable(a4),a2
-	bsr.w	sampleFFT
+	bsr	sampleFFT
 * A500 average = 39ms (old: 52ms)
 
 	move.l	s_spectrumMixedData(a4),a0
 	move.l	s_spectrumImagData(a4),a1
-	bsr.w	loudnessFFT
+	bsr	loudnessFFT
 * A500 average = 8ms
 
-	bsr.w	drawFFT
+	bsr	drawFFT
 * A500 average = 1ms
 
 	* Vertical fill
@@ -48988,7 +51287,7 @@ spectrumMixSamples
 
 .mixSample
 	move	ns_tempvol(a1),d0
-	bsr.w	getSpectrumVolumeTable
+	bsr	getSpectrumVolumeTable
 	; out: a2 = voltab
 
 	move	ns_period(a1),d0
@@ -49056,7 +51355,7 @@ spectrumMixSamples
 spectrumMixSamplesNew
 	lea	scopeData+scope_ch1(a5),a1
 	move	ns_tempvol(a1),d0
-	bsr.w	getSpectrumVolumeTable
+	bsr	getSpectrumVolumeTable
 	move.l	a2,a3
 	; a3 = ch1 voltab
 	move	ns_period(a1),d0
@@ -49066,7 +51365,7 @@ spectrumMixSamplesNew
 
 	lea	scopeData+scope_ch2(a5),a1
 	move	ns_tempvol(a1),d0
-	bsr.w	getSpectrumVolumeTable
+	bsr	getSpectrumVolumeTable
 	; a2 = ch2 voltab
 	move	ns_period(a1),d0
 	bsr.b	calcSampleStep
@@ -49117,20 +51416,20 @@ spectrumMixSamplesNew
 
 	lea	scopeData+scope_ch3(a5),a1
 	move	ns_tempvol(a1),d0
-	bsr.w	getSpectrumVolumeTable
+	bsr	getSpectrumVolumeTable
 	move.l	a2,a3
 	; a3 = ch3 voltab
 	move	ns_period(a1),d0
-	bsr.w	calcSampleStep
+	bsr	calcSampleStep
 	move.l	d1,d2
 	; d2 = ch3 step
 
 	lea	scopeData+scope_ch4(a5),a1
 	move	ns_tempvol(a1),d0
-	bsr.w	getSpectrumVolumeTable
+	bsr	getSpectrumVolumeTable
 	; a2 = ch4 voltab
 	move	ns_period(a1),d0
-	bsr.w	calcSampleStep
+	bsr	calcSampleStep
 	; d1 = ch4 step
 
 	move.l	s_spectrumChannel3(a4),a0	
@@ -49246,21 +51545,16 @@ spectrumGetPS3MSampleData
 	move.l	(a0),d1
     moveq   #4,d4   * scale factor
 
-    * For reSID the mask is not a bitmask, instead 
-    * it is around 140. Force to it to be 127 here.
-    jsr     playSidInRESIDMode
-    beq.b   .skipz
-    moveq   #FFT_LENGTH-1,d1
-    moveq   #5,d4   * Scale factor
-.skipz
-
 	move.l	ps3m_buff1(a5),a0
 	move.l	(a0),a0
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
-	
 	move.l	s_spectrumMixedData(a4),a2
-	moveq	#FFT_LENGTH-1,d7
+	moveq	#FFT_LENGTH-1,d7    * = 128
+
+    jsr     playSidInRESIDMode
+    bne    .resid
+
 .loop
 	move.b	(a0,d0.l),d2
 	move.b	(a1,d0.l),d3
@@ -49269,16 +51563,43 @@ spectrumGetPS3MSampleData
 	add	d3,d2
 	asl	d4,d2   * scaling!
 	move	d2,(a2)+
-	addq	#1,d0
-	and	d1,d0   * mask must be a bitmask 
+	addq.l	#1,d0
+    * End bound check
+    and.l   d1,d0
 	dbf	d7,.loop
-
 	rts
+
+.resid  
+    * buffer size is in d1, it can be 277
+    * or down to 46.
+
+.rloop
+	move.b	(a0,d0.l),d2
+	move.b	(a1,d0.l),d3
+	ext	d2
+	ext	d3
+	add	d3,d2
+	asl	    #5,d2   * scaling!
+    move	d2,(a2)+
+	addq.l	#1,d0
+    * See if data ran out:
+    cmp.l   d1,d0
+    blo.b   .2
+    moveq   #0,d0
+.2
+	dbf	d7,.rloop
+    rts
 
 spectrumGetSampleData
 	jsr	samples0
+    bne .gotData
+    rts
+.gotData
 	* d5 = follow offset
 	* d4 = buffer size mask
+
+    bsr     getSampleDataModulo
+    * d0 = sample data modulo, 1 or 2
 
 	move.l	s_spectrumMixedData(a4),a3
 	moveq	#FFT_LENGTH/2-1,d7
@@ -49296,12 +51617,13 @@ spectrumGetSampleData
 	asl	#5,d2 * scale
 	move	d2,(a3)+
 	
-	addq.l	#1,d5
+	add.l	d0,d5
 	cmp.l	d4,d5
-	bne.b	.1
+	blo.b	.1
 	moveq	#0,d5
 .1
 	dbf	d7,.mloop
+    moveq   #1,d0
 	rts
 
 .stereo
@@ -49316,9 +51638,9 @@ spectrumGetSampleData
 	asl	#4,d2 * scale
 	move	d2,(a3)+
 
-	addq.l	#1,d5
+	add.l	d0,d5
 	cmp.l	d4,d5
-	bne.b	.2
+	blo.b	.2
 	moveq	#0,d5
 .2
 	dbf	d7,.sloop
@@ -49353,6 +51675,7 @@ createlistBoxRegion
 	add		#127-62-1,d3 * magic constant
 
 	add	boxy(a5),d3
+    sub BOTTOM_MARGIN(a5),d3
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	add	windowtop(a5),d3
@@ -49488,7 +51811,6 @@ initializeButtonRowLayout
 	bsr.b	.do
 	lea	row2Gadgets,a0
 ;	bsr.b	.do
-;	rts
 	
 .do
 .1	tst	(a0)
@@ -49535,7 +51857,7 @@ horizontalLayout:
 	bsr.b	.do
 	lea	row2Gadgets,a0
 ;	bsr.b	.do
-;	rts
+
 
 .do
 .1	tst	(a0)
@@ -49572,7 +51894,7 @@ horizontalLayout:
 ;   a1 = gadget
 .centerContent
 	tst.l	gg_GadgetText(a1)
-	bne.b	.centerText
+	bne.b	centerGadgetText
 	move	gg_Flags(a1),d0
 	and	#GFLG_GADGIMAGE,d0
 	bne.b	.centerImage
@@ -49586,7 +51908,9 @@ horizontalLayout:
 	move	d3,ig_LeftEdge(a2)
 	rts
 
-.centerText
+* In:
+*   a1 = gadget
+centerGadgetText:
 	push	a0
 	move.l	gg_GadgetText(a1),a2
 
@@ -49607,13 +51931,18 @@ horizontalLayout:
 	lore	GFX,TextLength
 	pop	a1
 
+    push    d0
+	move	gg_Width(a1),d0
+    ext.l   d0
+    pop d0
+
 	; center	
 	move	gg_Width(a1),d3
 	sub	d0,d3
 	bpl.b	.p
 	moveq	#0,d3
 .p
-	addq	#1,d3 * round up
+	;;;addq	#1,d3 * round up
 	lsr		#1,d3
 	move	d3,it_LeftEdge(a2)
 	
@@ -49623,6 +51952,9 @@ horizontalLayout:
 ***************************************************************************
 *
 * Vertical layout
+* Layout vertical
+* VerticalLayout
+* LayooutVertical
 *
 ***************************************************************************
 
@@ -49694,11 +52026,35 @@ verticalLayout:
 	lea		gadgetListModeChangeButton,a0
 	subq	#2,d0
 	move	d0,gg_TopEdge(a0)
+ ifeq FEATURE_LIST_TABS
 	lea		gadgetFileSlider,a1
 	add		gg_Height(a0),d0
 	addq	#3,d0
 	move	d0,gg_TopEdge(a1)
-	rts
+ endif
+
+ ifne FEATURE_LIST_TABS
+	lea		gadgetListModeChangeButton,a0
+    move    gg_TopEdge(a0),d0
+   ; add     #14,d0
+    lea     gadgetListModeTab1Button,a1
+    move    d0,gg_TopEdge(a1)
+    add     #14,d0
+    lea     gadgetListModeTab2Button,a1
+    move    d0,gg_TopEdge(a1)
+    add     #14,d0
+    lea     gadgetListModeTab3Button,a1
+    move    d0,gg_TopEdge(a1)
+    add     #14,d0
+    lea     gadgetListModeTab4Button,a1
+    move    d0,gg_TopEdge(a1)
+
+	lea		gadgetFileSlider,a1
+	add		gg_Height(a0),d0
+	addq	#3,d0
+	move	d0,gg_TopEdge(a1)
+ endif
+ 	rts
 	
 * in:
 *   a0 = gadget row
@@ -49853,26 +52209,46 @@ verticalLayout:
 *
 ***************************************************************************
 
-SEARCH_MODLAND = 0
-SEARCH_AMINET  = 1
-SEARCH_MODULES = 2
-SEARCH_HVSC    = 3
+SEARCH_MODLAND          = 0
+SEARCH_AMINET           = 1
+SEARCH_MODULES          = 2
+SEARCH_HVSC             = 3
+SEARCH_AMIGAREMIX       = 4
+SEARCH_RKO              = 5
+SEARCH_STATIONS         = 6
+SEARCH_RECENT_PLAYLISTS = 7
 
 modlandSearch
 	moveq	#SEARCH_MODLAND,d7
-	bra.b	remoteSearch
+	bra 	remoteSearch
 
 aminetSearch
 	moveq	#SEARCH_AMINET,d7
-	bra.b	remoteSearch
+	bra 	remoteSearch
 
 modulesSearch
 	moveq	#SEARCH_MODULES,d7
-	bra.b	remoteSearch
+	bra 	remoteSearch
 
 hvscSearch
 	moveq	#SEARCH_HVSC,d7
-;	bra.b	remoteSearch
+	bra 	remoteSearch
+
+amigaRemixSearch
+	moveq	#SEARCH_AMIGAREMIX,d7
+	bra 	remoteSearch
+
+rkoSearch
+	moveq	#SEARCH_RKO,d7
+	bra 	remoteSearch
+
+stationsSearch
+	moveq	#SEARCH_STATIONS,d7
+	bra 	remoteSearch
+
+recentPlaylistsSearch
+	moveq	#SEARCH_RECENT_PLAYLISTS,d7
+	bra 	remoteSearch
 
 
 * Requests a search pattern from the user,
@@ -49889,42 +52265,46 @@ remoteSearch
 .go
 	jsr		lockMainWindow
 
-	* Storage space for user input
-	lea	-50(sp),sp
-	move.l	sp,a1
-	clr.b	(a1)
-	jsr		get_rt
-	; a1 = string buffer
-	; d0 = max chars
-	moveq	#40,d0
-	; a2 = requester title
-
-    lea     enterSearchPattern_t,a2 
-	; a3 = rtReqInfo structure or null
-	sub.l	a3,a3
-	; a0 = tags, to set the public screen
-	lea		otag15,a0
-	lob		rtGetStringA
-; d0 = true if something entered, false otherwise
-	tst.l	d0
-	beq		.exit
-
-	jsr		inforivit_searching
+	lea	.srh(pc),a0
+	jsr		printbox
+	bra.b	.srhh
+.srh
+	dc.b	"Searching...",0
+ even
+.srhh
 
 	* Prepare script into desbuf(a5)
-	lea		.modlandSearchCmd(pc),a0
+
+    lea     .genericSearchCmd(pc),a0
+	lea 	.modlandResultsPath(pc),a1
 	cmp.b	#SEARCH_MODLAND,d7
 	beq.b	.1
-	lea		.aminetSearchCmd(pc),a0
-	cmp.b	#SEARCH_AMINET,d7
-	beq.b	.1
-	lea		.modulesSearchCmd(pc),a0
+	lea 	.modulesResultsPath(pc),a1
     cmp.b   #SEARCH_MODULES,d7
     beq.b   .1
-    lea     .hvscSearchCmd(pc),a0
+	lea 	.hvscResultsPath(pc),a1
+    cmp.b   #SEARCH_HVSC,d7
+    beq.b   .1
+	lea 	.amigaRemixResultsPath(pc),a1
+    cmp.b   #SEARCH_AMIGAREMIX,d7
+    beq     .1
+	lea 	.rkoResultsPath(pc),a1
+    cmp.b   #SEARCH_RKO,d7
+    beq.b   .1
+	lea		.stationsSearchCmd(pc),a0
+	lea 	.stationsResultsPath(pc),a1
+    cmp.b   #SEARCH_STATIONS,d7
+    beq     .1
+	lea		.recentPlaylistsSearchCmd(pc),a0
+	lea 	.recentPlaylistsResultsPath(pc),a1
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+    beq     .1
+	lea		.aminetSearchCmd(pc),a0
+	lea 	.aminetResultsPath(pc),a1
 .1
-    pushpea .pathCmd(pc),d0  * path setting
- 	move.l	sp,d1		* search word
+    pushpea .pathCmd(pc),d0  * path cmd
+    move.l  a1,d1       * search cmd/search name
+ 	move.l	#gadgetSearchStringBuffer,d2		* search terms
 	jsr		desmsg
 
 	* Save it into a file for execution
@@ -49945,11 +52325,23 @@ remoteSearch
 	tst.l	d0
 	bmi		.exit
 
+    ; Redirect output to file, this contains error messages.
+    ; Output is not used here!
+    move.l  #searchOut,d1
+    move.l  #MODE_NEWFILE,d2
+    lore    Dos,Open
+    move.l  d0,d4
+    beq     .exit
+
 	pushpea	remoteExecute(pc),d1
-	moveq	#0,d2			* input
-	move.l	nilfile(a5),d3	* output
-	lore	Dos,Execute
+	moveq	#0,d2       * input
+	move.l	d4,d3	    * output
+    move.l  nilfile(a5),d3
+	lob     Execute
 	DPRINT	"Execute status=%ld"
+
+    move.l  d4,d1
+    lob     Close
 
 	* Prepare results path into stack
 	lea		-100(sp),sp
@@ -49962,7 +52354,7 @@ remoteSearch
 	tst.l	d0
 	bpl.b	.gotVar
 	moveq	#0,d0
-	bra.b	.bail
+	bra     .bail
 .gotVar
 
 	lea		.modlandResultsPath(pc),a0
@@ -49975,6 +52367,18 @@ remoteSearch
     cmp.b   #SEARCH_MODULES,d7
     beq.b   .a
     lea     .hvscResultsPath(pc),a0
+    cmp.b   #SEARCH_HVSC,d7
+    beq.b   .a
+    lea     .amigaRemixResultsPath(pc),a0
+    cmp.b   #SEARCH_AMIGAREMIX,d7
+    beq     .a
+    lea     .rkoResultsPath(pc),a0
+    cmp.b   #SEARCH_RKO,d7
+    beq     .a
+    lea     .stationsResultsPath(pc),a0
+    cmp.b   #SEARCH_STATIONS,d7
+    beq     .a
+    lea     .recentPlaylistsResultsPath(pc),a0
 .a
 
 	* Jump to after the variable
@@ -50000,8 +52404,6 @@ remoteSearch
 	pushm	all
 	* free previous list
 	bsr		freeSearchList
-	* ensure the correct mode is active
-	jsr		engageSearchResultsMode
 	popm	all
 
 	; start of data
@@ -50025,6 +52427,25 @@ remoteSearch
     beq.b   .2
 	pushpea	.hvscLine(pc),d6
 	moveq	#.hvscLineE-.hvscLine,d4	
+    cmp.b   #SEARCH_HVSC,d7
+    beq.b   .2
+	pushpea	.amigaRemixLine(pc),d6
+	moveq	#.amigaRemixLineE-.amigaRemixLine,d4	
+    cmp.b   #SEARCH_AMIGAREMIX,d7
+    beq     .2
+	pushpea	.rkoLine(pc),d6
+	moveq	#.rkoLineE-.rkoLine,d4	
+    cmp.b   #SEARCH_RKO,d7
+    beq     .2
+    moveq   #0,d6   * No base header to prepend
+    * Additional space for readable name
+    moveq   #100,d4  * Base header length, add extra space in this case
+    cmp.b   #SEARCH_STATIONS,d7
+    beq     .2
+    * RECENT_PLAYLISTS
+    pushpea	.recentPlaylistsLine(pc),d6 
+    * Add extra space for visible name
+	move.l	#.recentPlaylistsLineE-.recentPlaylistsLine+100,d4	
 	bra.b	.2
 .aa
 	pushpea	.aminetLine(pc),d6
@@ -50042,6 +52463,7 @@ remoteSearch
 ;	move.l	a0,d4
 ;	sub.l	d6,d4 * string length in d4
 .2
+    ; ---------------------------------
 
 	* Import data
 	* This will also set l_remote and l_nameaddr
@@ -50053,24 +52475,139 @@ remoteSearch
 .3	jsr		importModuleProgramFromDataSkipHeader
 	move.l	d0,modamount(a5)
 
-	move.l	a3,a0
+	move.l	a3,a0   
 	jsr		freemem
-	
+
+    bsr     .postProcessSearchResults
+
+    
 	tst.b	autosort(a5)
 	beq.b	.noSort
+	jsr		engageSearchResultsMode
+    * Sort will select the 1st item
+    * engageSearcuResultsMode will clear the selection,
+    * so do it in this order?
 	jsr		sortButtonAction
-	bra.b	.sorted
+	jsr		releaseModuleList
+    bra     .sortX
 .noSort
-	jsr		forceRefreshList
 .sorted
 	jsr		releaseModuleList
 .exit
-.noAminet
-	jsr		inforivit_play
-	jsr		unlockMainWindow
-	lea 	50(sp),sp
-	rts
+	jsr		engageSearchResultsMode
+.sortX
+	jmp		unlockMainWindow
+    
 
+.postProcessSearchResults
+    ; ---------------------------------
+    * Postprocess step
+    ; Get readable name from search results
+    ; for stations, playlists
+
+    moveq   #0,d3
+   
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+    beq     .s22
+    cmp.b   #SEARCH_STATIONS,d7
+    bne     .s2
+.s22
+
+    lea     searchResultsOut(pc),a0
+    jsr     plainLoadFile
+    move.l  d0,d3
+    beq     .s2
+    tst.l   d1
+    beq     .s2
+    move.l  d3,a2
+
+    ; Find column for "Name" for radio stations
+    ; Find column for "Title" for playlists
+    ; This loop does not have boundary checks!
+.z1 
+    cmp.b   #SEARCH_STATIONS,d7
+    beq     .rs1
+    moveq   #5-1,d1 * chars to skip over
+    cmp.b   #"T",(a2)+
+    bne.b   .z1
+    cmp.b   #"i",(a2)
+    bne.b   .z1
+    cmp.b   #"t",1(a2)
+    bne.b   .z1
+    cmp.b   #"l",2(a2)
+    beq.b   .pl1
+    bra     .z1
+.rs1
+    moveq   #4-1,d1 * chars to skip over
+    cmp.b   #"N",(a2)+
+    bne.b   .z1
+    cmp.b   #"a",(a2)
+    bne.b   .z1
+    cmp.b   #"m",1(a2)
+    bne.b   .z1
+    cmp.b   #"e",2(a2)
+    bne.b   .z1
+.pl1
+    * d0 = Name start column
+    move.l  a2,d0
+    subq.l  #1,d0
+    add     d1,a2   * skip to the next space to find out the next column
+.z2 cmp.b   #" ",(a2)+
+    beq     .z2
+    * d1 = name end column
+    move.l  a2,d1
+    * d1 = name length
+    sub.l   d0,d1
+    subq.l  #1,d1
+    * Set upper limit to not overflow buffer,
+    * this was allocated earlier.
+    cmp.l   #99,d1
+    bls.b   .z3
+    moveq   #99,d1
+.z3
+    * d0 = name offset
+    sub.l   d3,d0
+    subq.l  #4,d0
+    
+    * skip header, 1st line starts with "0"
+.s0 cmp.b   #"0",(a2)+
+    bne     .s0
+    subq    #1,a2
+
+    jsr     getVisibleModuleListHeader
+    move.l  a0,a3
+.s1
+	TSTNODE	a3,a3
+	beq.b	.s2
+    st      l_remote(a3)
+    lea     l_filename(a3),a1
+    
+    * Find end of filename, after it there are extra bytes
+    * for the visible name.
+.s4 tst.b   (a1)+
+    bne     .s4
+    ; after the NULL put the extra name
+    move.l  a1,l_nameaddr(a3)
+    st      l_separateName(a3)
+
+    * Copy name, starts here
+    add     d0,a2
+    move    d1,d2
+.s7 move.b  (a2)+,(a1)+
+    subq    #1,d2
+    bne     .s7
+    clr.b   (a1)
+
+    * Skip to next line
+.s3 cmp.b   #10,(a2)+
+    bne     .s3
+	bra.b	.s1
+.s2
+
+    * Free loaded searchout file data
+    move.l  d3,a0
+    jmp     freemem
+    
 
 * In:
 *   a3 = name to check, ends with 10 or 0
@@ -50104,12 +52641,13 @@ remoteSearch
 	dc.l	"bss "
 	dc.l	"cm  "
 	dc.l	"cus "
+	dc.l	"dbm "
 	dc.l	"dbm0"
 	dc.l	"digi"
 	dc.l	"dl  "
 	dc.l	"dln "
 	dc.l	"dm  "
-	dc.l	"dm2" 
+	dc.l	"dm2 " 
 	dc.l	"dmu "
 	dc.l	"dum "
 	dc.l	"dw  "
@@ -50167,6 +52705,7 @@ remoteSearch
 	dc.l	"spn "
 	dc.l	"sqt "
 	dc.l	"sun "
+    dc.l    "syn "
 	dc.l	"tcb "
 	dc.l	"tf  "
 	dc.l	"thx "
@@ -50200,61 +52739,146 @@ remoteSearch
     dc.b    "http://hvsc.csdb.dk/",0     
 .hvscLineE
 
+.amigaRemixLine
+    dc.b    "http://uhc.amigaremix.com/",0
+.amigaRemixLineE
+
+.rkoLine
+    dc.b    "http://uhc.remix.kwed.org/",0
+.rkoLineE
+
+.recentPlaylistsLine
+	dc.b	"http://asciiarena.se/",0
+.recentPlaylistsLineE
+
 .uhcTempDirVar
 	dc.b	"UHC/TEMPDIR",0
 
 .pathCmd
     dc.b    'path "${UHCBIN}C" "${UHCBIN}S" ADD',0
 
+.genericSearchCmd
+	dc.b	"%s",10     ; path
+	dc.b 	'%s SEARCHLIMIT=10000 %s',10  ; search, terms
+	dc.b	0
+
 .modlandResultsPath
 	dc.b	"modlandsearch",0
-.modlandSearchCmd
-	dc.b	"%s",10
-	dc.b 	'modlandsearch %s',10
-	dc.b	0
 .aminetResultsPath
 	dc.b	"aminetsearch",0
 .aminetSearchCmd
 	dc.b	"%s",10
-	dc.b 	'aminetsearch mods/ %s',10
+	dc.b 	'%s mods/ %s',10
 	dc.b	0
+
 .modulesResultsPath
 	dc.b	"modulessearch",0
-.modulesSearchCmd
-	dc.b	"%s",10
-	dc.b 	'modulessearch %s',10
-	dc.b	0
 .hvscResultsPath
 	dc.b	"hvscsearch",0
-.hvscSearchCmd
+.amigaRemixResultsPath
+	dc.b	"amigaremixsearch",0
+.rkoResultsPath
+	dc.b	"rkosearch",0
+.stationsResultsPath
+	dc.b	"stationsearch",0
+.stationsSearchCmd
 	dc.b	"%s",10
-	dc.b 	'hvscsearch %s',10
+	dc.b 	'uhcmirrorsearch SEARCHLIMIT=1000 SEARCHRESULTTO=T:searchresults %s %s',10
 	dc.b	0
+.recentPlaylistsResultsPath
+	dc.b	"playlistrecent",0
+.recentPlaylistsSearchCmd
+	dc.b	"%s",10
+	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s',10
+	dc.b	0
+
+
+remoteExecute
+       dc.b    "execute "
+remoteScriptPath
+       dc.b    "T:hip",0
+
+searchOut = nilname
+;searchOut
+;        dc.b    "T:searchout",0
+searchResultsOut
+        dc.b    "T:searchresults",0
  even
 
 * Set list node remote type and
 * set l_nameaddr to be proper for showing to user.
 * In:
 *   a0 = list node
-configRemoteNode
-	pushm	d0/a0-a2
+configRemoteNode:
+	pushm	d0/a0-a4
 	st		l_remote(a0)
- 
+    ;DPRINT  "configRemoteNode"
+    
  	lea		l_filename(a0),a1
 	move.l	a1,a2
 .findEnd2
 	tst.b	(a1)+
 	bne.b	.findEnd2
 
-	moveq	#2-1,d0
+    ; check if there is "#name=" somewhere.
+    ; before it is the url, after it a visible name
+    ; end bound:
+    move.l  a1,d0
+    subq.l  #8,d0
+    bmi     .noHash * very short string?
+    move.l  d0,a3
+    move.l  a2,a4
+.hash1
+    cmp.l   a4,a3
+    beq     .noHash
+    cmp.b   #"#",(a4)+
+    bne     .hash1
+    cmp.b   #"n",0(a4)
+    bne     .hash1
+    cmp.b   #"a",1(a4)
+    bne     .hash1
+    cmp.b   #"m",2(a4)
+    bne     .hash1
+    cmp.b   #"e",3(a4)
+    bne     .hash1
+    cmp.b   #"=",4(a4)
+    bne     .hash1
+    ; found it!
+    ; terminate file path and store nameaddr
+    clr.b   -1(a4)
+    addq    #5,a4
+    move.l  a4,l_nameaddr(a0)
+    st      l_separateName(a0)
+ if DEBUG
+    ;move.l  a4,d0
+    ;DPRINT  "#name=%s"
+ endif
+    bra     .x
+.noHash
 
+
+	moveq	#2-1,d0
 	* l_filename is odd
+
+    * For some remote sites 
+    * take the last file part only to avoid redundancy
+	* "captain/captain_-_space_debris"
+
+    cmp.l   #"remi",11(a2)
+    bne.b   .4
+    cmp.l   #"x.kw",15(a2)
+    beq.b   .3
+.4
+    cmp.l   #"amig",11(a2)
+    bne.b   .2
+    cmp.l   #"arem",15(a2)
+    beq.b   .3
+.2
 	cmp.l	#"modu",11(a2)
 	bne.b	.1
 	cmp.l	#"les.",15(a2)
 	bne.b	.1
-	* For modules.pl take the last file part only to avoid redundancy
-	* "captain/captain_-_space_debris"
+.3
 	moveq	#1-1,d0
 .1
 
@@ -50267,7 +52891,12 @@ configRemoteNode
 	addq	#1,a1
 .break
 	move.l	a1,l_nameaddr(a0)
-	popm	d0/a0-a2
+
+;    move.l  a1,d0
+;    DPRINT  "nameaddr=%s"
+
+.x
+	popm	d0/a0-a4
 	rts
 
 *
@@ -50283,6 +52912,9 @@ fetchRemoteFile:
 	move.l	a0,d0
 	DPRINT	"fetchRemoteFile: %s"
  endif
+    tst.b   uhcAvailable(a5)
+    beq     .exit
+
 	moveq	#0,d7	* status: fail
 	
 	* Temporary target file path, the last part of the url
@@ -50290,6 +52922,7 @@ fetchRemoteFile:
 .end
 	tst.b	(a2)+
 	bne.b	.end
+    move.l  a2,a4
 .sl	cmp.b	#"/",-(a2)
 	bne.b	.sl
 	addq	#1,a2
@@ -50298,104 +52931,136 @@ fetchRemoteFile:
 	* Build temp file path into a3
 	move.b	#"T",(a3)+
 	move.b	#":",(a3)+
+    * Max 24 chars to be friendly to the file system
+    moveq   #24-1,d1
+    moveq   #0,d0
 .copy
+    addq    #1,d0
 	move.b	(a2)+,(a3)+
-	bne.b	.copy
-
-	* TODO: temp file name must be 30 or less
+	dbeq	d1,.copy
+    cmp     #4,d0
+    bls.b   .skip
+    * Then copy four chars from the end of the original string
+    * to the end, this will preserve the file extension
+    * and include null
+    move.b  -(a4),-(a3)
+    move.b  -(a4),-(a3)
+    move.b  -(a4),-(a3)
+    move.b  -(a4),-(a3)
+    move.b  -(a4),-(a3)
+.skip
 
 	* Source url in a0
 	* Destination file in a1
-	
-	* Generate parametrized script
-	move.l	a0,d0
-	move.l	a1,d1 
-	lea		.getScript(pc),a0
-	jsr		desmsg
 
+    moveq   #0,d5
+    moveq   #0,d6
+    move.l  a0,d4
+
+    * Get a temp buffer    
+    move.l  #$10000,d0
+    moveq   #MEMF_PUBLIC,d1
+    jsr     getmem
+    move.l  d0,a4
+    tst.l   d0
+    beq     .memError
+
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "output=%s"
+ endif
+    move.l  a1,d1
+	move.l	#MODE_NEWFILE,d2
+	lore	Dos,Open
+    DPRINT  "output open=%lx"
+	move.l	d0,d5
+    beq     .writeError
+    * d5 = output file
+
+    push    d4
 	jsr		inforivit_downloading
 	jsr		setMainWindowWaitPointer
+    pop     a0
 
-	* Save into a file to execute
-	lea		desbuf(a5),a0
-	* Find length to d0
-    moveq   #-1,d0  ; phx strlen trick
-.c	tst.b   (a0)+
-	dbeq    d0,.c
- 	not.l   d0
+    * Streamer could have been started earlier.
+    * It may also have finished already by now, if file is small.
+    * a0 = url
+    jsr     startStreaming
+    DPRINT  "startStreaming=%lx"
+    tst.l   d0
+    beq     .streamError
+
+    move.l  a0,d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "input open=%lx"
+    move.l  d0,d6
+    beq     .readError
 
 
-	lea		remoteScriptPath(pc),a0
-	lea		desbuf(a5),a1
-	bsr		plainSaveFile
-	tst.l	d0
-	bmi		.exit * can't save temp file
+    * d6 = stream handle
+    * a4 = temporary buffer
+.loop
+    * Read from input 
+    move.l  d6,d1       * in file
+    move.l  a4,d2       * buffer
+    move.l  #$10000,d3  * length
+    lore    Dos,Read
+    DPRINT  "read=%ld bytes"
+    move.l  d0,d4       * bytes read
+    * d0 = bytes read, 0 = EOF, -1 = error
+    bmi.b   .readError
 
-	pushpea	remoteExecute(pc),d1
-	moveq	#0,d2			* input
-	move.l	nilfile(a5),d3	* output
-	lore	Dos,Execute
-	* d0 = true if was able to run the script
-	move.l	d0,d7
-	beq.b	.exit
+    move.l  d5,d1       * out file
+    move.l  a4,d2       * buffer
+    move.l  d4,d3       * length
+    lob     Write
+    tst.l   d0
+    bmi     .writeError
+    cmp.l   d0,d4
+    bne     .writeError
+    cmp.l   #$10000,d4
+    beq     .loop
+
+    DPRINT  "pipe written to local file"
 	* Set status to ok
 	moveq	#1,d7 
 
-	* Check out status from the output file
-	lea		.agetOut(pc),a0
-	bsr		plainLoadFile
-	tst.l	d0
-	beq.b	.exit
-	tst.l	d1
-	beq.b	.1
-	* Mangle a null terminated line changed error msg, horrible
-	lea		-200(sp),sp
-	move.l	sp,a1
-	move.l	d0,a0
-	moveq	#60,d2
-.e	move.b	(a0)+,(a1)+
-	subq	#1,d2
-	bne.b	.f
-	move.b	#10,(a1)+
-	moveq	#60,d2
-.f	subq	#1,d1
-	bne.b	.e
-	clr.b	(a1)
-	move.l	sp,a1
-	jsr		request
-	lea		200(sp),sp
-	* Status to fail
-	moveq	#0,d7
-.1	move.l	d0,a0
-	jsr		freemem
+.memError
+.streamError
+.writeError  
+.readError
+    move.l  d6,d1
+    beq.b   .x1
+    lore    Dos,Close
+.x1 move.l  d5,d1
+    beq     .x2
+    lore    Dos,Close
+.x2
+    move.l  a4,a0
+    jsr     freemem
+
+    * This stream job is finished.
+    move    #-1,streamReturnCode(a5)
+
+    * See if there was an error message
+    bsr     showStreamerError
+    tst.l   d0
+    beq     .exit
+    * status: error 
+    moveq   #0,d7
 .exit
 	jsr		clearMainWindowWaitPointer
 	move.l	d7,d0
 	popm	d1-a6
+    DPRINT	"fetchRemoteFile status=%ld"
 	rts
 
-.agetOut
-	dc.b	"T:agetout",0
-
-.getScript
-	dc.b	'path "${UHCBIN}C" ADD',10
-	dc.b	'aget "%s" "%s" QUIET >T:agetout',10,0
-remoteExecute
-	dc.b	"execute "
-remoteScriptPath
-	dc.b	"T:hip",0
-
- even
-
-* Checks if UHC is installed
+* Checks if UHC is installed, also checks version
 initializeUHC
 	tst.b	uusikick(a5)
-	bne.b	.go
-	* Remove search results related tooltip
-	lea	tooltipList\.listModeChange,a0
-	move.b	#4,1(a0)
-	rts
-.go
+	beq     .no
+
 	lea		-30(sp),sp
 	pushpea	.uhcBinVar(pc),d1
 	move.l	sp,d2
@@ -50404,10 +53069,41 @@ initializeUHC
 	lore	Dos,GetVar
 	lea		30(sp),sp
 	tst.l	d0
-	spl		uhcAvailable(a5)
+    bmi     .no
+
+    lea     .tags(pc),a0
+    basereg .tags,a0
+    move.l  nilfile(a5),.out(a0)
+    move.l  a0,d2
+    endb    a0
+
+    pushpea .versCmd(pc),d1
+    lob     SystemTagList
+    * d0 = version return code, 0 if OK, 5 if WARN
+    tst.l   d0
+    seq     uhcAvailable(a5)    
+.no
+  ifne FEATURE_LIST_TABS
+    tst.b   uhcAvailable(a5)
+    bne     .really
+    lea     gadgetListModeTab4Button,a0
+    jsr     disableButton
+.really
+  endif
+ if DEBUG   
+    moveq   #1,d0
+    and.b   uhcAvailable(a5),d0
+    DPRINT  "uhc available: %lx"
+ endif
 	rts
 
-.uhcBinVar	dc.b	"UHCBIN",0
+.tags
+    dc.l    SYS_Output,0
+.out = *-4
+    dc.l    TAG_END
+
+.versCmd        dc.b    "version UHC:C/aget 0 84",0
+.uhcBinVar	    dc.b	"UHCBIN",0
  even
 
 
@@ -50786,11 +53482,743 @@ combSortNodeArray
 	bne	.Loop
 
 	cmp.l	d5,d1	; gap < 1 ?
-	Bne.w	.MoreSort
+	Bne	.MoreSort
 	Tst.w	d0		; Any entries swapped ?
-	Bne.w	.MoreSort
+	Bne	.MoreSort
 	Rts
 
+
+***************************************************************************
+*
+* Network data streaming using aget and pipe
+*
+***************************************************************************
+
+streamPipeFile  dc.b    "PIPE:hippoStream",0
+agetHeadersFile dc.b    "T:agetheaders",0
+    even
+
+
+startNewStreaming:
+    * Reset the aget return code to uninitialized value
+    move.w  #-1,streamReturnCode(a5)
+    ; ... fall through
+
+* Starts streaming given url into the name pipe using a separate process
+* Returns if streaming is ongoing already or has been finished.
+* In:
+*   a0 = url
+* Out:
+*   a0 = stream name to read from
+*   d0 = true, or false if error
+startStreaming:
+    pushm   d1-d7/a1-a6
+    DPRINT  "*** startStreaming ***"
+
+    tst.b   uhcAvailable(a5)
+    beq     .x
+
+    moveq   #0,d0
+
+    lore    Exec,Forbid
+    move.l  streamerTask(a5),d6
+    move.w  streamReturnCode(a5),d7
+    lob     Permit
+
+ if DEBUG
+    push    d0
+    move.l  d6,d0
+    move    d7,d1
+    ext.l   d1
+    DPRINT  "task=%lx returnCode=%ld"
+    pop     d0
+ endif
+
+    * Task is already running?
+    tst.l   d6
+    bne     .y
+    * Task is not running, did it finish the previous operation?
+    * streamReturnCode(a5) is -1 if not done.
+    tst.w   d7
+    bpl     .y
+
+;    tst.l   streamerTask(a5)
+;    bne     .y
+    jsr     setMainWindowWaitPointer
+
+    DPRINT  "startStreaming"
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "url=%s"
+ endif
+
+    move.l  a0,a1
+.1  tst.b   (a1)+
+    bne     .1
+    move.l  a1,d0
+    sub.l   a0,d0
+    moveq   #MEMF_PUBLIC,d1
+    jsr     getmem
+    move.l  d0,streamerUrl(a5)
+    beq   .x
+    move.l  d0,a1
+.2  move.b  (a0)+,(a1)+
+    bne     .2
+
+    moveq   #0,d0
+    moveq   #SIGF_SINGLE,d1
+    lore    Exec,SetSignal
+
+    * Capture aget output into a file
+    pushpea agetOutputFile(pc),d1
+    move.l  #MODE_NEWFILE,d2
+    lore    Dos,Open
+    DPRINT  "aget output open=%lx"
+    move.l  d0,streamerProcessOutputHandle
+    beq     .x
+
+    pushpea streamerProcessTags(pc),d1
+    lob     CreateNewProc
+    DPRINT  "CreateNewProc=%lx"
+    beq     .error
+
+    DPRINT  "waiting for streamer start"
+
+    * Wait here until the task is fully running
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Wait
+
+    tst.l   streamerTask(a5)
+    bne.b   .ok
+    DPRINT  "Streamer task failed to start"
+    bra     .error
+.ok
+
+
+    * Wait here until things are looking good
+    DPRINT  "verify stream"
+.verifyLoop
+    moveq   #1*50,d1
+    lore    Dos,Delay
+    * Test #1: Is it running anymore?
+    tst.l   streamerTask(a5)
+    bne     .runs
+    * Nope, is there an error? 
+    tst.l   streamerError(a5)
+    beq     .done
+    * There was, stop here
+    DPRINT  "streamer erroneus stop!"
+    moveq   #0,d0
+    bra     .x
+.runs  
+
+    * Test #2: is there some output in the stdout?
+    * There should be either progress info or an error msg.
+    move.l  streamerProcessOutputHandle(pc),d1
+	moveq	#0,d2
+	moveq	#OFFSET_CURRENT,d3
+    lob     Seek
+    DPRINT  "Seek=%ld"
+    tst.l   d0
+    beq     .verifyLoop
+
+.done
+    lea     agetHeadersFile(pc),a0
+    bsr     plainLoadFile
+    DPRINT  "load headers=%lx len=%ld"
+    tst.l   d1
+    bne     .gotHeaders
+    DPRINT  "no header data"
+    bra     .error
+.gotHeaders
+    push    d0
+    bsr     parseAgetHeaders
+    pop     a0
+    jsr     freemem
+
+
+    bsr     streamIsMpegAudio
+    bne.b   .isMpeg
+    bsr     streamGetContentLength
+    tst.l   d0
+    bne.b   .gotLen
+    ; Not mpeg, does not have length, alert alert
+    DPRINT  "unsupported streaming format"
+    bra     .error
+.gotLen
+.isMpeg 
+
+ if DEBUG
+    bsr     streamIsMpegAudio
+    push    d0
+    bsr     streamGetContentLength
+    pop     d1
+    DPRINT  "streamer started! length=%ld mpeg/audio=%ld"
+ endif
+
+.y
+    lea     streamPipeFile(pc),a0
+    moveq   #1,d0   * status: ok
+.x
+    jsr     clearMainWindowWaitPointer
+    popm    d1-d7/a1-a6
+    rts
+
+.error
+    DPRINT  "error!"
+    ;move.l  streamerProcessOutputHandle(pc),d1
+    ;beq.b   .er
+    ;lore    Dos,Close
+.er
+    moveq   #0,d0   * status: error
+    bra     .x
+
+streamerProcessTags
+    dc.l    NP_Entry,streamerEntry
+    dc.l    NP_Output
+streamerProcessOutputHandle
+    dc.l    0
+    * By default output handle is closed by CreateNewProc
+    * Close it ourselves
+    dc.l    NP_CloseOutput,0
+    dc.l    NP_Name,.name
+    dc.l    TAG_END
+
+.name   
+    dc.b    "HiP-streamer",0
+agetOutputFile
+    dc.b    "T:agetout",0
+    even
+
+* Checks whether streamer is alive
+* Out:
+*    Z clear: alive, Z set: not alive
+streamIsAlive:
+    tst.l    streamerTask(a5)
+ if DEBUG
+    pushm   d0
+    move.l  streamerTask(a5),d0
+    beq.b   .1
+    DPRINT  "streamIsAlive=%lx"
+.1  tst.l   d0
+    popm    d0
+ endif
+    rts
+*
+*
+* Streamer process
+*
+*
+streamerEntry:
+
+    rsreset
+.uhcPathFormatted   rs.b    50
+.agetCmdFormatted   rs.b    100
+.agetArgsFormatted  rs.b    1000
+.varsSize           rs.b    0
+   
+    lea     var_b,a5
+    lea     -.varsSize(sp),sp
+    move.l  sp,a4
+
+    DPRINT  "stream:task started"
+    sub.l   a1,a1
+    lore    Exec,FindTask
+    move.l  d0,streamerTask(a5)
+  
+    bsr     freeStreamerError
+
+    * Remove previous headers if any
+    pushpea agetHeadersFile(pc),d1
+    lore    Dos,DeleteFile
+
+    pushpea .envVarName(pc),d1     * variable name
+    pushpea .uhcPathFormatted(a4),d2     * output buffer
+    moveq   #50-1,d3            * space available
+    move.l  #GVF_GLOBAL_ONLY,d4 * global variable
+    lob     GetVar
+    tst.l   d0
+    bmi     .error
+    
+
+    pushpea .uhcPathFormatted(a4),d0
+    DPRINT  "stream:UHCBIN=%s"
+
+    lea     .agetCmd(pc),a0
+    lea     .agetCmdFormatted(a4),a3
+    jsr     desmsg3
+
+    pushpea .agetCmdFormatted(a4),d0
+    DPRINT  "stream:cmd=%s"
+
+    pushpea .agetCmdFormatted(a4),d1
+    lob     LoadSeg
+    move.l  d0,d6
+    beq     .error
+    DPRINT  "stream:LoadSeg=%lx"
+
+    pushpea agetHeadersFile(pc),d0
+    move.l	streamerUrl(a5),d1
+    lea     .args(pc),a0
+    lea     .agetArgsFormatted(a4),a3
+    jsr     desmsg3
+
+    lea     streamerUrl(a5),a1
+    move.l  (a1),a0
+    clr.l   (a1)
+    jsr     freemem
+
+    * length of args
+    lea     .agetArgsFormatted(a4),a0
+    move.l  a0,a1
+.fe   
+    tst.b   (a0)+
+    bne.b   .fe
+    move.l  a0,d4
+    sub.l   a1,d4
+    subq.l  #1,d4   
+
+ ifne DEBUG
+    pushpea .agetArgsFormatted(a4),d0
+    DPRINT  "stream:args=%s"
+    move.l  d4,d0
+    DPRINT  "stream:len=%ld"
+ endif
+    bsr     .notify
+
+    move.l  d6,d1       * seglist
+    move.l  #4096*2,d2  * stack size, 8k recommended for aget
+    pushpea .agetArgsFormatted(a4),d3 * argptr
+                          * d4 = arg size
+    lore    Dos,RunCommand
+    * aget return code in d0, 0 = OK
+    move.l  d0,d5
+    DPRINT  "stream:runCommand=%ld (0=OK)"
+
+    move.l  d6,d1
+    beq.b   .a
+    lob     UnLoadSeg
+    DPRINT  "stream:UnLoadSeg"
+.a
+
+    * Manual closing of the output file handle, so it can be read below.
+    lea     streamerProcessOutputHandle(pc),a0
+    move.l  (a0),d1
+    clr.l   (a0)
+    tst.l    d1
+    beq.b   .b
+    lob      Close
+    DPRINT  "stream:Close agetout"
+.b
+
+    * Check aget output for errors.
+    moveq   #0,d7
+    tst.l   d5
+    beq     .t
+    DPRINT  "stream:load output"
+
+    * Read the file
+	lea		agetOutputFile(pc),a0
+	bsr		plainLoadFile
+    DPRINT  "stream:aget message grabbed, addr=%lx len=%ld"
+    move.l  d1,streamerErrorLength(a5)
+    move.l  d0,d7
+	beq.b	.t
+    tst.l   d1
+    bne     .t
+    * It should never be empty, free it and quit
+    move.l  d7,a0
+    jsr     freemem
+    moveq   #0,d7
+.t
+
+    DPRINT  "stream:task stopped"
+.x
+    lea     .varsSize(sp),sp
+    lore    Exec,Forbid
+    move.w  d5,streamReturnCode(a5)
+    move.l  d7,streamerError(a5)
+    clr.l   streamerTask(a5)
+    rts
+
+.notify
+    ; Notify main task
+    move.l  owntask(a5),a1
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Signal
+    rts
+
+.error
+    DPRINT  "stream:start error"
+    bsr     .notify
+    bra     .x
+
+.envVarName
+    dc.b    "UHCBIN",0
+
+.agetCmd
+    dc.b	'%sC/aget',0
+
+.args
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/16384/4 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
+;	dc.b	'"%s" PIPE:hippoStream/32768/4 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/8 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=4096',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=131072',10,0
+;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
+;	dc.b	'"%s" PIPE:hippoStream/4096/128 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=262144',10,0
+	dc.b	'TO=PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192 URL="%s"',10,0
+ even
+
+
+* Frees the previous aget error if any
+freeStreamerError:
+    move.l  streamerError(a5),a0
+    clr.l   streamerError(a5)
+    jmp     freemem
+    
+
+
+* Sends the ctrl+c signal to the streamer task if it is running
+stopStreaming:
+    DPRINT  "*** stopStreaming"
+
+    lore    Exec,Forbid
+    move.l  streamerTask(a5),d0
+    bne     .3
+    DPRINT  "streamer not running"
+    bra     .4
+.3
+    move.l  d0,a1
+    move.l  #SIGBREAKF_CTRL_C,d0
+    lob     Signal 
+    DPRINT  "signal sent"
+.4 
+    lob     Permit
+    rts
+
+* Waits for the streamer task to exit if it is running.
+* Used after startStreaming failure.
+awaitStreamerAndFlush:
+    moveq   #1,d0
+    bra     awaitStreamer0
+
+* Waits for the streamer task to exit if it is running.
+* Used after sample playing stopped to confirm the
+* streamer is done. No flushing as sample task will
+* do it by itself.
+awaitStreamer:
+    moveq   #0,d0
+
+awaitStreamer0:
+    DPRINT  "*** await streamer, flush=%ld" 
+    tst.l   streamerTask(a5)
+    beq     .4
+    DPRINT  "awaiting!" 
+    jsr	    setMainWindowWaitPointer
+    move.l  _DosBase(a5),a6
+
+    moveq   #0,d5
+    * Flush pipe file if possible if requested
+    tst.b   d0
+    beq     .noFlush
+    pushpea streamPipeFile(pc),d1
+	move.l	#MODE_OLDFILE,d2
+    lob     Open
+    move.l  d0,d5
+.noFlush
+
+    moveq   #0,d4   * num of Delay calls
+    moveq   #0,d3   * num of bytes flushed
+    moveq   #0,d6   * FGetC return code
+.loop   
+
+.5 
+    tst.l   streamerTask(a5)
+    beq     .continue
+    tst.l   d5
+    beq     .6
+    tst.l   d6
+    bmi     .6
+    move.l  d5,d1
+    lob     FGetC
+    addq.l  #1,d3
+    move.l  d0,d6
+    bpl     .5
+.6
+    DPRINT  "wait"
+    moveq   #50*1,d1
+    lob     Delay
+    addq.w  #1,d4
+    cmp.w   #10,d4
+    bhs     .jammed
+    bra     .loop
+.continue   
+
+    move.l  d5,d1
+    beq.b   .3
+    lob     Close
+.3
+
+ if DEBUG
+    move.l  d3,d0
+    move.l  d4,d1
+    DPRINT  "task closed, flushed %ld, waited %ld" 
+ endif
+.1
+    jsr	clearMainWindowWaitPointer
+.4
+    * This stream job is done.
+    * After awaiting a new stream should be started
+    move    #-1,streamReturnCode(a5)
+    rts
+
+.jammed
+    DPRINT  "streamer stop timeout! abandoning task"
+    clr.l   streamerTask(a5)
+    bra     .1
+
+
+* Display streamer error and free it
+* Out:
+*   d0 = true: error was shown, false: no error
+showStreamerError:
+    pushm   d1-a6
+    moveq   #0,d0
+    tst.b   disableShowStreamerError(a5)
+    bne     .exit
+    move.l  streamerError(a5),d0
+	tst.l	d0
+	beq.b	.exit
+    DPRINT  "showStreamerError"
+    move.l  streamerErrorLength(a5),d7 
+    beq     .exit
+	* Mangle a null terminated line changed error msg, horrible
+	lea		-200(sp),sp
+	move.l	sp,a1
+	move.l	d0,a0
+    move    #200-1,d6   * total allowed length
+
+.f	moveq	#60,d2      * row length
+.e	move.b	(a0)+,(a1)+
+    subq    #1,d6
+    beq     .g
+    subq    #1,d7
+    beq     .g
+	subq	#1,d2
+	bne.b	.e
+	move.b	#10,(a1)+
+    bra     .f
+    
+.g	clr.b	(a1)
+	move.l	sp,a1
+	jsr		request
+	lea		200(sp),sp
+
+	bsr     freeStreamerError
+	* Status: error shown
+	moveq	#1,d0
+.exit
+    popm    d1-a6
+    rts
+
+
+* In:
+*    d0 = HTTP headers in ReadArgs format
+*    d1 = length of data
+* Out:
+*    d0 = true if succeeded
+parseAgetHeaders:
+    pushm   d1-a6
+    DPRINT  "parseAgetHeaders"
+    move.l  d0,d6
+    move.l  d1,d7
+
+    move.l  _DosBase(a5),a6
+
+    bsr     freeStreamHeaderArgs
+
+    pushpea .template(pc),d1
+    pushpea streamHeaderArray(a5),d2
+    pushpea streamRDA(a5),d3
+
+    move.l  d3,a1
+    moveq   #RDA_SIZEOF-1,d0
+.c  clr.b   (a1)+
+    dbf     d0,.c
+
+    move.l  d3,a1
+    move.l  d6,RDA_Source+CS_Buffer(a1)
+    move.l  d7,RDA_Source+CS_Length(a1)
+
+    lob     ReadArgs
+    move.l  d0,streamHeaderRDArgs(a5)
+    DPRINT  "ReadArgs=%lx"
+
+    move.l  streamHeaderIcyName(a5),d0
+    beq     .11
+    bsr     .clean
+.11
+    move.l  streamHeaderIcyDescription(a5),d0
+    beq     .22
+    bsr     .clean
+.22
+
+  if DEBUG
+    move.l  streamHeaderContentLength(a5),d0
+    beq.b   .1
+    move.l  d0,a0
+    move.l  (a0),d0
+    DPRINT  "Content-Length: %ld"
+.1  move.l  streamHeaderContentType(a5),d0
+    beq.b   .2
+    DPRINT  "Content-Type: %s"
+.2  move.l  streamHeaderIcyName(a5),d0
+    beq     .3  
+    DPRINT  "Icy-Name: %s"
+.3  move.l  streamHeaderIcyDescription(a5),d0
+    beq     .4
+    DPRINT  "Icy-Description: %s"
+.4
+  endif
+
+   
+    popm    d1-a6
+    rts
+
+.clean
+    * Overwrite UTF8 with latin1
+    move.l  d0,a0
+    move.l  d0,a1
+.loop
+    jsr     utf8ToLatin1Char
+    move.b  d0,(a1)+
+.l  tst.b   (a0)
+    bne     .loop
+    clr.b   (a1)
+    rts
+
+.template
+     dc.b "CONTENT-LENGTH/K/N,CONTENT-TYPE/K,ICY-NAME/K,ICY-DESCRIPTION/K,REST/M",0
+    even
+
+
+freeStreamHeaderArgs:
+    DPRINT  "freeStreamHeaderArgs"
+    * Avoid crashing on kick 1.3
+    move.l  streamHeaderRDArgs(a5),d1
+    beq.b   .x
+    clr.l   streamHeaderRDArgs(a5)
+    lore    Dos,FreeArgs
+.x  
+    lea     streamHeaderArray(a5),a0
+    clr.l   (a0)+
+    clr.l   (a0)+
+    clr.l   (a0)+
+    clr.l   (a0)+
+    clr.l   (a0)+
+    rts
+
+* Returns true if the current stream is a radio station.
+* Out: 
+*   d0 = true or false
+streamIsRadioStation:
+    bsr     streamIsMpegAudio
+    beq     .no
+    bsr     streamGetContentLength
+    tst.l   d0
+    bne     .no
+    moveq   #1,d0
+    rts
+.no
+    moveq   #0,d0
+    rts
+
+* Returns the content length based on HTTP headers.
+* Out:
+*    d0 = length, or NULL if not available
+streamGetContentLength:
+    moveq   #0,d0
+    move.l  streamHeaderContentLength(a5),d1
+    beq.b   .x
+    move.l  d1,a0
+    move.l  (a0),d0
+.x  rts
+
+
+* Checks Content-Type. If it starts with "audio/mpeg" returns true
+* Out:
+*    d0 = true if "audio/mpeg", false otherwise
+streamIsMpegAudio:
+    moveq   #0,d0
+    move.l  streamHeaderContentType(a5),d1
+    beq     .x 
+    move.l  d1,a0
+    lea     .mimeAudioMpega(pc),a1
+.cmp
+    cmpm.b  (a1)+,(a0)+
+    bne     .x
+    tst.b   (a1)
+    bne     .cmp
+    moveq   #1,d0
+.x  tst.l   d0
+    rts
+
+.mimeAudioMpega
+    dc.b    "audio/mpeg",0
+
+ even
+
+
+* In:
+*   a0 = pointer to utf8 char
+* Out:
+*   d0 = latin1 char
+*   a0 = pointer to next utf8 char
+utf8ToLatin1Char:
+    moveq   #0,d0
+
+    * Get utf8 char length to d1
+    moveq   #1,d1
+    move.b  (a0),d0
+    bpl     .x * 1 byte
+    moveq   #2,d1  
+    moveq   #$20,d2
+    and.b   d0,d2
+    beq     .2 * 2 byte
+    moveq   #3,d1
+    moveq   #$10,d2
+    and.b   d0,d2
+    beq     .y
+    moveq   #4,d1
+    moveq   #$08,d2
+    and.b   d0,d2
+    beq     .y
+    moveq   #5,d1
+    moveq   #$04,d2
+    and.b   d0,d2
+    beq     .y
+    moveq   #6,d1
+    bra     .y
+.2
+    * Two bytes
+    and	    #$1f,d0
+    lsl     #6,d0
+    moveq   #0,d2
+    move.b  1(a0),d2
+    sub.w   #$80,d2
+    or.w    d2,d0
+    bra     .x
+.y
+    moveq   #"_",d0
+.x
+    cmp     #$ff,d0
+    bhi     .y
+
+    add.l   d1,a0
+    rts
 
 ***************************************************************************
 *
@@ -50908,7 +54336,7 @@ deshrinkle
 	add	shr_header_size(a0),a0
 	* Skip id and header size
 	addq	#8,a0
-	bra.w	ShrinklerDecompress
+	bra	ShrinklerDecompress
 
 
 xpkname         dc.b    "xpkmaster.library",0
@@ -51320,7 +54748,7 @@ prefsListFont
 prefsPlaySidMode 
        dc.l prefsEnableXMAPlay
        ; left, top, width, height
-       dc.w 214-80+4,107+28-14,100-8,12,3,1,1
+       dc.w 214-80+4,107+28-14-12-2,100-8,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -51333,9 +54761,9 @@ prefsPlaySidMode
        even
 
 prefsResidMode
-       dc.l 0 ; END
+       dc.l prefsResidFilter
        ; left, top, width, height
-       dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
+       dc.w 214-80+4-16,107+28-12-2,100-8+16,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -51347,24 +54775,290 @@ prefsResidMode
        dc.b "reSID mode...",0
        even
 
-prefsEnableXMAPlay dc.l prefsResidMode
+prefsResidFilter
+       dc.l prefsMHIEnable
        ; left, top, width, height
-       dc.w 214-80+4+64,107-12-2,28,12,3,1,1
+       dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
        dc.l 0
 .t     dc.b 1,0,1,0
-       dc.w -198+80-4-64,2
+       dc.w -198+80-4+16,2
        dc.l 0,.tx,0
 .tx 
-       dc.b "Enable xmaplay060......",0
+       dc.b "reSID filter",0
        even
 
+prefsMHIEnable
+       dc.l prefsMHILib
+       ; left, top, width, height
+       dc.w 214-80+4-12-12-6,107+28-14-12-2-14,28,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16+14,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "Enable MHI",0
+       even
+
+prefsMHILib
+       dc.l 0 ; END
+       ; left, top, width, height
+       dc.w 214-80+4,107+28-14-12-2-14,100-8,12,3,1,1
+       dc.l 0
+       dc.l 0,0,0,0
+       dc.w 0
+       dc.l 0
+
+
+prefsEnableXMAPlay dc.l prefsResidMode
+       ; left, top, width, height
+       ;dc.w 214-80+4+64,107-12-2,28,12,3,1,1
+       dc.w 214-80+4+64+160+40+4,107-12-2+14+14,28,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4-64+32+4+2,2
+       dc.l 0,.tx,0
+.tx 
+;       dc.b "Enable xmaplay060......",0
+       dc.b "Enable xmaplay060",0
+       even
+
+ ifne FEATURE_LIST_TABS
 ; Gadget
-gadgetListModeChangeButton
+gadgetListModeTab1Button:
 	; gg_NextGadget
+	dc.l gadgetListModeTab2Button
+	; gg_LeftEdge
+	dc 9
+	; gg_TopEdge
+	dc 64
+	; gg_Width
+	dc 18
+	; gg_Height
+	dc 13
+	; gg_Flags
+	dc GFLG_GADGIMAGE
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+	; gg_GadgetRender
+	dc.l .img
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+	; gg_GadgetId
+	dc.w 0
+	; gg_UserData
+	dc.l 0
+
+; Image
+.img
+	; ig_LeftEdge
+	dc 4
+	; ig_TopEdge
+	dc 3
+	; ig_Width
+	dc 9+1
+	; ig_Height
+	dc 7
+	; ig_Depth
+	dc 1
+	; ig_ImageData
+	dc.l	listImage
+	; ig_PlanePick
+	dc.b 1
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
+
+
+gadgetListModeTab2Button:
+	; gg_NextGadget
+	dc.l gadgetListModeTab3Button
+	; gg_LeftEdge
+	dc 9
+	; gg_TopEdge
+	dc 64+14
+	; gg_Width
+	dc 18
+	; gg_Height
+	dc 13
+	; gg_Flags
+	dc GFLG_GADGIMAGE
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+	; gg_GadgetRender
+	dc.l .img
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+	; gg_GadgetId
+	dc.w 0
+	; gg_UserData
+	dc.l 0
+
+; Image
+.img
+	; ig_LeftEdge
+	dc 4
+	; ig_TopEdge
+	dc 3
+	; ig_Width
+	dc 9+1
+	; ig_Height
+	dc 7
+	; ig_Depth
+	dc 1
+	; ig_ImageData
+	dc.l	favoriteImage
+	; ig_PlanePick
+	dc.b 1
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
+
+
+gadgetListModeTab3Button:
+	; gg_NextGadget
+	dc.l gadgetListModeTab4Button
+	; gg_LeftEdge
+	dc 9
+	; gg_TopEdge
+	dc 64+14+14
+	; gg_Width
+	dc 18
+	; gg_Height
+	dc 13
+	dc GFLG_GADGIMAGE
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+	; gg_GadgetRender
+	dc.l .img
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+	; gg_GadgetId
+	dc.w 0
+	; gg_UserData
+	dc.l 0
+
+; Image
+.img
+	; ig_LeftEdge
+	dc 4
+	; ig_TopEdge
+	dc 3
+	; ig_Width
+	dc 9+1
+	; ig_Height
+	dc 7
+	; ig_Depth
+	dc 1
+	; ig_ImageData
+	dc.l	fileBrowserImage
+	; ig_PlanePick
+	dc.b 1
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
+
+
+
+gadgetListModeTab4Button:
+	; gg_NextGadget
+	;dc.l gadgetListModeChangeButton
+    dc.l gadgetResize
+	; gg_LeftEdge
+	dc 9
+	; gg_TopEdge
+	dc 64+14+14+14
+	; gg_Width
+	dc 18
+	; gg_Height
+	dc 13
+	; gg_Flags
+	dc GFLG_GADGIMAGE
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+	; gg_GadgetRender
+	dc.l .img
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+	; gg_GadgetId
+	dc.w 0
+	; gg_UserData
+	dc.l 0
+
+; Image
+.img
+	; ig_LeftEdge
+	dc 4
+	; ig_TopEdge
+	dc 3
+	; ig_Width
+	dc 9+1
+	; ig_Height
+	dc 7
+	; ig_Depth
+	dc 1
+	; ig_ImageData
+	dc.l	searchImage
+	; ig_PlanePick
+	dc.b 1
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
+  endif
+
+
+; Gadget
+gadgetListModeChangeButton:
+	; gg_NextGadget
+  ifne FEATURE_LIST_TABS
+    dc.l gadgetListModeTab1Button
+  else
 	dc.l gadgetResize
+  endif
 	; gg_LeftEdge
 	dc 9
 	; gg_TopEdge
@@ -51469,6 +55163,113 @@ gadgetResize
 	dc.l 0
 
 
+GADGET_ID_SEARCH_STRING       = 1000
+GADGET_ID_SEARCH_SOURCE       = 1001
+GADGET_ID_LOCAL_SEARCH_STRING = 1002
+
+gadgetSearchString:
+	; gg_NextGadget
+	dc.l 0
+	; gg_LeftEdge
+	dc 0
+	; gg_TopEdge
+	dc 64
+	; gg_Width
+	dc 50
+	; gg_Height
+	dc 10
+	; gg_Flags
+	dc GFLG_STRINGEXTEND
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_STRGADGET
+    ; gg_GadgetRender
+	dc.l 0
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l gadgetSearchStringStringInfo
+	; gg_GadgetId
+	dc.w GADGET_ID_SEARCH_STRING
+	; gg_UserData
+	dc.l 0
+
+
+gadgetSearchStringStringInfo:
+    dc.l    gadgetSearchStringBuffer     ; si_Buffer
+    dc.l    0   ; si_UndoBuffer
+    dc.w    0   ; si_BufferPos
+    dc.w    49  ; si_MaxChars
+    dc.w    0   ; si_DispPos
+    dc.w    0   ; si_UndoPos
+    dc.w    0   ; si_NumChars
+    dc.w    0   ; si_DispCount
+    dc.w    0   ; si_CLeft
+    dc.w    0   ; si_CTop
+    dc.l    .extension ; si_Extension
+    dc.l    0   ; si_LongInt
+
+
+.extension  dc.l    0   ; sex_Font
+            dc.b    1,0 ; sex_Pens
+            dc.b    1,0 ; sex_ActivePens
+            dc.l    0   ; sex_InitialModes
+            dc.l    0   ; sex_EditHook
+            dc.l    0   ; sex_WorkBuffer
+            ds.b    16  ; sex_Reserved
+
+
+gadgetSearchSource:
+    ; gg_NextGadget
+	dc.l 0
+	; gg_LeftEdge
+	dc 0
+	; gg_TopEdge
+	dc 64
+	; gg_Width
+	dc 100
+	; gg_Height
+	dc 13
+	; gg_Flags
+	dc 0
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+    ; gg_GadgetRender
+	dc.l 0
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l gadgetSearchSourceIText
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+  	; gg_GadgetId
+	dc.w GADGET_ID_SEARCH_SOURCE
+	; gg_UserData
+	dc.l 0
+
+
+gadgetSearchSourceIText
+    dc.b    1   ; it_FrontPen
+    dc.b    0   ; it_BackPen
+    dc.b    0 ;RP_JAM1  ; it_DrawMode
+    dc.b    0   ; it_KludgeFill00
+    dc.w    3   ; it_LeftEdge
+    dc.w    2   ; it_TopEdge
+    dc.l    list_text_attr  ; it_ITextFont
+gadgetSearchSourceTextPtr:
+    dc.l    0   ; it_IText
+    dc.l    0   ; it_NextText
+
+
 * Rename the gadgets defined above to something not crazy
 * 1st row
 gadgetPlayButton 	EQU  button1
@@ -51536,6 +55337,7 @@ row2Gadgets
 	dc	0 ; END
 
 
+
 gadgetFileSliderInitialHeight = 67-16+2
 
 * Contains gadget-routine pairs that determine
@@ -51547,9 +55349,9 @@ rightButtonActionsList
 	* Prefs -> zoom file box
 	dr.w	gadgetPrefsButton
 	dc.l	zoomfilebox
-	* S -> Sort
+	* S -> Find in list 
 	dr.w	gadgetSortButton
-	dc.l	rsort
+    dc.l	find_new
 	* Move -> Add divider
 	dr.w	gadgetMoveButton
 	dc.l	add_divider
@@ -51571,6 +55373,9 @@ rightButtonActionsList
 	* Play -> Random play
 	dr.w	gadgetPlayButton
 	dc.l	soitamodi_random
+    * List mode change -> popup
+    dr.w    gadgetListModeChangeButton
+    dc.l    toggleListModePopup
 	dc.w	0 ; END
  
 
@@ -51595,6 +55400,9 @@ tooltipList
 	dr.w	gadgetForwardButton,.forward
 	dr.w	gadgetRewindButton,.rewind
 	dr.w	gadgetListModeChangeButton,.listModeChange
+    * This should be before source, as it may overlap the source button
+	dr.w	gadgetSearchString,.searchString 
+	dr.w	gadgetSearchSource,.searchSource
 	dc.w	0 ; END
  
 .play
@@ -51622,7 +55430,7 @@ tooltipList
 	dc.b	"LMB: Add new modules to the list",0
 	dc.b	"RMB: Insert new modules after the chosen module",0
 .add2
-	dc.b	39,1
+	dc.b	40,1
 	dc.b	"LMB: Add selected entry to the main list",0
 
 .del
@@ -51646,12 +55454,10 @@ tooltipList
 	dc.b	"LMB: Open preferences",0
 	dc.b    "RMB: Zoom file box",0
 .sort
-;	dc.b	16,2
-;	dc.b	"LMB: Sort list",0
-;	dc.b	"RMB: Find module",0
-	dc.b	21,2
-	dc.b	"LMB: Search functions",0
-	dc.b	"RMB: Sort list",0
+	dc.b	25,3
+	dc.b	"LMB: Sort list   [S]",0
+	dc.b	"RMB: Find module [F]",0
+    dc.b    "     Find next   [CTRL+F]"
 .move
 	dc.b	26,4
 	dc.b	"LMB: Move chosen module,",0
@@ -51659,11 +55465,9 @@ tooltipList
 	dc.b    "     the moved module",0
 	dc.b	"RMB: Add divider",0
 .prg
-	dc.b	24+5,4
+	dc.b	24,2
 	dc.b	"LMB: Load module program",0
 	dc.b	"RMB: Save module program",0
-	dc.b	"Favorite modules are saved to",0
-	dc.b	34,"S:HippoFavorites.prg",34,0
 .forward
 	dc.b	36,4
 	dc.b	"LMB: Skip module forward",0
@@ -51678,13 +55482,20 @@ tooltipList
 ;	dc.b	"LMB: Toggle list mode",0
 ;	dc.b	"     Normal > Favorites > File browser",0
 .listModeChange
-	dc.b	21,5
+	dc.b	21,6
 	dc.b	"LMB: Toggle list mode",0
-	dc.b	"    - Normal playlist",0
+	dc.b	"    - Main playlist",0
 	dc.b    "    - Favorites list",0
 	dc.b    "    - File browser",0
-	dc.b    "    - Search results",0
-
+	dc.b    "    - Search view",0
+    dc.b    "RMB: Open popup",0 
+.searchSource
+	dc.b	20,2
+	dc.b	"Select search source",0
+    dc.b    "to search from",0
+.searchString
+	dc.b	18,1
+	dc.b	"Enter search terms",0
   even
 
 *** Samplename ikkuna
@@ -52295,7 +56106,7 @@ kela2imDouble
 * height 8
 * width 16
 
-favoriteImage
+favoriteImage:
 	dc	%0111011100000000				
 	dc	%1111111110000000				
 	dc	%1111111110000000				
@@ -52304,7 +56115,7 @@ favoriteImage
 	dc	%0001110000000000				
 	dc	%0000100000000000				
 
-listImage
+listImage:
 	dc	%1101111111000000
 	dc	%0000000000000000				
 	dc	%1101111111000000
@@ -52314,7 +56125,7 @@ listImage
 	dc	%1101111111000000
 
 
-fileBrowserImage
+fileBrowserImage:
 	dc	%1111111100000000
 	dc	%1010011010000000				
 	dc	%1011111001000000
@@ -52323,7 +56134,7 @@ fileBrowserImage
 	dc	%1011001101000000
 	dc	%1111111111000000
 
-searchImage
+searchImage:
 	dc	%0001110000000000
 	dc	%0010001000000000
 	dc	%0101000100000000
@@ -52334,7 +56145,7 @@ searchImage
 	;dc	%0000000011000000
 
 
-resizeGadgetImage
+resizeGadgetImage:
 	; plane 1
 	dc	%0000010000000000
 	dc	%0001010000000000
@@ -52372,6 +56183,11 @@ slider1im
 		cnop 0,4
 * Global variables
 var_b		ds.b	size_var
+
+gadgetSearchStringBuffer:     
+    ds.b    50
+gadgetLocalSearchStringBuffer:     
+    ds.b    50
 
 * Copy of Protracker module header data for the info window
 ptheader	ds.b	950

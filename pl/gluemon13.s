@@ -6,6 +6,29 @@
 		include "mucro.i"
 test=0
 
+
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_volume    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+
+
  ifne test
 bob
 ;	lea	module,a0
@@ -17,6 +40,7 @@ bob
 	lea	songend,a2
 	lea	maxpat,a3
 	lea	curpat,a4
+    move.l #scope_,d0
 	jsr	init
 	bne.b	error
 
@@ -42,7 +66,7 @@ playLoop
 
 	rts
 
-
+scope_	ds.b	scope_size
 masterVol 	dc $40/1
 songend		dc 0
 maxpat		dc 0
@@ -130,17 +154,24 @@ module  incbin	"sys:Music/Roots/Modules/GlueMon/- unknown/giana sisters.glue"
 	jmp play(pc)
 	jmp end(pc)
 
-masterVolumeAddr 	dc.l 0
-songEndAddr		dc.l 0
-maxPattAddr		dc.l 0
-curPattAddr		dc.l 0
-chipData		dc.l 0
-mus_rndwaveAddr		dc.l 0
-mus_clrwaveAddr		dc.l 0
+
+
+testi	=	0
+
+masterVolumeAddr  dc.l    0
+songEndAddr       dc.l    0
+maxPattAddr       dc.l    0
+curPattAddr       dc.l    0
+scope             dc.l    0
+chipData          dc.l    0
+mus_rndwaveAddr   dc.l    0
+mus_clrwaveAddr   dc.l    0
+
 * a0 = mod
 * a1 = master vol Address
 * a2 = songend addr
 init
+    move.l d0,scope
 	move.l a0,d7
 	move.l a1,masterVolumeAddr
 	move.l a2,songEndAddr
@@ -448,6 +479,10 @@ glue_207a	cmp.b	#$ff,d1
 		beq.b	glue_2090
 		bsr.w	glue_22ea
 		move	d1,$a6(a6)
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    d1,scope_ch1+ns_period(a0)
+        move.l  (sp)+,a0
 		move	mus_att1(a4),mus_vol1(a4)
 glue_2090	move.b	1(a0,d0),d1
 		cmp.b	#$fe,d1
@@ -459,6 +494,10 @@ glue_20a2	cmp.b	#$ff,d1
 		beq.b	glue_20b8
 		bsr.w	glue_22ea
 		move	d1,$b6(a6)
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    d1,scope_ch2+ns_period(a0)
+        move.l  (sp)+,a0
 		move	mus_att2(a4),mus_vol2(a4)
 glue_20b8	move.b	2(a0,d0),d1
 		cmp.b	#$fe,d1
@@ -470,6 +509,10 @@ glue_20ca	cmp.b	#$ff,d1
 		beq.b	glue_20e0
 		bsr.w	glue_22ea
 		move	d1,$c6(a6)
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    d1,scope_ch3+ns_period(a0)
+        move.l  (sp)+,a0
 		move	mus_att3(a4),mus_vol3(a4)
 glue_20e0	tst.b	mus_drumflag(a4)
 		beq.b	glue_211c
@@ -483,6 +526,10 @@ glue_2100	cmp.b	#$ff,d1
 		beq.w	glue_22c8
 		bsr.w	glue_22ea
 		move	d1,$d6(a6)
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    d1,scope_ch4+ns_period(a0)
+        move.l  (sp)+,a0
 		move	mus_att4(a4),mus_vol4(a4)
 		bra.w	glue_22c8
 
@@ -568,6 +615,10 @@ glue_22a4	move	#8,$96(a6)
 glue_22b4	move	mus_drumpitch(a4),d1
 		sub	d1,mus_drumrate(a4)
 		move	mus_drumrate(a4),$d6(a6)
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    mus_drumrate(a4),scope_ch4+ns_period(a0)
+        move.l  (sp)+,a0
 
 glue_22c8	movem.l	d0/d2,-(a7)		;;
 ;		move	mus_lbal(a4),d0		;set LEFT vol
@@ -578,9 +629,17 @@ glue_22c8	movem.l	d0/d2,-(a7)		;;
 		mulu	d0,d2
 		lsr	#6,d2
 		move	d2,$a8(a6)
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    d2,scope_ch1+ns_volume(a0)
+        move.l  (sp)+,a0
 		move	mus_vol4(a4),d2		;chan 4
 		mulu	d0,d2
 		lsr	#6,d2
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    d2,scope_ch4+ns_volume(a0)
+        move.l  (sp)+,a0
 		move	d2,$d8(a6)
 		;move	mus_rbal(a4),d0		;set RIGHT vol
 		;mulu	mus_vol(a4),d0
@@ -589,10 +648,18 @@ glue_22c8	movem.l	d0/d2,-(a7)		;;
 		mulu	d0,d2
 		lsr	#6,d2
 		move	d2,$b8(a6)
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    d2,scope_ch2+ns_volume(a0)
+        move.l  (sp)+,a0
 		move	mus_vol3(a4),d2		;chan 3
 		mulu	d0,d2
 		lsr	#6,d2
 		move	d2,$c8(a6)
+        move.l  a0,-(sp)
+        move.l  scope(pc),a0
+        move    d2,scope_ch3+ns_volume(a0)
+        move.l  (sp)+,a0
 		movem.l	(a7)+,d0/d2
 		rts
 
@@ -603,22 +670,41 @@ glue_22ea	lea	mus_periods(pc),a1
 
 glue_init	movem.l	d0-a6,-(a7)
 		move.l	mus_stuff_adr(pc),a4
+
+        move.l  scope(pc),a0
+
 		lea	$dff000,a6
 		move.l	mus_data(a4),a3
 		move	#$f,$96(a6)
 		move.l	a3,d0
 		add.l	#$16,d0
 		move.l	d0,$a0(a6)
+        move.l  d0,scope_ch1+ns_start(a0)
+        move.l  d0,scope_ch1+ns_loopstart(a0)
+        move.w  #$10,scope_ch1+ns_length(a0)
+        move.w  #$10,scope_ch1+ns_replen(a0)
 		move	#$10,$a4(a6)
 		add.l	#$20,d0
 		move.l	d0,$b0(a6)
+        move.l  d0,scope_ch2+ns_start(a0)
+        move.l  d0,scope_ch2+ns_loopstart(a0)
+        move.w  #$10,scope_ch2+ns_length(a0)
+        move.w  #$10,scope_ch2+ns_replen(a0)
 		move	#$10,$b4(a6)
 		add.l	#$20,d0
 		move.l	d0,$c0(a6)
+        move.l  d0,scope_ch3+ns_start(a0)
+        move.l  d0,scope_ch3+ns_loopstart(a0)
+        move.w  #$10,scope_ch3+ns_length(a0)
+        move.w  #$10,scope_ch3+ns_replen(a0)
 		move	#$10,$c4(a6)
 		add.l	#$20,d0
 		move.l	d0,mus_extwave(a4)
 		move.l	d0,$d0(a6)
+        move.l  d0,scope_ch4+ns_start(a0)
+        move.l  d0,scope_ch4+ns_loopstart(a0)
+        move.w  #$10,scope_ch4+ns_length(a0)
+        move.w  #$10,scope_ch4+ns_replen(a0)
 		move	#$10,$d4(a6)
 		move	#$800f,$96(a6)
 		move.b	21(a3),d1

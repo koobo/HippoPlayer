@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.55
+Version: 2.56
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -11,7 +11,7 @@ Here you will find binaries with changes done after the original
 development stopped. 
 
 To use, copy the files over the files that you have from an existing
-installation. Check out aminet for the original package:
+installation. Check out aminet for the original archive:
 https://aminet.net/mus/play/hippoplayer.lha
 
 Or, just copy HiP somewhere and "HippoPlayer.group" to S:, then run
@@ -25,19 +25,181 @@ not work. The default placement is the S: directory, which is a bit silly
 (location can be changed in Prefs). You can also place the file in the 
 same directory with the HiP binary, too, if you're using kick2.0 or newer.
 
-NOTE 3: If you get errors where some module is not recognized even 
-if it should be, try removing "S:HippoPlayer.prefs" first.
 
-NOTE 4: Too long didn't read
-- New Prefs options: "Button tooltips", "Favorite modules", 
- "Keep list on exit", "Big buttons", new font selector, new scope toggles
-- New list mode change button above the file slider
-- Window resize gadgets
-- Improved scopes
-- New music formats
-- "S"-button search functions popup
-- Enhanced PlaySid support
-- Alternative HQ FastTracker 2 replayer by 8bitbubsy
+Quick overview of major changes since v2.45
+-------------------------------------------
+- List mode toggle button to switch between the list modes
+  - Main list
+  - Favorites: your favorited modules
+  - File browser: browse file system for modules
+  - Search view: search internet sites, browse shared playlists
+- New Prefs options:
+  - "Button tooltips": Hover mouse over gadgets to get help
+  - "Favorites": Right click modules to favorite them
+  - "Keep list on exit": Continue where you left off 
+  - "Big buttons": Larger buttons
+  - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
+  - "Enable xmaplay060": Enable a high quality XM replayer
+  - "Enable MHI": Play MP3s with extenal hardware
+- Resizable main and info windows
+- Main window font can be changed to any font
+- Support for many new music formats
+- Improved scopes: support for more music formats, multiple scopes,
+  spectrum scope, patternscope with two sizes and up to 18 channels
+- Support for MP3 streaming, radio stations
+- "Add" button in file browser or search view: copy items to main list
+
+New keyboard shortcuts:
+- Favorite module: [CTRL+F]
+- Toggle list mode: [SHIFT+M]
+- Navigate to parent in file browser: [BACKSPACE]
+- Search modules: [CTRL+S]
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.55 (10.11.2022) to v2.56 (15.2.2023) 
+
+## New fixes:
+
+- Fix MusicAssembler modules being silent on 68040/68060.
+
+- Fixes in the included playsid.library:
+   - A reSID related bug fixed which caused some tunes to have small pauses. 
+     Example tune: Hawaii by JCH.
+   - Fix a possible freeze bug when pausing PSID playback.
+
+- The "Continue on error" mode available in Prefs could crash in 
+  certain situations, this should be fixed now.
+
+- A crash fixed which happened when the main windows was hidden.
+
+- Modland search whitelist had some issues, the following formats
+  are now also found:
+  - Delta Music 2
+  - DIGIBooster Pro
+  - Synthesis
+
+- Pausing playback while using AHI was modified. This fixes
+  pause not working with the ZZ9000AX driver.
+  
+- Fixed a possible crash on 68000 when "Prefs/Play-1/Mode" was 
+  set to "All on startup" or "All on demand".
+
+- Fix PSID volume with reSID always starting with the max setting
+  when changing modules or subsongs.
+
+- Allow adding urls with command line and ARexx.
+
+- Fix getting stuck if started from the "Execute command" dialog.
+
+- Fix crash when playing CustomMade modules.
+
+- A few other small fixes.
+
+
+## New features and improvements:
+
+- Improved MP3 support: Data will be streamed over the network.
+  This allows listening to MP3 files without downloading them first, 
+  and also allows listening to radio station streams. UHCTools is 
+  used for network transfers. Remember to update UHCTools to latest!
+  
+- Added new search sources for MP3s provided by UHCTools:
+  - https://amigaremix.com/ 
+  - https://remix.kwed.org/
+  - Radio station search
+
+- Added "Shared lists" search source. This fetches a list of shared 
+  playlists to be checked out. For example, you'll find favorite lists,
+  top lists, and lists with certain musical themes. The lists will be 
+  updated periodically, and new community created lists added. 
+  Administration by Spot/Up Rough. Cool!
+
+- User interface changes related to searching remote files:
+  - The search results view now contains a search source selection button
+    and a search terms string gadget. The view is accessible using the list 
+    mode change button as usual.
+  - All remote search stuff from the "S"-button popup were moved over to the
+    search view.
+  - To search, activate the search view, select a source using the button and 
+    then type search words into the string gadget, and hit enter.
+  - [CTRL+S] is the keyboard shortcut remote search.
+  - The selected search source is saved with "Prefs/Save"
+
+- Finding items in lists:
+  - The "S"-button was returned to the original state: LMB sorts the list
+    and RMB activates "Find" from the module list.
+  - Activating "Find" from the button (or with key [F]) now brings up 
+    a string gadget below the list instead of a ReqTools requester.
+    "Find next" (or [SHIFT+F]) works as before.
+
+- When favoriting a module (with RMB) the currently playing subsong is also 
+  stored. The next time you play this particular module the favorited 
+  subsong will be played first.
+
+- PSID playback improvements using reSID with the updated playsid.library:
+   - Stereo SID (2SID) files are now supported. The 68060 at 50 MHz 
+     can handle most 2SIDs with filters enabled. 
+   - Proper support for multispeed tunes added. Previously only up to 
+     4-speed tunes worked, now Jeff's "12-speed tune" also plays fine.
+   - reSID filters can be toggled in "Prefs/Play-2":
+     - "Internal on": normal filter mode
+     - "Internal+Ext": also enable the external filter, 
+        may reduce noise, uses more CPU.
+     - "All off": no filters, less CPU usage.
+   - reSID is now about 20% faster due to code optimizations. 
+     The oversample mode x2 should work on most (non-stereo) tunes 
+     with 060@50, for improved sound. Also the x3 mode seems be 
+     fine with many tunes.
+   - 2SID tunes can be found in the HVSC.
+
+- MHI support: Enabling this and selecting a suitable driver in 
+  "Prefs/Play-2" allows MP3 playback using external hardware. 
+  This will override MPEGA and AHI settings for MP3 files.
+  
+- The popup selector is now keyboard controllable with arrows up, down, 
+  and enter. 
+
+- The list mode change button now has a popup selector with RMB.
+
+- Info window improvements: 
+  - Show MP3 file ID3v2 tag information, old tag versions 
+    (2 or older) not supported
+  - Show MP3 radio stream information
+  - Show PSID play speed which tells how often the SID parameters
+    are updated. Range 1..12 corresponds to 50..600 Hz update rate.
+
+- MP3 playback improvement for Paula output: When using the high quality
+  MPEGA settings, instead of 8-bit output the Paula 14-bit mode is used
+  by default and the downscaling step is more accurate. 
+  The HQ settings in Prefs are: Mpega quality: Hi, Freq.Div: 1.   
+
+- AHI: Added limited scope support when using AHI for sound output
+   - Scopes for sample files (MP3, Wav, etc)
+   - Scopes for modules played with PS3M (PT, XM, S3M, etc), at the 
+     moment only four scope channels supported.
+   - Patternscope supported without limitations.
+
+- Some keys from CDTV, CD32 were added as key shortcuts:
+  stop, play, prev, next.  
+
+- Pressing the [DEL] key now acts similarly as [BACKSPACE] and [D]:
+  delete list item, or navigate to parent in file browser view.
+
+- 8bitbubsy's xmaplay060 updated. The mixing routines are now faster
+  and a few bugs are fixed.
+
+- GlueMon module format: Added position/length and scope support
+
+- Thomas Winischhofer has updated his MusicMakerV8 players to
+  version 5.09, added these.
+
+Thanks and greetz go to in no order:
+- Spot, 8bitbubsy, Erique, Patrik, Mr. Hac, Mike, Ziphoid, AceMan, 
+  Mr. Sallinen
 
 
 ------------------------------------------------------------------------------
