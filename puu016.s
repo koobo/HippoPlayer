@@ -39154,10 +39154,15 @@ p_med:
 ;	cmp.b	#2,medtype(a5)
 ;	bne.b	.yeep
 
+    bsr     .fastmemplayrecommended
+    tst.b   d0
+    bne     .moveit
+
 	move.l	moduleaddress(a5),a0	* pistetäänkö fastiin?
 	btst	#0,20(a0)		* mmdflags; MMD_LOADTOFASTMEM
 	beq.b	.yeep
 
+.moveit
 ** jos on octamixplayerillä soitettava ja sijaitsee chipissä, koitetaan
 ** siirtää fastiin:
 	bsr	moveModuleToPublicMem
@@ -39276,6 +39281,21 @@ p_med:
 .dof 
     jmp	(a6,d7)
 
+.fastmemplayrecommended
+    * a0 = module address
+    move.l  moduleaddress(a5),a0
+	moveq	#_LVOMEDFastMemPlayRecommended,d7
+	move.b	medtype(a5),d6
+	beq.b	.doff
+	moveq	#_LVOMEDFastMemPlayRecommended8,d7
+	subq.b	#1,d6
+	beq.b	.doff
+    moveq   #0,d0
+	rts
+.doff
+    jsr 	(a6,d7)
+    DPRINT  "MEDFastMePlayRecommended=%ld"
+    rts
 
 
 .playmodule
