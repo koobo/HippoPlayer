@@ -22342,7 +22342,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ** PS3M
 
 .medform 
-.form2	dc.b	"%03ld %-28.28s %6ld",ILF,ILF2,0
+.form2	dc.b	"%03ld %-28.28s %6.6ld",ILF,ILF2,0
 
 .thxform
  	dc.b	"%03ld %-35.35s",ILF,ILF2,0
@@ -39150,9 +39150,6 @@ p_med:
 	lea	.pahk3(pc),a1
 .di	move.b	(a1)+,(a0)+
 	bne.b	.di
-
-    DPRINT  "e"
-
 
 ;	cmp.b	#2,medtype(a5)
 ;	bne.b	.yeep
