@@ -39059,6 +39059,7 @@ p_med:
 
 .medinit
 	movem.l	d1-a6,-(sp)
+    DPRINT  "MED init"
 
 	move.l	_MedPlayerBase(a5),d0
 	bne	.ook
@@ -39118,7 +39119,7 @@ p_med:
 	move.b	d0,medtype(a5)
 
 	cmp.b	#3,d0
-	bhs.b	.error2
+	bhs 	.error2
 
 * d0:
 * 0 = 4ch   medplayer
@@ -39150,13 +39151,17 @@ p_med:
 .di	move.b	(a1)+,(a0)+
 	bne.b	.di
 
+    DPRINT  "e"
+
 
 ;	cmp.b	#2,medtype(a5)
 ;	bne.b	.yeep
 
-    bsr     .fastmemplayrecommended
-    tst.b   d0
-    bne     .moveit
+    ;bsr     .fastmemplayrecommended
+    ;DPRINT  "ee"
+    ;tst.b   d0
+    ;bne     .moveit
+
 
 	move.l	moduleaddress(a5),a0	* pistetäänkö fastiin?
 	btst	#0,20(a0)		* mmdflags; MMD_LOADTOFASTMEM
@@ -39227,6 +39232,7 @@ p_med:
 	jmp	dela
 
 .G
+    DPRINT  "MEDGetPlayer"
 	moveq	#_LVOMEDGetPlayer,d7
 	move.b	medtype(a5),d6
 	beq.b	.do2
@@ -39237,6 +39243,7 @@ p_med:
 .do2	jmp	(a6,d7)
 
 .relocmodule
+    DPRINT  "MEDRelocModule"
 	moveq	#_LVOMEDRelocModule,d7
 	move.b	medtype(a5),d6
 	beq.b	.do3
@@ -39247,6 +39254,7 @@ p_med:
 .do3	jmp	(a6,d7)
 
 .setmodnum
+    DPRINT  "MEMSetModNum"
 	moveq	#_LVOMEDSetModnum,d7
 	move.b	medtype(a5),d6
 	beq.b	.do4
@@ -39281,21 +39289,22 @@ p_med:
 .dof 
     jmp	(a6,d7)
 
-.fastmemplayrecommended
-    * a0 = module address
-    move.l  moduleaddress(a5),a0
-	moveq	#_LVOMEDFastMemPlayRecommended,d7
-	move.b	medtype(a5),d6
-	beq.b	.doff
-	moveq	#_LVOMEDFastMemPlayRecommended8,d7
-	subq.b	#1,d6
-	beq.b	.doff
-    moveq   #0,d0
-	rts
-.doff
-    jsr 	(a6,d7)
-    DPRINT  "MEDFastMePlayRecommended=%ld"
-    rts
+;.fastmemplayrecommended
+;    
+;    * a0 = module address
+;    move.l  moduleaddress(a5),a0
+;	moveq	#_LVOMEDFastMemPlayRecommended,d7
+;	move.b	medtype(a5),d6
+;	beq.b	.doff
+;	moveq	#_LVOMEDFastMemPlayRecommended8,d7
+;	subq.b	#1,d6
+;	beq.b	.doff
+;    moveq   #0,d0
+;	rts
+;.doff
+;    jsr 	(a6,d7)
+;    DPRINT  "MEDFastMemPlayRecommended=%ld"
+;    rts
 
 
 .playmodule
@@ -39303,6 +39312,7 @@ p_med:
 	bsr.b	.P
 	jmp	dela
 .P
+    DPRINT  "MEDPlayModule"
 
 	moveq	#_LVOMEDPlayModule,d7
 	move.b	medtype(a5),d6
@@ -39311,10 +39321,12 @@ p_med:
 	subq.b	#1,d6
 	beq.b	.do5a
 
+    DPRINT  "MEDSet14BitMode"
 ** octamixplayer
 	moveq	#0,d0			* 8-bit
 	move.b	medmode(a5),d0		* 1: 14-bit
 	lob	MEDSet14BitMode
+    DPRINT  "MEDSetMixingFrequency"
 	moveq	#0,d0
 	move	medrate(a5),d0		* mixingrate
 	lob	MEDSetMixingFrequency
@@ -39338,7 +39350,7 @@ p_med:
 .E
 	movem.l	d0/d1/a0/a1/a6,-(sp)
 	move.l	_MedPlayerBase(a5),a6
-
+    DPRINT  "MEDFreePlayer"
 	moveq	#_LVOMEDFreePlayer,d0
 	move.b	medtype(a5),d1
 	beq.b	.do6
@@ -39358,6 +39370,7 @@ p_med:
 .medstop
 	movem.l	d0/d1/a0/a1/a6,-(sp)
 	move.l	_MedPlayerBase(a5),a6
+    DPRINT  "MEDStopPlayer"
 
 	moveq	#_LVOMEDStopPlayer,d0
 	move.b	medtype(a5),d1
