@@ -30616,11 +30616,12 @@ loadfile:
 
 
 
+* Sets lod_memtype(a5) that is used to allocate destination read buffer
 .checkm
     bsr   tutki_moduuli2
-	cmp.b	#2,d0
-	beq	.ptfoo
-    cmp.b   #-1,d0
+	cmp.b	#2,d0   * Protracker detected?
+	beq	.ptfoo      * Do additional check, returns to .publl or exits.
+    cmp.b   #-1,d0  * -1 = load to chip
     beq.b   .nofast
 
 .publl  move.l   #MEMF_PUBLIC!MEMF_CLEAR,d0
@@ -30687,13 +30688,16 @@ loadfile:
 	
 
 ** Ladataan PT file fastiin jos ei mahdu chipppppiin
-.ptfoo
+.ptfoo:
+    cmp     #pt_med,playertype(a5)
+    beq     .checkMed
 	tst.b	ahi_use(a5)		* AHI? -> public
 	bne	.publl
 	cmp.b	#2,ptmix(a5)		* PS3M? -> public
 	beq	.publl
-
+.checkMed
 	pushm	all
+    DPRINT  "Check if fits into CHIP"
 	move.l	#MEMF_LARGEST!MEMF_CHIP,d1
 	lore	Exec,AvailMem
 	cmp.l	lod_length(a5),d0
@@ -30932,6 +30936,10 @@ get_med1
 	beq.b	.q
 	rts
 .q	lea	medplayername1,a1
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "Opening %s"
+ endif
 ;	moveq	#6,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -30945,6 +30953,10 @@ get_med2
 	beq.b	.q
 	rts
 .q	lea	medplayername2,a1
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "Opening %s"
+ endif
 ;	moveq	#6,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -30958,6 +30970,10 @@ get_med3
 	beq.b	.q
 	rts
 .q	lea	medplayername3,a1
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "Opening %s"
+ endif
 ;	moveq	#7,d0
 	push	a6
 ;	lore	Exec,OpenLibrary
@@ -31036,7 +31052,13 @@ search:
 * Tutkitaan, onko moduuli sellanen jonka vois ladata fastiin.
 * a0 = moduuli, 1084 bytee
 
-tutki_moduuli2
+* Out:
+*   d0: 0 = load into public mem
+*       1 = load to fast mem: protracker fast mem player active
+*       2 = protracker file
+*      -1 = load to chip
+
+tutki_moduuli2:
 	DPRINT	"Check where to load"
 	pushm	d1-a6
 	move.l	a0,a4
@@ -31139,6 +31161,7 @@ tutki_moduuli2
 	bne.b	.nome
 	btst	#0,20(a4)		* mmdflags, MMD_LOADTOFASTMEM
 	bne.b	.goPublic
+    bra     .ff             * go public if doesn't fit into chip
 .nome
 
 	bsr	id_digibooster_
@@ -38965,7 +38988,8 @@ id_TFMX7V
 * MED
 ******************************************************************************
 
-p_med	jmp	.medinit(pc)
+p_med:
+	jmp	.medinit(pc)
 	p_NOP
 	jmp	.medvb(pc)
 	jmp	.medend(pc)
@@ -39090,6 +39114,7 @@ p_med	jmp	.medinit(pc)
 	and	#%01,d0
 	and	#%10,d1
 	or	d1,d0
+
 	move.b	d0,medtype(a5)
 
 	cmp.b	#3,d0
@@ -39181,11 +39206,12 @@ p_med	jmp	.medinit(pc)
 	move.l	moduleaddress(a5),a0
 	bsr.b	.relocmodule
 .eek	
+    bsr     .setfastmemplay
 	moveq	#0,d0
 	move	songnumber(a5),d0
 	bsr.b	.setmodnum
 	move.l	moduleaddress(a5),a0
- 	bsr.b	.playmodule
+ 	bsr 	.playmodule
 	movem.l	(sp)+,d1-a6
 	moveq	#0,d0
 	rts
@@ -39224,6 +39250,32 @@ p_med	jmp	.medinit(pc)
 	beq.b	.do4
 	moveq	#_LVOMEDSetModnumM,d7
 .do4	jmp	(a6,d7)
+
+.setfastmemplay
+    push    a6
+	move.l	moduleaddress(a5),a1	* onko chipissä?
+	lore	Exec,TypeOfMem
+    pop     a6
+	btst	#MEMB_CHIP,d0
+	seq     d1
+    moveq   #1,d0
+    and.b   d1,d0
+    move.l  #0,d1      * guess something for the buffer
+
+    DPRINT  "SetFastMemPlay=%ld"
+
+    * d0 = new state
+    * d1 = buffer size
+	moveq	#_LVOMEDSetFastMemPlay,d7
+	move.b	medtype(a5),d6
+	beq.b	.dof
+	moveq	#_LVOMEDSetFastMemPlay8,d7
+	subq.b	#1,d6
+	beq.b	.dof
+	rts
+.dof 
+    jmp	(a6,d7)
+
 
 
 .playmodule
