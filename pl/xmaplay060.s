@@ -879,6 +879,7 @@ mainErr	bsr.w	CloseAudio
 OpenGraphicsLib
 	move.l	4.w,a6
 	lea	GraphicsName(pc),a1
+	moveq	#36,d0
 	jsr	_LVOOpenLibrary(a6)
 	move.l	d0,GraphicsBase
 	rts
@@ -887,7 +888,7 @@ CloseGraphicsLib
 	tst.l	GraphicsBase(pc)
 	beq.b	.done
 	move.l	4.w,a6
-	move.l	DosBase(pc),a1
+	move.l	GraphicsBase(pc),a1
 	jsr	_LVOCloseLibrary(a6)
 .done	rts
 	
