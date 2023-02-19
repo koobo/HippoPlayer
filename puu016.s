@@ -9088,9 +9088,7 @@ fkeyaction
 gadgetsup:
 	bsr	    areMainWindowGadgetsFrozen
 	bne.b 	.exit
-    ; Close the search layout if open
-    jsr     switchToNormalLayoutIfPossible
-
+  
 	movem.l	d0-a6,-(sp)
 
 	* Deactivate tooltips for the gadget that was activated
@@ -9119,6 +9117,12 @@ gadgetsup:
     bsr     gadgetFindAction
     bra     .x
 .3
+    pushm   all
+    ; If user clicks outside of the search terms string
+    ; gadget, return to normal layout.
+    jsr     switchToNormalLayoutIfPossible
+    popm    all
+
 	add	d0,d0
 	lea	.gadlist-2(pc,d0),a0
 	add	(a0),a0
