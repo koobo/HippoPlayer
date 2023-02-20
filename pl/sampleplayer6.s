@@ -5695,7 +5695,7 @@ mhiInit:
     * Read a little to parse properties
     move.l  d7,d1
     move.l  #mpbuffer1,d2
-    move.l  #MPEGA_PCM_SIZE,d3
+    move.l  #MPEGA_PCM_SIZE*2,d3
     lob     Read
     DPRINT  "Read=%ld"
 
@@ -5713,12 +5713,84 @@ mhiInit:
     bsr     findMpegSync
     beq     .no
 
-    ;bfextu  (a0){11+2:2},d0
-    ;DPRINT  "Layer=%ld"
+;Bits (18,17)	Layer description
+;00 - reserved
+;01 - Layer III
+;10 - Layer II
+;11 - Layer I
 
-    bfextu  (a0){11+2+2+1:4},d0
-    move.w  .bitrates(pc,d0.w*2),mpbitrate(a5)
+    move.l  (a0),d1
+    moveq   #3,d0
+    and.l   d1,d0
+    lsr.l   #2,d1
+    DPRINT  "emphasis=%ld"
+    moveq   #1,d0
+    and.l   d1,d0
+    lsr.l   #1,d1
+    DPRINT  "original=%ld"
+    moveq   #1,d0
+    and.l   d1,d0
+    lsr.l   #1,d1
+    DPRINT  "copyright=%ld"
+    moveq   #3,d0
+    and.l   d1,d0
+    lsr.l   #2,d1
+    DPRINT  "mode extension=%ld"
+    moveq   #3,d0
+    and.l   d1,d0
+    lsr.l   #2,d1
+    DPRINT  "header=%ld"
+    moveq   #1,d0
+    and.l   d1,d0
+    lsr.l   #1,d1
+    DPRINT  "private bit=%ld"
+    moveq   #1,d0
+    and.l   d1,d0
+    lsr.l   #1,d1
+    DPRINT  "padding bit=%ld"
+    moveq   #3,d0
+    and.l   d1,d0
+    lsr.l   #2,d1
+    DPRINT  "sampling frequency=%ld"
+    cmp.b   #3,d0
+    bne     .ok2
+    DPRINT  "INVALID"
+.ok2
+    moveq   #$f,d0
+    and.l   d1,d0
+    lsr.l   #4,d1
+    DPRINT  "bitrate index=%ld"
+    move    d0,d3
+    cmp.b   #$f,d0
+    bne     .ok1
+    DPRINT  "INVALID"
+.ok1
+    moveq   #1,d0
+    and.l   d1,d0
+    lsr.l   #1,d1
+    DPRINT  "protection bit=%ld"
+    moveq   #3,d0
+    and.l   d1,d0
+    lsr.l   #2,d1
+    DPRINT  "layer=%ld"
+    move    d0,d2
+    cmp.b   #4,d0
+    bne     .ok3
+    DPRINT  "INVALID"
+.ok3
+    moveq   #1,d0
+    and.l   d1,d0
+    DPRINT  "id=%ld"
+
+    lea     .bitrates(pc),a0
+    move.l  (a0,d0.w*4),a0
+    move.l  (a0,d2.w*4),a0
+    moveq   #0,d0
+    move.w  (a0,d3.w*2),d0
+
+    move.w  d0,mpbitrate(a5)
     DPRINT  "Bitrate=%ld"
+
 
     bfextu  (a0){11+2+2+1+4:2},d0
     DPRINT  "Sampling frequency=%ld"
@@ -5747,8 +5819,43 @@ mhiInit:
     moveq   #0,d0   * ok
     rts
 
+
 .bitrates
-    dc.w    0,32,40,48,56,64,80,96,112,128,160,192,224,256,320
+  dc.l    .bitrates0
+  dc.l    .bitrates1
+
+.bitrates0
+  dc.l    .bitrates00
+  dc.l    .bitrates01
+  dc.l    .bitrates02
+.bitrates1
+  dc.l    .bitrates10
+  dc.l    .bitrates11
+  dc.l    .bitrates12
+
+.bitrates00
+  dc.w    0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256, 0
+.bitrates01
+  dc.w    0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0
+.bitrates02
+  dc.w    0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0
+.bitrates10
+  dc.w    0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0
+.bitrates11
+  dc.w    0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 0
+.bitrates12
+  dc.w    0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0
+
+
+;const INT16 MPT_bitrate[ 2 ][ 3 ][ 16 ] = {
+;   { {0,32,48,56,64,80,96,112,128,144,160,176,192,224,256,0},
+;     {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160,0},
+;     {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160,0} },
+;
+;   { {0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,0},
+;     {0,32,48,56,64,80,96,112,128,160,192,224,256,320,384,0},
+;     {0,32,40,48,56,64,80,96,112,128,160,192,224,256,320,0} }
+;};
 
 .mem   
     bsr     mhiDeinit
