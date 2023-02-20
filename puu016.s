@@ -8585,6 +8585,8 @@ nappuloita:
 ;.3	
 	cmp.b	#$21,d3	 	* s + control
  	bne.b	.4
+    tst     boxsize(a5) * Disable if box hidden
+    beq     .ee
 	jsr		searchActivate
 	bra	.ee
 .4
@@ -9212,7 +9214,11 @@ printbox:
 	bra	print
 
 rlistmode:
-	jmp	toggleListMode
+    ; No toggling while in Zoomed mode
+    tst     boxsize(a5)
+    beq     beep
+	jmp	    toggleListMode
+
 ;rlistmodePop:
 ;    jmp toggleListModePopup
 
@@ -9786,6 +9792,8 @@ gadgetFindAction:
 find_new:
 	cmp.l	#3,modamount(a5)
 	bhi.b	.ok
+    tst     boxsize(a5) * Disable if box hidden
+    bne     .ok
 	bra     beep
 .ok
     jmp     switchToLocalSearchLayout
