@@ -52696,6 +52696,7 @@ remoteSearch
     jmp     freemem
     
 
+* Modland whitelist
 * In:
 *   a3 = name to check, ends with 10 or 0
 * Out:
@@ -52808,6 +52809,7 @@ remoteSearch
 	dc.l	"jpn."
 	dc.l	"mcr."
 	dc.l	"qts."
+    dc.l    "cust"
 	dc.l	0
 
 .aminetLine
