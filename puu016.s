@@ -9780,12 +9780,10 @@ gadgetFindAction:
     bra     forceRefreshList
 
 find_new:
-	cmp.l	#3,modamount(a5)
-	bhi.b	.ok
     tst     boxsize(a5) * Disable if box hidden
-    bne     .ok
-	bra     beep
-.ok
+    beq     beep
+	cmp.l	#3,modamount(a5)
+	blo 	beep
     jmp     switchToLocalSearchLayout
     
 ;	bsr	get_rt
