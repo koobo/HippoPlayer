@@ -829,16 +829,6 @@ favorites_new	rs.b	1
 tooltips_new	rs.b 	1	
 savestate_new	rs.b 	1
 altbuttons_new  rs.b   1
-quadraScope_new rs.b 1
-quadraScopeBars_new rs.b 1
-quadraScopeF_new rs.b 1
-quadraScopeFBars_new rs.b 1
-hippoScope_new rs.b 1
-hippoScopeBars_new rs.b 1
-patternScope_new rs.b 1
-patternScopeXL_new rs.b 1
-spectrumScope_new rs.b 1
-spectrumScopeBars_new rs.b 1
 	
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -13889,12 +13879,6 @@ prefs_code
 	move.b	altbuttons(a5),altbuttons_new(a5)
 	move.b	mhiEnable(a5),mhiEnable_new(a5)
 
-	move.b quadraScopeBars(a5),quadraScopeBars_new(a5)        
-	move.b quadraScopeFBars(a5),quadraScopeFBars_new(a5)         
-	move.b hippoScopeBars(a5),hippoScopeBars_new(a5)       
-	move.b spectrumScopeBars(a5),spectrumScopeBars_new(a5)  
-
-
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
 	move.l	ahi_mode(a5),ahi_mode_new(a5)
@@ -15437,7 +15421,7 @@ rHippoScopeBars
 	bsr	restartHippoScopeTask
 
 pHippoScopeBars
-	move.b	hippoScopeBars_new(a5),d0
+	move.b	prefsdata+prefs_hippoScopeBars(a5),d0
 	lea	prefsHippoScopeBars,a0
 	bra	tickaa
 
