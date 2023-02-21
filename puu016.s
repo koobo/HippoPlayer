@@ -26376,26 +26376,26 @@ drawScope:
 	* Get normal scope area
 	bsr	requestNormalScopeDrawArea
 	bne.b	.sampleSkip * wait for resize
-
-	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
-	beq.b	.fil
-	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,s_quadmode2(a4)	
-	beq.b	.fil
-	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
-	beq	freqscope
-	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
-	beq	freqscope
-	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
-	beq.b	.sampleSkip
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)	
-	beq.b	.sampleSkip
+    
+    * bit 7 indicates bars
+    moveq   #$1f,d0
+    and.b   s_quadmode(a4),d0
+    cmp.b   #QUADMODE_FQUADRASCOPE,d0
+    beq     .fil
+    cmp.b   #QUADMODE_FREQANALYZER,d0
+    beq     freqscope
+    cmp.b   #QUADMODE_HIPPOSCOPE,d0
+    beq     sampleHippoScope
+    cmp.b   #QUADMODE_PATTERNSCOPE,d0
+    beq     .sampleSkip
 	* Default
-	bsr	samplescope
+	bra     samplescope
 .sampleSkip
 	rts
 .fil
 	bsr	samplescopefilled
 	bra.b	mirrorfill
+
 
 .renderPS3M
 	* PS3M scope
@@ -27118,7 +27118,7 @@ piup2	macro
 *********** Scopet PS3M
 *** stereoscope
 
-multiscope
+multiscope:
 
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
@@ -27145,7 +27145,7 @@ multiscope
     * This returns the buffer mask or size limit in d4
 	bsr	getps3mb
     moveq   #1,d3
-multiscope0
+multiscope0:
     * d3 = sample modulo
    
 .drlo	
@@ -27196,7 +27196,7 @@ multiscope0
 
 
 
-multiscopefilled
+multiscopefilled:
 
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
@@ -27224,7 +27224,7 @@ multiscopefilled
      * sample modulo 8-bit
     moveq   #1,d3   
 
-multiscopefilled0
+multiscopefilled0:
 
 hurl	macro 
 	move	d6,d2
@@ -27280,10 +27280,14 @@ multihipposcope:
 	move.l	(a2),d5
 	lsr.l	#8,d5
 
+	bsr.b	getps3mb
+
+    moveq   #1,d6   * sampledata modulo
+
+multihipposcope0:
 	lea	s_multab(a4),a2
 	move.l	s_draw1(a4),a3
-	bsr.b	getps3mb
-	moveq	#32,d6
+	;moveq	#32,d6
 	moveq	#120-1,d7
 .d
 
@@ -27295,7 +27299,8 @@ multihipposcope:
 	move.b	5(a1,d5.l),d2
 	asr.b	#2,d2 
 	ext	d2
-	add	d6,d2
+	;add	d6,d2
+    add     #32,d2
 	add	d2,d2
 	move	(a2,d2),d3
 
@@ -27311,18 +27316,19 @@ multihipposcope:
 	sub	d2,d3
 	bset	d1,39(a3,d3)
 
-	addq.l	#1,d5
+;	addq.l	#1,d5
+    add.l   d6,d5
 
 	cmp.l	d4,d5
-	bne.b	*+4
+	bne.b	.x
 	moveq	#0,d5
-
+.x
 	dbf	d7,.d
 
 	rts
 
 
-getps3mb
+getps3mb:
 	push	a0
 	move.l	ps3m_buffSizeMask(a5),a0
 	move.l	(a0),d4
@@ -28148,14 +28154,37 @@ samplescope:
 	lea	19(a0),a0
 	moveq	#19-1,d7
 	bsr	multiscope0
-	bsr.b	samples0
+	bsr 	samples0
 	lea	39(a0),a0
 	move.l	samplepointer2(a5),a1
 	move.l	(a1),a1
 	moveq	#19-1,d7
 	bra	multiscope0
 
-samplescopefilled
+sampleHippoScope:
+	tst.b	samplestereo(a5)
+	beq     .mono
+	bsr 	samples0
+    * d4 = sample data mask
+    * d5 = sample follow  position
+    bne     .hasData
+.mono
+    ; not supported
+    rts
+.hasData
+    jsr     getSampleDataModulo
+    move.l  d0,d6 * d6 = 1 or 2
+	move.l	samplepointer(a5),a1
+	move.l	(a1),a1
+	move	#240,d0
+    bsr     multihipposcope0
+
+	move.l	samplepointer2(a5),a1
+	move.l	(a1),a1
+	move	#88,d0
+    bra     multihipposcope0
+
+samplescopefilled:
 	bsr.b	samples0
     bne     .hasData
     rts
