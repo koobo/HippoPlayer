@@ -25523,6 +25523,14 @@ initScopeBitmaps
 	btst	#MEMB_CHIP,d0
 	sne		s_bufferIsChip(a4)
 
+    cmp.w   #50,LIB_VERSION(a6)
+    blo.b   .1
+    * Kickstart 4.0, 4.1, CPU is PPC.
+    * Could be non-classic HW in this case.
+    * Switch to CPU only routines.
+    clr.b   s_bufferIsChip(a4)
+.1
+
 	moveq	#1,d0 * ok
 .memError
 	rts
