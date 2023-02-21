@@ -30974,10 +30974,9 @@ get_med1
     move.l  a1,d0
     DPRINT  "Opening %s"
  endif
-;	moveq	#6,d0
+	moveq	#7,d0
 	push	a6
-;	lore	Exec,OpenLibrary
-	lore	Exec,OldOpenLibrary
+	lore	Exec,OpenLibrary
 	pop	a6
 	move.l	d0,_MedPlayerBase1(a5)
 	rts	
@@ -30991,10 +30990,9 @@ get_med2
     move.l  a1,d0
     DPRINT  "Opening %s"
  endif
-;	moveq	#6,d0
+	moveq	#7,d0
 	push	a6
-;	lore	Exec,OpenLibrary
-	lore	Exec,OldOpenLibrary
+	lore	Exec,OpenLibrary
 	pop	a6
 	move.l	d0,_MedPlayerBase2(a5)
 	rts	
@@ -31008,9 +31006,8 @@ get_med3
     move.l  a1,d0
     DPRINT  "Opening %s"
  endif
-;	moveq	#7,d0
+	moveq	#7,d0
 	push	a6
-;	lore	Exec,OpenLibrary
 	lore	Exec,OldOpenLibrary
 	pop	a6
 	move.l	d0,_MedPlayerBase3(a5)
