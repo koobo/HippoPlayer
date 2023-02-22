@@ -7,7 +7,7 @@ DEBUG	=	0
  endif
 
  ifnd SERIALDEBUG
-SERIALDEBUG = 1
+SERIALDEBUG = 0
  endif
 
 
@@ -386,6 +386,9 @@ sample_segment
 	dc.l	0
 	jmp	sample_code
 
+
+mpegaName	dc.b	"mpega.library",0
+ even
 
  if DEBUG
 flash1	move	#$f00,d0
@@ -963,7 +966,7 @@ init:
 ._2  
 
 	move.l	4.w,a6
-	lea	.mplibn(pc),a1
+	lea	    mpegaName(pc),a1
     moveq   #2,d0
 	lob	    OpenLibrary
 	move.l	d0,_MPEGABase(a5)
@@ -1102,9 +1105,6 @@ init:
 	dc.l	0	* stream buffer size (0=default)
 
 
-
-.mplibn	dc.b	"mpega.library",0
- even
 
 
 
@@ -4930,6 +4930,7 @@ mpega_skip_id3v2_stream
     move.l  d0,id3v2Data(a5)
     move.l  d0,a3
 
+    * The size is = total header header size - 10 bytes
     * d3 is the size of the header, amount of data to skip
     move.l  d3,d0
     
@@ -5692,12 +5693,6 @@ mhiInit:
     move.l  d0,mhiStreamSize(a5)
     DPRINT  "remote stream size=%ld"
 .go
-    * Read a little to parse properties
-    move.l  d7,d1
-    move.l  #mpbuffer1,d2
-    move.l  #MPEGA_PCM_SIZE*2,d3
-    lob     Read
-    DPRINT  "Read=%ld"
 
     ; Stash some default values, might be incorrect
     clr.b   kutistus(a5)    * no resampling
@@ -5708,100 +5703,9 @@ mhiInit:
     st      mplippu(a5)
     move    #3,mplayer(a5)
 
-    ; Find actual values from the 1st frame
-    lea     mpbuffer1,a0
-    bsr     findMpegSync
-    beq     .no
-
-;Bits (18,17)	Layer description
-;00 - reserved
-;01 - Layer III
-;10 - Layer II
-;11 - Layer I
-
-    move.l  (a0),d1
-    moveq   #3,d0
-    and.l   d1,d0
-    lsr.l   #2,d1
-    DPRINT  "emphasis=%ld"
-    moveq   #1,d0
-    and.l   d1,d0
-    lsr.l   #1,d1
-    DPRINT  "original=%ld"
-    moveq   #1,d0
-    and.l   d1,d0
-    lsr.l   #1,d1
-    DPRINT  "copyright=%ld"
-    moveq   #3,d0
-    and.l   d1,d0
-    lsr.l   #2,d1
-    DPRINT  "mode extension=%ld"
-    moveq   #3,d0
-    and.l   d1,d0
-    lsr.l   #2,d1
-    DPRINT  "header=%ld"
-    moveq   #1,d0
-    and.l   d1,d0
-    lsr.l   #1,d1
-    DPRINT  "private bit=%ld"
-    moveq   #1,d0
-    and.l   d1,d0
-    lsr.l   #1,d1
-    DPRINT  "padding bit=%ld"
-    moveq   #3,d0
-    and.l   d1,d0
-    lsr.l   #2,d1
-    DPRINT  "sampling frequency=%ld"
-    cmp.b   #3,d0
-    bne     .ok2
-    DPRINT  "INVALID"
-.ok2
-    moveq   #$f,d0
-    and.l   d1,d0
-    lsr.l   #4,d1
-    DPRINT  "bitrate index=%ld"
-    move    d0,d3
-    cmp.b   #$f,d0
-    bne     .ok1
-    DPRINT  "INVALID"
-.ok1
-    moveq   #1,d0
-    and.l   d1,d0
-    lsr.l   #1,d1
-    DPRINT  "protection bit=%ld"
-    moveq   #3,d0
-    and.l   d1,d0
-    lsr.l   #2,d1
-    DPRINT  "layer=%ld"
-    move    d0,d2
-    cmp.b   #4,d0
-    bne     .ok3
-    DPRINT  "INVALID"
-.ok3
-    moveq   #1,d0
-    and.l   d1,d0
-    DPRINT  "id=%ld"
-
-    lea     .bitrates(pc),a0
-    move.l  (a0,d0.w*4),a0
-    move.l  (a0,d2.w*4),a0
-    moveq   #0,d0
-    move.w  (a0,d3.w*2),d0
-
-    move.w  d0,mpbitrate(a5)
-    DPRINT  "Bitrate=%ld"
+    bsr     mhiReadMp3Properties
 
 
-    bfextu  (a0){11+2+2+1+4:2},d0
-    DPRINT  "Sampling frequency=%ld"
-    tst.b   d0
-    beq.b   .r
-    move    #48000,samplefreq(a5)
-.r
-    bfextu  (a0){11+2+2+1+4+2+1+1:2},d0
-    DPRINT  "Channel mode=%ld"
-    cmp.b   #%11,d0
-    sne     samplestereo(a5)
 
 
     move.l  mhiStreamSize(a5),d0
@@ -5819,43 +5723,6 @@ mhiInit:
     moveq   #0,d0   * ok
     rts
 
-
-.bitrates
-  dc.l    .bitrates0
-  dc.l    .bitrates1
-
-.bitrates0
-  dc.l    .bitrates00
-  dc.l    .bitrates01
-  dc.l    .bitrates02
-.bitrates1
-  dc.l    .bitrates10
-  dc.l    .bitrates11
-  dc.l    .bitrates12
-
-.bitrates00
-  dc.w    0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256, 0
-.bitrates01
-  dc.w    0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0
-.bitrates02
-  dc.w    0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0
-.bitrates10
-  dc.w    0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0
-.bitrates11
-  dc.w    0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 0
-.bitrates12
-  dc.w    0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0
-
-
-;const INT16 MPT_bitrate[ 2 ][ 3 ][ 16 ] = {
-;   { {0,32,48,56,64,80,96,112,128,144,160,176,192,224,256,0},
-;     {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160,0},
-;     {0,8,16,24,32,40,48,56,64,80,96,112,128,144,160,0} },
-;
-;   { {0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,0},
-;     {0,32,48,56,64,80,96,112,128,160,192,224,256,320,384,0},
-;     {0,32,40,48,56,64,80,96,112,128,160,192,224,256,320,0} }
-;};
 
 .mem   
     bsr     mhiDeinit
@@ -6256,61 +6123,166 @@ mhiFillBuffer:
  endif
     rts
 
+* Read MPEG stream properties by opening it with the MPEGA lib
+mhiReadMp3Properties
+* mpega stream
+	rsreset
+.norm		rs	1	* 1 or 2
+.layer		rs	1	* 0...3
+.mode		rs	1	* 1...3
+.bitrate	rs	1	* in kbps	
+.frequency	rs.l	1	* in Hz
+.channels	rs	1	* 1 or 2
+.ms_duration	rs.l	1	* duration in ms
 
-* Find MPEG sync word
 
-;#define SYNC_VALID( v ) ( ((v & 0xFFE00000) == 0xFFE00000) &&\
-;                          ((v & 0x00060000) != 0x00000000) &&\
-;                          ((v & 0xF000) != 0xF000) &&\
-;                          ((v & 0xF000) != 0x0000) &&\
-;                          ((v & 0x0C00) != 0x0C00) )
+    DPRINT  "mhiReadMp3Properties"
+	move.l	4.w,a6
+	lea	    mpegaName(pc),a1
+    moveq   #2,d0
+	lob	    OpenLibrary
+	move.l	d0,_MPEGABase(a5)
+	beq     .x
 
-* in:
-*   a0 = buffer
-* Out:
-*   d0 = true if found
-*   a0 = address of the header
-findMpegSync:
-	move	#MPEGA_PCM_SIZE-4-1,d1
-.loop
-	move.b	(a0),d2
-	lsl.l	#8,d2
-	move.b	1(a0),d2
-	lsl.l	#8,d2
-	move.b	2(a0),d2
-	lsl.l	#8,d2
-	move.b	3(a0),d2
-	
-	move.l	d2,d3
-	and.l	#$FFE00000,d3
-	cmp.l	#$FFE00000,d3
-	bne.b	.next
 
-	move.l	d2,d3
-	and.l	#$00060000,d3
-	beq.b	.next
+	lea	.mpega_hook(pc),a0
+	lea	.mpega_hook_func(pc),a1
+	move.l	a1,h_Entry(a0)
 
-	move.l	d2,d3
-	and.l	#$F000,d3
-	cmp.w	#$F000,d3
-	beq.b	.next
+	move.l	modulefilename(a5),a0
+  	lea	    .control(pc),a1	
+	lore	MPEGA,MPEGA_open
+    DPRINT  "MPEGA_open=%lx"
+    tst.l   d0
+    beq     .x
+    move.l  d0,a0
 
-	move.l	d2,d3
-	and.l	#$F000,d3
-	beq.b	.next
-	
-	move.w	d2,d3
-	and.w	#$0C00,d3
-	cmp.w	#$0C00,d3
-	bne.b	.yepSyncWord
-.next
-    addq    #1,a0
-	dbf	d1,.loop
+	move	.layer(a0),mplayer(a5)
+	move	.bitrate(a0),mpbitrate(a5)
+	move	.mode(a0),d1
+	cmp	#MPEGA_MODE_MONO,d1
+	sne	samplestereo(a5)	* stereo
+	st	samplebits(a5)		* 16-bit
+	move.l	.frequency(a0),d1
+	move	d1,samplefreq(a5)
+
+    lob     MPEGA_close
+
+ if DEBUG
     moveq   #0,d0
+    move    mpbitrate(a5),d0
+    DPRINT  "bitrate=%ld"
+    moveq   #0,d0
+    move    samplefreq(a5),d0
+    DPRINT  "frequency=%ld"
+ endif
+ 
+.x
     rts
-.yepSyncWord
-    moveq   #1,d0
-    rts
+
+
+.control	
+	dc.l	.mpega_hook	* no hook
+;	dc.l	0
+
+* layer 1 & 2
+	dc	0	* 1 = force mono
+* mono
+.fd1	dc	4	* freq_div 1, 2 or 4
+.q1	dc	0	* quality 0 (low) ... 2 (high)
+	dc.l	0	* freq_max
+* stereo
+.fd2	dc	4	* freq_div 1, 2 or 4
+.q2	dc	0	* quality 0 (low) ... 2 (high)
+	dc.l	0	* freq_max
+
+	
+* layer 3
+	dc	0	* 1 = force mono
+* mono
+.fd3	dc	4	* freq_div 1, 2 or 4
+.q3	dc	0	* quality 0 (low) ... 2 (high)
+	dc.l	0	* freq_max
+* stereo
+.fd4	dc	4	* freq_div 1, 2 or 4
+.q4	dc	0	* quality 0 (low) ... 2 (high)
+	dc.l	0	* freq_max
+
+
+	dc	0	* check validity if 1 
+	dc.l	2048	* stream buffer size (0=default)
+    
+.mpega_hook
+	* Hook structure from utility.i
+	ds.b	h_SIZEOF
+	
+* In:
+*   a0 = APTR hook
+*   a1 = MPEGA_ACCESS *access
+*   a2 = APTR handle
+.mpega_hook_func
+	pushm	d1-a6
+	bsr.b	.doHook
+	popm	d1-a6
+	rts
+.doHook
+	lea	var_b(pc),a5
+	move.l	_DosBase(a5),a6
+
+	cmp.l	#MPEGA_BSFUNC_OPEN,(a1)
+	beq 	.mpega_hook_open
+	cmp.l	#MPEGA_BSFUNC_READ,(a1)
+	beq 	.mpega_hook_read
+	cmp.l	#MPEGA_BSFUNC_SEEK,(a1)
+	beq 	.mpega_hook_seek
+	cmp.l	#MPEGA_BSFUNC_CLOSE,(a1)
+	beq 	.mpega_hook_close
+	moveq	#-1,d0
+	rts
+
+.mpega_hook_open
+    DPRINT  "mpega_hook_open"
+
+ if DEBUG
+    move.l	a1,a3
+	move.l	4(a3),d0
+	DPRINT	"%s"
+    clr.l   12(a3)
+ endif
+
+    move.l  mhiFile(a5),d0
+    DPRINT  "mhi handle=%lx"
+	* Return Dos file handle
+	rts	
+
+.mpega_hook_close
+    DPRINT  "mpega_hook_close"
+	moveq	#0,d0	* ok
+	rts
+
+.mpega_hook_read
+    DPRINT  "mpega_hook_read"
+
+	move.l	a2,d1    * handle
+	move.l	4(a1),d2 * buffer addr
+	move.l	8(a1),d3 * length to read
+	lob	Read
+    DPRINT  "read=%ld"
+	cmp.l	#-1,d0
+	beq.b	.mpega_read_err
+	rts	
+.mpega_read_err
+	* eof
+	moveq	#0,d0
+	rts
+
+
+.mpega_hook_seek
+    DPRINT  "mpega_hook_seek"
+	moveq	#0,d0 * ok
+	rts
+
+
 
 ***************************************************************************
 *
