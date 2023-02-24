@@ -1156,7 +1156,7 @@ loading2	rs.b	1		* ~0: filejen addaus meneill‰‰n
 favoriteListHeader	rs.b 	MLH_SIZE
 * Flag indicates the list has changed before last save
 favoriteListChanged	rs.b	1
-			rs.b	1	* pad
+windowClosedViaScreenNotify			rs.b	1	
 
 * List for file browser
 fileBrowserListHeader	rs.b	MLH_SIZE
@@ -3047,7 +3047,10 @@ main:
 
 	bsr	init_inputhandler
 	bsr	init_screennotify
+    tst.b   win(a5)
+    beq     .noScopes
 	jsr	startAndStopScopeTasks
+.noScopes
 
 	tst.b	infoon(a5)
 	beq.b	.qq
@@ -7332,11 +7335,14 @@ omaviesti
 	movem.l	snm_Type(a1),d3/d4
 	cmp.l	#SCREENNOTIFY_TYPE_WORKBENCH,d3
 	bne	.huh
+    ; snm_Value = FALSE: WB will be closed
+    ; snm_Value = TRUE: WB is open
 	tst.l	d4
 	bne.b	.open
 
 	tst.b	win(a5)			* HIDE!
 	beq	.huh
+    bset  #0,windowClosedViaScreenNotify(a5)
 	bsr	sulje_ikkuna
 	clr.b	win(a5)
 	bsr	sulje_prefs
@@ -7347,6 +7353,9 @@ omaviesti
 .open	
 	tst.b	win(a5)
 	bne	.huh
+    * Reopen if closed earlier via screen notify
+    bclr #0,windowClosedViaScreenNotify(a5)
+    beq .huh
 	bsr	openw
 	bra	.huh
 
