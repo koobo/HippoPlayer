@@ -312,13 +312,17 @@ mhiVolumeSignal rs.b    1
 mhiPlaying      rs.b    1
 mhiNoMoreData   rs.b    1
 mhiReady        rs.b    1
-                rs.b    1
+mhiInitError    rs.b    1
 mhiTask         rs.l    1
 mhiBase         rs.l    1
 mhiFile         rs.l    1
 mhiStreamSize   rs.l    1
 mhiHandle       rs.l    1
 mhiLibName      rs.l    1
+
+
+mainTask    rs.l    1
+
 
  if DEBUG
 output			rs.l 	1
@@ -613,6 +617,10 @@ init:
 	clr.b	cybercalibration(a5)
 .noz
 	DPRINT	"Start"
+
+    sub.l   a1,a1
+    lore    Exec,FindTask
+    move.l  d0,mainTask(a5)
 
 	move.l	(a5),a0
 	btst	#AFB_68020,AttnFlags+1(a0)
@@ -1656,6 +1664,11 @@ init:
 
 	DPRINT	"CreateProc"
 
+    ; Clear this so that it's safe to use later
+    moveq   #0,d0
+    moveq   #SIGF_SINGLE,d1
+    lore    Exec,SetSignal
+
 ** k‰ynnistet‰‰n prosessi
 	pushpea	.pn(pc),d1
 	moveq	#0,d2			* pri
@@ -1663,8 +1676,22 @@ init:
 	lsr.l	#2,d3
 	move.l	#4000,d4
 	lore	Dos,CreateProc
-	tst.l	d0
-	beq.b	.error
+    tst.l	d0
+	beq 	.error
+
+
+    DPRINT  "process started"
+
+    tst.b   mhiEnable(a5)
+    beq     .mhi1
+    DPRINT  "await MHI status"
+    * MHI will signal if it has started ok or failed, wait here
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Wait
+    tst.b   mhiInitError(a5)
+    bne     .mhiInitError
+.mhi1
+
 	addq	#1,sample_prosessi(a5)
 
 ** palautetaan arvoja
@@ -1711,6 +1738,11 @@ init:
 .vaara
 	DPRINT	"ier_unknown"
 	moveq	#ier_unknown,d0
+	bra	sampleiik
+
+.mhiInitError	
+	DPRINT	"ier_mhi"
+	moveq	#ier_mhi,d0
 	bra	sampleiik
 
 
@@ -2111,9 +2143,9 @@ ahiunhalt
 *********************************************************************
 
 sampleiik:
-
+    DPRINT  "sampleiik"
 	pushm	all
-	
+
 	bsr	clearsound
 	bsr	vapauta_kanavat
 	bsr	closesample
@@ -2180,32 +2212,16 @@ sample_code:
 
 	DPRINT	"*** Process ***"
 
-;	bsr	ahi_alustus
-;	beq	.zee
-;.koa	move	$dff006,$dff180
-;	btst	#6,$bfe001
-;	bne.b	.koa
-;	bra	quit2
-;.zee
-;	move	mainvolume+var_b(pc),d0
-;	bsr	vol
-
-
-;	moveq	#10,d1
-;.ee	move	#-1,d0
-;.e	move	$dff006,$dff180
-;	dbf	d0,.e
-;	dbf	d1,.ee
-
-;	bsr	sampleiik
-;	lore	Exec,Forbid
-;	clr	sample_prosessi(a5)
-;	clr.b	killsample(a5)
-;	rts
-
     tst.b   mhiEnable(a5)
     beq     .nomhi  
     bsr     mhiStart
+    DPRINT  "mhiStart=%ld"
+    * In case of failure skip the main cleanup,
+    * this will be done by the main task when it detects
+    * the MHI failure.
+    tst.l   d0
+    beq     quit3
+    * MHI operation finished succesfully
     bra     quit2
 .nomhi
 
@@ -3830,6 +3846,8 @@ quit:
 quit2:	
 	DPRINT	"quit2"
 	bsr	sampleiik
+quit3:
+	DPRINT	"quit3"
     DPRINT  "task exiting"
 	lore	Exec,Forbid
 	clr	sample_prosessi(a5)
@@ -5618,20 +5636,6 @@ mhiInit:
     move.l  d0,mhiBase(a5)
     beq     .noLib
 
-    ; Test open the decoder
-	sub.l	a1,a1
-	lob FindTask
-
-    move.l  d0,a0
-    moveq   #SIGF_SINGLE,d1
-    move.l  mhiBase(a5),a6
-    lob     MHIAllocDecoder
-    DPRINT  "MHIAllocDecoder=%lx"
-    tst.l   d0
-    beq     .noDecoder
-    move.l  d0,a3
-    lob     MHIFreeDecoder
-
     * Have buffers
     move.l	#MHI_BUFSIZE*MHI_BUFCOUNT,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -5660,7 +5664,7 @@ mhiInit:
     * This allows throttled streams to work better.
     DPRINT  "Radio station, buffering for 2 secs!"
     moveq   #2*50,d1
-    lob     Delay
+    lore    Dos,Delay
     bra     .cantSeek
 .notRemotex
     * Get current position
@@ -5788,9 +5792,21 @@ mhiStart:
     move.l  mhiTask(a5),a0
     DPRINT  "signal mask=%lx"
     lob     MHIAllocDecoder
+    ;moveq   #0,d0 - FAKE ERROR
     DPRINT  "MHIAllocDecoder=%lx"
     move.l  d0,mhiHandle(a5)
-    beq     .mhiExit
+    seq     mhiInitError(a5)
+
+    * Init done, status is set.
+    * Send signal to main task.
+    push    a6
+    move.l  mainTask(a5),a1
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Signal
+    pop     a6
+
+    tst.l   mhiHandle(A5)
+    beq     .mhiExitError
 
  if DEBUG
     move.l  mhiHandle(a5),a3
@@ -5884,7 +5900,15 @@ mhiStart:
 .mhiExit
     DPRINT  "mhiExit"
     bsr     mhiDeinit
+    moveq   #1,d0
     rts
+
+.mhiExitError:
+    DPRINT  "mhiError" 
+    bsr     .mhiExit
+    moveq   #0,d0
+    rts
+
 
 mhiDeinit:
     DPRINT  "mhiDeinit"
@@ -6243,13 +6267,13 @@ mhiReadMp3Properties
 .mpega_hook_open
     DPRINT  "mpega_hook_open"
 
- if DEBUG
-    move.l	a1,a3
-	move.l	4(a3),d0
-	DPRINT	"%s"
-    clr.l   12(a3)
- endif
-
+; if DEBUG
+;    move.l	a1,a3
+;	move.l	4(a3),d0
+;	DPRINT	"%s"
+;    clr.l   12(a3)
+; endif
+;
     move.l  mhiFile(a5),d0
     DPRINT  "mhi handle=%lx"
 	* Return Dos file handle
