@@ -6011,6 +6011,10 @@ mhiDoStop:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT "MHIGetStatus=%ld"
+ endif
     cmp.b   #MHIF_PLAYING,d0
     bne     .1
     DPRINT  "MHIPause"
@@ -6030,7 +6034,13 @@ mhiDoCont:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT "MHIGetStatus=%ld"
+ endif
     cmp.b   #MHIF_OUT_OF_DATA,d0
+    beq.b   .2
+    cmp.b   #MHIF_STOPPED,d0
     beq.b   .2
     cmp.b   #MHIF_PAUSED,d0
     bne     .1
