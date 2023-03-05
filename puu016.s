@@ -1134,6 +1134,11 @@ ps3m_playpos	rs.l	1
 ps3m_buffSizeMask rs.l	1
 ps3mUnpackedPattern rs.l 1
 
+* Scopes usign PS3M as source data (or faked PS3M)
+* modulo. This is always 1 unless PSID+reSID+AHI is active.
+ps3m_sampleDataModulo   rs.l    1
+
+
 ahi_use_new		rs.b	1
 ahi_muutpois_new	rs.b	1
 ahi_rate_new		rs.l	1
@@ -19083,7 +19088,7 @@ inforivit_play
 .2	dc.b	"Pro/Fasttracker",0
 .3	dc.b	"Multitracker",0
 .4	dc.b	"Fasttracker ][ XM",0
-.5	dc.b	"ImpulseTracker      [DP]",0
+.5	dc.b	"ImpulseTracker [DP]",0
  even
 
 .eer	bsr	siisti_nimi
@@ -19103,11 +19108,27 @@ inforivit_play
 	lea	modulename(a5),a0
 	move.l	a0,d0
 
+    * Display additional "AHI" if running PS3M in AHI mode
+    pushpea type_notAhi(pc),d3
+    cmp     #pt_multi,playertype(a5)
+    bne     .notAhi
+    tst.b   ahi_use_nyt(a5)
+    beq     .notAhi
+    pushpea type_ahi(pc),d3
+.notAhi
+
+    * d0 = name; d1 = type; d2 = AHI/not ahi
 	lea	tyyppi1_t(pc),a0
 	tst	d2			* PS3M channel count
 	beq.b	.ic
+    * d0 = name; d1 = type; d2 = channel count; d3 = AHI/not ahi
 	lea	tyyppi2_t(pc),a0
-.ic	bsr	desmsg
+    bra     .icc
+.ic	
+    move.l  d3,d2
+.icc
+
+    bsr	desmsg
 
 	lea	desbuf(a5),a2		* moduletyyppi talteen
 	move.l	a2,a0
@@ -19390,11 +19411,14 @@ siisti_nimi
 	printt	"todo: align name and type for extra nicety"
 
 tyyppi1_t	dc.b	"Name: %s",10
-		dc.b	"Type: %s",0
+		dc.b	"Type: %s%s",0
 
 tyyppi2_t	dc.b	"Name: %s",10
-		dc.b	"Type: %s %ldch",0
+		dc.b	"Type: %s %ldch%s",0
 typpi
+
+type_ahi    dc.b    " AHI"
+type_notAhi dc.b    0
  even
 
 *******************************************************************************
@@ -27163,7 +27187,7 @@ multiscope:
 	move	#$80,d6
     * This returns the buffer mask or size limit in d4
 	bsr	getps3mb
-    moveq   #1,d3
+    move.l  ps3m_sampleDataModulo(a5),d3
 multiscope0:
     * d3 = sample modulo
    
@@ -27192,14 +27216,14 @@ multiscope0:
 
     ;bpl.b   .2
     bpl.b   *+6
-    * Beginning bound check
+    * Beginning bound check, ping pong
     neg.l   d3
     moveq   #0,d5
 ;.2
 	cmp.l	d4,d5
 ;	blo.b	.1
     blo.b   *+6
-    * End bound check
+    * End bound check, ping pong
     neg.l   d3
     add.l   d3,d5
 ; .1
@@ -27240,8 +27264,8 @@ multiscopefilled:
 	move	#$80,d6
 	bsr	getps3mb
 
-     * sample modulo 8-bit
-    moveq   #1,d3   
+     * sample modulo
+    move.l  ps3m_sampleDataModulo(a5),d3
 
 multiscopefilled0:
 
@@ -27301,12 +27325,19 @@ multihipposcope:
 
 	bsr.b	getps3mb
 
-    moveq   #1,d6   * sampledata modulo
+;    moveq   #1,d6   * sampledata modulo
+    move.l  ps3m_sampleDataModulo(a5),d6
 
 multihipposcope0:
 	lea	s_multab(a4),a2
 	move.l	s_draw1(a4),a3
-	;moveq	#32,d6
+
+    * Pointer to get the y-value: x+5
+    move    d6,d7
+    ;mulu    #5,d7
+    lsl     #3,d7
+    lea     (a1,d7.w),a0
+
 	moveq	#120-1,d7
 .d
 
@@ -27315,7 +27346,9 @@ multihipposcope0:
 	ext	d1
 	add	d0,d1
 
-	move.b	5(a1,d5.l),d2
+    ;move.b	5(a1,d5.l),d2
+    move.b	(a0,d5.l),d2
+
 	asr.b	#2,d2 
 	ext	d2
 	;add	d6,d2
@@ -36299,8 +36332,16 @@ p_sid:	jmp	.init(pc)
     cmp.b   #OM_RESID_8580,d0
     bne     .o2
 .o1 
-    * Show additional "14-bit" with reSID
-    move.b  #" ",-1(a1)
+    * Show additional "14-bit" or "AHI" with reSID.
+    * Also set up the AHI specific modulo
+    move.l  #" 14-",-1(a1)
+    move.l  #"bit"<<8,-1+4(a1)
+    move.l  #1,ps3m_sampleDataModulo(a5)
+    cmp.b   #5,residmode(a5)
+    bne     .o2
+    move.l  #2,ps3m_sampleDataModulo(a5)
+    move.l  #" AHI",-1(a1)
+    clr.b   -1+4(a1)
 .o2
     tst.w   d0
     bne.b   .o3
@@ -36451,10 +36492,8 @@ p_sid:	jmp	.init(pc)
     lob     GetRESIDAudioBuffer
     * a0 = buffer ptr 1
     * a1 = buffer ptr 2 (could be same as 1)
-    * d0 = buffer length
+    * d0 = buffer length, bytes or words
     * d1 = period value
-    ;subq.l  #2,d0   * removes static pixels from scope
-    move.l  d0,residPosMask
     movem.l a0/a1,residBufPtr1
  if DEBUG
     move.l  a0,d1
@@ -36948,6 +36987,13 @@ sidScopeUpdate
     * a1 = buffer ptr 2 (could be same as 1)
     * d0 = buffer length
     * d1 = period value
+
+    cmp.b   #5,residmode(a5)
+    bne     .notAhi
+    * 16-bit samples, convert to bytes for scope limit checks
+    add.l   d0,d0
+.notAhi
+
     move.l  d0,residPosMask
     rts
 
@@ -41658,6 +41704,7 @@ p_multi:
 
 	addq	#1,ps3minitcount
 
+    move.l  #1,ps3m_sampleDataModulo(a5)
 	move	mixirate+2(a5),hip_ps3mrate+hippoport(a5)
 
 * välitetään tietoa ps3m:lle ja hankitaan sitä siltä
@@ -41671,6 +41718,13 @@ p_multi:
 	move	ahi_stereolev(a5),d5
 	move.l	ahi_mode(a5),d6
 	move.l	modulelength(a5),d7
+
+ if DEBUG
+    push    d0
+    move.l  d6,d0
+    DPRINT  "AHI mode=%lx"
+    pop     d0
+ endif
 
 	lea	ps3m_mname(a5),a0
 	lea	ps3m_numchans(a5),a1
@@ -47973,6 +48027,7 @@ p_xmaplay:
     pushpea .ps3mPos(pc),ps3m_playpos(a5)
     pushpea .buf1Ptr(pc),ps3m_buff1(a5)
     pushpea .buf2Ptr(pc),ps3m_buff2(a5)
+    move.l  #1,ps3m_sampleDataModulo(a5)
 
     bsr     .vol
 
@@ -51700,7 +51755,7 @@ spectrumGetPS3MSampleData
 .resid  
     * buffer size is in d1, it can be 277
     * or down to 46.
-
+    move.l  ps3m_sampleDataModulo(a5),d4
 .rloop
 	move.b	(a0,d0.l),d2
 	move.b	(a1,d0.l),d3
@@ -51709,7 +51764,7 @@ spectrumGetPS3MSampleData
 	add	d3,d2
 	asl	    #5,d2   * scaling!
     move	d2,(a2)+
-	addq.l	#1,d0
+	add.l	d4,d0
     * See if data ran out:
     cmp.l   d1,d0
     blo.b   .2
