@@ -37097,19 +37097,19 @@ isPlaysidReSID:
     move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
-	cmp     #4,LIB_REVISION(a0)
+	cmp     #5,LIB_REVISION(a0)
 	bne.b   .noRESID
     move.l  LIB_IDSTRING(a0),a0
-    cmp.b   #"1",16(a0)
-    bne.b   .noRESID
-    cmp.b   #"4",18(a0)
-    bne.b   .noRESID
-    cmp.b   #" ",19(a0)
-    bne.b   .noRESID
-    cmp.b   #"r",32(a0)
-    bne.b   .noRESID
-    cmp.b   #"e",33(a0)
-    bne.b   .noRESID
+;    cmp.b   #"1",16(a0)
+;    bne.b   .noRESID
+;    cmp.b   #"5",18(a0)
+;    bne.b   .noRESID
+;    cmp.b   #" ",19(a0)
+;    bne.b   .noRESID
+;    cmp.b   #"r",32(a0)
+;    bne.b   .noRESID
+;    cmp.b   #"e",33(a0)
+;    bne.b   .noRESID
    ; "playsid.library 1.4 (11.2.2023) reSID+SIDBlaster"
     pop     a0
     moveq   #1,d0
