@@ -70,6 +70,7 @@ FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_P61A        =   0
 FEATURE_LIST_TABS   =   0
+FEATURE_PASTE       =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -260,6 +261,11 @@ check	macro
 	include	libraries/timer_lib.i
 	include	devices/timer.i
 	include	intuition/sghooks.i
+
+ ifne FEATURE_PASTE
+    include libraries/iffparse_lib.i
+    include libraries/iffparse.i
+ endif
 
 	incdir include/
 	include	mucro.i
@@ -54405,6 +54411,131 @@ utf8ToLatin1Char:
     add.l   d1,a0
     rts
 
+
+***************************************************************************
+*
+* Clipboard
+*
+***************************************************************************
+
+ ifne FEATURE_PASTE
+readClipboard:
+    DPRINT  "a"
+; IFF types that may be text
+.ID_FTXT         equ     'FTXT'
+.ID_CHRS         equ     'CHRS'
+
+    moveq   #0,d7   * STATUS: error
+    sub.l   a4,a4   * iff handle
+
+    lea     .iffParseName(pc),a1
+	lore	Exec,OldOpenLibrary
+    tst.l   d0
+    beq     .exit
+    move.l  d0,a6
+
+    DPRINT  "b %lx"
+
+    lob     AllocIFF
+    tst.l   d0
+    beq     .exit
+    move.l  d0,a4
+    
+    DPRINT  "c %lx" 
+
+    moveq   #0,d0 ; default unit
+    lob     OpenClipboard
+    move.l  d0,iff_Stream(a4)
+    beq     .exit
+
+    DPRINT  "d %lx"
+
+    move.l  a4,a0
+    lob     InitIFFasClip
+
+    DPRINT  "e"
+
+    move.l  a4,a0
+    moveq   #IFFF_READ,d0
+    lob     OpenIFF
+    tst.l   d0
+    beq     .exit
+
+    DPRINT  "f %lx"
+
+    move.l  a4,a0
+    move.l  #.ID_FTXT,d0
+    move.l  #.ID_CHRS,d1
+    lob     StopChunk
+    tst.l   d0
+    beq     .exit
+
+    DPRINT  "g %lx"
+
+.loop
+    move.l  a4,a0
+    move.l  #IFFPARSE_SCAN,d0
+    lob     ParseIFF
+    DPRINT  "f %lx"
+
+    cmp.l   #IFFERR_EOC,d0
+    beq     .loop
+    tst.l   d0
+    beq     .exit
+
+    DPRINT  "h"
+
+    move.l  a4,a0
+    lob     CurrentChunk
+    DPRINT  "i"
+    * a0 = node
+    move.l  a0,d0
+    beq     .loop
+    cmp.l   #.ID_FTXT,cn_Type(a0)
+    bne     .loop
+    cmp.l   #.ID_CHRS,cn_ID(a0)
+    bne     .loop
+    DPRINT  "j"
+
+    move.l  a4,a0
+    move.l  #.bob,a1
+    move.l  #32,d0
+    lob     ReadChunkBytes
+    tst.l   d0
+    bmi     .loop
+
+    move.l  #.bob,d0
+    DPRINT  "got=%s"
+
+
+.exit
+    move.l  a4,d0
+    beq     .2
+    tst.l   iff_Stream(a4)
+    beq     .3
+    move.l  iff_Stream(a4),a0
+    lob     CloseClipboard
+.3
+    move.l  a4,a0
+    lob     CloseIFF
+    move.l  a4,a0
+    lob     FreeIFF
+.2
+
+    move.l  a6,d0
+    beq     .1
+    move.l  d0,a1
+    lore    Exec,CloseLibrary
+.1
+    move.l  d7,d0
+    rts
+
+.bob    ds.b    64
+
+.iffParseName   dc.b    "iffparse.library",0
+    even
+ endif
+ 
 ***************************************************************************
 *
 * Performance measurement with timer.device
