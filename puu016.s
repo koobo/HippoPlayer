@@ -10010,6 +10010,10 @@ rkelr
 newButtonAction
 rbutton11
 	skipIfGadgetDisabled gadgetNewButton
+    jsr     confirmFavoritesModification
+    bne     .1
+    rts
+.1
 	st	new(a5)
 ;	bsr	rbutton9		* Clear list
 	bra	rbutton1		* Play
