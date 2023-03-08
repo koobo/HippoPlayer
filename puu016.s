@@ -714,7 +714,9 @@ scopeToggleTable        rs.b 5 * Used by toggleScopes()
 * by LMB click, when scope was passivated because not being
 * visible. As this is global user does not need to do that again.
 scopeManualActivation	rs.b 1	
-__pad0     	        rs.b 1
+
+* Special flag to display a clarifying error message
+moduleWasRSID  	        rs.b 1
 
 scopeData  rs.b	 scope_size
 
@@ -29484,7 +29486,10 @@ tuntematonvirhe
 	bne.b	.groupSkip
 	lea	unknownDueToGroupDisabled_t(pc),a1
 .groupSkip
-
+    tst.b   moduleWasRSID(a5)
+    beq     .1
+    lea     .rsid_msg(pc),a1
+.1
 	lea	.g(pc),a2
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	bne.b	.noBr	
@@ -29501,6 +29506,8 @@ tuntematonvirhe
 
 .g	dc.b	"_Delete from list|_OK",0
 .onlyOk = *-4
+.rsid_msg
+    dc.b	"RSID format not supported!",0
  even
 
 *******************************************************************************
@@ -36904,15 +36911,17 @@ sid_remVolumePatch
 *******
 
 id_sid1 
-	bsr.b	id_sid1_
+	bsr.b	.id_sid1_
 	bne.b 	.no
 	bsr	moveModuleToPublicMem		* siirret‰‰n fastiin jos mahdollista
 	moveq	#0,d0 
 .no 
+    cmp.l   #"RSID",(a4)
+    seq     moduleWasRSID(a5)
+    tst.l   d0
 	rts
 
-
-id_sid1_
+.id_sid1_
 	cmp.l	#"PSID",(a4)
 	beq.b	.q
 	moveq	#-1,d0
