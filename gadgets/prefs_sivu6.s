@@ -77,7 +77,7 @@ nAMISKA3t	dc.b 1,0,1,0
 nAMISKA3tx	dc.b "MPEGA freq. div...",0
 	even
 nAMISKA4	dc.l nAMISKA5
-	dc.w 406,79,28,12,3,1,1
+	dc.w 406,79-8,28,12,3,1,1
 	dc.l 0,0,nAMISKA4t,0,0
 	dc.w 0
 	dc.l 0
@@ -87,7 +87,7 @@ nAMISKA4t	dc.b 1,0,1,0
 nAMISKA4tx	dc.b "MED output mode...",0
 	even
 nAMISKA5	dc.l 0
-	dc.w 260+120+8-4*8,107-12,174-120-8+4*8,12,7,9,3
+	dc.w 260+120+8-4*8,107-12+12-8+2,174-120-8+4*8,12,7,9,3
 	dc.l nAMISKA5gr,0,nAMISKA5t,0,nAMISKA5s
 	dc.w 0
 	dc.l 0

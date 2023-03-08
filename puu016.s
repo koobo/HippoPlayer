@@ -408,6 +408,7 @@ prefs_selectedSearch  rs.b      1
 prefs_mhiEnable       rs.b      1
 MHILIB_SIZE         =   39
 prefs_mhiLib          rs.b      MHILIB_SIZE
+prefs_medfastmemplay  rs.b     1
 prefs_size            rs.b      0
 
 *******************************************************************************
@@ -847,6 +848,8 @@ medratepot_new	rs	1
 sidmode_new     rs.b    1
 residmode_new   rs.b    1
 xmaplay_new     rs.b    1
+medfastmemplay_new rs.b  1
+            rs.b    1
 residfilter_new rs.b    1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
@@ -951,6 +954,7 @@ sidmode     rs.b    1
 residmode   rs.b    1
 xmaplay     rs.b    1
 residfilter rs.b    1
+medfastmemplay rs.b     1
 
 *******
 
@@ -13103,6 +13107,7 @@ loadprefs2
 	move.b	prefs_residmode(a0),residmode(a5)
 	move.b	prefs_residfilter(a0),residfilter(a5)
 	move.b	prefs_xmaplay(a0),xmaplay(a5)
+	move.b	prefs_medfastmemplay(a0),medfastmemplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
 	move.b	prefs_savestate(a0),savestate(a5)
@@ -13403,6 +13408,7 @@ saveprefs
 	move.b	residmode(a5),prefs_residmode(a0)
 	move.b	residfilter(a5),prefs_residfilter(a0)
 	move.b	xmaplay(a5),prefs_xmaplay(a0)
+	move.b	medfastmemplay(a5),prefs_medfastmemplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
@@ -13897,6 +13903,7 @@ prefs_code
 	move.b	residmode(a5),residmode_new(a5)
 	move.b	residfilter(a5),residfilter_new(a5)
 	move.b	xmaplay(a5),xmaplay_new(a5)
+	move.b	medfastmemplay(a5),medfastmemplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
@@ -14363,6 +14370,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	residmode_new(a5),residmode(a5)
 	move.b	residfilter_new(a5),residfilter(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
+	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
@@ -15103,6 +15111,7 @@ pupdate:				* Ikkuna päivitys
     bsr presidfilter    * reSID filter
     bsr pmhienable      * MHI enable
     bsr pmhilib         * MHI library
+    bsr pmedfastmemplay * MED FastMemPlay
 
 .x	popm	all
 	rts
@@ -15356,7 +15365,7 @@ gadgetsup2
     dr  rresidfilter * resid filter
     dr  rmhienable  * mhi enable
     dr  rmhilib     * mhi lib
-
+    dr  rmedfastmemplay * MED fast mem play
 
 rval0	moveq	#0,d0
 	bra	prefsgads2
@@ -17538,6 +17547,16 @@ pxmaplay
 	move.b	xmaplay_new(a5),d0
 	lea	    prefsEnableXMAPlay,a0
 	bra	tickaa
+
+*** MED fastmemplay toggle
+
+rmedfastmemplay
+	not.b	medfastmemplay_new(a5)
+pmedfastmemplay
+	move.b	medfastmemplay_new(a5),d0
+	lea	    prefsMedFastRamMode,a0
+	bra	tickaa
+
 
 *** MHI toggle, lib
 
@@ -30714,6 +30733,8 @@ loadfile:
 * Sets lod_memtype(a5) that is used to allocate destination read buffer
 .checkm
     bsr   tutki_moduuli2
+	cmp.b	#3,d0   * MED detected?
+	beq	.medfoo      * Do additional check, returns to .publl or exits.
 	cmp.b	#2,d0   * Protracker detected?
 	beq	.ptfoo      * Do additional check, returns to .publl or exits.
     cmp.b   #-1,d0  * -1 = load to chip
@@ -30784,13 +30805,11 @@ loadfile:
 
 ** Ladataan PT file fastiin jos ei mahdu chipppppiin
 .ptfoo:
-    cmp     #pt_med,playertype(a5)
-    beq     .checkMed
 	tst.b	ahi_use(a5)		* AHI? -> public
 	bne	.publl
 	cmp.b	#2,ptmix(a5)		* PS3M? -> public
 	beq	.publl
-.checkMed
+.medfoo:
 	pushm	all
     DPRINT  "Check if fits into CHIP"
 	move.l	#MEMF_LARGEST!MEMF_CHIP,d1
@@ -31207,10 +31226,10 @@ tutki_moduuli2:
 	move.l	1080(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#"TDZ",d0		* take
-	beq.b	.f
+	beq 	.f
 
 	bsr	id_it			 * IT
-	beq.b	.f
+	beq 	.f
 
 
 * tfmx song data?
@@ -31221,39 +31240,42 @@ tutki_moduuli2:
 * chip ram at later tage
 
 	cmp.l	#"TFMX",(a4)
-	beq.b	.goPublic
+	beq 	.goPublic
 	cmp.l	#"tfmx",(a4)
-	beq.b	.goPublic
+	beq 	.goPublic
 
 	bsr	id_oktalyzer8ch
-	beq.b	.goPublic
+	beq 	.goPublic
 
 	cmp.l	#'PSID',(a4)		* PSID-tiedosto
-	beq.b	.goPublic
+	beq 	.goPublic
 
 	bsr	id_thx_
 	tst.l	d0
-	beq.B	.goPublic
+	beq 	.goPublic
 	bsr	id_pretracker_
 	tst.l	d0
-	beq.B	.goPublic
+	beq 	.goPublic
 	bsr	id_mline
 	tst.l	d0
-	beq.b	.goPublic
+	beq 	.goPublic
 	jsr	id_musicmaker8_
 	tst.l	d0
-	beq.b	.goPublic
+	beq 	.goPublic
 	;bsr	id_digitalmugician2 
 	;beq.b	.goPublic
 
 ** OctaMed SoundStudio mixattavat moduulit
+    DPRINT  "blbokbo"
 	move.l	(a4),d0
 	lsr.l	#8,d0
 	cmp.l	#'MMD',d0
 	bne.b	.nome
+    tst.b   medfastmemplay(a5)  * MED FastMemPlay enabled in Prefs
+    bne     .goPublic
 	btst	#0,20(a4)		* mmdflags, MMD_LOADTOFASTMEM
 	bne.b	.goPublic
-    bra     .ff             * go public if doesn't fit into chip
+    bra     .fff             * go public if doesn't fit into chip
 .nome
 
 	bsr	id_digibooster_
@@ -31278,6 +31300,9 @@ tutki_moduuli2:
 .f	moveq	#0,d0		* public
 	rts
 .ff	moveq	#2,d0		* Protracker file
+	rts
+.fff	
+    moveq	#3,d0		* MED file
 	rts
 .rf	moveq	#1,d0		* fast
 	rts
@@ -55135,7 +55160,7 @@ prefsMHIEnable
        even
 
 prefsMHILib
-       dc.l 0 ; END
+       dc.l prefsMedFastRamMode 
        ; left, top, width, height
        dc.w 214-80+4,107+28-14-12-2-14,100-8,12,3,1,1
        dc.l 0
@@ -55159,6 +55184,23 @@ prefsEnableXMAPlay dc.l prefsResidMode
 ;       dc.b "Enable xmaplay060......",0
        dc.b "Enable xmaplay060",0
        even
+
+
+prefsMedFastRamMode dc.l 0 ;;;;;;;; END
+       ; left, top, width, height
+       dc.w 214-80+4+64+160+40+4,107-12-2+14+14-14-14-8,28,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4-64+32+4+2,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "MED FastMemPlay...",0
+       even
+
+
 
  ifne FEATURE_LIST_TABS
 ; Gadget
