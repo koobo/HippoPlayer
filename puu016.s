@@ -17436,17 +17436,21 @@ psidmode
     subq.b  #1,d0
     beq.b   .1
     lea     sidmode04(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     sidmode05(pc),a0
 .1 
     lea	    prefsPlaySidMode,a1
 	bra	prunt
 
 
 
-sidmode00	dc.b	11,4
+sidmode00	dc.b	11,5
 sidmode01	dc.b	"Normal",0
 sidmode02	dc.b	"reSID 6581",0
 sidmode03	dc.b	"reSID 8580",0
-sidmode04	dc.b	"SIDBlaster",0
+sidmode04	dc.b	"reSID Auto",0
+sidmode05	dc.b	"SIDBlaster",0
  even
 
 rresidmode_req
@@ -36256,17 +36260,29 @@ p_sid:	jmp	.init(pc)
     bsr     isPlaysidReSID
     beq     .skip
 
+    bsr     sid_getSidVersion
+    * d0 = detected SID, 0: 6581, not 0: 8580
+
     ; -----------------------
     ; Before AllocEmulResource set the operating mode
     ; 0 = normal
     ; 1 = resid 6581
     ; 2 = resid 8580
-    ; 3 = sidblaster
+    ; 3 = resid auto detect
+    ; 4 = sidblaster
     cmp.b   #1,sidmode(a5)
     beq     .m1
     cmp.b   #2,sidmode(a5)
     beq     .m2
     cmp.b   #3,sidmode(a5)
+    bne     .m22
+    * Auto detect
+    DPRINT  "Detected SID=%lx"
+    tst.b   d0
+    beq     .m1
+    bra     .m2
+.m22
+    cmp.b   #4,sidmode(a5)
     beq     .m3
     * Default option
     move    #OM_NORMAL,d0
@@ -36282,7 +36298,7 @@ p_sid:	jmp	.init(pc)
     bra     .cpuCheck
 
 .m3
-    lea     sidmode04,a0
+    lea     sidmode05,a0
     moveq   #OM_SIDBLASTER_USB,d0
     bra     .mode
     ; -----------------------
@@ -36474,6 +36490,8 @@ p_sid:	jmp	.init(pc)
     cmp.b   #1,sidmode(a5)
     beq     .rsf
     cmp.b   #2,sidmode(a5)
+    beq     .rsf
+    cmp.b   #3,sidmode(a5)
     bne     .nrsf
 .rsf
     moveq   #1,d0   * int on
@@ -36711,7 +36729,32 @@ p_sid:	jmp	.init(pc)
     rts
 .no moveq   #0,d0
     bra.b   .x
-    
+
+
+* Detect SID version to use
+* Out:
+*   d0 = 0: 6581
+*   d0 = non-zero: 8580
+sid_getSidVersion:
+    moveq   #0,d0
+    move.l  moduleaddress(a5),a0
+    cmp.l   #"PSID",(a0)
+    bne     .noheader
+    cmp     #2,sidh_version(a0)
+    blo     .v1
+    ; Header v2
+    ;Bits 4-5 specify the SID version (sidModel):
+    ;00 = Unknown,
+    ;01 = MOS6581,
+    ;10 = MOS8580,
+    ;11 = MOS6581 and MOS8580.
+    moveq   #%11<<4,d0
+    and     sidh_flags(a0),d0
+    cmp     #%10<<4,d0
+    seq     d0
+.v1    
+.noheader
+    rts
 
 * Calculate song speed and Hz
 * Out:
