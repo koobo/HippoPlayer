@@ -19622,16 +19622,34 @@ lootaan_aika
 	popm	all
 .noerl
 
+    ;add.l  #(59*60+12)*50,d0    * 59:12
+    ;add.l   #9*60*60*50,d0        * +1h
 
-
-	cmp.l	#99*60*50,d0		* onko aika 99:59?
+    cmp.l   #10*60*60*50,d0      * upper limit: 10 hours
 	blo.b	.ok
 	bsr	settimestart
 	moveq	#0,d0
 .ok
 
+	bsr	logo
+
 	divu	#50,d0
 	ext.l	d0
+    * d0 = total seconds
+
+    moveq   #'0',d2
+
+    divu    #60*60,d0
+    * d0 = hours
+    tst     d0
+    beq     .noHours
+    add.b   d2,d0
+    move.b  d0,(a0)+
+    move.b  #":",(a0)+
+.noHours
+    swap    d0
+    ext.l   d0
+    * d0 = remaining seconds
 	divu	#60,d0
 	swap	d0
 	moveq	#0,d1
@@ -19639,20 +19657,19 @@ lootaan_aika
 	clr	d0
 	swap	d0
 
-	bsr	logo
 	divu	#10,d0
-	add.b	#'0',d0
+	add.b	d2,d0
 	move.b	d0,(a0)+
 	swap	d0
-	add.b	#'0',d0
+	add.b	d2,d0
 	move.b	d0,(a0)+
 	move.b	#':',(a0)+
 
 	divu	#10,d1
-	add.b	#'0',d1
+	add.b	d2,d1
 	move.b	d1,(a0)+
 	swap	d1
-	add.b	#'0',d1
+	add.b	d2,d1
 	move.b	d1,(a0)+
 
 ******
