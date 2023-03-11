@@ -319,6 +319,8 @@ mhiFile         rs.l    1
 mhiStreamSize   rs.l    1
 mhiHandle       rs.l    1
 mhiLibName      rs.l    1
+mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
+                rs.b    1
 
 
 mainTask    rs.l    1
@@ -5636,6 +5638,18 @@ mhiInit:
     move.l  d0,mhiBase(a5)
     beq     .noLib
 
+    move.l  mhiLibName(a5),d1
+    lore    Dos,FilePart
+    * This buffer is 39 chars long
+    move.l  d0,a0
+    clr.b   mhiMPEGit(a5)
+    cmp.l   #"mhim",(a0)+
+    bne     .m1
+    cmp.l   #"pegi",(a0)+
+    bne     .m1
+    cmp.b   #"t",(a0)
+    seq     mhiMPEGit(a5)
+.m1
     * Have buffers
     move.l	#MHI_BUFSIZE*MHI_BUFCOUNT,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -6017,11 +6031,23 @@ mhiDoStop:
  endif
     cmp.b   #MHIF_PLAYING,d0
     bne     .1
+
+    * Special case!
+    tst.b   mhiMPEGit(a5)
+    bne     .2
+
     DPRINT  "MHIPause"
     move.l  mhiHandle(a5),a3
     lob     MHIPause
 .1  
     rts
+
+.2
+    DPRINT  "MHIStop (mhimpegit)"
+    move.l  mhiHandle(a5),a3
+    lob     MHIStop
+    rts
+
 
 mhiCont:
     move.b  mhiContSignal(a5),d1
@@ -6038,17 +6064,26 @@ mhiDoCont:
     and.l   #$ff,d0
     DPRINT "MHIGetStatus=%ld"
  endif
-    cmp.b   #MHIF_OUT_OF_DATA,d0
-    beq.b   .2
-    cmp.b   #MHIF_STOPPED,d0
-    beq.b   .2
-    cmp.b   #MHIF_PAUSED,d0
-    bne     .1
-.2
+    cmp.b   #MHIF_PLAYING,d0
+    beq     .1
+
+    * Special case!
+    tst.b   mhiMPEGit(a5)
+    bne     .2
+
     DPRINT  "MHIPlay"
     move.l  mhiHandle(a5),a3
     lob     MHIPlay
 .1  
+    rts
+.2
+    DPRINT  "mhimpegit init after stop"
+    bsr     mhiInitBuffers
+
+    DPRINT  "MHIPlay (mhimpegit)"
+    move.l  mhiHandle(a5),a3
+    move.l  mhiBase(a5),a6
+    lob     MHIPlay
     rts
 
 mhiVolume:
@@ -6100,8 +6135,8 @@ mhiFillEmptyBuffers:
     * Poll for stop sign to abort the fill process
     tst.b   samplestop(a5)
     beq     .go
-    DPRINT  "filling aborted"
-    bra     mhiDoStop
+    * Stop filling if stopped
+    rts
 .go
     
     move.l  mhiBase(a5),a6
