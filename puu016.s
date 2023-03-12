@@ -30447,6 +30447,8 @@ loadfile:
 	cmp.l	lod_length(a5),d0
 	bne	.error2
 
+    DPRINT  "Read=%ld"
+
 	lore	XFD,xfdAllocBufferInfo	
 	move.l	d0,a3	
 	tst.l	d0
@@ -30456,33 +30458,37 @@ loadfile:
 	move.l	lod_length(a5),xfdbi_SourceBufLen(a3)
 	move.l	a3,a0
 	lob	xfdRecogBuffer
+    DPRINT  "xfdRecogBuffer=%ld"
 	tst.l	d0
 	bne.b	.xok1		* Error: tavallisena filen‰
 
-.xok0	move.l	a3,a1
+.xok0	
+    move.l	a3,a1
 	lob	xfdFreeBufferInfo
 	bra	.exit
 .xok1
 	move.l	xfdbi_PackerName(a3),d0
+    push    a6
 	bsr	inforivit_xfd
+    pop     a6
 
 	move	xfdbi_PackerFlags(a3),d0
 	and	#XFDPFF_PASSWORD!XFDPFF_RELOC!XFDPFF_ADDR,d0
 	beq.b	.xok2		* Pakkerityyppi v‰‰r‰.. Ei kelpaa!
 	move	#lod_tuntematon,lod_error(a5)
-	bra.b	.xok0
+	bra 	.xok0
 .xok2
-
 	moveq	#MEMF_CHIP,d0
 	move.l	d0,xfdbi_TargetBufMemType(a3)
 	move.l	a3,a0
 	lob	xfdDecrunchBuffer
+    DPRINT  "xfdDecrunchBuffer=%ld"
 	tst.l	d0
 	bne.b	.xok3
 	move	xfdbi_Error(a3),lod_xfderror(a5) * error numba talteen
 	move	#lod_xfderr,lod_error(a5)
 	bsr	.free			* Vapautetaan pakattu file
-	bra.b	.xok0
+	bra 	.xok0
 .xok3
 	bsr	.free			* Vapautetaan pakattu file
 
@@ -30492,6 +30498,7 @@ loadfile:
 	move.l	a3,a1
 	lore	XFD,xfdFreeBufferInfo
 ** OK!
+    DPRINT  "xfdDecrunch ok"
 	bra	.exit
 
 
@@ -31287,7 +31294,6 @@ tutki_moduuli2:
 	;beq.b	.goPublic
 
 ** OctaMed SoundStudio mixattavat moduulit
-    DPRINT  "blbokbo"
 	move.l	(a4),d0
 	lsr.l	#8,d0
 	cmp.l	#'MMD',d0
