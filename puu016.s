@@ -406,10 +406,16 @@ prefs_residfilter     rs.b      1
 * the search selection.
 prefs_selectedSearch  rs.b      1 
 prefs_mhiEnable       rs.b      1
-MHILIB_SIZE         =   39
+MHILIB_SIZE         =   40
 prefs_mhiLib          rs.b      MHILIB_SIZE
 prefs_medfastmemplay  rs.b     1
+                      ;rs.b     1 * pad to get even prefs_size
 prefs_size            rs.b      0
+
+	ifne	prefs_size&1
+	fail
+	endc
+
 
 *******************************************************************************
 *
@@ -1236,7 +1242,6 @@ favorites	rs.b	1
 tooltips	rs.b  	1
 savestate	rs.b    1
 altbuttons  rs.b    1
- 			rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * Runtime scope settings
@@ -1250,7 +1255,8 @@ patternScope   rs.b 1
 patternScopeXL   rs.b 1
 spectrumScope   rs.b 1
 spectrumScopeBars   rs.b 1
- 
+                rs.b    1 * PADDING
+                 
 * audio homman muuttujat
 acou_deviceerr	rs.l	1
 iorequest	rs.b	ioa_SIZEOF
