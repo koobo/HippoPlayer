@@ -19221,6 +19221,10 @@ putinfo2:
 
 
 putinfo2centered:
+    tst.b   win(a5)
+    bne.b   .11
+    rts
+.11
     pushm   d0/a0
     move.l	rastport(a5),a1
 	move.l	listfontbase(a5),a0
