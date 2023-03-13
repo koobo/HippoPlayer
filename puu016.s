@@ -33603,6 +33603,8 @@ activateSearchStringGadget:
 *******************************************************************************
 
 importSavedStateModulesFromDisk
+    tst.b   win(a5)  * do nothing if no window
+    beq     .error
 	tst.b	savestate(a5)
 	bne.b	.enabled
 .error	rts
@@ -33757,6 +33759,8 @@ importSavedStateModulesFromDisk
 
 exportSavedStateModulesToDisk
 	DPRINT	"exportSavedStateModulesToDisk"
+    tst.b   win(a5)
+    beq     .x
 	tst.b	savestate(a5)
 	beq	.x
 
