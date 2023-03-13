@@ -7314,7 +7314,7 @@ tooltipDisplayHandler
 	tst.b	tooltips(a5)
 	beq.b	.exit
 	move.l	d0,a0 
-	bsr	showTooltipPopup
+	jsr	showTooltipPopup
 .exit
 	popm all
 	rts
@@ -21171,7 +21171,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	sfirstname(a5),d0
 	mulu	#65535,d0
-	bsr	divu_32
+	jsr	divu_32
 	cmp	pi_VertPot(a1),d0
 	sne	d2
 	move	d0,pi_VertPot(a1)
