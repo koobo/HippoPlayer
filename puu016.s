@@ -855,7 +855,7 @@ sidmode_new     rs.b    1
 residmode_new   rs.b    1
 xmaplay_new     rs.b    1
 medfastmemplay_new rs.b  1
-            rs.b    1
+mhiEnable_new   rs.b 1
 residfilter_new rs.b    1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
@@ -866,12 +866,9 @@ cybercalibration_new rs.b 1		* yritystä
 calibrationfile_new rs.b 100
 newcalibrationfile rs.b	1
 
-mhiEnable_new   rs.b 1
 mhiLib_new      rs.b MHILIB_SIZE
 
 prefs_exit	rs.b	1		* Prefs exit-flaggi
-
-
 
 slider4oldheight rs	1
 slider1old	rs	1		* previous VertPot value to detect changes
@@ -961,7 +958,7 @@ residmode   rs.b    1
 xmaplay     rs.b    1
 residfilter rs.b    1
 medfastmemplay rs.b     1
-
+            rs.b    1 * PAD
 *******
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
