@@ -8589,6 +8589,8 @@ nappuloita:
 	bmi	.exit	* vain jos nappula alhaalla
 	movem.l	d0-a6,-(sp)
 
+    ; ---- MODIFIER: control
+
 	cmp	#IEQUALIFIER_CONTROL,d4
 	bne.b	.noControl
 
@@ -8597,11 +8599,6 @@ nappuloita:
 	jsr	toggleFavoriteStatusForCurrentModule
 	bra	.ee
 .2
-;	cmp.b	#$37,d3	 	* m + control
-; 	bne.b	.3
-;	jsr		modlandSearch
-;	bra	.ee
-;.3	
 	cmp.b	#$21,d3	 	* s + control
  	bne.b	.4
     tst     boxsize(a5) * Disable if box hidden
@@ -8609,8 +8606,14 @@ nappuloita:
 	jsr		searchActivate
 	bra	.ee
 .4
-
+    cmp.b   #$22,d3
+    bne     .5
+    jsr     fetchAndSaveCurrentModule
+    bra     .ee
+.5
 .noControl
+
+    ; ---- MODIFIER: shift 
 
 	and.b	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.noshifts
@@ -16279,7 +16282,8 @@ rselarcdir
 
 
 ** Hakemisto requesteri
-dir_req	bsr	get_rt
+dir_req:
+	bsr	get_rt
 	moveq	#RT_FILEREQ,D0
 	sub.l	a0,a0
 	lob	rtAllocRequestA
@@ -53205,15 +53209,24 @@ configRemoteNode:
 	popm	d0/a0-a4
 	rts
 
+
+
 *
 * Loads a remote file into a file using aget.
 * in:
 *   a0 = url
 *   a1 = buffer for output file path
+*   a2 = target dir OPTIONAL
 * out:
 *   d0 = true: ok, false: some error
+
+fetchRemoteFileToTarget:
+	pushm	d1-a6
+    bra     fetchRemoteFile\.0
 fetchRemoteFile:
 	pushm	d1-a6
+    lea     .destinationDir(pc),a2
+.0:
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"fetchRemoteFile: %s"
@@ -53222,7 +53235,8 @@ fetchRemoteFile:
     beq     .exit
 
 	moveq	#0,d7	* status: fail
-	
+    move.l  a2,a6   * target path
+
 	* Temporary target file path, the last part of the url
 	move.l	a0,a2
 .end
@@ -53235,8 +53249,15 @@ fetchRemoteFile:
 
 	move.l	a1,a3
 	* Build temp file path into a3
-	move.b	#"T",(a3)+
-	move.b	#":",(a3)+
+.target1
+    move.b  (a6)+,(a3)+
+    bne.b   .target1
+    subq    #1,a3
+    cmp.b   #":",-1(a3)
+    beq     .target2
+    move.b  #"/",(a3)+
+.target2
+
     * Max 24 chars to be friendly to the file system
     moveq   #24-1,d1
     moveq   #0,d0
@@ -53361,6 +53382,10 @@ fetchRemoteFile:
 	popm	d1-a6
     DPRINT	"fetchRemoteFile status=%ld"
 	rts
+
+.destinationDir 
+    dc.b    "T:",0
+    even
 
 * Checks if UHC is installed, also checks version
 initializeUHC
@@ -53577,6 +53602,60 @@ getPreAndPostfixFromPath
 	rts
 
 ;.bob	ds.b	10
+
+fetchAndSaveCurrentModule:
+    DPRINT  "fetchAndSaveCurrentModule"
+    pushm   all
+    jsr     getcurrent
+    beq     .err
+    tst.b   l_remote(a3)
+    beq     .err
+    push    a3
+    jsr     dir_req    
+    * d7 = request 
+    popm    a3
+    beq     .err
+
+    lea	-200(sp),sp	* space for output path
+
+    move.l  d7,a2
+    move.l  16(a2),a2
+    tst.b   (a2)
+    beq     .2
+  
+    * Ensure start from scratch
+    move    #-1,streamReturnCode(a5)
+
+    * a2 = target path
+	move.l	sp,a1
+	lea	    l_filename(a3),a0	
+    jsr	    fetchRemoteFileToTarget
+    DPRINT  "fetchRemoteFile=%ld"
+    lea     .fail(pc),a1
+    tst.l   d0
+    beq     .3
+    lea     .okTxt(pc),a1
+.3 
+    jsr     request
+.2
+    tst.l   d7
+    beq     .1
+    move.l	d7,a1
+	lore    Req,rtFreeRequest
+.1
+    jsr     inforivit_play
+    lea     200(sp),sp
+.x
+    popm    all
+    rts
+
+.err    
+    jsr      beep
+    bra     .x
+
+.okTxt   dc.b   "Saved!",0
+.fail   dc.b    "Failed!",0
+ even
 
 ***************************************************************************
 *
