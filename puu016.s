@@ -21155,7 +21155,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
  	
 	move.l	d0,d1
 	move.l	#65535<<8,d0
-	bsr	divu_32
+	jsr	divu_32
 	move.l	d0,d1
 
 	lea	gAD1,a0
@@ -42535,18 +42535,18 @@ p_sample:
 .x	
     DPRINT  "sample init failed %ld"
     push    d0
-    bsr     stopStreaming
+    jsr     stopStreaming
     pop     d0
     rts
 
 .end:
     DPRINT  "sample end"
     jsr     setMainWindowWaitPointer
-    bsr     stopStreaming
+    jsr     stopStreaming
     move.l	sampleroutines(a5),a0
 	jsr 	.s_end(a0)
     jsr     clearMainWindowWaitPointer
-    bra     awaitStreamer
+    jmp     awaitStreamer
     
 .dostop:
     DPRINT  "sample stop"
