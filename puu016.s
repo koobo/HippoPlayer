@@ -41820,6 +41820,8 @@ p_multi:
 	move	(sp)+,playertype(a5)
 	tst.l 	d0
 	bmi 	.itError
+    DPRINT  "impulse=%lx"
+    bsr     patchIt
 	bsr	deliInit
 	jsr 	clearMainWindowWaitPointer
 	tst.l	d0
@@ -42286,6 +42288,29 @@ ahiWith4ChannelsActive:
 .no
     * Error: set Z
     or.b	#(1<<2),ccr
+    rts
+
+* This patches the "impulse" deliplayer DTP_Config
+* function so that it will no longer belligerently
+* poke the exec base.
+patchIt:
+    push    d0
+    move.l  d0,a0
+    move.l	#DTP_Config,d0  
+	bsr	    deliGetTagFromA0
+    beq     .x
+    move.l  d0,a0
+    move.w  #$4e71,d0
+    cmp.w   22(a0),d0
+    bne     .x
+    cmp.w   26(a0),d0
+    bne     .x
+    DPRINT  "Patch Impulse"
+    move.w  d0,34(a0)
+    move.w  d0,36(a0)
+    move.w  d0,38(a0)
+    jsr     clearCpuCaches
+.x  pop     d0
     rts
 
 
