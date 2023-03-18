@@ -35368,6 +35368,7 @@ eagleFormats
 	dr.w	p_steveturner
 	dr.w 	p_davidwhittaker
     dr.w    p_soundmaster
+    dr.w    p_soundprogramminglanguage
 	dr.w	p_activisionpro  	* very slow id
 	dc.w 	0	
 
@@ -47730,6 +47731,62 @@ p_soundmaster
         BNE.S   .lbC000338
         MOVEQ   #0,D0
 .lbC000338       RTS
+
+******************************************************************************
+* Sound Programming Language
+******************************************************************************
+
+p_soundprogramminglanguage
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_soundprogramminglanguage
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
+	dc.b	"Sound Prg. Language [EP]",0
+	        
+.path dc.b "soprol",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+.id
+	move.l	a4,a0
+.lbC00040C
+        CMP.L   #$3F3,(A0)
+        BNE.S   .lbC00044A
+        TST.B   $14(A0)
+        BEQ.S   .lbC00044A
+        LEA     $20(A0),A0
+        CMP.L   #$70FF4E75,(A0)+
+        BNE.S   .lbC00044A
+        CMP.L   #$21534F50,(A0)+
+        BNE.S   .lbC00044A
+        CMP.L   #$524F4C21,(A0)+
+        BNE.S   .lbC00044A
+        TST.L   (A0)+
+        BEQ.S   .lbC00044A
+        TST.L   (A0)+
+        BEQ.S   .lbC00044A
+        TST.L   (A0)
+        BEQ.S   .lbC00044A
+        MOVEQ   #0,D0
+        RTS
+.lbC00044A       MOVEQ   #-1,D0
+        RTS
+
 
 ******************************************************************************
 * The Musical Enlightenment

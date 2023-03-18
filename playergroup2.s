@@ -107,8 +107,8 @@ head	macro
 	head	pt_davidwhittaker,davidwhittaker
 	head	pt_aon8,aon8
     head    pt_xmaplay,xmaplay
-    head    pt_soundmaster,soundmaster
-    
+    head    pt_soundprogramminglanguage,soprol
+
 	dc	0
 	dc.l	0,0
 
@@ -482,6 +482,11 @@ soundmaster1
 soundmaster2
     even
 
+soprol1
+	incbin	"soprol.im"
+soprol2
+    even
+
  	endif ; IMP
 
 *********************************************************************
@@ -853,6 +858,11 @@ xmaplay2
 soundmaster1
 	incbin	"sound master.shr"
 soundmaster2
+    even
+
+soprol1
+	incbin	"soprol.shr"
+soprol2
     even
 
  endif ; SHR
