@@ -4051,6 +4051,21 @@ inputhandler
 .handlerloop
 	cmp.b	#IECLASS_RAWKEY,ie_Class(a0)
 	bne.b	.cont
+
+    tst.b   hotkey(a1)
+    bmi.b   .normal
+
+    * Special mode active! This can be used to cancel
+    * network download.
+    cmp.w   #$45,ie_Code(a0)
+    bne     .cont
+    * Esc pressed, qualifier ignored
+    * Eat the event
+    move.w  ie_Code(a0),rawkeyinput(a1)
+    clr.b   ie_Class(a0)
+    bra     .cont
+
+.normal
 	move	ie_Qualifier(a0),d0
 	and	#IEQUALIFIER_LSHIFT!IEQUALIFIER_CONTROL!IEQUALIFIER_LCOMMAND,d0
 	cmp	#IEQUALIFIER_LSHIFT!IEQUALIFIER_CONTROL!IEQUALIFIER_LCOMMAND,d0
@@ -4067,8 +4082,7 @@ inputhandler
 	bra.b	.exhand
 	
 .cont	
-	;move.l	ie_NextEvent(a0),d0		* seuraava
-	move.l	(a0),d0		* ie_NextEvent = 0
+	move.l	ie_NextEvent(a0),d0		* seuraava
 	move.l	d0,a0
 	bne.b	.handlerloop
 .exhand	
@@ -8606,7 +8620,7 @@ nappuloita:
 	jsr		searchActivate
 	bra	.ee
 .4
-    cmp.b   #$22,d3
+    cmp.b   #$24,d3     * g + control
     bne     .5
     jsr     fetchAndSaveCurrentModule
     bra     .ee
@@ -53352,16 +53366,30 @@ fetchRemoteFile:
 
     * d6 = stream handle
     * a4 = temporary buffer
+
 .loop
+    * Enable input handler special mode
+    move.b  hotkey(a5),-(sp)
+    move.b  #1,hotkey(a5)
+    clr.w   rawkeyinput(a5)
+
     * Read from input 
     move.l  d6,d1       * in file
     move.l  a4,d2       * buffer
     move.l  #$10000,d3  * length
     lore    Dos,Read
     DPRINT  "read=%ld bytes"
+
+    move.b  (sp)+,hotkey(a5)
+    cmp.w   #$45,rawkeyinput(a5)
+    bne     .5
+    moveq   #-1,d0
+.5
+
     move.l  d0,d4       * bytes read
     * d0 = bytes read, 0 = EOF, -1 = error
     bmi.b   .readError
+
 
     move.l  d5,d1       * out file
     move.l  a4,d2       * buffer
