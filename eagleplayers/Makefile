@@ -40,7 +40,8 @@ SOURCES=\
 	bin/tcb\ tracker \
 	bin/tim\ follin\ ii \
 	bin/tme \
-	bin/wally\ beben
+	bin/wally\ beben \
+	bin/sound\ master
 
 COMPRESSED_TARGETS=\
 	shr/activision\ pro.shr \
@@ -80,7 +81,8 @@ COMPRESSED_TARGETS=\
 	shr/tcb\ tracker.shr \
 	shr/tim\ follin\ ii.shr \
 	shr/tme.shr \
-	shr/wally\ beben.shr
+	shr/wally\ beben.shr\
+	shr/sound\ master.shr
 
 all: $(COMPRESSED_TARGETS)
 
@@ -162,4 +164,6 @@ shr/tim\ follin\ ii.shr:          bin/tim\ follin\ ii
 shr/tme.shr:                      bin/tme
 	$(COMPRESS) "$<" "$@"
 shr/wally\ beben.shr:             bin/wally\ beben
+	$(COMPRESS) "$<" "$@"
+shr/sound\ master.shr:            bin/sound\ master
 	$(COMPRESS) "$<" "$@"

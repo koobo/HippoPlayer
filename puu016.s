@@ -35367,6 +35367,7 @@ eagleFormats
 	dr.w	p_specialfx
 	dr.w	p_steveturner
 	dr.w 	p_davidwhittaker
+    dr.w    p_soundmaster
 	dr.w	p_activisionpro  	* very slow id
 	dc.w 	0	
 
@@ -47656,6 +47657,79 @@ p_soundcontrol
 .lbC00048E
 	rts
 
+******************************************************************************
+* Sound Master
+******************************************************************************
+
+p_soundmaster
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_soundmaster
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
+	dc.b	"Sound Master        [EP]",0
+	        
+.path dc.b "sound master",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+.id
+	move.l	a4,a0
+
+.lbC0002CC
+        MOVEQ   #-1,D0
+        MOVE.W  #$6000,D1
+        CMP.W   (A0)+,D1
+        BNE.S   .lbC000338
+        MOVE.L  A0,A1
+        MOVE.W  (A0)+,D2
+        BMI.S   .lbC000338
+        BEQ.S   .lbC000338
+        BTST    #0,D2
+        BNE.S   .lbC000338
+        CMP.W   (A0)+,D1
+        BNE.S   .lbC000338
+        MOVE.W  (A0)+,D3
+        BMI.S   .lbC000338
+        BEQ.S   .lbC000338
+        BTST    #0,D3
+        BNE.S   .lbC000338
+        CMP.W   (A0),D1
+        BNE.S   .lbC000338
+        ADD.W   D2,A1
+        LEA     $1E(A1),A0
+.lbC000302       CMP.W   #$47FA,(A1)
+        BEQ.S   .lbC000310
+        ADDQ.L  #2,A1
+        CMP.L   A0,A1
+        BNE.S   .lbC000302
+        RTS
+
+.lbC000310       CMP.W   #$4E75,(A1)+
+        BNE.S   .lbC000310
+        MOVEQ   #0,D1
+        CMP.L   #$177C0000,-8(A1)
+        BNE.S   .lbC000326
+        MOVEQ   #-1,D1
+        SUBQ.L  #6,A1
+.lbC000326       CMP.L   #$BFE001,-6(A1)
+        BNE.S   .lbC000338
+        MOVEQ   #0,D0
+.lbC000338       RTS
 
 ******************************************************************************
 * The Musical Enlightenment

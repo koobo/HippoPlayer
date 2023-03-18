@@ -107,7 +107,8 @@ head	macro
 	head	pt_davidwhittaker,davidwhittaker
 	head	pt_aon8,aon8
     head    pt_xmaplay,xmaplay
-
+    head    pt_soundmaster,soundmaster
+    
 	dc	0
 	dc.l	0,0
 
@@ -476,6 +477,11 @@ xmaplay1
 xmaplay2
     even
 
+soundmaster1
+	incbin	"sound master.im"
+soundmaster2
+    even
+
  	endif ; IMP
 
 *********************************************************************
@@ -842,6 +848,11 @@ davidwhittaker2
 xmaplay1
 	incbin	"xmaplay060.shr"
 xmaplay2
+    even
+
+soundmaster1
+	incbin	"sound master.shr"
+soundmaster2
     even
 
  endif ; SHR
