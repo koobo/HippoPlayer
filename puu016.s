@@ -11976,6 +11976,10 @@ rloadprog0
 
 * From keys, gadgets
 rloadprog
+	bsr	confirmFavoritesModification
+	bne.b	.go
+    rts
+.go
 	moveq	#0,d7
 	skipIfGadgetDisabled gadgetPrgButton
 
@@ -12625,8 +12629,6 @@ nimenalku:
 
 
 rsaveprog
-	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.x
 	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.x
 	DPRINT  "rsaveprog obtain list"
@@ -12698,8 +12700,10 @@ rsaveprog
 .cpe2	move.b	(a0)+,(a1)+
 	bne.b	.cpe2
 
+	bsr     getVisibleModuleListHeader
+    move.l  a0,a1
 	lea	filename2(a5),a0
-	lea	moduleListHeader(a5),a1
+	;lea	moduleListHeader(a5),a1
 	bsr.b exportModuleProgramToFile
 
 	move.l	req_file2(a5),d0
@@ -12742,7 +12746,6 @@ exportModuleProgramToFileWithSongMetaData:
 * in:
 *  a0 = filename
 *  a1 = list
-*  d0 = 1: export #song data, 0: don't export #song data
 exportModuleProgramToFile:
     moveq   #0,d7
 doExportModuleProgramToFile:
@@ -33106,8 +33109,8 @@ engageListMode:
 	rts
 
 .favoritesMode
-	lea	gadgetPrgButton(a4),a0
-	bsr	disableButton
+	;lea	gadgetPrgButton(a4),a0
+	;bsr	disableButton
 	bsr		setNormalAddTooltip
 	rts
 	
