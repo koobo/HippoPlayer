@@ -107,6 +107,7 @@ head	macro
 	head	pt_davidwhittaker,davidwhittaker
 	head	pt_aon8,aon8
     head    pt_xmaplay,xmaplay
+    head    pt_soundmaster,soundmaster
     head    pt_soundprogramminglanguage,soprol
 
 	dc	0
