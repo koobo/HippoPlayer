@@ -37233,7 +37233,7 @@ isPlaysidReSID:
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
 	cmp     #5,LIB_REVISION(a0)
-	bne.b   .noRESID
+	bhs.b   .noRESID
     move.l  LIB_IDSTRING(a0),a0
 ;    cmp.b   #"1",16(a0)
 ;    bne.b   .noRESID
