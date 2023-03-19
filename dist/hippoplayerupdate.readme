@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.56
+Version: 2.57
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -48,12 +48,110 @@ Quick overview of major changes since v2.45
   spectrum scope, patternscope with two sizes and up to 18 channels
 - Support for MP3 streaming, radio stations
 - "Add" button in file browser or search view: copy items to main list
+- Support for playlists of up to 131071 items.
 
 New keyboard shortcuts:
 - Favorite module: [CTRL+F]
 - Toggle list mode: [SHIFT+M]
 - Navigate to parent in file browser: [BACKSPACE]
 - Search modules: [CTRL+S]
+- Download file: [CTRL+G]
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from from v2.56 (15.2.2023) to v2.57 (?.?.2023) 
+
+## New fixes:
+
+- Fix crash when in the search view and doing a find (key [F] or RMB+"S" button).
+
+- Fix crash when playing XM modules with "xmaplay060" enabled.
+
+- playsid.library update:
+  - Fix hang and crash bug which could happen when starting PSID playback.
+  - Fix another crash bug related to earlier reSID modifications.
+
+- MHI support: 
+  - Fix wrong MP3 info being shown in the infobox
+  - Fix crash when using mhimdev with the iComp MP3@64 clockport module
+  - Fix pause and continue not working properly with Prelude + MPEGit
+
+- Fix modland whitelist, files with "cust.*" prefix were wrongly filtered out.
+
+- Prevent a few cases where the window layout broke with the new
+  search bar at the bottom.
+
+- Hidden mode fixes (when started with HIDE parameter):
+  - Do not auto-open scope windows
+  - Do not open window when Workbench screen mode changes
+  - Fix crash which could happen when starting and stopping playback
+  - Fix crash when starting with "Keep list on exit" active
+
+- ImpulseTracker: some issues causing system instability 
+  fixed (bad memory reads and writes).
+
+- Prefs: Fix HippoScope Bars toggle not updating when clicked.
+
+- Scopes: Add HippoScope support to sample data (eg. MP3, Wav)
+
+- Fix favorites list modification confirmation appearing unnecessarily
+  in certain situations.
+
+- Improved error message if trying to load an RSID file.
+
+- Possibly make scopes work when running on AOS4+PPC.
+
+- Show "AHI" in the infobox when AHI is active.
+
+- The elapsed time counter in the titlebar no longer wraps to zero
+  after 99 minutes, instead it wraps after 9 hours.
+
+
+## New improvements:
+
+- PSID support:
+  - PSID tunes can now be played through AHI in reSID mode.
+    In "Prefs/Play-2/reSID mode" there is a new option "AHI".
+    The AHI mode itself is set in "Prefs/AHI", other AHI settings
+    are not used at the moment (eg. master volume, stereo level).
+  - New option "Prefs/Play-2/PlaySid mode/reSID Auto" added.
+    This automatically selects the SID chip version to be used.
+
+- MED/OctaMed support:
+  - Load modules into FAST memory if they don't fit into CHIP,
+    automatically enabling the FastMemPlay mode.
+  - Added "Prefs/Play-2/MED FastMemPlay" toggle to manually enable
+    the FastMemPlay mode. This allows playing MED modules with
+    very large samples in addition to loading them to FAST mem. 
+
+- Download a remote file into a selected directory with the 
+  hotkey [CTRL+G] ("G" for get). Cancel with [ESC].
+
+
+## New music formats:
+
+- Sound Master:
+  - Eagleplayer "sound master" by Wanted Team.
+  - Silkworm title music!
+- Sound Programming Language:
+  - Eagleplayer "soprol" by Wanted Team.
+
+
+## Known issues recap:
+
+- Sonic Arranger module "svensktoppen" may cause a crash.
+- Oktalyzer module "1 love night dub.okta" may cause a crash.
+- There are some invalid S3M modules around with an uneven 
+  length orders table. These will crash Hippo.
+- THX/AHX pattern scope sometimes displays an empty channel
+  where actual data should be displayed.
+- Oktalyzer: the sound is generally a bit off. This is
+  likely because the original mixing routines are used
+  and these seem to be quite finicky.
+- PSID files made with "Hermit/SidWizard V1.x" don't seem to be 
+  compatible with playsid.library, and play wrongly.
 
 
 ------------------------------------------------------------------------------
