@@ -724,6 +724,8 @@ scopeManualActivation	rs.b 1
 
 * Special flag to display a clarifying error message
 moduleWasRSID  	        rs.b 1
+moduleWasNewIT          rs.b 1
+                        rs.b 1
 
 scopeData  rs.b	 scope_size
 
@@ -29571,6 +29573,10 @@ tuntematonvirhe
     beq     .1
     lea     .rsid_msg(pc),a1
 .1
+    tst.b   moduleWasNewIT(a5)
+    beq     .3
+    lea     .it_msg(pc),a1
+.3
 	lea	.g(pc),a2
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	bne.b	.noBr	
@@ -29589,6 +29595,8 @@ tuntematonvirhe
 .onlyOk = *-4
 .rsid_msg
     dc.b	"RSID format not supported!",0
+.it_msg
+    dc.b	"ImpulseTracker format higher",10,"than v2.00 not supported!",0
  even
 
 *******************************************************************************
@@ -42272,7 +42280,8 @@ id_xm:
 ps3minitcount	dc	0
 
 * ID from A0
-id_it
+id_it:
+    clr.b   moduleWasNewIT(a5)
 	push	d1
 	MOVEQ	#0,D0
 	CMP.L	#$494D504D,(A0)
@@ -42290,6 +42299,7 @@ id_it
 	BEQ.S	.itYes
 	CMP.W	#$200,D1
 	BEQ.S	.itYes
+    shi     moduleWasNewIT(a5)
 ; TEST: Fake version $214 to look like version $200
 ;	CMP.W	#$214,D1
 ;	Bne.S	.itFail
