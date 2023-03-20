@@ -11663,6 +11663,19 @@ copyCurrentEntryToMainList
     * NOTE: d0 status not checked 
 	* a4 = cloned node
 
+    * If chosenmodule is the same as the playing one,
+    * store subsong metadata.
+    move.l  chosenmodule(a5),d0
+    cmp.l   playingmodule(a5),d0
+    bne     .0
+    move    songnumber(a5),d0
+    move.b  d0,l_favSong(a4)
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT  "store song=%ld"
+ endif
+.0
+
 	move.l	a4,a1
 	lea		moduleListHeader(a5),a0
 	lore	Exec,AddTail
@@ -12803,9 +12816,9 @@ doExportModuleProgramToFile:
 	subq	#1,a1
 .noAdd
 
-    * Output fav song!
-    tst.b   d7
-    beq.b   .noFavSong
+    * Output fav song! - do this always
+;    tst.b   d7
+;    beq.b   .noFavSong
     move.b  l_favSong(a3),d0
     beq     .noFavSong
     move.b  #"#",(a1)+
@@ -32778,8 +32791,11 @@ updateFavoriteStatus:
 	bsr	findFavoriteModule
 	* a matching favorite module was found? set flag 
 	sne	l_favorite(a0)
-    * also copy the fav song over
+    * also copy the fav song over, if in fact a favorite
+    * there might be a fav song set even if not a favorite
+    beq.b   .notFav
     move.b  l_favSong(a1),l_favSong(a0)
+.notFav
 .skipDivs
 	rts
 
