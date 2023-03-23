@@ -48290,7 +48290,7 @@ p_xmaplay:
 	rts
 .okk
 	lea	    xmaplayroutines(a5),a0
-	bsr	allocreplayer
+	jsr	allocreplayer
 	beq.b	.ok3
 	rts
 .ok3
