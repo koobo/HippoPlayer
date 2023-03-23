@@ -99,7 +99,8 @@ New keyboard shortcuts:
 - Fix favorites list modification confirmation appearing unnecessarily
   in certain situations.
 
-- Improved error message if trying to load an RSID file.
+- Improved error messages if trying to load an RSID file or 
+  an unsupported ImpulseTracker file.
 
 - Possibly make scopes work when running on AOS4+PPC.
 
@@ -107,6 +108,10 @@ New keyboard shortcuts:
 
 - The elapsed time counter in the titlebar no longer wraps to zero
   after 99 minutes, instead it wraps after 9 hours.
+
+- The song number is stored when favoriting a module, but
+  it is now also stored if "Add"ing a module from file browser
+  or search results into the main list.
 
 
 ## New improvements:

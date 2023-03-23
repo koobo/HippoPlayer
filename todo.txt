@@ -1,3 +1,9 @@
+WORKS: TODO:
+- check timeout, maybe broke due to the elapsed timer change
+
+FIXED: TODO:
+- check favsong storage: only store this if rmb clicked on an item that is being played
+
 
 TODO:
 - Here are two possible Gurus on a 68000 (emulated in WinUAE): On a "vanilla"
