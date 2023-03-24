@@ -9691,6 +9691,8 @@ gadgetSearchStringAction:
 	beq.b	.rko
 	subq.b	#1,d0
 	beq.b	.recentPlaylists
+	subq.b	#1,d0
+	beq.b	.turran
 .skip
 	rts
 
@@ -9710,6 +9712,8 @@ gadgetSearchStringAction:
     jmp stationsSearch(a0) 
 .recentPlaylists
     jmp recentPlaylistsSearch(a0) 
+.turran
+    jmp turranSearch(a0) 
     endb    a0
 
 
@@ -9741,17 +9745,18 @@ gadgetSearchSourceAction:
 
 gadgeSearchSourceOptions:
 	* max width, rows
-	dc.b	15,8
+	dc.b	15,9
 gadgetSearchSourceOption1:
-    dc.b    "AmigaRemix",0 ; 4
-    dc.b    "Aminet",0 ; 1
-    dc.b    "HVSC",0 ; 3
-    dc.b    "Modland",0 ; 0
-    dc.b    "Modules.pl",0 ; 2 
-    dc.b    "Radio stations",0 ; 6
-    dc.b    "Remix.Kwed.org",0 ; 5
-    dc.b    "Shared lists",0 ; 7   
-    even
+  dc.b    "AmigaRemix",0        ; 4
+  dc.b    "Aminet",0            ; 1
+  dc.b    "HVSC",0              ; 3
+  dc.b    "Modland",0           ; 0
+  dc.b    "Modules.pl",0        ; 2 
+  dc.b    "Radio stations",0    ; 6
+  dc.b    "Remix.Kwed.org",0    ; 5
+  dc.b    "Shared lists",0      ; 7  
+  dc.b    "Turran FTP",0        ; 8 
+  even
 
 searchActivate:
     DPRINT  "search activate"
@@ -52724,6 +52729,7 @@ SEARCH_AMIGAREMIX       = 4
 SEARCH_RKO              = 5
 SEARCH_STATIONS         = 6
 SEARCH_RECENT_PLAYLISTS = 7
+SEARCH_TURRAN           = 8
 
 modlandSearch
 	moveq	#SEARCH_MODLAND,d7
@@ -52757,6 +52763,9 @@ recentPlaylistsSearch
 	moveq	#SEARCH_RECENT_PLAYLISTS,d7
 	bra 	remoteSearch
 
+turranSearch
+	moveq	#SEARCH_TURRAN,d7
+	bra 	remoteSearch
 
 * Requests a search pattern from the user,
 * then creates an executable shell script to launch
@@ -52806,6 +52815,10 @@ remoteSearch
 	lea 	.recentPlaylistsResultsPath(pc),a1
     cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
     beq     .1
+	lea		.turranSearchCmd(pc),a0
+	lea 	.turranResultsPath(pc),a1
+    cmp.b   #SEARCH_TURRAN,d7
+    beq     .1	
 	lea		.aminetSearchCmd(pc),a0
 	lea 	.aminetResultsPath(pc),a1
 .1
@@ -52886,6 +52899,9 @@ remoteSearch
     cmp.b   #SEARCH_STATIONS,d7
     beq     .a
     lea     .recentPlaylistsResultsPath(pc),a0
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+    beq     .a
+    lea     .turranResultsPath(pc),a0
 .a
 
 	* Jump to after the variable
@@ -52935,6 +52951,10 @@ remoteSearch
 	pushpea	.hvscLine(pc),d6
 	moveq	#.hvscLineE-.hvscLine,d4	
     cmp.b   #SEARCH_HVSC,d7
+    beq.b   .2
+	pushpea	.turranLine(pc),d6
+	moveq	#.turranLineE-.turranLine,d4	
+    cmp.b   #SEARCH_TURRAN,d7
     beq.b   .2
 	pushpea	.amigaRemixLine(pc),d6
 	moveq	#.amigaRemixLineE-.amigaRemixLine,d4	
@@ -53256,6 +53276,10 @@ remoteSearch
     dc.b    "http://uhc.remix.kwed.org/",0
 .rkoLineE
 
+.turranLine
+    dc.b    "http://ftp2.grandis.nu/turran/FTP/",0
+.turranLineE
+
 .recentPlaylistsLine
 	dc.b	"http://asciiarena.se/",0
 .recentPlaylistsLineE
@@ -53279,6 +53303,10 @@ remoteSearch
 	dc.b	"%s",10
 	dc.b 	'%s mods/ %s',10
 	dc.b	0
+.turranSearchCmd
+	dc.b	"%s",10
+	dc.b 	'%s collection/music/ %s',10
+	dc.b	0
 
 .modulesResultsPath
 	dc.b	"modulessearch",0
@@ -53288,6 +53316,8 @@ remoteSearch
 	dc.b	"amigaremixsearch",0
 .rkoResultsPath
 	dc.b	"rkosearch",0
+.turranResultsPath
+	dc.b	"turransearch",0
 .stationsResultsPath
 	dc.b	"stationsearch",0
 .stationsSearchCmd
@@ -53300,6 +53330,7 @@ remoteSearch
 	dc.b	"%s",10
 	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s',10
 	dc.b	0
+
 
 
 remoteExecute
