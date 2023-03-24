@@ -53295,7 +53295,7 @@ remoteSearch
 	dc.b 	'uhcmirrorsearch SEARCHLIMIT=1000 SEARCHRESULTTO=T:searchresults %s %s',10
 	dc.b	0
 .recentPlaylistsResultsPath
-	dc.b	"playlistrecent",0
+	dc.b	"playlistsearch",0
 .recentPlaylistsSearchCmd
 	dc.b	"%s",10
 	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s',10
