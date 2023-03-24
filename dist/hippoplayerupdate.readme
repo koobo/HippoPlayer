@@ -63,6 +63,8 @@ New keyboard shortcuts:
 
 # Changes from from v2.56 (15.2.2023) to v2.57 (?.?.2023) 
 
+Mostly fixes this time!
+
 ## New fixes:
 
 - Fix crash when in the search view and doing a find (key [F] or RMB+"S" button).
@@ -78,7 +80,8 @@ New keyboard shortcuts:
   - Fix crash when using mhimdev with the iComp MP3@64 clockport module
   - Fix pause and continue not working properly with Prelude + MPEGit
 
-- Fix modland whitelist, files with "cust.*" prefix were wrongly filtered out.
+- Fix Modland whitelist, files with "cust.*" prefix were wrongly filtered out
+  from searches.
 
 - Prevent a few cases where the window layout broke with the new
   search bar at the bottom.
@@ -113,6 +116,9 @@ New keyboard shortcuts:
   it is now also stored if "Add"ing a module from file browser
   or search results into the main list.
 
+- Enable the "Prg" button in favorites list, can be used to
+  save the favorites to another file.
+
 
 ## New improvements:
 
@@ -131,7 +137,7 @@ New keyboard shortcuts:
     the FastMemPlay mode. This allows playing MED modules with
     very large samples in addition to loading them to FAST mem. 
 
-- Download a remote file into a selected directory with the 
+- Download remote files into a selected directory with the 
   hotkey [CTRL+G] ("G" for get). Cancel with [ESC].
 
 

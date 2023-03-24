@@ -56197,7 +56197,7 @@ tooltipList
 	dc.b	25,3
 	dc.b	"LMB: Sort list   [S]",0
 	dc.b	"RMB: Find module [F]",0
-    dc.b    "     Find next   [CTRL+F]"
+    dc.b    "     Find next   [CTRL+F]",0
 .move
 	dc.b	26,4
 	dc.b	"LMB: Move chosen module,",0
