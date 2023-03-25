@@ -42300,7 +42300,9 @@ id_it:
 	MOVEQ	#0,D0
 	CMP.L	#$494D504D,(A0)
 	BNE.S	.itFail
-	MOVE.W	$2A(A0),D1			*  Cmwt: format version
+    *  Cmwt:     Compatible with tracker with version greater than value.
+    *             (ie. format version)
+	MOVE.W	$2A(A0),D1
 	ROR.W	#8,D1
  if DEBUG
 	push	d0
@@ -49665,6 +49667,13 @@ _deliDataSize		rs.b	0
 	DPRINT	"cutSuffix"
 	moveq	#0,d0
 	rts
+
+* AllocListData(Size:d0/Flags:d1)
+* In: 
+*   d0 = size to allocate
+*   d1 = AllocMem flags
+* Out:
+*   d0 = Pointer to allocated memory
 .allocListData
 	DPRINT	"allocListData %ld %lx"
 	* used by stonetracker
@@ -49689,6 +49698,9 @@ _deliDataSize		rs.b	0
 	moveq	#0,d0
 	bra.b 	.allocListDataX
 	
+* FreeListData(MemBlock:a1)
+* In:
+*   a1 =  memoryBlock - pointer to the memory block to free, or NULL.
 .freeListData
 	DPRINT	"freeListData"
 	moveq	#0,d0
