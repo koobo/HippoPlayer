@@ -724,8 +724,6 @@ scopeManualActivation	rs.b 1
 
 * Special flag to display a clarifying error message
 moduleWasRSID  	        rs.b 1
-moduleWasNewIT          rs.b 1
-                        rs.b 1
 
 scopeData  rs.b	 scope_size
 
@@ -1396,6 +1394,7 @@ deliPathArray		rs.l	1
 deliPatternInfo		rs.l 	1
 * UPS_USER struct info returned by EP
 deliUPSStruct			rs.l 	1
+deliForceAllocPublicMem rs.w    1
 
 * Path read from auto saved modulelist comment,
 * which is the last path used to add files to list
@@ -6691,10 +6690,6 @@ freemodule:
 	bsr	moduleIsExecutable
 	move.b	d0,d7
 
-	* IT hack!
-	jsr	isImpulseTrackerActive
-	sne	d6
-	
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
     * that UnLoadSeg() is needed.
@@ -6748,13 +6743,6 @@ freemodule:
 
 	move.l	modulelength(a5),d0
 	beq.b	.ee
-
-	* IT deliplayer memory overrun hack
-	tst.b	d6
-	bne.b	.notIT
-	DPRINT	"IT hack 2!"
-	addq.l	#2,d0
-.notIT
 	lob	FreeMem
 .exe
 
@@ -29578,10 +29566,6 @@ tuntematonvirhe
     beq     .1
     lea     .rsid_msg(pc),a1
 .1
-    tst.b   moduleWasNewIT(a5)
-    beq     .3
-    lea     .it_msg(pc),a1
-.3
 	lea	.g(pc),a2
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	bne.b	.noBr	
@@ -29600,8 +29584,6 @@ tuntematonvirhe
 .onlyOk = *-4
 .rsid_msg
     dc.b	"RSID format not supported!",0
-.it_msg
-    dc.b	"ImpulseTracker format higher",10,"than v2.00 not supported!",0
  even
 
 *******************************************************************************
@@ -30565,19 +30547,6 @@ loadfile:
 	move.l	lod_length(a5),d0
 	DPRINT	"Normal load %ld"
  endif
- 	
-	pushm d0/a0
-	lea	probebuffer(a5),a0
-	bsr	id_it
-	popm d0/a0
-	bne.b	.wasNotIt
-	DPRINT	"IT hack 1!"
-	move.l	lod_length(a5),d0
-	addq.l	#2,d0
-	move.l	lod_memtype(a5),d1
-	lore	Exec,AllocMem
-	bra.b	.itAlloc
-.wasNotIt
 
 	bsr	.alloc
 .itAlloc
@@ -41855,8 +41824,18 @@ p_multi:
 
 	move.l	moduleaddress(a5),a0
 	bsr 	id_it
-	bne.b	.notIt
+	bne 	.notIt
 	DPRINT "IT detected"
+
+    cmp.w   #$1402,$2A(A0)  * v2.14 module?
+    bne     .noConv
+    bsr     convertIT214
+    tst.l   d0
+    bne     .conv
+    moveq   #ier_not_compatible,d0
+    bra     .itError
+.conv
+.noConv
 
 	move.l	(a5),a0
 	btst	#AFB_68020,AttnFlags+1(a0)
@@ -42295,7 +42274,6 @@ ps3minitcount	dc	0
 
 * ID from A0
 id_it:
-    clr.b   moduleWasNewIT(a5)
 	push	d1
 	MOVEQ	#0,D0
 	CMP.L	#$494D504D,(A0)
@@ -42315,18 +42293,101 @@ id_it:
 	BEQ.S	.itYes
 	CMP.W	#$200,D1
 	BEQ.S	.itYes
-    shi     moduleWasNewIT(a5)
-; TEST: Fake version $214 to look like version $200
-;	CMP.W	#$214,D1
-;	Bne.S	.itFail
-;	move	#$0002,$2A(a0)
-;	bra.b	.itYes
+	CMP.W	#$214,D1
+	BEQ.S	.itYes
 .itFail
 	MOVEQ	#-1,D0
 .itYes
 	pop	d1
 	tst.l	d0
 	RTS
+
+* Converts IT v2.14 module into v2.00 format
+* Out:
+*  d0 = true: success, false: failed
+convertIT214:
+    DPRINT  "convertIT214"
+    pushm   d1-a6
+    moveq   #0,d7  * FAIL
+
+    pushpea .converter(pc),d1
+    lore    Dos,LoadSeg
+    DPRINT  "LoadSeg=%lx"
+    move.l  d0,d6
+    lsl.l   #2,d6
+    beq     .x
+
+    bsr     buildDeliBase
+	tst.l	d0
+    beq     .x
+
+    jsr     setMainWindowWaitPointer
+
+    pushm   d6/d7
+
+    DPRINT  "DTP_DeliBase"
+	move.l	#DTP_DeliBase,d0
+    move.l  d6,a0
+    bsr     deliGetTagFromA0
+	move.l	d0,a0 
+	move.l	deliBase(a5),(a0)
+
+    DPRINT  "DTP_Config"
+	move.l	#DTP_Config,d0
+    move.l  d6,a0
+    bsr     deliGetTagFromA0
+    bsr     deliCallFunc
+
+    st      deliForceAllocPublicMem(a5)
+
+    * Find the convert function from seglist    
+    move.l  d6,a0
+    move.l  #DTP_Convert,d0
+    bsr     deliGetTagFromA0
+    bsr     deliCallFunc    
+    DPRINT  "DTP_Convert=%lx"
+    * Returns 0 on success    
+    popm    d6/d7
+
+    sf      deliForceAllocPublicMem(a5)
+    jsr     clearMainWindowWaitPointer
+    
+    tst.l   d0
+    bne     .x
+    
+ if DEBUG
+    move.l  moduleaddress(a5),d0
+    move.l  modulelength(a5),d1
+    DPRINT  "Free old module=%lx,%ld"
+ endif
+
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    lore    Exec,FreeMem
+
+    move.l  deliLoadFileArray(a5),a0
+    movem.l (a0),d0/d1
+    clr.l   (a0)+
+    clr.l   (a0)+
+    move.l  d0,moduleaddress(a5)
+    move.l  d1,modulelength(a5)
+    DPRINT  "IT module converted=%lx,%ld"
+
+    moveq   #1,d7   * status: ok
+    
+.x
+    bsr     freeDeliBase
+    move.l  d6,d1
+    beq     .xx
+    lsr.l   #2,d1
+    lore    Dos,UnLoadSeg
+.xx
+    move.l  d7,d0
+    popm    d1-a6
+    rts
+
+.converter  dc.b    "PROGDIR:ImpulseDecruncher",0
+    even
 
 * Checks if AHI is active and there are max 4 voices in use.
 * In this case the scopes can be used in AHI mode.
@@ -48791,12 +48852,12 @@ freeDeliPlayer:
 	clr.l	deliPlayer(a5)
 	clr	deliPlayerType(a5)
 .x
-	bsr.b	.freeDeliLoadedFile
+	bsr.b	freeDeliLoadedFiles
 	bsr	freeDeliBase
 	popm	all
 	rts
 
-.freeDeliLoadedFile
+freeDeliLoadedFiles
 	tst.l	deliLoadFileArray(a5)
 	beq.b 	.xy
 	move.l	deliLoadFileArray(a5),a2
@@ -49686,6 +49747,10 @@ _deliDataSize		rs.b	0
 	move.l	a1,a3 
 	move.l	d6,d0
 	move.l	d7,d1
+    tst.w   deliForceAllocPublicMem(a5)
+    beq     .fal
+    moveq   #MEMF_PUBLIC,d1
+.fal
 	lore 	Exec,AllocMem
 	tst.l 	d0 
 	beq.b 	.err
