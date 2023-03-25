@@ -32796,6 +32796,9 @@ favoriteModuleFileName
 	dc.b	"S:HippoFavorites.prg",0
  even
 
+* Update list node favorite status.
+* Used in other list views than the favorites list
+* to indicate favorited tunes.
 * in:
 *  a0 = list node
 updateFavoriteStatus:
@@ -32804,9 +32807,15 @@ updateFavoriteStatus:
 	bsr	findFavoriteModule
 	* a matching favorite module was found? set flag 
 	sne	l_favorite(a0)
-    * also copy the fav song over, if in fact a favorite
-    * there might be a fav song set even if not a favorite
     beq.b   .notFav
+    * a1 = favorite node
+
+    * If the list item already had a subsong set,
+    * do not overwrite it with the saved subsong from favorites.
+    * This allows preparing a shared playlist with subsongs
+    * that do not get mangled by favorites.
+    tst.b   l_favSong(a0)
+    bne.b   .notFav
     move.b  l_favSong(a1),l_favSong(a0)
 .notFav
 .skipDivs
