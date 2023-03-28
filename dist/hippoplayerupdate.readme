@@ -63,8 +63,6 @@ New keyboard shortcuts:
 
 # Changes from from v2.56 (15.2.2023) to v2.57 (?.?.2023) 
 
-Mostly fixes this time!
-
 ## New fixes:
 
 - Fix crash when in the search view and doing a find (key [F] or RMB+"S" button).
@@ -112,12 +110,10 @@ Mostly fixes this time!
 - The elapsed time counter in the titlebar no longer wraps to zero
   after 99 minutes, instead it wraps after 9 hours.
 
-- The song number is stored when favoriting a module, but
-  it is now also stored if "Add"ing a module from file browser
-  or search results into the main list.
-
 - Enable the "Prg" button in favorites list, can be used to
   save the favorites to another file.
+
+- Fix "Shared playlists" in the search view to fetch more than 25 items.
 
 
 ## New improvements:
@@ -136,18 +132,33 @@ Mostly fixes this time!
   - Added "Prefs/Play-2/MED FastMemPlay" toggle to manually enable
     the FastMemPlay mode. This allows playing MED modules with
     very large samples in addition to loading them to FAST mem. 
-
+    
 - Download remote files into a selected directory with the 
   hotkey [CTRL+G] ("G" for get). Cancel with [ESC].
 
+- New search source added: Turran FTP.
 
-## New music formats:
+- Allow playlists to store subsongs for modules.   
+  The song number is stored when favoriting a module in the 
+  previous version, it is now also stored if "Add"ing a module from 
+  the file browser or the search results into the main list.
 
-- Sound Master:
+
+## New supported music formats:
+
+- Sound Master
   - Eagleplayer "sound master" by Wanted Team.
   - Silkworm title music!
-- Sound Programming Language:
+- Sound Programming Language
   - Eagleplayer "soprol" by Wanted Team.
+- Impulse Tracker v2.14
+  - Previously IT v1.00 and v2.00 modules were supported by
+    using the deliplayer plugin "impulse", which Hippo tries
+    to load from the Hippo binary directory.
+  - To play IT v2.14 modules, copy the "ImpulseDecruncher"
+    genie from DeliTracker archive to the Hippo binary 
+    directory, too. This is used to convert v2.14 format
+    modules to the v2.00 format before playback.
 
 
 ## Known issues recap:
