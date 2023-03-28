@@ -11482,9 +11482,9 @@ addfile:
  	jsr	_LVOAddTail(a6)
 
 	move.l	a3,a0
-	jsr	updateFavoriteStatus
-	rts
- 
+	jmp	updateFavoriteStatus
+
+
 .insert	move.l	fileinsert(a5),a2	* minkä filen perään insertataan
 	lob	Insert
 
@@ -12811,9 +12811,38 @@ doExportModuleProgramToFile:
 	subq	#1,a1
 .noAdd
 
-    * Output fav song! - do this always
-;    tst.b   d7
-;    beq.b   .noFavSong
+    * Output fav song! 
+    * d7 is true if saving favorites list
+
+    * Check #1: are we saving the favorites list?
+    tst.b   d7
+    bne     .doFav
+
+    * Check #2: not saving favorites. 
+    * Store song for this one if it is not a favorite
+    tst.b   l_favorite(a3)
+    beq     .doFav
+
+    * Is favorite and favsong is empty -> skip
+    tst.b   l_favSong(a3)
+    beq     .noFavSong
+
+    * This is a favorite song.
+    * Compare favorited song and list item song.
+    * If they differ, then save.
+    pushm   a1-a3
+    move.b  l_favSong(a3),d1
+    move.l  a3,a0
+    jsr     findFavoriteModule
+    beq     .favNotFound
+    * Compare favorited iten song with playlist item song
+    cmp.b   l_favSong(a1),d1
+.favNotFound
+    popm    a1-a3
+    * If they are the same, no need to save since
+    * it's already in favorites.
+    beq     .noFavSong
+.doFav
     move.b  l_favSong(a3),d0
     beq     .noFavSong
     move.b  #"#",(a1)+
