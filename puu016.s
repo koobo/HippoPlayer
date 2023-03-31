@@ -33,7 +33,8 @@ ver	macro
 ;	dc.b	"v2.55 (10.11.2022)"
 ;	dc.b	"v2.56฿ (?.?.202?)"
 ;	dc.b	"v2.56 (15.2.2023)"
-	dc.b	"v2.57฿ (?.?.2023)"
+;	dc.b	"v2.57฿ (?.?.2023)"
+	dc.b	"v2.57 (1.4.2023)"
 	endm	
 
  ifnd DEBUG
@@ -2338,7 +2339,7 @@ about_t
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
  dc.b "ญญญ  HippoPlayer "
  ver
- dc.b " " ; padding
+ dc.b "  " ; padding
  dc.b " ญญญ",10,3
  dc.b "ญญ          by K-P Koljonen          ญญ",10,3
  dc.b "ญญญ       Hippopotamus Design       ญญญ",10,3
