@@ -56003,7 +56003,7 @@ gadgetListModeChangeButtonImagePtr
 	; ig_NextImage
 	dc.l 0
 
-gadgetResize
+gadgetResize:
 	; gg_Next
 	dc.l	0
 	; gg_LeftEdge: relative to right edge
@@ -56019,7 +56019,38 @@ gadgetResize
 	; gg_GadgetType
 	dc.w	GTYP_SIZING
 	; gg_GadgetRender
-	dc.l	.gadgetResizeImage
+	dc.l	gadgetResizeImage
+	; gg_SelectRender
+	dc.l	0
+	; gg_GadgetText
+	dc.l	0	
+	; gg_MutualExclude
+	dc.l	0
+	; gg_SpecialInfo
+	dc.l	0
+	; gg_GadgetId
+	dc.w	0
+	; gg_UserData
+	dc.l	0
+
+
+gadgetResizeInfoWindow:
+	; gg_Next
+	dc.l	0
+	; gg_LeftEdge: relative to right edge
+	dc.w	-5
+	; gg_TopEdge: relative to bottom edge
+	dc.w	-5
+	; gg_Width, gg_Height
+	dc.w	6,6
+	; gg_Flags
+	dc.w	GFLG_RELRIGHT!GFLG_RELBOTTOM!GFLG_GADGIMAGE
+	; gg_Activation
+	dc.w	0
+	; gg_GadgetType
+	dc.w	GTYP_SIZING
+	; gg_GadgetRender
+	dc.l	gadgetResizeImage
 	; gg_SelectRender
 	dc.l	0
 	; gg_GadgetText
@@ -56034,7 +56065,7 @@ gadgetResize
 	dc.l	0
 
 ; Image
-.gadgetResizeImage
+gadgetResizeImage
 	; ig_LeftEdge
 	dc 0
 	; ig_TopEdge
@@ -56391,7 +56422,7 @@ tooltipList
   even
 
 *** Samplename ikkuna
-swinstruc
+swinstruc:
 	dc	0	;vas.yläk.x-koord.
 	dc	0	;---""--- y-koord
 swinsiz	dc	361-5,150-13*8-2
@@ -56418,7 +56449,7 @@ wreg1
 
 * Slider for the module info window
 gAD1	
-	dc.l gadgetResize
+    dc.l gadgetResizeInfoWindow
 	dc.w 9,14,16,127-13*8,GFLG_GADGHNONE,9,3
 	dc.l gAD1gr,0,0,0,gAD1s
 	dc.w 0
