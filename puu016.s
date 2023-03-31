@@ -12814,7 +12814,7 @@ doExportModuleProgramToFile:
     * Output fav song! 
     * d7 is true if saving favorites list
 
-    * Check #1: are we saving the favorites list?
+    * Check #1: are we saving the favorites list? Save #song
     tst.b   d7
     bne     .doFav
 
@@ -12826,6 +12826,12 @@ doExportModuleProgramToFile:
     * Is favorite and favsong is empty -> skip
     tst.b   l_favSong(a3)
     beq     .noFavSong
+
+* Existing minor issue:
+* - Jogeir's list has tune A with song #3
+* - Favs list has tune A with song #3
+* -> when saving, can't know where the song
+*    came from from favs: or from Jogeir's list
 
     * This is a favorite song.
     * Compare favorited song and list item song.
