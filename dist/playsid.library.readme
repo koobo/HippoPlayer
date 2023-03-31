@@ -104,4 +104,8 @@ Changelog
               the heavier Oversample x2 and x3 modes to with most
               tunes on 50MHz 060. About 20% faster compared
               to previous.
-           
+- 2023-03   - Add AHI support for reSID output.
+  v1.5      - Fix hang and crash bug which could happen when 
+              starting playback.
+            - Fix another crash bug related to earlier reSID  
+              modifications.

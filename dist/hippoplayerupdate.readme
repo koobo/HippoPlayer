@@ -61,7 +61,7 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 
 
-# Changes from from v2.56 (15.2.2023) to v2.57 (?.?.2023) 
+# Changes from from v2.56 (15.2.2023) to v2.57 (1.4.2023) 
 
 ## New fixes:
 
@@ -100,8 +100,7 @@ New keyboard shortcuts:
 - Fix favorites list modification confirmation appearing unnecessarily
   in certain situations.
 
-- Improved error messages if trying to load an RSID file or 
-  an unsupported ImpulseTracker file.
+- Improved error messages if trying to load an RSID file.
 
 - Possibly make scopes work when running on AOS4+PPC.
 
@@ -114,6 +113,8 @@ New keyboard shortcuts:
   save the favorites to another file.
 
 - Fix "Shared playlists" in the search view to fetch more than 25 items.
+
+- A few other fixes as well.
 
 
 ## New improvements:
@@ -149,8 +150,10 @@ New keyboard shortcuts:
 - Sound Master
   - Eagleplayer "sound master" by Wanted Team.
   - Silkworm title music!
+
 - Sound Programming Language
   - Eagleplayer "soprol" by Wanted Team.
+
 - Impulse Tracker v2.14
   - Previously IT v1.00 and v2.00 modules were supported by
     using the deliplayer plugin "impulse", which Hippo tries
@@ -161,14 +164,19 @@ New keyboard shortcuts:
     modules to the v2.00 format before playback.
 
 
+## Other news:
+
+- "Shared playlists" contains new cool stuff, such 
+  as Jogeir Liljedahl's fav synth list, check it! 
+  Organized by Spot/UpRough.
+
+
 ## Known issues recap:
 
 - Sonic Arranger module "svensktoppen" may cause a crash.
 - Oktalyzer module "1 love night dub.okta" may cause a crash.
 - There are some invalid S3M modules around with an uneven 
   length orders table. These will crash Hippo.
-- THX/AHX pattern scope sometimes displays an empty channel
-  where actual data should be displayed.
 - Oktalyzer: the sound is generally a bit off. This is
   likely because the original mixing routines are used
   and these seem to be quite finicky.
