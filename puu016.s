@@ -33,7 +33,9 @@ ver	macro
 ;	dc.b	"v2.55 (10.11.2022)"
 ;	dc.b	"v2.56ß (?.?.202?)"
 ;	dc.b	"v2.56 (15.2.2023)"
-	dc.b	"v2.56 (19.2.2023)"
+;	dc.b	"v2.56 (19.2.2023)"
+;	dc.b	"v2.57ß (?.?.2023)"
+	dc.b	"v2.57 (1.4.2023)"
 	endm	
 
  ifnd DEBUG
@@ -70,6 +72,7 @@ FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_P61A        =   0
 FEATURE_LIST_TABS   =   0
+FEATURE_PASTE       =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -261,6 +264,11 @@ check	macro
 	include	devices/timer.i
 	include	intuition/sghooks.i
 
+ ifne FEATURE_PASTE
+    include libraries/iffparse_lib.i
+    include libraries/iffparse.i
+ endif
+
 	incdir include/
 	include	mucro.i
 	include	med.i
@@ -400,9 +408,16 @@ prefs_residfilter     rs.b      1
 * the search selection.
 prefs_selectedSearch  rs.b      1 
 prefs_mhiEnable       rs.b      1
-MHILIB_SIZE         =   39
+MHILIB_SIZE         =   40
 prefs_mhiLib          rs.b      MHILIB_SIZE
+prefs_medfastmemplay  rs.b     1
+                      ;rs.b     1 * pad to get even prefs_size
 prefs_size            rs.b      0
+
+	ifne	prefs_size&1
+	fail
+	endc
+
 
 *******************************************************************************
 *
@@ -708,7 +723,9 @@ scopeToggleTable        rs.b 5 * Used by toggleScopes()
 * by LMB click, when scope was passivated because not being
 * visible. As this is global user does not need to do that again.
 scopeManualActivation	rs.b 1	
-__pad0     	        rs.b 1
+
+* Special flag to display a clarifying error message
+moduleWasRSID  	        rs.b 1
 
 scopeData  rs.b	 scope_size
 
@@ -829,16 +846,6 @@ favorites_new	rs.b	1
 tooltips_new	rs.b 	1	
 savestate_new	rs.b 	1
 altbuttons_new  rs.b   1
-quadraScope_new rs.b 1
-quadraScopeBars_new rs.b 1
-quadraScopeF_new rs.b 1
-quadraScopeFBars_new rs.b 1
-hippoScope_new rs.b 1
-hippoScopeBars_new rs.b 1
-patternScope_new rs.b 1
-patternScopeXL_new rs.b 1
-spectrumScope_new rs.b 1
-spectrumScopeBars_new rs.b 1
 	
 samplecyber_new	rs.b	1
 mpegaqua_new	rs.b	1
@@ -849,6 +856,8 @@ medratepot_new	rs	1
 sidmode_new     rs.b    1
 residmode_new   rs.b    1
 xmaplay_new     rs.b    1
+medfastmemplay_new rs.b  1
+mhiEnable_new   rs.b 1
 residfilter_new rs.b    1
 alarmpot_new	rs.l	1
 alarm_new	rs	1
@@ -859,12 +868,9 @@ cybercalibration_new rs.b 1		* yritystä
 calibrationfile_new rs.b 100
 newcalibrationfile rs.b	1
 
-mhiEnable_new   rs.b 1
 mhiLib_new      rs.b MHILIB_SIZE
 
 prefs_exit	rs.b	1		* Prefs exit-flaggi
-
-
 
 slider4oldheight rs	1
 slider1old	rs	1		* previous VertPot value to detect changes
@@ -953,7 +959,8 @@ sidmode     rs.b    1
 residmode   rs.b    1
 xmaplay     rs.b    1
 residfilter rs.b    1
-
+medfastmemplay rs.b     1
+            rs.b    1 * PAD
 *******
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
@@ -1144,6 +1151,11 @@ ps3m_playpos	rs.l	1
 ps3m_buffSizeMask rs.l	1
 ps3mUnpackedPattern rs.l 1
 
+* Scopes usign PS3M as source data (or faked PS3M)
+* modulo. This is always 1 unless PSID+reSID+AHI is active.
+ps3m_sampleDataModulo   rs.l    1
+
+
 ahi_use_new		rs.b	1
 ahi_muutpois_new	rs.b	1
 ahi_rate_new		rs.l	1
@@ -1166,7 +1178,7 @@ loading2	rs.b	1		* ~0: filejen addaus meneillään
 favoriteListHeader	rs.b 	MLH_SIZE
 * Flag indicates the list has changed before last save
 favoriteListChanged	rs.b	1
-			rs.b	1	* pad
+windowClosedViaScreenNotify			rs.b	1	
 
 * List for file browser
 fileBrowserListHeader	rs.b	MLH_SIZE
@@ -1229,7 +1241,6 @@ favorites	rs.b	1
 tooltips	rs.b  	1
 savestate	rs.b    1
 altbuttons  rs.b    1
- 			rs.b    1
 autosort	= prefsdata+prefs_autosort
 
 * Runtime scope settings
@@ -1243,7 +1254,8 @@ patternScope   rs.b 1
 patternScopeXL   rs.b 1
 spectrumScope   rs.b 1
 spectrumScopeBars   rs.b 1
- 
+                rs.b    1 * PADDING
+                 
 * audio homman muuttujat
 acou_deviceerr	rs.l	1
 iorequest	rs.b	ioa_SIZEOF
@@ -1384,6 +1396,7 @@ deliPathArray		rs.l	1
 deliPatternInfo		rs.l 	1
 * UPS_USER struct info returned by EP
 deliUPSStruct			rs.l 	1
+deliForceAllocPublicMem rs.w    1
 
 * Path read from auto saved modulelist comment,
 * which is the last path used to add files to list
@@ -1531,7 +1544,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	28
+xpl_versio	=	29
 
 
 *********************************************************************************
@@ -2327,7 +2340,7 @@ about_t
  dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
  dc.b "­­­  HippoPlayer "
  ver
- dc.b " " ; padding
+ dc.b "  " ; padding
  dc.b " ­­­",10,3
  dc.b "­­          by K-P Koljonen          ­­",10,3
  dc.b "­­­       Hippopotamus Design       ­­­",10,3
@@ -3057,7 +3070,10 @@ main:
 
 	bsr	init_inputhandler
 	bsr	init_screennotify
+    tst.b   win(a5)
+    beq     .noScopes
 	jsr	startAndStopScopeTasks
+.noScopes
 
 	tst.b	infoon(a5)
 	beq.b	.qq
@@ -4038,6 +4054,21 @@ inputhandler
 .handlerloop
 	cmp.b	#IECLASS_RAWKEY,ie_Class(a0)
 	bne.b	.cont
+
+    tst.b   hotkey(a1)
+    bmi.b   .normal
+
+    * Special mode active! This can be used to cancel
+    * network download.
+    cmp.w   #$45,ie_Code(a0)
+    bne     .cont
+    * Esc pressed, qualifier ignored
+    * Eat the event
+    move.w  ie_Code(a0),rawkeyinput(a1)
+    clr.b   ie_Class(a0)
+    bra     .cont
+
+.normal
 	move	ie_Qualifier(a0),d0
 	and	#IEQUALIFIER_LSHIFT!IEQUALIFIER_CONTROL!IEQUALIFIER_LCOMMAND,d0
 	cmp	#IEQUALIFIER_LSHIFT!IEQUALIFIER_CONTROL!IEQUALIFIER_LCOMMAND,d0
@@ -4054,8 +4085,7 @@ inputhandler
 	bra.b	.exhand
 	
 .cont	
-	;move.l	ie_NextEvent(a0),d0		* seuraava
-	move.l	(a0),d0		* ie_NextEvent = 0
+	move.l	ie_NextEvent(a0),d0		* seuraava
 	move.l	d0,a0
 	bne.b	.handlerloop
 .exhand	
@@ -6662,10 +6692,6 @@ freemodule:
 	bsr	moduleIsExecutable
 	move.b	d0,d7
 
-	* IT hack!
-	jsr	isImpulseTrackerActive
-	sne	d6
-	
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
     * that UnLoadSeg() is needed.
@@ -6719,13 +6745,6 @@ freemodule:
 
 	move.l	modulelength(a5),d0
 	beq.b	.ee
-
-	* IT deliplayer memory overrun hack
-	tst.b	d6
-	bne.b	.notIT
-	DPRINT	"IT hack 2!"
-	addq.l	#2,d0
-.notIT
 	lob	FreeMem
 .exe
 
@@ -7298,7 +7317,7 @@ tooltipDisplayHandler
 	tst.b	tooltips(a5)
 	beq.b	.exit
 	move.l	d0,a0 
-	bsr	showTooltipPopup
+	jsr	showTooltipPopup
 .exit
 	popm all
 	rts
@@ -7342,11 +7361,14 @@ omaviesti
 	movem.l	snm_Type(a1),d3/d4
 	cmp.l	#SCREENNOTIFY_TYPE_WORKBENCH,d3
 	bne	.huh
+    ; snm_Value = FALSE: WB will be closed
+    ; snm_Value = TRUE: WB is open
 	tst.l	d4
 	bne.b	.open
 
 	tst.b	win(a5)			* HIDE!
 	beq	.huh
+    bset  #0,windowClosedViaScreenNotify(a5)
 	bsr	sulje_ikkuna
 	clr.b	win(a5)
 	bsr	sulje_prefs
@@ -7357,6 +7379,9 @@ omaviesti
 .open	
 	tst.b	win(a5)
 	bne	.huh
+    * Reopen if closed earlier via screen notify
+    bclr #0,windowClosedViaScreenNotify(a5)
+    beq .huh
 	bsr	openw
 	bra	.huh
 
@@ -8570,6 +8595,8 @@ nappuloita:
 	bmi	.exit	* vain jos nappula alhaalla
 	movem.l	d0-a6,-(sp)
 
+    ; ---- MODIFIER: control
+
 	cmp	#IEQUALIFIER_CONTROL,d4
 	bne.b	.noControl
 
@@ -8578,18 +8605,21 @@ nappuloita:
 	jsr	toggleFavoriteStatusForCurrentModule
 	bra	.ee
 .2
-;	cmp.b	#$37,d3	 	* m + control
-; 	bne.b	.3
-;	jsr		modlandSearch
-;	bra	.ee
-;.3	
 	cmp.b	#$21,d3	 	* s + control
  	bne.b	.4
+    tst     boxsize(a5) * Disable if box hidden
+    beq     .ee
 	jsr		searchActivate
 	bra	.ee
 .4
-
+    cmp.b   #$24,d3     * g + control
+    bne     .5
+    jsr     fetchAndSaveCurrentModule
+    bra     .ee
+.5
 .noControl
+
+    ; ---- MODIFIER: shift 
 
 	and.b	#IEQUALIFIER_LSHIFT!IEQUALIFIER_RSHIFT,d4
 	beq.b	.noshifts
@@ -9212,7 +9242,11 @@ printbox:
 	bra	print
 
 rlistmode:
-	jmp	toggleListMode
+    ; No toggling while in Zoomed mode
+    tst     boxsize(a5)
+    beq     beep
+	jmp	    toggleListMode
+
 ;rlistmodePop:
 ;    jmp toggleListModePopup
 
@@ -9647,6 +9681,8 @@ gadgetSearchStringAction:
 	beq.b	.rko
 	subq.b	#1,d0
 	beq.b	.recentPlaylists
+	subq.b	#1,d0
+	beq.b	.turran
 .skip
 	rts
 
@@ -9666,6 +9702,8 @@ gadgetSearchStringAction:
     jmp stationsSearch(a0) 
 .recentPlaylists
     jmp recentPlaylistsSearch(a0) 
+.turran
+    jmp turranSearch(a0) 
     endb    a0
 
 
@@ -9697,17 +9735,18 @@ gadgetSearchSourceAction:
 
 gadgeSearchSourceOptions:
 	* max width, rows
-	dc.b	15,8
+	dc.b	15,9
 gadgetSearchSourceOption1:
-    dc.b    "AmigaRemix",0 ; 4
-    dc.b    "Aminet",0 ; 1
-    dc.b    "HVSC",0 ; 3
-    dc.b    "Modland",0 ; 0
-    dc.b    "Modules.pl",0 ; 2 
-    dc.b    "Radio stations",0 ; 6
-    dc.b    "Remix.Kwed.org",0 ; 5
-    dc.b    "Shared lists",0 ; 7   
-    even
+  dc.b    "AmigaRemix",0        ; 4
+  dc.b    "Aminet",0            ; 1
+  dc.b    "HVSC",0              ; 3
+  dc.b    "Modland",0           ; 0
+  dc.b    "Modules.pl",0        ; 2 
+  dc.b    "Radio stations",0    ; 6
+  dc.b    "Remix.Kwed.org",0    ; 5
+  dc.b    "Shared lists",0      ; 7  
+  dc.b    "Turran FTP",0        ; 8 
+  even
 
 searchActivate:
     DPRINT  "search activate"
@@ -9784,10 +9823,10 @@ gadgetFindAction:
     bra     forceRefreshList
 
 find_new:
+    tst     boxsize(a5) * Disable if box hidden
+    beq     beep
 	cmp.l	#3,modamount(a5)
-	bhi.b	.ok
-	bra     beep
-.ok
+	blo 	beep
     jmp     switchToLocalSearchLayout
     
 ;	bsr	get_rt
@@ -9994,6 +10033,10 @@ rkelr
 newButtonAction
 rbutton11
 	skipIfGadgetDisabled gadgetNewButton
+    jsr     confirmFavoritesModification
+    bne     .1
+    rts
+.1
 	st	new(a5)
 ;	bsr	rbutton9		* Clear list
 	bra	rbutton1		* Play
@@ -11441,9 +11484,9 @@ addfile:
  	jsr	_LVOAddTail(a6)
 
 	move.l	a3,a0
-	jsr	updateFavoriteStatus
-	rts
- 
+	jmp	updateFavoriteStatus
+
+
 .insert	move.l	fileinsert(a5),a2	* minkä filen perään insertataan
 	lob	Insert
 
@@ -11616,6 +11659,19 @@ copyCurrentEntryToMainList
 	jsr		cloneListNode
     * NOTE: d0 status not checked 
 	* a4 = cloned node
+
+    * If chosenmodule is the same as the playing one,
+    * store subsong metadata.
+    move.l  chosenmodule(a5),d0
+    cmp.l   playingmodule(a5),d0
+    bne     .0
+    move    songnumber(a5),d0
+    move.b  d0,l_favSong(a4)
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT  "store song=%ld"
+ endif
+.0
 
 	move.l	a4,a1
 	lea		moduleListHeader(a5),a0
@@ -11930,6 +11986,10 @@ rloadprog0
 
 * From keys, gadgets
 rloadprog
+	bsr	confirmFavoritesModification
+	bne.b	.go
+    rts
+.go
 	moveq	#0,d7
 	skipIfGadgetDisabled gadgetPrgButton
 
@@ -12579,8 +12639,6 @@ nimenalku:
 
 
 rsaveprog
-	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.x
 	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.x
 	DPRINT  "rsaveprog obtain list"
@@ -12652,8 +12710,10 @@ rsaveprog
 .cpe2	move.b	(a0)+,(a1)+
 	bne.b	.cpe2
 
+	bsr     getVisibleModuleListHeader
+    move.l  a0,a1
 	lea	filename2(a5),a0
-	lea	moduleListHeader(a5),a1
+	;lea	moduleListHeader(a5),a1
 	bsr.b exportModuleProgramToFile
 
 	move.l	req_file2(a5),d0
@@ -12696,7 +12756,6 @@ exportModuleProgramToFileWithSongMetaData:
 * in:
 *  a0 = filename
 *  a1 = list
-*  d0 = 1: export #song data, 0: don't export #song data
 exportModuleProgramToFile:
     moveq   #0,d7
 doExportModuleProgramToFile:
@@ -12754,9 +12813,44 @@ doExportModuleProgramToFile:
 	subq	#1,a1
 .noAdd
 
-    * Output fav song!
+    * Output fav song! 
+    * d7 is true if saving favorites list
+
+    * Check #1: are we saving the favorites list? Save #song
     tst.b   d7
-    beq.b   .noFavSong
+    bne     .doFav
+
+    * Check #2: not saving favorites. 
+    * Store song for this one if it is not a favorite
+    tst.b   l_favorite(a3)
+    beq     .doFav
+
+    * Is favorite and favsong is empty -> skip
+    tst.b   l_favSong(a3)
+    beq     .noFavSong
+
+* Existing minor issue:
+* - Jogeir's list has tune A with song #3
+* - Favs list has tune A with song #3
+* -> when saving, can't know where the song
+*    came from from favs: or from Jogeir's list
+
+    * This is a favorite song.
+    * Compare favorited song and list item song.
+    * If they differ, then save.
+    pushm   a1-a3
+    move.b  l_favSong(a3),d1
+    move.l  a3,a0
+    jsr     findFavoriteModule
+    beq     .favNotFound
+    * Compare favorited iten song with playlist item song
+    cmp.b   l_favSong(a1),d1
+.favNotFound
+    popm    a1-a3
+    * If they are the same, no need to save since
+    * it's already in favorites.
+    beq     .noFavSong
+.doFav
     move.b  l_favSong(a3),d0
     beq     .noFavSong
     move.b  #"#",(a1)+
@@ -13081,6 +13175,7 @@ loadprefs2
 	move.b	prefs_residmode(a0),residmode(a5)
 	move.b	prefs_residfilter(a0),residfilter(a5)
 	move.b	prefs_xmaplay(a0),xmaplay(a5)
+	move.b	prefs_medfastmemplay(a0),medfastmemplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
 	move.b	prefs_tooltips(a0),tooltips(a5)
 	move.b	prefs_savestate(a0),savestate(a5)
@@ -13381,6 +13476,7 @@ saveprefs
 	move.b	residmode(a5),prefs_residmode(a0)
 	move.b	residfilter(a5),prefs_residfilter(a0)
 	move.b	xmaplay(a5),prefs_xmaplay(a0)
+	move.b	medfastmemplay(a5),prefs_medfastmemplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
 	move.b	tooltips(a5),prefs_tooltips(a0)
 	move.b	savestate(a5),prefs_savestate(a0)
@@ -13875,17 +13971,12 @@ prefs_code
 	move.b	residmode(a5),residmode_new(a5)
 	move.b	residfilter(a5),residfilter_new(a5)
 	move.b	xmaplay(a5),xmaplay_new(a5)
+	move.b	medfastmemplay(a5),medfastmemplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
 	move.b	tooltips(a5),tooltips_new(a5)
 	move.b	savestate(a5),savestate_new(a5)
 	move.b	altbuttons(a5),altbuttons_new(a5)
 	move.b	mhiEnable(a5),mhiEnable_new(a5)
-
-	move.b quadraScopeBars(a5),quadraScopeBars_new(a5)        
-	move.b quadraScopeFBars(a5),quadraScopeFBars_new(a5)         
-	move.b hippoScopeBars(a5),hippoScopeBars_new(a5)       
-	move.b spectrumScopeBars(a5),spectrumScopeBars_new(a5)  
-
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -14347,6 +14438,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	residmode_new(a5),residmode(a5)
 	move.b	residfilter_new(a5),residfilter(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
+	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
@@ -15087,6 +15179,7 @@ pupdate:				* Ikkuna päivitys
     bsr presidfilter    * reSID filter
     bsr pmhienable      * MHI enable
     bsr pmhilib         * MHI library
+    bsr pmedfastmemplay * MED FastMemPlay
 
 .x	popm	all
 	rts
@@ -15340,7 +15433,7 @@ gadgetsup2
     dr  rresidfilter * resid filter
     dr  rmhienable  * mhi enable
     dr  rmhilib     * mhi lib
-
+    dr  rmedfastmemplay * MED fast mem play
 
 rval0	moveq	#0,d0
 	bra	prefsgads2
@@ -15429,7 +15522,7 @@ rHippoScopeBars
 	bsr	restartHippoScopeTask
 
 pHippoScopeBars
-	move.b	hippoScopeBars_new(a5),d0
+	move.b	prefsdata+prefs_hippoScopeBars(a5),d0
 	lea	prefsHippoScopeBars,a0
 	bra	tickaa
 
@@ -16251,7 +16344,8 @@ rselarcdir
 
 
 ** Hakemisto requesteri
-dir_req	bsr	get_rt
+dir_req:
+	bsr	get_rt
 	moveq	#RT_FILEREQ,D0
 	sub.l	a0,a0
 	lob	rtAllocRequestA
@@ -17390,7 +17484,7 @@ sidmode_callback
 
 rsidmode
 	addq.b	#1,sidmode_new(a5)
-	cmp.b	#4,sidmode_new(a5)
+	cmp.b	#5,sidmode_new(a5)
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
@@ -17411,17 +17505,21 @@ psidmode
     subq.b  #1,d0
     beq.b   .1
     lea     sidmode04(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     sidmode05(pc),a0
 .1 
     lea	    prefsPlaySidMode,a1
 	bra	prunt
 
 
 
-sidmode00	dc.b	11,4
+sidmode00	dc.b	11,5
 sidmode01	dc.b	"Normal",0
 sidmode02	dc.b	"reSID 6581",0
 sidmode03	dc.b	"reSID 8580",0
-sidmode04	dc.b	"SIDBlaster",0
+sidmode04	dc.b	"reSID Auto",0
+sidmode05	dc.b	"SIDBlaster",0
  even
 
 rresidmode_req
@@ -17447,7 +17545,7 @@ rresidfilter_req
 
 rresidmode
 	addq.b	#1,residmode_new(a5)
-	cmp.b	#5,residmode_new(a5)
+	cmp.b	#6,residmode_new(a5)
 	bne.b	.1
 	clr.b	residmode_new(a5)
 .1
@@ -17466,18 +17564,22 @@ presidmode
     subq.b  #1,d0
     beq.b   .1
     lea     residmode05(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residmode06(pc),a0
 .1 
     lea	    prefsResidMode,a1
 	bra	prunt
 
 
 
-residmode00	dc.b	13,5
+residmode00	dc.b	13,6
 residmode01	dc.b	"Normal",0
 residmode02	dc.b	"Oversample 2x",0
 residmode03	dc.b	"Oversample 3x",0
 residmode04	dc.b	"Oversample 4x",0
 residmode05	dc.b	"Interpolate",0
+residmode06	dc.b	"AHI",0
  even
 
 
@@ -17518,6 +17620,16 @@ pxmaplay
 	move.b	xmaplay_new(a5),d0
 	lea	    prefsEnableXMAPlay,a0
 	bra	tickaa
+
+*** MED fastmemplay toggle
+
+rmedfastmemplay
+	not.b	medfastmemplay_new(a5)
+pmedfastmemplay
+	move.b	medfastmemplay_new(a5),d0
+	lea	    prefsMedFastRamMode,a0
+	bra	tickaa
+
 
 *** MHI toggle, lib
 
@@ -19080,7 +19192,7 @@ inforivit_play
 .2	dc.b	"Pro/Fasttracker",0
 .3	dc.b	"Multitracker",0
 .4	dc.b	"Fasttracker ][ XM",0
-.5	dc.b	"ImpulseTracker      [DP]",0
+.5	dc.b	"ImpulseTracker [DP]",0
  even
 
 .eer	bsr	siisti_nimi
@@ -19100,11 +19212,27 @@ inforivit_play
 	lea	modulename(a5),a0
 	move.l	a0,d0
 
+    * Display additional "AHI" if running PS3M in AHI mode
+    pushpea type_notAhi(pc),d3
+    cmp     #pt_multi,playertype(a5)
+    bne     .notAhi
+    tst.b   ahi_use_nyt(a5)
+    beq     .notAhi
+    pushpea type_ahi(pc),d3
+.notAhi
+
+    * d0 = name; d1 = type; d2 = AHI/not ahi
 	lea	tyyppi1_t(pc),a0
 	tst	d2			* PS3M channel count
 	beq.b	.ic
+    * d0 = name; d1 = type; d2 = channel count; d3 = AHI/not ahi
 	lea	tyyppi2_t(pc),a0
-.ic	bsr	desmsg
+    bra     .icc
+.ic	
+    move.l  d3,d2
+.icc
+
+    bsr	desmsg
 
 	lea	desbuf(a5),a2		* moduletyyppi talteen
 	move.l	a2,a0
@@ -19159,6 +19287,10 @@ putinfo2:
 
 
 putinfo2centered:
+    tst.b   win(a5)
+    bne.b   .11
+    rts
+.11
     pushm   d0/a0
     move.l	rastport(a5),a1
 	move.l	listfontbase(a5),a0
@@ -19387,11 +19519,14 @@ siisti_nimi
 	printt	"todo: align name and type for extra nicety"
 
 tyyppi1_t	dc.b	"Name: %s",10
-		dc.b	"Type: %s",0
+		dc.b	"Type: %s%s",0
 
 tyyppi2_t	dc.b	"Name: %s",10
-		dc.b	"Type: %s %ldch",0
+		dc.b	"Type: %s %ldch%s",0
 typpi
+
+type_ahi    dc.b    " AHI"
+type_notAhi dc.b    0
  even
 
 *******************************************************************************
@@ -19560,16 +19695,34 @@ lootaan_aika
 	popm	all
 .noerl
 
+    ;add.l  #(59*60+12)*50,d0    * 59:12
+    ;add.l   #9*60*60*50,d0        * +1h
 
-
-	cmp.l	#99*60*50,d0		* onko aika 99:59?
+    cmp.l   #10*60*60*50,d0      * upper limit: 10 hours
 	blo.b	.ok
 	bsr	settimestart
 	moveq	#0,d0
 .ok
 
+	bsr	logo
+
 	divu	#50,d0
 	ext.l	d0
+    * d0 = total seconds
+
+    moveq   #'0',d2
+
+    divu    #60*60,d0
+    * d0 = hours
+    tst     d0
+    beq     .noHours
+    add.b   d2,d0
+    move.b  d0,(a0)+
+    move.b  #":",(a0)+
+.noHours
+    swap    d0
+    ext.l   d0
+    * d0 = remaining seconds
 	divu	#60,d0
 	swap	d0
 	moveq	#0,d1
@@ -19577,20 +19730,19 @@ lootaan_aika
 	clr	d0
 	swap	d0
 
-	bsr	logo
 	divu	#10,d0
-	add.b	#'0',d0
+	add.b	d2,d0
 	move.b	d0,(a0)+
 	swap	d0
-	add.b	#'0',d0
+	add.b	d2,d0
 	move.b	d0,(a0)+
 	move.b	#':',(a0)+
 
 	divu	#10,d1
-	add.b	#'0',d1
+	add.b	d2,d1
 	move.b	d1,(a0)+
 	swap	d1
-	add.b	#'0',d1
+	add.b	d2,d1
 	move.b	d1,(a0)+
 
 ******
@@ -21065,7 +21217,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
  	
 	move.l	d0,d1
 	move.l	#65535<<8,d0
-	bsr	divu_32
+	jsr	divu_32
 	move.l	d0,d1
 
 	lea	gAD1,a0
@@ -21086,7 +21238,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	sfirstname(a5),d0
 	mulu	#65535,d0
-	bsr	divu_32
+	jsr	divu_32
 	cmp	pi_VertPot(a1),d0
 	sne	d2
 	move	d0,pi_VertPot(a1)
@@ -22347,7 +22499,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ** PS3M
 
 .medform 
-.form2	dc.b	"%03ld %-28.28s %6ld",ILF,ILF2,0
+.form2	dc.b	"%03ld %-28.28s %6.6ld",ILF,ILF2,0
 
 .thxform
  	dc.b	"%03ld %-35.35s",ILF,ILF2,0
@@ -25531,6 +25683,14 @@ initScopeBitmaps
 	btst	#MEMB_CHIP,d0
 	sne		s_bufferIsChip(a4)
 
+    cmp.w   #50,LIB_VERSION(a6)
+    blo.b   .1
+    * Kickstart 4.0, 4.1, CPU is PPC.
+    * Could be non-classic HW in this case.
+    * Switch to CPU only routines.
+    clr.b   s_bufferIsChip(a4)
+.1
+
 	moveq	#1,d0 * ok
 .memError
 	rts
@@ -26384,26 +26544,26 @@ drawScope:
 	* Get normal scope area
 	bsr	requestNormalScopeDrawArea
 	bne.b	.sampleSkip * wait for resize
-
-	cmp.b	#QUADMODE2_FQUADRASCOPE,s_quadmode2(a4)
-	beq.b	.fil
-	cmp.b	#QUADMODE2_FQUADRASCOPE_BARS,s_quadmode2(a4)	
-	beq.b	.fil
-	cmp.b	#QUADMODE2_FREQANALYZER,s_quadmode2(a4)
-	beq	freqscope
-	cmp.b	#QUADMODE2_FREQANALYZER_BARS,s_quadmode2(a4)
-	beq	freqscope
-	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
-	beq.b	.sampleSkip
-	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)	
-	beq.b	.sampleSkip
+    
+    * bit 7 indicates bars
+    moveq   #$1f,d0
+    and.b   s_quadmode(a4),d0
+    cmp.b   #QUADMODE_FQUADRASCOPE,d0
+    beq     .fil
+    cmp.b   #QUADMODE_FREQANALYZER,d0
+    beq     freqscope
+    cmp.b   #QUADMODE_HIPPOSCOPE,d0
+    beq     sampleHippoScope
+    cmp.b   #QUADMODE_PATTERNSCOPE,d0
+    beq     .sampleSkip
 	* Default
-	bsr	samplescope
+	bra     samplescope
 .sampleSkip
 	rts
 .fil
 	bsr	samplescopefilled
 	bra.b	mirrorfill
+
 
 .renderPS3M
 	* PS3M scope
@@ -27126,7 +27286,7 @@ piup2	macro
 *********** Scopet PS3M
 *** stereoscope
 
-multiscope
+multiscope:
 
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
@@ -27152,8 +27312,8 @@ multiscope
 	move	#$80,d6
     * This returns the buffer mask or size limit in d4
 	bsr	getps3mb
-    moveq   #1,d3
-multiscope0
+    move.l  ps3m_sampleDataModulo(a5),d3
+multiscope0:
     * d3 = sample modulo
    
 .drlo	
@@ -27181,14 +27341,14 @@ multiscope0
 
     ;bpl.b   .2
     bpl.b   *+6
-    * Beginning bound check
+    * Beginning bound check, ping pong
     neg.l   d3
     moveq   #0,d5
 ;.2
 	cmp.l	d4,d5
 ;	blo.b	.1
     blo.b   *+6
-    * End bound check
+    * End bound check, ping pong
     neg.l   d3
     add.l   d3,d5
 ; .1
@@ -27204,7 +27364,7 @@ multiscope0
 
 
 
-multiscopefilled
+multiscopefilled:
 
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
@@ -27229,10 +27389,10 @@ multiscopefilled
 	move	#$80,d6
 	bsr	getps3mb
 
-     * sample modulo 8-bit
-    moveq   #1,d3   
+     * sample modulo
+    move.l  ps3m_sampleDataModulo(a5),d3
 
-multiscopefilled0
+multiscopefilled0:
 
 hurl	macro 
 	move	d6,d2
@@ -27288,10 +27448,21 @@ multihipposcope:
 	move.l	(a2),d5
 	lsr.l	#8,d5
 
+	bsr.b	getps3mb
+
+;    moveq   #1,d6   * sampledata modulo
+    move.l  ps3m_sampleDataModulo(a5),d6
+
+multihipposcope0:
 	lea	s_multab(a4),a2
 	move.l	s_draw1(a4),a3
-	bsr.b	getps3mb
-	moveq	#32,d6
+
+    * Pointer to get the y-value: x+5
+    move    d6,d7
+    ;mulu    #5,d7
+    lsl     #3,d7
+    lea     (a1,d7.w),a0
+
 	moveq	#120-1,d7
 .d
 
@@ -27300,10 +27471,13 @@ multihipposcope:
 	ext	d1
 	add	d0,d1
 
-	move.b	5(a1,d5.l),d2
+    ;move.b	5(a1,d5.l),d2
+    move.b	(a0,d5.l),d2
+
 	asr.b	#2,d2 
 	ext	d2
-	add	d6,d2
+	;add	d6,d2
+    add     #32,d2
 	add	d2,d2
 	move	(a2,d2),d3
 
@@ -27319,18 +27493,19 @@ multihipposcope:
 	sub	d2,d3
 	bset	d1,39(a3,d3)
 
-	addq.l	#1,d5
+;	addq.l	#1,d5
+    add.l   d6,d5
 
 	cmp.l	d4,d5
-	bne.b	*+4
+	bne.b	.x
 	moveq	#0,d5
-
+.x
 	dbf	d7,.d
 
 	rts
 
 
-getps3mb
+getps3mb:
 	push	a0
 	move.l	ps3m_buffSizeMask(a5),a0
 	move.l	(a0),d4
@@ -28156,14 +28331,37 @@ samplescope:
 	lea	19(a0),a0
 	moveq	#19-1,d7
 	bsr	multiscope0
-	bsr.b	samples0
+	bsr 	samples0
 	lea	39(a0),a0
 	move.l	samplepointer2(a5),a1
 	move.l	(a1),a1
 	moveq	#19-1,d7
 	bra	multiscope0
 
-samplescopefilled
+sampleHippoScope:
+	tst.b	samplestereo(a5)
+	beq     .mono
+	bsr 	samples0
+    * d4 = sample data mask
+    * d5 = sample follow  position
+    bne     .hasData
+.mono
+    ; not supported
+    rts
+.hasData
+    jsr     getSampleDataModulo
+    move.l  d0,d6 * d6 = 1 or 2
+	move.l	samplepointer(a5),a1
+	move.l	(a1),a1
+	move	#240,d0
+    bsr     multihipposcope0
+
+	move.l	samplepointer2(a5),a1
+	move.l	(a1),a1
+	move	#88,d0
+    bra     multihipposcope0
+
+samplescopefilled:
 	bsr.b	samples0
     bne     .hasData
     rts
@@ -29401,7 +29599,10 @@ tuntematonvirhe
 	bne.b	.groupSkip
 	lea	unknownDueToGroupDisabled_t(pc),a1
 .groupSkip
-
+    tst.b   moduleWasRSID(a5)
+    beq     .1
+    lea     .rsid_msg(pc),a1
+.1
 	lea	.g(pc),a2
 	cmp.b	#LISTMODE_BROWSER,listMode(a5)
 	bne.b	.noBr	
@@ -29418,6 +29619,8 @@ tuntematonvirhe
 
 .g	dc.b	"_Delete from list|_OK",0
 .onlyOk = *-4
+.rsid_msg
+    dc.b	"RSID format not supported!",0
  even
 
 *******************************************************************************
@@ -30317,6 +30520,8 @@ loadfile:
 	cmp.l	lod_length(a5),d0
 	bne	.error2
 
+    DPRINT  "Read=%ld"
+
 	lore	XFD,xfdAllocBufferInfo	
 	move.l	d0,a3	
 	tst.l	d0
@@ -30326,33 +30531,37 @@ loadfile:
 	move.l	lod_length(a5),xfdbi_SourceBufLen(a3)
 	move.l	a3,a0
 	lob	xfdRecogBuffer
+    DPRINT  "xfdRecogBuffer=%ld"
 	tst.l	d0
 	bne.b	.xok1		* Error: tavallisena filenä
 
-.xok0	move.l	a3,a1
+.xok0	
+    move.l	a3,a1
 	lob	xfdFreeBufferInfo
 	bra	.exit
 .xok1
 	move.l	xfdbi_PackerName(a3),d0
+    push    a6
 	bsr	inforivit_xfd
+    pop     a6
 
 	move	xfdbi_PackerFlags(a3),d0
 	and	#XFDPFF_PASSWORD!XFDPFF_RELOC!XFDPFF_ADDR,d0
 	beq.b	.xok2		* Pakkerityyppi väärä.. Ei kelpaa!
 	move	#lod_tuntematon,lod_error(a5)
-	bra.b	.xok0
+	bra 	.xok0
 .xok2
-
 	moveq	#MEMF_CHIP,d0
 	move.l	d0,xfdbi_TargetBufMemType(a3)
 	move.l	a3,a0
 	lob	xfdDecrunchBuffer
+    DPRINT  "xfdDecrunchBuffer=%ld"
 	tst.l	d0
 	bne.b	.xok3
 	move	xfdbi_Error(a3),lod_xfderror(a5) * error numba talteen
 	move	#lod_xfderr,lod_error(a5)
 	bsr	.free			* Vapautetaan pakattu file
-	bra.b	.xok0
+	bra 	.xok0
 .xok3
 	bsr	.free			* Vapautetaan pakattu file
 
@@ -30362,6 +30571,7 @@ loadfile:
 	move.l	a3,a1
 	lore	XFD,xfdFreeBufferInfo
 ** OK!
+    DPRINT  "xfdDecrunch ok"
 	bra	.exit
 
 
@@ -30374,19 +30584,6 @@ loadfile:
 	move.l	lod_length(a5),d0
 	DPRINT	"Normal load %ld"
  endif
- 	
-	pushm d0/a0
-	lea	probebuffer(a5),a0
-	bsr	id_it
-	popm d0/a0
-	bne.b	.wasNotIt
-	DPRINT	"IT hack 1!"
-	move.l	lod_length(a5),d0
-	addq.l	#2,d0
-	move.l	lod_memtype(a5),d1
-	lore	Exec,AllocMem
-	bra.b	.itAlloc
-.wasNotIt
 
 	bsr	.alloc
 .itAlloc
@@ -30621,11 +30818,14 @@ loadfile:
 
 
 
+* Sets lod_memtype(a5) that is used to allocate destination read buffer
 .checkm
     bsr   tutki_moduuli2
-	cmp.b	#2,d0
-	beq	.ptfoo
-    cmp.b   #-1,d0
+	cmp.b	#3,d0   * MED detected?
+	beq	.medfoo      * Do additional check, returns to .publl or exits.
+	cmp.b	#2,d0   * Protracker detected?
+	beq	.ptfoo      * Do additional check, returns to .publl or exits.
+    cmp.b   #-1,d0  * -1 = load to chip
     beq.b   .nofast
 
 .publl  move.l   #MEMF_PUBLIC!MEMF_CLEAR,d0
@@ -30692,13 +30892,14 @@ loadfile:
 	
 
 ** Ladataan PT file fastiin jos ei mahdu chipppppiin
-.ptfoo
+.ptfoo:
 	tst.b	ahi_use(a5)		* AHI? -> public
 	bne	.publl
 	cmp.b	#2,ptmix(a5)		* PS3M? -> public
 	beq	.publl
-
+.medfoo:
 	pushm	all
+    DPRINT  "Check if fits into CHIP"
 	move.l	#MEMF_LARGEST!MEMF_CHIP,d1
 	lore	Exec,AvailMem
 	cmp.l	lod_length(a5),d0
@@ -30937,10 +31138,13 @@ get_med1
 	beq.b	.q
 	rts
 .q	lea	medplayername1,a1
-;	moveq	#6,d0
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "Opening %s"
+ endif
+	moveq	#7,d0
 	push	a6
-;	lore	Exec,OpenLibrary
-	lore	Exec,OldOpenLibrary
+	lore	Exec,OpenLibrary
 	pop	a6
 	move.l	d0,_MedPlayerBase1(a5)
 	rts	
@@ -30950,10 +31154,13 @@ get_med2
 	beq.b	.q
 	rts
 .q	lea	medplayername2,a1
-;	moveq	#6,d0
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "Opening %s"
+ endif
+	moveq	#7,d0
 	push	a6
-;	lore	Exec,OpenLibrary
-	lore	Exec,OldOpenLibrary
+	lore	Exec,OpenLibrary
 	pop	a6
 	move.l	d0,_MedPlayerBase2(a5)
 	rts	
@@ -30963,9 +31170,12 @@ get_med3
 	beq.b	.q
 	rts
 .q	lea	medplayername3,a1
-;	moveq	#7,d0
+ if DEBUG
+    move.l  a1,d0
+    DPRINT  "Opening %s"
+ endif
+	moveq	#7,d0
 	push	a6
-;	lore	Exec,OpenLibrary
 	lore	Exec,OldOpenLibrary
 	pop	a6
 	move.l	d0,_MedPlayerBase3(a5)
@@ -31041,7 +31251,13 @@ search:
 * Tutkitaan, onko moduuli sellanen jonka vois ladata fastiin.
 * a0 = moduuli, 1084 bytee
 
-tutki_moduuli2
+* Out:
+*   d0: 0 = load into public mem
+*       1 = load to fast mem: protracker fast mem player active
+*       2 = protracker file
+*      -1 = load to chip
+
+tutki_moduuli2:
 	DPRINT	"Check where to load"
 	pushm	d1-a6
 	move.l	a0,a4
@@ -31098,10 +31314,10 @@ tutki_moduuli2
 	move.l	1080(a0),d0
 	lsr.l	#8,d0
 	cmp.l	#"TDZ",d0		* take
-	beq.b	.f
+	beq 	.f
 
 	bsr	id_it			 * IT
-	beq.b	.f
+	beq 	.f
 
 
 * tfmx song data?
@@ -31112,28 +31328,28 @@ tutki_moduuli2
 * chip ram at later tage
 
 	cmp.l	#"TFMX",(a4)
-	beq.b	.goPublic
+	beq 	.goPublic
 	cmp.l	#"tfmx",(a4)
-	beq.b	.goPublic
+	beq 	.goPublic
 
 	bsr	id_oktalyzer8ch
-	beq.b	.goPublic
+	beq 	.goPublic
 
 	cmp.l	#'PSID',(a4)		* PSID-tiedosto
-	beq.b	.goPublic
+	beq 	.goPublic
 
 	bsr	id_thx_
 	tst.l	d0
-	beq.B	.goPublic
+	beq 	.goPublic
 	bsr	id_pretracker_
 	tst.l	d0
-	beq.B	.goPublic
+	beq 	.goPublic
 	bsr	id_mline
 	tst.l	d0
-	beq.b	.goPublic
+	beq 	.goPublic
 	jsr	id_musicmaker8_
 	tst.l	d0
-	beq.b	.goPublic
+	beq 	.goPublic
 	;bsr	id_digitalmugician2 
 	;beq.b	.goPublic
 
@@ -31142,8 +31358,11 @@ tutki_moduuli2
 	lsr.l	#8,d0
 	cmp.l	#'MMD',d0
 	bne.b	.nome
+    tst.b   medfastmemplay(a5)  * MED FastMemPlay enabled in Prefs
+    bne     .goPublic
 	btst	#0,20(a4)		* mmdflags, MMD_LOADTOFASTMEM
 	bne.b	.goPublic
+    bra     .fff             * go public if doesn't fit into chip
 .nome
 
 	bsr	id_digibooster_
@@ -31168,6 +31387,9 @@ tutki_moduuli2
 .f	moveq	#0,d0		* public
 	rts
 .ff	moveq	#2,d0		* Protracker file
+	rts
+.fff	
+    moveq	#3,d0		* MED file
 	rts
 .rf	moveq	#1,d0		* fast
 	rts
@@ -32580,6 +32802,9 @@ favoriteModuleFileName
 	dc.b	"S:HippoFavorites.prg",0
  even
 
+* Update list node favorite status.
+* Used in other list views than the favorites list
+* to indicate favorited tunes.
 * in:
 *  a0 = list node
 updateFavoriteStatus:
@@ -32588,8 +32813,17 @@ updateFavoriteStatus:
 	bsr	findFavoriteModule
 	* a matching favorite module was found? set flag 
 	sne	l_favorite(a0)
-    * also copy the fav song over
+    beq.b   .notFav
+    * a1 = favorite node
+
+    * If the list item already had a subsong set,
+    * do not overwrite it with the saved subsong from favorites.
+    * This allows preparing a shared playlist with subsongs
+    * that do not get mangled by favorites.
+    tst.b   l_favSong(a0)
+    bne.b   .notFav
     move.b  l_favSong(a1),l_favSong(a0)
+.notFav
 .skipDivs
 	rts
 
@@ -32919,8 +33153,8 @@ engageListMode:
 	rts
 
 .favoritesMode
-	lea	gadgetPrgButton(a4),a0
-	bsr	disableButton
+	;lea	gadgetPrgButton(a4),a0
+	;bsr	disableButton
 	bsr		setNormalAddTooltip
 	rts
 	
@@ -33435,6 +33669,8 @@ activateSearchStringGadget:
 *******************************************************************************
 
 importSavedStateModulesFromDisk
+    tst.b   win(a5)  * do nothing if no window
+    beq     .error
 	tst.b	savestate(a5)
 	bne.b	.enabled
 .error	rts
@@ -33589,6 +33825,8 @@ importSavedStateModulesFromDisk
 
 exportSavedStateModulesToDisk
 	DPRINT	"exportSavedStateModulesToDisk"
+    tst.b   win(a5)
+    beq     .x
 	tst.b	savestate(a5)
 	beq	.x
 
@@ -35176,6 +35414,8 @@ eagleFormats
 	dr.w	p_specialfx
 	dr.w	p_steveturner
 	dr.w 	p_davidwhittaker
+    dr.w    p_soundmaster
+    dr.w    p_soundprogramminglanguage
 	dr.w	p_activisionpro  	* very slow id
 	dc.w 	0	
 
@@ -36121,17 +36361,29 @@ p_sid:	jmp	.init(pc)
     bsr     isPlaysidReSID
     beq     .skip
 
+    bsr     sid_getSidVersion
+    * d0 = detected SID, 0: 6581, not 0: 8580
+
     ; -----------------------
     ; Before AllocEmulResource set the operating mode
     ; 0 = normal
     ; 1 = resid 6581
     ; 2 = resid 8580
-    ; 3 = sidblaster
+    ; 3 = resid auto detect
+    ; 4 = sidblaster
     cmp.b   #1,sidmode(a5)
     beq     .m1
     cmp.b   #2,sidmode(a5)
     beq     .m2
     cmp.b   #3,sidmode(a5)
+    bne     .m22
+    * Auto detect
+    DPRINT  "Detected SID=%lx"
+    tst.b   d0
+    beq     .m1
+    bra     .m2
+.m22
+    cmp.b   #4,sidmode(a5)
     beq     .m3
     * Default option
     move    #OM_NORMAL,d0
@@ -36147,7 +36399,7 @@ p_sid:	jmp	.init(pc)
     bra     .cpuCheck
 
 .m3
-    lea     sidmode04,a0
+    lea     sidmode05,a0
     moveq   #OM_SIDBLASTER_USB,d0
     bra     .mode
     ; -----------------------
@@ -36239,8 +36491,16 @@ p_sid:	jmp	.init(pc)
     cmp.b   #OM_RESID_8580,d0
     bne     .o2
 .o1 
-    * Show additional "14-bit" with reSID
-    move.b  #" ",-1(a1)
+    * Show additional "14-bit" or "AHI" with reSID.
+    * Also set up the AHI specific modulo
+    move.l  #" 14-",-1(a1)
+    move.l  #"bit"<<8,-1+4(a1)
+    move.l  #1,ps3m_sampleDataModulo(a5)
+    cmp.b   #5,residmode(a5)
+    bne     .o2
+    move.l  #2,ps3m_sampleDataModulo(a5)
+    move.l  #" AHI",-1(a1)
+    clr.b   -1+4(a1)
 .o2
     tst.w   d0
     bne.b   .o3
@@ -36255,6 +36515,10 @@ p_sid:	jmp	.init(pc)
     move.b  residmode(a5),d1
     DPRINT  "Operating mode=%ld resid=%ld" 
     lob     SetOperatingMode
+
+    move.l  ahi_mode(a5),d0
+    lob     SetAHIMode
+    
 .skip
     ; -----------------------
 
@@ -36327,6 +36591,8 @@ p_sid:	jmp	.init(pc)
     cmp.b   #1,sidmode(a5)
     beq     .rsf
     cmp.b   #2,sidmode(a5)
+    beq     .rsf
+    cmp.b   #3,sidmode(a5)
     bne     .nrsf
 .rsf
     moveq   #1,d0   * int on
@@ -36387,10 +36653,8 @@ p_sid:	jmp	.init(pc)
     lob     GetRESIDAudioBuffer
     * a0 = buffer ptr 1
     * a1 = buffer ptr 2 (could be same as 1)
-    * d0 = buffer length
+    * d0 = buffer length, bytes or words
     * d1 = period value
-    ;subq.l  #2,d0   * removes static pixels from scope
-    move.l  d0,residPosMask
     movem.l a0/a1,residBufPtr1
  if DEBUG
     move.l  a0,d1
@@ -36566,7 +36830,32 @@ p_sid:	jmp	.init(pc)
     rts
 .no moveq   #0,d0
     bra.b   .x
-    
+
+
+* Detect SID version to use
+* Out:
+*   d0 = 0: 6581
+*   d0 = non-zero: 8580
+sid_getSidVersion:
+    moveq   #0,d0
+    move.l  moduleaddress(a5),a0
+    cmp.l   #"PSID",(a0)
+    bne     .noheader
+    cmp     #2,sidh_version(a0)
+    blo     .v1
+    ; Header v2
+    ;Bits 4-5 specify the SID version (sidModel):
+    ;00 = Unknown,
+    ;01 = MOS6581,
+    ;10 = MOS8580,
+    ;11 = MOS6581 and MOS8580.
+    moveq   #%11<<4,d0
+    and     sidh_flags(a0),d0
+    cmp     #%10<<4,d0
+    seq     d0
+.v1    
+.noheader
+    rts
 
 * Calculate song speed and Hz
 * Out:
@@ -36791,15 +37080,17 @@ sid_remVolumePatch
 *******
 
 id_sid1 
-	bsr.b	id_sid1_
+	bsr.b	.id_sid1_
 	bne.b 	.no
 	bsr	moveModuleToPublicMem		* siirretään fastiin jos mahdollista
 	moveq	#0,d0 
 .no 
+    cmp.l   #"RSID",(a4)
+    seq     moduleWasRSID(a5)
+    tst.l   d0
 	rts
 
-
-id_sid1_
+.id_sid1_
 	cmp.l	#"PSID",(a4)
 	beq.b	.q
 	moveq	#-1,d0
@@ -36884,6 +37175,13 @@ sidScopeUpdate
     * a1 = buffer ptr 2 (could be same as 1)
     * d0 = buffer length
     * d1 = period value
+
+    cmp.b   #5,residmode(a5)
+    bne     .notAhi
+    * 16-bit samples, convert to bytes for scope limit checks
+    add.l   d0,d0
+.notAhi
+
     move.l  d0,residPosMask
     rts
 
@@ -36981,19 +37279,19 @@ isPlaysidReSID:
     move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
-	cmp     #4,LIB_REVISION(a0)
-	bne.b   .noRESID
+	cmp     #5,LIB_REVISION(a0)
+	blo.b   .noRESID
     move.l  LIB_IDSTRING(a0),a0
-    cmp.b   #"1",16(a0)
-    bne.b   .noRESID
-    cmp.b   #"4",18(a0)
-    bne.b   .noRESID
-    cmp.b   #" ",19(a0)
-    bne.b   .noRESID
-    cmp.b   #"r",32(a0)
-    bne.b   .noRESID
-    cmp.b   #"e",33(a0)
-    bne.b   .noRESID
+;    cmp.b   #"1",16(a0)
+;    bne.b   .noRESID
+;    cmp.b   #"5",18(a0)
+;    bne.b   .noRESID
+;    cmp.b   #" ",19(a0)
+;    bne.b   .noRESID
+;    cmp.b   #"r",32(a0)
+;    bne.b   .noRESID
+;    cmp.b   #"e",33(a0)
+;    bne.b   .noRESID
    ; "playsid.library 1.4 (11.2.2023) reSID+SIDBlaster"
     pop     a0
     moveq   #1,d0
@@ -38970,7 +39268,8 @@ id_TFMX7V
 * MED
 ******************************************************************************
 
-p_med	jmp	.medinit(pc)
+p_med:
+	jmp	.medinit(pc)
 	p_NOP
 	jmp	.medvb(pc)
 	jmp	.medend(pc)
@@ -39040,6 +39339,7 @@ p_med	jmp	.medinit(pc)
 
 .medinit
 	movem.l	d1-a6,-(sp)
+    DPRINT  "MED init"
 
 	move.l	_MedPlayerBase(a5),d0
 	bne	.ook
@@ -39095,10 +39395,11 @@ p_med	jmp	.medinit(pc)
 	and	#%01,d0
 	and	#%10,d1
 	or	d1,d0
+
 	move.b	d0,medtype(a5)
 
 	cmp.b	#3,d0
-	bhs.b	.error2
+	bhs 	.error2
 
 * d0:
 * 0 = 4ch   medplayer
@@ -39130,14 +39431,20 @@ p_med	jmp	.medinit(pc)
 .di	move.b	(a1)+,(a0)+
 	bne.b	.di
 
-
 ;	cmp.b	#2,medtype(a5)
 ;	bne.b	.yeep
+
+    ;bsr     .fastmemplayrecommended
+    ;DPRINT  "ee"
+    ;tst.b   d0
+    ;bne     .moveit
+
 
 	move.l	moduleaddress(a5),a0	* pistetäänkö fastiin?
 	btst	#0,20(a0)		* mmdflags; MMD_LOADTOFASTMEM
 	beq.b	.yeep
 
+.moveit
 ** jos on octamixplayerillä soitettava ja sijaitsee chipissä, koitetaan
 ** siirtää fastiin:
 	bsr	moveModuleToPublicMem
@@ -39186,11 +39493,12 @@ p_med	jmp	.medinit(pc)
 	move.l	moduleaddress(a5),a0
 	bsr.b	.relocmodule
 .eek	
+    bsr     .setfastmemplay
 	moveq	#0,d0
 	move	songnumber(a5),d0
 	bsr.b	.setmodnum
 	move.l	moduleaddress(a5),a0
- 	bsr.b	.playmodule
+ 	bsr 	.playmodule
 	movem.l	(sp)+,d1-a6
 	moveq	#0,d0
 	rts
@@ -39201,6 +39509,7 @@ p_med	jmp	.medinit(pc)
 	jmp	dela
 
 .G
+    DPRINT  "MEDGetPlayer"
 	moveq	#_LVOMEDGetPlayer,d7
 	move.b	medtype(a5),d6
 	beq.b	.do2
@@ -39211,6 +39520,7 @@ p_med	jmp	.medinit(pc)
 .do2	jmp	(a6,d7)
 
 .relocmodule
+    DPRINT  "MEDRelocModule"
 	moveq	#_LVOMEDRelocModule,d7
 	move.b	medtype(a5),d6
 	beq.b	.do3
@@ -39221,6 +39531,7 @@ p_med	jmp	.medinit(pc)
 .do3	jmp	(a6,d7)
 
 .setmodnum
+    DPRINT  "MEMSetModNum"
 	moveq	#_LVOMEDSetModnum,d7
 	move.b	medtype(a5),d6
 	beq.b	.do4
@@ -39230,12 +39541,55 @@ p_med	jmp	.medinit(pc)
 	moveq	#_LVOMEDSetModnumM,d7
 .do4	jmp	(a6,d7)
 
+.setfastmemplay
+    push    a6
+	move.l	moduleaddress(a5),a1	* onko chipissä?
+	lore	Exec,TypeOfMem
+    pop     a6
+	btst	#MEMB_CHIP,d0
+	seq     d1
+    moveq   #1,d0
+    and.b   d1,d0
+    move.l  #0,d1      * guess something for the buffer
+
+    DPRINT  "SetFastMemPlay=%ld"
+
+    * d0 = new state
+    * d1 = buffer size
+	moveq	#_LVOMEDSetFastMemPlay,d7
+	move.b	medtype(a5),d6
+	beq.b	.dof
+	moveq	#_LVOMEDSetFastMemPlay8,d7
+	subq.b	#1,d6
+	beq.b	.dof
+	rts
+.dof 
+    jmp	(a6,d7)
+
+;.fastmemplayrecommended
+;    
+;    * a0 = module address
+;    move.l  moduleaddress(a5),a0
+;	moveq	#_LVOMEDFastMemPlayRecommended,d7
+;	move.b	medtype(a5),d6
+;	beq.b	.doff
+;	moveq	#_LVOMEDFastMemPlayRecommended8,d7
+;	subq.b	#1,d6
+;	beq.b	.doff
+;    moveq   #0,d0
+;	rts
+;.doff
+;    jsr 	(a6,d7)
+;    DPRINT  "MEDFastMemPlayRecommended=%ld"
+;    rts
+
 
 .playmodule
 	jsr	dela
 	bsr.b	.P
 	jmp	dela
 .P
+    DPRINT  "MEDPlayModule"
 
 	moveq	#_LVOMEDPlayModule,d7
 	move.b	medtype(a5),d6
@@ -39244,10 +39598,12 @@ p_med	jmp	.medinit(pc)
 	subq.b	#1,d6
 	beq.b	.do5a
 
+    DPRINT  "MEDSet14BitMode"
 ** octamixplayer
 	moveq	#0,d0			* 8-bit
 	move.b	medmode(a5),d0		* 1: 14-bit
 	lob	MEDSet14BitMode
+    DPRINT  "MEDSetMixingFrequency"
 	moveq	#0,d0
 	move	medrate(a5),d0		* mixingrate
 	lob	MEDSetMixingFrequency
@@ -39271,7 +39627,7 @@ p_med	jmp	.medinit(pc)
 .E
 	movem.l	d0/d1/a0/a1/a6,-(sp)
 	move.l	_MedPlayerBase(a5),a6
-
+    DPRINT  "MEDFreePlayer"
 	moveq	#_LVOMEDFreePlayer,d0
 	move.b	medtype(a5),d1
 	beq.b	.do6
@@ -39291,6 +39647,7 @@ p_med	jmp	.medinit(pc)
 .medstop
 	movem.l	d0/d1/a0/a1/a6,-(sp)
 	move.l	_MedPlayerBase(a5),a6
+    DPRINT  "MEDStopPlayer"
 
 	moveq	#_LVOMEDStopPlayer,d0
 	move.b	medtype(a5),d1
@@ -41504,8 +41861,18 @@ p_multi:
 
 	move.l	moduleaddress(a5),a0
 	bsr 	id_it
-	bne.b	.notIt
+	bne 	.notIt
 	DPRINT "IT detected"
+
+    cmp.w   #$1402,$2A(A0)  * v2.14 module?
+    bne     .noConv
+    bsr     convertIT214
+    tst.l   d0
+    bne     .conv
+    moveq   #ier_not_compatible,d0
+    bra     .itError
+.conv
+.noConv
 
 	move.l	(a5),a0
 	btst	#AFB_68020,AttnFlags+1(a0)
@@ -41526,6 +41893,8 @@ p_multi:
 	move	(sp)+,playertype(a5)
 	tst.l 	d0
 	bmi 	.itError
+    DPRINT  "impulse=%lx"
+    bsr     patchIt
 	bsr	deliInit
 	jsr 	clearMainWindowWaitPointer
 	tst.l	d0
@@ -41535,6 +41904,7 @@ p_multi:
 
 	addq	#1,ps3minitcount
 
+    move.l  #1,ps3m_sampleDataModulo(a5)
 	move	mixirate+2(a5),hip_ps3mrate+hippoport(a5)
 
 * välitetään tietoa ps3m:lle ja hankitaan sitä siltä
@@ -41548,6 +41918,13 @@ p_multi:
 	move	ahi_stereolev(a5),d5
 	move.l	ahi_mode(a5),d6
 	move.l	modulelength(a5),d7
+
+ if DEBUG
+    push    d0
+    move.l  d6,d0
+    DPRINT  "AHI mode=%lx"
+    pop     d0
+ endif
 
 	lea	ps3m_mname(a5),a0
 	lea	ps3m_numchans(a5),a1
@@ -41933,12 +42310,14 @@ id_xm:
 ps3minitcount	dc	0
 
 * ID from A0
-id_it
+id_it:
 	push	d1
 	MOVEQ	#0,D0
 	CMP.L	#$494D504D,(A0)
 	BNE.S	.itFail
-	MOVE.W	$2A(A0),D1			*  Cmwt: format version
+    *  Cmwt:     Compatible with tracker with version greater than value.
+    *             (ie. format version)
+	MOVE.W	$2A(A0),D1
 	ROR.W	#8,D1
  if DEBUG
 	push	d0
@@ -41951,17 +42330,101 @@ id_it
 	BEQ.S	.itYes
 	CMP.W	#$200,D1
 	BEQ.S	.itYes
-; TEST: Fake version $214 to look like version $200
-;	CMP.W	#$214,D1
-;	Bne.S	.itFail
-;	move	#$0002,$2A(a0)
-;	bra.b	.itYes
+	CMP.W	#$214,D1
+	BEQ.S	.itYes
 .itFail
 	MOVEQ	#-1,D0
 .itYes
 	pop	d1
 	tst.l	d0
 	RTS
+
+* Converts IT v2.14 module into v2.00 format
+* Out:
+*  d0 = true: success, false: failed
+convertIT214:
+    DPRINT  "convertIT214"
+    pushm   d1-a6
+    moveq   #0,d7  * FAIL
+
+    pushpea .converter(pc),d1
+    lore    Dos,LoadSeg
+    DPRINT  "LoadSeg=%lx"
+    move.l  d0,d6
+    lsl.l   #2,d6
+    beq     .x
+
+    bsr     buildDeliBase
+	tst.l	d0
+    beq     .x
+
+    jsr     setMainWindowWaitPointer
+
+    pushm   d6/d7
+
+    DPRINT  "DTP_DeliBase"
+	move.l	#DTP_DeliBase,d0
+    move.l  d6,a0
+    bsr     deliGetTagFromA0
+	move.l	d0,a0 
+	move.l	deliBase(a5),(a0)
+
+    DPRINT  "DTP_Config"
+	move.l	#DTP_Config,d0
+    move.l  d6,a0
+    bsr     deliGetTagFromA0
+    bsr     deliCallFunc
+
+    st      deliForceAllocPublicMem(a5)
+
+    * Find the convert function from seglist    
+    move.l  d6,a0
+    move.l  #DTP_Convert,d0
+    bsr     deliGetTagFromA0
+    bsr     deliCallFunc    
+    DPRINT  "DTP_Convert=%lx"
+    * Returns 0 on success    
+    popm    d6/d7
+
+    sf      deliForceAllocPublicMem(a5)
+    jsr     clearMainWindowWaitPointer
+    
+    tst.l   d0
+    bne     .x
+    
+ if DEBUG
+    move.l  moduleaddress(a5),d0
+    move.l  modulelength(a5),d1
+    DPRINT  "Free old module=%lx,%ld"
+ endif
+
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    lore    Exec,FreeMem
+
+    move.l  deliLoadFileArray(a5),a0
+    movem.l (a0),d0/d1
+    clr.l   (a0)+
+    clr.l   (a0)+
+    move.l  d0,moduleaddress(a5)
+    move.l  d1,modulelength(a5)
+    DPRINT  "IT module converted=%lx,%ld"
+
+    moveq   #1,d7   * status: ok
+    
+.x
+    bsr     freeDeliBase
+    move.l  d6,d1
+    beq     .xx
+    lsr.l   #2,d1
+    lore    Dos,UnLoadSeg
+.xx
+    move.l  d7,d0
+    popm    d1-a6
+    rts
+
+.converter  dc.b    "PROGDIR:ImpulseDecruncher",0
+    even
 
 * Checks if AHI is active and there are max 4 voices in use.
 * In this case the scopes can be used in AHI mode.
@@ -41984,6 +42447,29 @@ ahiWith4ChannelsActive:
 .no
     * Error: set Z
     or.b	#(1<<2),ccr
+    rts
+
+* This patches the "impulse" deliplayer DTP_Config
+* function so that it will no longer belligerently
+* poke the exec base.
+patchIt:
+    push    d0
+    move.l  d0,a0
+    move.l	#DTP_Config,d0  
+	bsr	    deliGetTagFromA0
+    beq     .x
+    move.l  d0,a0
+    move.w  #$4e71,d0
+    cmp.w   22(a0),d0
+    bne     .x
+    cmp.w   26(a0),d0
+    bne     .x
+    DPRINT  "Patch Impulse"
+    move.w  d0,34(a0)
+    move.w  d0,36(a0)
+    move.w  d0,38(a0)
+    jsr     clearCpuCaches
+.x  pop     d0
     rts
 
 
@@ -42208,18 +42694,18 @@ p_sample:
 .x	
     DPRINT  "sample init failed %ld"
     push    d0
-    bsr     stopStreaming
+    jsr     stopStreaming
     pop     d0
     rts
 
 .end:
     DPRINT  "sample end"
     jsr     setMainWindowWaitPointer
-    bsr     stopStreaming
+    jsr     stopStreaming
     move.l	sampleroutines(a5),a0
 	jsr 	.s_end(a0)
     jsr     clearMainWindowWaitPointer
-    bra     awaitStreamer
+    jmp     awaitStreamer
     
 .dostop:
     DPRINT  "sample stop"
@@ -47315,6 +47801,135 @@ p_soundcontrol
 .lbC00048E
 	rts
 
+******************************************************************************
+* Sound Master
+******************************************************************************
+
+p_soundmaster
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_soundmaster
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
+	dc.b	"Sound Master        [EP]",0
+	        
+.path dc.b "sound master",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+.id
+	move.l	a4,a0
+
+.lbC0002CC
+        MOVEQ   #-1,D0
+        MOVE.W  #$6000,D1
+        CMP.W   (A0)+,D1
+        BNE.S   .lbC000338
+        MOVE.L  A0,A1
+        MOVE.W  (A0)+,D2
+        BMI.S   .lbC000338
+        BEQ.S   .lbC000338
+        BTST    #0,D2
+        BNE.S   .lbC000338
+        CMP.W   (A0)+,D1
+        BNE.S   .lbC000338
+        MOVE.W  (A0)+,D3
+        BMI.S   .lbC000338
+        BEQ.S   .lbC000338
+        BTST    #0,D3
+        BNE.S   .lbC000338
+        CMP.W   (A0),D1
+        BNE.S   .lbC000338
+        ADD.W   D2,A1
+        LEA     $1E(A1),A0
+.lbC000302       CMP.W   #$47FA,(A1)
+        BEQ.S   .lbC000310
+        ADDQ.L  #2,A1
+        CMP.L   A0,A1
+        BNE.S   .lbC000302
+        RTS
+
+.lbC000310       CMP.W   #$4E75,(A1)+
+        BNE.S   .lbC000310
+        MOVEQ   #0,D1
+        CMP.L   #$177C0000,-8(A1)
+        BNE.S   .lbC000326
+        MOVEQ   #-1,D1
+        SUBQ.L  #6,A1
+.lbC000326       CMP.L   #$BFE001,-6(A1)
+        BNE.S   .lbC000338
+        MOVEQ   #0,D0
+.lbC000338       RTS
+
+******************************************************************************
+* Sound Programming Language
+******************************************************************************
+
+p_soundprogramminglanguage
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc  pt_soundprogramminglanguage
+.flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
+	dc.b	"Sound Prg. Language [EP]",0
+	        
+.path dc.b "soprol",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+.id
+	move.l	a4,a0
+.lbC00040C
+        CMP.L   #$3F3,(A0)
+        BNE.S   .lbC00044A
+        TST.B   $14(A0)
+        BEQ.S   .lbC00044A
+        LEA     $20(A0),A0
+        CMP.L   #$70FF4E75,(A0)+
+        BNE.S   .lbC00044A
+        CMP.L   #$21534F50,(A0)+
+        BNE.S   .lbC00044A
+        CMP.L   #$524F4C21,(A0)+
+        BNE.S   .lbC00044A
+        TST.L   (A0)+
+        BEQ.S   .lbC00044A
+        TST.L   (A0)+
+        BEQ.S   .lbC00044A
+        TST.L   (A0)
+        BEQ.S   .lbC00044A
+        MOVEQ   #0,D0
+        RTS
+.lbC00044A       MOVEQ   #-1,D0
+        RTS
+
 
 ******************************************************************************
 * The Musical Enlightenment
@@ -47789,7 +48404,7 @@ p_xmaplay:
 	rts
 .okk
 	lea	    xmaplayroutines(a5),a0
-	bsr	allocreplayer
+	jsr	allocreplayer
 	beq.b	.ok3
 	rts
 .ok3
@@ -47850,6 +48465,7 @@ p_xmaplay:
     pushpea .ps3mPos(pc),ps3m_playpos(a5)
     pushpea .buf1Ptr(pc),ps3m_buff1(a5)
     pushpea .buf2Ptr(pc),ps3m_buff2(a5)
+    move.l  #1,ps3m_sampleDataModulo(a5)
 
     bsr     .vol
 
@@ -48273,12 +48889,12 @@ freeDeliPlayer:
 	clr.l	deliPlayer(a5)
 	clr	deliPlayerType(a5)
 .x
-	bsr.b	.freeDeliLoadedFile
+	bsr.b	freeDeliLoadedFiles
 	bsr	freeDeliBase
 	popm	all
 	rts
 
-.freeDeliLoadedFile
+freeDeliLoadedFiles
 	tst.l	deliLoadFileArray(a5)
 	beq.b 	.xy
 	move.l	deliLoadFileArray(a5),a2
@@ -49149,6 +49765,13 @@ _deliDataSize		rs.b	0
 	DPRINT	"cutSuffix"
 	moveq	#0,d0
 	rts
+
+* AllocListData(Size:d0/Flags:d1)
+* In: 
+*   d0 = size to allocate
+*   d1 = AllocMem flags
+* Out:
+*   d0 = Pointer to allocated memory
 .allocListData
 	DPRINT	"allocListData %ld %lx"
 	* used by stonetracker
@@ -49161,6 +49784,10 @@ _deliDataSize		rs.b	0
 	move.l	a1,a3 
 	move.l	d6,d0
 	move.l	d7,d1
+    tst.w   deliForceAllocPublicMem(a5)
+    beq     .fal
+    moveq   #MEMF_PUBLIC,d1
+.fal
 	lore 	Exec,AllocMem
 	tst.l 	d0 
 	beq.b 	.err
@@ -49173,6 +49800,9 @@ _deliDataSize		rs.b	0
 	moveq	#0,d0
 	bra.b 	.allocListDataX
 	
+* FreeListData(MemBlock:a1)
+* In:
+*   a1 =  memoryBlock - pointer to the memory block to free, or NULL.
 .freeListData
 	DPRINT	"freeListData"
 	moveq	#0,d0
@@ -51577,7 +52207,7 @@ spectrumGetPS3MSampleData
 .resid  
     * buffer size is in d1, it can be 277
     * or down to 46.
-
+    move.l  ps3m_sampleDataModulo(a5),d4
 .rloop
 	move.b	(a0,d0.l),d2
 	move.b	(a1,d0.l),d3
@@ -51586,7 +52216,7 @@ spectrumGetPS3MSampleData
 	add	d3,d2
 	asl	    #5,d2   * scaling!
     move	d2,(a2)+
-	addq.l	#1,d0
+	add.l	d4,d0
     * See if data ran out:
     cmp.l   d1,d0
     blo.b   .2
@@ -52222,6 +52852,7 @@ SEARCH_AMIGAREMIX       = 4
 SEARCH_RKO              = 5
 SEARCH_STATIONS         = 6
 SEARCH_RECENT_PLAYLISTS = 7
+SEARCH_TURRAN           = 8
 
 modlandSearch
 	moveq	#SEARCH_MODLAND,d7
@@ -52255,6 +52886,9 @@ recentPlaylistsSearch
 	moveq	#SEARCH_RECENT_PLAYLISTS,d7
 	bra 	remoteSearch
 
+turranSearch
+	moveq	#SEARCH_TURRAN,d7
+	bra 	remoteSearch
 
 * Requests a search pattern from the user,
 * then creates an executable shell script to launch
@@ -52304,6 +52938,10 @@ remoteSearch
 	lea 	.recentPlaylistsResultsPath(pc),a1
     cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
     beq     .1
+	lea		.turranSearchCmd(pc),a0
+	lea 	.turranResultsPath(pc),a1
+    cmp.b   #SEARCH_TURRAN,d7
+    beq     .1	
 	lea		.aminetSearchCmd(pc),a0
 	lea 	.aminetResultsPath(pc),a1
 .1
@@ -52384,6 +53022,9 @@ remoteSearch
     cmp.b   #SEARCH_STATIONS,d7
     beq     .a
     lea     .recentPlaylistsResultsPath(pc),a0
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+    beq     .a
+    lea     .turranResultsPath(pc),a0
 .a
 
 	* Jump to after the variable
@@ -52433,6 +53074,10 @@ remoteSearch
 	pushpea	.hvscLine(pc),d6
 	moveq	#.hvscLineE-.hvscLine,d4	
     cmp.b   #SEARCH_HVSC,d7
+    beq.b   .2
+	pushpea	.turranLine(pc),d6
+	moveq	#.turranLineE-.turranLine,d4	
+    cmp.b   #SEARCH_TURRAN,d7
     beq.b   .2
 	pushpea	.amigaRemixLine(pc),d6
 	moveq	#.amigaRemixLineE-.amigaRemixLine,d4	
@@ -52614,6 +53259,7 @@ remoteSearch
     jmp     freemem
     
 
+* Modland whitelist
 * In:
 *   a3 = name to check, ends with 10 or 0
 * Out:
@@ -52726,6 +53372,7 @@ remoteSearch
 	dc.l	"jpn."
 	dc.l	"mcr."
 	dc.l	"qts."
+    dc.l    "cust"
 	dc.l	0
 
 .aminetLine
@@ -52752,6 +53399,10 @@ remoteSearch
     dc.b    "http://uhc.remix.kwed.org/",0
 .rkoLineE
 
+.turranLine
+    dc.b    "http://ftp2.grandis.nu/turran/FTP/",0
+.turranLineE
+
 .recentPlaylistsLine
 	dc.b	"http://asciiarena.se/",0
 .recentPlaylistsLineE
@@ -52775,6 +53426,10 @@ remoteSearch
 	dc.b	"%s",10
 	dc.b 	'%s mods/ %s',10
 	dc.b	0
+.turranSearchCmd
+	dc.b	"%s",10
+	dc.b 	'%s collection/music/ %s',10
+	dc.b	0
 
 .modulesResultsPath
 	dc.b	"modulessearch",0
@@ -52784,6 +53439,8 @@ remoteSearch
 	dc.b	"amigaremixsearch",0
 .rkoResultsPath
 	dc.b	"rkosearch",0
+.turranResultsPath
+	dc.b	"turransearch",0
 .stationsResultsPath
 	dc.b	"stationsearch",0
 .stationsSearchCmd
@@ -52791,11 +53448,12 @@ remoteSearch
 	dc.b 	'uhcmirrorsearch SEARCHLIMIT=1000 SEARCHRESULTTO=T:searchresults %s %s',10
 	dc.b	0
 .recentPlaylistsResultsPath
-	dc.b	"playlistrecent",0
+	dc.b	"playlistsearch",0
 .recentPlaylistsSearchCmd
 	dc.b	"%s",10
 	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s',10
 	dc.b	0
+
 
 
 remoteExecute
@@ -52904,15 +53562,24 @@ configRemoteNode:
 	popm	d0/a0-a4
 	rts
 
+
+
 *
 * Loads a remote file into a file using aget.
 * in:
 *   a0 = url
 *   a1 = buffer for output file path
+*   a2 = target dir OPTIONAL
 * out:
 *   d0 = true: ok, false: some error
+
+fetchRemoteFileToTarget:
+	pushm	d1-a6
+    bra     fetchRemoteFile\.0
 fetchRemoteFile:
 	pushm	d1-a6
+    lea     .destinationDir(pc),a2
+.0:
  if DEBUG
 	move.l	a0,d0
 	DPRINT	"fetchRemoteFile: %s"
@@ -52921,7 +53588,8 @@ fetchRemoteFile:
     beq     .exit
 
 	moveq	#0,d7	* status: fail
-	
+    move.l  a2,a6   * target path
+
 	* Temporary target file path, the last part of the url
 	move.l	a0,a2
 .end
@@ -52934,8 +53602,15 @@ fetchRemoteFile:
 
 	move.l	a1,a3
 	* Build temp file path into a3
-	move.b	#"T",(a3)+
-	move.b	#":",(a3)+
+.target1
+    move.b  (a6)+,(a3)+
+    bne.b   .target1
+    subq    #1,a3
+    cmp.b   #":",-1(a3)
+    beq     .target2
+    move.b  #"/",(a3)+
+.target2
+
     * Max 24 chars to be friendly to the file system
     moveq   #24-1,d1
     moveq   #0,d0
@@ -53005,16 +53680,30 @@ fetchRemoteFile:
 
     * d6 = stream handle
     * a4 = temporary buffer
+
 .loop
+    * Enable input handler special mode
+    move.b  hotkey(a5),-(sp)
+    move.b  #1,hotkey(a5)
+    clr.w   rawkeyinput(a5)
+
     * Read from input 
     move.l  d6,d1       * in file
     move.l  a4,d2       * buffer
     move.l  #$10000,d3  * length
     lore    Dos,Read
     DPRINT  "read=%ld bytes"
+
+    move.b  (sp)+,hotkey(a5)
+    cmp.w   #$45,rawkeyinput(a5)
+    bne     .5
+    moveq   #-1,d0
+.5
+
     move.l  d0,d4       * bytes read
     * d0 = bytes read, 0 = EOF, -1 = error
     bmi.b   .readError
+
 
     move.l  d5,d1       * out file
     move.l  a4,d2       * buffer
@@ -53060,6 +53749,10 @@ fetchRemoteFile:
 	popm	d1-a6
     DPRINT	"fetchRemoteFile status=%ld"
 	rts
+
+.destinationDir 
+    dc.b    "T:",0
+    even
 
 * Checks if UHC is installed, also checks version
 initializeUHC
@@ -53276,6 +53969,60 @@ getPreAndPostfixFromPath
 	rts
 
 ;.bob	ds.b	10
+
+fetchAndSaveCurrentModule:
+    DPRINT  "fetchAndSaveCurrentModule"
+    pushm   all
+    jsr     getcurrent
+    beq     .err
+    tst.b   l_remote(a3)
+    beq     .err
+    push    a3
+    jsr     dir_req    
+    * d7 = request 
+    popm    a3
+    beq     .err
+
+    lea	-200(sp),sp	* space for output path
+
+    move.l  d7,a2
+    move.l  16(a2),a2
+    tst.b   (a2)
+    beq     .2
+  
+    * Ensure start from scratch
+    move    #-1,streamReturnCode(a5)
+
+    * a2 = target path
+	move.l	sp,a1
+	lea	    l_filename(a3),a0	
+    jsr	    fetchRemoteFileToTarget
+    DPRINT  "fetchRemoteFile=%ld"
+    lea     .fail(pc),a1
+    tst.l   d0
+    beq     .3
+    lea     .okTxt(pc),a1
+.3 
+    jsr     request
+.2
+    tst.l   d7
+    beq     .1
+    move.l	d7,a1
+	lore    Req,rtFreeRequest
+.1
+    jsr     inforivit_play
+    lea     200(sp),sp
+.x
+    popm    all
+    rts
+
+.err    
+    jsr      beep
+    bra     .x
+
+.okTxt   dc.b   "Saved!",0
+.fail   dc.b    "Failed!",0
+ even
 
 ***************************************************************************
 *
@@ -54225,6 +54972,131 @@ utf8ToLatin1Char:
     add.l   d1,a0
     rts
 
+
+***************************************************************************
+*
+* Clipboard
+*
+***************************************************************************
+
+ ifne FEATURE_PASTE
+readClipboard:
+    DPRINT  "a"
+; IFF types that may be text
+.ID_FTXT         equ     'FTXT'
+.ID_CHRS         equ     'CHRS'
+
+    moveq   #0,d7   * STATUS: error
+    sub.l   a4,a4   * iff handle
+
+    lea     .iffParseName(pc),a1
+	lore	Exec,OldOpenLibrary
+    tst.l   d0
+    beq     .exit
+    move.l  d0,a6
+
+    DPRINT  "b %lx"
+
+    lob     AllocIFF
+    tst.l   d0
+    beq     .exit
+    move.l  d0,a4
+    
+    DPRINT  "c %lx" 
+
+    moveq   #0,d0 ; default unit
+    lob     OpenClipboard
+    move.l  d0,iff_Stream(a4)
+    beq     .exit
+
+    DPRINT  "d %lx"
+
+    move.l  a4,a0
+    lob     InitIFFasClip
+
+    DPRINT  "e"
+
+    move.l  a4,a0
+    moveq   #IFFF_READ,d0
+    lob     OpenIFF
+    tst.l   d0
+    beq     .exit
+
+    DPRINT  "f %lx"
+
+    move.l  a4,a0
+    move.l  #.ID_FTXT,d0
+    move.l  #.ID_CHRS,d1
+    lob     StopChunk
+    tst.l   d0
+    beq     .exit
+
+    DPRINT  "g %lx"
+
+.loop
+    move.l  a4,a0
+    move.l  #IFFPARSE_SCAN,d0
+    lob     ParseIFF
+    DPRINT  "f %lx"
+
+    cmp.l   #IFFERR_EOC,d0
+    beq     .loop
+    tst.l   d0
+    beq     .exit
+
+    DPRINT  "h"
+
+    move.l  a4,a0
+    lob     CurrentChunk
+    DPRINT  "i"
+    * a0 = node
+    move.l  a0,d0
+    beq     .loop
+    cmp.l   #.ID_FTXT,cn_Type(a0)
+    bne     .loop
+    cmp.l   #.ID_CHRS,cn_ID(a0)
+    bne     .loop
+    DPRINT  "j"
+
+    move.l  a4,a0
+    move.l  #.bob,a1
+    move.l  #32,d0
+    lob     ReadChunkBytes
+    tst.l   d0
+    bmi     .loop
+
+    move.l  #.bob,d0
+    DPRINT  "got=%s"
+
+
+.exit
+    move.l  a4,d0
+    beq     .2
+    tst.l   iff_Stream(a4)
+    beq     .3
+    move.l  iff_Stream(a4),a0
+    lob     CloseClipboard
+.3
+    move.l  a4,a0
+    lob     CloseIFF
+    move.l  a4,a0
+    lob     FreeIFF
+.2
+
+    move.l  a6,d0
+    beq     .1
+    move.l  d0,a1
+    lore    Exec,CloseLibrary
+.1
+    move.l  d7,d0
+    rts
+
+.bob    ds.b    64
+
+.iffParseName   dc.b    "iffparse.library",0
+    even
+ endif
+ 
 ***************************************************************************
 *
 * Performance measurement with timer.device
@@ -54811,7 +55683,7 @@ prefsMHIEnable
        even
 
 prefsMHILib
-       dc.l 0 ; END
+       dc.l prefsMedFastRamMode 
        ; left, top, width, height
        dc.w 214-80+4,107+28-14-12-2-14,100-8,12,3,1,1
        dc.l 0
@@ -54835,6 +55707,23 @@ prefsEnableXMAPlay dc.l prefsResidMode
 ;       dc.b "Enable xmaplay060......",0
        dc.b "Enable xmaplay060",0
        even
+
+
+prefsMedFastRamMode dc.l 0 ;;;;;;;; END
+       ; left, top, width, height
+       dc.w 214-80+4+64+160+40+4,107-12-2+14+14-14-14-8,28,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4-64+32+4+2,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "MED FastMemPlay...",0
+       even
+
+
 
  ifne FEATURE_LIST_TABS
 ; Gadget
@@ -55116,7 +56005,7 @@ gadgetListModeChangeButtonImagePtr
 	; ig_NextImage
 	dc.l 0
 
-gadgetResize
+gadgetResize:
 	; gg_Next
 	dc.l	0
 	; gg_LeftEdge: relative to right edge
@@ -55132,7 +56021,38 @@ gadgetResize
 	; gg_GadgetType
 	dc.w	GTYP_SIZING
 	; gg_GadgetRender
-	dc.l	.gadgetResizeImage
+	dc.l	gadgetResizeImage
+	; gg_SelectRender
+	dc.l	0
+	; gg_GadgetText
+	dc.l	0	
+	; gg_MutualExclude
+	dc.l	0
+	; gg_SpecialInfo
+	dc.l	0
+	; gg_GadgetId
+	dc.w	0
+	; gg_UserData
+	dc.l	0
+
+
+gadgetResizeInfoWindow:
+	; gg_Next
+	dc.l	0
+	; gg_LeftEdge: relative to right edge
+	dc.w	-5
+	; gg_TopEdge: relative to bottom edge
+	dc.w	-5
+	; gg_Width, gg_Height
+	dc.w	6,6
+	; gg_Flags
+	dc.w	GFLG_RELRIGHT!GFLG_RELBOTTOM!GFLG_GADGIMAGE
+	; gg_Activation
+	dc.w	0
+	; gg_GadgetType
+	dc.w	GTYP_SIZING
+	; gg_GadgetRender
+	dc.l	gadgetResizeImage
 	; gg_SelectRender
 	dc.l	0
 	; gg_GadgetText
@@ -55147,7 +56067,7 @@ gadgetResize
 	dc.l	0
 
 ; Image
-.gadgetResizeImage
+gadgetResizeImage
 	; ig_LeftEdge
 	dc 0
 	; ig_TopEdge
@@ -55462,7 +56382,7 @@ tooltipList
 	dc.b	25,3
 	dc.b	"LMB: Sort list   [S]",0
 	dc.b	"RMB: Find module [F]",0
-    dc.b    "     Find next   [CTRL+F]"
+    dc.b    "     Find next   [CTRL+F]",0
 .move
 	dc.b	26,4
 	dc.b	"LMB: Move chosen module,",0
@@ -55504,7 +56424,7 @@ tooltipList
   even
 
 *** Samplename ikkuna
-swinstruc
+swinstruc:
 	dc	0	;vas.yläk.x-koord.
 	dc	0	;---""--- y-koord
 swinsiz	dc	361-5,150-13*8-2
@@ -55531,7 +56451,7 @@ wreg1
 
 * Slider for the module info window
 gAD1	
-	dc.l gadgetResize
+    dc.l gadgetResizeInfoWindow
 	dc.w 9,14,16,127-13*8,GFLG_GADGHNONE,9,3
 	dc.l gAD1gr,0,0,0,gAD1s
 	dc.w 0

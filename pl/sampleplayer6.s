@@ -7,7 +7,7 @@ DEBUG	=	0
  endif
 
  ifnd SERIALDEBUG
-SERIALDEBUG = 1
+SERIALDEBUG = 0
  endif
 
 
@@ -312,13 +312,19 @@ mhiVolumeSignal rs.b    1
 mhiPlaying      rs.b    1
 mhiNoMoreData   rs.b    1
 mhiReady        rs.b    1
-                rs.b    1
+mhiInitError    rs.b    1
 mhiTask         rs.l    1
 mhiBase         rs.l    1
 mhiFile         rs.l    1
 mhiStreamSize   rs.l    1
 mhiHandle       rs.l    1
 mhiLibName      rs.l    1
+mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
+                rs.b    1
+
+
+mainTask    rs.l    1
+
 
  if DEBUG
 output			rs.l 	1
@@ -386,6 +392,9 @@ sample_segment
 	dc.l	0
 	jmp	sample_code
 
+
+mpegaName	dc.b	"mpega.library",0
+ even
 
  if DEBUG
 flash1	move	#$f00,d0
@@ -610,6 +619,10 @@ init:
 	clr.b	cybercalibration(a5)
 .noz
 	DPRINT	"Start"
+
+    sub.l   a1,a1
+    lore    Exec,FindTask
+    move.l  d0,mainTask(a5)
 
 	move.l	(a5),a0
 	btst	#AFB_68020,AttnFlags+1(a0)
@@ -963,7 +976,7 @@ init:
 ._2  
 
 	move.l	4.w,a6
-	lea	.mplibn(pc),a1
+	lea	    mpegaName(pc),a1
     moveq   #2,d0
 	lob	    OpenLibrary
 	move.l	d0,_MPEGABase(a5)
@@ -1102,9 +1115,6 @@ init:
 	dc.l	0	* stream buffer size (0=default)
 
 
-
-.mplibn	dc.b	"mpega.library",0
- even
 
 
 
@@ -1656,6 +1666,11 @@ init:
 
 	DPRINT	"CreateProc"
 
+    ; Clear this so that it's safe to use later
+    moveq   #0,d0
+    moveq   #SIGF_SINGLE,d1
+    lore    Exec,SetSignal
+
 ** k‰ynnistet‰‰n prosessi
 	pushpea	.pn(pc),d1
 	moveq	#0,d2			* pri
@@ -1663,8 +1678,22 @@ init:
 	lsr.l	#2,d3
 	move.l	#4000,d4
 	lore	Dos,CreateProc
-	tst.l	d0
-	beq.b	.error
+    tst.l	d0
+	beq 	.error
+
+
+    DPRINT  "process started"
+
+    tst.b   mhiEnable(a5)
+    beq     .mhi1
+    DPRINT  "await MHI status"
+    * MHI will signal if it has started ok or failed, wait here
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Wait
+    tst.b   mhiInitError(a5)
+    bne     .mhiInitError
+.mhi1
+
 	addq	#1,sample_prosessi(a5)
 
 ** palautetaan arvoja
@@ -1711,6 +1740,11 @@ init:
 .vaara
 	DPRINT	"ier_unknown"
 	moveq	#ier_unknown,d0
+	bra	sampleiik
+
+.mhiInitError	
+	DPRINT	"ier_mhi"
+	moveq	#ier_mhi,d0
 	bra	sampleiik
 
 
@@ -2111,9 +2145,9 @@ ahiunhalt
 *********************************************************************
 
 sampleiik:
-
+    DPRINT  "sampleiik"
 	pushm	all
-	
+
 	bsr	clearsound
 	bsr	vapauta_kanavat
 	bsr	closesample
@@ -2180,32 +2214,16 @@ sample_code:
 
 	DPRINT	"*** Process ***"
 
-;	bsr	ahi_alustus
-;	beq	.zee
-;.koa	move	$dff006,$dff180
-;	btst	#6,$bfe001
-;	bne.b	.koa
-;	bra	quit2
-;.zee
-;	move	mainvolume+var_b(pc),d0
-;	bsr	vol
-
-
-;	moveq	#10,d1
-;.ee	move	#-1,d0
-;.e	move	$dff006,$dff180
-;	dbf	d0,.e
-;	dbf	d1,.ee
-
-;	bsr	sampleiik
-;	lore	Exec,Forbid
-;	clr	sample_prosessi(a5)
-;	clr.b	killsample(a5)
-;	rts
-
     tst.b   mhiEnable(a5)
     beq     .nomhi  
     bsr     mhiStart
+    DPRINT  "mhiStart=%ld"
+    * In case of failure skip the main cleanup,
+    * this will be done by the main task when it detects
+    * the MHI failure.
+    tst.l   d0
+    beq     quit3
+    * MHI operation finished succesfully
     bra     quit2
 .nomhi
 
@@ -3830,6 +3848,8 @@ quit:
 quit2:	
 	DPRINT	"quit2"
 	bsr	sampleiik
+quit3:
+	DPRINT	"quit3"
     DPRINT  "task exiting"
 	lore	Exec,Forbid
 	clr	sample_prosessi(a5)
@@ -4930,6 +4950,7 @@ mpega_skip_id3v2_stream
     move.l  d0,id3v2Data(a5)
     move.l  d0,a3
 
+    * The size is = total header header size - 10 bytes
     * d3 is the size of the header, amount of data to skip
     move.l  d3,d0
     
@@ -5617,20 +5638,18 @@ mhiInit:
     move.l  d0,mhiBase(a5)
     beq     .noLib
 
-    ; Test open the decoder
-	sub.l	a1,a1
-	lob FindTask
-
+    move.l  mhiLibName(a5),d1
+    lore    Dos,FilePart
+    * This buffer is 39 chars long
     move.l  d0,a0
-    moveq   #SIGF_SINGLE,d1
-    move.l  mhiBase(a5),a6
-    lob     MHIAllocDecoder
-    DPRINT  "MHIAllocDecoder=%lx"
-    tst.l   d0
-    beq     .noDecoder
-    move.l  d0,a3
-    lob     MHIFreeDecoder
-
+    clr.b   mhiMPEGit(a5)
+    cmp.l   #"mhim",(a0)+
+    bne     .m1
+    cmp.l   #"pegi",(a0)+
+    bne     .m1
+    cmp.b   #"t",(a0)
+    seq     mhiMPEGit(a5)
+.m1
     * Have buffers
     move.l	#MHI_BUFSIZE*MHI_BUFCOUNT,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -5659,7 +5678,7 @@ mhiInit:
     * This allows throttled streams to work better.
     DPRINT  "Radio station, buffering for 2 secs!"
     moveq   #2*50,d1
-    lob     Delay
+    lore    Dos,Delay
     bra     .cantSeek
 .notRemotex
     * Get current position
@@ -5692,12 +5711,6 @@ mhiInit:
     move.l  d0,mhiStreamSize(a5)
     DPRINT  "remote stream size=%ld"
 .go
-    * Read a little to parse properties
-    move.l  d7,d1
-    move.l  #mpbuffer1,d2
-    move.l  #MPEGA_PCM_SIZE,d3
-    lob     Read
-    DPRINT  "Read=%ld"
 
     ; Stash some default values, might be incorrect
     clr.b   kutistus(a5)    * no resampling
@@ -5708,28 +5721,9 @@ mhiInit:
     st      mplippu(a5)
     move    #3,mplayer(a5)
 
-    ; Find actual values from the 1st frame
-    lea     mpbuffer1,a0
-    bsr     findMpegSync
-    beq     .no
+    bsr     mhiReadMp3Properties
 
-    ;bfextu  (a0){11+2:2},d0
-    ;DPRINT  "Layer=%ld"
 
-    bfextu  (a0){11+2+2+1:4},d0
-    move.w  .bitrates(pc,d0.w*2),mpbitrate(a5)
-    DPRINT  "Bitrate=%ld"
-
-    bfextu  (a0){11+2+2+1+4:2},d0
-    DPRINT  "Sampling frequency=%ld"
-    tst.b   d0
-    beq.b   .r
-    move    #48000,samplefreq(a5)
-.r
-    bfextu  (a0){11+2+2+1+4+2+1+1:2},d0
-    DPRINT  "Channel mode=%ld"
-    cmp.b   #%11,d0
-    sne     samplestereo(a5)
 
 
     move.l  mhiStreamSize(a5),d0
@@ -5747,8 +5741,6 @@ mhiInit:
     moveq   #0,d0   * ok
     rts
 
-.bitrates
-    dc.w    0,32,40,48,56,64,80,96,112,128,160,192,224,256,320
 
 .mem   
     bsr     mhiDeinit
@@ -5814,9 +5806,21 @@ mhiStart:
     move.l  mhiTask(a5),a0
     DPRINT  "signal mask=%lx"
     lob     MHIAllocDecoder
+    ;moveq   #0,d0 - FAKE ERROR
     DPRINT  "MHIAllocDecoder=%lx"
     move.l  d0,mhiHandle(a5)
-    beq     .mhiExit
+    seq     mhiInitError(a5)
+
+    * Init done, status is set.
+    * Send signal to main task.
+    push    a6
+    move.l  mainTask(a5),a1
+    moveq   #SIGF_SINGLE,d0
+    lore    Exec,Signal
+    pop     a6
+
+    tst.l   mhiHandle(A5)
+    beq     .mhiExitError
 
  if DEBUG
     move.l  mhiHandle(a5),a3
@@ -5910,7 +5914,15 @@ mhiStart:
 .mhiExit
     DPRINT  "mhiExit"
     bsr     mhiDeinit
+    moveq   #1,d0
     rts
+
+.mhiExitError:
+    DPRINT  "mhiError" 
+    bsr     .mhiExit
+    moveq   #0,d0
+    rts
+
 
 mhiDeinit:
     DPRINT  "mhiDeinit"
@@ -6013,13 +6025,29 @@ mhiDoStop:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT "MHIGetStatus=%ld"
+ endif
     cmp.b   #MHIF_PLAYING,d0
     bne     .1
+
+    * Special case!
+    tst.b   mhiMPEGit(a5)
+    bne     .2
+
     DPRINT  "MHIPause"
     move.l  mhiHandle(a5),a3
     lob     MHIPause
 .1  
     rts
+
+.2
+    DPRINT  "MHIStop (mhimpegit)"
+    move.l  mhiHandle(a5),a3
+    lob     MHIStop
+    rts
+
 
 mhiCont:
     move.b  mhiContSignal(a5),d1
@@ -6032,15 +6060,30 @@ mhiDoCont:
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
-    cmp.b   #MHIF_OUT_OF_DATA,d0
-    beq.b   .2
-    cmp.b   #MHIF_PAUSED,d0
-    bne     .1
-.2
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT "MHIGetStatus=%ld"
+ endif
+    cmp.b   #MHIF_PLAYING,d0
+    beq     .1
+
+    * Special case!
+    tst.b   mhiMPEGit(a5)
+    bne     .2
+
     DPRINT  "MHIPlay"
     move.l  mhiHandle(a5),a3
     lob     MHIPlay
 .1  
+    rts
+.2
+    DPRINT  "mhimpegit init after stop"
+    bsr     mhiInitBuffers
+
+    DPRINT  "MHIPlay (mhimpegit)"
+    move.l  mhiHandle(a5),a3
+    move.l  mhiBase(a5),a6
+    lob     MHIPlay
     rts
 
 mhiVolume:
@@ -6092,8 +6135,8 @@ mhiFillEmptyBuffers:
     * Poll for stop sign to abort the fill process
     tst.b   samplestop(a5)
     beq     .go
-    DPRINT  "filling aborted"
-    bra     mhiDoStop
+    * Stop filling if stopped
+    rts
 .go
     
     move.l  mhiBase(a5),a6
@@ -6149,61 +6192,166 @@ mhiFillBuffer:
  endif
     rts
 
+* Read MPEG stream properties by opening it with the MPEGA lib
+mhiReadMp3Properties
+* mpega stream
+	rsreset
+.norm		rs	1	* 1 or 2
+.layer		rs	1	* 0...3
+.mode		rs	1	* 1...3
+.bitrate	rs	1	* in kbps	
+.frequency	rs.l	1	* in Hz
+.channels	rs	1	* 1 or 2
+.ms_duration	rs.l	1	* duration in ms
 
-* Find MPEG sync word
 
-;#define SYNC_VALID( v ) ( ((v & 0xFFE00000) == 0xFFE00000) &&\
-;                          ((v & 0x00060000) != 0x00000000) &&\
-;                          ((v & 0xF000) != 0xF000) &&\
-;                          ((v & 0xF000) != 0x0000) &&\
-;                          ((v & 0x0C00) != 0x0C00) )
+    DPRINT  "mhiReadMp3Properties"
+	move.l	4.w,a6
+	lea	    mpegaName(pc),a1
+    moveq   #2,d0
+	lob	    OpenLibrary
+	move.l	d0,_MPEGABase(a5)
+	beq     .x
 
-* in:
-*   a0 = buffer
-* Out:
-*   d0 = true if found
-*   a0 = address of the header
-findMpegSync:
-	move	#MPEGA_PCM_SIZE-4-1,d1
-.loop
-	move.b	(a0),d2
-	lsl.l	#8,d2
-	move.b	1(a0),d2
-	lsl.l	#8,d2
-	move.b	2(a0),d2
-	lsl.l	#8,d2
-	move.b	3(a0),d2
-	
-	move.l	d2,d3
-	and.l	#$FFE00000,d3
-	cmp.l	#$FFE00000,d3
-	bne.b	.next
 
-	move.l	d2,d3
-	and.l	#$00060000,d3
-	beq.b	.next
+	lea	.mpega_hook(pc),a0
+	lea	.mpega_hook_func(pc),a1
+	move.l	a1,h_Entry(a0)
 
-	move.l	d2,d3
-	and.l	#$F000,d3
-	cmp.w	#$F000,d3
-	beq.b	.next
+	move.l	modulefilename(a5),a0
+  	lea	    .control(pc),a1	
+	lore	MPEGA,MPEGA_open
+    DPRINT  "MPEGA_open=%lx"
+    tst.l   d0
+    beq     .x
+    move.l  d0,a0
 
-	move.l	d2,d3
-	and.l	#$F000,d3
-	beq.b	.next
-	
-	move.w	d2,d3
-	and.w	#$0C00,d3
-	cmp.w	#$0C00,d3
-	bne.b	.yepSyncWord
-.next
-    addq    #1,a0
-	dbf	d1,.loop
+	move	.layer(a0),mplayer(a5)
+	move	.bitrate(a0),mpbitrate(a5)
+	move	.mode(a0),d1
+	cmp	#MPEGA_MODE_MONO,d1
+	sne	samplestereo(a5)	* stereo
+	st	samplebits(a5)		* 16-bit
+	move.l	.frequency(a0),d1
+	move	d1,samplefreq(a5)
+
+    lob     MPEGA_close
+
+ if DEBUG
     moveq   #0,d0
+    move    mpbitrate(a5),d0
+    DPRINT  "bitrate=%ld"
+    moveq   #0,d0
+    move    samplefreq(a5),d0
+    DPRINT  "frequency=%ld"
+ endif
+ 
+.x
     rts
-.yepSyncWord
-    moveq   #1,d0
-    rts
+
+
+.control	
+	dc.l	.mpega_hook	* no hook
+;	dc.l	0
+
+* layer 1 & 2
+	dc	0	* 1 = force mono
+* mono
+.fd1	dc	4	* freq_div 1, 2 or 4
+.q1	dc	0	* quality 0 (low) ... 2 (high)
+	dc.l	0	* freq_max
+* stereo
+.fd2	dc	4	* freq_div 1, 2 or 4
+.q2	dc	0	* quality 0 (low) ... 2 (high)
+	dc.l	0	* freq_max
+
+	
+* layer 3
+	dc	0	* 1 = force mono
+* mono
+.fd3	dc	4	* freq_div 1, 2 or 4
+.q3	dc	0	* quality 0 (low) ... 2 (high)
+	dc.l	0	* freq_max
+* stereo
+.fd4	dc	4	* freq_div 1, 2 or 4
+.q4	dc	0	* quality 0 (low) ... 2 (high)
+	dc.l	0	* freq_max
+
+
+	dc	0	* check validity if 1 
+	dc.l	2048	* stream buffer size (0=default)
+    
+.mpega_hook
+	* Hook structure from utility.i
+	ds.b	h_SIZEOF
+	
+* In:
+*   a0 = APTR hook
+*   a1 = MPEGA_ACCESS *access
+*   a2 = APTR handle
+.mpega_hook_func
+	pushm	d1-a6
+	bsr.b	.doHook
+	popm	d1-a6
+	rts
+.doHook
+	lea	var_b(pc),a5
+	move.l	_DosBase(a5),a6
+
+	cmp.l	#MPEGA_BSFUNC_OPEN,(a1)
+	beq 	.mpega_hook_open
+	cmp.l	#MPEGA_BSFUNC_READ,(a1)
+	beq 	.mpega_hook_read
+	cmp.l	#MPEGA_BSFUNC_SEEK,(a1)
+	beq 	.mpega_hook_seek
+	cmp.l	#MPEGA_BSFUNC_CLOSE,(a1)
+	beq 	.mpega_hook_close
+	moveq	#-1,d0
+	rts
+
+.mpega_hook_open
+    DPRINT  "mpega_hook_open"
+
+; if DEBUG
+;    move.l	a1,a3
+;	move.l	4(a3),d0
+;	DPRINT	"%s"
+;    clr.l   12(a3)
+; endif
+;
+    move.l  mhiFile(a5),d0
+    DPRINT  "mhi handle=%lx"
+	* Return Dos file handle
+	rts	
+
+.mpega_hook_close
+    DPRINT  "mpega_hook_close"
+	moveq	#0,d0	* ok
+	rts
+
+.mpega_hook_read
+    DPRINT  "mpega_hook_read"
+
+	move.l	a2,d1    * handle
+	move.l	4(a1),d2 * buffer addr
+	move.l	8(a1),d3 * length to read
+	lob	Read
+    DPRINT  "read=%ld"
+	cmp.l	#-1,d0
+	beq.b	.mpega_read_err
+	rts	
+.mpega_read_err
+	* eof
+	moveq	#0,d0
+	rts
+
+
+.mpega_hook_seek
+    DPRINT  "mpega_hook_seek"
+	moveq	#0,d0 * ok
+	rts
+
+
 
 ***************************************************************************
 *

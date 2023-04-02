@@ -14,6 +14,10 @@
 DEBUG	=	0
  endif
  
+ ifnd SERIALDEBUG
+SERIALDEBUG = 1
+ endif
+
  ifnd TEST
 TEST 	= 	0
  endif
@@ -11361,15 +11365,38 @@ desmsgDebugAndPrint
 
 	lea	debugDesBuf(pc),a3
 	move.l	sp,a1	
+ ifne SERIALDEBUG
+    lea     .putCharSerial(pc),a2
+    move.b	#"P",d0
+    bsr     .putCharSerial
+    move.b	#"S",d0
+    bsr     .putCharSerial
+    move.b	#"3",d0
+    bsr     .putCharSerial
+    move.b	#"M",d0
+    bsr     .putCharSerial
+    move.b	#":",d0
+    bsr     .putCharSerial
+ else
 	lea	.putc(pc),a2	
+ endif
 	move.l	4.w,a6
 	lob	RawDoFmt
 	movem.l	(sp)+,d0-d7/a0-a3/a6
+ ifeq SERIALDEBUG
 	bsr	PRINTOUT_DEBUGBUFFER
+ endif
 	rts	* teleport!
 .putc	
 	move.b	d0,(a3)+	
 	rts
+.putCharSerial
+    ;_LVORawPutChar
+    ; output char in d0 to serial
+    move.l  4.w,a6
+    jsr     -516(a6)
+    rts
+
 
 output			ds.l 	1
 debugDesBuf		ds.b	1024

@@ -97,3 +97,5 @@ pt_specialfx		rs.b  	1
 pt_steveturner		rs.b 	1
 pt_jasonpage		rs.b 	1
 pt_davidwhittaker	rs.b	1
+pt_soundmaster      rs.b    1
+pt_soundprogramminglanguage rs.b 1
