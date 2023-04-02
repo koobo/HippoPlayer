@@ -29413,7 +29413,13 @@ loadmodule:
     * Send an event to start the playback later with the new
     * list contents. Fake the "play" key event.
 
+    * rawkey $44 = play
+    * rawkey $2b = play random
     move    #$44,rawkeyinput(a5)
+    cmp.b   #pm_random,playmode(a5)
+    bne     .noRnd
+    move    #$2b,rawkeyinput(a5)
+.noRnd
 	move.b	rawKeySignal(a5),d1
 	bsr 	signalit
 
