@@ -96,6 +96,10 @@ PLAYING_MODULE_NONE 	= -1	 	* needs to be negative
 PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
 MAX_MODULES		= $1ffff 		    * this should be enough!
 
+; Where boxsize(a5) used this is the amount that should
+; be first reduced from it if the bottom search layout
+; is active. That is, the bottom stuff takes two lines
+; out of the file list.
 SEARCH_BOXSIZE_DELTA = 2
 	
  ;ifne TARK
@@ -10329,6 +10333,13 @@ rslider4
 	move.l	modamount(a5),d1
 	moveq	#0,d2
 	move	boxsize(a5),d2
+
+    * Adjust accordingly if the bottom search layout is active
+    tst.w   searchLayoutActive(a5)     
+    beq.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d2
+.lm1
+
 	sub.l	d2,d1
 	bpl.b	.e
 	moveq	#0,d1
