@@ -415,7 +415,8 @@ prefs_mhiEnable       rs.b      1
 MHILIB_SIZE         =   40
 prefs_mhiLib          rs.b      MHILIB_SIZE
 prefs_medfastmemplay  rs.b     1
-                      ;rs.b     1 * pad to get even prefs_size
+prefs_showPositionSlider rs.b  1
+                       rs.b     1 * pad to get even prefs_size
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -1475,7 +1476,10 @@ streamHeaderIcyName         rs.l       1
 streamHeaderIcyDescription  rs.l       1
 streamHeaderRest            rs.l       1
 disableShowStreamerError    rs.b       1
-                            rs.b       1
+
+showPositionSlider_new      rs.b       1
+showPositionSlider          = prefsdata+prefs_showPositionSlider
+
 
 * Remote search popup stores the selected search mode here
 * SEARCH_MODLAND etc etc
@@ -1483,6 +1487,7 @@ selectedSearch = prefsdata+prefs_selectedSearch
 
 mhiEnable      = prefsdata+prefs_mhiEnable
 mhiLib         = prefsdata+prefs_mhiLib
+
 
 * Flags to indicate the bottom search layout state
 * Tested with .w!
@@ -5126,6 +5131,12 @@ wrender:
 	* Insert an invisible size gadget last
 	bsr	configResizeGadget
 
+    lea     gadgetResize,a0
+    clr.l   gg_NextGadget(a0)
+    tst.b   showPositionSlider(a5)
+    beq     .noPos
+    move.l  #gadgetPositionSlider,gg_NextGadget(a0)
+.noPos
 
 * sitten isket‰‰n gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
@@ -9215,9 +9226,9 @@ gadgetsup:
     dr  rlistmode4
  endif
     dr  .exit       * resize gadget
-    dr  rpositionslider
+    dr  .rpositionslider
 
-rpositionslider
+.rpositionslider
     jmp     positionSliderMoved
 
 * Print some text into the filebox
@@ -14010,6 +14021,7 @@ prefs_code
 	move.b	savestate(a5),savestate_new(a5)
 	move.b	altbuttons(a5),altbuttons_new(a5)
 	move.b	mhiEnable(a5),mhiEnable_new(a5)
+	move.b	showPositionSlider(a5),showPositionSlider_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -14473,6 +14485,14 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	xmaplay_new(a5),xmaplay(a5)
 	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
+
+    move.b  showPositionSlider(a5),d0
+    move.b  showPositionSlider_new(a5),showPositionSlider(a5)
+    cmp.b   showPositionSlider(a5),d0
+    beq     .2
+	* magic! causes reopening of the main window:
+	clr	boxsize00(a5)
+.2
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
 	move	ahi_mastervol_new(a5),ahi_mastervol(a5)
@@ -15160,6 +15180,7 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	ppgmode			* pgmode
 	bsr	ppgstat			* pgstatus
 	bsr	pdbf			* volume fade
+    bsr ppositionslider * posiion slider
 	bra 	.x
 
 .4	subq	#1,d0
@@ -15413,6 +15434,7 @@ gadgetsup2
 	dr	rvbtimer	* vblank timer
 	dr	rptmix		* pt norm/fast/ps3m
 	dr	rpbutton3	* pt tempo
+    dr  rpositionslider * position slider
 ;	dr	rpslider2	* tfmx rate
 ;	dr	rpslider2b	* samplebufsiz
 ;	dr	rpslider2c	* sampleforcerate
@@ -15901,6 +15923,16 @@ pupdate3
 	seq	d0
 	lea	pbutton3,a0
 	bra	tickaa
+
+** Position slider
+rpositionslider
+	not.b	showPositionSlider_new(a5)
+
+ppositionslider
+    move.b  showPositionSlider_new(a5),d0
+	lea	gadgetEnablePositionSlider,a0
+	bra	tickaa
+
 
 
 ** S3M moodit 1,2,3
@@ -52517,10 +52549,12 @@ horizontalLayout:
 .it
     ; Position slider
     ; As wide as the window minus some borders and bonus
+    tst.b   showPositionSlider(a5)
+    beq     .noPos
     move	winstruc+nw_Width,d0
     sub	    #8+8+2,d0
     move    d0,gadgetPositionSlider+gg_Width
-
+.noPos
 	
   if DEBUG
 	moveq	#0,d1
@@ -52658,15 +52692,16 @@ verticalLayout:
 	*** Button row 1
     add     windowtop(a5),d0
    
+    tst.b   showPositionSlider(a5)
+    beq     .noPos
     * Add position slider here
     lea     gadgetPositionSlider,a0
     addq    #2,d0
     move    d0,gg_TopEdge(a0)
     move    #10-1,gg_Height(a0)
-    
-
-   
     add     #12,d0
+.noPos
+
 	move	d0,buttonRow1TopEdge(a5)
 
 	moveq	#13,d1
@@ -55039,6 +55074,10 @@ utf8ToLatin1Char:
 
 * User has moved the slider
 positionSliderMoved:
+    tst.b   showPositionSlider(a5)
+    bne     .yes
+    rts
+.yes
     * Reset knobhit after the user has released the button
     * so it can be again automatically updated below.
     lea     gadgetPositionSlider,a2
@@ -55105,9 +55144,13 @@ positionSliderMoved:
     rts
 
 * Update slider position based on current status
-refreshPositionSlider:
+refreshPositionSlider:  
+    tst.b   showPositionSlider(a5)
+    bne     .yes
+    rts
+.yes
     
-    DPRINT  "refreshPositionSlider"
+    ;DPRINT  "refreshPositionSlider"
     lea     gadgetPositionSlider,a3
     tst.b   playing(a5)
     bne     .enable
