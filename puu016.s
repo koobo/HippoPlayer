@@ -5185,6 +5185,22 @@ wrender:
 	move.l	rastport(a5),a1
 	bsr	sliderlaatikko
 
+
+    ; ---------------------------------
+    ; Position slider
+    move    buttonRow1TopEdge(a5),ply1
+    sub     #12+2,ply1
+    move    ply1,ply2
+    add     #10+2,ply2
+
+	moveq	#5+WINX,plx1
+	move	WINSIZX(a5),plx2
+	subq	#8,plx2
+
+	move.l	rastport(a5),a1
+	jsr 	sliderlaatikko
+    ; ---------------------------------
+
 ;.nelq
 
 *** Piirret‰‰n korvat
@@ -6477,7 +6493,7 @@ drawli	cmp	d0,d2
 
 
 
-sliderlaatikko
+sliderlaatikko:
 ;	rts
 	
 	move.l	a1,a3
@@ -9197,6 +9213,13 @@ gadgetsup:
     dr  rlistmode3
     dr  rlistmode4
  endif
+    dr  rresizegadget
+    dr  rpositionslider
+
+rpositionslider
+    DPRINT  "possi"
+rresizegadget
+    rts
 
 * Print some text into the filebox
 ** a0 = teksti
@@ -19868,7 +19891,12 @@ lootaan_aika
 		
 
 	clr.b	(a0)
+
+    ; Final step: position slider
+    jsr     refreshPositionSlider
+
 	bra	lootaus
+
 
 
 
@@ -32417,11 +32445,9 @@ whag	tst.b	win(a5)
 * in:
 *   a3 = gadget
 drawButtonFrameMainWindow:
-	* File and volume sliders
-	cmp.l	#slider1,a3
-	beq.b	.x
-	cmp.l	#slider4,a3
-	beq.b	.x
+	* Skip file and volume sliders
+    cmp     #GTYP_PROPGADGET,gg_GadgetType(a3)
+    beq.b   .x
 	* Invisible resize gadget
 	cmp.l	#gadgetResize,a3
 	beq.b	.x
@@ -52491,13 +52517,19 @@ horizontalLayout:
 	rts
 
 .it
+    ; Position slider
+    ; As wide as the window minus some borders and bonus
+    move	winstruc+nw_Width,d0
+    sub	    #8+8+2,d0
+    move    d0,gadgetPositionSlider+gg_Width
+
 	
   if DEBUG
 	moveq	#0,d1
 	move	winstruc+nw_Width,d1
 	move	d1,d0
 	; remove left and right borders
-	sub	#8+8,d1 
+	sub     #8+8,d1 
 	lsl.l	#8,d1
 	; original width without borders
 	divu	#264-8-8,d1
@@ -52627,6 +52659,16 @@ verticalLayout:
 
 	*** Button row 1
     add     windowtop(a5),d0
+   
+    * Add position slider here
+    lea     gadgetPositionSlider,a0
+    addq    #2,d0
+    move    d0,gg_TopEdge(a0)
+    move    #10-1,gg_Height(a0)
+    
+
+   
+    add     #12,d0
 	move	d0,buttonRow1TopEdge(a5)
 
 	moveq	#13,d1
@@ -54990,6 +55032,69 @@ utf8ToLatin1Char:
     rts
 
 
+
+***************************************************************************
+*
+* Position slider
+*
+***************************************************************************
+
+
+refreshPositionSlider:
+    
+    DPRINT  "refreshPositionSlider"
+    lea     gadgetPositionSlider,a3
+    tst.b   playing(a5)
+    bne     .enable
+.disable
+    DPRINT  "disable"
+    move.l  a3,a0
+    jmp     disableGadget
+.enable
+    move.l  playerbase(a5),a1
+    move    p_liput(a1),d0
+    and     #pf_kelaus,d0
+    cmp     #pf_kelaus,d0
+    bne     .disable
+    move.l  a3,a0
+    jsr     enableButton
+
+    * a0 = gadget
+    move.l  a3,a0
+    move.l	gg_SpecialInfo(a0),a1
+    * d0 = Flags
+    move	pi_Flags(a1),d0
+    * d1 = HorizPot
+    moveq   #0,d1
+    move    pos_maksimi(a5),d2
+    subq    #1,d2
+    bmi     .z
+    beq     .z
+    move    pos_nykyinen(a5),d1
+    mulu    #65535,d1
+    divu    d2,d1
+.z
+
+    * d2 = VertPot
+    moveq   #0,d2
+    * d3 = HorizBody
+    move    pi_HorizBody(a1),d3
+    * d4 = VertBody
+    moveq   #0,d4
+    * d5 = NumGad
+    moveq   #1,d5
+    * a1 = window
+	move.l	windowbase(a5),a1
+    * a2 = requester
+    sub.l   a2,a2
+
+    cmp     pi_HorizPot(a1),d1
+    beq     .noChange
+    lore    Intui,NewModifyProp
+.noChange
+    rts
+
+
 ***************************************************************************
 *
 * Clipboard
@@ -56024,7 +56129,7 @@ gadgetListModeChangeButtonImagePtr
 
 gadgetResize:
 	; gg_Next
-	dc.l	0
+	dc.l	gadgetPositionSlider
 	; gg_LeftEdge: relative to right edge
 	dc.w	-5
 	; gg_TopEdge: relative to bottom edge
@@ -56481,6 +56586,23 @@ gAD1s	dc.w 5,65535,0,0,0
 	dc.w 0,0,0,0,0,0
 
 
+
+gadgetPositionSlider
+        dc.l 0 ; next
+        dc.w 9,50
+        dc.w 54,12
+        * width, height:
+        dc.w 7,9 
+        dc.w 3
+        dc.l .slider1gr,0,0,0,.slider1s
+        dc.w 0 ; id
+        dc.l 0
+.slider1gr        dc.w 0,0,11,9,2
+        dc.l pslider2im
+        dc.b 3,0
+        dc.l 0
+.slider1s        dc.w 2,65535,0,0,0
+        dc.w 0,0,0,0,0,0
 
 
 *** Kick2.0+ window extension
