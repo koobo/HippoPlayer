@@ -1609,6 +1609,7 @@ pb_scope	=	13	; Replayer supports patternscope or quadscope
 pb_ahi		=	12
 pb_quadscopePoke =      11      ; Normal quadscope or EP poke interface
 pb_quadscopeUps	=  	10	; EP UPS interface
+pb_slidePos =   9    ; Position slider support
 pf_cont		=	1<<pb_cont
 pf_stop		=	1<<pb_stop
 pf_song		=	1<<pb_song
@@ -1624,7 +1625,7 @@ pf_scope	=	1<<pb_scope
 pf_ahi		=	1<<pb_ahi
 pf_quadscopeUps	=	1<<pb_quadscopeUps
 pf_quadscopePoke =	1<<pb_quadscopePoke
-
+pf_slidePos =   1<<pb_slidePos
 
 *********************************************************************************
 *
@@ -9213,13 +9214,11 @@ gadgetsup:
     dr  rlistmode3
     dr  rlistmode4
  endif
-    dr  rresizegadget
+    dr  .exit       * resize gadget
     dr  rpositionslider
 
 rpositionslider
-    DPRINT  "possi"
-rresizegadget
-    rts
+    jmp     positionSliderMoved
 
 * Print some text into the filebox
 ** a0 = teksti
@@ -19729,6 +19728,26 @@ lootaan_aika
 	popm	all
 .noerl
 
+    * Use mp3 position if possible
+    pushm    d0
+    moveq   #0,d1
+    cmp     #pt_sample,playertype(a5)
+    bne     .notSamplee
+    jsr     getMp3DurationInSeconds
+    * d0 = position
+    * d1 = total len
+    move.l  d0,d1
+.notSamplee
+    popm     d0
+
+	bsr	logo
+
+    tst.l   d1  * position in secs
+    beq     .notSecs
+    move.l  d1,d0
+    bra     .doSecs
+.notSecs
+
     ;add.l  #(59*60+12)*50,d0    * 59:12
     ;add.l   #9*60*60*50,d0        * +1h
 
@@ -19738,10 +19757,10 @@ lootaan_aika
 	moveq	#0,d0
 .ok
 
-	bsr	logo
 
 	divu	#50,d0
 	ext.l	d0
+.doSecs
     * d0 = total seconds
 
     moveq   #'0',d2
@@ -35466,7 +35485,7 @@ eagleFormats
 * Protracker
 ******************************************************************************
 
-p_protracker
+p_protracker:
 	jmp	.proinit(pc)
 	p_NOP
 	jmp	.provb(pc)
@@ -35482,7 +35501,7 @@ p_protracker
 	p_NOP
 	dc.w pt_prot 				* type
 .flags	
- dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopePoke
+ dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopePoke!pf_slidePos
 
 	dc.b	"Protracker",0
  even
@@ -41851,7 +41870,7 @@ p_multi:
 	jmp	.author(pc)
 	dc.w pt_multi
 .flags
- dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi!pf_quadscopePoke
+ dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi!pf_quadscopePoke!pf_slidePos
 	dc.b	"PS3M",0
 .itPath
 	dc.b	"impulse",0
@@ -42540,16 +42559,18 @@ p_sample:
 .name	dc.b	"                        ",0
  even
 
-               rsset    $20
-.s_init        rs.l     1
-.s_end         rs.l     1
-.s_stop        rs.l     1
-.s_cont        rs.l     1
-.s_vol         rs.l     1
-.s_ahiup       rs.l     1
-.s_ahinfo      rs.l     1
-.s_hasMp3Text  rs.l     1
-.s_getMp3Text  rs.l     1
+                   rsset    $20
+.s_init            rs.l     1
+.s_end             rs.l     1
+.s_stop            rs.l     1
+.s_cont            rs.l     1
+.s_vol             rs.l     1
+.s_ahiup           rs.l     1
+.s_ahinfo          rs.l     1
+.s_hasMp3Text      rs.l     1
+.s_getMp3Text      rs.l     1
+.s_getMp3Duration  rs.l     1    
+.s_mp3Seek         rs.l     1
 
 
 .init:
@@ -42631,7 +42652,7 @@ p_sample:
     beq     .notRemote
     pushm   d0-d7/a1-a6
     * If stream is alive, startStreaming will just return the pipe path
-    bsr     streamIsAlive
+    jsr     streamIsAlive
     bne     .alive
     DPRINT  "stream not alive"
     * If stream is not alive, a valid url should be provided.
@@ -42729,7 +42750,9 @@ p_sample:
     DPRINT  "Disable end detect"
 .notRadio
 
-
+    ; -------------------------------------
+    ; Finished
+    ; -------------------------------------
     DPRINT  "sample init ok"
  	moveq	#0,d0
     rts
@@ -42815,52 +42838,6 @@ id_mp3
 	bra.b	.yepID3v2
 .not
 
-	* Find MPEG sync word
-	* This is very unreliable in the sense that many other formats
-	* will be recognized as MPEG streams. Let's not do it.
-
- REM ;;;;
-;#define SYNC_VALID( v ) ( ((v & 0xFFE00000) == 0xFFE00000) &&\
-;                          ((v & 0x00060000) != 0x00000000) &&\
-;                          ((v & 0xF000) != 0xF000) &&\
-;                          ((v & 0xF000) != 0x0000) &&\
-;                          ((v & 0x0C00) != 0x0C00) )
-	move	#PROBE_BUFFER_LEN-4-1,d1
-	move.l	a0,a1
-.loop
-	move.b	(a1)+,d2
-	lsl.l	#8,d2
-	move.b	(a1),d2
-	lsl.l	#8,d2
-	move.b	1(a1),d2
-	lsl.l	#8,d2
-	move.b	2(a1),d2
-	
-	move.l	d2,d3
-	and.l	#$FFE00000,d3
-	cmp.l	#$FFE00000,d3
-	bne.b	.next
-
-	move.l	d2,d3
-	and.l	#$00060000,d3
-	beq.b	.next
-
-	move.l	d2,d3
-	and.l	#$F000,d3
-	cmp.w	#$F000,d3
-	beq.b	.next
-
-	move.l	d2,d3
-	and.l	#$F000,d3
-	beq.b	.next
-	
-	move.l	d2,d3
-	and.l	#$0C00,d3
-	cmp.w	#$0C00,d3
-	bne.b	.yepSyncWord
-.next
-	dbf	d1,.loop
- EREM ;;;;;;;;;
 .nope
 	moveq	#-1,d0
 	rts
@@ -42963,6 +42940,27 @@ getSampleDataAdd:
     bne     .1
     add.l   d0,d0
 .1  rts
+
+* In: 
+*  d0 = position in secs
+pleaseMp3Seek:
+    push    a5
+    move.l	sampleroutines(a5),a0
+    jsr     p_sample\.s_mp3Seek(a0)
+    pop     a5
+    rts
+
+getMp3DurationInSeconds:
+    moveq   #0,d0
+    moveq   #0,d1
+    tst.b   playing(a5)
+    beq     .x
+    push    a5
+    move.l	sampleroutines(a5),a0
+    jsr     p_sample\.s_getMp3Duration(a0)
+    pop     a5
+.x
+    rts
 
 
 ******************************************************************************
@@ -55039,7 +55037,74 @@ utf8ToLatin1Char:
 *
 ***************************************************************************
 
+* User has moved the slider
+positionSliderMoved:
+    * Reset knobhit after the user has released the button
+    * so it can be again automatically updated below.
+    lea     gadgetPositionSlider,a2
+    move.l	gg_SpecialInfo(a2),a0
+    and     #~KNOBHIT,pi_Flags(a0)
 
+    tst.b   playing(a5)
+    beq     .x
+
+    cmp     #pt_sample,playertype(a5)
+    bne     .notSample
+    jsr     getMp3DurationInSeconds
+    * d0 = pos
+    * d1 = len
+    move.l  d1,d0
+
+    * a2 = gadget
+	jsr	nappilasku
+    * d0 = position in secs
+    DPRINT  "mp3 position=%ld"
+    jmp pleaseMp3Seek
+
+.notSample
+
+    move    pos_maksimi(a5),d0
+    subq    #1,d0
+    bmi     .x
+    beq     .x
+
+    * a2 = gadget
+	jsr	nappilasku
+
+    cmp     pos_nykyinen(a5),d0
+    beq     .x
+    DPRINT  "Selected pos=%ld"
+
+    sub     pos_nykyinen(a5),d0
+    bpl     .forward
+    neg     d0
+    DPRINT  "backward %ld"
+    * Prevent detecting songend
+    st      kelattiintaakse(a5)
+.l1
+    push    d0
+    move.l  playerbase(a5),a0
+    jsr     p_taakse(a0)
+    pop     d0
+    subq    #1,d0
+    bne     .l1
+
+.x
+
+	rts
+
+.forward
+    DPRINT  "forward %ld"
+.l2
+    push    d0
+    move.l  playerbase(a5),a0
+    jsr     p_eteen(a0)
+    pop     d0
+    subq    #1,d0
+    bne     .l2
+    rts
+
+* Update slider position based on current status
 refreshPositionSlider:
     
     DPRINT  "refreshPositionSlider"
@@ -55047,23 +55112,42 @@ refreshPositionSlider:
     tst.b   playing(a5)
     bne     .enable
 .disable
-    DPRINT  "disable"
     move.l  a3,a0
     jmp     disableGadget
 .enable
+    
+    * Mp3 special case:
+
+    cmp     #pt_sample,playertype(a5)
+    bne     .notSample
+    jsr     getMp3DurationInSeconds
+    * d0 = position
+    * d1 = length
+    tst.l   d1
+    beq     .notSample
+
+    move.l  a3,a0
+    pushm   d0/d1
+    jsr     enableButton
+    popm    d1/d2
+
+    mulu    #65535,d1
+    divu    d2,d1
+    bra     .setProp
+
+.notSample
     move.l  playerbase(a5),a1
     move    p_liput(a1),d0
-    and     #pf_kelaus,d0
-    cmp     #pf_kelaus,d0
+    move    d0,d1
+    and     #pf_slidePos,d1
+    beq     .disable
+    move    d0,d1
+    and     #pf_kelaus,d1
+    cmp     #pf_kelaus,d1
     bne     .disable
     move.l  a3,a0
     jsr     enableButton
 
-    * a0 = gadget
-    move.l  a3,a0
-    move.l	gg_SpecialInfo(a0),a1
-    * d0 = Flags
-    move	pi_Flags(a1),d0
     * d1 = HorizPot
     moveq   #0,d1
     move    pos_maksimi(a5),d2
@@ -55074,6 +55158,17 @@ refreshPositionSlider:
     mulu    #65535,d1
     divu    d2,d1
 .z
+
+.setProp
+    * a0 = gadget
+    move.l  a3,a0
+    move.l	gg_SpecialInfo(a0),a1
+    * d0 = Flags
+    move	pi_Flags(a1),d0
+    move    d0,d5
+    * see if user has fondling the knob
+    and     #KNOBHIT,d5
+    bne     .hit
 
     * d2 = VertPot
     moveq   #0,d2
@@ -55094,6 +55189,9 @@ refreshPositionSlider:
 .noChange
     rts
 
+.hit
+    DPRINT  "knob hit!"
+    rts
 
 ***************************************************************************
 *
