@@ -37793,7 +37793,7 @@ p_soundmon
 	jmp .id_soundmon(pc)
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke!pf_slidePos
 	dc.b	"BP SoundMon v2.0",0
  even
 
@@ -37896,7 +37896,7 @@ p_soundmon3
 	jmp 	.id_soundmon3(pc)
 	jmp	bp_author(pc)
 	dc.w 	pt_soundmon3 	* type
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke!pf_slidePos
 	dc.b	"BP SoundMon 3 (v2.2)",0
  even
 
