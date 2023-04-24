@@ -55078,10 +55078,30 @@ positionSliderMoved:
     bne     .yes
     rts
 .yes
-    * Reset knobhit after the user has released the button
-    * so it can be again automatically updated below.
+;    DPRINT  "positionSliderMoved"
     lea     gadgetPositionSlider,a2
     move.l	gg_SpecialInfo(a2),a0
+
+    move.w  pi_Flags(a0),d0
+    and.w   #KNOBHIT,d0
+    bne     .knob
+
+    * User clicked elsewhere, not the knob
+    move    mousex(a5),d1
+    sub     gg_LeftEdge(a2),d1
+    mulu    #$ffff,d1
+    divu    gg_Width(a2),d1
+
+    * Move knob to the clicked position
+    move.l  a2,a3
+    push    a2
+    bsr     refreshPositionSlider\.setProp
+    pop     a2
+
+.knob
+    * User dragged the knob
+    * Reset knobhit after the user has released the button
+    * so it can be again automatically updated below.
     and     #~KNOBHIT,pi_Flags(a0)
 
     tst.b   playing(a5)
@@ -56730,11 +56750,13 @@ gAD1s	dc.w 5,65535,0,0,0
 
 gadgetPositionSlider
         dc.l 0 ; next
+        * left, top:
         dc.w 9,50
-        dc.w 54,12
         * width, height:
-        dc.w 7,9 
-        dc.w 3
+        dc.w 54,12
+        dc.w 7      * gg_Flags
+        dc.w GACT_RELVERIFY * gg_Activation
+        dc.w 3      * gg_GadgetType
         dc.l .slider1gr,0,0,0,.slider1s
         dc.w 0 ; id
         dc.l 0
