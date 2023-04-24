@@ -325,6 +325,8 @@ mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
 
 mainTask    rs.l    1
 
+mp3DurationInMs rs.l    1
+mp3PositionInMs rs.l    1   
 
  if DEBUG
 output			rs.l 	1
@@ -1756,9 +1758,9 @@ init:
 .t3	dc.b	"RIFF WAVE",0
 .t4	dc.b	"MP",0
 .form	dc.b	"%s %ld-bit %lc %2ldkHz",0
-.form2	dc.b	"MP%ld %ldkB %lc %2ldkHz %ld-bit",0
-.form3	dc.b	"MP%ld %ldkB %lc %2ldkHz AHI",0
-.form4	dc.b	"MP%ld %ldkB %lc %2ldkHz MHI",0
+.form2	dc.b	"MP%ld %ldkb %lc %2ldkHz %ld-bit",0
+.form3	dc.b	"MP%ld %ldkb %lc %2ldkHz AHI",0
+.form4	dc.b	"MP%ld %ldkb %lc %2ldkHz MHI",0
 
 .pn	dc.b	"HiP-Sample",0
  even
