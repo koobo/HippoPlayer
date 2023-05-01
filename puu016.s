@@ -55094,9 +55094,9 @@ positionSliderMoved:
 
     * Move knob to the clicked position
     move.l  a2,a3
-    push    a2
+    pushm   a0/a2
     bsr     refreshPositionSlider\.setProp
-    pop     a2
+    popm    a0/a2
 
 .knob
     * User dragged the knob
@@ -55110,6 +55110,8 @@ positionSliderMoved:
     cmp     #pt_sample,playertype(a5)
     bne     .notSample
     jsr     getMp3DurationInSeconds
+    tst.l   d1
+    beq     .notSample
     * d0 = pos
     * d1 = len
     move.l  d1,d0

@@ -4306,7 +4306,7 @@ initsamplecyber
 
 * Checks if mp3 can be seeked 
 isLocalMp3:
-    cmp.b   #4,sampleformat(a5)
+    tst.b   mplippu(a5)
     beq     .x
     bsr     isRemoteSample
     bne     .x
