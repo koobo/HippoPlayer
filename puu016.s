@@ -4508,7 +4508,8 @@ avaa_ikkuna:
 	bne.b	.set
 	move	#264,d0		* default width
 	move	d0,winstruc+nw_MinWidth(a0)
-	add	d0,d0
+    * set maxwidth to 4x original
+    lsl     #2,d0
 	move	d0,winstruc+nw_MaxWidth(a0)
 .set
 	endb	a0
