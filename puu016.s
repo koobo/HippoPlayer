@@ -242,13 +242,8 @@ check	macro
 	include	libraries/reqtools_lib.i
 	include	libraries/xpk.i
 	include	libraries/xpkmaster_lib.i
-  ifd __VASM
 	include	playsid.library/playsidbase.i
 	include	playsid.library/playsid_lib.i
-  else
-	include	libraries/playsidbase.i
-	include	libraries/playsid_lib.i
-  endif
 	include	libraries/xfdmaster_lib.i
 	include	libraries/xfdmaster.i
 	include	libraries/screennotify_lib.i
@@ -7012,7 +7007,7 @@ buttonspressed:
 	move.l	a2,a0
 	add	(a2)+,a0
 	move.l	(a2)+,a1
-	bsr.b	.rightButtonDownCheck
+	bsr 	.rightButtonDownCheck
 	beq.b	.handled
 	tst.w	(a2) 
 	bne.b	.actionLoop
@@ -7059,7 +7054,7 @@ buttonspressed:
 
 	* mouse not on top of info box, try marking files
 
-.x	bsr	markline		* merkit‰‰n modulenimi
+.x	jsr	markline		* merkit‰‰n modulenimi
 	rts
 
 .yea
@@ -21304,7 +21299,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d1,d0
 .ok
 	lsl.l	#8,d0
-	bsr	divu_32
+	jsr	divu_32
  	
 	move.l	d0,d1
 	move.l	#65535<<8,d0
@@ -31438,7 +31433,7 @@ tutki_moduuli2:
 	bsr	id_thx_
 	tst.l	d0
 	beq 	.goPublic
-	bsr	id_pretracker_
+	jsr	id_pretracker_
 	tst.l	d0
 	beq 	.goPublic
 	bsr	id_mline
@@ -40100,7 +40095,7 @@ p_mon	jmp	.moninit(pc)
 
 .monsong
 	bsr	clearsound
-	bra.b	.init
+	bra	.init
 
 
 .id_maniacsofnoise
@@ -45200,7 +45195,7 @@ p_startrekker
 	bsr.b	.id_
 	bne.b 	.nok
 	moveq	#20-1,d0
-	bsr	copyNameFromModule
+	jsr	copyNameFromModule
 	moveq	#0,d0	
 .nok	rts
 
@@ -55097,7 +55092,8 @@ positionSliderMoved:
     move.l  a2,a3
     pushm   a0/a2
     bsr     refreshPositionSlider\.setProp
-    popm    a0/a2
+    movem.l  (sp)+,a0/a2 ; AsmOne
+    ;popm    a0/a2
 
 .knob
     * User dragged the knob
