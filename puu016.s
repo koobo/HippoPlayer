@@ -55145,7 +55145,8 @@ refreshPositionSlider:
     * a2 = requester
     sub.l   a2,a2
 
-    cmp     pi_HorizPot(a1),d1
+    move.l	gg_SpecialInfo(a3),a4
+    cmp     pi_HorizPot(a4),d1
     beq     .noChange
     lore    Intui,NewModifyProp
 .noChange
