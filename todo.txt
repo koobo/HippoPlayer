@@ -1,4 +1,13 @@
 TODO:
+- soundfx: check this identifier, crash?
+
+FIXED: TODO
+- position slider: flashing on kick1.3 while playing
+
+FIXED: TODO
+- position slider not moving if only showing: module name or freemem in titlebar
+
+TODO:
 - zip window, zip back: pr -button missing
 - related to the new position slider, it messes up the gadgets list
 
