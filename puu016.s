@@ -5196,6 +5196,8 @@ wrender:
 
     ; ---------------------------------
     ; Position slider
+    tst.b   showPositionSlider(a5)
+    beq     .noPosSl
     move    buttonRow1TopEdge(a5),ply1
     sub     #12+2,ply1
     move    ply1,ply2
@@ -5207,6 +5209,7 @@ wrender:
 
 	move.l	rastport(a5),a1
 	jsr 	sliderlaatikko
+.noPosSl
     ; ---------------------------------
 
 ;.nelq
@@ -6562,7 +6565,7 @@ sliderlaatikko:
 	addq	#1,d1
 	move	plx2,d2
 	move	ply2,d3
-	bsr.b	drawli
+	bsr 	drawli
 
 	move	plx2,d0
 	move	ply2,d1
