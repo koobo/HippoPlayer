@@ -2865,7 +2865,10 @@ main:
 	addq	#3,gg_Height(a0)
 	addq	#1,gg_Width(a0)
 	move.l	#slimage2,gg_GadgetRender(a0) 	* moduleinfo-slideriin image
-	
+
+    * Remove position slider from the list by default, at this point
+    * it will have the correct gg_GadgetID by the init loop above.
+    clr.l   gg_NextGadget+gadgetResize
 	
 	* Gadget stuff done.
 
@@ -4438,6 +4441,7 @@ zipwindow:
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,RemoveGList
+    
     jsr     switchToNormalLayoutNoRefresh
 	DPRINT	"small"
 	bra.b	.x
@@ -5127,13 +5131,6 @@ wrender:
 	* Insert an invisible size gadget last
 	bsr	configResizeGadget
 
-    lea     gadgetResize,a0
-    clr.l   gg_NextGadget(a0)
-    tst.b   showPositionSlider(a5)
-    beq     .noPos
-    move.l  #gadgetPositionSlider,gg_NextGadget(a0)
-.noPos
-
 * sitten isket‰‰n gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
 	move.l	a4,a1
@@ -5141,11 +5138,30 @@ wrender:
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-.skip
+
+    ; Position slider handling:
+
+    lea     gadgetPositionSlider,a1
+    move.l	windowbase(a5),a0
+	lob     RemoveGadget
+    DPRINT  "RemoveGadget=%ld"
+
+    tst.b   showPositionSlider(a5)
+    beq     .noPos
+    lea     gadgetPositionSlider,a1
+    move.l	windowbase(a5),a0
+    moveq   #-1,d0  * add as last
+    lob     AddGadget
+    DPRINT  "AddGadget=%ld"
+.noPos
+
+
 	move.l	a4,a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	lore    Intui,RefreshGadgets
+
+
 
 	tst.b	uusikick(a5)
 	bne.b	.newK
@@ -55069,10 +55085,15 @@ positionSliderMoved:
 refreshPositionSlider:  
     tst.b   showPositionSlider(a5)
     bne     .yes
+.no
     rts
-.yes
+.yes    
+    * Zipped window?
+    tst.b   kokolippu(a5)
+	beq.b   .no
+
+;    DPRINT  "refreshPositionSlider"
     
-    ;DPRINT  "refreshPositionSlider"
     lea     gadgetPositionSlider,a3
     tst.b   playing(a5)
     bne     .enable
