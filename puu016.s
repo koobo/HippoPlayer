@@ -550,9 +550,6 @@ _LayersBase rs.l 1
 output		rs.l	1
  endc
 
-sidlibstore1	rs.l	2		* pSid kick13 patchin varasto
-sidlibstore2	rs.l	2
-
 owntask		rs.l	1
 lockhere	rs.l	1		* currentdir-lock
 homelock	rs.l 	1		* homedir-lock (V36)
@@ -31201,7 +31198,7 @@ get_sid:
 	move.l	(sp)+,a6
 	move.l	d0,_SIDBase(a5)
 	beq.b	.q
- if DEBUG
+    
     move.l  d0,a0
     moveq   #0,d0
     moveq   #0,d1
@@ -31209,10 +31206,18 @@ get_sid:
     move.w  LIB_REVISION(a0),d1
     move.l  LIB_IDSTRING(a0),d2
     DPRINT  "Opened playsid: %ld.%ld - %s"
- endif
+    cmp.w   #1,d0
+    blo     .fail
+    cmp.w   #2,d1
+    blo     .fail
+
 	bsr	init_sidpatch
 	moveq	#1,d0
 .q	rts
+
+.fail
+    moveq   #0,d0
+    rts
 
 get_xfd
 	move.l	_XFDBase(a5),d0
@@ -36966,148 +36971,41 @@ sid_getSongSpeed:
     mulu    #10,d1
     rts
 
-*** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
-
-
 rem_sidpatch
-	move.l	(a5),a0
-    * Patch for kick1.3 and lib version 1.1
-	cmp	#34,LIB_VERSION(a0)
-	bhi.b	.q
-	move.l	_SIDBase(a5),a6
-	cmp	#1,LIB_VERSION(a6)
-	bne.b	.q
-	cmp	#1,LIB_REVISION(a6)
-	bne.b	.q
-	move.l	_LVOStartSong+2(a6),a4
-	move.l	12714+2(a4),a0
-	move.l	12714+2+6(a4),a1
-	move.l	sidlibstore2(a5),86(a0)
-	move.l	sidlibstore2+4(a5),4+86(a0)
-	move.l	sidlibstore1(a5),14(a1)
-	move.l	sidlibstore1+4(a5),4+14(a1)
-	bsr	clearCpuCaches
-.q	
-	bsr	sid_remVolumePatch
-	rts
+    move.l  (a5),a0
+    cmp     #34,LIB_VERSION(a0)
+    bls     sid_remVolumePatch
+    rts
 
 init_sidpatch
-	move.l	(a5),a0
-	cmp	#34,LIB_VERSION(a0)
-	bhi.b	.q
-	move.l	_SIDBase(a5),a6
-	cmp	#1,LIB_VERSION(a6)
-	bne.b	.q
-	cmp	#1,LIB_REVISION(a6)
-	bne.b	.q
+    move.l  (a5),a0
+    cmp     #34,LIB_VERSION(a0)
+    bls     sid_addVolumePatch
+    rts
 
-	move.l	_LVOStartSong+2(a6),a4
-	move.l	12714+2(a4),a0
-	move.l	12714+2+6(a4),a1
-
-* a1+14
-*	move.l	4.w,a6		* ei saa tuhota
-*	jsr	-$29a(a6)	* saa tuhota
-
-* a0+86 
-*	move.l	4.w,a6		* saa tuhota
-*	jsr	-$2a0(a6)	* saa tuhota
-
-	move.l	14(a1),sidlibstore1(a5)
-	move.l	4+14(a1),sidlibstore1+4(a5)
-	move.l	86(a0),sidlibstore2(a5)
-	move.l	4+86(a0),sidlibstore2+4(a5)
-
-	move.l	.sidp1(pc),14(a1)
-	move.l	.sidp1+4(pc),4+14(a1)
-	move.l	.sidp2(pc),86(a0)
-	move.l	.sidp2+4(pc),4+86(a0)
-	bsr	clearCpuCaches
-.q
-	bsr	sid_addVolumePatch
-	rts
-
-.sidp1	
-	dc.w	$4eb9 ; jsr
-	dc.l	.sidpatch1
-	nop
-.sidp2
-	dc.w	$4eb9 ; jsr
-	dc.l	.sidpatch1
-	nop
-
-.sidpatch1
-	move.l	4.w,a6
-
-* -$29a	CreateMsgPort
-.LB_090C MOVEQ	#$22,D0
- 	MOVE.L	#$00010001,D1
-	JSR	-$00C6(A6)
-	MOVE.L	D0,-(A7)
-	BEQ.B	.LB_094A
-	MOVEQ	#-$01,D0
-	JSR	-$014A(A6)
-	MOVE.L	(A7),A0
-	MOVE.B	#$04,$0008(A0)
-;	MOVE.B	#$00,$000E(A0)
-	clr.b	$e(a0)
-	MOVE.B	D0,$000F(A0)
-	BMI.B	.LB_094E
-	MOVE.L	$0114(A6),$0010(A0)
-	LEA	$0014(A0),A1
-	MOVE.L	A1,$0008(A1)
-	ADDQ.L	#4,A1
-	CLR.L	(A1)
-	MOVE.L	A1,-(A1)
-.LB_094A MOVE.L	(A7)+,D0
-	RTS	
-.LB_094E MOVEQ	#$22,D0
-	MOVE.L	A0,A1
-	JSR	-$00D2(A6)
-	CLR.L	(A7)
-	BRA.B	.LB_094A
-
-
-.sidpatch2
-	move.l	4.w,a6
-
-* -$2a0	DeleteMsgPort
-.LB_095A mOVE.L	A0,-(A7)
-	BEQ.B	.LB_0978
-	MOVEQ	#$00,D0
-	MOVE.B	$000F(A0),D0
-	JSR	-$0150(A6)
-	MOVE.L	(A7),A1
-	MOVEQ	#-$01,D0
-	MOVE.L	D0,$0014(A1)
-	MOVE.L	D0,(A1)
-	MOVEQ	#$22,D0
-	JSR	-$00D2(A6)
-.LB_0978 ADDQ.L	#4,A7
-	RTS	
-
-
-
-; AllocEmulResource funkkarin osoitteesta:
-; 8418: move d0,$dff0a8
-;  +12: move d0,$dff0b8
-;  +12: move d0,$dff0c8
 
 sid_addVolumePatch
+    DPRINT  "sid_addVolumePatch"
+
 	move.l	_SIDBase(a5),a0
 	cmp #1,LIB_VERSION(a0)
 	bne.b	.q
-	cmp	#1,LIB_REVISION(a0)
+	cmp	#2,LIB_REVISION(a0)
 	bne.b	.q
 	lea	_LVOAllocEmulResource(a0),a0
 	move.l	2(a0),a0
-	
-	move	#$4eb9,8418(a0) ; jsr
-	pushpea .setVol1(pc),8418+2(a0)
-	move	#$4eb9,12+8418(a0)
-	pushpea .setVol2(pc),12+8418+2(a0)
-	move	#$4eb9,12+12+8418(a0)
-	pushpea .setVol3(pc),12+12+8418+2(a0)
+
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "hax address=%lx"
+ endif
+   
+	move	#$4eb9,8556(a0) ; jsr
+	pushpea .setVol1(pc),8556+2(a0)
+	move	#$4eb9,12+8556(a0)
+	pushpea .setVol2(pc),12+8556+2(a0)
+	move	#$4eb9,12+12+8556(a0)
+	pushpea .setVol3(pc),12+12+8556+2(a0)
 .q
 	rts
 
@@ -37143,19 +37041,21 @@ sid_addVolumePatch
 
 
 sid_remVolumePatch
+    DPRINT  "sid_remVolumePatch"
+
 	move.l	_SIDBase(a5),a0
 	cmp #1,LIB_VERSION(a0)
 	bne.b	.q
-	cmp	#1,LIB_REVISION(a0)
+	cmp	#2,LIB_REVISION(a0)
 	bne.b	.q
 	lea	_LVOAllocEmulResource(a0),a0
 	move.l	2(a0),a0
-	move	.vol1orig(pc),8418(a0)
-	move.l	.vol1orig+2(pc),8418+2(a0)
-	move	.vol2orig(pc),12+8418(a0)
-	move.l	.vol2orig+2(pc),12+8418+2(a0)
-	move	.vol3orig(pc),12+12+8418(a0)
-	move.l	.vol3orig+2(pc),12+12+8418+2(a0)
+	move	.vol1orig(pc),8556(a0)
+	move.l	.vol1orig+2(pc),8556+2(a0)
+	move	.vol2orig(pc),12+8556(a0)
+	move.l	.vol2orig+2(pc),12+8556+2(a0)
+	move	.vol3orig(pc),12+12+8556(a0)
+	move.l	.vol3orig+2(pc),12+12+8556+2(a0)
 	bsr	clearCpuCaches
 .q
 	rts
