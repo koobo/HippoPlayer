@@ -42881,8 +42881,8 @@ pleaseMp3Seek:
 getMp3DurationInSeconds:
     moveq   #0,d0
     moveq   #0,d1
-    tst.b   playing(a5)
-    beq     .x
+    ;tst.b   playing(a5)
+    ;beq     .x
     push    a5
     move.l	sampleroutines(a5),a0
     jsr     p_sample\.s_getMp3Duration(a0)
