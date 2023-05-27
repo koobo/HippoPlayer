@@ -1,9 +1,26 @@
-WORKS: TODO:
-- check timeout, maybe broke due to the elapsed timer change
+TODO:
+- zip window, zip back: pr -button missing
+- related to the new position slider, it messes up the gadgets list
 
-FIXED: TODO:
-- check favsong storage: only store this if rmb clicked on an item that is being played
+TODO:
+- top box bottom frames are wrong 
 
+TODO:
+- For the crash with the combination of ML+IT files, add the two ML files, then
+  the two IT files, then play one of the two ML file, then select "it.Pulse...".
+  HiP should crash.
+- ML: adding a ML and a IT file and playing them one after the other crashes my
+Amiga with no MuForce hit that I could see.
+- MPx: playing MP2 or MP3 files causes a MuForce hit
+
+TODO:
+- DeliCustom tunes which load additional files with DOS functions
+-- DeliTracker custom/TSM in modland
+-- These do not work as that would require patching DOS functions
+
+TODO:
+- THX/AHX pattern scope sometimes displays an empty channel
+  where actual data should be displayed.
 
 TODO:
 - Here are two possible Gurus on a 68000 (emulated in WinUAE): On a "vanilla"
@@ -64,8 +81,51 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+FIXED: TODO:
+- mp3 paused: title bar shows wrong position (not from mpega)
 
 
+FIXED: TODO:
+ update xmaplay 
+ https://eab.abime.net/showpost.php?p=1587772&postcount=38
+
+
+FIXED: TODO:
+- fix playsid.library kickstart 1.3 crash issue
+-- play eject the same tune a few times -> audio channel alloc error -> crash
+
+FIXED: TODO:
+- when posslider visible, play wav -> crash
+
+
+FIXED: TODO:
+- test xmaplay seeking
+
+TODO:
+- test kick13
+
+FIXED: TODO:
+- seek by clicking the empty part
+
+FIXED: TODO:
+- mp3 file seeking
+
+FIXED: TODO:
+The one thing it doesn't do anymore is select a random module when loading a
+"HiPPrg" list of modules... I have the random mode set in the hippo preferences,
+but when a modules list is loaded with:
+- WORKS in 255, not in 256, 257
+
+-> BISECTED FIRST BAD:
+- ff07fa5e654891f6d711cd8c53f58fc3f2fde068
+  "WIP: browse recent playlists"
+
+
+WORKS: TODO:
+- check timeout, maybe broke due to the elapsed timer change
+
+FIXED: TODO:
+- check favsong storage: only store this if rmb clicked on an item that is being played
 
 
 FIXED: TODO:

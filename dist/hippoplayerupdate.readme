@@ -41,9 +41,10 @@ Quick overview of major changes since v2.45
   - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
   - "Enable xmaplay060": Enable a high quality XM replayer
   - "Enable MHI": Play MP3s with extenal hardware
+  - "Position slider": For displaying and selecting position
 - Resizable main and info windows
 - Main window font can be changed to any font
-- Support for many new music formats
+- Support for many new music formats, stereo SID support
 - Improved scopes: support for more music formats, multiple scopes,
   spectrum scope, patternscope with two sizes and up to 18 channels
 - Support for MP3 streaming, radio stations
@@ -59,6 +60,38 @@ New keyboard shortcuts:
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
+
+# Changes from from v2.57 (1.4.2023) to v2.58 (?.?.2023)
+
+## New fixes:
+
+- Starting with command line "HiP <module list file name>"
+  or with a "Startup" playlist and with random play mode always played the
+  first entry, not a random entry, fixed this.
+
+- Fix search view sometimes not showing the last two list items.
+
+- Increased the maximum width of the window, so it can resized more.
+
+- Loading with "XFDmaster library" was fixed already in the previous
+  version but I forgot to mention it in the last changelist.
+
+- Playsid on kickstart 1.3: playing PSIDs on kick 1.3 could 
+  crash previously. There is now a kick 1.3 specific playsid.library
+  included, which is the latest official original version
+  with some kick 1.3 specific fixes. Use the other included
+  library for newer kickstarts.
+
+## New features:
+
+- A new prefs option "Prefs/Play-1/Position slider" enables a 
+  slider in the main window which can be used to select the playing
+  position. This works for the most common module types supporting
+  pattern skipping, and also for local MP3 files.
+
+- Updated 8bitbubsy's xmaplay060 from version v0.41 to v0.46.
+
 
 
 # Changes from from v2.56 (15.2.2023) to v2.57 (1.4.2023) 
