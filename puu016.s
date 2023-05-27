@@ -4215,6 +4215,8 @@ handleUiRefreshSignal
 	jsr	lootaan_kello
 ;	bsr	lootaan_muisti
 	jsr	lootaan_nimi
+    jsr     refreshPositionSlider
+
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
 	;bsr	zipwindow
@@ -4233,6 +4235,7 @@ handleUiRefreshSignal
 
 handlePosUpdateSignal
 	* Update title bar with position information
+    jsr     refreshPositionSlider
 	jmp	lootaan_pos
 
 handleSignal2
@@ -19935,9 +19938,6 @@ lootaan_aika
 		
 
 	clr.b	(a0)
-
-    ; Final step: position slider
-    jsr     refreshPositionSlider
 
 	bra	lootaus
 
