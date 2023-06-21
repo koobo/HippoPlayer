@@ -7,11 +7,11 @@ FIXED: TODO
 FIXED: TODO
 - position slider not moving if only showing: module name or freemem in titlebar
 
-TODO:
+FIXED: TODO:
 - zip window, zip back: pr -button missing
 - related to the new position slider, it messes up the gadgets list
 
-TODO:
+FIXED: TODO:
 - top box bottom frames are wrong 
 
 TODO:

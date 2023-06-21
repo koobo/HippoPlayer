@@ -35,7 +35,8 @@ ver	macro
 ;	dc.b	"v2.56 (15.2.2023)"
 ;	dc.b	"v2.57฿ (?.?.2023)"
 ;	dc.b	"v2.57 (1.4.2023)"
-	dc.b	"v2.58฿ (?.?.2023)"
+;	dc.b	"v2.58฿ (?.?.2023)"
+	dc.b	"v2.58 (22.6.2023)"
 	endm	
 
  ifnd DEBUG
@@ -1545,7 +1546,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	29
+xpl_versio	=	30
 
 
 *********************************************************************************
@@ -2342,7 +2343,7 @@ about_t
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
  dc.b "ญญญ  HippoPlayer "
  ver
- dc.b "  " ; padding
+ dc.b " " ; padding
  dc.b " ญญญ",10,3
  dc.b "ญญ          by K-P Koljonen          ญญ",10,3
  dc.b "ญญญ       Hippopotamus Design       ญญญ",10,3
@@ -2362,17 +2363,7 @@ about_t1
  dc.b " Copyright ฉ 1994-2023 by K-P Koljonen",10,3
  dc.b "           *** FREEWARE ***",10,3
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
- ;dc.b "Snail mail: Kari-Pekka Koljonen",10,3
- ;dc.b "            Torikatu 31",10,3
- ;dc.b "            FIN-40900 Sไynไtsalo",10,3
- ;dc.b "            Finland",10,3
- ;dc.b 10,3
- ;dc.b "E-mail:     kpk@cc.tut.fi",10,3
-  dc.b "E-mail:     kpk@iki.fi",10,3
- ;dc.b "            k-p@s2.org",10,3
- ;dc.b 10,3
- ;dc.b "WWW:        www.students.tut.fi/~kpk",10,3
- ;dc.b "IRC:        K-P",10,3,10,3
+ dc.b "E-mail:     kpk@iki.fi",10,3
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
  dc.b "    Hippopothamos the river-horse",10,3
  dc.b "    Hippopotamus  amphibius:   a  large",10,3
