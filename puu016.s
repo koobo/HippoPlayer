@@ -55122,6 +55122,9 @@ refreshPositionSlider:
     and     #pf_kelaus,d1
     cmp     #pf_kelaus,d1
     bne     .disable
+    jsr     isImpulseTrackerActive  * IT special case
+    beq     .disable
+
     move.l  a3,a0
     jsr     enableButton
 
