@@ -62,7 +62,7 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 
 
-# Changes from from v2.57 (1.4.2023) to v2.58 (?.?.2023)
+# Changes from from v2.57 (1.4.2023) to v2.58 (22.6.2023)
 
 ## New fixes:
 
@@ -83,7 +83,7 @@ New keyboard shortcuts:
   included, which is the latest official original version with some kick 1.3
   specific fixes. Use the other included library for newer kickstarts.
 
-- AHI: Improved SB128 compatibility when stopping playback.
+- AHI: Improved SBLive compatibility when stopping playback.
 
 ## New features:
 
