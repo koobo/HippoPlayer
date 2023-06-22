@@ -1,6 +1,6 @@
 # Experimental makefile
 
-COMPRESS=shrinkler -w -p -d -9
+COMPRESS=../shrinkle.sh
 
 SOURCES=\
 	bin/activision\ pro \
@@ -86,7 +86,10 @@ COMPRESSED_TARGETS=\
 	shr/sound\ master.shr \
 	shr/soprol.shr
 
-all: $(COMPRESSED_TARGETS)
+all: shr $(COMPRESSED_TARGETS)
+
+shr:
+	mkdir -p shr
 
 clean:
 	rm -f $(COMPRESSED_TARGETS) 

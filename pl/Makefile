@@ -1,14 +1,14 @@
 # Experimental makefile
 
-INCLUDE=-I$(HOME)/A/Asm/Include -I.. -I../Include 
-ASM=~/Prj/vbcc/bin/vasmm68k_mot
+INCLUDE=-I.. -I../Include -I../sys-include
+ASM=../temp/vasm/vasmm68k_mot
 EXE=-m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 EXEopt=-m68000 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 EXE020=-m68020 -no-opt -kick1hunks -Fhunkexe -nosym -DTEST=0
 EXE020opt=-m68020 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 BIN=-m68000 -no-opt -Fbin -ldots -DTEST=0
 BINopt=-m68000 -Fbin -ldots -DTEST=0
-COMPRESS=shrinkler -w -p -d -9
+COMPRESS=../shrinkle.sh
 
 TARGETS=\
 	bin/Aon4 \
@@ -78,7 +78,10 @@ COMPRESSED_TARGETS=\
 	shr/pretracker.bin.shr \
 	shr/xmaplay060.shr
 
-all: $(COMPRESSED_TARGETS)
+all: shr $(COMPRESSED_TARGETS)
+
+shr:
+	mkdir -p shr
 
 # Turn logging on in PS3M and sampleplayer
 debug: EXE020 += -DDEBUG=1

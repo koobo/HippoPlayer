@@ -272,7 +272,7 @@ check	macro
 
 	incdir include/
 	include	mucro.i
-	include	med.i
+	include	MED.i
 	include	Guru.i
 	include	ps3m.i
 	include	patternInfo.i
@@ -34618,13 +34618,13 @@ createio
 * out:
 *   d0 = 1 success, 0 failure
 *******
+_return		equr	d5
+_fl_lock	equr	d6
+_fl_lock2	equr	d7
+_fib		equr	d4
 getNameFromLock:
 .true		equ	1
 .false		equ	0
-.return		equr	d5
-.fl_lock	equr	d6
-.fl_lock2	equr	d7
-.fib		equr	d4
 
 	tst.l 	d1
 	bne.b	.lockOk
@@ -34652,13 +34652,13 @@ getNameFromLock:
 .old
 
 	* Use this one as the working fib, probably fine.
-	pushpea	fileinfoblock2(a5),.fib
+	pushpea	fileinfoblock2(a5),_fib
 
 	* save start of output buffer to a3 for later
 	move.l	d2,a3	
 
 	* initial return code status: false
-	moveq	#.false,.return
+	moveq	#.false,_return
 
 	* clear output buffer
 	move.l	d3,d0			
@@ -34673,15 +34673,15 @@ getNameFromLock:
 
 	* First, copy the lock
 	lob 	DupLock
-	move.l	d0,.fl_lock
+	move.l	d0,_fl_lock
 .loop	
-	move.l	.fl_lock,d1
+	move.l	_fl_lock,d1
 	lob  	ParentDir
-	move.l	d0,.fl_lock2
+	move.l	d0,_fl_lock2
 	beq.b	.loopEnd
 
-	move.l	.fl_lock,d1
-	move.l	.fib,d2
+	move.l	_fl_lock,d1
+	move.l	_fib,d2
 	lob 	Examine
 	tst.l	d0
 	beq.b	.cleanup
@@ -34693,7 +34693,7 @@ getNameFromLock:
 	beq.b	.noSpace
 	move.b	#'/',-(a4)
 .noSep
-	move.l	.fib,a0
+	move.l	_fib,a0
 	lea	fib_FileName(a0),a0
 	move.l	a0,a1
 .findEnd
@@ -34708,10 +34708,10 @@ getNameFromLock:
 	bne.b	.copyPart
 	
 	* done with this lock, go looping
-	move.l	.fl_lock,d1
+	move.l	_fl_lock,d1
 	lob UnLock
 
-	move.l .fl_lock2,.fl_lock
+	move.l _fl_lock2,_fl_lock
 	bra.b	.loop
 .loopEnd
 	* next comes the name for the device
@@ -34720,7 +34720,7 @@ getNameFromLock:
 	move.b	#':',-(a4)
 
 	* Dig into the lock, first convert BPTR to APTR.
-	move.l	.fl_lock,a0
+	move.l	_fl_lock,a0
 	add.l	a0,a0 
 	add.l 	a0,a0
 	move.l 	fl_Volume(a0),a0
@@ -34758,14 +34758,14 @@ getNameFromLock:
 
 
 	* indicate success
-	moveq 	#.true,.return
+	moveq 	#.true,_return
 .noSpace
 .cleanup
-	move.l	.fl_lock,d1
+	move.l	_fl_lock,d1
 	lob UnLock
 	
 	* return status
-	move.l	.return,d0
+	move.l	_return,d0
  if DEBUG
 	bne.b	.ok 
 	DPRINT	"GetNameFromLock FAILED!"
@@ -48539,6 +48539,7 @@ id_xmaplay
 
 DELI_LIST_DATA_SLOTS = 64
 
+	IFND DTN_NoteStruct
  STRUCTURE DTN_NoteStruct,0
 	APTR	nst_Channels		;pointer to a list of notechannels */
 	ULONG	nst_Flags		;misc flags (see below) */
@@ -48546,8 +48547,9 @@ DELI_LIST_DATA_SLOTS = 64
 	UWORD	nst_MaxVolume		;max. volume of this player (in most cases 64) */
 	STRUCT	nst_Reserved,18		;reserved for future use (must be 0 for now) */
 	LABEL	DTN_NoteStruct_SIZEOF
+	ENDC
 
-
+	IFND DTN_NoteChannel
  STRUCTURE DTN_NoteChannel,0
 	APTR	nch_NextChannel		;next channel in the list (NULL if last) */
 	ULONG	nch_NotePlayer		;for use by the noteplayer (the deliplayer must ignore this) */
@@ -48564,8 +48566,9 @@ DELI_LIST_DATA_SLOTS = 64
 	UWORD	nch_Volume		;volume of sample */
 	STRUCT	nch_Reserved1,26	;reserved for future use (must be 0 for now) */
 	LABEL	DTN_NoteChannel_SIZEOF
+	ENDC
 
-
+	IFND NSTB_Dummy
 NSTB_Dummy	EQU	0	; only a dummy-NoteStruct (no NotePlayer
 				; needed)
 NSTF_Dummy	EQU	1<<0
@@ -48610,6 +48613,7 @@ NSTB_32Bit 	EQU	20	;        -"-        longwords
 NSTF_32Bit 	EQU	1<<20
 NSTB_64Bit 	EQU	21	;        -"-        quadwords 
 NSTF_64Bit 	EQU	1<<21
+	ENDC
 
 * Load player and initialize module
 * in:
@@ -55391,7 +55395,7 @@ kplayer		incbin	kpl
 * FImp decruncher code
 fimp_decr	incbin	fimp_dec.bin
 
-shr_decr	include	ShrinklerDecompress.s
+shr_decr	include	shrinklerdecompress.s
 
 * in:
 *    a4 = data

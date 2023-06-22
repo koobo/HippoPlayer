@@ -559,12 +559,12 @@ sampleplay2
     even
 
 aon41
-	incbin aon4.shr
+	incbin Aon4.shr
 aon42
     even
 
 aon81
-	incbin aon8.shr
+	incbin Aon8.shr
 aon82
     even
 
@@ -599,12 +599,12 @@ bendaglish2
     even
 
 sidmonv21
-	incbin sidmon_v2.shr
+	incbin SidMon_v2.shr
 sidmonv22
     even
 
 delta11 
-	incbin delta1.shr
+	incbin Delta1.shr
 delta12
     even
 
@@ -624,22 +624,22 @@ pretracker2
     even
 
 custommade1 
-	incbin custommade_v1.shr
+	incbin CustomMade_v1.shr
 custommade2 
     even
 
 sonicarranger1
-	incbin sonicarranger.shr
+	incbin SonicArranger.shr
 sonicarranger2
     even
 
 davelowe1
-	incbin davelowe.shr
+	incbin DaveLowe.shr
 davelowe2 
     even
 
 startrekker1 
-	incbin startrekker.shr
+	incbin StarTrekker.shr
 startrekker2
     even
 

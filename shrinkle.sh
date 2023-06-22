@@ -5,12 +5,13 @@ if [ -z "$1" ]
     exit 1
 fi
 
+SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 BASE=`basename "$1"`
 # -w: write header
 # -p: no progress
 # -d: data mode
 # -9: max compress
-shrinkler -w -p -d -9 "$1" "shr/$BASE.shr"
+$SCRIPTPATH/temp/Shrinkler-master/build/native/Shrinkler -w -p -d -9 "$1" "shr/$BASE.shr"
 
 # Older shrinkler needed manual header:
 #TMPFILE=`mktemp`

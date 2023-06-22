@@ -6,3 +6,6 @@
 *.BACKUP
 im
 shr
+download/
+temp/
+sys-include/
