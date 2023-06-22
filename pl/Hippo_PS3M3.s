@@ -1536,11 +1536,16 @@ ahi_end
 
 	move.l	ahibase(pc),d0
 	beq.b	.1
-	clr.l	ahibase
 	move.l	d0,a6
+
+    ; for safety stop playback first, SB128 reportedly crashes otherwise
+    clr.b   setpause
+    bsr     ahi_stopcont
+
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_FreeAudio(a6)
 	CLOSEAHI
+	clr.l	ahibase
 .1
     bsr     freePatternBuffers
 	rts

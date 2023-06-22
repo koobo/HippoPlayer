@@ -35,7 +35,9 @@ ver	macro
 ;	dc.b	"v2.56 (15.2.2023)"
 ;	dc.b	"v2.56 (19.2.2023)"
 ;	dc.b	"v2.57฿ (?.?.2023)"
-	dc.b	"v2.57 (1.4.2023)"
+;	dc.b	"v2.57 (1.4.2023)"
+;	dc.b	"v2.58฿ (?.?.2023)"
+	dc.b	"v2.58 (22.6.2023)"
 	endm	
 
  ifnd DEBUG
@@ -96,6 +98,10 @@ PLAYING_MODULE_NONE 	= -1	 	* needs to be negative
 PLAYING_MODULE_REMOVED	= $7fffffff	* needs to be positive
 MAX_MODULES		= $1ffff 		    * this should be enough!
 
+; Where boxsize(a5) used this is the amount that should
+; be first reduced from it if the bottom search layout
+; is active. That is, the bottom stuff takes two lines
+; out of the file list.
 SEARCH_BOXSIZE_DELTA = 2
 	
  ;ifne TARK
@@ -238,13 +244,8 @@ check	macro
 	include	libraries/reqtools_lib.i
 	include	libraries/xpk.i
 	include	libraries/xpkmaster_lib.i
-  ifd __VASM
 	include	playsid.library/playsidbase.i
 	include	playsid.library/playsid_lib.i
-  else
-	include	libraries/playsidbase.i
-	include	libraries/playsid_lib.i
-  endif
 	include	libraries/xfdmaster_lib.i
 	include	libraries/xfdmaster.i
 	include	libraries/screennotify_lib.i
@@ -411,7 +412,8 @@ prefs_mhiEnable       rs.b      1
 MHILIB_SIZE         =   40
 prefs_mhiLib          rs.b      MHILIB_SIZE
 prefs_medfastmemplay  rs.b     1
-                      ;rs.b     1 * pad to get even prefs_size
+prefs_showPositionSlider rs.b  1
+                       rs.b     1 * pad to get even prefs_size
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -549,9 +551,6 @@ _LayersBase rs.l 1
  ifne DEBUG
 output		rs.l	1
  endc
-
-sidlibstore1	rs.l	2		* pSid kick13 patchin varasto
-sidlibstore2	rs.l	2
 
 owntask		rs.l	1
 lockhere	rs.l	1		* currentdir-lock
@@ -1471,7 +1470,10 @@ streamHeaderIcyName         rs.l       1
 streamHeaderIcyDescription  rs.l       1
 streamHeaderRest            rs.l       1
 disableShowStreamerError    rs.b       1
-                            rs.b       1
+
+showPositionSlider_new      rs.b       1
+showPositionSlider          = prefsdata+prefs_showPositionSlider
+
 
 * Remote search popup stores the selected search mode here
 * SEARCH_MODLAND etc etc
@@ -1479,6 +1481,7 @@ selectedSearch = prefsdata+prefs_selectedSearch
 
 mhiEnable      = prefsdata+prefs_mhiEnable
 mhiLib         = prefsdata+prefs_mhiLib
+
 
 * Flags to indicate the bottom search layout state
 * Tested with .w!
@@ -1544,7 +1547,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	29
+xpl_versio	=	30
 
 
 *********************************************************************************
@@ -1605,6 +1608,7 @@ pb_scope	=	13	; Replayer supports patternscope or quadscope
 pb_ahi		=	12
 pb_quadscopePoke =      11      ; Normal quadscope or EP poke interface
 pb_quadscopeUps	=  	10	; EP UPS interface
+pb_slidePos =   9    ; Position slider support
 pf_cont		=	1<<pb_cont
 pf_stop		=	1<<pb_stop
 pf_song		=	1<<pb_song
@@ -1620,7 +1624,7 @@ pf_scope	=	1<<pb_scope
 pf_ahi		=	1<<pb_ahi
 pf_quadscopeUps	=	1<<pb_quadscopeUps
 pf_quadscopePoke =	1<<pb_quadscopePoke
-
+pf_slidePos =   1<<pb_slidePos
 
 *********************************************************************************
 *
@@ -2340,7 +2344,7 @@ about_t
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
  dc.b "ญญญ  HippoPlayer "
  ver
- dc.b "  " ; padding
+ dc.b " " ; padding
  dc.b " ญญญ",10,3
  dc.b "ญญ          by K-P Koljonen          ญญ",10,3
  dc.b "ญญญ       Hippopotamus Design       ญญญ",10,3
@@ -2360,17 +2364,7 @@ about_t1
  dc.b " Copyright ฉ 1994-2023 by K-P Koljonen",10,3
  dc.b "           *** FREEWARE ***",10,3
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
- ;dc.b "Snail mail: Kari-Pekka Koljonen",10,3
- ;dc.b "            Torikatu 31",10,3
- ;dc.b "            FIN-40900 Sไynไtsalo",10,3
- ;dc.b "            Finland",10,3
- ;dc.b 10,3
- ;dc.b "E-mail:     kpk@cc.tut.fi",10,3
-  dc.b "E-mail:     kpk@iki.fi",10,3
- ;dc.b "            k-p@s2.org",10,3
- ;dc.b 10,3
- ;dc.b "WWW:        www.students.tut.fi/~kpk",10,3
- ;dc.b "IRC:        K-P",10,3,10,3
+ dc.b "E-mail:     kpk@iki.fi",10,3
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
  dc.b "    Hippopothamos the river-horse",10,3
  dc.b "    Hippopotamus  amphibius:   a  large",10,3
@@ -2863,7 +2857,10 @@ main:
 	addq	#3,gg_Height(a0)
 	addq	#1,gg_Width(a0)
 	move.l	#slimage2,gg_GadgetRender(a0) 	* moduleinfo-slideriin image
-	
+
+    * Remove position slider from the list by default, at this point
+    * it will have the correct gg_GadgetID by the init loop above.
+    clr.l   gg_NextGadget+gadgetResize
 	
 	* Gadget stuff done.
 
@@ -4213,6 +4210,8 @@ handleUiRefreshSignal
 	jsr	lootaan_kello
 ;	bsr	lootaan_muisti
 	jsr	lootaan_nimi
+    jsr     refreshPositionSlider
+
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
 	;bsr	zipwindow
@@ -4231,6 +4230,7 @@ handleUiRefreshSignal
 
 handlePosUpdateSignal
 	* Update title bar with position information
+    jsr     refreshPositionSlider
 	jmp	lootaan_pos
 
 handleSignal2
@@ -4433,6 +4433,7 @@ zipwindow:
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,RemoveGList
+    
     jsr     switchToNormalLayoutNoRefresh
 	DPRINT	"small"
 	bra.b	.x
@@ -4498,7 +4499,8 @@ avaa_ikkuna:
 	bne.b	.set
 	move	#264,d0		* default width
 	move	d0,winstruc+nw_MinWidth(a0)
-	add	d0,d0
+    * set maxwidth to 4x original
+    lsl     #2,d0
 	move	d0,winstruc+nw_MaxWidth(a0)
 .set
 	endb	a0
@@ -5121,7 +5123,6 @@ wrender:
 	* Insert an invisible size gadget last
 	bsr	configResizeGadget
 
-
 * sitten isketไไn gadgetit ikkunaan..
 	move.l	windowbase(a5),a0
 	move.l	a4,a1
@@ -5129,11 +5130,30 @@ wrender:
 	moveq	#-1,d1
 	sub.l	a2,a2
 	lore	Intui,AddGList
-.skip
+
+    ; Position slider handling:
+
+    lea     gadgetPositionSlider,a1
+    move.l	windowbase(a5),a0
+	lob     RemoveGadget
+    DPRINT  "RemoveGadget=%ld"
+
+    tst.b   showPositionSlider(a5)
+    beq     .noPos
+    lea     gadgetPositionSlider,a1
+    move.l	windowbase(a5),a0
+    moveq   #-1,d0  * add as last
+    lob     AddGadget
+    DPRINT  "AddGadget=%ld"
+.noPos
+
+
 	move.l	a4,a0
 	move.l	windowbase(a5),a1
 	sub.l	a2,a2
 	lore    Intui,RefreshGadgets
+
+
 
 	tst.b	uusikick(a5)
 	bne.b	.newK
@@ -5180,6 +5200,25 @@ wrender:
 	addq	#1,ply2
 	move.l	rastport(a5),a1
 	bsr	sliderlaatikko
+
+
+    ; ---------------------------------
+    ; Position slider
+    tst.b   showPositionSlider(a5)
+    beq     .noPosSl
+    move    buttonRow1TopEdge(a5),ply1
+    sub     #12+2,ply1
+    move    ply1,ply2
+    add     #10+2,ply2
+
+	moveq	#5+WINX,plx1
+	move	WINSIZX(a5),plx2
+	subq	#8,plx2
+
+	move.l	rastport(a5),a1
+	jsr 	sliderlaatikko
+.noPosSl
+    ; ---------------------------------
 
 ;.nelq
 
@@ -6473,7 +6512,7 @@ drawli	cmp	d0,d2
 
 
 
-sliderlaatikko
+sliderlaatikko:
 ;	rts
 	
 	move.l	a1,a3
@@ -6534,7 +6573,7 @@ sliderlaatikko
 	addq	#1,d1
 	move	plx2,d2
 	move	ply2,d3
-	bsr.b	drawli
+	bsr 	drawli
 
 	move	plx2,d0
 	move	ply2,d1
@@ -6979,7 +7018,7 @@ buttonspressed:
 	move.l	a2,a0
 	add	(a2)+,a0
 	move.l	(a2)+,a1
-	bsr.b	.rightButtonDownCheck
+	bsr 	.rightButtonDownCheck
 	beq.b	.handled
 	tst.w	(a2) 
 	bne.b	.actionLoop
@@ -7026,7 +7065,7 @@ buttonspressed:
 
 	* mouse not on top of info box, try marking files
 
-.x	bsr	markline		* merkitไไn modulenimi
+.x	jsr	markline		* merkitไไn modulenimi
 	rts
 
 .yea
@@ -9193,6 +9232,11 @@ gadgetsup:
     dr  rlistmode3
     dr  rlistmode4
  endif
+    dr  .exit       * resize gadget
+    dr  .rpositionslider
+
+.rpositionslider
+    jmp     positionSliderMoved
 
 * Print some text into the filebox
 ** a0 = teksti
@@ -10329,6 +10373,13 @@ rslider4
 	move.l	modamount(a5),d1
 	moveq	#0,d2
 	move	boxsize(a5),d2
+
+    * Adjust accordingly if the bottom search layout is active
+    tst.w   searchLayoutActive(a5)     
+    beq.b   .lm1
+    subq    #SEARCH_BOXSIZE_DELTA,d2
+.lm1
+
 	sub.l	d2,d1
 	bpl.b	.e
 	moveq	#0,d1
@@ -13977,6 +14028,7 @@ prefs_code
 	move.b	savestate(a5),savestate_new(a5)
 	move.b	altbuttons(a5),altbuttons_new(a5)
 	move.b	mhiEnable(a5),mhiEnable_new(a5)
+	move.b	showPositionSlider(a5),showPositionSlider_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -14440,6 +14492,14 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	xmaplay_new(a5),xmaplay(a5)
 	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
+
+    move.b  showPositionSlider(a5),d0
+    move.b  showPositionSlider_new(a5),showPositionSlider(a5)
+    cmp.b   showPositionSlider(a5),d0
+    beq     .2
+	* magic! causes reopening of the main window:
+	clr	boxsize00(a5)
+.2
 
 	move.l	ahi_rate_new(a5),ahi_rate(a5)
 	move	ahi_mastervol_new(a5),ahi_mastervol(a5)
@@ -15127,6 +15187,7 @@ pupdate:				* Ikkuna pไivitys
 	bsr	ppgmode			* pgmode
 	bsr	ppgstat			* pgstatus
 	bsr	pdbf			* volume fade
+    bsr ppositionslider * posiion slider
 	bra 	.x
 
 .4	subq	#1,d0
@@ -15380,6 +15441,7 @@ gadgetsup2
 	dr	rvbtimer	* vblank timer
 	dr	rptmix		* pt norm/fast/ps3m
 	dr	rpbutton3	* pt tempo
+    dr  rpositionslider * position slider
 ;	dr	rpslider2	* tfmx rate
 ;	dr	rpslider2b	* samplebufsiz
 ;	dr	rpslider2c	* sampleforcerate
@@ -15868,6 +15930,16 @@ pupdate3
 	seq	d0
 	lea	pbutton3,a0
 	bra	tickaa
+
+** Position slider
+rpositionslider
+	not.b	showPositionSlider_new(a5)
+
+ppositionslider
+    move.b  showPositionSlider_new(a5),d0
+	lea	gadgetEnablePositionSlider,a0
+	bra	tickaa
+
 
 
 ** S3M moodit 1,2,3
@@ -19695,6 +19767,26 @@ lootaan_aika
 	popm	all
 .noerl
 
+    * Use mp3 position if possible
+    pushm    d0
+    moveq   #0,d1
+    cmp     #pt_sample,playertype(a5)
+    bne     .notSamplee
+    jsr     getMp3DurationInSeconds
+    * d0 = position
+    * d1 = total len
+    move.l  d0,d1
+.notSamplee
+    popm     d0
+
+	bsr	logo
+
+    tst.l   d1  * position in secs
+    beq     .notSecs
+    move.l  d1,d0
+    bra     .doSecs
+.notSecs
+
     ;add.l  #(59*60+12)*50,d0    * 59:12
     ;add.l   #9*60*60*50,d0        * +1h
 
@@ -19704,10 +19796,10 @@ lootaan_aika
 	moveq	#0,d0
 .ok
 
-	bsr	logo
 
 	divu	#50,d0
 	ext.l	d0
+.doSecs
     * d0 = total seconds
 
     moveq   #'0',d2
@@ -19857,7 +19949,9 @@ lootaan_aika
 		
 
 	clr.b	(a0)
+
 	bra	lootaus
+
 
 
 
@@ -21213,7 +21307,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d1,d0
 .ok
 	lsl.l	#8,d0
-	bsr	divu_32
+	jsr	divu_32
  	
 	move.l	d0,d1
 	move.l	#65535<<8,d0
@@ -29413,7 +29507,13 @@ loadmodule:
     * Send an event to start the playback later with the new
     * list contents. Fake the "play" key event.
 
+    * rawkey $44 = play
+    * rawkey $2b = play random
     move    #$44,rawkeyinput(a5)
+    cmp.b   #pm_random,playmode(a5)
+    bne     .noRnd
+    move    #$2b,rawkeyinput(a5)
+.noRnd
 	move.b	rawKeySignal(a5),d1
 	bsr 	signalit
 
@@ -31109,7 +31209,7 @@ get_sid:
 	move.l	(sp)+,a6
 	move.l	d0,_SIDBase(a5)
 	beq.b	.q
- if DEBUG
+    
     move.l  d0,a0
     moveq   #0,d0
     moveq   #0,d1
@@ -31117,10 +31217,18 @@ get_sid:
     move.w  LIB_REVISION(a0),d1
     move.l  LIB_IDSTRING(a0),d2
     DPRINT  "Opened playsid: %ld.%ld - %s"
- endif
+    cmp.w   #1,d0
+    blo     .fail
+    cmp.w   #2,d1
+    blo     .fail
+
 	bsr	init_sidpatch
 	moveq	#1,d0
 .q	rts
+
+.fail
+    moveq   #0,d0
+    rts
 
 get_xfd
 	move.l	_XFDBase(a5),d0
@@ -31341,7 +31449,7 @@ tutki_moduuli2:
 	bsr	id_thx_
 	tst.l	d0
 	beq 	.goPublic
-	bsr	id_pretracker_
+	jsr	id_pretracker_
 	tst.l	d0
 	beq 	.goPublic
 	bsr	id_mline
@@ -32400,11 +32508,9 @@ whag	tst.b	win(a5)
 * in:
 *   a3 = gadget
 drawButtonFrameMainWindow:
-	* File and volume sliders
-	cmp.l	#slider1,a3
-	beq.b	.x
-	cmp.l	#slider4,a3
-	beq.b	.x
+	* Skip file and volume sliders
+    cmp     #GTYP_PROPGADGET,gg_GadgetType(a3)
+    beq.b   .x
 	* Invisible resize gadget
 	cmp.l	#gadgetResize,a3
 	beq.b	.x
@@ -35423,7 +35529,7 @@ eagleFormats
 * Protracker
 ******************************************************************************
 
-p_protracker
+p_protracker:
 	jmp	.proinit(pc)
 	p_NOP
 	jmp	.provb(pc)
@@ -35439,7 +35545,7 @@ p_protracker
 	p_NOP
 	dc.w pt_prot 				* type
 .flags	
- dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopePoke
+ dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopePoke!pf_slidePos
 
 	dc.b	"Protracker",0
  even
@@ -36876,148 +36982,41 @@ sid_getSongSpeed:
     mulu    #10,d1
     rts
 
-*** Killeri viritys kick1.3:lle, jotta playsid.library toimisi
-
-
 rem_sidpatch
-	move.l	(a5),a0
-    * Patch for kick1.3 and lib version 1.1
-	cmp	#34,LIB_VERSION(a0)
-	bhi.b	.q
-	move.l	_SIDBase(a5),a6
-	cmp	#1,LIB_VERSION(a6)
-	bne.b	.q
-	cmp	#1,LIB_REVISION(a6)
-	bne.b	.q
-	move.l	_LVOStartSong+2(a6),a4
-	move.l	12714+2(a4),a0
-	move.l	12714+2+6(a4),a1
-	move.l	sidlibstore2(a5),86(a0)
-	move.l	sidlibstore2+4(a5),4+86(a0)
-	move.l	sidlibstore1(a5),14(a1)
-	move.l	sidlibstore1+4(a5),4+14(a1)
-	bsr	clearCpuCaches
-.q	
-	bsr	sid_remVolumePatch
-	rts
+    move.l  (a5),a0
+    cmp     #34,LIB_VERSION(a0)
+    bls     sid_remVolumePatch
+    rts
 
 init_sidpatch
-	move.l	(a5),a0
-	cmp	#34,LIB_VERSION(a0)
-	bhi.b	.q
-	move.l	_SIDBase(a5),a6
-	cmp	#1,LIB_VERSION(a6)
-	bne.b	.q
-	cmp	#1,LIB_REVISION(a6)
-	bne.b	.q
+    move.l  (a5),a0
+    cmp     #34,LIB_VERSION(a0)
+    bls     sid_addVolumePatch
+    rts
 
-	move.l	_LVOStartSong+2(a6),a4
-	move.l	12714+2(a4),a0
-	move.l	12714+2+6(a4),a1
-
-* a1+14
-*	move.l	4.w,a6		* ei saa tuhota
-*	jsr	-$29a(a6)	* saa tuhota
-
-* a0+86 
-*	move.l	4.w,a6		* saa tuhota
-*	jsr	-$2a0(a6)	* saa tuhota
-
-	move.l	14(a1),sidlibstore1(a5)
-	move.l	4+14(a1),sidlibstore1+4(a5)
-	move.l	86(a0),sidlibstore2(a5)
-	move.l	4+86(a0),sidlibstore2+4(a5)
-
-	move.l	.sidp1(pc),14(a1)
-	move.l	.sidp1+4(pc),4+14(a1)
-	move.l	.sidp2(pc),86(a0)
-	move.l	.sidp2+4(pc),4+86(a0)
-	bsr	clearCpuCaches
-.q
-	bsr	sid_addVolumePatch
-	rts
-
-.sidp1	
-	dc.w	$4eb9 ; jsr
-	dc.l	.sidpatch1
-	nop
-.sidp2
-	dc.w	$4eb9 ; jsr
-	dc.l	.sidpatch1
-	nop
-
-.sidpatch1
-	move.l	4.w,a6
-
-* -$29a	CreateMsgPort
-.LB_090C MOVEQ	#$22,D0
- 	MOVE.L	#$00010001,D1
-	JSR	-$00C6(A6)
-	MOVE.L	D0,-(A7)
-	BEQ.B	.LB_094A
-	MOVEQ	#-$01,D0
-	JSR	-$014A(A6)
-	MOVE.L	(A7),A0
-	MOVE.B	#$04,$0008(A0)
-;	MOVE.B	#$00,$000E(A0)
-	clr.b	$e(a0)
-	MOVE.B	D0,$000F(A0)
-	BMI.B	.LB_094E
-	MOVE.L	$0114(A6),$0010(A0)
-	LEA	$0014(A0),A1
-	MOVE.L	A1,$0008(A1)
-	ADDQ.L	#4,A1
-	CLR.L	(A1)
-	MOVE.L	A1,-(A1)
-.LB_094A MOVE.L	(A7)+,D0
-	RTS	
-.LB_094E MOVEQ	#$22,D0
-	MOVE.L	A0,A1
-	JSR	-$00D2(A6)
-	CLR.L	(A7)
-	BRA.B	.LB_094A
-
-
-.sidpatch2
-	move.l	4.w,a6
-
-* -$2a0	DeleteMsgPort
-.LB_095A mOVE.L	A0,-(A7)
-	BEQ.B	.LB_0978
-	MOVEQ	#$00,D0
-	MOVE.B	$000F(A0),D0
-	JSR	-$0150(A6)
-	MOVE.L	(A7),A1
-	MOVEQ	#-$01,D0
-	MOVE.L	D0,$0014(A1)
-	MOVE.L	D0,(A1)
-	MOVEQ	#$22,D0
-	JSR	-$00D2(A6)
-.LB_0978 ADDQ.L	#4,A7
-	RTS	
-
-
-
-; AllocEmulResource funkkarin osoitteesta:
-; 8418: move d0,$dff0a8
-;  +12: move d0,$dff0b8
-;  +12: move d0,$dff0c8
 
 sid_addVolumePatch
+    DPRINT  "sid_addVolumePatch"
+
 	move.l	_SIDBase(a5),a0
 	cmp #1,LIB_VERSION(a0)
 	bne.b	.q
-	cmp	#1,LIB_REVISION(a0)
+	cmp	#2,LIB_REVISION(a0)
 	bne.b	.q
 	lea	_LVOAllocEmulResource(a0),a0
 	move.l	2(a0),a0
-	
-	move	#$4eb9,8418(a0) ; jsr
-	pushpea .setVol1(pc),8418+2(a0)
-	move	#$4eb9,12+8418(a0)
-	pushpea .setVol2(pc),12+8418+2(a0)
-	move	#$4eb9,12+12+8418(a0)
-	pushpea .setVol3(pc),12+12+8418+2(a0)
+
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "hax address=%lx"
+ endif
+   
+	move	#$4eb9,8556(a0) ; jsr
+	pushpea .setVol1(pc),8556+2(a0)
+	move	#$4eb9,12+8556(a0)
+	pushpea .setVol2(pc),12+8556+2(a0)
+	move	#$4eb9,12+12+8556(a0)
+	pushpea .setVol3(pc),12+12+8556+2(a0)
 .q
 	rts
 
@@ -37053,19 +37052,21 @@ sid_addVolumePatch
 
 
 sid_remVolumePatch
+    DPRINT  "sid_remVolumePatch"
+
 	move.l	_SIDBase(a5),a0
 	cmp #1,LIB_VERSION(a0)
 	bne.b	.q
-	cmp	#1,LIB_REVISION(a0)
+	cmp	#2,LIB_REVISION(a0)
 	bne.b	.q
 	lea	_LVOAllocEmulResource(a0),a0
 	move.l	2(a0),a0
-	move	.vol1orig(pc),8418(a0)
-	move.l	.vol1orig+2(pc),8418+2(a0)
-	move	.vol2orig(pc),12+8418(a0)
-	move.l	.vol2orig+2(pc),12+8418+2(a0)
-	move	.vol3orig(pc),12+12+8418(a0)
-	move.l	.vol3orig+2(pc),12+12+8418+2(a0)
+	move	.vol1orig(pc),8556(a0)
+	move.l	.vol1orig+2(pc),8556+2(a0)
+	move	.vol2orig(pc),12+8556(a0)
+	move.l	.vol2orig+2(pc),12+8556+2(a0)
+	move	.vol3orig(pc),12+12+8556(a0)
+	move.l	.vol3orig+2(pc),12+12+8556+2(a0)
 	bsr	clearCpuCaches
 .q
 	rts
@@ -37699,7 +37700,7 @@ p_soundmon
 	jmp .id_soundmon(pc)
 	jmp	bp_author(pc)
 	dc.w pt_soundmon2
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke!pf_slidePos
 	dc.b	"BP SoundMon v2.0",0
  even
 
@@ -37802,7 +37803,7 @@ p_soundmon3
 	jmp 	.id_soundmon3(pc)
 	jmp	bp_author(pc)
 	dc.w 	pt_soundmon3 	* type
- 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke
+ 	dc pf_scope!pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_scope!pf_quadscopePoke!pf_slidePos
 	dc.b	"BP SoundMon 3 (v2.2)",0
  even
 
@@ -40005,7 +40006,7 @@ p_mon	jmp	.moninit(pc)
 
 .monsong
 	bsr	clearsound
-	bra.b	.init
+	bra	.init
 
 
 .id_maniacsofnoise
@@ -41808,7 +41809,7 @@ p_multi:
 	jmp	.author(pc)
 	dc.w pt_multi
 .flags
- dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi!pf_quadscopePoke
+ dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ahi!pf_quadscopePoke!pf_slidePos
 	dc.b	"PS3M",0
 .itPath
 	dc.b	"impulse",0
@@ -42497,16 +42498,18 @@ p_sample:
 .name	dc.b	"                        ",0
  even
 
-               rsset    $20
-.s_init        rs.l     1
-.s_end         rs.l     1
-.s_stop        rs.l     1
-.s_cont        rs.l     1
-.s_vol         rs.l     1
-.s_ahiup       rs.l     1
-.s_ahinfo      rs.l     1
-.s_hasMp3Text  rs.l     1
-.s_getMp3Text  rs.l     1
+                   rsset    $20
+.s_init            rs.l     1
+.s_end             rs.l     1
+.s_stop            rs.l     1
+.s_cont            rs.l     1
+.s_vol             rs.l     1
+.s_ahiup           rs.l     1
+.s_ahinfo          rs.l     1
+.s_hasMp3Text      rs.l     1
+.s_getMp3Text      rs.l     1
+.s_getMp3Duration  rs.l     1    
+.s_mp3Seek         rs.l     1
 
 
 .init:
@@ -42588,7 +42591,7 @@ p_sample:
     beq     .notRemote
     pushm   d0-d7/a1-a6
     * If stream is alive, startStreaming will just return the pipe path
-    bsr     streamIsAlive
+    jsr     streamIsAlive
     bne     .alive
     DPRINT  "stream not alive"
     * If stream is not alive, a valid url should be provided.
@@ -42686,7 +42689,9 @@ p_sample:
     DPRINT  "Disable end detect"
 .notRadio
 
-
+    ; -------------------------------------
+    ; Finished
+    ; -------------------------------------
     DPRINT  "sample init ok"
  	moveq	#0,d0
     rts
@@ -42772,52 +42777,6 @@ id_mp3
 	bra.b	.yepID3v2
 .not
 
-	* Find MPEG sync word
-	* This is very unreliable in the sense that many other formats
-	* will be recognized as MPEG streams. Let's not do it.
-
- REM ;;;;
-;#define SYNC_VALID( v ) ( ((v & 0xFFE00000) == 0xFFE00000) &&\
-;                          ((v & 0x00060000) != 0x00000000) &&\
-;                          ((v & 0xF000) != 0xF000) &&\
-;                          ((v & 0xF000) != 0x0000) &&\
-;                          ((v & 0x0C00) != 0x0C00) )
-	move	#PROBE_BUFFER_LEN-4-1,d1
-	move.l	a0,a1
-.loop
-	move.b	(a1)+,d2
-	lsl.l	#8,d2
-	move.b	(a1),d2
-	lsl.l	#8,d2
-	move.b	1(a1),d2
-	lsl.l	#8,d2
-	move.b	2(a1),d2
-	
-	move.l	d2,d3
-	and.l	#$FFE00000,d3
-	cmp.l	#$FFE00000,d3
-	bne.b	.next
-
-	move.l	d2,d3
-	and.l	#$00060000,d3
-	beq.b	.next
-
-	move.l	d2,d3
-	and.l	#$F000,d3
-	cmp.w	#$F000,d3
-	beq.b	.next
-
-	move.l	d2,d3
-	and.l	#$F000,d3
-	beq.b	.next
-	
-	move.l	d2,d3
-	and.l	#$0C00,d3
-	cmp.w	#$0C00,d3
-	bne.b	.yepSyncWord
-.next
-	dbf	d1,.loop
- EREM ;;;;;;;;;
 .nope
 	moveq	#-1,d0
 	rts
@@ -42920,6 +42879,27 @@ getSampleDataAdd:
     bne     .1
     add.l   d0,d0
 .1  rts
+
+* In: 
+*  d0 = position in secs
+pleaseMp3Seek:
+    push    a5
+    move.l	sampleroutines(a5),a0
+    jsr     p_sample\.s_mp3Seek(a0)
+    pop     a5
+    rts
+
+getMp3DurationInSeconds:
+    moveq   #0,d0
+    moveq   #0,d1
+    ;tst.b   playing(a5)
+    ;beq     .x
+    push    a5
+    move.l	sampleroutines(a5),a0
+    jsr     p_sample\.s_getMp3Duration(a0)
+    pop     a5
+.x
+    rts
 
 
 ******************************************************************************
@@ -45126,7 +45106,7 @@ p_startrekker
 	bsr.b	.id_
 	bne.b 	.nok
 	moveq	#20-1,d0
-	bsr	copyNameFromModule
+	jsr	copyNameFromModule
 	moveq	#0,d0	
 .nok	rts
 
@@ -48371,7 +48351,7 @@ p_xmaplay:
     jmp      .author(pc)
     dc.w     pt_xmaplay
 .flags
-    dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_quadscopePoke
+    dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_quadscopePoke!pf_slidePos
 	dc.b    "FastTracker2 xmaplay060",0
  even
 
@@ -52474,13 +52454,21 @@ horizontalLayout:
 	rts
 
 .it
+    ; Position slider
+    ; As wide as the window minus some borders and bonus
+    tst.b   showPositionSlider(a5)
+    beq     .noPos
+    move	winstruc+nw_Width,d0
+    sub	    #8+8+2,d0
+    move    d0,gadgetPositionSlider+gg_Width
+.noPos
 	
   if DEBUG
 	moveq	#0,d1
 	move	winstruc+nw_Width,d1
 	move	d1,d0
 	; remove left and right borders
-	sub	#8+8,d1 
+	sub     #8+8,d1 
 	lsl.l	#8,d1
 	; original width without borders
 	divu	#264-8-8,d1
@@ -52610,6 +52598,17 @@ verticalLayout:
 
 	*** Button row 1
     add     windowtop(a5),d0
+   
+    tst.b   showPositionSlider(a5)
+    beq     .noPos
+    * Add position slider here
+    lea     gadgetPositionSlider,a0
+    addq    #2,d0
+    move    d0,gg_TopEdge(a0)
+    move    #10-1,gg_Height(a0)
+    add     #12,d0
+.noPos
+
 	move	d0,buttonRow1TopEdge(a5)
 
 	moveq	#13,d1
@@ -54973,6 +54972,209 @@ utf8ToLatin1Char:
     rts
 
 
+
+***************************************************************************
+*
+* Position slider
+*
+***************************************************************************
+
+* User has moved the slider
+positionSliderMoved:
+    tst.b   showPositionSlider(a5)
+    bne     .yes
+    rts
+.yes
+;    DPRINT  "positionSliderMoved"
+    lea     gadgetPositionSlider,a2
+    move.l	gg_SpecialInfo(a2),a0
+
+    move.w  pi_Flags(a0),d0
+    and.w   #KNOBHIT,d0
+    bne     .knob
+
+    * User clicked elsewhere, not the knob
+    move    mousex(a5),d1
+    sub     gg_LeftEdge(a2),d1
+    mulu    #$ffff,d1
+    divu    gg_Width(a2),d1
+
+    * Move knob to the clicked position
+    move.l  a2,a3
+    pushm   a0/a2
+    bsr     refreshPositionSlider\.setProp
+    movem.l  (sp)+,a0/a2 ; AsmOne
+    ;popm    a0/a2
+
+.knob
+    * User dragged the knob
+    * Reset knobhit after the user has released the button
+    * so it can be again automatically updated below.
+    and     #~KNOBHIT,pi_Flags(a0)
+
+    tst.b   playing(a5)
+    beq     .x
+
+    cmp     #pt_sample,playertype(a5)
+    bne     .notSample
+    jsr     getMp3DurationInSeconds
+    tst.l   d1
+    beq     .notSample
+    * d0 = pos
+    * d1 = len
+    move.l  d1,d0
+
+    * a2 = gadget
+	jsr	nappilasku
+    * d0 = position in secs
+    DPRINT  "mp3 position=%ld"
+    jmp pleaseMp3Seek
+
+.notSample
+
+    move    pos_maksimi(a5),d0
+    subq    #1,d0
+    bmi     .x
+    beq     .x
+
+    * a2 = gadget
+	jsr	nappilasku
+
+    cmp     pos_nykyinen(a5),d0
+    beq     .x
+    DPRINT  "Selected pos=%ld"
+
+    sub     pos_nykyinen(a5),d0
+    bpl     .forward
+    neg     d0
+    DPRINT  "backward %ld"
+    * Prevent detecting songend
+    st      kelattiintaakse(a5)
+.l1
+    push    d0
+    move.l  playerbase(a5),a0
+    jsr     p_taakse(a0)
+    pop     d0
+    subq    #1,d0
+    bne     .l1
+
+.x
+
+	rts
+
+.forward
+    DPRINT  "forward %ld"
+.l2
+    push    d0
+    move.l  playerbase(a5),a0
+    jsr     p_eteen(a0)
+    pop     d0
+    subq    #1,d0
+    bne     .l2
+    rts
+
+* Update slider position based on current status
+refreshPositionSlider:  
+    tst.b   showPositionSlider(a5)
+    bne     .yes
+.no
+    rts
+.yes    
+    * Zipped window?
+    tst.b   kokolippu(a5)
+	beq.b   .no
+
+;    DPRINT  "refreshPositionSlider"
+    
+    lea     gadgetPositionSlider,a3
+    tst.b   playing(a5)
+    bne     .enable
+.disable
+    move.l  a3,a0
+    jmp     disableGadget
+.enable
+    
+    * Mp3 special case:
+
+    cmp     #pt_sample,playertype(a5)
+    bne     .notSample
+    jsr     getMp3DurationInSeconds
+    * d0 = position
+    * d1 = length
+    tst.l   d1
+    beq     .notSample
+
+    move.l  a3,a0
+    pushm   d0/d1
+    jsr     enableButton
+    popm    d1/d2
+
+    mulu    #65535,d1
+    divu    d2,d1
+    bra     .setProp
+
+.notSample
+    move.l  playerbase(a5),a1
+    move    p_liput(a1),d0
+    move    d0,d1
+    and     #pf_slidePos,d1
+    beq     .disable
+    move    d0,d1
+    and     #pf_kelaus,d1
+    cmp     #pf_kelaus,d1
+    bne     .disable
+    jsr     isImpulseTrackerActive  * IT special case
+    beq     .disable
+
+    move.l  a3,a0
+    jsr     enableButton
+
+    * d1 = HorizPot
+    moveq   #0,d1
+    move    pos_maksimi(a5),d2
+    subq    #1,d2
+    bmi     .z
+    beq     .z
+    move    pos_nykyinen(a5),d1
+    mulu    #65535,d1
+    divu    d2,d1
+.z
+
+.setProp
+    * a0 = gadget
+    move.l  a3,a0
+    move.l	gg_SpecialInfo(a0),a1
+    * d0 = Flags
+    move	pi_Flags(a1),d0
+    move    d0,d5
+    * see if user has fondling the knob
+    and     #KNOBHIT,d5
+    bne     .hit
+
+    * d2 = VertPot
+    moveq   #0,d2
+    * d3 = HorizBody
+    move    pi_HorizBody(a1),d3
+    * d4 = VertBody
+    moveq   #0,d4
+    * d5 = NumGad
+    moveq   #1,d5
+    * a1 = window
+	move.l	windowbase(a5),a1
+    * a2 = requester
+    sub.l   a2,a2
+
+    move.l	gg_SpecialInfo(a3),a4
+    cmp     pi_HorizPot(a4),d1
+    beq     .noChange
+    lore    Intui,NewModifyProp
+.noChange
+    rts
+
+.hit
+    DPRINT  "knob hit!"
+    rts
+
 ***************************************************************************
 *
 * Clipboard
@@ -56007,7 +56209,7 @@ gadgetListModeChangeButtonImagePtr
 
 gadgetResize:
 	; gg_Next
-	dc.l	0
+	dc.l	gadgetPositionSlider
 	; gg_LeftEdge: relative to right edge
 	dc.w	-5
 	; gg_TopEdge: relative to bottom edge
@@ -56464,6 +56666,25 @@ gAD1s	dc.w 5,65535,0,0,0
 	dc.w 0,0,0,0,0,0
 
 
+
+gadgetPositionSlider
+        dc.l 0 ; next
+        * left, top:
+        dc.w 9,50
+        * width, height:
+        dc.w 54,12
+        dc.w 7      * gg_Flags
+        dc.w GACT_RELVERIFY * gg_Activation
+        dc.w 3      * gg_GadgetType
+        dc.l .slider1gr,0,0,0,.slider1s
+        dc.w 0 ; id
+        dc.l 0
+.slider1gr        dc.w 0,0,11,9,2
+        dc.l pslider2im
+        dc.b 3,0
+        dc.l 0
+.slider1s        dc.w 2,65535,0,0,0
+        dc.w 0,0,0,0,0,0
 
 
 *** Kick2.0+ window extension

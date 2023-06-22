@@ -325,6 +325,8 @@ mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
 
 mainTask    rs.l    1
 
+mp3DurationInMs rs.l    1
+mp3PositionInMs rs.l    1   
 
  if DEBUG
 output			rs.l 	1
@@ -386,6 +388,8 @@ size_var	rs.b	0
 	jmp	ahinfo(pc)
     jmp hasMp3TagText(pc)
     jmp getMp3TagText(pc)
+    jmp mp3GetDurationInSeconds(pc)
+    jmp mp3Seek(pc)
 
 	dc.l	16
 sample_segment
@@ -1041,6 +1045,7 @@ init:
 	move.l	.ms_duration(a3),d0	
     DPRINT  "duration=%ld ms"
  endif
+    move.l  .ms_duration(a3),mp3DurationInMs(a5)
 
     moveq   #0,d0
     bsr     isRemoteSample
@@ -1753,9 +1758,9 @@ init:
 .t3	dc.b	"RIFF WAVE",0
 .t4	dc.b	"MP",0
 .form	dc.b	"%s %ld-bit %lc %2ldkHz",0
-.form2	dc.b	"MP%ld %ldkB %lc %2ldkHz %ld-bit",0
-.form3	dc.b	"MP%ld %ldkB %lc %2ldkHz AHI",0
-.form4	dc.b	"MP%ld %ldkB %lc %2ldkHz MHI",0
+.form2	dc.b	"MP%ld %ldkb %lc %2ldkHz %ld-bit",0
+.form3	dc.b	"MP%ld %ldkb %lc %2ldkHz AHI",0
+.form4	dc.b	"MP%ld %ldkb %lc %2ldkHz MHI",0
 
 .pn	dc.b	"HiP-Sample",0
  even
@@ -4292,12 +4297,65 @@ initsamplecyber
 
 	move.l	d0,a0
 	move.l	calibrationaddr(a5),a1
-	bsr.b	_CreateTable
+	bsr 	_CreateTable
 	moveq	#1,d0
 
 .nocy	tst.l	d0
 	rts
 
+
+* Checks if mp3 can be seeked 
+isLocalMp3:
+    tst.b   mplippu(a5)
+    beq     .x
+    bsr     isRemoteSample
+    bne     .x
+    tst.b   mhiEnable(a5) 
+    bne     .x
+    moveq   #1,d2
+    rts
+.x  moveq   #0,d2
+    rts
+
+mp3GetDurationInSeconds:
+    lea     var_b,a5
+    moveq   #0,d0
+    moveq   #0,d1
+    bsr     isLocalMp3
+    beq     .x
+
+	move.l	mpstream(a5),a0
+    lea     mp3PositionInMs(a5),a1
+	lore	MPEGA,MPEGA_time
+
+    tst.l   d0
+    bne     .x
+
+    move.l  mp3PositionInMs(a5),d0
+    divu    #1000,d0
+    ext.l   d0
+    
+    move.l  mp3DurationInMs(a5),d1
+    divu.w  #1000,d1
+    ext.l   d1
+.x
+    rts
+
+
+* In:
+*  d0 = position in seconds to seek
+mp3Seek:
+    lea     var_b,a5
+    bsr     isLocalMp3
+    beq     .x
+    * Convert to MS
+    mulu.w  #1000,d0    
+    DPRINT  "mp3Seek %ld ms"
+	move.l	mpstream(a5),a0
+	lore	MPEGA,MPEGA_seek
+
+.x
+    rts
 
 
 

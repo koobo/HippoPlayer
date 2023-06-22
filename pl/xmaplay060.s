@@ -1,6 +1,6 @@
 ; ==============================================================================
 ; xmaplay060 - Port of Fasttracker II's XM replayer for 68060 Amigas
-; by 8bitbubsy, aug. 2020 - nov 2022. Syntax is Asm-Pro.
+; by 8bitbubsy, aug. 2020 - apr. 2023. Syntax is Asm-Pro.
 ;
 ; Because of lack of 14-bit calibration support, there will be quite a bit of
 ; static noise in the audio on some songs on a real Amiga. It will sound good
@@ -16,8 +16,7 @@
 ;          out once you allow loading a new song after play.
 ;
 ; TODOs:
-; 1) Make the main loop more system friendly, don't read keys directly
-; 2) Support AHI and 14-bit CyberSound calibration files
+; 1) Support AHI and 14-bit CyberSound calibration files
 ;
 ; Features:
 ; - 32 stereo channels with 11-bit input volumes (left/right)
@@ -147,7 +146,7 @@ PAL_CIA_PERIOD		EQU 7093 ;  ~99.997Hz
 NTSC_CIA_PERIOD		EQU 7158 ; ~100.001Hz
 
 ; Total sample buffer size in samples. Not the actual mix length per frame.
-SMP_BUFF_SIZE		EQU 8192
+SMP_BUFF_SIZE		EQU 16384
 
 LOOP_UNROLL_SIZE	EQU 1024
 MIN_PERIOD		EQU 64		; Paula period, that is
@@ -210,9 +209,15 @@ _LVOFreeSignal		EQU -336
 _LVOCloseLibrary	EQU -414
 _LVOOpenDevice		EQU -444
 _LVOCloseDevice		EQU -450
+_LVODoIO		EQU -456
 _LVOOpenResource	EQU -498
 _LVOOpenLibrary		EQU -552
+_LVOCreateIORequest	EQU -654
+_LVODeleteIORequest	EQU -660
+_LVOCreateMsgPort 	EQU -666
+_LVODeleteMsgPort	EQU -672
 _LVOPutStr		EQU -948
+
 
 swap16	MACRO
 	rol.w	#8,\1
@@ -488,7 +493,7 @@ SMP_HDR_SIZE	EQU 40
 	;SECTION maincode,CODE
 	
 	bra.w	MAIN
-	dc.b "\\0$VER: 0.41"
+	dc.b "\\0$VER: 0.46"
 	EVEN
 	
 	;-------------------------------------------------
@@ -615,7 +620,7 @@ fclose	movem.l	d0/d1/a0/a1/a6,-(sp)
 	;   d3.l = bytes to read
 	;
 	; Output:
-	;   d0.l = actual bytes written
+	;   d0.l = actual bytes read
 	;-------------------------------------------------	
 fread	movem.l	d1/a0/a1/a6,-(sp)
 	move.l	DosBase(pc),a6
@@ -866,6 +871,7 @@ cleanUp:
 	bsr.w	SilencePaula	; again (needed after FreeMusic() call)
 	; --------------------	
 	bsr.w	CloseDOSLib
+
 mainRts	moveq	#0,d0
 	rts
 
@@ -890,6 +896,7 @@ CloseGraphicsLib
 	move.l	4.w,a6
 	move.l	GraphicsBase(pc),a1
 	jsr	_LVOCloseLibrary(a6)
+	clr.l	GraphicsBase
 .done	rts
 	
 OpenDOSLib
@@ -906,6 +913,7 @@ CloseDOSLib
 	move.l	4.w,a6
 	move.l	DosBase(pc),a1
 	jsr	_LVOCloseLibrary(a6)
+	clr.l	DosBase
 .done	rts
 
 CpuIs68000
@@ -1352,8 +1360,8 @@ SetMixerVars
 	; Test if we have an NTSC machine
 	; ------------------------------------
 	lea	GraphicsName(pc),a1			
-	moveq	#0,d0
 	move.l	4.w,a6
+	moveq	#36,d0
 	jsr	_LVOOpenLibrary(a6)
 	tst.l	d0
 	bne.b	.L0
@@ -1495,23 +1503,32 @@ CalcCiaDelta
 	;   d1.b = 0 if PAL, 1 if NTSC
 	;
 	; Output:
-	;   d0.l = rounded 16.16fp frequency
+	;   d0.l = rounded 16.16fp frequency (Hz)
 PaulaPeriodToFreq
-	movem.l	d1-d4,-(sp)
 	tst.w	d0
 	bne.b	.Not0
-	moveq	#-1,d0			; period 0 = period 65535 on Amiga
 	; ---------------------------
-.Not0	move.l	d0,d2
+	; Period 0 -> period 65536 (confirmed on Paula)
+	; ---------------------------
+	tst.b	d1
+	bne.b	.NTSC0
+	move.l	#3546895,d0
+	bra.b	.done
+.NTSC0	move.l	#3579545,d0
+	bra.b	.done
+	; ---------------------------
+	; ---------------------------
+.Not0	movem.l	d1-d4,-(sp)
+	move.l	d0,d2
 	swap	d2
 	clr.w	d2			; d2.l = period * 65536
 	; ---------------------------
 	tst.b	d1
-	bne.b	.NTSC
+	bne.b	.NTSC1
 	moveq	#0,d0			; PAL
 	move.l	#3546895,d1 		; d1:d0 = round[3546895.0 * 2^32]
 	bra.b	.L0
-.NTSC	move.l	#$745D1746,d0		; NTSC
+.NTSC1	move.l	#$745D1746,d0		; NTSC
 	move.l	#3579545,d1 		; d1:d0 = round[3579545.4545 (recurring) * 2^32]	
 .L0	; ---------------------------
 	; Add rounding bias
@@ -1524,36 +1541,37 @@ PaulaPeriodToFreq
 	; ---------------------------
 	divu.l	d2,d1:d0		; d0.l = rounded Paula frequency (16.16fp)
 	movem.l	(sp)+,d1-d4
-	rts
+.done	rts
 
 ; converts BPM 32..255 into SamplesPerTick LUT (16.16fp)
+; Formula: (MixingFreq/(BPM/32))*2^16
 GenerateBPMTable
 	lea	BPM2SmpsPerTick,a0
-	move.l	MixingFreq(pc),d3	; 16.16fp
-	moveq	#32,d5			; starting BPM
-	move.l	d3,d6
-	move.l	d3,d4
-	lsr.l	#7,d6
-	lsl.l	#8,d4
-	lsl.l	#8,d4
-	lsl.l	#7,d4			; d6:d4 = MixingFreq(16.16fp) << 25
+	; ---------------------------
 	moveq	#0,d7
+	; ---------------------------
+	move.l	MixingFreq(pc),d0
+	moveq	#0,d6
+	move.l	d0,d4
+	lsl.l	#1,d4
+	addx.l	d7,d6
+	lsr.l	#1,d0
+	add.l	d0,d4
+	addx.l	d7,d6			; d6:d4 = MixingFreq(16.16fp) * 2.5
+	; ---------------------------
+	moveq	#32,d5			; starting BPM
 	; ---------------------------
 .loop	move.l	d6,d1
 	move.l	d4,d0
 	; ---------------------------
-	move.l	d5,d2			; d2 = BPM (32..255)
-	mulu.l	#13421773,d2		; 13421773 = round[2^25 / 2.5]
-					; d2 = (BPM / 2.5) * 2^25 (with small error)
-	; ---------------------------
 	; Add rounding bias
 	; ---------------------------
-	move.l	d2,d3
+	move.l	d5,d3
 	lsr.l	#1,d3
 	add.l	d3,d0
 	addx.l	d7,d1
 	; ---------------------------
-	divu.l	d2,d1:d0		; d0.l = rounded samplesPerTick (16.16fp)
+	divu.l	d5,d1:d0		; d0.l = rounded samplesPerTick (16.16fp)
 	move.l	d0,(a0)+
 	; ---------------------------
 	addq.b	#1,d5
@@ -2472,6 +2490,7 @@ LoadInstrHeader
 	
 	; This updates sRepL, sLen and sTimesToUnroll
 	; a1 = sample struct
+	; WARNING: Do NOT trash D3!
 PrepareLoopUnroll
 	clr.w	sTimesToUnroll(a1)
 	tst.b	sLoopType(a1)
@@ -2487,11 +2506,17 @@ PrepareLoopUnroll
 .ok	cmp.l	d1,d0
 	bhs.b	.end			; loop already big enough, no unroll needed!
 	; -----------------------------
-	divu.w	d0,d1			; repL (d0.l) is already <65536 at this point
-	mulu.w	d1,d0
-	move.w	d1,sTimesToUnroll(a1)
-	add.l	d0,sRepL(a1)
+	subq.l	#1,d1
+	divu.w	d0,d1			; (repL (d0.l) is already <65536 at this point)
+	; -----------------------------
+	cmp.b	#1,sLoopType(a1)	; bidi loop?
+	beq.b	.L0			; nope
+	add.w	d1,d1			; yes, unroll factor must be a multiple of 2
+	; -----------------------------
+.L0	move.w	d1,sTimesToUnroll(a1)
+	mulu.w	d1,d0			; d0.l = extra bytes to add to repL
 	add.l	d0,sLen(a1)
+	add.l	d0,sRepL(a1)
 .end	rts
 
 	; a1 = sample struct
@@ -2630,9 +2655,6 @@ UnrollSampleLoop8
 	dbra	d5,.bloop
 	sf	d4			; change direction to forwards
 	dbra	d6,.loop3	
-	btst	#0,sTimesToUnroll(a1)	; uneven unroll value = set loop to forward
-	beq.b	.end
-	move.b	#1,sLoopType(a1)
 	; ----------------------
 .end	rts
 
@@ -2688,15 +2710,12 @@ UnrollSampleLoop16
 	dbra	d5,.bloop
 	sf	d4			; change direction to forwards
 	dbra	d6,.loop3	
-	btst	#0,sTimesToUnroll(a1)	; uneven unroll value = set loop to forward
-	beq.b	.end
-	move.b	#1,sLoopType(a1)
 	; ----------------------
 .end	rts
 
-	; Puts an appropriate sample after loopEnd on looped samples,
-	; so that the linear interpolation routine in the mixer will
-	; always read the correct sample taps.
+	; Puts an appropriate sample at smp[sampleEnd] so that the the
+	; linear interpolation routine in the mixer will always read the
+	; correct sample tap.
 	;
 	; a1 = sample struct
 FixSample
@@ -2722,11 +2741,11 @@ FixSample
 	beq.b	.done8		; yes, don't fix
 	cmp.b	#1,sLoopType(a1)
 	beq.b	.fwd8
-.bidi8	move.b	-(a5),1(a5)
+.bidi8	move.b	-1(a5),0(a5)	; smp8[loopEnd] = smp8[loopEnd-1]
 	bra.b	.done8
-.fwd8	move.b	(a6),(a5)
+.fwd8	move.b	0(a6),0(a5)	; smp8[loopEnd] = smp8[loopStart]
 	bra.b	.done8
-.loff8	clr.b	(a5)
+.loff8	move.b	-1(a5),0(a5)	; smp8[sampleEnd] = smp8[sampleEnd-1]
 .done8	rts
 
 	; ---------------------
@@ -2739,11 +2758,11 @@ FixSample
 	beq.b	.done16		; yes, don't fix
 	cmp.b	#1,sLoopType(a1)
 	beq.b	.fwd16
-.bidi16	move.w	-(a5),2(a5)
+.bidi16	move.w	-2(a5),0(a5)	; smp16[loopEnd] = smp16[loopEnd-1]
 	bra.b	.done16
-.fwd16	move.w	(a6),(a5)
+.fwd16	move.w	0(a6),0(a5)	; smp16[loopEnd] = smp16[loopStart]
 	bra.b	.done16
-.loff16	clr.w	(a5)
+.loff16	move.w	-2(a5),0(a5)	; smp16[sampleEnd] = smp16[sampleEnd-1]
 .done16	rts
 
 	; d6.w = instrument number
@@ -4570,7 +4589,7 @@ FixaEnvelopeVibrato
 	add.l	#1<<5,d1		; rounding bias
 	lsr.l	#6,d1
 	; ----------------------------
-	tst.w	d1	
+	;tst.w	d1	
 	beq.b	.VolOK1	
 	subq.w	#1,d1			; if (d1 > 0) d1--; (0..2047)
 .VolOK1	move.w	d1,cFinalVol(a5)
@@ -4590,7 +4609,7 @@ FixaEnvelopeVibrato
 	add.l	#1<<5,d0		; rounding bias
 	lsr.l	#6,d0
 	; ----------------------------
-	tst.w	d0
+	;tst.w	d0
 	beq.b	.VolOK2	
 	subq.w	#1,d0			; if (d0 > 0) d0--; (0..2047)
 .VolOK2	move.w	d0,cFinalVol(a5)
@@ -5158,7 +5177,7 @@ GetFrequenceValue
 ;  d0.l = current volR
 ;  d1.l = upper 16-bit sampling delta (signed)
 ;  d2.l	= sampling position 32-bit integer
-;  d3.l = <reserved>
+;  d3.l = #16 (for 'lsr.l Dn,Dn' - better pipelined than 'swap Dn')
 ;  d4.l = <free>
 ;  d5.l = <free>
 ;  d6.l = current volL
@@ -5179,7 +5198,7 @@ MIX8_S	MACRO ; 68060 OPTIMIZED!
 	ext.l	d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
-	swap	d5
+	lsr.l	d3,d5
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	move.w	d5,d4		; copy of sample
 	; ---------------------
@@ -5202,7 +5221,7 @@ MIX8_C	MACRO ; 68060 OPTIMIZED!
 	ext.l	d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
-	swap	d5
+	lsr.l	d3,d5
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	; ---------------------
 	muls.w	d0,d5		; d0.w(0..2047) * d5.w(-32768..32765) -> d5.l(-67076096..67069955)
@@ -5219,7 +5238,7 @@ MIX16_S	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l*2),d4/d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
-	swap	d5
+	lsr.l	d3,d5
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	move.w	d5,d4		; copy of sample
 	; ---------------------
@@ -5238,7 +5257,7 @@ MIX16_C	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l*2),d4/d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
-	swap	d5
+	lsr.l	d3,d5
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	; ---------------------
 	muls.w	d0,d5		; d0.w(0..2047) * d5.w(-32768..32765) -> d5.l(-67076096..67069955)
@@ -5263,16 +5282,16 @@ MIX8_RS	MACRO ; 68060 OPTIMIZED!
 	ext.l	d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
-	swap	d5
+	lsr.l	d3,d5
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	; ---------------------
 	move.l	d6,d4
-	swap	d4		; d4.w = volL integer (0..2047)
+	lsr.l	d3,d4		; d4.w = volL integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32765) * d5.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
 	; ---------------------	
 	move.l	d0,d4
-	swap	d4		; d4.w = volR integer (0..2047)
+	lsr.l	d3,d4		; d4.w = volR integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32767) * d4.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
 	; ---------------------
@@ -5292,11 +5311,11 @@ MIX8_RC	MACRO ; 68060 OPTIMIZED!
 	ext.l	d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
-	swap	d5
+	lsr.l	d3,d5
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	; ---------------------
 	move.l	d6,d4
-	swap	d4		; d4.w = volL integer (0..2047)
+	lsr.l	d3,d4		; d4.w = volL integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32765) * d4.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
 	; ---------------------
@@ -5312,16 +5331,16 @@ MIX16_RS	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l*2),d4/d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
-	swap	d5
+	lsr.l	d3,d5
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	; ---------------------
 	move.l	d6,d4
-	swap	d4		; d4.w = volL integer (0..2047)
+	lsr.l	d3,d4		; d4.w = volL integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32765) * d5.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
 	; ---------------------
 	move.l	d0,d4
-	swap	d4		; d4.w = volR integer (0..2047)
+	lsr.l	d3,d4		; d4.w = volR integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32767) * d4.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
 	; ---------------------
@@ -5337,11 +5356,11 @@ MIX16_RC	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l*2),d4/d5
 	sub.l	d4,d5
 	mulu.l	d7,d5
-	swap	d5
+	lsr.l	d3,d5
 	add.w	d4,d5		; d5.w = interpolated 16-bit sample
 	; ---------------------
 	move.l	d6,d4
-	swap	d4		; d4.w = volL integer (0..2047)
+	lsr.l	d3,d4		; d4.w = volL integer (0..2047)
 	muls.w	d5,d4		; d5.w(-32768..32765) * d4.w(0..2047) -> d4.l(-67076096..67069955)
 	add.l	d4,(a5)+
 	; ---------------------
@@ -5375,7 +5394,8 @@ mix8S4 MIX8_S
 mix8S3 MIX8_S
 mix8S2 MIX8_S
 mix8S1 MIX8_S
-mix8S0 dbra d3,mix8SLoop
+mix8S0 subq.w	#1,MixLoopCounter
+       bpl.w	mix8SLoop
        rts
 
 mix8CLoop
@@ -5395,7 +5415,8 @@ mix8C4 MIX8_C
 mix8C3 MIX8_C
 mix8C2 MIX8_C
 mix8C1 MIX8_C
-mix8C0 dbra d3,mix8CLoop
+mix8C0 subq.w	#1,MixLoopCounter
+       bpl.w	mix8CLoop
        rts
 	
 mix16SLoop
@@ -5415,7 +5436,8 @@ mix16S4 MIX16_S
 mix16S3 MIX16_S
 mix16S2 MIX16_S
 mix16S1 MIX16_S
-mix16S0 dbra d3,mix16SLoop
+mix16S0 subq.w	#1,MixLoopCounter
+        bpl.w	mix16SLoop
         rts
 
 mix16CLoop
@@ -5435,7 +5457,8 @@ mix16C4 MIX16_C
 mix16C3 MIX16_C
 mix16C2 MIX16_C
 mix16C1 MIX16_C
-mix16C0 dbra d3,mix16CLoop
+mix16C0 subq.w	#1,MixLoopCounter
+        bpl.w	mix16CLoop
         rts
 
 ; ------------------
@@ -5459,7 +5482,8 @@ mix8RS4 MIX8_RS
 mix8RS3 MIX8_RS
 mix8RS2 MIX8_RS
 mix8RS1 MIX8_RS
-mix8RS0 dbra d3,mix8RSLoop
+mix8RS0 subq.w	#1,MixLoopCounter
+        bpl.w	mix8RSLoop
         rts
 
 mix8RCLoop
@@ -5479,7 +5503,8 @@ mix8RC4 MIX8_RC
 mix8RC3 MIX8_RC
 mix8RC2 MIX8_RC
 mix8RC1 MIX8_RC
-mix8RC0 dbra d3,mix8RCLoop
+mix8RC0 subq.w	#1,MixLoopCounter
+        bpl.w	mix8RCLoop
         rts
 	
 mix16RSLoop
@@ -5499,7 +5524,8 @@ mix16RS4 MIX16_RS
 mix16RS3 MIX16_RS
 mix16RS2 MIX16_RS
 mix16RS1 MIX16_RS
-mix16RS0 dbra d3,mix16RSLoop
+mix16RS0 subq.w	#1,MixLoopCounter
+         bpl.w	mix16RSLoop
          rts
 
 mix16RCLoop
@@ -5519,7 +5545,8 @@ mix16RC4 MIX16_RC
 mix16RC3 MIX16_RC
 mix16RC2 MIX16_RC
 mix16RC1 MIX16_RC
-mix16RC0 dbra d3,mix16RCLoop
+mix16RC0 subq.w	#1,MixLoopCounter
+         bpl.w	mix16RCLoop
          rts
 
 ; ============================================================
@@ -5581,6 +5608,7 @@ OneshotHandler
 	; ----------------------------
 	move.w	d5,d3
 	lsr.w	#4,d3			; d3.w = samples to mix (for mix loop)	
+	move.w	d3,MixLoopCounter
 	and.w	#16-1,d5
 	add.b	vMixTabOffset(a6),d5
 	add.b	d7,d5			; add "use volramp" offset
@@ -5596,6 +5624,7 @@ OneshotHandler
 .L5	move.l	vPosDec(a6),d7		; d7.l = frac (0..65535)
 	move.l	vFrqH32(a6),d1
 	move.w	vFrqL32(a6),a4
+	moveq	#16,d3
 	jsr	([MixFuncTab,pc,d5.w*4])
 	; ----------------------------
 	; Set back volumes
@@ -5671,6 +5700,7 @@ FwdLoopHandler
 	; ----------------------------
 	move.w	d5,d3
 	lsr.w	#4,d3			; d3.w = samples to mix (for mix loop)	
+	move.w	d3,MixLoopCounter
 	and.w	#16-1,d5
 	add.b	vMixTabOffset(a6),d5
 	add.b	d7,d5			; add "use volramp" offset
@@ -5686,6 +5716,7 @@ FwdLoopHandler
 .L5	move.l	vPosDec(a6),d7		; d7.l = frac (0..65535)
 	move.l	vFrqH32(a6),d1
 	move.w	vFrqL32(a6),a4
+	moveq	#16,d3
 	jsr	([MixFuncTab,pc,d5.w*4])
 	; ----------------------------
 	; Set back volumes
@@ -5763,6 +5794,7 @@ BidiLoopHandler
 	; ----------------------------
 	move.w	d5,d3
 	lsr.w	#4,d3			; d3.w = samples to mix (for mix loop)	
+	move.w	d3,MixLoopCounter
 	and.w	#16-1,d5
 	add.b	vMixTabOffset(a6),d5
 	add.b	d7,d5			; add "use volramp" offset
@@ -5776,6 +5808,7 @@ BidiLoopHandler
 	move.l	vLVol2(a6),d6		; previous tick's L volume
 	move.l	vRVol2(a6),d0		; previous tick's R volume
 .L5	move.l	vPosDec(a6),d7		; d7.l = frac (0..65535)
+	moveq	#16,d3
 	; ----------------------------
 	btst	#IBT_RevDir,vType(a6)	; reverse (backwards) sampling?
 	beq.b	.fwd			; nope, forwards
@@ -6416,7 +6449,7 @@ GetSongName
 ; ------------------------------------------------------------------------------
 
 HeaderText	dc.b "--------------------------------------------------------",$a
-		dc.b " xmaplay060 v0.41 ("
+		dc.b " xmaplay060 v0.46 ("
 	IF _14BIT
 		dc.b "14-bit"
 	ELSE
@@ -6441,6 +6474,7 @@ AudErrTxt	dc.b "Error initializing audio: Out of memory!",$a,0
 CIAErrTxt	dc.b "Error initializing audio: No CIA timers available!",$a,0
 CpuErrText	dc.b "Error: This program requires a 020+ CPU!",$a,0
 IsPlayingText	dc.b "Now playing, press ESC to stop...",$a,0
+WasPlayingText	dc.b "Playback stopped. You can close this window now.",$a,0
 
 XMSig		dc.b "Extended Module: ",0
 DosName		dc.b "dos.library",0
@@ -6553,6 +6587,7 @@ MixPeriod		dc.w 0
 TrackWidth		dc.w 0
 tmp16			dc.w 0
 MixingVolume		dc.w 64 ; 0..64
+MixLoopCounter		dc.w 0
 PattDelTime		dc.b 0
 PattDelTime2		dc.b 0
 PBreakFlag		dc.b 0
@@ -6571,6 +6606,8 @@ WhichCIAOpen		dc.b 0
 PaulaIntName		dc.b "xmaplay060 paula interrupt",0
 CIAIntName		dc.b "xmaplay060 cia interrupt",0
 WorkerTaskName		dc.b "xmaplay060 task",0
+HandlerName		dc.b "xmaplay060 input handler",0
+InputDevice		dc.b "input.device",0
 tmp8			dc.b 0
 bxxOverflow		dc.b 0
 	EVEN
