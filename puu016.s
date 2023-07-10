@@ -36,7 +36,8 @@ ver	macro
 ;	dc.b	"v2.57ß (?.?.2023)"
 ;	dc.b	"v2.57 (1.4.2023)"
 ;	dc.b	"v2.58ß (?.?.2023)"
-	dc.b	"v2.58 (22.6.2023)"
+;	dc.b	"v2.58 (22.6.2023)"
+	dc.b	"v2.59ß (?.?.2023)"
 	endm	
 
  ifnd DEBUG
@@ -25100,7 +25101,9 @@ SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 ; DPRINT can't be used as scope is now a task,
 ; DPRINT uses dos.library which is not allowed.
 SDPRINT macro
-
+    if SERIALDEBUG
+        DPRINT \1
+    endif
 	endm
 
 * Scope task entry points:
@@ -25508,7 +25511,7 @@ scopeLoop:
 .screenVisible
 
 	tst.b	playing(a5)
-	beq.b	.doNotDraw
+	beq 	.doNotDraw
 
 	* No scopes when AHI
 	;tst.b	ahi_use_nyt(a5)
@@ -25516,11 +25519,11 @@ scopeLoop:
 
 	* Does the active player support scopes?
 	move.l	playerbase(a5),d0
-	beq.b	.doNotDraw
+	beq 	.doNotDrawClear
 	move.l	d0,a0
 	move	p_liput(a0),d0 
 	btst	#pb_scope,d0 
-	beq.b	.doNotDraw
+	beq 	.doNotDrawClear
 
 	* Do not draw if patternmode and no pattern info
 	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
@@ -25534,15 +25537,15 @@ scopeLoop:
 	* Pattern data check
 	tst.l	deliPatternInfo(a5)
 	bne.b	.izOk
-	bra.b	.doNotDraw
+	bra 	.doNotDrawClear
 .noPattern
 	* Check for sample scope support
 	and	#pf_quadscopeUps!pf_quadscopePoke,d0
-	beq.b	.doNotDraw
+	beq 	.doNotDrawClear
 .izOk
 
 	bsr	scopeDrawAreaSizeChangeRequestIsActive
-	bne.b	.doNotDraw
+	bne 	.doNotDraw
 
 	tst.b	d7
 	bne.b	.doDraw
@@ -25562,7 +25565,10 @@ scopeLoop:
 	popm	d5/d6/d7
 	bra.b	.continue
 
-.doNotDraw
+
+; We come here if the current module does not support
+; the current scope mode, ie. the window is cleared.
+.doNotDrawClear
 	* See if clear requested
 	tst.b	d7
 	beq.b	.continue
@@ -25570,7 +25576,11 @@ scopeLoop:
 	moveq	#0,d7
 	bsr	scopeDrawAreaClear
 	jsr	printHippoScopeWindow
-	;bra	.continue - FALL THROUGH
+	bra	.continue 
+    
+; We come here if nothing should be drawn, there is a pause
+; for example. The previous drawn content is left.
+.doNotDraw
 
 .m
 .continue
@@ -25922,7 +25932,7 @@ requestScopeDrawAreaChange
 	sub	s_scopeDrawAreaHeight(a4),d1
 	move	d1,d2
 	or	d0,d2
-	beq.b	.noDiff
+	beq 	.noDiff
 
  if DEBUG 	
 	ext.l 	d0 
@@ -26012,7 +26022,7 @@ scopeWindowChanged
 	SDPRINT	"left=%ld top=%ld width=%ld height=%ld"
  endif
 	* Request again after window move
- 	bsr.b	scopeDrawAreaSizeChangeRequestIsActive
+ 	bsr 	scopeDrawAreaSizeChangeRequestIsActive
 	beq.b 	.nope 
 	move	s_scopeDrawAreaWidthRequest(a4),d0
 	move	s_scopeDrawAreaHeightRequest(a4),d1
@@ -51353,12 +51363,11 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	add	#FFT_LENGTH*2,a0
 	move.l	a0,s_spectrumImagData(a4)
 
-	bsr	prepareSpectrumSineTable
-	bsr.b	prepareSpectrumVolumeTable
-	bsr.b	prepareSpectrumMuluTable
-	bsr.b	prepareSpectrumExpTable
-
-	st	s_spectrumInitialized(a4)
+	bsr     prepareSpectrumSineTable
+	bsr 	prepareSpectrumVolumeTable
+	bsr 	prepareSpectrumMuluTable
+	bsr 	prepareSpectrumExpTable
+    st	s_spectrumInitialized(a4)
 	moveq	#1,d0
 	rts
 	
