@@ -41312,18 +41312,19 @@ p_thx
 	move.b	.ahx_pvtTrack(a0),d1
 	lea	232(a0),a0	* Next channel data 
 
-	* If bit 7 of byte 6 is 1, track 0 is included. 
-	* If it is 0, track 0 was empty, and is
-        * therefore not saved with the module, to save space.
+	* If bit 7 of byte 6 is 0, track 0 is included. 
+	* If it is 1, track 0 was empty, and is
+    * therefore not saved with the module, to save space.
 	tst.b	6(a1)
-	bmi.b	.notZero
-	* Track 0 not included.
+	bmi.b	.trackZeroEmpty
+	* Track 0 is included.
 	tst.b	d1
-	bne.b	.1
+    bpl     .1
 	* Track 0 is an empty stripe
 .goZero	clr.l	(a3)+
 	rts
-.notZero
+.trackZeroEmpty
+    * Subtract one as track 0 is not there.
 	subq.b	#1,d1
 	bmi.b	.goZero
 .1
