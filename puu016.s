@@ -39285,7 +39285,7 @@ p_med:
 	jmp	.medend(pc)
 	jmp	.medstop(pc)
 	jmp	.medcont(pc)
-	p_NOP
+	jmp .medvol(pc)
 	jmp	.medsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
@@ -39300,7 +39300,8 @@ p_med:
 
 .pahk1  dc.b	"4ch",0
 .pahk2  dc.b	"5-8ch",0
-.pahk3	dc.b	"1-64ch",0
+;.pahk3	dc.b	"1-64ch",0
+.pahk3	dc.b	"%ldch mix",0
 .a_	dc.b	"Teijo Kinnunen",0
 
  even
@@ -39309,12 +39310,38 @@ p_med:
 	pushpea	.a_(pc),d0
 	rts
 
+.dep    dc.w    0
+
 .medvb
 	move.l	moduleaddress(a5),a0
 	move	46(a0),pos_nykyinen(a5)
-	move.l	8(a0),a0
-	move	506(a0),pos_maksimi(a5)
-	rts
+
+    bsr     getMEDLength
+    move    d0,pos_maksimi(a5)
+
+
+
+    addq.b  #1,.dep
+    cmp.b   #25,.dep
+    bne     .yr
+    clr.b   .dep
+	move.l	moduleaddress(a5),a0
+    moveq   #0,d0
+    moveq   #0,d1
+    moveq   #0,d2
+    move    42(a0),d0
+    move    44(a0),d1
+    move    46(a0),d2
+    SDPRINT  "pblock=%ld pline=%ld pseqnum=%ld"
+.yr
+ 	rts
+
+.medvol
+	move.l	moduleaddress(a5),a0
+    move.b  mainvolume+1(a5),786(a0)
+
+    rts
+
 
 .eteen
 	movem.l	d0/d1/a0,-(sp)
@@ -39393,7 +39420,7 @@ p_med:
 	
 
 	move.l	moduleaddress(a5),a0
-	move	506(a1),pos_maksimi(a5)
+	;move	506(a1),pos_maksimi(a5)
 
 	move.l	8(a0),a1		* MMD0song *song
 	add.l	a0,a1			* reloc
@@ -39410,6 +39437,8 @@ p_med:
 
 	cmp.b	#3,d0
 	bhs 	.error2
+
+    move    534(a1),d3      * MMD2song: mixing channels, 0 means 4
 
 * d0:
 * 0 = 4ch   medplayer
@@ -39437,7 +39466,16 @@ p_med:
 	lea	.pahk2(pc),a1
 	subq.b	#1,d0
 	beq.b	.di
-	lea	.pahk3(pc),a1
+
+    push    a0
+	;lea	.pahk3(pc),a1
+    lea     .pahk3(pc),a0
+    moveq   #0,d0
+    move    d3,d0
+    jsr     desmsg
+    lea     desbuf(a5),a1
+    pop     a0
+
 .di	move.b	(a1)+,(a0)+
 	bne.b	.di
 
@@ -39707,6 +39745,38 @@ p_med:
 	bra	idtest
 
 
+* Out:
+*   d0 = Length of MMD0/MMD2 module in positions
+getMEDLength:
+	move.l	moduleaddress(a5),a0
+    tst.b   medrelocced(a5)
+    beq     .no
+
+    * MMD0song, MMD2song
+	move.l	8(a0),a1
+    * MMD0song: songlen
+    * MMD2song: number of sections
+	move	506(a1),d0
+
+    cmp.l   #"MMD2",(a0)
+    blo     .ok
+
+    * safety check: assume at least one section
+    cmp     #1,d0
+    blo     .no
+
+    ; **playseqtable
+    move.l  508(a1),a1
+    ; get pointer to first PlaySeq
+    move.l  (a1),a1
+    ; read the length
+    move    40(a1),d0
+.ok
+    rts
+
+.no
+    moveq   #0,d0
+    rts
 
 
 ******************************************************************************
