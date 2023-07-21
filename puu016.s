@@ -39300,7 +39300,6 @@ p_med:
 
 .pahk1  dc.b	"4ch",0
 .pahk2  dc.b	"5-8ch",0
-;.pahk3	dc.b	"1-64ch",0
 .pahk3	dc.b	"%ldch mix",0
 .a_	dc.b	"Teijo Kinnunen",0
 
@@ -39320,7 +39319,7 @@ p_med:
     move    d0,pos_maksimi(a5)
     bsr     MEDPatternUpdate
 
-    
+ REM
     addq.b  #1,.dep
     cmp.b   #25,.dep
     bne     .yr
@@ -39334,13 +39333,11 @@ p_med:
     move    46(a0),d2
     SDPRINT  "pblock=%ld pline=%ld pseqnum=%ld"
 .yr
+ EREM
  	rts
 
 .medvol
-	move.l	moduleaddress(a5),a0
-    move.b  mainvolume+1(a5),786(a0)
-
-    
+    * TODO
     rts
 
 
@@ -39548,6 +39545,8 @@ p_med:
 	bsr.b	.setmodnum
 	move.l	moduleaddress(a5),a0
  	bsr 	.playmodule
+    * Initial call
+    bsr     MEDPatternUpdate
 	movem.l	(sp)+,d1-a6
 	moveq	#0,d0
 	rts
@@ -39707,6 +39706,10 @@ p_med:
 	moveq	#_LVOMEDStopPlayerM,d0
 .do7	jsr	(a6,d0)
 
+    lea     MEDPatternInfoPtr(pc),a1
+    move.l  (a1),a0
+    clr.l   (a1)
+    jsr     freemem
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
 
@@ -39749,11 +39752,22 @@ p_med:
 MEDPatternUpdate:
     tst.b   medrelocced(a5)
     beq     .no
-	move.l	moduleaddress(a5),a1
-    cmp.l   #"MMD0",(a1)
-    bne     .no
 
-    lea     .PatternInfo(PC),a0
+    lea     MEDPatternInfoPtr(pc),a2
+    tst.l   (a2)
+    bne     .1
+    move.l  #PI_Stripes+4*64,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    move.l  d0,(a2)
+
+.1
+	move.l	moduleaddress(a5),a1
+
+.mmd0
+    move.l  MEDPatternInfoPtr(PC),a0
+    move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+    move.l  a0,deliPatternInfo(a5)
 
     * Set current pattern position:
     * MMD0->pline
@@ -39765,9 +39779,14 @@ MEDPatternUpdate:
     lsl     #2,d0
 
     * MMD0->blockarr
-    move.l  16(a1),a1
+    move.l  16(a1),a2
     * Get MMD0Block corresponding to d0
-    move.l  (a1,d0),a2
+    move.l  (a2,d0),a2
+
+    cmp.l   #"MMD1",(a1)
+    bhs     .mmd1
+
+    move.l  #.ConvertNoteMMD0,PI_Convert(a0)
 
     * MMD0Block->numtracks    
     moveq   #0,d0
@@ -39787,19 +39806,48 @@ MEDPatternUpdate:
     * Set stripes
     * Skip MMD0Block header
     addq    #2,a2
-    move.l  a2,.Stripe1
+    lea     PI_Stripes(a0),a0
+    move.l  a2,(a0)+
     addq    #3,a2
-    move.l  a2,.Stripe2
+    move.l  a2,(a0)+
     addq    #3,a2
-    move.l  a2,.Stripe3
+    move.l  a2,(a0)+
     addq    #3,a2
-    move.l  a2,.Stripe4
+    move.l  a2,(a0)+
 
 
 
-    move.l  #.ConvertNoteMMD0,PI_Convert(a0)
-    move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
-    move.l  a0,deliPatternInfo(a5)
+    rts
+
+.mmd1
+    move.l  #.ConvertNoteMMD1,PI_Convert(a0)
+
+    * MMD1Block->numtracks    
+    moveq   #0,d0
+    move.w  (a2),d0
+    move.w  d0,PI_Voices(a0)
+
+    * Calc number of bytes to next row: 4 bytes per channel
+    lsl.l   #2,d0
+    move.l  d0,PI_Modulo(a0)
+
+    * MMD0Block->lines
+    move.w  2(a2),d0
+    addq    #1,d0   * 0 means 1
+    move.w  d0,PI_Pattlength(a0)
+
+    ; Skip over MMD1Block header
+    addq    #8,a2
+    ; BlockInfo with additional command pages is ignored
+
+    * Set stripes
+    move    PI_Voices(a0),d0
+    subq    #1,d0
+    lea     PI_Stripes(a0),a0
+.str
+    move.l  a2,(a0)+
+    addq    #4,a2
+    dbf     d0,.str
     rts
 
 .no
@@ -39821,10 +39869,7 @@ MEDPatternUpdate:
 
 
 .ConvertNoteMMD0
-    move    #$f00,$dff180
-	moveq	#0,D0		; Period, Note
 	moveq	#0,D1		; Sample number
-	moveq	#0,D2		; Command 
 	moveq	#0,D3		; Command argument
     
     * Note number
@@ -39837,24 +39882,54 @@ MEDPatternUpdate:
     moveq   #$f,d2
     and.b   1(a0),d2
 
+    * 6th bit of sample numb
+    moveq   #%01000000,d3
+           ;#%00100000
+    and.b   (a0),d3
+    lsr.b   #1,d3
+    or.b    d3,d1
+
+    * 5th bit of sample numb
+    move.w  #%10000000,d3
+           ;#%00010000
+    and.b   (a0),d3
+    lsr.b   #3,d3
+    or.b    d3,d1
+
     move.b  2(a0),d3
-    
 
 	rts
 
-.ConvertNoteMMD2
-	moveq	#0,D0		; Period, Note
-	moveq	#0,D1		; Sample number
+;    The note structures, which are 4 bytes long in MMD1 modules, are
+;    arranged exactly as in MMD0 modules (i.e. L0T0, L0T1... L1T0, L1T1..).
+;
+;        xnnnnnnn xxiiiiii cccccccc dddddddd
+;
+;    n = note number (0 - $7F, 0 = ---, 1 = C-1...)
+;    i = instrument number (0 - $3F)
+;    c = command ($00 - $FF)
+;    d = data byte ($00 - $FF)
+;    x = undefined, reserved for future expansion. MUST BE SET TO ZERO,
+;        AND MASKED OUT WHEN READING THE NOTE OR INSTRUMENT NUMBER.
+
+
+.ConvertNoteMMD1
 	moveq	#0,D2		; Command 
 	moveq	#0,D3		; Command argument
-	
+    
+    * Note number
+    moveq   #$7f,d0
+    and.b   (a0),d0
+    
+    moveq   #$3f,d1
+    and.b   1(a0),d1
+
+    move.b  2(a0),d2
+    move.b  3(a0),d3
 	rts
 
-.PatternInfo 		ds.b	PI_Stripes	
-.Stripe1		dc.l	1
-.Stripe2		dc.l	1
-.Stripe3		dc.l	1
-.Stripe4		dc.l	1
+MEDPatternInfoPtr
+        dc.l     0
 
 * Out:
 *   d0 = Length of MMD0/MMD2 module in positions
