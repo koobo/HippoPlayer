@@ -39293,7 +39293,7 @@ p_med:
 	jmp .id_med(pc)
 	jmp	.author(pc)
 	dc.w pt_med
-.flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song
+.flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song!pf_volume!pf_scope
 	dc.b	"MED "
 .nam1	dc.b	"     "
 .nam2	dc.b	"      ",0
@@ -39318,9 +39318,9 @@ p_med:
 
     bsr     getMEDLength
     move    d0,pos_maksimi(a5)
+    bsr     MEDPatternUpdate
 
-
-
+    
     addq.b  #1,.dep
     cmp.b   #25,.dep
     bne     .yr
@@ -39340,6 +39340,7 @@ p_med:
 	move.l	moduleaddress(a5),a0
     move.b  mainvolume+1(a5),786(a0)
 
+    
     rts
 
 
@@ -39744,6 +39745,116 @@ p_med:
 	cmp.l	#'MMD',d0
 	bra	idtest
 
+
+MEDPatternUpdate:
+    tst.b   medrelocced(a5)
+    beq     .no
+	move.l	moduleaddress(a5),a1
+    cmp.l   #"MMD0",(a1)
+    bne     .no
+
+    lea     .PatternInfo(PC),a0
+
+    * Set current pattern position:
+    * MMD0->pline
+    move    44(a1),PI_Pattpos(a0)
+
+    * Get current pattern:
+    * MMD0->pblock
+    move    42(a1),d0
+    lsl     #2,d0
+
+    * MMD0->blockarr
+    move.l  16(a1),a1
+    * Get MMD0Block corresponding to d0
+    move.l  (a1,d0),a2
+
+    * MMD0Block->numtracks    
+    moveq   #0,d0
+    move.b  (a2),d0
+    move.w  d0,PI_Voices(a0)
+
+    * Calc number of bytes to next row: 3 bytes per channel
+    mulu    #3,d0
+    move.l  d0,PI_Modulo(a0)
+
+    * MMD0Block->lines
+    moveq   #0,d0
+    move.b  1(a2),d0
+    addq    #1,d0   * 0 means 1
+    move.w  d0,PI_Pattlength(a0)
+
+    * Set stripes
+    * Skip MMD0Block header
+    addq    #2,a2
+    move.l  a2,.Stripe1
+    addq    #3,a2
+    move.l  a2,.Stripe2
+    addq    #3,a2
+    move.l  a2,.Stripe3
+    addq    #3,a2
+    move.l  a2,.Stripe4
+
+
+
+    move.l  #.ConvertNoteMMD0,PI_Convert(a0)
+    move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+    move.l  a0,deliPatternInfo(a5)
+    rts
+
+.no
+    clr.l   deliPatternInfo(a5)
+    rts
+
+* Called by the PI engine to get values for a particular row
+
+* MMD0 block format
+* The 3-byte structure looks like this (each letter corresponds to one bit):
+*    xynnnnnn iiiicccc dddddddd
+*
+*    n = note number (0 - $3F). 0 = ---, 1 = C-1, 2 = C#1...
+*    i = the low 4 bits of the instrument number
+*    x = the 5th bit (#4) of the instrument number
+*    y = the 6th bit (#5) of the instrument number
+*    c = command number (0 - $F)
+*    d = databyte ($00 - $FF)
+
+
+.ConvertNoteMMD0
+    move    #$f00,$dff180
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+    
+    * Note number
+    moveq   #%00111111,d0
+    and.b   (a0),d0
+    
+    move.b  1(a0),d1
+    lsr.b   #4,d1
+    
+    moveq   #$f,d2
+    and.b   1(a0),d2
+
+    move.b  2(a0),d3
+    
+
+	rts
+
+.ConvertNoteMMD2
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+	
+	rts
+
+.PatternInfo 		ds.b	PI_Stripes	
+.Stripe1		dc.l	1
+.Stripe2		dc.l	1
+.Stripe3		dc.l	1
+.Stripe4		dc.l	1
 
 * Out:
 *   d0 = Length of MMD0/MMD2 module in positions
@@ -41069,7 +41180,7 @@ thx_author
 .a 	dc.b	"Dexter & Pink/aBYSs",0
 	even 
 
-p_thx
+p_thx:
 	jmp	.init(pc)
 	jmp .ahxCIAInterrupt(pc)
 	p_NOP   ; vb not used
