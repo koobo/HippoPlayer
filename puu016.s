@@ -14458,6 +14458,12 @@ exprefs	move.l	_IntuiBase(a5),a6
 	ext.l	d0
 	move.l	d0,priority(a5)
 	move	boxsize_new(a5),boxsize(a5)
+    tst.w   searchLayoutActive(a5)      
+    beq     .sla
+    cmp     #5,boxsize(a5)
+    bhs     .sla
+    move    #5,boxsize(a5)
+.sla    
 	move.b	dclick_new(a5),doubleclick(a5)
 	move.b	startuponoff_new(a5),startuponoff(a5)
 	move	timeout_new(a5),timeout(a5)
