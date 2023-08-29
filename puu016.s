@@ -28758,7 +28758,7 @@ noteScroller2:
 	* Keep visual range at 0..99, larger won't fit
 	cmp		#100,d3
 	blo.b	.s
-	sub		#100,d3
+	sub		#100,d3 * TODO: what if still doesn't fit?
 .s
 	divu	#10,d3 
 	lsl.b	#4,d3
@@ -39299,11 +39299,10 @@ p_med:
 	jmp .id_med(pc)
 	jmp	.author(pc)
 	dc.w pt_med
-.flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song!pf_volume!pf_scope
+.flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song!pf_scope
 	dc.b	"MED "
 .nam1	dc.b	"     "
-.nam2	dc.b	"      ",0
-
+.nam2	dc.b	"        ",0
 .pahk1  dc.b	"4ch",0
 .pahk2  dc.b	"5-8ch",0
 .pahk3	dc.b	"%ldch mix",0
@@ -39315,8 +39314,6 @@ p_med:
 	pushpea	.a_(pc),d0
 	rts
 
-.dep    dc.w    0
-
 .medvb
 	move.l	moduleaddress(a5),a0
 	move	46(a0),pos_nykyinen(a5)
@@ -39324,22 +39321,6 @@ p_med:
     bsr     getMEDLength
     move    d0,pos_maksimi(a5)
     bsr     MEDPatternUpdate
-
- REM
-    addq.b  #1,.dep
-    cmp.b   #25,.dep
-    bne     .yr
-    clr.b   .dep
-	move.l	moduleaddress(a5),a0
-    moveq   #0,d0
-    moveq   #0,d1
-    moveq   #0,d2
-    move    42(a0),d0
-    move    44(a0),d1
-    move    46(a0),d2
-    SDPRINT  "pblock=%ld pline=%ld pseqnum=%ld"
-.yr
- EREM
  	rts
 
 .medvol
@@ -39357,9 +39338,9 @@ p_med:
 	blo.b	.a
 	clr	d1
 .a	move	d1,46(a0)
-;	clr	44(a0)
-;	clr	48(a0)
-;	clr.b	50(a0)
+ 	;clr	44(a0)
+    ;clr	48(a0)
+	;clr.b	50(a0)
 	move	d1,pos_nykyinen(a5)
 	movem.l	(sp)+,d0/d1/a0
 	rts
@@ -39394,7 +39375,7 @@ p_med:
 	move.l	(a0),.nam1
 	cmp.l	#"MMD2",(a0)		* onko mmd2+? poistetaan kelaus..
 	blo.b	.olde
-	and	#~pf_kelaus!pf_poslen,(a1)
+	and	#~pf_kelaus,(a1)
 .olde
 	bsr	whatgadgets
 
@@ -39792,7 +39773,7 @@ MEDPatternUpdate:
     cmp.l   #"MMD1",(a1)
     bhs     .mmd1
 
-    move.l  #.ConvertNoteMMD0,PI_Convert(a0)
+    pushpea .ConvertNoteMMD0(pc),PI_Convert(a0)
 
     * MMD0Block->numtracks    
     moveq   #0,d0
@@ -39826,7 +39807,7 @@ MEDPatternUpdate:
     rts
 
 .mmd1
-    move.l  #.ConvertNoteMMD1,PI_Convert(a0)
+    pushpea .ConvertNoteMMD1(pc),PI_Convert(a0)
 
     * MMD1Block->numtracks    
     moveq   #0,d0
