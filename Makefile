@@ -55,3 +55,11 @@ clean:
 
 dist: HiP HiP-debug group
 	cd dist && make
+
+stil: HiP-STIL.db
+
+HiP-STIL.db: STIL.txt
+	python3 STIL-convert.py
+
+STIL.txt: 
+	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/STIL.txt
