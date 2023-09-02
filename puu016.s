@@ -22108,7 +22108,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	clr.l	(a1)
 
 	move.l	sp,a1
-	moveq	#12,d5
+	moveq	#12,d5  * allocate 12 lines text buffer
 	bsr	.allo2
 	bne.b	.jee9
 	lea	50(sp),sp
@@ -22674,7 +22674,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
   even
 
 
-.putcomment
+.putcomment:
 	pushm	d0/d1/a0/a3
 	moveq	#39+1,d1
 	bra.b	.puct
@@ -29235,9 +29235,14 @@ loadmodule:
 	* Then do ordinary load, this will also pick 
 	* the TFMX smpl file in the temp dir.
 	move.l	sp,a0	* path to load from
-	move.b	d6,d0   * double buffering flag
+	move.b	d6,d0   * double buffering fla
+    push    a3
 	bsr		.doLoadModule
 	move.l	d0,d7	* save status
+    pop     a3
+    * loadmodule will store the temp filepath address in stack into modulefilename(a5),
+    * put the actual path there, it's needed in module info for example.
+    pushpea l_filename(a3),modulefilename(a5)
 .skip2
 	* Delete TFMX smpl temp file if it is there
 	lea		100(sp),a0
