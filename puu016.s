@@ -55764,11 +55764,11 @@ doGetSTILInfo:
 .f1 
     * Read fnv1
     move.b  (a0)+,d3
-    rol.l   #8,d3
+    rol.w   #8,d3
     move.b  (a0)+,d3
-    rol.l   #8,d3
+    swap    d3
     move.b  (a0)+,d3
-    rol.l   #8,d3
+    rol.w   #8,d3
     move.b  (a0)+,d3
     cmp.l   d5,d3
     beq     .found
@@ -55785,9 +55785,9 @@ doGetSTILInfo:
     * Read data offset
     moveq   #0,d0
     move.b  (a0)+,d0
-    rol.l   #8,d0
+    swap    d0
     move.b  (a0)+,d0
-    rol.l   #8,d0
+    rol.w   #8,d0
     move.b  (a0)+,d0
 
 
