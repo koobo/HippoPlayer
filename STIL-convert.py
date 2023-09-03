@@ -3,6 +3,7 @@
 # TODO: skip "folder items" like /MUSICIANS/H/Hubbard_Rob/
 # TODO: check /MUSICIANS/Z/Zzap69/Jullov.sid
 #       has two TITLE and ARTIST entries
+# Todo: chris huelsbeck does not work due to the umlaut u
 
 from struct import *
 import os
@@ -148,7 +149,7 @@ def convertStil():
     tempFile = "/tmp/stil.tmp"
     fileDb = open(tempFile, 'wb')
 
-    wrapper = textwrap.TextWrapper(width=39)
+    wrapper = textwrap.TextWrapper(width=39, initial_indent="", subsequent_indent=" ")
     stil = {}
 
     # Parse into a dictionary
@@ -165,9 +166,8 @@ def convertStil():
             path = os.path.splitext(line.strip())[0]
             # Parse STIL block
             block = {}
-            # Store non-song number specific data (eg. comment) in song 0
-            songNumber = 0
-            block[songNumber] = {}
+            lines = []
+            comment = ""
             while True:
                 pos = fileIn.tell()
                 line = fileIn.readline()
@@ -177,75 +177,58 @@ def convertStil():
 
                     # Skip folder items, not supporting those at the moment
                     if not path[-1] == "/":
+                        block["lines"] = lines
                         stil[path] = block
                     else:
                         pass #print("Skipped: " + path)        
                     break
                 line = line.rstrip()
-                # Check for song indicator
+
+                # Output fields as wrapped lines
+                
                 if line[0:2] == "(#":
-                    songNumber = int(line.strip("(#)"))
-                # New dict for each song
-             
-                if not block.get(songNumber):
-                    block[songNumber] = {}
+                    songNumber = line.strip("(#)")
+                    lines.append("") # empty line after
+                    lines += wrapper.wrap("*** Song " + songNumber + " ***")
              
                 if line.startswith("   NAME:"):
-                    if not "name" in block[songNumber]:
-                        block[songNumber]["name"] = []
-                    block[songNumber]["name"].append(line[9:])
+                    lines += wrapper.wrap("Name: " + line[9:])
              
                 if line.startswith(" AUTHOR:"):
-                    if not "author" in block[songNumber]:
-                        block[songNumber]["author"] = []
-                    block[songNumber]["author"].append(line[9:])
+                    lines += wrapper.wrap("Author: " + line[9:])
              
                 if line.startswith("  TITLE:"):
-                    if not "title" in block[songNumber]:
-                        block[songNumber]["title"] = []
-                    block[songNumber]["title"].append(line[9:])
+                    lines += wrapper.wrap("Title: " + line[9:])
              
                 if line.startswith(" ARTIST:"):
-                    if not "artist" in block[songNumber]:
-                        block[songNumber]["artist"] = []
-                    block[songNumber]["artist"].append(line[9:])
+                    lines += wrapper.wrap("Artist: " + line[9:])
              
-                if line.startswith("COMMENT:") or line.startswith("        "):
-                    if not block[songNumber].get("comment"):
-                        block[songNumber]["comment"] = line[9:]
-                    else:
-                        block[songNumber]["comment"] += line[8:]
+                if line.startswith("COMMENT:"):
+                    comment = line[9:]
+                    pos = fileIn.tell()
+                    nextLine = fileIn.readline()
+                    fileIn.seek(pos)
+                    if not nextLine or not nextLine.startswith("        "):
+                        lines += wrapper.wrap("Comment: " + comment)
+                        comment = ""
+
+                if line.startswith("        "):
+                    comment += line[8:]
+                    pos = fileIn.tell()
+                    nextLine = fileIn.readline()
+                    fileIn.seek(pos)
+                    if not nextLine or not nextLine.startswith("        "):
+                        lines += wrapper.wrap("Comment: " + comment)
+                        comment = ""
+
+
+
+
     fileIn.close()
-
-
-    # Create wrapped lines that are displayable in the hippo info window
-    for path in stil:
-        lines = []
-
-        def wrapAndPut(nameIn, fieldIn, linesOut):
-            if fieldIn in stil[path][songNumber]:
-                if type(stil[path][songNumber][fieldIn]) is list:
-                    for fieldValue in stil[path][songNumber][fieldIn]:
-                        linesOut += wrapper.wrap(nameIn + ": " + fieldValue)
-                else:
-                    linesOut += wrapper.wrap(nameIn + ": " + stil[path][songNumber][fieldIn])
-
-
-        for songNumber in stil[path]:
-            if songNumber > 0: # Do not put title for generic info
-                lines += wrapper.wrap(str("Song #" + str(songNumber)))
-            wrapAndPut("Name", "name", lines)
-            wrapAndPut("Author", "author", lines)
-            wrapAndPut("Title", "title", lines)
-            wrapAndPut("Artist", "artist", lines)
-            wrapAndPut("Comment", "comment", lines)
-        stil[path]["lines"] = lines
-
 
     #dictionaryCompress(stil)
     #huffmanEncode(stil)
     fnvHash(stil)
-
 
     # Leave space for length
     fileIdx.write(pack(">I", 0xdeadbeef))
