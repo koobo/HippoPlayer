@@ -3647,6 +3647,7 @@ exit
  endif
     jsr     freeStreamHeaderArgs
     jsr     freeStreamerError
+    jsr     freeSTILData
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -22080,6 +22081,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	cmp	#pt_sid,playertype(a5)		* PSID
 	bne	.nosid
 
+***************************************
+* PSID
+***************************************
 * SID piisista infoa
 
 	move	#33,info_prosessi(a5)		* PSID info-lippu
@@ -22107,8 +22111,27 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	pushpea	filecomment(a5),(a1)+
 	clr.l	(a1)
 
-	move.l	sp,a1
-	moveq	#12,d5  * allocate 12 lines text buffer
+    moveq	#12,d5  * allocate 12 lines text buffer initially
+
+    * Check if there is STIL data available
+	
+    moveq   #0,d4
+    jsr     getSTILInfo
+    * a0 = text, to be freed
+    * d0 = length
+    tst.l   d0
+    beq     .noSTIL
+
+    * Add more lines to be allocated
+    move.l  a0,d4
+    * How many 40 char lines does this need 
+    move.l  d0,d1
+
+    divu    #40,d1
+    addq    #1,d1   * round up
+    add     d1,d5
+.noSTIL
+    * Allocate text buffer, amount of lines in d5
 	bsr	.allo2
 	bne.b	.jee9
 	lea	50(sp),sp
@@ -22116,11 +22139,36 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .jee9
 
 	lea	.form(pc),a0
+	move.l	sp,a1       * parameters in
 	move.l	infotaz(a5),a3
 	bsr	.desmsg4
 	lea	50(sp),sp
 
 	bsr	.putcomment
+
+    ;----------------------------------
+    ; Insert STIL data
+
+    tst.l   d4
+    beq     .selvis
+    * d4 now has STIL data
+
+    ; Find end of current buffer
+    move.l	infotaz(a5),a3
+	bsr     .lloppu
+    ; extra space
+    bsr     .putLineChange
+    * put stil stuff there
+
+    move.l  d4,a0
+.copyStil  
+    move.b  (a0)+,(a3)+
+    bne     .copyStil
+
+    ; Free it after copying
+    move.l  d4,a0
+    jsr     freemem
+
 	bra	.selvis
 
 
@@ -55555,7 +55603,346 @@ readClipboard:
 .iffParseName   dc.b    "iffparse.library",0
     even
  endif
+
+***************************************************************************
+*
+* STIL database
+*
+***************************************************************************
+
+* modulefilename: path
+
+* Look for:
+* /DEMOS/
+* /GAMES/
+* /MUSICIANS/
+
+* TODO: get modulfilename, upper case it and remove the extension,
+* then it's compatible
+* in cmpm use module file name lenght and NOT stil path length
+
+* Out:
+*   a0 = text data, should be freed
+*   d0 = text length or NULL if not found
+getSTILInfo:
+    DPRINT  "getSTILInfo"
+    pushm   d1-d7/a1-a6
+
+    move.l  modulefilename(a5),d0
+    beq     .1
+    DPRINT  "%s"
+    move.l  d0,a0
+    bsr     doGetSTILInfo
+    tst.l   d0
+    beq     .1
+    * Data length
+    move.l  -4(a0),d0
+.1
+    DPRINT  "result=%ld"
+    popm    d1-d7/a1-a6
+    rts
+    
+; TODO: info window waitpointe
+
+* In:
+*   a0 = module path
+* Out:
+*   d0 = true or false
+*   a0 = text buffer, to be free after use
+doGetSTILInfo:
+    ; Space for module path starting from the STIL path part
+    ; Space for the path from the STIL index
+    lea     -200(sp),sp
+
+    ; ---------------------------------
+    ; Search for known STIL path parts from the module path.
+    ; /DEMOS /GAMES /MUSICIANS
+    ; If not found, exit.
+
+.loop
+    move.b  (a0)+,d0
+    beq     .exitFail
+    cmp.b   #"/",d0
+    bne     .loop
+
+    lea     .demos(pc),a2
+    bsr     .find
+    bne     .ok1
+    lea     .games(pc),a2
+    bsr     .find
+    bne     .ok1
+    lea     .musicians(pc),a2
+    bsr     .find
+    bne     .ok1
+    bra     .loop
+
+
+.demos      dc.b    "DEMOS/",0
+.games      dc.b    "GAMES/",0
+.musicians  dc.b    "MUSICIANS/",0
+.stil       dc.b    "p:HiP-STIL.db",0
+    even
+
+.find:
+    move.l  a0,a1
+.loop2
+    move.b  (a1)+,d0
+    beq     .not
+    move.b  (a2)+,d1
+    beq     .yes
+    bsr     .upperCaseD0
+    cmp.b   d1,d0
+    beq     .loop2
+.not
+    moveq   #0,d0
+    rts
+.yes
+    moveq   #1,d0
+    rts
+
+.exitFail
+    moveq   #0,d0
+    bra     .exitStil
+
+.ok1
+    ; ---------------------------------
+    ; Copy from STIL-looking bit onwards and uppercase it
+
+    subq.l  #1,a0
+    move.l  sp,a1
+.copy1
+    move.b  (a0)+,d0
+    beq     .copied
+    bsr     .upperCaseD0
+    move.b  d0,(a1)+
+    bra     .copy1
+.copied
+
+    ; ---------------------------------
+    ; Check for ".sid" extension
+
+    cmp.b   #".",-4(a1)
+    bne     .exitFail
+    cmp.b   #"S",-3(a1)
+    bne     .exitFail
+    cmp.b   #"I",-2(a1)
+    bne     .exitFail
+    cmp.b   #"D",-1(a1)
+    bne     .exitFail
+    ; Remove it since it's not in the STIL data either
+    clr.b   -4(a1)
+
+    ; ---------------------------------
+    ; Calculate fnv1 into d5
+    move.l  sp,a0
+    bsr     fnv1
+    move.l  d0,d5
  
+    ; ---------------------------------
+    ; Load STIL index
+
+    bsr     loadSTILIndex
+    move.l  d0,d6
+    beq     .loadErr
+
+    * Offset to the data portion
+    move.l  d0,a0
+    move.l  (a0),d0
+
+    move.l  a0,a1
+    add.l   d0,a1
+    addq.l  #4,a0
+    * a0 = start of index
+    * a1 = end of index
+    move.l  d7,a2
+    * a2 = search string
+
+.f1 
+    * Read fnv1
+    move.b  (a0)+,d3
+    rol.l   #8,d3
+    move.b  (a0)+,d3
+    rol.l   #8,d3
+    move.b  (a0)+,d3
+    rol.l   #8,d3
+    move.b  (a0)+,d3
+    cmp.l   d5,d3
+    beq     .found
+    * Skip data offset
+    addq    #3,a0
+    cmp.l   a1,a0
+    blo     .f1
+     * out of data, not found
+    moveq   #0,d0
+    bra     .f4
+    
+.found
+    * Read data offset
+    moveq   #0,d0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+
+
+    ; ---------------------------------
+    * Was a match
+    bsr     loadSTILEntry
+    tst.l   d0
+    beq     .loadErr
+    move.l  d0,a0
+
+    moveq   #1,d0
+.f4
+.loadErr
+.exitStil
+    lea     200(sp),sp
+    rts
+
+
+.upperCaseD0
+    cmp.b	#'a',d0
+    blo 	.up1
+    cmp.b	#'z',d0
+    bhi 	.up1
+    and.b   #$df,d0 * to uppper
+.up1
+    rts    	
+    
+
+loadSTILIndex:
+    move.l  stilIndexPtr(pc),d0
+    bne     .1
+
+    DPRINT  "Loading STIL data"
+    move.l  #datafileName,d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    move.l  d0,stilFileHandle
+    beq     .err
+
+    lea     -4(sp),sp
+    move.l  d0,d1   * file 
+    move.l  sp,d2   * dest
+    moveq   #4,d3   * len
+    lob     Read
+    move.l  (sp),stilDataOffset
+    cmp.l   #4,d0
+    lea     4(sp),sp
+    bne     .err
+
+    move.l  stilDataOffset(pc),d0
+    moveq   #MEMF_PUBLIC,d1
+    jsr     getmem
+    beq     .err
+
+    move.l  d0,stilIndexPtr
+    move.l  stilFileHandle,d1
+    move.l  d0,d2
+    addq.l  #4,d2   * space for offset
+    move.l  stilDataOffset,d3   * reading 4 bytes extra here but no matter
+    lore    Dos,Read
+    cmp.l   stilDataOffset,d0
+    bne     .err
+.1
+    move.l  stilIndexPtr,d0
+    move.l  d0,a0
+    move.l  stilDataOffset,(a0)
+    rts
+
+.err
+    moveq   #0,d0
+    rts
+
+* In:
+*   d0 = Data offset
+loadSTILEntry:
+    * Skip the index part
+    add.l   stilDataOffset,d0
+    move.l  d0,d2
+    move.l  stilFileHandle,d1
+    move.l  #OFFSET_BEGINNING,d3
+    lore    Dos,Seek
+    cmp.l   #-1,d0
+    beq     .err
+
+    * Read entry length
+    lea     -2(sp),sp
+    move.l  stilFileHandle,d1 
+    move.l  sp,d2   * dest
+    moveq   #2,d3   * len
+    lob     Read
+    cmp.l   #2,d0
+    bne     .err
+    moveq   #0,d4
+    move.w  (sp)+,d4
+
+    move.l  d4,d0
+    addq    #1,d0   * space for NULL at end
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    beq     .err
+    move.l  d0,d5
+
+    move.l  stilFileHandle,d1
+    move.l  d5,d2
+    move.l  d4,d3
+    lob     Read
+    cmp.l   d4,d0
+    bne     .err
+
+    * success
+    move.l  d5,d0
+    rts
+
+.err
+    moveq   #0,d0
+    rts
+
+
+freeSTILData: 
+    DPRINT  "freeSTIL"
+    move.l  stilIndexPtr,a0
+    jsr     freemem
+    move.l  stilFileHandle,d1
+    beq     .1
+    lore    Dos,Close
+.1
+    rts
+
+stilIndexPtr
+    dc.l    0
+stilDataOffset
+    dc.l    0
+stilFileHandle
+    dc.l    0
+
+
+datafileName
+    dc.b "p:HiP-STIL.db",0
+    even
+
+
+* In:
+*   a0 = string with null termination
+* Out:
+*   d0 = fnv1 hash
+fnv1:
+    move.l  #$811c9dc5,d0 * hval
+    move.l  #$01000193,d1 * prime
+    bra     .go
+.loop
+    jsr     mulu_32
+    eor.b   d2,d0
+.go
+    move.b  (a0)+,d2
+    bne     .loop
+.x
+    rts
+
+
+
 ***************************************************************************
 *
 * Performance measurement with timer.device
