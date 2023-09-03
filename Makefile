@@ -53,7 +53,7 @@ cleaner: clean
 clean:	
 	rm -f HiP HiP-debug 
 
-dist: HiP HiP-debug group
+dist: HiP HiP-debug group stil
 	cd dist && make
 
 stil: HiP-STIL.db

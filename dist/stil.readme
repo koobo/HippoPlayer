@@ -1,0 +1,12 @@
+STIL is the SID Tune Information List, part of the High Voltage SID collection
+(HVSC). It contains information about SIDs, including the original composer's
+name, defects in certain tunes, interesting trivia, etc etc.
+
+HippoPlayer is able to display this information in the info window if it detects
+the SID being played is part of HVSC (by checking the file path and URL).
+
+To enable, unarchive stil.lha and place the file "HiP-STIL.db" to the directory
+where Hippo is installed.
+
+Note that the format of the data is custom generated for Hippo. This allows fast
+searches, low memory usage and not a lot disk access.
