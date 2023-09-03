@@ -1499,6 +1499,11 @@ favoritesModeChosenModule   rs.l    1
 fileBrowserChosenModule     rs.l    1
 searchResultsChosenModule   rs.l    1
 
+* STIL
+stilFileHandle  rs.l    1   
+stilDataOffset  rs.l    1   
+stilIndexPtr    rs.l    1
+
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -20932,7 +20937,7 @@ rbutton10b
 .n	movem.l	(sp)+,d0-a6
 .x	rts
 
-info_code
+info_code:
 	lea	var_b,a5
 	addq	#1,info_prosessi(a5)
 
@@ -20946,6 +20951,15 @@ info_code
 	moveq	#-1,d0
 	lob	AllocSignal
 	move.b	d0,info_signal2(a5)
+
+    * Switch process current dir so that STIL db can be found
+    move.l  homelock(a5),d1 * This is available in kick2+, PROGDIR:
+    bne     .n1
+    move.l  lockhere(a5),d1 * Fallback option, the current dir
+    beq     .n2
+.n1
+    lore    Dos,CurrentDir
+.n2
 
 	bsr.b	.infocode
 
@@ -55610,17 +55624,6 @@ readClipboard:
 *
 ***************************************************************************
 
-* modulefilename: path
-
-* Look for:
-* /DEMOS/
-* /GAMES/
-* /MUSICIANS/
-
-* TODO: get modulfilename, upper case it and remove the extension,
-* then it's compatible
-* in cmpm use module file name lenght and NOT stil path length
-
 * Out:
 *   a0 = text data, should be freed
 *   d0 = text length or NULL if not found
@@ -55642,7 +55645,7 @@ getSTILInfo:
     popm    d1-d7/a1-a6
     rts
     
-; TODO: info window waitpointe
+; TODO: info window waitpointer
 
 * In:
 *   a0 = module path
@@ -55651,7 +55654,6 @@ getSTILInfo:
 *   a0 = text buffer, to be free after use
 doGetSTILInfo:
     ; Space for module path starting from the STIL path part
-    ; Space for the path from the STIL index
     lea     -200(sp),sp
 
     ; ---------------------------------
@@ -55680,7 +55682,6 @@ doGetSTILInfo:
 .demos      dc.b    "DEMOS/",0
 .games      dc.b    "GAMES/",0
 .musicians  dc.b    "MUSICIANS/",0
-.stil       dc.b    "p:HiP-STIL.db",0
     even
 
 .find:
@@ -55737,11 +55738,15 @@ doGetSTILInfo:
     move.l  sp,a0
     bsr     fnv1
     move.l  d0,d5
- 
+ if DEBUG
+    move.l  sp,d1
+    DPRINT  "fnv1=%lx %s"
+ endif
     ; ---------------------------------
     ; Load STIL index
 
     bsr     loadSTILIndex
+    DPRINT  "loadSTILIndex=%lx"
     move.l  d0,d6
     beq     .loadErr
 
@@ -55754,8 +55759,7 @@ doGetSTILInfo:
     addq.l  #4,a0
     * a0 = start of index
     * a1 = end of index
-    move.l  d7,a2
-    * a2 = search string
+    * d5 = hash to find
 
 .f1 
     * Read fnv1
@@ -55774,6 +55778,7 @@ doGetSTILInfo:
     blo     .f1
      * out of data, not found
     moveq   #0,d0
+    DPRINT  "not found"
     bra     .f4
     
 .found
@@ -55789,6 +55794,7 @@ doGetSTILInfo:
     ; ---------------------------------
     * Was a match
     bsr     loadSTILEntry
+    DPRINT  "loadSTILEntry=%lx"
     tst.l   d0
     beq     .loadErr
     move.l  d0,a0
@@ -55812,14 +55818,14 @@ doGetSTILInfo:
     
 
 loadSTILIndex:
-    move.l  stilIndexPtr(pc),d0
+    move.l  stilIndexPtr(a5),d0
     bne     .1
 
     DPRINT  "Loading STIL data"
-    move.l  #datafileName,d1
+    pushpea .file(pc),d1
     move.l  #MODE_OLDFILE,d2
     lore    Dos,Open
-    move.l  d0,stilFileHandle
+    move.l  d0,stilFileHandle(a5)
     beq     .err
 
     lea     -4(sp),sp
@@ -55827,41 +55833,44 @@ loadSTILIndex:
     move.l  sp,d2   * dest
     moveq   #4,d3   * len
     lob     Read
-    move.l  (sp),stilDataOffset
-    cmp.l   #4,d0
+    move.l  (sp),stilDataOffset(a5)
+    cmp.w   #4,d0
     lea     4(sp),sp
     bne     .err
 
-    move.l  stilDataOffset(pc),d0
+    move.l  stilDataOffset(a5),d0
     moveq   #MEMF_PUBLIC,d1
     jsr     getmem
     beq     .err
 
-    move.l  d0,stilIndexPtr
-    move.l  stilFileHandle,d1
+    move.l  d0,stilIndexPtr(a5)
+    move.l  stilFileHandle(a5),d1
     move.l  d0,d2
     addq.l  #4,d2   * space for offset
-    move.l  stilDataOffset,d3   * reading 4 bytes extra here but no matter
+    move.l  stilDataOffset(a5),d3   * reading 4 bytes extra here but no matter
     lore    Dos,Read
-    cmp.l   stilDataOffset,d0
+    cmp.l   stilDataOffset(a5),d0
     bne     .err
 .1
-    move.l  stilIndexPtr,d0
+    move.l  stilIndexPtr(a5),d0
     move.l  d0,a0
-    move.l  stilDataOffset,(a0)
+    move.l  stilDataOffset(a5),(a0)
     rts
 
 .err
     moveq   #0,d0
     rts
 
+.file   dc.b    "HiP-STIL.db",0
+    even
+
 * In:
 *   d0 = Data offset
 loadSTILEntry:
     * Skip the index part
-    add.l   stilDataOffset,d0
+    add.l   stilDataOffset(a5),d0
     move.l  d0,d2
-    move.l  stilFileHandle,d1
+    move.l  stilFileHandle(a5),d1
     move.l  #OFFSET_BEGINNING,d3
     lore    Dos,Seek
     cmp.l   #-1,d0
@@ -55869,11 +55878,11 @@ loadSTILEntry:
 
     * Read entry length
     lea     -2(sp),sp
-    move.l  stilFileHandle,d1 
+    move.l  stilFileHandle(a5),d1 
     move.l  sp,d2   * dest
     moveq   #2,d3   * len
     lob     Read
-    cmp.l   #2,d0
+    cmp.w   #2,d0
     bne     .err
     moveq   #0,d4
     move.w  (sp)+,d4
@@ -55885,7 +55894,7 @@ loadSTILEntry:
     beq     .err
     move.l  d0,d5
 
-    move.l  stilFileHandle,d1
+    move.l  stilFileHandle(a5),d1
     move.l  d5,d2
     move.l  d4,d3
     lob     Read
@@ -55903,26 +55912,13 @@ loadSTILEntry:
 
 freeSTILData: 
     DPRINT  "freeSTIL"
-    move.l  stilIndexPtr,a0
+    move.l  stilIndexPtr(a5),a0
     jsr     freemem
-    move.l  stilFileHandle,d1
+    move.l  stilFileHandle(a5),d1
     beq     .1
     lore    Dos,Close
 .1
     rts
-
-stilIndexPtr
-    dc.l    0
-stilDataOffset
-    dc.l    0
-stilFileHandle
-    dc.l    0
-
-
-datafileName
-    dc.b "p:HiP-STIL.db",0
-    even
-
 
 * In:
 *   a0 = string with null termination
