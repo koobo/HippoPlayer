@@ -55745,6 +55745,10 @@ doGetSTILInfo:
     ; Load STIL index
 
     push    d5
+    ; Try to create the index first, slow
+    pushm   all
+    bsr     createStilIndex
+    popm    all
     bsr     loadSTILIndex
     * d0 = address
     * d1 = length
@@ -55827,12 +55831,14 @@ doGetSTILInfo:
 .up1
     rts    	
     
-
+* Out:
+*  d0 = index data pointer, or NULL
+*  d1 = index data lenght
 loadSTILIndex:
     move.l  stilIndexPtr(a5),d0
     bne     .ok
 
-    pushpea .stilIndexName(pc),d1
+    pushpea stilIndexName(pc),d1
     move.l  #MODE_OLDFILE,d2
     lore    Dos,Open
     move.l  d0,d7
@@ -55883,11 +55889,7 @@ loadSTILIndex:
 .err
     moveq   #0,d0
     rts
-
-.stilIndexName
-    dc.b    "STIL.idx",0
-    even
-
+    
 * In:
 *   d0 = Data offset
 *   d1 = Length to read
@@ -55907,7 +55909,7 @@ loadSTILEntry:
     move.l  d0,d6
     beq     .err
     
-    pushpea .stilDataName(pc),d1
+    pushpea stilDataName(pc),d1
     move.l  #MODE_OLDFILE,d2
     lore    Dos,Open
     move.l  d0,d7
@@ -55976,32 +55978,13 @@ loadSTILEntry:
     moveq   #0,d0
     rts
 
-.stilDataName   
-    dc.b    "STIL.txt",0
-    even
-
 freeSTILData: 
     DPRINT  "freeSTIL"
     move.l  stilIndexPtr(a5),a0
     jsr     freemem
     rts
 
-* In:
-*   a0 = string with null termination
-* Out:
-*   d0 = fnv1 hash
-fnv1:
-    move.l  #$811c9dc5,d0 * hval
-    move.l  #$01000193,d1 * prime
-    bra     .go
-.loop
-    jsr     mulu_32
-    eor.b   d2,d0
-.go
-    move.b  (a0)+,d2
-    bne     .loop
-.x
-    rts
+
 
 * in:
 *   a0 = STIL entry text, null terminated
@@ -56216,6 +56199,284 @@ putNewLine
     move.b   #ILF2,(a1)+
     rts
 
+* Creates the STIL.idx file from STIL.txt
+createStilIndex:
+    DPRINT "createStilIndex"
+    sub.l   a4,a4   
+    moveq   #0,d6
+
+    ; ---------------------------------
+    * Open STIL.txt
+    pushpea stilDataName(pc),d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "open STIL.txt=%lx"
+    move.l  d0,d7
+    beq     .exit
+
+    ; ---------------------------------
+    * Find STIL.txt length
+	move.l	d7,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d7,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+	move.l	d7,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
+    DPRINT  "len=%lx"
+
+    ; ---------------------------------
+    * Try to open idx
+    pushpea stilIndexName(pc),d1
+    move.l  #MODE_OLDFILE,d2
+    lob     Open
+    DPRINT  "old STIL.idx=%lx"
+    move.l  d0,d6
+    bne     .yesIdx
+    ; ---------------------------------
+    * No previous idx, create new
+    pushpea stilIndexName(pc),d1
+    move.l  #MODE_NEWFILE,d2
+    lob     Open
+    DPRINT  "new STIL.idx=%lx"
+    move.l  d0,d6
+    beq     .exit
+    bra     .writeLen
+.yesIdx
+    ; ---------------------------------
+    * Read txt length from the start
+    lea     -4(sp),sp
+    move.l  d6,d1   * file
+    move.l  sp,d2   * dest
+    moveq   #4,d3   * len
+    lob     Read
+    * Go back to start
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek		
+    ; ---------------------------------
+    * Compare txt length and the length stored in idx
+    * If same, exit
+    cmp.l   (sp)+,d5
+    beq     .exit
+.writeLen
+    ; ---------------------------------
+    ; Allocate 10k + 190k here, the last part for output
+    move.l  #1024*200,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    beq     .exit
+    DPRINT  "AllocMem=%lx"
+    move.l  d0,a4
+    * Output buffer into a5
+    lea     10*1024(a4),a5
+
+    ; ---------------------------------
+    * Write the txt length into the idx
+    move.l  d5,-(sp)
+    move.l  d6,d1   * file
+    move.l  sp,d2   * source
+    moveq   #4,d3   * len
+    lob     Write
+    DPRINT  "Write=%lx"
+    addq    #4,sp   * pop
+    cmp.l   #-1,d0
+    beq     .exit
+    * d0 = -1 on error
+
+    ; ---------------------------------
+    * Read a chunk of txt
+    lea     -200(sp),sp
+    move.l  sp,a3           * line buffer
+    moveq   #0,d5           * txt file position
+    DPRINT  "readLoop"
+.readLoop
+    move.l  d7,d1
+    move.l  a4,d2
+    move.l  #1024*10,d3
+    lob     Read
+    DPRINT  "Read=%lx"
+    move    #$0f0,$dff180
+    move.l  d0,d4
+    beq     .stopLoop
+    bmi     .stopLoop
+    ; ---------------------------------
+    ; Read bytes until lime change
+    move.l  a4,a0           * start
+    lea     (a0,d0),a1      * end
+    moveq   #13,d1          * loop constants
+    moveq   #10,d2
+.lineLoop
+    move.b  (a0)+,d0
+    cmp.b   d1,d0
+    beq     .cr
+    cmp.b   d2,d0
+    beq     .lf
+    * Copy one char, check if data exhausted
+    move.b  d0,(a3)+
+.continue
+    cmp.l   a1,a0
+    blo     .lineLoop
+
+    * Update global data offset
+    add.l   #1024*10,d5
+    * See if we got a full chunk last time, read more if so
+    cmp.l   #1024*10,d4
+    beq     .readLoop
+    * Exit
+    bra     .stopLoop
+
+.continueLineLoop
+    moveq   #13,d1
+    moveq   #10,d2
+    bra     .continue
+
+.lf
+.cr
+    * Skip lines that are not the title line
+    cmp.b   #"/",(sp)
+    bne     .next
+ ;   move    #$f00,$dff180
+    ; ---------------------------------
+    ; A whole line read, null terminate
+    clr.b   (a3)
+
+    ; Convert to uppercase
+    move.l  sp,a2
+    moveq   #'a',d1
+    moveq   #'z',d2
+    move.b  #$df,d3
+    bra     .ugo
+.ucase1
+    cmp.b	d1,d0
+    blo 	.up1
+    cmp.b	d2,d0
+    bhi 	.up1
+    and.b   d3,d0 * to upper
+.up1
+    move.b  d0,(a2)+
+.ugo
+    move.b  (a2),d0
+    bne     .ucase1
+.ucase2
+    ; ---------------------------------
+    ; Check for extension and remove it
+    cmp.b   #"D",-1(a2)
+    bne     .next
+    cmp.b   #"I",-2(a2)
+    bne     .next
+    cmp.b   #"S",-3(a2)
+    bne     .next
+    cmp.b   #".",-4(a2)
+    bne     .next
+    clr.b   -4(a2)
+; if DEBUG
+;    move.l  sp,d0
+;    DPRINT  "UCas=%s"
+; endif
+    ; ---------------------------------
+    ; Process string in a0
+
+    ; Calc offset to the line after the title line, 
+    ; where the data is.
+    ; a0 points to 13 or 10 on the previous title line here.
+    move.l  a0,a2
+    cmp.b   #10,(a2)
+    bne     .skip1
+    addq    #1,a2
+.skip1
+    * Offset relative to the work buffer
+    sub.l   a4,a2
+    * Offset relative to the STIL.txt file
+    add.l   d5,a2
+
+    ; USE a2!
+    move.l  sp,d0
+    push    a0
+    move.l  d0,a0
+    bsr     fnv1
+    pop     a0
+
+    * d0 = hash into output
+    move.l  d0,(a5)+
+    * a2 = offset, store three bytes
+    move.l  a2,d0
+    swap    d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    
+.next
+    ; ---------------------------------
+    ; Start getting a new line into a3
+    move.l  sp,a3
+    ; Ignore 10 if the line ended with 13 ealier
+    cmp.b   #10,(a0)
+    bne     .continueLineLoop
+    addq    #1,a0
+    bra     .continueLineLoop
+
+.stopLoop
+
+    lea     200(sp),sp
+
+    ; ---------------------------------
+    ; Write index
+    move.l  d6,d1   * file
+    lea     10*1024(a4),a0
+    move.l  a0,d2   * src
+    move.l  a5,d3
+    sub.l   a0,d3   * length
+    lob     Write
+
+.exit
+    ; ---------------------------------
+    DPRINT  "exit"
+    move.l  a4,a0
+    jsr     freemem
+    move.l  d7,d1
+    beq     .x1
+    lob     Close
+.x1 move.l  d6,d1
+    beq     .x2
+    lob     Close
+.x2
+    rts
+
+
+
+* In:
+*   a0 = string with null termination
+* Out:
+*   d0 = fnv1 hash
+fnv1:
+    push    a2
+    move.l  #$811c9dc5,d0 * hval
+    move.l  #$01000193,d1 * prime
+    lea     mulu_32,a2
+    bra     .go
+.loop
+    jsr     (a2)
+    eor.b   d2,d0
+.go
+    move.b  (a0)+,d2
+    bne     .loop
+.x     
+    pop     a2
+    rts
+
+stilDataName:  dc.b "STIL.txt",0
+stilIndexName: dc.b "STIL.idx",0
+ even
 
 ***************************************************************************
 *
