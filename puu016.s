@@ -56295,6 +56295,7 @@ createStilIndex:
     * Read a chunk of txt
     lea     -200(sp),sp
     move.l  sp,a3           * line buffer
+    move.l  d5,196(sp)      * store total length here
     moveq   #0,d5           * txt file position
     DPRINT  "readLoop"
 .readLoop
@@ -56302,8 +56303,33 @@ createStilIndex:
     move.l  a4,d2
     move.l  #1024*10,d3
     lob     Read
-    DPRINT  "Read=%lx"
-    move    #$0f0,$dff180
+
+    ; ---------------------------------
+    ; Print progress information
+    move.l  196(sp),d1
+    pushm   all
+    lea     var_b,a5
+    move.l  d5,d0
+    lsr.l   #8,d0
+    lsr.l   #8,d1
+    mulu    #100,d0
+    divu    d1,d0
+    ext.l   d0
+
+    moveq   #"%",d1
+    lea     .progressMsg(pc),a0
+    lea     -64(sp),sp
+    move.l  sp,a3
+    jsr     desmsg3
+
+    moveq   #35,d0
+    moveq   #22,d1
+    move.l  sp,a0
+    jsr     sprint
+    lea     64(sp),sp
+    popm    all
+
+    ; ---------------------------------
     move.l  d0,d4
     beq     .stopLoop
     bmi     .stopLoop
@@ -56404,8 +56430,15 @@ createStilIndex:
     bsr     fnv1
     pop     a0
 
-    * d0 = hash into output
-    move.l  d0,(a5)+
+    * d0 = hash into output    
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
     * a2 = offset, store three bytes
     move.l  a2,d0
     swap    d0
@@ -56452,7 +56485,9 @@ createStilIndex:
 .x2
     rts
 
-
+.progressMsg
+    dc.b    "Creating STIL index %02.2ld%lc",0
+    even
 
 * In:
 *   a0 = string with null termination
