@@ -1500,8 +1500,6 @@ fileBrowserChosenModule     rs.l    1
 searchResultsChosenModule   rs.l    1
 
 * STIL
-stilFileHandle  rs.l    1   
-stilDataOffset  rs.l    1   
 stilIndexPtr    rs.l    1
 
 
@@ -55636,10 +55634,11 @@ getSTILInfo:
     DPRINT  "%s"
     move.l  d0,a0
     bsr     doGetSTILInfo
+    DPRINT  "doGetStilInfo addr=%lx len=%lx"
     tst.l   d0
     beq     .1
-    * Data length
-    move.l  -4(a0),d0
+    move.l  d0,a0
+    move.l  d1,d0
 .1
     DPRINT  "result=%ld"
     popm    d1-d7/a1-a6
@@ -55745,30 +55744,29 @@ doGetSTILInfo:
     ; ---------------------------------
     ; Load STIL index
 
+    push    d5
     bsr     loadSTILIndex
-    DPRINT  "loadSTILIndex=%lx"
-    move.l  d0,d6
+    * d0 = address
+    * d1 = length
+    DPRINT  "loadSTILIndex=%lx %ld"
+    pop     d5
+    tst.l   d0
     beq     .loadErr
 
-    * Offset to the data portion
     move.l  d0,a0
-    move.l  (a0),d0
-
-    move.l  a0,a1
-    add.l   d0,a1
-    addq.l  #4,a0
+    move.l  d0,a1
+    add.l   d1,a1
+    addq.l  #4,a0 * skip data length 
     * a0 = start of index
     * a1 = end of index
-    * d5 = hash to find
-
 .f1 
     * Read fnv1
     move.b  (a0)+,d3
-    rol.w   #8,d3
+    rol.l   #8,d3
     move.b  (a0)+,d3
-    swap    d3
+    rol.l   #8,d3
     move.b  (a0)+,d3
-    rol.w   #8,d3
+    rol.l   #8,d3
     move.b  (a0)+,d3
     cmp.l   d5,d3
     beq     .found
@@ -55778,28 +55776,41 @@ doGetSTILInfo:
     blo     .f1
      * out of data, not found
     moveq   #0,d0
-    DPRINT  "not found"
     bra     .f4
     
 .found
-    * Read data offset
-    moveq   #0,d0
-    move.b  (a0)+,d0
-    swap    d0
-    move.b  (a0)+,d0
-    rol.w   #8,d0
-    move.b  (a0)+,d0
-
-
     ; ---------------------------------
     * Was a match
+    * Grab 3 data offset bytes after text
+ 
+    moveq   #0,d0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+ 
+    * Read next data offset
+    addq    #4,a0
+    moveq   #0,d1
+    move.b  (a0)+,d1
+    rol.l   #8,d1
+    move.b  (a0)+,d1
+    rol.l   #8,d1
+    move.b  (a0)+,d1
+    sub.l   d0,d1  
+    * d1 = length
+    bpl     .len
+    * If accessing the last item the following length is zero
+    * so we end up here, exit with fail!
+    moveq   #0,d0
+    bra     .loadErr
+.len
+
     bsr     loadSTILEntry
-    DPRINT  "loadSTILEntry=%lx"
     tst.l   d0
     beq     .loadErr
     move.l  d0,a0
-
-    moveq   #1,d0
 .f4
 .loadErr
 .exitStil
@@ -55819,105 +55830,160 @@ doGetSTILInfo:
 
 loadSTILIndex:
     move.l  stilIndexPtr(a5),d0
-    bne     .1
+    bne     .ok
 
-    DPRINT  "Loading STIL data"
-    pushpea .file(pc),d1
+    pushpea .stilIndexName(pc),d1
     move.l  #MODE_OLDFILE,d2
     lore    Dos,Open
-    move.l  d0,stilFileHandle(a5)
+    move.l  d0,d7
     beq     .err
+    
+    ; ---------------------------------
+    * Find index length
+	move.l	d7,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d7,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+	move.l	d7,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
 
-    lea     -4(sp),sp
-    move.l  d0,d1   * file 
-    move.l  sp,d2   * dest
-    moveq   #4,d3   * len
-    lob     Read
-    move.l  (sp),stilDataOffset(a5)
-    cmp.w   #4,d0
-    lea     4(sp),sp
-    bne     .err
-
-    move.l  stilDataOffset(a5),d0
-    moveq   #MEMF_PUBLIC,d1
+    ; ---------------------------------
+    * reserve some empty to the end to detect the last item
+    move.l  d5,d0
+    addq.l  #8,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
     jsr     getmem
     beq     .err
 
     move.l  d0,stilIndexPtr(a5)
-    move.l  stilFileHandle(a5),d1
+    move.l  d7,d1
     move.l  d0,d2
-    addq.l  #4,d2   * space for offset
-    move.l  stilDataOffset(a5),d3   * reading 4 bytes extra here but no matter
-    lore    Dos,Read
-    cmp.l   stilDataOffset(a5),d0
+    move.l  d5,d3
+    lob     Read
+    push    d0
+
+    move.l  d7,d1
+    lob     Close
+    
+    cmp.l   (sp)+,d5
     bne     .err
-.1
+.ok
     move.l  stilIndexPtr(a5),d0
     move.l  d0,a0
-    move.l  stilDataOffset(a5),(a0)
+    move.l  -4(a0),d1   * length
     rts
 
 .err
     moveq   #0,d0
     rts
 
-.file   dc.b    "HiP-STIL.db",0
+.stilIndexName
+    dc.b    "STIL.idx",0
     even
 
 * In:
 *   d0 = Data offset
+*   d1 = Length to read
+* Out;
+*   d0 = Allocated buffer, to be freed with freemem()
+*   d1 = Length of data in buffer (not size of the buffer)
 loadSTILEntry:
-    * Skip the index part
-    add.l   stilDataOffset(a5),d0
-    move.l  d0,d2
-    move.l  stilFileHandle(a5),d1
+    move.l  d0,d4
+    move.l  d1,d5
+    moveq   #0,d7
+
+    move.l  d5,d0
+    ;addq.l  #1,d0   * space for NULL at end
+    lsl.l   #2,d0    * allocate 4x times as much
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    move.l  d0,d6
+    beq     .err
+    
+    pushpea .stilDataName(pc),d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    move.l  d0,d7
+    beq     .err
+
+    move.l  d7,d1
+    move.l  d4,d2   
     move.l  #OFFSET_BEGINNING,d3
-    lore    Dos,Seek
+    lob     Seek
     cmp.l   #-1,d0
     beq     .err
 
-    * Read entry length
-    lea     -2(sp),sp
-    move.l  stilFileHandle(a5),d1 
-    move.l  sp,d2   * dest
-    moveq   #2,d3   * len
+    move.l  d7,d1 * file
+    move.l  d6,d2 * dest
+    add.l   d5,d2 * use the 2nd half of the buffer
+    add.l   d5,d2
+    move.l  d5,d3 * len
     lob     Read
-    cmp.w   #2,d0
-    bne     .err
-    moveq   #0,d4
-    move.w  (sp)+,d4
-
-    move.l  d4,d0
-    addq    #1,d0   * space for NULL at end
-    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
-    jsr     getmem
-    beq     .err
-    move.l  d0,d5
-
-    move.l  stilFileHandle(a5),d1
-    move.l  d5,d2
-    move.l  d4,d3
-    lob     Read
-    cmp.l   d4,d0
+    cmp.l   d5,d0
     bne     .err
 
+    move.l  d7,d1
+    beq     .2
+    lob     Close
+.2
+    ; The data contains the title of the following item,
+    ; add null 
+    move.l  d6,a1
+    add.l   d5,a1   * the 2nd half
+    add.l   d5,a1
+    add.l   d5,a1   * the end of the buffer
+.3  cmp.l   d6,a1 * limit check
+    beq     .5
+    cmp.b   #"/",-(a1)
+    bne     .3
+    cmp.b   #10,-1(a1)
+    bne     .3
+    cmp.b   #13,-2(a1)
+    bne     .4
+    subq    #1,a1
+.4
+    clr.b   -1(a1)
+.5
+    * Source data: 2nd half
+    move.l  d6,a0   
+    add.l   d5,a0
+    add.l   d5,a0
+    * Destination: 1st half
+    move.l  d6,a1
+    pushm   d5/d6
+    bsr     convertStilEntry
+    popm    d0/d1
+    exg     d0,d1
+    * d0 = buffer addr
+    * d1 = length
     * success
-    move.l  d5,d0
     rts
 
 .err
+    move.l  d6,a0
+    jsr     freemem
+    move.l  d7,d1
+    beq     .1
+    lore    Dos,Close
+.1
     moveq   #0,d0
     rts
 
+.stilDataName   
+    dc.b    "STIL.txt",0
+    even
 
 freeSTILData: 
     DPRINT  "freeSTIL"
     move.l  stilIndexPtr(a5),a0
     jsr     freemem
-    move.l  stilFileHandle(a5),d1
-    beq     .1
-    lore    Dos,Close
-.1
     rts
 
 * In:
@@ -55937,6 +56003,218 @@ fnv1:
 .x
     rts
 
+* in:
+*   a0 = STIL entry text, null terminated
+*   a1 = output buffer
+convertStilEntry:
+    DPRINT  "convertStilEntry"
+.loop
+    tst.b   (a0)
+    beq     .x
+    bsr     .get4
+    * d0 = four chars
+    * d1 = two chars
+
+    * Skip the first line with path: /MUSICIANS/G/Gray_Matt/Tusker.sid
+    move    d1,d2
+    and.w   #$ff00,d2
+    cmp.w   #"/"<<8,d2
+    bne     .1
+    bsr     .skipLine
+    bra     .loop
+.1
+    * ---------------------------------
+    * COMMENT
+    cmp.l   #"COMM",d0
+    bne     .2
+    * Store comment start at a2
+    move.l  a0,a2
+.com
+    bsr     .skipLine
+    bsr     .get4
+    cmp.l   #"    ",d0
+    beq     .com
+    * a0 now at the end of the comment +4
+    * Null teminate the comment
+    clr.b   -5(a0)
+    * Wrap from start of comment to end
+    lea     -4(a2),a0
+    bsr     wrapLines
+    * a0 now points to the line after the comment section
+    bsr     putNewLine
+    bra     .loop
+.2
+    * ---------------------------------
+    cmp.w   #"(#",d1    * Song number
+    bne     .3
+    lea     .song1(pc),a2
+.s1 move.b  (a2)+,(a1)+
+    bne     .s1
+    subq    #1,a1
+    lea     -2(a0),a2
+.s2 move.b  (a2)+,(a1)+
+    cmp.b   #")",(a2)
+    bne     .s2
+    lea     .song2(pc),a2
+.s3 move.b  (a2)+,(a1)+
+    bne     .s3
+    subq    #1,a1
+    bsr     putNewLine
+    bsr     .skipLine
+    bra     .loop
+.3
+    * ---------------------------------
+    cmp.l   #"   N",d0  * NAME
+    bne     .4
+    lea     -1(a0),a2
+    bra     .field
+    * ---------------------------------
+.4
+    cmp.l   #" AUT",d0  * AUTHOR
+    bne     .5
+    lea     -3(a0),a2
+    bra     .field
+    * ---------------------------------
+.5
+    cmp.l   #"  TI",d0  * TITLE
+    bne     .6
+    lea     -2(a0),a2
+    bra     .field
+    * ---------------------------------
+.6
+    cmp.l   #" ART",d0  * ARTIST
+    bne     .7
+    lea     -3(a0),a2
+    bra     .field
+    * ---------------------------------
+.7
+    bsr     .skipLine
+    bra     .loop
+
+.field:
+    * Skip to the end of line and null terminate
+    bsr     .skipLine
+    clr.b   -1(a0)
+    * Wrap from the start
+    move.l  a2,a0
+    bsr     wrapLines
+    * a0 now at the start of the next line
+    bsr     putNewLine
+    bra     .loop
+.x    
+    rts
+
+    
+.get4
+    move.b  (a0)+,d0
+    rol.w   #8,d0
+    move.b  (a0)+,d0
+    move.w  d0,d1
+    swap    d0
+    move.b  (a0)+,d0
+    rol.w   #8,d0
+    move.b  (a0)+,d0
+    rts
+
+.skipLine
+    cmp.b   #10,(a0)+
+    bne     .skipLine
+    rts
+
+.song1  
+    dc.b    ILF,ILF2,"*** Song ",0
+.song2
+    dc.b    " ***",0
+    even
+
+
+* Wraps given text to output until null encountered
+* in:
+*   a0 = input text with line changes 10 and terminating null
+*   a1 = output buffer
+wrapLines:
+.LIMIT = 39
+	moveq	#0,d1
+	moveq	#0,d2
+.loop
+    cmp     #.LIMIT,d2
+    beq     .newLine
+.get
+    move.b  (a0)+,d0
+    beq     .eof
+    * Eat line changes in input and any whitespaces after it
+    cmp.b   #10,d0
+    bne     .noLf
+.eatSpaces1
+    cmp.b   #" ",(a0)
+    bne     .ate1
+    addq    #1,a0
+    bra     .eatSpaces1
+.ate1
+    * Output a space if input has a linechange
+    moveq   #" ",d0
+    bra     .noBr
+.noLf
+    * Got a char, check if it's a break character
+    bsr     .isBreaker
+    bne     .noBr
+    * Notice that we have a break char
+    addq    #1,d1
+.noBr
+    * Output char
+    move.b  d0,(a1)+
+    addq    #1,d2
+    bra     .loop
+    
+.newLine
+    * Limit reached
+    * Insert a linebreak here if there's a break character here
+    bsr     .isBreaker
+    beq     .y1
+    * There was not, see if there was a break ealier
+    tst     d1
+    beq     .y1
+    * There was, rewind to it
+.fb
+    subq    #1,a0
+    subq    #1,a1
+    move.b  (a0),d0
+    bsr     .isBreaker
+    bne     .fb
+    
+.y1
+    * Put linechange here and extra space for indentation
+    moveq   #0,d1
+    moveq   #1,d2
+    bsr     putNewLine
+    move.b      #" ",(a1)+
+    * Eat spaces after line change in output
+.eatSpaces2
+    cmp.b   #" ",(a0)
+    bne     .loop
+    addq    #1,a0
+    bra     .eatSpaces2
+    bra     .loop
+
+.eof
+	rts
+
+* Sets Z if d0 is a break character
+.isBreaker
+    cmp.b   #" ",d0
+    beq     .is
+    cmp.b   #"-",d0
+    beq     .is
+    cmp.b   #"_",d0
+.is
+    rts
+
+putNewLine
+	;move.b	#10,(a1)+
+	;rts
+    move.b   #ILF,(a1)+
+    move.b   #ILF2,(a1)+
+    rts
 
 
 ***************************************************************************
