@@ -55644,13 +55644,12 @@ getSTILInfo:
     popm    d1-d7/a1-a6
     rts
     
-; TODO: info window waitpointer
 
 * In:
 *   a0 = module path
 * Out:
 *   d0 = true or false
-*   a0 = text buffer, to be free after use
+*   a0 = text buffer, to be freed after use
 doGetSTILInfo:
     ; Space for module path starting from the STIL path part
     lea     -200(sp),sp
@@ -55893,7 +55892,7 @@ loadSTILIndex:
 * In:
 *   d0 = Data offset
 *   d1 = Length to read
-* Out;
+* Out:
 *   d0 = Allocated buffer, to be freed with freemem()
 *   d1 = Length of data in buffer (not size of the buffer)
 loadSTILEntry:
@@ -55902,7 +55901,6 @@ loadSTILEntry:
     moveq   #0,d7
 
     move.l  d5,d0
-    ;addq.l  #1,d0   * space for NULL at end
     lsl.l   #2,d0    * allocate 4x times as much
     move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
     jsr     getmem
@@ -55951,6 +55949,7 @@ loadSTILEntry:
     bne     .4
     subq    #1,a1
 .4
+    * Null terminate before the following item
     clr.b   -1(a1)
 .5
     * Source data: 2nd half
@@ -55984,8 +55983,7 @@ freeSTILData:
     jsr     freemem
     rts
 
-
-
+* Formats and line wraps the STIL entry text.
 * in:
 *   a0 = STIL entry text, null terminated
 *   a1 = output buffer
@@ -56177,7 +56175,6 @@ wrapLines:
     bne     .loop
     addq    #1,a0
     bra     .eatSpaces2
-    bra     .loop
 
 .eof
 	rts
@@ -56330,11 +56327,12 @@ createStilIndex:
     popm    all
 
     ; ---------------------------------
+    ; Bytes read in d0, check for EOF
     move.l  d0,d4
     beq     .stopLoop
     bmi     .stopLoop
     ; ---------------------------------
-    ; Read bytes until lime change
+    ; Read bytes until line change
     move.l  a4,a0           * start
     lea     (a0,d0),a1      * end
     moveq   #13,d1          * loop constants
@@ -56459,12 +56457,13 @@ createStilIndex:
     bra     .continueLineLoop
 
 .stopLoop
-
+    ; File scan completed
     lea     200(sp),sp
 
     ; ---------------------------------
     ; Write index
     move.l  d6,d1   * file
+    ; Data is located after the read input buffer
     lea     10*1024(a4),a0
     move.l  a0,d2   * src
     move.l  a5,d3
