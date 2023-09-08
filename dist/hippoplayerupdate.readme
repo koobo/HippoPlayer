@@ -58,11 +58,48 @@ New keyboard shortcuts:
 - Search modules: [CTRL+S]
 - Download file: [CTRL+G]
 
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
 
-# Changes from from v2.57 (1.4.2023) to v2.58 (22.6.2023)
+# Changes from v2.58 (22.6.2023) to v2.59 (?.?.2023) 
+
+## New fixes:
+
+- MED/OctaMED: Display module length and channel count for multichannel modules.
+
+- Patternscope now supports MED and OctaMED modules, up to 18 channels visible.
+
+- Patternscope and AHX modules: Fix bug which caused track 0 sometimes not being
+  displayed.
+
+- Scopes: When paused display the paused contents instead of the Hippo gfx.
+
+## New feature:
+
+- STIL support added. This is the additional information companion for the
+  High Voltage Sid Collection. FAQ: "The SID Tune Information List (STIL)
+  contains information about the SID tunes found in the HVSC beyond the standard
+  TITLE, AUTHOR, and RELEASED information. STIL goes a little deeper listing SID
+  tune information that only a true SID freak would enjoy. Such information
+  listed in STIL includes cover information, interesting facts, useless trivia,
+  comments on the tunes by the composers themselves, etc."
+ 
+  Hippo is able to display this information in the info window if it detects the
+  SID being played being a part of the HVSC hierarchy, by checking the file path
+  or URL. For example, using HVSC search or a local HVSC collection works.
+ 
+  The STIL.txt needs to be available in the Hippo directory, it can be found in
+  https://www.hvsc.c64.org/downloads. It's pretty big so it won't fit on a
+  floppy, otherwise no special requirements.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.57 (1.4.2023) to v2.58 (22.6.2023)
 
 ## New fixes:
 
@@ -100,7 +137,7 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 
 
-# Changes from from v2.56 (15.2.2023) to v2.57 (1.4.2023) 
+# Changes from v2.56 (15.2.2023) to v2.57 (1.4.2023) 
 
 ## New fixes:
 
