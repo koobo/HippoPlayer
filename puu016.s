@@ -31364,7 +31364,7 @@ get_med3
  endif
 	moveq	#7,d0
 	push	a6
-	lore	Exec,OldOpenLibrary
+	lore	Exec,OpenLibrary
 	pop	a6
 	move.l	d0,_MedPlayerBase3(a5)
 	rts	
