@@ -10982,7 +10982,7 @@ filereq_code
 	lore	Exec,Forbid
 
 	move.b	fileReqSignal(a5),d1	* Send signal, all done
-	bsr	signalit
+	jsr	signalit
 	clr.b	filereqmode(a5)
 
 	clr	filereq_prosessi(a5)	* Lippu: prosessi poistettu
