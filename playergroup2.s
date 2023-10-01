@@ -22,7 +22,7 @@ P61A=0
  endif
 
 
-start	dc.b	"HiPxPla",30	* Tunnistus ja versio, 8 bytes
+start	dc.b	"HiPxPla",31	* Tunnistus ja versio, 8 bytes
 
 head	macro
 	dc.w	\1
@@ -109,6 +109,7 @@ head	macro
     head    pt_xmaplay,xmaplay
     head    pt_soundmaster,soundmaster
     head    pt_soundprogramminglanguage,soprol
+    head    pt_midiext,midiext
 
 	dc	0
 	dc.l	0,0
@@ -488,6 +489,11 @@ soprol1
 soprol2
     even
 
+midiext1
+	incbin	"delimidi.im"
+midiext2
+    even
+
  	endif ; IMP
 
 *********************************************************************
@@ -865,6 +871,13 @@ soprol1
 	incbin	"soprol.shr"
 soprol2
     even
+
+midiext1
+	incbin	"delimidi.shr"
+midiext2
+    even
+
+
 
  endif ; SHR
 

@@ -1555,7 +1555,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	30
+xpl_versio	=	31
 
 
 *********************************************************************************
@@ -31453,7 +31453,7 @@ search:
 tutki_moduuli2:
 	DPRINT	"Check where to load"
 	pushm	d1-a6
-	move.l	a0,a4
+	move.l	a0,a4   * module in both a0 and a4, id routines may use either
 	move.l	#1084,d7
 	bsr.b	.do
 	popm	d1-a6
@@ -31512,7 +31512,6 @@ tutki_moduuli2:
 	bsr	id_it			 * IT
 	beq 	.f
 
-
 * tfmx song data?
 
 * This check also matches "Hippel7", but apparently
@@ -31545,6 +31544,9 @@ tutki_moduuli2:
 	beq 	.goPublic
 	;bsr	id_digitalmugician2 
 	;beq.b	.goPublic
+
+    jsr     p_midiext\.id
+    beq     .goPublic
 
 ** OctaMed SoundStudio mixattavat moduulit
 	move.l	(a4),d0
@@ -35611,6 +35613,7 @@ eagleFormats
 	dr.w 	p_davidwhittaker
     dr.w    p_soundmaster
     dr.w    p_soundprogramminglanguage
+    dr.w    p_midiext
 	dr.w	p_activisionpro  	* very slow id
 	dc.w 	0	
 
@@ -48655,6 +48658,49 @@ p_specialfx
 	MOVEQ	#0,D0
 .lbC0003C6	RTS
 
+
+******************************************************************************
+* MIDI (serial output)
+******************************************************************************
+
+p_midiext
+  jmp      .init(pc)
+  jmp      deliPlay(pc)
+  p_NOP
+  jmp      deliEnd(pc)
+  jmp      deliStop(pc)
+  jmp      deliCont(pc)
+  jmp      deliVolume(pc)
+  jmp      deliSong(pc)
+  jmp      deliForward(pc)
+  jmp      deliBackward(pc)
+  p_NOP
+  jmp      .id(pc)
+  jmp      deliAuthor(pc)
+  dc       pt_midiext
+  dc       pf_end
+  dc.b     "MIDI (serial out)   [DP]",0
+	        
+.path dc.b "delimidi",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bra		deliLoadAndInit
+	
+.id
+    cmp.l   #"MThd",(a4)
+    bne     .no
+    cmp.l   #6,4(a4)
+    bne     .no
+    cmp.w   #3,8(a4)
+    bhi     .no
+    moveq   #0,d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
 
 
 ******************************************************************************
