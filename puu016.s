@@ -1499,6 +1499,11 @@ favoritesModeChosenModule   rs.l    1
 fileBrowserChosenModule     rs.l    1
 searchResultsChosenModule   rs.l    1
 
+* Store here the amount of mods received from the last search
+* This can be used to not force refresh the recent playlist contents
+* if there are no results
+modsFromLastSearch          rs.l    1
+
 * STIL
 stilIndexPtr    rs.l    1
 
@@ -33222,6 +33227,10 @@ engageSearchResultsMode:
     bne     .1
     cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     bne     .1
+    * In recent lists case this is set to -1 when first done.
+    * This will avoid recursive calls if there are no results.
+    tst.l   modsFromLastSearch(a5)
+    ble     .1
     jsr     recentPlaylistsSearch
 .1  
 	popm	all
@@ -53196,6 +53205,8 @@ rkoSearch
 
 stationsSearch
 	moveq	#SEARCH_STATIONS,d7
+    * Special case with empty results
+    move.l  #-1,modsFromLastSearch(a5)
 	bra 	remoteSearch
 
 recentPlaylistsSearch
@@ -53439,6 +53450,8 @@ remoteSearch
 	beq.b	.3
 	sub.l	a0,a0
 .3	jsr		importModuleProgramFromDataSkipHeader
+    DPRINT  "modsFromLastSearch=%ld"
+    move.l  d0,modsFromLastSearch(a5)
 	move.l	d0,modamount(a5)
 
 	move.l	a3,a0   
