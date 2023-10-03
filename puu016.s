@@ -56048,6 +56048,7 @@ freeSTILData:
 *   a1 = output buffer
 convertStilEntry:
     DPRINT  "convertStilEntry"
+    moveq   #0,d7       * comment flag
 .loop
     tst.b   (a0)
     beq     .x
@@ -56077,8 +56078,20 @@ convertStilEntry:
     * a0 now at the end of the comment +4
     * Null teminate the comment
     clr.b   -5(a0)
+    tst.b   d7
+    bne     .not1st
+    * Label th 1st comment differently
+    lea     -1(a2),a0
+    move.b  #"S",(a0)
+    move.b  #"T",1(a0)
+    move.b  #"I",2(a0)
+    move.b  #"L",3(a0)
+    st      d7
+    bra     .was1st
+.not1st
     * Wrap from start of comment to end
     lea     -4(a2),a0
+.was1st
     bsr     wrapLines
     * a0 now points to the line after the comment section
     bsr     putNewLine
@@ -56450,7 +56463,7 @@ createStilIndex:
 .ugo
     move.b  (a2),d0
     bne     .ucase1
-.ucase2
+
     ; ---------------------------------
     ; Check for extension and remove it
     cmp.b   #"D",-1(a2)
