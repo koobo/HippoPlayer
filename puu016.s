@@ -56072,7 +56072,7 @@ convertStilEntry:
 .com
     bsr     .skipLine
     bsr     .get4
-    cmp.l   #"    ",d0
+    cmp.l   #"    ",d0  * COMMENT continued
     beq     .com
     * a0 now at the end of the comment +4
     * Null teminate the comment
@@ -56183,6 +56183,8 @@ wrapLines:
     move.b  (a0)+,d0
     beq     .eof
     * Eat line changes in input and any whitespaces after it
+    cmp.b   #13,d0
+    beq     .get
     cmp.b   #10,d0
     bne     .noLf
 .eatSpaces1
@@ -56224,10 +56226,10 @@ wrapLines:
     
 .y1
     * Put linechange here and extra space for indentation
-    moveq   #0,d1
-    moveq   #1,d2
+    moveq   #0,d1 * reset break notifier
+    moveq   #1,d2 * reset counter
     bsr     putNewLine
-    move.b      #" ",(a1)+
+    move.b  #" ",(a1)+
     * Eat spaces after line change in output
 .eatSpaces2
     cmp.b   #" ",(a0)
