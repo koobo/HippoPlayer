@@ -37067,7 +37067,7 @@ sid_getSongSpeed:
 .1  move.l  #(709379+28419/4),d0
     divu    d1,d0
     ext.l   d0
-    move    d0,d1
+    move.l  d0,d1
     divu    #50,d0
     ext.l   d0
     divu    #10,d1
