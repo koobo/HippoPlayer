@@ -413,7 +413,7 @@ MHILIB_SIZE         =   40
 prefs_mhiLib          rs.b      MHILIB_SIZE
 prefs_medfastmemplay  rs.b     1
 prefs_showPositionSlider rs.b  1
-                       rs.b     1 * pad to get even prefs_size
+prefs_residboost      rs.b      1
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -858,6 +858,8 @@ xmaplay_new     rs.b    1
 medfastmemplay_new rs.b  1
 mhiEnable_new   rs.b 1
 residfilter_new rs.b    1
+residboost_new  rs.b    1
+                rs.b    1       * pad
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
@@ -958,8 +960,8 @@ sidmode     rs.b    1
 residmode   rs.b    1
 xmaplay     rs.b    1
 residfilter rs.b    1
+residboost  rs.b    1
 medfastmemplay rs.b     1
-            rs.b    1 * PAD
 *******
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
@@ -8541,19 +8543,19 @@ nupit
 	bsr.b	setknob2
 
 * sample forced sampling rate
-;	lea	sIPULI2,a0
-	lea	sIPULI2-sIPULI(a0),a0
-	moveq	#65535/600,d0		* 65535/max
-	bsr.b	setknob
-;	move	#65535*0/600,d0		* 65535*arvo/max
-	moveq	#0,d0
-	bsr.b	setknob2
+;;	lea	sIPULI2,a0
+;	lea	sIPULI2-sIPULI(a0),a0
+;	moveq	#65535/600,d0		* 65535/max
+;	bsr.b	setknob
+;;	move	#65535*0/600,d0		* 65535*arvo/max
+;	moveq	#0,d0
+;	bsr.b	setknob2
 
 
 
 * ahi rate
-;	lea	ahiG4,a0
-	lea	ahiG4-sIPULI2(a0),a0
+	lea	ahiG4,a0
+;	lea	ahiG4-sIPULI2(a0),a0
 	moveq	#65535/(580-50),d0	* 65535/max
 	bsr.b	setknob
 	move	#65535*50/(580-50),d0	* 65535*arvo/max
@@ -13234,6 +13236,7 @@ loadprefs2
 	move.b	prefs_sidmode(a0),sidmode(a5)
 	move.b	prefs_residmode(a0),residmode(a5)
 	move.b	prefs_residfilter(a0),residfilter(a5)
+	move.b	prefs_residboost(a0),residboost(a5)
 	move.b	prefs_xmaplay(a0),xmaplay(a5)
 	move.b	prefs_medfastmemplay(a0),medfastmemplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
@@ -13386,12 +13389,12 @@ sliderit
 	bsr	setknob2
 
 * sampleforcerate
-	lea	sIPULI2-sIPULI(a0),a0
-	moveq	#0,d0
-	move	sampleforcerate(a5),d0
-	mulu	#65535,d0
-	divu	#600-9,d0
-	bsr	setknob2
+;	lea	sIPULI2-sIPULI(a0),a0
+;	moveq	#0,d0
+;	move	sampleforcerate(a5),d0
+;	mulu	#65535,d0
+;	divu	#600-9,d0
+;	bsr	setknob2
 
 
 
@@ -13402,7 +13405,7 @@ sliderit
 	mulu	#65535,d0
 	divu	#580-50,d0
 
-	lea	ahiG4-sIPULI2(a0),a0
+	lea	ahiG4,a0
 	bsr	setknob2
 
 * ahi master volume
@@ -13535,6 +13538,7 @@ saveprefs
 	move.b	sidmode(a5),prefs_sidmode(a0)
 	move.b	residmode(a5),prefs_residmode(a0)
 	move.b	residfilter(a5),prefs_residfilter(a0)
+	move.b	residboost(a5),prefs_residboost(a0)
 	move.b	xmaplay(a5),prefs_xmaplay(a0)
 	move.b	medfastmemplay(a5),prefs_medfastmemplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
@@ -14030,6 +14034,7 @@ prefs_code
 	move.b	sidmode(a5),sidmode_new(a5)
 	move.b	residmode(a5),residmode_new(a5)
 	move.b	residfilter(a5),residfilter_new(a5)
+	move.b	residboost(a5),residboost_new(a5)
 	move.b	xmaplay(a5),xmaplay_new(a5)
 	move.b	medfastmemplay(a5),medfastmemplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
@@ -14504,6 +14509,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	sidmode_new(a5),sidmode(a5)
 	move.b	residmode_new(a5),residmode(a5)
 	move.b	residfilter_new(a5),residfilter(a5)
+	move.b	residboost_new(a5),residboost(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
 	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
@@ -15016,7 +15022,7 @@ mousemoving2			* P‰ivitet‰‰n propgadgetteja
 .5
 	bsr	psup2		* tfmx mixingrate
 	bsr	psup2b		* samplebufsiz
-	bsr	psup2c		* sampleforcerate
+	;bsr	psup2c		* sampleforcerate
 	bsr	pupmedrate	* med mixing rate
 	
 
@@ -15073,21 +15079,21 @@ pmousebuttons
 	lea	PoU2,a0
 	lea	rpgmode_req(pc),a2
 	bsr 	.check
-	bra.b	.xx
+	bra 	.xx
 
 .3	subq	#2,d0
 	bne.b	.4
 
 	lea	smode2,a0		* ps3m playmode
 	lea	rsmode1_req(pc),a2	
-	bsr.b	.check
+	bsr 	.check
 	lea	smode1,a0		* ps3m state
 	lea	rsmode2_req(pc),a2
-	bsr.b	.check
+	bsr 	.check
 	lea	jommo,a0		* ps3m buffer size
 	lea	rps3mb_req(pc),a2
-	bsr.b	.check
-	bra.b	.xx
+	bsr 	.check
+	bra 	.xx
 	
 					* ahi sivun ohi
 .4	;nop
@@ -15112,6 +15118,9 @@ pmousebuttons
 	bsr.b	.check
 	lea     prefsResidFilter,a0
 	lea	    rresidfilter_req(pc),a2	   * resid mode
+	bsr.b	.check
+	lea     prefsResidBoost,a0
+	lea	    rresidboost_req(pc),a2	   * resid boost
 	bsr.b	.check
 
 
@@ -15243,7 +15252,7 @@ pupdate:				* Ikkuna p‰ivitys
 .7
 	bsr	psup2			* tfmx mixingrate
 	bsr	psup2b			* samplebufsize
-	bsr	psup2c			* sampleforcerate
+	;bsr	psup2c			* sampleforcerate
 	bsr	pupmedrate		* med mixing rate
 	bsr	psamplecyber	* sample cyber
 	bsr	pmpegaqua		* MPEGA quality
@@ -15253,6 +15262,7 @@ pupdate:				* Ikkuna p‰ivitys
     bsr pxmaplay        * XMAPlay
     bsr presidmode      * reSID mode
     bsr presidfilter    * reSID filter
+    bsr presidboost     * reSID boost
     bsr pmhienable      * MHI enable
     bsr pmhilib         * MHI library
     bsr pmedfastmemplay * MED FastMemPlay
@@ -15498,16 +15508,17 @@ gadgetsup2
 .s6
 	dr	rpslider2	* tfmx rate
 	dr	rpslider2b	* samplebufsiz
-	dr	rpslider2c	* sampleforcerate
+	;dr	rpslider2c	* sampleforcerate
 	dr	rsamplecyber	* sample cybercalibration
 	dr	rmpegaqua	* mpega quality
-	dr	rmpegadiv	* mpeda freq division
+	dr	rmpegadiv	* mpega freq division
 	dr	rmedmode	* med mode
 	dr	rmedrate	* med mixing rate
     dr  rsidmode    * sid mode
     dr  rxmaplay    * xmaplay
     dr  rresidmode  * resid mode
     dr  rresidfilter * resid filter
+    dr  rresidboost * resid boost
     dr  rmhienable  * mhi enable
     dr  rmhilib     * mhi lib
     dr  rmedfastmemplay * MED fast mem play
@@ -15771,6 +15782,7 @@ psup2b
 
 ********** force sample rate
 
+ REM
 rpslider2c
 psup2c
 	lea	sIPULI2,a2
@@ -15803,7 +15815,7 @@ psup2c
 .of	dc.b	".....off",0
 .t	dc.b	" %2.2ld.%1.1ldkHz",0
 	even 
-
+ EREM
 
 
 ** Archivers: tempdir, lha jne..
@@ -17630,6 +17642,17 @@ rresidfilter_req
 	bra 	presidfilter
 .x	rts
 
+rresidboost_req
+	lea	residboost00(pc),a0
+
+    pushpea sidmode_callback(pc),d4
+    bsr     listselector
+	bmi.b	.x
+	move.b	d0,residboost_new(a5)
+	bra 	presidboost
+.x	rts
+
+
 rresidmode
 	addq.b	#1,residmode_new(a5)
 	cmp.b	#6,residmode_new(a5)
@@ -17697,6 +17720,37 @@ residfilter01	dc.b	"Internal on",0
 residfilter02	dc.b	"Internal+Ext",0
 residfilter03	dc.b	"All off",0
  even
+
+
+rresidboost
+	addq.b	#1,residboost_new(a5)
+	cmp.b	#4,residboost_new(a5)
+	bne.b	.1
+	clr.b	residboost_new(a5)
+.1
+
+presidboost
+    lea     residboost01(pc),a0
+	move.b	residboost_new(a5),d0
+    beq.b   .1
+    lea     residboost02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residboost03(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residboost04(pc),a0
+.1 
+    lea	    prefsResidBoost,a1
+	bra	prunt
+
+residboost00	dc.b    6,4
+residboost01	dc.b	"Off",0
+residboost02	dc.b	"2x",0
+residboost03	dc.b	"3x",0
+residboost04	dc.b	"4x",0
+ even
+
 
 
 *** XMAPlay toggle
@@ -36807,7 +36861,18 @@ p_sid:	jmp	.init(pc)
     moveq   #0,d1   * ext off
 .goFilt
     DPRINT  "Filter=%ld ExtFilter=%ld"
-    lob     SetRESIDFilter 
+    lob     SetRESIDFilter
+    moveq   #0,d0
+    move.b  residboost(a5),d0
+    beq     .nb
+    * 0 = off
+    * 1 = 2x
+    * 2 = 3x
+    * 3 = 4x
+    addq    #1,d0
+.nb
+    DPRINT  "boost=%ld"
+    lob     SetRESIDBoost
 .nrsf
     ; -----------------------
 
@@ -57114,7 +57179,7 @@ prefsListFont
 prefsPlaySidMode 
        dc.l prefsEnableXMAPlay
        ; left, top, width, height
-       dc.w 214-80+4,107+28-14-12-2,100-8,12,3,1,1
+       dc.w 214-80+4,107+28-14-12-2-14,100-8,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -57129,7 +57194,7 @@ prefsPlaySidMode
 prefsResidMode
        dc.l prefsResidFilter
        ; left, top, width, height
-       dc.w 214-80+4-16,107+28-12-2,100-8+16,12,3,1,1
+       dc.w 214-80+4-16,107+28-12-2-14,100-8+16,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -57142,9 +57207,9 @@ prefsResidMode
        even
 
 prefsResidFilter
-       dc.l prefsMHIEnable
+       dc.l prefsResidBoost
        ; left, top, width, height
-       dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
+       dc.w 214-80+4-16,107+28-14,100-8+16,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -57156,10 +57221,25 @@ prefsResidFilter
        dc.b "reSID filter",0
        even
 
+prefsResidBoost
+       dc.l prefsMHIEnable
+       ; left, top, width, height
+       dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "reSID boost",0
+       even
+
 prefsMHIEnable
        dc.l prefsMHILib
        ; left, top, width, height
-       dc.w 214-80+4-12-12-6,107+28-14-12-2-14,28,12,3,1,1
+       dc.w 214-80+4-12-12-6,107+28-14-12-2-14-28,28,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -57174,7 +57254,7 @@ prefsMHIEnable
 prefsMHILib
        dc.l prefsMedFastRamMode 
        ; left, top, width, height
-       dc.w 214-80+4,107+28-14-12-2-14,100-8,12,3,1,1
+       dc.w 214-80+4,107+28-14-12-2-14-28,100-8,12,3,1,1
        dc.l 0
        dc.l 0,0,0,0
        dc.w 0
