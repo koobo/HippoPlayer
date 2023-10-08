@@ -36542,6 +36542,7 @@ convert_oldst
 * SID
 ******************************************************************************
 
+p_psid:
 p_sid:	jmp	.init(pc)
 	p_NOP
 	jmp 	sidScopeUpdate(pc)
@@ -37028,8 +37029,15 @@ p_sid:	jmp	.init(pc)
 
 .volume
     push    d0
+    move.l	_SIDBase(a5),a0
+    * Call this on kick 1.3 too even if not in "resid mode", if new enough lib
+    cmp     #1,LIB_VERSION(a0)
+    bne     .11
+    cmp     #6,LIB_REVISION(a0)
+    bhs     .22
     bsr     isPlaysidReSID
     beq.b   .11
+.22
     move.l	_SIDBase(a5),a6
     move    mainvolume(a5),d0
     jsr     _LVOSetVolume(a6)
@@ -37439,7 +37447,12 @@ isPlaysidReSID:
 	bne.b   .noRESID
 	cmp     #5,LIB_REVISION(a0)
 	blo.b   .noRESID
-    move.l  LIB_IDSTRING(a0),a0
+    * Require 020 for reSID/SIDBlaster stuff
+    move.l  (a5),a0
+    btst	#AFB_68020,AttnFlags+1(a0)
+	beq.b   .noRESID
+
+;    move.l  LIB_IDSTRING(a0),a0
 ;    cmp.b   #"1",16(a0)
 ;    bne.b   .noRESID
 ;    cmp.b   #"5",18(a0)
