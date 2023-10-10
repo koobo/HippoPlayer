@@ -57246,7 +57246,7 @@ prefsResidBoost
        dc.w -198+80-4+16,2
        dc.l 0,.tx,0
 .tx 
-       dc.b "reSID boost",0
+       dc.b "reSID boost..",0
        even
 
 prefsMHIEnable
