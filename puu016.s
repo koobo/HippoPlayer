@@ -414,6 +414,8 @@ prefs_mhiLib          rs.b      MHILIB_SIZE
 prefs_medfastmemplay  rs.b     1
 prefs_showPositionSlider rs.b  1
 prefs_residboost      rs.b      1
+prefs_midimode        rs.b      1
+                      rs.b      1 *pad
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -859,7 +861,7 @@ medfastmemplay_new rs.b  1
 mhiEnable_new   rs.b 1
 residfilter_new rs.b    1
 residboost_new  rs.b    1
-                rs.b    1       * pad
+midimode_new    rs.b    1 
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
@@ -962,6 +964,8 @@ xmaplay     rs.b    1
 residfilter rs.b    1
 residboost  rs.b    1
 medfastmemplay rs.b     1
+midimode    rs.b    1
+            rs.b    1 * pad
 *******
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
@@ -8330,6 +8334,7 @@ umph
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
     tst.b   l_remote(a3)
     beq.b   .notRem1
+    printt  "TODO: midi case"
     moveq   #0,d7   * disable for remotes!
 .notRem1
     tst.b   d7
@@ -8364,6 +8369,7 @@ umph
     tst.b   l_remote(a3)
     beq.b   .notRem
     moveq   #0,d0     * disable for remotes!
+    printt  "TODO: midi case"
     DPRINT  "DISABLE double buffering 2"
 .notRem
     push    a3
@@ -10698,6 +10704,19 @@ rbutton1:
 	* load these modules again before restarting.
 	cmp	#pt_delicustom,playertype(a5)
 	beq	.new
+    * PIPE midi sample? These need a full restart too.
+    cmp     #pt_sample,playertype(a5)
+    bne    .notSmp
+    move.l  modulefilename(a5),a0
+    cmp.b   #"P",(a0)+
+    bne     .notSmp
+    cmp.b   #"I",(a0)+
+    bne     .notSmp
+    cmp.b   #"P",(a0)+
+    bne     .notSmp
+    cmp.b   #"E",(a0)
+    beq     .new
+.notSmp
 	* Same with all EaglePlayers to be safe.
 	* At least Tim Follin crashes.
 	cmp	#pt_eagle_start,playertype(a5)
@@ -10749,6 +10768,7 @@ rbutton1:
 	tst.l	playingmodule(a5)	* Onko soitettavana mitään?
 	bmi.b	.nomod
 
+    printt  "TODO: midi case"
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki päällä?
     tst.b   l_remote(a3)
     beq.b   .notRem1
@@ -10773,6 +10793,7 @@ rbutton1:
 
 	lea	l_filename(a3),a0	* Ladataan
 	move.b	d7,d0 * double buffering flag
+    printt  "TODO: midi case"
     tst.b   l_remote(a3)
     beq.b   .notRem2
     moveq   #0,d7 * disable for remotes!
@@ -13237,6 +13258,7 @@ loadprefs2
 	move.b	prefs_residmode(a0),residmode(a5)
 	move.b	prefs_residfilter(a0),residfilter(a5)
 	move.b	prefs_residboost(a0),residboost(a5)
+	move.b	prefs_midimode(a0),midimode(a5)
 	move.b	prefs_xmaplay(a0),xmaplay(a5)
 	move.b	prefs_medfastmemplay(a0),medfastmemplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
@@ -13539,6 +13561,7 @@ saveprefs
 	move.b	residmode(a5),prefs_residmode(a0)
 	move.b	residfilter(a5),prefs_residfilter(a0)
 	move.b	residboost(a5),prefs_residboost(a0)
+	move.b	midimode(a5),prefs_midimode(a0)
 	move.b	xmaplay(a5),prefs_xmaplay(a0)
 	move.b	medfastmemplay(a5),prefs_medfastmemplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
@@ -14035,6 +14058,7 @@ prefs_code
 	move.b	residmode(a5),residmode_new(a5)
 	move.b	residfilter(a5),residfilter_new(a5)
 	move.b	residboost(a5),residboost_new(a5)
+	move.b	midimode(a5),midimode_new(a5)
 	move.b	xmaplay(a5),xmaplay_new(a5)
 	move.b	medfastmemplay(a5),medfastmemplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
@@ -14510,6 +14534,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	residmode_new(a5),residmode(a5)
 	move.b	residfilter_new(a5),residfilter(a5)
 	move.b	residboost_new(a5),residboost(a5)
+	move.b	midimode_new(a5),midimode(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
 	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
@@ -15122,6 +15147,9 @@ pmousebuttons
 	lea     prefsResidBoost,a0
 	lea	    rresidboost_req(pc),a2	   * resid boost
 	bsr.b	.check
+	lea     prefsMidiMode,a0
+	lea	    rmidimode_req(pc),a2	   * resid boost
+	bsr.b	.check
 
 
 .xx	popm	all
@@ -15266,6 +15294,7 @@ pupdate:				* Ikkuna päivitys
     bsr pmhienable      * MHI enable
     bsr pmhilib         * MHI library
     bsr pmedfastmemplay * MED FastMemPlay
+    bsr pmidimode       * MIDI mode
 
 .x	popm	all
 	rts
@@ -15522,6 +15551,7 @@ gadgetsup2
     dr  rmhienable  * mhi enable
     dr  rmhilib     * mhi lib
     dr  rmedfastmemplay * MED fast mem play
+    dr  rmidimode    * MIDI mode
 
 rval0	moveq	#0,d0
 	bra	prefsgads2
@@ -17653,6 +17683,17 @@ rresidboost_req
 .x	rts
 
 
+rmidimode_req
+	lea	midimode00(pc),a0
+
+    moveq   #0,d4
+    bsr     listselector
+	bmi.b	.x
+	move.b	d0,midimode_new(a5)
+	bra 	pmidimode
+.x	rts
+
+
 rresidmode
 	addq.b	#1,residmode_new(a5)
 	cmp.b	#6,residmode_new(a5)
@@ -17749,6 +17790,28 @@ residboost01	dc.b	"Off",0
 residboost02	dc.b	"2x",0
 residboost03	dc.b	"3x",0
 residboost04	dc.b	"4x",0
+ even
+
+
+rmidimode
+	addq.b	#1,midimode_new(a5)
+	cmp.b	#2,midimode_new(a5)
+	bne.b	.1
+	clr.b	midimode_new(a5)
+.1
+
+pmidimode
+    lea     midimode01(pc),a0
+	move.b	midimode_new(a5),d0
+    beq.b   .1
+    lea     midimode02(pc),a0
+.1 
+    lea	    prefsMidiMode,a1
+	bra	prunt
+
+midimode00	dc.b    12,2
+midimode01	dc.b	"Timidity",0
+midimode02	dc.b	"Serial out",0
  even
 
 
@@ -29274,8 +29337,19 @@ loadmodule:
 	* also with the PS3M configuration file.
 	move.l	l_nameaddr(a3),solename(a5)
 	move.b	l_remote(a3),lastLoadedModuleWasRemote(a5)
+
+    * Check if a stramable MIDI
+    push    a0
+    lea     l_filename(a3),a0
+    jsr     fileIsMidiForStreaming
+    popm    a0
+    bne     .midiStream
+
 	* Check if a remote file
+    tst.b   l_remote(a3)
 	beq		.doLoadModule
+
+.midiStream
 
     * This is a remote file.
     * Open up a stream.
@@ -29290,9 +29364,23 @@ loadmodule:
     pop     d0
     tst.l   d1
     bne     .streamOk
+    DPRINT  "startStreaming failed, clean up"
     jsr     stopStreaming
     jsr     showStreamerError
+
+    ; If this was midi flushing needs to be done if timidity
+    ; is running, othewise flush will get stuck with an empty pipe
+    lea     l_filename(a3),a0
+    jsr     fileIsMidiForStreaming
+    beq     .flush
+    DPRINT  "midi clean up"
+    jsr     findMidiProcess
+    bne     .flush
+    jsr     awaitStreamer
+    bra     .wasMidi    
+.flush
     jsr     awaitStreamerAndFlush
+.wasMidi
     lea     .msg(pc),a1
     jsr     request
 	jsr	    inforivit_clear
@@ -29304,18 +29392,17 @@ loadmodule:
 
 .streamOk
 
-    * Special case check: remote mp3 files go through as if
-    * they were normal files, no remote fetching
-;    pushm   d0/a0
-;    lea     l_filename(a3),a0
-;    bsr     id_mp3filename
-;    tst.l   d0
-;    popm    d0/a0
-;    beq     .doLoadModule
-
+    * Bypass the rest of the file loading, to be
+    * continued in sampleplayer PIPE read mechanism later.
     pushm   d0/a0
+    * mpeg stream?
     jsr     streamIsMpegAudio
     tst.l   d0
+    bne     .str0
+    * MIDI stream?
+    lea 	l_filename(a3),a0	
+    jsr     fileIsMidiForStreaming
+.str0
     popm    d0/a0
     bne     .doLoadModule
 
@@ -30305,10 +30392,29 @@ loadfile:
 ;     tst.l   d0
 ;     beq     .sampleCheck
 
+
+    * Bypass the rest of the file loading, to be
+    * continued in sampleplayer PIPE read mechanism later.
     jsr     streamIsAlive
     beq     .notRemote
     jsr     streamIsMpegAudio
     bne     .sampleCheck
+    * See if this is a PIPE with wav indicator
+    move.l 	lod_filename(a5),a0	
+    lea     midiStreamPipeFile,a1
+    move.l  a0,d0
+    move.l  a1,d1
+    DPRINT  "file=%s cmp=%s"
+    moveq   #6-1,d0
+.chkMd
+    cmpm.b  (a0)+,(a1)+
+    bne     .notRemote
+    dbf     d0,.chkMd
+
+    * MIDI file is a WAV stream from here onwards
+    move.b	#SAMPLE_FORMAT_WAV,sampleformat(a5)
+    st      sampleinit(a5)
+    bra     .exit
 .notRemote
 
     * Get info on the file
@@ -54699,9 +54805,10 @@ combSortNodeArray
 *
 ***************************************************************************
 
-streamPipeFile  dc.b    "PIPE:hippoStream",0
-agetHeadersFile dc.b    "T:agetheaders",0
-    even
+streamPipeFile      dc.b    "PIPE:hippoStream",0
+midiStreamPipeFile  dc.b    "PIPE:wavHippoStream",0
+agetHeadersFile     dc.b    "T:agetheaders",0
+                    even
 
 
 startNewStreaming:
@@ -54756,7 +54863,7 @@ startStreaming:
     move.l  a0,d0
     DPRINT  "url=%s"
  endif
-
+    move.l  a0,d5   * URL pointer here for later
     move.l  a0,a1
 .1  tst.b   (a1)+
     bne     .1
@@ -54770,10 +54877,36 @@ startStreaming:
 .2  move.b  (a0)+,(a1)+
     bne     .2
 
+    ; Clear SINGLE for later use
     moveq   #0,d0
     moveq   #SIGF_SINGLE,d1
     lore    Exec,SetSignal
 
+    ;-----------------------------------
+    ; Midi stream start
+    move.l  streamerUrl(a5),a0
+    bsr     fileIsMidiForStreaming
+    beq     .notMidi_
+    DPRINT  "start MIDI"
+
+;    * Capture timidity output into a file
+;    pushpea agetOutputFile(pc),d1
+;    move.l  #MODE_NEWFILE,d2
+;    lore    Dos,Open
+;    DPRINT  "midi output open=%lx"
+;    move.l  d0,d1
+;    lob     SelectOutput
+;    DPRINT  "selectOutput=%lx"
+;    move.l  d0,d1
+;    lob     Close
+
+    pushpea wavStreamerProcessTags(pc),d1
+    bra     .isMidi
+
+.notMidi_
+    ;-----------------------------------
+    ; UHC stream start
+    DPRINT  "Start aget"
     * Capture aget output into a file
     pushpea agetOutputFile(pc),d1
     move.l  #MODE_NEWFILE,d2
@@ -54781,9 +54914,12 @@ startStreaming:
     DPRINT  "aget output open=%lx"
     move.l  d0,streamerProcessOutputHandle
     beq     .x
-
     pushpea streamerProcessTags(pc),d1
-    lob     CreateNewProc
+
+.isMidi
+
+;    pushpea streamerProcessTags(pc),d1
+    lore    Dos,CreateNewProc
     DPRINT  "CreateNewProc=%lx"
     beq     .error
 
@@ -54798,7 +54934,30 @@ startStreaming:
     DPRINT  "Streamer task failed to start"
     bra     .error
 .ok
-
+    
+    ; ---------------------------------
+    ;; MIDI stream? 
+    * streamerUrl(a5) no longer valid
+ if DEBUG
+    move.l  d5,d0
+    DPRINT  "MIDI verify: %s"
+ endif
+    move.l  d5,a0
+    bsr     fileIsMidiForStreaming
+    beq     .notMidi
+    * Wait a bit and check if it's still running
+    moveq   #2*50,d1
+    lore    Dos,Delay
+    bsr     findMidiProcess
+    DPRINT  "midi process=%lx"
+    * status fail?
+    tst.l   d0
+    beq     .x
+    lea     midiStreamPipeFile(pc),a0
+    DPRINT  "MIDI bypass"
+    bra     .midiStream
+.notMidi
+    ; ---------------------------------
 
     * Wait here until things are looking good
     DPRINT  "verify stream"
@@ -54828,6 +54987,8 @@ startStreaming:
     beq     .verifyLoop
 
 .done
+    
+    
     lea     agetHeadersFile(pc),a0
     bsr     plainLoadFile
     DPRINT  "load headers=%lx len=%ld"
@@ -54863,23 +55024,26 @@ startStreaming:
 
 .y
     lea     streamPipeFile(pc),a0
+.midiStream
     moveq   #1,d0   * status: ok
 .x
+    DPRINT  "status=%lx"
+
     jsr     clearMainWindowWaitPointer
     popm    d1-d7/a1-a6
     rts
 
 .error
-    DPRINT  "error!"
-    ;move.l  streamerProcessOutputHandle(pc),d1
-    ;beq.b   .er
-    ;lore    Dos,Close
-.er
+    DPRINT  "error! closing output"
+;    move.l  streamerProcessOutputHandle(pc),d1
+;    beq.b   .er
+;    clr.l   streamerProcessOutputHandle
+;    lore    Dos,Close
+;.er
     moveq   #0,d0   * status: error
     bra     .x
 
 streamerProcessTags
-    dc.l    NP_Entry,streamerEntry
     dc.l    NP_Output
 streamerProcessOutputHandle
     dc.l    0
@@ -54887,13 +55051,26 @@ streamerProcessOutputHandle
     * Close it ourselves
     dc.l    NP_CloseOutput,0
     dc.l    NP_Name,.name
+    dc.l    NP_Entry,streamerEntry
     dc.l    TAG_END
 
-.name   
+.name
     dc.b    "HiP-streamer",0
 agetOutputFile
     dc.b    "T:agetout",0
+midiOutputFile
+    dc.b    "T:midiout",0
     even
+
+* SystemTagList will auto-close the parent streams
+* with SYS_Asynch=TRUE
+wavStreamerProcessTags
+    dc.l    NP_Entry,streamerEntry
+    dc.l    NP_Name,streamerProcessOutputHandle\.name
+    dc.l    NP_CloseOutput,0
+    dc.l    NP_CloseInput,0
+    dc.l    TAG_END
+
 
 * Checks whether streamer is alive
 * Out:
@@ -54909,7 +55086,8 @@ streamIsAlive:
     popm    d0
  endif
     rts
-*
+
+******************************************************************************
 *
 * Streamer process
 *
@@ -54919,6 +55097,7 @@ streamerEntry:
     rsreset
 .uhcPathFormatted   rs.b    50
 .agetCmdFormatted   rs.b    100
+.buffer             rs.b    0
 .agetArgsFormatted  rs.b    1000
 .varsSize           rs.b    0
    
@@ -54937,6 +55116,16 @@ streamerEntry:
     pushpea agetHeadersFile(pc),d1
     lore    Dos,DeleteFile
 
+    ; ---------------------------------
+    ; MIDI stream check
+    
+    move.l	streamerUrl(a5),a0
+    jsr     fileIsMidiForStreaming
+    bne     .handleMidiStream
+
+    ; ---------------------------------
+    ; Launch with "aget"
+    
     pushpea .envVarName(pc),d1     * variable name
     pushpea .uhcPathFormatted(a4),d2     * output buffer
     moveq   #50-1,d3            * space available
@@ -54973,6 +55162,7 @@ streamerEntry:
     clr.l   (a1)
     jsr     freemem
 
+.argsDone
     * length of args
     lea     .agetArgsFormatted(a4),a0
     move.l  a0,a1
@@ -55007,14 +55197,7 @@ streamerEntry:
 .a
 
     * Manual closing of the output file handle, so it can be read below.
-    lea     streamerProcessOutputHandle(pc),a0
-    move.l  (a0),d1
-    clr.l   (a0)
-    tst.l    d1
-    beq.b   .b
-    lob      Close
-    DPRINT  "stream:Close agetout"
-.b
+    bsr     .closeOutputHandle
 
     * Check aget output for errors.
     moveq   #0,d7
@@ -55037,8 +55220,10 @@ streamerEntry:
     moveq   #0,d7
 .t
 
-    DPRINT  "stream:task stopped"
 .x
+    ;----------------------------------
+
+    DPRINT  "stream:task stopped"
     lea     .varsSize(sp),sp
     lore    Exec,Forbid
     move.w  d5,streamReturnCode(a5)
@@ -55058,11 +55243,134 @@ streamerEntry:
     bsr     .notify
     bra     .x
 
+.closeOutputHandle:
+    lea     streamerProcessOutputHandle(pc),a0
+    move.l  (a0),d1
+    clr.l   (a0)
+    tst.l    d1
+    beq.b   .b
+ if DEBUG
+    move.l  d1,d0
+    DPRINT  "stream:close output handle=%lx"
+ endif
+    lore    Dos,Close
+    DPRINT  "stream:Close agetout"
+.b
+    rts
+
+
+
+.handleMidiStream:
+    DPRINT  "stream:url is MIDI"
+    * clear stream error msg address to be returned, not used here
+    moveq   #0,d7 
+    moveq   #0,d5
+
+    pushpea timidityCliName(pc),d0
+    move.l	streamerUrl(a5),d1
+    lea     .timidityCmd(pc),a0
+    lea     .buffer(a4),a3
+    jsr     desmsg3
+
+ if DEBUG
+    pushpea .buffer(a4),d0
+    DPRINT  "stream:cmd=%s"
+ endif
+
+    ; Change current dir to "timidity:"
+	pushpea	.timidityDir(pc),d1
+    moveq	#ACCESS_READ,d2
+	lore    Dos,Lock
+    DPRINT  "stream:lock=%lx"
+    move.l  d0,.sysCurrentDir
+    beq     .error
+
+;    * Capture timidity output into a file
+;    pushpea midiOutputFile(pc),d1
+;    move.l  #MODE_NEWFILE,d2
+;    lob     Open
+;    DPRINT  "stream:midi output open=%lx"
+;    move.l  d0,.sysOutput
+;    beq     .error
+;
+    ; Launch timidity
+    pushpea .buffer(a4),d1
+    pushpea .sysTags(pc),d2
+    lore    Dos,SystemTagList
+    DPRINT  "stream:SystemTagList=%ld"
+    cmp.l   #-1,d0
+    bne     .ok
+    * Free any resources in case of failure
+
+    DPRINT  "stream:error cleanup!"
+    move.l  .sysCurrentDir(pc),d1
+    lob     UnLock
+    bra     .error
+.ok
+
+    ; Notify main task that we are on
+    DPRINT  "stream:notify main task"
+    bsr     .notify
+    
+
+    ; Wait for stopping
+    DPRINT  "stream:Wait for CTRL-C"
+    move.l  #SIGBREAKF_CTRL_C,d0
+    lore    Exec,Wait
+    DPRINT  "stream:CTRL-C received!"
+
+.breakLoop
+    DPRINT  "stream:break loop"
+    bsr     findMidiProcess
+    beq     .notFound
+
+    DPRINT  "stream:Signaling CTRL-C to timidity"
+    move.l  d0,a1
+    move.l  #SIGBREAKF_CTRL_C,d0
+    lore    Exec,Signal
+
+    DPRINT  "stream:wait!"
+    moveq   #50,d1
+    lore    Dos,Delay
+    bra     .breakLoop
+    
+.notFound
+    DPRINT  "stream:not found -> exit"
+.midiExit
+    DPRINT  "stream:midi exit"
+    moveq   #0,d5
+    moveq   #0,d7
+    bra     .x
+
+.sysTags
+    dc.l    NP_StackSize,10000
+    * This is automatically unlocked:
+;    dc.l    NP_Output,0
+;.sysOutput = *-4
+    dc.l    NP_CurrentDir,0
+.sysCurrentDir = *-4
+    dc.l    NP_ExitCode,.exitCode
+    dc.l    SYS_Asynch,1
+    dc.l    TAG_END
+
+
+.exitCode
+    DPRINT  "stream:NP_ExitCode called! return=%lx"
+    rts
+
+
 .envVarName
     dc.b    "UHCBIN",0
 
 .agetCmd
     dc.b	'%sC/aget',0
+
+
+.timidityDir   
+    dc.b    "timidity:",0
+    
+.timidityCmd
+    dc.b    '%s -id -Ow1S -s27710 -o PIPE:wavHippoStream/65536/2 "%s"',10,0
 
 .args
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
@@ -55075,8 +55383,81 @@ streamerEntry:
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
 ;	dc.b	'"%s" PIPE:hippoStream/4096/128 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=262144',10,0
 	dc.b	'TO=PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192 URL="%s"',10,0
+
+timidityCliName   dc.b    "timidity",0
+
  even
 
+* Find the CLI process "timidity"
+* Out:
+*   d0 = process address or null
+findMidiProcess:
+    lea     -64(sp),sp
+    moveq   #0,d4
+    lore    Dos,MaxCli
+    move.l  d0,d6
+    moveq   #1,d5
+.cliLoop
+    move.l  d5,d1
+    lob     FindCliProc
+    move.l  d0,d4
+    beq     .noCLI
+    move.l  d0,a0
+    move.l  pr_CLI(a0),d0
+    lsl.l   #2,d0   * BPTR->APTR
+    move.l  d0,a0
+    tst.l   cli_Module(a0)
+    beq     .noCLI  
+    move.l  cli_CommandName(a0),d0
+    lsl.l   #2,d0   * BPTR->APTR
+    move.l  d0,a0
+    * Convert BCPL string
+    move.b  (a0)+,d1
+    lea     (sp),a1
+.cliCp
+    move.b  (a0)+,(a1)+
+    subq.b  #1,d1
+    bne     .cliCp
+    clr.b   (a1)
+    * See if this CLI is "timidity"
+    lea     (sp),a0
+    lea     timidityCliName(pc),a1
+.cliCmp
+    cmpm.b  (a0)+,(a1)+
+    bne     .noCLI
+    tst.b   -1(a1)
+    bne     .cliCmp
+    * Found!
+    lea     64(sp),sp
+ if DEBUG
+    pushm   all
+    move.l  4.w,a6
+    sub.l   a1,a1
+    lob     FindTask
+    move.l  d0,d1
+    move.l  d4,d0
+    DPRINT  "findMidiProcess=%lx task=%lx"
+    popm    all
+ endif
+    move.l  d4,d0
+    rts
+
+.noCLI
+    addq    #1,d5
+    cmp     d6,d5
+    bne     .cliLoop
+    * Not found!
+    lea     64(sp),sp
+ if DEBUG
+    pushm   all
+    move.l  4.w,a6
+    sub.l   a1,a1
+    lob     FindTask
+    DPRINT  "findMidiProcess=NULL task=%lx"
+    popm    all
+ endif
+    moveq   #0,d0
+    rts
 
 * Frees the previous aget error if any
 freeStreamerError:
@@ -55132,6 +55513,7 @@ awaitStreamer0:
     pushpea streamPipeFile(pc),d1
 	move.l	#MODE_OLDFILE,d2
     lob     Open
+    DPRINT  "open=%lx"
     move.l  d0,d5
 .noFlush
 
@@ -55375,6 +55757,51 @@ streamIsMpegAudio:
     dc.b    "audio/mpeg",0
 
  even
+
+* Checks if file is eligible for MIDI->WAV streaming
+* Checks if path has ".mid" or ".midi" suffix 
+* In:
+*   a0 = path
+* Out:
+*   z clear/true if path is a midi file path, z set/false otherwise
+fileIsMidiForStreaming:
+    push    d0
+    tst.b   midimode(a5)    * 0: timidity, 1: serial
+    bne     .no
+    tst.b   uusikick(a5)
+    beq     .no
+    push    a0
+    move.l  (a5),a0
+	btst	#AFB_68020,AttnFlags+1(a0)
+    pop     a0  
+    beq     .no
+
+.1  tst.b   (a0)+
+    bne     .1
+    subq    #1,a0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    or.l    #$20202020,d0   * to lowercase
+    cmp.l   #".mid",d0
+    beq     .yes
+    cmp.l   #"midi",d0
+    bne     .no
+    cmp.b   #".",-(a0)
+    beq     .yes
+.no
+    moveq   #0,d0
+    bra     .x
+.yes
+    moveq   #1,d0
+.x
+    popm    d0
+    rts
 
 
 * In:
@@ -57192,16 +57619,16 @@ prefsListFont
 prefsPlaySidMode 
        dc.l prefsEnableXMAPlay
        ; left, top, width, height
-       dc.w 214-80+4,107+28-14-12-2-14,100-8,12,3,1,1
+       dc.w 214-80+4-8-8,107+28-14-12-2-14,100-8+8+8,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
        dc.l 0
 .t     dc.b 1,0,1,0
-       dc.w -198+80-4,2
+       dc.w -198+80-4+8+8,2
        dc.l 0,.tx,0
 .tx 
-       dc.b "PlaySid mode...",0
+       dc.b "PlaySid mode",0
        even
 
 prefsResidMode
@@ -57291,7 +57718,7 @@ prefsEnableXMAPlay dc.l prefsResidMode
        even
 
 
-prefsMedFastRamMode dc.l 0 ;;;;;;;; END
+prefsMedFastRamMode dc.l prefsMidiMode 
        ; left, top, width, height
        dc.w 214-80+4+64+160+40+4,107-12-2+14+14-14-14-8,28,12,3,1,1
        dc.l 0
@@ -57305,6 +57732,21 @@ prefsMedFastRamMode dc.l 0 ;;;;;;;; END
        dc.b "MED FastMemPlay...",0
        even
 
+
+prefsMidiMode
+       dc.l 0  ;;;;;;;; END
+       ; left, top, width, height
+       dc.w 214-80+4-16,107+28-4*14,100-8+16,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "MIDI mode....",0
+       even
 
 
  ifne FEATURE_LIST_TABS
