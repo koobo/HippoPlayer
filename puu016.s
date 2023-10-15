@@ -7725,7 +7725,7 @@ signalreceived
 	bsr	settimestart
 .reet0	st	playing(a5)
 	bsr	inforivit_play
-	bsr	start_info
+	jsr	start_info
 .reet
 	rts
 
@@ -14124,7 +14124,7 @@ prefs_code
 	move	kelloke2s-pslider1s(a0),alarmpot_new(a5)
 	move	eskimOs-pslider1s(a0),infosizepot_new(a5)
 	move	sIPULIs-pslider1s(a0),samplebufsizpot_new(a5)
-	move	sIPULI2s-pslider1s(a0),sampleforceratepot_new(a5)
+	;move	sIPULI2s-pslider1s(a0),sampleforceratepot_new(a5)
 	move	ahiG4s-pslider1s(a0),ahi_ratepot_new(a5)
 	move	ahiG5s-pslider1s(a0),ahi_mastervolpot_new(a5)
 	move	ahiG6s-pslider1s(a0),ahi_stereolevpot_new(a5)
@@ -14785,7 +14785,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move	timeoutpot_new(a5),kellokes-pslider1s(a0)		
 	move	alarmpot_new(a5),kelloke2s-pslider1s(a0)
 	move	samplebufsizpot_new(a5),sIPULIs-pslider1s(a0)	
-	move	sampleforceratepot_new(a5),sIPULI2s-pslider1s(a0)	
+	;move	sampleforceratepot_new(a5),sIPULI2s-pslider1s(a0)	
 	move	ahi_ratepot_new(a5),ahiG4s-pslider1s(a0)
 	move	ahi_mastervolpot_new(a5),ahiG5s-pslider1s(a0)
 	move	ahi_stereolevpot_new(a5),ahiG6s-pslider1s(a0)
@@ -19608,7 +19608,7 @@ inforivit_fimpdecr
 
 inforivit_xfd
 	lea	.1(pc),a0
-	bsr	desmsg	
+	jsr	desmsg	
 	lea	desbuf(a5),a0
 	bra	putinfo
 .1	dc.b	"XFD decrunching...",10
