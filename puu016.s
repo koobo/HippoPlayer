@@ -8332,9 +8332,14 @@ umph
 	bne.b	.hm1
 
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
+
+    lea     l_filename(a3),a0
+    printt  "TODO: midi case"
+    jsr     fileIsMidiForStreaming
+    bne     .mid0
     tst.b   l_remote(a3)
     beq.b   .notRem1
-    printt  "TODO: midi case"
+.mid0
     moveq   #0,d7   * disable for remotes!
 .notRem1
     tst.b   d7
@@ -8366,10 +8371,13 @@ umph
 	lea	l_filename(a3),a0	* Ladataan
 	* load it, d7 contains double buffering flag
 	move.b	d7,d0
+    printt  "TODO: midi case"
+    jsr     fileIsMidiForStreaming
+    bne     .mid1
     tst.b   l_remote(a3)
     beq.b   .notRem
+.mid1
     moveq   #0,d0     * disable for remotes!
-    printt  "TODO: midi case"
     DPRINT  "DISABLE double buffering 2"
 .notRem
     push    a3
@@ -10766,12 +10774,16 @@ rbutton1:
 
 .new	moveq	#0,d7
 	tst.l	playingmodule(a5)	* Onko soitettavana mit‰‰n?
-	bmi.b	.nomod
+	bmi 	.nomod
 
-    printt  "TODO: midi case"
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki p‰‰ll‰?
+    lea     l_filename(a5),a0
+    printt  "TODO: midi case"
+    jsr     fileIsMidiForStreaming
+    bne     .mid0
     tst.b   l_remote(a3)
     beq.b   .notRem1
+.mid0
     moveq   #0,d7 * disable for remotes!
 .notRem1
     tst.b   d7
@@ -10794,8 +10806,11 @@ rbutton1:
 	lea	l_filename(a3),a0	* Ladataan
 	move.b	d7,d0 * double buffering flag
     printt  "TODO: midi case"
+    jsr     fileIsMidiForStreaming
+    bne     .mid2
     tst.b   l_remote(a3)
     beq.b   .notRem2
+.mid2
     moveq   #0,d7 * disable for remotes!
     DPRINT  "DISABLE double buffering 1"
 .notRem2
@@ -55766,6 +55781,10 @@ streamIsMpegAudio:
 *   z clear/true if path is a midi file path, z set/false otherwise
 fileIsMidiForStreaming:
     push    d0
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "fileIsMidiForStreaming=%s"
+ endif
     tst.b   midimode(a5)    * 0: timidity, 1: serial
     bne     .no
     tst.b   uusikick(a5)
