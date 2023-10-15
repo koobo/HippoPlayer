@@ -37551,7 +37551,7 @@ isPlaysidReSID:
     move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
-	cmp     #5,LIB_REVISION(a0)
+	cmp     #6,LIB_REVISION(a0)
 	blo.b   .noRESID
     * Require 020 for reSID/SIDBlaster stuff
     move.l  (a5),a0
