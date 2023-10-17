@@ -3661,6 +3661,7 @@ exit
  endif
     jsr     freeStreamHeaderArgs
     jsr     freeStreamerError
+    jsr     freeStreamerUrl
     jsr     freeSTILData
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
@@ -54842,15 +54843,12 @@ startStreaming:
     pushm   d1-d7/a1-a6
     DPRINT  "*** startStreaming ***"
 
-    tst.b   uhcAvailable(a5)
-    beq     .x
-
-    moveq   #0,d0
-
+    push    a0
     lore    Exec,Forbid
     move.l  streamerTask(a5),d6
     move.w  streamReturnCode(a5),d7
     lob     Permit
+    pop     a0
 
  if DEBUG
     push    d0
@@ -54874,6 +54872,7 @@ startStreaming:
     jsr     setMainWindowWaitPointer
 
     DPRINT  "startStreaming"
+    bsr     freeStreamerUrl
  if DEBUG
     move.l  a0,d0
     DPRINT  "url=%s"
@@ -54921,6 +54920,11 @@ startStreaming:
 .notMidi_
     ;-----------------------------------
     ; UHC stream start
+
+    moveq   #0,d0   * status: fail
+    tst.b   uhcAvailable(a5)
+    beq     .x
+
     DPRINT  "Start aget"
     * Capture aget output into a file
     pushpea agetOutputFile(pc),d1
@@ -55172,10 +55176,7 @@ streamerEntry:
     lea     .agetArgsFormatted(a4),a3
     jsr     desmsg3
 
-    lea     streamerUrl(a5),a1
-    move.l  (a1),a0
-    clr.l   (a1)
-    jsr     freemem
+    bsr     freeStreamerUrl
 
 .argsDone
     * length of args
@@ -55480,6 +55481,15 @@ freeStreamerError:
     clr.l   streamerError(a5)
     jmp     freemem
     
+freeStreamerUrl:
+    pushm   a0/a1
+    lea     streamerUrl(a5),a1
+    move.l  (a1),a0
+    clr.l   (a1)
+    jsr     freemem
+    popm    a0/a1
+    rts
+
 
 
 * Sends the ctrl+c signal to the streamer task if it is running
@@ -55782,8 +55792,10 @@ streamIsMpegAudio:
 fileIsMidiForStreaming:
     push    d0
  if DEBUG
+    pushm   all
     move.l  a0,d0
     DPRINT  "fileIsMidiForStreaming=%s"
+    popm    all
  endif
     tst.b   midimode(a5)    * 0: timidity, 1: serial
     bne     .no
@@ -55814,9 +55826,23 @@ fileIsMidiForStreaming:
     cmp.b   #".",-(a0)
     beq     .yes
 .no
+ if DEBUG
+    pushm   all
+    moveq   #0,d0
+    moveq   #0,d1
+    moveq   #0,d2
+    move.b  midimode(a5),d0
+    move.b  uusikick(a5),d1
+    move.l  (a5),a0
+	btst	#AFB_68020,AttnFlags+1(a0)
+    sne     d2
+    DPRINT  "->no, mode=%lx kick=%lx cpu=%lx"
+    popm    all
+ endif
     moveq   #0,d0
     bra     .x
 .yes
+    DPRINT  "->yes"
     moveq   #1,d0
 .x
     popm    d0
