@@ -10776,7 +10776,7 @@ rbutton1:
 	bmi 	.nomod
 
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki p‰‰ll‰?
-    lea     l_filename(a5),a0
+    lea     l_filename(a3),a0
     jsr     fileIsMidiForStreaming
     bne     .mid0
     tst.b   l_remote(a3)
