@@ -69,17 +69,19 @@ New keyboard shortcuts:
 
 ## Fixes:
 
+- Patternscope and AHX modules: Fix bug which caused track 0 sometimes not being
+  displayed.
+
+- Info window: Fix PSID song speed information sometimes showing wrong values.
+
+## New stuff:
+
+- Scopes: When paused display the paused contents instead of the Hippo gfx.
+
 - MED/OctaMED: Display song length and channel count for multichannel modules.
 
 - Patternscope now supports MED and OctaMED modules, up to 18 channels visible.
   "mini4" font is needed to display more than 8 channels as before.
-
-- Patternscope and AHX modules: Fix bug which caused track 0 sometimes not being
-  displayed.
-
-- Scopes: When paused display the paused contents instead of the Hippo gfx.
-
-## New stuff:
 
 - STIL support added for use with the High Voltage Sid Collection. FAQ: "The SID
   Tune Information List (STIL) contains information about the SID tunes found in
@@ -97,6 +99,17 @@ New keyboard shortcuts:
   found in https://www.hvsc.c64.org/downloads. It's pretty big so it won't fit
   on a floppy, otherwise no special requirements. During the first access a 
   separate index file STIL.idx is created, this takes a while.
+  
+- PSID improvements with the updated playsid.library:
+   - SIDBlaster support upgraded by Erique, now faster and much less
+     likely to cause jams. A 68020 should be enough for normal
+     playback, previously a faster CPU was needed.
+   - reSID mode now supports playsid-style digisamples, as heard for
+     example in tunes like "Skate Or Die" and "Arkanoid".   
+   - "Prefs/Play-2/reSID boost" can be used to boost the volume 
+     in reSID mode.
+   - The library also now works on kickstart 1.3 in the original
+     playback mode, no need to have a separate kick1.3 lib version.
 
 - MIDI file playback support:
   - Serial output using Alastair M. Robinson's "delimidi" player. 
@@ -111,17 +124,6 @@ New keyboard shortcuts:
             version 45 (OS 3.2).
    - "Prefs/Play-2/MIDI mode" setting chooses which mode is active.
    - Scopes and song end detection supported.
-  
- - PSID improvements with the updated playsid.library:
-   - SIDBlaster support upgraded by Erique, now faster and much less
-     likely to cause jams. A 68020 should be enough for normal
-     playback, previously a faster CPU was needed.
-   - reSID mode now supports playsid-style digisamples, as heard for
-     example in tunes like "Skate Or Die" and "Arkanoid".   
-   - "Prefs/Play-2/reSID boost" can be used to boost the volume 
-     in reSID mode.
-   - The library also now works on kickstart 1.3 in the original
-     playback mode, no need to have a separate kick1.3 lib version.
 
 
 ------------------------------------------------------------------------------
