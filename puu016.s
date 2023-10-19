@@ -8335,7 +8335,6 @@ umph
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
 
     lea     l_filename(a3),a0
-    printt  "TODO: midi case"
     jsr     fileIsMidiForStreaming
     bne     .mid0
     tst.b   l_remote(a3)
@@ -8372,7 +8371,6 @@ umph
 	lea	l_filename(a3),a0	* Ladataan
 	* load it, d7 contains double buffering flag
 	move.b	d7,d0
-    printt  "TODO: midi case"
     jsr     fileIsMidiForStreaming
     bne     .mid1
     tst.b   l_remote(a3)
@@ -10779,7 +10777,6 @@ rbutton1:
 
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki p‰‰ll‰?
     lea     l_filename(a5),a0
-    printt  "TODO: midi case"
     jsr     fileIsMidiForStreaming
     bne     .mid0
     tst.b   l_remote(a3)
@@ -10806,7 +10803,6 @@ rbutton1:
 
 	lea	l_filename(a3),a0	* Ladataan
 	move.b	d7,d0 * double buffering flag
-    printt  "TODO: midi case"
     jsr     fileIsMidiForStreaming
     bne     .mid2
     tst.b   l_remote(a3)

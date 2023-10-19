@@ -1,18 +1,15 @@
 TODO:
+- sample scope with sid+resid:
+-- play and switch tunes
+-- sometimes to the right side of the scope area some old stuff is left and not cleared
+
+TODO:
+- Crockettstheme2023 from Aminet, keeps crashing HippoPlayer, 
+  Running under OS 3.2.2 and Latest Version
+- Guru 8000 0005 with both OctaMixPlayer v7.0 and v7.1 
+
+TODO:
 - soundfx: check this identifier, crash?
-
-FIXED: TODO
-- position slider: flashing on kick1.3 while playing
-
-FIXED: TODO
-- position slider not moving if only showing: module name or freemem in titlebar
-
-FIXED: TODO:
-- zip window, zip back: pr -button missing
-- related to the new position slider, it messes up the gadgets list
-
-FIXED: TODO:
-- top box bottom frames are wrong 
 
 TODO:
 - For the crash with the combination of ML+IT files, add the two ML files, then
@@ -28,14 +25,11 @@ TODO:
 -- These do not work as that would require patching DOS functions
 
 TODO:
-- THX/AHX pattern scope sometimes displays an empty channel
-  where actual data should be displayed.
-
-TODO:
 - Here are two possible Gurus on a 68000 (emulated in WinUAE): On a "vanilla"
 68000 without library to play OctaMED modules, when encountering such a modulde,
 HippoPlayer will display a requester saying that the library is missing and then
 crash after selecting "Ok". 
+-- Works ok
 
 TODO:
 - sequence
@@ -86,13 +80,48 @@ TODO:
 - fix timeout not really working on radio stations
 
 
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
-------------------------------------------------------------------------------
-------------------------------------------------------------------------------
-------------------------------------------------------------------------------
+FIXED: TODO:
+- would it be possible to optionally not clear the scopes when a MOD is paused ? 
+  For instance for studying the notes & commands in the patternscope...
+
+FIXED: TODO
+- position slider: flashing on kick1.3 while playing
+
+FIXED: TODO
+- position slider not moving if only showing: module name or freemem in titlebar
+
+FIXED: TODO:
+- zip window, zip back: pr -button missing
+- related to the new position slider, it messes up the gadgets list
+
+FIXED: TODO:
+- top box bottom frames are wrong 
+
+FIXED: TODO:
+- GUI corruption (no crash, though):
+- switch to search view
+- open prefs and set filebox length to 0
+- Use
+
+FIXED: TODO:
+Found a way to crash the system with HiP 68k v2.58:
+- switch to search view
+- click "PR"
+- set filebox height to 3 items
+- Use --> now this already looks... suspicious 😉 see screenshot
+- click "PR" again
+- --> Guru
+
+FIXED: TODO:
+- THX/AHX pattern scope sometimes displays an empty channel
+  where actual data should be displayed.
+
 FIXED: TODO:
 - mp3 paused: title bar shows wrong position (not from mpega)
-
 
 FIXED: TODO:
  update xmaplay 
