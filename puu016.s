@@ -55786,7 +55786,7 @@ streamIsMpegAudio:
 * Out:
 *   z clear/true if path is a midi file path, z set/false otherwise
 fileIsMidiForStreaming:
-    push    d0
+    pushm   d0/a0
  if DEBUG
     pushm   all
     move.l  a0,d0
@@ -55797,10 +55797,17 @@ fileIsMidiForStreaming:
     bne     .no
     tst.b   uusikick(a5)
     beq     .no
+
     push    a0
     move.l  (a5),a0
-	btst	#AFB_68020,AttnFlags+1(a0)
+    move    AttnFlags(a0),d0
     pop     a0  
+    
+    * Require at least 020
+	btst	#AFB_68020,d0
+    beq     .no
+    * ...and an FPU
+    and     #AFF_68881!AFF_68882!AFF_FPU40,d0
     beq     .no
 
 .1  tst.b   (a0)+
@@ -55841,7 +55848,7 @@ fileIsMidiForStreaming:
     DPRINT  "->yes"
     moveq   #1,d0
 .x
-    popm    d0
+    popm    d0/a0
     rts
 
 
