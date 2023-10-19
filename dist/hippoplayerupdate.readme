@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.58
+Version: 2.59
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -39,6 +39,7 @@ Quick overview of major changes since v2.45
   - "Keep list on exit": Continue where you left off 
   - "Big buttons": Larger buttons
   - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
+  - "MIDI mode": Select how to play MIDI files
   - "Enable xmaplay060": Enable a high quality XM replayer
   - "Enable MHI": Play MP3s with extenal hardware
   - "Position slider": For displaying and selecting position
@@ -46,7 +47,8 @@ Quick overview of major changes since v2.45
 - Main window font can be changed to any font
 - Support for many new music formats, stereo SID support
 - Improved scopes: support for more music formats, multiple scopes,
-  spectrum scope, patternscope with two sizes and up to 18 channels
+  spectrum scope, patternscope with two sizes and up to 18 channels 
+  ("mini4" font needed for 8+ channel display)
 - Support for MP3 streaming, radio stations
 - "Add" button in file browser or search view: copy items to main list
 - Support for playlists of up to 131071 items.
@@ -65,34 +67,61 @@ New keyboard shortcuts:
 
 # Changes from v2.58 (22.6.2023) to v2.59 (?.?.2023) 
 
-## New fixes:
+## Fixes:
 
-- MED/OctaMED: Display module length and channel count for multichannel modules.
+- MED/OctaMED: Display song length and channel count for multichannel modules.
 
 - Patternscope now supports MED and OctaMED modules, up to 18 channels visible.
+  "mini4" font is needed to display more than 8 channels as before.
 
 - Patternscope and AHX modules: Fix bug which caused track 0 sometimes not being
   displayed.
 
 - Scopes: When paused display the paused contents instead of the Hippo gfx.
 
-## New feature:
+## New stuff:
 
-- STIL support added. This is the additional information companion for the
-  High Voltage Sid Collection. FAQ: "The SID Tune Information List (STIL)
-  contains information about the SID tunes found in the HVSC beyond the standard
-  TITLE, AUTHOR, and RELEASED information. STIL goes a little deeper listing SID
-  tune information that only a true SID freak would enjoy. Such information
-  listed in STIL includes cover information, interesting facts, useless trivia,
-  comments on the tunes by the composers themselves, etc."
+- STIL support added for use with the High Voltage Sid Collection. FAQ: "The SID
+  Tune Information List (STIL) contains information about the SID tunes found in
+  the HVSC beyond the standard TITLE, AUTHOR, and RELEASED information. STIL
+  goes a little deeper listing SID tune information that only a true SID freak
+  would enjoy. Such information listed in STIL includes cover information,
+  interesting facts, useless trivia, comments on the tunes by the composers
+  themselves, etc."
  
   Hippo is able to display this information in the info window if it detects the
   SID being played being a part of the HVSC hierarchy, by checking the file path
-  or URL. For example, using HVSC search or a local HVSC collection works.
+  or URL. For example, using the HVSC search or a local HVSC collection works.
  
-  The STIL.txt needs to be available in the Hippo directory, it can be found in
-  https://www.hvsc.c64.org/downloads. It's pretty big so it won't fit on a
-  floppy, otherwise no special requirements.
+  The file STIL.txt needs to be available in the Hippo directory, it can be
+  found in https://www.hvsc.c64.org/downloads. It's pretty big so it won't fit
+  on a floppy, otherwise no special requirements. During the first access a 
+  separate index file STIL.idx is created, this takes a while.
+
+- MIDI file playback support:
+  - Serial output using Alastair M. Robinson's "delimidi" player. 
+    This will use MIDI equipment connected to the serial port for playing. 
+  - Paula/AHI output using Timidity Amiga port by Philipp Grosswiler. 
+    Unarchive https://aminet.net/mus/midi/AmiTiMiDity.lha and set an 
+    assign "timidity:" to the directory. Timidity is used to convert
+    MIDI to WAV on the fly. This is a CPU+FPU intensive task, 
+    68060 is tested to work.
+    - Note: queue-handler performance is important here,
+            version 37 (OS 3.0/3.1) is slower than 
+            version 45 (OS 3.2).
+   - "Prefs/Play-2/MIDI mode" setting chooses which mode is active.
+   - Scopes and song end detection supported.
+  
+ - PSID improvements with the updated playsid.library:
+   - SIDBlaster support upgraded by Erique, now faster and much less
+     likely to cause jams. A 68020 should be enough for normal
+     playback, previously a faster CPU was needed.
+   - reSID mode now supports playsid-style digisamples, as heard for
+     example in tunes like "Skate Or Die" and "Arkanoid".   
+   - "Prefs/Play-2/reSID boost" can be used to boost the volume 
+     in reSID mode.
+   - The library also now works on kickstart 1.3 in the original
+     playback mode, no need to have a separate kick1.3 lib version.
 
 
 ------------------------------------------------------------------------------
@@ -1613,6 +1642,7 @@ List of supported formats (could be incomplete):
 - GlueMon
 - Hippel ST, Hippel ST COSO
 - Hippel, Hippel 7v, Hippel-COSO
+- Impulse Tracker
 - In Stereo! v1, v2
 - JamCracker
 - Jason Brooke 
@@ -1620,11 +1650,12 @@ List of supported formats (could be incomplete):
 - Jeroen Tel
 - Kris Hatlelid
 - Maniacs of Noise 
-- Mark II 
 - Mark Cooksey
+- Mark II 
 - MaxTrax
 - MED, OctaMED
 - Medley Sound 
+- MIDI (general MIDI, serial out)
 - MultiTracker, TakeTracker (multichannel Protracker-like formats)
 - Music Assembler
 - Musicline Editor
@@ -1632,7 +1663,7 @@ List of supported formats (could be incomplete):
 - Oktalyzer
 - PreTracker
 - ProTracker, NoiseTracker, SoundTracker, Old SoundTracker
-- PSID
+- PSID, 2SID
 - PumaTracker 
 - Quartet, Quartet ST
 - Richard Joseph
@@ -1644,6 +1675,8 @@ List of supported formats (could be incomplete):
 - Sidmon v1, v2
 - Sonic Arranger (some variants not supported)
 - Sonix
+- Sound Master
+- Sound Programming Language
 - SoundControl
 - SoundFX
 - SpecialFX
