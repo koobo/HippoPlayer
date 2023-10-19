@@ -96,9 +96,11 @@ New keyboard shortcuts:
   or URL. For example, using the HVSC search or a local HVSC collection works.
  
   The file STIL.txt needs to be available in the Hippo directory, it can be
-  found in https://www.hvsc.c64.org/downloads. It's pretty big so it won't fit
-  on a floppy, otherwise no special requirements. During the first access a 
+  found in https://www.hvsc.c64.org/downloads. During the first access a 
   separate index file STIL.idx is created, this takes a while.
+  On kick1.3 Hippo needs to be started using the Workbench icon or
+  from shell in the same directory where the STIL.txt is for
+  Hippo to be able to find it.
   
 - PSID improvements with the updated playsid.library:
    - SIDBlaster support upgraded by Erique, now faster and much less
