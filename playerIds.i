@@ -99,3 +99,4 @@ pt_jasonpage		rs.b 	1
 pt_davidwhittaker	rs.b	1
 pt_soundmaster      rs.b    1
 pt_soundprogramminglanguage rs.b 1
+pt_midiext          rs.b    1
