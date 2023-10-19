@@ -1,6 +1,0 @@
-This is the "playsid.library 1.2 (30.03.96)" with a minor modification
-to make it work on Kickstart 1.3. Copy to LIBS: and remove the "-kick13" 
-part from the name.
-
-Use "playsid.library" if you're running a newer kickstart.
-
