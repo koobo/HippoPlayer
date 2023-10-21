@@ -12526,6 +12526,7 @@ importModuleProgramFromData:
 	
 ;	lea	moduleListHeader(a5),a4
 ;	move.l	a5,a4
+    ;----------------------------------
 .ploop
 
 	* See if additional header should
@@ -12536,9 +12537,10 @@ importModuleProgramFromData:
 	* A remote it is, run filter if available
 	move.l	a6,d3
 	beq.b	.accepted
-	jsr		(a6)
+	jsr		(a6)     * FILTER CALLBACK
 	tst.l	d0
 	bne.b	.accepted
+    * Rejected by filter
 .skipToNext
 	* Skip to next entry
 	cmp.l	d5,a3
@@ -12547,6 +12549,7 @@ importModuleProgramFromData:
 	bne.b	.skipToNext
 	bra		.next
 .accepted
+
 
 	* Is this an url?
 	moveq	#0,d3	* local
@@ -12593,7 +12596,7 @@ importModuleProgramFromData:
 
 	* Copy filename 
 	lea	l_filename(a2),a0
-
+    ; ---------------------------------
     * UTF8 encoding for divider magic: $c3b7
     cmp.b   #$c3,(a3)
     bne     .div0
@@ -12610,7 +12613,7 @@ importModuleProgramFromData:
 	st	l_divider(a2)
 .notDiv2
 .utf8div
-
+    ; ---------------------------------
 	* See if additional header should
 	* be prepended to the line. This indicates
 	* a remote url, it is used to add the base url address.
@@ -12623,13 +12626,16 @@ importModuleProgramFromData:
 	bne.b	.copyHdr
 	subq	#1,a0 * to NULL
 .noHdr
-
+    ; ---------------------------------
 	* Copy chars until line change
-	moveq	#10,d1
+	moveq	#10,d1  * LF
+    moveq   #13,d0  * CR
+    move.w  #"#",a1
+    moveq   #0,d2
 .le	
 	move.b	(a3)+,d2
     * Painfully check for "#song=x"
-    cmp.b   #"#",d2
+    cmp.w   a1,d2 
     bne.b   .1
     cmp.b   (a3),d1
     beq     .1
@@ -12647,20 +12653,27 @@ importModuleProgramFromData:
     beq     .1
     cmp.b   #"g",3(a3)
     bne     .1
-    moveq   #$f,d0
-    and.b   5(a3),d0
+    moveq   #$f,d2
+    and.b   5(a3),d2
+    move.b  d2,l_favSong(a2)
+ if DEBUG
+    push    d0
+    move.l  d2,d0
     DPRINT  "FavSong restored=%ld" 
-    move.b  d0,l_favSong(a2)
+    pop     d0
+ endif
     * Replace with LF to ignore the rest
     move.b  d1,d2
     addq    #7,a3
 .1
-	move.b	d2,(a0)+
+    cmp.b   d0,d2      * Skip CR
+    beq.b   .le
+	move.b	d2,(a0)+   * Copy!
 	cmp.b	d1,d2
 	bne.b	.le
 	* Replace LF with NULL
 	clr.b	-(a0)
-
+    ; ---------------------------------
 	lea	l_filename(a2),a1
 	tst.b	l_divider(a2)
 	beq.b	.notDiv
