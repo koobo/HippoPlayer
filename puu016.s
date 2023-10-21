@@ -53687,10 +53687,30 @@ remoteSearch
 	* Import data
 	* This will also set l_remote and l_nameaddr
 	* to correct values for remote files.
+
+    * Set filter for modland entries
 	lea		.modlandFilter(pc),a0
 	cmp.b	#SEARCH_MODLAND,d7
-	beq.b	.3
+	beq.b	.yesModl
+    * Default: no filter
 	sub.l	a0,a0
+.yesModl
+
+    * Check if playlist entries already have an url.
+    * If yes, let's not append the default baseurl in d6.
+    * New data is in a3.
+    cmp.b   #"h",(a3)
+    bne     .3
+    cmp.b   #"t",1(a3)
+    bne     .3
+    cmp.b   #"t",2(a3)
+    bne     .3
+    cmp.b   #"p",3(a3)
+    bne     .3
+    * Playlist entry started with an url, let's not append
+    * the default.
+    moveq   #0,d6
+
 .3	jsr		importModuleProgramFromDataSkipHeader
     DPRINT  "modsFromLastSearch=%ld"
     move.l  d0,modsFromLastSearch(a5)
