@@ -74,6 +74,10 @@ New keyboard shortcuts:
 
 - Info window: Fix PSID song speed information sometimes showing wrong values.
 
+- Prevent jam when receiving no results from recent stations search.
+
+- Allow MS-DOS line changes in playlist/module program files.
+
 ## New stuff:
 
 - Scopes: When paused display the paused contents instead of the Hippo gfx.
