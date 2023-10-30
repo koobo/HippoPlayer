@@ -4556,6 +4556,8 @@ avaa_ikkuna:
 	move	fileBoxOrigTopEdge(a5),fileBoxTopEdge(a5)
 .1
 	jsr	layoutGadgetsVertical
+    * Ensure list mode toggle button has the correct icon 
+    jsr setListModeChangeButtonIconNoRefresh    
  
 	
 	; Update into window structure
@@ -4719,6 +4721,11 @@ avaa_ikkuna:
     sub     BOTTOM_MARGIN(a5),d3
 	move	d3,gg_Height(a3)
 	subq	#3,gg_Height(a3)
+
+    tst.b   altbuttons(a5)
+    beq     .noAlt1
+    subq    #7,gg_Height(a3)
+.noAlt1
 
  ifne FEATURE_LIST_TABS
     sub #3*14,gg_Height(a3)
@@ -33567,7 +33574,7 @@ engageSearchResultsMode:
 
 * Common operations to be done after list mode change
 engageListMode:
-	bsr	.setListModeChangeButtonIcon
+	bsr	setListModeChangeButtonIcon
 	bsr	.setButtonStatesAccordingToListMode
 	bsr.b	.setListState
   ifne FEATURE_LIST_TABS
@@ -33708,27 +33715,42 @@ engageListMode:
 
 	endb	a4
 
-.setListModeChangeButtonIcon
-	lea	listImage,a0
-	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
-	beq.b	.set
-	lea	favoriteImage-listImage(a0),a0
-	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.set
-	lea	fileBrowserImage-favoriteImage(a0),a0
-	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
-	beq.b	.set
-	lea	searchImage-fileBrowserImage(a0),a0
-	cmp.b 	#LISTMODE_SEARCH,listMode(a5)
-	beq.b	.set
-	rts
-.set
-	* Toggle listmode button icon
-	move.l	a0,gadgetListModeChangeButtonImagePtr
+
+setListModeChangeButtonIcon:
+    bsr setListModeChangeButtonIconNoRefresh
 	lea	gadgetListModeChangeButton,a0
  ifeq FEATURE_LIST_TABS
 	jsr refreshGadgetInA0
  endif
+    rts
+
+setListModeChangeButtonIconNoRefresh:
+	lea	listImage,a0
+    lea listImageBig,a1
+	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
+	beq.b	.set
+	lea	favoriteImage-listImage(a0),a0
+	lea	favoriteImageBig-listImageBig(a1),a1
+	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
+	beq.b	.set
+	lea	fileBrowserImage-favoriteImage(a0),a0
+	lea	fileBrowserImageBig-favoriteImageBig(a1),a1
+	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
+	beq.b	.set
+	lea	searchImage-fileBrowserImage(a0),a0
+	lea	searchImageBig-fileBrowserImageBig(a1),a1
+    cmp.b 	#LISTMODE_SEARCH,listMode(a5)
+	beq.b	.set
+	rts
+.set
+	* Toggle listmode button icon
+    move.w  #7,ig_Height+gadgetListModeChangeButtonImage
+    tst.b   altbuttons(a5)
+    beq     .66
+    move.l  a1,a0
+    move.w  #7*2,ig_Height+gadgetListModeChangeButtonImage
+.66
+	move.l	a0,gadgetListModeChangeButtonImagePtr
     rts
 
 setNormalAddTooltip
@@ -54237,6 +54259,14 @@ verticalLayout:
 	lea		gadgetListModeChangeButton,a0
 	subq	#2,d0
 	move	d0,gg_TopEdge(a0)
+
+    move    #13,gg_Height(a0)   * Large mode button
+    tst.b   altbuttons(a5)
+    beq     .noAlt1
+    addq    #7,gg_Height(a0)    * Normal mode button
+.noAlt1
+
+
  ifeq FEATURE_LIST_TABS
 	lea		gadgetFileSlider,a1
 	add		gg_Height(a0),d0
@@ -60157,6 +60187,24 @@ favoriteImage:
 	dc	%0001110000000000				
 	dc	%0000100000000000				
 
+favoriteImageBig:
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0111011100000000				
+	dc	%1111111110000000				
+	dc	%1111111110000000				
+	dc	%1111111110000000				
+	dc	%1111111110000000				
+	dc	%0111111100000000				
+	dc	%0011111000000000				
+	dc	%0001110000000000				
+	dc	%0000100000000000				
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0000000000000000
+
+
+
 listImage:
 	dc	%1101111111000000
 	dc	%0000000000000000				
@@ -60166,15 +60214,46 @@ listImage:
 	dc	%0000000000000000
 	dc	%1101111111000000
 
+listImageBig:
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%1101111111000000
+	dc	%0000000000000000
+	dc	%1101111111000000
+	dc	%0000000000000000				
+	dc	%1101111111000000
+	dc	%0000000000000000
+	dc	%1101111111000000
+	dc	%0000000000000000
+	dc	%1101111111000000
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0000000000000000
 
 fileBrowserImage:
 	dc	%1111111100000000
-	dc	%1010011010000000				
+	dc	%1011001010000000				
 	dc	%1011111001000000
 	dc	%1000000001000000
 	dc	%1011111101000000
-	dc	%1011001101000000
+	dc	%1010000101000000
 	dc	%1111111111000000
+
+fileBrowserImageBig:
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%1111111100000000
+	dc	%1011001010000000				
+	dc	%1011001001000000				
+	dc	%1011111001000000
+	dc	%1000000001000000
+	dc	%1011111101000000
+	dc	%1010000101000000
+	dc	%1010000101000000
+	dc	%1010000101000000
+	dc	%1111111111000000
+	dc	%0000000000000000
+	dc	%0000000000000000
 
 searchImage:
 	dc	%0001110000000000
@@ -60184,8 +60263,22 @@ searchImage:
 	dc	%0010001100000000
 	dc	%0001111100000000
 	dc	%0000000110000000
-	;dc	%0000000011000000
 
+searchImageBig:
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0001110000000000
+	dc	%0010001000000000
+	dc	%0101000100000000
+	dc	%0100000100000000
+	dc	%0100000100000000
+	dc	%0010001100000000
+	dc	%0001111100000000
+	dc	%0000000110000000
+	dc	%0000000110000000
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0000000000000000
 
 resizeGadgetImage:
 	; plane 1
