@@ -668,11 +668,15 @@ init:
     move.l  modulefilename(a5),a0
     bsr     isPipe
     beq     .notPipeW
-    * Should be "PIPE:wavHippoStream"
+    * Should be "PIPE:wavHippoStream" for WAV
+    *           "PIPE:wavHippoStream2" for AIFF
     cmp.b   #"w",5(a0)
     bne     .notPipeW
     DPRINT  "sample PIPE wav bypass"
-    move.b  #3,sampleformat(a5)
+    move.b  #3,sampleformat(a5) * WAV decoder
+    cmp.b   #"2",19(a0)
+    bne     .wavinitPipeBypass
+    move.b  #2,sampleformat(a5) * AIFF decoder
     bra     .wavinitPipeBypass
 .notPipeW
 
@@ -1429,6 +1433,15 @@ init:
 
 ** muotoillaan inforivi hipolle
 
+    push    a0
+    move.l  modulefilename(a5),a0
+    bsr     isPipe
+    pop     a0
+    beq     .fr0
+    * wav/aiff + midi
+    lea     .t3midi(pc),a0
+    bra     .fr1
+.fr0
 	lea	.t1(pc),a0
 	move.b	sampleformat(a5),d0
 	subq.b	#1,d0
@@ -1438,13 +1451,6 @@ init:
 	beq.b	.fr1
 	lea	.t3(pc),a0
 
-    push    a0
-    move.l  modulefilename(a5),a0
-    bsr     isPipe
-    pop     a0
-    beq     .fr1
-    * wav + midi
-    lea     .t3midi(pc),a0
 
 .fr1	move.l	a0,d0
 
@@ -4292,8 +4298,11 @@ closesample
 
     ; ---------------------------------
     ; Handle special case with PIPE+wav flushing
+    cmp.b   #2,sampleformat(a5)
+    beq     .wasAiff
     cmp.b   #3,sampleformat(a5)
     bne     .notWav
+.wasAiff
     move.l  modulefilename(a5),a0
     bsr     isPipe
     beq     .notWav

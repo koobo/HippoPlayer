@@ -964,8 +964,12 @@ xmaplay     rs.b    1
 residfilter rs.b    1
 residboost  rs.b    1
 medfastmemplay rs.b     1
-midimode    rs.b    1
-            rs.b    1 * pad
+
+MIDI_TIMIDITY = 0
+MIDI_GMPLAY   = 1
+MIDI_SERIAL   = 2
+midimode  rs.b    1
+          rs.b    1 * pad
 *******
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
@@ -17820,7 +17824,7 @@ residboost04	dc.b	"4x",0
 
 rmidimode
 	addq.b	#1,midimode_new(a5)
-	cmp.b	#2,midimode_new(a5)
+	cmp.b	#3,midimode_new(a5)
 	bne.b	.1
 	clr.b	midimode_new(a5)
 .1
@@ -17830,13 +17834,17 @@ pmidimode
 	move.b	midimode_new(a5),d0
     beq.b   .1
     lea     midimode02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     midimode03(pc),a0
 .1 
     lea	    prefsMidiMode,a1
 	bra	prunt
 
-midimode00	dc.b    12,2
+midimode00	dc.b    12,3
 midimode01	dc.b	"Timidity",0
-midimode02	dc.b	"Serial out",0
+midimode02	dc.b	"GMPlay",0
+midimode03	dc.b	"Serial out",0
  even
 
 
@@ -54852,6 +54860,7 @@ combSortNodeArray
 
 streamPipeFile      dc.b    "PIPE:hippoStream",0
 midiStreamPipeFile  dc.b    "PIPE:wavHippoStream",0
+midiStreamPipeFile2 dc.b    "PIPE:wavHippoStream2",0
 agetHeadersFile     dc.b    "T:agetheaders",0
                     even
 
@@ -55002,6 +55011,10 @@ startStreaming:
     tst.l   d0
     beq     .x
     lea     midiStreamPipeFile(pc),a0
+    cmp.b   #MIDI_TIMIDITY,midimode(a5)
+    beq     .yti
+    lea     midiStreamPipeFile2(pc),a0
+.yti
     DPRINT  "MIDI bypass"
     bra     .midiStream
 .notMidi
@@ -55311,9 +55324,17 @@ streamerEntry:
     moveq   #0,d7 
     moveq   #0,d5
 
+    cmp.b   #MIDI_GMPLAY,midimode(a5)
+    bne     .ngm
+    bsr     .setGmDriverEnvVar
+    pushpea gmplayCliName(pc),d0
+    lea     .gmplayCmd(pc),a0
+    bra     .ygm
+.ngm
     pushpea timidityCliName(pc),d0
-    move.l	streamerUrl(a5),d1
     lea     .timidityCmd(pc),a0
+.ygm
+    move.l	streamerUrl(a5),d1
     lea     .buffer(a4),a3
     jsr     desmsg3
 
@@ -55322,22 +55343,18 @@ streamerEntry:
     DPRINT  "stream:cmd=%s"
  endif
 
-    ; Change current dir to "timidity:"
+    ; Change current dir to "timidity:" or "gm:"
+    pushpea .gmplayDir(pc),d1
+    cmp.b   #MIDI_GMPLAY,midimode(a5)
+    beq     .ygm2
 	pushpea	.timidityDir(pc),d1
+.ygm2
     moveq	#ACCESS_READ,d2
 	lore    Dos,Lock
     DPRINT  "stream:lock=%lx"
     move.l  d0,.sysCurrentDir
     beq     .error
 
-;    * Capture timidity output into a file
-;    pushpea midiOutputFile(pc),d1
-;    move.l  #MODE_NEWFILE,d2
-;    lob     Open
-;    DPRINT  "stream:midi output open=%lx"
-;    move.l  d0,.sysOutput
-;    beq     .error
-;
     ; Launch timidity
     pushpea .buffer(a4),d1
     pushpea .sysTags(pc),d2
@@ -55389,9 +55406,6 @@ streamerEntry:
 
 .sysTags
     dc.l    NP_StackSize,10000
-    * This is automatically unlocked:
-;    dc.l    NP_Output,0
-;.sysOutput = *-4
     dc.l    NP_CurrentDir,0
 .sysCurrentDir = *-4
     dc.l    NP_ExitCode,.exitCode
@@ -55404,18 +55418,37 @@ streamerEntry:
     rts
 
 
+.setGmDriverEnvVar:
+    pushpea .gmEnvVarName(pc),d1
+    pushpea .gmEnvVarValue(pc),d2  * value
+    moveq   #-1,d3               * size or -1 for null terminated string
+    move.l  #GVF_GLOBAL_ONLY,d4  * global variable
+    lore    Dos,SetVar           * set it
+    DPRINT  "SetVar=%ld"
+    rts
+
+.gmEnvVarName:
+    dc.b    "CyberSound/SoundDrivers/file_Destination",0
+.gmEnvVarValue:
+    dc.b    "PIPE:wavHippoStream2/65536/2",0
+    even
+
 .envVarName
     dc.b    "UHCBIN",0
 
 .agetCmd
     dc.b	'%sC/aget',0
 
-
 .timidityDir   
     dc.b    "timidity:",0
     
 .timidityCmd
     dc.b    '%s -id -Ow1S -s27710 -o PIPE:wavHippoStream/65536/2 "%s"',10,0
+
+.gmplayDir
+    dc.b    "gm:",0
+.gmplayCmd
+    dc.b    '%s OUTPUT=file QUIET FREQUENCY=27710 "%s"',10,0
 
 .args
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
@@ -55430,6 +55463,8 @@ streamerEntry:
 	dc.b	'TO=PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192 URL="%s"',10,0
 
 timidityCliName   dc.b    "timidity",0
+
+gmplayCliName   dc.b "gmplay",0
 
  even
 
@@ -55464,8 +55499,11 @@ findMidiProcess:
     subq.b  #1,d1
     bne     .cliCp
     clr.b   (a1)
-    * See if this CLI is "timidity"
+    * See if this CLI is "timidity","gmplay"
     lea     (sp),a0
+    lea     gmplayCliName(pc),a1
+    cmp.b   #MIDI_GMPLAY,midimode(a5)
+    beq     .cliCmp
     lea     timidityCliName(pc),a1
 .cliCmp
     cmpm.b  (a0)+,(a1)+
@@ -55826,10 +55864,13 @@ fileIsMidiForStreaming:
     DPRINT  "fileIsMidiForStreaming=%s"
     popm    all
  endif
-    tst.b   midimode(a5)    * 0: timidity, 1: serial
-    bne     .no
+    cmp.b   #MIDI_SERIAL,midimode(a5)
+    beq     .no
     tst.b   uusikick(a5)
     beq     .no
+
+    cmp.b   #MIDI_TIMIDITY,midimode(a5)
+    bne     .1
 
     push    a0
     move.l  (a5),a0
