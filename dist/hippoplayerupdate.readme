@@ -118,18 +118,23 @@ New keyboard shortcuts:
      playback mode, no need to have a separate kick1.3 lib version.
 
 - MIDI file playback support:
-  - Serial output using Alastair M. Robinson's "delimidi" player. 
+  - "Prefs/Play-2/MIDI mode" setting chooses which mode is active.
+  - Serial output mode using Alastair M. Robinson's "delimidi" player. 
     This will use MIDI equipment connected to the serial port for playing. 
-  - Paula/AHI output using Timidity Amiga port by Philipp Grosswiler. 
-    Unarchive https://aminet.net/mus/midi/AmiTiMiDity.lha and set an 
-    assign "timidity:" to the directory. Timidity is used to convert
-    MIDI to WAV on the fly. This is a CPU+FPU intensive task, 
-    68060 is tested to work.
-    - Note: queue-handler performance is important here,
-            version 37 (OS 3.0/3.1) is slower than 
-            version 45 (OS 3.2).
-   - "Prefs/Play-2/MIDI mode" setting chooses which mode is active.
-   - Scopes and song end detection supported.
+  - Paula/AHI output mode using either Timidity Amiga port by Philipp 
+    Grosswiler or GMPlay by Christian Buchner.
+    - Timidity: Good quality, heavy CPU and FPU usage, 68060 tested to work.
+      Unarchive https://aminet.net/mus/midi/AmiTiMiDity.lha and set an 
+      assign "timidity:" to the directory. 
+    - GMPlay: Not as good quality, lighter CPU load, 68020 should work.
+      Install GMPlay from http://aminet.net/mus/midi/GMPlay13.lha and
+      set an assign "gm:" to the directory (this is just for Hippo to
+      find it). 
+    - Timidity and GMPlay are used to convert midi into audio 
+      on-the-fly and piped through to Hippo using PIPE:.
+      The performance of the queue-handler is important,
+      V37 (OS 3.0/3.1) is slower than V45 (OS 3.2).
+  - Scopes and song end detection supported.
 
 
 ------------------------------------------------------------------------------
