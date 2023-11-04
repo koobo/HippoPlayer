@@ -968,8 +968,9 @@ medfastmemplay rs.b     1
 MIDI_TIMIDITY = 0
 MIDI_GMPLAY   = 1
 MIDI_SERIAL   = 2
-midimode  rs.b    1
-          rs.b    1 * pad
+midimode            rs.b    1
+                    rs.b    1 * pad
+currentMidiCliName  rs.l    1 * Name of the CLI app last used for MIDI
 *******
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
@@ -54861,8 +54862,11 @@ combSortNodeArray
 *
 ***************************************************************************
 
+* Name returned for aget style stream (network bytes)
 streamPipeFile      dc.b    "PIPE:hippoStream",0
+* Name returned for WAV style stream (Timidity)
 midiStreamPipeFile  dc.b    "PIPE:wavHippoStream",0
+* Name returned for PCM/AIFF style stream (GMPlay)
 midiStreamPipeFile2 dc.b    "PIPE:wavHippoStream2",0
 agetHeadersFile     dc.b    "T:agetheaders",0
                     even
@@ -55337,6 +55341,8 @@ streamerEntry:
     pushpea timidityCliName(pc),d0
     lea     .timidityCmd(pc),a0
 .ygm
+    * Store this so graceful exit can be done later
+    move.l  d0,currentMidiCliName(a5)
     move.l	streamerUrl(a5),d1
     lea     .buffer(a4),a3
     jsr     desmsg3
@@ -55504,10 +55510,7 @@ findMidiProcess:
     clr.b   (a1)
     * See if this CLI is "timidity","gmplay"
     lea     (sp),a0
-    lea     gmplayCliName(pc),a1
-    cmp.b   #MIDI_GMPLAY,midimode(a5)
-    beq     .cliCmp
-    lea     timidityCliName(pc),a1
+    move.l  currentMidiCliName(a5),a1
 .cliCmp
     cmpm.b  (a0)+,(a1)+
     bne     .noCLI
