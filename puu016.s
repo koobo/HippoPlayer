@@ -29410,17 +29410,20 @@ loadmodule:
     jsr     findMidiProcess
     bne     .flush
     jsr     awaitStreamer
+    lea     .msgMidi(pc),a1
     bra     .wasMidi    
 .flush
     jsr     awaitStreamerAndFlush
-.wasMidi
     lea     .msg(pc),a1
+.wasMidi
     jsr     request
 	jsr	    inforivit_clear
     moveq   #lod_remoteError,d0
     rts
 .msg
     dc.b    "Error downloading data!",0
+.msgMidi
+    dc.b    "Error starting MIDI!",0
     even
 
 .streamOk
