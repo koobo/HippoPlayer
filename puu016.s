@@ -959,7 +959,14 @@ mpegadiv	rs.b	1		* MPEGA freq. division
 medmode		rs.b	1		* MED mode
 medrate		rs	1		* MED mixing rate
 sidmode     rs.b    1
+
+RESIDMODE_NORMAL = 0
+RESIDMODE_OVERSAMPLE2 = 1
+RESIDMODE_OVERSAMPLE3 = 2
+RESIDMODE_OVERSAMPLE4 = 3
+RESIDMODE_INTERPOLATE = 4
 residmode   rs.b    1
+
 xmaplay     rs.b    1
 residfilter rs.b    1
 residboost  rs.b    1
@@ -17726,7 +17733,7 @@ rmidimode_req
 
 rresidmode
 	addq.b	#1,residmode_new(a5)
-	cmp.b	#6,residmode_new(a5)
+	cmp.b	#4,residmode_new(a5)
 	bne.b	.1
 	clr.b	residmode_new(a5)
 .1
@@ -17742,25 +17749,17 @@ presidmode
     subq.b  #1,d0
     beq.b   .1
     lea     residmode04(pc),a0
-    subq.b  #1,d0
-    beq.b   .1
-    lea     residmode05(pc),a0
-    subq.b  #1,d0
-    beq.b   .1
-    lea     residmode06(pc),a0
 .1 
     lea	    prefsResidMode,a1
 	bra	prunt
 
 
 
-residmode00	dc.b	13,6
+residmode00	dc.b	13,4
 residmode01	dc.b	"Normal",0
 residmode02	dc.b	"Oversample 2x",0
 residmode03	dc.b	"Oversample 3x",0
 residmode04	dc.b	"Oversample 4x",0
-residmode05	dc.b	"Interpolate",0
-residmode06	dc.b	"AHI",0
  even
 
 
@@ -19771,6 +19770,8 @@ type_notAhi dc.b    0
 * Loota (otsikkopalkki tiedot)
 *******
 
+* Set the start time of the module playback
+* Also stores whether the module playback was started in AHI mode
 settimestart
 	move.b	ahi_use(a5),ahi_use_nyt(a5)	* ahi:n tila talteen
 
@@ -36756,12 +36757,12 @@ p_sid:	jmp	.init(pc)
 
     bsr     isPlaysidReSID
     beq     .skip
-
-    bsr     sid_getSidVersion
-    * d0 = detected SID, 0: 6581, not 0: 8580
+    DPRINT  "reSID"
 
     ; -----------------------
     ; Before AllocEmulResource set the operating mode
+    ; These corrspond to playsid OM_RESID_6581, OM_RESID_8580, 
+    ; OM_RESID_AUTO, OM_SIDBLATER_USB
     ; 0 = normal
     ; 1 = resid 6581
     ; 2 = resid 8580
@@ -36772,31 +36773,41 @@ p_sid:	jmp	.init(pc)
     cmp.b   #2,sidmode(a5)
     beq     .m2
     cmp.b   #3,sidmode(a5)
-    bne     .m22
-    * Auto detect
-    DPRINT  "Detected SID=%lx"
-    tst.b   d0
-    beq     .m1
-    bra     .m2
-.m22
-    cmp.b   #4,sidmode(a5)
     beq     .m3
-    * Default option
+    cmp.b   #4,sidmode(a5)
+    beq     .m4
+    * Fallback default option
     move    #OM_NORMAL,d0
     lea     .zero(pc),a0
     bra     .mode
 .m1
-    lea     sidmode02,a0
+    *** reSID 6581
+    lea     sidmode02,a0 
     moveq   #OM_RESID_6581,d0
+    DPRINT  "OM_RESID_6581"
     bra     .cpuCheck
 .m2
+    *** reSID 8580
     lea     sidmode03,a0
     moveq   #OM_RESID_8580,d0
+    DPRINT  "OM_RESID_8580"
     bra     .cpuCheck
-
 .m3
+    *** reSID AUTO
+    lea     sidmode02,a0   * "6581"
+    bsr     sid_getSidVersion
+    * d0 = detected SID, 0: 6581, not 0: 8580
+    beq     .m33
+    lea     sidmode03,a0   * "8580"    
+.m33
+    moveq   #OM_RESID_AUTO,d0
+    DPRINT  "OM_RESID_AUTO"
+    bra     .cpuCheck
+.m4
+    *** SIDBlaster USB
     lea     sidmode05,a0
     moveq   #OM_SIDBLASTER_USB,d0
+    DPRINT  "OM_SIDBLASTER_USB"
     bra     .mode
     ; -----------------------
 .cpuCheck
@@ -36878,23 +36889,24 @@ p_sid:	jmp	.init(pc)
 
     ; -----------------------
 .mode
+    * Copy infobox text into place
     lea     .title(pc),a1
 .a  move.b  (a0)+,(a1)+
     bne.b   .a
 
     cmp.b   #OM_RESID_6581,d0
     beq     .o1
+    cmp.b   #OM_RESID_AUTO,d0
+    beq     .o1
     cmp.b   #OM_RESID_8580,d0
     bne     .o2
 .o1 
     * Show additional "14-bit" or "AHI" with reSID.
-    * Also set up the AHI specific modulo
     move.l  #" 14-",-1(a1)
     move.l  #"bit"<<8,-1+4(a1)
     move.l  #1,ps3m_sampleDataModulo(a5)
-    cmp.b   #5,residmode(a5)
-    bne     .o2
-    move.l  #2,ps3m_sampleDataModulo(a5)
+    tst.b   ahi_use_nyt(a5)
+    beq     .o2
     move.l  #" AHI",-1(a1)
     clr.b   -1+4(a1)
 .o2
@@ -36907,16 +36919,36 @@ p_sid:	jmp	.init(pc)
     bra     .er
 .o3
 
-    moveq   #0,d1
-    move.b  residmode(a5),d1
-    DPRINT  "Operating mode=%ld resid=%ld" 
+    DPRINT  "Operating mode=%ld" 
     lob     SetOperatingMode
-
+    
+    moveq   #0,d0
+    move.b  residmode(a5),d0
+    DPRINT  "Resid mode=%ld" 
+    lob     SetRESIDMode
+ 
+ if DEBUG
+    moveq   #0,d0
+    moveq   #0,d1
+    move.b  ahi_use(a5),d0
+    move.b  ahi_use_nyt(a5),d1
+    DPRINT  "ahi_use=%lx ahi_use_nyt=%lx"
+ endif
+ 
+    * AHI mode, NULL to disable
+    moveq   #0,d0    
+    tst.b   ahi_use(a5)
+    beq     .noAhi
+    * Set up the AHI specific modulo for scopes
+    move.l  #2,ps3m_sampleDataModulo(a5)
     move.l  ahi_mode(a5),d0
+.noAhi
+    DPRINT  "AHI mode=%lx" 
     lob     SetAHIMode
     
 .skip
     ; -----------------------
+    DPRINT  "Classic init"
 
 	lob	AllocEmulResource
     DPRINT  "AllocEmulResource=%ld"
@@ -36984,12 +37016,13 @@ p_sid:	jmp	.init(pc)
     * reSID Filter settings - after AllocEmulResource
     bsr     isPlaysidReSID
     beq     .nrsf
-    cmp.b   #1,sidmode(a5)
+    cmp.b   #1,sidmode(a5)  * 6510
     beq     .rsf
-    cmp.b   #2,sidmode(a5)
+    cmp.b   #2,sidmode(a5)  * 8580
     beq     .rsf
-    cmp.b   #3,sidmode(a5)
-    bne     .nrsf
+    cmp.b   #3,sidmode(a5)  * AUTO
+    beq     .rsf
+    bra     .nrsf
 .rsf
     moveq   #1,d0   * int on
     moveq   #0,d1   * ext off
@@ -37013,6 +37046,7 @@ p_sid:	jmp	.init(pc)
     * 1 = 2x
     * 2 = 3x
     * 3 = 4x
+    * 0 and 1 do nothing (multiply by 0 or 1), so add 1
     addq    #1,d0
 .nb
     DPRINT  "boost=%ld"
@@ -37252,6 +37286,7 @@ p_sid:	jmp	.init(pc)
 *   d0 = non-zero: 8580
 sid_getSidVersion:
     moveq   #0,d0
+    push    a0    
     move.l  moduleaddress(a5),a0
     cmp.l   #"PSID",(a0)
     bne     .noheader
@@ -37269,6 +37304,8 @@ sid_getSidVersion:
     seq     d0
 .v1    
 .noheader
+    pop     a0
+    tst     d0
     rts
 
 * Calculate song speed and Hz
@@ -37626,6 +37663,8 @@ playSidInRESIDMode:
     lob     GetOperatingMode * output in d0, d1
     tst     d0
     beq     .no
+    cmp     #OM_RESID_AUTO,d0
+    beq     .y
     cmp     #OM_RESID_6581,d0
     beq     .y
     cmp     #OM_RESID_8580,d0
