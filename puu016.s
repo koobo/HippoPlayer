@@ -12679,10 +12679,10 @@ importModuleProgramFromData:
     addq    #7,a3
 .1
     cmp.b   d0,d2      * Skip CR
-    beq.b   .le
+    beq    .le
 	move.b	d2,(a0)+   * Copy!
 	cmp.b	d1,d2
-	bne.b	.le
+	bne 	.le
 	* Replace LF with NULL
 	clr.b	-(a0)
     ; ---------------------------------
@@ -30335,7 +30335,7 @@ loadfile:
 	bsr	identifyFormatsOnly 
 	beq.b .on
 	DPRINT	"Eagle"
-	lea	eagleFormats(pc),a3 
+	lea	eagleFormats,a3 
 	bsr	identifyFormatsOnly 
 	beq.b .on
 
@@ -32103,7 +32103,7 @@ tutki_moduuli:
 	bra	.ex
 
 .davelowe
-	pushpea	p_davelowe(pc),playerbase(a5)
+	pushpea	p_davelowe,playerbase(a5)
 	move	#pt_davelowe,playertype(a5)
 	bra	.ex
 
@@ -32263,7 +32263,7 @@ idtest:
 *   a3 = array of formats
 * out:
 *   d0 = 0 if some format accepted the module, ~0 otherwise
-identifyFormatsOnly
+identifyFormatsOnly:
 	* Flag: only identify, do not grab data
 	moveq	#1,d1
 	bra.b 	doIdentifyFormats
@@ -32276,10 +32276,12 @@ doIdentifyFormats
 	tst	(a3)
 	beq.b	.notFound
 	move.l	a3,a0
-	add	(a0),a0
+    add.w   (a0),a0
  if DEBUG
-	;pushpea	p_name(a0),d0
-	;DPRINT	"- %s"
+;    move    (a3),d0
+;    ext.l   d0
+;	pushpea	p_name(a0),d1
+;	DPRINT	"- %ld -> %s"
  endif
 	pushm	all
 	jsr	p_id(a0)
@@ -35718,7 +35720,7 @@ clearsound
 * - replayer code is within modules
 * - replayer code is in libraries
 * - TFMX and ProTracker have special handling 
-internalFormats
+internalFormats:
 	;dr.w	p_protracker 
 	dr.w	p_med 
 	dr.w 	p_mline 
@@ -35734,7 +35736,7 @@ internalFormats
 
 * Formats
 * - replayers are in the HippoPlayer.group
-groupFormats
+groupFormats:
 	dr.w 	p_jamcracker 
 	dr.w 	p_pumatracker 
 	dr.w 	p_futurecomposer13
@@ -35766,54 +35768,6 @@ groupFormats
  	dr.w 	p_aon8
 	dc.w 	0
 
-
-* Formats
-* - replayers provided in eagleplayer plugins
-eagleFormats
-	dr.w	p_synthesis
-	dr.w	p_syntracker
-	dr.w	p_robhubbard2
-	dr.w	p_chiptracker
-	dr.w	p_quartet
-	dr.w	p_facethemusic
-	dr.w	p_richardjoseph
-	dr.w	p_instereo1 
-	dr.w	p_instereo2
-	dr.w	p_jasonbrooke
-	dr.w	p_earache
-	dr.w	p_krishatlelid
-	dr.w	p_richardjoseph2
-	dr.w	p_hippel7
-	dr.w	p_aprosys
-	dr.w	p_hippelst
-	dr.w	p_tcbtracker
-	dr.w	p_markcooksey 
-	dr.w	p_maxtrax
-	dr.w	p_wallybeben
-	dr.w	p_synthpack
-	dr.w	p_robhubbard 
-	dr.w 	p_jeroentel
-	dr.w	p_sonix
-	dr.w	p_quartetst 
-	; Hangs on privileged instruction?
-	;dr.w	p_coredesign
-	dr.w	p_digitalmugician2
-	dr.w	p_musicmaker4
-	dr.w	p_musicmaker8
-	dr.w	p_soundcontrol
-	dr.w	p_stonetracker
-	dr.w	p_themusicalenlightenment
-	dr.w	p_timfollin2
-	dr.w	p_digitalmugician
-	dr.w 	p_jasonpage
-	dr.w	p_specialfx
-	dr.w	p_steveturner
-	dr.w 	p_davidwhittaker
-    dr.w    p_soundmaster
-    dr.w    p_soundprogramminglanguage
-    dr.w    p_midiext
-	dr.w	p_activisionpro  	* very slow id
-	dc.w 	0	
 
 ******************************************************************************
 * Protracker
@@ -44104,6 +44058,59 @@ id_delicustom
 	dc.l DTP_CustomPlayer
 .id3_end
 
+
+******************************************************************************
+*
+* EP formats
+* - replayers provided in eagleplayer plugins
+*
+******************************************************************************
+
+eagleFormats:
+	dr.w	p_synthesis
+	dr.w	p_syntracker
+	dr.w	p_robhubbard2
+	dr.w	p_chiptracker
+	dr.w	p_quartet
+	dr.w	p_facethemusic
+	dr.w	p_richardjoseph
+	dr.w	p_instereo1 
+	dr.w	p_instereo2
+	dr.w	p_jasonbrooke
+	dr.w	p_earache
+	dr.w	p_krishatlelid
+	dr.w	p_richardjoseph2
+	dr.w	p_hippel7
+	dr.w	p_aprosys
+	dr.w	p_hippelst
+	dr.w	p_tcbtracker
+	dr.w	p_markcooksey 
+	dr.w	p_maxtrax
+	dr.w	p_wallybeben
+	dr.w	p_synthpack
+	dr.w	p_robhubbard 
+	dr.w 	p_jeroentel
+	dr.w	p_sonix
+	dr.w	p_quartetst 
+	; Hangs on privileged instruction?
+	;dr.w	p_coredesign
+	dr.w	p_digitalmugician2
+	dr.w	p_musicmaker4
+	dr.w	p_musicmaker8
+	dr.w	p_soundcontrol
+	dr.w	p_stonetracker
+	dr.w	p_themusicalenlightenment
+	dr.w	p_timfollin2
+	dr.w	p_digitalmugician
+	dr.w 	p_jasonpage
+	dr.w	p_specialfx
+	dr.w	p_steveturner
+	dr.w 	p_davidwhittaker
+    dr.w    p_soundmaster
+    dr.w    p_soundprogramminglanguage
+    dr.w    p_midiext
+    dr.w	p_activisionpro  	* very slow id
+	dc.w 	0	
 
 
 ******************************************************************************
