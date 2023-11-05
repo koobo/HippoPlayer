@@ -21417,7 +21417,16 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.smousemoving
 	bra.b	.idcmpLoop
 
+
 .noMouseMove
+	moveq	#IDCMP_GADGETUP,d0
+	cmp.l	d0,d2
+	bne.b	.noGadgetsUp
+    * This event comes for the slider with mousewheel 
+	bsr	.smousemoving
+	bra 	.idcmpLoop
+
+.noGadgetsUp
 	;cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	moveq	#IDCMP_MOUSEBUTTONS,d0
 	cmp.l	d0,d2
