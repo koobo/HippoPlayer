@@ -1806,6 +1806,15 @@ progstart
 
 	* There was no hip already running, launch a new one
 
+    * Or not, if there happens to be QUIT given
+    move.l  sv_argvArray+4(a5),d0
+    beq     .noParms
+    move.l  d0,a0
+    jsr     kirjainta4
+    cmp.l   #"QUIT",d0
+    beq     .eien
+.noParms
+
 	move.l	a4,a6			* hankitaan kopio lukosta
 	move.l	lockhere(a5),d1
 	lob	DupLock
