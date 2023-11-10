@@ -3159,26 +3159,32 @@ main:
  ifne EFEKTI
 	jsr	efekti
  endc
+    * Are there any command line parameters from shell?
+    * Also Workbench icon clicks get placed her as arguments.
 	tst.l	sv_argvArray+4(a5)
 	bne.b	.komento0
+    * No, check for startup module.
 	tst.b	startuponoff(a5)
 	beq.b	.komento0
 	tst.b	startup(a5)
 	beq.b	.komento0
 	pushpea	startup(a5),sv_argvArray+4(a5) * Parametriksi startupmoduuli
 	clr.l	sv_argvArray+8(a5)
+    bsr     komentojono
+    bra     .startupModHandled
 .komento0
-	bsr	komentojono			* tutkitaan komentojono.
-
-	* Command line and startup modules handled,
-	* if none of these provided stuff, try the saved
-	* state modules.
-	tst.l 	modamount(a5)
-	bne.b	.skip
+    * No startup module.
+    * Restore the saved state list next.
 	bsr		lockMainWindow
 	jsr	importSavedStateModulesFromDisk
 	bsr		unlockMainWindow
-.skip
+.startupModHandled
+
+    * Finally, append any modules from command line/workbench
+	tst.l	sv_argvArray+4(a5)
+    beq     .noCliParms
+    bsr     komentojono
+.noCliParms
 
 *********************************************************************************
 *
@@ -13033,6 +13039,12 @@ doExportModuleProgramToFile:
 
 komentojono:
 	DPRINT	"Processing command line parameters"
+
+	tst.l	sv_argvArray+4(a5)
+    bne     .something
+    DPRINT  "->nothing"
+    rts
+.something
 
 	* Ensure correct list mode before proceeding
 	jsr	engageNormalMode
@@ -34083,7 +34095,7 @@ activateSearchStringGadget:
 *
 *******************************************************************************
 
-importSavedStateModulesFromDisk
+importSavedStateModulesFromDisk:
     tst.b   win(a5)  * do nothing if no window
     beq     .error
 	tst.b	savestate(a5)
@@ -34234,6 +34246,10 @@ importSavedStateModulesFromDisk
 	jsr	resh
 	tst.l	modamount(a5)
 	beq.b	.empty
+    * Special case: if there are mods from cli args do not
+    * start the stored module, as user want to start the cli added mod.
+    tst.l	sv_argvArray+4(a5)
+    bne     .empty
 	jmp	playButtonAction
 .empty
 	rts
