@@ -8362,11 +8362,8 @@ umph
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
 
     lea     l_filename(a3),a0
-    jsr     fileIsMidiForStreaming
-    bne     .mid0
     tst.b   l_remote(a3)
     beq.b   .notRem1
-.mid0
     moveq   #0,d7   * disable for remotes!
 .notRem1
     tst.b   d7
@@ -8398,11 +8395,8 @@ umph
 	lea	l_filename(a3),a0	* Ladataan
 	* load it, d7 contains double buffering flag
 	move.b	d7,d0
-    jsr     fileIsMidiForStreaming
-    bne     .mid1
     tst.b   l_remote(a3)
     beq.b   .notRem
-.mid1
     moveq   #0,d0     * disable for remotes!
     DPRINT  "DISABLE double buffering 2"
 .notRem
@@ -10804,11 +10798,8 @@ rbutton1:
 
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki p‰‰ll‰?
     lea     l_filename(a3),a0
-    jsr     fileIsMidiForStreaming
-    bne     .mid0
     tst.b   l_remote(a3)
     beq.b   .notRem1
-.mid0
     moveq   #0,d7 * disable for remotes!
 .notRem1
     tst.b   d7
@@ -10830,11 +10821,8 @@ rbutton1:
 
 	lea	l_filename(a3),a0	* Ladataan
 	move.b	d7,d0 * double buffering flag
-    jsr     fileIsMidiForStreaming
-    bne     .mid2
     tst.b   l_remote(a3)
     beq.b   .notRem2
-.mid2
     moveq   #0,d7 * disable for remotes!
     DPRINT  "DISABLE double buffering 1"
 .notRem2
@@ -29403,18 +29391,9 @@ loadmodule:
 	move.l	l_nameaddr(a3),solename(a5)
 	move.b	l_remote(a3),lastLoadedModuleWasRemote(a5)
 
-    * Check if a stramable MIDI
-    push    a0
-    lea     l_filename(a3),a0
-    jsr     fileIsMidiForStreaming
-    popm    a0
-    bne     .midiStream
-
 	* Check if a remote file
     tst.b   l_remote(a3)
 	beq		.doLoadModule
-
-.midiStream
 
     * This is a remote file.
     * Open up a stream.
@@ -29433,29 +29412,14 @@ loadmodule:
     jsr     stopStreaming
     jsr     showStreamerError
 
-    ; If this was midi flushing needs to be done if timidity
-    ; is running, othewise flush will get stuck with an empty pipe
-    lea     l_filename(a3),a0
-    jsr     fileIsMidiForStreaming
-    beq     .flush
-    DPRINT  "midi clean up"
-    jsr     findMidiProcess
-    bne     .flush
-    jsr     awaitStreamer
-    lea     .msgMidi(pc),a1
-    bra     .wasMidi    
-.flush
     jsr     awaitStreamerAndFlush
     lea     .msg(pc),a1
-.wasMidi
     jsr     request
 	jsr	    inforivit_clear
     moveq   #lod_remoteError,d0
     rts
 .msg
     dc.b    "Error downloading data!",0
-.msgMidi
-    dc.b    "Error starting MIDI!",0
     even
 
 .streamOk
@@ -29466,11 +29430,6 @@ loadmodule:
     * mpeg stream?
     jsr     streamIsMpegAudio
     tst.l   d0
-    bne     .str0
-    * MIDI stream?
-    lea 	l_filename(a3),a0	
-    jsr     fileIsMidiForStreaming
-.str0
     popm    d0/a0
     bne     .doLoadModule
 
@@ -30467,22 +30426,6 @@ loadfile:
     beq     .notRemote
     jsr     streamIsMpegAudio
     bne     .sampleCheck
-    * See if this is a PIPE with wav indicator
-    move.l 	lod_filename(a5),a0	
-    lea     midiStreamPipeFile,a1
-    move.l  a0,d0
-    move.l  a1,d1
-    DPRINT  "file=%s cmp=%s"
-    moveq   #6-1,d0
-.chkMd
-    cmpm.b  (a0)+,(a1)+
-    bne     .notRemote
-    dbf     d0,.chkMd
-
-    * MIDI file is a WAV stream from here onwards
-    move.b	#SAMPLE_FORMAT_WAV,sampleformat(a5)
-    st      sampleinit(a5)
-    bra     .exit
 .notRemote
 
     * Get info on the file
@@ -48964,7 +48907,7 @@ p_specialfx
 * MIDI (serial output)
 ******************************************************************************
 
-p_midiext
+p_midiext:
   jmp      .init(pc)
   jmp      deliPlay(pc)
   p_NOP
@@ -48987,10 +48930,14 @@ p_midiext
 
 .init
 	lea	.path(pc),a0 
-	moveq	#0<<16|0,d0
-	bra		deliLoadAndInit
-	
+	moveq	#0<<16|9,d0
+	bra		deliLoadAndInit 
+      
 .id
+    cmp.b   #MIDI_SERIAL,midimode(a5)
+    bne     id_midi\.no
+
+id_midi
     cmp.l   #"MThd",(a4)
     bne     .no
     cmp.l   #6,4(a4)
@@ -49001,6 +48948,192 @@ p_midiext
     rts
 .no
     moveq   #-1,d0
+    rts
+
+* In:
+*   a0 = path
+* Out:
+*   d0 = true if path has ".mid" or ".midi" extension
+hasMidiExtension:
+    push    a0
+.1  tst.b   (a0)+
+    bne     .1
+    subq    #1,a0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    or.l    #$20202020,d0   * to lowercase
+    cmp.l   #".mid",d0
+    beq     .yes
+    cmp.l   #"midi",d0
+    bne     .no
+    cmp.b   #".",-(a0)
+    beq     .yes
+.no
+    DPRINT  "->no"
+    moveq   #0,d0
+    bra     .x
+.yes
+    DPRINT  "->yes"
+    moveq   #1,d0
+.x
+    pop     a0
+    rts
+
+
+
+******************************************************************************
+* MIDI (Timidity, GMPlay)
+******************************************************************************
+
+p_midistream:
+  jmp      .init(pc)
+  p_NOP     * CIA   
+  p_NOP     * VB
+  jmp       .end(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  p_NOP    * Song
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      .id(pc)
+  p_NOP    * Author
+  dc       pt_midistream
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+.title
+  dc.b     "MIDI                    ",0
+.tempFile  dc.b    "T:hippo.midi",0
+           even
+
+.id
+    tst.b   uusikick(a5)
+    beq     .no
+
+    cmp.b   #MIDI_GMPLAY,midimode(a5)
+    beq     id_midi
+
+    cmp.b   #MIDI_TIMIDITY,midimode(a5)
+    bne     .no
+
+    push    a0
+    move.l  (a5),a0
+    move    AttnFlags(a0),d0
+    pop     a0      
+    * Require at least 020
+	btst	#AFB_68020,d0
+    beq     id_midi\.no
+    * ...and an FPU
+    and     #AFF_68881!AFF_68882!AFF_FPU40,d0
+    bne     id_midi
+.no
+    moveq   #-1,d0
+    rts
+
+.init
+    DPRINT  "MIDI stream init"
+    lea     .tempFile(pc),a0
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    bsr     plainSaveFile
+    bmi     .initError
+    DPRINT  "saved to temp"
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)    
+
+    lea     .tempFile(pc),a0
+    * Start streaming
+    jsr     startNewStreaming
+    DPRINT  "startStreaming=%lx"
+    tst.l   d0
+    beq     .streamError
+
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "stream is %s"
+ endif
+    * Point sampleplayer to the pipe stream
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc) 
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    bsr     .deleteTempFile
+    * D0 = error code
+    rts
+
+.ok
+    * Copy some title info
+    lea     midimode01,a0
+    cmp.b   #MIDI_TIMIDITY,midimode(a5)
+    beq     .11
+    lea     midimode02,a0
+.11     
+    lea     .title+5(pc),a1
+    move.b  #"(",(a1)+
+.22
+    move.b  (a0)+,(a1)+
+    bne     .22
+    subq    #1,a1
+    move.b  #")",(a1)+
+    clr.b   (a1)
+
+
+    * Sample init OK
+    moveq   #0,d0
+    rts
+
+
+
+.initError
+    moveq   #-1,d0
+    rts
+
+.streamError    
+    DPRINT  "MIDI stream error!"
+    bsr     .deleteTempFile
+
+    ; Send CTRL-C to streamer if possible
+    bsr     stopStreaming
+    ; If this was midi flushing needs to be done if timidity
+    ; is running, othewise flush will get stuck with an empty pipe
+    jsr     findMidiProcess
+    bne     .flush
+    DPRINT  "MIDI: wait for streamer to exit"
+    jsr     awaitStreamer
+    bra     .1
+.flush
+    DPRINT  "MIDI: flush and wait for streamer to exit"
+    jsr     awaitStreamerAndFlush
+.1
+    lea     .msgMidi(pc),a1
+    jsr     request
+
+    moveq   #-1,d0
+    rts
+
+.msgMidi
+    dc.b    "Error starting MIDI!",0
+    even
+
+.end
+    DPRINT  "MIDI stream end"
+    jsr     p_sample+p_end(pc)
+
+.deleteTempFile
+    DPRINT  "Delete MIDI temp file"
+    push    d0
+    pushpea .tempFile(pc),d1
+    lore    Dos,DeleteFile
+    pop     d0
     rts
 
 
@@ -55024,21 +55157,9 @@ startStreaming:
     ;-----------------------------------
     ; Midi stream start
     move.l  streamerUrl(a5),a0
-    bsr     fileIsMidiForStreaming
+    jsr     hasMidiExtension
     beq     .notMidi_
     DPRINT  "start MIDI"
-
-;    * Capture timidity output into a file
-;    pushpea agetOutputFile(pc),d1
-;    move.l  #MODE_NEWFILE,d2
-;    lore    Dos,Open
-;    DPRINT  "midi output open=%lx"
-;    move.l  d0,d1
-;    lob     SelectOutput
-;    DPRINT  "selectOutput=%lx"
-;    move.l  d0,d1
-;    lob     Close
-
     pushpea wavStreamerProcessTags(pc),d1
     bra     .isMidi
 
@@ -55087,16 +55208,17 @@ startStreaming:
     DPRINT  "MIDI verify: %s"
  endif
     move.l  d5,a0
-    bsr     fileIsMidiForStreaming
+    jsr     hasMidiExtension
     beq     .notMidi
     * Wait a bit and check if it's still running
     moveq   #2*50,d1
     lore    Dos,Delay
     bsr     findMidiProcess
-    DPRINT  "midi process=%lx"
+    DPRINT  "MIDI process=%lx"
     * status fail?
     tst.l   d0
     beq     .x
+    DPRINT  "MIDI verified"
     lea     midiStreamPipeFile(pc),a0
     cmp.b   #MIDI_TIMIDITY,midimode(a5)
     beq     .yti
@@ -55175,7 +55297,7 @@ startStreaming:
 .midiStream
     moveq   #1,d0   * status: ok
 .x
-    DPRINT  "status=%lx"
+    DPRINT  "status=%lx (0 is fail)"
 
     jsr     clearMainWindowWaitPointer
     popm    d1-d7/a1-a6
@@ -55268,7 +55390,7 @@ streamerEntry:
     ; MIDI stream check
     
     move.l	streamerUrl(a5),a0
-    jsr     fileIsMidiForStreaming
+    jsr     hasMidiExtension
     bne     .handleMidiStream
 
     ; ---------------------------------
@@ -55935,81 +56057,6 @@ streamIsMpegAudio:
     dc.b    "audio/mpeg",0
 
  even
-
-* Checks if file is eligible for MIDI->WAV streaming
-* Checks if path has ".mid" or ".midi" suffix 
-* In:
-*   a0 = path
-* Out:
-*   z clear/true if path is a midi file path, z set/false otherwise
-fileIsMidiForStreaming:
-    pushm   d0/a0
- if DEBUG
-    pushm   all
-    move.l  a0,d0
-    DPRINT  "fileIsMidiForStreaming=%s"
-    popm    all
- endif
-    cmp.b   #MIDI_SERIAL,midimode(a5)
-    beq     .no
-    tst.b   uusikick(a5)
-    beq     .no
-
-    cmp.b   #MIDI_TIMIDITY,midimode(a5)
-    bne     .1
-
-    push    a0
-    move.l  (a5),a0
-    move    AttnFlags(a0),d0
-    pop     a0  
-    
-    * Require at least 020
-	btst	#AFB_68020,d0
-    beq     .no
-    * ...and an FPU
-    and     #AFF_68881!AFF_68882!AFF_FPU40,d0
-    beq     .no
-
-.1  tst.b   (a0)+
-    bne     .1
-    subq    #1,a0
-    move.b  -(a0),d0
-    ror.l   #8,d0
-    move.b  -(a0),d0
-    ror.l   #8,d0
-    move.b  -(a0),d0
-    ror.l   #8,d0
-    move.b  -(a0),d0
-    ror.l   #8,d0
-    or.l    #$20202020,d0   * to lowercase
-    cmp.l   #".mid",d0
-    beq     .yes
-    cmp.l   #"midi",d0
-    bne     .no
-    cmp.b   #".",-(a0)
-    beq     .yes
-.no
- if DEBUG
-    pushm   all
-    moveq   #0,d0
-    moveq   #0,d1
-    moveq   #0,d2
-    move.b  midimode(a5),d0
-    move.b  uusikick(a5),d1
-    move.l  (a5),a0
-	btst	#AFB_68020,AttnFlags+1(a0)
-    sne     d2
-    DPRINT  "->no, mode=%lx kick=%lx cpu=%lx"
-    popm    all
- endif
-    moveq   #0,d0
-    bra     .x
-.yes
-    DPRINT  "->yes"
-    moveq   #1,d0
-.x
-    popm    d0/a0
-    rts
 
 
 * In:
