@@ -32246,22 +32246,23 @@ identifyFormats
 	clr.b	modulename(a5)
 doIdentifyFormats
 .loop 
-	tst	(a3)
+	tst.l	(a3)
 	beq.b	.notFound
 	move.l	a3,a0
-    add.w   (a0),a0
+    add.l   (a0),a0
  if DEBUG
-;    move    (a3),d0
-;    ext.l   d0
-;	pushpea	p_name(a0),d1
-;	DPRINT	"- %ld -> %s"
+    push    d1
+    move.l  (a3),d0
+	pushpea	p_name(a0),d1
+	DPRINT	"- %ld -> %s"
+    pop     d1
  endif
 	pushm	all
 	jsr	p_id(a0)
 	tst.b	d0
 	popm 	all
 	beq.b 	.found
-	addq	#2,a3
+	addq	#4,a3
 	bra.b	.loop
 .found
 	tst.b	d1 
@@ -35698,52 +35699,53 @@ clearsound
 * - replayer code is in libraries
 * - TFMX and ProTracker have special handling 
 internalFormats:
-	;dr.w	p_protracker 
-	dr.w	p_med 
-	dr.w 	p_mline 
-	dr.w 	p_musicassembler 
-	dr.w 	p_fred 
-	dr.w	p_sidmon1 
-	dr.w 	p_deltamusic 
-	dr.w	p_markii 
-	dr.w 	p_mon
-	dr.w 	p_beathoven 
-	dr.w	p_hippel	* very slow id 
-	dc.w 	0
+	;dr.l	p_protracker 
+	dr.l	p_med 
+	dr.l 	p_mline 
+	dr.l 	p_musicassembler 
+	dr.l 	p_fred 
+	dr.l	p_sidmon1 
+	dr.l 	p_deltamusic 
+	dr.l	p_markii 
+	dr.l 	p_mon
+	dr.l 	p_beathoven 
+	dr.l	p_hippel	* very slow id 
+	dc.l	0
 
 * Formats
 * - replayers are in the HippoPlayer.group
 groupFormats:
-	dr.w 	p_jamcracker 
-	dr.w 	p_pumatracker 
-	dr.w 	p_futurecomposer13
-	dr.w 	p_futurecomposer14 
-	dr.w 	p_oktalyzer
-	;dr.w	p_tfmx
-	dr.w	p_hippelcoso 
-	dr.w	p_soundmon 
-	dr.w	p_soundmon3 
-	dr.w	p_digibooster 
-	dr.w 	p_digiboosterpro 
-	dr.w	p_thx 
-	dr.w 	p_aon 
-	dr.w	p_gamemusiccreator 
-	dr.w	p_medley 
-	dr.w	p_bendaglish 
-	dr.w	p_sidmon2 
-	dr.w	p_deltamusic1 
-	dr.w	p_soundfx 
-	dr.w	p_gluemon
-	dr.w	p_pretracker 
-	dr.w 	p_custommade 
-	dr.w 	p_sonicarranger
-	dr.w	p_startrekker
-	dr.w	p_voodoosupremesynthesizer
+	dr.l 	p_jamcracker 
+	dr.l 	p_pumatracker 
+	dr.l 	p_futurecomposer13
+	dr.l 	p_futurecomposer14 
+	dr.l 	p_oktalyzer
+	;dr.l	p_tfmx
+	dr.l	p_hippelcoso 
+	dr.l	p_soundmon 
+	dr.l	p_soundmon3 
+	dr.l	p_digibooster 
+	dr.l 	p_digiboosterpro 
+	dr.l	p_thx 
+	dr.l 	p_aon 
+	dr.l	p_gamemusiccreator 
+	dr.l	p_medley 
+	dr.l	p_bendaglish 
+	dr.l	p_sidmon2 
+	dr.l	p_deltamusic1 
+	dr.l	p_soundfx 
+	dr.l	p_gluemon
+	dr.l	p_pretracker 
+	dr.l 	p_custommade 
+	dr.l 	p_sonicarranger
+	dr.l	p_startrekker
+	dr.l	p_voodoosupremesynthesizer
  ifne FEATURE_P61A
-	dr.w 	p_player
+	dr.l 	p_player
  endif
- 	dr.w 	p_aon8
-	dc.w 	0
+ 	dr.l 	p_aon8
+    dr.l    p_midistream
+	dc.l 	0
 
 
 ******************************************************************************
@@ -44044,50 +44046,50 @@ id_delicustom
 ******************************************************************************
 
 eagleFormats:
-	dr.w	p_synthesis
-	dr.w	p_syntracker
-	dr.w	p_robhubbard2
-	dr.w	p_chiptracker
-	dr.w	p_quartet
-	dr.w	p_facethemusic
-	dr.w	p_richardjoseph
-	dr.w	p_instereo1 
-	dr.w	p_instereo2
-	dr.w	p_jasonbrooke
-	dr.w	p_earache
-	dr.w	p_krishatlelid
-	dr.w	p_richardjoseph2
-	dr.w	p_hippel7
-	dr.w	p_aprosys
-	dr.w	p_hippelst
-	dr.w	p_tcbtracker
-	dr.w	p_markcooksey 
-	dr.w	p_maxtrax
-	dr.w	p_wallybeben
-	dr.w	p_synthpack
-	dr.w	p_robhubbard 
-	dr.w 	p_jeroentel
-	dr.w	p_sonix
-	dr.w	p_quartetst 
+	dr.l	p_synthesis
+	dr.l	p_syntracker
+	dr.l	p_robhubbard2
+	dr.l	p_chiptracker
+	dr.l	p_quartet
+	dr.l	p_facethemusic
+	dr.l	p_richardjoseph
+	dr.l	p_instereo1 
+	dr.l	p_instereo2
+	dr.l	p_jasonbrooke
+	dr.l	p_earache
+	dr.l	p_krishatlelid
+	dr.l	p_richardjoseph2
+	dr.l	p_hippel7
+	dr.l	p_aprosys
+	dr.l	p_hippelst
+	dr.l	p_tcbtracker
+	dr.l	p_markcooksey 
+	dr.l	p_maxtrax
+	dr.l	p_wallybeben
+	dr.l	p_synthpack
+	dr.l	p_robhubbard 
+	dr.l 	p_jeroentel
+	dr.l	p_sonix
+	dr.l	p_quartetst 
 	; Hangs on privileged instruction?
-	;dr.w	p_coredesign
-	dr.w	p_digitalmugician2
-	dr.w	p_musicmaker4
-	dr.w	p_musicmaker8
-	dr.w	p_soundcontrol
-	dr.w	p_stonetracker
-	dr.w	p_themusicalenlightenment
-	dr.w	p_timfollin2
-	dr.w	p_digitalmugician
-	dr.w 	p_jasonpage
-	dr.w	p_specialfx
-	dr.w	p_steveturner
-	dr.w 	p_davidwhittaker
-    dr.w    p_soundmaster
-    dr.w    p_soundprogramminglanguage
-    dr.w    p_midiext
-    dr.w	p_activisionpro  	* very slow id
-	dc.w 	0	
+	;dr.l	p_coredesign
+	dr.l	p_digitalmugician2
+	dr.l	p_musicmaker4
+	dr.l	p_musicmaker8
+	dr.l	p_soundcontrol
+	dr.l	p_stonetracker
+	dr.l	p_themusicalenlightenment
+	dr.l	p_timfollin2
+	dr.l	p_digitalmugician
+	dr.l 	p_jasonpage
+	dr.l	p_specialfx
+	dr.l	p_steveturner
+	dr.l 	p_davidwhittaker
+    dr.l    p_soundmaster
+    dr.l    p_soundprogramminglanguage
+    dr.l    p_midiext
+    dr.l	p_activisionpro  	* very slow id
+	dc.l	0	
 
 
 ******************************************************************************
