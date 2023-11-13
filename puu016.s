@@ -7584,7 +7584,7 @@ omaviesti
 
 .killeri
 	st	exitmainprogram(a5)
-	bra.b	.he
+	bra	.he
 
 
 
@@ -7760,7 +7760,7 @@ signalreceived
 .loader	
 	* load error, no module to play
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* latausvirhe
-	bra.b	.reet
+	bra 	.reet
 
 .mododo	
 	* init error, no module to play
@@ -43130,7 +43130,7 @@ p_sample:
     jsr     inforivit_connecting
 .notAlive
     move.l  a4,a0
-    bsr     startStreaming
+    jsr     startStreaming
 .noCurrent
     * a0 = filename to read from
     tst.l   d0
