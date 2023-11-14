@@ -522,6 +522,18 @@ MESSAGE_COMMAND_PRG = "PRGM"
 	WORD		PTch_period	* Channel period
 	WORD		PTch_private1	* Private...
 	
+*******************************************************************************
+*
+* Local stream config structure
+
+    rsreset
+localStream_currentDir     rs.l    1 * Directory to change to, or NULL
+localStream_cliName        rs.l    1 * Command
+localStream_command        rs.l    1 * Full command line with arguments
+localStream_pipe           rs.l    1 * PIPE path for reading
+localStream_setup          rs.l    1 * Setup routine to call or NULL
+localStream_stack          rs.l    1 * Stack requested, or NULL if default
+
 
 *******************************************************************************
 *
@@ -977,7 +989,6 @@ MIDI_GMPLAY   = 1
 MIDI_SERIAL   = 2
 midimode            rs.b    1
                     rs.b    1 * pad
-currentMidiCliName  rs.l    1 * Name of the CLI app last used for MIDI
 *******
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
@@ -1478,8 +1489,12 @@ streamHeaderRDArgs      rs.l    1
 * Set to -1 when starting, set to aget return code when aget exists
 * Used to detect if stream has finished in certain cases.
 streamReturnCode        rs.w    1
+* Pointer to local pipe stream config to be used if not doing aget stream
+streamLocalConfig          rs.l    1
+* Name of the CLI app last used for local streamin
+currentLocalStreamCliName  rs.l    1 
 * Data sturcture for ReadArgs, specifies the input
-streamRDA               rs.b    RDA_SIZEOF
+streamRDA                  rs.b    RDA_SIZEOF
 * Output parsed data from ReadArgs
 streamHeaderArray           rs.l       0
 streamHeaderContentLength   rs.l       1
@@ -48952,12 +48967,11 @@ id_midi
     moveq   #-1,d0
     rts
 
+
+
 * In:
 *   a0 = path
-* Out:
-*   d0 = true if path has ".mid" or ".midi" extension
-hasMidiExtension:
-    push    a0
+getFileExtension4:
 .1  tst.b   (a0)+
     bne     .1
     subq    #1,a0
@@ -48970,21 +48984,22 @@ hasMidiExtension:
     move.b  -(a0),d0
     ror.l   #8,d0
     or.l    #$20202020,d0   * to lowercase
+    rts
+    
+* In:
+*   a0 = path
+* Out:
+*   d0 = true if path has ".mid" or ".midi" extension
+hasMidiExtension:
+    bsr     getFileExtension4
     cmp.l   #".mid",d0
     beq     .yes
     cmp.l   #"midi",d0
-    bne     .no
-    cmp.b   #".",-(a0)
     beq     .yes
-.no
-    DPRINT  "->no"
     moveq   #0,d0
-    bra     .x
+    rts
 .yes
-    DPRINT  "->yes"
     moveq   #1,d0
-.x
-    pop     a0
     rts
 
 
@@ -48992,6 +49007,7 @@ hasMidiExtension:
 ******************************************************************************
 * MIDI (Timidity, GMPlay)
 ******************************************************************************
+
 
 p_midistream:
   jmp      .init(pc)
@@ -49050,9 +49066,14 @@ p_midistream:
     * Switch type to sample so correct replayer gets loaded
     move    #pt_sample,playertype(a5)    
 
-    lea     .tempFile(pc),a0
     * Start streaming
-    jsr     startNewStreaming
+    lea     .tempFile(pc),a0
+    pushpea pipe_Timidity(pc),d0
+    cmp.b   #MIDI_TIMIDITY,midimode(a5)
+    beq     .ti
+    pushpea pipe_GMPlay(pc),d0
+.ti
+    jsr     startLocalStreaming
     DPRINT  "startStreaming=%lx"
     tst.l   d0
     beq     .streamError
@@ -49107,7 +49128,7 @@ p_midistream:
     bsr     stopStreaming
     ; If this was midi flushing needs to be done if timidity
     ; is running, othewise flush will get stuck with an empty pipe
-    jsr     findMidiProcess
+    jsr     findLocalStreamProcess
     bne     .flush
     DPRINT  "MIDI: wait for streamer to exit"
     jsr     awaitStreamer
@@ -49137,6 +49158,49 @@ p_midistream:
     lore    Dos,DeleteFile
     pop     d0
     rts
+
+pipe_GMPlay:
+    dc.l    .gmCurrentDir
+    dc.l    .gmPlayCliName
+    dc.l    .gmPlayCommand
+    dc.l    aiffStreamPipeFile
+    dc.l    .setGMPlayDriverEnvVar
+    dc.l    0 * no special stack
+
+.gmCurrentDir:   dc.b    "gm:",0
+.gmPlayCliName:  dc.b    "gmplay",0
+.gmPlayCommand:  dc.b    '%s OUTPUT=file QUIET FREQUENCY=27710 "%s"',10,0
+                 even
+
+
+
+.setGMPlayDriverEnvVar:
+    pushpea .gmEnvVarName(pc),d1
+    pushpea .gmEnvVarValue(pc),d2  * value
+    moveq   #-1,d3               * size or -1 for null terminated string
+    move.l  #GVF_GLOBAL_ONLY,d4  * global variable
+    lore    Dos,SetVar           * set it
+    DPRINT  "SetVar=%ld"
+    rts
+
+.gmEnvVarName:
+    dc.b    "CyberSound/SoundDrivers/file_Destination",0
+.gmEnvVarValue:
+    dc.b    "PIPE:wavHippoStream2/65536/2",0
+    even
+
+pipe_Timidity:
+    dc.l    .timidityDir
+    dc.l    .timidityCliName
+    dc.l    .timidityCmd
+    dc.l    wavStreamPipeFile
+    dc.l    0 * no setup
+    dc.l    0 * no special stack
+
+.timidityDir      dc.b    "timidity:",0    
+.timidityCliName  dc.b    "timidity",0
+.timidityCmd      dc.b    '%s -id -Ow1S -s27710 -o PIPE:wavHippoStream/65536/2 "%s"',10,0
+    even
 
 
 ******************************************************************************
@@ -55080,12 +55144,19 @@ combSortNodeArray
 * Name returned for aget style stream (network bytes)
 streamPipeFile      dc.b    "PIPE:hippoStream",0
 * Name returned for WAV style stream (Timidity)
-midiStreamPipeFile  dc.b    "PIPE:wavHippoStream",0
+wavStreamPipeFile  dc.b    "PIPE:wavHippoStream",0
 * Name returned for PCM/AIFF style stream (GMPlay)
-midiStreamPipeFile2 dc.b    "PIPE:wavHippoStream2",0
+aiffStreamPipeFile dc.b    "PIPE:wavHippoStream2",0
 agetHeadersFile     dc.b    "T:agetheaders",0
                     even
 
+* Start local pipe stream
+* In:
+*   d0 = PIPE stream config
+startLocalStreaming:
+    * Reset the aget return code to uninitialized value
+    move.w  #-1,streamReturnCode(a5)
+    bra     startStreaming0
 
 startNewStreaming:
     * Reset the aget return code to uninitialized value
@@ -55096,12 +55167,16 @@ startNewStreaming:
 * Returns if streaming is ongoing already or has been finished.
 * In:
 *   a0 = url
+*   d0 = PIPE stream config, or NULL for aget operation
 * Out:
 *   a0 = stream name to read from
 *   d0 = true, or false if error
 startStreaming:
+    moveq   #0,d0
+startStreaming0:
     pushm   d1-d7/a1-a6
-    DPRINT  "*** startStreaming ***"
+    DPRINT  "*** startStreaming *** local=%lx"
+    move.l  d0,streamLocalConfig(a5)
 
     push    a0
     lore    Exec,Forbid
@@ -55157,15 +55232,13 @@ startStreaming:
     lore    Exec,SetSignal
 
     ;-----------------------------------
-    ; Midi stream start
-    move.l  streamerUrl(a5),a0
-    jsr     hasMidiExtension
-    beq     .notMidi_
-    DPRINT  "start MIDI"
+    ; Local pipe stream start
+    tst.l   streamLocalConfig(a5)
+    beq     .notLocalPipe
+    DPRINT  "start local pipe stream"
     pushpea wavStreamerProcessTags(pc),d1
-    bra     .isMidi
-
-.notMidi_
+    bra     .isLocalPipe
+.notLocalPipe
     ;-----------------------------------
     ; UHC stream start
 
@@ -55183,7 +55256,7 @@ startStreaming:
     beq     .x
     pushpea streamerProcessTags(pc),d1
 
-.isMidi
+.isLocalPipe
 
 ;    pushpea streamerProcessTags(pc),d1
     lore    Dos,CreateNewProc
@@ -55207,28 +55280,25 @@ startStreaming:
     * streamerUrl(a5) no longer valid
  if DEBUG
     move.l  d5,d0
-    DPRINT  "MIDI verify: %s"
+    DPRINT  "Local pipe verify: %s"
  endif
-    move.l  d5,a0
-    jsr     hasMidiExtension
-    beq     .notMidi
+    tst.l   d4
+    beq     .notLocalPipee
     * Wait a bit and check if it's still running
     moveq   #2*50,d1
     lore    Dos,Delay
-    bsr     findMidiProcess
-    DPRINT  "MIDI process=%lx"
+    bsr     findLocalStreamProcess
+    DPRINT  "Local pipe process=%lx"
     * status fail?
     tst.l   d0
     beq     .x
-    DPRINT  "MIDI verified"
-    lea     midiStreamPipeFile(pc),a0
-    cmp.b   #MIDI_TIMIDITY,midimode(a5)
-    beq     .yti
-    lea     midiStreamPipeFile2(pc),a0
-.yti
-    DPRINT  "MIDI bypass"
-    bra     .midiStream
-.notMidi
+    DPRINT  "Local pipe verified"
+
+    move.l  streamLocalConfig(a5),a0
+    move.l  localStream_pipe(a0),a0
+    DPRINT  "Local pipe bypass"
+    bra     .localPipeStream
+.notLocalPipee
     ; ---------------------------------
 
     * Wait here until things are looking good
@@ -55296,7 +55366,7 @@ startStreaming:
 
 .y
     lea     streamPipeFile(pc),a0
-.midiStream
+.localPipeStream
     moveq   #1,d0   * status: ok
 .x
     DPRINT  "status=%lx (0 is fail)"
@@ -55330,8 +55400,6 @@ streamerProcessOutputHandle
     dc.b    "HiP-streamer",0
 agetOutputFile
     dc.b    "T:agetout",0
-midiOutputFile
-    dc.b    "T:midiout",0
     even
 
 * SystemTagList will auto-close the parent streams
@@ -55389,11 +55457,10 @@ streamerEntry:
     lore    Dos,DeleteFile
 
     ; ---------------------------------
-    ; MIDI stream check
+    ; Local stream check
     
-    move.l	streamerUrl(a5),a0
-    jsr     hasMidiExtension
-    bne     .handleMidiStream
+    tst.l   streamLocalConfig(a5)
+    bne     .handleLocalStream
 
     ; ---------------------------------
     ; Launch with "aget"
@@ -55529,24 +55596,24 @@ streamerEntry:
 
 
 
-.handleMidiStream:
-    DPRINT  "stream:url is MIDI"
+.handleLocalStream:
+    DPRINT  "stream:local stream"
     * clear stream error msg address to be returned, not used here
     moveq   #0,d7 
     moveq   #0,d5
 
-    cmp.b   #MIDI_GMPLAY,midimode(a5)
-    bne     .ngm
-    bsr     .setGmDriverEnvVar
-    pushpea gmplayCliName(pc),d0
-    lea     .gmplayCmd(pc),a0
-    bra     .ygm
-.ngm
-    pushpea timidityCliName(pc),d0
-    lea     .timidityCmd(pc),a0
-.ygm
+    move.l  streamLocalConfig(a5),a4
+    move.l  localStream_setup(a4),d0
+    beq     .noLocalSetup
+    move.l  d0,a0
+    jsr     (a0)
+.noLocalSetup
+
+    move.l  localStream_cliName(a4),d0
+    move.l  localStream_command(a4),a0
+
     * Store this so graceful exit can be done later
-    move.l  d0,currentMidiCliName(a5)
+    move.l  d0,currentLocalStreamCliName(a5)
     move.l	streamerUrl(a5),d1
     lea     .buffer(a4),a3
     jsr     desmsg3
@@ -55557,20 +55624,26 @@ streamerEntry:
  endif
 
     ; Change current dir to "timidity:" or "gm:"
-    pushpea .gmplayDir(pc),d1
-    cmp.b   #MIDI_GMPLAY,midimode(a5)
-    beq     .ygm2
-	pushpea	.timidityDir(pc),d1
-.ygm2
+    move.l  localStream_currentDir(a4),d1   * if null Lock takes SYS:
     moveq	#ACCESS_READ,d2
 	lore    Dos,Lock
     DPRINT  "stream:lock=%lx"
     move.l  d0,.sysCurrentDir
     beq     .error
 
+    lea     .sysTags(pc),a0
+    move.l  a0,d2
+
+    * Set default stack
+    move.l  #10000,4(a0)
+    move.l  localStream_stack(a4),d1
+    beq     .defaultStack
+    * Modified stack requested
+    move.l  d1,4(a0)
+.defaultStack
+
     ; Launch timidity
     pushpea .buffer(a4),d1
-    pushpea .sysTags(pc),d2
     lore    Dos,SystemTagList
     DPRINT  "stream:SystemTagList=%ld"
     cmp.l   #-1,d0
@@ -55596,7 +55669,7 @@ streamerEntry:
 
 .breakLoop
     DPRINT  "stream:break loop"
-    bsr     findMidiProcess
+    bsr     findLocalStreamProcess
     beq     .notFound
 
     DPRINT  "stream:Signaling CTRL-C to timidity"
@@ -55630,38 +55703,12 @@ streamerEntry:
     DPRINT  "stream:NP_ExitCode called! return=%lx"
     rts
 
-
-.setGmDriverEnvVar:
-    pushpea .gmEnvVarName(pc),d1
-    pushpea .gmEnvVarValue(pc),d2  * value
-    moveq   #-1,d3               * size or -1 for null terminated string
-    move.l  #GVF_GLOBAL_ONLY,d4  * global variable
-    lore    Dos,SetVar           * set it
-    DPRINT  "SetVar=%ld"
-    rts
-
-.gmEnvVarName:
-    dc.b    "CyberSound/SoundDrivers/file_Destination",0
-.gmEnvVarValue:
-    dc.b    "PIPE:wavHippoStream2/65536/2",0
-    even
-
 .envVarName
     dc.b    "UHCBIN",0
 
 .agetCmd
     dc.b	'%sC/aget',0
 
-.timidityDir   
-    dc.b    "timidity:",0
-    
-.timidityCmd
-    dc.b    '%s -id -Ow1S -s27710 -o PIPE:wavHippoStream/65536/2 "%s"',10,0
-
-.gmplayDir
-    dc.b    "gm:",0
-.gmplayCmd
-    dc.b    '%s OUTPUT=file QUIET FREQUENCY=27710 "%s"',10,0
 
 .args
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
@@ -55675,16 +55722,13 @@ streamerEntry:
 ;	dc.b	'"%s" PIPE:hippoStream/4096/128 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=262144',10,0
 	dc.b	'TO=PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192 URL="%s"',10,0
 
-timidityCliName   dc.b    "timidity",0
-
-gmplayCliName   dc.b "gmplay",0
 
  even
 
 * Find the CLI process "timidity"
 * Out:
 *   d0 = process address or null
-findMidiProcess:
+findLocalStreamProcess:
     lea     -64(sp),sp
     moveq   #0,d4
     lore    Dos,MaxCli
@@ -55714,7 +55758,7 @@ findMidiProcess:
     clr.b   (a1)
     * See if this CLI is "timidity","gmplay"
     lea     (sp),a0
-    move.l  currentMidiCliName(a5),a1
+    move.l  currentLocalStreamCliName(a5),a1
 .cliCmp
     cmpm.b  (a0)+,(a1)+
     bne     .noCLI
@@ -55729,7 +55773,7 @@ findMidiProcess:
     lob     FindTask
     move.l  d0,d1
     move.l  d4,d0
-    DPRINT  "findMidiProcess=%lx task=%lx"
+    DPRINT  "findLocalStreamProcess=%lx task=%lx"
     popm    all
  endif
     move.l  d4,d0
@@ -55746,7 +55790,7 @@ findMidiProcess:
     move.l  4.w,a6
     sub.l   a1,a1
     lob     FindTask
-    DPRINT  "findMidiProcess=NULL task=%lx"
+    DPRINT  "findLocalStreamProcess=NULL task=%lx"
     popm    all
  endif
     moveq   #0,d0
