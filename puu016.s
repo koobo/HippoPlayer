@@ -31698,6 +31698,9 @@ tutki_moduuli2:
 	cmp.l	#"TDZ",d0		* take
 	beq 	.f
 
+    cmp.l   #"Vgm ",(a0)     * VGM
+    beq     .f
+
 	bsr	id_it			 * IT
 	beq 	.f
 
