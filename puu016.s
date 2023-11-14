@@ -30143,11 +30143,14 @@ loadfile:
 	beq.b	.lzx
 	cmp.l	#'ZIP.',d1
 	beq.b	.zip
+	cmp.l	#'VGZ.',d1 * gzipped VGM file
+	beq.b	.vgz
 	* gzip test
 	* ".gzX"
 	and.l	#$ffdfdf00,d0
 	cmp.l	#'.GZ'<<8,d0
 	bne	.nope
+.vgz
 	lea	gzipDecompressCommand,a0
 	moveq	#1,d6	* "Unzipping" message
 	bra.b	.unp
@@ -35760,6 +35763,7 @@ groupFormats:
  endif
  	dr.l 	p_aon8
     dr.l    p_midistream
+    dr.l    p_vgm
 	dc.l 	0
 
 
@@ -49204,6 +49208,140 @@ pipe_Timidity:
 
 
 ******************************************************************************
+* VGM
+******************************************************************************
+
+p_vgm:
+  jmp      .init(pc)
+  p_NOP     * CIA   
+  p_NOP     * VB
+  jmp       .end(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  p_NOP    * Song
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      .id(pc)
+  p_NOP    * Author
+  dc       pt_vgm
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+.title           dc.b    "VGM",0
+.tempFile  dc.b    "T:hippo.vgm",0
+           even
+
+.id
+    tst.b   uusikick(a5)
+    beq     .no
+    cmp.l   #"Vgm ",(a4)
+    bne     .no
+    moveq   #0,d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
+.init
+    DPRINT  "VGM stream init"
+    lea     .tempFile(pc),a0
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    bsr     plainSaveFile
+    bmi     .initError
+    DPRINT  "saved to temp"
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)    
+
+    lea     .tempFile(pc),a0
+    * Start streaming
+    pushpea pipe_vgm2wav(pc),d0
+    jsr     startLocalStreaming
+    DPRINT  "startStreaming=%lx"
+    tst.l   d0
+    beq     .streamError
+
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "VGM stream is %s"
+ endif
+    * Point sampleplayer to the pipe stream
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc) 
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    bsr     .deleteTempFile
+    * D0 = error code
+    rts
+
+.ok
+    * Sample init OK
+    moveq   #0,d0
+    rts
+
+
+
+.initError
+    moveq   #-1,d0
+    rts
+
+.streamError    
+    DPRINT  "VGM stream error!"
+    bsr     .deleteTempFile
+
+    ; Send CTRL-C to streamer if possible
+    bsr     stopStreaming
+    ; If this was midi flushing needs to be done if timidity
+    ; is running, othewise flush will get stuck with an empty pipe
+    jsr     findLocalStreamProcess
+    bne     .flush
+    DPRINT  "VGM: wait for streamer to exit"
+    jsr     awaitStreamer
+    bra     .1
+.flush
+    DPRINT  "MIDI: flush and wait for streamer to exit"
+    jsr     awaitStreamerAndFlush
+.1
+    lea     .msgMidi(pc),a1
+    jsr     request
+
+    moveq   #-1,d0
+    rts
+
+.msgMidi
+    dc.b    "Error starting VGM!",0
+    even
+
+.end
+    DPRINT  "VGM stream end"
+    jsr     p_sample+p_end(pc)
+
+.deleteTempFile
+    DPRINT  "Delete VGM temp file"
+    push    d0
+    pushpea .tempFile(pc),d1
+    lore    Dos,DeleteFile
+    pop     d0
+    rts
+
+pipe_vgm2wav:
+    dc.l    .sys * no current dir
+    dc.l    .vgmCliName
+    dc.l    .vgmCmd
+    dc.l    wavStreamPipeFile
+    dc.l    0 * no setup
+    dc.l    50000 * large stack
+    
+.vgmCliName  dc.b    "vgm2wav",0
+.vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -i "%s"',10
+.sys         dc.b    0
+             even
+
+
+******************************************************************************
 * XMAPlay060
 ******************************************************************************
 
@@ -52135,6 +52273,10 @@ plainLoadFile:
 *  d0 = Written bytes or -1 if error
 plainSaveFile:
 	pushm	d1-a6
+ if DEBUG
+    move.l   a0,d1
+    DPRINT "Saving %ld bytes to %s"
+ endif
 	moveq	#-1,d7
 	move.l	a1,d4
 	move.l 	d0,d5
@@ -52156,6 +52298,7 @@ plainSaveFile:
 	lob		Close
 .openErr 
 	move.l	d7,d0
+    DPRINT  "->%ld"
 	popm	d1-a6 
 	rts
 
@@ -54259,6 +54402,8 @@ remoteSearch
 	dc.l	"wb  "
 	dc.l    "tme "
 	dc.l	"xm  "
+    dc.l    "vgm "
+    dc.l    "vgz "
 	dc.l	0
 ;todo: synmod
 
@@ -55176,7 +55321,7 @@ startStreaming:
 startStreaming0:
     pushm   d1-d7/a1-a6
     DPRINT  "*** startStreaming *** local=%lx"
-    move.l  d0,streamLocalConfig(a5)
+    move.l  d0,d4
 
     push    a0
     lore    Exec,Forbid
@@ -55196,11 +55341,20 @@ startStreaming0:
 
     * Task is already running?
     tst.l   d6
-    bne     .y
+;    bne     .y
+    beq     .nope
+    * Exit early, reurn pipe file
+    tst.l   streamLocalConfig(a5)
+    bne     .localIsActive
+    bra     .y
+.nope
     * Task is not running, did it finish the previous operation?
     * streamReturnCode(a5) is -1 if not done.
     tst.w   d7
     bpl     .y
+
+    * Store local stream config, or NULL
+    move.l  d4,streamLocalConfig(a5)
 
 ;    tst.l   streamerTask(a5)
 ;    bne     .y
@@ -55278,12 +55432,12 @@ startStreaming0:
     ; ---------------------------------
     ;; MIDI stream? 
     * streamerUrl(a5) no longer valid
+    tst.l   streamLocalConfig(a5)
+    beq     .notLocalPipee
  if DEBUG
     move.l  d5,d0
     DPRINT  "Local pipe verify: %s"
  endif
-    tst.l   d4
-    beq     .notLocalPipee
     * Wait a bit and check if it's still running
     moveq   #2*50,d1
     lore    Dos,Delay
@@ -55293,7 +55447,7 @@ startStreaming0:
     tst.l   d0
     beq     .x
     DPRINT  "Local pipe verified"
-
+.localIsActive
     move.l  streamLocalConfig(a5),a0
     move.l  localStream_pipe(a0),a0
     DPRINT  "Local pipe bypass"
@@ -55366,6 +55520,8 @@ startStreaming0:
 
 .y
     lea     streamPipeFile(pc),a0
+
+
 .localPipeStream
     moveq   #1,d0   * status: ok
 .x
@@ -55672,7 +55828,7 @@ streamerEntry:
     bsr     findLocalStreamProcess
     beq     .notFound
 
-    DPRINT  "stream:Signaling CTRL-C to timidity"
+    DPRINT  "stream:Signaling CTRL-C to cli cmd"
     move.l  d0,a1
     move.l  #SIGBREAKF_CTRL_C,d0
     lore    Exec,Signal
@@ -55692,10 +55848,10 @@ streamerEntry:
 
 .sysTags
     dc.l    NP_StackSize,10000
-    dc.l    NP_CurrentDir,0
-.sysCurrentDir = *-4
     dc.l    NP_ExitCode,.exitCode
     dc.l    SYS_Asynch,1
+    dc.l    NP_CurrentDir,0
+.sysCurrentDir = *-4
     dc.l    TAG_END
 
 
