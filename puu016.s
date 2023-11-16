@@ -35769,6 +35769,52 @@ groupFormats:
     dr.l    p_vgm
 	dc.l 	0
 
+eagleFormats:
+	dr.l	p_synthesis
+	dr.l	p_syntracker
+	dr.l	p_robhubbard2
+	dr.l	p_chiptracker
+	dr.l	p_quartet
+	dr.l	p_facethemusic
+	dr.l	p_richardjoseph
+	dr.l	p_instereo1 
+	dr.l	p_instereo2
+	dr.l	p_jasonbrooke
+	dr.l	p_earache
+	dr.l	p_krishatlelid
+	dr.l	p_richardjoseph2
+	dr.l	p_hippel7
+	dr.l	p_aprosys
+	dr.l	p_hippelst
+	dr.l	p_tcbtracker
+	dr.l	p_markcooksey 
+	dr.l	p_maxtrax
+	dr.l	p_wallybeben
+	dr.l	p_synthpack
+	dr.l	p_robhubbard 
+	dr.l 	p_jeroentel
+	dr.l	p_sonix
+	dr.l	p_quartetst 
+	; Hangs on privileged instruction?
+	;dr.l	p_coredesign
+	dr.l	p_digitalmugician2
+	dr.l	p_musicmaker4
+	dr.l	p_musicmaker8
+	dr.l	p_soundcontrol
+	dr.l	p_stonetracker
+	dr.l	p_themusicalenlightenment
+	dr.l	p_timfollin2
+	dr.l	p_digitalmugician
+	dr.l 	p_jasonpage
+	dr.l	p_specialfx
+	dr.l	p_steveturner
+	dr.l 	p_davidwhittaker
+    dr.l    p_soundmaster
+    dr.l    p_soundprogramminglanguage
+    dr.l    p_midiext
+    dr.l	p_activisionpro  	* very slow id
+	dc.l	0	
+
 
 ******************************************************************************
 * Protracker
@@ -44066,52 +44112,6 @@ id_delicustom
 * - replayers provided in eagleplayer plugins
 *
 ******************************************************************************
-
-eagleFormats:
-	dr.l	p_synthesis
-	dr.l	p_syntracker
-	dr.l	p_robhubbard2
-	dr.l	p_chiptracker
-	dr.l	p_quartet
-	dr.l	p_facethemusic
-	dr.l	p_richardjoseph
-	dr.l	p_instereo1 
-	dr.l	p_instereo2
-	dr.l	p_jasonbrooke
-	dr.l	p_earache
-	dr.l	p_krishatlelid
-	dr.l	p_richardjoseph2
-	dr.l	p_hippel7
-	dr.l	p_aprosys
-	dr.l	p_hippelst
-	dr.l	p_tcbtracker
-	dr.l	p_markcooksey 
-	dr.l	p_maxtrax
-	dr.l	p_wallybeben
-	dr.l	p_synthpack
-	dr.l	p_robhubbard 
-	dr.l 	p_jeroentel
-	dr.l	p_sonix
-	dr.l	p_quartetst 
-	; Hangs on privileged instruction?
-	;dr.l	p_coredesign
-	dr.l	p_digitalmugician2
-	dr.l	p_musicmaker4
-	dr.l	p_musicmaker8
-	dr.l	p_soundcontrol
-	dr.l	p_stonetracker
-	dr.l	p_themusicalenlightenment
-	dr.l	p_timfollin2
-	dr.l	p_digitalmugician
-	dr.l 	p_jasonpage
-	dr.l	p_specialfx
-	dr.l	p_steveturner
-	dr.l 	p_davidwhittaker
-    dr.l    p_soundmaster
-    dr.l    p_soundprogramminglanguage
-    dr.l    p_midiext
-    dr.l	p_activisionpro  	* very slow id
-	dc.l	0	
 
 
 ******************************************************************************
