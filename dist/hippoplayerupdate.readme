@@ -155,13 +155,13 @@ New keyboard shortcuts:
   Download from http://aminet.net/mus/play/vgm2wav-gme.lha and the place
   binary into C: or Hippo directory. This is an Amiga port of a
   C++ application. The CPU usage varies depending on the format being
-  played, for some formats a 060 (or faster) is required.
+  played, for some formats a 060 (or faster) might be required.
   
 - Note on performance: Timidity, GMPlay and vgm2wav are used to
   convert files to audio on-the-fly and piped through to Hippo
-  using using the queue-handler. The performance of queue-handler 
-  is important, the older V37 (OS 3.0/3.1) is much slower than the 
-  newer V45 (OS 3.2).
+  using PIPE: provided by the queue-handler. The performance of 
+  queue-handler is important, the older V37 (OS 3.0/3.1) is much 
+  slower than the newer V45 (OS 3.2).
 
 
 ------------------------------------------------------------------------------
