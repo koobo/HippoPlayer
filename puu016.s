@@ -49358,7 +49358,7 @@ vgmDeleteTempFile
     rts
 
 pipe_vgm2wav:
-    dc.l    .sys * no current dir
+    dc.l    0 * use homelock for current dir
     dc.l    .vgmCliName
     dc.l    .vgmCmd
     dc.l    wavStreamPipeFile
@@ -49371,7 +49371,7 @@ pipe_vgm2wav:
              even
  REM
 pipe_vgm2wav:
-    dc.l    .sys * no current dir
+    dc.l    0 * use homelock for current dir
     dc.l    .vgmCliName
     dc.l    .vgmCmdLq
     dc.l    wavStreamPipeFileLQ
@@ -55960,9 +55960,16 @@ streamerEntry:
     ; Change current dir to "timidity:" or "gm:"
     move.l  streamLocalConfig(a5),a3
     move.l  localStream_currentDir(a3),d1   * if null Lock takes SYS:
+    bne     .hasCurrent
+
+    move.l  homelock(a5),d1
+    lore    Dos,DupLock
+    bra     .useHome
+.hasCurrent
     moveq	#ACCESS_READ,d2
 	lore    Dos,Lock
-    DPRINT  "stream:lock=%lx"
+.useHome
+    DPRINT  "stream:current dir lock=%lx"
     move.l  d0,.sysCurrentDir
     beq     .error
 
