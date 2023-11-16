@@ -31698,7 +31698,7 @@ tutki_moduuli2:
 	cmp.l	#"TDZ",d0		* take
 	beq 	.f
 
-    cmp.l   #"Vgm ",(a0)     * VGM
+    jsr     id_vgm
     beq     .f
 
 	bsr	id_it			 * IT
@@ -32342,7 +32342,7 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 * Virittelee nimen tied.nimestä
 *******
 tee_modnimi:
- 	move.l  #INFO_MODULE_NAME_LEN-1,d1
+ 	move.w  #INFO_MODULE_NAME_LEN-1,d1
 	lea		modulename(a5),a1
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	bne.b	.arc				* otetaan pelkkä filename
@@ -49215,10 +49215,10 @@ pipe_Timidity:
 ******************************************************************************
 
 p_vgm:
-  jmp      .init(pc)
+  jmp      vgmInit(pc)
   p_NOP     * CIA   
   p_NOP     * VB
-  jmp       .end(pc)
+  jmp       vgmEnd(pc)
   jmp      p_sample+p_stop(pc)
   jmp      p_sample+p_cont(pc)
   jmp      p_sample+p_volume(pc)
@@ -49226,39 +49226,62 @@ p_vgm:
   p_NOP    * Forward
   p_NOP    * Backward
   jmp      p_sample+p_ahiupdate(pc)
-  jmp      .id(pc)
+  jmp      id_vgm(pc)
   p_NOP    * Author
   dc       pt_vgm
   dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
-.title           dc.b    "VGM",0
-.tempFile  dc.b    "T:hippo.vgm",0
-           even
+;vgmTitle    dc.b    "VGM                     ",0
+vgmTitle     dc.b    "VGM  (VGM2WAV)          ",0
+             even
+vgmTempFile  dc.b    "T:hippo."
+vgmTempExt   dc.b    "vgm",0,0
+             even
 
-.id
-    tst.b   uusikick(a5)
-    beq     .no
-    cmp.l   #"Vgm ",(a4)
-    bne     .no
-    moveq   #0,d0
-    rts
-.no
-    moveq   #-1,d0
-    rts
-
-.init
+vgmInit
     DPRINT  "VGM stream init"
-    lea     .tempFile(pc),a0
+ if DEBUG
+    move.l  moduleaddress(a5),d0
+    DPRINT  "module=%lx"
+ endif
+
+    * Temp file should a correct extension for vgm2wav
+    move.l  moduleaddress(a5),a4
+    bsr     vgmGet4
+    lea     vgmTempExt(pc),a0
+    move.l  d0,(a0)
+    cmp.b   #' ',2(a0)
+    bne     .11
+    clr.b   2(a0)
+    bra     .33
+.11
+    cmp.b   #' ',3(a0)
+    bne     .33
+    clr.b   3(a0)
+.33
+
+    lea     vgmTempFile(pc),a0
     move.l  moduleaddress(a5),a1
     move.l  modulelength(a5),d0
     bsr     plainSaveFile
-    bmi     .initError
+    bmi     .outOfMem
     DPRINT  "saved to temp"
+
+    bsr     vgmSetTypeName
+
+    * Free module, not used anymore, it can be big
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    lore    Exec,FreeMem
+    clr.l   moduleaddress(a5)
+
+    DPRINT  "module freed"
 
     * Switch type to sample so correct replayer gets loaded
     move    #pt_sample,playertype(a5)    
 
-    lea     .tempFile(pc),a0
-    * Start streaming
+    * Start streaming, url:
+    lea     vgmTempFile(pc),a0
+    * pipe specification:
     pushpea pipe_vgm2wav(pc),d0
     jsr     startLocalStreaming
     DPRINT  "startStreaming=%lx"
@@ -49276,16 +49299,20 @@ p_vgm:
     DPRINT  "Sample init=%lx"
     tst.l   d0
     beq     .ok
-    bsr     .deleteTempFile
+    bsr     vgmDeleteTempFile
     * D0 = error code
     rts
 
 .ok
+
+
     * Sample init OK
     moveq   #0,d0
     rts
 
-
+.outOfMem
+    moveq   #ier_nomem,d0
+    rts
 
 .initError
     moveq   #-1,d0
@@ -49293,7 +49320,7 @@ p_vgm:
 
 .streamError    
     DPRINT  "VGM stream error!"
-    bsr     .deleteTempFile
+    bsr     vgmDeleteTempFile
 
     ; Send CTRL-C to streamer if possible
     bsr     stopStreaming
@@ -49305,27 +49332,27 @@ p_vgm:
     jsr     awaitStreamer
     bra     .1
 .flush
-    DPRINT  "MIDI: flush and wait for streamer to exit"
+    DPRINT  "VGM: flush and wait for streamer to exit"
     jsr     awaitStreamerAndFlush
 .1
-    lea     .msgMidi(pc),a1
+    lea     .msg(pc),a1
     jsr     request
 
     moveq   #-1,d0
     rts
 
-.msgMidi
-    dc.b    "Error starting VGM!",0
+.msg
+    dc.b    "Error starting 'vgm2wav'",0
     even
 
-.end
+vgmEnd
     DPRINT  "VGM stream end"
     jsr     p_sample+p_end(pc)
 
-.deleteTempFile
+vgmDeleteTempFile
     DPRINT  "Delete VGM temp file"
     push    d0
-    pushpea .tempFile(pc),d1
+    pushpea vgmTempFile(pc),d1
     lore    Dos,DeleteFile
     pop     d0
     rts
@@ -49336,12 +49363,132 @@ pipe_vgm2wav:
     dc.l    .vgmCmd
     dc.l    wavStreamPipeFile
     dc.l    0 * no setup
-    dc.l    50000 * large stack
+    dc.l    100000 * large stack
     
 .vgmCliName  dc.b    "vgm2wav",0
 .vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -i "%s"',10
 .sys         dc.b    0
              even
+
+vgmSetTypeName:
+    * Set name.
+    * vgz filename is "gzData", copy the original filename
+ 	move.w  #INFO_MODULE_NAME_LEN-1,d1
+	move.l	solename(a5),a0
+	lea		modulename(a5),a1
+    jsr     tee_modnimi\.copy
+
+    move.l  moduleaddress(a5),a4
+    bsr     vgmGet4
+    lea     vgmTitle(pc),a0
+    move.l  d0,(a0)+
+    rts
+ REM
+    cmp.l   #"VGM ",d0
+    beq     .vgm
+    clr.b   (a0)
+    rts
+
+.vgm
+    move.b  #"v",(a0)+
+    * Put version number
+
+    * reverse BCD  0x00000171 -> v1.71
+    *              0x17010000
+    move.l  8(a4),d0 
+    swap    d0
+    * 0x1701
+    moveq   #'0',d2
+    add.b   d2,d0
+    move.b  d0,(a0)+
+    move.b  #".",(a0)+
+    ror     #8,d0
+    * d0 = 0x17
+    moveq   #$f,d1
+    and     d0,d1
+    lsr.b   #4,d0
+    add.b   d2,d0
+    add.b   d2,d1
+    move.b  d0,(a0)+
+    move.b  d1,(a0)+
+    clr.b   (a0)
+    rts
+ EREM
+
+* In:
+*   a4 = module
+* Out:
+*   d0 = NULL, or a 4-code for supported subtype
+vgmGet4:
+    move.l  #"VGM ",d0
+    cmp.l   #"Vgm ",(a4)
+    beq     .ok
+
+    move.l  #"AY  ",d0
+    cmp.l   #"ZXAY",(a4)
+    beq     .ok
+
+    move.l  #"GBS ",d0
+    cmp.l   #("GBS"<<8)+1,(a4)
+    beq     .ok
+
+    move.l  #"GYM ",d0
+    cmp.l   #"GYMX",(a4)
+    beq     .ok
+
+    move.l  #"HES ",d0
+    cmp.l   #"HESM",(a4)
+    beq     .ok
+
+    move.l  #"KSS ",d0
+    cmp.l   #"KSCC",(a4)
+    beq     .ok
+    cmp.l   #"KSSX",(a4)
+    beq     .ok
+
+    move.l  #"NSF ",d0
+    cmp.l   #"NESM",(a4)
+    beq     .ok
+
+    move.l  #"NSFE",d0
+    cmp.l   #"NSFE",(a4)
+    beq     .ok
+
+    move.l  #"SAP ",d0
+    cmp.l   #("SAP"<<8)+$d,(a4)
+    beq     .ok
+
+    move.l  #"SPC ",d0
+    cmp.l   #"SNES",(a4)
+    beq     .ok
+    moveq    #0,d0
+.ok 
+    tst.l   d0
+    rts
+
+;;  case BLARGG_4CHAR('Z','X','A','Y'):  return "AY";
+;;  case BLARGG_4CHAR('G','B','S',0x01): return "GBS";
+;;  case BLARGG_4CHAR('G','Y','M','X'):  return "GYM";
+;;  case BLARGG_4CHAR('H','E','S','M'):  return "HES";
+;;  case BLARGG_4CHAR('K','S','C','C'):
+;;  case BLARGG_4CHAR('K','S','S','X'):  return "KSS";
+;;  case BLARGG_4CHAR('N','E','S','M'):  return "NSF";
+;;  case BLARGG_4CHAR('N','S','F','E'):  return "NSFE";
+;;  case BLARGG_4CHAR('S','A','P',0x0D): return "SAP";
+;;  case BLARGG_4CHAR('S','N','E','S'):  return "SPC";
+;;  case BLARGG_4CHAR('V','g','m',' '):  return "VGM";
+
+id_vgm
+    DPRINT  "id_vgm"
+    tst.b   uusikick(a5)
+    beq     .no
+    bsr     vgmGet4
+    beq     .no
+    moveq   #0,d0   * yes
+    rts
+.no
+    moveq   #-1,d0
+    rts
 
 
 ******************************************************************************
@@ -52301,7 +52448,10 @@ plainSaveFile:
 	lob		Close
 .openErr 
 	move.l	d7,d0
+ if DEBUG
     DPRINT  "->%ld"
+    tst.l   d0
+ endif
 	popm	d1-a6 
 	rts
 
@@ -54405,8 +54555,17 @@ remoteSearch
 	dc.l	"wb  "
 	dc.l    "tme "
 	dc.l	"xm  "
-    dc.l    "vgm "
-    dc.l    "vgz "
+    dc.l    "vgm " * vgm2wav
+    dc.l    "vgz " *
+    dc.l    "ay  " *
+    dc.l    "gbs " *
+    dc.l    "gym " *
+    dc.l    "hes " *
+    dc.l    "kss " *
+    dc.l    "nsf " *
+    dc.l    "nsfe" *
+    dc.l    "sap " *
+    dc.l    "spc " * 
 	dc.l	0
 ;todo: synmod
 
@@ -55761,15 +55920,16 @@ streamerEntry:
     moveq   #0,d7 
     moveq   #0,d5
 
-    move.l  streamLocalConfig(a5),a4
-    move.l  localStream_setup(a4),d0
+    * Local stream config in a3!
+    move.l  streamLocalConfig(a5),a3
+    move.l  localStream_setup(a3),d0
     beq     .noLocalSetup
     move.l  d0,a0
     jsr     (a0)
 .noLocalSetup
 
-    move.l  localStream_cliName(a4),d0
-    move.l  localStream_command(a4),a0
+    move.l  localStream_cliName(a3),d0
+    move.l  localStream_command(a3),a0
 
     * Store this so graceful exit can be done later
     move.l  d0,currentLocalStreamCliName(a5)
@@ -55783,7 +55943,8 @@ streamerEntry:
  endif
 
     ; Change current dir to "timidity:" or "gm:"
-    move.l  localStream_currentDir(a4),d1   * if null Lock takes SYS:
+    move.l  streamLocalConfig(a5),a3
+    move.l  localStream_currentDir(a3),d1   * if null Lock takes SYS:
     moveq	#ACCESS_READ,d2
 	lore    Dos,Lock
     DPRINT  "stream:lock=%lx"
@@ -55795,7 +55956,7 @@ streamerEntry:
 
     * Set default stack
     move.l  #10000,4(a0)
-    move.l  localStream_stack(a4),d1
+    move.l  localStream_stack(a3),d1
     beq     .defaultStack
     * Modified stack requested
     move.l  d1,4(a0)
