@@ -49360,15 +49360,19 @@ vgmDeleteTempFile
 pipe_vgm2wav:
     dc.l    .sys * no current dir
     dc.l    .vgmCliName
-    dc.l    .vgmCmd
-    dc.l    wavStreamPipeFile
+    dc.l    .vgmCmdLq
+    dc.l    wavStreamPipeFileLQ
     dc.l    0 * no setup
-    dc.l    100000 * large stack
+    dc.l    50000 * large stack
     
 .vgmCliName  dc.b    "vgm2wav",0
 .vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -i "%s"',10
+.vgmCmdLq      dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -i "%s"',10
 .sys         dc.b    0
              even
+
+wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
+    even
 
 vgmSetTypeName:
     * Set name.
