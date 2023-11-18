@@ -4866,6 +4866,7 @@ _xread
 .nla	move.l	(a0),d1		;mfh_fh
 	move.l	_DosBase+var_b,a6
 	lob	Read
+    DPRINT  "Read=%ld bytes"
 .exit	movem.l	(a7)+,d1-a6
 	rts
 .is_xpk	move.l	d2,d6	;buf
