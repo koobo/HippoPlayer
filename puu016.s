@@ -30122,6 +30122,7 @@ loadfile:
 	;clr.b	executablemoduleinit(a5)
 	clr.b	lod_exefile(a5)
 
+*********************************************************************
 ** Archiven purku
 
 	move.b	-(a0),d0
@@ -30165,6 +30166,7 @@ loadfile:
 	moveq	#2,d6
 
 .unp	
+    DPRINT  "Extracting archive!"
 
 	pushm	all
 	* takes type in d6
@@ -30219,9 +30221,14 @@ loadfile:
 	moveq	#0,d5
 
 *** Luodaan dirri
+ if DEBUG
+    move.l  a4,d0
+    DPRINT  "Creating %ls"
+ endif
 
 	move.l	a4,d1
 	lore	Dos,CreateDir
+    DPRINT  "CreateDir=%lx"
 	tst.l	d0
 	beq.b	.onjo
 	move.l	d0,d1
@@ -30233,33 +30240,60 @@ loadfile:
 	move.l	a4,d1
 	moveq	#ACCESS_READ,d2
 	lob	Lock
+    DPRINT  "Lock=%lx"
 
 	move.l	d0,d7
 	beq	.x
 
 *** CD dirriin
 
-	move.l	d0,d1
+ if DEBUG
+    push    d0
+    move.l  d0,d1
+    lea     -100(sp),sp
+    move.l  sp,d2
+    moveq   #99,d3
+    jsr     getNameFromLock
+    move.l  sp,d0
+    DPRINT  "Changing dir1=%s"
+    lea     100(sp),sp
+    pop     d0
+ endif
+
+	move.l	d7,d1
 	lob	CurrentDir
+    * d6 = previous current dir
 	move.l	d0,d6
 
 *** Ajetaan kamat
 
 	pushpea	lod_buf(a5),d1
+ if DEBUG
+    move.l  d1,d0
+    DPRINT  "cmd=%s"
+ endif
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3		* output
 	lob	Execute
+    DPRINT  "Execute=%lx"
 
-	* back to old current dir
-	move.l	d7,d1
-	lob	CurrentDir
-
+ if DEBUG
+    move.l  d7,d1
+    lea     -100(sp),sp
+    move.l  sp,d2
+    moveq   #99,d3
+    jsr     getNameFromLock
+    move.l  sp,d0
+    DPRINT  "Changing dir2=%s"
+    lea     100(sp),sp
+ endif
 
 *** Skannataan dirrin filét
 
 	move.l	d7,d1
 	pushpea	fileinfoblock(a5),d2
 	lob	Examine
+    DPRINT  "Examine=%lx"
 	tst.l	d0
 	beq	 .x
 
@@ -30271,6 +30305,7 @@ loadfile:
 .loop	
 	move.l	d7,d1
 	lob	ExNext
+    DPRINT  "ExNext=%lx"
 	tst.l	d0
 	beq	.x
 
@@ -30283,6 +30318,7 @@ loadfile:
 	pushpea	fib_FileName+fileinfoblock(a5),d1
 	move.l	#MODE_OLDFILE,d2
 	lob	Open
+    DPRINT  "Open=%lx"
 	move.l	d0,d4
 	beq	.bah
 
@@ -30399,7 +30435,7 @@ loadfile:
 	st	d5
 	bra.b	.x
 .nah
-
+    DPRINT  "Rejected"
 	move.l	d4,d1
 	lob	Close
 .bah
@@ -30407,8 +30443,22 @@ loadfile:
 	bra	.loop
 
 .x
+
+ if DEBUG
+    move.l  d6,d1
+    lea     -100(sp),sp
+    move.l  sp,d2
+    moveq   #99,d3
+    jsr     getNameFromLock
+    move.l  sp,d0
+    DPRINT  "Changing dir3=%s"
+    lea     100(sp),sp
+ endif
+
+    ; Back to old currentdir
 	move.l	d6,d1
 	lob	CurrentDir
+    DPRINT  "CurrentDir=%lx"
 
 	move.l	d7,d1
 	beq.b	.xx
@@ -30416,15 +30466,17 @@ loadfile:
 .xx
 
 	lea	160(sp),sp
+    DPRINT  "Archive phase finished!"
 
 	tst	d5
 	bne.b	.nope
 
+    DPRINT  "Nothing found"
 * oliko sopivaa fileä?
 	move	#lod_extract,lod_error(a5)
 	bra	.exit
 
-
+*********************************************************************
 
 .nope
 	* Ordinary file load below, archive extraction above.
