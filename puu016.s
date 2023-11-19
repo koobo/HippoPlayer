@@ -533,7 +533,7 @@ localStream_command        rs.l    1 * Full command line with arguments
 localStream_pipe           rs.l    1 * PIPE path for reading
 localStream_setup          rs.l    1 * Setup routine to call or NULL
 localStream_stack          rs.l    1 * Stack requested, or NULL if default
-
+localStream_poll           rs.l    1 * If streamer is sent CTRL-D this routine is called
 
 *******************************************************************************
 *
@@ -49173,6 +49173,7 @@ pipe_GMPlay:
     dc.l    aiffStreamPipeFile
     dc.l    .setGMPlayDriverEnvVar
     dc.l    0 * no special stack
+    dc.l    0 * no poll routine
 
 .gmCurrentDir:   dc.b    "gm:",0
 .gmPlayCliName:  dc.b    "gmplay",0
@@ -49203,6 +49204,7 @@ pipe_Timidity:
     dc.l    wavStreamPipeFile
     dc.l    0 * no setup
     dc.l    0 * no special stack
+    dc.l    0 * no poll routine
 
 .timidityDir      dc.b    "timidity:",0    
 .timidityCliName  dc.b    "timidity",0
@@ -49217,7 +49219,7 @@ pipe_Timidity:
 p_vgm:
   jmp      vgmInit(pc)
   p_NOP     * CIA   
-  p_NOP     * VB
+  jmp      vgmPollTrigger(pc)     * VB
   jmp       vgmEnd(pc)
   jmp      p_sample+p_stop(pc)
   jmp      p_sample+p_cont(pc)
@@ -49304,7 +49306,8 @@ vgmInit
     rts
 
 .ok
-
+    ; Enable polling for music length
+    clr.w   vgmPollCount
 
     * Sample init OK
     moveq   #0,d0
@@ -49347,6 +49350,7 @@ vgmInit
 
 vgmEnd
     DPRINT  "VGM stream end"
+    move.w  #-1,vgmPollCount    * safety
     jsr     p_sample+p_end(pc)
 
 vgmDeleteTempFile
@@ -49356,7 +49360,8 @@ vgmDeleteTempFile
     lore    Dos,DeleteFile
     pop     d0
     rts
-
+ 
+ REM
 pipe_vgm2wav:
     dc.l    0 * use homelock for current dir
     dc.l    .vgmCliName
@@ -49364,12 +49369,14 @@ pipe_vgm2wav:
     dc.l    wavStreamPipeFile
     dc.l    0 * no setup
     dc.l    50000 * large stack
+    dc.l    0 * no poll routine
 
 .vgmCliName  dc.b    "vgm2wav",0
-.vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -i "%s"',10
+.vgmCmd      dc.b    '%s -o PIPE:wavHippoStream/65536/2 -i "%s"',10
 .sys         dc.b    0
              even
- REM
+ EREM
+; REM
 pipe_vgm2wav:
     dc.l    0 * use homelock for current dir
     dc.l    .vgmCliName
@@ -49377,13 +49384,15 @@ pipe_vgm2wav:
     dc.l    wavStreamPipeFileLQ
     dc.l    0 * no setup
     dc.l    50000 * large stack
+    dc.l    vgmPoll
 
-.vgmCliName  dc.b    "vgm2wav",0
-.vgmCmdLq      dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -i "%s"',10
-.sys         dc.b    0
+.vgmCliName          dc.b    "vgm2wav",0
+.vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -l t:vgmlen -i "%s"',10
+.sys                 dc.b    0
+* This name is recognized in the sample player to engage 22050 Hz out
 wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
-    even
- EREM
+                     even
+; EREM
  
 vgmSetTypeName:
     * Set name.
@@ -49492,6 +49501,60 @@ vgmGet4:
 ;;  case BLARGG_4CHAR('S','A','P',0x0D): return "SAP";
 ;;  case BLARGG_4CHAR('S','N','E','S'):  return "SPC";
 ;;  case BLARGG_4CHAR('V','g','m',' '):  return "VGM";
+
+* Called from VB interrupt.
+* Will signal the streamer task using an interval.
+* Intent is to make the streamer call the poll callback
+* in task scope, which then will check if the song lenght
+* info is available.
+vgmPollTrigger:
+    lea     vgmPollCount(pc),a0
+    move    (a0),d0
+    bmi     .2
+    addq    #1,d0
+    and     #$7f,d0
+    move    d0,(a0)
+    bne     .2
+
+    lore    Exec,Forbid
+    move.l  streamerTask(a5),d0
+    beq     .1
+    move.l  d0,a1
+    move.l  #SIGBREAKF_CTRL_D,d0
+    lob     Signal 
+.1  lob     Permit
+.2  rts
+
+vgmPollCount  dc.w    -1
+
+* Try to read the file where vgm2wav has written the length info
+vgmPoll:
+    DPRINT  "vgmPoll!"
+    lea     .path(pc),a0
+    jsr     plainLoadFile
+    tst.l   d0
+    beq     .no 
+    move.l  d0,a0
+    move.l  (a0),d0 
+ if DEBUG
+    DPRINT  "vgm length=%ld secs"
+    tst.l   d0
+ endif
+    * Store result if there is something
+    bmi     .noTime
+    divu    #60,d0
+    move.w  d0,kokonaisaika(a5)
+    swap    d0
+    move.w  d0,kokonaisaika+2(a5)
+.noTime
+    * Stop polling
+    move    #-1,vgmPollCount
+    jsr     freemem
+.no
+    rts
+
+.path   dc.b    "t:vgmlen",0
+    even
 
 id_vgm
     DPRINT  "id_vgm"
@@ -56002,11 +56065,26 @@ streamerEntry:
     DPRINT  "stream:notify main task"
     bsr     .notify
     
+.waitLoop
+    move.l  #SIGBREAKF_CTRL_C,d0
 
+    move.l  streamLocalConfig(a5),a3
+    tst.l   localStream_poll(a3)
+    beq     .noPoll
+    bset    #SIGBREAKB_CTRL_D,d0
+    DPRINT  "stream:Wait for CTRL-D"
+.noPoll
     ; Wait for stopping
     DPRINT  "stream:Wait for CTRL-C"
-    move.l  #SIGBREAKF_CTRL_C,d0
     lore    Exec,Wait
+    btst    #SIGBREAKB_CTRL_D,d0
+    beq     .noCtrlD
+    DPRINT  "stream:CTRL-D received, call poll routine"
+    move.l  streamLocalConfig(a5),a3
+    move.l  localStream_poll(a3),a3
+    jsr     (a3)
+    bra     .waitLoop
+.noCtrlD
     DPRINT  "stream:CTRL-C received!"
 
 .breakLoop
