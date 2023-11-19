@@ -54940,7 +54940,20 @@ fetchRemoteFile:
     moveq   #0,d0
 .copy
     addq    #1,d0
-	move.b	(a2)+,(a3)+
+	move.b	(a2)+,d2
+    * Remove suspect chars such as ()*?'"
+    cmp.b   #"(",d2
+    beq     .sanity
+    cmp.b   #")",d2
+    beq     .sanity
+    cmp.b   #"*",d2
+    beq     .sanity
+    cmp.b   #"?",d2
+    bne     .gog
+.sanity
+    moveq   #"_",d2
+.gog
+    move.b  d2,(a3)+
 	dbeq	d1,.copy
     cmp     #4,d0
     bls.b   .skip
