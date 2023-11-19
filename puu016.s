@@ -49601,11 +49601,32 @@ vgmPoll:
     even
 
 id_vgm
-    DPRINT  "id_vgm"
     tst.b   uusikick(a5)
     beq     .no
+
+;;;    * Check for VGZ
+;;;    push    a0
+;;;    move.l  modulefilename(a5),a0
+;;;.1  tst.b   (a0)+
+;;;    bne     .1
+;;;    subq    #1,a0
+;;;    moveq   #4-1,d1
+;;;.2  ror.l   #8,d0
+;;;    move.b  -(a0),d0
+;;;    dbf     d1,.2
+;;;    or.l    #$20202000,d0
+;;;    cmp.l   #"vgz.",d0
+;;;    bne     .noGz
+;;;    moveq   #0,d0
+;;;    move.w  (a4),d0
+;;;    cmp.w   #$1f8b,(a4)
+;;;.noGz
+;;;    pop     a0
+;;;    beq     .yes
+
     bsr     vgmGet4
     beq     .no
+.yes
     moveq   #0,d0   * yes
     rts
 .no
