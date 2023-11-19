@@ -49270,14 +49270,6 @@ vgmInit
 
     bsr     vgmSetTypeName
 
-    * Free module, not used anymore, it can be big
-    move.l  moduleaddress(a5),a1
-    move.l  modulelength(a5),d0
-    lore    Exec,FreeMem
-    clr.l   moduleaddress(a5)
-
-    DPRINT  "module freed"
-
     * Switch type to sample so correct replayer gets loaded
     move    #pt_sample,playertype(a5)    
 
@@ -49372,7 +49364,7 @@ pipe_vgm2wav:
     dc.l    0 * no poll routine
 
 .vgmCliName  dc.b    "vgm2wav",0
-.vgmCmd      dc.b    '%s -o PIPE:wavHippoStream/65536/2 -i "%s"',10
+.vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -l t:vgmlen -i "%s"',10
 .sys         dc.b    0
              even
  EREM
