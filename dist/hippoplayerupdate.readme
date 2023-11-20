@@ -114,7 +114,7 @@ New keyboard shortcuts:
   from shell in the same directory where the STIL.txt is for
   Hippo to be able to find it.
   
-- PSID improvements with the updated playsid.library:
+- PSID improvements with the updated playsid.library v1.6:
    - SIDBlaster support upgraded by Erique, now faster and much less
      likely to cause jams. A 68020 should be enough for normal
      playback, previously a faster CPU was needed.
@@ -125,7 +125,7 @@ New keyboard shortcuts:
    - The library also now works on kickstart 1.3 in the original
      playback mode, no need to have a separate kick1.3 lib version.
 
-- MIDI playback support:
+- MIDI file playback support:
   - "Prefs/Play-2/MIDI mode" setting chooses which mode is active.
   - Serial output mode using Alastair M. Robinson's "delimidi" player. 
     This will use MIDI equipment connected to the serial port for playing. 
@@ -137,10 +137,11 @@ New keyboard shortcuts:
     - GMPlay: Not as good quality, lighter CPU load, 68020 should work.
       Install GMPlay from http://aminet.net/mus/midi/GMPlay13.lha and
       set an assign "gm:" to the directory (this is just for Hippo to
-      find it). 
+      find it). Also install Patrik's file driver into "gm:SoundDrivers", 
+      https://aminet.net/mus/misc/file.driver.lha 
   - Scopes and song end detection supported.
 
-- Console music playback support using the "vgm2wav" application. 
+- Console music playback support using the "vgm2wav" application:
   It uses the Game Music Emulator library for sound output. The following
   formats (and file extensions) are supported:
   - AY        ZX Spectrum/Amstrad CPC
@@ -152,16 +153,16 @@ New keyboard shortcuts:
   - SAP       Atari systems using POKEY sound chip
   - SPC       Super Nintendo/Super Famicom
   - VGM/VGZ   Sega Master System/Mark III, Sega Genesis/Mega Drive, BBC Micro 
-  Download from http://aminet.net/mus/play/vgm2wav-gme.lha and the place
-  binary into C: or Hippo directory. This is an Amiga port of a
-  C++ application. The CPU usage varies depending on the format being
-  played, for some formats a 060 (or faster) might be required.
+  Download http://aminet.net/mus/play/vgm2wav-gme.lha and place the
+  binary into C: or Hippo directory. The CPU usage varies depending on the 
+  format being played, for some formats a 68060@50MHz may not be enough.
+  Vgz-files are gzipped, so you need to have a working gzip in C: too.
   
 - Note on performance: Timidity, GMPlay and vgm2wav are used to
   convert files to audio on-the-fly and piped through to Hippo
   using PIPE: provided by the queue-handler. The performance of 
   queue-handler is important, the older V37 (OS 3.0/3.1) is much 
-  slower than the newer V45 (OS 3.2).
+  slower than the newer V45 (OS 3.2). 
 
 
 ------------------------------------------------------------------------------
