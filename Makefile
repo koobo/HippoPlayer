@@ -63,3 +63,8 @@ stil: STIL.txt
 
 STIL.txt: 
 	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/STIL.txt
+
+beta: HiP HiP-debug
+	lha a ~/Dropbox/hip-beta.lha HiP HiP-debug HiP-debug-ser HippoPlayer.group vgm2wav
+	cd playsid.library && lha a ~/Dropbox/hip-beta.lha playsid.library
+	scp ~/Dropbox/hip-beta.lha sitruuna.local:/srv/ftp/amiga/
