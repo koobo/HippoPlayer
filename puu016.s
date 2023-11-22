@@ -21136,8 +21136,13 @@ info_code:
     bne     .n1
     move.l  lockhere(a5),d1 * Fallback option, the current dir
     beq     .n2
-.n1
-    lore    Dos,CurrentDir
+.n1 
+    lore    Dos,DupLock
+    move.l  d0,d1
+    lob     CurrentDir
+    move.l  d0,d1
+    beq     .n2
+    lob     UnLock
 .n2
 
 	bsr.b	.infocode
