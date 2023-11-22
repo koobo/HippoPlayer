@@ -18456,7 +18456,7 @@ listselector:
 	move.l	d6,a1
 	move.l	wd_RPort(a1),a1
 	move.l	a3,a3
-	bsr		doDrawButtonFrame
+	jsr		doDrawButtonFrame
 .xx
 	popm	all
 	rts
