@@ -36959,11 +36959,14 @@ p_sid:	jmp	.init(pc)
     cmp.b   #OM_RESID_8580,d0
     bne     .o2
 .o1 
+    printt "CHECK AHI MODE info"
+
     * Show additional "14-bit" or "AHI" with reSID.
     move.l  #" 14-",-1(a1)
     move.l  #"bit"<<8,-1+4(a1)
     move.l  #1,ps3m_sampleDataModulo(a5)
-    tst.b   ahi_use_nyt(a5)
+;    tst.b   ahi_use_nyt(a5)
+    tst.b   ahi_use(a5)
     beq     .o2
     move.l  #" AHI",-1(a1)
     clr.b   -1+4(a1)
@@ -49292,6 +49295,7 @@ p_vgm:
 ;vgmTitle    dc.b    "VGM                     ",0
 vgmTitle     dc.b    "VGM  (VGM2WAV)          ",0
              even
+vgmTitleAhi  = vgmTitle+16
 vgmTempFile  dc.b    "T:hippo."
 vgmTempExt   dc.b    "vgm",0,0
              even
@@ -49357,6 +49361,13 @@ vgmInit
 .ok
     ; Enable polling for music length
     clr.w   vgmPollCount
+
+    lea     vgmTitleAhi(pc),a0
+    move.l  #"    ",(a0)
+    tst.b   ahi_use(a5)
+    beq     .noa
+    move.l  #"AHI ",(a0)
+.noa
 
     * Sample init OK
     moveq   #0,d0
