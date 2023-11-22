@@ -36959,6 +36959,7 @@ p_sid:	jmp	.init(pc)
 .a  move.b  (a0)+,(a1)+
     bne.b   .a
 
+    * Additional info in reSID mode
     cmp.b   #OM_RESID_6581,d0
     beq     .o1
     cmp.b   #OM_RESID_AUTO,d0
