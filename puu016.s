@@ -534,6 +534,7 @@ localStream_pipe           rs.l    1 * PIPE path for reading
 localStream_setup          rs.l    1 * Setup routine to call or NULL
 localStream_stack          rs.l    1 * Stack requested, or NULL if default
 localStream_poll           rs.l    1 * If streamer is sent CTRL-D this routine is called
+localStream_additionalParam rs.l   1 * Used as the 3rd formatting parameter
 
 *******************************************************************************
 *
@@ -10252,7 +10253,13 @@ rbutton3
 	move.l	playerbase(a5),a0
 	jsr	p_stop(a0)
 	
-	move	(sp)+,mainvolume(a5)
+	move	(sp)+,mainvolume(a5)    DPRINT  "VGM stream init"
+ if DEBUG
+    move.l  moduleaddress(a5),d0
+    DPRINT  "module=%lx"
+ endif
+
+
 
 	bra	inforivit_pause
 ;.hehe	rts
@@ -49234,6 +49241,7 @@ pipe_GMPlay:
     dc.l    .setGMPlayDriverEnvVar
     dc.l    0 * no special stack
     dc.l    0 * no poll routine
+    dc.l    0 * additional formatting parameter
 
 .gmCurrentDir:   dc.b    "gm:",0
 .gmPlayCliName:  dc.b    "gmplay",0
@@ -49265,6 +49273,7 @@ pipe_Timidity:
     dc.l    0 * no setup
     dc.l    0 * no special stack
     dc.l    0 * no poll routine
+    dc.l    0 * additional formatting parameter
 
 .timidityDir      dc.b    "timidity:",0    
 .timidityCliName  dc.b    "timidity",0
@@ -49284,14 +49293,14 @@ p_vgm:
   jmp      p_sample+p_stop(pc)
   jmp      p_sample+p_cont(pc)
   jmp      p_sample+p_volume(pc)
-  p_NOP    * Song
+  jmp      vgmSong(pc)
   p_NOP    * Forward
   p_NOP    * Backward
   jmp      p_sample+p_ahiupdate(pc)
   jmp      id_vgm(pc)
   p_NOP    * Author
   dc       pt_vgm
-  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke!pf_song
 ;vgmTitle    dc.b    "VGM                     ",0
 vgmTitle     dc.b    "VGM  (VGM2WAV)          ",0
              even
@@ -49301,11 +49310,16 @@ vgmTempExt   dc.b    "vgm",0,0
              even
 
 vgmInit
+    ; Reset track number
+    clr.w   vgmTrackNumber
+
+vgmInit0
     DPRINT  "VGM stream init"
  if DEBUG
     move.l  moduleaddress(a5),d0
     DPRINT  "module=%lx"
  endif
+
 
     * Temp file should a correct extension for vgm2wav
     move.l  moduleaddress(a5),a4
@@ -49421,6 +49435,24 @@ vgmDeleteTempFile
     pop     d0
     rts
  
+vgmSong:
+    DPRINT  "vgmSong"
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Select %ld"
+ endif
+    move    d0,vgmTrackNumber
+
+    bsr     vgmEnd
+    bsr     vgmInit0
+    tst.l   d0
+    bpl.b   .ok
+    DPRINT  "Song change failed %ld"
+    clr.b   playing(a5)
+.ok 
+    rts
+
  REM
 pipe_vgm2wav:
     dc.l    0 * use homelock for current dir
@@ -49430,9 +49462,10 @@ pipe_vgm2wav:
     dc.l    0 * no setup
     dc.l    50000 * large stack
     dc.l    0 * no poll routine
+    dc.l    0 * additional format string parameter
 
 .vgmCliName  dc.b    "vgm2wav",0
-.vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -l t:vgmlen -i "%s"',10
+.vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -l t:vgmlen -i "%s" -r %ld',10
 .sys         dc.b    0
              even
  EREM
@@ -49445,9 +49478,11 @@ pipe_vgm2wav:
     dc.l    0 * no setup
     dc.l    50000 * large stack
     dc.l    vgmPoll
+    dc.l    0 * additional format string parameter
+vgmTrackNumber = *-2
 
 .vgmCliName          dc.b    "vgm2wav",0
-.vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -l t:vgmlen -i "%s"',10
+.vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -l t:vgmlen -i "%s" -r %ld',10
 .sys                 dc.b    0
 * This name is recognized in the sample player to engage 22050 Hz out
 wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
@@ -49596,8 +49631,9 @@ vgmPoll:
     beq     .no 
     move.l  d0,a0
     move.l  (a0),d0 
+    move.l  4(a0),d1 
  if DEBUG
-    DPRINT  "vgm length=%ld secs"
+    DPRINT  "vgm length=%ld secs, track count=%ld"
     tst.l   d0
  endif
     * Store result if there is something
@@ -49607,6 +49643,13 @@ vgmPoll:
     swap    d0
     move.w  d0,kokonaisaika+2(a5)
 .noTime
+    * Validate track count
+    subq    #1,d1
+    bmi     .1
+    cmp     #64,d1
+    bhs     .1
+    move.w  d1,maxsongs(a5)
+.1
     * Stop polling
     move    #-1,vgmPollCount
     jsr     freemem
@@ -56106,6 +56149,7 @@ streamerEntry:
     * Store this so graceful exit can be done later
     move.l  d0,currentLocalStreamCliName(a5)
     move.l	streamerUrl(a5),d1
+    move.l  localStream_additionalParam(a3),d2
     lea     .buffer(a4),a3
     jsr     desmsg3
 
