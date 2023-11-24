@@ -10203,6 +10203,14 @@ songSkip
 	DPRINT	"New song: %ld"
 	move	d0,songnumber(a5)
 
+    cmp.w   #pt_vgm,playertype(a5)
+    bne     .notVgm
+    * VGM subsong handling is different
+    jsr     vgmSongChangePossible
+    beq     .stop
+.notVgm
+
+
 	st	kelattiintaakse(a5)
 	clr.b	playing(a5)
 	move.l	playerbase(a5),a0
@@ -10217,6 +10225,11 @@ songSkip
 .nosong
 	rts
 
+.stop  
+    DPRINT  "VGM special case abort"
+    clr.b	playing(a5)
+	bsr	inforivit_clear	
+    rts
 
 *******************************************************************************
 * Song number >
@@ -10224,7 +10237,7 @@ songSkip
 actionPrevSong
 rbutton13
 	moveq	#-1,d1			* v‰hennet‰‰n songnumberia
-	bra.b	songSkip
+	bra 	songSkip
 
 
 ******************************************************************************
@@ -19383,7 +19396,7 @@ inforivit_clear_2ndrow:
 
 inforivit_killerps3m
 	lea	var_b,a5
-inforivit_play
+inforivit_play:
 	bsr.b	inforivit_clear
 	tst.l	playingmodule(a5)
 	bpl.b	.huh
@@ -49302,17 +49315,18 @@ p_vgm:
   p_NOP    * Author
   dc       pt_vgm
   dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke!pf_song
-;vgmTitle    dc.b    "VGM                     ",0
-vgmTitle     dc.b    "VGM  (VGM2WAV)          ",0
-             even
-vgmTitleAhi  = vgmTitle+16
-vgmTempFile  dc.b    "T:hippo."
-vgmTempExt   dc.b    "vgm",0,0
-             even
+vgmTitle      ds.b    32    * empty space
+vgmTempFile   dc.b    "T:hippo."
+vgmTempExt    dc.b    "vgm",0,0
+vgmPollFile   dc.b    "T:vgmlen",0
+              even
+vgmPollCount  dc.w    -1
+vgmVoices     dc.w    0
 
 vgmInit
     ; Reset track number
     clr.w   vgmTrackNumber
+    clr.w   vgmVoices
 
 vgmInit0
     DPRINT  "VGM stream init"
@@ -49376,13 +49390,8 @@ vgmInit0
 .ok
     ; Enable polling for music length
     clr.w   vgmPollCount
-
-    lea     vgmTitleAhi(pc),a0
-    move.l  #"    ",(a0)
-    tst.b   ahi_use(a5)
-    beq     .noa
-    move.l  #"AHI ",(a0)
-.noa
+    ; Update info also
+    bsr     vgmInfoText
 
     * Sample init OK
     moveq   #0,d0
@@ -49435,7 +49444,52 @@ vgmDeleteTempFile
     lore    Dos,DeleteFile
     pop     d0
     rts
- 
+
+* Generate info text about the format
+vgmInfoText:
+    lea     -8(sp),sp
+    move.l  moduleaddress(a5),a4
+    bsr     vgmGet4
+    clr.l   (sp)
+    clr.l   4(sp)
+
+    move.l  sp,a0
+    moveq   #4-1,d1
+.l  rol.l   #8,d0
+    cmp.b   #" ",d0
+    beq     .ll    
+    move.b  d0,(a0)+
+    dbf     d1,.l
+.ll
+
+    move.l  sp,d0
+    moveq   #0,d1
+    move.w  vgmVoices(pc),d1
+
+    pushpea .ahi(pc),d2
+    tst.b    ahi_use(a5)
+    bne     .1
+    addq.l  #4,d2
+;    pushpea .null(pc),d2
+.1
+    lea     .form(pc),a0
+    lea     vgmTitle(pc),a3
+    jsr     desmsg3
+    lea     8(sp),sp
+
+    rts
+
+* subformat, AHI, voices: max 25 ch
+.ahi    dc.b    " AHI"
+.null   dc.b    0
+.form   dc.b    "%s VGM2WAV %ldch %s",0
+    even
+
+vgmSongChangePossible:
+    jsr     findLocalStreamProcess
+    tst.l   d0
+    rts
+
 vgmSong:
     DPRINT  "vgmSong"
  if DEBUG
@@ -49443,14 +49497,36 @@ vgmSong:
 	move	songnumber(a5),d0
 	DPRINT	"Select %ld"
  endif
-    move    d0,vgmTrackNumber
+    move.l  #SIGBREAKF_CTRL_D,d3    * Next track signal
+    lea     vgmTrackNumber(pc),a0
+    move    (a0),d1
+    move    d0,(a0)
+    sub     d1,d0
+    bpl.b   .next
+    move.l  #SIGBREAKF_CTRL_E,d3    * Previous track signal
+.next
 
+    bsr      vgmSongChangePossible
+    ;beq     .restart
+    beq     .x
+    lore    Exec,Forbid
+    move.l  d0,a1
+    move.l  d3,d0
+    lob     Signal
+    lob     Permit
+    DPRINT  "chang track signal!"
+    ; Enable polling for music length for this track
+    clr.w   vgmPollCount
+.x
+    rts
+
+.restart
+    DPRINT  "restarting"
     bsr     vgmEnd
     bsr     vgmInit0
     tst.l   d0
     bpl.b   .ok
     DPRINT  "Song change failed %ld"
-    clr.b   playing(a5)
 .ok 
     rts
 
@@ -49466,7 +49542,7 @@ pipe_vgm2wav:
     dc.l    0 * additional format string parameter
 
 .vgmCliName  dc.b    "vgm2wav",0
-.vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -l t:vgmlen -i "%s" -r %ld',10
+.vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -n -l t:vgmlen -i "%s" -r %ld',10
 .sys         dc.b    0
              even
  EREM
@@ -49483,7 +49559,7 @@ pipe_vgm2wav:
 vgmTrackNumber = *-2
 
 .vgmCliName          dc.b    "vgm2wav",0
-.vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -l t:vgmlen -i "%s" -r %ld',10
+.vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -n -l t:vgmlen -i "%s" -r %ld',10
 .sys                 dc.b    0
 * This name is recognized in the sample player to engage 22050 Hz out
 wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
@@ -49497,12 +49573,13 @@ vgmSetTypeName:
 	move.l	solename(a5),a0
 	lea		modulename(a5),a1
     jsr     tee_modnimi\.copy
-
-    move.l  moduleaddress(a5),a4
-    bsr     vgmGet4
-    lea     vgmTitle(pc),a0
-    move.l  d0,(a0)+
     rts
+
+;    move.l  moduleaddress(a5),a4
+;    bsr     vgmGet4
+;    lea     vgmTitle(pc),a0
+;    move.l  d0,(a0)+
+;    rts
  REM
     cmp.l   #"VGM ",d0
     beq     .vgm
@@ -49621,20 +49698,20 @@ vgmPollTrigger:
 .1  lob     Permit
 .2  rts
 
-vgmPollCount  dc.w    -1
+
 
 * Try to read the file where vgm2wav has written the length info
 vgmPoll:
     DPRINT  "vgmPoll!"
-    lea     .path(pc),a0
+    lea     vgmPollFile(pc),a0
     jsr     plainLoadFile
     tst.l   d0
     beq     .no 
     move.l  d0,a0
-    move.l  (a0),d0 
-    move.l  4(a0),d1 
+    movem.l (a0),d0/d1/d2
+    move.w  d2,vgmVoices
  if DEBUG
-    DPRINT  "vgm length=%ld secs, track count=%ld"
+    DPRINT  "vgm length=%ld secs, track count=%ld, voices=%ld"
     tst.l   d0
  endif
     * Store result if there is something
@@ -49654,11 +49731,21 @@ vgmPoll:
     * Stop polling
     move    #-1,vgmPollCount
     jsr     freemem
+    bsr     vgmDeletePollFile
+
+	tst.b	playing(a5)
+	beq.b	.no
+    bsr     vgmInfoText
+    jsr     inforivit_play
+
 .no
     rts
 
-.path   dc.b    "t:vgmlen",0
-    even
+
+vgmDeletePollFile:
+    pushpea vgmPollFile(pc),d1
+    lore    Dos,DeleteFile
+    rts
 
 id_vgm
     tst.b   uusikick(a5)
@@ -56288,6 +56375,7 @@ streamerEntry:
 * Out:
 *   d0 = process address or null
 findLocalStreamProcess:
+    pushm   d2-d7/a2-a6
     lea     -64(sp),sp
     moveq   #0,d4
     lore    Dos,MaxCli
@@ -56336,6 +56424,7 @@ findLocalStreamProcess:
     popm    all
  endif
     move.l  d4,d0
+    popm    d2-d7/a2-a6
     rts
 
 .noCLI
@@ -56352,6 +56441,7 @@ findLocalStreamProcess:
     DPRINT  "findLocalStreamProcess=NULL task=%lx"
     popm    all
  endif
+    popm    d2-d7/a2-a6
     moveq   #0,d0
     rts
 
