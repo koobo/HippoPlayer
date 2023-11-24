@@ -7668,6 +7668,10 @@ signalreceived
 	move	p_liput(a0),d0
 	btst	#pb_song,d0
  	beq	.reet
+    * Special case: VGM task has already stopped, 
+    * can't change to another song at this point.
+    cmp.w   #pt_vgm,p_type(a0)
+    beq     .reet
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne	rbutton13		* next song!
@@ -7687,6 +7691,10 @@ signalreceived
 	move	p_liput(a0),d0
 	btst	#pb_song,d0
  	beq.b	.eipa
+    * Special case: VGM task has already stopped, 
+    * can't change to another song at this point.
+    cmp.w   #pt_vgm,p_type(a0)
+    beq     .eipa
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne	rbutton13		* next song!
@@ -10187,6 +10195,8 @@ rbutton12
 	moveq	#1,d1		* lisätään songnumberia
 
 songSkip
+    DPRINT  "Next/prev song action"
+
 	tst.l	playingmodule(a5)
 	bmi.b	.nosong
 
@@ -10203,14 +10213,6 @@ songSkip
 	DPRINT	"New song: %ld"
 	move	d0,songnumber(a5)
 
-    cmp.w   #pt_vgm,playertype(a5)
-    bne     .notVgm
-    * VGM subsong handling is different
-    jsr     vgmSongChangePossible
-    beq     .stop
-.notVgm
-
-
 	st	kelattiintaakse(a5)
 	clr.b	playing(a5)
 	move.l	playerbase(a5),a0
@@ -10224,12 +10226,6 @@ songSkip
 	bsr	lootaan_aika
 .nosong
 	rts
-
-.stop  
-    DPRINT  "VGM special case abort"
-    clr.b	playing(a5)
-	bsr	inforivit_clear	
-    rts
 
 *******************************************************************************
 * Song number >
@@ -10266,7 +10262,7 @@ rbutton3
 	move.l	playerbase(a5),a0
 	jsr	p_stop(a0)
 	
-	move	(sp)+,mainvolume(a5)    DPRINT  "VGM stream init"
+	move	(sp)+,mainvolume(a5)    
  if DEBUG
     move.l  moduleaddress(a5),d0
     DPRINT  "module=%lx"
@@ -49487,8 +49483,11 @@ vgmInfoText:
 
 vgmSongChangePossible:
     jsr     findLocalStreamProcess
+    DPRINT  "vgmSongChangePossible=%lx"
     tst.l   d0
     rts
+
+; stream task is still in Wait even if vgm2wav has exited
 
 vgmSong:
     DPRINT  "vgmSong"
@@ -49500,6 +49499,8 @@ vgmSong:
     move.l  #SIGBREAKF_CTRL_D,d3    * Next track signal
     lea     vgmTrackNumber(pc),a0
     move    (a0),d1
+    cmp     d0,d1       * same?
+    beq     .x
     move    d0,(a0)
     sub     d1,d0
     bpl.b   .next
@@ -49507,19 +49508,19 @@ vgmSong:
 .next
 
     bsr      vgmSongChangePossible
-    ;beq     .restart
     beq     .x
     lore    Exec,Forbid
     move.l  d0,a1
     move.l  d3,d0
     lob     Signal
     lob     Permit
-    DPRINT  "chang track signal!"
+    DPRINT  "Change track signal!"
     ; Enable polling for music length for this track
     clr.w   vgmPollCount
 .x
     rts
 
+ REM
 .restart
     DPRINT  "restarting"
     bsr     vgmEnd
@@ -49529,6 +49530,7 @@ vgmSong:
     DPRINT  "Song change failed %ld"
 .ok 
     rts
+ EREM
 
  REM
 pipe_vgm2wav:
@@ -49537,7 +49539,7 @@ pipe_vgm2wav:
     dc.l    .vgmCmd
     dc.l    wavStreamPipeFile
     dc.l    0 * no setup
-    dc.l    50000 * large stack
+    dc.l    10000 * largeish stack
     dc.l    0 * no poll routine
     dc.l    0 * additional format string parameter
 
