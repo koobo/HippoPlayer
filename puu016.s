@@ -32349,11 +32349,11 @@ doIdentifyFormats
 	move.l	a3,a0
     add.l   (a0),a0
  if DEBUG
-    push    d1
-    move.l  (a3),d0
-	pushpea	p_name(a0),d1
-	DPRINT	"- %ld -> %s"
-    pop     d1
+;;;    push    d1
+;;;    move.l  (a3),d0
+;;;	pushpea	p_name(a0),d1
+;;;	DPRINT	"- %ld -> %s"
+;;;    pop     d1
  endif
 	pushm	all
 	jsr	p_id(a0)
