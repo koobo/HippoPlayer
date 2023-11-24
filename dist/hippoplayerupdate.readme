@@ -139,7 +139,7 @@ New keyboard shortcuts:
       set an assign "gm:" to the directory (this is just for Hippo to
       find it). Also install Patrik's file driver into "gm:SoundDrivers", 
       https://aminet.net/mus/misc/file.driver.lha 
-  - Scopes and song end detection supported.
+  - Scopes, song end detection, AHI output supported.
 
 - Console music playback support using the "vgm2wav" application:
   It uses the Game Music Emulator library for sound output. The following
@@ -150,13 +150,17 @@ New keyboard shortcuts:
   - HES       NEC TurboGrafx-16/PC Engine
   - KSS       MSX Home Computer/other Z80 systems (doesn't support FM sound)
   - NSF/NSFE  Nintendo NES/Famicom (with VRC 6, Namco 106, and FME-7 sound)
-  - SAP       Atari systems using POKEY sound chip
+  - SAP       Atari systems using POKEY sound chip (no digimusic support)
   - SPC       Super Nintendo/Super Famicom
   - VGM/VGZ   Sega Master System/Mark III, Sega Genesis/Mega Drive, BBC Micro 
-  Download http://aminet.net/mus/play/vgm2wav-gme.lha and place the
+  Download http://aminet.net/mus/misc/vgm2wav-gme.lha and place the
   binary into C: or Hippo directory. The CPU usage varies depending on the 
-  format being played, for some formats a 68060@50MHz may not be enough.
+  format being played. A 060 might not be fast enough for SPC files,
+  a 020 can likely handle AY and SAP, for example.
   Vgz-files are gzipped, so you need to have a working gzip in C: too.
+  
+  Scopes, subsongs, song end detection (for some subformats), 
+  AHI output supported.
   
 - Note on performance: Timidity, GMPlay and vgm2wav are used to
   convert files to audio on-the-fly and piped through to Hippo
