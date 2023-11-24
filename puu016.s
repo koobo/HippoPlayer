@@ -43304,7 +43304,7 @@ p_sample:
 ;	pushpea	probebuffer(a5),d4
 	pushpea	kokonaisaika(a5),d5
 
-	move.b	samplecyber(a5),d7
+	move.b	samplecyber(a5),d6
 ;	move.b	cybercalibration(a5),d6
 	move.l	calibrationaddr(a5),d7
 
