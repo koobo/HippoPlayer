@@ -49311,13 +49311,15 @@ p_vgm:
   p_NOP    * Author
   dc       pt_vgm
   dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke!pf_song
-vgmTitle      ds.b    32    * empty space
-vgmTempFile   dc.b    "T:hippo."
-vgmTempExt    dc.b    "vgm",0,0
-vgmPollFile   dc.b    "T:vgmlen",0
-              even
-vgmPollCount  dc.w    -1
-vgmVoices     dc.w    0
+vgmTitle        ds.b    32    * empty space
+vgmTempFile     dc.b    "T:hippo."
+vgmTempExt      dc.b    "vgm",0,0
+vgmPollFile     dc.b    "T:vgmlen",0
+                even
+vgmPollCount    dc.w    -1
+vgmVoices       dc.w    0
+vgmActuallyMdx  dc.b    0
+                even
 
 vgmInit
     ; Reset track number
@@ -49333,6 +49335,9 @@ vgmInit0
 
 
     * Temp file should a correct extension for vgm2wav
+    move.b  vgmActuallyMdx(pc),d0
+    bne     .mdx
+    
     move.l  moduleaddress(a5),a4
     bsr     vgmGet4
     lea     vgmTempExt(pc),a0
@@ -49347,6 +49352,7 @@ vgmInit0
     clr.b   3(a0)
 .33
 
+.mdx
     lea     vgmTempFile(pc),a0
     move.l  moduleaddress(a5),a1
     move.l  modulelength(a5),d0
@@ -49363,6 +49369,10 @@ vgmInit0
     lea     vgmTempFile(pc),a0
     * pipe specification:
     pushpea pipe_vgm2wav(pc),d0
+    move.b  vgmActuallyMdx(pc),d1
+    beq     .44
+    pushpea pipe_mdx2wav(pc),d0
+.44
     jsr     startLocalStreaming
     DPRINT  "startStreaming=%lx"
     tst.l   d0
@@ -49419,14 +49429,20 @@ vgmInit0
     jsr     awaitStreamerAndFlush
 .1
     lea     .msg(pc),a1
+    move.b  vgmActuallyMdx(pc),d0
+    beq     .2
+    lea     .msg2(pc),a1
+.2
     jsr     request
 
     moveq   #-1,d0
     rts
 
 .msg
-    dc.b    "Error starting 'vgm2wav'",0
-    even
+  dc.b    "Error starting 'vgm2wav'",0
+.msg2
+  dc.b    "Error starting 'mdx2wav'",0
+  even
 
 vgmEnd
     DPRINT  "VGM stream end"
@@ -49469,6 +49485,12 @@ vgmInfoText:
 ;    pushpea .null(pc),d2
 .1
     lea     .form(pc),a0
+    move.b  vgmActuallyMdx(pc),d3
+    beq     .2
+    lea     .formMdx(pc),a0
+    moveq   #8,d0
+    move.l  d2,d1
+.2
     lea     vgmTitle(pc),a3
     jsr     desmsg3
     lea     8(sp),sp
@@ -49476,10 +49498,11 @@ vgmInfoText:
     rts
 
 * subformat, AHI, voices: max 25 ch
-.ahi    dc.b    " AHI"
-.null   dc.b    0
-.form   dc.b    "%s VGM2WAV %ldch %s",0
-    even
+.ahi      dc.b    " AHI"
+.null     dc.b    0
+.form     dc.b    "%s VGM2WAV %ldch %s",0
+.formMdx  dc.b    "MDX MDX2WAV %ldch %s",0
+          even
 
 vgmSongChangePossible:
     jsr     findLocalStreamProcess
@@ -49491,6 +49514,11 @@ vgmSongChangePossible:
 
 vgmSong:
     DPRINT  "vgmSong"
+    move.b  vgmActuallyMdx(pc),d1
+    beq     .1
+    rts
+.1
+
  if DEBUG
 	moveq	#0,d0
 	move	songnumber(a5),d0
@@ -49549,6 +49577,22 @@ vgmTrackNumber = *-2
 * This name is recognized in the sample player to engage 22050 Hz out
 wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
                      even
+
+pipe_mdx2wav:
+             dc.l    0 * use homelock for current dir
+             dc.l    .mdxCliName
+             dc.l    .mdxCmdLq
+             dc.l    wavStreamPipeFileLQ
+             dc.l    0 * no setup
+             dc.l    10000 * large stack
+             dc.l    0 * no polling
+             dc.l    0 * additional format string parameter
+
+.mdxCliName  dc.b    "mdx2wav",0
+.mdxCmdLq    dc.b    '%s "%s" -r 22050 -o PIPE:wavHippoStream3/65536/2',10
+             dc.b    0
+             even
+
  
 vgmSetTypeName:
     * Set name.
@@ -49734,6 +49778,23 @@ vgmDeletePollFile:
 id_vgm
     tst.b   uusikick(a5)
     beq     .no
+
+    * Check for MDX
+    push    a0
+    move.l  modulefilename(a5),a0
+.1  tst.b   (a0)+
+    bne     .1
+    subq    #1,a0
+    moveq   #4-1,d1
+.2  ror.l   #8,d0
+    move.b  -(a0),d0
+    dbf     d1,.2
+    or.l    #$20202000,d0
+    cmp.l   #"mdx.",d0
+    lea     vgmActuallyMdx(pc),a0
+    seq     (a0)
+    pop     a0
+    beq     .yes
 
 ;;;    * Check for VGZ
 ;;;    push    a0
