@@ -54901,6 +54901,7 @@ remoteSearch
     dc.l    "nsfe" *
     dc.l    "sap " *
     dc.l    "spc " * 
+    dc.l    "mdx " *
 	dc.l	0
 ;todo: synmod
 
