@@ -670,16 +670,16 @@ init:
     beq     .notPipeW
     * Should be "PIPE:wavHippoStream" for WAV 27710 Hz
     *           "PIPE:wavHippoStream2" for AIFF 27710 Hz
-    *           "PIPE:wavHippoStream3" for WAV 22050 Hz
+    *           "PIPE:wavHippoStream3" for AIFF 22050 Hz
     cmp.b   #"w",5(a0)
     bne     .notPipeW
     DPRINT  "sample PIPE wav bypass"
-    move.b  #3,sampleformat(a5) * WAV decoder
+    move.b  #2,sampleformat(a5) * AIFF decoder
     cmp.b   #"3",19(a0)
     beq     .wavinitPipeBypassLq
     cmp.b   #"2",19(a0)
-    bne     .wavinitPipeBypass
-    move.b  #2,sampleformat(a5) * AIFF decoder
+    beq     .wavinitPipeBypass
+    move.b  #3,sampleformat(a5) * WAV decoder
     bra     .wavinitPipeBypass
 .notPipeW
 

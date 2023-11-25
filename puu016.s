@@ -49532,23 +49532,6 @@ vgmSong:
     rts
  EREM
 
- REM
-pipe_vgm2wav:
-    dc.l    0 * use homelock for current dir
-    dc.l    .vgmCliName
-    dc.l    .vgmCmd
-    dc.l    wavStreamPipeFile
-    dc.l    0 * no setup
-    dc.l    10000 * largeish stack
-    dc.l    0 * no poll routine
-    dc.l    0 * additional format string parameter
-
-.vgmCliName  dc.b    "vgm2wav",0
-.vgmCmd      dc.b    '%s -f 27710 -o PIPE:wavHippoStream/65536/2 -n -l t:vgmlen -i "%s" -r %ld',10
-.sys         dc.b    0
-             even
- EREM
-; REM
 pipe_vgm2wav:
     dc.l    0 * use homelock for current dir
     dc.l    .vgmCliName
@@ -49561,12 +49544,11 @@ pipe_vgm2wav:
 vgmTrackNumber = *-2
 
 .vgmCliName          dc.b    "vgm2wav",0
-.vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -n -l t:vgmlen -i "%s" -r %ld',10
+.vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -p -l t:vgmlen -i "%s" -r %ld',10
 .sys                 dc.b    0
 * This name is recognized in the sample player to engage 22050 Hz out
 wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
                      even
-; EREM
  
 vgmSetTypeName:
     * Set name.
