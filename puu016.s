@@ -49566,7 +49566,7 @@ pipe_vgm2wav:
     dc.l    .vgmCmdLq
     dc.l    wavStreamPipeFileLQ
     dc.l    0 * no setup
-    dc.l    50000 * large stack
+    dc.l    10000 * large stack
     dc.l    vgmPoll
     dc.l    0 * additional format string parameter
 vgmTrackNumber = *-2
@@ -49574,7 +49574,7 @@ vgmTrackNumber = *-2
 .vgmCliName          dc.b    "vgm2wav",0
 .vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -p -l t:vgmlen -i "%s" -r %ld',10
 .sys                 dc.b    0
-* This name is recognized in the sample player to engage 22050 Hz out
+* This name is recognized in the sample player to engage 22050 Hz out AIFF decoder
 wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
                      even
 
