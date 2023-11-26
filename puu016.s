@@ -49498,10 +49498,10 @@ vgmInfoText:
     rts
 
 * subformat, AHI, voices: max 25 ch
-.ahi      dc.b    " AHI"
+.ahi      dc.b    "AHI "
 .null     dc.b    0
-.form     dc.b    "%s VGM2WAV %ldch %s",0
-.formMdx  dc.b    "MDX MDX2WAV %ldch %s",0
+.form     dc.b    "%s %ldch %s(VGM2WAV)",0
+.formMdx  dc.b    "MDX %ldch %s(MDX2WAV)",0
           even
 
 vgmSongChangePossible:
@@ -49585,11 +49585,11 @@ pipe_mdx2wav:
              dc.l    wavStreamPipeFileLQ
              dc.l    0 * no setup
              dc.l    10000 * large stack
-             dc.l    0 * no polling
+             dc.l    mdxPoll * no polling
              dc.l    0 * additional format string parameter
 
 .mdxCliName  dc.b    "mdx2wav",0
-.mdxCmdLq    dc.b    '%s "%s" -r 22050 -o PIPE:wavHippoStream3/65536/2',10
+.mdxCmdLq    dc.b    '%s "%s" -r 22050 -p t:vgmlen -o PIPE:wavHippoStream3/65536/2',10
              dc.b    0
              even
 
@@ -49729,14 +49729,29 @@ vgmPollTrigger:
 
 
 * Try to read the file where vgm2wav has written the length info
+mdxPoll:
+    moveq   #1,d3
+    DPRINT  "mdxPoll!"
+    bra     vgmPoll0
 vgmPoll:
     DPRINT  "vgmPoll!"
+    moveq   #0,d3
+vgmPoll0:
     lea     vgmPollFile(pc),a0
     jsr     plainLoadFile
     tst.l   d0
     beq     .no 
+    move.l  d0,a1
     move.l  d0,a0
-    movem.l (a0),d0/d1/d2
+    moveq   #1,d1       * default song count
+    moveq   #0,d2       * default num of voices
+    move.l  (a1)+,d0    * song length
+    tst.b   d3
+    bne     .mdx
+    move.l (a1)+,d1     * song/track count
+    move.l (a1)+,d2     * num of voices
+.mdx
+
     move.w  d2,vgmVoices
  if DEBUG
     DPRINT  "vgm length=%ld secs, track count=%ld, voices=%ld"
@@ -49758,6 +49773,7 @@ vgmPoll:
 .1
     * Stop polling
     move    #-1,vgmPollCount
+    * Free a0
     jsr     freemem
     bsr     vgmDeletePollFile
 
@@ -49765,12 +49781,12 @@ vgmPoll:
 	beq.b	.no
     bsr     vgmInfoText
     jsr     inforivit_play
-
 .no
     rts
 
 
-vgmDeletePollFile:
+vgmDeletePollFile:  
+    DPRINT  "Delete poll file"
     pushpea vgmPollFile(pc),d1
     lore    Dos,DeleteFile
     rts
