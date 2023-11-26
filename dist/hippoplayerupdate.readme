@@ -161,12 +161,19 @@ New keyboard shortcuts:
   
   Scopes, subsongs, song end detection (for some subformats), 
   AHI output supported.
-  
-- Note on performance: Timidity, GMPlay and vgm2wav are used to
-  convert files to audio on-the-fly and piped through to Hippo
-  using PIPE: provided by the queue-handler. The performance of 
-  queue-handler is important, the older V37 (OS 3.0/3.1) is much 
-  slower than the newer V45 (OS 3.2). 
+
+- MDX music from the Sharp X68000 system playback support using the
+  "mdx2wav" application. These contain 8 FM synthesized channels and 
+  the 68060 at 50MHz is likely not fast enough for smooth playback. 
+  Download http://aminet.net/mus/misc/mdx2wav.lha and place the binary 
+  into C: or Hippo directory. Scopes, song end detection, AHI 
+  output supported.
+
+- Note on performance: Timidity, GMPlay, vgm2wav and mdx2wav are used 
+  to convert files to audio on-the-fly and piped through to Hippo using 
+  PIPE: provided by the queue-handler. The performance of queue-handler 
+  is important, the older V37 (OS 3.0/3.1) is much slower than the newer
+  V45 (OS 3.2). 
 
 
 ------------------------------------------------------------------------------
