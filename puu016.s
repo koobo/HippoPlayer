@@ -55540,6 +55540,10 @@ getPreAndPostfixFromPath
 fetchAndSaveCurrentModule:
     DPRINT  "fetchAndSaveCurrentModule"
     pushm   all
+    * Can't do this if the pipe streamer is already running
+    jsr     streamIsAlive
+    bne     .err
+    
     jsr     getcurrent
     beq     .err
     tst.b   l_remote(a3)
