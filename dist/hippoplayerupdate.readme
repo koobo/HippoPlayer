@@ -65,7 +65,7 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 
 
-# Changes from v2.58 (22.6.2023) to v2.59 (?.?.2023) 
+# Changes from v2.58 (22.6.2023) to v2.59 (29.11.2023) 
 
 ## Fixes:
 
@@ -124,6 +124,8 @@ New keyboard shortcuts:
      in reSID mode.
    - The library also now works on kickstart 1.3 in the original
      playback mode, no need to have a separate kick1.3 lib version.
+   - Improved configuration with environment variables, if not using
+     with Hippo.
 
 - MIDI file playback support:
   - "Prefs/Play-2/MIDI mode" setting chooses which mode is active.
@@ -155,9 +157,9 @@ New keyboard shortcuts:
   - VGM/VGZ   Sega Master System/Mark III, Sega Genesis/Mega Drive, BBC Micro 
   Download http://aminet.net/mus/misc/vgm2wav-gme.lha and place the
   binary into C: or Hippo directory. The CPU usage varies depending on the 
-  format being played. A 060 might not be fast enough for SPC files,
-  a 020 can likely handle AY and SAP, for example.
-  Vgz-files are gzipped, so you need to have a working gzip in C: too.
+  format being played. A 68060@50MHz might not be fast enough for SPC files,
+  a 68020 can likely handle AY and SAP, for example. Vgz-files are gzipped, 
+  so you need to have a working gzip in C: too.
   
   Scopes, subsongs, song end detection (for some subformats), 
   AHI output supported.
@@ -170,10 +172,13 @@ New keyboard shortcuts:
   output supported.
 
 - Note on performance: Timidity, GMPlay, vgm2wav and mdx2wav are used 
-  to convert files to audio on-the-fly and piped through to Hippo using 
-  PIPE: provided by the queue-handler. The performance of queue-handler 
-  is important, the older V37 (OS 3.0/3.1) is much slower than the newer
-  V45 (OS 3.2). 
+  to convert files to audio on-the-fly. Th data is piped through to Hippo 
+  using PIPE: provided by the queue-handler. The performance of
+  queue-handler is important, the older V37 (OS 3.0/3.1) is much slower 
+  than the newer V45 (OS 3.2). 
+
+- Greetz+thanx in no order go to Spot/UpRough, Patrik/UHCTeam, Erique, 
+  Estrayk and Marek Hac for helping with this version.
 
 
 ------------------------------------------------------------------------------

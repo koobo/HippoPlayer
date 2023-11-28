@@ -1,3 +1,6 @@
+FIXED: TODO:
+- ctrl+g won't work when pipe streamer is active
+
 TODO:
 - sample scope with sid+resid:
 -- play and switch tunes
@@ -8,7 +11,7 @@ TODO:
   Running under OS 3.2.2 and Latest Version
 - Guru 8000 0005 with both OctaMixPlayer v7.0 and v7.1 
 
-TODO:
+FIXED: TODO:
 - soundfx: check this identifier, crash?
 
 TODO:

@@ -18,7 +18,7 @@ pt_mline	rs.b	1
 pt_beathoven	rs.b	1
 pt_delicustom	rs.b 	1
 pt_midistream   rs.b    1
-pt_vgm          rs.b    1
+pt_vgm          rs.b    1   * TODO: WARNING: This is 47
 
 * These need a replayer code from the group file
 pt_group_start = 49

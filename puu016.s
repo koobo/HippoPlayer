@@ -37,7 +37,8 @@ ver	macro
 ;	dc.b	"v2.57 (1.4.2023)"
 ;	dc.b	"v2.58฿ (?.?.2023)"
 ;	dc.b	"v2.58 (22.6.2023)"
-	dc.b	"v2.59฿ (?.?.2023)"
+;	dc.b	"v2.59฿ (?.?.2023)"
+	dc.b	"v2.59 (29.11.2023)"
 	endm	
 
  ifnd DEBUG
@@ -2395,7 +2396,7 @@ about_t
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
  dc.b "ญญญ  HippoPlayer "
  ver
- dc.b " " ; padding
+ dc.b "" ; padding
  dc.b " ญญญ",10,3
  dc.b "ญญ          by K-P Koljonen          ญญ",10,3
  dc.b "ญญญ       Hippopotamus Design       ญญญ",10,3
@@ -19640,7 +19641,7 @@ inforivit_xpkload
 	lea	.1(pc),a0
 	lea	probebuffer+8(a5),a1
 	move.l	a1,d0
-	bsr	desmsg
+	jsr	desmsg
 	lea	desbuf(a5),a0
 	bra	putinfo2
 .1	dc.b	"XPK %4s",0
@@ -49311,15 +49312,17 @@ p_vgm:
   p_NOP    * Author
   dc       pt_vgm
   dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke!pf_song
-vgmTitle        ds.b    32    * empty space
+vgmTitle        ds.b    32    * (too much) empty space for formatting
 vgmTempFile     dc.b    "T:hippo."
 vgmTempExt      dc.b    "vgm",0,0
 vgmPollFile     dc.b    "T:vgmlen",0
-                even
-vgmPollCount    dc.w    -1
-vgmVoices       dc.w    0
+* Set to true if actually handling an MDX fil
 vgmActuallyMdx  dc.b    0
                 even
+* VB activated poller: -1 to disable, counts up to a second or so then wraps
+vgmPollCount    dc.w    -1 
+* Detected number of voices from vgm2wav
+vgmVoices       dc.w    0
 
 vgmInit
     ; Reset track number
@@ -49448,6 +49451,7 @@ vgmEnd
     DPRINT  "VGM stream end"
     move.w  #-1,vgmPollCount    * safety
     jsr     p_sample+p_end(pc)
+    ; ... fall through ...
 
 vgmDeleteTempFile
     DPRINT  "Delete VGM temp file"
@@ -49562,8 +49566,8 @@ vgmSong:
 
 pipe_vgm2wav:
     dc.l    0 * use homelock for current dir
-    dc.l    .vgmCliName
-    dc.l    .vgmCmdLq
+    dc.l    vgmCliName
+    dc.l    vgmCmdLq
     dc.l    wavStreamPipeFileLQ
     dc.l    0 * no setup
     dc.l    10000 * large stack
@@ -49571,9 +49575,9 @@ pipe_vgm2wav:
     dc.l    0 * additional format string parameter
 vgmTrackNumber = *-2
 
-.vgmCliName          dc.b    "vgm2wav",0
-.vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -p -l t:vgmlen -i "%s" -r %ld',10
-.sys                 dc.b    0
+vgmCliName          dc.b    "vgm2wav",0
+vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -p -l t:vgmlen -i "%s" -r %ld',10 
+                    dc.b    0
 * This name is recognized in the sample player to engage 22050 Hz out AIFF decoder
 wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
                      even
@@ -49777,6 +49781,7 @@ vgmPoll0:
     jsr     freemem
     bsr     vgmDeletePollFile
 
+    * Update infobox too
 	tst.b	playing(a5)
 	beq.b	.no
     bsr     vgmInfoText
@@ -49798,15 +49803,8 @@ id_vgm
     * Check for MDX
     push    a0
     move.l  modulefilename(a5),a0
-.1  tst.b   (a0)+
-    bne     .1
-    subq    #1,a0
-    moveq   #4-1,d1
-.2  ror.l   #8,d0
-    move.b  -(a0),d0
-    dbf     d1,.2
-    or.l    #$20202000,d0
-    cmp.l   #"mdx.",d0
+    bsr     getFileExtension4
+    cmp.l   #".mdx",d0
     lea     vgmActuallyMdx(pc),a0
     seq     (a0)
     pop     a0
