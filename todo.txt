@@ -1,3 +1,6 @@
+TODO: 
+- big button support for the list mode change button
+
 FIXED: TODO:
 - ctrl+g won't work when pipe streamer is active
 
