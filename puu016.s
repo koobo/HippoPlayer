@@ -37,7 +37,9 @@ ver	macro
 ;	dc.b	"v2.57ﬂ (?.?.2023)"
 ;	dc.b	"v2.57 (1.4.2023)"
 ;	dc.b	"v2.58ﬂ (?.?.2023)"
-	dc.b	"v2.58 (22.6.2023)"
+;	dc.b	"v2.58 (22.6.2023)"
+;	dc.b	"v2.59ﬂ (?.?.2023)"
+	dc.b	"v2.59 (29.11.2023)"
 	endm	
 
  ifnd DEBUG
@@ -413,7 +415,9 @@ MHILIB_SIZE         =   40
 prefs_mhiLib          rs.b      MHILIB_SIZE
 prefs_medfastmemplay  rs.b     1
 prefs_showPositionSlider rs.b  1
-                       rs.b     1 * pad to get even prefs_size
+prefs_residboost      rs.b      1
+prefs_midimode        rs.b      1
+                      rs.b      1 *pad
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -520,6 +524,19 @@ MESSAGE_COMMAND_PRG = "PRGM"
 	WORD		PTch_period	* Channel period
 	WORD		PTch_private1	* Private...
 	
+*******************************************************************************
+*
+* Local stream config structure
+
+    rsreset
+localStream_currentDir     rs.l    1 * Directory to change to, or NULL
+localStream_cliName        rs.l    1 * Command
+localStream_command        rs.l    1 * Full command line with arguments
+localStream_pipe           rs.l    1 * PIPE path for reading
+localStream_setup          rs.l    1 * Setup routine to call or NULL
+localStream_stack          rs.l    1 * Stack requested, or NULL if default
+localStream_poll           rs.l    1 * If streamer is sent CTRL-D this routine is called
+localStream_additionalParam rs.l   1 * Used as the 3rd formatting parameter
 
 *******************************************************************************
 *
@@ -858,6 +875,8 @@ xmaplay_new     rs.b    1
 medfastmemplay_new rs.b  1
 mhiEnable_new   rs.b 1
 residfilter_new rs.b    1
+residboost_new  rs.b    1
+midimode_new    rs.b    1 
 alarmpot_new	rs.l	1
 alarm_new	rs	1
 vbtimer_new	rs.b	1
@@ -955,11 +974,24 @@ mpegadiv	rs.b	1		* MPEGA freq. division
 medmode		rs.b	1		* MED mode
 medrate		rs	1		* MED mixing rate
 sidmode     rs.b    1
+
+RESIDMODE_NORMAL = 0
+RESIDMODE_OVERSAMPLE2 = 1
+RESIDMODE_OVERSAMPLE3 = 2
+RESIDMODE_OVERSAMPLE4 = 3
+RESIDMODE_INTERPOLATE = 4
 residmode   rs.b    1
+
 xmaplay     rs.b    1
 residfilter rs.b    1
+residboost  rs.b    1
 medfastmemplay rs.b     1
-            rs.b    1 * PAD
+
+MIDI_TIMIDITY = 0
+MIDI_GMPLAY   = 1
+MIDI_SERIAL   = 2
+midimode            rs.b    1
+                    rs.b    1 * pad
 *******
 
 sortbuf		rs.l	1		* sorttaukseen puskuri
@@ -1460,8 +1492,12 @@ streamHeaderRDArgs      rs.l    1
 * Set to -1 when starting, set to aget return code when aget exists
 * Used to detect if stream has finished in certain cases.
 streamReturnCode        rs.w    1
+* Pointer to local pipe stream config to be used if not doing aget stream
+streamLocalConfig          rs.l    1
+* Name of the CLI app last used for local streamin
+currentLocalStreamCliName  rs.l    1 
 * Data sturcture for ReadArgs, specifies the input
-streamRDA               rs.b    RDA_SIZEOF
+streamRDA                  rs.b    RDA_SIZEOF
 * Output parsed data from ReadArgs
 streamHeaderArray           rs.l       0
 streamHeaderContentLength   rs.l       1
@@ -1498,6 +1534,14 @@ normalModeChosenModule      rs.l    1
 favoritesModeChosenModule   rs.l    1
 fileBrowserChosenModule     rs.l    1
 searchResultsChosenModule   rs.l    1
+
+* Store here the amount of mods received from the last search
+* This can be used to not force refresh the recent playlist contents
+* if there are no results
+modsFromLastSearch          rs.l    1
+
+* STIL
+stilIndexPtr    rs.l    1
 
 
  if DEBUG
@@ -1547,7 +1591,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	30
+xpl_versio	=	31
 
 
 *********************************************************************************
@@ -1779,6 +1823,15 @@ progstart
 	bne	.poptofront
 
 	* There was no hip already running, launch a new one
+
+    * Or not, if there happens to be QUIT given
+    move.l  sv_argvArray+4(a5),d0
+    beq     .noParms
+    move.l  d0,a0
+    jsr     kirjainta4
+    cmp.l   #"QUIT",d0
+    beq     .eien
+.noParms
 
 	move.l	a4,a6			* hankitaan kopio lukosta
 	move.l	lockhere(a5),d1
@@ -2344,7 +2397,7 @@ about_t
  dc.b "≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠≠",10,3
  dc.b "≠≠≠  HippoPlayer "
  ver
- dc.b " " ; padding
+ dc.b "" ; padding
  dc.b " ≠≠≠",10,3
  dc.b "≠≠          by K-P Koljonen          ≠≠",10,3
  dc.b "≠≠≠       Hippopotamus Design       ≠≠≠",10,3
@@ -3124,26 +3177,32 @@ main:
  ifne EFEKTI
 	jsr	efekti
  endc
+    * Are there any command line parameters from shell?
+    * Also Workbench icon clicks get placed her as arguments.
 	tst.l	sv_argvArray+4(a5)
 	bne.b	.komento0
+    * No, check for startup module.
 	tst.b	startuponoff(a5)
 	beq.b	.komento0
 	tst.b	startup(a5)
 	beq.b	.komento0
 	pushpea	startup(a5),sv_argvArray+4(a5) * Parametriksi startupmoduuli
 	clr.l	sv_argvArray+8(a5)
+    bsr     komentojono
+    bra     .startupModHandled
 .komento0
-	bsr	komentojono			* tutkitaan komentojono.
-
-	* Command line and startup modules handled,
-	* if none of these provided stuff, try the saved
-	* state modules.
-	tst.l 	modamount(a5)
-	bne.b	.skip
+    * No startup module.
+    * Restore the saved state list next.
 	bsr		lockMainWindow
 	jsr	importSavedStateModulesFromDisk
 	bsr		unlockMainWindow
-.skip
+.startupModHandled
+
+    * Finally, append any modules from command line/workbench
+	tst.l	sv_argvArray+4(a5)
+    beq     .noCliParms
+    bsr     komentojono
+.noCliParms
 
 *********************************************************************************
 *
@@ -3647,6 +3706,8 @@ exit
  endif
     jsr     freeStreamHeaderArgs
     jsr     freeStreamerError
+    jsr     freeStreamerUrl
+    jsr     freeSTILData
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -7541,7 +7602,7 @@ omaviesti
 
 .killeri
 	st	exitmainprogram(a5)
-	bra.b	.he
+	bra	.he
 
 
 
@@ -7609,6 +7670,10 @@ signalreceived
 	move	p_liput(a0),d0
 	btst	#pb_song,d0
  	beq	.reet
+    * Special case: VGM task has already stopped, 
+    * can't change to another song at this point.
+    cmp.w   #pt_vgm,p_type(a0)
+    beq     .reet
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne	rbutton13		* next song!
@@ -7628,6 +7693,10 @@ signalreceived
 	move	p_liput(a0),d0
 	btst	#pb_song,d0
  	beq.b	.eipa
+    * Special case: VGM task has already stopped, 
+    * can't change to another song at this point.
+    cmp.w   #pt_vgm,p_type(a0)
+    beq     .eipa
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne	rbutton13		* next song!
@@ -7710,14 +7779,14 @@ signalreceived
 	bsr	settimestart
 .reet0	st	playing(a5)
 	bsr	inforivit_play
-	bsr	start_info
+	jsr	start_info
 .reet
 	rts
 
 .loader	
 	* load error, no module to play
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)	* latausvirhe
-	bra.b	.reet
+	bra 	.reet
 
 .mododo	
 	* init error, no module to play
@@ -8317,6 +8386,8 @@ umph
 	bne.b	.hm1
 
 	move.b	doublebuf(a5),d7	* onko doublebuffering?
+
+    lea     l_filename(a3),a0
     tst.b   l_remote(a3)
     beq.b   .notRem1
     moveq   #0,d7   * disable for remotes!
@@ -8532,19 +8603,19 @@ nupit
 	bsr.b	setknob2
 
 * sample forced sampling rate
-;	lea	sIPULI2,a0
-	lea	sIPULI2-sIPULI(a0),a0
-	moveq	#65535/600,d0		* 65535/max
-	bsr.b	setknob
-;	move	#65535*0/600,d0		* 65535*arvo/max
-	moveq	#0,d0
-	bsr.b	setknob2
+;;	lea	sIPULI2,a0
+;	lea	sIPULI2-sIPULI(a0),a0
+;	moveq	#65535/600,d0		* 65535/max
+;	bsr.b	setknob
+;;	move	#65535*0/600,d0		* 65535*arvo/max
+;	moveq	#0,d0
+;	bsr.b	setknob2
 
 
 
 * ahi rate
-;	lea	ahiG4,a0
-	lea	ahiG4-sIPULI2(a0),a0
+	lea	ahiG4,a0
+;	lea	ahiG4-sIPULI2(a0),a0
 	moveq	#65535/(580-50),d0	* 65535/max
 	bsr.b	setknob
 	move	#65535*50/(580-50),d0	* 65535*arvo/max
@@ -10126,6 +10197,8 @@ rbutton12
 	moveq	#1,d1		* lis‰t‰‰n songnumberia
 
 songSkip
+    DPRINT  "Next/prev song action"
+
 	tst.l	playingmodule(a5)
 	bmi.b	.nosong
 
@@ -10156,14 +10229,13 @@ songSkip
 .nosong
 	rts
 
-
 *******************************************************************************
 * Song number >
 *******
 actionPrevSong
 rbutton13
 	moveq	#-1,d1			* v‰hennet‰‰n songnumberia
-	bra.b	songSkip
+	bra 	songSkip
 
 
 ******************************************************************************
@@ -10192,7 +10264,13 @@ rbutton3
 	move.l	playerbase(a5),a0
 	jsr	p_stop(a0)
 	
-	move	(sp)+,mainvolume(a5)
+	move	(sp)+,mainvolume(a5)    
+ if DEBUG
+    move.l  moduleaddress(a5),d0
+    DPRINT  "module=%lx"
+ endif
+
+
 
 	bra	inforivit_pause
 ;.hehe	rts
@@ -10687,6 +10765,19 @@ rbutton1:
 	* load these modules again before restarting.
 	cmp	#pt_delicustom,playertype(a5)
 	beq	.new
+    * PIPE midi sample? These need a full restart too.
+    cmp     #pt_sample,playertype(a5)
+    bne    .notSmp
+    move.l  modulefilename(a5),a0
+    cmp.b   #"P",(a0)+
+    bne     .notSmp
+    cmp.b   #"I",(a0)+
+    bne     .notSmp
+    cmp.b   #"P",(a0)+
+    bne     .notSmp
+    cmp.b   #"E",(a0)
+    beq     .new
+.notSmp
 	* Same with all EaglePlayers to be safe.
 	* At least Tim Follin crashes.
 	cmp	#pt_eagle_start,playertype(a5)
@@ -10736,9 +10827,10 @@ rbutton1:
 
 .new	moveq	#0,d7
 	tst.l	playingmodule(a5)	* Onko soitettavana mit‰‰n?
-	bmi.b	.nomod
+	bmi 	.nomod
 
 	move.b	doublebuf(a5),d7	* Onko doublebufferinki p‰‰ll‰?
+    lea     l_filename(a3),a0
     tst.b   l_remote(a3)
     beq.b   .notRem1
     moveq   #0,d7 * disable for remotes!
@@ -10978,7 +11070,7 @@ filereq_code
 	lore	Exec,Forbid
 
 	move.b	fileReqSignal(a5),d1	* Send signal, all done
-	bsr	signalit
+	jsr	signalit
 	clr.b	filereqmode(a5)
 
 	clr	filereq_prosessi(a5)	* Lippu: prosessi poistettu
@@ -12482,6 +12574,7 @@ importModuleProgramFromData:
 	
 ;	lea	moduleListHeader(a5),a4
 ;	move.l	a5,a4
+    ;----------------------------------
 .ploop
 
 	* See if additional header should
@@ -12492,9 +12585,10 @@ importModuleProgramFromData:
 	* A remote it is, run filter if available
 	move.l	a6,d3
 	beq.b	.accepted
-	jsr		(a6)
+	jsr		(a6)     * FILTER CALLBACK
 	tst.l	d0
 	bne.b	.accepted
+    * Rejected by filter
 .skipToNext
 	* Skip to next entry
 	cmp.l	d5,a3
@@ -12503,6 +12597,7 @@ importModuleProgramFromData:
 	bne.b	.skipToNext
 	bra		.next
 .accepted
+
 
 	* Is this an url?
 	moveq	#0,d3	* local
@@ -12549,7 +12644,7 @@ importModuleProgramFromData:
 
 	* Copy filename 
 	lea	l_filename(a2),a0
-
+    ; ---------------------------------
     * UTF8 encoding for divider magic: $c3b7
     cmp.b   #$c3,(a3)
     bne     .div0
@@ -12566,7 +12661,7 @@ importModuleProgramFromData:
 	st	l_divider(a2)
 .notDiv2
 .utf8div
-
+    ; ---------------------------------
 	* See if additional header should
 	* be prepended to the line. This indicates
 	* a remote url, it is used to add the base url address.
@@ -12579,13 +12674,16 @@ importModuleProgramFromData:
 	bne.b	.copyHdr
 	subq	#1,a0 * to NULL
 .noHdr
-
+    ; ---------------------------------
 	* Copy chars until line change
-	moveq	#10,d1
+	moveq	#10,d1  * LF
+    moveq   #13,d0  * CR
+    move.w  #"#",a1
+    moveq   #0,d2
 .le	
 	move.b	(a3)+,d2
     * Painfully check for "#song=x"
-    cmp.b   #"#",d2
+    cmp.w   a1,d2 
     bne.b   .1
     cmp.b   (a3),d1
     beq     .1
@@ -12603,20 +12701,27 @@ importModuleProgramFromData:
     beq     .1
     cmp.b   #"g",3(a3)
     bne     .1
-    moveq   #$f,d0
-    and.b   5(a3),d0
+    moveq   #$f,d2
+    and.b   5(a3),d2
+    move.b  d2,l_favSong(a2)
+ if DEBUG
+    push    d0
+    move.l  d2,d0
     DPRINT  "FavSong restored=%ld" 
-    move.b  d0,l_favSong(a2)
+    pop     d0
+ endif
     * Replace with LF to ignore the rest
     move.b  d1,d2
     addq    #7,a3
 .1
-	move.b	d2,(a0)+
+    cmp.b   d0,d2      * Skip CR
+    beq    .le
+	move.b	d2,(a0)+   * Copy!
 	cmp.b	d1,d2
-	bne.b	.le
+	bne 	.le
 	* Replace LF with NULL
 	clr.b	-(a0)
-
+    ; ---------------------------------
 	lea	l_filename(a2),a1
 	tst.b	l_divider(a2)
 	beq.b	.notDiv
@@ -12956,6 +13061,12 @@ doExportModuleProgramToFile:
 komentojono:
 	DPRINT	"Processing command line parameters"
 
+	tst.l	sv_argvArray+4(a5)
+    bne     .something
+    DPRINT  "->nothing"
+    rts
+.something
+
 	* Ensure correct list mode before proceeding
 	jsr	engageNormalMode
 
@@ -13225,6 +13336,8 @@ loadprefs2
 	move.b	prefs_sidmode(a0),sidmode(a5)
 	move.b	prefs_residmode(a0),residmode(a5)
 	move.b	prefs_residfilter(a0),residfilter(a5)
+	move.b	prefs_residboost(a0),residboost(a5)
+	move.b	prefs_midimode(a0),midimode(a5)
 	move.b	prefs_xmaplay(a0),xmaplay(a5)
 	move.b	prefs_medfastmemplay(a0),medfastmemplay(a5)
 	move.b	prefs_favorites(a0),favorites(a5)
@@ -13377,12 +13490,12 @@ sliderit
 	bsr	setknob2
 
 * sampleforcerate
-	lea	sIPULI2-sIPULI(a0),a0
-	moveq	#0,d0
-	move	sampleforcerate(a5),d0
-	mulu	#65535,d0
-	divu	#600-9,d0
-	bsr	setknob2
+;	lea	sIPULI2-sIPULI(a0),a0
+;	moveq	#0,d0
+;	move	sampleforcerate(a5),d0
+;	mulu	#65535,d0
+;	divu	#600-9,d0
+;	bsr	setknob2
 
 
 
@@ -13393,7 +13506,7 @@ sliderit
 	mulu	#65535,d0
 	divu	#580-50,d0
 
-	lea	ahiG4-sIPULI2(a0),a0
+	lea	ahiG4,a0
 	bsr	setknob2
 
 * ahi master volume
@@ -13526,6 +13639,8 @@ saveprefs
 	move.b	sidmode(a5),prefs_sidmode(a0)
 	move.b	residmode(a5),prefs_residmode(a0)
 	move.b	residfilter(a5),prefs_residfilter(a0)
+	move.b	residboost(a5),prefs_residboost(a0)
+	move.b	midimode(a5),prefs_midimode(a0)
 	move.b	xmaplay(a5),prefs_xmaplay(a0)
 	move.b	medfastmemplay(a5),prefs_medfastmemplay(a0)
 	move.b	favorites(a5),prefs_favorites(a0)
@@ -14021,6 +14136,8 @@ prefs_code
 	move.b	sidmode(a5),sidmode_new(a5)
 	move.b	residmode(a5),residmode_new(a5)
 	move.b	residfilter(a5),residfilter_new(a5)
+	move.b	residboost(a5),residboost_new(a5)
+	move.b	midimode(a5),midimode_new(a5)
 	move.b	xmaplay(a5),xmaplay_new(a5)
 	move.b	medfastmemplay(a5),medfastmemplay_new(a5)
 	move.b	favorites(a5),favorites_new(a5)
@@ -14071,7 +14188,7 @@ prefs_code
 	move	kelloke2s-pslider1s(a0),alarmpot_new(a5)
 	move	eskimOs-pslider1s(a0),infosizepot_new(a5)
 	move	sIPULIs-pslider1s(a0),samplebufsizpot_new(a5)
-	move	sIPULI2s-pslider1s(a0),sampleforceratepot_new(a5)
+	;move	sIPULI2s-pslider1s(a0),sampleforceratepot_new(a5)
 	move	ahiG4s-pslider1s(a0),ahi_ratepot_new(a5)
 	move	ahiG5s-pslider1s(a0),ahi_mastervolpot_new(a5)
 	move	ahiG6s-pslider1s(a0),ahi_stereolevpot_new(a5)
@@ -14458,6 +14575,12 @@ exprefs	move.l	_IntuiBase(a5),a6
 	ext.l	d0
 	move.l	d0,priority(a5)
 	move	boxsize_new(a5),boxsize(a5)
+    tst.w   searchLayoutActive(a5)      
+    beq     .sla
+    cmp     #5,boxsize(a5)
+    bhs     .sla
+    move    #5,boxsize(a5)
+.sla    
 	move.b	dclick_new(a5),doubleclick(a5)
 	move.b	startuponoff_new(a5),startuponoff(a5)
 	move	timeout_new(a5),timeout(a5)
@@ -14489,6 +14612,8 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	sidmode_new(a5),sidmode(a5)
 	move.b	residmode_new(a5),residmode(a5)
 	move.b	residfilter_new(a5),residfilter(a5)
+	move.b	residboost_new(a5),residboost(a5)
+	move.b	midimode_new(a5),midimode(a5)
 	move.b	xmaplay_new(a5),xmaplay(a5)
 	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
@@ -14724,7 +14849,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move	timeoutpot_new(a5),kellokes-pslider1s(a0)		
 	move	alarmpot_new(a5),kelloke2s-pslider1s(a0)
 	move	samplebufsizpot_new(a5),sIPULIs-pslider1s(a0)	
-	move	sampleforceratepot_new(a5),sIPULI2s-pslider1s(a0)	
+	;move	sampleforceratepot_new(a5),sIPULI2s-pslider1s(a0)	
 	move	ahi_ratepot_new(a5),ahiG4s-pslider1s(a0)
 	move	ahi_mastervolpot_new(a5),ahiG5s-pslider1s(a0)
 	move	ahi_stereolevpot_new(a5),ahiG6s-pslider1s(a0)
@@ -15001,7 +15126,7 @@ mousemoving2			* P‰ivitet‰‰n propgadgetteja
 .5
 	bsr	psup2		* tfmx mixingrate
 	bsr	psup2b		* samplebufsiz
-	bsr	psup2c		* sampleforcerate
+	;bsr	psup2c		* sampleforcerate
 	bsr	pupmedrate	* med mixing rate
 	
 
@@ -15058,21 +15183,21 @@ pmousebuttons
 	lea	PoU2,a0
 	lea	rpgmode_req(pc),a2
 	bsr 	.check
-	bra.b	.xx
+	bra 	.xx
 
 .3	subq	#2,d0
 	bne.b	.4
 
 	lea	smode2,a0		* ps3m playmode
 	lea	rsmode1_req(pc),a2	
-	bsr.b	.check
+	bsr 	.check
 	lea	smode1,a0		* ps3m state
 	lea	rsmode2_req(pc),a2
-	bsr.b	.check
+	bsr 	.check
 	lea	jommo,a0		* ps3m buffer size
 	lea	rps3mb_req(pc),a2
-	bsr.b	.check
-	bra.b	.xx
+	bsr 	.check
+	bra 	.xx
 	
 					* ahi sivun ohi
 .4	;nop
@@ -15097,6 +15222,12 @@ pmousebuttons
 	bsr.b	.check
 	lea     prefsResidFilter,a0
 	lea	    rresidfilter_req(pc),a2	   * resid mode
+	bsr.b	.check
+	lea     prefsResidBoost,a0
+	lea	    rresidboost_req(pc),a2	   * resid boost
+	bsr.b	.check
+	lea     prefsMidiMode,a0
+	lea	    rmidimode_req(pc),a2	   * resid boost
 	bsr.b	.check
 
 
@@ -15228,7 +15359,7 @@ pupdate:				* Ikkuna p‰ivitys
 .7
 	bsr	psup2			* tfmx mixingrate
 	bsr	psup2b			* samplebufsize
-	bsr	psup2c			* sampleforcerate
+	;bsr	psup2c			* sampleforcerate
 	bsr	pupmedrate		* med mixing rate
 	bsr	psamplecyber	* sample cyber
 	bsr	pmpegaqua		* MPEGA quality
@@ -15238,9 +15369,11 @@ pupdate:				* Ikkuna p‰ivitys
     bsr pxmaplay        * XMAPlay
     bsr presidmode      * reSID mode
     bsr presidfilter    * reSID filter
+    bsr presidboost     * reSID boost
     bsr pmhienable      * MHI enable
     bsr pmhilib         * MHI library
     bsr pmedfastmemplay * MED FastMemPlay
+    bsr pmidimode       * MIDI mode
 
 .x	popm	all
 	rts
@@ -15483,19 +15616,21 @@ gadgetsup2
 .s6
 	dr	rpslider2	* tfmx rate
 	dr	rpslider2b	* samplebufsiz
-	dr	rpslider2c	* sampleforcerate
+	;dr	rpslider2c	* sampleforcerate
 	dr	rsamplecyber	* sample cybercalibration
 	dr	rmpegaqua	* mpega quality
-	dr	rmpegadiv	* mpeda freq division
+	dr	rmpegadiv	* mpega freq division
 	dr	rmedmode	* med mode
 	dr	rmedrate	* med mixing rate
     dr  rsidmode    * sid mode
     dr  rxmaplay    * xmaplay
     dr  rresidmode  * resid mode
     dr  rresidfilter * resid filter
+    dr  rresidboost * resid boost
     dr  rmhienable  * mhi enable
     dr  rmhilib     * mhi lib
     dr  rmedfastmemplay * MED fast mem play
+    dr  rmidimode    * MIDI mode
 
 rval0	moveq	#0,d0
 	bra	prefsgads2
@@ -15756,6 +15891,7 @@ psup2b
 
 ********** force sample rate
 
+ REM
 rpslider2c
 psup2c
 	lea	sIPULI2,a2
@@ -15788,7 +15924,7 @@ psup2c
 .of	dc.b	".....off",0
 .t	dc.b	" %2.2ld.%1.1ldkHz",0
 	even 
-
+ EREM
 
 
 ** Archivers: tempdir, lha jne..
@@ -17615,9 +17751,31 @@ rresidfilter_req
 	bra 	presidfilter
 .x	rts
 
+rresidboost_req
+	lea	residboost00(pc),a0
+
+    pushpea sidmode_callback(pc),d4
+    bsr     listselector
+	bmi.b	.x
+	move.b	d0,residboost_new(a5)
+	bra 	presidboost
+.x	rts
+
+
+rmidimode_req
+	lea	midimode00(pc),a0
+
+    moveq   #0,d4
+    bsr     listselector
+	bmi.b	.x
+	move.b	d0,midimode_new(a5)
+	bra 	pmidimode
+.x	rts
+
+
 rresidmode
 	addq.b	#1,residmode_new(a5)
-	cmp.b	#6,residmode_new(a5)
+	cmp.b	#4,residmode_new(a5)
 	bne.b	.1
 	clr.b	residmode_new(a5)
 .1
@@ -17633,25 +17791,17 @@ presidmode
     subq.b  #1,d0
     beq.b   .1
     lea     residmode04(pc),a0
-    subq.b  #1,d0
-    beq.b   .1
-    lea     residmode05(pc),a0
-    subq.b  #1,d0
-    beq.b   .1
-    lea     residmode06(pc),a0
 .1 
     lea	    prefsResidMode,a1
 	bra	prunt
 
 
 
-residmode00	dc.b	13,6
+residmode00	dc.b	13,4
 residmode01	dc.b	"Normal",0
 residmode02	dc.b	"Oversample 2x",0
 residmode03	dc.b	"Oversample 3x",0
 residmode04	dc.b	"Oversample 4x",0
-residmode05	dc.b	"Interpolate",0
-residmode06	dc.b	"AHI",0
  even
 
 
@@ -17682,6 +17832,63 @@ residfilter01	dc.b	"Internal on",0
 residfilter02	dc.b	"Internal+Ext",0
 residfilter03	dc.b	"All off",0
  even
+
+
+rresidboost
+	addq.b	#1,residboost_new(a5)
+	cmp.b	#4,residboost_new(a5)
+	bne.b	.1
+	clr.b	residboost_new(a5)
+.1
+
+presidboost
+    lea     residboost01(pc),a0
+	move.b	residboost_new(a5),d0
+    beq.b   .1
+    lea     residboost02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residboost03(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     residboost04(pc),a0
+.1 
+    lea	    prefsResidBoost,a1
+	bra	prunt
+
+residboost00	dc.b    6,4
+residboost01	dc.b	"Off",0
+residboost02	dc.b	"2x",0
+residboost03	dc.b	"3x",0
+residboost04	dc.b	"4x",0
+ even
+
+
+rmidimode
+	addq.b	#1,midimode_new(a5)
+	cmp.b	#3,midimode_new(a5)
+	bne.b	.1
+	clr.b	midimode_new(a5)
+.1
+
+pmidimode
+    lea     midimode01(pc),a0
+	move.b	midimode_new(a5),d0
+    beq.b   .1
+    lea     midimode02(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     midimode03(pc),a0
+.1 
+    lea	    prefsMidiMode,a1
+	bra	prunt
+
+midimode00	dc.b    12,3
+midimode01	dc.b	"Timidity",0
+midimode02	dc.b	"GMPlay",0
+midimode03	dc.b	"Serial out",0
+ even
+
 
 
 *** XMAPlay toggle
@@ -18267,7 +18474,7 @@ listselector:
 	move.l	d6,a1
 	move.l	wd_RPort(a1),a1
 	move.l	a3,a3
-	bsr		doDrawButtonFrame
+	jsr		doDrawButtonFrame
 .xx
 	popm	all
 	rts
@@ -19187,7 +19394,7 @@ inforivit_clear_2ndrow:
 
 inforivit_killerps3m
 	lea	var_b,a5
-inforivit_play
+inforivit_play:
 	bsr.b	inforivit_clear
 	tst.l	playingmodule(a5)
 	bpl.b	.huh
@@ -19435,7 +19642,7 @@ inforivit_xpkload
 	lea	.1(pc),a0
 	lea	probebuffer+8(a5),a1
 	move.l	a1,d0
-	bsr	desmsg
+	jsr	desmsg
 	lea	desbuf(a5),a0
 	bra	putinfo2
 .1	dc.b	"XPK %4s",0
@@ -19461,7 +19668,7 @@ inforivit_fimpdecr
 
 inforivit_xfd
 	lea	.1(pc),a0
-	bsr	desmsg	
+	jsr	desmsg	
 	lea	desbuf(a5),a0
 	bra	putinfo
 .1	dc.b	"XFD decrunching...",10
@@ -19605,6 +19812,8 @@ type_notAhi dc.b    0
 * Loota (otsikkopalkki tiedot)
 *******
 
+* Set the start time of the module playback
+* Also stores whether the module playback was started in AHI mode
 settimestart
 	move.b	ahi_use(a5),ahi_use_nyt(a5)	* ahi:n tila talteen
 
@@ -20925,7 +21134,7 @@ rbutton10b
 .n	movem.l	(sp)+,d0-a6
 .x	rts
 
-info_code
+info_code:
 	lea	var_b,a5
 	addq	#1,info_prosessi(a5)
 
@@ -20939,6 +21148,20 @@ info_code
 	moveq	#-1,d0
 	lob	AllocSignal
 	move.b	d0,info_signal2(a5)
+
+    * Switch process current dir so that STIL db can be found
+    move.l  homelock(a5),d1 * This is available in kick2+, PROGDIR:
+    bne     .n1
+    move.l  lockhere(a5),d1 * Fallback option, the current dir
+    beq     .n2
+.n1 
+    lore    Dos,DupLock
+    move.l  d0,d1
+    lob     CurrentDir
+    move.l  d0,d1
+    beq     .n2
+    lob     UnLock
+.n2
 
 	bsr.b	.infocode
 
@@ -21241,7 +21464,16 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.smousemoving
 	bra.b	.idcmpLoop
 
+
 .noMouseMove
+	moveq	#IDCMP_GADGETUP,d0
+	cmp.l	d0,d2
+	bne.b	.noGadgetsUp
+    * This event comes for the slider with mousewheel 
+	bsr	.smousemoving
+	bra 	.idcmpLoop
+
+.noGadgetsUp
 	;cmp.l	#IDCMP_MOUSEBUTTONS,d2
 	moveq	#IDCMP_MOUSEBUTTONS,d0
 	cmp.l	d0,d2
@@ -22074,6 +22306,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	cmp	#pt_sid,playertype(a5)		* PSID
 	bne	.nosid
 
+***************************************
+* PSID
+***************************************
 * SID piisista infoa
 
 	move	#33,info_prosessi(a5)		* PSID info-lippu
@@ -22101,8 +22336,27 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	pushpea	filecomment(a5),(a1)+
 	clr.l	(a1)
 
-	move.l	sp,a1
-	moveq	#12,d5
+    moveq	#12,d5  * allocate 12 lines text buffer initially
+
+    * Check if there is STIL data available
+	
+    moveq   #0,d4
+    jsr     getSTILInfo
+    * a0 = text, to be freed
+    * d0 = length
+    tst.l   d0
+    beq     .noSTIL
+
+    * Add more lines to be allocated
+    move.l  a0,d4
+    * How many 40 char lines does this need 
+    move.l  d0,d1
+
+    divu    #40,d1
+    addq    #1,d1   * round up
+    add     d1,d5
+.noSTIL
+    * Allocate text buffer, amount of lines in d5
 	bsr	.allo2
 	bne.b	.jee9
 	lea	50(sp),sp
@@ -22110,11 +22364,36 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .jee9
 
 	lea	.form(pc),a0
+	move.l	sp,a1       * parameters in
 	move.l	infotaz(a5),a3
 	bsr	.desmsg4
 	lea	50(sp),sp
 
 	bsr	.putcomment
+
+    ;----------------------------------
+    ; Insert STIL data
+
+    tst.l   d4
+    beq     .selvis
+    * d4 now has STIL data
+
+    ; Find end of current buffer
+    move.l	infotaz(a5),a3
+	bsr     .lloppu
+    ; extra space
+    bsr     .putLineChange
+    * put stil stuff there
+
+    move.l  d4,a0
+.copyStil  
+    move.b  (a0)+,(a3)+
+    bne     .copyStil
+
+    ; Free it after copying
+    move.l  d4,a0
+    jsr     freemem
+
 	bra	.selvis
 
 
@@ -22668,7 +22947,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
   even
 
 
-.putcomment
+.putcomment:
 	pushm	d0/d1/a0/a3
 	moveq	#39+1,d1
 	bra.b	.puct
@@ -25101,7 +25380,9 @@ SCOPE_SMALL_FONT_CHANNEL_LIMIT = 8
 ; DPRINT can't be used as scope is now a task,
 ; DPRINT uses dos.library which is not allowed.
 SDPRINT macro
-
+    if SERIALDEBUG
+        DPRINT \1
+    endif
 	endm
 
 * Scope task entry points:
@@ -25509,7 +25790,7 @@ scopeLoop:
 .screenVisible
 
 	tst.b	playing(a5)
-	beq.b	.doNotDraw
+	beq 	.doNotDraw
 
 	* No scopes when AHI
 	;tst.b	ahi_use_nyt(a5)
@@ -25517,11 +25798,11 @@ scopeLoop:
 
 	* Does the active player support scopes?
 	move.l	playerbase(a5),d0
-	beq.b	.doNotDraw
+	beq 	.doNotDrawClear
 	move.l	d0,a0
 	move	p_liput(a0),d0 
 	btst	#pb_scope,d0 
-	beq.b	.doNotDraw
+	beq 	.doNotDrawClear
 
 	* Do not draw if patternmode and no pattern info
 	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
@@ -25535,15 +25816,15 @@ scopeLoop:
 	* Pattern data check
 	tst.l	deliPatternInfo(a5)
 	bne.b	.izOk
-	bra.b	.doNotDraw
+	bra 	.doNotDrawClear
 .noPattern
 	* Check for sample scope support
 	and	#pf_quadscopeUps!pf_quadscopePoke,d0
-	beq.b	.doNotDraw
+	beq 	.doNotDrawClear
 .izOk
 
 	bsr	scopeDrawAreaSizeChangeRequestIsActive
-	bne.b	.doNotDraw
+	bne 	.doNotDraw
 
 	tst.b	d7
 	bne.b	.doDraw
@@ -25563,7 +25844,10 @@ scopeLoop:
 	popm	d5/d6/d7
 	bra.b	.continue
 
-.doNotDraw
+
+; We come here if the current module does not support
+; the current scope mode, ie. the window is cleared.
+.doNotDrawClear
 	* See if clear requested
 	tst.b	d7
 	beq.b	.continue
@@ -25571,7 +25855,11 @@ scopeLoop:
 	moveq	#0,d7
 	bsr	scopeDrawAreaClear
 	jsr	printHippoScopeWindow
-	;bra	.continue - FALL THROUGH
+	bra	.continue 
+    
+; We come here if nothing should be drawn, there is a pause
+; for example. The previous drawn content is left.
+.doNotDraw
 
 .m
 .continue
@@ -25923,7 +26211,7 @@ requestScopeDrawAreaChange
 	sub	s_scopeDrawAreaHeight(a4),d1
 	move	d1,d2
 	or	d0,d2
-	beq.b	.noDiff
+	beq 	.noDiff
 
  if DEBUG 	
 	ext.l 	d0 
@@ -26013,7 +26301,7 @@ scopeWindowChanged
 	SDPRINT	"left=%ld top=%ld width=%ld height=%ld"
  endif
 	* Request again after window move
- 	bsr.b	scopeDrawAreaSizeChangeRequestIsActive
+ 	bsr 	scopeDrawAreaSizeChangeRequestIsActive
 	beq.b 	.nope 
 	move	s_scopeDrawAreaWidthRequest(a4),d0
 	move	s_scopeDrawAreaHeightRequest(a4),d1
@@ -28743,7 +29031,7 @@ noteScroller2:
 	* Keep visual range at 0..99, larger won't fit
 	cmp		#100,d3
 	blo.b	.s
-	sub		#100,d3
+	sub		#100,d3 * TODO: what if still doesn't fit?
 .s
 	divu	#10,d3 
 	lsl.b	#4,d3
@@ -29140,7 +29428,9 @@ loadmodule:
 	* also with the PS3M configuration file.
 	move.l	l_nameaddr(a3),solename(a5)
 	move.b	l_remote(a3),lastLoadedModuleWasRemote(a5)
+
 	* Check if a remote file
+    tst.b   l_remote(a3)
 	beq		.doLoadModule
 
     * This is a remote file.
@@ -29156,8 +29446,10 @@ loadmodule:
     pop     d0
     tst.l   d1
     bne     .streamOk
+    DPRINT  "startStreaming failed, clean up"
     jsr     stopStreaming
     jsr     showStreamerError
+
     jsr     awaitStreamerAndFlush
     lea     .msg(pc),a1
     jsr     request
@@ -29170,16 +29462,10 @@ loadmodule:
 
 .streamOk
 
-    * Special case check: remote mp3 files go through as if
-    * they were normal files, no remote fetching
-;    pushm   d0/a0
-;    lea     l_filename(a3),a0
-;    bsr     id_mp3filename
-;    tst.l   d0
-;    popm    d0/a0
-;    beq     .doLoadModule
-
+    * Bypass the rest of the file loading, to be
+    * continued in sampleplayer PIPE read mechanism later.
     pushm   d0/a0
+    * mpeg stream?
     jsr     streamIsMpegAudio
     tst.l   d0
     popm    d0/a0
@@ -29220,9 +29506,14 @@ loadmodule:
 	* Then do ordinary load, this will also pick 
 	* the TFMX smpl file in the temp dir.
 	move.l	sp,a0	* path to load from
-	move.b	d6,d0   * double buffering flag
+	move.b	d6,d0   * double buffering fla
+    push    a3
 	bsr		.doLoadModule
 	move.l	d0,d7	* save status
+    pop     a3
+    * loadmodule will store the temp filepath address in stack into modulefilename(a5),
+    * put the actual path there, it's needed in module info for example.
+    pushpea l_filename(a3),modulefilename(a5)
 .skip2
 	* Delete TFMX smpl temp file if it is there
 	lea		100(sp),a0
@@ -29854,6 +30145,7 @@ loadfile:
 	;clr.b	executablemoduleinit(a5)
 	clr.b	lod_exefile(a5)
 
+*********************************************************************
 ** Archiven purku
 
 	move.b	-(a0),d0
@@ -29875,11 +30167,14 @@ loadfile:
 	beq.b	.lzx
 	cmp.l	#'ZIP.',d1
 	beq.b	.zip
+	cmp.l	#'VGZ.',d1 * gzipped VGM file
+	beq.b	.vgz
 	* gzip test
 	* ".gzX"
 	and.l	#$ffdfdf00,d0
 	cmp.l	#'.GZ'<<8,d0
 	bne	.nope
+.vgz
 	lea	gzipDecompressCommand,a0
 	moveq	#1,d6	* "Unzipping" message
 	bra.b	.unp
@@ -29894,6 +30189,7 @@ loadfile:
 	moveq	#2,d6
 
 .unp	
+    DPRINT  "Extracting archive!"
 
 	pushm	all
 	* takes type in d6
@@ -29948,9 +30244,14 @@ loadfile:
 	moveq	#0,d5
 
 *** Luodaan dirri
+ if DEBUG
+    move.l  a4,d0
+    DPRINT  "Creating %ls"
+ endif
 
 	move.l	a4,d1
 	lore	Dos,CreateDir
+    DPRINT  "CreateDir=%lx"
 	tst.l	d0
 	beq.b	.onjo
 	move.l	d0,d1
@@ -29962,33 +30263,60 @@ loadfile:
 	move.l	a4,d1
 	moveq	#ACCESS_READ,d2
 	lob	Lock
+    DPRINT  "Lock=%lx"
 
 	move.l	d0,d7
 	beq	.x
 
 *** CD dirriin
 
-	move.l	d0,d1
+ if DEBUG
+    push    d0
+    move.l  d0,d1
+    lea     -100(sp),sp
+    move.l  sp,d2
+    moveq   #99,d3
+    jsr     getNameFromLock
+    move.l  sp,d0
+    DPRINT  "Changing dir1=%s"
+    lea     100(sp),sp
+    pop     d0
+ endif
+
+	move.l	d7,d1
 	lob	CurrentDir
+    * d6 = previous current dir
 	move.l	d0,d6
 
 *** Ajetaan kamat
 
 	pushpea	lod_buf(a5),d1
+ if DEBUG
+    move.l  d1,d0
+    DPRINT  "cmd=%s"
+ endif
 	moveq	#0,d2			* input
 	move.l	nilfile(a5),d3		* output
 	lob	Execute
+    DPRINT  "Execute=%lx"
 
-	* back to old current dir
-	move.l	d7,d1
-	lob	CurrentDir
-
+ if DEBUG
+    move.l  d7,d1
+    lea     -100(sp),sp
+    move.l  sp,d2
+    moveq   #99,d3
+    jsr     getNameFromLock
+    move.l  sp,d0
+    DPRINT  "Changing dir2=%s"
+    lea     100(sp),sp
+ endif
 
 *** Skannataan dirrin filÈt
 
 	move.l	d7,d1
 	pushpea	fileinfoblock(a5),d2
 	lob	Examine
+    DPRINT  "Examine=%lx"
 	tst.l	d0
 	beq	 .x
 
@@ -30000,6 +30328,7 @@ loadfile:
 .loop	
 	move.l	d7,d1
 	lob	ExNext
+    DPRINT  "ExNext=%lx"
 	tst.l	d0
 	beq	.x
 
@@ -30012,6 +30341,7 @@ loadfile:
 	pushpea	fib_FileName+fileinfoblock(a5),d1
 	move.l	#MODE_OLDFILE,d2
 	lob	Open
+    DPRINT  "Open=%lx"
 	move.l	d0,d4
 	beq	.bah
 
@@ -30071,7 +30401,7 @@ loadfile:
 	bsr	identifyFormatsOnly 
 	beq.b .on
 	DPRINT	"Eagle"
-	lea	eagleFormats(pc),a3 
+	lea	eagleFormats,a3 
 	bsr	identifyFormatsOnly 
 	beq.b .on
 
@@ -30128,7 +30458,7 @@ loadfile:
 	st	d5
 	bra.b	.x
 .nah
-
+    DPRINT  "Rejected"
 	move.l	d4,d1
 	lob	Close
 .bah
@@ -30136,8 +30466,22 @@ loadfile:
 	bra	.loop
 
 .x
+
+ if DEBUG
+    move.l  d6,d1
+    lea     -100(sp),sp
+    move.l  sp,d2
+    moveq   #99,d3
+    jsr     getNameFromLock
+    move.l  sp,d0
+    DPRINT  "Changing dir3=%s"
+    lea     100(sp),sp
+ endif
+
+    ; Back to old currentdir
 	move.l	d6,d1
 	lob	CurrentDir
+    DPRINT  "CurrentDir=%lx"
 
 	move.l	d7,d1
 	beq.b	.xx
@@ -30145,15 +30489,17 @@ loadfile:
 .xx
 
 	lea	160(sp),sp
+    DPRINT  "Archive phase finished!"
 
 	tst	d5
 	bne.b	.nope
 
+    DPRINT  "Nothing found"
 * oliko sopivaa file‰?
 	move	#lod_extract,lod_error(a5)
 	bra	.exit
 
-
+*********************************************************************
 
 .nope
 	* Ordinary file load below, archive extraction above.
@@ -30166,6 +30512,9 @@ loadfile:
 ;     tst.l   d0
 ;     beq     .sampleCheck
 
+
+    * Bypass the rest of the file loading, to be
+    * continued in sampleplayer PIPE read mechanism later.
     jsr     streamIsAlive
     beq     .notRemote
     jsr     streamIsMpegAudio
@@ -31284,7 +31633,7 @@ get_med3
  endif
 	moveq	#7,d0
 	push	a6
-	lore	Exec,OldOpenLibrary
+	lore	Exec,OpenLibrary
 	pop	a6
 	move.l	d0,_MedPlayerBase3(a5)
 	rts	
@@ -31368,7 +31717,7 @@ search:
 tutki_moduuli2:
 	DPRINT	"Check where to load"
 	pushm	d1-a6
-	move.l	a0,a4
+	move.l	a0,a4   * module in both a0 and a4, id routines may use either
 	move.l	#1084,d7
 	bsr.b	.do
 	popm	d1-a6
@@ -31424,9 +31773,11 @@ tutki_moduuli2:
 	cmp.l	#"TDZ",d0		* take
 	beq 	.f
 
+    jsr     id_vgm
+    beq     .f
+
 	bsr	id_it			 * IT
 	beq 	.f
-
 
 * tfmx song data?
 
@@ -31460,6 +31811,9 @@ tutki_moduuli2:
 	beq 	.goPublic
 	;bsr	id_digitalmugician2 
 	;beq.b	.goPublic
+
+    jsr     p_midiext\.id
+    beq     .goPublic
 
 ** OctaMed SoundStudio mixattavat moduulit
 	move.l	(a4),d0
@@ -31818,7 +32172,7 @@ tutki_moduuli:
 	bra	.ex
 
 .davelowe
-	pushpea	p_davelowe(pc),playerbase(a5)
+	pushpea	p_davelowe,playerbase(a5)
 	move	#pt_davelowe,playertype(a5)
 	bra	.ex
 
@@ -31978,7 +32332,7 @@ idtest:
 *   a3 = array of formats
 * out:
 *   d0 = 0 if some format accepted the module, ~0 otherwise
-identifyFormatsOnly
+identifyFormatsOnly:
 	* Flag: only identify, do not grab data
 	moveq	#1,d1
 	bra.b 	doIdentifyFormats
@@ -31988,20 +32342,23 @@ identifyFormats
 	clr.b	modulename(a5)
 doIdentifyFormats
 .loop 
-	tst	(a3)
+	tst.l	(a3)
 	beq.b	.notFound
 	move.l	a3,a0
-	add	(a0),a0
+    add.l   (a0),a0
  if DEBUG
-	;pushpea	p_name(a0),d0
-	;DPRINT	"- %s"
+;;;    push    d1
+;;;    move.l  (a3),d0
+;;;	pushpea	p_name(a0),d1
+;;;	DPRINT	"- %ld -> %s"
+;;;    pop     d1
  endif
 	pushm	all
 	jsr	p_id(a0)
 	tst.b	d0
 	popm 	all
 	beq.b 	.found
-	addq	#2,a3
+	addq	#4,a3
 	bra.b	.loop
 .found
 	tst.b	d1 
@@ -32060,7 +32417,7 @@ keyfilename	dc.b	"L:HippoPlayer.Key",0
 * Virittelee nimen tied.nimest‰
 *******
 tee_modnimi:
- 	move.l  #INFO_MODULE_NAME_LEN-1,d1
+ 	move.w  #INFO_MODULE_NAME_LEN-1,d1
 	lea		modulename(a5),a1
 	tst.b	lod_archive(a5)		* Paketista purettuna
 	bne.b	.arc				* otetaan pelkk‰ filename
@@ -33142,6 +33499,10 @@ engageSearchResultsMode:
     bne     .1
     cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
     bne     .1
+    * In recent lists case this is set to -1 when first done.
+    * This will avoid recursive calls if there are no results.
+    tst.l   modsFromLastSearch(a5)
+    ble     .1
     jsr     recentPlaylistsSearch
 .1  
 	popm	all
@@ -33774,7 +34135,7 @@ activateSearchStringGadget:
 *
 *******************************************************************************
 
-importSavedStateModulesFromDisk
+importSavedStateModulesFromDisk:
     tst.b   win(a5)  * do nothing if no window
     beq     .error
 	tst.b	savestate(a5)
@@ -33925,6 +34286,10 @@ importSavedStateModulesFromDisk
 	jsr	resh
 	tst.l	modamount(a5)
 	beq.b	.empty
+    * Special case: if there are mods from cli args do not
+    * start the stored module, as user want to start the cli added mod.
+    tst.l	sv_argvArray+4(a5)
+    bne     .empty
 	jmp	playButtonAction
 .empty
 	rts
@@ -35429,101 +35794,102 @@ clearsound
 * - replayer code is within modules
 * - replayer code is in libraries
 * - TFMX and ProTracker have special handling 
-internalFormats
-	;dr.w	p_protracker 
-	dr.w	p_med 
-	dr.w 	p_mline 
-	dr.w 	p_musicassembler 
-	dr.w 	p_fred 
-	dr.w	p_sidmon1 
-	dr.w 	p_deltamusic 
-	dr.w	p_markii 
-	dr.w 	p_mon
-	dr.w 	p_beathoven 
-	dr.w	p_hippel	* very slow id 
-	dc.w 	0
+internalFormats:
+	;dr.l	p_protracker 
+	dr.l	p_med 
+	dr.l 	p_mline 
+	dr.l 	p_musicassembler 
+	dr.l 	p_fred 
+	dr.l	p_sidmon1 
+	dr.l 	p_deltamusic 
+	dr.l	p_markii 
+	dr.l 	p_mon
+	dr.l 	p_beathoven 
+	dr.l	p_hippel	* very slow id 
+	dc.l	0
 
 * Formats
 * - replayers are in the HippoPlayer.group
-groupFormats
-	dr.w 	p_jamcracker 
-	dr.w 	p_pumatracker 
-	dr.w 	p_futurecomposer13
-	dr.w 	p_futurecomposer14 
-	dr.w 	p_oktalyzer
-	;dr.w	p_tfmx
-	dr.w	p_hippelcoso 
-	dr.w	p_soundmon 
-	dr.w	p_soundmon3 
-	dr.w	p_digibooster 
-	dr.w 	p_digiboosterpro 
-	dr.w	p_thx 
-	dr.w 	p_aon 
-	dr.w	p_gamemusiccreator 
-	dr.w	p_medley 
-	dr.w	p_bendaglish 
-	dr.w	p_sidmon2 
-	dr.w	p_deltamusic1 
-	dr.w	p_soundfx 
-	dr.w	p_gluemon
-	dr.w	p_pretracker 
-	dr.w 	p_custommade 
-	dr.w 	p_sonicarranger
-	dr.w	p_startrekker
-	dr.w	p_voodoosupremesynthesizer
+groupFormats:
+	dr.l 	p_jamcracker 
+	dr.l 	p_pumatracker 
+	dr.l 	p_futurecomposer13
+	dr.l 	p_futurecomposer14 
+	dr.l 	p_oktalyzer
+	;dr.l	p_tfmx
+	dr.l	p_hippelcoso 
+	dr.l	p_soundmon 
+	dr.l	p_soundmon3 
+	dr.l	p_digibooster 
+	dr.l 	p_digiboosterpro 
+	dr.l	p_thx 
+	dr.l 	p_aon 
+	dr.l	p_gamemusiccreator 
+	dr.l	p_medley 
+	dr.l	p_bendaglish 
+	dr.l	p_sidmon2 
+	dr.l	p_deltamusic1 
+	dr.l	p_soundfx 
+	dr.l	p_gluemon
+	dr.l	p_pretracker 
+	dr.l 	p_custommade 
+	dr.l 	p_sonicarranger
+	dr.l	p_startrekker
+	dr.l	p_voodoosupremesynthesizer
  ifne FEATURE_P61A
-	dr.w 	p_player
+	dr.l 	p_player
  endif
- 	dr.w 	p_aon8
-	dc.w 	0
+ 	dr.l 	p_aon8
+    dr.l    p_midistream
+    dr.l    p_vgm
+	dc.l 	0
 
-
-* Formats
-* - replayers provided in eagleplayer plugins
-eagleFormats
-	dr.w	p_synthesis
-	dr.w	p_syntracker
-	dr.w	p_robhubbard2
-	dr.w	p_chiptracker
-	dr.w	p_quartet
-	dr.w	p_facethemusic
-	dr.w	p_richardjoseph
-	dr.w	p_instereo1 
-	dr.w	p_instereo2
-	dr.w	p_jasonbrooke
-	dr.w	p_earache
-	dr.w	p_krishatlelid
-	dr.w	p_richardjoseph2
-	dr.w	p_hippel7
-	dr.w	p_aprosys
-	dr.w	p_hippelst
-	dr.w	p_tcbtracker
-	dr.w	p_markcooksey 
-	dr.w	p_maxtrax
-	dr.w	p_wallybeben
-	dr.w	p_synthpack
-	dr.w	p_robhubbard 
-	dr.w 	p_jeroentel
-	dr.w	p_sonix
-	dr.w	p_quartetst 
+eagleFormats:
+	dr.l	p_synthesis
+	dr.l	p_syntracker
+	dr.l	p_robhubbard2
+	dr.l	p_chiptracker
+	dr.l	p_quartet
+	dr.l	p_facethemusic
+	dr.l	p_richardjoseph
+	dr.l	p_instereo1 
+	dr.l	p_instereo2
+	dr.l	p_jasonbrooke
+	dr.l	p_earache
+	dr.l	p_krishatlelid
+	dr.l	p_richardjoseph2
+	dr.l	p_hippel7
+	dr.l	p_aprosys
+	dr.l	p_hippelst
+	dr.l	p_tcbtracker
+	dr.l	p_markcooksey 
+	dr.l	p_maxtrax
+	dr.l	p_wallybeben
+	dr.l	p_synthpack
+	dr.l	p_robhubbard 
+	dr.l 	p_jeroentel
+	dr.l	p_sonix
+	dr.l	p_quartetst 
 	; Hangs on privileged instruction?
-	;dr.w	p_coredesign
-	dr.w	p_digitalmugician2
-	dr.w	p_musicmaker4
-	dr.w	p_musicmaker8
-	dr.w	p_soundcontrol
-	dr.w	p_stonetracker
-	dr.w	p_themusicalenlightenment
-	dr.w	p_timfollin2
-	dr.w	p_digitalmugician
-	dr.w 	p_jasonpage
-	dr.w	p_specialfx
-	dr.w	p_steveturner
-	dr.w 	p_davidwhittaker
-    dr.w    p_soundmaster
-    dr.w    p_soundprogramminglanguage
-	dr.w	p_activisionpro  	* very slow id
-	dc.w 	0	
+	;dr.l	p_coredesign
+	dr.l	p_digitalmugician2
+	dr.l	p_musicmaker4
+	dr.l	p_musicmaker8
+	dr.l	p_soundcontrol
+	dr.l	p_stonetracker
+	dr.l	p_themusicalenlightenment
+	dr.l	p_timfollin2
+	dr.l	p_digitalmugician
+	dr.l 	p_jasonpage
+	dr.l	p_specialfx
+	dr.l	p_steveturner
+	dr.l 	p_davidwhittaker
+    dr.l    p_soundmaster
+    dr.l    p_soundprogramminglanguage
+    dr.l    p_midiext
+    dr.l	p_activisionpro  	* very slow id
+	dc.l	0	
+
 
 ******************************************************************************
 * Protracker
@@ -36396,6 +36762,7 @@ convert_oldst
 * SID
 ******************************************************************************
 
+p_psid:
 p_sid:	jmp	.init(pc)
 	p_NOP
 	jmp 	sidScopeUpdate(pc)
@@ -36466,12 +36833,12 @@ p_sid:	jmp	.init(pc)
 
     bsr     isPlaysidReSID
     beq     .skip
-
-    bsr     sid_getSidVersion
-    * d0 = detected SID, 0: 6581, not 0: 8580
+    DPRINT  "reSID"
 
     ; -----------------------
     ; Before AllocEmulResource set the operating mode
+    ; These corrspond to playsid OM_RESID_6581, OM_RESID_8580, 
+    ; OM_RESID_AUTO, OM_SIDBLATER_USB
     ; 0 = normal
     ; 1 = resid 6581
     ; 2 = resid 8580
@@ -36482,31 +36849,41 @@ p_sid:	jmp	.init(pc)
     cmp.b   #2,sidmode(a5)
     beq     .m2
     cmp.b   #3,sidmode(a5)
-    bne     .m22
-    * Auto detect
-    DPRINT  "Detected SID=%lx"
-    tst.b   d0
-    beq     .m1
-    bra     .m2
-.m22
-    cmp.b   #4,sidmode(a5)
     beq     .m3
-    * Default option
+    cmp.b   #4,sidmode(a5)
+    beq     .m4
+    * Fallback default option
     move    #OM_NORMAL,d0
     lea     .zero(pc),a0
     bra     .mode
 .m1
-    lea     sidmode02,a0
+    *** reSID 6581
+    lea     sidmode02,a0 
     moveq   #OM_RESID_6581,d0
+    DPRINT  "OM_RESID_6581"
     bra     .cpuCheck
 .m2
+    *** reSID 8580
     lea     sidmode03,a0
     moveq   #OM_RESID_8580,d0
+    DPRINT  "OM_RESID_8580"
     bra     .cpuCheck
-
 .m3
+    *** reSID AUTO
+    lea     sidmode02,a0   * "6581"
+    bsr     sid_getSidVersion
+    * d0 = detected SID, 0: 6581, not 0: 8580
+    beq     .m33
+    lea     sidmode03,a0   * "8580"    
+.m33
+    moveq   #OM_RESID_AUTO,d0
+    DPRINT  "OM_RESID_AUTO"
+    bra     .cpuCheck
+.m4
+    *** SIDBlaster USB
     lea     sidmode05,a0
     moveq   #OM_SIDBLASTER_USB,d0
+    DPRINT  "OM_SIDBLASTER_USB"
     bra     .mode
     ; -----------------------
 .cpuCheck
@@ -36588,23 +36965,28 @@ p_sid:	jmp	.init(pc)
 
     ; -----------------------
 .mode
+    * Copy infobox text into place
     lea     .title(pc),a1
 .a  move.b  (a0)+,(a1)+
     bne.b   .a
 
+    * Additional info in reSID mode
     cmp.b   #OM_RESID_6581,d0
+    beq     .o1
+    cmp.b   #OM_RESID_AUTO,d0
     beq     .o1
     cmp.b   #OM_RESID_8580,d0
     bne     .o2
 .o1 
+    printt "CHECK AHI MODE info"
+
     * Show additional "14-bit" or "AHI" with reSID.
-    * Also set up the AHI specific modulo
     move.l  #" 14-",-1(a1)
     move.l  #"bit"<<8,-1+4(a1)
     move.l  #1,ps3m_sampleDataModulo(a5)
-    cmp.b   #5,residmode(a5)
-    bne     .o2
-    move.l  #2,ps3m_sampleDataModulo(a5)
+;    tst.b   ahi_use_nyt(a5)
+    tst.b   ahi_use(a5)
+    beq     .o2
     move.l  #" AHI",-1(a1)
     clr.b   -1+4(a1)
 .o2
@@ -36617,16 +36999,36 @@ p_sid:	jmp	.init(pc)
     bra     .er
 .o3
 
-    moveq   #0,d1
-    move.b  residmode(a5),d1
-    DPRINT  "Operating mode=%ld resid=%ld" 
+    DPRINT  "Operating mode=%ld" 
     lob     SetOperatingMode
-
+    
+    moveq   #0,d0
+    move.b  residmode(a5),d0
+    DPRINT  "Resid mode=%ld" 
+    lob     SetRESIDMode
+ 
+ if DEBUG
+    moveq   #0,d0
+    moveq   #0,d1
+    move.b  ahi_use(a5),d0
+    move.b  ahi_use_nyt(a5),d1
+    DPRINT  "ahi_use=%lx ahi_use_nyt=%lx"
+ endif
+ 
+    * AHI mode, NULL to disable
+    moveq   #0,d0    
+    tst.b   ahi_use(a5)
+    beq     .noAhi
+    * Set up the AHI specific modulo for scopes
+    move.l  #2,ps3m_sampleDataModulo(a5)
     move.l  ahi_mode(a5),d0
+.noAhi
+    DPRINT  "AHI mode=%lx" 
     lob     SetAHIMode
     
 .skip
     ; -----------------------
+    DPRINT  "Classic init"
 
 	lob	AllocEmulResource
     DPRINT  "AllocEmulResource=%ld"
@@ -36694,12 +37096,13 @@ p_sid:	jmp	.init(pc)
     * reSID Filter settings - after AllocEmulResource
     bsr     isPlaysidReSID
     beq     .nrsf
-    cmp.b   #1,sidmode(a5)
+    cmp.b   #1,sidmode(a5)  * 6510
     beq     .rsf
-    cmp.b   #2,sidmode(a5)
+    cmp.b   #2,sidmode(a5)  * 8580
     beq     .rsf
-    cmp.b   #3,sidmode(a5)
-    bne     .nrsf
+    cmp.b   #3,sidmode(a5)  * AUTO
+    beq     .rsf
+    bra     .nrsf
 .rsf
     moveq   #1,d0   * int on
     moveq   #0,d1   * ext off
@@ -36715,7 +37118,19 @@ p_sid:	jmp	.init(pc)
     moveq   #0,d1   * ext off
 .goFilt
     DPRINT  "Filter=%ld ExtFilter=%ld"
-    lob     SetRESIDFilter 
+    lob     SetRESIDFilter
+    moveq   #0,d0
+    move.b  residboost(a5),d0
+    beq     .nb
+    * 0 = off
+    * 1 = 2x
+    * 2 = 3x
+    * 3 = 4x
+    * 0 and 1 do nothing (multiply by 0 or 1), so add 1
+    addq    #1,d0
+.nb
+    DPRINT  "boost=%ld"
+    lob     SetRESIDBoost
 .nrsf
     ; -----------------------
 
@@ -36871,8 +37286,15 @@ p_sid:	jmp	.init(pc)
 
 .volume
     push    d0
+    move.l	_SIDBase(a5),a0
+    * Call this on kick 1.3 too even if not in "resid mode", if new enough lib
+    cmp     #1,LIB_VERSION(a0)
+    bne     .11
+    cmp     #6,LIB_REVISION(a0)
+    bhs     .22
     bsr     isPlaysidReSID
     beq.b   .11
+.22
     move.l	_SIDBase(a5),a6
     move    mainvolume(a5),d0
     jsr     _LVOSetVolume(a6)
@@ -36944,6 +37366,7 @@ p_sid:	jmp	.init(pc)
 *   d0 = non-zero: 8580
 sid_getSidVersion:
     moveq   #0,d0
+    push    a0    
     move.l  moduleaddress(a5),a0
     cmp.l   #"PSID",(a0)
     bne     .noheader
@@ -36961,6 +37384,8 @@ sid_getSidVersion:
     seq     d0
 .v1    
 .noheader
+    pop     a0
+    tst     d0
     rts
 
 * Calculate song speed and Hz
@@ -36975,7 +37400,7 @@ sid_getSongSpeed:
 .1  move.l  #(709379+28419/4),d0
     divu    d1,d0
     ext.l   d0
-    move    d0,d1
+    move.l  d0,d1
     divu    #50,d0
     ext.l   d0
     divu    #10,d1
@@ -37280,9 +37705,14 @@ isPlaysidReSID:
     move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
-	cmp     #5,LIB_REVISION(a0)
+	cmp     #6,LIB_REVISION(a0)
 	blo.b   .noRESID
-    move.l  LIB_IDSTRING(a0),a0
+    * Require 020 for reSID/SIDBlaster stuff
+    move.l  (a5),a0
+    btst	#AFB_68020,AttnFlags+1(a0)
+	beq.b   .noRESID
+
+;    move.l  LIB_IDSTRING(a0),a0
 ;    cmp.b   #"1",16(a0)
 ;    bne.b   .noRESID
 ;    cmp.b   #"5",18(a0)
@@ -37313,6 +37743,8 @@ playSidInRESIDMode:
     lob     GetOperatingMode * output in d0, d1
     tst     d0
     beq     .no
+    cmp     #OM_RESID_AUTO,d0
+    beq     .y
     cmp     #OM_RESID_6581,d0
     beq     .y
     cmp     #OM_RESID_8580,d0
@@ -39276,7 +39708,7 @@ p_med:
 	jmp	.medend(pc)
 	jmp	.medstop(pc)
 	jmp	.medcont(pc)
-	p_NOP
+	jmp .medvol(pc)
 	jmp	.medsong(pc)
 	jmp	.eteen(pc)
 	jmp	.taakse(pc)
@@ -39284,14 +39716,13 @@ p_med:
 	jmp .id_med(pc)
 	jmp	.author(pc)
 	dc.w pt_med
-.flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song
+.flgs	dc	pf_stop!pf_cont!pf_poslen!pf_kelaus!pf_song!pf_scope
 	dc.b	"MED "
 .nam1	dc.b	"     "
-.nam2	dc.b	"      ",0
-
+.nam2	dc.b	"        ",0
 .pahk1  dc.b	"4ch",0
 .pahk2  dc.b	"5-8ch",0
-.pahk3	dc.b	"1-64ch",0
+.pahk3	dc.b	"%ldch mix",0
 .a_	dc.b	"Teijo Kinnunen",0
 
  even
@@ -39303,9 +39734,16 @@ p_med:
 .medvb
 	move.l	moduleaddress(a5),a0
 	move	46(a0),pos_nykyinen(a5)
-	move.l	8(a0),a0
-	move	506(a0),pos_maksimi(a5)
-	rts
+
+    bsr     getMEDLength
+    move    d0,pos_maksimi(a5)
+    bsr     MEDPatternUpdate
+ 	rts
+
+.medvol
+    * TODO
+    rts
+
 
 .eteen
 	movem.l	d0/d1/a0,-(sp)
@@ -39317,9 +39755,9 @@ p_med:
 	blo.b	.a
 	clr	d1
 .a	move	d1,46(a0)
-;	clr	44(a0)
-;	clr	48(a0)
-;	clr.b	50(a0)
+ 	;clr	44(a0)
+    ;clr	48(a0)
+	;clr.b	50(a0)
 	move	d1,pos_nykyinen(a5)
 	movem.l	(sp)+,d0/d1/a0
 	rts
@@ -39354,7 +39792,7 @@ p_med:
 	move.l	(a0),.nam1
 	cmp.l	#"MMD2",(a0)		* onko mmd2+? poistetaan kelaus..
 	blo.b	.olde
-	and	#~pf_kelaus!pf_poslen,(a1)
+	and	#~pf_kelaus,(a1)
 .olde
 	bsr	whatgadgets
 
@@ -39384,7 +39822,7 @@ p_med:
 	
 
 	move.l	moduleaddress(a5),a0
-	move	506(a1),pos_maksimi(a5)
+	;move	506(a1),pos_maksimi(a5)
 
 	move.l	8(a0),a1		* MMD0song *song
 	add.l	a0,a1			* reloc
@@ -39401,6 +39839,8 @@ p_med:
 
 	cmp.b	#3,d0
 	bhs 	.error2
+
+    move    534(a1),d3      * MMD2song: mixing channels, 0 means 4
 
 * d0:
 * 0 = 4ch   medplayer
@@ -39428,7 +39868,16 @@ p_med:
 	lea	.pahk2(pc),a1
 	subq.b	#1,d0
 	beq.b	.di
-	lea	.pahk3(pc),a1
+
+    push    a0
+	;lea	.pahk3(pc),a1
+    lea     .pahk3(pc),a0
+    moveq   #0,d0
+    move    d3,d0
+    jsr     desmsg
+    lea     desbuf(a5),a1
+    pop     a0
+
 .di	move.b	(a1)+,(a0)+
 	bne.b	.di
 
@@ -39500,6 +39949,8 @@ p_med:
 	bsr.b	.setmodnum
 	move.l	moduleaddress(a5),a0
  	bsr 	.playmodule
+    * Initial call
+    bsr     MEDPatternUpdate
 	movem.l	(sp)+,d1-a6
 	moveq	#0,d0
 	rts
@@ -39659,6 +40110,10 @@ p_med:
 	moveq	#_LVOMEDStopPlayerM,d0
 .do7	jsr	(a6,d0)
 
+    lea     MEDPatternInfoPtr(pc),a1
+    move.l  (a1),a0
+    clr.l   (a1)
+    jsr     freemem
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
 
@@ -39698,6 +40153,220 @@ p_med:
 	bra	idtest
 
 
+MEDPatternUpdate:
+    tst.b   medrelocced(a5)
+    beq     .no
+
+    lea     MEDPatternInfoPtr(pc),a2
+    tst.l   (a2)
+    bne     .1
+    move.l  #PI_Stripes+4*64,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    move.l  d0,(a2)
+
+.1
+	move.l	moduleaddress(a5),a1
+
+.mmd0
+    move.l  MEDPatternInfoPtr(PC),a0
+    move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+    move.l  a0,deliPatternInfo(a5)
+
+    * Set current pattern position:
+    * MMD0->pline
+    move    44(a1),PI_Pattpos(a0)
+
+    * Get current pattern:
+    * MMD0->pblock
+    move    42(a1),d0
+    lsl     #2,d0
+
+    * MMD0->blockarr
+    move.l  16(a1),a2
+    * Get MMD0Block corresponding to d0
+    move.l  (a2,d0),a2
+
+    cmp.l   #"MMD1",(a1)
+    bhs     .mmd1
+
+    pushpea .ConvertNoteMMD0(pc),PI_Convert(a0)
+
+    * MMD0Block->numtracks    
+    moveq   #0,d0
+    move.b  (a2),d0
+    move.w  d0,PI_Voices(a0)
+
+    * Calc number of bytes to next row: 3 bytes per channel
+    mulu    #3,d0
+    move.l  d0,PI_Modulo(a0)
+
+    * MMD0Block->lines
+    moveq   #0,d0
+    move.b  1(a2),d0
+    addq    #1,d0   * 0 means 1
+    move.w  d0,PI_Pattlength(a0)
+
+    * Set stripes
+    * Skip MMD0Block header
+    addq    #2,a2
+    lea     PI_Stripes(a0),a0
+    move.l  a2,(a0)+
+    addq    #3,a2
+    move.l  a2,(a0)+
+    addq    #3,a2
+    move.l  a2,(a0)+
+    addq    #3,a2
+    move.l  a2,(a0)+
+
+
+
+    rts
+
+.mmd1
+    pushpea .ConvertNoteMMD1(pc),PI_Convert(a0)
+
+    * MMD1Block->numtracks    
+    moveq   #0,d0
+    move.w  (a2),d0
+    move.w  d0,PI_Voices(a0)
+
+    * Calc number of bytes to next row: 4 bytes per channel
+    lsl.l   #2,d0
+    move.l  d0,PI_Modulo(a0)
+
+    * MMD0Block->lines
+    move.w  2(a2),d0
+    addq    #1,d0   * 0 means 1
+    move.w  d0,PI_Pattlength(a0)
+
+    ; Skip over MMD1Block header
+    addq    #8,a2
+    ; BlockInfo with additional command pages is ignored
+
+    * Set stripes
+    move    PI_Voices(a0),d0
+    subq    #1,d0
+    lea     PI_Stripes(a0),a0
+.str
+    move.l  a2,(a0)+
+    addq    #4,a2
+    dbf     d0,.str
+    rts
+
+.no
+    clr.l   deliPatternInfo(a5)
+    rts
+
+* Called by the PI engine to get values for a particular row
+
+* MMD0 block format
+* The 3-byte structure looks like this (each letter corresponds to one bit):
+*    xynnnnnn iiiicccc dddddddd
+*
+*    n = note number (0 - $3F). 0 = ---, 1 = C-1, 2 = C#1...
+*    i = the low 4 bits of the instrument number
+*    x = the 5th bit (#4) of the instrument number
+*    y = the 6th bit (#5) of the instrument number
+*    c = command number (0 - $F)
+*    d = databyte ($00 - $FF)
+
+
+.ConvertNoteMMD0
+	moveq	#0,D1		; Sample number
+	moveq	#0,D3		; Command argument
+    
+    * Note number
+    moveq   #%00111111,d0
+    and.b   (a0),d0
+    
+    move.b  1(a0),d1
+    lsr.b   #4,d1
+    
+    moveq   #$f,d2
+    and.b   1(a0),d2
+
+    * 6th bit of sample numb
+    moveq   #%01000000,d3
+           ;#%00100000
+    and.b   (a0),d3
+    lsr.b   #1,d3
+    or.b    d3,d1
+
+    * 5th bit of sample numb
+    move.w  #%10000000,d3
+           ;#%00010000
+    and.b   (a0),d3
+    lsr.b   #3,d3
+    or.b    d3,d1
+
+    move.b  2(a0),d3
+
+	rts
+
+;    The note structures, which are 4 bytes long in MMD1 modules, are
+;    arranged exactly as in MMD0 modules (i.e. L0T0, L0T1... L1T0, L1T1..).
+;
+;        xnnnnnnn xxiiiiii cccccccc dddddddd
+;
+;    n = note number (0 - $7F, 0 = ---, 1 = C-1...)
+;    i = instrument number (0 - $3F)
+;    c = command ($00 - $FF)
+;    d = data byte ($00 - $FF)
+;    x = undefined, reserved for future expansion. MUST BE SET TO ZERO,
+;        AND MASKED OUT WHEN READING THE NOTE OR INSTRUMENT NUMBER.
+
+
+.ConvertNoteMMD1
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+    
+    * Note number
+    moveq   #$7f,d0
+    and.b   (a0),d0
+    
+    moveq   #$3f,d1
+    and.b   1(a0),d1
+
+    move.b  2(a0),d2
+    move.b  3(a0),d3
+	rts
+
+MEDPatternInfoPtr
+        dc.l     0
+
+* Out:
+*   d0 = Length of MMD0/MMD2 module in positions
+getMEDLength:
+	move.l	moduleaddress(a5),a0
+    tst.b   medrelocced(a5)
+    beq     .no
+
+    * MMD0song, MMD2song
+	move.l	8(a0),a1
+    * MMD0song: songlen
+    * MMD2song: number of sections
+	move	506(a1),d0
+
+    cmp.l   #"MMD2",(a0)
+    blo     .ok
+
+    * safety check: assume at least one section
+    cmp     #1,d0
+    blo     .no
+
+    ; **playseqtable
+    move.l  508(a1),a1
+    ; get pointer to first PlaySeq
+    move.l  (a1),a1
+    ; read the length
+    move    40(a1),d0
+.ok
+    rts
+
+.no
+    moveq   #0,d0
+    rts
 
 
 ******************************************************************************
@@ -40990,7 +41659,7 @@ thx_author
 .a 	dc.b	"Dexter & Pink/aBYSs",0
 	even 
 
-p_thx
+p_thx:
 	jmp	.init(pc)
 	jmp .ahxCIAInterrupt(pc)
 	p_NOP   ; vb not used
@@ -41303,18 +41972,19 @@ p_thx
 	move.b	.ahx_pvtTrack(a0),d1
 	lea	232(a0),a0	* Next channel data 
 
-	* If bit 7 of byte 6 is 1, track 0 is included. 
-	* If it is 0, track 0 was empty, and is
-        * therefore not saved with the module, to save space.
+	* If bit 7 of byte 6 is 0, track 0 is included. 
+	* If it is 1, track 0 was empty, and is
+    * therefore not saved with the module, to save space.
 	tst.b	6(a1)
-	bmi.b	.notZero
-	* Track 0 not included.
+	bmi.b	.trackZeroEmpty
+	* Track 0 is included.
 	tst.b	d1
-	bne.b	.1
+    bpl     .1
 	* Track 0 is an empty stripe
 .goZero	clr.l	(a3)+
 	rts
-.notZero
+.trackZeroEmpty
+    * Subtract one as track 0 is not there.
 	subq.b	#1,d1
 	bmi.b	.goZero
 .1
@@ -42607,7 +43277,7 @@ p_sample:
     jsr     inforivit_connecting
 .notAlive
     move.l  a4,a0
-    bsr     startStreaming
+    jsr     startStreaming
 .noCurrent
     * a0 = filename to read from
     tst.l   d0
@@ -42636,7 +43306,7 @@ p_sample:
 ;	pushpea	probebuffer(a5),d4
 	pushpea	kokonaisaika(a5),d5
 
-	move.b	samplecyber(a5),d7
+	move.b	samplecyber(a5),d6
 ;	move.b	cybercalibration(a5),d6
 	move.l	calibrationaddr(a5),d7
 
@@ -43514,6 +44184,13 @@ id_delicustom
 	dc.l DTP_CustomPlayer
 .id3_end
 
+
+******************************************************************************
+*
+* EP formats
+* - replayers provided in eagleplayer plugins
+*
+******************************************************************************
 
 
 ******************************************************************************
@@ -48329,6 +49006,840 @@ p_specialfx
 .lbC0003C6	RTS
 
 
+******************************************************************************
+* MIDI (serial output)
+******************************************************************************
+
+p_midiext:
+  jmp      .init(pc)
+  jmp      deliPlay(pc)
+  p_NOP
+  jmp      deliEnd(pc)
+  jmp      deliStop(pc)
+  jmp      deliCont(pc)
+  jmp      deliVolume(pc)
+  jmp      deliSong(pc)
+  jmp      deliForward(pc)
+  jmp      deliBackward(pc)
+  p_NOP
+  jmp      .id(pc)
+  jmp      deliAuthor(pc)
+  dc       pt_midiext
+  dc       pf_end
+  dc.b     "MIDI (serial out)   [DP]",0
+	        
+.path dc.b "delimidi",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0<<16|9,d0
+	bra		deliLoadAndInit 
+      
+.id
+    cmp.b   #MIDI_SERIAL,midimode(a5)
+    bne     id_midi\.no
+
+id_midi
+    cmp.l   #"MThd",(a4)
+    bne     .no
+    cmp.l   #6,4(a4)
+    bne     .no
+    cmp.w   #3,8(a4)
+    bhi     .no
+    moveq   #0,d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
+
+
+* In:
+*   a0 = path
+getFileExtension4:
+.1  tst.b   (a0)+
+    bne     .1
+    subq    #1,a0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    move.b  -(a0),d0
+    ror.l   #8,d0
+    or.l    #$20202020,d0   * to lowercase
+    rts
+    
+* In:
+*   a0 = path
+* Out:
+*   d0 = true if path has ".mid" or ".midi" extension
+hasMidiExtension:
+    bsr     getFileExtension4
+    cmp.l   #".mid",d0
+    beq     .yes
+    cmp.l   #"midi",d0
+    beq     .yes
+    moveq   #0,d0
+    rts
+.yes
+    moveq   #1,d0
+    rts
+
+
+
+******************************************************************************
+* MIDI (Timidity, GMPlay)
+******************************************************************************
+
+
+p_midistream:
+  jmp      .init(pc)
+  p_NOP     * CIA   
+  p_NOP     * VB
+  jmp       .end(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  p_NOP    * Song
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      .id(pc)
+  p_NOP    * Author
+  dc       pt_midistream
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+.title
+  dc.b     "MIDI                    ",0
+.tempFile  dc.b    "T:hippo.midi",0
+           even
+
+.id
+    tst.b   uusikick(a5)
+    beq     .no
+
+    cmp.b   #MIDI_GMPLAY,midimode(a5)
+    beq     id_midi
+
+    cmp.b   #MIDI_TIMIDITY,midimode(a5)
+    bne     .no
+
+    push    a0
+    move.l  (a5),a0
+    move    AttnFlags(a0),d0
+    pop     a0      
+    * Require at least 020
+	btst	#AFB_68020,d0
+    beq     id_midi\.no
+    * ...and an FPU
+    and     #AFF_68881!AFF_68882!AFF_FPU40,d0
+    bne     id_midi
+.no
+    moveq   #-1,d0
+    rts
+
+.init
+    DPRINT  "MIDI stream init"
+    lea     .tempFile(pc),a0
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    bsr     plainSaveFile
+    bmi     .initError
+    DPRINT  "saved to temp"
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)    
+
+    * Start streaming
+    lea     .tempFile(pc),a0
+    pushpea pipe_Timidity(pc),d0
+    cmp.b   #MIDI_TIMIDITY,midimode(a5)
+    beq     .ti
+    pushpea pipe_GMPlay(pc),d0
+.ti
+    jsr     startLocalStreaming
+    DPRINT  "startStreaming=%lx"
+    tst.l   d0
+    beq     .streamError
+
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "stream is %s"
+ endif
+    * Point sampleplayer to the pipe stream
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc) 
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    bsr     .deleteTempFile
+    * D0 = error code
+    rts
+
+.ok
+    * Copy some title info
+    lea     midimode01,a0
+    cmp.b   #MIDI_TIMIDITY,midimode(a5)
+    beq     .11
+    lea     midimode02,a0
+.11     
+    lea     .title+5(pc),a1
+    move.b  #"(",(a1)+
+.22
+    move.b  (a0)+,(a1)+
+    bne     .22
+    subq    #1,a1
+    move.b  #")",(a1)+
+    clr.b   (a1)
+
+
+    * Sample init OK
+    moveq   #0,d0
+    rts
+
+
+
+.initError
+    moveq   #-1,d0
+    rts
+
+.streamError    
+    DPRINT  "MIDI stream error!"
+    bsr     .deleteTempFile
+
+    ; Send CTRL-C to streamer if possible
+    bsr     stopStreaming
+    ; If this was midi flushing needs to be done if timidity
+    ; is running, othewise flush will get stuck with an empty pipe
+    jsr     findLocalStreamProcess
+    bne     .flush
+    DPRINT  "MIDI: wait for streamer to exit"
+    jsr     awaitStreamer
+    bra     .1
+.flush
+    DPRINT  "MIDI: flush and wait for streamer to exit"
+    jsr     awaitStreamerAndFlush
+.1
+    lea     .msgMidi(pc),a1
+    jsr     request
+
+    moveq   #-1,d0
+    rts
+
+.msgMidi
+    dc.b    "Error starting MIDI!",0
+    even
+
+.end
+    DPRINT  "MIDI stream end"
+    jsr     p_sample+p_end(pc)
+
+.deleteTempFile
+    DPRINT  "Delete MIDI temp file"
+    push    d0
+    pushpea .tempFile(pc),d1
+    lore    Dos,DeleteFile
+    pop     d0
+    rts
+
+pipe_GMPlay:
+    dc.l    .gmCurrentDir
+    dc.l    .gmPlayCliName
+    dc.l    .gmPlayCommand
+    dc.l    aiffStreamPipeFile
+    dc.l    .setGMPlayDriverEnvVar
+    dc.l    0 * no special stack
+    dc.l    0 * no poll routine
+    dc.l    0 * additional formatting parameter
+
+.gmCurrentDir:   dc.b    "gm:",0
+.gmPlayCliName:  dc.b    "gmplay",0
+.gmPlayCommand:  dc.b    '%s OUTPUT=file QUIET FREQUENCY=27710 "%s"',10,0
+                 even
+
+
+
+.setGMPlayDriverEnvVar:
+    pushpea .gmEnvVarName(pc),d1
+    pushpea .gmEnvVarValue(pc),d2  * value
+    moveq   #-1,d3               * size or -1 for null terminated string
+    move.l  #GVF_GLOBAL_ONLY,d4  * global variable
+    lore    Dos,SetVar           * set it
+    DPRINT  "SetVar=%ld"
+    rts
+
+.gmEnvVarName:
+    dc.b    "CyberSound/SoundDrivers/file_Destination",0
+.gmEnvVarValue:
+    dc.b    "PIPE:wavHippoStream2/65536/2",0
+    even
+
+pipe_Timidity:
+    dc.l    .timidityDir
+    dc.l    .timidityCliName
+    dc.l    .timidityCmd
+    dc.l    wavStreamPipeFile
+    dc.l    0 * no setup
+    dc.l    0 * no special stack
+    dc.l    0 * no poll routine
+    dc.l    0 * additional formatting parameter
+
+.timidityDir      dc.b    "timidity:",0    
+.timidityCliName  dc.b    "timidity",0
+.timidityCmd      dc.b    '%s -id -Ow1S -s27710 -o PIPE:wavHippoStream/65536/2 "%s"',10,0
+    even
+
+
+******************************************************************************
+* VGM
+******************************************************************************
+
+p_vgm:
+  jmp      vgmInit(pc)
+  p_NOP     * CIA   
+  jmp      vgmPollTrigger(pc)     * VB
+  jmp       vgmEnd(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  jmp      vgmSong(pc)
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      id_vgm(pc)
+  p_NOP    * Author
+  dc       pt_vgm
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke!pf_song
+vgmTitle        ds.b    32    * (too much) empty space for formatting
+vgmTempFile     dc.b    "T:hippo."
+vgmTempExt      dc.b    "vgm",0,0
+vgmPollFile     dc.b    "T:vgmlen",0
+* Set to true if actually handling an MDX fil
+vgmActuallyMdx  dc.b    0
+                even
+* VB activated poller: -1 to disable, counts up to a second or so then wraps
+vgmPollCount    dc.w    -1 
+* Detected number of voices from vgm2wav
+vgmVoices       dc.w    0
+
+vgmInit
+    ; Reset track number
+    clr.w   vgmTrackNumber
+    clr.w   vgmVoices
+
+vgmInit0
+    DPRINT  "VGM stream init"
+ if DEBUG
+    move.l  moduleaddress(a5),d0
+    DPRINT  "module=%lx"
+ endif
+
+
+    * Temp file should a correct extension for vgm2wav
+    move.b  vgmActuallyMdx(pc),d0
+    bne     .mdx
+    
+    move.l  moduleaddress(a5),a4
+    bsr     vgmGet4
+    lea     vgmTempExt(pc),a0
+    move.l  d0,(a0)
+    cmp.b   #' ',2(a0)
+    bne     .11
+    clr.b   2(a0)
+    bra     .33
+.11
+    cmp.b   #' ',3(a0)
+    bne     .33
+    clr.b   3(a0)
+.33
+
+.mdx
+    lea     vgmTempFile(pc),a0
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    bsr     plainSaveFile
+    bmi     .outOfMem
+    DPRINT  "saved to temp"
+
+    bsr     vgmSetTypeName
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)    
+
+    * Start streaming, url:
+    lea     vgmTempFile(pc),a0
+    * pipe specification:
+    pushpea pipe_vgm2wav(pc),d0
+    move.b  vgmActuallyMdx(pc),d1
+    beq     .44
+    pushpea pipe_mdx2wav(pc),d0
+.44
+    jsr     startLocalStreaming
+    DPRINT  "startStreaming=%lx"
+    tst.l   d0
+    beq     .streamError
+
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "VGM stream is %s"
+ endif
+    * Point sampleplayer to the pipe stream
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc) 
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    bsr     vgmDeleteTempFile
+    * D0 = error code
+    rts
+
+.ok
+    ; Enable polling for music length
+    clr.w   vgmPollCount
+    ; Update info also
+    bsr     vgmInfoText
+
+    * Sample init OK
+    moveq   #0,d0
+    rts
+
+.outOfMem
+    moveq   #ier_nomem,d0
+    rts
+
+.initError
+    moveq   #-1,d0
+    rts
+
+.streamError    
+    DPRINT  "VGM stream error!"
+    bsr     vgmDeleteTempFile
+
+    ; Send CTRL-C to streamer if possible
+    bsr     stopStreaming
+    ; If this was midi flushing needs to be done if timidity
+    ; is running, othewise flush will get stuck with an empty pipe
+    jsr     findLocalStreamProcess
+    bne     .flush
+    DPRINT  "VGM: wait for streamer to exit"
+    jsr     awaitStreamer
+    bra     .1
+.flush
+    DPRINT  "VGM: flush and wait for streamer to exit"
+    jsr     awaitStreamerAndFlush
+.1
+    lea     .msg(pc),a1
+    move.b  vgmActuallyMdx(pc),d0
+    beq     .2
+    lea     .msg2(pc),a1
+.2
+    jsr     request
+
+    moveq   #-1,d0
+    rts
+
+.msg
+  dc.b    "Error starting 'vgm2wav'",0
+.msg2
+  dc.b    "Error starting 'mdx2wav'",0
+  even
+
+vgmEnd
+    DPRINT  "VGM stream end"
+    move.w  #-1,vgmPollCount    * safety
+    jsr     p_sample+p_end(pc)
+    ; ... fall through ...
+
+vgmDeleteTempFile
+    DPRINT  "Delete VGM temp file"
+    push    d0
+    pushpea vgmTempFile(pc),d1
+    lore    Dos,DeleteFile
+    pop     d0
+    rts
+
+* Generate info text about the format
+vgmInfoText:
+    lea     -8(sp),sp
+    move.l  moduleaddress(a5),a4
+    bsr     vgmGet4
+    clr.l   (sp)
+    clr.l   4(sp)
+
+    move.l  sp,a0
+    moveq   #4-1,d1
+.l  rol.l   #8,d0
+    cmp.b   #" ",d0
+    beq     .ll    
+    move.b  d0,(a0)+
+    dbf     d1,.l
+.ll
+
+    move.l  sp,d0
+    moveq   #0,d1
+    move.w  vgmVoices(pc),d1
+
+    pushpea .ahi(pc),d2
+    tst.b    ahi_use(a5)
+    bne     .1
+    addq.l  #4,d2
+;    pushpea .null(pc),d2
+.1
+    lea     .form(pc),a0
+    move.b  vgmActuallyMdx(pc),d3
+    beq     .2
+    lea     .formMdx(pc),a0
+    moveq   #8,d0
+    move.l  d2,d1
+.2
+    lea     vgmTitle(pc),a3
+    jsr     desmsg3
+    lea     8(sp),sp
+
+    rts
+
+* subformat, AHI, voices: max 25 ch
+.ahi      dc.b    "AHI "
+.null     dc.b    0
+.form     dc.b    "%s %ldch %s(VGM2WAV)",0
+.formMdx  dc.b    "MDX %ldch %s(MDX2WAV)",0
+          even
+
+vgmSongChangePossible:
+    jsr     findLocalStreamProcess
+    DPRINT  "vgmSongChangePossible=%lx"
+    tst.l   d0
+    rts
+
+; stream task is still in Wait even if vgm2wav has exited
+
+vgmSong:
+    DPRINT  "vgmSong"
+    move.b  vgmActuallyMdx(pc),d1
+    beq     .1
+    rts
+.1
+
+ if DEBUG
+	moveq	#0,d0
+	move	songnumber(a5),d0
+	DPRINT	"Select %ld"
+ endif
+    move.l  #SIGBREAKF_CTRL_D,d3    * Next track signal
+    lea     vgmTrackNumber(pc),a0
+    move    (a0),d1
+    cmp     d0,d1       * same?
+    beq     .x
+    move    d0,(a0)
+    sub     d1,d0
+    bpl.b   .next
+    move.l  #SIGBREAKF_CTRL_E,d3    * Previous track signal
+.next
+
+    bsr      vgmSongChangePossible
+    beq     .x
+    lore    Exec,Forbid
+    move.l  d0,a1
+    move.l  d3,d0
+    lob     Signal
+    lob     Permit
+    DPRINT  "Change track signal!"
+    ; Enable polling for music length for this track
+    clr.w   vgmPollCount
+.x
+    rts
+
+ REM
+.restart
+    DPRINT  "restarting"
+    bsr     vgmEnd
+    bsr     vgmInit0
+    tst.l   d0
+    bpl.b   .ok
+    DPRINT  "Song change failed %ld"
+.ok 
+    rts
+ EREM
+
+pipe_vgm2wav:
+    dc.l    0 * use homelock for current dir
+    dc.l    vgmCliName
+    dc.l    vgmCmdLq
+    dc.l    wavStreamPipeFileLQ
+    dc.l    0 * no setup
+    dc.l    10000 * large stack
+    dc.l    vgmPoll
+    dc.l    0 * additional format string parameter
+vgmTrackNumber = *-2
+
+vgmCliName          dc.b    "vgm2wav",0
+vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -p -l t:vgmlen -i "%s" -r %ld',10 
+                    dc.b    0
+* This name is recognized in the sample player to engage 22050 Hz out AIFF decoder
+wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
+                     even
+
+pipe_mdx2wav:
+             dc.l    0 * use homelock for current dir
+             dc.l    .mdxCliName
+             dc.l    .mdxCmdLq
+             dc.l    wavStreamPipeFileLQ
+             dc.l    0 * no setup
+             dc.l    10000 * large stack
+             dc.l    mdxPoll * no polling
+             dc.l    0 * additional format string parameter
+
+.mdxCliName  dc.b    "mdx2wav",0
+.mdxCmdLq    dc.b    '%s "%s" -r 22050 -p t:vgmlen -o PIPE:wavHippoStream3/65536/2',10
+             dc.b    0
+             even
+
+ 
+vgmSetTypeName:
+    * Set name.
+    * vgz filename is "gzData", copy the original filename
+ 	move.w  #INFO_MODULE_NAME_LEN-1,d1
+	move.l	solename(a5),a0
+	lea		modulename(a5),a1
+    jsr     tee_modnimi\.copy
+    rts
+
+;    move.l  moduleaddress(a5),a4
+;    bsr     vgmGet4
+;    lea     vgmTitle(pc),a0
+;    move.l  d0,(a0)+
+;    rts
+ REM
+    cmp.l   #"VGM ",d0
+    beq     .vgm
+    clr.b   (a0)
+    rts
+
+.vgm
+    move.b  #"v",(a0)+
+    * Put version number
+
+    * reverse BCD  0x00000171 -> v1.71
+    *              0x17010000
+    move.l  8(a4),d0 
+    swap    d0
+    * 0x1701
+    moveq   #'0',d2
+    add.b   d2,d0
+    move.b  d0,(a0)+
+    move.b  #".",(a0)+
+    ror     #8,d0
+    * d0 = 0x17
+    moveq   #$f,d1
+    and     d0,d1
+    lsr.b   #4,d0
+    add.b   d2,d0
+    add.b   d2,d1
+    move.b  d0,(a0)+
+    move.b  d1,(a0)+
+    clr.b   (a0)
+    rts
+ EREM
+
+* In:
+*   a4 = module
+* Out:
+*   d0 = NULL, or a 4-code for supported subtype
+vgmGet4:
+    move.l  #"VGM ",d0
+    cmp.l   #"Vgm ",(a4)
+    beq     .ok
+
+    move.l  #"AY  ",d0
+    cmp.l   #"ZXAY",(a4)
+    beq     .ok
+
+    move.l  #"GBS ",d0
+    cmp.l   #("GBS"<<8)+1,(a4)
+    beq     .ok
+
+    move.l  #"GYM ",d0
+    cmp.l   #"GYMX",(a4)
+    beq     .ok
+
+    move.l  #"HES ",d0
+    cmp.l   #"HESM",(a4)
+    beq     .ok
+
+    move.l  #"KSS ",d0
+    cmp.l   #"KSCC",(a4)
+    beq     .ok
+    cmp.l   #"KSSX",(a4)
+    beq     .ok
+
+    move.l  #"NSF ",d0
+    cmp.l   #"NESM",(a4)
+    beq     .ok
+
+    move.l  #"NSFE",d0
+    cmp.l   #"NSFE",(a4)
+    beq     .ok
+
+    move.l  #"SAP ",d0
+    cmp.l   #("SAP"<<8)+$d,(a4)
+    beq     .ok
+
+    move.l  #"SPC ",d0
+    cmp.l   #"SNES",(a4)
+    beq     .ok
+    moveq    #0,d0
+.ok 
+    tst.l   d0
+    rts
+
+;;  case BLARGG_4CHAR('Z','X','A','Y'):  return "AY";
+;;  case BLARGG_4CHAR('G','B','S',0x01): return "GBS";
+;;  case BLARGG_4CHAR('G','Y','M','X'):  return "GYM";
+;;  case BLARGG_4CHAR('H','E','S','M'):  return "HES";
+;;  case BLARGG_4CHAR('K','S','C','C'):
+;;  case BLARGG_4CHAR('K','S','S','X'):  return "KSS";
+;;  case BLARGG_4CHAR('N','E','S','M'):  return "NSF";
+;;  case BLARGG_4CHAR('N','S','F','E'):  return "NSFE";
+;;  case BLARGG_4CHAR('S','A','P',0x0D): return "SAP";
+;;  case BLARGG_4CHAR('S','N','E','S'):  return "SPC";
+;;  case BLARGG_4CHAR('V','g','m',' '):  return "VGM";
+
+* Called from VB interrupt.
+* Will signal the streamer task using an interval.
+* Intent is to make the streamer call the poll callback
+* in task scope, which then will check if the song lenght
+* info is available.
+vgmPollTrigger:
+    lea     vgmPollCount(pc),a0
+    move    (a0),d0
+    bmi     .2
+    addq    #1,d0
+    and     #$7f,d0
+    move    d0,(a0)
+    bne     .2
+
+    lore    Exec,Forbid
+    move.l  streamerTask(a5),d0
+    beq     .1
+    move.l  d0,a1
+    move.l  #SIGBREAKF_CTRL_D,d0
+    lob     Signal 
+.1  lob     Permit
+.2  rts
+
+
+
+* Try to read the file where vgm2wav has written the length info
+mdxPoll:
+    moveq   #1,d3
+    DPRINT  "mdxPoll!"
+    bra     vgmPoll0
+vgmPoll:
+    DPRINT  "vgmPoll!"
+    moveq   #0,d3
+vgmPoll0:
+    lea     vgmPollFile(pc),a0
+    jsr     plainLoadFile
+    tst.l   d0
+    beq     .no 
+    move.l  d0,a1
+    move.l  d0,a0
+    moveq   #1,d1       * default song count
+    moveq   #0,d2       * default num of voices
+    move.l  (a1)+,d0    * song length
+    tst.b   d3
+    bne     .mdx
+    move.l (a1)+,d1     * song/track count
+    move.l (a1)+,d2     * num of voices
+.mdx
+
+    move.w  d2,vgmVoices
+ if DEBUG
+    DPRINT  "vgm length=%ld secs, track count=%ld, voices=%ld"
+    tst.l   d0
+ endif
+    * Store result if there is something
+    bmi     .noTime
+    divu    #60,d0
+    move.w  d0,kokonaisaika(a5)
+    swap    d0
+    move.w  d0,kokonaisaika+2(a5)
+.noTime
+    * Validate track count
+    subq    #1,d1
+    bmi     .1
+    cmp     #64,d1
+    bhs     .1
+    move.w  d1,maxsongs(a5)
+.1
+    * Stop polling
+    move    #-1,vgmPollCount
+    * Free a0
+    jsr     freemem
+    bsr     vgmDeletePollFile
+
+    * Update infobox too
+	tst.b	playing(a5)
+	beq.b	.no
+    bsr     vgmInfoText
+    jsr     inforivit_play
+.no
+    rts
+
+
+vgmDeletePollFile:  
+    DPRINT  "Delete poll file"
+    pushpea vgmPollFile(pc),d1
+    lore    Dos,DeleteFile
+    rts
+
+id_vgm
+    tst.b   uusikick(a5)
+    beq     .no
+
+    * Check for MDX
+    push    a0
+    move.l  modulefilename(a5),a0
+    bsr     getFileExtension4
+    cmp.l   #".mdx",d0
+    lea     vgmActuallyMdx(pc),a0
+    seq     (a0)
+    pop     a0
+    beq     .yes
+
+;;;    * Check for VGZ
+;;;    push    a0
+;;;    move.l  modulefilename(a5),a0
+;;;.1  tst.b   (a0)+
+;;;    bne     .1
+;;;    subq    #1,a0
+;;;    moveq   #4-1,d1
+;;;.2  ror.l   #8,d0
+;;;    move.b  -(a0),d0
+;;;    dbf     d1,.2
+;;;    or.l    #$20202000,d0
+;;;    cmp.l   #"vgz.",d0
+;;;    bne     .noGz
+;;;    moveq   #0,d0
+;;;    move.w  (a4),d0
+;;;    cmp.w   #$1f8b,(a4)
+;;;.noGz
+;;;    pop     a0
+;;;    beq     .yes
+
+    bsr     vgmGet4
+    beq     .no
+.yes
+    moveq   #0,d0   * yes
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
 
 ******************************************************************************
 * XMAPlay060
@@ -51262,6 +52773,10 @@ plainLoadFile:
 *  d0 = Written bytes or -1 if error
 plainSaveFile:
 	pushm	d1-a6
+ if DEBUG
+    move.l   a0,d1
+    DPRINT "Saving %ld bytes to %s"
+ endif
 	moveq	#-1,d7
 	move.l	a1,d4
 	move.l 	d0,d5
@@ -51283,6 +52798,10 @@ plainSaveFile:
 	lob		Close
 .openErr 
 	move.l	d7,d0
+ if DEBUG
+    DPRINT  "->%ld"
+    tst.l   d0
+ endif
 	popm	d1-a6 
 	rts
 
@@ -51354,12 +52873,11 @@ SPECTRUM_TOTAL set SPECTRUM_TOTAL+2*FFT_LENGTH*2  ; words
 	add	#FFT_LENGTH*2,a0
 	move.l	a0,s_spectrumImagData(a4)
 
-	bsr	prepareSpectrumSineTable
-	bsr.b	prepareSpectrumVolumeTable
-	bsr.b	prepareSpectrumMuluTable
-	bsr.b	prepareSpectrumExpTable
-
-	st	s_spectrumInitialized(a4)
+	bsr     prepareSpectrumSineTable
+	bsr 	prepareSpectrumVolumeTable
+	bsr 	prepareSpectrumMuluTable
+	bsr 	prepareSpectrumExpTable
+    st	s_spectrumInitialized(a4)
 	moveq	#1,d0
 	rts
 	
@@ -52879,6 +54397,8 @@ rkoSearch
 
 stationsSearch
 	moveq	#SEARCH_STATIONS,d7
+    * Special case with empty results
+    move.l  #-1,modsFromLastSearch(a5)
 	bra 	remoteSearch
 
 recentPlaylistsSearch
@@ -53117,11 +54637,33 @@ remoteSearch
 	* Import data
 	* This will also set l_remote and l_nameaddr
 	* to correct values for remote files.
+
+    * Set filter for modland entries
 	lea		.modlandFilter(pc),a0
 	cmp.b	#SEARCH_MODLAND,d7
-	beq.b	.3
+	beq.b	.yesModl
+    * Default: no filter
 	sub.l	a0,a0
+.yesModl
+
+    * Check if playlist entries already have an url.
+    * If yes, let's not append the default baseurl in d6.
+    * New data is in a3.
+    cmp.b   #"h",(a3)
+    bne     .3
+    cmp.b   #"t",1(a3)
+    bne     .3
+    cmp.b   #"t",2(a3)
+    bne     .3
+    cmp.b   #"p",3(a3)
+    bne     .3
+    * Playlist entry started with an url, let's not append
+    * the default.
+    moveq   #0,d6
+
 .3	jsr		importModuleProgramFromDataSkipHeader
+    DPRINT  "modsFromLastSearch=%ld"
+    move.l  d0,modsFromLastSearch(a5)
 	move.l	d0,modamount(a5)
 
 	move.l	a3,a0   
@@ -53363,6 +54905,18 @@ remoteSearch
 	dc.l	"wb  "
 	dc.l    "tme "
 	dc.l	"xm  "
+    dc.l    "vgm " * vgm2wav
+    dc.l    "vgz " *
+    dc.l    "ay  " *
+    dc.l    "gbs " *
+    dc.l    "gym " *
+    dc.l    "hes " *
+    dc.l    "kss " *
+    dc.l    "nsf " *
+    dc.l    "nsfe" *
+    dc.l    "sap " *
+    dc.l    "spc " * 
+    dc.l    "mdx " *
 	dc.l	0
 ;todo: synmod
 
@@ -53615,7 +55169,20 @@ fetchRemoteFile:
     moveq   #0,d0
 .copy
     addq    #1,d0
-	move.b	(a2)+,(a3)+
+	move.b	(a2)+,d2
+    * Remove suspect chars such as ()*?'"
+    cmp.b   #"(",d2
+    beq     .sanity
+    cmp.b   #")",d2
+    beq     .sanity
+    cmp.b   #"*",d2
+    beq     .sanity
+    cmp.b   #"?",d2
+    bne     .gog
+.sanity
+    moveq   #"_",d2
+.gog
+    move.b  d2,(a3)+
 	dbeq	d1,.copy
     cmp     #4,d0
     bls.b   .skip
@@ -53972,6 +55539,10 @@ getPreAndPostfixFromPath
 fetchAndSaveCurrentModule:
     DPRINT  "fetchAndSaveCurrentModule"
     pushm   all
+    * Can't do this if the pipe streamer is already running
+    jsr     streamIsAlive
+    bne     .err
+    
     jsr     getcurrent
     beq     .err
     tst.b   l_remote(a3)
@@ -54245,10 +55816,22 @@ combSortNodeArray
 *
 ***************************************************************************
 
-streamPipeFile  dc.b    "PIPE:hippoStream",0
-agetHeadersFile dc.b    "T:agetheaders",0
-    even
+* Name returned for aget style stream (network bytes)
+streamPipeFile      dc.b    "PIPE:hippoStream",0
+* Name returned for WAV style stream (Timidity)
+wavStreamPipeFile  dc.b    "PIPE:wavHippoStream",0
+* Name returned for PCM/AIFF style stream (GMPlay)
+aiffStreamPipeFile dc.b    "PIPE:wavHippoStream2",0
+agetHeadersFile     dc.b    "T:agetheaders",0
+                    even
 
+* Start local pipe stream
+* In:
+*   d0 = PIPE stream config
+startLocalStreaming:
+    * Reset the aget return code to uninitialized value
+    move.w  #-1,streamReturnCode(a5)
+    bra     startStreaming0
 
 startNewStreaming:
     * Reset the aget return code to uninitialized value
@@ -54259,22 +55842,23 @@ startNewStreaming:
 * Returns if streaming is ongoing already or has been finished.
 * In:
 *   a0 = url
+*   d0 = PIPE stream config, or NULL for aget operation
 * Out:
 *   a0 = stream name to read from
 *   d0 = true, or false if error
 startStreaming:
-    pushm   d1-d7/a1-a6
-    DPRINT  "*** startStreaming ***"
-
-    tst.b   uhcAvailable(a5)
-    beq     .x
-
     moveq   #0,d0
+startStreaming0:
+    pushm   d1-d7/a1-a6
+    DPRINT  "*** startStreaming *** local=%lx"
+    move.l  d0,d4
 
+    push    a0
     lore    Exec,Forbid
     move.l  streamerTask(a5),d6
     move.w  streamReturnCode(a5),d7
     lob     Permit
+    pop     a0
 
  if DEBUG
     push    d0
@@ -54287,22 +55871,32 @@ startStreaming:
 
     * Task is already running?
     tst.l   d6
-    bne     .y
+;    bne     .y
+    beq     .nope
+    * Exit early, reurn pipe file
+    tst.l   streamLocalConfig(a5)
+    bne     .localIsActive
+    bra     .y
+.nope
     * Task is not running, did it finish the previous operation?
     * streamReturnCode(a5) is -1 if not done.
     tst.w   d7
     bpl     .y
+
+    * Store local stream config, or NULL
+    move.l  d4,streamLocalConfig(a5)
 
 ;    tst.l   streamerTask(a5)
 ;    bne     .y
     jsr     setMainWindowWaitPointer
 
     DPRINT  "startStreaming"
+    bsr     freeStreamerUrl
  if DEBUG
     move.l  a0,d0
     DPRINT  "url=%s"
  endif
-
+    move.l  a0,d5   * URL pointer here for later
     move.l  a0,a1
 .1  tst.b   (a1)+
     bne     .1
@@ -54316,10 +55910,27 @@ startStreaming:
 .2  move.b  (a0)+,(a1)+
     bne     .2
 
+    ; Clear SINGLE for later use
     moveq   #0,d0
     moveq   #SIGF_SINGLE,d1
     lore    Exec,SetSignal
 
+    ;-----------------------------------
+    ; Local pipe stream start
+    tst.l   streamLocalConfig(a5)
+    beq     .notLocalPipe
+    DPRINT  "start local pipe stream"
+    pushpea wavStreamerProcessTags(pc),d1
+    bra     .isLocalPipe
+.notLocalPipe
+    ;-----------------------------------
+    ; UHC stream start
+
+    moveq   #0,d0   * status: fail
+    tst.b   uhcAvailable(a5)
+    beq     .x
+
+    DPRINT  "Start aget"
     * Capture aget output into a file
     pushpea agetOutputFile(pc),d1
     move.l  #MODE_NEWFILE,d2
@@ -54327,9 +55938,12 @@ startStreaming:
     DPRINT  "aget output open=%lx"
     move.l  d0,streamerProcessOutputHandle
     beq     .x
-
     pushpea streamerProcessTags(pc),d1
-    lob     CreateNewProc
+
+.isLocalPipe
+
+;    pushpea streamerProcessTags(pc),d1
+    lore    Dos,CreateNewProc
     DPRINT  "CreateNewProc=%lx"
     beq     .error
 
@@ -54344,7 +55958,32 @@ startStreaming:
     DPRINT  "Streamer task failed to start"
     bra     .error
 .ok
-
+    
+    ; ---------------------------------
+    ;; MIDI stream? 
+    * streamerUrl(a5) no longer valid
+    tst.l   streamLocalConfig(a5)
+    beq     .notLocalPipee
+ if DEBUG
+    move.l  d5,d0
+    DPRINT  "Local pipe verify: %s"
+ endif
+    * Wait a bit and check if it's still running
+    moveq   #2*50,d1
+    lore    Dos,Delay
+    bsr     findLocalStreamProcess
+    DPRINT  "Local pipe process=%lx"
+    * status fail?
+    tst.l   d0
+    beq     .x
+    DPRINT  "Local pipe verified"
+.localIsActive
+    move.l  streamLocalConfig(a5),a0
+    move.l  localStream_pipe(a0),a0
+    DPRINT  "Local pipe bypass"
+    bra     .localPipeStream
+.notLocalPipee
+    ; ---------------------------------
 
     * Wait here until things are looking good
     DPRINT  "verify stream"
@@ -54374,6 +56013,8 @@ startStreaming:
     beq     .verifyLoop
 
 .done
+    
+    
     lea     agetHeadersFile(pc),a0
     bsr     plainLoadFile
     DPRINT  "load headers=%lx len=%ld"
@@ -54409,23 +56050,28 @@ startStreaming:
 
 .y
     lea     streamPipeFile(pc),a0
+
+
+.localPipeStream
     moveq   #1,d0   * status: ok
 .x
+    DPRINT  "status=%lx (0 is fail)"
+
     jsr     clearMainWindowWaitPointer
     popm    d1-d7/a1-a6
     rts
 
 .error
-    DPRINT  "error!"
-    ;move.l  streamerProcessOutputHandle(pc),d1
-    ;beq.b   .er
-    ;lore    Dos,Close
-.er
+    DPRINT  "error! closing output"
+;    move.l  streamerProcessOutputHandle(pc),d1
+;    beq.b   .er
+;    clr.l   streamerProcessOutputHandle
+;    lore    Dos,Close
+;.er
     moveq   #0,d0   * status: error
     bra     .x
 
 streamerProcessTags
-    dc.l    NP_Entry,streamerEntry
     dc.l    NP_Output
 streamerProcessOutputHandle
     dc.l    0
@@ -54433,13 +56079,24 @@ streamerProcessOutputHandle
     * Close it ourselves
     dc.l    NP_CloseOutput,0
     dc.l    NP_Name,.name
+    dc.l    NP_Entry,streamerEntry
     dc.l    TAG_END
 
-.name   
+.name
     dc.b    "HiP-streamer",0
 agetOutputFile
     dc.b    "T:agetout",0
     even
+
+* SystemTagList will auto-close the parent streams
+* with SYS_Asynch=TRUE
+wavStreamerProcessTags
+    dc.l    NP_Entry,streamerEntry
+    dc.l    NP_Name,streamerProcessOutputHandle\.name
+    dc.l    NP_CloseOutput,0
+    dc.l    NP_CloseInput,0
+    dc.l    TAG_END
+
 
 * Checks whether streamer is alive
 * Out:
@@ -54455,7 +56112,8 @@ streamIsAlive:
     popm    d0
  endif
     rts
-*
+
+******************************************************************************
 *
 * Streamer process
 *
@@ -54465,6 +56123,7 @@ streamerEntry:
     rsreset
 .uhcPathFormatted   rs.b    50
 .agetCmdFormatted   rs.b    100
+.buffer             rs.b    0
 .agetArgsFormatted  rs.b    1000
 .varsSize           rs.b    0
    
@@ -54483,6 +56142,15 @@ streamerEntry:
     pushpea agetHeadersFile(pc),d1
     lore    Dos,DeleteFile
 
+    ; ---------------------------------
+    ; Local stream check
+    
+    tst.l   streamLocalConfig(a5)
+    bne     .handleLocalStream
+
+    ; ---------------------------------
+    ; Launch with "aget"
+    
     pushpea .envVarName(pc),d1     * variable name
     pushpea .uhcPathFormatted(a4),d2     * output buffer
     moveq   #50-1,d3            * space available
@@ -54514,11 +56182,9 @@ streamerEntry:
     lea     .agetArgsFormatted(a4),a3
     jsr     desmsg3
 
-    lea     streamerUrl(a5),a1
-    move.l  (a1),a0
-    clr.l   (a1)
-    jsr     freemem
+    bsr     freeStreamerUrl
 
+.argsDone
     * length of args
     lea     .agetArgsFormatted(a4),a0
     move.l  a0,a1
@@ -54553,14 +56219,7 @@ streamerEntry:
 .a
 
     * Manual closing of the output file handle, so it can be read below.
-    lea     streamerProcessOutputHandle(pc),a0
-    move.l  (a0),d1
-    clr.l   (a0)
-    tst.l    d1
-    beq.b   .b
-    lob      Close
-    DPRINT  "stream:Close agetout"
-.b
+    bsr     .closeOutputHandle
 
     * Check aget output for errors.
     moveq   #0,d7
@@ -54583,8 +56242,10 @@ streamerEntry:
     moveq   #0,d7
 .t
 
-    DPRINT  "stream:task stopped"
 .x
+    ;----------------------------------
+
+    DPRINT  "stream:task stopped"
     lea     .varsSize(sp),sp
     lore    Exec,Forbid
     move.w  d5,streamReturnCode(a5)
@@ -54604,11 +56265,161 @@ streamerEntry:
     bsr     .notify
     bra     .x
 
+.closeOutputHandle:
+    lea     streamerProcessOutputHandle(pc),a0
+    move.l  (a0),d1
+    clr.l   (a0)
+    tst.l    d1
+    beq.b   .b
+ if DEBUG
+    move.l  d1,d0
+    DPRINT  "stream:close output handle=%lx"
+ endif
+    lore    Dos,Close
+    DPRINT  "stream:Close agetout"
+.b
+    rts
+
+
+
+.handleLocalStream:
+    DPRINT  "stream:local stream"
+    * clear stream error msg address to be returned, not used here
+    moveq   #0,d7 
+    moveq   #0,d5
+
+    * Local stream config in a3!
+    move.l  streamLocalConfig(a5),a3
+    move.l  localStream_setup(a3),d0
+    beq     .noLocalSetup
+    move.l  d0,a0
+    jsr     (a0)
+.noLocalSetup
+
+    move.l  localStream_cliName(a3),d0
+    move.l  localStream_command(a3),a0
+
+    * Store this so graceful exit can be done later
+    move.l  d0,currentLocalStreamCliName(a5)
+    move.l	streamerUrl(a5),d1
+    move.l  localStream_additionalParam(a3),d2
+    lea     .buffer(a4),a3
+    jsr     desmsg3
+
+ if DEBUG
+    pushpea .buffer(a4),d0
+    DPRINT  "stream:cmd=%s"
+ endif
+
+    ; Change current dir to "timidity:" or "gm:"
+    move.l  streamLocalConfig(a5),a3
+    move.l  localStream_currentDir(a3),d1   * if null Lock takes SYS:
+    bne     .hasCurrent
+
+    move.l  homelock(a5),d1
+    lore    Dos,DupLock
+    bra     .useHome
+.hasCurrent
+    moveq	#ACCESS_READ,d2
+	lore    Dos,Lock
+.useHome
+    DPRINT  "stream:current dir lock=%lx"
+    move.l  d0,.sysCurrentDir
+    beq     .error
+
+    lea     .sysTags(pc),a0
+    move.l  a0,d2
+
+    * Set default stack
+    move.l  #10000,4(a0)
+    move.l  localStream_stack(a3),d1
+    beq     .defaultStack
+    * Modified stack requested
+    move.l  d1,4(a0)
+.defaultStack
+
+    ; Launch timidity
+    pushpea .buffer(a4),d1
+    lore    Dos,SystemTagList
+    DPRINT  "stream:SystemTagList=%ld"
+    cmp.l   #-1,d0
+    bne     .ok
+    * Free any resources in case of failure
+
+    DPRINT  "stream:error cleanup!"
+    move.l  .sysCurrentDir(pc),d1
+    lob     UnLock
+    bra     .error
+.ok
+
+    ; Notify main task that we are on
+    DPRINT  "stream:notify main task"
+    bsr     .notify
+    
+.waitLoop
+    move.l  #SIGBREAKF_CTRL_C,d0
+
+    move.l  streamLocalConfig(a5),a3
+    tst.l   localStream_poll(a3)
+    beq     .noPoll
+    bset    #SIGBREAKB_CTRL_D,d0
+    DPRINT  "stream:Wait for CTRL-D"
+.noPoll
+    ; Wait for stopping
+    DPRINT  "stream:Wait for CTRL-C"
+    lore    Exec,Wait
+    btst    #SIGBREAKB_CTRL_D,d0
+    beq     .noCtrlD
+    DPRINT  "stream:CTRL-D received, call poll routine"
+    move.l  streamLocalConfig(a5),a3
+    move.l  localStream_poll(a3),a3
+    jsr     (a3)
+    bra     .waitLoop
+.noCtrlD
+    DPRINT  "stream:CTRL-C received!"
+
+.breakLoop
+    DPRINT  "stream:break loop"
+    bsr     findLocalStreamProcess
+    beq     .notFound
+
+    DPRINT  "stream:Signaling CTRL-C to cli cmd"
+    move.l  d0,a1
+    move.l  #SIGBREAKF_CTRL_C,d0
+    lore    Exec,Signal
+
+    DPRINT  "stream:wait!"
+    moveq   #50,d1
+    lore    Dos,Delay
+    bra     .breakLoop
+    
+.notFound
+    DPRINT  "stream:not found -> exit"
+.midiExit
+    DPRINT  "stream:midi exit"
+    moveq   #0,d5
+    moveq   #0,d7
+    bra     .x
+
+.sysTags
+    dc.l    NP_StackSize,10000
+    dc.l    NP_ExitCode,.exitCode
+    dc.l    SYS_Asynch,1
+    dc.l    NP_CurrentDir,0
+.sysCurrentDir = *-4
+    dc.l    TAG_END
+
+
+.exitCode
+    DPRINT  "stream:NP_ExitCode called! return=%lx"
+    rts
+
 .envVarName
     dc.b    "UHCBIN",0
 
 .agetCmd
     dc.b	'%sC/aget',0
+
 
 .args
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s',10,0
@@ -54621,8 +56432,83 @@ streamerEntry:
 ;	dc.b	'"%s" PIPE:hippoStream/65536/2 MINIMIZEDELAY ONLYPROGRESS DUMPHEADERS=%s',10,0
 ;	dc.b	'"%s" PIPE:hippoStream/4096/128 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=262144',10,0
 	dc.b	'TO=PIPE:hippoStream/65536/2 ONLYPROGRESS DUMPHEADERS=%s BUFSIZE=8192 URL="%s"',10,0
+
+
  even
 
+* Find the CLI process "timidity"
+* Out:
+*   d0 = process address or null
+findLocalStreamProcess:
+    pushm   d2-d7/a2-a6
+    lea     -64(sp),sp
+    moveq   #0,d4
+    lore    Dos,MaxCli
+    move.l  d0,d6
+    moveq   #1,d5
+.cliLoop
+    move.l  d5,d1
+    lob     FindCliProc
+    move.l  d0,d4
+    beq     .noCLI
+    move.l  d0,a0
+    move.l  pr_CLI(a0),d0
+    lsl.l   #2,d0   * BPTR->APTR
+    move.l  d0,a0
+    tst.l   cli_Module(a0)
+    beq     .noCLI  
+    move.l  cli_CommandName(a0),d0
+    lsl.l   #2,d0   * BPTR->APTR
+    move.l  d0,a0
+    * Convert BCPL string
+    move.b  (a0)+,d1
+    lea     (sp),a1
+.cliCp
+    move.b  (a0)+,(a1)+
+    subq.b  #1,d1
+    bne     .cliCp
+    clr.b   (a1)
+    * See if this CLI is "timidity","gmplay"
+    lea     (sp),a0
+    move.l  currentLocalStreamCliName(a5),a1
+.cliCmp
+    cmpm.b  (a0)+,(a1)+
+    bne     .noCLI
+    tst.b   -1(a1)
+    bne     .cliCmp
+    * Found!
+    lea     64(sp),sp
+ if DEBUG
+    pushm   all
+    move.l  4.w,a6
+    sub.l   a1,a1
+    lob     FindTask
+    move.l  d0,d1
+    move.l  d4,d0
+    DPRINT  "findLocalStreamProcess=%lx task=%lx"
+    popm    all
+ endif
+    move.l  d4,d0
+    popm    d2-d7/a2-a6
+    rts
+
+.noCLI
+    addq    #1,d5
+    cmp     d6,d5
+    bne     .cliLoop
+    * Not found!
+    lea     64(sp),sp
+ if DEBUG
+    pushm   all
+    move.l  4.w,a6
+    sub.l   a1,a1
+    lob     FindTask
+    DPRINT  "findLocalStreamProcess=NULL task=%lx"
+    popm    all
+ endif
+    popm    d2-d7/a2-a6
+    moveq   #0,d0
+    rts
 
 * Frees the previous aget error if any
 freeStreamerError:
@@ -54630,6 +56516,15 @@ freeStreamerError:
     clr.l   streamerError(a5)
     jmp     freemem
     
+freeStreamerUrl:
+    pushm   a0/a1
+    lea     streamerUrl(a5),a1
+    move.l  (a1),a0
+    clr.l   (a1)
+    jsr     freemem
+    popm    a0/a1
+    rts
+
 
 
 * Sends the ctrl+c signal to the streamer task if it is running
@@ -54678,6 +56573,7 @@ awaitStreamer0:
     pushpea streamPipeFile(pc),d1
 	move.l	#MODE_OLDFILE,d2
     lob     Open
+    DPRINT  "open=%lx"
     move.l  d0,d5
 .noFlush
 
@@ -55298,7 +57194,918 @@ readClipboard:
 .iffParseName   dc.b    "iffparse.library",0
     even
  endif
+
+***************************************************************************
+*
+* STIL database
+*
+***************************************************************************
+
+* Out:
+*   a0 = text data, should be freed
+*   d0 = text length or NULL if not found
+getSTILInfo:
+    DPRINT  "getSTILInfo"
+    pushm   d1-d7/a1-a6
+
+    move.l  modulefilename(a5),d0
+    beq     .1
+    DPRINT  "%s"
+    move.l  d0,a0
+    bsr     doGetSTILInfo
+    DPRINT  "doGetStilInfo addr=%lx len=%lx"
+    tst.l   d0
+    beq     .1
+    move.l  d0,a0
+    move.l  d1,d0
+.1
+    DPRINT  "result=%ld"
+    popm    d1-d7/a1-a6
+    rts
+    
+
+* In:
+*   a0 = module path
+* Out:
+*   d0 = true or false
+*   a0 = text buffer, to be freed after use
+doGetSTILInfo:
+    ; Space for module path starting from the STIL path part
+    lea     -200(sp),sp
+
+    ; ---------------------------------
+    ; Search for known STIL path parts from the module path.
+    ; /DEMOS /GAMES /MUSICIANS
+    ; If not found, exit.
+
+.loop
+    move.b  (a0)+,d0
+    beq     .exitFail
+    cmp.b   #"/",d0
+    bne     .loop
+
+    lea     .demos(pc),a2
+    bsr     .find
+    bne     .ok1
+    lea     .games(pc),a2
+    bsr     .find
+    bne     .ok1
+    lea     .musicians(pc),a2
+    bsr     .find
+    bne     .ok1
+    bra     .loop
+
+
+.demos      dc.b    "DEMOS/",0
+.games      dc.b    "GAMES/",0
+.musicians  dc.b    "MUSICIANS/",0
+    even
+
+.find:
+    move.l  a0,a1
+.loop2
+    move.b  (a1)+,d0
+    beq     .not
+    move.b  (a2)+,d1
+    beq     .yes
+    bsr     .upperCaseD0
+    cmp.b   d1,d0
+    beq     .loop2
+.not
+    moveq   #0,d0
+    rts
+.yes
+    moveq   #1,d0
+    rts
+
+.exitFail
+    moveq   #0,d0
+    bra     .exitStil
+
+.ok1
+    ; ---------------------------------
+    ; Copy from STIL-looking bit onwards and uppercase it
+
+    subq.l  #1,a0
+    move.l  sp,a1
+.copy1
+    move.b  (a0)+,d0
+    beq     .copied
+    bsr     .upperCaseD0
+    move.b  d0,(a1)+
+    bra     .copy1
+.copied
+
+    ; ---------------------------------
+    ; Check for ".sid" extension
+
+    cmp.b   #".",-4(a1)
+    bne     .exitFail
+    cmp.b   #"S",-3(a1)
+    bne     .exitFail
+    cmp.b   #"I",-2(a1)
+    bne     .exitFail
+    cmp.b   #"D",-1(a1)
+    bne     .exitFail
+    ; Remove it since it's not in the STIL data either
+    clr.b   -4(a1)
+
+    ; ---------------------------------
+    ; Calculate fnv1 into d5
+    move.l  sp,a0
+    bsr     fnv1
+    move.l  d0,d5
+ if DEBUG
+    move.l  sp,d1
+    DPRINT  "fnv1=%lx %s"
+ endif
+    ; ---------------------------------
+    ; Load STIL index
+
+    push    d5
+    ; Try to create the index first, slow
+    pushm   all
+    bsr     createStilIndex
+    popm    all
+    bsr     loadSTILIndex
+    * d0 = address
+    * d1 = length
+    DPRINT  "loadSTILIndex=%lx %ld"
+    pop     d5
+    tst.l   d0
+    beq     .loadErr
+
+    move.l  d0,a0
+    move.l  d0,a1
+    add.l   d1,a1
+    addq.l  #4,a0 * skip data length 
+    * a0 = start of index
+    * a1 = end of index
+.f1 
+    * Read fnv1
+    move.b  (a0)+,d3
+    rol.l   #8,d3
+    move.b  (a0)+,d3
+    rol.l   #8,d3
+    move.b  (a0)+,d3
+    rol.l   #8,d3
+    move.b  (a0)+,d3
+    cmp.l   d5,d3
+    beq     .found
+    * Skip data offset
+    addq    #3,a0
+    cmp.l   a1,a0
+    blo     .f1
+     * out of data, not found
+    moveq   #0,d0
+    bra     .f4
+    
+.found
+    ; ---------------------------------
+    * Was a match
+    * Grab 3 data offset bytes after text
  
+    moveq   #0,d0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+ 
+    * Read next data offset
+    addq    #4,a0
+    moveq   #0,d1
+    move.b  (a0)+,d1
+    rol.l   #8,d1
+    move.b  (a0)+,d1
+    rol.l   #8,d1
+    move.b  (a0)+,d1
+    sub.l   d0,d1  
+    * d1 = length
+    bpl     .len
+    * If accessing the last item the following length is zero
+    * so we end up here, exit with fail!
+    moveq   #0,d0
+    bra     .loadErr
+.len
+
+    bsr     loadSTILEntry
+    tst.l   d0
+    beq     .loadErr
+    move.l  d0,a0
+.f4
+.loadErr
+.exitStil
+    lea     200(sp),sp
+    rts
+
+
+.upperCaseD0
+    cmp.b	#'a',d0
+    blo 	.up1
+    cmp.b	#'z',d0
+    bhi 	.up1
+    and.b   #$df,d0 * to uppper
+.up1
+    rts    	
+    
+* Out:
+*  d0 = index data pointer, or NULL
+*  d1 = index data lenght
+loadSTILIndex:
+    move.l  stilIndexPtr(a5),d0
+    bne     .ok
+
+    pushpea stilIndexName(pc),d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    move.l  d0,d7
+    beq     .err
+    
+    ; ---------------------------------
+    * Find index length
+	move.l	d7,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d7,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+	move.l	d7,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
+
+    ; ---------------------------------
+    * reserve some empty to the end to detect the last item
+    move.l  d5,d0
+    addq.l  #8,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    beq     .err
+
+    move.l  d0,stilIndexPtr(a5)
+    move.l  d7,d1
+    move.l  d0,d2
+    move.l  d5,d3
+    lob     Read
+    push    d0
+
+    move.l  d7,d1
+    lob     Close
+    
+    cmp.l   (sp)+,d5
+    bne     .err
+.ok
+    move.l  stilIndexPtr(a5),d0
+    move.l  d0,a0
+    move.l  -4(a0),d1   * length
+    rts
+
+.err
+    moveq   #0,d0
+    rts
+    
+* In:
+*   d0 = Data offset
+*   d1 = Length to read
+* Out:
+*   d0 = Allocated buffer, to be freed with freemem()
+*   d1 = Length of data in buffer (not size of the buffer)
+loadSTILEntry:
+    move.l  d0,d4
+    move.l  d1,d5
+    moveq   #0,d7
+
+    move.l  d5,d0
+    lsl.l   #2,d0    * allocate 4x times as much
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    move.l  d0,d6
+    beq     .err
+    
+    pushpea stilDataName(pc),d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    move.l  d0,d7
+    beq     .err
+
+    move.l  d7,d1
+    move.l  d4,d2   
+    move.l  #OFFSET_BEGINNING,d3
+    lob     Seek
+    cmp.l   #-1,d0
+    beq     .err
+
+    move.l  d7,d1 * file
+    move.l  d6,d2 * dest
+    add.l   d5,d2 * use the 2nd half of the buffer
+    add.l   d5,d2
+    move.l  d5,d3 * len
+    lob     Read
+    cmp.l   d5,d0
+    bne     .err
+
+    move.l  d7,d1
+    beq     .2
+    lob     Close
+.2
+    ; The data contains the title of the following item,
+    ; add null 
+    move.l  d6,a1
+    add.l   d5,a1   * the 2nd half
+    add.l   d5,a1
+    add.l   d5,a1   * the end of the buffer
+.3  cmp.l   d6,a1 * limit check
+    beq     .5
+    cmp.b   #"/",-(a1)
+    bne     .3
+    cmp.b   #10,-1(a1)
+    bne     .3
+    cmp.b   #13,-2(a1)
+    bne     .4
+    subq    #1,a1
+.4
+    * Null terminate before the following item
+    clr.b   -1(a1)
+.5
+    * Source data: 2nd half
+    move.l  d6,a0   
+    add.l   d5,a0
+    add.l   d5,a0
+    * Destination: 1st half
+    move.l  d6,a1
+    pushm   d5/d6
+    bsr     convertStilEntry
+    popm    d0/d1
+    exg     d0,d1
+    * d0 = buffer addr
+    * d1 = length
+    * success
+    rts
+
+.err
+    move.l  d6,a0
+    jsr     freemem
+    move.l  d7,d1
+    beq     .1
+    lore    Dos,Close
+.1
+    moveq   #0,d0
+    rts
+
+freeSTILData: 
+    DPRINT  "freeSTIL"
+    move.l  stilIndexPtr(a5),a0
+    jsr     freemem
+    rts
+
+* Formats and line wraps the STIL entry text.
+* in:
+*   a0 = STIL entry text, null terminated
+*   a1 = output buffer
+convertStilEntry:
+    DPRINT  "convertStilEntry"
+    moveq   #0,d7       * comment flag
+.loop
+    tst.b   (a0)
+    beq     .x
+    bsr     .get4
+    * d0 = four chars
+    * d1 = two chars
+
+    * Skip the first line with path: /MUSICIANS/G/Gray_Matt/Tusker.sid
+    move    d1,d2
+    and.w   #$ff00,d2
+    cmp.w   #"/"<<8,d2
+    bne     .1
+    bsr     .skipLine
+    bra     .loop
+.1
+    * ---------------------------------
+    * COMMENT
+    cmp.l   #"COMM",d0
+    bne     .2
+    * Store comment start at a2
+    move.l  a0,a2
+.com
+    bsr     .skipLine
+    bsr     .get4
+    cmp.l   #"    ",d0  * COMMENT continued
+    beq     .com
+    * a0 now at the end of the comment +4
+    * Null teminate the comment
+    clr.b   -5(a0)
+    tst.b   d7
+    bne     .not1st
+    * Label th 1st comment differently
+    lea     -1(a2),a0
+    move.b  #"S",(a0)
+    move.b  #"T",1(a0)
+    move.b  #"I",2(a0)
+    move.b  #"L",3(a0)
+    st      d7
+    bra     .was1st
+.not1st
+    * Wrap from start of comment to end
+    lea     -4(a2),a0
+.was1st
+    bsr     wrapLines
+    * a0 now points to the line after the comment section
+    bsr     putNewLine
+    bra     .loop
+.2
+    * ---------------------------------
+    cmp.w   #"(#",d1    * Song number
+    bne     .3
+    lea     .song1(pc),a2
+.s1 move.b  (a2)+,(a1)+
+    bne     .s1
+    subq    #1,a1
+    lea     -2(a0),a2
+.s2 move.b  (a2)+,(a1)+
+    cmp.b   #")",(a2)
+    bne     .s2
+    lea     .song2(pc),a2
+.s3 move.b  (a2)+,(a1)+
+    bne     .s3
+    subq    #1,a1
+    bsr     putNewLine
+    bsr     .skipLine
+    bra     .loop
+.3
+    * ---------------------------------
+    cmp.l   #"   N",d0  * NAME
+    bne     .4
+    lea     -1(a0),a2
+    bra     .field
+    * ---------------------------------
+.4
+    cmp.l   #" AUT",d0  * AUTHOR
+    bne     .5
+    lea     -3(a0),a2
+    bra     .field
+    * ---------------------------------
+.5
+    cmp.l   #"  TI",d0  * TITLE
+    bne     .6
+    lea     -2(a0),a2
+    bra     .field
+    * ---------------------------------
+.6
+    cmp.l   #" ART",d0  * ARTIST
+    bne     .7
+    lea     -3(a0),a2
+    bra     .field
+    * ---------------------------------
+.7
+    bsr     .skipLine
+    bra     .loop
+
+.field:
+    * Skip to the end of line and null terminate
+    bsr     .skipLine
+    clr.b   -1(a0)
+    * Wrap from the start
+    move.l  a2,a0
+    bsr     wrapLines
+    * a0 now at the start of the next line
+    bsr     putNewLine
+    bra     .loop
+.x    
+    rts
+
+    
+.get4
+    move.b  (a0)+,d0
+    rol.w   #8,d0
+    move.b  (a0)+,d0
+    move.w  d0,d1
+    swap    d0
+    move.b  (a0)+,d0
+    rol.w   #8,d0
+    move.b  (a0)+,d0
+    rts
+
+.skipLine
+    cmp.b   #10,(a0)+
+    bne     .skipLine
+    rts
+
+.song1  
+    dc.b    ILF,ILF2,"*** Song ",0
+.song2
+    dc.b    " ***",0
+    even
+
+
+* Wraps given text to output until null encountered
+* in:
+*   a0 = input text with line changes 10 and terminating null
+*   a1 = output buffer
+wrapLines:
+.LIMIT = 39
+	moveq	#0,d1
+	moveq	#0,d2
+.loop
+    cmp     #.LIMIT,d2
+    beq     .newLine
+.get
+    move.b  (a0)+,d0
+    beq     .eof
+    * Eat line changes in input and any whitespaces after it
+    cmp.b   #13,d0
+    beq     .get
+    cmp.b   #10,d0
+    bne     .noLf
+.eatSpaces1
+    cmp.b   #" ",(a0)
+    bne     .ate1
+    addq    #1,a0
+    bra     .eatSpaces1
+.ate1
+    * Output a space if input has a linechange
+    moveq   #" ",d0
+    bra     .noBr
+.noLf
+    * Got a char, check if it's a break character
+    bsr     .isBreaker
+    bne     .noBr
+    * Notice that we have a break char
+    addq    #1,d1
+.noBr
+    * Output char
+    move.b  d0,(a1)+
+    addq    #1,d2
+    bra     .loop
+    
+.newLine
+    * Limit reached
+    * Insert a linebreak here if there's a break character here
+    bsr     .isBreaker
+    beq     .y1
+    * There was not, see if there was a break ealier
+    tst     d1
+    beq     .y1
+    * There was, rewind to it
+.fb
+    subq    #1,a0
+    subq    #1,a1
+    move.b  (a0),d0
+    bsr     .isBreaker
+    bne     .fb
+    
+.y1
+    * Put linechange here and extra space for indentation
+    moveq   #0,d1 * reset break notifier
+    moveq   #1,d2 * reset counter
+    bsr     putNewLine
+    move.b  #" ",(a1)+
+    * Eat spaces after line change in output
+.eatSpaces2
+    cmp.b   #" ",(a0)
+    bne     .loop
+    addq    #1,a0
+    bra     .eatSpaces2
+
+.eof
+	rts
+
+* Sets Z if d0 is a break character
+.isBreaker
+    cmp.b   #" ",d0
+    beq     .is
+    cmp.b   #"-",d0
+    beq     .is
+    cmp.b   #"_",d0
+.is
+    rts
+
+putNewLine
+	;move.b	#10,(a1)+
+	;rts
+    move.b   #ILF,(a1)+
+    move.b   #ILF2,(a1)+
+    rts
+
+* Creates the STIL.idx file from STIL.txt
+createStilIndex:
+    DPRINT "createStilIndex"
+    sub.l   a4,a4   
+    moveq   #0,d6
+
+    ; ---------------------------------
+    * Open STIL.txt
+    pushpea stilDataName(pc),d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "open STIL.txt=%lx"
+    move.l  d0,d7
+    beq     .exit
+
+    ; ---------------------------------
+    * Find STIL.txt length
+	move.l	d7,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d7,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+	move.l	d7,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
+    DPRINT  "len=%lx"
+
+    ; ---------------------------------
+    * Try to open idx
+    pushpea stilIndexName(pc),d1
+    move.l  #MODE_OLDFILE,d2
+    lob     Open
+    DPRINT  "old STIL.idx=%lx"
+    move.l  d0,d6
+    bne     .yesIdx
+    ; ---------------------------------
+    * No previous idx, create new
+    pushpea stilIndexName(pc),d1
+    move.l  #MODE_NEWFILE,d2
+    lob     Open
+    DPRINT  "new STIL.idx=%lx"
+    move.l  d0,d6
+    beq     .exit
+    bra     .writeLen
+.yesIdx
+    ; ---------------------------------
+    * Read txt length from the start
+    lea     -4(sp),sp
+    move.l  d6,d1   * file
+    move.l  sp,d2   * dest
+    moveq   #4,d3   * len
+    lob     Read
+    * Go back to start
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek		
+    ; ---------------------------------
+    * Compare txt length and the length stored in idx
+    * If same, exit
+    cmp.l   (sp)+,d5
+    beq     .exit
+.writeLen
+    ; ---------------------------------
+    ; Allocate 10k + 190k here, the last part for output
+    move.l  #1024*200,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    beq     .exit
+    DPRINT  "AllocMem=%lx"
+    move.l  d0,a4
+    * Output buffer into a5
+    lea     10*1024(a4),a5
+
+    ; ---------------------------------
+    * Write the txt length into the idx
+    move.l  d5,-(sp)
+    move.l  d6,d1   * file
+    move.l  sp,d2   * source
+    moveq   #4,d3   * len
+    lob     Write
+    DPRINT  "Write=%lx"
+    addq    #4,sp   * pop
+    cmp.l   #-1,d0
+    beq     .exit
+    * d0 = -1 on error
+
+    ; ---------------------------------
+    * Read a chunk of txt
+    lea     -200(sp),sp
+    move.l  sp,a3           * line buffer
+    move.l  d5,196(sp)      * store total length here
+    moveq   #0,d5           * txt file position
+    DPRINT  "readLoop"
+.readLoop
+    move.l  d7,d1
+    move.l  a4,d2
+    move.l  #1024*10,d3
+    lob     Read
+
+    ; ---------------------------------
+    ; Print progress information
+    move.l  196(sp),d1
+    pushm   all
+    lea     var_b,a5
+    move.l  d5,d0
+    lsr.l   #8,d0
+    lsr.l   #8,d1
+    mulu    #100,d0
+    divu    d1,d0
+    ext.l   d0
+
+    moveq   #"%",d1
+    lea     .progressMsg(pc),a0
+    lea     -64(sp),sp
+    move.l  sp,a3
+    jsr     desmsg3
+
+    moveq   #35,d0
+    moveq   #22,d1
+    move.l  sp,a0
+    jsr     sprint
+    lea     64(sp),sp
+    popm    all
+
+    ; ---------------------------------
+    ; Bytes read in d0, check for EOF
+    move.l  d0,d4
+    beq     .stopLoop
+    bmi     .stopLoop
+    ; ---------------------------------
+    ; Read bytes until line change
+    move.l  a4,a0           * start
+    lea     (a0,d0),a1      * end
+    moveq   #13,d1          * loop constants
+    moveq   #10,d2
+.lineLoop
+    move.b  (a0)+,d0
+    cmp.b   d1,d0
+    beq     .cr
+    cmp.b   d2,d0
+    beq     .lf
+    * Copy one char, check if data exhausted
+    move.b  d0,(a3)+
+.continue
+    cmp.l   a1,a0
+    blo     .lineLoop
+
+    * Update global data offset
+    add.l   #1024*10,d5
+    * See if we got a full chunk last time, read more if so
+    cmp.l   #1024*10,d4
+    beq     .readLoop
+    * Exit
+    bra     .stopLoop
+
+.continueLineLoop
+    moveq   #13,d1
+    moveq   #10,d2
+    bra     .continue
+
+.lf
+.cr
+    * Skip lines that are not the title line
+    cmp.b   #"/",(sp)
+    bne     .next
+ ;   move    #$f00,$dff180
+    ; ---------------------------------
+    ; A whole line read, null terminate
+    clr.b   (a3)
+
+    ; Convert to uppercase
+    move.l  sp,a2
+    moveq   #'a',d1
+    moveq   #'z',d2
+    move.b  #$df,d3
+    bra     .ugo
+.ucase1
+    cmp.b	d1,d0
+    blo 	.up1
+    cmp.b	d2,d0
+    bhi 	.up1
+    and.b   d3,d0 * to upper
+.up1
+    move.b  d0,(a2)+
+.ugo
+    move.b  (a2),d0
+    bne     .ucase1
+
+    ; ---------------------------------
+    ; Check for extension and remove it
+    cmp.b   #"D",-1(a2)
+    bne     .next
+    cmp.b   #"I",-2(a2)
+    bne     .next
+    cmp.b   #"S",-3(a2)
+    bne     .next
+    cmp.b   #".",-4(a2)
+    bne     .next
+    clr.b   -4(a2)
+; if DEBUG
+;    move.l  sp,d0
+;    DPRINT  "UCas=%s"
+; endif
+    ; ---------------------------------
+    ; Process string in a0
+
+    ; Calc offset to the line after the title line, 
+    ; where the data is.
+    ; a0 points to 13 or 10 on the previous title line here.
+    move.l  a0,a2
+    cmp.b   #10,(a2)
+    bne     .skip1
+    addq    #1,a2
+.skip1
+    * Offset relative to the work buffer
+    sub.l   a4,a2
+    * Offset relative to the STIL.txt file
+    add.l   d5,a2
+
+    ; USE a2!
+    move.l  sp,d0
+    push    a0
+    move.l  d0,a0
+    bsr     fnv1
+    pop     a0
+
+    * d0 = hash into output    
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    * a2 = offset, store three bytes
+    move.l  a2,d0
+    swap    d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    rol.l   #8,d0
+    move.b  d0,(a5)+
+    
+.next
+    ; ---------------------------------
+    ; Start getting a new line into a3
+    move.l  sp,a3
+    ; Ignore 10 if the line ended with 13 ealier
+    cmp.b   #10,(a0)
+    bne     .continueLineLoop
+    addq    #1,a0
+    bra     .continueLineLoop
+
+.stopLoop
+    ; File scan completed
+    lea     200(sp),sp
+
+    ; ---------------------------------
+    ; Write index
+    move.l  d6,d1   * file
+    ; Data is located after the read input buffer
+    lea     10*1024(a4),a0
+    move.l  a0,d2   * src
+    move.l  a5,d3
+    sub.l   a0,d3   * length
+    lob     Write
+
+.exit
+    ; ---------------------------------
+    DPRINT  "exit"
+    move.l  a4,a0
+    jsr     freemem
+    move.l  d7,d1
+    beq     .x1
+    lob     Close
+.x1 move.l  d6,d1
+    beq     .x2
+    lob     Close
+.x2
+    rts
+
+.progressMsg
+    dc.b    "Creating STIL index %02.2ld%lc",0
+    even
+
+* In:
+*   a0 = string with null termination
+* Out:
+*   d0 = fnv1 hash
+fnv1:
+    push    a2
+    move.l  #$811c9dc5,d0 * hval
+    move.l  #$01000193,d1 * prime
+    lea     mulu_32,a2
+    bra     .go
+.loop
+    jsr     (a2)
+    eor.b   d2,d0
+.go
+    move.b  (a0)+,d2
+    bne     .loop
+.x     
+    pop     a2
+    rts
+
+stilDataName:  dc.b "STIL.txt",0
+stilIndexName: dc.b "STIL.idx",0
+ even
+
 ***************************************************************************
 *
 * Performance measurement with timer.device
@@ -55827,22 +58634,22 @@ prefsListFont
 prefsPlaySidMode 
        dc.l prefsEnableXMAPlay
        ; left, top, width, height
-       dc.w 214-80+4,107+28-14-12-2,100-8,12,3,1,1
+       dc.w 214-80+4-8-8,107+28-14-12-2-14,100-8+8+8,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
        dc.l 0
 .t     dc.b 1,0,1,0
-       dc.w -198+80-4,2
+       dc.w -198+80-4+8+8,2
        dc.l 0,.tx,0
 .tx 
-       dc.b "PlaySid mode...",0
+       dc.b "PlaySid mode",0
        even
 
 prefsResidMode
        dc.l prefsResidFilter
        ; left, top, width, height
-       dc.w 214-80+4-16,107+28-12-2,100-8+16,12,3,1,1
+       dc.w 214-80+4-16,107+28-12-2-14,100-8+16,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -55855,9 +58662,9 @@ prefsResidMode
        even
 
 prefsResidFilter
-       dc.l prefsMHIEnable
+       dc.l prefsResidBoost
        ; left, top, width, height
-       dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
+       dc.w 214-80+4-16,107+28-14,100-8+16,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -55869,10 +58676,25 @@ prefsResidFilter
        dc.b "reSID filter",0
        even
 
+prefsResidBoost
+       dc.l prefsMHIEnable
+       ; left, top, width, height
+       dc.w 214-80+4-16,107+28,100-8+16,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "reSID boost..",0
+       even
+
 prefsMHIEnable
        dc.l prefsMHILib
        ; left, top, width, height
-       dc.w 214-80+4-12-12-6,107+28-14-12-2-14,28,12,3,1,1
+       dc.w 214-80+4-12-12-6,107+28-14-12-2-14-28,28,12,3,1,1
        dc.l 0
        dc.l 0,.t,0,0
        dc.w 0
@@ -55887,7 +58709,7 @@ prefsMHIEnable
 prefsMHILib
        dc.l prefsMedFastRamMode 
        ; left, top, width, height
-       dc.w 214-80+4,107+28-14-12-2-14,100-8,12,3,1,1
+       dc.w 214-80+4,107+28-14-12-2-14-28,100-8,12,3,1,1
        dc.l 0
        dc.l 0,0,0,0
        dc.w 0
@@ -55911,7 +58733,7 @@ prefsEnableXMAPlay dc.l prefsResidMode
        even
 
 
-prefsMedFastRamMode dc.l 0 ;;;;;;;; END
+prefsMedFastRamMode dc.l prefsMidiMode 
        ; left, top, width, height
        dc.w 214-80+4+64+160+40+4,107-12-2+14+14-14-14-8,28,12,3,1,1
        dc.l 0
@@ -55925,6 +58747,21 @@ prefsMedFastRamMode dc.l 0 ;;;;;;;; END
        dc.b "MED FastMemPlay...",0
        even
 
+
+prefsMidiMode
+       dc.l 0  ;;;;;;;; END
+       ; left, top, width, height
+       dc.w 214-80+4-16,107+28-4*14,100-8+16,12,3,1,1
+       dc.l 0
+       dc.l 0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t     dc.b 1,0,1,0
+       dc.w -198+80-4+16,2
+       dc.l 0,.tx,0
+.tx 
+       dc.b "MIDI mode....",0
+       even
 
 
  ifne FEATURE_LIST_TABS

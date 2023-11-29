@@ -665,6 +665,24 @@ init:
 	move.l	d0,samplebufsiz(a5)
     DPRINT  "sample buffer=%ld"
 
+    move.l  modulefilename(a5),a0
+    bsr     isPipe
+    beq     .notPipeW
+    * Should be "PIPE:wavHippoStream" for WAV 27710 Hz
+    *           "PIPE:wavHippoStream2" for AIFF 27710 Hz
+    *           "PIPE:wavHippoStream3" for AIFF 22050 Hz
+    cmp.b   #"w",5(a0)
+    bne     .notPipeW
+    DPRINT  "sample PIPE wav bypass"
+    move.b  #2,sampleformat(a5) * AIFF decoder
+    cmp.b   #"3",19(a0)
+    beq     .wavinitPipeBypassLq
+    cmp.b   #"2",19(a0)
+    beq     .wavinitPipeBypass
+    move.b  #3,sampleformat(a5) * WAV decoder
+    bra     .wavinitPipeBypass
+.notPipeW
+
     bsr     isRemoteSample
     bne     .remote
 
@@ -811,6 +829,23 @@ init:
 * WAV INIT
 *********************************************************************
 
+.wavinitPipeBypassLq
+    DPRINT  "wavinitPipeBypassLq"
+    move    #22050,samplefreq(a5)
+    bra     .wavinitPipeBypass0
+    
+.wavinitPipeBypass
+    DPRINT  "wavinitPipeBypass"
+    * Wav header is 44 bytes
+    move    #27710,samplefreq(a5)
+.wavinitPipeBypass0
+    st      samplebits(a5)  
+    st      samplestereo(a5)
+    clr.l   samplestart(a5)
+    moveq   #0,d0 * length unknown
+    bsr     .moi
+    bra     .bypass
+
 .wavinit
 	move.l	#200,d2
 	moveq	#4,d0
@@ -855,6 +890,7 @@ init:
 	sub.l	a4,d0
 	move.l	d0,samplestart(a5)
 
+.bypass
 	move.l	samplebufsiz(a5),d0
 	tst.b	samplestereo(a5)
 	beq.b	.wa2
@@ -1406,6 +1442,15 @@ init:
 
 ** muotoillaan inforivi hipolle
 
+    push    a0
+    move.l  modulefilename(a5),a0
+    bsr     isPipe
+    pop     a0
+    beq     .fr0
+    * wav/aiff + midi
+    lea     .t3midi(pc),a0
+    bra     .fr1
+.fr0
 	lea	.t1(pc),a0
 	move.b	sampleformat(a5),d0
 	subq.b	#1,d0
@@ -1414,6 +1459,8 @@ init:
 	subq.b	#1,d0
 	beq.b	.fr1
 	lea	.t3(pc),a0
+
+
 .fr1	move.l	a0,d0
 
 	tst	mplippu(a5)
@@ -1756,6 +1803,7 @@ init:
 .t1	dc.b	"IFF 8SVX",0
 .t2	dc.b	"AIFF",0
 .t3	dc.b	"RIFF WAVE",0
+.t3midi dc.b "MIDI",0
 .t4	dc.b	"MP",0
 .form	dc.b	"%s %ld-bit %lc %2ldkHz",0
 .form2	dc.b	"MP%ld %ldkb %lc %2ldkHz %ld-bit",0
@@ -4257,6 +4305,27 @@ closesample
 	tst	mplippu(a5)
 	bne.b	.c
 
+    ; ---------------------------------
+    ; Handle special case with PIPE+wav flushing
+    cmp.b   #2,sampleformat(a5)
+    beq     .wasAiff
+    cmp.b   #3,sampleformat(a5)
+    bne     .notWav
+.wasAiff
+    move.l  modulefilename(a5),a0
+    bsr     isPipe
+    beq     .notWav
+    DPRINT  "WAV pipe flush"
+.loop
+    lea     fh1(a5),a0
+    move.l  mfh_fh(a0),d1
+    lore    Dos,FGetC
+    tst.l   d0
+    bpl     .loop
+    DPRINT  "pipe flush done"
+    ; ---------------------------------
+.notWav
+
 	lea	fh1(a5),a0
 	bsr	_xclose
 	lea	fh2(a5),a0
@@ -4680,12 +4749,16 @@ _xopen
 ;.notloadall
 
 	move.l	(mfh_filename,a5),d1
+ if DEBUG
+    move.l  d1,d0
+    DPRINT  "Opening=%s"
+ endif
 	move.l	#MODE_OLDFILE,d2
 
 	move.l	_DosBase+var_b,a6
 	lob	Open
-
-	move.l	d0,(a5)
+    DPRINT  "_xopen=%lx"
+	move.l	d0,(a5) 
 	bne.b	.open_ok
 	moveq	#-1,d0			;-1=DOS_OPEN_ERROR
 	bra	.exit
@@ -4793,6 +4866,7 @@ _xread
 .nla	move.l	(a0),d1		;mfh_fh
 	move.l	_DosBase+var_b,a6
 	lob	Read
+    DPRINT  "Read=%ld bytes"
 .exit	movem.l	(a7)+,d1-a6
 	rts
 .is_xpk	move.l	d2,d6	;buf

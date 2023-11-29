@@ -17,6 +17,8 @@ pt_hippel	rs.b	1
 pt_mline	rs.b	1
 pt_beathoven	rs.b	1
 pt_delicustom	rs.b 	1
+pt_midistream   rs.b    1
+pt_vgm          rs.b    1   * TODO: WARNING: This is 47
 
 * These need a replayer code from the group file
 pt_group_start = 49
@@ -99,3 +101,4 @@ pt_jasonpage		rs.b 	1
 pt_davidwhittaker	rs.b	1
 pt_soundmaster      rs.b    1
 pt_soundprogramminglanguage rs.b 1
+pt_midiext          rs.b    1

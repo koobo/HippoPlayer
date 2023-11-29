@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.58
+Version: 2.59
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -39,6 +39,7 @@ Quick overview of major changes since v2.45
   - "Keep list on exit": Continue where you left off 
   - "Big buttons": Larger buttons
   - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
+  - "MIDI mode": Select how to play MIDI files
   - "Enable xmaplay060": Enable a high quality XM replayer
   - "Enable MHI": Play MP3s with extenal hardware
   - "Position slider": For displaying and selecting position
@@ -46,7 +47,8 @@ Quick overview of major changes since v2.45
 - Main window font can be changed to any font
 - Support for many new music formats, stereo SID support
 - Improved scopes: support for more music formats, multiple scopes,
-  spectrum scope, patternscope with two sizes and up to 18 channels
+  spectrum scope, patternscope with two sizes and up to 18 channels 
+  ("mini4" font needed for 8+ channel display)
 - Support for MP3 streaming, radio stations
 - "Add" button in file browser or search view: copy items to main list
 - Support for playlists of up to 131071 items.
@@ -58,11 +60,132 @@ New keyboard shortcuts:
 - Search modules: [CTRL+S]
 - Download file: [CTRL+G]
 
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
 
-# Changes from from v2.57 (1.4.2023) to v2.58 (22.6.2023)
+# Changes from v2.58 (22.6.2023) to v2.59 (29.11.2023) 
+
+## Fixes:
+
+- Patternscope and AHX modules: Fix bug which caused track 0 sometimes not being
+  displayed.
+
+- Info window: Fix PSID song speed information sometimes showing wrong values.
+
+- Prevent jam when receiving no results from recent stations search.
+
+- Allow MS-DOS line changes in playlist/module program files.
+
+- Info window: Allow mousewheel to work with scrolling the content.
+
+- Commandline parameters: If started with "QUIT" and there is no
+  existing HiP instance running, do not start a new one.
+
+- Keep list on exit: when starting HiP with commandline/icon modules
+  as parameters do not lose the kept list, instead append to the end.
+
+## New stuff:
+
+- Scopes: When paused display the paused contents instead of the Hippo gfx.
+
+- MED/OctaMED: Display song length and channel count for multichannel modules.
+
+- Patternscope now supports MED and OctaMED modules, up to 18 channels visible.
+  "mini4" font is needed to display more than 8 channels as before.
+
+- STIL support added for use with the High Voltage Sid Collection. FAQ: "The SID
+  Tune Information List (STIL) contains information about the SID tunes found in
+  the HVSC beyond the standard TITLE, AUTHOR, and RELEASED information. STIL
+  goes a little deeper listing SID tune information that only a true SID freak
+  would enjoy. Such information listed in STIL includes cover information,
+  interesting facts, useless trivia, comments on the tunes by the composers
+  themselves, etc."
+ 
+  Hippo is able to display this information in the info window if it detects the
+  SID being played being a part of the HVSC hierarchy, by checking the file path
+  or URL. For example, using the HVSC search or a local HVSC collection works.
+ 
+  The file STIL.txt needs to be available in the Hippo directory, it can be
+  found in https://www.hvsc.c64.org/downloads. During the first access a 
+  separate index file STIL.idx is created, this takes a while.
+  On kick1.3 Hippo needs to be started using the Workbench icon or
+  from shell in the same directory where the STIL.txt is for
+  Hippo to be able to find it.
+  
+- PSID improvements with the updated playsid.library v1.6:
+   - SIDBlaster support upgraded by Erique, now faster and much less
+     likely to cause jams. A 68020 should be enough for normal
+     playback, previously a faster CPU was needed.
+   - reSID mode now supports playsid-style digisamples, as heard for
+     example in tunes like "Skate Or Die" and "Arkanoid".   
+   - "Prefs/Play-2/reSID boost" can be used to boost the volume 
+     in reSID mode.
+   - The library also now works on kickstart 1.3 in the original
+     playback mode, no need to have a separate kick1.3 lib version.
+   - Improved configuration with environment variables, if not using
+     with Hippo.
+
+- MIDI file playback support:
+  - "Prefs/Play-2/MIDI mode" setting chooses which mode is active.
+  - Serial output mode using Alastair M. Robinson's "delimidi" player. 
+    This will use MIDI equipment connected to the serial port for playing. 
+  - Paula/AHI output mode using either Timidity Amiga port by Philipp 
+    Grosswiler or GMPlay by Christian Buchner.
+    - Timidity: Good quality, heavy CPU and FPU usage, 68060 tested to work.
+      Unarchive https://aminet.net/mus/midi/AmiTiMiDity.lha and set an 
+      assign "timidity:" to the directory. 
+    - GMPlay: Not as good quality, lighter CPU load, 68020 should work.
+      Install GMPlay from http://aminet.net/mus/midi/GMPlay13.lha and
+      set an assign "gm:" to the directory (this is just for Hippo to
+      find it). Also install Patrik's file driver into "gm:SoundDrivers", 
+      https://aminet.net/mus/misc/file.driver.lha 
+  - Scopes, song end detection, AHI output supported.
+
+- Console music playback support using the "vgm2wav" application:
+  It uses the Game Music Emulator library for sound output. The following
+  formats (and file extensions) are supported:
+  - AY        ZX Spectrum/Amstrad CPC
+  - GBS       Nintendo Game Boy
+  - GYM       Sega Genesis/Mega Drive
+  - HES       NEC TurboGrafx-16/PC Engine
+  - KSS       MSX Home Computer/other Z80 systems (doesn't support FM sound)
+  - NSF/NSFE  Nintendo NES/Famicom (with VRC 6, Namco 106, and FME-7 sound)
+  - SAP       Atari systems using POKEY sound chip (no digimusic support)
+  - SPC       Super Nintendo/Super Famicom
+  - VGM/VGZ   Sega Master System/Mark III, Sega Genesis/Mega Drive, BBC Micro 
+  Download http://aminet.net/mus/misc/vgm2wav-gme.lha and place the
+  binary into C: or Hippo directory. The CPU usage varies depending on the 
+  format being played. A 68060@50MHz might not be fast enough for SPC files,
+  a 68020 can likely handle AY and SAP, for example. Vgz-files are gzipped, 
+  so you need to have a working gzip in C: too.
+  
+  Scopes, subsongs, song end detection (for some subformats), 
+  AHI output supported.
+
+- MDX music from the Sharp X68000 system playback support using the
+  "mdx2wav" application. These contain 8 FM synthesized channels and 
+  the 68060 at 50MHz is likely not fast enough for smooth playback. 
+  Download http://aminet.net/mus/misc/mdx2wav.lha and place the binary 
+  into C: or Hippo directory. Scopes, song end detection, AHI 
+  output supported.
+
+- Note on performance: Timidity, GMPlay, vgm2wav and mdx2wav are used 
+  to convert files to audio on-the-fly. Th data is piped through to Hippo 
+  using PIPE: provided by the queue-handler. The performance of
+  queue-handler is important, the older V37 (OS 3.0/3.1) is much slower 
+  than the newer V45 (OS 3.2). 
+
+- Greetz+thanx in no order go to Spot/UpRough, Patrik/UHCTeam, Erique, 
+  Estrayk and Marek Hac for helping with this version.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.57 (1.4.2023) to v2.58 (22.6.2023)
 
 ## New fixes:
 
@@ -100,7 +223,7 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 
 
-# Changes from from v2.56 (15.2.2023) to v2.57 (1.4.2023) 
+# Changes from v2.56 (15.2.2023) to v2.57 (1.4.2023) 
 
 ## New fixes:
 
@@ -1576,6 +1699,7 @@ List of supported formats (could be incomplete):
 - GlueMon
 - Hippel ST, Hippel ST COSO
 - Hippel, Hippel 7v, Hippel-COSO
+- Impulse Tracker
 - In Stereo! v1, v2
 - JamCracker
 - Jason Brooke 
@@ -1583,11 +1707,12 @@ List of supported formats (could be incomplete):
 - Jeroen Tel
 - Kris Hatlelid
 - Maniacs of Noise 
-- Mark II 
 - Mark Cooksey
+- Mark II 
 - MaxTrax
 - MED, OctaMED
 - Medley Sound 
+- MIDI (general MIDI, serial out)
 - MultiTracker, TakeTracker (multichannel Protracker-like formats)
 - Music Assembler
 - Musicline Editor
@@ -1595,7 +1720,7 @@ List of supported formats (could be incomplete):
 - Oktalyzer
 - PreTracker
 - ProTracker, NoiseTracker, SoundTracker, Old SoundTracker
-- PSID
+- PSID, 2SID
 - PumaTracker 
 - Quartet, Quartet ST
 - Richard Joseph
@@ -1607,6 +1732,8 @@ List of supported formats (could be incomplete):
 - Sidmon v1, v2
 - Sonic Arranger (some variants not supported)
 - Sonix
+- Sound Master
+- Sound Programming Language
 - SoundControl
 - SoundFX
 - SpecialFX

@@ -1,12 +1,11 @@
 # Experimental makefile
-
 INCLUDE=-I$(HOME)/A/Asm/Include -I. -I./Include 
-ASM=~/Prj/vbcc/bin/vasmm68k_mot
+ASM ?= /opt/amiga/bin/vasmm68k_mot 
 FLAGS=
 TARGET=
 
 # Normal and debug build of the main app
-all: HiP HiP-debug group
+all: HiP HiP-debug HiP-debug-ser group
 
 # Same as above with debug build of the group as well.
 # This enables logging with PS3M and sampleplayer.
@@ -22,6 +21,10 @@ HiP: puu016.s kpl playerIds.i
 # Debug logging version 
 HiP-debug: puu016.s kpl playerIds.i
 	$(ASM) $(INCLUDE) -m68000 -kick1hunks -Fhunkexe -nosym -DDEBUG=1 -L $@.txt -o $@ $<
+	@echo Built $@
+
+HiP-debug-ser: puu016.s kpl playerIds.i
+	$(ASM) $(INCLUDE) -m68000 -kick1hunks -Fhunkexe -nosym -DDEBUG=1 -DSERIALDEBUG=1  -o $@ $<
 	@echo Built $@
 
 # Protracker replayer binary
@@ -51,7 +54,17 @@ cleaner: clean
 	cd pl && make clean
 
 clean:	
-	rm -f HiP HiP-debug 
+	rm -f HiP HiP-debug HiP-debug-ser
 
 dist: HiP HiP-debug group
 	cd dist && make
+
+stil: STIL.txt
+
+STIL.txt: 
+	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/STIL.txt
+
+beta: HiP HiP-debug
+	lha a ~/Dropbox/hip-beta.lha HiP HiP-debug HiP-debug-ser HippoPlayer.group vgm2wav
+	cd playsid.library && lha a ~/Dropbox/hip-beta.lha playsid.library
+	scp ~/Dropbox/hip-beta.lha sitruuna.local:/srv/ftp/amiga/
