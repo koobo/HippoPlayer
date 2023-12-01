@@ -6,7 +6,8 @@ hippoplayerupdate.lha:
 	cp ../playsid.library/playsid.library .
 	cp ../playsid.library/README.txt playsid.library.readme
 	rm -f $@
-	lha a -o5 $@ HiP HiP.info HippoPlayer.group FILE_ID.DIZ hippoplayerupdate.readme playsid.library playsid.library.readme 
+	chmod a+rx HiP
+	lha a -1 -o5 $@ HiP HiP.info HippoPlayer.group FILE_ID.DIZ hippoplayerupdate.readme playsid.library playsid.library.readme
 		
 clean:
 	rm hippoplayerupdate.lha
