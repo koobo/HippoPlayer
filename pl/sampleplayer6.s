@@ -3615,16 +3615,17 @@ decodeMp3
 	move.l	d3,d7	;len
 	moveq	#0,d5	;already read
 
-.xloop	tst.l	d7
+.xloop	
+    tst.l	d7
 	bgt.b	.go_on
 .eof	
 	move.l	d5,d0
-	bra.b	.exit
+	bra 	.exit
 
 .go_on	move.l	mpbuffcontent(a5),d0
-	ble.b	.read
+	ble 	.read
 	sub.l	d0,d7
-	bge.b	.copy
+	bge 	.copy
 	add.l	d0,d7
 	move.l	d7,d0
 	moveq	#0,d7
@@ -3641,12 +3642,26 @@ decodeMp3
 	add.l	d1,a0
 	add.l	d1,a1
 
-	subq	#1,d0
+    cmp     #1152,d0
+    beq     .quick
 
-.co	move	(a0)+,(a3)+
-	move	(a1)+,(a3)+
+	subq	#1,d0
+.co	move	(a0)+,(a3)+ * left
+	move	(a1)+,(a3)+ * right 
 	dbf	d0,.co
-	bra.b	.xloop
+	bra     .xloop
+
+.quick
+    lsr     #4,d0
+    subq    #1,d0
+.qcopy
+ rept 16
+	move	(a0)+,(a3)+ * left
+	move	(a1)+,(a3)+ * right 
+ endr
+    dbf     d0,.qcopy
+
+    bra      .xloop
 
 .read
 	clr.l	mpbuffpos(a5)
@@ -3658,8 +3673,8 @@ decodeMp3
 	popm	d1-a6
     * 1152 bytes decoded at a time
     move.l	d0,mpbuffcontent(a5)
-	bmi.b	.eof
-	bra.b	.xloop
+	bmi 	.eof
+	bra 	.xloop
 
 .pcm	dc.l	mpbuffer1
 	dc.l	mpbuffer2
