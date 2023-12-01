@@ -610,6 +610,12 @@ init:
     move.w  (a1)+,d0
     move.b  d0,mhiEnable(a5)
     ; enable mhi
+    cmp.b   #4,sampleformat(a5)
+    beq     .wasMp3
+    clr.b   mhiEnable(a5)
+    DPRINT  "Not mp3, disable MHI"
+.wasMp3
+
     move.l  (a1)+,streamLength(a5)
     move.l  (a1)+,_XPKBase(a5)
     move.l  (a1)+,colordiv(a5)
@@ -2268,6 +2274,9 @@ sample_code:
 	DPRINT	"*** Process ***"
 
     tst.b   mhiEnable(a5)
+    beq     .nomhi  
+    * Sanity check
+    tst.l   mhiBase(a5)
     beq     .nomhi  
     bsr     mhiStart
     DPRINT  "mhiStart=%ld"
