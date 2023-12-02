@@ -3199,6 +3199,9 @@ sample_code:
     * Detect mp3 special case when no cybersound calibration used
     tst.l   samplecyber(a5)
     bne.b   .wl2
+    * Special mode only for the normal 44.1kHz freq
+    cmp.w   #1,mpfreqdiv(a5)
+    bne     .wl2
     tst     mplippu(a5)
     bne     decodeMp3
 .wl2
