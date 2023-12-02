@@ -593,6 +593,15 @@ init:
 ;	move.l	d4,probebuffer(a5)
 	move.l	d5,kokonaisaika(a5)
 
+ if DEBUG
+    pushm   d0/d1
+    moveq   #0,d0
+    move.b  d6,d0
+    move.l  d7,d1
+    DPRINT  "cyber calib=%lx addr=%lx"
+    popm    d0/d1
+ endif
+
 	move.b	d6,cybercalibration(a5)
 	move.l	d7,calibrationaddr(a5)
 
@@ -1100,6 +1109,16 @@ init:
 .noLength
 	bsr	.moi_mp
 	bsr	.freqcheck
+
+ if DEBUG
+    pushm   d0/d1
+    moveq   #0,d0
+    moveq   #0,d1
+    move    mpfreqdiv(a5),d0
+    move    mpqual(a5),d1
+    DPRINT  "MPEGA freqdiv=%lx quality=%ld"
+    popm    d0/d1
+ endif
 
 	st	mplippu(a5)
 	move.b	#2,sampleformat(a5)	* huijataan että ollaan AIFF
@@ -3581,7 +3600,7 @@ convert_stereo_14bit
     * Special case for stereo mp3
 decodeMp3
 .wl2
-    DPRINT  "mp3 loop"
+    DPRINT  "mp3 loop SPECIAL CASE"
 	bsr	clrsamplebuf
 
 	move.l	samplework(a5),a4
