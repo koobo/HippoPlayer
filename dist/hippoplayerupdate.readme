@@ -64,6 +64,28 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
+# Changes from v2.59 (29.11.2023) to  v2.60 (?.?.2024) 
+
+## Fixes:
+
+- Enabling "MHI output" in Prefs and trying to play
+  WAV/AIFF/MIDI/MDX2WAV/VGM2WAV would lead to crash. 
+
+- Setting "MPEGA freq div" to something else than 1 and playing mp3 
+  would lead to a crash. This will engage the relatively new and improved 
+  mp3 downsampling code which can't handle non-44.1kHz input data.
+
+## New/old stuff:
+
+- This was already in the previous version but forgot to mention:
+  The reSID output mode for PSID files no longer has a separate AHI setting,
+  that is controlled from the Prefs/AHI subpage. This allows use of the noise 
+  reduction modes for AHI too (Oversample x2, etc), which was previously not 
+  possible.
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
 
 # Changes from v2.58 (22.6.2023) to v2.59 (29.11.2023) 
 
