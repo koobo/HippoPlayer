@@ -3664,7 +3664,8 @@ decodeMp3
 	add.l	d1,a0
 	add.l	d1,a1
 
-    cmp     #1152,d0
+    moveq   #1<<4-1,d1
+    and     d0,d1
     beq     .quick
 
 	subq	#1,d0
@@ -4133,14 +4134,13 @@ ahiswap	movem.l	(a3),d0/d1/d2/d3
 
 read_mp_mono
 	moveq	#-1,d0
-	bsr.b	read_mp
-	rts
+	bra 	read_mp
 
 read_mp_stereo
 
 	moveq	#0,d0
-	bsr.b	read_mp
-	rts
+;	bsr.b	read_mp
+;	rts
 
 read_mp
 	movem.l	d1-a6,-(a7)
@@ -4164,7 +4164,7 @@ read_mp
 	bra.b	.exit
 
 .go_on	move.l	mpbuffcontent(a5),d0
-	ble.b	.read
+	ble 	.read
 	sub.l	d0,d7
 	bge.b	.copy
 	add.l	d0,d7
@@ -4184,21 +4184,53 @@ read_mp
 	add.l	d1,a0
 	add.l	d1,a1
 
-	subq	#1,d0
+    * Here we would get 1152, 576, or 288 
+    * depending on the freq div.
+    * but freq div=1 is handled in the special branch,
+    * unless in mono mode
 
 	tst	d6
 	bne.b	.mono
 
+    moveq   #1<<4-1,d1
+    and     d0,d1
+    beq     .stereoFast
 
+	subq	#1,d0
 .co	move	(a0)+,(a3)+
 	move	(a1)+,(a3)+
 	dbf	d0,.co
-	bra.b	.xloop
+	bra 	.xloop
+
+.stereoFast
+    lsr     #4,d0
+	subq	#1,d0
+.stereoFastCopy
+ rept 16
+    move	(a0)+,(a3)+
+	move	(a1)+,(a3)+
+ endr
+    dbf     d0,.stereoFastCopy
+    bra     .xloop
+
 .mono
+    moveq   #1<<4-1,d1
+    and     d0,d1
+    beq     .monoFast
+	subq	#1,d0
+.monoCopy
 	move	(a0)+,(a3)+
-	;move	(a1)+,(a3)+
-	dbf	d0,.mono
-	bra.b	.xloop
+	dbf	d0,.monoCopy
+	bra     .xloop
+.monoFast
+    lsr     #4,d0
+	subq	#1,d0
+.monoFastCopy
+ rept 16/2
+	move.l	(a0)+,(a3)+
+ endr
+    dbf     d0,.monoFastCopy
+    bra     .xloop
 
 .read
 	clr.l	mpbuffpos(a5)
@@ -4210,8 +4242,8 @@ read_mp
 	popm	d1-a6
 
 	move.l	d0,mpbuffcontent(a5)
-	bmi.b	.eof
-	bra.b	.xloop
+	bmi 	.eof
+	bra 	.xloop
 
 .pcm	dc.l	mpbuffer1
 	dc.l	mpbuffer2
