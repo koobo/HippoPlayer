@@ -279,7 +279,7 @@ samplefreq	rs	1
 
 samplebuffer	rs.l	8+1
 samplecyber         rs.l    1 * Pointer to the cyber calibration table $20000 bytes
-volumeScalingTable  rs.l    1 * Pointer to the volume scaling table 64*256 bytes
+
 
 sampleper	rs	1
 samplepointer	rs.l	1
@@ -2266,9 +2266,6 @@ sampleiik:
 	move.l	samplecyber(a5),a0
 	bsr	freemem
 	clr.l	samplecyber(a5)
-    move.l  volumeScalingTable(a5),a0
-    bsr	freemem
-	clr.l   volumeScalingTable(a5)
 
 	lea	samplebuffer(a5),a3
 .f	move.l	(a3)+,d0
@@ -3533,10 +3530,14 @@ convert_stereo
     DPRINT  "16-bit"
 .w123_
  rept 4
-	move.b	(a0)+,(a1)+
-	addq.l	#1,a0
-	move.b	(a0)+,(a2)+
-	addq.l	#1,a0
+;	move.b	(a0)+,(a1)+
+;	addq.l	#1,a0
+;	move.b	(a0)+,(a2)+
+;	addq.l	#1,a0
+
+	move.b	(a0),(a1)+
+	move.b	2(a0),(a2)+
+	addq.l	#4,a0
  endr
  	dbf	d0,.w123_
 	rts
@@ -3566,6 +3567,9 @@ convert_stereo_14bit
 
 	tst	d5
 	bne	.aiffc214
+
+    cmp.w   #$40,mainvolume(a5)
+    bne     .cyber_wav_stereo_14bit_volume
 
     DPRINT  "convert WAV stereo cyber 14-bit"
 
@@ -3605,10 +3609,41 @@ convert_stereo_14bit
 	dbf	d0,.w1214_020
 	rts
 
+.cyber_wav_stereo_14bit_volume:
+    DPRINT  "convert WAV stereo cyber 14-bit vol"
+    move    mainvolume(a5),d2
+.cyber_wav_stereo_14bit_volume_:
+    move    $dff006,$dff180
+ rept 4
+    move.w  (a0)+,d1
+    ror.w   #8,d1       * WAV byte order
+    muls    d2,d1
+    asr.l   #6,d1
 
+	add.l	d1,d1
+    move.b	(a6,d1.l),(a3)+
+	move.b	1(a6,d1.l),(a1)+
+
+    ;----------------------------------
+
+    move.w  (a0)+,d1
+    ror.w   #8,d1       * WAV byte order
+    muls    d2,d1
+    asr.l   #6,d1
+
+	add.l	d1,d1
+	move.b	(a6,d1.l),(a4)+
+	move.b	1(a6,d1.l),(a2)+
+ endr	
+    dbf	d0,.cyber_wav_stereo_14bit_volume_
+
+    rts
 
 
 .aiffc214
+    cmp.w   #$40,mainvolume(a5)
+    bne     .cyber_aiff_stereo_14bit_volume
+
     DPRINT  "convert AIFF stereo cyber 14-bit"
 
 	tst.b	cpu(a5)
@@ -3646,6 +3681,34 @@ convert_stereo_14bit
 	rts
 
 
+.cyber_aiff_stereo_14bit_volume:
+    DPRINT  "convert AIFF stereo cyber 14-bit vol"
+    move    mainvolume(a5),d2
+.cyber_aiff_stereo_14bit_volume_:
+    move    $dff006,$dff180
+ rept 4
+    move.w  (a0)+,d1
+    muls    d2,d1
+    asr.l   #6,d1
+
+	add.l	d1,d1
+    move.b	(a6,d1.l),(a3)+
+	move.b	1(a6,d1.l),(a1)+
+
+    ;----------------------------------
+
+    move.w  (a0)+,d1
+    muls    d2,d1
+    asr.l   #6,d1
+
+	add.l	d1,d1
+	move.b	(a6,d1.l),(a4)+
+	move.b	1(a6,d1.l),(a2)+
+ endr	
+    dbf	d0,.cyber_aiff_stereo_14bit_volume_
+
+    rts
+
 .ordinary_stereo_14bit
   	lsr.l	#2,d0
 	subq	#1,d0
@@ -3654,196 +3717,102 @@ convert_stereo_14bit
 	bne	.o_aiffc214
 * WAV
     cmp.w   #$40,mainvolume(a5)
-    bne     .ordinary_stereo_14bit_volume
+    bne     .ordinary_wav_stereo_14bit_volume
 
     DPRINT  "convert WAV stereo normal 14-bit"
 .o_w1214
- rept 4
-    move	(a0)+,d1
-    move.b  d1,(a3)+    * MSB
-    ror	    #8,d1
+
+  rept 4
+    move.b  (a0)+,d1
     lsr.b   #2,d1
     move.b  d1,(a1)+    * LSB
+    move.b  (a0)+,(a3)+ * MSB
 
-    move	(a0)+,d1        
-    move.b  d1,(a4)+    * MSB
-    ror     #8,d1   
+    move.b  (a0)+,d1
     lsr.b   #2,d1
     move.b  d1,(a2)+    * LSB
+    move.b  (a0)+,(a4)+ * MSB
  endr
  	dbf	d0,.o_w1214
 	rts
 
-.ordinary_stereo_14bit_volume:
+.ordinary_wav_stereo_14bit_volume:
     DPRINT  "convert WAV stereo normal 14-bit vol"
-    ; TEST file: giana.wav
-;   aabb*v/64 = (aa*256 + bb) * v/64
-;   (aa*256*v/64 + bb*v/64)
-;   (aa*256*v + bb*v)/64
-	move.l	volumeScalingTable(a5),a6
-    move    mainvolume(a5),d1
-    mulu    #512,d1
-    add.l   d1,a6
-.ordinary_stereo_14bit_volume_:
+
+    move.w  mainvolume(a5),d2
+
+.ordinary_wav_stereo_14bit_volume_:
  rept 4
+    move.w  (a0)+,d1
+    ror.w   #8,d1   * WAV byte order
+    muls    d2,d1
+    asr.l   #6,d1
+    lsr.b   #2,d1
+    move.b  d1,(a1)+    * LSB
+    ror.w   #8,d1
+    move.b  d1,(a3)+    * MSB
 
- ; REM
-   ; move	(a0)+,d1
-   ; move.b  d1,(a3)+    * MSB
-   ; ror	    #8,d1
-   ; lsr.b   #2,d1
-   ; move.b  d1,(a1)+    * LSB
+    move.w  (a0)+,d1
+    ror.w   #8,d1   * WAV byte order
+    muls    d2,d1
+    asr.l   #6,d1
+    lsr.b   #2,d1
+    move.b  d1,(a2)+    * LSB
+    ror.w   #8,d1
+    move.b  d1,(a4)+    * MSB
 
-;    move.b  (a0)+,d1
-;    lsr.b   #2,d1
-;    move.b  d1,(a1)+    * LSB
-;    move.b  (a0)+,d1
-;    move.b  d1,(a3)+    * MSB
-
-;    moveq   #0,d1
-;    move.b  (a0)+,d1    * LSB
-;    ext.w   d1
-;    moveq   #0,d2
-;    move.b  (a0)+,d2    * MSB
-;    ext.w   d2
-;    muls    #$20,d1
-;    muls    #$20,d2
-;    asl.l   #8,d2
-;    add.l   d1,d2
-;    asr.l   #6,d2
-;    lsr.b   #2,d2
-;    move.b  d2,(a1)+    * LSB
-;    ror.w   #8,d2
-;    move.b  d2,(a3)+    * MSB
-
-    ; OK!
-    moveq   #0,d1
-    move.b  (a0)+,d1    * LSB
-    add.w   d1,d1
-    move.w  (a6,d1.w),d1 * mul by volume
-    moveq   #0,d2
-    move.b  (a0)+,d2    * MSB
-    add.w   d2,d2
-    move.w  (a6,d2.w),d2 * mul by
-    ext.l   d2
-    ext.l   d1
-
-    asl.l   #8,d2
-    add.l   d1,d2
-    asr.l   #6,d2
-    lsr.b   #2,d2
-    move.b  d2,(a1)+    * LSB
-    ror.w   #8,d2
-    move.b  d2,(a3)+    * MSB
-
-
-
-;    move.b  (a0)+,d1    * LSB
-;    move.b  d1,(a1)+
-;    ext     d1
-;    move.b  (a0)+,d2    * MSB
-;    move.b  d2,(a3)+
-;    ext     d2
-;    muls    mainvolume(a5),d1
-;    muls    mainvolume(a5),d2
-;    asl.l   #8,d2
-;    add.l   d2,d1
-;    asr.l   #6,d1
-;
-   ; lsr.b   #2,d1
-   ; move.b  d1,(a1)+
-   ; ror.w   #8,d1
-   ; move.b  d1,(a3)+
-
-   ; other side silent
-    addq    #2,a0
-    clr.b   (a2)+
-    clr.b   (a4)+
- 
-  ;  move.b  (a0)+,d1    * MSB
-  ;  ext     d1
-  ;  move.b  (a0)+,d2    * LSB
-  ;  ext     d2
-  ;  muls    mainvolume(a5),d1
-  ;  muls    mainvolume(a5),d2
-  ;  asl.l   #8,d2
-  ;  add.l   d2,d1
-  ;  asr.l   #6,d1
-;
-  ;  lsr.b   #2,d1
-  ;  move.b  d1,(a2)+
-  ;  ror.w   #8,d1
-  ;  move.b  d1,(a4)+
- ; EREM
-
-  REM
-    moveq   #0,d1
-    move.b  (a0)+,d1    * LSB
-    moveq   #0,d2
-    add.w   d1,d1
-    move.w  (a6,d1.w),d2
-    ext.l   d2
-
-    moveq   #0,d1
-    move.b  (a0)+,d1    * MSB
-    moveq   #0,d3
-    add.w   d1,d1
-    move.w  (a6,d1.w),d3
-    ext.l   d3
-    asl.l   #8,d3
-    add.l   d3,d2
-    asr.l   #6,d2
-
-    lsr.b   #2,d2
-    move.b  d2,(a1)+       * LSB out
-    ror.w   #8,d2
-    move.b  d2,(a3)+       * MSB out
-
-    ; ---------------------------------
-
-    ; other side silent
-    clr.b   (a2)+
-    clr.b   (a4)+
-    
- EREM
-
-;;    move	(a0)+,d1
-;;    move.b  d1,(a3)+    * MSB
-;;    ror	    #8,d1
-;;    lsr.b   #2,d1
-;;    move.b  d1,(a1)+    * LSB
-;;
-;;    move	(a0)+,d1        
-;;    move.b  d1,(a4)+    * MSB
-;;    ror     #8,d1   
-;;    lsr.b   #2,d1
-;;    move.b  d1,(a2)+    * LSB
  endr
- 	dbf	d0,.ordinary_stereo_14bit_volume_
+ 	dbf	d0,.ordinary_wav_stereo_14bit_volume_
     rts
+
 
 * AIFF
 .o_aiffc214
+    cmp.w   #$40,mainvolume(a5)
+    bne     .ordinary_aiff_stereo_14bit_volume
     DPRINT  "convert AIFF stereo normal 14-bit"
 
 .o_aiffc214_l
  rept 4
-	move	(a0)+,d1
+	move.b	(a0)+,(a3)+  * MSB
+	move.b	(a0)+,d1
     lsr.b   #2,d1
     move.b  d1,(a1)+    * LSB
-	ror	#8,d1
-    move.b  d1,(a3)+    * MSB
 
-	move	(a0)+,d1
+	move.b	(a0)+,(a4)+  * MSB
+	move.b	(a0)+,d1
     lsr.b   #2,d1
     move.b  d1,(a2)+    * LSB
-	ror	#8,d1
-    move.b  d1,(a4)+    * MSB
  endr
     dbf d0,.o_aiffc214_l
     rts
 
+.ordinary_aiff_stereo_14bit_volume:
+    DPRINT  "convert AIFF stereo normal 14-bit vol"
+    move    mainvolume(a5),d2
+   
+.ordinary_aiff_stereo_14bit_volume_:
 
+ rept 4
+    move.w  (a0)+,d1
+    muls    d2,d1
+    asr.l   #6,d1
+    lsr.b   #2,d1
+    move.b  d1,(a1)+    * LSB
+    ror.w   #8,d1
+    move.b  d1,(a3)+    * MSB
+
+    move.w  (a0)+,d1
+    muls    d2,d1
+    asr.l   #6,d1
+    lsr.b   #2,d1
+    move.b  d1,(a2)+    * LSB
+    ror.w   #8,d1
+    move.b  d1,(a4)+    * MSB
+
+ endr
+    dbf d0,.ordinary_aiff_stereo_14bit_volume_
+    rts
 
 
 ; -----------------
@@ -4693,14 +4662,6 @@ initsamplecyber:
 	beq 	.nocy
     moveq   #0,d7   * error
 
-    * For each byte, have 64 values of words
-	move.l	#2*256*(64+1),d0
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
-	bsr	getmem
-	move.l	d0,volumeScalingTable(a5)
-	beq 	.nocy
-    bsr     .doVolTable
-
     moveq   #1,d7     * ok
 
     move.l  4.w,a0
@@ -4742,28 +4703,25 @@ initsamplecyber:
     dc.b    "CyberSound/SoundDrivers/14Bit_Calibration",0
     even
 
-.doVolTable:
-    move.l  d0,a0
-    moveq   #0,d0
-.vl1
-    moveq   #0,d1
-.vl2
-    move    d1,d2
-    ext.w   d2
-    muls    d0,d2
-    ;asr.l   #6,d2
-    ;mulu    d0,d2
-    ;lsr     #6,d2
-    move.w  d2,(a0)+
-
-    addq    #1,d1
-    cmp     #256,d1
-    bne     .vl2
-
-    addq    #1,d0
-    cmp     #64+1,d0
-    bne     .vl1
-    rts
+;;;.doVolTable:
+;;;    move.l  d0,a0
+;;;    moveq   #0,d0
+;;;.vl1
+;;;    moveq   #0,d1
+;;;.vl2
+;;;    move    d1,d2
+;;;    ext.w   d2
+;;;    muls    d0,d2
+;;;    move.w  d2,(a0)+
+;;;
+;;;    addq    #1,d1
+;;;    cmp     #256,d1
+;;;    bne     .vl2
+;;;
+;;;    addq    #1,d0
+;;;    cmp     #64+1,d0
+;;;    bne     .vl1
+;;;    rts
 
 
 * Checks if mp3 can be seeked 
