@@ -244,7 +244,7 @@ songover	rs.l	1
 
 cpu		rs.b	1
 cybercalibration rs.b	1
-calibrationaddr	rs.l	1
+;;calibrationaddr	rs.l	1
 
 sampleforcerate	rs	1
 samplebuf	rs.l	1	* sampleplayeri
@@ -278,7 +278,8 @@ samplestart	rs.l	1
 samplefreq	rs	1
 
 samplebuffer	rs.l	8+1
-samplecyber	rs.l	1
+samplecyber         rs.l    1 * Pointer to the cyber calibration table $20000 bytes
+volumeScalingTable  rs.l    1 * Pointer to the volume scaling table 64*256 bytes
 
 sampleper	rs	1
 samplepointer	rs.l	1
@@ -603,7 +604,7 @@ init:
  endif
 
 	move.b	d6,cybercalibration(a5)
-	move.l	d7,calibrationaddr(a5)
+	;;;move.l	d7,calibrationaddr(a5)
 
 	move.l	4.w,(a5)
 	move.l	a1,_DosBase(a5)
@@ -1494,10 +1495,10 @@ init:
 	ext.l	d0
 .yi0
 
-	moveq	#8,d1
+	moveq	#8,d1           * Bits
 	tst.b	samplebits(a5)
 	beq.b	.fr3
-	moveq	#16,d1
+	moveq	#16,d1          * Bits
 .fr3
 	tst	mplippu(a5)
 	beq.b	.nomp
@@ -1516,17 +1517,38 @@ init:
 	divu	#1000,d3
 	ext.l	d3
 
-    moveq   #8,d4
+    DPRINT  "-------------------------------"
+    push    d0
+    moveq   #0,d0
+    move.b  samplecyberset(a5),d0
+    DPRINT  "cyber=%ld"
+    pop     d0
+
+
+    * Sample paula out
+    lea     .paula8Bit(pc),a0
+    tst.b	cybercalibration(a5)	
+    beq     .nocyb
+	tst.b	samplebits(a5)
+	beq	    .nocyb
+    lea     .paula14Bit(pc),a0
+.nocyb
+    move.l  a0,d4
+
+    tst.b   mplippu(a5)
+    beq      .lqq
+    * MP3 bits, freq
+    moveq   #8,d4           * Bits
     tst.b   samplestereo(a5)
     beq.b   .lqq
     cmp     #44100,samplefreq(a5)
     blo.b   .lqq
     tst.b   cpu(a5)
     beq.b   .lqq
-    moveq   #14,d4
+    moveq   #14,d4      * Bits
 .lqq
 
-	lea	.form(pc),a0
+	lea	.form(pc),a0    * sample form
 	tst	mplippu(a5)
 	beq.b	.nomp2
     lea     .form4(pc),a0
@@ -1553,7 +1575,7 @@ init:
 	lea	samplebuffer(a5),a3
 
 	tst.b	ahi(a5)		* jos ahi, ei tarvita näitä puskureita
-	bne.b	.ok2
+	bne 	.ok2
     tst.b   mhiEnable(a5)
     bne     .ok2
 
@@ -1569,9 +1591,10 @@ init:
 	beq.b	.es2
 	tst.b	samplebits(a5)
 	beq.b	.es2
-	tst.l	calibrationaddr(a5)
+	;tst.l	calibrationaddr(a5)
 	;beq.b	.es2
 	st	samplecyberset(a5)
+    DPRINT  "set samplcyberset(a5)-------------------"
 	add	d6,d6				* 8 kpl
 .es2
 
@@ -1830,12 +1853,14 @@ init:
 .t3	dc.b	"RIFF WAVE",0
 .t3midi dc.b "MIDI",0
 .t4	dc.b	"MP",0
-.form	dc.b	"%s %ld-bit %lc %2ldkHz",0
+.form	dc.b	"%s %ld-bit %lc %2ldkHz %s",0
 .form2	dc.b	"MP%ld %ldkb %lc %2ldkHz %ld-bit",0
 .form3	dc.b	"MP%ld %ldkb %lc %2ldkHz AHI",0
 .form4	dc.b	"MP%ld %ldkb %lc %2ldkHz MHI",0
 
-.pn	dc.b	"HiP-Sample",0
+.paula8Bit   dc.b    "8-bit",0
+.paula14Bit  dc.b    "14-bit",0
+.pn          dc.b    "HiP-Sample",0
  even
 
 isPipe:
@@ -2241,7 +2266,9 @@ sampleiik:
 	move.l	samplecyber(a5),a0
 	bsr	freemem
 	clr.l	samplecyber(a5)
-
+    move.l  volumeScalingTable(a5),a0
+    bsr	freemem
+	clr.l   volumeScalingTable(a5)
 
 	lea	samplebuffer(a5),a3
 .f	move.l	(a3)+,d0
@@ -2844,6 +2871,7 @@ sample_code:
 
 	tst.b	samplecyberset(a5)
 	bne.b	.14bitmono
+    DPRINT  "8-bit mono"
 
 	move.l	(a3),a1
 	tst.b	kutistus(a5)
@@ -2882,6 +2910,7 @@ sample_code:
 
 
 .14bitmono
+	DPRINT	"14-bit mono"
 
 
 	move.l	d6,d0
@@ -2981,6 +3010,7 @@ sample_code:
 
 
 .convert_mono
+    DPRINT  "convert_mono"
 * a0 = source
 * a1 = dest
 * d0 = len
@@ -2990,7 +3020,6 @@ sample_code:
 
 	tst	d5
 	bne.b	.aiffc
-
 
 	tst.b	samplebits(a5)
 	bne.b	.w2
@@ -3012,6 +3041,7 @@ sample_code:
 	rts
 
 .aiffc
+
 	tst.b	samplebits(a5)
 	bne.b	.w22
 .w42	
@@ -3034,6 +3064,8 @@ sample_code:
 
 
 .convert_mono_14bit
+    DPRINT "convert mono 14bit"
+
 * a0 = source
 * a1 = dest 1
 * a2 = dest 2
@@ -3047,6 +3079,9 @@ sample_code:
 
 	tst	d5
 	bne	.aiffc14
+
+    cmp.w   #0,a6
+    beq     .ordinaryWavMono14
 
 	tst.b	cpu(a5)
 	bne.b	.w214_020
@@ -3075,8 +3110,22 @@ sample_code:
 	dbf	d0,.w214_020
 	rts
 
+.ordinaryWavMono14:
+ rept 4
+    move	(a0)+,d1
+    move.b  d1,(a2)+    * MSB
+    ror     #8,d1
+    lsr.b   #2,d1
+    move.b  d1,(a1)+    * LSB
+ endr 
+	dbf     d0,.ordinaryWavMono14
+    rts
+
 
 .aiffc14
+    cmp.w   #0,a6
+    beq     .ordinaryAiffMono14
+
 	tst.b	cpu(a5)
 	bne.b	.w2214_020
 .w2214
@@ -3099,6 +3148,16 @@ sample_code:
 	dbf	d0,.w2214_020
 	rts
 
+.ordinaryAiffMono14:
+ rept 4
+    move	(a0)+,d1
+    lsr.b   #2,d1
+    move.b  d1,(a1)+    * LSB
+    ror     #8,d1
+    move.b  d1,(a2)+    * MSB
+ endr 
+	dbf     d0,.ordinaryAiffMono14
+    rts
 
 
 ************* AIFF/WAV stereo
@@ -3216,11 +3275,15 @@ sample_code:
 	DPRINT	"AIFF/WAV STEREO"
 
     * Detect mp3 special case when no cybersound calibration used
-    tst.l   samplecyber(a5)
+
+    * Is the cybersound mapping table set up? If it is, use
+    * the calibrated out path.
+    tst.l   samplecyber(a5) 
     bne.b   .wl2
-    * Special mode only for the normal 44.1kHz freq
+    * Freq div is something else than 1?
     cmp.w   #1,mpfreqdiv(a5)
     bne     .wl2
+    * MP3 mode on?
     tst     mplippu(a5)
     bne     decodeMp3
 .wl2
@@ -3314,14 +3377,12 @@ sample_code:
 		move.l	a3,a4
 		add.l	samplebufsiz(a5),a4
 .j0
-    DPRINT  "convert stereo 14bit"
 	bsr	convert_stereo_14bit
 
 	movem.l	(sp),a3/a4/a6
 
 	tst.b	kutistus(a5)
 	beq.b	.j1
-        DPRINT  "downsample"
 		move.l	(a3),a1			* kohde
 		move.l	samplework2(a5),a0 	* lähde
 		move.l	d6,d2			* pituus
@@ -3420,11 +3481,13 @@ convert_stereo
 	subq	#1,d0
 
 	tst	d5
-	bne.b	.aiffc2
+	bne	.aiffc2
+    DPRINT  "convert_stereo wav"
 
 	tst.b	samplebits(a5)
 	bne.b	.w12
 	move.b	#$80,d2
+    DPRINT  "8-bit"
 .w14	
 
  rept 4
@@ -3441,19 +3504,23 @@ convert_stereo
 	rts
 
 .w12	
+    DPRINT  "16-bit"
+.w12_
  rept 4
 	move	(a0)+,d1
 	move.b	d1,(a1)+
 	move	(a0)+,d1
 	move.b	d1,(a2)+
  endr
-	dbf	d0,.w12
+	dbf	d0,.w12_
 	rts
 
 
 .aiffc2
+    DPRINT  "convert_stereo aiff"
 	tst.b	samplebits(a5)
 	bne.b	.w123
+    DPRINT  "8-bit"
 .w143	
  rept 4
 	move.b	(a0)+,(a1)+
@@ -3463,13 +3530,15 @@ convert_stereo
 	rts
 
 .w123	
+    DPRINT  "16-bit"
+.w123_
  rept 4
 	move.b	(a0)+,(a1)+
 	addq.l	#1,a0
 	move.b	(a0)+,(a2)+
 	addq.l	#1,a0
  endr
- 	dbf	d0,.w123
+ 	dbf	d0,.w123_
 	rts
 
 
@@ -3486,10 +3555,10 @@ convert_stereo_14bit
 * a4 = dest 4
 * d0 = len
 
+
     tst.l   samplecyber(a5)
     beq     .ordinary_stereo_14bit
-
-	move.l	samplecyber(a5),a6
+	move.l	samplecyber(a5),a6  
 
 	lsr.l	#2,d0
 	subq	#1,d0
@@ -3497,6 +3566,8 @@ convert_stereo_14bit
 
 	tst	d5
 	bne	.aiffc214
+
+    DPRINT  "convert WAV stereo cyber 14-bit"
 
 	tst.b	cpu(a5)
 	bne	.w1214_020
@@ -3538,6 +3609,8 @@ convert_stereo_14bit
 
 
 .aiffc214
+    DPRINT  "convert AIFF stereo cyber 14-bit"
+
 	tst.b	cpu(a5)
 	bne.b	.w12314_020
 
@@ -3577,22 +3650,199 @@ convert_stereo_14bit
   	lsr.l	#2,d0
 	subq	#1,d0
 
-.o_w1214_020
+	tst	d5
+	bne	.o_aiffc214
+* WAV
+    cmp.w   #$40,mainvolume(a5)
+    bne     .ordinary_stereo_14bit_volume
+
+    DPRINT  "convert WAV stereo normal 14-bit"
+.o_w1214
+ rept 4
+    move	(a0)+,d1
+    move.b  d1,(a3)+    * MSB
+    ror	    #8,d1
+    lsr.b   #2,d1
+    move.b  d1,(a1)+    * LSB
+
+    move	(a0)+,d1        
+    move.b  d1,(a4)+    * MSB
+    ror     #8,d1   
+    lsr.b   #2,d1
+    move.b  d1,(a2)+    * LSB
+ endr
+ 	dbf	d0,.o_w1214
+	rts
+
+.ordinary_stereo_14bit_volume:
+    DPRINT  "convert WAV stereo normal 14-bit vol"
+    ; TEST file: giana.wav
+;   aabb*v/64 = (aa*256 + bb) * v/64
+;   (aa*256*v/64 + bb*v/64)
+;   (aa*256*v + bb*v)/64
+	move.l	volumeScalingTable(a5),a6
+    move    mainvolume(a5),d1
+    mulu    #512,d1
+    add.l   d1,a6
+.ordinary_stereo_14bit_volume_:
+ rept 4
+
+ ; REM
+   ; move	(a0)+,d1
+   ; move.b  d1,(a3)+    * MSB
+   ; ror	    #8,d1
+   ; lsr.b   #2,d1
+   ; move.b  d1,(a1)+    * LSB
+
+;    move.b  (a0)+,d1
+;    lsr.b   #2,d1
+;    move.b  d1,(a1)+    * LSB
+;    move.b  (a0)+,d1
+;    move.b  d1,(a3)+    * MSB
+
+;    moveq   #0,d1
+;    move.b  (a0)+,d1    * LSB
+;    ext.w   d1
+;    moveq   #0,d2
+;    move.b  (a0)+,d2    * MSB
+;    ext.w   d2
+;    muls    #$20,d1
+;    muls    #$20,d2
+;    asl.l   #8,d2
+;    add.l   d1,d2
+;    asr.l   #6,d2
+;    lsr.b   #2,d2
+;    move.b  d2,(a1)+    * LSB
+;    ror.w   #8,d2
+;    move.b  d2,(a3)+    * MSB
+
+    ; OK!
+    moveq   #0,d1
+    move.b  (a0)+,d1    * LSB
+    add.w   d1,d1
+    move.w  (a6,d1.w),d1 * mul by volume
+    moveq   #0,d2
+    move.b  (a0)+,d2    * MSB
+    add.w   d2,d2
+    move.w  (a6,d2.w),d2 * mul by
+    ext.l   d2
+    ext.l   d1
+
+    asl.l   #8,d2
+    add.l   d1,d2
+    asr.l   #6,d2
+    lsr.b   #2,d2
+    move.b  d2,(a1)+    * LSB
+    ror.w   #8,d2
+    move.b  d2,(a3)+    * MSB
+
+
+
+;    move.b  (a0)+,d1    * LSB
+;    move.b  d1,(a1)+
+;    ext     d1
+;    move.b  (a0)+,d2    * MSB
+;    move.b  d2,(a3)+
+;    ext     d2
+;    muls    mainvolume(a5),d1
+;    muls    mainvolume(a5),d2
+;    asl.l   #8,d2
+;    add.l   d2,d1
+;    asr.l   #6,d1
+;
+   ; lsr.b   #2,d1
+   ; move.b  d1,(a1)+
+   ; ror.w   #8,d1
+   ; move.b  d1,(a3)+
+
+   ; other side silent
+    addq    #2,a0
+    clr.b   (a2)+
+    clr.b   (a4)+
+ 
+  ;  move.b  (a0)+,d1    * MSB
+  ;  ext     d1
+  ;  move.b  (a0)+,d2    * LSB
+  ;  ext     d2
+  ;  muls    mainvolume(a5),d1
+  ;  muls    mainvolume(a5),d2
+  ;  asl.l   #8,d2
+  ;  add.l   d2,d1
+  ;  asr.l   #6,d1
+;
+  ;  lsr.b   #2,d1
+  ;  move.b  d1,(a2)+
+  ;  ror.w   #8,d1
+  ;  move.b  d1,(a4)+
+ ; EREM
+
+  REM
+    moveq   #0,d1
+    move.b  (a0)+,d1    * LSB
+    moveq   #0,d2
+    add.w   d1,d1
+    move.w  (a6,d1.w),d2
+    ext.l   d2
+
+    moveq   #0,d1
+    move.b  (a0)+,d1    * MSB
+    moveq   #0,d3
+    add.w   d1,d1
+    move.w  (a6,d1.w),d3
+    ext.l   d3
+    asl.l   #8,d3
+    add.l   d3,d2
+    asr.l   #6,d2
+
+    lsr.b   #2,d2
+    move.b  d2,(a1)+       * LSB out
+    ror.w   #8,d2
+    move.b  d2,(a3)+       * MSB out
+
+    ; ---------------------------------
+
+    ; other side silent
+    clr.b   (a2)+
+    clr.b   (a4)+
+    
+ EREM
+
+;;    move	(a0)+,d1
+;;    move.b  d1,(a3)+    * MSB
+;;    ror	    #8,d1
+;;    lsr.b   #2,d1
+;;    move.b  d1,(a1)+    * LSB
+;;
+;;    move	(a0)+,d1        
+;;    move.b  d1,(a4)+    * MSB
+;;    ror     #8,d1   
+;;    lsr.b   #2,d1
+;;    move.b  d1,(a2)+    * LSB
+ endr
+ 	dbf	d0,.ordinary_stereo_14bit_volume_
+    rts
+
+* AIFF
+.o_aiffc214
+    DPRINT  "convert AIFF stereo normal 14-bit"
+
+.o_aiffc214_l
  rept 4
 	move	(a0)+,d1
     lsr.b   #2,d1
-    move.b  d1,(a1)+
+    move.b  d1,(a1)+    * LSB
 	ror	#8,d1
-    move.b  d1,(a3)+
+    move.b  d1,(a3)+    * MSB
 
 	move	(a0)+,d1
     lsr.b   #2,d1
-    move.b  d1,(a2)+
+    move.b  d1,(a2)+    * LSB
 	ror	#8,d1
-    move.b  d1,(a4)+
+    move.b  d1,(a4)+    * MSB
  endr
- 	dbf	d0,.o_w1214_020
-	rts
+    dbf d0,.o_aiffc214_l
+    rts
+
 
 
 
@@ -4428,12 +4678,44 @@ closesample
 
 
 
-initsamplecyber
-	moveq	#1,d0
+initsamplecyber:
+ if DEBUG
+    moveq   #0,d0
+	move.b  samplecyberset(a5),d0
+    DPRINT  "*** Init samplecyber %lx ***"
+ endif
+
+    lea     -256(sp),sp
+    clr.l   samplecyber(a5)
+
+    moveq  #1,d7   * ok
 	tst.b	samplecyberset(a5)
-	beq.b	.nocy
-	tst.l	calibrationaddr(a5)
-	beq.b	.nocy
+	beq 	.nocy
+    moveq   #0,d7   * error
+
+    * For each byte, have 64 values of words
+	move.l	#2*256*(64+1),d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	bsr	getmem
+	move.l	d0,volumeScalingTable(a5)
+	beq 	.nocy
+    bsr     .doVolTable
+
+    moveq   #1,d7     * ok
+
+    move.l  4.w,a0
+    cmp.w   #36,LIB_VERSION(a0)
+    blo     .nocy
+
+    pushpea .envVarName(pc),d1     * variable name
+    move.l  sp,d2                 *  output
+    move.l  #256,d3               * space available
+    move.l  #GVF_GLOBAL_ONLY!GVF_BINARY_VAR,d4  * global variable
+    lore    Dos,GetVar
+    DPRINT  "GetVar=%lx"
+    moveq   #-1,d0 ;;;;;;; DISABLE
+    tst.l   d0
+    bmi     .nocy
 
 	move.l	#$20000,d0
 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
@@ -4441,14 +4723,47 @@ initsamplecyber
 	move.l	d0,samplecyber(a5)
 	beq.b	.nocy
 
-
 	move.l	d0,a0
-	move.l	calibrationaddr(a5),a1
+	move.l	sp,a1
 	bsr 	_CreateTable
-	moveq	#1,d0
 
-.nocy	tst.l	d0
+    DPRINT  "CyberCalibration table created!"
+
+.nocy
+    lea     256(sp),sp
+
+    move.l  d7,d0
+    DPRINT  "result=%ld"
+	tst.l	d0
 	rts
+
+
+.envVarName:
+    dc.b    "CyberSound/SoundDrivers/14Bit_Calibration",0
+    even
+
+.doVolTable:
+    move.l  d0,a0
+    moveq   #0,d0
+.vl1
+    moveq   #0,d1
+.vl2
+    move    d1,d2
+    ext.w   d2
+    muls    d0,d2
+    ;asr.l   #6,d2
+    ;mulu    d0,d2
+    ;lsr     #6,d2
+    move.w  d2,(a0)+
+
+    addq    #1,d1
+    cmp     #256,d1
+    bne     .vl2
+
+    addq    #1,d0
+    cmp     #64+1,d0
+    bne     .vl1
+    rts
 
 
 * Checks if mp3 can be seeked 
@@ -6696,4 +7011,3 @@ findSyncBuffer
             ds.b    10
 mpbuffer1	ds	MPEGA_PCM_SIZE
 mpbuffer2	ds	MPEGA_PCM_SIZE
-
