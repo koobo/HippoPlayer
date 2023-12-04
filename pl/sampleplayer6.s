@@ -1129,15 +1129,15 @@ init:
 	st	mplippu(a5)
 	move.b	#2,sampleformat(a5)	* huijataan että ollaan AIFF
     * Enforce 14-bit output for MP3 if high quality settings
-    cmp     #1,mpfreqdiv(a5)
-    bne.b   .lq
-    tst.b   samplestereo(a5)
-    beq.b   .lq
-    tst.b   ahi(a5)
-    bne     .lq
-    st      cybercalibration(a5)
-    DPRINT  "Enabling 14-bit mp3 output"
-.lq
+;    cmp     #1,mpfreqdiv(a5)
+;    bne.b   .lq
+;    tst.b   samplestereo(a5)
+;    beq.b   .lq
+;    tst.b   ahi(a5)
+;    bne     .lq
+;    st      cybercalibration(a5)
+;    DPRINT  "Enabling 14-bit mp3 output"
+;.lq
 
 	move.l	samplebufsiz(a5),d0
 	lsl.l	#2,d0
@@ -3297,10 +3297,16 @@ sample_code:
 
 	DPRINT	"AIFF/WAV STEREO"
 
+    printt "Combo: 14-bit out disabled, no calibration, play mp3 -> crash"
+
     * Detect mp3 special case when no cybersound calibration used
 
     * Is the cybersound mapping table set up? If it is, use
     * the calibrated out path.
+    * Calibration enabled?
+	tst.b	samplecyberset(a5)
+    beq     .wl2
+    * Table up?
     tst.l   samplecyber(a5) 
     bne.b   .wl2
     * Freq div is something else than 1?
