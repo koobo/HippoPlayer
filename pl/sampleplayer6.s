@@ -243,7 +243,7 @@ vapauta		rs.l	1
 songover	rs.l	1
 
 cpu		rs.b	1
-cybercalibration rs.b	1
+cybercalibration rs.b	1   * 8-bit out or 14-bit ordinary or calibrated
 ;;calibrationaddr	rs.l	1
 
 sampleforcerate	rs	1
@@ -603,6 +603,7 @@ init:
     popm    d0/d1
  endif
 
+    * 8-bit or 14-bit out
 	move.b	d6,cybercalibration(a5)
 	;;;move.l	d7,calibrationaddr(a5)
 
@@ -1464,110 +1465,7 @@ init:
 ******* Ok. Let's soitetaan
 
 .sampleok:
-	bsr.b	.freqcheck
-
-** muotoillaan inforivi hipolle
-
-    push    a0
-    move.l  modulefilename(a5),a0
-    bsr     isPipe
-    pop     a0
-    beq     .fr0
-    * wav/aiff + midi
-    lea     .t3midi(pc),a0
-    bra     .fr1
-.fr0
-	lea	.t1(pc),a0
-	move.b	sampleformat(a5),d0
-	subq.b	#1,d0
-	beq.b	.fr1
-	lea	.t2(pc),a0
-	subq.b	#1,d0
-	beq.b	.fr1
-	lea	.t3(pc),a0
-
-
-.fr1	move.l	a0,d0
-
-	tst	mplippu(a5)
-	beq.b	.yi0
-	move	mplayer(a5),d0
-	ext.l	d0
-.yi0
-
-	moveq	#8,d1           * Bits
-	tst.b	samplebits(a5)
-	beq.b	.fr3
-	moveq	#16,d1          * Bits
-.fr3
-	tst	mplippu(a5)
-	beq.b	.nomp
-	move	mpbitrate(a5),d1
-.nomp
-
-	moveq	#"S",d2
-	tst.b	samplestereo(a5)
-	bne.b	.fr2
-	moveq	#"M",d2
-.fr2	
-
-	moveq	#0,d3
-	move	samplefreq(a5),d3
-	add	#500,d3			* pyöristetään ylöspäin
-	divu	#1000,d3
-	ext.l	d3
-
-    DPRINT  "-------------------------------"
-    push    d0
-    moveq   #0,d0
-    move.b  samplecyberset(a5),d0
-    DPRINT  "cyber=%ld"
-    pop     d0
-
-
-    * Sample paula out
-    lea     .paula8Bit(pc),a0
-    tst.b	cybercalibration(a5)	
-    beq     .nocyb
-	tst.b	samplebits(a5)
-	beq	    .nocyb
-    lea     .paula14Bit(pc),a0
-.nocyb
-    move.l  a0,d4
-
-    tst.b   mplippu(a5)
-    beq      .lqq
-    * MP3 bits, freq
-    moveq   #8,d4           * Bits
-    tst.b   samplestereo(a5)
-    beq.b   .lqq
-    cmp     #44100,samplefreq(a5)
-    blo.b   .lqq
-    tst.b   cpu(a5)
-    beq.b   .lqq
-    moveq   #14,d4      * Bits
-.lqq
-
-	lea	.form(pc),a0    * sample form
-	tst	mplippu(a5)
-	beq.b	.nomp2
-    lea     .form4(pc),a0
-    tst.b   mhiEnable(a5)
-    bne     .aa1
-	lea	    .form3(pc),a0
-    tst.b   ahi(a5)
-    bne.b   .aa1
-    lea     .form2(pc),a0
-.aa1
-.nomp2
-	bsr	desmsg
-
-	lea	desbuf(a5),a0
-	move.l	pname(a5),a1
-.ci	move.b	(a0)+,(a1)+
-	bne.b	.ci
-
-
+	bsr 	.freqcheck
 
 ** varataan puskurit
 
@@ -1594,7 +1492,7 @@ init:
 	;tst.l	calibrationaddr(a5)
 	;beq.b	.es2
 	st	samplecyberset(a5)
-    DPRINT  "set samplcyberset(a5)-------------------"
+    DPRINT  "set samplcyberset"
 	add	d6,d6				* 8 kpl
 .es2
 
@@ -1764,6 +1662,8 @@ init:
 	move	mainvolume+var_b(pc),d0
 	bsr	vol
 
+    bsr     prepareInfoLine
+
 	DPRINT	"CreateProc"
 
     ; Clear this so that it's safe to use later
@@ -1772,7 +1672,7 @@ init:
     lore    Exec,SetSignal
 
 ** käynnistetään prosessi
-	pushpea	.pn(pc),d1
+	pushpea	processName(pc),d1
 	moveq	#0,d2			* pri
 	pushpea	sample_segment(pc),d3
 	lsr.l	#2,d3
@@ -1848,19 +1748,133 @@ init:
 	bra	sampleiik
 
 
-.t1	dc.b	"IFF 8SVX",0
-.t2	dc.b	"AIFF",0
-.t3	dc.b	"RIFF WAVE",0
-.t3midi dc.b "MIDI",0
-.t4	dc.b	"MP",0
-.form	dc.b	"%s %ld-bit %lc %2ldkHz %s",0
-.form2	dc.b	"MP%ld %ldkb %lc %2ldkHz %ld-bit",0
-.form3	dc.b	"MP%ld %ldkb %lc %2ldkHz AHI",0
-.form4	dc.b	"MP%ld %ldkb %lc %2ldkHz MHI",0
 
-.paula8Bit   dc.b    "8-bit",0
-.paula14Bit  dc.b    "14-bit",0
-.pn          dc.b    "HiP-Sample",0
+** muotoillaan inforivi hipolle
+prepareInfoLine:
+    DPRINT  "prepareInfoLine"
+
+    push    a0
+    move.l  modulefilename(a5),a0
+    bsr     isPipe
+    pop     a0
+    beq     .fr0
+    * wav/aiff + midi
+    lea     .t3midi(pc),a0
+    bra     .fr1
+.fr0
+	lea	.t1(pc),a0
+	move.b	sampleformat(a5),d0
+	subq.b	#1,d0
+	beq.b	.fr1
+	lea	.t2(pc),a0
+	subq.b	#1,d0
+	beq.b	.fr1
+	lea	.t3(pc),a0
+
+
+.fr1	move.l	a0,d0
+
+	tst	mplippu(a5)
+	beq.b	.yi0
+	move	mplayer(a5),d0
+	ext.l	d0
+.yi0
+
+	moveq	#8,d1           * Bits
+	tst.b	samplebits(a5)
+	beq.b	.fr3
+	moveq	#16,d1          * Bits
+.fr3
+	tst	mplippu(a5)
+	beq.b	.nomp
+	move	mpbitrate(a5),d1
+.nomp
+
+	moveq	#"S",d2
+	tst.b	samplestereo(a5)
+	bne.b	.fr2
+	moveq	#"M",d2
+.fr2	
+
+	moveq	#0,d3
+	move	samplefreq(a5),d3
+	add	#500,d3			* pyöristetään ylöspäin
+	divu	#1000,d3
+	ext.l	d3
+
+    DPRINT  "-------------------------------"
+    push    d0
+    moveq   #0,d0
+    move.b  samplecyberset(a5),d0
+    DPRINT  "cyber=%ld"
+    pop     d0
+
+
+    * Sample paula out
+    lea     .paula8Bit(pc),a0
+	tst.b	samplebits(a5)
+	beq	    .nocyb
+    tst.b	cybercalibration(a5)	
+    beq     .nocyb
+    lea     .paula14BitCyber(pc),a0
+    tst.l   samplecyber(a5)
+    bne     .nocyb
+    lea     .paula14Bit(pc),a0
+.nocyb
+    move.l  a0,d4
+
+    tst.b   mplippu(a5)
+    beq      .lqq
+    * MP3 bits, freq
+    moveq   #8,d4           * Bits
+    tst.b   samplestereo(a5)
+    beq.b   .lqq
+    cmp     #44100,samplefreq(a5)
+    blo.b   .lqq
+    tst.b   cpu(a5)
+    beq.b   .lqq
+    moveq   #14,d4      * Bits
+.lqq
+
+	lea	.form(pc),a0    * sample form
+	tst	mplippu(a5)
+	beq.b	.nomp2
+    lea     .form4(pc),a0
+    tst.b   mhiEnable(a5)
+    bne     .aa1
+	lea	    .form3(pc),a0
+    tst.b   ahi(a5)
+    bne.b   .aa1
+    lea     .form2(pc),a0
+.aa1
+.nomp2
+	bsr	desmsg
+
+	lea	desbuf(a5),a0
+	move.l	pname(a5),a1
+.ci	move.b	(a0)+,(a1)+
+	bne.b	.ci
+
+    rts
+
+
+.t1               dc.b    "IFF 8SVX",0
+.t2               dc.b    "AIFF",0
+.t3               dc.b    "WAV",0
+.t3midi           dc.b    "MIDI",0
+.t4               dc.b    "MP",0
+* Sample form
+.form             dc.b    "%s %ld-bit %lc %2ldkHz %s",0
+* MP3 forms
+.form2            dc.b    "MP%ld %ldkb %lc %2ldkHz %ld-bit",0
+.form3            dc.b    "MP%ld %ldkb %lc %2ldkHz AHI",0
+.form4            dc.b    "MP%ld %ldkb %lc %2ldkHz MHI",0
+
+.paula8Bit        dc.b    0
+.paula14Bit       dc.b    "14-bit",0
+.paula14BitCyber  dc.b    "14c-bit",0
+
+processName  dc.b    "HiP-Sample",0
  even
 
 isPipe:
@@ -3496,7 +3510,6 @@ convert_stereo
 	move.b	d1,(a2)+
  endr
 
-
 	dbf	d0,.w14
 	rts
 
@@ -3528,17 +3541,25 @@ convert_stereo
 
 .w123	
     DPRINT  "16-bit"
+    moveq   #4*4,d1
 .w123_
- rept 4
+; rept 4
 ;	move.b	(a0)+,(a1)+
 ;	addq.l	#1,a0
 ;	move.b	(a0)+,(a2)+
 ;	addq.l	#1,a0
-
+; endr
+ 
 	move.b	(a0),(a1)+
 	move.b	2(a0),(a2)+
-	addq.l	#4,a0
- endr
+	move.b	4(a0),(a1)+
+	move.b	6(a0),(a2)+
+	move.b	8(a0),(a1)+
+	move.b	10(a0),(a2)+
+	move.b	12(a0),(a1)+
+	move.b	14(a0),(a2)+
+	add.l   d1,a0
+
  	dbf	d0,.w123_
 	rts
 
