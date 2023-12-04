@@ -3306,12 +3306,12 @@ sample_code:
     * Calibration enabled?
 	tst.b	samplecyberset(a5)
     beq     .wl2
-    * Table up?
-    tst.l   samplecyber(a5) 
-    bne.b   .wl2
     * Freq div is something else than 1?
     cmp.w   #1,mpfreqdiv(a5)
     bne     .wl2
+    * Need 020+ for the special mod
+    tst.b   cpu(a5)
+    beq     .wl2
     * MP3 mode on?
     tst     mplippu(a5)
     bne     decodeMp3
@@ -4054,6 +4054,11 @@ decodeMp3
     ; Two bytes, ie. a word, at a time
     lsr.l   #1,d0
     subq    #1,d0
+
+	move.l	samplecyber(a5),a6  
+    tst.l   a6
+    bne     .bobCalib
+    DPRINT  "special mp3 14-bit ordinary"
 .bob
  rept 2
     * Index into d4
@@ -4079,6 +4084,30 @@ decodeMp3
 
  endr
     dbf     d0,.bob
+    bra     .bobDone
+
+.bobCalib
+    DPRINT  "special mp3 14-bit calibrated"
+    moveq   #0,d5
+.bobCalib_
+ rept 2
+    * Index into d4
+    move.l  d2,d4
+    and.l   d3,d4
+    * Next sample
+	addx.l	d1,d2
+
+    move.w  (a0,d4.l*4),d5
+    move.b	(a6,d5.l*2),(a3)+
+	move.b	1(a6,d5.l*2),(a1)+    
+
+    move.w  2(a0,d4.l*4),d5
+    move.b	(a6,d5.l*2),(a4)+
+	move.b	1(a6,d5.l*2),(a2)+    
+ endr
+    dbf     d0,.bobCalib_
+
+.bobDone
 
     pop     d0
 	movem.l	(sp),a3/a4/a6
