@@ -3137,11 +3137,10 @@ sample_code:
 
 .ordinaryWavMono14:
  rept 4
-    move	(a0)+,d1
-    move.b  d1,(a2)+    * MSB
-    ror     #8,d1
+    move.b  (a0)+,d1
     lsr.b   #2,d1
     move.b  d1,(a1)+    * LSB
+    move.b  (a0)+,(a2)+ * MSB
  endr 
 	dbf     d0,.ordinaryWavMono14
     rts
@@ -3175,11 +3174,10 @@ sample_code:
 
 .ordinaryAiffMono14:
  rept 4
-    move	(a0)+,d1
+    move.b  (a0)+,(a2)+ * MSB
+    move.b  (a0)+,d1
     lsr.b   #2,d1
     move.b  d1,(a1)+    * LSB
-    ror     #8,d1
-    move.b  d1,(a2)+    * MSB
  endr 
 	dbf     d0,.ordinaryAiffMono14
     rts
