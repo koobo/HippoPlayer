@@ -1835,31 +1835,28 @@ prepareInfoLine:
     move.l  a0,d4
     move.l  d4,sampleOutputInfo(a5)
 
+	lea	.form(pc),a0    * sample form
+
+    * MP3 info
     tst.b   mplippu(a5)
     beq      .lqq
+    lea     .formMp3(pc),a0
     * MP3 bits, freq
-    moveq   #8,d4           * Bits
-    tst.b   samplestereo(a5)
-    beq.b   .lqq
-    cmp     #44100,samplefreq(a5)
-    blo.b   .lqq
-    tst.b   cpu(a5)
-    beq.b   .lqq
-    moveq   #14,d4      * Bits
+    pushpea .mhiTxt(pc),d4
+    tst.b   mhiEnable(a5)
+    bne     .lqq
+    pushpea .ahiTxt(pc),d4
+    tst.b   ahi(a5)
+    bne.b   .lqq
+    pushpea .paula8Bit(pc),d4
+    tst.b	cybercalibration(a5)	
+    beq     .lqq
+    pushpea .paula14BitCyber(pc),d4
+    tst.l   samplecyber(a5)
+    bne     .lqq
+    pushpea .paula14Bit(pc),d4
 .lqq
 
-	lea	.form(pc),a0    * sample form
-	tst	mplippu(a5)
-	beq.b	.nomp2
-    lea     .form4(pc),a0
-    tst.b   mhiEnable(a5)
-    bne     .aa1
-	lea	    .form3(pc),a0
-    tst.b   ahi(a5)
-    bne.b   .aa1
-    lea     .form2(pc),a0
-.aa1
-.nomp2
 	bsr	desmsg
 
 	lea	desbuf(a5),a0
@@ -1879,14 +1876,13 @@ prepareInfoLine:
 * Sample form: "WAV 16-bit S 44Khz 14-bi" <- this fits
 .form             dc.b    "%s %ld-bit %lc %2ldkHz %s",0
 * MP3 forms
-.form2            dc.b    "MP%ld %ldkb %lc %2ldkHz %ld-bit",0
-.form3            dc.b    "MP%ld %ldkb %lc %2ldkHz AHI",0
-.form4            dc.b    "MP%ld %ldkb %lc %2ldkHz MHI",0
+.formMp3            dc.b    "MP%ld %ldkb %lc %2ldkHz %s",0
 
 .paula8Bit        dc.b    0
 .paula14Bit       dc.b    "14-bit",0
 .paula14BitCyber  dc.b    "14c-bit",0
 .ahiTxt           dc.b    "AHI",0
+.mhiTxt           dc.b    "MHI",0
 
 processName  dc.b    "HiP-Sample",0
  even
@@ -3135,6 +3131,7 @@ sample_code:
 	dbf	d0,.w214_020
 	rts
 
+* Wav mono 14-bit out volume not supported
 .ordinaryWavMono14:
  rept 4
     move.b  (a0)+,d1
@@ -3172,6 +3169,7 @@ sample_code:
 	dbf	d0,.w2214_020
 	rts
 
+* AIFF mono 14-bit out volume not supported
 .ordinaryAiffMono14:
  rept 4
     move.b  (a0)+,(a2)+ * MSB
@@ -3215,9 +3213,11 @@ sample_code:
 	bsr	wavread2
 	beq	quit
 
+
 	movem.l	(a3),a0/a1	
 	move.l	a4,a2
 	move.l	d6,d0		* len
+    DPRINT  "AHI bytes=%ld"
 	lsr.l	#1,d0
 	subq	#1,d0
 
@@ -3310,7 +3310,6 @@ sample_code:
     tst     mplippu(a5)
     bne     decodeMp3
 .wl2
-
  
 	bsr	clrsamplebuf
 
@@ -3382,7 +3381,6 @@ sample_code:
 	bra	.loh
 
 .14bit0
-
 	move.l	d6,d0
 	move.l	a4,a0
 
@@ -3645,15 +3643,15 @@ convert_stereo_14bit
 .cyber_wav_stereo_14bit_volume:
     DPRINT  "convert WAV stereo cyber 14-bit vol"
     move    mainvolume(a5),d2
+    move.l  #$ffff<<1,d3
 .cyber_wav_stereo_14bit_volume_:
-    move    $dff006,$dff180
  rept 4
     move.w  (a0)+,d1
     ror.w   #8,d1       * WAV byte order
     muls    d2,d1
-    asr.l   #6,d1
+    asr.l   #5,d1
+    and.l   d3,d1
 
-	add.l	d1,d1
     move.b	(a6,d1.l),(a3)+
 	move.b	1(a6,d1.l),(a1)+
 
@@ -3662,9 +3660,9 @@ convert_stereo_14bit
     move.w  (a0)+,d1
     ror.w   #8,d1       * WAV byte order
     muls    d2,d1
-    asr.l   #6,d1
+    asr.l   #5,d1
+    and.l   d3,d1
 
-	add.l	d1,d1
 	move.b	(a6,d1.l),(a4)+
 	move.b	1(a6,d1.l),(a2)+
  endr	
@@ -3674,8 +3672,12 @@ convert_stereo_14bit
 
 
 .aiffc214
+
+    tst.b   mplippu(a5) * mpega volume scaling used
+    bne     .mp3a
     cmp.w   #$40,mainvolume(a5)
     bne     .cyber_aiff_stereo_14bit_volume
+.mp3a
 
     DPRINT  "convert AIFF stereo cyber 14-bit"
 
@@ -3717,14 +3719,14 @@ convert_stereo_14bit
 .cyber_aiff_stereo_14bit_volume:
     DPRINT  "convert AIFF stereo cyber 14-bit vol"
     move    mainvolume(a5),d2
+    move.l  #$ffff<<1,d3
 .cyber_aiff_stereo_14bit_volume_:
-    move    $dff006,$dff180
  rept 4
     move.w  (a0)+,d1
     muls    d2,d1
-    asr.l   #6,d1
+    asr.l   #5,d1
+    and.l   d3,d1
 
-	add.l	d1,d1
     move.b	(a6,d1.l),(a3)+
 	move.b	1(a6,d1.l),(a1)+
 
@@ -3732,9 +3734,9 @@ convert_stereo_14bit
 
     move.w  (a0)+,d1
     muls    d2,d1
-    asr.l   #6,d1
+    asr.l   #5,d1
+    and.l   d3,d1
 
-	add.l	d1,d1
 	move.b	(a6,d1.l),(a4)+
 	move.b	1(a6,d1.l),(a2)+
  endr	
@@ -3779,7 +3781,7 @@ convert_stereo_14bit
     move.w  (a0)+,d1
     ror.w   #8,d1   * WAV byte order
     muls    d2,d1
-    asr.l   #6,d1
+    lsr.l   #6,d1
     lsr.b   #2,d1
     move.b  d1,(a1)+    * LSB
     ror.w   #8,d1
@@ -3801,8 +3803,11 @@ convert_stereo_14bit
 
 * AIFF
 .o_aiffc214
+    tst.b   mplippu(a5) * mpega volume scaling used
+    bne     .mp3b
     cmp.w   #$40,mainvolume(a5)
     bne     .ordinary_aiff_stereo_14bit_volume
+.mp3b
     DPRINT  "convert AIFF stereo normal 14-bit"
 
 .o_aiffc214_l
@@ -3829,7 +3834,7 @@ convert_stereo_14bit
  rept 4
     move.w  (a0)+,d1
     muls    d2,d1
-    asr.l   #6,d1
+    lsr.l   #6,d1
     lsr.b   #2,d1
     move.b  d1,(a1)+    * LSB
     ror.w   #8,d1
@@ -4707,7 +4712,7 @@ initsamplecyber:
     move.l  #GVF_GLOBAL_ONLY!GVF_BINARY_VAR,d4  * global variable
     lore    Dos,GetVar
     DPRINT  "GetVar=%lx"
-    moveq   #-1,d0 ;;;;;;; DISABLE
+    ;;;;;;moveq   #-1,d0 ;;;;;;; DISABLE
     tst.l   d0
     bmi     .nocy
 
