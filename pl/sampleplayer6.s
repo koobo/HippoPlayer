@@ -634,6 +634,9 @@ init:
     move.l  (a1)+,songover(a5)
     move.w  (a1)+,d0
     move.b  d0,kutistus(a5)
+ if DEBUG
+    DPRINT  "resample needed kutistus=%lx"
+ endif
 
 	tst.b	ahi(a5)		* jos AHI, ei kutistusta eikä calibrationia
 	beq.b	.noz
@@ -1540,14 +1543,15 @@ init:
 
  if DEBUG
 	move.l	d7,d0
-	DPRINT	"frequency=%ld"
+    move.l  #KUTISTUSTAAJUUS,d1    
+	DPRINT	"input frequency=%ld resampling threshold=%ld"
  endif
 
 	tst.b	kutistus(a5)
 	beq.b	.nok
-	cmp	#KUTISTUSTAAJUUS,d7
-	blo.b	.nok
-    DPRINT  "need resampling"
+	cmp	    #KUTISTUSTAAJUUS,d7
+	bls.b	.nok
+    DPRINT  "need resampling!"
 	move	#KUTISTUSTAAJUUS,d7
 
 	move.l	samplebufsiz(a5),d0	* kutistukselle
@@ -1570,7 +1574,9 @@ init:
 	moveq	#ier_nomem,d0
 	bra	sampleiik
 
-.nok	clr.b	kutistus(a5)		* ei tartte kutistaa
+.nok	
+    clr.b	kutistus(a5)		* ei tartte kutistaa
+    DPRINT  "resampling NOT needed"
 .nik	
 
 	divu	d7,d4
