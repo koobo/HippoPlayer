@@ -788,6 +788,8 @@ samplepointer		rs.l	1
 samplepointer2		rs.l	1
 * Set to non-zero if sample being played is stereo
 samplestereo		rs.b	1
+* Pointer to text describing the output mode: empty, 14-bit, 14-bit calib, AHI
+sampleOutputInfoText rs.l   1
 
 * This is set in loadfile() to indicate a sample is found.
 * Actual loading is then skipped.
@@ -43166,6 +43168,7 @@ p_sample:
 .flags
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .name	dc.b	"                        ",0
+        ds.b    8 * safety
  even
 
                    rsset    $20
@@ -43328,7 +43331,7 @@ p_sample:
     ; d4 = sample bits 8 or 16, convert to 1 and 2
     lsr     #3,d4
     move    d4,ahiSampleModulo(a5)
-
+    move.l  d5,sampleOutputInfoText(a5)
 
  if DEBUG
 	pushm	d0-d3
@@ -49184,22 +49187,23 @@ p_midistream:
     lea     midimode01,a0
     cmp.b   #MIDI_TIMIDITY,midimode(a5)
     beq     .11
-    lea     midimode02,a0
+    basereg midimode01,a0
+    lea     midimode02(a0),a0
+    endb    a0
 .11     
-    lea     .title+5(pc),a1
-    move.b  #"(",(a1)+
-.22
-    move.b  (a0)+,(a1)+
-    bne     .22
-    subq    #1,a1
-    move.b  #")",(a1)+
-    clr.b   (a1)
+    move.l  a0,d0
+    move.l  sampleOutputInfoText(a5),d1
 
+    lea     .form(pc),a0
+    lea     .title(pc),a3
+    jsr     desmsg3
 
     * Sample init OK
     moveq   #0,d0
     rts
-
+        * "MIDI Timidity 14c-bit"
+.form:  dc.b    "MIDI %s %s",0
+    even
 
 
 .initError
@@ -49482,19 +49486,13 @@ vgmInfoText:
     move.l  sp,d0
     moveq   #0,d1
     move.w  vgmVoices(pc),d1
+    move.l  sampleOutputInfoText(a5),d2
 
-    pushpea .ahi(pc),d2
-    tst.b    ahi_use(a5)
-    bne     .1
-    addq.l  #4,d2
-;    pushpea .null(pc),d2
-.1
     lea     .form(pc),a0
     move.b  vgmActuallyMdx(pc),d3
     beq     .2
     lea     .formMdx(pc),a0
-    moveq   #8,d0
-    move.l  d2,d1
+    move.l  d2,d0
 .2
     lea     vgmTitle(pc),a3
     jsr     desmsg3
@@ -49503,10 +49501,9 @@ vgmInfoText:
     rts
 
 * subformat, AHI, voices: max 25 ch
-.ahi      dc.b    "AHI "
 .null     dc.b    0
-.form     dc.b    "%s %ldch %s(VGM2WAV)",0
-.formMdx  dc.b    "MDX %ldch %s(MDX2WAV)",0
+.form     dc.b    "%s %ldch VGM2WAV %s",0
+.formMdx  dc.b    "MDX 8ch MDX2WAV %s",0
           even
 
 vgmSongChangePossible:
