@@ -118,7 +118,9 @@ WINX	= 2	* X ja Y lisäykset pääikkunan grafiikkaan
 WINY	= 3
 
 * This char as the first char in filename indicates a list divider
-DIVIDER_MAGIC = '÷'
+DIVIDER_MAGIC = '÷' ; UTF8=c3b7
+* Another magic char for dividers to be drawn differently
+DIVIDER_MAGIC_ALT = 'ö' ; UTF8=c3b6
 
 ;isListDivider macro 
 ;	cmp.b 	#DIVIDER_MAGIC,\1
@@ -1608,6 +1610,10 @@ l_nameaddr	rs.l	1		* osoitin pelkkään tied.nimeen
 					* address to filename without path
 l_favorite	rs.b 	1		* 0: not favorite, non-zero: favorite
 l_divider	rs.b	1		* this is a divider, ie. a path
+                            * 00: not divider
+                            * f0: stealthy divider
+                            * ff: ordinary divider
+                            * 7f: "parent folder" in file browser
 l_remote	rs.b    1       * 0: local file, non-zero: remote
 l_favSong   rs.b    1       * 0 or song number when node was favorited
 l_separateName rs.b 1       * set if l_nameaddr points to "#name=<name>""
@@ -12654,15 +12660,33 @@ importModuleProgramFromData:
     bne     .div0
 	addq	#2,a3
 	st	    l_divider(a2)
-    bra     .utf8div
+    bra     .foundDiv
 .div0
     * Amiga encoding:
 	cmp.b	#DIVIDER_MAGIC,(a3)
 	bne.b	.notDiv2
 	addq	#1,a3
 	st	l_divider(a2)
+    bra     .foundDiv
 .notDiv2
-.utf8div
+
+    cmp.b   #$c3,(a3)
+    bne     .div1
+    cmp.b   #$b6,1(a3)
+    bne     .div1
+	addq	#2,a3
+    bra     .altDiv
+.div1
+    * Amiga encoding:
+    cmp.b   #DIVIDER_MAGIC_ALT,(a3)
+    bne     .notDivAlt
+	addq	#1,a3
+.altDiv
+	move.b  #$f0,l_divider(a2)
+.notDivAlt
+
+.foundDiv
+
     ; ---------------------------------
 	* See if additional header should
 	* be prepended to the line. This indicates
@@ -18916,6 +18940,9 @@ doPrintNames:
 
 	tst.b	l_divider(a3)
 	beq.b	.nodi
+    * Stealth divider, no special styles
+    cmp.b   #$f0,l_divider(a3)
+    beq.b   .nodi
 	st	d7	* set flag: divider being handled
 	* Set color for list divider
 	push	a1
