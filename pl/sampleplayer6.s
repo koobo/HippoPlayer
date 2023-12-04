@@ -326,8 +326,9 @@ mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
 
 mainTask    rs.l    1
 
-mp3DurationInMs rs.l    1
-mp3PositionInMs rs.l    1   
+mp3DurationInMs  rs.l    1
+mp3PositionInMs  rs.l    1   
+sampleOutputInfo rs.l    1  * Return text describing the output mode
 
  if DEBUG
 output			rs.l 	1
@@ -1708,6 +1709,7 @@ init:
     beq.b   .888
     moveq   #16,d4
 .888
+    move.l  sampleOutputInfo(a5),d5
 
     tst.b   mhiEnable(a5)
     beq     .999
@@ -1810,7 +1812,10 @@ prepareInfoLine:
     pop     d0
 
 
-    * Sample paula out
+    * Sample out info
+    lea     .ahiTxt(pc),a0
+    tst.b   ahi(a5)
+    bne     .nocyb
     lea     .paula8Bit(pc),a0
 	tst.b	samplebits(a5)
 	beq	    .nocyb
@@ -1822,6 +1827,7 @@ prepareInfoLine:
     lea     .paula14Bit(pc),a0
 .nocyb
     move.l  a0,d4
+    move.l  d4,sampleOutputInfo(a5)
 
     tst.b   mplippu(a5)
     beq      .lqq
@@ -1863,7 +1869,8 @@ prepareInfoLine:
 .t3               dc.b    "WAV",0
 .t3midi           dc.b    "MIDI",0
 .t4               dc.b    "MP",0
-* Sample form
+* Sample form: "AIFF 16-bit S 44Khz 14c-bit" -> 27ch, fits 27/28?
+* Sample form: "WAV 16-bit S 44Khz 14-bi" <- this fits
 .form             dc.b    "%s %ld-bit %lc %2ldkHz %s",0
 * MP3 forms
 .form2            dc.b    "MP%ld %ldkb %lc %2ldkHz %ld-bit",0
@@ -1873,6 +1880,7 @@ prepareInfoLine:
 .paula8Bit        dc.b    0
 .paula14Bit       dc.b    "14-bit",0
 .paula14BitCyber  dc.b    "14c-bit",0
+.ahiTxt           dc.b    "AHI",0
 
 processName  dc.b    "HiP-Sample",0
  even
