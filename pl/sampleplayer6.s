@@ -3297,24 +3297,19 @@ sample_code:
 
 	DPRINT	"AIFF/WAV STEREO"
 
-    printt "Combo: 14-bit out disabled, no calibration, play mp3 -> crash"
-
-    * Detect mp3 special case when no cybersound calibration used
-
-    * Is the cybersound mapping table set up? If it is, use
-    * the calibrated out path.
-    * Calibration enabled?
-	tst.b	samplecyberset(a5)
-    beq     .wl2
-    * Freq div is something else than 1?
-    cmp.w   #1,mpfreqdiv(a5)
-    bne     .wl2
-    * Need 020+ for the special mod
-    tst.b   cpu(a5)
-    beq     .wl2
+    * Detect mp3 special case, this supports 14-bit out only with extra
+    * downsampling precision and combined downsample-14-bit conversion. 
     * MP3 mode on?
     tst     mplippu(a5)
-    bne     decodeMp3
+    beq     .wl2
+    * Need 020+ for the special mode
+    tst.b   cpu(a5)
+    beq     .wl2
+    * Also need 14-bit mode enabled
+    tst.b	samplecyberset(a5)
+    beq     .wl2
+    * Input frequency can be whatever
+    bra     decodeMp3
 .wl2
  
 	bsr	clrsamplebuf
@@ -4055,10 +4050,16 @@ decodeMp3
     lsr.l   #1,d0
     subq    #1,d0
 
+
 	move.l	samplecyber(a5),a6  
     tst.l   a6
     bne     .bobCalib
-    DPRINT  "special mp3 14-bit ordinary"
+ if DEBUG
+    push    d0
+    move.l  d1,d0
+    DPRINT  "special mp3 14-bit ordinary step=%lx"
+    pop     d0
+ endif
 .bob
  rept 2
     * Index into d4
@@ -4087,7 +4088,12 @@ decodeMp3
     bra     .bobDone
 
 .bobCalib
-    DPRINT  "special mp3 14-bit calibrated"
+ if DEBUG
+    push    d0
+    move.l  d1,d0
+    DPRINT  "special mp3 14-bit calibrated step=%lx"
+    pop     d0
+ endif
     moveq   #0,d5
 .bobCalib_
  rept 2
