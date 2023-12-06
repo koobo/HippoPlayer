@@ -25821,6 +25821,10 @@ scopeLoop:
 	beq 	.continue
 .screenVisible
 
+    * In case there is no module in memory clear and print hippo
+    tst.l   moduleaddress(a5)
+    beq     .doNotDrawClear
+
 	tst.b	playing(a5)
 	beq 	.doNotDraw
 
