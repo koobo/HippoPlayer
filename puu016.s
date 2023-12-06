@@ -26599,9 +26599,22 @@ getScopeMiniFontIfNeeded
 .miniOk
 	DPRINT	"Got mini font"
 	rts
-;.noFontMsg
-;	dc.b	"Couldn't open 'mini4' font for patternscope!",0;
-;	even
+
+showNoMiniFontMessage:
+	tst.l	minifontbase(a5)
+	bne.b	.skip
+	lea	.noFontMsg(pc),a1 
+	tst.b	(a1)
+	beq.b	.skip
+	bsr	request
+	* Show this only once to not be annoying
+	clr.b	(a1)	
+.skip
+    rts
+
+.noFontMsg
+	dc.b	"Couldn't open 'mini4' font for patternscope!",0;
+	even
 
 ******* Quadrascopelle 
 voltab
@@ -28874,16 +28887,17 @@ noteScroller2:
 	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,d7
 	bhi.b	.narrow
 	* normal font stripe
-;	mulu	#72,d0
-	move	d0,d2 * tricky mul with 72
-	lsl	#6,d2
-	lsl	#3,d0
-	add	d2,d0
+	mulu	#72,d0
 	bra.b	.wide
 .narrow
-	* Test if font is available
+    * Need narrow font,
+	* test if font is available
 	tst.l	minifontbase(a5)
-	beq.b	.x
+	bne 	.yesFont
+    * bail out with msg
+    bsr     showNoMiniFontMessage
+    bra     .x
+.yesFont
 	* each narrow stripe is 32 pix
 	lsl	#5,d0 ;mulu	#32,d0 	
 .wide
