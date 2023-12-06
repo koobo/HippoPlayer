@@ -43249,7 +43249,13 @@ p_sample:
 	moveq	#0,d0
 	cmp	#16000,horizfreq(a5)
 	slo	d0
-    DPRINT  "resample needed: %ld"
+ if DEBUG
+    push    d1
+    moveq   #0,d1
+    move    horizfreq(a5),d1
+    DPRINT  "resample needed: %ld (horizfreq=%ld)"
+    pop     d1
+ endif
 	move	d0,-(sp)
 	pea	songover(a5)
 	move.l	colordiv(a5),-(sp)
@@ -43342,8 +43348,8 @@ p_sample:
 	pushpea	kokonaisaika(a5),d5
 
 	move.b	samplecyber(a5),d6
-;	move.b	cybercalibration(a5),d6
-	move.l	calibrationaddr(a5),d7
+	move.b	cybercalibration(a5),d6 * 14-bit out or not
+;	move.l	calibrationaddr(a5),d7
 
 	move	sampleforcerate(a5),a6
 

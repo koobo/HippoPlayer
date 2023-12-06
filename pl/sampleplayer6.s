@@ -596,12 +596,11 @@ init:
 	move.l	d5,kokonaisaika(a5)
 
  if DEBUG
-    pushm   d0/d1
+    pushm   d0
     moveq   #0,d0
     move.b  d6,d0
-    move.l  d7,d1
-    DPRINT  "cyber calib=%lx addr=%lx"
-    popm    d0/d1
+    DPRINT  "14-bit out requested=%lx"
+    pop     d0
  endif
 
     * 8-bit or 14-bit out
@@ -3791,7 +3790,7 @@ convert_stereo_14bit
     move.w  (a0)+,d1
     ror.w   #8,d1   * WAV byte order
     muls    d2,d1
-    asr.l   #6,d1
+    lsr.l   #6,d1
     lsr.b   #2,d1
     move.b  d1,(a2)+    * LSB
     ror.w   #8,d1
@@ -3843,7 +3842,7 @@ convert_stereo_14bit
 
     move.w  (a0)+,d1
     muls    d2,d1
-    asr.l   #6,d1
+    lsr.l   #6,d1
     lsr.b   #2,d1
     move.b  d1,(a2)+    * LSB
     ror.w   #8,d1
