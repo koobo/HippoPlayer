@@ -19502,7 +19502,7 @@ inforivit_play:
 .1	dc.b	"Screamtracker ]I[",0
 .2	dc.b	"Pro/Fasttracker",0
 .3	dc.b	"Multitracker",0
-.4	dc.b	"Fasttracker ][ XM",0
+.4	dc.b	"Fasttracker ][",0
 .5	dc.b	"ImpulseTracker [DP]",0
  even
 
@@ -19527,6 +19527,11 @@ inforivit_play:
     pushpea type_notAhi(pc),d3
     cmp     #pt_multi,playertype(a5)
     bne     .notAhi
+    cmp.b   #sm_stereo14,s3mmode2(a5)
+    bne     .not14
+    pushpea type_14bit(pc),d3
+    bra     .notAhi
+.not14
     tst.b   ahi_use_nyt(a5)
     beq     .notAhi
     pushpea type_ahi(pc),d3
@@ -19838,6 +19843,7 @@ typpi
 
 type_ahi    dc.b    " AHI"
 type_notAhi dc.b    0
+type_14bit  dc.b    " 14-bit",0
  even
 
 *******************************************************************************
