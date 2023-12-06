@@ -886,9 +886,9 @@ alarm_new	rs	1
 vbtimer_new	rs.b	1
 Xscopechanged	rs.b	1		* scopea muutettu
 contonerr_laskuri rs.b 1		* kuinka monta virheellist‰ lataus
-cybercalibration_new rs.b 1		* yrityst‰
-calibrationfile_new rs.b 100
-newcalibrationfile rs.b	1
+;cybercalibration_new rs.b 1		* yrityst‰
+;calibrationfile_new rs.b 100
+;newcalibrationfile rs.b	1
 
 mhiLib_new      rs.b MHILIB_SIZE
 
@@ -1132,7 +1132,7 @@ xplayer		rs.l	1	* osote
 xlen		rs.l	1	* pakattupituus
 
 ps3msettingsfile rs.l	1	* ps3m settings filen osoite
-calibrationaddr	 rs.l	1	* CyberSound 14-bit calibration table
+;;calibrationaddr	 rs.l	1	* CyberSound 14-bit calibration table
 
 sampleroutines	rs.l	0
 aonroutines	rs.l	0
@@ -2639,7 +2639,7 @@ main:
 	pushm	all
 	bsr	loadprefs
 	bsr	loadps3msettings
-	bsr	loadcybersoundcalibration
+	;;bsr	loadcybersoundcalibration
 	popm	all
 
 
@@ -3648,8 +3648,8 @@ exit
 	bsr	freemem
 	move.l	ps3msettingsfile(a5),a0		* vapautetaan ps3masetustied.
 	bsr	freemem
-	move.l	calibrationaddr(a5),a0
-	bsr	freemem
+;	move.l	calibrationaddr(a5),a0
+;	bsr	freemem
 	move.l	randomtable(a5),a0
 	bsr 	freemem
 	move.l	lastStoredFileReqDirectory(a5),a0 
@@ -13337,7 +13337,7 @@ loadprefs2
 	move.b	prefs_ps3msettings(a0),ps3msettings(a5)
 	move.b	prefs_prefsivu(a0),prefsivu+1(a5)
 	move.b	prefs_samplebufsiz(a0),samplebufsiz0(a5)
-	move.b	prefs_cybercalibration(a0),cybercalibration(a5)
+	;move.b	prefs_cybercalibration(a0),cybercalibration(a5)
 	move	prefs_forcerate(a0),sampleforcerate(a5)
 
 	move.b	prefs_samplecyber(a0),samplecyber(a5)
@@ -13654,7 +13654,7 @@ saveprefs
 	move.b	kokolippu(a5),prefs_kokolippu(a0)
 	not.b	prefs_kokolippu(a0)
 	move.b	samplebufsiz0(a5),prefs_samplebufsiz(a0)
-	move.b	cybercalibration(a5),prefs_cybercalibration(a0)
+	;move.b	cybercalibration(a5),prefs_cybercalibration(a0)
 	move	sampleforcerate(a5),prefs_forcerate(a0)
 
 	move.b	samplecyber(a5),prefs_samplecyber(a0)
@@ -13916,6 +13916,7 @@ loadps3msettings
 *********************************************************************
 * Ladataan CyberSound 14-bit kalibraatiotiedosto
 
+ REM
 loadcybersoundcalibration
 	tst.b	cybercalibration(a5)
 	beq.b	.xx
@@ -13966,6 +13967,7 @@ loadcybersoundcalibration
 
 .er1	dc.b	"Unable to load calibration file!",0
  even
+ EREM
 
 ******************************************************************************
 * Piirt‰‰ tekstuurin ikkunaan
@@ -14151,7 +14153,7 @@ prefs_code
 	bsr	setPrefsInfoBox
 	move.b	ps3msettings(a5),ps3msettings_new(a5)
 	move.b	samplebufsiz0(a5),samplebufsiz_new(a5)
-	move.b	cybercalibration(a5),cybercalibration_new(a5)
+	;move.b	cybercalibration(a5),cybercalibration_new(a5)
 	move	sampleforcerate(a5),sampleforcerate_new(a5)
 
 	move.b	samplecyber(a5),samplecyber_new(a5)
@@ -14289,10 +14291,10 @@ prefs_code
 	moveq	#MHILIB_SIZE-1,d0
 	bsr.b	.cp2
 
-	lea	calibrationfile(a5),a0
-	lea	calibrationfile_new(a5),a1
-.ww2	move.b	(a0)+,(a1)+
-	bne.b	.ww2
+;	lea	calibrationfile(a5),a0
+;	lea	calibrationfile_new(a5),a1
+;.ww2	move.b	(a0)+,(a1)+
+;	bne.b	.ww2
 
 	lea	ahi_name(a5),a0
 	lea	ahi_name_new(a5),a1
@@ -14627,7 +14629,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	xfd_new(a5),xfd(a5)
 	move.b	ps3msettings_new(a5),ps3msettings(a5)
 	move.b	samplebufsiz_new(a5),samplebufsiz0(a5)
-	move.b	cybercalibration_new(a5),cybercalibration(a5)
+	;move.b	cybercalibration_new(a5),cybercalibration(a5)
 	move	sampleforcerate_new(a5),sampleforcerate(a5)
 
 	move.b	samplecyber_new(a5),samplecyber(a5)
@@ -14788,9 +14790,9 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lea	groupname(a5),a1
 	bsr 	.copy
 
-	lea	calibrationfile_new(a5),a0
-	lea	calibrationfile(a5),a1
-	bsr 	.copy
+;	lea	calibrationfile_new(a5),a0
+;	lea	calibrationfile(a5),a1
+;	bsr 	.copy
 
 	lea	ahi_name_new(a5),a0
 	lea	ahi_name(a5),a1
@@ -14814,6 +14816,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 * ladataan caib fle jos tarpeen
 
+ REM
 	tst.b	cybercalibration(a5)
 	beq.b	.dw
 	tst.l	calibrationaddr(a5)
@@ -14825,7 +14828,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	clr.l	calibrationaddr(a5)
 .dw2	bsr	loadcybersoundcalibration
 .dw	clr.b	newcalibrationfile(a5)
-
+ EREM
 
 
 	cmp.b	#2,prefs_exit(a5)	* Tallennetaanko??
@@ -15366,8 +15369,8 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	pps3mb			* ps3m buffer
 	bsr	pupdate7b		* stereo
 	bsr	psettings		* settings file
-	bsr	pcyber			* cyber calibration
-	bsr	pcybername		* cyber calibration file name
+;	bsr	pcyber			* cyber calibration
+;	bsr	pcybername		* cyber calibration file name
 	bra	.x
 
 .6	subq.b	#1,d0
@@ -15627,8 +15630,8 @@ gadgetsup2
 	dr	rsmode3		* ps3m volumeboost
 	dr	rsmode4		* ps3m stereofactor
 	dr	rsettings	* settings file on/off
-	dr	rcyber		* cyber calibration
-	dr	rcybername	* cyber calibration file name
+;	dr	rcyber		* cyber calibration
+;	dr	rcybername	* cyber calibration file name
 
 *** Sivu5
 .s5	dr	rahi3		* ahi select mode
@@ -16308,7 +16311,7 @@ psettings
 
 
 
-
+ REM
 ***** cyber calibration nappu
 rcyber
 	not.b	cybercalibration_new(a5)
@@ -16351,7 +16354,7 @@ pcybername
 	bsr	prunt2	
 	lea	30(sp),sp
 	rts
-
+ EREM
 
 
 
@@ -42609,8 +42612,10 @@ p_multi:
 
 * v‰litet‰‰n tietoa ps3m:lle ja hankitaan sit‰ silt‰
 
-	move.b	cybercalibration(a5),d0
-	move.l	calibrationaddr(a5),d1
+;	move.b	cybercalibration(a5),d0
+;	move.l	calibrationaddr(a5),d1
+    moveq   #0,d0
+    moveq   #0,d1
 
 	move.b	ahi_use(a5),d2
 	move.l	ahi_rate(a5),d3
