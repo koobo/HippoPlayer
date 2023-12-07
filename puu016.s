@@ -43371,8 +43371,9 @@ p_sample:
 ;	pushpea	probebuffer(a5),d4
 	pushpea	kokonaisaika(a5),d5
 
+    * 14-bit out or not
 	move.b	samplecyber(a5),d6
-	move.b	cybercalibration(a5),d6 * 14-bit out or not
+;	move.b	cybercalibration(a5),d6 
 ;	move.l	calibrationaddr(a5),d7
 
 	move	sampleforcerate(a5),a6
