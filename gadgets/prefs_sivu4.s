@@ -76,7 +76,9 @@ juust0tx	dc.b "Stereo level................",0
 	even
 juust0s	dc.w 2,0,0,0,0
 	dc.w 0,0,0,0,0,0
-Fruit	dc.l bENDER1
+Fruit	
+    dc.l 0
+    ;dc.l bENDER1
 	dc.w 406,135,28,12,3,1,1
 	dc.l 0,0,Fruitt,0,0
 	dc.w 0
@@ -86,18 +88,18 @@ Fruitt	dc.b 1,0,1,0
 	dc.l 0,Fruittx,0
 Fruittx	dc.b "Use S:HippoPlayer.PS3M configuration file.......",0
 	even
-bENDER1	dc.l bENDER2
-	dc.w 406,121,28,12,3,1,1
-	dc.l 0,0,0,0,0
-	dc.w 0
-	dc.l 0
-bENDER2	dc.l 0
-	dc.w 246,121,158,12,0,1,1
-	dc.l 0,0,bENDER2t,0,0
-	dc.w 0
-	dc.l 0
-bENDER2t	dc.b 1,0,1,0
-	dc.w -230,2
-	dc.l 0,bENDER2tx,0
-bENDER2tx	dc.b "Use CyberSound calibration..",0
-	even
+;bENDER1	dc.l bENDER2
+;	dc.w 406,121,28,12,3,1,1
+;	dc.l 0,0,0,0,0
+;	dc.w 0
+;	dc.l 0
+;bENDER2	dc.l 0
+;	dc.w 246,121,158,12,0,1,1
+;	dc.l 0,0,bENDER2t,0,0
+;	dc.w 0
+;	dc.l 0
+;bENDER2t	dc.b 1,0,1,0
+;	dc.w -230,2
+;	dc.l 0,bENDER2tx,0
+;bENDER2tx	dc.b "Use CyberSound calibration..",0
+;	even
