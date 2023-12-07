@@ -120,7 +120,7 @@ WINY	= 3
 * This char as the first char in filename indicates a list divider
 DIVIDER_MAGIC = '÷' ; UTF8=c3b7
 * Another magic char for dividers to be drawn differently
-DIVIDER_MAGIC_ALT = 'ö' ; UTF8=c3b6
+DIVIDER_MAGIC_ALT = '¢' ; UTF8=c2a2
 
 ;isListDivider macro 
 ;	cmp.b 	#DIVIDER_MAGIC,\1
@@ -12670,9 +12670,9 @@ importModuleProgramFromData:
     bra     .foundDiv
 .notDiv2
 
-    cmp.b   #$c3,(a3)
+    cmp.b   #$c2,(a3)
     bne     .div1
-    cmp.b   #$b6,1(a3)
+    cmp.b   #$a2,1(a3)
     bne     .div1
 	addq	#2,a3
     bra     .altDiv
@@ -26589,7 +26589,7 @@ getScopeMiniFontIfNeeded
 	move.l	d0,a6
 	lea	mini_text_attr,a0
 	lob	OpenDiskFont
-	move.l	d0,minifontbase(a5)
+ 	move.l	d0,minifontbase(a5)
 	move.l	a6,a1
 	lore 	Exec,CloseLibrary
 ;	tst.l	minifontbase(a5)
