@@ -3,11 +3,16 @@
 test	=	0
 
  ifnd DEBUG
-DEBUG	=	0
+DEBUG	=	1
  endif
 
  ifnd SERIALDEBUG
-SERIALDEBUG = 0
+SERIALDEBUG = 1
+ endif
+
+; 020 specific conversion loops avoid writing to CHIP in bytes
+ ifnd WRITELONG
+WRITELONG = 0
  endif
 
 
@@ -1045,9 +1050,6 @@ init:
 	moveq	#ier_mpega,d0
 	bra	sampleiik
 .uzx
- if DEBUG
-    bsr     openTimer
- endif
 
 	* Set up hook
 	lea	.mpega_hook(pc),a0
@@ -1669,6 +1671,10 @@ init:
 	bsr	vol
 
     bsr     prepareInfoLine
+
+ if DEBUG
+    bsr     openTimer
+ endif
 
 	DPRINT	"CreateProc"
 
@@ -3384,7 +3390,7 @@ sample_code:
 	move.l	d6,d0
 	move.l	a4,a0
 
-	pushm	a3/a4/a6
+	pushm	d5/d6/a3/a4/a6
 	movem.l	(a3),a1/a2		* vas oik LSB kanavat
 	movem.l	16(a3),a3/a4		* vas oik MSB kanavat
 
@@ -3400,7 +3406,7 @@ sample_code:
 .j0
 	bsr	convert_stereo_14bit
 
-	movem.l	(sp),a3/a4/a6
+	movem.l	(sp),d5/d6/a3/a4/a6
 
 	tst.b	kutistus(a5)
 	beq.b	.j1
@@ -3429,7 +3435,7 @@ sample_code:
 	movem.l	16(a3),a2/a3
 	bsr	playblock_14bit
 
-	popm	a3/a4/a6
+	popm	d5/d6/a3/a4/a6
 	
 	bsr	wait
 	bne	quit
@@ -3523,8 +3529,11 @@ convert_stereo
 	dbf	d0,.w14
 	rts
 
+* Use case: timidity
 .w12	
-    DPRINT  "16-bit"
+    tst.b   cpu(a5)
+    bne     .w12_020
+    DPRINT  "16-bit wav 000"
 .w12_
  rept 4
 	move	(a0)+,d1
@@ -3535,6 +3544,67 @@ convert_stereo
 	dbf	d0,.w12_
 	rts
 
+.w12_020
+
+ ifeq WRITELONG
+
+    DPRINT  "16-bit wav 020"
+ if DEBUG
+    bsr     startMeasure
+ endif
+.w12_020_
+ rept 4
+	move	(a0)+,d1
+	move.b	d1,(a1)+
+	move	(a0)+,d1
+	move.b	d1,(a2)+
+ endr
+	dbf	d0,.w12_020_
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
+    rts
+
+ else
+    DPRINT  "16-bit wav 020 writelong"
+ if DEBUG
+    bsr     startMeasure
+ endif
+.w12_020_
+
+	move	(a0)+,d1
+    move.b  d1,d2
+    lsl.w   #8,d2
+	move	(a0)+,d1
+    move.b  d1,d3
+    lsl.w   #8,d3
+
+	move	(a0)+,d1
+    move.b  d1,d2
+    swap    d2
+	move	(a0)+,d1
+    move.b  d1,d3
+    swap    d3
+
+	move	(a0)+,d1
+    move.b  d1,d2
+    lsl.w   #8,d2
+	move	(a0)+,d1
+    move.b  d1,d3
+    lsl.w   #8,d3
+
+	move	(a0)+,d1
+    move.b  d1,d2
+    move.l  d2,(a1)+
+	move	(a0)+,d1
+    move.b  d1,d3
+    move.l  d3,(a2)+
+	dbf	d0,.w12_020_
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
+	rts
+ endif
 
 .aiffc2
     DPRINT  "convert_stereo aiff"
@@ -3550,7 +3620,15 @@ convert_stereo
 	rts
 
 .w123	
-    DPRINT  "16-bit"
+
+ ifne WRITELONG
+    tst.b   cpu(a5)
+    bne     .w123_020
+ endif
+    DPRINT  "16-bit aiff 000/020"
+ if DEBUG
+    bsr     startMeasure
+ endif
     moveq   #4*4,d1
 .w123_
 ; rept 4
@@ -3571,11 +3649,38 @@ convert_stereo
 	add.l   d1,a0
 
  	dbf	d0,.w123_
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
 	rts
 
 
+* Use case: gmplay, vgm2wav, mdx2wav input
+.w123_020
+    DPRINT  "16-bit aiff 020 writelong"
+    moveq   #4*4,d1
+.w123_020_
 
+	move.b	(a0),d2
+    lsl.w   #8,d2
+	move.b	2(a0),d3
+    lsl.w   #8,d3
+	move.b	4(a0),d2
+    swap    d2
+	move.b	6(a0),d3
+    swap    d3
+	move.b	8(a0),d2
+    lsl.w   #8,d2
+	move.b	10(a0),d3
+    lsl.w   #8,d3
+	move.b	12(a0),d2
+    move.l  d2,(a1)+
+	move.b	14(a0),d3
+    move.l  d3,(a2)+
+	add.l   d1,a0
 
+ 	dbf	d0,.w123_020_
+	rts 
 
 
 
@@ -3602,10 +3707,11 @@ convert_stereo_14bit
     cmp.w   #$40,mainvolume(a5)
     bne     .cyber_wav_stereo_14bit_volume
 
-    DPRINT  "convert WAV stereo cyber 14-bit"
 
 	tst.b	cpu(a5)
 	bne	.w1214_020
+
+    DPRINT  "convert WAV stereo cyber 14-bit"
 .w1214
  rept 4
 	moveq	#0,d1
@@ -3626,6 +3732,14 @@ convert_stereo_14bit
 	rts
 
 .w1214_020
+
+ ifeq WRITELONG
+    DPRINT  "convert WAV stereo cyber 020 14-bit"
+ if DEBUG
+    bsr     startMeasure
+ endif
+.w1214_020_
+
  rept 4
 	move	(a0)+,d1
 	ror	#8,d1
@@ -3637,8 +3751,57 @@ convert_stereo_14bit
 	move.b	(a6,d1.l*2),(a4)+
 	move.b	1(a6,d1.l*2),(a2)+
  endr
-	dbf	d0,.w1214_020
+	dbf	d0,.w1214_020_
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
 	rts
+
+ else
+   
+    DPRINT  "convert WAV stereo cyber 020 14-bit writelong"
+ if DEBUG
+    bsr     startMeasure
+ endif
+.w1214_020_
+ rept 3
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+	move.b	(a6,d1.l*2),d3
+	move.b	1(a6,d1.l*2),d4
+    lsl.l   #8,d3       * faster than rol on 020/030
+    lsl.l   #8,d4
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+	move.b	(a6,d1.l*2),d5
+	move.b	1(a6,d1.l*2),d6
+    lsl.l   #8,d5
+    lsl.l   #8,d6
+ endr
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+	move.b	(a6,d1.l*2),d3
+    move.l  d3,(a3)+
+
+	move.b	1(a6,d1.l*2),d4
+    move.l  d4,(a1)+
+
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+	move.b	(a6,d1.l*2),d5
+    move.l  d5,(a4)+
+    
+    move.b	1(a6,d1.l*2),d6
+    move.l  d6,(a2)+
+
+
+	dbf	d0,.w1214_020_
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
+	rts
+
+ endif
 
 .cyber_wav_stereo_14bit_volume:
     DPRINT  "convert WAV stereo cyber 14-bit vol"
@@ -3679,11 +3842,9 @@ convert_stereo_14bit
     bne     .cyber_aiff_stereo_14bit_volume
 .mp3a
 
-    DPRINT  "convert AIFF stereo cyber 14-bit"
-
 	tst.b	cpu(a5)
-	bne.b	.w12314_020
-
+	bne 	.w12314_020
+    DPRINT  "convert AIFF stereo cyber 14-bit"
 .w12314	
  rept 4
 	moveq	#0,d1
@@ -3703,6 +3864,12 @@ convert_stereo_14bit
 
 
 .w12314_020
+ ifeq WRITELONG
+    DPRINT  "convert AIFF stereo 020 cyber 14-bit"
+ if DEBUG
+    bsr     startMeasure
+ endif
+.w12314_020_
  rept 4
 	move	(a0)+,d1
 	move.b	(a6,d1.l*2),(a3)+
@@ -3712,8 +3879,49 @@ convert_stereo_14bit
 	move.b	(a6,d1.l*2),(a4)+
 	move.b	1(a6,d1.l*2),(a2)+
  endr
- 	dbf	d0,.w12314_020
+ 	dbf	d0,.w12314_020_
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
 	rts
+ else
+    DPRINT  "convert AIFF stereo 020 cyber 14-bit writelong"
+ if DEBUG
+    bsr     startMeasure
+ endif
+.w12314_020_longwrite_
+ rept 3
+	move	(a0)+,d1
+	move.b	(a6,d1.l*2),d3
+	move.b	1(a6,d1.l*2),d4
+    lsl.l   #8,d3       * faster than rol on 020/030
+    lsl.l   #8,d4
+	move	(a0)+,d1
+	move.b	(a6,d1.l*2),d5
+	move.b	1(a6,d1.l*2),d6
+    lsl.l   #8,d5
+    lsl.l   #8,d6
+ endr
+	move	(a0)+,d1
+	move.b	(a6,d1.l*2),d3
+    move.l  d3,(a3)+
+
+	move.b	1(a6,d1.l*2),d4
+    move.l  d4,(a1)+
+
+	move	(a0)+,d1
+	move.b	(a6,d1.l*2),d5
+    move.l  d5,(a4)+
+    
+    move.b	1(a6,d1.l*2),d6
+    move.l  d6,(a2)+
+
+ 	dbf	d0,.w12314_020_longwrite_
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
+	rts
+ endif
 
 
 .cyber_aiff_stereo_14bit_volume:
@@ -3755,6 +3963,9 @@ convert_stereo_14bit
     bne     .ordinary_wav_stereo_14bit_volume
 
     DPRINT  "convert WAV stereo normal 14-bit"
+ if DEBUG
+    bsr     startMeasure
+ endif
 .o_w1214
 
   rept 4
@@ -3769,7 +3980,10 @@ convert_stereo_14bit
     move.b  (a0)+,(a4)+ * MSB
  endr
  	dbf	d0,.o_w1214
-	rts
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
+ 	rts
 
 .ordinary_wav_stereo_14bit_volume:
     DPRINT  "convert WAV stereo normal 14-bit vol"
@@ -3808,8 +4022,16 @@ convert_stereo_14bit
     cmp.w   #$40,mainvolume(a5)
     bne     .ordinary_aiff_stereo_14bit_volume
 .mp3b
-    DPRINT  "convert AIFF stereo normal 14-bit"
 
+ ifne WRITELONG
+    tst.b   cpu(a5)
+    bne     .ordinaryAiff14_020
+ endif
+
+    DPRINT  "convert AIFF stereo normal 14-bit"
+ if DEBUG
+    bsr     startMeasure
+ endif
 .o_aiffc214_l
  rept 4
 	move.b	(a0)+,(a3)+  * MSB
@@ -3823,7 +4045,48 @@ convert_stereo_14bit
     move.b  d1,(a2)+    * LSB
  endr
     dbf d0,.o_aiffc214_l
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
     rts
+
+.ordinaryAiff14_020:
+    DPRINT  "convert AIFF stereo normal 14-bit writelong"
+ if DEBUG
+    bsr     startMeasure
+ endif
+.ordinaryAiff14_020_ 
+ rept 3
+    move.b  (a0)+,d2
+    lsl.l   #8,d2
+    move.b  (a0)+,d3
+    lsr.b   #2,d3
+    lsl.l   #8,d3
+    
+    move.b  (a0)+,d4
+    lsl.l   #8,d4
+    move.b  (a0)+,d5
+    lsr.b   #2,d5
+    lsl.l   #8,d5
+ endr
+    move.b  (a0)+,d2
+    move.l  d2,(a3)+
+    move.b  (a0)+,d3
+    lsr.b   #2,d3
+    move.l  d3,(a1)+
+    
+    move.b  (a0)+,d4
+    move.l  d4,(a4)+
+    move.b  (a0)+,d5
+    lsr.b   #2,d5
+    move.l  d5,(a2)+
+
+    dbf d0,.ordinaryAiff14_020_ 
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
+     rts
+
 
 .ordinary_aiff_stereo_14bit_volume:
     DPRINT  "convert AIFF stereo normal 14-bit vol"
@@ -4060,12 +4323,47 @@ decodeMp3
     pop     d0
  endif
 .bob
+; rept 2
+;    * Index into d4
+;    move.l  d2,d4
+;    and.l   d3,d4
+;    * Next sample
+;	addx.l	d1,d2
+;
+;    * ror does not change X, lsr does, can't use it here
+;    * LLLLLLLLllllllllRRRRRRRRrrrrrrrr
+;    move.l  (a0,d4.l*4),d4
+;    * LLLLLLLLllllll00RRRRRRRRrrrrrr00
+;    and.l   d5,d4
+;    ror.b   #2,d4
+;    move.b  d4,(a2)+        * right LSB
+;    ror.w	#8,d4
+;    move.b  d4,(a4)+        * right MSB
+;    swap    d4
+;    ror.b   #2,d4
+;    move.b  d4,(a1)+        * left LSB
+;    ror.w   #8,d4
+;    move.b  d4,(a3)+        * left MSB
+;
+; endr
+;
  rept 2
     * Index into d4
     move.l  d2,d4
-    and.l   d3,d4
+    and.l   #$0003ffff,d4
     * Next sample
 	addx.l	d1,d2
+
+    * Left 16-sample
+    move.w  (a0,d4.l*4),d3
+    move.b  d3,d7
+    and.b   #%11111100,d7
+    ror.b   #2,d7
+        
+
+    * Right 16-bit
+    move.w  (a0,d4.l*4),d4
+
 
     * ror does not change X, lsr does, can't use it here
     * LLLLLLLLllllllllRRRRRRRRrrrrrrrr
@@ -4083,6 +4381,7 @@ decodeMp3
     move.b  d4,(a3)+        * left MSB
 
  endr
+
     dbf     d0,.bob
     bra     .bobDone
 
@@ -6951,22 +7250,44 @@ closeTimer
 
 
 startMeasure:
+    pushm   all
     lea     clockStart(a5),a0
-    bra doStartMeasure
+    bsr     doStartMeasure
+    popm    all
+    rts
 
 startMeasure2:
+    pushm   all
     lea     clockStart2(a5),a0
-    bra doStartMeasure
+    bsr     doStartMeasure
+    popm    all
+    rts
 
 stopMeasure:
+    pushm   d1-a6
 	lea	    clockStart(a5),a0
 	lea	    clockEnd(a5),a1
-    bra     doStopMeasure
+    bsr     doStopMeasure
+    popm    d1-a6
+    rts
+
+stopMeasurePrint:
+    pushm   all
+	lea	    clockStart(a5),a0
+	lea	    clockEnd(a5),a1
+    bsr     doStopMeasure
+    DPRINT  "%ld ms"
+    popm    all
+    rts
+
 
 stopMeasure2:
+    pushm   d1-a6
 	lea	    clockStart2(a5),a0
 	lea	    clockEnd2(a5),a1
-    bra     doStopMeasure
+    bsr     doStopMeasure
+    popm    d1-a6
+    rts
 
 doStartMeasure:
 	tst.b	timerOpen(a5)
