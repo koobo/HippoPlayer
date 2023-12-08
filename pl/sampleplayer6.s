@@ -3549,8 +3549,10 @@ convert_stereo
  ifeq WRITELONG
 
     DPRINT  "16-bit wav 020"
+    * Timidity JeSoPazzo: 234 ms
+    * giana.wav: 26 ms
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .w12_020_
  rept 4
@@ -3561,14 +3563,15 @@ convert_stereo
  endr
 	dbf	d0,.w12_020_
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
     rts
 
  else
     DPRINT  "16-bit wav 020 writelong"
+    * Timidity JeSoPazzo: 124 ms
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .w12_020_
 
@@ -3601,7 +3604,7 @@ convert_stereo
     move.l  d3,(a2)+
 	dbf	d0,.w12_020_
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
 	rts
  endif
@@ -3627,7 +3630,7 @@ convert_stereo
  endif
     DPRINT  "16-bit aiff 000/020"
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
     moveq   #4*4,d1
 .w123_
@@ -3650,7 +3653,7 @@ convert_stereo
 
  	dbf	d0,.w123_
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
 	rts
 
@@ -3658,7 +3661,10 @@ convert_stereo
 * Use case: gmplay, vgm2wav, mdx2wav input
 .w123_020
     DPRINT  "16-bit aiff 020 writelong"
-    moveq   #4*4,d1
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
+     moveq   #4*4,d1
 .w123_020_
 
 	move.b	(a0),d2
@@ -3680,7 +3686,11 @@ convert_stereo
 	add.l   d1,a0
 
  	dbf	d0,.w123_020_
-	rts 
+
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
+ 	rts 
 
 
 
@@ -3735,6 +3745,7 @@ convert_stereo_14bit
 
  ifeq WRITELONG
     DPRINT  "convert WAV stereo cyber 020 14-bit"
+    * A1200/060 giana.wav 128k buffer: 328-330 ms
  if DEBUG
     bsr     startMeasure
  endif
@@ -3753,15 +3764,16 @@ convert_stereo_14bit
  endr
 	dbf	d0,.w1214_020_
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
 	rts
 
  else
    
     DPRINT  "convert WAV stereo cyber 020 14-bit writelong"
+    * A1200/060 giana.wav 128k buffer: 280 ms
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .w1214_020_
  rept 3
@@ -3797,7 +3809,7 @@ convert_stereo_14bit
 
 	dbf	d0,.w1214_020_
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
 	rts
 
@@ -3866,8 +3878,9 @@ convert_stereo_14bit
 .w12314_020
  ifeq WRITELONG
     DPRINT  "convert AIFF stereo 020 cyber 14-bit"
+    * A1200/060 Xenon.wav 128k buffer: 520 ms
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .w12314_020_
  rept 4
@@ -3881,13 +3894,14 @@ convert_stereo_14bit
  endr
  	dbf	d0,.w12314_020_
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
 	rts
  else
     DPRINT  "convert AIFF stereo 020 cyber 14-bit writelong"
+    * A1200/060 Xenon.wav 128k buffer: 240 ms
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .w12314_020_longwrite_
  rept 3
@@ -3918,7 +3932,7 @@ convert_stereo_14bit
 
  	dbf	d0,.w12314_020_longwrite_
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
 	rts
  endif
@@ -3964,7 +3978,7 @@ convert_stereo_14bit
 
     DPRINT  "convert WAV stereo normal 14-bit"
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .o_w1214
 
@@ -3981,7 +3995,7 @@ convert_stereo_14bit
  endr
  	dbf	d0,.o_w1214
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
  	rts
 
@@ -4030,7 +4044,7 @@ convert_stereo_14bit
 
     DPRINT  "convert AIFF stereo normal 14-bit"
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .o_aiffc214_l
  rept 4
@@ -4046,14 +4060,14 @@ convert_stereo_14bit
  endr
     dbf d0,.o_aiffc214_l
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
     rts
 
 .ordinaryAiff14_020:
     DPRINT  "convert AIFF stereo normal 14-bit writelong"
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .ordinaryAiff14_020_ 
  rept 3
@@ -4083,7 +4097,7 @@ convert_stereo_14bit
 
     dbf d0,.ordinaryAiff14_020_ 
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
      rts
 
@@ -4315,46 +4329,25 @@ decodeMp3
 
 	move.l	samplecyber(a5),a6  
     tst.l   a6
-    bne     .bobCalib
+    ;bne     .bobCalib
  if DEBUG
     push    d0
     move.l  d1,d0
     DPRINT  "special mp3 14-bit ordinary step=%lx"
-    bsr     startMeasure
+    move.l  (sp),d0
+    lsr.l   #1,d0
+    bsr     startMeasureSamples
     pop     d0
  endif
+    push    d6
 .bob
-; rept 2
-;    * Index into d4
-;    move.l  d2,d4
-;    and.l   d3,d4
-;    * Next sample
-;	addx.l	d1,d2
-;
-;    * ror does not change X, lsr does, can't use it here
-;    * LLLLLLLLllllllllRRRRRRRRrrrrrrrr
-;    move.l  (a0,d4.l*4),d4
-;    * LLLLLLLLllllll00RRRRRRRRrrrrrr00
-;    and.l   d5,d4
-;    ror.b   #2,d4
-;    move.b  d4,(a2)+        * right LSB
-;    ror.w	#8,d4
-;    move.b  d4,(a4)+        * right MSB
-;    swap    d4
-;    ror.b   #2,d4
-;    move.b  d4,(a1)+        * left LSB
-;    ror.w   #8,d4
-;    move.b  d4,(a3)+        * left MSB
-;
-; endr
-;
+ REM ; weird BYTE write
  rept 2
     * Index into d4
     move.l  d2,d4
     and.l   #$0003ffff,d4
     * Next sample
 	addx.l	d1,d2
-
     * ror does not change X, lsr does, can't use it here
     * LLLLLLLLllllllllRRRRRRRRrrrrrrrr
     move.l  (a0,d4.l*4),d4
@@ -4369,13 +4362,61 @@ decodeMp3
     move.b  d4,(a1)+        * left LSB
     ror.w   #8,d4
     move.b  d4,(a3)+        * left MSB
-
  endr
+ EREM
+
+    * Index into d4
+    move.l  d2,d4
+    and.l   #$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
+
+    * left sample 1
+    move.b  0(a0,d4.l*4),d3  * MSB
+    rol.w   #8,d3
+    move.b  1(a0,d4.l*4),d5  * LSB
+    ;and.w   #%11111100,d5
+    ;ror.b   #2,d5
+    ;rol.w   #8,d5
+    rol.w    #6,d5
+
+    * right sample 1
+    move.b  2(a0,d4.l*4),d6  * MSB
+    rol.w   #8,d6
+    move.b  3(a0,d4.l*4),d7  * LSB
+    ;and.w   #%11111100,d7
+    ;ror.b   #2,d7
+    ;rol.w   #8,d7
+    rol.w   #6,d7
+
+    * Index into d4
+    move.l  d2,d4
+    and.l   #$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
+
+    * left sample 2
+    move.b  0(a0,d4.l*4),d3  * MSB
+    move.w  d3,(a4)+
+    
+    move.b  1(a0,d4.l*4),d5  * LSB
+    and.b   #%11111100,d5
+    ror.b   #2,d5
+    move.w  d5,(a2)+
+
+    * right sample 2
+    move.b  2(a0,d4.l*4),d6  * MSB
+    move.w  d6,(a3)+
+    move.b  3(a0,d4.l*4),d7  * LSB
+    and.w   #%0011111111111100,d7
+    ror.b   #2,d7
+    move.w  d7,(a1)+
 
     dbf     d0,.bob
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
+    pop     d6
     bra     .bobDone
 
 .bobCalib
@@ -4383,11 +4424,14 @@ decodeMp3
     push    d0
     move.l  d1,d0
     DPRINT  "special mp3 14-bit calibrated step=%lx"
-    bsr     startMeasure
+    move.l  (sp),d0
+    lsr.l   #1,d0
+    bsr     startMeasureSamples
     pop     d0
  endif
     moveq   #0,d5
 .bobCalib_
+ ;REM ; BYTE WRITE
  rept 2
     * Index into d4
     move.l  d2,d4
@@ -4403,9 +4447,13 @@ decodeMp3
     move.b	(a6,d5.l*2),(a4)+
 	move.b	1(a6,d5.l*2),(a2)+    
  endr
+  ;EREM
+
+      
+
     dbf     d0,.bobCalib_
  if DEBUG
-    bsr     stopMeasurePrint
+    bsr     stopMeasureSamples
  endif
 
 .bobDone
@@ -4925,6 +4973,15 @@ truncate:
 	move.l	d7,d6			* kohdepituus
 	movem.l	(sp)+,d0/d1
 
+; if DEBUG
+;    push    d0
+;    move    d7,d0
+;    lsr     #1,d0
+;    bsr     startMeasureSamples
+;    pop     d0
+; endif
+
+
     * Calculate fractional step with 12-bit fractions
     * fffxxxxx.
 	lsl.l	#8,d0
@@ -4945,6 +5002,8 @@ truncate:
     * max integer range: 128kB -> 17 bits
     * Mask with one extra bit just to be sure
 	move.l	#$0003ffff,d3
+
+
 .lop
 	move.l	d2,d4
 	and.l	d3,d4
@@ -4959,6 +5018,11 @@ truncate:
 	dbf	d7,.lop
 
 	move.l	d6,d0
+
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
+
     DPRINT  "out=%ld bytes"
 	popm	d1-a6
 	rts	
@@ -7246,6 +7310,37 @@ closeTimer
 .x	rts
 
 
+* In: 
+*   d0 = word, samples to process divided by 4
+startMeasureSamples:
+    pushm   all
+    move.w  d0,sampleCount
+    lea     clockStart(a5),a0
+    bsr     doStartMeasure
+    popm    all
+    rts
+
+stopMeasureSamples:
+    pushm   d0-a6
+	lea	    clockStart(a5),a0
+	lea	    clockEnd(a5),a1
+    bsr     doStopMeasure
+    * d0 = millisecs
+    move.l  d0,d2
+    mulu.l  #1000*1000,d2    * d1 = nanoseconds
+    moveq   #0,d1
+    move.w  sampleCount(pc),d1
+    beq     .x
+    lsl.l   #2,d1
+    divu.l  d1,d2
+
+    DPRINT  "time=%ld ms, samples=%ld, speed=%ld ns/sample"
+.x
+    popm    d0-a6
+    rts
+
+sampleCount:    dc.l    0
+
 startMeasure:
     pushm   all
     lea     clockStart(a5),a0
@@ -7268,14 +7363,6 @@ stopMeasure:
     popm    d1-a6
     rts
 
-stopMeasurePrint:
-    pushm   all
-	lea	    clockStart(a5),a0
-	lea	    clockEnd(a5),a1
-    bsr     doStopMeasure
-    DPRINT  "%ld ms"
-    popm    all
-    rts
 
 
 stopMeasure2:
