@@ -4320,6 +4320,7 @@ decodeMp3
     push    d0
     move.l  d1,d0
     DPRINT  "special mp3 14-bit ordinary step=%lx"
+    bsr     startMeasure
     pop     d0
  endif
 .bob
@@ -4354,17 +4355,6 @@ decodeMp3
     * Next sample
 	addx.l	d1,d2
 
-    * Left 16-sample
-    move.w  (a0,d4.l*4),d3
-    move.b  d3,d7
-    and.b   #%11111100,d7
-    ror.b   #2,d7
-        
-
-    * Right 16-bit
-    move.w  (a0,d4.l*4),d4
-
-
     * ror does not change X, lsr does, can't use it here
     * LLLLLLLLllllllllRRRRRRRRrrrrrrrr
     move.l  (a0,d4.l*4),d4
@@ -4383,6 +4373,9 @@ decodeMp3
  endr
 
     dbf     d0,.bob
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
     bra     .bobDone
 
 .bobCalib
@@ -4390,6 +4383,7 @@ decodeMp3
     push    d0
     move.l  d1,d0
     DPRINT  "special mp3 14-bit calibrated step=%lx"
+    bsr     startMeasure
     pop     d0
  endif
     moveq   #0,d5
@@ -4410,6 +4404,9 @@ decodeMp3
 	move.b	1(a6,d5.l*2),(a2)+    
  endr
     dbf     d0,.bobCalib_
+ if DEBUG
+    bsr     stopMeasurePrint
+ endif
 
 .bobDone
 
