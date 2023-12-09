@@ -5174,12 +5174,12 @@ truncate:
     tst.b   convertWritesLongs(a5)
     bne     .020
  if DEBUG
+    DPRINT  "writebyte"
     push    d0
     move    d7,d0
     lsr     #1,d0
     bsr     startMeasureSamples
     pop     d0
-    DPRINT  "writebyte"
  endif
 
 .lop000
@@ -5198,12 +5198,12 @@ truncate:
 
 .020
  if DEBUG
+    DPRINT  "writeword"
     push    d0
     move    d7,d0
     lsr     #1,d0
     bsr     startMeasureSamples
     pop     d0
-    DPRINT  "writeword"
  endif
 
 .lop020
