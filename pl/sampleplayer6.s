@@ -4213,7 +4213,7 @@ convert_stereo_14bit
     rts
 
 
-; -----------------
+; -------------------------------------------------------------------
     * Special case for stereo mp3
 decodeMp3
 .wl2
@@ -4376,16 +4376,6 @@ decodeMp3
     * lsr shift: round up
     addq.l  #1,d0
 
-
-; if DEBUG
-;    pushm   d0/d1
-;    move.l  d0,d1
-;    lsr.l   #1,d1
-;    move.l  d6,d0
-;    DPRINT  "in=%ld bytes out=%ld words"
-;    popm    d0/d1
-; endif
-
     * d0 = target length
     push    d0
 
@@ -4399,16 +4389,10 @@ decodeMp3
     ror.l	#8,d1
 	ror.l	#4,d1
 
-    ; Start with index 0, X cleared
-    sub.l   d2,d2
-    ; Index mask
-    move.l	#$0003ffff,d3
-    ; Mask to clear two LSB bits from both right and left
-    move.l  #%11111111111111001111111111111100,d5
     ; Two bytes, ie. a word, at a time
-    lsr.l   #1,d0
-    subq    #1,d0
-
+    ;lsr.l   #1,d0
+    ; dbf 
+    ;subq    #1,d0
 
 	move.l	samplecyber(a5),a6  
     tst.l   a6
@@ -4422,10 +4406,20 @@ decodeMp3
     move.l  d1,d0
     DPRINT  "special mp3 14-bit ordinary step=%lx writebyte"
     move.l  (sp),d0
-    lsr.l   #1,d0
     bsr     startMeasureSamples
     pop     d0
  endif
+    lsr.l   #1,d0
+    subq    #1,d0
+
+    ; Start with index 0, X cleared
+    sub.l   d2,d2
+
+    ; Index mask
+    move.l	#$0003ffff,d3
+    ; Mask to clear two LSB bits from both right and left
+    move.l  #%11111111111111001111111111111100,d5
+
 .bobShort_
     * WEIRD byte write
  rept 2
@@ -4456,13 +4450,21 @@ decodeMp3
  if DEBUG
     push    d0
     move.l  d1,d0
-    DPRINT  "special mp3 14-bit ordinary step=%lx writeword"
+    DPRINT  "special mp3 14-bit ordinary step=%lx writelong"
     move.l  (sp),d0
     lsr.l   #1,d0
     bsr     startMeasureSamples
     pop     d0
  endif
+    push    d0
+    lsr.l   #2,d0
+    ; Start with index 0, X cleared
+    sub.l   d2,d2
+    * long words
+    subq    #1,d0
+
 .bobLong_
+ rept 3
     * Index into d4
     move.l  d2,d4
     and.l   #$0003ffff,d4
@@ -4471,46 +4473,71 @@ decodeMp3
 
     * left sample 1
     move.b  0(a0,d4.l*4),d3  * MSB
-    rol.w   #8,d3
+    rol.l   #8,d3
     move.b  1(a0,d4.l*4),d5  * LSB
-    ;and.w   #%11111100,d5
-    ;ror.b   #2,d5
-    ;rol.w   #8,d5
-    rol.w    #6,d5
+    rol.l   #8,d5
 
     * right sample 1
     move.b  2(a0,d4.l*4),d6  * MSB
-    rol.w   #8,d6
+    rol.l   #8,d6
     move.b  3(a0,d4.l*4),d7  * LSB
-    ;and.w   #%11111100,d7
-    ;ror.b   #2,d7
-    ;rol.w   #8,d7
-    rol.w   #6,d7
+    rol.l   #8,d7
+ endr
+   * Index into d4
+    move.l  d2,d4
+    and.l   #$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
 
+    * left sample 4
+    move.b  0(a0,d4.l*4),d3  * MSB
+    move.l  d3,(a3)+
+    move.b  1(a0,d4.l*4),d5  * LSB
+    and.l   #$fcfcfcfc,d5
+    ror.l   #2,d5
+    move.l  d5,(a1)+
+
+    * right sample 4
+    move.b  2(a0,d4.l*4),d6  * MSB
+    move.l  d6,(a4)+
+    move.b  3(a0,d4.l*4),d7  * LSB
+    and.l   #$fcfcfcfc,d7
+    ror.l   #2,d7
+    move.l  d7,(a2)+
+
+    dbf     d0,.bobLong_
+ 
+.bobLongRemaining
+    moveq   #%11,d0
+    and.l   (sp)+,d0
+    beq     .bobLoopDone
+    subq    #1,d0
+
+.bobLongRemaining_
     * Index into d4
     move.l  d2,d4
     and.l   #$0003ffff,d4
     * Next sample
 	addx.l	d1,d2
 
-    * left sample 2
-    move.b  0(a0,d4.l*4),d3  * MSB
-    move.w  d3,(a4)+
-    
-    move.b  1(a0,d4.l*4),d5  * LSB
-    and.w   #%0011111111111100,d5
+    * left sample 1
+    move.b  0(a0,d4.l*4),(a3)+ * MSB
+    move.b  1(a0,d4.l*4),d5  
     ror.b   #2,d5
-    move.w  d5,(a2)+
+    and.b   #%00111111,d5
+    move.b  d5,(a1)+           * LSB
 
-    * right sample 2
-    move.b  2(a0,d4.l*4),d6  * MSB
-    move.w  d6,(a3)+
-    move.b  3(a0,d4.l*4),d7  * LSB
-    and.w   #%0011111111111100,d7
-    ror.b   #2,d7
-    move.w  d7,(a1)+
+    move.b  2(a0,d4.l*4),(a4)+ * MSB
+    move.b  3(a0,d4.l*4),d5  
+    ror.b   #2,d5
+    and.b   #%00111111,d5
+    move.b  d5,(a2)+           * LSB
 
-    dbf     d0,.bobLong_
+    dbf     d0,.bobLongRemaining_
+
+
+
+
 .bobLoopDone
  if DEBUG
     bsr     stopMeasureSamples
@@ -4527,11 +4554,14 @@ decodeMp3
     move.l  d1,d0
     DPRINT  "special mp3 14-bit calibrated step=%lx writebyte"
     move.l  (sp),d0
-    lsr.l   #1,d0
     bsr     startMeasureSamples
     pop     d0
  endif
+    lsr.l   #1,d0
+    subq    #1,d0
     moveq   #0,d5
+   ; Start with index 0, X cleared
+    sub.l   d2,d2
 .bobCalib_
  rept 2
     * Index into d4
@@ -4558,18 +4588,21 @@ decodeMp3
  if DEBUG
     push    d0
     move.l  d1,d0
-    DPRINT  "special mp3 14-bit calibrated step=%lx writeword"
+    DPRINT  "special mp3 14-bit calibrated step=%lx writelong"
     move.l  (sp),d0
     lsr.l   #1,d0
     bsr     startMeasureSamples
     pop     d0
  endif
-    push    d6
+    pushm   d6/a5
     moveq   #0,d5
+    push    d0
+    lsr.l   #2,d0
+    move    d0,a5
+    ; Start with index 0, X cleared
+    sub.l   d2,d2
 .bobCalibLong_
-    ; Stash loop counter
-    swap    d0
-
+ rept 3   
     * Index into d4
     move.l  d2,d4
     and.l	#$0003ffff,d4
@@ -4579,22 +4612,18 @@ decodeMp3
     ; 1st sample
 
     move.w  (a0,d4.l*4),d5      * left
-    ;move.b	(a6,d5.l*2),(a3)+
 	move.b	(a6,d5.l*2),d3
-    rol.w   #8,d3
-	;move.b	1(a6,d5.l*2),(a1)+    
+    rol.l   #8,d3
 	move.b	1(a6,d5.l*2),d6    
-    rol.w   #8,d6
+    rol.l   #8,d6
 
     move.w  2(a0,d4.l*4),d5     * right
-    ;move.b	(a6,d5.l*2),(a4)+
     move.b	(a6,d5.l*2),d7
-    rol.w   #8,d7
-	;move.b	1(a6,d5.l*2),(a2)+    
+    rol.l   #8,d7
     move.b	1(a6,d5.l*2),d0
-    rol.w   #8,d0
-
-    ; 2nd sample
+    rol.l   #8,d0
+ endr
+    ; 4th sample
 
     * Index into d4
     move.l  d2,d4
@@ -4603,27 +4632,51 @@ decodeMp3
 	addx.l	d1,d2
 
     move.w  (a0,d4.l*4),d5     * left
-    ;move.b	(a6,d5.l*2),(a3)+
-	move.b	(a6,d5.l*2),d3
-    move.w  d3,(a3)+
-	;move.b	1(a6,d5.l*2),(a1)+    
+    move.b	(a6,d5.l*2),d3
+    move.l  d3,(a3)+           * MSB
 	move.b	1(a6,d5.l*2),d6   
-    move.w  d6,(a1)+
+    move.l  d6,(a1)+           * LSB
 
-    move.w  2(a0,d4.l*4),d5     * right
-    ;move.b	(a6,d5.l*2),(a4)+
+    move.w  2(a0,d4.l*4),d5    * right
     move.b	(a6,d5.l*2),d7
-    move.w  d7,(a4)+
-	;move.b	1(a6,d5.l*2),(a2)+    
+    move.l  d7,(a4)+           * MSB
     move.b	1(a6,d5.l*2),d0
-    move.w  d0,(a2)+
+    move.l  d0,(a2)+           * LSB
 
-    swap    d0
-    dbf     d0,.bobCalibLong_
+    subq     #1,a5
+    tst.w    a5
+    bne      .bobCalibLong_
+
+.bobCalibLongRemaining:
+
+    moveq   #%11,d0
+    and.l   (sp)+,d0
+    beq     .bobCalibLongDone
+    subq    #1,d0
+
+.bobCalibLongRemaining_:
+    * Index into d4
+    move.l  d2,d4
+    and.l	#$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
+
+    move.w  (a0,d4.l*4),d5
+    move.b	(a6,d5.l*2),(a3)+
+	move.b	1(a6,d5.l*2),(a1)+    
+
+    move.w  2(a0,d4.l*4),d5
+    move.b	(a6,d5.l*2),(a4)+
+	move.b	1(a6,d5.l*2),(a2)+  
+
+    dbf     d0,.bobCalibLongRemaining_
+
+.bobCalibLongDone:
+
+    popm    d6/a5
  if DEBUG
     bsr     stopMeasureSamples
  endif
-    pop     d6
 
 .bobDone
 
