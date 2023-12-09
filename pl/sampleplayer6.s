@@ -5209,13 +5209,6 @@ truncate:
 	ror.l	#8,d0
 	ror.l	#4,d0
 
-    * Fractional index at d2 to zero and clear the x-flag
-    sub.l   d2,d2
-
-    ; Do two bytes at a time, this matches with
-    ; paula word accuacy
-	lsr.l	#1,d7
-	subq	#1,d7
 	
     * max integer range: 128kB -> 17 bits
     * Mask with one extra bit just to be sure
@@ -5231,6 +5224,13 @@ truncate:
     bsr     startMeasureSamples
     pop     d0
  endif
+    ; Do two bytes at a time, this matches with
+    ; paula word accuacy
+	lsr.l	#1,d7
+	subq	#1,d7
+
+    * Fractional index at d2 to zero and clear the x-flag
+    sub.l   d2,d2
 
 .lop000
 	move.l	d2,d4
@@ -5248,7 +5248,7 @@ truncate:
 
 .020
  if DEBUG
-    DPRINT  "writeword"
+    DPRINT  "writelong"
     push    d0
     move    d7,d0
     lsr     #1,d0
@@ -5256,20 +5256,40 @@ truncate:
     pop     d0
  endif
 
-.lop020
-	move.l	d2,d4
-	and.l	d3,d4
-	move.b	(a0,d4.l),d5
-    rol.w   #8,d5
-	addx.l	d0,d2
+    push    d7
+    lsr.l   #2,d7
+    subq    #1,d7
 
+    * Fractional index at d2 to zero and clear the x-flag
+    sub.l   d2,d2
+
+.lop020
+ rept 3
 	move.l	d2,d4
 	and.l	d3,d4
 	move.b	(a0,d4.l),d5
-    move.w  d5,(a1)+
+    rol.l   #8,d5
+	addx.l	d0,d2
+ endr
+	move.l	d2,d4
+	and.l	d3,d4
+	move.b	(a0,d4.l),d5
+    move.l  d5,(a1)+
 	addx.l	d0,d2
 
 	dbf	d7,.lop020
+
+    moveq   #%11,d7
+    and.l   (sp)+,d7
+    beq     .000
+    subq    #1,d7
+.lop020rem
+	move.l	d2,d4
+	and.l	d3,d4
+	move.b	(a0,d4.l),(a1)+
+	addx.l	d0,d2
+    dbf     d7,.lop020rem
+
 
 .000
 
