@@ -21,7 +21,7 @@ SERIALDEBUG = 1
 ; - resample writebyte: 73 ms (target CHIP)
 ; - resample writeword: 50 ms (target CHIP)
 ; - special 14-bit calib writebyte: 380 ms
-; - special 14-bit calib writeword: TBD!
+; - special 14-bit calib writeword: 260 ms
 ; - special 14-bit norm  writebyte: 230 ms
 ; - special 14-bit norm  writeword: 130 ms
 
