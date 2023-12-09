@@ -32,7 +32,7 @@ SERIALDEBUG = 1
 ; - convert WAV stereo cyber 020 14-bit writelong: 287 ms (target FAST
 ; - convert WAV stereo normal 14-bit writebyte: 80-120 ms (target FAST)
 ; - convert WAV stereo normal 14-bit writelong: 50-90 ms (target FAST)
-)
+
 ; - resample writeword: 28 ms (ch1), 206 ms (ch2) (target CHIP) weird
 ; - resample writeword: 28,149,28,150 discrete values for four out buffers 
 ; - resample writeword: 30, 90, 150 ms discrete values
@@ -4522,7 +4522,7 @@ decodeMp3
     bra     .bobDone
 
 .bobCalib
-    tst.b   convetWritesLongs(a5)
+    tst.b   convertWritesLongs(a5)
     bne     .bobCalibLong
 
  if DEBUG
@@ -4567,27 +4567,66 @@ decodeMp3
     bsr     startMeasureSamples
     pop     d0
  endif
+    push    d6
     moveq   #0,d5
 .bobCalibLong_
- rept 2
+    ; Stash loop counter
+    swap    d0
+
     * Index into d4
     move.l  d2,d4
-    and.l   d3,d4
+    and.l	#$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
+
+    ; 1st sample
+
+    move.w  (a0,d4.l*4),d5
+    ;move.b	(a6,d5.l*2),(a3)+
+	move.b	(a6,d5.l*2),d3
+    rol.w   #8,d3
+	;move.b	1(a6,d5.l*2),(a1)+    
+	move.b	1(a6,d5.l*2),d6    
+    rol.w   #8,d6
+
+    move.w  2(a0,d4.l*4),d5
+    ;move.b	(a6,d5.l*2),(a4)+
+    move.b	(a6,d5.l*2),d7
+    rol.w   #8,d7
+	;move.b	1(a6,d5.l*2),(a2)+    
+    move.b	1(a6,d5.l*2),d0
+    rol.w   #8,d0
+
+    ; 2nd sample
+
+    * Index into d4
+    move.l  d2,d4
+    and.l	#$0003ffff,d4
     * Next sample
 	addx.l	d1,d2
 
     move.w  (a0,d4.l*4),d5
-    move.b	(a6,d5.l*2),(a3)+
-	move.b	1(a6,d5.l*2),(a1)+    
+    ;move.b	(a6,d5.l*2),(a3)+
+	move.b	(a6,d5.l*2),d3
+    move.w  d3,(a3)+
+	;move.b	1(a6,d5.l*2),(a1)+    
+	move.b	1(a6,d5.l*2),d6   
+    move.w  d6,(a1)+
 
     move.w  2(a0,d4.l*4),d5
-    move.b	(a6,d5.l*2),(a4)+
-	move.b	1(a6,d5.l*2),(a2)+    
- endr
+    ;move.b	(a6,d5.l*2),(a4)+
+    move.b	(a6,d5.l*2),d7
+    move.w  d7,(a4)+
+	;move.b	1(a6,d5.l*2),(a2)+    
+    move.b	1(a6,d5.l*2),d0
+    move.w  d0,(a2)+
+
+    swap    d0
     dbf     d0,.bobCalibLong_
  if DEBUG
     bsr     stopMeasureSamples
  endif
+    pop     d6
 
 .bobDone
 
