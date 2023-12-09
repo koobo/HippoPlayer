@@ -33,12 +33,9 @@ SERIALDEBUG = 1
 ; - convert WAV stereo normal 14-bit writebyte: 80-120 ms (target FAST)
 ; - convert WAV stereo normal 14-bit writelong: 50-90 ms (target FAST)
 
-; - resample writeword: 28 ms (ch1), 206 ms (ch2) (target CHIP) weird
-; - resample writeword: 28,149,28,150 discrete values for four out buffers 
-; - resample writeword: 30, 90, 150 ms discrete values
-; - resample writebyte: 50,170,110,100 discrete values, 110 typical
-; - resample writebyte: 172 ms (ch1), 110 ms (ch2) (target CHIP)
-; - resample writebyte: 50, 120, 180 ms
+; - resample writebyte: typical values 120, 50 (target CHIP)
+; - resample writeword: typical values 28, 92 (target CHIP)
+
 
 ; xenon.ay (vgm2wav, no resampling)
 ; - 16-bit AIFF 000/020 writebyte: 240 ms
