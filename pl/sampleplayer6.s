@@ -4498,7 +4498,7 @@ decodeMp3
     move.w  d3,(a4)+
     
     move.b  1(a0,d4.l*4),d5  * LSB
-    and.b   #%11111100,d5
+    and.w   #%0011111111111100,d5
     ror.b   #2,d5
     move.w  d5,(a2)+
 
@@ -4578,7 +4578,7 @@ decodeMp3
 
     ; 1st sample
 
-    move.w  (a0,d4.l*4),d5
+    move.w  (a0,d4.l*4),d5      * left
     ;move.b	(a6,d5.l*2),(a3)+
 	move.b	(a6,d5.l*2),d3
     rol.w   #8,d3
@@ -4586,7 +4586,7 @@ decodeMp3
 	move.b	1(a6,d5.l*2),d6    
     rol.w   #8,d6
 
-    move.w  2(a0,d4.l*4),d5
+    move.w  2(a0,d4.l*4),d5     * right
     ;move.b	(a6,d5.l*2),(a4)+
     move.b	(a6,d5.l*2),d7
     rol.w   #8,d7
@@ -4602,7 +4602,7 @@ decodeMp3
     * Next sample
 	addx.l	d1,d2
 
-    move.w  (a0,d4.l*4),d5
+    move.w  (a0,d4.l*4),d5     * left
     ;move.b	(a6,d5.l*2),(a3)+
 	move.b	(a6,d5.l*2),d3
     move.w  d3,(a3)+
@@ -4610,7 +4610,7 @@ decodeMp3
 	move.b	1(a6,d5.l*2),d6   
     move.w  d6,(a1)+
 
-    move.w  2(a0,d4.l*4),d5
+    move.w  2(a0,d4.l*4),d5     * right
     ;move.b	(a6,d5.l*2),(a4)+
     move.b	(a6,d5.l*2),d7
     move.w  d7,(a4)+
