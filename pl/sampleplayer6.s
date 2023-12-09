@@ -10,10 +10,7 @@ DEBUG	=	1
 SERIALDEBUG = 1
  endif
 
-; 020 specific conversion loops avoid writing to CHIP in bytes
- ifnd WRITELONG
-WRITELONG = 0
- endif
+
 
 
 * Print to debug console, very clever.
@@ -256,7 +253,7 @@ samplebuf	rs.l	1	* sampleplayeri
 ;samplehandle	rs.l	1	* sampletiedosto
 ;samplehandle2	rs.l	1	* sampletiedosto 2
 killsample	rs.b	1
-		rs.b	1
+convertWritesLongs   rs.b	1
 
 fh1	rs.b	mfh_SIZEOF
 fh2	rs.b	mfh_SIZEOF
@@ -3509,12 +3506,12 @@ convert_stereo
 
 	tst	d5
 	bne	.aiffc2
-    DPRINT  "convert_stereo wav"
+    DPRINT  "convert_stereo WAV"
 
 	tst.b	samplebits(a5)
 	bne.b	.w12
 	move.b	#$80,d2
-    DPRINT  "8-bit"
+    DPRINT  "8-bit 000"
 .w14	
 
  rept 4
@@ -3533,7 +3530,7 @@ convert_stereo
 .w12	
     tst.b   cpu(a5)
     bne     .w12_020
-    DPRINT  "16-bit wav 000"
+    DPRINT  "16-bit 000"
 .w12_
  rept 4
 	move	(a0)+,d1
@@ -3546,14 +3543,16 @@ convert_stereo
 
 .w12_020
 
- ifeq WRITELONG
+    tst.b   convertWritesLongs(a5)
+    bne     .w12_020_long
 
-    DPRINT  "16-bit wav 020"
+    DPRINT  "16-bit WAV 020 writebyte"
     * Timidity JeSoPazzo: 234 ms
     * giana.wav: 26 ms
  if DEBUG
     bsr     startMeasureSamples
  endif
+
 .w12_020_
  rept 4
 	move	(a0)+,d1
@@ -3567,13 +3566,13 @@ convert_stereo
  endif
     rts
 
- else
-    DPRINT  "16-bit wav 020 writelong"
+.w12_020_long
+    DPRINT  "16-bit WAV 020 writelong"
     * Timidity JeSoPazzo: 124 ms
  if DEBUG
     bsr     startMeasureSamples
  endif
-.w12_020_
+.w12_020_long_
 
 	move	(a0)+,d1
     move.b  d1,d2
@@ -3602,15 +3601,15 @@ convert_stereo
 	move	(a0)+,d1
     move.b  d1,d3
     move.l  d3,(a2)+
-	dbf	d0,.w12_020_
+	dbf	d0,.w12_020_long_
  if DEBUG
     bsr     stopMeasureSamples
  endif
 	rts
- endif
+ 
 
 .aiffc2
-    DPRINT  "convert_stereo aiff"
+    DPRINT  "convert_stereo AIFF"
 	tst.b	samplebits(a5)
 	bne.b	.w123
     DPRINT  "8-bit"
@@ -3624,11 +3623,10 @@ convert_stereo
 
 .w123	
 
- ifne WRITELONG
-    tst.b   cpu(a5)
-    bne     .w123_020
- endif
-    DPRINT  "16-bit aiff 000/020"
+    tst.b   convertWritesLongs(a5)
+    bne     .w123_020_long
+
+    DPRINT  "16-bit AIFF 000/020 writebyte"
  if DEBUG
     bsr     startMeasureSamples
  endif
@@ -3659,13 +3657,13 @@ convert_stereo
 
 
 * Use case: gmplay, vgm2wav, mdx2wav input
-.w123_020
-    DPRINT  "16-bit aiff 020 writelong"
+.w123_020_long
+    DPRINT  "16-bit AIFF 020 writelong"
  if DEBUG
     bsr     startMeasureSamples
  endif
      moveq   #4*4,d1
-.w123_020_
+.w123_020_long_
 
 	move.b	(a0),d2
     lsl.w   #8,d2
@@ -3685,7 +3683,7 @@ convert_stereo
     move.l  d3,(a2)+
 	add.l   d1,a0
 
- 	dbf	d0,.w123_020_
+ 	dbf	d0,.w123_020_long_
 
  if DEBUG
     bsr     stopMeasureSamples
@@ -3721,7 +3719,7 @@ convert_stereo_14bit
 	tst.b	cpu(a5)
 	bne	.w1214_020
 
-    DPRINT  "convert WAV stereo cyber 14-bit"
+    DPRINT  "convert WAV stereo cyber 14-bit writebyte"
 .w1214
  rept 4
 	moveq	#0,d1
@@ -3743,8 +3741,10 @@ convert_stereo_14bit
 
 .w1214_020
 
- ifeq WRITELONG
-    DPRINT  "convert WAV stereo cyber 020 14-bit"
+    tst.b   convertWritesLongs(a5)
+    bne     .w1214_020_long
+
+    DPRINT  "convert WAV stereo cyber 020 14-bit writebyte"
     * A1200/060 giana.wav 128k buffer: 328-330 ms
  if DEBUG
     bsr     startMeasure
@@ -3768,14 +3768,13 @@ convert_stereo_14bit
  endif
 	rts
 
- else
-   
+.w1214_020_long 
     DPRINT  "convert WAV stereo cyber 020 14-bit writelong"
     * A1200/060 giana.wav 128k buffer: 280 ms
  if DEBUG
     bsr     startMeasureSamples
  endif
-.w1214_020_
+.w1214_020_long_
  rept 3
 	move	(a0)+,d1
     ror.w   #8,d1       * wav byteorder
@@ -3806,17 +3805,15 @@ convert_stereo_14bit
     move.b	1(a6,d1.l*2),d6
     move.l  d6,(a2)+
 
-
-	dbf	d0,.w1214_020_
+	dbf	d0,.w1214_020_long_
  if DEBUG
     bsr     stopMeasureSamples
  endif
 	rts
 
- endif
 
 .cyber_wav_stereo_14bit_volume:
-    DPRINT  "convert WAV stereo cyber 14-bit vol"
+    DPRINT  "convert WAV stereo cyber 14-bit VOLUME"
     move    mainvolume(a5),d2
     move.l  #$ffff<<1,d3
 .cyber_wav_stereo_14bit_volume_:
@@ -3856,7 +3853,7 @@ convert_stereo_14bit
 
 	tst.b	cpu(a5)
 	bne 	.w12314_020
-    DPRINT  "convert AIFF stereo cyber 14-bit"
+    DPRINT  "convert AIFF stereo cyber 14-bit writebyte" 
 .w12314	
  rept 4
 	moveq	#0,d1
@@ -3876,8 +3873,9 @@ convert_stereo_14bit
 
 
 .w12314_020
- ifeq WRITELONG
-    DPRINT  "convert AIFF stereo 020 cyber 14-bit"
+    tst.b   convertWritesLongs(a5)
+    bne     .w12314_020_long
+    DPRINT  "convert AIFF stereo 020 cyber 14-bit writebyte"
     * A1200/060 Xenon.wav 128k buffer: 520 ms
  if DEBUG
     bsr     startMeasureSamples
@@ -3897,7 +3895,8 @@ convert_stereo_14bit
     bsr     stopMeasureSamples
  endif
 	rts
- else
+
+.w12314_020_long
     DPRINT  "convert AIFF stereo 020 cyber 14-bit writelong"
     * A1200/060 Xenon.wav 128k buffer: 240 ms
  if DEBUG
@@ -3935,11 +3934,10 @@ convert_stereo_14bit
     bsr     stopMeasureSamples
  endif
 	rts
- endif
-
+ 
 
 .cyber_aiff_stereo_14bit_volume:
-    DPRINT  "convert AIFF stereo cyber 14-bit vol"
+    DPRINT  "convert AIFF stereo cyber 14-bit VOLUME writebyte"
     move    mainvolume(a5),d2
     move.l  #$ffff<<1,d3
 .cyber_aiff_stereo_14bit_volume_:
@@ -3976,7 +3974,7 @@ convert_stereo_14bit
     cmp.w   #$40,mainvolume(a5)
     bne     .ordinary_wav_stereo_14bit_volume
 
-    DPRINT  "convert WAV stereo normal 14-bit"
+    DPRINT  "convert WAV stereo normal 14-bit writebyte"
  if DEBUG
     bsr     startMeasureSamples
  endif
@@ -4000,7 +3998,7 @@ convert_stereo_14bit
  	rts
 
 .ordinary_wav_stereo_14bit_volume:
-    DPRINT  "convert WAV stereo normal 14-bit vol"
+    DPRINT  "convert WAV stereo normal 14-bit VOLUME writebyte"
 
     move.w  mainvolume(a5),d2
 
@@ -4037,12 +4035,10 @@ convert_stereo_14bit
     bne     .ordinary_aiff_stereo_14bit_volume
 .mp3b
 
- ifne WRITELONG
-    tst.b   cpu(a5)
-    bne     .ordinaryAiff14_020
- endif
-
-    DPRINT  "convert AIFF stereo normal 14-bit"
+    tst.b   convertWritesLongs(a5)
+    bne     .ordinaryAiff14_long
+    
+    DPRINT  "convert AIFF stereo normal 14-bit writebyte"
  if DEBUG
     bsr     startMeasureSamples
  endif
@@ -4064,12 +4060,12 @@ convert_stereo_14bit
  endif
     rts
 
-.ordinaryAiff14_020:
+.ordinaryAiff14_long:
     DPRINT  "convert AIFF stereo normal 14-bit writelong"
  if DEBUG
     bsr     startMeasureSamples
  endif
-.ordinaryAiff14_020_ 
+.ordinaryAiff14_long_ 
  rept 3
     move.b  (a0)+,d2
     lsl.l   #8,d2
@@ -4095,7 +4091,7 @@ convert_stereo_14bit
     lsr.b   #2,d5
     move.l  d5,(a2)+
 
-    dbf d0,.ordinaryAiff14_020_ 
+    dbf d0,.ordinaryAiff14_long_ 
  if DEBUG
     bsr     stopMeasureSamples
  endif
@@ -4103,7 +4099,7 @@ convert_stereo_14bit
 
 
 .ordinary_aiff_stereo_14bit_volume:
-    DPRINT  "convert AIFF stereo normal 14-bit vol"
+    DPRINT  "convert AIFF stereo normal 14-bit VOLUME writebyte"
     move    mainvolume(a5),d2
    
 .ordinary_aiff_stereo_14bit_volume_:
@@ -4329,23 +4325,26 @@ decodeMp3
 
 	move.l	samplecyber(a5),a6  
     tst.l   a6
-    ;bne     .bobCalib
+    bne     .bobCalib
+    push    d6
+
+    tst.b   convertWritesLongs(a5)
+    bne     .bobLong
  if DEBUG
     push    d0
     move.l  d1,d0
-    DPRINT  "special mp3 14-bit ordinary step=%lx"
+    DPRINT  "special mp3 14-bit ordinary step=%lx writebyte"
     move.l  (sp),d0
     lsr.l   #1,d0
     bsr     startMeasureSamples
     pop     d0
  endif
-    push    d6
-.bob
- REM ; weird BYTE write
+.bobShort_
+    * WEIRD byte write
  rept 2
     * Index into d4
     move.l  d2,d4
-    and.l   #$0003ffff,d4
+    and.l   d3,d4
     * Next sample
 	addx.l	d1,d2
     * ror does not change X, lsr does, can't use it here
@@ -4363,8 +4362,20 @@ decodeMp3
     ror.w   #8,d4
     move.b  d4,(a3)+        * left MSB
  endr
- EREM
+    dbf     d0,.bobShort_
+    bra     .bobLoopDone
 
+.bobLong
+ if DEBUG
+    push    d0
+    move.l  d1,d0
+    DPRINT  "special mp3 14-bit ordinary step=%lx writeword"
+    move.l  (sp),d0
+    lsr.l   #1,d0
+    bsr     startMeasureSamples
+    pop     d0
+ endif
+.bobLong_
     * Index into d4
     move.l  d2,d4
     and.l   #$0003ffff,d4
@@ -4412,7 +4423,8 @@ decodeMp3
     ror.b   #2,d7
     move.w  d7,(a1)+
 
-    dbf     d0,.bob
+    dbf     d0,.bobLong_
+.bobLoopDone
  if DEBUG
     bsr     stopMeasureSamples
  endif
@@ -4423,7 +4435,7 @@ decodeMp3
  if DEBUG
     push    d0
     move.l  d1,d0
-    DPRINT  "special mp3 14-bit calibrated step=%lx"
+    DPRINT  "special mp3 14-bit calibrated step=%lx writebyte"
     move.l  (sp),d0
     lsr.l   #1,d0
     bsr     startMeasureSamples
@@ -4431,7 +4443,6 @@ decodeMp3
  endif
     moveq   #0,d5
 .bobCalib_
- ;REM ; BYTE WRITE
  rept 2
     * Index into d4
     move.l  d2,d4
@@ -4447,10 +4458,6 @@ decodeMp3
     move.b	(a6,d5.l*2),(a4)+
 	move.b	1(a6,d5.l*2),(a2)+    
  endr
-  ;EREM
-
-      
-
     dbf     d0,.bobCalib_
  if DEBUG
     bsr     stopMeasureSamples
@@ -4958,7 +4965,6 @@ truncate:
 	move	samplefreq(a5),d0
 	move.l	#KUTISTUSTAAJUUS,d1
 
-    DPRINT  "resample %ld->%ld in=%ld bytes"
 
     * source length d2 range is max 128kB
     * calculate target length based on ratio of frequencies
@@ -4973,13 +4979,10 @@ truncate:
 	move.l	d7,d6			* kohdepituus
 	movem.l	(sp)+,d0/d1
 
-; if DEBUG
-;    push    d0
-;    move    d7,d0
-;    lsr     #1,d0
-;    bsr     startMeasureSamples
-;    pop     d0
-; endif
+ if DEBUG
+    move.l  d7,d3
+    DPRINT  "resample %ld->%ld in=%ld out=%ld"
+ endif
 
 
     * Calculate fractional step with 12-bit fractions
@@ -5002,9 +5005,19 @@ truncate:
     * max integer range: 128kB -> 17 bits
     * Mask with one extra bit just to be sure
 	move.l	#$0003ffff,d3
+ 
+    tst.b   convertWritesLongs(a5)
+    bne     .020
+ if DEBUG
+    push    d0
+    move    d7,d0
+    lsr     #1,d0
+    bsr     startMeasureSamples
+    pop     d0
+    DPRINT  "writebyte"
+ endif
 
-
-.lop
+.lop000
 	move.l	d2,d4
 	and.l	d3,d4
 	move.b	(a0,d4.l),(a1)+
@@ -5015,7 +5028,35 @@ truncate:
 	move.b	(a0,d4.l),(a1)+
 	addx.l	d0,d2
 
-	dbf	d7,.lop
+	dbf	d7,.lop000
+    bra     .000
+
+.020
+ if DEBUG
+    push    d0
+    move    d7,d0
+    lsr     #1,d0
+    bsr     startMeasureSamples
+    pop     d0
+    DPRINT  "writeword"
+ endif
+
+.lop020
+	move.l	d2,d4
+	and.l	d3,d4
+	move.b	(a0,d4.l),d5
+    rol.w   #8,d5
+	addx.l	d0,d2
+
+	move.l	d2,d4
+	and.l	d3,d4
+	move.b	(a0,d4.l),d5
+    move.w  d5,(a1)+
+	addx.l	d0,d2
+
+	dbf	d7,.lop020
+
+.000
 
 	move.l	d6,d0
 
@@ -5023,7 +5064,6 @@ truncate:
     bsr     stopMeasureSamples
  endif
 
-    DPRINT  "out=%ld bytes"
 	popm	d1-a6
 	rts	
 
@@ -5095,6 +5135,11 @@ initsamplecyber:
     lea     -256(sp),sp
     clr.l   samplecyber(a5)
 
+    * If 020+ default to long chip writes
+    tst.b   cpu(a5)
+    sne     convertWritesLongs(a5)
+
+
     moveq  #1,d7   * ok
 	tst.b	samplecyberset(a5)
 	beq 	.nocy
@@ -5112,12 +5157,12 @@ initsamplecyber:
     move.l  #GVF_GLOBAL_ONLY!GVF_BINARY_VAR,d4  * global variable
     lore    Dos,GetVar
     DPRINT  "GetVar=%lx"
-    ;;;;;;moveq   #-1,d0 ;;;;;;; DISABLE
+  ;;;;; moveq   #-1,d0 ;;;;;;; DISABLE
     tst.l   d0
     bmi     .nocy
 
 	move.l	#$20000,d0
-	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+ 	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
 	bsr	getmem
 	move.l	d0,samplecyber(a5)
 	beq.b	.nocy
@@ -5129,6 +5174,45 @@ initsamplecyber:
     DPRINT  "CyberCalibration table created!"
 
 .nocy
+ 
+     
+ if DEBUG
+    move.l  4.w,a0
+    cmp.w   #36,LIB_VERSION(a0)
+    blo     .nobonus
+    pushpea .envVarName2(pc),d1     * variable name
+    move.l  sp,d2                 *  output
+    move.l  #256,d3               * space available
+    move.l  #GVF_GLOBAL_ONLY,d4  * global variable
+    lore    Dos,GetVar
+    DPRINT  "------------- GetVar=%lx"
+    tst.l   d0
+    bmi     .nobonus
+    
+    moveq   #0,d0
+    move.b  (sp),d0
+    DPRINT  "Got %lc"
+
+    move.b  (sp),d0
+    and.b   #%01,d0
+    beq     .b1
+    * Force normal non-cyber mode
+    move.l	samplecyber(a5),a0
+	bsr	freemem
+	clr.l	samplecyber(a5)
+    DPRINT  "+++ Force non-calibrated 14-bit"
+.b1
+    move.b  (sp),d1
+    and.b   #%10,d1
+    beq     .b2
+    clr.b   convertWritesLongs(a5)
+    DPRINT  "+++ Force byte chip writes"
+.b2 
+.nobonus
+ endif
+
+
+
     lea     256(sp),sp
 
     move.l  d7,d0
@@ -5139,6 +5223,14 @@ initsamplecyber:
 
 .envVarName:
     dc.b    "CyberSound/SoundDrivers/14Bit_Calibration",0
+ if DEBUG
+.envVarName2:
+    dc.b    "HipSmp",0
+    * Bit 0 value 0: Normal
+    * Bit 0 value 1: Force non-calibrated
+    * Bit 1 value 0: Normal, autoselect long write based on cpu
+    * Bit 1 value 1: Force byte writes
+ endif
     even
 
 ;;;.doVolTable:
@@ -7325,14 +7417,20 @@ stopMeasureSamples:
 	lea	    clockStart(a5),a0
 	lea	    clockEnd(a5),a1
     bsr     doStopMeasure
-    * d0 = millisecs
     move.l  d0,d2
-    mulu.l  #1000*1000,d2    * d1 = nanoseconds
+    * d0 = millisecs
+    move.l  #1000*1000,d1
+    bsr     mulu_32
+    * d0 = nanosecs
     moveq   #0,d1
     move.w  sampleCount(pc),d1
     beq     .x
     lsl.l   #2,d1
-    divu.l  d1,d2
+    bsr     divu_32
+    * d0 = ns/sample
+    moveq   #0,d1
+    move.w  sampleCount(pc),d1
+    exg     d0,d2    
 
     DPRINT  "time=%ld ms, samples=%ld, speed=%ld ns/sample"
 .x
