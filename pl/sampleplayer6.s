@@ -11,6 +11,53 @@ SERIALDEBUG = 1
  endif
 
 
+;################################################
+;################################################
+; Perf test A1200/060, sample buffer size 128k
+
+; Solar serpent.mp3 (resampling needed)
+; - 16-bit AIFF 000/020 writebyte: 27-30ms (target FAST)
+; - 16-bit AIFF 020     writelong: 23ms    (target FAST)
+; - resample writebyte: 73 ms (target CHIP)
+; - resample writeword: 50 ms (target CHIP)
+; - special 14-bit calib writebyte: 380 ms
+; - special 14-bit calib writeword: TBD!
+; - special 14-bit norm  writebyte: 230 ms
+; - special 14-bit norm  writeword: 130 ms
+
+; giana.wav (resampling needed)
+; - 16-bit WAV 020 writebyte: 26ms    (target FAST)
+; - 16-bit WAV 020 writelong: 26ms    (target FAST)
+; - convert WAV stereo cyber 020 14-bit writebyte: 320 ms (target FAST)
+; - convert WAV stereo cyber 020 14-bit writelong: 287 ms (target FAST
+; - convert WAV stereo normal 14-bit writebyte: 80-120 ms (target FAST)
+; - convert WAV stereo normal 14-bit writelong: 50-90 ms (target FAST)
+)
+; - resample writeword: 28 ms (ch1), 206 ms (ch2) (target CHIP) weird
+; - resample writeword: 28,149,28,150 discrete values for four out buffers 
+; - resample writeword: 30, 90, 150 ms discrete values
+; - resample writebyte: 50,170,110,100 discrete values, 110 typical
+; - resample writebyte: 172 ms (ch1), 110 ms (ch2) (target CHIP)
+; - resample writebyte: 50, 120, 180 ms
+
+; xenon.ay (vgm2wav, no resampling)
+; - 16-bit AIFF 000/020 writebyte: 240 ms
+; - 16-bit AIFF 020     writelong: 120-150 ms, sometimes 50 ms
+; - convert AIFF stereo 020 cyber 14-bit writebyte: 520-590 ms
+; - convert AIFF stereo 020 cyber 14-bit writelong: 240-260 ms
+; - convert AIFF stereo normal 14-bit    writebyte: 380-450 ms
+; - convert AIFF stereo normal 14-bit    writelong: 140-180 ms
+
+; JeSoPazzo.mid (timidity, no resampling)
+; - 16-bit WAV 020 writebyte: 230 ms
+; - 16-bit WAV 020 writelong: 120 ms, sometimes 50 ms
+; - convert WAV stereo cyber 020 14-bit writebyte: 550-620 ms
+; - convert WAV stereo cyber 020 14-bit writelong: 300-320 ms
+; - convert WAV stereo normal 14-bit writebyte: 390 ms
+; - convert WAV stereo normal 14-bit writelong: 150 ms
+
+;################################################
+;################################################
 
 
 * Print to debug console, very clever.
@@ -3747,7 +3794,7 @@ convert_stereo_14bit
     DPRINT  "convert WAV stereo cyber 020 14-bit writebyte"
     * A1200/060 giana.wav 128k buffer: 328-330 ms
  if DEBUG
-    bsr     startMeasure
+    bsr     startMeasureSamples
  endif
 .w1214_020_
 
@@ -3974,6 +4021,9 @@ convert_stereo_14bit
     cmp.w   #$40,mainvolume(a5)
     bne     .ordinary_wav_stereo_14bit_volume
 
+    tst.b   convertWritesLongs(a5)
+    bne     .wav14long
+
     DPRINT  "convert WAV stereo normal 14-bit writebyte"
  if DEBUG
     bsr     startMeasureSamples
@@ -3996,6 +4046,46 @@ convert_stereo_14bit
     bsr     stopMeasureSamples
  endif
  	rts
+
+
+.wav14long:
+    DPRINT  "convert WAV stereo normal 14-bit writelong"
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
+.wav14long_:
+ rept 3
+    move.b  (a0)+,d3
+    lsr.b   #2,d3
+    lsl.l   #8,d3
+    move.b  (a0)+,d2
+    lsl.l   #8,d2
+    
+    move.b  (a0)+,d5
+    lsr.b   #2,d5
+    lsl.l   #8,d5
+    move.b  (a0)+,d4
+    lsl.l   #8,d4
+ endr
+    move.b  (a0)+,d3
+    lsr.b   #2,d3
+    move.l  d3,(a1)+
+    move.b  (a0)+,d2
+    move.l  d2,(a3)+
+    
+    move.b  (a0)+,d5
+    lsr.b   #2,d5
+    move.l  d5,(a2)+
+    move.b  (a0)+,d4
+    move.l  d4,(a4)+
+    
+    dbf     d0,.wav14long_
+
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
+ 	rts
+
 
 .ordinary_wav_stereo_14bit_volume:
     DPRINT  "convert WAV stereo normal 14-bit VOLUME writebyte"
@@ -4432,6 +4522,9 @@ decodeMp3
     bra     .bobDone
 
 .bobCalib
+    tst.b   convetWritesLongs(a5)
+    bne     .bobCalibLong
+
  if DEBUG
     push    d0
     move.l  d1,d0
@@ -4459,6 +4552,39 @@ decodeMp3
 	move.b	1(a6,d5.l*2),(a2)+    
  endr
     dbf     d0,.bobCalib_
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
+    bra     .bobDone
+
+.bobCalibLong:
+ if DEBUG
+    push    d0
+    move.l  d1,d0
+    DPRINT  "special mp3 14-bit calibrated step=%lx writeword"
+    move.l  (sp),d0
+    lsr.l   #1,d0
+    bsr     startMeasureSamples
+    pop     d0
+ endif
+    moveq   #0,d5
+.bobCalibLong_
+ rept 2
+    * Index into d4
+    move.l  d2,d4
+    and.l   d3,d4
+    * Next sample
+	addx.l	d1,d2
+
+    move.w  (a0,d4.l*4),d5
+    move.b	(a6,d5.l*2),(a3)+
+	move.b	1(a6,d5.l*2),(a1)+    
+
+    move.w  2(a0,d4.l*4),d5
+    move.b	(a6,d5.l*2),(a4)+
+	move.b	1(a6,d5.l*2),(a2)+    
+ endr
+    dbf     d0,.bobCalibLong_
  if DEBUG
     bsr     stopMeasureSamples
  endif
