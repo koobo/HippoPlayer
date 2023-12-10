@@ -74,11 +74,7 @@ New keyboard shortcuts:
 - Setting "MPEGA freq div" to something else than 1 and playing mp3 
   could lead to a crash.
 
-- A performance degrading bug fixed in MIDI/VGM/MDX playback.
-- Many minor optimizations done in sample waveform playback.
-
-- Some minor speed optimizations in MP3 playback.
-
+- Scopes: clear the scope contents when no module or music is loaded.
 
 ## New/old stuff:
 

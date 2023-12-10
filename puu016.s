@@ -25827,10 +25827,6 @@ scopeLoop:
 	beq 	.continue
 .screenVisible
 
-    * In case there is no module in memory clear and print hippo
-    tst.l   moduleaddress(a5)
-    beq     .doNotDrawClear
-
 	tst.b	playing(a5)
 	beq 	.doNotDraw
 
@@ -25902,6 +25898,9 @@ scopeLoop:
 ; We come here if nothing should be drawn, there is a pause
 ; for example. The previous drawn content is left.
 .doNotDraw
+    * In case there is no module in memory clear and print hippo
+    tst.w   playertype(a5)
+    beq     .doNotDrawClear
 
 .m
 .continue
