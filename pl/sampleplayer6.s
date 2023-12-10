@@ -3813,7 +3813,6 @@ convert_stereo_14bit
 
 .w1214_020_long 
     DPRINT  "convert WAV stereo cyber 020 14-bit writelong"
-    * A1200/060 giana.wav 128k buffer: 280 ms
  if DEBUG
     bsr     startMeasureSamples
  endif
@@ -3856,9 +3855,18 @@ convert_stereo_14bit
 
 
 .cyber_wav_stereo_14bit_volume:
-    DPRINT  "convert WAV stereo cyber 14-bit VOLUME"
     move    mainvolume(a5),d2
+
+    tst.b   convertWritesLongs(a5)
+    bne     .cyber_wav_stereo_14bit_volume_long:
+    DPRINT  "convert WAV stereo cyber 14-bit VOLUME writebyte"
+
     move.l  #$ffff<<1,d3
+
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
+
 .cyber_wav_stereo_14bit_volume_:
  rept 4
     move.w  (a0)+,d1
@@ -3883,6 +3891,75 @@ convert_stereo_14bit
  endr	
     dbf	d0,.cyber_wav_stereo_14bit_volume_
 
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
+    rts
+
+.cyber_wav_stereo_14bit_volume_long:
+    DPRINT  "convert WAV stereo cyber 14-bit VOLUME writelong"
+    move.l  #$ffff<<1,d7
+
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
+
+.cyber_wav_stereo_14bit_volume_long_:
+ rept 3
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d3
+	move.b	1(a6,d1.l),d4
+    lsl.l   #8,d3       * faster than rol on 020/030
+    lsl.l   #8,d4
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d5
+	move.b	1(a6,d1.l),d6
+    lsl.l   #8,d5
+    lsl.l   #8,d6
+ endr
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d3
+    move.l  d3,(a3)+    * MSB
+
+	move.b	1(a6,d1.l),d4
+    move.l  d4,(a1)+    * LSB
+
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d5
+    move.l  d5,(a4)+    * MSB
+    
+    move.b	1(a6,d1.l),d6
+    move.l  d6,(a2)+    * LSB
+
+    dbf	d0,.cyber_wav_stereo_14bit_volume_long_
+ 
+  if DEBUG
+    bsr     stopMeasureSamples
+ endif   
     rts
 
 
@@ -3897,6 +3974,10 @@ convert_stereo_14bit
 	tst.b	cpu(a5)
 	bne 	.w12314_020
     DPRINT  "convert AIFF stereo cyber 14-bit writebyte" 
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
+ 
 .w12314	
  rept 4
 	moveq	#0,d1
@@ -3912,7 +3993,11 @@ convert_stereo_14bit
 	move.b	1(a6,d1.l),(a2)+
  endr
  	dbf	d0,.w12314
-	rts
+
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
+ 	rts
 
 
 .w12314_020
@@ -3983,6 +4068,9 @@ convert_stereo_14bit
     DPRINT  "convert AIFF stereo cyber 14-bit VOLUME writebyte"
     move    mainvolume(a5),d2
     move.l  #$ffff<<1,d3
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
 .cyber_aiff_stereo_14bit_volume_:
  rept 4
     move.w  (a0)+,d1
@@ -4005,6 +4093,9 @@ convert_stereo_14bit
  endr	
     dbf	d0,.cyber_aiff_stereo_14bit_volume_
 
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
     rts
 
 .ordinary_stereo_14bit
@@ -4084,9 +4175,15 @@ convert_stereo_14bit
 
 
 .ordinary_wav_stereo_14bit_volume:
+    tst.b   convertWritesLongs(a5)
+    bne     .ordinary_wav_stereo_14bit_volume_long
+
     DPRINT  "convert WAV stereo normal 14-bit VOLUME writebyte"
 
     move.w  mainvolume(a5),d2
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
 
 .ordinary_wav_stereo_14bit_volume_:
  rept 4
@@ -4110,6 +4207,133 @@ convert_stereo_14bit
 
  endr
  	dbf	d0,.ordinary_wav_stereo_14bit_volume_
+
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
+    rts
+
+
+.ordinary_wav_stereo_14bit_volume_long:
+    DPRINT  "convert WAV stereo normal 14-bit VOLUME writelong"
+
+    move.w  mainvolume(a5),d7
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
+
+.ordinary_wav_stereo_14bit_volume_long_:
+    ; ---------- SAMPLE 1
+    move.w  (a0)+,d6    * left sample 
+    ror.w   #8,d6       * WAV byteorder
+    muls    d7,d6       * volume scale
+    lsr.l   #6,d6
+  
+    move.b  d6,d3       * LSB
+    lsr.b   #2,d3
+    lsl.w   #8,d3
+
+    and.w   #$ff00,d6   * MSB
+    move.w  d6,d2
+
+    move.w  (a0)+,d6    * right sample 
+    ror.w   #8,d6       * WAV byteorder
+    muls    d7,d6       * volume scale
+    lsr.l   #6,d6
+
+    move.b  d6,d5       * LSB
+    lsr.b   #2,d5
+    lsl.w   #8,d5
+
+    and.w   #$ff00,d6   * MSB
+    move.w  d6,d4
+
+    ; ---------- SAMPLE 2
+    move.w  (a0)+,d6    * left sample 
+    ror.w   #8,d6       * WAV byteorder
+    muls    d7,d6       * volume scale
+    lsr.l   #6,d6
+  
+    move.b  d6,d3       * LSB
+    lsr.b   #2,d3
+    swap    d3
+
+    lsr.w   #8,d6       * MSB
+    move.b  d6,d2
+    swap    d2
+
+    move.w  (a0)+,d6    * right sample 
+    ror.w   #8,d6       * WAV byteorder
+    muls    d7,d6       * volume scale
+    lsr.l   #6,d6
+
+    move.b  d6,d5       * LSB
+    lsr.b   #2,d5
+    swap    d5
+
+    lsr.w   #8,d6       * MSB
+    move.b  d6,d4
+    swap    d4
+ 
+    ; ---------- SAMPLE 3
+    move.w  (a0)+,d6    * left sample 
+    ror.w   #8,d6       * WAV byteorder
+    muls    d7,d6       * volume scale
+    lsr.l   #6,d6
+  
+    move.b  d6,d3       * LSB
+    lsr.b   #2,d3
+    lsl.w   #8,d3
+    
+    lsr.w   #8,d6       * MSB
+    move.b  d6,d2
+    lsl.w   #8,d2
+    
+    move.w  (a0)+,d6    * right sample 
+    ror.w   #8,d6       * WAV byteorder
+    muls    d7,d6       * volume scale
+    lsr.l   #6,d6
+
+    move.b  d6,d5       * LSB
+    lsr.b   #2,d5
+    lsl.w   #8,d5
+
+    lsr.w   #8,d6       * MSB
+    move.b  d6,d4
+    lsl.w   #8,d4
+ 
+    ; ---------- SAMPLE 4
+    move.w  (a0)+,d6    * left sample 
+    ror.w   #8,d6       * WAV byteorder
+    muls    d7,d6       * volume scale
+    lsr.l   #6,d6
+  
+    move.b  d6,d3       * LSB
+    lsr.b   #2,d3
+    move.l  d3,(a1)+
+
+    lsr.w   #8,d6       * MSB
+    move.b  d6,d2
+    move.l  d2,(a3)+
+    
+    move.w  (a0)+,d6    * right sample 
+    ror.w   #8,d6       * WAV byteorder
+    muls    d7,d6       * volume scale
+    lsr.l   #6,d6
+
+    move.b  d6,d5       * LSB
+    lsr.b   #2,d5
+    move.l  d5,(a2)+
+
+    lsr.w   #8,d6       * MSB
+    move.b  d6,d4
+    move.l  d4,(a4)+
+     
+ 	dbf	d0,.ordinary_wav_stereo_14bit_volume_long_
+
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
     rts
 
 
@@ -4185,9 +4409,14 @@ convert_stereo_14bit
 
 
 .ordinary_aiff_stereo_14bit_volume:
+    ;tst.b   convertWritesLongs(a5)
+    ;bne .ordinary_aiff_stereo_14bit_volume_long
     DPRINT  "convert AIFF stereo normal 14-bit VOLUME writebyte"
+ if DEBUG
+    bsr     startMeasureSamples
+ endif
     move    mainvolume(a5),d2
-   
+
 .ordinary_aiff_stereo_14bit_volume_:
 
  rept 4
@@ -4209,8 +4438,11 @@ convert_stereo_14bit
 
  endr
     dbf d0,.ordinary_aiff_stereo_14bit_volume_
-    rts
 
+ if DEBUG
+    bsr     stopMeasureSamples
+ endif
+    rts
 
 ; -------------------------------------------------------------------
     * Special case for stereo mp3
