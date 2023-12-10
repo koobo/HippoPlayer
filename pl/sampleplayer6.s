@@ -20,10 +20,10 @@ SERIALDEBUG = 1
 ; - 16-bit AIFF 020     writelong: 23ms    (target FAST)
 ; - resample writebyte: 73 ms (target CHIP)
 ; - resample writeword: 50 ms (target CHIP)
-; - special 14-bit calib writebyte: 380 ms
-; - special 14-bit calib writeword: 260 ms
-; - special 14-bit norm  writebyte: 230 ms
-; - special 14-bit norm  writeword: 130 ms
+; - special mp3 14-bit calibrated writebyte: 380 ms
+; - special mp3 14-bit calibrated writeword: 260 ms
+; - special mp3 14-bit ordinary   writebyte: 230 ms
+; - special mp3 14-bit ordinary   writeword: 130 ms
 
 ; giana.wav (resampling needed)
 ; - 16-bit WAV 020 writebyte: 26ms    (target FAST)
@@ -35,7 +35,6 @@ SERIALDEBUG = 1
 
 ; - resample writebyte: typical values 120, 50 (target CHIP)
 ; - resample writeword: typical values 28, 92 (target CHIP)
-
 
 ; xenon.ay (vgm2wav, no resampling)
 ; - 16-bit AIFF 000/020 writebyte: 240 ms
@@ -4406,6 +4405,7 @@ decodeMp3
     move.l  d1,d0
     DPRINT  "special mp3 14-bit ordinary step=%lx writebyte"
     move.l  (sp),d0
+    lsr.l   #2,d0
     bsr     startMeasureSamples
     pop     d0
  endif
@@ -4452,19 +4452,19 @@ decodeMp3
     move.l  d1,d0
     DPRINT  "special mp3 14-bit ordinary step=%lx writelong"
     move.l  (sp),d0
-    lsr.l   #1,d0
+    lsr.l   #2,d0
     bsr     startMeasureSamples
     pop     d0
  endif
     push    d0
-    lsr.l   #2,d0
+    lsr.l   #2,d0   * 4 at a time
     ; Start with index 0, X cleared
     sub.l   d2,d2
     * long words
     subq    #1,d0
 
 .bobLong_
- rept 3
+    ; ----------------- SAMPLE 1
     * Index into d4
     move.l  d2,d4
     and.l   #$0003ffff,d4
@@ -4473,17 +4473,56 @@ decodeMp3
 
     * left sample 1
     move.b  0(a0,d4.l*4),d3  * MSB
-    rol.l   #8,d3
+    rol.w   #8,d3
     move.b  1(a0,d4.l*4),d5  * LSB
-    rol.l   #8,d5
+    rol.w   #8,d5
 
     * right sample 1
     move.b  2(a0,d4.l*4),d6  * MSB
-    rol.l   #8,d6
+    rol.w   #8,d6
     move.b  3(a0,d4.l*4),d7  * LSB
-    rol.l   #8,d7
- endr
-   * Index into d4
+    rol.w   #8,d7
+
+    ; ----------------- SAMPLE 2
+    * Index into d4
+    move.l  d2,d4
+    and.l   #$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
+
+    * left sample 1
+    move.b  0(a0,d4.l*4),d3  * MSB
+    swap    d3
+    move.b  1(a0,d4.l*4),d5  * LSB
+    swap    d5
+
+    * right sample 1
+    move.b  2(a0,d4.l*4),d6  * MSB
+    swap    d6
+    move.b  3(a0,d4.l*4),d7  * LSB
+    swap    d7
+
+    ; ----------------- SAMPLE 3
+    * Index into d4
+    move.l  d2,d4
+    and.l   #$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
+
+    * left sample 1
+    move.b  0(a0,d4.l*4),d3  * MSB
+    rol.w   #8,d3
+    move.b  1(a0,d4.l*4),d5  * LSB
+    rol.w   #8,d5
+
+    * right sample 1
+    move.b  2(a0,d4.l*4),d6  * MSB
+    rol.w   #8,d6
+    move.b  3(a0,d4.l*4),d7  * LSB
+    rol.w   #8,d7
+
+    ; ----------------- SAMPLE 4
+    * Index into d4
     move.l  d2,d4
     and.l   #$0003ffff,d4
     * Next sample
@@ -4520,13 +4559,14 @@ decodeMp3
     * Next sample
 	addx.l	d1,d2
 
-    * left sample 1
+    * left sample
     move.b  0(a0,d4.l*4),(a3)+ * MSB
     move.b  1(a0,d4.l*4),d5  
     ror.b   #2,d5
     and.b   #%00111111,d5
     move.b  d5,(a1)+           * LSB
 
+    * right sample
     move.b  2(a0,d4.l*4),(a4)+ * MSB
     move.b  3(a0,d4.l*4),d5  
     ror.b   #2,d5
@@ -4554,10 +4594,11 @@ decodeMp3
     move.l  d1,d0
     DPRINT  "special mp3 14-bit calibrated step=%lx writebyte"
     move.l  (sp),d0
+    lsr.l   #2,d0
     bsr     startMeasureSamples
     pop     d0
  endif
-    lsr.l   #1,d0
+    lsr.l   #1,d0 * 2 at a time
     subq    #1,d0
     moveq   #0,d5
    ; Start with index 0, X cleared
@@ -4590,40 +4631,76 @@ decodeMp3
     move.l  d1,d0
     DPRINT  "special mp3 14-bit calibrated step=%lx writelong"
     move.l  (sp),d0
-    lsr.l   #1,d0
+    lsr.l   #2,d0
     bsr     startMeasureSamples
     pop     d0
  endif
     pushm   d6/a5
     moveq   #0,d5
     push    d0
-    lsr.l   #2,d0
+    lsr.l   #2,d0   * 4 at a time
     move    d0,a5
     ; Start with index 0, X cleared
     sub.l   d2,d2
 .bobCalibLong_
- rept 3   
+    ; --------------- SAMPLE 1
     * Index into d4
     move.l  d2,d4
     and.l	#$0003ffff,d4
     * Next sample
 	addx.l	d1,d2
 
-    ; 1st sample
-
     move.w  (a0,d4.l*4),d5      * left
 	move.b	(a6,d5.l*2),d3
-    rol.l   #8,d3
+    rol.w   #8,d3
 	move.b	1(a6,d5.l*2),d6    
-    rol.l   #8,d6
+    rol.w   #8,d6
 
     move.w  2(a0,d4.l*4),d5     * right
     move.b	(a6,d5.l*2),d7
-    rol.l   #8,d7
+    rol.w   #8,d7
     move.b	1(a6,d5.l*2),d0
-    rol.l   #8,d0
- endr
-    ; 4th sample
+    rol.w   #8,d0
+
+    ; --------------- SAMPLE 2
+    * Index into d4
+    move.l  d2,d4
+    and.l	#$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
+
+    move.w  (a0,d4.l*4),d5      * left
+	move.b	(a6,d5.l*2),d3
+    swap    d3
+	move.b	1(a6,d5.l*2),d6    
+    swap    d6
+
+    move.w  2(a0,d4.l*4),d5     * right
+    move.b	(a6,d5.l*2),d7
+    swap    d7
+    move.b	1(a6,d5.l*2),d0
+    swap    d0
+    
+    ; --------------- SAMPLE 3
+    * Index into d4
+    move.l  d2,d4
+    and.l	#$0003ffff,d4
+    * Next sample
+	addx.l	d1,d2
+
+    move.w  (a0,d4.l*4),d5      * left
+	move.b	(a6,d5.l*2),d3
+    rol.w   #8,d3
+	move.b	1(a6,d5.l*2),d6    
+    rol.w   #8,d6
+
+    move.w  2(a0,d4.l*4),d5     * right
+    move.b	(a6,d5.l*2),d7
+    rol.w   #8,d7
+    move.b	1(a6,d5.l*2),d0
+    rol.w   #8,d0
+
+    ; --------------- SAMPLE 4
 
     * Index into d4
     move.l  d2,d4
@@ -4646,8 +4723,6 @@ decodeMp3
     subq     #1,a5
     tst.w    a5
     bne      .bobCalibLong_
-
-.bobCalibLongRemaining:
 
     moveq   #%11,d0
     and.l   (sp)+,d0
@@ -5219,8 +5294,8 @@ truncate:
  if DEBUG
     DPRINT  "writebyte"
     push    d0
-    move    d7,d0
-    lsr     #1,d0
+    move.l  d7,d0
+    lsr.l   #2,d0
     bsr     startMeasureSamples
     pop     d0
  endif
@@ -5250,8 +5325,8 @@ truncate:
  if DEBUG
     DPRINT  "writelong"
     push    d0
-    move    d7,d0
-    lsr     #1,d0
+    move.l  d7,d0
+    lsr.l   #2,d0
     bsr     startMeasureSamples
     pop     d0
  endif
@@ -5264,13 +5339,25 @@ truncate:
     sub.l   d2,d2
 
 .lop020
- rept 3
+    ; sample 1
 	move.l	d2,d4
 	and.l	d3,d4
 	move.b	(a0,d4.l),d5
-    rol.l   #8,d5
+    rol.w   #8,d5
 	addx.l	d0,d2
- endr
+    ; sample 2
+	move.l	d2,d4
+	and.l	d3,d4
+	move.b	(a0,d4.l),d5
+    swap    d5
+	addx.l	d0,d2
+    ; sample 3
+	move.l	d2,d4
+	and.l	d3,d4
+	move.b	(a0,d4.l),d5
+    rol.w   #8,d5
+	addx.l	d0,d2
+    ; sample 4
 	move.l	d2,d4
 	and.l	d3,d4
 	move.b	(a0,d4.l),d5
@@ -7644,6 +7731,7 @@ startMeasureSamples:
     move.w  d0,sampleCount
     lea     clockStart(a5),a0
     bsr     doStartMeasure
+    lore    Exec,Forbid
     popm    all
     rts
 
@@ -7652,6 +7740,9 @@ stopMeasureSamples:
 	lea	    clockStart(a5),a0
 	lea	    clockEnd(a5),a1
     bsr     doStopMeasure
+    push    d0
+    lore    Exec,Permit
+    pop     d0
     move.l  d0,d2
     * d0 = millisecs
     move.l  #1000*1000,d1
@@ -7666,7 +7757,6 @@ stopMeasureSamples:
     moveq   #0,d1
     move.w  sampleCount(pc),d1
     exg     d0,d2    
-
     DPRINT  "time=%ld ms, samples=%ld, speed=%ld ns/sample"
 .x
     popm    d0-a6
