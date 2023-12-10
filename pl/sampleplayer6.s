@@ -4491,7 +4491,7 @@ convert_stereo_14bit
     lsr.l   #6,d1
     lsr.b   #2,d1
     move.b  d1,(a1)+    * LSB
-    ror.w   #8,d1
+    lsr.w   #8,d1
     move.b  d1,(a3)+    * MSB
 
     move.w  (a0)+,d1
@@ -4499,7 +4499,7 @@ convert_stereo_14bit
     lsr.l   #6,d1
     lsr.b   #2,d1
     move.b  d1,(a2)+    * LSB
-    ror.w   #8,d1
+    lsr.w   #8,d1
     move.b  d1,(a4)+    * MSB
 
  endr
