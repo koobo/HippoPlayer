@@ -3817,20 +3817,46 @@ convert_stereo_14bit
     bsr     startMeasureSamples
  endif
 .w1214_020_long_
- rept 3
+    ; ------------- SAMPLE 1
 	move	(a0)+,d1
     ror.w   #8,d1       * wav byteorder
 	move.b	(a6,d1.l*2),d3
 	move.b	1(a6,d1.l*2),d4
-    lsl.l   #8,d3       * faster than rol on 020/030
-    lsl.l   #8,d4
+    lsl.w   #8,d3       * faster than rol on 020/030
+    lsl.w   #8,d4
 	move	(a0)+,d1
     ror.w   #8,d1       * wav byteorder
 	move.b	(a6,d1.l*2),d5
 	move.b	1(a6,d1.l*2),d6
-    lsl.l   #8,d5
-    lsl.l   #8,d6
- endr
+    lsl.w   #8,d5
+    lsl.w   #8,d6
+    ; ------------- SAMPLE 2
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+	move.b	(a6,d1.l*2),d3
+	move.b	1(a6,d1.l*2),d4
+    swap    d3
+    swap    d4
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+	move.b	(a6,d1.l*2),d5
+	move.b	1(a6,d1.l*2),d6
+    swap    d5
+    swap    d6
+    ; ------------- SAMPLE 3
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+	move.b	(a6,d1.l*2),d3
+	move.b	1(a6,d1.l*2),d4
+    lsl.w   #8,d3       * faster than rol on 020/030
+    lsl.w   #8,d4
+	move	(a0)+,d1
+    ror.w   #8,d1       * wav byteorder
+	move.b	(a6,d1.l*2),d5
+	move.b	1(a6,d1.l*2),d6
+    lsl.w   #8,d5
+    lsl.w   #8,d6
+    ; ------------- SAMPLE 4
 	move	(a0)+,d1
     ror.w   #8,d1       * wav byteorder
 	move.b	(a6,d1.l*2),d3
@@ -3905,8 +3931,8 @@ convert_stereo_14bit
  endif
 
 .cyber_wav_stereo_14bit_volume_long_:
- rept 3
-	move	(a0)+,d1
+    ; -------------- SAMPLE 1
+	move	(a0)+,d1    * left
     ror.w   #8,d1       * wav byteorder
 
     muls    d2,d1       * volume scale
@@ -3915,9 +3941,10 @@ convert_stereo_14bit
 
 	move.b	(a6,d1.l),d3
 	move.b	1(a6,d1.l),d4
-    lsl.l   #8,d3       * faster than rol on 020/030
-    lsl.l   #8,d4
-	move	(a0)+,d1
+    lsl.w   #8,d3       * faster than rol on 020/030
+    lsl.w   #8,d4
+
+	move	(a0)+,d1    * right
     ror.w   #8,d1       * wav byteorder
 
     muls    d2,d1       * volume scale
@@ -3926,10 +3953,61 @@ convert_stereo_14bit
 
 	move.b	(a6,d1.l),d5
 	move.b	1(a6,d1.l),d6
-    lsl.l   #8,d5
-    lsl.l   #8,d6
- endr
-	move	(a0)+,d1
+    lsl.w   #8,d5
+    lsl.w   #8,d6
+
+    ; -------------- SAMPLE 2
+	move	(a0)+,d1    * left
+    ror.w   #8,d1       * wav byteorder
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d3
+	move.b	1(a6,d1.l),d4
+    swap    d3
+    swap    d4
+
+	move	(a0)+,d1    * right
+    ror.w   #8,d1       * wav byteorder
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d5
+	move.b	1(a6,d1.l),d6
+    swap    d5
+    swap    d6
+
+    ; -------------- SAMPLE 3
+	move	(a0)+,d1    * left
+    ror.w   #8,d1       * wav byteorder
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d3
+	move.b	1(a6,d1.l),d4
+    lsl.w   #8,d3       * faster than rol on 020/030
+    lsl.w   #8,d4
+
+	move	(a0)+,d1    * right
+    ror.w   #8,d1       * wav byteorder
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d5
+	move.b	1(a6,d1.l),d6
+    lsl.w   #8,d5
+    lsl.w   #8,d6
+
+    ; -------------- SAMPLE 4
+	move	(a0)+,d1    * left
     ror.w   #8,d1       * wav byteorder
 
     muls    d2,d1       * volume scale
@@ -3942,7 +4020,7 @@ convert_stereo_14bit
 	move.b	1(a6,d1.l),d4
     move.l  d4,(a1)+    * LSB
 
-	move	(a0)+,d1
+	move	(a0)+,d1    * right
     ror.w   #8,d1       * wav byteorder
 
     muls    d2,d1       * volume scale
@@ -4031,18 +4109,40 @@ convert_stereo_14bit
     bsr     startMeasureSamples
  endif
 .w12314_020_longwrite_
- rept 3
+    ; --------------- SAMPLE 1
 	move	(a0)+,d1
 	move.b	(a6,d1.l*2),d3
 	move.b	1(a6,d1.l*2),d4
-    lsl.l   #8,d3       * faster than rol on 020/030
-    lsl.l   #8,d4
+    lsl.w   #8,d3       * faster than rol on 020/030
+    lsl.w   #8,d4
 	move	(a0)+,d1
 	move.b	(a6,d1.l*2),d5
 	move.b	1(a6,d1.l*2),d6
-    lsl.l   #8,d5
-    lsl.l   #8,d6
- endr
+    lsl.w   #8,d5
+    lsl.w   #8,d6
+    ; --------------- SAMPLE 2
+	move	(a0)+,d1
+	move.b	(a6,d1.l*2),d3
+	move.b	1(a6,d1.l*2),d4
+    swap    d3
+    swap    d4
+	move	(a0)+,d1
+	move.b	(a6,d1.l*2),d5
+	move.b	1(a6,d1.l*2),d6
+    swap    d5
+    swap    d6
+    ; --------------- SAMPLE 3
+	move	(a0)+,d1
+	move.b	(a6,d1.l*2),d3
+	move.b	1(a6,d1.l*2),d4
+    lsl.w   #8,d3       * faster than rol on 020/030
+    lsl.w   #8,d4
+	move	(a0)+,d1
+	move.b	(a6,d1.l*2),d5
+	move.b	1(a6,d1.l*2),d6
+    lsl.w   #8,d5
+    lsl.w   #8,d6
+    ; --------------- SAMPLE 4
 	move	(a0)+,d1
 	move.b	(a6,d1.l*2),d3
     move.l  d3,(a3)+
@@ -4111,7 +4211,7 @@ convert_stereo_14bit
  endif
 
 .cyber_aiff_stereo_14bit_volume_long_:
- rept 3
+    ; --------------- SAMPLE 1
 	move	(a0)+,d1
 
     muls    d2,d1       * volume scale
@@ -4120,8 +4220,8 @@ convert_stereo_14bit
 
 	move.b	(a6,d1.l),d3
 	move.b	1(a6,d1.l),d4
-    lsl.l   #8,d3       * faster than rol on 020/030
-    lsl.l   #8,d4
+    lsl.w   #8,d3       * faster than rol on 020/030
+    lsl.w   #8,d4
 	move	(a0)+,d1
 
     muls    d2,d1       * volume scale
@@ -4130,9 +4230,51 @@ convert_stereo_14bit
 
 	move.b	(a6,d1.l),d5
 	move.b	1(a6,d1.l),d6
-    lsl.l   #8,d5
-    lsl.l   #8,d6
- endr
+    lsl.w   #8,d5
+    lsl.w   #8,d6
+    ; --------------- SAMPLE 2
+	move	(a0)+,d1
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d3
+	move.b	1(a6,d1.l),d4
+    swap    d3
+    swap    d4
+	move	(a0)+,d1
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d5
+	move.b	1(a6,d1.l),d6
+    swap    d5
+    swap    d6
+    ; --------------- SAMPLE 3
+	move	(a0)+,d1
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d3
+	move.b	1(a6,d1.l),d4
+    lsl.w   #8,d3       * faster than rol on 020/030
+    lsl.w   #8,d4
+	move	(a0)+,d1
+
+    muls    d2,d1       * volume scale
+    asr.l   #5,d1
+    and.l   d7,d1
+
+	move.b	(a6,d1.l),d5
+	move.b	1(a6,d1.l),d6
+    lsl.w   #8,d5
+    lsl.w   #8,d6
+    ; --------------- SAMPLE 4
 	move	(a0)+,d1
 
     muls    d2,d1       * volume scale
@@ -4207,19 +4349,43 @@ convert_stereo_14bit
     bsr     startMeasureSamples
  endif
 .wav14long_:
- rept 3
+    ; ------------- SAMPLE 1
     move.b  (a0)+,d3
     lsr.b   #2,d3
-    lsl.l   #8,d3
+    lsl.w   #8,d3
     move.b  (a0)+,d2
-    lsl.l   #8,d2
+    lsl.w   #8,d2
     
     move.b  (a0)+,d5
     lsr.b   #2,d5
-    lsl.l   #8,d5
+    lsl.w   #8,d5
     move.b  (a0)+,d4
-    lsl.l   #8,d4
- endr
+    lsl.w   #8,d4
+    ; ------------- SAMPLE 2
+    move.b  (a0)+,d3
+    lsr.b   #2,d3
+    swap    d3
+    move.b  (a0)+,d2
+    swap    d2
+    
+    move.b  (a0)+,d5
+    lsr.b   #2,d5
+    swap    d5
+    move.b  (a0)+,d4
+    swap    d4
+    ; ------------- SAMPLE 3
+    move.b  (a0)+,d3
+    lsr.b   #2,d3
+    lsl.w   #8,d3
+    move.b  (a0)+,d2
+    lsl.w   #8,d2
+    
+    move.b  (a0)+,d5
+    lsr.b   #2,d5
+    lsl.w   #8,d5
+    move.b  (a0)+,d4
+    lsl.w   #8,d4
+    ; ------------- SAMPLE 4
     move.b  (a0)+,d3
     lsr.b   #2,d3
     move.l  d3,(a1)+
@@ -4442,19 +4608,43 @@ convert_stereo_14bit
     bsr     startMeasureSamples
  endif
 .ordinaryAiff14_long_ 
- rept 3
+    ; -------------- SAMPLE 1
     move.b  (a0)+,d2
-    lsl.l   #8,d2
+    lsl.w   #8,d2
     move.b  (a0)+,d3
     lsr.b   #2,d3
-    lsl.l   #8,d3
+    lsl.w   #8,d3
     
     move.b  (a0)+,d4
-    lsl.l   #8,d4
+    lsl.w   #8,d4
     move.b  (a0)+,d5
     lsr.b   #2,d5
-    lsl.l   #8,d5
- endr
+    lsl.w   #8,d5
+    ; -------------- SAMPLE 2
+    move.b  (a0)+,d2
+    swap    d2
+    move.b  (a0)+,d3
+    lsr.b   #2,d3
+    swap    d3
+    
+    move.b  (a0)+,d4
+    swap    d4
+    move.b  (a0)+,d5
+    lsr.b   #2,d5
+    swap    d5
+    ; -------------- SAMPLE 3
+    move.b  (a0)+,d2
+    lsl.w   #8,d2
+    move.b  (a0)+,d3
+    lsr.b   #2,d3
+    lsl.w   #8,d3
+    
+    move.b  (a0)+,d4
+    lsl.w   #8,d4
+    move.b  (a0)+,d5
+    lsr.b   #2,d5
+    lsl.w   #8,d5
+    ; -------------- SAMPLE 4
     move.b  (a0)+,d2
     move.l  d2,(a3)+
     move.b  (a0)+,d3
