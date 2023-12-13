@@ -3755,21 +3755,16 @@ convert_stereo
 
     ; --------- SAMPLES 1-4 l
     move.w  (a0),d2
-
 	move.b	4(a0),d2
     swap    d2
-	
 	move.w	8(a0),d2
-
 	move.b	12(a0),d2
     move.l  d2,(a1)+
     ; --------- SAMPLES 1-4 r
     move.w  2(a0),d3
-
 	move.b	6(a0),d3
     swap    d3
 	move.w	10(a0),d3
-
 	move.b	14(a0),d3
     move.l  d3,(a2)+
 
@@ -4398,44 +4393,41 @@ convert_stereo_14bit
  if DEBUG
     bsr     startMeasureSamples
  endif
+    move.l  #$fcfcfcfc,d7
 .wav14long_:
     ; ------------- SAMPLE 1 l
     move.w  (a0),d3
-    lsr.w   #2,d3
     move.w  1(a0),d2
     ; ------------- SAMPLE 2 l
     move.b  4(a0),d3
-    lsr.b   #2,d3
     swap    d3
     move.b  5(a0),d2
     swap    d2
     ; ------------- SAMPLE 3 l
     move.w  8(a0),d3
-    lsr.w   #2,d3
     move.w  9(a0),d2
     ; ------------- SAMPLE 4 l
     move.b  12(a0),d3
-    lsr.b   #2,d3
+    and.l   d7,d3
+    lsr.l   #2,d3
     move.l  d3,(a1)+
     move.b  13(a0),d2
     move.l  d2,(a3)+
     ; ------------- SAMPLE 1 r
     move.w  2(a0),d5
-    lsr.w   #2,d5
     move.w  3(a0),d4
     ; ------------- SAMPLE 2 r
     move.b  6(a0),d5
-    lsr.b   #2,d5
     swap    d5
     move.b  7(a0),d4
     swap    d4
     ; ------------- SAMPLE 3 r
     move.w  10(a0),d5
-    lsr.w   #2,d5
     move.w  11(a0),d4
     ; ------------- SAMPLE 4 r
     move.b  14(a0),d5
-    lsr.b   #2,d5
+    and.l   d7,d5
+    lsr.l   #2,d5
     move.l  d5,(a2)+
     move.b  15(a0),d4
     move.l  d4,(a4)+
@@ -4493,6 +4485,7 @@ convert_stereo_14bit
     DPRINT  "convert WAV stereo normal 14-bit VOLUME writelong"
 
     move.w  mainvolume(a5),d7
+    move.l  #$fcfcfcfc,d1
  if DEBUG
     bsr     startMeasureSamples
  endif
@@ -4505,11 +4498,8 @@ convert_stereo_14bit
     lsr.l   #6,d6
   
     move.b  d6,d3       * LSB
-    lsr.b   #2,d3
     lsl.w   #8,d3
-
-    and.w   #$ff00,d6   * MSB
-    move.w  d6,d2
+    move.w  d6,d2       * MSB
     ; ---------- SAMPLE 2 l
     move.w  4(a0),d6    * left sample 
     ror.w   #8,d6       * WAV byteorder
@@ -4517,13 +4507,11 @@ convert_stereo_14bit
     lsr.l   #6,d6
   
     move.b  d6,d3       * LSB
-    lsr.b   #2,d3
     swap    d3
 
     lsr.w   #8,d6       * MSB
     move.b  d6,d2
     swap    d2
-
     ; ---------- SAMPLE 3 l
     move.w  8(a0),d6    * left sample 
     ror.w   #8,d6       * WAV byteorder
@@ -4531,13 +4519,8 @@ convert_stereo_14bit
     lsr.l   #6,d6
   
     move.b  d6,d3       * LSB
-    lsr.b   #2,d3
     lsl.w   #8,d3
-    
-    lsr.w   #8,d6       * MSB
-    move.b  d6,d2
-    lsl.w   #8,d2
- 
+    move.w  d6,d2       * MSB
     ; ---------- SAMPLE 4 l
     move.w  12(a0),d6    * left sample 
     ror.w   #8,d6       * WAV byteorder
@@ -4545,13 +4528,13 @@ convert_stereo_14bit
     lsr.l   #6,d6
   
     move.b  d6,d3       * LSB
-    lsr.b   #2,d3
-    move.l  d3,(a1)+
+    and.l   d1,d3
+    lsr.l   #2,d3
+    move.l  d3,(a1)+   
 
     lsr.w   #8,d6       * MSB
     move.b  d6,d2
     move.l  d2,(a3)+
-
     ; ---------- SAMPLE 1 r
     move.w  2(a0),d6    * right sample 
     ror.w   #8,d6       * WAV byteorder
@@ -4559,12 +4542,8 @@ convert_stereo_14bit
     lsr.l   #6,d6
 
     move.b  d6,d5       * LSB
-    lsr.b   #2,d5
     lsl.w   #8,d5
-
-    and.w   #$ff00,d6   * MSB
-    move.w  d6,d4
-
+    move.w  d6,d4       * MSB
     ; ---------- SAMPLE 2 r
     move.w  6(a0),d6    * right sample 
     ror.w   #8,d6       * WAV byteorder
@@ -4572,13 +4551,10 @@ convert_stereo_14bit
     lsr.l   #6,d6
 
     move.b  d6,d5       * LSB
-    lsr.b   #2,d5
     swap    d5
-
     lsr.w   #8,d6       * MSB
     move.b  d6,d4
     swap    d4
- 
     ; ---------- SAMPLE 3 r
     move.w  10(a0),d6    * right sample 
     ror.w   #8,d6       * WAV byteorder
@@ -4586,13 +4562,8 @@ convert_stereo_14bit
     lsr.l   #6,d6
 
     move.b  d6,d5       * LSB
-    lsr.b   #2,d5
     lsl.w   #8,d5
-
-    lsr.w   #8,d6       * MSB
-    move.b  d6,d4
-    lsl.w   #8,d4
- 
+    move.w  d6,d4       * MSB
     ; ---------- SAMPLE 4 r
     move.w  14(a0),d6    * right sample 
     ror.w   #8,d6       * WAV byteorder
@@ -4600,7 +4571,8 @@ convert_stereo_14bit
     lsr.l   #6,d6
 
     move.b  d6,d5       * LSB
-    lsr.b   #2,d5
+    and.l   d1,d5
+    lsr.l   #2,d5
     move.l  d5,(a2)+
 
     lsr.w   #8,d6       * MSB
@@ -4654,47 +4626,44 @@ convert_stereo_14bit
  if DEBUG
     bsr     startMeasureSamples
  endif
+    move.l  #$fcfcfcfc,d6
 .ordinaryAiff14_long_ 
     ; -------------- SAMPLE 1 l
     move.w  (a0),d2
     move.w  1(a0),d3
-    lsr.w   #2,d3
     ; -------------- SAMPLE 2 l
     move.b  4(a0),d2
     swap    d2
     move.b  5(a0),d3
-    lsr.b   #2,d3
     swap    d3
     ; -------------- SAMPLE 3 l
     move.w  8(a0),d2
     move.w  9(a0),d3
-    lsr.w   #2,d3
     ; -------------- SAMPLE 4 l
     move.b  12(a0),d2
-    move.l  d2,(a3)+
+    move.l  d2,(a3)+    * MSB
     move.b  13(a0),d3
-    lsr.b   #2,d3
-    move.l  d3,(a1)+
+    and.l   d6,d3   
+    lsr.l   #2,d3
+    move.l  d3,(a1)+    * LSB
     ; -------------- SAMPLE 1 r
     move.w  2(a0),d4
     move.w  3(a0),d5
-    lsr.w   #2,d5
     ; -------------- SAMPLE 2 r
     move.b  6(a0),d4
     swap    d4
     move.b  7(a0),d5
-    lsr.b   #2,d5
     swap    d5
     ; -------------- SAMPLE 3 r
     move.w  10(a0),d4
     move.w  11(a0),d5
-    lsr.w   #2,d5
     ; -------------- SAMPLE 4 r
     move.b  14(a0),d4
-    move.l  d4,(a4)+
+    move.l  d4,(a4)+    * MSB
     move.b  15(a0),d5
-    lsr.b   #2,d5
-    move.l  d5,(a2)+
+    and.l   d6,d5
+    lsr.l   #2,d5
+    move.l  d5,(a2)+    * LSB
 
     lea     16(a0),a0
     dbf d0,.ordinaryAiff14_long_ 
@@ -4745,6 +4714,7 @@ convert_stereo_14bit
     DPRINT  "convert AIFF stereo normal 14-bit VOLUME writelong"
 
     move.w  mainvolume(a5),d7
+    move.l  #$fcfcfcfc,d1
  if DEBUG
     bsr     startMeasureSamples
  endif
@@ -4753,23 +4723,17 @@ convert_stereo_14bit
     ; ---------- SAMPLE 1 l
     move.w  (a0),d6    * left sample 
     muls    d7,d6       * volume scale
-    lsr.l   #6,d6
-  
-    move.b  d6,d3       * LSB
-    lsr.b   #2,d3
-    lsl.w   #8,d3
+    lsr.l   #6,d6  
 
-    and.w   #$ff00,d6   * MSB
+    move.b  d6,d3       * LSB
+    lsl.w   #8,d3
     move.w  d6,d2
     ; ---------- SAMPLE 2 l
     move.w  4(a0),d6    * left sample 
     muls    d7,d6       * volume scale
     lsr.l   #6,d6
-  
     move.b  d6,d3       * LSB
-    lsr.b   #2,d3
     swap    d3
-
     lsr.w   #8,d6       * MSB
     move.b  d6,d2
     swap    d2
@@ -4779,70 +4743,55 @@ convert_stereo_14bit
     lsr.l   #6,d6
   
     move.b  d6,d3       * LSB
-    lsr.b   #2,d3
     lsl.w   #8,d3
-    
-    lsr.w   #8,d6       * MSB
-    move.b  d6,d2
-    lsl.w   #8,d2
+    move.w  d6,d2
     ; ---------- SAMPLE 4 l
     move.w  12(a0),d6    * left sample 
     muls    d7,d6       * volume scale
     lsr.l   #6,d6
   
     move.b  d6,d3       * LSB
-    lsr.b   #2,d3
+    and.l   d1,d3
+    lsr.l   #2,d3
     move.l  d3,(a1)+
 
     lsr.w   #8,d6       * MSB
     move.b  d6,d2
-    move.l  d2,(a3)+
-    
+    move.l  d2,(a3)+    
     ; ---------- SAMPLE 1 r
     move.w  2(a0),d6    * right sample 
     muls    d7,d6       * volume scale
     lsr.l   #6,d6
 
     move.b  d6,d5       * LSB
-    lsr.b   #2,d5
     lsl.w   #8,d5
-
-    and.w   #$ff00,d6   * MSB
     move.w  d6,d4
-
     ; ---------- SAMPLE 2 r
     move.w  6(a0),d6    * right sample 
     muls    d7,d6       * volume scale
     lsr.l   #6,d6
 
     move.b  d6,d5       * LSB
-    lsr.b   #2,d5
     swap    d5
-
     lsr.w   #8,d6       * MSB
     move.b  d6,d4
     swap    d4
- 
     ; ---------- SAMPLE 3 r
     move.w  10(a0),d6    * right sample 
     muls    d7,d6       * volume scale
     lsr.l   #6,d6
 
     move.b  d6,d5       * LSB
-    lsr.b   #2,d5
     lsl.w   #8,d5
-
-    lsr.w   #8,d6       * MSB
-    move.b  d6,d4
-    lsl.w   #8,d4
- 
+    move.w  d6,d4
     ; ---------- SAMPLE 4 r
     move.w  14(a0),d6    * right sample 
     muls    d7,d6       * volume scale
     lsr.l   #6,d6
 
     move.b  d6,d5       * LSB
-    lsr.b   #2,d5
+    and.l   d1,d5
+    lsr.l   #2,d5
     move.l  d5,(a2)+
 
     lsr.w   #8,d6       * MSB
