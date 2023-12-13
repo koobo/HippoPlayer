@@ -5102,12 +5102,18 @@ decodeMp3
     bsr     startMeasureSamples
     pop     d0
  endif
-    push    d0
-    lsr.l   #2,d0   * 4 at a time
+
+    * Remaining byte count for dbf
+    moveq   #%11,d4
+    and.w   d0,d4
+    subq    #1,d4
+    move.w  d4,-(sp)
+
+    * long words, 4 bytes at a time
+    lsr.l   #2,d0 
+    subq    #1,d0
     ; Start with index 0, X cleared
     sub.l   d2,d2
-    * long words
-    subq    #1,d0
 
 .bobLong_
     ; ----------------- SAMPLE 1
@@ -5119,15 +5125,11 @@ decodeMp3
 
     * left sample 1
     move.w  0(a0,d4.l*4),d3  * MSB
-    ;rol.w   #8,d3
     move.w  1(a0,d4.l*4),d5  * LSB
-    ;rol.w   #8,d5
 
     * right sample 1
     move.w  2(a0,d4.l*4),d6  * MSB
-    ;rol.w   #8,d6
     move.w  3(a0,d4.l*4),d7  * LSB
-    ;rol.w   #8,d7
 
     ; ----------------- SAMPLE 2
     * Index into d4
@@ -5157,15 +5159,11 @@ decodeMp3
 
     * left sample 3
     move.w  0(a0,d4.l*4),d3  * MSB
-    ;rol.w   #8,d3
     move.w  1(a0,d4.l*4),d5  * LSB
-    ;rol.w   #8,d5
 
     * right sample 3
     move.w  2(a0,d4.l*4),d6  * MSB
-    ;rol.w   #8,d6
     move.w  3(a0,d4.l*4),d7  * LSB
-    ;rol.w   #8,d7
 
     ; ----------------- SAMPLE 4
     * Index into d4
@@ -5193,10 +5191,8 @@ decodeMp3
     dbf     d0,.bobLong_
  
 .bobLongRemaining
-    moveq   #%11,d0
-    and.l   (sp)+,d0
-    beq     .bobLoopDone
-    subq    #1,d0
+    move.w  (sp)+,d0
+    bmi     .bobLoopDone
 
 .bobLongRemaining_
     * Index into d4
@@ -5282,10 +5278,17 @@ decodeMp3
     pop     d0
  endif
     pushm   d6/a5
-    moveq   #0,d5
-    push    d0
+    
+     * Remaining byte count for dbf
+    moveq   #%11,d4
+    and.w   d0,d4
+    subq    #1,d4
+    move.w  d4,-(sp)
+    
     lsr.l   #2,d0   * 4 at a time
-    move    d0,a5
+    move    d0,a5   * loop counter in a5
+
+    moveq   #0,d5
     ; Start with index 0, X cleared
     sub.l   d2,d2
 .bobCalibLong_
@@ -5298,15 +5301,11 @@ decodeMp3
 
     move.w  (a0,d4.l*4),d5      * left
 	move.w	(a6,d5.l*2),d3
-    ;rol.w   #8,d3
 	move.w	1(a6,d5.l*2),d6    
-    ;rol.w   #8,d6
 
     move.w  2(a0,d4.l*4),d5     * right
     move.w	(a6,d5.l*2),d7
-    ;rol.w   #8,d7
     move.w	1(a6,d5.l*2),d0
-    ;rol.w   #8,d0
 
     ; --------------- SAMPLE 2
     * Index into d4
@@ -5336,15 +5335,11 @@ decodeMp3
 
     move.w  (a0,d4.l*4),d5      * left
 	move.w	(a6,d5.l*2),d3
-    ;rol.w   #8,d3
 	move.w	1(a6,d5.l*2),d6    
-    ;rol.w   #8,d6
 
     move.w  2(a0,d4.l*4),d5     * right
     move.w	(a6,d5.l*2),d7
-    ;rol.w   #8,d7
     move.w	1(a6,d5.l*2),d0
-    ;rol.w   #8,d0
 
     ; --------------- SAMPLE 4
 
@@ -5366,14 +5361,12 @@ decodeMp3
     move.b	1(a6,d5.l*2),d0
     move.l  d0,(a2)+           * LSB
 
-    subq     #1,a5
-    tst.w    a5
+    subq     #1,a5  * Does not touch X (Ax)
+    tst.w    a5     * Does not touch X
     bne      .bobCalibLong_
 
-    moveq   #%11,d0
-    and.l   (sp)+,d0
-    beq     .bobCalibLongDone
-    subq    #1,d0
+    move.w  (sp)+,d0
+    bmi     .bobCalibLongDone
 
 .bobCalibLongRemaining_:
     * Index into d4
@@ -5977,7 +5970,13 @@ truncate:
     pop     d0
  endif
 
-    push    d7
+    * remaining count for dbf
+    moveq   #%11,d4
+    and.w   d7,d4
+    subq    #1,d4
+    move.w  d4,-(sp)
+
+    * 4 bytes at a time
     lsr.l   #2,d7
     subq    #1,d7
 
@@ -5989,7 +5988,6 @@ truncate:
 	move.l	d2,d4
 	and.l	d3,d4
 	move.w	(a0,d4.l),d5
-    ;rol.w   #8,d5
 	addx.l	d0,d2
     ; sample 2
 	move.l	d2,d4
@@ -6001,7 +5999,6 @@ truncate:
 	move.l	d2,d4
 	and.l	d3,d4
 	move.w	(a0,d4.l),d5
-    ;rol.w   #8,d5
 	addx.l	d0,d2
     ; sample 4
 	move.l	d2,d4
@@ -6012,10 +6009,8 @@ truncate:
 
 	dbf	d7,.lop020
 
-    moveq   #%11,d7
-    and.l   (sp)+,d7
-    beq     .000
-    subq    #1,d7
+    move.w  (sp)+,d7
+    bmi     .000
 .lop020rem
 	move.l	d2,d4
 	and.l	d3,d4
