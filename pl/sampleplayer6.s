@@ -61,43 +61,33 @@ SERIALDEBUG = 1
 ; - measurements Forbid/Permit protected
 
 ; Solar serpent.mp3 (resampling needed)
-; - 16-bit AIFF 000/020 writebyte: ? ms (target FAST)
-; - 16-bit AIFF 020     writelong: ? ms    (target FAST)
-; - resample writebyte: ? ms (target CHIP)
-; - resample writeword: ? ms (target CHIP)
-; - special mp3 14-bit calibrated writebyte: ? ms
-; - special mp3 14-bit calibrated writeword: ? ms
-; - special mp3 14-bit ordinary   writebyte: ? ms
-; - special mp3 14-bit ordinary   writeword: ? ms
+; - 16-bit AIFF 020     writelong: 23 ms    (target FAST)
+; - resample writeword: 18 ms (target CHIP)
+; - special mp3 14-bit calibrated writelong: 190-200 ms
+; - special mp3 14-bit ordinary   writelong: 75 ms
 
 ; giana.wav (resampling needed)
-; - 16-bit WAV 020 writebyte: ? ms    (target FAST)
-; - 16-bit WAV 020 writelong: ? ms    (target FAST)
-; - convert WAV stereo cyber 020 14-bit writebyte: ? ms (target FAST)
-; - convert WAV stereo cyber 020 14-bit writelong: ? ms (target FAST
-; - convert WAV stereo normal 14-bit writebyte: ? ms (target FAST)
-; - convert WAV stereo normal 14-bit writelong: ? ms (target FAST)
-
-; - resample writebyte: typical values ? (target CHIP)
-; - resample writeword: typical values ? (target CHIP)
+; - 16-bit WAV 020 writelong: 25 ms    (target FAST)
+; - convert WAV stereo cyber 020 14-bit writelong: 233 ms (target FAST)
+; - convert WAV stereo normal 14-bit writelong: 46 ms (target FAST)
+; - resample writelong: 18 ms (target CHIP)
 
 ; xenon.ay (vgm2wav, no resampling)
-; - 16-bit AIFF 000/020 writebyte: ? ms
-; - 16-bit AIFF 020     writelong: ? ms
-; - convert AIFF stereo 020 cyber 14-bit writebyte: ? ms
-; - convert AIFF stereo 020 cyber 14-bit writelong: ? ms
-; - convert AIFF stereo normal 14-bit    writebyte: ? ms
-; - convert AIFF stereo normal 14-bit    writelong: ? ms
+; - 16-bit AIFF 020     writelong: 56 ms
+; - convert AIFF stereo 020 cyber 14-bit writelong: 183 ms
+; - convert AIFF stereo normal 14-bit    writelong: 98 ms
 
 ; JeSoPazzo.mid (timidity, no resampling)
-; - 16-bit WAV 020 writebyte: ? ms
-; - 16-bit WAV 020 writelong: ? ms
-; - convert WAV stereo cyber 020 14-bit writebyte: ? ms
-; - convert WAV stereo cyber 020 14-bit writelong: ? ms
-; - convert WAV stereo normal 14-bit writebyte: ? ms
-; - convert WAV stereo normal 14-bit writelong: ? ms
+; - 16-bit WAV 020 writelong: 56 ms
+; - convert WAV stereo cyber 020 14-bit writelong: 270-290 ms
+; - convert WAV stereo normal 14-bit writelong: 100 ms
 
 ; TODO: volume scaling variants
+
+; PM average cpu usage, solar serpent time 1:30, sashimi:
+; - 14-bit normal writebyte: 54%
+; - 14-bit normal writelong: 49%
+; - 14-bit calibr writelong: 53%
 
 ;################################################
 ;################################################
