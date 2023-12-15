@@ -5048,6 +5048,9 @@ decodeMp3
     subq    #1,d4
     move.w  d4,-(sp)
 
+    push    a5
+    move.l  #$0003ffff,a5
+
     * long words, 4 bytes at a time
     lsr.l   #2,d0 
     subq    #1,d0
@@ -5057,8 +5060,8 @@ decodeMp3
 .bobLong_
     ; ----------------- SAMPLE 1
     * Index into d4
-    move.l  d2,d4
-    and.l   #$0003ffff,d4
+    move.l  a5,d4
+    and.l   d2,d4
     * Next sample
 	addx.l	d1,d2
 
@@ -5072,8 +5075,8 @@ decodeMp3
 
     ; ----------------- SAMPLE 2
     * Index into d4
-    move.l  d2,d4
-    and.l   #$0003ffff,d4
+    move.l  a5,d4
+    and.l   d2,d4
     * Next sample
 	addx.l	d1,d2
 
@@ -5091,8 +5094,8 @@ decodeMp3
 
     ; ----------------- SAMPLE 3
     * Index into d4
-    move.l  d2,d4
-    and.l   #$0003ffff,d4
+    move.l  a5,d4
+    and.l   d2,d4
     * Next sample
 	addx.l	d1,d2
 
@@ -5106,8 +5109,8 @@ decodeMp3
 
     ; ----------------- SAMPLE 4
     * Index into d4
-    move.l  d2,d4
-    and.l   #$0003ffff,d4
+    move.l  a5,d4
+    and.l   d2,d4
     * Next sample
 	addx.l	d1,d2
 
@@ -5128,10 +5131,10 @@ decodeMp3
     move.l  d7,(a2)+
 
     dbf     d0,.bobLong_
- 
-.bobLongRemaining
+    pop     a5
+
     move.w  (sp)+,d0
-    bmi     .bobLoopDone
+    bmi     .bobLongLoopDone
 
 .bobLongRemaining_
     * Index into d4
@@ -5156,8 +5159,7 @@ decodeMp3
 
     dbf     d0,.bobLongRemaining_
 
-
-
+.bobLongLoopDone
 
 .bobLoopDone
  if DEBUG
