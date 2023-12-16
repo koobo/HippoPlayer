@@ -84,11 +84,26 @@ SERIALDEBUG = 1
 
 ; TODO: volume scaling variants
 
-; PM average cpu usage, solar serpent time 1:30, sashimi:
+; PM average cpu usage, solar serpent, time 1:30, sashimi:
 ; - 14-bit normal writebyte: 54%
 ; - 14-bit normal writelong: 49%
 ; - 14-bit calibr writelong: 53%
 
+; PM average cpu usage, xenon.ay vgm2wav, time 1:30, sashimi:
+; - 16-bit AIFF 00/020 writebyte: 12%
+; - 16-bit AIFF 020 writelong: 10%
+; hippo v2.59 nodebug (AIFF writebyte): 10%
+; hippo v2.60b nodebug (AIFF writelong): 8%
+
+; PM average cpu usage, JeSoPazzo.mid timidity, time 1:30, sashimi:
+; - 16-bit AIFF 00/020 writebyte: 44%
+; - 16-bit AIFF 020 writelong: 43%
+; - wav stereo cyber 020 14-bit writelong: 45%
+; - wav stereo cyber 020 14-bit VOLUME writelong: 46%
+; hippo v2.59 nodebug (WAV writebyte): 41%
+; hippo v2.60b nodebug (WAV writelong): 40%
+ 
+ 
 ;################################################
 ;################################################
 
@@ -3918,7 +3933,7 @@ convert_stereo_14bit
     move    mainvolume(a5),d2
 
     tst.b   convertWritesLongs(a5)
-    bne     .cyber_wav_stereo_14bit_volume_long:
+    bne     .cyber_wav_stereo_14bit_volume_long
     DPRINT  "convert WAV stereo cyber 14-bit VOLUME writebyte"
 
     move.l  #$ffff<<1,d3
@@ -4954,29 +4969,31 @@ decodeMp3
    
     divu.l  d1,d0
 
-    * d0 is used to calculate output length in words
-    * round updwards so we don't lose any bytes,
-    * causing speed to be a little too fast
-    * lsr shift: round up
+;;   NOT NEEDED since no bytes are discarded in loop:
+;;    * d0 is used to calculate output length in words
+;;    * round updwards so we don't lose any bytes,
+;;    * causing speed to be a little too fast
+;;    * lsr shift: round up
+;;    addq.l  #1,d0
+
+    * Do on more byte if odd length
+    btst    #0,d0
+    beq     .isEven
     addq.l  #1,d0
+.isEven
 
     * d0 = target length
     push    d0
 
-    * Calculate fractional step with 12-bit fractions
-    * fffxxxxx.
-    * Divide (target frequency)<<12 by destination frequency 
+    * Calculate fractional step with 13-bit fractions
+    * fff8xxxx.
+    * Divide (target frequency)<<13 by destination frequency 
     lsl.l   #8,d1
-    lsl.l   #4,d1
+    lsl.l   #5,d1
     divu.w  d2,d1
     ext.l   d1
     ror.l	#8,d1
-	ror.l	#4,d1
-
-    ; Two bytes, ie. a word, at a time
-    ;lsr.l   #1,d0
-    ; dbf 
-    ;subq    #1,d0
+	ror.l	#5,d1
 
 	move.l	samplecyber(a5),a6  
     tst.l   a6
@@ -4985,6 +5002,7 @@ decodeMp3
 
     tst.b   convertWritesLongs(a5)
     bne     .bobLong
+    ;; UNUSED byte writes:
  if DEBUG
     push    d0
     move.l  d1,d0
@@ -5136,6 +5154,7 @@ decodeMp3
     move.w  (sp)+,d0
     bmi     .bobLongLoopDone
 
+    * loop run 2 or 4 rounds
 .bobLongRemaining_
     * Index into d4
     move.l  d2,d4
@@ -6028,7 +6047,7 @@ closesample
 
 
 
-
+* If this fails to allocate memory, normal 14-bit mode is then used
 initsamplecyber:
  if DEBUG
     moveq   #0,d0
@@ -6043,13 +6062,9 @@ initsamplecyber:
     tst.b   cpu(a5)
     sne     convertWritesLongs(a5)
 
-
     moveq  #1,d7   * ok
 	tst.b	samplecyberset(a5)
 	beq 	.nocy
-    moveq   #0,d7   * error
-
-    moveq   #1,d7     * ok
 
     move.l  4.w,a0
     cmp.w   #36,LIB_VERSION(a0)
