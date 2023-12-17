@@ -3628,7 +3628,6 @@ convert_stereo
 	dbf	d0,.w14
 	rts
 
-* Use case: timidity
 .w12	
     tst.b   cpu(a5)
     bne     .w12_020
@@ -3666,6 +3665,7 @@ convert_stereo
  endif
     rts
 
+* Use case: timidity
 .w12_020_long
     DPRINT  "16-bit WAV 020 writelong"
  if DEBUG
@@ -3750,7 +3750,7 @@ convert_stereo
 	rts
 
 
-* Use case: gmplay, vgm2wav, mdx2wav input
+* Use case: gmplay, vgm2wav, mdx2wav, mp3 with freqdiv 2 or 3
 .w123_020_long
     DPRINT  "16-bit AIFF 020 writelong"
  if DEBUG
@@ -4977,7 +4977,7 @@ decodeMp3
 ;;    * lsr shift: round up
 ;;    addq.l  #1,d0
 
-    * Do on more byte if odd length
+    * Do one more byte if odd length
     btst    #0,d0
     beq     .isEven
     addq.l  #1,d0
