@@ -3,11 +3,11 @@
 test	=	0
 
  ifnd DEBUG
-DEBUG	=	1
+DEBUG	=	0
  endif
 
  ifnd SERIALDEBUG
-SERIALDEBUG = 1
+SERIALDEBUG = 0
  endif
 
 
@@ -3405,8 +3405,9 @@ sample_code:
     * Also need 14-bit mode enabled
     tst.b	samplecyberset(a5)
     beq     .wl2
-    * Input frequency can be whatever
-    bra     decodeMp3
+    * Input frequency should not be divided
+    cmp     #1,mpfreqdiv(a5)
+    beq     decodeMp3
 .wl2
  
 	bsr	clrsamplebuf
