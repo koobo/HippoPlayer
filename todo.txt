@@ -1,3 +1,60 @@
+FIXED: TODO:
+- ctrl+g won't work when pipe streamer is active
+
+TODO:
+- sample scope with sid+resid:
+-- play and switch tunes
+-- sometimes to the right side of the scope area some old stuff is left and not cleared
+
+TODO:
+- Crockettstheme2023 from Aminet, keeps crashing HippoPlayer, 
+  Running under OS 3.2.2 and Latest Version
+- Guru 8000 0005 with both OctaMixPlayer v7.0 and v7.1 
+
+FIXED: TODO:
+- soundfx: check this identifier, crash?
+
+TODO:
+- For the crash with the combination of ML+IT files, add the two ML files, then
+  the two IT files, then play one of the two ML file, then select "it.Pulse...".
+  HiP should crash.
+- ML: adding a ML and a IT file and playing them one after the other crashes my
+Amiga with no MuForce hit that I could see.
+- MPx: playing MP2 or MP3 files causes a MuForce hit
+
+TODO:
+- DeliCustom tunes which load additional files with DOS functions
+-- DeliTracker custom/TSM in modland
+-- These do not work as that would require patching DOS functions
+
+TODO:
+- Here are two possible Gurus on a 68000 (emulated in WinUAE): On a "vanilla"
+68000 without library to play OctaMED modules, when encountering such a modulde,
+HippoPlayer will display a requester saying that the library is missing and then
+crash after selecting "Ok". 
+-- Works ok
+
+TODO:
+- sequence
+- set AHI: toccata stereo++
+- play it file
+- exit
+- restart
+- while restoring favorites, there is a hit
+- "version" command causes a hit
+
+TODO:
+Feature request: would it be possible to add copy-paste support to search input
+on standard RAmiga+c and RAmiga+v?
+
+TODO:
+- sinus.xm: PS3Mn kanssa ei voi patternskipata kuin 0 tai 1 vaikka on pidempi modi
+- toteutus tehty niin että lyhyen modin kanssa ei toimi oikein
+
+TODO:
+- check the pt song issue, doesn't seem to work
+- toimii samanlailla kuin v2.45?
+
 TODO:
 - kick1.3: font "polarsmall", search layout toggle: still some garbage on screen
   -> polarsmall ok on kick3
@@ -22,9 +79,237 @@ to work correctly, which is not the case when just selecting a dir, which is the
 TODO: CRASH:
 - Press "Add" on filebrowser root level
 
+TODO:
+- fix timeout not really working on radio stations
+
+
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
+FIXED: TODO:
+- would it be possible to optionally not clear the scopes when a MOD is paused ? 
+  For instance for studying the notes & commands in the patternscope...
+
+FIXED: TODO
+- position slider: flashing on kick1.3 while playing
+
+FIXED: TODO
+- position slider not moving if only showing: module name or freemem in titlebar
+
+FIXED: TODO:
+- zip window, zip back: pr -button missing
+- related to the new position slider, it messes up the gadgets list
+
+FIXED: TODO:
+- top box bottom frames are wrong 
+
+FIXED: TODO:
+- GUI corruption (no crash, though):
+- switch to search view
+- open prefs and set filebox length to 0
+- Use
+
+FIXED: TODO:
+Found a way to crash the system with HiP 68k v2.58:
+- switch to search view
+- click "PR"
+- set filebox height to 3 items
+- Use --> now this already looks... suspicious ðŸ˜‰ see screenshot
+- click "PR" again
+- --> Guru
+
+FIXED: TODO:
+- THX/AHX pattern scope sometimes displays an empty channel
+  where actual data should be displayed.
+
+FIXED: TODO:
+- mp3 paused: title bar shows wrong position (not from mpega)
+
+FIXED: TODO:
+ update xmaplay 
+ https://eab.abime.net/showpost.php?p=1587772&postcount=38
+
+
+FIXED: TODO:
+- fix playsid.library kickstart 1.3 crash issue
+-- play eject the same tune a few times -> audio channel alloc error -> crash
+
+FIXED: TODO:
+- when posslider visible, play wav -> crash
+
+
+FIXED: TODO:
+- test xmaplay seeking
+
+TODO:
+- test kick13
+
+FIXED: TODO:
+- seek by clicking the empty part
+
+FIXED: TODO:
+- mp3 file seeking
+
+FIXED: TODO:
+The one thing it doesn't do anymore is select a random module when loading a
+"HiPPrg" list of modules... I have the random mode set in the hippo preferences,
+but when a modules list is loaded with:
+- WORKS in 255, not in 256, 257
+
+-> BISECTED FIRST BAD:
+- ff07fa5e654891f6d711cd8c53f58fc3f2fde068
+  "WIP: browse recent playlists"
+
+
+WORKS: TODO:
+- check timeout, maybe broke due to the elapsed timer change
+
+FIXED: TODO:
+- check favsong storage: only store this if rmb clicked on an item that is being played
+
+
+FIXED: TODO:
+- play "12-speed tune" with resid ahi
+- try to play "yet bigger beat"
+--> recoverable alert, guru, no sound
+- INFO: clean boot, resid+ahi, "yet bigger beat" -> ok
+
+- switch between "age we ageed", "yet bigger beat" ->
+  hang
+
+FIXED: TODO:
+- IT deliplayer DTP_Config leads to AHI problems?
+
+FIXED: TODO:
+If I add a IT file, a MOD file, and a ML file, then I can play them in this
+order but as soon as I go back to the IT file, HiP crashes with a Guru 8000
+0003. This crash seems to happen only when combining IT and ML files.
+-> ahi.device first open after boot causes problems
+
+FIXED: TODO:
+- set filebrwoser + keep list 
+- quit
+- hip hide
+-> crash
+
+
+FIXED: TODO:
+- crash on 68000 at startup
+
+FIXED: TODO:
+- 3.2 + 68000
+- set module to play, exit
+- start with hip hide
+- crash
+
+FIXED XFD: TODO:
+I'm having problems with Hippoplayer v. 2.56 ; trying to play .p61 or .thx /
+.ahx format modules freezes my system and I have to reboot. (.xfd decrunching,
+stonecracker 4.04 data). I have xfdmaster.library v. 39.15 installed. Should
+that work ok ..?! I have modified the HiP settings; but can'tt find the possible
+reason.
+
+FIXED: TODO:
+Reporting a bug with the latest version (2.56 - 15.2.2023):
+The 'Pause' key will not resume playback of a 'paused' mp3 file when MHI is 
+enabled with a Prelude sound card using the mpegit MHI driver.
+Behavior: The elapsed time is advancing but there is no audio.
+If it matters: I have the sample buffer set to 16kB and the mpega quality set to Hi.
+Pressing the 'play' button will of course resume playback from the beginning.
+I'm on an A2000, OS 3.2 with a Prelude & vampire v2+ (and some other Z2 cards).
+
+FIXED: TODO:
+- fav list
+- push "new"
+- say "nope!"
+- press play
+- get conf dialog again!
+
+FIXED: TODO:
+If I play a sid in one PlaySid mode and then try to play a sid with another mode
+it causes a crash. 68060 + fastmem / OS 3.1
+
+hip v2.56 debug, release v2.56 version of playsid.library
+- play with resid 6851
+- then play with normal mode -> hang
+
+hip v2.57 debug, release v2.56 version of playsid.library
+- play with resid 6851
+- then play with normal mode -> OK
+
+hip v2.56 debug, release v2.57 version of playsid.library
+- play with resid 6851
+- then play with normal mode -> hang
+
+hip v2.55, release v2.57 version of playsid.library
+- ???
+
+hip v2.55 - first with reSID, fsuae 020
+- play with resid 6851
+- then play with normal mode -> OK
+- hangs on STOP -> interrupt flood issue
+
+hip v2.56 - fsuae 020
+- SCOPES ON
+- play with resid 6851
+- then play with normal mode -> HANG
+
+hip v2.56 - fsuae 020
+- SCOPES OFF
+- play with resid 6851
+- then play with normal mode -> HANG
+
+hip v2.57b - playsid.lib v2.56 - fsuae 020
+- play with resid 6851
+- then play with normal mode -> HANG
+- playsid.library:
+-- BAD 7097dfe0eeeaa0393537c2df3dafc3c776e8696e
+-- 2023-02-14 07:23 +0200 K-P Koljonen o [HEAD] Add binary v1.4
+
+hip v2.57b - playsid.lib v2.55 - fsuae 020
+- play with resid 6851
+- then play with normal mode -> OK!
+- playsid.library :
+-- GOOD 80352a3e1d4003112498d3b1426b40595297ef48
+-- 2022-11-08 19:42 +0200 K-P Koljonen o [HEAD] Update
+
+BAD COMMIT from bisect:
+        commit 9ceeb7c8ea9e446704800fd73bc86463db709f64
+        Author: K-P Koljonen <kpkoljonen@gmail.com>
+        Date:   Fri Jan 20 12:36:45 2023 +0200
+            WiP: dynamic audio buffer size
+
+
+FIXED: TODO: On the same "vanilla" 68000, playing/pausing modules
+via ARexx works well except when HippoPlayer is "hidden".
+
+FIXED: TODO:
+Prelude sound card using the mpegit MHI driver:
+When 'pausing', the music doesn't immediately stop playing.
+It will go on for a few seconds. I'm guessing it's playing from a buffer.
+
+FIXED: TODO:
+- psid+resid -> AHI
+- AHI Mode: paula 8-bit stereo 0x20009
+
+FIXED: TODO:
+- MED fast ram mode enable
+
+FIXED:
+when I hide HiP to play in the background, and screen mode is changed, HiP 
+always pops back up again. 
+
+FIXED: TODO:
+- open med libs with verson
+
+FIXED: TODO:
+- enable hipposcope for samples
+
+FIXED: TODO:
+Noticed a small bug: checking the "Bars" checkbox for hipposcope is odd: it
+works, meaning the bars are shown, but the checkbox itself keeps being
+unchecked. All other "Bars" checkboxes work as expected.
 
 DONE: TODO:
 - SEARCHLIMIT=100 uhcsearch
@@ -59,9 +344,6 @@ FIXED: TODO:
 FIXED: TODO:
 - title bar zipped window STILL HAS resize gadget
 -- appears when title bar is deactivated by clicking outside
-
-TODO:
-- fix timeout not really working on radio stations
 
 
 FIXED: TODO:
