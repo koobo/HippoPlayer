@@ -4511,6 +4511,8 @@ avaa_ikkuna:
 	move	fileBoxOrigTopEdge(a5),fileBoxTopEdge(a5)
 .1
 	jsr	layoutGadgetsVertical
+    * Ensure list mode toggle button has the correct icon 
+    jsr setListModeChangeButtonIconNoRefresh    
  
 	
 	; Update into window structure
@@ -4675,10 +4677,9 @@ avaa_ikkuna:
 	move	d3,gg_Height(a3)
 	subq	#3,gg_Height(a3)
 
-    printt "TODO: altbuttons make smaller due to larger toggle button"
     tst.b   altbuttons(a5)
     beq     .noAlt1
-    ;subq    #8,gg_Height(a3)
+    subq    #7,gg_Height(a3)
 .noAlt1
 
  ifne FEATURE_LIST_TABS
@@ -33582,7 +33583,16 @@ engageListMode:
 
 	endb	a4
 
-setListModeChangeButtonIcon
+
+setListModeChangeButtonIcon:
+    bsr setListModeChangeButtonIconNoRefresh
+	lea	gadgetListModeChangeButton,a0
+ ifeq FEATURE_LIST_TABS
+	jsr refreshGadgetInA0
+ endif
+    rts
+
+setListModeChangeButtonIconNoRefresh:
 	lea	listImage,a0
     lea listImageBig,a1
 	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
@@ -33609,10 +33619,6 @@ setListModeChangeButtonIcon
     move.w  #7*2,ig_Height+gadgetListModeChangeButtonImage
 .66
 	move.l	a0,gadgetListModeChangeButtonImagePtr
-	lea	gadgetListModeChangeButton,a0
- ifeq FEATURE_LIST_TABS
-	jsr refreshGadgetInA0
- endif
     rts
 
 setNormalAddTooltip
@@ -53266,10 +53272,10 @@ verticalLayout:
 	subq	#2,d0
 	move	d0,gg_TopEdge(a0)
 
-    move    #13,gg_Height(a0)
+    move    #13,gg_Height(a0)   * Large mode button
     tst.b   altbuttons(a5)
     beq     .noAlt1
-    addq    #7,gg_Height(a0)
+    addq    #7,gg_Height(a0)    * Normal mode button
 .noAlt1
 
 
@@ -59224,20 +59230,20 @@ listImage:
 	dc	%1101111111000000
 
 listImageBig:
-	dc	%1101111111000000
-	dc	%1101111111000000
+	dc	%1101111110000000
+	dc	%1101111110000000
 	dc	%0000000000000000				
 	dc	%0000000000000000				
-	dc	%1101111111000000
-	dc	%1101111111000000
+	dc	%1101111110000000
+	dc	%1101111110000000
 	dc	%0000000000000000
 	dc	%0000000000000000
-	dc	%1101111111000000
-	dc	%1101111111000000
+	dc	%1101111110000000
+	dc	%1101111110000000
 	dc	%0000000000000000
 	dc	%0000000000000000
-	dc	%1101111111000000
-	dc	%1101111111000000
+	dc	%1101111110000000
+	dc	%1101111110000000
 
 fileBrowserImage:
 	dc	%1111111100000000
@@ -59250,18 +59256,18 @@ fileBrowserImage:
 
 fileBrowserImageBig:
 	dc	%1111111100000000
-	dc	%1111111110000000
-	dc	%1010011001000000				
-	dc	%1010011001000000				
-	dc	%1011111001000000
+	dc	%1011111010000000
+	dc	%1011001001000000				
+	dc	%1011001001000000				
+	dc	%1011001001000000				
 	dc	%1011111001000000
 	dc	%1000000001000000
 	dc	%1000000001000000
 	dc	%1011111101000000
-	dc	%1011111101000000
-	dc	%1011001101000000
-	dc	%1011001101000000
-	dc	%1111111111000000
+	dc	%1010000101000000
+	dc	%1010000101000000
+	dc	%1010000101000000
+	dc	%1010000101000000
 	dc	%1111111111000000
 
 searchImage:
@@ -59274,20 +59280,20 @@ searchImage:
 	dc	%0000000110000000
 
 searchImageBig:
+    dc  %0000000000000000
 	dc	%0001110000000000
 	dc	%0010001000000000
 	dc	%0010001000000000
 	dc	%0100000100000000
 	dc	%0101000100000000
 	dc	%0100000100000000
-	dc	%0100000100000000
 	dc	%0010000100000000
 	dc	%0010001100000000
 	dc	%0001111100000000
-	dc	%0000111100000000
+	dc	%0000001100000000
 	dc	%0000000110000000
 	dc	%0000000110000000
-	dc	%0000000011000000
+    dc  %0000000000000000
     
 
 resizeGadgetImage:
