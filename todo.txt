@@ -1,3 +1,36 @@
+
+TODO:
+- sample names shown with xmaplay060
+
+TODO:
+- playlist support for #volume for setting file volume
+
+FIXED: TODO:
+- sample scopes broke with the last scope change (moduleaddress zero check)
+
+TODO:
+- hippo face in scopes is using wrong colors in some RTG modes.
+  this is because it assumes colors 0-3 to work as on denise modes?
+
+FIXED: TODO:
+- eject clears the scopes and prints the head
+
+FIXED: TODO:
+- sample/PS3M: use cybersound if set in ENV
+- rename cybersoud button to: Sample 14-bit out or something
+
+FIX: TODO:
+- MHI startataan vaikka ei olisi edes mp3-file kyseessä
+
+TODO:
+- add one MIDI, also WAV
+- play
+- after it stops
+- play counter still rolling
+--> assumption is that module repeats, MIDI/VGM/MDX don't though, so they
+    keep rolling the timer.. feature?
+
+
 TODO: 
 - big button support for the list mode change button
 
