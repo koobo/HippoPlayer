@@ -101,9 +101,9 @@ New keyboard shortcuts:
   - The 14-bit calibration tool by Christian Buchner is here:
     http://aminet.net/disk/cdrom/14Bit_CDPlayer.lha
 
- - The "Prefs/PS3M" Cybersound settings were removed. If you set the
-   PS3M mode to "14-bit" the calibrated output is automatically used
-   if the calibration ENV variable is found.
+  - The "Prefs/PS3M" Cybersound settings were removed. If you set the
+    PS3M mode to "14-bit" the calibrated output is automatically used
+    if the calibration ENV variable is found.
 
 - This was already in the previous version but forgot to mention:
   The reSID output mode for PSID files no longer has a separate AHI setting,
