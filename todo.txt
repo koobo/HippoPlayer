@@ -1,9 +1,20 @@
 
+DONE: TODO: 
+- big button support for the list mode change button
+
 TODO:
 - sample names shown with xmaplay060
 
 TODO:
 - playlist support for #volume for setting file volume
+
+TODO:
+- add one MIDI, also WAV
+- play
+- after it stops
+- play counter still rolling
+--> assumption is that module repeats, MIDI/VGM/MDX don't though, so they
+    keep rolling the timer.. feature?
 
 FIXED: TODO:
 - sample scopes broke with the last scope change (moduleaddress zero check)
@@ -22,17 +33,6 @@ FIXED: TODO:
 FIX: TODO:
 - MHI startataan vaikka ei olisi edes mp3-file kyseessä
 
-TODO:
-- add one MIDI, also WAV
-- play
-- after it stops
-- play counter still rolling
---> assumption is that module repeats, MIDI/VGM/MDX don't though, so they
-    keep rolling the timer.. feature?
-
-
-TODO: 
-- big button support for the list mode change button
 
 FIXED: TODO:
 - ctrl+g won't work when pipe streamer is active

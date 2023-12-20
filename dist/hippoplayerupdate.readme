@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.59
+Version: 2.60
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -69,7 +69,7 @@ New keyboard shortcuts:
 ## Fixes:
 
 - Enabling "MHI output" in Prefs and trying to play
-  WAV/AIFF/MIDI/MDX2WAV/VGM2WAV could lead to crash. 
+  WAV/AIFF/MIDI/MDX2WAV/VGM2WAV could lead to a crash. 
 
 - Setting "MPEGA freq div" to something else than 1 and playing mp3 
   could lead to a crash.
@@ -77,6 +77,9 @@ New keyboard shortcuts:
 - Scopes: clear the scope contents when no module or music is loaded.
 
 ## New/old stuff:
+
+- The list mode toggle button on the left of the filebox now also
+  changes size if "Big buttons" is enabled in Prefs.
 
 - The sample waveform handling pipelines were refactored,
   these changes will have an effect on the following formats:
