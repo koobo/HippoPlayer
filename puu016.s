@@ -54153,11 +54153,6 @@ centerGadgetText:
 	lore	GFX,TextLength
 	pop	a1
 
-    push    d0
-	move	gg_Width(a1),d0
-    ext.l   d0
-    pop d0
-
 	; center	
 	move	gg_Width(a1),d3
 	sub	d0,d3
