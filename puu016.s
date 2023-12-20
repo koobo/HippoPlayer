@@ -75,7 +75,6 @@ DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_P61A        =   0
-FEATURE_LIST_TABS   =   0
 FEATURE_PASTE       =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
@@ -2797,10 +2796,6 @@ main:
 	; add another button as the new last one
 	basereg	gadgetFileSlider,a0
 	pushpea	gadgetListModeChangeButton(a0),gadgetSortButton+gg_NextGadget(a0)
- ifne FEATURE_LIST_TABS
-	pushpea	gadgetListModeTab1Button(a0),gadgetSortButton+gg_NextGadget(a0)
- endif
-
 	endb	a0
 	
 	move.l	_IntuiBase(a5),a6
@@ -4726,10 +4721,6 @@ avaa_ikkuna:
     beq     .noAlt1
     subq    #7,gg_Height(a3)
 .noAlt1
-
- ifne FEATURE_LIST_TABS
-    sub #3*14,gg_Height(a3)
- endif
  
 ;    Old (weird) piece of code:
 ;
@@ -5171,16 +5162,6 @@ wrender:
 	* Box is minimized, skipped gadgets:
 	cmp.l	#gadgetListModeChangeButton,a3
 	beq 	.skipClear
- ifne FEATURE_LIST_TABS
-	cmp.l	#gadgetListModeTab1Button,a3
-	beq 	.skipClear
-	cmp.l	#gadgetListModeTab2Button,a3
-	beq 	.skipClear
-	cmp.l	#gadgetListModeTab3Button,a3
-	beq 	.skipClear
-	cmp.l	#gadgetListModeTab4Button,a3
-	beq 	.skipClear
- endif
 	cmp.l	#slider4,a3		* fileslider
 	bne 	.clef
 .skipClear
@@ -5428,9 +5409,6 @@ wrender:
 	jsr	lootaa
 	bsr	reslider
 
-  ifne FEATURE_LIST_TABS
-    jsr updateListModeTabs
-  endif
     jsr switchToSearchLayoutIfNeeded
 	DPRINT	"wrender done"
 
@@ -9308,16 +9286,8 @@ gadgetsup:
 	dr	rloadprog	* ohjelman lataus
 	dr	rmove		* move
 	dr	rsort       * sort
- ifeq FEATURE_LIST_TABS
 	dr	rlistmode	* listmode change
     ;dr  rlistmodePop
- endif
- ifne FEATURE_LIST_TABS
-    dr  rlistmode1
-    dr  rlistmode2
-    dr  rlistmode3
-    dr  rlistmode4
- endif
     dr  .exit       * resize gadget
     dr  .rpositionslider
 
@@ -9377,19 +9347,6 @@ rlistmode:
     beq     beep
 	jmp	    toggleListMode
 
-;rlistmodePop:
-;    jmp toggleListModePopup
-
-  ifne FEATURE_LIST_TABS
-rlistmode1:
-    jmp engageNormalMode
-rlistmode2:
-    jmp engageFavoritesMode
-rlistmode3:
-    jmp engageFileBrowserMode
-rlistmode4:
-    jmp engageSearchResultsMode
- endif
 
 *******************************************************************************
 * Sortti
@@ -33577,9 +33534,6 @@ engageListMode:
 	bsr	setListModeChangeButtonIcon
 	bsr	.setButtonStatesAccordingToListMode
 	bsr.b	.setListState
-  ifne FEATURE_LIST_TABS
-    bsr     updateListModeTabs
-  endif
 	* Playing module should be invalidated,
 	* it is not compatible between the two lists.
 	tst.l	playingmodule(a5) 
@@ -33719,9 +33673,7 @@ engageListMode:
 setListModeChangeButtonIcon:
     bsr setListModeChangeButtonIconNoRefresh
 	lea	gadgetListModeChangeButton,a0
- ifeq FEATURE_LIST_TABS
 	jsr refreshGadgetInA0
- endif
     rts
 
 setListModeChangeButtonIconNoRefresh:
@@ -33767,58 +33719,6 @@ setSearchAddTooltip
 	sub.l	a0,a1
 	move	a1,(a0)
 	rts
-
-  ifne FEATURE_LIST_TABS
-updateListModeTabs:
-    lea     gadgetListModeTab1Button,a0
-    basereg gadgetListModeTab1Button,a0
-    bsr     setListModeTabsToDefaultColor
-	cmp.b	#LISTMODE_NORMAL,listMode(a5)
-	beq.b	.normalMode
-	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.favoritesMode
-	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq.b	.browserMode
-	cmp.b	#LISTMODE_SEARCH,listMode(a5)
-	beq.b	.searchMode
-    rts
-.normalMode
-    move.l  gadgetListModeTab1Button+gg_GadgetRender(a0),a1
-    move.b  #2,ig_PlanePick(a1)
-    bra refreshListModeTabs
-.favoritesMode
-    move.l  gadgetListModeTab2Button+gg_GadgetRender(a0),a1
-    move.b  #2,ig_PlanePick(a1)
-    bra refreshListModeTabs
-.browserMode
-    move.l  gadgetListModeTab3Button+gg_GadgetRender(a0),a1
-    move.b  #2,ig_PlanePick(a1)
-    bra refreshListModeTabs
-.searchMode
-    move.l  gadgetListModeTab4Button+gg_GadgetRender(a0),a1
-    move.b  #2,ig_PlanePick(a1)
-    bra refreshListModeTabs
-
-setListModeTabsToDefaultColor:
-    move.l  gadgetListModeTab1Button+gg_GadgetRender(a0),a1
-    move.b  #1,ig_PlanePick(a1)
-    move.l  gadgetListModeTab2Button+gg_GadgetRender(a0),a1
-    move.b  #1,ig_PlanePick(a1)
-    move.l  gadgetListModeTab3Button+gg_GadgetRender(a0),a1
-    move.b  #1,ig_PlanePick(a1)
-    move.l  gadgetListModeTab4Button+gg_GadgetRender(a0),a1
-    move.b  #1,ig_PlanePick(a1)
-    rts
-    endb    a0
-
-refreshListModeTabs:
-  ;  lea     gadgetListModeTab1Button(a0),a0
-    move.l	windowbase(a5),a1
-	sub.l	a2,a2
-	moveq	#4,d0	
-	lore	Intui,RefreshGList
-    rts
-  endif
 
 switchToSearchLayoutIfNeeded:
     DPRINT  "switch to search layout if needed"
@@ -54262,34 +54162,10 @@ verticalLayout:
 .noAlt1
 
 
- ifeq FEATURE_LIST_TABS
 	lea		gadgetFileSlider,a1
 	add		gg_Height(a0),d0
 	addq	#3,d0
 	move	d0,gg_TopEdge(a1)
- endif
-
- ifne FEATURE_LIST_TABS
-	lea		gadgetListModeChangeButton,a0
-    move    gg_TopEdge(a0),d0
-   ; add     #14,d0
-    lea     gadgetListModeTab1Button,a1
-    move    d0,gg_TopEdge(a1)
-    add     #14,d0
-    lea     gadgetListModeTab2Button,a1
-    move    d0,gg_TopEdge(a1)
-    add     #14,d0
-    lea     gadgetListModeTab3Button,a1
-    move    d0,gg_TopEdge(a1)
-    add     #14,d0
-    lea     gadgetListModeTab4Button,a1
-    move    d0,gg_TopEdge(a1)
-
-	lea		gadgetFileSlider,a1
-	add		gg_Height(a0),d0
-	addq	#3,d0
-	move	d0,gg_TopEdge(a1)
- endif
  	rts
 	
 * in:
@@ -55431,13 +55307,6 @@ initializeUHC
     tst.l   d0
     seq     uhcAvailable(a5)    
 .no
-  ifne FEATURE_LIST_TABS
-    tst.b   uhcAvailable(a5)
-    bne     .really
-    lea     gadgetListModeTab4Button,a0
-    jsr     disableButton
-.really
-  endif
  if DEBUG   
     moveq   #1,d0
     and.b   uhcAvailable(a5),d0
@@ -58847,235 +58716,10 @@ prefsMidiMode
        dc.b "MIDI mode....",0
        even
 
-
- ifne FEATURE_LIST_TABS
-; Gadget
-gadgetListModeTab1Button:
-	; gg_NextGadget
-	dc.l gadgetListModeTab2Button
-	; gg_LeftEdge
-	dc 9
-	; gg_TopEdge
-	dc 64
-	; gg_Width
-	dc 18
-	; gg_Height
-	dc 13
-	; gg_Flags
-	dc GFLG_GADGIMAGE
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l .img
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-; Image
-.img
-	; ig_LeftEdge
-	dc 4
-	; ig_TopEdge
-	dc 3
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	listImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
-
-
-gadgetListModeTab2Button:
-	; gg_NextGadget
-	dc.l gadgetListModeTab3Button
-	; gg_LeftEdge
-	dc 9
-	; gg_TopEdge
-	dc 64+14
-	; gg_Width
-	dc 18
-	; gg_Height
-	dc 13
-	; gg_Flags
-	dc GFLG_GADGIMAGE
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l .img
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-; Image
-.img
-	; ig_LeftEdge
-	dc 4
-	; ig_TopEdge
-	dc 3
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	favoriteImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
-
-
-gadgetListModeTab3Button:
-	; gg_NextGadget
-	dc.l gadgetListModeTab4Button
-	; gg_LeftEdge
-	dc 9
-	; gg_TopEdge
-	dc 64+14+14
-	; gg_Width
-	dc 18
-	; gg_Height
-	dc 13
-	dc GFLG_GADGIMAGE
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l .img
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-; Image
-.img
-	; ig_LeftEdge
-	dc 4
-	; ig_TopEdge
-	dc 3
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	fileBrowserImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
-
-
-
-gadgetListModeTab4Button:
-	; gg_NextGadget
-	;dc.l gadgetListModeChangeButton
-    dc.l gadgetResize
-	; gg_LeftEdge
-	dc 9
-	; gg_TopEdge
-	dc 64+14+14+14
-	; gg_Width
-	dc 18
-	; gg_Height
-	dc 13
-	; gg_Flags
-	dc GFLG_GADGIMAGE
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l .img
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-; Image
-.img
-	; ig_LeftEdge
-	dc 4
-	; ig_TopEdge
-	dc 3
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	searchImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
-  endif
-
-
 ; Gadget
 gadgetListModeChangeButton:
 	; gg_NextGadget
-  ifne FEATURE_LIST_TABS
-    dc.l gadgetListModeTab1Button
-  else
 	dc.l gadgetResize
-  endif
 	; gg_LeftEdge
 	dc 9
 	; gg_TopEdge
