@@ -49191,7 +49191,7 @@ p_midistream:
 
 
 .initError
-    moveq   #-1,d0
+    moveq   #ier_error,d0
     rts
 
 .streamError    
@@ -49214,7 +49214,7 @@ p_midistream:
     lea     .msgMidi(pc),a1
     jsr     request
 
-    moveq   #-1,d0
+    moveq   #ier_error_nomsg,d0
     rts
 
 .msgMidi
@@ -49400,7 +49400,7 @@ vgmInit0
     rts
 
 .initError
-    moveq   #-1,d0
+    moveq   #ier_error,d0
     rts
 
 .streamError    
@@ -49427,7 +49427,7 @@ vgmInit0
 .2
     jsr     request
 
-    moveq   #-1,d0
+    moveq   #ier_error_nomsg,d0
     rts
 
 .msg
