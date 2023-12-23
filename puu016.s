@@ -37579,8 +37579,8 @@ sidScopeUpdate
     * d0 = buffer length
     * d1 = period value
 
-    cmp.b   #5,residmode(a5)
-    bne     .notAhi
+    tst.b   ahi_use_nyt(a5)
+    beq     .notAhi
     * 16-bit samples, convert to bytes for scope limit checks
     add.l   d0,d0
 .notAhi
