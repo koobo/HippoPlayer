@@ -1016,8 +1016,6 @@ pos_nykyinen	rs	1		* moduulin position
 pos_maksimi	rs	1		
 positionmuutos	rs	1
 
-datestamp1	rs.l	3		 * ajanottoa varten
-datestamp2	rs.l	3
 aika1		rs.l	1
 aika2		rs.l	1
 vanhaaika	rs	1
@@ -19819,19 +19817,34 @@ type_14bit  dc.b    " 14-bit",0
 settimestart
 	move.b	ahi_use(a5),ahi_use_nyt(a5)	* ahi:n tila talteen
 
-	pushm	d0/d1/d2/a0/a1/a6
-	pushpea	datestamp1(a5),d1
-	lore	Dos,DateStamp
-	move.l	datestamp1+4(a5),d0
-	mulu	#60*50,d0
-	add.l	datestamp1+8(a5),d0
+	pushm   all
+    bsr     getCurrentTimeInSecs
 	move.l	d0,aika1(a5)
-
 	check	3
-
-	popm	d0/d1/d2/a0/a1/a6
+	popm	all
 	rts
 
+
+* Out:
+*   d0 = System time relative to the 1st day of the year 1978 in seconds
+getCurrentTimeInSecs:
+    lea     -12(sp),sp
+    move.l  sp,d1
+	lore	Dos,DateStamp
+    move.l (sp)+,d0
+    * convert days into secs
+    move.l  #24*60*60,d1
+    bsr     mulu_32
+    * convert minutes into secs
+    move.l  (sp)+,d1
+	mulu	#60,d1
+    add.l   d1,d0
+    * convert minutes to secs
+    move.l  (sp)+,d1
+    divu    #50,d1
+    ext.l   d1
+    add.l   d1,d0
+    rts
 
 * 0= 	dc.b	8+4,"Time, pos/len, song",0
 * 1= 	dc.b	0,"Time/duration, pos/len",0
@@ -19871,12 +19884,7 @@ lootaan_aika
 	bne.b	.npa
 
 	move.l	aika2(a5),d3
-
-	pushpea	datestamp2(a5),d1
-	lore	Dos,DateStamp
-	move.l	datestamp2+4(a5),d0
-	mulu	#60*50,d0
-	add.l	datestamp2+8(a5),d0
+    bsr     getCurrentTimeInSecs
 	move.l	d0,aika2(a5)
 
 	cmp	#pt_multi,playertype(a5)
@@ -19896,12 +19904,15 @@ lootaan_aika
 	move.l	aika2(a5),d0
 	sub.l	aika1(a5),d0
 
+  ;;  DPRINT  "Current time=%ld"
+    
 	move.l	d0,hippoport+hip_playtime(a5)
 
 ************* tähän timeout!
 	move	timeout(a5),d1
 	beq     .ok0
-	mulu	#50,d1
+	;mulu	#50,d1
+    ext.l   d1
 
 	cmp.l	d1,d0
 	blo    	.ok0
@@ -20002,14 +20013,18 @@ lootaan_aika
     ;add.l   #8*60*60*50,d0        * +8h
     ;add.l   #1*60*60*50,d0        * +1h
 
-    cmp.l   #10*60*60*50,d0      * upper limit: 10 hours, wrap
+    ;add.l  #(59*60+50),d0    * 59:12
+    ;add.l   #8*60*60,d0        * +8h
+    ;add.l   #1*60*60,d0        * +1h
+
+    ;cmp.l   #10*60*60*50,d0      * upper limit: 10 hours, wrap
+	cmp.l   #10*60*60,d0      * upper limit: 10 hours, wrap
 	blo.b	.ok
 	bsr	settimestart
 	moveq	#0,d0
 .ok
 
-	divu	#50,d0
-    and.l   #$ffff,d0
+	;divu	#50,d0
 .doSecs
     * d0 = total seconds
 
