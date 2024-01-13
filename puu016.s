@@ -19998,18 +19998,18 @@ lootaan_aika
     bra     .doSecs
 .notSecs
 
-    ;add.l  #(59*60+12)*50,d0    * 59:12
-    ;add.l   #9*60*60*50,d0        * +1h
+    ;add.l  #(59*60+50)*50,d0    * 59:12
+    ;add.l   #8*60*60*50,d0        * +8h
+    ;add.l   #1*60*60*50,d0        * +1h
 
-    cmp.l   #10*60*60*50,d0      * upper limit: 10 hours
+    cmp.l   #10*60*60*50,d0      * upper limit: 10 hours, wrap
 	blo.b	.ok
 	bsr	settimestart
 	moveq	#0,d0
 .ok
 
-
 	divu	#50,d0
-	ext.l	d0
+    and.l   #$ffff,d0
 .doSecs
     * d0 = total seconds
 
