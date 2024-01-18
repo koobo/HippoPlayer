@@ -19839,7 +19839,7 @@ getCurrentTimeInSecs:
     move.l  (sp)+,d1
 	mulu	#60,d1
     add.l   d1,d0
-    * convert minutes to secs
+    * convert ticks to secs
     move.l  (sp)+,d1
     divu    #50,d1
     ext.l   d1
@@ -20013,12 +20013,13 @@ lootaan_aika
     ;add.l   #8*60*60*50,d0        * +8h
     ;add.l   #1*60*60*50,d0        * +1h
 
-    ;add.l  #(59*60+50),d0    * 59:12
+;    add.l  #(59*60+50),d0    * 59:12
+;    add.l   #8*60*60,d0        * +8h
+;    add.l   #1*60*60,d0        * +1h
     ;add.l   #8*60*60,d0        * +8h
-    ;add.l   #1*60*60,d0        * +1h
-
+    ;
     ;cmp.l   #10*60*60*50,d0      * upper limit: 10 hours, wrap
-	cmp.l   #10*60*60,d0      * upper limit: 10 hours, wrap
+	cmp.l   #99*60*60,d0      * upper limit: 99 hours, wrap
 	blo.b	.ok
 	bsr	settimestart
 	moveq	#0,d0
@@ -20032,8 +20033,19 @@ lootaan_aika
 
     divu    #60*60,d0
     * d0 = hours
-    tst     d0
     beq     .noHours
+    * Handle tens of ours
+    cmp     #10,d0
+    blo.b   .smallHours
+    moveq   #0,d1
+    move.w  d0,d1
+    divu    #10,d1
+    add.b   d2,d1
+    move.b  d1,(a0)+
+    swap    d1
+    move.w  d1,d0
+    * hours 0-9 in d0.w
+.smallHours
     add.b   d2,d0
     move.b  d0,(a0)+
     move.b  #":",(a0)+
@@ -34715,7 +34727,7 @@ fileBrowserDir
 	* Insert parent to the top
 	tst.l	d5
 	beq.b	.noParent
-	bsr	getVisibleModuleListHeader
+	jsr	getVisibleModuleListHeader
 	* get parent node
 	move.l	d5,a1
 	* Insert a1 into a0
@@ -34770,7 +34782,7 @@ fileBrowserGoToParent
 	DPRINT	"Go to parent"
 	* Get the 1st node
 	moveq	#0,d0
-	bsr	getListNode
+	jsr	getListNode
 	beq.b	.x
 	move.l	a0,a3	* save this
 	bsr.b	isFileBrowserParentNode
