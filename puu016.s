@@ -118,7 +118,7 @@ WINY	= 3
 
 * This char as the first char in filename indicates a list divider
 DIVIDER_MAGIC = '÷' ; UTF8=c3b7
-* Another magic char for dividers to be drawn differently
+* Another magic char for dividers to be drawn differently, stealthy
 DIVIDER_MAGIC_ALT = '¢' ; UTF8=c2a2
 
 ;isListDivider macro 
@@ -12644,6 +12644,7 @@ importModuleProgramFromData:
     bne     .notDivAlt
 	addq	#1,a3
 .altDiv
+    * Stealthy divider
 	move.b  #$f0,l_divider(a2)
 .notDivAlt
 
@@ -18905,7 +18906,7 @@ doPrintNames:
 
 	tst.b	l_divider(a3)
 	beq.b	.nodi
-    * Stealth divider, no special styles
+    * Stealthy divider, no special styles
     cmp.b   #$f0,l_divider(a3)
     beq.b   .nodi
 	st	d7	* set flag: divider being handled
@@ -55061,13 +55062,18 @@ configRemoteNode:
 
 
 	moveq	#2-1,d0
-	* l_filename is odd
+    * a2 points to l_filename,
+	* l_filename is odd here
 
     * For some remote sites 
     * take the last file part only to avoid redundancy
 	* "captain/captain_-_space_debris"
 
-    cmp.l   #"remi",11(a2)
+    ifeq l_filename&1
+        fail Assumed uneven here
+    endif
+
+    cmp.l   #"remi",11(a2)  * odd+odd = even offset
     bne.b   .4
     cmp.l   #"x.kw",15(a2)
     beq.b   .3
