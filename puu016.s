@@ -7287,6 +7287,15 @@ refreshGadgetInA0:
 *   d0 = 0  was inside
 *   d0 = -1 was not inside
 checkMouseOnGadget
+    * Special case: skip search layout gadgets if not active
+    tst.w   searchLayoutActive(a5)
+    bne     .srch
+    cmp.l   #gadgetSearchString,a0
+    beq     .xx
+    cmp.l   #gadgetSearchSource,a0
+    beq     .xx
+.srch
+
 	movem	gg_LeftEdge(a0),d0-d3
 	move	mousex(a5),d6
 	move	mousey(a5),d7
@@ -7376,8 +7385,8 @@ tooltipHandler
 	and	#GFLG_DISABLED,d0
 	bne.b	.disabled
 
-	bsr.b	checkMouseOnGadget
-	bne.b	.no
+	bsr  	checkMouseOnGadget
+	bne 	.no
 	* Yes it was.
 	* Check if this gadget was not allowed to have tooltips for now
 	cmp.l  disableTooltipForGadget(a5),a0
