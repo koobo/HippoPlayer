@@ -64,7 +64,7 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
-# Changes from v2.59 (29.11.2023) to v2.60 (?.?.2024) 
+# Changes from v2.59 (29.11.2023) to v2.60 (18.2.2024) 
 
 ## Fixes:
 
@@ -110,8 +110,9 @@ New keyboard shortcuts:
   - The output mode is indicated in the top infobox: 
     nothing (8-bit), 14-bit, 14c-bit, AHI.
   - Average CPU usage is now lower for the above formats due to optimized 
-    CHIP RAM access. For example mp3 playback on 68060 with Paula is now 
-    about 5% faster than before.
+    CHIP RAM access. Examples: Mp3 playback on 68060 with Paula is now 
+    about 5% faster than before, MIDI playback with GMPlay and 68030 is 
+    also about 5% faster than before.
   - Paula 14-bit output now also supports volume control (with 
     additional CPU cost).
 
@@ -124,6 +125,7 @@ New keyboard shortcuts:
   that is controlled from the "Prefs/AHI" subpage. This allows use of the noise 
   reduction modes for AHI too (Oversample x2, etc), which was previously not 
   possible.
+
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------

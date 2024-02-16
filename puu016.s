@@ -39,8 +39,10 @@ ver	macro
 ;	dc.b	"v2.58 (22.6.2023)"
 ;	dc.b	"v2.59▀ (?.?.2023)"
 ;	dc.b	"v2.59 (29.11.2023)"
-	dc.b	"v2.60▀ (?.?.2023)"
+;	dc.b	"v2.60▀ (?.?.2023)"
+	dc.b	"v2.60 (18.2.2024)"
 	endm	
+
 
  ifnd DEBUG
 * AsmOne setting:
@@ -787,10 +789,10 @@ samplefollow		rs.l	1
 samplepointer		rs.l	1
 * Sample pointer to the other stereo channel
 samplepointer2		rs.l	1
-* Set to non-zero if sample being played is stereo
-samplestereo		rs.b	1
 * Pointer to text describing the output mode: empty, 14-bit, 14-bit calib, AHI
 sampleOutputInfoText rs.l   1
+* Set to non-zero if sample being played is stereo
+samplestereo		rs.b	1
 
 * This is set in loadfile() to indicate a sample is found.
 * Actual loading is then skipped.
@@ -2385,7 +2387,7 @@ about_tt
 
 ;scrtit	dc.b	"HippoPlayer - Copyright й 1994-2021 K-P Koljonen",0
 scrtit	dc.b	"HippoPlayer"
-	dc.b	" by K-P in 1994-2000, 2021-2023",0
+	dc.b	" by K-P in 1994-2000, 2021-2024",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -2402,7 +2404,7 @@ about_t
  dc.b "ннннннннннннннннннннннннннннннннннннннн",10,3
  dc.b "ннн  HippoPlayer "
  ver
- dc.b "" ; padding
+ dc.b " " ; padding
  dc.b " ннн",10,3
  dc.b "нн          by K-P Koljonen          нн",10,3
  dc.b "ннн       Hippopotamus Design       ннн",10,3
@@ -2419,7 +2421,7 @@ about_t1
  dc.b " as long as all the files are included",10,3
  dc.b "   unaltered. Not for commercial use",10,3
  dc.b " without a permission from the author.",10,3
- dc.b " Copyright й 1994-2023 by K-P Koljonen",10,3
+ dc.b " Copyright й 1994-2024 by K-P Koljonen",10,3
  dc.b "           *** FREEWARE ***",10,3
  dc.b "ннннннннннннннннннннннннннннннннннннннн",10,3
  dc.b "E-mail:     kpk@iki.fi",10,3
