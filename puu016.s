@@ -54325,9 +54325,9 @@ verticalLayout:
 	subq	#4,d3 * magic constant
 	move	d3,ig_Height(a1)
 
-	* Soure data
+	* Source data
 	lea		horizPropGadgetGfxNormal,a2
-	tst		uusikick(a5)
+	tst.b	uusikick(a5)
 	bne.b	.newKnob
 	lea		horizPropGadgetGfxNormal_kick13,a2
 .newKnob
