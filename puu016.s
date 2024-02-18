@@ -39,8 +39,11 @@ ver	macro
 ;	dc.b	"v2.58ß (?.?.2023)"
 ;	dc.b	"v2.58 (22.6.2023)"
 ;	dc.b	"v2.59ß (?.?.2023)"
-	dc.b	"v2.59 (29.11.2023)"
+;	dc.b	"v2.59 (29.11.2023)"
+;	dc.b	"v2.60ß (?.?.2023)"
+	dc.b	"v2.60 (18.2.2024)"
 	endm	
+
 
  ifnd DEBUG
 * AsmOne setting:
@@ -75,7 +78,6 @@ DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_P61A        =   0
-FEATURE_LIST_TABS   =   0
 FEATURE_PASTE       =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
@@ -118,7 +120,9 @@ WINX	= 2	* X ja Y lisäykset pääikkunan grafiikkaan
 WINY	= 3
 
 * This char as the first char in filename indicates a list divider
-DIVIDER_MAGIC = '÷'
+DIVIDER_MAGIC = '÷' ; UTF8=c3b7
+* Another magic char for dividers to be drawn differently, stealthy
+DIVIDER_MAGIC_ALT = '¢' ; UTF8=c2a2
 
 ;isListDivider macro 
 ;	cmp.b 	#DIVIDER_MAGIC,\1
@@ -786,6 +790,8 @@ samplefollow		rs.l	1
 samplepointer		rs.l	1
 * Sample pointer to the other stereo channel
 samplepointer2		rs.l	1
+* Pointer to text describing the output mode: empty, 14-bit, 14-bit calib, AHI
+sampleOutputInfoText rs.l   1
 * Set to non-zero if sample being played is stereo
 samplestereo		rs.b	1
 
@@ -882,9 +888,9 @@ alarm_new	rs	1
 vbtimer_new	rs.b	1
 Xscopechanged	rs.b	1		* scopea muutettu
 contonerr_laskuri rs.b 1		* kuinka monta virheellistä lataus
-cybercalibration_new rs.b 1		* yritystä
-calibrationfile_new rs.b 100
-newcalibrationfile rs.b	1
+;cybercalibration_new rs.b 1		* yritystä
+;calibrationfile_new rs.b 100
+;newcalibrationfile rs.b	1
 
 mhiLib_new      rs.b MHILIB_SIZE
 
@@ -1013,8 +1019,6 @@ pos_nykyinen	rs	1		* moduulin position
 pos_maksimi	rs	1		
 positionmuutos	rs	1
 
-datestamp1	rs.l	3		 * ajanottoa varten
-datestamp2	rs.l	3
 aika1		rs.l	1
 aika2		rs.l	1
 vanhaaika	rs	1
@@ -1128,7 +1132,7 @@ xplayer		rs.l	1	* osote
 xlen		rs.l	1	* pakattupituus
 
 ps3msettingsfile rs.l	1	* ps3m settings filen osoite
-calibrationaddr	 rs.l	1	* CyberSound 14-bit calibration table
+;;calibrationaddr	 rs.l	1	* CyberSound 14-bit calibration table
 
 sampleroutines	rs.l	0
 aonroutines	rs.l	0
@@ -1606,6 +1610,10 @@ l_nameaddr	rs.l	1		* osoitin pelkkään tied.nimeen
 					* address to filename without path
 l_favorite	rs.b 	1		* 0: not favorite, non-zero: favorite
 l_divider	rs.b	1		* this is a divider, ie. a path
+                            * 00: not divider
+                            * f0: stealthy divider
+                            * ff: ordinary divider
+                            * 7f: "parent folder" in file browser
 l_remote	rs.b    1       * 0: local file, non-zero: remote
 l_favSong   rs.b    1       * 0 or song number when node was favorited
 l_separateName rs.b 1       * set if l_nameaddr points to "#name=<name>""
@@ -2380,7 +2388,7 @@ about_tt
 
 ;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
 scrtit	dc.b	"HippoPlayer"
-	dc.b	" by K-P in 1994-2000, 2021-2023",0
+	dc.b	" by K-P in 1994-2000, 2021-2024",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -2397,7 +2405,7 @@ about_t
  dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
  dc.b "­­­  HippoPlayer "
  ver
- dc.b "" ; padding
+ dc.b " " ; padding
  dc.b " ­­­",10,3
  dc.b "­­          by K-P Koljonen          ­­",10,3
  dc.b "­­­       Hippopotamus Design       ­­­",10,3
@@ -2414,7 +2422,7 @@ about_t1
  dc.b " as long as all the files are included",10,3
  dc.b "   unaltered. Not for commercial use",10,3
  dc.b " without a permission from the author.",10,3
- dc.b " Copyright © 1994-2023 by K-P Koljonen",10,3
+ dc.b " Copyright © 1994-2024 by K-P Koljonen",10,3
  dc.b "           *** FREEWARE ***",10,3
  dc.b "­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­­",10,3
  dc.b "E-mail:     kpk@iki.fi",10,3
@@ -2631,7 +2639,7 @@ main:
 	pushm	all
 	bsr	loadprefs
 	bsr	loadps3msettings
-	bsr	loadcybersoundcalibration
+	;;bsr	loadcybersoundcalibration
 	popm	all
 
 
@@ -2789,10 +2797,6 @@ main:
 	; add another button as the new last one
 	basereg	gadgetFileSlider,a0
 	pushpea	gadgetListModeChangeButton(a0),gadgetSortButton+gg_NextGadget(a0)
- ifne FEATURE_LIST_TABS
-	pushpea	gadgetListModeTab1Button(a0),gadgetSortButton+gg_NextGadget(a0)
- endif
-
 	endb	a0
 	
 	move.l	_IntuiBase(a5),a6
@@ -3640,8 +3644,8 @@ exit
 	bsr	freemem
 	move.l	ps3msettingsfile(a5),a0		* vapautetaan ps3masetustied.
 	bsr	freemem
-	move.l	calibrationaddr(a5),a0
-	bsr	freemem
+;	move.l	calibrationaddr(a5),a0
+;	bsr	freemem
 	move.l	randomtable(a5),a0
 	bsr 	freemem
 	move.l	lastStoredFileReqDirectory(a5),a0 
@@ -4548,6 +4552,8 @@ avaa_ikkuna:
 	move	fileBoxOrigTopEdge(a5),fileBoxTopEdge(a5)
 .1
 	jsr	layoutGadgetsVertical
+    * Ensure list mode toggle button has the correct icon 
+    jsr setListModeChangeButtonIconNoRefresh    
  
 	
 	; Update into window structure
@@ -4712,9 +4718,10 @@ avaa_ikkuna:
 	move	d3,gg_Height(a3)
 	subq	#3,gg_Height(a3)
 
- ifne FEATURE_LIST_TABS
-    sub #3*14,gg_Height(a3)
- endif
+    tst.b   altbuttons(a5)
+    beq     .noAlt1
+    subq    #7,gg_Height(a3)
+.noAlt1
  
 ;    Old (weird) piece of code:
 ;
@@ -5156,16 +5163,6 @@ wrender:
 	* Box is minimized, skipped gadgets:
 	cmp.l	#gadgetListModeChangeButton,a3
 	beq 	.skipClear
- ifne FEATURE_LIST_TABS
-	cmp.l	#gadgetListModeTab1Button,a3
-	beq 	.skipClear
-	cmp.l	#gadgetListModeTab2Button,a3
-	beq 	.skipClear
-	cmp.l	#gadgetListModeTab3Button,a3
-	beq 	.skipClear
-	cmp.l	#gadgetListModeTab4Button,a3
-	beq 	.skipClear
- endif
 	cmp.l	#slider4,a3		* fileslider
 	bne 	.clef
 .skipClear
@@ -5413,9 +5410,6 @@ wrender:
 	jsr	lootaa
 	bsr	reslider
 
-  ifne FEATURE_LIST_TABS
-    jsr updateListModeTabs
-  endif
     jsr switchToSearchLayoutIfNeeded
 	DPRINT	"wrender done"
 
@@ -7296,6 +7290,15 @@ refreshGadgetInA0:
 *   d0 = 0  was inside
 *   d0 = -1 was not inside
 checkMouseOnGadget
+    * Special case: skip search layout gadgets if not active
+    tst.w   searchLayoutActive(a5)
+    bne     .srch
+    cmp.l   #gadgetSearchString,a0
+    beq     .xx
+    cmp.l   #gadgetSearchSource,a0
+    beq     .xx
+.srch
+
 	movem	gg_LeftEdge(a0),d0-d3
 	move	mousex(a5),d6
 	move	mousey(a5),d7
@@ -7385,8 +7388,8 @@ tooltipHandler
 	and	#GFLG_DISABLED,d0
 	bne.b	.disabled
 
-	bsr.b	checkMouseOnGadget
-	bne.b	.no
+	bsr  	checkMouseOnGadget
+	bne 	.no
 	* Yes it was.
 	* Check if this gadget was not allowed to have tooltips for now
 	cmp.l  disableTooltipForGadget(a5),a0
@@ -9293,16 +9296,8 @@ gadgetsup:
 	dr	rloadprog	* ohjelman lataus
 	dr	rmove		* move
 	dr	rsort       * sort
- ifeq FEATURE_LIST_TABS
 	dr	rlistmode	* listmode change
     ;dr  rlistmodePop
- endif
- ifne FEATURE_LIST_TABS
-    dr  rlistmode1
-    dr  rlistmode2
-    dr  rlistmode3
-    dr  rlistmode4
- endif
     dr  .exit       * resize gadget
     dr  .rpositionslider
 
@@ -9362,19 +9357,6 @@ rlistmode:
     beq     beep
 	jmp	    toggleListMode
 
-;rlistmodePop:
-;    jmp toggleListModePopup
-
-  ifne FEATURE_LIST_TABS
-rlistmode1:
-    jmp engageNormalMode
-rlistmode2:
-    jmp engageFavoritesMode
-rlistmode3:
-    jmp engageFileBrowserMode
-rlistmode4:
-    jmp engageSearchResultsMode
- endif
 
 *******************************************************************************
 * Sortti
@@ -12652,15 +12634,34 @@ importModuleProgramFromData:
     bne     .div0
 	addq	#2,a3
 	st	    l_divider(a2)
-    bra     .utf8div
+    bra     .foundDiv
 .div0
     * Amiga encoding:
 	cmp.b	#DIVIDER_MAGIC,(a3)
 	bne.b	.notDiv2
 	addq	#1,a3
 	st	l_divider(a2)
+    bra     .foundDiv
 .notDiv2
-.utf8div
+
+    cmp.b   #$c2,(a3)
+    bne     .div1
+    cmp.b   #$a2,1(a3)
+    bne     .div1
+	addq	#2,a3
+    bra     .altDiv
+.div1
+    * Amiga encoding:
+    cmp.b   #DIVIDER_MAGIC_ALT,(a3)
+    bne     .notDivAlt
+	addq	#1,a3
+.altDiv
+    * Stealthy divider
+	move.b  #$f0,l_divider(a2)
+.notDivAlt
+
+.foundDiv
+
     ; ---------------------------------
 	* See if additional header should
 	* be prepended to the line. This indicates
@@ -13311,7 +13312,7 @@ loadprefs2
 	move.b	prefs_ps3msettings(a0),ps3msettings(a5)
 	move.b	prefs_prefsivu(a0),prefsivu+1(a5)
 	move.b	prefs_samplebufsiz(a0),samplebufsiz0(a5)
-	move.b	prefs_cybercalibration(a0),cybercalibration(a5)
+	;move.b	prefs_cybercalibration(a0),cybercalibration(a5)
 	move	prefs_forcerate(a0),sampleforcerate(a5)
 
 	move.b	prefs_samplecyber(a0),samplecyber(a5)
@@ -13628,7 +13629,7 @@ saveprefs
 	move.b	kokolippu(a5),prefs_kokolippu(a0)
 	not.b	prefs_kokolippu(a0)
 	move.b	samplebufsiz0(a5),prefs_samplebufsiz(a0)
-	move.b	cybercalibration(a5),prefs_cybercalibration(a0)
+	;move.b	cybercalibration(a5),prefs_cybercalibration(a0)
 	move	sampleforcerate(a5),prefs_forcerate(a0)
 
 	move.b	samplecyber(a5),prefs_samplecyber(a0)
@@ -13890,6 +13891,7 @@ loadps3msettings
 *********************************************************************
 * Ladataan CyberSound 14-bit kalibraatiotiedosto
 
+ REM
 loadcybersoundcalibration
 	tst.b	cybercalibration(a5)
 	beq.b	.xx
@@ -13940,6 +13942,7 @@ loadcybersoundcalibration
 
 .er1	dc.b	"Unable to load calibration file!",0
  even
+ EREM
 
 ******************************************************************************
 * Piirtää tekstuurin ikkunaan
@@ -14125,7 +14128,7 @@ prefs_code
 	bsr	setPrefsInfoBox
 	move.b	ps3msettings(a5),ps3msettings_new(a5)
 	move.b	samplebufsiz0(a5),samplebufsiz_new(a5)
-	move.b	cybercalibration(a5),cybercalibration_new(a5)
+	;move.b	cybercalibration(a5),cybercalibration_new(a5)
 	move	sampleforcerate(a5),sampleforcerate_new(a5)
 
 	move.b	samplecyber(a5),samplecyber_new(a5)
@@ -14263,10 +14266,10 @@ prefs_code
 	moveq	#MHILIB_SIZE-1,d0
 	bsr.b	.cp2
 
-	lea	calibrationfile(a5),a0
-	lea	calibrationfile_new(a5),a1
-.ww2	move.b	(a0)+,(a1)+
-	bne.b	.ww2
+;	lea	calibrationfile(a5),a0
+;	lea	calibrationfile_new(a5),a1
+;.ww2	move.b	(a0)+,(a1)+
+;	bne.b	.ww2
 
 	lea	ahi_name(a5),a0
 	lea	ahi_name_new(a5),a1
@@ -14601,7 +14604,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	xfd_new(a5),xfd(a5)
 	move.b	ps3msettings_new(a5),ps3msettings(a5)
 	move.b	samplebufsiz_new(a5),samplebufsiz0(a5)
-	move.b	cybercalibration_new(a5),cybercalibration(a5)
+	;move.b	cybercalibration_new(a5),cybercalibration(a5)
 	move	sampleforcerate_new(a5),sampleforcerate(a5)
 
 	move.b	samplecyber_new(a5),samplecyber(a5)
@@ -14762,9 +14765,9 @@ exprefs	move.l	_IntuiBase(a5),a6
 	lea	groupname(a5),a1
 	bsr 	.copy
 
-	lea	calibrationfile_new(a5),a0
-	lea	calibrationfile(a5),a1
-	bsr 	.copy
+;	lea	calibrationfile_new(a5),a0
+;	lea	calibrationfile(a5),a1
+;	bsr 	.copy
 
 	lea	ahi_name_new(a5),a0
 	lea	ahi_name(a5),a1
@@ -14788,6 +14791,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 
 * ladataan caib fle jos tarpeen
 
+ REM
 	tst.b	cybercalibration(a5)
 	beq.b	.dw
 	tst.l	calibrationaddr(a5)
@@ -14799,7 +14803,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	clr.l	calibrationaddr(a5)
 .dw2	bsr	loadcybersoundcalibration
 .dw	clr.b	newcalibrationfile(a5)
-
+ EREM
 
 
 	cmp.b	#2,prefs_exit(a5)	* Tallennetaanko??
@@ -15340,8 +15344,8 @@ pupdate:				* Ikkuna päivitys
 	bsr	pps3mb			* ps3m buffer
 	bsr	pupdate7b		* stereo
 	bsr	psettings		* settings file
-	bsr	pcyber			* cyber calibration
-	bsr	pcybername		* cyber calibration file name
+;	bsr	pcyber			* cyber calibration
+;	bsr	pcybername		* cyber calibration file name
 	bra	.x
 
 .6	subq.b	#1,d0
@@ -15601,8 +15605,8 @@ gadgetsup2
 	dr	rsmode3		* ps3m volumeboost
 	dr	rsmode4		* ps3m stereofactor
 	dr	rsettings	* settings file on/off
-	dr	rcyber		* cyber calibration
-	dr	rcybername	* cyber calibration file name
+;	dr	rcyber		* cyber calibration
+;	dr	rcybername	* cyber calibration file name
 
 *** Sivu5
 .s5	dr	rahi3		* ahi select mode
@@ -16282,7 +16286,7 @@ psettings
 
 
 
-
+ REM
 ***** cyber calibration nappu
 rcyber
 	not.b	cybercalibration_new(a5)
@@ -16325,7 +16329,7 @@ pcybername
 	bsr	prunt2	
 	lea	30(sp),sp
 	rts
-
+ EREM
 
 
 
@@ -18914,6 +18918,9 @@ doPrintNames:
 
 	tst.b	l_divider(a3)
 	beq.b	.nodi
+    * Stealthy divider, no special styles
+    cmp.b   #$f0,l_divider(a3)
+    beq.b   .nodi
 	st	d7	* set flag: divider being handled
 	* Set color for list divider
 	push	a1
@@ -19470,7 +19477,7 @@ inforivit_play:
 .1	dc.b	"Screamtracker ]I[",0
 .2	dc.b	"Pro/Fasttracker",0
 .3	dc.b	"Multitracker",0
-.4	dc.b	"Fasttracker ][ XM",0
+.4	dc.b	"Fasttracker ][",0
 .5	dc.b	"ImpulseTracker [DP]",0
  even
 
@@ -19495,6 +19502,11 @@ inforivit_play:
     pushpea type_notAhi(pc),d3
     cmp     #pt_multi,playertype(a5)
     bne     .notAhi
+    cmp.b   #sm_stereo14,s3mmode2(a5)
+    bne     .not14
+    pushpea type_14bit(pc),d3
+    bra     .notAhi
+.not14
     tst.b   ahi_use_nyt(a5)
     beq     .notAhi
     pushpea type_ahi(pc),d3
@@ -19806,6 +19818,7 @@ typpi
 
 type_ahi    dc.b    " AHI"
 type_notAhi dc.b    0
+type_14bit  dc.b    " 14-bit",0
  even
 
 *******************************************************************************
@@ -19817,19 +19830,34 @@ type_notAhi dc.b    0
 settimestart
 	move.b	ahi_use(a5),ahi_use_nyt(a5)	* ahi:n tila talteen
 
-	pushm	d0/d1/d2/a0/a1/a6
-	pushpea	datestamp1(a5),d1
-	lore	Dos,DateStamp
-	move.l	datestamp1+4(a5),d0
-	mulu	#60*50,d0
-	add.l	datestamp1+8(a5),d0
+	pushm   all
+    bsr     getCurrentTimeInSecs
 	move.l	d0,aika1(a5)
-
 	check	3
-
-	popm	d0/d1/d2/a0/a1/a6
+	popm	all
 	rts
 
+
+* Out:
+*   d0 = System time relative to the 1st day of the year 1978 in seconds
+getCurrentTimeInSecs:
+    lea     -12(sp),sp
+    move.l  sp,d1
+	lore	Dos,DateStamp
+    move.l (sp)+,d0
+    * convert days into secs
+    move.l  #24*60*60,d1
+    bsr     mulu_32
+    * convert minutes into secs
+    move.l  (sp)+,d1
+	mulu	#60,d1
+    add.l   d1,d0
+    * convert ticks to secs
+    move.l  (sp)+,d1
+    divu    #50,d1
+    ext.l   d1
+    add.l   d1,d0
+    rts
 
 * 0= 	dc.b	8+4,"Time, pos/len, song",0
 * 1= 	dc.b	0,"Time/duration, pos/len",0
@@ -19869,12 +19897,7 @@ lootaan_aika
 	bne.b	.npa
 
 	move.l	aika2(a5),d3
-
-	pushpea	datestamp2(a5),d1
-	lore	Dos,DateStamp
-	move.l	datestamp2+4(a5),d0
-	mulu	#60*50,d0
-	add.l	datestamp2+8(a5),d0
+    bsr     getCurrentTimeInSecs
 	move.l	d0,aika2(a5)
 
 	cmp	#pt_multi,playertype(a5)
@@ -19894,12 +19917,15 @@ lootaan_aika
 	move.l	aika2(a5),d0
 	sub.l	aika1(a5),d0
 
+  ;;  DPRINT  "Current time=%ld"
+    
 	move.l	d0,hippoport+hip_playtime(a5)
 
 ************* tähän timeout!
 	move	timeout(a5),d1
 	beq     .ok0
-	mulu	#50,d1
+	;mulu	#50,d1
+    ext.l   d1
 
 	cmp.l	d1,d0
 	blo    	.ok0
@@ -19996,18 +20022,23 @@ lootaan_aika
     bra     .doSecs
 .notSecs
 
-    ;add.l  #(59*60+12)*50,d0    * 59:12
-    ;add.l   #9*60*60*50,d0        * +1h
+    ;add.l  #(59*60+50)*50,d0    * 59:12
+    ;add.l   #8*60*60*50,d0        * +8h
+    ;add.l   #1*60*60*50,d0        * +1h
 
-    cmp.l   #10*60*60*50,d0      * upper limit: 10 hours
+;    add.l  #(59*60+50),d0    * 59:12
+;    add.l   #8*60*60,d0        * +8h
+;    add.l   #1*60*60,d0        * +1h
+    ;add.l   #8*60*60,d0        * +8h
+    ;
+    ;cmp.l   #10*60*60*50,d0      * upper limit: 10 hours, wrap
+	cmp.l   #99*60*60,d0      * upper limit: 99 hours, wrap
 	blo.b	.ok
 	bsr	settimestart
 	moveq	#0,d0
 .ok
 
-
-	divu	#50,d0
-	ext.l	d0
+	;divu	#50,d0
 .doSecs
     * d0 = total seconds
 
@@ -20015,8 +20046,19 @@ lootaan_aika
 
     divu    #60*60,d0
     * d0 = hours
-    tst     d0
     beq     .noHours
+    * Handle tens of ours
+    cmp     #10,d0
+    blo.b   .smallHours
+    moveq   #0,d1
+    move.w  d0,d1
+    divu    #10,d1
+    add.b   d2,d1
+    move.b  d1,(a0)+
+    swap    d1
+    move.w  d1,d0
+    * hours 0-9 in d0.w
+.smallHours
     add.b   d2,d0
     move.b  d0,(a0)+
     move.b  #":",(a0)+
@@ -25860,6 +25902,9 @@ scopeLoop:
 ; We come here if nothing should be drawn, there is a pause
 ; for example. The previous drawn content is left.
 .doNotDraw
+    * In case there is no module in memory clear and print hippo
+    tst.w   playertype(a5)
+    beq     .doNotDrawClear
 
 .m
 .continue
@@ -26547,7 +26592,7 @@ getScopeMiniFontIfNeeded
 	move.l	d0,a6
 	lea	mini_text_attr,a0
 	lob	OpenDiskFont
-	move.l	d0,minifontbase(a5)
+ 	move.l	d0,minifontbase(a5)
 	move.l	a6,a1
 	lore 	Exec,CloseLibrary
 ;	tst.l	minifontbase(a5)
@@ -26563,9 +26608,22 @@ getScopeMiniFontIfNeeded
 .miniOk
 	DPRINT	"Got mini font"
 	rts
-;.noFontMsg
-;	dc.b	"Couldn't open 'mini4' font for patternscope!",0;
-;	even
+
+showNoMiniFontMessage:
+	tst.l	minifontbase(a5)
+	bne.b	.skip
+	lea	.noFontMsg(pc),a1 
+	tst.b	(a1)
+	beq.b	.skip
+	bsr	request
+	* Show this only once to not be annoying
+	clr.b	(a1)	
+.skip
+    rts
+
+.noFontMsg
+	dc.b	"Couldn't open 'mini4' font for patternscope!",0;
+	even
 
 ******* Quadrascopelle 
 voltab
@@ -28838,16 +28896,17 @@ noteScroller2:
 	cmp	#SCOPE_SMALL_FONT_CHANNEL_LIMIT,d7
 	bhi.b	.narrow
 	* normal font stripe
-;	mulu	#72,d0
-	move	d0,d2 * tricky mul with 72
-	lsl	#6,d2
-	lsl	#3,d0
-	add	d2,d0
+	mulu	#72,d0
 	bra.b	.wide
 .narrow
-	* Test if font is available
+    * Need narrow font,
+	* test if font is available
 	tst.l	minifontbase(a5)
-	beq.b	.x
+	bne 	.yesFont
+    * bail out with msg
+    bsr     showNoMiniFontMessage
+    bra     .x
+.yesFont
 	* each narrow stripe is 32 pix
 	lsl	#5,d0 ;mulu	#32,d0 	
 .wide
@@ -33512,12 +33571,9 @@ engageSearchResultsMode:
 
 * Common operations to be done after list mode change
 engageListMode:
-	bsr	.setListModeChangeButtonIcon
+	bsr	setListModeChangeButtonIcon
 	bsr	.setButtonStatesAccordingToListMode
 	bsr.b	.setListState
-  ifne FEATURE_LIST_TABS
-    bsr     updateListModeTabs
-  endif
 	* Playing module should be invalidated,
 	* it is not compatible between the two lists.
 	tst.l	playingmodule(a5) 
@@ -33653,27 +33709,40 @@ engageListMode:
 
 	endb	a4
 
-.setListModeChangeButtonIcon
+
+setListModeChangeButtonIcon:
+    bsr setListModeChangeButtonIconNoRefresh
+	lea	gadgetListModeChangeButton,a0
+	jsr refreshGadgetInA0
+    rts
+
+setListModeChangeButtonIconNoRefresh:
 	lea	listImage,a0
+    lea listImageBig,a1
 	cmp.b 	#LISTMODE_NORMAL,listMode(a5)
 	beq.b	.set
 	lea	favoriteImage-listImage(a0),a0
+	lea	favoriteImageBig-listImageBig(a1),a1
 	cmp.b 	#LISTMODE_FAVORITES,listMode(a5)
 	beq.b	.set
 	lea	fileBrowserImage-favoriteImage(a0),a0
+	lea	fileBrowserImageBig-favoriteImageBig(a1),a1
 	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.set
 	lea	searchImage-fileBrowserImage(a0),a0
-	cmp.b 	#LISTMODE_SEARCH,listMode(a5)
+	lea	searchImageBig-fileBrowserImageBig(a1),a1
+    cmp.b 	#LISTMODE_SEARCH,listMode(a5)
 	beq.b	.set
 	rts
 .set
 	* Toggle listmode button icon
+    move.w  #7,ig_Height+gadgetListModeChangeButtonImage
+    tst.b   altbuttons(a5)
+    beq     .66
+    move.l  a1,a0
+    move.w  #7*2,ig_Height+gadgetListModeChangeButtonImage
+.66
 	move.l	a0,gadgetListModeChangeButtonImagePtr
-	lea	gadgetListModeChangeButton,a0
- ifeq FEATURE_LIST_TABS
-	jsr refreshGadgetInA0
- endif
     rts
 
 setNormalAddTooltip
@@ -33690,58 +33759,6 @@ setSearchAddTooltip
 	sub.l	a0,a1
 	move	a1,(a0)
 	rts
-
-  ifne FEATURE_LIST_TABS
-updateListModeTabs:
-    lea     gadgetListModeTab1Button,a0
-    basereg gadgetListModeTab1Button,a0
-    bsr     setListModeTabsToDefaultColor
-	cmp.b	#LISTMODE_NORMAL,listMode(a5)
-	beq.b	.normalMode
-	cmp.b	#LISTMODE_FAVORITES,listMode(a5)
-	beq.b	.favoritesMode
-	cmp.b	#LISTMODE_BROWSER,listMode(a5)
-	beq.b	.browserMode
-	cmp.b	#LISTMODE_SEARCH,listMode(a5)
-	beq.b	.searchMode
-    rts
-.normalMode
-    move.l  gadgetListModeTab1Button+gg_GadgetRender(a0),a1
-    move.b  #2,ig_PlanePick(a1)
-    bra refreshListModeTabs
-.favoritesMode
-    move.l  gadgetListModeTab2Button+gg_GadgetRender(a0),a1
-    move.b  #2,ig_PlanePick(a1)
-    bra refreshListModeTabs
-.browserMode
-    move.l  gadgetListModeTab3Button+gg_GadgetRender(a0),a1
-    move.b  #2,ig_PlanePick(a1)
-    bra refreshListModeTabs
-.searchMode
-    move.l  gadgetListModeTab4Button+gg_GadgetRender(a0),a1
-    move.b  #2,ig_PlanePick(a1)
-    bra refreshListModeTabs
-
-setListModeTabsToDefaultColor:
-    move.l  gadgetListModeTab1Button+gg_GadgetRender(a0),a1
-    move.b  #1,ig_PlanePick(a1)
-    move.l  gadgetListModeTab2Button+gg_GadgetRender(a0),a1
-    move.b  #1,ig_PlanePick(a1)
-    move.l  gadgetListModeTab3Button+gg_GadgetRender(a0),a1
-    move.b  #1,ig_PlanePick(a1)
-    move.l  gadgetListModeTab4Button+gg_GadgetRender(a0),a1
-    move.b  #1,ig_PlanePick(a1)
-    rts
-    endb    a0
-
-refreshListModeTabs:
-  ;  lea     gadgetListModeTab1Button(a0),a0
-    move.l	windowbase(a5),a1
-	sub.l	a2,a2
-	moveq	#4,d0	
-	lore	Intui,RefreshGList
-    rts
-  endif
 
 switchToSearchLayoutIfNeeded:
     DPRINT  "switch to search layout if needed"
@@ -34723,7 +34740,7 @@ fileBrowserDir
 	* Insert parent to the top
 	tst.l	d5
 	beq.b	.noParent
-	bsr	getVisibleModuleListHeader
+	jsr	getVisibleModuleListHeader
 	* get parent node
 	move.l	d5,a1
 	* Insert a1 into a0
@@ -34778,7 +34795,7 @@ fileBrowserGoToParent
 	DPRINT	"Go to parent"
 	* Get the 1st node
 	moveq	#0,d0
-	bsr	getListNode
+	jsr	getListNode
 	beq.b	.x
 	move.l	a0,a3	* save this
 	bsr.b	isFileBrowserParentNode
@@ -37602,8 +37619,8 @@ sidScopeUpdate
     * d0 = buffer length
     * d1 = period value
 
-    cmp.b   #5,residmode(a5)
-    bne     .notAhi
+    tst.b   ahi_use_nyt(a5)
+    beq     .notAhi
     * 16-bit samples, convert to bytes for scope limit checks
     add.l   d0,d0
 .notAhi
@@ -42580,8 +42597,10 @@ p_multi:
 
 * välitetään tietoa ps3m:lle ja hankitaan sitä siltä
 
-	move.b	cybercalibration(a5),d0
-	move.l	calibrationaddr(a5),d1
+;	move.b	cybercalibration(a5),d0
+;	move.l	calibrationaddr(a5),d1
+    moveq   #0,d0
+    moveq   #0,d1
 
 	move.b	ahi_use(a5),d2
 	move.l	ahi_rate(a5),d3
@@ -43166,6 +43185,7 @@ p_sample:
 .flags
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .name	dc.b	"                        ",0
+        ds.b    8 * safety
  even
 
                    rsset    $20
@@ -43214,7 +43234,13 @@ p_sample:
 	moveq	#0,d0
 	cmp	#16000,horizfreq(a5)
 	slo	d0
-    DPRINT  "resample needed: %ld"
+ if DEBUG
+    push    d1
+    moveq   #0,d1
+    move    horizfreq(a5),d1
+    DPRINT  "resample needed: %ld (horizfreq=%ld)"
+    pop     d1
+ endif
 	move	d0,-(sp)
 	pea	songover(a5)
 	move.l	colordiv(a5),-(sp)
@@ -43306,9 +43332,10 @@ p_sample:
 ;	pushpea	probebuffer(a5),d4
 	pushpea	kokonaisaika(a5),d5
 
+    * 14-bit out or not
 	move.b	samplecyber(a5),d6
-;	move.b	cybercalibration(a5),d6
-	move.l	calibrationaddr(a5),d7
+;	move.b	cybercalibration(a5),d6 
+;	move.l	calibrationaddr(a5),d7
 
 	move	sampleforcerate(a5),a6
 
@@ -43328,7 +43355,7 @@ p_sample:
     ; d4 = sample bits 8 or 16, convert to 1 and 2
     lsr     #3,d4
     move    d4,ahiSampleModulo(a5)
-
+    move.l  d5,sampleOutputInfoText(a5)
 
  if DEBUG
 	pushm	d0-d3
@@ -49184,26 +49211,27 @@ p_midistream:
     lea     midimode01,a0
     cmp.b   #MIDI_TIMIDITY,midimode(a5)
     beq     .11
-    lea     midimode02,a0
+    basereg midimode01,a0
+    lea     midimode02(a0),a0
+    endb    a0
 .11     
-    lea     .title+5(pc),a1
-    move.b  #"(",(a1)+
-.22
-    move.b  (a0)+,(a1)+
-    bne     .22
-    subq    #1,a1
-    move.b  #")",(a1)+
-    clr.b   (a1)
+    move.l  a0,d0
+    move.l  sampleOutputInfoText(a5),d1
 
+    lea     .form(pc),a0
+    lea     .title(pc),a3
+    jsr     desmsg3
 
     * Sample init OK
     moveq   #0,d0
     rts
-
+        * "MIDI Timidity 14c-bit"
+.form:  dc.b    "MIDI %s %s",0
+    even
 
 
 .initError
-    moveq   #-1,d0
+    moveq   #ier_error,d0
     rts
 
 .streamError    
@@ -49226,7 +49254,7 @@ p_midistream:
     lea     .msgMidi(pc),a1
     jsr     request
 
-    moveq   #-1,d0
+    moveq   #ier_error_nomsg,d0
     rts
 
 .msgMidi
@@ -49412,7 +49440,7 @@ vgmInit0
     rts
 
 .initError
-    moveq   #-1,d0
+    moveq   #ier_error,d0
     rts
 
 .streamError    
@@ -49439,7 +49467,7 @@ vgmInit0
 .2
     jsr     request
 
-    moveq   #-1,d0
+    moveq   #ier_error_nomsg,d0
     rts
 
 .msg
@@ -49482,19 +49510,13 @@ vgmInfoText:
     move.l  sp,d0
     moveq   #0,d1
     move.w  vgmVoices(pc),d1
+    move.l  sampleOutputInfoText(a5),d2
 
-    pushpea .ahi(pc),d2
-    tst.b    ahi_use(a5)
-    bne     .1
-    addq.l  #4,d2
-;    pushpea .null(pc),d2
-.1
     lea     .form(pc),a0
     move.b  vgmActuallyMdx(pc),d3
     beq     .2
     lea     .formMdx(pc),a0
-    moveq   #8,d0
-    move.l  d2,d1
+    move.l  d2,d0
 .2
     lea     vgmTitle(pc),a3
     jsr     desmsg3
@@ -49503,10 +49525,9 @@ vgmInfoText:
     rts
 
 * subformat, AHI, voices: max 25 ch
-.ahi      dc.b    "AHI "
 .null     dc.b    0
-.form     dc.b    "%s %ldch %s(VGM2WAV)",0
-.formMdx  dc.b    "MDX %ldch %s(MDX2WAV)",0
+.form     dc.b    "%s %ldch VGM2WAV %s",0
+.formMdx  dc.b    "MDX 8ch MDX2WAV %s",0
           even
 
 vgmSongChangePossible:
@@ -54072,11 +54093,6 @@ centerGadgetText:
 	lore	GFX,TextLength
 	pop	a1
 
-    push    d0
-	move	gg_Width(a1),d0
-    ext.l   d0
-    pop d0
-
 	; center	
 	move	gg_Width(a1),d3
 	sub	d0,d3
@@ -54178,34 +54194,18 @@ verticalLayout:
 	lea		gadgetListModeChangeButton,a0
 	subq	#2,d0
 	move	d0,gg_TopEdge(a0)
- ifeq FEATURE_LIST_TABS
-	lea		gadgetFileSlider,a1
-	add		gg_Height(a0),d0
-	addq	#3,d0
-	move	d0,gg_TopEdge(a1)
- endif
 
- ifne FEATURE_LIST_TABS
-	lea		gadgetListModeChangeButton,a0
-    move    gg_TopEdge(a0),d0
-   ; add     #14,d0
-    lea     gadgetListModeTab1Button,a1
-    move    d0,gg_TopEdge(a1)
-    add     #14,d0
-    lea     gadgetListModeTab2Button,a1
-    move    d0,gg_TopEdge(a1)
-    add     #14,d0
-    lea     gadgetListModeTab3Button,a1
-    move    d0,gg_TopEdge(a1)
-    add     #14,d0
-    lea     gadgetListModeTab4Button,a1
-    move    d0,gg_TopEdge(a1)
+    move    #13,gg_Height(a0)   * Large mode button
+    tst.b   altbuttons(a5)
+    beq     .noAlt1
+    addq    #7,gg_Height(a0)    * Normal mode button
+.noAlt1
+
 
 	lea		gadgetFileSlider,a1
 	add		gg_Height(a0),d0
 	addq	#3,d0
 	move	d0,gg_TopEdge(a1)
- endif
  	rts
 	
 * in:
@@ -55074,13 +55074,18 @@ configRemoteNode:
 
 
 	moveq	#2-1,d0
-	* l_filename is odd
+    * a2 points to l_filename,
+	* l_filename is odd here
 
     * For some remote sites 
     * take the last file part only to avoid redundancy
 	* "captain/captain_-_space_debris"
 
-    cmp.l   #"remi",11(a2)
+    ifeq l_filename&1
+        fail Assumed uneven here
+    endif
+
+    cmp.l   #"remi",11(a2)  * odd+odd = even offset
     bne.b   .4
     cmp.l   #"x.kw",15(a2)
     beq.b   .3
@@ -55347,13 +55352,6 @@ initializeUHC
     tst.l   d0
     seq     uhcAvailable(a5)    
 .no
-  ifne FEATURE_LIST_TABS
-    tst.b   uhcAvailable(a5)
-    bne     .really
-    lea     gadgetListModeTab4Button,a0
-    jsr     disableButton
-.really
-  endif
  if DEBUG   
     moveq   #1,d0
     and.b   uhcAvailable(a5),d0
@@ -58763,235 +58761,10 @@ prefsMidiMode
        dc.b "MIDI mode....",0
        even
 
-
- ifne FEATURE_LIST_TABS
-; Gadget
-gadgetListModeTab1Button:
-	; gg_NextGadget
-	dc.l gadgetListModeTab2Button
-	; gg_LeftEdge
-	dc 9
-	; gg_TopEdge
-	dc 64
-	; gg_Width
-	dc 18
-	; gg_Height
-	dc 13
-	; gg_Flags
-	dc GFLG_GADGIMAGE
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l .img
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-; Image
-.img
-	; ig_LeftEdge
-	dc 4
-	; ig_TopEdge
-	dc 3
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	listImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
-
-
-gadgetListModeTab2Button:
-	; gg_NextGadget
-	dc.l gadgetListModeTab3Button
-	; gg_LeftEdge
-	dc 9
-	; gg_TopEdge
-	dc 64+14
-	; gg_Width
-	dc 18
-	; gg_Height
-	dc 13
-	; gg_Flags
-	dc GFLG_GADGIMAGE
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l .img
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-; Image
-.img
-	; ig_LeftEdge
-	dc 4
-	; ig_TopEdge
-	dc 3
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	favoriteImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
-
-
-gadgetListModeTab3Button:
-	; gg_NextGadget
-	dc.l gadgetListModeTab4Button
-	; gg_LeftEdge
-	dc 9
-	; gg_TopEdge
-	dc 64+14+14
-	; gg_Width
-	dc 18
-	; gg_Height
-	dc 13
-	dc GFLG_GADGIMAGE
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l .img
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-; Image
-.img
-	; ig_LeftEdge
-	dc 4
-	; ig_TopEdge
-	dc 3
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	fileBrowserImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
-
-
-
-gadgetListModeTab4Button:
-	; gg_NextGadget
-	;dc.l gadgetListModeChangeButton
-    dc.l gadgetResize
-	; gg_LeftEdge
-	dc 9
-	; gg_TopEdge
-	dc 64+14+14+14
-	; gg_Width
-	dc 18
-	; gg_Height
-	dc 13
-	; gg_Flags
-	dc GFLG_GADGIMAGE
-	; gg_Activation
-	dc GACT_RELVERIFY
-	; gg_GadgetType
-	dc GTYP_BOOLGADGET
-	; gg_GadgetRender
-	dc.l .img
-	; gg_SelectRender
-	dc.l 0
-	; gg_GadgetText
-	dc.l 0
-	; gg_MutualExclude
-	dc.l 0
-	; gg_SpecialInfo
-	dc.l 0
-	; gg_GadgetId
-	dc.w 0
-	; gg_UserData
-	dc.l 0
-
-; Image
-.img
-	; ig_LeftEdge
-	dc 4
-	; ig_TopEdge
-	dc 3
-	; ig_Width
-	dc 9+1
-	; ig_Height
-	dc 7
-	; ig_Depth
-	dc 1
-	; ig_ImageData
-	dc.l	searchImage
-	; ig_PlanePick
-	dc.b 1
-	; ig_PlaneOff
-	dc.b 0
-	; ig_NextImage
-	dc.l 0
-  endif
-
-
 ; Gadget
 gadgetListModeChangeButton:
 	; gg_NextGadget
-  ifne FEATURE_LIST_TABS
-    dc.l gadgetListModeTab1Button
-  else
 	dc.l gadgetResize
-  endif
 	; gg_LeftEdge
 	dc 9
 	; gg_TopEdge
@@ -60098,6 +59871,24 @@ favoriteImage:
 	dc	%0001110000000000				
 	dc	%0000100000000000				
 
+favoriteImageBig:
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0111011100000000				
+	dc	%1111111110000000				
+	dc	%1111111110000000				
+	dc	%1111111110000000				
+	dc	%1111111110000000				
+	dc	%0111111100000000				
+	dc	%0011111000000000				
+	dc	%0001110000000000				
+	dc	%0000100000000000				
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0000000000000000
+
+
+
 listImage:
 	dc	%1101111111000000
 	dc	%0000000000000000				
@@ -60107,15 +59898,46 @@ listImage:
 	dc	%0000000000000000
 	dc	%1101111111000000
 
+listImageBig:
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%1101111111000000
+	dc	%0000000000000000
+	dc	%1101111111000000
+	dc	%0000000000000000				
+	dc	%1101111111000000
+	dc	%0000000000000000
+	dc	%1101111111000000
+	dc	%0000000000000000
+	dc	%1101111111000000
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0000000000000000
 
 fileBrowserImage:
 	dc	%1111111100000000
-	dc	%1010011010000000				
+	dc	%1011001010000000				
 	dc	%1011111001000000
 	dc	%1000000001000000
 	dc	%1011111101000000
-	dc	%1011001101000000
+	dc	%1010000101000000
 	dc	%1111111111000000
+
+fileBrowserImageBig:
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%1111111100000000
+	dc	%1011001010000000				
+	dc	%1011001001000000				
+	dc	%1011111001000000
+	dc	%1000000001000000
+	dc	%1011111101000000
+	dc	%1010000101000000
+	dc	%1010000101000000
+	dc	%1010000101000000
+	dc	%1111111111000000
+	dc	%0000000000000000
+	dc	%0000000000000000
 
 searchImage:
 	dc	%0001110000000000
@@ -60125,8 +59947,22 @@ searchImage:
 	dc	%0010001100000000
 	dc	%0001111100000000
 	dc	%0000000110000000
-	;dc	%0000000011000000
 
+searchImageBig:
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0001110000000000
+	dc	%0010001000000000
+	dc	%0101000100000000
+	dc	%0100000100000000
+	dc	%0100000100000000
+	dc	%0010001100000000
+	dc	%0001111100000000
+	dc	%0000000110000000
+	dc	%0000000110000000
+	dc	%0000000000000000
+	dc	%0000000000000000
+	dc	%0000000000000000
 
 resizeGadgetImage:
 	; plane 1

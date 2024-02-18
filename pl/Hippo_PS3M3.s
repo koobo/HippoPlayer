@@ -86,6 +86,7 @@ ier_ahi		=	-19
 
 	include	dos/dos_lib.i
 	include	dos/dos.i
+    include	dos/var.i
 
 	include	hardware/intbits.i
 	include	resources/cia_lib.i
@@ -303,8 +304,9 @@ init1r
 	move.l	#samples,(a3)
 	move.l	#xm_insts,(a4)
 
+    * Find this stuff out later
+    moveq   #0,d0
 	move.b	d0,CyberCalibration
-	move.l	d1,CyberTable
 
 
 *** ahi-tiedot
@@ -448,6 +450,9 @@ s3init
 	move.l	4(sp),voluproutine
 
 	pushm	d1-d7/a2-a6
+
+    * After getting dosbase try to find calibration ENV data
+    bsr     InitCyberSound
 
 	clr	PS3M_eject
 	clr	PS3M_position
@@ -2257,6 +2262,34 @@ id_it
 	RTS
 
 
+InitCyberSound:
+    pushm   all
+    DPRINT  "Init CyberSound"
+    clr.b   CyberCalibration
+
+    move.l  4.w,a0
+    cmp.w   #36,LIB_VERSION(a0)
+    blo     .nocy
+
+    pushpea .envVarName(pc),d1     * variable name
+    move.l  #CyberTable,d2       * output
+    move.l  #256,d3               * space available
+    move.l  #GVF_GLOBAL_ONLY!GVF_BINARY_VAR,d4  * global variable
+    move.l  dosbase,a6
+    lob     GetVar
+    tst.l   d0
+    bmi     .nocy
+
+    st      CyberCalibration
+    DPRINT  "got table"
+.nocy
+    popm    all
+	rts
+
+
+.envVarName:
+    dc.b    "CyberSound/SoundDrivers/14Bit_Calibration",0
+    even
 
 *********************************
 *	   PS3M 0.9A ®		*
@@ -5062,7 +5095,8 @@ do14tab	move.l	buff14(a5),a0
 		; Parameters
 
 .docyber
-	move.l	CyberTable(a5),a1
+	;move.l	CyberTable(a5),a1
+    lea     CyberTable(a5),a1
 
 
 		; a0 = Table address
@@ -11116,7 +11150,7 @@ timerinterrupt 	dc.l	0,0
 
 CyberCalibration dc.b	0
 		dc.b	0
-CyberTable	dc.l	0
+CyberTable	ds.b	256
 
 vbrr		dc.l	0
 olev4		dc.l	0

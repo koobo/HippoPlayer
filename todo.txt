@@ -1,5 +1,20 @@
-FIXED: TODO:
-- ctrl+g won't work when pipe streamer is active
+TODO:
+- sample names shown with xmaplay060
+
+TODO:
+- playlist support for #volume for setting file volume
+
+TODO:
+- add one MIDI, also WAV
+- play
+- after it stops
+- play counter still rolling
+--> assumption is that module repeats, MIDI/VGM/MDX don't though, so they
+    keep rolling the timer.. feature?
+
+TODO:
+- hippo face in scopes is using wrong colors in some RTG modes.
+  this is because it assumes colors 0-3 to work as on denise modes?
 
 TODO:
 - sample scope with sid+resid:
@@ -10,9 +25,6 @@ TODO:
 - Crockettstheme2023 from Aminet, keeps crashing HippoPlayer, 
   Running under OS 3.2.2 and Latest Version
 - Guru 8000 0005 with both OctaMixPlayer v7.0 and v7.1 
-
-FIXED: TODO:
-- soundfx: check this identifier, crash?
 
 TODO:
 - For the crash with the combination of ML+IT files, add the two ML files, then
@@ -86,6 +98,35 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
+FIXED: TODO:
+- soundfx: check this identifier, crash?
+
+FIXED: TODO:
+- eject clears the scopes and prints the head
+
+FIXED: TODO:
+- sample/PS3M: use cybersound if set in ENV
+- rename cybersoud button to: Sample 14-bit out or something
+
+FIX: TODO:
+- MHI startataan vaikka ei olisi edes mp3-file kyseessä
+
+
+FIXED: TODO:
+- ctrl+g won't work when pipe streamer is active
+
+
+DONE: TODO:
+- hover mouse over volumebar, tooltip for search bar appears?
+  only with normal sized buttons
+
+DONE: TODO: 
+- big button support for the list mode change button
+
+
+FIXED: TODO:
+- sample scopes broke with the last scope change (moduleaddress zero check)
 
 FIXED: TODO:
 - would it be possible to optionally not clear the scopes when a MOD is paused ? 

@@ -54,7 +54,9 @@ nAMISKA1	dc.l nAMISKA2
 nAMISKA1t	dc.b 1,0,1,0
 	dc.w -186,2
 	dc.l 0,nAMISKA1tx,0
-nAMISKA1tx	dc.b "Cybercalibration.......",0
+nAMISKA1tx	
+    ;dc.b "Cybercalibration.......",0
+    dc.b "Sample 14-bit output...",0
 	even
 nAMISKA2	dc.l nAMISKA3
 	dc.w 406,37,28,12,3,1,1
