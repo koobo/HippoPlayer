@@ -12670,7 +12670,9 @@ importModuleProgramFromData:
 	beq.b	.noHdr
 	moveq	#1,d3	* remote!
 	move.l	d6,a1
-.copyHdr
+    tst.b   (a1)    * null string check
+    beq     .noHdr
+.copyHdr   
 	move.b	(a1)+,(a0)+
 	bne.b	.copyHdr
 	subq	#1,a0 * to NULL
@@ -29796,19 +29798,28 @@ loadmodule:
 	tst.b 	executablemoduleinit(a5)
 	bne 	.nip
 
+    move.l	modulefilename(a5),a0
+    jsr     getFileExtension4
+    cmp.l   #".m3u",d0
+    seq     d0
+    beq     .nipa
+
 	move.l	moduleaddress(a5),a0	* Oliko moduleprogram??
 	cmp.l	#"HiPP",(a0)
-	bne 	.nipz
-	cmp	#"rg",4(a0)
-	beq 	.nipa
-.nipz
-	cmp.l	#"HIPP",(a0)
 	bne 	.nip
-	cmp	#"RO",4(a0)
-	bne 	.nip
+	cmp	    #"rg",4(a0)
+    bne     .nip
+;	beq 	.nipa
+
+;.nipz
+;	cmp.l	#"HIPP",(a0)
+;	bne 	.nip
+;	cmp	#"RO",4(a0)
+;	bne 	.nip
 
 .nipa
     DPRINT  "module program detected"
+    move.b  d0,-(sp)
 
 ;       lea     -150(sp),sp
 ;       move.l  sp,a3
@@ -29835,7 +29846,33 @@ loadmodule:
     move.l  moduleaddress(a5),a3
     move.l  a3,a4
     add.l   modulelength(a5),a4
+    ; ---------------------------------
+    tst.b   (sp)+
+    beq     .norml
+    * Special: provide an empty line to prepend.
+    * This makes it run the filter
+    lea     .importFilter(pc),a0
+    clr     -(sp)
+    move.l  sp,d6   * prepend line addr
+    moveq   #0,d4   * prepend line length
+    jsr     importModuleProgramFromDataSkipHeader
+    addq    #2,sp
+    bra     .m3uz
+* In:
+*   a3 = name to check, ends with 10 or 0
+* Out:
+*   d0 = true if ok, false otherwise
+.importFilter
+    * Skip extended m3u lines
+    moveq   #0,d0
+    cmp.b   #"#",(a3)
+    sne     d0
+    rts
+
+.norml
+    ; ---------------------------------
     jsr     importModuleProgramFromData
+.m3uz
     move.l	d0,modamount(a5)
     DPRINT  "modamount=%ld"
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
@@ -49103,17 +49140,17 @@ getFileExtension4:
 *   a0 = path
 * Out:
 *   d0 = true if path has ".mid" or ".midi" extension
-hasMidiExtension:
-    bsr     getFileExtension4
-    cmp.l   #".mid",d0
-    beq     .yes
-    cmp.l   #"midi",d0
-    beq     .yes
-    moveq   #0,d0
-    rts
-.yes
-    moveq   #1,d0
-    rts
+;hasMidiExtension:
+;    bsr     getFileExtension4
+;    cmp.l   #".mid",d0
+;    beq     .yes
+;    cmp.l   #"midi",d0
+;    beq     .yes
+;    moveq   #0,d0
+;    rts
+;.yes
+;    moveq   #1,d0
+;    rts
 
 
 
@@ -56636,8 +56673,11 @@ showStreamerError:
     bne     .exit
     move.l  streamerError(a5),d0
 	tst.l	d0
-	beq.b	.exit
-    DPRINT  "showStreamerError"
+	beq	.exit
+ if DEBUG
+    move.l  streamerErrorLength(a5),d1
+    DPRINT  "showStreamerError addr=%lx len=%ld"
+ endif
     move.l  streamerErrorLength(a5),d7 
     beq     .exit
 	* Mangle a null terminated line changed error msg, horrible
@@ -56648,6 +56688,10 @@ showStreamerError:
 
 .f	moveq	#60,d2      * row length
 .e	move.b	(a0)+,(a1)+
+    cmp.b   #"%",-1(a1) * formatting character: will confuse reqtools
+    bne     .h
+    move.b  #"_",-1(a1)
+.h
     subq    #1,d6
     beq     .g
     subq    #1,d7
