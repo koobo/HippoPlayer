@@ -12364,7 +12364,17 @@ rloadprogDoIt
 	pushm 	d1-a6
 	lea		moduleListHeader(a5),a2
 	move.l	.loppu(pc),a4 
+
+    ; ---------------------------------
+    lea	filename2(a5),a0
+    jsr     getFileExtension4
+    cmp.l   #".m3u",d0
+    bne     .notM3u
+    bsr     importModuleProgramM3u
+    bra     .wasM3u
+.notM3u
 	bsr	importModuleProgramFromData
+.wasM3u
 	DPRINT 	"Imported %ld files"
 	popm	d1-a6
 
@@ -12473,6 +12483,34 @@ otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
 * UGH! Evil hackery:
 ;loadprog
 ;	bra.b	*-22		* bra.b -> bra.b .blob
+
+
+* To be called instad of "impotModuleProgramFromData"
+* if data is an m3u file
+importModuleProgramM3u:
+    DPRINT  "importModuleProgramM3u"
+    * Special: provide an empty line to prepend.
+    * This makes it run the filter
+    lea     .importFilter(pc),a0
+    clr     -(sp)
+    move.l  sp,d6   * prepend line addr
+    moveq   #0,d4   * prepend line length
+    bsr     importModuleProgramFromDataSkipHeader
+    addq    #2,sp
+    rts
+
+* In:
+*   a3 = name to check, ends with 10 or 0
+* Out:
+*   d0 = true if ok, false otherwise
+.importFilter
+    * Skip extended m3u lines
+    moveq   #0,d0
+    cmp.b   #"#",(a3)
+    sne     d0
+    rts
+
+
 
 * in:
 *   a0 = module program file name
@@ -29849,28 +29887,10 @@ loadmodule:
     ; ---------------------------------
     tst.b   (sp)+
     beq     .norml
-    * Special: provide an empty line to prepend.
-    * This makes it run the filter
-    lea     .importFilter(pc),a0
-    clr     -(sp)
-    move.l  sp,d6   * prepend line addr
-    moveq   #0,d4   * prepend line length
-    jsr     importModuleProgramFromDataSkipHeader
-    addq    #2,sp
+    jsr     importModuleProgramM3u
     bra     .m3uz
-* In:
-*   a3 = name to check, ends with 10 or 0
-* Out:
-*   d0 = true if ok, false otherwise
-.importFilter
-    * Skip extended m3u lines
-    moveq   #0,d0
-    cmp.b   #"#",(a3)
-    sne     d0
-    rts
-
-.norml
     ; ---------------------------------
+.norml
     jsr     importModuleProgramFromData
 .m3uz
     move.l	d0,modamount(a5)
