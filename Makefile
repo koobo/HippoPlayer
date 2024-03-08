@@ -67,6 +67,6 @@ STIL.txt:
 beta: HiP HiP-debug
 	lha a ~/Dropbox/hip-beta.lha HiP HiP-debug HiP-debug-ser HippoPlayer.group
 	cd playsid.library && lha a ~/Dropbox/hip-beta.lha playsid.library
-	cd ~/Prj/mdx2wav-koobo && lha a ~/Dropbox/hip-beta.lha mdx2wav.000 mdx2wav.020  mdx2wav.020fpu  mdx2wav.040  mdx2wav.060
-	cd ~/Prj/vgm2wav-koobo && lha a ~/Dropbox/hip-beta.lha vgm2wav.000 vgm2wav.020  vgm2wav.020fpu  vgm2wav.040  vgm2wav.060
+#	cd ~/Prj/mdx2wav-koobo && lha a ~/Dropbox/hip-beta.lha mdx2wav.000 mdx2wav.020  mdx2wav.020fpu  mdx2wav.040  mdx2wav.060
+#	cd ~/Prj/vgm2wav-koobo && lha a ~/Dropbox/hip-beta.lha vgm2wav.000 vgm2wav.020  vgm2wav.020fpu  vgm2wav.040  vgm2wav.060
 	scp ~/Dropbox/hip-beta.lha sitruuna.local:/srv/ftp/amiga/
