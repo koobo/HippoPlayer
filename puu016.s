@@ -33517,13 +33517,6 @@ toggleListModePopup:
     beq     engageFileBrowserMode
     subq    #1,d0
     beq     engageSearchResultsMode
-    subq    #1,d0
-    bne     .skip
-    * Shortcut to shared lists
-    move.b  #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
-    jsr     engageSearchResultsMode
-    jsr     refreshGadgetSearchSource
-    jsr     recentPlaylistsSearch
 .skip
 	rts
 
