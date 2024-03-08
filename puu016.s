@@ -54082,33 +54082,56 @@ horizontalLayout:
 	lea	row1Gadgets,a0
 	bsr.b	.do
 	lea	row2Gadgets,a0
-;	bsr.b	.do
-
+	;bsr.b	.do
+    
 
 .do
+    * Current x-position, left border
+    moveq   #8,d7
+    lsl.l   #8,d7
+
 .1	tst	(a0)
 	beq.b	.2
 	move.l	a0,a1
 	add	(a0),a1
 
+    * Total width available: window width - borders
 	moveq	#0,d1
 	move	winstruc+nw_Width,d1
 	; remove left and right borders
 	sub	#8+8,d1 
 	lsl.l	#8,d1
+    * Calculate a multiplier
+    * Original window width: 1<<8
+    *          Double width: 2<<8
+
 	; original width without borders
 	divu	#264-8-8,d1
-	move.l	d1,d2
+	move.w	d1,d2
 	
-	mulu	4(a0),d1
-	lsr.l	#8,d1
-	; add left border
-	addq	#8,d1
-	move	d1,gg_LeftEdge(a1)
+;    * Calculate scaled left edge
+;	mulu	4(a0),d1    * gg_LeftEdge
+;	lsr.l	#8,d1
+;	; add left border
+;	addq	#8,d1
+;	move	d1,gg_LeftEdge(a1)
+;
 
-	mulu	2(a0),d2
-	lsr.l	#8,d2
+    move.l  d7,d6
+    lsr.l   #8,d6
+    move    d6,gg_LeftEdge(a1)
+
+;    * Calculate scaled width
+	mulu	2(a0),d2    * gg_Width
+    add.l   d2,d7
+    add.l   #1<<8,d7
+
+    lsr.l	#8,d2
 	move	d2,gg_Width(a1)
+
+    ;move    d7,gg_LeftEdge(a1)
+    ;add     d2,d7   * Next position
+    ;addq    #2,d7   * Account for borders
 
 	bsr.b	.centerContent
 	addq	#6,a0
