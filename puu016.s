@@ -5066,7 +5066,8 @@ getscreeninfo
 	bsr.b	.hum
 	lea	gadgets2-gadgets(a0),a0
 	bsr.b	.hum
-	lea	gAD1-gadgets2(a0),a0
+    * NOTE: this moves gadgetResizeInfoWindow
+	lea	gAD1-gadgets2(a0),a0    
 	bsr.b	.hum
 	lea	sivu0-gAD1(a0),a0
 	bsr.b	.hum
@@ -5092,11 +5093,20 @@ getscreeninfo
 .opener	moveq	#-1,d0
 	rts
 
-
+* Nudge gadget edges in a0 by d0,d1
 .hum
+    * Resize gadgets are bottom relative, don't touch them
+
 	move.l	a0,a1
-.lop0	add	d0,gg_TopEdge(a1)
+.lop0	
+    cmp.l   #gadgetResizeInfoWindow,a1
+    beq     .e00
+    cmp.l   #gadgetResize,a1
+    beq     .e00
+
+    add	d0,gg_TopEdge(a1)
 	add	d1,gg_LeftEdge(a1)
+.e00
 	tst.l	(a1)
 	beq.b	.e0
 	move.l	(a1),a1
@@ -5649,21 +5659,10 @@ configResizeGadget
 	tst	boxsize(a5)
 	beq.b	enableResizeGadget\.small
 
-* Enables the low right bottom resize gadget, on kick2.0+ only,
-* where GTYP_SIZING is available.
+* Enables the low right bottom resize gadget
 enableResizeGadget
 	lea	gadgetResize,a1
 	move.l	windowbase(a5),a0
-	* Height is a bit larger than the window bottom border
-	moveq	#0,d0
-	move.b	wd_BorderBottom(a0),d0
-	addq	#3,d0
-	;move	d0,gg_Height(a1)
-
-	* Position at the bottom of the window
-;	subq	#2,d0
-	neg	d0
-	move	d0,gg_TopEdge(a1)
 
 	* Enable and unhide
 	and	#~GFLG_DISABLED,gg_Flags(a1)
@@ -21753,9 +21752,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#0,d0
 	rts
 
-
 .refreshInfoWindowResizeGadget
-	lea	gadgetResize,a0
+    DPRINT  "refreshInfoWindowResizeGadget"
+	lea	gadgetResizeInfoWindow,a0
 .refreshInfoWindowGadget
 	move.l	swindowbase(a5),a1
 	sub.l	a2,a2
