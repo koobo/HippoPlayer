@@ -37002,6 +37002,13 @@ p_sid:	jmp	.init(pc)
     lob     MeasureRESIDPerformance
     bsr     .sidIsStereo
     beq     .noSt2
+    bsr     .sidIsThree
+    beq     .no3sid
+    * Divide by three to match the 3x cpu load
+    divu    #3,d1
+    ext.l   d1
+    bra     .noSt2
+.no3sid
     * Halve the reference value in case stereo sid to match
     * the double CPU load.
     lsr.l   #1,d1
@@ -37119,6 +37126,9 @@ p_sid:	jmp	.init(pc)
     bsr     .sidIsStereo
     beq     .noSt
     move.b  #"2",.title0
+    bsr     .sidIsThree
+    beq     .noSt
+    move.b  #"3",.title0
 .noSt
 
  if DEBUG
@@ -37434,7 +37444,7 @@ p_sid:	jmp	.init(pc)
 .77
     rts
 
-.sidIsStereo
+.sidIsStereo:
     pushm   d0/a0
     move.l  moduleaddress(a5),a0
     cmp     #3,sidh_version(a0)
@@ -37446,6 +37456,17 @@ p_sid:	jmp	.init(pc)
 .no moveq   #0,d0
     bra.b   .x
 
+.sidIsThree:
+    pushm   d0/a0
+    move.l  moduleaddress(a5),a0
+    cmp     #4,sidh_version(a0)
+    blo.b   .no3
+     * SID3 base address should be non-zero
+    tst.b   $7b(a0)
+.x3  popm    d0/a0
+    rts
+.no3 moveq   #0,d0
+    bra.b   .x3
 
 * Detect SID version to use
 * Out:
