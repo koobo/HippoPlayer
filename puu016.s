@@ -37062,8 +37062,14 @@ p_sid:	jmp	.init(pc)
     printt "CHECK AHI MODE info"
 
     * Show additional "14-bit" or "AHI" with reSID.
+    * 3SID is 14-bit for SID1, 8-bit for SID2, 3
+    move.l  #"  8-",-1(a1)
+    move.l  #"bit"<<8,-1+4(a1)
+    bsr     .sidIsThree
+    bne     .was3
     move.l  #" 14-",-1(a1)
     move.l  #"bit"<<8,-1+4(a1)
+.was3
     move.l  #1,ps3m_sampleDataModulo(a5)
 ;    tst.b   ahi_use_nyt(a5)
     tst.b   ahi_use(a5)
