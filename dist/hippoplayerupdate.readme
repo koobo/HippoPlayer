@@ -64,6 +64,30 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
+# Changes from v2.60 (18.2.2024) to v2.61 (?.?.2024)
+
+## Fixes:
+
+- Window resize gadget fixes:
+  - Position fixed when window bottom border is large.
+  - Fixed info window gadget not working on kickstart 3.2.
+
+- If the initial view was the "Search View" and the
+  chosen seach mode "Recent Playlists", the contents
+  were not automatically refreshed on start up, fixed.
+
+## New stuff:
+
+- Support for ".m3u" playlist files. Hippo can load these
+  if they contain urls.
+
+- PSID improvements with the updated playsid.library v1.7:
+  - Support for 3SID files, these use three SIDs and output
+    9 channels. The 68060 at 50 MHz can play these if reSID
+    filters are turned off.
+  - reSID performance optimizations, about 8% faster on 68060 now.
+
+
 # Changes from v2.59 (29.11.2023) to v2.60 (18.2.2024) 
 
 ## Fixes:
