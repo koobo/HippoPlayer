@@ -37013,6 +37013,8 @@ p_sid:	jmp	.init(pc)
     * the double CPU load.
     lsr.l   #1,d1
 .noSt2
+    DPRINT  "measured=%ld ref=%ld"
+
  if DEBUG
     pushm   d0-d2
     move.l  d1,d2
