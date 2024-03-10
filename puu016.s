@@ -37128,7 +37128,7 @@ p_sid:	jmp	.init(pc)
     DPRINT  "SID header version=%ld"
     cmp     #2,d2
     blo     .v1
-    ; Header v2
+    ; Header v2 -----------------------
     move    sidh_flags(a0),d0
     DPRINT  "Flags=%lx"
     move.l  d0,d1
@@ -37137,7 +37137,7 @@ p_sid:	jmp	.init(pc)
     DPRINT  "SID version=%ld"
     cmp     #3,d2
     blo     .v2
-    ; Header v3
+    ; Header v3 -----------------------
     move.l  d1,d0
     lsr     #6,d0
     and     #%11,d0
@@ -37147,6 +37147,19 @@ p_sid:	jmp	.init(pc)
     lsl     #4,d0
     add.l   #$d000,d0
     DPRINT  "2nd SID address=%lx"
+    cmp     #4,d2
+    blo     .v3
+    ; Header v4 -----------------------
+    move.l  d1,d0
+    lsr     #8,d0
+    and     #%11,d0
+    DPRINT  "3rd SID version=%ld"
+    moveq   #0,d0
+    move.b  $7b(a0),d0
+    lsl     #4,d0
+    add.l   #$d000,d0
+    DPRINT  "3rd SID address=%lx"
+.v3
 .v2
 .v1    
  endif
