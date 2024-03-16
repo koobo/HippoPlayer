@@ -12632,6 +12632,7 @@ importModuleProgramFromData:
 	moveq	#1,d3	* remote
 .local
     
+    * Calculate length
 	move.l	a3,a0
 	moveq	#10,d1
 .r23	
@@ -12643,10 +12644,16 @@ importModuleProgramFromData:
 	move.l	a0,d0
 	sub.l	a3,d0	* pituus
 
-    * Too short? Skip
+    * Too short? Skip to ignore badly formed paths or urls.
     cmp.l   #5,d0
     bhi     .len1
-.lenSkip
+    
+    * Ignore length check for dividers
+    push    d0
+    bsr     isDividerInA3
+    popm    d0  * keep flags
+    bne     .len1
+
     add.l   d0,a3
     bra     .next
 .len1
@@ -12665,40 +12672,17 @@ importModuleProgramFromData:
 	* Copy filename 
 	lea	l_filename(a2),a0
     ; ---------------------------------
-    * UTF8 encoding for divider magic: $c3b7
-    cmp.b   #$c3,(a3)
-    bne     .div0
-    cmp.b   #$b7,1(a3)
-    bne     .div0
-	addq	#2,a3
+    bsr     isDividerInA3
+    beq     .notDivider
+    * Skip over divider to not copy it
+    add     d0,a3
 	st	    l_divider(a2)
-    bra     .foundDiv
-.div0
-    * Amiga encoding:
-	cmp.b	#DIVIDER_MAGIC,(a3)
-	bne.b	.notDiv2
-	addq	#1,a3
-	st	l_divider(a2)
-    bra     .foundDiv
-.notDiv2
-
-    cmp.b   #$c2,(a3)
-    bne     .div1
-    cmp.b   #$a2,1(a3)
-    bne     .div1
-	addq	#2,a3
-    bra     .altDiv
-.div1
-    * Amiga encoding:
-    cmp.b   #DIVIDER_MAGIC_ALT,(a3)
-    bne     .notDivAlt
-	addq	#1,a3
-.altDiv
+    tst.b   d1
+    beq     .normalDivider
     * Stealthy divider
 	move.b  #$f0,l_divider(a2)
-.notDivAlt
-
-.foundDiv
+.normalDivider
+.notDivider
 
     ; ---------------------------------
 	* See if additional header should
@@ -12817,6 +12801,49 @@ unknown_module_program_error  dc.b	"Not a module program!",0
 xpk_module_program_error	 dc.b	"Could not load XPK compressed module program!",0
  even
 
+* In:
+*  a3 = string
+* Out:
+*  d0 = 0 if not divider, otherwise divider length, 1 or 2 (UTF8)
+*  d1 = 0 normal divider, 1 strealth divider
+isDividerInA3:
+    * Amiga encoding:
+	cmp.b	#DIVIDER_MAGIC,(a3)
+	beq 	.1
+    * Amiga encoding:
+    cmp.b   #DIVIDER_MAGIC_ALT,(a3)
+	beq 	.11
+
+* UTF8 encoding for divider magic: $c3b7
+    cmp.b   #$c3,(a3)
+    bne     .div0
+    cmp.b   #$b7,1(a3)
+    beq     .2
+.div0
+    cmp.b   #$c2,(a3)
+    bne     .div1
+    cmp.b   #$a2,1(a3)
+    beq     .22
+.div1
+    moveq   #0,d0
+    rts
+
+.1
+    moveq   #0,d1
+    moveq   #1,d0
+    rts
+.11
+    moveq   #1,d1
+    moveq   #1,d0
+    rts
+.2
+    moveq   #0,d1
+    moveq   #2,d0
+    rts
+.22
+    moveq   #1,d1
+    moveq   #2,d0
+    rts
 
 *** Etsii tiedoston nimestä (polku/nimi) pelkän tiedoston nimen alun
 *** a0 <= loppu
