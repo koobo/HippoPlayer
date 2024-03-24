@@ -105,7 +105,9 @@ eins2t	dc.b 1,0,1,0
 	dc.l 0,eins2tx,0
 eins2tx	dc.b "Doubleclick.......",0
 	even
-luuta	dc.l bUu3
+luuta	
+;    dc.l bUu3
+    dc.l bUu1
 	dc.w 406,65,28,12,3,1,1
 	dc.l 0,0,luutat,0,0
 	dc.w 0
@@ -115,16 +117,18 @@ luutat	dc.b 1,0,1,0
 	dc.l 0,luutatx,0
 luutatx	dc.b "Continue on error",0
 	even
-bUu3	dc.l bUu1
-	dc.w 406,79,28,12,3,1,1
-	dc.l 0,0,bUu3t,0,0
-	dc.w 0
-	dc.l 0
-bUu3t	dc.b 1,0,1,0
-	dc.w -146,2
-	dc.l 0,bUu3tx,0
-bUu3tx	dc.b "Early load........",0
-	even
+
+;bUu3	dc.l bUu1
+;	dc.w 406,79,28,12,3,1,1
+;	dc.l 0,0,bUu3t,0,0
+;	dc.w 0
+;	dc.l 0
+;bUu3t	dc.b 1,0,1,0
+;	dc.w -146,2
+;	dc.l 0,bUu3tx,0
+;bUu3tx	dc.b "Early load........",0
+;	even
+
 bUu1	dc.l bUu22
 	dc.w 406,93,28,12,3,1,1
 	dc.l 0,0,bUu1t,0,0

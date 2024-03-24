@@ -15084,11 +15084,6 @@ prefsgads
 	sub.l	a2,a2
 	lore	Intui,AddGList
 
-	* Remove "Early load" gadget
-	move.l	windowbase2(a5),a0
-	lea	bUu3,a1
-	lob	RemoveGadget
-
 	lea	gadgets2,a0
 	move.l	windowbase2(a5),a1
 	sub.l	a2,a2
@@ -15343,7 +15338,6 @@ pupdate:				* Ikkuna päivitys
 	bsr	phot			* hotkey
 	bsr	perr			* cont on err
 	bsr	pdiv			* divider dir
-	bsr	pearly			* early load
 	bsr	purealarm		* alarm slider
 	bsr	pautosort		* auto sort
 	bsr	pfavorites		* favorites
@@ -15605,7 +15599,6 @@ gadgetsup2
 	dr	rhotkey		* hotkey
 	dr	rdclick		* doubleclick
 	dr	rerr		* continue on error
-	dr	rearly		* early load
 	dr	rdiv		* divider / dir
 	dr	rautosort	* autosort
 	dr	rfavorites	* favorites
@@ -17552,8 +17545,6 @@ ls299	dc.b	3,3
 
 **** Early load
 * DISABLED!
-rearly
-pearly	rts
 ;rearly_req
 ;	lea	ls400(pc),a0
 ;	bsr	listselector
