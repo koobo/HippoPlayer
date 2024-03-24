@@ -44285,7 +44285,7 @@ p_delicustom
 	jmp id_delicustom(pc)
 	jmp	deliAuthor(pc)
 	dc.w pt_delicustom
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song!pf_end
 	dc.b	"DeliTracker Custom",0
  even
 
