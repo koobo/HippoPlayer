@@ -957,7 +957,8 @@ infosize_new	rs	1		* module infon koko
 infosize	rs	1
 infosizepot_new	rs	1
 
-prefixcut	rs.b	1
+prefixcut	rs.b	1   * prefix cut setting recycled to scope priority
+scopePriority = prefixcut 
 earlyload	rs.b	1
 divdir		rs.b	1
 cybercalibration rs.b	1
@@ -17515,21 +17516,22 @@ pdiv
 
 
 **** Prefix cut
+* Recycled to: Scope priority
 rprefx_req
 	lea	ls299(pc),a0
 	bsr	listselector
 	bmi.b	.x
 	move.b	d0,prefix_new(a5)
-	cmp.b	#7,d0
+	cmp.b	#3,d0
 	blo.b	pprefx
-	move.b	#6,prefix_new(a5)
+	move.b	#2,prefix_new(a5)
 	bra.b	pprefx
 .x	rts
 
 rprefx
 	move.b	prefix_new(a5),d0
 	addq.b	#1,d0
-	cmp.b	#6,d0
+	cmp.b	#2,d0
 	bls.b	.r
 	moveq	#0,d0
 .r	move.b	d0,prefix_new(a5)
@@ -17537,19 +17539,15 @@ rprefx
 pprefx
 	moveq	#0,d0
 	move.b	prefix_new(a5),d0
-	add	d0,d0
+	lsl  #2,d0
 	lea	ls299+2(pc,d0),a0
 	lea	bUu2,a1
 	bra	prunt
 
-ls299	dc.b	1,7
-	dc.b	"0",0
-	dc.b	"1",0
-	dc.b	"2",0
-	dc.b	"3",0
-	dc.b	"4",0
-	dc.b	"5",0
-	dc.b	"6",0
+ls299	dc.b	3,3
+	dc.b	"-30",0
+	dc.b	"-1 ",0
+	dc.b	" 0 ",0
  even
 
 **** Early load
@@ -18978,7 +18976,7 @@ doPrintNames:
 	move.l	a3,a4
 
 	move.l	l_nameaddr(a3),a0
-	bsr	cut_prefix
+	;;bsr	cut_prefix
 	move.l	a0,a2		* name is in a2
 
 	moveq	#0,d7		* clear divider flag
@@ -19154,7 +19152,7 @@ doPrintNames:
 
 
 ***** Katkaisee prefixin nimestä a0:ssa
-
+ REM
 cut_prefix:
 ;	isListDivider (a0)		* onko divideri?
 ;	beq.b	.xx
@@ -19174,7 +19172,7 @@ cut_prefix:
 	
 .x	popm	d0/a1
 .xx	rts
-
+ EREM
 
 * in:
 *   a0 = test pointer with two chars to convert
@@ -25849,9 +25847,22 @@ scopeEntry:
 	clr.l scopeRenderTime(a5)
  endif
 
+    * Set priority
+    * 0 = -30
+    * 1 =  -1
+    * 2 =   0
+    moveq   #-30,d0
+    move.b  scopePriority(a5),d1
+    beq     .pr1
+    moveq   #-1,d0
+    subq.b  #1,d1
+    beq     .pr1
+    moveq   #0,d0
+.pr1
+
 	; Ready to run	
 	move.l	s_quad_task(a4),a1
-	moveq	#-30,d0				* Prioriteetti 0:sta -30:een
+	;;moveq	#-30,d0				* Prioriteetti 0:sta -30:een
 	lore	Exec,SetTaskPri
 
 *********************************************************************
@@ -58644,9 +58655,9 @@ prefsQuadraScope
        even
 .t2    
        dc.b 1,0,1,0
-       dc.w -146+70,2-14
+       dc.w -146+70+5*8,2-14-14
        dc.l 0,.tx2,0
-.tx2	dc.b	 "Scopes:",0
+.tx2	dc.b	 "-- Scopes --",0
  even
 
 prefsQuadraScopeBars
