@@ -25842,13 +25842,14 @@ scopeEntry:
     * 0 = -30
     * 1 =  -1
     * 2 =   0
-    moveq   #-30,d0
-    move.b  scopePriority(a5),d1
-    beq     .pr1
     moveq   #-1,d0
+    move.b  scopePriority(a5),d1
     subq.b  #1,d1
     beq     .pr1
     moveq   #0,d0
+    subq.b  #1,d1
+    beq     .pr1
+    moveq   #-30,d0
 .pr1
 
 	; Ready to run	
