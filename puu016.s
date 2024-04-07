@@ -17515,16 +17515,16 @@ rprefx_req
 	bsr	listselector
 	bmi.b	.x
 	move.b	d0,prefix_new(a5)
-	cmp.b	#3,d0
+	cmp.b	#4,d0
 	blo.b	pprefx
-	move.b	#2,prefix_new(a5)
+	move.b	#3,prefix_new(a5)
 	bra.b	pprefx
 .x	rts
 
 rprefx
 	move.b	prefix_new(a5),d0
 	addq.b	#1,d0
-	cmp.b	#2,d0
+	cmp.b	#3,d0
 	bls.b	.r
 	moveq	#0,d0
 .r	move.b	d0,prefix_new(a5)
@@ -17537,10 +17537,11 @@ pprefx
 	lea	bUu2,a1
 	bra	prunt
 
-ls299	dc.b	3,3
+ls299	dc.b	3,4
 	dc.b	"-30",0
 	dc.b	"-1 ",0
 	dc.b	" 0 ",0
+	dc.b	"+1 ",0
  even
 
 **** Early load
@@ -25842,14 +25843,18 @@ scopeEntry:
     * 0 = -30
     * 1 =  -1
     * 2 =   0
-    moveq   #-1,d0
+    * 3 =  +1
     move.b  scopePriority(a5),d1
-    subq.b  #1,d1
-    beq     .pr1
+    moveq   #-1,d0
+    subq.b  #1,d1   * 1
+    beq     .pr1   
     moveq   #0,d0
-    subq.b  #1,d1
+    subq.b  #1,d1   * 2
     beq     .pr1
-    moveq   #-30,d0
+    moveq   #1,d0
+    subq.b  #1,d1   * 3
+    beq     .pr1
+    moveq   #-30,d0 * 0
 .pr1
 
 	; Ready to run	
