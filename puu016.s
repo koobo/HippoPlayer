@@ -27804,6 +27804,10 @@ piup2	macro
 
 multiscope:
 
+
+    jsr     playSidInRESIDMode
+    bne    .resid3
+.notSid3
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
 
@@ -27817,17 +27821,54 @@ multiscope:
 	move.l	(a1),a1
 	move.l	s_draw1(a4),a0
 	lea	39(a0),a0
+    bra     .h
+
+    ; ---------------------------------
+.resid3
+
+    * Start at pixel 39*8 = 312
+    move.l  residBufPtr3,d0
+    beq     .notSid3
+    move.l  d0,a1
+
+	move.l	s_draw1(a4),a0
+	lea 	3*96/8+2(a0),a0
+	moveq	#96/8-1,d7
+    bsr     .h2
+
+    * sid1
+	move.l	ps3m_buff1(a5),a1
+	move.l	(a1),a1
+
+    * Start at pixel 19*8 = 152
+	move.l	s_draw1(a4),a0
+	lea	96/8(a0),a0
+    * Draw 96 pixels
+	moveq	#96/8-1,d7
+	bsr.b	.h2
+
+    * sid2
+    * Start at pixel 39*8 = 312
+	move.l	ps3m_buff2(a5),a1
+	move.l	(a1),a1
+	move.l	s_draw1(a4),a0
+	lea	2*96/8+1(a0),a0
+	moveq	#96/8-1,d7
+    bra    .h2
+
+    ; ---------------------------------
+
 
     * Draw segment from right to left
 .h
-
+    * Draw 152 pixels
+	moveq	#160/8-1-1,d7
+.h2
 	move.l	ps3m_playpos(a5),a2
 	move.l	(a2),d5
 	lsr.l	#8,d5
 	lea	s_multab(a4),a2
 		
-    * Draw 152 pixels
-	moveq	#160/8-1-1,d7
     * Pixel mask: rightmost pixels
 	moveq	#1,d0
     * Sample normalize constant
@@ -37321,9 +37362,10 @@ p_sid:	jmp	.init(pc)
     lob     GetRESIDAudioBuffer
     * a0 = buffer ptr 1
     * a1 = buffer ptr 2 (could be same as 1)
+    * a2 = buffer ptr 3 (could be null)
     * d0 = buffer length, bytes or words
     * d1 = period value
-    movem.l a0/a1,residBufPtr1
+    movem.l a0/a1/a2,residBufPtr1
  if DEBUG
     move.l  a0,d1
     DPRINT  "length=%ld buffer=%lx"
@@ -37924,6 +37966,7 @@ playSidInRESIDMode:
 residBufPos     dc.l    0
 residBufPtr1    dc.l    0
 residBufPtr2    dc.l    0
+residBufPtr3    dc.l    0
 residPosMask    dc.l    $7f 
 
 
@@ -53864,7 +53907,10 @@ spectrumGetPS3MSampleData
 	dbf	d7,.loop
 	rts
 
-.resid  
+.resid * 1 or 2 SIDs
+    move.l  residBufPtr3,d4
+    bne     .resid3
+
     * buffer size is in d1, it can be 277
     * or down to 46.
     move.l  ps3m_sampleDataModulo(a5),d4
@@ -53883,6 +53929,33 @@ spectrumGetPS3MSampleData
     moveq   #0,d0
 .2
 	dbf	d7,.rloop
+    rts
+
+.resid3 * 3 SIDs
+    move.l  d4,a6
+
+    * buffer size is in d1, it can be 277
+    * or down to 46.
+    move.l  ps3m_sampleDataModulo(a5),d4
+.rloop2
+	move.b	(a0,d0.l),d2    * sid1
+	move.b	(a1,d0.l),d3    * sid2
+	ext	d2
+	ext	d3
+	add	d3,d2
+	move.b	(a6,d0.l),d3    * sid3
+    ext     d3
+    add     d3,d2
+
+	asl	    #5,d2   * scaling!
+    move	d2,(a2)+
+	add.l	d4,d0
+    * See if data ran out:
+    cmp.l   d1,d0
+    blo.b   .22
+    moveq   #0,d0
+.22
+	dbf	d7,.rloop2
     rts
 
 spectrumGetSampleData
