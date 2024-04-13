@@ -26990,7 +26990,8 @@ drawScope:
     * Too many AHI voices, do not draw 
     rts
     ; ---------------------------------
-.notMulti
+.notMulti  
+    * XMAPlay and reSID provide compatible scope input
 	cmp	    #pt_xmaplay,playertype(a5)
 	beq	.renderPS3M
     jsr     playSidInRESIDMode
@@ -27806,14 +27807,18 @@ multiscope:
 	move.l	ps3m_buff1(a5),a1
 	move.l	(a1),a1
 
+    * Start at pixel 19*8 = 152
 	move.l	s_draw1(a4),a0
 	lea	19(a0),a0
 	bsr.b	.h
 
+    * Start at pixel 39*8 = 312
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
 	move.l	s_draw1(a4),a0
 	lea	39(a0),a0
+
+    * Draw segment from right to left
 .h
 
 	move.l	ps3m_playpos(a5),a2
@@ -27821,9 +27826,11 @@ multiscope:
 	lsr.l	#8,d5
 	lea	s_multab(a4),a2
 		
-    * 160 pixels minus one?
+    * Draw 152 pixels
 	moveq	#160/8-1-1,d7
+    * Pixel mask: rightmost pixels
 	moveq	#1,d0
+    * Sample normalize constant
 	move	#$80,d6
     * This returns the buffer mask or size limit in d4
 	bsr	getps3mb
