@@ -31603,9 +31603,11 @@ loadfile:
 	bra	.exit
 
 
-.alloc	
+.alloc:
 	move.l	lod_length(a5),d0
 	move.l	lod_memtype(a5),d1
+    or.l    #MEMF_CLEAR,d1
+    DPRINT  "allocate=%lx"
 	move.l	(a5),a6
 	lob	AllocMem
 	tst.l	d0
