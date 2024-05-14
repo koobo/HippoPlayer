@@ -37216,12 +37216,14 @@ p_sid:	jmp	.init(pc)
     bne     .noheader
 
     * Change title if stereo sid
+    lea     .title0(pc),a1
     bsr     .sidIsStereo
     beq     .noSt
-    move.b  #"2",.title0
+    move.b  #"2",(a1)
+    * 3SID
     bsr     .sidIsThree
     beq     .noSt
-    move.b  #"3",.title0
+    move.b  #"3",(a1)
 .noSt
 
  if DEBUG
