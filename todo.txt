@@ -1,3 +1,19 @@
+
+TODO:
+- for modland urls display the 2nd subdir in the list:
+    * This is a modland url
+    * http://ftp.modland.com/pub/modules/Pretracker/Virgill/coop-Tecon/down the drain.prt
+
+TODO:
+- change window right border to 10 -> right side decorative bevel bugs
+
+TODO:
+- layout: inconsistent button spacing when window is scaled wider
+
+TODO:
+- layout: bg pattern missing one pixel column on the right side
+
+
 TODO:
 - sample names shown with xmaplay060
 
@@ -98,6 +114,26 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
+FIXED: TODO:
+- 3SID scope display
+
+FIXED: TODO:
+- empty dividers ignored on import
+
+FIXED: TODO:
+goto "Shared lists"
+open Prefs and save
+close HiP
+restart HiP
+--> we start with the "Shared lists" already selected, but the list is not loaded 
+This stopped working with 2.59, with 2.58 it's loading the list on startup.
+
+FIXED: TODO:
+- info window resize not working on 3.2
+
+FIXED: TODO:
+- resize gadget misplaced if bottom border is set larger
 
 FIXED: TODO:
 - soundfx: check this identifier, crash?

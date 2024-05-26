@@ -48,7 +48,7 @@ Quick overview of major changes since v2.45
 - Support for many new music formats, stereo SID support
 - Improved scopes: support for more music formats, multiple scopes,
   spectrum scope, patternscope with two sizes and up to 18 channels 
-  ("mini4" font needed for 8+ channel display)
+  ("mini4" font needed for 8+ channel display).
 - Support for MP3 streaming, radio stations
 - "Add" button in file browser or search view: copy items to main list
 - Support for playlists of up to 131071 items.
@@ -76,16 +76,35 @@ New keyboard shortcuts:
   chosen seach mode "Recent Playlists", the contents
   were not automatically refreshed on start up, fixed.
 
+- Song end detection added for DeliCustom format. Some
+  modules may support this.
+
+- Fix empty list dividers not working.
+
 ## New stuff:
 
-- Support for ".m3u" playlist files. Hippo can load these
+- Limited support for ".m3u" playlist files. Hippo can load these
   if they contain urls.
 
 - PSID improvements with the updated playsid.library v1.7:
-  - Support for 3SID files, these use three SIDs and output
-    9 channels. The 68060 at 50 MHz can play these if reSID
-    filters are turned off.
-  - reSID performance optimizations, about 8% faster on 68060 now.
+  - Support for 3SID files in reSID mode, these output 9
+    simultaneous SID voices. With filters enabled the 68060
+    will struggle.
+  - reSID performance optimizations, about 15% faster on 68060 now
+    compared to previous version.
+
+- New Prefs option "Scope priority" can be used to adjust the 
+  scope task priority from the default -30. Setting it higher
+  allows the scopes to update smoothly with eg. MP3 playback 
+  without pausing during decoding. 
+
+- The P61 format support was re-enabled, it is now as it was in v2.45. 
+  I disabled it sometime back thinking nobody uses it, but there is at 
+  least one who does :)
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 
 # Changes from v2.59 (29.11.2023) to v2.60 (18.2.2024) 
