@@ -5,7 +5,7 @@ FLAGS=
 TARGET=
 
 # Normal and debug build of the main app
-all: HiP HiP-debug HiP-debug-ser group
+all: HiP HiP-debug HiP-debug-ser group playsid
 
 # Same as above with debug build of the group as well.
 # This enables logging with PS3M and sampleplayer.
@@ -56,7 +56,7 @@ cleaner: clean
 clean:	
 	rm -f HiP HiP-debug HiP-debug-ser
 
-dist: HiP HiP-debug group
+dist: HiP HiP-debug group playsid
 	cd dist && make
 
 stil: STIL.txt
@@ -70,3 +70,6 @@ beta: HiP HiP-debug
 #	cd ~/Prj/mdx2wav-koobo && lha a ~/Dropbox/hip-beta.lha mdx2wav.000 mdx2wav.020  mdx2wav.020fpu  mdx2wav.040  mdx2wav.060
 #	cd ~/Prj/vgm2wav-koobo && lha a ~/Dropbox/hip-beta.lha vgm2wav.000 vgm2wav.020  vgm2wav.020fpu  vgm2wav.040  vgm2wav.060
 	scp ~/Dropbox/hip-beta.lha sitruuna.local:/srv/ftp/amiga/
+
+playsid: 
+	dmake -C playsid.library
