@@ -37485,7 +37485,7 @@ p_sid:	jmp	.init(pc)
     * Call this on kick 1.3 too even if not in "resid mode", if new enough lib
     cmp     #1,LIB_VERSION(a0)
     bne     .11
-    cmp     #6,LIB_REVISION(a0)
+    cmp     #7,LIB_REVISION(a0)
     bhs     .22
     bsr     isPlaysidReSID
     beq.b   .11
@@ -37911,7 +37911,7 @@ isPlaysidReSID:
     move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
-	cmp     #6,LIB_REVISION(a0)
+	cmp     #7,LIB_REVISION(a0)
 	blo.b   .noRESID
     * Require 020 for reSID/SIDBlaster stuff
     move.l  (a5),a0
