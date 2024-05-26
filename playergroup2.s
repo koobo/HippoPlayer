@@ -3,7 +3,7 @@
 
 IM=0	; Select FImp compressed files
 SHR=1	; Select Shrinkler compressed files
-P61A=0
+P61A=1
 
 	incdir	include/
 	include	playerIds.i

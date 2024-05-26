@@ -77,7 +77,7 @@ ANNOY	= 0 * 1: Unregistered version tekstejä ympäriinsä
 DELI_TEST_MODE 		= 	0
 FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
-FEATURE_P61A        =   0
+FEATURE_P61A        =   1
 FEATURE_PASTE       =   0
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
@@ -282,8 +282,10 @@ check	macro
 	include	Guru.i
 	include	ps3m.i
 	include	patternInfo.i
-;use = 0
-	;include	player61.i
+ ifne FEATURE_P61A
+use = 0
+	include	player61.i
+ endif
 
 	include	playerIds.i
 	include	kpl_offsets.S
@@ -31644,7 +31646,7 @@ loadfile:
 
 	* Test for known exe formats
 
-	bsr	id_futureplayer
+	jsr	id_futureplayer
 	bne.b	.notFuturePlayer
 	moveq	#pt_futureplayer,d7
 	bra.b	.exeOk
@@ -45103,7 +45105,7 @@ p_sidmon2
 .id_sidmon2
 	lea		.idStart(pc),a1
 	moveq	#.idEnd-.idStart,d0
-	bra 	search
+	jmp 	search
 
 .idStart	dc.b	'SIDMON II - THE MIDI VERSION'
 .idEnd 
