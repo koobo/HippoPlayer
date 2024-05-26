@@ -54,7 +54,7 @@ it will use half or more of the available CPU power on an A1200 with a
 50MHz 68060. An FPU is not required.
 
 In reSID mode the library is able to play stereo SIDs (2SID),
-outputting six SID channels.
+outputting six SID channels, and 3SIDs with 9 SID channels.
 
 Sometimes the sound output may be noisy. This is sampling noise, 
 result of the reSID "fast sampling" method. A few other sampling
@@ -68,7 +68,9 @@ The filters can be enabled or disabled. The main filter is responsible
 for the distinctive SID sound. The external filter does not have
 much of an audible effect, it may reduce the sampling noise somewhat.
 
-The sound is output using the Paula 14-bit mode.
+The sound is output using the Paula 14-bit mode, except in 3SID
+mode where SID 2 and SID 3 are output in 8-bit.
+AHI output is available, too.
 
 'setenv PlaySIDDebug 1' will enable reSID raster bar CPU measurement visual, 0
 will disable it.
@@ -123,4 +125,8 @@ Changelog
             - Library compatible with kick 1.3.
             - Allow "Oversample" modes to work with AHI.
             - Enhanced environment variables for more control.
-         
+- 2024-05   - Support for 3SID files with 9 SID channels, 
+  v1.7        in reSID mode. In Paula mode SID1 uses 14-bit out, 
+              SIDs 2 and 3 use 8-bit outputs.        
+            - Some reSID speed optimizations, about 18% faster on
+              68060 than before. 
