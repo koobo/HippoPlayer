@@ -69,8 +69,8 @@ New keyboard shortcuts:
 ## Fixes:
 
 - Window resize gadget fixes:
-  - Position fixed when window bottom border is large.
-  - Fixed info window gadget not working on kickstart 3.2.
+  - Position corrected when window bottom border is large.
+  - Fixed info window resize gadget not working on kickstart 3.2.
 
 - If the initial view was the "Search View" and the
   chosen seach mode "Recent Playlists", the contents
@@ -91,7 +91,7 @@ New keyboard shortcuts:
     simultaneous SID voices. With filters enabled the 68060
     will struggle.
   - reSID performance optimizations, about 15% faster on 68060 now
-    compared to previous version.
+    compared to the previous version.
 
 - New Prefs option "Scope priority" can be used to adjust the 
   scope task priority from the default -30. Setting it higher
@@ -99,8 +99,6 @@ New keyboard shortcuts:
   without pausing during decoding. 
 
 - The P61 format support was re-enabled, it is now as it was in v2.45. 
-  I disabled it sometime back thinking nobody uses it, but there is at 
-  least one who does :)
 
 
 ------------------------------------------------------------------------------
