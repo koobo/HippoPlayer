@@ -1,6 +1,7 @@
 # Experimental makefile
 INCLUDE=-I$(HOME)/A/Asm/Include -I. -I./Include 
-ASM ?= /opt/amiga/bin/vasmm68k_mot 
+VBCC ?= /opt/amiga
+ASM ?= $(VBCC)/bin/vasmm68k_mot
 FLAGS=
 TARGET=
 
@@ -72,4 +73,4 @@ beta: HiP HiP-debug
 	scp ~/Dropbox/hip-beta.lha sitruuna.local:/srv/ftp/amiga/
 
 playsid: 
-	dmake -C playsid.library
+	make -C playsid.library
