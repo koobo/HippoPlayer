@@ -273,6 +273,9 @@ check	macro
 	include	devices/timer.i
 	include	intuition/sghooks.i
 
+    include libraries/expansion_lib.i
+    include libraries/configvars.i
+
  ifne FEATURE_PASTE
     include libraries/iffparse_lib.i
     include libraries/iffparse.i
@@ -573,6 +576,7 @@ _XFDBase	rs.l	1
 _FFPBase	rs.l 1
 _MTBase     rs.l 1
 _LayersBase rs.l 1
+_ExpansionBase rs.l 1
  ifne DEBUG
 output		rs.l	1
  endc
@@ -1553,6 +1557,14 @@ recentPlaylistsLastSearchFailed  rs.b    1
 * STIL
 stilIndexPtr    rs.l    1
 
+* VGM TNT
+tntBase			rs.l	1
+vgmDataStart    rs.l    1
+vgmDataCurrent	rs.l	1
+vgmDataEnd      rs.l    1
+vgmSampleCount  rs.l    1
+vgmTime         rs.l    1 * VGM time in 44100 Hz ticks
+vgmPlayTime     rs.l    1 * Host playback time in 44100 Hz ticks
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -2373,6 +2385,7 @@ fileprocname	dc.b	"HiP-Filereq",0
 prefsprocname	dc.b	"HiP-Prefs",0
 infoprocname	dc.b	"HiP-Info",0
 layersName	dc.b	"layers.library",0
+expansionName dc.b	"expansion.library",0
 cianame	dc.b	"ciaa.resource",0
  
 CHECKSTART
@@ -2613,6 +2626,10 @@ main:
 	lea 	layersName(pc),a1		
 	lob	OldOpenLibrary
 	move.l	d0,_LayersBase(a5)
+
+	lea 	expansionName(pc),a1		
+	lob	OldOpenLibrary
+	move.l	d0,_ExpansionBase(a5)
 
 	pushpea	nilname(pc),d1
 	move.l	#MODE_OLDFILE,d2
@@ -3757,6 +3774,8 @@ exit
 	move.l	_MTBase(a5),d0
 	bsr	closel
 	move.l	_LayersBase(a5),d0
+	bsr	closel
+	move.l	_ExpansionBase(a5),d0
 	bsr	closel
 
 	bsr	tulostavirhe
@@ -20152,6 +20171,8 @@ lootaan_aika
 ******
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.koa
+	cmp  #pt_vgm_tnt,playertype(a5)
+	beq.b	.koa
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.oai
 .koa	cmp	#3,lootamoodi(a5)
@@ -32534,6 +32555,7 @@ idtest:
 
 * Run through format list and execute id function for each format
 * in:
+*   a4 = module
 *   a3 = array of formats
 * out:
 *   d0 = 0 if some format accepted the module, ~0 otherwise
@@ -35969,6 +35991,7 @@ internalFormats:
 	dr.l 	p_mon
 	dr.l 	p_beathoven 
 	dr.l	p_hippel	* very slow id 
+	dr.l	p_vgm_tnt
 	dc.l	0
 
 * Formats
@@ -50051,6 +50074,412 @@ id_vgm
     rts
 .no
     moveq   #-1,d0
+    rts
+
+******************************************************************************
+* VGM Tnt
+******************************************************************************
+
+p_vgm_tnt:
+  jmp      .vgmTntInit(pc)
+  jmp	   .vgmTntCia(pc)
+  p_NOP    * VB
+  jmp      .vgmTntEnd(pc)
+  jmp      .vgmTntStop(pc)
+  p_NOP    .vgmTntContinue(pc)
+  p_NOP    * Volume
+  p_NOP    * Song
+  p_NOP    * Forward
+  p_NOP    * Backward
+  p_NOP    * AHI update
+  jmp      id_vgmTnt(pc)
+  p_NOP    * Author
+  dc       pt_vgm_tnt
+  dc       pf_stop!pf_cont!pf_end
+  dc.b     "VGM Tnt "
+.chip:
+  dc.b     "             ",0
+  even
+
+.vgmTntInit:
+    move   #28419/4,d0     * 100Hz
+    jsr    init_ciaint_withTempo
+    beq.b  .ok2
+    jsr    vapauta_kanavat
+    moveq  #ier_nociaints,d0
+    rts
+.ok2
+    clr.l    vgmTime(a5)
+    clr.l    vgmPlayTime(a5)
+    move.l   vgmDataStart(a5),vgmDataCurrent(a5)
+
+    bsr      vgmSetTypeName
+
+    move.l   vgmSampleCount(a5),d0
+    divu     #44100,d0
+    * d0 = seconds
+    ext.l    d0
+    divu     #60,d0
+    move     d0,kokonaisaika(a5)    * minutes
+    swap     d0
+    move     d0,kokonaisaika+2(a5) * seconds
+
+    moveq    #0,d0        * ok
+    rts
+
+
+.vgmTntEnd:
+.vgmTntStop:
+    move.l  moduleaddress(a5),a0
+    tst.l   $74(a0)  * AY8910 clock
+    bne     ay8910silence
+    rts
+
+.vgmTntContinue:
+    move.l  moduleaddress(a5),a0
+    tst.l   $74(a0)  * AY8910 clock
+    bne     ay8910restore
+    rts
+    
+.vgmTntCia:
+    ;moveq   #0,d6  * host time
+    ;moveq   #0,d7  * vgm time
+    move.l  vgmPlayTime(a5),d6
+    move.l  vgmTime(a5),d7
+    bsr     .play
+    move.l  d6,vgmPlayTime(a5)
+    move.l  d7,vgmTime(a5)
+    rts
+
+.play
+    * 1/50th sec or 20 ms host playtime elapsed
+    * 44100/1000*20 = 882 ticks
+    * 1/100th sec or 10 ms host playtime elapsed
+    * 44100/1000*10 = 441 ticks
+    * 1/200th sec or 5 ms host playtime elapsed
+    * 44100/1000*5 = 220.5 ticks
+;    add.l   #882,d6
+    add.l   #441,d6
+
+    * Host behind vgm? 
+    cmp.l   d6,d7
+    bhs     .out
+
+    * Process VGM events so that vgm time catches up
+.proc
+    bsr     .process
+    cmp.l   d6,d7
+    blo     .proc
+
+.out
+    rts
+
+
+.process
+    move.l  vgmDataCurrent(a5),a0
+    cmp.l   vgmDataEnd(a5),a0
+    bhs     .dataEnd2
+    tst.l   vgmSampleCount(a5)
+    ble     .dataEnd
+    moveq   #0,d0
+    move.b  (a0)+,d0  
+    bsr     .command
+.continue
+    move.l  a0,vgmDataCurrent(a5)
+    rts
+ 
+.dataEnd2
+    DPRINT "dataEnd2"
+.dataEnd
+    DPRINT "dataEnd1"
+    bsr     .restart
+    bra     .continue
+
+* Out: 
+*   a0 = new current position
+.restart
+    DPRINT "VGM songover, restart"
+    st      songover(a5)
+
+    * restart from beginning
+    move.l  vgmDataStart(a5),a0
+    move.l  moduleaddress(a5),a1
+    move.l  $18(a1),d0  * Total # samples
+    ilword  d0
+    move.l  d0,vgmSampleCount(a5)
+
+    * restart from loop start
+    move.l  $20(a1),d1     * loop samples
+    beq     .noLoop
+    DPRINT "loop restart"
+
+    move.l  $1c(a1),d0  * loop offset
+    ilword  d0
+    cmp.l   modulelength(a5),d0
+    bhs     .noLoop
+    DPRINT  "loop ok, start=%ld"
+    lea      $1c(a1,d0.l),a0
+
+    ilword   d1
+    move.l   d1,vgmSampleCount(a5)
+.noLoop
+    rts
+
+.command
+    ; ---------------------------------
+    cmp.b   #$31,d0
+    beq     .AY8910_stereo_mask
+    cmp.b   #$a0,d0
+    beq     .AY8910_write_value
+    cmp.b   #$a0!$80,d0
+    beq     .AY8910_write_value_2nd
+    ; ---------------------------------
+    cmp.b   #$5a,d0
+    beq     .YM3812_write_value
+    cmp.b   #$aa,d0
+    beq     .YM3812_write_value_2nd
+    ; ---------------------------------
+    cmp.b   #$66,d0
+    beq     .restart
+    ; ---------------------------------
+    cmp.b   #$61,d0
+    beq     .wait_samples
+    cmp.b   #$62,d0
+    beq     .wait_735_samples
+    cmp.b   #$63,d0
+    beq     .wait_882_samples
+    ; ---------------------------------    
+    cmp.b   #$70,d0
+    blo     .cx
+    cmp.b   #$7f,d0
+    bhi     .cx
+    moveq   #0,d1
+    move.b  d0,d1
+    sub.b   #$70,d1
+    addq.b  #1,d1
+    bra     .wait_n
+.cx
+    ; ---------------------------------
+    if DEBUG
+    and.l    #$ff,d0
+    DPRINT    "VGM unknown command=%lx"
+ endif
+    rts
+
+
+.wait_samples
+    moveq   #0,d1
+    move.w  (a0)+,d1
+    ror     #8,d1
+.wait_n
+    add.l   d1,d7
+    sub.l   d1,vgmSampleCount(a5)
+    rts
+
+.wait_735_samples
+    move.l  #735,d1
+    bra     .wait_n
+
+.wait_882_samples
+    move.l  #882,d1
+    bra     .wait_n
+
+.AY8910_stereo_mask
+    move.b  (a0)+,d1    * value
+    rts
+
+.AY8910_write_value    
+    * write dd into aa
+    move.b  (a0)+,d1    * aa
+    move.b  (a0)+,d2    * dd
+
+    * Store volumes for later
+    cmp.b   #8,d1
+    bne     .v1
+    move.b  d2,ay8910vol1
+    bra     .v3
+.v1
+    cmp.b   #9,d1
+    bne     .v2
+    move.b  d2,ay8910vol2
+    bra     .v3
+.v2
+    cmp.b   #10,d1
+    bne     .v3
+    move.b  d2,ay8910vol3
+.v3
+    bsr     ay8910poke
+    rts
+
+.AY8910_write_value_2nd
+    move.b  (a0)+,d1    * aa
+    move.b  (a0)+,d2    * dd
+    * write dd into aa
+    rts
+.YM3812_write_value
+    move.b  (a0)+,d1    * aa
+    move.b  (a0)+,d2    * dd
+    * write dd into aa
+    rts
+.YM3812_write_value_2nd
+    move.b  (a0)+,d1    * aa
+    move.b  (a0)+,d2    * dd
+    * write dd into aa
+    rts
+
+* Poke d2 into register d1
+ay8910poke:
+    and.l   #$ff,d2
+    and.w   #$ff,d1
+    move.l  tntBase(a5),a1
+    lea     $c0(a1),a1  * tnt_psg, 16 regs here, each 32-bits, write to the low 8 byte
+    lsl.w   #2,d1
+    move.l  d2,(a1,d1.w)
+    rts
+
+ay8910silence:
+    moveq    #8,d1
+    moveq    #0,d2
+    bsr      ay8910poke
+    moveq    #9,d1
+    moveq    #0,d2
+    bsr      ay8910poke
+    moveq    #10,d1
+    moveq    #0,d2
+    bsr      ay8910poke
+    rts
+
+ay8910restore:
+    moveq    #8,d1
+    move.b   ay8910vol1(pc),d2
+    bsr      ay8910poke
+    moveq    #9,d1
+    move.b   ay8910vol2(pc),d2
+    bsr      ay8910poke
+    moveq    #10,d1
+    move.b   ay8910vol3(pc),d2
+    bsr      ay8910poke
+    rts
+
+ay8910vol1:    dc.b    0
+ay8910vol2:    dc.b    0
+ay8910vol3:    dc.b    0
+ even
+
+id_vgmTnt:
+    DPRINT "id_vgmTnt"
+    bsr     openTnt
+    beq     .no
+    move.l  a4,a0
+    bsr     vgmTntInit
+    beq     .no
+    
+    moveq    #0,d0    * yes
+    rts
+.no
+    moveq    #-1,d0    * no
+    rts
+    
+openTnt:
+    ; TODO: test if tnt is enabled
+
+.AUTOCONFIG_MANUF = 5110
+.AUTOCONFIG_PROD  = 61
+
+    move.l    _ExpansionBase(a5),d0
+    beq        .x
+
+    move.l  d0,a6
+    sub.l   a0,a0
+    move.l  #.AUTOCONFIG_MANUF,d0
+    move.l  #.AUTOCONFIG_PROD,d1
+    lob     FindConfigDev
+    tst.l   d0
+    beq     .x
+    move.l  d0,a0   
+    move.l  cd_BoardAddr(a0),tntBase(a5)
+.x
+    rts
+
+vgmTntInit:
+    DPRINT    "vgmTntInit"
+    move.l  (a0),d0     * id
+    cmp.l   #"Vgm ",d0
+    bne     .fail
+
+    move.l  4(a0),d0    * EoF offset
+    ilword  d0
+    lea     4(a0,d0.l),a2
+    move.l  a2,vgmDataEnd(a5)
+
+    move.l  $18(a0),d0  * Total # samples
+    ilword  d0
+    * 4147180 bionic commando 
+    * -> 94 sec
+    * -> 1 min 34 s
+    move.l  d0,vgmSampleCount(a5)
+    DPRINT "sample count=%ld"
+
+    move.l  $1c(a0),d0  * loop offset
+    ilword  d0
+    DPRINT "loop offset=%ld"
+    move.l  $20(a0),d0  * loop samples
+    ilword  d0
+    DPRINT "loop samples=%ld"
+
+    move.l  8(a0),d0    * Header version
+    ilword  d0
+    DPRINT "header version=%lx"
+
+    * Start of VGM data, prior to v1.50:
+    lea     $40(a0),a1  
+    cmp.l   #$150,d0
+    blo     .old
+    * After v1.50:
+    move.l  $34(a0),d1  * VGM data offset
+    ilword  d1  
+ if DEBUG
+    push     d0
+    move.l   d1,d0
+    DPRINT "start offset=%ld"
+    pop      d0
+ endif
+    lea     $34(a0,d1.l),a1
+.old
+    move.l  a1,vgmDataStart(a5)
+
+    * AY8910, YM3812 only available on v1.51 and newer
+    cmp.l   #$151,d0
+    blo     .fail
+
+    move.l  $74(a0),d0  * AY8910 clock
+    bne     .AY8190
+   ; move.l  $50(a0),d0  * YM3812 clock
+   ; bne     .YM3812
+
+.fail
+    moveq   #0,d0
+    rts
+
+.AY8190
+;    ilword  d0
+;    btst    #30,d0  * 1 = dual chip
+;    move.b  $78(a0),d1  * AY8190 chip type
+;    move.b  $79(a0),d2  * AY8190 chip flags
+
+    lea      p_vgm_tnt\.chip(pc),a0
+    move.l   #"AY81",(a0)+
+    move.w   #"90",(a0)+
+    clr.b    (a0)
+    
+    moveq   #1,d0
+    rts
+
+.YM3812
+    ilword  d0
+    btst    #30,d0  * 1 = dual chip
+
+    moveq   #1,d0
     rts
 
 

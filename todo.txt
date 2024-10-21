@@ -1,3 +1,7 @@
+TODO:
+- mhi mp3 output: displays "0kB", why? remove mpega.lib and try?
+  - mhiReadMp3Properties failaa, käy näin -> mpega.libr puuttuu?
+
 
 TODO:
 - for modland urls display the 2nd subdir in the list:
