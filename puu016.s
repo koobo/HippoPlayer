@@ -17776,7 +17776,7 @@ sidmode_callback
 
 rsidmode
 	addq.b	#1,sidmode_new(a5)
-	cmp.b	#5,sidmode_new(a5)
+	cmp.b	#6,sidmode_new(a5)
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
@@ -17800,18 +17800,22 @@ psidmode
     subq.b  #1,d0
     beq.b   .1
     lea     sidmode05(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     sidmode06(pc),a0
 .1 
     lea	    prefsPlaySidMode,a1
 	bra	prunt
 
 
 
-sidmode00	dc.b	11,5
+sidmode00	dc.b	11,6
 sidmode01	dc.b	"Normal",0
 sidmode02	dc.b	"reSID 6581",0
 sidmode03	dc.b	"reSID 8580",0
 sidmode04	dc.b	"reSID Auto",0
 sidmode05	dc.b	"SIDBlaster",0
+sidmode06	dc.b	"ZorroSID EE",0
  even
 
 rresidmode_req
@@ -37030,6 +37034,7 @@ p_sid:	jmp	.init(pc)
     ; 2 = resid 8580
     ; 3 = resid auto detect
     ; 4 = sidblaster
+    ; 5 = zorrosid
     cmp.b   #1,sidmode(a5)
     beq     .m1
     cmp.b   #2,sidmode(a5)
@@ -37038,6 +37043,8 @@ p_sid:	jmp	.init(pc)
     beq     .m3
     cmp.b   #4,sidmode(a5)
     beq     .m4
+    cmp.b   #5,sidmode(a5)
+    beq     .m5
     * Fallback default option
     move    #OM_NORMAL,d0
     lea     .zero(pc),a0
@@ -37070,6 +37077,12 @@ p_sid:	jmp	.init(pc)
     lea     sidmode05,a0
     moveq   #OM_SIDBLASTER_USB,d0
     DPRINT  "OM_SIDBLASTER_USB"
+    bra     .mode
+.m5
+    *** ZorroSID
+    lea     sidmode06,a0
+    moveq   #OM_ZORROSID,d0
+    DPRINT  "OM_ZORROSID"
     bra     .mode
     ; -----------------------
 .cpuCheck
@@ -37421,11 +37434,17 @@ p_sid:	jmp	.init(pc)
     cmp     #SID_NOSIDBLASTER,d0
     bne.b   .sb
     lea     .blasterMsg(pc),a1
+.msg
     jsr     request
     moveq   #ier_error,d0
     bra.b   .er
 .sb
-	moveq	#ier_nomem,d0
+    cmp     #SID_ZORROSIDINVALID,d0
+    bne.b   .zs
+    lea     .zorroSidMsg(pc),a1
+    bra     .msg
+.zs
+    moveq	#ier_nomem,d0
 	bra.b	.er
 
 .error2	bsr.b	.free
@@ -37525,6 +37544,8 @@ p_sid:	jmp	.init(pc)
 
 .blasterMsg
     dc.b    "Couldn't initialize SIDBlaster!",0
+.zorroSidMsg
+    dc.b    "Can't access ZorroSID, check MMU settings!",0
     even
 
 .performanceRequest
