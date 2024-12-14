@@ -24965,6 +24965,49 @@ str2msg	pushm	d0/d1/a0/a1/a6
 * Scopes
 *
 ********************************************************************************
+
+* SID pattern scope voice
+* clr-fields: 
+* - when the main value is set from 1 to 0, clr is set to non-zero.
+* - clr is subtracted every frame
+* - when clr reaches zero, display zero
+    rsreset
+sv_freq        rs.w 1
+sv_pulseWidth  rs.w 1
+sv_envelope    rs.w 1   * 0..63
+sv_gate        rs.b 1  * current value
+sv_gateClr     rs.b 1  
+sv_sync        rs.b 1
+sb_syncClr     rs.b 1
+sv_ring        rs.b 1
+sv_ringClr     rs.b 1
+sv_test        rs.b 1
+sv_testClr     rs.b 1
+sv_triangle    rs.b 1
+sv_triangleClr rs.b 1
+sv_saw         rs.b 1
+sv_sawClr      rs.b 1
+sv_pulse       rs.b 1
+sv_pulseClr    rs.b 1
+sv_noise       rs.b 1
+sv_noiseClr    rs.b 1
+sv_filter      rs.b 1   * filter enable for this voice
+sv_filterClr   rs.b 1
+sv_size        rs.b 0
+
+* SID scope data
+    rsreset
+ss_voice1     rs.b  sv_size
+ss_voice2     rs.b  sv_size
+ss_voice3     rs.b  sv_size
+ss_filterCut  rs.w  1
+ss_filterRes  rs.b  1
+ss_filterLp   rs.b  1
+ss_filterBp   rs.b  1
+ss_filterHp   rs.b  1
+sids_size       rs.b  0
+
+* Scope data
                               rsreset
 s_global                      rs.l       1
 s_quad_task                   rs.l       1
@@ -25027,6 +25070,8 @@ s_spectrumMixedData           rs.l       1
 s_spectrumImagData            rs.l       1
 s_spectrumInitialized         rs.w       1
                               endif
+
+s_sidScopeData                rs.b      sids_size 
 
 s_multab                      rs.w       256 * modulo multiplication table
 s_scopeHorizontalBarTable     rs.b       512
@@ -25965,6 +26010,8 @@ scopeLoop:
 	* Protracker special case
 	cmp	#pt_prot,playertype(a5)
 	beq.b	.izOk
+	cmp	#pt_sid,playertype(a5)
+	beq.b	.izOk
 	* Pattern data check
 	tst.l	deliPatternInfo(a5)
 	bne.b	.izOk
@@ -26868,6 +26915,7 @@ drawScope:
 	* See if the whole drawing phase can be skipped
 	bsr	patternScopeIsActive
 	bne.b	.noPattSc
+    * For generic pattern scope, update only when position changes
 	move.l	deliPatternInfo(a5),d0 
 	beq.b 	.noPattSc 
 	move.l	d0,a0
@@ -27029,6 +27077,12 @@ drawScope:
     * XMAPlay and reSID provide compatible scope input
 	cmp	    #pt_xmaplay,playertype(a5)
 	beq	.renderPS3M
+    * PSID specific notescroller launch
+	cmp	    #pt_sid,playertype(a5)
+    bne     .notPSID
+    bsr     patternScopeIsActive
+    beq     patternScopeSID
+.notPSID
     jsr     playSidInRESIDMode
     bne     .renderPS3M
 .goAhi
@@ -29475,7 +29529,7 @@ noteScroller2:
 *   a2 = contains font data
 *   d4 = contains font modulo
 
-.print
+.print:
 	* get one char to print
 	moveq	#0,d5
 	move.l	a5,d1
@@ -29611,6 +29665,7 @@ noteScroller2:
 .note	dc.b	"00000000"
 .pos	dc.b	"00"
  even
+
 
 ; End of scopes for now
 
@@ -37964,6 +38019,7 @@ isPlaysidReSID:
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
 	cmp     #7,LIB_REVISION(a0)
+	cmp     #3,LIB_REVISION(a0)
 	blo.b   .noRESID
     * Require 020 for reSID/SIDBlaster stuff
     move.l  (a5),a0
@@ -38026,6 +38082,412 @@ residBufPtr1    dc.l    0
 residBufPtr2    dc.l    0
 residBufPtr3    dc.l    0
 residPosMask    dc.l    $7f 
+
+
+
+patternScopeSIDUpdate:
+	move.l	_SIDBase(a5),a0
+    move.l  346(a0),a0      * psb_C64Mem    
+    add.l   #$d400,a0      * SID
+    ; ---------------------------------
+    moveq   #0,d0
+    move.b  $17(a0),d0
+    lsr     #4,d0
+    move.b  d0,s_sidScopeData+ss_filterRes(a4)
+    ; ---------------------------------
+    moveq   #7,d0
+    and.b   $15(a0),d0      * low byte
+    moveq   #0,d1
+    move.b  $16(a0),d1      * high byte
+    lsl     #3,d1
+    and     #$7f8,d1
+    or.w    d1,d0
+    move.w  d0,s_sidScopeData+ss_filterCut(a4)
+    ; ---------------------------------
+    moveq   #1<<4,d0
+    and.b   $18(a0),d0
+    lea     s_sidScopeData+ss_filterLp(a4),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<5,d0
+    and.b   $18(a0),d0
+    lea     s_sidScopeData+ss_filterBp(a4),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<6,d0
+    and.b   $18(a0),d0
+    lea     s_sidScopeData+ss_filterHp(a4),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<0,d0
+    and.b   $17(a0),d0
+    lea     s_sidScopeData+ss_voice1+sv_filter(a4),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<1,d0
+    and.b   $17(a0),d0
+    lea     s_sidScopeData+ss_voice2+sv_filter(a4),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<2,d0
+    and.b   $17(a0),d0
+    lea     s_sidScopeData+ss_voice3+sv_filter(a4),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    lea     s_sidScopeData+ss_voice1(a4),a1
+    moveq   #0,d2       * voice number
+    bsr     .updateVoice
+    bsr     .updateVoice
+    bsr     .updateVoice
+    ; ---------------------------------
+    * Gran envelope values from secret locations
+    * psb_Envelope1,2,3
+    move.l  _SIDBase(a5),a0
+    move.w  448(a0),s_sidScopeData+ss_voice1+sv_envelope(a4)
+    move.w  450(a0),s_sidScopeData+ss_voice2+sv_envelope(a4)
+    move.w  452(a0),s_sidScopeData+ss_voice3+sv_envelope(a4)
+    rts
+
+.updateVoice
+    moveq   #1<<0,d0       
+    and.b   4(a0),d0
+    lea     sv_gate(a1),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<1,d0       
+    and.b   4(a0),d0
+    lea     sv_sync(a1),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<2,d0       
+    and.b   4(a0),d0
+    lea     sv_ring(a1),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<3,d0       
+    and.b   4(a0),d0
+    lea     sv_test(a1),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<4,d0       
+    and.b   4(a0),d0
+    lea     sv_triangle(a1),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<5,d0       
+    and.b   4(a0),d0
+    lea     sv_saw(a1),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #1<<6,d0       
+    and.b   4(a0),d0
+    lea     sv_pulse(a1),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    move.w  #1<<7,d0       
+    and.b   4(a0),d0
+    lea     sv_noise(a1),a2
+    bsr     .updateValue
+    ; ---------------------------------
+    moveq   #0,d0
+    move.b  1(a0),d0
+    ror     #8,d0
+    move.b  (a0),d0
+    cmp.l   #$3fff,d0   * $0000-$3fff -> $0000-$ffff
+    bhs     .f1
+    add.l   d0,d0
+    add.l   d0,d0
+    bra     .f2
+.f1
+    cmp.l   #$7fff,d0   * $0000-$7fff -> $0000-$ffff
+    bhs     .f2
+    add.l   d0,d0
+.f2
+    cmp.l   #$ffff,d0
+    bls     .fok
+    moveq   #-1,d0
+.fok
+    move.w  d0,sv_freq(a1)
+    ; ---------------------------------
+    move.b  3(a0),d0
+    ror     #8,d0
+    move.b  2(a0),d0
+    and     #$fff,d0
+ ;   move    #$fff,d0
+    move.w  d0,sv_pulseWidth(a1)
+    ; ---------------------------------
+    lea     sv_size(a1),a1 * next voice struct
+    addq    #7,a0          * next SID voice
+    rts
+
+* In: 
+*  d0 = new value
+*  a2 = pointer to value
+.updateValue
+    move.b  (a2),d1 * stash old value
+    move.b  d0,(a2) * store new value
+    * is the new value zero?
+    beq     .z
+    * not zero, clear counter and exit.
+    clr.b   1(a2)
+    rts
+.count
+    * Countdown zero counter
+    tst.b   1(a2)
+    beq     .cz
+    subq.b  #1,1(a2)
+.cz rts
+.z
+    * new value is zero
+    tst.b   d1 
+    beq     .count
+    * old was not zero, start counter
+    move.b  #4,1(a2)
+    rts
+    
+
+patternScopeSID:
+
+    push    a5
+    bsr     patternScopeSIDUpdate
+
+	bsr	noteScrollerGetFont * uses d4,a2
+    * d4 = font modulo
+    * a2 = font data
+
+    move    #40,d7         * output buffer modulo
+	move.l	s_draw1(a4),a5 * Draw here
+    moveq   #8-1,d2        * rows to print
+    lea     .row1,a3       * 1st row
+    ;----------------------------------
+.loop
+    moveq   #40-1,d3        * number of chars to print
+    bsr     noteScroller2\.print
+    lea     8*40-40(a5),a5
+    ;----------------------------------
+    dbf     d2,.loop
+    ;----------------------------------
+	move.l	s_draw1(a4),a0
+    lea     7*8*40+29(a0),a0   
+    lea     s_sidScopeData+ss_filterLp(a4),a1
+    bsr     .drawBlock
+    ;----------------------------------
+	move.l	s_draw1(a4),a0
+    lea     7*8*40+34(a0),a0   
+    lea     s_sidScopeData+ss_filterBp(a4),a1
+    bsr     .drawBlock
+    ;----------------------------------
+	move.l	s_draw1(a4),a0
+    lea     7*8*40+39(a0),a0   
+    lea     s_sidScopeData+ss_filterHp(a4),a1
+    bsr     .drawBlock
+    ;----------------------------------
+	move.l	s_draw1(a4),a0
+    lea     7*8*40+7(a0),a0   
+    move.w  s_sidScopeData+ss_filterCut(a4),d0  * range 0..7f8
+    lsr     #5,d0   * 0..63
+    bsr     .drawBar64
+    ;----------------------------------
+	move.l	s_draw1(a4),a0
+    lea     7*8*40+21(a0),a0   
+    move.b  s_sidScopeData+ss_filterRes(a4),d0  * range 0..15
+    bsr     .drawBar16
+    ;----------------------------------
+	move.l	s_draw1(a4),a2
+    lea     s_sidScopeData+ss_voice1(a4),a3
+	bsr     .drawVoice
+    ;----------------------------------
+	move.l	s_draw1(a4),a2
+    lea     13(a2),a2
+    lea     s_sidScopeData+ss_voice2(a4),a3
+	bsr     .drawVoice
+    ;----------------------------------
+	move.l	s_draw1(a4),a2
+    lea     26(a2),a2
+    lea     s_sidScopeData+ss_voice3(a4),a3
+	bsr     .drawVoice
+
+    pop     a5
+    rts
+
+
+* In:
+*   a2 = output screen ptr
+*   a3 = voice data
+.drawVoice:
+    lea     0*8*40+11(a2),a0   
+    lea     sv_filter(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     3*8*40+5(a2),a0   
+    lea     sv_gate(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     4*8*40+5(a2),a0   
+    lea     sv_sync(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     5*8*40+5(a2),a0   
+    lea     sv_ring(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     6*8*40+5(a2),a0   
+    lea     sv_test(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     3*8*40+11(a2),a0   
+    lea     sv_triangle(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     4*8*40+11(a2),a0   
+    lea     sv_saw(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     5*8*40+11(a2),a0   
+    lea     sv_pulse(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     6*8*40+11(a2),a0   
+    lea     sv_noise(a3),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     1*8*40+3(a2),a0   
+    move.w  sv_freq(a3),d0  * range 0..ffff
+    lsr     #8,d0   
+    lsr     #2,d0   * 0..63
+    bsr     .drawBar64
+    ;----------------------------------
+    lea     2*8*40+3(a2),a0   
+    move.w  sv_pulseWidth(a3),d0  * range 0..fff
+    lsr     #6,d0   * 0..63
+    bsr     .drawBar64
+    ;----------------------------------
+    lea     54*40+12(a2),a0   
+    move.w  sv_envelope(a3),d0  * range 0..63
+    * scale to 0..54
+    mulu    #54,d0
+    lsr     #6,d0   * div 64
+    bsr     .drawVBar64
+    rts
+
+* In:
+*   a0 = output screen ptr
+*   a1 = data
+.drawBlock:
+    tst.b   1(a1)   * clear counter active?
+    bne     .dob
+    tst.b   (a1)    * value on/off
+    beq     .bz
+.dob
+;    moveq   #-1,d0  * pattern
+    move.b  #%10001000,d0
+    move.b  1(a1),d1 * 1-4
+    subq.b  #1,d1    * 1
+    beq     .dob2
+    move.b  #%10101010,d0
+    subq.b  #1,d1    * 2
+    beq     .dob2
+    move.b  #%11101110,d0
+    subq.b  #1,d1    * 3
+    beq     .dob2
+.boo
+    move.b  #%11111111,d0
+.dob2
+    moveq   #8-1-1,d1
+.db
+    move.b  d0,(a0)
+    ror.b   #1,d0
+    lea     40(a0),a0
+    dbf     d1,.db
+    rts
+.bz
+    moveq   #%00011000,d0
+    ;move.b  d0,2*40(a0)
+    move.b  d0,3*40(a0)
+    rts
+
+* In:
+*   a0 = output screen ptr
+*   d0 = value 0..63
+.drawBar64
+    move.b  #$80,d1 * mask
+    moveq   #64-1,d2
+.dl1
+    tst.b   d0
+    blt     .dlx
+    or.b    d1,0*40(a0)
+    or.b    d1,1*40(a0)
+    or.b    d1,2*40(a0)
+    or.b    d1,3*40(a0)
+    or.b    d1,4*40(a0)
+    or.b    d1,5*40(a0)
+.dlx
+    or.b    d1,6*40(a0)
+    ror.b   #1,d1
+    bpl     .dl2
+    addq    #1,a0
+.dl2
+    subq.b  #1,d0
+    dbf     d2,.dl1 
+    rts
+
+* In:
+*   a0 = output screen ptr
+*   d0 = value 0..63
+.drawBar16
+    move.b  #$80,d1 * mask
+    moveq   #16-1,d2
+.dl1_
+    tst.b   d0
+    ble     .dlx_
+    or.b    d1,0*40(a0)
+    or.b    d1,1*40(a0)
+    or.b    d1,2*40(a0)
+    or.b    d1,3*40(a0)
+    or.b    d1,4*40(a0)
+    or.b    d1,5*40(a0)
+.dlx_
+    or.b    d1,6*40(a0)
+    ror.b   #1,d1
+    bpl     .dl2_
+    addq    #1,a0
+.dl2_
+    subq.b  #1,d0
+    dbf     d2,.dl1_ 
+    rts
+
+* In:
+*   a0 = output screen ptr
+*   d0 = value 0..63
+.drawVBar64
+    moveq   #64-1,d2
+    move.b  #%00111110,d1
+.vl1
+    tst.b   d0
+    blt     .vlx
+    or.b    d1,(a0)
+.vlx
+    lea     -40(a0),a0
+    subq.b  #1,d0
+    dbf     d2,.vl1 
+    rts
+
+           ; 0123456789012345678901234567890123456789
+;.row1 dc.b  "VOICE 1 Flt   VOICE 2       VOICE 3     "
+.row1 dc.b  "Voice1 Flt   Voice2 Flt   Voice3 Flt    "
+.row2 dc.b  "Fr           Fr           Fr            "
+.row3 dc.b  "Pw           Pw           Pw            "
+.row4 dc.b  "Gate   Tri   Gate   Tri   Gate   Tri    "
+.row5 dc.b  "Sync   Saw   Sync   Saw   Sync   Saw    "
+.row6 dc.b  "Ring   Pul   Ring   Pul   Ring   Pul    "
+.row7 dc.b  "Test   Noi   Test   Noi   Test   Noi    "
+;.row4 dc.b  "Gate   Syn    Gate   Syn    Gate   Syn  "
+;.row5 dc.b  "Ring   Tst    Ring   Tst    Ring   Tst  "
+;.row6 dc.b  "Tria   Saw    Tria   Saw    Tria   Saw  "
+;.row7 dc.b  "Puls   Noi    Puls   Noi    Puls   Noi  "
+.row8 dc.b  "Filter          Reso      LP   BP   HP  "
+
+    even
 
 
 * T‰nne v‰liin h‰m‰‰v‰sti
