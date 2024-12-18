@@ -17125,6 +17125,12 @@ rselscreen
 	clr.l	pubwork(a5)
 	bra.b	.l
 .fe
+
+ if DEBUG
+	lea	pubscreen_new(a5),a0
+    move.l  a0,d0    
+    DPRINT  "NextPubScreen=%s"
+ endif
 	bsr.b	pselscreen
 
 	lea	pubscreen_new(a5),a0
