@@ -31740,7 +31740,7 @@ loadfile:
 	bra.b	.exeOk
 
 .notFuturePlayer
-	bsr	id_delicustom
+	jsr	id_delicustom
 	bne.b	.notDeliCustom
 	moveq	#pt_delicustom,d7
 	bra.b	.exeOk 
@@ -38018,8 +38018,7 @@ isPlaysidReSID:
     move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
-	cmp     #7,LIB_REVISION(a0)
-	cmp     #3,LIB_REVISION(a0)
+	cmp     #8,LIB_REVISION(a0)
 	blo.b   .noRESID
     * Require 020 for reSID/SIDBlaster stuff
     move.l  (a5),a0
@@ -46025,7 +46024,7 @@ p_pretracker
 	bne.b .x
 	lea	$14(a4),a1
 	moveq	#20-1,d0
-	bsr	copyNameFromA1
+    jsr	copyNameFromA1
 	moveq	#0,d0
 .x  rts
 
@@ -49068,7 +49067,7 @@ id_stonetracker
 	pop	a4
 	tst.l 	d0 
 	bne.b .not 
-	bsr	moveModuleToPublicMem
+	jsr	moveModuleToPublicMem
 	moveq	#0,d0
 .not
 	rts
