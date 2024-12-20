@@ -38170,11 +38170,10 @@ patternScopeSIDUpdate
     bsr     .updateValue
     ; ---------------------------------
     lea     ss_voice1(a3),a1
-    moveq   #0,d2       * voice number
     bsr     .updateVoice
     bsr     .updateVoice
-    bsr     .updateVoice
-    rts
+;    bsr     .updateVoice
+;    rts
 
 .updateVoice
     moveq   #1<<0,d0       
@@ -38223,8 +38222,7 @@ patternScopeSIDUpdate
     move.b  (a0),d0
     cmp.l   #$3fff,d0   * $0000-$3fff -> $0000-$ffff
     bhs     .f1
-    add.l   d0,d0
-    add.l   d0,d0
+    lsl.l   #2,d0
     bra     .f2
 .f1
     cmp.l   #$7fff,d0   * $0000-$7fff -> $0000-$ffff
@@ -38289,54 +38287,17 @@ patternScopeSID:
     move    #40,d7         * output buffer modulo
 	move.l	s_draw1(a4),a5 * Draw here
     moveq   #8-1,d2        * rows to print
-    lea     .row1,a3       * 1st row
+    lea     .row1(pc),a3   * 1st row
     ;----------------------------------
 .loop
     moveq   #40-1,d3        * number of chars to print
     bsr     noteScroller2\.print
     lea     8*40-40(a5),a5
-    ;----------------------------------
     dbf     d2,.loop
     ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     7*8*40+28(a0),a0   
-    lea     s_sidScopeData+ss_filterLp(a4),a1
-    bsr     .drawBlock
-    ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     7*8*40+33(a0),a0   
-    lea     s_sidScopeData+ss_filterBp(a4),a1
-    bsr     .drawBlock
-    ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     7*8*40+38(a0),a0   
-    lea     s_sidScopeData+ss_filterHp(a4),a1
-    bsr     .drawBlock
-    ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     7*8*40+7(a0),a0   
-    move.w  s_sidScopeData+ss_filterCut(a4),d0  * range 0..7f8
-    lsr     #5,d0   * 0..63
-    bsr     .drawBar64
-    ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     7*8*40+21(a0),a0   
-    move.b  s_sidScopeData+ss_filterRes(a4),d0  * range 0..15
-    bsr     .drawBar16
-    ;----------------------------------
-	move.l	s_draw1(a4),a2
-    lea     s_sidScopeData+ss_voice1(a4),a3
-	bsr     .drawVoice
-    ;----------------------------------
-	move.l	s_draw1(a4),a2
-    lea     13(a2),a2
-    lea     s_sidScopeData+ss_voice2(a4),a3
-	bsr     .drawVoice
-    ;----------------------------------
-	move.l	s_draw1(a4),a2
-    lea     26(a2),a2
-    lea     s_sidScopeData+ss_voice3(a4),a3
-	bsr     .drawVoice
+	move.l	s_draw1(a4),a6
+    lea     s_sidScopeData(a4),a5
+    bsr     .drawSid
     ;----------------------------------
 
     move.l  (sp),a5
@@ -38353,66 +38314,65 @@ patternScopeSID:
     move    #40,d7         * output buffer modulo
 	move.l	s_draw1(a4),a5 * Draw here
     lea     8*8*40(a5),a5
-    lea     .row1b,a3       * 1st row
+    lea     .row1b(pc),a3   * 1st row
     moveq   #40-1,d3        * number of chars to print
     bsr     noteScroller2\.print
     lea     8*40-40(a5),a5
-    lea     .row2,a3       * 1st row
+    lea     .row2(pc),a3   * 1st row
     moveq   #7-1,d2        * rows to print
     ;----------------------------------
 .loop2
     moveq   #40-1,d3        * number of chars to print
     bsr     noteScroller2\.print
     lea     8*40-40(a5),a5
-    ;----------------------------------
     dbf     d2,.loop2
     ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     (8+7)*8*40+28(a0),a0   
-    lea     s_sid2ScopeData+ss_filterLp(a4),a1
-    bsr     .drawBlock
-    ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     (8+7)*8*40+33(a0),a0   
-    lea     s_sid2ScopeData+ss_filterBp(a4),a1
-    bsr     .drawBlock
-    ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     (8+7)*8*40+38(a0),a0   
-    lea     s_sid2ScopeData+ss_filterHp(a4),a1
-    bsr     .drawBlock
-    ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     (8+7)*8*40+7(a0),a0   
-    move.w  s_sid2ScopeData+ss_filterCut(a4),d0  * range 0..7f8
-    lsr     #5,d0   * 0..63
-    bsr     .drawBar64
-    ;----------------------------------
-	move.l	s_draw1(a4),a0
-    lea     (8+7)*8*40+21(a0),a0   
-    move.b  s_sid2ScopeData+ss_filterRes(a4),d0  * range 0..15
-    bsr     .drawBar16
-    ;----------------------------------
-	move.l	s_draw1(a4),a2
-    lea     8*8*40(a2),a2
-    lea     s_sid2ScopeData+ss_voice1(a4),a3
-	bsr     .drawVoice
-    ;----------------------------------
-	move.l	s_draw1(a4),a2
-    lea     8*8*40(a2),a2
-    lea     13(a2),a2
-    lea     s_sid2ScopeData+ss_voice2(a4),a3
-	bsr     .drawVoice
-    ;----------------------------------
-	move.l	s_draw1(a4),a2
-    lea     8*8*40(a2),a2
-    lea     26(a2),a2
-    lea     s_sid2ScopeData+ss_voice3(a4),a3
-	bsr     .drawVoice
+	move.l	s_draw1(a4),a6
+    lea     8*8*40(a6),a6   
+    lea     s_sid2ScopeData(a4),a5
+    bsr     .drawSid
     ;----------------------------------
 .x
     pop     a5
     rts
+
+* In:
+*  a5 = s_sidScopeData
+*  a6 = screen pointer
+.drawSid:
+    lea     7*8*40+28(a6),a0   
+    lea     ss_filterLp(a5),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     7*8*40+33(a6),a0   
+    lea     ss_filterBp(a5),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     7*8*40+38(a6),a0   
+    lea     ss_filterHp(a5),a1
+    bsr     .drawBlock
+    ;----------------------------------
+    lea     7*8*40+7(a6),a0   
+    move.w  ss_filterCut(a5),d0  * range 0..7f8
+    lsr     #5,d0   * 0..63
+    bsr     .drawBar64
+    ;----------------------------------
+	lea     7*8*40+21(a6),a0   
+    move.b  ss_filterRes(a5),d0  * range 0..15
+    bsr     .drawBar16
+    ;----------------------------------
+	move.l	a6,a2
+    lea     ss_voice1(a5),a3
+	bsr     .drawVoice
+    ;----------------------------------
+    lea     13(a6),a2
+    lea     ss_voice2(a5),a3
+	bsr     .drawVoice
+    ;----------------------------------
+    lea     26(a6),a2
+    lea     ss_voice3(a5),a3
+;	bsr     .drawVoice
+;    rts
 
 
 * In:
@@ -38483,19 +38443,18 @@ patternScopeSID:
     tst.b   (a1)    * value on/off
     beq     .bz
 .dob
-;    moveq   #-1,d0  * pattern
     move.b  #%10001000,d0
     move.b  1(a1),d1 * 1-4
     subq.b  #1,d1    * 1
     beq     .dob2
-    move.b  #%10101010,d0
+    move.b  #%01001001,d0
     subq.b  #1,d1    * 2
     beq     .dob2
-    move.b  #%11101110,d0
+    move.b  #%10101010,d0
     subq.b  #1,d1    * 3
     beq     .dob2
 .boo
-    move.b  #%11111111,d0
+    moveq  #-1,d0
 .dob2
     moveq   #8-1-1-1,d1
     add     #40,a0
