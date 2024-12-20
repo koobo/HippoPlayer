@@ -38438,36 +38438,74 @@ patternScopeSID:
 *   a0 = output screen ptr
 *   a1 = data
 .drawBlock:
-    tst.b   1(a1)   * clear counter active?
-    bne     .dob
     tst.b   (a1)    * value on/off
+    bne     .b1
+     * clear counter active?
+    move.b  1(a1),d1 
     beq     .bz
-.dob
-    move.b  #%10001000,d0
-    move.b  1(a1),d1 * 1-4
-    subq.b  #1,d1    * 1
-    beq     .dob2
-    move.b  #%01001001,d0
-    subq.b  #1,d1    * 2
-    beq     .dob2
-    move.b  #%10101010,d0
-    subq.b  #1,d1    * 3
-    beq     .dob2
-.boo
-    moveq  #-1,d0
-.dob2
-    moveq   #8-1-1-1,d1
-    add     #40,a0
-.db
-    move.b  d0,(a0)
-    ror.b   #1,d0
-    lea     40(a0),a0
-    dbf     d1,.db
+
+    * d1 = 1-4
+    subq.b  #1,d1
+    beq     .b5
+    subq.b  #1,d1
+    beq     .b4
+    subq.b  #1,d1
+    beq     .b3
+;    subq.b  #1,d1
+;    beq     .b2
+;    rts
+    bra     .b2
+
+.b1
+    moveq   #-1,d0
+    move.b  d0,0*40(a0)
+    move.b  d0,1*40(a0)
+    move.b  d0,2*40(a0)
+    move.b  d0,3*40(a0)
+    move.b  d0,4*40(a0)
+    move.b  d0,5*40(a0)
+    rts
+.b2
+    move.b  #%00000000,0*40(a0)
+    move.b  #%01111110,1*40(a0)
+    move.b  #%01111110,2*40(a0)
+    move.b  #%01111110,3*40(a0)
+    move.b  #%01111110,4*40(a0)
+    move.b  #%00000000,5*40(a0)
+    rts
+.b3
+    move.b  #%00000000,0*40(a0)
+    move.b  #%00000000,1*40(a0)
+    move.b  #%00111100,2*40(a0)
+    move.b  #%00111100,3*40(a0)
+    move.b  #%00000000,4*40(a0)
+    move.b  #%00000000,5*40(a0)
+    rts
+.b4
+    move.b  #%00000000,0*40(a0)
+    move.b  #%00000000,1*40(a0)
+    move.b  #%00011000,2*40(a0)
+    move.b  #%00011000,3*40(a0)
+    move.b  #%00000000,4*40(a0)
+    move.b  #%00000000,5*40(a0)
+    rts
+.b5
+    move.b  #%00000000,0*40(a0)
+    move.b  #%00000000,1*40(a0)
+    move.b  #%00010000,2*40(a0)
+    move.b  #%00001000,3*40(a0)
+    move.b  #%00000000,4*40(a0)
+    move.b  #%00000000,5*40(a0)
     rts
 .bz
-    moveq   #%00011000,d0
-    ;move.b  d0,2*40(a0)
+    * clear!
+    moveq   #0,d0
+    move.b  d0,0*40(a0)
+    move.b  d0,1*40(a0)
+    move.b  d0,2*40(a0)
     move.b  d0,3*40(a0)
+    move.b  d0,4*40(a0)
+    move.b  d0,5*40(a0)
     rts
 
 * In:
