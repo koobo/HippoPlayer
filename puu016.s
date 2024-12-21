@@ -24997,15 +24997,19 @@ sv_size        rs.b 0
 
 * SID scope data
     rsreset
-ss_voice1     rs.b  sv_size
-ss_voice2     rs.b  sv_size
-ss_voice3     rs.b  sv_size
-ss_filterCut  rs.w  1
-ss_filterRes  rs.b  1
-ss_filterLp   rs.b  1
-ss_filterBp   rs.b  1
-ss_filterHp   rs.b  1
-sids_size       rs.b  0
+ss_voice1      rs.b  sv_size
+ss_voice2      rs.b  sv_size
+ss_voice3      rs.b  sv_size
+ss_filterCut   rs.w  1
+ss_filterRes   rs.b  1
+ss_filterLp    rs.b  1
+ss_filterLpClr rs.b  1
+ss_filterBp    rs.b  1
+ss_filterBpClr rs.b  1
+ss_filterHp    rs.b  1
+ss_filterHpClr rs.b  1
+               rs.b  1 * pad
+sids_size      rs.b  0
 
 * Scope data
                               rsreset
@@ -25679,6 +25683,10 @@ scopeEntry:
 	sub.l	a1,a1
 	lore	Exec,FindTask
 	move.l	d0,s_quad_task(a4)
+
+    * Store task local data address to the task struct
+    move.l  d0,a0
+    move.l  a4,TC_Userdata(a0)
 
 * Modulo multab 
 	lea	s_multab(a4),a0
@@ -37913,8 +37921,26 @@ sidScopeUpdate
 	bsr	anyScopeRunning
 	beq	.x
 
+    tst.b   patternScopeRunning(a5)
+    beq     .noP
+    * Single SID patternscope
+    * Get pattern scope task data area
+    move.l  taskPatternScope+TC_Userdata(a5),a4
+    bsr     patternScopeSID1Update
+.noP
     bsr     playSidInRESIDMode
     beq.b   .1
+
+    * reSID active, check if need to update SID2 pattern data
+    tst.b   patternScopeRunning(a5)
+    beq     .noS
+    bsr     p_sid\.sidIsStereo
+    beq     .noS
+    * 2SID patternscope
+    * Get pattern scope task data area
+    move.l  taskPatternScope+TC_Userdata(a5),a4
+    bsr     patternScopeSID2Update
+.noS
 
     * reSID, update the buffer size as it may change 
 	move.l	_SIDBase(a5),a6
@@ -38276,9 +38302,7 @@ patternScopeSID:
     bne     .sizeOk
 	rts
 .sizeOk
-
     push    a5
-    bsr     patternScopeSID1Update
 
 	bsr	noteScrollerGetFont * uses d4,a2
     * d4 = font modulo
@@ -38305,7 +38329,6 @@ patternScopeSID:
     bne     .x
     bsr     p_sid\.sidIsStereo
     beq     .x
-    bsr     patternScopeSID2Update
 
 	bsr	noteScrollerGetFont * uses d4,a2
     * d4 = font modulo
