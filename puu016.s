@@ -38153,7 +38153,7 @@ patternScopeSIDUpdate
     ; ---------------------------------
     moveq   #0,d0
     move.b  $17(a0),d0
-    lsr     #4,d0
+    lsr.b   #4,d0
     move.b  d0,ss_filterRes(a3)
     ; ---------------------------------
     moveq   #7,d0
@@ -38246,14 +38246,14 @@ patternScopeSIDUpdate
     move.b  1(a0),d0
     ror     #8,d0
     move.b  (a0),d0
-    cmp.l   #$3fff,d0   * $0000-$3fff -> $0000-$ffff
+    cmp.w   #$3fff,d0   * $0000-$3fff -> $0000-$ffff
     bhs     .f1
-    lsl.l   #2,d0
+    lsl.w   #2,d0
     bra     .f2
 .f1
-    cmp.l   #$7fff,d0   * $0000-$7fff -> $0000-$ffff
+    cmp.w   #$7fff,d0   * $0000-$7fff -> $0000-$ffff
     bhs     .f2
-    add.l   d0,d0
+    add.w   d0,d0
 .f2
     cmp.l   #$ffff,d0
     bls     .fok
@@ -38362,7 +38362,7 @@ patternScopeSID:
 * In:
 *  a5 = s_sidScopeData
 *  a6 = screen pointer
-.drawSid:
+.drawSid:   
     lea     7*8*40+28(a6),a0   
     lea     ss_filterLp(a5),a1
     bsr     .drawBlock
@@ -38589,12 +38589,13 @@ patternScopeSID:
 .drawVBar64
     moveq   #64-1,d2
     move.b  #%00111110,d1
+    moveq   #40,d3
 .vl1
     tst.b   d0
     blt     .vlx
     or.b    d1,(a0)
 .vlx
-    lea     -40(a0),a0
+    sub.w   d3,a0
     subq.b  #1,d0
     dbf     d2,.vl1 
     rts
@@ -48900,7 +48901,7 @@ p_musicmaker8
 .id_musicmaker8
 	bsr.b	id_musicmaker8_
 	bne.b	.no
-	bsr	moveModuleToPublicMem
+	jsr	moveModuleToPublicMem
 	moveq	#0,d0
 .no
 	rts
