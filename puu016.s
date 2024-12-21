@@ -52298,7 +52298,8 @@ freeDeliBase
 
 	move.l deliData(a5),a0 
 	jsr 	freemem 
-.x	clr.l	deliData(a5)
+.x	clr.l	deliData(a5)   
+    clr.l   deliLoadFileArray(a5)
 	rts 
 
 
