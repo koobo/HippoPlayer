@@ -1566,6 +1566,10 @@ vgmSampleCount  rs.l    1
 vgmTime         rs.l    1 * VGM time in 44100 Hz ticks
 vgmPlayTime     rs.l    1 * Host playback time in 44100 Hz ticks
 
+* SID wave scope
+sid_followPositions rs.w    4
+sid_followFractions rs.w    4
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -37965,8 +37969,8 @@ sidScopeUpdate
 	move.l	_SIDBase(a5),a1
 	* DisplayData:
 	move.l	50(a1),a1
-	lea	.followPositions(pc),a3
-	lea	.followFractions(pc),a2
+	lea	sid_followPositions(a5),a3
+	lea	sid_followFractions(a5),a2
 	moveq	#0,d4
 .loop
 	* WORD index d7
@@ -38035,11 +38039,6 @@ sidScopeUpdate
 	cmp	#4*2,d7
 	bne.b	.loop
 .x	rts
-
-.followPositions
-	ds.w	4
-.followFractions
-	ds.w	4
 
 
 * Checks whether the opened playsid.library
