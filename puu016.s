@@ -38117,6 +38117,7 @@ residBufPtr3    dc.l    0
 residPosMask    dc.l    $7f 
 
 
+*** SID monitor scope, running as a pattern scope
 
 patternScopeSID1Update:
 	move.l	_SIDBase(a5),a0
@@ -38134,7 +38135,6 @@ patternScopeSID1Update:
 patternScopeSID2Update:
 	move.l	_SIDBase(a5),a0
     move.l  346(a0),a0      * psb_C64Mem    
-;    add.l   #$d420,a0      * SID
     add.l   #$d420,a0      * SID
     lea     s_sid2ScopeData(a4),a3
     * Grab envelope values from secret locations
@@ -38150,14 +38150,12 @@ patternScopeSID2Update:
 *   a3 = s_sidScopeData
 patternScopeSIDUpdate
     ; ---------------------------------
-    moveq   #0,d0
     move.b  $17(a0),d0
     lsr.b   #4,d0
     move.b  d0,ss_filterRes(a3)
     ; ---------------------------------
     moveq   #7,d0
     and.b   $15(a0),d0      * low byte
-    moveq   #0,d1
     move.b  $16(a0),d1      * high byte
     lsl     #3,d1
     and     #$7f8,d1
@@ -38241,23 +38239,18 @@ patternScopeSIDUpdate
     lea     sv_noise(a1),a2
     bsr     .updateValue
     ; ---------------------------------
-    moveq   #0,d0
     move.b  1(a0),d0
     ror     #8,d0
     move.b  (a0),d0
     cmp.w   #$3fff,d0   * $0000-$3fff -> $0000-$ffff
     bhs     .f1
-    lsl.w   #2,d0
+    lsl.w   #2,d0       * low freq gets 4x
     bra     .f2
 .f1
     cmp.w   #$7fff,d0   * $0000-$7fff -> $0000-$ffff
     bhs     .f2
-    add.w   d0,d0
+    add.w   d0,d0       * med freq gets 2x
 .f2
-    cmp.l   #$ffff,d0
-    bls     .fok
-    moveq   #-1,d0
-.fok
     move.w  d0,sv_freq(a1)
     ; ---------------------------------
     move.b  3(a0),d0
@@ -38302,7 +38295,7 @@ patternScopeSID:
 	rts
 .sizeOk
     push    a5
-
+   
 	bsr	noteScrollerGetFont * uses d4,a2
     * d4 = font modulo
     * a2 = font data
@@ -38323,6 +38316,7 @@ patternScopeSID:
     bsr     .drawSid
     ;----------------------------------
 
+    * Do 2nd SID if possible
     move.l  (sp),a5
     cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
     bne     .x
@@ -38453,13 +38447,13 @@ patternScopeSID:
     * scale to 0..54
     mulu    #55,d0
     lsr     #6,d0   * div 64
-    bsr     .drawVBar64
-    rts
-
+    bra     .drawVBar64
+    
 * In:
 *   a0 = output screen ptr
 *   a1 = data
 .drawBlock:
+    moveq   #0,d2
     tst.b   (a1)    * value on/off
     bne     .b1
      * clear counter active?
@@ -38488,46 +38482,48 @@ patternScopeSID:
     move.b  d0,5*40(a0)
     rts
 .b2
-    move.b  #%00000000,0*40(a0)
-    move.b  #%01111110,1*40(a0)
-    move.b  #%01111110,2*40(a0)
-    move.b  #%01111110,3*40(a0)
-    move.b  #%01111110,4*40(a0)
-    move.b  #%00000000,5*40(a0)
+    move.b  d2,0*40(a0)
+    moveq   #%01111110,d1
+    move.b  d1,1*40(a0)
+    move.b  d1,2*40(a0)
+    move.b  d1,3*40(a0)
+    move.b  d1,4*40(a0)
+    move.b  d2,5*40(a0)
     rts
 .b3
-    move.b  #%00000000,0*40(a0)
-    move.b  #%00000000,1*40(a0)
-    move.b  #%00111100,2*40(a0)
-    move.b  #%00111100,3*40(a0)
-    move.b  #%00000000,4*40(a0)
-    move.b  #%00000000,5*40(a0)
+    move.b  d2,0*40(a0)
+    move.b  d2,1*40(a0)
+    moveq   #%00111100,d1
+    move.b  d1,2*40(a0)
+    move.b  d1,3*40(a0)
+    move.b  d2,4*40(a0)
+    move.b  d2,5*40(a0)
     rts
 .b4
-    move.b  #%00000000,0*40(a0)
-    move.b  #%00000000,1*40(a0)
-    move.b  #%00011000,2*40(a0)
-    move.b  #%00011000,3*40(a0)
-    move.b  #%00000000,4*40(a0)
-    move.b  #%00000000,5*40(a0)
+    move.b  d2,0*40(a0)
+    move.b  d2,1*40(a0)
+    moveq   #%00011000,d1
+    move.b  d1,2*40(a0)
+    move.b  d1,3*40(a0)
+    move.b  d2,4*40(a0)
+    move.b  d2,5*40(a0)
     rts
 .b5
-    move.b  #%00000000,0*40(a0)
-    move.b  #%00000000,1*40(a0)
+    move.b  d2,0*40(a0)
+    move.b  d2,1*40(a0)
     move.b  #%00010000,2*40(a0)
     move.b  #%00001000,3*40(a0)
-    move.b  #%00000000,4*40(a0)
-    move.b  #%00000000,5*40(a0)
+    move.b  d2,4*40(a0)
+    move.b  d2,5*40(a0)
     rts
 .bz
     * clear!
-    moveq   #0,d0
-    move.b  d0,0*40(a0)
-    move.b  d0,1*40(a0)
-    move.b  d0,2*40(a0)
-    move.b  d0,3*40(a0)
-    move.b  d0,4*40(a0)
-    move.b  d0,5*40(a0)
+    move.b  d2,0*40(a0)
+    move.b  d2,1*40(a0)
+    move.b  d2,2*40(a0)
+    move.b  d2,3*40(a0)
+    move.b  d2,4*40(a0)
+    move.b  d2,5*40(a0)
     rts
 
 * In:
@@ -38587,7 +38583,7 @@ patternScopeSID:
 *   d0 = value 0..63
 .drawVBar64
     moveq   #64-1,d2
-    move.b  #%00111110,d1
+    moveq   #%00111110,d1
     moveq   #40,d3
 .vl1
     tst.b   d0
@@ -38600,7 +38596,6 @@ patternScopeSID:
     rts
 
            ; 0123456789012345678901234567890123456789
-;.row1 dc.b  "VOICE 1 Flt   VOICE 2       VOICE 3     "
 .row1 dc.b  "Voice1 Flt   Voice2 Flt   Voice3 Flt    "
 .row2 dc.b  "Fr           Fr           Fr            "
 .row3 dc.b  "Pw           Pw           Pw            "
