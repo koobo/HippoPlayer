@@ -94,7 +94,7 @@ _end:
 *   d1 = max position
 _getPosLen:
     move    SongPos(pc),d0
-    move    hLen(pc),d1
+    move    hLen,d1
     rts
 
 * in: 

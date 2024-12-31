@@ -30684,7 +30684,7 @@ loadfile:
     jsr     id_xmaplay
     beq     .on
 
-	bsr	id_ps3m		
+	jsr	id_ps3m		
 	tst.l	d0
 	beq	.on
 
@@ -30693,7 +30693,7 @@ loadfile:
 
 	bsr	id_TFMX_PRO
 	tst	d0
-	beq.b	.on
+	beq	.on
 
 	bsr	id_TFMX7V
 	tst	d0
@@ -44995,15 +44995,15 @@ p_delicustom
 id_delicustom
 	lea	.id1_start(pc),a1	
 	moveq	#.id1_end-.id1_start,d0
-	bsr	search
+	jsr	search
 	bne.b	.notDeli
 	lea	.id2_start(pc),a1	
 	moveq	#.id2_end-.id2_start,d0
-	bsr	search
+	jsr	search
 	bne.b	.notDeli
 	lea	.id3_start(pc),a1	
 	moveq	#.id3_end-.id3_start,d0
-	bsr	search
+	jsr	search
 	bne.b	.notDeli
 
 	* search() leaves with a0 pointing
