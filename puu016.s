@@ -51636,12 +51636,18 @@ freeDeliPlayer:
 	rts
 
 freeDeliLoadedFiles
+    DPRINT  "freeDeliLoadedFiles"
 	tst.l	deliLoadFileArray(a5)
 	beq.b 	.xy
 	move.l	deliLoadFileArray(a5),a2
 .loop
 	tst.l 	(a2) 
 	beq.b 	.end
+ if DEBUG
+    movem.l (a2),d0/d1
+    DPRINT  "Freemem %lx %lx"
+ ENDIF
+
 	move.l	(a2),a1
 	move.l	4(a2),d0
 	lore 	Exec,FreeMem
