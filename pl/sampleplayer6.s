@@ -7389,19 +7389,19 @@ convertMsString:
     moveq   #$f,d1
     and.b   -(a1),d1
     move.l  d2,d0
-    jsr     mulu_32
+    bsr     mulu_32
     add.l   d0,d4   * millisecs
 
     moveq   #10,d0
     move.l  d2,d1
-    jsr     mulu_32
+    bsr     mulu_32
     move.l  d0,d2
     bra     .loop
 .x
     * d4 = millisecs
     move.l  d4,d0
     move.l  #1000,d1
-    jsr     divu_32
+    bsr     divu_32
     * d0 = seconds
     divu.w  #60,d0
     move.l  d0,d1

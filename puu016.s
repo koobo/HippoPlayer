@@ -38407,7 +38407,7 @@ patternScopeSID:
     * d4 = font modulo
     * a2 = font data
 
-    move    #40,d7         * output buffer modulo
+    moveq   #40,d7         * output buffer modulo
 	move.l	s_draw1(a4),a5 * Draw here
     moveq   #8-1,d2        * rows to print
     lea     .row1(pc),a3   * 1st row
@@ -38434,7 +38434,7 @@ patternScopeSID:
     * d4 = font modulo
     * a2 = font data
 
-    move    #40,d7         * output buffer modulo
+    moveq   #40,d7         * output buffer modulo
 	move.l	s_draw1(a4),a5 * Draw here
     lea     8*8*40(a5),a5
     lea     .row1b(pc),a3   * 1st row
