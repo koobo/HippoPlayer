@@ -602,7 +602,7 @@ filecomment	rs.b	80+4		* tiedoston kommentti
 windowbase	rs.l	1		* p‰‰ohjelma
 mainWindowLock rs.l 1
 appwindow	rs.l	1		* appwindowbase
-screenlock	rs.l	1
+screenlock	rs.l	1       * kick2.0+: public screen lock
 rastport	rs.l	1		*
 userport	rs.l	1		*
 windowbase2	rs.l	1		* prefs
@@ -865,7 +865,6 @@ arclzx_new	rs.b	100
 pattern_new	rs.b	70
 startup_new	rs.b	120
 fkeys_new	rs.b	120*10
-pubwork		rs.l	1
 xfd_new		rs.b	1
 fontname_new	rs.b	20+1
 listfontname_new rs.b 	20+1
@@ -1348,15 +1347,20 @@ arclha		= prefsdata+prefs_arclha * pakkerit
 arczip		= prefsdata+prefs_arczip
 arclzx		= prefsdata+prefs_arclzx
 pattern		= prefsdata+prefs_pattern
-pubscreen	= prefsdata+prefs_pubscreen
+pubscreen	= prefsdata+prefs_pubscreen  * name for the selected pubscreen
 nastyaudio	= prefsdata+prefs_nasty
 doublebuf	= prefsdata+prefs_dbf
 calibrationfile = prefsdata+prefs_calibrationfile
 
+* Final pubscreen name that is referred to with
+; RT_PubScrName (requesters) and WA_PubScreenName (windows)
+pubScreenNameTags	rs.b	MAXPUBSCREENNAME+1
+
 tokenizedpattern	rs.b	70*2+2
 
-newpubscreen	rs.b	1
-newpubscreen2	rs.b	1
+newpubscreen	rs.b	1   * value of newpubscreen2 on Prefs exit, 
+                            * set to null when windows have been moved 
+newpubscreen2	rs.b	1   * set in Prefs if pubscreen is selected
 
 
 deleteflag	rs.b	1	* filen ja dividerin deletointiin
@@ -4797,15 +4801,40 @@ getscreeninfo
 	tst.b	uusikick(a5)
 	beq	.olde
 
-	lea	pubscreen(a5),a0
+    lea     -150(sp),sp     * MAXPUBSCREENNAME = 139
+	lea	pubscreen(a5),a0    
+    cmp.l   #"Fron",(a0)    * Check for "Front screen"
+    bne     .nF
+    move.l  sp,a0
+    bsr     findFrontPublicScreenName
+    lea     pubscreen(a5),a0    
+    tst.l   d0
+    beq     .nFF     * got null, go for default
+    move.l  d0,a0
+.nF
+    move.l  a0,a3               * name in a3
 	lore	Intui,LockPubScreen
+.nFF
 	move.l	d0,screenlock(a5)
 	bne.b	.ok1
-	sub.l	a0,a0
+    DPRINT  "Using default pubscreen"
+	sub.l	a0,a0           * Workbench fallback, should always work
 	lob	LockPubScreen
+    lea     aseta_vakiot\.wb(pc),a3
 	move.l	d0,screenlock(a5)
-	beq	.opener
 .ok1
+ if DEBUG
+    push    d0
+    move.l  a3,d0
+    DPRINT  "using pubscreen=%s"
+    pop     d0
+ endif
+    * Copy to where windows and requesters can find it
+    lea     pubScreenNameTags(a5),a2
+.cp move.b  (a3)+,(a2)+
+    bne     .cp
+    lea     150(sp),sp  * release stack where the name may be
+
 	move.l	d0,a0
 
 	move.l	d0,screenaddr(a5)
@@ -5140,9 +5169,48 @@ getscreeninfo
 	move.l	(a1),a1
 	bra.b	.lop0
 .e0	rts
-
-
 	
+
+* In:
+*   a0 = Buffer to store the public screen name
+* Out:
+*   d0 = Passed buffer or NULL if front screen is Workbench or not a public screen
+findFrontPublicScreenName:
+    DPRINT  "findFrontPublicScreenName"
+    move.l  a0,a4       * target buffer
+    clr.b   (a4)
+    moveq   #0,d4       * result
+	lore	Intui,LockPubScreenList
+    move.l  d0,a1
+	move.l	ib_FirstScreen(a6),a0
+    move.l  sc_Title(a0),d0
+    moveq   #WBENCHSCREEN,d0
+    and     sc_Flags(a0),d0
+    bne     .non
+    moveq   #PUBLICSCREEN,d0
+    and     sc_Flags(a0),d0
+    beq     .non
+
+    * a1 = List of PubScreenNode structures
+    bra     .goLoop
+.loop
+    cmp.l   psn_Screen(a1),a0   * Is this the front screen?
+    beq     .found    
+.goLoop
+	TSTNODE	a1,a1
+	bne     .loop
+    bra     .non
+.found
+    * Copy public name into buffer
+    move.l  LN_NAME(a1),a0
+    move.l  a4,a1
+.cp move.b  (a0)+,(a1)+
+    bne     .cp
+    move.l  a4,d4
+.non
+    lob     UnlockPubScreenList
+    move.l  d4,d0
+    rts
 
 
 ****** Piirret‰‰n ikkunan kamat
@@ -5608,7 +5676,7 @@ front	pushm	all
 	bne.b	.a
 	bra.b	.qq
 
-unlockscreen
+unlockscreen:
 	tst.b	uusikick(a5)
 	beq.b	.q
 	move.l	screenlock(a5),a1
@@ -9970,7 +10038,7 @@ find_new:
 ftags
 	dc.l	RTGS_Width,262
 	dc.l	RT_TextAttr,text_attr
-otag15	dc.l	RT_PubScrName,pubscreen+var_b
+otag15	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 	
 
@@ -11010,7 +11078,7 @@ add_divider
 .tags
 	dc.l	RTGS_Width,262
 	dc.l	RT_TextAttr,text_attr
-otag17	dc.l	RT_PubScrName,pubscreen+var_b
+otag17	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 
 
@@ -11790,7 +11858,7 @@ filereqtags
 	dc.l	RTFI_Flags
 	dc.l	FREQF_MULTISELECT!FREQF_PATGAD!FREQF_SELECTDIRS
 ;	dc.l	RT_TextAttr,text_attr
-otag2	dc.l	RT_PubScrName,pubscreen+var_b
+otag2	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 filereqtitle
 	dc.b	"Select files & dirs to add",0
@@ -12506,7 +12574,7 @@ rloadprogDoIt
 
 .tags
 	dc.l	RTFI_Flags,FREQF_PATGAD
-otag1	dc.l	RT_PubScrName,pubscreen+var_b,0
+otag1	dc.l	RT_PubScrName,pubScreenNameTags+var_b,0
 
 * UGH! Evil hackery:
 ;loadprog
@@ -12986,7 +13054,7 @@ rsaveprog
 
 
 .tags	dc.l	RTFI_Flags,FREQF_PATGAD
-otag16	dc.l	RT_PubScrName,pubscreen+var_b,0
+otag16	dc.l	RT_PubScrName,pubScreenNameTags+var_b,0
 
 
 prgheader	dc.b	"HiPPrg",10,10	* headeri
@@ -14645,9 +14713,6 @@ exprefs	move.l	_IntuiBase(a5),a6
 	bmi.b	.yyk2
 	lob	FreeSignal
 .yyk2
-
-	bsr	freepubwork		* Vapautetaan mahd. pubscreenlocki
-	clr.l	pubwork(a5)
 
 	tst.b	prefs_exit(a5)
 	beq	.cancelled
@@ -16669,7 +16734,7 @@ dir_req:
 .dirtags
 	dc.l	RTFI_Flags,FREQF_NOFILES
 ;	dc.l	RT_TextAttr,text_attr
-otag4	dc.l	RT_PubScrName,pubscreen+var_b
+otag4	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 
 
@@ -16877,7 +16942,7 @@ pgetfile
 
 .tags
 	dc.l	RTFI_Flags,FREQF_PATGAD
-otag14	dc.l	RT_PubScrName,pubscreen+var_b,TAG_END
+otag14	dc.l	RT_PubScrName,pubScreenNameTags+var_b,TAG_END
 
 ********* Alarm
 ralarm
@@ -16998,7 +17063,7 @@ rfkeys
 .tags	dc.l	RTEZ_ReqTitle,.title
 	dc.l	RT_Underscore,"_"
 	dc.l	RT_TextAttr,text_attr
-otag5	dc.l	RT_PubScrName,pubscreen+var_b
+otag5	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 
 *********** Timeout
@@ -17080,7 +17145,7 @@ pselector2
 	dc.l	RTEZ_ReqTitle,reqtitle
 	dc.l	RT_Underscore,"_"
 	dc.l	RT_TextAttr,text_attr
-otag3	dc.l	RT_PubScrName,pubscreen+var_b
+otag3	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 
 pgad5	dc.b	"_1|_2|_3|_4|_5",0
@@ -17113,44 +17178,83 @@ perr
 **** Select screen
 
 rselscreen
-	tst.b	uusikick(a5)
-	bne.b	.n
+    tst.b	uusikick(a5)
+	bne.b	.nk
 	rts
 
-.n	st	newpubscreen2(a5)
-	
-	bsr.b	freepubwork
+.nk
+    * new list selector data
+    lea     -512(sp),sp
+    * 0: width in characters
+    * 1: height in lines
+    move.l  sp,a3
+    move.b  #16,(a3)+    * default width
+    move.b  #1,(a3)+     * at least one 
 
-.l	move.l	pubwork(a5),a0
-	lea	pubscreen_new(a5),a1
-	lore	Intui,NextPubScreen
-	tst.l	d0
-	bne.b	.fe
-	clr.l	pubwork(a5)
-	bra.b	.l
-.fe
+    * Get public screens and put them into the list
+	lore	Intui,LockPubScreenList
+    move.l  d0,a1
+    * a1 = List of PubScreenNode structures
+    bra     .goLoop
+.loop
+    move.l  LN_NAME(a1),a0  * screen name
+    bsr     .cp
+    addq.b  #1,1(sp)        * increase entry counter
+.goLoop
+	TSTNODE	a1,a1
+	bne     .loop
 
+    lob     UnlockPubScreenList
+
+    * Index 0: Workbench
+    * Index 1: ...
+    * Index 2: ...
+    * Index last: Front
+
+    * Put the last one
+    lea     .front(pc),a0
+    bsr     .cp
+
+    move.l  sp,a0
+	bsr	listselector
+    DPRINT  "listselector=%ld"
+    tst.b   d0
+    bmi     .x
+
+    * What was the name?
+    lea     2(sp),a0    
+    tst.b   d0
+    bra     .goFind
+.findName
+    tst.b   (a0)+
+    bne     .findName
+    subq.b  #1,d0
+.goFind
+    bne     .findName
+    * Copy it
+    lea     pubscreen_new(a5),a3
+    bsr     .cp
+.cont
  if DEBUG
-	lea	pubscreen_new(a5),a0
-    move.l  a0,d0    
-    DPRINT  "NextPubScreen=%s"
+    pushpea pubscreen_new(a5),d0
+    DPRINT  "Selected pubscreen=%s"
  endif
-	bsr.b	pselscreen
+    st	newpubscreen2(a5)	
+	bsr pselscreen
+.x	
 
-	lea	pubscreen_new(a5),a0
-	lob	LockPubScreen
-	move.l	d0,pubwork(a5)
-	beq.b	.l
-	rts
+    lea 512(sp),sp
+    rts
 
-freepubwork
-	move.l	pubwork(a5),d0
-	beq.b	.eb
-	move.l	d0,a1
-	sub.l	a0,a0
-	lore	Intui,UnlockPubScreen
-.eb	rts
-	
+.cp
+    move.b  (a0)+,(a3)+
+    bne     .cp
+    rts
+
+.front  dc.b    "Front screen",0
+ even
+
+
 pselscreen
 	tst.b	uusikick(a5)
 	bne.b	.new
@@ -17307,7 +17411,7 @@ fontreqtags
 	dc.l	RTFO_FilterFunc,.fontfilter
 	dc.l	RT_TextAttr,text_attr
 .pubScreenTag
-	dc.l	RT_PubScrName,pubscreen+var_b
+	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 
 .fontfilter
@@ -17396,7 +17500,7 @@ listfontreqtags
 	dc.l	RTFO_MinHeight,6
 	dc.l	RT_TextAttr,text_attr
 .pubScreenTag
-	dc.l	RT_PubScrName,pubscreen+var_b
+	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 
 pListFont
@@ -23767,7 +23871,7 @@ infodefresponse	=	*-4
 
 	dc.l	RT_Underscore,"_"
 	dc.l	RT_TextAttr,text_attr
-otag8	dc.l	RT_PubScrName,pubscreen+var_b
+otag8	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 	dc.l	TAG_END
 
 init_error
@@ -59602,7 +59706,7 @@ idcmpmw	dc.l	idcmpflags
 *** Kick2.0+ window extension
 * pubscreen, zip window
 
-.t	dc.l	WA_PubScreenName,pubscreen+var_b	
+.t	dc.l	WA_PubScreenName,pubScreenNameTags+var_b	
 	dc.l	WA_PubScreenFallBack,TRUE
 	* Needed by ZipWindow (kick2.0)
 	* Pointer to four words, LeftEdge, TopEdge, Width, Height
@@ -60587,7 +60691,7 @@ gadgetPositionSlider
 * Asetetaan pubscreen
 
 enw_tags
-	dc.l	WA_PubScreenName,pubscreen+var_b	
+	dc.l	WA_PubScreenName,pubScreenNameTags+var_b	
 	dc.l	WA_PubScreenFallBack,TRUE
 	dc.l	TAG_END
 	
