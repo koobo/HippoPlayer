@@ -1,6 +1,31 @@
+
+TODO:
+- a loop track button added to the button bar, easier than playmode switch from Prefs
+
+TODO:
+- playing a network stream a long time will increase the t:agetout
+  temp file slowly, it may get too large
+
+TODO:
+- easier way to set "play module repeatedly"
+-- key shortcut
+-- obscure rmb combo 
+-- new button 
+
+TODO:
+- bring hippo to front 
+-- hippo runs on WB/some screen
+   run "hip front"  from DOpus -> still on WB 
+-- hippo not started 
+   run "hip front" from DOPUS -> opens on DOpus 
+-- public screen setting: add "FRONT", always open new hip  
+   on frontmost screen if it is public screen
+
+
 TODO:
 - mhi mp3 output: displays "0kB", why? remove mpega.lib and try?
-  - mhiReadMp3Properties failaa, kÃ¤y nÃ¤in -> mpega.libr puuttuu?
+  - mhiReadMp3Properties failaa, kÃ¤y nÃ¤in -> mpega.library puuttuu?
+  - yes
 
 
 TODO:
@@ -81,7 +106,7 @@ on standard RAmiga+c and RAmiga+v?
 
 TODO:
 - sinus.xm: PS3Mn kanssa ei voi patternskipata kuin 0 tai 1 vaikka on pidempi modi
-- toteutus tehty niin että lyhyen modin kanssa ei toimi oikein
+- toteutus tehty niin ettï¿½ lyhyen modin kanssa ei toimi oikein
 
 TODO:
 - check the pt song issue, doesn't seem to work
@@ -119,6 +144,10 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
+FIXED: TODO
+- PS3M AHI -> pattern scope works for 4ch mods only
+
+
 FIXED: TODO:
 - 3SID scope display
 
@@ -150,7 +179,7 @@ FIXED: TODO:
 - rename cybersoud button to: Sample 14-bit out or something
 
 FIX: TODO:
-- MHI startataan vaikka ei olisi edes mp3-file kyseessä
+- MHI startataan vaikka ei olisi edes mp3-file kyseessï¿½
 
 
 FIXED: TODO:
@@ -461,7 +490,7 @@ FIXED: TODO:
 - OK: DISABLE ctrl+s onn kick13
 
 - OK: exit local find layout while in SEARCH VIEW with mouse click
-- jotain roskaa jää fileboxin alimmalle riville kun vaihtelee searc
+- jotain roskaa jï¿½ï¿½ fileboxin alimmalle riville kun vaihtelee searc
   view <-> muut viewit
 
 FIXED: TODO:

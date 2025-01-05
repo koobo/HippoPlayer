@@ -64,6 +64,40 @@ New keyboard shortcuts:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
+# Changes from v2.61 (28.5.2024) to v2.62 (?.?.2025) 
+
+## Fixes:
+
+- Fix possible memory corruption issue with ImpulseTracker v2.14 modules.
+  Older IT format modules unaffected.
+
+- Pattern scope: Fix not displying anything when AHI enabled and module
+  has more than 4 channels.
+
+## New stuff:
+
+- Prefs: Option to select public screen "Front screen". Hippo will then
+  try to open to the frontmost public screen whatever it may be, falling 
+  back to Workbench.
+
+- PSID improvements with the updated playsid.library v1.8:
+  - ZorroSID support, a zorro card with a real SID chip.
+  - Some minor reSID fixes.
+
+- PatternScope for PSID music. Does not actually display a pattern,
+  instead displays the state of the SID chip in various ways
+  which is kind of fun to look at. "Patternscope XL" will display
+  information for 2SIDs.
+
+- ...
+
+- ...
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
 # Changes from v2.60 (18.2.2024) to v2.61 (28.5.2024)
 
 ## Fixes:
