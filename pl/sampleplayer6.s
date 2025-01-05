@@ -7375,7 +7375,7 @@ get_syncsafe_integer:
 *   d0 = seconds
 *   d1 = minutes
 convertMsString:
-    moveq   #0,d0
+    moveq   #0,d4
     move.l  a0,a1
 .1
     tst.b   (a1)+
@@ -7386,17 +7386,30 @@ convertMsString:
 .loop
     cmp.l   a0,a1
     beq     .x
-    moveq   #$f,d3
-    and.b   -(a1),d3
+    moveq   #$f,d1
+    and.b   -(a1),d1
+    move.l  d2,d0
+    jsr     mulu_32
+    add.l   d0,d4   * millisecs
 
-    mulu.l  d2,d3
-    add.l   d3,d0
-    mulu.l  #10,d2
+    moveq   #10,d0
+    move.l  d2,d1
+    jsr     mulu_32
+    move.l  d0,d2
     bra     .loop
 .x
-    divu.l  #1000,d0
-    divul.l #60,d1:d0
+    * d4 = millisecs
+    move.l  d4,d0
+    move.l  #1000,d1
+    jsr     divu_32
+    * d0 = seconds
+    divu.w  #60,d0
+    move.l  d0,d1
+    swap    d0
+    ext.l   d0
+    ext.l   d1
     rts
+
 
 
 
@@ -7659,12 +7672,12 @@ mhiInit:
 
 
 
-    move.l  mhiStreamSize(a5),d0
+    move.l  mhiStreamSize(a5),d1
     beq.b   .2
-    move    mpbitrate(a5),d1
+    move    mpbitrate(a5),d0
     beq.b   .2      * variable? skip
-    mulu    #1024/8,d1    * kBits to bits
-    divu.l  d1,d0   * into seconds
+    mulu    #1024/8,d0   * kBits/s to bytes/s
+    bsr     divu_32      * size in bytes / bytes/s -> to seconds
     * Put it
     bsr     init\.moi_mp
 .2
