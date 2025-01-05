@@ -27187,7 +27187,10 @@ drawScope:
     * PS3M + AHI is handled like a ordinary 4ch poke scope
     jsr     ahiWith4ChannelsActive
     bne     .goAhi
-    * Too many AHI voices, do not draw 
+    * Too many AHI voices for wave scopes, check if can do patterns
+    bsr     patternScopeIsActive
+    beq     .goAhi
+    * This didn't work out, not drawing.
     rts
     ; ---------------------------------
 .notMulti  
