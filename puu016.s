@@ -428,7 +428,7 @@ prefs_medfastmemplay  rs.b     1
 prefs_showPositionSlider rs.b  1
 prefs_residboost      rs.b      1
 prefs_midimode        rs.b      1
-                      rs.b      1 *pad
+prefs_ps3mamigus      rs.b      1 
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -898,6 +898,8 @@ contonerr_laskuri rs.b 1		* kuinka monta virheellistä lataus
 ;cybercalibration_new rs.b 1		* yritystä
 ;calibrationfile_new rs.b 100
 ;newcalibrationfile rs.b	1
+ps3mamigus_new    rs.b   1
+                  rs.b   1 * pad
 
 mhiLib_new      rs.b MHILIB_SIZE
 
@@ -1534,7 +1536,8 @@ selectedSearch = prefsdata+prefs_selectedSearch
 
 mhiEnable      = prefsdata+prefs_mhiEnable
 mhiLib         = prefsdata+prefs_mhiLib
-
+* 0 = not used, 1 = normal mode, 2 = interpolated mode
+ps3mamigus     = prefsdata+prefs_ps3mamigus
 
 * Flags to indicate the bottom search layout state
 * Tested with .w!
@@ -6388,9 +6391,13 @@ inittick
 
 * d0 = <>0: aseta merkki, muutoin tyhjennä alue
 * d2/d3 = kohde x,y
+* a0 = gadget
 
-tickaa	pushm	d0-d6/a0-a2/a6
-
+tickaa:	pushm	d0-d6/a0-a2/a6
+    move    #GFLG_DISABLED,d6
+    and.w   gg_Flags(a0),d6
+    bne     .x
+    
 	move	#$c0,d6			* suora kopio
 ;	move	#$ee,d6			* D: A or D
 	tst.b	d0
@@ -6411,6 +6418,7 @@ tickaa	pushm	d0-d6/a0-a2/a6
 ;	add	windowleft(a5),d2
 ;	add	windowtop(a5),d3
 	lore	GFX,BltBitMapRastPort
+.x
 	popm	d0-d6/a0-a2/a6
 	rts
 
@@ -14312,6 +14320,7 @@ prefs_code
 	move.b	altbuttons(a5),altbuttons_new(a5)
 	move.b	mhiEnable(a5),mhiEnable_new(a5)
 	move.b	showPositionSlider(a5),showPositionSlider_new(a5)
+    move.b  ps3mamigus(a5),ps3mamigus_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -14465,22 +14474,26 @@ prefs_code
 
 	bsr	inittick
 
-
-	move	#GFLG_DISABLED,d0
+	move	#GFLG_DISABLED,d4
+    lea     VaL6,a3
+    basereg VaL6,a3
 	tst.b	uusikick(a5)		* uusi kick?
 	bne.b	.uusi
-    lea     VaL6,a0
-    basereg VaL6,a0
 ** Disabloidaan screengadgetti!
-;	or	d0,gg_Flags+pbutton13
+;	or	d4,gg_Flags+pbutton13
 ** Disabloidaan ahi-valinta
-	or	d0,gg_Flags+VaL6(a0)
+	or	d4,gg_Flags+VaL6(a3)
 
     * Disable MHI gadgtes
-	or	d0,gg_Flags+prefsMHIEnable(a0)
-	or	d0,gg_Flags+prefsMHILib(a0)
-    endb    a0
+	or	d4,gg_Flags+prefsMHIEnable(a3)
+	or	d4,gg_Flags+prefsMHILib(a3)
 .uusi
+    bsr    checkAmiGUSAvailability
+    tst    d0
+    bne    .yesGus
+    or     d4,gg_Flags+bENDER1(a3)
+.yesGus
+    endb    a3
 
 	move.l	_IntuiBase(a5),a6
 	lea	winstruc2,a0
@@ -14780,6 +14793,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	xmaplay_new(a5),xmaplay(a5)
 	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
+    move.b  ps3mamigus_new(a5),ps3mamigus(a5)
 
     move.b  showPositionSlider(a5),d0
     move.b  showPositionSlider_new(a5),showPositionSlider(a5)
@@ -15176,26 +15190,30 @@ prefsgads
 	sub.l	a2,a2
 	lore	Intui,AddGList
 
+    
 	lea	gadgets2,a0
 	move.l	windowbase2(a5),a1
 	sub.l	a2,a2
 	lob	RefreshGadgets
 
+    bsr     refreshPrefsGads
 
-;	tst.b	uusikick(a5)
-;	beq	.loru
+	move.l	rastport2(a5),a1
+	move.l	pen_1(a5),d0
+	lore	GFX,SetAPen
+	move.l	pen_0(a5),d0
+	move.l	rastport2(a5),a1
+	lob	SetBPen
 
+
+	bra	pupdate
+	
+
+refreshPrefsGads:
 *** Gadgettien reunojen vahvistus
 	lea	gadgets2,a3
 .loloop
 	move.l	(a3),d3
-
-;	moveq	#GTYP_GTYPEMASK,d7
-;	and	gg_GadgetType(a3),d7	* tyyppi
-;	cmp.b	#GTYP_PROPGADGET,d7	* ei kosketa slidereihim
-;	beq.b	.sli
-;	cmp.b	#GTYP_STRGADGET,d7	* eikä stringeihin
-;	beq.b	.nel
 
 	move	gg_GadgetType(a3),d7
 	subq.b	#GTYP_PROPGADGET,d7
@@ -15230,18 +15248,7 @@ prefsgads
 
 
 .loru
-
-
-	move.l	rastport2(a5),a1
-	move.l	pen_1(a5),d0
-	lore	GFX,SetAPen
-	move.l	pen_0(a5),d0
-	move.l	rastport2(a5),a1
-	lob	SetBPen
-
-
-	bra	pupdate
-	
+    rts
 
 
 ****************** 
@@ -15356,6 +15363,9 @@ pmousebuttons
 	lea	jommo,a0		* ps3m buffer size
 	lea	rps3mb_req(pc),a2
 	bsr 	.check
+    lea     bENDER1,a0
+    lea     rps3mamigus_req(pc),a2
+    bsr     .check
 	bra 	.xx
 	
 					* ahi sivun ohi
@@ -15498,6 +15508,7 @@ pupdate:				* Ikkuna päivitys
 	bsr	pps3mb			* ps3m buffer
 	bsr	pupdate7b		* stereo
 	bsr	psettings		* settings file
+    bsr pps3mamigus     * ps3m amigus mode
 ;	bsr	pcyber			* cyber calibration
 ;	bsr	pcybername		* cyber calibration file name
 	bra	.x
@@ -15571,10 +15582,14 @@ prunt2:
 	moveq	#1,d7		* ei korvaa
 	bra.b	pru0
 
-prunt
+prunt:
 	pushm	all
 	moveq	#0,d7
 pru0
+    move    #GFLG_DISABLED,d0
+    and.w   gg_Flags(a1),d0
+    bne     .nok
+
 	movem.l	a0/a1,-(Sp)			* putsaus
 	movem	gg_LeftEdge(a1),d0/d1/d4/d5
 	move.l	rastport2(a5),a0
@@ -15758,6 +15773,7 @@ gadgetsup2
 	dr	rsmode3		* ps3m volumeboost
 	dr	rsmode4		* ps3m stereofactor
 	dr	rsettings	* settings file on/off
+    dr  rps3mamigus * ps3m amigus mode
 ;	dr	rcyber		* cyber calibration
 ;	dr	rcybername	* cyber calibration file name
 
@@ -16438,6 +16454,115 @@ psettings
 	bra	tickaa
 
 
+rps3mamigus_req
+	lea	pps3mamigus\.ls0(pc),a0
+	bsr	listselector
+	bmi.b	.x
+	move.b	d0,ps3mamigus_new(a5)
+	bra.b	pps3mamigus_update
+.x	rts
+
+rps3mamigus
+	addq.b	#1,ps3mamigus_new(a5)
+	cmp.b	#2,ps3mamigus_new(a5)
+	ble.b	.3
+	clr.b   ps3mamigus_new(a5)
+.3
+
+pps3mamigus_update
+    bsr     pps3mamigus
+    
+    move.b	ps3mamigus_new(a5),d0
+    beq     ps3mamigusEnableOthers
+    bra     ps3mamigusDisableOthers
+
+pps3mamigus
+	lea     .ls1(pc),a0
+    move.b	ps3mamigus_new(a5),d0
+    beq     .g
+	lea     .ls2(pc),a0
+    subq.b  #1,d0
+    beq     .g
+	lea     .ls3(pc),a0
+.g
+    lea     bENDER1,a1
+    bra     prunt
+    
+.ls0	dc.b	18,3
+.ls1	dc.b	"No",0
+.ls2	dc.b	"Yes, normal",0
+.ls3	dc.b	"Yes, interpolate",0
+ even
+
+ps3mamigusDisableOthers:
+    lea     smode1,a4
+    basereg smode1,a4
+    move.l  a4,a3
+    bsr     .disable
+    lea     smode2(a4),a3
+    bsr     .disable
+    lea     jommo(a4),a3
+    bsr     .disable
+    lea     pslider1(a4),a3
+    bsr     .disable
+    lea     juusto(a4),a3
+    bsr     .disable
+    lea     juust0(a4),a3
+    bsr     .disable
+    lea     Fruit(a4),a3
+    bsr     .disable
+    endb    a4
+    rts
+
+.disable
+    move.l  a3,a0
+	move.l	windowbase2(a5),a1
+    sub.l   a2,a2
+    lore    Intui,OffGadget
+    rts
+
+ps3mamigusEnableOthers:
+    lea     smode1,a4
+    move    #GFLG_DISABLED,d0
+    and     gg_Flags(a4),d0
+    beq     .x
+    basereg smode1,a4
+    move.l  a4,a3
+    bsr     .enable
+    lea     smode2(a4),a3
+    bsr     .enable
+    lea     jommo(a4),a3
+    bsr     .enable
+    lea     pslider1(a4),a3
+    bsr     .enable
+    lea     juusto(a4),a3
+    bsr     .enable
+    lea     juust0(a4),a3
+    bsr     .enable
+    lea     Fruit(a4),a3
+    bsr     .enable
+    bsr     refreshPrefsGads
+    bsr     pupdate
+    endb    a4
+.x
+    rts
+
+.enable
+    move.l  a3,a0
+	move.l	windowbase2(a5),a1
+    sub.l   a2,a2
+    lore    Intui,OnGadget
+	cmp	#GTYP_PROPGADGET,gg_GadgetType(a3)
+    beq     .xx
+	movem	4(a3),d0/d1/d4/d5
+	move.l	rastport2(a5),a1
+    move.l  a1,a0
+	move	d0,d2
+	move	d1,d3
+	moveq	#$0a,d6
+	move.l	_GFXBase(a5),a6
+	jmp	    _LVOClipBlit(a6)
+.xx rts
 
  REM
 ***** cyber calibration nappu
@@ -44091,6 +44216,18 @@ patchIt:
     jsr     clearCpuCaches
 .x  pop     d0
     rts
+
+checkAmiGUSAvailability:
+.AMIGUS_HAGEN_PRODUCT_ID	= 17
+.AMIGUS_MANUFACTURER_ID		= 2782
+    move.l  _ExpansionBase(a5),d0
+    beq     .x
+    move.l  d0,a6
+    sub.l   a0,a0
+    move.l  #.AMIGUS_MANUFACTURER_ID,d0
+    moveq   #.AMIGUS_HAGEN_PRODUCT_ID,d1
+    lob     FindConfigDev
+.x  rts
 
 
 ******************************************************************************
