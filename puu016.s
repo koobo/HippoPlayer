@@ -7678,7 +7678,7 @@ omaviesti
 .lop	
 	lea		200(sp),sp
 	bsr		releaseModuleList
-	bsr	listChanged
+	jsr	listChanged
 	bsr	forceRefreshList
 	bra.b	.huh
 
@@ -10979,7 +10979,7 @@ rbutton1:
 .inierr	
 	DPRINT	"Replay init ERROR"
 	move.l	#PLAYING_MODULE_NONE,playingmodule(A5)	* initvirhe
-	bra	init_error
+	jmp	init_error
 ;	rts
 
 halt:	clr.b	playing(a5)	
@@ -24723,7 +24723,7 @@ rexxmessage
 	bsr	nimenalku
 	move.l	a0,l_nameaddr(a3)	* pelkän nimen osoite
 
-	bsr	addfile
+	jsr	addfile
 	bsr	listChanged
 
 	tst.l	chosenmodule(a5)
@@ -32720,7 +32720,7 @@ tutki_moduuli:
 	bra	.ex
 
 .futureplayer
-	pushpea	p_futureplayer(pc),playerbase(a5)
+	pushpea	p_futureplayer,playerbase(a5)
 	move	#pt_futureplayer,playertype(a5)
 	bra	.ex
 
@@ -45235,7 +45235,7 @@ p_digitalmugician
 .id_digitalmugician
 	lea	.id_start(pc),a1	
 	moveq	#.id_end-.id_start,d0
-	bsr	search
+	jsr	search
 	bra	idtest
 
 .id_start
