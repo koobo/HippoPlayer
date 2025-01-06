@@ -14488,7 +14488,7 @@ prefs_code
 	or	d4,gg_Flags+prefsMHIEnable(a3)
 	or	d4,gg_Flags+prefsMHILib(a3)
 .uusi
-    bsr    checkAmiGUSAvailability
+    jsr    checkAmiGUSAvailability
     tst    d0
     bne    .yesGus
     or     d4,gg_Flags+bENDER1(a3)
@@ -19825,14 +19825,19 @@ inforivit_play:
     pushpea type_notAhi(pc),d3
     cmp     #pt_multi,playertype(a5)
     bne     .notAhi
+    tst.b   ahi_use_nyt(a5)
+	bne		.yesAhi
     cmp.b   #sm_stereo14,s3mmode2(a5)
     bne     .not14
     pushpea type_14bit(pc),d3
     bra     .notAhi
-.not14
-    tst.b   ahi_use_nyt(a5)
-    beq     .notAhi
+.yesAhi
     pushpea type_ahi(pc),d3
+	tst.b	ps3mamigus(a5)
+	beq		.notAG
+    pushpea type_agus(pc),d3	
+.notAG
+.not14
 .notAhi
 
     * d0 = name; d1 = type; d2 = AHI/not ahi
@@ -20142,6 +20147,7 @@ typpi
 type_ahi    dc.b    " AHI"
 type_notAhi dc.b    0
 type_14bit  dc.b    " 14-bit",0
+type_agus   dc.b    " AGUS",0
  even
 
 *******************************************************************************
@@ -26263,7 +26269,6 @@ scopeLoop:
 	and	#pf_quadscopeUps!pf_quadscopePoke,d0
 	beq 	.doNotDrawClear
 .izOk
-
 	bsr	scopeDrawAreaSizeChangeRequestIsActive
 	bne 	.doNotDraw
 
@@ -27306,11 +27311,15 @@ drawScope:
     ; ---------------------------------
     cmp 	#pt_multi,playertype(a5)
     bne.b   .notMulti
+	* PS3M with AmiGUS?
+	tst.b	ps3mamigus(a5)
+	bne		.amigus
     * PS3M without AHI?
     tst.b   ahi_use_nyt(a5)
     beq     .renderPS3M
-    * PS3M + AHI is handled like a ordinary 4ch poke scope
-    jsr     ahiWith4ChannelsActive
+.amigus
+    * PS3M + AHI (or AmiGUS) is handled like a ordinary 4ch poke scope
+    jsr     ahiOrGusWith4ChannelsActive
     bne     .goAhi
     * Too many AHI voices for wave scopes, check if can do patterns
     bsr     patternScopeIsActive
@@ -43657,7 +43666,24 @@ p_multi:
     moveq   #0,d0
     moveq   #0,d1
 
-	move.b	ahi_use(a5),d2
+	* Select mode: normal, AHI, AmiGUS
+	move.b	ahi_use(a5),d2	 * AHI overrides
+	beq		.notAhi
+	moveq	#1,d2
+	bra		.goAhi
+.notAhi
+	cmp.b	#1,ps3mamigus(a5)
+	beq     .amiGUSNormal
+	cmp.b	#2,ps3mamigus(a5)
+	beq	    .amiGUSInter
+	bra	    .goAhi
+.amiGUSNormal
+	moveq	#-1,d2
+	bra	    .goAhi
+.amiGUSInter
+	moveq	#-2,d2
+.goAhi
+
 	move.l	ahi_rate(a5),d3
 	move	ahi_mastervol(a5),d4
 	move	ahi_stereolev(a5),d5
@@ -44175,9 +44201,12 @@ convertIT214:
 * In this case the scopes can be used in AHI mode.
 * Out:
 *   Z: set if false, clear if true
-ahiWith4ChannelsActive:
+ahiOrGusWith4ChannelsActive:
+	tst.b	ps3mamigus(a5)	* Cheat! AmiGUS should also work.
+	bne		.gus
     tst.b   ahi_use_nyt(a5)
     beq     .no
+.gus
     * Check if more than 4 voices, bail out if so
     tst.l   deliPatternInfo(a5)
     beq     .no
@@ -44227,7 +44256,14 @@ checkAmiGUSAvailability:
     move.l  #.AMIGUS_MANUFACTURER_ID,d0
     moveq   #.AMIGUS_HAGEN_PRODUCT_ID,d1
     lob     FindConfigDev
-.x  rts
+.x  
+	tst.l  	d0
+	bne		.yes
+	clr.b	ps3mamigus(a5)	* for safety clear setting
+	rts
+.yes 
+	st      d0
+	rts
 
 
 ******************************************************************************

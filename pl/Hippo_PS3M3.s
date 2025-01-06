@@ -289,7 +289,13 @@ adjustroutine	dc.l	0
 voluproutine	dc.l	0
 s3mmode1a	dc.b	0
 
+* Use mode in "ahi_use"
+USE_NORMAL        = 0
+USE_AHI           = 1
+USE_AMIGUS_NORMAL = -1
+USE_AMIGUS_INTERP = -2
 ahi_use		dc.b	0
+
 ahi_rate	dc.l	0
 ahi_mastervol	dc	0
 ahi_stereolev	dc	0
@@ -327,6 +333,15 @@ init1r
 	move.l	d6,ahi_mode
 
 	move.l	d7,setmodulelen
+
+ if DEBUG
+    moveq   #0,d0
+    move.b  ahi_use,d0
+    ext     d0
+    ext.l   d0
+    DPRINT  "ahi_use=%ld"
+ endif
+
 	rts
 
 init2r	
