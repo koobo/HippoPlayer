@@ -43659,6 +43659,10 @@ p_multi:
     move.l  #1,ps3m_sampleDataModulo(a5)
 	move	mixirate+2(a5),hip_ps3mrate+hippoport(a5)
 
+	* This will clear ps3mamigus if for some reason
+	* it is set and the card is missing.
+	bsr		checkAmiGUSAvailability
+
 * v‰litet‰‰n tietoa ps3m:lle ja hankitaan sit‰ silt‰
 
 ;	move.b	cybercalibration(a5),d0
@@ -43667,22 +43671,17 @@ p_multi:
     moveq   #0,d1
 
 	* Select mode: normal, AHI, AmiGUS
-	move.b	ahi_use(a5),d2	 * AHI overrides
-	beq		.notAhi
-	moveq	#1,d2
-	bra		.goAhi
-.notAhi
+	moveq	#-1,d2			* d2 = ahi_use
 	cmp.b	#1,ps3mamigus(a5)
-	beq     .amiGUSNormal
-	cmp.b	#2,ps3mamigus(a5)
-	beq	    .amiGUSInter
-	bra	    .goAhi
-.amiGUSNormal
-	moveq	#-1,d2
-	bra	    .goAhi
-.amiGUSInter
+	beq     .gogo
 	moveq	#-2,d2
-.goAhi
+	cmp.b	#2,ps3mamigus(a5)
+	beq     .gogo
+	moveq	#1,d2
+	tst.b	ahi_use(a5)
+	bne		.gogo
+	moveq	#0,d2
+.gogo
 
 	move.l	ahi_rate(a5),d3
 	move	ahi_mastervol(a5),d4
