@@ -26408,6 +26408,10 @@ qexit:
 	* Dangerous exit procedures!	
 	lore	Exec,Forbid
 
+	* Prevent scope interrupt from rusing the task local data
+	move.l	s_quad_task(a4),a0
+	clr.l	TC_Userdata(a0)
+
 	* Not running anymore
 	move.l	s_runningStatusAddr(a4),a0
 	clr.b	(a0)
@@ -38170,7 +38174,9 @@ sidScopeUpdate
     beq     .noP
     * Single SID patternscope
     * Get pattern scope task data area
-    move.l  taskPatternScope+TC_Userdata(a5),a4
+    move.l  taskPatternScope+TC_Userdata(a5),d0
+    beq		.noP
+    move.l	d0,a4
     bsr     patternScopeSID1Update
 .noP
     bsr     playSidInRESIDMode
@@ -38183,7 +38189,9 @@ sidScopeUpdate
     beq     .noS
     * 2SID patternscope
     * Get pattern scope task data area
-    move.l  taskPatternScope+TC_Userdata(a5),a4
+    move.l  taskPatternScope+TC_Userdata(a5),d0
+    beq		.noS
+    move.l	d0,a4
     bsr     patternScopeSID2Update
 .noS
 
