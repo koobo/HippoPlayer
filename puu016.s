@@ -38779,8 +38779,9 @@ patternScopeSID:
 *   a0 = output screen ptr
 *   d0 = value 0..63
 .drawBar64
-    move.b  #$80,d1 * mask
     moveq   #64-1,d2
+.drawBarX
+    moveq   #$ffffff80,d1 * mask
 .dl1
     tst.b   d0
     blt     .dlx
@@ -38805,27 +38806,8 @@ patternScopeSID:
 *   a0 = output screen ptr
 *   d0 = value 0..15
 .drawBar16
-    move.b  #$80,d1 * mask
     moveq   #16-1,d2
-.dl1_
-    tst.b   d0
-    blt     .dlx_
-    ;or.b    d1,0*40(a0)
-   ; or.b    d1,1*40(a0)
-    or.b    d1,2*40(a0)
-    or.b    d1,3*40(a0)
-    or.b    d1,4*40(a0)
-;    or.b    d1,5*40(a0)
-.dlx_
-    or.b    d1,5*40(a0)
-;    or.b    d1,6*40(a0)
-    ror.b   #1,d1
-    bpl     .dl2_
-    addq    #1,a0
-.dl2_
-    subq.b  #1,d0
-    dbf     d2,.dl1_ 
-    rts
+    bra     .drawBarX
 
 * In:
 *   a0 = output screen ptr
