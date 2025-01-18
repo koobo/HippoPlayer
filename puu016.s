@@ -35774,7 +35774,7 @@ sortStringPtrArray
 * Audio allocation
 *******************************************************************************
 
-varaa_kanavat
+varaa_kanavat:
 	tst.b	kanavatvarattu+var_b
 	beq.b	.jee
 	moveq	#0,d0
@@ -35829,7 +35829,7 @@ acouscl
 	moveq	#-1,d0
 	rts
 
-vapauta_kanavat	
+vapauta_kanavat:
 	tst.b	kanavatvarattu+var_b
 	bne.b	.eeo
 	rts
@@ -35977,7 +35977,7 @@ ciaint_setTempoFromD0
 	bra.b	ciaint_setTempo
 
 
-rem_ciaint
+rem_ciaint:
 	tst.b	ciasaatu(a5)
 	beq.b	.hm
 	rts
@@ -36009,13 +36009,13 @@ rem_ciaint
 * Varaa muistia ja purkaa soittorutiinin
 * a0 = osoitin paikkaan mihin laitetaan osoite
 
-allocreplayer2
+allocreplayer2:
 	pushm	d1-a6
 	DPRINT	"Alloc replayer to chip"
 	moveq	#MEMF_CHIP,d6
 	bra.b	are
 
-allocreplayer
+allocreplayer:
 	pushm	d1-a6
 	DPRINT	"Alloc replayer to public mem"
 	moveq	#MEMF_PUBLIC,d6
@@ -36300,6 +36300,63 @@ clearsound
 	popm	d0/a0
 	rts
 
+* before: 150876
+* after:  150044
+
+generalReplayInitChipMem:
+    moveq   #1,d1
+    bra     generalReplayInitDo
+
+generalReplayInitNoAlloc:
+    moveq   #-1,d1
+    bra     generalReplayInitDo
+
+generalReplayInit:
+    moveq   #0,d1
+
+* In:
+*   a0 = where to store allocated replay code
+*   d1 = 0: allocate replayer in public mem 
+*        1: to chip mem
+*       -1: do not allocate replayer, a0 unused
+* Out:
+*   d0 = error code, 0 if no error
+
+generalReplayInitDo:
+    bsr	    varaa_kanavat       * d1-a6 preserved
+    beq.b	.ok
+    moveq	#ier_nochannels,d0
+    rts
+.ok	
+    bsr     init_ciaint         * d1-a6 preserved
+    beq.b   .ok2
+    bsr     vapauta_kanavat
+    moveq   #ier_nociaints,d0
+    rts
+.ok2
+    * a0 = input address
+    tst.b   d1
+    bmi     .ok3
+    beq     .normal
+    bsr     allocreplayer2       * d1-a6 preserved
+    bra     .chip
+.normal
+    bsr     allocreplayer       * d1-a6 preserved
+.chip
+    beq.b   .ok3
+    * d0 preserved here:
+    bsr     rem_ciaint
+    bsr     vapauta_kanavat
+.ok3
+    tst.b   d0
+    rts
+
+
+;generalReplayUninit:
+;	bsr	rem_ciaint
+;	bsr	clearsound
+;	bra	vapauta_kanavat
+; 
 
 ******************************************************************************
 * Music formats
@@ -38954,15 +39011,8 @@ p_deltamusic
 	rts
 
 .deltainit
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok
-	bsr	init_ciaint
+    bsr     generalReplayInitNoAlloc
 	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	movem.l	d0-a6,-(sp)
@@ -39044,23 +39094,11 @@ p_futurecomposer13
 
 
 .fc10init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	fc10routines(a5),a0
-	bsr	allocreplayer2 * Into CHIP, has waveforms in it
+    * Into CHIP, has waveforms in it
+    bsr generalReplayInitChipMem
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
-
+    rts
 .ok3
 	pushm	d0-d7/a1-a6
 	move.l	moduleaddress(a5),a0
@@ -39124,24 +39162,10 @@ p_futurecomposer14
 
 
 .fc10init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	fc14routines(a5),a0
-	bsr	allocreplayer2
+    bsr generalReplayInitChipMem
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
-;	rts
-
+	rts
 .ok3	
 	pushm 	d0-d7/a1-a6
 	move.l	moduleaddress(a5),a0
@@ -39214,23 +39238,10 @@ p_soundmon
 
 
 .bpsminit
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	bpsmroutines(a5),a0
-	bsr	allocreplayer
-	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
-;	rts
+    bsr generalReplayInit
+    beq .ok3
+    rts
 .ok3
 
 
@@ -39311,23 +39322,10 @@ p_soundmon3
  even
 
 .bpsminit
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	bpsmroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
-;	rts
+    rts
 .ok3
 
 
@@ -39420,24 +39418,10 @@ p_jamcracker
 	rts 
 
 .jaminit
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	jamroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
-;	rts
-
+    rts
 .ok3	
 	pushm 	a5/a6
 	move.l	moduleaddress(a5),a0
@@ -39502,15 +39486,8 @@ p_musicassembler
 	rts
 
 .massinit
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
+    bsr     generalReplayInitNoAlloc
 	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
 	rts
 .ok2
 
@@ -39622,15 +39599,8 @@ p_fred
 	rts
 	
 .fredinit
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
+    bsr     generalReplayInitNoAlloc
 	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	movem.l	d0-a6,-(sp)
@@ -39733,22 +39703,10 @@ p_sonicarranger
 .offset_backward 	= $20+20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	sonicroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
+    rts
 .ok3
 	;bra	.skip
 
@@ -39927,15 +39885,8 @@ p_sidmon1
  even
 
 .sm10init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
+    bsr     generalReplayInitNoAlloc
 	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
 	rts
 .ok2
 	movem.l	d0-a6,-(sp)
@@ -40060,24 +40011,10 @@ p_oktalyzer
 	rts
 	
 .okinit	
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-
 	lea	oktaroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
-
+    rts
 .ok3	
 	move.l	moduleaddress(a5),a0
 	lea	songover(a5),a1
@@ -41601,15 +41538,8 @@ p_markii
 	rts
 
 .markinit
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
+    bsr     generalReplayInitNoAlloc
 	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
 	rts
 .ok2
 
@@ -41697,15 +41627,8 @@ p_mon	jmp	.moninit(pc)
 	rts
 
 .moninit
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
+    bsr     generalReplayInitNoAlloc
 	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
 	rts
 .ok2
 
@@ -42179,15 +42102,8 @@ p_hippel
  even
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
+    bsr     generalReplayInitNoAlloc
 	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
 	rts
 .ok2
 
@@ -42838,23 +42754,10 @@ p_thx:
 
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	thxroutines(a5),a0
-	bsr	allocreplayer
-	bne	vapauta_kanavat
+    bsr generalReplayInit
 	beq.b	.ok3
-	bra	vapauta_kanavat
-
+    rts
 .ok3	
 	DPRINT	"AHX init"
 	pushm	d1-a6
@@ -43319,22 +43222,10 @@ p_aon
 .OFFSET_CONT = $20+16
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	aonroutines(a5),a0
-	bsr	allocreplayer
-	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
+	lea	    aonroutines(a5),a0
+    bsr     generalReplayInit
+    beq     .ok3
+    rts
 .ok3
 	pushm	d1-a6
 
@@ -43426,22 +43317,10 @@ p_aon8
 	moveq	#ier_hardware,d0
 	rts
 .okk
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	aonroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bra	vapauta_kanavat
+    rts
 .ok3
 	pushm	d1-a6
 
@@ -44720,23 +44599,9 @@ p_pumatracker
 	rts
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	pumatrackerroutines(a5),a0
-	* allocate into chip mem
-	bsr	allocreplayer2
+    bsr generalReplayInitChipMem
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	all
@@ -44859,15 +44724,8 @@ p_beathoven
 .BEAT_AUTHOR = 40+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
+    bsr     generalReplayInitNoAlloc
 	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
 	rts
 .ok2
 
@@ -44999,22 +44857,9 @@ p_gamemusiccreator
 .GMC_END   = $20+8
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	gamemusiccreatorroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInitChipMem
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d0-d7/a1-a6
@@ -45553,22 +45398,9 @@ p_medley
 .MEDLEY_SONG  = 12+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	medleyroutines(a5),a0
-	bsr	allocreplayer
+	lea	    medleyroutines(a5),a0
+    bsr     generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -45685,22 +45517,9 @@ p_futureplayer
 .FP_SONG  = 12+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	futureplayerroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -45819,22 +45638,9 @@ p_bendaglish
 .BD_SONG  = 12+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	bendaglishroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -45959,22 +45765,9 @@ p_sidmon2
 .PLAY  = 4+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	sidmon2routines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -46046,22 +45839,9 @@ p_deltamusic1
 .PLAY  = 4+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	deltamusic1routines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -46140,22 +45920,9 @@ p_soundfx
 .PLAY  = 4+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	soundfxroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-d7/a1-a6
@@ -46230,22 +45997,9 @@ p_gluemon
 .END   = 8+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea 	gluemonroutines(a5),a0
-	bsr	allocreplayer
+    bsr     generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -46331,22 +46085,9 @@ p_pretracker
 	rts
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea 	pretrackerroutines(a5),a0
-	bsr	allocreplayer
+    bsr     generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	jsr	setMainWindowWaitPointer
@@ -46472,22 +46213,9 @@ p_custommade
 .SONG  = 8+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
-	lea	custommaderoutines(a5),a0
-	bsr	allocreplayer
+	lea	    custommaderoutines(a5),a0
+    bsr     generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -46615,22 +46343,9 @@ p_davelowe
 .SONG  = 12+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	daveloweroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -46757,22 +46472,9 @@ p_startrekker
 
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	startrekkerroutines(a5),a0
-	bsr	allocreplayer2
+    bsr generalReplayInitChipMem
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	pushm	d1-a6
@@ -46957,22 +46659,9 @@ p_voodoosupremesynthesizer
 .SONG  = 16+$20
 
 .init
-	bsr	varaa_kanavat
-	beq.b	.ok
-	moveq	#ier_nochannels,d0
-	rts
-.ok	
-	bsr	init_ciaint
-	beq.b	.ok2
-	bsr	vapauta_kanavat
-	moveq	#ier_nociaints,d0
-	rts
-.ok2
 	lea	voodooroutines(a5),a0
-	bsr	allocreplayer
+    bsr generalReplayInit
 	beq.b	.ok3
-	bsr	rem_ciaint
-	bsr	vapauta_kanavat
 	rts
 .ok3
 	move.l	moduleaddress(a5),a0
