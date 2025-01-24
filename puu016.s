@@ -18015,7 +18015,7 @@ sidmode_callback
 
 rsidmode
 	addq.b	#1,sidmode_new(a5)
-	cmp.b	#6,sidmode_new(a5)
+	cmp.b	#7,sidmode_new(a5)
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
