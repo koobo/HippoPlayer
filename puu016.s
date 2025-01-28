@@ -38255,22 +38255,17 @@ sidScopeUpdate
     beq		.noP
     move.l	d0,a4
     bsr     patternScopeSID1Update
-.noP
-    bsr     playSidInRESIDMode
-    beq.b   .1
 
-    * reSID active, check if need to update SID2 pattern data
-    tst.b   patternScopeRunning(a5)
-    beq     .noS
+    * Check if need to update SID2 pattern data
     bsr     p_sid\.sidIsStereo
-    beq     .noS
+    beq     .noP
     * 2SID patternscope
     * Get pattern scope task data area
-    move.l  taskPatternScope+TC_Userdata(a5),d0
-    beq		.noS
-    move.l	d0,a4
+    move.l  taskPatternScope+TC_Userdata(a5),a4
     bsr     patternScopeSID2Update
-.noS
+.noP
+    bsr     playSidInRESIDMode
+    beq     .1
 
     * reSID, update the buffer size as it may change 
 	move.l	_SIDBase(a5),a6
@@ -38289,6 +38284,7 @@ sidScopeUpdate
     move.l  d0,residPosMask
     rts
 
+    * Normal mode 
 .1
 	lea	scopeData+scope_ch1(a5),a0
 	moveq	#0,d7
