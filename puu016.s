@@ -38775,24 +38775,44 @@ patternScopeSID:
 *   a0 = output screen ptr
 *   a1 = data
 .drawBlock:
-    moveq   #0,d2
     tst.b   (a1)    * value on/off
-    bne     .b1
+    bne.b   .b1
+    moveq   #0,d2
      * clear counter active?
     move.b  1(a1),d1 
-    beq     .bz
+    beq.b   .bz
 
     * d1 = 1-4
     subq.b  #1,d1
-    beq     .b5
+    beq.b   .b5
     subq.b  #1,d1
-    beq     .b4
+    beq.b   .b4
     subq.b  #1,d1
     beq     .b3
 ;    subq.b  #1,d1
 ;    beq     .b2
 ;    rts
-    bra     .b2
+;    bra     .b2
+
+.b2
+    move.b  d2,0*40(a0)
+    moveq   #%01111110,d1
+    move.b  d1,1*40(a0)
+    move.b  d1,2*40(a0)
+    move.b  d1,3*40(a0)
+    move.b  d1,4*40(a0)
+    move.b  d2,5*40(a0)
+    rts
+
+.bz
+    * clear!
+    move.b  d2,0*40(a0)
+    move.b  d2,1*40(a0)
+    move.b  d2,2*40(a0)
+    move.b  d2,3*40(a0)
+    move.b  d2,4*40(a0)
+    move.b  d2,5*40(a0)
+    rts
 
 .b1
     moveq   #-1,d0
@@ -38803,21 +38823,11 @@ patternScopeSID:
     move.b  d0,4*40(a0)
     move.b  d0,5*40(a0)
     rts
-.b2
-    move.b  d2,0*40(a0)
-    moveq   #%01111110,d1
-    move.b  d1,1*40(a0)
-    move.b  d1,2*40(a0)
-    move.b  d1,3*40(a0)
-    move.b  d1,4*40(a0)
-    move.b  d2,5*40(a0)
-    rts
-.b3
+.b5
     move.b  d2,0*40(a0)
     move.b  d2,1*40(a0)
-    moveq   #%00111100,d1
-    move.b  d1,2*40(a0)
-    move.b  d1,3*40(a0)
+    move.b  #%00010000,2*40(a0)
+    move.b  #%00001000,3*40(a0)
     move.b  d2,4*40(a0)
     move.b  d2,5*40(a0)
     rts
@@ -38830,23 +38840,16 @@ patternScopeSID:
     move.b  d2,4*40(a0)
     move.b  d2,5*40(a0)
     rts
-.b5
+.b3
     move.b  d2,0*40(a0)
     move.b  d2,1*40(a0)
-    move.b  #%00010000,2*40(a0)
-    move.b  #%00001000,3*40(a0)
+    moveq   #%00111100,d1
+    move.b  d1,2*40(a0)
+    move.b  d1,3*40(a0)
     move.b  d2,4*40(a0)
     move.b  d2,5*40(a0)
     rts
-.bz
-    * clear!
-    move.b  d2,0*40(a0)
-    move.b  d2,1*40(a0)
-    move.b  d2,2*40(a0)
-    move.b  d2,3*40(a0)
-    move.b  d2,4*40(a0)
-    move.b  d2,5*40(a0)
-    rts
+
 
 * In:
 *   a0 = output screen ptr
@@ -38886,30 +38889,35 @@ patternScopeSID:
 *   a0 = output screen ptr
 *   d0 = value 0..63
 .drawVBar64
-    moveq   #64-1,d2
     moveq   #%00111110,d1
     moveq   #40,d3
 .vl1
-    tst.b   d0
-    blt     .vlx
     or.b    d1,(a0)
-.vlx
     sub.w   d3,a0
-    subq.b  #1,d0
-    dbf     d2,.vl1 
+    dbf     d0,.vl1
     rts
 
            ; 0123456789012345678901234567890123456789
-.row1 dc.b  "Voice1 Flt   Voice2 Flt   Voice3 Flt    "
-.row2 dc.b  "Fr           Fr           Fr            "
-.row3 dc.b  "Pw           Pw           Pw            "
-.row4 dc.b  "Gate   Tri   Gate   Tri   Gate   Tri    "
-.row5 dc.b  "Sync   Saw   Sync   Saw   Sync   Saw    "
-.row6 dc.b  "Ring   Pul   Ring   Pul   Ring   Pul    "
-.row7 dc.b  "Test   Noi   Test   Noi   Test   Noi    "
-.row8 dc.b  "Filter          Reso     LP   BP   HP   "
-.row1b dc.b "Voice4 Flt   Voice5 Flt   Voice6 Flt    "
+;.row1  dc.b  "Voice1 Flt   Voice2 Flt   Voice3 Flt    "
+;.row2  dc.b  "Fr           Fr           Fr            "
+;       dc.b  "Pw           Pw           Pw            "
+;       dc.b  "Gate   Tri   Gate   Tri   Gate   Tri    "
+;       dc.b  "Sync   Saw   Sync   Saw   Sync   Saw    "
+;       dc.b  "Ring   Pul   Ring   Pul   Ring   Pul    "
+;       dc.b  "Test   Noi   Test   Noi   Test   Noi    "
+;       dc.b  "Filter          Reso     LP   BP   HP   "
+;.row1b dc.b "Voice4 Flt   Voice5 Flt   Voice6 Flt    "
 
+; The above so that spaces are zeros, this speeds up the print phase
+.row1  dc.b  "Voice1",0,"Flt",0,0,0,"Voice2",0,"Flt",0,0,0,"Voice3",0,"Flt",0,0,0,0
+.row2  dc.b  "Fr",0,0,0,0,0,0,0,0,0,0,0,"Fr",0,0,0,0,0,0,0,0,0,0,0,"Fr",0,0,0,0,0,0,0,0,0,0,0,0
+       dc.b  "Pw",0,0,0,0,0,0,0,0,0,0,0,"Pw",0,0,0,0,0,0,0,0,0,0,0,"Pw",0,0,0,0,0,0,0,0,0,0,0,0
+       dc.b  "Gate",0,0,0,"Tri",0,0,0,"Gate",0,0,0,"Tri",0,0,0,"Gate",0,0,0,"Tri",0,0,0,0
+       dc.b  "Sync",0,0,0,"Saw",0,0,0,"Sync",0,0,0,"Saw",0,0,0,"Sync",0,0,0,"Saw",0,0,0,0
+       dc.b  "Ring",0,0,0,"Pul",0,0,0,"Ring",0,0,0,"Pul",0,0,0,"Ring",0,0,0,"Pul",0,0,0,0
+       dc.b  "Test",0,0,0,"Noi",0,0,0,"Test",0,0,0,"Noi",0,0,0,"Test",0,0,0,"Noi",0,0,0,0
+       dc.b  "Filter",0,0,0,0,0,0,0,0,0,0,"Reso",0,0,0,0,0,"LP",0,0,0,"BP",0,0,0,"HP",0,0,0
+.row1b dc.b  "Voice4",0,"Flt",0,0,0,"Voice5",0,"Flt",0,0,0,"Voice6",0,"Flt",0,0,0,0
     even
 
 
