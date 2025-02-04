@@ -7586,6 +7586,10 @@ putCharSerial
 MHI_BUFSIZE = 16*1024
 MHI_BUFCOUNT = 8
 
+mhimpegit   dc.b    "mhimpegit"
+mhimpegitE  
+    even
+
 mhiInit:
     DPRINT  "mhiInit"
 
@@ -7599,17 +7603,17 @@ mhiInit:
     move.l  d0,mhiBase(a5)
     beq     .noLib
 
-    move.l  mhiLibName(a5),d1
-    lore    Dos,FilePart
-    * This buffer is 39 chars long
-    move.l  d0,a0
+    ; MPEGit special case check
     clr.b   mhiMPEGit(a5)
-    cmp.l   #"mhim",(a0)+
+    move.l  mhiLibName(a5),a0
+    bsr     findFilePart
+    lea     mhimpegit(pc),a1
+    moveq   #mhimpegitE-mhimpegit-1,d0
+.m2 cmpm.b  (a0)+,(a1)+
     bne     .m1
-    cmp.l   #"pegi",(a0)+
-    bne     .m1
-    cmp.b   #"t",(a0)
-    seq     mhiMPEGit(a5)
+    dbf     d0,.m2
+    st      mhiMPEGit(a5)
+    DPRINT  "mhiMPEGit detected"
 .m1
     * Have buffers
     move.l	#MHI_BUFSIZE*MHI_BUFCOUNT,d0
@@ -8168,6 +8172,13 @@ mhiReadMp3Properties
 
     DPRINT  "mhiReadMp3Properties"
 	move.l	4.w,a6
+
+    * Paranoia
+    btst	#AFB_68020,AttnFlags+1(a6)
+    beq     .x
+    cmp     #36,LIB_VERSION(a6)
+    blo     .x
+
 	lea	    mpegaName(pc),a1
     moveq   #2,d0
 	lob	    OpenLibrary
@@ -8312,6 +8323,27 @@ mhiReadMp3Properties
 	moveq	#0,d0 * ok
 	rts
 
+* In:
+*   a0 = path
+* Out:
+*   a0 = pointer to the last component of string path
+findFilePart:
+    move.l  a0,a1
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+.loop
+    cmp.l   a0,a1
+    beq     .isSep
+	cmp.b	#":",-1(a0)
+	beq.b	.isSep
+	cmp.b	#"/",-1(a0)
+	beq.b	.isSep
+    subq    #1,a0
+    bra     .loop
+.isSep
+	* Filename part start position in a0
+    rts
 
 
 ***************************************************************************
