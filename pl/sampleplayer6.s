@@ -1936,7 +1936,7 @@ prepareInfoLine:
 
     * MP3 info
     tst.b   mplippu(a5)
-    beq      .lqq
+    beq      .notMp3
     lea     .formMp3(pc),a0
     * MP3 bits, freq
     pushpea .mhiTxt(pc),d4
@@ -1953,6 +1953,20 @@ prepareInfoLine:
     bne     .lqq
     pushpea .paula14Bit(pc),d4
 .lqq
+    * Used:
+    * d0,d1,d2,d3,d4, d1=bitrate
+
+    * Check if bitrate info available
+    tst     d1
+    bne     .isBr
+    * No, push params down one reg
+    lea     .formMp3NoBr(pc),a0
+    move.l  d2,d1
+    move.l  d3,d2
+    move.l  d4,d3
+.isBr
+
+.notMp3
 
 	bsr	desmsg
 
@@ -1974,6 +1988,7 @@ prepareInfoLine:
 .form             dc.b    "%s %ld-bit %lc %2ldkHz %s",0
 * MP3 forms
 .formMp3            dc.b    "MP%ld %ldkb %lc %2ldkHz %s",0
+.formMp3NoBr        dc.b    "MP%ld %lc %2ldkHz %s",0
 
 .paula8Bit        dc.b    0
 .paula14Bit       dc.b    "14-bit",0
