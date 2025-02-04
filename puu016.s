@@ -37604,10 +37604,10 @@ p_sid:	jmp	.init(pc)
     tst.w   d0
     bne.b   .o3
     * Normal mode + stereo: not supported
-    bsr     .sidIsStereo
-    beq     .o3
-    moveq   #ier_not_compatible,d0
-    bra     .er
+    ;bsr     .sidIsStereo
+    ;beq     .o3
+    ;moveq   #ier_not_compatible,d0
+    ;bra     .er
 .o3
 
     DPRINT  "Operating mode=%ld" 
