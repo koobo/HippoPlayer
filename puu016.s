@@ -577,6 +577,7 @@ _FFPBase	rs.l 1
 _MTBase     rs.l 1
 _LayersBase rs.l 1
 _ExpansionBase rs.l 1
+_TntBase    rs.l    1
  ifne DEBUG
 output		rs.l	1
  endc
@@ -1565,7 +1566,7 @@ recentPlaylistsLastSearchFailed  rs.b    1
 stilIndexPtr    rs.l    1
 
 * VGM TNT
-tntBase			rs.l	1
+tntPSG1Base		rs.l	1
 vgmDataStart    rs.l    1
 vgmDataCurrent	rs.l	1
 vgmDataEnd      rs.l    1
@@ -2397,6 +2398,7 @@ prefsprocname	dc.b	"HiP-Prefs",0
 infoprocname	dc.b	"HiP-Info",0
 layersName	dc.b	"layers.library",0
 expansionName dc.b	"expansion.library",0
+tntName     dc.b    "trinity.library",0
 cianame	dc.b	"ciaa.resource",0
  
 CHECKSTART
@@ -3787,6 +3789,8 @@ exit
 	move.l	_LayersBase(a5),d0
 	bsr	closel
 	move.l	_ExpansionBase(a5),d0
+	bsr	closel
+	move.l	_TntBase(a5),d0
 	bsr	closel
 
 	bsr	tulostavirhe
@@ -50921,8 +50925,8 @@ p_vgm_tnt:
 ay8910poke:
     and.l   #$ff,d2
     and.w   #$ff,d1
-    move.l  tntBase(a5),a1
-    lea     $c0(a1),a1  * tnt_psg, 16 regs here, each 32-bits, write to the low 8 byte
+    * tnt_psg, 16 regs here, each 32-bits, write to the low 8 byte
+    move.l  tntPSG1Base(a5),a1
     lsl.w   #2,d1
     move.l  d2,(a1,d1.w)
     rts
@@ -50958,38 +50962,97 @@ ay8910vol3:    dc.b    0
 
 id_vgmTnt:
     DPRINT "id_vgmTnt"
-    bsr     openTnt
-    beq     .no
-    move.l  a4,a0
+
+    * Check if this VGM is known and supported
     bsr     vgmTntInit
     beq     .no
-    
+
+    * Check for TNT 
+    bsr     openTnt
+    beq     .no
+
+    * Check for the core needed
+    tst.l   tntPSG1Base(a6)
+    beq     .no
+
+    move.l  a4,a0
     moveq    #0,d0    * yes
     rts
 .no
     moveq    #-1,d0    * no
     rts
     
+
+* ID: PSG1
+* Type: AY-3-8910
+
+
 openTnt:
-    ; TODO: test if tnt is enabled
+    DPRINT  "openTnt"
+._LVOTrinityFind     EQU   -30
+._LVOEnumAudioCore     EQU   -36
 
-.AUTOCONFIG_MANUF = 5110
-.AUTOCONFIG_PROD  = 61
+;struct TrinityAudioInfo 
+;{
+;0    ULONG Id;               // 4 byte compatibility id
+;4    UWORD Flags;
+;6    UWORD Version;          // hi byte major, lo byte minor version
+;8    const char Name[16];
+;24   const char Author[20];
+;44   UWORD Offset;
+;46   UWORD Size;
+;};
 
-    move.l    _ExpansionBase(a5),d0
-    beq        .x
 
-    move.l  d0,a6
-    sub.l   a0,a0
-    move.l  #.AUTOCONFIG_MANUF,d0
-    move.l  #.AUTOCONFIG_PROD,d1
-    lob     FindConfigDev
-    tst.l   d0
+    move.l  _TntBase(a5),d0
+    bne     .1
+    lea     tntName,a1
+    lore	Exec,OldOpenLibrary
+    move.l	d0,_TntBase(a5)
     beq     .x
-    move.l  d0,a0   
-    move.l  cd_BoardAddr(a0),tntBase(a5)
+.1  move.l  d0,a6
+
+    jsr     ._LVOTrinityFind(a6)
+    DPRINT  "Find=%lx"
+    move.l  d0,d5
+    beq     .x
+
+    move.l  #"PSG1",d7
+    bsr     .findCore
+    move.l  d6,tntPSG1Base(a6)
+
+    moveq   #1,d0   * ok
 .x
     rts
+
+* In:
+*   d5 = Trinity base
+*   d7 = Id to find
+* Out:
+*   d6 = NULL, or address if found
+.findCore:
+    moveq   #0,d6       * result
+    clr.l   -(sp)       * TrinityAudioInfo ptr
+    clr.l   -(sp)       * index ptr
+.loopEnum
+    move.l  sp,d0       * pointer to index
+    moveq   #-1,d1      * flags, anything goes
+    lea     4(sp),a0    * pointer to TrinityAudioInfo
+    jsr     ._LVOEnumAudioCore(a6)
+    DPRINT  "Enum=%lx"
+    tst.l   d0
+    beq     .out
+    move.l  4(sp),a0    * TrinityAudioInfo into a0
+    cmp.l   (a0),d7     * Does it match?
+    bne     .loopEnum
+    moveq   #0,d6
+    move.w  44(a0),d6   * Get offset and exit
+    add.l   d5,d6
+.out
+    addq    #8,sp
+    rts
+
+
 
 vgmTntInit:
     DPRINT    "vgmTntInit"
