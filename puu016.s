@@ -37600,8 +37600,8 @@ p_sid:	jmp	.init(pc)
     move.l  #" AHI",-1(a1)
     clr.b   -1+4(a1)
 .o2
-    tst.w   d0
-    bne.b   .o3
+    ;tst.w   d0
+    ;bne.b   .o3
     * Normal mode + stereo: not supported
     ;bsr     .sidIsStereo
     ;beq     .o3
