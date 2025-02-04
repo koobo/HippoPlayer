@@ -14489,8 +14489,8 @@ prefs_code
 	or	d4,gg_Flags+VaL6(a3)
 
     * Disable MHI gadgtes
-	or	d4,gg_Flags+prefsMHIEnable(a3)
-	or	d4,gg_Flags+prefsMHILib(a3)
+	;or	d4,gg_Flags+prefsMHIEnable(a3)
+	;or	d4,gg_Flags+prefsMHILib(a3)
 .uusi
     jsr    checkAmiGUSAvailability
     tst    d0
@@ -18250,9 +18250,7 @@ pmedfastmemplay
 rmhienable
 	not.b	mhiEnable_new(a5)
 pmhienable
-    tst.b   uusikick(a5)
-    beq     .x
-	move.b	mhiEnable_new(a5),d0
+    move.b	mhiEnable_new(a5),d0
 	lea	    prefsMHIEnable,a0
 	bra	tickaa
 .x  rts
@@ -18271,11 +18269,8 @@ rmhilib
  even
 
 pmhilib
-    tst.b   uusikick(a5)
-    beq     .x
-    pushpea mhiLib_new(a5),d1
-    lore    Dos,FilePart
-    move.l  d0,a0
+    lea     mhiLib_new(a5),a0
+    jsr     findFilePart
 
 	lea	-30(sp),sp
     move.l  sp,a1
@@ -54003,6 +53998,28 @@ deliShowNoteStruct
 * File load and save utilities
 *
 ***************************************************************************
+
+* In:
+*   a0 = path
+* Out:
+*   a0 = pointer to the last component of string path
+findFilePart:
+    move.l  a0,a1
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+.loop
+    cmp.l   a0,a1
+    beq     .isSep
+	cmp.b	#":",-1(a0)
+	beq.b	.isSep
+	cmp.b	#"/",-1(a0)
+	beq.b	.isSep
+    subq    #1,a0
+    bra     .loop
+.isSep
+	* Filename part start position in a0
+    rts
 
 * Loads a file
 * in:
