@@ -50957,6 +50957,7 @@ ay8910vol3:    dc.b    0
 
 id_vgmTnt:
     DPRINT "id_vgmTnt"
+    move.l  a4,a0
 
     * Check if this VGM is known and supported
     bsr     vgmTntInit
@@ -50967,10 +50968,9 @@ id_vgmTnt:
     beq     .no
 
     * Check for the core needed
-    tst.l   tntPSG1Base(a6)
+    tst.l   tntPSG1Base(a5)
     beq     .no
 
-    move.l  a4,a0
     moveq    #0,d0    * yes
     rts
 .no
@@ -51003,6 +51003,7 @@ openTnt:
     bne     .1
     lea     tntName,a1
     lore	Exec,OldOpenLibrary
+    DPRINT  "TntBase=%lx"
     move.l	d0,_TntBase(a5)
     beq     .x
 .1  move.l  d0,a6
@@ -51014,7 +51015,9 @@ openTnt:
 
     move.l  #"PSG1",d7
     bsr     .findCore
-    move.l  d6,tntPSG1Base(a6)
+    DPRINT  "findCore=%lx"
+    move.l  d0,tntPSG1Base(a5)
+    beq     .x
 
     moveq   #1,d0   * ok
 .x
@@ -51027,24 +51030,32 @@ openTnt:
 *   d6 = NULL, or address if found
 .findCore:
     moveq   #0,d6       * result
-    clr.l   -(sp)       * TrinityAudioInfo ptr
-    clr.l   -(sp)       * index ptr
+    lea     -256(sp),sp
+    clr.l   (sp)        * index: zero
 .loopEnum
     move.l  sp,d0       * pointer to index
     moveq   #-1,d1      * flags, anything goes
-    lea     4(sp),a0    * pointer to TrinityAudioInfo
+    lea     4(sp),a0    * pointer to TrinityAudioInfo, space=252
     jsr     ._LVOEnumAudioCore(a6)
     DPRINT  "Enum=%lx"
     tst.l   d0
     beq     .out
-    move.l  4(sp),a0    * TrinityAudioInfo into a0
+    lea     4(sp),a0    * TrinityAudioInfo into a0
+ if DEBUG
+    clr.l   -(sp)
+    clr.l   -(sp)
+    move.l  (a0),(sp)
+    move.l  sp,d0
+    DPRINT  "Id=%s"
+    addq    #8,sp
+ endif
     cmp.l   (a0),d7     * Does it match?
     bne     .loopEnum
-    moveq   #0,d6
     move.w  44(a0),d6   * Get offset and exit
     add.l   d5,d6
 .out
-    addq    #8,sp
+    move.l  d6,d0
+    lea     256(sp),sp
     rts
 
 
@@ -51106,6 +51117,7 @@ vgmTntInit:
    ; bne     .YM3812
 
 .fail
+    DPRINT  "fail"
     moveq   #0,d0
     rts
 
@@ -51120,6 +51132,7 @@ vgmTntInit:
     move.w   #"90",(a0)+
     clr.b    (a0)
     
+    DPRINT  "AY8190"
     moveq   #1,d0
     rts
 
@@ -51127,6 +51140,7 @@ vgmTntInit:
     ilword  d0
     btst    #30,d0  * 1 = dual chip
 
+    DPRINT  "YM3812"
     moveq   #1,d0
     rts
 
