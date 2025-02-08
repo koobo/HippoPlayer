@@ -189,9 +189,20 @@ amigus_playmusic:
 	pushm	d2-d7/a2-a6
 
 	bsr		s3vol				; Update master volume
+	move.w	PS3M_master,d1		; Master Volume
 
-	move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
-	move.w	PS3M_master,d1			; Master Volume
+	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
+	
+	cmp.w	#64,d1				; Full PAULA volume?
+	bne		.ag_novolovl		; No, then just shift it
+	move.w	#$ffff,d1			; Yes, set full AmiGUS master volume
+	bra		.ag_setmastervol
+.ag_novolovl	
+	lsl.l	#5,d1
+	lsl.l	#5,d1	
+.ag_setmastervol	
+	move.w	d1,HAGEN_GLOBAL_VOLUMEL(a6)
+	move.w	d1,HAGEN_GLOBAL_VOLUMER(a6)	
 
 	move	mtype,d0			; Select appropriate player routine
 	lea		s3m_music(pc),a0
@@ -244,6 +255,7 @@ amigus_playmusic:
 amigus_volume:					; d6 = channel number, a4 = channel block; a6 = AmiGUS base
 	move.w	mVolume(a4),d1					; Channel Volume
 	lsl.w 	#7,d1
+	lsl.w	#1,d1
 	btst	#0,d6
 	beq.b	.ag_even_ch
 	move.w	d1,HAGEN_VOICE_VOLUMEL(a6)
@@ -274,8 +286,8 @@ amigus_period:
 	rts
 ;---	
 amigus_setrepeat:
-	move.w	ahi_use,d0
-	cmp.w	#-1,d0
+	move.b	ahi_use,d0
+	cmp.b	#-1,d0
 	bne		.ag_interpolated
 	move.w	#$8000,d0
 	tst.b	mLoop(a4)
@@ -298,6 +310,7 @@ amigus_setrepeat:
 amigus_sample:
 	move.l	mStart(a4),d2
 	move.l	mLength(a4),d3
+	move.l	mLLength(a4),d4	
 	sub.l	s3m,d2
 
 	cmp.l	#4,d3
@@ -310,9 +323,10 @@ amigus_sample:
 	clr.w	HAGEN_VOICE_CTRL(a6)		; Temporarily disable voice playback
 	
 	move.l	d2,HAGEN_VOICE_PSTRTH(a6)	; Update pointers
-	move.l	d2,HAGEN_VOICE_PLOOPH(a6)
 	add.l	d2,d3	
 	move.l	d3,HAGEN_VOICE_PENDH(a6)
+	sub.l	d4,d3
+	move.l	d3,HAGEN_VOICE_PLOOPH(a6)	
 	
 	move.w	d1,HAGEN_VOICE_CTRL(a6)	; Re-trigger voice
 	rts
