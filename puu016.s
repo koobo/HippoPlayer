@@ -25319,6 +25319,7 @@ s_spectrumInitialized         rs.w       1
 
 s_sidScopeData                rs.b      sids_size 
 s_sid2ScopeData               rs.b      sids_size 
+s_sid3ScopeData               rs.b      sids_size 
 
 s_multab                      rs.w       256 * modulo multiplication table
 s_scopeHorizontalBarTable     rs.b       512
@@ -28501,6 +28502,7 @@ patternScopeSizeAdjust:
 	bne.b 	.normHeight
 	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
 .normHeight
+patternScopeSizeAdjustDo:
 	cmp	s_scopeDrawAreaWidth(a4),d0
 	bne.b	.plz
 	cmp	s_scopeDrawAreaHeight(a4),d1
@@ -38255,13 +38257,22 @@ sidScopeUpdate
     move.l	d0,a4
     bsr     patternScopeSID1Update
 
-    * Check if need to update SID2 pattern data
+    * Check if need to update SID2
     bsr     p_sid\.sidIsStereo
     beq     .noP
+
     * 2SID patternscope
     * Get pattern scope task data area
     move.l  taskPatternScope+TC_Userdata(a5),a4
     bsr     patternScopeSID2Update
+
+    * Check if need to update SID3
+    bsr     p_sid\.sidIsThree
+    beq     .noP
+    * 3SID patternscope
+    * Get pattern scope task data area
+    move.l  taskPatternScope+TC_Userdata(a5),a4
+    bsr     patternScopeSID3Update
 .noP
     bsr     playSidInRESIDMode
     beq     .1
@@ -38464,7 +38475,20 @@ patternScopeSID2Update:
     move.w  454(a1),ss_voice1+sv_envelope(a3)
     move.w  456(a1),ss_voice2+sv_envelope(a3)
     move.w  458(a1),ss_voice3+sv_envelope(a3)
-;    bra     patternScopeSIDUpdate
+    bra     patternScopeSIDUpdate
+
+patternScopeSID3Update:
+	move.l	_SIDBase(a5),a0
+    move.l  346(a0),a0      * psb_C64Mem    
+    add.l   #$d440,a0      * SID
+    lea     s_sid3ScopeData(a4),a3
+    * Grab envelope values from secret locations
+    * psb_Envelope7,8,9
+    move.l  _SIDBase(a5),a1
+    move.w  460(a1),ss_voice1+sv_envelope(a3)
+    move.w  462(a1),ss_voice2+sv_envelope(a3)
+    move.w  464(a1),ss_voice3+sv_envelope(a3)
+    bra     patternScopeSIDUpdate
 
 * In:
 *   a0 = SID data 
@@ -38611,9 +38635,29 @@ patternScopeSIDUpdate
     
 
 patternScopeSID:
-    bsr     patternScopeSizeAdjust
+    bsr     p_sid\.sidIsThree
+    bne     .throuble
+    bsr     p_sid\.sidIsStereo
+    bne     .double
+
+* 1SID
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+    bra     .change
+
+* 3SID
+.throuble
+	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT*3,d1
+    bra     .change
+
+* 2SID
+.double
+	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
+.change
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+    bsr     patternScopeSizeAdjustDo
     bne     .sizeOk
-	rts
+    rts
+
 .sizeOk
     push    a5
    
@@ -38639,8 +38683,6 @@ patternScopeSID:
 
     * Do 2nd SID if possible
     move.l  (sp),a5
-    cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
-    bne     .x
     bsr     p_sid\.sidIsStereo
     beq     .x
 
@@ -38669,6 +38711,39 @@ patternScopeSID:
     lea     s_sid2ScopeData(a4),a5
     bsr     .drawSid
     ;----------------------------------
+
+    ; Do 3SID if possible
+    move.l  (sp),a5
+    bsr     p_sid\.sidIsThree
+    beq     .x
+
+	bsr	noteScrollerGetFont * uses d4,a2
+    * d4 = font modulo
+    * a2 = font data
+
+    moveq   #40,d7         * output buffer modulo
+	move.l	s_draw1(a4),a5 * Draw here
+    lea     16*8*40(a5),a5
+    lea     .row1c(pc),a3   * 1st row
+    moveq   #40-1,d3        * number of chars to print
+    bsr     noteScroller2\.print
+    lea     8*40-40(a5),a5
+    lea     .row2(pc),a3   * 1st row
+    moveq   #7-1,d2        * rows to print
+    ;----------------------------------
+.loop3
+    moveq   #40-1,d3        * number of chars to print
+    bsr     noteScroller2\.print
+    lea     8*40-40(a5),a5
+    dbf     d2,.loop3
+    ;----------------------------------
+	move.l	s_draw1(a4),a6
+    lea     16*8*40(a6),a6   
+    lea     s_sid3ScopeData(a4),a5
+    bsr     .drawSid
+    ;----------------------------------
+
+
 .x
     pop     a5
     rts
@@ -38917,6 +38992,7 @@ patternScopeSID:
        dc.b  "Test",0,0,0,"Noi",0,0,0,"Test",0,0,0,"Noi",0,0,0,"Test",0,0,0,"Noi",0,0,0,0
        dc.b  "Filter",0,0,0,0,0,0,0,0,0,0,"Reso",0,0,0,0,0,"LP",0,0,0,"BP",0,0,0,"HP",0,0,0
 .row1b dc.b  "Voice4",0,"Flt",0,0,0,"Voice5",0,"Flt",0,0,0,"Voice6",0,"Flt",0,0,0,0
+.row1c dc.b  "Voice7",0,"Flt",0,0,0,"Voice8",0,"Flt",0,0,0,"Voice9",0,"Flt",0,0,0,0
     even
 
 
