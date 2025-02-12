@@ -38384,13 +38384,13 @@ isPlaysidReSID:
     move.l  d0,a0
 	cmp     #1,LIB_VERSION(a0)
 	bne.b   .noRESID
-	cmp     #8,LIB_REVISION(a0)
+	cmp     #9,LIB_REVISION(a0)
 	blo.b   .noRESID
     * Require 020 for reSID/SIDBlaster stuff
-    move.l  (a5),a0
-    btst	#AFB_68020,AttnFlags+1(a0)
-	beq.b   .noRESID
-
+;    move.l  (a5),a0
+;    btst	#AFB_68020,AttnFlags+1(a0)
+;	beq.b   .noRESID
+;
 ;    move.l  LIB_IDSTRING(a0),a0
 ;    cmp.b   #"1",16(a0)
 ;    bne.b   .noRESID
