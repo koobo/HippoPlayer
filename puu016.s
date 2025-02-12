@@ -18057,8 +18057,10 @@ psidmode
 
 sidmode00	dc.b	11,7
 sidmode01	dc.b	"Normal",0
-sidmode02	dc.b	"reSID 6581",0
-sidmode03	dc.b	"reSID 8580",0
+sidmode02	dc.b	"reSID "
+t6581       dc.b    "6581",0
+sidmode03	dc.b	"reSID "
+t8580       dc.b    "8580",0
 sidmode04	dc.b	"reSID Auto",0
 sidmode05	dc.b	"SIDBlaster",0
 sidmode06	dc.b	"ZorroSID EE",0
@@ -22689,11 +22691,16 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	#33,info_prosessi(a5)		* PSID info-lippu
 
+    lea     t6581,a2
+    jsr     sid_getSidVersion
+    beq     .6581
+    lea     t8580-t6581(a2),a2
+.6581
     jsr     sid_getSongSpeed
     * d0 = speed number 
     * d1 = speed hz 
 
-	lea	-50(sp),sp
+	lea	-128(sp),sp
 	move.l	sp,a1
 	pushpea	sidheader+sidh_name(a5),(a1)+
 	pushpea	sidheader+sidh_author(a5),(a1)+
@@ -22704,6 +22711,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	sidheader+sidh_defsong(a5),-2(a1)
     move.l  d0,(a1)+    * song speed
     move.l  d1,(a1)+    * song speed hz
+    move.l  a2,(a1)+    * chip
 	move.l	modulelength(a5),(a1)+
 	move.l	moduleaddress(a5),d0
 	move.l	d0,(a1)+
@@ -22712,7 +22720,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	pushpea	filecomment(a5),(a1)+
 	clr.l	(a1)
 
-    moveq	#12,d5  * allocate 12 lines text buffer initially
+    moveq	#13,d5  * allocate 13 lines text buffer initially
 
     * Check if there is STIL data available
 	
@@ -22735,7 +22743,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     * Allocate text buffer, amount of lines in d5
 	bsr	.allo2
 	bne.b	.jee9
-	lea	50(sp),sp
+	lea	128(sp),sp
 	bra	.prepareFailed
 .jee9
 
@@ -22743,7 +22751,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a1       * parameters in
 	move.l	infotaz(a5),a3
 	bsr	.desmsg4
-	lea	50(sp),sp
+	lea	128(sp),sp
 
 	bsr	.putcomment
 
@@ -22780,6 +22788,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Copyright: %-28.28s",ILF,ILF2
 	dc.b	"Songs: %ld (default %ld)",ILF,ILF2
     dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2
+    dc.b	"SID type: %-4.4s",ILF,ILF2
 	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
  even
