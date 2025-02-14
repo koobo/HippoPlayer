@@ -22711,7 +22711,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	sidheader+sidh_defsong(a5),-2(a1)
     move.l  d0,(a1)+    * song speed
     move.l  d1,(a1)+    * song speed hz
-    move.l  a2,(a1)+    * chip
+    move.l  a2,(a1)+    * sid type
+    pushpea .stilNag(pc),(a1)+ * stil comment
 	move.l	modulelength(a5),(a1)+
 	move.l	moduleaddress(a5),d0
 	move.l	d0,(a1)+
@@ -22727,7 +22728,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     moveq   #0,d4
     jsr     getSTILInfo
     * a0 = text, to be freed
-    * d0 = length
+    * d0 = length or null if not found, negative if no stil data
+    tst.l   d0
+    bmi     .noSTIL
+    clr.l   -20(a1)     * remove STIL nag
     tst.l   d0
     beq     .noSTIL
 
@@ -22788,7 +22792,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Copyright: %-28.28s",ILF,ILF2
 	dc.b	"Songs: %ld (default %ld)",ILF,ILF2
     dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2
-    dc.b	"SID type: %-4.4s",ILF,ILF2
+    dc.b	"SID type: %-4.4s %24.24s",ILF,ILF2
 	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
  even
@@ -22796,6 +22800,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .huhe	dc.b	ILF,ILF2
 	dc.b	"          No info available.",0
 .zero = *-1
+.stilNag    dc.b     "Get STIL for more!",0
  even
 
 .nosid
@@ -58648,7 +58653,7 @@ readClipboard:
 
 * Out:
 *   a0 = text data, should be freed
-*   d0 = text length or NULL if not found
+*   d0 = text length or NULL or NEGATIVE on failure
 getSTILInfo:
     DPRINT  "getSTILInfo"
     pushm   d1-d7/a1-a6
@@ -58660,7 +58665,7 @@ getSTILInfo:
     bsr     doGetSTILInfo
     DPRINT  "doGetStilInfo addr=%lx len=%lx"
     tst.l   d0
-    beq     .1
+    ble     .1
     move.l  d0,a0
     move.l  d1,d0
 .1
@@ -58672,7 +58677,7 @@ getSTILInfo:
 * In:
 *   a0 = module path
 * Out:
-*   d0 = true or false
+*   d0 = ok: positive, zero: error, negative: STIL.txt missing
 *   a0 = text buffer, to be freed after use
 doGetSTILInfo:
     ; Space for module path starting from the STIL path part
@@ -58778,7 +58783,7 @@ doGetSTILInfo:
     DPRINT  "loadSTILIndex=%lx %ld"
     pop     d5
     tst.l   d0
-    beq     .loadErr
+    beq     .fileErr
 
     move.l  d0,a0
     move.l  d0,a1
@@ -58843,7 +58848,9 @@ doGetSTILInfo:
 .exitStil
     lea     200(sp),sp
     rts
-
+.fileErr
+    moveq   #-1,d0
+    bra     .loadErr
 
 .upperCaseD0
     cmp.b	#'a',d0
