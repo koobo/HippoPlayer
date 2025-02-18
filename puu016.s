@@ -1563,7 +1563,9 @@ recentPlaylistsLastSearchFailed  rs.b    1
                                  rs.b    1 * pad
 
 * STIL
-stilIndexPtr    rs.l    1
+stilIndexPtr         rs.l    1
+sidSongLengthData    rs.l    1
+slIndexPtr           rs.l    1
 
 * VGM TNT
 tntPSG1Base		rs.l	1
@@ -3748,6 +3750,7 @@ exit
     jsr     freeStreamerError
     jsr     freeStreamerUrl
     jsr     freeSTILData
+    jsr     freeSLData
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -20423,6 +20426,13 @@ lootaan_aika
 	move.b	d1,(a0)+
 
 ******
+    * SID song length?
+    cmp.w   #pt_sid,playertype(a5)
+    bne     .nosid
+    * SID length is stored here during song init:
+    tst.l   kokonaisaika(a5)    
+    bne    .koa
+.nosid
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.koa
 	cmp  #pt_vgm_tnt,playertype(a5)
@@ -37358,7 +37368,7 @@ convert_oldst
 p_psid:
 p_sid:	jmp	.init(pc)
 	p_NOP
-	jmp 	sidScopeUpdate(pc)
+	jmp 	sidVBlank(pc)
 	jmp	.end(pc)
 	jmp	.stop(pc)
 	jmp	.cont(pc)
@@ -37390,7 +37400,7 @@ p_sid:	jmp	.init(pc)
  even
 
 .init
-    DPRINT  "PlaySID init"
+    DPRINT  "+-+-+ PlaySID init +-+-+"
 	bsr	get_sid
 	bne.b	.ok
 	moveq	#ier_nosid,d0
@@ -37400,10 +37410,16 @@ p_sid:	jmp	.init(pc)
 .ok
 	movem.l	d1-a6,-(sp)
 
+    * Read HVSC songlengths if possible
+    jsr     loadSLIndex 
+    * Read lengths for this SID and subsong
+    bsr     sid_readSongLength  
+
 	move.l	_SIDBase(a5),a6
 
     lea     p_sid(pc),a0
     basereg p_sid,a0
+    and     #~pf_end,.flags(a0) * default: no end detection
 
     * Default title "PSID"
     move.b  #"P",.title0(a0)
@@ -37877,7 +37893,7 @@ p_sid:	jmp	.init(pc)
 .free	
     DPRINT  "FreeEmulResource"
     lob	FreeEmulResource
-
+    bsr     sid_freeSongLengthData
 	clr.b	.flag
 	rts
 
@@ -37898,7 +37914,7 @@ p_sid:	jmp	.init(pc)
     ; This will return an error code in d0
     
     bsr     .volume
-	rts
+    bra     sid_getSongLength
 
 .song	movem.l	d0/d1/a0/a1/a6,-(sp)
 	bsr.b	.sanko
@@ -38255,9 +38271,32 @@ id_sid
 .ide1
  even
 
+sidVBlank:
+    bsr     sidEndCheck
+    bra     sidScopeUpdate
+
+* Based in info from Songlength database
+sidEndCheck:
+    tst.l   kokonaisaika(a5)
+    beq     .x
+    
+    move.l	aika2(a5),d0
+	sub.l	aika1(a5),d0            * can be negative
+
+    move.w  kokonaisaika(a5),d1     * mins
+    mulu    #60,d1
+    add.w   kokonaisaika+2(a5),d1   * secs
+    cmp.l   d0,d1
+    bge     .x
+    st      songover(a5)
+    ;DPRINT  "SONGOVER %ld %ld"
+.x
+    rts
+    
 * Scope data update and following
 * This is emulates what the PlaySid pplication does.
-sidScopeUpdate
+sidScopeUpdate:
+
 	* Skip this if not needed
 	bsr	anyScopeRunning
 	beq	.x
@@ -39009,6 +39048,115 @@ patternScopeSID:
 .row1c dc.b  "Voice7",0,"Flt",0,0,0,"Voice8",0,"Flt",0,0,0,"Voice9",0,"Flt",0,0,0,0
     even
 
+
+
+* Read the HVSC provided simple song length data
+* from the converted preloaded index.
+* Store it into a buffer where it can be read later.
+sid_readSongLength:
+    DPRINT  "sid_readSongLength"
+    bsr     sid_freeSongLengthData
+
+    cmp.l   #1,slIndexPtr(a5)
+    bls     .x
+
+    move.l  modulefilename(a5),d0
+    beq     .x
+    move.l  d0,a0
+    jsr     getStilHash
+    * d0 = hash to find
+
+    move.l  slIndexPtr(a5),a0
+    move.l  -4(a0),d1
+    lea     -4(a0,d1.l),a1  * end of buffer
+    addq    #4,a0           * skip md5 file length
+.find
+    moveq   #0,d1
+    move.l  a0,a2
+    move.b  (a2)+,d1        * length
+    bpl     .s1
+    and.w   #$7f,d1         * clear top indicator bit
+    lsl     #8,d1
+    move.b  (a2)+,d1        * word length
+.s1 add.l   d1,a0           * next entry
+
+    move.b  (a2)+,d1        * read hash
+    ror     #8,d1
+    move.b  (a2)+,d1
+    swap    d1
+    move.b  (a2)+,d1
+    ror     #8,d1
+    move.b  (a2)+,d1
+
+    cmp.l   d0,d1
+    beq     .found
+
+    cmp.l   a1,a0
+    blo     .find
+    DPRINT  "no match"
+.x
+    rts
+
+.found
+    DPRINT  "found it"
+    * read lengths from a2 until a0
+    pushm   a0/a2
+    * Allocate some mem for unpacked lengths,
+    * roughly.
+    move.l  a0,d0
+    sub.l   a2,d0
+    DPRINT  "entry=%ld"
+    add.l   d0,d0
+    move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    move.l  d0,sidSongLengthData(a5)
+    beq     .x
+    move.l  d0,a1
+    popm    a0/a2
+.slop  
+    moveq   #0,d0
+    move.b  (a2)+,d0
+    bpl     .1
+    and     #$7f,d0
+    lsl     #8,d0
+    move.b  (a2)+,d0
+.1  move    d0,(a1)+
+    DPRINT  "len=%lds"
+    cmp.l   a2,a0
+    bne     .slop
+    rts
+
+sid_freeSongLengthData:
+    move.l  sidSongLengthData(a5),a0
+    clr.l   sidSongLengthData(a5)
+    jmp     freemem
+
+* Fetch and store song length for current SID song
+* and store it in kokonaisaika(a5)
+sid_getSongLength:
+    push    d0
+    clr.l   kokonaisaika(a5)
+
+    move.l  sidSongLengthData(a5),d0
+    beq     .x
+    move.l  d0,a0
+    moveq   #0,d0
+    move    songnumber(a5),d0
+    add     d0,d0
+    move    (a0,d0),d0
+    divu    #60,d0
+    move    d0,kokonaisaika(a5)
+    swap    d0
+    move    d0,kokonaisaika+2(a5)
+
+    * Update capability flags to match
+    tst.l   kokonaisaika(a5)
+    beq     .x
+    lea     p_sid\.flags(pc),a0
+    or.w    #pf_end,(a0)
+    DPRINT  "sid_getSongLength=%08.8lx"
+.x  pop     d0
+    rts
 
 * T‰nne v‰liin h‰m‰‰v‰sti
 
@@ -58680,95 +58828,11 @@ getSTILInfo:
 *   d0 = ok: positive, zero: error, negative: STIL.txt missing
 *   a0 = text buffer, to be freed after use
 doGetSTILInfo:
-    ; Space for module path starting from the STIL path part
-    lea     -200(sp),sp
-
-    ; ---------------------------------
-    ; Search for known STIL path parts from the module path.
-    ; /DEMOS /GAMES /MUSICIANS
-    ; If not found, exit.
-
-.loop
-    move.b  (a0)+,d0
-    beq     .exitFail
-    cmp.b   #"/",d0
-    bne     .loop
-
-    lea     .demos(pc),a2
-    bsr     .find
-    bne     .ok1
-    lea     .games(pc),a2
-    bsr     .find
-    bne     .ok1
-    lea     .musicians(pc),a2
-    bsr     .find
-    bne     .ok1
-    bra     .loop
-
-
-.demos      dc.b    "DEMOS/",0
-.games      dc.b    "GAMES/",0
-.musicians  dc.b    "MUSICIANS/",0
-    even
-
-.find:
-    move.l  a0,a1
-.loop2
-    move.b  (a1)+,d0
-    beq     .not
-    move.b  (a2)+,d1
-    beq     .yes
-    bsr     .upperCaseD0
-    cmp.b   d1,d0
-    beq     .loop2
-.not
-    moveq   #0,d0
-    rts
-.yes
-    moveq   #1,d0
-    rts
-
-.exitFail
-    moveq   #0,d0
-    bra     .exitStil
-
-.ok1
-    ; ---------------------------------
-    ; Copy from STIL-looking bit onwards and uppercase it
-
-    subq.l  #1,a0
-    move.l  sp,a1
-.copy1
-    move.b  (a0)+,d0
-    beq     .copied
-    bsr     .upperCaseD0
-    move.b  d0,(a1)+
-    bra     .copy1
-.copied
-
-    ; ---------------------------------
-    ; Check for ".sid" extension
-
-    cmp.b   #".",-4(a1)
-    bne     .exitFail
-    cmp.b   #"S",-3(a1)
-    bne     .exitFail
-    cmp.b   #"I",-2(a1)
-    bne     .exitFail
-    cmp.b   #"D",-1(a1)
-    bne     .exitFail
-    ; Remove it since it's not in the STIL data either
-    clr.b   -4(a1)
-
-    ; ---------------------------------
-    ; Calculate fnv1 into d5
-    move.l  sp,a0
-    bsr     fnv1
+    bsr     getStilHash
+    tst.l   d0
+    beq     .exitStil
     move.l  d0,d5
- if DEBUG
-    move.l  sp,d1
-    DPRINT  "fnv1=%lx %s"
- endif
+
     ; ---------------------------------
     ; Load STIL index
 
@@ -58846,11 +58910,106 @@ doGetSTILInfo:
 .f4
 .loadErr
 .exitStil
-    lea     200(sp),sp
     rts
 .fileErr
     moveq   #-1,d0
     bra     .loadErr
+
+* In:
+*   a0 = module path
+* Out:
+*   d0 = fnv1 hash or null if error
+getStilHash:
+    lea     -200(sp),sp
+    ; ---------------------------------
+    ; Search for known STIL path parts from the module path.
+    ; /DEMOS /GAMES /MUSICIANS
+    ; If not found, exit.
+
+.loop
+    move.b  (a0)+,d0
+    beq     .exitFail
+    cmp.b   #"/",d0
+    bne     .loop
+
+    lea     .demos(pc),a2
+    bsr     .find
+    bne     .ok1
+    lea     .games(pc),a2
+    bsr     .find
+    bne     .ok1
+    lea     .musicians(pc),a2
+    bsr     .find
+    bne     .ok1
+    bra     .loop
+
+
+.demos      dc.b    "DEMOS/",0
+.games      dc.b    "GAMES/",0
+.musicians  dc.b    "MUSICIANS/",0
+    even
+
+.find:
+    move.l  a0,a1
+.loop2
+    move.b  (a1)+,d0
+    beq     .not
+    move.b  (a2)+,d1
+    beq     .yes
+    bsr     .upperCaseD0
+    cmp.b   d1,d0
+    beq     .loop2
+.not
+    moveq   #0,d0
+    rts
+.yes
+    moveq   #1,d0
+    rts
+
+.exitFail
+    moveq   #0,d0
+    bra     .exitStil
+
+.ok1
+    ; ---------------------------------
+    ; Copy from STIL-looking bit onwards and uppercase it
+
+    subq.l  #1,a0
+    move.l  sp,a2
+.copy1
+    move.b  (a0)+,d0
+    beq     .copied
+    bsr     .upperCaseD0
+    move.b  d0,(a2)+
+    bra     .copy1
+.copied
+
+    ; ---------------------------------
+    ; Check for ".sid" extension
+
+    cmp.b   #".",-4(a2)
+    bne     .exitFail
+    cmp.b   #"S",-3(a2)
+    bne     .exitFail
+    cmp.b   #"I",-2(a2)
+    bne     .exitFail
+    cmp.b   #"D",-1(a2)
+    bne     .exitFail
+    ; Remove it since it's not in the STIL data either
+    clr.b   -4(a2)
+
+    ; ---------------------------------
+    ; Calculate fnv1 into d5
+    move.l  sp,a0
+    bsr     fnv1
+ if DEBUG
+    move.l  sp,d1
+    DPRINT  "fnv1=%lx %s"
+ endif
+.exitStil:
+    lea     200(sp),sp
+    rts
+
 
 .upperCaseD0
     cmp.b	#'a',d0
@@ -58861,6 +59020,8 @@ doGetSTILInfo:
 .up1
     rts    	
     
+
+
 * Out:
 *  d0 = index data pointer, or NULL
 *  d1 = index data lenght
@@ -59011,8 +59172,8 @@ loadSTILEntry:
 freeSTILData: 
     DPRINT  "freeSTIL"
     move.l  stilIndexPtr(a5),a0
-    jsr     freemem
-    rts
+    jmp     freemem
+
 
 * Formats and line wraps the STIL entry text.
 * in:
@@ -59419,34 +59580,11 @@ createStilIndex:
     clr.b   (a3)
 
     ; Convert to uppercase
-    move.l  sp,a2
-    moveq   #'a',d1
-    moveq   #'z',d2
-    move.b  #$df,d3
-    bra     .ugo
-.ucase1
-    cmp.b	d1,d0
-    blo 	.up1
-    cmp.b	d2,d0
-    bhi 	.up1
-    and.b   d3,d0 * to upper
-.up1
-    move.b  d0,(a2)+
-.ugo
-    move.b  (a2),d0
-    bne     .ucase1
-
-    ; ---------------------------------
     ; Check for extension and remove it
-    cmp.b   #"D",-1(a2)
-    bne     .next
-    cmp.b   #"I",-2(a2)
-    bne     .next
-    cmp.b   #"S",-3(a2)
-    bne     .next
-    cmp.b   #".",-4(a2)
-    bne     .next
-    clr.b   -4(a2)
+    move.l  sp,a2
+    bsr     convertA2ToUpperCaseRemoveSidExt
+    beq     .next   * if SID ext missing for some reason
+
 ; if DEBUG
 ;    move.l  sp,d0
 ;    DPRINT  "UCas=%s"
@@ -59534,6 +59672,45 @@ createStilIndex:
     dc.b    "Creating STIL index %02.2ld%lc",0
     even
 
+
+* Convert SID file path in A2 
+* In:
+*   a2 = pointer to text, null terminated
+* Out:
+*   a2 = Uppercased, extension removed
+*   d0 = true if SID extension found and removed, false otherwise
+convertA2ToUpperCaseRemoveSidExt:
+    moveq   #'a',d1
+    moveq   #'z',d2
+    move.b  #$df,d3
+    bra     .ugo
+.ucase1
+    cmp.b	d1,d0
+    blo 	.up1
+    cmp.b	d2,d0
+    bhi 	.up1
+    and.b   d3,d0 * to upper
+.up1
+    move.b  d0,(a2)+
+.ugo
+    move.b  (a2),d0
+    bne     .ucase1
+
+    cmp.b   #"D",-1(a2)
+    bne     .err
+    cmp.b   #"I",-2(a2)
+    bne     .err
+    cmp.b   #"S",-3(a2)
+    bne     .err
+    cmp.b   #".",-4(a2)
+    bne     .err
+    clr.b   -4(a2)
+    moveq   #1,d0
+    rts
+.err
+    moveq   #0,d0
+    rts
+
 * In:
 *   a0 = string with null termination
 * Out:
@@ -59554,9 +59731,498 @@ fnv1:
     pop     a2
     rts
 
-stilDataName:  dc.b "STIL.txt",0
-stilIndexName: dc.b "STIL.idx",0
+stilDataName:   dc.b "STIL.txt",0
+stilIndexName:  dc.b "STIL.idx",0
+slDataName:     dc.b "PROGDIR:"
+slDataNameO:    dc.b "Songlengths.md5",0
+slIndexName:    dc.b "PROGDIR:"
+slIndexNameO:   dc.b "Songlengths.idx",0
  even
+
+* Creates Songlengths.idx from HVSC's Songlengths.md5
+createSLIndex:
+.inputBufferLength  = 10*1024
+.lineBufferLength   = 4096
+.outBufferLength    = 1024
+.pushBufferLength   = 12*1024
+.workMemLen = .inputBufferLength+.lineBufferLength+.outBufferLength+.pushBufferLength
+
+    rsreset
+.workMem          rs.l    1  
+.inLength         rs.l    1 * input file len
+.inFH             rs.l    1 * input file handle
+.outFH            rs.l    1 * output file handle
+.inputBuffer      rs.l    1 * read chunks from input file
+.lineBuffer       rs.l    1 * read and uppercase line from the buffer
+.outBuffer        rs.l    1 * create output data entries here
+.pushBuffer       rs.l    1 * push buffer
+.pushBufferPos    rs.l    1 * position in the push buffer
+.lastHash         rs.l    1 * hash of the last read item
+.lastRead         rs.l    1 * bytes form the last input read
+.totalRead        rs.l    1 * total bytes read
+.lastProgress     rs.w    1 * to detect if progress needs to be displayed
+.count            rs.l    1 * debug info
+.freeze           rs.w    1
+.slVars           rs.b    0
+
+    DPRINT "createSLIndex"
+    pushm   d1-a6
+    moveq   #.slVars/2-1,d0
+.sk clr.w   -(sp)
+    dbf     d0,.sk
+    move.l  sp,a4
+
+    ; ---------------------------------
+    * Open Songlengths.md5
+    pushpea slDataName(pc),d1
+    tst.b   uusikick(a5)
+    bne     .n1
+    addq.l  #slDataNameO-slDataName,d1
+.n1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "md5 open=%lx"
+    move.l  d0,.inFH(a4)
+    move.l  d0,d7
+    beq     .exit       * bail out quickly
+
+    ; ---------------------------------
+    * Find length
+	move.l	d7,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d7,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+    move.l  d0,.inLength(a4)
+	move.l	d7,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
+    DPRINT  "len=%lx"
+
+    ; ---------------------------------
+    * Try to open idx
+    pushpea slIndexName(pc),d1
+    tst.b   uusikick(a5)
+    bne     .n2
+    addq.l  #slIndexNameO-slIndexName,d1
+.n2
+    move.l  #MODE_OLDFILE,d2
+    lob     Open
+    DPRINT  "old idx=%lx"
+    move.l  d0,d6
+    move.l  d0,.outFH(a4)
+    bne     .yesIdx
+    ; ---------------------------------
+    * No previous idx, create new
+    pushpea slIndexName(pc),d1
+    tst.b   uusikick(a5)
+    bne     .n3
+    addq.l  #slIndexNameO-slIndexName,d1
+.n3
+    move.l  #MODE_NEWFILE,d2
+    lob     Open
+    DPRINT  "new idx=%lx"
+    move.l  d0,d6
+    move.l  d0,.outFH(a4)
+    beq     .exit
+    bra     .writeLen
+.yesIdx
+    ; ---------------------------------
+    * Read txt length from the start
+    lea     -4(sp),sp
+    move.l  d6,d1   * file
+    move.l  sp,d2   * dest
+    moveq   #4,d3   * len
+    lob     Read
+    * Go back to start
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek		
+    ; ---------------------------------
+    * Compare txt length and the length stored in idx
+    * If same, exit
+    cmp.l   (sp)+,d5
+    beq     .exit
+.writeLen
+
+	jsr	    setMainWindowWaitPointer
+	jsr   	freezeMainWindowGadgets
+    st      .freeze(a4)
+
+    ; ---------------------------------
+    ; Allocate buffers
+    move.l  #.workMemLen,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    beq     .exit
+    DPRINT  "AllocMem=%lx"
+    move.l  d0,.workMem(a4)
+    move.l  d0,a0
+    move.l  a0,.inputBuffer(a4)
+    lea     .inputBufferLength(a0),a0
+    move.l  a0,.lineBuffer(a4)
+    lea     .lineBufferLength(a0),a0
+    move.l  a0,.outBuffer(a4)
+    lea     .outBufferLength(a0),a0
+    move.l  a0,.pushBuffer(a4)
+    move.l  a0,.pushBufferPos(a4)
+
+    ; ---------------------------------
+    * Write the txt length into the idx
+    move.l  d5,-(sp)
+    move.l  d6,d1   * file
+    move.l  sp,d2   * source
+    moveq   #4,d3   * len
+    lob     Write
+    DPRINT  "Write=%lx"
+    addq    #4,sp   * pop
+    cmp.l   #-1,d0
+    beq     .exit
+    * d0 = -1 on error
+
+    ; ---------------------------------
+    * Read a chunk of txt
+    DPRINT  "readLoop"
+.readLoop
+    move.l  .inFH(a4),d1
+    move.l  .inputBuffer(a4),d2
+    move.l  #1024*10,d3
+    lob     Read
+    add.l   d0,.totalRead(a4)
+    move.l  d0,.lastRead(a4)
+    
+    ; ---------------------------------
+    ; Print progress information
+    pushm   all
+    move.l  .totalRead(a4),d0
+    moveq   #100,d1
+    jsr     mulu_32
+    move.l  .inLength(a4),d1
+    jsr     divu_32
+
+    cmp.w   .lastProgress(a4),d0
+    beq     .skipPrg
+    move.w  d0,.lastProgress(a4)
+
+    moveq   #"%",d1
+    lea     .progressMsg(pc),a0
+    lea     -64(sp),sp
+    move.l  sp,a3
+    jsr     desmsg3
+     
+    move.l  sp,a0
+    jsr     printbox
+    lea     64(sp),sp
+.skipPrg
+    popm    all
+
+    ; ---------------------------------
+    ; Bytes read in d0, check for EOF
+    tst.l   d0
+    beq     .stopLoop
+    bmi     .stopLoop
+    ; ---------------------------------
+    ; Read bytes until line change
+    move.l  .inputBuffer(a4),a0 * start of source
+    lea     (a0,d0),a1          * end 
+.continueLineLoop
+    move.l  .lineBuffer(a4),a3  * target buffer
+    moveq   #13,d1              * loop constants
+    moveq   #10,d2
+.lineLoop
+    move.b  (a0)+,d0
+    cmp.b   d1,d0
+    beq     .cr
+    cmp.b   d2,d0
+    beq     .lf
+    * Copy one char, check if data exhausted
+    move.b  d0,(a3)+
+.continue
+    cmp.l   a1,a0
+    blo     .lineLoop
+
+    * See if we got a full chunk last time, read more if so
+    cmp.l   #1024*10,.lastRead(a4)
+    beq     .readLoop
+    * Exit
+    bra     .stopLoop
+
+ REM
+; /MUSICIANS/H/Hubbard_Rob/Auf_Wiedersehen_Monty.sid
+1887c86a8a60ddbad5b904e3c1a87818=6:08 0:09 0:09 0:08 0:10 0:09 0:09 0:09 0:06 0:09 0:08 0:08 0:12
+ EREM
+
+;8df3577abc088d52538c3e4ae21e6843=0:07.311 0:08.565 0:10.955 0:08.43 0:07.377 0:07.495 0:08.297 0:09.099 0:07.261 0:07.495 0:08.564 0:08.565 0:10.536 0:06.291 0:08.564 0:07.495 0:11.773 0:08.564 0:12.844 0:11.44 0:07.261 0:08.565 0:08.565 0:08.297 0:14.983 0:07.495 0:12.577 0:17.12
+;d6d3d7811fa58aae8ae4f618c3fde294=1:03.621 0:20.689 0:05.433 0:18.366 0:02.956 0:11.05 0:13.755 0:04.809 0:08.138 0:04.844 0:03.284 0:08.623 0:09.871 0:03.977 0:05.364 0:09.802 0:12.437 0:08.554 0:05.695 0:09.559 0:04.948 0:17.845 0:11 0:04.602 0:14.725 0:03.423 0:06.612 0:07.306 0:04.844 0:04.879 0:06.266 0:05.729 0:04.809 0:16.043 0:17.637 0:04.671 0:01 0:02.887 0:04.255 0:06.335 0:20.203 0:13.408 0:06.057 0:07.167 0:03.769 0:20.273 0:03.665 0:03.007 0:19.025 0:11.293 0:03.214 0:05.225 0:02.175 0:21.625 1:01.358 0:03.007 0:10.426 0:04.081 0:05.537 0:07.618 0:07 0:10.842 0:03.665 0:06.146 0:19.44 0:05.711 0:17.36 0:39.653 0:21.243'
+
+.lf
+.cr
+    ; A whole line read, null terminate
+    clr.b   (a3)
+
+    * Skip lines that are not the title line
+    move.l  .lineBuffer(a4),a2
+    cmp.b   #";",(a2)
+    bne     .dataLine
+
+    * Handle ;-line with path
+
+    ; Convert to uppercase
+    ; Check for extension and remove it
+    bsr     convertA2ToUpperCaseRemoveSidExt
+    beq     .next   * if SID ext missing for some reason
+
+    ; ---------------------------------
+    ; Calc hash of the uppercased string
+    push    a0
+    move.l  .lineBuffer(a4),a0
+    addq.l  #2,a0       * skip ; and space
+    bsr     fnv1
+    move.l  d0,.lastHash(a4)
+    pop     a0
+   
+    bra     .next
+
+.dataLine
+    move.l  .lastHash(a4),d0
+    beq     .next
+
+    * Preserve a0, a1!
+    pushm   a0/a1
+
+    * a2 points to the first time
+    ; 1887c86a8a60ddbad5b904e3c1a87818=6:08 0:09 0:09 0:08 0:10 0:09 0:09 0:09 0:06 0:09 0:08 0:08 0:12
+
+* ; /DEMOS/A-F/Fist_of_the_North_Star-Ita_OST_Remix.sid
+* 25dbae1938a4ebc963c7fc64410ee6be=2:51.374    
+    
+* ; /MUSICIANS/Z/Zardax/Halfway_Thru.sid
+* 760b9415bc14f37cada675b8fab91a37=3:39.345
+
+    move.l  .lineBuffer(a4),a2
+    add.w   #33,a2   * skip over the md5 part
+
+    move.l  .outBuffer(a4),a1
+    clr.b   (a1)+    * item length, use 1 or 2 bytes if needed
+    clr.b   (a1)+
+    * Write hash
+    rol.l   #8,d0
+    move.b  d0,(a1)+
+    rol.l   #8,d0
+    move.b  d0,(a1)+
+    rol.l   #8,d0
+    move.b  d0,(a1)+
+    rol.l   #8,d0
+    move.b  d0,(a1)+
+    
+.timeLoop
+    moveq   #$f,d0
+    and.b   (a2)+,d0     * read mins
+    mulu    #60,d0       * to secs
+    cmp.b   #":",(a2)+
+    beq     .t1
+    mulu    #10,d0       * tens of mins
+    moveq   #$f,d1
+    and.b   -1(a2),d1    * read mins
+    mulu    #60,d1       * to secs
+    add.w   d1,d0        * total secs from mins
+    addq    #1,a2        * skip :
+.t1 
+    moveq   #$f,d1
+    and.b   (a2)+,d1     * read tens of secs
+    mulu    #10,d1
+    add.w   d1,d0
+    moveq   #$f,d1
+    and.b   (a2)+,d1     * read secs
+    add.w   d1,d0           
+    
+    cmp.w   #$7f,d0     * decide size of write
+    bls     .sml
+    or      #$8000,d0   * indicate WORD
+    * write total secs, WORD
+    ror.w   #8,d0
+    move.b  d0,(a1)+
+    ror.w   #8,d0
+.sml
+    move.b  d0,(a1)+    * write small secs
+    cmp.b   #".",(a2)   * fractions of secs?
+    bne     .t2
+    * skip over 1-3 numbers
+.skip
+    move.b  (a2),d0
+    beq     .t3
+    cmp.b   #13,d0
+    beq     .t3
+    cmp.b   #10,d0
+    beq     .t3
+    cmp.b   #" ",d0
+    beq     .t2
+    addq    #1,a2
+    bra     .skip
+.t2
+    * a2 now points to 13,10 or space
+    cmp.b   #" ",(a2)+
+    beq     .timeLoop
+.t3
+
+    * Calc entry length
+    move.l  a1,d0
+    move.l  .outBuffer(a4),a3
+    sub.l   a3,d0
+
+    * One byte length, or word length
+    cmp.w   #$7f,d0
+    bls     .small
+    * Store entry length
+    move.b  d0,1(a3)
+    ror.w   #8,d0
+    move.b  d0,(a3)
+    ror.w   #8,d0
+    or.b     #$80,(a3)  * high bit indicates word length
+    bra     .large
+.small
+    * Store small entry length
+    addq    #1,a3    
+    subq.l  #1,d0
+    move.b  d0,(a3)
+.large
+
+
+;    * Write entry
+;    move.l  a3,d2           * src
+;    move.l  d0,d3           * length 
+;    move.l  .outFH(a4),d1   * file
+;    lob     Write
+
+    move.l  a3,a0
+    bsr     .push
+
+    addq.l  #1,.count(a4)
+    clr.l   .lastHash(a4)
+    popm    a0/a1
+.next
+    ; ---------------------------------
+    ; Start getting a new line 
+    ; Ignore 10 if the line ended with 13 ealier
+    cmp.b   #10,(a0)
+    bne     .continueLineLoop
+    addq    #1,a0
+    bra     .continueLineLoop
+
+.stopLoop   
+    * Write remaining
+    bsr     .pushWrite
+
+.exit
+    ; ---------------------------------
+ if DEBUG
+    move.l  .count(a4),d0
+    DPRINT  "exiting, wrote %ld entries"
+ endif
+    move.l  .workMem(a4),a0
+    jsr     freemem
+    move.l  .inFH(a4),d1
+    beq     .x1
+    lob     Close
+.x1 move.l  .outFH(a4),d1
+    beq     .x2
+    lob     Close
+.x2
+    tst.b   .freeze(a4)
+    beq     .nf
+    jsr	    unfreezeMainWindowGadgets
+	jsr	    clearMainWindowWaitPointer
+    jsr     forceRefreshList
+.nf
+    lea     .slVars(sp),sp
+	popm    d1-a6
+    rts
+
+* In:
+*   a0 = data pointer
+*   d0 = length of data
+.push
+    move.l  .pushBufferPos(a4),d3
+    sub.l   .pushBuffer(a4),d3
+    cmp.l   #10*1024,d3
+    blo     .noPush
+    pushm   d0/a0
+    bsr     .pushWrite
+    popm    d0/a0
+.noPush
+    move.l  .pushBufferPos(a4),a1
+    subq    #1,d0
+.cp move.b  (a0)+,(a1)+
+    dbf     d0,.cp
+    move.l  a1,.pushBufferPos(a4)
+    rts
+
+.pushWrite
+    move.l  .pushBufferPos(a4),d3
+    sub.l   .pushBuffer(a4),d3    * len
+    beq     .noWrite
+    move.l  .pushBuffer(a4),d2    * src
+    move.l  .outFH(a4),d1         * file
+    lob     Write
+    DPRINT  "write=%ld"
+    move.l  .pushBuffer(a4),.pushBufferPos(a4)
+.noWrite
+    rts
+
+.progressMsg
+    dc.b    "Indexing song lengths %02.2ld%lc",0
+
+    even
+
+* Read and generate HVSC songlengths index if possible
+* Out:
+*  d0 = index data pointer, or NULL
+loadSLIndex:
+    DPRINT  "loadSLIndex"
+    move.l  slIndexPtr(a5),d0
+    bne     .has
+    bsr     createSLIndex    
+.has
+    moveq   #1,d1
+    move.l  slIndexPtr(a5),d0
+    cmp.l   d1,d0
+    beq     .err
+    tst.l   d0
+    bne     .ok
+
+    * Try this once, 1 indicates that this was done
+    move.l  d1,slIndexPtr(a5)
+
+    lea     slIndexName(pc),a0
+    tst.b   uusikick(a5)
+    bne     .n2
+    addq.l  #slIndexNameO-slIndexName,a0
+.n2
+    jsr     plainLoadFile
+    DPRINT  "load=%lx"
+    tst.l   d0
+    beq     .err
+    move.l  d0,slIndexPtr(a5)
+.ok
+    rts
+
+.err
+    moveq   #0,d0
+    rts
+
+freeSLData: 
+    DPRINT  "freeSL"
+    move.l  slIndexPtr(a5),a0
+    cmp.w   #1,a0
+    bls     .x
+    jmp     freemem
+.x  rts
 
 ***************************************************************************
 *
