@@ -1,3 +1,6 @@
+TODO:
+- title bar displaying options need rethinking
+
 
 TODO:
 - a loop track button added to the button bar, easier than playmode switch from Prefs
@@ -11,16 +14,6 @@ TODO:
 -- key shortcut
 -- obscure rmb combo 
 -- new button 
-
-TODO:
-- bring hippo to front 
--- hippo runs on WB/some screen
-   run "hip front"  from DOpus -> still on WB 
--- hippo not started 
-   run "hip front" from DOPUS -> opens on DOpus 
--- public screen setting: add "FRONT", always open new hip  
-   on frontmost screen if it is public screen
-
 
 TODO:
 - mhi mp3 output: displays "0kB", why? remove mpega.lib and try?
@@ -143,6 +136,35 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
+DONE: TODO:
+- position slider moving but not draggable for some formats?
+
+DONE: TODO:
+- bring hippo to front 
+-- hippo runs on WB/some screen
+   run "hip front"  from DOpus -> still on WB 
+-- hippo not started 
+   run "hip front" from DOPUS -> opens on DOpus 
+-- public screen setting: add "FRONT", always open new hip  
+   on frontmost screen if it is public screen
+
+
+FIXED: TODO: HIT
+- open: quad scope/hippo/filled + patternscope
+- play: gopho.sid, resid mode
+- toggle scopes off with "z"
+- toggle on with "z"
+--> hit, level 3
+- scope update is done even if the scope is not set up yet
+
+FIXED: TODO:
+- ensure playsid.library is not in mem
+- play gopho.sid
+- filter sound bassy
+- play it again
+- filter sounds different, same as deepsid
+-> something in playsid/resid is different on 2nd time
 
 FIXED: TODO
 - PS3M AHI -> pattern scope works for 4ch mods only
