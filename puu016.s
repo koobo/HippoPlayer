@@ -1017,6 +1017,7 @@ TITLEBAR_TIME_POSLEN_SONG 		= 0
 TITLEBAR_CLOCK_FREEMEM			= 1
 TITLEBAR_NAME					= 2
 TITLEBAR_TIMEDUR_POSLEN			= 3
+TITLEBAR_MODE_MAX               = 3
 lootamoodi	rs	1		* lootan moodi, titlebar mode
 
 lootassa	rs	1		* viimeisin tieto lootassa
@@ -5524,7 +5525,7 @@ wrender:
 
 
 .pienehko
-	st	lootassa(a5)
+	st	lootassa(a5)        * force refresh titlebar
 	clr.b	wintitl2(a5)
 	jsr	lootaa
 	bsr	reslider
@@ -9185,16 +9186,16 @@ nappuloita:
 
 
 .showtime
-	clr	lootamoodi(a5)
+	clr	lootamoodi(a5)  ; TITLEBAR_TIME_POSLEN_SONG
 	bra	lootaa
 .showclock
-	move	#1,lootamoodi(a5)
+	move	#TITLEBAR_CLOCK_FREEMEM,lootamoodi(a5)
 	bra	lootaa
 .showname
-	move	#2,lootamoodi(a5)
+	move	#TITLEBAR_NAME,lootamoodi(a5)
 	bra	lootaa
 .showtime2
-	move	#3,lootamoodi(a5)
+	move	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
 	bra	lootaa
 
 
@@ -16162,7 +16163,7 @@ rpbutton1_req
 
 rpbutton1
 	addq	#1,lootamoodi_new(a5)	* vaihetaan moodia
-	cmp	#3,lootamoodi_new(a5)
+	cmp	#TITLEBAR_MODE_MAX,lootamoodi_new(a5)
 	ble.b	.ook
 	clr	lootamoodi_new(a5)
 .ook
@@ -20219,16 +20220,16 @@ lootaan_song
 
 lootaan_aika
 	moveq	#0,d0
-	tst	lootamoodi(a5)
+	tst	lootamoodi(a5)  * TITLEBAR_TIME_POSLEN_SONG
 	beq.b	.ook
-	cmp	#3,lootamoodi(a5)
+	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
 	beq.b	.ook
 	rts
 .ook	
 	pushm	all
 	clr.b	do_alarm(a5)		* sammutetaan herätys
 
-	clr	lootassa(a5)		
+	clr	lootassa(a5)		    * TITLEBAR_TIME_POSLEN_SONG 	
 
 * ajan päivitys (datestamp-magic)
 
@@ -20441,7 +20442,7 @@ lootaan_aika
 	beq.b	.koa
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.oai
-.koa	cmp	#3,lootamoodi(a5)
+.koa	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
 	bne.b	.oai
 	
 
@@ -20502,7 +20503,7 @@ lootaan_aika
 
 	cmp	#pt_prot,playertype(a5)
 	bne.b	.pot
-	cmp	#3,lootamoodi(a5)
+	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
 	beq.b	.jaa
 .pot
 
@@ -20556,7 +20557,7 @@ lootaan_aika
 
 
 lootaan_kello
-	cmp	#1,lootamoodi(a5)
+	cmp	#TITLEBAR_CLOCK_FREEMEM,lootamoodi(a5)
 	beq.b	.ook
 	rts
 .ook
@@ -20568,13 +20569,13 @@ lootaan_kello
 	lore	Dos,DateStamp
 	move.l	4(sp),d1
 	lea	16(sp),sp
-	cmp	#1,lootassa(a5)
+	cmp	#TITLEBAR_CLOCK_FREEMEM,lootassa(a5)
 	bne.b	.erp
 	cmp	vanhaaika(a5),d1
 	bne.b	.erp
 	addq	#1,d7
 
-.erp	move	#1,lootassa(a5)
+.erp	move	#TITLEBAR_CLOCK_FREEMEM,lootassa(a5)
 
 	move	d1,vanhaaika(a5)
 	divu	#60,d1			* tunnit/minuutit
@@ -20645,13 +20646,13 @@ lootaan_kello
  even
 
 lootaan_nimi
-	cmp	#2,lootamoodi(a5)
+	cmp	#TITLEBAR_NAME,lootamoodi(a5)
 	beq.b	.ook
 	rts
 .ook
 	pushm	all
 	clr.b	do_alarm(a5)		* sammutetaan herätys
-	move	#2,lootassa(a5)
+	move	#TITLEBAR_NAME,lootassa(a5)
 
 	bsr.b	logo
 	lea	modulename(a5),a1
@@ -36693,7 +36694,7 @@ p_protracker:
 	beq.b	.yee
 
 	clr.l	kokonaisaika(a5)
-	cmp	#3,lootamoodi(a5)
+	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
 	bne.b	.la
 	pushm	d2-a6
 	move.l	moduleaddress(a5),a0
