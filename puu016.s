@@ -1562,10 +1562,11 @@ searchResultsChosenModule   rs.l    1
 recentPlaylistsLastSearchFailed  rs.b    1
                                  rs.b    1 * pad
 
-* STIL
-stilIndexPtr         rs.l    1
-sidSongLengthData    rs.l    1
-slIndexPtr           rs.l    1
+* HVSC STIL and Songlengths support
+stilIndexPtr         rs.l    1 * Index
+slIndexPtr           rs.l    1 * Index and data for everything
+sidSongLengthData    rs.l    1 * Data for the current song
+slEndDetect          rs.w    1 * End detected based on SL data
 
 * VGM TNT
 tntPSG1Base		rs.l	1
@@ -37914,7 +37915,9 @@ p_sid:	jmp	.init(pc)
     ; This will return an error code in d0
     
     bsr     .volume
-    bra     sid_getSongLength
+    bsr     sid_getSongLength
+    clr.b   slEndDetect(a5)
+    rts
 
 .song	movem.l	d0/d1/a0/a1/a6,-(sp)
 	bsr.b	.sanko
@@ -38279,7 +38282,9 @@ sidVBlank:
 sidEndCheck:
     tst.l   kokonaisaika(a5)
     beq     .x
-    
+    tst.b   slEndDetect(a5)         * prevent multiple triggers
+    bne     .x
+
     move.l	aika2(a5),d0
 	sub.l	aika1(a5),d0            * can be negative
 
@@ -38288,6 +38293,7 @@ sidEndCheck:
     add.w   kokonaisaika+2(a5),d1   * secs
     cmp.l   d0,d1
     bge     .x
+    st      slEndDetect(a5)
     st      songover(a5)
     ;DPRINT  "SONGOVER %ld %ld"
 .x
