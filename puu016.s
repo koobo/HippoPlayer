@@ -60047,7 +60047,10 @@ createSLIndex:
     moveq   #$f,d1
     and.b   (a2)+,d1     * read secs
     add.w   d1,d0           
-    
+    bne     .nz
+    * under 1 sec, round to 1
+    moveq   #1,d0
+.nz
     cmp.w   #$7f,d0     * decide size of write
     bls     .sml
     or      #$8000,d0   * indicate WORD
