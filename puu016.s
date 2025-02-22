@@ -58584,14 +58584,18 @@ refreshPositionSlider:
     tst.b   kokolippu(a5)
 	beq.b   .no
 
-;    DPRINT  "refreshPositionSlider"
+    ;DPRINT  "refreshPositionSlider"
     
     lea     gadgetPositionSlider,a3
     tst.b   playing(a5)
     bne     .enable
 .disable
     move.l  a3,a0
-    jmp     disableGadget
+    jsr     disableGadget
+    * move to neutral position when disabled
+    moveq   #0,d1
+    bra     .setProp    
+    
 .enable
     
     * Mp3 special case:
@@ -58613,21 +58617,49 @@ refreshPositionSlider:
     divu    d2,d1
     bra     .setProp
 
+* Disable but move if position info available
+.disable2
+    move.l  a3,a0
+    jsr     disableGadget
+    move.l  playerbase(a5),a1
+    move    p_liput(a1),d0
+    and     #pf_poslen,d0
+    bne     .moveProp
+    cmp     #pt_sid,playertype(a5)
+    beq     .sid
+.sidx
+    rts
+.sid
+    * Special case for SIDs
+    tst.l   kokonaisaika(a5)
+    beq     .sidx
+    move.l	aika2(a5),d1
+	sub.l	aika1(a5),d1            * can be negative
+    ble     .sidx
+    mulu    #$ffff,d1
+    move.w  kokonaisaika(a5),d0     * mins
+    mulu    #60,d0
+    add.w   kokonaisaika+2(a5),d0   * secs
+    divu    d0,d1
+    bra     .setProp
+
 .notSample
     move.l  playerbase(a5),a1
     move    p_liput(a1),d0
     move    d0,d1
     and     #pf_slidePos,d1
-    beq     .disable
+    beq     .disable2
     move    d0,d1
     and     #pf_kelaus,d1
     cmp     #pf_kelaus,d1
-    bne     .disable
+    bne     .disable2
     jsr     isImpulseTrackerActive  * IT special case
-    beq     .disable
+    beq     .disable2
 
     move.l  a3,a0
     jsr     enableButton
+
+.moveProp
 
     * d1 = HorizPot
     moveq   #0,d1
