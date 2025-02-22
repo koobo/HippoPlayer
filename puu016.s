@@ -1566,7 +1566,8 @@ recentPlaylistsLastSearchFailed  rs.b    1
 stilIndexPtr         rs.l    1 * Index
 slIndexPtr           rs.l    1 * Index and data for everything
 sidSongLengthData    rs.l    1 * Data for the current song
-slEndDetect          rs.w    1 * End detected based on SL data
+slLoadAttempted      rs.b    1 * Used to prevent failing many times
+slEndDetect          rs.b    1 * End detected based on SL data
 
 * VGM TNT
 tntPSG1Base		rs.l	1
@@ -39063,8 +39064,8 @@ sid_readSongLength:
     DPRINT  "sid_readSongLength"
     bsr     sid_freeSongLengthData
 
-    cmp.l   #1,slIndexPtr(a5)
-    bls     .x
+    tst.l   slIndexPtr(a5)
+    beq     .x
 
     move.l  modulefilename(a5),d0
     beq     .x
@@ -59778,6 +59779,8 @@ slIndexNameO:   dc.b "Songlengths.idx",0
  even
 
 * Creates Songlengths.idx from HVSC's Songlengths.md5
+* Out:
+*    d0 = true on success
 createSLIndex:
 .inputBufferLength  = 10*1024
 .lineBufferLength   = 4096
@@ -59800,7 +59803,8 @@ createSLIndex:
 .totalRead        rs.l    1 * total bytes read
 .lastProgress     rs.w    1 * to detect if progress needs to be displayed
 .count            rs.l    1 * debug info
-.freeze           rs.w    1
+.freeze           rs.b    1
+                  rs.b    1 * pad
 .slVars           rs.b    0
 
     DPRINT "createSLIndex"
@@ -59988,7 +59992,7 @@ createSLIndex:
     * See if we got a full chunk last time, read more if so
     cmp.l   #1024*10,.lastRead(a4)
     beq     .readLoop
-    * Exit
+    * Exit - call this a success
     bra     .stopLoop
 
  REM
@@ -60134,19 +60138,17 @@ createSLIndex:
     move.b  d0,(a3)
 .large
 
-
-;    * Write entry
-;    move.l  a3,d2           * src
-;    move.l  d0,d3           * length 
-;    move.l  .outFH(a4),d1   * file
-;    lob     Write
-
     move.l  a3,a0
     bsr     .push
+    * d0 = true on success
 
     addq.l  #1,.count(a4)
     clr.l   .lastHash(a4)
     popm    a0/a1
+
+    * Stop on push error
+    tst.l   d0
+    beq     .stopLoop
 .next
     ; ---------------------------------
     ; Start getting a new line 
@@ -60188,6 +60190,8 @@ createSLIndex:
 * In:
 *   a0 = data pointer
 *   d0 = length of data
+* Out: 
+*   d0 = true on success, false otherwise
 .push
     move.l  .pushBufferPos(a4),d3
     sub.l   .pushBuffer(a4),d3
@@ -60195,13 +60199,19 @@ createSLIndex:
     blo     .noPush
     pushm   d0/a0
     bsr     .pushWrite
+    tst.l   d0
     popm    d0/a0
+    bmi     .fail
 .noPush
     move.l  .pushBufferPos(a4),a1
     subq    #1,d0
 .cp move.b  (a0)+,(a1)+
     dbf     d0,.cp
     move.l  a1,.pushBufferPos(a4)
+    moveq   #1,d0 * ok
+    rts
+.fail
+    moveq   #0,d0 * bad
     rts
 
 .pushWrite
@@ -60226,20 +60236,14 @@ createSLIndex:
 *  d0 = index data pointer, or NULL
 loadSLIndex:
     DPRINT  "loadSLIndex"
+    tst.b   slLoadAttempted(a5)
+    bne     .ok
+
     move.l  slIndexPtr(a5),d0
     bne     .has
     bsr     createSLIndex    
+    DPRINT  "createSLIndex=%ld"
 .has
-    moveq   #1,d1
-    move.l  slIndexPtr(a5),d0
-    cmp.l   d1,d0
-    beq     .err
-    tst.l   d0
-    bne     .ok
-
-    * Try this once, 1 indicates that this was done
-    move.l  d1,slIndexPtr(a5)
-
     lea     slIndexName(pc),a0
     tst.b   uusikick(a5)
     bne     .n2
@@ -60247,23 +60251,17 @@ loadSLIndex:
 .n2
     jsr     plainLoadFile
     DPRINT  "load=%lx"
-    tst.l   d0
-    beq     .err
     move.l  d0,slIndexPtr(a5)
+    st      slLoadAttempted(a5)
 .ok
     rts
 
-.err
-    moveq   #0,d0
-    rts
 
 freeSLData: 
     DPRINT  "freeSL"
     move.l  slIndexPtr(a5),a0
-    cmp.w   #1,a0
-    bls     .x
+    clr.l   slIndexPtr(a5)
     jmp     freemem
-.x  rts
 
 ***************************************************************************
 *
