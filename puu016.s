@@ -59917,11 +59917,13 @@ createSLIndex:
     ; ---------------------------------
     * Read a chunk of txt
     DPRINT  "readLoop"
+    move.l  .lineBuffer(a4),a3  * target buffer for a line
 .readLoop
     move.l  .inFH(a4),d1
     move.l  .inputBuffer(a4),d2
     move.l  #1024*10,d3
     lob     Read
+    ;;DPRINT  "read=%ld"
     add.l   d0,.totalRead(a4)
     move.l  d0,.lastRead(a4)
     
@@ -59959,8 +59961,6 @@ createSLIndex:
     ; Read bytes until line change
     move.l  .inputBuffer(a4),a0 * start of source
     lea     (a0,d0),a1          * end 
-.continueLineLoop
-    move.l  .lineBuffer(a4),a3  * target buffer
     moveq   #13,d1              * loop constants
     moveq   #10,d2
 .lineLoop
@@ -59980,6 +59980,11 @@ createSLIndex:
     beq     .readLoop
     * Exit - call this a success
     bra     .stopLoop
+
+.continueLineLoop:
+    moveq   #13,d1              * loop constants
+    moveq   #10,d2
+    bra     .continue
 
  REM
 ; /MUSICIANS/H/Hubbard_Rob/Auf_Wiedersehen_Monty.sid
@@ -60014,7 +60019,6 @@ createSLIndex:
     bsr     fnv1
     move.l  d0,.lastHash(a4)
     pop     a0
-   
     bra     .next
 
 .dataLine
@@ -60033,9 +60037,10 @@ createSLIndex:
 * ; /MUSICIANS/Z/Zardax/Halfway_Thru.sid
 * 760b9415bc14f37cada675b8fab91a37=3:39.345
 
+    * skip over the md5 part
     move.l  .lineBuffer(a4),a2
-    add.w   #33,a2   * skip over the md5 part
-
+    lea     33(a2),a2
+    
     move.l  .outBuffer(a4),a1
     clr.b   (a1)+    * item length, use 1 or 2 bytes if needed
     clr.b   (a1)+
@@ -60138,6 +60143,7 @@ createSLIndex:
 .next
     ; ---------------------------------
     ; Start getting a new line 
+    move.l  .lineBuffer(a4),a3
     ; Ignore 10 if the line ended with 13 ealier
     cmp.b   #10,(a0)
     bne     .continueLineLoop
