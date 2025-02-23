@@ -1,5 +1,3 @@
-TODO:
-- title bar displaying options need rethinking
 
 
 TODO:
@@ -136,6 +134,8 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+DONE: TODO:
+- title bar displaying options need rethinking
 
 DONE: TODO:
 - position slider moving but not draggable for some formats?

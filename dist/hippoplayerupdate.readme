@@ -123,10 +123,13 @@ Additional files to check and download
 
 - Info window: Shows the SID chip information for PSIDs.
 
-- From HVSC provided data now also Songlengths.md5 is supported 
-  in addition to STIL data. This allows seeing song lengths and 
-  detecting song endings for PSIDs. Put this file into hippo dir: 
+- PSID song length support. From HVSC provided data now also 
+  Songlengths.md5 is supported in addition to STIL.txt data. This allows 
+  seeing song lengths and detecting song endings for PSIDs. 
+  Put this file into hippo dir: 
 	https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
+  Note that both STIL and Songlengths rely on the HVSC file hierarchy
+  to work as the SID file path or URL is used to search the data.
 
 - AmiGUS support (beta). Oliver Achten's AmiGUS zorro soundcard  
   contains a 32-channel high quality hardware mixer. 
@@ -145,6 +148,10 @@ Additional files to check and download
 - Prefs: Option to select public screen "Front screen". Hippo will then
   try to open to the frontmost public screen whatever it may be, falling 
   back to Workbench.
+
+- Title bar display: Removed the option "Time/duration, pos/len" from
+  Prefs > Display > Show. The option "Time, pos/len, song" shows 
+  all the relevant information available.
 
 - Thanks to Oliver and eriQue for their efforts!
 
