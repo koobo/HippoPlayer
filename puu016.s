@@ -5666,8 +5666,7 @@ setListFont:
 
 	; Dig height for this since it is used widely
 	move	tf_YSize(a0),listFontHeight(a5)	
-	bsr.b	setboxy
-	rts
+	bra.b	setboxy
 
 
 front	pushm	all
@@ -7133,14 +7132,12 @@ buttonspressed:
 	bsr	.leftButtonDownAction
 
     * Get rid of the find bar if possible
-    jsr     switchToNormalLayoutIfPossible
-	rts
+    jmp     switchToNormalLayoutIfPossible
 
 .test1
 	cmp	#MENUUP,d3
 	bne.b	.test2
-	bsr	.rightButtonUpAction		* right button up
-	rts 
+	bra	.rightButtonUpAction		* right button up 
 
 .test2	cmp	#MENUDOWN,d3			* right button down
 	bne.b 	.exit
@@ -7206,8 +7203,7 @@ buttonspressed:
 	tst.b	uusikick(a5)
 	bne.b	.new
 	bsr	sulje_ikkuna		* Vaihdetaan ikkunan kokoa (kick1.3)
-	bsr	avaa_ikkuna
-	rts
+	bra	avaa_ikkuna
 
 .new	
 	DPRINT	"ZipWindow Intuition"
@@ -7234,14 +7230,12 @@ buttonspressed:
 
 	* mouse not on top of info box, try marking files
 
-.x	jsr	markline		* merkit‰‰n modulenimi
-	rts
+.x	jmp	markline		* merkit‰‰n modulenimi
 
 .yea
 
 ** modinfon infon avaus
-	bsr	modinfoaaa
-	rts
+	bra	modinfoaaa
 
 * in:
 *   a0=gadget
@@ -7359,8 +7353,7 @@ forceSelectGadget
 	moveq	#-1,d0 
 	lob	AddGadget
 	move.l	d2,a0	
-	bsr.b	refreshGadget
-	rts
+	bra.b	refreshGadget
 
 * Forces a boolean gadget to show the deselected status
 * in:
@@ -7380,8 +7373,7 @@ forceDeselectGadget
 	lob	AddGadget
 
 	move.l	d2,a0	
-	bsr.b	refreshGadget
-	rts
+	;bra.b	refreshGadget
 
 * Redraws gadget
 * in:
@@ -8484,8 +8476,7 @@ umph
 	st	playing(a5)		* Ei varmaan tuu initerroria
 	bsr	inforivit_play
 	bsr	settimestart
-	bsr	start_info
-	rts
+	bra	start_info
 	
 .new
 	DPRINT	"New mod"
@@ -8760,8 +8751,7 @@ nupit
 	moveq	#65535/(580-50),d0	* 65535/max
 	bsr.b	setknob
 	move	#65535*50/(580-50),d0	* 65535*arvo/max
-	bsr.b	setknob2
-	rts
+	bra.b	setknob2
 
 
 * Vert.. Horiz..
@@ -9651,8 +9641,7 @@ sortModuleList:
 
 	DPRINT  "rsort release list"
 	bsr	releaseModuleList
-	bsr	unlockMainWindow
-	rts
+	bra	unlockMainWindow
 
 * a3 = lista
 * Hakee ensimm‰isen nimen, joka ei ole divideri
@@ -10132,8 +10121,7 @@ do_find_continue
 
 .q	
 	DPRINT  "find_continue release list"
-	bsr 	releaseModuleList
-	rts
+	bra 	releaseModuleList
 
 * String matchng: convert to uppercase, space equals underscore
 .find
@@ -10785,8 +10773,7 @@ rbutton1:
 	DPRINT  "playButtonAction release list"
 	bsr	releaseModuleList
 	bsr	listChanged
-	bsr	forceRefreshList
-	rts
+	bra	forceRefreshList
 
 .nomove
 	;check	2		* reg check
@@ -11087,8 +11074,7 @@ add_divider
 
 .x	
 	DPRINT  "add_divider release list"
-	bsr		releaseModuleList
-	rts
+	bra		releaseModuleList
 
 .ti	dc.b	"Add divider",0
  even
@@ -11252,8 +11238,7 @@ filereq_code
 
 	DPRINT  "filereq_code release list"
 	bsr		releaseModuleList
-	bsr		unlockMainWindow
-	rts
+	bra		unlockMainWindow
 
 .processResult
 	* Test if user selected anything or canceled
@@ -12181,8 +12166,7 @@ freelist:
 
 .listEmpty
 	DPRINT  "freelist release list"
-	bsr	releaseModuleList
-	rts
+	bra	releaseModuleList
 
 
 *******************************************************************************
@@ -12240,8 +12224,7 @@ rloadprogDoIt
 	bsr.b 	.doLoadProgram
 	bsr	 clearMainWindowWaitPointer
 	DPRINT  "rloadprog release list"
-	bsr	releaseModuleList
-	rts
+	bra	releaseModuleList
 
 .doLoadProgram
 	tst	filereq_prosessi(a5)
@@ -12535,8 +12518,7 @@ rloadprogDoIt
 
 	clr.l	chosenmodule(a5)	* moduuliksi eka
 .kex	bsr	listChanged
-	bsr	forceRefreshList
-	rts
+	bra	forceRefreshList
 
 .what
 	lea	unknown_module_program_error(pc),a1
@@ -13061,8 +13043,7 @@ rsaveprog
 	lob	rtFreeRequest
 .ex
 
-	bsr	forceRefreshList
-	rts
+	bra	forceRefreshList
 
 .nomods	lea	.lerr(pc),a1
 	bra	request
@@ -13718,9 +13699,7 @@ sliderit
 	mulu	#65535,d0
 	divu	#580-50,d0
 	lea	nAMISKA5-ahiG6(a0),a0
-	bsr	setknob2
-
-	rts
+	bra	setknob2
 
 * Update box size slider in prefs
 setprefsbox
@@ -16789,8 +16768,7 @@ pdup
 	lea	arcdir_new(a5),a0		* DISABLED!
 	lea	DuU3(a1),a1
 	endb	a1
-	bsr.b	.o
-	rts
+	;bra.b	.o
 
 .o	lea	-32(sp),sp
 	lea	30(sp),a2
@@ -18020,8 +17998,7 @@ sidmode_callback
     rts
 .2  
     bsr     get_sid
-    jsr     isPlaysidReSID
-    rts
+    jmp     isPlaysidReSID
 
 rsidmode
 	addq.b	#1,sidmode_new(a5)
@@ -19414,8 +19391,7 @@ doPrintNames:
 
 	jsr	removeListBoxClip
 
-	bsr 	releaseModuleList
-	rts
+	bra 	releaseModuleList
 	
 .marker	dc.b	0,0
 
@@ -20897,8 +20873,7 @@ markline:
 	lore	Intui,CurrentTime
 .double
 	bsr	showNamesNoCentering
-	bsr	reslider
-	rts
+	bra	reslider
 
 * Highlight line by xorring/complementing it
 * Highlight is cleared by doing the same operation again on the same line.
@@ -21442,8 +21417,7 @@ loadkeyfile
 
 
 .nixi	asr.l	#2,d0
-	jsr	(a6,d0)
-	rts
+	jmp	(a6,d0)
 
 
 
@@ -22146,8 +22120,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	beq.b	.q
 	move	d0,sfirstname(a5)
 
-	bsr.b	.print
-	rts
+	;bra.b	.print
 
 .print
 	tst.b	skokonaan(a5)
@@ -23876,8 +23849,7 @@ calculateDividersInList
 	beq.b	.l
 	addq.l	#1,d0
 	bra.b	.l
-.e	jsr	releaseModuleList
-	rts
+.e	jmp	releaseModuleList
 
 aboutButtonAction
 rbutton10
@@ -24760,8 +24732,7 @@ rexxmessage
 	bpl.b	.ee
 	clr.l	chosenmodule(a5)	* moduuliksi eka jos ei ennest‰‰n
 .ee	
-	jsr	forceRefreshList
-	rts
+	jmp	forceRefreshList
 
 
 *** INSERT
@@ -33510,8 +33481,7 @@ redrawButtonGadget
 	move.l	a3,a0
 	jsr	refreshGadgetInA0
 
-	bsr	drawButtonFrameMainWindow
-	rts
+	bra	drawButtonFrameMainWindow
 
 
 
@@ -33783,8 +33753,7 @@ importFavoriteModulesFromDisk
 	move.l	d6,a0
 	jsr	freemem
 .noData
-	bsr	logFavoriteList
-	rts
+	bra	logFavoriteList
 
 
 exportFavoriteModulesWithMessage
@@ -34176,8 +34145,7 @@ engageListMode:
 
 	jsr	releaseModuleList
 	jsr	clearMainWindowWaitPointer
- 	jsr	forceRefreshList
-	rts
+ 	jmp	forceRefreshList
 
 .setButtonStatesAccordingToListMode
 	lea	gadgets,a4
@@ -34203,14 +34171,12 @@ engageListMode:
 	lea	gadgetMoveButton(a4),a0
 	bsr	enableButtonWithEar
 	lea	gadgetPrgButton(a4),a0
-	bsr	enableButtonWithEar
-	rts
+	bra	enableButtonWithEar
 
 .favoritesMode
 	;lea	gadgetPrgButton(a4),a0
 	;bsr	disableButton
-	bsr		setNormalAddTooltip
-	rts
+	bra		setNormalAddTooltip
 	
 .browserMode
 	lea	gadgetDelButton(a4),a0
@@ -34221,8 +34187,7 @@ engageListMode:
 	bsr	disableButton
 	lea	gadgetPrgButton(a4),a0
 	bsr	disableButton
-	bsr		setFileBrowserAddTooltip
-	rts
+	bra		setFileBrowserAddTooltip
 
 .searchMode
 	lea	gadgetNewButton(a4),a0
@@ -34235,8 +34200,7 @@ engageListMode:
 	bsr	enableButtonWithEar
 	lea	gadgetDelButton(a4),a0
 	bsr	enableButtonWithEar
-	bsr		setFileBrowserAddTooltip
-	rts
+	bra		setFileBrowserAddTooltip
 
 	endb	a4
 
@@ -34244,8 +34208,7 @@ engageListMode:
 setListModeChangeButtonIcon:
     bsr setListModeChangeButtonIconNoRefresh
 	lea	gadgetListModeChangeButton,a0
-	jsr refreshGadgetInA0
-    rts
+	jmp refreshGadgetInA0
 
 setListModeChangeButtonIconNoRefresh:
 	lea	listImage,a0
@@ -34958,8 +34921,7 @@ countFileBrowserFiles
 	addq.l	#1,d0
 	bra.b	.loop
 .x
-	jsr	releaseModuleList
-	rts
+	jmp	releaseModuleList
 
 engageFileBrowserMode:
 	DPRINT	"** engage file browser"
@@ -35051,8 +35013,7 @@ fileBrowserRoot
 	jsr	forceRefreshList
 	
 	jsr	releaseModuleList
-	jsr	clearMainWindowWaitPointer
-	rts
+	jmp	clearMainWindowWaitPointer
 
 
 * Enters a given directory 
@@ -35285,8 +35246,7 @@ fileBrowserDir
 	jsr	forceRefreshList
 	
 	jsr	releaseModuleList
-	jsr	clearMainWindowWaitPointer
-	rts
+	jmp	clearMainWindowWaitPointer
 
 * Creates a list node and adds it to the list
 * in:
@@ -40536,8 +40496,7 @@ p_tfmx
 	jsr	$20(A0)
 	moveq	#3,D0
 	move.l	tfmxroutines(a5),A0
-	jsr	$20(A0)
-	rts
+	jmp	$20(A0)
 
 
 
@@ -41014,8 +40973,7 @@ p_med:
 
     bsr     getMEDLength
     move    d0,pos_maksimi(a5)
-    bsr     MEDPatternUpdate
- 	rts
+    bra     MEDPatternUpdate
 
 .medvol
     * TODO
@@ -45049,8 +45007,7 @@ p_beathoven
 
 .song
 	bsr.b	.deInit
-	bsr	.doInit
-	rts
+	bra	.doInit
 
 .id_beathoven
 	bsr.b .id_beathoven_
@@ -45372,8 +45329,7 @@ p_delicustom
 .init
 	move.l	moduleaddress(a5),d0
 	lsl.l	#2,d0
-	bsr	deliInit
-	rts
+	bra	deliInit
 
 id_delicustom
 	lea	.id1_start(pc),a1	
@@ -45700,8 +45656,7 @@ p_medley
 	DPRINT	"Song %ld"
  endif
  	move.l	medleyroutines(a5),a0
-	jsr	.MEDLEY_SONG(a0)
-	rts
+	jmp	.MEDLEY_SONG(a0)
 
 .end
 	bsr	rem_ciaint
@@ -45833,8 +45788,7 @@ p_futureplayer
 	DPRINT	"Song %ld"
  endif
 	move.l	futureplayerroutines(a5),a0
-	jsr	.FP_SONG(a0)
-	rts
+	jmp	.FP_SONG(a0)
 
 .end
 	bsr	rem_ciaint
@@ -46527,8 +46481,7 @@ p_custommade
 	* starts from 1, not 0
 	addq	#1,d0
 	move.l	custommaderoutines(a5),a0
-	jsr	.SONG(a0)
-	rts
+	jmp	.SONG(a0)
 
 .end
 	bsr	rem_ciaint
@@ -46650,8 +46603,7 @@ p_davelowe
 
 .play
 	move.l	daveloweroutines(a5),a0
-	jsr	.PLAY(a0)
-	rts
+	jmp	.PLAY(a0)
 
 .stop
 	bra	clearsound
@@ -46957,13 +46909,11 @@ p_voodoosupremesynthesizer
 	move.l	voodooroutines(a5),a0
 	jsr	.END(a0)
 	bsr	clearsound
-	bsr	vapauta_kanavat
-	rts
+	bra	vapauta_kanavat
 
 .play
 	move.l	voodooroutines(a5),a0
-	jsr	.PLAY(a0)
-	rts
+	jmp	.PLAY(a0)
 .stop
 	bra	clearsound
 .cont
@@ -50676,8 +50626,7 @@ vgmSetTypeName:
  	move.w  #INFO_MODULE_NAME_LEN-1,d1
 	move.l	solename(a5),a0
 	lea		modulename(a5),a1
-    jsr     tee_modnimi\.copy
-    rts
+    jmp     tee_modnimi\.copy
 
 ;    move.l  moduleaddress(a5),a4
 ;    bsr     vgmGet4
@@ -51143,8 +51092,7 @@ p_vgm_tnt:
     bne     .v3
     move.b  d2,ay8910vol3
 .v3
-    bsr     ay8910poke
-    rts
+    bra     ay8910poke
 
 .AY8910_write_value_2nd
     move.b  (a0)+,d1    * aa
@@ -51181,8 +51129,7 @@ ay8910silence:
     bsr      ay8910poke
     moveq    #10,d1
     moveq    #0,d2
-    bsr      ay8910poke
-    rts
+    bra      ay8910poke
 
 ay8910restore:
     moveq    #8,d1
@@ -51193,8 +51140,7 @@ ay8910restore:
     bsr      ay8910poke
     moveq    #10,d1
     move.b   ay8910vol3(pc),d2
-    bsr      ay8910poke
-    rts
+    bra      ay8910poke
 
 ay8910vol1:    dc.b    0
 ay8910vol2:    dc.b    0
@@ -52527,8 +52473,7 @@ deliSong
 	move.l	#DTP_StartInt,d0
 	bsr	deliGetTag
 	bsr	deliCallFunc
-	bsr	deliUpdatePositionInfo
-	rts
+	bra	deliUpdatePositionInfo
 
 * Not sure what exactly should be done with these two.
 * Seems to work more or less.
@@ -52559,15 +52504,13 @@ deliForward
 	DPRINT	"deliForward"
 	move.l	#DTP_NextPatt,d0
 	bsr	deliGetTag
-	bsr	deliCallFunc
-	rts
+	bra	deliCallFunc
 
 deliBackward
 	DPRINT	"deliBackward"
 	move.l	#DTP_PrevPatt,d0
 	bsr	deliGetTag
-	bsr	deliCallFunc
-	rts
+	bra	deliCallFunc
 
 deliVolume	
 	move.l	deliBase(a5),a0
