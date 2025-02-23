@@ -59470,6 +59470,7 @@ createStilIndex:
     bne     .yesIdx
     ; ---------------------------------
     * No previous idx, create new
+.doNew
     pushpea stilIndexName(pc),d1
     move.l  #MODE_NEWFILE,d2
     lob     Open
@@ -59480,7 +59481,7 @@ createStilIndex:
 .yesIdx
     ; ---------------------------------
     * Read txt length from the start
-    lea     -4(sp),sp
+    clr.l   -(sp)
     move.l  d6,d1   * file
     move.l  sp,d2   * dest
     moveq   #4,d3   * len
@@ -59495,6 +59496,11 @@ createStilIndex:
     * If same, exit
     cmp.l   (sp)+,d5
     beq     .exit
+    * Do new - close OLDFILE handle
+    DPRINT  "Replacing old index"
+    move.l  d6,d1
+    lob     Close
+    bra     .doNew
 .writeLen
     ; ---------------------------------
     ; Allocate 10k + 190k here, the last part for output
@@ -59678,6 +59684,7 @@ createStilIndex:
     move.l  a5,d3
     sub.l   a0,d3   * length
     lob     Write
+    DPRINT  "Wrote %ld bytes of STIL.idx"
 
 .exit
     ; ---------------------------------
@@ -59847,6 +59854,7 @@ createSLIndex:
     bne     .yesIdx
     ; ---------------------------------
     * No previous idx, create new
+.doNew
     pushpea slIndexName(pc),d1
     tst.b   uusikick(a5)
     bne     .n3
@@ -59862,7 +59870,7 @@ createSLIndex:
 .yesIdx
     ; ---------------------------------
     * Read txt length from the start
-    lea     -4(sp),sp
+    clr.l   -(sp)
     move.l  d6,d1   * file
     move.l  sp,d2   * dest
     moveq   #4,d3   * len
@@ -59877,6 +59885,11 @@ createSLIndex:
     * If same, exit
     cmp.l   (sp)+,d5
     beq     .exit
+    * Do new - close OLDFILE handle
+    DPRINT  "Replacing old index"
+    move.l  d6,d1
+    lob     Close
+    bra     .doNew
 .writeLen
 
 	jsr	    setMainWindowWaitPointer
