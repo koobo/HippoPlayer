@@ -1016,8 +1016,8 @@ sortbuf		rs.l	1		* sorttaukseen puskuri
 TITLEBAR_TIME_POSLEN_SONG 		= 0
 TITLEBAR_CLOCK_FREEMEM			= 1
 TITLEBAR_NAME					= 2
-TITLEBAR_TIMEDUR_POSLEN			= 3
-TITLEBAR_MODE_MAX               = 3
+TITLEBAR_TIMEDUR_POSLEN			= 3 * now same as TITLEBAR_TIME_POSLEN_SONG
+TITLEBAR_MODE_MAX               = 2
 lootamoodi	rs	1		* lootan moodi, titlebar mode
 
 lootassa	rs	1		* viimeisin tieto lootassa
@@ -6920,6 +6920,7 @@ freemodule:
 	clr	songnumber(a5)
 	clr 	maxsongs(a5)
 	clr 	minsong(a5)
+    clr.l   kokonaisaika(a5)     
 	* For non-EP players supporting patterninfo
 	clr.l	deliPatternInfo(a5) 
 	jsr	clearScopeData
@@ -16163,11 +16164,11 @@ pupdate1
 	lea	pbutton2,a1
 	bra	prunt
 
-ls1	dc.b	22,4	* leveys/korkeus merkkein‰
+ls1	dc.b	22,3	* leveys/korkeus merkkein‰
 ls2 	dc.b	"Time, pos/len, song",0
 ls3 	dc.b	"Clock, free memory",0
 ls4	dc.b	"Module name",0
-ls44 	dc.b	"Time/duration, pos/len",0
+ls44 	dc.b	"Time/duration, pos/len",0 ; no longer available
  even
 
 
@@ -20191,9 +20192,10 @@ lootaa					* p‰ivitet‰‰n kaikki
 
 lootaan_pos
 
-lootaan_song
+;lootaan_song
 ;	moveq	#1,d0
 
+* Does both TITLEBAR_TIME_POSLEN_SONG and TITLEBAR_TIMEDUR_POSLEN	
 lootaan_aika
 	moveq	#0,d0
 	tst	lootamoodi(a5)  * TITLEBAR_TIME_POSLEN_SONG
@@ -20209,8 +20211,8 @@ lootaan_aika
 
 * ajan p‰ivitys (datestamp-magic)
 
-	tst	d0			* mit‰ t‰‰ tekee?
-	bne.b	.npa
+	;tst	d0			* mit‰ t‰‰ tekee?
+	;bne.b	.npa
 
 	move.l	aika2(a5),d3
     bsr     getCurrentTimeInSecs
@@ -20236,6 +20238,8 @@ lootaan_aika
   ;;  DPRINT  "Current time=%ld"
     
 	move.l	d0,hippoport+hip_playtime(a5)
+
+    ; ---------------------------------
 
 ************* t‰h‰n timeout!
 	move	timeout(a5),d1
@@ -20295,28 +20299,31 @@ lootaan_aika
 	bsr	signalit
 	pop	d0
 .ok0
+    ; ---------------------------------
+    ; Early load - disabled 
+    
+;	move.b	earlyload(a5),d1
+;	beq.b	.noerl
+;	tst.b	playing(a5)
+;	beq.b	.noerl
+;
+;	tst.b	do_early(a5)		* joko oli p‰‰ll‰?
+;	bne.b	.noerl
+;
+;	move	pos_maksimi(a5),d2
+;	sub	pos_nykyinen(a5),d2
+;	cmp.b	d1,d2
+;	bhi.b	.noerl
+;
+;	st	do_early(a5)
+;	move	#$28,rawkeyinput(a5)
+;	move.b	rawKeySignal(a5),d1
+;	pushm	all
+;	bsr	signalit
+;	popm	all
+;.noerl
 
-
-	move.b	earlyload(a5),d1
-	beq.b	.noerl
-	tst.b	playing(a5)
-	beq.b	.noerl
-
-	tst.b	do_early(a5)		* joko oli p‰‰ll‰?
-	bne.b	.noerl
-
-	move	pos_maksimi(a5),d2
-	sub	pos_nykyinen(a5),d2
-	cmp.b	d1,d2
-	bhi.b	.noerl
-
-	st	do_early(a5)
-	move	#$28,rawkeyinput(a5)
-	move.b	rawKeySignal(a5),d1
-	pushm	all
-	bsr	signalit
-	popm	all
-.noerl
+    ; ---------------------------------
 
     * Use mp3 position if possible
     pushm    d0
@@ -20405,33 +20412,39 @@ lootaan_aika
 	move.b	d1,(a0)+
 
 ******
-    * SID song length?
-    cmp.w   #pt_sid,playertype(a5)
-    bne     .nosid
-    * SID length is stored here during song init:
-    tst.l   kokonaisaika(a5)    
-    bne    .koa
-.nosid
-	cmp	#pt_sample,playertype(a5)
-	beq.b	.koa
-	cmp  #pt_vgm_tnt,playertype(a5)
-	beq.b	.koa
-	cmp	#pt_prot,playertype(a5)
-	bne.b	.oai
-.koa	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
-	bne.b	.oai
-	
 
+;    * SID song length?
+;    cmp.w   #pt_sid,playertype(a5)
+;    bne     .nosid
+;    * SID length is stored here during song init:
+;    tst.l   kokonaisaika(a5)    
+;    bne    .koa
+;.nosid
+;	cmp	#pt_sample,playertype(a5)
+;	beq.b	.koa
+;	cmp  #pt_vgm_tnt,playertype(a5)
+;	beq.b	.koa
+;	cmp	#pt_prot,playertype(a5)
+;	bne.b	.oai
+;.koa	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
+;	bne.b	.oai
+;	
+;
+;	move.b	#'/',(a0)+
+;	tst.l	kokonaisaika(a5)
+;	bne.b	.aik
+;	move.b	#'-',(a0)+
+;	move.b	#'-',(a0)+
+;	move.b	#':',(a0)+
+;	move.b	#'-',(a0)+
+;	move.b	#'-',(a0)+
+;	bra.b	.oai
+;.aik
+ 
+    * Put total time if available
+ 	tst.l	kokonaisaika(a5)
+	beq.b	.oai
 	move.b	#'/',(a0)+
-	tst.l	kokonaisaika(a5)
-	bne.b	.aik
-	move.b	#'-',(a0)+
-	move.b	#'-',(a0)+
-	move.b	#':',(a0)+
-	move.b	#'-',(a0)+
-	move.b	#'-',(a0)+
-	bra.b	.oai
-.aik
 
 	moveq	#0,d0
 	move	kokonaisaika(a5),d0
@@ -20457,7 +20470,8 @@ lootaan_aika
 	tst.l	playingmodule(a5)
 	bmi	.jaa
 
-	move.l	playerbase(a5),a1
+    * Put position/length if available
+	move.l	playerbase(a5),a1       
 	move	p_liput(a1),d0
 	btst	#pb_poslen,d0
 	beq.b	.lootaan_song
@@ -20472,40 +20486,68 @@ lootaan_aika
 
 
 .lootaan_song
+    * Put songnumber if available
+
 	move.l	playerbase(a5),a1
 	move	p_liput(a1),d0
 	btst	#pb_song,d0
 	beq.b	.jaa
 
-	cmp	#pt_prot,playertype(a5)
-	bne.b	.pot
-	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
-	beq.b	.jaa
-.pot
+    * Protracker case
+    cmp     #pt_prot,playertype(a5)
+    bne     .noPt
+    cmp.b	#$ff,ptsonglist+1(a5)	* onko enemm‰n kuin yksi songi??
+    beq     .jaa    * show nothing if PT and no subsongs
+.noPt
 
+    * If just one song then display nothing
+	move	maxsongs(a5),d2
+	addq	#1,d2
+	sub		minsong(a5),d2  
+    cmp     #1,d2
+    bls     .jaa
 
+    * Put current song
 	move	songnumber(a5),d0
 	addq	#1,d0
 	sub	minsong(a5),d0
-
 	move.b	#' ',(a0)+
 	move.b	#'#',(a0)+
 	bsr	putnumber
-
-	cmp	#pt_prot,playertype(a5)		* ei maxsongeja
-	bne.b	.nptr
-	cmp.b	#$ff,ptsonglist+1(a5)	* onko enemm‰n kuin yksi songi??
-	bne.b	.nptr
-.ql	cmp.b	#'#',-(a0)		* jos vain yksi, ei songnumberia!
-	bne.b	.ql
-	bra.b	.jaa
-.nptr
+    * Put max song
 	move.b	#"/",(a0)+
-	moveq	#0,d0
-	move	maxsongs(a5),d0
-	addq	#1,d0
-	sub		minsong(a5),d0
+    move.w  d2,d0
 	bsr	putnumber
+
+; Original logic:
+;	cmp	#pt_prot,playertype(a5)
+;	bne.b	.pot
+;	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
+;	beq.b	.jaa
+;.pot
+
+;	move	songnumber(a5),d0
+;	addq	#1,d0
+;	sub	minsong(a5),d0
+;
+;	move.b	#' ',(a0)+
+;	move.b	#'#',(a0)+
+;	bsr	putnumber
+;
+;	cmp	#pt_prot,playertype(a5)		* ei maxsongeja
+;	bne.b	.nptr
+;	cmp.b	#$ff,ptsonglist+1(a5)	* onko enemm‰n kuin yksi songi??
+;	bne.b	.nptr
+;.ql	cmp.b	#'#',-(a0)		* jos vain yksi, ei songnumberia!
+;	bne.b	.ql
+;	bra.b	.jaa
+;.nptr
+;	move.b	#"/",(a0)+
+;	moveq	#0,d0
+;	move	maxsongs(a5),d0
+;	addq	#1,d0
+;	sub		minsong(a5),d0
+;	bsr	putnumber
 .jaa	
 
 ;	tst.b	uusikick(a5)	
@@ -20691,10 +20733,10 @@ logo	lea	desbuf(a5),a0
 
 * a0 = mihink‰ laitetaan
 * d0 = luku joka k‰‰nnet‰‰n ASCIIksi
-putnumber2
+putnumber2:
 	st	d1
 	bra.b	putnu
-putnumber
+putnumber:
 	moveq	#0,d1
 putnu	ext.l	d0
 	divu	#100,d0
@@ -36654,8 +36696,8 @@ p_protracker:
 	beq.b	.yee
 
 	clr.l	kokonaisaika(a5)
-	cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
-	bne.b	.la
+	;cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
+	;bne.b	.la
 	pushm	d2-a6
 	move.l	moduleaddress(a5),a0
 	move.b	tempoflag(a5),d0
