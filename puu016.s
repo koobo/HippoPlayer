@@ -60055,18 +60055,9 @@ createSLIndex:
     lea     33(a2),a2
     
     move.l  .outBuffer(a4),a1
-    clr.b   (a1)+    * item length, use 1 or 2 bytes if needed
-    clr.b   (a1)+
-    * Write hash
-    rol.l   #8,d0
-    move.b  d0,(a1)+
-    rol.l   #8,d0
-    move.b  d0,(a1)+
-    rol.l   #8,d0
-    move.b  d0,(a1)+
-    rol.l   #8,d0
-    move.b  d0,(a1)+
-    
+    clr.w   (a1)+    * item length, use 1 or 2 bytes if needed
+    move.l  d0,(a1)+ * Write hash
+       
 .timeLoop
     moveq   #$f,d0
     and.b   (a2)+,d0     * read mins
