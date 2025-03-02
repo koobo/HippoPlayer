@@ -1117,12 +1117,6 @@ init:
 	move	d1,.q4(a0)
 	endb	a0
 
-    tst.b   cpu(a5)
-    bne     .cpuGood
-    moveq   #ier_hardware,d0
-    bra     sampleiik
-
-.cpuGood
     tst.b   mhiEnable(a5)
     beq     ._2
     bsr     mhiInit
@@ -1131,6 +1125,12 @@ init:
     beq     .sampleok
     bra     sampleiik
 ._2  
+
+    tst.b   cpu(a5)
+    bne     .cpuGood
+    moveq   #ier_hardware,d0
+    bra     sampleiik
+.cpuGood
 
 	move.l	4.w,a6
 	lea	    mpegaName(pc),a1
