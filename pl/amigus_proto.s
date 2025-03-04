@@ -319,6 +319,7 @@ amigus_sample:
 	clr.w	amigus_mtrig
 	
 .ag_length_ok
+	sub.l	#4,d3
 	move.w	amigus_mtrig(pc),d1	
 	clr.w	HAGEN_VOICE_CTRL(a6)		; Temporarily disable voice playback
 	
@@ -326,6 +327,7 @@ amigus_sample:
 	add.l	d2,d3	
 	move.l	d3,HAGEN_VOICE_PENDH(a6)
 	sub.l	d4,d3
+	add.l 	#2,d3
 	move.l	d3,HAGEN_VOICE_PLOOPH(a6)	
 	
 	move.w	d1,HAGEN_VOICE_CTRL(a6)	; Re-trigger voice
@@ -394,11 +396,11 @@ AmiGUS_Int:
 	and.w   #$4000,d0					; did AmiGUS Timer IRQ occur?
 	beq		.noTimerInt					; if not, then there is nothing to do here	
 	
-	move.w	#$0f0f,$dff180		
+;	move.w	#$0f0f,$dff180		
 	move.w	#$4000,HAGEN_INTC0(a6)	; Clear interrupt
 
 	bsr	amigus_playmusic
-	move.w	#$8888,$dff180		
+;	move.w	#$8888,$dff180		
 .noTimerInt	
 
 	movem.l (sp)+,d1-d7/a0-a6	; Restore registers
