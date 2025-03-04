@@ -39119,10 +39119,10 @@ sid_readSongLength:
     add.l   d0,d0
     move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
     jsr     getmem
+    popm    a0/a2
     move.l  d0,sidSongLengthData(a5)
     beq     .x
     move.l  d0,a1
-    popm    a0/a2
 .slop  
     moveq   #0,d0
     move.b  (a2)+,d0
@@ -59084,11 +59084,14 @@ loadSTILIndex:
     jsr     getmem
     beq     .err
 
+
     move.l  d0,stilIndexPtr(a5)
     move.l  d7,d1
     move.l  d0,d2
     move.l  d5,d3
+    jsr     setMainWindowWaitPointer	
     lob     Read
+	jsr	    clearMainWindowWaitPointer
     push    d0
 
     move.l  d7,d1
@@ -59771,6 +59774,12 @@ slIndexName:    dc.b "PROGDIR:"
 slIndexNameO:   dc.b "Songlengths.idx",0
  even
 
+***************************************************************************
+*
+* Songlengths database
+*
+***************************************************************************
+
 * Creates Songlengths.idx from HVSC's Songlengths.md5
 * Out:
 *    d0 = true on success
@@ -60120,6 +60129,7 @@ createSLIndex:
     cmp.w   #$7f,d0
     bls     .small
     * Store entry length
+    * Two large entries at the moment found in data
     move.b  d0,1(a3)
     ror.w   #8,d0
     move.b  d0,(a3)
@@ -60245,7 +60255,9 @@ loadSLIndex:
     bne     .n2
     addq.l  #slIndexNameO-slIndexName,a0
 .n2
+    jsr     setMainWindowWaitPointer 
     jsr     plainLoadFile
+    jsr     clearMainWindowWaitPointer
     DPRINT  "load=%lx"
     move.l  d0,slIndexPtr(a5)
     st      slLoadAttempted(a5)
