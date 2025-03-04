@@ -692,6 +692,19 @@ init:
 ;	move.l	d4,probebuffer(a5)
 	move.l	d5,kokonaisaika(a5)
 
+    * 8-bit or 14-bit out
+	move.b	d6,cybercalibration(a5)
+	;;;move.l	d7,calibrationaddr(a5)
+
+	move.l	4.w,(a5)
+	move.l	a1,_DosBase(a5)     * needed for console debug out
+	move.l	a2,_GFXBase(a5)
+	move.l	a3,pname(a5)
+	move.l	a4,modulefilename(a5)
+
+	move	a6,sampleforcerate(a5)
+
+    DPRINT  "***** SAMPLE PLAYER INIT *****"
  if DEBUG
     pushm   d0
     moveq   #0,d0
@@ -700,17 +713,6 @@ init:
     pop     d0
  endif
 
-    * 8-bit or 14-bit out
-	move.b	d6,cybercalibration(a5)
-	;;;move.l	d7,calibrationaddr(a5)
-
-	move.l	4.w,(a5)
-	move.l	a1,_DosBase(a5)
-	move.l	a2,_GFXBase(a5)
-	move.l	a3,pname(a5)
-	move.l	a4,modulefilename(a5)
-
-	move	a6,sampleforcerate(a5)
 
 	* Two subroutine calls when getting here, hence 4+4
     lea 4+4(sp),a1
