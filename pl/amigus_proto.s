@@ -8,17 +8,23 @@
 
 ;=============================================================
 amigus_init:
+	bsr     allocPatternBuffers
+	beq		.ag_memerror
+		
+	bsr		init
+	bsr		FinalInit
+	
 	move.l	4.w,a6					
 	lea   	ExpansionName(pc),a1	
 	moveq   #33,d0
 	jsr     _LVOOpenLibrary(a6)		; Open expansion.library
-	tst.l   d0
-	bne.s   .ag_open_okay
+	
+	tst.l   d0						; Library opened?
+	bne.s   .ag_open_okay			; Yes, continue	
+	bra		.ag_init_error			; Could not open library
 
-	moveq	#-1,d0					; Could not open library
-	rts
 .ag_open_okay
-	move.l	d0,a6
+	move.l	d0,a6					; Let's find AmiGUS card
 	move.l	#AMIGUS_MANUFACTURER_ID,d0
 	move.l	#AMIGUS_HAGEN_PRODUCT_ID,d1
 	move.l	#0,a0
@@ -26,7 +32,7 @@ amigus_init:
 
 	push	d0
 	
-	move.l	d0,a0
+	move.l	d0,a0					; a0 = ConfigDev structure
 	move.l 	32(a0),d0 				; d0 = cd_BoardAddr
 	move.l	d0,amigus_base			; Store AmiGUS register base
 	
@@ -35,21 +41,21 @@ amigus_init:
 	jsr     _LVOCloseLibrary(a6)	; Close expansion.library
 	
 	pop		d0
+	
 	tst.l	d0						; Did we find AmiGUS card?
 	bne.s	.ag_init_memory
 
-	moveq	#-1,d0					; Could not find AmiGUS card
+.ag_init_error
+	moveq	#ier_ahi,d0				; Could not find AmiGUS card
+	popm	d1-d7/a2-a6		
 	rts
 
 .ag_init_memory
-    bsr     allocPatternBuffers
-	beq		.ag_memerror
 	
-	bsr		init
-	bsr		FinalInit	
 	
 	move.l	4.w,a6
-	move.b	#INTB_PORTS,d0
+	
+	moveq	#INTB_PORTS,d0
 	lea		AmiGUS_IntServer(pc),a1	; Set-up interrupt for play routine (INT2)
 	jsr		_LVOAddIntServer(a6)
 	
@@ -69,15 +75,19 @@ amigus_init:
 	
 	bsr		amigus_voice_reset		; Initialize all AmiGUS voices
 	
-	move.w	tempo,d0				; d0 = tempo (BPM)
+	move.w	tempo(pc),d0				; d0 = tempo (BPM)
 	bsr		amigus_tempo			; Set initial tempo
-	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt
 	
-	moveq	#0,d0
+	st   	setpause
+	
 	lea		PatternInfo(pc),a0
-	move.l	unpackedPatternPtr,a1
-
-	popm	d1-d7/a2-a6	
+	move.l	unpackedPatternPtr(pc),a1
+	
+	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
+	
+	popm	d1-d7/a2-a6		
+	moveq	#0,d0
+	
 	rts
 	
 .ag_memerror
@@ -150,8 +160,8 @@ amigus_cont:
 	rts
 ;---	
 .ag_restorechannels
-	lea	    cha0,a4
-	move	numchans,d7
+	lea	    cha0(pc),a4
+	move	numchans(pc),d7
 	subq	#1,d7
 	moveq	#0,d6
 .ag_restore_loop
@@ -186,25 +196,9 @@ amigus_playmusic:
     bne.b   .ag_nopause
     rts
 .ag_nopause
-	pushm	d2-d7/a2-a6
-
 	bsr		s3vol				; Update master volume
-	move.w	PS3M_master,d1		; Master Volume
 
-	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
-	
-	cmp.w	#64,d1				; Full PAULA volume?
-	bne		.ag_novolovl		; No, then just shift it
-	move.w	#$ffff,d1			; Yes, set full AmiGUS master volume
-	bra		.ag_setmastervol
-.ag_novolovl	
-	lsl.l	#5,d1
-	lsl.l	#5,d1	
-.ag_setmastervol	
-	move.w	d1,HAGEN_GLOBAL_VOLUMEL(a6)
-	move.w	d1,HAGEN_GLOBAL_VOLUMER(a6)	
-
-	move	mtype,d0			; Select appropriate player routine
+	move	mtype(pc),d0			; Select appropriate player routine
 	lea		s3m_music(pc),a0
 	subq	#1,d0
 	beq.b	.ag_player_exe	
@@ -220,18 +214,31 @@ amigus_playmusic:
 .ag_player_exe	
 	jsr	(a0)
 
-	lea		cha0,a4				; a4 = Note structure
-	move	numchans,d7			; d7 = Channel numbers
+	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
+	move.w	PS3M_master(pc),d1	; Master Volume	
+	cmp.w	#64,d1				; Full PAULA volume?
+	bne		.ag_novolovl		; No, then just shift it
+	move.w	#$ffff,d1			; Yes, set full AmiGUS master volume
+	bra		.ag_setmastervol
+.ag_novolovl	
+	lsl.l	#5,d1				; Convert volume value
+	lsl.l	#5,d1	
+.ag_setmastervol	
+	move.w	d1,HAGEN_GLOBAL_VOLUMEL(a6)	; Set AmiGUS master volume
+	move.w	d1,HAGEN_GLOBAL_VOLUMER(a6)	
+
+	lea		cha0(pc),a4				; a4 = Note structure
+	move	numchans(pc),d7			; d7 = Channel numbers
 	subq	#1,d7
-	moveq	#0,d6				; d6 = current channel number
-.ag_channel_loop				; Main channel loop
+	moveq	#0,d6					; d6 = current channel number
+.ag_channel_loop					; Main channel loop
 	move.w	d6,HAGEN_VOICE_BNK(a6)	; Set channel number
 	
 	bsr 	amigus_volume
 	bsr		amigus_period
 	bsr		amigus_setrepeat
 
-	tst		mPeriod(a4)
+	tst.w	mPeriod(a4)
 	beq.b	.ag_silence
 	tst.b	mOnOff(a4)
 	bne.b	.ag_silence			;sound off
@@ -249,7 +256,6 @@ amigus_playmusic:
 	addq	#1,d6
 	dbf		d7,.ag_channel_loop
 
-	popm	d2-d7/a2-a6
 	rts
 ;---
 amigus_volume:					; d6 = channel number, a4 = channel block; a6 = AmiGUS base
@@ -267,7 +273,7 @@ amigus_volume:					; d6 = channel number, a4 = channel block; a6 = AmiGUS base
 	rts
 ;---
 amigus_period:
-	move.l	clock,d0			; Get frequency base
+	move.l	clock(pc),d0			; Get frequency base
 	lsl.l	#2,d0
 	
 	moveq	#0,d1
@@ -286,7 +292,7 @@ amigus_period:
 	rts
 ;---	
 amigus_setrepeat:
-	move.b	ahi_use,d0
+	move.b	ahi_use(pc),d0
 	cmp.b	#-1,d0
 	bne		.ag_interpolated
 	move.w	#$8000,d0
@@ -319,18 +325,18 @@ amigus_sample:
 	clr.w	amigus_mtrig
 	
 .ag_length_ok
-	sub.l	#4,d3
 	move.w	amigus_mtrig(pc),d1	
 	clr.w	HAGEN_VOICE_CTRL(a6)		; Temporarily disable voice playback
 	
-	move.l	d2,HAGEN_VOICE_PSTRTH(a6)	; Update pointers
+	sub.l	#2,d3	
+	move.l	d2,HAGEN_VOICE_PSTRTH(a6)	; Update pointers (safe now)
 	add.l	d2,d3	
 	move.l	d3,HAGEN_VOICE_PENDH(a6)
 	sub.l	d4,d3
 	add.l 	#2,d3
 	move.l	d3,HAGEN_VOICE_PLOOPH(a6)	
 	
-	move.w	d1,HAGEN_VOICE_CTRL(a6)	; Re-trigger voice
+	move.w	d1,HAGEN_VOICE_CTRL(a6)		; Re-trigger voice
 	rts
 ;---	
 amigus_sample_scope
