@@ -60,10 +60,14 @@ clean:
 dist: HiP HiP-debug group playsid
 	cd dist && make
 
-stil: STIL.txt
+stil: STIL.txt Songlengths.md5
 
 STIL.txt: 
 	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/STIL.txt
+
+Songlengths.md5:
+	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
+	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.faq
 
 beta: HiP HiP-debug
 	lha a ~/Dropbox/hip-beta.lha HiP HiP-debug HiP-debug-ser HippoPlayer.group
