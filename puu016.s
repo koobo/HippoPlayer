@@ -51236,7 +51236,8 @@ openTnt:
     move.l  _TntBase(a5),d0
     bne     .1
     lea     tntName,a1
-    lore	Exec,OldOpenLibrary
+    moveq   #1,d0               * LIB_VERSION
+    lore	Exec,OpenLibrary
     DPRINT  "TntBase=%lx"
     move.l	d0,_TntBase(a5)
     beq     .x
@@ -51258,7 +51259,7 @@ openTnt:
     rts
 
 * In:
-*   d5 = Trinity base
+*   d5 = Trinity base (not library)
 *   d7 = Id to find
 * Out:
 *   d6 = NULL, or address if found
@@ -51267,9 +51268,9 @@ openTnt:
     lea     -256(sp),sp
     clr.l   (sp)        * index: zero
 .loopEnum
-    move.l  sp,d0       * pointer to index
-    moveq   #-1,d1      * flags, anything goes
-    lea     4(sp),a0    * pointer to TrinityAudioInfo, space=252
+    move.l  sp,a0       * pointer to index
+    moveq   #-1,d0      * flags, anything goes
+    lea     4(sp),a1    * pointer to TrinityAudioInfo, space=252
     jsr     ._LVOEnumAudioCore(a6)
     DPRINT  "Enum=%lx"
     tst.l   d0
