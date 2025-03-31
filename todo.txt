@@ -1,4 +1,6 @@
 
+TODO:
+- proplayer.a support for MEDs§
 
 TODO:
 - a loop track button added to the button bar, easier than playmode switch from Prefs
