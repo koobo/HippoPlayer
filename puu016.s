@@ -1571,7 +1571,7 @@ slLoadAttempted      rs.b    1 * Used to prevent failing many times
 slEndDetect          rs.b    1 * End detected based on SL data
 
 * VGM TNT
-tntPSG1Base		rs.l	1
+tntPSG1Core		rs.l	1
 vgmDataStart    rs.l    1
 vgmDataCurrent	rs.l	1
 vgmDataEnd      rs.l    1
@@ -50928,6 +50928,10 @@ p_vgm_tnt:
   even
 
 .vgmTntInit:
+    * Call again to get core if it has been freed
+    bsr     openTnt
+    beq     .err
+
     move   #28419/4,d0     * 100Hz
     jsr    init_ciaint_withTempo
     beq.b  .ok2
@@ -50952,9 +50956,13 @@ p_vgm_tnt:
 
     moveq    #0,d0        * ok
     rts
-
+.err
+    moveq   #ier_unknown,d0
+    rts
 
 .vgmTntEnd:
+    bsr     closeTnt
+
 .vgmTntStop:
     move.l  moduleaddress(a5),a0
     tst.l   $74(a0)  * AY8910 clock
@@ -51152,14 +51160,32 @@ p_vgm_tnt:
     * write dd into aa
     rts
 
+;struct TrinityRegData8
+;{
+;    unsigned char RegIdx, RegData;
+;};
+
+
 * Poke d2 into register d1
 ay8910poke:
-    and.l   #$ff,d2
-    and.w   #$ff,d1
-    * tnt_psg, 16 regs here, each 32-bits, write to the low 8 byte
-    move.l  tntPSG1Base(a5),a1
-    lsl.w   #2,d1
-    move.l  d2,(a1,d1.w)
+;    and.l   #$ff,d2
+;    and.w   #$ff,d1
+;    * tnt_psg, 16 regs here, each 32-bits, write to the low 8 byte
+;    move.l  tntPSG1Base(a5),a1
+;    lsl.w   #2,d1
+;    move.l  d2,(a1,d1.w)
+    push    a0
+    move.l  _TntBase(a5),a6
+    move.l  tntPSG1Core(a5),a0
+    * Two TrinityRegData8 structs
+    clr.l   -(sp)      
+    move.b  d1,(sp)     * RegIdx
+    move.b  d2,1(sp)    * RegData
+    move.w  #-1,2(sp)   * terminate
+    move.l  sp,a1
+    jsr     _LVOWriteCoreRegisters(a6)
+    addq    #4,sp
+    pop     a0
     rts
 
 ay8910silence:
@@ -51202,7 +51228,7 @@ id_vgmTnt:
     beq     .no
 
     * Check for the core needed
-    tst.l   tntPSG1Base(a5)
+    tst.l   tntPSG1Core(a5)
     beq     .no
 
     moveq    #0,d0    * yes
@@ -51216,10 +51242,14 @@ id_vgmTnt:
 * Type: AY-3-8910
 
 
+_LVOTrinityFind         EQU   -30
+_LVOEnumAudioCore       EQU   -36
+_LVOOpenAudioCore       EQU   -42
+_LVOCloseAudioCore      EQU   -48
+_LVOWriteCoreRegisters  EQU   -54
+
 openTnt:
     DPRINT  "openTnt"
-._LVOTrinityFind     EQU   -30
-._LVOEnumAudioCore     EQU   -36
 
 ;struct TrinityAudioInfo 
 ;{
@@ -51232,7 +51262,6 @@ openTnt:
 ;46   UWORD Size;
 ;};
 
-
     move.l  _TntBase(a5),d0
     bne     .1
     lea     tntName,a1
@@ -51243,17 +51272,25 @@ openTnt:
     beq     .x
 .1  move.l  d0,a6
 
-    jsr     ._LVOTrinityFind(a6)
+    tst.l   tntPSG1Core(a5)
+    bne     .ok
+
+    jsr     _LVOTrinityFind(a6)
     DPRINT  "Find=%lx"
-    move.l  d0,d5
+    tst.l   d0
     beq     .x
 
     move.l  #"PSG1",d7
     bsr     .findCore
     DPRINT  "findCore=%lx"
-    move.l  d0,tntPSG1Base(a5)
+    tst.l   d0
     beq     .x
 
+    move.l  d7,d0
+    jsr     _LVOOpenAudioCore(a6)
+    DPRINT  "OpenAudioCore=%lx"
+    move.l  d0,tntPSG1Core(a5)
+.ok
     moveq   #1,d0   * ok
 .x
     rts
@@ -51271,7 +51308,7 @@ openTnt:
     move.l  sp,a0       * pointer to index
     moveq   #-1,d0      * flags, anything goes
     lea     4(sp),a1    * pointer to TrinityAudioInfo, space=252
-    jsr     ._LVOEnumAudioCore(a6)
+    jsr     _LVOEnumAudioCore(a6)
     DPRINT  "Enum=%lx"
     tst.l   d0
     beq     .out
@@ -51287,10 +51324,22 @@ openTnt:
     cmp.l   (a0),d7     * Does it match?
     bne     .loopEnum
     move.w  44(a0),d6   * Get offset and exit
-    add.l   d5,d6
 .out
     move.l  d6,d0
     lea     256(sp),sp
+    rts
+
+
+closeTnt:
+    move.l  _TntBase(a5),d0
+    beq     .x
+    move.l  d0,a6
+    move.l  tntPSG1Core(a5),d0
+    beq     .x
+    clr.l   tntPSG1Core(a5)
+    move.l  d0,a0
+    jsr     _LVOCloseAudioCore(a6)
+.x
     rts
 
 
