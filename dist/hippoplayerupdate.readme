@@ -104,8 +104,10 @@ Additional files to check and download
 - Fix a possible memory corruption issue with ImpulseTracker v2.14 
   modules. Older IT format modules unaffected.
 
-- Pattern scope: Fix not displying anything when AHI enabled and module
+- Pattern scope: Fix not displaying anything when AHI enabled and module
   has more than 4 channels.
+
+- Allow use of MHI on kick 1.3/68000, too.
 
 ## New stuff:
 
@@ -154,7 +156,6 @@ Additional files to check and download
   all the relevant information available.
 
 - Thanks to Oliver and eriQue for their efforts!
-
 
 
 ------------------------------------------------------------------------------
