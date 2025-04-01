@@ -50961,7 +50961,8 @@ p_vgm_tnt:
     rts
 
 .vgmTntEnd:
-    bsr     closeTnt
+    bsr     .vgmTntStop      * make silent
+    bra     closeTnt
 
 .vgmTntStop:
     move.l  moduleaddress(a5),a0
