@@ -107,8 +107,6 @@ Additional files to check and download
 - Pattern scope: Fix not displaying anything when AHI enabled and module
   has more than 4 channels.
 
-- Allow use of MHI on kick 1.3/68000, too.
-
 ## New stuff:
 
 - PSID improvements with the updated playsid.library v1.9:
@@ -121,13 +119,14 @@ Additional files to check and download
   - Some bug fixes and compatibility improvements.
 
 - PatternScope for PSID music. Does not actually display patterns,
-  instead displays the state of the SID chips visually.
+  instead displays the state of the SID chips visually, which 
+  is kind of interesting to look at.
 
 - Info window: Shows the SID chip information for PSIDs.
 
 - PSID song length support. From HVSC provided data now also 
-  Songlengths.md5 is supported in addition to STIL.txt data. This allows 
-  seeing song lengths and detecting song endings for PSIDs. 
+  Songlengths.md5 is supported in addition to STIL.txt data. This 
+  allows seeing song lengths and detecting song endings for PSIDs. 
   Put this file into hippo dir: 
 	https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
   Note that both STIL and Songlengths rely on the HVSC file hierarchy
@@ -139,9 +138,13 @@ Additional files to check and download
   This will direct multichannel module mixing to AmiGUS.
   To play Protracker modules through AmiGUS, set
   "Prefs > Play-1 > PT Replayer" to PS3M. Direct AmiGUS support 
-  works on 68000 and kick 1.3 and leaves the main CPU free for 
-  other stuff.
+  works on 68000/kick 1.3 and leaves the main CPU free for 
+  other stuff. Driver by Oliver.
 
+- Trinity accelerator sound core support (beta). VGM music 
+  files containing songs for the AY8910 chip can be played.
+  Find those here: https://vgmrips.net/packs/chip/ay-3-8910
+  
 - Position slider: Now always changes position if position 
   info is available even when disabled. It is enabled when 
   position changing is possible. Position shown for SIDs
@@ -154,8 +157,6 @@ Additional files to check and download
 - Title bar display: Removed the option "Time/duration, pos/len" from
   Prefs > Display > Show. The option "Time, pos/len, song" shows 
   all the relevant information available.
-
-- Thanks to Oliver and eriQue for their efforts!
 
 
 ------------------------------------------------------------------------------
