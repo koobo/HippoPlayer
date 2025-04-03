@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.61
+Version: 2.62
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -80,7 +80,7 @@ Additional files to check and download
   https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/STIL.txt
 - To see song lengths and detect song endings for PSIDs, 
   get the song length data:
-	https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
+  https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
 - To play ImpulseTracker modules grab "impulse" and "ImpulseDecruncher":
   https://aminet.net/mus/play/DeliTracker232.lha
 - MIDI playback external tools:
@@ -97,14 +97,14 @@ Additional files to check and download
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
-# Changes from v2.61 (28.5.2024) to v2.62 (?.?.2025) 
+# Changes from v2.61 (28.5.2024) to v2.62 (4.4.2025) 
 
 ## Fixes:
 
 - Fix a possible memory corruption issue with ImpulseTracker v2.14 
   modules. Older IT format modules unaffected.
 
-- Pattern scope: Fix not displaying anything when AHI enabled and module
+- Pattern scope: Fix not displaying scope when AHI enabled and module
   has more than 4 channels.
 
 ## New stuff:
@@ -128,7 +128,7 @@ Additional files to check and download
   Songlengths.md5 is supported in addition to STIL.txt data. This 
   allows seeing song lengths and detecting song endings for PSIDs. 
   Put this file into hippo dir: 
-	https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
+  https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
   Note that both STIL and Songlengths rely on the HVSC file hierarchy
   to work as the SID file path or URL is used to search the data.
 
@@ -143,7 +143,7 @@ Additional files to check and download
 
 - Trinity accelerator sound core support (beta). VGM music 
   files containing songs for the AY8910 chip can be played.
-  Find those here: https://vgmrips.net/packs/chip/ay-3-8910
+  Find some here: https://vgmrips.net/packs/chip/ay-3-8910
   
 - Position slider: Now always changes position if position 
   info is available even when disabled. It is enabled when 

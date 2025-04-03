@@ -43,7 +43,8 @@ ver	macro
 ;	dc.b	"v2.60 (18.2.2024)"
 ;	dc.b	"v2.61฿ (?.?.2024)"
 ;	dc.b	"v2.61 (28.5.2024)"
-	dc.b	"v2.62฿ (?.?.2025)"
+;	dc.b	"v2.62฿ (?.?.2025)"
+	dc.b	"v2.62 (4.4.2025)"
 	endm	
 
 
@@ -2442,7 +2443,7 @@ about_t
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
  dc.b "ญญญ  HippoPlayer "
  ver
- dc.b " " ; padding
+ dc.b "  " ; padding
  dc.b " ญญญ",10,3
  dc.b "ญญ          by K-P Koljonen          ญญ",10,3
  dc.b "ญญญ       Hippopotamus Design       ญญญ",10,3
