@@ -692,6 +692,19 @@ init:
 ;	move.l	d4,probebuffer(a5)
 	move.l	d5,kokonaisaika(a5)
 
+    * 8-bit or 14-bit out
+	move.b	d6,cybercalibration(a5)
+	;;;move.l	d7,calibrationaddr(a5)
+
+	move.l	4.w,(a5)
+	move.l	a1,_DosBase(a5)     * needed for console debug out
+	move.l	a2,_GFXBase(a5)
+	move.l	a3,pname(a5)
+	move.l	a4,modulefilename(a5)
+
+	move	a6,sampleforcerate(a5)
+
+    DPRINT  "***** SAMPLE PLAYER INIT *****"
  if DEBUG
     pushm   d0
     moveq   #0,d0
@@ -700,17 +713,6 @@ init:
     pop     d0
  endif
 
-    * 8-bit or 14-bit out
-	move.b	d6,cybercalibration(a5)
-	;;;move.l	d7,calibrationaddr(a5)
-
-	move.l	4.w,(a5)
-	move.l	a1,_DosBase(a5)
-	move.l	a2,_GFXBase(a5)
-	move.l	a3,pname(a5)
-	move.l	a4,modulefilename(a5)
-
-	move	a6,sampleforcerate(a5)
 
 	* Two subroutine calls when getting here, hence 4+4
     lea 4+4(sp),a1
@@ -1117,12 +1119,6 @@ init:
 	move	d1,.q4(a0)
 	endb	a0
 
-    tst.b   cpu(a5)
-    bne     .cpuGood
-    moveq   #ier_hardware,d0
-    bra     sampleiik
-
-.cpuGood
     tst.b   mhiEnable(a5)
     beq     ._2
     bsr     mhiInit
@@ -1131,6 +1127,12 @@ init:
     beq     .sampleok
     bra     sampleiik
 ._2  
+
+    tst.b   cpu(a5)
+    bne     .cpuGood
+    moveq   #ier_hardware,d0
+    bra     sampleiik
+.cpuGood
 
 	move.l	4.w,a6
 	lea	    mpegaName(pc),a1
@@ -1936,7 +1938,7 @@ prepareInfoLine:
 
     * MP3 info
     tst.b   mplippu(a5)
-    beq      .lqq
+    beq      .notMp3
     lea     .formMp3(pc),a0
     * MP3 bits, freq
     pushpea .mhiTxt(pc),d4
@@ -1953,6 +1955,20 @@ prepareInfoLine:
     bne     .lqq
     pushpea .paula14Bit(pc),d4
 .lqq
+    * Used:
+    * d0,d1,d2,d3,d4, d1=bitrate
+
+    * Check if bitrate info available
+    tst     d1
+    bne     .isBr
+    * No, push params down one reg
+    lea     .formMp3NoBr(pc),a0
+    move.l  d2,d1
+    move.l  d3,d2
+    move.l  d4,d3
+.isBr
+
+.notMp3
 
 	bsr	desmsg
 
@@ -1974,6 +1990,7 @@ prepareInfoLine:
 .form             dc.b    "%s %ld-bit %lc %2ldkHz %s",0
 * MP3 forms
 .formMp3            dc.b    "MP%ld %ldkb %lc %2ldkHz %s",0
+.formMp3NoBr        dc.b    "MP%ld %lc %2ldkHz %s",0
 
 .paula8Bit        dc.b    0
 .paula14Bit       dc.b    "14-bit",0
@@ -7375,7 +7392,7 @@ get_syncsafe_integer:
 *   d0 = seconds
 *   d1 = minutes
 convertMsString:
-    moveq   #0,d0
+    moveq   #0,d4
     move.l  a0,a1
 .1
     tst.b   (a1)+
@@ -7386,17 +7403,30 @@ convertMsString:
 .loop
     cmp.l   a0,a1
     beq     .x
-    moveq   #$f,d3
-    and.b   -(a1),d3
+    moveq   #$f,d1
+    and.b   -(a1),d1
+    move.l  d2,d0
+    bsr     mulu_32
+    add.l   d0,d4   * millisecs
 
-    mulu.l  d2,d3
-    add.l   d3,d0
-    mulu.l  #10,d2
+    moveq   #10,d0
+    move.l  d2,d1
+    bsr     mulu_32
+    move.l  d0,d2
     bra     .loop
 .x
-    divu.l  #1000,d0
-    divul.l #60,d1:d0
+    * d4 = millisecs
+    move.l  d4,d0
+    move.l  #1000,d1
+    bsr     divu_32
+    * d0 = seconds
+    divu.w  #60,d0
+    move.l  d0,d1
+    swap    d0
+    ext.l   d0
+    ext.l   d1
     rts
+
 
 
 
@@ -7558,6 +7588,10 @@ putCharSerial
 MHI_BUFSIZE = 16*1024
 MHI_BUFCOUNT = 8
 
+mhimpegit   dc.b    "mhimpegit"
+mhimpegitE  
+    even
+
 mhiInit:
     DPRINT  "mhiInit"
 
@@ -7571,17 +7605,17 @@ mhiInit:
     move.l  d0,mhiBase(a5)
     beq     .noLib
 
-    move.l  mhiLibName(a5),d1
-    lore    Dos,FilePart
-    * This buffer is 39 chars long
-    move.l  d0,a0
+    ; MPEGit special case check
     clr.b   mhiMPEGit(a5)
-    cmp.l   #"mhim",(a0)+
+    move.l  mhiLibName(a5),a0
+    bsr     findFilePart
+    lea     mhimpegit(pc),a1
+    moveq   #mhimpegitE-mhimpegit-1,d0
+.m2 cmpm.b  (a0)+,(a1)+
     bne     .m1
-    cmp.l   #"pegi",(a0)+
-    bne     .m1
-    cmp.b   #"t",(a0)
-    seq     mhiMPEGit(a5)
+    dbf     d0,.m2
+    st      mhiMPEGit(a5)
+    DPRINT  "mhiMPEGit detected"
 .m1
     * Have buffers
     move.l	#MHI_BUFSIZE*MHI_BUFCOUNT,d0
@@ -7659,12 +7693,12 @@ mhiInit:
 
 
 
-    move.l  mhiStreamSize(a5),d0
+    move.l  mhiStreamSize(a5),d1
     beq.b   .2
-    move    mpbitrate(a5),d1
+    move    mpbitrate(a5),d0
     beq.b   .2      * variable? skip
-    mulu    #1024/8,d1    * kBits to bits
-    divu.l  d1,d0   * into seconds
+    mulu    #1024/8,d0   * kBits/s to bytes/s
+    bsr     divu_32      * size in bytes / bytes/s -> to seconds
     * Put it
     bsr     init\.moi_mp
 .2
@@ -8140,6 +8174,13 @@ mhiReadMp3Properties
 
     DPRINT  "mhiReadMp3Properties"
 	move.l	4.w,a6
+
+    * Paranoia
+    btst	#AFB_68020,AttnFlags+1(a6)
+    beq     .x
+    cmp     #36,LIB_VERSION(a6)
+    blo     .x
+
 	lea	    mpegaName(pc),a1
     moveq   #2,d0
 	lob	    OpenLibrary
@@ -8284,6 +8325,27 @@ mhiReadMp3Properties
 	moveq	#0,d0 * ok
 	rts
 
+* In:
+*   a0 = path
+* Out:
+*   a0 = pointer to the last component of string path
+findFilePart:
+    move.l  a0,a1
+.findEnd
+	tst.b	(a0)+
+	bne.b	.findEnd
+.loop
+    cmp.l   a0,a1
+    beq     .isSep
+	cmp.b	#":",-1(a0)
+	beq.b	.isSep
+	cmp.b	#"/",-1(a0)
+	beq.b	.isSep
+    subq    #1,a0
+    bra     .loop
+.isSep
+	* Filename part start position in a0
+    rts
 
 
 ***************************************************************************

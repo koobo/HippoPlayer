@@ -277,6 +277,14 @@ taaksej	jmp	taakse(pc)
 volj	jmp	s3vol(pc)
 vboostj	jmp	boosto(pc)
 
+;================================================================
+; AmiGus play routines - by O.Achten 
+
+	include amigus_proto.s
+
+;================================================================
+
+
 inforivit	dc.l	0
 var_playing	dc.l	0
 var_volume	dc.l	0
@@ -289,7 +297,13 @@ adjustroutine	dc.l	0
 voluproutine	dc.l	0
 s3mmode1a	dc.b	0
 
+* Use mode in "ahi_use"
+USE_NORMAL        = 0
+USE_AHI           = 1
+USE_AMIGUS_NORMAL = -1
+USE_AMIGUS_INTERP = -2
 ahi_use		dc.b	0
+
 ahi_rate	dc.l	0
 ahi_mastervol	dc	0
 ahi_stereolev	dc	0
@@ -327,6 +341,15 @@ init1r
 	move.l	d6,ahi_mode
 
 	move.l	d7,setmodulelen
+
+ if DEBUG
+    moveq   #0,d0
+    move.b  ahi_use,d0
+    ext     d0
+    ext.l   d0
+    DPRINT  "ahi_use=%ld"
+ endif
+
 	rts
 
 init2r	
@@ -415,7 +438,9 @@ init2r
 
 boosto
 	tst.b	ahi_use
+	bmi	amigus_update	;OA: AmiGUS	
 	bne	ahi_update
+
 
 	move.b	d0,vboost+3
 	lea	data,a5
@@ -477,7 +502,9 @@ s3init
 	move.l	a6,gfxbase
 
 	tst.b	ahi_use
+	bmi	amigus_init	;OA: AmiGUS	
 	bne	ahi_init
+
 
 	clr	system
 	cmp.b	#5,d4
@@ -1181,6 +1208,7 @@ s3vol
 
 s3stop	
 	tst.b	ahi_use
+	bmi	amigus_stop	;OA: AmiGUS	
 	bne	ahi_stop
 
 	pushm	all
@@ -1192,8 +1220,11 @@ s3stop
 	rts
 
 
-s3cont	tst.b	ahi_use
+s3cont	
+	tst.b	ahi_use
+	bmi	amigus_cont	;OA: AmiGUS	
 	bne	ahi_cont
+
 
 	tst	jjo
 	bne.b	.jm
@@ -1210,9 +1241,15 @@ s3cont	tst.b	ahi_use
 s3end
 	DPRINT	"S3end"
 
+
+
 	tst.b	ahi_use
 	beq.b	.noAhi
+	bmi		.use_amigus_end
 	bsr	ahi_end
+	bra .closeDebugWindow
+.use_amigus_end	
+	bsr	amigus_end	;OA: AmiGUS
 	bra	.closeDebugWindow
 .noAhi
 
@@ -6470,7 +6507,9 @@ stempo	moveq	#0,d0
 	bls.b	.e
 
 	tst.b	ahi_use
+	bmi	amigus_tempo	;OA: AmiGUS	
 	bne	ahi_tempo
+
 
 	move.l	mrate,d1
 	move.l	d1,d2
@@ -8053,7 +8092,9 @@ xm_spd	cmp	#$20,d1
 
 	move	d1,d0
 	tst.b	ahi_use
+	bmi	amigus_tempo	;OA: AmiGUS	
 	bne	ahi_tempo
+
 
 	move.l	mrate(a5),d0
 	move.l	d0,d2
@@ -9670,7 +9711,9 @@ mt_setspeed
 
 mt_settempo
 	tst.b	ahi_use
+	bmi amigus_tempo	;OA: AmiGUS	
 	bne	ahi_tempo
+
 
 	move.l	d1,-(sp)
 	move.l	mrate,d1
@@ -10370,7 +10413,9 @@ it_setTimer
 	move	d0,tempo
 	
 	tst.b	ahi_use
+	bmi	amigus_tempo	;OA: AmiGUS	
 	bne	ahi_tempo
+
 
 	move.l	mrate(pc),d1
 	beq.b	.x

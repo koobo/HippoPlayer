@@ -19,6 +19,8 @@ pt_beathoven	rs.b	1
 pt_delicustom	rs.b 	1
 pt_midistream   rs.b    1
 pt_vgm          rs.b    1   * TODO: WARNING: This is 47
+	rsset	pt_internal_start-1  * start backwards
+pt_vgm_tnt   rs.b	-1		
 
 * These need a replayer code from the group file
 pt_group_start = 49

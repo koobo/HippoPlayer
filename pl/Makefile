@@ -1,7 +1,8 @@
 # Experimental makefile
 
 INCLUDE=-I$(HOME)/A/Asm/Include -I.. -I../Include 
-ASM=~/Prj/vbcc/bin/vasmm68k_mot
+VBCC ?= /opt/amiga
+ASM ?= $(VBCC)/bin/vasmm68k_mot
 EXE=-m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 EXEopt=-m68000 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0
 EXE020=-m68020 -no-opt -kick1hunks -Fhunkexe -nosym -DTEST=0

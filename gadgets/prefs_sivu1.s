@@ -81,14 +81,14 @@ gfonttoutx	dc.b "Fonts",0
 ;	even
 
 bUu2	dc.l eskimO
-	dc.w 406,37,28,12,3,1,1
+	dc.w 406,37+14+14,28,12,3,1,1
 	dc.l 0,0,bUu2t,0,0
 	dc.w 0
 	dc.l 0
 bUu2t	dc.b 1,0,1,0
 	dc.w -146,2
 	dc.l 0,bUu2tx,0
-bUu2tx	dc.b "Prefix cut........",0
+bUu2tx	dc.b "Scope priority....",0
 	even
 eskimO	dc.l 0
 	dc.w 172,79,70,12,6,9,3
