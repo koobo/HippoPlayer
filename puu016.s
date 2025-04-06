@@ -1769,18 +1769,6 @@ DPRINT macro
 	endc
 	endm
 
-* No auto line feed
-DPRINT2 macro
-	ifne DEBUG
-	pea	.LDD\2(pc)
-	jsr	PRINTOUT
-	bra.b	.LD\2
-.LDD\2
- 	dc.b 	\1,0
- 	even
-.LD\2
-	endc
-	endm
 
 * delay
 DDELAY macro
@@ -19582,9 +19570,11 @@ delete
 	lore	Exec,Remove
 	move.l	a3,a0
  ifne DEBUG
-	DPRINT2 "Deleting->",1
-	DEBU	l_filename(a0)
-	DPRINT  "<-"
+    push    a0
+    lea l_filename(a0),a0
+    move.l  a0,d0
+	DPRINT "Deleting %s"
+    pop     a0
  endc
 
 
