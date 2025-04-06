@@ -2407,7 +2407,8 @@ layersName	dc.b	"layers.library",0
 expansionName dc.b	"expansion.library",0
 tntName     dc.b    "trinity.library",0
 cianame	dc.b	"ciaa.resource",0
- 
+timerDeviceName dc.b	"timer.device",0
+
 CHECKSTART
 CHECKSUM	=	43647
 
@@ -25314,8 +25315,8 @@ s_buffer0w                    rs.w       1
 * Buffer height rasterlines
 s_buffer0h                    rs.w       1
 * Set to true if draw buffer is in CHIP
-s_bufferIsChip                rs.b       1
-                              rs.b       1
+s_bufferIsChip                rs.b       1 
+s_syncMode                    rs.b       1 * 0: vblank, 1: timer device
 s_quadmode                    rs.b       1
 s_quadmode2                   rs.b       1
 s_scopeDrawAreaWidth		rs.w 	1
@@ -25362,6 +25363,9 @@ s_spectrumInitialized         rs.w       1
 s_sidScopeData                rs.b      sids_size 
 s_sid2ScopeData               rs.b      sids_size 
 s_sid3ScopeData               rs.b      sids_size 
+
+s_timerPort                   rs.b      MP_SIZE
+s_timerIORequest              rs.b      IOTV_SIZE
 
 s_multab                      rs.w       256 * modulo multiplication table
 s_scopeHorizontalBarTable     rs.b       512
@@ -25973,6 +25977,39 @@ scopeEntry:
     move.l  d0,a0
     move.l  a4,TC_Userdata(a0)
 
+    ; ---------------------------------
+    ; Select sync mode
+    ; 68020 or higher, use timer.device
+	btst	#AFB_68020,AttnFlags+1(a6)
+	sne     s_syncMode(a4)
+    ; ---------------------------------
+    ; Create port
+    lea     s_timerPort(a4),a3
+    moveq   #-1,d0
+    lob     AllocSignal	
+    move.b	d0,MP_SIGBIT(a3)
+ 	move.l	s_quad_task(a4),MP_SIGTASK(a3)
+	move.b	#NT_MSGPORT,LN_TYPE(a3)
+	clr.l	LN_NAME(a3)
+	move.b	#PA_SIGNAL,MP_FLAGS(a3)
+	lea     MP_MSGLIST(a3),a0
+	NEWLIST	a0
+    ; ---------------------------------
+    ; Create IO
+	lea     s_timerIORequest(a4),a2
+	move.l	a3,MN_REPLYPORT(a2)
+	move.b	#NT_MESSAGE,LN_TYPE(a2)
+	move	#IOTV_SIZE,MN_LENGTH(a2)
+    ; ---------------------------------
+    ; timer.device
+    lea     timerDeviceName,a0
+	lea     s_timerIORequest(a4),a1
+    moveq   #UNIT_VBLANK,d0
+    moveq   #0,d1
+    lob     OpenDevice * returns d0=non-zero on error
+    tst.l   d0
+    ; ---------------------------------
+
 * Modulo multab 
 	lea	s_multab(a4),a0
 	moveq	#0,d0
@@ -26236,25 +26273,40 @@ scopeEntry:
 	;;moveq	#-30,d0				* Prioriteetti 0:sta -30:een
 	lore	Exec,SetTaskPri
 
+ if DEBUG
+    moveq   #1,d0
+    and.b   s_syncMode(a4),d0
+    SDPRINT "Enter scope loop, timer sync=%ld"
+ endif
+
 *********************************************************************
 * Scope main loop, scope loop, main scope loop, scope main loop
 *********************************************************************
 
-scopeTest=0
+    tst.b   s_syncMode(a4)
+    bne     scopeLoop\.first    * Start with SendIO, not WaitIO
 
 scopeLoop:
 
- ifne scopeTest
- 	move	#$666,$dff180
-.1 	cmp.b	#$40,$dff006
- 	bne.b	.1
-.2 	cmp.b	#$40,$dff006
- 	beq.b	.2
- 	move	#$f00,$dff180
- else
-	move.l	_GFXBase(a5),a6
-	lob	WaitTOF
- endif
+    ; ---------------------------------
+    tst.b   s_syncMode(a4)
+    beq     .vbl
+    ; ---------------------------------
+    lea     s_timerIORequest(a4),a1  
+	lore    Exec,WaitIO
+.first:
+    lea     s_timerIORequest(a4),a1  
+	move.w	#TR_ADDREQUEST,IO_COMMAND(a1)
+	clr.l   IOTV_TIME+TV_SECS(a1)
+	move.l	#19*1000,IOTV_TIME+TV_MICRO(a1)
+	lore    Exec,SendIO
+    bra     .timer
+    ; ---------------------------------
+.vbl
+    move.l  _GFXBase(a5),a6
+	lob     WaitTOF
+.timer
+    ; ---------------------------------
 
 
 	;tst.b	tapa_quad(a5)		* pitääkö poistua?
@@ -26426,6 +26478,15 @@ qexit:
 	lea	scopeStopTimeMicros(a5),a1
 	lore	Intui,CurrentTime
  endif
+    ; ---------------------------------
+    tst.b   s_syncMode(a4)
+    beq     .nos
+    lea     s_timerIORequest(a4),a1  
+	lore    Exec,WaitIO
+.nos
+    lea     s_timerIORequest(a4),a1
+    lore    Exec,CloseDevice
+    ; ---------------------------------
 
 	SDPRINT	"Scope task will exit"
 	bsr.b	qflush_messages
@@ -26563,14 +26624,21 @@ initScopeBitmaps
 	lore	Exec,TypeOfMem
 	btst	#MEMB_CHIP,d0
 	sne		s_bufferIsChip(a4)
-
+    
     cmp.w   #50,LIB_VERSION(a6)
     blo.b   .1
     * Kickstart 4.0, 4.1, CPU is PPC.
     * Could be non-classic HW in this case.
     * Switch to CPU only routines.
+.cpu
     clr.b   s_bufferIsChip(a4)
 .1
+ if DEBUG
+    moveq   #1,d0
+    and.b   s_bufferIsChip(a4),d0
+    SDPRINT "Scope buffer is chip=%ld"
+ endif
+
 
 	moveq	#1,d0 * ok
 .memError
