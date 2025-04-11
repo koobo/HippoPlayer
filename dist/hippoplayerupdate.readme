@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.59
+Version: 2.62
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -10,17 +10,18 @@ Hello!
 Here you will find binaries with changes done after the original
 development stopped. 
 
-To use, copy the files over the files that you have from an existing
-installation. Check out aminet for the original archive:
-https://aminet.net/mus/play/hippoplayer.lha
+Copy HiP somewhere and "HippoPlayer.group" to S:, then run
+HiP. You can also copy the files over to a previous installation.
+This should work if you have the "reqtools.library" installed.
+For only Protracker playback you don't need the "group" file.
 
-Or, just copy HiP somewhere and "HippoPlayer.group" to S:, then run
-HiP. That should work if you have the "reqtools.library" installed. 
+NOTE 1: 
+The original archive https://aminet.net/mus/play/hippoplayer.lha
+is in its original state. There is no updated documentation. 
+Please read the change history below.
 
-NOTE 1: The original archive is in its original state. There is no
-updated documentation. Please read the change history below.
-
-NOTE 2: Ensure that "HippoPlayer.group" gets updated, as old versions will
+NOTE 2: 
+Ensure that "HippoPlayer.group" gets updated, as old versions will
 not work. The default placement is the S: directory, which is a bit silly
 (location can be changed in Prefs). You can also place the file in the 
 same directory with the HiP binary, too, if you're using kick2.0 or newer.
@@ -38,19 +39,22 @@ Quick overview of major changes since v2.45
   - "Favorites": Right click modules to favorite them
   - "Keep list on exit": Continue where you left off 
   - "Big buttons": Larger buttons
-  - "PlaySID mode": Enable reSID or SIDBlaster for PSID files
+  - "PlaySID mode": Use reSID or various hardware for output
   - "MIDI mode": Select how to play MIDI files
   - "Enable xmaplay060": Enable a high quality XM replayer
   - "Enable MHI": Play MP3s with extenal hardware
   - "Position slider": For displaying and selecting position
 - Resizable main and info windows
 - Main window font can be changed to any font
-- Support for many new music formats, stereo SID support
+- Support for many new music formats
+- SID support with dual and triple SIDs, many output options and 
+  devices, STIL database for song info, song lengths
 - Improved scopes: support for more music formats, multiple scopes,
   spectrum scope, patternscope with two sizes and up to 18 channels 
-  ("mini4" font needed for 8+ channel display)
+  ("mini4" font needed for 8+ channel display).
 - Support for MP3 streaming, radio stations
 - "Add" button in file browser or search view: copy items to main list
+- Support for AmiGUS soundcard for hardware mixing.
 - Support for playlists of up to 131071 items.
 
 New keyboard shortcuts:
@@ -59,6 +63,208 @@ New keyboard shortcuts:
 - Navigate to parent in file browser: [BACKSPACE]
 - Search modules: [CTRL+S]
 - Download file: [CTRL+G]
+
+
+Additional files to check and download
+--------------------------------------
+- Some music formats need external libraries for playback, 
+  the original archive has these:
+  https://aminet.net/mus/play/hippoplayer.lha
+- Enable internet features, search and streaming:
+  https://aminet.net/util/misc/UHCTools.lha
+- Mini4 font to display patternscope with 8+ channels:
+  https://aminet.net/text/bfont/mini.font.lha
+- To view STIL information with PSID tunes, get STIL.txt:
+  https://www.hvsc.c64.org/downloads
+  ... direct mirror link:
+  https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/STIL.txt
+- To see song lengths and detect song endings for PSIDs, 
+  get the song length data:
+  https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
+- To play ImpulseTracker modules grab "impulse" and "ImpulseDecruncher":
+  https://aminet.net/mus/play/DeliTracker232.lha
+- MIDI playback external tools:
+  https://aminet.net/mus/midi/AmiTiMiDity.lha 
+  https://aminet.net/mus/midi/GMPlay13.lha 
+  https://aminet.net/mus/misc/file.driver.lha 
+- Console music playback external tools:
+  https://aminet.net/mus/misc/vgm2wav-gme.lha
+  https://aminet.net/mus/misc/mdx2wav.lha
+- Calibration utility to finetune 14-bit output:
+  https://aminet.net/disk/cdrom/14Bit_CDPlayer.lha
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+# Changes from v2.61 (28.5.2024) to v2.62 (4.4.2025) 
+
+## Fixes:
+
+- Fix a possible memory corruption issue with ImpulseTracker v2.14 
+  modules. Older IT format modules unaffected.
+
+- Pattern scope: Fix not displaying scope when AHI enabled and module
+  has more than 4 channels.
+
+## New stuff:
+
+- PSID improvements with the updated playsid.library v1.9:
+  - New output options in "Prefs > Play-1 > PlaySid Mode"
+  - USBSID-Pico support, a USB device with SID chips
+    for SID/2SID/3SID playback. Driver by eriQue.
+  - Multiple SIDBlaster support for SID/2SID/3SID playback.
+    Driver by eriQue.
+  - ZorroSID support, a zorro card with a SID chip.
+  - Some bug fixes and compatibility improvements.
+
+- PatternScope for PSID music. Does not actually display patterns,
+  instead displays the state of the SID chips visually, which 
+  is kind of interesting to look at.
+
+- Info window: Shows the SID chip information for PSIDs.
+
+- PSID song length support. From HVSC provided data now also 
+  Songlengths.md5 is supported in addition to STIL.txt data. This 
+  allows seeing song lengths and detecting song endings for PSIDs. 
+  Put this file into hippo dir: 
+  https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
+  Note that both STIL and Songlengths rely on the HVSC file hierarchy
+  to work as the SID file path or URL is used to search the data.
+
+- AmiGUS support (beta). Oliver Achten's AmiGUS zorro soundcard  
+  contains a 32-channel high quality hardware mixer. 
+  To activate, enable "Prefs > PS3M > Use AmiGUS hardware mixer". 
+  This will direct multichannel module mixing to AmiGUS.
+  To play Protracker modules through AmiGUS, set
+  "Prefs > Play-1 > PT Replayer" to PS3M. Direct AmiGUS support 
+  works on 68000/kick 1.3 and leaves the main CPU free for 
+  other stuff. Driver by Oliver.
+
+- Trinity accelerator sound core support (beta). VGM music 
+  files containing songs for the AY8910 chip can be played.
+  Find some here: https://vgmrips.net/packs/chip/ay-3-8910
+  
+- Position slider: Now always changes position if position 
+  info is available even when disabled. It is enabled when 
+  position changing is possible. Position shown for SIDs
+  too.
+  
+- Prefs: Option to select public screen "Front screen". Hippo will then
+  try to open to the frontmost public screen whatever it may be, falling 
+  back to Workbench.
+
+- Title bar display: Removed the option "Time/duration, pos/len" from
+  Prefs > Display > Show. The option "Time, pos/len, song" shows 
+  all the relevant information available.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.60 (18.2.2024) to v2.61 (28.5.2024)
+
+## Fixes:
+
+- Window resize gadget fixes:
+  - Position corrected when window bottom border is large.
+  - Fixed info window resize gadget not working on kickstart 3.2.
+
+- If the initial view was the "Search View" and the
+  chosen seach mode "Recent Playlists", the contents
+  were not automatically refreshed on start up, fixed.
+
+- Song end detection added for DeliCustom format. Some
+  modules may support this.
+
+- Fix empty list dividers not working.
+
+## New stuff:
+
+- Limited support for ".m3u" playlist files. Hippo can load these
+  if they contain urls.
+
+- PSID improvements with the updated playsid.library v1.7:
+  - Support for 3SID files in reSID mode, these output 9
+    simultaneous SID voices. With filters enabled the 68060
+    will struggle.
+  - reSID performance optimizations, about 15% faster on 68060 now
+    compared to the previous version.
+
+- New Prefs option "Scope priority" can be used to adjust the 
+  scope task priority from the default -30. Setting it higher
+  allows the scopes to update smoothly with eg. MP3 playback 
+  without pausing during decoding. 
+
+- The P61 format support was re-enabled, it is now as it was in v2.45. 
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.59 (29.11.2023) to v2.60 (18.2.2024) 
+
+## Fixes:
+
+- Enabling "MHI output" in Prefs and trying to play
+  WAV/AIFF/MIDI/MDX2WAV/VGM2WAV could lead to a crash. 
+
+- Setting "MPEGA freq div" to something else than 1 and playing mp3 
+  could lead to a crash.
+
+- Scopes: clear the scope contents when no module or music is loaded.
+
+- Playback timer fixes:
+  - Fixed display getting confused at around 9 hours of play.
+  - Fixed timer getting reset to zero at midnight.
+  - Timer now wraps at 100 hours instead of 10 hours.
+
+- Fix wrong tooltip sometimes appearing on top of the volume slider.
+
+
+## New stuff:
+
+- The list mode toggle button on the left of the filebox now also
+  changes size if "Big buttons" is enabled in Prefs.
+
+- Sample data handling was refactored. The following formats are affected:
+  - IFF/WAV/AIFF samples
+  - MP3 files
+  - MIDI sound generated by Timidity or GMPlay
+  - VGM2WAV generated sound
+  - MDX2WAV generated sound
+  Improvements:
+  - Previously it was possible to enable 14-bit calibrated output using
+    "Prefs/Play-2/Cybercalibration". This did not affect mp3 and 
+    there was no option for ordinary 14-bit mode. Not very consistent.
+  - The above formats can now be configured to use 8-bit, 14-bit, 
+    calibrated 14-bit and AHI.
+  - A new setting "Prefs/Play-2/Sample 14-bit output" can be used to 
+    activate the 14-bit mode. The AHI setting will override this as usual.
+  - If you have configured the 14-bit calibration for your system 
+    using Christian Buchner's calibration tool
+    (http://aminet.net/disk/cdrom/14Bit_CDPlayer.lha) then the
+    calibrated 14-bit Paula output is used automatically.
+  - The output mode is indicated in the top infobox: 
+    nothing (8-bit), 14-bit, 14c-bit, AHI.
+  - Average CPU usage is now lower for the above formats due to optimized 
+    CHIP RAM access. Examples: Mp3 playback on 68060 with Paula is now 
+    about 5% faster than before, MIDI playback with GMPlay and 68030 is 
+    also about 5% faster than before.
+  - Paula 14-bit output now also supports volume control (with 
+    additional CPU cost).
+
+- The "Prefs/PS3M" Cybersound settings were removed. If you set the
+  PS3M mode to "14-bit" the calibrated output is automatically used
+  if the calibration ENV variable is found.
+
+- This was already in the previous version but forgot to mention:
+  The reSID output mode for PSID files no longer has a separate AHI setting,
+  that is controlled from the "Prefs/AHI" subpage. This allows use of the noise 
+  reduction modes for AHI too (Oversample x2, etc), which was previously not 
+  possible.
 
 
 ------------------------------------------------------------------------------

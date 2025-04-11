@@ -3,7 +3,7 @@
 
 IM=0	; Select FImp compressed files
 SHR=1	; Select Shrinkler compressed files
-P61A=0
+P61A=1
 
 	incdir	include/
 	include	playerIds.i
@@ -22,7 +22,7 @@ P61A=0
  endif
 
 
-start	dc.b	"HiPxPla",31	* Tunnistus ja versio, 8 bytes
+start	dc.b	"HiPxPla",33	* Tunnistus ja versio, 8 bytes
 
 head	macro
 	dc.w	\1

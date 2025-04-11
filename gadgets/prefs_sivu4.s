@@ -6,7 +6,7 @@ smode1	dc.l smode2
 smode1t	dc.b 1,0,1,0
 	dc.w -288,2
 	dc.l 0,smode1tx,0
-smode1tx	dc.b "Play mode...........................",0
+smode1tx	dc.b "Play mode..........................",0
 	even
 smode2	dc.l jommo
 	dc.w 364,51,70,12,0,1,1
@@ -40,7 +40,7 @@ pslider1gr	dc.w 0,0,11,9,2
 pslider1t	dc.b 1,0,1,0
 	dc.w -268,2
 	dc.l 0,pslider1tx,0
-pslider1tx	dc.b "Mixing rate...............",0
+pslider1tx	dc.b "Mixing rate..............",0
 	even
 pslider1s	dc.w 2,0,65535,0,0
 	dc.w 0,0,0,0,0,0
@@ -72,12 +72,13 @@ juust0gr	dc.w 0,0,11,9,2
 juust0t	dc.b 1,0,1,0
 	dc.w -268,2
 	dc.l 0,juust0tx,0
-juust0tx	dc.b "Stereo level................",0
+juust0tx	dc.b "Stereo level (surround).....",0
 	even
 juust0s	dc.w 2,0,0,0,0
 	dc.w 0,0,0,0,0,0
-Fruit	dc.l bENDER1
-	dc.w 406,135,28,12,3,1,1
+Fruit	
+    dc.l bENDER1
+	dc.w 406,135-14,28,12,3,1,1
 	dc.l 0,0,Fruitt,0,0
 	dc.w 0
 	dc.l 0
@@ -86,18 +87,13 @@ Fruitt	dc.b 1,0,1,0
 	dc.l 0,Fruittx,0
 Fruittx	dc.b "Use S:HippoPlayer.PS3M configuration file.......",0
 	even
-bENDER1	dc.l bENDER2
-	dc.w 406,121,28,12,3,1,1
-	dc.l 0,0,0,0,0
-	dc.w 0
-	dc.l 0
-bENDER2	dc.l 0
-	dc.w 246,121,158,12,0,1,1
+bENDER1	dc.l 0 
+	dc.w 304,121+14,130,12,3,1,1
 	dc.l 0,0,bENDER2t,0,0
 	dc.w 0
 	dc.l 0
 bENDER2t	dc.b 1,0,1,0
-	dc.w -230,2
+	dc.w -288,2
 	dc.l 0,bENDER2tx,0
-bENDER2tx	dc.b "Use CyberSound calibration..",0
+bENDER2tx	dc.b "Use AmiGUS hardware mixer..........",0
 	even

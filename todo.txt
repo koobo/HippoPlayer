@@ -1,5 +1,58 @@
-FIXED: TODO:
-- ctrl+g won't work when pipe streamer is active
+
+TODO:
+- proplayer.a support for MEDsÂ§
+
+TODO:
+- a loop track button added to the button bar, easier than playmode switch from Prefs
+
+TODO:
+- playing a network stream a long time will increase the t:agetout
+  temp file slowly, it may get too large
+
+TODO:
+- easier way to set "play module repeatedly"
+-- key shortcut
+-- obscure rmb combo 
+-- new button 
+
+TODO:
+- mhi mp3 output: displays "0kB", why? remove mpega.lib and try?
+  - mhiReadMp3Properties failaa, kÃ¤y nÃ¤in -> mpega.library puuttuu?
+  - yes
+
+
+TODO:
+- for modland urls display the 2nd subdir in the list:
+    * This is a modland url
+    * http://ftp.modland.com/pub/modules/Pretracker/Virgill/coop-Tecon/down the drain.prt
+
+TODO:
+- change window right border to 10 -> right side decorative bevel bugs
+
+TODO:
+- layout: inconsistent button spacing when window is scaled wider
+
+TODO:
+- layout: bg pattern missing one pixel column on the right side
+
+
+TODO:
+- sample names shown with xmaplay060
+
+TODO:
+- playlist support for #volume for setting file volume
+
+TODO:
+- add one MIDI, also WAV
+- play
+- after it stops
+- play counter still rolling
+--> assumption is that module repeats, MIDI/VGM/MDX don't though, so they
+    keep rolling the timer.. feature?
+
+TODO:
+- hippo face in scopes is using wrong colors in some RTG modes.
+  this is because it assumes colors 0-3 to work as on denise modes?
 
 TODO:
 - sample scope with sid+resid:
@@ -10,9 +63,6 @@ TODO:
 - Crockettstheme2023 from Aminet, keeps crashing HippoPlayer, 
   Running under OS 3.2.2 and Latest Version
 - Guru 8000 0005 with both OctaMixPlayer v7.0 and v7.1 
-
-FIXED: TODO:
-- soundfx: check this identifier, crash?
 
 TODO:
 - For the crash with the combination of ML+IT files, add the two ML files, then
@@ -49,7 +99,7 @@ on standard RAmiga+c and RAmiga+v?
 
 TODO:
 - sinus.xm: PS3Mn kanssa ei voi patternskipata kuin 0 tai 1 vaikka on pidempi modi
-- toteutus tehty niin että lyhyen modin kanssa ei toimi oikein
+- toteutus tehty niin ettï¿½ lyhyen modin kanssa ei toimi oikein
 
 TODO:
 - check the pt song issue, doesn't seem to work
@@ -86,6 +136,90 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+DONE: TODO:
+- title bar displaying options need rethinking
+
+DONE: TODO:
+- position slider moving but not draggable for some formats?
+
+DONE: TODO:
+- bring hippo to front 
+-- hippo runs on WB/some screen
+   run "hip front"  from DOpus -> still on WB 
+-- hippo not started 
+   run "hip front" from DOPUS -> opens on DOpus 
+-- public screen setting: add "FRONT", always open new hip  
+   on frontmost screen if it is public screen
+
+
+FIXED: TODO: HIT
+- open: quad scope/hippo/filled + patternscope
+- play: gopho.sid, resid mode
+- toggle scopes off with "z"
+- toggle on with "z"
+--> hit, level 3
+- scope update is done even if the scope is not set up yet
+
+FIXED: TODO:
+- ensure playsid.library is not in mem
+- play gopho.sid
+- filter sound bassy
+- play it again
+- filter sounds different, same as deepsid
+-> something in playsid/resid is different on 2nd time
+
+FIXED: TODO
+- PS3M AHI -> pattern scope works for 4ch mods only
+
+
+FIXED: TODO:
+- 3SID scope display
+
+FIXED: TODO:
+- empty dividers ignored on import
+
+FIXED: TODO:
+goto "Shared lists"
+open Prefs and save
+close HiP
+restart HiP
+--> we start with the "Shared lists" already selected, but the list is not loaded 
+This stopped working with 2.59, with 2.58 it's loading the list on startup.
+
+FIXED: TODO:
+- info window resize not working on 3.2
+
+FIXED: TODO:
+- resize gadget misplaced if bottom border is set larger
+
+FIXED: TODO:
+- soundfx: check this identifier, crash?
+
+FIXED: TODO:
+- eject clears the scopes and prints the head
+
+FIXED: TODO:
+- sample/PS3M: use cybersound if set in ENV
+- rename cybersoud button to: Sample 14-bit out or something
+
+FIX: TODO:
+- MHI startataan vaikka ei olisi edes mp3-file kyseessï¿½
+
+
+FIXED: TODO:
+- ctrl+g won't work when pipe streamer is active
+
+
+DONE: TODO:
+- hover mouse over volumebar, tooltip for search bar appears?
+  only with normal sized buttons
+
+DONE: TODO: 
+- big button support for the list mode change button
+
+
+FIXED: TODO:
+- sample scopes broke with the last scope change (moduleaddress zero check)
 
 FIXED: TODO:
 - would it be possible to optionally not clear the scopes when a MOD is paused ? 
@@ -380,7 +514,7 @@ FIXED: TODO:
 - OK: DISABLE ctrl+s onn kick13
 
 - OK: exit local find layout while in SEARCH VIEW with mouse click
-- jotain roskaa jää fileboxin alimmalle riville kun vaihtelee searc
+- jotain roskaa jï¿½ï¿½ fileboxin alimmalle riville kun vaihtelee searc
   view <-> muut viewit
 
 FIXED: TODO:
