@@ -60418,12 +60418,19 @@ readUsl:
     DPRINT  "readUsl"
     cmp.w   #pt_sample,playertype(a5)
     beq     .reject
+    cmp.w   #pt_sid,playertype(a5)
+    beq     .reject
+
+    bsr     uslLoadIndex
+
+    tst.l   uslIndexPtr(a5)
+    beq     .noData
 
     bsr     calcModuleMD5
-    bsr     uslLoadIndex
     bsr     uslLoadData
     bsr     uslFind
     DPRINT  "uslFind=%ld"
+.noData
     rts
 
 .reject
