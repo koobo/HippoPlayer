@@ -31463,6 +31463,7 @@ loadfile:
     pushpea lod_xpkOutLen(a5),.xpkoutlen-.xpktags(a0)
 	move.l	_XPKBase(a5),a6
 	lob	XpkUnpack
+    DPRINT  "XpkUnpack=%ld"
 	tst.l	d0
 	bne	.xpk_error
 	bra	.exit
@@ -32965,7 +32966,9 @@ tutki_moduuli:
 	moveq	#1,d1			* Ei oteta filen kommenttia talteen
 	move.b	xpkid(a5),d4		* ei XPK ID:tä samplefileille
 	st	xpkid(a5)
+    move.l  lod_xpkOutLen(a5),d2 * preserve mdat lenght for MD5sum
 	bsr	loadfile
+    move.l  d2,lod_xpkOutLen(a5)
 	move.b	d4,xpkid(a5)
 	move.l	d0,-(sp)
 
@@ -60412,11 +60415,19 @@ freeSLData:
     include "../md5/md5.s" 
 
 readUsl:
+    DPRINT  "readUsl"
+    cmp.w   #pt_sample,playertype(a5)
+    beq     .reject
+
     bsr     calcModuleMD5
     bsr     uslLoadIndex
     bsr     uslLoadData
     bsr     uslFind
     DPRINT  "uslFind=%ld"
+    rts
+
+.reject
+    DPRINT  "reject"
     rts
 
 calcModuleMD5:
