@@ -1267,6 +1267,7 @@ lod_kommentti		rs.b	1	 * 0: ei oteta kommenttia
 lod_xpkfile		rs.b	1	 * <>0: tiedosto oli xpk-pakattu
 lod_exefile		rs.b	1	 * <>0: file was an exe		
 lod_dirlock		rs.l	1
+lod_xpkOutLen   rs.l    1
 lod_buf			rs.b	200
 lod_b			rs.b	0
 
@@ -1584,6 +1585,12 @@ vgmPlayTime     rs.l    1 * Host playback time in 44100 Hz ticks
 * SID wave scope
 sid_followPositions rs.w    4
 sid_followFractions rs.w    4
+
+* UADE songlength data
+uslMD5          rs.b    6   * Loaded 48-bit MD5 sum
+uslIndexPtr     rs.l    1   * Pointer to DB index
+uslDataPtr      rs.l    1   * Ppinter to current DB block
+uslNotFound     rs.w    1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -3745,6 +3752,8 @@ exit
     jsr     freeStreamerUrl
     jsr     freeSTILData
     jsr     freeSLData
+    jsr     uslFreeIndex
+    jsr     uslFreeData
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -30479,6 +30488,10 @@ loadmodule:
 	tst.l	d0
 	bne.b	.unk_err		* ep‰m‰‰r‰inen tiedosto
 
+    push    d0
+    jsr     readUsl
+    pop     d0
+
 	clr.b	contonerr_laskuri(a5)	* nollataan virhelaskuri
 	rts	
 
@@ -31314,7 +31327,7 @@ loadfile:
 	bsr	.checkm
 
 	* XPK compressed file check
-
+    clr.l   lod_xpkOutLen(a5)       * clear previous outlen initially
 	cmp.l	#"XPKF",probebuffer(a5)
 	bne	.wasnt_xpk
 
@@ -31447,6 +31460,7 @@ loadfile:
 
 	move.l	lod_filename(a5),.xpkfile-.xpktags(a0)
 	move.l	lod_memtype(a5),.xpkmem-.xpktags(a0)
+    pushpea lod_xpkOutLen(a5),.xpkoutlen-.xpktags(a0)
 	move.l	_XPKBase(a5),a6
 	lob	XpkUnpack
 	tst.l	d0
@@ -31474,6 +31488,11 @@ loadfile:
 
 		dc.l	XPK_ChunkHook
 		dc.l	.hook
+
+        dc.l    XPK_GetOutLen   * exact size of decompressed data
+.xpkoutlen
+        dc.l    0
+
 		dc.l	TAG_END
 
 
@@ -35095,7 +35114,7 @@ fileBrowserRoot
 	move.b	#":",(a0)+
 	clr.b	(a0)
 
-	bsr	getVisibleModuleListHeader
+	jsr	getVisibleModuleListHeader
 	ADDTAIL	* add node (a1)
 	addq.l	#1,modamount(a5)
 .next
@@ -60381,6 +60400,191 @@ freeSLData:
     move.l  slIndexPtr(a5),a0
     clr.l   slIndexPtr(a5)
     jmp     freemem
+
+
+
+***************************************************************************
+*
+* UADE songlength database
+*
+***************************************************************************
+
+    include "../md5/md5.s" 
+
+readUsl:
+    bsr     calcModuleMD5
+    bsr     uslLoadIndex
+    bsr     uslLoadData
+    bsr     uslFind
+    DPRINT  "uslFind=%ld"
+    rts
+
+calcModuleMD5:
+    
+    lea     -MD5Ctx_SIZEOF(sp),sp
+
+    move.l  sp,a0
+    bsr     MD5_Init
+
+    move.l  sp,a0
+    move.l  moduleaddress(a5),a1
+    
+    * Special case for XPK, exact decompressed length
+    * is not the allocated mem length
+    move.l  lod_xpkOutLen(a5),d0
+    bne     .1
+    move.l  modulelength(a5),d0
+.1
+
+    DPRINT  "calcModuleMD5 length=%ld"
+    bsr     MD5_Update
+
+    move.l  sp,a0
+    bsr     MD5_Final
+
+    move.l  d0,uslMD5(a5)
+    swap    d1
+    move.w  d1,uslMD5+4(a5)
+
+    lea     MD5Ctx_SIZEOF(sp),sp
+
+    DPRINT  "MD5: %08lx %08lx %08lx %08lx"
+    rts
+ 
+
+uslLoadIndex:
+    DPRINT  "uslLoadIndex"
+    tst.l   uslIndexPtr(a5)
+    bne     .y          * already loaded?
+    tst.b   uslNotFound(a5)
+    bne     .y          * only try once
+    bsr     uslOpen
+    seq     uslNotFound(a5)
+    beq     .y
+    move.l  #$84,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,uslIndexPtr(a5)
+    beq     .x
+
+    move.l  d7,d1		        * file
+	move.l	uslIndexPtr(a5),d2	* destination
+	move.l	#$84,d3		        * pituus
+	lob	    Read
+    DPRINT  "read=%ld"
+.x
+    bsr     uslClose
+.y
+    rts
+
+uslLoadData:
+    DPRINT  "uslLoadData"
+    tst.l   uslIndexPtr(a5)
+    beq     .error
+    move.l  uslDataPtr(a5),d0
+    beq     .load
+    DPRINT  "check previous"
+    * Check if already have it
+    move.l  d0,a0
+    move.b  (a0),d0
+    lsr.b   #4,d0   
+    move.b  uslMD5(a5),d1
+    lsr.b   #4,d1
+    cmp.b   d0,d1
+    beq     .gotIt
+.load
+    bsr     uslFreeData
+    bsr     uslOpen
+    beq     .error
+
+    * Access index
+    move.b  uslMD5(a5),d0
+    lsr.b   #4,d0
+    and.w   #$f,d0
+    lsl     #3,d0
+    move.l  uslIndexPtr(a5),a0
+    movem.l 4(a0,d0),d4/d5
+    * d4 = file offset, d5 = block length
+
+    move.l  d7,d1   * fh
+    move.l  d4,d2   * offset   
+    move.l  #OFFSET_BEGINNING,d3
+    lob     Seek
+
+    move.l  d5,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,uslDataPtr(a5)
+    beq     .error2
+
+    move.l  d7,d1   * fh
+    move.l  d0,d2   * target
+    move.l  d5,d3   * len
+    lore    Dos,Read
+    DPRINT  "read=%ld"
+
+.error2
+    bsr     uslClose
+.error
+    rts
+.gotIt
+    DPRINT  "already had it"
+    rts
+
+
+uslFind:
+    moveq   #0,d0       * result in d0
+    move.l  uslDataPtr(a5),d1
+    beq     .x
+    move.l  d1,a0
+    move.l  -4(a0),d1   * mem area length
+    lea	    (a0,d1.l),a1
+    move.l  uslMD5(a5),d1
+    move.w  uslMD5+4(a5),d2
+    bra	    .go
+.find
+    cmp.l	(a0),d1
+    bne	    .no
+    cmp.w   4(a0),d2
+    bne     .no
+    move.w	6(a0),d0    * result data
+    rts 
+.no addq	#8,a0       * go to next item
+.go cmp.l	a1,a0
+    blo     .find
+.x
+    rts
+
+
+uslFreeIndex:
+    DPRINT  "uslFreeIndex"
+    move.l  uslIndexPtr(a5),a0
+    clr.l   uslIndexPtr(a5)
+    jmp     freemem
+
+uslFreeData:
+    DPRINT  "uslFreeData"
+    move.l  uslDataPtr(a5),a0
+    clr.l   uslDataPtr(a5)
+    jmp     freemem
+
+uslOpen:
+	pushpea uslFile(pc),d1
+	move.l	#MODE_OLDFILE,d2
+	lore    Dos,Open
+    move.l  d0,d7
+    rts
+
+uslClose:
+    move.l  d7,d1
+    beq     .1
+	lore    Dos,Close
+.1
+    rts
+
+uslFile:	dc.b	"PROGDIR:songlengths.db",0
+    even
+
 
 ***************************************************************************
 *
