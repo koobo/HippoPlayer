@@ -1586,11 +1586,12 @@ vgmPlayTime     rs.l    1 * Host playback time in 44100 Hz ticks
 sid_followPositions rs.w    4
 sid_followFractions rs.w    4
 
-* UADE songlength data
-uslMD5          rs.b    6   * Loaded 48-bit MD5 sum
-uslIndexPtr     rs.l    1   * Pointer to DB index
-uslDataPtr      rs.l    1   * Ppinter to current DB block
-uslNotFound     rs.w    1
+* Audacious-UADE songlength data
+uslMD5          rs.b      6   * Loaded module 48-bit MD5 sum
+uslIndexPtr     rs.l      1   * Pointer to DB index
+uslDataPtr      rs.l      1   * Pointer to current DB block
+uslNotFound     rs.w      1   * Flag to avoid retrying if file not available
+uslSongLengthData rs.w    16  * Data for the current module. max 16 songs
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -6924,6 +6925,7 @@ freemodule:
 	* For non-EP players supporting patterninfo
 	clr.l	deliPatternInfo(a5) 
 	jsr	clearScopeData
+    jsr     uslClearSongData
 	
 ;	bsr	lootaa
 	bsr	inforivit_clear
@@ -7887,6 +7889,7 @@ signalreceived
 	bne.b	.mododo
 
 	bsr	settimestart
+    jsr uslGetSongLength
 .reet0	st	playing(a5)
 	bsr	inforivit_play
 	jsr	start_info
@@ -8477,6 +8480,7 @@ umph
 	st	playing(a5)		* Ei varmaan tuu initerroria
 	bsr	inforivit_play
 	bsr	settimestart
+    jsr uslGetSongLength
 	bra	start_info
 	
 .new
@@ -8555,6 +8559,7 @@ umph
 	bsr	settimestart
 	st	playing(a5)
 	bsr	inforivit_play
+    jsr uslGetSongLength
 	bsr	start_info
 
 .erer
@@ -10309,6 +10314,7 @@ songSkip
 	bsr	settimestart
 
 	bsr	inforivit_play
+    jsr uslGetSongLength
 .err	
 	bsr	lootaan_aika
 .nosong
@@ -10906,6 +10912,7 @@ rbutton1:
 	st	playing(a5)		* Ei varmaan tuu initerroria
 	bsr	settimestart
 	bsr	inforivit_play
+    jsr uslGetSongLength
 	bra	start_info
 	;rts
 
@@ -10961,6 +10968,7 @@ rbutton1:
 	bne.b	.inierr
 
 	bsr	settimestart
+    jsr uslGetSongLength
 .reet0	st	playing(a5)
 	bsr	inforivit_play
 	bsr	start_info
@@ -60416,10 +60424,16 @@ freeSLData:
 
 readUsl:
     DPRINT  "readUsl"
-    cmp.w   #pt_sample,playertype(a5)
-    beq     .reject
+    cmp.w   #pt_prot,playertype(a5)
+   ; beq     .reject
     cmp.w   #pt_sid,playertype(a5)
     beq     .reject
+    cmp.w   #pt_sample,playertype(a5)
+    beq     .reject
+
+    lea     uslSongLengthData(a5),a0
+    tst.w   (a0)
+    bne     .hasIt
 
     bsr     uslLoadIndex
 
@@ -60432,7 +60446,9 @@ readUsl:
     DPRINT  "uslFind=%ld"
 .noData
     rts
-
+.hasIt
+    DPRINT  "Already have it"
+    rts
 .reject
     DPRINT  "reject"
     rts
@@ -60459,14 +60475,12 @@ calcModuleMD5:
 
     move.l  sp,a0
     bsr     MD5_Final
+    DPRINT  "MD5: %08lx %08lx %08lx %08lx"
 
     move.l  d0,uslMD5(a5)
     swap    d1
     move.w  d1,uslMD5+4(a5)
-
     lea     MD5Ctx_SIZEOF(sp),sp
-
-    DPRINT  "MD5: %08lx %08lx %08lx %08lx"
     rts
  
 
@@ -60498,7 +60512,7 @@ uslLoadIndex:
 uslLoadData:
     DPRINT  "uslLoadData"
     tst.l   uslIndexPtr(a5)
-    beq     .error
+    beq     .noDataError
     move.l  uslDataPtr(a5),d0
     beq     .load
     DPRINT  "check previous"
@@ -60548,31 +60562,111 @@ uslLoadData:
 .gotIt
     DPRINT  "already had it"
     rts
+.noDataError
+    DPRINT  "no data available"
+    rts
 
-
+uslClearSongData:
+	lea	    uslSongLengthData(a5),a2
+    moveq   #8-1,d0
+.cl clr.l   (a2)+
+    dbf     d0,.cl
+    rts
+    
 uslFind:
     moveq   #0,d0       * result in d0
     move.l  uslDataPtr(a5),d1
     beq     .x
     move.l  d1,a0
-    move.l  -4(a0),d1   * mem area length
-    lea	    (a0,d1.l),a1
-    move.l  uslMD5(a5),d1
-    move.w  uslMD5+4(a5),d2
+    move.l  -4(a0),d1       * mem area length
+    lea	    (a0,d1.l),a1    * search end bound
+    movem.w uslMD5(a5),d1/d2/d3
+    and.w   #$0fff,d1       * ignore top 4 bits
     bra	    .go
 .find
-    cmp.l	(a0),d1
-    bne	    .no
-    cmp.w   4(a0),d2
-    bne     .no
-    move.w	6(a0),d0    * result data
-    rts 
-.no addq	#8,a0       * go to next item
-.go cmp.l	a1,a0
-    blo     .find
+    ; ---------------------------------
+	* First 16 bits, top 4 bits (song count) ignored
+	move.b  (a0),d4
+    moveq   #$f,d0
+    and.b	d4,d0
+    rol	    #8,d0
+	move.b	1(a0),d0
+	cmp.w   d1,d0
+	bne     .skip
+
+    move.b	2(a0),d0
+    rol	    #8,d0
+	move.b	3(a0),d0
+	cmp.w	d2,d0
+	bne	    .skip
+
+    * Last 16 bits
+	move.b	4(a0),d0
+	rol	    #8,d0
+	move.b	5(a0),d0
+	cmp.w	d3,d0
+	bne	    .skip
+    ; ---------------------------------
+    * found it!
+    * read song count
+    bsr     uslClearSongData
+	lsr.b	#4,d4
+	addq	#6,a0
+	lea	    uslSongLengthData(a5),a1 
+.sl
+	moveq	#0,d0
+	move.b	(a0)+,d0    
+	bpl	    .sml
+	and	    #$7f,d0         * 16-bit length
+	lsl	    #8,d0
+	move.b	(a0)+,d0
+.sml	
+    DPRINT  "song length=%ld"
+	move.w	d0,(a1)+
+	subq.b	#1,d4
+	bne     .sl
+    DPRINT  "found"
+	rts
+    ; ---------------------------------
+.skip
+    * read song count
+	lsr.b	#4,d4	
+	addq	#6,a0	* skip over md5sum
+.songs
+	tst.b	(a0)+
+	bpl     .small
+	addq	#1,a0	* 16-bit length
+.small
+	subq.b	#1,d4
+	bne	.songs
+    ; ---------------------------------
+.go	
+	cmp.l	a1,a0
+	blo	    .find
+.x
+    DPRINT  "not found"
+	moveq	#0,d0
+	rts
+
+uslGetSongLength:
+    DPRINT  "uslGetSongLength"
+    clr.l   kokonaisaika(a5)
+    lea     uslSongLengthData(a5),a0
+    tst.w   (a0)
+    beq     .x
+
+    moveq   #0,d0
+    move    songnumber(a5),d0
+    DPRINT  "song=%ld"
+    add     d0,d0
+    move    (a0,d0),d0
+    DPRINT  "length=%ld"
+    divu    #60,d0
+    move    d0,kokonaisaika(a5)
+    swap    d0
+    move    d0,kokonaisaika+2(a5)
 .x
     rts
-
 
 uslFreeIndex:
     DPRINT  "uslFreeIndex"
