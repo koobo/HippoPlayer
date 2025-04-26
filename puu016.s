@@ -60681,7 +60681,12 @@ uslFreeData:
     jmp     freemem
 
 uslOpen:
-	pushpea uslFile(pc),d1
+    lea     uslFile(pc),a0
+    tst.b   uusikick(a5)
+    bne     .1
+    lea     uslFileOld(pc),a0
+.1
+    move.l  a0,d1
 	move.l	#MODE_OLDFILE,d2
 	lore    Dos,Open
     move.l  d0,d7
@@ -60694,7 +60699,8 @@ uslClose:
 .1
     rts
 
-uslFile:	dc.b	"PROGDIR:songlengths.db",0
+uslFile:	dc.b	"PROGDIR:"
+uslFileOld  dc.b    "songlengths.db",0
     even
 
 
