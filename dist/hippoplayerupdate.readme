@@ -1142,7 +1142,7 @@ This time we skip over one version number!
     - Richard Joseph, Rob Hubbard, Rob Hubbard 2/Infogrames, Sonix Music Driver
     - SoundControl, Special FX, Steve Turner, Synth Pack, TCBTracker (ST)
     - The Musical Enlightenment, Tim Follin, Wally Beben
-  - Fixed a problem where samples with short repeat lenghts were displayed
+  - Fixed a problem where samples with short repeat lengths were displayed
     incorrectly, this means every chip and synth sample in practice. 
     The playback position was calculated wrong and resulted in an 
     unrealistically static waveform display. 

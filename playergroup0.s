@@ -81,7 +81,7 @@
 start	dc.b	"HiPxPla",21	* Tunnistus ja versio
 
 main	
-	* start offset + lenght -pairs
+	* start offset + length -pairs
 	dc.l	ps3mdata-main,tfmxdata-ps3mdata
 	dc.l	tfmxdata-main,tfmx7data-tfmxdata
 	dc.l	tfmx7data-main,jamdata-tfmx7data

@@ -43936,7 +43936,7 @@ p_multi:
 
 * VBLANK routine
 * Updates:
-* - position and lenght info
+* - position and length info
 * - patternscope information, if needed
 .s3poslen
 	tst.b	patternScopeRunning(a5)
@@ -45236,7 +45236,7 @@ id_gamemusiccreator
      * traverse a pattern
     * four bytes per channel per row,
     * so 16 bytes per row
-    * pattern lenght is then 64 rows.
+    * pattern length is then 64 rows.
     * go through all 4 byte note slots in one pattern.
 
     move    #256-1,d5		* 64 rows x 4 channels
@@ -45714,7 +45714,7 @@ p_medley
 
 
 ; in: a4 = module
-;     d7 = module lenght
+;     d7 = module length
 ; out: d0 = 0, valid valid
 ;      d0 = -1, not valid
 .id_medley
@@ -46874,7 +46874,7 @@ p_startrekker
 .nok	rts
 
 ; in: a4 = module
-;     d7 = module lenght
+;     d7 = module length
 ; out: d0 = 0, valid valid
 ;      d0 = -1, not valid
 .id_
@@ -50775,7 +50775,7 @@ vgmGet4:
 * Called from VB interrupt.
 * Will signal the streamer task using an interval.
 * Intent is to make the streamer call the poll callback
-* in task scope, which then will check if the song lenght
+* in task scope, which then will check if the song length
 * info is available.
 vgmPollTrigger:
     lea     vgmPollCount(pc),a0
@@ -59102,7 +59102,7 @@ getStilHash:
 
 * Out:
 *  d0 = index data pointer, or NULL
-*  d1 = index data lenght
+*  d1 = index data length
 loadSTILIndex:
     move.l  stilIndexPtr(a5),d0
     bne     .ok
