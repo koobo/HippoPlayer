@@ -4323,7 +4323,7 @@ handleUiRefreshSignal
 ;	bsr	lootaan_muisti
 	jsr	lootaan_nimi
     jsr     refreshPositionSlider
-
+    bsr     periodicEndCheck
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
 	;bsr	zipwindow
@@ -4338,6 +4338,37 @@ handleUiRefreshSignal
 
 	pop	d0
 	rts
+
+* See if song ended base on the song length data
+periodicEndCheck:
+    tst.b   playing(a5)
+    beq     .3
+
+    * PSID?
+    cmp.w   #pt_sid,playertype(a5)
+    bne     .1
+    jmp     sidEndCheck
+.1
+    * Others, if they do not provide the end check otherwise
+	move.l	playerbase(a5),a0
+	move	#pf_end,d2
+	and	    p_liput(a0),d2
+    bne     .3
+    * Do we have length data?
+    tst.w   uslSongLengthData(a5)
+    beq     .3
+    
+    move.l	aika2(a5),d0
+	sub.l	aika1(a5),d0            * can be negative
+    move.w  kokonaisaika(a5),d1     * mins
+    mulu    #60,d1
+    add.w   kokonaisaika+2(a5),d1   * secs
+    cmp.l   d0,d1
+    bge     .3
+    st      songover(a5)
+    DPRINT  "periodicEndCheck! %ld %ld"
+.3
+    rts
 
 
 handlePosUpdateSignal
@@ -38368,9 +38399,9 @@ id_sid
 .ide1
  even
 
-sidVBlank:
-    bsr     sidEndCheck
-    bra     sidScopeUpdate
+;sidVBlank:
+;    bsr     sidEndCheck
+;    bra     sidScopeUpdate
 
 * Based in info from Songlength database
 sidEndCheck:
@@ -38395,6 +38426,7 @@ sidEndCheck:
     
 * Scope data update and following
 * This is emulates what the PlaySid pplication does.
+sidVBlank:
 sidScopeUpdate:
 
 	* Skip this if not needed
@@ -58753,17 +58785,17 @@ refreshPositionSlider:
     move    p_liput(a1),d0
     and     #pf_poslen,d0
     bne     .moveProp
-    cmp     #pt_sid,playertype(a5)
-    beq     .sid
-.sidx
-    rts
-.sid
-    * Special case for SIDs
+;    cmp     #pt_sid,playertype(a5)
+;    beq     .sid
+;.sidx
+;    rts
+;.sid
+    * If the length is known use that.
     tst.l   kokonaisaika(a5)
-    beq     .sidx
+    beq     .no
     move.l	aika2(a5),d1
 	sub.l	aika1(a5),d1            * can be negative
-    ble     .sidx
+    ble     .no
     mulu    #$ffff,d1
     move.w  kokonaisaika(a5),d0     * mins
     mulu    #60,d0
@@ -60425,7 +60457,7 @@ freeSLData:
 readUsl:
     DPRINT  "readUsl"
     cmp.w   #pt_prot,playertype(a5)
-   ; beq     .reject
+    beq     .reject
     cmp.w   #pt_sid,playertype(a5)
     beq     .reject
     cmp.w   #pt_sample,playertype(a5)
@@ -60650,13 +60682,18 @@ uslFind:
 
 uslGetSongLength:
     DPRINT  "uslGetSongLength"
-    clr.l   kokonaisaika(a5)
+    ; Do not clobber PT or SID data if already available
+    tst.l   kokonaisaika(a5)
+    bne     .1
+
+    ;;clr.l   kokonaisaika(a5)
     lea     uslSongLengthData(a5),a0
     tst.w   (a0)
     beq     .x
 
     moveq   #0,d0
     move    songnumber(a5),d0
+    sub     minsong(a5),d0
     DPRINT  "song=%ld"
     add     d0,d0
     move    (a0,d0),d0
@@ -60666,6 +60703,9 @@ uslGetSongLength:
     swap    d0
     move    d0,kokonaisaika+2(a5)
 .x
+    rts
+.1
+    DPRINT  "already set"
     rts
 
 uslFreeIndex:
