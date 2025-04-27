@@ -60501,8 +60501,13 @@ calcModuleMD5:
     bne     .1
     move.l  modulelength(a5),d0
 .1
-
     DPRINT  "calcModuleMD5 length=%ld"
+
+    cmp.l   #200000,d0
+    blo     .11
+    jsr     setMainWindowWaitPointer
+.11
+
  if DEBUG
     pushm   all
     bsr     startMeasure
@@ -60517,12 +60522,12 @@ calcModuleMD5:
     move.l  sp,a0
     bsr     MD5_Final
     DPRINT  "MD5: %08lx %08lx %08lx %08lx"
-
     move.l  d0,uslMD5(a5)
     swap    d1
     move.w  d1,uslMD5+4(a5)
     lea     MD5Ctx_SIZEOF(sp),sp
-    rts
+
+    jmp     clearMainWindowWaitPointer
  
 
 uslLoadIndex:
