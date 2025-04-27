@@ -60503,7 +60503,16 @@ calcModuleMD5:
 .1
 
     DPRINT  "calcModuleMD5 length=%ld"
+ if DEBUG
+    pushm   all
+    bsr     startMeasure
+    popm    all
+ endif
     bsr     MD5_Update
+ if DEBUG
+    bsr     stopMeasure
+    DPRINT  "MD5 took %ld ms"
+ endif
 
     move.l  sp,a0
     bsr     MD5_Final
