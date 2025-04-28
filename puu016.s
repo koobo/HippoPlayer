@@ -3248,6 +3248,8 @@ main:
     bsr     komentojono
 .noCliParms
 
+    jsr     uslCreateIndex
+
 *********************************************************************************
 *
 * P‰‰silmukka
@@ -60486,7 +60488,6 @@ readUsl:
     rts
 
 calcModuleMD5:
-    
     lea     -MD5Ctx_SIZEOF(sp),sp
 
     move.l  sp,a0
@@ -60753,10 +60754,453 @@ uslClose:
 .1
     rts
 
-uslFile:	dc.b	"PROGDIR:"
-uslFileOld  dc.b    "songlengths.db",0
+uslFile:	 dc.b	"PROGDIR:"
+uslFileOld   dc.b   "songlengths.db_",0
+uslDataName  dc.b   "PROGDIR:"
+uslDataNameO dc.b   "songlengths.tsv",0
+     even
+
+
+* Creates Songlengths.idx from Audacious-UADE songlengths.tsv
+* Out:
+*    d0 = true on success
+uslCreateIndex:
+    DPRINT  "uslCreateIndex"
+    rsreset
+.index            rs.l    16*2
+.varsSize         rs.b    0
+
+    moveq   #.varsSize/2-1,d0
+.sk clr.w   -(sp)
+    dbf     d0,.sk
+    move.l  sp,a4
+
+    * Input file
+    lea     uslDataName(pc),a0
+    tst.b   uusikick(a5)
+    bne     .n1
+    lea     uslDataNameO(pc),a0
+.n1
+    * Output file
+    lea     uslFile(pc),a1
+    tst.b   uusikick(a5)
+    bne     .n3
+    lea     uslDataNameO(pc),a1
+.n3
+    lea     .progressMsg(pc),a2
+    lea     .callback(pc),a3
+    bsr     fileConverter
+
+    lea     .varsSize(sp),sp
+    rts
+
+* Callback inputs:
+*    a0 = input line
+*    a1 = output buffer
+*    a4 = callback user data
+* Outputs:
+*    d0 = bytes to write or 0 
+.callback
+    ; ---------------------------------
+    * Read 8 chars of MD5
+    moveq   #0,d1
+    moveq   #8-1,d3
+.md5a
+    rol.l   #4,d1
+* 0..9 = $30..$39
+* a..f = $61..$66
+    move.b  (a0)+,d0
+    cmp.b   #$61,d0
+    bhs     .n13
+    sub.b   #$30,d0
+    bra     .n23
+.n13
+    sub.b   #$61-10,d0
+.n23
+    or.b    d0,d1
+    dbf     d3,.md5a
+    move.l  d1,(a1)+
+
+    * Read 4 chars of MD5
+    moveq   #0,d1
+    moveq   #4-1,d3
+.md5b
+    rol.l   #4,d1
+* 0..9 = $30..$39
+* a..f = $61..$66
+    move.b  (a0)+,d0
+    cmp.b   #$61,d0
+    bhs     .n11
+    sub.b   #$30,d0
+    bra     .n22
+.n11
+    sub.b   #$61-10,d0
+.n22
+    or.b    d0,d1
+    dbf     d3,.md5b
+    move.w  d1,(a1)+
+
+    * Write 6 bytes
+    moveq   #6,d0
+    rts
+
+
+.progressMsg
+    dc.b    "XIndexing song lengths %02.2ld%lc",0
     even
 
+
+* In:
+*   a0 = input file name
+*   a1 = output file name
+*   a2 = progress message
+*   a3 = file converter callback
+*        Callback inputs:
+*           a0 = input line
+*           a1 = output buffer
+*           a4 = callback user data
+*           d0 = current output file position
+*        Outputs:
+*           d0 = bytes to write or 0 
+*   a4 = callback user data 
+* Out:
+*   d0 = true on success
+fileConverter:
+.inputBufferLength  = 10*1024
+.lineBufferLength   = 4096
+.outBufferLength    = 1024
+.pushBufferLength   = 12*1024
+.workMemLen = .inputBufferLength+.lineBufferLength+.outBufferLength+.pushBufferLength
+
+    rsreset
+.workMem          rs.l    1  
+.inputFile        rs.l    1 * input file name
+.outputFile       rs.l    1 * output file name
+.progressMsg      rs.l    1 * progress message
+.lineCallback     rs.l    1 * callback to convert one input line
+.lineCallbackData rs.l    1 * callback user data
+.inLength         rs.l    1 * input file len
+.inFH             rs.l    1 * input file handle
+.outFH            rs.l    1 * output file handle
+.inputBuffer      rs.l    1 * read chunks from input file
+.lineBuffer       rs.l    1 * read and uppercase line from the buffer
+.outBuffer        rs.l    1 * create output data entries here
+.pushBuffer       rs.l    1 * push buffer
+.pushBufferPos    rs.l    1 * position in the push buffer
+.lastRead         rs.l    1 * bytes form the last input read
+.totalRead        rs.l    1 * total bytes read
+.lastProgress     rs.w    1 * to detect if progress needs to be displayed
+.count            rs.l    1 * debug info
+.freeze           rs.b    1
+                  rs.b    1 * pad
+.slVars           rs.b    0
+
+    DPRINT "fileConverter"
+    pushm   d1-a6
+    moveq   #.slVars/2-1,d0
+.sk clr.w   -(sp)
+    dbf     d0,.sk
+    move.l  sp,a6
+
+    move.l  a0,.inputFile(a6)
+    move.l  a1,.outputFile(a6)
+    move.l  a2,.progressMsg(a6)
+    move.l  a3,.lineCallback(a6)
+    move.l  a4,.lineCallbackData(a6)
+
+    move.l  a6,a4
+    ; ---------------------------------
+    * Open input
+    move.l  .inputFile(a4),d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "open=%lx"
+    move.l  d0,.inFH(a4)
+    move.l  d0,d7
+    beq     .exit       * bail out quickly
+
+    ; ---------------------------------
+    * Find length
+	move.l	d7,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d7,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+    move.l  d0,.inLength(a4)
+	move.l	d7,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
+    DPRINT  "len=%lx"
+
+    ; ---------------------------------
+    * Try to open idx
+    move.l  .outputFile(a4),d1
+    move.l  #MODE_OLDFILE,d2
+    lob     Open
+    DPRINT  "old idx=%lx"
+    move.l  d0,d6
+    move.l  d0,.outFH(a4)
+    bne     .yesIdx
+    ; ---------------------------------
+    * No previous idx, create new
+.doNew
+    move.l  .outputFile(a4),d1
+    move.l  #MODE_NEWFILE,d2
+    lob     Open
+    DPRINT  "new idx=%lx"
+    move.l  d0,d6
+    move.l  d0,.outFH(a4)
+    beq     .exit
+    bra     .writeLen
+.yesIdx
+    ; ---------------------------------
+    * Read txt length from the start
+    clr.l   -(sp)
+    move.l  d6,d1   * file
+    move.l  sp,d2   * dest
+    moveq   #4,d3   * len
+    lob     Read
+    * Go back to start
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek		
+    ; ---------------------------------
+    * Compare txt length and the length stored in idx
+    * If same, exit
+    cmp.l   (sp)+,d5
+;    beq     .exit
+    * Do new - close OLDFILE handle
+    DPRINT  "Replacing old index"
+    move.l  d6,d1
+    lob     Close
+    bra     .doNew
+.writeLen
+
+	jsr	    setMainWindowWaitPointer
+	jsr   	freezeMainWindowGadgets
+    st      .freeze(a4)
+
+    ; ---------------------------------
+    ; Allocate buffers
+    move.l  #.workMemLen,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    beq     .exit
+    DPRINT  "AllocMem=%lx"
+    move.l  d0,.workMem(a4)
+    move.l  d0,a0
+    move.l  a0,.inputBuffer(a4)
+    lea     .inputBufferLength(a0),a0
+    move.l  a0,.lineBuffer(a4)
+    lea     .lineBufferLength(a0),a0
+    move.l  a0,.outBuffer(a4)
+    lea     .outBufferLength(a0),a0
+    move.l  a0,.pushBuffer(a4)
+    move.l  a0,.pushBufferPos(a4)
+
+    ; ---------------------------------
+    * Write the txt length into the idx
+    move.l  d5,-(sp)
+    move.l  d6,d1   * file
+    move.l  sp,d2   * source
+    moveq   #4,d3   * len
+    lob     Write
+    DPRINT  "Write=%lx"
+    addq    #4,sp   * pop
+    cmp.l   #-1,d0
+    beq     .exit
+    * d0 = -1 on error
+
+    ; ---------------------------------
+    * Read a chunk of txt
+    DPRINT  "readLoop"
+    move.l  .lineBuffer(a4),a3  * target buffer for a line
+.readLoop
+    move.l  .inFH(a4),d1
+    move.l  .inputBuffer(a4),d2
+    move.l  #1024*10,d3
+    lob     Read
+;;    DPRINT  "read=%ld"
+    add.l   d0,.totalRead(a4)
+    move.l  d0,.lastRead(a4)
+    
+    ; ---------------------------------
+    ; Print progress information
+    pushm   all
+    move.l  .totalRead(a4),d0
+    moveq   #99,d1
+    jsr     mulu_32
+    move.l  .inLength(a4),d1
+    jsr     divu_32
+
+    cmp.w   .lastProgress(a4),d0
+    beq     .skipPrg
+    move.w  d0,.lastProgress(a4)
+
+    moveq   #"%",d1
+    move.l  .progressMsg(a4),a0
+    lea     -64(sp),sp
+    move.l  sp,a3
+    jsr     desmsg3
+     
+    move.l  sp,a0
+    jsr     printbox
+    lea     64(sp),sp
+.skipPrg
+    popm    all
+
+    ; ---------------------------------
+    ; Bytes read in d0, check for EOF
+    tst.l   d0
+    beq     .stopLoop
+    bmi     .stopLoop
+    ; ---------------------------------
+    ; Read bytes until line change
+    move.l  .inputBuffer(a4),a0 * start of source
+    lea     (a0,d0),a1          * end 
+    moveq   #13,d1              * loop constants
+    moveq   #10,d2
+.lineLoop
+    move.b  (a0)+,d0
+    cmp.b   d1,d0
+    beq     .cr
+    cmp.b   d2,d0
+    beq     .lf
+    * Copy one char, check if data exhausted
+    move.b  d0,(a3)+
+.continue
+    cmp.l   a1,a0
+    blo     .lineLoop
+
+    * See if we got a full chunk last time, read more if so
+    cmp.l   #1024*10,.lastRead(a4)
+    beq     .readLoop
+    * Exit - call this a success
+    bra     .stopLoop
+
+.continueLineLoop:
+    moveq   #13,d1              * loop constants
+    moveq   #10,d2
+    bra     .continue
+
+.lf
+.cr
+    ; A whole line read, null terminate
+    clr.b   (a3)
+    * Preserve a0, a1!
+    pushm   d1-a6
+    ; ---------------------------------
+    * Read line here   
+    move.l  .lineBuffer(a4),a0
+
+    * Write data here
+    move.l  .outBuffer(a4),a1
+
+    * Convert data
+    move.l  .lineCallback(a4),a3
+    push    a4
+    move.l  .lineCallbackData(a4),a4
+    jsr     (a3)
+    pop     a4
+
+    * Write if requested
+    tst.l   d0
+    bne     .doWrite
+    moveq   #1,d0
+    bra     .noWri
+.doWrite
+    move.l  .outBuffer(a4),a0
+    bsr     .push
+.noWri
+    popm    d1-a6
+    ; ---------------------------------
+    * Stop on push error
+    tst.l   d0
+    beq     .stopLoop
+
+.next
+    ; ---------------------------------
+    ; Start getting a new line 
+    move.l  .lineBuffer(a4),a3
+    ; Ignore 10 if the line ended with 13 ealier
+    cmp.b   #10,(a0)
+    bne     .continueLineLoop
+    addq    #1,a0
+    bra     .continueLineLoop
+
+.stopLoop   
+    * Write remaining
+    bsr     .pushWrite
+
+.exit
+    ; ---------------------------------
+ if DEBUG
+    move.l  .count(a4),d0
+    DPRINT  "exiting, wrote %ld entries"
+ endif
+    move.l  .workMem(a4),a0
+    jsr     freemem
+    move.l  .inFH(a4),d1
+    beq     .x1
+    lob     Close
+.x1 move.l  .outFH(a4),d1
+    beq     .x2
+    lob     Close
+.x2
+    tst.b   .freeze(a4)
+    beq     .nf
+    jsr	    unfreezeMainWindowGadgets
+	jsr	    clearMainWindowWaitPointer
+    jsr     forceRefreshList
+.nf
+    lea     .slVars(sp),sp
+	popm    d1-a6
+    rts
+
+* In:
+*   a0 = data pointer
+*   d0 = length of data
+* Out: 
+*   d0 = true on success, false otherwise
+.push
+    move.l  .pushBufferPos(a4),d3
+    sub.l   .pushBuffer(a4),d3
+    cmp.l   #10*1024,d3
+    blo     .noPush
+    pushm   d0/a0
+    bsr     .pushWrite
+    tst.l   d0
+    popm    d0/a0
+    bmi     .fail
+.noPush
+    move.l  .pushBufferPos(a4),a1
+    subq    #1,d0
+.cp move.b  (a0)+,(a1)+
+    dbf     d0,.cp
+    move.l  a1,.pushBufferPos(a4)
+    moveq   #1,d0 * ok
+    rts
+.fail
+    moveq   #0,d0 * bad
+    rts
+
+.pushWrite
+    move.l  .pushBufferPos(a4),d3
+    sub.l   .pushBuffer(a4),d3    * len
+    beq     .noWrite
+    move.l  .pushBuffer(a4),d2    * src
+    move.l  .outFH(a4),d1         * file
+    lob     Write
+    ;DPRINT  "write=%ld"
+    move.l  .pushBuffer(a4),.pushBufferPos(a4)
+.noWrite
+    rts
 
 ***************************************************************************
 *
