@@ -60791,7 +60791,7 @@ uslCreateIndex:
     lea     uslFile(pc),a1
     tst.b   uusikick(a5)
     bne     .n3
-    lea     uslDataNameO(pc),a1
+    lea     uslFileOld(pc),a1
 .n3
     * Initial values:
     move    #-1,.lastIndex(a4)
@@ -60957,13 +60957,26 @@ uslCreateIndex:
 .numL
     moveq   #$f,d0
     and.b	-(a0),d0
+    cmp.l   #$ffff,d3
+    bhi     .large
+    mulu.w  d3,d0
+    bra     .small
+.large  
     move.l	d3,d1
     jsr	    mulu_32
+.small
     add.l	d0,d2
+
+    cmp.l   #$ffff,d3
+    bhi     .large2
+    mulu.w  #10,d3
+    bra     .small2
+.large2
     move.l	d3,d1
     moveq   #10,d0
     jsr     mulu_32
     move.l	d0,d3
+.small2
     cmp.l   a2,a0
     bne     .numL
 
