@@ -60767,7 +60767,9 @@ uslDataNameO dc.b   "songlengths.tsv",0
 uslCreateIndex:
     DPRINT  "uslCreateIndex"
     rsreset
-.index            rs.l    16*2
+.lastIndex        rs.w    1     * Based on the top 4 bits of the MD5sum
+.indexPtr         rs.l    1     
+.index            rs.l    17*2  * Build index here
 .varsSize         rs.b    0
 
     moveq   #.varsSize/2-1,d0
@@ -60787,8 +60789,14 @@ uslCreateIndex:
     bne     .n3
     lea     uslDataNameO(pc),a1
 .n3
+    * Initial values:
+    move    #-1,.lastIndex(a4)
+    pea     .index(a4)
+    move.l  (sp)+,.indexPtr(a4)
+
     lea     .progressMsg(pc),a2
     lea     .callback(pc),a3
+    move    #$80,d0     * index space
     bsr     fileConverter
 
     lea     .varsSize(sp),sp
@@ -60798,17 +60806,75 @@ uslCreateIndex:
 *    a0 = input line
 *    a1 = output buffer
 *    a4 = callback user data
+*    d7 = current output write position
 * Outputs:
 *    d0 = bytes to write or 0 
-.callback
-    ; ---------------------------------
+.callback:
+    move.l  a0,d0
+
+    move.l  a1,a5 * stash this, start of the entry
+    
     * Read 8 chars of MD5
-    moveq   #0,d1
     moveq   #8-1,d3
+    bsr     .readHex
+ 
+    * Read 4 chars of MD5
+    moveq   #4-1,d3
+    bsr     .readHex
+
+    * Build index from the top 4 bits
+    move.b  (a5),d0
+    lsr.b   #4,d0
+    cmp.b   .lastIndex(a4),d0
+    beq     .noidx
+    move.b  d0,.lastIndex(a4)
+
+    * Write current position to the next index slot
+    move.l  .indexPtr(a4),a0
+    move.l  d7,(a0)+
+    move.l  a0,.indexPtr(a4)
+.noidx
+
+    bsr     .skipTab
+    bsr     .skipTab
+
+    * song count
+    moveq   #0,d4
+.getNums
+    bsr     .getNumber
+    beq     .noMore
+    add.l   #500,d2  * round
+    divu    #1000,d2 * ms->s
+    cmp.w   #$7f,d2 
+    bls     .sml
+    ror.w   #8,d2
+    or.b    #$80,d2
+    move.b  d2,(a1)+
+    ror.w   #8,d2
+.sml 
+    move.b  d2,(a1)+
+    addq    #1,d4
+    cmp     #$f,d4      * limit check for songs
+    blo     .getNums
+    
+.noMore
+    * put song count to the first 4 bytes
+    lsl.b   #4,d4
+    and.b   #$0f,(a5)
+    or.b    d4,(a5)  
+
+    * How many bytes to write
+    move.l  a1,d0
+    sub.l   a5,d0
+    rts
+
+
+.readHex:
+    moveq   #0,d1
 .md5a
-    rol.l   #4,d1
 * 0..9 = $30..$39
 * a..f = $61..$66
+    rol.w   #4,d1
     move.b  (a0)+,d0
     cmp.b   #$61,d0
     bhs     .n13
@@ -60818,35 +60884,107 @@ uslCreateIndex:
     sub.b   #$61-10,d0
 .n23
     or.b    d0,d1
+    btst    #0,d3
+    bne     .n33
+    move.b  d1,(a1)+
+    clr.b   d1
+.n33
     dbf     d3,.md5a
-    move.l  d1,(a1)+
+    rts
 
-    * Read 4 chars of MD5
-    moveq   #0,d1
-    moveq   #4-1,d3
-.md5b
-    rol.l   #4,d1
-* 0..9 = $30..$39
-* a..f = $61..$66
+
+.skipTab
+.t	cmp.b	#9,(a0)+
+    bne     .t
+    rts
+
+
+.getNumber
+    bsr     .findNumberStart
+    beq     .gx   
+    move.l  a0,a2
+    bsr     .findNumberEnd
+    beq     .gx   
+    move.l  a0,a3
+
+* last char at a0
+* first char at a2
+* build into d2
+	moveq	#0,d2 
+	moveq	#1,d3
+.numL
+    moveq   #$f,d0
+    and.b	-(a0),d0
+    move.l	d3,d1
+    jsr	    mulu_32
+    add.l	d0,d2
+    move.l	d3,d1
+    moveq   #10,d0
+    jsr     mulu_32
+    move.l	d0,d3
+    cmp.l   a2,a0
+    bne     .numL
+
+    move.l   a3,a0
+    moveq    #1,d1 
+    rts
+.gx
+    moveq    #0,d1
+    rts
+
+.findNumberStart
+.fn1 
     move.b  (a0)+,d0
-    cmp.b   #$61,d0
-    bhs     .n11
-    sub.b   #$30,d0
-    bra     .n22
-.n11
-    sub.b   #$61-10,d0
-.n22
-    or.b    d0,d1
-    dbf     d3,.md5b
-    move.w  d1,(a1)+
+    bsr     .isEnd
+    bne     .eof
+    bsr     .isNum
+    beq     .fn1
+    subq    #1,a0
+    moveq   #1,d1
+    rts
 
-    * Write 6 bytes
-    moveq   #6,d0
+.findNumberEnd
+.fn2  
+    move.b  (a0)+,d0
+    bsr     .isEnd
+    bne     .eof
+    bsr     .isNum
+    bne     .fn2
+    subq    #1,a0
+    moveq   #1,d1
+    rts
+
+.eof
+    moveq   #0,d1
+    rts
+
+.isEnd
+    tst.b   d0
+    beq     .yesEnd
+    cmp.b   #10,d0
+    beq     .yesEnd
+    cmp.b   #13,d0
+    beq     .yesEnd
+    moveq   #0,d1   * not end
+    rts
+.yesEnd
+    moveq   #1,d1
+    rts
+
+.isNum
+    cmp.b   #"0",d0
+    blo     .noN
+    cmp.b   #"9",d0
+    bhi     .noN
+    moveq   #1,d1   * yes number
+    rts
+.noN
+    moveq   #0,d1   * not number
     rts
 
 
 .progressMsg
-    dc.b    "XIndexing song lengths %02.2ld%lc",0
+    dc.b    "Doing songlengths data %02.2ld%lc",0
     even
 
 
@@ -60863,6 +61001,7 @@ uslCreateIndex:
 *        Outputs:
 *           d0 = bytes to write or 0 
 *   a4 = callback user data 
+*   d0 = space to reserve for header om top of the default 4
 * Out:
 *   d0 = true on success
 fileConverter:
@@ -60879,6 +61018,7 @@ fileConverter:
 .progressMsg      rs.l    1 * progress message
 .lineCallback     rs.l    1 * callback to convert one input line
 .lineCallbackData rs.l    1 * callback user data
+.finalCallback    rs.l    1 * called last, d0=FH, a6=DOSBase
 .inLength         rs.l    1 * input file len
 .inFH             rs.l    1 * input file handle
 .outFH            rs.l    1 * output file handle
@@ -60890,6 +61030,8 @@ fileConverter:
 .lastRead         rs.l    1 * bytes form the last input read
 .totalRead        rs.l    1 * total bytes read
 .lastProgress     rs.w    1 * to detect if progress needs to be displayed
+.headerSpace      rs.w    1 * add this much bytes to the front of the file
+.pushedBytes      rs.l    1 * number of bytes pushed
 .count            rs.l    1 * debug info
 .freeze           rs.b    1
                   rs.b    1 * pad
@@ -60897,11 +61039,12 @@ fileConverter:
 
     DPRINT "fileConverter"
     pushm   d1-a6
-    moveq   #.slVars/2-1,d0
+    moveq   #.slVars/2-1,d7
 .sk clr.w   -(sp)
-    dbf     d0,.sk
+    dbf     d7,.sk
     move.l  sp,a6
 
+    move.w  d0,.headerSpace(a6)
     move.l  a0,.inputFile(a6)
     move.l  a1,.outputFile(a6)
     move.l  a2,.progressMsg(a6)
@@ -61017,6 +61160,18 @@ fileConverter:
     beq     .exit
     * d0 = -1 on error
 
+    * Write additional space
+    clr.w   -(sp)
+    move.w  .headerSpace(a4),d4
+    lsr.w   #1,d4
+    subq.w  #1,d4
+.spc
+    move.l  d6,d1   * file
+    move.l  sp,d2   * source
+    moveq   #2,d3   * len
+    lob     Write
+    dbf     d4,.spc    
+    addq    #2,sp
     ; ---------------------------------
     * Read a chunk of txt
     DPRINT  "readLoop"
@@ -61026,7 +61181,7 @@ fileConverter:
     move.l  .inputBuffer(a4),d2
     move.l  #1024*10,d3
     lob     Read
-;;    DPRINT  "read=%ld"
+    ;;DPRINT  "read=%ld"
     add.l   d0,.totalRead(a4)
     move.l  d0,.lastRead(a4)
     
@@ -61094,21 +61249,20 @@ fileConverter:
     ; A whole line read, null terminate
     clr.b   (a3)
     * Preserve a0, a1!
-    pushm   d1-a6
+    pushm   a0/a1
     ; ---------------------------------
+    pushm   d1-d7/a2-a6
     * Read line here   
     move.l  .lineBuffer(a4),a0
-
     * Write data here
     move.l  .outBuffer(a4),a1
-
-    * Convert data
+    * Provide current output write position
+    move.l  .pushedBytes(a4),d7
     move.l  .lineCallback(a4),a3
-    push    a4
     move.l  .lineCallbackData(a4),a4
+    * Convert data
     jsr     (a3)
-    pop     a4
-
+    popm    d1-d7/a2-a6
     * Write if requested
     tst.l   d0
     bne     .doWrite
@@ -61118,7 +61272,8 @@ fileConverter:
     move.l  .outBuffer(a4),a0
     bsr     .push
 .noWri
-    popm    d1-a6
+    popm    a0/a1
+    addq.l  #1,.count(a4)
     ; ---------------------------------
     * Stop on push error
     tst.l   d0
@@ -61168,7 +61323,8 @@ fileConverter:
 *   d0 = length of data
 * Out: 
 *   d0 = true on success, false otherwise
-.push
+.push:
+    add.l   d0,.pushedBytes(a4)
     move.l  .pushBufferPos(a4),d3
     sub.l   .pushBuffer(a4),d3
     cmp.l   #10*1024,d3
@@ -61190,13 +61346,13 @@ fileConverter:
     moveq   #0,d0 * bad
     rts
 
-.pushWrite
+.pushWrite:
     move.l  .pushBufferPos(a4),d3
     sub.l   .pushBuffer(a4),d3    * len
     beq     .noWrite
     move.l  .pushBuffer(a4),d2    * src
     move.l  .outFH(a4),d1         * file
-    lob     Write
+    lore    Dos,Write
     ;DPRINT  "write=%ld"
     move.l  .pushBuffer(a4),.pushBufferPos(a4)
 .noWrite
