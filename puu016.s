@@ -3216,6 +3216,11 @@ main:
 	bra		print
 .oohi
 
+    * Try and create the song length database at startup
+    tst.b   win(a5)
+    beq     .uc
+    jsr     uslCreateIndex
+.uc
 
 
  ifne EFEKTI
