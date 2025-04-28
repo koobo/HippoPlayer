@@ -3248,8 +3248,6 @@ main:
     bsr     komentojono
 .noCliParms
 
-    jsr     uslCreateIndex
-
 *********************************************************************************
 *
 * P‰‰silmukka
@@ -60697,11 +60695,17 @@ uslFind:
 
 uslGetSongLength:
     DPRINT  "uslGetSongLength"
-    ; Do not clobber PT or SID data if already available
-    tst.l   kokonaisaika(a5)
-    bne     .1
 
-    ;;clr.l   kokonaisaika(a5)
+    cmp.w   #pt_prot,playertype(a5)
+    beq     .1
+    cmp.w   #pt_sid,playertype(a5)
+    beq     .1
+
+    ; Do not clobber PT or SID data if already available
+    ;tst.l   kokonaisaika(a5)
+    ;bne     .1
+
+    clr.l   kokonaisaika(a5)
     lea     uslSongLengthData(a5),a0
     tst.w   (a0)
     beq     .x
@@ -60809,7 +60813,7 @@ uslCreateIndex:
 *    a4 = callback user data
 *    a6 = DOSBase
 .finalizeCallback:
-    DPRINT  "finalize"
+    * Write the index at the header 
     lea     .index(a4),a3
 
     move.l  d7,d1   * fh
@@ -60834,10 +60838,9 @@ uslCreateIndex:
     move.l  sp,d2   * source
     moveq   #8,d3   * len
     lob     Write
+
     addq    #8,sp
-
     dbf     d6,.loop
-
     rts
 
 
@@ -61157,7 +61160,7 @@ fileConverter:
     * Compare txt length and the length stored in idx
     * If same, exit
     cmp.l   (sp)+,d5
-;    beq     .exit
+    beq     .exit
     * Do new - close OLDFILE handle
     DPRINT  "Replacing old index"
     move.l  d6,d1
@@ -61336,7 +61339,13 @@ fileConverter:
     bsr     .pushWrite
 
 .exit
+ if DEBUG
+    move.l  .count(a4),d0
+    DPRINT  "exiting, wrote %ld entries"
+ endif
     ; ---------------------------------
+    tst.l   .count(a4)
+    beq     .noFinal
     move.l  .finalizeCallback(a4),d0
     beq     .noFinal
     move.l  d0,a0
@@ -61348,10 +61357,6 @@ fileConverter:
     pop     a4
 .noFinal
     ; ---------------------------------
- if DEBUG
-    move.l  .count(a4),d0
-    DPRINT  "exiting, wrote %ld entries"
- endif
     move.l  .workMem(a4),a0
     jsr     freemem
     move.l  .inFH(a4),d1
