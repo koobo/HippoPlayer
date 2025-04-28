@@ -1,4 +1,7 @@
 TODO:
+- mdat.apidya: can't play the main theme, only the other subsongs
+
+TODO:
 - improve PT end detection heuristics
 - https://github.com/koobo/HippoPlayer/issues/26
 - Many trick pattern modules
