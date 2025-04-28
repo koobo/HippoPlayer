@@ -60755,7 +60755,7 @@ uslClose:
     rts
 
 uslFile:	 dc.b	"PROGDIR:"
-uslFileOld   dc.b   "songlengths.db_",0
+uslFileOld   dc.b   "songlengths.db",0
 uslDataName  dc.b   "PROGDIR:"
 uslDataNameO dc.b   "songlengths.tsv",0
      even
@@ -60769,7 +60769,7 @@ uslCreateIndex:
     rsreset
 .lastIndex        rs.w    1     * Based on the top 4 bits of the MD5sum
 .indexPtr         rs.l    1     
-.index            rs.l    17*2  * Build index here
+.index            rs.l    17    * Build index here
 .varsSize         rs.b    0
 
     moveq   #.varsSize/2-1,d0
@@ -60795,12 +60795,51 @@ uslCreateIndex:
     move.l  (sp)+,.indexPtr(a4)
 
     lea     .progressMsg(pc),a2
+    lea     .finalizeCallback(pc),a3
+    move.l  a3,d1
     lea     .callback(pc),a3
     move    #$80,d0     * index space
     bsr     fileConverter
 
     lea     .varsSize(sp),sp
     rts
+
+* Finalize callback inputs:
+*    d7 = output file handle
+*    a4 = callback user data
+*    a6 = DOSBase
+.finalizeCallback:
+    DPRINT  "finalize"
+    lea     .index(a4),a3
+
+    move.l  d7,d1   * fh
+    moveq   #0,d2   * offset
+    moveq   #OFFSET_CURRENT,d3
+    lob     Seek    
+    move.l  d0,16*4(a3)   * last position
+
+    move.l  d7,d1   * fh
+    moveq   #4,d2   * offset, start of index
+    moveq   #OFFSET_BEGINNING,d3
+    lob     Seek    
+
+    moveq   #16-1,d6
+.loop
+    move.l  (a3)+,d0     * offset of data block
+    move.l  (a3),d1      * next offset
+    sub.l   d0,d1        * block size
+    movem.l d0/d1,-(sp)
+
+    move.l  d7,d1   * file
+    move.l  sp,d2   * source
+    moveq   #8,d3   * len
+    lob     Write
+    addq    #8,sp
+
+    dbf     d6,.loop
+
+    rts
+
 
 * Callback inputs:
 *    a0 = input line
@@ -60984,7 +61023,7 @@ uslCreateIndex:
 
 
 .progressMsg
-    dc.b    "Doing songlengths data %02.2ld%lc",0
+    dc.b    "Creating song lengths %02.2ld%lc",0
     even
 
 
@@ -61018,7 +61057,7 @@ fileConverter:
 .progressMsg      rs.l    1 * progress message
 .lineCallback     rs.l    1 * callback to convert one input line
 .lineCallbackData rs.l    1 * callback user data
-.finalCallback    rs.l    1 * called last, d0=FH, a6=DOSBase
+.finalizeCallback rs.l    1 * called last, d7=FH, a6=DOSBase
 .inLength         rs.l    1 * input file len
 .inFH             rs.l    1 * input file handle
 .outFH            rs.l    1 * output file handle
@@ -61045,6 +61084,7 @@ fileConverter:
     move.l  sp,a6
 
     move.w  d0,.headerSpace(a6)
+    move.l  d1,.finalizeCallback(a6)
     move.l  a0,.inputFile(a6)
     move.l  a1,.outputFile(a6)
     move.l  a2,.progressMsg(a6)
@@ -61153,6 +61193,7 @@ fileConverter:
     move.l  d6,d1   * file
     move.l  sp,d2   * source
     moveq   #4,d3   * len
+    add.l   d3,.pushedBytes(a4)
     lob     Write
     DPRINT  "Write=%lx"
     addq    #4,sp   * pop
@@ -61169,6 +61210,7 @@ fileConverter:
     move.l  d6,d1   * file
     move.l  sp,d2   * source
     moveq   #2,d3   * len
+    add.l   d3,.pushedBytes(a4)
     lob     Write
     dbf     d4,.spc    
     addq    #2,sp
@@ -61294,6 +61336,17 @@ fileConverter:
     bsr     .pushWrite
 
 .exit
+    ; ---------------------------------
+    move.l  .finalizeCallback(a4),d0
+    beq     .noFinal
+    move.l  d0,a0
+    move.l  _DosBase(a5),a6
+    move.l  .outFH(a4),d7
+    push    a4
+    move.l  .lineCallbackData(a4),a4
+    jsr     (a0)
+    pop     a4
+.noFinal
     ; ---------------------------------
  if DEBUG
     move.l  .count(a4),d0
