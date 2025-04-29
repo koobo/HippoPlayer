@@ -20486,7 +20486,7 @@ lootaan_aika
 ;	move.b	#'-',(a0)+
 ;	bra.b	.oai
 ;.aik
- 
+
     * Put total time if available
  	tst.l	kokonaisaika(a5)
 	beq.b	.oai
@@ -59993,13 +59993,21 @@ freeSLData:
 
     include "../md5/md5.s" 
 
-readUsl:
-    DPRINT  "readUsl"
+* These formats already have length information,
+* skip these.
+uslIgnoreFormats:
     cmp.w   #pt_prot,playertype(a5)
     beq     .reject
     cmp.w   #pt_sid,playertype(a5)
     beq     .reject
     cmp.w   #pt_sample,playertype(a5)
+.reject
+    rts
+
+
+readUsl:
+    DPRINT  "readUsl"
+    bsr     uslIgnoreFormats
     beq     .reject
 
     lea     uslSongLengthData(a5),a0
@@ -60235,14 +60243,9 @@ uslFind:
 uslGetSongLength:
     DPRINT  "uslGetSongLength"
 
-    cmp.w   #pt_prot,playertype(a5)
+    ; Do not clobber PT, SID, Sample data
+    bsr     uslIgnoreFormats
     beq     .1
-    cmp.w   #pt_sid,playertype(a5)
-    beq     .1
-
-    ; Do not clobber PT or SID data if already available
-    ;tst.l   kokonaisaika(a5)
-    ;bne     .1
 
     clr.l   kokonaisaika(a5)
     lea     uslSongLengthData(a5),a0
@@ -60261,9 +60264,7 @@ uslGetSongLength:
     swap    d0
     move    d0,kokonaisaika+2(a5)
 .x
-    rts
 .1
-    DPRINT  "already set"
     rts
 
 uslFreeIndex:
