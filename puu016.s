@@ -59609,282 +59609,94 @@ putNewLine
     move.b   #ILF2,(a1)+
     rts
 
+* before using fileConverter 154452
+* after: 154084
+
 * Creates the STIL.idx file from STIL.txt
 createStilIndex:
-    DPRINT "createStilIndex"
-    sub.l   a4,a4   
-    moveq   #0,d6
+    DPRINT  "createStilIndex"
+    rsreset
+.storeNextOffset  rs.w    1
+.varsSize         rs.b    0
 
-    ; ---------------------------------
-    * Open STIL.txt
-    pushpea stilDataName(pc),d1
-    move.l  #MODE_OLDFILE,d2
-    lore    Dos,Open
-    DPRINT  "open STIL.txt=%lx"
-    move.l  d0,d7
-    beq     .exit
+    moveq   #.varsSize/2-1,d0
+.sk clr.w   -(sp)
+    dbf     d0,.sk
+    move.l  sp,a4
 
-    ; ---------------------------------
-    * Find STIL.txt length
-	move.l	d7,d1		
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d7,d1
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d0,d5		* file length
-	move.l	d7,d1
-	moveq	#0,d2
-	moveq	#-1,d3
-	lob	Seek			* start of file
-    DPRINT  "len=%lx"
+    * Input file
+    lea     stilDataName(pc),a0
+    * Output file
+    lea     stilIndexName(pc),a1
 
-    ; ---------------------------------
-    * Try to open idx
-    pushpea stilIndexName(pc),d1
-    move.l  #MODE_OLDFILE,d2
-    lob     Open
-    DPRINT  "old STIL.idx=%lx"
-    move.l  d0,d6
-    bne     .yesIdx
-    ; ---------------------------------
-    * No previous idx, create new
-.doNew
-    pushpea stilIndexName(pc),d1
-    move.l  #MODE_NEWFILE,d2
-    lob     Open
-    DPRINT  "new STIL.idx=%lx"
-    move.l  d0,d6
-    beq     .exit
-    bra     .writeLen
-.yesIdx
-    ; ---------------------------------
-    * Read txt length from the start
-    clr.l   -(sp)
-    move.l  d6,d1   * file
-    move.l  sp,d2   * dest
-    moveq   #4,d3   * len
-    lob     Read
-    * Go back to start
-	move.l	d6,d1
-	moveq	#0,d2
-	moveq	#-1,d3
-	lob	Seek		
-    ; ---------------------------------
-    * Compare txt length and the length stored in idx
-    * If same, exit
-    cmp.l   (sp)+,d5
-    beq     .exit
-    * Do new - close OLDFILE handle
-    DPRINT  "Replacing old index"
-    move.l  d6,d1
-    lob     Close
-    bra     .doNew
-.writeLen
-    ; ---------------------------------
-    ; Allocate 10k + 190k here, the last part for output
-    move.l  #1024*200,d0
-    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
-    jsr     getmem
-    beq     .exit
-    DPRINT  "AllocMem=%lx"
-    move.l  d0,a4
-    * Output buffer into a5
-    lea     10*1024(a4),a5
+    lea     .callback(pc),a3
+    lea     .progressMsg(pc),a2
+    moveq   #0,d0
+    moveq   #0,d1
+    bsr     fileConverter
 
-    ; ---------------------------------
-    * Write the txt length into the idx
-    move.l  d5,-(sp)
-    move.l  d6,d1   * file
-    move.l  sp,d2   * source
-    moveq   #4,d3   * len
-    lob     Write
-    DPRINT  "Write=%lx"
-    addq    #4,sp   * pop
-    cmp.l   #-1,d0
-    beq     .exit
-    * d0 = -1 on error
-
-    ; ---------------------------------
-    * Read a chunk of txt
-    lea     -200(sp),sp
-    move.l  sp,a3           * line buffer
-    move.l  d5,196(sp)      * store total length here
-    moveq   #0,d5           * txt file position
-    DPRINT  "readLoop"
-.readLoop
-    move.l  d7,d1
-    move.l  a4,d2
-    move.l  #1024*10,d3
-    lob     Read
-
-    ; ---------------------------------
-    ; Print progress information
-    move.l  196(sp),d1
-    pushm   all
-    lea     var_b,a5
-    move.l  d5,d0
-    lsr.l   #8,d0
-    lsr.l   #8,d1
-    mulu    #100,d0
-    divu    d1,d0
-    ext.l   d0
-
-    moveq   #"%",d1
-    lea     .progressMsg(pc),a0
-    lea     -64(sp),sp
-    move.l  sp,a3
-    jsr     desmsg3
-
-    moveq   #35,d0
-    moveq   #22,d1
-    move.l  sp,a0
-    jsr     sprint
-    lea     64(sp),sp
-    popm    all
-
-    ; ---------------------------------
-    ; Bytes read in d0, check for EOF
-    move.l  d0,d4
-    beq     .stopLoop
-    bmi     .stopLoop
-    ; ---------------------------------
-    ; Read bytes until line change
-    move.l  a4,a0           * start
-    lea     (a0,d0),a1      * end
-    moveq   #13,d1          * loop constants
-    moveq   #10,d2
-.lineLoop
-    move.b  (a0)+,d0
-    cmp.b   d1,d0
-    beq     .cr
-    cmp.b   d2,d0
-    beq     .lf
-    * Copy one char, check if data exhausted
-    move.b  d0,(a3)+
-.continue
-    cmp.l   a1,a0
-    blo     .lineLoop
-
-    * Update global data offset
-    add.l   #1024*10,d5
-    * See if we got a full chunk last time, read more if so
-    cmp.l   #1024*10,d4
-    beq     .readLoop
-    * Exit
-    bra     .stopLoop
-
-.continueLineLoop
-    moveq   #13,d1
-    moveq   #10,d2
-    bra     .continue
-
-.lf
-.cr
-    * Skip lines that are not the title line
-    cmp.b   #"/",(sp)
-    bne     .next
- ;   move    #$f00,$dff180
-    ; ---------------------------------
-    ; A whole line read, null terminate
-    clr.b   (a3)
-
-    ; Convert to uppercase
-    ; Check for extension and remove it
-    move.l  sp,a2
-    bsr     convertA2ToUpperCaseRemoveSidExt
-    beq     .next   * if SID ext missing for some reason
-
-; if DEBUG
-;    move.l  sp,d0
-;    DPRINT  "UCas=%s"
-; endif
-    ; ---------------------------------
-    ; Process string in a0
-
-    ; Calc offset to the line after the title line, 
-    ; where the data is.
-    ; a0 points to 13 or 10 on the previous title line here.
-    move.l  a0,a2
-    cmp.b   #10,(a2)
-    bne     .skip1
-    addq    #1,a2
-.skip1
-    * Offset relative to the work buffer
-    sub.l   a4,a2
-    * Offset relative to the STIL.txt file
-    add.l   d5,a2
-
-    ; USE a2!
-    move.l  sp,d0
-    push    a0
-    move.l  d0,a0
-    bsr     fnv1
-    pop     a0
-
-    * d0 = hash into output    
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    * a2 = offset, store three bytes
-    move.l  a2,d0
-    swap    d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    
-.next
-    ; ---------------------------------
-    ; Start getting a new line into a3
-    move.l  sp,a3
-    ; Ignore 10 if the line ended with 13 ealier
-    cmp.b   #10,(a0)
-    bne     .continueLineLoop
-    addq    #1,a0
-    bra     .continueLineLoop
-
-.stopLoop
-    ; File scan completed
-    lea     200(sp),sp
-
-    ; ---------------------------------
-    ; Write index
-    move.l  d6,d1   * file
-    ; Data is located after the read input buffer
-    lea     10*1024(a4),a0
-    move.l  a0,d2   * src
-    move.l  a5,d3
-    sub.l   a0,d3   * length
-    lob     Write
-    DPRINT  "Wrote %ld bytes of STIL.idx"
-
-.exit
-    ; ---------------------------------
-    DPRINT  "exit"
-    move.l  a4,a0
-    jsr     freemem
-    move.l  d7,d1
-    beq     .x1
-    lob     Close
-.x1 move.l  d6,d1
-    beq     .x2
-    lob     Close
-.x2
+    lea     .varsSize(sp),sp
     rts
+
 
 .progressMsg
     dc.b    "Creating STIL index %02.2ld%lc",0
     even
 
+* Callback inputs:
+*    a0 = input line
+*    a1 = output buffer
+*    a4 = callback user data
+*    d6 = current input read position
+*    d7 = current output write position
+* Outputs:
+*    d0 = bytes to write or 0 
+.callback:
+    * Skip lines that are not the title line
+    cmp.b   #"/",(a0)
+    bne     .next
+
+    move.l  a1,a3
+
+    ; Convert to uppercase
+    ; Check for extension and remove it
+    move.l  a0,a2
+    bsr     convertA2ToUpperCaseRemoveSidExt
+    beq     .next   * if SID ext missing for some reason
+
+    * Calc fnv1 from a0, now uppser cased
+    bsr     fnv1
+
+    * hash into output    
+    move.l  d0,(a3)
+
+    * flag for the next line
+    st  .storeNextOffset(a4)
+
+    * Write 4 bytes at a0
+    move.l  a3,a0   
+    moveq   #4,d0
+    rts
+
+.next
+    tst.b   .storeNextOffset(a4)
+    beq     .next2
+    clr.b   .storeNextOffset(a4)
+
+    * Store three byte offset
+    move.l  a1,a0
+    swap    d6
+    move.b  d6,(a1)+
+    rol.l   #8,d6
+    move.b  d6,(a1)+
+    rol.l   #8,d6
+    move.b  d6,(a1)+
+    moveq   #3,d0
+    rts
+
+.next2
+    moveq   #0,d0
+    rts
 
 * Convert SID file path in A2 
 * In:
@@ -59944,8 +59756,11 @@ fnv1:
     pop     a2
     rts
 
+* STIL stuff is run in info window context which
+* has a correclty set current dir, no need for PROGDIR: then
 stilDataName:   dc.b "STIL.txt",0
 stilIndexName:  dc.b "STIL.idx",0
+
 slDataName:     dc.b "PROGDIR:"
 slDataNameO:    dc.b "Songlengths.md5",0
 slIndexName:    dc.b "PROGDIR:"
@@ -59954,7 +59769,7 @@ slIndexNameO:   dc.b "Songlengths.idx",0
 
 ***************************************************************************
 *
-* Songlengths database
+* STIL Songlengths database for SIDs
 *
 ***************************************************************************
 
@@ -60176,7 +59991,7 @@ freeSLData:
 
 ***************************************************************************
 *
-* UADE songlength database
+* Audacious-UADE songlength database (not for SIDs)
 *
 ***************************************************************************
 
@@ -60576,6 +60391,7 @@ uslCreateIndex:
 *    a0 = input line
 *    a1 = output buffer
 *    a4 = callback user data
+*    d6 = current input read position
 *    d7 = current output write position
 * Outputs:
 *    d0 = bytes to write or 0 
@@ -60785,7 +60601,8 @@ uslCreateIndex:
 *           a0 = input line
 *           a1 = output buffer
 *           a4 = callback user data
-*           d0 = current output file position
+*           d6 = current input file position
+*           d7 = current output file position
 *        Outputs:
 *           d0 = bytes to write or 0 
 *   a4 = callback user data 
@@ -60819,7 +60636,9 @@ fileConverter:
 .totalRead        rs.l    1 * total bytes read
 .lastProgress     rs.w    1 * to detect if progress needs to be displayed
 .headerSpace      rs.w    1 * add this much bytes to the front of the file
-.pushedBytes      rs.l    1 * number of bytes pushed
+.pushedBytes      rs.l    1 * number of bytes pushed to output
+.globalInputOffset rs.l   1 * current input offset incremented in chunks
+.inputOffset      rs.l    1 * current input offset in bytes
 .count            rs.l    1 * debug info
 .freeze           rs.b    1
                   rs.b    1 * pad
@@ -61026,6 +60845,8 @@ fileConverter:
     cmp.l   a1,a0
     blo     .lineLoop
 
+    * Update global input data offset
+    add.l   #1024*10,.globalInputOffset(a4)
     * See if we got a full chunk last time, read more if so
     cmp.l   #1024*10,.lastRead(a4)
     beq     .readLoop
@@ -61045,12 +60866,25 @@ fileConverter:
     pushm   a0/a1
     ; ---------------------------------
     pushm   d1-d7/a2-a6
+    * Provide current input data position
+    * relative to the input buffer
+    move.l  a0,d0
+    sub.l   .inputBuffer(a4),d0
+    * Relative the input file
+    add.l   .globalInputOffset(a4),d0
+    * Use the previous value as the new one
+    * points to the next line.
+    move.l  .inputOffset(a4),d6
+    move.l  d0,.inputOffset(a4)
+
     * Read line here   
     move.l  .lineBuffer(a4),a0
     * Write data here
     move.l  .outBuffer(a4),a1
+
     * Provide current output write position
     move.l  .pushedBytes(a4),d7
+
     move.l  .lineCallback(a4),a3
     move.l  .lineCallbackData(a4),a4
     * Convert data
