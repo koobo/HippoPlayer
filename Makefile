@@ -69,6 +69,9 @@ Songlengths.md5:
 	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
 	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.faq
 
+songlengths.tsv:
+	wget https://raw.githubusercontent.com/mvtiaine/audacious-uade-tools/refs/heads/master/tsv/pretty/songlengths.tsv
+	
 beta: HiP HiP-debug
 	lha a ~/Dropbox/hip-beta.lha HiP HiP-debug HiP-debug-ser HippoPlayer.group
 	cd playsid.library && lha a ~/Dropbox/hip-beta.lha playsid.library
