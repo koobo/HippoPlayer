@@ -59991,7 +59991,7 @@ freeSLData:
 *
 ***************************************************************************
 
-    include "../md5/md5.s" 
+    include "md5.s" 
 
 * These formats already have length information,
 * skip these.
