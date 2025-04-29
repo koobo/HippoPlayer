@@ -92,10 +92,47 @@ Additional files to check and download
   https://aminet.net/mus/misc/mdx2wav.lha
 - Calibration utility to finetune 14-bit output:
   https://aminet.net/disk/cdrom/14Bit_CDPlayer.lha
+- To get song length data for a huge amount of modules,
+  get this file:
+  https://raw.githubusercontent.com/mvtiaine/audacious-uade-tools/refs/
+  heads/master/tsv/pretty/songlengths.tsv
 
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
+
+# Changes from v2.62 (4.4.2025) to v2.63 (?.?.2025) 
+
+## Fixes:
+
+- Song end was not detected when playing XM modules using
+  xmaplay060, fixed this.
+
+- In some RTG screen modes the scopes used a lot of CPU due 
+  to "vertical blank" sync not working properly. The scopes 
+  now use another sync method (with faster CPUs), this 
+  should help.
+
+
+## New stuff:
+
+- Support for Audacious-UADE songlengths data. This will provide
+  song length info for about 300000 modules in various formats.
+  Length will be shown in the title bar as well as the position slider.
+  It will also be used for end detection for the formats which do not
+  support it otherwise.
+
+  To enable, download the following file and put it in hippo dir: 
+  https://raw.githubusercontent.com/mvtiaine/audacious-uade-tools/refs/
+          heads/master/tsv/pretty/songlengths.tsv
+  During next start the file "songlengths.db" will be (slowly) generated,
+  after which the tsv-file can be deleted.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
 
 # Changes from v2.61 (28.5.2024) to v2.62 (4.4.2025) 
 
