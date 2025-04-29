@@ -59656,8 +59656,6 @@ createStilIndex:
     cmp.b   #"/",(a0)
     bne     .next
 
-    move.l  a1,a3
-
     ; Convert to uppercase
     ; Check for extension and remove it
     move.l  a0,a2
@@ -59668,13 +59666,13 @@ createStilIndex:
     bsr     fnv1
 
     * hash into output    
-    move.l  d0,(a3)
+    move.l  d0,(a1)
 
     * flag for the next line
     st  .storeNextOffset(a4)
 
     * Write 4 bytes at a0
-    move.l  a3,a0   
+    move.l  a1,a0   
     moveq   #4,d0
     rts
 
@@ -59741,7 +59739,6 @@ convertA2ToUpperCaseRemoveSidExt:
 * Out:
 *   d0 = fnv1 hash
 fnv1:
-    push    a2
     move.l  #$811c9dc5,d0 * hval
     move.l  #$01000193,d1 * prime
     lea     mulu_32,a2
@@ -59753,7 +59750,6 @@ fnv1:
     move.b  (a0)+,d2
     bne     .loop
 .x     
-    pop     a2
     rts
 
 * STIL stuff is run in info window context which
