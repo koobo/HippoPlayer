@@ -60510,16 +60510,12 @@ uslCreateIndex:
 .small
     add.l	d0,d2
 
-    cmp.l   #$ffff,d3
-    bhi     .large2
-    mulu.w  #10,d3
-    bra     .small2
-.large2
-    move.l	d3,d1
-    moveq   #10,d0
-    jsr     mulu_32
-    move.l	d0,d3
-.small2
+    ; mul d3 by 10
+    move.l  d3,d0
+    lsl.l   #3,d3  * x8
+    add.l   d0,d3  * +1
+    add.l   d0,d3  * +1
+
     cmp.l   a2,a0
     bne     .numL
 
