@@ -7030,10 +7030,10 @@ freemodule:
 moduleIsExecutable
 	cmp	#pt_delicustom,playertype(a5)
 	beq.b	.isExe
-	cmp	#pt_futureplayer,playertype(a5)
-	beq.b	.isExe
-	cmp	#pt_davelowe,playertype(a5)
-	beq.b	.isExe
+;	cmp	#pt_futureplayer,playertype(a5)
+;	beq.b	.isExe
+;	cmp	#pt_davelowe,playertype(a5)
+;	beq.b	.isExe
 	moveq	#0,d0
 	rts
 .isExe 
@@ -32169,23 +32169,23 @@ loadfile:
 
 	* Test for known exe formats
 
-	jsr	id_futureplayer
-	bne.b	.notFuturePlayer
-	moveq	#pt_futureplayer,d7
-	bra.b	.exeOk
+;	jsr	id_futureplayer
+;	bne.b	.notFuturePlayer
+;	moveq	#pt_futureplayer,d7
+;	bra.b	.exeOk
 
-.notFuturePlayer
+;.notFuturePlayer
 	jsr	id_delicustom
 	bne.b	.notDeliCustom
 	moveq	#pt_delicustom,d7
 	bra.b	.exeOk 
 
 .notDeliCustom 
-	jsr	id_davelowe
-	bne.b	.notDl
-	move	#pt_davelowe,d7
-	bra.b	.exeOk
-.notDl
+;	jsr	id_davelowe
+;	bne.b	.notDl
+;	move	#pt_davelowe,d7
+;	bra.b	.exeOk
+;.notDl
 	bra.b	.notKnown
 .exeOk
 	move.l	#MEMF_PUBLIC,lod_memtype(a5)
@@ -32743,10 +32743,10 @@ tutki_moduuli:
 .mpa
 	* First test for exe modules, skip the rest
 	* of the checks since moduledata is a seglist
-	cmp.b	#pt_futureplayer,executablemoduleinit(a5)
-	beq	.futureplayer
-	cmp.b	#pt_davelowe,executablemoduleinit(a5)
-	beq	.davelowe
+;	cmp.b	#pt_futureplayer,executablemoduleinit(a5)
+;	beq	.futureplayer
+;	cmp.b	#pt_davelowe,executablemoduleinit(a5)
+;	beq	.davelowe
 
 	tst.b	sampleinit(a5)		* sample??
 	bne	.sample
@@ -32892,15 +32892,15 @@ tutki_moduuli:
 	move	#pt_delicustom,playertype(a5)
 	bra	.ex
 
-.futureplayer
-	pushpea	p_futureplayer,playerbase(a5)
-	move	#pt_futureplayer,playertype(a5)
-	bra	.ex
-
-.davelowe
-	pushpea	p_davelowe,playerbase(a5)
-	move	#pt_davelowe,playertype(a5)
-	bra	.ex
+;.futureplayer
+;	pushpea	p_futureplayer,playerbase(a5)
+;	move	#pt_futureplayer,playertype(a5)
+;	bra	.ex
+;
+;.davelowe
+;	pushpea	p_davelowe,playerbase(a5)
+;	move	#pt_davelowe,playertype(a5)
+;	bra	.ex
 
 **** Oliko  sample??
 .sample:
@@ -36576,6 +36576,8 @@ groupFormats:
  	dr.l 	p_aon8
     dr.l    p_midistream
     dr.l    p_vgm
+    dr.l    p_davelowe
+    dr.l    p_futureplayer
 	dc.l 	0
 
 eagleFormats:
@@ -45135,7 +45137,7 @@ p_beathoven
 	move.l	moduleaddress(a5),a0
     cmp.l   #$3f3,(a0)
     bne     .1
-    DPRINT  "Relocate"
+    DPRINT  "Relocate module"
 	* clear the hunk id for safety to avoid reloccing again
 	clr.l	(a0)
     bsr reloc
@@ -45931,7 +45933,19 @@ p_futureplayer
 	rts
 .ok3
 	pushm	d1-a6
-	move.l	moduleaddress(a5),d0
+
+	move.l	moduleaddress(a5),a0
+    cmp.l   #$3f3,(a0)
+    bne     .1
+    DPRINT  "Relocate module"
+	* clear the hunk id for safety to avoid reloccing again
+	clr.l	(a0)
+    bsr reloc
+.1
+
+    moveq   #$20-4,d0
+	add.l	moduleaddress(a5),d0
+
 	lea	nullsample,a1
 	lea	mainvolume(a5),a2
 	lea	maxsongs(a5),a3
@@ -46755,10 +46769,25 @@ p_davelowe
 	rts
 .ok3
 	pushm	d1-a6
+
+
+	move.l	moduleaddress(a5),a0
+    cmp.l   #$3f3,(a0)
+    bne     .1
+    DPRINT  "Relocate module"
+	* clear the hunk id for safety to avoid reloccing again
+	clr.l	(a0)
+    bsr     reloc
+	bsr	    clearCpuCaches
+.1
+    DPRINT  "init"
+
 	move.l	moduleaddress(a5),a0 
+    lea     $20-4(a0),a0  * skip hunk header
+
 	* LoadSeg BPTR->APTR
-	add.l	a0,a0
-	add.l	a0,a0
+	;add.l	a0,a0
+	;add.l	a0,a0
 	lea	mainvolume(a5),a1 
 	lea	songover(a5),a2
 	move.l	daveloweroutines(a5),a3

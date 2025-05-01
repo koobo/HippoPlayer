@@ -594,8 +594,8 @@ InitPlayer
 ;	move.l	dosbase,a6
 ;	move.l	#modulePath,d1
 ;	jsr	_LVOLoadSeg(A6)
-	lsl.l	#2,D0
-	beq.b	InitFail
+;	lsl.l	#2,D0
+;	beq.b	InitFail
 	addq.l	#4,D0
 
 	move.l	D0,A0				; module address
