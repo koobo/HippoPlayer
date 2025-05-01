@@ -45131,6 +45131,21 @@ p_beathoven
 
 .doInit
 	pushm	all
+
+	move.l	moduleaddress(a5),a0
+    cmp.l   #$3f3,(a0)
+    bne     .1
+    DPRINT  "Relocate"
+	* clear the hunk id for safety to avoid reloccing again
+	clr.l	(a0)
+    bsr reloc
+	bsr	clearCpuCaches
+	move.l	moduleaddress(a5),a1
+	move.l	$20+36(a1),a1
+	moveq	#30-1,d0
+	bsr	copyNameFromA1
+.1
+
 	move.l	moduleaddress(a5),a2
 	move.l	.BEAT_SUBSONGS(a2),d0 
 	DPRINT	"Beathoven init, subsongs=%ld"
@@ -45181,10 +45196,10 @@ p_beathoven
 .id_beathoven
 	bsr.b .id_beathoven_
 	bne.b .x 
-	move.l	moduleaddress(a5),a1
-	move.l	$20+36(a1),a1
-	moveq	#30-1,d0
-	bsr	copyNameFromA1
+;	move.l	moduleaddress(a5),a1
+;	move.l	$20+36(a1),a1
+;	moveq	#30-1,d0
+;	bsr	copyNameFromA1
 	moveq	#0,d0
 .x 	rts
 
@@ -45204,11 +45219,11 @@ p_beathoven
     bne.b   .notBeat
     cmp.l   #'HOVE',8(a0)
     bne.b   .notBeat
-    * looks good, relocate it
+;    * looks good, relocate it
     move.l  a4,a0
-    bsr reloc
-	* clear the hunk id for safety to avoid reloccing again
-	clr.l	(a4)
+;    bsr reloc
+;	* clear the hunk id for safety to avoid reloccing again
+;	clr.l	(a4)
 	bsr	clearCpuCaches
     moveq   #0,d0
     rts
