@@ -4389,6 +4389,7 @@ handleSignal2
 
 	* Do this to update favorite status if settings changed
 	jsr	handleFavoriteModuleConfigChange
+    jsr setPlayModeChangeButtonIcon
 
 	* Check if boxsize in prefs was changed
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
@@ -4634,7 +4635,7 @@ avaa_ikkuna:
 	jsr	layoutGadgetsVertical
     * Ensure list mode toggle button has the correct icon 
     jsr setListModeChangeButtonIconNoRefresh    
- 
+    jsr setPlayModeChangeButtonIconNoRefresh
 	
 	; Update into window structure
 	lea	winstruc,a0
@@ -5304,6 +5305,11 @@ wrender:
 	move.l	d7,a3
 	tst.l	d7
 	bne.b	.clrloop
+
+    lea     gadgetPlayModeChangeButton,a3
+    movem.w 4(a3),d0/d1/d4/d5
+    bsr     .cler
+
 	bra.b	.oru
 
 .cler	
@@ -5348,7 +5354,9 @@ wrender:
     lea     gadgetPositionSlider,a1
     move.l	windowbase(a5),a0
 	lob     RemoveGadget
-    DPRINT  "RemoveGadget=%ld"
+    lea     gadgetPlayModeChangeButton,a1
+    move.l	windowbase(a5),a0
+	lob     RemoveGadget
 
     tst.b   showPositionSlider(a5)
     beq     .noPos
@@ -5356,7 +5364,10 @@ wrender:
     move.l	windowbase(a5),a0
     moveq   #-1,d0  * add as last
     lob     AddGadget
-    DPRINT  "AddGadget=%ld"
+    lea     gadgetPlayModeChangeButton,a1
+    move.l	windowbase(a5),a0
+    moveq   #-1,d0  * add as last
+    lob     AddGadget
 .noPos
 
 
@@ -5418,6 +5429,14 @@ wrender:
     ; Position slider
     tst.b   showPositionSlider(a5)
     beq     .noPosSl
+;    lea     gadgetPositionSlider,a0
+;    move    gg_LeftEdge(a0),plx1
+;    move    gg_TopEdge(a0),ply1
+;    move.l  plx1,plx2
+;    move.l  ply1,ply2
+;    add     gg_Width(a0),plx2
+;    add     gg_Height(a0),ply2
+
     move    buttonRow1TopEdge(a5),ply1
     sub     #12+2,ply1
     move    ply1,ply2
@@ -5426,6 +5445,9 @@ wrender:
 	moveq	#5+WINX,plx1
 	move	WINSIZX(a5),plx2
 	subq	#8,plx2
+
+    subq    #2,plx2
+    sub     gadgetPlayModeChangeButton+gg_Width,plx2
 
 	move.l	rastport(a5),a1
 	jsr 	sliderlaatikko
@@ -5458,7 +5480,9 @@ wrender:
 	bsr	printkorva
     tst boxsize(a5)
     beq .sk
-	lea	gadgetListModeChangeButton,a0
+	lea	gadgetListModeChangeButton-button1(a0),a0
+    bsr	printkorva
+	lea	gadgetPlayModeChangeButton-gadgetListModeChangeButton(a0),a0
     bsr	printkorva
 .sk
 
@@ -7481,7 +7505,8 @@ tooltipHandler
 	move	mousey(a5),d1
 
 	* Check if above "Play" button
-	lea	gadgetPlayButton,a0
+	;lea	gadgetPlayButton,a0
+	lea	gadgetPositionSlider,a0
 	move	gg_TopEdge(a0),d2
 	cmp	d1,d2
 	blo.b	.under
@@ -9423,9 +9448,12 @@ gadgetsup:
     ;dr  rlistmodePop
     dr  .exit       * resize gadget
     dr  .rpositionslider
+    dr  .rplaymodechange
 
 .rpositionslider
     jmp     positionSliderMoved
+.rplaymodechange
+    jmp     togglePlayMode
 
 * Print some text into the filebox
 ** a0 = teksti
@@ -16232,6 +16260,7 @@ pupdate2
 	lea	pbutton1,a1
 	bra	prunt 
 
+togglePlayModePopupOptions:
 ls50	dc.b	23,5
 ls5 dc.b	"List repeatedly",0
 ls6 dc.b	"List once",0
@@ -34679,6 +34708,70 @@ activateSearchStringGadget:
     sub.l   a2,a2
     lore    Intui,ActivateGadget
     rts
+
+
+; -------------------------------------
+
+togglePlayMode:
+    DPRINT  "togglePlayMode"
+    move.b  playmode(a5),d0     * previous
+    addq.b  #1,playmode(a5)
+    cmp.b   #pm_max,playmode(a5)
+    ble     .1
+    move.b  #1,playmode(a5)
+.1
+    cmp.b   #pm_repeat,d0
+    beq     .3
+    cmp.b   #pm_repeat,playmode(a5)
+    bne     .2
+.3 
+     jsr     forceRefreshList
+.2
+
+setPlayModeChangeButtonIcon:
+    bsr setPlayModeChangeButtonIconNoRefresh
+	lea	gadgetPlayModeChangeButton,a0
+	jmp refreshGadgetInA0
+
+setPlayModeChangeButtonIconNoRefresh:
+    move.b  playmode(a5),d0
+    lea     playModeRepeatListImage,a0
+    subq.b  #1,d0
+    beq     .set
+    lea     playModePlayListImage-playModeRepeatListImage(a0),a0
+    subq.b  #1,d0
+    beq     .set
+    lea     playModeRepeatModuleImage-playModePlayListImage(a0),a0
+    subq.b  #1,d0
+    beq     .set
+    lea     playModePlayModuleImage-playModeRepeatModuleImage(a0),a0
+    subq.b  #1,d0
+    beq     .set
+    lea     playModeRandomImage-playModePlayModuleImage(a0),a0
+.set
+	move.l	a0,gadgetPlayModeChangeButtonImagePtr
+    rts
+
+
+togglePlayModePopup:
+	DPRINT	"Play mode"
+	lea		togglePlayModePopupOptions,a4
+	lea		gadgetPlayModeChangeButton,a0
+	move	gg_LeftEdge(a0),d6
+	moveq	#20,d7
+	add		gg_TopEdge(a0),d7
+    moveq   #0,d4
+    moveq   #0,d0
+    move.b  playmode(a5),d0
+    subq.b  #1,d0
+	jsr		listSelectorMainWindowPreselect
+	bmi.b	.skip
+	addq.b	#1,d0
+	move.b	d0,playmode(a5)
+    bsr     setPlayModeChangeButtonIcon
+    jmp     forceRefreshList
+.skip
+	rts
 
 
 
@@ -55708,7 +55801,19 @@ horizontalLayout:
     beq     .noPos
     move	winstruc+nw_Width,d0
     sub	    #8+8+2,d0
-    move    d0,gadgetPositionSlider+gg_Width
+    sub	    #18+2,d0      ; mode button width
+    lea     gadgetPositionSlider,a0
+    lea     gadgetPlayModeChangeButton-gadgetPositionSlider(a0),a1
+    move    d0,gg_Width(a0)
+
+    move    gg_TopEdge(a0),gg_TopEdge(a1)
+    move    gg_Height(a0),gg_Height(a1)
+    move    gg_LeftEdge(a0),d0
+    add     gg_Width(a0),d0
+    move    d0,gg_LeftEdge(a1)
+    addq    #1+2,gg_LeftEdge(a1)
+    subq    #2,gg_TopEdge(a1)
+    addq    #4,gg_Height(a1)
 .noPos
 	
   if DEBUG
@@ -61961,6 +62066,9 @@ rightButtonActionsList
     * List mode change -> popup
     dr.w    gadgetListModeChangeButton
     dc.l    toggleListModePopup
+    * Play mode change -> popo
+    dr.w    gadgetPlayModeChangeButton
+    dc.l    togglePlayModePopup
 	dc.w	0 ; END
  
 
@@ -61988,6 +62096,7 @@ tooltipList
     * This should be before source, as it may overlap the source button
 	dr.w	gadgetSearchString,.searchString 
 	dr.w	gadgetSearchSource,.searchSource
+	dr.w	gadgetPlayModeChangeButton,.playModeChange
 	dc.w	0 ; END
  
 .play
@@ -62081,6 +62190,14 @@ tooltipList
 .searchString
 	dc.b	18,1
 	dc.b	"Enter search terms",0
+.playModeChange
+	dc.b	17,6
+    dc.b    "Select play mode:",0
+    dc.b	" - List repeat",0
+    dc.b	" - List once",0
+    dc.b	" - Module repeat",0
+    dc.b	" - Module once",0
+    dc.b	" - List random",0
   even
 
 *** Samplename ikkuna
@@ -62126,7 +62243,8 @@ gAD1s	dc.w 5,65535,0,0,0
 
 
 gadgetPositionSlider
-        dc.l 0 ; next
+        ;dc.l 0 ; next
+        dc.l gadgetPlayModeChangeButton
         * left, top:
         dc.w 9,50
         * width, height:
@@ -62143,6 +62261,62 @@ gadgetPositionSlider
         dc.l 0
 .slider1s        dc.w 2,65535,0,0,0
         dc.w 0,0,0,0,0,0
+
+; Gadget
+gadgetPlayModeChangeButton:
+	; gg_NextGadget
+	dc.l 0
+	; gg_LeftEdge
+	dc 9
+	; gg_TopEdge
+	dc 50
+	; gg_Width
+	dc 18
+	; gg_Height
+	dc 13
+	; gg_Flags
+	dc GFLG_GADGIMAGE
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+	; gg_GadgetRender
+	dc.l gadgetPlayModeChangeButtonImage
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+	; gg_GadgetId
+	dc.w 0
+	; gg_UserData
+	dc.l 0
+
+
+; Image
+gadgetPlayModeChangeButtonImage
+	; ig_LeftEdge
+	dc 4
+	; ig_TopEdge
+	dc 3
+	; ig_Width
+	dc 9+1
+	; ig_Height
+	dc 7
+	; ig_Depth
+	dc 1
+	; ig_ImageData
+gadgetPlayModeChangeButtonImagePtr
+	dc.l	listImage
+	; ig_PlanePick
+	dc.b 1
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
 
 
 *** Kick2.0+ window extension
@@ -62827,6 +63001,60 @@ resizeGadgetImage:
 	dc	%1000000000000000
 	dc	%1000000000000000
 	dc	%0000000000000000
+
+; repeat list, play list once, repeat module, plauy module once,
+; reanbdom
+; 10 px wide
+playModeRepeatListImage
+        ;0123456789
+	dc	%0100000000000000				
+	dc	%0100001000000000				
+	dc	%0100011100000000				
+	dc	%0100111110000000				
+	dc	%0100001000000000				
+	dc	%0100001000000000				
+	dc	%0111111000000000				
+
+        ;0123456789
+playModePlayListImage
+	dc	%0000010000000000				
+	dc	%0000010000000000				
+	dc	%0000010000000000				
+	dc	%0000010000000000				
+	dc	%0001111100000000				
+	dc	%0000111000000000				
+	dc	%0000010000000000				
+
+        ;0123456789
+playModeRepeatModuleImage
+	dc	%1111111111000000				
+	dc	%0000000001000000				
+	dc	%0001000001000000				
+	dc	%0011000001000000				
+	dc	%0111111111000000				
+	dc	%0011000000000000				
+	dc	%0001000000000000				
+
+        ;0123456789
+playModePlayModuleImage
+	dc	%0000000000000000				
+	dc	%0000000100000000				
+	dc	%0000000110000000				
+	dc	%1111111111000000				
+	dc	%0000000110000000				
+	dc	%0000000100000000				
+	dc	%0000000000000000				
+
+        ;0123456789
+playModeRandomImage
+	dc	%0010000100000000				
+	dc	%0001001000000000				
+	dc	%0000110000000000				
+	dc	%0001001000000000				
+	dc	%0010000100000000				
+	dc	%0111001110000000				
+	dc	%0010000100000000				
+
 
 	section	mah,bss_c
 
