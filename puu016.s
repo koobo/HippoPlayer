@@ -816,11 +816,7 @@ SAMPLE_FORMAT_AIFF = 2
 SAMPLE_FORMAT_WAV  = 3
 SAMPLE_FORMAT_MP3  = 4
 sampleformat   rs.b    1
-
-* This is set in loadfile() to indicate an executable module has been 
-* loaded with LoadSeg(). Value can be 0 for normal processing,
-* or p_delicustom or p_futureplayer.
-executablemoduleinit		rs.b	1
+                rs.b        1   * PAD
 
 ****** Prefs asetukset, joita k‰sitell‰‰n
 
@@ -1116,6 +1112,7 @@ modulelength	rs.l	1	* modin pituus
 modulefilename	rs.l	1	* modin tiedoston nimi
 solename	rs.l	1	* osoitin pelkk‰‰n tied.nimeen
 kanavatvarattu	rs	1	* 0: ei varattu, ei-0: varattu
+moduleAddressLoadSeg rs.l 1  * module if loaded with LoadSeg()
 
 ;earlymoduleaddress	rs.l	1	*
 ;earlymodulelength	rs.l	1	*
@@ -1265,7 +1262,7 @@ lod_tfmx		rs.b	1
 lod_pad			rs.b	1
 lod_kommentti		rs.b	1	 * 0: ei oteta kommenttia
 lod_xpkfile		rs.b	1	 * <>0: tiedosto oli xpk-pakattu
-lod_exefile		rs.b	1	 * <>0: file was an exe		
+lod_exefile__	rs.b	1	 * <>0: file was an exe		
 lod_dirlock		rs.l	1
 lod_xpkOutLen   rs.l    1
 lod_buf			rs.b	200
@@ -6932,10 +6929,6 @@ freemodule:
 	DPRINT	"freemodule obtain data"
 	bsr	obtainModuleData
 
-	* Check if need to do UnLoadSeg
-	bsr	moduleIsExecutable
-	move.b	d0,d7
-
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
     * that UnLoadSeg() is needed.
@@ -6972,30 +6965,16 @@ freemodule:
 	lea	ps3mroutines(a5),a0		* vapautetaan replayeri
 	jsr	freereplayer
 	jsr	freeDeliPlayer
-	
-	move.l	(a5),a6
-	move.l	moduleaddress(a5),d0
-	beq.b	.ee
-	move.l	d0,a1
 
-	tst.b	d7
-	beq.b	.normal
-	move.l 	a1,d1
+
+    move.l  moduleAddressLoadSeg(a5),d1
+    beq     .noSegs
+    clr.l   moduleAddressLoadSeg(a5)
 	lore	Dos,UnLoadSeg
- if DEBUG
-	move.l	moduleaddress(a5),d0
-	DPRINT	"UnLoadSeg 0x%lx"
- endif
-	bra.b	.exe
-.normal
+	DPRINT	"UnLoadSeg!"
+.noSegs
 
-	move.l	modulelength(a5),d0
-	beq.b	.ee
-	lob	FreeMem
-.exe
-
-	clr.l	moduleaddress(a5)
-	clr.l	modulelength(a5)
+    bsr     justFreeModuleData
 
 ;	tst.l	keyfile+44(a5)	* datan v‰lilt‰ 38-50 pit‰‰ olla nollia
 ;	beq.b	.zz
@@ -7024,21 +7003,19 @@ freemodule:
 	movem.l	(sp)+,d0-a6
 	rts
 
+justFreeModuleData:
+    move.l	(a5),a6
+	move.l	moduleaddress(a5),d0
+	beq.b	.ee
+	move.l	d0,a1
+	move.l	modulelength(a5),d0
+	beq.b	.ee
+	lob	FreeMem
+.ee
+	clr.l	moduleaddress(a5)
+	clr.l	modulelength(a5)
+    rts
 
-* out:
-*  d0 = non-zero if loaded module is an LoadSeg() loaded exe	
-moduleIsExecutable
-	cmp	#pt_delicustom,playertype(a5)
-	beq.b	.isExe
-;	cmp	#pt_futureplayer,playertype(a5)
-;	beq.b	.isExe
-;	cmp	#pt_davelowe,playertype(a5)
-;	beq.b	.isExe
-	moveq	#0,d0
-	rts
-.isExe 
-	moveq	#1,d0 
-	rts
 
 *******************************************************************************
 * Volumen feidaus
@@ -30359,9 +30336,6 @@ loadmodule:
 	move.l	(a2)+,tfmxsampleslen(a5)
 	move.b	(a2),lod_tfmx(a5)
 
-	* Grab exe load status from loader
-	move.b 	lod_exefile(a5),executablemoduleinit(a5)
-
 	tst.l	d7
 	beq.b	.nay
 * errori? putsataan tfmx osotteet
@@ -30424,13 +30398,8 @@ loadmodule:
 	tst	d0
 	bne	.err			* virhe lataamisessa
 
-	* Grab exe load status from loader
-	move.b 	lod_exefile(a5),executablemoduleinit(a5)
-
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
-	bne 	.nip
-	tst.b 	executablemoduleinit(a5)
 	bne 	.nip
 
     move.l	modulefilename(a5),a0
@@ -30855,12 +30824,6 @@ loadfile:
 .fe	tst.b	(a0)+
 	bne.b	.fe
 	subq	#1,a0
-
-	* Clear flag that indicates that the module that was loaded
-	* was in fact an executable. If this is not done,
-	* XPK packed modules are thought to be DeliCustoms and mayhem ensues.
-	;clr.b	executablemoduleinit(a5)
-	clr.b	lod_exefile(a5)
 
 *********************************************************************
 ** Archiven purku
@@ -31344,13 +31307,6 @@ loadfile:
 	bra	.lha
 
 .nolha
-
-	bsr	.handleExecutableModuleLoading
-	* Skip the rest if LoadSeg above went fine
-	;tst.b	executablemoduleinit(a5)
-	tst.b 	lod_exefile(a5)
-	bne	.exit
-
 
 ** Is this a sample file, stop loading if so.
 ** Jos havaitaan file sampleks, ei ladata enemp‰‰
@@ -32152,67 +32108,6 @@ loadfile:
 .eee	rts
 
 
-
-.handleExecutableModuleLoading
-	* Probebuffer now has 1084 of data we can check
-	* for Delitracker CUSTOM format, as it has to be loaded
-	* with LoadSeg(), being an exe file.
-	* Clear the flag that indicates exe module load status.
-	;clr.b	executablemoduleinit(a5)
-	clr.b	lod_exefile(a5)
-	* There are no AHI supported exe type modules
-	tst.b	ahi_muutpois(a5)
-	bne	.ahiSkip
-	pushm 	d1-a6
-	lea	probebuffer(a5),a4
-	move.l	#1084,d7
-
-	* Test for known exe formats
-
-;	jsr	id_futureplayer
-;	bne.b	.notFuturePlayer
-;	moveq	#pt_futureplayer,d7
-;	bra.b	.exeOk
-
-;.notFuturePlayer
-	jsr	id_delicustom
-	bne.b	.notDeliCustom
-	moveq	#pt_delicustom,d7
-	bra.b	.exeOk 
-
-.notDeliCustom 
-;	jsr	id_davelowe
-;	bne.b	.notDl
-;	move	#pt_davelowe,d7
-;	bra.b	.exeOk
-;.notDl
-	bra.b	.notKnown
-.exeOk
-	move.l	#MEMF_PUBLIC,lod_memtype(a5)
-	bsr	.infor
-	move.l	lod_filename(a5),d1
-	lore	Dos,LoadSeg
-	tst.l	d0
-	beq.b	.loadSegErr
-	* set type of loadsegged module
-	;move.b	d7,executablemoduleinit(a5)
-	move.b	d7,lod_exefile(a5)
-	move.l	d0,lod_address(a5)
-	* length is not readily available for these, so clear it
-	clr.l	lod_length(a5)
- if DEBUG
-	move.l	d7,d0
-	DPRINT	"Module LoadSeg ok for type %ld"
- endif
-.loadExit
-.notKnown
-	popm 	d1-a6
-.ahiSkip
-	rts
-.loadSegErr
-	move	#lod_loadsegfail,lod_error(a5)
-	bra.b 	.loadExit
-
 * Removes the temp directory used for unarchiving lha etc
 remarctemp
 	pushm	all
@@ -32535,6 +32430,10 @@ tutki_moduuli2:
 	jsr	id_musicmaker8_
 	tst.l	d0
 	beq 	.goPublic
+
+    jsr     id_delicustom
+    beq     .goPublic
+
 	;bsr	id_digitalmugician2 
 	;beq.b	.goPublic
 
@@ -32656,9 +32555,6 @@ tutki_moduuli:
 	cmp.b	#2,ptmix(a5)	* Normaali vai miksaava PT replayeri?
 	beq.b	.ohi
 	
-	* Ensure no id funcs are ran on executables
-	tst.b	executablemoduleinit(a5)
-	bne.b	.ohi
 	* See if there is data to check
 	move.l	a4,d0
 	beq.b	.ohi
@@ -32670,19 +32566,10 @@ tutki_moduuli:
 	* replay code.
 	clr.b	external(a5)		* Lippu: ei tartte player grouppia 
 
-	* First test for exe modules, skip the rest
-	* of the checks since moduledata is a seglist
-	cmp.b	#pt_delicustom,executablemoduleinit(a5)
-	beq	.delicustom
-
 	tst.b	sampleinit(a5)
 	bne.b	.noop
 
 	tst.b	ahi_muutpois(a5)	
-	bne.b	.noop
-
-	* Ensure no id funcs are ran on executables
-	tst.b	executablemoduleinit(a5)
 	bne.b	.noop
 
 	* These do not require player group:
@@ -32730,8 +32617,6 @@ tutki_moduuli:
 
 	tst.b	ahi_muutpois(a5)
 	beq.b	.mpa
-	tst.b	executablemoduleinit(a5)
-	bne.b	.mpa
 
 ** AHIa tukevat replayerit
     tst.b   sampleinit(a5)
@@ -32741,12 +32626,6 @@ tutki_moduuli:
 
 	bra.b	.mp
 .mpa
-	* First test for exe modules, skip the rest
-	* of the checks since moduledata is a seglist
-;	cmp.b	#pt_futureplayer,executablemoduleinit(a5)
-;	beq	.futureplayer
-;	cmp.b	#pt_davelowe,executablemoduleinit(a5)
-;	beq	.davelowe
 
 	tst.b	sampleinit(a5)		* sample??
 	bne	.sample
@@ -36578,6 +36457,7 @@ groupFormats:
     dr.l    p_vgm
     dr.l    p_davelowe
     dr.l    p_futureplayer
+    dr.l    p_delicustom
 	dc.l 	0
 
 eagleFormats:
@@ -45510,12 +45390,45 @@ p_delicustom
 	dc.w pt_delicustom
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song!pf_end
 	dc.b	"DeliTracker Custom",0
+.tempFile
+    dc.b    "t:hippo-delicustom",0
  even
 
 .init
-	move.l	moduleaddress(a5),d0
+    DPRINT  "DeliCustom init"
+    lea     .tempFile(pc),a0
+	move.l	moduleaddress(a5),a1
+    
+    * Special case for XPK, exact decompressed length
+    * is not the allocated mem length. LoadSeg() will freak
+    * out if the length is not exact
+    move.l  lod_xpkOutLen(a5),d0
+    bne     .1
+    move.l  modulelength(a5),d0
+.1
+	bsr 	plainSaveFile
+	bmi 	.saveError
+
+    jsr     justFreeModuleData
+
+    pushpea .tempFile(pc),d1
+	lore	Dos,LoadSeg
+    DPRINT  "LoadSeg=%lx"
+    move.l  d0,moduleAddressLoadSeg(a5)
+
+    pushpea .tempFile(pc),d1
+    lore    Dos,DeleteFile
+
+    move.l  moduleAddressLoadSeg(a5),d0
+    beq     .loadError
+
 	lsl.l	#2,d0
 	bra	deliInit
+
+.saveError
+.loadError
+    moveq   #ier_nomem,d0
+    rts
 
 id_delicustom
 	lea	.id1_start(pc),a1	
@@ -45538,6 +45451,7 @@ id_delicustom
 	tst.l	(a0)
 	beq.b	.notDeli
 
+    DPRINT  "found delicustom"
 	moveq	#0,d0
 	rts
 	
