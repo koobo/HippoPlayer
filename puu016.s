@@ -60214,6 +60214,8 @@ uslGetSongLength:
     move    songnumber(a5),d0
     sub     minsong(a5),d0
     DPRINT  "song=%ld"
+    cmp     #$f,d0      * upper limit check
+    bhi     .x      
     add     d0,d0
     move    (a0,d0),d0
     DPRINT  "length=%ld"
