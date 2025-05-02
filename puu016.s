@@ -22496,6 +22496,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	beq.b	.1
 	cmp	    #pt_sample,playertype(a5)
 	beq.b   .2 ; no address for samples
+    cmp     #pt_delicustom,playertype(a5)
+    beq     .2
 	tst.l	moduleaddress(a5)
 	beq.b	.1
 .2	tst.l	playingmodule(a5)
