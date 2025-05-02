@@ -60140,6 +60140,12 @@ uslIgnoreFormats:
 .reject
     rts
 
+umeIgnoreFormats:
+    cmp.w   #pt_sid,playertype(a5)
+    beq     .reject
+    cmp.w   #pt_sample,playertype(a5)
+.reject
+    rts
 
 readUsl:
     DPRINT  "readUsl"
@@ -60171,6 +60177,8 @@ readUsl:
 
 readUme:
     DPRINT  "readUme"
+    bsr     umeIgnoreFormats
+    beq     .reject
 
     move.l  umeMetaDataPtr(a5),d0
     beq     .no
