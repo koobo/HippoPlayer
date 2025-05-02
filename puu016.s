@@ -1583,12 +1583,14 @@ vgmPlayTime     rs.l    1 * Host playback time in 44100 Hz ticks
 sid_followPositions rs.w    4
 sid_followFractions rs.w    4
 
-* Audacious-UADE songlength data
+* Audacious-UADE songlength data, metadata
 uslMD5          rs.b      6   * Loaded module 48-bit MD5 sum
-uslIndexPtr     rs.l      1   * Pointer to DB index
+uslIndexPtr     rs.l      1   * Pointer to songlength DB index
 uslDataPtr      rs.l      1   * Pointer to current DB block
-uslNotFound     rs.w      1   * Flag to avoid retrying if file not available
-uslSongLengthData rs.w    16  * Data for the current module. max 16 songs
+uslSongLengthData rs.w    16  * SL data for the current module, max 16 songs
+umeIndexPtr     rs.l      1   * Pointer to metadata DB index
+umeDataPtr      rs.l      1   * Pointer to current DB block
+umeMetaDataPtr  rs.l      1   * Ptr to metadata strings
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -3217,6 +3219,7 @@ main:
     tst.b   win(a5)
     beq     .uc
     jsr     uslCreateIndex
+    jsr     umeCreateIndex
 .uc
 
 
@@ -3757,6 +3760,8 @@ exit
     jsr     freeSLData
     jsr     uslFreeIndex
     jsr     uslFreeData
+    jsr     umeFreeIndex
+    jsr     umeFreeData
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -6979,6 +6984,7 @@ freemodule:
 	clr.l	deliPatternInfo(a5) 
 	jsr	clearScopeData
     jsr     uslClearSongData
+    jsr     uslUmeClear
 	
 ;	bsr	lootaa
 	bsr	inforivit_clear
@@ -22989,6 +22995,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr 	.doLine
 	bpl 	.ends
 	bsr 	.doLine
+
+	move.l	infotaz(a5),a3
+	bsr	.lloppu
+	bsr	    .putLineChange
+    bsr     .putMetaData
 	bra 	.ends
 
 * Copies a line to output, cuts at space near the end of line
@@ -23403,7 +23414,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.doLine
 .endA	lea	200(sp),sp
 .noAuth
+
+    bsr     .putMetaData
+
 	bra	.selvis
+
 
 
 .form3	
@@ -23414,7 +23429,59 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Comment:",ILF,ILF2,0
 .author
 	dc.b	"Player: %s",0
+.metaData1  dc.b    "Authors: %s",0
+.metaData2  dc.b    "Publishers: %s",0
+.metaData3  dc.b    "Album: %s",0
+.metaData4  dc.b    "Year: %s"
   even
+
+* Put UADE-Audacious metadata
+.putMetaData
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .noMeta
+    move.l  d0,a4
+    tst.b   (a4)
+    beq     .noMeta
+
+    lea     .metaData1(pc),a0 
+    bsr     .putMetaLine
+    lea     .metaData2(pc),a0 
+    bsr     .putMetaLine
+    lea     .metaData3(pc),a0 
+    bsr     .putMetaLine
+    lea     .metaData4(pc),a0 
+    bsr     .putMetaLine
+.noMeta
+    rts
+
+.putMetaLine
+    tst.b   (a4)            * skip empty
+    beq     .nextMeta
+
+    lea     -100(sp),sp
+    move.l  a4,d0
+    move.l  sp,a3
+    jsr     desmsg3
+
+	move.l	infotaz(a5),a3
+	bsr	    .lloppu
+    bsr     .putLineChange
+    
+    move.l  sp,a0
+    move.l  a3,a1
+    bsr     .doLine
+    bpl     .endM
+    bsr     .doLine
+    bpl     .endM
+    bsr     .doLine
+.endM
+
+    lea     100(sp),sp
+
+.nextMeta
+    tst.b   (a4)+
+    bne     .nextMeta
+    rts
 
 
 .putcomment:
@@ -23442,6 +23509,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	popm	d0/d1/a0/a3
 	rts
 
+* d1 = character limit for the first line to be put
 .putlines
 	moveq	#0,d0
 .com	addq	#1,d0
@@ -23549,8 +23617,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * Out:
 *   a3 = buffer
 .allo:
-	bsr.b	.allo2
-	beq.b	.xiipo
+	bsr 	.allo2
+	beq 	.xiipo
 
 	lea	-32(sp),sp
 	move.l	sp,a4
@@ -23581,7 +23649,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.putcomment2
 	
 	move.l	infotaz(a5),a3
-	bsr.b	.lloppu
+	bsr 	.lloppu
+    bsr     .putMetaData
+	move.l	infotaz(a5),a3
+	bsr 	.lloppu
 
 	bsr	.putLineChange
 	moveq	#39-1,d0
@@ -60486,11 +60557,13 @@ umeFind:
     * get 4 strings
     moveq   #4-1,d1
 .sl
-    move.b  (a0),d0 
+    move.b  (a0)+,d0
+    subq.b  #1,d0
+    beq     .em
 .cp move.b  (a0)+,(a2)+
     subq.b  #1,d0
     bne     .cp
-    clr.b   (a2)+
+.em clr.b   (a2)+
     dbf     d1,.sl
 
     move.l  umeMetaDataPtr(a5),d0
