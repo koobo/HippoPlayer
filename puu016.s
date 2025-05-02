@@ -30532,6 +30532,7 @@ loadmodule:
 
     push    d0
     jsr     readUsl
+    jsr     readUme
     pop     d0
 
 	clr.b	contonerr_laskuri(a5)	* nollataan virhelaskuri
@@ -60051,6 +60052,7 @@ freeSLData:
 ***************************************************************************
 *
 * Audacious-UADE songlength database (not for SIDs)
+* Metadata database
 *
 ***************************************************************************
 
@@ -60095,7 +60097,35 @@ readUsl:
     DPRINT  "reject"
     rts
 
+
+readUme:
+    DPRINT  "readUme"
+
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .no
+    move.l  d0,a0
+    tst.b   (a0)
+    bne     .hasIt
+.no
+    bsr     umeLoadIndex
+
+    tst.l   umeIndexPtr(a5)
+    beq     .noData
+
+    bsr     calcModuleMD5
+    bsr     umeLoadData
+    bsr     umeFind
+    DPRINT  "umeFind=%ld"
+.noData
+.hasIt
+.reject
+    rts
+
+
 calcModuleMD5:
+    tst.l   uslMD5(a5)          
+    bne     readUme\.reject
+
     lea     -MD5Ctx_SIZEOF(sp),sp
 
     move.l  sp,a0
@@ -60143,10 +60173,7 @@ uslLoadIndex:
     DPRINT  "uslLoadIndex"
     tst.l   uslIndexPtr(a5)
     bne     .y          * already loaded?
-    tst.b   uslNotFound(a5)
-    bne     .y          * only try once
     bsr     uslOpen
-    seq     uslNotFound(a5)
     beq     .y
     move.l  #$84,d0
     moveq   #0,d1
@@ -60163,6 +60190,39 @@ uslLoadIndex:
     bsr     uslClose
 .y
     rts
+
+
+umeLoadIndex:
+    DPRINT  "umeLoadIndex"
+    tst.l   umeIndexPtr(a5)
+    bne     .y          * already loaded?
+
+    * Allocate a buffer for the metadata txt
+    move.l  #$80,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,umeMetaDataPtr(a5)
+    beq     .y
+
+    bsr     umeOpen
+    beq     .y
+
+    move.l  #$104,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,umeIndexPtr(a5)
+    beq     .x
+
+    move.l  d7,d1		        * file
+	move.l	umeIndexPtr(a5),d2	* destination
+	move.l	#$104,d3		      * pituus
+	lob     Read
+    DPRINT  "read=%ld"
+.x
+    bsr     umeClose
+.y
+    rts
+
 
 uslLoadData:
     DPRINT  "uslLoadData"
@@ -60221,13 +60281,84 @@ uslLoadData:
     DPRINT  "no data available"
     rts
 
+
+umeLoadData:
+    DPRINT  "umeLoadData"
+    tst.l   umeIndexPtr(a5)
+    beq     .noDataError
+    move.l  umeDataPtr(a5),d0
+    beq     .load
+    DPRINT  "check previous"
+    * Check if already have it
+    move.l  d0,a0
+    move.b  (a0),d0
+    lsr.b   #3,d0   
+    move.b  uslMD5(a5),d1
+    lsr.b   #3,d1
+    cmp.b   d0,d1
+    beq     .gotIt
+.load
+    bsr     umeFreeData
+    bsr     umeOpen
+    beq     .error
+
+    * Access index
+    move.b  uslMD5(a5),d0
+    lsr.b   #3,d0
+    and.w   #$1f,d0     * 5 bits!
+    lsl     #3,d0
+    move.l  umeIndexPtr(a5),a0
+    movem.l 4(a0,d0),d4/d5
+    * d4 = file offset, d5 = block length
+
+    move.l  d7,d1   * fh
+    move.l  d4,d2   * offset   
+    move.l  #OFFSET_BEGINNING,d3
+    lob     Seek
+
+    move.l  d5,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,umeDataPtr(a5)
+    beq     .error2
+
+    move.l  d7,d1   * fh
+    move.l  d0,d2   * target
+    move.l  d5,d3   * len
+    lore    Dos,Read
+    DPRINT  "read=%ld"
+
+.error2
+    bsr     umeClose
+.error
+    rts
+.gotIt
+    DPRINT  "already had it"
+    rts
+.noDataError
+    DPRINT  "no data available"
+    rts
+
+    
+
 uslClearSongData:
+    DPRINT  "uslClearSongData"
 	lea	    uslSongLengthData(a5),a2
     moveq   #8-1,d0
 .cl clr.l   (a2)+
     dbf     d0,.cl
     rts
-    
+
+uslUmeClear:
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .1
+    move.l  d0,a0
+    clr.b   (a0)
+.1  
+    clr.l   uslMD5(a5)
+    clr.w   uslMD5+4(a5)
+    rts
+
 uslFind:
     moveq   #0,d0       * result in d0
     move.l  uslDataPtr(a5),d1
@@ -60303,6 +60434,88 @@ uslFind:
 	moveq	#0,d0
 	rts
 
+    
+umeFind:
+    DPRINT  "umeFind"
+    * Empty any previous data
+    move.l  umeMetaDataPtr(a5),a1
+    clr.b   (a1)
+
+    moveq   #0,d0       * result in d0
+    move.l  umeDataPtr(a5),d1
+    beq     .x
+    move.l  d1,a0
+    move.l  -4(a0),d1       * mem area length
+    lea	    (a0,d1.l),a1    * search end bound
+
+    movem.w uslMD5(a5),d1/d2/d3
+
+    pushm   all
+    move.l  (a0),d0
+    and.l   #$ffff,d1
+    and.l   #$ffff,d2
+    and.l   #$ffff,d3
+    DPRINT  "first=%08lx - find=%04lx%04lx%04lx"
+    popm    all
+
+.find
+    ; ---------------------------------
+	* First 16 bits
+    move.b	(a0),d0
+    rol	    #8,d0
+	move.b	1(a0),d0
+	cmp.w	d1,d0
+	bne	    .skip
+
+    move.b	2(a0),d0
+    rol	    #8,d0
+	move.b	3(a0),d0
+	cmp.w	d2,d0
+	bne	    .skip
+
+    * Last 16 bits
+	move.b	4(a0),d0
+	rol	    #8,d0
+	move.b	5(a0),d0
+	cmp.w	d3,d0
+	bne	    .skip
+    ; ---------------------------------
+    * found it!
+	addq	#6,a0
+    move.l  umeMetaDataPtr(a5),a2
+    * get 4 strings
+    moveq   #4-1,d1
+.sl
+    move.b  (a0),d0 
+.cp move.b  (a0)+,(a2)+
+    subq.b  #1,d0
+    bne     .cp
+    clr.b   (a2)+
+    dbf     d1,.sl
+
+    move.l  umeMetaDataPtr(a5),d0
+    addq.l  #1,d0
+    DPRINT  "++++++ found %s"
+	rts
+    ; ---------------------------------
+.skip
+    * skip 4 strings
+	addq	#6,a0
+    moveq   #4-1,d4
+.skip4
+    moveq   #0,d0
+    move.b  (a0),d0     
+    add.w   d0,a0
+    dbf     d4,.skip4
+    ; ---------------------------------
+.go	
+	cmp.l	a1,a0
+	blo	    .find
+.x
+    DPRINT  "----- not found"
+	moveq	#0,d0
+	rts
+
 uslGetSongLength:
     DPRINT  "uslGetSongLength"
 
@@ -60336,13 +60549,29 @@ uslFreeIndex:
     DPRINT  "uslFreeIndex"
     move.l  uslIndexPtr(a5),a0
     clr.l   uslIndexPtr(a5)
+.free
     jmp     freemem
+
+umeFreeIndex:
+    DPRINT  "umeFreeIndex"
+    move.l  umeMetaDataPtr(a5),a0
+    clr.l   umeMetaDataPtr(a5)
+    bsr     uslFreeIndex\.free
+    move.l  umeIndexPtr(a5),a0
+    clr.l   umeIndexPtr(a5)
+    bra     uslFreeIndex\.free
 
 uslFreeData:
     DPRINT  "uslFreeData"
     move.l  uslDataPtr(a5),a0
     clr.l   uslDataPtr(a5)
-    jmp     freemem
+    bra     uslFreeIndex\.free
+
+umeFreeData:
+    DPRINT  "umeFreeData"
+    move.l  umeDataPtr(a5),a0
+    clr.l   umeDataPtr(a5)
+    bra     uslFreeIndex\.free
 
 uslOpen:
     lea     uslFile(pc),a0
@@ -60356,21 +60585,33 @@ uslOpen:
     move.l  d0,d7
     rts
 
+umeOpen:
+    lea     umeFile(pc),a0
+    tst.b   uusikick(a5)
+    bne     .1
+    lea     umeFileOld(pc),a0
+.1  bra     uslOpen\.1
+
 uslClose:
+umeClose:
     move.l  d7,d1
     beq     .1
 	lore    Dos,Close
-.1
-    rts
+.1  rts
+
 
 uslFile:	 dc.b	"PROGDIR:"
 uslFileOld   dc.b   "songlengths.db",0
 uslDataName  dc.b   "PROGDIR:"
 uslDataNameO dc.b   "songlengths.tsv",0
+umeFile:	 dc.b	"PROGDIR:"
+umeFileOld   dc.b   "metadata.db",0
+umeDataName  dc.b   "PROGDIR:"
+umeDataNameO dc.b   "combined.tsv",0
      even
 
 
-* Creates Songlengths.idx from Audacious-UADE songlengths.tsv
+* Creates Songlengths.db from Audacious-UADE songlengths.tsv
 * Out:
 *    d0 = true on success
 uslCreateIndex:
@@ -60378,7 +60619,7 @@ uslCreateIndex:
     rsreset
 .lastIndex        rs.w    1     * Based on the top 4 bits of the MD5sum
 .indexPtr         rs.l    1     
-.index            rs.l    17    * Build index here
+.index            rs.l    17    * Build index here, 16 entries
 .varsSize         rs.b    0
 
     moveq   #.varsSize/2-1,d0
@@ -60644,6 +60885,161 @@ uslCreateIndex:
 
 .progressMsg
     dc.b    "Creating song lengths %02.2ld%lc",0
+    even
+
+
+
+* Creates metadata.db from Audacious-UADE combined.tsv
+* Out:
+*    d0 = true on success
+umeCreateIndex:
+    DPRINT  "umeCreateIndex"
+    rsreset
+.lastIndex        rs.w    1     * Based on the top 4 bits of the MD5sum
+.indexPtr         rs.l    1     
+.index            rs.l    33    * Build index here, 32 entries
+.varsSize         rs.b    0
+
+    moveq   #.varsSize/2-1,d0
+.sk clr.w   -(sp)
+    dbf     d0,.sk
+    move.l  sp,a4
+
+    * Input file
+    lea     umeDataName(pc),a0
+    tst.b   uusikick(a5)
+    bne     .n1
+    lea     umeDataNameO(pc),a0
+.n1
+    * Output file
+    lea     umeFile(pc),a1
+    tst.b   uusikick(a5)
+    bne     .n3
+    lea     umeFileOld(pc),a1
+.n3
+    * Initial values:
+    move    #-1,.lastIndex(a4)
+    pea     .index(a4)
+    move.l  (sp)+,.indexPtr(a4)
+
+    lea     .progressMsg(pc),a2
+    lea     .finalizeCallback(pc),a3
+    move.l  a3,d1
+    lea     .callback(pc),a3
+    move    #$20*8,d0     * index space
+    bsr     fileConverter
+
+    lea     .varsSize(sp),sp
+    rts
+
+* Finalize callback inputs:
+*    d7 = output file handle
+*    a4 = callback user data
+*    a6 = DOSBase
+.finalizeCallback:
+    * Write the index at the header 
+    lea     .index(a4),a3
+
+    move.l  d7,d1   * fh
+    moveq   #0,d2   * offset
+    moveq   #OFFSET_CURRENT,d3
+    lob     Seek    
+    move.l  d0,32*4(a3)   * last position
+
+    move.l  d7,d1   * fh
+    moveq   #4,d2   * offset, start of index
+    moveq   #OFFSET_BEGINNING,d3
+    lob     Seek    
+
+    moveq   #32-1,d6
+.loop
+    move.l  (a3)+,d0     * offset of data block
+    move.l  (a3),d1      * next offset
+    sub.l   d0,d1        * block size
+    movem.l d0/d1,-(sp)
+
+    move.l  d7,d1   * file
+    move.l  sp,d2   * source
+    moveq   #8,d3   * len
+    lob     Write
+
+    addq    #8,sp
+    dbf     d6,.loop
+    rts
+
+
+* Callback inputs:
+*    a0 = input line
+*    a1 = output buffer
+*    a4 = callback user data
+*    d6 = current input read position
+*    d7 = current output write position
+* Outputs:
+*    d0 = bytes to write or 0 
+.callback:
+; Format:
+; [md5]<TAB>[authors]<TAB>[publishers]<TAB>[album]<TAB>[year]
+
+    move.l  a0,d0
+    move.l  a1,a5 * stash this, start of the entry
+    
+    * Read 8 chars of MD5
+    moveq   #8-1,d3
+    bsr     uslCreateIndex\.readHex
+ 
+    * Read 4 chars of MD5
+    moveq   #4-1,d3
+    bsr     uslCreateIndex\.readHex
+
+    * Build index from the top 5 bits
+    move.b  (a5),d0
+    lsr.b   #3,d0
+    cmp.b   .lastIndex(a4),d0
+    beq     .noidx
+    move.b  d0,.lastIndex(a4)
+
+    * Write current position to the next index slot
+    move.l  .indexPtr(a4),a2
+    move.l  d7,(a2)+
+    move.l  a2,.indexPtr(a4)
+.noidx
+    addq    #1,a0   * skip 1st tab
+
+    * get this many strings
+    moveq   #4-1,d0
+.strs
+    move.l  a1,a2   * grab start ptr
+    clr.b   (a1)+   * placeholder for length
+    moveq   #9,d2   * tab
+    bra     .lop0
+.lop
+    move.b  d0,(a1)+
+.lop0
+    move.b  (a0)+,d0
+    beq     .end
+    cmp.b   d2,d0
+    bne     .lop
+.end
+    * write string length in front
+    move.l  a1,d1
+    sub.l   a2,d1
+    move.b  d1,(a2)
+
+    dbf     d0,.strs
+
+    * How many bytes to write
+    move.l  a1,d0
+    sub.l   a5,d0
+    * What to write
+    move.l  a5,a0
+    rts
+
+
+
+
+
+.progressMsg
+    dc.b    "Creating metadata %02.2ld%lc",0
     even
 
 *********************************************************************
