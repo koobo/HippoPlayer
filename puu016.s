@@ -60131,8 +60131,11 @@ freeSLData:
 USL_INDEX_SIZE = 16
 UME_INDEX_SIZE = 32
 
-USL_INDEX_SIZE_BYTES = USL_INDEX_SIZE*8+4 ; orig length, then pairs of (offset,length)
-UME_INDEX_SIZE_BYTES = UME_INDEX_SIZE*8+4
+USL_INDEX_SIZE_BYTES = USL_INDEX_SIZE*8 ; pairs of (offset,length)
+UME_INDEX_SIZE_BYTES = UME_INDEX_SIZE*8
+
+USL_HEADER_SIZE_BYTES = USL_INDEX_SIZE_BYTES+4
+UME_HEADER_SIZE_BYTES = UME_INDEX_SIZE_BYTES+4
 
     include "md5.s" 
 
@@ -60262,7 +60265,7 @@ uslLoadIndex:
     DPRINT  "uslLoadIndex"
     bsr     uslOpen
     beq     .y
-    move.l  #USL_INDEX_SIZE_BYTES,d0
+    move.l  #USL_HEADER_SIZE_BYTES,d0
     moveq   #0,d1
     jsr     getmem
     move.l  d0,uslIndexPtr(a5)
@@ -60270,7 +60273,7 @@ uslLoadIndex:
 
     move.l  d7,d1		        * file
 	move.l	uslIndexPtr(a5),d2	* destination
-	move.l	#USL_INDEX_SIZE_BYTES,d3  * pituus
+	move.l	#USL_HEADER_SIZE_BYTES,d3  * pituus
 	lob	    Read
     DPRINT  "read=%ld"
 .x
@@ -60281,17 +60284,10 @@ uslLoadIndex:
 
 umeLoadIndex:
     DPRINT  "umeLoadIndex"
-    * Allocate some space for the metadata txt
-    moveq   #$7f,d0
-    moveq   #0,d1
-    jsr     getmem
-    move.l  d0,umeMetaDataPtr(a5)
-    beq     .y
-
     bsr     umeOpen
     beq     .y
 
-    move.l  #UME_INDEX_SIZE_BYTES,d0
+    move.l  #UME_HEADER_SIZE_BYTES,d0
     moveq   #0,d1
     jsr     getmem
     move.l  d0,umeIndexPtr(a5)
@@ -60299,9 +60295,15 @@ umeLoadIndex:
 
     move.l  d7,d1		        * file
 	move.l	umeIndexPtr(a5),d2	* destination
-	move.l	#UME_INDEX_SIZE_BYTES,d3   * pituus
+	move.l	#UME_HEADER_SIZE_BYTES,d3   * pituus
 	lob     Read
     DPRINT  "read=%ld"
+
+    * Allocate some space for the metadata txt
+    moveq   #$7f,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,umeMetaDataPtr(a5)
 .x
     bsr     umeClose
 .y
@@ -60520,7 +60522,9 @@ uslFind:
 umeFind:
     DPRINT  "umeFind"
     * Empty any previous data
-    move.l  umeMetaDataPtr(a5),a1
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .x
+    move.l  d0,a1
     clr.b   (a1)
 
     moveq   #0,d0       * result in d0
@@ -60694,7 +60698,7 @@ uslCreateIndex:
     rsreset
 .lastIndex        rs.w    1     * Based on the top 4 bits of the MD5sum
 .indexPtr         rs.l    1     
-.index            rs.l    17    * Build index here, 16 entries
+.index            rs.l    USL_INDEX_SIZE+1    * Build index here
 .varsSize         rs.b    0
 
     moveq   #.varsSize/2-1,d0
@@ -60723,7 +60727,7 @@ uslCreateIndex:
     lea     .finalizeCallback(pc),a3
     move.l  a3,d1
     lea     .callback(pc),a3
-    move    #$80,d0     * index space
+    move    #USL_INDEX_SIZE_BYTES,d0     * index space
     bsr     fileConverter
 
     lea     .varsSize(sp),sp
@@ -60741,14 +60745,14 @@ uslCreateIndex:
     moveq   #0,d2   * offset
     moveq   #OFFSET_CURRENT,d3
     lob     Seek    
-    move.l  d0,16*4(a3)   * last position
+    move.l  d0,USL_INDEX_SIZE*4(a3)   * last position
 
     move.l  d7,d1   * fh
     moveq   #4,d2   * offset, start of index
     moveq   #OFFSET_BEGINNING,d3
     lob     Seek    
 
-    moveq   #16-1,d6
+    moveq   #USL_INDEX_SIZE-1,d6
 .loop
     move.l  (a3)+,d0     * offset of data block
     move.l  (a3),d1      * next offset
@@ -60972,7 +60976,7 @@ umeCreateIndex:
     rsreset
 .lastIndex        rs.w    1     * Based on the top 4 bits of the MD5sum
 .indexPtr         rs.l    1     
-.index            rs.l    33    * Build index here, 32 entries
+.index            rs.l    UME_INDEX_SIZE+1    * Build index here
 .varsSize         rs.b    0
 
     moveq   #.varsSize/2-1,d0
@@ -61001,7 +61005,7 @@ umeCreateIndex:
     lea     .finalizeCallback(pc),a3
     move.l  a3,d1
     lea     .callback(pc),a3
-    move    #$20*8,d0     * index space
+    move    #UME_INDEX_SIZE_BYTES,d0     * index space
     bsr     fileConverter
 
     lea     .varsSize(sp),sp
@@ -61019,14 +61023,14 @@ umeCreateIndex:
     moveq   #0,d2   * offset
     moveq   #OFFSET_CURRENT,d3
     lob     Seek    
-    move.l  d0,32*4(a3)   * last position
+    move.l  d0,UME_INDEX_SIZE*4(a3)   * last position
 
     move.l  d7,d1   * fh
     moveq   #4,d2   * offset, start of index
     moveq   #OFFSET_BEGINNING,d3
     lob     Seek    
 
-    moveq   #32-1,d6
+    moveq   #UME_INDEX_SIZE-1,d6
 .loop
     move.l  (a3)+,d0     * offset of data block
     move.l  (a3),d1      * next offset
