@@ -60128,7 +60128,7 @@ freeSLData:
 *
 ***************************************************************************
 
-USL_INDEX_SIZE = 16
+USL_INDEX_SIZE = 32
 UME_INDEX_SIZE = 64
 
 USL_INDEX_SIZE_BYTES = USL_INDEX_SIZE*8 ; pairs of (offset,length)
@@ -60320,9 +60320,9 @@ uslLoadData:
     * Check if already have it
     move.l  d0,a0
     move.b  (a0),d0
-    lsr.b   #4,d0   
+    lsr.b   #3,d0           * 5-bit index
     move.b  uslMD5(a5),d1
-    lsr.b   #4,d1
+    lsr.b   #3,d1
     cmp.b   d0,d1
     beq     .gotIt
 .load
@@ -60332,9 +60332,9 @@ uslLoadData:
 
     * Access index
     move.b  uslMD5(a5),d0
-    lsr.b   #4,d0
-    and.w   #$f,d0
-    lsl     #3,d0
+    lsr.b   #3,d0
+    and.w   #$1f,d0     * 5-bit index!
+    lsl     #3,d0       * 8 byte element index
     move.l  uslIndexPtr(a5),a0
     movem.l 4(a0,d0),d4/d5
     * d4 = file offset, d5 = block length
@@ -60392,7 +60392,6 @@ umeLoadData:
     move.b  uslMD5(a5),d0
     lsr.b   #2,d0
     and.w   #$3f,d0     * 6 bits!
-    ext.l   d0
     lsl     #3,d0       * 8 byte element index
     move.l  umeIndexPtr(a5),a0
     movem.l 4(a0,d0),d4/d5
@@ -60697,7 +60696,7 @@ umeDataNameO dc.b   "combined.tsv",0
 uslCreateIndex:
     DPRINT  "uslCreateIndex"
     rsreset
-.lastIndex        rs.w    1     * Based on the top 4 bits of the MD5sum
+.lastIndex        rs.w    1     * Based on the top bits of the MD5sum
 .indexPtr         rs.l    1     
 .index            rs.l    USL_INDEX_SIZE+1    * Build index here
 .varsSize         rs.b    0
@@ -60791,9 +60790,9 @@ uslCreateIndex:
     moveq   #4-1,d3
     bsr     .readHex
 
-    * Build index from the top 4 bits
+    * Build index from the top 5 bits
     move.b  (a5),d0
-    lsr.b   #4,d0
+    lsr.b   #3,d0
     cmp.b   .lastIndex(a4),d0
     beq     .noidx
     move.b  d0,.lastIndex(a4)
