@@ -60207,7 +60207,6 @@ readUme:
     bsr     calcModuleMD5
     bsr     umeLoadData
     bsr     umeFind
-    DPRINT  "umeFind=%ld"
 .noData
 .hasIt
 .reject
@@ -60256,6 +60255,7 @@ calcModuleMD5:
     move.l  d0,uslMD5(a5)
     swap    d1
     move.w  d1,uslMD5+4(a5)
+    
     lea     MD5Ctx_SIZEOF(sp),sp
 
     jmp     clearMainWindowWaitPointer
