@@ -92,10 +92,9 @@ Additional files to check and download
   https://aminet.net/mus/misc/mdx2wav.lha
 - Calibration utility to finetune 14-bit output:
   https://aminet.net/disk/cdrom/14Bit_CDPlayer.lha
-- To get song length data for a huge amount of modules,
-  get this file:
-  https://raw.githubusercontent.com/mvtiaine/audacious-uade-tools/refs/
-  heads/master/tsv/pretty/songlengths.tsv
+- To get song lengths and metadata, get "songlengths.tsv"
+  and "combined.tsv":
+  https://github.com/mvtiaine/audacious-uade-tools/tree/master/tsv/pretty
 
 
 ------------------------------------------------------------------------------
@@ -107,27 +106,44 @@ Additional files to check and download
 ## Fixes:
 
 - Song end was not detected when playing XM modules using
-  xmaplay060, fixed this.
+  xmaplay060, fixed.
 
-- In some RTG screen modes the scopes used a lot of CPU due 
+- In some RTG screenmodes the scopes used a lot of CPU due 
   to "vertical blank" sync not working properly. The scopes 
   now use another sync method (with faster CPUs), this 
   should help.
 
+- Previously the following formats could not be loaded
+  if compressed, but now can be: 
+  Future Player, DeliTracker Custom, Dave Lowe
 
 ## New stuff:
 
-- Support for Audacious-UADE songlengths data. This will provide
-  song length info for about 300000 modules in various formats.
-  Length will be shown in the title bar as well as the position slider.
-  It will also be used for end detection for the formats which do not
-  support it otherwise.
+- Shortcut button to change the play mode added beside the position 
+  slider. This does the same as "Prefs > General > Play",
+  ie. repeat, loop, random, etc. Enable with 
+  "Prefs > Play-2 > Play mode button, position slider".
+  
+- Support for Audacious-UADE metadata. This data contains
+  song lengths, author/composer, publisher/group, album/game/demo name
+  and year info for about 300000 modules.
 
-  To enable, download the following file and put it in hippo dir: 
-  https://raw.githubusercontent.com/mvtiaine/audacious-uade-tools/refs/
-          heads/master/tsv/pretty/songlengths.tsv
-  During next start the file "songlengths.db" will be (slowly) generated,
-  after which the tsv-file can be deleted.
+  Song length will be shown in the title bar as well as with the position 
+  slider. It will also be used for end detection for the formats which do 
+  not support it otherwise. Other data is shown in the info window.
+
+  Protracker modules already have lengths calculated, but every other
+  format, including obscure exotics, will get lengths this way.
+  
+  To enable song lengths, download "songlengths.tsv", to enable metadata, 
+  download "combined.tsv" and put these in the hippo dir. During 
+  next start they will be (slowly) converted into "songlengths.db" and
+  "metadata.db", and the tsv-files can be deleted. Data lookup uses
+  about 100k of mem for each, and some disk space.
+
+  Download here (use the "raw" mode):
+  https://github.com/mvtiaine/audacious-uade-tools/tree/master/tsv/pretty
+
 
 
 ------------------------------------------------------------------------------
