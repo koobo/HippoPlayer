@@ -23432,7 +23432,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Player: %s",0
 .metaData1  dc.b    "Authors: %s",0
 .metaData2  dc.b    "Publishers: %s",0
-.metaData3  dc.b    "Album: %s",0
+.metaData3  dc.b    "Product: %s",0
 .metaData4  dc.b    "Year: %s"
   even
 
@@ -58643,14 +58643,7 @@ parseAgetHeaders:
 .clean
     * Overwrite UTF8 with latin1
     move.l  d0,a0
-    move.l  d0,a1
-.loop
-    jsr     utf8ToLatin1Char
-    move.b  d0,(a1)+
-.l  tst.b   (a0)
-    bne     .loop
-    clr.b   (a1)
-    rts
+    bra     utf8StrToLatin1
 
 .template
      dc.b "CONTENT-LENGTH/K/N,CONTENT-TYPE/K,ICY-NAME/K,ICY-DESCRIPTION/K,REST/M",0
@@ -58723,6 +58716,17 @@ streamIsMpegAudio:
 
  even
 
+* In-place convert a UTF8 string to Latin1
+* In:
+*   a0 = text, utf8
+utf8StrToLatin1:
+    move.l  a0,a1
+.l  bsr     utf8ToLatin1Char
+    move.b  d0,(a1)+
+    tst.b   (a0)
+    bne     .l
+    clr.b   (a1)
+    rts
 
 * In:
 *   a0 = pointer to utf8 char
@@ -60562,16 +60566,26 @@ umeFind:
 	addq	#6,a0
     move.l  umeMetaDataPtr(a5),a2
     * get 4 strings
-    moveq   #4-1,d1
+    moveq   #4-1,d3
 .sl
+    moveq   #0,d0
     move.b  (a0)+,d0
     subq.b  #1,d0
     beq     .em
-.cp move.b  (a0)+,(a2)+
-    subq.b  #1,d0
-    bne     .cp
+    lea     (a0,d0),a3   * str end
+.loop
+    jsr     utf8ToLatin1Char    * read (a0)+
+    cmp.b   #"~",d0
+    bne     .1
+    move.b  #",",(a2)+
+    moveq   #" ",d0
+.1
+    move.b  d0,(a2)+
+    cmp.l   a3,a0
+    bne     .loop
+
 .em clr.b   (a2)+
-    dbf     d1,.sl
+    dbf     d3,.sl
 
     move.l  umeMetaDataPtr(a5),d0
     DPRINT  "+++ found %s"
