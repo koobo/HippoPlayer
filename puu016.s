@@ -3215,11 +3215,10 @@ main:
 	bra		print
 .oohi
 
-    * Try and create the song length database at startup
     tst.b   win(a5)
     beq     .uc
-    jsr     uslCreateIndex
-    jsr     umeCreateIndex
+    * Get metadata at startup
+    jsr     initializeUslUme
 .uc
 
 
@@ -55869,7 +55868,7 @@ horizontalLayout:
 	rts
 
 .it
-    ; Position slider
+    ; Position slider - play mode change button
     ; As wide as the window minus some borders and bonus
     tst.b   showPositionSlider(a5)
     beq     .noPos
@@ -60129,7 +60128,24 @@ freeSLData:
 *
 ***************************************************************************
 
+USL_INDEX_SIZE = 16
+UME_INDEX_SIZE = 32
+
+USL_INDEX_SIZE_BYTES = USL_INDEX_SIZE*8+4 ; orig length, then pairs of (offset,length)
+UME_INDEX_SIZE_BYTES = UME_INDEX_SIZE*8+4
+
     include "md5.s" 
+
+* Called once on startup
+initializeUslUme:
+    DPRINT  "initializeUslUme"
+    bsr     uslCreateIndex
+    bsr     umeCreateIndex
+
+    bsr     uslLoadIndex
+    bsr     umeLoadIndex
+    rts
+
 
 * These formats already have length information,
 * skip these.
@@ -60151,6 +60167,9 @@ umeIgnoreFormats:
 
 readUsl:
     DPRINT  "readUsl"
+    tst.l   uslIndexPtr(a5)
+    beq     .noData
+
     bsr     uslIgnoreFormats
     beq     .reject
 
@@ -60158,27 +60177,21 @@ readUsl:
     tst.w   (a0)
     bne     .hasIt
 
-    bsr     uslLoadIndex
-
-    tst.l   uslIndexPtr(a5)
-    beq     .noData
-
     bsr     calcModuleMD5
     bsr     uslLoadData
     bsr     uslFind
     DPRINT  "uslFind=%ld"
 .noData
-    rts
 .hasIt
-    DPRINT  "Already have it"
-    rts
 .reject
-    DPRINT  "reject"
     rts
 
 
 readUme:
     DPRINT  "readUme"
+    tst.l   umeIndexPtr(a5)
+    beq     .noData
+
     bsr     umeIgnoreFormats
     beq     .reject
 
@@ -60188,11 +60201,6 @@ readUme:
     tst.b   (a0)
     bne     .hasIt
 .no
-    bsr     umeLoadIndex
-
-    tst.l   umeIndexPtr(a5)
-    beq     .noData
-
     bsr     calcModuleMD5
     bsr     umeLoadData
     bsr     umeFind
@@ -60204,7 +60212,7 @@ readUme:
 
 
 calcModuleMD5:
-    tst.l   uslMD5(a5)          
+    tst.l   uslMD5(a5)            
     bne     readUme\.reject
 
     lea     -MD5Ctx_SIZEOF(sp),sp
@@ -60252,11 +60260,9 @@ calcModuleMD5:
 
 uslLoadIndex:
     DPRINT  "uslLoadIndex"
-    tst.l   uslIndexPtr(a5)
-    bne     .y          * already loaded?
     bsr     uslOpen
     beq     .y
-    move.l  #$84,d0
+    move.l  #USL_INDEX_SIZE_BYTES,d0
     moveq   #0,d1
     jsr     getmem
     move.l  d0,uslIndexPtr(a5)
@@ -60264,7 +60270,7 @@ uslLoadIndex:
 
     move.l  d7,d1		        * file
 	move.l	uslIndexPtr(a5),d2	* destination
-	move.l	#$84,d3		        * pituus
+	move.l	#USL_INDEX_SIZE_BYTES,d3  * pituus
 	lob	    Read
     DPRINT  "read=%ld"
 .x
@@ -60275,11 +60281,8 @@ uslLoadIndex:
 
 umeLoadIndex:
     DPRINT  "umeLoadIndex"
-    tst.l   umeIndexPtr(a5)
-    bne     .y          * already loaded?
-
-    * Allocate a buffer for the metadata txt
-    move.l  #$80,d0
+    * Allocate some space for the metadata txt
+    moveq   #$7f,d0
     moveq   #0,d1
     jsr     getmem
     move.l  d0,umeMetaDataPtr(a5)
@@ -60288,7 +60291,7 @@ umeLoadIndex:
     bsr     umeOpen
     beq     .y
 
-    move.l  #$104,d0
+    move.l  #UME_INDEX_SIZE_BYTES,d0
     moveq   #0,d1
     jsr     getmem
     move.l  d0,umeIndexPtr(a5)
@@ -60296,7 +60299,7 @@ umeLoadIndex:
 
     move.l  d7,d1		        * file
 	move.l	umeIndexPtr(a5),d2	* destination
-	move.l	#$104,d3		      * pituus
+	move.l	#UME_INDEX_SIZE_BYTES,d3   * pituus
 	lob     Read
     DPRINT  "read=%ld"
 .x
@@ -60449,7 +60452,6 @@ uslFind:
     lea	    (a0,d1.l),a1    * search end bound
     movem.w uslMD5(a5),d1/d2/d3
     and.w   #$0fff,d1       * ignore top 4 bits
-    bra	    .go
 .find
     ; ---------------------------------
 	* First 16 bits, top 4 bits (song count) ignored
@@ -60488,11 +60490,11 @@ uslFind:
 	lsl	    #8,d0
 	move.b	(a0)+,d0
 .sml	
-    DPRINT  "song length=%ld"
+    DPRINT  "--- song length=%ld"
 	move.w	d0,(a1)+
 	subq.b	#1,d4
 	bne     .sl
-    DPRINT  "found"
+    DPRINT  "--- found"
 	rts
     ; ---------------------------------
 .skip
@@ -60507,11 +60509,10 @@ uslFind:
 	subq.b	#1,d4
 	bne	.songs
     ; ---------------------------------
-.go	
 	cmp.l	a1,a0
 	blo	    .find
 .x
-    DPRINT  "not found"
+    DPRINT  "--- not found"
 	moveq	#0,d0
 	rts
 
@@ -60530,14 +60531,6 @@ umeFind:
     lea	    (a0,d1.l),a1    * search end bound
 
     movem.w uslMD5(a5),d1/d2/d3
-
-    pushm   all
-    move.l  (a0),d0
-    and.l   #$ffff,d1
-    and.l   #$ffff,d2
-    and.l   #$ffff,d3
-    DPRINT  "first=%08lx - find=%04lx%04lx%04lx"
-    popm    all
 
 .find
     ; ---------------------------------
@@ -60577,16 +60570,15 @@ umeFind:
     dbf     d1,.sl
 
     move.l  umeMetaDataPtr(a5),d0
-    addq.l  #1,d0
-    DPRINT  "++++++ found %s"
+    DPRINT  "+++ found %s"
 	rts
     ; ---------------------------------
 .skip
     * skip 4 strings
 	addq	#6,a0
     moveq   #4-1,d4
-.skip4
     moveq   #0,d0
+.skip4
     move.b  (a0),d0     
     add.w   d0,a0
     dbf     d4,.skip4
@@ -60595,7 +60587,7 @@ umeFind:
 	cmp.l	a1,a0
 	blo	    .find
 .x
-    DPRINT  "----- not found"
+    DPRINT  "+++ not found"
 	moveq	#0,d0
 	rts
 
