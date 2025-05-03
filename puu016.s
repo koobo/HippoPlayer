@@ -60129,7 +60129,7 @@ freeSLData:
 ***************************************************************************
 
 USL_INDEX_SIZE = 16
-UME_INDEX_SIZE = 32
+UME_INDEX_SIZE = 64
 
 USL_INDEX_SIZE_BYTES = USL_INDEX_SIZE*8 ; pairs of (offset,length)
 UME_INDEX_SIZE_BYTES = UME_INDEX_SIZE*8
@@ -60378,9 +60378,9 @@ umeLoadData:
     * Check if already have it
     move.l  d0,a0
     move.b  (a0),d0
-    lsr.b   #3,d0   
+    lsr.b   #2,d0           * 6-bit index
     move.b  uslMD5(a5),d1
-    lsr.b   #3,d1
+    lsr.b   #2,d1
     cmp.b   d0,d1
     beq     .gotIt
 .load
@@ -60390,9 +60390,10 @@ umeLoadData:
 
     * Access index
     move.b  uslMD5(a5),d0
-    lsr.b   #3,d0
-    and.w   #$1f,d0     * 5 bits!
-    lsl     #3,d0
+    lsr.b   #2,d0
+    and.w   #$3f,d0     * 6 bits!
+    ext.l   d0
+    lsl     #3,d0       * 8 byte element index
     move.l  umeIndexPtr(a5),a0
     movem.l 4(a0,d0),d4/d5
     * d4 = file offset, d5 = block length
@@ -60979,7 +60980,7 @@ umeCreateIndex:
 .index            rs.l    UME_INDEX_SIZE+1    * Build index here
 .varsSize         rs.b    0
 
-    moveq   #.varsSize/2-1,d0
+    move    #.varsSize/2-1,d0
 .sk clr.w   -(sp)
     dbf     d0,.sk
     move.l  sp,a4
@@ -61070,9 +61071,9 @@ umeCreateIndex:
     moveq   #4-1,d3
     bsr     uslCreateIndex\.readHex
 
-    * Build index from the top 5 bits
+    * Build index from the top 6 bits
     move.b  (a5),d0
-    lsr.b   #3,d0
+    lsr.b   #2,d0           
     cmp.b   .lastIndex(a4),d0
     beq     .noidx
     move.b  d0,.lastIndex(a4)
