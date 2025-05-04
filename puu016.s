@@ -1592,6 +1592,16 @@ umeIndexPtr     rs.l      1   * Pointer to metadata DB index
 umeDataPtr      rs.l      1   * Pointer to current DB block
 umeMetaDataPtr  rs.l      1   * Ptr to metadata strings
 
+* Info text scroller
+infoScrollPos       rs.w      1
+infoScrollLength    rs.w      1 * pixels
+infoScrollBitplane  rs.l      1
+infoScrollBitplaneW rs.w      1
+infoScrollBitplaneH rs.w      1
+infoScrollEnabled   rs.b      1
+infoScrollSmall     rs.b      1 * set if all text fits 
+infoScrollBitMap    rs.b      bm_SIZEOF-7*4 * for 1 bpl
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -3761,6 +3771,7 @@ exit
     jsr     uslFreeData
     jsr     umeFreeIndex
     jsr     umeFreeData
+    jsr     infoScrollFree
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -4330,6 +4341,8 @@ handleUiRefreshSignal
 	jsr	lootaan_nimi
     jsr     refreshPositionSlider
     bsr     periodicEndCheck
+    jsr     drawInfoScroller 
+
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
 	;bsr	zipwindow
@@ -18053,7 +18066,7 @@ sidmode_callback
     moveq   #1,d0
     rts
 .2  
-    bsr     get_sid
+    jsr     get_sid
     jmp     isPlaysidReSID
 
 rsidmode
@@ -19903,7 +19916,7 @@ inforivit_play:
 	lea	moduletype(a5),a1
 .ol	cmp.b	#10,(a2)+
 	bne.b	.ol
-	addq.l	#6,a2
+	addq.l	#6,a2           * skip "Type: "
 .cep	move.b	(a2)+,(a1)+
 	bne.b	.cep
 	clr.b	(a1)
@@ -19916,13 +19929,19 @@ bipb2
 	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
 	bsr		infoBoxPrint
+    jsr     initInfoScroller
+    DPRINT  "infoBoxPrint"
 bopb	rts
 
 putinfo:
 	bsr	inforivit_clear
 	bra.b	bipb
 
-printInfoBox:
+* In:
+*   a0 = text
+*   d0 = x
+*   d1 = y
+;printInfoBox:
 infoBoxPrint:
     tst.b   win(a5)
     beq     .x
@@ -20183,7 +20202,7 @@ siisti_nimi
 	printt	"todo: align name and type for extra nicety"
 
 tyyppi1_t	dc.b	"Name: %s",10
-		dc.b	"Type: %s%s",0
+tyyppi1b_t  dc.b	"Type: %s%s",0
 
 tyyppi2_t	dc.b	"Name: %s",10
 		dc.b	"Type: %s %ldch%s",0
@@ -20194,6 +20213,8 @@ type_notAhi dc.b    0
 type_14bit  dc.b    " 14-bit",0
 type_agus   dc.b    " AGUS",0
  even
+
+
 
 *******************************************************************************
 * Loota (otsikkopalkki tiedot)
@@ -24495,6 +24516,10 @@ intserver
 	tst.b	playing(a5)
 	beq.b	.notPlaying3
 	lsr     #1,d0				
+    jsr     isInfoScrollEnabled
+    beq     .notPlaying3
+    * Scroller enabled, update more often
+    moveq   #SCROLL_UPDATE_RATE,d0
 .notPlaying3
 
 	* Count if enough VBlanks have passed and then signal
@@ -60439,14 +60464,17 @@ uslClearSongData:
     dbf     d0,.cl
     rts
 
+
 uslUmeClear:
+    clr.l   uslMD5(a5)
+    clr.w   uslMD5+4(a5)
+
+umeClear:
     move.l  umeMetaDataPtr(a5),d0
     beq     .1
     move.l  d0,a0
     clr.b   (a0)
 .1  
-    clr.l   uslMD5(a5)
-    clr.w   uslMD5+4(a5)
     rts
 
 uslFind:
@@ -61545,6 +61573,300 @@ fileConverter:
     move.l  .pushBuffer(a4),.pushBufferPos(a4)
 .noWrite
     rts
+
+
+***************************************************************************
+*
+* Info box scroll
+*
+***************************************************************************
+
+SCROLL_UPDATE_RATE = 4  * update each x/50 sec
+SCROLL_MOVE_RATE   = 2  * move this many pixels at once
+
+isInfoScrollEnabled:
+    tst.b   infoScrollEnabled(a5)
+    rts
+
+initInfoScroller:
+    pushm   all
+    DPRINT  "initInfoScroller"
+    rsreset
+.rastport   rs.b    rp_SIZEOF
+.text       rs.b    512
+.textLen    rs.w    1
+.vars       rs.b    0
+
+    * Initial delay
+    move    #-150,infoScrollPos(a5)
+
+    lea     -.vars(sp),sp
+    move.l  sp,a4
+
+    ; ---------------------------------
+    lea     .text(a4),a3
+
+    * "Type: "
+    lea     tyyppi1b_t,a0
+    moveq   #6-1,d0
+.c1 move.b  (a0)+,(a3)+
+    dbf     d0,.c1
+
+    lea     moduletype(a5),a0
+.c2 move.b  (a0)+,(a3)+
+    bne     .c2
+    subq    #1,a3
+
+    ; ---------------------------------
+    * Metadata available?
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .noMore
+    move.l  d0,a0
+    tst.b   (a0)
+    beq     .noMore
+
+    * Put four meta fields if available
+    lea     info_code\.metaData1,a1
+    moveq   #9-1,d0
+    bsr     .putMeta
+
+    lea     info_code\.metaData2,a1
+    moveq   #12-1,d0
+    bsr     .putMeta
+
+    lea     info_code\.metaData3,a1
+    moveq   #9-1,d0
+    bsr     .putMeta
+
+    lea     info_code\.metaData4,a1
+    moveq   #5-1,d0
+    bsr     .putMeta
+
+    * finish
+    move.b  #" ",(a3)+
+    move.b  #"#",(a3)+
+    move.b  #" ",(a3)+
+    clr.b   (a3)
+
+    ; ---------------------------------
+.noMore
+    lea     .text(a4),a0
+    moveq   #-1,d0
+.l  tst.b   (a0)+
+    dbeq    d0,.l
+    not.w   d0
+    move    d0,.textLen(a4)
+    beq     .x
+    ; ---------------------------------
+
+    move.l  _GFXBase(a5),a6
+    lea     .rastport(a4),a1
+    lob     InitRastPort
+
+    lea     .rastport(a4),a1
+	move.l	listfontbase(a5),a0
+	lob     SetFont
+
+    move.l	pen_1(a5),d0
+    lea     .rastport(a4),a1
+	lob     SetAPen
+
+    lea     .rastport(a4),a1
+    lea     .text(a4),a0
+    move    .textLen(a4),d0
+    lob     TextLength
+    move    d0,infoScrollLength(a5)
+
+    ; ---------------------------------
+	move.l	listfontbase(a5),a1
+	move    tf_YSize(a1),d1
+
+    tst.l   infoScrollBitplane(a5)
+    beq     .1
+    cmp.w   infoScrollBitplaneW(a5),d0
+    bhi     .2
+    cmp.w   infoScrollBitplaneH(a5),d1
+    bls     .3          * old is larger, do nothing
+.2  
+    * Need to reallocate
+    pushm   d0/d1
+    bsr     infoScrollFree
+    popm    d0/d1
+.1
+    move    d0,infoScrollBitplaneW(a5)
+    move    d1,infoScrollBitplaneH(a5)
+    lob     AllocRaster
+    move.l  d0,infoScrollBitplane(a5)
+    beq     .x
+.3
+    moveq   #1,d0
+    move    infoScrollBitplaneW(a5),d1
+    move    infoScrollBitplaneH(a5),d2
+    lea     infoScrollBitMap(a5),a0
+    move.l  a0,rp_BitMap+.rastport(a4)
+    move.l  infoScrollBitplane(a5),bm_Planes(a0)
+    lob     InitBitMap
+
+	move.l	listfontbase(a5),a1
+	move    tf_Baseline(a1),d1
+    moveq   #0,d0
+    lea     .rastport(a4),a1
+    lob     Move
+
+    lea     .text(a4),a0
+    move    .textLen(a4),d0
+    lea     .rastport(a4),a1
+    lob     Text
+.x
+
+    ; Check if can be enabled
+    clr.b   infoScrollEnabled(a5)
+
+    tst.l   infoScrollBitplane(a5)
+    beq     .e
+    move.l  umeMetaDataPtr(a5),d1
+    beq     .e
+    move.l  d1,a0
+    tst.b   (a0)
+    beq     .e
+    DPRINT  "Enabling scrolly"
+    st      infoScrollEnabled(a5)
+
+    * Check if the text fits in the window
+    move	WINSIZX(a5),d4          * size x
+    sub     #10,d4                 
+    cmp     infoScrollLength(a5),d4
+    shs     infoScrollSmall(a5)
+
+.e
+    lea     .vars(sp),sp
+    popm    all
+    rts
+
+* In:
+*   a0 = metadata
+*   a3 = output buffer
+*   a1 = title string
+*   d0 = title string length -1
+.putMeta:
+    tst.b   (a0)+
+    beq     .m2
+    move.b  #" ",(a3)+
+    move.b  #"#",(a3)+
+    move.b  #" ",(a3)+
+    * title
+.c5 move.b  (a1)+,(a3)+
+    dbf     d0,.c5
+    * text
+    subq    #1,a0
+.c6 move.b  (a0)+,(a3)+
+    bne     .c6
+    subq    #1,a3
+.m2
+    rts
+
+infoScrollFree:
+    move.l  infoScrollBitplane(a5),d0
+    beq     .1
+    move.l  d0,a0
+    clr.l   infoScrollBitplane(a5)    
+    move    infoScrollBitplaneW(a5),d0
+    move    infoScrollBitplaneH(a5),d1
+    lore    GFX,FreeRaster
+.1  rts
+
+drawInfoScroller:   
+    tst.b   infoScrollEnabled(a5)
+    beq     .x
+
+    move    infoScrollPos(a5),d0
+    bpl     .po
+    moveq   #0,d0
+.po move    d0,a3
+
+	move.l	listfontbase(a5),a0
+	move    tf_YSize(a0),d5         * size y
+
+    moveq   #7+WINX+4,d2
+	move	infoBoxTopEdge(a5),d3
+    add     windowleft(a5),d2       * dest x
+    add     windowtop(a5),d3        * dest y
+
+    move    infoBoxHeight(a5),d5   
+    lsr     #1,d5
+    add     d5,d3
+    addq    #1,d3                   * dest y
+
+    move	WINSIZX(a5),d4          * size x
+    sub     #10,d4                 
+	sub		d2,d4	                * size x, max target area width
+    move    d4,d7                   * stash it
+
+    * reduce blit width if there is not enough data
+    move    infoScrollLength(a5),d0          
+    sub      a3,d0
+    cmp     d4,d0
+    bhs     .11
+    move    d0,d4
+.11 
+
+    moveq   #0,d0               * src x
+    move     a3,d0
+
+    moveq   #0,d1                   * src y
+    move.b  #$c0,d6                 * minterm: copy
+    move.l	rastport(a5),a1	     	* dest
+    lea     infoScrollBitMap(a5),a0  * src
+    lore    GFX,BltBitMapRastPort
+
+    * Text fits in one go? also clear magic top bit?
+    * No need to do anything further.
+    tst.b   infoScrollSmall(a5)
+    beq     .sm
+    clr.b   infoScrollEnabled(a5)
+    bra     .x
+.sm
+
+    * update dest x
+    add     d4,d2
+    * update remaining size
+    sub     d4,d7
+
+.fill
+    move    infoScrollLength(a5),d1 
+    sub     d1,d7              * subtract from remaining
+    bpl     .ff
+    * Does not fit to the remaining space
+    move    d7,d4
+    add     d1,d4
+    move    d4,d1
+    beq     .out
+.ff
+    move    d1,d4               * size x
+
+    moveq   #0,d0               * src x
+    moveq   #0,d1               * src y
+    move.l	rastport(a5),a1		* dest
+    lea     infoScrollBitMap(a5),a0   * src
+    lob     BltBitMapRastPort
+
+    * update dest x
+    add     d4,d2
+    tst     d7
+    bpl     .fill
+.out
+
+    tst.b   infoScrollSmall(a5)     * no scrolling needed?
+    bne     .x
+    move    infoScrollPos(a5),d0
+    addq    #SCROLL_MOVE_RATE,d0
+    cmp     infoScrollLength(a5),d0
+    blt     .1
+    clr     d0
+.1  move    d0,infoScrollPos(a5)
+.x
+    rts
+
 
 ***************************************************************************
 *
