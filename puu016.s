@@ -24519,7 +24519,7 @@ intserver
 	tst.b	playing(a5)
 	beq.b	.notPlaying3
 	lsr     #1,d0				
-    jsr     isInfoScrollEnabled
+    tst.b    infoScrollEnabled(a5)
     beq     .notPlaying3
     * Scroller enabled, update more often
     moveq   #SCROLL_UPDATE_RATE,d0
@@ -61599,10 +61599,6 @@ fileConverter:
 
 SCROLL_UPDATE_RATE = 4  * update each x/50 sec
 
-isInfoScrollEnabled:
-    tst.b   infoScrollEnabled(a5)
-    rts
-
 initInfoScroller:
     pushm   all
     DPRINT  "initInfoScroller"
@@ -61612,25 +61608,26 @@ initInfoScroller:
 .rows       rs.w    1
 .vars       rs.b    0
 
-    * Initial delay
-    move    #0,infoScrollPos(a5)
-    move    #30,infoScrollWaitTicks(a5)
-
     lea     -.vars(sp),sp
     move.l  sp,a4
+
+    * Reset to initial state
+    clr     infoScrollPos(a5)
+    clr.b   infoScrollEnabled(a5)
+    move    #30,infoScrollWaitTicks(a5)
 
     clr     .rows(a4)
     lea     .text(a4),a3
     bsr     .putType
 
-    * Metadata available?
+    * Exit if no metadata 
     move.l  umeMetaDataPtr(a5),d0
-    beq     .noMore
+    beq     .e
     move.l  d0,a0
     tst.b   (a0)
-    beq     .noMore
-
-    * Put four meta fields if available
+    beq     .e
+    
+    * Put four meta fields if available, from a0
     lea     info_code\.metaData1,a1
     moveq   #9-1,d0
     bsr     .putMeta
@@ -61652,7 +61649,6 @@ initInfoScroller:
     clr.b   (a3)
 
     ; ---------------------------------
-.noMore
 
     move.l  _GFXBase(a5),a6
     lea     .rastport(a4),a1
@@ -61665,7 +61661,6 @@ initInfoScroller:
     move.l	pen_1(a5),d0
     lea     .rastport(a4),a1
 	lob     SetAPen
-
 
     * Area width
     move	WINSIZX(a5),d0          * size x
@@ -61724,20 +61719,10 @@ initInfoScroller:
 	move    tf_Baseline(a1),d1
     lea     .text(a4),a0
     bsr     .print
-.x
-    ; Check if can be enabled
-    clr.b   infoScrollEnabled(a5)
 
-    tst.l   infoScrollBitplane(a5)
-    beq     .e
-    move.l  umeMetaDataPtr(a5),d1
-    beq     .e
-    move.l  d1,a0
-    tst.b   (a0)
-    beq     .e
-    DPRINT  "Enabling scrolly"
+    ; All ok so far
     st      infoScrollEnabled(a5)
-
+.x
 .e
     lea     .vars(sp),sp
     popm    all
@@ -61876,8 +61861,7 @@ drawInfoScroller:
 .doWait
     subq    #1,infoScrollWaitTicks(a5)
     bne     .wai
-    moveq   #8,d0
-    move    d0,infoScrollMoveTicks(a5)
+    move    #8,infoScrollMoveTicks(a5) * easing size
 .wai
     rts
 
