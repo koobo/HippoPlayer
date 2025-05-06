@@ -61230,7 +61230,9 @@ fileConverter:
     move.l  sp,a6
 
  if DEBUG
-	jsr	startMeasure
+    pushm   all
+    jsr     startMeasure
+    popm    all
  endif
 
     move.w  d0,.headerSpace(a6)
