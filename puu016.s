@@ -61840,7 +61840,7 @@ drawInfoScroller:
     rts
 
 .easing
- dc.b 0,9,13,15,16,16,16,16 ; easeInExpo
+ dc.b 0,9,13,15,16,16,16,16 ; easeOutExpo
  
 
 .doScroll
