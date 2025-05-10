@@ -60265,8 +60265,13 @@ calcModuleMD5:
 .1
     DPRINT  "calcModuleMD5 length=%ld"
 
+    * Show wait pointer if 68000 or long enough
+    move.l  (a5),a2
+    btst    #AFB_68020,AttnFlags+1(a2)
+    beq     .12
     cmp.l   #200000,d0
     blo     .11
+.12
     jsr     setMainWindowWaitPointer
 .11
 
