@@ -42215,7 +42215,7 @@ p_davidwhittaker
 	jmp	deliAuthor(pc)
 	dc  	pt_davidwhittaker
 .flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"David Whittaker     [EP]",0
+	dc.b	"David Whittaker [EP]",0
 	        
 .path 	dc.b "david whittaker",0
  	even
@@ -45540,7 +45540,7 @@ p_digitalmugician
 	jmp	deliAuthor(pc)
 	dc  pt_digitalmugician
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope!pf_quadscopePoke
-	dc.b	"Digital Mugician    [EP]",0
+	dc.b	"Digital Mugician [EP]",0
 .path	dc.b	"mugician.amp",0
  even
  
@@ -45696,7 +45696,7 @@ p_synthesis
 	jmp	deliAuthor(pc)
 	dc  pt_synthesis 
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_song
-	dc.b	"Synthesis           [EP]",0
+	dc.b	"Synthesis [EP]",0
 
 .path dc.b "synth 4.0",0
  even
@@ -45761,7 +45761,7 @@ p_syntracker
 	jmp	deliAuthor(pc)
 	dc pt_syntracker
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
-	dc.b	"SynTracker          [EP]",0
+	dc.b	"SynTracker [EP]",0
 .path dc.b "syntracker",0
  even
 
@@ -45868,7 +45868,7 @@ p_chiptracker
 	jmp	deliAuthor(pc)
 	dc  pt_chiptracker 
  dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2!pf_quadscopeUps
-	dc.b	"ChipTracker         [EP]",0
+	dc.b	"ChipTracker [EP]",0
 
 .path dc.b "chiptracker",0
  even
@@ -47290,7 +47290,7 @@ p_quartet
 	jmp	deliAuthor(pc)
 	dc  	pt_quartet 
  	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Quartet             [EP]",0
+	dc.b	"Quartet [EP]",0
 
 .path dc.b "quartet",0
  even
@@ -47358,7 +47358,7 @@ p_facethemusic
 	jmp	deliAuthor(pc)
 	dc  pt_facethemusic 
 .flags 	dc pf_stop!pf_cont!pf_volume!pf_end	
-	dc.b	"Face The Music      [EP]",0
+	dc.b	"Face The Music [EP]",0
 
 .path dc.b "face the music",0
  even
@@ -47479,7 +47479,7 @@ p_instereo1
 	jmp	deliAuthor(pc)
 	dc 	pt_instereo1
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
-	dc.b	"In Stereo! 1.0      [EP]",0
+	dc.b	"In Stereo! 1.0 [EP]",0
 
 .path dc.b "in stereo 1.0",0
  even
@@ -47604,7 +47604,7 @@ p_instereo2
 	jmp	deliAuthor(pc)
 	dc 	pt_instereo2
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
-	dc.b	"In Stereo! 2.0      [EP]",0
+	dc.b	"In Stereo! 2.0 [EP]",0
 
 .path dc.b "in stereo 2.0",0
  even
@@ -47648,7 +47648,7 @@ p_jasonbrooke
 	jmp	deliAuthor(pc)
 	dc  pt_jasonbrooke
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Jason Brooke        [EP]",0
+	dc.b	"Jason Brooke [EP]",0
 	        
 .path dc.b "jason brooke",0
  even
@@ -47728,7 +47728,7 @@ p_earache
 	jmp	deliAuthor(pc)
 	dc  pt_earache
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"EarAche             [EP]",0
+	dc.b	"EarAche [EP]",0
 	        
 .path dc.b "earache",0
  even
@@ -47822,7 +47822,7 @@ p_krishatlelid
 	jmp	deliAuthor(pc)
 	dc  pt_krishatlelid
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Kris Hatlelid       [EP]",0
+	dc.b	"Kris Hatlelid [EP]",0
 	        
 .path dc.b "kris hatlelid",0
  even
@@ -47903,7 +47903,7 @@ p_richardjoseph2
 	jmp	deliAuthor(pc)
 	dc  pt_richardjoseph2
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Richard Joseph      [EP]",0
+	dc.b	"Richard Joseph [EP]",0
 	
 	        
 .path dc.b "richard joseph",0
@@ -47963,7 +47963,7 @@ p_hippel7
 	jmp	deliAuthor(pc)
 	dc  pt_hippel7
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen
-	dc.b	"Jochen Hippel 7v    [EP]",0
+	dc.b	"Jochen Hippel 7v [EP]",0
 		        
 .path dc.b "jochen hippel 7v",0
  even
@@ -48067,7 +48067,7 @@ p_aprosys
 	jmp	deliAuthor(pc)
 	dc  pt_aprosys
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"AProSys             [EP]",0
+	dc.b	"AProSys [EP]",0
 		        
 .path dc.b "aprosys",0
  even
@@ -48110,7 +48110,7 @@ p_hippelst
 	jmp	deliAuthor(pc)
 	dc  pt_hippelst
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Jochen Hippel ST    [EP]",0	        
+	dc.b	"Jochen Hippel ST [EP]",0	        
 .path dc.b "jochen hippel st",0
  even
 
@@ -48298,7 +48298,7 @@ p_tcbtracker
 	jmp	deliAuthor(pc)
 	dc  pt_tcbtracker
 .flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse!pf_quadscopeUps
-	dc.b	"TCBTracker (ST)     [EP]",0	        
+	dc.b	"TCBTracker (ST) [EP]",0	        
 .path dc.b "tcb tracker",0
  even
 
@@ -48393,7 +48393,7 @@ p_markcooksey
 	jmp	deliAuthor(pc)
 	dc  	pt_markcooksey
 .flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_song!pf_quadscopeUps!pf_scope
-	dc.b	"Mark Cooksey        [EP]",0	        
+	dc.b	"Mark Cooksey [EP]",0	        
 .path 	dc.b 	"mark cooksey",0
  even
 
@@ -48514,7 +48514,7 @@ p_activisionpro
 	jmp	deliAuthor(pc)
 	dc  pt_activisionpro
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
-	dc.b	"Activision Pro      [EP]",0
+	dc.b	"Activision Pro [EP]",0
 	        
 .path dc.b "activision pro",0
  even
@@ -48763,7 +48763,7 @@ p_maxtrax
 	jmp	deliAuthor(pc)
 	dc  pt_maxtrax
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"MaxTrax             [EP]",0
+	dc.b	"MaxTrax [EP]",0
 	        
 .path dc.b "maxtrax",0
  even
@@ -48831,7 +48831,7 @@ p_wallybeben
 	jmp	deliAuthor(pc)
 	dc  pt_wallybeben
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Wally Beben         [EP]",0
+	dc.b	"Wally Beben [EP]",0
 	        
 .path dc.b "wally beben",0
  even
@@ -48901,7 +48901,7 @@ p_synthpack
 	jmp	deliAuthor(pc)
 	dc  pt_synthpack
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Synth Pack          [EP]",0
+	dc.b	"Synth Pack [EP]",0
 	        
 .path dc.b "synth pack",0
  even
@@ -48950,7 +48950,7 @@ p_robhubbard
 	jmp	deliAuthor(pc)
 	dc  pt_robhubbard
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Rob Hubbard         [EP]",0
+	dc.b	"Rob Hubbard [EP]",0
 .path dc.b "rob hubbard",0
  even
 
@@ -49003,7 +49003,7 @@ p_jeroentel
 	jmp	deliAuthor(pc)
 	dc  pt_jeroentel
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Jeroen Tel          [EP]",0
+	dc.b	"Jeroen Tel [EP]",0
 .path dc.b "jeroen tel",0
  even
 
@@ -49075,7 +49075,7 @@ p_sonix
 	jmp	deliAuthor(pc)
 	dc  pt_sonix
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Sonix Music Driver  [EP]",0
+	dc.b	"Sonix Music Driver [EP]",0
 .path dc.b "sonix music driver",0
  even
 
@@ -49216,7 +49216,7 @@ p_quartetst
 	jmp	deliAuthor(pc)
 	dc  pt_quartetst
 .flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Quartet ST          [EP]",0
+	dc.b	"Quartet ST [EP]",0
 .path dc.b "quartet st",0
  even
 
@@ -49284,7 +49284,7 @@ p_coredesign
 	jmp	deliAuthor(pc)
 	dc  pt_coredesign
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
-	dc.b	"Core Design         [EP]",0
+	dc.b	"Core Design [EP]",0
 .path dc.b "core design",0
  even
 
@@ -49380,7 +49380,7 @@ p_musicmaker8
 	jmp	deliAuthor(pc)
 	dc 	 pt_musicmaker8
 .flags	dc 	pf_stop!pf_cont!pf_volume!pf_end
-	dc.b	"MusicMaker V8 8-ch  [EP]",0
+	dc.b	"MusicMaker V8 8ch [EP]",0
 .path 	dc.b "musicmaker8",0
  even
 
@@ -49500,7 +49500,7 @@ p_musicmaker4
 	jmp	deliAuthor(pc)
 	dc  pt_musicmaker4
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
-	dc.b	"MusicMaker V8 4-ch  [EP]",0
+	dc.b	"MusicMaker V8 4ch [EP]",0
 .path dc.b "musicmaker4",0
  even
 
@@ -49657,7 +49657,7 @@ p_stonetracker
 	jmp	deliAuthor(pc)
 	dc  pt_stonetracker
 .flags	dc pf_stop!pf_cont!pf_volume!pf_song!pf_kelaus!pf_end
-	dc.b	"StoneTracker        [EP]",0
+	dc.b	"StoneTracker [EP]",0
 .path dc.b "eaglestone",0
  even
  
@@ -49772,7 +49772,7 @@ p_soundcontrol
 	jmp	deliAuthor(pc)
 	dc  pt_soundcontrol
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
-	dc.b	"SoundControl        [EP]",0
+	dc.b	"SoundControl [EP]",0
 	        
 .path dc.b "soundcontrol",0
  even
@@ -49826,7 +49826,7 @@ p_soundmaster
 	jmp	deliAuthor(pc)
 	dc  pt_soundmaster
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
-	dc.b	"Sound Master        [EP]",0
+	dc.b	"Sound Master [EP]",0
 	        
 .path dc.b "sound master",0
  even
@@ -50090,7 +50090,7 @@ p_timfollin2
 	jmp	deliAuthor(pc)
 	dc  	pt_timfollin2
  dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopePoke
-	dc.b	"Tim Follin          [EP]",0
+	dc.b	"Tim Follin [EP]",0
 	        
 .path dc.b "tim follin ii",0
  even
@@ -50164,7 +50164,7 @@ p_jasonpage
 	jmp	deliAuthor(pc)
 	dc  	pt_jasonpage
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
-	dc.b	"Jason Page          [EP]",0
+	dc.b	"Jason Page [EP]",0
 	        
 .path dc.b "jason page",0
  even
@@ -50244,7 +50244,7 @@ p_steveturner
 	jmp	deliAuthor(pc)
 	dc  	pt_steveturner
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
-	dc.b	"Steve Turner        [EP]",0
+	dc.b	"Steve Turner [EP]",0
 	        
 .path dc.b "steve turner",0
  even
@@ -50295,7 +50295,7 @@ p_specialfx
 	jmp	deliAuthor(pc)
 	dc  	pt_specialfx
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
-	dc.b	"Special FX          [EP]",0
+	dc.b	"Special FX [EP]",0
 	        
 .path dc.b "special fx",0
  even
@@ -50374,7 +50374,7 @@ p_midiext:
   jmp      deliAuthor(pc)
   dc       pt_midiext
   dc       pf_end
-  dc.b     "MIDI (serial out)   [DP]",0
+  dc.b     "MIDI (serial out) [DP]",0
 	        
 .path dc.b "delimidi",0
  even
