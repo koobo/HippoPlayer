@@ -23016,11 +23016,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.lloppu
 	; do three lines wrapping at space
 	bsr 	.doLine
-	bpl 	.ends
+	bpl 	.endss
 	bsr 	.doLine
-	bpl 	.ends
+	bpl 	.endss
 	bsr 	.doLine
-
+.endss
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	    .putLineChange
