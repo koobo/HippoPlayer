@@ -60958,14 +60958,15 @@ uslCreateIndex:
     moveq    #1,d1 
     rts
 .gx
+.eof
+.noN
     moveq    #0,d1
     rts
 
 .findNumberStart
 .fn1 
     move.b  (a0)+,d0
-    bsr     .isEnd
-    bne     .eof
+    beq     .eof
     bsr     .isNum
     beq     .fn1
     subq    #1,a0
@@ -60975,30 +60976,13 @@ uslCreateIndex:
 .findNumberEnd
 .fn2  
     move.b  (a0)+,d0
-    bsr     .isEnd
-    bne     .eof
+    beq     .eof
     bsr     .isNum
     bne     .fn2
     subq    #1,a0
     moveq   #1,d1
     rts
 
-.eof
-    moveq   #0,d1
-    rts
-
-.isEnd
-    tst.b   d0
-    beq     .yesEnd
-    cmp.b   #10,d0
-    beq     .yesEnd
-    cmp.b   #13,d0
-    beq     .yesEnd
-    moveq   #0,d1   * not end
-    rts
-.yesEnd
-    moveq   #1,d1
-    rts
 
 .isNum
     cmp.b   #"0",d0
@@ -61006,9 +60990,6 @@ uslCreateIndex:
     cmp.b   #"9",d0
     bhi     .noN
     moveq   #1,d1   * yes number
-    rts
-.noN
-    moveq   #0,d1   * not number
     rts
 
 
