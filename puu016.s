@@ -18078,7 +18078,7 @@ rsidmode
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
-    bsr     get_sid
+    jsr     get_sid
     jsr     isPlaysidReSID
     bne     .2
 	clr.b	sidmode_new(a5)
@@ -19969,7 +19969,7 @@ putinfo2:
 	move	infoBoxTopEdge(a5),d1
 	move.l	listfontbase(a5),a1
 	add		tf_YSize(a1),d1	* to 2nd row
-	bra.b	bipb2	
+	bra	bipb2	
 
 
 putinfo2centered:
@@ -21622,6 +21622,13 @@ rbutton10b
 .n	movem.l	(sp)+,d0-a6
 .x	rts
 
+
+metaData1  dc.b    "Authors: %s",0
+metaData2  dc.b    "Publishers: %s",0
+metaData3  dc.b    "Product: %s",0
+metaData4  dc.b    "Year: %s"
+ even
+ 
 info_code:
 	lea	var_b,a5
 	addq	#1,info_prosessi(a5)
@@ -23454,10 +23461,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Comment:",ILF,ILF2,0
 .author
 	dc.b	"Player: %s",0
-.metaData1  dc.b    "Authors: %s",0
-.metaData2  dc.b    "Publishers: %s",0
-.metaData3  dc.b    "Product: %s",0
-.metaData4  dc.b    "Year: %s"
   even
 
 * Put UADE-Audacious metadata
@@ -23468,13 +23471,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     tst.b   (a4)
     beq     .noMeta
 
-    lea     .metaData1(pc),a0 
+    lea     metaData1(pc),a0 
     bsr     .putMetaLine
-    lea     .metaData2(pc),a0 
+    lea     metaData2(pc),a0 
     bsr     .putMetaLine
-    lea     .metaData3(pc),a0 
+    lea     metaData3(pc),a0 
     bsr     .putMetaLine
-    lea     .metaData4(pc),a0 
+    lea     metaData4(pc),a0 
     bsr     .putMetaLine
 .noMeta
     rts
@@ -33258,9 +33261,12 @@ loadplayergroup
 	;bsr	inforivit_clear
 
  if DEBUG 
+    tst.l   d7
+    beq     .x1
 	move.l	d7,a0 
 	move.l	-4(a0),d0 
 	DPRINT	"Group size %ld"
+.x1
  endif
 
 	move.l	d7,d0
@@ -61614,19 +61620,19 @@ initInfoScroller:
     beq     .e
     
     * Put four meta fields if available, from a0
-    lea     info_code\.metaData1,a1
+    lea     metaData1,a1
     moveq   #9-1,d0
     bsr     .putMeta
 
-    lea     info_code\.metaData2,a1
+    lea     metaData2,a1
     moveq   #12-1,d0
     bsr     .putMeta
 
-    lea     info_code\.metaData3,a1
+    lea     metaData3,a1
     moveq   #9-1,d0
     bsr     .putMeta
 
-    lea     info_code\.metaData4,a1
+    lea     metaData4,a1
     moveq   #6-1,d0
     bsr     .putMeta
 
