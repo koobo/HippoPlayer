@@ -18118,7 +18118,7 @@ sidmode03	dc.b	"reSID "
 t8580       dc.b    "8580",0
 sidmode04	dc.b	"reSID Auto",0
 sidmode05	dc.b	"SIDBlaster",0
-sidmode06	dc.b	"ZorroSID EE",0
+sidmode06	dc.b	"ZorroSID",0
 sidmode07	dc.b	"USBSID-Pico",0
  even
 
