@@ -37059,18 +37059,48 @@ nl_loopcount	EQU	6	 ; B
 nl_ts		=	8	* channeltempsize
 
 
+* Out:
+*   d0 = secs
+*   d1 = minutes
+* or null if cannot determine
+modlen:
+    DPRINT  "+++ modlen +++"
 
-modlen
+    rsreset
+.songend	    rs.w	1
+.Tempo		    rs.w	1
+.tempoval	    rs.w	1
+.tempoflag	    rs.w	1
+.time		    rs.l	1
 
-	basereg	modlen,a5
-	lea	modlen(pc),a5
+.mt_chan1temp	 rs.b  nl_ts
+.mt_chan2temp	 rs.b  nl_ts
+.mt_chan3temp	 rs.b  nl_ts
+.mt_chan4temp	 rs.b  nl_ts
 
-	lea	.datastart(a5),a1
-	lea	.dataend(a5),a2
-.lfe	clr.b	(a1)+
-	cmp.l	a1,a2
-	bne.b	.lfe
+.varmistus	        rs.w 1
+.mt_SongDataPtr	    rs.l 1
+.mt_PatternPos	    rs.w 1
+.mt_speed	        rs.b 1
+.mt_counter	        rs.b 1
+.mt_SongPos	        rs.b 1
+.mt_PBreakPos	    rs.b 1
+.mt_PosJumpFlag	    rs.b 1
+.mt_PBreakFlag	    rs.b 1
+.mt_PattDelTime	    rs.b 1
+.mt_PattDelTime2    rs.b 1
+.varsSize           rs.b 0
+ even
 
+    moveq   #.varsSize/2-1,d2
+.sk clr.w   -(sp)
+    dbf     d2,.sk
+    move.l  sp,a5
+    bsr     .do
+    lea     .varsSize(sp),sp
+    rts
+
+.do
 	MOVE.L	A0,.mt_SongDataPtr(a5)
 	move.b	d0,.tempoflag(a5)
 
@@ -37089,7 +37119,7 @@ modlen
 	tst	.songend(a5)
 	beq.b	.loop
 
-	cmp.b	#1,.songend(a5)
+	cmp.b	#1,.songend(a5) * check for magic flag
 	bne.b	.nod
 	moveq	#0,d0
 	moveq	#0,d1
@@ -37115,7 +37145,6 @@ modlen
 
 
 .mt_music
-	lea	modlen(pc),a5
 	addq	#1,.varmistus(a5)
 ;	cmp	#512,.varmistus(a5)
 ;	cmp	#2048,.varmistus(a5)
@@ -37146,7 +37175,7 @@ modlen
 	BRA.B	.mt_dskip
 
 .mt_NoNewNote
-	pea	.mt_NoNewPosYet(a5)
+	pea	.mt_NoNewPosYet(pc)
 
 .mt_NoNewAllChannels
 	LEA	.mt_chan1temp(a5),A6
@@ -37256,24 +37285,32 @@ modlen
 
 
 .mt_PositionJump
+    * Get jump position:
+	MOVEQ	#0,D0
+	MOVE.B	3(A6),D0
 	push	d1
 	MOVE.B	.mt_SongPos(a5),D1		* hyv‰ksyt‰‰n jos jumppi
-	addq.b	#1,d1				* viimeisess‰ patternissa
+	addq.b	#1,d1				    * viimeisess‰ patternissa
 	MOVE.L	.mt_SongDataPtr(a5),a0
 	cmp.b	950(a0),d1
 	bne.b	.nre
+    DPRINT  "Detect jump in the last position"
 	st	.songend(a5)
-	pop	d1
 	bra.b	.fine
 
-.nre	pop	d1
-	move.b	#1,.songend(a5)
-
+.nre	
+    DPRINT  "Detected jump NOT in the last position"
+	move.b	#1,.songend(a5)     
+    
 .fine
+    * Set new song position, not really needed as 
+    * the operation stops here.
 	SUBQ.B	#1,D0
 	MOVE.B	D0,.mt_SongPos(a5)
+	pop	d1
 
-.mt_pj2	CLR.B	.mt_PBreakPos(a5)
+.mt_pj2	
+    CLR.B	.mt_PBreakPos(a5)
 	ST 	.mt_PosJumpFlag(a5)
 	RTS
 
@@ -37376,36 +37413,6 @@ modlen
 .qq	RTS
 
 
-.datastart	
-
-.songend	dc	0
-.Tempo		dc	125
-.tempoval	dc	0
-.tempoflag	dc	0
-.time		dc.l	0
-
-.mt_chan1temp	ds.b	8
-.mt_chan2temp	ds.b	8
-.mt_chan3temp	ds.b	8
-.mt_chan4temp	ds.b	8
- even
-
-.varmistus	dc	0
-.mt_SongDataPtr	dc.l 0
-.mt_PatternPos	dc.w 0
-.mt_speed	dc.b 6
-.mt_counter	dc.b 0
-.mt_SongPos	dc.b 0
-.mt_PBreakPos	dc.b 0
-.mt_PosJumpFlag	dc.b 0
-.mt_PBreakFlag	dc.b 0
-.mt_PattDelTime	dc.b 0
-.mt_PattDelTime2 dc.b 0
- even
-
-.dataend
-
- endb	a5
 
 * TODO: also run id_oldst 
 id_protracker
