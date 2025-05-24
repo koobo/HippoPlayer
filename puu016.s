@@ -61596,7 +61596,7 @@ initInfoScroller:
     DPRINT  "initInfoScroller"
     rsreset
 .rastport   rs.b    rp_SIZEOF
-.text       rs.b    1024
+.text       rs.b    512
 .rows       rs.w    1
 .vars       rs.b    0
 
