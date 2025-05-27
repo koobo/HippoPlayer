@@ -24491,14 +24491,27 @@ intserver
 	move.l	playerbase(a5),a0
 	move	#pf_end,d2
 	and	p_liput(a0),d2
-	;bne.b	.skipCheck
+    ;bne     .skipCheck
 	beq.b	.noSongEnd
+
+    * Protracker case:
+    * - backwards jump is a songover signal
+    *   for songs that have subsongs
+    * - it is not a songover signal if mod has no
+    *   subsongs
+    cmp.w   #pt_prot,playertype(a5)
+    bne     .noProt
+    tst.w   maxsongs(a5)
+    beq     .skipCheck
+.noProt
+
+
 	* This player supports songend. 
 	* To avoid extra songend detections, do the song position
 	* check only if the current position is non-zero.
 	* This detects PT modules that jump from the last position to 
 	* some other than position zero.
-	tst	d0
+	tst	    d0
 	beq.b	.skipCheck
 
 .noSongEnd
@@ -36756,12 +36769,14 @@ p_protracker:
 .c
 
 	bsr	.getsongs
+    tst.w   maxsongs(a5)
+    beq     .yesSs
+    DPRINT  "reset time"
+    * With subsongs reset the calculated time
+    * as it should not be correct
+    clr.l   kokonaisaika(a5)
+.yesSs
 
- if DEBUG
-    moveq   #0,d0
-    move.w  maxsongs(a5),d0
-    DPRINT  "Subsongs=%ld"
- endif
 
 	bsr	whatgadgets
 
@@ -36865,7 +36880,7 @@ p_protracker:
 .cus
 	move	kplbase+k_songpos(a5),pos_nykyinen(a5)
 	tst.b	kplbase+k_songover(a5)
-	sne	songover(a5)
+	sne	songover(a5)            * TODO: suspect
 	clr.b	kplbase+k_songover(a5)
 	rts
 
@@ -36898,12 +36913,21 @@ p_protracker:
 
 
 * Tutkii koko songin, ja kattoo jos olisi erillisi‰ songeja.
-.getsongs:
+.getsongs:  
 	move.l	moduleaddress(a5),a0
 	cmp.b	#'K',951(a0)
 	beq.b	.yee
 
 	clr.l	kokonaisaika(a5)
+
+    bsr     .detectSubsongs
+
+    * Skip length detect for subsong mods,
+    * these will get stuck in position jump loops
+    * and would provide wrong total length anyway
+    tst     maxsongs(a5)
+    bne     .la
+
 	;cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
 	;bne.b	.la
 	pushm	d2-a6
@@ -36916,8 +36940,13 @@ p_protracker:
 	move	d1,kokonaisaika+2(a5)	* secs
 .la
 
-	move.l	a6,-(sp)
+    rts
 
+
+.detectSubsongs:
+    DPRINT  "+++ PT getsongs +++"
+
+	move.l	a6,-(sp)
 	move	#$0fff,d3
 	moveq	#0,d0
 	move.b	950(a0),d0		* songlength
@@ -36936,16 +36965,17 @@ p_protracker:
 
 .check
 	moveq	#0,d2
-	move.b	(a3)+,d2
+	move.b	(a3)+,d2        * read position
 	lsl.l	#5,d2			* d2*1024
 	lsl.l	#5,d2	
-	lea	(a2,d2.l),a1
+	lea	(a2,d2.l),a1        * get pattern
 
 ************************ OPT
-
+    * Loop rows of pattern
 	moveq	#1024/4/4-1,d2
 .look	
-	movem.l	(a1)+,d4-d7
+	movem.l	(a1)+,d4-d7 * ch1,ch2,ch3,ch4 notedata
+    * Extract command column d4,d5,d6,d7
 	and	d3,d4
 	rol	#8,d4
 	and	d3,d5
@@ -36955,14 +36985,8 @@ p_protracker:
 	and	d3,d7
 	rol	#8,d7
 
-	cmp.b	#$b,d4
-	beq.b	.jump1
-	cmp.b	#$b,d5
-	beq.b	.jump2
-	cmp.b	#$b,d6
-	beq.b	.jump3
-	cmp.b	#$b,d7
-	beq.b	.jump4
+    * If any of the channels has a D then continue
+    * A B+D combo indicates pattern scrambling
 	cmp.b	#$d,d4
 	beq.b	.next
 	cmp.b	#$d,d5
@@ -36972,10 +36996,29 @@ p_protracker:
 	cmp.b	#$d,d7
 	beq.b	.next
 
-	dbf	d2,.look
+	cmp.b	#$b,d4
+	beq.b	.jump1
+	cmp.b	#$b,d5
+	beq.b	.jump2
+	cmp.b	#$b,d6
+	beq.b	.jump3
+	cmp.b	#$b,d7
+	beq.b	.jump4
 
-.next	addq	#1,d1
-	dbf	d0,.check
+;	cmp.b	#$d,d4
+;	beq.b	.next
+;	cmp.b	#$d,d5
+;	beq.b	.next
+;	cmp.b	#$d,d6
+;	beq.b	.next
+;	cmp.b	#$d,d7
+;	beq.b	.next 
+;
+	dbf	d2,.look        
+
+.next	
+    addq	#1,d1
+	dbf	d0,.check       * loop song position
 
 	move.b	#-1,(a4)
 	lea	ptsonglist(a5),a0
@@ -36988,6 +37031,12 @@ p_protracker:
 	subq.b	#1,d0
 	move.b	d0,maxsongs+1(a5)
 
+  if DEBUG
+    moveq   #0,d1
+    move.b  ptsonglist(a5),d1
+    DPRINT  "subsongs found=%ld first=%ld"
+  endif
+
 	move.l	(sp)+,a6
 	rts
 
@@ -36998,17 +37047,33 @@ p_protracker:
 .jump2	move	d5,d4
 .jump1	
 .jump	rol	#8,d4
+    * d4 = jump target position
+    * if jump target >= current song position
+    * we are jumping forward and this is
+    * not a subsong delimiter
 	cmp.b	d1,d4
 	bhs.b	.next
 
+ if DEBUG   
+    pushm   d0/d1
+    moveq   #0,d0
+    move.b  d4,d0
+    and.l   #$ff,d1
+    DPRINT  "Backward jump to %ld at %ld"
+    popm    d0/d1
+ endif
+
+    * store the following position as a
+    * start of the next subsong
 	moveq	#1,d4
 	add.b	d1,d4
 
-	cmp	a6,d4
+
+	cmp	a6,d4               * compare to song length in a6
 	blo.b	.eoe
 	moveq	#-1,d4			* Moduulin alkuun
 .eoe	move.b	d4,(a4)+
-	bra.b	.next
+	bra 	.next
 
 
 * Out:
@@ -37064,7 +37129,7 @@ nl_ts		=	8	* channeltempsize
 *   d1 = minutes
 * or null if cannot determine
 modlen:
-    DPRINT  "+++ modlen +++"
+    DPRINT  "+++ PT modlen +++"
 
     rsreset
 .songend	    rs.w	1
@@ -37137,7 +37202,7 @@ modlen:
 ;.pal
 	jsr	divu_32
 				* d0 = kesto sekunteina
-
+    DPRINT  "secs=%ld"
 	divu	#60,d0
 	move.l	d0,d1
 	swap	d1
@@ -37145,11 +37210,14 @@ modlen:
 
 
 .mt_music
+
+
 	addq	#1,.varmistus(a5)
 ;	cmp	#512,.varmistus(a5)
 ;	cmp	#2048,.varmistus(a5)
 	cmp	#4096,.varmistus(a5)
 	blo.b	.noy
+    DPRINT  "safety trigger"
 	clr	.mt_PatternPos(a5)
 	CLR.B	.mt_PBreakPos(a5)
 	CLR.B	.mt_PosJumpFlag(a5)
@@ -37172,7 +37240,7 @@ modlen:
 	TST.B	.mt_PattDelTime2(a5)
 	BEQ.S	.mt_GetNewNote
 	BSR.S	.mt_NoNewAllChannels
-	BRA.B	.mt_dskip
+	BRA 	.mt_dskip
 
 .mt_NoNewNote
 	pea	.mt_NoNewPosYet(pc)
@@ -37210,11 +37278,11 @@ modlen:
 	ADD.W	.mt_PatternPos(a5),D1
 
 	LEA	.mt_chan1temp(a5),A6
-	BSR.S	.mt_PlayVoice
+	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
-	BSR.S	.mt_PlayVoice
+	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
-	BSR.S	.mt_PlayVoice
+	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
 	pea	.mt_SetDMA(pc)
 
@@ -37252,6 +37320,7 @@ modlen:
 	LSL.W	#4,D0
 	MOVE.W	D0,.mt_PatternPos(a5)
 .mt_nnpysk
+
 	CMP.W	#1024,.mt_PatternPos(a5)
 	BLO.S	.mt_NoNewPosYet
 .mt_NextPosition	
@@ -37268,10 +37337,9 @@ modlen:
 	st	.songend(a5)
 .jo
 	AND.B	#$7F,.mt_SongPos(a5)
-	MOVE.B	.mt_SongPos(a5),D1
-
+	MOVE.B	.mt_SongPos(a5),d0
 	MOVE.L	.mt_SongDataPtr(a5),A0
-	CMP.B	950(A0),D1
+	CMP.B	950(A0),d0
 	BLO.S	.mt_NoNewPosYet
 	CLR.B	.mt_SongPos(a5)
 	st	.songend(a5)
@@ -37286,28 +37354,26 @@ modlen:
 
 .mt_PositionJump
     * Get jump position:
-	MOVEQ	#0,D0
 	MOVE.B	3(A6),D0
-	push	d1
-	MOVE.B	.mt_SongPos(a5),D1		* hyv‰ksyt‰‰n jos jumppi
-	addq.b	#1,d1				    * viimeisess‰ patternissa
-	MOVE.L	.mt_SongDataPtr(a5),a0
-	cmp.b	950(a0),d1
+	MOVE.B	.mt_SongPos(a5),D2		* hyv‰ksyt‰‰n jos jumppi
+
+	addq.b	#1,d2				    * viimeisess‰ patternissa
+	MOVE.L	.mt_SongDataPtr(a5),a1  * a0 must be preserved
+	cmp.b	950(a1),d2
 	bne.b	.nre
     DPRINT  "Detect jump in the last position"
 	st	.songend(a5)
 	bra.b	.fine
 
 .nre	
-    DPRINT  "Detected jump NOT in the last position"
-	move.b	#1,.songend(a5)     
+    ;DPRINT  "Detected jump NOT in the last position"
+	;move.b	#1,.songend(a5)     
     
 .fine
     * Set new song position, not really needed as 
     * the operation stops here.
 	SUBQ.B	#1,D0
 	MOVE.B	D0,.mt_SongPos(a5)
-	pop	d1
 
 .mt_pj2	
     CLR.B	.mt_PBreakPos(a5)
@@ -37359,11 +37425,11 @@ modlen:
 	CMP.B	#$B,D0
 	BEQ	.mt_PositionJump
 	CMP.B	#$D,D0
-	BEQ.S	.mt_PatternBreak
+	BEQ 	.mt_PatternBreak
 	CMP.B	#$E,D0
-	BEQ.S	.mt_E_Commands
+	BEQ 	.mt_E_Commands
 	CMP.B	#$F,D0
-	BEQ.S	.mt_SetSpeed
+	BEQ 	.mt_SetSpeed
 	rts
 
 .mt_E_Commands
