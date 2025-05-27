@@ -105,33 +105,42 @@ Additional files to check and download
 
 ## Fixes:
 
+- Protracker (and related):
+  - Fix end detector failing with some modules using stop loops,
+    for example "Synaptic Gap II" by Cobolt.
+  - Improved end detector, subsong detector, length calculator.
+    Should now handle scrambled pattern modules better, for example:
+    - "Black Queen" by Dreamer (a classic)
+    - "404 Crew Returns" and "Brofists" by Bonefish & Mygg
+    - "Professional Tracker" by Hoffman & Daytripper
+    
 - Song end was not detected when playing XM modules using
-  xmaplay060, now works.
+  xmaplay060, now ok.
 
 - In some RTG screenmodes the scopes used a lot of CPU due 
   to "vertical blank" sync not working properly. The scopes 
   now use another sync method (with faster CPUs), this 
   should help.
 
-- Previously the following formats could not be loaded
-  if compressed, but now can be: 
+- Previously the following formats could only be loaded 
+  if the files were uncompressed, now they can be:
   Future Player, DeliTracker Custom, Dave Lowe
 
 ## New stuff:
 
 - Shortcut button to change the play mode added beside the position 
   slider. This does the same as "Prefs > General > Play",
-  ie. repeat, loop, random, etc. Show button with 
+  ie. repeat, loop, random, etc. Enable this button with 
   "Prefs > Play-2 > Play mode button, position slider".
   
 - Support for Audacious-UADE metadata. This data contains
   song lengths, author/composer, publisher/group, album/game/demo 
   name and year info for about 300000 modules.
 
-  Song length will be shown in the title bar as well as with the position 
-  slider. Other metadata is shown in the infobox at the top and in the
-  info window. Song length is used for end detection for the formats which 
-  do not support it otherwise.
+  Song length will be shown in the title bar as well as with the 
+  position slider. Other metadata is shown in the infobox at the 
+  top and in the info window. Song length is used for end detection 
+  for the formats which do not support it otherwise.
 
   Protracker modules already have lengths calculated, but every other
   format, including obscure exotics, will get lengths this way.
@@ -145,6 +154,8 @@ Additional files to check and download
   Download here (use the "raw" mode):
   https://github.com/mvtiaine/audacious-uade-tools/tree/master/tsv/pretty
 
+- Updated playsid.library v1.10:
+  - ZorroSID address configurable with env variables
 
 
 ------------------------------------------------------------------------------

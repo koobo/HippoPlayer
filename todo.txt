@@ -1,33 +1,24 @@
 TODO:
-- mdat.apidya: can't play the main theme, only the other subsongs
-
-TODO:
 - improve PT end detection heuristics
 - https://github.com/koobo/HippoPlayer/issues/26
 - Many trick pattern modules
+- "404 Crew Returns by Mr. Mygg & Bonefish"
+- "Professional Tracker by Hoffman & Daytripper"
+- "Black Queen by Dreamer"
 
+FIXED: TODO:
+- synaptic gap ii.mod -> B-komento hyppää samaan patterniin ja
+  jää looppiin
 
-TODO:
-- proplayer.a support for MEDs§
-
-TODO:
-- a loop track button added to the button bar, easier than playmode switch from Prefs
+OK: TODO:
+- list mode button tooltip does not work
 
 TODO:
 - playing a network stream a long time will increase the t:agetout
   temp file slowly, it may get too large
 
 TODO:
-- easier way to set "play module repeatedly"
--- key shortcut
--- obscure rmb combo 
--- new button 
-
-TODO:
-- mhi mp3 output: displays "0kB", why? remove mpega.lib and try?
-  - mhiReadMp3Properties failaa, käy näin -> mpega.library puuttuu?
-  - yes
-
+- proplayer.a support for MEDs
 
 TODO:
 - for modland urls display the 2nd subdir in the list:
@@ -42,7 +33,6 @@ TODO:
 
 TODO:
 - layout: bg pattern missing one pixel column on the right side
-
 
 TODO:
 - sample names shown with xmaplay060
@@ -144,6 +134,34 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+FIXED: TODO:
+- digital man.is -> metadata not showing in info window
+
+FIXED: TODO:
+- md5sum wait pointer not working on kic13
+
+FIXED: TODO:
+- scroller: do not scroll if all text fits in the window
+
+OK: TODO:
+- mdat.apidya: can't play the main theme, only the other subsongs
+- WORKS OK
+
+FIXED: TODO:
+- a loop track button added to the button bar, easier than playmode switch from Prefs
+
+FIXED: TODO:
+- easier way to set "play module repeatedly"
+-- key shortcut
+-- obscure rmb combo 
+-- new button 
+
+OK: TODO:
+- mhi mp3 output: displays "0kB", why? remove mpega.lib and try?
+  - mhiReadMp3Properties failaa, käy näin -> mpega.library puuttuu?
+  - yes
+
+
 DONE: TODO:
 - title bar displaying options need rethinking
 
