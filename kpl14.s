@@ -2035,6 +2035,16 @@ k_positionjump				* B00
     cmp.b   #$d*4,k_chan4temp(a5)	
     bne.b   k_pj3
 .ook
+    * See if the jump is in the last position
+    move    k_songpos(a5),d2
+	addq	#1,d2
+	move.l	k_songdataptr(a5),a0
+	cmp.b	-2(a0),d2
+    bne     .notLast
+    * It was, consider this the end
+    addq.b  #1,k_songover(a5)
+.notLast
+
 	subq	#1,d0
 	move	d0,k_songpos(a5)
 	st 	k_posjumpflag(a5)
