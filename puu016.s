@@ -36963,18 +36963,35 @@ p_protracker:
 	lea	ptsonglist(a5),a4
 	clr.b	(a4)+
 
+    * scramble detect counter
+    sub.l   a0,a0
+    ; ---------------------------------
 .check
+;;    push    d0
+;;    moveq   #0,d0
+;;    move.w  d1,d0
+;;    DPRINT  "--- POSITION=%ld ---"
+;;    pop     d0
+
 	moveq	#0,d2
 	move.b	(a3)+,d2        * read position
 	lsl.l	#5,d2			* d2*1024
 	lsl.l	#5,d2	
 	lea	(a2,d2.l),a1        * get pattern
-
-************************ OPT
+    ; ---------------------------------
     * Loop rows of pattern
 	moveq	#1024/4/4-1,d2
 .look	
 	movem.l	(a1)+,d4-d7 * ch1,ch2,ch3,ch4 notedata
+
+;;    pushm   d0-d3
+;;    move.l  d4,d0
+;;    move.l  d5,d1
+;;    move.l  d6,d2
+;;    move.l  d7,d3
+;;    DPRINT  "%08.8lx %08.8lx %08.8lx %08.8lx"
+;;    popm    d0-d3
+
     * Extract command column d4,d5,d6,d7
 	and	d3,d4
 	rol	#8,d4
@@ -36988,38 +37005,29 @@ p_protracker:
     * If any of the channels has a D then continue
     * A B+D combo indicates pattern scrambling
 	cmp.b	#$d,d4
-	beq.b	.next
+	beq 	.patternBreak
 	cmp.b	#$d,d5
-	beq.b	.next
+	beq 	.patternBreak
 	cmp.b	#$d,d6
-	beq.b	.next
+	beq 	.patternBreak
 	cmp.b	#$d,d7
-	beq.b	.next
+	beq 	.patternBreak
 
 	cmp.b	#$b,d4
-	beq.b	.jump1
+	beq 	.jump1
 	cmp.b	#$b,d5
-	beq.b	.jump2
+	beq 	.jump2
 	cmp.b	#$b,d6
-	beq.b	.jump3
+	beq 	.jump3
 	cmp.b	#$b,d7
-	beq.b	.jump4
+	beq 	.jump4
 
-;	cmp.b	#$d,d4
-;	beq.b	.next
-;	cmp.b	#$d,d5
-;	beq.b	.next
-;	cmp.b	#$d,d6
-;	beq.b	.next
-;	cmp.b	#$d,d7
-;	beq.b	.next 
-;
 	dbf	d2,.look        
 
 .next	
     addq	#1,d1
 	dbf	d0,.check       * loop song position
-
+    ; ---------------------------------
 	move.b	#-1,(a4)
 	lea	ptsonglist(a5),a0
 	move.l	a0,a1
@@ -37029,8 +37037,8 @@ p_protracker:
 	subq	#1,a0
 	move	a0,d0
 	subq.b	#1,d0
+.exit
 	move.b	d0,maxsongs+1(a5)
-
   if DEBUG
     moveq   #0,d1
     move.b  ptsonglist(a5),d1
@@ -37039,6 +37047,26 @@ p_protracker:
 
 	move.l	(sp)+,a6
 	rts
+
+    ; Check for B+D combos which signal a scramble module
+.patternBreak
+	cmp.b	#$b,d4
+	beq     .scrambled
+	cmp.b	#$b,d5
+	beq     .scrambled
+	cmp.b	#$b,d6
+	beq     .scrambled
+	cmp.b	#$b,d7
+	bne     .next
+.scrambled
+    addq    #1,a0
+    cmp     #4,a0   
+    blo     .next
+    DPRINT  "This looks like a scrambled module"
+    moveq   #0,d0
+    move.w  #$00ff,ptsonglist(a5)
+    bra     .exit
+
 
 .jump4	move	d7,d4
 	bra.b	.jump
@@ -37052,7 +37080,7 @@ p_protracker:
     * we are jumping forward and this is
     * not a subsong delimiter
 	cmp.b	d1,d4
-	bhs.b	.next
+	bhs 	.next
 
  if DEBUG   
     pushm   d0/d1
@@ -37363,7 +37391,7 @@ modlen:
 	bne.b	.nre
     DPRINT  "Detect jump in the last position"
 	st	.songend(a5)
-	bra.b	.fine
+;	bra 	.fine
 
 .nre	
     ;DPRINT  "Detected jump NOT in the last position"
