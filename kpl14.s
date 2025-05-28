@@ -2020,20 +2020,24 @@ k_volumeok
 k_positionjump				* B00
 	move	(a4),d0
 	and	#$ff,d0
+
+    * Allow jumps if there is a D on the same row.
+    * Common scrambled pattern trick.
+    cmp.b   #$d*4,k_chan1temp(a5)	
+    beq.b   .ook2
+    cmp.b   #$d*4,k_chan2temp(a5)	
+    beq.b   .ook2
+    cmp.b   #$d*4,k_chan3temp(a5)	
+    beq.b   .ook2
+    cmp.b   #$d*4,k_chan4temp(a5)	
+    beq     .ook2
+
 	cmp	k_songpos(a5),d0	* hyppy samaan positioniin?
 	bne.b	.ook
-	;moveq	#0,d0			* ei käy!
-    * Jump to same position, allow if there is also
-    * a patternbreak somewhere, otherwise
-    * this is a stop which should be ignored.
-    cmp.b   #$d*4,k_chan1temp(a5)	
-    beq.b   .ook
-    cmp.b   #$d*4,k_chan2temp(a5)	
-    beq.b   .ook
-    cmp.b   #$d*4,k_chan3temp(a5)	
-    beq.b   .ook
-    cmp.b   #$d*4,k_chan4temp(a5)	
-    bne.b   k_pj3
+    * Jump to the same position witouth a D,
+    * this is a songend.
+    addq.b  #1,k_songover(a5)
+    rts
 .ook
     * See if the jump is in the last position
     move    k_songpos(a5),d2
@@ -2044,6 +2048,7 @@ k_positionjump				* B00
     * It was, consider this the end
     addq.b  #1,k_songover(a5)
 .notLast
+.ook2
 
 	subq	#1,d0
 	move	d0,k_songpos(a5)
