@@ -4373,13 +4373,23 @@ periodicEndCheck:
 .1
     * Others, if they do not provide the end check otherwise
 	move.l	playerbase(a5),a0
+
+    * Special case: 
+    * If Protracker and calculated length available,
+    * use this as well as fallback, in some cases
+    * end is not detected ovherwise (brofists.mod).
+    cmp.w   #pt_prot,p_type(a0)
+    bne     .notPt
+    tst.l   kokonaisaika(a5)
+    bne     .wasPt
+.notPt
 	move	#pf_end,d2
 	and	    p_liput(a0),d2
     bne     .3
     * Do we have length data?
     tst.w   uslSongLengthData(a5)
     beq     .3
-    
+.wasPt
     move.l	aika2(a5),d0
 	sub.l	aika1(a5),d0            * can be negative
     move.w  kokonaisaika(a5),d1     * mins
@@ -36880,7 +36890,9 @@ p_protracker:
 .cus
 	move	kplbase+k_songpos(a5),pos_nykyinen(a5)
 	tst.b	kplbase+k_songover(a5)
-	sne	songover(a5)            * TODO: suspect
+    beq     .noend
+	st  	songover(a5)            
+.noend
 	clr.b	kplbase+k_songover(a5)
 	rts
 
@@ -37190,6 +37202,8 @@ modlen:
 .mt_PattDelTime	    rs.b 1
 .mt_PattDelTime2    rs.b 1
 .failsafe           rs.l 1
+.lastPositionJump   rs.w 1
+.lastNoteTime       rs.l 1
 .varsSize           rs.b 0
  even
 
@@ -37218,9 +37232,22 @@ modlen:
     * 30 minutes failsafe
     move.l  #30*60*50,.failsafe(a5)
 .loop	
-    bsr.b	.mt_music
+    bsr 	.mt_music
+
     subq.l  #1,.failsafe(a5)
     bmi     .stopz
+
+    tst.b   .lastPositionJump(a5)
+    beq     .gog
+    move.l  .time(a5),d0
+    sub.l   .lastNoteTime(a5),d0
+	move.l	#709379,d1	* PAL
+    jsr     divu_32
+    cmp.l   #10,d0
+    blo     .gog
+    st      .songend(a5)
+    DPRINT  "too long since last note"
+.gog
 	tst	.songend(a5)
 	beq.b	.loop
 
@@ -37246,7 +37273,7 @@ modlen:
 ;.pal
 	jsr	divu_32
 				* d0 = kesto sekunteina
-    DPRINT  "secs=%ld"
+    DPRINT  "---> secs=%ld"
 	divu	#60,d0
 	move.l	d0,d1
 	swap	d1
@@ -37304,6 +37331,15 @@ modlen:
 	ADD.W	.mt_PatternPos(a5),D1
 
 	LEA	.mt_chan1temp(a5),A6
+
+;    pushm    d0-d6
+;    push    d2
+;    movem.l  (a0,d1.l),d2/d3/d4/d5
+;    pop     d1
+;    and.l   #$ff,d1
+;   ;; DPRINT  "%ld/%ld->%08.8lx %08.8lx %08.8lx %08.8lx"
+;    popm     d0-d6
+
 	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
 	BSR 	.mt_PlayVoice
@@ -37317,9 +37353,16 @@ modlen:
 
 
 .mt_PlayVoice
+    * Read 4 bytes ot pattern data
 	MOVE.L	(A0,D1.L),(A6)
 	ADDQ.L	#4,D1
-	Bra	.mt_CheckMoreEfx
+
+    * Timestamp of the last note
+    and     #$0fff,d2
+    and.w   (a6),d2
+    beq     .mt_CheckMoreEfx
+    move.l  .time(a5),.lastNoteTime(a5)
+    bra     .mt_CheckMoreEfx
 
 
 .mt_SetDMA
@@ -37374,25 +37417,69 @@ modlen:
 .mt_exit	
 	RTS
 
-
+* brofists:
+* - B23+D20 in the last position 79
+*   to silence, this is the end of the mod
+*   how to detect it?
+* 404 crew:
+* - B+D in the last position to earlier position
+*   which jump back to last position to another row
+*   which is ok
 
 .mt_PositionJump
     * Get jump position:
 	MOVE.B	3(A6),D0
-	MOVE.B	.mt_SongPos(a5),D2		* hyv‰ksyt‰‰n jos jumppi
-
-	addq.b	#1,d2				    * viimeisess‰ patternissa
+	
+    * Check if at the last song position
+    moveq   #0,d3
+    MOVE.B	.mt_SongPos(a5),D2
+    addq.b	#1,d2			
 	MOVE.L	.mt_SongDataPtr(a5),a1  * a0 must be preserved
 	cmp.b	950(a1),d2
-	bne.b	.nre
-    DPRINT  "Detect jump in the last position"
-	st	.songend(a5)
-;	bra 	.fine
+    bne     .notLast
+    st      d3
+    st      .lastPositionJump(a5)
+    push    d0
+    moveq   #0,d0
+    move.b  d2,d0
+    DPRINT  "last position jump %ld"
+    pop     d0
+.notLast
 
+    * Allow jumps if there is a D on the same row.
+    * Common scrambled pattern trick.
+	moveq	#$f,d2
+    and.b   2(A0,D1.L),d2
+    cmp.b   #$d,d2
+    beq     .pbrk
+	moveq	#$f,d2
+    and.b   2+4(A0,D1.L),d2
+    cmp.b   #$d,d2
+    beq     .pbrk
+	moveq	#$f,d2
+    and.b   2+8(A0,D1.L),d2
+    cmp.b   #$d,d2
+    beq     .pbrk
+	moveq	#$f,d2
+    and.b   2+12(A0,D1.L),d2
+    cmp.b   #$d,d2
+    beq     .pbrk
+
+	MOVE.B	.mt_SongPos(a5),D2	
+    cmp.b   d0,d2
+    bne     .ook
+    * Jump to the same position witouth a D,
+    * this is a songend.
+    DPRINT  "Jump to the same position"
+    st      .songend(a5)
+    rts
+.ook
+    tst.b   d3
+    beq     .nre
+    DPRINT  "Jump and no break in the last position"
+	st	    .songend(a5)
+.pbrk
 .nre	
-    ;DPRINT  "Detected jump NOT in the last position"
-	;move.b	#1,.songend(a5)     
-    
 .fine
     * Set new song position, not really needed as 
     * the operation stops here.
