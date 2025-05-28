@@ -37002,17 +37002,6 @@ p_protracker:
 	and	d3,d7
 	rol	#8,d7
 
-    * If any of the channels has a D then continue
-    * A B+D combo indicates pattern scrambling
-	cmp.b	#$d,d4
-	beq 	.patternBreak
-	cmp.b	#$d,d5
-	beq 	.patternBreak
-	cmp.b	#$d,d6
-	beq 	.patternBreak
-	cmp.b	#$d,d7
-	beq 	.patternBreak
-
 	cmp.b	#$b,d4
 	beq 	.jump1
 	cmp.b	#$b,d5
@@ -37022,9 +37011,22 @@ p_protracker:
 	cmp.b	#$b,d7
 	beq 	.jump4
 
+	cmp.b	#$d,d4
+	beq 	.next
+	cmp.b	#$d,d5
+	beq 	.next
+	cmp.b	#$d,d6
+	beq 	.next
+	cmp.b	#$d,d7
+	beq 	.next
+
 	dbf	d2,.look        
 
 .next	
+    * allow this many B+D combos until deciding
+    cmp.w   #4,a0 
+    bhs     .scrambled
+
     addq	#1,d1
 	dbf	d0,.check       * loop song position
     ; ---------------------------------
@@ -37048,33 +37050,16 @@ p_protracker:
 	move.l	(sp)+,a6
 	rts
 
-    ; Check for B+D combos which signal a scramble module
-.patternBreak
-	cmp.b	#$b,d4
-	beq     .scrambled
-	cmp.b	#$b,d5
-	beq     .scrambled
-	cmp.b	#$b,d6
-	beq     .scrambled
-	cmp.b	#$b,d7
-	bne     .next
-.scrambled
-    addq    #1,a0
-    cmp     #4,a0   
-    blo     .next
-    DPRINT  "This looks like a scrambled module"
-    moveq   #0,d0
-    move.w  #$00ff,ptsonglist(a5)
-    bra     .exit
-
-
 .jump4	move	d7,d4
 	bra.b	.jump
 .jump3	move	d6,d4
 	bra.b	.jump
 .jump2	move	d5,d4
 .jump1	
-.jump	rol	#8,d4
+.jump	
+    bsr     .scrambleTest
+
+    rol	#8,d4
     * d4 = jump target position
     * if jump target >= current song position
     * we are jumping forward and this is
@@ -37102,6 +37087,29 @@ p_protracker:
 	moveq	#-1,d4			* Moduulin alkuun
 .eoe	move.b	d4,(a4)+
 	bra 	.next
+
+
+.scrambleTest
+    ; Check for B+D combos which signal a scrambled module
+	cmp.b	#$d,d4
+	beq     .scramble
+	cmp.b	#$d,d5
+	beq     .scramble
+	cmp.b	#$d,d6
+	beq     .scramble
+	cmp.b	#$d,d7
+	beq     .scramble
+    rts
+.scramble
+    addq    #1,a0
+    rts
+
+.scrambled
+    DPRINT  "This looks like a scrambled module"
+    moveq   #0,d0
+    move.w  #$00ff,ptsonglist(a5)
+    bra     .exit
+
 
 
 * Out:
@@ -37171,7 +37179,6 @@ modlen:
 .mt_chan3temp	 rs.b  nl_ts
 .mt_chan4temp	 rs.b  nl_ts
 
-.varmistus	        rs.w 1
 .mt_SongDataPtr	    rs.l 1
 .mt_PatternPos	    rs.w 1
 .mt_speed	        rs.b 1
@@ -37182,6 +37189,7 @@ modlen:
 .mt_PBreakFlag	    rs.b 1
 .mt_PattDelTime	    rs.b 1
 .mt_PattDelTime2    rs.b 1
+.failsafe           rs.l 1
 .varsSize           rs.b 0
  even
 
@@ -37207,16 +37215,24 @@ modlen:
 	move.l	#1773447,d0
 	divu	.Tempo(a5),d0
 	move	d0,.tempoval(a5)
-
-.loop	bsr.b	.mt_music
+    * 30 minutes failsafe
+    move.l  #30*60*50,.failsafe(a5)
+.loop	
+    bsr.b	.mt_music
+    subq.l  #1,.failsafe(a5)
+    bmi     .stopz
 	tst	.songend(a5)
 	beq.b	.loop
 
 	cmp.b	#1,.songend(a5) * check for magic flag
 	bne.b	.nod
+.exx
 	moveq	#0,d0
 	moveq	#0,d1
 	rts
+.stopz
+    DPRINT  "failsafe triggered"
+    bra     .exx
 .nod
 
 
@@ -37238,24 +37254,6 @@ modlen:
 
 
 .mt_music
-
-
-	addq	#1,.varmistus(a5)
-;	cmp	#512,.varmistus(a5)
-;	cmp	#2048,.varmistus(a5)
-	cmp	#4096,.varmistus(a5)
-	blo.b	.noy
-    DPRINT  "safety trigger"
-	clr	.mt_PatternPos(a5)
-	CLR.B	.mt_PBreakPos(a5)
-	CLR.B	.mt_PosJumpFlag(a5)
-	clr.b	.mt_PattDelTime(a5)
-	clr.b	.mt_PattDelTime2(a5)
-	clr.b	.mt_counter(a5)
-	move	#1024,.mt_PatternPos(a5)
-	bra.b	.mt_GetNewNote
-.noy
-
 	moveq	#0,d0
 	move	.tempoval(a5),d0
 	add.l	d0,.time(a5)
@@ -37352,8 +37350,6 @@ modlen:
 	CMP.W	#1024,.mt_PatternPos(a5)
 	BLO.S	.mt_NoNewPosYet
 .mt_NextPosition	
-	clr	.varmistus(a5)
-
 	MOVEQ	#0,D0
 	MOVE.B	.mt_PBreakPos(a5),D0
 	LSL.W	#4,D0
@@ -37427,6 +37423,7 @@ modlen:
 	MOVEQ	#0,D0
 	MOVE.B	3(A6),D0
 	Bne.b	.no0
+    st      .songend(a5)    * F00 -> end
 	moveq	#31,d0
 .no0
 	tst	.tempoflag(a5)
