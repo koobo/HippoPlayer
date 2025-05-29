@@ -37231,54 +37231,45 @@ modlen:
 	move	d0,.tempoval(a5)
     * 30 minutes failsafe
     move.l  #30*60*50,.failsafe(a5)
+    ; ---------------------------------
 .loop	
     bsr 	.mt_music
 
+    ; Failsafe test to catch runaway modules
     subq.l  #1,.failsafe(a5)
     bmi     .stopz
 
+    ; Silence test after a jump has been
+    ; detected in the last position.
     tst.b   .lastPositionJump(a5)
     beq     .gog
     move.l  .time(a5),d0
     sub.l   .lastNoteTime(a5),d0
 	move.l	#709379,d1	* PAL
     jsr     divu_32
-    cmp.l   #10,d0
+    cmp.l   #10,d0        * seconds limit
     blo     .gog
     st      .songend(a5)
     DPRINT  "too long since last note"
 .gog
 	tst	.songend(a5)
 	beq.b	.loop
-
-	cmp.b	#1,.songend(a5) * check for magic flag
-	bne.b	.nod
-.exx
-	moveq	#0,d0
-	moveq	#0,d1
-	rts
-.stopz
-    DPRINT  "failsafe triggered"
-    bra     .exx
-.nod
-
+    ; ---------------------------------
 
 	move.l	.time(a5),d0
 	move.l	#709379,d1	* PAL
-
-;	move.l	(a5),a0
-;	cmp.b	#60,PowerSupplyFrequency(a0)
-;	bne.b	.pal
-;	move.l	#715909,d1	* NTSC
-;.pal
-	jsr	divu_32
-				* d0 = kesto sekunteina
+	jsr	divu_32			 * d0 = kesto sekunteina
     DPRINT  "---> secs=%ld"
 	divu	#60,d0
 	move.l	d0,d1
 	swap	d1
 	rts
 
+.stopz
+    DPRINT  "failsafe triggered"
+	moveq	#0,d0
+	moveq	#0,d1
+	rts
 
 .mt_music
 	moveq	#0,d0
@@ -37358,7 +37349,7 @@ modlen:
 	ADDQ.L	#4,D1
 
     * Timestamp of the last note
-    and     #$0fff,d2
+    move    #$0fff,d2
     and.w   (a6),d2
     beq     .mt_CheckMoreEfx
     move.l  .time(a5),.lastNoteTime(a5)
