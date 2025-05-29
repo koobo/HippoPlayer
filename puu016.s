@@ -61793,6 +61793,25 @@ initInfoScroller:
     lea     .text(a4),a3
     bsr     .putType
 
+    ; ---------------------------------
+    ; PSID metadata 
+    cmp.w   #pt_sid,playertype(a5)
+    bne     .noSid
+
+    lea     sidheader+sidh_author(a5),a0
+    lea     metaData1,a1    * authors
+    moveq   #9-1,d0
+    bsr     .putMeta
+
+    lea     sidheader+sidh_copyright(a5),a0
+    lea     metaData2,a1    * publisher
+    moveq   #12-1,d0
+    bsr     .putMeta
+    bra     .wasSid
+.noSid
+    ; ---------------------------------
+    ; UME metadata 
+
     * Exit if no metadata 
     move.l  umeMetaDataPtr(a5),d0
     beq     .e
@@ -61817,6 +61836,7 @@ initInfoScroller:
     moveq   #6-1,d0
     bsr     .putMeta
 
+.wasSid
     * 1st and last line are the same to allow smooth looping
     bsr     .putType
     clr.b   (a3)
