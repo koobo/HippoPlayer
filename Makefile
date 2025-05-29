@@ -60,7 +60,7 @@ clean:
 dist: HiP HiP-debug group playsid
 	cd dist && make
 
-stil: STIL.txt Songlengths.md5
+data: STIL.txt Songlengths.md5 songlengths.tsv combined.tsv
 
 STIL.txt: 
 	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/STIL.txt
@@ -70,8 +70,11 @@ Songlengths.md5:
 	wget https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.faq
 
 songlengths.tsv:
-	wget https://raw.githubusercontent.com/mvtiaine/audacious-uade-tools/refs/heads/master/tsv/pretty/songlengths.tsv
-	
+	cp audacious-uade-tools/tsv/pretty/songlengths.tsv .
+
+combined.tsv:
+	cp audacious-uade-tools/tsv/pretty/combined.tsv .
+
 beta: HiP HiP-debug
 	lha a ~/Dropbox/hip-beta.lha HiP HiP-debug HiP-debug-ser HippoPlayer.group
 	cd playsid.library && lha a ~/Dropbox/hip-beta.lha playsid.library

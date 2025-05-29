@@ -1,3 +1,6 @@
 [submodule "playsid.library"]
 	path = playsid.library
 	url = git@github.com:koobo/playsid.library.git
+[submodule "audacious-uade-tools"]
+	path = audacious-uade-tools
+	url = git@github.com:mvtiaine/audacious-uade-tools.git
