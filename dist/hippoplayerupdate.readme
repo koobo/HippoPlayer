@@ -93,9 +93,13 @@ Additional files to check and download
 - Calibration utility to finetune 14-bit output:
   https://aminet.net/disk/cdrom/14Bit_CDPlayer.lha
 - To get song lengths and metadata, get "songlengths.tsv"
-  and "combined.tsv":
-  https://github.com/mvtiaine/audacious-uade-tools/tree/master/tsv/pretty
-
+  and "combined.tsv", browse to:
+  https://github.com/koobo/HippoPlayer/tree/main
+  ... then: 
+  -> audacious-udate-tools -> tsv -> pretty 
+  -> combined.tsv -> Download raw file
+  ... and:
+  -> songlengths.tsv -> Download raw file  
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -154,10 +158,11 @@ Additional files to check and download
   download "combined.tsv" and put these in the hippo dir. During 
   next start they will be (slowly) converted into "songlengths.db" and
   "metadata.db", and the tsv-files can be deleted. Some disk space
-  is needed for this feature.
-  
-  Download here (use the "raw" mode):
-  https://github.com/mvtiaine/audacious-uade-tools/tree/master/tsv/pretty
+  is needed for this feature. See "Additional files" section above
+  for download details.
+
+- PSID data (author, publisher/copyright) is also shown in the infobox 
+  area now.
 
 - Updated playsid.library v1.10:
   - ZorroSID address configurable with env variables
