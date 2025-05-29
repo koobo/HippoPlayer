@@ -4394,6 +4394,8 @@ periodicEndCheck:
     * Do we have length data?
     tst.w   uslSongLengthData(a5)
     beq     .3
+    tst.l   kokonaisaika(a5)
+    beq     .3
 .wasPt
     move.l	aika2(a5),d0
 	sub.l	aika1(a5),d0            * can be negative
