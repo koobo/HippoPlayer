@@ -105,15 +105,20 @@ Additional files to check and download
 
 ## Fixes:
 
-- Protracker (and related):
-  - Fix end detector failing with some modules using stop loops,
-    for example "Synaptic Gap II" by Cobolt.
-  - Improved end detector, subsong detector, length calculator.
-    Should now handle scrambled pattern modules better, for example:
-    - "Black Queen" by Dreamer (a classic)
-    - "404 Crew Returns" and "Brofists" by Bonefish & Mygg
-    - "Professional Tracker" by Hoffman & Daytripper
-    
+- Protracker module end detector, subsong detector, 
+  length calculator improved. Should now handle some 
+  modules better, for example:
+  - "Black Queen" by Dreamer (pattern scrambler classic)
+  - "404 Crew Returns" and "Brofists" by Bonefish & Mygg
+    (really scrambled)
+  - "Professional Tracker" by Hoffman & Daytripper
+    (slightly scrambled)
+  - "Synaptic Gap II" by Cobolt (loop stop mechanism)
+  Previously to listen to some pattern scrambled modules
+  without playback prematurely ending it was necessary to
+  select the play mode "Module repeatedly", this is no 
+  longer needed.
+
 - Song end was not detected when playing XM modules using
   xmaplay060, now ok.
 

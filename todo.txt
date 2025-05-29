@@ -1,3 +1,6 @@
+FIXED: TODO:
+- hoffman: msx.mod -> modlen jumittaa
+
 TODO:
 - improve PT end detection heuristics
 - https://github.com/koobo/HippoPlayer/issues/26
