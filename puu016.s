@@ -4374,10 +4374,14 @@ periodicEndCheck:
     * Others, if they do not provide the end check otherwise
 	move.l	playerbase(a5),a0
 
-    * Special case: 
+    * Special cases: 
     * If Protracker and calculated length available,
     * use this as well as fallback, in some cases
     * end is not detected ovherwise (brofists.mod).
+    cmp.w   #pt_tfmx,p_type(a0)
+    beq     .wasTfmx
+    cmp.w   #pt_tfmx7,p_type(a0)
+    beq     .wasTfmx
     cmp.w   #pt_prot,p_type(a0)
     bne     .notPt
     tst.l   kokonaisaika(a5)
@@ -4386,6 +4390,7 @@ periodicEndCheck:
 	move	#pf_end,d2
 	and	    p_liput(a0),d2
     bne     .3
+.wasTfmx
     * Do we have length data?
     tst.w   uslSongLengthData(a5)
     beq     .3
