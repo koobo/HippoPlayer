@@ -7262,8 +7262,18 @@ buttonspressed:
 	move.l	a2,a0
 	add	(a2)+,a0
 	move.l	(a2)+,a1
+    ; -------------
+    * Special case check,
+    * this can be visible or not
+    cmp.l   #gadgetPlayModeChangeButton,a0
+    bne     .11
+    tst.b   showPositionSlider(a5)
+    beq     .skip
+.11
+    ; -------------
 	bsr 	.rightButtonDownCheck
 	beq.b	.handled
+.skip
 	tst.w	(a2) 
 	bne.b	.actionLoop
 
@@ -7482,6 +7492,11 @@ checkMouseOnGadget
     cmp.l   #gadgetSearchSource,a0
     beq     .xx
 .srch
+    tst.b   showPositionSlider(a5)
+    bne     .ps
+    cmp.l   #gadgetPlayModeChangeButton,a0
+    beq     .xx
+.ps
 
 	movem	gg_LeftEdge(a0),d0-d3
 	move	mousex(a5),d6
@@ -8264,9 +8279,8 @@ getRandomValue
         rts
 
 
-
 * mulu_32 --- d0 = d0*d1
-mulu_32	movem.l	d2/d3,-(sp)
+mulu_32:	movem.l	d2/d3,-(sp)
 	move.l	d0,d2
 	move.l	d1,d3
 	swap	d2
@@ -21401,6 +21415,9 @@ showTooltipPopup
 	* place above pointer a bit
 	sub	d5,d7
 	subq	#8,d7
+    bpl     .yok
+    moveq   #0,d7   * validate y
+.yok
 	move	d7,nw_TopEdge(a0)
 
 	* see if it fits on screen and adjust
@@ -34866,9 +34883,13 @@ togglePlayMode:
 .2
 
 setPlayModeChangeButtonIcon:
-    bsr setPlayModeChangeButtonIconNoRefresh
-	lea	gadgetPlayModeChangeButton,a0
-	jmp refreshGadgetInA0
+    bsr   setPlayModeChangeButtonIconNoRefresh
+    tst.b showPositionSlider(a5)
+    beq   .noPos
+	lea   gadgetPlayModeChangeButton,a0
+	jmp   refreshGadgetInA0
+.noPos  
+    rts
 
 setPlayModeChangeButtonIconNoRefresh:
     move.b  playmode(a5),d0
@@ -63069,14 +63090,14 @@ rightButtonActionsList
     * List mode change -> popup
     dr.w    gadgetListModeChangeButton
     dc.l    toggleListModePopup
-    * Play mode change -> popo
+    * Play mode change -> popup
     dr.w    gadgetPlayModeChangeButton
     dc.l    togglePlayModePopup
 	dc.w	0 ; END
  
 
 * Contains tooltip data for mainwindow gadgets
-tooltipList
+tooltipList:
 	dr.w 	gadgetPlayButton,.play
 	dr.w	gadgetInfoButton,.info
 	dr.w	gadgetStopButton,.stop
