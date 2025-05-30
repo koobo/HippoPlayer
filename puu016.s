@@ -60940,11 +60940,11 @@ umeClose:
 
 
 uslFile:	 dc.b	"PROGDIR:"
-uslFileOld   dc.b   "songlengths.db",0
+uslFileOld   dc.b   "au-songlengths.db",0
 uslDataName  dc.b   "PROGDIR:"
 uslDataNameO dc.b   "songlengths.tsv",0
 umeFile:	 dc.b	"PROGDIR:"
-umeFileOld   dc.b   "metadata.db",0
+umeFileOld   dc.b   "au-metadata.db",0
 umeDataName  dc.b   "PROGDIR:"
 umeDataNameO dc.b   "combined.tsv",0
      even
