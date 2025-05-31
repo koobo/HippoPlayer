@@ -4,3 +4,4 @@
 [submodule "audacious-uade-tools"]
 	path = audacious-uade-tools
 	url = git@github.com:mvtiaine/audacious-uade-tools.git
+        shallow = true
