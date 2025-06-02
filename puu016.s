@@ -10899,17 +10899,18 @@ rbutton1:
 	;move.b	new2(a5),d1
 	;clr.b	new2(a5)
 
-	cmp.b	#pm_random,playmode(a5)
-	bne.b	.xa
-
-	move.b	tabularasa(a5),d3
-	clr.b	tabularasa(a5)
-	tst.b	d3
-	bne	soitamodi_random
-
-	;tst.b	d1
-	;bne	soitamodi_random * soita randomi, now 'New' ja randomplay
-	;bsr	shownames
+; Removed this old logic faulty logic
+;;;	cmp.b	#pm_random,playmode(a5)
+;;;	bne.b	.xa
+;;;
+;;;	move.b	tabularasa(a5),d3
+;;;	clr.b	tabularasa(a5)
+;;;	tst.b	d3
+;;;	bne	soitamodi_random
+;;;
+;;;	;tst.b	d1
+;;;	;bne	soitamodi_random * soita randomi, now 'New' ja randomplay
+;;;	;bsr	shownames
 .xa
 
 	bsr	clear_random		* Tyhj‰x
@@ -11240,13 +11241,12 @@ filereq_code
 	addq	#1,filereq_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 	moveq	#0,d7
 
-	tst.l	modamount(a5)
-	sne	tabularasa(a5)		* pistetaan lippu jos aluks 
-					* ei moduuleja. tata kaytetaan
-					* randomplayn kanssa, eli katotaan
-					* otetaanko eka moduuli taysin 
-					* randomilla
-
+;;;	tst.l	modamount(a5)
+;;;	sne	tabularasa(a5)		* pistetaan lippu jos aluks 
+;;;					* ei moduuleja. tata kaytetaan
+;;;					* randomplayn kanssa, eli katotaan
+;;;					* otetaanko eka moduuli taysin 
+;;;					* randomilla
 	bsr.b	.filer
 
 	* Now exiting this process
