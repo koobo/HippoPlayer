@@ -45012,9 +45012,12 @@ p_sample:
 
  if DEBUG
 	pushm	d0-d3
+    tst     d0
+    bne     .dxx
 	move.l	d3,d0
     move.l  d4,d2
 	DPRINT	"Bufsize=%ld add=%ld mod=%ld"
+.dxx
 	popm	d0-d3
  endif
 
@@ -45050,6 +45053,7 @@ p_sample:
     DPRINT  "sample init failed %ld"
     push    d0
     jsr     stopStreaming
+    jsr     awaitStreamerAndFlush
     pop     d0
     rts
 
