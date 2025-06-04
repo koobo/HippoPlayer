@@ -37338,6 +37338,7 @@ modlen:
 .mt_GetNewNote
 
 	MOVE.L	.mt_SongDataPtr(a5),A0
+;;    move.b  950(a0),d2        * debug
 	LEA	12(A0),A3
 	LEA	952(A0),A2	;pattpo
 	LEA	1084(A0),A0	;patterndata
@@ -37458,11 +37459,13 @@ modlen:
     bne     .notLast
     st      d3
     st      .lastPositionJump(a5)
+ if DEBUG
     push    d0
     moveq   #0,d0
     move.b  d2,d0
     DPRINT  "last position jump %ld"
     pop     d0
+ endif
 .notLast
 
     * Allow jumps if there is a D on the same row.
@@ -37487,7 +37490,7 @@ modlen:
 	MOVE.B	.mt_SongPos(a5),D2	
     cmp.b   d0,d2
     bne     .ook
-    * Jump to the same position witouth a D,
+    * Jump to the same position without a D,
     * this is a songend.
     DPRINT  "Jump to the same position"
     st      .songend(a5)
@@ -37500,8 +37503,7 @@ modlen:
 .pbrk
 .nre	
 .fine
-    * Set new song position, not really needed as 
-    * the operation stops here.
+    * Set new song position
 	SUBQ.B	#1,D0
 	MOVE.B	D0,.mt_SongPos(a5)
 
