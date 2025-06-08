@@ -1,4 +1,9 @@
 TODO:
+- hawkeye.TME
+- infowindow: viimeinen rivi ei scrollaannu esiin "year: 1991"
+  jos on pieni ikkuna
+
+TODO:
 - Zoomed mode:
 -- resize gadget is visible, it should not
 

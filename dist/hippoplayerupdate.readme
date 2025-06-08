@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.62
+Version: 2.63
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -44,6 +44,7 @@ Quick overview of major changes since v2.45
   - "Enable xmaplay060": Enable a high quality XM replayer
   - "Enable MHI": Play MP3s with extenal hardware
   - "Position slider": For displaying and selecting position
+  - "Play mode button": Change play mode in the main window
 - Resizable main and info windows
 - Main window font can be changed to any font
 - Support for many new music formats
@@ -96,7 +97,7 @@ Additional files to check and download
   and "combined.tsv", browse to:
   https://github.com/koobo/HippoPlayer/tree/main
   ... then: 
-  -> audacious-udate-tools -> tsv -> pretty 
+  -> audacious-uade-tools -> tsv -> pretty 
   -> combined.tsv -> Download raw file
   ... and:
   -> songlengths.tsv -> Download raw file  
@@ -105,7 +106,7 @@ Additional files to check and download
 ------------------------------------------------------------------------------
 
 
-# Changes from v2.62 (4.4.2025) to v2.63 (?.?.2025) 
+# Changes from v2.62 (4.4.2025) to v2.63 (9.6.2025) 
 
 ## Fixes:
 
@@ -117,23 +118,31 @@ Additional files to check and download
     (really scrambled)
   - "Professional Tracker" by Hoffman & Daytripper
     (slightly scrambled)
-  - "Synaptic Gap II" by Cobolt (loop stop mechanism)
+  - "Synaptic Gap II" by Cobolt (loop stop trick)
   Previously to listen to some pattern scrambled modules
-  without playback prematurely ending it was necessary to
+  without playback erroneusly ending it was necessary to
   select the play mode "Module repeatedly", this is no 
   longer needed.
 
 - Song end was not detected when playing XM modules using
   xmaplay060, now ok.
 
-- In some RTG screenmodes the scopes used a lot of CPU due 
-  to "vertical blank" sync not working properly. The scopes 
-  now use another sync method (with faster CPUs), this 
-  should help.
+- Some RTG screenmodes don't have a working "vertical blank
+  sync" support, this caused the scopes to use a lot of CPU.
+  Another sync method is now used to help with this.
 
 - Previously the following formats could only be loaded 
   if the files were uncompressed, now they can be:
   Future Player, DeliTracker Custom, Dave Lowe
+
+- Fixed an error handling bug: If playback of a remote mp3 
+  file failed in certain way all subsequent remote file 
+  playback attempts also failed.
+
+- Fixed a case in random play mode where trying to play 
+  a selected module lead to a random module being played 
+  instead.
+
 
 ## New stuff:
 
@@ -156,10 +165,12 @@ Additional files to check and download
   
   To enable song lengths, download "songlengths.tsv", to enable metadata, 
   download "combined.tsv" and put these in the hippo dir. During 
-  next start they will be (slowly) converted into "songlengths.db" and
-  "metadata.db", and the tsv-files can be deleted. Some disk space
+  next start they will be (slowly) converted into "au-songlengths.db" and
+  "au-metadata.db", and the tsv-files can be deleted. Some disk space
   is needed for this feature. See "Additional files" section above
   for download details.
+
+  Thanks to mvtiane for his work on audacious-uade-tools and the data!
 
 - PSID data (author, publisher/copyright) is also shown in the infobox 
   area now.
