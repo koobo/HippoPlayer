@@ -45,7 +45,8 @@ ver	macro
 ;	dc.b	"v2.61 (28.5.2024)"
 ;	dc.b	"v2.62ß (?.?.2025)"
 ;	dc.b	"v2.62 (4.4.2025)"
-	dc.b	"v2.63ß (?.?.2025)"
+;	dc.b	"v2.63ß (?.?.2025)"
+	dc.b	"v2.63 (9.6.2025)"
 	endm	
 
 
@@ -23513,6 +23514,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr     .putMetaLine
     lea     metaData4(pc),a0 
     bsr     .putMetaLine
+	move.l	infotaz(a5),a3
+	bsr	    .lloppu
+    bsr     .putLineChange
 .noMeta
     rts
 

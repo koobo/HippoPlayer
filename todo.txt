@@ -1,7 +1,22 @@
+TODO:
+- Zoomed mode:
+-- resize gadget is visible, it should not
+
+FIXED: TODO:
+- kick3.2
+- uusi listmode-nappi oli kadonnut (myös prefsistä),
+  sen sijaan näkyö ekan nappulan päällä
+- korjaantui kuin kävi togglaa prefssistä
+- TEST: disabloidaan nappi, vaihdetaan moodia prefssistä
+  -> ilmestuu pakolla ruutuun
+
+FIXED: TODO:
+- play mode button tooltip does not work
+
 FIXED: TODO:
 - hoffman: msx.mod -> modlen jumittaa
 
-TODO:
+FIXED: TODO:
 - improve PT end detection heuristics
 - https://github.com/koobo/HippoPlayer/issues/26
 - Many trick pattern modules
