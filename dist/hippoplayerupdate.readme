@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.62
+Version: 2.63
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -44,6 +44,7 @@ Quick overview of major changes since v2.45
   - "Enable xmaplay060": Enable a high quality XM replayer
   - "Enable MHI": Play MP3s with extenal hardware
   - "Position slider": For displaying and selecting position
+  - "Play mode button": Change play mode in the main window
 - Resizable main and info windows
 - Main window font can be changed to any font
 - Support for many new music formats
@@ -92,10 +93,95 @@ Additional files to check and download
   https://aminet.net/mus/misc/mdx2wav.lha
 - Calibration utility to finetune 14-bit output:
   https://aminet.net/disk/cdrom/14Bit_CDPlayer.lha
+- To get song lengths and metadata, get "songlengths.tsv"
+  and "combined.tsv", browse to:
+  https://github.com/koobo/HippoPlayer/tree/main
+  ... then: 
+  -> audacious-uade-tools -> tsv -> pretty 
+  -> combined.tsv -> Download raw file
+  ... and:
+  -> songlengths.tsv -> Download raw file  
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.62 (4.4.2025) to v2.63 (9.6.2025) 
+
+## Fixes:
+
+- Protracker module end detector, subsong detector, 
+  length calculator improved. Should now handle some 
+  modules better, for example:
+  - "Black Queen" by Dreamer (pattern scrambler classic)
+  - "404 Crew Returns" and "Brofists" by Bonefish & Mygg
+    (really scrambled)
+  - "Professional Tracker" by Hoffman & Daytripper
+    (slightly scrambled)
+  - "Synaptic Gap II" by Cobolt (loop stop trick)
+  Previously to listen to some pattern scrambled modules
+  without playback erroneusly ending it was necessary to
+  select the play mode "Module repeatedly", this is no 
+  longer needed.
+
+- Song end was not detected when playing XM modules using
+  xmaplay060, now ok.
+
+- Some RTG screenmodes don't have a working "vertical blank
+  sync" support, this caused the scopes to use a lot of CPU.
+  Another sync method is now used to help with this.
+
+- Previously the following formats could only be loaded 
+  if the files were uncompressed, now they can be:
+  Future Player, DeliTracker Custom, Dave Lowe
+
+- Fixed an error handling bug: If playback of a remote mp3 
+  file failed in certain way all subsequent remote file 
+  playback attempts also failed.
+
+- Fixed a case in random play mode where trying to play 
+  a selected module lead to a random module being played 
+  instead.
+
+
+## New stuff:
+
+- Shortcut button to change the play mode added beside the position 
+  slider. This does the same as "Prefs > General > Play",
+  ie. repeat, loop, random, etc. Enable this button with 
+  "Prefs > Play-2 > Play mode button, position slider".
+  
+- Support for Audacious-UADE metadata. This data contains
+  song lengths, author/composer, publisher/group, album/game/demo 
+  name and year info for about 300000 modules.
+
+  Song length will be shown in the title bar as well as with the 
+  position slider. Other metadata is shown in the infobox at the 
+  top and in the info window. Song length is used for end detection 
+  for the formats which do not support it otherwise.
+
+  Protracker modules already have lengths calculated, but every other
+  format, including obscure exotics, will get lengths this way.
+  
+  To enable song lengths, download "songlengths.tsv", to enable metadata, 
+  download "combined.tsv" and put these in the hippo dir. During 
+  next start they will be (slowly) converted into "au-songlengths.db" and
+  "au-metadata.db", and the tsv-files can be deleted. Some disk space
+  is needed for this feature. See "Additional files" section above
+  for download details.
+
+  Thanks to mvtiane for his work on audacious-uade-tools and the data!
+
+- PSID data (author, publisher/copyright) is also shown in the infobox 
+  area now.
+
+- Updated playsid.library v1.10:
+  - ZorroSID address configurable with env variables
 
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
 
 # Changes from v2.61 (28.5.2024) to v2.62 (4.4.2025) 
 

@@ -44,6 +44,9 @@ Configuring with environment variables
 - Toggle reSID debug colors:
   Variable: "PlaySIDDebug", values: "on,off"
 
+- Set ZorroSID address:
+  Variable: "PlaySIDZorroSID", value: 8-digit hex number, 
+  example: "00EE0000"
 
 reSID
 -----
@@ -98,7 +101,8 @@ ZorroSID
 --------
 
 ZorroSID is a zorro compatible card with a SID chip.
-The card should be configured to be at address $EE0000.
+The card address can be configured with an env variable,
+the default address is $EE0000.
 
 For an MMU enabled system you need to configure the
 memory range properly. If you have Thor's MMU libraries
@@ -162,3 +166,5 @@ Changelog
                - Aliens by Paul Clansey 
                - Vangelis Is Not Dead by Martin Demsky
                - Timewarp Spheres 2SID by F7sus4
+- 2025-05   
+  v1.10     - Allow configuring ZorroSID base address

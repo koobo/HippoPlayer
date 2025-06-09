@@ -45,7 +45,9 @@ ver	macro
 ;	dc.b	"v2.61ﬂ (?.?.2024)"
 ;	dc.b	"v2.61 (28.5.2024)"
 ;	dc.b	"v2.62ﬂ (?.?.2025)"
-	dc.b	"v2.62 (4.4.2025)"
+;	dc.b	"v2.62 (4.4.2025)"
+;	dc.b	"v2.63ﬂ (?.?.2025)"
+	dc.b	"v2.63 (9.6.2025)"
 	endm	
 
 
@@ -816,11 +818,7 @@ SAMPLE_FORMAT_AIFF = 2
 SAMPLE_FORMAT_WAV  = 3
 SAMPLE_FORMAT_MP3  = 4
 sampleformat   rs.b    1
-
-* This is set in loadfile() to indicate an executable module has been 
-* loaded with LoadSeg(). Value can be 0 for normal processing,
-* or p_delicustom or p_futureplayer.
-executablemoduleinit		rs.b	1
+                rs.b        1   * PAD
 
 ****** Prefs asetukset, joita k‰sitell‰‰n
 
@@ -1116,6 +1114,7 @@ modulelength	rs.l	1	* modin pituus
 modulefilename	rs.l	1	* modin tiedoston nimi
 solename	rs.l	1	* osoitin pelkk‰‰n tied.nimeen
 kanavatvarattu	rs	1	* 0: ei varattu, ei-0: varattu
+moduleAddressLoadSeg rs.l 1  * module if loaded with LoadSeg()
 
 ;earlymoduleaddress	rs.l	1	*
 ;earlymodulelength	rs.l	1	*
@@ -1265,8 +1264,9 @@ lod_tfmx		rs.b	1
 lod_pad			rs.b	1
 lod_kommentti		rs.b	1	 * 0: ei oteta kommenttia
 lod_xpkfile		rs.b	1	 * <>0: tiedosto oli xpk-pakattu
-lod_exefile		rs.b	1	 * <>0: file was an exe		
+lod_exefile__	rs.b	1	 * <>0: file was an exe		
 lod_dirlock		rs.l	1
+lod_xpkOutLen   rs.l    1
 lod_buf			rs.b	200
 lod_b			rs.b	0
 
@@ -1585,6 +1585,28 @@ vgmPlayTime     rs.l    1 * Host playback time in 44100 Hz ticks
 sid_followPositions rs.w    4
 sid_followFractions rs.w    4
 
+* Audacious-UADE songlength data, metadata
+uslMD5          rs.b      6   * Loaded module 48-bit MD5 sum
+uslIndexPtr     rs.l      1   * Pointer to songlength DB index
+uslDataPtr      rs.l      1   * Pointer to current DB block
+uslSongLengthData rs.w    16  * SL data for the current module, max 16 songs
+umeIndexPtr     rs.l      1   * Pointer to metadata DB index
+umeDataPtr      rs.l      1   * Pointer to current DB block
+umeMetaDataPtr  rs.l      1   * Ptr to metadata strings
+
+* Info text scroller
+infoScrollPos       rs.w      1 
+infoScrollWaitTicks rs.w      1 * ticks to wait before scrolling
+infoScrollMoveTicks rs.w      1
+infoScrollLineHeight rs.w     1
+infoScrollLength    rs.w      1 * pixels, height
+infoScrollBitplane  rs.l      1
+infoScrollBitplaneW rs.w      1
+infoScrollBitplaneH rs.w      1
+infoScrollEnabled   rs.b      1
+infoScrollSmall     rs.b      1 * set if all text fits 
+infoScrollBitMap    rs.b      bm_SIZEOF-7*4 * for 1 bpl
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -1769,18 +1791,6 @@ DPRINT macro
 	endc
 	endm
 
-* No auto line feed
-DPRINT2 macro
-	ifne DEBUG
-	pea	.LDD\2(pc)
-	jsr	PRINTOUT
-	bra.b	.LD\2
-.LDD\2
- 	dc.b 	\1,0
- 	even
-.LD\2
-	endc
-	endm
 
 * delay
 DDELAY macro
@@ -2407,7 +2417,8 @@ layersName	dc.b	"layers.library",0
 expansionName dc.b	"expansion.library",0
 tntName     dc.b    "trinity.library",0
 cianame	dc.b	"ciaa.resource",0
- 
+timerDeviceName dc.b	"timer.device",0
+
 CHECKSTART
 CHECKSUM	=	43647
 
@@ -3219,6 +3230,11 @@ main:
 	bra		print
 .oohi
 
+    tst.b   win(a5)
+    beq     .uc
+    * Get metadata at startup
+    jsr     initializeUslUme
+.uc
 
 
  ifne EFEKTI
@@ -3756,6 +3772,11 @@ exit
     jsr     freeStreamerUrl
     jsr     freeSTILData
     jsr     freeSLData
+    jsr     uslFreeIndex
+    jsr     uslFreeData
+    jsr     umeFreeIndex
+    jsr     umeFreeData
+    jsr     infoScrollFree
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -4324,6 +4345,8 @@ handleUiRefreshSignal
 ;	bsr	lootaan_muisti
 	jsr	lootaan_nimi
     jsr     refreshPositionSlider
+    bsr     periodicEndCheck
+    jsr     drawInfoScroller 
 
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
@@ -4339,6 +4362,54 @@ handleUiRefreshSignal
 
 	pop	d0
 	rts
+
+* See if song ended base on the song length data
+periodicEndCheck:
+    tst.b   playing(a5)
+    beq     .3
+
+    * PSID?
+    cmp.w   #pt_sid,playertype(a5)
+    bne     .1
+    jmp     sidEndCheck
+.1
+    * Others, if they do not provide the end check otherwise
+	move.l	playerbase(a5),a0
+
+    * Special cases: 
+    * If Protracker and calculated length available,
+    * use this as well as fallback, in some cases
+    * end is not detected ovherwise (brofists.mod).
+    cmp.w   #pt_tfmx,p_type(a0)
+    beq     .wasTfmx
+    cmp.w   #pt_tfmx7,p_type(a0)
+    beq     .wasTfmx
+    cmp.w   #pt_prot,p_type(a0)
+    bne     .notPt
+    tst.l   kokonaisaika(a5)
+    bne     .wasPt
+.notPt
+	move	#pf_end,d2
+	and	    p_liput(a0),d2
+    bne     .3
+.wasTfmx
+    * Do we have length data?
+    tst.w   uslSongLengthData(a5)
+    beq     .3
+    tst.l   kokonaisaika(a5)
+    beq     .3
+.wasPt
+    move.l	aika2(a5),d0
+	sub.l	aika1(a5),d0            * can be negative
+    move.w  kokonaisaika(a5),d1     * mins
+    mulu    #60,d1
+    add.w   kokonaisaika+2(a5),d1   * secs
+    cmp.l   d0,d1
+    bge     .3
+    st      songover(a5)
+    DPRINT  "periodicEndCheck! %ld %ld"
+.3
+    rts
 
 
 handlePosUpdateSignal
@@ -4357,6 +4428,7 @@ handleSignal2
 
 	* Do this to update favorite status if settings changed
 	jsr	handleFavoriteModuleConfigChange
+    jsr setPlayModeChangeButtonIcon
 
 	* Check if boxsize in prefs was changed
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
@@ -4602,7 +4674,7 @@ avaa_ikkuna:
 	jsr	layoutGadgetsVertical
     * Ensure list mode toggle button has the correct icon 
     jsr setListModeChangeButtonIconNoRefresh    
- 
+    jsr setPlayModeChangeButtonIconNoRefresh
 	
 	; Update into window structure
 	lea	winstruc,a0
@@ -5272,6 +5344,11 @@ wrender:
 	move.l	d7,a3
 	tst.l	d7
 	bne.b	.clrloop
+
+    lea     gadgetPlayModeChangeButton,a3
+    movem.w 4(a3),d0/d1/d4/d5
+    bsr     .cler
+
 	bra.b	.oru
 
 .cler	
@@ -5316,7 +5393,9 @@ wrender:
     lea     gadgetPositionSlider,a1
     move.l	windowbase(a5),a0
 	lob     RemoveGadget
-    DPRINT  "RemoveGadget=%ld"
+    lea     gadgetPlayModeChangeButton,a1
+    move.l	windowbase(a5),a0
+	lob     RemoveGadget
 
     tst.b   showPositionSlider(a5)
     beq     .noPos
@@ -5324,7 +5403,10 @@ wrender:
     move.l	windowbase(a5),a0
     moveq   #-1,d0  * add as last
     lob     AddGadget
-    DPRINT  "AddGadget=%ld"
+    lea     gadgetPlayModeChangeButton,a1
+    move.l	windowbase(a5),a0
+    moveq   #-1,d0  * add as last
+    lob     AddGadget
 .noPos
 
 
@@ -5386,6 +5468,14 @@ wrender:
     ; Position slider
     tst.b   showPositionSlider(a5)
     beq     .noPosSl
+;    lea     gadgetPositionSlider,a0
+;    move    gg_LeftEdge(a0),plx1
+;    move    gg_TopEdge(a0),ply1
+;    move.l  plx1,plx2
+;    move.l  ply1,ply2
+;    add     gg_Width(a0),plx2
+;    add     gg_Height(a0),ply2
+
     move    buttonRow1TopEdge(a5),ply1
     sub     #12+2,ply1
     move    ply1,ply2
@@ -5394,6 +5484,9 @@ wrender:
 	moveq	#5+WINX,plx1
 	move	WINSIZX(a5),plx2
 	subq	#8,plx2
+
+    subq    #2,plx2
+    sub     gadgetPlayModeChangeButton+gg_Width,plx2
 
 	move.l	rastport(a5),a1
 	jsr 	sliderlaatikko
@@ -5426,7 +5519,9 @@ wrender:
 	bsr	printkorva
     tst boxsize(a5)
     beq .sk
-	lea	gadgetListModeChangeButton,a0
+	lea	gadgetListModeChangeButton-button1(a0),a0
+    bsr	printkorva
+	lea	gadgetPlayModeChangeButton-gadgetListModeChangeButton(a0),a0
     bsr	printkorva
 .sk
 
@@ -6897,10 +6992,6 @@ freemodule:
 	DPRINT	"freemodule obtain data"
 	bsr	obtainModuleData
 
-	* Check if need to do UnLoadSeg
-	bsr	moduleIsExecutable
-	move.b	d0,d7
-
 	* Need to clear playertype(a5) to avoid
     * following freemodules to maybe mistakenly thing
     * that UnLoadSeg() is needed.
@@ -6926,6 +7017,8 @@ freemodule:
 	* For non-EP players supporting patterninfo
 	clr.l	deliPatternInfo(a5) 
 	jsr	clearScopeData
+    jsr     uslClearSongData
+    jsr     uslUmeClear
 	
 ;	bsr	lootaa
 	bsr	inforivit_clear
@@ -6936,30 +7029,16 @@ freemodule:
 	lea	ps3mroutines(a5),a0		* vapautetaan replayeri
 	jsr	freereplayer
 	jsr	freeDeliPlayer
-	
-	move.l	(a5),a6
-	move.l	moduleaddress(a5),d0
-	beq.b	.ee
-	move.l	d0,a1
 
-	tst.b	d7
-	beq.b	.normal
-	move.l 	a1,d1
+
+    move.l  moduleAddressLoadSeg(a5),d1
+    beq     .noSegs
+    clr.l   moduleAddressLoadSeg(a5)
 	lore	Dos,UnLoadSeg
- if DEBUG
-	move.l	moduleaddress(a5),d0
-	DPRINT	"UnLoadSeg 0x%lx"
- endif
-	bra.b	.exe
-.normal
+	DPRINT	"UnLoadSeg!"
+.noSegs
 
-	move.l	modulelength(a5),d0
-	beq.b	.ee
-	lob	FreeMem
-.exe
-
-	clr.l	moduleaddress(a5)
-	clr.l	modulelength(a5)
+    bsr     justFreeModuleData
 
 ;	tst.l	keyfile+44(a5)	* datan v‰lilt‰ 38-50 pit‰‰ olla nollia
 ;	beq.b	.zz
@@ -6988,21 +7067,19 @@ freemodule:
 	movem.l	(sp)+,d0-a6
 	rts
 
+justFreeModuleData:
+    move.l	(a5),a6
+	move.l	moduleaddress(a5),d0
+	beq.b	.ee
+	move.l	d0,a1
+	move.l	modulelength(a5),d0
+	beq.b	.ee
+	lob	FreeMem
+.ee
+	clr.l	moduleaddress(a5)
+	clr.l	modulelength(a5)
+    rts
 
-* out:
-*  d0 = non-zero if loaded module is an LoadSeg() loaded exe	
-moduleIsExecutable
-	cmp	#pt_delicustom,playertype(a5)
-	beq.b	.isExe
-	cmp	#pt_futureplayer,playertype(a5)
-	beq.b	.isExe
-	cmp	#pt_davelowe,playertype(a5)
-	beq.b	.isExe
-	moveq	#0,d0
-	rts
-.isExe 
-	moveq	#1,d0 
-	rts
 
 *******************************************************************************
 * Volumen feidaus
@@ -7187,8 +7264,18 @@ buttonspressed:
 	move.l	a2,a0
 	add	(a2)+,a0
 	move.l	(a2)+,a1
+    ; -------------
+    * Special case check,
+    * this can be visible or not
+    cmp.l   #gadgetPlayModeChangeButton,a0
+    bne     .11
+    tst.b   showPositionSlider(a5)
+    beq     .skip
+.11
+    ; -------------
 	bsr 	.rightButtonDownCheck
 	beq.b	.handled
+.skip
 	tst.w	(a2) 
 	bne.b	.actionLoop
 
@@ -7407,6 +7494,11 @@ checkMouseOnGadget
     cmp.l   #gadgetSearchSource,a0
     beq     .xx
 .srch
+    tst.b   showPositionSlider(a5)
+    bne     .ps
+    cmp.l   #gadgetPlayModeChangeButton,a0
+    beq     .xx
+.ps
 
 	movem	gg_LeftEdge(a0),d0-d3
 	move	mousex(a5),d6
@@ -7468,7 +7560,8 @@ tooltipHandler
 	move	mousey(a5),d1
 
 	* Check if above "Play" button
-	lea	gadgetPlayButton,a0
+	;lea	gadgetPlayButton,a0
+	lea	gadgetPositionSlider,a0
 	move	gg_TopEdge(a0),d2
 	cmp	d1,d2
 	blo.b	.under
@@ -7889,6 +7982,7 @@ signalreceived
 	bne.b	.mododo
 
 	bsr	settimestart
+    jsr uslGetSongLength
 .reet0	st	playing(a5)
 	bsr	inforivit_play
 	jsr	start_info
@@ -8187,9 +8281,8 @@ getRandomValue
         rts
 
 
-
 * mulu_32 --- d0 = d0*d1
-mulu_32	movem.l	d2/d3,-(sp)
+mulu_32:	movem.l	d2/d3,-(sp)
 	move.l	d0,d2
 	move.l	d1,d3
 	swap	d2
@@ -8479,6 +8572,7 @@ umph
 	st	playing(a5)		* Ei varmaan tuu initerroria
 	bsr	inforivit_play
 	bsr	settimestart
+    jsr uslGetSongLength
 	bra	start_info
 	
 .new
@@ -8557,6 +8651,7 @@ umph
 	bsr	settimestart
 	st	playing(a5)
 	bsr	inforivit_play
+    jsr uslGetSongLength
 	bsr	start_info
 
 .erer
@@ -9407,9 +9502,12 @@ gadgetsup:
     ;dr  rlistmodePop
     dr  .exit       * resize gadget
     dr  .rpositionslider
+    dr  .rplaymodechange
 
 .rpositionslider
     jmp     positionSliderMoved
+.rplaymodechange
+    jmp     togglePlayMode
 
 * Print some text into the filebox
 ** a0 = teksti
@@ -10311,6 +10409,7 @@ songSkip
 	bsr	settimestart
 
 	bsr	inforivit_play
+    jsr uslGetSongLength
 .err	
 	bsr	lootaan_aika
 .nosong
@@ -10802,17 +10901,18 @@ rbutton1:
 	;move.b	new2(a5),d1
 	;clr.b	new2(a5)
 
-	cmp.b	#pm_random,playmode(a5)
-	bne.b	.xa
-
-	move.b	tabularasa(a5),d3
-	clr.b	tabularasa(a5)
-	tst.b	d3
-	bne	soitamodi_random
-
-	;tst.b	d1
-	;bne	soitamodi_random * soita randomi, now 'New' ja randomplay
-	;bsr	shownames
+; Removed this old logic faulty logic
+;;;	cmp.b	#pm_random,playmode(a5)
+;;;	bne.b	.xa
+;;;
+;;;	move.b	tabularasa(a5),d3
+;;;	clr.b	tabularasa(a5)
+;;;	tst.b	d3
+;;;	bne	soitamodi_random
+;;;
+;;;	;tst.b	d1
+;;;	;bne	soitamodi_random * soita randomi, now 'New' ja randomplay
+;;;	;bsr	shownames
 .xa
 
 	bsr	clear_random		* Tyhj‰x
@@ -10908,6 +11008,7 @@ rbutton1:
 	st	playing(a5)		* Ei varmaan tuu initerroria
 	bsr	settimestart
 	bsr	inforivit_play
+    jsr uslGetSongLength
 	bra	start_info
 	;rts
 
@@ -10963,6 +11064,7 @@ rbutton1:
 	bne.b	.inierr
 
 	bsr	settimestart
+    jsr uslGetSongLength
 .reet0	st	playing(a5)
 	bsr	inforivit_play
 	bsr	start_info
@@ -11141,13 +11243,12 @@ filereq_code
 	addq	#1,filereq_prosessi(a5)	* Lippu: prosessi p‰‰ll‰
 	moveq	#0,d7
 
-	tst.l	modamount(a5)
-	sne	tabularasa(a5)		* pistetaan lippu jos aluks 
-					* ei moduuleja. tata kaytetaan
-					* randomplayn kanssa, eli katotaan
-					* otetaanko eka moduuli taysin 
-					* randomilla
-
+;;;	tst.l	modamount(a5)
+;;;	sne	tabularasa(a5)		* pistetaan lippu jos aluks 
+;;;					* ei moduuleja. tata kaytetaan
+;;;					* randomplayn kanssa, eli katotaan
+;;;					* otetaanko eka moduuli taysin 
+;;;					* randomilla
 	bsr.b	.filer
 
 	* Now exiting this process
@@ -16213,6 +16314,7 @@ pupdate2
 	lea	pbutton1,a1
 	bra	prunt 
 
+togglePlayModePopupOptions:
 ls50	dc.b	23,5
 ls5 dc.b	"List repeatedly",0
 ls6 dc.b	"List once",0
@@ -18000,7 +18102,7 @@ sidmode_callback
     moveq   #1,d0
     rts
 .2  
-    bsr     get_sid
+    jsr     get_sid
     jmp     isPlaysidReSID
 
 rsidmode
@@ -18009,7 +18111,7 @@ rsidmode
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
-    bsr     get_sid
+    jsr     get_sid
     jsr     isPlaysidReSID
     bne     .2
 	clr.b	sidmode_new(a5)
@@ -18049,7 +18151,7 @@ sidmode03	dc.b	"reSID "
 t8580       dc.b    "8580",0
 sidmode04	dc.b	"reSID Auto",0
 sidmode05	dc.b	"SIDBlaster",0
-sidmode06	dc.b	"ZorroSID EE",0
+sidmode06	dc.b	"ZorroSID",0
 sidmode07	dc.b	"USBSID-Pico",0
  even
 
@@ -19581,9 +19683,11 @@ delete
 	lore	Exec,Remove
 	move.l	a3,a0
  ifne DEBUG
-	DPRINT2 "Deleting->",1
-	DEBU	l_filename(a0)
-	DPRINT  "<-"
+    push    a0
+    lea l_filename(a0),a0
+    move.l  a0,d0
+	DPRINT "Deleting %s"
+    pop     a0
  endc
 
 
@@ -19848,7 +19952,7 @@ inforivit_play:
 	lea	moduletype(a5),a1
 .ol	cmp.b	#10,(a2)+
 	bne.b	.ol
-	addq.l	#6,a2
+	addq.l	#6,a2           * skip "Type: "
 .cep	move.b	(a2)+,(a1)+
 	bne.b	.cep
 	clr.b	(a1)
@@ -19861,13 +19965,19 @@ bipb2
 	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
 	bsr		infoBoxPrint
+    jsr     initInfoScroller
+    DPRINT  "infoBoxPrint"
 bopb	rts
 
 putinfo:
 	bsr	inforivit_clear
 	bra.b	bipb
 
-printInfoBox:
+* In:
+*   a0 = text
+*   d0 = x
+*   d1 = y
+;printInfoBox:
 infoBoxPrint:
     tst.b   win(a5)
     beq     .x
@@ -19892,7 +20002,7 @@ putinfo2:
 	move	infoBoxTopEdge(a5),d1
 	move.l	listfontbase(a5),a1
 	add		tf_YSize(a1),d1	* to 2nd row
-	bra.b	bipb2	
+	bra	bipb2	
 
 
 putinfo2centered:
@@ -20128,7 +20238,7 @@ siisti_nimi
 	printt	"todo: align name and type for extra nicety"
 
 tyyppi1_t	dc.b	"Name: %s",10
-		dc.b	"Type: %s%s",0
+tyyppi1b_t  dc.b	"Type: %s%s",0
 
 tyyppi2_t	dc.b	"Name: %s",10
 		dc.b	"Type: %s %ldch%s",0
@@ -20139,6 +20249,8 @@ type_notAhi dc.b    0
 type_14bit  dc.b    " 14-bit",0
 type_agus   dc.b    " AGUS",0
  even
+
+
 
 *******************************************************************************
 * Loota (otsikkopalkki tiedot)
@@ -20442,7 +20554,7 @@ lootaan_aika
 ;	move.b	#'-',(a0)+
 ;	bra.b	.oai
 ;.aik
- 
+
     * Put total time if available
  	tst.l	kokonaisaika(a5)
 	beq.b	.oai
@@ -21305,6 +21417,9 @@ showTooltipPopup
 	* place above pointer a bit
 	sub	d5,d7
 	subq	#8,d7
+    bpl     .yok
+    moveq   #0,d7   * validate y
+.yok
 	move	d7,nw_TopEdge(a0)
 
 	* see if it fits on screen and adjust
@@ -21543,6 +21658,13 @@ rbutton10b
 .n	movem.l	(sp)+,d0-a6
 .x	rts
 
+
+metaData1  dc.b    "Authors: %s",0
+metaData2  dc.b    "Publishers: %s",0
+metaData3  dc.b    "Product: %s",0
+metaData4  dc.b    "Year: %s"
+ even
+ 
 info_code:
 	lea	var_b,a5
 	addq	#1,info_prosessi(a5)
@@ -22440,6 +22562,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	beq.b	.1
 	cmp	    #pt_sample,playertype(a5)
 	beq.b   .2 ; no address for samples
+    cmp     #pt_delicustom,playertype(a5)
+    beq     .2
 	tst.l	moduleaddress(a5)
 	beq.b	.1
 .2	tst.l	playingmodule(a5)
@@ -22935,10 +23059,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.lloppu
 	; do three lines wrapping at space
 	bsr 	.doLine
-	bpl 	.ends
+	bpl 	.endss
 	bsr 	.doLine
-	bpl 	.ends
+	bpl 	.endss
 	bsr 	.doLine
+.endss
+	move.l	infotaz(a5),a3
+	bsr	.lloppu
+	bsr	    .putLineChange
+    bsr     .putMetaData
 	bra 	.ends
 
 * Copies a line to output, cuts at space near the end of line
@@ -23353,7 +23482,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.doLine
 .endA	lea	200(sp),sp
 .noAuth
+
+    bsr     .putMetaData
+
 	bra	.selvis
+
 
 
 .form3	
@@ -23365,6 +23498,57 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .author
 	dc.b	"Player: %s",0
   even
+
+* Put UADE-Audacious metadata
+.putMetaData
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .noMeta
+    move.l  d0,a4
+    tst.b   (a4)
+    beq     .noMeta
+
+    lea     metaData1(pc),a0 
+    bsr     .putMetaLine
+    lea     metaData2(pc),a0 
+    bsr     .putMetaLine
+    lea     metaData3(pc),a0 
+    bsr     .putMetaLine
+    lea     metaData4(pc),a0 
+    bsr     .putMetaLine
+	move.l	infotaz(a5),a3
+	bsr	    .lloppu
+    bsr     .putLineChange
+.noMeta
+    rts
+
+.putMetaLine
+    tst.b   (a4)            * skip empty
+    beq     .nextMeta
+
+    lea     -100(sp),sp
+    move.l  a4,d0
+    move.l  sp,a3
+    jsr     desmsg3
+
+	move.l	infotaz(a5),a3
+	bsr	    .lloppu
+    bsr     .putLineChange
+    
+    move.l  sp,a0
+    move.l  a3,a1
+    bsr     .doLine
+    bpl     .endM
+    bsr     .doLine
+    bpl     .endM
+    bsr     .doLine
+.endM
+
+    lea     100(sp),sp
+
+.nextMeta
+    tst.b   (a4)+
+    bne     .nextMeta
+    rts
 
 
 .putcomment:
@@ -23392,6 +23576,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	popm	d0/d1/a0/a3
 	rts
 
+* d1 = character limit for the first line to be put
 .putlines
 	moveq	#0,d0
 .com	addq	#1,d0
@@ -23499,8 +23684,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * Out:
 *   a3 = buffer
 .allo:
-	bsr.b	.allo2
-	beq.b	.xiipo
+	bsr 	.allo2
+	beq 	.xiipo
 
 	lea	-32(sp),sp
 	move.l	sp,a4
@@ -23531,7 +23716,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.putcomment2
 	
 	move.l	infotaz(a5),a3
-	bsr.b	.lloppu
+	bsr 	.lloppu
+    bsr     .putMetaData
+	move.l	infotaz(a5),a3
+	bsr 	.lloppu
 
 	bsr	.putLineChange
 	moveq	#39-1,d0
@@ -24342,14 +24530,27 @@ intserver
 	move.l	playerbase(a5),a0
 	move	#pf_end,d2
 	and	p_liput(a0),d2
-	;bne.b	.skipCheck
+    ;bne     .skipCheck
 	beq.b	.noSongEnd
+
+    * Protracker case:
+    * - backwards jump is a songover signal
+    *   for songs that have subsongs
+    * - it is not a songover signal if mod has no
+    *   subsongs
+    cmp.w   #pt_prot,playertype(a5)
+    bne     .noProt
+    tst.w   maxsongs(a5)
+    beq     .skipCheck
+.noProt
+
+
 	* This player supports songend. 
 	* To avoid extra songend detections, do the song position
 	* check only if the current position is non-zero.
 	* This detects PT modules that jump from the last position to 
 	* some other than position zero.
-	tst	d0
+	tst	    d0
 	beq.b	.skipCheck
 
 .noSongEnd
@@ -24373,6 +24574,10 @@ intserver
 	tst.b	playing(a5)
 	beq.b	.notPlaying3
 	lsr     #1,d0				
+    tst.b    infoScrollEnabled(a5)
+    beq     .notPlaying3
+    * Scroller enabled, update more often
+    moveq   #SCROLL_UPDATE_RATE,d0
 .notPlaying3
 
 	* Count if enough VBlanks have passed and then signal
@@ -25314,8 +25519,8 @@ s_buffer0w                    rs.w       1
 * Buffer height rasterlines
 s_buffer0h                    rs.w       1
 * Set to true if draw buffer is in CHIP
-s_bufferIsChip                rs.b       1
-                              rs.b       1
+s_bufferIsChip                rs.b       1 
+s_syncMode                    rs.b       1 * 0: vblank, 1: timer device
 s_quadmode                    rs.b       1
 s_quadmode2                   rs.b       1
 s_scopeDrawAreaWidth		rs.w 	1
@@ -25362,6 +25567,9 @@ s_spectrumInitialized         rs.w       1
 s_sidScopeData                rs.b      sids_size 
 s_sid2ScopeData               rs.b      sids_size 
 s_sid3ScopeData               rs.b      sids_size 
+
+s_timerPort                   rs.b      MP_SIZE
+s_timerIORequest              rs.b      IOTV_SIZE
 
 s_multab                      rs.w       256 * modulo multiplication table
 s_scopeHorizontalBarTable     rs.b       512
@@ -25973,6 +26181,39 @@ scopeEntry:
     move.l  d0,a0
     move.l  a4,TC_Userdata(a0)
 
+    ; ---------------------------------
+    ; Select sync mode
+    ; 68020 or higher, use timer.device
+	btst	#AFB_68020,AttnFlags+1(a6)
+	sne     s_syncMode(a4)
+    ; ---------------------------------
+    ; Create port
+    lea     s_timerPort(a4),a3
+    moveq   #-1,d0
+    lob     AllocSignal	
+    move.b	d0,MP_SIGBIT(a3)
+ 	move.l	s_quad_task(a4),MP_SIGTASK(a3)
+	move.b	#NT_MSGPORT,LN_TYPE(a3)
+	clr.l	LN_NAME(a3)
+	move.b	#PA_SIGNAL,MP_FLAGS(a3)
+	lea     MP_MSGLIST(a3),a0
+	NEWLIST	a0
+    ; ---------------------------------
+    ; Create IO
+	lea     s_timerIORequest(a4),a2
+	move.l	a3,MN_REPLYPORT(a2)
+	move.b	#NT_MESSAGE,LN_TYPE(a2)
+	move	#IOTV_SIZE,MN_LENGTH(a2)
+    ; ---------------------------------
+    ; timer.device
+    lea     timerDeviceName,a0
+	lea     s_timerIORequest(a4),a1
+    moveq   #UNIT_VBLANK,d0
+    moveq   #0,d1
+    lob     OpenDevice * returns d0=non-zero on error
+    tst.l   d0
+    ; ---------------------------------
+
 * Modulo multab 
 	lea	s_multab(a4),a0
 	moveq	#0,d0
@@ -26236,25 +26477,40 @@ scopeEntry:
 	;;moveq	#-30,d0				* Prioriteetti 0:sta -30:een
 	lore	Exec,SetTaskPri
 
+ if DEBUG
+    moveq   #1,d0
+    and.b   s_syncMode(a4),d0
+    SDPRINT "Enter scope loop, timer sync=%ld"
+ endif
+
 *********************************************************************
 * Scope main loop, scope loop, main scope loop, scope main loop
 *********************************************************************
 
-scopeTest=0
+    tst.b   s_syncMode(a4)
+    bne     scopeLoop\.first    * Start with SendIO, not WaitIO
 
 scopeLoop:
 
- ifne scopeTest
- 	move	#$666,$dff180
-.1 	cmp.b	#$40,$dff006
- 	bne.b	.1
-.2 	cmp.b	#$40,$dff006
- 	beq.b	.2
- 	move	#$f00,$dff180
- else
-	move.l	_GFXBase(a5),a6
-	lob	WaitTOF
- endif
+    ; ---------------------------------
+    tst.b   s_syncMode(a4)
+    beq     .vbl
+    ; ---------------------------------
+    lea     s_timerIORequest(a4),a1  
+	lore    Exec,WaitIO
+.first:
+    lea     s_timerIORequest(a4),a1  
+	move.w	#TR_ADDREQUEST,IO_COMMAND(a1)
+	clr.l   IOTV_TIME+TV_SECS(a1)
+	move.l	#19*1000,IOTV_TIME+TV_MICRO(a1)
+	lore    Exec,SendIO
+    bra     .timer
+    ; ---------------------------------
+.vbl
+    move.l  _GFXBase(a5),a6
+	lob     WaitTOF
+.timer
+    ; ---------------------------------
 
 
 	;tst.b	tapa_quad(a5)		* pit‰‰kˆ poistua?
@@ -26426,6 +26682,15 @@ qexit:
 	lea	scopeStopTimeMicros(a5),a1
 	lore	Intui,CurrentTime
  endif
+    ; ---------------------------------
+    tst.b   s_syncMode(a4)
+    beq     .nos
+    lea     s_timerIORequest(a4),a1  
+	lore    Exec,WaitIO
+.nos
+    lea     s_timerIORequest(a4),a1
+    lore    Exec,CloseDevice
+    ; ---------------------------------
 
 	SDPRINT	"Scope task will exit"
 	bsr.b	qflush_messages
@@ -26563,14 +26828,21 @@ initScopeBitmaps
 	lore	Exec,TypeOfMem
 	btst	#MEMB_CHIP,d0
 	sne		s_bufferIsChip(a4)
-
+    
     cmp.w   #50,LIB_VERSION(a6)
     blo.b   .1
     * Kickstart 4.0, 4.1, CPU is PPC.
     * Could be non-classic HW in this case.
     * Switch to CPU only routines.
+.cpu
     clr.b   s_bufferIsChip(a4)
 .1
+ if DEBUG
+    moveq   #1,d0
+    and.b   s_bufferIsChip(a4),d0
+    SDPRINT "Scope buffer is chip=%ld"
+ endif
+
 
 	moveq	#1,d0 * ok
 .memError
@@ -30248,9 +30520,6 @@ loadmodule:
 	move.l	(a2)+,tfmxsampleslen(a5)
 	move.b	(a2),lod_tfmx(a5)
 
-	* Grab exe load status from loader
-	move.b 	lod_exefile(a5),executablemoduleinit(a5)
-
 	tst.l	d7
 	beq.b	.nay
 * errori? putsataan tfmx osotteet
@@ -30313,13 +30582,8 @@ loadmodule:
 	tst	d0
 	bne	.err			* virhe lataamisessa
 
-	* Grab exe load status from loader
-	move.b 	lod_exefile(a5),executablemoduleinit(a5)
-
 	* These two case have been identifier earlier during load phase
 	tst.b	sampleinit(a5)
-	bne 	.nip
-	tst.b 	executablemoduleinit(a5)
 	bne 	.nip
 
     move.l	modulefilename(a5),a0
@@ -30420,6 +30684,11 @@ loadmodule:
 	bsr	tutki_moduuli
 	tst.l	d0
 	bne.b	.unk_err		* ep‰m‰‰r‰inen tiedosto
+
+    push    d0
+    jsr     readUsl
+    jsr     readUme
+    pop     d0
 
 	clr.b	contonerr_laskuri(a5)	* nollataan virhelaskuri
 	rts	
@@ -30740,12 +31009,6 @@ loadfile:
 .fe	tst.b	(a0)+
 	bne.b	.fe
 	subq	#1,a0
-
-	* Clear flag that indicates that the module that was loaded
-	* was in fact an executable. If this is not done,
-	* XPK packed modules are thought to be DeliCustoms and mayhem ensues.
-	;clr.b	executablemoduleinit(a5)
-	clr.b	lod_exefile(a5)
 
 *********************************************************************
 ** Archiven purku
@@ -31230,13 +31493,6 @@ loadfile:
 
 .nolha
 
-	bsr	.handleExecutableModuleLoading
-	* Skip the rest if LoadSeg above went fine
-	;tst.b	executablemoduleinit(a5)
-	tst.b 	lod_exefile(a5)
-	bne	.exit
-
-
 ** Is this a sample file, stop loading if so.
 ** Jos havaitaan file sampleks, ei ladata enemp‰‰
 .sampleCheck
@@ -31256,7 +31512,7 @@ loadfile:
 	bsr	.checkm
 
 	* XPK compressed file check
-
+    clr.l   lod_xpkOutLen(a5)       * clear previous outlen initially
 	cmp.l	#"XPKF",probebuffer(a5)
 	bne	.wasnt_xpk
 
@@ -31389,8 +31645,10 @@ loadfile:
 
 	move.l	lod_filename(a5),.xpkfile-.xpktags(a0)
 	move.l	lod_memtype(a5),.xpkmem-.xpktags(a0)
+    pushpea lod_xpkOutLen(a5),.xpkoutlen-.xpktags(a0)
 	move.l	_XPKBase(a5),a6
 	lob	XpkUnpack
+    DPRINT  "XpkUnpack=%ld"
 	tst.l	d0
 	bne	.xpk_error
 	bra	.exit
@@ -31416,6 +31674,11 @@ loadfile:
 
 		dc.l	XPK_ChunkHook
 		dc.l	.hook
+
+        dc.l    XPK_GetOutLen   * exact size of decompressed data
+.xpkoutlen
+        dc.l    0
+
 		dc.l	TAG_END
 
 
@@ -32030,67 +32293,6 @@ loadfile:
 .eee	rts
 
 
-
-.handleExecutableModuleLoading
-	* Probebuffer now has 1084 of data we can check
-	* for Delitracker CUSTOM format, as it has to be loaded
-	* with LoadSeg(), being an exe file.
-	* Clear the flag that indicates exe module load status.
-	;clr.b	executablemoduleinit(a5)
-	clr.b	lod_exefile(a5)
-	* There are no AHI supported exe type modules
-	tst.b	ahi_muutpois(a5)
-	bne	.ahiSkip
-	pushm 	d1-a6
-	lea	probebuffer(a5),a4
-	move.l	#1084,d7
-
-	* Test for known exe formats
-
-	jsr	id_futureplayer
-	bne.b	.notFuturePlayer
-	moveq	#pt_futureplayer,d7
-	bra.b	.exeOk
-
-.notFuturePlayer
-	jsr	id_delicustom
-	bne.b	.notDeliCustom
-	moveq	#pt_delicustom,d7
-	bra.b	.exeOk 
-
-.notDeliCustom 
-	jsr	id_davelowe
-	bne.b	.notDl
-	move	#pt_davelowe,d7
-	bra.b	.exeOk
-.notDl
-	bra.b	.notKnown
-.exeOk
-	move.l	#MEMF_PUBLIC,lod_memtype(a5)
-	bsr	.infor
-	move.l	lod_filename(a5),d1
-	lore	Dos,LoadSeg
-	tst.l	d0
-	beq.b	.loadSegErr
-	* set type of loadsegged module
-	;move.b	d7,executablemoduleinit(a5)
-	move.b	d7,lod_exefile(a5)
-	move.l	d0,lod_address(a5)
-	* length is not readily available for these, so clear it
-	clr.l	lod_length(a5)
- if DEBUG
-	move.l	d7,d0
-	DPRINT	"Module LoadSeg ok for type %ld"
- endif
-.loadExit
-.notKnown
-	popm 	d1-a6
-.ahiSkip
-	rts
-.loadSegErr
-	move	#lod_loadsegfail,lod_error(a5)
-	bra.b 	.loadExit
-
 * Removes the temp directory used for unarchiving lha etc
 remarctemp
 	pushm	all
@@ -32413,6 +32615,10 @@ tutki_moduuli2:
 	jsr	id_musicmaker8_
 	tst.l	d0
 	beq 	.goPublic
+
+    jsr     id_delicustom
+    beq     .goPublic
+
 	;bsr	id_digitalmugician2 
 	;beq.b	.goPublic
 
@@ -32534,9 +32740,6 @@ tutki_moduuli:
 	cmp.b	#2,ptmix(a5)	* Normaali vai miksaava PT replayeri?
 	beq.b	.ohi
 	
-	* Ensure no id funcs are ran on executables
-	tst.b	executablemoduleinit(a5)
-	bne.b	.ohi
 	* See if there is data to check
 	move.l	a4,d0
 	beq.b	.ohi
@@ -32548,19 +32751,10 @@ tutki_moduuli:
 	* replay code.
 	clr.b	external(a5)		* Lippu: ei tartte player grouppia 
 
-	* First test for exe modules, skip the rest
-	* of the checks since moduledata is a seglist
-	cmp.b	#pt_delicustom,executablemoduleinit(a5)
-	beq	.delicustom
-
 	tst.b	sampleinit(a5)
 	bne.b	.noop
 
 	tst.b	ahi_muutpois(a5)	
-	bne.b	.noop
-
-	* Ensure no id funcs are ran on executables
-	tst.b	executablemoduleinit(a5)
 	bne.b	.noop
 
 	* These do not require player group:
@@ -32608,8 +32802,6 @@ tutki_moduuli:
 
 	tst.b	ahi_muutpois(a5)
 	beq.b	.mpa
-	tst.b	executablemoduleinit(a5)
-	bne.b	.mpa
 
 ** AHIa tukevat replayerit
     tst.b   sampleinit(a5)
@@ -32619,12 +32811,6 @@ tutki_moduuli:
 
 	bra.b	.mp
 .mpa
-	* First test for exe modules, skip the rest
-	* of the checks since moduledata is a seglist
-	cmp.b	#pt_futureplayer,executablemoduleinit(a5)
-	beq	.futureplayer
-	cmp.b	#pt_davelowe,executablemoduleinit(a5)
-	beq	.davelowe
 
 	tst.b	sampleinit(a5)		* sample??
 	bne	.sample
@@ -32770,15 +32956,15 @@ tutki_moduuli:
 	move	#pt_delicustom,playertype(a5)
 	bra	.ex
 
-.futureplayer
-	pushpea	p_futureplayer,playerbase(a5)
-	move	#pt_futureplayer,playertype(a5)
-	bra	.ex
-
-.davelowe
-	pushpea	p_davelowe,playerbase(a5)
-	move	#pt_davelowe,playertype(a5)
-	bra	.ex
+;.futureplayer
+;	pushpea	p_futureplayer,playerbase(a5)
+;	move	#pt_futureplayer,playertype(a5)
+;	bra	.ex
+;
+;.davelowe
+;	pushpea	p_davelowe,playerbase(a5)
+;	move	#pt_davelowe,playertype(a5)
+;	bra	.ex
 
 **** Oliko  sample??
 .sample:
@@ -32888,7 +33074,9 @@ tutki_moduuli:
 	moveq	#1,d1			* Ei oteta filen kommenttia talteen
 	move.b	xpkid(a5),d4		* ei XPK ID:t‰ samplefileille
 	st	xpkid(a5)
+    move.l  lod_xpkOutLen(a5),d2 * preserve mdat lenght for MD5sum
 	bsr	loadfile
+    move.l  d2,lod_xpkOutLen(a5)
 	move.b	d4,xpkid(a5)
 	move.l	d0,-(sp)
 
@@ -33125,9 +33313,12 @@ loadplayergroup
 	;bsr	inforivit_clear
 
  if DEBUG 
+    tst.l   d7
+    beq     .x1
 	move.l	d7,a0 
 	move.l	-4(a0),d0 
 	DPRINT	"Group size %ld"
+.x1
  endif
 
 	move.l	d7,d0
@@ -34678,6 +34869,74 @@ activateSearchStringGadget:
     rts
 
 
+; -------------------------------------
+
+togglePlayMode:
+    DPRINT  "togglePlayMode"
+    move.b  playmode(a5),d0     * previous
+    addq.b  #1,playmode(a5)
+    cmp.b   #pm_max,playmode(a5)
+    ble     .1
+    move.b  #1,playmode(a5)
+.1
+    cmp.b   #pm_repeat,d0
+    beq     .3
+    cmp.b   #pm_repeat,playmode(a5)
+    bne     .2
+.3 
+     jsr     forceRefreshList
+.2
+
+setPlayModeChangeButtonIcon:
+    bsr   setPlayModeChangeButtonIconNoRefresh
+    tst.b showPositionSlider(a5)
+    beq   .noPos
+	lea   gadgetPlayModeChangeButton,a0
+	jmp   refreshGadgetInA0
+.noPos  
+    rts
+
+setPlayModeChangeButtonIconNoRefresh:
+    move.b  playmode(a5),d0
+    lea     playModeRepeatListImage,a0
+    subq.b  #1,d0
+    beq     .set
+    lea     playModePlayListImage-playModeRepeatListImage(a0),a0
+    subq.b  #1,d0
+    beq     .set
+    lea     playModeRepeatModuleImage-playModePlayListImage(a0),a0
+    subq.b  #1,d0
+    beq     .set
+    lea     playModePlayModuleImage-playModeRepeatModuleImage(a0),a0
+    subq.b  #1,d0
+    beq     .set
+    lea     playModeRandomImage-playModePlayModuleImage(a0),a0
+.set
+	move.l	a0,gadgetPlayModeChangeButtonImagePtr
+    rts
+
+
+togglePlayModePopup:
+	DPRINT	"Play mode"
+	lea		togglePlayModePopupOptions,a4
+	lea		gadgetPlayModeChangeButton,a0
+	move	gg_LeftEdge(a0),d6
+	moveq	#20,d7
+	add		gg_TopEdge(a0),d7
+    moveq   #0,d4
+    moveq   #0,d0
+    move.b  playmode(a5),d0
+    subq.b  #1,d0
+	jsr		listSelectorMainWindowPreselect
+	bmi.b	.skip
+	addq.b	#1,d0
+	move.b	d0,playmode(a5)
+    bsr     setPlayModeChangeButtonIcon
+    jmp     forceRefreshList
+.skip
+	rts
+
+
 
 ********************************************************************************
 *** SECTION ********************************************************************
@@ -35037,7 +35296,7 @@ fileBrowserRoot
 	move.b	#":",(a0)+
 	clr.b	(a0)
 
-	bsr	getVisibleModuleListHeader
+	jsr	getVisibleModuleListHeader
 	ADDTAIL	* add node (a1)
 	addq.l	#1,modamount(a5)
 .next
@@ -36452,6 +36711,9 @@ groupFormats:
  	dr.l 	p_aon8
     dr.l    p_midistream
     dr.l    p_vgm
+    dr.l    p_davelowe
+    dr.l    p_futureplayer
+    dr.l    p_delicustom
 	dc.l 	0
 
 eagleFormats:
@@ -36550,12 +36812,14 @@ p_protracker:
 .c
 
 	bsr	.getsongs
+    tst.w   maxsongs(a5)
+    beq     .yesSs
+    DPRINT  "reset time"
+    * With subsongs reset the calculated time
+    * as it should not be correct
+    clr.l   kokonaisaika(a5)
+.yesSs
 
- if DEBUG
-    moveq   #0,d0
-    move.w  maxsongs(a5),d0
-    DPRINT  "Subsongs=%ld"
- endif
 
 	bsr	whatgadgets
 
@@ -36659,7 +36923,9 @@ p_protracker:
 .cus
 	move	kplbase+k_songpos(a5),pos_nykyinen(a5)
 	tst.b	kplbase+k_songover(a5)
-	sne	songover(a5)
+    beq     .noend
+	st  	songover(a5)            
+.noend
 	clr.b	kplbase+k_songover(a5)
 	rts
 
@@ -36692,12 +36958,21 @@ p_protracker:
 
 
 * Tutkii koko songin, ja kattoo jos olisi erillisi‰ songeja.
-.getsongs:
+.getsongs:  
 	move.l	moduleaddress(a5),a0
 	cmp.b	#'K',951(a0)
 	beq.b	.yee
 
 	clr.l	kokonaisaika(a5)
+
+    bsr     .detectSubsongs
+
+    * Skip length detect for subsong mods,
+    * these will get stuck in position jump loops
+    * and would provide wrong total length anyway
+    tst     maxsongs(a5)
+    bne     .la
+
 	;cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
 	;bne.b	.la
 	pushm	d2-a6
@@ -36710,8 +36985,13 @@ p_protracker:
 	move	d1,kokonaisaika+2(a5)	* secs
 .la
 
-	move.l	a6,-(sp)
+    rts
 
+
+.detectSubsongs:
+    DPRINT  "+++ PT getsongs +++"
+
+	move.l	a6,-(sp)
 	move	#$0fff,d3
 	moveq	#0,d0
 	move.b	950(a0),d0		* songlength
@@ -36728,18 +37008,36 @@ p_protracker:
 	lea	ptsonglist(a5),a4
 	clr.b	(a4)+
 
+    * scramble detect counter
+    sub.l   a0,a0
+    ; ---------------------------------
 .check
+;;    push    d0
+;;    moveq   #0,d0
+;;    move.w  d1,d0
+;;    DPRINT  "--- POSITION=%ld ---"
+;;    pop     d0
+
 	moveq	#0,d2
-	move.b	(a3)+,d2
+	move.b	(a3)+,d2        * read position
 	lsl.l	#5,d2			* d2*1024
 	lsl.l	#5,d2	
-	lea	(a2,d2.l),a1
-
-************************ OPT
-
+	lea	(a2,d2.l),a1        * get pattern
+    ; ---------------------------------
+    * Loop rows of pattern
 	moveq	#1024/4/4-1,d2
 .look	
-	movem.l	(a1)+,d4-d7
+	movem.l	(a1)+,d4-d7 * ch1,ch2,ch3,ch4 notedata
+
+;;    pushm   d0-d3
+;;    move.l  d4,d0
+;;    move.l  d5,d1
+;;    move.l  d6,d2
+;;    move.l  d7,d3
+;;    DPRINT  "%08.8lx %08.8lx %08.8lx %08.8lx"
+;;    popm    d0-d3
+
+    * Extract command column d4,d5,d6,d7
 	and	d3,d4
 	rol	#8,d4
 	and	d3,d5
@@ -36750,27 +37048,33 @@ p_protracker:
 	rol	#8,d7
 
 	cmp.b	#$b,d4
-	beq.b	.jump1
+	beq 	.jump1
 	cmp.b	#$b,d5
-	beq.b	.jump2
+	beq 	.jump2
 	cmp.b	#$b,d6
-	beq.b	.jump3
+	beq 	.jump3
 	cmp.b	#$b,d7
-	beq.b	.jump4
+	beq 	.jump4
+
 	cmp.b	#$d,d4
-	beq.b	.next
+	beq 	.next
 	cmp.b	#$d,d5
-	beq.b	.next
+	beq 	.next
 	cmp.b	#$d,d6
-	beq.b	.next
+	beq 	.next
 	cmp.b	#$d,d7
-	beq.b	.next
+	beq 	.next
 
-	dbf	d2,.look
+	dbf	d2,.look        
 
-.next	addq	#1,d1
-	dbf	d0,.check
+.next	
+    * allow this many B+D combos until deciding
+    cmp.w   #4,a0 
+    bhs     .scrambled
 
+    addq	#1,d1
+	dbf	d0,.check       * loop song position
+    ; ---------------------------------
 	move.b	#-1,(a4)
 	lea	ptsonglist(a5),a0
 	move.l	a0,a1
@@ -36780,7 +37084,13 @@ p_protracker:
 	subq	#1,a0
 	move	a0,d0
 	subq.b	#1,d0
+.exit
 	move.b	d0,maxsongs+1(a5)
+  if DEBUG
+    moveq   #0,d1
+    move.b  ptsonglist(a5),d1
+    DPRINT  "subsongs found=%ld first=%ld"
+  endif
 
 	move.l	(sp)+,a6
 	rts
@@ -36791,18 +37101,60 @@ p_protracker:
 	bra.b	.jump
 .jump2	move	d5,d4
 .jump1	
-.jump	rol	#8,d4
-	cmp.b	d1,d4
-	bhs.b	.next
+.jump	
+    bsr     .scrambleTest
 
+    rol	#8,d4
+    * d4 = jump target position
+    * if jump target >= current song position
+    * we are jumping forward and this is
+    * not a subsong delimiter
+	cmp.b	d1,d4
+	bhs 	.next
+
+ if DEBUG   
+    pushm   d0/d1
+    moveq   #0,d0
+    move.b  d4,d0
+    and.l   #$ff,d1
+    DPRINT  "Backward jump to %ld at %ld"
+    popm    d0/d1
+ endif
+
+    * store the following position as a
+    * start of the next subsong
 	moveq	#1,d4
 	add.b	d1,d4
 
-	cmp	a6,d4
+
+	cmp	a6,d4               * compare to song length in a6
 	blo.b	.eoe
 	moveq	#-1,d4			* Moduulin alkuun
 .eoe	move.b	d4,(a4)+
-	bra.b	.next
+	bra 	.next
+
+
+.scrambleTest
+    ; Check for B+D combos which signal a scrambled module
+	cmp.b	#$d,d4
+	beq     .scramble
+	cmp.b	#$d,d5
+	beq     .scramble
+	cmp.b	#$d,d6
+	beq     .scramble
+	cmp.b	#$d,d7
+	beq     .scramble
+    rts
+.scramble
+    addq    #1,a0
+    rts
+
+.scrambled
+    DPRINT  "This looks like a scrambled module"
+    moveq   #0,d0
+    move.w  #$00ff,ptsonglist(a5)
+    bra     .exit
+
 
 
 * Out:
@@ -36853,18 +37205,50 @@ nl_loopcount	EQU	6	 ; B
 nl_ts		=	8	* channeltempsize
 
 
+* Out:
+*   d0 = secs
+*   d1 = minutes
+* or null if cannot determine
+modlen:
+    DPRINT  "+++ PT modlen +++"
 
-modlen
+    rsreset
+.songend	    rs.w	1
+.Tempo		    rs.w	1
+.tempoval	    rs.w	1
+.tempoflag	    rs.w	1
+.time		    rs.l	1
 
-	basereg	modlen,a5
-	lea	modlen(pc),a5
+.mt_chan1temp	 rs.b  nl_ts
+.mt_chan2temp	 rs.b  nl_ts
+.mt_chan3temp	 rs.b  nl_ts
+.mt_chan4temp	 rs.b  nl_ts
 
-	lea	.datastart(a5),a1
-	lea	.dataend(a5),a2
-.lfe	clr.b	(a1)+
-	cmp.l	a1,a2
-	bne.b	.lfe
+.mt_SongDataPtr	    rs.l 1
+.mt_PatternPos	    rs.w 1
+.mt_speed	        rs.b 1
+.mt_counter	        rs.b 1
+.mt_SongPos	        rs.b 1
+.mt_PBreakPos	    rs.b 1
+.mt_PosJumpFlag	    rs.b 1
+.mt_PBreakFlag	    rs.b 1
+.mt_PattDelTime	    rs.b 1
+.mt_PattDelTime2    rs.b 1
+.failsafe           rs.l 1
+.lastPositionJump   rs.w 1
+.lastNoteTime       rs.l 1
+.varsSize           rs.b 0
+ even
 
+    moveq   #.varsSize/2-1,d2
+.sk clr.w   -(sp)
+    dbf     d2,.sk
+    move.l  sp,a5
+    bsr     .do
+    lea     .varsSize(sp),sp
+    rts
+
+.do
 	MOVE.L	A0,.mt_SongDataPtr(a5)
 	move.b	d0,.tempoflag(a5)
 
@@ -36878,53 +37262,49 @@ modlen
 	move.l	#1773447,d0
 	divu	.Tempo(a5),d0
 	move	d0,.tempoval(a5)
+    * 30 minutes failsafe
+    move.l  #30*60*50,.failsafe(a5)
+    ; ---------------------------------
+.loop	
+    bsr 	.mt_music
 
-.loop	bsr.b	.mt_music
+    ; Failsafe test to catch runaway modules
+    subq.l  #1,.failsafe(a5)
+    bmi     .stopz
+
+    ; Silence test after a jump has been
+    ; detected in the last position.
+    tst.b   .lastPositionJump(a5)
+    beq     .gog
+    move.l  .time(a5),d0
+    sub.l   .lastNoteTime(a5),d0
+	move.l	#709379,d1	* PAL
+    jsr     divu_32
+    cmp.l   #10,d0        * seconds limit
+    blo     .gog
+    st      .songend(a5)
+    DPRINT  "too long since last note"
+.gog
 	tst	.songend(a5)
 	beq.b	.loop
-
-	cmp.b	#1,.songend(a5)
-	bne.b	.nod
-	moveq	#0,d0
-	moveq	#0,d1
-	rts
-.nod
-
+    ; ---------------------------------
 
 	move.l	.time(a5),d0
 	move.l	#709379,d1	* PAL
-
-;	move.l	(a5),a0
-;	cmp.b	#60,PowerSupplyFrequency(a0)
-;	bne.b	.pal
-;	move.l	#715909,d1	* NTSC
-;.pal
-	jsr	divu_32
-				* d0 = kesto sekunteina
-
+	jsr	divu_32			 * d0 = kesto sekunteina
+    DPRINT  "---> secs=%ld"
 	divu	#60,d0
 	move.l	d0,d1
 	swap	d1
 	rts
 
+.stopz
+    DPRINT  "failsafe triggered"
+	moveq	#0,d0
+	moveq	#0,d1
+	rts
 
 .mt_music
-	lea	modlen(pc),a5
-	addq	#1,.varmistus(a5)
-;	cmp	#512,.varmistus(a5)
-;	cmp	#2048,.varmistus(a5)
-	cmp	#4096,.varmistus(a5)
-	blo.b	.noy
-	clr	.mt_PatternPos(a5)
-	CLR.B	.mt_PBreakPos(a5)
-	CLR.B	.mt_PosJumpFlag(a5)
-	clr.b	.mt_PattDelTime(a5)
-	clr.b	.mt_PattDelTime2(a5)
-	clr.b	.mt_counter(a5)
-	move	#1024,.mt_PatternPos(a5)
-	bra.b	.mt_GetNewNote
-.noy
-
 	moveq	#0,d0
 	move	.tempoval(a5),d0
 	add.l	d0,.time(a5)
@@ -36937,10 +37317,10 @@ modlen
 	TST.B	.mt_PattDelTime2(a5)
 	BEQ.S	.mt_GetNewNote
 	BSR.S	.mt_NoNewAllChannels
-	BRA.B	.mt_dskip
+	BRA 	.mt_dskip
 
 .mt_NoNewNote
-	pea	.mt_NoNewPosYet(a5)
+	pea	.mt_NoNewPosYet(pc)
 
 .mt_NoNewAllChannels
 	LEA	.mt_chan1temp(a5),A6
@@ -36963,6 +37343,7 @@ modlen
 .mt_GetNewNote
 
 	MOVE.L	.mt_SongDataPtr(a5),A0
+;;    move.b  950(a0),d2        * debug
 	LEA	12(A0),A3
 	LEA	952(A0),A2	;pattpo
 	LEA	1084(A0),A0	;patterndata
@@ -36975,11 +37356,20 @@ modlen
 	ADD.W	.mt_PatternPos(a5),D1
 
 	LEA	.mt_chan1temp(a5),A6
-	BSR.S	.mt_PlayVoice
+
+;    pushm    d0-d6
+;    push    d2
+;    movem.l  (a0,d1.l),d2/d3/d4/d5
+;    pop     d1
+;    and.l   #$ff,d1
+;   ;; DPRINT  "%ld/%ld->%08.8lx %08.8lx %08.8lx %08.8lx"
+;    popm     d0-d6
+
+	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
-	BSR.S	.mt_PlayVoice
+	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
-	BSR.S	.mt_PlayVoice
+	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
 	pea	.mt_SetDMA(pc)
 
@@ -36988,9 +37378,16 @@ modlen
 
 
 .mt_PlayVoice
+    * Read 4 bytes ot pattern data
 	MOVE.L	(A0,D1.L),(A6)
 	ADDQ.L	#4,D1
-	Bra	.mt_CheckMoreEfx
+
+    * Timestamp of the last note
+    move    #$0fff,d2
+    and.w   (a6),d2
+    beq     .mt_CheckMoreEfx
+    move.l  .time(a5),.lastNoteTime(a5)
+    bra     .mt_CheckMoreEfx
 
 
 .mt_SetDMA
@@ -37017,11 +37414,10 @@ modlen
 	LSL.W	#4,D0
 	MOVE.W	D0,.mt_PatternPos(a5)
 .mt_nnpysk
+
 	CMP.W	#1024,.mt_PatternPos(a5)
 	BLO.S	.mt_NoNewPosYet
 .mt_NextPosition	
-	clr	.varmistus(a5)
-
 	MOVEQ	#0,D0
 	MOVE.B	.mt_PBreakPos(a5),D0
 	LSL.W	#4,D0
@@ -37033,10 +37429,9 @@ modlen
 	st	.songend(a5)
 .jo
 	AND.B	#$7F,.mt_SongPos(a5)
-	MOVE.B	.mt_SongPos(a5),D1
-
+	MOVE.B	.mt_SongPos(a5),d0
 	MOVE.L	.mt_SongDataPtr(a5),A0
-	CMP.B	950(A0),D1
+	CMP.B	950(A0),d0
 	BLO.S	.mt_NoNewPosYet
 	CLR.B	.mt_SongPos(a5)
 	st	.songend(a5)
@@ -37047,27 +37442,78 @@ modlen
 .mt_exit	
 	RTS
 
-
+* brofists:
+* - B23+D20 in the last position 79
+*   to silence, this is the end of the mod
+*   how to detect it?
+* 404 crew:
+* - B+D in the last position to earlier position
+*   which jump back to last position to another row
+*   which is ok
 
 .mt_PositionJump
-	push	d1
-	MOVE.B	.mt_SongPos(a5),D1		* hyv‰ksyt‰‰n jos jumppi
-	addq.b	#1,d1				* viimeisess‰ patternissa
-	MOVE.L	.mt_SongDataPtr(a5),a0
-	cmp.b	950(a0),d1
-	bne.b	.nre
-	st	.songend(a5)
-	pop	d1
-	bra.b	.fine
+    * Get jump position:
+	MOVE.B	3(A6),D0
+	
+    * Check if at the last song position
+    moveq   #0,d3
+    MOVE.B	.mt_SongPos(a5),D2
+    addq.b	#1,d2			
+	MOVE.L	.mt_SongDataPtr(a5),a1  * a0 must be preserved
+	cmp.b	950(a1),d2
+    bne     .notLast
+    st      d3
+    st      .lastPositionJump(a5)
+ if DEBUG
+    push    d0
+    moveq   #0,d0
+    move.b  d2,d0
+    DPRINT  "last position jump %ld"
+    pop     d0
+ endif
+.notLast
 
-.nre	pop	d1
-	move.b	#1,.songend(a5)
+    * Allow jumps if there is a D on the same row.
+    * Common scrambled pattern trick.
+	moveq	#$f,d2
+    and.b   2(A0,D1.L),d2
+    cmp.b   #$d,d2
+    beq     .pbrk
+	moveq	#$f,d2
+    and.b   2+4(A0,D1.L),d2
+    cmp.b   #$d,d2
+    beq     .pbrk
+	moveq	#$f,d2
+    and.b   2+8(A0,D1.L),d2
+    cmp.b   #$d,d2
+    beq     .pbrk
+	moveq	#$f,d2
+    and.b   2+12(A0,D1.L),d2
+    cmp.b   #$d,d2
+    beq     .pbrk
 
+	MOVE.B	.mt_SongPos(a5),D2	
+    cmp.b   d0,d2
+    bne     .ook
+    * Jump to the same position without a D,
+    * this is a songend.
+    DPRINT  "Jump to the same position"
+    st      .songend(a5)
+    rts
+.ook
+    tst.b   d3
+    beq     .nre
+    DPRINT  "Jump and no break in the last position"
+	st	    .songend(a5)
+.pbrk
+.nre	
 .fine
+    * Set new song position
 	SUBQ.B	#1,D0
 	MOVE.B	D0,.mt_SongPos(a5)
 
-.mt_pj2	CLR.B	.mt_PBreakPos(a5)
+.mt_pj2	
+    CLR.B	.mt_PBreakPos(a5)
 	ST 	.mt_PosJumpFlag(a5)
 	RTS
 
@@ -37090,6 +37536,7 @@ modlen
 	MOVEQ	#0,D0
 	MOVE.B	3(A6),D0
 	Bne.b	.no0
+    st      .songend(a5)    * F00 -> end
 	moveq	#31,d0
 .no0
 	tst	.tempoflag(a5)
@@ -37116,11 +37563,11 @@ modlen
 	CMP.B	#$B,D0
 	BEQ	.mt_PositionJump
 	CMP.B	#$D,D0
-	BEQ.S	.mt_PatternBreak
+	BEQ 	.mt_PatternBreak
 	CMP.B	#$E,D0
-	BEQ.S	.mt_E_Commands
+	BEQ 	.mt_E_Commands
 	CMP.B	#$F,D0
-	BEQ.S	.mt_SetSpeed
+	BEQ 	.mt_SetSpeed
 	rts
 
 .mt_E_Commands
@@ -37170,36 +37617,6 @@ modlen
 .qq	RTS
 
 
-.datastart	
-
-.songend	dc	0
-.Tempo		dc	125
-.tempoval	dc	0
-.tempoflag	dc	0
-.time		dc.l	0
-
-.mt_chan1temp	ds.b	8
-.mt_chan2temp	ds.b	8
-.mt_chan3temp	ds.b	8
-.mt_chan4temp	ds.b	8
- even
-
-.varmistus	dc	0
-.mt_SongDataPtr	dc.l 0
-.mt_PatternPos	dc.w 0
-.mt_speed	dc.b 6
-.mt_counter	dc.b 0
-.mt_SongPos	dc.b 0
-.mt_PBreakPos	dc.b 0
-.mt_PosJumpFlag	dc.b 0
-.mt_PBreakFlag	dc.b 0
-.mt_PattDelTime	dc.b 0
-.mt_PattDelTime2 dc.b 0
- even
-
-.dataend
-
- endb	a5
 
 * TODO: also run id_oldst 
 id_protracker
@@ -38012,7 +38429,7 @@ p_sid:	jmp	.init(pc)
 .perfReqTxt
     dc.b    "Your Amiga could be too slow!",10
     dc.b    "The sound may become distorted and",10
-    dc.b    "the system unesponsive.",10
+    dc.b    "the system unresponsive.",10
     dc.b    "Performance: %ld.%1.1ld ms, need <= %ld ms",0
 
 .perfReqButtons
@@ -38280,9 +38697,9 @@ id_sid
 .ide1
  even
 
-sidVBlank:
-    bsr     sidEndCheck
-    bra     sidScopeUpdate
+;sidVBlank:
+;    bsr     sidEndCheck
+;    bra     sidScopeUpdate
 
 * Based in info from Songlength database
 sidEndCheck:
@@ -38307,6 +38724,7 @@ sidEndCheck:
     
 * Scope data update and following
 * This is emulates what the PlaySid pplication does.
+sidVBlank:
 sidScopeUpdate:
 
 	* Skip this if not needed
@@ -42014,7 +42432,7 @@ p_davidwhittaker
 	jmp	deliAuthor(pc)
 	dc  	pt_davidwhittaker
 .flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"David Whittaker     [EP]",0
+	dc.b	"David Whittaker [EP]",0
 	        
 .path 	dc.b "david whittaker",0
  	even
@@ -44601,9 +45019,12 @@ p_sample:
 
  if DEBUG
 	pushm	d0-d3
+    tst     d0
+    bne     .dxx
 	move.l	d3,d0
     move.l  d4,d2
 	DPRINT	"Bufsize=%ld add=%ld mod=%ld"
+.dxx
 	popm	d0-d3
  endif
 
@@ -44639,6 +45060,7 @@ p_sample:
     DPRINT  "sample init failed %ld"
     push    d0
     jsr     stopStreaming
+    jsr     awaitStreamerAndFlush
     pop     d0
     rts
 
@@ -45006,6 +45428,21 @@ p_beathoven
 
 .doInit
 	pushm	all
+
+	move.l	moduleaddress(a5),a0
+    cmp.l   #$3f3,(a0)
+    bne     .1
+    DPRINT  "Relocate module"
+	* clear the hunk id for safety to avoid reloccing again
+	clr.l	(a0)
+    bsr reloc
+	bsr	clearCpuCaches
+	move.l	moduleaddress(a5),a1
+	move.l	$20+36(a1),a1
+	moveq	#30-1,d0
+	bsr	copyNameFromA1
+.1
+
 	move.l	moduleaddress(a5),a2
 	move.l	.BEAT_SUBSONGS(a2),d0 
 	DPRINT	"Beathoven init, subsongs=%ld"
@@ -45056,10 +45493,10 @@ p_beathoven
 .id_beathoven
 	bsr.b .id_beathoven_
 	bne.b .x 
-	move.l	moduleaddress(a5),a1
-	move.l	$20+36(a1),a1
-	moveq	#30-1,d0
-	bsr	copyNameFromA1
+;	move.l	moduleaddress(a5),a1
+;	move.l	$20+36(a1),a1
+;	moveq	#30-1,d0
+;	bsr	copyNameFromA1
 	moveq	#0,d0
 .x 	rts
 
@@ -45079,11 +45516,11 @@ p_beathoven
     bne.b   .notBeat
     cmp.l   #'HOVE',8(a0)
     bne.b   .notBeat
-    * looks good, relocate it
+;    * looks good, relocate it
     move.l  a4,a0
-    bsr reloc
-	* clear the hunk id for safety to avoid reloccing again
-	clr.l	(a4)
+;    bsr reloc
+;	* clear the hunk id for safety to avoid reloccing again
+;	clr.l	(a4)
 	bsr	clearCpuCaches
     moveq   #0,d0
     rts
@@ -45324,7 +45761,7 @@ p_digitalmugician
 	jmp	deliAuthor(pc)
 	dc  pt_digitalmugician
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_kelauseteen!pf_kelaustaakse!pf_scope!pf_quadscopePoke
-	dc.b	"Digital Mugician    [EP]",0
+	dc.b	"Digital Mugician [EP]",0
 .path	dc.b	"mugician.amp",0
  even
  
@@ -45368,12 +45805,45 @@ p_delicustom
 	dc.w pt_delicustom
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song!pf_end
 	dc.b	"DeliTracker Custom",0
+.tempFile
+    dc.b    "t:hippo-delicustom",0
  even
 
 .init
-	move.l	moduleaddress(a5),d0
+    DPRINT  "DeliCustom init"
+    lea     .tempFile(pc),a0
+	move.l	moduleaddress(a5),a1
+    
+    * Special case for XPK, exact decompressed length
+    * is not the allocated mem length. LoadSeg() will freak
+    * out if the length is not exact
+    move.l  lod_xpkOutLen(a5),d0
+    bne     .1
+    move.l  modulelength(a5),d0
+.1
+	bsr 	plainSaveFile
+	bmi 	.saveError
+
+    jsr     justFreeModuleData
+
+    pushpea .tempFile(pc),d1
+	lore	Dos,LoadSeg
+    DPRINT  "LoadSeg=%lx"
+    move.l  d0,moduleAddressLoadSeg(a5)
+
+    pushpea .tempFile(pc),d1
+    lore    Dos,DeleteFile
+
+    move.l  moduleAddressLoadSeg(a5),d0
+    beq     .loadError
+
 	lsl.l	#2,d0
 	bra	deliInit
+
+.saveError
+.loadError
+    moveq   #ier_nomem,d0
+    rts
 
 id_delicustom
 	lea	.id1_start(pc),a1	
@@ -45396,6 +45866,7 @@ id_delicustom
 	tst.l	(a0)
 	beq.b	.notDeli
 
+    DPRINT  "found delicustom"
 	moveq	#0,d0
 	rts
 	
@@ -45446,7 +45917,7 @@ p_synthesis
 	jmp	deliAuthor(pc)
 	dc  pt_synthesis 
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end!pf_song
-	dc.b	"Synthesis           [EP]",0
+	dc.b	"Synthesis [EP]",0
 
 .path dc.b "synth 4.0",0
  even
@@ -45511,7 +45982,7 @@ p_syntracker
 	jmp	deliAuthor(pc)
 	dc pt_syntracker
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_end
-	dc.b	"SynTracker          [EP]",0
+	dc.b	"SynTracker [EP]",0
 .path dc.b "syntracker",0
  even
 
@@ -45618,7 +46089,7 @@ p_chiptracker
 	jmp	deliAuthor(pc)
 	dc  pt_chiptracker 
  dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_kelauseteen!pf_kelaustaakse!pf_ciakelaus2!pf_quadscopeUps
-	dc.b	"ChipTracker         [EP]",0
+	dc.b	"ChipTracker [EP]",0
 
 .path dc.b "chiptracker",0
  even
@@ -45791,7 +46262,19 @@ p_futureplayer
 	rts
 .ok3
 	pushm	d1-a6
-	move.l	moduleaddress(a5),d0
+
+	move.l	moduleaddress(a5),a0
+    cmp.l   #$3f3,(a0)
+    bne     .1
+    DPRINT  "Relocate module"
+	* clear the hunk id for safety to avoid reloccing again
+	clr.l	(a0)
+    bsr reloc
+.1
+
+    moveq   #$20-4,d0
+	add.l	moduleaddress(a5),d0
+
 	lea	nullsample,a1
 	lea	mainvolume(a5),a2
 	lea	maxsongs(a5),a3
@@ -46615,10 +47098,25 @@ p_davelowe
 	rts
 .ok3
 	pushm	d1-a6
+
+
+	move.l	moduleaddress(a5),a0
+    cmp.l   #$3f3,(a0)
+    bne     .1
+    DPRINT  "Relocate module"
+	* clear the hunk id for safety to avoid reloccing again
+	clr.l	(a0)
+    bsr     reloc
+	bsr	    clearCpuCaches
+.1
+    DPRINT  "init"
+
 	move.l	moduleaddress(a5),a0 
+    lea     $20-4(a0),a0  * skip hunk header
+
 	* LoadSeg BPTR->APTR
-	add.l	a0,a0
-	add.l	a0,a0
+	;add.l	a0,a0
+	;add.l	a0,a0
 	lea	mainvolume(a5),a1 
 	lea	songover(a5),a2
 	move.l	daveloweroutines(a5),a3
@@ -47013,7 +47511,7 @@ p_quartet
 	jmp	deliAuthor(pc)
 	dc  	pt_quartet 
  	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Quartet             [EP]",0
+	dc.b	"Quartet [EP]",0
 
 .path dc.b "quartet",0
  even
@@ -47081,7 +47579,7 @@ p_facethemusic
 	jmp	deliAuthor(pc)
 	dc  pt_facethemusic 
 .flags 	dc pf_stop!pf_cont!pf_volume!pf_end	
-	dc.b	"Face The Music      [EP]",0
+	dc.b	"Face The Music [EP]",0
 
 .path dc.b "face the music",0
  even
@@ -47202,7 +47700,7 @@ p_instereo1
 	jmp	deliAuthor(pc)
 	dc 	pt_instereo1
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
-	dc.b	"In Stereo! 1.0      [EP]",0
+	dc.b	"In Stereo! 1.0 [EP]",0
 
 .path dc.b "in stereo 1.0",0
  even
@@ -47327,7 +47825,7 @@ p_instereo2
 	jmp	deliAuthor(pc)
 	dc 	pt_instereo2
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
-	dc.b	"In Stereo! 2.0      [EP]",0
+	dc.b	"In Stereo! 2.0 [EP]",0
 
 .path dc.b "in stereo 2.0",0
  even
@@ -47371,7 +47869,7 @@ p_jasonbrooke
 	jmp	deliAuthor(pc)
 	dc  pt_jasonbrooke
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Jason Brooke        [EP]",0
+	dc.b	"Jason Brooke [EP]",0
 	        
 .path dc.b "jason brooke",0
  even
@@ -47451,7 +47949,7 @@ p_earache
 	jmp	deliAuthor(pc)
 	dc  pt_earache
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"EarAche             [EP]",0
+	dc.b	"EarAche [EP]",0
 	        
 .path dc.b "earache",0
  even
@@ -47545,7 +48043,7 @@ p_krishatlelid
 	jmp	deliAuthor(pc)
 	dc  pt_krishatlelid
 	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Kris Hatlelid       [EP]",0
+	dc.b	"Kris Hatlelid [EP]",0
 	        
 .path dc.b "kris hatlelid",0
  even
@@ -47626,7 +48124,7 @@ p_richardjoseph2
 	jmp	deliAuthor(pc)
 	dc  pt_richardjoseph2
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Richard Joseph      [EP]",0
+	dc.b	"Richard Joseph [EP]",0
 	
 	        
 .path dc.b "richard joseph",0
@@ -47686,7 +48184,7 @@ p_hippel7
 	jmp	deliAuthor(pc)
 	dc  pt_hippel7
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen
-	dc.b	"Jochen Hippel 7v    [EP]",0
+	dc.b	"Jochen Hippel 7v [EP]",0
 		        
 .path dc.b "jochen hippel 7v",0
  even
@@ -47790,7 +48288,7 @@ p_aprosys
 	jmp	deliAuthor(pc)
 	dc  pt_aprosys
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"AProSys             [EP]",0
+	dc.b	"AProSys [EP]",0
 		        
 .path dc.b "aprosys",0
  even
@@ -47833,7 +48331,7 @@ p_hippelst
 	jmp	deliAuthor(pc)
 	dc  pt_hippelst
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_poslen!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Jochen Hippel ST    [EP]",0	        
+	dc.b	"Jochen Hippel ST [EP]",0	        
 .path dc.b "jochen hippel st",0
  even
 
@@ -48021,7 +48519,7 @@ p_tcbtracker
 	jmp	deliAuthor(pc)
 	dc  pt_tcbtracker
 .flags	dc pf_scope!pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus2!pf_kelauseteen!pf_kelaustaakse!pf_quadscopeUps
-	dc.b	"TCBTracker (ST)     [EP]",0	        
+	dc.b	"TCBTracker (ST) [EP]",0	        
 .path dc.b "tcb tracker",0
  even
 
@@ -48116,7 +48614,7 @@ p_markcooksey
 	jmp	deliAuthor(pc)
 	dc  	pt_markcooksey
 .flags	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_poslen!pf_ciakelaus!pf_song!pf_quadscopeUps!pf_scope
-	dc.b	"Mark Cooksey        [EP]",0	        
+	dc.b	"Mark Cooksey [EP]",0	        
 .path 	dc.b 	"mark cooksey",0
  even
 
@@ -48237,7 +48735,7 @@ p_activisionpro
 	jmp	deliAuthor(pc)
 	dc  pt_activisionpro
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus
-	dc.b	"Activision Pro      [EP]",0
+	dc.b	"Activision Pro [EP]",0
 	        
 .path dc.b "activision pro",0
  even
@@ -48486,7 +48984,7 @@ p_maxtrax
 	jmp	deliAuthor(pc)
 	dc  pt_maxtrax
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"MaxTrax             [EP]",0
+	dc.b	"MaxTrax [EP]",0
 	        
 .path dc.b "maxtrax",0
  even
@@ -48554,7 +49052,7 @@ p_wallybeben
 	jmp	deliAuthor(pc)
 	dc  pt_wallybeben
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Wally Beben         [EP]",0
+	dc.b	"Wally Beben [EP]",0
 	        
 .path dc.b "wally beben",0
  even
@@ -48624,7 +49122,7 @@ p_synthpack
 	jmp	deliAuthor(pc)
 	dc  pt_synthpack
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Synth Pack          [EP]",0
+	dc.b	"Synth Pack [EP]",0
 	        
 .path dc.b "synth pack",0
  even
@@ -48673,7 +49171,7 @@ p_robhubbard
 	jmp	deliAuthor(pc)
 	dc  pt_robhubbard
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Rob Hubbard         [EP]",0
+	dc.b	"Rob Hubbard [EP]",0
 .path dc.b "rob hubbard",0
  even
 
@@ -48726,7 +49224,7 @@ p_jeroentel
 	jmp	deliAuthor(pc)
 	dc  pt_jeroentel
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Jeroen Tel          [EP]",0
+	dc.b	"Jeroen Tel [EP]",0
 .path dc.b "jeroen tel",0
  even
 
@@ -48798,7 +49296,7 @@ p_sonix
 	jmp	deliAuthor(pc)
 	dc  pt_sonix
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Sonix Music Driver  [EP]",0
+	dc.b	"Sonix Music Driver [EP]",0
 .path dc.b "sonix music driver",0
  even
 
@@ -48939,7 +49437,7 @@ p_quartetst
 	jmp	deliAuthor(pc)
 	dc  pt_quartetst
 .flags	dc pf_stop!pf_cont!pf_volume!pf_ciakelaus!pf_scope!pf_quadscopeUps
-	dc.b	"Quartet ST          [EP]",0
+	dc.b	"Quartet ST [EP]",0
 .path dc.b "quartet st",0
  even
 
@@ -49007,7 +49505,7 @@ p_coredesign
 	jmp	deliAuthor(pc)
 	dc  pt_coredesign
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
-	dc.b	"Core Design         [EP]",0
+	dc.b	"Core Design [EP]",0
 .path dc.b "core design",0
  even
 
@@ -49103,7 +49601,7 @@ p_musicmaker8
 	jmp	deliAuthor(pc)
 	dc 	 pt_musicmaker8
 .flags	dc 	pf_stop!pf_cont!pf_volume!pf_end
-	dc.b	"MusicMaker V8 8-ch  [EP]",0
+	dc.b	"MusicMaker V8 8ch [EP]",0
 .path 	dc.b "musicmaker8",0
  even
 
@@ -49223,7 +49721,7 @@ p_musicmaker4
 	jmp	deliAuthor(pc)
 	dc  pt_musicmaker4
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_ciakelaus
-	dc.b	"MusicMaker V8 4-ch  [EP]",0
+	dc.b	"MusicMaker V8 4ch [EP]",0
 .path dc.b "musicmaker4",0
  even
 
@@ -49380,7 +49878,7 @@ p_stonetracker
 	jmp	deliAuthor(pc)
 	dc  pt_stonetracker
 .flags	dc pf_stop!pf_cont!pf_volume!pf_song!pf_kelaus!pf_end
-	dc.b	"StoneTracker        [EP]",0
+	dc.b	"StoneTracker [EP]",0
 .path dc.b "eaglestone",0
  even
  
@@ -49495,7 +49993,7 @@ p_soundcontrol
 	jmp	deliAuthor(pc)
 	dc  pt_soundcontrol
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
-	dc.b	"SoundControl        [EP]",0
+	dc.b	"SoundControl [EP]",0
 	        
 .path dc.b "soundcontrol",0
  even
@@ -49549,7 +50047,7 @@ p_soundmaster
 	jmp	deliAuthor(pc)
 	dc  pt_soundmaster
 .flags	dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_kelaustaakse!pf_scope!pf_quadscopeUps
-	dc.b	"Sound Master        [EP]",0
+	dc.b	"Sound Master [EP]",0
 	        
 .path dc.b "sound master",0
  even
@@ -49813,7 +50311,7 @@ p_timfollin2
 	jmp	deliAuthor(pc)
 	dc  	pt_timfollin2
  dc pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopePoke
-	dc.b	"Tim Follin          [EP]",0
+	dc.b	"Tim Follin [EP]",0
 	        
 .path dc.b "tim follin ii",0
  even
@@ -49887,7 +50385,7 @@ p_jasonpage
 	jmp	deliAuthor(pc)
 	dc  	pt_jasonpage
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
-	dc.b	"Jason Page          [EP]",0
+	dc.b	"Jason Page [EP]",0
 	        
 .path dc.b "jason page",0
  even
@@ -49967,7 +50465,7 @@ p_steveturner
 	jmp	deliAuthor(pc)
 	dc  	pt_steveturner
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
-	dc.b	"Steve Turner        [EP]",0
+	dc.b	"Steve Turner [EP]",0
 	        
 .path dc.b "steve turner",0
  even
@@ -50018,7 +50516,7 @@ p_specialfx
 	jmp	deliAuthor(pc)
 	dc  	pt_specialfx
 	dc 	pf_stop!pf_cont!pf_volume!pf_end!pf_song!pf_ciakelaus2!pf_scope!pf_quadscopeUps
-	dc.b	"Special FX          [EP]",0
+	dc.b	"Special FX [EP]",0
 	        
 .path dc.b "special fx",0
  even
@@ -50097,7 +50595,7 @@ p_midiext:
   jmp      deliAuthor(pc)
   dc       pt_midiext
   dc       pf_end
-  dc.b     "MIDI (serial out)   [DP]",0
+  dc.b     "MIDI (serial out) [DP]",0
 	        
 .path dc.b "delimidi",0
  even
@@ -55619,13 +56117,25 @@ horizontalLayout:
 	rts
 
 .it
-    ; Position slider
+    ; Position slider - play mode change button
     ; As wide as the window minus some borders and bonus
     tst.b   showPositionSlider(a5)
     beq     .noPos
     move	winstruc+nw_Width,d0
     sub	    #8+8+2,d0
-    move    d0,gadgetPositionSlider+gg_Width
+    sub	    #18+2,d0      ; mode button width
+    lea     gadgetPositionSlider,a0
+    lea     gadgetPlayModeChangeButton-gadgetPositionSlider(a0),a1
+    move    d0,gg_Width(a0)
+
+    move    gg_TopEdge(a0),gg_TopEdge(a1)
+    move    gg_Height(a0),gg_Height(a1)
+    move    gg_LeftEdge(a0),d0
+    add     gg_Width(a0),d0
+    move    d0,gg_LeftEdge(a1)
+    addq    #1+2,gg_LeftEdge(a1)
+    subq    #2,gg_TopEdge(a1)
+    addq    #4,gg_Height(a1)
 .noPos
 	
   if DEBUG
@@ -58382,14 +58892,7 @@ parseAgetHeaders:
 .clean
     * Overwrite UTF8 with latin1
     move.l  d0,a0
-    move.l  d0,a1
-.loop
-    jsr     utf8ToLatin1Char
-    move.b  d0,(a1)+
-.l  tst.b   (a0)
-    bne     .loop
-    clr.b   (a1)
-    rts
+    bra     utf8StrToLatin1
 
 .template
      dc.b "CONTENT-LENGTH/K/N,CONTENT-TYPE/K,ICY-NAME/K,ICY-DESCRIPTION/K,REST/M",0
@@ -58462,6 +58965,17 @@ streamIsMpegAudio:
 
  even
 
+* In-place convert a UTF8 string to Latin1
+* In:
+*   a0 = text, utf8
+utf8StrToLatin1:
+    move.l  a0,a1
+.l  bsr     utf8ToLatin1Char
+    move.b  d0,(a1)+
+    tst.b   (a0)
+    bne     .l
+    clr.b   (a1)
+    rts
 
 * In:
 *   a0 = pointer to utf8 char
@@ -58665,17 +59179,17 @@ refreshPositionSlider:
     move    p_liput(a1),d0
     and     #pf_poslen,d0
     bne     .moveProp
-    cmp     #pt_sid,playertype(a5)
-    beq     .sid
-.sidx
-    rts
-.sid
-    * Special case for SIDs
+;    cmp     #pt_sid,playertype(a5)
+;    beq     .sid
+;.sidx
+;    rts
+;.sid
+    * If the length is known use that.
     tst.l   kokonaisaika(a5)
-    beq     .sidx
+    beq     .no
     move.l	aika2(a5),d1
 	sub.l	aika1(a5),d1            * can be negative
-    ble     .sidx
+    ble     .no
     mulu    #$ffff,d1
     move.w  kokonaisaika(a5),d0     * mins
     mulu    #60,d0
@@ -59484,282 +59998,92 @@ putNewLine
     move.b   #ILF2,(a1)+
     rts
 
+* before using fileConverter 154452
+* after: 154084
+
 * Creates the STIL.idx file from STIL.txt
 createStilIndex:
-    DPRINT "createStilIndex"
-    sub.l   a4,a4   
-    moveq   #0,d6
+    DPRINT  "createStilIndex"
+    rsreset
+.storeNextOffset  rs.w    1
+.varsSize         rs.b    0
 
-    ; ---------------------------------
-    * Open STIL.txt
-    pushpea stilDataName(pc),d1
-    move.l  #MODE_OLDFILE,d2
-    lore    Dos,Open
-    DPRINT  "open STIL.txt=%lx"
-    move.l  d0,d7
-    beq     .exit
+    moveq   #.varsSize/2-1,d0
+.sk clr.w   -(sp)
+    dbf     d0,.sk
+    move.l  sp,a4
 
-    ; ---------------------------------
-    * Find STIL.txt length
-	move.l	d7,d1		
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d7,d1
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d0,d5		* file length
-	move.l	d7,d1
-	moveq	#0,d2
-	moveq	#-1,d3
-	lob	Seek			* start of file
-    DPRINT  "len=%lx"
+    * Input file
+    lea     stilDataName(pc),a0
+    * Output file
+    lea     stilIndexName(pc),a1
 
-    ; ---------------------------------
-    * Try to open idx
-    pushpea stilIndexName(pc),d1
-    move.l  #MODE_OLDFILE,d2
-    lob     Open
-    DPRINT  "old STIL.idx=%lx"
-    move.l  d0,d6
-    bne     .yesIdx
-    ; ---------------------------------
-    * No previous idx, create new
-.doNew
-    pushpea stilIndexName(pc),d1
-    move.l  #MODE_NEWFILE,d2
-    lob     Open
-    DPRINT  "new STIL.idx=%lx"
-    move.l  d0,d6
-    beq     .exit
-    bra     .writeLen
-.yesIdx
-    ; ---------------------------------
-    * Read txt length from the start
-    clr.l   -(sp)
-    move.l  d6,d1   * file
-    move.l  sp,d2   * dest
-    moveq   #4,d3   * len
-    lob     Read
-    * Go back to start
-	move.l	d6,d1
-	moveq	#0,d2
-	moveq	#-1,d3
-	lob	Seek		
-    ; ---------------------------------
-    * Compare txt length and the length stored in idx
-    * If same, exit
-    cmp.l   (sp)+,d5
-    beq     .exit
-    * Do new - close OLDFILE handle
-    DPRINT  "Replacing old index"
-    move.l  d6,d1
-    lob     Close
-    bra     .doNew
-.writeLen
-    ; ---------------------------------
-    ; Allocate 10k + 190k here, the last part for output
-    move.l  #1024*200,d0
-    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
-    jsr     getmem
-    beq     .exit
-    DPRINT  "AllocMem=%lx"
-    move.l  d0,a4
-    * Output buffer into a5
-    lea     10*1024(a4),a5
+    lea     .callback(pc),a3
+    lea     .progressMsg(pc),a2
+    moveq   #0,d0
+    moveq   #0,d1
+    bsr     fileConverter
 
-    ; ---------------------------------
-    * Write the txt length into the idx
-    move.l  d5,-(sp)
-    move.l  d6,d1   * file
-    move.l  sp,d2   * source
-    moveq   #4,d3   * len
-    lob     Write
-    DPRINT  "Write=%lx"
-    addq    #4,sp   * pop
-    cmp.l   #-1,d0
-    beq     .exit
-    * d0 = -1 on error
-
-    ; ---------------------------------
-    * Read a chunk of txt
-    lea     -200(sp),sp
-    move.l  sp,a3           * line buffer
-    move.l  d5,196(sp)      * store total length here
-    moveq   #0,d5           * txt file position
-    DPRINT  "readLoop"
-.readLoop
-    move.l  d7,d1
-    move.l  a4,d2
-    move.l  #1024*10,d3
-    lob     Read
-
-    ; ---------------------------------
-    ; Print progress information
-    move.l  196(sp),d1
-    pushm   all
-    lea     var_b,a5
-    move.l  d5,d0
-    lsr.l   #8,d0
-    lsr.l   #8,d1
-    mulu    #100,d0
-    divu    d1,d0
-    ext.l   d0
-
-    moveq   #"%",d1
-    lea     .progressMsg(pc),a0
-    lea     -64(sp),sp
-    move.l  sp,a3
-    jsr     desmsg3
-
-    moveq   #35,d0
-    moveq   #22,d1
-    move.l  sp,a0
-    jsr     sprint
-    lea     64(sp),sp
-    popm    all
-
-    ; ---------------------------------
-    ; Bytes read in d0, check for EOF
-    move.l  d0,d4
-    beq     .stopLoop
-    bmi     .stopLoop
-    ; ---------------------------------
-    ; Read bytes until line change
-    move.l  a4,a0           * start
-    lea     (a0,d0),a1      * end
-    moveq   #13,d1          * loop constants
-    moveq   #10,d2
-.lineLoop
-    move.b  (a0)+,d0
-    cmp.b   d1,d0
-    beq     .cr
-    cmp.b   d2,d0
-    beq     .lf
-    * Copy one char, check if data exhausted
-    move.b  d0,(a3)+
-.continue
-    cmp.l   a1,a0
-    blo     .lineLoop
-
-    * Update global data offset
-    add.l   #1024*10,d5
-    * See if we got a full chunk last time, read more if so
-    cmp.l   #1024*10,d4
-    beq     .readLoop
-    * Exit
-    bra     .stopLoop
-
-.continueLineLoop
-    moveq   #13,d1
-    moveq   #10,d2
-    bra     .continue
-
-.lf
-.cr
-    * Skip lines that are not the title line
-    cmp.b   #"/",(sp)
-    bne     .next
- ;   move    #$f00,$dff180
-    ; ---------------------------------
-    ; A whole line read, null terminate
-    clr.b   (a3)
-
-    ; Convert to uppercase
-    ; Check for extension and remove it
-    move.l  sp,a2
-    bsr     convertA2ToUpperCaseRemoveSidExt
-    beq     .next   * if SID ext missing for some reason
-
-; if DEBUG
-;    move.l  sp,d0
-;    DPRINT  "UCas=%s"
-; endif
-    ; ---------------------------------
-    ; Process string in a0
-
-    ; Calc offset to the line after the title line, 
-    ; where the data is.
-    ; a0 points to 13 or 10 on the previous title line here.
-    move.l  a0,a2
-    cmp.b   #10,(a2)
-    bne     .skip1
-    addq    #1,a2
-.skip1
-    * Offset relative to the work buffer
-    sub.l   a4,a2
-    * Offset relative to the STIL.txt file
-    add.l   d5,a2
-
-    ; USE a2!
-    move.l  sp,d0
-    push    a0
-    move.l  d0,a0
-    bsr     fnv1
-    pop     a0
-
-    * d0 = hash into output    
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    * a2 = offset, store three bytes
-    move.l  a2,d0
-    swap    d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    rol.l   #8,d0
-    move.b  d0,(a5)+
-    
-.next
-    ; ---------------------------------
-    ; Start getting a new line into a3
-    move.l  sp,a3
-    ; Ignore 10 if the line ended with 13 ealier
-    cmp.b   #10,(a0)
-    bne     .continueLineLoop
-    addq    #1,a0
-    bra     .continueLineLoop
-
-.stopLoop
-    ; File scan completed
-    lea     200(sp),sp
-
-    ; ---------------------------------
-    ; Write index
-    move.l  d6,d1   * file
-    ; Data is located after the read input buffer
-    lea     10*1024(a4),a0
-    move.l  a0,d2   * src
-    move.l  a5,d3
-    sub.l   a0,d3   * length
-    lob     Write
-    DPRINT  "Wrote %ld bytes of STIL.idx"
-
-.exit
-    ; ---------------------------------
-    DPRINT  "exit"
-    move.l  a4,a0
-    jsr     freemem
-    move.l  d7,d1
-    beq     .x1
-    lob     Close
-.x1 move.l  d6,d1
-    beq     .x2
-    lob     Close
-.x2
+    lea     .varsSize(sp),sp
     rts
+
 
 .progressMsg
     dc.b    "Creating STIL index %02.2ld%lc",0
     even
 
+* Callback inputs:
+*    a0 = input line
+*    a1 = output buffer
+*    a4 = callback user data
+*    d6 = current input read position
+*    d7 = current output write position
+* Outputs:
+*    d0 = bytes to write or 0 
+.callback:
+    * Skip lines that are not the title line
+    cmp.b   #"/",(a0)
+    bne     .next
+
+    ; Convert to uppercase
+    ; Check for extension and remove it
+    move.l  a0,a2
+    bsr     convertA2ToUpperCaseRemoveSidExt
+    beq     .next   * if SID ext missing for some reason
+
+    * Calc fnv1 from a0, now uppser cased
+    bsr     fnv1
+
+    * hash into output    
+    move.l  d0,(a1)
+
+    * flag for the next line
+    st  .storeNextOffset(a4)
+
+    * Write 4 bytes at a0
+    move.l  a1,a0   
+    moveq   #4,d0
+    rts
+
+.next
+    tst.b   .storeNextOffset(a4)
+    beq     .next2
+    clr.b   .storeNextOffset(a4)
+
+    * Store three byte offset
+    move.l  a1,a0
+    swap    d6
+    move.b  d6,(a1)+
+    rol.l   #8,d6
+    move.b  d6,(a1)+
+    rol.l   #8,d6
+    move.b  d6,(a1)+
+    moveq   #3,d0
+    rts
+
+.next2
+    moveq   #0,d0
+    rts
 
 * Convert SID file path in A2 
 * In:
@@ -59804,7 +60128,6 @@ convertA2ToUpperCaseRemoveSidExt:
 * Out:
 *   d0 = fnv1 hash
 fnv1:
-    push    a2
     move.l  #$811c9dc5,d0 * hval
     move.l  #$01000193,d1 * prime
     lea     mulu_32,a2
@@ -59816,11 +60139,13 @@ fnv1:
     move.b  (a0)+,d2
     bne     .loop
 .x     
-    pop     a2
     rts
 
+* STIL stuff is run in info window context which
+* has a correclty set current dir, no need for PROGDIR: then
 stilDataName:   dc.b "STIL.txt",0
 stilIndexName:  dc.b "STIL.idx",0
+
 slDataName:     dc.b "PROGDIR:"
 slDataNameO:    dc.b "Songlengths.md5",0
 slIndexName:    dc.b "PROGDIR:"
@@ -59829,253 +60154,63 @@ slIndexNameO:   dc.b "Songlengths.idx",0
 
 ***************************************************************************
 *
-* Songlengths database
+* STIL Songlengths database for SIDs
 *
 ***************************************************************************
+
+* hip len 155084 before using fileConverter here
+* after,  154452
 
 * Creates Songlengths.idx from HVSC's Songlengths.md5
 * Out:
 *    d0 = true on success
 createSLIndex:
-.inputBufferLength  = 10*1024
-.lineBufferLength   = 4096
-.outBufferLength    = 1024
-.pushBufferLength   = 12*1024
-.workMemLen = .inputBufferLength+.lineBufferLength+.outBufferLength+.pushBufferLength
-
+    DPRINT  "createSLIndex"
     rsreset
-.workMem          rs.l    1  
-.inLength         rs.l    1 * input file len
-.inFH             rs.l    1 * input file handle
-.outFH            rs.l    1 * output file handle
-.inputBuffer      rs.l    1 * read chunks from input file
-.lineBuffer       rs.l    1 * read and uppercase line from the buffer
-.outBuffer        rs.l    1 * create output data entries here
-.pushBuffer       rs.l    1 * push buffer
-.pushBufferPos    rs.l    1 * position in the push buffer
-.lastHash         rs.l    1 * hash of the last read item
-.lastRead         rs.l    1 * bytes form the last input read
-.totalRead        rs.l    1 * total bytes read
-.lastProgress     rs.w    1 * to detect if progress needs to be displayed
-.count            rs.l    1 * debug info
-.freeze           rs.b    1
-                  rs.b    1 * pad
-.slVars           rs.b    0
+.lastHash         rs.l    1
+.lineBuffer       rs.l    1
+.outBuffer        rs.l    1
+.varsSize         rs.b    0
 
-    DPRINT "createSLIndex"
-    pushm   d1-a6
-    moveq   #.slVars/2-1,d0
+    moveq   #.varsSize/2-1,d0
 .sk clr.w   -(sp)
     dbf     d0,.sk
     move.l  sp,a4
 
-    ; ---------------------------------
-    * Open Songlengths.md5
-    pushpea slDataName(pc),d1
+    * Input file
+    lea     slDataName(pc),a0
     tst.b   uusikick(a5)
     bne     .n1
-    addq.l  #slDataNameO-slDataName,d1
+    addq.l  #slDataNameO-slDataName,a0
 .n1
-    move.l  #MODE_OLDFILE,d2
-    lore    Dos,Open
-    DPRINT  "md5 open=%lx"
-    move.l  d0,.inFH(a4)
-    move.l  d0,d7
-    beq     .exit       * bail out quickly
-
-    ; ---------------------------------
-    * Find length
-	move.l	d7,d1		
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d7,d1
-	moveq	#0,d2	
-	moveq	#1,d3
-	lob	Seek
-	move.l	d0,d5		* file length
-    move.l  d0,.inLength(a4)
-	move.l	d7,d1
-	moveq	#0,d2
-	moveq	#-1,d3
-	lob	Seek			* start of file
-    DPRINT  "len=%lx"
-
-    ; ---------------------------------
-    * Try to open idx
-    pushpea slIndexName(pc),d1
+    * Output file
+    lea     slIndexName(pc),a1
     tst.b   uusikick(a5)
     bne     .n2
-    addq.l  #slIndexNameO-slIndexName,d1
+    addq.l  #slIndexNameO-slIndexName,a1
 .n2
-    move.l  #MODE_OLDFILE,d2
-    lob     Open
-    DPRINT  "old idx=%lx"
-    move.l  d0,d6
-    move.l  d0,.outFH(a4)
-    bne     .yesIdx
-    ; ---------------------------------
-    * No previous idx, create new
-.doNew
-    pushpea slIndexName(pc),d1
-    tst.b   uusikick(a5)
-    bne     .n3
-    addq.l  #slIndexNameO-slIndexName,d1
-.n3
-    move.l  #MODE_NEWFILE,d2
-    lob     Open
-    DPRINT  "new idx=%lx"
-    move.l  d0,d6
-    move.l  d0,.outFH(a4)
-    beq     .exit
-    bra     .writeLen
-.yesIdx
-    ; ---------------------------------
-    * Read txt length from the start
-    clr.l   -(sp)
-    move.l  d6,d1   * file
-    move.l  sp,d2   * dest
-    moveq   #4,d3   * len
-    lob     Read
-    * Go back to start
-	move.l	d6,d1
-	moveq	#0,d2
-	moveq	#-1,d3
-	lob	Seek		
-    ; ---------------------------------
-    * Compare txt length and the length stored in idx
-    * If same, exit
-    cmp.l   (sp)+,d5
-    beq     .exit
-    * Do new - close OLDFILE handle
-    DPRINT  "Replacing old index"
-    move.l  d6,d1
-    lob     Close
-    bra     .doNew
-.writeLen
+    lea     .progressMsg(pc),a2
+    moveq   #0,d1       * no finalize callback
+    lea     .callback(pc),a3
+    moveq   #0,d0       * no index space
+    bsr     fileConverter
 
-	jsr	    setMainWindowWaitPointer
-	jsr   	freezeMainWindowGadgets
-    st      .freeze(a4)
+    lea     .varsSize(sp),sp
+    rts
 
-    ; ---------------------------------
-    ; Allocate buffers
-    move.l  #.workMemLen,d0
-    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
-    jsr     getmem
-    beq     .exit
-    DPRINT  "AllocMem=%lx"
-    move.l  d0,.workMem(a4)
-    move.l  d0,a0
-    move.l  a0,.inputBuffer(a4)
-    lea     .inputBufferLength(a0),a0
+* Callback inputs:
+*    a0 = input line
+*    a1 = output buffer
+*    a4 = callback user data
+*    d7 = current output write position
+* Outputs:
+*    d0 = bytes to write or 0 
+.callback:
     move.l  a0,.lineBuffer(a4)
-    lea     .lineBufferLength(a0),a0
-    move.l  a0,.outBuffer(a4)
-    lea     .outBufferLength(a0),a0
-    move.l  a0,.pushBuffer(a4)
-    move.l  a0,.pushBufferPos(a4)
-
-    ; ---------------------------------
-    * Write the txt length into the idx
-    move.l  d5,-(sp)
-    move.l  d6,d1   * file
-    move.l  sp,d2   * source
-    moveq   #4,d3   * len
-    lob     Write
-    DPRINT  "Write=%lx"
-    addq    #4,sp   * pop
-    cmp.l   #-1,d0
-    beq     .exit
-    * d0 = -1 on error
-
-    ; ---------------------------------
-    * Read a chunk of txt
-    DPRINT  "readLoop"
-    move.l  .lineBuffer(a4),a3  * target buffer for a line
-.readLoop
-    move.l  .inFH(a4),d1
-    move.l  .inputBuffer(a4),d2
-    move.l  #1024*10,d3
-    lob     Read
-    ;;DPRINT  "read=%ld"
-    add.l   d0,.totalRead(a4)
-    move.l  d0,.lastRead(a4)
-    
-    ; ---------------------------------
-    ; Print progress information
-    pushm   all
-    move.l  .totalRead(a4),d0
-    moveq   #100,d1
-    jsr     mulu_32
-    move.l  .inLength(a4),d1
-    jsr     divu_32
-
-    cmp.w   .lastProgress(a4),d0
-    beq     .skipPrg
-    move.w  d0,.lastProgress(a4)
-
-    moveq   #"%",d1
-    lea     .progressMsg(pc),a0
-    lea     -64(sp),sp
-    move.l  sp,a3
-    jsr     desmsg3
-     
-    move.l  sp,a0
-    jsr     printbox
-    lea     64(sp),sp
-.skipPrg
-    popm    all
-
-    ; ---------------------------------
-    ; Bytes read in d0, check for EOF
-    tst.l   d0
-    beq     .stopLoop
-    bmi     .stopLoop
-    ; ---------------------------------
-    ; Read bytes until line change
-    move.l  .inputBuffer(a4),a0 * start of source
-    lea     (a0,d0),a1          * end 
-    moveq   #13,d1              * loop constants
-    moveq   #10,d2
-.lineLoop
-    move.b  (a0)+,d0
-    cmp.b   d1,d0
-    beq     .cr
-    cmp.b   d2,d0
-    beq     .lf
-    * Copy one char, check if data exhausted
-    move.b  d0,(a3)+
-.continue
-    cmp.l   a1,a0
-    blo     .lineLoop
-
-    * See if we got a full chunk last time, read more if so
-    cmp.l   #1024*10,.lastRead(a4)
-    beq     .readLoop
-    * Exit - call this a success
-    bra     .stopLoop
-
-.continueLineLoop:
-    moveq   #13,d1              * loop constants
-    moveq   #10,d2
-    bra     .continue
-
- REM
-; /MUSICIANS/H/Hubbard_Rob/Auf_Wiedersehen_Monty.sid
-1887c86a8a60ddbad5b904e3c1a87818=6:08 0:09 0:09 0:08 0:10 0:09 0:09 0:09 0:06 0:09 0:08 0:08 0:12
- EREM
-
-;8df3577abc088d52538c3e4ae21e6843=0:07.311 0:08.565 0:10.955 0:08.43 0:07.377 0:07.495 0:08.297 0:09.099 0:07.261 0:07.495 0:08.564 0:08.565 0:10.536 0:06.291 0:08.564 0:07.495 0:11.773 0:08.564 0:12.844 0:11.44 0:07.261 0:08.565 0:08.565 0:08.297 0:14.983 0:07.495 0:12.577 0:17.12
-;d6d3d7811fa58aae8ae4f618c3fde294=1:03.621 0:20.689 0:05.433 0:18.366 0:02.956 0:11.05 0:13.755 0:04.809 0:08.138 0:04.844 0:03.284 0:08.623 0:09.871 0:03.977 0:05.364 0:09.802 0:12.437 0:08.554 0:05.695 0:09.559 0:04.948 0:17.845 0:11 0:04.602 0:14.725 0:03.423 0:06.612 0:07.306 0:04.844 0:04.879 0:06.266 0:05.729 0:04.809 0:16.043 0:17.637 0:04.671 0:01 0:02.887 0:04.255 0:06.335 0:20.203 0:13.408 0:06.057 0:07.167 0:03.769 0:20.273 0:03.665 0:03.007 0:19.025 0:11.293 0:03.214 0:05.225 0:02.175 0:21.625 1:01.358 0:03.007 0:10.426 0:04.081 0:05.537 0:07.618 0:07 0:10.842 0:03.665 0:06.146 0:19.44 0:05.711 0:17.36 0:39.653 0:21.243'
-
-.lf
-.cr
-    ; A whole line read, null terminate
-    clr.b   (a3)
+    move.l  a1,.outBuffer(a4)
+    move.l  a0,a2
 
     * Skip lines that are not the title line
-    move.l  .lineBuffer(a4),a2
     cmp.b   #";",(a2)
     bne     .dataLine
 
@@ -60088,20 +60223,17 @@ createSLIndex:
 
     ; ---------------------------------
     ; Calc hash of the uppercased string
-    push    a0
     move.l  .lineBuffer(a4),a0
     addq.l  #2,a0       * skip ; and space
     bsr     fnv1
     move.l  d0,.lastHash(a4)
-    pop     a0
-    bra     .next
+.next
+    moveq   #0,d0   * exit, write nothing
+    rts
 
 .dataLine
     move.l  .lastHash(a4),d0
     beq     .next
-
-    * Preserve a0, a1!
-    pushm   a0/a1
 
     * a2 points to the first time
     ; 1887c86a8a60ddbad5b904e3c1a87818=6:08 0:09 0:09 0:08 0:10 0:09 0:09 0:09 0:06 0:09 0:08 0:08 0:12
@@ -60195,100 +60327,16 @@ createSLIndex:
     subq.l  #1,d0
     move.b  d0,(a3)
 .large
-
-    move.l  a3,a0
-    bsr     .push
-    * d0 = true on success
-
-    addq.l  #1,.count(a4)
     clr.l   .lastHash(a4)
-    popm    a0/a1
-
-    * Stop on push error
-    tst.l   d0
-    beq     .stopLoop
-.next
-    ; ---------------------------------
-    ; Start getting a new line 
-    move.l  .lineBuffer(a4),a3
-    ; Ignore 10 if the line ended with 13 ealier
-    cmp.b   #10,(a0)
-    bne     .continueLineLoop
-    addq    #1,a0
-    bra     .continueLineLoop
-
-.stopLoop   
-    * Write remaining
-    bsr     .pushWrite
-
-.exit
-    ; ---------------------------------
- if DEBUG
-    move.l  .count(a4),d0
-    DPRINT  "exiting, wrote %ld entries"
- endif
-    move.l  .workMem(a4),a0
-    jsr     freemem
-    move.l  .inFH(a4),d1
-    beq     .x1
-    lob     Close
-.x1 move.l  .outFH(a4),d1
-    beq     .x2
-    lob     Close
-.x2
-    tst.b   .freeze(a4)
-    beq     .nf
-    jsr	    unfreezeMainWindowGadgets
-	jsr	    clearMainWindowWaitPointer
-    jsr     forceRefreshList
-.nf
-    lea     .slVars(sp),sp
-	popm    d1-a6
+    move.l  a3,a0
+    * write d0 bytes from a0
     rts
 
-* In:
-*   a0 = data pointer
-*   d0 = length of data
-* Out: 
-*   d0 = true on success, false otherwise
-.push
-    move.l  .pushBufferPos(a4),d3
-    sub.l   .pushBuffer(a4),d3
-    cmp.l   #10*1024,d3
-    blo     .noPush
-    pushm   d0/a0
-    bsr     .pushWrite
-    tst.l   d0
-    popm    d0/a0
-    bmi     .fail
-.noPush
-    move.l  .pushBufferPos(a4),a1
-    subq    #1,d0
-.cp move.b  (a0)+,(a1)+
-    dbf     d0,.cp
-    move.l  a1,.pushBufferPos(a4)
-    moveq   #1,d0 * ok
-    rts
-.fail
-    moveq   #0,d0 * bad
-    rts
-
-.pushWrite
-    move.l  .pushBufferPos(a4),d3
-    sub.l   .pushBuffer(a4),d3    * len
-    beq     .noWrite
-    move.l  .pushBuffer(a4),d2    * src
-    move.l  .outFH(a4),d1         * file
-    lob     Write
-    DPRINT  "write=%ld"
-    move.l  .pushBuffer(a4),.pushBufferPos(a4)
-.noWrite
-    rts
 
 .progressMsg
-    dc.b    "Indexing song lengths %02.2ld%lc",0
-
+    dc.b    "Indexing SID lengths %02.2ld%lc",0
     even
+
 
 * Read and generate HVSC songlengths index if possible
 * Out:
@@ -60323,6 +60371,1726 @@ freeSLData:
     move.l  slIndexPtr(a5),a0
     clr.l   slIndexPtr(a5)
     jmp     freemem
+
+
+
+***************************************************************************
+*
+* Audacious-UADE songlength database (not for SIDs)
+* Metadata database
+*
+***************************************************************************
+
+USL_INDEX_SIZE = 32
+UME_INDEX_SIZE = 64
+
+USL_INDEX_SIZE_BYTES = USL_INDEX_SIZE*8 ; pairs of (offset,length)
+UME_INDEX_SIZE_BYTES = UME_INDEX_SIZE*8
+
+USL_HEADER_SIZE_BYTES = USL_INDEX_SIZE_BYTES+4
+UME_HEADER_SIZE_BYTES = UME_INDEX_SIZE_BYTES+4
+
+    include "md5.s" 
+
+* Called once on startup
+initializeUslUme:
+    DPRINT  "initializeUslUme"
+    bsr     uslCreateIndex
+    bsr     umeCreateIndex
+
+    bsr     uslLoadIndex
+    bsr     umeLoadIndex
+    rts
+
+
+* These formats already have length information,
+* skip these.
+uslIgnoreFormats:
+    cmp.w   #pt_prot,playertype(a5)
+    beq     .reject
+    cmp.w   #pt_sid,playertype(a5)
+    beq     .reject
+    cmp.w   #pt_sample,playertype(a5)
+.reject
+    rts
+
+umeIgnoreFormats:
+    cmp.w   #pt_sid,playertype(a5)
+    beq     .reject
+    cmp.w   #pt_sample,playertype(a5)
+.reject
+    rts
+
+readUsl:
+    DPRINT  "readUsl"
+    tst.l   uslIndexPtr(a5)
+    beq     .noData
+
+    bsr     uslIgnoreFormats
+    beq     .reject
+
+    lea     uslSongLengthData(a5),a0
+    tst.w   (a0)
+    bne     .hasIt
+
+    bsr     calcModuleMD5
+    bsr     uslLoadData
+    bsr     uslFind
+    DPRINT  "uslFind=%ld"
+.noData
+.hasIt
+.reject
+    rts
+
+
+readUme:
+    DPRINT  "readUme"
+    tst.l   umeIndexPtr(a5)
+    beq     .noData
+
+    bsr     umeIgnoreFormats
+    beq     .reject
+
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .no
+    move.l  d0,a0
+    tst.b   (a0)
+    bne     .hasIt
+.no
+    bsr     calcModuleMD5
+    bsr     umeLoadData
+    bsr     umeFind
+.noData
+.hasIt
+.reject
+    rts
+
+
+calcModuleMD5:
+    tst.l   uslMD5(a5)            
+    bne     readUme\.reject
+
+    lea     -MD5Ctx_SIZEOF(sp),sp
+
+    move.l  sp,a0
+    bsr     MD5_Init
+
+    move.l  sp,a0
+    move.l  moduleaddress(a5),a1
+    
+    * Special case for XPK, exact decompressed length
+    * is not the allocated mem length
+    move.l  lod_xpkOutLen(a5),d0
+    bne     .1
+    move.l  modulelength(a5),d0
+.1
+    DPRINT  "calcModuleMD5 length=%ld"
+
+    * Show wait pointer if 68000 or long enough
+    move.l  (a5),a2
+    btst    #AFB_68020,AttnFlags+1(a2)
+    beq     .12
+    cmp.l   #200000,d0
+    blo     .11
+.12
+    jsr     setMainWindowWaitPointer
+.11
+
+ if DEBUG
+    pushm   all
+    bsr     startMeasure
+    popm    all
+ endif
+    bsr     MD5_Update
+ if DEBUG
+    bsr     stopMeasure
+    DPRINT  "MD5 took %ld ms"
+ endif
+
+    move.l  sp,a0
+    bsr     MD5_Final
+    DPRINT  "MD5: %08lx %08lx %08lx %08lx"
+    move.l  d0,uslMD5(a5)
+    swap    d1
+    move.w  d1,uslMD5+4(a5)
+    
+    lea     MD5Ctx_SIZEOF(sp),sp
+
+    jmp     clearMainWindowWaitPointer
+ 
+
+uslLoadIndex:
+    DPRINT  "uslLoadIndex"
+    bsr     uslOpen
+    beq     .y
+    move.l  #USL_HEADER_SIZE_BYTES,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,uslIndexPtr(a5)
+    beq     .x
+
+    move.l  d7,d1		        * file
+	move.l	uslIndexPtr(a5),d2	* destination
+	move.l	#USL_HEADER_SIZE_BYTES,d3  * pituus
+	lob	    Read
+    DPRINT  "read=%ld"
+.x
+    bsr     uslClose
+.y
+    rts
+
+
+umeLoadIndex:
+    DPRINT  "umeLoadIndex"
+    bsr     umeOpen
+    beq     .y
+
+    move.l  #UME_HEADER_SIZE_BYTES,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,umeIndexPtr(a5)
+    beq     .x
+
+    move.l  d7,d1		        * file
+	move.l	umeIndexPtr(a5),d2	* destination
+	move.l	#UME_HEADER_SIZE_BYTES,d3   * pituus
+	lob     Read
+    DPRINT  "read=%ld"
+
+    * Allocate some space for the metadata txt
+    moveq   #$7f,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,umeMetaDataPtr(a5)
+.x
+    bsr     umeClose
+.y
+    rts
+
+
+uslLoadData:
+    DPRINT  "uslLoadData"
+    tst.l   uslIndexPtr(a5)
+    beq     .noDataError
+    move.l  uslDataPtr(a5),d0
+    beq     .load
+    DPRINT  "check previous"
+    * Check if already have it
+    move.l  d0,a0
+    move.b  (a0),d0
+    lsr.b   #3,d0           * 5-bit index
+    move.b  uslMD5(a5),d1
+    lsr.b   #3,d1
+    cmp.b   d0,d1
+    beq     .gotIt
+.load
+    bsr     uslFreeData
+    bsr     uslOpen
+    beq     .error
+
+    * Access index
+    move.b  uslMD5(a5),d0
+    lsr.b   #3,d0
+    and.w   #$1f,d0     * 5-bit index!
+    lsl     #3,d0       * 8 byte element index
+    move.l  uslIndexPtr(a5),a0
+    movem.l 4(a0,d0),d4/d5
+    * d4 = file offset, d5 = block length
+
+    move.l  d7,d1   * fh
+    move.l  d4,d2   * offset   
+    move.l  #OFFSET_BEGINNING,d3
+    lob     Seek
+
+    move.l  d5,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,uslDataPtr(a5)
+    beq     .error2
+
+    move.l  d7,d1   * fh
+    move.l  d0,d2   * target
+    move.l  d5,d3   * len
+    lore    Dos,Read
+    DPRINT  "read=%ld"
+
+.error2
+    bsr     uslClose
+.error
+    rts
+.gotIt
+    DPRINT  "already had it"
+    rts
+.noDataError
+    DPRINT  "no data available"
+    rts
+
+
+umeLoadData:
+    DPRINT  "umeLoadData"
+    tst.l   umeIndexPtr(a5)
+    beq     .noDataError
+    move.l  umeDataPtr(a5),d0
+    beq     .load
+    DPRINT  "check previous"
+    * Check if already have it
+    move.l  d0,a0
+    move.b  (a0),d0
+    lsr.b   #2,d0           * 6-bit index
+    move.b  uslMD5(a5),d1
+    lsr.b   #2,d1
+    cmp.b   d0,d1
+    beq     .gotIt
+.load
+    bsr     umeFreeData
+    bsr     umeOpen
+    beq     .error
+
+    * Access index
+    move.b  uslMD5(a5),d0
+    lsr.b   #2,d0
+    and.w   #$3f,d0     * 6 bits!
+    lsl     #3,d0       * 8 byte element index
+    move.l  umeIndexPtr(a5),a0
+    movem.l 4(a0,d0),d4/d5
+    * d4 = file offset, d5 = block length
+
+    move.l  d7,d1   * fh
+    move.l  d4,d2   * offset   
+    move.l  #OFFSET_BEGINNING,d3
+    lob     Seek
+
+    move.l  d5,d0
+    moveq   #0,d1
+    jsr     getmem
+    move.l  d0,umeDataPtr(a5)
+    beq     .error2
+
+    move.l  d7,d1   * fh
+    move.l  d0,d2   * target
+    move.l  d5,d3   * len
+    lore    Dos,Read
+    DPRINT  "read=%ld"
+
+.error2
+    bsr     umeClose
+.error
+    rts
+.gotIt
+    DPRINT  "already had it"
+    rts
+.noDataError
+    DPRINT  "no data available"
+    rts
+
+    
+
+uslClearSongData:
+    DPRINT  "uslClearSongData"
+	lea	    uslSongLengthData(a5),a2
+    moveq   #8-1,d0
+.cl clr.l   (a2)+
+    dbf     d0,.cl
+    rts
+
+
+uslUmeClear:
+    clr.l   uslMD5(a5)
+    clr.w   uslMD5+4(a5)
+
+umeClear:
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .1
+    move.l  d0,a0
+    clr.b   (a0)
+.1  
+    rts
+
+uslFind:
+    moveq   #0,d0       * result in d0
+    move.l  uslDataPtr(a5),d1
+    beq     .x
+    move.l  d1,a0
+    move.l  -4(a0),d1       * mem area length
+    lea	    (a0,d1.l),a1    * search end bound
+    movem.w uslMD5(a5),d1/d2/d3
+    and.w   #$0fff,d1       * ignore top 4 bits
+.find
+    ; ---------------------------------
+	* First 16 bits, top 4 bits (song count) ignored
+	move.b  (a0),d4
+    moveq   #$f,d0
+    and.b	d4,d0
+    rol	    #8,d0
+	move.b	1(a0),d0
+	cmp.w   d1,d0
+	bne     .skip
+
+    move.b	2(a0),d0
+    rol	    #8,d0
+	move.b	3(a0),d0
+	cmp.w	d2,d0
+	bne	    .skip
+
+    * Last 16 bits
+	move.b	4(a0),d0
+	rol	    #8,d0
+	move.b	5(a0),d0
+	cmp.w	d3,d0
+	bne	    .skip
+    ; ---------------------------------
+    * found it!
+    * read song count
+    bsr     uslClearSongData
+	lsr.b	#4,d4
+	addq	#6,a0
+	lea	    uslSongLengthData(a5),a1 
+.sl
+	moveq	#0,d0
+	move.b	(a0)+,d0    
+	bpl	    .sml
+	and	    #$7f,d0         * 16-bit length
+	lsl	    #8,d0
+	move.b	(a0)+,d0
+.sml	
+    DPRINT  "--- song length=%ld"
+	move.w	d0,(a1)+
+	subq.b	#1,d4
+	bne     .sl
+    DPRINT  "--- found"
+	rts
+    ; ---------------------------------
+.skip
+    * read song count
+	lsr.b	#4,d4	
+	addq	#6,a0	* skip over md5sum
+.songs
+	tst.b	(a0)+
+	bpl     .small
+	addq	#1,a0	* 16-bit length
+.small
+	subq.b	#1,d4
+	bne	.songs
+    ; ---------------------------------
+	cmp.l	a1,a0
+	blo	    .find
+.x
+    DPRINT  "--- not found"
+	moveq	#0,d0
+	rts
+
+    
+umeFind:
+    DPRINT  "umeFind"
+    * Empty any previous data
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .x
+    move.l  d0,a1
+    clr.b   (a1)
+
+    moveq   #0,d0       * result in d0
+    move.l  umeDataPtr(a5),d1
+    beq     .x
+    move.l  d1,a0
+    move.l  -4(a0),d1       * mem area length
+    lea	    (a0,d1.l),a1    * search end bound
+
+    movem.w uslMD5(a5),d1/d2/d3
+
+.find
+    ; ---------------------------------
+	* First 16 bits
+    move.b	(a0),d0
+    rol	    #8,d0
+	move.b	1(a0),d0
+	cmp.w	d1,d0
+	bne	    .skip
+
+    move.b	2(a0),d0
+    rol	    #8,d0
+	move.b	3(a0),d0
+	cmp.w	d2,d0
+	bne	    .skip
+
+    * Last 16 bits
+	move.b	4(a0),d0
+	rol	    #8,d0
+	move.b	5(a0),d0
+	cmp.w	d3,d0
+	bne	    .skip
+    ; ---------------------------------
+    * found it!
+	addq	#6,a0
+    move.l  umeMetaDataPtr(a5),a2
+    * get 4 strings
+    moveq   #4-1,d3
+.sl
+    moveq   #0,d0
+    move.b  (a0)+,d0
+    subq.b  #1,d0
+    beq     .em
+    lea     (a0,d0),a3   * str end
+.loop
+    jsr     utf8ToLatin1Char    * read (a0)+
+    cmp.b   #"~",d0
+    bne     .1
+    move.b  #",",(a2)+
+    moveq   #" ",d0
+.1
+    move.b  d0,(a2)+
+    cmp.l   a3,a0
+    bne     .loop
+
+.em clr.b   (a2)+
+    dbf     d3,.sl
+
+    move.l  umeMetaDataPtr(a5),d0
+    DPRINT  "+++ found %s"
+	rts
+    ; ---------------------------------
+.skip
+    * skip 4 strings
+	addq	#6,a0
+    moveq   #4-1,d4
+    moveq   #0,d0
+.skip4
+    move.b  (a0),d0     
+    add.w   d0,a0
+    dbf     d4,.skip4
+    ; ---------------------------------
+.go	
+	cmp.l	a1,a0
+	blo	    .find
+.x
+    DPRINT  "+++ not found"
+	moveq	#0,d0
+	rts
+
+uslGetSongLength:
+    DPRINT  "uslGetSongLength"
+
+    ; Do not clobber PT, SID, Sample data
+    bsr     uslIgnoreFormats
+    beq     .1
+
+    clr.l   kokonaisaika(a5)
+    lea     uslSongLengthData(a5),a0
+    tst.w   (a0)
+    beq     .x
+
+    moveq   #0,d0
+    move    songnumber(a5),d0
+    sub     minsong(a5),d0
+    DPRINT  "song=%ld"
+    cmp     #$f,d0      * upper limit check
+    bhi     .x      
+    add     d0,d0
+    move    (a0,d0),d0
+    DPRINT  "length=%ld"
+    divu    #60,d0
+    move    d0,kokonaisaika(a5)
+    swap    d0
+    move    d0,kokonaisaika+2(a5)
+.x
+.1
+    rts
+
+uslFreeIndex:
+    DPRINT  "uslFreeIndex"
+    move.l  uslIndexPtr(a5),a0
+    clr.l   uslIndexPtr(a5)
+.free
+    jmp     freemem
+
+umeFreeIndex:
+    DPRINT  "umeFreeIndex"
+    move.l  umeMetaDataPtr(a5),a0
+    clr.l   umeMetaDataPtr(a5)
+    bsr     uslFreeIndex\.free
+    move.l  umeIndexPtr(a5),a0
+    clr.l   umeIndexPtr(a5)
+    bra     uslFreeIndex\.free
+
+uslFreeData:
+    DPRINT  "uslFreeData"
+    move.l  uslDataPtr(a5),a0
+    clr.l   uslDataPtr(a5)
+    bra     uslFreeIndex\.free
+
+umeFreeData:
+    DPRINT  "umeFreeData"
+    move.l  umeDataPtr(a5),a0
+    clr.l   umeDataPtr(a5)
+    bra     uslFreeIndex\.free
+
+uslOpen:
+    lea     uslFile(pc),a0
+    tst.b   uusikick(a5)
+    bne     .1
+    lea     uslFileOld(pc),a0
+.1
+    move.l  a0,d1
+	move.l	#MODE_OLDFILE,d2
+	lore    Dos,Open
+    move.l  d0,d7
+    rts
+
+umeOpen:
+    lea     umeFile(pc),a0
+    tst.b   uusikick(a5)
+    bne     .1
+    lea     umeFileOld(pc),a0
+.1  bra     uslOpen\.1
+
+uslClose:
+umeClose:
+    move.l  d7,d1
+    beq     .1
+	lore    Dos,Close
+.1  rts
+
+
+uslFile:	 dc.b	"PROGDIR:"
+uslFileOld   dc.b   "au-songlengths.db",0
+uslDataName  dc.b   "PROGDIR:"
+uslDataNameO dc.b   "songlengths.tsv",0
+umeFile:	 dc.b	"PROGDIR:"
+umeFileOld   dc.b   "au-metadata.db",0
+umeDataName  dc.b   "PROGDIR:"
+umeDataNameO dc.b   "combined.tsv",0
+     even
+
+
+* Creates Songlengths.db from Audacious-UADE songlengths.tsv
+* Out:
+*    d0 = true on success
+uslCreateIndex:
+    DPRINT  "uslCreateIndex"
+    rsreset
+.lastIndex        rs.w    1     * Based on the top bits of the MD5sum
+.indexPtr         rs.l    1     
+.index            rs.l    USL_INDEX_SIZE+1    * Build index here
+.varsSize         rs.b    0
+
+    moveq   #.varsSize/2-1,d0
+.sk clr.w   -(sp)
+    dbf     d0,.sk
+    move.l  sp,a4
+
+    * Input file
+    lea     uslDataName(pc),a0
+    tst.b   uusikick(a5)
+    bne     .n1
+    lea     uslDataNameO(pc),a0
+.n1
+    * Output file
+    lea     uslFile(pc),a1
+    tst.b   uusikick(a5)
+    bne     .n3
+    lea     uslFileOld(pc),a1
+.n3
+    * Initial values:
+    move    #-1,.lastIndex(a4)
+    pea     .index(a4)
+    move.l  (sp)+,.indexPtr(a4)
+
+    lea     .progressMsg(pc),a2
+    lea     .finalizeCallback(pc),a3
+    move.l  a3,d1
+    lea     .callback(pc),a3
+    move    #USL_INDEX_SIZE_BYTES,d0     * index space
+    bsr     fileConverter
+
+    lea     .varsSize(sp),sp
+    rts
+
+* Finalize callback inputs:
+*    d7 = output file handle
+*    a4 = callback user data
+*    a6 = DOSBase
+.finalizeCallback:
+    * Write the index at the header 
+    lea     .index(a4),a3
+
+    move.l  d7,d1   * fh
+    moveq   #0,d2   * offset
+    moveq   #OFFSET_CURRENT,d3
+    lob     Seek    
+    move.l  d0,USL_INDEX_SIZE*4(a3)   * last position
+
+    move.l  d7,d1   * fh
+    moveq   #4,d2   * offset, start of index
+    moveq   #OFFSET_BEGINNING,d3
+    lob     Seek    
+
+    moveq   #USL_INDEX_SIZE-1,d6
+.loop
+    move.l  (a3)+,d0     * offset of data block
+    move.l  (a3),d1      * next offset
+    sub.l   d0,d1        * block size
+    movem.l d0/d1,-(sp)
+
+    move.l  d7,d1   * file
+    move.l  sp,d2   * source
+    moveq   #8,d3   * len
+    lob     Write
+
+    addq    #8,sp
+    dbf     d6,.loop
+    rts
+
+
+* Callback inputs:
+*    a0 = input line
+*    a1 = output buffer
+*    a4 = callback user data
+*    d6 = current input read position
+*    d7 = current output write position
+* Outputs:
+*    d0 = bytes to write or 0 
+.callback:
+    move.l  a0,d0
+
+    move.l  a1,a5 * stash this, start of the entry
+    
+    * Read 8 chars of MD5
+    moveq   #8-1,d3
+    bsr     .readHex
+ 
+    * Read 4 chars of MD5
+    moveq   #4-1,d3
+    bsr     .readHex
+
+    * Build index from the top 5 bits
+    move.b  (a5),d0
+    lsr.b   #3,d0
+    cmp.b   .lastIndex(a4),d0
+    beq     .noidx
+    move.b  d0,.lastIndex(a4)
+
+    * Write current position to the next index slot
+    move.l  .indexPtr(a4),a0
+    move.l  d7,(a0)+
+    move.l  a0,.indexPtr(a4)
+.noidx
+
+    bsr     .skipTab
+    bsr     .skipTab
+
+    * song count
+    moveq   #0,d4
+.getNums
+    bsr     .getNumber
+    beq     .noMore
+    add.l   #500,d2  * round
+    divu    #1000,d2 * ms->s
+    cmp.w   #$7f,d2 
+    bls     .sml
+    ror.w   #8,d2
+    or.b    #$80,d2
+    move.b  d2,(a1)+
+    ror.w   #8,d2
+.sml 
+    move.b  d2,(a1)+
+    addq    #1,d4
+    cmp     #$f,d4      * limit check for songs
+    blo     .getNums
+    
+.noMore
+    * put song count to the first 4 bytes
+    lsl.b   #4,d4
+    and.b   #$0f,(a5)
+    or.b    d4,(a5)  
+
+    * How many bytes to write
+    move.l  a1,d0
+    sub.l   a5,d0
+    * What to write
+    move.l  a5,a0
+    rts
+
+
+.readHex:
+    moveq   #0,d1
+.md5a
+* 0..9 = $30..$39
+* a..f = $61..$66
+    rol.w   #4,d1
+    move.b  (a0)+,d0
+    cmp.b   #$61,d0
+    bhs     .n13
+    sub.b   #$30,d0
+    bra     .n23
+.n13
+    sub.b   #$61-10,d0
+.n23
+    or.b    d0,d1
+    btst    #0,d3
+    bne     .n33
+    move.b  d1,(a1)+
+    clr.b   d1
+.n33
+    dbf     d3,.md5a
+    rts
+
+
+.skipTab
+.t	cmp.b	#9,(a0)+
+    bne     .t
+    rts
+
+
+.getNumber
+    bsr     .findNumberStart
+    beq     .gx   
+    move.l  a0,a2
+    bsr     .findNumberEnd
+    beq     .gx   
+    move.l  a0,a3
+
+* last char at a0
+* first char at a2
+* build into d2
+	moveq	#0,d2 
+	moveq	#1,d3
+.numL
+    moveq   #$f,d0
+    and.b	-(a0),d0
+    cmp.l   #$ffff,d3
+    bhi     .large
+    mulu.w  d3,d0
+    bra     .small
+.large  
+    move.l	d3,d1
+    jsr	    mulu_32
+.small
+    add.l	d0,d2
+
+    ; mul d3 by 10
+    move.l  d3,d0
+    lsl.l   #3,d3  * x8
+    add.l   d0,d3  * +1
+    add.l   d0,d3  * +1
+
+    cmp.l   a2,a0
+    bne     .numL
+
+    move.l   a3,a0
+    moveq    #1,d1 
+    rts
+.gx
+.eof
+.noN
+    moveq    #0,d1
+    rts
+
+.findNumberStart
+.fn1 
+    move.b  (a0)+,d0
+    beq     .eof
+    bsr     .isNum
+    beq     .fn1
+    subq    #1,a0
+    moveq   #1,d1
+    rts
+
+.findNumberEnd
+.fn2  
+    move.b  (a0)+,d0
+    beq     .eof
+    bsr     .isNum
+    bne     .fn2
+    subq    #1,a0
+    moveq   #1,d1
+    rts
+
+
+.isNum
+    cmp.b   #"0",d0
+    blo     .noN
+    cmp.b   #"9",d0
+    bhi     .noN
+    moveq   #1,d1   * yes number
+    rts
+
+
+.progressMsg
+    dc.b    "Creating song lengths %02.2ld%lc",0
+    even
+
+
+
+* Creates metadata.db from Audacious-UADE combined.tsv
+* Out:
+*    d0 = true on success
+umeCreateIndex:
+    DPRINT  "umeCreateIndex"
+    rsreset
+.lastIndex        rs.w    1     * Based on the top 4 bits of the MD5sum
+.indexPtr         rs.l    1     
+.index            rs.l    UME_INDEX_SIZE+1    * Build index here
+.varsSize         rs.b    0
+
+    move    #.varsSize/2-1,d0
+.sk clr.w   -(sp)
+    dbf     d0,.sk
+    move.l  sp,a4
+
+    * Input file
+    lea     umeDataName(pc),a0
+    tst.b   uusikick(a5)
+    bne     .n1
+    lea     umeDataNameO(pc),a0
+.n1
+    * Output file
+    lea     umeFile(pc),a1
+    tst.b   uusikick(a5)
+    bne     .n3
+    lea     umeFileOld(pc),a1
+.n3
+    * Initial values:
+    move    #-1,.lastIndex(a4)
+    pea     .index(a4)
+    move.l  (sp)+,.indexPtr(a4)
+
+    lea     .progressMsg(pc),a2
+    lea     .finalizeCallback(pc),a3
+    move.l  a3,d1
+    lea     .callback(pc),a3
+    move    #UME_INDEX_SIZE_BYTES,d0     * index space
+    bsr     fileConverter
+
+    lea     .varsSize(sp),sp
+    rts
+
+* Finalize callback inputs:
+*    d7 = output file handle
+*    a4 = callback user data
+*    a6 = DOSBase
+.finalizeCallback:
+    * Write the index at the header 
+    lea     .index(a4),a3
+
+    move.l  d7,d1   * fh
+    moveq   #0,d2   * offset
+    moveq   #OFFSET_CURRENT,d3
+    lob     Seek    
+    move.l  d0,UME_INDEX_SIZE*4(a3)   * last position
+
+    move.l  d7,d1   * fh
+    moveq   #4,d2   * offset, start of index
+    moveq   #OFFSET_BEGINNING,d3
+    lob     Seek    
+
+    moveq   #UME_INDEX_SIZE-1,d6
+.loop
+    move.l  (a3)+,d0     * offset of data block
+    move.l  (a3),d1      * next offset
+    sub.l   d0,d1        * block size
+    movem.l d0/d1,-(sp)
+
+    move.l  d7,d1   * file
+    move.l  sp,d2   * source
+    moveq   #8,d3   * len
+    lob     Write
+
+    addq    #8,sp
+    dbf     d6,.loop
+    rts
+
+
+* Callback inputs:
+*    a0 = input line
+*    a1 = output buffer
+*    a4 = callback user data
+*    d6 = current input read position
+*    d7 = current output write position
+* Outputs:
+*    d0 = bytes to write or 0 
+.callback:
+; Format:
+; [md5]<TAB>[authors]<TAB>[publishers]<TAB>[album]<TAB>[year]
+
+    move.l  a0,d0
+    move.l  a1,a5 * stash this, start of the entry
+    
+    * Read 8 chars of MD5
+    moveq   #8-1,d3
+    bsr     uslCreateIndex\.readHex
+ 
+    * Read 4 chars of MD5
+    moveq   #4-1,d3
+    bsr     uslCreateIndex\.readHex
+
+    * Build index from the top 6 bits
+    move.b  (a5),d0
+    lsr.b   #2,d0           
+    cmp.b   .lastIndex(a4),d0
+    beq     .noidx
+    move.b  d0,.lastIndex(a4)
+
+    * Write current position to the next index slot
+    move.l  .indexPtr(a4),a2
+    move.l  d7,(a2)+
+    move.l  a2,.indexPtr(a4)
+.noidx
+    addq    #1,a0   * skip 1st tab
+
+    * get this many strings
+    moveq   #4-1,d0
+.strs
+    move.l  a1,a2   * grab start ptr
+    clr.b   (a1)+   * placeholder for length
+    moveq   #9,d2   * tab
+    bra     .lop0
+.lop
+    move.b  d0,(a1)+
+.lop0
+    move.b  (a0)+,d0
+    beq     .end
+    cmp.b   d2,d0
+    bne     .lop
+.end
+    * write string length in front
+    move.l  a1,d1
+    sub.l   a2,d1
+    move.b  d1,(a2)
+
+    dbf     d0,.strs
+
+    * How many bytes to write
+    move.l  a1,d0
+    sub.l   a5,d0
+    * What to write
+    move.l  a5,a0
+    rts
+
+
+
+
+
+.progressMsg
+    dc.b    "Creating metadata %02.2ld%lc",0
+    even
+
+*********************************************************************
+*
+* Buffered file converter
+*
+* In:
+*   a0 = input file name
+*   a1 = output file name
+*   a2 = progress message
+*   a3 = file converter callback
+*        Callback inputs:
+*           a0 = input line
+*           a1 = output buffer
+*           a4 = callback user data
+*           d6 = current input file position
+*           d7 = current output file position
+*        Outputs:
+*           d0 = bytes to write or 0 
+*   a4 = callback user data 
+*   d0 = space to reserve for header om top of the default 4
+* Out:
+*   d0 = true on success
+fileConverter:
+.inputBufferLength  = 10*1024
+.lineBufferLength   = 4096
+.outBufferLength    = 1024
+.pushBufferLength   = 12*1024
+.workMemLen = .inputBufferLength+.lineBufferLength+.outBufferLength+.pushBufferLength
+
+    rsreset
+.workMem          rs.l    1  
+.inputFile        rs.l    1 * input file name
+.outputFile       rs.l    1 * output file name
+.progressMsg      rs.l    1 * progress message
+.lineCallback     rs.l    1 * callback to convert one input line
+.lineCallbackData rs.l    1 * callback user data
+.finalizeCallback rs.l    1 * called last, d7=FH, a6=DOSBase
+.inLength         rs.l    1 * input file len
+.inFH             rs.l    1 * input file handle
+.outFH            rs.l    1 * output file handle
+.inputBuffer      rs.l    1 * read chunks from input file
+.lineBuffer       rs.l    1 * read and uppercase line from the buffer
+.outBuffer        rs.l    1 * create output data entries here
+.pushBuffer       rs.l    1 * push buffer
+.pushBufferPos    rs.l    1 * position in the push buffer
+.lastRead         rs.l    1 * bytes form the last input read
+.totalRead        rs.l    1 * total bytes read
+.lastProgress     rs.w    1 * to detect if progress needs to be displayed
+.headerSpace      rs.w    1 * add this much bytes to the front of the file
+.pushedBytes      rs.l    1 * number of bytes pushed to output
+.globalInputOffset rs.l   1 * current input offset incremented in chunks
+.inputOffset      rs.l    1 * current input offset in bytes
+.count            rs.l    1 * debug info
+.freeze           rs.b    1
+                  rs.b    1 * pad
+.slVars           rs.b    0
+
+    DPRINT "fileConverter"
+    pushm   d1-a6
+    moveq   #.slVars/2-1,d7
+.sk clr.w   -(sp)
+    dbf     d7,.sk
+    move.l  sp,a6
+
+ if DEBUG
+    pushm   all
+    jsr     startMeasure
+    popm    all
+ endif
+
+    move.w  d0,.headerSpace(a6)
+    move.l  d1,.finalizeCallback(a6)
+    move.l  a0,.inputFile(a6)
+    move.l  a1,.outputFile(a6)
+    move.l  a2,.progressMsg(a6)
+    move.l  a3,.lineCallback(a6)
+    move.l  a4,.lineCallbackData(a6)
+
+    move.l  a6,a4
+    ; ---------------------------------
+    * Open input
+    move.l  .inputFile(a4),d1
+    move.l  #MODE_OLDFILE,d2
+    lore    Dos,Open
+    DPRINT  "open=%lx"
+    move.l  d0,.inFH(a4)
+    move.l  d0,d7
+    beq     .exit       * bail out quickly
+
+    ; ---------------------------------
+    * Find length
+	move.l	d7,d1		
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d7,d1
+	moveq	#0,d2	
+	moveq	#1,d3
+	lob	Seek
+	move.l	d0,d5		* file length
+    move.l  d0,.inLength(a4)
+	move.l	d7,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek			* start of file
+    DPRINT  "len=%lx"
+
+    ; ---------------------------------
+    * Try to open idx
+    move.l  .outputFile(a4),d1
+    move.l  #MODE_OLDFILE,d2
+    lob     Open
+    DPRINT  "old idx=%lx"
+    move.l  d0,d6
+    move.l  d0,.outFH(a4)
+    bne     .yesIdx
+    ; ---------------------------------
+    * No previous idx, create new
+.doNew
+    move.l  .outputFile(a4),d1
+    move.l  #MODE_NEWFILE,d2
+    lob     Open
+    DPRINT  "new idx=%lx"
+    move.l  d0,d6
+    move.l  d0,.outFH(a4)
+    beq     .exit
+    bra     .writeLen
+.yesIdx
+    ; ---------------------------------
+    * Read txt length from the start
+    clr.l   -(sp)
+    move.l  d6,d1   * file
+    move.l  sp,d2   * dest
+    moveq   #4,d3   * len
+    lob     Read
+    * Go back to start
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#-1,d3
+	lob	Seek		
+    ; ---------------------------------
+    * Compare txt length and the length stored in idx
+    * If same, exit
+    cmp.l   (sp)+,d5
+    beq     .exit
+    * Do new - close OLDFILE handle
+    DPRINT  "Replacing old index"
+    move.l  d6,d1
+    lob     Close
+    bra     .doNew
+.writeLen
+
+	jsr	    setMainWindowWaitPointer
+	jsr   	freezeMainWindowGadgets
+    st      .freeze(a4)
+
+    ; ---------------------------------
+    ; Allocate buffers
+    move.l  #.workMemLen,d0
+    move.l  #MEMF_PUBLIC!MEMF_CLEAR,d1
+    jsr     getmem
+    beq     .exit
+    DPRINT  "AllocMem=%lx"
+    move.l  d0,.workMem(a4)
+    move.l  d0,a0
+    move.l  a0,.inputBuffer(a4)
+    lea     .inputBufferLength(a0),a0
+    move.l  a0,.lineBuffer(a4)
+    lea     .lineBufferLength(a0),a0
+    move.l  a0,.outBuffer(a4)
+    lea     .outBufferLength(a0),a0
+    move.l  a0,.pushBuffer(a4)
+    move.l  a0,.pushBufferPos(a4)
+
+    ; ---------------------------------
+    * Write the txt length into the idx
+    move.l  d5,-(sp)
+    move.l  d6,d1   * file
+    move.l  sp,d2   * source
+    moveq   #4,d3   * len
+    add.l   d3,.pushedBytes(a4)
+    lob     Write
+    DPRINT  "Write=%lx"
+    addq    #4,sp   * pop
+    cmp.l   #-1,d0
+    beq     .exit
+    * d0 = -1 on error
+
+    * Write additional space
+    move.w  .headerSpace(a4),d4
+    beq     .noSpc
+    lsr.w   #1,d4
+    subq.w  #1,d4
+    clr.w   -(sp)
+.spc
+    move.l  d6,d1   * file
+    move.l  sp,d2   * source
+    moveq   #2,d3   * len
+    add.l   d3,.pushedBytes(a4)
+    lob     Write
+    dbf     d4,.spc    
+    addq    #2,sp
+.noSpc
+    ; ---------------------------------
+    * Read a chunk of txt
+    DPRINT  "readLoop"
+    move.l  .lineBuffer(a4),a3  * target buffer for a line
+.readLoop
+    move.l  .inFH(a4),d1
+    move.l  .inputBuffer(a4),d2
+    move.l  #1024*10,d3
+    lob     Read
+    ;;DPRINT  "read=%ld"
+    add.l   d0,.totalRead(a4)
+    move.l  d0,.lastRead(a4)
+    
+    ; ---------------------------------
+    ; Print progress information
+    pushm   all
+    move.l  .totalRead(a4),d0
+    moveq   #99,d1
+    jsr     mulu_32
+    move.l  .inLength(a4),d1
+    jsr     divu_32
+
+    cmp.w   .lastProgress(a4),d0
+    beq     .skipPrg
+    move.w  d0,.lastProgress(a4)
+
+    moveq   #"%",d1
+    move.l  .progressMsg(a4),a0
+    lea     -64(sp),sp
+    move.l  sp,a3
+    jsr     desmsg3
+     
+    move.l  sp,a0
+    jsr     printbox
+    lea     64(sp),sp
+.skipPrg
+    popm    all
+
+    ; ---------------------------------
+    ; Bytes read in d0, check for EOF
+    tst.l   d0
+    beq     .stopLoop
+    bmi     .stopLoop
+    ; ---------------------------------
+    ; Read bytes until line change
+    move.l  .inputBuffer(a4),a0 * start of source
+    lea     (a0,d0),a1          * end 
+    moveq   #13,d1              * loop constants
+    moveq   #10,d2
+.lineLoop
+    move.b  (a0)+,d0
+    cmp.b   d1,d0
+    beq     .cr
+    cmp.b   d2,d0
+    beq     .lf
+    * Copy one char, check if data exhausted
+    move.b  d0,(a3)+
+.continue
+    cmp.l   a1,a0
+    blo     .lineLoop
+
+    * Update global input data offset
+    add.l   #1024*10,.globalInputOffset(a4)
+    * See if we got a full chunk last time, read more if so
+    cmp.l   #1024*10,.lastRead(a4)
+    beq     .readLoop
+    * Exit - call this a success
+    bra     .stopLoop
+
+.continueLineLoop:
+    moveq   #13,d1              * loop constants
+    moveq   #10,d2
+    bra     .continue
+
+.lf
+.cr
+    ; A whole line read, null terminate
+    clr.b   (a3)
+    * Preserve a0, a1!
+    pushm   a0/a1
+    ; ---------------------------------
+    pushm   d1-d7/a2-a6
+    * Provide current input data position
+    * relative to the input buffer
+    move.l  a0,d0
+    sub.l   .inputBuffer(a4),d0
+    * Relative the input file
+    add.l   .globalInputOffset(a4),d0
+    * Use the previous value as the new one
+    * points to the next line.
+    move.l  .inputOffset(a4),d6
+    move.l  d0,.inputOffset(a4)
+
+    * Read line here   
+    move.l  .lineBuffer(a4),a0
+    * Write data here
+    move.l  .outBuffer(a4),a1
+
+    * Provide current output write position
+    move.l  .pushedBytes(a4),d7
+
+    move.l  .lineCallback(a4),a3
+    move.l  .lineCallbackData(a4),a4
+    * Convert data
+    jsr     (a3)
+    * d0 = number of bytes to write
+    * a0 = here are the bytes
+    popm    d1-d7/a2-a6
+    * Write if requested
+    tst.l   d0
+    bne     .doWrite
+    moveq   #1,d0
+    bra     .noWri
+.doWrite
+    bsr     .push
+.noWri
+    popm    a0/a1
+    addq.l  #1,.count(a4)
+    ; ---------------------------------
+    * Stop on push error
+    tst.l   d0
+    beq     .stopLoop
+
+.next
+    ; ---------------------------------
+    ; Start getting a new line 
+    move.l  .lineBuffer(a4),a3
+    ; Ignore 10 if the line ended with 13 ealier
+    cmp.b   #10,(a0)
+    bne     .continueLineLoop
+    addq    #1,a0
+    bra     .continueLineLoop
+
+.stopLoop   
+    * Write remaining
+    bsr     .pushWrite
+
+.exit
+ if DEBUG
+    move.l  .count(a4),d0
+    DPRINT  "exiting, wrote %ld entries"
+ endif
+    ; ---------------------------------
+    tst.l   .count(a4)
+    beq     .noFinal
+    move.l  .finalizeCallback(a4),d0
+    beq     .noFinal
+    move.l  d0,a0
+    move.l  _DosBase(a5),a6
+    move.l  .outFH(a4),d7
+    push    a4
+    move.l  .lineCallbackData(a4),a4
+    jsr     (a0)
+    pop     a4
+.noFinal
+    ; ---------------------------------
+    move.l  .workMem(a4),a0
+    jsr     freemem
+    move.l  .inFH(a4),d1
+    beq     .x1
+    lob     Close
+.x1 move.l  .outFH(a4),d1
+    beq     .x2
+    lob     Close
+.x2
+    tst.b   .freeze(a4)
+    beq     .nf
+    jsr	    unfreezeMainWindowGadgets
+	jsr	    clearMainWindowWaitPointer
+    jsr     forceRefreshList
+.nf
+
+ if DEBUG
+    bsr     stopMeasure
+    divu.w  #1000,d0
+    ext.l   d0
+    DPRINT  "FileConverter took %ld s"
+ endif
+    lea     .slVars(sp),sp
+	popm    d1-a6
+    rts
+
+* In:
+*   a0 = data pointer
+*   d0 = length of data
+* Out: 
+*   d0 = true on success, false otherwise
+.push:
+    add.l   d0,.pushedBytes(a4)
+    move.l  .pushBufferPos(a4),d3
+    sub.l   .pushBuffer(a4),d3
+    cmp.l   #10*1024,d3
+    blo     .noPush
+    pushm   d0/a0
+    bsr     .pushWrite
+    tst.l   d0
+    popm    d0/a0
+    bmi     .fail
+.noPush
+    move.l  .pushBufferPos(a4),a1
+    subq    #1,d0
+.cp move.b  (a0)+,(a1)+
+    dbf     d0,.cp
+    move.l  a1,.pushBufferPos(a4)
+    moveq   #1,d0 * ok
+    rts
+.fail
+    moveq   #0,d0 * bad
+    rts
+
+.pushWrite:
+    move.l  .pushBufferPos(a4),d3
+    sub.l   .pushBuffer(a4),d3    * len
+    beq     .noWrite
+    move.l  .pushBuffer(a4),d2    * src
+    move.l  .outFH(a4),d1         * file
+    lore    Dos,Write
+    ;DPRINT  "write=%ld"
+    move.l  .pushBuffer(a4),.pushBufferPos(a4)
+.noWrite
+    rts
+
+
+***************************************************************************
+*
+* Info box scroll
+*
+***************************************************************************
+
+SCROLL_UPDATE_RATE = 4  * update each x/50 sec
+
+initInfoScroller:
+    pushm   all
+    DPRINT  "initInfoScroller"
+    rsreset
+.rastport   rs.b    rp_SIZEOF
+.text       rs.b    512
+.rows       rs.w    1
+.vars       rs.b    0
+
+    lea     -.vars(sp),sp
+    move.l  sp,a4
+
+    * Reset to initial state
+    clr     infoScrollPos(a5)
+    clr.b   infoScrollEnabled(a5)
+    move    #30,infoScrollWaitTicks(a5)
+
+    clr     .rows(a4)
+    lea     .text(a4),a3
+    bsr     .putType
+
+    ; ---------------------------------
+    ; PSID metadata 
+    cmp.w   #pt_sid,playertype(a5)
+    bne     .noSid
+
+    lea     sidheader+sidh_author(a5),a0
+    lea     metaData1,a1    * authors
+    moveq   #9-1,d0
+    bsr     .putMeta
+
+    lea     sidheader+sidh_copyright(a5),a0
+    lea     metaData2,a1    * publisher
+    moveq   #12-1,d0
+    bsr     .putMeta
+    bra     .wasSid
+.noSid
+    ; ---------------------------------
+    ; UME metadata 
+
+    * Exit if no metadata 
+    move.l  umeMetaDataPtr(a5),d0
+    beq     .e
+    move.l  d0,a0
+    tst.b   (a0)
+    beq     .e
+    
+    * Put four meta fields if available, from a0
+    lea     metaData1,a1
+    moveq   #9-1,d0
+    bsr     .putMeta
+
+    lea     metaData2,a1
+    moveq   #12-1,d0
+    bsr     .putMeta
+
+    lea     metaData3,a1
+    moveq   #9-1,d0
+    bsr     .putMeta
+
+    lea     metaData4,a1
+    moveq   #6-1,d0
+    bsr     .putMeta
+
+.wasSid
+    * 1st and last line are the same to allow smooth looping
+    bsr     .putType
+    clr.b   (a3)
+
+    ; ---------------------------------
+
+    move.l  _GFXBase(a5),a6
+    lea     .rastport(a4),a1
+    lob     InitRastPort
+
+    lea     .rastport(a4),a1
+	move.l	listfontbase(a5),a0
+	lob     SetFont
+
+    move.l	pen_1(a5),d0
+    lea     .rastport(a4),a1
+	lob     SetAPen
+
+    * Area width
+    move	WINSIZX(a5),d0          * size x
+    sub     #7+WINX+4,d2
+    sub     windowleft(a5),d2       * dest x
+    * To be safe double the size horizontally
+    add     d0,d0
+
+    ; ---------------------------------
+	move.l	listfontbase(a5),a1
+	move    tf_YSize(a1),d1
+    move    d1,infoScrollLineHeight(a5)
+    mulu    .rows(a4),d1
+
+    * Determine content height to be scrolled
+    * so that it will loop nicely
+    move    d1,d2
+    sub     infoScrollLineHeight(a5),d2
+    move    d2,infoScrollLength(a5)
+
+    add      infoScrollLineHeight(a5),d1 * safety
+
+    tst.l   infoScrollBitplane(a5)
+    beq     .1
+    cmp.w   infoScrollBitplaneW(a5),d0
+    bhi     .2
+    cmp.w   infoScrollBitplaneH(a5),d1
+    bls     .3          * old is larger, do nothing
+.2  
+    * Need to reallocate
+    pushm   d0/d1
+    bsr     infoScrollFree
+    popm    d0/d1
+.1
+    move    d0,infoScrollBitplaneW(a5)
+    move    d1,infoScrollBitplaneH(a5)
+    lob     AllocRaster
+    move.l  d0,infoScrollBitplane(a5)
+    beq     .x
+.3
+    moveq   #1,d0
+    move    infoScrollBitplaneW(a5),d1
+    move    infoScrollBitplaneH(a5),d2
+    lea     infoScrollBitMap(a5),a0
+    move.l  a0,rp_BitMap+.rastport(a4)
+    move.l  infoScrollBitplane(a5),bm_Planes(a0)
+    lob     InitBitMap
+
+    * Empty target
+    lea     .rastport(a4),a1
+    moveq   #0,d0
+    lob     SetRast
+
+    moveq   #0,d0
+	move.l	listfontbase(a5),a1
+	move    tf_Baseline(a1),d1
+    lea     .text(a4),a0
+    bsr     .print
+
+    ; All ok so far
+    st      infoScrollEnabled(a5)
+.x
+.e
+    lea     .vars(sp),sp
+    popm    all
+    rts
+
+.putType:
+    * "Type: "
+    lea     tyyppi1b_t,a0
+    moveq   #6-1,d0
+.c1 move.b  (a0)+,(a3)+
+    dbf     d0,.c1
+
+    lea     moduletype(a5),a0
+.c2 move.b  (a0)+,(a3)+
+    bne     .c2
+    subq    #1,a3
+    move.b  #10,(a3)+
+    addq    #1,.rows(a4)
+    rts
+
+* In:
+*   a0 = metadata
+*   a3 = output buffer
+*   a1 = title string
+*   d0 = title string length -1
+.putMeta:
+    tst.b   (a0)+
+    beq     .m2
+    * title
+.c5 move.b  (a1)+,(a3)+
+    dbf     d0,.c5
+    * text
+    subq    #1,a0
+.c6 move.b  (a0)+,d0
+    beq     .zz
+    * Split to another line if there is ", "
+    cmp.b   #",",d0
+    bne     .z
+    cmp.b   #" ",(a0)
+    bne     .z
+    addq    #1,a0
+    addq    #1,.rows(a4)
+    move.b  #10,(a3)+
+    moveq   #".",d0
+    move.b  d0,(a3)+
+    move.b  d0,(a3)+
+.z
+    move.b  d0,(a3)+
+    bra     .c6
+.zz move.b  #10,(a3)+
+    addq    #1,.rows(a4)
+.m2
+    rts
+
+.print
+    pushm   all
+    lea     .rastport(a4),a4
+    jmp     doPrint
+
+
+infoScrollFree:
+    move.l  infoScrollBitplane(a5),d0
+    beq     .1
+    move.l  d0,a0
+    clr.l   infoScrollBitplane(a5)    
+    move    infoScrollBitplaneW(a5),d0
+    move    infoScrollBitplaneH(a5),d1
+    lore    GFX,FreeRaster
+.1  rts
+
+
+drawInfoScroller:   
+    tst.b   playing(a5)
+    beq     .x
+    tst.b   infoScrollEnabled(a5)
+    beq     .x
+    tst.w   infoScrollWaitTicks(a5)
+    bne    .doWait
+
+    moveq   #7+WINX+4-1+1,d2
+    add     windowleft(a5),d2       * dest x
+    
+	move	infoBoxTopEdge(a5),d3
+    add     windowtop(a5),d3        
+    move    infoBoxHeight(a5),d5   
+    lsr     #1,d5
+    add     d5,d3
+    addq    #1,d3                   * dest y
+ 
+    move	WINSIZX(a5),d4          * size x - width of area
+    sub     #10,d4                 
+    sub     d2,d4
+
+	move.l	listfontbase(a5),a0
+	move    tf_YSize(a0),d5         * size y - one row
+
+    moveq   #0,d0                   * src x
+
+    * src y using easing
+    moveq   #8,d1
+    sub     infoScrollMoveTicks(a5),d1
+    move.b  .easing(pc,d1),d1  
+    mulu    infoScrollLineHeight(a5),d1
+    lsr     #4,d1
+    add     infoScrollPos(a5),d1
+
+    move.b  #$c0,d6                 * minterm: copy
+    move.l	rastport(a5),a1	     	* dest
+    lea     infoScrollBitMap(a5),a0  * src
+    lore    GFX,BltBitMapRastPort
+
+    tst.w   infoScrollMoveTicks(a5)
+    bne    .doScroll
+.x
+    rts
+
+.easing
+ dc.b 0,9,13,15,16,16,16,16 ; easeOutExpo
+ 
+
+.doScroll
+    subq    #1,infoScrollMoveTicks(a5)
+    bne     .scr
+    move    infoScrollLineHeight(a5),d0
+    add     d0,infoScrollPos(a5)
+    move    #30,infoScrollWaitTicks(a5)
+    rts
+.scr
+    move    infoScrollPos(a5),d0
+    cmp     infoScrollLength(a5),d0
+    blt     .1
+    clr     d0
+.1  move    d0,infoScrollPos(a5)
+    rts
+
+.doWait
+    subq    #1,infoScrollWaitTicks(a5)
+    bne     .wai
+    move    #8,infoScrollMoveTicks(a5) * easing size
+.wai
+    rts
 
 ***************************************************************************
 *
@@ -61333,11 +63101,14 @@ rightButtonActionsList
     * List mode change -> popup
     dr.w    gadgetListModeChangeButton
     dc.l    toggleListModePopup
+    * Play mode change -> popup
+    dr.w    gadgetPlayModeChangeButton
+    dc.l    togglePlayModePopup
 	dc.w	0 ; END
  
 
 * Contains tooltip data for mainwindow gadgets
-tooltipList
+tooltipList:
 	dr.w 	gadgetPlayButton,.play
 	dr.w	gadgetInfoButton,.info
 	dr.w	gadgetStopButton,.stop
@@ -61360,6 +63131,7 @@ tooltipList
     * This should be before source, as it may overlap the source button
 	dr.w	gadgetSearchString,.searchString 
 	dr.w	gadgetSearchSource,.searchSource
+	dr.w	gadgetPlayModeChangeButton,.playModeChange
 	dc.w	0 ; END
  
 .play
@@ -61453,6 +63225,14 @@ tooltipList
 .searchString
 	dc.b	18,1
 	dc.b	"Enter search terms",0
+.playModeChange
+	dc.b	17,6
+    dc.b    "Select play mode:",0
+    dc.b	" - List repeat",0
+    dc.b	" - List once",0
+    dc.b	" - Module repeat",0
+    dc.b	" - Module once",0
+    dc.b	" - List random",0
   even
 
 *** Samplename ikkuna
@@ -61498,7 +63278,8 @@ gAD1s	dc.w 5,65535,0,0,0
 
 
 gadgetPositionSlider
-        dc.l 0 ; next
+        ;dc.l 0 ; next
+        dc.l gadgetPlayModeChangeButton
         * left, top:
         dc.w 9,50
         * width, height:
@@ -61515,6 +63296,62 @@ gadgetPositionSlider
         dc.l 0
 .slider1s        dc.w 2,65535,0,0,0
         dc.w 0,0,0,0,0,0
+
+; Gadget
+gadgetPlayModeChangeButton:
+	; gg_NextGadget
+	dc.l 0
+	; gg_LeftEdge
+	dc 9
+	; gg_TopEdge
+	dc 50
+	; gg_Width
+	dc 18
+	; gg_Height
+	dc 13
+	; gg_Flags
+	dc GFLG_GADGIMAGE
+	; gg_Activation
+	dc GACT_RELVERIFY
+	; gg_GadgetType
+	dc GTYP_BOOLGADGET
+	; gg_GadgetRender
+	dc.l gadgetPlayModeChangeButtonImage
+	; gg_SelectRender
+	dc.l 0
+	; gg_GadgetText
+	dc.l 0
+	; gg_MutualExclude
+	dc.l 0
+	; gg_SpecialInfo
+	dc.l 0
+	; gg_GadgetId
+	dc.w 0
+	; gg_UserData
+	dc.l 0
+
+
+; Image
+gadgetPlayModeChangeButtonImage
+	; ig_LeftEdge
+	dc 4
+	; ig_TopEdge
+	dc 3
+	; ig_Width
+	dc 9+1
+	; ig_Height
+	dc 7
+	; ig_Depth
+	dc 1
+	; ig_ImageData
+gadgetPlayModeChangeButtonImagePtr
+	dc.l	listImage
+	; ig_PlanePick
+	dc.b 1
+	; ig_PlaneOff
+	dc.b 0
+	; ig_NextImage
+	dc.l 0
 
 
 *** Kick2.0+ window extension
@@ -62199,6 +64036,60 @@ resizeGadgetImage:
 	dc	%1000000000000000
 	dc	%1000000000000000
 	dc	%0000000000000000
+
+; repeat list, play list once, repeat module, plauy module once,
+; reanbdom
+; 10 px wide
+playModeRepeatListImage
+        ;0123456789
+	dc	%0100000000000000				
+	dc	%0100001000000000				
+	dc	%0100011100000000				
+	dc	%0100111110000000				
+	dc	%0100001000000000				
+	dc	%0100001000000000				
+	dc	%0011110000000000				
+
+        ;0123456789
+playModePlayListImage
+	dc	%0000010000000000				
+	dc	%0000010000000000				
+	dc	%0000010000000000				
+	dc	%0000010000000000				
+	dc	%0001111100000000				
+	dc	%0000111000000000				
+	dc	%0000010000000000				
+
+        ;0123456789
+playModeRepeatModuleImage
+	dc	%1111111100000000				
+	dc	%0000000010000000				
+	dc	%0001000010000000				
+	dc	%0011000010000000				
+	dc	%0111111100000000				
+	dc	%0011000000000000				
+	dc	%0001000000000000				
+
+        ;0123456789
+playModePlayModuleImage
+	dc	%0000000000000000				
+	dc	%0000000100000000				
+	dc	%0000000110000000				
+	dc	%1111111111000000				
+	dc	%0000000110000000				
+	dc	%0000000100000000				
+	dc	%0000000000000000				
+
+        ;0123456789
+playModeRandomImage
+	dc	%0010000100000000				
+	dc	%0001001000000000				
+	dc	%0000110000000000				
+	dc	%0001001000000000				
+	dc	%0010000100000000				
+	dc	%0111001110000000				
+	dc	%0010000100000000				
+
 
 	section	mah,bss_c
 
