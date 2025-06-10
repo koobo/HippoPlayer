@@ -4850,6 +4850,8 @@ GetNextPos
 	cmp.w	hLen,d0
 	blo.b	.NoNewSong
 	move.w	hRepS,d0
+    move.l  songOverPtr,a0      * song over trigger
+    st      (a0)
 .NoNewSong
 	move.w	d0,SongPos
 	lea	hSongTab,a0
