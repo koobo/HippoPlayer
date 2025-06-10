@@ -19723,6 +19723,7 @@ delete
 *
 
 execuutti
+ REM ; remove this, very silly
 	lea	-300(sp),sp
 	move.l	sp,a4
 	clr.b	(a4)
@@ -19778,7 +19779,8 @@ execuutti
 
 .title	dc.b	"Select executable",0
  even
-
+ EREM
+ 
 *******************************************************************************
 * Kahden ylimmäisen tekstirivin hommat (loota)
 *******
