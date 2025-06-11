@@ -5520,6 +5520,8 @@ wrender:
     beq .sk
 	lea	gadgetListModeChangeButton-button1(a0),a0
     bsr	printkorva
+    tst.b   showPositionSlider(a5)
+    beq     .sk
 	lea	gadgetPlayModeChangeButton-gadgetListModeChangeButton(a0),a0
     bsr	printkorva
 .sk
