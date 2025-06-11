@@ -8,7 +8,9 @@ pbutton2t	dc.b 1,0,1,0
 	dc.l 0,pbutton2tx,0
 pbutton2tx	dc.b "Show",0
 	even
-pbutton13	dc.l meloni
+pbutton13	
+    ;dc.l meloni
+    dc.l gadgetEnablePositionSlider
 	dc.w 74,51,168,12,0,1,1
 	dc.l 0,0,pbutton13t,0,0
 	dc.w 0
@@ -18,27 +20,50 @@ pbutton13t	dc.b 1,0,1,0
 	dc.l 0,pbutton13tx,0
 pbutton13tx	dc.b "Screen",0
 	even
-meloni	dc.l gfonttou
-	dc.w 172,65,70,12,6,9,3
-	dc.l melonigr,0,melonit,0,melonis
+
+;meloni	dc.l gfonttou
+;	dc.w 172,65,70,12,6,9,3
+;	dc.l melonigr,0,melonit,0,melonis
+;	dc.w 0
+;	dc.l 0
+;melonigr	dc.w 0,0,11,9,2
+;	dc.l meloniim
+;	dc.b 3,0
+;	dc.l 0
+;melonit	dc.b 1,0,1,0
+;	dc.w -156,2
+;	dc.l 0,melonitx,0
+;melonitx	dc.b "Filebox.........",0
+;	even
+;melonis	dc.w 2,0,0,0,0
+;	dc.w 0,0,0,0,0,0
+
+
+
+gadgetEnablePositionSlider
+    dc.l    gfonttou
+	dc.w 214,51+14*2+29+11,28,12,3,1,1
+	dc.l 0,0,.pbutton3t,0,0
 	dc.w 0
 	dc.l 0
-melonigr	dc.w 0,0,11,9,2
-	dc.l meloniim
-	dc.b 3,0
-	dc.l 0
-melonit	dc.b 1,0,1,0
-	dc.w -156,2
-	dc.l 0,melonitx,0
-melonitx	dc.b "Filebox.........",0
+.pbutton3t	dc.b 1,0,1,0
+	dc.w -198,2
+	dc.l 0,.pbutton3tx,.nextTxt
+
+.nextTxt	dc.b 1,0,1,0
+	dc.w -198,2-12
+	dc.l 0,.pbutton3tx2,0
+
+.pbutton3tx2 dc.b "Play mode button and",0
+.pbutton3tx	 dc.b "position slider.........",0
 	even
-melonis	dc.w 2,0,0,0,0
-	dc.w 0,0,0,0,0,0
+
+
 
 gfonttou	
 	;dc.l pout2
 	dc.l bUu2
-	dc.w 120-7*8,93,(122+6*8)/2,12,0,1,1
+	dc.w 120-7*8,93-28,(122+6*8)/2,12,0,1,1
 	dc.l 0,0,gfonttout,0,0
 	dc.w 0
 	dc.l 0
@@ -80,8 +105,10 @@ gfonttoutx	dc.b "Fonts",0
 ;pout3btx	dc.b "Scope bars........",0
 ;	even
 
-bUu2	dc.l eskimO
-	dc.w 406,37+14+14,28,12,3,1,1
+bUu2	
+    ;dc.l eskimO
+	dc.l    0
+    dc.w 406,37+14+14,28,12,3,1,1
 	dc.l 0,0,bUu2t,0,0
 	dc.w 0
 	dc.l 0
@@ -90,19 +117,20 @@ bUu2t	dc.b 1,0,1,0
 	dc.l 0,bUu2tx,0
 bUu2tx	dc.b "Scope priority....",0
 	even
-eskimO	dc.l 0
-	dc.w 172,79,70,12,6,9,3
-	dc.l eskimOgr,0,eskimOt,0,eskimOs
-	dc.w 0
-	dc.l 0
-eskimOgr	dc.w 0,0,11,9,2
-	dc.l eskimOim
-	dc.b 3,0
-	dc.l 0
-eskimOt	dc.b 1,0,1,0
-	dc.w -156,2
-	dc.l 0,eskimOtx,0
-eskimOtx	dc.b "Module info.....",0
-	even
-eskimOs	dc.w 2,0,0,0,0
-	dc.w 0,0,0,0,0,0
+
+;eskimO	dc.l 0
+;	dc.w 172,79,70,12,6,9,3
+;	dc.l eskimOgr,0,eskimOt,0,eskimOs
+;	dc.w 0
+;	dc.l 0
+;eskimOgr	dc.w 0,0,11,9,2
+;	dc.l eskimOim
+;	dc.b 3,0
+;	dc.l 0
+;eskimOt	dc.b 1,0,1,0
+;	dc.w -156,2
+;	dc.l 0,eskimOtx,0
+;eskimOtx	dc.b "Module info.....",0
+;	even
+;eskimOs	dc.w 2,0,0,0,0
+;	dc.w 0,0,0,0,0,0

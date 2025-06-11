@@ -2799,7 +2799,8 @@ main:
 	pushpea	prefsFavorites(a0),bUu22(a0)
 	* Add "Button tooltips" prefs button to the page 2
 	;move.l	#prefsTooltips,eskimO
-	pushpea	prefsTooltips(a0),eskimO(a0)
+	;pushpea	prefsTooltips(a0),eskimO(a0)
+	pushpea	prefsTooltips(a0),bUu2(a0)
     ; Add sid mode button after the "MED rate" button
     pushpea prefsPlaySidMode(a0),nAMISKA5(a0)
 	endb	a0
@@ -5839,7 +5840,7 @@ mainWindowSizeChanged
  endif
 
 	* Set new boxsize into prefs gadget
-	bsr	setprefsbox
+	;;bsr	setprefsbox
 
 	* Signal to make changes happen
 	move.b	ownsignal2(a5),d1
@@ -7406,7 +7407,7 @@ zoomfilebox
 	move	boxsizez(a5),boxsize(a5)
 	bsr	enableResizeGadget
 .x
-	bsr	setprefsbox
+	;;bsr	setprefsbox
 	move.b	ownsignal2(a5),d1
 	jmp	signalit		* prefsp‰ivitys-signaali
 	
@@ -8768,23 +8769,23 @@ nupit
 
 * boxsize
 ;	lea	meloni,a0
-	lea	meloni-juust0(a0),a0
-	move	#65535/(51-3),d0		* 65535/max
-	bsr	setknob
-	move	#65535*(8-3)/(51-3),d0		* 65535*arvo/max
-	bsr	setknob2
+;;	lea	meloni-juust0(a0),a0
+;;	move	#65535/(51-3),d0		* 65535/max
+;;	bsr	setknob
+;;	move	#65535*(8-3)/(51-3),d0		* 65535*arvo/max
+;;	bsr	setknob2
 
 * infosize
 ;	lea	eskimO,a0
-	lea	eskimO-meloni(a0),a0
-	move	#65535/(50-3),d0		* 65535/max
-	bsr.b	setknob
-	move	#65535*(16-3)/(50-3),d0		* 65535*arvo/max
-	bsr.b	setknob2
+;;	lea	eskimO-meloni(a0),a0
+;;	move	#65535/(50-3),d0		* 65535/max
+;;	bsr.b	setknob
+;;	move	#65535*(16-3)/(50-3),d0		* 65535*arvo/max
+;;	bsr.b	setknob2
 
 * timeout
-;	lea	kelloke,a0
-	lea	kelloke-eskimO(a0),a0
+	lea	kelloke,a0
+;	lea	kelloke-eskimO(a0),a0
 	move	#65535/1800,d0			* 65535/max
 	bsr.b	setknob
 ;	move	#65535*0/1800,d0		* 65535*arvo/max
@@ -13631,7 +13632,7 @@ loadprefs2
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
 	bsr.b	sliderit
-	bsr	setprefsbox
+	;;bsr	setprefsbox
 	bsr	mainpriority
 
 .eee	
@@ -13741,16 +13742,16 @@ sliderit
 	bsr	setknob2
 
 * moduleinfo
-	lea	eskimO-kelloke2(a0),a0
-	move	infosize(a5),d0
-	subq	#3,d0
-	mulu	#65535,d0
-	divu	#50-3,d0
-	bsr	setknob2
+;	lea	eskimO-kelloke2(a0),a0
+;	move	infosize(a5),d0
+;	subq	#3,d0
+;	mulu	#65535,d0
+;	divu	#50-3,d0
+;	bsr	setknob2
 
 
 * samplebuffersize
-	lea	sIPULI-eskimO(a0),a0
+	lea	sIPULI,a0
 	moveq	#0,d0
 	move.b	samplebufsiz0(a5),d0
 	mulu	#65535,d0
@@ -13807,24 +13808,24 @@ sliderit
 	bra	setknob2
 
 * Update box size slider in prefs
-setprefsbox
-* boxsize
-	lea	meloni,a0
-	move	boxsize(a5),d0
-	beq.b	.x
-	subq	#2,d0
-.x	mulu	#65535,d0
-	divu	#51-3,d0
-	bra	setknob2
+;setprefsbox
+;* boxsize
+;	lea	meloni,a0
+;	move	boxsize(a5),d0
+;	beq.b	.x
+;	subq	#2,d0
+;.x	mulu	#65535,d0
+;	divu	#51-3,d0
+;	bra	setknob2
 
-setPrefsInfoBox
-	lea	eskimO,a0
-	move	infosize(a5),d0
-	subq	#3,d0
-	mulu	#65535,d0
-	divu	#50-3,d0
-	bra		setknob2
-
+;setPrefsInfoBox
+;	lea	eskimO,a0
+;	move	infosize(a5),d0
+;	subq	#3,d0
+;	mulu	#65535,d0
+;	divu	#50-3,d0
+;	bra		setknob2
+;
 saveprefs
 	DPRINT	"Prefs save"
 	move.l	windowbase(a5),d0
@@ -14373,7 +14374,7 @@ prefs_code
 	move.b	doubleclick(a5),dclick_new(a5)
 	move.b	startuponoff(a5),startuponoff_new(a5)
 	move	boxsize(a5),boxsize_new(a5)
-	bsr	setprefsbox
+	;;bsr	setprefsbox
 	move	timeout(a5),timeout_new(a5)
 	move.b	hotkey(a5),hotkey_new(a5)
 	move.b	contonerr(a5),cerr_new(a5)
@@ -14390,7 +14391,7 @@ prefs_code
 	move.b	earlyload(a5),early_new(a5)
 	move.b	xfd(a5),xfd_new(a5)
 	move	infosize(a5),infosize_new(a5)
-	bsr	setPrefsInfoBox
+	;;bsr	setPrefsInfoBox
 	move.b	ps3msettings(a5),ps3msettings_new(a5)
 	move.b	samplebufsiz0(a5),samplebufsiz_new(a5)
 	;move.b	cybercalibration(a5),cybercalibration_new(a5)
@@ -14452,10 +14453,10 @@ prefs_code
 	move	pslider2s-pslider1s(a0),tfmxmixpot_new(a5)
 	move	juustos-pslider1s(a0),volumeboostpot_new(a5)
 	move	juust0s-pslider1s(a0),stereofactorpot_new(a5)
-	move	melonis-pslider1s(a0),boxsizepot_new(a5)
+	;move	melonis-pslider1s(a0),boxsizepot_new(a5)
 	move	kellokes-pslider1s(a0),timeoutpot_new(a5)
 	move	kelloke2s-pslider1s(a0),alarmpot_new(a5)
-	move	eskimOs-pslider1s(a0),infosizepot_new(a5)
+	;move	eskimOs-pslider1s(a0),infosizepot_new(a5)
 	move	sIPULIs-pslider1s(a0),samplebufsizpot_new(a5)
 	;move	sIPULI2s-pslider1s(a0),sampleforceratepot_new(a5)
 	move	ahiG4s-pslider1s(a0),ahi_ratepot_new(a5)
@@ -15116,8 +15117,8 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move	tfmxmixpot_new(a5),pslider2s-pslider1s(a0)
 	move	volumeboostpot_new(a5),juustos-pslider1s(a0)
 	move	stereofactorpot_new(a5),juust0s-pslider1s(a0)
-	move	boxsizepot_new(a5),melonis-pslider1s(a0)
-	move	infosizepot_new(a5),eskimOs-pslider1s(a0)
+	;move	boxsizepot_new(a5),melonis-pslider1s(a0)
+	;move	infosizepot_new(a5),eskimOs-pslider1s(a0)
 	move	timeoutpot_new(a5),kellokes-pslider1s(a0)		
 	move	alarmpot_new(a5),kelloke2s-pslider1s(a0)
 	move	samplebufsizpot_new(a5),sIPULIs-pslider1s(a0)	
@@ -15358,8 +15359,8 @@ mousemoving2			* P‰ivitet‰‰n propgadgetteja
 .x
 	subq	#1,d0
 	bne.b	.2
-	bsr	pbox		* box size
-	bsr	pinfosize
+;	bsr	pbox		* box size
+;	bsr	pinfosize
 	bra.b	.z
 .2
 	subq	#1,d0
@@ -15544,15 +15545,15 @@ pupdate:				* Ikkuna p‰ivitys
 	bne.b	.3
 
 	;bsr	psup3			* scope mode
-	bsr	pbox			* box size
+	;;bsr	pbox			* box size
 	;bsr	psup0			* scope on/off
-	bsr	pinfosize		* info size
+	;;bsr	pinfosize		* info size
 	bsr	pupdate1		* show
 	bsr	pselscreen		* screen
 	;bsr	pscopebar		* scope bars
 	bsr	pprefx			* prefix cut
 	bsr	pfont			* fontti
-	bsr	pscreen			* screen refresh rates
+	;;bsr	pscreen			* screen refresh rates
 	bsr	ptooltips  	     	* tooltips
 	bsr	paltbuttons  	        * alt buttons
 	bsr	pQuadraScope
@@ -15566,6 +15567,7 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	pSpectrumScope
 	bsr	pSpectrumScopeBars
 	bsr	pListFont
+    bsr ppositionslider * posiion slider
 	bra	.x
 
 .3	subq	#1,d0
@@ -15580,7 +15582,6 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	ppgmode			* pgmode
 	bsr	ppgstat			* pgstatus
 	bsr	pdbf			* volume fade
-    bsr ppositionslider * posiion slider
 	bra 	.x
 
 .4	subq	#1,d0
@@ -15809,13 +15810,14 @@ gadgetsup2
 *** Sivu1
 	dr	rpbutton1	* show		* pbutton2
 	dr	rselscreen	* publicscreen
-	dr	rbox		* boxsize
+	;;dr	rbox		* boxsize
+    dr  rpositionslider * position slider
 	dr	rfont		* font selector
 	;dr	rquad		* scope on/off
 	;dr	rquadm		* scopen moodi	* pout3
 	;dr	rscopebar	* bar mode scopeille
 	dr	rprefx		* prefix cut
-	dr	rinfosize	* module info size
+	;;dr	rinfosize	* module info size
 	dr  	rtooltips     * tooltips
 	dr  	raltbuttons * alt buttons
 	dr	rQuadraScope
@@ -15840,7 +15842,6 @@ gadgetsup2
 	dr	rvbtimer	* vblank timer
 	dr	rptmix		* pt norm/fast/ps3m
 	dr	rpbutton3	* pt tempo
-    dr  rpositionslider * position slider
 ;	dr	rpslider2	* tfmx rate
 ;	dr	rpslider2b	* samplebufsiz
 ;	dr	rpslider2c	* sampleforcerate
@@ -16963,50 +16964,50 @@ otag4	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 *** Box size
 
 rbox
-pbox
-	lea	meloni,a2
-	moveq	#51-3,d0		* max
-	bsr	nappilasku
-	beq.b	.fe
-	addq	#2,d0
-
-.fe	move	d0,boxsize_new(a5)
-
-	lea	.i(pC),a0
-	bsr	desmsg2
-	lea	desbuf2(a5),a0
-
-;	movem	meloni+4,d0/d1
-	movem	4(a2),d0/d1
-	sub	#26,d0
-	addq	#8,d1
-
-	bra	print3b
-
-.i dc.b	"%-2.2ld",0
- even
-
-rinfosize
-pinfosize
-	lea	eskimO,a2
-	moveq	#50-3,d0		* max
-	bsr	nappilasku
-	addq.l	#3,d0
-	move	d0,infosize_new(a5)
-
-	lea	.i(pC),a0
-	bsr	desmsg2
-	lea	desbuf2(a5),a0
-
-;	movem	eskimO+4,d0/d1
-	movem	4(a2),d0/d1
-	sub	#26,d0
-	addq	#8,d1
-
-	bra	print3b
-
-.i dc.b	"%-2.2ld",0
- even
+;;pbox
+;;	lea	meloni,a2
+;;	moveq	#51-3,d0		* max
+;;	bsr	nappilasku
+;;	beq.b	.fe
+;;	addq	#2,d0
+;;
+;;.fe	move	d0,boxsize_new(a5)
+;;
+;;	lea	.i(pC),a0
+;;	bsr	desmsg2
+;;	lea	desbuf2(a5),a0
+;;
+;;;	movem	meloni+4,d0/d1
+;;	movem	4(a2),d0/d1
+;;	sub	#26,d0
+;;	addq	#8,d1
+;;
+;;	bra	print3b
+;;
+;;.i dc.b	"%-2.2ld",0
+;; even
+;;
+;;rinfosize
+;;pinfosize
+;;	lea	eskimO,a2
+;;	moveq	#50-3,d0		* max
+;;	bsr	nappilasku
+;;	addq.l	#3,d0
+;;	move	d0,infosize_new(a5)
+;;
+;;	lea	.i(pC),a0
+;;	bsr	desmsg2
+;;	lea	desbuf2(a5),a0
+;;
+;;;	movem	eskimO+4,d0/d1
+;;	movem	4(a2),d0/d1
+;;	sub	#26,d0
+;;	addq	#8,d1
+;;
+;;	bra	print3b
+;;
+;;.i dc.b	"%-2.2ld",0
+;; even
 
 
 ********* Doubleclick
@@ -17731,35 +17732,35 @@ pListFont
 
 *** Printataan screen refresh ratetkin
 
-pscreen
-	tst.b	gfxcard(a5)
-	beq.b	.nop
-	lea	.dea(pc),a0
-	bra.b	.do
-
-.nop
-	moveq	#0,d0
-	move	vertfreq(a5),d0
-
-	moveq	#0,d1
-	move	horizfreq(a5),d1
-	divu	#1000,d1
-	ext.l	d1
-
-	lea	.de(pc),a0
-	bsr	desmsg2
-	lea	desbuf2(a5),a0
-
-.do	moveq	#16,d0
-	move	#122+18,d1
-	add	windowtop(a5),d1
-	bra	print3b
-
-
-.de
-	dc.b	"Screen: %ldHz/%ldkHz",0
-.dea	dc.b	"A gfx card detected.",0
- even
+;;pscreen
+;;	tst.b	gfxcard(a5)
+;;	beq.b	.nop
+;;	lea	.dea(pc),a0
+;;	bra.b	.do
+;;
+;;.nop
+;;	moveq	#0,d0
+;;	move	vertfreq(a5),d0
+;;
+;;	moveq	#0,d1
+;;	move	horizfreq(a5),d1
+;;	divu	#1000,d1
+;;	ext.l	d1
+;;
+;;	lea	.de(pc),a0
+;;	bsr	desmsg2
+;;	lea	desbuf2(a5),a0
+;;
+;;.do	moveq	#16,d0
+;;	move	#122+18,d1
+;;	add	windowtop(a5),d1
+;;	bra	print3b
+;;
+;;
+;;.de
+;;	dc.b	"Screen: %ldHz/%ldkHz",0
+;;.dea	dc.b	"A gfx card detected.",0
+;; even
 
 
 ***** Playergroup file
@@ -22194,7 +22195,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d3,infosize(a5)
 	bra.b	.sizeNotChanged
 .skipSize
-	bsr	setPrefsInfoBox
+	;;;bsr	setPrefsInfoBox
 	bsr	updateprefs
 	; return 1: do refresh
 	moveq	#1,d0
@@ -62443,7 +62444,7 @@ prefsSaveStatetx
 * x-coordinates adjusted manually.
 
 prefsTooltips dc.l prefsAltButtons
-       dc.w 214,107,28,12,3,1,1
+       dc.w 214,107-28,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsTooltipst,0,0
        dc.w 0
@@ -62457,7 +62458,7 @@ prefsTooltipstx
 
 prefsAltButtons 
        dc.l prefsQuadraScope
-       dc.w 214,107+14,28,12,3,1,1
+       dc.w 214,107+14-28,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsAltButtonst,0,0
        dc.w 0
@@ -62614,7 +62615,7 @@ prefsSpectrumScopeBars
 ; Button to select list font, on prefs page 2
 prefsListFont
 	dc.l	0 ; LAST ONE
-	dc.w 120+37,93,(122+6*8)/2,12,0,1,1
+	dc.w 120+37,93-14-14,(122+6*8)/2,12,0,1,1
 	dc.l 0,0,0,0,0
 	dc.w 0
 	dc.l 0
