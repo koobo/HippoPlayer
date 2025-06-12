@@ -690,7 +690,7 @@ seed		rs.l	1		* randomgeneratorin SEED
 freezegads	rs.b	1		* ~0: Mainwindowin gadgetit OFF
 hippoporton	rs.b	1		* ~0: hippo portti initattu
 
-ciasaatu	rs.b	1		* 1: saatiin cia timeri
+ciasaatu	rs.b	1		* 0: saatiin cia timeri
 vbsaatu		rs.b	1		* 1: saatiin vb intti
 
 prefs_task	rs.l	1		* prefs-prosessi
@@ -2543,6 +2543,8 @@ main:
 	move	#2,pen_2+2(a5)
 	move	#3,pen_3+2(a5)
 	move.b	#33,keycode(a5)		* keycode
+
+	st	ciasaatu(a5)            * initial state: no cia int
 
 	pushpea	poptofront(pc),poptofrontr(a5)
 
@@ -4776,9 +4778,12 @@ avaa_ikkuna:
 .gotWindow
 	move.l	d0,windowbase(a5)
 	bne.b	.ok
+.outOfMem
 	bsr	unlockscreen
 
-.opener	moveq	#-1,d0			* Ei auennut!
+.opener	
+    DPRINT  "FAILED WINDOW OPEN"
+    moveq	#-1,d0			* Ei auennut!
 	rts
 
 .leve	
@@ -4796,6 +4801,23 @@ avaa_ikkuna:
 	move.l	wd_RPort(a0),rastport(a5)
 	move.l	wd_UserPort(a0),userport(a5)
 	;move	wd_Height(a0),wkork(a5)
+
+    ; ---------------------------------
+    * Allocate space for the file slider
+    move.l  windowbase(a5),a0
+    moveq   #0,d0
+    move.w  wd_Height(a0),d0
+    lsl     #2,d0           * two planes, width 16 pix
+    move.l  #MEMF_CHIP!MEMF_CLEAR,d1
+    bsr     getmem
+    move.l  d0,slimDataPtr
+    bne     .gotSlim
+    move.l  windowbase(a5),a0
+    clr.l   windowbase(a5)
+    lore    Intui,CloseWindow
+    bra     .outOfMem
+.gotSlim
+    ; ---------------------------------
 
  if DEBUG
 	moveq	#0,d0
@@ -5864,7 +5886,7 @@ configResizeGadget
 	bsr.b	disableResizeGadget
 	* Check if box is visible?
 	tst	boxsize(a5)
-	beq.b	enableResizeGadget\.small
+	beq	enableResizeGadget\.small
 
 * Enables the low right bottom resize gadget
 enableResizeGadget
@@ -5876,7 +5898,7 @@ enableResizeGadget
 	move	#6,gg_Width(a1)
 
 	* Set wd_MinSize to correspond to 3 rows
-	bsr.b	getFileboxYStartToD2
+	bsr 	getFileboxYStartToD2
 ;	add	#3*8+6,d2
     * NOTE: raise minsize to 5 due to extra space required
     * for search controls and/or list mode buttons
@@ -5887,13 +5909,21 @@ enableResizeGadget
 	add	windowbottom(a5),d0
 
 	add	d0,d2
-	move	d2,wd_MinHeight(a0)
+	;move	d2,wd_MinHeight(a0)
+
+    move    d2,d1       * min height
+    moveq   #-1,d3      * max height, UNLIMITED
+    moveq   #0,d0       * min width unchanged
+    moveq   #0,d2       * max width unchanged
+    lore    Intui,WindowLimits
+    DPRINT  "WindowLimits=%ld"
 
 	* Max size too, 47 lines down, total 50
-	moveq	#50-3,d0
-	mulu	listFontHeight(a5),d0
-	add	d0,d2
-
+;	moveq	#50-3,d0
+;	mulu	listFontHeight(a5),d0
+;	add	d0,d2
+;
+    moveq   #-1,d2
 	move	d2,wd_MaxHeight(a0)
 
 
@@ -5989,7 +6019,12 @@ sulje_ikkuna:
 	move.l	46(a0),a1		* WB screen addr
 	move	14(a1),wbkorkeus(a5)	* WB:n korkeus
 	clr.l	windowbase(a5)
-	jmp	_LVOCloseWindow(a6)
+	jsr	_LVOCloseWindow(a6)
+
+    lea     slimDataPtr,a1  * free slider gfx buffer
+    move.l  (a1),a0
+    clr.l   (a1)
+    bra     freemem
 
 
 
@@ -10791,7 +10826,10 @@ reslider:
 	subq	#2+1,d0
 	move	d0,d1
 
-	lea	slim,a2
+;	lea	slim,a2
+    move.l  slimDataPtr,d2
+    beq     .bar            * should not happen
+    move.l  d2,a2
 	lea	slim1a(a0),a1
 	tst.b	uusikick(a5)
 	bne.b	.newz
@@ -63376,7 +63414,8 @@ slimage		dc	0	* leftedge
 		dc	16	* width
 slimheight	dc	8	* heigh
 		dc	2	* depth
-		dc.l	slim	* data
+slimDataPtr
+		dc.l	0	* data
 		dc.b	%11	* planepick
 		dc.b	0	* planeon/onff
 		dc.l	0	* nextimage
@@ -64102,9 +64141,11 @@ ps3memptysample
 nullsample	ds.l	1
 
 * tilaa filebox-sliderin imagelle
-slim:	ds	410*2
+* 410 pixels
+* now using dynamic allocation
+;;slim:	ds	2*410
 
-* sampleinfo-slideri
+* sampleinfo-slideri, 410 pixels tall
 slim2:	ds	410*2
 
 * volume slider image
