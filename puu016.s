@@ -1795,6 +1795,15 @@ DPRINT macro
 	endc
 	endm
 
+DPRINTBYTE macro
+	ifne DEBUG
+    move.l  d0,-(sp)
+    moveq   #0,d0
+    move.b  \2,d0
+    DPRINT  \1
+    move.l  (sp)+,d0
+	endc
+	endm
 
 * delay
 DDELAY macro
@@ -3548,8 +3557,9 @@ msgloop
 
 	lob	ReplyMsg
 
-	cmp.l	#IDCMP_CHANGEWINDOW,d2
+	cmp.l	#IDCMP_CHANGEWINDOW,d2       * V36
 	bne.b	.noChangeWindow
+    DPRINT  "IDCMP_CHANGEWINDOW"
 	; Window resize events go into IDCMP_CHANGEWINDOW
 	; on kick 2.0+.
 	bsr	zipwindow
@@ -3558,19 +3568,19 @@ msgloop
 
 .noChangeWindow
 	cmp.l	#IDCMP_NEWSIZE,d2
-	bne.b	.noNewSize
+	bne 	.noNewSize
 	tst.b	uusikick(a5)
-	bne.b	.idcmpLoop
+	bne 	.idcmpLoop
 	; Use this event on kick1.3, as CHANGEWINDOW is not reported there.
 	bsr	mainWindowSizeChanged
-	bra.b	.idcmpLoop
+	bra 	.idcmpLoop
 .noNewSize
 
 	cmp.l	#IDCMP_RAWKEY,d2
-	bne.b	.noRawKey
+	bne 	.noRawKey
 	clr	userIdleTick(a5)	
 	bsr	nappuloita
-	bra.b	.idcmpLoop
+	bra 	.idcmpLoop
 .noRawKey	
 	* There will be a lot of mousemove messages.
 	* To keep the load light only take the first one and filter out the
@@ -3607,6 +3617,7 @@ msgloop
 	; so redraw it to ensure correct visual.
 	cmp.l	#IDCMP_ACTIVEWINDOW,d2
 	bne.b	.noActive
+    DPRINT  "IDCMP_ACTIVEWINDOW"
 	bsr	refreshResizeGadget
 	bra	.idcmpLoop
 .noActive
@@ -4609,8 +4620,11 @@ zipwindow:
  	move	windowZippedSize+2(a5),d1
 	DPRINT	"height=%ld zipped=%ld"
  endif
+    DPRINTBYTE "=== prev kokolippu=%ld",kokolippu(a5)
+
 	cmp	windowZippedSize+2(a5),d0
 	bne.b	.biggified
+
 
 	* Zipped to small size
 	tst.b	kokolippu(a5)
@@ -4628,6 +4642,7 @@ zipwindow:
     
     jsr     switchToNormalLayoutNoRefresh
 	DPRINT	"small"
+
 	bra.b	.x
 
 .biggified
@@ -4639,7 +4654,10 @@ zipwindow:
 	move.l	4(a0),windowpos(a5)
 	bsr	wrender
 
-.x	popm	all
+.x	
+    DPRINTBYTE "=== new kokolippu=%ld",kokolippu(a5)
+
+    popm	all
 	rts
 
 
@@ -4709,6 +4727,8 @@ avaa_ikkuna:
 .new1	add	windowtop(a5),d0
 	move	d0,wsizey-winstruc(a0)
 	bsr	.leve
+
+    DPRINTBYTE "=== kokolippu=%ld",kokolippu(a5)
 
 	* What is this?
 	not.b	kokolippu(a5)
@@ -5340,6 +5360,7 @@ wrender:
 	tst.b	kokolippu(a5)
 	beq	.pienehko
 
+    DPRINT  "wrender LARGE"
 
 	move.l	rastport(a5),a2
 	moveq	#4,d0
@@ -5949,14 +5970,20 @@ enableResizeGadget
 
 * Refresh the resize gadget if possible
 refreshResizeGadget:
+    DPRINTBYTE "=== refreshSizeGadget kokolippu=%ld",kokolippu(a5)
 	tst.b	uusikick(a5)
 	beq.b	.x
     * Do if large window
     tst.b   kokolippu(a5)
     beq.b   .x
 	push	a0
+    move.l  windowbase(a5),a0       * additional sanity check 
+    cmp.w   #40,wd_Height(a0)       * to avoid drawing size gadget on 
+    blo     .xx                     * small window
+    DPRINT  "refreshResizeGadget"
 	lea	gadgetResize,a0
 	bsr	refreshGadgetInA0
+.xx
 	pop	a0
 .x	rts
 
