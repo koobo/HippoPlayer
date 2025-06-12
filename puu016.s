@@ -5367,9 +5367,12 @@ wrender:
 	tst.l	d7
 	bne.b	.clrloop
 
+    tst.b   showPositionSlider(a5)
+    beq     .skipThis
     lea     gadgetPlayModeChangeButton,a3
     movem.w 4(a3),d0/d1/d4/d5
     bsr     .cler
+.skipThis
 
 	bra.b	.oru
 
