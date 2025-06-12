@@ -60463,7 +60463,12 @@ initializeUslUme:
 
     bsr     uslLoadIndex
     bsr     umeLoadIndex
-    rts
+
+    tst.l   umeIndexPtr(a5)
+    bne     .1
+    * Disable prefs item - no data
+    or.w    #GFLG_DISABLED,gg_Flags+gadgetDisableInfoScroll
+.1  rts
 
 
 * These formats already have length information,
