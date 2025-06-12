@@ -22562,7 +22562,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ; Put line change with special line feed so that ordinary line feeds
 ; can be filtered out.
-.putLineChange	
+.putLineChange:
 	move.b	#ILF,(a3)+
 	move.b	#ILF2,(a3)+
 	rts
@@ -23130,7 +23130,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	    .putLineChange
-    bsr     .putMetaData
+    bsr     .putMetaDataWithExtraLineChange
 	bra 	.ends
 
 * Copies a line to output, cuts at space near the end of line
@@ -23546,8 +23546,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .endA	lea	200(sp),sp
 .noAuth
 
-    bsr     .putMetaData
-
+    bsr     .putMetaDataWithExtraLineChange
 	bra	.selvis
 
 
@@ -23562,14 +23561,18 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Player: %s",0
   even
 
+
 * Put UADE-Audacious metadata
-.putMetaData
+
+.putMetaData:
+    moveq   #0,d1
+.putMetaData0:
     move.l  umeMetaDataPtr(a5),d0
     beq     .noMeta
     move.l  d0,a4
     tst.b   (a4)
     beq     .noMeta
-
+    push    d1
     lea     metaData1(pc),a0 
     bsr     .putMetaLine
     lea     metaData2(pc),a0 
@@ -23578,11 +23581,16 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr     .putMetaLine
     lea     metaData4(pc),a0 
     bsr     .putMetaLine
-	move.l	infotaz(a5),a3
-	bsr	    .lloppu
-    bsr     .putLineChange
+    tst.l   (sp)+
+    beq     .noMeta
+    bsr     .putLineChangeToEndOfBuffer
 .noMeta
     rts
+
+.putMetaDataWithExtraLineChange
+    moveq   #1,d1
+    bra     .putMetaData0
+
 
 .putMetaLine
     tst.b   (a4)            * skip empty
@@ -23593,9 +23601,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  sp,a3
     jsr     desmsg3
 
-	move.l	infotaz(a5),a3
-	bsr	    .lloppu
-    bsr     .putLineChange
+    bsr     .putLineChangeToEndOfBuffer
     
     move.l  sp,a0
     move.l  a3,a1
@@ -23612,6 +23618,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     tst.b   (a4)+
     bne     .nextMeta
     rts
+
+.putLineChangeToEndOfBuffer:
+	move.l	infotaz(a5),a3
+	bsr	    .lloppu
+    bra     .putLineChange
+
 
 
 .putcomment:
