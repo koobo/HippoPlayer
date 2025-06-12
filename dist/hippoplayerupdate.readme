@@ -111,17 +111,21 @@ Additional files to check and download
 
 ## Fixes:
 
+- AmiGUS integration improvements and fixes provided by Oliver.
 - Remove graphics glitch on top of some window buttons, shown
   when the position slider is not visible.
-- Prefs: Remove filebox and info window size change sliders, the same 
-         functionality can be done with the window resize gadgets.
-- Some issues fixed in the AmiGUS integration, provided by Oliver.
 
-
-## New stuff:
+## Improvements:
 
 - Main window height limit removed, historically it was set to 50
-  previously.
+  previously. 
+- Prefs: Add "Disable info scroll" toggle to disable the metadata
+         info scroller introduced in v2.63.
+- Prefs: Remove filebox and info window size change sliders, the same 
+         functionality can be done with window resize gadgets.
+- Prefs: Move "Position slider/play mode button" toggle to the 
+         "Display" page.
+  
 
 
 ------------------------------------------------------------------------------
