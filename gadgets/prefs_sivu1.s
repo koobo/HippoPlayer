@@ -41,7 +41,7 @@ pbutton13tx	dc.b "Screen",0
 
 
 gadgetEnablePositionSlider
-    dc.l    gfonttou
+    dc.l    gadgetDisableInfoScroll
 	dc.w 214,51+14*2+29+11,28,12,3,1,1
 	dc.l 0,0,.pbutton3t,0,0
 	dc.w 0
@@ -58,6 +58,18 @@ gadgetEnablePositionSlider
 .pbutton3tx	 dc.b "position slider.........",0
 	even
 
+gadgetDisableInfoScroll
+    dc.l    gfonttou
+	dc.w 214,51+14*2+29+11+14,28,12,3,1,1
+	dc.l 0,0,.pbutton3t,0,0
+	dc.w 0
+	dc.l 0
+.pbutton3t	dc.b 1,0,1,0
+	dc.w -198,2
+	dc.l 0,.pbutton3tx,0
+
+.pbutton3tx	 dc.b "Disable info scroll.....",0
+	even
 
 
 gfonttou	

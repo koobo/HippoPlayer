@@ -433,6 +433,8 @@ prefs_showPositionSlider rs.b  1
 prefs_residboost      rs.b      1
 prefs_midimode        rs.b      1
 prefs_ps3mamigus      rs.b      1 
+prefs_disableInfoScroll rs.b    1
+                      rs.b      1 * padding
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -1532,7 +1534,9 @@ disableShowStreamerError    rs.b       1
 
 showPositionSlider_new      rs.b       1
 showPositionSlider          = prefsdata+prefs_showPositionSlider
-
+disableInfoScroll_new      rs.b       1
+disableInfoScroll          = prefsdata+prefs_disableInfoScroll
+                            rs.b      1 * pad
 
 * Remote search popup stores the selected search mode here
 * SEARCH_MODLAND etc etc
@@ -14457,6 +14461,7 @@ prefs_code
 	move.b	altbuttons(a5),altbuttons_new(a5)
 	move.b	mhiEnable(a5),mhiEnable_new(a5)
 	move.b	showPositionSlider(a5),showPositionSlider_new(a5)
+	move.b	disableInfoScroll(a5),disableInfoScroll_new(a5)
     move.b  ps3mamigus(a5),ps3mamigus_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
@@ -14931,6 +14936,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
     move.b  ps3mamigus_new(a5),ps3mamigus(a5)
+    move.b  disableInfoScroll_new(a5),disableInfoScroll(a5)
 
     move.b  showPositionSlider(a5),d0
     move.b  showPositionSlider_new(a5),showPositionSlider(a5)
@@ -15610,6 +15616,7 @@ pupdate:				* Ikkuna päivitys
 	bsr	pSpectrumScopeBars
 	bsr	pListFont
     bsr ppositionslider * posiion slider
+    bsr pdisableinfoscroll
 	bra	.x
 
 .3	subq	#1,d0
@@ -15854,6 +15861,7 @@ gadgetsup2
 	dr	rselscreen	* publicscreen
 	;;dr	rbox		* boxsize
     dr  rpositionslider * position slider
+    dr  rdisableinfoscroll * disable info scroll
 	dr	rfont		* font selector
 	;dr	rquad		* scope on/off
 	;dr	rquadm		* scopen moodi	* pout3
@@ -16385,6 +16393,15 @@ rpositionslider
 ppositionslider
     move.b  showPositionSlider_new(a5),d0
 	lea	gadgetEnablePositionSlider,a0
+	bra	tickaa
+
+** Position slider
+rdisableinfoscroll
+	not.b	disableInfoScroll_new(a5)
+
+pdisableinfoscroll
+    move.b  disableInfoScroll_new(a5),d0
+	lea	gadgetDisableInfoScroll,a0
 	bra	tickaa
 
 
@@ -61868,6 +61885,10 @@ initInfoScroller:
     clr     infoScrollPos(a5)
     clr.b   infoScrollEnabled(a5)
     move    #30,infoScrollWaitTicks(a5)
+
+    * Prefs setting check
+    tst.b   disableInfoScroll(a5)
+    bne     .x
 
     clr     .rows(a4)
     lea     .text(a4),a3
