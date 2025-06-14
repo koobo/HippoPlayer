@@ -1600,7 +1600,6 @@ umeMetaDataPtr  rs.l      1   * Ptr to metadata strings
 
 * Info text scroller
 infoScrollPos       rs.w      1 
-infoScrollWaitTicks rs.w      1 * ticks to wait before scrolling
 infoScrollMoveTicks rs.w      1
 infoScrollLineHeight rs.w     1
 infoScrollLength    rs.w      1 * pixels, height
@@ -1610,6 +1609,10 @@ infoScrollBitplaneH rs.w      1
 infoScrollEnabled   rs.b      1
 infoScrollSmall     rs.b      1 * set if all text fits 
 infoScrollBitMap    rs.b      bm_SIZEOF-7*4 * for 1 bpl
+infoScrollLastTime  rs.l      2 * secs, micros
+
+sysTimerPort        rs.b      MP_SIZE
+sysTimerIORequest   rs.b      IOTV_SIZE
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -3152,6 +3155,7 @@ main:
 	jsr	inforivit_clear
 	jsr	importFavoriteModulesFromDisk
 	jsr	initializeUHC
+    jsr initSysTime
 
 	DPRINT	"Loading group"
 
@@ -3642,6 +3646,7 @@ exit
 	jsr	exportFavoriteModulesToDisk
 	jsr	exportSavedStateModulesToDisk
 	jsr	deinitUHC
+    jsr deinitSysTime
 * poistetaan loput prosessit...
 
 
@@ -26288,30 +26293,11 @@ scopeEntry:
 	sne     s_syncMode(a4)
     ; ---------------------------------
     ; Create port
-    lea     s_timerPort(a4),a3
-    moveq   #-1,d0
-    lob     AllocSignal	
-    move.b	d0,MP_SIGBIT(a3)
- 	move.l	s_quad_task(a4),MP_SIGTASK(a3)
-	move.b	#NT_MSGPORT,LN_TYPE(a3)
-	clr.l	LN_NAME(a3)
-	move.b	#PA_SIGNAL,MP_FLAGS(a3)
-	lea     MP_MSGLIST(a3),a0
-	NEWLIST	a0
-    ; ---------------------------------
-    ; Create IO
+ 	move.l	s_quad_task(a4),a1
 	lea     s_timerIORequest(a4),a2
-	move.l	a3,MN_REPLYPORT(a2)
-	move.b	#NT_MESSAGE,LN_TYPE(a2)
-	move	#IOTV_SIZE,MN_LENGTH(a2)
-    ; ---------------------------------
-    ; timer.device
-    lea     timerDeviceName,a0
-	lea     s_timerIORequest(a4),a1
-    moveq   #UNIT_VBLANK,d0
-    moveq   #0,d1
-    lob     OpenDevice * returns d0=non-zero on error
-    tst.l   d0
+    lea     s_timerPort(a4),a3
+    jsr     initTimer
+    * returns d0=non-zero on error
     ; ---------------------------------
 
 * Modulo multab 
@@ -61937,7 +61923,8 @@ initInfoScroller:
     * Reset to initial state
     clr     infoScrollPos(a5)
     clr.b   infoScrollEnabled(a5)
-    move    #30,infoScrollWaitTicks(a5)
+    bsr     getSysTime
+    movem.l d0/d1,infoScrollLastTime(a5)
 
     * Prefs setting check
     tst.b   disableInfoScroll(a5)
@@ -62146,8 +62133,8 @@ drawInfoScroller:
     beq     .x
     tst.b   infoScrollEnabled(a5)
     beq     .x
-    tst.w   infoScrollWaitTicks(a5)
-    bne    .doWait
+    tst.l   infoScrollLastTime(a5)  * Need to wait?
+    bne     .doWait
 
     moveq   #7+WINX+4-1+1,d2
     add     windowleft(a5),d2       * dest x
@@ -62193,9 +62180,11 @@ drawInfoScroller:
 .doScroll
     subq    #1,infoScrollMoveTicks(a5)
     bne     .scr
+    * Scrolled enough, start waiting
     move    infoScrollLineHeight(a5),d0
     add     d0,infoScrollPos(a5)
-    move    #30,infoScrollWaitTicks(a5)
+    bsr     getSysTime
+    movem.l d0/d1,infoScrollLastTime(a5)
     rts
 .scr
     move    infoScrollPos(a5),d0
@@ -62206,11 +62195,83 @@ drawInfoScroller:
     rts
 
 .doWait
-    subq    #1,infoScrollWaitTicks(a5)
-    bne     .wai
+    bsr     getSysTime
+    * Subtract times
+    sub.l   infoScrollLastTime(a5),d0   * secs
+    sub.l   infoScrollLastTime+4(a5),d1  * micros
+    bge     .ok
+    subq.l  #1,d0
+    add.l   #1000000,d1  * MAXMICRO
+.ok
+    cmp.l   #3,d0
+    blo     .wai
+
+    clr.l   infoScrollLastTime(a5)
     move    #8,infoScrollMoveTicks(a5) * easing size
 .wai
     rts
+
+initSysTime:
+    move.l  owntask(a5),a1
+    lea     sysTimerIORequest(a5),a2
+    lea     sysTimerPort(a5),a3
+    bsr     initTimer
+    rts
+    
+deinitSysTime:
+    lea     sysTimerIORequest(a5),a1
+    lore    Exec,CloseDevice
+    move.b  sysTimerPort+MP_SIGBIT(a5),d0
+    lob     FreeSignal
+    rts
+
+* Read system time
+* Out:
+*   d0 = seconds
+*   d1 = microseconds
+getSysTime:
+    lea	    sysTimerIORequest(a5),a1
+    move.w	#TR_GETSYSTIME,IO_COMMAND(a1)
+    lore    Exec,DoIO
+    movem.l sysTimerIORequest+IOTV_TIME+TV_SECS(a5),d0/d1 
+    rts
+
+
+
+* Utility to set up a timer
+* In:
+*   a1 = current task
+*   a2 = io structure
+*   a3 = port structure
+* Out:
+*   d0 = OpenDevice return code
+initTimer:
+    ; ---------------------------------
+    ; Create port
+    move.l  a1,MP_SIGTASK(a3)
+    move.b  #NT_MSGPORT,LN_TYPE(a3)
+    clr.l   LN_NAME(a3)
+    move.b  #PA_SIGNAL,MP_FLAGS(a3)
+    lea     MP_MSGLIST(a3),a0
+    NEWLIST a0
+    moveq   #-1,d0
+    lore    Exec,AllocSignal       * error ignored
+    move.b  d0,MP_SIGBIT(a3)
+    ; ---------------------------------
+    ; Create IO
+    move.l  a3,MN_REPLYPORT(a2)
+    move.b  #NT_MESSAGE,LN_TYPE(a2)
+    move    #IOTV_SIZE,MN_LENGTH(a2)
+    ; ---------------------------------
+    ; timer.device
+    lea     timerDeviceName,a0
+    move.l  a2,a1
+    moveq   #UNIT_VBLANK,d0
+    moveq   #0,d1
+    lob     OpenDevice * returns d0=non-zero on error
+    rts
+
+
 
 ***************************************************************************
 *
