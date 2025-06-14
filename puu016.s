@@ -3574,7 +3574,6 @@ msgloop
 
 	cmp.l	#IDCMP_CHANGEWINDOW,d2       * V36
 	bne.b	.noChangeWindow
-    DPRINT  "IDCMP_CHANGEWINDOW"
 	; Window resize events go into IDCMP_CHANGEWINDOW
 	; on kick 2.0+.
 	bsr	zipwindow
@@ -3632,7 +3631,6 @@ msgloop
 	; so redraw it to ensure correct visual.
 	cmp.l	#IDCMP_ACTIVEWINDOW,d2
 	bne.b	.noActive
-    DPRINT  "IDCMP_ACTIVEWINDOW"
 	bsr	refreshResizeGadget
 	bra	.idcmpLoop
 .noActive
