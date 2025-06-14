@@ -15641,7 +15641,7 @@ pupdate:				* Ikkuna päivitys
 	;bsr	pscopebar		* scope bars
 	bsr	pprefx			* prefix cut
 	bsr	pfont			* fontti
-	;;bsr	pscreen			* screen refresh rates
+	bsr	pscreen			* screen refresh rates
 	bsr	ptooltips  	     	* tooltips
 	bsr	paltbuttons  	        * alt buttons
 	bsr	pQuadraScope
@@ -17831,35 +17831,39 @@ pListFont
 
 *** Printataan screen refresh ratetkin
 
-;;pscreen
-;;	tst.b	gfxcard(a5)
-;;	beq.b	.nop
-;;	lea	.dea(pc),a0
-;;	bra.b	.do
-;;
-;;.nop
-;;	moveq	#0,d0
-;;	move	vertfreq(a5),d0
-;;
-;;	moveq	#0,d1
-;;	move	horizfreq(a5),d1
-;;	divu	#1000,d1
-;;	ext.l	d1
-;;
-;;	lea	.de(pc),a0
-;;	bsr	desmsg2
-;;	lea	desbuf2(a5),a0
-;;
-;;.do	moveq	#16,d0
-;;	move	#122+18,d1
-;;	add	windowtop(a5),d1
-;;	bra	print3b
-;;
-;;
-;;.de
-;;	dc.b	"Screen: %ldHz/%ldkHz",0
-;;.dea	dc.b	"A gfx card detected.",0
-;; even
+pscreen
+	tst.b	gfxcard(a5)
+	beq.b	.nop
+;	lea	.dea(pc),a0
+;	bra.b	.do
+    rts
+    
+.nop
+	moveq	#0,d0
+	move	vertfreq(a5),d0
+
+	moveq	#0,d1
+	move	horizfreq(a5),d1
+	divu	#1000,d1
+	ext.l	d1
+
+	lea	.de(pc),a0
+	bsr	desmsg2
+	lea	desbuf2(a5),a0
+
+.do	
+;    moveq	#16,d0
+;	move	#122+18,d1
+    move	#260,d0
+	move	#42,d1
+	add	windowtop(a5),d1
+	bra	print3b
+
+
+.de
+	dc.b	"Screen: %ldHz/%ldkHz",0
+;.dea	dc.b	"A gfx card detected.",0
+ even
 
 
 ***** Playergroup file
