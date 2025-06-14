@@ -1607,7 +1607,7 @@ infoScrollBitplane  rs.l      1
 infoScrollBitplaneW rs.w      1
 infoScrollBitplaneH rs.w      1
 infoScrollEnabled   rs.b      1
-infoScrollSmall     rs.b      1 * set if all text fits 
+infoWaitTick        rs.b      1
 infoScrollBitMap    rs.b      bm_SIZEOF-7*4 * for 1 bpl
 infoScrollLastTime  rs.l      2 * secs, micros
 
@@ -62194,6 +62194,13 @@ drawInfoScroller:
     rts
 
 .doWait
+    * Waiting, don't check the time every cycle
+    * to save CPU
+    addq.b  #1,infoWaitTick(a5)
+    moveq   #%11,d0
+    and.b    infoWaitTick(a5),d0
+    bne     .wai
+
     bsr     getSysTime
     * Subtract times
     sub.l   infoScrollLastTime(a5),d0   * secs
@@ -62202,7 +62209,7 @@ drawInfoScroller:
     subq.l  #1,d0
     ;add.l   #1000000,d1  * MAXMICRO - not needed
 .ok
-    cmp.l   #3,d0   *  3 secs!
+    cmp.w   #3,d0   *  3 secs!
     blo     .wai
 
     clr.l   infoScrollLastTime(a5)
