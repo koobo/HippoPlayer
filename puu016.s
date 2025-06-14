@@ -4379,10 +4379,13 @@ handleUiRefreshSignal
 	;bsr	zipwindow
 
 	* Try to save favorite modules when user has been idle for a while
-	moveq	#0,d0 
-	move	userIdleTick(a5),d0 
-	cmp	#7,d0
-	blo.b	.notIdleEnough
+    moveq   #7,d0
+    tst.b    infoScrollEnabled(a5)
+    beq     .1
+    add     d0,d0
+.1
+    cmp     userIdleTick(a5),d0
+	bhs.b	.notIdleEnough
 	jsr	exportFavoriteModulesWithMessage
 .notIdleEnough
 
