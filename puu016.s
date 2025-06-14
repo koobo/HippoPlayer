@@ -1599,20 +1599,17 @@ umeDataPtr      rs.l      1   * Pointer to current DB block
 umeMetaDataPtr  rs.l      1   * Ptr to metadata strings
 
 * Info text scroller
-infoScrollPos             rs.w      1 
-infoScrollMoveTicks       rs.w      1
-infoScrollLineHeight      rs.w      1
-infoScrollLength          rs.w      1 * pixels, height
-infoScrollBitplane        rs.l      1
-infoScrollBitplaneW       rs.w      1
-infoScrollBitplaneH       rs.w      1
-infoScrollEnabled         rs.b      1
-infoScrollPrepared        rs.b      1
-infoScrollBitMap          rs.b      bm_SIZEOF-7*4 * for 1 bpl
-infoScrollWaitActive      rs.b      1
-infoScrollIOSent          rs.b      1
-infoScrollTimerPort       rs.b      MP_SIZE
-infoScrollTimerIORequest  rs.b      IOTV_SIZE
+infoScrollPos       rs.w      1 
+infoScrollWaitTicks rs.w      1 * ticks to wait before scrolling
+infoScrollMoveTicks rs.w      1
+infoScrollLineHeight rs.w     1
+infoScrollLength    rs.w      1 * pixels, height
+infoScrollBitplane  rs.l      1
+infoScrollBitplaneW rs.w      1
+infoScrollBitplaneH rs.w      1
+infoScrollEnabled   rs.b      1
+infoScrollSmall     rs.b      1 * set if all text fits 
+infoScrollBitMap    rs.b      bm_SIZEOF-7*4 * for 1 bpl
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -3249,9 +3246,11 @@ main:
 	bra		print
 .oohi
 
+    tst.b   win(a5)
+    beq     .uc
     * Get metadata at startup
     jsr     initializeUslUme
-    jsr     infoScrollPrepare
+.uc
 
 
  ifne EFEKTI
@@ -3331,11 +3330,6 @@ msgloop
 	bset	d1,d0
 	move.b	hippoport+MP_SIGBIT(a5),d1 * oman viestiportin bitti
 	bset	d1,d0
-    tst.b   infoScrollPrepared(a5)
-    beq     .noInfoScroll
-    move.b  infoScrollTimerPort+MP_SIGBIT(a5),d1
-	bset	d1,d0
-.noInfoScroll
 
 	tst.b	win(a5)
 	beq.b	.nw
@@ -3530,15 +3524,6 @@ msgloop
 	beq.b	.noTooltipSignal
 	bsr	tooltipDisplayHandler
 .noTooltipSignal
-
-    * Info scroll signal check
-    tst.b   infoScrollPrepared(a5)
-    beq     .noInfoScroll2
-    move.b  infoScrollTimerPort+MP_SIGBIT(a5),d3
-	btst	d3,d0
-    beq     .noInfoScroll2
-    jsr     infoScrollSignalHandler
-.noInfoScroll2
 
 * Vastataan IDCMP:n viestiin
 
@@ -3808,8 +3793,7 @@ exit
     jsr     umeFreeIndex
     jsr     umeFreeData
     jsr     infoScrollFree
-    jsr     infoScrollUninit
-    
+
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
 	jsr	rem_sidpatch		* patchi kanssa
@@ -4092,6 +4076,7 @@ deleteport0
 		lea	hippoport(a5),a2
 deleteport1	move.l	a2,a1
 		lore	Exec,RemPort
+		moveq	#0,d0
 		move.b	MP_SIGBIT(a2),d0	* signaalin numero
 		lob	FreeSignal
 		popm	all
@@ -4377,7 +4362,7 @@ handleUiRefreshSignal
 	jsr	lootaan_nimi
     jsr     refreshPositionSlider
     bsr     periodicEndCheck
-    jsr     infoScrollDraw 
+    jsr     drawInfoScroller 
 
 	; No need to call this every refresh signal, it is handled via RMB 
 	; and IDCMP-event handlers anyway:
@@ -4445,11 +4430,8 @@ periodicEndCheck:
 
 handlePosUpdateSignal
 	* Update title bar with position information
-    push    d0
     jsr     refreshPositionSlider
-	jsr 	lootaan_pos
-    pop     d0
-    rts
+	jmp	lootaan_pos
 
 handleSignal2
 	DPRINT	"Signal 2"
@@ -20071,7 +20053,7 @@ bipb2
 	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
 	bsr		infoBoxPrint
-    jsr     infoScrollInit
+    jsr     initInfoScroller
     DPRINT  "infoBoxPrint"
 bopb	rts
 
@@ -26305,13 +26287,31 @@ scopeEntry:
 	btst	#AFB_68020,AttnFlags+1(a6)
 	sne     s_syncMode(a4)
     ; ---------------------------------
-    ; Set up timer
- 	move.l	s_quad_task(a4),a1
-	lea     s_timerIORequest(a4),a2
+    ; Create port
     lea     s_timerPort(a4),a3
-    jsr     initTimer
-    * returns d0=non-zero on error
-    * ignored!
+    moveq   #-1,d0
+    lob     AllocSignal	
+    move.b	d0,MP_SIGBIT(a3)
+ 	move.l	s_quad_task(a4),MP_SIGTASK(a3)
+	move.b	#NT_MSGPORT,LN_TYPE(a3)
+	clr.l	LN_NAME(a3)
+	move.b	#PA_SIGNAL,MP_FLAGS(a3)
+	lea     MP_MSGLIST(a3),a0
+	NEWLIST	a0
+    ; ---------------------------------
+    ; Create IO
+	lea     s_timerIORequest(a4),a2
+	move.l	a3,MN_REPLYPORT(a2)
+	move.b	#NT_MESSAGE,LN_TYPE(a2)
+	move	#IOTV_SIZE,MN_LENGTH(a2)
+    ; ---------------------------------
+    ; timer.device
+    lea     timerDeviceName,a0
+	lea     s_timerIORequest(a4),a1
+    moveq   #UNIT_VBLANK,d0
+    moveq   #0,d1
+    lob     OpenDevice * returns d0=non-zero on error
+    tst.l   d0
     ; ---------------------------------
 
 * Modulo multab 
@@ -61922,105 +61922,7 @@ fileConverter:
 
 SCROLL_UPDATE_RATE = 4  * update each x/50 sec
 
-* Sets up a timer for waiting before scrolling
-infoScrollPrepare:
-    move.l  owntask(a5),a1
-    lea     infoScrollTimerIORequest(a5),a2
-	lea     infoScrollTimerPort(a5),a3
-    bsr     initTimer
-    DPRINT  "infoScrollPrepare=%lx"
-    tst.l   d0
-    seq     infoScrollPrepared(a5)
-    rts
-
-infoScrollUninit:
-    DPRINT  "infoScrollUninit"
-    tst.b   infoScrollPrepared(a5)
-    beq     .x
-    bsr     infoScrollResetTimer
-    lea     infoScrollTimerIORequest(a5),a1
-    lore    Exec,CloseDevice
-
-    move.b	MP_SIGBIT+infoScrollTimerPort(a5),d0
-    lob     FreeSignal
-.x  rts
-
-infoScrollResetTimer:
-    tst.b   infoScrollIOSent(a5)
-    beq     .1
-    lea     infoScrollTimerIORequest(a5),a1
-    lore    Exec,CheckIO * returns NULL if in progress
-    tst.l   d0
-    bne     .1
-    lea     infoScrollTimerIORequest(a5),a1
-    lob     AbortIO
-    lea     infoScrollTimerIORequest(a5),a1
-    lob     WaitIO
-    clr.b   infoScrollWaitActive(a5)
-.1  
-    rts
-
-infoScrollSignalHandler:
-    lea     infoScrollTimerPort(a5),a0
-    lore    Exec,GetMsg    
-    tst.l   d0
-    beq     .x
-    ;DPRINT  "###### Timer signal %lx ######"
-    clr.b   infoScrollWaitActive(a5)
-    move    #8,infoScrollMoveTicks(a5) * easing size
-.x    
-    rts
- REM 
-	move.l	IO_DEVICE+infoScrollTimerIORequest(a5),a6
-
-    move.l  tv1,tv2
-    move.l  tv1+4,tv2+4
-
-    lea     tv1,a0
-    lob     GetSysTime
-    move.l  tv1+TV_SECS,d0
-    move.l  tv1+TV_MICRO,d1
-   ;; DPRINT  "%ld %ld"
-
-    move.l  tv1,tv3
-    move.l  tv1+4,tv3+4
-
-    * tv1 = new 
-    * tv2 = old
-
-    lea     tv3,a0      * dest
-    lea     tv2,a1      * source
-    lob     SubTime
-    * dest = dest - source 
-
-    move.l  tv3+TV_SECS,d0
-    move.l  tv3+TV_MICRO,d1
-    divu    #1000,d1        * micro -> milli
-    ext.l   d1
-    DPRINT  "%ld s %ld ms"
-    rts
-
-tv1     ds.b    TV_SIZE
-tv2     ds.b    TV_SIZE
-tv3     ds.b    TV_SIZE
- EREM
-
-infoScrollStartWait:
-    tst.b   infoScrollWaitActive(a5)
-    bne     .ongoing
-    lea     infoScrollTimerIORequest(a5),a1  
-	move.w	#TR_ADDREQUEST,IO_COMMAND(a1)
-	move.l  #2,IOTV_TIME+TV_SECS(a1)
-;	move.l	#1000000/2,IOTV_TIME+TV_MICRO(a1) 
-    move.l	#0,IOTV_TIME+TV_MICRO(a1) 
-	lore    Exec,SendIO
-    ;DPRINT  "###### SendIO ######"
-    st      infoScrollWaitActive(a5)
-    st      infoScrollIOSent(a5)
-.ongoing
-    rts
-
-infoScrollInit:
+initInfoScroller:
     pushm   all
     DPRINT  "initInfoScroller"
     rsreset
@@ -62035,16 +61937,11 @@ infoScrollInit:
     * Reset to initial state
     clr     infoScrollPos(a5)
     clr.b   infoScrollEnabled(a5)
-
-    * Timer availability check
-    tst.b   infoScrollPrepared(a5)
-    beq     .x
+    move    #30,infoScrollWaitTicks(a5)
 
     * Prefs setting check
     tst.b   disableInfoScroll(a5)
     bne     .x
-
-    bsr     infoScrollResetTimer
 
     clr     .rows(a4)
     lea     .text(a4),a3
@@ -62170,9 +62067,7 @@ infoScrollInit:
     lea     .text(a4),a0
     bsr     .print
 
-
     ; All ok so far
-    bsr     infoScrollStartWait
     st      infoScrollEnabled(a5)
 .x
 .e
@@ -62246,13 +62141,13 @@ infoScrollFree:
 .1  rts
 
 
-infoScrollDraw:   
+drawInfoScroller:   
     tst.b   playing(a5)
     beq     .x
     tst.b   infoScrollEnabled(a5)
     beq     .x
-    tst.b   infoScrollWaitActive(a5)
-    bne     .x
+    tst.w   infoScrollWaitTicks(a5)
+    bne    .doWait
 
     moveq   #7+WINX+4-1+1,d2
     add     windowleft(a5),d2       * dest x
@@ -62300,7 +62195,8 @@ infoScrollDraw:
     bne     .scr
     move    infoScrollLineHeight(a5),d0
     add     d0,infoScrollPos(a5)
-    bra     infoScrollStartWait
+    move    #30,infoScrollWaitTicks(a5)
+    rts
 .scr
     move    infoScrollPos(a5),d0
     cmp     infoScrollLength(a5),d0
@@ -62309,40 +62205,12 @@ infoScrollDraw:
 .1  move    d0,infoScrollPos(a5)
     rts
 
-
-* Utility to set up a timer
-* In:
-*   a1 = current task
-*   a2 = io structure
-*   a3 = port structure
-* Out:
-*   d0 = OpenDevice return code
-initTimer:
-    ; ---------------------------------
-    ; Create port
-    move.l  a1,MP_SIGTASK(a3)
-	move.b	#NT_MSGPORT,LN_TYPE(a3)
-	clr.l	LN_NAME(a3)
-	move.b	#PA_SIGNAL,MP_FLAGS(a3)
-	lea     MP_MSGLIST(a3),a0
-	NEWLIST	a0
-    moveq   #-1,d0
-    lore    Exec,AllocSignal	    * error ignored
-    move.b	d0,MP_SIGBIT(a3)
-    ; ---------------------------------
-    ; Create IO
-	move.l	a3,MN_REPLYPORT(a2)
-	move.b	#NT_MESSAGE,LN_TYPE(a2)
-	move	#IOTV_SIZE,MN_LENGTH(a2)
-    ; ---------------------------------
-    ; timer.device
-    lea     timerDeviceName,a0
-    move.l  a2,a1
-    moveq   #UNIT_VBLANK,d0
-    moveq   #0,d1
-    lob     OpenDevice * returns d0=non-zero on error
+.doWait
+    subq    #1,infoScrollWaitTicks(a5)
+    bne     .wai
+    move    #8,infoScrollMoveTicks(a5) * easing size
+.wai
     rts
-
 
 ***************************************************************************
 *
