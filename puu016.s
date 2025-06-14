@@ -2412,6 +2412,7 @@ PRINTOUT
 getmemCount 	dc.l	0
 freememCount	dc.l	0
 getmemTotal		dc.l	0
+freememTotal    dc.l    0
  endc
 
 
@@ -3862,6 +3863,10 @@ exit
 	lsr.l	#8,d0 
 	lsr.l	#2,d0 
 	DPRINT "Getmem total: %ld kilobytes"
+	move.l  freememTotal(pc),d0 
+	lsr.l	#8,d0 
+	lsr.l	#2,d0 
+	DPRINT "Freemem total: %ld kilobytes"
 	move.l	getmemTotal(pc),d0
 	move.l	getmemCount(pc),d1
 	bne.b	.nz
@@ -7021,6 +7026,9 @@ freemem:
 	move.l	a0,d0
 	beq.b	.n
 	move.l	-(a0),d0
+ ifne DEBUG
+    add.l   d0,freememTotal
+ endc
 	move.l	a0,a1
 	move.l	4.w,a6
 	lob	FreeMem
