@@ -62207,9 +62207,13 @@ drawInfoScroller:
     sub.l   infoScrollLastTime+4(a5),d1  * micros
     bge     .ok
     subq.l  #1,d0
-    ;add.l   #1000000,d1  * MAXMICRO - not needed
+    add.l   #1000000,d1  * MAXMICRO 
 .ok
-    cmp.w   #3,d0   *  3 secs!
+;    DPRINT  "GetSysTime %ld %ld"
+
+    cmp.w   #2,d0   *  Trigger at 2.5 secs
+    blo     .wai
+    cmp.l   #1000000/2,d1
     blo     .wai
 
     clr.l   infoScrollLastTime(a5)
