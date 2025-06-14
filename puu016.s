@@ -62200,9 +62200,9 @@ drawInfoScroller:
     sub.l   infoScrollLastTime+4(a5),d1  * micros
     bge     .ok
     subq.l  #1,d0
-    add.l   #1000000,d1  * MAXMICRO
+    ;add.l   #1000000,d1  * MAXMICRO - not needed
 .ok
-    cmp.l   #3,d0
+    cmp.l   #3,d0   *  3 secs!
     blo     .wai
 
     clr.l   infoScrollLastTime(a5)
@@ -62210,12 +62210,6 @@ drawInfoScroller:
 .wai
     rts
 
-initSysTime:
-    move.l  owntask(a5),a1
-    lea     sysTimerIORequest(a5),a2
-    lea     sysTimerPort(a5),a3
-    bsr     initTimer
-    rts
     
 deinitSysTime:
     lea     sysTimerIORequest(a5),a1
@@ -62235,6 +62229,12 @@ getSysTime:
     movem.l sysTimerIORequest+IOTV_TIME+TV_SECS(a5),d0/d1 
     rts
 
+initSysTime:
+    move.l  owntask(a5),a1
+    lea     sysTimerIORequest(a5),a2
+    lea     sysTimerPort(a5),a3
+;    bsr     initTimer
+;    rts
 
 
 * Utility to set up a timer
