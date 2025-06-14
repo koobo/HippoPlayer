@@ -37339,6 +37339,7 @@ modlen:
 .failsafe           rs.l 1
 .lastPositionJump   rs.w 1
 .lastNoteTime       rs.l 1
+.patternIndex       rs.l 1
 .varsSize           rs.b 0
  even
 
@@ -37456,16 +37457,18 @@ modlen:
 	ASL.L	#8,D1
 	ASL.L	#2,D1
 	ADD.W	.mt_PatternPos(a5),D1
+    move.l  d1,.patternIndex(a5)
 
 	LEA	.mt_chan1temp(a5),A6
 
-;    pushm    d0-d6
-;    push    d2
-;    movem.l  (a0,d1.l),d2/d3/d4/d5
-;    pop     d1
-;    and.l   #$ff,d1
-;   ;; DPRINT  "%ld/%ld->%08.8lx %08.8lx %08.8lx %08.8lx"
-;    popm     d0-d6
+;  pushm    d0-d6
+;  move.l   a0,d0
+;	MOVEQ	#0,D2
+;	mOVE.B	.mt_SongPos(a5),D2
+;  DPRINT    "Patt=%lx offs=%lx song=%ld"
+;  movem.l  (a0,d1.l),d0-d3
+;  DPRINT  "%08.8lx %08.8lx %08.8lx %08.8lx"
+;  popm     d0-d6
 
 	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
@@ -37473,14 +37476,12 @@ modlen:
 	addq	#nl_ts,a6
 	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
-	pea	.mt_SetDMA(pc)
-
-;	BSR.S	.mt_PlayVoice
-;	BRA.B	.mt_SetDMA
+	BSR 	.mt_PlayVoice
+	bra	    .mt_SetDMA
 
 
 .mt_PlayVoice
-    * Read 4 bytes ot pattern data
+    * Read 4 bytes of pattern data
 	MOVE.L	(A0,D1.L),(A6)
 	ADDQ.L	#4,D1
 
@@ -37553,6 +37554,9 @@ modlen:
 *   which jump back to last position to another row
 *   which is ok
 
+* In:
+*   a0 = current pattern row
+*   d1 = column index to pattern (0,4,8,12)
 .mt_PositionJump
     * Get jump position:
 	MOVE.B	3(A6),D0
@@ -37577,22 +37581,25 @@ modlen:
 
     * Allow jumps if there is a D on the same row.
     * Common scrambled pattern trick.
+    move.l  .patternIndex(a5),d4
 	moveq	#$f,d2
-    and.b   2(A0,D1.L),d2
+    and.b   2(A0,d4.L),d2
     cmp.b   #$d,d2
     beq     .pbrk
 	moveq	#$f,d2
-    and.b   2+4(A0,D1.L),d2
+    and.b   2+4(A0,d4.L),d2
     cmp.b   #$d,d2
     beq     .pbrk
 	moveq	#$f,d2
-    and.b   2+8(A0,D1.L),d2
+    and.b   2+8(A0,d4.L),d2
     cmp.b   #$d,d2
     beq     .pbrk
 	moveq	#$f,d2
-    and.b   2+12(A0,D1.L),d2
+    and.b   2+12(A0,d4.L),d2
     cmp.b   #$d,d2
     beq     .pbrk
+
+    DPRINT  "no pbrk"
 
 	MOVE.B	.mt_SongPos(a5),D2	
     cmp.b   d0,d2
@@ -37603,6 +37610,10 @@ modlen:
     st      .songend(a5)
     rts
 .ook
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT  "jump to %ld"
+ endif
     tst.b   d3
     beq     .nre
     DPRINT  "Jump and no break in the last position"
