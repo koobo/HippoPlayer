@@ -5973,7 +5973,6 @@ enableResizeGadget
 
 * Refresh the resize gadget if possible
 refreshResizeGadget:
-    DPRINTBYTE "=== refreshSizeGadget kokolippu=%ld",kokolippu(a5)
 	tst.b	uusikick(a5)
 	beq.b	.x
     * Do if large window
