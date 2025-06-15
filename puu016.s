@@ -5088,7 +5088,7 @@ getscreeninfo
 
 	lob	FindDisplayInfo
 	move.l	d0,d4
-	beq.b	.ba
+	beq 	.ba
 
 	lea	-40(sp),sp
 	move.l	sp,a4
@@ -5098,11 +5098,19 @@ getscreeninfo
 	moveq	#0,d7
 
 	move.l	#DTAG_DISP,d1
-	bsr.b	.pa
+	bsr 	.pa
 	move	dis_PixelSpeed(a4),d5
 
+ if DEBUG
+    move.l  dis_PropertyFlags(a4),d0
+    DPRINT  "dis_PropertyFlags=%08.8lx"
+;#define DIPF_IS_FOREIGN         0x80000000      /* this mode is not native to the Amiga */
+    and.l   #$80000000,d0
+    DPRINT  "DIPF_FOREIGN=%ld"
+ endif
+
 	move.l	#DTAG_MNTR,d1
-	bsr.b	.pa
+	bsr 	.pa
 	move	mtr_TotalRows(a4),d6	
 	move	mtr_TotalColorClocks(a4),d7
 
