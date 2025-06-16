@@ -228,8 +228,8 @@ MD5_Final:
 
     rsreset
 step_setget     rs.w       1
-step_rotation   rs.w       1
 step_constant   rs.l       1
+step_rotation   rs.w       1
 step_SIZEOF     rs.b       0
 
 funcF = 0
@@ -261,15 +261,15 @@ MD5_Body:
     and.l   d5,d0
     eor.l   d7,d0
     ; ---------------------------------
-    move.w  step_setget(a2),d1
+    move.w  (a2)+,d1
     move.l  (a1,d1),d2
     ilword  d2
     move.l  d2,ctx_block(a0,d1)
     add.l   d2,d0
     ; ---------------------------------
-    add.l   step_constant(a2),d0
+    add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    move.w  step_rotation(a2),d2
+    move.w  (a2)+,d2
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
     ; ---------------------------------
@@ -278,7 +278,6 @@ MD5_Body:
     move.l   d5,d6
     move.l   d0,d5
     ; ---------------------------------
-    lea     step_SIZEOF(a2),a2
     dbf     d3,.stepLoopF
     ; ---------------------------------
     moveq   #16-1,d3
@@ -289,12 +288,12 @@ MD5_Body:
     and.l   d7,d0
     eor.l   d6,d0
     ; ---------------------------------
-    move.w  step_setget(a2),d1
+    move.w  (a2)+,d1
     add.l   ctx_block(a0,d1),d0
     ; ---------------------------------
-    add.l   step_constant(a2),d0
+    add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    move.w  step_rotation(a2),d2
+    move.w  (a2)+,d2
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
     ; ---------------------------------
@@ -303,7 +302,6 @@ MD5_Body:
     move.l   d5,d6
     move.l   d0,d5
     ; ---------------------------------
-    lea     step_SIZEOF(a2),a2
     dbf     d3,.stepLoopG
     ; ---------------------------------
     moveq   #16-1,d3
@@ -313,12 +311,12 @@ MD5_Body:
     eor.l   d6,d0
     eor.l   d7,d0
     ; ---------------------------------
-    move.w  step_setget(a2),d1
+    move.w  (a2)+,d1
     add.l   ctx_block(a0,d1),d0
     ; ---------------------------------
-    add.l   step_constant(a2),d0
+    add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    move.w  step_rotation(a2),d2
+    move.w  (a2)+,d2
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
     ; ---------------------------------
@@ -327,7 +325,6 @@ MD5_Body:
     move.l   d5,d6
     move.l   d0,d5
     ; ---------------------------------
-    lea     step_SIZEOF(a2),a2
     dbf     d3,.stepLoopH
     ; ---------------------------------
     moveq   #16-1,d3
@@ -338,12 +335,12 @@ MD5_Body:
     or.l    d5,d0
     eor.l   d6,d0
     ; ---------------------------------
-    move.w  step_setget(a2),d1
+    move.w  (a2)+,d1
     add.l   ctx_block(a0,d1),d0
     ; ---------------------------------
-    add.l   step_constant(a2),d0
+    add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    move.w  step_rotation(a2),d2
+    move.w  (a2)+,d2
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
     ; ---------------------------------
@@ -352,7 +349,6 @@ MD5_Body:
     move.l   d5,d6
     move.l   d0,d5
     ; ---------------------------------
-    lea     step_SIZEOF(a2),a2
     dbf     d3,.stepLoopI
     ; ---------------------------------
     add.l   d4,ctx_a(a0)
@@ -371,259 +367,259 @@ MD5_Body:
 * 64 steps
 .steps:
          dc.w 0<<2
-         dc.w 7
          dc.l $d76aa478 
+         dc.w 7
 
          dc.w 1<<2
-         dc.w 12
          dc.l $e8c7b756 
+         dc.w 12
 
          dc.w 2<<2
-         dc.w 17
          dc.l $242070db 
+         dc.w 17
 
          dc.w 3<<2
-         dc.w 22
          dc.l $c1bdceee 
+         dc.w 22
 
          dc.w 4<<2
-         dc.w 7
          dc.l $f57c0faf 
+         dc.w 7
 
          dc.w 5<<2
-         dc.w 12
          dc.l $4787c62a 
+         dc.w 12
 
          dc.w 6<<2
-         dc.w 17
          dc.l $a8304613 
+         dc.w 17
 
          dc.w 7<<2
-         dc.w 22
          dc.l $fd469501 
+         dc.w 22
 
          dc.w 8<<2
-         dc.w 7
          dc.l $698098d8 
-
-         dc.w 9<<2
-         dc.w 12
-         dc.l $8b44f7af 
-
-         dc.w 10<<2
-         dc.w 17
-         dc.l $ffff5bb1 
-
-         dc.w 11<<2
-         dc.w 22
-         dc.l $895cd7be 
-
-         dc.w 12<<2
          dc.w 7
-         dc.l $6b901122 
 
-         dc.w 13<<2
+         dc.w 9<<2
+         dc.l $8b44f7af 
          dc.w 12
-         dc.l $fd987193 
 
-         dc.w 14<<2
+         dc.w 10<<2
+         dc.l $ffff5bb1 
          dc.w 17
-         dc.l $a679438e 
 
-         dc.w 15<<2
+         dc.w 11<<2
+         dc.l $895cd7be 
          dc.w 22
+
+         dc.w 12<<2
+         dc.l $6b901122 
+         dc.w 7
+
+         dc.w 13<<2
+         dc.l $fd987193 
+         dc.w 12
+
+         dc.w 14<<2
+         dc.l $a679438e 
+         dc.w 17
+
+         dc.w 15<<2
          dc.l $49b40821 
+         dc.w 22
 
          dc.w 1<<2
-         dc.w 5
          dc.l $f61e2562 
+         dc.w 5
 
          dc.w 6<<2
-         dc.w 9
          dc.l $c040b340 
+         dc.w 9
 
          dc.w 11<<2
-         dc.w 14
          dc.l $265e5a51 
+         dc.w 14
 
          dc.w 0<<2
-         dc.w 20
          dc.l $e9b6c7aa 
+         dc.w 20
 
          dc.w 5<<2
-         dc.w 5
          dc.l $d62f105d 
+         dc.w 5
 
          dc.w 10<<2
-         dc.w 9
          dc.l $02441453 
+         dc.w 9
 
          dc.w 15<<2
-         dc.w 14
          dc.l $d8a1e681 
+         dc.w 14
 
          dc.w 4<<2
-         dc.w 20
          dc.l $e7d3fbc8 
+         dc.w 20
 
          dc.w 9<<2
-         dc.w 5
          dc.l $21e1cde6 
-
-         dc.w 14<<2
-         dc.w 9
-         dc.l $c33707d6 
-
-         dc.w 3<<2
-         dc.w 14
-         dc.l $f4d50d87 
-
-         dc.w 8<<2
-         dc.w 20
-         dc.l $455a14ed 
-
-         dc.w 13<<2
          dc.w 5
-         dc.l $a9e3e905 
 
-         dc.w 2<<2
+         dc.w 14<<2
+         dc.l $c33707d6 
          dc.w 9
-         dc.l $fcefa3f8 
 
-         dc.w 7<<2
+         dc.w 3<<2
+         dc.l $f4d50d87 
          dc.w 14
-         dc.l $676f02d9 
 
-         dc.w 12<<2
+         dc.w 8<<2
+         dc.l $455a14ed 
          dc.w 20
+
+         dc.w 13<<2
+         dc.l $a9e3e905 
+         dc.w 5
+
+         dc.w 2<<2
+         dc.l $fcefa3f8 
+         dc.w 9
+
+         dc.w 7<<2
+         dc.l $676f02d9 
+         dc.w 14
+
+         dc.w 12<<2
          dc.l $8d2a4c8a 
+         dc.w 20
 
          dc.w 5<<2
-         dc.w 4
          dc.l $fffa3942 
+         dc.w 4
 
          dc.w 8<<2
-         dc.w 11
          dc.l $8771f681 
+         dc.w 11
 
          dc.w 11<<2
-         dc.w 16
          dc.l $6d9d6122 
+         dc.w 16
 
          dc.w 14<<2
-         dc.w 23
          dc.l $fde5380c 
+         dc.w 23
 
          dc.w 1<<2
-         dc.w 4
          dc.l $a4beea44 
+         dc.w 4
 
          dc.w 4<<2
-         dc.w 11
          dc.l $4bdecfa9 
+         dc.w 11
 
          dc.w 7<<2
-         dc.w 16
          dc.l $f6bb4b60 
+         dc.w 16
 
          dc.w 10<<2
-         dc.w 23
          dc.l $bebfbc70 
+         dc.w 23
 
          dc.w 13<<2
-         dc.w 4
          dc.l $289b7ec6 
+         dc.w 4
 
          dc.w 0<<2
-         dc.w 11
          dc.l $eaa127fa 
+         dc.w 11
 
          dc.w 3<<2
-         dc.w 16
          dc.l $d4ef3085 
+         dc.w 16
 
          dc.w 6<<2
-         dc.w 23
          dc.l $04881d05 
+         dc.w 23
 
          dc.w 9<<2
-         dc.w 4
          dc.l $d9d4d039 
+         dc.w 4
 
          dc.w 12<<2
-         dc.w 11
          dc.l $e6db99e5 
+         dc.w 11
 
          dc.w 15<<2
-         dc.w 16
          dc.l $1fa27cf8 
+         dc.w 16
 
          dc.w 2<<2
-         dc.w 23
          dc.l $c4ac5665 
+         dc.w 23
 
          dc.w 0<<2
-         dc.w 6
          dc.l $f4292244 
+         dc.w 6
 
          dc.w 7<<2
-         dc.w 10
          dc.l $432aff97 
+         dc.w 10
 
          dc.w 14<<2
-         dc.w 15
          dc.l $ab9423a7 
+         dc.w 15
 
          dc.w 5<<2
-         dc.w 21
          dc.l $fc93a039 
+         dc.w 21
 
          dc.w 12<<2
-         dc.w 6
          dc.l $655b59c3 
+         dc.w 6
 
          dc.w 3<<2
-         dc.w 10
          dc.l $8f0ccc92 
+         dc.w 10
 
          dc.w 10<<2
-         dc.w 15
          dc.l $ffeff47d 
+         dc.w 15
 
          dc.w 1<<2
-         dc.w 21
          dc.l $85845dd1 
+         dc.w 21
 
          dc.w 8<<2
-         dc.w 6
          dc.l $6fa87e4f 
+         dc.w 6
 
          dc.w 15<<2
-         dc.w 10
          dc.l $fe2ce6e0 
+         dc.w 10
 
          dc.w 6<<2
-         dc.w 15
          dc.l $a3014314 
+         dc.w 15
 
          dc.w 13<<2
-         dc.w 21
          dc.l $4e0811a1 
+         dc.w 21
 
          dc.w 4<<2
-         dc.w 6
          dc.l $f7537e82 
+         dc.w 6
 
          dc.w 11<<2
-         dc.w 10
          dc.l $bd3af235 
+         dc.w 10
 
          dc.w 2<<2
-         dc.w 15
          dc.l $2ad7d2bb 
+         dc.w 15
 
          dc.w 9<<2
-         dc.w 21
          dc.l $eb86d391 
+         dc.w 21
 
          dc   -1 ; END
