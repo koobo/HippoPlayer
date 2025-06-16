@@ -14,14 +14,14 @@ TEST=1
   endif
 
     STRUCTURE MD5Ctx,0
-        ULONG  ctx_lo
-        ULONG  ctx_hi
         ULONG  ctx_a
         ULONG  ctx_b
         ULONG  ctx_c
         ULONG  ctx_d
         STRUCT ctx_buffer,64
         STRUCT ctx_block,16*4
+        ULONG  ctx_lo
+        ULONG  ctx_hi
     LABEL MD5Ctx_SIZEOF
 
 
