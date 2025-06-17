@@ -252,6 +252,9 @@ MD5_Body:
     ; ---------------------------------
     movem.l ctx_a(a0),d4/d5/d6/d7
     lea     .steps(pc),a2
+    ; First loop: copy data
+    move.l  a1,a4
+    lea     ctx_block(a0),a6
     ; ---------------------------------
     moveq   #16-1,d3
 .stepLoopF:
@@ -261,10 +264,13 @@ MD5_Body:
     and.l   d5,d0
     eor.l   d7,d0
     ; ---------------------------------
-    move.w  (a2)+,d1
-    move.l  (a1,d1),d2
+    ;move.w  (a2)+,d1
+    ;addq    #2,a2
+    ;move.l  (a1,d1),d2
+    move.l  (a4)+,d2
     ilword  d2
-    move.l  d2,ctx_block(a0,d1)
+    ;move.l  d2,ctx_block(a0,d1)
+    move.l  d2,(a6)+
     add.l   d2,d0
     ; ---------------------------------
     add.l   (a2)+,d0
@@ -366,67 +372,67 @@ MD5_Body:
 
 * 64 steps
 .steps:
-         dc.w 0<<2
+;         dc.w 0<<2
          dc.l $d76aa478 
          dc.w 7
 
-         dc.w 1<<2
+;         dc.w 1<<2
          dc.l $e8c7b756 
          dc.w 12
 
-         dc.w 2<<2
+;         dc.w 2<<2
          dc.l $242070db 
          dc.w 17
 
-         dc.w 3<<2
+;         dc.w 3<<2
          dc.l $c1bdceee 
          dc.w 22
 
-         dc.w 4<<2
+;         dc.w 4<<2
          dc.l $f57c0faf 
          dc.w 7
 
-         dc.w 5<<2
+;         dc.w 5<<2
          dc.l $4787c62a 
          dc.w 12
 
-         dc.w 6<<2
+;         dc.w 6<<2
          dc.l $a8304613 
          dc.w 17
 
-         dc.w 7<<2
+;         dc.w 7<<2
          dc.l $fd469501 
          dc.w 22
 
-         dc.w 8<<2
+;         dc.w 8<<2
          dc.l $698098d8 
          dc.w 7
 
-         dc.w 9<<2
+;         dc.w 9<<2
          dc.l $8b44f7af 
          dc.w 12
 
-         dc.w 10<<2
+;         dc.w 10<<2
          dc.l $ffff5bb1 
          dc.w 17
 
-         dc.w 11<<2
+;         dc.w 11<<2
          dc.l $895cd7be 
          dc.w 22
 
-         dc.w 12<<2
+;         dc.w 12<<2
          dc.l $6b901122 
          dc.w 7
 
-         dc.w 13<<2
+;         dc.w 13<<2
          dc.l $fd987193 
          dc.w 12
 
-         dc.w 14<<2
+;         dc.w 14<<2
          dc.l $a679438e 
          dc.w 17
 
-         dc.w 15<<2
+;         dc.w 15<<2
          dc.l $49b40821 
          dc.w 22
 
