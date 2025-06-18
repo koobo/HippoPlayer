@@ -1,11 +1,15 @@
-TODO:
+FIXED: TODO:
+- modlen calc problem: furzogue.mod
+-- B03 in the last row of last position
+
+FIXED: TODO:
 - hawkeye.TME
 - infowindow: viimeinen rivi ei scrollaannu esiin "year: 1991"
   jos on pieni ikkuna
 
 TODO:
 - Zoomed mode:
--- resize gadget is visible, it should not
+-- resize gadget is visible, it should not, MINOR
 
 FIXED: TODO:
 - kick3.2
@@ -33,7 +37,7 @@ FIXED: TODO:
 - synaptic gap ii.mod -> B-komento hyppää samaan patterniin ja
   jää looppiin
 
-OK: TODO:
+FIXED: TODO:
 - list mode button tooltip does not work
 
 TODO:

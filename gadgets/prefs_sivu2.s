@@ -73,7 +73,7 @@ laren1t	dc.b 1,0,1,0
 	dc.l 0,laren1tx,0
 laren1tx	dc.b "PT replayer..",0
 	even
-pbutton3	dc.l gadgetEnablePositionSlider
+pbutton3	dc.l 0
 	dc.w 406,51,28,12,3,1,1
 	dc.l 0,0,pbutton3t,0,0
 	dc.w 0
@@ -83,22 +83,3 @@ pbutton3t	dc.b 1,0,1,0
 	dc.l 0,pbutton3tx,0
 pbutton3tx	dc.b "Protracker tempo..",0
 	even
-
-gadgetEnablePositionSlider
-    dc.l    0
-	dc.w 406,51+14*2,28,12,3,1,1
-	dc.l 0,0,.pbutton3t,0,0
-	dc.w 0
-	dc.l 0
-.pbutton3t	dc.b 1,0,1,0
-	dc.w -148,2
-	dc.l 0,.pbutton3tx,.nextTxt
-
-.nextTxt	dc.b 1,0,1,0
-	dc.w -148,2-12
-	dc.l 0,.pbutton3tx2,0
-
-.pbutton3tx2 dc.b "Play mode button",0
-.pbutton3tx	 dc.b "position slider...",0
-	even
-

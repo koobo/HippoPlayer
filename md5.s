@@ -1,19 +1,31 @@
-;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
+;APS00000088000000880000008800000088000000880000008800000088000000880000008800000088
+  ifnd __VASM
+	incdir	include:
+	include exec/types.i
+	include mucro.i
 
+ilword	macro
+	ror	#8,\1
+	swap	\1
+	ror	#8,\1
+	endm
+
+TEST=1
+  endif
 
     STRUCTURE MD5Ctx,0
-        ULONG  ctx_lo
-        ULONG  ctx_hi
         ULONG  ctx_a
         ULONG  ctx_b
         ULONG  ctx_c
         ULONG  ctx_d
         STRUCT ctx_buffer,64
         STRUCT ctx_block,16*4
+        ULONG  ctx_lo
+        ULONG  ctx_hi
     LABEL MD5Ctx_SIZEOF
 
 
-    REM
+	ifd TEST
 main:
     lea     .ctx,a0
     jsr     MD5_Init
@@ -35,8 +47,8 @@ input
 ;	incbin	"actimpls.mod"	
 ;	incbin	"outofsilence"
 inputE
-    even 
-     EREM
+    even
+     endif
 
 
 * In:
@@ -133,11 +145,6 @@ MD5_Update:
     rts
 
 
-;ilword	macro
-;	ror	#8,\1
-;	swap	\1
-;	ror	#8,\1
-;	endm
 
 * In:
 *   a0 = context
@@ -220,16 +227,16 @@ MD5_Final:
     rts
 
     rsreset
-step_func       rs.b       1
-step_rotation   rs.b       1
 step_setget     rs.w       1
 step_constant   rs.l       1
+step_rotation   rs.w       1
 step_SIZEOF     rs.b       0
 
 funcF = 0
 funcG = 1
 funcH = 2
 funcI = 3
+
 
 
 
@@ -244,414 +251,382 @@ MD5_Body:
 .loop
     ; ---------------------------------
     movem.l ctx_a(a0),d4/d5/d6/d7
-
     lea     .steps(pc),a2
-    move.b  step_func(a2),d0
-.stepLoop
-    beq     .funcF
-    subq.b  #1,d0
-    beq     .funcG
-    subq.b  #1,d0
-    beq     .funcH
-.funcI:
-    ;(y) ^ ((x) | ~(z))
-    move.l  d7,d0
-    not.l   d0
-    or.l    d5,d0
-    eor.l   d6,d0
-    bra     .funcDone
-
-.funcF:
+    ; First loop: copy data
+    move.l  a1,a4
+    lea     ctx_block(a0),a6
+    ; ---------------------------------
+    moveq   #0,d1
+    moveq   #16-1,d3
+.stepLoopF:
     ;((z) ^ ((x) & ((y) ^ (z))))
     move.l  d6,d0
     eor.l   d7,d0
     and.l   d5,d0
     eor.l   d7,d0
-    bra     .funcDone
-
-.funcG:
-    ;((y) ^ ((z) & ((x) ^ (y))))
-    move.l  d5,d0
-    eor.l   d6,d0
-    and.l   d7,d0
-    eor.l   d6,d0
-    bra     .funcDone
-
-.funcH:
-    ;(x) ^ (y) ^ (z)
-    move.l  d5,d0
-    eor.l   d6,d0
-    eor.l   d7,d0
-
-.funcDone:
-    * d0 = result
-
-    move.w  step_setget(a2),d1
-    bmi.b   .set                    * unlikely branch
-.get   
-    add.l   ctx_block(a0,d1),d0
-.cont
-    add.l   step_constant(a2),d0
+    ; ---------------------------------
+    ;move.w  (a2)+,d1
+    ;addq    #2,a2
+    ;move.l  (a1,d1),d2
+    move.l  (a4)+,d2
+    ilword  d2
+    ;move.l  d2,ctx_block(a0,d1)
+    move.l  d2,(a6)+
+    add.l   d2,d0
+    ; ---------------------------------
+    add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    move.b  step_rotation(a2),d2
+    move.w  (a2)+,d2
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
-
-* rotate the four 
-* d4 = a
-* d5 = b
-* d6 = c
-* d7 = d
+    ; ---------------------------------
     move.l   d7,d4
     move.l   d6,d7
     move.l   d5,d6
     move.l   d0,d5
     ; ---------------------------------
-    lea     step_SIZEOF(a2),a2
-    move.b  step_func(a2),d0
-    bpl     .stepLoop
+    dbf     d3,.stepLoopF
+    ; ---------------------------------
+    moveq   #16-1,d3
+.stepLoopG:
+    ;((y) ^ ((z) & ((x) ^ (y))))
+    move.l  d5,d0
+    eor.l   d6,d0
+    and.l   d7,d0
+    eor.l   d6,d0
+    ; ---------------------------------
+    move.b  (a2)+,d1
+    move.b  (a2)+,d2
+    add.l   ctx_block(a0,d1),d0
+    ; ---------------------------------
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    rol.l   d2,d0
+    add.l   d5,d0       * add ctx_b
+    ; ---------------------------------
+    move.l   d7,d4
+    move.l   d6,d7
+    move.l   d5,d6
+    move.l   d0,d5
+    ; ---------------------------------
+    dbf     d3,.stepLoopG
+    ; ---------------------------------
+    moveq   #16-1,d3
+.stepLoopH:
+    ;(x) ^ (y) ^ (z)
+    move.l  d5,d0
+    eor.l   d6,d0
+    eor.l   d7,d0
+    ; ---------------------------------
+    move.b  (a2)+,d1
+    move.b  (a2)+,d2
+    add.l   ctx_block(a0,d1),d0
+    ; ---------------------------------
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    rol.l   d2,d0
+    add.l   d5,d0       * add ctx_b
+    ; ---------------------------------
+    move.l   d7,d4
+    move.l   d6,d7
+    move.l   d5,d6
+    move.l   d0,d5
+    ; ---------------------------------
+    dbf     d3,.stepLoopH
+    ; ---------------------------------
+    moveq   #16-1,d3
+.stepLoopI:
+    ;(y) ^ ((x) | ~(z))
+    move.l  d7,d0
+    not.l   d0
+    or.l    d5,d0
+    eor.l   d6,d0
+    ; ---------------------------------
+    move.b  (a2)+,d1
+    move.b  (a2)+,d2
+    add.l   ctx_block(a0,d1),d0
+    ; ---------------------------------
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    rol.l   d2,d0
+    add.l   d5,d0       * add ctx_b
+    ; ---------------------------------
+    move.l   d7,d4
+    move.l   d6,d7
+    move.l   d5,d6
+    move.l   d0,d5
+    ; ---------------------------------
+    dbf     d3,.stepLoopI
     ; ---------------------------------
     add.l   d4,ctx_a(a0)
     add.l   d5,ctx_b(a0)
     add.l   d6,ctx_c(a0)
     add.l   d7,ctx_d(a0)
-
+    ; ---------------------------------
     lea     64(a1),a1
     cmp.l   a3,a1
     bne     .loop
 
     rts
 
-.set
-    ext.w   d1
-    move.l  (a1,d1),d2
-    ilword  d2
-    move.l  d2,ctx_block(a0,d1)
-    add.l   d2,d0
-    bra.b    .cont
-
 
 
 * 64 steps
 .steps:
-         dc.b funcF 
-         dc.b 7
-         dc.w $8000!0<<2
+;         dc.w 0<<2
          dc.l $d76aa478 
+         dc.w 7
 
-         dc.b funcF 
-         dc.b 12
-         dc.w $8000!1<<2
+;         dc.w 1<<2
          dc.l $e8c7b756 
+         dc.w 12
 
-         dc.b funcF 
-         dc.b 17
-         dc.w $8000!2<<2
+;         dc.w 2<<2
          dc.l $242070db 
+         dc.w 17
 
-         dc.b funcF 
-         dc.b 22
-         dc.w $8000!3<<2
+;         dc.w 3<<2
          dc.l $c1bdceee 
+         dc.w 22
 
-         dc.b funcF 
-         dc.b 7
-         dc.w $8000!4<<2
+;         dc.w 4<<2
          dc.l $f57c0faf 
+         dc.w 7
 
-         dc.b funcF 
-         dc.b 12
-         dc.w $8000!5<<2
+;         dc.w 5<<2
          dc.l $4787c62a 
+         dc.w 12
 
-         dc.b funcF 
-         dc.b 17
-         dc.w $8000!6<<2
+;         dc.w 6<<2
          dc.l $a8304613 
+         dc.w 17
 
-         dc.b funcF 
-         dc.b 22
-         dc.w $8000!7<<2
+;         dc.w 7<<2
          dc.l $fd469501 
+         dc.w 22
 
-         dc.b funcF 
-         dc.b 7
-         dc.w $8000!8<<2
+;         dc.w 8<<2
          dc.l $698098d8 
+         dc.w 7
 
-         dc.b funcF 
-         dc.b 12
-         dc.w $8000!9<<2
+;         dc.w 9<<2
          dc.l $8b44f7af 
+         dc.w 12
 
-         dc.b funcF 
-         dc.b 17
-         dc.w $8000!10<<2
+;         dc.w 10<<2
          dc.l $ffff5bb1 
+         dc.w 17
 
-         dc.b funcF 
-         dc.b 22
-         dc.w $8000!11<<2
+;         dc.w 11<<2
          dc.l $895cd7be 
+         dc.w 22
 
-         dc.b funcF 
-         dc.b 7
-         dc.w $8000!12<<2
+;         dc.w 12<<2
          dc.l $6b901122 
+         dc.w 7
 
-         dc.b funcF 
-         dc.b 12
-         dc.w $8000!13<<2
+;         dc.w 13<<2
          dc.l $fd987193 
+         dc.w 12
 
-         dc.b funcF 
-         dc.b 17
-         dc.w $8000!14<<2
+;         dc.w 14<<2
          dc.l $a679438e 
+         dc.w 17
 
-         dc.b funcF 
-         dc.b 22
-         dc.w $8000!15<<2
+;         dc.w 15<<2
          dc.l $49b40821 
+         dc.w 22
 
-         dc.b funcG 
+         dc.b 1<<2
          dc.b 5
-         dc.w 1<<2
          dc.l $f61e2562 
 
-         dc.b funcG 
+         dc.b 6<<2
          dc.b 9
-         dc.w 6<<2
          dc.l $c040b340 
 
-         dc.b funcG 
+         dc.b 11<<2
          dc.b 14
-         dc.w 11<<2
          dc.l $265e5a51 
 
-         dc.b funcG 
+         dc.b 0<<2
          dc.b 20
-         dc.w 0<<2
          dc.l $e9b6c7aa 
 
-         dc.b funcG 
+         dc.b 5<<2
          dc.b 5
-         dc.w 5<<2
          dc.l $d62f105d 
 
-         dc.b funcG 
+         dc.b 10<<2
          dc.b 9
-         dc.w 10<<2
          dc.l $02441453 
 
-         dc.b funcG 
+         dc.b 15<<2
          dc.b 14
-         dc.w 15<<2
          dc.l $d8a1e681 
 
-         dc.b funcG 
+         dc.b 4<<2
          dc.b 20
-         dc.w 4<<2
          dc.l $e7d3fbc8 
 
-         dc.b funcG 
+         dc.b 9<<2
          dc.b 5
-         dc.w 9<<2
          dc.l $21e1cde6 
 
-         dc.b funcG 
+         dc.b 14<<2
          dc.b 9
-         dc.w 14<<2
          dc.l $c33707d6 
 
-         dc.b funcG 
+         dc.b 3<<2
          dc.b 14
-         dc.w 3<<2
          dc.l $f4d50d87 
 
-         dc.b funcG 
+         dc.b 8<<2
          dc.b 20
-         dc.w 8<<2
          dc.l $455a14ed 
 
-         dc.b funcG 
+         dc.b 13<<2
          dc.b 5
-         dc.w 13<<2
          dc.l $a9e3e905 
 
-         dc.b funcG 
+         dc.b 2<<2
          dc.b 9
-         dc.w 2<<2
          dc.l $fcefa3f8 
 
-         dc.b funcG 
+         dc.b 7<<2
          dc.b 14
-         dc.w 7<<2
          dc.l $676f02d9 
 
-         dc.b funcG 
+         dc.b 12<<2
          dc.b 20
-         dc.w 12<<2
          dc.l $8d2a4c8a 
 
-         dc.b funcH 
+         dc.b 5<<2
          dc.b 4
-         dc.w 5<<2
          dc.l $fffa3942 
 
-         dc.b funcH 
+         dc.b 8<<2
          dc.b 11
-         dc.w 8<<2
          dc.l $8771f681 
 
-         dc.b funcH 
+         dc.b 11<<2
          dc.b 16
-         dc.w 11<<2
          dc.l $6d9d6122 
 
-         dc.b funcH 
+         dc.b 14<<2
          dc.b 23
-         dc.w 14<<2
          dc.l $fde5380c 
 
-         dc.b funcH 
+         dc.b 1<<2
          dc.b 4
-         dc.w 1<<2
          dc.l $a4beea44 
 
-         dc.b funcH 
+         dc.b 4<<2
          dc.b 11
-         dc.w 4<<2
          dc.l $4bdecfa9 
 
-         dc.b funcH 
+         dc.b 7<<2
          dc.b 16
-         dc.w 7<<2
          dc.l $f6bb4b60 
 
-         dc.b funcH 
+         dc.b 10<<2
          dc.b 23
-         dc.w 10<<2
          dc.l $bebfbc70 
 
-         dc.b funcH 
+         dc.b 13<<2
          dc.b 4
-         dc.w 13<<2
          dc.l $289b7ec6 
 
-         dc.b funcH 
+         dc.b 0<<2
          dc.b 11
-         dc.w 0<<2
          dc.l $eaa127fa 
 
-         dc.b funcH 
+         dc.b 3<<2
          dc.b 16
-         dc.w 3<<2
          dc.l $d4ef3085 
 
-         dc.b funcH 
+         dc.b 6<<2
          dc.b 23
-         dc.w 6<<2
          dc.l $04881d05 
 
-         dc.b funcH 
+         dc.b 9<<2
          dc.b 4
-         dc.w 9<<2
          dc.l $d9d4d039 
 
-         dc.b funcH 
+         dc.b 12<<2
          dc.b 11
-         dc.w 12<<2
          dc.l $e6db99e5 
 
-         dc.b funcH 
+         dc.b 15<<2
          dc.b 16
-         dc.w 15<<2
          dc.l $1fa27cf8 
 
-         dc.b funcH 
+         dc.b 2<<2
          dc.b 23
-         dc.w 2<<2
          dc.l $c4ac5665 
 
-         dc.b funcI 
+         dc.b 0<<2
          dc.b 6
-         dc.w 0<<2
          dc.l $f4292244 
 
-         dc.b funcI 
+         dc.b 7<<2
          dc.b 10
-         dc.w 7<<2
          dc.l $432aff97 
 
-         dc.b funcI 
+         dc.b 14<<2
          dc.b 15
-         dc.w 14<<2
          dc.l $ab9423a7 
 
-         dc.b funcI 
+         dc.b 5<<2
          dc.b 21
-         dc.w 5<<2
          dc.l $fc93a039 
 
-         dc.b funcI 
+         dc.b 12<<2
          dc.b 6
-         dc.w 12<<2
          dc.l $655b59c3 
 
-         dc.b funcI 
+         dc.b 3<<2
          dc.b 10
-         dc.w 3<<2
          dc.l $8f0ccc92 
 
-         dc.b funcI 
+         dc.b 10<<2
          dc.b 15
-         dc.w 10<<2
          dc.l $ffeff47d 
 
-         dc.b funcI 
+         dc.b 1<<2
          dc.b 21
-         dc.w 1<<2
          dc.l $85845dd1 
 
-         dc.b funcI 
+         dc.b 8<<2
          dc.b 6
-         dc.w 8<<2
          dc.l $6fa87e4f 
 
-         dc.b funcI 
+         dc.b 15<<2
          dc.b 10
-         dc.w 15<<2
          dc.l $fe2ce6e0 
 
-         dc.b funcI 
+         dc.b 6<<2
          dc.b 15
-         dc.w 6<<2
          dc.l $a3014314 
 
-         dc.b funcI 
+         dc.b 13<<2
          dc.b 21
-         dc.w 13<<2
          dc.l $4e0811a1 
 
-         dc.b funcI 
+         dc.b 4<<2
          dc.b 6
-         dc.w 4<<2
          dc.l $f7537e82 
 
-         dc.b funcI 
+         dc.b 11<<2
          dc.b 10
-         dc.w 11<<2
          dc.l $bd3af235 
 
-         dc.b funcI 
+         dc.b 2<<2
          dc.b 15
-         dc.w 2<<2
          dc.l $2ad7d2bb 
 
-         dc.b funcI 
+         dc.b 9<<2
          dc.b 21
-         dc.w 9<<2
          dc.l $eb86d391 
 
          dc   -1 ; END

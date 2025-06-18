@@ -47,7 +47,9 @@ ver	macro
 ;	dc.b	"v2.62ß (?.?.2025)"
 ;	dc.b	"v2.62 (4.4.2025)"
 ;	dc.b	"v2.63ß (?.?.2025)"
-	dc.b	"v2.63 (9.6.2025)"
+;	dc.b	"v2.63 (9.6.2025)"
+;	dc.b	"v2.64ß (?.?.2025)"
+	dc.b	"v2.64 (19.6.2025)"
 	endm	
 
 
@@ -433,6 +435,8 @@ prefs_showPositionSlider rs.b  1
 prefs_residboost      rs.b      1
 prefs_midimode        rs.b      1
 prefs_ps3mamigus      rs.b      1 
+prefs_disableInfoScroll rs.b    1
+                      rs.b      1 * padding
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -691,7 +695,7 @@ seed		rs.l	1		* randomgeneratorin SEED
 freezegads	rs.b	1		* ~0: Mainwindowin gadgetit OFF
 hippoporton	rs.b	1		* ~0: hippo portti initattu
 
-ciasaatu	rs.b	1		* 1: saatiin cia timeri
+ciasaatu	rs.b	1		* 0: saatiin cia timeri
 vbsaatu		rs.b	1		* 1: saatiin vb intti
 
 prefs_task	rs.l	1		* prefs-prosessi
@@ -1532,7 +1536,9 @@ disableShowStreamerError    rs.b       1
 
 showPositionSlider_new      rs.b       1
 showPositionSlider          = prefsdata+prefs_showPositionSlider
-
+disableInfoScroll_new      rs.b       1
+disableInfoScroll          = prefsdata+prefs_disableInfoScroll
+                            rs.b      1 * pad
 
 * Remote search popup stores the selected search mode here
 * SEARCH_MODLAND etc etc
@@ -1596,7 +1602,6 @@ umeMetaDataPtr  rs.l      1   * Ptr to metadata strings
 
 * Info text scroller
 infoScrollPos       rs.w      1 
-infoScrollWaitTicks rs.w      1 * ticks to wait before scrolling
 infoScrollMoveTicks rs.w      1
 infoScrollLineHeight rs.w     1
 infoScrollLength    rs.w      1 * pixels, height
@@ -1604,8 +1609,12 @@ infoScrollBitplane  rs.l      1
 infoScrollBitplaneW rs.w      1
 infoScrollBitplaneH rs.w      1
 infoScrollEnabled   rs.b      1
-infoScrollSmall     rs.b      1 * set if all text fits 
+infoWaitTick        rs.b      1
 infoScrollBitMap    rs.b      bm_SIZEOF-7*4 * for 1 bpl
+infoScrollLastTime  rs.l      2 * secs, micros
+
+sysTimerPort        rs.b      MP_SIZE
+sysTimerIORequest   rs.b      IOTV_SIZE
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -1791,6 +1800,15 @@ DPRINT macro
 	endc
 	endm
 
+DPRINTBYTE macro
+	ifne DEBUG
+    move.l  d0,-(sp)
+    moveq   #0,d0
+    move.b  \2,d0
+    DPRINT  \1
+    move.l  (sp)+,d0
+	endc
+	endm
 
 * delay
 DDELAY macro
@@ -2396,6 +2414,7 @@ PRINTOUT
 getmemCount 	dc.l	0
 freememCount	dc.l	0
 getmemTotal		dc.l	0
+freememTotal    dc.l    0
  endc
 
 
@@ -2544,6 +2563,8 @@ main:
 	move	#2,pen_2+2(a5)
 	move	#3,pen_3+2(a5)
 	move.b	#33,keycode(a5)		* keycode
+
+	st	ciasaatu(a5)            * initial state: no cia int
 
 	pushpea	poptofront(pc),poptofrontr(a5)
 
@@ -2800,7 +2821,8 @@ main:
 	pushpea	prefsFavorites(a0),bUu22(a0)
 	* Add "Button tooltips" prefs button to the page 2
 	;move.l	#prefsTooltips,eskimO
-	pushpea	prefsTooltips(a0),eskimO(a0)
+	;pushpea	prefsTooltips(a0),eskimO(a0)
+	pushpea	prefsTooltips(a0),bUu2(a0)
     ; Add sid mode button after the "MED rate" button
     pushpea prefsPlaySidMode(a0),nAMISKA5(a0)
 	endb	a0
@@ -3136,6 +3158,7 @@ main:
 	jsr	inforivit_clear
 	jsr	importFavoriteModulesFromDisk
 	jsr	initializeUHC
+    jsr initSysTime
 
 	DPRINT	"Loading group"
 
@@ -3541,7 +3564,7 @@ msgloop
 
 	lob	ReplyMsg
 
-	cmp.l	#IDCMP_CHANGEWINDOW,d2
+	cmp.l	#IDCMP_CHANGEWINDOW,d2       * V36
 	bne.b	.noChangeWindow
 	; Window resize events go into IDCMP_CHANGEWINDOW
 	; on kick 2.0+.
@@ -3551,19 +3574,19 @@ msgloop
 
 .noChangeWindow
 	cmp.l	#IDCMP_NEWSIZE,d2
-	bne.b	.noNewSize
+	bne 	.noNewSize
 	tst.b	uusikick(a5)
-	bne.b	.idcmpLoop
+	bne 	.idcmpLoop
 	; Use this event on kick1.3, as CHANGEWINDOW is not reported there.
 	bsr	mainWindowSizeChanged
-	bra.b	.idcmpLoop
+	bra 	.idcmpLoop
 .noNewSize
 
 	cmp.l	#IDCMP_RAWKEY,d2
-	bne.b	.noRawKey
+	bne 	.noRawKey
 	clr	userIdleTick(a5)	
 	bsr	nappuloita
-	bra.b	.idcmpLoop
+	bra 	.idcmpLoop
 .noRawKey	
 	* There will be a lot of mousemove messages.
 	* To keep the load light only take the first one and filter out the
@@ -3626,6 +3649,7 @@ exit
 	jsr	exportFavoriteModulesToDisk
 	jsr	exportSavedStateModulesToDisk
 	jsr	deinitUHC
+    jsr deinitSysTime
 * poistetaan loput prosessit...
 
 
@@ -3841,6 +3865,10 @@ exit
 	lsr.l	#8,d0 
 	lsr.l	#2,d0 
 	DPRINT "Getmem total: %ld kilobytes"
+	move.l  freememTotal(pc),d0 
+	lsr.l	#8,d0 
+	lsr.l	#2,d0 
+	DPRINT "Freemem total: %ld kilobytes"
 	move.l	getmemTotal(pc),d0
 	move.l	getmemCount(pc),d1
 	bne.b	.nz
@@ -4353,10 +4381,13 @@ handleUiRefreshSignal
 	;bsr	zipwindow
 
 	* Try to save favorite modules when user has been idle for a while
-	moveq	#0,d0 
-	move	userIdleTick(a5),d0 
-	cmp	#7,d0
-	blo.b	.notIdleEnough
+    moveq   #7,d0
+    tst.b    infoScrollEnabled(a5)
+    beq     .1
+    add     d0,d0
+.1
+    cmp     userIdleTick(a5),d0
+	bhs.b	.notIdleEnough
 	jsr	exportFavoriteModulesWithMessage
 .notIdleEnough
 
@@ -4428,7 +4459,6 @@ handleSignal2
 
 	* Do this to update favorite status if settings changed
 	jsr	handleFavoriteModuleConfigChange
-    jsr setPlayModeChangeButtonIcon
 
 	* Check if boxsize in prefs was changed
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
@@ -4505,6 +4535,9 @@ handleSignal2
 	lore	Intui,SizeWindow
 .sameHeight
 .boxSizeChanged
+
+    * Ensure this button is updated
+    jsr setPlayModeChangeButtonIcon
 
 ** ei saa rämpätä ikkunaa jos se ei oo oikeassa koossaan!!
 
@@ -4602,8 +4635,11 @@ zipwindow:
  	move	windowZippedSize+2(a5),d1
 	DPRINT	"height=%ld zipped=%ld"
  endif
+    DPRINTBYTE "=== prev kokolippu=%ld",kokolippu(a5)
+
 	cmp	windowZippedSize+2(a5),d0
 	bne.b	.biggified
+
 
 	* Zipped to small size
 	tst.b	kokolippu(a5)
@@ -4621,6 +4657,7 @@ zipwindow:
     
     jsr     switchToNormalLayoutNoRefresh
 	DPRINT	"small"
+
 	bra.b	.x
 
 .biggified
@@ -4632,7 +4669,10 @@ zipwindow:
 	move.l	4(a0),windowpos(a5)
 	bsr	wrender
 
-.x	popm	all
+.x	
+    DPRINTBYTE "=== new kokolippu=%ld",kokolippu(a5)
+
+    popm	all
 	rts
 
 
@@ -4702,6 +4742,8 @@ avaa_ikkuna:
 .new1	add	windowtop(a5),d0
 	move	d0,wsizey-winstruc(a0)
 	bsr	.leve
+
+    DPRINTBYTE "=== kokolippu=%ld",kokolippu(a5)
 
 	* What is this?
 	not.b	kokolippu(a5)
@@ -4776,9 +4818,12 @@ avaa_ikkuna:
 .gotWindow
 	move.l	d0,windowbase(a5)
 	bne.b	.ok
+.outOfMem
 	bsr	unlockscreen
 
-.opener	moveq	#-1,d0			* Ei auennut!
+.opener	
+    DPRINT  "FAILED WINDOW OPEN"
+    moveq	#-1,d0			* Ei auennut!
 	rts
 
 .leve	
@@ -4796,6 +4841,23 @@ avaa_ikkuna:
 	move.l	wd_RPort(a0),rastport(a5)
 	move.l	wd_UserPort(a0),userport(a5)
 	;move	wd_Height(a0),wkork(a5)
+
+    ; ---------------------------------
+    * Allocate space for the file slider
+    move.l  windowbase(a5),a0
+    moveq   #0,d0
+    move.w  wd_Height(a0),d0
+    lsl     #2,d0           * two planes, width 16 pix
+    move.l  #MEMF_CHIP!MEMF_CLEAR,d1
+    bsr     getmem
+    move.l  d0,slimDataPtr
+    bne     .gotSlim
+    move.l  windowbase(a5),a0
+    clr.l   windowbase(a5)
+    lore    Intui,CloseWindow
+    bra     .outOfMem
+.gotSlim
+    ; ---------------------------------
 
  if DEBUG
 	moveq	#0,d0
@@ -5030,7 +5092,7 @@ getscreeninfo
 
 	lob	FindDisplayInfo
 	move.l	d0,d4
-	beq.b	.ba
+	beq 	.ba
 
 	lea	-40(sp),sp
 	move.l	sp,a4
@@ -5040,11 +5102,19 @@ getscreeninfo
 	moveq	#0,d7
 
 	move.l	#DTAG_DISP,d1
-	bsr.b	.pa
+	bsr 	.pa
 	move	dis_PixelSpeed(a4),d5
 
+ if DEBUG
+    move.l  dis_PropertyFlags(a4),d0
+    DPRINT  "dis_PropertyFlags=%08.8lx"
+;#define DIPF_IS_FOREIGN         0x80000000      /* this mode is not native to the Amiga */
+    and.l   #$80000000,d0
+    DPRINT  "DIPF_FOREIGN=%ld"
+ endif
+
 	move.l	#DTAG_MNTR,d1
-	bsr.b	.pa
+	bsr 	.pa
 	move	mtr_TotalRows(a4),d6	
 	move	mtr_TotalColorClocks(a4),d7
 
@@ -5313,6 +5383,7 @@ wrender:
 	tst.b	kokolippu(a5)
 	beq	.pienehko
 
+    DPRINT  "wrender LARGE"
 
 	move.l	rastport(a5),a2
 	moveq	#4,d0
@@ -5345,9 +5416,12 @@ wrender:
 	tst.l	d7
 	bne.b	.clrloop
 
+    tst.b   showPositionSlider(a5)
+    beq     .skipThis
     lea     gadgetPlayModeChangeButton,a3
     movem.w 4(a3),d0/d1/d4/d5
     bsr     .cler
+.skipThis
 
 	bra.b	.oru
 
@@ -5521,6 +5595,8 @@ wrender:
     beq .sk
 	lea	gadgetListModeChangeButton-button1(a0),a0
     bsr	printkorva
+    tst.b   showPositionSlider(a5)
+    beq     .sk
 	lea	gadgetPlayModeChangeButton-gadgetListModeChangeButton(a0),a0
     bsr	printkorva
 .sk
@@ -5838,7 +5914,7 @@ mainWindowSizeChanged
  endif
 
 	* Set new boxsize into prefs gadget
-	bsr	setprefsbox
+	;;bsr	setprefsbox
 
 	* Signal to make changes happen
 	move.b	ownsignal2(a5),d1
@@ -5862,7 +5938,7 @@ configResizeGadget
 	bsr.b	disableResizeGadget
 	* Check if box is visible?
 	tst	boxsize(a5)
-	beq.b	enableResizeGadget\.small
+	beq	enableResizeGadget\.small
 
 * Enables the low right bottom resize gadget
 enableResizeGadget
@@ -5874,7 +5950,7 @@ enableResizeGadget
 	move	#6,gg_Width(a1)
 
 	* Set wd_MinSize to correspond to 3 rows
-	bsr.b	getFileboxYStartToD2
+	bsr 	getFileboxYStartToD2
 ;	add	#3*8+6,d2
     * NOTE: raise minsize to 5 due to extra space required
     * for search controls and/or list mode buttons
@@ -5885,13 +5961,21 @@ enableResizeGadget
 	add	windowbottom(a5),d0
 
 	add	d0,d2
-	move	d2,wd_MinHeight(a0)
+	;move	d2,wd_MinHeight(a0)
+
+    move    d2,d1       * min height
+    moveq   #-1,d3      * max height, UNLIMITED
+    moveq   #0,d0       * min width unchanged
+    moveq   #0,d2       * max width unchanged
+    lore    Intui,WindowLimits
+    DPRINT  "WindowLimits=%ld"
 
 	* Max size too, 47 lines down, total 50
-	moveq	#50-3,d0
-	mulu	listFontHeight(a5),d0
-	add	d0,d2
-
+;	moveq	#50-3,d0
+;	mulu	listFontHeight(a5),d0
+;	add	d0,d2
+;
+    moveq   #-1,d2
 	move	d2,wd_MaxHeight(a0)
 
 
@@ -5915,8 +5999,13 @@ refreshResizeGadget:
     tst.b   kokolippu(a5)
     beq.b   .x
 	push	a0
+    move.l  windowbase(a5),a0       * additional sanity check 
+    cmp.w   #40,wd_Height(a0)       * to avoid drawing size gadget on 
+    blo     .xx                     * small window
+    DPRINT  "refreshResizeGadget"
 	lea	gadgetResize,a0
 	bsr	refreshGadgetInA0
+.xx
 	pop	a0
 .x	rts
 
@@ -5987,7 +6076,12 @@ sulje_ikkuna:
 	move.l	46(a0),a1		* WB screen addr
 	move	14(a1),wbkorkeus(a5)	* WB:n korkeus
 	clr.l	windowbase(a5)
-	jmp	_LVOCloseWindow(a6)
+	jsr	_LVOCloseWindow(a6)
+
+    lea     slimDataPtr,a1  * free slider gfx buffer
+    move.l  (a1),a0
+    clr.l   (a1)
+    bra     freemem
 
 
 
@@ -6947,6 +7041,9 @@ freemem:
 	move.l	a0,d0
 	beq.b	.n
 	move.l	-(a0),d0
+ ifne DEBUG
+    add.l   d0,freememTotal
+ endc
 	move.l	a0,a1
 	move.l	4.w,a6
 	lob	FreeMem
@@ -7405,7 +7502,7 @@ zoomfilebox
 	move	boxsizez(a5),boxsize(a5)
 	bsr	enableResizeGadget
 .x
-	bsr	setprefsbox
+	;;bsr	setprefsbox
 	move.b	ownsignal2(a5),d1
 	jmp	signalit		* prefspäivitys-signaali
 	
@@ -8767,23 +8864,23 @@ nupit
 
 * boxsize
 ;	lea	meloni,a0
-	lea	meloni-juust0(a0),a0
-	move	#65535/(51-3),d0		* 65535/max
-	bsr	setknob
-	move	#65535*(8-3)/(51-3),d0		* 65535*arvo/max
-	bsr	setknob2
+;;	lea	meloni-juust0(a0),a0
+;;	move	#65535/(51-3),d0		* 65535/max
+;;	bsr	setknob
+;;	move	#65535*(8-3)/(51-3),d0		* 65535*arvo/max
+;;	bsr	setknob2
 
 * infosize
 ;	lea	eskimO,a0
-	lea	eskimO-meloni(a0),a0
-	move	#65535/(50-3),d0		* 65535/max
-	bsr.b	setknob
-	move	#65535*(16-3)/(50-3),d0		* 65535*arvo/max
-	bsr.b	setknob2
+;;	lea	eskimO-meloni(a0),a0
+;;	move	#65535/(50-3),d0		* 65535/max
+;;	bsr.b	setknob
+;;	move	#65535*(16-3)/(50-3),d0		* 65535*arvo/max
+;;	bsr.b	setknob2
 
 * timeout
-;	lea	kelloke,a0
-	lea	kelloke-eskimO(a0),a0
+	lea	kelloke,a0
+;	lea	kelloke-eskimO(a0),a0
 	move	#65535/1800,d0			* 65535/max
 	bsr.b	setknob
 ;	move	#65535*0/1800,d0		* 65535*arvo/max
@@ -10789,7 +10886,10 @@ reslider:
 	subq	#2+1,d0
 	move	d0,d1
 
-	lea	slim,a2
+;	lea	slim,a2
+    move.l  slimDataPtr,d2
+    beq     .bar            * should not happen
+    move.l  d2,a2
 	lea	slim1a(a0),a1
 	tst.b	uusikick(a5)
 	bne.b	.newz
@@ -13630,7 +13730,7 @@ loadprefs2
 	st	newdirectory(a5)		* Lippu: uusi hakemisto
 
 	bsr.b	sliderit
-	bsr	setprefsbox
+	;;bsr	setprefsbox
 	bsr	mainpriority
 
 .eee	
@@ -13740,16 +13840,16 @@ sliderit
 	bsr	setknob2
 
 * moduleinfo
-	lea	eskimO-kelloke2(a0),a0
-	move	infosize(a5),d0
-	subq	#3,d0
-	mulu	#65535,d0
-	divu	#50-3,d0
-	bsr	setknob2
+;	lea	eskimO-kelloke2(a0),a0
+;	move	infosize(a5),d0
+;	subq	#3,d0
+;	mulu	#65535,d0
+;	divu	#50-3,d0
+;	bsr	setknob2
 
 
 * samplebuffersize
-	lea	sIPULI-eskimO(a0),a0
+	lea	sIPULI,a0
 	moveq	#0,d0
 	move.b	samplebufsiz0(a5),d0
 	mulu	#65535,d0
@@ -13806,24 +13906,24 @@ sliderit
 	bra	setknob2
 
 * Update box size slider in prefs
-setprefsbox
-* boxsize
-	lea	meloni,a0
-	move	boxsize(a5),d0
-	beq.b	.x
-	subq	#2,d0
-.x	mulu	#65535,d0
-	divu	#51-3,d0
-	bra	setknob2
+;setprefsbox
+;* boxsize
+;	lea	meloni,a0
+;	move	boxsize(a5),d0
+;	beq.b	.x
+;	subq	#2,d0
+;.x	mulu	#65535,d0
+;	divu	#51-3,d0
+;	bra	setknob2
 
-setPrefsInfoBox
-	lea	eskimO,a0
-	move	infosize(a5),d0
-	subq	#3,d0
-	mulu	#65535,d0
-	divu	#50-3,d0
-	bra		setknob2
-
+;setPrefsInfoBox
+;	lea	eskimO,a0
+;	move	infosize(a5),d0
+;	subq	#3,d0
+;	mulu	#65535,d0
+;	divu	#50-3,d0
+;	bra		setknob2
+;
 saveprefs
 	DPRINT	"Prefs save"
 	move.l	windowbase(a5),d0
@@ -14372,7 +14472,7 @@ prefs_code
 	move.b	doubleclick(a5),dclick_new(a5)
 	move.b	startuponoff(a5),startuponoff_new(a5)
 	move	boxsize(a5),boxsize_new(a5)
-	bsr	setprefsbox
+	;;bsr	setprefsbox
 	move	timeout(a5),timeout_new(a5)
 	move.b	hotkey(a5),hotkey_new(a5)
 	move.b	contonerr(a5),cerr_new(a5)
@@ -14389,7 +14489,7 @@ prefs_code
 	move.b	earlyload(a5),early_new(a5)
 	move.b	xfd(a5),xfd_new(a5)
 	move	infosize(a5),infosize_new(a5)
-	bsr	setPrefsInfoBox
+	;;bsr	setPrefsInfoBox
 	move.b	ps3msettings(a5),ps3msettings_new(a5)
 	move.b	samplebufsiz0(a5),samplebufsiz_new(a5)
 	;move.b	cybercalibration(a5),cybercalibration_new(a5)
@@ -14413,6 +14513,7 @@ prefs_code
 	move.b	altbuttons(a5),altbuttons_new(a5)
 	move.b	mhiEnable(a5),mhiEnable_new(a5)
 	move.b	showPositionSlider(a5),showPositionSlider_new(a5)
+	move.b	disableInfoScroll(a5),disableInfoScroll_new(a5)
     move.b  ps3mamigus(a5),ps3mamigus_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
@@ -14451,10 +14552,10 @@ prefs_code
 	move	pslider2s-pslider1s(a0),tfmxmixpot_new(a5)
 	move	juustos-pslider1s(a0),volumeboostpot_new(a5)
 	move	juust0s-pslider1s(a0),stereofactorpot_new(a5)
-	move	melonis-pslider1s(a0),boxsizepot_new(a5)
+	;move	melonis-pslider1s(a0),boxsizepot_new(a5)
 	move	kellokes-pslider1s(a0),timeoutpot_new(a5)
 	move	kelloke2s-pslider1s(a0),alarmpot_new(a5)
-	move	eskimOs-pslider1s(a0),infosizepot_new(a5)
+	;move	eskimOs-pslider1s(a0),infosizepot_new(a5)
 	move	sIPULIs-pslider1s(a0),samplebufsizpot_new(a5)
 	;move	sIPULI2s-pslider1s(a0),sampleforceratepot_new(a5)
 	move	ahiG4s-pslider1s(a0),ahi_ratepot_new(a5)
@@ -14887,6 +14988,7 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	medfastmemplay_new(a5),medfastmemplay(a5)
     move.b  mhiEnable_new(a5),mhiEnable(a5)
     move.b  ps3mamigus_new(a5),ps3mamigus(a5)
+    move.b  disableInfoScroll_new(a5),disableInfoScroll(a5)
 
     move.b  showPositionSlider(a5),d0
     move.b  showPositionSlider_new(a5),showPositionSlider(a5)
@@ -15115,8 +15217,8 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move	tfmxmixpot_new(a5),pslider2s-pslider1s(a0)
 	move	volumeboostpot_new(a5),juustos-pslider1s(a0)
 	move	stereofactorpot_new(a5),juust0s-pslider1s(a0)
-	move	boxsizepot_new(a5),melonis-pslider1s(a0)
-	move	infosizepot_new(a5),eskimOs-pslider1s(a0)
+	;move	boxsizepot_new(a5),melonis-pslider1s(a0)
+	;move	infosizepot_new(a5),eskimOs-pslider1s(a0)
 	move	timeoutpot_new(a5),kellokes-pslider1s(a0)		
 	move	alarmpot_new(a5),kelloke2s-pslider1s(a0)
 	move	samplebufsizpot_new(a5),sIPULIs-pslider1s(a0)	
@@ -15357,8 +15459,8 @@ mousemoving2			* Päivitetään propgadgetteja
 .x
 	subq	#1,d0
 	bne.b	.2
-	bsr	pbox		* box size
-	bsr	pinfosize
+;	bsr	pbox		* box size
+;	bsr	pinfosize
 	bra.b	.z
 .2
 	subq	#1,d0
@@ -15543,9 +15645,9 @@ pupdate:				* Ikkuna päivitys
 	bne.b	.3
 
 	;bsr	psup3			* scope mode
-	bsr	pbox			* box size
+	;;bsr	pbox			* box size
 	;bsr	psup0			* scope on/off
-	bsr	pinfosize		* info size
+	;;bsr	pinfosize		* info size
 	bsr	pupdate1		* show
 	bsr	pselscreen		* screen
 	;bsr	pscopebar		* scope bars
@@ -15565,6 +15667,8 @@ pupdate:				* Ikkuna päivitys
 	bsr	pSpectrumScope
 	bsr	pSpectrumScopeBars
 	bsr	pListFont
+    bsr ppositionslider * posiion slider
+    bsr pdisableinfoscroll
 	bra	.x
 
 .3	subq	#1,d0
@@ -15579,7 +15683,6 @@ pupdate:				* Ikkuna päivitys
 	bsr	ppgmode			* pgmode
 	bsr	ppgstat			* pgstatus
 	bsr	pdbf			* volume fade
-    bsr ppositionslider * posiion slider
 	bra 	.x
 
 .4	subq	#1,d0
@@ -15808,13 +15911,15 @@ gadgetsup2
 *** Sivu1
 	dr	rpbutton1	* show		* pbutton2
 	dr	rselscreen	* publicscreen
-	dr	rbox		* boxsize
+	;;dr	rbox		* boxsize
+    dr  rpositionslider * position slider
+    dr  rdisableinfoscroll * disable info scroll
 	dr	rfont		* font selector
 	;dr	rquad		* scope on/off
 	;dr	rquadm		* scopen moodi	* pout3
 	;dr	rscopebar	* bar mode scopeille
 	dr	rprefx		* prefix cut
-	dr	rinfosize	* module info size
+	;;dr	rinfosize	* module info size
 	dr  	rtooltips     * tooltips
 	dr  	raltbuttons * alt buttons
 	dr	rQuadraScope
@@ -15839,7 +15944,6 @@ gadgetsup2
 	dr	rvbtimer	* vblank timer
 	dr	rptmix		* pt norm/fast/ps3m
 	dr	rpbutton3	* pt tempo
-    dr  rpositionslider * position slider
 ;	dr	rpslider2	* tfmx rate
 ;	dr	rpslider2b	* samplebufsiz
 ;	dr	rpslider2c	* sampleforcerate
@@ -16341,6 +16445,15 @@ rpositionslider
 ppositionslider
     move.b  showPositionSlider_new(a5),d0
 	lea	gadgetEnablePositionSlider,a0
+	bra	tickaa
+
+** Position slider
+rdisableinfoscroll
+	not.b	disableInfoScroll_new(a5)
+
+pdisableinfoscroll
+    move.b  disableInfoScroll_new(a5),d0
+	lea	gadgetDisableInfoScroll,a0
 	bra	tickaa
 
 
@@ -16962,50 +17075,50 @@ otag4	dc.l	RT_PubScrName,pubScreenNameTags+var_b
 *** Box size
 
 rbox
-pbox
-	lea	meloni,a2
-	moveq	#51-3,d0		* max
-	bsr	nappilasku
-	beq.b	.fe
-	addq	#2,d0
-
-.fe	move	d0,boxsize_new(a5)
-
-	lea	.i(pC),a0
-	bsr	desmsg2
-	lea	desbuf2(a5),a0
-
-;	movem	meloni+4,d0/d1
-	movem	4(a2),d0/d1
-	sub	#26,d0
-	addq	#8,d1
-
-	bra	print3b
-
-.i dc.b	"%-2.2ld",0
- even
-
-rinfosize
-pinfosize
-	lea	eskimO,a2
-	moveq	#50-3,d0		* max
-	bsr	nappilasku
-	addq.l	#3,d0
-	move	d0,infosize_new(a5)
-
-	lea	.i(pC),a0
-	bsr	desmsg2
-	lea	desbuf2(a5),a0
-
-;	movem	eskimO+4,d0/d1
-	movem	4(a2),d0/d1
-	sub	#26,d0
-	addq	#8,d1
-
-	bra	print3b
-
-.i dc.b	"%-2.2ld",0
- even
+;;pbox
+;;	lea	meloni,a2
+;;	moveq	#51-3,d0		* max
+;;	bsr	nappilasku
+;;	beq.b	.fe
+;;	addq	#2,d0
+;;
+;;.fe	move	d0,boxsize_new(a5)
+;;
+;;	lea	.i(pC),a0
+;;	bsr	desmsg2
+;;	lea	desbuf2(a5),a0
+;;
+;;;	movem	meloni+4,d0/d1
+;;	movem	4(a2),d0/d1
+;;	sub	#26,d0
+;;	addq	#8,d1
+;;
+;;	bra	print3b
+;;
+;;.i dc.b	"%-2.2ld",0
+;; even
+;;
+;;rinfosize
+;;pinfosize
+;;	lea	eskimO,a2
+;;	moveq	#50-3,d0		* max
+;;	bsr	nappilasku
+;;	addq.l	#3,d0
+;;	move	d0,infosize_new(a5)
+;;
+;;	lea	.i(pC),a0
+;;	bsr	desmsg2
+;;	lea	desbuf2(a5),a0
+;;
+;;;	movem	eskimO+4,d0/d1
+;;	movem	4(a2),d0/d1
+;;	sub	#26,d0
+;;	addq	#8,d1
+;;
+;;	bra	print3b
+;;
+;;.i dc.b	"%-2.2ld",0
+;; even
 
 
 ********* Doubleclick
@@ -17733,9 +17846,10 @@ pListFont
 pscreen
 	tst.b	gfxcard(a5)
 	beq.b	.nop
-	lea	.dea(pc),a0
-	bra.b	.do
-
+;	lea	.dea(pc),a0
+;	bra.b	.do
+    rts
+    
 .nop
 	moveq	#0,d0
 	move	vertfreq(a5),d0
@@ -17749,15 +17863,18 @@ pscreen
 	bsr	desmsg2
 	lea	desbuf2(a5),a0
 
-.do	moveq	#16,d0
-	move	#122+18,d1
+.do	
+;    moveq	#16,d0
+;	move	#122+18,d1
+    move	#260,d0
+	move	#42,d1
 	add	windowtop(a5),d1
 	bra	print3b
 
 
 .de
 	dc.b	"Screen: %ldHz/%ldkHz",0
-.dea	dc.b	"A gfx card detected.",0
+;.dea	dc.b	"A gfx card detected.",0
  even
 
 
@@ -19724,6 +19841,7 @@ delete
 *
 
 execuutti
+ REM ; remove this, very silly
 	lea	-300(sp),sp
 	move.l	sp,a4
 	clr.b	(a4)
@@ -19779,7 +19897,8 @@ execuutti
 
 .title	dc.b	"Select executable",0
  even
-
+ EREM
+ 
 *******************************************************************************
 * Kahden ylimmäisen tekstirivin hommat (loota)
 *******
@@ -22191,7 +22310,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d3,infosize(a5)
 	bra.b	.sizeNotChanged
 .skipSize
-	bsr	setPrefsInfoBox
+	;;;bsr	setPrefsInfoBox
 	bsr	updateprefs
 	; return 1: do refresh
 	moveq	#1,d0
@@ -22499,7 +22618,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ; Put line change with special line feed so that ordinary line feeds
 ; can be filtered out.
-.putLineChange	
+.putLineChange:
 	move.b	#ILF,(a3)+
 	move.b	#ILF2,(a3)+
 	rts
@@ -23067,7 +23186,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	    .putLineChange
-    bsr     .putMetaData
+    bsr     .putMetaDataWithExtraLineChange
 	bra 	.ends
 
 * Copies a line to output, cuts at space near the end of line
@@ -23483,8 +23602,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .endA	lea	200(sp),sp
 .noAuth
 
-    bsr     .putMetaData
-
+    bsr     .putMetaDataWithExtraLineChange
 	bra	.selvis
 
 
@@ -23499,14 +23617,18 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	dc.b	"Player: %s",0
   even
 
+
 * Put UADE-Audacious metadata
-.putMetaData
+
+.putMetaData:
+    moveq   #0,d1
+.putMetaData0:
     move.l  umeMetaDataPtr(a5),d0
     beq     .noMeta
     move.l  d0,a4
     tst.b   (a4)
     beq     .noMeta
-
+    push    d1
     lea     metaData1(pc),a0 
     bsr     .putMetaLine
     lea     metaData2(pc),a0 
@@ -23515,11 +23637,16 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr     .putMetaLine
     lea     metaData4(pc),a0 
     bsr     .putMetaLine
-	move.l	infotaz(a5),a3
-	bsr	    .lloppu
-    bsr     .putLineChange
+    tst.l   (sp)+
+    beq     .noMeta
+    bsr     .putLineChangeToEndOfBuffer
 .noMeta
     rts
+
+.putMetaDataWithExtraLineChange
+    moveq   #1,d1
+    bra     .putMetaData0
+
 
 .putMetaLine
     tst.b   (a4)            * skip empty
@@ -23530,9 +23657,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  sp,a3
     jsr     desmsg3
 
-	move.l	infotaz(a5),a3
-	bsr	    .lloppu
-    bsr     .putLineChange
+    bsr     .putLineChangeToEndOfBuffer
     
     move.l  sp,a0
     move.l  a3,a1
@@ -23549,6 +23674,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     tst.b   (a4)+
     bne     .nextMeta
     rts
+
+.putLineChangeToEndOfBuffer:
+	move.l	infotaz(a5),a3
+	bsr	    .lloppu
+    bra     .putLineChange
+
 
 
 .putcomment:
@@ -26188,30 +26319,11 @@ scopeEntry:
 	sne     s_syncMode(a4)
     ; ---------------------------------
     ; Create port
-    lea     s_timerPort(a4),a3
-    moveq   #-1,d0
-    lob     AllocSignal	
-    move.b	d0,MP_SIGBIT(a3)
- 	move.l	s_quad_task(a4),MP_SIGTASK(a3)
-	move.b	#NT_MSGPORT,LN_TYPE(a3)
-	clr.l	LN_NAME(a3)
-	move.b	#PA_SIGNAL,MP_FLAGS(a3)
-	lea     MP_MSGLIST(a3),a0
-	NEWLIST	a0
-    ; ---------------------------------
-    ; Create IO
+ 	move.l	s_quad_task(a4),a1
 	lea     s_timerIORequest(a4),a2
-	move.l	a3,MN_REPLYPORT(a2)
-	move.b	#NT_MESSAGE,LN_TYPE(a2)
-	move	#IOTV_SIZE,MN_LENGTH(a2)
-    ; ---------------------------------
-    ; timer.device
-    lea     timerDeviceName,a0
-	lea     s_timerIORequest(a4),a1
-    moveq   #UNIT_VBLANK,d0
-    moveq   #0,d1
-    lob     OpenDevice * returns d0=non-zero on error
-    tst.l   d0
+    lea     s_timerPort(a4),a3
+    jsr     initTimer
+    * returns d0=non-zero on error
     ; ---------------------------------
 
 * Modulo multab 
@@ -37237,6 +37349,7 @@ modlen:
 .failsafe           rs.l 1
 .lastPositionJump   rs.w 1
 .lastNoteTime       rs.l 1
+.patternIndex       rs.l 1
 .varsSize           rs.b 0
  even
 
@@ -37354,16 +37467,18 @@ modlen:
 	ASL.L	#8,D1
 	ASL.L	#2,D1
 	ADD.W	.mt_PatternPos(a5),D1
+    move.l  d1,.patternIndex(a5)
 
 	LEA	.mt_chan1temp(a5),A6
 
-;    pushm    d0-d6
-;    push    d2
-;    movem.l  (a0,d1.l),d2/d3/d4/d5
-;    pop     d1
-;    and.l   #$ff,d1
-;   ;; DPRINT  "%ld/%ld->%08.8lx %08.8lx %08.8lx %08.8lx"
-;    popm     d0-d6
+;  pushm    d0-d6
+;  move.l   a0,d0
+;	MOVEQ	#0,D2
+;	mOVE.B	.mt_SongPos(a5),D2
+;  DPRINT    "Patt=%lx offs=%lx song=%ld"
+;  movem.l  (a0,d1.l),d0-d3
+;  DPRINT  "%08.8lx %08.8lx %08.8lx %08.8lx"
+;  popm     d0-d6
 
 	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
@@ -37371,14 +37486,12 @@ modlen:
 	addq	#nl_ts,a6
 	BSR 	.mt_PlayVoice
 	addq	#nl_ts,a6
-	pea	.mt_SetDMA(pc)
-
-;	BSR.S	.mt_PlayVoice
-;	BRA.B	.mt_SetDMA
+	BSR 	.mt_PlayVoice
+	bra	    .mt_SetDMA
 
 
 .mt_PlayVoice
-    * Read 4 bytes ot pattern data
+    * Read 4 bytes of pattern data
 	MOVE.L	(A0,D1.L),(A6)
 	ADDQ.L	#4,D1
 
@@ -37451,6 +37564,9 @@ modlen:
 *   which jump back to last position to another row
 *   which is ok
 
+* In:
+*   a0 = current pattern row
+*   d1 = column index to pattern (0,4,8,12)
 .mt_PositionJump
     * Get jump position:
 	MOVE.B	3(A6),D0
@@ -37475,22 +37591,25 @@ modlen:
 
     * Allow jumps if there is a D on the same row.
     * Common scrambled pattern trick.
+    move.l  .patternIndex(a5),d4
 	moveq	#$f,d2
-    and.b   2(A0,D1.L),d2
+    and.b   2(A0,d4.L),d2
     cmp.b   #$d,d2
     beq     .pbrk
 	moveq	#$f,d2
-    and.b   2+4(A0,D1.L),d2
+    and.b   2+4(A0,d4.L),d2
     cmp.b   #$d,d2
     beq     .pbrk
 	moveq	#$f,d2
-    and.b   2+8(A0,D1.L),d2
+    and.b   2+8(A0,d4.L),d2
     cmp.b   #$d,d2
     beq     .pbrk
 	moveq	#$f,d2
-    and.b   2+12(A0,D1.L),d2
+    and.b   2+12(A0,d4.L),d2
     cmp.b   #$d,d2
     beq     .pbrk
+
+    DPRINT  "no pbrk"
 
 	MOVE.B	.mt_SongPos(a5),D2	
     cmp.b   d0,d2
@@ -37501,6 +37620,10 @@ modlen:
     st      .songend(a5)
     rts
 .ook
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT  "jump to %ld"
+ endif
     tst.b   d3
     beq     .nre
     DPRINT  "Jump and no break in the last position"
@@ -60400,7 +60523,12 @@ initializeUslUme:
 
     bsr     uslLoadIndex
     bsr     umeLoadIndex
-    rts
+
+    tst.l   umeIndexPtr(a5)
+    bne     .1
+    * Disable prefs item - no data
+    or.w    #GFLG_DISABLED,gg_Flags+gadgetDisableInfoScroll
+.1  rts
 
 
 * These formats already have length information,
@@ -61821,7 +61949,12 @@ initInfoScroller:
     * Reset to initial state
     clr     infoScrollPos(a5)
     clr.b   infoScrollEnabled(a5)
-    move    #30,infoScrollWaitTicks(a5)
+    bsr     getSysTime
+    movem.l d0/d1,infoScrollLastTime(a5)
+
+    * Prefs setting check
+    tst.b   disableInfoScroll(a5)
+    bne     .x
 
     clr     .rows(a4)
     lea     .text(a4),a3
@@ -62026,8 +62159,8 @@ drawInfoScroller:
     beq     .x
     tst.b   infoScrollEnabled(a5)
     beq     .x
-    tst.w   infoScrollWaitTicks(a5)
-    bne    .doWait
+    tst.l   infoScrollLastTime(a5)  * Need to wait?
+    bne     .doWait
 
     moveq   #7+WINX+4-1+1,d2
     add     windowleft(a5),d2       * dest x
@@ -62073,9 +62206,11 @@ drawInfoScroller:
 .doScroll
     subq    #1,infoScrollMoveTicks(a5)
     bne     .scr
+    * Scrolled enough, start waiting
     move    infoScrollLineHeight(a5),d0
     add     d0,infoScrollPos(a5)
-    move    #30,infoScrollWaitTicks(a5)
+    bsr     getSysTime
+    movem.l d0/d1,infoScrollLastTime(a5)
     rts
 .scr
     move    infoScrollPos(a5),d0
@@ -62086,11 +62221,94 @@ drawInfoScroller:
     rts
 
 .doWait
-    subq    #1,infoScrollWaitTicks(a5)
+    * Waiting, don't check the time every cycle
+    * to save CPU
+    addq.b  #1,infoWaitTick(a5)
+    moveq   #%11,d0
+    and.b    infoWaitTick(a5),d0
     bne     .wai
+
+    bsr     getSysTime
+    * Subtract times
+    sub.l   infoScrollLastTime(a5),d0   * secs
+    sub.l   infoScrollLastTime+4(a5),d1  * micros
+    bge     .ok
+    subq.l  #1,d0
+    add.l   #1000000,d1  * MAXMICRO 
+.ok
+;    DPRINT  "GetSysTime %ld %ld"
+
+    cmp.w   #2,d0   *  Trigger at 2.5 secs
+    blo     .wai
+    cmp.l   #1000000/2,d1
+    blo     .wai
+
+    clr.l   infoScrollLastTime(a5)
     move    #8,infoScrollMoveTicks(a5) * easing size
 .wai
     rts
+
+    
+deinitSysTime:
+    lea     sysTimerIORequest(a5),a1
+    lore    Exec,CloseDevice
+    move.b  sysTimerPort+MP_SIGBIT(a5),d0
+    lob     FreeSignal
+    rts
+
+* Read system time
+* Out:
+*   d0 = seconds
+*   d1 = microseconds
+getSysTime:
+    lea	    sysTimerIORequest(a5),a1
+    move.w	#TR_GETSYSTIME,IO_COMMAND(a1)
+    lore    Exec,DoIO
+    movem.l sysTimerIORequest+IOTV_TIME+TV_SECS(a5),d0/d1 
+    rts
+
+initSysTime:
+    move.l  owntask(a5),a1
+    lea     sysTimerIORequest(a5),a2
+    lea     sysTimerPort(a5),a3
+;    bsr     initTimer
+;    rts
+
+
+* Utility to set up a timer
+* In:
+*   a1 = current task
+*   a2 = io structure
+*   a3 = port structure
+* Out:
+*   d0 = OpenDevice return code
+initTimer:
+    ; ---------------------------------
+    ; Create port
+    move.l  a1,MP_SIGTASK(a3)
+    move.b  #NT_MSGPORT,LN_TYPE(a3)
+    clr.l   LN_NAME(a3)
+    move.b  #PA_SIGNAL,MP_FLAGS(a3)
+    lea     MP_MSGLIST(a3),a0
+    NEWLIST a0
+    moveq   #-1,d0
+    lore    Exec,AllocSignal       * error ignored
+    move.b  d0,MP_SIGBIT(a3)
+    ; ---------------------------------
+    ; Create IO
+    move.l  a3,MN_REPLYPORT(a2)
+    move.b  #NT_MESSAGE,LN_TYPE(a2)
+    move    #IOTV_SIZE,MN_LENGTH(a2)
+    ; ---------------------------------
+    ; timer.device
+    lea     timerDeviceName,a0
+    move.l  a2,a1
+    moveq   #UNIT_VBLANK,d0
+    moveq   #0,d1
+    lob     OpenDevice * returns d0=non-zero on error
+    rts
+
+
 
 ***************************************************************************
 *
@@ -62440,7 +62658,7 @@ prefsSaveStatetx
 * x-coordinates adjusted manually.
 
 prefsTooltips dc.l prefsAltButtons
-       dc.w 214,107,28,12,3,1,1
+       dc.w 214,107-28,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsTooltipst,0,0
        dc.w 0
@@ -62454,7 +62672,7 @@ prefsTooltipstx
 
 prefsAltButtons 
        dc.l prefsQuadraScope
-       dc.w 214,107+14,28,12,3,1,1
+       dc.w 214,107+14-28,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsAltButtonst,0,0
        dc.w 0
@@ -62611,7 +62829,7 @@ prefsSpectrumScopeBars
 ; Button to select list font, on prefs page 2
 prefsListFont
 	dc.l	0 ; LAST ONE
-	dc.w 120+37,93,(122+6*8)/2,12,0,1,1
+	dc.w 120+37,93-14-14,(122+6*8)/2,12,0,1,1
 	dc.l 0,0,0,0,0
 	dc.w 0
 	dc.l 0
@@ -63372,7 +63590,8 @@ slimage		dc	0	* leftedge
 		dc	16	* width
 slimheight	dc	8	* heigh
 		dc	2	* depth
-		dc.l	slim	* data
+slimDataPtr
+		dc.l	0	* data
 		dc.b	%11	* planepick
 		dc.b	0	* planeon/onff
 		dc.l	0	* nextimage
@@ -64098,9 +64317,11 @@ ps3memptysample
 nullsample	ds.l	1
 
 * tilaa filebox-sliderin imagelle
-slim:	ds	410*2
+* 410 pixels
+* now using dynamic allocation
+;;slim:	ds	2*410
 
-* sampleinfo-slideri
+* sampleinfo-slideri, 410 pixels tall
 slim2:	ds	410*2
 
 * volume slider image

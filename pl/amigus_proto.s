@@ -193,12 +193,12 @@ amigus_tempo:
 ;=============================================================
 amigus_playmusic:
     move.b  setpause(pc),d0
-    bne.b   .ag_nopause
+    bne.b   .ag_nopause			; Quit when pause
     rts
 .ag_nopause
 	bsr		s3vol				; Update master volume
 
-	move	mtype(pc),d0			; Select appropriate player routine
+	move	mtype(pc),d0		; Select appropriate player routine
 	lea		s3m_music(pc),a0
 	subq	#1,d0
 	beq.b	.ag_player_exe	
@@ -212,7 +212,7 @@ amigus_playmusic:
 	beq.b  	.ag_player_exe	
 	lea		it_music(pc),a0
 .ag_player_exe	
-	jsr	(a0)
+	jsr	(a0)					; Execute player routine
 
 	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
 	move.w	PS3M_master(pc),d1	; Master Volume	
@@ -242,13 +242,12 @@ amigus_playmusic:
 	beq.b	.ag_silence
 	tst.b	mOnOff(a4)
 	bne.b	.ag_silence			;sound off
-
 	tst.l	mFPos(a4)
-	bne.b	.ag_ty
+	bne.b	.ag_silence
 	addq.l	#1,mFPos(a4)
+	
 	bsr		amigus_sample
     bsr     amigus_sample_scope
-.ag_ty
 .ag_silence
 	bsr     amigus_data_scope
 
@@ -273,21 +272,24 @@ amigus_volume:					; d6 = channel number, a4 = channel block; a6 = AmiGUS base
 	rts
 ;---
 amigus_period:
-	move.l	clock(pc),d0			; Get frequency base
-	lsl.l	#2,d0
+	move.l	#14317056,d0		; Get frequency base
 	
 	moveq	#0,d1
 	move.w	mPeriod(a4),d1		; Get note value
 	beq		.ag_period_exit		; Prevent division by 0
-	divu.w	d1,d0				; Convert to frequency
 	
-	moveq	#0,d1				
-	move.w	d0,d1				; Get rid of the remainder
+	bsr	divu_32					; Calculate frequency (d0 = frequency)
 	
-	move.w	#$15d8,d0			; Convert to AmiGUS register value
-	mulu	d1,d0
+	move.l	#$15d8,d1
+	mulu.w	d0,d1
 	
-	move.l	d0,HAGEN_VOICE_RATEH(a6)	; Update note frequency
+	swap	d0
+	mulu.w	#$15d8,d0
+	swap	d0
+	move.w  #0,d0
+	add.l	d0,d1
+	
+	move.l	d1,HAGEN_VOICE_RATEH(a6)	; Update note frequency
 .ag_period_exit	
 	rts
 ;---	
