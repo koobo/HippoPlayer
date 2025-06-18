@@ -4457,7 +4457,6 @@ handleSignal2
 
 	* Do this to update favorite status if settings changed
 	jsr	handleFavoriteModuleConfigChange
-    jsr setPlayModeChangeButtonIcon
 
 	* Check if boxsize in prefs was changed
 	move	boxsize(a5),d0		* onko boxin koko vaihtunut??
@@ -4534,6 +4533,9 @@ handleSignal2
 	lore	Intui,SizeWindow
 .sameHeight
 .boxSizeChanged
+
+    * Ensure this button is updated
+    jsr setPlayModeChangeButtonIcon
 
 ** ei saa rämpätä ikkunaa jos se ei oo oikeassa koossaan!!
 
