@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.63
+Version: 2.64
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -107,11 +107,11 @@ Additional files to check and download
 ------------------------------------------------------------------------------
 
 
-# Changes from v2.63 (9.6.2025) to v2.64 (?.?.2025) 
+# Changes from v2.63 (9.6.2025) to v2.64 (19.6.2025) 
 
-## Fixes:
+## Fixes and improvements:
 
-- AmiGUS integration fixes provided by Oliver.
+- AmiGUS integration fixes.
 - Remove graphics glitch on top of some window buttons, shown
   when the position slider is not visible.
 - Prevent drawing the resize gadget on the zipped window in certain 
@@ -119,11 +119,9 @@ Additional files to check and download
 - Protracker length calculator gets some more fixes, works
   with Romeo Knight's Furzogue again.
 - Metadata info: Fix to ensure correct delay before scrolling data.
-- Metadata info: Data search now faster especially on A500.
-
-## Improvements:
-
-- Main window height limit removed, it was previously set to 50 rows.
+- Metadata info: Data search now faster (especially on A500).
+- Info window: remove unnecessary metadata line changes.
+- Main window height limit removed, it was historically set to 50 rows.
 - Prefs: Remove filebox and info window size change sliders, the same 
          functionality can be done with window resize gadgets.
 - Prefs: Move "Position slider/play mode button" toggle to the 
@@ -131,7 +129,6 @@ Additional files to check and download
 - Prefs: Add "Disable info scroll" toggle to disable the metadata
          info scroller introduced in v2.63.
   
-
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
