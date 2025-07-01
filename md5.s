@@ -1,4 +1,6 @@
 ;APS00000088000000880000008800000088000000880000008800000088000000880000008800000088
+; Asm port of https://github.com/calebstewart/md5/blob/main/md5.cpp
+
   ifnd __VASM
 	incdir	include:
 	include exec/types.i
@@ -261,16 +263,12 @@ MD5_Body:
 .stepLoopF:
     ;((z) ^ ((x) & ((y) ^ (z))))
     move.l  d6,d0
-    eor.l   d7,d0
-    and.l   d5,d0
-    eor.l   d7,d0
+    eor.l   d7,d0       * d0 = c ^ d 
+    and.l   d5,d0       * d0 = (c ^ d) & b
+    eor.l   d7,d0       * d0 = ((c ^ d) & b) ^ d
     ; ---------------------------------
-    ;move.w  (a2)+,d1
-    ;addq    #2,a2
-    ;move.l  (a1,d1),d2
     move.l  (a4)+,d2
     ilword  d2
-    ;move.l  d2,ctx_block(a0,d1)
     move.l  d2,(a6)+
     add.l   d2,d0
     ; ---------------------------------
@@ -280,10 +278,10 @@ MD5_Body:
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
     ; ---------------------------------
-    move.l   d7,d4
-    move.l   d6,d7
-    move.l   d5,d6
-    move.l   d0,d5
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+    move.l   d0,d5      * b = new sum
     ; ---------------------------------
     dbf     d3,.stepLoopF
     ; ---------------------------------
@@ -291,9 +289,9 @@ MD5_Body:
 .stepLoopG:
     ;((y) ^ ((z) & ((x) ^ (y))))
     move.l  d5,d0
-    eor.l   d6,d0
-    and.l   d7,d0
-    eor.l   d6,d0
+    eor.l   d6,d0       * d0 = b ^ c
+    and.l   d7,d0       * d0 = (b ^ c) & d
+    eor.l   d6,d0       * d0 = ((b ^ c) & d) ^ c
     ; ---------------------------------
     move.b  (a2)+,d1
     move.b  (a2)+,d2
@@ -304,19 +302,19 @@ MD5_Body:
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
     ; ---------------------------------
-    move.l   d7,d4
-    move.l   d6,d7
-    move.l   d5,d6
-    move.l   d0,d5
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+    move.l   d0,d5      * b = new sum
     ; ---------------------------------
     dbf     d3,.stepLoopG
     ; ---------------------------------
     moveq   #16-1,d3
 .stepLoopH:
     ;(x) ^ (y) ^ (z)
-    move.l  d5,d0
-    eor.l   d6,d0
-    eor.l   d7,d0
+    move.l  d5,d0       
+    eor.l   d6,d0       * d0 = b ^ c
+    eor.l   d7,d0       * d0 = (b ^ c) ^ d
     ; ---------------------------------
     move.b  (a2)+,d1
     move.b  (a2)+,d2
@@ -327,10 +325,10 @@ MD5_Body:
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
     ; ---------------------------------
-    move.l   d7,d4
-    move.l   d6,d7
-    move.l   d5,d6
-    move.l   d0,d5
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+    move.l   d0,d5      * b = new sum
     ; ---------------------------------
     dbf     d3,.stepLoopH
     ; ---------------------------------
@@ -338,9 +336,9 @@ MD5_Body:
 .stepLoopI:
     ;(y) ^ ((x) | ~(z))
     move.l  d7,d0
-    not.l   d0
-    or.l    d5,d0
-    eor.l   d6,d0
+    not.l   d0          * d0 = ~d
+    or.l    d5,d0       * d0 = (~d) | b
+    eor.l   d6,d0       * d0 = ((~d) | b) ^ c
     ; ---------------------------------
     move.b  (a2)+,d1
     move.b  (a2)+,d2
@@ -351,10 +349,10 @@ MD5_Body:
     rol.l   d2,d0
     add.l   d5,d0       * add ctx_b
     ; ---------------------------------
-    move.l   d7,d4
-    move.l   d6,d7
-    move.l   d5,d6
-    move.l   d0,d5
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+    move.l   d0,d5      * b = new sum
     ; ---------------------------------
     dbf     d3,.stepLoopI
     ; ---------------------------------
