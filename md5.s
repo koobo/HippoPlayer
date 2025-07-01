@@ -250,13 +250,6 @@ funcI = 3
 *   a1 = input data, new position
 MD5_Body:
 
-.rotate macro
-    move.l   d7,d4      * a = d
-    move.l   d6,d7      * d = c
-    move.l   d5,d6      * c = b
-    move.l   d0,d5      * b = new sum
- endm
-
 .mixF macro
     ;((z) ^ ((x) & ((y) ^ (z))))
     move.l  d6,d0
@@ -310,8 +303,12 @@ MD5_Body:
     add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
     rol.l   #7,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixF
     move.l  (a4)+,d2
@@ -323,8 +320,12 @@ MD5_Body:
     add.l   d4,d0       * add ctx_a
     swap    d0
     ror.l   #4,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixF
     move.l  (a4)+,d2
@@ -336,8 +337,12 @@ MD5_Body:
     add.l   d4,d0       * add ctx_a
     swap    d0
     rol.l   #1,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixF
     move.l  (a4)+,d2
@@ -349,8 +354,13 @@ MD5_Body:
     add.l   d4,d0       * add ctx_a
     swap    d0
     rol.l   #6,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
+    ; ---------------------------------
     dbf     d3,.stepLoopF
     ; ---------------------------------
     moveq   #16/4-1,d3
@@ -361,8 +371,12 @@ MD5_Body:
     add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
     rol.l   #5,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixG
     move.w  (a2)+,d1        * read index
@@ -372,8 +386,12 @@ MD5_Body:
     ; ---------------------------------
     swap    d0
     ror.l   #7,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixG
     move.w  (a2)+,d1        * read index
@@ -383,8 +401,12 @@ MD5_Body:
     ; ---------------------------------
     swap    d0
     ror.l   #2,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixG
     move.w  (a2)+,d1        * read index
@@ -394,8 +416,12 @@ MD5_Body:
     ; ---------------------------------
     swap    d0
     rol.l   #4,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     dbf     d3,.stepLoopG
     ; ---------------------------------
@@ -407,8 +433,12 @@ MD5_Body:
     add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
     rol.l   #4,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixH
     move.w  (a2)+,d1        * read index
@@ -418,8 +448,12 @@ MD5_Body:
     ; ---------------------------------
     swap    d0
     ror.l   #5,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixH
     move.w  (a2)+,d1        * read index
@@ -428,8 +462,12 @@ MD5_Body:
     add.l   d4,d0       * add ctx_a
     ; ---------------------------------
     swap    d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixH
     move.w  (a2)+,d1        * read index
@@ -439,8 +477,12 @@ MD5_Body:
     ; ---------------------------------
     swap    d0
     rol.l   #7,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     dbf     d3,.stepLoopH
     ; ---------------------------------
@@ -452,8 +494,12 @@ MD5_Body:
     add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
     rol.l   #6,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixI
     move.w  (a2)+,d1        * read index
@@ -463,8 +509,12 @@ MD5_Body:
     ; ---------------------------------
     swap    d0
     ror.l   #6,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixI
     move.w  (a2)+,d1        * read index
@@ -474,8 +524,12 @@ MD5_Body:
     ; ---------------------------------
     swap    d0
     ror.l   #1,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     .mixI
     move.w  (a2)+,d1        * read index
@@ -485,8 +539,12 @@ MD5_Body:
     ; ---------------------------------
     swap    d0
     rol.l   #5,d0
-    add.l   d5,d0       * add ctx_b
-    .rotate
+
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+
+    add.l    d0,d5       * add ctx_b, b = new sum
     ; ---------------------------------
     dbf     d3,.stepLoopI
     ; ---------------------------------
