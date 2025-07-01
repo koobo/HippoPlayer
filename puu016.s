@@ -2656,6 +2656,8 @@ main:
 
 	DPRINT	"Hippo is alive"
 
+    jsr     initSysTime     * init early to allow debug timing on kick 1.3
+
 	tst.b	uusikick(a5)
 	beq.b	.olld
 	lea	wbname(pc),a1
@@ -3157,7 +3159,6 @@ main:
 	jsr	inforivit_clear
 	jsr	importFavoriteModulesFromDisk
 	jsr	initializeUHC
-    jsr initSysTime
 
 	DPRINT	"Loading group"
 
@@ -62315,7 +62316,10 @@ initTimer:
 *
 ***************************************************************************
 
+
  if DEBUG
+
+
 openTimer
 	move.l	(a5),a0
 	move	LIB_VERSION(a0),d0
@@ -62336,6 +62340,8 @@ openTimer
 	even
 
 closeTimer
+    tst.b   uusikick(a5)
+    beq     .x
 	tst.b	timerOpen(a5)
 	beq.b	.x
 	clr.b	timerOpen(a5)
@@ -62345,6 +62351,8 @@ closeTimer
 .x	rts
 
 startMeasure
+    tst.b   uusikick(a5)
+    beq     .old
 	tst.b	timerOpen(a5)
 	beq.b	.x
 	push	a6	
@@ -62354,8 +62362,17 @@ startMeasure
 	pop 	a6
 .x	rts
 
+.old
+	push	a6	
+    jsr     getSysTime
+    movem.l d0/d1,oldTimer
+	pop 	a6
+    rts
+
 ; out: d0: difference in millisecs
 stopMeasure
+    tst.b   uusikick(a5)
+    beq     .old
 	tst.b	timerOpen(a5)
 	bne.b	.x
 	moveq	#-1,d0
@@ -62387,6 +62404,35 @@ stopMeasure
 	move.l	d1,d0
 	popm	d2-d4/a6
 	rts
+
+.old
+    pushm	d2-d4/a6
+    jsr     getSysTime
+
+    * Subtract times
+    sub.l   oldTimer,d0   * secs
+    sub.l   oldTimer+4,d1  * micros
+    bge     .ok
+    subq.l  #1,d0
+    add.l   #1000000,d1  * MAXMICRO 
+.ok
+    push    d1
+
+    move.l  #1000,d1
+    jsr     mulu_32
+    * d0 = secs into millisecs
+    move.l  d0,d2
+
+    pop     d0
+    move.l  #1000,d1
+    jsr     divu_32
+    * d0 = microsecs into millisecs
+
+    add.l   d2,d0
+	popm	d2-d4/a6
+    rts
+
+oldTimer    ds.l    2       * kick1.3
 
   endif
 
