@@ -249,6 +249,47 @@ funcI = 3
 * Out:
 *   a1 = input data, new position
 MD5_Body:
+
+.rotate macro
+    move.l   d7,d4      * a = d
+    move.l   d6,d7      * d = c
+    move.l   d5,d6      * c = b
+    move.l   d0,d5      * b = new sum
+ endm
+
+.mixF macro
+    ;((z) ^ ((x) & ((y) ^ (z))))
+    move.l  d6,d0
+    eor.l   d7,d0       * d0 = c ^ d 
+    and.l   d5,d0       * d0 = (c ^ d) & b
+    eor.l   d7,d0       * d0 = ((c ^ d) & b) ^ d
+    endm
+
+.mixG macro
+    ;((y) ^ ((z) & ((x) ^ (y))))
+    move.l  d5,d0
+    eor.l   d6,d0       * d0 = b ^ c
+    and.l   d7,d0       * d0 = (b ^ c) & d
+    eor.l   d6,d0       * d0 = ((b ^ c) & d) ^ c
+    endm
+
+.mixH macro
+    ;(x) ^ (y) ^ (z)
+    move.l  d5,d0       
+    eor.l   d6,d0       * d0 = b ^ c
+    eor.l   d7,d0       * d0 = (b ^ c) ^ d
+    endm
+
+.mixI macro
+    ;(y) ^ ((x) | ~(z))
+    move.l  d7,d0
+    not.l   d0          * d0 = ~d
+    or.l    d5,d0       * d0 = (~d) | b
+    eor.l   d6,d0       * d0 = ((~d) | b) ^ c
+    endm
+
+
+    ; ---------------------------------
     lea     (a1,d0.l),a3       * loop end
 .loop
     ; ---------------------------------
@@ -258,15 +299,9 @@ MD5_Body:
     move.l  a1,a4
     lea     ctx_block(a0),a6
     ; ---------------------------------
-    moveq   #0,d1
-    moveq   #16-1,d3
+    moveq   #16/4-1,d3
 .stepLoopF:
-    ;((z) ^ ((x) & ((y) ^ (z))))
-    move.l  d6,d0
-    eor.l   d7,d0       * d0 = c ^ d 
-    and.l   d5,d0       * d0 = (c ^ d) & b
-    eor.l   d7,d0       * d0 = ((c ^ d) & b) ^ d
-    ; ---------------------------------
+    .mixF
     move.l  (a4)+,d2
     ilword  d2
     move.l  d2,(a6)+
@@ -274,85 +309,184 @@ MD5_Body:
     ; ---------------------------------
     add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    move.w  (a2)+,d2
-    rol.l   d2,d0
+    rol.l   #7,d0
     add.l   d5,d0       * add ctx_b
+    .rotate
     ; ---------------------------------
-    move.l   d7,d4      * a = d
-    move.l   d6,d7      * d = c
-    move.l   d5,d6      * c = b
-    move.l   d0,d5      * b = new sum
-    ; ---------------------------------
-    dbf     d3,.stepLoopF
-    ; ---------------------------------
-    moveq   #16-1,d3
-.stepLoopG:
-    ;((y) ^ ((z) & ((x) ^ (y))))
-    move.l  d5,d0
-    eor.l   d6,d0       * d0 = b ^ c
-    and.l   d7,d0       * d0 = (b ^ c) & d
-    eor.l   d6,d0       * d0 = ((b ^ c) & d) ^ c
-    ; ---------------------------------
-    move.b  (a2)+,d1
-    move.b  (a2)+,d2
-    add.l   ctx_block(a0,d1),d0
+    .mixF
+    move.l  (a4)+,d2
+    ilword  d2
+    move.l  d2,(a6)+
+    add.l   d2,d0
     ; ---------------------------------
     add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    rol.l   d2,d0
+    swap    d0
+    ror.l   #4,d0
     add.l   d5,d0       * add ctx_b
+    .rotate
     ; ---------------------------------
-    move.l   d7,d4      * a = d
-    move.l   d6,d7      * d = c
-    move.l   d5,d6      * c = b
-    move.l   d0,d5      * b = new sum
+    .mixF
+    move.l  (a4)+,d2
+    ilword  d2
+    move.l  d2,(a6)+
+    add.l   d2,d0
+    ; ---------------------------------
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    swap    d0
+    rol.l   #1,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    ; ---------------------------------
+    .mixF
+    move.l  (a4)+,d2
+    ilword  d2
+    move.l  d2,(a6)+
+    add.l   d2,d0
+    ; ---------------------------------
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    swap    d0
+    rol.l   #6,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    dbf     d3,.stepLoopF
+    ; ---------------------------------
+    moveq   #16/4-1,d3
+.stepLoopG:
+    .mixG
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    rol.l   #5,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    ; ---------------------------------
+    .mixG
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    ror.l   #7,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    ; ---------------------------------
+    .mixG
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    ror.l   #2,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    ; ---------------------------------
+    .mixG
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    rol.l   #4,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
     ; ---------------------------------
     dbf     d3,.stepLoopG
     ; ---------------------------------
-    moveq   #16-1,d3
+    moveq   #16/4-1,d3
 .stepLoopH:
-    ;(x) ^ (y) ^ (z)
-    move.l  d5,d0       
-    eor.l   d6,d0       * d0 = b ^ c
-    eor.l   d7,d0       * d0 = (b ^ c) ^ d
-    ; ---------------------------------
-    move.b  (a2)+,d1
-    move.b  (a2)+,d2
+    .mixH
+    move.w  (a2)+,d1        * read index
     add.l   ctx_block(a0,d1),d0
-    ; ---------------------------------
     add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    rol.l   d2,d0
+    rol.l   #4,d0
     add.l   d5,d0       * add ctx_b
+    .rotate
     ; ---------------------------------
-    move.l   d7,d4      * a = d
-    move.l   d6,d7      * d = c
-    move.l   d5,d6      * c = b
-    move.l   d0,d5      * b = new sum
+    .mixH
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    ror.l   #5,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    ; ---------------------------------
+    .mixH
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    ; ---------------------------------
+    .mixH
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    rol.l   #7,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
     ; ---------------------------------
     dbf     d3,.stepLoopH
     ; ---------------------------------
-    moveq   #16-1,d3
+    moveq   #16/4-1,d3
 .stepLoopI:
-    ;(y) ^ ((x) | ~(z))
-    move.l  d7,d0
-    not.l   d0          * d0 = ~d
-    or.l    d5,d0       * d0 = (~d) | b
-    eor.l   d6,d0       * d0 = ((~d) | b) ^ c
-    ; ---------------------------------
-    move.b  (a2)+,d1
-    move.b  (a2)+,d2
+    .mixI
+    move.w  (a2)+,d1        * read index
     add.l   ctx_block(a0,d1),d0
-    ; ---------------------------------
     add.l   (a2)+,d0
     add.l   d4,d0       * add ctx_a
-    rol.l   d2,d0
+    rol.l   #6,d0
     add.l   d5,d0       * add ctx_b
+    .rotate
     ; ---------------------------------
-    move.l   d7,d4      * a = d
-    move.l   d6,d7      * d = c
-    move.l   d5,d6      * c = b
-    move.l   d0,d5      * b = new sum
+    .mixI
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    ror.l   #6,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    ; ---------------------------------
+    .mixI
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    ror.l   #1,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
+    ; ---------------------------------
+    .mixI
+    move.w  (a2)+,d1        * read index
+    add.l   ctx_block(a0,d1),d0
+    add.l   (a2)+,d0
+    add.l   d4,d0       * add ctx_a
+    ; ---------------------------------
+    swap    d0
+    rol.l   #5,d0
+    add.l   d5,d0       * add ctx_b
+    .rotate
     ; ---------------------------------
     dbf     d3,.stepLoopI
     ; ---------------------------------
@@ -371,260 +505,180 @@ MD5_Body:
 
 * 64 steps
 .steps:
-;         dc.w 0<<2
+.stepsF:
          dc.l $d76aa478 
-         dc.w 7
 
-;         dc.w 1<<2
          dc.l $e8c7b756 
-         dc.w 12
 
-;         dc.w 2<<2
          dc.l $242070db 
-         dc.w 17
 
-;         dc.w 3<<2
          dc.l $c1bdceee 
-         dc.w 22
 
-;         dc.w 4<<2
          dc.l $f57c0faf 
-         dc.w 7
 
-;         dc.w 5<<2
          dc.l $4787c62a 
-         dc.w 12
 
-;         dc.w 6<<2
          dc.l $a8304613 
-         dc.w 17
 
-;         dc.w 7<<2
          dc.l $fd469501 
-         dc.w 22
 
-;         dc.w 8<<2
          dc.l $698098d8 
-         dc.w 7
 
-;         dc.w 9<<2
          dc.l $8b44f7af 
-         dc.w 12
 
-;         dc.w 10<<2
          dc.l $ffff5bb1 
-         dc.w 17
 
-;         dc.w 11<<2
          dc.l $895cd7be 
-         dc.w 22
 
-;         dc.w 12<<2
          dc.l $6b901122 
-         dc.w 7
 
-;         dc.w 13<<2
          dc.l $fd987193 
-         dc.w 12
 
-;         dc.w 14<<2
          dc.l $a679438e 
-         dc.w 17
 
-;         dc.w 15<<2
          dc.l $49b40821 
-         dc.w 22
 
-         dc.b 1<<2
-         dc.b 5
+.stepsG:
+         dc.w 1<<2
          dc.l $f61e2562 
 
-         dc.b 6<<2
-         dc.b 9
+         dc.w 6<<2
          dc.l $c040b340 
 
-         dc.b 11<<2
-         dc.b 14
+         dc.w 11<<2
          dc.l $265e5a51 
 
-         dc.b 0<<2
-         dc.b 20
+         dc.w 0<<2
          dc.l $e9b6c7aa 
 
-         dc.b 5<<2
-         dc.b 5
+         dc.w 5<<2
          dc.l $d62f105d 
 
-         dc.b 10<<2
-         dc.b 9
+         dc.w 10<<2
          dc.l $02441453 
 
-         dc.b 15<<2
-         dc.b 14
+         dc.w 15<<2
          dc.l $d8a1e681 
 
-         dc.b 4<<2
-         dc.b 20
+         dc.w 4<<2
          dc.l $e7d3fbc8 
 
-         dc.b 9<<2
-         dc.b 5
+         dc.w 9<<2
          dc.l $21e1cde6 
 
-         dc.b 14<<2
-         dc.b 9
+         dc.w 14<<2
          dc.l $c33707d6 
 
-         dc.b 3<<2
-         dc.b 14
+         dc.w 3<<2
          dc.l $f4d50d87 
 
-         dc.b 8<<2
-         dc.b 20
+         dc.w 8<<2
          dc.l $455a14ed 
 
-         dc.b 13<<2
-         dc.b 5
+         dc.w 13<<2
          dc.l $a9e3e905 
 
-         dc.b 2<<2
-         dc.b 9
+         dc.w 2<<2
          dc.l $fcefa3f8 
 
-         dc.b 7<<2
-         dc.b 14
+         dc.w 7<<2
          dc.l $676f02d9 
 
-         dc.b 12<<2
-         dc.b 20
+         dc.w 12<<2
          dc.l $8d2a4c8a 
-
-         dc.b 5<<2
-         dc.b 4
+.stepsH:
+         dc.w 5<<2
          dc.l $fffa3942 
 
-         dc.b 8<<2
-         dc.b 11
+         dc.w 8<<2
          dc.l $8771f681 
 
-         dc.b 11<<2
-         dc.b 16
+         dc.w 11<<2
          dc.l $6d9d6122 
 
-         dc.b 14<<2
-         dc.b 23
+         dc.w 14<<2
          dc.l $fde5380c 
 
-         dc.b 1<<2
-         dc.b 4
+         dc.w 1<<2
          dc.l $a4beea44 
 
-         dc.b 4<<2
-         dc.b 11
+         dc.w 4<<2
          dc.l $4bdecfa9 
 
-         dc.b 7<<2
-         dc.b 16
+         dc.w 7<<2
          dc.l $f6bb4b60 
 
-         dc.b 10<<2
-         dc.b 23
+         dc.w 10<<2
          dc.l $bebfbc70 
 
-         dc.b 13<<2
-         dc.b 4
+         dc.w 13<<2
          dc.l $289b7ec6 
 
-         dc.b 0<<2
-         dc.b 11
+         dc.w 0<<2
          dc.l $eaa127fa 
 
-         dc.b 3<<2
-         dc.b 16
+         dc.w 3<<2
          dc.l $d4ef3085 
 
-         dc.b 6<<2
-         dc.b 23
+         dc.w 6<<2
          dc.l $04881d05 
 
-         dc.b 9<<2
-         dc.b 4
+         dc.w 9<<2
          dc.l $d9d4d039 
 
-         dc.b 12<<2
-         dc.b 11
+         dc.w 12<<2
          dc.l $e6db99e5 
 
-         dc.b 15<<2
-         dc.b 16
+         dc.w 15<<2
          dc.l $1fa27cf8 
 
-         dc.b 2<<2
-         dc.b 23
+         dc.w 2<<2
          dc.l $c4ac5665 
-
-         dc.b 0<<2
-         dc.b 6
+.stepsI:
+         dc.w 0<<2
          dc.l $f4292244 
 
-         dc.b 7<<2
-         dc.b 10
+         dc.w 7<<2
          dc.l $432aff97 
 
-         dc.b 14<<2
-         dc.b 15
+         dc.w 14<<2
          dc.l $ab9423a7 
 
-         dc.b 5<<2
-         dc.b 21
+         dc.w 5<<2
          dc.l $fc93a039 
 
-         dc.b 12<<2
-         dc.b 6
+         dc.w 12<<2
          dc.l $655b59c3 
 
-         dc.b 3<<2
-         dc.b 10
+         dc.w 3<<2
          dc.l $8f0ccc92 
 
-         dc.b 10<<2
-         dc.b 15
+         dc.w 10<<2
          dc.l $ffeff47d 
 
-         dc.b 1<<2
-         dc.b 21
+         dc.w 1<<2
          dc.l $85845dd1 
 
-         dc.b 8<<2
-         dc.b 6
+         dc.w 8<<2
          dc.l $6fa87e4f 
 
-         dc.b 15<<2
-         dc.b 10
+         dc.w 15<<2
          dc.l $fe2ce6e0 
 
-         dc.b 6<<2
-         dc.b 15
+         dc.w 6<<2
          dc.l $a3014314 
 
-         dc.b 13<<2
-         dc.b 21
+         dc.w 13<<2
          dc.l $4e0811a1 
 
-         dc.b 4<<2
-         dc.b 6
+         dc.w 4<<2
          dc.l $f7537e82 
 
-         dc.b 11<<2
-         dc.b 10
+         dc.w 11<<2
          dc.l $bd3af235 
 
-         dc.b 2<<2
-         dc.b 15
+         dc.w 2<<2
          dc.l $2ad7d2bb 
 
-         dc.b 9<<2
-         dc.b 21
+         dc.w 9<<2
          dc.l $eb86d391 
-
-         dc   -1 ; END
