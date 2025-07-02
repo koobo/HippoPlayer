@@ -228,19 +228,6 @@ MD5_Final:
     ilword  d3
     rts
 
-    rsreset
-step_setget     rs.w       1
-step_constant   rs.l       1
-step_rotation   rs.w       1
-step_SIZEOF     rs.b       0
-
-funcF = 0
-funcG = 1
-funcH = 2
-funcI = 3
-
-
-
 
 * In:
 *   a0 = context
@@ -289,12 +276,11 @@ mixI macro
     movem.l ctx_a(a0),d4/d5/d6/d7
     lea     .steps(pc),a2
     ; First loop: copy data
-    move.l  a1,a4
     lea     ctx_block(a0),a6
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopF:
-    move.l  (a4)+,d2
+    move.l  (a1)+,d2
     mixF
     ilword  d2
     add.l   d4,d0       * add ctx_a
@@ -307,7 +293,7 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.l  (a4)+,d2
+    move.l  (a1)+,d2
     mixF
     ilword  d2
     add.l   d4,d0       * add ctx_a
@@ -321,7 +307,7 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.l  (a4)+,d2
+    move.l  (a1)+,d2
     mixF
     ilword  d2
     add.l   d4,d0       * add ctx_a
@@ -335,7 +321,7 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.l  (a4)+,d2
+    move.l  (a1)+,d2
     mixF
     ilword  d2
     add.l   d4,d0       * add ctx_a
@@ -472,7 +458,7 @@ mixI macro
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
-    swap    d0         * <<< 12
+    swap    d0         * <<< 10
     ror.l   #6,d0
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
@@ -508,10 +494,8 @@ mixI macro
     add.l   d6,ctx_c(a0)
     add.l   d7,ctx_d(a0)
     ; ---------------------------------
-    lea     64(a1),a1
-    cmp.l   a3,a1
+    cmp.l   a3,a1      * check if end of last block
     bne     .loop
-
     rts
 
 
@@ -519,38 +503,22 @@ mixI macro
 * 64 steps
 .steps:
 .stepsF:
-         dc.l $d76aa478 
-
-         dc.l $e8c7b756 
-
-         dc.l $242070db 
-
-         dc.l $c1bdceee 
-
-         dc.l $f57c0faf 
-
-         dc.l $4787c62a 
-
-         dc.l $a8304613 
-
-         dc.l $fd469501 
-
-         dc.l $698098d8 
-
-         dc.l $8b44f7af 
-
-         dc.l $ffff5bb1 
-
-         dc.l $895cd7be 
-
-         dc.l $6b901122 
-
-         dc.l $fd987193 
-
-         dc.l $a679438e 
-
-         dc.l $49b40821 
-
+         dc.l $d76aa478
+         dc.l $e8c7b756
+         dc.l $242070db
+         dc.l $c1bdceee
+         dc.l $f57c0faf
+         dc.l $4787c62a
+         dc.l $a8304613
+         dc.l $fd469501
+         dc.l $698098d8
+         dc.l $8b44f7af
+         dc.l $ffff5bb1
+         dc.l $895cd7be
+         dc.l $6b901122
+         dc.l $fd987193
+         dc.l $a679438e
+         dc.l $49b40821
 .stepsG:
          dc.w 1<<2
          dc.l $f61e2562 
