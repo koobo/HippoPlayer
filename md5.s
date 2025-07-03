@@ -243,9 +243,9 @@ MD5_Final:
     rts
 
 
-; 21840 ms
-; 21670 ms - h trick = -170ms
-; 21360 ms - direct block address = -471ms
+; 21840 ms - reference
+; 21670 ms - h trick = -170ms = 0.7%
+; 21360 ms - direct block address = -471ms = 2.2%
 
 
 * In:
@@ -256,35 +256,90 @@ MD5_Final:
 *   a1 = input data, new position
 MD5_Body:
 
-mixF macro
+; Rotation, original A is lost:
+;   A := D
+;   D := C
+;   C := B
+;   B := B + leftrotate(F, s[i])
+
+; \1 a
+; \2 b
+; \3 c
+; \4 d
+; \5 tmp1
+; \6 tmp2
+stepFa macro 
+    move.l  (a1)+,\6
+    ilword  \6
+    move.l  \6,(a6)+
+
     ;((z) ^ ((x) & ((y) ^ (z))))
-    move.l  d6,d0
-    eor.l   d7,d0       * d0 = c ^ d 
-    and.l   d5,d0       * d0 = (c ^ d) & b
-    eor.l   d7,d0       * d0 = ((c ^ d) & b) ^ d
+    move.l  \3,\5
+    eor.l   \4,\5       * \5 = c ^ d 
+    and.l   \2,\5       * \5 = (c ^ d) & b
+    eor.l   \4,\5       * \5 = ((c ^ d) & b) ^ d
+
+    add.l   \6,\5      * add block value
+    add.l   \1,\5      * add ctx_a
+    add.l   (a2)+,\5   * add constant
     endm
 
-mixG macro
+
+; \1 a
+; \2 b
+; \3 c
+; \4 d
+; \5 tmp
+stepGa macro 
+    move.l  (a2)+,a4   * read index
+
     ;((y) ^ ((z) & ((x) ^ (y))))
-    move.l  d5,d0
-    eor.l   d6,d0       * d0 = b ^ c
-    and.l   d7,d0       * d0 = (b ^ c) & d
-    eor.l   d6,d0       * d0 = ((b ^ c) & d) ^ c
+    move.l  \2,\5
+    eor.l   \3,\5       * \5 = b ^ c
+    and.l   \4,\5       * \5 = (b ^ c) & d
+    eor.l   \3,\5       * \5 = ((b ^ c) & d) ^ c
+
+    add.l   \1,\5      * add ctx_a
+    add.l   (a4),\5    * add block value
+    add.l   (a2)+,\5   * add constant
     endm
 
-mixH macro
+; \1 a
+; \2 b
+; \3 c
+; \4 d
+; \5 tmp
+stepHa macro 
+    move.l  (a2)+,a4   * read index
+
     ;(x) ^ (y) ^ (z)
-    move.l  d5,d0       
-    eor.l   d6,d0       * d0 = b ^ c
-    eor.l   d7,d0       * d0 = (b ^ c) ^ d
+    move.l  \2,\5       
+    eor.l   \3,\5       * \5 = b ^ c
+    eor.l   \4,\5       * \5 = (b ^ c) ^ d
+
+    add.l   \1,\5      * add ctx_a
+    add.l   (a4),\5    * add block value
+    add.l   (a2)+,\5   * add constant
     endm
 
-mixI macro
+
+; \1 a
+; \2 b
+; \3 c
+; \4 d
+; \5 tmp
+stepIa macro 
+    move.l  (a2)+,a4   * read index
+
     ;(y) ^ ((x) | ~(z))
-    move.l  d7,d0
-    not.l   d0          * d0 = ~d
-    or.l    d5,d0       * d0 = (~d) | b
-    eor.l   d6,d0       * d0 = ((~d) | b) ^ c
+    move.l  \4,\5
+    not.l   \5          * \5 = ~d
+    or.l    \2,\5       * \5 = (~d) | b
+    eor.l   \3,\5       * \5 = ((~d) | b) ^ c
+
+    add.l   \1,\5      * add ctx_a
+    add.l   (a4),\5    * add block value
+    add.l   (a2)+,\5   * add constant
     endm
 
 
@@ -299,213 +354,186 @@ mixI macro
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopF:
-    move.l  (a1)+,d2
-    mixF
-    ilword  d2
-    add.l   d4,d0       * add ctx_a
-    move.l  d2,(a6)+
-    add.l   d2,d0
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
+    *       A  B  C  D  
+    *       d4 d5 d6 d7
+    stepFa  d4,d5,d6,d7,d0,d1
     rol.l   #7,d0      * <<< 7
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    add.l   d5,d0      * add ctx_b, b = new sum
+    * d0 = new b - goes to b
+    * d5 = old b - goes to c
+
     ; ---------------------------------
-    move.l  (a1)+,d2
-    mixF
-    ilword  d2
-    add.l   d4,d0       * add ctx_a
-    move.l  d2,(a6)+
-    add.l   d2,d0
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 12
-    ror.l   #4,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d7 d4 d5 d6  
+    stepFa  d7,d0,d5,d6,d2,d1
+    swap    d2         * <<< 12
+    ror.l   #4,d2
+    add.l   d0,d2      * tmp += b
+    * d2 = new b - goes to b    
+    * d0 = old b - goes to c
+
     ; ---------------------------------
-    move.l  (a1)+,d2
-    mixF
-    ilword  d2
-    add.l   d4,d0       * add ctx_a
-    move.l  d2,(a6)+
-    add.l   d2,d0
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 17
-    rol.l   #1,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d6 d7 d4 d5
+    stepFa  d6,d2,d0,d5,d7,d1
+    swap    d7         * <<< 17
+    rol.l   #1,d7
+    add.l   d2,d7      * tmp += b
+    * d7 = new b - goes to b    
+    * d2 = old b - goes to c
     ; ---------------------------------
-    move.l  (a1)+,d2
-    mixF
-    ilword  d2
-    add.l   d4,d0       * add ctx_a
-    move.l  d2,(a6)+
-    add.l   d2,d0
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 22
-    rol.l   #6,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    stepFa  d5,d7,d2,d0,d4,d1
+    swap    d4        * <<< 22
+    rol.l   #6,d4
+    add.l   d7,d4      * b += rotated sum
+    * d4 = new b - goes to b
+    * d7 = old b - goes to c
+
+    ; reset variable placements 
+    move.l   d4,d5      * b = new sum
+    move.l   d0,d4      * a = d
+    move.l   d7,d6      * c = b 
+    move.l   d2,d7      * d = c
+
     ; ---------------------------------
     dbf     d3,.stepLoopF
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopG:
-    move.l  (a2)+,a4   * read index
-    mixG
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0    * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
+    *       A  B  C  D  
+    *       d4 d5 d6 d7
+    stepGa  d4,d5,d6,d7,d0
     rol.l   #5,d0      * <<< 5
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    add.l   d5,d0      * tmp += b
+    * d0 = new b - goes to b
+    * d5 = old b - goes to c
+
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixG
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0    * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 9
-    ror.l   #7,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d7 d4 d5 d6  
+    stepGa  d7,d0,d5,d6,d2
+    swap    d2         * <<< 9
+    ror.l   #7,d2
+    add.l   d0,d2      * tmp += b
+    * d2 = new b - goes to b    
+    * d0 = old b - goes to c
+
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixG
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0    * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 14
-    ror.l   #2,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d6 d7 d4 d5
+    stepGa  d6,d2,d0,d5,d7
+    swap    d7         * <<< 14
+    ror.l   #2,d7
+    add.l   d2,d7      * tmp += b
+    * d7 = new b - goes to b    
+    * d2 = old b - goes to c
+    
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixG
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 20
-    rol.l   #4,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    stepGa  d5,d7,d2,d0,d4
+    swap    d4         * <<< 20
+    rol.l   #4,d4
+    add.l   d7,d4      * b += rotated sum
+    * d4 = new b - goes to b
+    * d7 = old b - goes to c
+
+    ; reset variable placements 
+    move.l   d4,d5      * b = new sum
+    move.l   d0,d4      * a = d
+    move.l   d7,d6      * c = b 
+    move.l   d2,d7      * d = c
     ; ---------------------------------
     dbf     d3,.stepLoopG
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopH:
-    move.l  (a2)+,a4   * read index
-    mixH
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
+    *       A  B  C  D  
+    *       d4 d5 d6 d7
+    stepHa  d4,d5,d6,d7,d0
     rol.l   #4,d0      * <<< 4
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    add.l   d5,d0      * tmp += b
+    * d0 = new b - goes to b
+    * d5 = old b - goes to c
+
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixH
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 11
-    ror.l   #5,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d7 d4 d5 d6  
+    stepHa  d7,d0,d5,d6,d2
+    swap    d2         * <<< 11
+    ror.l   #5,d2
+    add.l   d0,d2      * tmp += b
+    * d2 = new b - goes to b    
+    * d0 = old b - goes to c
+
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixH
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 16
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d6 d7 d4 d5
+    stepHa  d6,d2,d0,d5,d7
+    swap    d7         * <<< 16
+    add.l   d2,d7      * tmp += b
+    * d7 = new b - goes to b    
+    * d2 = old b - goes to c
+    
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixH
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 23
-    rol.l   #7,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    stepHa  d5,d7,d2,d0,d4
+    swap    d4         * <<< 23
+    rol.l   #7,d4
+    add.l   d7,d4      * b += rotated sum
+    * d4 = new b - goes to b
+    * d7 = old b - goes to c
+
+    ; reset variable placements 
+    move.l   d4,d5      * b = new sum
+    move.l   d0,d4      * a = d
+    move.l   d7,d6      * c = b 
+    move.l   d2,d7      * d = c
     ; ---------------------------------
     dbf     d3,.stepLoopH
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopI:
-    move.l  (a2)+,a4   * read index
-    mixI
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    rol.l   #6,d0      * <<< 6
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d4 d5 d6 d7
+    stepIa  d4,d5,d6,d7,d0
+    rol.l   #6,d0      * tmp <<< 6
+    add.l   d5,d0      * tmp += b
+    * d0 = new b - goes to b
+    * d5 = old b - goes to c
+
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixI
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 10
-    ror.l   #6,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d7 d4 d5 d6  
+    stepIa  d7,d0,d5,d6,d2
+    swap    d2         * <<< 10
+    ror.l   #6,d2
+    add.l   d0,d2      * tmp += b
+    * d2 = new b - goes to b    
+    * d0 = old b - goes to c
+
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixI
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 15
-    ror.l   #1,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    *       A  B  C  D  
+    *       d6 d7 d4 d5
+    stepIa  d6,d2,d0,d5,d7
+    swap    d7         * <<< 15
+    ror.l   #1,d7
+    add.l   d2,d7      * tmp += b
+    * d7 = new b - goes to b    
+    * d2 = old b - goes to c
+    
     ; ---------------------------------
-    move.l  (a2)+,a4   * read index
-    mixI
-    add.l   d4,d0      * add ctx_a
-    add.l   (a4),d0     * add block value
-    move.l  d7,d4      * a = d
-    add.l   (a2)+,d0
-    move.l  d6,d7      * d = c
-    swap    d0         * <<< 21
-    rol.l   #5,d0
-    move.l  d5,d6      * c = b
-    add.l   d0,d5      * add ctx_b, b = new sum
+    stepIa  d5,d7,d2,d0,d4
+    swap    d4         * <<< 21
+    rol.l   #5,d4
+    add.l   d7,d4      * b += rotated sum
+    * d4 = new b - goes to b
+    * d7 = old b - goes to c
+
+    ; reset variable placements 
+    move.l   d4,d5      * b = new sum
+    move.l   d0,d4      * a = d
+    move.l   d7,d6      * c = b 
+    move.l   d2,d7      * d = c
     ; ---------------------------------
+
     dbf     d3,.stepLoopI
     ; ---------------------------------
     add.l   d4,ctx_a(a0)
