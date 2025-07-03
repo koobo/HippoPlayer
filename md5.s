@@ -62,6 +62,20 @@ MD5_Init:
     move.l  #$10325476,ctx_d(a0)
     clr.l   ctx_lo(a0)
     clr.l   ctx_hi(a0)
+
+    lea     MD5_Body\.stepsG(pc),a1
+    lea     ctx_block(a0),a2
+    moveq   #16+16+16-1,d0
+.1
+    move.l  (a1),d2
+    bgt     .2
+    neg.l   d2
+    add.l   a2,d2
+    move.l  d2,(a1)
+.2
+    addq    #8,a1
+    dbf     d0,.1
+
     rts
 
 * In:
@@ -229,6 +243,11 @@ MD5_Final:
     rts
 
 
+; 21840 ms
+; 21670 ms - h trick = -170ms
+; 21360 ms - direct block address = -471ms
+
+
 * In:
 *   a0 = context
 *   a1 = input data
@@ -339,10 +358,10 @@ mixI macro
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopG:
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixG
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0    * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -350,10 +369,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixG
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0    * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -362,10 +381,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixG
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0    * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -374,10 +393,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixG
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -390,10 +409,10 @@ mixI macro
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopH:
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixH
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -401,10 +420,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixH
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -413,10 +432,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixH
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -424,10 +443,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixH
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -440,10 +459,10 @@ mixI macro
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopI:
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixI
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -451,10 +470,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixI
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -463,10 +482,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixI
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -475,10 +494,10 @@ mixI macro
     move.l  d5,d6      * c = b
     add.l   d0,d5      * add ctx_b, b = new sum
     ; ---------------------------------
-    move.w  (a2)+,d1   * read index
+    move.l  (a2)+,a4   * read index
     mixI
     add.l   d4,d0      * add ctx_a
-    add.l   ctx_block(a0,d1),d0
+    add.l   (a4),d0     * add block value
     move.l  d7,d4      * a = d
     add.l   (a2)+,d0
     move.l  d6,d7      * d = c
@@ -520,146 +539,146 @@ mixI macro
          dc.l $a679438e
          dc.l $49b40821
 .stepsG:
-         dc.w 1<<2
+         dc.l -1<<2
          dc.l $f61e2562 
 
-         dc.w 6<<2
+         dc.l -6<<2
          dc.l $c040b340 
 
-         dc.w 11<<2
+         dc.l -11<<2
          dc.l $265e5a51 
 
-         dc.w 0<<2
+         dc.l -0<<2
          dc.l $e9b6c7aa 
 
-         dc.w 5<<2
+         dc.l -5<<2
          dc.l $d62f105d 
 
-         dc.w 10<<2
+         dc.l -10<<2
          dc.l $02441453 
 
-         dc.w 15<<2
+         dc.l -15<<2
          dc.l $d8a1e681 
 
-         dc.w 4<<2
+         dc.l -4<<2
          dc.l $e7d3fbc8 
 
-         dc.w 9<<2
+         dc.l -9<<2
          dc.l $21e1cde6 
 
-         dc.w 14<<2
+         dc.l -14<<2
          dc.l $c33707d6 
 
-         dc.w 3<<2
+         dc.l -3<<2
          dc.l $f4d50d87 
 
-         dc.w 8<<2
+         dc.l -8<<2
          dc.l $455a14ed 
 
-         dc.w 13<<2
+         dc.l -13<<2
          dc.l $a9e3e905 
 
-         dc.w 2<<2
+         dc.l -2<<2
          dc.l $fcefa3f8 
 
-         dc.w 7<<2
+         dc.l -7<<2
          dc.l $676f02d9 
 
-         dc.w 12<<2
+         dc.l -12<<2
          dc.l $8d2a4c8a 
 .stepsH:
-         dc.w 5<<2
+         dc.l -5<<2
          dc.l $fffa3942 
 
-         dc.w 8<<2
+         dc.l -8<<2
          dc.l $8771f681 
 
-         dc.w 11<<2
+         dc.l -11<<2
          dc.l $6d9d6122 
 
-         dc.w 14<<2
+         dc.l -14<<2
          dc.l $fde5380c 
 
-         dc.w 1<<2
+         dc.l -1<<2
          dc.l $a4beea44 
 
-         dc.w 4<<2
+         dc.l -4<<2
          dc.l $4bdecfa9 
 
-         dc.w 7<<2
+         dc.l -7<<2
          dc.l $f6bb4b60 
 
-         dc.w 10<<2
+         dc.l -10<<2
          dc.l $bebfbc70 
 
-         dc.w 13<<2
+         dc.l -13<<2
          dc.l $289b7ec6 
 
-         dc.w 0<<2
+         dc.l -0<<2
          dc.l $eaa127fa 
 
-         dc.w 3<<2
+         dc.l -3<<2
          dc.l $d4ef3085 
 
-         dc.w 6<<2
+         dc.l -6<<2
          dc.l $04881d05 
 
-         dc.w 9<<2
+         dc.l -9<<2
          dc.l $d9d4d039 
 
-         dc.w 12<<2
+         dc.l -12<<2
          dc.l $e6db99e5 
 
-         dc.w 15<<2
+         dc.l -15<<2
          dc.l $1fa27cf8 
 
-         dc.w 2<<2
+         dc.l -2<<2
          dc.l $c4ac5665 
 .stepsI:
-         dc.w 0<<2
+         dc.l -0<<2
          dc.l $f4292244 
 
-         dc.w 7<<2
+         dc.l -7<<2
          dc.l $432aff97 
 
-         dc.w 14<<2
+         dc.l -14<<2
          dc.l $ab9423a7 
 
-         dc.w 5<<2
+         dc.l -5<<2
          dc.l $fc93a039 
 
-         dc.w 12<<2
+         dc.l -12<<2
          dc.l $655b59c3 
 
-         dc.w 3<<2
+         dc.l -3<<2
          dc.l $8f0ccc92 
 
-         dc.w 10<<2
+         dc.l -10<<2
          dc.l $ffeff47d 
 
-         dc.w 1<<2
+         dc.l -1<<2
          dc.l $85845dd1 
 
-         dc.w 8<<2
+         dc.l -8<<2
          dc.l $6fa87e4f 
 
-         dc.w 15<<2
+         dc.l -15<<2
          dc.l $fe2ce6e0 
 
-         dc.w 6<<2
+         dc.l -6<<2
          dc.l $a3014314 
 
-         dc.w 13<<2
+         dc.l -13<<2
          dc.l $4e0811a1 
 
-         dc.w 4<<2
+         dc.l -4<<2
          dc.l $f7537e82 
 
-         dc.w 11<<2
+         dc.l -11<<2
          dc.l $bd3af235 
 
-         dc.w 2<<2
+         dc.l -2<<2
          dc.l $2ad7d2bb 
 
-         dc.w 9<<2
+         dc.l -9<<2
          dc.l $eb86d391 
