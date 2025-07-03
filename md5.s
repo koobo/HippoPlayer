@@ -269,14 +269,16 @@ MD5_Body:
 ; \5 tmp1
 ; \6 tmp2
 stepFa macro 
-    move.l  (a1)+,\6
-    ilword  \6
-    move.l  \6,(a6)+
+    move.l  (a1)+,\6    * read input
 
     ;((z) ^ ((x) & ((y) ^ (z))))
-    move.l  \3,\5
+    move.l  \3,\5       * mix to \5
+    ror.w   #8,\6       * ilword part 1
     eor.l   \4,\5       * \5 = c ^ d 
+    swap    \6          * ilword part 2
+    ror.w   #8,\6       * ilword part 3
     and.l   \2,\5       * \5 = (c ^ d) & b
+    move.l  \6,(a6)+    * write to block buffer
     eor.l   \4,\5       * \5 = ((c ^ d) & b) ^ d
 
     add.l   \6,\5      * add block value
@@ -354,8 +356,7 @@ stepIa macro
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopF:
-    *       A  B  C  D  
-    *       d4 d5 d6 d7
+    *       A  B  C  D  t1 t2
     stepFa  d4,d5,d6,d7,d0,d1
     rol.l   #7,d0      * <<< 7
     add.l   d5,d0      * add ctx_b, b = new sum
@@ -363,8 +364,7 @@ stepIa macro
     * d5 = old b - goes to c
 
     ; ---------------------------------
-    *       A  B  C  D  
-    *       d7 d4 d5 d6  
+    *       A  B  C  D  t1 t2
     stepFa  d7,d0,d5,d6,d2,d1
     swap    d2         * <<< 12
     ror.l   #4,d2
@@ -373,8 +373,7 @@ stepIa macro
     * d0 = old b - goes to c
 
     ; ---------------------------------
-    *       A  B  C  D  
-    *       d6 d7 d4 d5
+    *       A  B  C  D  t1 t2
     stepFa  d6,d2,d0,d5,d7,d1
     swap    d7         * <<< 17
     rol.l   #1,d7
@@ -382,18 +381,15 @@ stepIa macro
     * d7 = new b - goes to b    
     * d2 = old b - goes to c
     ; ---------------------------------
+    *       A  B  C  D  t1 t2
     stepFa  d5,d7,d2,d0,d4,d1
     swap    d4        * <<< 22
+    move.l  d7,d6      * rotate: c = b 
     rol.l   #6,d4
     add.l   d7,d4      * b += rotated sum
-    * d4 = new b - goes to b
-    * d7 = old b - goes to c
-
-    ; reset variable placements 
-    move.l   d4,d5      * b = new sum
-    move.l   d0,d4      * a = d
-    move.l   d7,d6      * c = b 
-    move.l   d2,d7      * d = c
+    move.l  d2,d7      * rotate: d = c
+    move.l  d4,d5      * rotate: b = new sum
+    move.l  d0,d4      * rotate: a = d
 
     ; ---------------------------------
     dbf     d3,.stepLoopF
@@ -419,8 +415,7 @@ stepIa macro
     * d0 = old b - goes to c
 
     ; ---------------------------------
-    *       A  B  C  D  
-    *       d6 d7 d4 d5
+    *       A  B  C  D  t
     stepGa  d6,d2,d0,d5,d7
     swap    d7         * <<< 14
     ror.l   #2,d7
@@ -429,25 +424,21 @@ stepIa macro
     * d2 = old b - goes to c
     
     ; ---------------------------------
+    *       A  B  C  D  t
     stepGa  d5,d7,d2,d0,d4
     swap    d4         * <<< 20
+    move.l  d7,d6      * rotate: c = b 
     rol.l   #4,d4
     add.l   d7,d4      * b += rotated sum
-    * d4 = new b - goes to b
-    * d7 = old b - goes to c
-
-    ; reset variable placements 
-    move.l   d4,d5      * b = new sum
-    move.l   d0,d4      * a = d
-    move.l   d7,d6      * c = b 
-    move.l   d2,d7      * d = c
+    move.l  d2,d7      * rotate: d = c
+    move.l  d4,d5      * rotate: b = new sum
+    move.l  d0,d4      * rotate: a = d
     ; ---------------------------------
     dbf     d3,.stepLoopG
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopH:
-    *       A  B  C  D  
-    *       d4 d5 d6 d7
+    *       A  B  C  D  t
     stepHa  d4,d5,d6,d7,d0
     rol.l   #4,d0      * <<< 4
     add.l   d5,d0      * tmp += b
@@ -455,8 +446,7 @@ stepIa macro
     * d5 = old b - goes to c
 
     ; ---------------------------------
-    *       A  B  C  D  
-    *       d7 d4 d5 d6  
+    *       A  B  C  D  t
     stepHa  d7,d0,d5,d6,d2
     swap    d2         * <<< 11
     ror.l   #5,d2
@@ -465,8 +455,7 @@ stepIa macro
     * d0 = old b - goes to c
 
     ; ---------------------------------
-    *       A  B  C  D  
-    *       d6 d7 d4 d5
+    *       A  B  C  D  t
     stepHa  d6,d2,d0,d5,d7
     swap    d7         * <<< 16
     add.l   d2,d7      * tmp += b
@@ -474,25 +463,21 @@ stepIa macro
     * d2 = old b - goes to c
     
     ; ---------------------------------
+    *       A  B  C  D  t
     stepHa  d5,d7,d2,d0,d4
     swap    d4         * <<< 23
+    move.l  d7,d6      * rotate: c = b 
     rol.l   #7,d4
     add.l   d7,d4      * b += rotated sum
-    * d4 = new b - goes to b
-    * d7 = old b - goes to c
-
-    ; reset variable placements 
-    move.l   d4,d5      * b = new sum
-    move.l   d0,d4      * a = d
-    move.l   d7,d6      * c = b 
-    move.l   d2,d7      * d = c
+    move.l  d2,d7      * rotate: d = c
+    move.l  d4,d5      * rotate: b = new sum
+    move.l  d0,d4      * rotate: a = d
     ; ---------------------------------
     dbf     d3,.stepLoopH
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopI:
-    *       A  B  C  D  
-    *       d4 d5 d6 d7
+    *       A  B  C  D  t
     stepIa  d4,d5,d6,d7,d0
     rol.l   #6,d0      * tmp <<< 6
     add.l   d5,d0      * tmp += b
@@ -500,8 +485,7 @@ stepIa macro
     * d5 = old b - goes to c
 
     ; ---------------------------------
-    *       A  B  C  D  
-    *       d7 d4 d5 d6  
+    *       A  B  C  D  t
     stepIa  d7,d0,d5,d6,d2
     swap    d2         * <<< 10
     ror.l   #6,d2
@@ -510,8 +494,7 @@ stepIa macro
     * d0 = old b - goes to c
 
     ; ---------------------------------
-    *       A  B  C  D  
-    *       d6 d7 d4 d5
+    *       A  B  C  D  t
     stepIa  d6,d2,d0,d5,d7
     swap    d7         * <<< 15
     ror.l   #1,d7
@@ -520,20 +503,16 @@ stepIa macro
     * d2 = old b - goes to c
     
     ; ---------------------------------
+    *       A  B  C  D  t
     stepIa  d5,d7,d2,d0,d4
     swap    d4         * <<< 21
+    move.l  d7,d6      * rotate: c = b 
     rol.l   #5,d4
     add.l   d7,d4      * b += rotated sum
-    * d4 = new b - goes to b
-    * d7 = old b - goes to c
-
-    ; reset variable placements 
-    move.l   d4,d5      * b = new sum
-    move.l   d0,d4      * a = d
-    move.l   d7,d6      * c = b 
-    move.l   d2,d7      * d = c
+    move.l  d2,d7      * rotate: d = c
+    move.l  d4,d5      * rotate: b = new sum
+    move.l  d0,d4      * rotate: a = d
     ; ---------------------------------
-
     dbf     d3,.stepLoopI
     ; ---------------------------------
     add.l   d4,ctx_a(a0)
