@@ -56,6 +56,11 @@ inputE
 * In:
 *   a0 = context
 MD5_Init:
+    lea     MD5Ctx_SIZEOF(a0),a1
+.cl clr.b   -(a1)
+    cmp.l   a0,a1
+    bne     .cl
+
     move.l  #$67452301,ctx_a(a0)
     move.l  #$efcdab89,ctx_b(a0)
     move.l  #$98badcfe,ctx_c(a0)
@@ -64,15 +69,13 @@ MD5_Init:
     clr.l   ctx_hi(a0)
 
     lea     MD5_Body\.stepsG(pc),a1
-    lea     ctx_block(a0),a2
+    lea     MD5_Body\.stepOffsetsGHI(pc),a3
     moveq   #16+16+16-1,d0
+    moveq   #0,d2
 .1
-    move.l  (a1),d2
-    bgt     .2
-    neg.l   d2
-    add.l   a2,d2
-    move.l  d2,(a1)
-.2
+    move.b  (a3)+,d2
+    lea     ctx_block(a0,d2),a2
+    move.l  a2,(a1)
     addq    #8,a1
     dbf     d0,.1
 
@@ -546,146 +549,196 @@ stepIa macro
          dc.l $a679438e
          dc.l $49b40821
 .stepsG:
-         dc.l -1<<2
+         dc.l 0
          dc.l $f61e2562 
 
-         dc.l -6<<2
+         dc.l 0
          dc.l $c040b340 
 
-         dc.l -11<<2
+         dc.l 0
          dc.l $265e5a51 
 
-         dc.l -0<<2
+         dc.l 0
          dc.l $e9b6c7aa 
 
-         dc.l -5<<2
+         dc.l 0
          dc.l $d62f105d 
 
-         dc.l -10<<2
+         dc.l 0
          dc.l $02441453 
 
-         dc.l -15<<2
+         dc.l 0
          dc.l $d8a1e681 
 
-         dc.l -4<<2
+         dc.l 0
          dc.l $e7d3fbc8 
 
-         dc.l -9<<2
+         dc.l 0
          dc.l $21e1cde6 
 
-         dc.l -14<<2
+         dc.l 0
          dc.l $c33707d6 
 
-         dc.l -3<<2
+         dc.l 0
          dc.l $f4d50d87 
 
-         dc.l -8<<2
+         dc.l 0
          dc.l $455a14ed 
 
-         dc.l -13<<2
+         dc.l 0
          dc.l $a9e3e905 
 
-         dc.l -2<<2
+         dc.l 0
          dc.l $fcefa3f8 
 
-         dc.l -7<<2
+         dc.l 0
          dc.l $676f02d9 
 
-         dc.l -12<<2
+         dc.l 0
          dc.l $8d2a4c8a 
 .stepsH:
-         dc.l -5<<2
+         dc.l 0
          dc.l $fffa3942 
 
-         dc.l -8<<2
+         dc.l 0
          dc.l $8771f681 
 
-         dc.l -11<<2
+         dc.l 0
          dc.l $6d9d6122 
 
-         dc.l -14<<2
+         dc.l 0
          dc.l $fde5380c 
 
-         dc.l -1<<2
+         dc.l 0
          dc.l $a4beea44 
 
-         dc.l -4<<2
+         dc.l 0
          dc.l $4bdecfa9 
 
-         dc.l -7<<2
+         dc.l 0
          dc.l $f6bb4b60 
 
-         dc.l -10<<2
+         dc.l 0
          dc.l $bebfbc70 
 
-         dc.l -13<<2
+         dc.l 0
          dc.l $289b7ec6 
 
-         dc.l -0<<2
+         dc.l 0
          dc.l $eaa127fa 
 
-         dc.l -3<<2
+         dc.l 0
          dc.l $d4ef3085 
 
-         dc.l -6<<2
+         dc.l 0
          dc.l $04881d05 
 
-         dc.l -9<<2
+         dc.l 0
          dc.l $d9d4d039 
 
-         dc.l -12<<2
+         dc.l 0
          dc.l $e6db99e5 
 
-         dc.l -15<<2
+         dc.l 0
          dc.l $1fa27cf8 
 
-         dc.l -2<<2
+         dc.l 0
          dc.l $c4ac5665 
 .stepsI:
-         dc.l -0<<2
+         dc.l 0
          dc.l $f4292244 
 
-         dc.l -7<<2
+         dc.l 0
          dc.l $432aff97 
 
-         dc.l -14<<2
+         dc.l 0
          dc.l $ab9423a7 
 
-         dc.l -5<<2
+         dc.l 0
          dc.l $fc93a039 
 
-         dc.l -12<<2
+         dc.l 0
          dc.l $655b59c3 
 
-         dc.l -3<<2
+         dc.l 0
          dc.l $8f0ccc92 
 
-         dc.l -10<<2
+         dc.l 0
          dc.l $ffeff47d 
 
-         dc.l -1<<2
+         dc.l 0
          dc.l $85845dd1 
 
-         dc.l -8<<2
+         dc.l 0
          dc.l $6fa87e4f 
 
-         dc.l -15<<2
+         dc.l 0
          dc.l $fe2ce6e0 
 
-         dc.l -6<<2
+         dc.l 0
          dc.l $a3014314 
 
-         dc.l -13<<2
+         dc.l 0
          dc.l $4e0811a1 
 
-         dc.l -4<<2
+         dc.l 0
          dc.l $f7537e82 
 
-         dc.l -11<<2
+         dc.l 0
          dc.l $bd3af235 
 
-         dc.l -2<<2
+         dc.l 0
          dc.l $2ad7d2bb 
 
-         dc.l -9<<2
+         dc.l 0
          dc.l $eb86d391 
+
+.stepOffsetsGHI:
+         dc.b 1<<2
+         dc.b 6<<2
+         dc.b 11<<2
+         dc.b 0<<2
+         dc.b 5<<2
+         dc.b 10<<2
+         dc.b 15<<2
+         dc.b 4<<2
+         dc.b 9<<2
+         dc.b 14<<2
+         dc.b 3<<2
+         dc.b 8<<2
+         dc.b 13<<2
+         dc.b 2<<2
+         dc.b 7<<2
+         dc.b 12<<2
+         dc.b 5<<2
+         dc.b 8<<2
+         dc.b 11<<2
+         dc.b 14<<2
+         dc.b 1<<2
+         dc.b 4<<2
+         dc.b 7<<2
+         dc.b 10<<2
+         dc.b 13<<2
+         dc.b 0<<2
+         dc.b 3<<2
+         dc.b 6<<2
+         dc.b 9<<2
+         dc.b 12<<2
+         dc.b 15<<2
+         dc.b 2<<2
+         dc.b 0<<2
+         dc.b 7<<2
+         dc.b 14<<2
+         dc.b 5<<2
+         dc.b 12<<2
+         dc.b 3<<2
+         dc.b 10<<2
+         dc.b 1<<2
+         dc.b 8<<2
+         dc.b 15<<2
+         dc.b 6<<2
+         dc.b 13<<2
+         dc.b 4<<2
+         dc.b 11<<2
+         dc.b 2<<2
+         dc.b 9<<2
