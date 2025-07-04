@@ -1,5 +1,5 @@
 ;APS00000088000000880000008800000088000000880000008800000088000000880000008800000088
-; Asm port of https://github.com/calebstewart/md5/blob/main/md5.cpp
+; Inspired by https://github.com/calebstewart/md5/blob/main/md5.cpp
 
   ifnd __VASM
 	incdir	include:
