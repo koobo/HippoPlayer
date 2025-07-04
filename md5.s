@@ -57,7 +57,7 @@ inputE
 *   a0 = context
 MD5_Init:
     lea     MD5Ctx_SIZEOF(a0),a1
-.cl clr.b   -(a1)
+.cl clr.l   -(a1)
     cmp.l   a0,a1
     bne     .cl
 
@@ -250,6 +250,9 @@ MD5_Final:
 ; 21670 ms - h trick = -170ms = 0.7%
 ; 21360 ms - direct block address = -471ms = 2.2%
 
+; h trick: 20050 ms to 19900 ms = 0.75%
+; attributed horror v2.64:  11087 ms
+; latest                    8039 ms = 27.5%
 
 * In:
 *   a0 = context
@@ -269,7 +272,7 @@ MD5_Body:
 ; \2 b
 ; \3 c
 ; \4 d
-; \5 tmp1
+; \5 tmp1 - output
 ; \6 tmp2
 stepFa macro 
     move.l  (a1)+,\6    * read input
@@ -294,7 +297,7 @@ stepFa macro
 ; \2 b
 ; \3 c
 ; \4 d
-; \5 tmp
+; \5 tmp - output
 stepGa macro 
     move.l  (a2)+,a4   * read index
 
@@ -313,14 +316,32 @@ stepGa macro
 ; \2 b
 ; \3 c
 ; \4 d
-; \5 tmp
+; \5 tmp - output
+; \6 tmp 2 - intermediate result
 stepHa macro 
     move.l  (a2)+,a4   * read index
 
     ;(x) ^ (y) ^ (z)
     move.l  \2,\5       
     eor.l   \3,\5       * \5 = b ^ c
+    move.l  \5,\6       * \6 = store for stepHb
     eor.l   \4,\5       * \5 = (b ^ c) ^ d
+
+    add.l   \1,\5      * add ctx_a
+    add.l   (a4),\5    * add block value
+    add.l   (a2)+,\5   * add constant
+    endm
+
+; \1 a
+; \2 b
+; \3 c
+; \4 d
+; \5 tmp - output
+stepHb macro 
+    move.l  (a2)+,a4   * read index
+
+    ; use stepHa intermediate result in \5
+    eor.l   \2,\5       * \5 = (b ^ c) ^ d
 
     add.l   \1,\5      * add ctx_a
     add.l   (a4),\5    * add block value
@@ -332,7 +353,7 @@ stepHa macro
 ; \2 b
 ; \3 c
 ; \4 d
-; \5 tmp
+; \5 tmp - out
 stepIa macro 
     move.l  (a2)+,a4   * read index
 
@@ -441,8 +462,8 @@ stepIa macro
     ; ---------------------------------
     moveq   #16/4-1,d3
 .stepLoopH:
-    *       A  B  C  D  t
-    stepHa  d4,d5,d6,d7,d0
+    *       A  B  C  D  t  t2
+    stepHa  d4,d5,d6,d7,d0,d2
     rol.l   #4,d0      * <<< 4
     add.l   d5,d0      * tmp += b
     * d0 = new b - goes to b
@@ -450,7 +471,7 @@ stepIa macro
 
     ; ---------------------------------
     *       A  B  C  D  t
-    stepHa  d7,d0,d5,d6,d2
+    stepHb  d7,d0,d5,d6,d2
     swap    d2         * <<< 11
     ror.l   #5,d2
     add.l   d0,d2      * tmp += b
@@ -459,7 +480,7 @@ stepIa macro
 
     ; ---------------------------------
     *       A  B  C  D  t
-    stepHa  d6,d2,d0,d5,d7
+    stepHa  d6,d2,d0,d5,d7,d4
     swap    d7         * <<< 16
     add.l   d2,d7      * tmp += b
     * d7 = new b - goes to b    
@@ -467,10 +488,10 @@ stepIa macro
     
     ; ---------------------------------
     *       A  B  C  D  t
-    stepHa  d5,d7,d2,d0,d4
+    stepHb  d5,d7,d2,d0,d4
     swap    d4         * <<< 23
     move.l  d7,d6      * rotate: c = b 
-    rol.l   #7,d4
+    rol.l   #7,d4      * <<<
     add.l   d7,d4      * b += rotated sum
     move.l  d2,d7      * rotate: d = c
     move.l  d4,d5      * rotate: b = new sum
