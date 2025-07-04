@@ -24,6 +24,8 @@ TEST=1
         STRUCT ctx_block,16*4
         ULONG  ctx_lo
         ULONG  ctx_hi
+        * Pairs of (block address, constant) for steps g,h,i
+        STRUCT ctx_stepsGHI,3*16*8
     LABEL MD5Ctx_SIZEOF
 
 
@@ -56,11 +58,6 @@ inputE
 * In:
 *   a0 = context
 MD5_Init:
-    lea     MD5Ctx_SIZEOF(a0),a1
-.cl clr.l   -(a1)
-    cmp.l   a0,a1
-    bne     .cl
-
     move.l  #$67452301,ctx_a(a0)
     move.l  #$efcdab89,ctx_b(a0)
     move.l  #$98badcfe,ctx_c(a0)
@@ -68,17 +65,19 @@ MD5_Init:
     clr.l   ctx_lo(a0)
     clr.l   ctx_hi(a0)
 
+    * Prepare block addressess into a table
+    * for steps g,h,i
     lea     MD5_Body\.stepsG(pc),a1
-    lea     MD5_Body\.stepOffsetsGHI(pc),a3
+    lea     MD5_Body\.stepBlockOffsetsGHI(pc),a3
+    lea     ctx_stepsGHI(a0),a4
     moveq   #16+16+16-1,d0
     moveq   #0,d2
 .1
     move.b  (a3)+,d2
     lea     ctx_block(a0,d2),a2
-    move.l  a2,(a1)
-    addq    #8,a1
+    move.l  a2,(a4)+        * store address
+    move.l  (a1)+,(a4)+     * store constant
     dbf     d0,.1
-
     rts
 
 * In:
@@ -374,7 +373,7 @@ stepIa macro
 .loop
     ; ---------------------------------
     movem.l ctx_a(a0),d4/d5/d6/d7
-    lea     .steps(pc),a2
+    lea     .stepsF(pc),a2
     ; First loop: copy data
     lea     ctx_block(a0),a6
     ; ---------------------------------
@@ -418,6 +417,7 @@ stepIa macro
     ; ---------------------------------
     dbf     d3,.stepLoopF
     ; ---------------------------------
+    lea     ctx_stepsGHI(a0),a2
     moveq   #16/4-1,d3
 .stepLoopG:
     *       A  B  C  D  
@@ -569,152 +569,59 @@ stepIa macro
          dc.l $fd987193
          dc.l $a679438e
          dc.l $49b40821
-.stepsG:
-         dc.l 0
+.stepsG:         
          dc.l $f61e2562 
-
-         dc.l 0
          dc.l $c040b340 
-
-         dc.l 0
          dc.l $265e5a51 
-
-         dc.l 0
          dc.l $e9b6c7aa 
-
-         dc.l 0
          dc.l $d62f105d 
-
-         dc.l 0
          dc.l $02441453 
-
-         dc.l 0
          dc.l $d8a1e681 
-
-         dc.l 0
          dc.l $e7d3fbc8 
-
-         dc.l 0
          dc.l $21e1cde6 
-
-         dc.l 0
          dc.l $c33707d6 
-
-         dc.l 0
          dc.l $f4d50d87 
-
-         dc.l 0
          dc.l $455a14ed 
-
-         dc.l 0
          dc.l $a9e3e905 
-
-         dc.l 0
          dc.l $fcefa3f8 
-
-         dc.l 0
          dc.l $676f02d9 
-
-         dc.l 0
          dc.l $8d2a4c8a 
-.stepsH:
-         dc.l 0
+.stepsH:         
          dc.l $fffa3942 
-
-         dc.l 0
          dc.l $8771f681 
-
-         dc.l 0
          dc.l $6d9d6122 
-
-         dc.l 0
          dc.l $fde5380c 
-
-         dc.l 0
          dc.l $a4beea44 
-
-         dc.l 0
          dc.l $4bdecfa9 
-
-         dc.l 0
          dc.l $f6bb4b60 
-
-         dc.l 0
          dc.l $bebfbc70 
-
-         dc.l 0
          dc.l $289b7ec6 
-
-         dc.l 0
          dc.l $eaa127fa 
-
-         dc.l 0
          dc.l $d4ef3085 
-
-         dc.l 0
          dc.l $04881d05 
-
-         dc.l 0
          dc.l $d9d4d039 
-
-         dc.l 0
          dc.l $e6db99e5 
-
-         dc.l 0
          dc.l $1fa27cf8 
-
-         dc.l 0
          dc.l $c4ac5665 
-.stepsI:
-         dc.l 0
+.stepsI:         
          dc.l $f4292244 
-
-         dc.l 0
          dc.l $432aff97 
-
-         dc.l 0
          dc.l $ab9423a7 
-
-         dc.l 0
          dc.l $fc93a039 
-
-         dc.l 0
          dc.l $655b59c3 
-
-         dc.l 0
          dc.l $8f0ccc92 
-
-         dc.l 0
          dc.l $ffeff47d 
-
-         dc.l 0
          dc.l $85845dd1 
-
-         dc.l 0
          dc.l $6fa87e4f 
-
-         dc.l 0
          dc.l $fe2ce6e0 
-
-         dc.l 0
          dc.l $a3014314 
-
-         dc.l 0
          dc.l $4e0811a1 
-
-         dc.l 0
          dc.l $f7537e82 
-
-         dc.l 0
          dc.l $bd3af235 
-
-         dc.l 0
          dc.l $2ad7d2bb 
-
-         dc.l 0
          dc.l $eb86d391 
 
-.stepOffsetsGHI:
+.stepBlockOffsetsGHI:
          dc.b 1<<2
          dc.b 6<<2
          dc.b 11<<2
