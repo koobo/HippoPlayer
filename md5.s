@@ -305,6 +305,24 @@ stepGa macro
     endm
 
 ; \1 a
+; \2 b - overwritten output
+; \3 c
+; \4 d
+stepGb macro 
+    move.l  (a2)+,a4   * read block address
+
+    ;((y) ^ ((z) & ((x) ^ (y))))
+;    move.l  \2,\5
+    eor.l   \3,\2       * \2 = b ^ c
+    and.l   \4,\2       * \2 = (b ^ c) & d
+    eor.l   \3,\2       * \2 = ((b ^ c) & d) ^ c
+
+    add.l   \1,\2      * add ctx_a
+    add.l   (a4),\2    * add block value
+    add.l   (a2)+,\2   * add constant
+    endm
+
+; \1 a
 ; \2 b
 ; \3 c
 ; \4 d
@@ -448,13 +466,13 @@ stepIb macro
     * d7 = new b - goes to b    
     * d2 = old b - goes to c
     ; ---------------------------------
-    *       A  B  C  D  t
-    stepGa  d5,d7,d2,d0,d4
-    swap    d4         * <<< 20
-    rol.l   #4,d4      * <<<
-    move.l  d7,d5      * new b
     move.l  d7,d6      * rotate: c = b 
-    add.l   d4,d5      * rotate: b = new sum
+    *       A  B  C  D 
+    stepGb  d5,d7,d2,d0
+    swap    d7         * <<< 20
+    rol.l   #4,d7      * <<<
+    move.l  d6,d5      * new b
+    add.l   d7,d5      * rotate: b = new sum
     move.l  d2,d7      * rotate: d = c
     move.l  d0,d4      * rotate: a = d
     ; ---------------------------------
