@@ -287,6 +287,28 @@ stepFa macro
 
 ; \1 a
 ; \2 b
+; \3 c - output
+; \4 d
+; \5 tmp2
+stepFb macro 
+    move.l  (a1)+,\5    * read input
+
+    ;((z) ^ ((x) & ((y) ^ (z))))
+    ror.w   #8,\5       * ilword part 1
+    eor.l   \4,\3       * 3 = c ^ d 
+    swap    \5          * ilword part 2
+    ror.w   #8,\5       * ilword part 3
+    and.l   \2,\3       * 3 = (c ^ d) & b
+    move.l  \5,(a6)+    * write to block buffer
+    eor.l   \4,\3       * 3 = ((c ^ d) & b) ^ d
+
+    add.l   \5,\3      * add block value
+    add.l   \1,\3      * add ctx_a
+    add.l   (a2)+,\3   * add constant
+    endm
+
+; \1 a
+; \2 b
 ; \3 c
 ; \4 d
 ; \5 tmp - output
@@ -428,14 +450,14 @@ stepIb macro
     * d7 = new b - goes to b    
     * d2 = old b - goes to c
     ; ---------------------------------
-    *       A  B  C  D  t1 t2
-    stepFa  d5,d7,d2,d0,d4,d1
-    swap    d4         * <<< 22
-    rol.l   #6,d4      * <<<
-    move.l  d7,d5      * new b
     move.l  d7,d6      * rotate: c = b 
-    add.l   d4,d5      * rotate: b = new sum
     move.l  d2,d7      * rotate: d = c
+    *       A  B  C  D  t1
+    stepFb  d5,d6,d2,d0,d1
+    swap    d2         * <<< 22
+    rol.l   #6,d2      * <<<
+    move.l  d6,d5      * new b
+    add.l   d2,d5      * rotate: b = new sum
     move.l  d0,d4      * rotate: a = d
     ; ---------------------------------
     dbf     d3,.stepLoopF
@@ -540,7 +562,7 @@ stepIb macro
     * d2 = old b - goes to c
     ; ---------------------------------
     move.l  d0,d4      * rotate: a = d
-    *       A  B  C  D  t
+    *       A  B  C  D 
     stepIb  d5,d7,d2,d0
     swap    d0         * <<< 21
     rol.l   #5,d0      * <<<
