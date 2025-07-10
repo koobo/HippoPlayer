@@ -359,6 +359,23 @@ stepIa macro
     add.l   (a2)+,\5   * add constant
     endm
 
+; \1 a
+; \2 b
+; \3 c
+; \4 d - overwritten, out
+stepIb macro 
+    move.l  (a2)+,a4   * read block address
+
+    ;(y) ^ ((x) | ~(z))
+    not.l   \4          * \4 = ~d
+    or.l    \2,\4       * \4 = (~d) | b
+    eor.l   \3,\4       * \4 = ((~d) | b) ^ c
+
+    add.l   \1,\4      * add ctx_a
+    add.l   (a4),\4    * add block value
+    add.l   (a2)+,\4   * add constant
+    endm
+
     ; ---------------------------------
     lea     (a1,d0.l),a3       * loop end
 .loop
@@ -504,15 +521,15 @@ stepIa macro
     * d7 = new b - goes to b    
     * d2 = old b - goes to c
     ; ---------------------------------
+    move.l  d0,d4      * rotate: a = d
     *       A  B  C  D  t
-    stepIa  d5,d7,d2,d0,d4
-    swap    d4         * <<< 21
-    rol.l   #5,d4      * <<<
+    stepIb  d5,d7,d2,d0
+    swap    d0         * <<< 21
+    rol.l   #5,d0      * <<<
     move.l  d7,d5      * new b
     move.l  d7,d6      * rotate: c = b 
-    add.l   d4,d5      * rotate: b = new sum
+    add.l   d0,d5      * rotate: b = new sum
     move.l  d2,d7      * rotate: d = c
-    move.l  d0,d4      * rotate: a = d
     ; ---------------------------------
     dbf     d3,.stepLoopI
     ; ---------------------------------
