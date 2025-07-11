@@ -1,3 +1,248 @@
+;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
+    incdir  include:
+    include mucro.i
+
+    jmp     tfmx_init(pc)
+    jmp     tfmx_end(pc)
+    jmp     tfmx_forward(pc)
+    jmp     tfmx_backward(pc)
+    jmp     tfmx_getpos(pc)
+    jmp     tfmx_stop(pc)
+    jmp     tfmx_cont(pc)
+    jmp     tfmx_volume(pc)
+    jmp     tfmx_song(pc)
+    jmp     tfmx_getsongs(pc)
+
+module      dc.l    0
+samples     dc.l    0
+songOver    dc.l    0
+songNumber  dc.w    0 
+
+* In:
+*   a0 = module address
+*   a1 = sample address
+*   a2  = song over address
+*   d0 = song number
+tfmx_init:
+    move.l  a0,module
+    move.l  a1,samples
+    move.l  a2,songOver
+    move    d0,songNumber
+
+    lea     _timerInterrupt(pc),a1
+	lea	tfmxi1(pc),a2
+	move.l	a1,(a2)
+    lea     _audioInterrupt(pc),a0
+	move.l	a0,tfmxi2-tfmxi1(a2)
+	move.l	a0,tfmxi3-tfmxi1(a2)
+	move.l	a0,tfmxi4-tfmxi1(a2)
+	move.l	a0,tfmxi5-tfmxi1(a2)
+
+	bsr	tfmx_varaa
+    beq     .ok3
+    moveq   #0,d0   * failed
+    rts
+.ok3
+
+	move.l  module(pc),a0
+	cmp.l	#"TFHD",(a0)
+	bne.b	.noo
+
+	move.l	a0,d0
+	add.l	4(a0),d0		* MDAT
+	move.l	d0,d1
+	add.l	10(a0),d1		* SMPL
+	btst	#0,d1		* onko parittomassa osoitteessa?
+	beq.b	.un
+	addq.l	#1,d1		* on, v‰‰nnet‰‰n se parilliseksi
+	move.l	d1,a0
+	clr.l	(a0)		* alusta nollaa tyhj‰ks
+	bra.b	.un
+.noo
+
+	move.l	module(pc),d0
+	move.l	samples(pc),d1
+
+.un
+	bsr     start+$14
+	moveq	#0,d0			* song number
+	move	songNumber(pc),d0
+	bsr     start+12
+
+	bsr 	tfmx_cont
+    bsr     tfmx_getsongs
+    move.l  d0,d1   
+
+    moveq   #1,d0   * success
+    rts
+
+tfmx_cont:
+    bset	#0,$bfdf00
+    rts
+
+tfmx_stop:
+	bclr	#0,$bfdf00
+    rts
+
+tfmx_volume:
+    ext.l   d0
+	bra     start+$28
+
+tfmx_forward:
+	move	_songPosition(pc),d0
+	addq	#2,d0
+	cmp	    _songLength,d0
+	bhi.b	.og
+	subq	#1,d0
+	move	d0,_songPosition
+.og	
+	rts
+
+tfmx_backward:
+	subq	#1,_songPosition
+	bpl.b	.gog
+	clr	    _songPosition
+.gog
+	rts
+
+tfmx_getpos:
+    move    _songPosition(pc),d0
+    move    _songLength(pc),d1
+    rts
+
+tfmx_song:  
+    move    d0,songNumber
+    rts
+
+tfmx_end:
+	
+.tfmxe	
+    bsr 	tfmx_stop
+	bsr	start+$1C
+	moveq	#0,D0
+	bsr	start+$20
+	moveq	#1,D0
+	bsr	start+$20
+	moveq	#2,D0
+	bsr	start+$20
+	moveq	#3,D0
+	bsr	start+$20
+    bsr     tfmx_vapauta
+    rts
+
+
+
+tfmx_varaa:
+	move.l	a6,-(sp)
+	moveq	#7,D0
+	lea	tfmx_L000106(PC),A1
+	move.l	4.w,A6
+	jsr	-$A2(A6)
+	move.l	D0,tfmx_L0000E0
+	moveq	#8,D0
+	lea	tfmx_L00011C(PC),A1
+	jsr	-$A2(A6)
+	move.l	D0,tfmx_L0000E4
+	moveq	#9,D0
+	lea	tfmx_L000132(PC),A1
+	jsr	-$A2(A6)
+	move.l	D0,tfmx_L0000E8
+	moveq	#10,D0
+	lea	tfmx_L000148(PC),A1
+	jsr	-$A2(A6)
+	move.l	D0,tfmx_L0000EC
+	lea	.n(pc),A1
+	jsr	-$1F2(A6)
+	move.l	D0,tfmx_L0000DC
+	beq.b	tfmx_C000338
+	moveq	#1,D0
+	lea	tfmx_L0000F0(PC),A1
+	move.l	tfmx_L0000DC,A6
+	jsr	-6(A6)
+	tst.l	D0
+	bne.b	tfmx_C000338
+	moveq	#0,D0
+	move.l	(sp)+,a6
+	rts
+
+.n	dc.b	"ciab.resource",0
+ even
+
+* vapautetaan kaikki
+tfmx_vapauta:
+	move.l	a6,-(sp)
+	moveq	#1,D0
+	lea	tfmx_L0000F0(PC),A1
+	move.l	tfmx_L0000DC,A6
+	jsr	-12(A6)
+tfmx_C000338	moveq	#10,D0
+	move.l	tfmx_L0000EC,A1
+	move.l	4.w,A6
+	jsr	-$A2(A6)
+	moveq	#9,D0
+	move.l	tfmx_L0000E8,A1
+	jsr	-$A2(A6)
+	moveq	#8,D0
+	move.l	tfmx_L0000E4,A1
+	jsr	-$A2(A6)
+	moveq	#7,D0
+	move.l	tfmx_L0000E0,A1
+	jsr	-$A2(A6)
+	move.l	(sp)+,a6
+    moveq   #1,d0
+	rts
+
+* palauttaa songien m‰‰r‰n d0:ssa
+tfmx_getsongs:
+	move.l	module(pc),a0
+	lea	$0100(a0),a0
+	moveq.l	#-2,d0
+	moveq.l	#2,d1
+	moveq.l	#$1e,d2
+.35a	addq.l	#1,d0
+	tst.w	(a0)+
+	bne.s	.362
+	subq.l	#1,d1
+.362	dbeq	d2,.35a
+	rts	
+
+
+tfmx_L0000DC	dc.l	1		* TFMX:n dataa
+tfmx_L0000E0	dc.l	1
+tfmx_L0000E4	dc.l	1
+tfmx_L0000E8	dc.l	1
+tfmx_L0000EC	dc.l	1
+
+
+tfmx_L0000F0	dcb.l	$2,0
+	dc.b	2,1			* nt_interrupt, prioriteetti 1
+	dc.l	TFMX_Pro_MSG0
+	dcb.w	$2,0
+tfmxi1	dc.l	0
+tfmx_L000106	dcb.l	$2,0
+	dc.b	2,100
+	dc.l	TFMX_Pro_MSG0
+	dcb.w	$2,0
+tfmxi2	dc.l	0
+tfmx_L00011C	dcb.l	$2,0
+	dc.b	2,100
+	dc.l	TFMX_Pro_MSG0
+	dcb.w	$2,0
+tfmxi3	dc.l	0
+tfmx_L000132	dcb.l	$2,0
+	dc.b	2,100
+	dc.l	TFMX_Pro_MSG0
+	dcb.w	$2,0
+tfmxi4	dc.l	0
+tfmx_L000148	dcb.l	$2,0
+	dc.b	2,100
+	dc.l	TFMX_Pro_MSG0
+	dcb.w	$2,0
+tfmxi5	dc.l	0
+TFMX_Pro_MSG0 dc.b "TFMX",0
+ even
+
+
 start
 tfmx_base
 tfmx_C000400	bra	tfmx_C00178A
@@ -213,6 +458,12 @@ tfmx_C00064E	st	$48(A0)
 	cmp.w	2(A5),D0
 	bne.s	tfmx_C000664
 	move.w	0(A5),4(A5)
+
+    move.l  a0,-(sp)
+    move.l  songOver(pc),a0
+    st      (a0)
+    move.l  (sp)+,a0
+
 	bra.s	tfmx_C000668
 
 tfmx_C000664	addq.w	#1,4(A5)
@@ -697,6 +948,7 @@ tfmx_C000C16	move.w	$1A(A6),6(A5)
 	move.w	$44(A5),$DFF09A
 	bra	tfmx_C000AEC
 
+_audioInterrupt:
 tfmx_C000C2C	movem.l	D0/A5,-(SP)
 	lea	tfmx_L001B98(PC),A5
 	move.w	$DFF01E,D0
@@ -1751,6 +2003,7 @@ tfmx_C001A88	tst.l	$20(A6)
 tfmx_C001A96	movem.l	(SP)+,A5/A6
 	rts
 
+_timerInterrupt:
 tfmx_C001A9C	move.l	A6,-(SP)
 	bsr	tfmx_C000464
 	move.l	(SP)+,A6
@@ -1841,8 +2094,13 @@ tfmx_L001D48	dcb.l	$5,0
 	dc.l	$FF00
 	dcb.l	$23,0
 	dc.l	$FF00
-tfmx_L002018	dc.l	0
-	dc.l	6
+tfmx_L002018	
+	dc.w	0
+_songLength:
+	dc.w	0	
+_songPosition:
+	dc.w	0
+    dc.w    6
 	dcb.l	$30,0
 tfmx_L0020E0	dcb.l	$30,0
 tfmx_L0021A0	dcb.l	$9,0

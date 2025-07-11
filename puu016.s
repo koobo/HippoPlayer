@@ -1341,11 +1341,6 @@ rexxresult	rs.l	1		* argstringi
 wintitl		rs.b	80
 wintitl2	rs.b	80
 
-tfmx_L0000DC	rs.l	1		* TFMX:n dataa
-tfmx_L0000E0	rs.l	1
-tfmx_L0000E4	rs.l	1
-tfmx_L0000E8	rs.l	1
-tfmx_L0000EC	rs.l	1
 sidheader	rs.b	sidh_sizeof
 
  
@@ -40918,7 +40913,7 @@ tfmx_author
 	dc.b	"Chris Huelsbeck, Peter Thierolf",0
 	even
 
-p_tfmx
+p_tfmx:
 	jmp	.tfmxinit(pc)
 	p_NOP
 	jmp	.tfmxvb(pc)
@@ -40937,34 +40932,32 @@ p_tfmx
 	dc.b	"TFMX",0
  even
 
+    rsset $20
+.tfmx_init      rs.l    1
+.tfmx_end       rs.l    1
+.tfmx_forward   rs.l    1
+.tfmx_backward  rs.l    1
+.tfmx_getpos    rs.l    1
+.tfmx_stop      rs.l    1
+.tfmx_cont      rs.l    1
+.tfmx_volume    rs.l    1
+.tfmx_song      rs.l    1   
+.tfmx_getsongs  rs.l    1
+
 
 .eteen
-	pushm	d0/a0
 	move.l	tfmxroutines(a5),a0
-	move	7196(a0),d0
-	addq	#2,d0
-	cmp	7194(a0),d0
-	bhi.b	.og
-	subq	#1,d0
-	move	d0,7196(a0)
-.og	popm	d0/a0
-	rts
+    jmp     .tfmx_forward(a0)
 
 .taakse
-	push	a0
 	move.l	tfmxroutines(a5),a0
-	subq	#1,7196(a0)
-	bpl.b	.gog
-	clr	7196(a0)
-.gog	pop	a0
-	rts
+    jmp     .tfmx_backward(a0)
 
 .tfmxvb
-	push	a0
 	move.l	tfmxroutines(a5),a0
-	move	7194(a0),pos_maksimi(a5)
-	move	7196(a0),pos_nykyinen(a5)
-	pop	a0
+    jsr     .tfmx_getpos(a0)
+    move    d0,pos_nykyinen(a5)
+    move    d1,pos_maksimi(a5)
 	rts
 
 .tfmxinit
@@ -40977,216 +40970,56 @@ p_tfmx
 	bsr	allocreplayer
 	beq.b	.ok2
 	bra	vapauta_kanavat
-;	rts
 .ok2
-	move.l	tfmxroutines(a5),a0
-	lea	5788(a0),a1
-	lea	tfmxi1(pc),a2
-;	move.l	a1,tfmxi1
-	move.l	a1,(a2)
-	lea	2092(a0),a0
-;	move.l	a0,tfmxi2
-;	move.l	a0,tfmxi3
-;	move.l	a0,tfmxi4
-;	move.l	a0,tfmxi5
-	move.l	a0,tfmxi2-tfmxi1(a2)
-	move.l	a0,tfmxi3-tfmxi1(a2)
-	move.l	a0,tfmxi4-tfmxi1(a2)
-	move.l	a0,tfmxi5-tfmxi1(a2)
+	move.l	moduleaddress(a5),a0
+	move.l	tfmxsamplesaddr(a5),a1
+    lea     songover(a5),a2
+	move	songnumber(a5),d0
+	move.l	tfmxroutines(a5),a3
+    jsr     .tfmx_init(a3)
+    * d0 = status
+    * d1 = song count
+    tst.l   d0
+	bne.b	.ok3
 
-	bsr	tfmx_varaa
-	beq.b	.ok3
-;	move.l	tfmxroutines(a5),a0
-;	bsr	freereplayer
 	bsr	vapauta_kanavat
 	moveq	#ier_nociaints,d0
 	rts
 
 .ok3
-	bsr	gettfmxsongs
-	move	d0,maxsongs(a5)
+    move    d1,maxsongs(a5)
+    bsr     .tfmxvolume
 
-
-	move.l	moduleaddress(a5),a0
-	cmp.l	#"TFHD",(a0)
-	bne.b	.noo
-
-	move.l	a0,d0
-	add.l	4(a0),d0		* MDAT
-	move.l	d0,d1
-	add.l	10(a0),d1		* SMPL
-	btst	#0,d1		* onko parittomassa osoitteessa?
-	beq.b	.un
-	addq.l	#1,d1		* on, v‰‰nnet‰‰n se parilliseksi
-	move.l	d1,a0
-	clr.l	(a0)		* alusta nollaa tyhj‰ks
-	bra.b	.un
-.noo
-
-
-	move.l	moduleaddress(a5),d0
-	move.l	tfmxsamplesaddr(a5),d1
-
-.un
-	move.l	tfmxroutines(a5),A0
-	jsr	$14(A0)
-	moveq	#0,d0			* song number
-	move	songnumber(a5),d0
-	move.l	tfmxroutines(a5),A0
-	jsr	12(A0)
-
-
-	bsr.b	.tfmxvolume
-	bsr.b	.tfmxcont
 	moveq	#0,d0
 	rts
 
 .tfmxcont
-	bset	#0,$bfdf00
-	rts
+	move.l	tfmxroutines(a5),a0
+    jmp     .tfmx_cont(a0)
 
 .tfmxstop
-	bclr	#0,$bfdf00
-	bra	clearsound
-
+	move.l	tfmxroutines(a5),a0
+    jsr     .tfmx_stop(a0)
+    bra     clearsound
 
 .tfmxsong
-	bsr.b	.tfmxe
-	bra.b	.ok3
+	move.l	tfmxroutines(a5),a0
+    jsr     .tfmx_end(a0)
+    bsr     .ok2
+    * error ignored
+    DPRINT  "tfmxsong=%ld"
+    rts
 
 .tfmxvolume
-	moveq	#0,d0
 	move	mainvolume(a5),d0
 	move.l	tfmxroutines(a5),A0
-	jmp	$28(A0)
-
+	jmp	    .tfmx_volume(a0)
+    
 .tfmxend
-	pushm	all
-	bsr	tfmx_vapauta
-	bsr.b	.tfmxe
-	popm	all
-	bra	vapauta_kanavat
+	move.l	tfmxroutines(a5),A0
+    jsr     .tfmx_end(a0)
+	bra	    vapauta_kanavat
 	
-.tfmxe	bsr.b	.tfmxstop
-	move.l	tfmxroutines(a5),A0
-	jsr	$1C(A0)
-	moveq	#0,D0
-	move.l	tfmxroutines(a5),A0
-	jsr	$20(A0)
-	moveq	#1,D0
-	move.l	tfmxroutines(a5),A0
-	jsr	$20(A0)
-	moveq	#2,D0
-	move.l	tfmxroutines(a5),A0
-	jsr	$20(A0)
-	moveq	#3,D0
-	move.l	tfmxroutines(a5),A0
-	jmp	$20(A0)
-
-
-
-tfmx_varaa
-	move.l	a6,-(sp)
-	moveq	#7,D0
-	lea	tfmx_L000106(PC),A1
-	move.l	(a5),A6
-	jsr	-$A2(A6)
-	move.l	D0,tfmx_L0000E0(a5)
-	moveq	#8,D0
-	lea	tfmx_L00011C(PC),A1
-	jsr	-$A2(A6)
-	move.l	D0,tfmx_L0000E4(a5)
-	moveq	#9,D0
-	lea	tfmx_L000132(PC),A1
-	jsr	-$A2(A6)
-	move.l	D0,tfmx_L0000E8(a5)
-	moveq	#10,D0
-	lea	tfmx_L000148(PC),A1
-	jsr	-$A2(A6)
-	move.l	D0,tfmx_L0000EC(a5)
-	lea	.n(pc),A1
-	jsr	-$1F2(A6)
-	move.l	D0,tfmx_L0000DC(a5)
-	beq.b	tfmx_C000338
-	moveq	#1,D0
-	lea	tfmx_L0000F0(PC),A1
-	move.l	tfmx_L0000DC(a5),A6
-	jsr	-6(A6)
-	tst.l	D0
-	bne.b	tfmx_C000338
-	moveq	#0,D0
-	move.l	(sp)+,a6
-	rts
-
-.n	dc.b	"ciab.resource",0
- even
-
-* vapautetaan kaikki
-tfmx_vapauta
-	move.l	a6,-(sp)
-	moveq	#1,D0
-	lea	tfmx_L0000F0(PC),A1
-	move.l	tfmx_L0000DC(a5),A6
-	jsr	-12(A6)
-tfmx_C000338	moveq	#10,D0
-	move.l	tfmx_L0000EC(a5),A1
-	move.l	(a5),A6
-	jsr	-$A2(A6)
-	moveq	#9,D0
-	move.l	tfmx_L0000E8(a5),A1
-	jsr	-$A2(A6)
-	moveq	#8,D0
-	move.l	tfmx_L0000E4(a5),A1
-	jsr	-$A2(A6)
-	moveq	#7,D0
-	move.l	tfmx_L0000E0(a5),A1
-	jsr	-$A2(A6)
-	move.l	(sp)+,a6
-	rts
-
-
-tfmx_L0000F0	dcb.l	$2,0
-	dc.b	2,1			* nt_interrupt, prioriteetti 1
-	dc.l	TFMX_Pro_MSG0
-	dcb.w	$2,0
-tfmxi1	dc.l	0
-tfmx_L000106	dcb.l	$2,0
-	dc.b	2,100
-	dc.l	TFMX_Pro_MSG0
-	dcb.w	$2,0
-tfmxi2	dc.l	0
-tfmx_L00011C	dcb.l	$2,0
-	dc.b	2,100
-	dc.l	TFMX_Pro_MSG0
-	dcb.w	$2,0
-tfmxi3	dc.l	0
-tfmx_L000132	dcb.l	$2,0
-	dc.b	2,100
-	dc.l	TFMX_Pro_MSG0
-	dcb.w	$2,0
-tfmxi4	dc.l	0
-tfmx_L000148	dcb.l	$2,0
-	dc.b	2,100
-	dc.l	TFMX_Pro_MSG0
-	dcb.w	$2,0
-tfmxi5	dc.l	0
-TFMX_Pro_MSG0 dc.b "TFMX",0
- even
-
-
-* palauttaa songien m‰‰r‰n d0:ssa
-gettfmxsongs
-	move.l	moduleaddress(a5),a0
-	lea	$0100(a0),a0
-	moveq.l	#-2,d0
-	moveq.l	#2,d1
-	moveq.l	#$1e,d2
-.35a	addq.l	#1,d0
-	tst.w	(a0)+
-	bne.s	.362
-	subq.l	#1,d1
-.362	dbeq	d2,.35a
-	rts	
 
 
 * TODO: all variants
@@ -41435,6 +41268,19 @@ p_tfmx7
 	move.l	(sp)+,a5
 	rts
 
+* palauttaa songien m‰‰r‰n d0:ssa
+gettfmxsongs:
+	move.l	moduleaddress(a5),a0
+	lea	$0100(a0),a0
+	moveq.l	#-2,d0
+	moveq.l	#2,d1
+	moveq.l	#$1e,d2
+.35a	addq.l	#1,d0
+	tst.w	(a0)+
+	bne.s	.362
+	subq.l	#1,d1
+.362	dbeq	d2,.35a
+	rts	
 
 
 id_TFMX7V

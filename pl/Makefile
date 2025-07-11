@@ -145,7 +145,7 @@ bin/soundmon3: SoundMon3.s
 bin/StarTrekker: StarTrekker_v1.2_AM.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/tfmx: tfmx.asm
-	$(ASM) $(INCLUDE) $(BIN) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/tfmx7c: tfmx7c.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/thx: thx.asm
