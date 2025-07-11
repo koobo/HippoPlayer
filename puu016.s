@@ -46624,7 +46624,7 @@ p_sidmon2
 	jmp .id_sidmon2(pc)
 	jmp	.author(pc)
 	dc.w pt_sidmon2
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_scope!pf_quadscopePoke!pf_end!pf_poslen
 	dc.b	"SidMon 2",0
 .a	dc.b	"Michael Kleps (Unknown/DOC 1990)",0
  even
@@ -46647,6 +46647,8 @@ p_sidmon2
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	dmawait(pc),a2
+	lea	scopeData(a5),a3
+	lea	songover(a5),a4
 	move.l	sidmon2routines(a5),a6
 	jsr	.INIT(a6)
 	popm	d1-a6
@@ -46655,7 +46657,11 @@ p_sidmon2
 
 .play
 	move.l	sidmon2routines(a5),a0
-	jmp	.PLAY(a0)
+	jsr 	.PLAY(a0)
+	move	d0,pos_nykyinen(a5)
+	move	d1,pos_maksimi(a5)
+    rts
+
 
 .stop
 	bra	clearsound

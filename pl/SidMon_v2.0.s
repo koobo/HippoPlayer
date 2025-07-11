@@ -2,6 +2,28 @@
 	incdir 	include:
 	include	mucro.i
 
+
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+
 test	=	0
 
 
@@ -12,6 +34,8 @@ test	=	0
 	lea	module,a0
 	lea	masterVol,a1
 	lea dmawait,a2
+	lea	scope_,a3
+    lea songOver_,a4
 	jsr	init
 	bsr	playLoop
 	rts
@@ -19,12 +43,14 @@ test	=	0
 playLoop
 
 .loop	
-	cmp.b	#$80,$dff006
+
+; REM
+ 	cmp.b	#$80,$dff006
 	bne.b	.loop
 
 .x	cmp.b	#$80,$dff006
 	beq.b	.x	
-
+; EREM
 	move	#$ff0,$dff180
  	jsr	play
  	clr	$dff180
@@ -47,12 +73,14 @@ dmawait
 
 masterVol 	dc $40
 songCount	dc 0
+scope_		ds.b scope_size
+songOver_   dc.w    0
 
 	section d,data_c
 
 module  
 ;	incbin	"sys:music/roots/modules/sidmon 2/dr. awesome/software 2000.sid2"
-	incbin	"sys:music/roots/modules/SidMon 2/Hans-Hermann Franck/cobra-highscore.sid2"
+	incbin	"m:exo/SidMon 2/Hans-Hermann Franck/cobra-highscore.sid2"
 
 	section c,code_p
  endif
@@ -66,16 +94,25 @@ init
 	move.l	a0,song
 	move.l	a1,mainVolumeAddress
 	move.l	a2,dmaWaitRoutine
+    move.l  a3,scope
+    move.l  a4,songover
 	bra.b	initmuzak
 
 play
 	move.l	mainVolumeAddress(pc),a0
 	move	(a0),mainVolume
-	bra.w	playmuzak
+	bsr 	playmuzak
+    moveq   #0,d0
+    moveq   #0,d1
+    move.b  currentpos(pc),d0
+    move.b  length(pc),d1
+    rts
 
 mainVolumeAddress	dc.l	0
 dmaWaitRoutine		dc.l	0
 mainVolume		dc.w	0
+scope           dc.l    0
+songover        dc.l    0
 
 initmuzak:
 	movem.l	d0-d7/a0-a6,-(a7)
@@ -229,12 +266,18 @@ notthree:
 	jsr 	(a2)
 
 	lea	voice1(pc),a2
+    move.l  scope(pc),a3
 	moveq	#$3,d0
 repeatloop:
 	move.w	16(a2),d4
 	move.l	26(a2),(a6,d4.w)
 	move.w	30(a2),4(a6,d4.w)
+
+	move.l	26(a2),ns_loopstart(a3)
+	move.w	30(a2),ns_replen(a3)
+
 	lea	voice2-voice1(a2),a2
+    lea ns_size(a3),a3
 	dbf	d0,repeatloop
 
 	addq.b	#$1,3(a0)
@@ -247,6 +290,10 @@ repeatloop:
 	cmp.b	2(a0),d0
 	bne.s	addlater
 	move.b	#-$1,2(a0)
+
+    move.l  songover(pc),a3
+    st      (a3)
+
 addlater:
 	addq.b	#$1,2(a0)
 
@@ -490,9 +537,18 @@ noinschange:
 	add.w	d0,d0
 	move.w	16(a2),d4
 	move.w	(a3,d0.w),10(a2)
-	move.l	4(a2),(a6,d4.w)
+	move.l	4(a2),(a6,d4.w)        
 	move.w	8(a2),4(a6,d4.w)
 	move.w	10(a2),6(a6,d4.w)
+
+    move.l  scope(pc),a3
+    lea     -$a0(a3),a3
+	move.l	4(a2),ns_start(a3,d4.w)        
+	move.w	8(a2),ns_length(a3,d4.w)
+	move.l	4(a2),ns_loopstart(a3,d4.w)        
+	move.w	8(a2),ns_replen(a3,d4.w)
+	move.w	10(a2),ns_period(a3,d4.w)
+
 nonote:	rts
 
 doeffect:
@@ -510,9 +566,9 @@ X1
 	bsr	doadsrcurve
 	bsr	dowaveform
 	bsr	doarpeggio
-	bsr.s	dosoundtracker
+	bsr	dosoundtracker
 	bsr	dovibrato
-	bsr.s	dopitchbend
+	bsr	dopitchbend
 	bsr	donoteslide
 	pop  d4
 skip
@@ -524,6 +580,11 @@ skip
 	move.w	#$5f,10(a2)
 	* enforcer hit, d4 can be garbage?
 	move.w	10(a2),6(a6,d4.w)
+
+    move.l  scope(pc),a3
+    lea     -$a0(a3),a3
+	move.w	10(a2),ns_period(a3,d4.w)
+
 .x	rts
 
 notlow:	cmp.w	#$1680,10(a2)
@@ -531,6 +592,10 @@ notlow:	cmp.w	#$1680,10(a2)
 	move.w	#$1680,10(a2)
 pitchok:
 	move.w	10(a2),6(a6,d4.w)
+
+    move.l  scope(pc),a3
+    lea     -$a0(a3),a3
+	move.w	10(a2),ns_period(a3,d4.w)
 .x	rts
 
 dopitchbend:
@@ -712,6 +777,10 @@ volumechange:
 	lsr	#6,d1
 	move.w	d0,8(a6,d4.w)	; VOL
 
+    move.l  scope(pc),a3
+    lea     -$a0(a3),a3
+	move.w	d0,ns_vol(a3,d4.w)
+
 	add.w	d0,d0
 	add.w	d0,d0
 	cmp.w	#$ff,d0
@@ -836,6 +905,11 @@ allwaveok:
 	move.w	(a4),30(a2)
 	move.l	26(a2),(a6,d4.w)
 	move.w	30(a2),4(a6,d4.w)
+
+    move.l  scope(pc),a3
+    lea     -$a0(a3),a3
+	move.l	26(a2),ns_start(a3,d4.w)
+	move.w	30(a2),ns_length(a3,d4.w)
 	rts
 
 doadsrcurve:
@@ -845,6 +919,10 @@ doadsrcurve:
 	mulu	mainVolume(pc),d0
 	lsr	#6,d0
 	move.w	d0,8(a6,d4.w)	; VOL
+
+    move.l  scope(pc),a3
+    lea     -$a0(a3),a3
+	move.w	d0,ns_vol(a3,d4.w)	; VOL
 	rts 
 
 doadsrcalc:
@@ -1054,9 +1132,9 @@ waveadds:	blk.l	4,0
 song:		dc.l	0
 sampleno:	dc.w	0
 midimode:	dc.w	0
-length:		dc.b	0
+length:		dc.b	0   * song length
 speed:		dc.b	0
-currentpos:	dc.b	0
+currentpos:	dc.b	0   * song position
 currentnot:	dc.b	0
 currentrast:	dc.b	0
 patlength:	dc.b	0
