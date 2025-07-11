@@ -5,6 +5,25 @@ test	=	0
 	incdir	include:
 	include	mucro.i
 
+* Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
 
  ifne test
 bob
@@ -15,6 +34,8 @@ bob
 	lea	module,a0
 	lea	masterVol,a1
 	lea	dmawait,a2
+    lea songOver_,a3
+    lea scope_,a4
 	jsr	init
 	bne.b	error
 
@@ -36,26 +57,32 @@ dmawait
 
 playLoop
 .loop	
+; REM
 	cmp.b	#$80,$dff006
 	bne.b	.loop
 .x	cmp.b	#$80,$dff006
 	beq.b	.x	
-
+; EREM
 	move	#$ff0,$dff180
 	jsr	play
 	clr	$dff180
 
+    tst     songOver
+    bne     .xx
+
 	btst	#6,$bfe001
 	bne.b	.loop
-
+.xx
 	rts
 
 
 masterVol 	dc $40/2
+songOver_   dc.w    0
+scope_		ds.b scope_size
 
 	SECTION	modu,data_c
 
-module  incbin	"sys:music/roots/Modules/Delta Music/Dr. Awesome/cryptoburners.dm"
+module  incbin	"m:exo/Delta Music/Dr. Awesome/cryptoburners.dm"
 
 
 
@@ -72,6 +99,8 @@ init
 	move.l	a0,moduleAddress
 	move.l	a1,masterVolumeAddress
 	move.l	a2,dmaWaitAddress
+    move.l  a3,songOverAddress
+    move.l  a4,scope
 	bra.w	_init
 
 play
@@ -84,6 +113,40 @@ masterVolumeAddress	dc.l	0
 moduleAddress		dc.l	0
 masterVolume		dc.w	0
 dmaWaitAddress		dc.l	0
+songOverAddress     dc.l    0
+scope               dc.l    0
+
+setStart
+    move.l  a4,a1
+    sub.l   #$dff0a0,a1
+    add.l   scope(pc),a1
+    move.l  d0,ns_start(a1)
+    move.l  d0,ns_loopstart(a1)
+    rts
+
+setLength
+    move.l  a4,a1
+    sub.l   #$dff0a0,a1
+    add.l   scope(pc),a1
+    move.w  d0,ns_length(a1)
+    move.w  d0,ns_replen(a1)
+    rts
+
+
+setPeriod
+    move.l  a4,a1
+    sub.l   #$dff0a0,a1
+    add.l   scope(pc),a1
+    move.w  d0,ns_period(a1)
+    rts
+
+setVol
+    move.l  a4,a1
+    sub.l   #$dff0a0,a1
+    add.l   scope(pc),a1
+    move.w  d1,ns_vol(a1)
+    rts
+
 
 _play
 	MOVEM.L	D0-D7/A0-A6,-(SP)
@@ -98,56 +161,73 @@ _play
 	MOVE.W	#$800F,$DFF096
 	move.l	dmaWaitAddress(pc),a6
 	jsr	(a6)
-	LEA	lbL0008F0(PC),A6
-	MOVE.L	(A6),A4
+	LEA	lbL0008F0(PC),A6 * channel 1 data
+    move.l  scope(pc),a3
+	MOVE.L	(A6),A4     * audio base
 	MOVE.L	6(A6),A5
 	TST.B	14(A5)
 	BEQ.S	lbC0001BA
-	MOVE.W	$1C(A5),4(A4)
+	MOVE.W	$1C(A5),4(A4)   * replen?
+	MOVE.W	$1C(A5),ns_replen(A3)   
 	MOVEQ	#0,D7
 	MOVE.W	$1A(A5),D7
 	ADD.L	A5,D7
 	ADD.L	#$1E,D7
-	MOVE.L	D7,(A4)
-lbC0001BA	LEA	lbL00092A(PC),A6
+	MOVE.L	D7,(A4)         * loopstart?
+    move.l  d7,ns_loopstart(a3)
+lbC0001BA	
+    lea     ns_size(a3),a3
+    LEA	lbL00092A(PC),A6    * channel 2 data
 	MOVE.L	(A6),A4
 	MOVE.L	6(A6),A5
 	TST.B	14(A5)
 	BEQ.S	lbC0001E4
 	MOVE.W	$1C(A5),4(A4)
+	MOVE.W	$1C(A5),ns_replen(A3)   
 	MOVEQ	#0,D7
 	MOVE.W	$1A(A5),D7
 	ADD.L	A5,D7
 	ADD.L	#$1E,D7
 	MOVE.L	D7,(A4)
-lbC0001E4	LEA	lbL000964(PC),A6
+    move.l  d7,ns_loopstart(a3)
+lbC0001E4	
+    lea     ns_size(a3),a3
+    LEA	lbL000964(PC),A6
 	MOVE.L	(A6),A4
 	MOVE.L	6(A6),A5
 	TST.B	14(A5)
 	BEQ.S	lbC00020E
 	MOVE.W	$1C(A5),4(A4)
+	MOVE.W	$1C(A5),ns_replen(A3)   
 	MOVEQ	#0,D7
 	MOVE.W	$1A(A5),D7
 	ADD.L	A5,D7
 	ADD.L	#$1E,D7
 	MOVE.L	D7,(A4)
-lbC00020E	LEA	lbL00099E(PC),A6
+    move.l  d7,ns_loopstart(a3)
+lbC00020E	
+    lea     ns_size(a3),a3
+    LEA	lbL00099E(PC),A6
 	MOVE.L	(A6),A4
 	MOVE.L	6(A6),A5
 	TST.B	14(A5)
 	BEQ.S	lbC000238
 	MOVE.W	$1C(A5),4(A4)
+	MOVE.W	$1C(A5),ns_replen(A3)   
 	MOVEQ	#0,D7
 	MOVE.W	$1A(A5),D7
 	ADD.L	A5,D7
 	ADD.L	#$1E,D7
 	MOVE.L	D7,(A4)
+    move.l  d7,ns_loopstart(a3)
 lbC000238	MOVEM.L	(SP)+,D0-D7/A0-A6
 	RTS
 
-lbC00023E	MOVE.L	(A6),A4
+* play voice 
+* a6 = channel data
+lbC00023E	MOVE.L	(A6),A4     * get audio base
 	MOVE.L	6(A6),A5
-	SUBQ.B	#1,$2F(A6)
+	SUBQ.B	#1,$2F(A6)      * speed counter
 	BNE.W	lbC00036E
 	MOVE.B	lbB000836,$2F(A6)
 	TST.L	$1C(A6)
@@ -157,6 +237,11 @@ lbC00025C	MOVE.L	$12(A6),A0
 	MOVE.W	(A0,D7.W),D0
 	CMP.W	#$FFFF,D0
 	BNE.S	lbC00027E
+
+    * song end?
+    move.l  songOverAddress(pc),a1
+    st      (a1)
+
 	MOVE.W	2(A0,D7.W),D0
 	AND.W	#$7FF,D0
 	ASL.W	#1,D0
@@ -169,7 +254,7 @@ lbC00027E	MOVE.B	D0,$32(A6)
 	ADD.L	lbL0009E8(PC),D0
 	MOVE.L	D0,$18(A6)
 	ADDQ.W	#2,$16(A6)
-lbC000296	MOVE.L	$18(A6),A0
+lbC000296	MOVE.L	$18(A6),A0  * current pattern data ptr
 	ADD.L	$1C(A6),A0
 	TST.B	2(A0)
 	BEQ.S	lbC0002B0
@@ -201,11 +286,13 @@ lbC0002B0	MOVEQ	#0,D0
 	CLR.B	$10(A6)
 	TST.B	14(A5)
 	BEQ.S	lbC00031C
-	CLR.W	$1E(A5)
-	MOVE.L	D0,(A4)
+	CLR.W	$1E(A5) 
+	MOVE.L	D0,(A4)         * start
+    bsr     setStart
 lbC00031C	MOVE.W	$18(A5),D0
 	ASR.W	#1,D0
 	MOVE.W	D0,4(A4)
+    bsr     setLength
 	MOVE.B	9(A5),$20(A6)
 	MOVE.B	11(A5),D0
 	MOVE.B	D0,$21(A6)
@@ -257,6 +344,8 @@ lbC0003C2	ASL.L	#5,D7
 	ADD.L	#$4E,D7
 	ADD.L	6(A6),D7
 	MOVE.L	D7,(A4)
+    move.l  d7,d0
+    bsr     setStart
 	ADDQ.B	#1,$10(A6)
 lbC0003D6	TST.B	13(A5)
 	BEQ.S	lbC00043E
@@ -368,6 +457,7 @@ lbC0004A0	MOVEQ	#0,D0
 lbC000508	CLR.W	10(A6)
 lbC00050C	ADD.W	$24(A6),D0
 	MOVE.W	D0,6(A4)
+    bsr     setPeriod
 	MOVEQ	#0,D1
 	MOVE.B	$29(A6),D1
 	MOVE.B	$33(A6),D0
@@ -427,6 +517,7 @@ lbC0005C6	MOVE.B	D1,$29(A6)
 	mulu	masterVolume(pc),d1
 	lsr	#6,d1
 	MOVE.W	D1,8(A4)
+    bsr     setVol
 	RTS
 
 _init
@@ -469,9 +560,11 @@ lbC0005F8	MOVE.L	(A0)+,D0
 	BSR.S	lbC000660
 	RTS
 
-lbC000660	MOVE.L	A0,(A6)
+* a0 = $DFF0A0...
+* d0 = dma enable 
+lbC000660	MOVE.L	A0,(A6) * write audio base to channel data
 	MOVE.W	D0,4(A6)
-	MOVE.W	#$10,4(A0)
+	MOVE.W	#$10,4(A0)     
 	CLR.W	8(A0)
 	MOVE.L	#lbL000838,6(A6)
 	CLR.W	10(A6)

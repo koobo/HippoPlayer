@@ -46705,7 +46705,7 @@ p_deltamusic1
 	jmp .id_deltamusic1(pc)
 	jmp	.author(pc)
 	dc.w pt_deltamusic1
-	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_scope!pf_quadscopePoke!pf_end
 	dc.b	"Delta Music 1",0
 .a 	dc.b	"Bent Nielsen",0
  even
@@ -46727,6 +46727,8 @@ p_deltamusic1
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	dmawait(pc),a2
+    lea     songover(a5),a3
+    lea     scopeData(a5),a4
 	move.l	deltamusic1routines(a5),a6
 	jsr	.INIT(a6)
 	popm	d1-a6
