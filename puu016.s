@@ -1657,7 +1657,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	33
+xpl_versio	=	34
 
 
 *********************************************************************************
