@@ -336,6 +336,8 @@ setStartD0:
     popm    d1/a0
     rts 
 
+; Scope support functions:
+
 setStartLenD0D1:
     pushm   d2/a0
     move.l  scope(pc),a0
@@ -417,6 +419,17 @@ setVolumeD0:
     popm    d1/a0
     rts 
 
+setVolume4_D0D1:
+    pushm   d1/a0
+    move.l  scope(pc),a0
+    move.w  d1,scope_ch4+ns_vol(a0)
+
+    move.w  a4,d1
+    sub.w   #$f0a0,d1
+    add.w   d1,a0
+    move.w  d0,ns_vol(a0)
+    popm    d1/a0
+    rts 
 
 start
 tfmx_base

@@ -7,6 +7,26 @@ testi = 0
 	include	hardware/intbits.i
 	include	mucro.i
 
+; Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
  ifne testi
 
 	section	omcwd,code_p
@@ -178,7 +198,17 @@ position
 	move	maxPosition(pc),d1
 	rts
 
+* d0 = module
+* d1 = samples
+* d2 = mixing rate
+* d3 = song number
+* d4 = buffer
+* a0 = songover
+* a1 = scope
 init
+    move.l  a0,songOver
+    move.l  a1,scope
+
 	bsr	SetIntVectors
 
 lbL00024C
@@ -203,6 +233,9 @@ lbL00024C
 ;	bsr	lbC0002C8
 	rts
 
+songOver    dc.l    0
+scope       dc.l    0
+
 end
 lbL00028C
 	bsr	ClearIntVectors
@@ -226,6 +259,115 @@ lbL00028C
 	;move.l	old(pc),$70(a5)
 	RTS	
 
+; Scope support functions:
+
+setStartD0:
+    pushm   d1/a0
+    move.l  scope(pc),a0
+    move.w  a4,d1
+    sub.w   #$f0a0,d1
+    add.w   d1,a0
+
+;    and.l   #$ffff,d1
+;    DPRINT  "setStartD0 %lx ch=%lx"
+
+    move.l  d0,ns_start(a0)
+    move.l  d0,ns_loopstart(a0)
+    popm    d1/a0
+    rts 
+
+setStartLenD0D1:
+    pushm   d2/a0
+    move.l  scope(pc),a0
+    move.w  a4,d2
+    sub.w   #$f0a0,d2
+    add.w   d2,a0
+
+;    and.l   #$ffff,d1
+;    and.l   #$ffff,d2
+;    DPRINT  "setStartLenD0D1 %lx %lx ch=%lx"
+
+    ;move.l  d0,ns_start(a0)
+    ;move.w  d1,ns_length(a0)
+    move.l  d0,ns_loopstart(a0)
+    move.w  d1,ns_replen(a0)
+    popm    d2/a0
+    rts 
+
+setRepeatD0D1:
+    pushm   d2/a0
+    move.l  scope(pc),a0
+    move.w  a4,d2
+    sub.w   #$f0a0,d2
+    add.w   d2,a0
+
+;    and.l   #$ffff,d1
+;    and.l   #$ffff,d2
+;    DPRINT  "setRepeatD0D1 %lx %lx ch=%lx"
+
+    move.l  d0,ns_loopstart(a0)
+    move.w  d1,ns_replen(a0)
+    popm    d2/a0
+    rts 
+
+setLengthD0:
+    pushm   d1/a0
+    move.l  scope(pc),a0
+    move.w  a4,d1
+    sub.w   #$f0a0,d1
+
+;    and.l   #$ffff,d0
+;    and.l   #$ffff,d1
+;    DPRINT  "setLengthD0 %lx ch=%lx"
+
+    add.w   d1,a0
+    move.w  d0,ns_length(a0)
+    move.w  d0,ns_replen(a0)
+    popm    d1/a0
+    rts 
+
+setLengthD1:
+    pushm   d0/a0
+    move.l  scope(pc),a0
+    move.w  a4,d0
+    sub.w   #$f0a0,d0
+    add.w   d0,a0
+
+;    and.l   #$ffff,d0
+;    and.l   #$ffff,d1
+;    DPRINT  "setLengthD1 ch=%lx %lx"
+
+    move.w  d1,ns_length(a0)
+    move.w  d1,ns_replen(a0)
+    popm    d0/a0
+    rts 
+
+setVolumeD0:
+    pushm   d1/a0
+    move.l  scope(pc),a0
+    move.w  a4,d1
+    sub.w   #$f0a0,d1
+
+;    and.l   #$ffff,d0
+;    and.l   #$ffff,d1
+;    DPRINT  "setVolumeD0 %lx ch=%lx"
+
+    add.w   d1,a0
+    move.w  d0,ns_vol(a0)
+    popm    d1/a0
+    rts 
+
+setVolume4_D0D1:
+    pushm   d1/a0
+    move.l  scope(pc),a0
+    move.w  d1,scope_ch4+ns_vol(a0)
+
+    move.w  a4,d1
+    sub.w   #$f0a0,d1
+    add.w   d1,a0
+    move.w  d0,ns_vol(a0)
+    popm    d1/a0
+    rts 
 
 vol
 lbC0002C8
@@ -328,24 +470,33 @@ lbC000398	move.b	#1,$1F(A6)
 	move.w	$34(A6),D0
 	beq.s	lbC0003E4
 
+    move.l  scope(pc),a0
 	move.w	D0,$DFF096
 	moveq	#9,D1
 	btst	#0,D0
 	beq.s	lbC0003BC
 
 	move.w	D1,$DFF0A6
+    move    d1,scope_ch1+ns_period(a0)
+
 lbC0003BC	btst	#1,D0
 	beq.s	lbC0003C8
 
 	move.w	D1,$DFF0B6
+    move    d1,scope_ch2+ns_period(a0)
+
 lbC0003C8	btst	#2,D0
 	beq.s	lbC0003D4
 
 	move.w	D1,$DFF0C6
+    move    d1,scope_ch3+ns_period(a0)
+
 lbC0003D4	btst	#3,D0
 	beq.s	lbC0003E0
 
 	move.w	D1,$DFF0D6
+    move    d1,scope_ch4+ns_period(a0)
+
 lbC0003E0	clr.w	$34(A6)
 
 	bsr	DMAWait
@@ -362,13 +513,18 @@ lbC0003F6	bsr	lbC000864
 
 	bsr	lbC000486
 lbC000404	lea	lbL0015F2(PC),A5
+    move.l  scope(pc),a0
 	move.w	$58(A5),$DFF0A6
+    move    $58(A5),scope_ch1+ns_period(a0)
 	lea	lbL001656(PC),A5
 	move.w	$58(A5),$DFF0B6
+    move    $58(A5),scope_ch2+ns_period(a0)
 	lea	lbL0016BA(PC),A5
 	move.w	$58(A5),$DFF0C6
+    move    $58(A5),scope_ch3+ns_period(a0)
 	lea	lbL00171E(PC),A5
 	move.w	$58(A5),$DFF0D6
+    move    $58(A5),scope_ch4+ns_period(a0)
 	lea	lbL001782(PC),A5
 	lea	lbL002606(PC),A4
 	move.w	$58(A5),6(A4)
@@ -529,6 +685,12 @@ lbC0005BC	st	$48(A0)
 	bne.s	lbC0005D2
 
 	move.w	0(A5),4(A5)
+
+    move.l  a0,-(sp)
+    move.l  songOver(pc),a0
+    st      (a0)
+    move.l  (sp)+,a0
+
 	bra.s	lbC0005D6
 
 lbC0005D2	addq.w	#1,4(A5)
@@ -979,7 +1141,8 @@ lbC000A7A	clr.b	3(A5)
 	add.l	4(A6),D0
 lbC000A86	move.l	D0,$2C(A5)
 	move.l	D0,(A4)
-	addq.w	#1,$10(A5)
+    bsr     setStartD0
+ 	addq.w	#1,$10(A5)
 	bra	lbC0008DE
 
 lbC000A94	move.b	13(A6),3(A5)
@@ -996,11 +1159,16 @@ lbC000AB2	move.w	14(A6),D0
 	add.w	D0,D1
 	move.w	D1,$34(A5)
 	move.w	D1,4(A4)
+    bsr     setLengthD1
 	addq.w	#1,$10(A5)
 	bra	lbC0008DE
 
 lbC000ACC	move.w	14(A6),$34(A5)
 	move.w	14(A6),4(A4)
+    push    d1
+	move.w	14(A6),d1
+    bsr     setLengthD1
+    pop     d1
 	addq.w	#1,$10(A5)
 	bra	lbC0008DE
 
@@ -1244,6 +1412,12 @@ lbC000DB8	move.l	12(A6),D0
 	sub.w	D0,$34(A5)
 	move.w	$34(A5),4(A4)
 	addq.w	#1,$10(A5)
+
+    pushm   d0/d1
+	move.l	$2C(A5),d0
+	move.w	$34(A5),d1
+    bsr     setRepeatD0D1
+    popm    d0/d1
 	bra	lbC0008DE
 
 lbC000DD8	clr.b	3(A5)
@@ -1252,6 +1426,12 @@ lbC000DD8	clr.b	3(A5)
 	move.w	#1,$34(A5)
 	move.w	#1,4(A4)
 	addq.w	#1,$10(A5)
+
+    pushm   d0/d1
+	move.l	4(A6),d0
+    moveq   #1,d1
+    bsr     setStartLenD0D1
+    popm    d0/d1
 	bra	lbC0008DE
 
 lbC000DFA	tst.b	1(A5)
@@ -1269,6 +1449,7 @@ lbC000E0C	tst.b	3(A5)
 	add.l	$50(A5),D0
 	move.l	D0,$2C(A5)
 	move.l	D0,(A4)
+    bsr     setStartD0
 	sub.b	#1,3(A5)
 	bne.s	lbC000E32
 
@@ -1399,6 +1580,7 @@ lbC000F52	moveq	#0,D1
 
 	move.w	D1,$DFF0D8
 	move.w	D0,8(A4)
+    bsr     setVolume4_D0D1
 	bra.s	lbC000F8E
 
 lbC000F76	tst.w	$3E(A5)
@@ -1412,6 +1594,7 @@ lbC000F76	tst.w	$3E(A5)
 	mulu	D1,D0
 	lsr.w	#8,D0
 lbC000F8A	move.w	D0,8(A4)
+            bsr     setVolumeD0
 lbC000F8E	rts
 
 lbC000F90	movem.l	D0/A4-A6,-(SP)
@@ -2116,6 +2299,13 @@ lbC001D20	add.w	$3A(A6),D3
 	move.w	#0,$DFF0D8
 	move.l	$64(A5),$DFF0D0
 	move.w	#2,$DFF0D4
+
+    move.l  scope(pc),a0
+    move.l  $64(A5),scope_ch4+ns_start(a0)
+    move.l  $64(A5),scope_ch4+ns_loopstart(a0)
+    move.w  #2,scope_ch4+ns_loopstart(a0)
+    move.w  #2,scope_ch4+ns_replen(a0)
+
 	move.w	#$8208,$4C(A6)
 	move.w	#$C400,$DFF09A
 	bsr	lbC001EFA
@@ -2338,7 +2528,13 @@ lbC00202A	rts
 lbC00202C	lea	lbL0025E6(PC),A5
 	move.l	$68(A5),$DFF0D0
 	move.w	$72(A5),$DFF0D4
+
 	movem.l	D1-D7/A0-A4/A6,-(SP)
+
+    move.l  scope(pc),a6
+    move.l	$68(A5),scope_ch4+ns_loopstart(a6)
+	move.w	$72(A5),scope_ch4+ns_replen(a6)
+
 	lea	lbL001564(PC),A6
 	tst.b	$12(A6)
 	beq	lbC002146

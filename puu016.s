@@ -41131,7 +41131,8 @@ TFMX_IDs
 
 
 
-p_tfmx7
+p_tfmx7:
+p_tfmx7c:
 	jmp	.tfmxinit(pc)
 	p_NOP
 	jmp	.vb(pc)
@@ -41146,7 +41147,7 @@ p_tfmx7
 	jmp 	id_TFMX7V(pc)
 	jmp	tfmx_author(pc)
 	dc.w 	pt_tfmx7 	* type
-	dc	pf_volume!pf_song!pf_poslen!pf_kelaus!pf_end!pf_stop!pf_cont
+	dc	pf_volume!pf_song!pf_poslen!pf_kelaus!pf_end!pf_stop!pf_cont!pf_end!pf_scope!pf_quadscopePoke
 	dc.b	"TFMX 7ch",0
  even
 
@@ -41191,9 +41192,10 @@ p_tfmx7
 	jsr	.OFFSET_END(a4)
 	popm	all
 	bsr	vapauta_kanavat
-	move.l	.tfmxbuf(pc),a0
+    lea     .tfmxbuf(pc),a1
+    move.l  (a1),a0
+    clr.l   (a1)
 	jsr	freemem
-	clr.l	.tfmxbuf
 .e	rts
 
 .tfmxsong
@@ -41246,6 +41248,8 @@ p_tfmx7
 	move.l	tfmxsamplesaddr(a5),d1
 
 .un
+    lea     songover(a5),a0
+    lea     scopeData(a5),a1
 	move.l	tfmxroutines(a5),a4
 	moveq	#0,d3
 	move	songnumber(a5),d3
