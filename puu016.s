@@ -29572,10 +29572,10 @@ lever
 * 907-108
 .drawLever
 	cmp	#2,ns_length(a3)
-	bls.b	.h
+	bls 	.h
 	moveq	#0,d1
 	move	ns_period(a3),d1
-	beq.b	.h
+	beq 	.h
 	sub	#108,d1
 	lsl	#1,d1
 	divu	#27,d1		* lukualueeksi 0-59
@@ -29596,6 +29596,8 @@ lever
 	bne.b	.pad
 	moveq	#1,d0
 .pad	
+    CLAMPVOL    d0
+
 	lsl	#3,d0
 	subq	#8,d0
 	bpl.b	.ojdo
