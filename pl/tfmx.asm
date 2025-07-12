@@ -2,6 +2,41 @@
     incdir  include:
     include mucro.i
 
+DEBUG=0
+
+* Print to debug console, very clever.
+* Param 1: string
+* d0-d6:    formatting parameters, d7 is reserved
+DPRINT macro
+	ifne DEBUG
+	jsr	desmsgDebugAndPrint
+  dc.b 	\1,10,0
+  even
+	endc
+	endm
+
+
+; Scope data for one channel
+              rsreset
+ns_start      rs.l       1 * Sample start address
+ns_length     rs         1 * Length in words
+ns_loopstart  rs.l       1 * Loop start address
+ns_replen     rs         1 * Loop length in words
+ns_vol    rs         1 * Volume
+ns_period     rs         1 * Period
+ns_size       rs.b       0 * = 16 bytes
+
+* Combined scope data structure
+              rsreset
+scope_ch1	  rs.b	ns_size
+scope_ch2	  rs.b	ns_size
+scope_ch3	  rs.b	ns_size
+scope_ch4	  rs.b	ns_size
+scope_trigger rs.b  1 * Audio channel enable DMA flags
+scope_pad	  rs.b  1
+scope_size    rs.b  0
+
+
     jmp     tfmx_init(pc)
     jmp     tfmx_end(pc)
     jmp     tfmx_forward(pc)
@@ -10,13 +45,55 @@
     jmp     tfmx_stop(pc)
     jmp     tfmx_cont(pc)
     jmp     tfmx_volume(pc)
-    jmp     tfmx_song(pc)
+    jmp     tfmx_song(pc)           * not used
     jmp     tfmx_getsongs(pc)
 
 module      dc.l    0
 samples     dc.l    0
 songOver    dc.l    0
 songNumber  dc.w    0 
+scope       dc.l    0
+
+ ifne DEBUG
+ 	include	exec/exec_lib.i
+
+desmsgDebugAndPrint
+	* sp contains the return address, which is
+	* the string to print
+	movem.l	d0-d7/a0-a3/a6,-(sp)
+	* get string
+	move.l	4*(8+4+1)(sp),a0
+	* find end of string
+	move.l	a0,a1
+.e	tst.b	(a1)+
+	bne.b	.e
+	move.l	a1,d7
+	btst	#0,d7
+	beq.b	.even
+	addq.l	#1,d7
+.even
+	* overwrite return address 
+	* for RTS to be just after the string
+	move.l	d7,4*(8+4+1)(sp)
+
+	lea	debugDesBuf(pc),a3
+	move.l	sp,a1	
+
+    lea     .putCharSerial(pc),a2
+
+	move.l	4.w,a6
+	jsr     _LVORawDoFmt(a6)
+	movem.l	(sp)+,d0-d7/a0-a3/a6
+	rts	* teleport!
+.putCharSerial
+    ;_LVORawPutChar
+    ; output char in d0 to serial
+    move.l  4.w,a6
+    jsr     -516(a6)
+    rts
+
+debugDesBuf		ds.b	1024
+ endif
 
 * In:
 *   a0 = module address
@@ -24,9 +101,11 @@ songNumber  dc.w    0
 *   a2  = song over address
 *   d0 = song number
 tfmx_init:
+    DPRINT  "### tfmx_init ###"
     move.l  a0,module
     move.l  a1,samples
     move.l  a2,songOver
+    move.l  a3,scope
     move    d0,songNumber
 
     lea     _timerInterrupt(pc),a1
@@ -242,6 +321,102 @@ tfmxi5	dc.l	0
 TFMX_Pro_MSG0 dc.b "TFMX",0
  even
 
+setStartD0:
+    pushm   d1/a0
+    move.l  scope(pc),a0
+    move.w  a4,d1
+    sub.w   #$f0a0,d1
+    add.w   d1,a0
+
+;    and.l   #$ffff,d1
+;    DPRINT  "setStartD0 %lx ch=%lx"
+
+    move.l  d0,ns_start(a0)
+    move.l  d0,ns_loopstart(a0)
+    popm    d1/a0
+    rts 
+
+setStartLenD0D1:
+    pushm   d2/a0
+    move.l  scope(pc),a0
+    move.w  a4,d2
+    sub.w   #$f0a0,d2
+    add.w   d2,a0
+
+;    and.l   #$ffff,d1
+;    and.l   #$ffff,d2
+;    DPRINT  "setStartLenD0D1 %lx %lx ch=%lx"
+
+    ;move.l  d0,ns_start(a0)
+    ;move.w  d1,ns_length(a0)
+    move.l  d0,ns_loopstart(a0)
+    move.w  d1,ns_replen(a0)
+    popm    d2/a0
+    rts 
+
+setRepeatD0D1:
+    pushm   d2/a0
+    move.l  scope(pc),a0
+    move.w  a4,d2
+    sub.w   #$f0a0,d2
+    add.w   d2,a0
+
+;    and.l   #$ffff,d1
+;    and.l   #$ffff,d2
+;    DPRINT  "setRepeatD0D1 %lx %lx ch=%lx"
+
+    move.l  d0,ns_loopstart(a0)
+    move.w  d1,ns_replen(a0)
+    popm    d2/a0
+    rts 
+
+setLengthD0:
+    pushm   d1/a0
+    move.l  scope(pc),a0
+    move.w  a4,d1
+    sub.w   #$f0a0,d1
+
+;    and.l   #$ffff,d0
+;    and.l   #$ffff,d1
+;    DPRINT  "setLengthD0 %lx ch=%lx"
+
+    add.w   d1,a0
+    move.w  d0,ns_length(a0)
+    move.w  d0,ns_replen(a0)
+    popm    d1/a0
+    rts 
+
+setLengthD1:
+    pushm   d0/a0
+    move.l  scope(pc),a0
+    move.w  a4,d0
+    sub.w   #$f0a0,d0
+    add.w   d0,a0
+
+;    and.l   #$ffff,d0
+;    and.l   #$ffff,d1
+;    DPRINT  "setLengthD1 ch=%lx %lx"
+
+    move.w  d1,ns_length(a0)
+    move.w  d1,ns_replen(a0)
+    popm    d0/a0
+    rts 
+
+setVolumeD0:
+    pushm   d1/a0
+    move.l  scope(pc),a0
+    move.w  a4,d1
+    sub.w   #$f0a0,d1
+
+;    and.l   #$ffff,d0
+;    and.l   #$ffff,d1
+;    DPRINT  "setVolumeD0 %lx ch=%lx"
+
+    add.w   d1,a0
+    move.w  d0,ns_vol(a0)
+    popm    d1/a0
+    rts 
+
 
 start
 tfmx_base
@@ -300,20 +475,25 @@ tfmx_C000464	movem.l	D0-D7/A0-A6,-(SP)
 	move.l	$18(A6),-(SP)
 	move.w	$4A(A6),D0
 	beq.s	tfmx_C0004B2
+    move.l  scope(pc),a0
 	move.w	D0,$DFF096
 	moveq	#9,D1
 	btst	#0,D0
 	beq.s	tfmx_C00048A
 	move.w	D1,$DFF0A6
+    move    d1,scope_ch1+ns_period(a0)
 tfmx_C00048A	btst	#1,D0
 	beq.s	tfmx_C000496
 	move.w	D1,$DFF0B6
+    move    d1,scope_ch2+ns_period(a0)
 tfmx_C000496	btst	#2,D0
 	beq.s	tfmx_C0004A2
 	move.w	D1,$DFF0C6
+    move    d1,scope_ch3+ns_period(a0)
 tfmx_C0004A2	btst	#3,D0
 	beq.s	tfmx_C0004AE
 	move.w	D1,$DFF0D6
+    move    d1,scope_ch4+ns_period(a0)
 tfmx_C0004AE	clr.w	$4A(A6)
 tfmx_C0004B2	tst.b	$1E(A6)
 	bne.s	tfmx_C0004BC
@@ -323,14 +503,19 @@ tfmx_C0004BC	bsr	tfmx_C0009BC
 	tst.b	$10(A6)
 	bmi.s	tfmx_C0004CA
 	bsr	tfmx_C000510
-tfmx_C0004CA	lea	tfmx_L001B98(PC),A5
-	move.w	$8C(A5),$DFF0A6
-	lea	tfmx_L001C28(PC),A5
+tfmx_C0004CA	lea	_channel1Data(PC),A5   
+    move.l  scope(pc),a0
+	move.w	$8C(A5),$DFF0A6         * write periods
+    move    $8C(A5),scope_ch1+ns_period(a0)
+	lea	_channel2Data(PC),A5
 	move.w	$8C(A5),$DFF0B6
-	lea	tfmx_L001CB8(PC),A5
+    move    $8C(A5),scope_ch2+ns_period(a0)
+	lea	_channel3Data(PC),A5
 	move.w	$8C(A5),$DFF0C6
-	lea	tfmx_L001D48(PC),A5
+    move    $8C(A5),scope_ch3+ns_period(a0)
+	lea	_channel4Data(PC),A5
 	move.w	$8C(A5),$DFF0D6
+    move    $8C(A5),scope_ch4+ns_period(a0)
 	move.w	$48(A6),$DFF096
 	clr.w	$48(A6)
 tfmx_C000506	move.l	(SP)+,$18(A6)
@@ -580,7 +765,7 @@ tfmx_C0007D2	move.w	4(A5),D0
 	add.w	D0,A0
 	move.l	$3C(A6),A1
 	move.w	(A0)+,D0
-	cmp.w	#$EFFE,D0
+	cmp.w	#$EFFE,D0           
 	bne.s	tfmx_C000810
 	move.w	(A0)+,D0
 	add.w	D0,D0
@@ -733,20 +918,20 @@ tfmx_C0009AE	move.b	#0,$11(A6)
 	clr.w	0(A1)
 	bra	tfmx_C0007D2
 
-tfmx_C0009BC	lea	tfmx_L001B98(PC),A5
+tfmx_C0009BC	lea	_channel1Data(PC),A5
 	bsr.s	tfmx_C0009D2
-	lea	tfmx_L001C28(PC),A5
+	lea	_channel2Data(PC),A5
 	bsr.s	tfmx_C0009D2
-	lea	tfmx_L001CB8(PC),A5
+	lea	_channel3Data(PC),A5
 	bsr.s	tfmx_C0009D2
-	lea	tfmx_L001D48(PC),A5
-tfmx_C0009D2	move.l	$58(A5),A4
+	lea	_channel4Data(PC),A5
+tfmx_C0009D2	move.l	$58(A5),A4  * get paula base
 	tst.w	$3E(A5)
 	bmi.s	tfmx_C0009E2
 	subq.w	#1,$3E(A5)
-	bra.s	tfmx_C0009EA
+	bra.s	tfmx_C0009EA            * go to track step
 
-tfmx_C0009E2	clr.b	$3C(A5)
+tfmx_C0009E2	clr.b	$3C(A5)     * get new note?
 	clr.b	$3D(A5)
 tfmx_C0009EA	move.l	$88(A5),D0
 	beq.s	tfmx_C000A02
@@ -757,11 +942,11 @@ tfmx_C0009EA	move.l	$88(A5),D0
 tfmx_C000A02	tst.b	0(A5)
 	beq	tfmx_C001088
 	tst.w	$12(A5)
-	beq.s	tfmx_C000A18
+	beq.s	runMacro
 	subq.w	#1,$12(A5)
 tfmx_C000A14	bra	tfmx_C001088
 
-tfmx_C000A18	move.l	12(A5),A0
+runMacro	move.l	12(A5),A0
 	move.w	$10(A5),D0
 	add.w	D0,D0
 	add.w	D0,D0
@@ -775,61 +960,36 @@ tfmx_C000A18	move.l	12(A5),A0
 	bhs	tfmx_C000AEC
 	jmp	tfmx_C000A44(PC,D0.W)
 
-tfmx_C000A44	bra	tfmx_C000B06
-
-	bra	tfmx_C000B40
-
-	bra	tfmx_C000B66
-
-	bra	tfmx_C000BDE
-
-	bra	tfmx_C000BF2
-
-	bra	tfmx_C000CD6
-
-	bra	tfmx_C000EDC
-
-	bra	tfmx_C000D18
-
-	bra	tfmx_C000DB4
-
-	bra	tfmx_C000DAC
-
-	bra	tfmx_C000E82
-
-	bra	tfmx_C000E0C
-
-	bra	tfmx_C000E2E
-
-	bra	tfmx_C000D20
-
-	bra	tfmx_C000D5A
-
-	bra	tfmx_C000E62
-
-	bra	tfmx_C000D0A
-
-	bra	tfmx_C000B80
-
-	bra	tfmx_C000BB2
-
-	bra	tfmx_C000B1A
-
-	bra	tfmx_C000E9E
-
-	bra	tfmx_C000ED0
-
-	bra	tfmx_C000F08
-
-	bra	tfmx_C000DF4
-
-	bra	tfmx_C000F18
-
-	bra	tfmx_C000F38
-
-	bra	tfmx_C000C16
-
-	bra	tfmx_C000CAC
+* Macro command jump table
+tfmx_C000A44	
+    bra	macro_stopEfxAndDma
+	bra	macro_startVoice
+	bra	macro_setBeginningOfSample
+	bra	macro_setLength
+	bra	macro_wait
+	bra	macro_repeatSection
+	bra	macro_jump
+	bra	macro_endMacro
+	bra	macro_setFreqByThisNote
+	bra	macro_setFreqDirect
+	bra	macro_clearAllEffects
+	bra	macro_portamento
+	bra	macro_vibrato
+	bra	macro_addVolume
+	bra	macro_setVolume
+	bra	macro_envelope
+	bra	macro_loopKeyUp
+	bra	macro_addBegin
+	bra	macro_addLen
+	bra	macro_DMAOff
+	bra	macro_WaitKeyUp
+	bra	macro_GoSubMacro
+	bra	macro_ReturnToOldMacro
+	bra	macro_SetPeriod
+	bra	macro_setSampleLoop
+	bra	macro_setOneShotSample
+	bra	macro_waitOnDMA
+	bra	macro_randomPlay
 
 	bra	tfmx_C000C80
 
@@ -866,41 +1026,42 @@ tfmx_C000AEC	tst.b	$8E(A5)
 
 tfmx_C000AFA	st	$8E(A5)
 tfmx_C000AFE	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000B06	clr.b	$1C(A5)
+macro_stopEfxAndDma	clr.b	$1C(A5)
 	clr.b	$26(A5)
 	clr.w	$30(A5)
 	clr.b	$4B(A5)
 	clr.w	$6A(A5)
-tfmx_C000B1A	addq.w	#1,$10(A5)
+macro_DMAOff	addq.w	#1,$10(A5)
 	tst.b	$19(A6)
 	bne.s	tfmx_C000B30
 	move.w	$16(A5),$DFF096
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C000B30	move.w	$16(A5),D0
 	or.w	D0,$4A(A6)
 	clr.b	$8E(A5)
 	bra	tfmx_C001088
 
-tfmx_C000B40	move.w	$46(A5),$DFF09A
+macro_startVoice	move.w	$46(A5),$DFF09A
 	move.w	$46(A5),$DFF09C
 	move.b	$19(A6),1(A5)
 	addq.w	#1,$10(A5)
 	move.w	$14(A5),D0
 	or.w	D0,$48(A6)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000B66	clr.b	3(A5)
+macro_setBeginningOfSample	clr.b	3(A5)
 	move.l	$18(A6),D0
 	add.l	4(A6),D0
 tfmx_C000B72	move.l	D0,$2C(A5)
 	move.l	D0,(A4)
+    bsr     setStartD0
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000B80	move.b	$19(A6),3(A5)
+macro_addBegin	move.b	$19(A6),3(A5)
 	move.b	$19(A6),$1B(A5)
 	move.w	$1A(A6),D1
 	ext.l	D1
@@ -912,9 +1073,9 @@ tfmx_C000B80	move.b	$19(A6),3(A5)
 	move.l	D0,$2C(A5)
 	move.l	D0,$64(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000BB2	move.w	$1A(A6),D0
+macro_addLen	move.w	$1A(A6),D0
 	move.w	$34(A5),D1
 	add.w	D0,D1
 	move.w	D1,$34(A5)
@@ -922,18 +1083,24 @@ tfmx_C000BB2	move.w	$1A(A6),D0
 	beq.s	tfmx_C000BD2
 	move.w	D1,$68(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000BD2	move.w	D1,4(A4)
+tfmx_C000BD2	
+    move.w	D1,4(A4)
+    bsr     setLengthD1
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000BDE	move.w	$1A(A6),$34(A5)
+macro_setLength	move.w	$1A(A6),$34(A5)
 	move.w	$1A(A6),4(A4)
+    push    d1
+    move    $1A(A6),d1
+    bsr     setLengthD1
+    pop     d1
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000BF2	btst	#0,$19(A6)
+macro_wait	btst	#0,$19(A6)
 	beq.s	tfmx_C000C0C
 	tst.b	$53(A5)
 	bne	tfmx_C000A14
@@ -943,25 +1110,25 @@ tfmx_C000BF2	btst	#0,$19(A6)
 tfmx_C000C0C	move.w	$1A(A6),$12(A5)
 	bra	tfmx_C000AEC
 
-tfmx_C000C16	move.w	$1A(A6),6(A5)
+macro_waitOnDMA	move.w	$1A(A6),6(A5)
 	clr.b	0(A5)
 	move.w	$44(A5),$DFF09A
 	bra	tfmx_C000AEC
 
 _audioInterrupt:
 tfmx_C000C2C	movem.l	D0/A5,-(SP)
-	lea	tfmx_L001B98(PC),A5
+	lea	_channel1Data(PC),A5
 	move.w	$DFF01E,D0
 	and.w	$DFF01C,D0
 	btst	#7,D0
 	bne.s	tfmx_C000C5E
-	lea	tfmx_L001C28(PC),A5
+	lea	_channel2Data(PC),A5
 	btst	#8,D0
 	bne.s	tfmx_C000C5E
-	lea	tfmx_L001CB8(PC),A5
+	lea	_channel3Data(PC),A5
 	btst	#9,D0
 	bne.s	tfmx_C000C5E
-	lea	tfmx_L001D48(PC),A5
+	lea	_channel4Data(PC),A5
 tfmx_C000C5E	move.w	$46(A5),$DFF09C
 	subq.w	#1,6(A5)
 	bpl.s	tfmx_C000C7A
@@ -974,15 +1141,15 @@ tfmx_C000C80	move.b	$19(A6),D0
 	cmp.b	5(A5),D0
 	bhs	tfmx_C000AFE
 	move.w	$1A(A6),$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C000C96	move.b	$19(A6),D0
 	cmp.b	$18(A5),D0
 	bhs	tfmx_C000AFE
 	move.w	$1A(A6),$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000CAC	move.b	$19(A6),$52(A5)
+macro_randomPlay	move.b	$19(A6),$52(A5)
 	move.w	$1A(A6),$48(A5)
 	move.w	#$101,$4A(A5)
 	bsr	tfmx_C001298
@@ -992,7 +1159,7 @@ tfmx_C000CAC	move.b	$19(A6),$52(A5)
 tfmx_C000CCC	move.b	$19(A6),$37(A5)
 	bra	tfmx_C000AFE
 
-tfmx_C000CD6	tst.b	$1A(A5)
+macro_repeatSection	tst.b	$1A(A5)
 	beq.s	tfmx_C000CEA
 	cmp.b	#$FF,$1A(A5)
 	beq.s	tfmx_C000CF6
@@ -1001,23 +1168,23 @@ tfmx_C000CD6	tst.b	$1A(A5)
 
 tfmx_C000CEA	st	$1A(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C000CF6	move.b	$19(A6),D0
 	subq.b	#1,D0
 	move.b	D0,$1A(A5)
 tfmx_C000D00	move.w	$1A(A6),$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000D0A	tst.b	$36(A5)
-	bne.s	tfmx_C000CD6
+macro_loopKeyUp	tst.b	$36(A5)
+	bne.s	macro_repeatSection
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000D18	clr.b	0(A5)
+macro_endMacro	clr.b	0(A5)
 	bra	tfmx_C001088
 
-tfmx_C000D20	cmp.b	#$FE,$1A(A6)
+macro_addVolume	cmp.b	#$FE,$1A(A6)
 	bne.s	tfmx_C000D40
 	move.b	5(A5),D2
 	move.b	$1B(A6),D3
@@ -1033,9 +1200,9 @@ tfmx_C000D40	move.w	8(A5),D0
 	add.w	$1A(A6),D0
 	move.b	D0,$18(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000D5A	cmp.b	#$FE,$1A(A6)
+macro_setVolume	cmp.b	#$FE,$1A(A6)
 	bne.s	tfmx_C000D78
 	move.b	5(A5),D2
 	move.b	$1B(A6),D3
@@ -1047,7 +1214,7 @@ tfmx_L000D74	dc.l	$1D43001B
 
 tfmx_C000D78	move.b	$1B(A6),$18(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C000D86	move.b	5(A5),$18(A6)
 	move.b	9(A5),D0
@@ -1061,18 +1228,18 @@ tfmx_C000DA2	move.b	4(A5),D2
 	lea	tfmx_C000AEC(PC),A1
 	bra.s	tfmx_C000DBC
 
-tfmx_C000DAC	moveq	#0,D2
+macro_setFreqDirect	moveq	#0,D2
 	lea	tfmx_C000AEC(PC),A1
 	bra.s	tfmx_C000DBC
 
-tfmx_C000DB4	move.b	5(A5),D2
+macro_setFreqByThisNote	move.b	5(A5),D2
 	lea	tfmx_C000AEC(PC),A1
 tfmx_C000DBC	move.b	$19(A6),D0
 	add.b	D2,D0
 	and.b	#$3F,D0
 	ext.w	D0
 	add.w	D0,D0
-	lea	tfmx_W0021CE(PC),A0
+	lea	tfmx_periodTable(PC),A0
 	move.w	0(A0,D0.W),D0
 	move.w	10(A5),D1
 	add.w	$1A(A6),D1
@@ -1083,16 +1250,16 @@ tfmx_C000DBC	move.b	$19(A6),D0
 tfmx_C000DE4	move.w	D0,$28(A5)
 	tst.w	$30(A5)
 	bne.s	tfmx_C000DF2
-	move.w	D0,$8C(A5)
+	move.w	D0,$8C(A5)      * stored period
 tfmx_C000DF2	jmp	(A1)
 
-tfmx_C000DF4	move.w	$1A(A6),$28(A5)
+macro_SetPeriod	move.w	$1A(A6),$28(A5)
 	tst.w	$30(A5)
 	bne	tfmx_C000AFE
 	move.w	$1A(A6),$8C(A5)
 	bra	tfmx_C000AFE
 
-tfmx_C000E0C	move.b	$19(A6),$22(A5)
+macro_portamento	move.b	$19(A6),$22(A5)
 	move.b	#1,$23(A5)
 	tst.w	$30(A5)
 	bne.s	tfmx_C000E24
@@ -1100,7 +1267,7 @@ tfmx_C000E0C	move.b	$19(A6),$22(A5)
 tfmx_C000E24	move.w	$1A(A6),$30(A5)
 	bra	tfmx_C000AFE
 
-tfmx_C000E2E	move.b	$19(A6),D0
+macro_vibrato	move.b	$19(A6),D0
 	move.b	D0,$26(A5)
 	lsr.b	#1,D0
 	move.b	D0,$27(A5)
@@ -1111,16 +1278,16 @@ tfmx_C000E2E	move.b	$19(A6),D0
 	move.w	$28(A5),$8C(A5)
 	clr.w	$24(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000E62	move.b	$1A(A6),$1C(A5)
+macro_envelope	move.b	$1A(A6),$1C(A5)
 	move.b	$19(A6),$1F(A5)
 	move.b	$1A(A6),$1D(A5)
 	move.b	$1B(A6),$1E(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000E82	clr.b	$4B(A5)
+macro_clearAllEffects	clr.b	$4B(A5)
 	clr.w	$6A(A5)
 	clr.b	3(A5)
 	clr.b	$1C(A5)
@@ -1128,7 +1295,7 @@ tfmx_C000E82	clr.b	$4B(A5)
 	clr.w	$30(A5)
 	bra	tfmx_C000AFE
 
-tfmx_C000E9E	tst.b	$36(A5)
+macro_WaitKeyUp	tst.b	$36(A5)
 	beq	tfmx_C000AFE
 	tst.b	$1A(A5)
 	beq.s	tfmx_C000EBA
@@ -1145,9 +1312,9 @@ tfmx_C000EC2	move.b	$1B(A6),D0
 	move.b	D0,$1A(A5)
 tfmx_C000ECC	bra	tfmx_C001088
 
-tfmx_C000ED0	move.l	12(A5),$38(A5)
+macro_GoSubMacro	move.l	12(A5),$38(A5)
 	move.w	$10(A5),$40(A5)
-tfmx_C000EDC	move.b	$19(A6),D0
+macro_jump	move.b	$19(A6),D0
 	and.l	#$7F,D0
 	move.l	$40(A6),A0
 	add.w	D0,D0
@@ -1158,28 +1325,41 @@ tfmx_C000EDC	move.b	$19(A6),D0
 	move.l	D0,12(A5)
 	move.w	$1A(A6),$10(A5)
 	st	$1A(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
-tfmx_C000F08	move.l	$38(A5),12(A5)
+macro_ReturnToOldMacro	move.l	$38(A5),12(A5)
 	move.w	$40(A5),$10(A5)
 	bra	tfmx_C000AFE
 
-tfmx_C000F18	move.l	$18(A6),D0
+macro_setSampleLoop	move.l	$18(A6),D0
 	add.l	D0,$2C(A5)
 	move.l	$2C(A5),(A4)
 	lsr.w	#1,D0
 	sub.w	D0,$34(A5)
 	move.w	$34(A5),4(A4)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
 
-tfmx_C000F38	clr.b	3(A5)
+    pushm   d0/d1
+	move.l	$2C(A5),d0
+	move.w	$34(A5),d1
+    bsr     setRepeatD0D1
+    popm    d0/d1
+	bra	runMacro
+
+macro_setOneShotSample	
+    clr.b	3(A5)
 	move.l	4(A6),$2C(A5)
 	move.l	4(A6),(A4)
 	move.w	#1,$34(A5)
 	move.w	#1,4(A4)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+
+    pushm   d0/d1
+	move.l	4(A6),d0
+    moveq   #1,d1
+    bsr     setStartLenD0D1
+    popm    d0/d1
+	bra	runMacro
 
 tfmx_C000F5A	move.b	$19(A6),D0
 	and.w	#3,D0
@@ -1197,13 +1377,16 @@ tfmx_C000F72	clr.b	3(A5)
 	add.l	$60(A5),D0
 	move.l	D0,(A4)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+
+    bsr     setStartD0
+	bra	runMacro
 
 tfmx_C000F98	move.w	$18(A6),D0
 	bne.s	tfmx_C000FA2
 	move.w	#$100,D0
 tfmx_C000FA2	lsr.w	#1,D0
 	move.w	D0,4(A4)
+    bsr     setLengthD0
 	move.w	$18(A6),D0
 	subq.w	#1,D0
 	and.w	#$FF,D0
@@ -1211,29 +1394,29 @@ tfmx_C000FA2	lsr.w	#1,D0
 	move.w	$1A(A6),$68(A5)
 	move.w	$1A(A6),$34(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C000FCA	move.l	$18(A6),D0
 	lsl.l	#8,D0
 	move.l	D0,$6C(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C000FDC	move.l	$18(A6),$78(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C000FEA	move.w	$18(A6),$70(A5)
 	move.w	$18(A6),$72(A5)
 	move.w	$1A(A6),$74(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C001004	move.w	$18(A6),$84(A5)
 	move.w	$18(A6),$86(A5)
 	move.w	$1A(A6),$82(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C00101E	move.b	$1B(A6),$76(A5)
 	move.b	$1A(A6),D0
@@ -1243,12 +1426,12 @@ tfmx_C00101E	move.b	$1B(A6),$76(A5)
 	move.w	$18(A6),$7C(A5)
 	move.w	$18(A6),$7E(A5)
 	addq.w	#1,$10(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C001044	addq.w	#1,$10(A5)
 	clr.w	$6A(A5)
 	tst.b	$19(A6)
-	beq	tfmx_C000A18
+	beq	runMacro
 	clr.l	$6C(A5)
 	clr.w	$70(A5)
 	clr.w	$72(A5)
@@ -1261,7 +1444,7 @@ tfmx_C001044	addq.w	#1,$10(A5)
 	clr.w	$80(A5)
 	clr.w	$7C(A5)
 	clr.w	$7E(A5)
-	bra	tfmx_C000A18
+	bra	runMacro
 
 tfmx_C001088	tst.b	1(A5)
 	bmi.s	tfmx_C001096
@@ -1280,6 +1463,7 @@ tfmx_C00109A	tst.b	3(A5)
 	bra.s	tfmx_C0010BA
 
 tfmx_C0010B8	move.l	D0,(A4)
+    bsr         setStartD0
 tfmx_C0010BA	sub.b	#1,3(A5)
 	bne.s	tfmx_C0010CC
 	move.b	$1B(A5),3(A5)
@@ -1466,7 +1650,7 @@ tfmx_C001306	add.b	5(A5),D0
 	and.w	#$3F,D0
 	beq	tfmx_C0013B0
 	add.w	D0,D0
-	lea	tfmx_W0021CE(PC),A0
+	lea	tfmx_periodTable(PC),A0
 	move.w	0(A0,D0.W),D0
 	move.w	10(A5),D1
 	beq.s	tfmx_C00132A
@@ -1531,7 +1715,7 @@ tfmx_C0013C6	btst	#1,$49(A5)
 	lsr.w	#3,D1
 	move.l	A5,-(SP)
 	add.l	$54(A5),A5
-	move.l	$58(A5),A4
+	move.l	$58(A5),A4      * paula base
 	move.b	D1,$18(A5)
 	cmp.w	$28(A5),D0
 	beq.s	tfmx_C001418
@@ -1565,7 +1749,8 @@ tfmx_C00144E	moveq	#0,D1
 	add.w	D0,D0
 	mulu	D1,D0
 	lsr.w	#8,D0
-tfmx_C001468	move.w	D0,8(A4)
+tfmx_C001468	move.w	D0,8(A4)        * paula volume
+    bsr     setVolumeD0
 	rts
 
 tfmx_C00146E	move.w	$DFF006,D7
@@ -1668,7 +1853,7 @@ tfmx_C0015C4	clr.w	$30(A5)
 	and.w	#$3F,D0
 	move.b	D0,5(A5)
 	add.w	D0,D0
-	lea	tfmx_W0021CE(PC),A4
+	lea	tfmx_periodTable(PC),A4
 	move.w	0(A4,D0.W),$28(A5)
 	bra.s	tfmx_C0015A2
 
@@ -1802,13 +1987,13 @@ tfmx_C00178A	move.l	A6,-(SP)
 	lea	tfmx_L001B0C(PC),A6
 	clr.b	$1E(A6)
 	clr.w	$48(A6)
-	lea	tfmx_L001B98(PC),A6
+	lea	_channel1Data(PC),A6
 	bsr.s	tfmx_C001778
-	lea	tfmx_L001C28(PC),A6
+	lea	_channel2Data(PC),A6
 	bsr.s	tfmx_C001778
-	lea	tfmx_L001CB8(PC),A6
+	lea	_channel3Data(PC),A6
 	bsr.s	tfmx_C001778
-	lea	tfmx_L001D48(PC),A6
+	lea	_channel4Data(PC),A6
 	bsr.s	tfmx_C001778
 	clr.w	$DFF0A8
 	clr.w	$DFF0B8
@@ -1956,13 +2141,13 @@ tfmx_C0019D8	move.w	#5,$40(A6)
 	dbra	D0,tfmx_C0019D8
 	lea	tfmx_L001B0C(PC),A6
 	lea	tfmx_L001B58(PC),A4
-	lea	tfmx_L001B98(PC),A5
+	lea	_channel1Data(PC),A5
 	move.l	A5,(A4)+
-	lea	tfmx_L001C28(PC),A5
+	lea	_channel2Data(PC),A5
 	move.l	A5,(A4)+
-	lea	tfmx_L001CB8(PC),A5
+	lea	_channel3Data(PC),A5
 	move.l	A5,(A4)+
-	lea	tfmx_L001D48(PC),A5
+	lea	_channel4Data(PC),A5
 	move.l	A5,(A4)+
 	moveq	#11,D0
 tfmx_C001A0A	move.l	-$10(A4),(A4)+
@@ -2042,7 +2227,7 @@ tfmx_L001B0C	dcb.l	$9,0
 	dc.l	$FFFF
 	dcb.l	$5,0
 tfmx_L001B58	dcb.l	$10,0
-tfmx_L001B98	dcb.l	$5,0
+_channel1Data	dcb.l	$5,0        * channel 1 data
 	dc.l	$82010001
 	dcb.l	$B,0
 	dc.l	$80800080
@@ -2053,7 +2238,7 @@ tfmx_L001B98	dcb.l	$5,0
 	dc.l	4
 	dcb.l	$A,0
 	dc.l	$FF00
-tfmx_L001C28	dcb.l	$5,0
+_channel2Data	dcb.l	$5,0
 	dc.l	$82020002
 	dcb.l	$B,0
 	dc.l	$81000100
@@ -2064,7 +2249,7 @@ tfmx_L001C28	dcb.l	$5,0
 	dc.l	$104
 	dcb.l	$A,0
 	dc.l	$FF00
-tfmx_L001CB8	dcb.l	$5,0
+_channel3Data	dcb.l	$5,0
 	dc.l	$82040004
 	dcb.l	$B,0
 	dc.l	$82000200
@@ -2075,7 +2260,7 @@ tfmx_L001CB8	dcb.l	$5,0
 	dc.l	$204
 	dcb.l	$A,0
 	dc.l	$FF00
-tfmx_L001D48	dcb.l	$5,0
+_channel4Data	dcb.l	$5,0
 	dc.l	$82080008
 	dcb.l	$B,0
 	dc.l	$84000400
@@ -2109,7 +2294,7 @@ tfmx_W0021C6	dc.w	$F400
 	dc.w	0
 	dc.w	$F000
 	dc.w	0
-tfmx_W0021CE	dc.w	$6AE
+tfmx_periodTable	dc.w	$6AE
 	dc.w	$64E
 	dc.w	$5F4
 	dc.w	$59E

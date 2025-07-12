@@ -40928,7 +40928,7 @@ p_tfmx:
 	jmp id_tfmx(pc) 
 	jmp	tfmx_author(pc)
 	dc.w pt_tfmx				* type
-	dc	pf_cont!pf_stop!pf_song!pf_volume!pf_kelaus!pf_poslen!pf_end
+	dc	pf_cont!pf_stop!pf_song!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_quadscopePoke
 	dc.b	"TFMX",0
  even
 
@@ -40974,9 +40974,10 @@ p_tfmx:
 	move.l	moduleaddress(a5),a0
 	move.l	tfmxsamplesaddr(a5),a1
     lea     songover(a5),a2
+    lea     scopeData(a5),a3
 	move	songnumber(a5),d0
-	move.l	tfmxroutines(a5),a3
-    jsr     .tfmx_init(a3)
+	move.l	tfmxroutines(a5),a4
+    jsr     .tfmx_init(a4)
     * d0 = status
     * d1 = song count
     tst.l   d0
@@ -41120,7 +41121,8 @@ id_TFMX_PRO
 TFMX_IDs
 	dc.b	'tfmxsong',0
 	dc.b	'TFMX-SONG',0
-	dc.b	'TFMX_SONG',0,0
+	dc.b	'TFMX_SONG',0
+    even
 
 
 ******************************************************************************
