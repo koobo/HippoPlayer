@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.64
+Version: 2.65
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -101,6 +101,22 @@ Additional files to check and download
     -> combined.tsv -> Download raw file
   ... and:
     -> songlengths.tsv -> Download raw file  
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+# Changes from v2.64 (19.6.2025) to v2.65 (?.?.2025) 
+
+## Improvements:
+
+- Added scope support and improved song end detection for 
+  the following formats:
+  - Delta Music 1.0
+  - Sidmon 2
+  - TFMX
+  - TFMX 7 channels 
+- Metadata info: Data search now even faster (especially on A500).
 
 
 ------------------------------------------------------------------------------
