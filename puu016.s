@@ -47396,7 +47396,7 @@ p_voodoosupremesynthesizer
 	dc.w 	pt_voodoosupremesynthesizer
 	dc	pf_stop!pf_cont!pf_ciakelaus!pf_volume!pf_song
 	dc.b	"VoodooSupremeSynthesizer",0
-.a 	dc.b "Thomas Partl",0
+.a 	dc.b "Tomas Partl",0
  even
 
 .author
