@@ -32659,6 +32659,13 @@ tutki_moduuli2:
 	beq	.ff
 
 .nom
+    * Check if a module program
+    cmp.l   #"HiPP",(a0)
+    bne.b   .noP1
+    cmp.w   #"rg",4(a0)
+    beq     .f
+.noP1
+
 ;	bsr	id_ps3m
 ;	tst.l	d0
 ;	beq	.goPublic
