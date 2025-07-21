@@ -8375,7 +8375,8 @@ getRandomValue
 
 
 * mulu_32 --- d0 = d0*d1
-mulu_32:	movem.l	d2/d3,-(sp)
+mulu_32:	
+    movem.l	d2/d3,-(sp)
 	move.l	d0,d2
 	move.l	d1,d3
 	swap	d2
@@ -8391,7 +8392,8 @@ mulu_32:	movem.l	d2/d3,-(sp)
 	rts	
 
 * divu_32 --- d0 = d0/d1, d1=remainder
-divu_32	move.l	d3,-(a7)
+divu_32:	
+    move.l	d3,-(a7)
 	swap	d1
 	tst	d1
 	bne.b	.lb_5f8c
@@ -60376,7 +60378,17 @@ UME_INDEX_SIZE_BYTES = UME_INDEX_SIZE*8
 USL_HEADER_SIZE_BYTES = USL_INDEX_SIZE_BYTES+4
 UME_HEADER_SIZE_BYTES = UME_INDEX_SIZE_BYTES+4
 
-    include "md5.s" 
+ if DEBUG
+    include "md5.s"
+ endif
+ 
+ ifd __VASM    
+    mc68020
+ endif
+    include "xxhash32.s"
+ ifd __VASM    
+    mc68020
+ endif
 
 * Called once on startup
 initializeUslUme:
@@ -60461,6 +60473,15 @@ calcModuleMD5:
     tst.l   uslMD5(a5)            
     bne     readUme\.reject
 
+    * Show wait pointer if 68000 or long enough
+    move.l  (a5),a2
+    btst    #AFB_68020,AttnFlags+1(a2)
+    bne     .11
+    jsr     setMainWindowWaitPointer
+.11
+
+    ;;;;;;;;; MD5 calc ;;;;;;;;;;;
+ if DEBUG
     lea     -MD5Ctx_SIZEOF(sp),sp
 
     move.l  sp,a0
@@ -60477,15 +60498,6 @@ calcModuleMD5:
 .1
     DPRINT  "calcModuleMD5 length=%ld"
 
-    * Show wait pointer if 68000 or long enough
-    move.l  (a5),a2
-    btst    #AFB_68020,AttnFlags+1(a2)
-    beq     .12
-    cmp.l   #200000,d0
-    blo     .11
-.12
-    jsr     setMainWindowWaitPointer
-.11
 
  if DEBUG
     pushm   all
@@ -60495,7 +60507,25 @@ calcModuleMD5:
     bsr     MD5_Update
  if DEBUG
     bsr     stopMeasure
-    DPRINT  "MD5 took %ld ms"
+
+    move.l  d0,d2       * ms
+    move.l  modulelength(a5),d0
+    move.l  #1000,d1
+    jsr     mulu_32
+    * d0 = bytes*1000
+    move.l  d2,d1
+    jsr     divu_32
+    * d0 = bytes*1000/ms
+    * d0 = bytes/s
+
+    lsr.l   #8,d0
+    lsr.l   #2,d0
+    move.l  d0,d1
+    * d0 = kb/S
+
+    move.l  d2,d0
+
+    DPRINT  "MD5 took %ld ms (%ld kB/s)"
  endif
 
     move.l  sp,a0
@@ -60506,6 +60536,97 @@ calcModuleMD5:
     move.w  d1,uslMD5+4(a5)
     
     lea     MD5Ctx_SIZEOF(sp),sp
+ endif
+
+;; if DEBUG
+;;    pushm   all
+;;    bsr     startMeasure
+;;    popm    all
+;; endif
+;;    move.l  moduleaddress(a5),a0
+;;    * Special case for XPK, exact decompressed length
+;;    * is not the allocated mem length
+;;    move.l  lod_xpkOutLen(a5),d0
+;;    bne     .1a
+;;    move.l  modulelength(a5),d0
+;;.1a
+;;    moveq   #0,d1
+;;    jsr     XXH32
+;; if DEBUG
+;;    push    d0
+;;    bsr     stopMeasure
+;;    move.l  d0,d2       * ms
+;;
+;;    move.l  modulelength(a5),d0
+;;    move.l  #1000,d1
+;;    jsr     mulu_32
+;;    * d0 = bytes*1000
+;;    move.l  d2,d1
+;;    jsr     divu_32
+;;    * d0 = bytes*1000/ms
+;;    * d0 = bytes/s
+;;
+;;    lsr.l   #8,d0
+;;    lsr.l   #2,d0
+;;    move.l  d0,d1
+;;    * d0 = kb/S
+;;
+;;    move.l  d2,d0
+;;    pop     d2  * result
+
+;;    DPRINT  "XXH32 took %ld ms (%ld kB/s), xxh32=%lx"
+;; endif
+
+    ;;;;;;;;; XXH32 calc ;;;;;;;;;;;
+
+    move.l  moduleaddress(a5),a0
+    * Special case for XPK, exact decompressed length
+    * is not the allocated mem length
+    move.l  lod_xpkOutLen(a5),d0
+    bne     .1b
+    move.l  modulelength(a5),d0
+.1b
+    move.w  d0,uslMD5+4(a5)     * last 32 bits of hash
+
+    cmp.l   #256*1024,d0        * size cap used by audacious data
+    bls     .1c
+    move.l  #256*1024,d0
+.1c
+
+ if DEBUG
+    move.l  d0,d7
+    pushm   all
+    bsr     startMeasure
+    popm    all
+ endif
+
+    moveq   #0,d1               * seed
+    jsr     XXH32
+    move.l  d0,uslMD5(a5)       * first 32 bits
+
+ if DEBUG
+    bsr     stopMeasure
+    move.l  d0,d2       * ms
+
+    move.l  d7,d0
+    move.l  #1000,d1
+    jsr     mulu_32
+    * d0 = bytes*1000
+    move.l  d2,d1
+    jsr     divu_32
+    * d0 = bytes*1000/ms
+    * d0 = bytes/s
+
+    lsr.l   #8,d0
+    lsr.l   #2,d0
+    move.l  d0,d1
+    * d0 = kB/s
+
+    move.l  d2,d0
+    move.l  uslMD5(a5),d2
+
+    DPRINT  "XXH32 256k took %ld ms (%ld kB/s), xxh32=%lx"
+ endif 
 
     jmp     clearMainWindowWaitPointer
  
@@ -60948,7 +61069,7 @@ uslDataNameO dc.b   "songlengths.tsv",0
 umeFile:	 dc.b	"PROGDIR:"
 umeFileOld   dc.b   "au-metadata.db",0
 umeDataName  dc.b   "PROGDIR:"
-umeDataNameO dc.b   "combined.tsv",0
+umeDataNameO dc.b   "metadata.tsv",0
      even
 
 
