@@ -60475,7 +60475,8 @@ readUme:
 .reject
     rts
 
-
+* Calculates a hash code for finding out audacious-uade metadata.
+* Not actually MD5 anymore.
 calcModuleMD5:
     tst.l   uslMD5(a5)            
     bne     readUme\.reject
@@ -61575,7 +61576,10 @@ fileConverter:
     move.l  .inputFile(a4),d1
     move.l  #MODE_OLDFILE,d2
     lore    Dos,Open
-    DPRINT  "open=%lx"
+ if DEBUG
+    move.l  .inputFile(a4),d1
+    DPRINT  "open=%lx - %s"
+ endif
     move.l  d0,.inFH(a4)
     move.l  d0,d7
     beq     .exit       * bail out quickly
@@ -61631,6 +61635,10 @@ fileConverter:
 	moveq	#0,d2
 	moveq	#-1,d3
 	lob	Seek		
+ if DEBUG
+    move.l  (sp),d0
+    DPRINT  "old len=%lx"
+ endif
     ; ---------------------------------
     * Compare txt length and the length stored in idx
     * If same, exit
