@@ -165,6 +165,22 @@ XXH32_mulu macro
 	add.l	\3,\1
     endm
 
+XXH32_mulub macro
+	move.l	\1,\3
+	move.l	\2,\4
+	;swap	\3      ; -1
+	swap	\4
+	mulu	\2,\3
+	swap    \1       ; rotate left 13 2nd phase
+    mulu	\1,\4
+	mulu	\2,\1
+	add     \4,\3
+	swap	\3
+	clr	    \3
+	add.l	\3,\1
+    endm
+
+
 * In:
 *   d0 = input data
 *   \1 = accumulator (d4,d5,d6,d7)
@@ -177,11 +193,12 @@ XXH32_round  macro
     XXH32_mulu d0,d1,d2,d3
     add.l   d0,\1   
 
-    swap    \1      * rotate left 13
+    ; rotate left 13, rotate right 3 here
+    ; do a swap (rotate left 16) later for \1
     ror.l   #3,\1
 
     move.l  a4,d1
-    XXH32_mulu \1,d1,d2,d3 
+    XXH32_mulub \1,d1,d2,d3 
     endm
 
 * kick 1.3 attributed horror: 8420 ms
