@@ -436,7 +436,7 @@ prefs_residboost      rs.b      1
 prefs_midimode        rs.b      1
 prefs_ps3mamigus      rs.b      1 
 prefs_disableInfoScroll rs.b    1
-                      rs.b      1 * padding
+prefs_scopesize       rs.b      1
 prefs_size            rs.b      0
 
 	ifne	prefs_size&1
@@ -904,7 +904,7 @@ contonerr_laskuri rs.b 1		* kuinka monta virheellistä lataus
 ;calibrationfile_new rs.b 100
 ;newcalibrationfile rs.b	1
 ps3mamigus_new    rs.b   1
-                  rs.b   1 * pad
+scopesize_new     rs.b   1
 
 mhiLib_new      rs.b MHILIB_SIZE
 
@@ -1543,6 +1543,7 @@ mhiEnable      = prefsdata+prefs_mhiEnable
 mhiLib         = prefsdata+prefs_mhiLib
 * 0 = not used, 1 = normal mode, 2 = interpolated mode
 ps3mamigus     = prefsdata+prefs_ps3mamigus
+scopesize      = prefsdata+prefs_scopesize
 
 * Flags to indicate the bottom search layout state
 * Tested with .w!
@@ -14512,6 +14513,7 @@ prefs_code
 	move.b	showPositionSlider(a5),showPositionSlider_new(a5)
 	move.b	disableInfoScroll(a5),disableInfoScroll_new(a5)
     move.b  ps3mamigus(a5),ps3mamigus_new(a5)
+    move.b  scopesize(a5),scopesize_new(a5)
 
 	move.l	ahi_rate(a5),ahi_rate_new(a5)
 	move	ahi_mastervol(a5),ahi_mastervol_new(a5)
@@ -14986,6 +14988,7 @@ exprefs	move.l	_IntuiBase(a5),a6
     move.b  mhiEnable_new(a5),mhiEnable(a5)
     move.b  ps3mamigus_new(a5),ps3mamigus(a5)
     move.b  disableInfoScroll_new(a5),disableInfoScroll(a5)
+    move.b  scopesize_new(a5),scopesize(a5)
 
     move.b  showPositionSlider(a5),d0
     move.b  showPositionSlider_new(a5),showPositionSlider(a5)
@@ -15527,6 +15530,9 @@ pmousebuttons
 	lea	bUu2,a0			* prefix cut
 	lea	rprefx_req(pc),a2
 	bsr	.check
+	lea	prefsScopeSize,a0		
+	lea	rScopeSize_req(pc),a2
+	bsr	.check
 	bra     .xx
 
 .2	subq	#1,d0
@@ -15653,6 +15659,7 @@ pupdate:				* Ikkuna päivitys
 	bsr	pscreen			* screen refresh rates
 	bsr	ptooltips  	     	* tooltips
 	bsr	paltbuttons  	        * alt buttons
+    bsr pScopeSize
 	bsr	pQuadraScope
 	bsr	pQuadraScopeBars
 	bsr	pQuadraScopeF
@@ -15919,6 +15926,7 @@ gadgetsup2
 	;;dr	rinfosize	* module info size
 	dr  	rtooltips     * tooltips
 	dr  	raltbuttons * alt buttons
+    dr  rScopeSize
 	dr	rQuadraScope
 	dr	rQuadraScopeBars
 	dr	rQuadraScopeF
@@ -18012,6 +18020,44 @@ ls299	dc.b	3,4
 	dc.b	" 0 ",0
 	dc.b	"+1 ",0
  even
+
+*** Scope size
+
+rScopeSize_req
+	lea	pScopeSize\.l0(pc),a0
+	bsr	listselector
+	bmi.b	.x
+	move.b	d0,scopesize_new(a5)
+	bra.b	pScopeSize
+.x	rts
+
+rScopeSize
+	move.b	scopesize_new(a5),d0
+	addq.b	#1,d0
+	cmp.b	#2,d0
+	bls.b	.r
+	moveq	#0,d0
+.r	move.b	d0,scopesize_new(a5)
+
+pScopeSize
+    lea     .l1(pc),a0
+    move.b  scopesize_new(a5),d0
+    beq.b   .1
+    lea     .l2(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     .l3(pc),a0
+.1
+	lea	prefsScopeSize,a1
+	bra	prunt
+
+.l0	dc.b	7,3 * width, height
+.l1	dc.b	"Default",0
+.l2	dc.b	"Half",0
+.l3	dc.b	"Double",0
+ even
+
+
 
 **** Early load
 * DISABLED!
@@ -27643,7 +27689,8 @@ drawScope:
 	bne.b	.noPattSc
     * For generic pattern scope, update only when position changes
 	move.l	deliPatternInfo(a5),d0 
-	beq.b 	.noPattSc 
+    beq.b   .wasPattSc      * Protracker specific
+    * Generic 
 	move.l	d0,a0
 	movem	PI_Pattpos(a0),d0/d1 
 	cmp	s_scopePreviousPattPos(a4),d0 
@@ -27654,19 +27701,27 @@ drawScope:
 .doUpdate
 	move	d0,s_scopePreviousPattPos(a4)
 	move	d1,s_scopePreviousSongPos(a4)
+    bra     .wasPattSc
 .noPattSc
-	* s_draw1 = draw scope in this buffer
-	* s_draw2 = clear this buffer
 
-    ;;;;;;;;;; XAX
+    * Adjust waveform scope size - based on prefs
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
-	;move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+    move.b  scopesize(a5),d2
+    beq.b   .try
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_HALF,d1
+    subq.b  #1,d2
+    beq.b   .try
 	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
-	;move	#SCOPE_DRAW_AREA_HEIGHT_HALF,d1
+.try
     bsr     patternScopeSizeAdjustDo
     bne     .sizeOk
     rts
 .sizeOk
+
+.wasPattSc
+	* s_draw1 = draw scope in this buffer
+	* s_draw2 = clear this buffer
 
 	* clear draw area
 	tst.b	s_bufferIsChip(a4)
@@ -62829,7 +62884,7 @@ prefsTooltipstx
        even
 
 prefsAltButtons 
-       dc.l prefsQuadraScope
+       dc.l prefsScopeSize
        dc.w 214,107+14-28,28,12,3,1,1
        dc.l 0
        dc.l 0,prefsAltButtonst,0,0
@@ -62847,6 +62902,21 @@ prefsBarsText
 	dc.b	"Bars",0
 	even
 
+prefsScopeSize
+       dc.l prefsQuadraScope
+       dc.w 406-8-8-8-8,51,28+8+8+8+8,12,3,1,1
+       dc.l 0,0,.t,0,0
+       dc.w 0
+       dc.l 0
+.t        
+       dc.b 1,0,1,0
+       dc.w -146+8+8+8+8,2
+       dc.l 0,.tx,0 
+.tx
+       dc.b "Scope size....",0
+       even
+ even
+
 prefsQuadraScope 
        dc.l prefsQuadraScopeBars
        dc.w 406-70,51+14+14,28,12,3,1,1
@@ -62856,7 +62926,7 @@ prefsQuadraScope
 .t        
        dc.b 1,0,1,0
        dc.w -146+70,2
-       dc.l 0,.tx,.t2
+       dc.l 0,.tx,0 ;.t2
 .tx
        dc.b "Quadra",0
        even
