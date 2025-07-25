@@ -28795,6 +28795,17 @@ multiscope:
 multiscope0:
     * d3 = sample modulo
    
+    move    d6,a6   * normalize constant
+    moveq   #3,d6   * scale shift 0..32
+    cmp     #SCOPE_DRAW_AREA_HEIGHT_HALF,s_scopeDrawAreaHeight(a4)
+    beq     .sc
+    subq    #1,d6    * scale shift 0..64
+    cmp     #SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
+    beq     .sc
+    subq    #1,d6    * scale shift 0..128
+.sc
+
+
 .drlo	
     * Do 8 horizontal pixels
     moveq   #2-1,d1
@@ -28802,10 +28813,12 @@ multiscope0:
     rept 4
     * Get one data byte, adjust with $80
     * turns it from -128..127 to 0..256 I guess
- 	move	d6,d2
+ 	;move	d6,d2
+    move    a6,d2
 	add.b	(a1,d5.l),d2
     * scale to 0..63
-	lsr.b	#2,d2
+	;lsr.b	#2,d2
+    lsr.b   d6,d2
     * Multiply by screen modulo using a table
 	add	d2,d2
 	move	(a2,d2),d2
@@ -28916,23 +28929,26 @@ multihipposcope:
 	move.l	(a1),a1
 
 	move	#240,d0
-	bsr.b	.1
+	bsr.b	.1                  * do buff1
+
 	move.l	ps3m_buff2(a5),a1
 	move.l	(a1),a1
 	moveq	#88,d0
-	
+                           * do buff2
 .1
 
 	move.l	ps3m_playpos(a5),a2
 	move.l	(a2),d5
 	lsr.l	#8,d5
 
-	bsr.b	getps3mb
+	bsr 	getps3mb
 
 ;    moveq   #1,d6   * sampledata modulo
     move.l  ps3m_sampleDataModulo(a5),d6
 
 multihipposcope0:
+    push    a5
+
 	lea	s_multab(a4),a2
 	move.l	s_draw1(a4),a3
 
@@ -28942,21 +28958,42 @@ multihipposcope0:
     lsl     #3,d7
     lea     (a1,d7.w),a0
 
+    move.w  s_scopeDrawAreaHeight(a4),d7
+
+    move.l  d4,a6
+    move.l  d6,a5
+
+    * d4,d6 free now
+
+    move    #3,d4   * scale shift
+    moveq   #16,d6  * center
+    cmp     #SCOPE_DRAW_AREA_HEIGHT_HALF,d7
+    beq     .sc
+    move    #2,d4   * scale shift
+    moveq   #32,d6  * center
+    cmp     #SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d7
+    beq     .sc
+    move    #1,d4   * scale shift
+    moveq   #64,d6  * center
+.sc
+
+
 	moveq	#120-1,d7
 .d
 
-	move.b	(a1,d5.l),d1
+	move.b	(a1,d5.l),d1        * x-coordinate
 	asr.b	#1,d1
 	ext	d1
 	add	d0,d1
 
     ;move.b	5(a1,d5.l),d2
-    move.b	(a0,d5.l),d2
+    move.b	(a0,d5.l),d2        * y-coordinate
 
-	asr.b	#2,d2 
+;	asr.b	#2,d2 
+    asr.b   d4,d2       * scale
 	ext	d2
-	;add	d6,d2
-    add     #32,d2
+;      add     #32,d2
+    add     d6,d2       * center
 	add	d2,d2
 	move	(a2,d2),d3
 
@@ -28972,15 +29009,17 @@ multihipposcope0:
 	sub	d2,d3
 	bset	d1,39(a3,d3)
 
-;	addq.l	#1,d5
-    add.l   d6,d5
+    ;add.l   d6,d5
+    add.l    a5,d5
 
-	cmp.l	d4,d5
+	;cmp.l	d4,d5
+    cmp.l   a6,d5
 	bne.b	.x
 	moveq	#0,d5
 .x
 	dbf	d7,.d
 
+    pop     a5
 	rts
 
 
