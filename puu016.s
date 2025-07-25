@@ -27466,18 +27466,25 @@ showNoMiniFontMessage:
 
 ******* Quadrascopelle 
 voltab:
+    moveq   #0,d7          * normal quadra
+voltab0:
 	lea	s_mtab(a4),a0
 	moveq	#$40-1,d3      * volume range 0..64
 	moveq	#0,d2
-
-;	tst	d7
-;	bne.b	.voltab_fill
 
 .olp2	moveq	#0,d0   
 	move	#256-1,d4   
 .olp1	
     move	d0,d1
 	ext	d1
+
+    tst.b   d7      * in filled mode mirror low to up
+    beq     .norm
+    tst     d1
+    bmi     .norm
+    neg     d1
+.norm
+
 	muls	d2,d1       * scale by volume
 
     bsr     getScopeSizeParams
@@ -27516,31 +27523,38 @@ getScopeSizeParams:
 ******* Filled quadrascope
 
 voltab_fill:
-	lea	s_mtab(a4),a0
-	moveq	#$40-1,d3
-	moveq	#0,d2
-.olp2q	moveq	#0,d0
-	move	#256-1,d4
-.olp1q	move	d0,d1
-	ext	d1
-	muls	d2,d1
-	asr	#8,d1
-	tst	d1
-	bmi.b	.mee
-	moveq	#31,d5
-	sub	d1,d5
-	move	d5,d1
-	sub	#32,d1
-.mee	add	#32,d1
-	mulu	#40,d1
-	add	#39,d1
-	move	d1,(a0)+
-	addq	#1,d0
-	dbf	d4,.olp1q
-	addq	#1,d2
-	dbf	d3,.olp2q
-	rts
+    moveq   #1,d7           * filled mode
+    bra     voltab0
 
+
+;voltab_fill_old:
+;	lea	s_mtab(a4),a0
+;	moveq	#$40-1,d3
+;	moveq	#0,d2
+;.olp2q	moveq	#0,d0
+;	move	#256-1,d4
+;.olp1q	move	d0,d1
+;	ext	d1
+;	muls	d2,d1
+;	asr	#8,d1
+;
+;	tst	d1
+;	bmi.b	.mee
+;	moveq	#31,d5
+;	sub	d1,d5
+;	move	d5,d1
+;	sub	#32,d1
+;.mee	add	#32,d1
+;
+;	mulu	#40,d1
+;	add	#39,d1
+;	move	d1,(a0)+
+;	addq	#1,d0
+;	dbf	d4,.olp1q
+;	addq	#1,d2
+;	dbf	d3,.olp2q
+;	rts
+;
 
 
 ******* Hipposcopelle
@@ -27646,9 +27660,9 @@ drawScope:
 
     ;;;;;;;;;; XAX
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
-	;;move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
-	;move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
-	move	#SCOPE_DRAW_AREA_HEIGHT_HALF,d1
+	;move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
+	;move	#SCOPE_DRAW_AREA_HEIGHT_HALF,d1
     bsr     patternScopeSizeAdjustDo
     bne     .sizeOk
     rts
@@ -27929,7 +27943,7 @@ drawScope:
 
 mirrorfill
 	tst.b	s_bufferIsChip(a4)
-	beq.b	.cpuMirrorFill
+	beq 	.cpuMirrorFill
 
 	lore	GFX,OwnBlitter
 	lob	WaitBlit
@@ -27948,24 +27962,50 @@ mirrorfill
 	moveq	#-1,d0
 	move.l	d0,$44-$58(a2)
 	move.l	#$0b5a0000,$40-$58(a2)	* D = A not C
-	move	#31*64+20,(a2)	
+	;move	#31*64+20,(a2)	
 
-	lea	63*40(a0),a1		* kopioidaan
+	move	s_scopeDrawAreaHeight(a4),d0
+    move    d0,d1
+    lsr     #1,d0
+    lsl     #6,d0
+    add     #20,d0
+    move    d0,(a2)
+
+    * Target for upside-down-copy
+    subq    #1,d1
+	mulu	s_scopeDrawAreaModulo(a4),d1
+    lea     (a0,d1),a1
+
+;	lea	63*40(a0),a1		* kopioidaan
+    add     #1<<6,d0        * copy one more row
+
 	lob	WaitBlit
 	movem.l	a0/a1,$50-$58(a2)
 	move	#-80,$66-$58(a2) 	* D
 	move.l	#$09f00000,$40-$58(a2)
-	move	#32*64+20,(a2)	
+	;move	#32*64+20,(a2)	
+    move    d0,(a2)
 
 	lob	DisownBlitter
 	rts
 
 .cpuMirrorFill
-	moveq	#31,d1
+	move	s_scopeDrawAreaHeight(a4),d1
+    lsr     #1,d1
+    subq    #1,d1
 	bsr.b	cpuVerticalFill
+
+	move	s_scopeDrawAreaHeight(a4),d0
+    subq    #1,d0
+    mulu	s_scopeDrawAreaModulo(a4),d0
+
 	move.l	s_draw1(a4),a0
-	lea		63*40(a0),a1
-	moveq	#32-1,d1
+    lea     (a0,d0),a1
+
+	move	s_scopeDrawAreaHeight(a4),d1
+    lsr     #1,d1
+    subq    #1,d1
+
 .y	moveq	#320/64-1,d0
 .x	move.l	(a0)+,(a1)+
 	move.l	(a0)+,(a1)+
@@ -28171,7 +28211,7 @@ sco	macro
 	add	d2,d2
 	move	(a2,d2),d3
 	or.b	d0,(a0,d3)
-	or.b	d0,(a3,d3)
+	or.b	d0,(a3,d3)  * unnecessary plot in filled quadra
 
 	ifne	\2
 	add.b	d0,d0
@@ -55383,8 +55423,7 @@ runSpectrumScope
 .x	rts
 
 .cpuFill
-	move	s_scopeDrawAreaHeight(a4),d0
-;	moveq	#65,d1
+	move	s_scopeDrawAreaHeight(a4),d1
 	jmp		cpuVerticalFill
 
 * Test visualization
