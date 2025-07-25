@@ -6475,16 +6475,14 @@ printhippo1
 
 ** Print into scope window
 printHippoScopeWindow
-	;tst.b	uusikick(a5)
-	;bne.b	.yep
-	;rts
-;.yep	
+    cmp.w   #64,s_scopeDrawAreaHeight(a4)
+    blo     .x
+
 	pushm	d0-d6/a0-a2/a6
 	lea	bitmapHippoHead(a5),a0
 	move.l	s_rastport3(a4),a1		* quad
 	moveq	#0,d0	
 	moveq	#0,d1
-
 
 	* Center hippohead into scope window
 	move.l	s_scopeWindowBase(a4),a2 
@@ -6505,6 +6503,7 @@ printHippoScopeWindow
 	move	#$c0,d6			* suora kopio
 	lore	GFX,BltBitMapRastPort
 	popm	d0-d6/a0-a2/a6
+.x
 	rts
 
 
@@ -25702,6 +25701,7 @@ s_timerIORequest              rs.b      IOTV_SIZE
 
 s_multab                      rs.w       256 * modulo multiplication table
 s_scopeHorizontalBarTable     rs.b       512
+s_voltabRoutine               rs.l       1
 s_mtab                        rs.b       64*256*2 * volume table for scopes
 sizeof_scopeVars              rs.b       1
 
@@ -26178,6 +26178,7 @@ QUADMODE2_PATTERNSCOPEXL_BARS = 11
 SCOPE_DRAW_AREA_WIDTH_DEFAULT = 320
 SCOPE_DRAW_AREA_HEIGHT_DEFAULT = 64
 SCOPE_DRAW_AREA_HEIGHT_DOUBLE = 2*64
+SCOPE_DRAW_AREA_HEIGHT_HALF = 32
 
 * If more channels than defined here,
 * switch to small font.
@@ -26359,6 +26360,7 @@ scopeEntry:
 	addq.b	#1,d1
 .e	move.b	d1,s_quadmode2(a4)	* 0-9
 
+    sub.l   a1,a1       * voltab routine address goes here
 	moveq	#0,d0
 	move.b	s_quadmode2(a4),d0
 	lsl	#1,d0
@@ -26377,36 +26379,18 @@ scopeEntry:
 	bra.b	.patternScopeXL	* patternscope xl
 	bra.b	.patternScopeXLBars	* patternscope xl bars (no bars available though)
 
-
-.7	moveq	#-1,d7
-	bra.b	.11
-.8	moveq	#-1,d7
-	bra.b	.33
-
-* Quadrascope
-.1	moveq	#0,d7
-.11	
-	bsr	voltab
+.7	
+.8	
+    pea     voltab_fill(pc)
+	bra 	.cont
+.1	
+.3	
+    pea     voltab(pc)
+	bra 	.cont
+.2	
+.4	
+    pea     voltab2(pc)
 	bra.b	.cont
-
-* Hipposcope
-.2
-	bsr	voltab2
-	bra.b	.cont
-
-
-.3	moveq	#0,d7
-.33
-	bsr	voltab
-
-.wo	
-	bsr	makeScopeHorizontalBars		* tehd‰‰n palkkitaulu
-	bra.b	.cont
-
-
-.4
-	bsr	voltab2
-	bra.b	.wo
 
 .5	
   ifne FEATURE_FREQSCOPE
@@ -26418,7 +26402,7 @@ scopeEntry:
 	jsr	spectrumInitialize
 	beq	.memer
  endif
-	bra.b	.cont
+    bra     .specCont
 
   ifne FEATURE_FREQSCOPE 
 .delt	move.l	#(256+32)*4,d0
@@ -26445,7 +26429,9 @@ scopeEntry:
    	jsr	spectrumInitialize
 	beq	.memer
   endif
-	bra.b	.wo * go to bar init
+.specCont
+    pea     prepareSpectrumMuluTable
+	bra.b	.cont
 
 .patternScopeNormal
 .patternScopeNormalBars
@@ -26453,12 +26439,19 @@ scopeEntry:
 	* makes things easier. 
 	move.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4)
 	SDPRINT	"Patternscope NORMAL"
-	bra.b	.cont
+	bra.b	.contNoVol
 .patternScopeXL
 .patternScopeXLBars
 	move.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
 	SDPRINT	"Patternscope XL"
+.contNoVol
+    pea     0.w
 .cont
+
+    * Store voltab create routine for later
+    move.l  (sp)+,s_voltabRoutine(a4)
+    bsr     scopeCreateVoltab
+	bsr	makeScopeHorizontalBars		* tehd‰‰n palkkitaulu
 
 	* Start with no size request active.
 	move	s_scopeDrawAreaWidth(a4),s_scopeDrawAreaWidthRequest(a4)
@@ -27146,6 +27139,7 @@ requestScopeDrawAreaChange
 
 	move.l	s_scopeWindowBase(a4),a0 
 	lore 	Intui,SizeWindow
+
 	moveq	#1,d0
 	rts
 .noDiff
@@ -27222,9 +27216,18 @@ scopeWindowSizeChanged
 
 	bsr	initScopeBitmaps
 	bsr	drawScopeWindowDecorations
+    bsr     scopeCreateVoltab
+
+    ; Redo voltabs
 	popm	d2-d6
 	rts
 
+scopeCreateVoltab:
+    move.l  s_voltabRoutine(a4),d0
+    beq     .nv
+    move.l  d0,a0
+    jmp     (a0)
+.nv rts
 
 *********************************************************************
 * Scope interrupt code, keeps track the play positions of 
@@ -27462,36 +27465,60 @@ showNoMiniFontMessage:
 	even
 
 ******* Quadrascopelle 
-voltab
+voltab:
 	lea	s_mtab(a4),a0
-	moveq	#$40-1,d3
+	moveq	#$40-1,d3      * volume range 0..64
 	moveq	#0,d2
 
-	tst	d7
-	bne.b	.voltab_fill
+;	tst	d7
+;	bne.b	.voltab_fill
 
-.olp2	moveq	#0,d0
-	move	#256-1,d4
-.olp1	move	d0,d1
+.olp2	moveq	#0,d0   
+	move	#256-1,d4   
+.olp1	
+    move	d0,d1
 	ext	d1
-	muls	d2,d1
-	asr	#8,d1
-	add	#32,d1
-	mulu	#40,d1
+	muls	d2,d1       * scale by volume
+
+    bsr     getScopeSizeParams
+    asr     d5,d1       * shift to range 0..32, 0..64, 0..128
+    add     d6,d1       * center
+
+	mulu	#40,d1      * modulo 320, pix width
 	add	#39,d1
 	move	d1,(a0)+
 	addq	#1,d0
 	dbf	d4,.olp1
-	addq	#1,d2
+	addq	#1,d2       * next volume level
 	dbf	d3,.olp2
 	rts
 
+getScopeSizeParams:
+    * HALF
+    moveq   #9,d5       * shift 
+    moveq   #16,d6      * center
+
+    cmp.w   #SCOPE_DRAW_AREA_HEIGHT_HALF,s_scopeDrawAreaHeight(a4)
+    beq     .h0
+    * DEFAULT
+    subq    #1,d5
+    add     d6,d6
+
+    cmp.w   #SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
+    beq     .h0
+    * DOUBLE
+    subq    #1,d5
+    add     d6,d6
+.h0
+    rts
+
+
 ******* Filled quadrascope
 
-.voltab_fill
-;	lea	mtab(a5),a0
-;	moveq	#$40-1,d3
-;	moveq	#0,d2
+voltab_fill:
+	lea	s_mtab(a4),a0
+	moveq	#$40-1,d3
+	moveq	#0,d2
 .olp2q	moveq	#0,d0
 	move	#256-1,d4
 .olp1q	move	d0,d1
@@ -27517,8 +27544,10 @@ voltab
 
 
 ******* Hipposcopelle
-voltab2
+voltab2:
 	lea	s_mtab(a4),a0
+
+    ; 1st half for the y-value
 
 	moveq	#$40-1,d3
 	moveq	#0,d2
@@ -27529,8 +27558,11 @@ voltab2
 	move	d0,d1
 	ext	d1
 	muls	d2,d1
-	asr	#8,d1
-	add.b	#$80,d1
+
+    bsr     getScopeSizeParams
+    asr     d5,d1       * shift to range 0..32, 0..64, 0..128
+    add     d6,d1       * center
+
 	move.b	d1,(a0)+
 
 	addq	#1,d0
@@ -27539,6 +27571,7 @@ voltab2
 	addq	#1,d2
 	dbf	d3,.op2
 
+    ; The 2nd half is for the x-value
 
 	moveq	#$40-1,d3
 	moveq	#0,d2
@@ -27610,6 +27643,16 @@ drawScope:
 .noPattSc
 	* s_draw1 = draw scope in this buffer
 	* s_draw2 = clear this buffer
+
+    ;;;;;;;;;; XAX
+	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0
+	;;move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+	;move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
+	move	#SCOPE_DRAW_AREA_HEIGHT_HALF,d1
+    bsr     patternScopeSizeAdjustDo
+    bne     .sizeOk
+    rts
+.sizeOk
 
 	* clear draw area
 	tst.b	s_bufferIsChip(a4)
@@ -28056,7 +28099,8 @@ getScopeChannelData:
 	rts
 
 quadrascope:
-	lea	scopeData+scope_ch1(a5),a3
+	lea	scopeData+scope_ch1(a5),a3	
+    
 	move.l	s_draw1(a4),a0
 	lea	-30(a0),a0
 	bsr.b	.scope
@@ -28162,7 +28206,9 @@ hm\2
 hipposcope:
 	lea	scopeData+scope_ch1(a5),a3
 	move.l	s_draw1(a4),a6
-	lea	-20-95*40(a6),a6
+    ;lea     -20-95*40(a6),a6
+    lea     -20(a6),a6
+
 	bsr.b	.twirl
 	* a6 is unchanged
 	
@@ -29552,12 +29598,12 @@ notescroller:
 
 ********** Palkit
 
-leverEor
+leverEor:
 	* Flag: eor
 	moveq	#1,d4
 	bra.b	lever\.go
 
-lever
+lever:
 	* Flag: or
 	moveq	#0,d4
 .go
@@ -29579,12 +29625,30 @@ lever
 	moveq	#0,d1
 	move	ns_period(a3),d1
 	beq 	.h
-	sub	#108,d1
-	lsl	#1,d1
-	divu	#27,d1		* lukualueeksi 0-59
+;	sub	#108,d1
 
-	* clamp
-	cmp	#59,d1
+    sub     #100,d1
+
+    * d1 = 0..900
+
+    moveq   #64-5,d2    
+    cmp     #SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
+    beq     .gog
+    moveq   #32-5,d2    
+    cmp     #SCOPE_DRAW_AREA_HEIGHT_HALF,s_scopeDrawAreaHeight(a4)
+    beq     .gog
+    moveq   #128-5,d2    
+.gog
+    mulu    d2,d1
+    divu    #900,d1
+
+
+;	lsl	#1,d1
+;	divu	#27,d1		* lukualueeksi 0-59
+;
+;	* clamp
+;	cmp	#59,d1
+    cmp     d2,d1
 	bls.b	.1
 	move	#59,d1
 .1
@@ -55043,12 +55107,19 @@ getSpectrumVolumeTable
 	add	d0,a2
 	rts
 
+* Map FFT power values 0..64 to 0..s_scopeDrawAreaHeight * modulo
 prepareSpectrumMuluTable
 	move.l	s_spectrumMuluTable(a4),a0
 	moveq	#0,d0
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT-1,d1
-.l	move	d0,(a0)+
-	add	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,d0
+    moveq   #64-1,d1
+.l	
+    move    d0,d2
+    mulu    s_scopeDrawAreaHeight(a4),d2
+    lsr     #6,d2
+	mulu	s_scopeDrawAreaModulo(a4),d2
+    move    d2,(a0)+
+
+    addq    #1,d0
 	dbf	d1,.l
 	rts
 
@@ -55283,11 +55354,13 @@ runSpectrumScope
 	lore	GFX,OwnBlitter
 
 	move.l	s_draw1(a4),a0
-	;addq	#2,a0 * horiz offset
-	;moveq	#2,d0 * modulo
 	moveq	#0,d0 * modulo
 	lea	40(a0),a1 * target is one line below
 	lea	$dff000,a2
+
+    move    s_scopeDrawAreaHeight(a4),d1
+    lsl     #6,d1
+    add     #20,d1      * 320 width
 
 	lob	WaitBlit
 	move.l	a0,$50(a2)	* A
@@ -55300,8 +55373,9 @@ runSpectrumScope
 	move.l	#$0b5a0000,$40(a2)	* D = A not C
 	* Height: 65 px
 	* Width 19*16 = 304 px
-	;move	#65*64+19,$58(a2)
-	move	#65*64+20,$58(a2)
+;	move	#65*64+20,$58(a2)
+    move    d1,$58(a2)
+
 	lob	DisownBlitter
 	
 ;	bsr.b	drawScales
@@ -55309,7 +55383,8 @@ runSpectrumScope
 .x	rts
 
 .cpuFill
-	moveq	#65,d1
+	move	s_scopeDrawAreaHeight(a4),d0
+;	moveq	#65,d1
 	jmp		cpuVerticalFill
 
 * Test visualization
