@@ -27945,8 +27945,8 @@ drawScope:
 * Sample scope
 .renderSample
 	* Get normal scope area
-	bsr	requestNormalScopeDrawArea
-	bne.b	.sampleSkip * wait for resize
+	;bsr	requestNormalScopeDrawArea
+	;bne.b	.sampleSkip * wait for resize
     
     * bit 7 indicates bars
     moveq   #$1f,d0
@@ -28793,6 +28793,9 @@ multiscope:
 	bsr	getps3mb
     move.l  ps3m_sampleDataModulo(a5),d3
 multiscope0:
+    cmp.w   #1024,a1        * sanity check
+    blo     .x
+
     * d3 = sample modulo
    
     move    d6,a6   * normalize constant
@@ -28851,6 +28854,7 @@ multiscope0:
     * Jump 8 pixels to left
 	sub	d0,a0
 	dbf	d7,.drlo
+.x
 	rts
 
 
@@ -28947,6 +28951,9 @@ multihipposcope:
     move.l  ps3m_sampleDataModulo(a5),d6
 
 multihipposcope0:
+    cmp.w   #1024,a1        * sanity check
+    blo     .xxx
+
     push    a5
 
 	lea	s_multab(a4),a2
@@ -29020,6 +29027,7 @@ multihipposcope0:
 	dbf	d7,.d
 
     pop     a5
+.xxx
 	rts
 
 
@@ -29887,7 +29895,7 @@ samplescope:
 
 sampleHippoScope:
 	tst.b	samplestereo(a5)
-	beq     .mono
+	;beq     .mono
 	bsr 	samples0
     * d4 = sample data mask
     * d5 = sample follow  position
@@ -29903,10 +29911,19 @@ sampleHippoScope:
 	move	#240,d0
     bsr     multihipposcope0
 
+    * Draw the same buffer if mono
+	move.l	samplepointer(a5),a1
+    tst.b   samplestereo(a5)
+    beq     .xx
+;    beq     .goMono
+
 	move.l	samplepointer2(a5),a1
+.goMono
 	move.l	(a1),a1
 	move	#88,d0
     bra     multihipposcope0
+.xx
+    rts
 
 samplescopefilled:
 	bsr.b	samples0
