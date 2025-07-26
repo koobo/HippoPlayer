@@ -60790,6 +60790,7 @@ calcModuleMD5:
     bsr     stopMeasure
 
     move.l  d0,d2       * ms
+    beq     .woop
     move.l  modulelength(a5),d0
     move.l  #1000,d1
     jsr     mulu_32
@@ -60807,6 +60808,7 @@ calcModuleMD5:
     move.l  d2,d0
 
     DPRINT  "MD5 took %ld ms (%ld kB/s)"
+.woop
  endif
 
     move.l  sp,a0
@@ -60888,6 +60890,7 @@ calcModuleMD5:
  if DEBUG
     bsr     stopMeasure
     move.l  d0,d2       * ms
+    beq     .woop2
 
     move.l  d7,d0
     move.l  #1000,d1
@@ -60907,6 +60910,7 @@ calcModuleMD5:
     move.l  uslMD5(a5),d2
 
     DPRINT  "XXH32 256k took %ld ms (%ld kB/s), xxh32=%lx"
+.woop2
  endif 
 
     jmp     clearMainWindowWaitPointer
