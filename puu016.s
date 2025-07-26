@@ -28988,7 +28988,7 @@ multihipposcope0:
     cmp.w   #1024,a1        * sanity check
     blo     .xxx
 
-    push    a5
+    pushm   d4/d6/a5
 
 	lea	s_multab(a4),a2
 	move.l	s_draw1(a4),a3
@@ -29055,12 +29055,12 @@ multihipposcope0:
 
 	;cmp.l	d4,d5
     cmp.l   a6,d5
-	bne.b	.x
+    bne.b   .x
 	moveq	#0,d5
 .x
 	dbf	d7,.d
 
-    pop     a5
+    popm     d4/d6/a5
 .xxx
 	rts
 
@@ -29948,8 +29948,7 @@ sampleHippoScope:
     * Draw the same buffer if mono
 	move.l	samplepointer(a5),a1
     tst.b   samplestereo(a5)
-    beq     .xx
-;    beq     .goMono
+    beq     .goMono
 
 	move.l	samplepointer2(a5),a1
 .goMono
