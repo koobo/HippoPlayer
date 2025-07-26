@@ -28899,18 +28899,39 @@ multiscopefilled:
 
      * sample modulo
     move.l  ps3m_sampleDataModulo(a5),d3
-
+	
 multiscopefilled0:
+    cmp.w   #1024,a1        * sanity check
+    blo     .x
+
+    * Center vertically
+	move	s_scopeDrawAreaHeight(a4),d2
+    lsr     #1,d2
+    subq    #1,d2
+	mulu	s_scopeDrawAreaModulo(a4),d2
+    add.l   d2,a0
+
+    moveq   #3,d1       * scale 0..32
+    cmp     #SCOPE_DRAW_AREA_HEIGHT_HALF,s_scopeDrawAreaHeight(a4)
+    beq     .sc
+    moveq   #2,d1       * scale 0..64
+    cmp     #SCOPE_DRAW_AREA_HEIGHT_HALF,s_scopeDrawAreaHeight(a4)
+    beq     .sc
+    moveq   #1,d1       * scale 0..128
+.sc
 
 hurl	macro 
-	move	d6,d2
-	add.b	(a1,d5.l),d2
+    move.b	(a1,d5.l),d2
+    ext     d2
 	bpl.b	.ok\1
-	not.b	d2
+	neg.w	d2
 .ok\1
-	lsr.b	#2,d2
-	add	d2,d2
+    * d2 = 0..127
+    asr     d1,d2
+    * d2 = 0..31
+ 	add     d2,d2
 	move	(a2,d2),d2
+    neg     d2
 	or.b	d0,(a0,d2)
 	add.b	d0,d0
 	add.l	d3,d5
@@ -28933,6 +28954,7 @@ hurl	macro
 	moveq	#1,d0
 	sub	d0,a0
 	dbf	d7,.drlo
+.x
 	rts
 
 
@@ -28997,7 +29019,7 @@ multihipposcope0:
 .sc
 
 
-	moveq	#120-1,d7
+	moveq	#120-1,d7           *
 .d
 
 	move.b	(a1,d5.l),d1        * x-coordinate
@@ -29973,7 +29995,10 @@ samples0:
 	move.l	(a0),d5
 ;	move.l	samplefollow(a5),d5
 
+    * Sanity check
 	move.l	samplebufsiz(a5),d4
+    cmp.l   d4,d5
+    bhs     .error
 
     * Check if AHI 16-bit buffer
     tst.b   ahi_use_nyt(a5)
@@ -29989,7 +30014,10 @@ samples0:
 
 	lea	s_multab(a4),a2
 	move.l	s_draw1(a4),a0
+    tst.l   d0
+    rts
 .error
+    moveq   #0,d0
 	rts
 
 
@@ -45232,7 +45260,14 @@ p_sample:
     move    d4,ahiSampleModulo(a5)
     move.l  d5,sampleOutputInfoText(a5)
 
+
  if DEBUG
+    push    d0
+    moveq   #0,d0
+    move.b  samplestereo(a5),d0
+    DPRINT  "samplestereo=%ld"
+    pop     d0
+
 	pushm	d0-d3
     tst     d0
     bne     .dxx
