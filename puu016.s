@@ -8069,8 +8069,10 @@ signalreceived
     DPRINT  "--- fav song: %ld"
 
 	DPRINT	"--- Replay init"
+    bsr     obtainModuleData
 	move.l	playerbase(a5),a0	* soitto p‰‰lle
 	jsr	p_init(a0)
+    bsr     releaseModuleData
 	tst.l	d0
 	bne.b	.mododo
 
@@ -8738,8 +8740,10 @@ umph
     DPRINT  "=== fav song: %ld"
 
 	DPRINT	"=== Replay init"
+    bsr     obtainModuleData
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
+    bsr     releaseModuleData
 	tst.l	d0
 	bne.b	.inierr
 
@@ -10608,6 +10612,7 @@ rbutton4a
 .nofa	move	d0,-(sp)
 	DPRINT	"Replay end (eject)"
 
+    bsr     obtainModuleData
 	lore    Exec,Disable
 	bsr	halt
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
@@ -10615,7 +10620,8 @@ rbutton4a
 	move.l	playerbase(a5),d0
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
-	
+	bsr     releaseModuleData
+
 	bsr	freemodule
 	move	(sp)+,mainvolume(a5)
 	clr.b	movenode(a5)
@@ -11085,6 +11091,7 @@ rbutton1:
 
 	DPRINT	"Replay end"
 * Soitetaan vaan alusta
+    bsr     obtainModuleData
     push    a3
 	bsr	halt
 	move.l	playerbase(a5),a0
@@ -11100,6 +11107,7 @@ rbutton1:
 	DPRINT	"/// Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
+    bsr     releaseModuleData
 	tst.l	d0
 	bne	.inierr
 
@@ -11127,9 +11135,11 @@ rbutton1:
 	move	d0,-(sp)
 	DPRINT	"Replay end"
     push    d7          * save this!
+    bsr     obtainModuleData
 	bsr	halt			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
+    bsr     releaseModuleData
 	bsr	freemodule	
     pop     d7
 	move	(sp)+,mainvolume(a5)
@@ -11150,6 +11160,7 @@ rbutton1:
 	tst.l	d0
 	bne.b	.loader
 
+    bsr     obtainModuleData
     moveq   #0,d0
     move.b  l_favSong(a3),d0
     move    d0,songnumber(a5)
@@ -11158,6 +11169,7 @@ rbutton1:
 	DPRINT	":;: Replay init"
 	move.l	playerbase(a5),a0
 	jsr	p_init(a0)
+    bsr     releaseModuleData
 	tst.l	d0
 	bne.b	.inierr
 
@@ -30813,7 +30825,6 @@ loadmodule:
 
 	push	d7
 
-	jsr	releaseModuleData
 
 	* At this point correct properties
 	* for current module should be in place
@@ -30829,6 +30840,8 @@ loadmodule:
 	;;;move.l	modulefilename(a5),a0
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
+
+	jsr	releaseModuleData
 
 	;;;move.l	modulefilename(a5),a0
 	jsr	freemodule	
