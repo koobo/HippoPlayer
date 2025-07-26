@@ -663,7 +663,11 @@ stop:
 
 init:
 	lea	var_b(pc),a5
-
+    
+    clr.l   samplepointer(a5)
+    clr.l   samplepointer2(a5)
+    clr.l   samplefollow(a5)
+    
 	bsr.b	.doInit
 	DPRINT	"init status=%ld"
  if DEBUG
