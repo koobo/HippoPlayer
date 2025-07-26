@@ -27817,11 +27817,15 @@ drawScope:
 	move	s_scopeDrawAreaHeight(a4),d5
 
 	* Perform some adjustments based on mode and type
-	cmp.b	#QUADMODE_FREQANALYZER,s_quadmode(a4)
+    moveq   #$f,d7              * strip "bars" bit
+    and.b   s_quadmode(a4),d7
+	cmp.b	#QUADMODE_FREQANALYZER,d7
 	beq.b	.noMagic
-	cmp.b	#QUADMODE_PATTERNSCOPE,s_quadmode(a4)
+	cmp.b	#QUADMODE_FREQANALYZER,d7
+	beq.b	.noMagic
+	cmp.b	#QUADMODE_PATTERNSCOPE,d7
 	beq.b	.pattern
-	cmp.b	#QUADMODE_PATTERNSCOPEXL,s_quadmode(a4)
+	cmp.b	#QUADMODE_PATTERNSCOPEXL,d7
 	beq.b	.pattern
 
 	cmp	    #pt_sample,playertype(a5)
