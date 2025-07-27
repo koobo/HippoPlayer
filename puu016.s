@@ -30008,22 +30008,20 @@ samples0:
     beq     .error
     move.l  d5,a0
 	move.l	(a0),d5
-;	move.l	samplefollow(a5),d5
-
-    * Sanity check
 	move.l	samplebufsiz(a5),d4
-    cmp.l   d4,d5
-    bhs     .error
 
     * Check if AHI 16-bit buffer
     tst.b   ahi_use_nyt(a5)
     beq     .noA
     cmp     #2,ahiSampleModulo(a5)
     bne     .noA
-    add.l   d4,d4
+    add.l   d4,d4   * double buffer size if so
 .noA
-	subq.l	#1,d4
-    
+    * Sanity check
+    cmp.l   d4,d5
+    bhs     .error
+
+	subq.l	#1,d4    
 	moveq	#1,d0
 	move	#$80,d6
 
