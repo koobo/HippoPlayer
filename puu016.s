@@ -60764,8 +60764,7 @@ calcModuleMD5:
     jsr     setMainWindowWaitPointer
 .11
 
-    ;;;;;;;;; MD5 calc ;;;;;;;;;;;
- if DEBUG
+ REM  ;;;;;;;;; MD5 calc ;;;;;;;;;;;
     lea     -MD5Ctx_SIZEOF(sp),sp
 
     move.l  sp,a0
@@ -60822,7 +60821,7 @@ calcModuleMD5:
     move.w  d1,uslMD5+4(a5)
     
     lea     MD5Ctx_SIZEOF(sp),sp
- endif
+ EREM    ;;;;;;;;; MD5 calc ;;;;;;;;;;;
 
 ;; if DEBUG
 ;;    pushm   all
