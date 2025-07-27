@@ -26397,9 +26397,21 @@ scopeEntry:
 	clr.l	s_deltab1(a4)
   endif
 
+    ; ---------------------------------
+    ; Set initial dimensions
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,s_scopeDrawAreaWidth(a4) 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
-	move	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,s_scopeDrawAreaHeight(a4)
+
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+    move.b  scopesize(a5),d2
+    beq.b   .try
+	moveq	#SCOPE_DRAW_AREA_HEIGHT_HALF,d1
+    subq.b  #1,d2
+    beq.b   .try
+	move	#SCOPE_DRAW_AREA_HEIGHT_DOUBLE,d1
+.try
+    move    d1,s_scopeDrawAreaHeight(a4)
+    ; ---------------------------------
 
 
  if DEBUG
@@ -27121,10 +27133,10 @@ drawScopeWindowDecorations
 	rts
 
 
-requestNormalScopeDrawArea
-	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0 
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
-	* falling thru!
+;;requestNormalScopeDrawArea
+;;	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,d0 
+;;	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+;;	* falling thru!
 
 * Resize window based on relative change to
 * the draw area.
