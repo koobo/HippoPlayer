@@ -94,11 +94,11 @@ Additional files to check and download
 - Calibration utility to finetune 14-bit output:
   https://aminet.net/disk/cdrom/14Bit_CDPlayer.lha
 - To get song lengths and metadata, get "songlengths.tsv"
-  and "combined.tsv", browse to:
-  https://github.com/koobo/HippoPlayer/tree/main
+  and "metadata.tsv", browse to:
+  https://github.com/koobo/HippoPlayer
   ... then: 
-    -> audacious-uade-tools -> tsv -> pretty 
-    -> combined.tsv -> Download raw file
+    -> audacious-uade-tools -> tsv -> pretty -> xxh32
+    -> metadata.tsv -> Download raw file
   ... and:
     -> songlengths.tsv -> Download raw file  
 
@@ -116,8 +116,13 @@ Additional files to check and download
   - Sidmon 2
   - TFMX
   - TFMX 7 channels 
-- Metadata info: Data search now even faster (especially on A500).
-
+- Metadata: Data is updated and now uses a different checksum for faster
+            access. Download the files "songlengths.tsv" and
+            "metadata.tsv" (see above) and put in hippo dir.
+            For the A500 maximum time for checksum calc is now 5s.
+- Prefs: "Scope size" selection added, allows selecting the vertical size 
+         for waveform based scopes. 
+- HippoScope: Now displayed also with mono sound.
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
