@@ -225,6 +225,7 @@ XXH32_round_020  macro
 *   d1 = input seed
 XXH32:
     rsreset
+.hash           rs.l    1
 .remaining      rs.l    1
 .inputLength    rs.l    1   
 .seed           rs.l    1   
@@ -232,7 +233,6 @@ XXH32:
 .acc2           rs.l    1
 .acc3           rs.l    1
 .acc4           rs.l    1
-.hash           rs.l    1
 .data_sizeof    rs.b    0
 
     movem.l d2-d7/a2-a6,-(sp)
@@ -401,7 +401,7 @@ XXH32:
     jsr     mulu_32
     move.l  d0,.hash(a5)
 
-    move.l  .hash(a5),d0
+    ;move.l  .hash(a5),d0
     moveq   #13,d1
     lsr.l   d1,d0
     eor.l   d0,.hash(a5)
@@ -411,7 +411,7 @@ XXH32:
     jsr     mulu_32
     move.l  d0,.hash(a5)
 
-    move.l  .hash(a5),d0
+    ;move.l  .hash(a5),d0
     swap    d0
     eor.w   d0,.hash+2(a5)
 
