@@ -108,6 +108,12 @@ Additional files to check and download
 
 # Changes from v2.64 (19.6.2025) to v2.65 (?.?.2025) 
 
+## Fixes:
+
+- Trying to load a very large module program sometimes lead to an out 
+  of memory error due to using chip mem, fixed.
+- A few other minor issues fixed.
+
 ## Improvements:
 
 - Added scope support and improved song end detection for 
@@ -116,13 +122,15 @@ Additional files to check and download
   - Sidmon 2
   - TFMX
   - TFMX 7 channels 
-- Metadata: Data is updated and now uses a different checksum for faster
-            access. Download the files "songlengths.tsv" and
-            "metadata.tsv" (see above) and put in hippo dir.
-            For the A500 maximum time for checksum calc is now 5s.
+- Metadata: Data is updated and now uses a different checksum (xxhash32 
+            insted of md5). To keep using the metadata info, download the 
+            files "songlengths.tsv" and "metadata.tsv" (see above) and 
+            put in hippo dir. For the A500 maximum time for checksum calc 
+            is now 5s.
 - Prefs: "Scope size" selection added, allows selecting the vertical size 
          for waveform based scopes. 
 - HippoScope: Now displayed also with mono sound.
+
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
