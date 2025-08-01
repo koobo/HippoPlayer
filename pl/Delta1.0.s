@@ -230,13 +230,13 @@ lbC00023E	MOVE.L	(A6),A4     * get audio base
 	SUBQ.B	#1,$2F(A6)      * speed counter
 	BNE.W	lbC00036E
 	MOVE.B	lbB000836,$2F(A6)
-	TST.L	$1C(A6)
+	TST.L	$1C(A6)         * pattern position check
 	BNE.S	lbC000296
-lbC00025C	MOVE.L	$12(A6),A0
-	MOVE.W	$16(A6),D7
-	MOVE.W	(A0,D7.W),D0
-	CMP.W	#$FFFF,D0
-	BNE.S	lbC00027E
+lbC00025C	MOVE.L	$12(A6),A0  
+	MOVE.W	$16(A6),D7      * get song position
+	MOVE.W	(A0,D7.W),D0    
+	CMP.W	#$FFFF,D0       * song end marker
+	BNE.S	lbC00027E       
 
     * song end?
     move.l  songOverAddress(pc),a1
@@ -248,22 +248,22 @@ lbC00025C	MOVE.L	$12(A6),A0
 	MOVE.W	D0,$16(A6)
 	BRA.S	lbC00025C
 
-lbC00027E	MOVE.B	D0,$32(A6)
+lbC00027E	MOVE.B	D0,$32(A6)  * store note transpose, 2 bit value
 	ASR.L	#2,D0
 	AND.L	#$3FC0,D0
 	ADD.L	lbL0009E8(PC),D0
 	MOVE.L	D0,$18(A6)
-	ADDQ.W	#2,$16(A6)
+	ADDQ.W	#2,$16(A6)          * next song position
 lbC000296	MOVE.L	$18(A6),A0  * current pattern data ptr
-	ADD.L	$1C(A6),A0
+	ADD.L	$1C(A6),A0          * row ptr
 	TST.B	2(A0)
 	BEQ.S	lbC0002B0
-	MOVE.B	2(A0),$37(A6)
-	MOVE.B	3(A0),$38(A6)
+	MOVE.B	2(A0),$37(A6)       * note command
+	MOVE.B	3(A0),$38(A6)       * command parameter
 lbC0002B0	MOVEQ	#0,D0
-	MOVE.B	1(A0),D0
+	MOVE.B	1(A0),D0            * note period
 	BEQ.W	lbC00035C
-	ADD.B	$32(A6),D0
+	ADD.B	$32(A6),D0          * note transpose
 	MOVE.B	D0,$28(A6)
 	MOVE.W	4(A6),D0
 	SUB.W	#$8000,D0
@@ -276,7 +276,7 @@ lbC0002B0	MOVEQ	#0,D0
 	MOVE.B	2(A0),$37(A6)
 	MOVE.B	3(A0),$38(A6)
 	LEA	lbL0009EC(PC),A1
-	MOVE.B	(A0),D0
+	MOVE.B	(A0),D0             * note sample
 	ASL.L	#2,D0
 	MOVE.L	0(A1,D0.L),D0
 	MOVE.L	D0,6(A6)
@@ -306,8 +306,8 @@ lbC00031C	MOVE.W	$18(A5),D0
 	CLR.B	$2B(A6)
 	MOVE.W	4(A5),$2C(A6)
 	CLR.B	$2E(A6)
-lbC00035C	ADDQ.L	#4,$1C(A6)
-	CMP.L	#$40,$1C(A6)
+lbC00035C	ADDQ.L	#4,$1C(A6)      * pattern data advance
+	CMP.L	#$40,$1C(A6)            * check for end of pattern, 16 row patterns
 	BNE.S	lbC00036E
 	CLR.L	$1C(A6)
 lbC00036E	TST.B	14(A5)
@@ -352,7 +352,7 @@ lbC0003D6	TST.B	13(A5)
 	MOVE.W	10(A6),D1
 	BNE.S	lbC0003FC
 	MOVEQ	#0,D0
-	LEA	lbW000848(PC),A1
+	LEA	periodTable(PC),A1
 	MOVE.B	$28(A6),D0
 	ASL.W	#1,D0
 	MOVE.W	0(A1,D0.W),D0
@@ -363,7 +363,7 @@ lbC0003D6	TST.B	13(A5)
 lbC0003FC	MOVEQ	#0,D0
 	MOVEQ	#0,D2
 	MOVE.B	13(A5),D2
-	LEA	lbW000848(PC),A1
+	LEA	periodTable(PC),A1
 	MOVE.B	$28(A6),D0
 	ASL.W	#1,D0
 	MOVE.W	0(A1,D0.W),D0
@@ -437,7 +437,7 @@ lbC0004A0	MOVEQ	#0,D0
 	MOVE.B	0(A1,D0.W),D1
 	ADDQ.B	#1,$34(A6)
 	AND.B	#7,$34(A6)
-	LEA	lbW000848(PC),A1
+	LEA	periodTable(PC),A1
 	MOVE.B	$28(A6),D0
 	ADD.B	D1,D0
 	ASL.W	#1,D0
@@ -735,7 +735,7 @@ lbL000838	dc.l	0
 	dc.l	0
 	dc.l	0
 	dc.l	0
-lbW000848	dc.w	0
+periodTable	dc.w	0
 	dc.w	$1AC0
 	dc.w	$1940
 	dc.w	$17D0
