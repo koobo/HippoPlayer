@@ -33012,6 +33012,8 @@ tutki_moduuli2:
 
     jsr     p_midiext\.id
     beq     .goPublic
+    jsr     p_symphonie\.id
+    beq     .goPublic
 
 ** OctaMed SoundStudio mixattavat moduulit
 	move.l	(a4),d0
@@ -37148,6 +37150,7 @@ eagleFormats:
     dr.l    p_soundprogramminglanguage
     dr.l    p_midiext
     dr.l	p_activisionpro  	* very slow id
+    dr.l    p_symphonie
 	dc.l	0	
 
 
@@ -52398,6 +52401,66 @@ id_xmaplay
 .no
     moveq   #-1,d0
     rts
+
+
+******************************************************************************
+* Symphonie
+******************************************************************************
+
+p_symphonie:
+  jmp      .init(pc)
+  jmp      deliPlay(pc)
+  p_NOP
+  jmp      deliEnd(pc)
+  jmp      deliStop(pc)
+  jmp      deliCont(pc)
+  jmp      deliVolume(pc)
+  jmp      deliSong(pc)
+  jmp      deliForward(pc)
+  jmp      deliBackward(pc)
+  p_NOP
+  jmp      .id(pc)
+  jmp      deliAuthor(pc)
+  dc       pt_symphonie
+.flags
+  dc       pf_end!pf_volume!pf_kelaus
+  dc.b     "Symphonie Pro [EP]",0
+	        
+.path dc.b "symphonie pro",0
+ even
+
+.init
+	move.l	(a5),a1
+	btst	#AFB_68020,AttnFlags+1(a1)
+	bne.b	.cpuOk
+    moveq	#ier_hardware,d0
+	rts
+.cpuOk
+	lea	.path(pc),a0 
+	moveq	#0<<16|0,d0
+	bsr		deliLoadAndInit 
+
+    * Volume seems to work even if the EP flags indicate otherwise
+    lea     .flags(pc),a0
+    or      #pf_volume,(a0)
+    rts
+      
+.id
+id_symphonie
+    tst.b   uusikick(a5)
+    beq     .no
+    cmp.l   #$53796d4d,(a4)
+    bne     .no
+    cmp.w   #1,6(a4)
+    bne     .no
+    moveq   #0,d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
+
+
 
 *******************************************************************************
 *** SECTION *******************************************************************
