@@ -60734,9 +60734,9 @@ UME_INDEX_SIZE_BYTES = UME_INDEX_SIZE*8
 USL_HEADER_SIZE_BYTES = USL_INDEX_SIZE_BYTES+4
 UME_HEADER_SIZE_BYTES = UME_INDEX_SIZE_BYTES+4
 
- if DEBUG
-    include "md5.s"
- endif
+; if DEBUG
+;    include "md5.s"
+; endif
  
  ifd __VASM    
     mc68020
