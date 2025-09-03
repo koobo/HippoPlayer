@@ -52,11 +52,15 @@ Quick overview of major changes since v2.45
   devices, STIL database for song info, song lengths
 - Improved scopes: support for more music formats, multiple scopes,
   spectrum scope, patternscope with two sizes and up to 18 channels 
-  ("mini4" font needed for 8+ channel display).
+  ("mini4" font needed for 8+ channel display), change vertical size 
+  in Prefs "Scope size".
 - Support for MP3 streaming, radio stations
 - "Add" button in file browser or search view: copy items to main list
 - Support for AmiGUS soundcard for hardware mixing.
 - Support for playlists of up to 131071 items.
+- Support for Trinity accelerator audio core.
+- Metadata and songlengths with Audacious-UADE metadata for
+  over 300000 modules.
 
 New keyboard shortcuts:
 - Favorite module: [CTRL+F]
@@ -84,6 +88,8 @@ Additional files to check and download
   https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
 - To play ImpulseTracker modules grab "impulse" and "ImpulseDecruncher":
   https://aminet.net/mus/play/DeliTracker232.lha
+- To play Symphonie modules grab "Symphonie Pro":
+  https://aminet.net/mus/play/Eagleplayer.lha
 - MIDI playback external tools:
   https://aminet.net/mus/midi/AmiTiMiDity.lha 
   https://aminet.net/mus/midi/GMPlay13.lha 
@@ -111,26 +117,37 @@ Additional files to check and download
 ## Fixes:
 
 - Trying to load a very large module program sometimes lead to an out 
-  of memory error due to using chip mem, fixed.
-- A few other minor issues fixed.
+  of memory error, fixed.
+- A few other minor issues addressed.
 
 ## Improvements:
 
-- Added scope support and improved song end detection for 
-  the following formats:
+- Added scope support and improved song end detection for the following 
+  formats:
   - Delta Music 1.0
   - Sidmon 2
   - TFMX
   - TFMX 7 channels 
-- Metadata: Data is updated and now uses a different checksum (xxhash32 
-            insted of md5). To keep using the metadata info, download the 
-            files "songlengths.tsv" and "metadata.tsv" (see above) and 
-            put in hippo dir. For the A500 maximum time for checksum calc 
-            is now 5s.
-- Prefs: "Scope size" selection added, allows selecting the vertical size 
+- Audacious-UADE metadata update
+  - Data is updated. To keep using metadata info, download the files 
+    "songlengths.tsv" and "metadata.tsv" (see above) and put in hippo dir. 
+  - Metadata search now faster due to simpler checksum algorithm
+    (xxhash32 instead of MD5). May still take a few secs on A500.
+- Prefs: "Scope size" selection added, allows choosing the vertical size 
          for waveform based scopes. 
 - HippoScope: Now displayed also with mono sound.
 
+## New music format:
+
+- Symphonie Pro (symmod)
+  - Playback is done using the external eagleplayer plugin "symphonie pro". 
+    Grab it from from the EaglePlayer archive on aminet. Hippo looks for 
+    the file in the following places: "PROGDIR:", "PROGDIR:eagleplayers", 
+    "eagleplayer2:eagleplayers", where PROGDIR: is the Hippo binary directory.
+  - The player may open requesters while playing. Some modules may also 
+    lead to crashes and jams, unfortunately.
+  - 68020 or faster.
+- Note: list of supported formats at the bottom of this file.
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -2077,7 +2094,7 @@ List of supported formats (could be incomplete):
 - Oktalyzer
 - PreTracker
 - ProTracker, NoiseTracker, SoundTracker, Old SoundTracker
-- PSID, 2SID
+- PSID, 2SID, 3SID
 - PumaTracker 
 - Quartet, Quartet ST
 - Richard Joseph
@@ -2099,6 +2116,7 @@ List of supported formats (could be incomplete):
 - StarTrekker, Audio Sculpture (8ch format not supported)
 - Steve Turner
 - StoneTracker
+- Symphonie Pro
 - Synth Pack
 - Synthesis 
 - SynTracker
