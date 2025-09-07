@@ -128,17 +128,19 @@ Additional files to check and download
   - Sidmon 2
   - TFMX
   - TFMX 7 channels 
-- Sonic Arranger compatibility improvements using Wanted Team's 
-  player. Patternscope and waveform scopes work (to some extent).
+- Sonic Arranger compatibility improvements using the player adapted by
+  Wanted Team. Patternscope and waveform scopes work (to some extent).
   The module "svensktoppen" no longer causes a crash.
 - Audacious-UADE metadata update
-  - Data is updated. To keep using metadata info, download the files 
+  - Data is updated. To keep using metadata info download the files 
     "songlengths.tsv" and "metadata.tsv" (see above) and put in hippo dir. 
   - Metadata search now faster due to simpler checksum algorithm
     (xxhash32 instead of MD5). May still take a few secs on A500.
 - Prefs: "Scope size" selection added, allows choosing the vertical size 
          for waveform based scopes. 
 - HippoScope: Now displayed also with mono sound.
+- PatternScope: Added support for larger octave range (some synth formats 
+                go really low).
 
 ## New music format:
 
