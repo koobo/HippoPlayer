@@ -52348,7 +52348,7 @@ p_symphonie:
   jmp      deliAuthor(pc)
   dc       pt_symphonie
 .flags
-  dc       pf_end!pf_volume!pf_kelaus
+  dc       pf_volume!pf_kelaus
   dc.b     "Symphonie Pro [EP]",0
 	        
 .path dc.b "symphonie pro",0
@@ -52368,6 +52368,8 @@ p_symphonie:
     * Volume seems to work even if the EP flags indicate otherwise
     lea     .flags(pc),a0
     or      #pf_volume,(a0)
+    * Song end does not, disable it if set by flags
+    and     #~pf_end,(a0)
     rts
       
 .id
