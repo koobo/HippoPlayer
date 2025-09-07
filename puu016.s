@@ -1659,7 +1659,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	34
+xpl_versio	=	35
 
 
 *********************************************************************************
@@ -30338,8 +30338,10 @@ noteScroller2:
 * register usage: d0-d3, a1
 
 	* Get note data at a0
+    pushm   a0/a1            * SonicArranger trashes a0, a1
 	move.l	PI_Convert(a1),a3
-	jsr	(a3)
+	jsr	    (a3)
+    popm    a0/a1
 	move.l	d5,a1
 
 * d0 = period
@@ -37092,7 +37094,6 @@ groupFormats:
 	dr.l	p_gluemon
 	dr.l	p_pretracker 
 	dr.l 	p_custommade 
-	dr.l 	p_sonicarranger
 	dr.l	p_startrekker
 	dr.l	p_voodoosupremesynthesizer
  ifne FEATURE_P61A
@@ -37151,6 +37152,7 @@ eagleFormats:
     dr.l    p_midiext
     dr.l	p_activisionpro  	* very slow id
     dr.l    p_symphonie
+	dr.l 	p_sonicarranger
 	dc.l	0	
 
 
@@ -40766,113 +40768,36 @@ p_fred
 
 p_sonicarranger
 	jmp	.init(pc)
-	jmp	 .play(pc)
+	jmp	deliPlay(pc)
 	p_NOP
-	jmp	.end(pc)
-	jmp	 .stop(pc)
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
 	p_NOP
-	p_NOP
-	jmp 	.song(pc)
-	jmp 	.forward(pc)
-	jmp 	.backward(pc)
-	p_NOP
-	jmp .id_sonicarranger(pc)
-	jmp	.author(pc)
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
 	dc.w pt_sonicarranger				* type
-	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song
-	dc.b	"Sonic Arranger",0
-.a 	dc.b	"Carsten Schlote, Branko Mikic, Carsten Herbst",0
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
+	dc.b	"Sonic Arranger [EP]",0
+	        
+.path dc.b "sonicarranger",0
  even
 
-.author
-	pushpea	.a(pc),d0
-	rts	
-
-.offset_init 		= $20+0
-.offset_play 		= $20+4
-.offset_end		= $20+8
-.offset_song 		= $20+12
-.offset_forward 	= $20+16
-.offset_backward 	= $20+20
-
 .init
-	lea	sonicroutines(a5),a0
-    bsr generalReplayInit
-	beq.b	.ok3
-    rts
-.ok3
-	;bra	.skip
-
-	move.l	moduleaddress(a5),a0
-	move.l	modulelength(a5),d0
-	lea	mainvolume(a5),a1
-	lea	songover(a5),a2
-	lea	pos_nykyinen(a5),a3
-	move.l	sonicroutines(a5),a4
-	push	a5
-	jsr	.offset_init(a4)
-	pop	a5
-	cmp.b	#-1,d0
-	beq.b	.memErr
-	cmp.b	#-2,d0
-	beq.b	.formatErr
-	move	d1,pos_maksimi(a5)
-	move	d3,maxsongs(a5)
-
-	move	d2,d0
-	bsr	ciaint_setTempoFromD0
-.skip
+	lea	.path(pc),a0 
 	moveq	#0,d0
-	rts	
-
-.memErr	moveq	#ier_nomem,d0
-	rts
-.formatErr
-	moveq	#ier_not_compatible,d0
-	rts
-
-.end
-	bsr	rem_ciaint
-	move.l	sonicroutines(a5),a0
-	jsr	.offset_end(a0)
-	bsr	clearsound
-	bra	vapauta_kanavat
-
-.stop
-	bra	clearsound
-	
-.song
-	move	songnumber(a5),d0
-	move.l	sonicroutines(a5),a0
-	push	a5
-	jsr	.offset_song(a0)
-	pop	a5
-	move	d0,pos_maksimi(a5)
-	rts
-
-.forward
-	move.l	sonicroutines(a5),a0
-	push	a5
-	jsr	.offset_forward(a0)
-	pop	a5
-	rts
-.backward
-	move.l	sonicroutines(a5),a0
-	push	a5
-	jsr	.offset_backward(a0)
-	pop	a5
-	rts
-
-.play	
-	move.l	sonicroutines(a5),a0
-	jmp	.offset_play(a0)
+	bra		deliLoadAndInit 
 
 
 ; in: a4 = module
 ;     d7 = module length
 ; out: d0 = 0, valid valid
 ;      d0 = -1, not valid
-.id_sonicarranger
+.id
 	move.l	a4,a0
 	move.l	d7,d3
 	moveq	#-1,D0
