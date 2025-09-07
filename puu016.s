@@ -24235,11 +24235,24 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	bra	.samplePlayExit
 
+*  Some synth formats use periods lower than the Protracker period table
+;periodsSynthLow1:
+;    dc $3580,$3280,$2FA0,$2D00,$2A60,$2800,$25C0,$23A0,$21A0,$1FC0,$1E00,$1C50 * Octave -4
+;periodsSynthLow2:
+;    dc $1AC0,$1940,$17D0,$1680,$1530,$1400,$12E0,$11D0,$10D0,$FE0,$F00,$E28 * Octave -3
+;periodsSynthLow3:
+;    dc $D60,$CA0,$BE8,$B40,$A98,$A00,$970,$8E8,$868,$7F0,$780,$714 * Octave -2
+periodsSynthLow4:
+	dc $6B0,$650,$5F4,$5A0,$54C,$500,$4B8,$474,$434,$3F8,$3C0,$38A * Octave -1
 periods
-	dc	856,808,762,720,678,640,604,570,538,508,480,453
-	dc	428,404,381,360,339,320,302,285,269,254,240,226
-	dc	214,202,190,180,170,160,151,143,135,127,120,113
-periodsEnd
+	dc	856,808,762,720,678,640,604,570,538,508,480,453 * octave 1 - protracker
+	dc	428,404,381,360,339,320,302,285,269,254,240,226 * octave 2 - protracker
+	dc	214,202,190,180,170,160,151,143,135,127,120,113 * octave 3 - protracker
+periodsEnd  
+;    dc $6B,$65,$5F,$5A,$55,$50,$4B,$47,$43,$3F,$3C,$38  * octave 4 - synth
+;    dc $35,$32,$2F,$2D,$2A,$28,$25,$23,$21,$1F,$1E,$1C  * octave 5 - synth
+periodsSynthEnd  
+
 
 * NOT USED
 ;freeinfosample
@@ -30356,8 +30369,8 @@ noteScroller2:
 	* Check magic flag: negative indicates note indices
 	tst	PI_Speed(a1)	
 	bmi.b	.notPeriod
-	lea	periods(pc),a5
-	lea	periodsEnd(pc),a6
+	lea	    periodsSynthLow4(pc),a5  * cover a larger range for synth formats
+	lea	    periodsSynthEnd(pc),a6
 .findPeriod
 	cmp	(a5)+,d0
 	beq.b	.found
