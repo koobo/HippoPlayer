@@ -24240,8 +24240,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;    dc $3580,$3280,$2FA0,$2D00,$2A60,$2800,$25C0,$23A0,$21A0,$1FC0,$1E00,$1C50 * Octave -4
 ;periodsSynthLow2:
 ;    dc $1AC0,$1940,$17D0,$1680,$1530,$1400,$12E0,$11D0,$10D0,$FE0,$F00,$E28 * Octave -3
-;periodsSynthLow3:
-;    dc $D60,$CA0,$BE8,$B40,$A98,$A00,$970,$8E8,$868,$7F0,$780,$714 * Octave -2
+periodsSynthLow3:
+    dc $D60,$CA0,$BE8,$B40,$A98,$A00,$970,$8E8,$868,$7F0,$780,$714 * Octave -2
 periodsSynthLow4:
 	dc $6B0,$650,$5F4,$5A0,$54C,$500,$4B8,$474,$434,$3F8,$3C0,$38A * Octave -1
 periods
@@ -30369,15 +30369,27 @@ noteScroller2:
 	* Check magic flag: negative indicates note indices
 	tst	PI_Speed(a1)	
 	bmi.b	.notPeriod
-	lea	    periodsSynthLow4(pc),a5  * cover a larger range for synth formats
-	lea	    periodsSynthEnd(pc),a6
+	lea	    periodsSynthLow3(pc),a5  * cover a larger range for synth formats
+	;lea	    periodsSynthEnd(pc),a6
+    moveq   #(periodsSynthEnd-periodsSynthLow3)-1,d5
 .findPeriod
-	cmp	(a5)+,d0
-	beq.b	.found
-	addq	#1,d5
-	cmp.l	a6,a5
-	bne.b	.findPeriod
+    cmp     (a5)+,d0
+    dbeq    d5,.findPeriod
+    tst     d5
+    bmi     .unknown
+    moveq   #(periodsSynthEnd-periodsSynthLow3)-1,d0
+    sub     d5,d0
+    move    d0,d5
+    bra     .found
+
+;.findPeriod
+;	cmp	(a5)+,d0
+;	beq.b	.found
+;	addq	#1,d5
+;	cmp.l	a6,a5
+;	bne.b	.findPeriod
 * Unknown
+.unknown
 	move.w  #'**',(a3)+
 	move.b  #'*',(a3)+
 	bra.b	.unknownNote
