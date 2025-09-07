@@ -321,6 +321,9 @@ tfmxi5	dc.l	0
 TFMX_Pro_MSG0 dc.b "TFMX",0
  even
 
+
+; Scope support functions:
+
 setStartD0:
     pushm   d1/a0
     move.l  scope(pc),a0
@@ -328,15 +331,15 @@ setStartD0:
     sub.w   #$f0a0,d1
     add.w   d1,a0
 
-;    and.l   #$ffff,d1
-;    DPRINT  "setStartD0 %lx ch=%lx"
+ if DEBUG
+    and.l   #$ffff,d1
+    DPRINT  "setStartD0 %lx ch=%lx"
+ endif
 
     move.l  d0,ns_start(a0)
     move.l  d0,ns_loopstart(a0)
     popm    d1/a0
     rts 
-
-; Scope support functions:
 
 setStartLenD0D1:
     pushm   d2/a0
@@ -345,9 +348,11 @@ setStartLenD0D1:
     sub.w   #$f0a0,d2
     add.w   d2,a0
 
-;    and.l   #$ffff,d1
-;    and.l   #$ffff,d2
-;    DPRINT  "setStartLenD0D1 %lx %lx ch=%lx"
+ if DEBUG
+     and.l   #$ffff,d1
+     and.l   #$ffff,d2
+     DPRINT  "setStartLenD0D1 %lx %lx ch=%lx"
+ endif
 
     ;move.l  d0,ns_start(a0)
     ;move.w  d1,ns_length(a0)
@@ -363,9 +368,11 @@ setRepeatD0D1:
     sub.w   #$f0a0,d2
     add.w   d2,a0
 
-;    and.l   #$ffff,d1
-;    and.l   #$ffff,d2
-;    DPRINT  "setRepeatD0D1 %lx %lx ch=%lx"
+ if DEBUG
+    and.l   #$ffff,d1
+    and.l   #$ffff,d2
+    DPRINT  "setRepeatD0D1 %lx %lx ch=%lx"
+ endif
 
     move.l  d0,ns_loopstart(a0)
     move.w  d1,ns_replen(a0)
@@ -378,9 +385,11 @@ setLengthD0:
     move.w  a4,d1
     sub.w   #$f0a0,d1
 
-;    and.l   #$ffff,d0
-;    and.l   #$ffff,d1
-;    DPRINT  "setLengthD0 %lx ch=%lx"
+ if DEBUG
+    and.l   #$ffff,d0
+    and.l   #$ffff,d1
+    DPRINT  "setLengthD0 %lx ch=%lx"
+ endif
 
     add.w   d1,a0
     move.w  d0,ns_length(a0)
@@ -395,11 +404,16 @@ setLengthD1:
     sub.w   #$f0a0,d0
     add.w   d0,a0
 
-;    and.l   #$ffff,d0
-;    and.l   #$ffff,d1
-;    DPRINT  "setLengthD1 ch=%lx %lx"
+ if DEBUG
+    and.l   #$ffff,d0
+    and.l   #$ffff,d1
+    exg     d0,d1
+    DPRINT  "setLengthD1 %lx ch=%lx"
+    exg     d0,d1
+ endif
 
-    move.w  d1,ns_length(a0)
+    printt   "TODO TODO?"
+;    move.w  d1,ns_length(a0)      
     move.w  d1,ns_replen(a0)
     popm    d0/a0
     rts 
@@ -410,26 +424,17 @@ setVolumeD0:
     move.w  a4,d1
     sub.w   #$f0a0,d1
 
+; if DEBUG
 ;    and.l   #$ffff,d0
 ;    and.l   #$ffff,d1
 ;    DPRINT  "setVolumeD0 %lx ch=%lx"
+; endif
 
     add.w   d1,a0
     move.w  d0,ns_vol(a0)
     popm    d1/a0
     rts 
 
-setVolume4_D0D1:
-    pushm   d1/a0
-    move.l  scope(pc),a0
-    move.w  d1,scope_ch4+ns_vol(a0)
-
-    move.w  a4,d1
-    sub.w   #$f0a0,d1
-    add.w   d1,a0
-    move.w  d0,ns_vol(a0)
-    popm    d1/a0
-    rts 
 
 start
 tfmx_base
@@ -878,6 +883,8 @@ tfmx_C0008FA	movem.l	(SP)+,A0/A1
 
 tfmx_C000900	clr.b	$1E(A6)
 	movem.l	(SP)+,A0/A1
+
+    printt  "todo: songend maybe"
 	rts
 
 tfmx_C00090A	tst.w	$36(A6)
@@ -1372,6 +1379,7 @@ macro_setOneShotSample
     moveq   #1,d1
     bsr     setStartLenD0D1
     popm    d0/d1
+
 	bra	runMacro
 
 tfmx_C000F5A	move.b	$19(A6),D0
