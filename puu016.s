@@ -60917,17 +60917,20 @@ calcModuleMD5:
  if DEBUG
     bsr     stopMeasure
     move.l  d0,d2       * ms
-    beq     .woop2
 
     move.l  d7,d0
     move.l  #1000,d1
     jsr     mulu_32
     * d0 = bytes*1000
     move.l  d2,d1
+    bne     .ndz
+    clr.l   d0
+    bra     .ndzz
+.ndz
     jsr     divu_32
     * d0 = bytes*1000/ms
     * d0 = bytes/s
-
+.ndzz
     lsr.l   #8,d0
     lsr.l   #2,d0
     move.l  d0,d1
@@ -60935,8 +60938,7 @@ calcModuleMD5:
 
     move.l  d2,d0
     move.l  uslMD5(a5),d2
-
-    DPRINT  "XXH32 256k took %ld ms (%ld kB/s), xxh32=%lx"
+    DPRINT  "XXH32 256k %ld ms (%ld kB/s) %lx"
 .woop2
  endif 
 
