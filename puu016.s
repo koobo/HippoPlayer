@@ -1592,6 +1592,9 @@ uslMD5          rs.b      6   * Loaded module 48-bit MD5 sum
 uslIndexPtr     rs.l      1   * Pointer to songlength DB index
 uslDataPtr      rs.l      1   * Pointer to current DB block
 uslSongLengthData rs.w    16  * SL data for the current module, max 16 songs
+uslLoadedIndex  rs.b      1   * 5-bit number indicating which index is now loaded
+                              * plus 1 so that NULL means nothing is loaded
+                rs.b      1   * padding
 umeIndexPtr     rs.l      1   * Pointer to metadata DB index
 umeDataPtr      rs.l      1   * Pointer to current DB block
 umeMetaDataPtr  rs.l      1   * Ptr to metadata strings
@@ -60677,8 +60680,8 @@ freeSLData:
 *
 ***************************************************************************
 
-USL_INDEX_SIZE = 32
-UME_INDEX_SIZE = 64
+USL_INDEX_SIZE = 32     * 5 bits
+UME_INDEX_SIZE = 64     * 6 bits
 
 USL_INDEX_SIZE_BYTES = USL_INDEX_SIZE*8 ; pairs of (offset,length)
 UME_INDEX_SIZE_BYTES = UME_INDEX_SIZE*8
@@ -61000,15 +61003,20 @@ uslLoadData:
     beq     .noDataError
     move.l  uslDataPtr(a5),d0
     beq     .load
+    move.b   uslLoadedIndex(a5),d0
+    beq     .load
+
     DPRINT  "check previous"
-    * Check if already have it
-    move.l  d0,a0
-    move.b  (a0),d0
-    lsr.b   #3,d0           * 5-bit index
+
+    * Check if already have it,
+    * compare previous index with the new index
+    * based on module checksum
+    subq.b  #1,d0           * normalize this first
     move.b  uslMD5(a5),d1
     lsr.b   #3,d1
     cmp.b   d0,d1
     beq     .gotIt
+
 .load
     bsr     uslFreeData
     bsr     uslOpen
@@ -61018,6 +61026,11 @@ uslLoadData:
     move.b  uslMD5(a5),d0
     lsr.b   #3,d0
     and.w   #$1f,d0     * 5-bit index!
+
+    move.b  d0,d1       * store loaded index for the next time
+    addq.b  #1,d1
+    move.b  d1,uslLoadedIndex(a5)
+
     lsl     #3,d0       * 8 byte element index
     move.l  uslIndexPtr(a5),a0
     movem.l 4(a0,d0),d4/d5
@@ -61039,13 +61052,12 @@ uslLoadData:
     move.l  d5,d3   * len
     lore    Dos,Read
     DPRINT  "read=%ld"
-
 .error2
     bsr     uslClose
 .error
     rts
 .gotIt
-    DPRINT  "already had it"
+    DPRINT  "already had it!"
     rts
 .noDataError
     DPRINT  "no data available"
@@ -61062,7 +61074,7 @@ umeLoadData:
     * Check if already have it
     move.l  d0,a0
     move.b  (a0),d0
-    lsr.b   #2,d0           * 6-bit index
+    lsr.b   #2,d0           * top 6 bits is the index
     move.b  uslMD5(a5),d1
     lsr.b   #2,d1
     cmp.b   d0,d1
@@ -61075,7 +61087,7 @@ umeLoadData:
     * Access index
     move.b  uslMD5(a5),d0
     lsr.b   #2,d0
-    and.w   #$3f,d0     * 6 bits!
+    and.w   #$3f,d0     * 6-bit index!
     lsl     #3,d0       * 8 byte element index
     move.l  umeIndexPtr(a5),a0
     movem.l 4(a0,d0),d4/d5
@@ -61103,7 +61115,7 @@ umeLoadData:
 .error
     rts
 .gotIt
-    DPRINT  "already had it"
+    DPRINT  "already had it!"
     rts
 .noDataError
     DPRINT  "no data available"
@@ -61341,6 +61353,7 @@ uslFreeData:
     DPRINT  "uslFreeData"
     move.l  uslDataPtr(a5),a0
     clr.l   uslDataPtr(a5)
+    clr.b   uslLoadedIndex(a5)
     bra     uslFreeIndex\.free
 
 umeFreeData:
