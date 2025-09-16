@@ -29849,16 +29849,11 @@ lever:
 .gog
     mulu    d2,d1
     divu    #900,d1
-
-
-;	lsl	#1,d1
-;	divu	#27,d1		* lukualueeksi 0-59
-;
-;	* clamp
-;	cmp	#59,d1
+ 
+	* clamp
     cmp     d2,d1
 	bls.b	.1
-	move	#59,d1
+	move	d2,d1
 .1
 
 	lea	s_multab(a4),a1
