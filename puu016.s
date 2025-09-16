@@ -61654,7 +61654,7 @@ uslCreateIndex:
 
 
 
-* Creates metadata.db from Audacious-UADE combined.tsv
+* Creates metadata.db from Audacious-UADE metadata.tsv
 * Out:
 *    d0 = true on success
 umeCreateIndex:
