@@ -22,7 +22,7 @@ P61A=1
  endif
 
 
-start	dc.b	"HiPxPla",34	* Tunnistus ja versio, 8 bytes
+start	dc.b	"HiPxPla",35	* Tunnistus ja versio, 8 bytes
 
 head	macro
 	dc.w	\1
@@ -251,11 +251,6 @@ pretracker2
 custommade1 
 	incbin custommade_v1.im
 custommade2 
-    even
-
-sonicarranger1
-	incbin sonicarranger.im
-sonicarranger2
     even
 
 davelowe1
@@ -494,6 +489,7 @@ midiext1
 midiext2
     even
 
+
  	endif ; IMP
 
 *********************************************************************
@@ -632,11 +628,6 @@ pretracker2
 custommade1 
 	incbin custommade_v1.shr
 custommade2 
-    even
-
-sonicarranger1
-	incbin sonicarranger.shr
-sonicarranger2
     even
 
 davelowe1
@@ -877,6 +868,10 @@ midiext1
 midiext2
     even
 
+sonicarranger1
+	incbin sonicarranger.shr
+sonicarranger2
+    even
 
 
  endif ; SHR
