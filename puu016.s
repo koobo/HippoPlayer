@@ -26418,7 +26418,10 @@ scopeEntry:
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT,s_scopeDrawAreaWidth(a4) 
 	move	#SCOPE_DRAW_AREA_WIDTH_DEFAULT/8,s_scopeDrawAreaModulo(a4)
 
-	moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+    moveq	#SCOPE_DRAW_AREA_HEIGHT_DEFAULT,d1
+    bsr     patternScopeIsActive   * patternscope is immune to this setting
+    bne.b	.try
+
     move.b  scopesize(a5),d2
     beq.b   .try
 	moveq	#SCOPE_DRAW_AREA_HEIGHT_HALF,d1
