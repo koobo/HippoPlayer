@@ -49,7 +49,8 @@ ver	macro
 ;	dc.b	"v2.63 (9.6.2025)"
 ;	dc.b	"v2.64฿ (?.?.2025)"
 ;	dc.b	"v2.64 (19.6.2025)"
-	dc.b	"v2.65฿ (?.?.2025)"
+;	dc.b	"v2.65฿ (?.?.2025)"
+	dc.b	"v2.65 (26.9.2025)"
 	endm	
 
 
@@ -2473,7 +2474,7 @@ about_t
  dc.b "ญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญญ",10,3
  dc.b "ญญญ  HippoPlayer "
  ver
- dc.b "  " ; padding
+ dc.b " " ; padding
  dc.b " ญญญ",10,3
  dc.b "ญญ          by K-P Koljonen          ญญ",10,3
  dc.b "ญญญ       Hippopotamus Design       ญญญ",10,3
@@ -44936,9 +44937,7 @@ convertIT214:
     DPRINT  "Free old module=%lx,%ld"
  endif
 
-    move.l  moduleaddress(a5),a1
-    move.l  modulelength(a5),d0
-    lore    Exec,FreeMem
+    jsr     justFreeModuleData
 
     move.l  deliLoadFileArray(a5),a0
     movem.l (a0),d0/d1
