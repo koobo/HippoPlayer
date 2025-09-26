@@ -427,6 +427,8 @@ mp3DurationInMs  rs.l    1
 mp3PositionInMs  rs.l    1   
 sampleOutputInfo rs.l    1  * Return text describing the output mode
 
+modulefilenameBuf rs.b   200 * Local copy
+
  if DEBUG
 output			rs.l 	1
 debugDesBuf		rs.b	1000
@@ -663,7 +665,11 @@ stop:
 
 init:
 	lea	var_b(pc),a5
-
+    
+    clr.l   samplepointer(a5)
+    clr.l   samplepointer2(a5)
+    clr.l   samplefollow(a5)
+    
 	bsr.b	.doInit
 	DPRINT	"init status=%ld"
  if DEBUG
@@ -700,7 +706,16 @@ init:
 	move.l	a1,_DosBase(a5)     * needed for console debug out
 	move.l	a2,_GFXBase(a5)
 	move.l	a3,pname(a5)
-	move.l	a4,modulefilename(a5)
+
+    ; Make a local copy of the filename, it may disappear from
+    ; the calling side in certain situations leading to illegal mem reads.
+    ; If the list is cleared, the node goes away and the pointer is invalidated.
+;	move.l	a4,modulefilename(a5)
+    lea     modulefilenameBuf(a5),a3
+    move.l  a3,modulefilename(a5)
+.copyName
+    move.b  (a4)+,(a3)+
+    bne.b   .copyName  
 
 	move	a6,sampleforcerate(a5)
 

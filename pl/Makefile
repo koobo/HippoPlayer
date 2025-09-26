@@ -18,7 +18,6 @@ TARGETS=\
 	bin/DaveLowe \
 	bin/Delta1 \
 	bin/SidMon_v2 \
-	bin/SonicArranger \
 	bin/StarTrekker \
 	bin/bendaglish \
 	bin/bpsm \
@@ -51,7 +50,6 @@ COMPRESSED_TARGETS=\
 	shr/DaveLowe.shr \
 	shr/Delta1.shr \
 	shr/SidMon_v2.shr \
-	shr/SonicArranger.shr \
 	shr/StarTrekker.shr \
 	shr/bendaglish.shr \
 	shr/bpsm.shr \
@@ -95,8 +93,6 @@ clean:
 bin/bendaglish: Benn\ Daglishv3.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/DaveLowe: Dave\ Lowe_v3.asm
-	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
-bin/SonicArranger: Sonic\ Arranger_v1.asm
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/Aon4: aon4channel.s
 	$(ASM) $(INCLUDE) $(EXEopt) -o $@ "$<"
@@ -145,7 +141,7 @@ bin/soundmon3: SoundMon3.s
 bin/StarTrekker: StarTrekker_v1.2_AM.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/tfmx: tfmx.asm
-	$(ASM) $(INCLUDE) $(BIN) -o $@ "$<"
+	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/tfmx7c: tfmx7c.s
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/thx: thx.asm
@@ -168,8 +164,6 @@ shr/DaveLowe.shr:         bin/DaveLowe
 shr/Delta1.shr:           bin/Delta1
 	$(COMPRESS) "$<" "$@"
 shr/SidMon_v2.shr:        bin/SidMon_v2
-	$(COMPRESS) "$<" "$@"
-shr/SonicArranger.shr:    bin/SonicArranger
 	$(COMPRESS) "$<" "$@"
 shr/StarTrekker.shr:      bin/StarTrekker
 	$(COMPRESS) "$<" "$@"

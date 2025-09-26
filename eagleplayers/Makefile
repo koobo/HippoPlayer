@@ -43,7 +43,8 @@ SOURCES=\
 	bin/wally\ beben \
 	bin/sound\ master \
 	bin/soprol \
-	bin/delimidi
+	bin/delimidi \
+	bin/sonicarranger
 
 COMPRESSED_TARGETS=\
 	shr/activision\ pro.shr \
@@ -86,7 +87,8 @@ COMPRESSED_TARGETS=\
 	shr/wally\ beben.shr \
 	shr/sound\ master.shr \
 	shr/soprol.shr \
-	shr/delimidi.shr
+	shr/delimidi.shr \
+	shr/sonicarranger.shr
 
 all: $(COMPRESSED_TARGETS)
 
@@ -171,7 +173,9 @@ shr/wally\ beben.shr:             bin/wally\ beben
 	$(COMPRESS) "$<" "$@"
 shr/sound\ master.shr:            bin/sound\ master
 	$(COMPRESS) "$<" "$@"
-shr/soprol.shr:                      bin/soprol
+shr/soprol.shr:                   bin/soprol
 	$(COMPRESS) "$<" "$@"
-shr/delimidi.shr:                      bin/delimidi
+shr/delimidi.shr:                 bin/delimidi
+	$(COMPRESS) "$<" "$@"
+shr/sonicarranger.shr:            bin/sonicarranger
 	$(COMPRESS) "$<" "$@"
