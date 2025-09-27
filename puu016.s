@@ -41963,9 +41963,9 @@ p_med:
 	moveq	#0,d0			* 8-bit
 	move.b	medmode(a5),d0		* 1: 14-bit
 	lob	MEDSet14BitMode
-    DPRINT  "MEDSetMixingFrequency"
 	moveq	#0,d0
 	move	medrate(a5),d0		* mixingrate
+    DPRINT  "MEDSetMixingFrequency %ld"
 	lob	MEDSetMixingFrequency
 
 	moveq	#_LVOMEDPlayModuleM,d7
@@ -60695,7 +60695,7 @@ UME_HEADER_SIZE_BYTES = UME_INDEX_SIZE_BYTES+4
  endif
     include "xxhash32.s"
  ifd __VASM    
-    mc68020
+    mc68000
  endif
 
 * Called once on startup
