@@ -103,6 +103,7 @@ flushCaches
 *   d1 = max position
 *   d2 = cia timer value
 *   d3 = subsong count 
+*   d4 = patterninfo
 init
 	move.l	a0,moduleAddress
 	move.l	a1,mainVolumeAddr
@@ -120,11 +121,13 @@ init
 	bne.b	.initErr
 	bsr.b	flushCaches
 	bsr.w	InitSound
-
+    bsr     PatternInit
 	bsr.w	SubSongRange
 	move.l	d1,d3
 	move	ciaTimerValue(pc),d2
 	move.l	InfoBuffer+Length(pc),d1
+    move.l  #PATTERNINFO,d4
+    move.l  #StructAdr,d5
 
 	moveq	#0,d0
 	rts
@@ -185,10 +188,10 @@ song
 	rts
 
 forward
-	bra.b	NextPattern
+	bra 	NextPattern
 
 backward
-	bra.b	PrevPattern
+	bra 	PrevPattern
 
 chipBuffer		dc.l	0
 songNumber		dc.w	0
@@ -273,86 +276,86 @@ Max
 ;	dc.w	0
 ;OldVoice4
 ;	dc.w	0
-;StructAdr;
-;	ds.b	UPS_SizeOF
+StructAdr;
+	ds.b	UPS_SizeOF
 
 ***************************************************************************
 ****************************** EP_PatternInit *****************************
 ***************************************************************************
 
-;PATTERNINFO:
-;	DS.B	PI_Stripes	; This is the main structure
-;
-;* Here you store the address of each "stripe" (track) for the current
-;* pattern so the PI engine can read the data for each row and send it
-;* to the CONVERTNOTE function you supply.  The engine determines what
-;* data needs to be converted by looking at the Pattpos and Modulo fields.
-;
-;STRIPE1	DS.L	1
-;STRIPE2	DS.L	1
-;STRIPE3	DS.L	1
-;STRIPE4	DS.L	1
-;
-;* More stripes go here in case you have more than 4 channels.
-;
-;
-;* Called at various and sundry times (e.g. StartInt, apparently)
-;* Return PatternInfo Structure in A0
-;PatternInit
-;	lea	PATTERNINFO(PC),A0
-;	moveq	#4,D0
-;	move.w	D0,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
-;	move.l	#CONVERTNOTE,PI_Convert(A0)
-;	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
-;	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
-;	clr.w	PI_Songpos(A0)		; Current Position in Song (from 0)
-;	move.w	InfoBuffer+Length+2(PC),PI_MaxSongPos(A0)	; Songlength
-;	rts
-;
-;* Called by the PI engine to get values for a particular row
-;CONVERTNOTE:
-;
-;* The command string is a single character.  It is NOT ASCII, howver.
-;* The character mapping starts from value 0 and supports letters from A-Z
-;
-;* $00 ~ '0'
-;* ...
-;* $09 ~ '9'
-;* $0A ~ 'A'
-;* ...
-;* $0F ~ 'F'
-;* $10 ~ 'G'
-;* etc.
-;
-;	moveq	#0,D0		; Period? Note?
-;	moveq	#0,D1		; Sample number
-;	moveq	#0,D2		; Command string
-;	moveq	#0,D3		; Command argument
-;	move.b	(A0)+,D0
-;	beq.b	NoNote
-;	lea	lbW001716(PC),A1
-;	add.w	D0,D0
-;	cmp.w	#$DA,D0
-;	bcs.b	GetNote
-;	moveq	#0,D0
-;GetNote
-;	move.w	(A1,D0.W),D0
-;NoNote
-;	move.b	(A0)+,D1
-;	move.b	(A0)+,D2
-;	and.b	#15,D2
-;	move.b	(A0)+,D3
-;	rts
-;
-;PATINFO
-;	move.l	A0,-(SP)
-;	lea	PATTERNINFO(PC),A0
-;	move.w	lbW000618(PC),PI_Speed(A0)	; Speed Value
-;	move.w	lbW00061A(PC),PI_Pattlength(A0)	; Length of each stripe in rows
-;	move.w	lbW00063E(PC),PI_Pattpos(A0)
-;	move.w	lbW000640(PC),PI_Songpos(A0)
-;	move.l	(SP)+,A0
-;	rts
+PATTERNINFO:
+	DS.B	PI_Stripes	; This is the main structure
+
+* Here you store the address of each "stripe" (track) for the current
+* pattern so the PI engine can read the data for each row and send it
+* to the CONVERTNOTE function you supply.  The engine determines what
+* data needs to be converted by looking at the Pattpos and Modulo fields.
+
+STRIPE1	DS.L	1
+STRIPE2	DS.L	1
+STRIPE3	DS.L	1
+STRIPE4	DS.L	1
+
+* More stripes go here in case you have more than 4 channels.
+
+
+* Called at various and sundry times (e.g. StartInt, apparently)
+* Return PatternInfo Structure in A0
+PatternInit
+	lea	PATTERNINFO(PC),A0
+	moveq	#4,D0
+	move.w	D0,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	move.l	#CONVERTNOTE,PI_Convert(A0)
+	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	clr.w	PI_Songpos(A0)		; Current Position in Song (from 0)
+	move.w	InfoBuffer+Length+2(PC),PI_MaxSongPos(A0)	; Songlength
+	rts
+
+* Called by the PI engine to get values for a particular row
+CONVERTNOTE:
+
+* The command string is a single character.  It is NOT ASCII, howver.
+* The character mapping starts from value 0 and supports letters from A-Z
+
+* $00 ~ '0'
+* ...
+* $09 ~ '9'
+* $0A ~ 'A'
+* ...
+* $0F ~ 'F'
+* $10 ~ 'G'
+* etc.
+
+	moveq	#0,D0		; Period? Note?
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command string
+	moveq	#0,D3		; Command argument
+	move.b	(A0)+,D0
+	beq.b	NoNote
+	lea	lbW001716(PC),A1
+	add.w	D0,D0
+	cmp.w	#$DA,D0
+	bcs.b	GetNote
+	moveq	#0,D0
+GetNote
+	move.w	(A1,D0.W),D0
+NoNote
+	move.b	(A0)+,D1
+	move.b	(A0)+,D2
+	and.b	#15,D2
+	move.b	(A0)+,D3
+	rts
+
+PATINFO
+	move.l	A0,-(SP)
+	lea	PATTERNINFO(PC),A0
+	move.w	lbW000618(PC),PI_Speed(A0)	; Speed Value
+	move.w	lbW00061A(PC),PI_Pattlength(A0)	; Length of each stripe in rows
+	move.w	lbW00063E(PC),PI_Pattpos(A0)
+	move.w	lbW000640(PC),PI_Songpos(A0)
+	move.l	(SP)+,A0
+	rts
 ;
 ***************************************************************************
 ******************************* DTP_NextPatt ******************************
@@ -544,84 +547,84 @@ InfoBuffer
 ;
 SetVol
 	move.w	D0,8(A3)
-	rts
+;	rts
 
 
 *------------------------------- Set Vol -------------------------------*
 
 ;SetVol
-;	move.l	A0,-(A7)
-;	lea	StructAdr+UPS_Voice1Vol(PC),A0
-;	cmp.l	#$DFF0A0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice2Vol(PC),A0
-;	cmp.l	#$DFF0B0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice3Vol(PC),A0
-;	cmp.l	#$DFF0C0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice4Vol(PC),A0
-;.SetVoice
-;	move.w	D0,(A0)
-;	move.l	(A7)+,A0
-;	rts
+	move.l	A0,-(A7)
+	lea	StructAdr+UPS_Voice1Vol(PC),A0
+	cmp.l	#$DFF0A0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice2Vol(PC),A0
+	cmp.l	#$DFF0B0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice3Vol(PC),A0
+	cmp.l	#$DFF0C0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice4Vol(PC),A0
+.SetVoice
+	move.w	D0,(A0)
+	move.l	(A7)+,A0
+	rts
 
 *------------------------------- Set Adr -------------------------------*
 
-;SetAdr
-;	move.l	A1,-(A7)
-;	lea	StructAdr+UPS_Voice1Adr(PC),A1
-;	cmp.l	#$DFF0A0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice2Adr(PC),A1
-;	cmp.l	#$DFF0B0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice3Adr(PC),A1
-;	cmp.l	#$DFF0C0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice4Adr(PC),A1
-;.SetVoice
-;	move.l	D0,(A1)
-;	move.l	(A7)+,A1
-;	rts
+SetAdr
+	move.l	A1,-(A7)
+	lea	StructAdr+UPS_Voice1Adr(PC),A1
+	cmp.l	#$DFF0A0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice2Adr(PC),A1
+	cmp.l	#$DFF0B0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice3Adr(PC),A1
+	cmp.l	#$DFF0C0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice4Adr(PC),A1
+.SetVoice
+	move.l	D0,(A1)
+	move.l	(A7)+,A1
+	rts
 
 *------------------------------- Set Len -------------------------------*
 
-;SetLen
-;	move.l	A1,-(A7)
-;	lea	StructAdr+UPS_Voice1Len(PC),A1
-;	cmp.l	#$DFF0A0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice2Len(PC),A1
-;	cmp.l	#$DFF0B0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice3Len(PC),A1
-;	cmp.l	#$DFF0C0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice4Len(PC),A1
-;.SetVoice
-;	move.w	D0,(A1)
-;	move.l	(A7)+,A1
-;	rts
+SetLen
+	move.l	A1,-(A7)
+	lea	StructAdr+UPS_Voice1Len(PC),A1
+	cmp.l	#$DFF0A0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice2Len(PC),A1
+	cmp.l	#$DFF0B0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice3Len(PC),A1
+	cmp.l	#$DFF0C0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice4Len(PC),A1
+.SetVoice
+	move.w	D0,(A1)
+	move.l	(A7)+,A1
+	rts
 
 *------------------------------- Set Per -------------------------------*
 
-;SetPer
-;	move.l	A1,-(A7)
-;	lea	StructAdr+UPS_Voice1Per(PC),A1
-;	cmp.l	#$DFF0A0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice2Per(PC),A1
-;	cmp.l	#$DFF0B0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice3Per(PC),A1
-;	cmp.l	#$DFF0C0,A3
-;	beq.s	.SetVoice
-;	lea	StructAdr+UPS_Voice4Per(PC),A1
-;.SetVoice
-;	move.w	D3,(A1)
-;	move.l	(A7)+,A1
-;	rts
+SetPer
+	move.l	A1,-(A7)
+	lea	StructAdr+UPS_Voice1Per(PC),A1
+	cmp.l	#$DFF0A0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice2Per(PC),A1
+	cmp.l	#$DFF0B0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice3Per(PC),A1
+	cmp.l	#$DFF0C0,A3
+	beq.s	.SetVoice
+	lea	StructAdr+UPS_Voice4Per(PC),A1
+.SetVoice
+	move.w	D3,(A1)
+	move.l	(A7)+,A1
+	rts
 
 ***************************************************************************
 **************************** EP_Voices ************************************
@@ -993,7 +996,7 @@ Notuj
 	not.b	(A2)+
 	tst.b	(A2)
 	bne.b	Notuj
-	bsr.b	InitPlay
+	bsr 	InitPlay
 Alloc
 ;	movea.l	dtg_AudioAlloc(A5),A0
 ;	jmp	(A0)
@@ -1027,13 +1030,13 @@ InitSound
 	bsr.w	InitSong
 	lea	InfoBuffer(PC),A0
 	move.w	lbW00061E(PC),Length+2(A0)
-;	lea	PATTERNINFO(PC),A0
-;	move.w	lbW000622(PC),D1	; Hz value
-;	mulu.w	#125,D1
-;	divu.w	#50,D1
-;	move.w	D1,PI_BPM(A0)		; Beats Per Minute
-;	move.w	lbW000618(PC),PI_Speed(A0)	; Speed Value
-;	move.w	lbW00061A(PC),PI_Pattlength(A0)	; Length of each stripe in rows
+	lea	PATTERNINFO(PC),A0
+	move.w	lbW000622(PC),D1	; Hz value
+	mulu.w	#125,D1
+	divu.w	#50,D1
+	move.w	D1,PI_BPM(A0)		; Beats Per Minute
+	move.w	lbW000618(PC),PI_Speed(A0)	; Speed Value
+	move.w	lbW00061A(PC),PI_Pattlength(A0)	; Length of each stripe in rows
 	bset	#1,$BFE001
 	lea	lbW000624(PC),A0
 	move.w	#-1,(A0)
@@ -1057,23 +1060,22 @@ InitSound
 ***************************** DTP_Interrupt *******************************
 ***************************************************************************
 
-;Interrupt
-;	movem.l	D1-A6,-(A7)
-;	lea	StructAdr(PC),A0
-;	st	UPS_Enabled(A0)
-;	clr.w	UPS_Voice1Per(A0)
-;	clr.w	UPS_Voice2Per(A0)
-;	clr.w	UPS_Voice3Per(A0)
-;	clr.w	UPS_Voice4Per(A0)
+Interrupt
+	movem.l	D1-A6,-(A7)
+	lea	StructAdr(PC),A0
+	st	UPS_Enabled(A0)
+	clr.w	UPS_Voice1Per(A0)
+	clr.w	UPS_Voice2Per(A0)
+	clr.w	UPS_Voice3Per(A0)
+	clr.w	UPS_Voice4Per(A0)
 ;	move.w	#UPSB_Adr!UPSB_Len!UPSB_Per!UPSB_Vol,UPS_Flags(A0)
+	bsr.w	Play
 
-;	bsr.w	Play
-
-;	lea	StructAdr(PC),A0
-;	clr.w	UPS_Enabled(A0)
-;	movem.l	(A7)+,D1-A6
-;	moveq	#0,D0
-;	rts
+	lea	StructAdr(PC),A0
+	clr.w	UPS_Enabled(A0)
+	movem.l	(A7)+,D1-A6
+	moveq	#0,D0
+	rts
 
 SongEnd
 	push	a0
@@ -1591,7 +1593,7 @@ lbC000892	MOVE.L	$BC(A4),D2
 ;	MOVEQ	#0,D0
 ;	RTS
 
-Interrupt
+;Interrupt
 Play
 ;lbC000908	MOVEM.L	D0-D7/A0-A6,-(SP)
 	LEA	lbB000628(PC),A6
@@ -1669,13 +1671,13 @@ lbC0009C4	MOVEQ	#0,D0
 	MOVE.W	(A0)+,D0
 	ASL.L	#2,D0
 
-;	move.l	A5,-(SP)
-;	lea	PATTERNINFO(PC),A5
+	move.l	A5,-(SP)
+	lea	PATTERNINFO(PC),A5
 
 	LEA	0(A1,D0.L),A6
 	MOVE.L	A6,(A2)+
 
-;	move.l	A6,PI_Stripes(A5)	; STRIPE1
+	move.l	A6,PI_Stripes(A5)	; STRIPE1
 
 	MOVE.L	(A6),(A4)+
 	MOVE.W	(A0)+,(A3)+
@@ -1685,7 +1687,7 @@ lbC0009C4	MOVEQ	#0,D0
 	LEA	0(A1,D0.L),A6
 	MOVE.L	A6,(A2)+
 
-;	move.l	A6,PI_Stripes+4(A5)	; STRIPE2
+	move.l	A6,PI_Stripes+4(A5)	; STRIPE2
 
 	MOVE.L	(A6),(A4)+
 	MOVE.W	(A0)+,(A3)+
@@ -1695,7 +1697,7 @@ lbC0009C4	MOVEQ	#0,D0
 	LEA	0(A1,D0.L),A6
 	MOVE.L	A6,(A2)+
 
-;	move.l	A6,PI_Stripes+8(A5)	; STRIPE3
+	move.l	A6,PI_Stripes+8(A5)	; STRIPE3
 
 	MOVE.L	(A6),(A4)+
 	MOVE.W	(A0)+,(A3)+
@@ -1705,8 +1707,8 @@ lbC0009C4	MOVEQ	#0,D0
 	LEA	0(A1,D0.L),A6
 	MOVE.L	A6,(A2)+
 
-;	move.l	A6,PI_Stripes+12(A5)	; STRIPE4
-;	move.l	(SP)+,A5
+	move.l	A6,PI_Stripes+12(A5)	; STRIPE4
+	move.l	(SP)+,A5
 
 	MOVE.L	(A6),(A4)+
 	MOVE.W	(A0)+,(A3)+
@@ -1728,7 +1730,7 @@ lbC000A26	LEA	lbL00064A(PC),A0
 	MOVE.L	(A2)+,(A1)+
 lbC000A4C
 
-;	bsr.w	PATINFO
+	bsr.w	PATINFO
 
 	LEA	lbL00065A(PC),A0
 	MOVE.L	A0,-(SP)
@@ -2038,7 +2040,7 @@ lbC000D1C	LEA	lbL000418(PC),A0
 
 lbC000D3E	MOVE.L	D0,(A3)			; address
 
-	;bsr.w	SetAdr
+	bsr.w	SetAdr
 
 	MOVE.L	D0,$BC(A4)
 	MOVEQ	#0,D1
@@ -2050,7 +2052,7 @@ lbC000D3E	MOVE.L	D0,(A3)			; address
 lbC000D58	ADD.L	D1,D0
 	MOVE.W	D0,4(A3)			; length
 
-	;bsr.w	SetLen
+	bsr.w	SetLen
 
 	MOVE.W	D0,$B8(A4)
 	OR.W	D2,D5
@@ -2069,12 +2071,12 @@ lbC000D6C	MOVEA.L	lbL00040C(PC),A0
 	MOVE.L	A1,(A3)				; address
 
 	move.l	A1,D0
-	;bsr.w	SetAdr
+	bsr.w	SetAdr
 
 	MOVE.W	4(A5),D0
 	MOVE.W	D0,4(A3)			; length
 
-	;bsr.w	SetLen
+	bsr.w	SetLen
 
 	MOVE.W	D0,$B8(A4)
 	SUBQ.W	#1,D0
@@ -2325,7 +2327,7 @@ lbC001050	LEA	lbW00063C(PC),A6
 	ADD.W	D0,$84(A4)
 lbC001060	MOVE.W	D3,6(A3)		; period
 
-	;bsr.w	SetPer
+	bsr.w	SetPer
 
 	TST.W	(A5)
 	BEQ.S	lbC00106C

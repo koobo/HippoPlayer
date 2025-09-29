@@ -1,40 +1,18 @@
-TODO:
-- hawkeye.TME
-- infowindow: viimeinen rivi ei scrollaannu esiin "year: 1991"
-  jos on pieni ikkuna
+FIXED: TODO
+- open quadra, pattern, normal size
+- play Keo/Waterproof.smod
+- change scope size to small
+- change scope size to large
+--> mem cookie error
+
+--> lever problem?
 
 TODO:
+- fix psid usb error messages, they all get "out of mem2
+
+TODO?:
 - Zoomed mode:
--- resize gadget is visible, it should not
-
-FIXED: TODO:
-- kick3.2
-- uusi listmode-nappi oli kadonnut (myös prefsistä),
-  sen sijaan näkyö ekan nappulan päällä
-- korjaantui kuin kävi togglaa prefssistä
-- TEST: disabloidaan nappi, vaihdetaan moodia prefssistä
-  -> ilmestuu pakolla ruutuun
-
-FIXED: TODO:
-- play mode button tooltip does not work
-
-FIXED: TODO:
-- hoffman: msx.mod -> modlen jumittaa
-
-FIXED: TODO:
-- improve PT end detection heuristics
-- https://github.com/koobo/HippoPlayer/issues/26
-- Many trick pattern modules
-- "404 Crew Returns by Mr. Mygg & Bonefish"
-- "Professional Tracker by Hoffman & Daytripper"
-- "Black Queen by Dreamer"
-
-FIXED: TODO:
-- synaptic gap ii.mod -> B-komento hyppää samaan patterniin ja
-  jää looppiin
-
-OK: TODO:
-- list mode button tooltip does not work
+-- resize gadget is visible, it should not, MINOR
 
 TODO:
 - playing a network stream a long time will increase the t:agetout
@@ -63,7 +41,7 @@ TODO:
 TODO:
 - playlist support for #volume for setting file volume
 
-TODO:
+TODO?:
 - add one MIDI, also WAV
 - play
 - after it stops
@@ -157,6 +135,67 @@ TODO:
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+FIXED: TODO:
+- kick3.2
+- uusi listmode-nappi oli kadonnut (myös prefsistä),
+  sen sijaan näkyö ekan nappulan päällä
+- korjaantui kuin kävi togglaa prefssistä
+- TEST: disabloidaan nappi, vaihdetaan moodia prefssistä
+  -> ilmestuu pakolla ruutuun
+
+FIXED: TODO:
+- play mode button tooltip does not work
+
+FIXED: TODO:
+- hoffman: msx.mod -> modlen jumittaa
+
+FIXED: TODO:
+- improve PT end detection heuristics
+- https://github.com/koobo/HippoPlayer/issues/26
+- Many trick pattern modules
+- "404 Crew Returns by Mr. Mygg & Bonefish"
+- "Professional Tracker by Hoffman & Daytripper"
+- "Black Queen by Dreamer"
+
+FIXED: TODO:
+- synaptic gap ii.mod -> B-komento hyppää samaan patterniin ja
+  jää looppiin
+
+FIXED: TODO:
+- list mode button tooltip does not work
+
+DONE: TODO:
+- play: powerhouse-forgemaster06-menu.sa
+- play: jesus stole my jellybeans.ahx 
+--> uslLoadData "already had it", does not find data
+
+DONE: TODO
+- sonic arranger patternscope
+
+DONE: TODO:
+- test pattern scope widths and new waveform scope sizes
+
+DONE: TODO:
+- "one waveform" hipposcope
+
+DONE: TODO:
+- waveform scope with different sizes, small, medium, large?
+
+DONE: TODO:
+- tfmx crashes on kick13 -> remnove serial debug log 
+- add tfmx favorite -> crash on kick 3.2
+
+FIXED: TODO:
+- modlen calc problem: furzogue.mod
+-- B03 in the last row of last position
+
+FIXED: TODO:
+- hawkeye.TME
+- infowindow: viimeinen rivi ei scrollaannu esiin "year: 1991"
+  jos on pieni ikkuna
+
+
+
 FIXED: TODO:
 - digital man.is -> metadata not showing in info window
 

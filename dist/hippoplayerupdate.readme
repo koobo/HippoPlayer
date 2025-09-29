@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.63
+Version: 2.65
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -52,11 +52,15 @@ Quick overview of major changes since v2.45
   devices, STIL database for song info, song lengths
 - Improved scopes: support for more music formats, multiple scopes,
   spectrum scope, patternscope with two sizes and up to 18 channels 
-  ("mini4" font needed for 8+ channel display).
+  ("mini4" font needed for 8+ channel display), change vertical size 
+  in Prefs "Scope size".
 - Support for MP3 streaming, radio stations
 - "Add" button in file browser or search view: copy items to main list
 - Support for AmiGUS soundcard for hardware mixing.
 - Support for playlists of up to 131071 items.
+- Support for Trinity accelerator audio core.
+- Metadata and songlengths with Audacious-UADE metadata for
+  over 300000 modules.
 
 New keyboard shortcuts:
 - Favorite module: [CTRL+F]
@@ -84,6 +88,8 @@ Additional files to check and download
   https://hvsc.brona.dk/HVSC/C64Music/DOCUMENTS/Songlengths.md5
 - To play ImpulseTracker modules grab "impulse" and "ImpulseDecruncher":
   https://aminet.net/mus/play/DeliTracker232.lha
+- To play Symphonie modules grab "Symphonie Pro":
+  https://aminet.net/mus/play/Eagleplayer.lha
 - MIDI playback external tools:
   https://aminet.net/mus/midi/AmiTiMiDity.lha 
   https://aminet.net/mus/midi/GMPlay13.lha 
@@ -94,13 +100,88 @@ Additional files to check and download
 - Calibration utility to finetune 14-bit output:
   https://aminet.net/disk/cdrom/14Bit_CDPlayer.lha
 - To get song lengths and metadata, get "songlengths.tsv"
-  and "combined.tsv", browse to:
-  https://github.com/koobo/HippoPlayer/tree/main
+  and "metadata.tsv", browse to:
+  https://github.com/koobo/HippoPlayer
   ... then: 
-  -> audacious-uade-tools -> tsv -> pretty 
-  -> combined.tsv -> Download raw file
+    -> audacious-uade-tools -> tsv -> pretty -> xxh32
+    -> metadata.tsv -> Download raw file
   ... and:
-  -> songlengths.tsv -> Download raw file  
+    -> songlengths.tsv -> Download raw file  
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+# Changes from v2.64 (19.6.2025) to v2.65 (26.9.2025) 
+
+## Fixes:
+
+- Trying to load a very large module program sometimes lead to an out 
+  of memory error, fixed.
+- Metadata info: Audacious-UADE song length was sometimes not found due 
+  to a bug in data loading, fixed.
+
+## Improvements:
+
+- Added scope support and improved song end detection for the following 
+  formats:
+  - Delta Music 1.0
+  - Sidmon 2
+  - TFMX
+  - TFMX 7 channels 
+- Sonic Arranger compatibility improvements, patternscope and waveform
+  scope support added. Player adapted by Wanted Team.
+- Metadata info: 
+  - Audacious-UADE data is updated and the format changed.
+    To use (or keep) using metadata info download the files 
+    "songlengths.tsv" and "metadata.tsv" (see above) and put in hippo dir.
+  - Metadata search now faster due to simpler checksum algorithm
+    (xxhash32 instead of MD5). May still take a few secs on A500.
+- Prefs: "Scope size" selection added, allows choosing the vertical size 
+         for waveform based scopes. 
+- HippoScope: Now displayed also with mono sound.
+- PatternScope: Added support for larger octave range (some synth formats 
+                go really low).
+
+## New music format:
+
+- Symphonie Pro (symmod)
+  - Playback is done using the external eagleplayer plugin "symphonie pro". 
+    Grab it from from the EaglePlayer archive on aminet. Hippo looks for 
+    the file in the following places: "PROGDIR:", "PROGDIR:eagleplayers", 
+    "eagleplayer2:eagleplayers", where PROGDIR: is the Hippo binary directory.
+  - The player may open requesters while playing. Some modules may also 
+    lead to crashes and jams, unfortunately.
+
+- Note: list of supported formats at the bottom of this file.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+
+# Changes from v2.63 (9.6.2025) to v2.64 (19.6.2025) 
+
+## Fixes and improvements:
+
+- AmiGUS integration fixes.
+- Remove graphics glitch on top of some window buttons, shown
+  when the position slider is not visible.
+- Prevent drawing the resize gadget on the zipped window in certain 
+  situations.
+- Protracker length calculator gets some more fixes, works
+  with Romeo Knight's Furzogue again.
+- Metadata info: Fix to ensure correct delay before scrolling data.
+- Metadata info: Data search now faster (especially on A500).
+- Info window: remove unnecessary metadata line changes.
+- Main window height limit removed, it was historically set to 50 rows.
+- Prefs: Remove filebox and info window size change sliders, the same 
+         functionality can be done with window resize gadgets.
+- Prefs: Move "Position slider/play mode button" toggle to the 
+         "Display" page.
+- Prefs: Add "Disable info scroll" toggle to disable the metadata
+         info scroller introduced in v2.63.
+  
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
@@ -1969,6 +2050,7 @@ List of supported formats (could be incomplete):
 - Activision Pro (also known as Martin Walker)
 - AProSys
 - Art of Noise (4ch, 8ch)
+- AY (vgm2wav)
 - Beathoven Sound System 
 - Ben Daglish
 - BP SoundMon v2, v3
@@ -1988,7 +2070,10 @@ List of supported formats (could be incomplete):
 - Future Composer v1.0-v1.4 
 - Future Player 
 - Game Music Creator
+- GBS (vgm2wav)
 - GlueMon
+- GYM  (vgm2wav)
+- HES (vgm2wav)
 - Hippel ST, Hippel ST COSO
 - Hippel, Hippel 7v, Hippel-COSO
 - Impulse Tracker
@@ -1998,10 +2083,12 @@ List of supported formats (could be incomplete):
 - Jason Page
 - Jeroen Tel
 - Kris Hatlelid
+- KSS (vgm2wav)
 - Maniacs of Noise 
 - Mark Cooksey
 - Mark II 
 - MaxTrax
+- MDX (mdx2wav)
 - MED, OctaMED
 - Medley Sound 
 - MIDI (general MIDI, serial out)
@@ -2009,10 +2096,12 @@ List of supported formats (could be incomplete):
 - Music Assembler
 - Musicline Editor
 - MusicMaker
+- NSF (vgm2wav)
+- NSFE (vgm2wav)
 - Oktalyzer
 - PreTracker
 - ProTracker, NoiseTracker, SoundTracker, Old SoundTracker
-- PSID, 2SID
+- PSID, 2SID, 3SID
 - PumaTracker 
 - Quartet, Quartet ST
 - Richard Joseph
@@ -2020,6 +2109,7 @@ List of supported formats (could be incomplete):
 - Rob Hubbard 1
 - Rob Hubbard 2 (also known as Infogrames)
 - Sample files (WAV, AIFF, IFF, MP3)
+- SAP (vgm2wav)
 - ScreamTracker 3
 - Sidmon v1, v2
 - Sonic Arranger (some variants not supported)
@@ -2028,10 +2118,12 @@ List of supported formats (could be incomplete):
 - Sound Programming Language
 - SoundControl
 - SoundFX
+- SPC (vgm2wav) 
 - SpecialFX
 - StarTrekker, Audio Sculpture (8ch format not supported)
 - Steve Turner
 - StoneTracker
+- Symphonie Pro
 - Synth Pack
 - Synthesis 
 - SynTracker
@@ -2042,5 +2134,6 @@ List of supported formats (could be incomplete):
 - THX, AHX 
 - Tim Follin
 - VectorDean
+- VGM (vgm2wav)
 - Voodoo Supreme Synthesizer
 - Wally Beben

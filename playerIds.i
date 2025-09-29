@@ -52,7 +52,6 @@ pt_soundfx		rs.b	1
 pt_gluemon		rs.b	1
 pt_pretracker		rs.b	1
 pt_custommade		rs.b 	1
-pt_sonicarranger	rs.b	1
 pt_davelowe		rs.b	1
 pt_startrekker		rs.b 	1
 pt_voodoosupremesynthesizer rs.b  1
@@ -104,3 +103,5 @@ pt_davidwhittaker	rs.b	1
 pt_soundmaster      rs.b    1
 pt_soundprogramminglanguage rs.b 1
 pt_midiext          rs.b    1
+pt_symphonie        rs.b    1
+pt_sonicarranger	rs.b	1
