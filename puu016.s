@@ -4773,24 +4773,35 @@ avaa_ikkuna:
 	add	    windowtop(a5),d0
 	move    d0,nw_Height(a0)
 
+    * Check for negative X,Y
+    * This can happen on OS 3.2 and leads to OpenWindow failing.
+    tst.w   windowpos(a5)
+    bpl     .posE
+    clr.w   windowpos(a5)
+.posE
+    tst.w   windowpos+2(a5)
+    bpl     .posEE
+    clr.w   windowpos+2(a5)
+.posEE
 
 
     * Calculate left edge so that window fits
     * Set nw_LeftEdge, nw_TopEdge
     move.l  windowpos(a5),nw_LeftEdge(a0)
+
 	bsr   .leve
 
 
  if DEBUG
     pushm   d0-d3
-    moveq   #0,d0
-    moveq   #0,d1
-    moveq   #0,d2
-    moveq   #0,d3
     move    nw_Width(a0),d0
     move    nw_Height(a0),d1
     move    nw_LeftEdge(a0),d2
     move    nw_TopEdge(a0),d3
+    ext.l   d0
+    ext.l   d1
+    ext.l   d2
+    ext.l   d3
     DPRINT  "Trying to open %ldx%ld at %ld,%ld"
     popm    d0-d3
  endif
