@@ -14931,6 +14931,10 @@ exprefs	move.l	_IntuiBase(a5),a6
 .hh
 	move.l	windowbase2(a5),a0
 	move.l	4(a0),windowpos_p(a5)
+    tst     windowpos_p(a5)     * negative x test
+    bpl     .nngx
+    clr     windowpos_p(a5)
+.nngx
 	lob	CloseWindow
 	clr.l	windowbase2(a5)
 .eek
@@ -22223,6 +22227,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	beq.b	.uh1
 	move.l	d0,a0
 	move.l	4(a0),infopos2(a5) * preserve position
+    tst     infopos2(a5)
+    bpl     .nngx
+    clr     infopos2(a5)    * negative x check
+.nngx
 	lob	CloseWindow
 	clr.l	swindowbase(a5)
 .uh1
@@ -26577,6 +26585,10 @@ scopeEntry:
 
 	* Restore top/left to some previous used value
 	move.l	s_storedPositionAddr(a4),a1
+    tst.w   (a1)        * negative x check
+    bpl     .nngx
+    clr.w   (a1)
+.nngx
 	move.l	(a1),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
