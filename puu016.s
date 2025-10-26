@@ -4814,7 +4814,10 @@ avaa_ikkuna:
     DPRINT  "Window open failed! Retry smaller."
     * If at 3, move the window to the top and hope for the best.
     cmp     #3,boxsize(a5)
-    bne     .smaller
+    bhi     .smaller
+    * Already tried y-reset?
+    tst     windowpos+2(a5)
+    beq     .failll
     * Reset stored window y-coordinate to zero
     clr     windowpos+2(a5)
     bra     .windowOpenLoop
@@ -4831,6 +4834,7 @@ avaa_ikkuna:
 .gotWindow
 	move.l	d0,windowbase(a5)
 	bne.b	.ok
+.failll
 .outOfMem
 	bsr	unlockscreen
 
