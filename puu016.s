@@ -51051,25 +51051,8 @@ p_midistream:
 .streamError    
     DPRINT  "MIDI stream error!"
     bsr     .deleteTempFile
-
-    ; Send CTRL-C to streamer if possible
-    bsr     stopStreaming
-    ; If this was midi flushing needs to be done if timidity
-    ; is running, othewise flush will get stuck with an empty pipe
-    jsr     findLocalStreamProcess
-    bne     .flush
-    DPRINT  "MIDI: wait for streamer to exit"
-    jsr     awaitStreamer
-    bra     .1
-.flush
-    DPRINT  "MIDI: flush and wait for streamer to exit"
-    jsr     awaitStreamerAndFlush
-.1
     lea     .msgMidi(pc),a1
-    jsr     request
-
-    moveq   #ier_error_nomsg,d0
-    rts
+    bra     commonStreamError
 
 .msgMidi
     dc.b    "Error starting MIDI!",0
@@ -51220,25 +51203,8 @@ p_ogg:
 
 .streamError    
     DPRINT  "Ogg stream error!"
-
-    ; Send CTRL-C to streamer if possible
-    bsr     stopStreaming
-    ; If this was midi flushing needs to be done if timidity
-    ; is running, othewise flush will get stuck with an empty pipe
-    jsr     findLocalStreamProcess
-    bne     .flush
-    DPRINT  "Ogg: wait for streamer to exit"
-    jsr     awaitStreamer
-    bra     .1
-.flush
-    DPRINT  "Ogg: flush and wait for streamer to exit"
-    jsr     awaitStreamerAndFlush
-.1
     lea     .msg(pc),a1
-    jsr     request
-
-    moveq   #ier_error_nomsg,d0
-    rts
+    bra     commonStreamError
 
 .msg
     dc.b    "Error starting Ogg!",0
@@ -51391,34 +51357,43 @@ vgmInit0
     DPRINT  "VGM stream error!"
     bsr     vgmDeleteTempFile
 
-    ; Send CTRL-C to streamer if possible
-    bsr     stopStreaming
-    ; If this was midi flushing needs to be done if timidity
-    ; is running, othewise flush will get stuck with an empty pipe
-    jsr     findLocalStreamProcess
-    bne     .flush
-    DPRINT  "VGM: wait for streamer to exit"
-    jsr     awaitStreamer
-    bra     .1
-.flush
-    DPRINT  "VGM: flush and wait for streamer to exit"
-    jsr     awaitStreamerAndFlush
-.1
     lea     .msg(pc),a1
     move.b  vgmActuallyMdx(pc),d0
     beq     .2
     lea     .msg2(pc),a1
-.2
-    jsr     request
+.2  bra     commonStreamError
 
-    moveq   #ier_error_nomsg,d0
-    rts
 
 .msg
   dc.b    "Error starting 'vgm2wav'",0
 .msg2
   dc.b    "Error starting 'mdx2wav'",0
   even
+
+* Handle error when starting streamer
+* In:
+*    a1 = Message to be shown in requester
+commonStreamError:
+    push    a1
+    ; Send CTRL-C to streamer if possible
+    bsr     stopStreaming
+    ; If this was midi flushing needs to be done if timidity
+    ; is running, othewise flush will get stuck with an empty pipe
+    jsr     findLocalStreamProcess
+    bne     .flush
+    DPRINT  "Stream: wait for streamer to exit"
+    jsr     awaitStreamer
+    bra     .1
+.flush
+    DPRINT  "Stream: flush and wait for streamer to exit"
+    jsr     awaitStreamerAndFlush
+.1
+    pop     a1
+    jsr     request
+
+    moveq   #ier_error_nomsg,d0
+    rts
+
 
 vgmEnd
     DPRINT  "VGM stream end"
