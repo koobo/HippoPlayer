@@ -38009,6 +38009,7 @@ modlen:
 	MOVE.B	3(A6),D0
 	Bne.b	.no0
     st      .songend(a5)    * F00 -> end
+    printt  "TODO: no songend if there is a valid speed in any of the higher channels"
 	moveq	#31,d0
 .no0
 	tst	.tempoflag(a5)
@@ -61462,6 +61463,8 @@ umeFind:
     moveq   #4-1,d4
     moveq   #0,d0
 .skip4
+    printt  "enforcer read hit here with NOT found module"
+    * sequence: play "mouse.mod", then another
     move.b  (a0),d0     
     add.w   d0,a0
     dbf     d4,.skip4
