@@ -805,12 +805,15 @@ init:
     * Should be "PIPE:wavHippoStream" for WAV 27710 Hz
     *           "PIPE:wavHippoStream2" for AIFF 27710 Hz
     *           "PIPE:wavHippoStream3" for AIFF 22050 Hz
+    *           "PIPE:wavHippoStream4" for AIFF 44100 Hz
     cmp.b   #"w",5(a0)
     bne     .notPipeW
     DPRINT  "sample PIPE wav bypass"
     move.b  #2,sampleformat(a5) * AIFF decoder
     cmp.b   #"3",19(a0)
     beq     .wavinitPipeBypassLq
+    cmp.b   #"4",19(a0)
+    beq     .wavinitPipeBypassHq
     cmp.b   #"2",19(a0)
     beq     .wavinitPipeBypass
     move.b  #3,sampleformat(a5) * WAV decoder
@@ -967,7 +970,12 @@ init:
     DPRINT  "wavinitPipeBypassLq"
     move    #22050,samplefreq(a5)
     bra     .wavinitPipeBypass0
-    
+
+.wavinitPipeBypassHq
+    DPRINT  "wavinitPipeBypassHq"
+    move    #44100,samplefreq(a5)
+    bra     .wavinitPipeBypass0
+
 .wavinitPipeBypass
     DPRINT  "wavinitPipeBypass"
     * Wav header is 44 bytes

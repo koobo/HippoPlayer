@@ -822,6 +822,7 @@ SAMPLE_FORMAT_IFF  = 1
 SAMPLE_FORMAT_AIFF = 2
 SAMPLE_FORMAT_WAV  = 3
 SAMPLE_FORMAT_MP3  = 4
+SAMPLE_FORMAT_OGG  = 5
 sampleformat   rs.b    1
                 rs.b        1   * PAD
 
@@ -32614,6 +32615,11 @@ loadfile:
 	cmp.l	#"WAVE",8(a0)
 	beq	.sampl
 .nosaa
+** Ogg vorbis
+	move.b	#SAMPLE_FORMAT_OGG,sampleformat(a5)
+	cmp.l	#"OggS",(a0)
+	beq	.sampl
+.nosaaa
 ** MPEG
 	move.b	#SAMPLE_FORMAT_MP3,sampleformat(a5)
     jsr     streamIsAlive
@@ -33410,11 +33416,22 @@ tutki_moduuli:
 
 **** Oliko  sample??
 .sample:
+    move.b  sampleformat(a5),d0
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT  "sample path taken, format=%ld"
+ endif
+    cmp.b   #SAMPLE_FORMAT_OGG,d0
+    beq     .goingOgg
+
 	pushpea	p_sample(pC),playerbase(a5)
 	move	#pt_sample,playertype(a5)
 	bra	.ex
 
-
+.goingOgg
+	move.l  #p_ogg,playerbase(a5)
+	move	#pt_ogg,playertype(a5)
+    bra     .ex
 
 ** Yhdistetty TFMX formaatti
 
@@ -37151,6 +37168,7 @@ groupFormats:
  endif
  	dr.l 	p_aon8
     dr.l    p_midistream
+    dr.l    p_ogg
     dr.l    p_vgm
     dr.l    p_davelowe
     dr.l    p_futureplayer
@@ -40812,122 +40830,6 @@ p_fred
 	rts
 
 
-******************************************************************************
-* SonicArranger
-******************************************************************************
-
-p_sonicarranger
-	jmp	.init(pc)
-	jmp	deliPlay(pc)
-	p_NOP
-	jmp	deliEnd(pc)
-	jmp	deliStop(pc)
-	jmp	deliCont(pc)
-	jmp	deliVolume(pc)
-	jmp	deliSong(pc)
-	jmp	deliForward(pc)
-	jmp	deliBackward(pc)
-	p_NOP
-	jmp .id(pc)
-	jmp	deliAuthor(pc)
-	dc.w pt_sonicarranger				* type
-	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
-	dc.b	"Sonic Arranger [EP]",0
-	        
-.path dc.b "sonicarranger",0
- even
-
-.init
-	lea	.path(pc),a0 
-	moveq	#0,d0
-	bra		deliLoadAndInit 
-
-
-; in: a4 = module
-;     d7 = module length
-; out: d0 = 0, valid valid
-;      d0 = -1, not valid
-.id
-	move.l	a4,a0
-	move.l	d7,d3
-	moveq	#-1,D0
-
-	cmp.l	#'SOAR',(A0)
-	bne.b	.NoSong
-	addq.l	#4,A0
-	cmp.l	#'V1.0',(A0)+
-	bne	.Fault
-	cmp.l	#'STBL',(A0)
-	bne	.Fault
-	bra	.Found
-.NoSong
-	cmp.w	#$4EFA,(A0)
-	bne.b	.NoRepa
-	move.w	2(A0),D1
-	beq.b	.Fault
-	bmi.b	.Fault
-	btst	#0,D1
-	bne.b	.Fault
-	lea	6(A0,D1.W),A1
-	cmp.w	#$41FA,(A1)+
-	bne.b	.Fault
-	moveq	#0,D1
-	move.w	(A1),D1
-	beq.b	.Fault
-	bmi.b	.Fault
-	btst	#0,D1
-	bne.b	.Fault
-	add.w	D1,A1
-	subq.l	#8,D3
-	sub.l	D1,D3
-	bmi.b	.Fault
-	move.l	A1,A0
-.NoRepa
-	move.l	A0,A1
-	moveq	#$28,D1
-	sub.l	D1,D3
-	bmi.b	.Fault
-	cmp.l	(A1)+,D1
-	bne.b	.Fault
-	moveq	#6,D1
-.NextLong
-	move.l	(A1)+,D2
-	beq.b	.Fault
-	bmi.b	.Fault
-	btst	#0,D2
-	bne.b	.Fault
-	dbf	D1,.NextLong
-	sub.l	D2,D3
-	bmi.b	.Fault
-	lea	(A0,D2.L),A1
-	move.l	(A1)+,D1
-	beq.b	.SynthOnly
-	move.l	A1,A0
-.NextSize
-	sub.l	(A0),D3
-	bmi.b	.Fault
-	add.l	(A0)+,A1
-	addq.l	#4,A1
-	subq.l	#1,D1
-	bne.b	.NextSize
-.SynthOnly
-	moveq	#12,D1
-	sub.l	D1,D3
-	bmi.b	.Fault
-	lea	.Text(PC),A0
-.CheckString
-	cmpm.b	(A0)+,(A1)+
-	bne.b	.Fault
-	dbeq	D1,.CheckString
-.Found
-	moveq	#0,D0
-.Fault
-	tst.l	d0
-	rts
-.Text
-	dc.b	'deadbeef'
-	dc.l	0
-
 
 ******************************************************************************
 * SidMon 1.0
@@ -44037,7 +43939,7 @@ p_mline
 	move.l	a4,a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
-	bsr	plainSaveFile
+	jsr	plainSaveFile
 	bmi.b	.orr
 
 	bsr	get_mline
@@ -46134,6 +46036,123 @@ id_delicustom
 * - replayers provided in eagleplayer plugins
 *
 ******************************************************************************
+
+
+******************************************************************************
+* SonicArranger
+******************************************************************************
+
+p_sonicarranger
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc.w pt_sonicarranger				* type
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
+	dc.b	"Sonic Arranger [EP]",0
+	        
+.path dc.b "sonicarranger",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id
+	move.l	a4,a0
+	move.l	d7,d3
+	moveq	#-1,D0
+
+	cmp.l	#'SOAR',(A0)
+	bne.b	.NoSong
+	addq.l	#4,A0
+	cmp.l	#'V1.0',(A0)+
+	bne	.Fault
+	cmp.l	#'STBL',(A0)
+	bne	.Fault
+	bra	.Found
+.NoSong
+	cmp.w	#$4EFA,(A0)
+	bne.b	.NoRepa
+	move.w	2(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	lea	6(A0,D1.W),A1
+	cmp.w	#$41FA,(A1)+
+	bne.b	.Fault
+	moveq	#0,D1
+	move.w	(A1),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	add.w	D1,A1
+	subq.l	#8,D3
+	sub.l	D1,D3
+	bmi.b	.Fault
+	move.l	A1,A0
+.NoRepa
+	move.l	A0,A1
+	moveq	#$28,D1
+	sub.l	D1,D3
+	bmi.b	.Fault
+	cmp.l	(A1)+,D1
+	bne.b	.Fault
+	moveq	#6,D1
+.NextLong
+	move.l	(A1)+,D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+	dbf	D1,.NextLong
+	sub.l	D2,D3
+	bmi.b	.Fault
+	lea	(A0,D2.L),A1
+	move.l	(A1)+,D1
+	beq.b	.SynthOnly
+	move.l	A1,A0
+.NextSize
+	sub.l	(A0),D3
+	bmi.b	.Fault
+	add.l	(A0)+,A1
+	addq.l	#4,A1
+	subq.l	#1,D1
+	bne.b	.NextSize
+.SynthOnly
+	moveq	#12,D1
+	sub.l	D1,D3
+	bmi.b	.Fault
+	lea	.Text(PC),A0
+.CheckString
+	cmpm.b	(A0)+,(A1)+
+	bne.b	.Fault
+	dbeq	D1,.CheckString
+.Found
+	moveq	#0,D0
+.Fault
+	tst.l	d0
+	rts
+.Text
+	dc.b	'deadbeef'
+	dc.l	0
 
 
 ******************************************************************************
@@ -51107,6 +51126,129 @@ pipe_Timidity:
 .timidityDir      dc.b    "timidity:",0    
 .timidityCliName  dc.b    "timidity",0
 .timidityCmd      dc.b    '%s -id -Ow1S -s27710 -o PIPE:wavHippoStream/65536/2 "%s"',10,0
+    even
+
+
+******************************************************************************
+* Ogg
+******************************************************************************
+
+p_ogg:
+  jmp      .init(pc)
+  p_NOP     * CIA   
+  p_NOP     * VB
+  jmp       .end(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  p_NOP    * Song
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      .id(pc)
+  p_NOP    * Author
+  dc       pt_ogg
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+.title
+  dc.b     "Ogg",0
+           even
+
+.id
+    cmp.l   #"OggS",(a4)
+    bne     .no
+    DPRINT  "Ogg detected"
+    moveq   #0,d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
+.init
+    DPRINT  "Ogg init"
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)    
+
+    * Start streaming
+    move.l  modulefilename(a5),a0
+    pushpea pipe_Ogg(pc),d0
+    jsr     startLocalStreaming
+    DPRINT  "startStreaming=%lx"
+    tst.l   d0
+    beq     .streamError
+
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "stream is %s"
+ endif
+    * Point sampleplayer to the pipe stream
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc) 
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    * D0 = error code
+    rts
+
+.ok
+
+    * Sample init OK
+    moveq   #0,d0
+    rts
+        * "MIDI Timidity 14c-bit"
+.form:  dc.b    "MIDI %s %s",0
+    even
+
+
+.initError
+    moveq   #ier_error,d0
+    rts
+
+.streamError    
+    DPRINT  "Ogg stream error!"
+
+    ; Send CTRL-C to streamer if possible
+    bsr     stopStreaming
+    ; If this was midi flushing needs to be done if timidity
+    ; is running, othewise flush will get stuck with an empty pipe
+    jsr     findLocalStreamProcess
+    bne     .flush
+    DPRINT  "Ogg: wait for streamer to exit"
+    jsr     awaitStreamer
+    bra     .1
+.flush
+    DPRINT  "Ogg: flush and wait for streamer to exit"
+    jsr     awaitStreamerAndFlush
+.1
+    lea     .msgMidi(pc),a1
+    jsr     request
+
+    moveq   #ier_error_nomsg,d0
+    rts
+
+.msgMidi
+    dc.b    "Error starting Ogg!",0
+    even
+
+.end
+    DPRINT  "Ogg stream end"
+    jmp     p_sample+p_end(pc)
+
+
+pipe_Ogg:
+    dc.l    0 * no current dir
+    dc.l    .CliName
+    dc.l    .Cmd
+    dc.l    .file
+    dc.l    0 * no setup
+    dc.l    0 * no special stack
+    dc.l    0 * no poll routine
+    dc.l    0 * additional formatting parameter
+
+.file     dc.b    "PIPE:wavHippoStream4",0
+.CliName  dc.b    "oggv_dec",0
+.Cmd      dc.b    '%s "%s" r >PIPE:wavHippoStream4/65536/2',10,0
     even
 
 
@@ -60744,15 +60886,23 @@ uslIgnoreFormats:
     beq     .reject
     cmp.w   #pt_sid,playertype(a5)
     beq     .reject
+    tst.b   sampleinit(a5)
+    bne     .reject
     cmp.w   #pt_sample,playertype(a5)
+    rts
 .reject
+    moveq   #0,d0
     rts
 
 umeIgnoreFormats:
     cmp.w   #pt_sid,playertype(a5)
     beq     .reject
+    tst.b   sampleinit(a5)
+    bne     .reject
     cmp.w   #pt_sample,playertype(a5)
+    rts
 .reject
+    moveq   #0,d0
     rts
 
 readUsl:
