@@ -44985,6 +44985,7 @@ p_sample:
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .name	dc.b	"                        ",0
         ds.b    8 * safety
+.nameE
  even
 
                    rsset    $20
@@ -51155,7 +51156,8 @@ p_ogg:
   dc       pt_ogg
   dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .title
-  dc.b     "Ogg",0
+.info
+  ds.b    p_sample\.nameE-p_sample\.name
            even
 
 .id
@@ -51197,6 +51199,12 @@ p_ogg:
     rts
 
 .ok
+    * Copy info 
+    lea     p_sample\.name(pc),a0
+    lea     .info(pc),a1
+.cp move.b  (a0)+,(a1)+
+    cmp.l   #p_sample\.nameE,a0
+    bne     .cp
 
     * Sample init OK
     moveq   #0,d0
@@ -51226,13 +51234,13 @@ p_ogg:
     DPRINT  "Ogg: flush and wait for streamer to exit"
     jsr     awaitStreamerAndFlush
 .1
-    lea     .msgMidi(pc),a1
+    lea     .msg(pc),a1
     jsr     request
 
     moveq   #ier_error_nomsg,d0
     rts
 
-.msgMidi
+.msg
     dc.b    "Error starting Ogg!",0
     even
 

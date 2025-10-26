@@ -427,6 +427,8 @@ mp3DurationInMs  rs.l    1
 mp3PositionInMs  rs.l    1   
 sampleOutputInfo rs.l    1  * Return text describing the output mode
 
+pipeFormatDetail  rs.w   1
+
 modulefilenameBuf rs.b   200 * Local copy
 
  if DEBUG
@@ -806,16 +808,25 @@ init:
     *           "PIPE:wavHippoStream2" for AIFF 27710 Hz
     *           "PIPE:wavHippoStream3" for AIFF 22050 Hz
     *           "PIPE:wavHippoStream4" for AIFF 44100 Hz
+    clr.w   pipeFormatDetail(a5)
     cmp.b   #"w",5(a0)
     bne     .notPipeW
     DPRINT  "sample PIPE wav bypass"
     move.b  #2,sampleformat(a5) * AIFF decoder
+
+    move.w  #3,pipeFormatDetail(a5)
     cmp.b   #"3",19(a0)
     beq     .wavinitPipeBypassLq
+
+    move.w  #4,pipeFormatDetail(a5)
     cmp.b   #"4",19(a0)
     beq     .wavinitPipeBypassHq
+
+    move.w  #2,pipeFormatDetail(a5)
     cmp.b   #"2",19(a0)
     beq     .wavinitPipeBypass
+
+    move.w  #1,pipeFormatDetail(a5)
     move.b  #3,sampleformat(a5) * WAV decoder
     bra     .wavinitPipeBypass
 .notPipeW
@@ -1890,6 +1901,9 @@ prepareInfoLine:
     beq     .fr0
     * wav/aiff + midi
     lea     .t3midi(pc),a0
+    cmp.w   #4,pipeFormatDetail(a5)
+    bne     .fr1
+    lea     .t3ogg(pc),a0
     bra     .fr1
 .fr0
 	lea	.t1(pc),a0
@@ -2007,6 +2021,7 @@ prepareInfoLine:
 .t2               dc.b    "AIFF",0
 .t3               dc.b    "WAV",0
 .t3midi           dc.b    "MIDI",0
+.t3ogg            dc.b    "Ogg",0
 .t4               dc.b    "MP",0
 * Sample form: "AIFF 16-bit S 44Khz 14c-bit" -> 27ch, fits 27/28?
 * Sample form: "WAV 16-bit S 44Khz 14-bi" <- this fits
