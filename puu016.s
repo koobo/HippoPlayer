@@ -33198,6 +33198,9 @@ tutki_moduuli:
 	bsr	id_protracker
 	beq	.protracker
 
+	bsr	id_oldst
+	beq	.oldst
+
 .ohi
 	* Test for formats that do not require an external
 	* replay code.
@@ -33229,8 +33232,8 @@ tutki_moduuli:
 	bsr	id_sid
 	beq	.sid
 
-	bsr	id_oldst
-	beq	.oldst
+;	bsr	id_oldst
+;	beq	.oldst
 .noop
 
 	tst.l	externalplayers(a5)	* ladataan playerit
@@ -33305,6 +33308,15 @@ tutki_moduuli:
 	bsr	id_ps3m		
 	tst.l	d0
 	beq	.multi
+
+    * Case: PS3M with Old Soundtracker
+    bsr	    id_oldst
+    bne     .notOldSt
+	bsr	    convert_oldst
+    bra     .multi
+.notOldSt
+
+
 
 	clr.b	external(a5)
 .nope
@@ -38205,8 +38217,8 @@ id_oldst
 	rts
 
 convert_oldst
-
-*******
+    DPRINT  "Convert OLD SOUNDTRACKER"
+******* 
 * Muutetaan PT-formaattiin
 * a4 <= moduuli
 
@@ -61455,6 +61467,7 @@ umeFind:
 .skip4
     printt  "enforcer read hit here with NOT found module"
     * sequence: play "mouse.mod", then another
+    printt "Enforcer read hits here: Vortex 42 theme.mod.gz"
     move.b  (a0),d0     
     add.w   d0,a0
     dbf     d4,.skip4
