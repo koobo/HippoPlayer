@@ -59583,6 +59583,9 @@ refreshPositionSlider:
 .no
     rts
 .yes    
+    * Window not open?
+    tst.b   win(a5) 
+    beq.b   .no
     * Zipped window?
     tst.b   kokolippu(a5)
 	beq.b   .no
@@ -62636,6 +62639,10 @@ drawInfoScroller:
     tst.b   playing(a5)
     beq     .x
     tst.b   infoScrollEnabled(a5)
+    beq     .x
+    tst.b   win(a5)                 * Window not open?
+    beq     .x
+    tst.b   kokolippu(a5)           * Window is zipped?
     beq     .x
     tst.l   infoScrollLastTime(a5)  * Need to wait?
     bne     .doWait
