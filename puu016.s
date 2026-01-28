@@ -38025,9 +38025,41 @@ modlen:
 	MOVEQ	#0,D0
 	MOVE.B	3(A6),D0
 	Bne.b	.no0
+    * F00 special case check
+	moveq	#31,d0 * set to max normal speed as in kpl14.s
+
+    * Test if any of the channels have a non-zero set speed command.
+    * In this case assume song has not ended (dirt.mod).
+    move.l  .patternIndex(a5),d4
+	moveq	#$f,d2
+    and.b   2(A0,d4.L),d2
+    cmp.b   #$f,d2
+    bne     .sp1
+    tst.b   3(A0,d4.L)  * test Fxx parameter
+    bne     .no0
+.sp1
+	moveq	#$f,d2
+    and.b   2+4(A0,d4.L),d2
+    cmp.b   #$f,d2
+    bne     .sp2
+    tst.b   3+4(A0,d4.L)  * test Fxx parameter
+    bne     .no0
+.sp2
+	moveq	#$f,d2
+    and.b   2+8(A0,d4.L),d2
+    cmp.b   #$f,d2
+    bne    .sp3
+    tst.b   3+8(A0,d4.L)  * test Fxx parameter
+    bne     .no0
+.sp3
+	moveq	#$f,d2
+    and.b   2+12(A0,d4.L),d2
+    cmp.b   #$f,d2
+    bne     .no0
+    tst.b   3+12(A0,d4.L)  * test Fxx parameter
+    bne     .no0
+    
     st      .songend(a5)    * F00 -> end
-    printt  "TODO: no songend if there is a valid speed in any of the higher channels"
-	moveq	#31,d0
 .no0
 	tst	.tempoflag(a5)
 	beq.b	.notempo
