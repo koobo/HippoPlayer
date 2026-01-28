@@ -107,10 +107,37 @@ Additional files to check and download
     -> metadata.tsv -> Download raw file
   ... and:
     -> songlengths.tsv -> Download raw file  
+- To play Ogg files get oggv_dec from:
+  ...TODO TODO...
 
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
+# Changes from v2.65 (26.9.2025) to v2.66 (?.?.?) 
+
+## Fixes:
+
+- Fixed Modland search not finding PumaTracker, Symphonie Pro or
+  Sound Programming Language modules due to a file extension whitelist mishap.
+
+- Fixed Old Soundtracker files not being playable through AHI or PS3M mixer.
+
+- Kickstart 3.2: Fix Hippo freezing when resizing the window when
+  window positioned over the left edge of the screen.
+
+- Fix a system hang when hiding HippoPlayer (with Amiga-Shift-Ctrl-H)
+  and having the Info Scroll enabled.
+
+## New music format:
+
+- Ogg files can be played if you have the tool "oggv_dec" available
+  in path (eg. in C:) and a fast enough CPU, like a 68060.
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
 
 # Changes from v2.64 (19.6.2025) to v2.65 (26.9.2025) 
 

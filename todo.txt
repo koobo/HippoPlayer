@@ -1,3 +1,22 @@
+TODO:
+- rewrite info window for prop fonts
+
+TODO:
+- gzipped old soundtracker files not recognized
+
+FIXXED: TODO:
+- OldSoundtracker -> does not support AHI even if it should
+
+TODO:
+- dirt.mod - F00 paikoitellen
+- periodEndCheck triggeroituu jatkuvasti jos pistää "module repeatedly"
+
+FIXED: TODO:
+- modland whitelist
+-- symmod
+-- soprol
+-- PumaTracker
+
 FIXED: TODO
 - open quadra, pattern, normal size
 - play Keo/Waterproof.smod

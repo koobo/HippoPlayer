@@ -50,7 +50,8 @@ ver	macro
 ;	dc.b	"v2.64ß (?.?.2025)"
 ;	dc.b	"v2.64 (19.6.2025)"
 ;	dc.b	"v2.65ß (?.?.2025)"
-	dc.b	"v2.65 (26.9.2025)"
+;	dc.b	"v2.65 (26.9.2025)"
+	dc.b	"v2.66ß (?.?.2026)"
 	endm	
 
 
@@ -51204,9 +51205,6 @@ p_ogg:
     * Sample init OK
     moveq   #0,d0
     rts
-        * "MIDI Timidity 14c-bit"
-.form:  dc.b    "MIDI %s %s",0
-    even
 
 
 .initError
@@ -57527,6 +57525,9 @@ remoteSearch
     dc.l    "sap " *
     dc.l    "spc " * 
     dc.l    "mdx " *
+    dc.l    "puma" 
+    dc.l    "spl "
+    dc.l    "mmod" * symmod, works like this
 	dc.l	0
 ;todo: synmod
 
