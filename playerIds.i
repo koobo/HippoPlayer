@@ -106,3 +106,5 @@ pt_soundprogramminglanguage rs.b 1
 pt_midiext          rs.b    1
 pt_symphonie        rs.b    1
 pt_sonicarranger	rs.b	1
+pt_tfmx_            rs.b    1
+pt_tfmxpro_         rs.b    1

@@ -1665,7 +1665,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	35
+xpl_versio	=	36
 
 
 *********************************************************************************
@@ -2521,6 +2521,7 @@ about_t1
  dc.b 0
  dc.b $ff
  even
+
 
 
  ifne asm
@@ -31682,18 +31683,19 @@ loadfile:
 	tst.l	d0
 	beq	.on
 
-	bsr	id_tfmxunion
-	beq	.on
+;	bsr	id_tfmxunion
+;	beq	.on
 
-	bsr	id_TFMX_PRO
-	tst	d0
+;	bsr	id_TFMX_PRO
+    jsr  id_tfmx_pro_
 	beq	.on
 
 	bsr	id_TFMX7V
 	tst	d0
 	beq.b	.on
 
-	bsr	id_tfmx
+;	bsr	id_tfmx
+    jsr     id_tfmx_
 	beq.b	.on
 
 	DPRINT	"Internal"
@@ -33271,19 +33273,20 @@ tutki_moduuli:
 	tst.b	sampleinit(a5)		* sample??
 	bne	.sample
 
-	bsr	id_TFMX_PRO
-	tst	d0
-	beq	.tfmx
+;	bsr	id_TFMX_PRO
+    jsr id_tfmx_pro_
+	beq	.tfmxPro
 
 	bsr	id_TFMX7V
 	tst	d0
 	beq	.tfmx7
 
-	bsr	id_tfmx
+;	bsr	id_tfmx
+    jsr id_tfmx_
 	beq	.tfmx
 
-	bsr	id_tfmxunion
-	beq	.tfmxunion
+;	bsr	id_tfmxunion
+;	beq	.tfmxunion
 
 	DPRINT	"Group"
 	lea	groupFormats(pc),a3 
@@ -33452,14 +33455,14 @@ tutki_moduuli:
 
 ** Yhdistetty TFMX formaatti
 
-.tfmxunion
-	moveq	#0,d7
-	moveq	#$7f,d0
-	and.b	8(a4),d0		*  tyyppi
-	cmp.b	#3,d0
-	beq.b	.t7
-	moveq	#1,d7
-.t7	bra	.ok
+;.tfmxunion
+;	moveq	#0,d7
+;	moveq	#$7f,d0
+;	and.b	8(a4),d0		*  tyyppi
+;	cmp.b	#3,d0
+;	beq.b	.t7
+;	moveq	#1,d7
+;.t7	bra	.ok
 
 
 
@@ -33468,8 +33471,13 @@ tutki_moduuli:
 .tfmx7	moveq	#0,d7
 	bra.b	.t	
 
+.tfmxPro
+    moveq   #2,d7
+    bra     .t
 .tfmx	moveq	#1,d7
 .t	
+    DPRINT  "*** TFMX init special ***"
+
 	moveq	#0,d0
 
 	lea	fileinfoblock+fib_FileName(a5),a0		* tied.nimi: mdat.*
@@ -33568,14 +33576,27 @@ tutki_moduuli:
 	lea	150(sp),sp
 	tst.l	d0
 	beq.b	.ok
+    DPRINT  "samples load failed!"
 	rts
 	
-.ok	pushpea	p_tfmx(pc),playerbase(a5)
-	move	#pt_tfmx,playertype(a5)
-	tst	d7
-	bne	.ex
+.ok	
+    DPRINT  "samples loaded succesfully!"
+    * d7 = 0 -> tfmx7v
+    * d7 = 1 -> tfmx
+    * d7 = 2 -> tfmx pro
+
 	pushpea	p_tfmx7(pc),playerbase(a5)
 	move	#pt_tfmx7,playertype(a5)
+    tst     d7
+    beq     .ex
+
+    move.l  #p_tfmx_,playerbase(a5)
+	move	#pt_tfmx_,playertype(a5)
+	subq    #1,d7
+    beq     .ex
+
+    move.l  #p_tfmxpro_,playerbase(a5)
+	move	#pt_tfmxpro_,playertype(a5)
 	bra	.ex
 
 ;.tfmxid	dc.b	"mdat.",0
@@ -41124,6 +41145,7 @@ tfmx_author
 	dc.b	"Chris Huelsbeck, Peter Thierolf",0
 	even
 
+ REM
 p_tfmx:
 	jmp	.tfmxinit(pc)
 	p_NOP
@@ -41328,6 +41350,7 @@ id_TFMX_PRO
 	moveq	#-1,d0
 .exit
 	rts
+ EREM
 
 TFMX_IDs
 	dc.b	'tfmxsong',0
@@ -52607,7 +52630,259 @@ id_symphonie
     rts
 
 
+******************************************************************************
+* TFMX
+******************************************************************************
 
+p_tfmx_
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp id_tfmx_(pc)
+	jmp	deliAuthor(pc)
+	dc.w pt_tfmx_				* type
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
+	dc.b	"TFMX [EP]",0
+	        
+.path dc.b "tfmx",0
+ even
+
+.init   
+    DPRINT  "TFMX init"
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+p_tfmxpro_
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp id_tfmx_pro_(pc)
+	jmp	deliAuthor(pc)
+	dc.w pt_tfmxpro_				* type
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
+	dc.b	"TFMX Pro [EP]",0
+	        
+.path dc.b "tfmx pro",0
+ even
+
+.init
+    DPRINT  "TFMX Pro init"
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+
+
+id_tfmx_
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	cmp.l	#'TFMX',(A0)
+	bne 	.Fault
+
+	cmp.b	#$20,4(A0)
+	bne.b	.CheckAnother
+
+	bra.b	.test
+.CheckAnother
+	cmp.l	#'-SON',4(A0)
+	bne 	.Fault
+	cmp.w	#'G ',8(A0)
+	bne 	.Fault
+	cmp.w	#'by',10(A0)
+	beq.b	.test
+	cmp.l	#'(Emp',16(A0)
+	bne.b	.NoEmpty
+	cmp.l	#'ty) ',20(A0)
+	bne 	.Fault
+	bra.b	.test
+.NoEmpty
+	cmp.w	#'  ',16(A0)
+	beq.b	.test
+	cmp.w	#$303D,16(A0)		; extension for Lethal Zone
+	bne.b	.Fault
+.test
+	tst.l	464(A0)
+	bne.b	.Fault
+	cmp.w	#$0E60,14(A0)		; extension for Z-Out (title)
+	beq.b	.Fault
+	cmp.w	#$0860,14(A0)		; extension for Metal Law (jingle)
+	bne.b	.NextNew1
+	cmp.w	#$090C,4644(A0)
+	beq.b	.Fault
+.NextNew1
+	cmp.w	#$0B20,14(A0)		; extension for Bug Bomber (unpacked)
+	bne.b	.NextNew2
+	cmp.w	#$8C26,5120(A0)
+	beq.b	.Fault
+.NextNew2
+	cmp.w	#$0920,14(A0)		; extension for Metal Law (preview)
+	bne.b	.OK
+	cmp.w	#$9305,3876(A0)
+	beq.b	.Fault
+.OK
+	move.l	1536(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	move.l	2044(A0),D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+	lea	(A0,D2.L),A1
+	lea	(A0,D1.L),A0
+.CheckForPro_ST
+	cmp.b	#36,(A0)
+	bhi.b	.Fault
+	addq.l	#4,A0
+	cmp.l	A0,A1
+	bne.b	.CheckForPro_ST
+
+	moveq	#0,D0
+.Fault
+    tst     d0
+	rts
+
+
+id_tfmx_pro_
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	cmp.l	#'tfmx',(A0)
+	bne.b	.CheckAnother
+	addq.l	#4,A0
+	cmp.l	#'song',(A0)+
+	bne 	.Fault
+	tst.w	(A0)
+	bne 	.Fault
+	bra 	.OK1
+.CheckAnother
+	cmp.l	#'TFMX',(A0)
+	bne 	.Fault
+	cmp.l	#'-SON',4(A0)
+	bne 	.Fault
+	cmp.w	#'G ',8(A0)
+	bne 	.Fault
+	move.l	464(A0),D1
+	beq.b	.late
+	tst.w	D1
+	bne.b	.OK2
+	swap	D1			; PC test
+	cmp.b	#1,D1
+	bgt.w	.OK1
+	bra 	.Fault
+.late
+	tst.w	12(A0)
+	bne 	.Fault
+	cmp.w	#'  ',16(A0)
+	beq.w	.Fault
+	cmp.w	#$303D,16(A0)		; extension for Lethal Zone
+	beq.w	.Fault
+	cmp.l	#'(Emp',16(A0)
+	bne.b	.OK
+	cmp.l	#'ty) ',20(A0)
+	bne.b	.OK
+	cmp.w	#$0E60,14(A0)		; extension for Z-Out (title)
+	beq.b	.OK
+	cmp.w	#$0860,14(A0)		; extension for Metal Law (jingle)
+	bne.b	.NextNew1
+	cmp.w	#$090C,4644(A0)
+	beq.b	.OK
+.NextNew1
+	cmp.w	#$0B20,14(A0)		; extension for Bug Bomber (unpacked)
+	bne.b	.NextNew2
+	cmp.w	#$8C26,5120(A0)
+	beq.b	.OK
+.NextNew2
+	cmp.w	#$0920,14(A0)		; extension for Metal Law (preview)
+	bne 	.Fault
+	cmp.w	#$9305,3876(A0)
+	bne.b	.Fault
+.OK
+	move.l	#2048,D1
+.OK2
+	cmp.w	#$8B0,14(A0)
+	bne.b	.NoException		; BMW exception
+	cmp.l	#$01F4FF00,516(A0)
+	beq.b	.Fault
+.NoException
+	moveq	#31,D2
+	lea	256(A0),A1
+.NextPos
+	moveq	#0,D3
+	move.w	(A1)+,D3
+	cmp.w	#$01FF,D3
+	beq.b	.SkipIt
+	lsl.l	#4,D3				; * 16
+	add.l	D1,D3
+	lea	(A0,D3.L),A2
+.CheckEFFE
+	cmp.w	#$EFFE,(A2)+
+	beq.b	.SevenVoice_Test
+.SkipIt
+	dbf	D2,.NextPos
+
+	move.l	468(A0),D2
+	beq.b	.NoPack
+	move.l	472(A0),D1
+	move.l	(A0,D1.L),D1
+	bra.b	.CheckST
+.NoPack
+	move.l	1536(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	move.l	2044(A0),D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+.CheckST
+	lea	(A0,D2.L),A1
+	lea	(A0,D1.L),A0
+.CheckForST
+	cmp.b	#63,(A0)
+	bhi.b	.Fault
+	addq.l	#4,A0
+	cmp.l	A0,A1
+	bne.b	.CheckForST
+.OK1
+	moveq	#0,D0
+.Fault
+    tst     d0
+	rts
+
+.SevenVoice_Test
+	cmp.w	#$0003,(A2)+
+	bne.b	.CheckNext
+	tst.b	(A2)
+	bne.b	.Fault
+	tst.b	3(A2)
+	beq.b	.Fault
+.CheckNext
+	addq.l	#4,A2
+	addq.l	#8,A2
+	bra.b	.CheckEFFE
 
 *******************************************************************************
 *** SECTION *******************************************************************
@@ -53137,6 +53412,13 @@ deliInit:
 	bsr	deliHandleFlags
 .noFlags
 
+    ; ---------------------------------
+    ; TFMX samples are loaded elsewhere
+    cmp.w   #pt_tfmx_,playertype(a5)
+    beq     .noExtLoad
+    cmp.w   #pt_tfmxpro_,playertype(a5)
+    beq     .noExtLoad
+    ; ---------------------------------
 	move.l	#DTP_ExtLoad,d0  
 	bsr	deliGetTag
 	beq.b	.noExtLoad
@@ -54001,11 +54283,33 @@ deliFindEmptyListDataSlot
 * in: 
 *   d0 = file number. 0 is the original module, 
 *                     1 is the 1st loaded file with dtg_LoadFile, etc
+* Out:
+*   a0 = data address
+*   d0 = data length
 deliGetListData 
 	DPRINT	"getListData %ld"
 	tst.l	d0 
 	beq.b	.first
 
+    ; -----------------------
+    ; TFMX special case
+    push    d1
+    moveq   #1,d1
+    cmp.l   d1,d0
+    bne     .noTfmx
+    move    playertype+var_b,d1
+    cmp     #pt_tfmx_,d1
+    beq     .tfmx
+    cmp     #pt_tfmxpro_,d1
+    bne     .noTfmx
+.tfmx
+    pop     d1
+    move.l  tfmxsamplesaddr+var_b,a0
+    move.l  tfmxsampleslen+var_b,d0
+    rts
+.noTfmx
+    pop     d1
+    ; -----------------------
 	* Grab (addr,len) so that index 1 corresponds to the first item.
 	pushm	d3/a1
 	move.l	deliLoadFileArray+var_b,a1
