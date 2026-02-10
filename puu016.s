@@ -15746,7 +15746,7 @@ pupdate:				* Ikkuna päivitys
 	bsr	pps3mb			* ps3m buffer
 	bsr	pupdate7b		* stereo
 	bsr	psettings		* settings file
-    bsr pps3mamigus     * ps3m amigus mode
+    bsr pps3mamigus_update    * ps3m amigus mode
 ;	bsr	pcyber			* cyber calibration
 ;	bsr	pcybername		* cyber calibration file name
 	bra	.x
@@ -16740,8 +16740,8 @@ pps3mamigus
     
 .ls0	dc.b	18,3
 .ls1	dc.b	"No",0
-.ls2	dc.b	"Yes, normal",0
-.ls3	dc.b	"Yes, interpolate",0
+.ls2	dc.b	"Yes",0
+.ls3	dc.b	"Yes+interpolate",0
  even
 
 ps3mamigusDisableOthers:
