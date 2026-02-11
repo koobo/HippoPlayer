@@ -5035,6 +5035,11 @@ getscreeninfo
 	moveq	#0,d1
 	move.b	sc_WBorBottom(a0),d1
 	DPRINT	"sc_WBorTop=%ld sc_WBorBottom=%ld"
+	moveq	#0,d0
+	move.b	sc_WBorLeft(a0),d0
+	moveq	#0,d1
+	move.b	sc_WBorRight(a0),d1
+	DPRINT	"sc_WBorLeft=%ld sc_WBorRight=%ld"
  endif
 
 	* It seems that the total height of the window
@@ -21943,10 +21948,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	; Set window size limits
 	; Max height 50 lines
-	move	oldswinsiz(a5),d0
-	move	d0,nw_MinHeight(a0)
-	add	#(50-3)*8,d0
-	move	d0,nw_MaxHeight(a0)
+;	move	oldswinsiz(a5),d0
+;;	move	d0,nw_MinHeight(a0)
+;	add	#(50-3)*8,d0
+;	move	d0,nw_MaxHeight(a0)
 
 	; fit into the screen
 	
@@ -22013,14 +22018,22 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .redraw
 	DPRINT	"Info redraw"
+    
+	move.l	swindowbase(a5),a1
+    move.w  wd_Width(a1),d2
+    sub     windowright(a5),d2
+    subq    #5,d2
+
+
 	move.l	srastport(a5),a2
-	moveq	#4,d0
-	moveq	#11,d1
-	move	#356-5-2+2,d2
-	moveq	#147-13*8-2,d3
+	moveq	#4,d0               * x1
+    add    windowleft(a5),d0
+	moveq	#11,d1              * y1
+;	move	#356-5-2+2,d2     * x2
+	moveq	#147-13*8-2,d3    * y2
 	move	infosize(a5),d4
 	subq	#3,d4
-	lsl	#3,d4
+	lsl	#3,d4           * font height
 	add	d4,d3
 	bsr	drawtexture
 
@@ -22590,7 +22603,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 
-* d0 = alkurivi
+* d0 = alkurivi tekstiss‰
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien m‰‰r‰
 .print2
@@ -22606,14 +22619,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .ra
 
 	move	d1,d7
-	lsl	#3,d7
-	add	#22-1,d7
+	lsl	#3,d7           * font height
+	add	#22-1,d7        
 	
 	move	d2,d6
 	subq	#1,d6		* ???
 
 .lorp
-	lea	-50(sp),sp
+	lea	-200(sp),sp  * buffer for line
 	move.l	sp,a0
 	move.l	a0,a1
 
@@ -22645,12 +22658,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;	bra.b	.xw
 ;.xq
 
-	moveq	#35-2,d0
-	move	d7,d1
+	moveq	#35-2,d0        * x1 relative to windowleft(a5)
+	move	d7,d1           * y1 relative to windowtop(a5)
 	jsr	sprint
 
 .xw	addq	#8,d7
-	lea	50(sp),sp
+	lea	200(sp),sp
 	tst.b	-1(a3)
 	beq.b	.xip
 
@@ -22861,26 +22874,27 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
+    bsr     .wrappage
     ; do ines wrapping at space
-	bsr    	.doLine
-    bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-	bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-	bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-	bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-	bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-.ic1   
+;	bsr    	.doLinea
+;    bpl    	.ic1
+;    move.b  #" ",(a3)+
+;	bsr    	.doLine
+;	bpl    	.ic1
+;    move.b  #" ",(a3)+
+;	bsr    	.doLine
+;	bpl    	.ic1
+;    move.b  #" ",(a3)+
+;	bsr    	.doLine
+;	bpl    	.ic1
+;    move.b  #" ",(a3)+
+;	bsr    	.doLine
+;	bpl    	.ic1
+;    move.b  #" ",(a3)+
+;	bsr    	.doLine
+;.ic1   
+;    rts
     rts
-
 
 .icyForm1
     dc.b    ILF,ILF2," Name:",ILF,ILF2
@@ -23261,18 +23275,107 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
+    bsr     .wrappage
+
 	; do three lines wrapping at space
-	bsr 	.doLine
-	bpl 	.endss
-	bsr 	.doLine
-	bpl 	.endss
-	bsr 	.doLine
+    * wrap text at a0 to a3
+
+;	bsr 	.doLine
+;	bpl 	.endss
+;	bsr 	.doLine
+;	bpl 	.endss
+;	bsr 	.doLine
 .endss
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	    .putLineChange
     bsr     .putMetaDataWithExtraLineChange
 	bra 	.ends
+
+* In:
+*   a0 = input text
+*   a3 = output text buffer
+.wrappage:
+    pushm   all
+
+ ifne DEBUG
+    move.l  a0,d0
+    DPRINT  "Wrap text '%s'"
+ endif
+    
+
+	move.l	swindowbase(a5),a1  
+    move.w  wd_Width(a1),d6
+    sub     windowright(a5),d6
+    subq    #5,d6
+    sub     #35-2,d6     * width of slider
+
+    moveq   #0,d7       * current X
+                        * output buffer in a3
+    move.l  a0,a4       * input text in a4
+    lea     -50(sp),sp * word buffer
+.wrapLoop
+    move.l  sp,a2       * word buffer
+    clr.b   (a2)
+    * copy one word into a2
+.copyWord
+    move.b  (a4)+,d0
+    beq     .wordEnd
+    cmp.b   #10,d0
+    bne     .noLf
+    moveq   #" ",d0
+.noLf
+    cmp.b   #" ",d0
+    beq     .wordEnd
+    cmp.b   #"-",d0
+    beq     .wordEnd
+    cmp.b   #"_",d0
+    beq     .wordEnd
+    move.b  d0,(a2)+
+    bra     .copyWord
+.wordEnd
+    move.b  d0,(a2)+ * also preserve separator char
+    clr.b   (a2)    * null terminate word even if not needed
+    move.l  sp,a0   * word
+    move.l  a2,d0   * characters in word
+    sub.l   sp,d0
+    move    d0,d5   * stash word length 
+ ifne DEBUG
+    move.l  sp,d1
+    DPRINT  "length=%ld word='%s'"
+ endif 
+    * a0 = text, d0 = char count
+    push    a6
+	move.l	srastport(a5),a1
+	lore	GFX,TextLength
+    pop     a6
+    * d0 = word length in pixels
+    DPRINT  "pixels=%ld"
+
+    add     d0,d7   * new x-position
+    cmp     d6,d7   * is the x-position over the width limit
+    blo     .wordFits
+    * word does not fit
+    bsr     .putLineChange  * new linechange into a3
+    move    d0,d7           * start a new line, initial position
+.wordFits
+    * copy word from word buffer into output
+    move.l  sp,a0
+.copyChars
+    move.b  (a0)+,(a3)+
+    subq    #1,d5
+    bne     .copyChars
+
+    tst.b   -1(a4)
+    beq     .wrapEnd
+    tst.b   (a4)    * end of input
+    bne     .wrapLoop
+.wrapEnd
+    DPRINT  "wrap done"
+    lea     50(sp),sp
+    popm    all
+    rts
+
 
 * Copies a line to output, cuts at space near the end of line
 * in:
@@ -23283,7 +23386,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 *   a3 = pointer to next position in output buffer
 *   d0 = negative: all input handled
 *        positive: data left in input for the next row
-.doLine:
+.doLine_DISABLED:
  	moveq	#39-1,d0
 	moveq	#0,d1
 .cl1	cmp.b	#" ",(a0)
@@ -23674,17 +23777,19 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a3
 	jsr	desmsg3
 	move.l	sp,a0
-	move.l	a0,d0
+;	move.l	a0,d0
 
 	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
-	bsr	.doLine
-	bpl.b	.endA
-	bsr	.doLine
-	bpl.b	.endA
-	bsr	.doLine
-.endA	lea	200(sp),sp
+;	bsr	.doLine
+;	bpl.b	.endA
+;	bsr	.doLine
+;	bpl.b	.endA
+;	bsr	.doLine
+;.endA
+    bsr     .wrappage
+	lea	200(sp),sp
 .noAuth
 
     bsr     .putMetaDataWithExtraLineChange
@@ -23745,13 +23850,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr     .putLineChangeToEndOfBuffer
     
     move.l  sp,a0
-    move.l  a3,a1
-    bsr     .doLine
-    bpl     .endM
-    bsr     .doLine
-    bpl     .endM
-    bsr     .doLine
-.endM
+    bsr     .wrappage
+;    move.l  a3,a1
+;    bsr     .doLine
+;    bpl     .endM
+;    bsr     .doLine
+;    bpl     .endM
+;    bsr     .doLine
+;.endM
 
     lea     100(sp),sp
 
@@ -64361,7 +64467,11 @@ sflags	dc.l	swflags
 	dc.l	.w
 	dc.l	0	;screen struc
 	dc.l	0	
-	dc	0,0,0,0,WBENCHSCREEN
+    * nw_MinWidth, nw_MinHeight
+	dc	0,0
+	* nw_MaxWidth, nw_MaxHeight
+	dc	640,512
+    dc  WBENCHSCREEN
 	dc.l	enw_tags
 
 .w	dc.b	"HippoInfo"
