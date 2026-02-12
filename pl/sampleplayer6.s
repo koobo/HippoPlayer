@@ -431,6 +431,8 @@ pipeFormatDetail  rs.w   1
 
 modulefilenameBuf rs.b   200 * Local copy
 
+wrappageFunction    rs.l    1   * ptr to info window text wrapper func
+
  if DEBUG
 output			rs.l 	1
 debugDesBuf		rs.b	1000
@@ -6984,9 +6986,11 @@ ILF2	=	$03
 
 * In:
 *   a0 = info window text buffer
+*   a1 = wrappage function
 getMp3TagText:
     pushm   all
     lea     var_b,a5
+    move.l  a1,wrappageFunction(a5)
     move.l  a0,a2
     bsr     mpega_parse_id3v2
     popm    all
@@ -6994,7 +6998,7 @@ getMp3TagText:
     
 
 * In:
-*  a2 = info window text buffer
+*  a2 = info window text buffer for output
 mpega_parse_id3v2
     pushm   all
     tst.l   id3v2Data(a5)
@@ -7060,12 +7064,12 @@ mpega_parse_id3v2
     lea     .tit2Format(pc),a0
     bsr     findAndAppendWithFormat
 
-    move.l  #"TIT2",d0
-    bsr     findFrameByName
-    beq.b   .11
-    move.l  d0,a0
-    bsr     appendWithWrap
-.11
+;    move.l  #"TIT2",d0
+;    bsr     findFrameByName
+;    beq.b   .11
+;    move.l  d0,a0
+;    bsr     appendWithWrap
+;.11
  
     move.l  #"TIT3",d0
     lea     .tit3Format(pc),a0
@@ -7109,69 +7113,67 @@ mpega_parse_id3v2
     rts
 
 .titleFormat
-    dc.b    ILF,ILF2
-    dc.b    " --- MP3 info ---",ILF,ILF2,ILF,ILF2,0
+    dc.b    10
+    dc.b    "*** MP3 tags info ***",0
 .tpe1Format
-    dc.b    " Artist:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Artist:",10
+    dc.b    "%s",0
 .tpe2Format
-    dc.b    " Band:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Band:",10
+    dc.b    "%s",0
 .tpe3Format
-    dc.b    " Conductor:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Conductor:",10
+    dc.b    "%s",0
 .tpe4Format
-    dc.b    " Remixed by:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Remixed by:",10
+    dc.b    "%s",0
 .tcomFormat
-    dc.b    " Composer:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Composer:",10
+    dc.b    "%s",0
 .topeFormat
-    dc.b    " Original artist:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Original artist:",10
+    dc.b    "%s",0
 .tit1Format
-    dc.b    " Content:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
-;.tit2Format
-;    dc.b    " Title:",ILF,ILF2
-;    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Content:",10
+    dc.b    "%s",0
 .tit2Format
-    dc.b    " Title:",ILF,ILF2,0
+    dc.b    "Title:",10
+    dc.b    "%s",0
 .tit3Format
-    dc.b    " Subtitle:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Subtitle:",10
+    dc.b    "%s",0
 .talbFormat
-    dc.b    " Album:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Album:",10
+    dc.b    "%s",0
 .tyerFormat
-    dc.b    " Year:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Year:",10
+    dc.b    "%s",0
 .tdatFormat
-    dc.b    " Date:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Date:",10
+    dc.b    "%s",0
 .tdrcFormat
-    dc.b    " Recording time:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Recording time:",10
+    dc.b    "%s",0
 .tdrlFormat
-    dc.b    " Release time:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Release time:",10
+    dc.b    "%s",0
 .trckFormat
-    dc.b    " Track number:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Track number:",10
+    dc.b    "%s",0
 .tlenFormat
-    dc.b    " Length:",ILF,ILF2
-    dc.b    " %ld:%02ld",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Length:",10
+    dc.b    "%ld:%02ld",0
 .tmooFormat
-    dc.b    " Mood:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Mood:",10
+    dc.b    "%s",0
 .trsnFormat
-    dc.b    " Radio station:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "Radio station:",10
+    dc.b    "%s",0
 
  even
 
 * In:
-*   d0 = frame name 4-cbar
+*   d0 = frame name 4-char
 *   a0 = format string
 *   a2 = buffer to append
 findAndAppendWithFormat
@@ -7182,88 +7184,35 @@ findAndAppendWithFormat
 appendWithFormat:
     bsr     desmsg
     lea     desbuf(a5),a0
-.cc move.b  (a0)+,(a2)+
-    bne     .cc
-    subq    #1,a2
-    rts
 
-* In:
-*   a0 =  string
-*   a2 = buffer to append
-appendWithWrap:
-    pushm   d0-a1/a3-a6
+    * copy title line
+.2  move.b  (a0)+,d0
+    cmp.b   #10,d0
+    beq     .1
+    move.b  d0,(a2)+
+    bra     .2
+.1
+    bsr     putLineChange
+
+    * copy and wrap the 2nd line
+    push    a3
     move.l  a2,a3
-    move.b  #" ",(a3)+
-    bsr     .doLine
-    bpl     .ends
-    move.b  #" ",(a3)+
-    bsr     .doLine
-    bpl     .ends
-    move.b  #" ",(a3)+
-    bsr     .doLine
-.ends
+    move.l  wrappageFunction(a5),a1
+    jsr     (a1)
     move.l  a3,a2
-    popm    d0-a1/a3-a6
+    pop     a3
+
+    subq    #1,a2
+    bsr     putLineChange
+    bsr     putLineChange
     rts
-
-
-* Copies a line to output, cuts at space near the end of line
-* in:
-*   a0 = input text
-*   a3 = output buffer
-* out:
-*   a0 = pointer to next line if available
-*   a3 = pointer to next position in output buffer
-*   d0 = negative: all input handled
-*        positive: data left in input for the next row
-.doLine
-    move.l  a0,d0
-	moveq	#37-1,d0
-	moveq	#0,d1
-.cl1
-    cmp.b   #"_",(a0)
-    beq     .ys1
-    cmp.b	#" ",(a0)
-	bne.b	.ns1
-.ys1
-	addq	#1,d1 ; keep track of spaces
-.ns1	    
-    move.b  (a0)+,d2
-    cmp.b   #ILF2,d2
-    bne.b   .noIlf2
-    * Line change resets the counter
-    moveq	#37-1,d0    
-.noIlf2
-    move.b  d2,(a3)+
-	dbeq	d0,.cl1
-	tst	d0
-	bpl.b	.endLine
-	; find previous space to cut from
-	; SAFETY: if there are any
-	tst	d1
-	beq.b	.endLin
-.li1	
-    subq	#1,a3
-    cmp.b   #"_",-(a0)
-    beq     .ys2
-	cmp.b	#" ",(a0)
-	bne.b	.li1
-.ys2
-	addq	#1,a0
-	move.l	a0,d0
-.endLin
-	moveq	#-1,d0
-.endLine
-	bsr	.putLineChange
-	tst	d0
+    
+putLineChange:
+	move.b	#ILF,(a2)+
+	move.b	#ILF2,(a2)+
 	rts
 
-; Put line change with special line feed so that ordinary line feeds
-; can be filtered out.
-.putLineChange	
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
-	rts
+
 * In: 
 *    d0 = 4-char frame name to find
 *    a3 = start of data

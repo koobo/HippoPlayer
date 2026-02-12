@@ -22833,6 +22833,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  infotaz(a5),a3
 
     move.l  a3,a0
+    lea     .wrappage(pc),a1
     jsr     getMp3TagText
 
     ;----------------------------------
@@ -22867,22 +22868,30 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bra     .selvis
 
 ; Icy specific putter
+; In:
+;   a0 = title text
+;   a3 = output 
+;   d0 = content
 .putIcy
-    push    a3
-    jsr     desmsg3
-    pop     a0
-	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
+.cpI
+    move.b  (a0)+,(a3)+
+    bne     .cpI
+    subq    #1,a3
+	bsr	.putLineChange
+    move.l  d0,a0
     bsr     .wrappage
+	move.l	infotaz(a5),a3
+	bsr	.lloppu
+	bsr	.putLineChange
+	bsr	.putLineChange
     rts
 
 .icyForm1
-    dc.b    ILF,ILF2," Name:",ILF,ILF2
-    dc.b    " %s",ILF,ILF2,0
+    dc.b    "Name:",0
 .icyForm2
-    dc.b    ILF,ILF2," Description:",ILF,ILF2
-    dc.b    " %-.250s",ILF,ILF2,0
+    dc.b    "Description:",0
  even
 
 .nosample
@@ -23271,8 +23280,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 *   a0 = updated pointer
 *   a3 = updated pointer
 .wrappage:
-    pushm   d0-d7/a1/a2/a4-a6
-
+    pushm   d0-d7/a1/a2/a4-a6   
+    lea     var_b,a5            * needed as may be called from sampleplayer context
  ifne DEBUG
     move.l  a0,d0
     DPRINT  "Wrap text '%s'"
@@ -23296,6 +23305,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .copyWord
     move.b  (a4)+,d0
     beq     .wordEnd
+
     cmp.b   #10,d0    
     beq     .Lf
     cmp.b   #13,d0    
@@ -45359,9 +45369,10 @@ hasMp3TagText
 
 * in: 
 *  a0 = buffer to write to
-getMp3TagText 
-	move.l	sampleroutines(a5),a1
-	jmp     p_sample\.s_getMp3Text(a1)
+*  a1 = wrappage function
+getMp3TagText:
+	move.l	sampleroutines(a5),a2
+	jmp     p_sample\.s_getMp3Text(a2)
     
 
 * In:
