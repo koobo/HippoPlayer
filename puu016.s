@@ -22033,14 +22033,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#147-13*8-2,d3    * y2
 	move	infosize(a5),d4
 	subq	#3,d4
-	lsl	#3,d4           * font height
+	mulu    listFontHeight(a5),d4           * font height
 	add	d4,d3
 	bsr	drawtexture
 
 	; set slider height
 	move	infosize(a5),d0
 	subq	#3,d0
-	lsl	#3,d0
+    mulu    listFontHeight(a5),d0
 	add	oldsgadsiz(a5),d0
 	;move	d0,gg_Height+gAD1
 
@@ -22071,7 +22071,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#143-13*8,ply2
 	move	infosize(a5),d0
 	subq	#3,d0
-	lsl	#3,d0
+    mulu    listFontHeight(a5),d0
 	add	d0,ply2
 	add	windowleft(a5),plx1
 	add	windowleft(a5),plx2
@@ -22102,7 +22102,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#144-15-13*8,d5
 	move	infosize(a5),d6
 	subq	#3,d6
-	lsl	#3,d6
+    mulu    listFontHeight(a5),d6
 	add	d6,d5
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
@@ -22391,7 +22391,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	add	windowtop(a5),d1
 
 	sub	d1,d0
-	lsr	#3,d0
+    ext.l   d0
+    divu    listFontHeight(a5),d0
 	move	infosize(a5),d3 
 	move	d0,infosize(a5)
 
@@ -22401,14 +22402,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
  endif
 	* adjust window height to match infosize
 	subq	#3,d0
-	lsl	#3,d0
+    mulu    listFontHeight(a5),d0
 	add	oldswinsiz(a5),d0
 	sub	wd_Height(a0),d0
 	beq.b	.skipSize
 	bmi.b	.neg
 	* ensure negative change to not go over screen,
 	* kick1.3 does not do sanity checks
-	subq	#8,d0 * font height
+	sub 	listFontHeight(a5),d0 * font height
 .neg
  if DEBUG
  	ext.l	d0
@@ -22555,7 +22556,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#16-1,d1		* source y
 
 	move	d7,d3
-	lsl	#3,d3
+    mulu    listFontHeight(a5),d3
 	add	#16-1,d3		* dest y
 
 	bsr.b	.copy
@@ -22576,7 +22577,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * kohtaan infosize-d7 d7 kpl uusia rivejä
 
 	move	d7,d1
-	lsl	#3,d1
+    mulu    listFontHeight(a5),d1
 	add	#16-1,d1		* source y	
 	moveq	#16-1,d3		* dest y
 
@@ -22600,7 +22601,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	infosize(a5),d5	* y size
 	sub	d7,d5
-	lsl	#3,d5
+    mulu    listFontHeight(a5),d5
 
 	move.b	#$c0,d6		* minterm: a->d
 	moveq	#31-2,d0		* source x =
@@ -22633,7 +22634,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .ra
 
 	move	d1,d7
-	lsl	#3,d7           * font height
+    mulu    listFontHeight(a5),d7
 	add	#22-1,d7        
 	
 	move	d2,d6
@@ -22657,7 +22658,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move.l	a1,d1
 	sub.l	d0,d1
-	moveq	#39,d0
+	moveq	#39,d0      * fill rest with space? TODO
+    printt  "TODO"
 	sub	d1,d0
 	subq	#1,d0
 	bmi.b	.xo
@@ -22676,7 +22678,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d7,d1           * y1 relative to windowtop(a5)
 	jsr	sprint
 
-.xw	addq	#8,d7
+.xw	add     listFontHeight(a5),d7
 	lea	200(sp),sp
 	tst.b	-1(a3)
 	beq.b	.xip
