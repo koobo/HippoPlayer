@@ -23295,8 +23295,11 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * In:
 *   a0 = input text
 *   a3 = output text buffer
+* Out:
+*   a0 = updated pointer
+*   a3 = updated pointer
 .wrappage:
-    pushm   all
+    pushm   d0-d7/a1/a2/a4-a6
 
  ifne DEBUG
     move.l  a0,d0
@@ -23321,15 +23324,19 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .copyWord
     move.b  (a4)+,d0
     beq     .wordEnd
-    cmp.b   #10,d0
+    cmp.b   #10,d0    
+    beq     .Lf
+    cmp.b   #13,d0    
     bne     .noLf
-    moveq   #" ",d0
+.Lf moveq   #" ",d0
 .noLf
     cmp.b   #" ",d0
     beq     .wordEnd
     cmp.b   #"-",d0
     beq     .wordEnd
     cmp.b   #"_",d0
+    beq     .wordEnd
+    cmp.b   #"/",d0
     beq     .wordEnd
     move.b  d0,(a2)+
     bra     .copyWord
@@ -23345,10 +23352,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     DPRINT  "length=%ld word='%s'"
  endif 
     * a0 = text, d0 = char count
-    push    a6
 	move.l	srastport(a5),a1
 	lore	GFX,TextLength
-    pop     a6
     * d0 = word length in pixels
     DPRINT  "pixels=%ld"
 
@@ -23370,10 +23375,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     beq     .wrapEnd
     tst.b   (a4)    * end of input
     bne     .wrapLoop
+    addq    #1,a4
 .wrapEnd
     DPRINT  "wrap done"
     lea     50(sp),sp
-    popm    all
+    move.l  a4,a0
+    popm    d0-d7/a1/a2/a4-a6
     rts
 
 
@@ -60821,6 +60828,13 @@ convertStilEntry:
 *   a0 = input text with line changes 10 and terminating null
 *   a1 = output buffer
 wrapLines:
+    push    a3
+    move.l  a1,a3
+    jsr     info_code\.wrappage
+    move.l  a3,a1
+    pop     a3
+    rts 
+.do
 .LIMIT = 39
 	moveq	#0,d1
 	moveq	#0,d2
