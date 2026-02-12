@@ -22059,8 +22059,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .reprint
 
+	move.l	swindowbase(a5),a1
+    move.w  wd_Width(a1),plx2
+    sub     windowright(a5),plx2
+    subq    #8,plx2
+
+
 	moveq	#29,plx1
-	move	#351-3,plx2
+;	move	#351-3,plx2
 	moveq	#13,ply1
 	moveq	#143-13*8,ply2
 	move	infosize(a5),d0
@@ -22082,9 +22088,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	laatikko1,a0
 .a	jsr	(a0)
 
+    * d4 = XSize
+	move.l	swindowbase(a5),a1
+    move.w  wd_Width(a1),d4
+    sub     windowright(a5),d4
+    sub    #9,d4
+
+
 	moveq	#31-2+2,d0		* tyhjennet‰‰n
+    sub     d0,d4
 	moveq	#15-1,d1
-	move	#350-31-5+2,d4
+	;move	#350-31-5+2,d4
 	moveq	#144-15-13*8,d5
 	move	infosize(a5),d6
 	subq	#3,d6
@@ -22833,7 +22847,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  infotaz(a5),a3
 
     move.l  a3,a0
-    lea     .wrappage(pc),a1
+    lea     wrappage(pc),a1
     jsr     getMp3TagText
 
     ;----------------------------------
@@ -22881,7 +22895,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     subq    #1,a3
 	bsr	.putLineChange
     move.l  d0,a0
-    bsr     .wrappage
+    bsr     wrappage
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	.putLineChange
@@ -23265,7 +23279,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
-    bsr     .wrappage
+    bsr     wrappage
 
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
@@ -23273,97 +23287,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr     .putMetaDataWithExtraLineChange
 	bra 	.ends
 
-* In:
-*   a0 = input text
-*   a3 = output text buffer
-* Out:
-*   a0 = updated pointer
-*   a3 = updated pointer
-.wrappage:
-    pushm   d0-d7/a1/a2/a4-a6   
-    lea     var_b,a5            * needed as may be called from sampleplayer context
- ifne DEBUG
-    move.l  a0,d0
-    DPRINT  "Wrap text '%s'"
- endif
-    
-
-	move.l	swindowbase(a5),a1  
-    move.w  wd_Width(a1),d6
-    sub     windowright(a5),d6
-    subq    #5,d6
-    sub     #35-2,d6     * width of slider
-
-    moveq   #0,d7       * current X
-                        * output buffer in a3
-    move.l  a0,a4       * input text in a4
-    lea     -50(sp),sp * word buffer
-.wrapLoop
-    move.l  sp,a2       * word buffer
-    clr.b   (a2)
-    * copy one word into a2
-.copyWord
-    move.b  (a4)+,d0
-    beq     .wordEnd
-
-    cmp.b   #10,d0    
-    beq     .Lf
-    cmp.b   #13,d0    
-    bne     .noLf
-.Lf moveq   #" ",d0
-.noLf
-    cmp.b   #" ",d0
-    beq     .wordEnd
-    cmp.b   #"-",d0
-    beq     .wordEnd
-    cmp.b   #"_",d0
-    beq     .wordEnd
-    cmp.b   #"/",d0
-    beq     .wordEnd
-    move.b  d0,(a2)+
-    bra     .copyWord
-.wordEnd
-    move.b  d0,(a2)+ * also preserve separator char
-    clr.b   (a2)    * null terminate word even if not needed
-    move.l  sp,a0   * word
-    move.l  a2,d0   * characters in word
-    sub.l   sp,d0
-    move    d0,d5   * stash word length 
- ifne DEBUG
-    move.l  sp,d1
-    DPRINT  "length=%ld word='%s'"
- endif 
-    * a0 = text, d0 = char count
-	move.l	srastport(a5),a1
-	lore	GFX,TextLength
-    * d0 = word length in pixels
-    DPRINT  "pixels=%ld"
-
-    add     d0,d7   * new x-position
-    cmp     d6,d7   * is the x-position over the width limit
-    blo     .wordFits
-    * word does not fit
-    bsr     .putLineChange  * new linechange into a3
-    move    d0,d7           * start a new line, initial position
-.wordFits
-    * copy word from word buffer into output
-    move.l  sp,a0
-.copyChars
-    move.b  (a0)+,(a3)+
-    subq    #1,d5
-    bne     .copyChars
-
-    tst.b   -1(a4)
-    beq     .wrapEnd
-    tst.b   (a4)    * end of input
-    bne     .wrapLoop
-    addq    #1,a4
-.wrapEnd
-    DPRINT  "wrap done"
-    lea     50(sp),sp
-    move.l  a4,a0
-    popm    d0-d7/a1/a2/a4-a6
-    rts
 
 
 .ends
@@ -23734,7 +23657,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;	bpl.b	.endA
 ;	bsr	.doLine
 ;.endA
-    bsr     .wrappage
+    bsr     wrappage
 	lea	200(sp),sp
 .noAuth
 
@@ -23796,7 +23719,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr     .putLineChangeToEndOfBuffer
     
     move.l  sp,a0
-    bsr     .wrappage
+    bsr     wrappage
 ;    move.l  a3,a1
 ;    bsr     .doLine
 ;    bpl     .endM
@@ -24347,6 +24270,115 @@ periodsSynthEnd
 ;	popm	all
 ;.x	rts
 
+
+* In:
+*   a0 = input text
+*   a3 = output text buffer
+* Out:
+*   a0 = updated pointer
+*   a3 = updated pointer
+wrappage:
+    pushm   d0-d7/a1/a2/a4-a6   
+    lea     var_b,a5            * needed as may be called from sampleplayer context
+ ifne DEBUG
+    move.l  a0,d0
+    DPRINT  "Wrap text '%s'"
+ endif
+    
+
+	move.l	swindowbase(a5),a1  
+    move.w  wd_Width(a1),d6
+    sub     windowright(a5),d6
+    subq    #5,d6
+    sub     #35-2,d6     * width of slider
+
+    * output buffer in a3
+    move.l  a0,a4       * input text in a4
+    lea     -50(sp),sp * word buffer
+    moveq   #0,d7       * current X
+.wrapLoop
+    move.l  sp,a2       * word buffer
+    clr.b   (a2)
+    * copy one word into a2
+    bsr     .doCopyWord
+    move.l  sp,a0   * word
+.fe tst.b   (a0)+
+    bne     .fe
+    move.l  a0,d0
+    sub.l   sp,d0
+    subq    #1,d0   
+    move    d0,d5   * stash word length 
+    move.l  sp,a0   * word
+ ifne DEBUG
+    move.l  sp,d1
+    DPRINT  "length=%ld word='%s'"
+ endif 
+    * a0 = text, d0 = char count
+	move.l	srastport(a5),a1
+	lore	GFX,TextLength
+    * d0 = word length in pixels
+    DPRINT  "pixels=%ld"
+    add     d0,d7   * new x-position
+    cmp     d6,d7   * is the x-position over the width limit
+    blo     .wordFits
+    * word does not fit
+    bsr     info_code\.putLineChange  * new linechange into a3
+    move    d0,d7           * start a new line, initial position
+.wordFits
+
+    * copy word from word buffer into output
+    move.l  sp,a0
+    subq    #1,d5
+    bmi     .ccc
+.copyChars
+    move.b  (a0)+,(a3)+
+    dbf     d5,.copyChars
+.ccc
+
+    tst.b   -1(a4)
+    beq     .wrapEnd
+    tst.b   (a4)    * end of input
+    bne     .wrapLoop
+    addq    #1,a4
+.wrapEnd
+    DPRINT  "wrap done"
+    lea     50(sp),sp
+    move.l  a4,a0
+    popm    d0-d7/a1/a2/a4-a6
+    rts
+
+
+.doCopyWord
+.copyWord
+    move.b  (a4)+,d0
+    beq     .wordEnd
+    cmp.b   #13,d0      * Ignore  
+    beq    .copyWord
+
+    cmp.b   #10,d0
+    bne     .noLf
+    moveq  #" ",d0
+.noLf
+
+    cmp.b   #" ",d0    
+    beq     .spc
+    cmp.b   #"-",d0
+    beq     .wordEnd
+    cmp.b   #"_",d0
+    beq     .wordEnd
+    cmp.b   #"/",d0
+    beq     .wordEnd
+    move.b  d0,(a2)+
+    bra     .copyWord
+.spc
+   * Peek at the next char, eat spaces
+    cmp.b   #" ",(a4)
+    beq     .copyWord
+
+.wordEnd
+    move.b  d0,(a2)+ * also preserve separator char or null
+    clr.b   (a2)
+    rts
 
 ****************************************************************
 * About
@@ -60770,7 +60802,7 @@ convertStilEntry:
 wrapLines:
     push    a3
     move.l  a1,a3
-    jsr     info_code\.wrappage
+    jsr     wrappage
     move.l  a3,a1
     pop     a3
     rts 
