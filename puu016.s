@@ -22875,25 +22875,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
     bsr     .wrappage
-    ; do ines wrapping at space
-;	bsr    	.doLinea
-;    bpl    	.ic1
-;    move.b  #" ",(a3)+
-;	bsr    	.doLine
-;	bpl    	.ic1
-;    move.b  #" ",(a3)+
-;	bsr    	.doLine
-;	bpl    	.ic1
-;    move.b  #" ",(a3)+
-;	bsr    	.doLine
-;	bpl    	.ic1
-;    move.b  #" ",(a3)+
-;	bsr    	.doLine
-;	bpl    	.ic1
-;    move.b  #" ",(a3)+
-;	bsr    	.doLine
-;.ic1   
-;    rts
     rts
 
 .icyForm1
@@ -23277,15 +23258,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.lloppu
     bsr     .wrappage
 
-	; do three lines wrapping at space
-    * wrap text at a0 to a3
-
-;	bsr 	.doLine
-;	bpl 	.endss
-;	bsr 	.doLine
-;	bpl 	.endss
-;	bsr 	.doLine
-.endss
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	    .putLineChange
@@ -23383,49 +23355,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     popm    d0-d7/a1/a2/a4-a6
     rts
 
-
-* Copies a line to output, cuts at space near the end of line
-* in:
-*   a0 = input text
-*   a3 = output buffer
-* out:
-*   a0 = pointer to next line if available
-*   a3 = pointer to next position in output buffer
-*   d0 = negative: all input handled
-*        positive: data left in input for the next row
-.doLine_DISABLED:
- 	moveq	#39-1,d0
-	moveq	#0,d1
-.cl1	cmp.b	#" ",(a0)
-	bne.b	.ns1
-	addq	#1,d1 ; keep track of spaces
-.ns1	
-    move.b  (a0)+,d2
-    cmp.b   #ILF2,d2
-    bne.b   .noIlf2
-    * Line change resets the counter
-    moveq	#39-1,d0    
-.noIlf2
-    move.b  d2,(a3)+
-	dbeq	d0,.cl1
-    ; d0 = -1, all chars copied
- 	tst 	d0
-	bpl	    .endLine
- 	; find previous space to cut from
-	; SAFETY: if there are any
-	tst	d1
-	beq.b	.endLin
-.li1	subq	#1,a3
-	cmp.b	#" ",-(a0)
-	bne.b	.li1
-	addq	#1,a0
-	move.l	a0,d0
-.endLin
-	moveq	#-1,d0
-.endLine
-	bsr	.putLineChange
-	tst	d0
-	rts
 
 .ends
 	lea	200(sp),sp
@@ -60834,85 +60763,8 @@ wrapLines:
     move.l  a3,a1
     pop     a3
     rts 
-.do
-.LIMIT = 39
-	moveq	#0,d1
-	moveq	#0,d2
-.loop
-    cmp     #.LIMIT,d2
-    beq     .newLine
-.get
-    move.b  (a0)+,d0
-    beq     .eof
-    * Eat line changes in input and any whitespaces after it
-    cmp.b   #13,d0
-    beq     .get
-    cmp.b   #10,d0
-    bne     .noLf
-.eatSpaces1
-    cmp.b   #" ",(a0)
-    bne     .ate1
-    addq    #1,a0
-    bra     .eatSpaces1
-.ate1
-    * Output a space if input has a linechange
-    moveq   #" ",d0
-    bra     .noBr
-.noLf
-    * Got a char, check if it's a break character
-    bsr     .isBreaker
-    bne     .noBr
-    * Notice that we have a break char
-    addq    #1,d1
-.noBr
-    * Output char
-    move.b  d0,(a1)+
-    addq    #1,d2
-    bra     .loop
-    
-.newLine
-    * Limit reached
-    * Insert a linebreak here if there's a break character here
-    bsr     .isBreaker
-    beq     .y1
-    * There was not, see if there was a break ealier
-    tst     d1
-    beq     .y1
-    * There was, rewind to it
-.fb
-    subq    #1,a0
-    subq    #1,a1
-    move.b  (a0),d0
-    bsr     .isBreaker
-    bne     .fb
-    
-.y1
-    * Put linechange here and extra space for indentation
-    moveq   #0,d1 * reset break notifier
-    moveq   #1,d2 * reset counter
-    bsr     putNewLine
-    move.b  #" ",(a1)+
-    * Eat spaces after line change in output
-.eatSpaces2
-    cmp.b   #" ",(a0)
-    bne     .loop
-    addq    #1,a0
-    bra     .eatSpaces2
 
-.eof
-	rts
-
-* Sets Z if d0 is a break character
-.isBreaker
-    cmp.b   #" ",d0
-    beq     .is
-    cmp.b   #"-",d0
-    beq     .is
-    cmp.b   #"_",d0
-.is
-    rts
-
-putNewLine
+putNewLine:
 	;move.b	#10,(a1)+
 	;rts
     move.b   #ILF,(a1)+
