@@ -1251,7 +1251,7 @@ sfirstname2	rs	1
 riviamount	rs	1
 oldswinsiz	rs	1
 oldsgadsiz	rs	1
-skokonaan	rs.b	1
+skokonaan	rs.b	1       * flag to force redraw content
 		rs.b	1
 
 ******* LoadDatan muuttujia
@@ -4265,12 +4265,12 @@ inputhandler
 *******
 
 * sPrint = Info-ikkunaan
-sprint  pushm	all
-	add	windowleft(a5),d0
-	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
-	move.l	srastport(a5),a4
-	bra.b	doPrint	
-
+;sprint:  pushm	all
+;	add	windowleft(a5),d0
+;	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
+;	move.l	srastport(a5),a4
+;	bra.b	doPrint	
+;
 
 * Print3 = Prefs-ikkunaan
 print3	pushm	all
@@ -4337,6 +4337,10 @@ doPrint:
 .pog
 	subq	#1,d0
 	lob	Text
+
+; TEST
+;	move.l	a4,a1
+;    lob ClearEOL
 
 	tst	d7
 	beq.b	.x
@@ -21913,6 +21917,7 @@ info_code:
 
 ************* Module info
 .infocode
+    DPRINT "--- infocode ---"
 
 *** Avataan ikkuna
 * 39 kirjainta mahtuu laatikkoon
@@ -21936,18 +21941,32 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	lea	swinstruc,a0
 	basereg swinstruc,a0
-	move	nw_Height+swinstruc(a0),oldswinsiz(a5)
-	move	gg_Height+gAD1(a0),oldsgadsiz(a5)
+;	move	nw_Height+swinstruc(a0),oldswinsiz(a5)
+;	move	gg_Height+gAD1(a0),oldsgadsiz(a5)
 
+    ; ---------------------------------
+    ; Set initial window + slider height
+    move    #10,infosize(a5)
 	move	infosize(a5),d0
-	subq	#3,d0
-	lsl	#3,d0
-	add	d0,nw_Height+swinstruc(a0)
-	add	d0,gg_Height+gAD1(a0)
+	;subq	#3,d0
+    mulu    listFontHeight(a5),d0
+    ;move    d0,d1
+    ;addq    #8,d1
+	;move	d1,gg_Height+gAD1(a0)
+    add     windowtop(a5),d0
+    add     windowbottom(a5),d0
+    add     #16+2+2,d0
+	move	d0,nw_Height+swinstruc(a0)
 	endb	a0
 
-	; Set window size limits
-	; Max height 50 lines
+    ; ---------------------------------
+	; Set window minimum size limit
+	; Min height 10 lines
+    moveq   #10,d0
+    mulu    listFontHeight(a5),d0
+	move    d0,nw_MinHeight+swinstruc
+    printt  "TODO"
+
 ;	move	oldswinsiz(a5),d0
 ;;	move	d0,nw_MinHeight(a0)
 ;	add	#(50-3)*8,d0
@@ -21955,25 +21974,31 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	; fit into the screen
 	
+    ; ---------------------------------
+    ; See if the window fits vertically
+    printt  "TODO: test this"
 	move	wbkorkeus(a5),d2
 .lo	cmp	nw_Height(a0),d2
 	bhi.b	.fine
-	
+
 	clr	nw_TopEdge(a0)		* sijoitetaan mahd. ylös
 	subq	#1,infosize(a5)
-	subq	#8,nw_Height(a0)
+    move    listFontHeight(a5),d1
+	sub 	d1,nw_Height(a0)
 
 	move	infosize(a5),d0
 	subq	#3,d0
-	lsl	#3,d0
+    mulu    d1,d0
 	add	oldsgadsiz(a5),d0
 	move	d0,gg_Height+gAD1
 	bra.b	.lo
-
+    ; ---------------------------------
 .fine
 	move.l	infopos2(a5),(a0)
 	bsr	tark_mahtu
 
+    ; ---------------------------------
+    ; Open window
 	move.l	a0,a2
 	basereg swinstruc,a2
 
@@ -21983,11 +22008,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	d0,swindowbase(a5)
 
 	and.l	#~WFLG_ACTIVATE,sflags(a2) * clearataan active-flaggi
-	move	d7,swinstruc+nw_Height(a2)
+;	move	d7,swinstruc+nw_Height(a2) * TODO? d7 is uninitialized here
 	endb	a2
 
 	tst.l	d0
 	bne.b	.koo
+    ; Window failed to open
+    ; TODO: retry smaller and at zero y
 	lea	windowerr_t(pc),a1
 	bsr	request
 	bra	.sexit
@@ -21998,7 +22025,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	wd_UserPort(a0),suserport(a5)
 
 	move.l	srastport(a5),a1
-	move.l	fontbase(a5),a0
+;	move.l	fontbase(a5),a0
+	move.l	listfontbase(a5),a0
 	lore	GFX,SetFont	
 	
 	move.l	swindowbase(a5),a0
@@ -22019,34 +22047,35 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .redraw
 	DPRINT	"Info redraw"
     
+    ; ---------------------------------
+    ; Draw background texture
 	move.l	swindowbase(a5),a1
     move.w  wd_Width(a1),d2
     sub     windowright(a5),d2
-    subq    #5,d2
+    subq    #5,d2               * x2
 
 
 	move.l	srastport(a5),a2
 	moveq	#4,d0               * x1
-    add    windowleft(a5),d0
 	moveq	#11,d1              * y1
-;	move	#356-5-2+2,d2     * x2
-	moveq	#147-13*8-2,d3    * y2
+;	moveq	#147-13*8-2,d3    * y2
+    moveq   #17,d3
 	move	infosize(a5),d4
-	subq	#3,d4
 	mulu    listFontHeight(a5),d4           * font height
-	add	d4,d3
+	add	    d4,d3               * yy
 	bsr	drawtexture
 
-	; set slider height
+    ; ---------------------------------
+	; Set slider height
 	move	infosize(a5),d0
-	subq	#3,d0
     mulu    listFontHeight(a5),d0
-	add	oldsgadsiz(a5),d0
-	;move	d0,gg_Height+gAD1
-
-	lea	gAD1,a3
+    add     windowtop(a5),d0
+    subq    #3,d0
+	lea	    gAD1,a3
 	move	d0,gg_Height(a3)
 
+    ; ---------------------------------
+	; Draw slider frame
 	movem	4(a3),plx1/ply1/plx2/ply2	* slider
 	add	plx1,plx2
 	add	ply1,ply2
@@ -22059,24 +22088,22 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .reprint
 
+    ; ---------------------------------
+    ; Draw inner frame, clear content area
 	move.l	swindowbase(a5),a1
     move.w  wd_Width(a1),plx2
     sub     windowright(a5),plx2
     subq    #8,plx2
 
-
 	moveq	#29,plx1
-;	move	#351-3,plx2
 	moveq	#13,ply1
-	moveq	#143-13*8,ply2
-	move	infosize(a5),d0
-	subq	#3,d0
-    mulu    listFontHeight(a5),d0
-	add	d0,ply2
-	add	windowleft(a5),plx1
-	add	windowleft(a5),plx2
-	add	windowtop(a5),ply1
-	add	windowtop(a5),ply2
+	move	wd_Height(a1),ply2
+    add     ply1,ply2
+    sub     #20,ply2
+	add	    windowleft(a5),plx1
+	add	    windowleft(a5),plx2
+	add	    windowtop(a5),ply1
+	add	    windowtop(a5),ply2
 	move.l	srastport(a5),a1
 
 	* Select box frame depending on if info or about window
@@ -22099,11 +22126,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     sub     d0,d4
 	moveq	#15-1,d1
 	;move	#350-31-5+2,d4
-	moveq	#144-15-13*8,d5
 	move	infosize(a5),d6
-	subq	#3,d6
     mulu    listFontHeight(a5),d6
-	add	d6,d5
+    moveq   #1,d5
+    add     d6,d5
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	move.l	srastport(a5),a0
@@ -22111,9 +22137,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d0,d2
 	move	d1,d3
 	moveq	#$0a,d6
+	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
 	lore	GFX,ClipBlit
 	st	skokonaan(a5)
 
+    ; ---------------------------------
+    ; Prepare text content in infotaz(a5)
 	jsr	obtainModuleData
 	bsr	.prepareInfoWindowContent
 	jsr	releaseModuleData
@@ -22121,7 +22151,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	tst.l	infotaz(a5)
 	beq	.sexit
 
-
+    ; Calculate amount of rows in content
 	clr	riviamount(a5)
 	move.l	infotaz(a5),a0
 .fii	tst.b	(a0)
@@ -22132,7 +22162,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra.b	.fii
 .kii
 
-	bsr	.print
+    ; Draw content into window
+	bsr	.infoprint
 
 	clr	sfirstname(a5)
 	bsr	.reslider
@@ -22486,7 +22517,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	cmp	d2,d1
 	beq.b	.rawkeyExit
 	bsr	.reslider
-	bsr.b	.print
+	bsr	.infoprint
 	
 .rawkeyExit
 	moveq	#0,d0
@@ -22520,17 +22551,19 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	;bra.b	.print
 
-.print
-	tst.b	skokonaan(a5)
+.infoprint:
+    tst.b	skokonaan(a5)
 	beq.b	.naht
-	clr.b	skokonaan(a5)
+    clr.b	skokonaan(a5)
 
 	moveq	#0,d0
-.all0	moveq	#0,d1
+.all0	    
+    moveq	#0,d1
 	move	infosize(a5),d2
 	bra	.print2
 
-.all	move	sfirstname(a5),d0
+.all
+	move	sfirstname(a5),d0
 	bra.b	.all0
 	
 
@@ -22545,7 +22578,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bmi.b	.alas
 
 
-.ylos	cmp	infosize(a5),d7
+.ylos	
+    cmp	    infosize(a5),d7
 	bhs.b	.all
 
 
@@ -22622,6 +22656,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien määrä
 .print2
+ ifne DEBUG
+    and.l   #$ffff,d0
+    and.l   #$ffff,d1
+    and.l   #$ffff,d2
+    DPRINT  "InfoPrint start=%ld first=%ld rows=%ld"
+ endif
+
 	move.l	infotaz(a5),a3
 	subq	#1,d0
 	bmi.b	.rr
@@ -22635,38 +22676,40 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	d1,d7
     mulu    listFontHeight(a5),d7
-	add	#22-1,d7        
+	add	#22-1+2+1,d7           * y-offset
 	
 	move	d2,d6
-	subq	#1,d6		* ???
+	subq	#1,d6		* DBF
 
+    ; ---------------------------------
+    ; Line loop
 .lorp
 	lea	-200(sp),sp  * buffer for line
-	move.l	sp,a0
-	move.l	a0,a1
+	move.l	sp,a1
 
-	move.l	a1,d0
-
-.lorp2	move.b	(a3)+,(a1)+
+.lorp2	
+    move.b	(a3)+,d0
 	beq.b	.xp
-	
-	cmp.b	#10,-1(a1)
-	bne.b	.lorp2
-	clr.b	-1(a1)	
-	addq	#1,a3		* skipataan ILF2
-.xp	subq	#1,a1
 
-	move.l	a1,d1
-	sub.l	d0,d1
-	moveq	#39,d0      * fill rest with space? TODO
-    printt  "TODO"
-	sub	d1,d0
-	subq	#1,d0
-	bmi.b	.xo
-.pe	move.b	#' ',(a1)+
-	dbf	d0,.pe
-	clr.b	(a1)
-.xo
+    cmp.b   #ILF2,d0
+    beq     .lorp2
+    cmp.b   #ILF,d0
+    beq     .xp
+    cmp.b   #10,d0
+    beq     .xp
+    * copy
+    move.b  d0,(a1)+
+    bra     .lorp2
+.xp
+	clr.b	(a1)    * null term
+
+    move.l  a1,d3
+    sub.l   sp,d3       * strlen
+
+ ifne DEBUG
+    move.l  sp,d0
+    DPRINT  "Line: %s"
+ endif
 
 ;	cmp.l	#"----",(a0)
 ;	bne.b	.xq
@@ -22676,9 +22719,86 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	moveq	#35-2,d0        * x1 relative to windowleft(a5)
 	move	d7,d1           * y1 relative to windowtop(a5)
-	jsr	sprint
+    
+    add	windowleft(a5),d0
+	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
+	move.l	srastport(a5),a1
+    lore    GFX,Move
 
-.xw	add     listFontHeight(a5),d7
+    * a0 = string
+    * d0 = length
+	move.l	srastport(a5),a1
+    move.l  sp,a0
+    move.l  d3,d0
+    lob     Text
+
+ REM
+     ; Clear to right
+	move.l	srastport(a5),a0
+    move.l  a0,a1
+    move.w  rp_cp_x(a0),d0
+    move.w  rp_cp_y(a0),d1
+    move.w  d0,d2
+    move.w  d1,d3
+    move    #30,d4       * TODO
+    move    listFontHeight(a5),d5
+    push    d6
+    ext.l   d0
+    ext.l   d1
+    ext.l   d2
+    ext.l   d3
+    ext.l   d4
+    ext.l   d5
+    DPRINT  "SrcX=%ld SrcY=%ld DestX=%ld DestY=%ld XSize=%ld YSize=%ld"
+	moveq	#$0a,d6 * clear
+	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
+    lob     ClipBlit
+    pop     d6
+ EREM
+
+    ;	move.l	srastport(a5),a1
+    move.l  swindowbase(a5),a0
+
+
+;	move.l	srastport(a5),a1
+;                MOVE.L  A1,A2               ; save RastPort
+;                MOVE.B  rp_FgPen(A1),D4     ; save foreground pen
+;                MOVE.L  rp_AreaPtrn(A1),D5  ; save areafill pattern
+;                MOVEQ   #0,D0
+;                CMP.B   #RP_JAM2,rp_DrawMode(A1)
+;                BNE.S   .isClear
+;                MOVE.B  rp_BgPen(A1),D0
+;.isClear:
+;             lob SetAPen
+ 
+
+;
+;
+	move.l	srastport(a5),a1
+    move.l  pen_1(a5),d0
+    ;lob     SetAPen
+
+	move.l	srastport(a5),a1
+    move.w  rp_cp_x(a1),d0
+    move.w  rp_cp_y(a1),d1
+    SUB.W   rp_TxBaseline(A1),D1
+    move.w  d0,d2
+    move    wd_Width(a0),d2
+    sub     windowleft(a5),d2
+    sub     windowright(a5),d2
+    sub     #12,d2
+    move.w  d1,d3
+    add     listFontHeight(a5),d3
+    lob     RectFill
+;
+;                MOVE.L  A2,A1
+;                MOVE.L  D5,rp_AreaPtrn(A1)
+;                MOVE.B  D4,D0
+;             lob SetAPen
+
+.xw	
+    add     listFontHeight(a5),d7
 	lea	200(sp),sp
 	tst.b	-1(a3)
 	beq.b	.xip
@@ -22687,6 +22807,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .xip
 	rts
 	
+
 
 * x = 35
 * y = d7
@@ -23176,7 +23297,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
  even
 
 .huhe	dc.b	ILF,ILF2
-	dc.b	"          No info available.",0
+	dc.b	"No info available.",0
 .zero = *-1
 .stilNag    dc.b     "Get STIL for more!",0
  even
@@ -64398,6 +64519,7 @@ wreg1
 * Slider for the module info window
 gAD1	
     dc.l gadgetResizeInfoWindow
+    *    x,y, w, h
 	dc.w 9,14,16,127-13*8,GFLG_GADGHNONE,9,3
 	dc.l gAD1gr,0,0,0,gAD1s
 	dc.w 0
