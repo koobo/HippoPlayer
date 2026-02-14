@@ -21948,11 +21948,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     ; Set initial window + slider height
     move    #10,infosize(a5)
 	move	infosize(a5),d0
-	;subq	#3,d0
     mulu    listFontHeight(a5),d0
-    ;move    d0,d1
-    ;addq    #8,d1
-	;move	d1,gg_Height+gAD1(a0)
     add     windowtop(a5),d0
     add     windowbottom(a5),d0
     add     #16+2+2,d0
@@ -22233,7 +22229,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#IDCMP_NEWSIZE,d0
 	cmp.l	d0,d2
 	bne.b	.noNewSize
-	bsr	.infoWindowNewSize
+	bsr	.infoWindowNewSize  * returns 1 if refresh changes
 	beq.b	.idcmpLoop
 	bsr	.flush_messages
 	bra	.redraw
@@ -22405,13 +22401,49 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .infoWindowNewSize
-	DPRINT	"info newsize"
 	move.l	swindowbase(a5),a0
 	lore	Intui,RefreshWindowFrame
 	bsr	.refreshInfoWindowResizeGadget
 
 	move.l	swindowbase(a5),a0
+    moveq   #0,d0
  	move	wd_Height(a0),d0
+
+	DPRINT	"INFO NEWSIZE height=%ld"
+
+    * Calc how many rows fits in this height
+    sub     windowtop(a5),d0
+    sub     windowbottom(a5),d0
+    sub     #20,d0
+    divu    listFontHeight(a5),d0
+
+ ifne DEBUG
+    ext.l   d0
+    DPRINT  "rows=%ld"
+ endif  
+    move    d0,infosize(a5)
+
+    * Then calc the window size as this rounds down
+    mulu    listFontHeight(a5),d0
+    add     windowtop(a5),d0
+    add     windowbottom(a5),d0
+    add     #16+2+2,d0
+
+    * Calculate delta Y
+    sub     wd_Height(a0),d0
+    beq     .skipSize
+ ifne DEBUG
+    ext.l   d0
+    DPRINT  "resizing height by %ld"
+ endif
+    move    d0,d1
+    moveq   #0,d0   * Delta x
+	lore	Intui,SizeWindow
+    
+	; no refresh
+	moveq	#0,d0
+    rts
+
 
 	* account for bottom border
 	subq	#6,d0
@@ -22431,7 +22463,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
  	ext.l	d0
  	DPRINT	"size=%ld"
  endif
+
 	* adjust window height to match infosize
+ 	move	infosize(a5),d0
+    mulu    listFontHeight(a5),d0
+    add     windowtop(a5),d0
+    add     windowbottom(a5),d0
+    add     #16+2+2,d0
+	move	d0,nw_Height+swinstruc
+    
 	subq	#3,d0
     mulu    listFontHeight(a5),d0
 	add	oldswinsiz(a5),d0
@@ -22454,6 +22494,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d3,infosize(a5)
 	bra.b	.sizeNotChanged
 .skipSize
+    DPRINT  "no size change needed"
 	;;;bsr	setPrefsInfoBox
 	bsr	updateprefs
 	; return 1: do refresh
@@ -22656,12 +22697,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien m‰‰r‰
 .print2
- ifne DEBUG
-    and.l   #$ffff,d0
-    and.l   #$ffff,d1
-    and.l   #$ffff,d2
-    DPRINT  "InfoPrint start=%ld first=%ld rows=%ld"
- endif
+; ifne DEBUG
+;    and.l   #$ffff,d0
+;    and.l   #$ffff,d1
+;    and.l   #$ffff,d2
+;    DPRINT  "InfoPrint start=%ld first=%ld rows=%ld"
+; endif
 
 	move.l	infotaz(a5),a3
 	subq	#1,d0
@@ -22676,7 +22717,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	d1,d7
     mulu    listFontHeight(a5),d7
-	add	#22-1+2+1,d7           * y-offset
+	add	#22-1+2+1+8,d7           * y-offset
 	
 	move	d2,d6
 	subq	#1,d6		* DBF
@@ -22706,10 +22747,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  a1,d3
     sub.l   sp,d3       * strlen
 
- ifne DEBUG
-    move.l  sp,d0
-    DPRINT  "Line: %s"
- endif
+; ifne DEBUG
+;    move.l  sp,d0
+;    DPRINT  "Line: %s"
+; endif
 
 ;	cmp.l	#"----",(a0)
 ;	bne.b	.xq
@@ -22723,6 +22764,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     add	windowleft(a5),d0
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	move.l	srastport(a5),a1
+    SUB.W   rp_TxBaseline(A1),D1
+
     lore    GFX,Move
 
     * a0 = string
@@ -22732,30 +22775,30 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  d3,d0
     lob     Text
 
- REM
-     ; Clear to right
-	move.l	srastport(a5),a0
-    move.l  a0,a1
-    move.w  rp_cp_x(a0),d0
-    move.w  rp_cp_y(a0),d1
-    move.w  d0,d2
-    move.w  d1,d3
-    move    #30,d4       * TODO
-    move    listFontHeight(a5),d5
-    push    d6
-    ext.l   d0
-    ext.l   d1
-    ext.l   d2
-    ext.l   d3
-    ext.l   d4
-    ext.l   d5
-    DPRINT  "SrcX=%ld SrcY=%ld DestX=%ld DestY=%ld XSize=%ld YSize=%ld"
-	moveq	#$0a,d6 * clear
-	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
-	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
-    lob     ClipBlit
-    pop     d6
- EREM
+; REM
+;     ; Clear to right
+;	move.l	srastport(a5),a0
+;    move.l  a0,a1
+;    move.w  rp_cp_x(a0),d0
+;    move.w  rp_cp_y(a0),d1
+;    move.w  d0,d2
+;    move.w  d1,d3
+;    move    #30,d4       * TODO
+;    move    listFontHeight(a5),d5
+;    push    d6
+;    ext.l   d0
+;    ext.l   d1
+;    ext.l   d2
+;    ext.l   d3
+;    ext.l   d4
+;    ext.l   d5
+;    DPRINT  "SrcX=%ld SrcY=%ld DestX=%ld DestY=%ld XSize=%ld YSize=%ld"
+;	moveq	#$0a,d6 * clear
+;	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+;	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
+;    lob     ClipBlit
+;    pop     d6
+; EREM
 
     ;	move.l	srastport(a5),a1
     move.l  swindowbase(a5),a0
@@ -24403,10 +24446,10 @@ periodsSynthEnd
 wrappage:
     pushm   d0-d7/a1/a2/a4-a6   
     lea     var_b,a5            * needed as may be called from sampleplayer context
- ifne DEBUG
-    move.l  a0,d0
-    DPRINT  "Wrap text '%s'"
- endif
+; ifne DEBUG
+;    move.l  a0,d0
+;    DPRINT  "Wrap text '%s'"
+; endif
     
 
 	move.l	swindowbase(a5),a1  
@@ -24432,15 +24475,15 @@ wrappage:
     subq    #1,d0   
     move    d0,d5   * stash word length 
     move.l  sp,a0   * word
- ifne DEBUG
-    move.l  sp,d1
-    DPRINT  "length=%ld word='%s'"
- endif 
+; ifne DEBUG
+;    move.l  sp,d1
+;    DPRINT  "length=%ld word='%s'"
+; endif 
     * a0 = text, d0 = char count
 	move.l	srastport(a5),a1
 	lore	GFX,TextLength
     * d0 = word length in pixels
-    DPRINT  "pixels=%ld"
+;   DPRINT  "pixels=%ld"
     add     d0,d7   * new x-position
     cmp     d6,d7   * is the x-position over the width limit
     blo     .wordFits
@@ -24464,7 +24507,7 @@ wrappage:
     bne     .wrapLoop
     addq    #1,a4
 .wrapEnd
-    DPRINT  "wrap done"
+;    DPRINT  "wrap done"
     lea     50(sp),sp
     move.l  a4,a0
     popm    d0-d7/a1/a2/a4-a6
