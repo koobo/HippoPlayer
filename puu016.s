@@ -6883,7 +6883,8 @@ laatikko3
 
 
 
-drawli	cmp	d0,d2
+drawli:
+	cmp	d0,d2
 	bhi.b	.e
 	exg	d0,d2
 .e	cmp	d1,d3
@@ -22682,6 +22683,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#31-2,d0		* source x =
 	move.l	d0,d2		* dest x
 	move	#39*8+4,d4	* x size
+    printt  "TODO width"
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	add	windowleft(a5),d2
@@ -22717,8 +22719,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	d1,d7
     mulu    listFontHeight(a5),d7
-	add	#22-1+2+1+8,d7           * y-offset
+	add	#22-1+2+1+8-16-1,d7           * y-offset
 	
+
 	move	d2,d6
 	subq	#1,d6		* DBF
 
@@ -22744,13 +22747,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .xp
 	clr.b	(a1)    * null term
 
-    move.l  a1,d3
-    sub.l   sp,d3       * strlen
+    move.l  a1,d5
+    sub.l   sp,d5       * strlen
 
 ; ifne DEBUG
 ;    move.l  sp,d0
 ;    DPRINT  "Line: %s"
 ; endif
+
 
 ;	cmp.l	#"----",(a0)
 ;	bne.b	.xq
@@ -22764,17 +22768,66 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     add	windowleft(a5),d0
 	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
 	move.l	srastport(a5),a1
-    SUB.W   rp_TxBaseline(A1),D1
-
+    add.w   rp_TxBaseline(A1),D1
     lore    GFX,Move
+
+    ; ---------------------------------
+    ; Clear line
+
+	move.l	srastport(a5),a1
+    MOVE.B  rp_FgPen(A1),D4     ; save foreground pe
+    moveq   #0,d0
+    lob     SetAPen
+
+    move.l  swindowbase(a5),a0
+	move.l	srastport(a5),a1
+    move.w  rp_cp_x(a1),d0
+    move.w  rp_cp_y(a1),d1
+    SUB.W   rp_TxBaseline(A1),D1
+    move.w  d0,d2
+    move    wd_Width(a0),d2
+    sub     windowleft(a5),d2
+    sub     windowright(a5),d2
+    sub     #12,d2
+    move.w  d1,d3
+    add     listFontHeight(a5),d3
+    lob     RectFill
+
+	move.l	srastport(a5),a1
+    MOVE.B  D4,D0
+    lob SetAPen
+    ; ---------------------------------
+
+    cmp.b   #"÷",(sp)
+    bne     .ss1
+    cmp.b   #"÷",1(sp)
+    bne     .ss1
+    * Print a separator
+
+	move.l	srastport(a5),a1
+    move.w  rp_cp_x(a1),d0
+    move.w  rp_cp_y(a1),d1
+    move    listFontHeight(a5),d2
+    subq    #1,d2
+    lsr     #1,d2
+    sub     d2,d1
+    lob     Move
+
+	move.l	srastport(a5),a1
+    move.w  rp_cp_x(a1),d0
+    add     #100,d0
+    move.w  rp_cp_y(a1),d1
+    lob     Draw    
+    bra     .ss2
+.ss1
 
     * a0 = string
     * d0 = length
 	move.l	srastport(a5),a1
     move.l  sp,a0
-    move.l  d3,d0
+    move.l  d5,d0
     lob     Text
-
+.ss2
 ; REM
 ;     ; Clear to right
 ;	move.l	srastport(a5),a0
@@ -22801,7 +22854,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ; EREM
 
     ;	move.l	srastport(a5),a1
-    move.l  swindowbase(a5),a0
+;    move.l  swindowbase(a5),a0
 
 
 ;	move.l	srastport(a5),a1
@@ -22815,31 +22868,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;.isClear:
 ;             lob SetAPen
  
-
-;
-;
-	move.l	srastport(a5),a1
-    move.l  pen_1(a5),d0
-    ;lob     SetAPen
-
-	move.l	srastport(a5),a1
-    move.w  rp_cp_x(a1),d0
-    move.w  rp_cp_y(a1),d1
-    SUB.W   rp_TxBaseline(A1),D1
-    move.w  d0,d2
-    move    wd_Width(a0),d2
-    sub     windowleft(a5),d2
-    sub     windowright(a5),d2
-    sub     #12,d2
-    move.w  d1,d3
-    add     listFontHeight(a5),d3
-    lob     RectFill
-;
-;                MOVE.L  A2,A1
-;                MOVE.L  D5,rp_AreaPtrn(A1)
-;                MOVE.B  D4,D0
-;             lob SetAPen
-
 .xw	
     add     listFontHeight(a5),d7
 	lea	200(sp),sp
@@ -23328,14 +23356,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .form	dc.b	"PSID-module",ILF,ILF2
-	dc.b	"­­­­­­­­­­­",ILF,ILF2
-	dc.b	"Name: %-33.33s",ILF,ILF2
-	dc.b	"Author: %-31.31s",ILF,ILF2
-	dc.b	"Copyright: %-28.28s",ILF,ILF2
+    dc.b    "÷÷",ILF,ILF2
+	dc.b	"Name: %s",ILF,ILF2
+	dc.b	"Author: %s",ILF,ILF2
+	dc.b	"Copyright: %s",ILF,ILF2
 	dc.b	"Songs: %ld (default %ld)",ILF,ILF2
     dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2
-    dc.b	"SID type: %-4.4s %24.24s",ILF,ILF2
-	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
+    dc.b	"SID type: %s %s",ILF,ILF2
+	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
  even
 
@@ -23483,8 +23511,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	rts
 
 * max width: 39
-.eagleSong	 	dc.b	"Song: %-33.33s",ILF,ILF2,0
-.eagleAuthor		dc.b	"Author: %-31.31s",ILF,ILF2,0
+.eagleSong	 	dc.b	"Song: %s",ILF,ILF2,0
+.eagleAuthor		dc.b	"Author: %s",ILF,ILF2,0
 .eagleSubsongs		dc.b	"Subsongs: %ld",ILF,ILF2,0
 .eagleSamples		dc.b	"Samples: %ld",ILF,ILF2,0
 .eagleSynthSamples	dc.b	"Synth samples: %ld",ILF,ILF2,0
@@ -23493,8 +23521,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .eaglePrefix 		dc.b	"Prefix: %s",ILF,ILF2,0
 .eagleVoices	 	dc.b	"Voices: %ld",ILF,ILF2,0
 .eagleDuration	 	dc.b	"Duration: %02ld:%02ld",ILF,ILF2,0
-.eagleAbout	     	dc.b	"About: %-32.32s",ILF,ILF2,0
-.eagleName		dc.b	"Eagleplayer: %-26.26s",ILF,ILF2,0
+.eagleAbout	     	dc.b	"About: %s",ILF,ILF2,0
+.eagleName		dc.b	"Eagleplayer: %s",ILF,ILF2,0
 .eagleCreator       	dc.b	"Creator: %s",0
  even
 
@@ -23744,29 +23772,29 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 * PS3M
-.form11	dc.b	"Name: %-33.33s",ILF,ILF2
-	dc.b	"Type: %-25.25s %2.ld.%1.1ldkHz",ILF,ILF2
-	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
+.form11	dc.b	"Name: %s",ILF,ILF2
+	dc.b	"Type: %s %2.ld.%1.1ldkHz",ILF,ILF2
+	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2
 	dc.b	"Comment: ",0
 
 
 * PT
-.form1	dc.b	"Name: %-33.33s",ILF,ILF2
-	dc.b	"Type: %-33.33s",ILF,ILF2
-	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
+.form1	dc.b	"Name: %s",ILF,ILF2
+	dc.b	"Type: %s",ILF,ILF2
+	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2
 	dc.b	"Comment: ",0
 
 ** PT
 
-.form0	dc.b	'%02ld %-22.22s        %6ld',ILF,ILF2,0
+.form0	dc.b	'%02ld %s ÷%ld',ILF,ILF2,0
 
 ** PS3M
 
 .medform 
-.form2	dc.b	"%03ld %-28.28s %6.6ld",ILF,ILF2,0
+.form2	dc.b	"%03ld %s ÷%ld",ILF,ILF2,0
 
 .thxform
- 	dc.b	"%03ld %-35.35s",ILF,ILF2,0
+ 	dc.b	"%03ld %s",ILF,ILF2,0
 
  even
 
@@ -23833,9 +23861,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .form3	
-	dc.b	"Name: %-33.33s",ILF,ILF2
-	dc.b	"Type: %-33.33s",ILF,ILF2
-	dc.b	"Size: %-9.ld   ($%08.lx-$%08.lx)",ILF,ILF2
+	dc.b	"Name: %s",ILF,ILF2
+	dc.b	"Type: %s",ILF,ILF2
+	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2
 	dc.b	ILF,ILF2
 	dc.b	"Comment:",ILF,ILF2,0
 .author
@@ -24079,9 +24107,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr 	.lloppu
 
 	bsr	.putLineChange
-	moveq	#39-1,d0
-.ca	move.b	#"­",(a3)+
-	dbf	d0,.ca
+
+    ; separator magic
+    move.b  #"÷",(a3)+
+    move.b  #"÷",(a3)+
 	bsr	.putLineChange
 	clr.b	(a3)
 
@@ -64543,7 +64572,7 @@ sflags	dc.l	swflags
 	dc.l	0	;screen struc
 	dc.l	0	
     * nw_MinWidth, nw_MinHeight
-	dc	0,0
+	dc	200,0
 	* nw_MaxWidth, nw_MaxHeight
 	dc	640,512
     dc  WBENCHSCREEN
