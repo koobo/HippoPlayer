@@ -22735,6 +22735,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.b	(a3)+,d0
 	beq.b	.xp
 
+    cmp.b   #"¢",d0 * alignment separator 
+    beq     .xp
+
     cmp.b   #ILF2,d0
     beq     .lorp2
     cmp.b   #ILF,d0
@@ -22796,13 +22799,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	srastport(a5),a1
     MOVE.B  D4,D0
     lob SetAPen
-    ; ---------------------------------
 
+    ; ---------------------------------
+    ; Print a separator
     cmp.b   #"÷",(sp)
     bne     .ss1
     cmp.b   #"÷",1(sp)
     bne     .ss1
-    * Print a separator
 
 	move.l	srastport(a5),a1
     move.w  rp_cp_x(a1),d0
@@ -22825,6 +22828,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     lob     Draw    
     bra     .ss2
 .ss1
+    ; ---------------------------------
+    ; Print text
 
     * a0 = string
     * d0 = length
@@ -22832,6 +22837,56 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  sp,a0
     move.l  d5,d0
     lob     Text
+
+    ; ---------------------------------
+    ; Print text with right align
+    ; See if there is an alignment marker
+    cmp.b   #"¢",-1(a3)
+    bne     .noAlign
+    move.l  sp,a1
+.lorp22	
+    move.b	(a3)+,d0
+	beq.b	.xp2
+    cmp.b   #ILF2,d0
+    beq     .lorp22
+    cmp.b   #ILF,d0
+    beq     .xp2
+    cmp.b   #10,d0
+    beq     .xp2
+    * copy
+    move.b  d0,(a1)+
+    bra     .lorp22
+.xp2
+	clr.b	(a1)    * null term
+
+    move.l  a1,d0
+    sub.l   sp,d0
+    move.l  d0,d4   * stash char count
+
+    * a0 = text, d0 = char count
+    move.l  sp,a0
+	move.l	srastport(a5),a1
+	lob	    TextLength
+    move.l  d0,d1       
+
+    move.l  swindowbase(a5),a0
+    move    wd_LeftEdge(a0),d0
+    add     wd_Width(a0),d0
+    sub     windowright(a5),d0
+    sub     d1,d0
+    sub     #18,d0  * magic
+
+	move.l	srastport(a5),a1
+    move.w  rp_cp_y(a1),d1
+    lob     Move
+
+	move.l	srastport(a5),a1
+    move.l  sp,a0
+    move.l  d4,d0
+    lob     Text
+.noAlign    
+
+
 .ss2
 ; REM
 ;     ; Clear to right
@@ -23791,12 +23846,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ** PT
 
-.form0	dc.b	'%02ld %s ÷%ld',ILF,ILF2,0
+.form0	dc.b	'%02ld %s ¢%ld',ILF,ILF2,0
 
 ** PS3M
 
 .medform 
-.form2	dc.b	"%03ld %s ÷%ld",ILF,ILF2,0
+.form2	dc.b	"%03ld %s ¢%ld",ILF,ILF2,0
 
 .thxform
  	dc.b	"%03ld %s",ILF,ILF2,0
