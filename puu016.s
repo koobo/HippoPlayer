@@ -22775,7 +22775,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     ; Clear line
 
 	move.l	srastport(a5),a1
-    MOVE.B  rp_FgPen(A1),D4     ; save foreground pe
+    MOVE.B  rp_FgPen(A1),D4     ; save foreground pen
     moveq   #0,d0
     lob     SetAPen
 
@@ -22813,9 +22813,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     sub     d2,d1
     lob     Move
 
+    move.l  swindowbase(a5),a0
 	move.l	srastport(a5),a1
-    move.w  rp_cp_x(a1),d0
-    add     #100,d0
+
+    move    wd_LeftEdge(a0),d0
+    add     wd_Width(a0),d0
+    sub     windowleft(a5),d0
+    sub     #18,d0  * slider area
+    
     move.w  rp_cp_y(a1),d1
     lob     Draw    
     bra     .ss2
