@@ -21937,6 +21937,10 @@ sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
 sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
     move.l  listfontbase(a5),a0
+    tst.b   infolag(a5)
+    beq     .il
+    move.l  fontbase(a5),a0
+.il
     move.l  a0,infofontbase(a5)
 	move	tf_YSize(a0),infoFontHeight(a5)	
 
@@ -21958,9 +21962,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     moveq   #10,d0
 .v1
     move    d0,infosize(a5)
+
     printt  "TODO infosize handling"
 	move	infosize(a5),d0
-    mulu    listFontHeight(a5),d0
+    mulu    infoFontHeight(a5),d0
     add     windowtop(a5),d0
     add     windowbottom(a5),d0
     add     #16+2+2,d0
@@ -21971,7 +21976,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; Set window minimum size limit
 	; Min height 10 lines
     moveq   #10,d0
-    mulu    listFontHeight(a5),d0
+    mulu    infoFontHeight(a5),d0
 	move    d0,nw_MinHeight+swinstruc
     printt  "TODO"
 
