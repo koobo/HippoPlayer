@@ -21977,6 +21977,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; Min height 10 lines
     moveq   #10,d0
     mulu    infoFontHeight(a5),d0
+    add     windowtop(a5),d0
+    add     windowbottom(a5),d0
+    add     #16+2+2,d0
 	move    d0,nw_MinHeight+swinstruc
     printt  "TODO"
 
@@ -22074,15 +22077,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     moveq   #17,d3
 	move	infosize(a5),d4
 	mulu    infoFontHeight(a5),d4           * font height
+;    sub     windowbottom(a5),d4
 	add	    d4,d3               * yy
 	bsr	drawtexture
 
     ; ---------------------------------
 	; Set slider height
-	move	infosize(a5),d0
-    mulu    infoFontHeight(a5),d0
-    add     windowtop(a5),d0
-    subq    #3,d0
+    move.l  swindowbase(a5),a1
+    move.w  wd_Height(a1),d0
+    sub     windowtop(a5),d0
+    sub     windowbottom(a5),d0
+    sub     #21,d0
 	lea	    gAD1,a3
 	move	d0,gg_Height(a3)
 
@@ -22110,12 +22115,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#29,plx1
 	moveq	#13,ply1
 	move	wd_Height(a1),ply2
+    sub     windowtop(a5),ply2
     add     ply1,ply2
-    sub     #20,ply2
+    sub     #18,ply2
 	add	    windowleft(a5),plx1
 	add	    windowleft(a5),plx2
 	add	    windowtop(a5),ply1
 	add	    windowtop(a5),ply2
+    sub     windowbottom(a5),ply2
 	move.l	srastport(a5),a1
 
 	* Select box frame depending on if info or about window
@@ -22853,6 +22860,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     cmp.b   #"÷",1(sp)
     bne     .ss1
 
+    ; Adjust vertically to middle of the font
 	move.l	srastport(a5),a1
     move.w  rp_cp_x(a1),d0
     move.w  rp_cp_y(a1),d1
@@ -22868,6 +22876,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move    wd_LeftEdge(a0),d0
     add     wd_Width(a0),d0
     sub     windowleft(a5),d0
+    sub     windowright(a5),d0
     sub     #18,d0  * slider area magic
     
     move.w  rp_cp_y(a1),d1
