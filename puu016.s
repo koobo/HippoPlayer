@@ -21953,6 +21953,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	basereg swinstruc,a0
 ;	move	nw_Height+swinstruc(a0),oldswinsiz(a5)
 ;	move	gg_Height+gAD1(a0),oldsgadsiz(a5)
+    move    #250,nw_MinWidth(a0)
 
     ; ---------------------------------
     ; Set initial window + slider height
@@ -22886,6 +22887,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     ; ---------------------------------
     ; Print text
 
+    ; Align center?
     move.l  sp,a2
     cmp.b   #"°",(a2)
     bne     .noCenter
@@ -23407,37 +23409,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * SID piisista infoa
 
 	move	#33,info_prosessi(a5)		* PSID info-lippu
-
-    lea     t6581,a2
-    jsr     sid_getSidVersion
-    beq     .6581
-    lea     t8580-t6581(a2),a2
-.6581
-    jsr     sid_getSongSpeed
-    * d0 = speed number 
-    * d1 = speed hz 
-
-	lea	-128(sp),sp
-	move.l	sp,a1
-	pushpea	sidheader+sidh_name(a5),(a1)+
-	pushpea	sidheader+sidh_author(a5),(a1)+
-	pushpea	sidheader+sidh_copyright(a5),(a1)+
-	clr.l	(a1)+
-	clr.l	(a1)+
-	move	sidheader+sidh_number(a5),-6(a1)
-	move	sidheader+sidh_defsong(a5),-2(a1)
-    move.l  d0,(a1)+    * song speed
-    move.l  d1,(a1)+    * song speed hz
-    move.l  a2,(a1)+    * sid type
-    pushpea .stilNag(pc),(a1)+ * stil comment
-	move.l	modulelength(a5),(a1)+
-	move.l	moduleaddress(a5),d0
-	move.l	d0,(a1)+
-	add.l	modulelength(a5),d0
-	move.l	d0,(a1)+
-	pushpea	filecomment(a5),(a1)+
-	clr.l	(a1)
-
     moveq	#13,d5  * allocate 13 lines text buffer initially
 
     * Check if there is STIL data available
@@ -23464,15 +23435,58 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     * Allocate text buffer, amount of lines in d5
 	bsr	.allo2
 	bne.b	.jee9
-	lea	128(sp),sp
 	bra	.prepareFailed
 .jee9
 
-	lea	.form(pc),a0
-	move.l	sp,a1       * parameters in
+    * Stuff text into output buffer
 	move.l	infotaz(a5),a3
-	bsr	.desmsg4
-	lea	128(sp),sp
+    bsr     .lloppu
+	lea	.form(pc),a0
+.sif move.b  (a0)+,(a3)+
+    bne     .sif
+    
+    * Below fields with wrapping
+	lea	    .sform2(pc),a0 
+	pushpea	sidheader+sidh_name(a5),d0
+    bsr     .deliPutInfo2
+	lea	    .sform3(pc),a0 
+	pushpea	sidheader+sidh_author(a5),d0
+    bsr     .deliPutInfo2
+	lea	    .sform4(pc),a0 
+	pushpea	sidheader+sidh_copyright(a5),d0
+    bsr     .deliPutInfo2
+	lea	    .sform5(pc),a0 
+    moveq   #0,d0
+    moveq   #0,d1
+    move    sidheader+sidh_number(a5),d0
+    move    sidheader+sidh_defsong(a5),d1
+    bsr     .deliPutInfo2
+    jsr     sid_getSongSpeed
+    * d0 = speed number 
+    * d1 = speed hz 
+	lea 	.sform6(pc),a0 
+    bsr     .deliPutInfo2
+    lea     t6581,a2
+    jsr     sid_getSidVersion
+    beq     .6581
+    lea     t8580-t6581(a2),a2
+.6581
+    move.l  a2,d0
+	lea 	.sform7(pc),a0 
+    bsr     .deliPutInfo2
+	lea 	.sform8(pc),a0 
+    move.l	modulelength(a5),d0
+	move.l	moduleaddress(a5),d1
+    move.l  d1,d2
+	add.l	d0,d2
+    bsr .deliPutInfo2
+
+    * Final field 
+	move.l	infotaz(a5),a3
+    bsr     .lloppu
+	lea	    .sform9(pc),a0
+.sic move.b  (a0)+,(a3)+
+    bne     .sic
 
 	bsr	.putcomment
 
@@ -23502,22 +23516,22 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra	.selvis
 
 
+.sform0
 .form	dc.b	"PSID-module",ILF,ILF2
-    dc.b    "÷÷",ILF,ILF2
-	dc.b	"Name: %s",ILF,ILF2
-	dc.b	"Author: %s",ILF,ILF2
-	dc.b	"Copyright: %s",ILF,ILF2
-	dc.b	"Songs: %ld (default %ld)",ILF,ILF2
-    dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2
-    dc.b	"SID type: %s %s",ILF,ILF2
-	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2
-	dc.b	"Comment:",ILF,ILF2,0
+.sform1     dc.b    "÷÷",ILF,ILF2,0
+.sform2 	dc.b	"Name: %s",ILF,ILF2,0
+.sform3 	dc.b	"Author: %s",ILF,ILF2,0
+.sform4 	dc.b	"Copyright: %s",ILF,ILF2,0
+.sform5 	dc.b	"Songs: %ld (default %ld)",ILF,ILF2,0
+.sform6     dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2,0
+.sform7     dc.b	"SID type: %s",ILF,ILF2,0
+.sform8 	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2,0
+.sform9 	dc.b	"Comment:",ILF,ILF2,0
  even
 
 .huhe	dc.b	ILF,ILF2
-	dc.b	"No info available.",0
+	dc.b	"°No info available.",0
 .zero = *-1
-.stilNag    dc.b     "Get STIL for more!",0
  even
 
 .nosid
@@ -23636,17 +23650,21 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .noInfo
 	rts
 
+* in:
+*   a0 = format text
+*   a3 = output buffer
+*   d0 = data
 .deliFormat	
 	pushm	d0-d7
 	move.l	sp,a1
-    lea     -200(sp),sp
+    lea     -200(sp),sp  * formatted text
     move.l  a3,a4
     move.l  sp,a3
 	lea	putc,a2	;merkkien siirto
 	lore 	Exec,RawDoFmt
     move.l  sp,a0
     move.l  a4,a3
-    bsr     wrappage
+    bsr     wrappage    * wrap it into output
     lea     200(sp),sp
 	popm	d0-d7
 	rts
@@ -24609,17 +24627,17 @@ periodsSynthEnd
 wrappage:
     pushm   d0-d7/a1/a2/a4-a6   
     lea     var_b,a5            * needed as may be called from sampleplayer context
-; ifne DEBUG
-;    move.l  a0,d0
-;    DPRINT  "Wrap text '%s'"
-; endif
+ ifne DEBUG
+    move.l  a0,d0
+    DPRINT  "Wrap text '%s'"
+ endif
     
 
 	move.l	swindowbase(a5),a1  
     move.w  wd_Width(a1),d6
     sub     windowright(a5),d6
-    subq    #5,d6
-    sub     #35-2,d6     * width of slider
+    sub     windowleft(a5),d6
+    sub     #35-2+5+5,d6     * width of slider etc magic
 
     * output buffer in a3
     move.l  a0,a4       * input text in a4
