@@ -7202,7 +7202,7 @@ appendWithFormat:
     move.l  a3,a2
     pop     a3
 
-    subq    #1,a2
+    ;subq    #1,a2
     bsr     putLineChange
     bsr     putLineChange
     rts
