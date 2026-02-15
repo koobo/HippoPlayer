@@ -22445,7 +22445,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#0,d0
     rts
 
-
+ REM
 	* account for bottom border
 	subq	#6,d0
 	sub	windowbottom(a5),d0
@@ -22494,6 +22494,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; new size event
 	move	d3,infosize(a5)
 	bra.b	.sizeNotChanged
+ EREM
+
 .skipSize
     DPRINT  "no size change needed"
 	;;;bsr	setPrefsInfoBox
@@ -22674,16 +22676,22 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ** kopioidaan 
 
 .copy	
+    * calc x-size
+    move.l  swindowbase(a5),a2
+    move    wd_Width(a2),d4
+    sub     #40,d4
+    sub     windowleft(a5),d4
+    sub     windowright(a5),d4
 
 	move	infosize(a5),d5	* y size
 	sub	d7,d5
     mulu    listFontHeight(a5),d5
 
 	move.b	#$c0,d6		* minterm: a->d
-	moveq	#31-2,d0		* source x =
+	moveq	#31-2,d0	* source x =
 	move.l	d0,d2		* dest x
-	move	#39*8+4,d4	* x size
-    printt  "TODO width"
+;	move	#39*8+4,d4	* x size
+
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	add	windowleft(a5),d2
@@ -22777,6 +22785,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     ; ---------------------------------
     ; Clear line
 
+ REM
 	move.l	srastport(a5),a1
     MOVE.B  rp_FgPen(A1),D4     ; save foreground pen
     moveq   #0,d0
@@ -22794,11 +22803,33 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     sub     #12,d2
     move.w  d1,d3
     add     listFontHeight(a5),d3
+    subq    #1,d3
     lob     RectFill
 
 	move.l	srastport(a5),a1
     MOVE.B  D4,D0
     lob SetAPen
+ EREM
+    pushm   d5/d6
+    move.l  swindowbase(a5),a2
+	move.l	srastport(a5),a0
+    move.l  a0,a1
+    move.w  rp_cp_x(a0),d0
+    move.w  rp_cp_y(a0),d1
+    SUB.W   rp_TxBaseline(A1),D1
+    move.w  d0,d2
+    move.w  d1,d3
+    move    wd_Width(a2),d4
+    sub     #44,d4
+    sub     windowleft(a5),d4
+    sub     windowright(a5),d4
+
+    move    listFontHeight(a5),d5
+	moveq	#$0a,d6 * clear
+	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
+    lob     ClipBlit
+    popm    d5/d6
 
     ; ---------------------------------
     ; Print a separator
@@ -22822,7 +22853,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move    wd_LeftEdge(a0),d0
     add     wd_Width(a0),d0
     sub     windowleft(a5),d0
-    sub     #18,d0  * slider area
+    sub     #18,d0  * slider area magic
     
     move.w  rp_cp_y(a1),d1
     lob     Draw    
@@ -39164,7 +39195,7 @@ p_sid:	jmp	.init(pc)
 .er	movem.l	(sp)+,d1-a6
 	rts
 
-.error1
+.error1:
     cmp     #SID_NOSIDBLASTER,d0
     bne.b   .sb
     lea     .blasterMsg(pc),a1
