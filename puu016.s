@@ -23606,43 +23606,30 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	.eagleName(pc),a0 
 	bsr 	.deliPutInfo2	
 .noPlrName 
+
 	* Creator, 1-3 lines
 	move.l	#DTP_Creator,d0 
 	jsr	deliGetTag 
 	beq 	.noCrtr
 	lea	.eagleCreator(pc),a0 
-	; format output buffer
-	lea	-200(sp),sp
-	move.l	sp,a3
-	jsr	desmsg3
-	move.l	sp,a0
-
-	; target output buffer
-	move.l	infotaz(a5),a3
-	bsr	.lloppu
-    bsr     wrappage
+    bsr     .deliPutInfo2
 
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	    .putLineChange
     bsr     .putMetaDataWithExtraLineChange
-	bra 	.ends
 
-
-
-.ends
-	lea	200(sp),sp
 .noCrtr
 	bra	.selvis
 
-.deliPutInfo
+.deliPutInfo:
 	push 	a0
 	jsr	deliFindInfoValue
 	pop  	a0
 	tst.l	d0
 	* zero or lower
 	ble.b	.noInfo
-.deliPutInfo2
+.deliPutInfo2:
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr.b	.deliFormat
@@ -23652,8 +23639,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .deliFormat	
 	pushm	d0-d7
 	move.l	sp,a1
+    lea     -200(sp),sp
+    move.l  a3,a4
+    move.l  sp,a3
 	lea	putc,a2	;merkkien siirto
 	lore 	Exec,RawDoFmt
+    move.l  sp,a0
+    move.l  a4,a3
+    bsr     wrappage
+    lea     200(sp),sp
 	popm	d0-d7
 	rts
 
@@ -24061,13 +24055,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     
     move.l  sp,a0
     bsr     wrappage
-;    move.l  a3,a1
-;    bsr     .doLine
-;    bpl     .endM
-;    bsr     .doLine
-;    bpl     .endM
-;    bsr     .doLine
-;.endM
 
     lea     100(sp),sp
 
