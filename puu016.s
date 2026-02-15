@@ -623,6 +623,7 @@ fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 minifontbase 	rs.l	1
 listfontbase	rs.l	1		* points to some font base
+infofontbase    rs.l    1       * info window font
 notifyhandle	rs.l	1		* Screennotifylle
 windowtop	rs	1		* ikkunoiden eisysteemialueen yläreuna
 windowright	rs	1
@@ -635,6 +636,7 @@ infolag		rs.b	1 * mitä näytetään infoikkunassa: 0=sample, ~0=about
 infotaz		rs.l	1 * infoikkunan datan osoite
 
 listFontHeight	rs.w	1
+infoFontHeight  rs.w    1
 
 windowtop2	rs	1
 windowleft2	rs	1
@@ -21934,6 +21936,9 @@ sidcmpflags set IDCMP_CLOSEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
 sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
 sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
+    move.l  listfontbase(a5),a0
+    move.l  a0,infofontbase(a5)
+	move	tf_YSize(a0),infoFontHeight(a5)	
 
 	tst.b	gotscreeninfo(a5)
 	bne.b	.joo
@@ -21947,7 +21952,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
     ; ---------------------------------
     ; Set initial window + slider height
-    move    #10,infosize(a5)
+    move    infosize(a5),d0
+    cmp     #10,d0
+    bhs     .v1
+    moveq   #10,d0
+.v1
+    move    d0,infosize(a5)
+    printt  "TODO infosize handling"
 	move	infosize(a5),d0
     mulu    listFontHeight(a5),d0
     add     windowtop(a5),d0
@@ -21980,7 +21991,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	clr	nw_TopEdge(a0)		* sijoitetaan mahd. ylös
 	subq	#1,infosize(a5)
-    move    listFontHeight(a5),d1
+    move    infoFontHeight(a5),d1
 	sub 	d1,nw_Height(a0)
 
 	move	infosize(a5),d0
@@ -22022,8 +22033,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	wd_UserPort(a0),suserport(a5)
 
 	move.l	srastport(a5),a1
-;	move.l	fontbase(a5),a0
-	move.l	listfontbase(a5),a0
+	move.l	infofontbase(a5),a0
 	lore	GFX,SetFont	
 	
 	move.l	swindowbase(a5),a0
@@ -22058,14 +22068,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;	moveq	#147-13*8-2,d3    * y2
     moveq   #17,d3
 	move	infosize(a5),d4
-	mulu    listFontHeight(a5),d4           * font height
+	mulu    infoFontHeight(a5),d4           * font height
 	add	    d4,d3               * yy
 	bsr	drawtexture
 
     ; ---------------------------------
 	; Set slider height
 	move	infosize(a5),d0
-    mulu    listFontHeight(a5),d0
+    mulu    infoFontHeight(a5),d0
     add     windowtop(a5),d0
     subq    #3,d0
 	lea	    gAD1,a3
@@ -22124,7 +22134,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#15-1,d1
 	;move	#350-31-5+2,d4
 	move	infosize(a5),d6
-    mulu    listFontHeight(a5),d6
+    mulu    infoFontHeight(a5),d6
     moveq   #1,d5
     add     d6,d5
 	add	windowleft(a5),d0
@@ -22416,7 +22426,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     sub     windowtop(a5),d0
     sub     windowbottom(a5),d0
     sub     #20,d0
-    divu    listFontHeight(a5),d0
+    divu    infoFontHeight(a5),d0
 
  ifne DEBUG
     ext.l   d0
@@ -22425,7 +22435,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move    d0,infosize(a5)
 
     * Then calc the window size as this rounds down
-    mulu    listFontHeight(a5),d0
+    mulu    infoFontHeight(a5),d0
     add     windowtop(a5),d0
     add     windowbottom(a5),d0
     add     #16+2+2,d0
@@ -22456,7 +22466,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	sub	d1,d0
     ext.l   d0
-    divu    listFontHeight(a5),d0
+    divu    infoFontHeight(a5),d0
 	move	infosize(a5),d3 
 	move	d0,infosize(a5)
 
@@ -22467,21 +22477,21 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	* adjust window height to match infosize
  	move	infosize(a5),d0
-    mulu    listFontHeight(a5),d0
+    mulu    infoFontHeight(a5),d0
     add     windowtop(a5),d0
     add     windowbottom(a5),d0
     add     #16+2+2,d0
 	move	d0,nw_Height+swinstruc
     
 	subq	#3,d0
-    mulu    listFontHeight(a5),d0
+    mulu    infoFontHeight(a5),d0
 	add	oldswinsiz(a5),d0
 	sub	wd_Height(a0),d0
 	beq.b	.skipSize
 	bmi.b	.neg
 	* ensure negative change to not go over screen,
 	* kick1.3 does not do sanity checks
-	sub 	listFontHeight(a5),d0 * font height
+	sub 	infoFontHeight(a5),d0 * font height
 .neg
  if DEBUG
  	ext.l	d0
@@ -22634,7 +22644,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#16-1,d1		* source y
 
 	move	d7,d3
-    mulu    listFontHeight(a5),d3
+    mulu    infoFontHeight(a5),d3
 	add	#16-1,d3		* dest y
 
 	bsr.b	.copy
@@ -22655,7 +22665,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * kohtaan infosize-d7 d7 kpl uusia rivejä
 
 	move	d7,d1
-    mulu    listFontHeight(a5),d1
+    mulu    infoFontHeight(a5),d1
 	add	#16-1,d1		* source y	
 	moveq	#16-1,d3		* dest y
 
@@ -22685,7 +22695,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move	infosize(a5),d5	* y size
 	sub	d7,d5
-    mulu    listFontHeight(a5),d5
+    mulu    infoFontHeight(a5),d5
 
 	move.b	#$c0,d6		* minterm: a->d
 	moveq	#31-2,d0	* source x =
@@ -22726,7 +22736,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .ra
 
 	move	d1,d7
-    mulu    listFontHeight(a5),d7
+    mulu    infoFontHeight(a5),d7
 	add	#22-1+2+1+8-16-1,d7           * y-offset
 	
 
@@ -22743,7 +22753,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.b	(a3)+,d0
 	beq.b	.xp
 
-    cmp.b   #"¢",d0 * alignment separator 
+    cmp.b   #"¢",d0 * right alignment separator 
     beq     .xp
 
     cmp.b   #ILF2,d0
@@ -22802,7 +22812,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     sub     windowright(a5),d2
     sub     #12,d2
     move.w  d1,d3
-    add     listFontHeight(a5),d3
+    add     infoFontHeight(a5),d3
     subq    #1,d3
     lob     RectFill
 
@@ -22824,7 +22834,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     sub     windowleft(a5),d4
     sub     windowright(a5),d4
 
-    move    listFontHeight(a5),d5
+    move    infoFontHeight(a5),d5
 	moveq	#$0a,d6 * clear
 	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
 	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
@@ -22841,7 +22851,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	srastport(a5),a1
     move.w  rp_cp_x(a1),d0
     move.w  rp_cp_y(a1),d1
-    move    listFontHeight(a5),d2
+    move    infoFontHeight(a5),d2
     subq    #1,d2
     lsr     #1,d2
     sub     d2,d1
@@ -22862,10 +22872,42 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     ; ---------------------------------
     ; Print text
 
+    move.l  sp,a2
+    cmp.b   #"°",(a2)
+    bne     .noCenter
+
+    subq    #1,d5       * modify length to remove separator
+    addq    #1,a2
+
+    DPRINT  "center"
+;    * a0 = text, d0 = char count
+    move.l  a2,a0
+    move.l  d5,d0
+	move.l	srastport(a5),a1
+	lob	    TextLength
+    lsr     #1,d0
+    move    d0,d2
+
+    move.l  swindowbase(a5),a0
+	move.l	srastport(a5),a1
+
+    move    wd_Width(a0),d0
+;    sub     rp_cp_x(a1),d0
+    sub     windowright(a5),d0
+    sub     windowleft(a5),d0
+    sub     #40,d0
+    lsr     #1,d0
+    sub     d2,d0
+    add.w   rp_cp_x(a1),d0
+    move.w  rp_cp_y(a1),d1
+    lob     Move
+
+
+.noCenter
     * a0 = string
     * d0 = length
 	move.l	srastport(a5),a1
-    move.l  sp,a0
+    move.l  a2,a0
     move.l  d5,d0
     lob     Text
 
@@ -22928,7 +22970,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;    move.w  d0,d2
 ;    move.w  d1,d3
 ;    move    #30,d4       * TODO
-;    move    listFontHeight(a5),d5
+;    move    infoFontHeight(a5),d5
 ;    push    d6
 ;    ext.l   d0
 ;    ext.l   d1
@@ -22960,7 +23002,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;             lob SetAPen
  
 .xw	
-    add     listFontHeight(a5),d7
+    add     infoFontHeight(a5),d7
 	lea	200(sp),sp
 	tst.b	-1(a3)
 	beq.b	.xip
