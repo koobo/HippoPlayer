@@ -1478,6 +1478,9 @@ listBoxClipRegion	rs.l	1
 infoBoxRegion		rs.l	1
 infoBoxClipRegion	rs.l	1
 
+infoWindowRegion     rs.l   1
+infoWindowClipRegion rs.l   1
+
 
 * String extend structure to configure custom font to string gadgets on kick2.0+
 stringExtendStruct 	rs.b	sex_SIZEOF
@@ -22060,7 +22063,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#0,d4
 	lore	Intui,ModifyProp
 
-.redraw
+
+.redraw:
 	DPRINT	"Info redraw"
     
     ; ---------------------------------
@@ -22103,6 +22107,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	addq	#1,ply2
 	move.l	srastport(a5),a1
 	jsr	sliderlaatikko
+
 
 .reprint
 
@@ -22182,6 +22187,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra.b	.fii
 .kii
 
+    jsr     initInfoWindowClip
+
     ; Draw content into window
 	bsr	.infoprint
 
@@ -22256,6 +22263,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.infoWindowNewSize  * returns 1 if refresh changes
 	beq.b	.idcmpLoop
 	bsr	.flush_messages
+    jsr     uninitInfoWindowClip
 	bra	.redraw
 
 .noNewSize
@@ -22303,7 +22311,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .sexit	
 	DPRINT	"info exit"
 	bsr.b	.flush_messages
+    jsr     uninitInfoWindowClip
 
+    printt  "TODO:"
 	move	oldswinsiz(a5),nw_Height+swinstruc
 	move	oldsgadsiz(a5),gg_Height+gAD1
 
@@ -22702,7 +22712,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     * calc x-size
     move.l  swindowbase(a5),a2
     move    wd_Width(a2),d4
-    sub     #40,d4
+    sub     #40-1,d4
     sub     windowleft(a5),d4
     sub     windowright(a5),d4
 
@@ -57278,6 +57288,7 @@ removeListBoxClip
 	move.l	listBoxClipRegion(a5),a1
 removeClip
 	move.l	windowbase(a5),a0
+removeClip_
 	move.l	wd_WLayer(a0),a0
 	; Null is ok here for a1
 	lore	Layers,InstallClipRegion
@@ -57303,6 +57314,92 @@ removeInfoBoxClip
 	move.l	infoBoxClipRegion(a5),a1
 	bra		removeClip
 	
+
+initInfoWindowClip:
+    DPRINT  "initInfoWindowClip"
+    bsr     createInfoWindowRegion
+    beq     .x
+    bsr     setInfoWindowClip
+.x  rts
+
+uninitInfoWindowClip:
+    DPRINT  "uninitInfoWindowClip"
+    bsr     removeInfoWindowClip
+    bra     disposeInfoWindowRegion
+    
+
+createInfoWindowRegion:
+	lore	GFX,NewRegion
+	move.l	d0,infoWindowRegion(a5)
+	beq 	.x
+
+	lea	    -ra_SIZEOF(sp),sp
+    move.l  sp,a1
+
+    * d4 = XSize
+	move.l	swindowbase(a5),a2
+    move.w  wd_Width(a2),d4
+    sub     windowright(a5),d4
+    sub     #9,d4
+
+	moveq	#31-2+2,d0
+    sub     d0,d4
+	moveq	#15-1,d1
+	move	infosize(a5),d6
+    mulu    infoFontHeight(a5),d6
+    ;lsr     #1,d6
+
+    moveq   #1,d5
+    add     d6,d5
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
+
+	move	d0,ra_MinX(a1)
+	move	d1,ra_MinY(a1)
+    add     d4,d0
+    add     d5,d1
+    subq    #2,d0
+	move	d0,ra_MaxX(a1)
+	move	d1,ra_MaxY(a1)
+
+	move.l	infoWindowRegion(a5),a0
+	lob	    OrRectRegion
+	lea	    ra_SIZEOF(sp),sp
+.x	tst.l	d0
+	rts
+
+
+disposeInfoWindowRegion:
+	move.l	infoWindowRegion(a5),d0
+	beq.b	.x
+	clr.l	infoWindowRegion(a5)
+	move.l	d0,a0
+	lore	GFX,DisposeRegion
+.x  rts
+
+setInfoWindowClip:
+    move.l  infoWindowRegion(a5),d0
+	beq.b	.x
+	move.l	swindowbase(a5),a0
+	move.l	wd_WLayer(a0),a0
+    move.l  d0,a1
+	lore	Layers,InstallClipRegion
+    DPRINT  "InstallClipRegion=%lx"
+	; d0 = previous clip region or NULL
+	move.l	d0,infoWindowClipRegion(a5)
+	; Out of memory is also possible, this
+	; is visible in some flag somewhere.
+.x	rts
+
+
+removeInfoWindowClip:
+	move.l	infoWindowClipRegion(a5),a1
+	move.l	swindowbase(a5),a0
+	bra		removeClip_
+
+
 ***************************************************************************
 *
 * Row button layout
