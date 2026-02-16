@@ -22066,7 +22066,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 .redraw:
 	DPRINT	"Info redraw"
-    
+    jsr     uninitInfoWindowClip
+
     ; ---------------------------------
     ; Draw background texture
 	move.l	swindowbase(a5),a1
@@ -22110,6 +22111,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .reprint
+    jsr     uninitInfoWindowClip
 
     ; ---------------------------------
     ; Draw inner frame, clear content area
@@ -22263,7 +22265,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.infoWindowNewSize  * returns 1 if refresh changes
 	beq.b	.idcmpLoop
 	bsr	.flush_messages
-    jsr     uninitInfoWindowClip
 	bra	.redraw
 
 .noNewSize
@@ -22712,7 +22713,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     * calc x-size
     move.l  swindowbase(a5),a2
     move    wd_Width(a2),d4
-    sub     #40-1,d4
+    sub     #40-1-1-1,d4
     sub     windowleft(a5),d4
     sub     windowright(a5),d4
 
@@ -57317,6 +57318,8 @@ removeInfoBoxClip
 
 initInfoWindowClip:
     DPRINT  "initInfoWindowClip"
+    tst.l   infoWindowRegion(a5)
+    bne     .x
     bsr     createInfoWindowRegion
     beq     .x
     bsr     setInfoWindowClip
@@ -57395,10 +57398,12 @@ setInfoWindowClip:
 
 
 removeInfoWindowClip:
+    tst.l   infoWindowRegion(a5)
+    beq     .x
 	move.l	infoWindowClipRegion(a5),a1
 	move.l	swindowbase(a5),a0
-	bra		removeClip_
-
+	bsr		removeClip_
+.x  rts
 
 ***************************************************************************
 *
