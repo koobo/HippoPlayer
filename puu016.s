@@ -23419,7 +23419,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     * d0 = length or null if not found, negative if no stil data
     tst.l   d0
     bmi     .noSTIL
-    clr.l   -20(a1)     * remove STIL nag
     tst.l   d0
     beq     .noSTIL
 
@@ -39376,11 +39375,12 @@ p_sid:	jmp	.init(pc)
 
 
 .blasterMsg
-    dc.b    "Couldn't initialize SIDBlaster!",0
 .zorroSidMsg
-    dc.b    "Can't access ZorroSID, check MMU settings!",0
 .usbsidpicoMsg
-    dc.b    "Couldn't initialize USBSID-Pico!",0
+    dc.b    "Couldn't initialize SID device!",0
+;    dc.b    "Couldn't initialize SIDBlaster!",0
+;    dc.b    "Can't access ZorroSID, check MMU settings!",0
+;    dc.b    "Couldn't initialize USBSID-Pico!",0
     even
 
 .performanceRequest
