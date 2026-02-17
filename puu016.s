@@ -22436,36 +22436,39 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	move.l	swindowbase(a5),a0
     moveq   #0,d0
- 	move	wd_Height(a0),d0
+    moveq   #0,d1
+ 	move	wd_Width(a0),d0
+ 	move	wd_Height(a0),d1
 
-	DPRINT	"INFO NEWSIZE height=%ld"
+	DPRINT	"INFO NEWSIZE width=%ld height=%ld"
+    * Grab new width so it can be saved if needed
+    move    d0,infowidth(a5)
 
     * Calc how many rows fits in this height
-    sub     windowtop(a5),d0
-    sub     windowbottom(a5),d0
-    sub     #20,d0
-    divu    infoFontHeight(a5),d0
+    sub     windowtop(a5),d1
+    sub     windowbottom(a5),d1
+    sub     #20,d1
+    divu    infoFontHeight(a5),d1
 
  ifne DEBUG
-    ext.l   d0
+    ext.l   d1
     DPRINT  "rows=%ld"
  endif  
-    move    d0,infosize(a5)
+    move    d1,infosize(a5)
 
     * Then calc the window size as this rounds down
-    mulu    infoFontHeight(a5),d0
-    add     windowtop(a5),d0
-    add     windowbottom(a5),d0
-    add     #16+2+2,d0
+    mulu    infoFontHeight(a5),d1
+    add     windowtop(a5),d1
+    add     windowbottom(a5),d1
+    add     #16+2+2,d1
 
     * Calculate delta Y
-    sub     wd_Height(a0),d0
+    sub     wd_Height(a0),d1
     beq     .skipSize
  ifne DEBUG
-    ext.l   d0
+    ext.l   d1
     DPRINT  "resizing height by %ld"
  endif
-    move    d0,d1
     moveq   #0,d0   * Delta x
 	lore	Intui,SizeWindow
     
