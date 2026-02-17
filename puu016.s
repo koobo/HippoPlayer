@@ -366,12 +366,12 @@ prefs_div		rs.b	1
 prefs_early		rs.b	1
 prefs_prefix		rs.b	1
 prefs_xfd			rs.b	1
-					rs.w	1
+prefs_infowidth		rs.w	1       * info window width pixels
 prefs_windowWidth	rs.w	1
 prefs_infopos2		rs.l	1
 prefs_arcdir		rs.b	150
 prefs_pattern		rs.b	70
-prefs_infosize		rs	1
+prefs_infosize		rs	1           * info window row count
 prefs_ps3msettings	rs.b	1
 prefs_prefsivu		rs.b	1
 prefs_kokolippu		rs.b	1		* 0: ikkuna pieni
@@ -970,9 +970,10 @@ vbtimer		rs.b	1		* ~0: Käytetään vb ajastusta
 vbtimeruse	rs.b	1		* ~0: tämän hetkinen
 groupmode_new	rs.b	1
 groupname_new	rs.b	100
-infosize_new	rs	1		* module infon koko
+;infosize_new	rs	1		* module infon koko
 infosize	rs	1
 infosizepot_new	rs	1
+infowidth   rs  1           * info window width pixels
 
 prefixcut	rs.b	1   * prefix cut setting recycled to scope priority
 scopePriority = prefixcut 
@@ -13716,9 +13717,8 @@ loadprefs2
 	move.l	prefs_infopos2(a0),infopos2(a5)
 	move.b	prefs_xfd(a0),xfd(a5)
 	move	prefs_infosize(a0),infosize(a5)
-	bne.b	.rr
-	move	#16,infosize(a5)
-.rr
+    move    prefs_infowidth(a0),infowidth(a5)
+
 	move.b	prefs_infoon(a0),infoon(a5)
 	move.b	prefs_ps3msettings(a0),ps3msettings(a5)
 	move.b	prefs_prefsivu(a0),prefsivu+1(a5)
@@ -14033,6 +14033,7 @@ saveprefs
 	move.l	infopos2(a5),prefs_infopos2(a0)
 	move.b	xfd(a5),prefs_xfd(a0)
 	move	infosize(a5),prefs_infosize(a0)
+	move	infowidth(a5),prefs_infowidth(a0)
 	move.b	ps3msettings(a5),prefs_ps3msettings(a0)
 	move.b	prefsivu+1(a5),prefs_prefsivu(a0)
 	move.b	kokolippu(a5),prefs_kokolippu(a0)
@@ -14533,7 +14534,7 @@ prefs_code
 	move.b	prefixcut(a5),prefix_new(a5)
 	move.b	earlyload(a5),early_new(a5)
 	move.b	xfd(a5),xfd_new(a5)
-	move	infosize(a5),infosize_new(a5)
+	;move	infosize(a5),infosize_new(a5)
 	;;bsr	setPrefsInfoBox
 	move.b	ps3msettings(a5),ps3msettings_new(a5)
 	move.b	samplebufsiz0(a5),samplebufsiz_new(a5)
@@ -15072,23 +15073,24 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
+    ; reopen info if size changed?
 
-	move	infosize(a5),d0
-	move	infosize_new(a5),infosize(a5)
-	cmp	infosize(a5),d0
-	beq.b	.eimu
-	tst	info_prosessi(a5)
-	beq.b	.eimu
-** updatetaan infoikkunaa
-	bsr	sulje_info
-	move.b	oli_infoa(a5),d7
-	st	oli_infoa(a5)
-	push	d7
-	bsr	start_info
-	pop	d7
-	move.b	d7,oli_infoa(a5)
-
-.eimu
+;	move	infosize(a5),d0
+;	move	infosize_new(a5),infosize(a5)
+;	cmp	infosize(a5),d0
+;	beq.b	.eimu
+;	tst	info_prosessi(a5)
+;	beq.b	.eimu
+;** updatetaan infoikkunaa
+;	bsr	sulje_info
+;	move.b	oli_infoa(a5),d7
+;	st	oli_infoa(a5)
+;	push	d7
+;	bsr	start_info
+;	pop	d7
+;	move.b	d7,oli_infoa(a5)
+;
+;.eimu
 
 ** asetetaan fontti
 	tst	boxsize00(a5)
@@ -21935,28 +21937,43 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .joo
 
 	lea	swinstruc,a0
-	basereg swinstruc,a0
 ;	move	nw_Height+swinstruc(a0),oldswinsiz(a5)
 ;	move	gg_Height+gAD1(a0),oldsgadsiz(a5)
     move    #250,nw_MinWidth(a0)
 
     ; ---------------------------------
     ; Set initial window + slider height
+.retry
     move    infosize(a5),d0
     cmp     #10,d0
     bhs     .v1
     moveq   #10,d0
-.v1
-    move    d0,infosize(a5)
+.v1 move    d0,infosize(a5)
 
-    printt  "TODO infosize handling"
 	move	infosize(a5),d0
     mulu    infoFontHeight(a5),d0
     add     windowtop(a5),d0
     add     windowbottom(a5),d0
     add     #16+2+2,d0
-	move	d0,nw_Height+swinstruc(a0)
-	endb	a0
+	move	d0,nw_Height(a0)
+
+    ; ---------------------------------
+    ; Set initial width, validate
+    move    infowidth(a5),d0
+    bne     .w0
+    move    #361-5,d0           * original default width
+.w0
+    cmp     nw_MinWidth(a0),d0
+    bhs     .w1
+    move    nw_MinWidth(a0),d0
+.w1
+    cmp     wbleveys(a5),d0
+    blo     .w2
+    move    wbleveys(a5),d0
+    subq    #8,d0
+.w2
+    move    d0,infowidth(a5)
+    move    d0,nw_Width(a0)
 
     ; ---------------------------------
 	; Set window minimum size limit
@@ -21966,34 +21983,20 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     add     windowtop(a5),d0
     add     windowbottom(a5),d0
     add     #16+2+2,d0
-	move    d0,nw_MinHeight+swinstruc
-    printt  "TODO"
-
-;	move	oldswinsiz(a5),d0
-;;	move	d0,nw_MinHeight(a0)
-;	add	#(50-3)*8,d0
-;	move	d0,nw_MaxHeight(a0)
-
-	; fit into the screen
+	move    d0,nw_MinHeight(a0)
 	
     ; ---------------------------------
     ; See if the window fits vertically
-    printt  "TODO: test this"
 	move	wbkorkeus(a5),d2
 .lo	cmp	nw_Height(a0),d2
 	bhi.b	.fine
 
-	clr	nw_TopEdge(a0)		* sijoitetaan mahd. ylös
-	subq	#1,infosize(a5)
-    move    infoFontHeight(a5),d1
-	sub 	d1,nw_Height(a0)
+    * avoid retry loop
+    cmp     #10,infosize(a5)
+    beq     .fine
 
-	move	infosize(a5),d0
-	subq	#3,d0
-    mulu    d1,d0
-	add	oldsgadsiz(a5),d0
-	move	d0,gg_Height+gAD1
-	bra.b	.lo
+    move    #10,infosize(a5)
+    bra     .retry
     ; ---------------------------------
 .fine
 	move.l	infopos2(a5),(a0)
@@ -22005,9 +22008,22 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	basereg swinstruc,a2
 
 	move	#7,slim2height(a2)
-	
+
+ ifne DEBUG
+    moveq   #0,d0
+    moveq   #0,d1
+    moveq   #0,d2
+    moveq   #0,d3
+    move   nw_LeftEdge(a0),d0
+    move   nw_TopEdge(a0),d1
+    move   nw_Width(a0),d2
+    move   nw_Height(a0),d3
+    DPRINT  "left=%ld top=%ld width=%ld height=%ld"
+ endif
+
 	lore	Intui,OpenWindow
 	move.l	d0,swindowbase(a5)
+    DPRINT  "OpenWindow=%lx"
 
 	and.l	#~WFLG_ACTIVATE,sflags(a2) * clearataan active-flaggi
 ;	move	d7,swinstruc+nw_Height(a2) * TODO? d7 is uninitialized here
@@ -22292,14 +22308,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     jsr     uninitInfoWindowClip
 
     printt  "TODO:"
-	move	oldswinsiz(a5),nw_Height+swinstruc
-	move	oldsgadsiz(a5),gg_Height+gAD1
+	;move	oldswinsiz(a5),nw_Height+swinstruc
+	;move	oldsgadsiz(a5),gg_Height+gAD1
 
 	move.l	_IntuiBase(a5),a6		
 	move.l	swindowbase(a5),d0
 	beq.b	.uh1
 	move.l	d0,a0
 	move.l	4(a0),infopos2(a5) * preserve position
+    move    wd_Width(a0),infowidth(a5) * and width
     tst     infopos2(a5)
     bpl     .nngx
     clr     infopos2(a5)    * negative x check
@@ -22794,53 +22811,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     lore    GFX,Move
 
     ; ---------------------------------
-    ; Clear line
-
- REM
-	move.l	srastport(a5),a1
-    MOVE.B  rp_FgPen(A1),D4     ; save foreground pen
-    moveq   #0,d0
-    lob     SetAPen
-
-    move.l  swindowbase(a5),a0
-	move.l	srastport(a5),a1
-    move.w  rp_cp_x(a1),d0
-    move.w  rp_cp_y(a1),d1
-    SUB.W   rp_TxBaseline(A1),D1
-    move.w  d0,d2
-    move    wd_Width(a0),d2
-    sub     windowleft(a5),d2
-    sub     windowright(a5),d2
-    sub     #12,d2
-    move.w  d1,d3
-    add     infoFontHeight(a5),d3
-    subq    #1,d3
-    lob     RectFill
-
-	move.l	srastport(a5),a1
-    MOVE.B  D4,D0
-    lob SetAPen
- EREM
-    pushm   d5/d6
-    move.l  swindowbase(a5),a2
-	move.l	srastport(a5),a0
-    move.l  a0,a1
-    move.w  rp_cp_x(a0),d0
-    move.w  rp_cp_y(a0),d1
-    SUB.W   rp_TxBaseline(A1),D1
-    move.w  d0,d2
-    move.w  d1,d3
-    move    wd_Width(a2),d4
-    sub     #44,d4
-    sub     windowleft(a5),d4
-    sub     windowright(a5),d4
-
-    move    infoFontHeight(a5),d5
-	moveq	#$0a,d6 * clear
-	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
-	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
-    lob     ClipBlit
-    popm    d5/d6
+    ; Clear line, relies on clipping
+    lob     ClearEOL
 
     ; ---------------------------------
     ; Print a separator
