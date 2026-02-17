@@ -24319,35 +24319,39 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ****** PT sample play
 
+* In:
+*  d5 = mouse x
+*  d6 = mouse y
 .samplePlay
-	sub	windowleft(a5),d5
-	sub	windowtop(a5),d6	* suhteutus fonttiin
-
-	cmp	#31,d5
-	blo	.samplePlayExit
-	cmp	#345,d5
-	bhi	.samplePlayExit
-	cmp	#14,d6
-	blo	.samplePlayExit
-	move	infosize(a5),d0
-	lsl	#3,d0
-	add	#14,d0
-	cmp	d0,d6
-	bhi	.samplePlayExit
-
 	tst.b	ahi_muutpois(a5)
 	bne	.samplePlayExit
-
 	cmp	#pt_prot,playertype(a5)
 	bne	.samplePlayExit
 	tst.l	playingmodule(a5)
 	bmi	.samplePlayExit
 
+	sub	windowleft(a5),d5
+	sub	windowtop(a5),d6	* suhteutus fonttiin
+
+    ; X-check
+    lea    gAD1,a0
+    move   gg_LeftEdge(a0),d0
+    add    gg_Width(a0),d0
+    ;sub #31,d5
+    sub     d0,d5
+	bmi	.samplePlayExit
+
+    ; Y-check
+	cmp	#14,d6
+	blo	.samplePlayExit
+
 * d5/d6 = mouse x/y
 
+    moveq   #0,d0
 	move	d6,d0
 	sub	#14+1,d0
-	lsr	#3,d0
+    ext.l   d0
+    divu   infoFontHeight(a5),d0
 	add	sfirstname(a5),d0
 	subq	#1,d0
 	bmi	.samplePlayExit
@@ -24368,9 +24372,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bhi	.samplePlayExit
 	and	#$f,d0
 	mulu	#10,d0
-	move.b	(a0)+,d1
-	and	#$f,d1
+    moveq   #$f,d1
+	and.b	(a0)+,d1
 	add	d1,d0		* d0 = samplenum
+
+ ifne DEBUG
+    ext.l   d0
+    DPRINT  "hit sample=%ld"
+ endif
 
 	cmp	#$1f,d0
 	bhi.b	.samplePlayExit
@@ -24520,11 +24529,24 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ** Mouse coordinate defines the sample period
 ** perioidi mousen x-koordinaatista
-	sub	#31,d5			* d5 = 0-315
-	mulu	#36,d5
-	divu	#315,d5
-	add	d5,d5
-	move	periods(pc,d5),d5
+    moveq   #0,d0
+    move    d5,d0
+    move.l  swindowbase(a5),a0
+    mulu    #(periodsEnd-periods)/2,d0
+    divu    wd_Width(a0),d0
+
+    cmp     #35,d0
+    bls     .sok
+    moveq   #35,d0
+.sok
+
+ ifne DEBUG
+    ext.l   d0
+    DPRINT  "x-step=%ld"
+ endif
+
+    add     d0,d0
+	move	periods(pc,d0),d5
 
 	move	d5,$a6-$96(a3)
 	move	d5,$b6-$96(a3)
