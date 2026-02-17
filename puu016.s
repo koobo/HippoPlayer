@@ -717,8 +717,6 @@ posUpdateSignal	rs.b	1
 audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
-info_signal	rs.b	1	* about signaali infojen päivitykseen
-info_signal2	rs.b	1	* about signaali infojen päivitykseen
 tooltipSignal	rs.b  	1	* signal for opening tooltip popup
 
 * Flag used to discard unnecessary mousemove IDCMP-messages
@@ -21819,9 +21817,7 @@ sulje_info:
 .joo	
 	pushm	d0/d1/a0/a1/a6
 	move.l	info_task(a5),a1
-	moveq	#0,d0
-	move.b	info_signal(a5),d1
-	bset	d1,d0
+    move.l  #SIGBREAKF_CTRL_C,d0
 	lore	Exec,Signal	
 
 .t	tst	info_prosessi(a5)	* odotellaan
@@ -21843,9 +21839,7 @@ start_info
 	tst	info_prosessi(a5)
 	beq.b	rbutton10b
 	move.l	info_task(a5),a1		* Päivityspyyntö!
-	moveq	#0,d0
-	move.b	info_signal2(a5),d1
-	bset	d1,d0
+    move.l  #SIGBREAKF_CTRL_D,d0
 	move.l	(a5),a6
 	jmp	_LVOSignal(a6)
 
@@ -21888,13 +21882,6 @@ info_code:
 	lore	Exec,FindTask
 	move.l	d0,info_task(a5)
 
-	moveq	#-1,d0
-	lob	AllocSignal
-	move.b	d0,info_signal(a5)
-	moveq	#-1,d0
-	lob	AllocSignal
-	move.b	d0,info_signal2(a5)
-
     * Switch process current dir so that STIL db can be found
     move.l  homelock(a5),d1 * This is available in kick2+, PROGDIR:
     bne     .n1
@@ -21910,11 +21897,6 @@ info_code:
 .n2
 
 	bsr.b	.infocode
-
-	move.b	info_signal(a5),d0
-	jsr	freesignal
-	move.b	info_signal2(a5),d0
-	jsr	freesignal
 
 	lore	Exec,Forbid
 	clr	info_prosessi(a5)
@@ -22210,19 +22192,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	suserport(a5),a4
 	move.b	MP_SIGBIT(a4),d1	* signalibitti
 	bset	d1,d0
-	move.b	info_signal(a5),d1
-	bset	d1,d0
-	move.b	info_signal2(a5),d1
-	bset	d1,d0
+    or.l    #SIGBREAKF_CTRL_C!SIGBREAKF_CTRL_D,d0
 	lore	Exec,Wait
 
 	; exit signal?
-	move.b	info_signal(a5),d1
-	btst	d1,d0
+    btst    #SIGBREAKB_CTRL_C,d0
 	bne	.sexit
 	; content refresh signal?
-	move.b	info_signal2(a5),d1
-	btst	d1,d0
+    btst    #SIGBREAKB_CTRL_D,d0
 	beq.b	.noRefresh
 	* refresh content signal
 	bsr	.flush_messages
