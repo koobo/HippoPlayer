@@ -21869,10 +21869,13 @@ rbutton10b
 .n	movem.l	(sp)+,d0-a6
 .x	rts
 
-
+metaData1b dc.b    "º"
 metaData1  dc.b    "Authors: %s",0
+metaData2b dc.b    "º"
 metaData2  dc.b    "Publishers: %s",0
+metaData3b dc.b    "º"
 metaData3  dc.b    "Product: %s",0
+metaData4b dc.b    "º"
 metaData4  dc.b    "Year: %s"
  even
  
@@ -21906,7 +21909,7 @@ info_code:
 
 
 ************* Module info
-.infocode
+.infocode:
     DPRINT "--- infocode ---"
 
 *** Avataan ikkuna
@@ -22839,9 +22842,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
     move    wd_LeftEdge(a0),d0
     add     wd_Width(a0),d0
-    sub     windowleft(a5),d0
-    sub     windowright(a5),d0
-    sub     #18,d0  * slider area magic
+    sub     #14,d0  * slider area magic
     
     move.w  rp_cp_y(a1),d1
     lob     Draw    
@@ -22880,15 +22881,48 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     add.w   rp_cp_x(a1),d0
     move.w  rp_cp_y(a1),d1
     lob     Move
-
+    bra     .noBold
 
 .noCenter
+    cmp.b   #"º",(a2)
+    bne     .noBold
+
+	move.l	srastport(a5),a1
+    moveq   #FSF_BOLD,d0          
+	moveq	#FSF_BOLD,d1
+	lob     SetSoftStyle
+
+.fc cmp.b   #":",(a2)+
+    bne     .fc
+
+    move.l  a2,d0
+    sub.l   sp,d0
+    sub.l   d0,d5
+
+	move.l	srastport(a5),a1
+    move.l  sp,a0
+    addq.l  #1,a0
+    subq.l  #1,d0
+    lob     Text
+
+	move.l	srastport(a5),a1
+    moveq   #0,d0          
+	moveq	#FSF_BOLD,d1
+	lob     SetSoftStyle
+
+.noBold
+
     * a0 = string
     * d0 = length
 	move.l	srastport(a5),a1
     move.l  a2,a0
     move.l  d5,d0
     lob     Text
+
+	move.l	srastport(a5),a1
+    moveq   #0,d0          
+	moveq	#FSF_BOLD,d1	* mask of bits to change
+	lob     SetSoftStyle
 
     ; ---------------------------------
     ; Print text with right align
@@ -22922,11 +22956,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  d0,d1       
 
     move.l  swindowbase(a5),a0
-    move    wd_LeftEdge(a0),d0
-    add     wd_Width(a0),d0
-    sub     windowright(a5),d0
+    move     wd_Width(a0),d0
     sub     d1,d0
-    sub     #18,d0  * magic
+    sub     #14,d0  * magic
 
 	move.l	srastport(a5),a1
     move.w  rp_cp_y(a1),d1
@@ -23209,9 +23241,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     rts
 
 .icyForm1
-    dc.b    "Name:",0
+    dc.b    "ºName:",0
 .icyForm2
-    dc.b    "Description:",0
+    dc.b    "ºDescription:",0
  even
 
 .nosample
@@ -23444,12 +23476,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr .deliPutInfo2
 
     * Final field 
-	move.l	infotaz(a5),a3
-    bsr     .lloppu
-	lea	    .sform9(pc),a0
-.sic move.b  (a0)+,(a3)+
-    bne     .sic
-
 	bsr	.putcomment
 
     ;----------------------------------
@@ -23481,14 +23507,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .sform0
 .form	dc.b	"PSID-module",ILF,ILF2
 .sform1     dc.b    "÷÷",ILF,ILF2,0
-.sform2 	dc.b	"Name: %s",ILF,ILF2,0
-.sform3 	dc.b	"Author: %s",ILF,ILF2,0
-.sform4 	dc.b	"Copyright: %s",ILF,ILF2,0
-.sform5 	dc.b	"Songs: %ld (default %ld)",ILF,ILF2,0
-.sform6     dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2,0
-.sform7     dc.b	"SID type: %s",ILF,ILF2,0
-.sform8 	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2,0
-.sform9 	dc.b	"Comment:",ILF,ILF2,0
+.sform2 	dc.b	"ºName: %s",ILF,ILF2,0
+.sform3 	dc.b	"ºAuthor: %s",ILF,ILF2,0
+.sform4 	dc.b	"ºCopyright: %s",ILF,ILF2,0
+.sform5 	dc.b	"ºSongs: %ld (default %ld)",ILF,ILF2,0
+.sform6     dc.b	"ºSong speed: %ld (%ld Hz)",ILF,ILF2,0
+.sform7     dc.b	"ºSID type: %s",ILF,ILF2,0
+.sform8 	dc.b	"ºSize: %ld ($%lx-$%lx)",ILF,ILF2,0
+;.sform9 	dc.b	"ºComment:",ILF,ILF2,0
  even
 
 .huhe	dc.b	ILF,ILF2
@@ -23632,19 +23658,19 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	rts
 
 * max width: 39
-.eagleSong	 	dc.b	"Song: %s",ILF,ILF2,0
-.eagleAuthor		dc.b	"Author: %s",ILF,ILF2,0
-.eagleSubsongs		dc.b	"Subsongs: %ld",ILF,ILF2,0
-.eagleSamples		dc.b	"Samples: %ld",ILF,ILF2,0
-.eagleSynthSamples	dc.b	"Synth samples: %ld",ILF,ILF2,0
-.eagleSongSize	 	dc.b	"Song size: %ld bytes",ILF,ILF2,0
-.eagleSamplesSize	dc.b	"Samples size: %ld bytes",ILF,ILF2,0
-.eaglePrefix 		dc.b	"Prefix: %s",ILF,ILF2,0
-.eagleVoices	 	dc.b	"Voices: %ld",ILF,ILF2,0
-.eagleDuration	 	dc.b	"Duration: %02ld:%02ld",ILF,ILF2,0
-.eagleAbout	     	dc.b	"About: %s",ILF,ILF2,0
-.eagleName		dc.b	"Eagleplayer: %s",ILF,ILF2,0
-.eagleCreator       	dc.b	"Creator: %s",0
+.eagleSong	 	    dc.b	"ºSong: %s",ILF,ILF2,0
+.eagleAuthor		dc.b	"ºAuthor: %s",ILF,ILF2,0
+.eagleSubsongs		dc.b	"ºSubsongs: %ld",ILF,ILF2,0
+.eagleSamples		dc.b	"ºSamples: %ld",ILF,ILF2,0
+.eagleSynthSamples	dc.b	"ºSynth samples: %ld",ILF,ILF2,0
+.eagleSongSize	 	dc.b	"ºSong size: %ld bytes",ILF,ILF2,0
+.eagleSamplesSize	dc.b	"ºSamples size: %ld bytes",ILF,ILF2,0
+.eaglePrefix 		dc.b	"ºPrefix: %s",ILF,ILF2,0
+.eagleVoices	 	dc.b	"ºVoices: %ld",ILF,ILF2,0
+.eagleDuration	 	dc.b	"ºDuration: %02ld:%02ld",ILF,ILF2,0
+.eagleAbout	     	dc.b	"ºAbout: %s",ILF,ILF2,0
+.eagleName		    dc.b	"ºEagleplayer: %s",ILF,ILF2,0
+.eagleCreator       dc.b	"ºCreator: %s",0
  even
 
 .noeagle
@@ -23893,17 +23919,18 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 * PS3M
-.form11	dc.b	"Name: %s",ILF,ILF2
-	dc.b	"Type: %s %2.ld.%1.1ldkHz",ILF,ILF2
-	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2
-	dc.b	"Comment: ",0
+.form11	dc.b	"ºName: %s",ILF,ILF2
+	dc.b	"ºType: %s %2.ld.%1.1ldkHz",ILF,ILF2
+	dc.b	"ºSize: %ld ($%lx-$%lx)",ILF,ILF2,0
+
+.commentForm:
+	dc.b	"ºComment: %s",ILF,ILF2,0
 
 
 * PT
-.form1	dc.b	"Name: %s",ILF,ILF2
-	dc.b	"Type: %s",ILF,ILF2
-	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2
-	dc.b	"Comment: ",0
+.form1	dc.b	"ºName: %s",ILF,ILF2
+	dc.b	"ºType: %s",ILF,ILF2
+	dc.b	"ºSize: %ld ($%lx-$%lx)",ILF,ILF2,0
 
 ** PT
 
@@ -23982,13 +24009,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .form3	
-	dc.b	"Name: %s",ILF,ILF2
-	dc.b	"Type: %s",ILF,ILF2
-	dc.b	"Size: %ld ($%lx-$%lx)",ILF,ILF2
-	dc.b	ILF,ILF2
-	dc.b	"Comment:",ILF,ILF2,0
+	dc.b	"ºName: %s",ILF,ILF2
+	dc.b	"ºType: %s",ILF,ILF2
+	dc.b	"ºSize: %ld ($%lx-$%lx)",ILF,ILF2
+	dc.b	ILF,ILF2,0
+;	dc.b	"ºComment:",ILF,ILF2,0
 .author
-	dc.b	"Player: %s",0
+	dc.b	"ºPlayer: %s",0
   even
 
 
@@ -24003,13 +24030,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     tst.b   (a4)
     beq     .noMeta
     push    d1
-    lea     metaData1(pc),a0 
+    lea     metaData1b(pc),a0 
     bsr     .putMetaLine
-    lea     metaData2(pc),a0 
+    lea     metaData2b(pc),a0 
     bsr     .putMetaLine
-    lea     metaData3(pc),a0 
+    lea     metaData3b(pc),a0 
     bsr     .putMetaLine
-    lea     metaData4(pc),a0 
+    lea     metaData4b(pc),a0 
     bsr     .putMetaLine
     tst.l   (sp)+
     beq     .noMeta
@@ -24051,6 +24078,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .putcomment:
+	lea	    .commentForm(pc),a0 
+	pushpea filecomment(a5),d0
+    printt  "TODO: skip if empty"
+    bra     .deliPutInfo2
+
+ REM
 	pushm	d0/d1/a0/a3
 	moveq	#39+1,d1
 	bra.b	.puct
@@ -24090,7 +24123,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bne.b	.com
 	subq	#1,a3 ; back to NULL
 	rts
- 
+  EREM
+
 *************************************
 
 * writes into a4 depending on format:
@@ -24102,7 +24136,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * - module start addr
 * - module end addr
 
-.namtypsizcom
+.namtypsizcom:
 	pushm	d0/d1
 
 	pushpea	modulename(a5),(a4)+
@@ -24212,10 +24246,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.desmsg4
 	lea	32(sp),sp
 
-	bsr	.putcomment2
+	bsr	.putcomment
 	
+    ; Remove last ILF,ILF2, putMetaData will append it
 	move.l	infotaz(a5),a3
 	bsr 	.lloppu
+    clr.b   -2(a3)
+
     bsr     .putMetaData
 	move.l	infotaz(a5),a3
 	bsr 	.lloppu
