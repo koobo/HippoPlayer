@@ -24078,52 +24078,15 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .putcomment:
+    lea     filecomment(a5),a0
+    tst.b   (a0)
+    beq     .noCommentz
+    move.l  a0,d0
 	lea	    .commentForm(pc),a0 
-	pushpea filecomment(a5),d0
-    printt  "TODO: skip if empty"
     bra     .deliPutInfo2
-
- REM
-	pushm	d0/d1/a0/a3
-	moveq	#39+1,d1
-	bra.b	.puct
-
-.putcomment2
-	pushm	d0/d1/a0/a3
-	moveq	#30+1,d1
-.puct
-	move.l	infotaz(a5),a3
-	bsr	.lloppu
-	lea	filecomment(a5),a0
- if DEBUG
-	move.l	a0,d0
-	DPRINT	"comment: %s"
- endif
-	tst.b	(a0)
-	beq.b	.empty
-	bsr.b	.putlines
-	bsr	.putLineChange
-	bsr	.putLineChange
-.empty
-	popm	d0/d1/a0/a3
-	rts
-
-* d1 = character limit for the first line to be put
-.putlines
-	moveq	#0,d0
-.com	addq	#1,d0
-	cmp	d1,d0
-	bne.b	.naga
-	moveq	#39,d1
-	tst.b	(a0)
-	beq.b	.naga
-	moveq	#0,d0
-	bsr	.putLineChange
-.naga	move.b	(a0)+,(a3)+
-	bne.b	.com
-	subq	#1,a3 ; back to NULL
-	rts
-  EREM
+.noCommentz
+    DPRINT  "EMPTY comment!"
+    rts
 
 *************************************
 
