@@ -1250,8 +1250,6 @@ ssliderold	rs.l	1
 sfirstname	rs	1
 sfirstname2	rs	1
 riviamount	rs	1
-oldswinsiz	rs	1
-oldsgadsiz	rs	1
 skokonaan	rs.b	1       * flag to force redraw content
 		rs.b	1
 
@@ -15805,7 +15803,7 @@ pupdate:				* Ikkuna päivitys
 
 ***** Tarkistetaan mahtuuko avattava ikkuna ruudulle
 * a0 = ikkuna
-tark_mahtu
+tark_mahtu:
 	move	wbleveys(a5),d0		* WB:n leveys
 	move	(a0),d1			* Ikkunan x-paikka
 	add	4(a0),d1		* Ikkunan oikea laita
@@ -17789,7 +17787,7 @@ rfont
 	bra	pfont
 
 
-.tit	dc.b	"Font for other windows",0
+.tit	dc.b	"Other window font",0
  even
 
 fontreqtags
@@ -17879,7 +17877,7 @@ rListFont
 	bra.b	pListFont
 
 
-.tit	dc.b	"Font for main window",0
+.tit	dc.b	"Main/info window font",0
  even
 
 listfontreqtags
@@ -22034,6 +22032,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	tst.l	d0
 	bne.b	.koo
+.slimError
     ; Window failed to open
     ; TODO: retry smaller and at zero y
 	lea	windowerr_t(pc),a1
@@ -22310,10 +22309,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr.b	.flush_messages
     jsr     uninitInfoWindowClip
 
-    printt  "TODO:"
-	;move	oldswinsiz(a5),nw_Height+swinstruc
-	;move	oldsgadsiz(a5),gg_Height+gAD1
-
 	move.l	_IntuiBase(a5),a6		
 	move.l	swindowbase(a5),d0
 	beq.b	.uh1
@@ -22326,12 +22321,19 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .nngx
 	lob	CloseWindow
 	clr.l	swindowbase(a5)
+    bsr     .freeSlim2Data
 .uh1
 	bsr.b	.fraz
 
 	;bsr	freeinfosample
 	rts
 
+
+.freeSlim2Data:
+    lea     slim2DataPtr,a1  * free slider gfx buffer
+    move.l  (a1),a0
+    clr.l   (a1)
+    jmp     freemem
 
 .fraz	move.l	infotaz(a5),a0
 	cmp.l	#about_t,a0
@@ -22346,6 +22348,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra  flushWindowMessages
 	
 .reslider
+    DPRINT  "info reslider"
 	moveq	#0,d0
 	move	riviamount(a5),d0
 	bne.b	.xe
@@ -22405,10 +22408,31 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#8,d0
 .zze
 	move	d0,slim2height(a0)
+ ifne DEBUG
+    ext.l   d0
+    DPRINT  "slim2height=%ld"
+ endif
 	subq	#2+1,d0
 	move	d0,d1
 
-	lea	slim2,a2
+    ; ---------------------------------
+    * Allocate space for slider image
+    pushm   d0/d1/a0
+    bsr     .freeSlim2Data
+
+    * Allocate as much as the window is tall to be safe
+    moveq   #0,d0
+	move.l	swindowbase(a5),a0
+    move.w  wd_Height(a0),d0
+    DPRINT  "win height=%ld"
+    lsl     #2,d0           * two planes, width 16 pix
+    move.l  #MEMF_CHIP!MEMF_CLEAR,d1
+    jsr     getmem
+    move.l  d0,slim2DataPtr
+    move.l  d0,a2
+    popm    d0/d1/a0
+    beq     .bar            * did we get it?
+
 	lea	slim1a(a0),a1
 	tst.b	uusikick(a5)
 	bne.b	.newz
@@ -22430,7 +22454,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	;lea	gAD1,a0
 	bsr	.refreshInfoWindowGadget
 .eiup	rts
-
 
 .infoWindowNewSize
 	move.l	swindowbase(a5),a0
@@ -64939,7 +64962,8 @@ slimage2	dc	0	* leftedge
 		dc	16	* width
 slim2height	dc	8	* heigh
 		dc	2	* depth
-		dc.l	slim2	* data
+slim2DataPtr
+		dc.l	0	* data
 		dc.b	%11	* planepick
 		dc.b	0	* planeon/onff
 		dc.l	0	* nextimage
@@ -65660,7 +65684,7 @@ nullsample	ds.l	1
 ;;slim:	ds	2*410
 
 * sampleinfo-slideri, 410 pixels tall
-slim2:	ds	410*2
+;slim2:	ds	410*2
 
 * volume slider image
 slider1im
