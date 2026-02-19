@@ -22876,7 +22876,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
     ; Align center?
     move.l  sp,a2
-    cmp.b   #"°",(a2)
+    cmp.b   #"°",(a2)   * center indicator
     bne     .noCenter
 
     subq    #1,d5       * modify length to remove separator
@@ -22907,7 +22907,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bra     .noBold
 
 .noCenter
-    cmp.b   #"º",(a2)
+    cmp.b   #"º",(a2)       * bold indicator 
     bne     .noBold
 
 	move.l	srastport(a5),a1
@@ -22915,7 +22915,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#FSF_BOLD,d1
 	lob     SetSoftStyle
 
-.fc cmp.b   #":",(a2)+
+.fc cmp.b   #":",(a2)+      * print bold until ":"
     bne     .fc
 
     move.l  a2,d0
@@ -22941,11 +22941,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  a2,a0
     move.l  d5,d0
     lob     Text
-
-	move.l	srastport(a5),a1
-    moveq   #0,d0          
-	moveq	#FSF_BOLD,d1	* mask of bits to change
-	lob     SetSoftStyle
 
     ; ---------------------------------
     ; Print text with right align
@@ -22993,49 +22988,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     lob     Text
 .noAlign    
 
-
 .ss2
-; REM
-;     ; Clear to right
-;	move.l	srastport(a5),a0
-;    move.l  a0,a1
-;    move.w  rp_cp_x(a0),d0
-;    move.w  rp_cp_y(a0),d1
-;    move.w  d0,d2
-;    move.w  d1,d3
-;    move    #30,d4       * TODO
-;    move    infoFontHeight(a5),d5
-;    push    d6
-;    ext.l   d0
-;    ext.l   d1
-;    ext.l   d2
-;    ext.l   d3
-;    ext.l   d4
-;    ext.l   d5
-;    DPRINT  "SrcX=%ld SrcY=%ld DestX=%ld DestY=%ld XSize=%ld YSize=%ld"
-;	moveq	#$0a,d6 * clear
-;	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
-;	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
-;    lob     ClipBlit
-;    pop     d6
-; EREM
-
-    ;	move.l	srastport(a5),a1
-;    move.l  swindowbase(a5),a0
-
-
-;	move.l	srastport(a5),a1
-;                MOVE.L  A1,A2               ; save RastPort
-;                MOVE.B  rp_FgPen(A1),D4     ; save foreground pen
-;                MOVE.L  rp_AreaPtrn(A1),D5  ; save areafill pattern
-;                MOVEQ   #0,D0
-;                CMP.B   #RP_JAM2,rp_DrawMode(A1)
-;                BNE.S   .isClear
-;                MOVE.B  rp_BgPen(A1),D0
-;.isClear:
-;             lob SetAPen
- 
-.xw	
     add     infoFontHeight(a5),d7
 	lea	200(sp),sp
 	tst.b	-1(a3)
