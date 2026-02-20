@@ -23525,10 +23525,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.desmsg4
 	bsr	.putcomment
 	lea	32(sp),sp
+    beq     .noCmt
 
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	.putLineChange
+.noCmt
 
 	move.l	#MI_SongName,d1
 	lea	.eagleSong(pc),a0
@@ -24059,9 +24061,9 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     beq     .noCommentz
     move.l  a0,d0
 	lea	    .commentForm(pc),a0 
-    bra     .deliPutInfo2
+    bsr     .deliPutInfo2
+    moveq   #1,d0
 .noCommentz
-    DPRINT  "EMPTY comment!"
     rts
 
 *************************************
