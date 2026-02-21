@@ -11,6 +11,7 @@ SERIALDEBUG = 0
  endif
 
 
+
 ;################################################
 ;################################################
 ; Perf test 1, A1200/060, sample buffer size 128k
@@ -7116,58 +7117,58 @@ mpega_parse_id3v2
     dc.b    10
     dc.b    "*** MP3 tags info ***",0
 .tpe1Format
-    dc.b    "Artist:",10
+    dc.b    "ºArtist:",10
     dc.b    "%s",0
 .tpe2Format
-    dc.b    "Band:",10
+    dc.b    "ºBand:",10
     dc.b    "%s",0
 .tpe3Format
-    dc.b    "Conductor:",10
+    dc.b    "ºConductor:",10
     dc.b    "%s",0
 .tpe4Format
-    dc.b    "Remixed by:",10
+    dc.b    "ºRemixed by:",10
     dc.b    "%s",0
 .tcomFormat
-    dc.b    "Composer:",10
+    dc.b    "ºComposer:",10
     dc.b    "%s",0
 .topeFormat
-    dc.b    "Original artist:",10
+    dc.b    "ºOriginal artist:",10
     dc.b    "%s",0
 .tit1Format
-    dc.b    "Content:",10
+    dc.b    "ºContent:",10
     dc.b    "%s",0
 .tit2Format
-    dc.b    "Title:",10
+    dc.b    "ºTitle:",10
     dc.b    "%s",0
 .tit3Format
-    dc.b    "Subtitle:",10
+    dc.b    "ºSubtitle:",10
     dc.b    "%s",0
 .talbFormat
-    dc.b    "Album:",10
+    dc.b    "ºAlbum:",10
     dc.b    "%s",0
 .tyerFormat
-    dc.b    "Year:",10
+    dc.b    "ºYear:",10
     dc.b    "%s",0
 .tdatFormat
-    dc.b    "Date:",10
+    dc.b    "ºDate:",10
     dc.b    "%s",0
 .tdrcFormat
-    dc.b    "Recording time:",10
+    dc.b    "ºRecording time:",10
     dc.b    "%s",0
 .tdrlFormat
-    dc.b    "Release time:",10
+    dc.b    "ºRelease time:",10
     dc.b    "%s",0
 .trckFormat
-    dc.b    "Track number:",10
+    dc.b    "ºTrack number:",10
     dc.b    "%s",0
 .tlenFormat
-    dc.b    "Length:",10
+    dc.b    "ºLength:",10
     dc.b    "%ld:%02ld",0
 .tmooFormat
-    dc.b    "Mood:",10
+    dc.b    "ºMood:",10
     dc.b    "%s",0
 .trsnFormat
-    dc.b    "Radio station:",10
+    dc.b    "ºRadio station:",10
     dc.b    "%s",0
 
  even
@@ -7202,7 +7203,6 @@ appendWithFormat:
     move.l  a3,a2
     pop     a3
 
-    ;subq    #1,a2
     bsr     putLineChange
     bsr     putLineChange
     rts
