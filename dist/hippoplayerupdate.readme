@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.65
+Version: 2.66
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -46,7 +46,7 @@ Quick overview of major changes since v2.45
   - "Position slider": For displaying and selecting position
   - "Play mode button": Change play mode in the main window
 - Resizable main and info windows
-- Main window font can be changed to any font
+- Main and info window font can be changed to any font
 - Support for many new music formats
 - SID support with dual and triple SIDs, many output options and 
   devices, STIL database for song info, song lengths
@@ -107,34 +107,54 @@ Additional files to check and download
     -> metadata.tsv -> Download raw file
   ... and:
     -> songlengths.tsv -> Download raw file  
-- To play Ogg files get oggv_dec from:
-  ...TODO TODO...
+- To play Ogg files get oggv_dec:
+  https://aminet.net/mus/play/oggv_dec.lha
 
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
+
 
 # Changes from v2.65 (26.9.2025) to v2.66 (?.?.?) 
 
 ## Fixes:
 
-- Fixed Modland search not finding PumaTracker, Symphonie Pro or
-  Sound Programming Language modules due to a file extension whitelist mishap.
+- Fixed Old Soundtracker files not being playable through AHI or PS3M.
 
-- Fixed Old Soundtracker files not being playable through AHI or PS3M mixer.
+- Fixed Modland search not finding PumaTracker, Symphonie Pro or
+  Sound Programming Language modules due to a file extension whitelist 
+  mishap.
 
 - Kickstart 3.2: Fix Hippo freezing when resizing the window when
   window positioned over the left edge of the screen.
 
-- Fix a system hang when hiding HippoPlayer (with Amiga-Shift-Ctrl-H)
+- Fix system hanging when hiding HippoPlayer (with Amiga-Shift-Ctrl-H)
   and having the Info Scroll enabled.
 
-## New music format:
+- Possible chip memory corruption bug fixed when resizing the info 
+  window large enough.
 
-- Ogg files can be played if you have the tool "oggv_dec" available
+- Protracker module length calculator fix (survive F00 cases better
+  (dirt.mod)).
+
+## Improvements:
+
+- Info window changes:
+  - Now resizable also horizontally instead of just vertically.
+  - Uses the same font as the main window, font restrictions removed.
+ 
+- Song length data and metadata updated by mvtiaine, you can grab new  
+  "songlengths.tsv" and "metadata.tsv" if you want (see above how).
+  Now contains metadata info of about 330000 modules, song lengths 
+  for about 400000 modules.
+
+- Ogg files can now be played if you have the tool "oggv_dec" available
   in path (eg. in C:) and a fast enough CPU, like a 68060.
 
-
+- Improved TFMX compatibility with replayer adapted by Wanted Team,
+  fixes issues with Gem'X music for example.
+   
+  
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
@@ -278,7 +298,7 @@ Additional files to check and download
   is needed for this feature. See "Additional files" section above
   for download details.
 
-  Thanks to mvtiane for his work on audacious-uade-tools and the data!
+  Thanks to mvtiaine for his work on audacious-uade-tools and the data!
 
 - PSID data (author, publisher/copyright) is also shown in the infobox 
   area now.
