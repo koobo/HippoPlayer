@@ -21876,6 +21876,20 @@ metaData3  dc.b    "Product: %s",0
 metaData4b dc.b    "º"
 metaData4  dc.b    "Year: %s"
  even
+
+*** Avataan ikkuna
+* 39 kirjainta mahtuu laatikkoon
+* Linefeedi ILF joka myöhemmin korvataan 10:llä. Sitävarten että voidaan
+* karsia ylimääräset linefeedit pois.
+
+ILF	=	$83
+ILF2	=	$03
+
+swflags set WFLG_SMART_REFRESH!WFLG_NOCAREREFRESH!WFLG_DRAGBAR
+swflags set swflags!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET!WFLG_RMBTRAP
+sidcmpflags set IDCMP_CLOSEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
+sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
+sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
  
 info_code:
 	lea	var_b,a5
@@ -21907,22 +21921,10 @@ info_code:
 
 
 ************* Module info
+
+
 .infocode:
     DPRINT "--- infocode ---"
-
-*** Avataan ikkuna
-* 39 kirjainta mahtuu laatikkoon
-* Linefeedi ILF joka myöhemmin korvataan 10:llä. Sitävarten että voidaan
-* karsia ylimääräset linefeedit pois.
-
-ILF	=	$83
-ILF2	=	$03
-
-swflags set WFLG_SMART_REFRESH!WFLG_NOCAREREFRESH!WFLG_DRAGBAR
-swflags set swflags!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET!WFLG_RMBTRAP
-sidcmpflags set IDCMP_CLOSEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
-sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
-sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
     move.l  listfontbase(a5),a0
     tst.b   infolag(a5)
@@ -22422,8 +22424,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
     * Allocate as much as the window is tall to be safe
     moveq   #0,d0
-	move.l	swindowbase(a5),a0
-    move.w  wd_Height(a0),d0
+    move.l  swindowbase(a5),a1
+    move.w  wd_Height(a1),d0
     DPRINT  "win height=%ld"
     lsl     #2,d0           * two planes, width 16 pix
     move.l  #MEMF_CHIP!MEMF_CLEAR,d1
@@ -29361,7 +29363,10 @@ multiscopefilled:
 	
 multiscopefilled0:
     cmp.w   #1024,a1        * sanity check
-    blo     .x
+;    blo     .x
+    bhs.b   .go
+    rts
+.go
 
     * Center vertically
 	move	s_scopeDrawAreaHeight(a4),d2
@@ -33684,7 +33689,7 @@ tutki_moduuli:
 	DPRINT	"Group"
 	lea	groupFormats(pc),a3 
 	bsr	identifyFormats
-	beq.b .ex2
+	beq	.ex2
 
 	DPRINT	"Eagle"
 	lea	eagleFormats(pc),a3
