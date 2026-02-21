@@ -23634,6 +23634,7 @@ info_code:
     move.l  a4,a3
     bsr     wrappage    * wrap it into output
     lea     200(sp),sp
+    bsr     info_code\.putLineChange  * new linechange into a3
 	popm	d0-d7
 	rts
 
@@ -24612,12 +24613,24 @@ wrappage:
     clr.b   (a2)
     * copy one word into a2
     bsr     .doCopyWord
+    * find length, ignore linefeeds
     move.l  sp,a0   * word
 .fe tst.b   (a0)+
     bne     .fe
+    * find out exact end of word, skip line changes
+.fe2
+    move.b  -(a0),d0
+    beq     .fe2
+    cmp.b   #ILF,d0
+    beq     .fe2
+    cmp.b   #ILF2,d0
+    beq     .fe2
+;    cmp.b   #10,d0
+;    beq     .fe2
+.fe22
     move.l  a0,d0
     sub.l   sp,d0
-    subq    #1,d0   
+    addq.l  #1,d0
     move    d0,d5   * stash word length 
     move.l  sp,a0   * word
 ; ifne DEBUG
@@ -24627,8 +24640,15 @@ wrappage:
     * a0 = text, d0 = char count
 	move.l	srastport(a5),a1
 	lore	GFX,TextLength
-    * d0 = word length in pixels
-;   DPRINT  "pixels=%ld"
+    * d0 = word length in pixels, 16 bits
+;    DPRINT  "pixels=%ld"
+ ifne DEBUG
+    cmp     #800,d0
+    blo     .okL
+    DPRINT  "abnormal=%ld"
+.okL
+ endif
+
     add     d0,d7   * new x-position
     cmp     d6,d7   * is the x-position over the width limit
     blo     .wordFits
@@ -24653,6 +24673,7 @@ wrappage:
     addq    #1,a4
 .wrapEnd
 ;    DPRINT  "wrap done"
+   ; bsr     info_code\.putLineChange  * new linechange into a3
     lea     50(sp),sp
     move.l  a4,a0
     popm    d0-d7/a1/a2/a4-a6
@@ -24663,14 +24684,22 @@ wrappage:
 .copyWord
     move.b  (a4)+,d0
     beq     .wordEnd
-    cmp.b   #13,d0      * Ignore  
+    cmp.b   #13,d0       * Ignore  
     beq    .copyWord
+;    cmp.b   #"º",d0
+;    beq    .copyWord    * Ignore: bold indicator
+;    cmp.b   #"°",d0
+;    beq    .copyWord    * Ignore: bold indicator
+;    cmp.b   #"¢",d0
+;    beq    .copyWord    * Ignore: right align indicator
 
     cmp.b   #10,d0
     bne     .noLf
+.ispc
     moveq  #" ",d0
 .noLf
 
+    
     cmp.b   #" ",d0    
     beq     .spc
     cmp.b   #"-",d0

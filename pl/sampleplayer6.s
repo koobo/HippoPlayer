@@ -7114,8 +7114,8 @@ mpega_parse_id3v2
     rts
 
 .titleFormat
-    dc.b    10
-    dc.b    "*** MP3 tags info ***",0
+    dc.b    "MP3 tags",10
+    dc.b    "÷÷",0
 .tpe1Format
     dc.b    "ºArtist:",10
     dc.b    "%s",0

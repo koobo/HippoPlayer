@@ -1,5 +1,17 @@
-TODO:
-- rewrite info window for prop fonts
+TODO: rewrite info window for prop fonts
+-- transition modinfo<->about, font switch
+-- screen size fit check in beginning
+-- OK: check TODOs
+-- OK: save width, to prefs, until next open
+-- OK: comment wrappng
+-- OK: PT sample playing?
+-- OK: bold text?
+-- OK: MP3 info does not work atm
+-- OK: PSID info does not linewrap
+-- OK: cliprect
+
+FIXED: TODO:
+- AGUS hardware mixer button should disable all other stuff, but doesnt?
 
 TODO:
 - gzipped old soundtracker files not recognized
@@ -7,7 +19,7 @@ TODO:
 FIXXED: TODO:
 - OldSoundtracker -> does not support AHI even if it should
 
-TODO:
+FIXED: TODO:
 - dirt.mod - F00 paikoitellen
 - periodEndCheck triggeroituu jatkuvasti jos pistää "module repeatedly"
 
@@ -26,7 +38,7 @@ FIXED: TODO
 
 --> lever problem?
 
-TODO:
+FIXED: TODO:
 - fix psid usb error messages, they all get "out of mem2
 
 TODO?:
