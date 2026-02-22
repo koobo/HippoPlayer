@@ -7114,61 +7114,61 @@ mpega_parse_id3v2
     rts
 
 .titleFormat
-    dc.b    "MP3 tags",10
+    dc.b    "MP3 tags",ILF,ILF2
     dc.b    "÷÷",0
 .tpe1Format
-    dc.b    "ºArtist:",10
+    dc.b    "ºArtist: "
     dc.b    "%s",0
 .tpe2Format
-    dc.b    "ºBand:",10
+    dc.b    "ºBand: "
     dc.b    "%s",0
 .tpe3Format
-    dc.b    "ºConductor:",10
+    dc.b    "ºConductor: "
     dc.b    "%s",0
 .tpe4Format
-    dc.b    "ºRemixed by:",10
+    dc.b    "ºRemixed by: "
     dc.b    "%s",0
 .tcomFormat
-    dc.b    "ºComposer:",10
+    dc.b    "ºComposer: "
     dc.b    "%s",0
 .topeFormat
-    dc.b    "ºOriginal artist:",10
+    dc.b    "ºOriginal artist: "
     dc.b    "%s",0
 .tit1Format
-    dc.b    "ºContent:",10
+    dc.b    "ºContent: "
     dc.b    "%s",0
 .tit2Format
-    dc.b    "ºTitle:",10
+    dc.b    "ºTitle: "
     dc.b    "%s",0
 .tit3Format
-    dc.b    "ºSubtitle:",10
+    dc.b    "ºSubtitle: "
     dc.b    "%s",0
 .talbFormat
-    dc.b    "ºAlbum:",10
+    dc.b    "ºAlbum: "
     dc.b    "%s",0
 .tyerFormat
-    dc.b    "ºYear:",10
+    dc.b    "ºYear: "
     dc.b    "%s",0
 .tdatFormat
-    dc.b    "ºDate:",10
+    dc.b    "ºDate: "
     dc.b    "%s",0
 .tdrcFormat
-    dc.b    "ºRecording time:",10
+    dc.b    "ºRecording time: "
     dc.b    "%s",0
 .tdrlFormat
-    dc.b    "ºRelease time:",10
+    dc.b    "ºRelease time: "
     dc.b    "%s",0
 .trckFormat
-    dc.b    "ºTrack number:",10
+    dc.b    "ºTrack number: "
     dc.b    "%s",0
 .tlenFormat
-    dc.b    "ºLength:",10
+    dc.b    "ºLength: "
     dc.b    "%ld:%02ld",0
 .tmooFormat
-    dc.b    "ºMood:",10
+    dc.b    "ºMood: "
     dc.b    "%s",0
 .trsnFormat
-    dc.b    "ºRadio station:",10
+    dc.b    "ºRadio station: "
     dc.b    "%s",0
 
  even
@@ -7185,27 +7185,15 @@ findAndAppendWithFormat
 appendWithFormat:
     bsr     desmsg
     lea     desbuf(a5),a0
-
-    * copy title line
-.2  move.b  (a0)+,d0
-    cmp.b   #10,d0
-    beq     .1
-    move.b  d0,(a2)+
-    bra     .2
-.1
-    bsr     putLineChange
-
-    * copy and wrap the 2nd line
     push    a3
     move.l  a2,a3
     move.l  wrappageFunction(a5),a1
     jsr     (a1)
     move.l  a3,a2
     pop     a3
-
-    bsr     putLineChange
-    bsr     putLineChange
-    rts
+    ;bsr     putLineChange
+    ;rts
+    ; ... fall ...
     
 putLineChange:
 	move.b	#ILF,(a2)+
