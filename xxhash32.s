@@ -1,5 +1,10 @@
-;APS00000088000000880000008800000088000000880000008800000088000000880000008800000088
+;APS0000012F0000012F0000012F0000012F0000012F0000012F0000012F0000012F0000012F0000012F
 ; Asm port of https://github.com/easyaspi314/xxhash-clean/blob/master/xxhash32-ref.c
+
+XXH32TEST=0
+
+
+	ifne XXH32TEST
 
   ifnd __VASM
 	incdir	include:
@@ -11,11 +16,8 @@ ilword	macro
 	swap	\1
 	ror	#8,\1
 	endm
+  endif ; __VASM
 
-TEST=1
-  endif
-
-	ifd TEST
 
 TEST_DATA_SIZE = 101
 
@@ -133,7 +135,7 @@ mulu_32:	movem.l	d2/d3,-(sp)
 	movem.l	(sp)+,d2/d3
 	rts	
 
-    endif
+    endif ;  TEST
 
 
 

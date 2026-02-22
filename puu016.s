@@ -51,7 +51,8 @@ ver	macro
 ;	dc.b	"v2.64 (19.6.2025)"
 ;	dc.b	"v2.65ß (?.?.2025)"
 ;	dc.b	"v2.65 (26.9.2025)"
-	dc.b	"v2.66ß (?.?.2026)"
+;	dc.b	"v2.66ß (?.?.2026)"
+	dc.b	"v2.66 (23.2.2026)"
 	endm	
 
 
@@ -2461,7 +2462,7 @@ about_tt
 
 ;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
 scrtit	dc.b	"HippoPlayer"
-	dc.b	" by K-P in 1994-2000, 2021-2025",0
+	dc.b	" by K-P in 1994-2000, 2021-2026",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
