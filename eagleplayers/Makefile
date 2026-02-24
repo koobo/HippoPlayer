@@ -44,7 +44,9 @@ SOURCES=\
 	bin/sound\ master \
 	bin/soprol \
 	bin/delimidi \
-	bin/sonicarranger
+	bin/sonicarranger \
+	bin/TFMX \
+	bin/TFMX\ Pro
 
 COMPRESSED_TARGETS=\
 	shr/activision\ pro.shr \
@@ -88,7 +90,9 @@ COMPRESSED_TARGETS=\
 	shr/sound\ master.shr \
 	shr/soprol.shr \
 	shr/delimidi.shr \
-	shr/sonicarranger.shr
+	shr/sonicarranger.shr \
+	shr/TFMX.shr \
+	shr/TFMX\ Pro.shr
 
 all: $(COMPRESSED_TARGETS)
 
@@ -178,4 +182,8 @@ shr/soprol.shr:                   bin/soprol
 shr/delimidi.shr:                 bin/delimidi
 	$(COMPRESS) "$<" "$@"
 shr/sonicarranger.shr:            bin/sonicarranger
+	$(COMPRESS) "$<" "$@"
+shr/TFMX.shr:                     bin/TFMX
+	$(COMPRESS) "$<" "$@"
+shr/TFMX\ Pro.shr:                bin/TFMX\ Pro
 	$(COMPRESS) "$<" "$@"

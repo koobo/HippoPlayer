@@ -296,6 +296,7 @@ poslen		dc.l	0
 adjustroutine	dc.l	0
 voluproutine	dc.l	0
 s3mmode1a	dc.b	0
+initGuard   dc.w    0
 
 * Use mode in "ahi_use"
 USE_NORMAL        = 0
@@ -466,12 +467,22 @@ s3poslen
 	rts
 	endb	a5
 
-s3init	
+s3init:
 	* Store this first to allow debug logs to work
 	move.l	a3,dosbase
 
-	DPRINT	"s3init"
+ if DEBUG
+    move.l  #s3init,d0
+	DPRINT	"s3init %lx"
+ endif
 
+    tst.w   initGuard
+    beq     .noIg
+    DPRINT  "------ init ongoing ------"
+.noIg
+
+    st      initGuard
+ 
 	move.l	4(sp),voluproutine
 
 	pushm	d1-d7/a2-a6
@@ -634,7 +645,9 @@ s3init
 	move.l	d0,buff14(a5)
 	bne.b	.alavaraa
 
-.memerr	bsr	s3end
+.memerr	
+    sf      initGuard
+    bsr	s3end
 	popm	d1-d7/a2-a6
 	moveq	#ier_nomem,d0
 	rts
@@ -661,6 +674,7 @@ s3init
 
 .kala	
 	jsr	s3mPlay
+    sf      initGuard
 	bsr	s3end
 	move.l	var_playing(pc),a0
 	clr.b	(a0)
@@ -687,21 +701,35 @@ s3init
  ifne TEST
 	jsr	s3m_code
  else
+    clr.l   ps3m_task
 	move.l	#s3m_segment,d3
 	lsr.l	#2,d3
 	move.l	#3000,d4
 	lob	CreateProc
+    DPRINT  "CreateProc=%lx"
 	tst.l	d0
 	bne.b	.ne
 	moveq	#ier_noprocess,d0
 	bsr	s3end
 	bra.b	.en
 .ne	
+
+.waitTask
+    tst.l   ps3m_task
+    bne     .gotTask
+    DPRINT  "waiting for task"
+    moveq   #25,d1
+    lob     Delay
+    bra     .waitTask
+
+.gotTask
+
 	moveq	#0,d0
 .en 
  endif 
 	lea	PatternInfo(pc),a0
 	move.l	unpackedPatternPtr,a1
+    sf      initGuard
 
 	popm	d1-d7/a2-a6
 	rts
@@ -1238,10 +1266,26 @@ s3cont
 	rts
 
 
-s3end
+s3end:
 	DPRINT	"S3end"
 
+ if DEBUG
+    tst.w   initGuard
+    beq     .1
+    DPRINT  "****** init ongoing! ******"
+.1
+ endif
 
+    * If init is still ongoing wait for it to finish
+;.wait
+;    tst.w   initGuard
+;    beq     .noInit
+;
+;	moveq	#10,d1
+;	move.l	dosbase,a6
+;	lob 	Delay
+;    bra     .wait
+;.noInit    
 
 	tst.b	ahi_use
 	beq.b	.noAhi
@@ -1264,7 +1308,7 @@ s3end
 	lea	data,a5
 	basereg	data,a5
 
-	bsr.b	s3cont
+	bsr 	s3cont
 
 	st	PS3M_eject(a5)
 	st	PS3M_wait(a5)
@@ -1274,16 +1318,22 @@ s3end
 	cmp	#DISABLED,system(a5)
 	beq.b	.d
 
+    moveq   #0,d3
 .ll	
 	pushm	d0/d1/a0/a1/a6
-	move.l	gfxbase,a6
-	lob	WaitTOF
+	move.l	dosbase,a6
+    moveq   #10,d1
+    lob Delay
+    addq.l  #1,d3
 	popm	d0/d1/a0/a1/a6
   
  ifeq TEST
 	tst	PS3M_wait(a5)			; Wait for player
 	bne.b	.ll				; task to finish
  endc
+    
+    move.l  d3,d0
+    DPRINT  "Waited %ld times"
 
 .d
 
@@ -1361,6 +1411,7 @@ s3end
 
 .closeDebugWindow
  ifne DEBUG
+ ifeq SERIALDEBUG
 	move.l	#1*50,d1
 	move.l	dosbase,a6
 	lob 	Delay
@@ -1370,6 +1421,8 @@ s3end
 	lob	Close
 .noDbg
  endif
+ endif
+    DPRINT  "s3end done"
 	rts
 
 allocPatternBuffers
@@ -1469,10 +1522,13 @@ s3m_code
 	lob	FindTask
 	move.l	d0,ps3m_task
 
-	DPRINT	"s3m_code"
+	DPRINT	"s3m_code task=%lx"
 	
 	st	PS3M_play
-	jmp	syss3mPlay
+	jsr	syss3mPlay
+
+    clr.l   ps3m_task
+    rts
 
 
 ps3m_task	dc.l	0

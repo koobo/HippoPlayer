@@ -51,7 +51,9 @@ ver	macro
 ;	dc.b	"v2.64ß (?.?.2025)"
 ;	dc.b	"v2.64 (19.6.2025)"
 ;	dc.b	"v2.65ß (?.?.2025)"
-	dc.b	"v2.65 (26.9.2025)"
+;	dc.b	"v2.65 (26.9.2025)"
+;	dc.b	"v2.66ß (?.?.2026)"
+	dc.b	"v2.66 (23.2.2026)"
 	endm	
 
 
@@ -366,12 +368,12 @@ prefs_div		rs.b	1
 prefs_early		rs.b	1
 prefs_prefix		rs.b	1
 prefs_xfd			rs.b	1
-					rs.w	1
+prefs_infowidth		rs.w	1       * info window width pixels
 prefs_windowWidth	rs.w	1
 prefs_infopos2		rs.l	1
 prefs_arcdir		rs.b	150
 prefs_pattern		rs.b	70
-prefs_infosize		rs	1
+prefs_infosize		rs	1           * info window row count
 prefs_ps3msettings	rs.b	1
 prefs_prefsivu		rs.b	1
 prefs_kokolippu		rs.b	1		* 0: ikkuna pieni
@@ -623,6 +625,7 @@ fontbase	rs.l	1		* ordinary font to be used everywhere
 topazbase	rs.l	1
 minifontbase 	rs.l	1
 listfontbase	rs.l	1		* points to some font base
+infofontbase    rs.l    1       * info window font
 notifyhandle	rs.l	1		* Screennotifylle
 windowtop	rs	1		* ikkunoiden eisysteemialueen yläreuna
 windowright	rs	1
@@ -635,6 +638,7 @@ infolag		rs.b	1 * mitä näytetään infoikkunassa: 0=sample, ~0=about
 infotaz		rs.l	1 * infoikkunan datan osoite
 
 listFontHeight	rs.w	1
+infoFontHeight  rs.w    1
 
 windowtop2	rs	1
 windowleft2	rs	1
@@ -715,8 +719,6 @@ posUpdateSignal	rs.b	1
 audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
-info_signal	rs.b	1	* about signaali infojen päivitykseen
-info_signal2	rs.b	1	* about signaali infojen päivitykseen
 tooltipSignal	rs.b  	1	* signal for opening tooltip popup
 
 * Flag used to discard unnecessary mousemove IDCMP-messages
@@ -823,6 +825,7 @@ SAMPLE_FORMAT_IFF  = 1
 SAMPLE_FORMAT_AIFF = 2
 SAMPLE_FORMAT_WAV  = 3
 SAMPLE_FORMAT_MP3  = 4
+SAMPLE_FORMAT_OGG  = 5
 sampleformat   rs.b    1
                 rs.b        1   * PAD
 
@@ -969,9 +972,10 @@ vbtimer		rs.b	1		* ~0: Käytetään vb ajastusta
 vbtimeruse	rs.b	1		* ~0: tämän hetkinen
 groupmode_new	rs.b	1
 groupname_new	rs.b	100
-infosize_new	rs	1		* module infon koko
+;infosize_new	rs	1		* module infon koko
 infosize	rs	1
 infosizepot_new	rs	1
+infowidth   rs  1           * info window width pixels
 
 prefixcut	rs.b	1   * prefix cut setting recycled to scope priority
 scopePriority = prefixcut 
@@ -1248,9 +1252,7 @@ ssliderold	rs.l	1
 sfirstname	rs	1
 sfirstname2	rs	1
 riviamount	rs	1
-oldswinsiz	rs	1
-oldsgadsiz	rs	1
-skokonaan	rs.b	1
+skokonaan	rs.b	1       * flag to force redraw content
 		rs.b	1
 
 ******* LoadDatan muuttujia
@@ -1475,6 +1477,9 @@ listBoxClipRegion	rs.l	1
 infoBoxRegion		rs.l	1
 infoBoxClipRegion	rs.l	1
 
+infoWindowRegion     rs.l   1
+infoWindowClipRegion rs.l   1
+
 
 * String extend structure to configure custom font to string gadgets on kick2.0+
 stringExtendStruct 	rs.b	sex_SIZEOF
@@ -1664,7 +1669,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	35
+xpl_versio	=	36
 
 
 *********************************************************************************
@@ -2458,7 +2463,7 @@ about_tt
 
 ;scrtit	dc.b	"HippoPlayer - Copyright © 1994-2021 K-P Koljonen",0
 scrtit	dc.b	"HippoPlayer"
-	dc.b	" by K-P in 1994-2000, 2021-2025",0
+	dc.b	" by K-P in 1994-2000, 2021-2026",0
 	dc.b	"$VER: "
 banner_t
 	dc.b	"HippoPlayer "
@@ -2520,6 +2525,7 @@ about_t1
  dc.b 0
  dc.b $ff
  even
+
 
 
  ifne asm
@@ -4263,12 +4269,12 @@ inputhandler
 *******
 
 * sPrint = Info-ikkunaan
-sprint  pushm	all
-	add	windowleft(a5),d0
-	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
-	move.l	srastport(a5),a4
-	bra.b	doPrint	
-
+;sprint:  pushm	all
+;	add	windowleft(a5),d0
+;	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
+;	move.l	srastport(a5),a4
+;	bra.b	doPrint	
+;
 
 * Print3 = Prefs-ikkunaan
 print3	pushm	all
@@ -4335,6 +4341,10 @@ doPrint:
 .pog
 	subq	#1,d0
 	lob	Text
+
+; TEST
+;	move.l	a4,a1
+;    lob ClearEOL
 
 	tst	d7
 	beq.b	.x
@@ -4774,24 +4784,35 @@ avaa_ikkuna:
 	add	    windowtop(a5),d0
 	move    d0,nw_Height(a0)
 
+    * Check for negative X,Y
+    * This can happen on OS 3.2 and leads to OpenWindow failing.
+    tst.w   windowpos(a5)
+    bpl     .posE
+    clr.w   windowpos(a5)
+.posE
+    tst.w   windowpos+2(a5)
+    bpl     .posEE
+    clr.w   windowpos+2(a5)
+.posEE
 
 
     * Calculate left edge so that window fits
     * Set nw_LeftEdge, nw_TopEdge
     move.l  windowpos(a5),nw_LeftEdge(a0)
+
 	bsr   .leve
 
 
  if DEBUG
     pushm   d0-d3
-    moveq   #0,d0
-    moveq   #0,d1
-    moveq   #0,d2
-    moveq   #0,d3
     move    nw_Width(a0),d0
     move    nw_Height(a0),d1
     move    nw_LeftEdge(a0),d2
     move    nw_TopEdge(a0),d3
+    ext.l   d0
+    ext.l   d1
+    ext.l   d2
+    ext.l   d3
     DPRINT  "Trying to open %ldx%ld at %ld,%ld"
     popm    d0-d3
  endif
@@ -4803,7 +4824,10 @@ avaa_ikkuna:
     DPRINT  "Window open failed! Retry smaller."
     * If at 3, move the window to the top and hope for the best.
     cmp     #3,boxsize(a5)
-    bne     .smaller
+    bhi     .smaller
+    * Already tried y-reset?
+    tst     windowpos+2(a5)
+    beq     .failll
     * Reset stored window y-coordinate to zero
     clr     windowpos+2(a5)
     bra     .windowOpenLoop
@@ -4820,6 +4844,7 @@ avaa_ikkuna:
 .gotWindow
 	move.l	d0,windowbase(a5)
 	bne.b	.ok
+.failll
 .outOfMem
 	bsr	unlockscreen
 
@@ -5018,6 +5043,11 @@ getscreeninfo
 	moveq	#0,d1
 	move.b	sc_WBorBottom(a0),d1
 	DPRINT	"sc_WBorTop=%ld sc_WBorBottom=%ld"
+	moveq	#0,d0
+	move.b	sc_WBorLeft(a0),d0
+	moveq	#0,d1
+	move.b	sc_WBorRight(a0),d1
+	DPRINT	"sc_WBorLeft=%ld sc_WBorRight=%ld"
  endif
 
 	* It seems that the total height of the window
@@ -6857,7 +6887,8 @@ laatikko3
 
 
 
-drawli	cmp	d0,d2
+drawli:
+	cmp	d0,d2
 	bhi.b	.e
 	exg	d0,d2
 .e	cmp	d1,d3
@@ -13686,9 +13717,8 @@ loadprefs2
 	move.l	prefs_infopos2(a0),infopos2(a5)
 	move.b	prefs_xfd(a0),xfd(a5)
 	move	prefs_infosize(a0),infosize(a5)
-	bne.b	.rr
-	move	#16,infosize(a5)
-.rr
+    move    prefs_infowidth(a0),infowidth(a5)
+
 	move.b	prefs_infoon(a0),infoon(a5)
 	move.b	prefs_ps3msettings(a0),ps3msettings(a5)
 	move.b	prefs_prefsivu(a0),prefsivu+1(a5)
@@ -14003,6 +14033,7 @@ saveprefs
 	move.l	infopos2(a5),prefs_infopos2(a0)
 	move.b	xfd(a5),prefs_xfd(a0)
 	move	infosize(a5),prefs_infosize(a0)
+	move	infowidth(a5),prefs_infowidth(a0)
 	move.b	ps3msettings(a5),prefs_ps3msettings(a0)
 	move.b	prefsivu+1(a5),prefs_prefsivu(a0)
 	move.b	kokolippu(a5),prefs_kokolippu(a0)
@@ -14503,7 +14534,7 @@ prefs_code
 	move.b	prefixcut(a5),prefix_new(a5)
 	move.b	earlyload(a5),early_new(a5)
 	move.b	xfd(a5),xfd_new(a5)
-	move	infosize(a5),infosize_new(a5)
+	;move	infosize(a5),infosize_new(a5)
 	;;bsr	setPrefsInfoBox
 	move.b	ps3msettings(a5),ps3msettings_new(a5)
 	move.b	samplebufsiz0(a5),samplebufsiz_new(a5)
@@ -14921,6 +14952,10 @@ exprefs	move.l	_IntuiBase(a5),a6
 .hh
 	move.l	windowbase2(a5),a0
 	move.l	4(a0),windowpos_p(a5)
+    tst     windowpos_p(a5)     * negative x test
+    bpl     .nngx
+    clr     windowpos_p(a5)
+.nngx
 	lob	CloseWindow
 	clr.l	windowbase2(a5)
 .eek
@@ -15038,23 +15073,24 @@ exprefs	move.l	_IntuiBase(a5),a6
 	move.b	autosort_new(a5),autosort(a5)
 
 ;	move	infosize_new(a5),infosize(a5)
+    ; reopen info if size changed?
 
-	move	infosize(a5),d0
-	move	infosize_new(a5),infosize(a5)
-	cmp	infosize(a5),d0
-	beq.b	.eimu
-	tst	info_prosessi(a5)
-	beq.b	.eimu
-** updatetaan infoikkunaa
-	bsr	sulje_info
-	move.b	oli_infoa(a5),d7
-	st	oli_infoa(a5)
-	push	d7
-	bsr	start_info
-	pop	d7
-	move.b	d7,oli_infoa(a5)
-
-.eimu
+;	move	infosize(a5),d0
+;	move	infosize_new(a5),infosize(a5)
+;	cmp	infosize(a5),d0
+;	beq.b	.eimu
+;	tst	info_prosessi(a5)
+;	beq.b	.eimu
+;** updatetaan infoikkunaa
+;	bsr	sulje_info
+;	move.b	oli_infoa(a5),d7
+;	st	oli_infoa(a5)
+;	push	d7
+;	bsr	start_info
+;	pop	d7
+;	move.b	d7,oli_infoa(a5)
+;
+;.eimu
 
 ** asetetaan fontti
 	tst	boxsize00(a5)
@@ -15725,7 +15761,7 @@ pupdate:				* Ikkuna päivitys
 	bsr	pps3mb			* ps3m buffer
 	bsr	pupdate7b		* stereo
 	bsr	psettings		* settings file
-    bsr pps3mamigus     * ps3m amigus mode
+    bsr pps3mamigus_update    * ps3m amigus mode
 ;	bsr	pcyber			* cyber calibration
 ;	bsr	pcybername		* cyber calibration file name
 	bra	.x
@@ -15769,7 +15805,7 @@ pupdate:				* Ikkuna päivitys
 
 ***** Tarkistetaan mahtuuko avattava ikkuna ruudulle
 * a0 = ikkuna
-tark_mahtu
+tark_mahtu:
 	move	wbleveys(a5),d0		* WB:n leveys
 	move	(a0),d1			* Ikkunan x-paikka
 	add	4(a0),d1		* Ikkunan oikea laita
@@ -16719,8 +16755,8 @@ pps3mamigus
     
 .ls0	dc.b	18,3
 .ls1	dc.b	"No",0
-.ls2	dc.b	"Yes, normal",0
-.ls3	dc.b	"Yes, interpolate",0
+.ls2	dc.b	"Yes",0
+.ls3	dc.b	"Yes+interpolate",0
  even
 
 ps3mamigusDisableOthers:
@@ -17753,7 +17789,7 @@ rfont
 	bra	pfont
 
 
-.tit	dc.b	"Font for other windows",0
+.tit	dc.b	"Other window font",0
  even
 
 fontreqtags
@@ -17843,7 +17879,7 @@ rListFont
 	bra.b	pListFont
 
 
-.tit	dc.b	"Font for main window",0
+.tit	dc.b	"Main/info window font",0
  even
 
 listfontreqtags
@@ -21783,9 +21819,7 @@ sulje_info:
 .joo	
 	pushm	d0/d1/a0/a1/a6
 	move.l	info_task(a5),a1
-	moveq	#0,d0
-	move.b	info_signal(a5),d1
-	bset	d1,d0
+    move.l  #SIGBREAKF_CTRL_C,d0
 	lore	Exec,Signal	
 
 .t	tst	info_prosessi(a5)	* odotellaan
@@ -21807,9 +21841,7 @@ start_info
 	tst	info_prosessi(a5)
 	beq.b	rbutton10b
 	move.l	info_task(a5),a1		* Päivityspyyntö!
-	moveq	#0,d0
-	move.b	info_signal2(a5),d1
-	bset	d1,d0
+    move.l  #SIGBREAKF_CTRL_D,d0
 	move.l	(a5),a6
 	jmp	_LVOSignal(a6)
 
@@ -21837,12 +21869,29 @@ rbutton10b
 .n	movem.l	(sp)+,d0-a6
 .x	rts
 
-
+metaData1b dc.b    "º"
 metaData1  dc.b    "Authors: %s",0
+metaData2b dc.b    "º"
 metaData2  dc.b    "Publishers: %s",0
+metaData3b dc.b    "º"
 metaData3  dc.b    "Product: %s",0
+metaData4b dc.b    "º"
 metaData4  dc.b    "Year: %s"
  even
+
+*** Avataan ikkuna
+* 39 kirjainta mahtuu laatikkoon
+* Linefeedi ILF joka myöhemmin korvataan 10:llä. Sitävarten että voidaan
+* karsia ylimääräset linefeedit pois.
+
+ILF	=	$83
+ILF2	=	$03
+
+swflags set WFLG_SMART_REFRESH!WFLG_NOCAREREFRESH!WFLG_DRAGBAR
+swflags set swflags!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET!WFLG_RMBTRAP
+sidcmpflags set IDCMP_CLOSEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
+sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
+sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
  
 info_code:
 	lea	var_b,a5
@@ -21851,13 +21900,6 @@ info_code:
 	sub.l	a1,a1
 	lore	Exec,FindTask
 	move.l	d0,info_task(a5)
-
-	moveq	#-1,d0
-	lob	AllocSignal
-	move.b	d0,info_signal(a5)
-	moveq	#-1,d0
-	lob	AllocSignal
-	move.b	d0,info_signal2(a5)
 
     * Switch process current dir so that STIL db can be found
     move.l  homelock(a5),d1 * This is available in kick2+, PROGDIR:
@@ -21875,33 +21917,24 @@ info_code:
 
 	bsr.b	.infocode
 
-	move.b	info_signal(a5),d0
-	jsr	freesignal
-	move.b	info_signal2(a5),d0
-	jsr	freesignal
-
 	lore	Exec,Forbid
 	clr	info_prosessi(a5)
 	rts
 
 
 ************* Module info
-.infocode
 
-*** Avataan ikkuna
-* 39 kirjainta mahtuu laatikkoon
-* Linefeedi ILF joka myöhemmin korvataan 10:llä. Sitävarten että voidaan
-* karsia ylimääräset linefeedit pois.
 
-ILF	=	$83
-ILF2	=	$03
+.infocode:
+    DPRINT "--- infocode ---"
 
-swflags set WFLG_SMART_REFRESH!WFLG_NOCAREREFRESH!WFLG_DRAGBAR
-swflags set swflags!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET!WFLG_RMBTRAP
-sidcmpflags set IDCMP_CLOSEWINDOW!IDCMP_GADGETUP!IDCMP_MOUSEMOVE!IDCMP_RAWKEY
-sidcmpflags set sidcmpflags!IDCMP_MOUSEBUTTONS!IDCMP_NEWSIZE
-sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
-
+    move.l  listfontbase(a5),a0
+    tst.b   infolag(a5)
+    beq     .il
+    move.l  fontbase(a5),a0
+.il
+    move.l  a0,infofontbase(a5)
+	move	tf_YSize(a0),infoFontHeight(a5)	
 
 	tst.b	gotscreeninfo(a5)
 	bne.b	.joo
@@ -21909,59 +21942,103 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .joo
 
 	lea	swinstruc,a0
-	basereg swinstruc,a0
-	move	nw_Height+swinstruc(a0),oldswinsiz(a5)
-	move	gg_Height+gAD1(a0),oldsgadsiz(a5)
+;	move	nw_Height+swinstruc(a0),oldswinsiz(a5)
+;	move	gg_Height+gAD1(a0),oldsgadsiz(a5)
+    move    #250,nw_MinWidth(a0)
+
+    ; ---------------------------------
+    ; Set initial window + slider height
+.retry
+    move    infosize(a5),d0
+    cmp     #10,d0
+    bhs     .v1
+    moveq   #10,d0
+.v1 move    d0,infosize(a5)
 
 	move	infosize(a5),d0
-	subq	#3,d0
-	lsl	#3,d0
-	add	d0,nw_Height+swinstruc(a0)
-	add	d0,gg_Height+gAD1(a0)
-	endb	a0
+    mulu    infoFontHeight(a5),d0
+    add     windowtop(a5),d0
+    add     windowbottom(a5),d0
+    add     #16+2+2,d0
+	move	d0,nw_Height(a0)
 
-	; Set window size limits
-	; Max height 50 lines
-	move	oldswinsiz(a5),d0
-	move	d0,nw_MinHeight(a0)
-	add	#(50-3)*8,d0
-	move	d0,nw_MaxHeight(a0)
+    ; ---------------------------------
+    ; Set initial width, validate
+    move    infowidth(a5),d0
+    bne     .w0
+    move    #361-5,d0           * original default width
+.w0
+    cmp     nw_MinWidth(a0),d0
+    bhs     .w1
+    move    nw_MinWidth(a0),d0
+.w1
+    cmp     wbleveys(a5),d0
+    blo     .w2
+    move    wbleveys(a5),d0
+    subq    #8,d0
+.w2
+    move    d0,infowidth(a5)
+    move    d0,nw_Width(a0)
 
-	; fit into the screen
+    ; ---------------------------------
+	; Set window minimum size limit
+	; Min height 10 lines
+    moveq   #10,d0
+    mulu    infoFontHeight(a5),d0
+    add     windowtop(a5),d0
+    add     windowbottom(a5),d0
+    add     #16+2+2,d0
+	move    d0,nw_MinHeight(a0)
 	
+    ; ---------------------------------
+    ; See if the window fits vertically
 	move	wbkorkeus(a5),d2
 .lo	cmp	nw_Height(a0),d2
 	bhi.b	.fine
-	
-	clr	nw_TopEdge(a0)		* sijoitetaan mahd. ylös
-	subq	#1,infosize(a5)
-	subq	#8,nw_Height(a0)
 
-	move	infosize(a5),d0
-	subq	#3,d0
-	lsl	#3,d0
-	add	oldsgadsiz(a5),d0
-	move	d0,gg_Height+gAD1
-	bra.b	.lo
+    * avoid retry loop
+    cmp     #10,infosize(a5)
+    beq     .fine
 
+    move    #10,infosize(a5)
+    bra     .retry
+    ; ---------------------------------
 .fine
 	move.l	infopos2(a5),(a0)
 	bsr	tark_mahtu
 
+    ; ---------------------------------
+    ; Open window
 	move.l	a0,a2
 	basereg swinstruc,a2
 
 	move	#7,slim2height(a2)
-	
+
+ ifne DEBUG
+    moveq   #0,d0
+    moveq   #0,d1
+    moveq   #0,d2
+    moveq   #0,d3
+    move   nw_LeftEdge(a0),d0
+    move   nw_TopEdge(a0),d1
+    move   nw_Width(a0),d2
+    move   nw_Height(a0),d3
+    DPRINT  "left=%ld top=%ld width=%ld height=%ld"
+ endif
+
 	lore	Intui,OpenWindow
 	move.l	d0,swindowbase(a5)
+    DPRINT  "OpenWindow=%lx"
 
 	and.l	#~WFLG_ACTIVATE,sflags(a2) * clearataan active-flaggi
-	move	d7,swinstruc+nw_Height(a2)
+;	move	d7,swinstruc+nw_Height(a2) * TODO? d7 is uninitialized here
 	endb	a2
 
 	tst.l	d0
 	bne.b	.koo
+.slimError
+    ; Window failed to open
+    ; TODO: retry smaller and at zero y
 	lea	windowerr_t(pc),a1
 	bsr	request
 	bra	.sexit
@@ -21972,7 +22049,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	wd_UserPort(a0),suserport(a5)
 
 	move.l	srastport(a5),a1
-	move.l	fontbase(a5),a0
+	move.l	infofontbase(a5),a0
 	lore	GFX,SetFont	
 	
 	move.l	swindowbase(a5),a0
@@ -21990,29 +22067,42 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#0,d4
 	lore	Intui,ModifyProp
 
-.redraw
+
+.redraw:
 	DPRINT	"Info redraw"
+    jsr     uninitInfoWindowClip
+
+    ; ---------------------------------
+    ; Draw background texture
+	move.l	swindowbase(a5),a1
+    move.w  wd_Width(a1),d2
+    sub     windowright(a5),d2
+    subq    #5,d2               * x2
+
+
 	move.l	srastport(a5),a2
-	moveq	#4,d0
-	moveq	#11,d1
-	move	#356-5-2+2,d2
-	moveq	#147-13*8-2,d3
+	moveq	#4,d0               * x1
+	moveq	#11,d1              * y1
+;	moveq	#147-13*8-2,d3    * y2
+    moveq   #17,d3
 	move	infosize(a5),d4
-	subq	#3,d4
-	lsl	#3,d4
-	add	d4,d3
+	mulu    infoFontHeight(a5),d4           * font height
+;    sub     windowbottom(a5),d4
+	add	    d4,d3               * yy
 	bsr	drawtexture
 
-	; set slider height
-	move	infosize(a5),d0
-	subq	#3,d0
-	lsl	#3,d0
-	add	oldsgadsiz(a5),d0
-	;move	d0,gg_Height+gAD1
-
-	lea	gAD1,a3
+    ; ---------------------------------
+	; Set slider height
+    move.l  swindowbase(a5),a1
+    move.w  wd_Height(a1),d0
+    sub     windowtop(a5),d0
+    sub     windowbottom(a5),d0
+    sub     #21,d0
+	lea	    gAD1,a3
 	move	d0,gg_Height(a3)
 
+    ; ---------------------------------
+	; Draw slider frame
 	movem	4(a3),plx1/ply1/plx2/ply2	* slider
 	add	plx1,plx2
 	add	ply1,ply2
@@ -22023,20 +22113,28 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	srastport(a5),a1
 	jsr	sliderlaatikko
 
+
 .reprint
+    jsr     uninitInfoWindowClip
+
+    ; ---------------------------------
+    ; Draw inner frame, clear content area
+	move.l	swindowbase(a5),a1
+    move.w  wd_Width(a1),plx2
+    sub     windowright(a5),plx2
+    subq    #8,plx2
 
 	moveq	#29,plx1
-	move	#351-3,plx2
 	moveq	#13,ply1
-	moveq	#143-13*8,ply2
-	move	infosize(a5),d0
-	subq	#3,d0
-	lsl	#3,d0
-	add	d0,ply2
-	add	windowleft(a5),plx1
-	add	windowleft(a5),plx2
-	add	windowtop(a5),ply1
-	add	windowtop(a5),ply2
+	move	wd_Height(a1),ply2
+    sub     windowtop(a5),ply2
+    add     ply1,ply2
+    sub     #18,ply2
+	add	    windowleft(a5),plx1
+	add	    windowleft(a5),plx2
+	add	    windowtop(a5),ply1
+	add	    windowtop(a5),ply2
+    sub     windowbottom(a5),ply2
 	move.l	srastport(a5),a1
 
 	* Select box frame depending on if info or about window
@@ -22048,14 +22146,21 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	laatikko1,a0
 .a	jsr	(a0)
 
+    * d4 = XSize
+	move.l	swindowbase(a5),a1
+    move.w  wd_Width(a1),d4
+    sub     windowright(a5),d4
+    sub    #9,d4
+
+
 	moveq	#31-2+2,d0		* tyhjennetään
+    sub     d0,d4
 	moveq	#15-1,d1
-	move	#350-31-5+2,d4
-	moveq	#144-15-13*8,d5
+	;move	#350-31-5+2,d4
 	move	infosize(a5),d6
-	subq	#3,d6
-	lsl	#3,d6
-	add	d6,d5
+    mulu    infoFontHeight(a5),d6
+    moveq   #1,d5
+    add     d6,d5
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	move.l	srastport(a5),a0
@@ -22063,9 +22168,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move	d0,d2
 	move	d1,d3
 	moveq	#$0a,d6
+	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
 	lore	GFX,ClipBlit
 	st	skokonaan(a5)
 
+    ; ---------------------------------
+    ; Prepare text content in infotaz(a5)
 	jsr	obtainModuleData
 	bsr	.prepareInfoWindowContent
 	jsr	releaseModuleData
@@ -22073,7 +22182,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	tst.l	infotaz(a5)
 	beq	.sexit
 
-
+    ; Calculate amount of rows in content
 	clr	riviamount(a5)
 	move.l	infotaz(a5),a0
 .fii	tst.b	(a0)
@@ -22084,7 +22193,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra.b	.fii
 .kii
 
-	bsr	.print
+    jsr     initInfoWindowClip
+
+    ; Draw content into window
+	bsr	.infoprint
 
 	clr	sfirstname(a5)
 	bsr	.reslider
@@ -22102,19 +22214,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	suserport(a5),a4
 	move.b	MP_SIGBIT(a4),d1	* signalibitti
 	bset	d1,d0
-	move.b	info_signal(a5),d1
-	bset	d1,d0
-	move.b	info_signal2(a5),d1
-	bset	d1,d0
+    or.l    #SIGBREAKF_CTRL_C!SIGBREAKF_CTRL_D,d0
 	lore	Exec,Wait
 
 	; exit signal?
-	move.b	info_signal(a5),d1
-	btst	d1,d0
+    btst    #SIGBREAKB_CTRL_C,d0
 	bne	.sexit
 	; content refresh signal?
-	move.b	info_signal2(a5),d1
-	btst	d1,d0
+    btst    #SIGBREAKB_CTRL_D,d0
 	beq.b	.noRefresh
 	* refresh content signal
 	bsr	.flush_messages
@@ -22154,7 +22261,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#IDCMP_NEWSIZE,d0
 	cmp.l	d0,d2
 	bne.b	.noNewSize
-	bsr	.infoWindowNewSize
+	bsr	.infoWindowNewSize  * returns 1 if refresh changes
 	beq.b	.idcmpLoop
 	bsr	.flush_messages
 	bra	.redraw
@@ -22204,23 +22311,33 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .sexit	
 	DPRINT	"info exit"
 	bsr.b	.flush_messages
-
-	move	oldswinsiz(a5),nw_Height+swinstruc
-	move	oldsgadsiz(a5),gg_Height+gAD1
+    jsr     uninitInfoWindowClip
 
 	move.l	_IntuiBase(a5),a6		
 	move.l	swindowbase(a5),d0
 	beq.b	.uh1
 	move.l	d0,a0
 	move.l	4(a0),infopos2(a5) * preserve position
+    move    wd_Width(a0),infowidth(a5) * and width
+    tst     infopos2(a5)
+    bpl     .nngx
+    clr     infopos2(a5)    * negative x check
+.nngx
 	lob	CloseWindow
 	clr.l	swindowbase(a5)
+    bsr     .freeSlim2Data
 .uh1
 	bsr.b	.fraz
 
 	;bsr	freeinfosample
 	rts
 
+
+.freeSlim2Data:
+    lea     slim2DataPtr,a1  * free slider gfx buffer
+    move.l  (a1),a0
+    clr.l   (a1)
+    jmp     freemem
 
 .fraz	move.l	infotaz(a5),a0
 	cmp.l	#about_t,a0
@@ -22235,6 +22352,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra  flushWindowMessages
 	
 .reslider
+    DPRINT  "info reslider"
 	moveq	#0,d0
 	move	riviamount(a5),d0
 	bne.b	.xe
@@ -22294,10 +22412,31 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#8,d0
 .zze
 	move	d0,slim2height(a0)
+ ifne DEBUG
+    ext.l   d0
+    DPRINT  "slim2height=%ld"
+ endif
 	subq	#2+1,d0
 	move	d0,d1
 
-	lea	slim2,a2
+    ; ---------------------------------
+    * Allocate space for slider image
+    pushm   d0/d1/a0
+    bsr     .freeSlim2Data
+
+    * Allocate as much as the window is tall to be safe
+    moveq   #0,d0
+    move.l  swindowbase(a5),a1
+    move.w  wd_Height(a1),d0
+    DPRINT  "win height=%ld"
+    lsl     #2,d0           * two planes, width 16 pix
+    move.l  #MEMF_CHIP!MEMF_CLEAR,d1
+    jsr     getmem
+    move.l  d0,slim2DataPtr
+    move.l  d0,a2
+    popm    d0/d1/a0
+    beq     .bar            * did we get it?
+
 	lea	slim1a(a0),a1
 	tst.b	uusikick(a5)
 	bne.b	.newz
@@ -22320,16 +22459,54 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.refreshInfoWindowGadget
 .eiup	rts
 
-
 .infoWindowNewSize
-	DPRINT	"info newsize"
 	move.l	swindowbase(a5),a0
 	lore	Intui,RefreshWindowFrame
 	bsr	.refreshInfoWindowResizeGadget
 
 	move.l	swindowbase(a5),a0
- 	move	wd_Height(a0),d0
+    moveq   #0,d0
+    moveq   #0,d1
+ 	move	wd_Width(a0),d0
+ 	move	wd_Height(a0),d1
 
+	DPRINT	"INFO NEWSIZE width=%ld height=%ld"
+    * Grab new width so it can be saved if needed
+    move    d0,infowidth(a5)
+
+    * Calc how many rows fits in this height
+    sub     windowtop(a5),d1
+    sub     windowbottom(a5),d1
+    sub     #20,d1
+    divu    infoFontHeight(a5),d1
+
+ ifne DEBUG
+    ext.l   d1
+    DPRINT  "rows=%ld"
+ endif  
+    move    d1,infosize(a5)
+
+    * Then calc the window size as this rounds down
+    mulu    infoFontHeight(a5),d1
+    add     windowtop(a5),d1
+    add     windowbottom(a5),d1
+    add     #16+2+2,d1
+
+    * Calculate delta Y
+    sub     wd_Height(a0),d1
+    beq     .skipSize
+ ifne DEBUG
+    ext.l   d1
+    DPRINT  "resizing height by %ld"
+ endif
+    moveq   #0,d0   * Delta x
+	lore	Intui,SizeWindow
+    
+	; no refresh
+	moveq	#0,d0
+    rts
+
+ REM
 	* account for bottom border
 	subq	#6,d0
 	sub	windowbottom(a5),d0
@@ -22339,7 +22516,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	add	windowtop(a5),d1
 
 	sub	d1,d0
-	lsr	#3,d0
+    ext.l   d0
+    divu    infoFontHeight(a5),d0
 	move	infosize(a5),d3 
 	move	d0,infosize(a5)
 
@@ -22347,16 +22525,24 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
  	ext.l	d0
  	DPRINT	"size=%ld"
  endif
+
 	* adjust window height to match infosize
+ 	move	infosize(a5),d0
+    mulu    infoFontHeight(a5),d0
+    add     windowtop(a5),d0
+    add     windowbottom(a5),d0
+    add     #16+2+2,d0
+	move	d0,nw_Height+swinstruc
+    
 	subq	#3,d0
-	lsl	#3,d0
+    mulu    infoFontHeight(a5),d0
 	add	oldswinsiz(a5),d0
 	sub	wd_Height(a0),d0
 	beq.b	.skipSize
 	bmi.b	.neg
 	* ensure negative change to not go over screen,
 	* kick1.3 does not do sanity checks
-	subq	#8,d0 * font height
+	sub 	infoFontHeight(a5),d0 * font height
 .neg
  if DEBUG
  	ext.l	d0
@@ -22369,7 +22555,10 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	; new size event
 	move	d3,infosize(a5)
 	bra.b	.sizeNotChanged
+ EREM
+
 .skipSize
+    DPRINT  "no size change needed"
 	;;;bsr	setPrefsInfoBox
 	bsr	updateprefs
 	; return 1: do refresh
@@ -22433,7 +22622,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	cmp	d2,d1
 	beq.b	.rawkeyExit
 	bsr	.reslider
-	bsr.b	.print
+	bsr	.infoprint
 	
 .rawkeyExit
 	moveq	#0,d0
@@ -22467,17 +22656,19 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 	;bra.b	.print
 
-.print
-	tst.b	skokonaan(a5)
+.infoprint:
+    tst.b	skokonaan(a5)
 	beq.b	.naht
-	clr.b	skokonaan(a5)
+    clr.b	skokonaan(a5)
 
 	moveq	#0,d0
-.all0	moveq	#0,d1
+.all0	    
+    moveq	#0,d1
 	move	infosize(a5),d2
 	bra	.print2
 
-.all	move	sfirstname(a5),d0
+.all
+	move	sfirstname(a5),d0
 	bra.b	.all0
 	
 
@@ -22492,7 +22683,8 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bmi.b	.alas
 
 
-.ylos	cmp	infosize(a5),d7
+.ylos	
+    cmp	    infosize(a5),d7
 	bhs.b	.all
 
 
@@ -22503,7 +22695,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	moveq	#16-1,d1		* source y
 
 	move	d7,d3
-	lsl	#3,d3
+    mulu    infoFontHeight(a5),d3
 	add	#16-1,d3		* dest y
 
 	bsr.b	.copy
@@ -22524,7 +22716,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * kohtaan infosize-d7 d7 kpl uusia rivejä
 
 	move	d7,d1
-	lsl	#3,d1
+    mulu    infoFontHeight(a5),d1
 	add	#16-1,d1		* source y	
 	moveq	#16-1,d3		* dest y
 
@@ -22545,15 +22737,22 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ** kopioidaan 
 
 .copy	
+    * calc x-size
+    move.l  swindowbase(a5),a2
+    move    wd_Width(a2),d4
+    sub     #40-1-1-1,d4
+    sub     windowleft(a5),d4
+    sub     windowright(a5),d4
 
 	move	infosize(a5),d5	* y size
 	sub	d7,d5
-	lsl	#3,d5
+    mulu    infoFontHeight(a5),d5
 
 	move.b	#$c0,d6		* minterm: a->d
-	moveq	#31-2,d0		* source x =
+	moveq	#31-2,d0	* source x =
 	move.l	d0,d2		* dest x
-	move	#39*8+4,d4	* x size
+;	move	#39*8+4,d4	* x size
+
 	add	windowleft(a5),d0
 	add	windowtop(a5),d1
 	add	windowleft(a5),d2
@@ -22565,10 +22764,17 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 
-* d0 = alkurivi
+* d0 = alkurivi tekstissä
 * d1 = eka rivi ruudulla
 * d2 = printattavien rivien määrä
 .print2
+; ifne DEBUG
+;    and.l   #$ffff,d0
+;    and.l   #$ffff,d1
+;    and.l   #$ffff,d2
+;    DPRINT  "InfoPrint start=%ld first=%ld rows=%ld"
+; endif
+
 	move.l	infotaz(a5),a3
 	subq	#1,d0
 	bmi.b	.rr
@@ -22581,38 +22787,46 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .ra
 
 	move	d1,d7
-	lsl	#3,d7
-	add	#22-1,d7
+    mulu    infoFontHeight(a5),d7
+	add	#22-1+2+1+8-16-1,d7           * y-offset
 	
+
 	move	d2,d6
-	subq	#1,d6		* ???
+	subq	#1,d6		* DBF
 
+    ; ---------------------------------
+    ; Line loop
 .lorp
-	lea	-50(sp),sp
-	move.l	sp,a0
-	move.l	a0,a1
+	lea	-200(sp),sp  * buffer for line
+	move.l	sp,a1
 
-	move.l	a1,d0
-
-.lorp2	move.b	(a3)+,(a1)+
+.lorp2	
+    move.b	(a3)+,d0
 	beq.b	.xp
-	
-	cmp.b	#10,-1(a1)
-	bne.b	.lorp2
-	clr.b	-1(a1)	
-	addq	#1,a3		* skipataan ILF2
-.xp	subq	#1,a1
 
-	move.l	a1,d1
-	sub.l	d0,d1
-	moveq	#39,d0
-	sub	d1,d0
-	subq	#1,d0
-	bmi.b	.xo
-.pe	move.b	#' ',(a1)+
-	dbf	d0,.pe
-	clr.b	(a1)
-.xo
+    cmp.b   #"¢",d0 * right alignment separator 
+    beq     .xp
+
+    cmp.b   #ILF2,d0
+    beq     .lorp2
+    cmp.b   #ILF,d0
+    beq     .xp
+    cmp.b   #10,d0
+    beq     .xp
+    * copy
+    move.b  d0,(a1)+
+    bra     .lorp2
+.xp
+	clr.b	(a1)    * null term
+
+    move.l  a1,d5
+    sub.l   sp,d5       * strlen
+
+; ifne DEBUG
+;    move.l  sp,d0
+;    DPRINT  "Line: %s"
+; endif
+
 
 ;	cmp.l	#"----",(a0)
 ;	bne.b	.xq
@@ -22620,12 +22834,167 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 ;	bra.b	.xw
 ;.xq
 
-	moveq	#35-2,d0
-	move	d7,d1
-	jsr	sprint
+	moveq	#35-2,d0        * x1 relative to windowleft(a5)
+	move	d7,d1           * y1 relative to windowtop(a5)
+    
+    add	windowleft(a5),d0
+	add	windowtop(a5),d1	* suhteutetaan palkin fonttiin
+	move.l	srastport(a5),a1
+    add.w   rp_TxBaseline(A1),D1
+    lore    GFX,Move
 
-.xw	addq	#8,d7
-	lea	50(sp),sp
+    ; ---------------------------------
+    ; Clear line, relies on clipping
+    lob     ClearEOL
+
+    ; ---------------------------------
+    ; Print a separator
+    cmp.b   #"÷",(sp)
+    bne     .ss1
+    cmp.b   #"÷",1(sp)
+    bne     .ss1
+
+    ; Adjust vertically to middle of the font
+	move.l	srastport(a5),a1
+    move.w  rp_cp_x(a1),d0
+    move.w  rp_cp_y(a1),d1
+    move    infoFontHeight(a5),d2
+    subq    #1,d2
+    lsr     #1,d2
+    sub     d2,d1
+    lob     Move
+
+    move.l  swindowbase(a5),a0
+	move.l	srastport(a5),a1
+
+    move    wd_LeftEdge(a0),d0
+    add     wd_Width(a0),d0
+    sub     #14,d0  * slider area magic
+    
+    move.w  rp_cp_y(a1),d1
+    lob     Draw    
+    bra     .ss2
+.ss1
+    ; ---------------------------------
+    ; Print text
+
+    ; Align center?
+    move.l  sp,a2
+    cmp.b   #"°",(a2)   * center indicator
+    bne     .noCenter
+
+    subq    #1,d5       * modify length to remove separator
+    addq    #1,a2
+
+    DPRINT  "center"
+;    * a0 = text, d0 = char count
+    move.l  a2,a0
+    move.l  d5,d0
+	move.l	srastport(a5),a1
+	lob	    TextLength
+    lsr     #1,d0
+    move    d0,d2
+
+    move.l  swindowbase(a5),a0
+	move.l	srastport(a5),a1
+
+    move    wd_Width(a0),d0
+;    sub     rp_cp_x(a1),d0
+    sub     windowright(a5),d0
+    sub     windowleft(a5),d0
+    sub     #40,d0
+    lsr     #1,d0
+    sub     d2,d0
+    add.w   rp_cp_x(a1),d0
+    move.w  rp_cp_y(a1),d1
+    lob     Move
+    bra     .noBold
+
+.noCenter
+    cmp.b   #"º",(a2)       * bold indicator 
+    bne     .noBold
+
+	move.l	srastport(a5),a1
+    moveq   #FSF_BOLD,d0          
+	moveq	#FSF_BOLD,d1
+	lob     SetSoftStyle
+
+.fc cmp.b   #":",(a2)+      * print bold until ":"
+    bne     .fc
+
+    move.l  a2,d0
+    sub.l   sp,d0
+    sub.l   d0,d5
+
+	move.l	srastport(a5),a1
+    move.l  sp,a0
+    addq.l  #1,a0
+    subq.l  #1,d0
+    lob     Text
+
+	move.l	srastport(a5),a1
+    moveq   #0,d0          
+	moveq	#FSF_BOLD,d1
+	lob     SetSoftStyle
+
+.noBold
+
+    * a0 = string
+    * d0 = length
+	move.l	srastport(a5),a1
+    move.l  a2,a0
+    move.l  d5,d0
+    lob     Text
+
+    ; ---------------------------------
+    ; Print text with right align
+    ; See if there is an alignment marker
+    cmp.b   #"¢",-1(a3)
+    bne     .noAlign
+    move.l  sp,a1
+.lorp22	
+    move.b	(a3)+,d0
+	beq.b	.xp2
+    cmp.b   #ILF2,d0
+    beq     .lorp22
+    cmp.b   #ILF,d0
+    beq     .xp2
+    cmp.b   #10,d0
+    beq     .xp2
+    * copy
+    move.b  d0,(a1)+
+    bra     .lorp22
+.xp2
+	clr.b	(a1)    * null term
+
+    move.l  a1,d0
+    sub.l   sp,d0
+    move.l  d0,d4   * stash char count
+
+    * a0 = text, d0 = char count
+    move.l  sp,a0
+	move.l	srastport(a5),a1
+	lob	    TextLength
+    move.l  d0,d1       
+
+    move.l  swindowbase(a5),a0
+    move     wd_Width(a0),d0
+    sub     d1,d0
+    sub     #14,d0  * magic
+
+	move.l	srastport(a5),a1
+    move.w  rp_cp_y(a1),d1
+    lob     Move
+
+	move.l	srastport(a5),a1
+    move.l  sp,a0
+    move.l  d4,d0
+    lob     Text
+.noAlign    
+
+.ss2
+    add     infoFontHeight(a5),d7
+	lea	200(sp),sp
 	tst.b	-1(a3)
 	beq.b	.xip
 
@@ -22633,6 +23002,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 .xip
 	rts
 	
+
 
 * x = 35
 * y = d7
@@ -22795,6 +23165,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     move.l  infotaz(a5),a3
 
     move.l  a3,a0
+    lea     wrappage(pc),a1
     jsr     getMp3TagText
 
     ;----------------------------------
@@ -22829,40 +23200,30 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bra     .selvis
 
 ; Icy specific putter
+; In:
+;   a0 = title text
+;   a3 = output 
+;   d0 = content
 .putIcy
-    push    a3
-    jsr     desmsg3
-    pop     a0
-	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
-    ; do ines wrapping at space
-	bsr    	.doLine
-    bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-	bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-	bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-	bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-	bpl    	.ic1
-    move.b  #" ",(a3)+
-	bsr    	.doLine
-.ic1   
+.cpI
+    move.b  (a0)+,(a3)+
+    bne     .cpI
+    subq    #1,a3
+	bsr	.putLineChange
+    move.l  d0,a0
+    bsr     wrappage
+	move.l	infotaz(a5),a3
+	bsr	.lloppu
+	bsr	.putLineChange
+	bsr	.putLineChange
     rts
 
-
 .icyForm1
-    dc.b    ILF,ILF2," Name:",ILF,ILF2
-    dc.b    " %s",ILF,ILF2,0
+    dc.b    "ºName:",0
 .icyForm2
-    dc.b    ILF,ILF2," Description:",ILF,ILF2
-    dc.b    " %-.250s",ILF,ILF2,0
+    dc.b    "ºDescription:",0
  even
 
 .nosample
@@ -23023,37 +23384,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * SID piisista infoa
 
 	move	#33,info_prosessi(a5)		* PSID info-lippu
-
-    lea     t6581,a2
-    jsr     sid_getSidVersion
-    beq     .6581
-    lea     t8580-t6581(a2),a2
-.6581
-    jsr     sid_getSongSpeed
-    * d0 = speed number 
-    * d1 = speed hz 
-
-	lea	-128(sp),sp
-	move.l	sp,a1
-	pushpea	sidheader+sidh_name(a5),(a1)+
-	pushpea	sidheader+sidh_author(a5),(a1)+
-	pushpea	sidheader+sidh_copyright(a5),(a1)+
-	clr.l	(a1)+
-	clr.l	(a1)+
-	move	sidheader+sidh_number(a5),-6(a1)
-	move	sidheader+sidh_defsong(a5),-2(a1)
-    move.l  d0,(a1)+    * song speed
-    move.l  d1,(a1)+    * song speed hz
-    move.l  a2,(a1)+    * sid type
-    pushpea .stilNag(pc),(a1)+ * stil comment
-	move.l	modulelength(a5),(a1)+
-	move.l	moduleaddress(a5),d0
-	move.l	d0,(a1)+
-	add.l	modulelength(a5),d0
-	move.l	d0,(a1)+
-	pushpea	filecomment(a5),(a1)+
-	clr.l	(a1)
-
     moveq	#13,d5  * allocate 13 lines text buffer initially
 
     * Check if there is STIL data available
@@ -23064,7 +23394,6 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     * d0 = length or null if not found, negative if no stil data
     tst.l   d0
     bmi     .noSTIL
-    clr.l   -20(a1)     * remove STIL nag
     tst.l   d0
     beq     .noSTIL
 
@@ -23080,16 +23409,53 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     * Allocate text buffer, amount of lines in d5
 	bsr	.allo2
 	bne.b	.jee9
-	lea	128(sp),sp
 	bra	.prepareFailed
 .jee9
 
-	lea	.form(pc),a0
-	move.l	sp,a1       * parameters in
+    * Stuff text into output buffer
 	move.l	infotaz(a5),a3
-	bsr	.desmsg4
-	lea	128(sp),sp
+    bsr     .lloppu
+	lea	.form(pc),a0
+.sif move.b  (a0)+,(a3)+
+    bne     .sif
+    
+    * Below fields with wrapping
+	lea	    .sform2(pc),a0 
+	pushpea	sidheader+sidh_name(a5),d0
+    bsr     .deliPutInfo2
+	lea	    .sform3(pc),a0 
+	pushpea	sidheader+sidh_author(a5),d0
+    bsr     .deliPutInfo2
+	lea	    .sform4(pc),a0 
+	pushpea	sidheader+sidh_copyright(a5),d0
+    bsr     .deliPutInfo2
+	lea	    .sform5(pc),a0 
+    moveq   #0,d0
+    moveq   #0,d1
+    move    sidheader+sidh_number(a5),d0
+    move    sidheader+sidh_defsong(a5),d1
+    bsr     .deliPutInfo2
+    jsr     sid_getSongSpeed
+    * d0 = speed number 
+    * d1 = speed hz 
+	lea 	.sform6(pc),a0 
+    bsr     .deliPutInfo2
+    lea     t6581,a2
+    jsr     sid_getSidVersion
+    beq     .6581
+    lea     t8580-t6581(a2),a2
+.6581
+    move.l  a2,d0
+	lea 	.sform7(pc),a0 
+    bsr     .deliPutInfo2
+	lea 	.sform8(pc),a0 
+    move.l	modulelength(a5),d0
+	move.l	moduleaddress(a5),d1
+    move.l  d1,d2
+	add.l	d0,d2
+    bsr .deliPutInfo2
 
+    * Final field 
 	bsr	.putcomment
 
     ;----------------------------------
@@ -23118,22 +23484,22 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bra	.selvis
 
 
+.sform0
 .form	dc.b	"PSID-module",ILF,ILF2
-	dc.b	"­­­­­­­­­­­",ILF,ILF2
-	dc.b	"Name: %-33.33s",ILF,ILF2
-	dc.b	"Author: %-31.31s",ILF,ILF2
-	dc.b	"Copyright: %-28.28s",ILF,ILF2
-	dc.b	"Songs: %ld (default %ld)",ILF,ILF2
-    dc.b	"Song speed: %ld (%ld Hz)",ILF,ILF2
-    dc.b	"SID type: %-4.4s %24.24s",ILF,ILF2
-	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
-	dc.b	"Comment:",ILF,ILF2,0
+.sform1     dc.b    "÷÷",ILF,ILF2,0
+.sform2 	dc.b	"ºName: %s",ILF,ILF2,0
+.sform3 	dc.b	"ºAuthor: %s",ILF,ILF2,0
+.sform4 	dc.b	"ºCopyright: %s",ILF,ILF2,0
+.sform5 	dc.b	"ºSongs: %ld (default %ld)",ILF,ILF2,0
+.sform6     dc.b	"ºSong speed: %ld (%ld Hz)",ILF,ILF2,0
+.sform7     dc.b	"ºSID type: %s",ILF,ILF2,0
+.sform8 	dc.b	"ºSize: %ld ($%lx-$%lx)",ILF,ILF2,0
+;.sform9 	dc.b	"ºComment:",ILF,ILF2,0
  even
 
 .huhe	dc.b	ILF,ILF2
-	dc.b	"          No info available.",0
+	dc.b	"°No info available.",0
 .zero = *-1
-.stilNag    dc.b     "Get STIL for more!",0
  even
 
 .nosid
@@ -23163,10 +23529,12 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.desmsg4
 	bsr	.putcomment
 	lea	32(sp),sp
+    beq     .noCmt
 
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	.putLineChange
+.noCmt
 
 	move.l	#MI_SongName,d1
 	lea	.eagleSong(pc),a0
@@ -23222,117 +23590,70 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	lea	.eagleName(pc),a0 
 	bsr 	.deliPutInfo2	
 .noPlrName 
+
 	* Creator, 1-3 lines
 	move.l	#DTP_Creator,d0 
 	jsr	deliGetTag 
 	beq 	.noCrtr
 	lea	.eagleCreator(pc),a0 
-	; format output buffer
-	lea	-200(sp),sp
-	move.l	sp,a3
-	jsr	desmsg3
-	move.l	sp,a0
+    bsr     .deliPutInfo2
 
-	; target output buffer
-	move.l	infotaz(a5),a3
-	bsr	.lloppu
-	; do three lines wrapping at space
-	bsr 	.doLine
-	bpl 	.endss
-	bsr 	.doLine
-	bpl 	.endss
-	bsr 	.doLine
-.endss
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr	    .putLineChange
     bsr     .putMetaDataWithExtraLineChange
-	bra 	.ends
 
-* Copies a line to output, cuts at space near the end of line
-* in:
-*   a0 = input text
-*   a3 = output buffer
-* out:
-*   a0 = pointer to next line if available
-*   a3 = pointer to next position in output buffer
-*   d0 = negative: all input handled
-*        positive: data left in input for the next row
-.doLine:
- 	moveq	#39-1,d0
-	moveq	#0,d1
-.cl1	cmp.b	#" ",(a0)
-	bne.b	.ns1
-	addq	#1,d1 ; keep track of spaces
-.ns1	
-    move.b  (a0)+,d2
-    cmp.b   #ILF2,d2
-    bne.b   .noIlf2
-    * Line change resets the counter
-    moveq	#39-1,d0    
-.noIlf2
-    move.b  d2,(a3)+
-	dbeq	d0,.cl1
-    ; d0 = -1, all chars copied
- 	tst 	d0
-	bpl	    .endLine
- 	; find previous space to cut from
-	; SAFETY: if there are any
-	tst	d1
-	beq.b	.endLin
-.li1	subq	#1,a3
-	cmp.b	#" ",-(a0)
-	bne.b	.li1
-	addq	#1,a0
-	move.l	a0,d0
-.endLin
-	moveq	#-1,d0
-.endLine
-	bsr	.putLineChange
-	tst	d0
-	rts
-
-.ends
-	lea	200(sp),sp
 .noCrtr
 	bra	.selvis
 
-.deliPutInfo
+.deliPutInfo:
 	push 	a0
 	jsr	deliFindInfoValue
 	pop  	a0
 	tst.l	d0
 	* zero or lower
 	ble.b	.noInfo
-.deliPutInfo2
+.deliPutInfo2:
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
 	bsr.b	.deliFormat
 .noInfo
 	rts
 
+* in:
+*   a0 = format text
+*   a3 = output buffer
+*   d0 = data
 .deliFormat	
 	pushm	d0-d7
 	move.l	sp,a1
+    lea     -200(sp),sp  * formatted text
+    move.l  a3,a4
+    move.l  sp,a3
 	lea	putc,a2	;merkkien siirto
 	lore 	Exec,RawDoFmt
+    move.l  sp,a0
+    move.l  a4,a3
+    bsr     wrappage    * wrap it into output
+    lea     200(sp),sp
+    bsr     info_code\.putLineChange  * new linechange into a3
 	popm	d0-d7
 	rts
 
 * max width: 39
-.eagleSong	 	dc.b	"Song: %-33.33s",ILF,ILF2,0
-.eagleAuthor		dc.b	"Author: %-31.31s",ILF,ILF2,0
-.eagleSubsongs		dc.b	"Subsongs: %ld",ILF,ILF2,0
-.eagleSamples		dc.b	"Samples: %ld",ILF,ILF2,0
-.eagleSynthSamples	dc.b	"Synth samples: %ld",ILF,ILF2,0
-.eagleSongSize	 	dc.b	"Song size: %ld bytes",ILF,ILF2,0
-.eagleSamplesSize	dc.b	"Samples size: %ld bytes",ILF,ILF2,0
-.eaglePrefix 		dc.b	"Prefix: %s",ILF,ILF2,0
-.eagleVoices	 	dc.b	"Voices: %ld",ILF,ILF2,0
-.eagleDuration	 	dc.b	"Duration: %02ld:%02ld",ILF,ILF2,0
-.eagleAbout	     	dc.b	"About: %-32.32s",ILF,ILF2,0
-.eagleName		dc.b	"Eagleplayer: %-26.26s",ILF,ILF2,0
-.eagleCreator       	dc.b	"Creator: %s",0
+.eagleSong	 	    dc.b	"ºSong: %s",ILF,ILF2,0
+.eagleAuthor		dc.b	"ºAuthor: %s",ILF,ILF2,0
+.eagleSubsongs		dc.b	"ºSubsongs: %ld",ILF,ILF2,0
+.eagleSamples		dc.b	"ºSamples: %ld",ILF,ILF2,0
+.eagleSynthSamples	dc.b	"ºSynth samples: %ld",ILF,ILF2,0
+.eagleSongSize	 	dc.b	"ºSong size: %ld bytes",ILF,ILF2,0
+.eagleSamplesSize	dc.b	"ºSamples size: %ld bytes",ILF,ILF2,0
+.eaglePrefix 		dc.b	"ºPrefix: %s",ILF,ILF2,0
+.eagleVoices	 	dc.b	"ºVoices: %ld",ILF,ILF2,0
+.eagleDuration	 	dc.b	"ºDuration: %02ld:%02ld",ILF,ILF2,0
+.eagleAbout	     	dc.b	"ºAbout: %s",ILF,ILF2,0
+.eagleName		    dc.b	"ºEagleplayer: %s",ILF,ILF2,0
+.eagleCreator       dc.b	"ºCreator: %s",0
  even
 
 .noeagle
@@ -23581,29 +23902,30 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 * PS3M
-.form11	dc.b	"Name: %-33.33s",ILF,ILF2
-	dc.b	"Type: %-25.25s %2.ld.%1.1ldkHz",ILF,ILF2
-	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
-	dc.b	"Comment: ",0
+.form11	dc.b	"ºName: %s",ILF,ILF2
+	dc.b	"ºType: %s %2.ld.%1.1ldkHz",ILF,ILF2
+	dc.b	"ºSize: %ld ($%lx-$%lx)",ILF,ILF2,0
+
+.commentForm:
+	dc.b	"ºComment: %s",ILF,ILF2,0
 
 
 * PT
-.form1	dc.b	"Name: %-33.33s",ILF,ILF2
-	dc.b	"Type: %-33.33s",ILF,ILF2
-	dc.b	"Size: %-7.ld     ($%08.lx-$%08.lx)",ILF,ILF2
-	dc.b	"Comment: ",0
+.form1	dc.b	"ºName: %s",ILF,ILF2
+	dc.b	"ºType: %s",ILF,ILF2
+	dc.b	"ºSize: %ld ($%lx-$%lx)",ILF,ILF2,0
 
 ** PT
 
-.form0	dc.b	'%02ld %-22.22s        %6ld',ILF,ILF2,0
+.form0	dc.b	'%02ld %s ¢%ld',ILF,ILF2,0
 
 ** PS3M
 
 .medform 
-.form2	dc.b	"%03ld %-28.28s %6.6ld",ILF,ILF2,0
+.form2	dc.b	"%03ld %s ¢%ld",ILF,ILF2,0
 
 .thxform
- 	dc.b	"%03ld %-35.35s",ILF,ILF2,0
+ 	dc.b	"%03ld %s",ILF,ILF2,0
 
  even
 
@@ -23649,17 +23971,19 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	move.l	sp,a3
 	jsr	desmsg3
 	move.l	sp,a0
-	move.l	a0,d0
+;	move.l	a0,d0
 
 	; target output buffer
 	move.l	infotaz(a5),a3
 	bsr	.lloppu
-	bsr	.doLine
-	bpl.b	.endA
-	bsr	.doLine
-	bpl.b	.endA
-	bsr	.doLine
-.endA	lea	200(sp),sp
+;	bsr	.doLine
+;	bpl.b	.endA
+;	bsr	.doLine
+;	bpl.b	.endA
+;	bsr	.doLine
+;.endA
+    bsr     wrappage
+	lea	200(sp),sp
 .noAuth
 
     bsr     .putMetaDataWithExtraLineChange
@@ -23668,13 +23992,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .form3	
-	dc.b	"Name: %-33.33s",ILF,ILF2
-	dc.b	"Type: %-33.33s",ILF,ILF2
-	dc.b	"Size: %-9.ld   ($%08.lx-$%08.lx)",ILF,ILF2
-	dc.b	ILF,ILF2
-	dc.b	"Comment:",ILF,ILF2,0
+	dc.b	"ºName: %s",ILF,ILF2
+	dc.b	"ºType: %s",ILF,ILF2
+	dc.b	"ºSize: %ld ($%lx-$%lx)",ILF,ILF2
+	dc.b	ILF,ILF2,0
+;	dc.b	"ºComment:",ILF,ILF2,0
 .author
-	dc.b	"Player: %s",0
+	dc.b	"ºPlayer: %s",0
   even
 
 
@@ -23689,13 +24013,13 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     tst.b   (a4)
     beq     .noMeta
     push    d1
-    lea     metaData1(pc),a0 
+    lea     metaData1b(pc),a0 
     bsr     .putMetaLine
-    lea     metaData2(pc),a0 
+    lea     metaData2b(pc),a0 
     bsr     .putMetaLine
-    lea     metaData3(pc),a0 
+    lea     metaData3b(pc),a0 
     bsr     .putMetaLine
-    lea     metaData4(pc),a0 
+    lea     metaData4b(pc),a0 
     bsr     .putMetaLine
     tst.l   (sp)+
     beq     .noMeta
@@ -23720,13 +24044,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
     bsr     .putLineChangeToEndOfBuffer
     
     move.l  sp,a0
-    move.l  a3,a1
-    bsr     .doLine
-    bpl     .endM
-    bsr     .doLine
-    bpl     .endM
-    bsr     .doLine
-.endM
+    bsr     wrappage
 
     lea     100(sp),sp
 
@@ -23743,46 +24061,16 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 
 .putcomment:
-	pushm	d0/d1/a0/a3
-	moveq	#39+1,d1
-	bra.b	.puct
+    lea     filecomment(a5),a0
+    tst.b   (a0)
+    beq     .noCommentz
+    move.l  a0,d0
+	lea	    .commentForm(pc),a0 
+    bsr     .deliPutInfo2
+    moveq   #1,d0
+.noCommentz
+    rts
 
-.putcomment2
-	pushm	d0/d1/a0/a3
-	moveq	#30+1,d1
-.puct
-	move.l	infotaz(a5),a3
-	bsr	.lloppu
-	lea	filecomment(a5),a0
- if DEBUG
-	move.l	a0,d0
-	DPRINT	"comment: %s"
- endif
-	tst.b	(a0)
-	beq.b	.empty
-	bsr.b	.putlines
-	bsr	.putLineChange
-	bsr	.putLineChange
-.empty
-	popm	d0/d1/a0/a3
-	rts
-
-* d1 = character limit for the first line to be put
-.putlines
-	moveq	#0,d0
-.com	addq	#1,d0
-	cmp	d1,d0
-	bne.b	.naga
-	moveq	#39,d1
-	tst.b	(a0)
-	beq.b	.naga
-	moveq	#0,d0
-	bsr	.putLineChange
-.naga	move.b	(a0)+,(a3)+
-	bne.b	.com
-	subq	#1,a3 ; back to NULL
-	rts
- 
 *************************************
 
 * writes into a4 depending on format:
@@ -23794,7 +24082,7 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 * - module start addr
 * - module end addr
 
-.namtypsizcom
+.namtypsizcom:
 	pushm	d0/d1
 
 	pushpea	modulename(a5),(a4)+
@@ -23904,18 +24192,22 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bsr	.desmsg4
 	lea	32(sp),sp
 
-	bsr	.putcomment2
+	bsr	.putcomment
 	
+    ; Remove last ILF,ILF2, putMetaData will append it
 	move.l	infotaz(a5),a3
 	bsr 	.lloppu
+    clr.b   -2(a3)
+
     bsr     .putMetaData
 	move.l	infotaz(a5),a3
 	bsr 	.lloppu
 
 	bsr	.putLineChange
-	moveq	#39-1,d0
-.ca	move.b	#"­",(a3)+
-	dbf	d0,.ca
+
+    ; separator magic
+    move.b  #"÷",(a3)+
+    move.b  #"÷",(a3)+
 	bsr	.putLineChange
 	clr.b	(a3)
 
@@ -24010,35 +24302,39 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ****** PT sample play
 
+* In:
+*  d5 = mouse x
+*  d6 = mouse y
 .samplePlay
-	sub	windowleft(a5),d5
-	sub	windowtop(a5),d6	* suhteutus fonttiin
-
-	cmp	#31,d5
-	blo	.samplePlayExit
-	cmp	#345,d5
-	bhi	.samplePlayExit
-	cmp	#14,d6
-	blo	.samplePlayExit
-	move	infosize(a5),d0
-	lsl	#3,d0
-	add	#14,d0
-	cmp	d0,d6
-	bhi	.samplePlayExit
-
 	tst.b	ahi_muutpois(a5)
 	bne	.samplePlayExit
-
 	cmp	#pt_prot,playertype(a5)
 	bne	.samplePlayExit
 	tst.l	playingmodule(a5)
 	bmi	.samplePlayExit
 
+	sub	windowleft(a5),d5
+	sub	windowtop(a5),d6	* suhteutus fonttiin
+
+    ; X-check
+    lea    gAD1,a0
+    move   gg_LeftEdge(a0),d0
+    add    gg_Width(a0),d0
+    ;sub #31,d5
+    sub     d0,d5
+	bmi	.samplePlayExit
+
+    ; Y-check
+	cmp	#14,d6
+	blo	.samplePlayExit
+
 * d5/d6 = mouse x/y
 
+    moveq   #0,d0
 	move	d6,d0
 	sub	#14+1,d0
-	lsr	#3,d0
+    ext.l   d0
+    divu   infoFontHeight(a5),d0
 	add	sfirstname(a5),d0
 	subq	#1,d0
 	bmi	.samplePlayExit
@@ -24059,9 +24355,14 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 	bhi	.samplePlayExit
 	and	#$f,d0
 	mulu	#10,d0
-	move.b	(a0)+,d1
-	and	#$f,d1
+    moveq   #$f,d1
+	and.b	(a0)+,d1
 	add	d1,d0		* d0 = samplenum
+
+ ifne DEBUG
+    ext.l   d0
+    DPRINT  "hit sample=%ld"
+ endif
 
 	cmp	#$1f,d0
 	bhi.b	.samplePlayExit
@@ -24211,11 +24512,24 @@ sidcmpflags set sidcmpflags!IDCMP_ACTIVEWINDOW!IDCMP_INACTIVEWINDOW
 
 ** Mouse coordinate defines the sample period
 ** perioidi mousen x-koordinaatista
-	sub	#31,d5			* d5 = 0-315
-	mulu	#36,d5
-	divu	#315,d5
-	add	d5,d5
-	move	periods(pc,d5),d5
+    moveq   #0,d0
+    move    d5,d0
+    move.l  swindowbase(a5),a0
+    mulu    #(periodsEnd-periods)/2,d0
+    divu    wd_Width(a0),d0
+
+    cmp     #35,d0
+    bls     .sok
+    moveq   #35,d0
+.sok
+
+ ifne DEBUG
+    ext.l   d0
+    DPRINT  "x-step=%ld"
+ endif
+
+    add     d0,d0
+	move	periods(pc,d0),d5
 
 	move	d5,$a6-$96(a3)
 	move	d5,$b6-$96(a3)
@@ -24270,6 +24584,143 @@ periodsSynthEnd
 ;	popm	all
 ;.x	rts
 
+
+* In:
+*   a0 = input text
+*   a3 = output text buffer
+* Out:
+*   a0 = updated pointer
+*   a3 = updated pointer
+wrappage:
+    pushm   d0-d7/a1/a2/a4-a6   
+    lea     var_b,a5            * needed as may be called from sampleplayer context
+ ifne DEBUG
+    move.l  a0,d0
+    DPRINT  "Wrap text '%s'"
+ endif
+    
+
+	move.l	swindowbase(a5),a1  
+    move.w  wd_Width(a1),d6
+    sub     windowright(a5),d6
+    sub     windowleft(a5),d6
+    sub     #35-2+5+5,d6     * width of slider etc magic
+
+    * output buffer in a3
+    move.l  a0,a4       * input text in a4
+    lea     -50(sp),sp * word buffer
+    moveq   #0,d7       * current X
+.wrapLoop
+    move.l  sp,a2       * word buffer
+    clr.b   (a2)
+    * copy one word into a2
+    bsr     .doCopyWord
+    * find length, ignore linefeeds
+    move.l  sp,a0   * word
+.fe tst.b   (a0)+
+    bne     .fe
+    * find out exact end of word, skip line changes
+.fe2
+    move.b  -(a0),d0
+    beq     .fe2
+    cmp.b   #ILF,d0
+    beq     .fe2
+    cmp.b   #ILF2,d0
+    beq     .fe2
+;    cmp.b   #10,d0
+;    beq     .fe2
+.fe22
+    move.l  a0,d0
+    sub.l   sp,d0
+    addq.l  #1,d0
+    move    d0,d5   * stash word length 
+    move.l  sp,a0   * word
+; ifne DEBUG
+;    move.l  sp,d1
+;    DPRINT  "length=%ld word='%s'"
+; endif 
+    * a0 = text, d0 = char count
+	move.l	srastport(a5),a1
+	lore	GFX,TextLength
+    * d0 = word length in pixels, 16 bits
+;    DPRINT  "pixels=%ld"
+ ifne DEBUG
+    cmp     #800,d0
+    blo     .okL
+    DPRINT  "abnormal=%ld"
+.okL
+ endif
+
+    add     d0,d7   * new x-position
+    cmp     d6,d7   * is the x-position over the width limit
+    blo     .wordFits
+    * word does not fit
+    bsr     info_code\.putLineChange  * new linechange into a3
+    move    d0,d7           * start a new line, initial position
+.wordFits
+
+    * copy word from word buffer into output
+    move.l  sp,a0
+    subq    #1,d5
+    bmi     .ccc
+.copyChars
+    move.b  (a0)+,(a3)+
+    dbf     d5,.copyChars
+.ccc
+
+    tst.b   -1(a4)
+    beq     .wrapEnd
+    tst.b   (a4)    * end of input
+    bne     .wrapLoop
+    addq    #1,a4
+.wrapEnd
+;    DPRINT  "wrap done"
+   ; bsr     info_code\.putLineChange  * new linechange into a3
+    lea     50(sp),sp
+    move.l  a4,a0
+    popm    d0-d7/a1/a2/a4-a6
+    rts
+
+
+.doCopyWord
+.copyWord
+    move.b  (a4)+,d0
+    beq     .wordEnd
+    cmp.b   #13,d0       * Ignore  
+    beq    .copyWord
+;    cmp.b   #"º",d0
+;    beq    .copyWord    * Ignore: bold indicator
+;    cmp.b   #"°",d0
+;    beq    .copyWord    * Ignore: bold indicator
+;    cmp.b   #"¢",d0
+;    beq    .copyWord    * Ignore: right align indicator
+
+    cmp.b   #10,d0
+    bne     .noLf
+.ispc
+    moveq  #" ",d0
+.noLf
+
+    
+    cmp.b   #" ",d0    
+    beq     .spc
+    cmp.b   #"-",d0
+    beq     .wordEnd
+    cmp.b   #"_",d0
+    beq     .wordEnd
+    cmp.b   #"/",d0
+    beq     .wordEnd
+    move.b  d0,(a2)+
+    bra     .copyWord
+.spc
+   * Peek at the next char, eat spaces
+    cmp.b   #" ",(a4)
+    beq     .copyWord
+
+.wordEnd
+    move.b  d0,(a2)+ * also preserve separator char or null
+    clr.b   (a2)
+    rts
 
 ****************************************************************
 * About
@@ -26567,6 +27018,10 @@ scopeEntry:
 
 	* Restore top/left to some previous used value
 	move.l	s_storedPositionAddr(a4),a1
+    tst.w   (a1)        * negative x check
+    bpl     .nngx
+    clr.w   (a1)
+.nngx
 	move.l	(a1),(a0)
 
 	move	quadWindowHeightOriginal(a5),d0
@@ -28939,7 +29394,10 @@ multiscopefilled:
 	
 multiscopefilled0:
     cmp.w   #1024,a1        * sanity check
-    blo     .x
+;    blo     .x
+    bhs.b   .go
+    rts
+.go
 
     * Center vertically
 	move	s_scopeDrawAreaHeight(a4),d2
@@ -31654,18 +32112,19 @@ loadfile:
 	tst.l	d0
 	beq	.on
 
-	bsr	id_tfmxunion
-	beq	.on
+;	bsr	id_tfmxunion
+;	beq	.on
 
-	bsr	id_TFMX_PRO
-	tst	d0
+;	bsr	id_TFMX_PRO
+    jsr  id_tfmx_pro_
 	beq	.on
 
 	bsr	id_TFMX7V
 	tst	d0
 	beq.b	.on
 
-	bsr	id_tfmx
+;	bsr	id_tfmx
+    jsr     id_tfmx_
 	beq.b	.on
 
 	DPRINT	"Internal"
@@ -32592,6 +33051,11 @@ loadfile:
 	cmp.l	#"WAVE",8(a0)
 	beq	.sampl
 .nosaa
+** Ogg vorbis
+	move.b	#SAMPLE_FORMAT_OGG,sampleformat(a5)
+	cmp.l	#"OggS",(a0)
+	beq	.sampl
+.nosaaa
 ** MPEG
 	move.b	#SAMPLE_FORMAT_MP3,sampleformat(a5)
     jsr     streamIsAlive
@@ -33166,6 +33630,9 @@ tutki_moduuli:
 	bsr	id_protracker
 	beq	.protracker
 
+	bsr	id_oldst
+	beq	.oldst
+
 .ohi
 	* Test for formats that do not require an external
 	* replay code.
@@ -33197,8 +33664,8 @@ tutki_moduuli:
 	bsr	id_sid
 	beq	.sid
 
-	bsr	id_oldst
-	beq	.oldst
+;	bsr	id_oldst
+;	beq	.oldst
 .noop
 
 	tst.l	externalplayers(a5)	* ladataan playerit
@@ -33235,24 +33702,25 @@ tutki_moduuli:
 	tst.b	sampleinit(a5)		* sample??
 	bne	.sample
 
-	bsr	id_TFMX_PRO
-	tst	d0
-	beq	.tfmx
+;	bsr	id_TFMX_PRO
+    jsr id_tfmx_pro_
+	beq	.tfmxPro
 
 	bsr	id_TFMX7V
 	tst	d0
 	beq	.tfmx7
 
-	bsr	id_tfmx
+;	bsr	id_tfmx
+    jsr id_tfmx_
 	beq	.tfmx
 
-	bsr	id_tfmxunion
-	beq	.tfmxunion
+;	bsr	id_tfmxunion
+;	beq	.tfmxunion
 
 	DPRINT	"Group"
 	lea	groupFormats(pc),a3 
 	bsr	identifyFormats
-	beq.b .ex2
+	beq	.ex2
 
 	DPRINT	"Eagle"
 	lea	eagleFormats(pc),a3
@@ -33273,6 +33741,15 @@ tutki_moduuli:
 	bsr	id_ps3m		
 	tst.l	d0
 	beq	.multi
+
+    * Case: PS3M with Old Soundtracker
+    bsr	    id_oldst
+    bne     .notOldSt
+	bsr	    convert_oldst
+    bra     .multi
+.notOldSt
+
+
 
 	clr.b	external(a5)
 .nope
@@ -33388,22 +33865,33 @@ tutki_moduuli:
 
 **** Oliko  sample??
 .sample:
+    move.b  sampleformat(a5),d0
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT  "sample path taken, format=%ld"
+ endif
+    cmp.b   #SAMPLE_FORMAT_OGG,d0
+    beq     .goingOgg
+
 	pushpea	p_sample(pC),playerbase(a5)
 	move	#pt_sample,playertype(a5)
 	bra	.ex
 
-
+.goingOgg
+	move.l  #p_ogg,playerbase(a5)
+	move	#pt_ogg,playertype(a5)
+    bra     .ex
 
 ** Yhdistetty TFMX formaatti
 
-.tfmxunion
-	moveq	#0,d7
-	moveq	#$7f,d0
-	and.b	8(a4),d0		*  tyyppi
-	cmp.b	#3,d0
-	beq.b	.t7
-	moveq	#1,d7
-.t7	bra	.ok
+;.tfmxunion
+;	moveq	#0,d7
+;	moveq	#$7f,d0
+;	and.b	8(a4),d0		*  tyyppi
+;	cmp.b	#3,d0
+;	beq.b	.t7
+;	moveq	#1,d7
+;.t7	bra	.ok
 
 
 
@@ -33412,8 +33900,13 @@ tutki_moduuli:
 .tfmx7	moveq	#0,d7
 	bra.b	.t	
 
+.tfmxPro
+    moveq   #2,d7
+    bra     .t
 .tfmx	moveq	#1,d7
 .t	
+    DPRINT  "*** TFMX init special ***"
+
 	moveq	#0,d0
 
 	lea	fileinfoblock+fib_FileName(a5),a0		* tied.nimi: mdat.*
@@ -33512,14 +34005,27 @@ tutki_moduuli:
 	lea	150(sp),sp
 	tst.l	d0
 	beq.b	.ok
+    DPRINT  "samples load failed!"
 	rts
 	
-.ok	pushpea	p_tfmx(pc),playerbase(a5)
-	move	#pt_tfmx,playertype(a5)
-	tst	d7
-	bne	.ex
+.ok	
+    DPRINT  "samples loaded succesfully!"
+    * d7 = 0 -> tfmx7v
+    * d7 = 1 -> tfmx
+    * d7 = 2 -> tfmx pro
+
 	pushpea	p_tfmx7(pc),playerbase(a5)
 	move	#pt_tfmx7,playertype(a5)
+    tst     d7
+    beq     .ex
+
+    move.l  #p_tfmx_,playerbase(a5)
+	move	#pt_tfmx_,playertype(a5)
+	subq    #1,d7
+    beq     .ex
+
+    move.l  #p_tfmxpro_,playerbase(a5)
+	move	#pt_tfmxpro_,playertype(a5)
 	bra	.ex
 
 ;.tfmxid	dc.b	"mdat.",0
@@ -37129,6 +37635,7 @@ groupFormats:
  endif
  	dr.l 	p_aon8
     dr.l    p_midistream
+    dr.l    p_ogg
     dr.l    p_vgm
     dr.l    p_davelowe
     dr.l    p_futureplayer
@@ -37968,8 +38475,41 @@ modlen:
 	MOVEQ	#0,D0
 	MOVE.B	3(A6),D0
 	Bne.b	.no0
+    * F00 special case check
+	moveq	#31,d0 * set to max normal speed as in kpl14.s
+
+    * Test if any of the channels have a non-zero set speed command.
+    * In this case assume song has not ended (dirt.mod).
+    move.l  .patternIndex(a5),d4
+	moveq	#$f,d2
+    and.b   2(A0,d4.L),d2
+    cmp.b   #$f,d2
+    bne     .sp1
+    tst.b   3(A0,d4.L)  * test Fxx parameter
+    bne     .no0
+.sp1
+	moveq	#$f,d2
+    and.b   2+4(A0,d4.L),d2
+    cmp.b   #$f,d2
+    bne     .sp2
+    tst.b   3+4(A0,d4.L)  * test Fxx parameter
+    bne     .no0
+.sp2
+	moveq	#$f,d2
+    and.b   2+8(A0,d4.L),d2
+    cmp.b   #$f,d2
+    bne    .sp3
+    tst.b   3+8(A0,d4.L)  * test Fxx parameter
+    bne     .no0
+.sp3
+	moveq	#$f,d2
+    and.b   2+12(A0,d4.L),d2
+    cmp.b   #$f,d2
+    bne     .no0
+    tst.b   3+12(A0,d4.L)  * test Fxx parameter
+    bne     .no0
+    
     st      .songend(a5)    * F00 -> end
-	moveq	#31,d0
 .no0
 	tst	.tempoflag(a5)
 	beq.b	.notempo
@@ -38160,8 +38700,8 @@ id_oldst
 	rts
 
 convert_oldst
-
-*******
+    DPRINT  "Convert OLD SOUNDTRACKER"
+******* 
 * Muutetaan PT-formaattiin
 * a4 <= moduuli
 
@@ -38714,7 +39254,7 @@ p_sid:	jmp	.init(pc)
 .er	movem.l	(sp)+,d1-a6
 	rts
 
-.error1
+.error1:
     cmp     #SID_NOSIDBLASTER,d0
     bne.b   .sb
     lea     .blasterMsg(pc),a1
@@ -38834,11 +39374,12 @@ p_sid:	jmp	.init(pc)
 
 
 .blasterMsg
-    dc.b    "Couldn't initialize SIDBlaster!",0
 .zorroSidMsg
-    dc.b    "Can't access ZorroSID, check MMU settings!",0
 .usbsidpicoMsg
-    dc.b    "Couldn't initialize USBSID-Pico!",0
+    dc.b    "Couldn't initialize SID device!",0
+;    dc.b    "Couldn't initialize SIDBlaster!",0
+;    dc.b    "Can't access ZorroSID, check MMU settings!",0
+;    dc.b    "Couldn't initialize USBSID-Pico!",0
     even
 
 .performanceRequest
@@ -40790,122 +41331,6 @@ p_fred
 	rts
 
 
-******************************************************************************
-* SonicArranger
-******************************************************************************
-
-p_sonicarranger
-	jmp	.init(pc)
-	jmp	deliPlay(pc)
-	p_NOP
-	jmp	deliEnd(pc)
-	jmp	deliStop(pc)
-	jmp	deliCont(pc)
-	jmp	deliVolume(pc)
-	jmp	deliSong(pc)
-	jmp	deliForward(pc)
-	jmp	deliBackward(pc)
-	p_NOP
-	jmp .id(pc)
-	jmp	deliAuthor(pc)
-	dc.w pt_sonicarranger				* type
-	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
-	dc.b	"Sonic Arranger [EP]",0
-	        
-.path dc.b "sonicarranger",0
- even
-
-.init
-	lea	.path(pc),a0 
-	moveq	#0,d0
-	bra		deliLoadAndInit 
-
-
-; in: a4 = module
-;     d7 = module length
-; out: d0 = 0, valid valid
-;      d0 = -1, not valid
-.id
-	move.l	a4,a0
-	move.l	d7,d3
-	moveq	#-1,D0
-
-	cmp.l	#'SOAR',(A0)
-	bne.b	.NoSong
-	addq.l	#4,A0
-	cmp.l	#'V1.0',(A0)+
-	bne	.Fault
-	cmp.l	#'STBL',(A0)
-	bne	.Fault
-	bra	.Found
-.NoSong
-	cmp.w	#$4EFA,(A0)
-	bne.b	.NoRepa
-	move.w	2(A0),D1
-	beq.b	.Fault
-	bmi.b	.Fault
-	btst	#0,D1
-	bne.b	.Fault
-	lea	6(A0,D1.W),A1
-	cmp.w	#$41FA,(A1)+
-	bne.b	.Fault
-	moveq	#0,D1
-	move.w	(A1),D1
-	beq.b	.Fault
-	bmi.b	.Fault
-	btst	#0,D1
-	bne.b	.Fault
-	add.w	D1,A1
-	subq.l	#8,D3
-	sub.l	D1,D3
-	bmi.b	.Fault
-	move.l	A1,A0
-.NoRepa
-	move.l	A0,A1
-	moveq	#$28,D1
-	sub.l	D1,D3
-	bmi.b	.Fault
-	cmp.l	(A1)+,D1
-	bne.b	.Fault
-	moveq	#6,D1
-.NextLong
-	move.l	(A1)+,D2
-	beq.b	.Fault
-	bmi.b	.Fault
-	btst	#0,D2
-	bne.b	.Fault
-	dbf	D1,.NextLong
-	sub.l	D2,D3
-	bmi.b	.Fault
-	lea	(A0,D2.L),A1
-	move.l	(A1)+,D1
-	beq.b	.SynthOnly
-	move.l	A1,A0
-.NextSize
-	sub.l	(A0),D3
-	bmi.b	.Fault
-	add.l	(A0)+,A1
-	addq.l	#4,A1
-	subq.l	#1,D1
-	bne.b	.NextSize
-.SynthOnly
-	moveq	#12,D1
-	sub.l	D1,D3
-	bmi.b	.Fault
-	lea	.Text(PC),A0
-.CheckString
-	cmpm.b	(A0)+,(A1)+
-	bne.b	.Fault
-	dbeq	D1,.CheckString
-.Found
-	moveq	#0,D0
-.Fault
-	tst.l	d0
-	rts
-.Text
-	dc.b	'deadbeef'
-	dc.l	0
-
 
 ******************************************************************************
 * SidMon 1.0
@@ -41150,6 +41575,7 @@ tfmx_author
 	dc.b	"Chris Huelsbeck, Peter Thierolf",0
 	even
 
+ REM
 p_tfmx:
 	jmp	.tfmxinit(pc)
 	p_NOP
@@ -41354,6 +41780,7 @@ id_TFMX_PRO
 	moveq	#-1,d0
 .exit
 	rts
+ EREM
 
 TFMX_IDs
 	dc.b	'tfmxsong',0
@@ -41964,9 +42391,9 @@ p_med:
 	moveq	#0,d0			* 8-bit
 	move.b	medmode(a5),d0		* 1: 14-bit
 	lob	MEDSet14BitMode
-    DPRINT  "MEDSetMixingFrequency"
 	moveq	#0,d0
 	move	medrate(a5),d0		* mixingrate
+    DPRINT  "MEDSetMixingFrequency %ld"
 	lob	MEDSetMixingFrequency
 
 	moveq	#_LVOMEDPlayModuleM,d7
@@ -44015,7 +44442,7 @@ p_mline
 	move.l	a4,a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
-	bsr	plainSaveFile
+	jsr	plainSaveFile
 	bmi.b	.orr
 
 	bsr	get_mline
@@ -45056,6 +45483,7 @@ p_sample:
 	dc	pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
 .name	dc.b	"                        ",0
         ds.b    8 * safety
+.nameE
  even
 
                    rsset    $20
@@ -45319,9 +45747,10 @@ hasMp3TagText
 
 * in: 
 *  a0 = buffer to write to
-getMp3TagText 
-	move.l	sampleroutines(a5),a1
-	jmp     p_sample\.s_getMp3Text(a1)
+*  a1 = wrappage function
+getMp3TagText:
+	move.l	sampleroutines(a5),a2
+	jmp     p_sample\.s_getMp3Text(a2)
     
 
 * In:
@@ -46112,6 +46541,123 @@ id_delicustom
 * - replayers provided in eagleplayer plugins
 *
 ******************************************************************************
+
+
+******************************************************************************
+* SonicArranger
+******************************************************************************
+
+p_sonicarranger
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp .id(pc)
+	jmp	deliAuthor(pc)
+	dc.w pt_sonicarranger				* type
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
+	dc.b	"Sonic Arranger [EP]",0
+	        
+.path dc.b "sonicarranger",0
+ even
+
+.init
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+
+; in: a4 = module
+;     d7 = module length
+; out: d0 = 0, valid valid
+;      d0 = -1, not valid
+.id
+	move.l	a4,a0
+	move.l	d7,d3
+	moveq	#-1,D0
+
+	cmp.l	#'SOAR',(A0)
+	bne.b	.NoSong
+	addq.l	#4,A0
+	cmp.l	#'V1.0',(A0)+
+	bne	.Fault
+	cmp.l	#'STBL',(A0)
+	bne	.Fault
+	bra	.Found
+.NoSong
+	cmp.w	#$4EFA,(A0)
+	bne.b	.NoRepa
+	move.w	2(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	lea	6(A0,D1.W),A1
+	cmp.w	#$41FA,(A1)+
+	bne.b	.Fault
+	moveq	#0,D1
+	move.w	(A1),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	add.w	D1,A1
+	subq.l	#8,D3
+	sub.l	D1,D3
+	bmi.b	.Fault
+	move.l	A1,A0
+.NoRepa
+	move.l	A0,A1
+	moveq	#$28,D1
+	sub.l	D1,D3
+	bmi.b	.Fault
+	cmp.l	(A1)+,D1
+	bne.b	.Fault
+	moveq	#6,D1
+.NextLong
+	move.l	(A1)+,D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+	dbf	D1,.NextLong
+	sub.l	D2,D3
+	bmi.b	.Fault
+	lea	(A0,D2.L),A1
+	move.l	(A1)+,D1
+	beq.b	.SynthOnly
+	move.l	A1,A0
+.NextSize
+	sub.l	(A0),D3
+	bmi.b	.Fault
+	add.l	(A0)+,A1
+	addq.l	#4,A1
+	subq.l	#1,D1
+	bne.b	.NextSize
+.SynthOnly
+	moveq	#12,D1
+	sub.l	D1,D3
+	bmi.b	.Fault
+	lea	.Text(PC),A0
+.CheckString
+	cmpm.b	(A0)+,(A1)+
+	bne.b	.Fault
+	dbeq	D1,.CheckString
+.Found
+	moveq	#0,D0
+.Fault
+	tst.l	d0
+	rts
+.Text
+	dc.b	'deadbeef'
+	dc.l	0
 
 
 ******************************************************************************
@@ -51004,25 +51550,8 @@ p_midistream:
 .streamError    
     DPRINT  "MIDI stream error!"
     bsr     .deleteTempFile
-
-    ; Send CTRL-C to streamer if possible
-    bsr     stopStreaming
-    ; If this was midi flushing needs to be done if timidity
-    ; is running, othewise flush will get stuck with an empty pipe
-    jsr     findLocalStreamProcess
-    bne     .flush
-    DPRINT  "MIDI: wait for streamer to exit"
-    jsr     awaitStreamer
-    bra     .1
-.flush
-    DPRINT  "MIDI: flush and wait for streamer to exit"
-    jsr     awaitStreamerAndFlush
-.1
     lea     .msgMidi(pc),a1
-    jsr     request
-
-    moveq   #ier_error_nomsg,d0
-    rts
+    bra     commonStreamError
 
 .msgMidi
     dc.b    "Error starting MIDI!",0
@@ -51085,6 +51614,116 @@ pipe_Timidity:
 .timidityDir      dc.b    "timidity:",0    
 .timidityCliName  dc.b    "timidity",0
 .timidityCmd      dc.b    '%s -id -Ow1S -s27710 -o PIPE:wavHippoStream/65536/2 "%s"',10,0
+    even
+
+
+******************************************************************************
+* Ogg
+******************************************************************************
+
+p_ogg:
+  jmp      .init(pc)
+  p_NOP     * CIA   
+  p_NOP     * VB
+  jmp       .end(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  p_NOP    * Song
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      .id(pc)
+  p_NOP    * Author
+  dc       pt_ogg
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+.title
+.info
+  ds.b    p_sample\.nameE-p_sample\.name
+           even
+
+.id
+    cmp.l   #"OggS",(a4)
+    bne     .no
+    DPRINT  "Ogg detected"
+    moveq   #0,d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
+.init
+    DPRINT  "Ogg init"
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)    
+
+    * Start streaming
+    move.l  modulefilename(a5),a0
+    pushpea pipe_Ogg(pc),d0
+    jsr     startLocalStreaming
+    DPRINT  "startStreaming=%lx"
+    tst.l   d0
+    beq     .streamError
+
+ if DEBUG
+    move.l  a0,d0
+    DPRINT  "stream is %s"
+ endif
+    * Point sampleplayer to the pipe stream
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc) 
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    * D0 = error code
+    rts
+
+.ok
+    * Copy info 
+    lea     p_sample\.name(pc),a0
+    lea     .info(pc),a1
+.cp move.b  (a0)+,(a1)+
+    cmp.l   #p_sample\.nameE,a0
+    bne     .cp
+
+    * Sample init OK
+    moveq   #0,d0
+    rts
+
+
+.initError
+    moveq   #ier_error,d0
+    rts
+
+.streamError    
+    DPRINT  "Ogg stream error!"
+    lea     .msg(pc),a1
+    bra     commonStreamError
+
+.msg
+    dc.b    "Error starting Ogg!",0
+    even
+
+.end
+    DPRINT  "Ogg stream end"
+    jmp     p_sample+p_end(pc)
+
+
+pipe_Ogg:
+    dc.l    0 * no current dir
+    dc.l    .CliName
+    dc.l    .Cmd
+    dc.l    .file
+    dc.l    0 * no setup
+    dc.l    0 * no special stack
+    dc.l    0 * no poll routine
+    dc.l    0 * additional formatting parameter
+
+.file     dc.b    "PIPE:wavHippoStream4",0
+.CliName  dc.b    "oggv_dec",0
+.Cmd      dc.b    '%s "%s" r >PIPE:wavHippoStream4/65536/2',10,0
     even
 
 
@@ -51214,34 +51853,43 @@ vgmInit0
     DPRINT  "VGM stream error!"
     bsr     vgmDeleteTempFile
 
-    ; Send CTRL-C to streamer if possible
-    bsr     stopStreaming
-    ; If this was midi flushing needs to be done if timidity
-    ; is running, othewise flush will get stuck with an empty pipe
-    jsr     findLocalStreamProcess
-    bne     .flush
-    DPRINT  "VGM: wait for streamer to exit"
-    jsr     awaitStreamer
-    bra     .1
-.flush
-    DPRINT  "VGM: flush and wait for streamer to exit"
-    jsr     awaitStreamerAndFlush
-.1
     lea     .msg(pc),a1
     move.b  vgmActuallyMdx(pc),d0
     beq     .2
     lea     .msg2(pc),a1
-.2
-    jsr     request
+.2  bra     commonStreamError
 
-    moveq   #ier_error_nomsg,d0
-    rts
 
 .msg
   dc.b    "Error starting 'vgm2wav'",0
 .msg2
   dc.b    "Error starting 'mdx2wav'",0
   even
+
+* Handle error when starting streamer
+* In:
+*    a1 = Message to be shown in requester
+commonStreamError:
+    push    a1
+    ; Send CTRL-C to streamer if possible
+    bsr     stopStreaming
+    ; If this was midi flushing needs to be done if timidity
+    ; is running, othewise flush will get stuck with an empty pipe
+    jsr     findLocalStreamProcess
+    bne     .flush
+    DPRINT  "Stream: wait for streamer to exit"
+    jsr     awaitStreamer
+    bra     .1
+.flush
+    DPRINT  "Stream: flush and wait for streamer to exit"
+    jsr     awaitStreamerAndFlush
+.1
+    pop     a1
+    jsr     request
+
+    moveq   #ier_error_nomsg,d0
+    rts
+
 
 vgmEnd
     DPRINT  "VGM stream end"
@@ -52413,7 +53061,259 @@ id_symphonie
     rts
 
 
+******************************************************************************
+* TFMX
+******************************************************************************
 
+p_tfmx_
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp id_tfmx_(pc)
+	jmp	deliAuthor(pc)
+	dc.w pt_tfmx_				* type
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
+	dc.b	"TFMX [EP]",0
+	        
+.path dc.b "tfmx",0
+ even
+
+.init   
+    DPRINT  "TFMX init"
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+p_tfmxpro_
+	jmp	.init(pc)
+	jmp	deliPlay(pc)
+	p_NOP
+	jmp	deliEnd(pc)
+	jmp	deliStop(pc)
+	jmp	deliCont(pc)
+	jmp	deliVolume(pc)
+	jmp	deliSong(pc)
+	jmp	deliForward(pc)
+	jmp	deliBackward(pc)
+	p_NOP
+	jmp id_tfmx_pro_(pc)
+	jmp	deliAuthor(pc)
+	dc.w pt_tfmxpro_				* type
+	dc pf_cont!pf_stop!pf_poslen!pf_kelaus!pf_volume!pf_end!pf_ciakelaus2!pf_song!pf_scope!pf_quadscopeUps
+	dc.b	"TFMX Pro [EP]",0
+	        
+.path dc.b "tfmx pro",0
+ even
+
+.init
+    DPRINT  "TFMX Pro init"
+	lea	.path(pc),a0 
+	moveq	#0,d0
+	bra		deliLoadAndInit 
+
+
+
+id_tfmx_
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	cmp.l	#'TFMX',(A0)
+	bne 	.Fault
+
+	cmp.b	#$20,4(A0)
+	bne.b	.CheckAnother
+
+	bra.b	.test
+.CheckAnother
+	cmp.l	#'-SON',4(A0)
+	bne 	.Fault
+	cmp.w	#'G ',8(A0)
+	bne 	.Fault
+	cmp.w	#'by',10(A0)
+	beq.b	.test
+	cmp.l	#'(Emp',16(A0)
+	bne.b	.NoEmpty
+	cmp.l	#'ty) ',20(A0)
+	bne 	.Fault
+	bra.b	.test
+.NoEmpty
+	cmp.w	#'  ',16(A0)
+	beq.b	.test
+	cmp.w	#$303D,16(A0)		; extension for Lethal Zone
+	bne.b	.Fault
+.test
+	tst.l	464(A0)
+	bne.b	.Fault
+	cmp.w	#$0E60,14(A0)		; extension for Z-Out (title)
+	beq.b	.Fault
+	cmp.w	#$0860,14(A0)		; extension for Metal Law (jingle)
+	bne.b	.NextNew1
+	cmp.w	#$090C,4644(A0)
+	beq.b	.Fault
+.NextNew1
+	cmp.w	#$0B20,14(A0)		; extension for Bug Bomber (unpacked)
+	bne.b	.NextNew2
+	cmp.w	#$8C26,5120(A0)
+	beq.b	.Fault
+.NextNew2
+	cmp.w	#$0920,14(A0)		; extension for Metal Law (preview)
+	bne.b	.OK
+	cmp.w	#$9305,3876(A0)
+	beq.b	.Fault
+.OK
+	move.l	1536(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	move.l	2044(A0),D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+	lea	(A0,D2.L),A1
+	lea	(A0,D1.L),A0
+.CheckForPro_ST
+	cmp.b	#36,(A0)
+	bhi.b	.Fault
+	addq.l	#4,A0
+	cmp.l	A0,A1
+	bne.b	.CheckForPro_ST
+
+	moveq	#0,D0
+.Fault
+    tst     d0
+	rts
+
+
+id_tfmx_pro_
+	move.l	a4,a0
+	moveq	#-1,D0
+
+	cmp.l	#'tfmx',(A0)
+	bne.b	.CheckAnother
+	addq.l	#4,A0
+	cmp.l	#'song',(A0)+
+	bne 	.Fault
+	tst.w	(A0)
+	bne 	.Fault
+	bra 	.OK1
+.CheckAnother
+	cmp.l	#'TFMX',(A0)
+	bne 	.Fault
+	cmp.l	#'-SON',4(A0)
+	bne 	.Fault
+	cmp.w	#'G ',8(A0)
+	bne 	.Fault
+	move.l	464(A0),D1
+	beq.b	.late
+	tst.w	D1
+	bne.b	.OK2
+	swap	D1			; PC test
+	cmp.b	#1,D1
+	bgt.w	.OK1
+	bra 	.Fault
+.late
+	tst.w	12(A0)
+	bne 	.Fault
+	cmp.w	#'  ',16(A0)
+	beq.w	.Fault
+	cmp.w	#$303D,16(A0)		; extension for Lethal Zone
+	beq.w	.Fault
+	cmp.l	#'(Emp',16(A0)
+	bne.b	.OK
+	cmp.l	#'ty) ',20(A0)
+	bne.b	.OK
+	cmp.w	#$0E60,14(A0)		; extension for Z-Out (title)
+	beq.b	.OK
+	cmp.w	#$0860,14(A0)		; extension for Metal Law (jingle)
+	bne.b	.NextNew1
+	cmp.w	#$090C,4644(A0)
+	beq.b	.OK
+.NextNew1
+	cmp.w	#$0B20,14(A0)		; extension for Bug Bomber (unpacked)
+	bne.b	.NextNew2
+	cmp.w	#$8C26,5120(A0)
+	beq.b	.OK
+.NextNew2
+	cmp.w	#$0920,14(A0)		; extension for Metal Law (preview)
+	bne 	.Fault
+	cmp.w	#$9305,3876(A0)
+	bne.b	.Fault
+.OK
+	move.l	#2048,D1
+.OK2
+	cmp.w	#$8B0,14(A0)
+	bne.b	.NoException		; BMW exception
+	cmp.l	#$01F4FF00,516(A0)
+	beq.b	.Fault
+.NoException
+	moveq	#31,D2
+	lea	256(A0),A1
+.NextPos
+	moveq	#0,D3
+	move.w	(A1)+,D3
+	cmp.w	#$01FF,D3
+	beq.b	.SkipIt
+	lsl.l	#4,D3				; * 16
+	add.l	D1,D3
+	lea	(A0,D3.L),A2
+.CheckEFFE
+	cmp.w	#$EFFE,(A2)+
+	beq.b	.SevenVoice_Test
+.SkipIt
+	dbf	D2,.NextPos
+
+	move.l	468(A0),D2
+	beq.b	.NoPack
+	move.l	472(A0),D1
+	move.l	(A0,D1.L),D1
+	bra.b	.CheckST
+.NoPack
+	move.l	1536(A0),D1
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D1
+	bne.b	.Fault
+	move.l	2044(A0),D2
+	beq.b	.Fault
+	bmi.b	.Fault
+	btst	#0,D2
+	bne.b	.Fault
+.CheckST
+	lea	(A0,D2.L),A1
+	lea	(A0,D1.L),A0
+.CheckForST
+	cmp.b	#63,(A0)
+	bhi.b	.Fault
+	addq.l	#4,A0
+	cmp.l	A0,A1
+	bne.b	.CheckForST
+.OK1
+	moveq	#0,D0
+.Fault
+    tst     d0
+	rts
+
+.SevenVoice_Test
+	cmp.w	#$0003,(A2)+
+	bne.b	.CheckNext
+	tst.b	(A2)
+	bne.b	.Fault
+	tst.b	3(A2)
+	beq.b	.Fault
+.CheckNext
+	addq.l	#4,A2
+	addq.l	#8,A2
+	bra.b	.CheckEFFE
 
 *******************************************************************************
 *** SECTION *******************************************************************
@@ -52943,6 +53843,13 @@ deliInit:
 	bsr	deliHandleFlags
 .noFlags
 
+    ; ---------------------------------
+    ; TFMX samples are loaded elsewhere
+    cmp.w   #pt_tfmx_,playertype(a5)
+    beq     .noExtLoad
+    cmp.w   #pt_tfmxpro_,playertype(a5)
+    beq     .noExtLoad
+    ; ---------------------------------
 	move.l	#DTP_ExtLoad,d0  
 	bsr	deliGetTag
 	beq.b	.noExtLoad
@@ -53807,11 +54714,33 @@ deliFindEmptyListDataSlot
 * in: 
 *   d0 = file number. 0 is the original module, 
 *                     1 is the 1st loaded file with dtg_LoadFile, etc
+* Out:
+*   a0 = data address
+*   d0 = data length
 deliGetListData 
 	DPRINT	"getListData %ld"
 	tst.l	d0 
 	beq.b	.first
 
+    ; -----------------------
+    ; TFMX special case
+    push    d1
+    moveq   #1,d1
+    cmp.l   d1,d0
+    bne     .noTfmx
+    move    playertype+var_b,d1
+    cmp     #pt_tfmx_,d1
+    beq     .tfmx
+    cmp     #pt_tfmxpro_,d1
+    bne     .noTfmx
+.tfmx
+    pop     d1
+    move.l  tfmxsamplesaddr+var_b,a0
+    move.l  tfmxsampleslen+var_b,d0
+    rts
+.noTfmx
+    pop     d1
+    ; -----------------------
 	* Grab (addr,len) so that index 1 corresponds to the first item.
 	pushm	d3/a1
 	move.l	deliLoadFileArray+var_b,a1
@@ -56348,6 +57277,7 @@ removeListBoxClip
 	move.l	listBoxClipRegion(a5),a1
 removeClip
 	move.l	windowbase(a5),a0
+removeClip_
 	move.l	wd_WLayer(a0),a0
 	; Null is ok here for a1
 	lore	Layers,InstallClipRegion
@@ -56373,6 +57303,96 @@ removeInfoBoxClip
 	move.l	infoBoxClipRegion(a5),a1
 	bra		removeClip
 	
+
+initInfoWindowClip:
+    DPRINT  "initInfoWindowClip"
+    tst.l   infoWindowRegion(a5)
+    bne     .x
+    bsr     createInfoWindowRegion
+    beq     .x
+    bsr     setInfoWindowClip
+.x  rts
+
+uninitInfoWindowClip:
+    DPRINT  "uninitInfoWindowClip"
+    bsr     removeInfoWindowClip
+    bra     disposeInfoWindowRegion
+    
+
+createInfoWindowRegion:
+	lore	GFX,NewRegion
+	move.l	d0,infoWindowRegion(a5)
+	beq 	.x
+
+	lea	    -ra_SIZEOF(sp),sp
+    move.l  sp,a1
+
+    * d4 = XSize
+	move.l	swindowbase(a5),a2
+    move.w  wd_Width(a2),d4
+    sub     windowright(a5),d4
+    sub     #9,d4
+
+	moveq	#31-2+2,d0
+    sub     d0,d4
+	moveq	#15-1,d1
+	move	infosize(a5),d6
+    mulu    infoFontHeight(a5),d6
+    ;lsr     #1,d6
+
+    moveq   #1,d5
+    add     d6,d5
+	add	windowleft(a5),d0
+	add	windowtop(a5),d1
+	;ClipBlit(Src, SrcX, SrcY, Dest, DestX, DestY, XSize, YSize, Minterm)
+	;         A0   D0    D1    A1    D2     D3     D4     D5     D6
+
+	move	d0,ra_MinX(a1)
+	move	d1,ra_MinY(a1)
+    add     d4,d0
+    add     d5,d1
+    subq    #2,d0
+	move	d0,ra_MaxX(a1)
+	move	d1,ra_MaxY(a1)
+
+	move.l	infoWindowRegion(a5),a0
+	lob	    OrRectRegion
+	lea	    ra_SIZEOF(sp),sp
+.x	tst.l	d0
+	rts
+
+
+disposeInfoWindowRegion:
+	move.l	infoWindowRegion(a5),d0
+	beq.b	.x
+	clr.l	infoWindowRegion(a5)
+	move.l	d0,a0
+	lore	GFX,DisposeRegion
+.x  rts
+
+setInfoWindowClip:
+    move.l  infoWindowRegion(a5),d0
+	beq.b	.x
+	move.l	swindowbase(a5),a0
+	move.l	wd_WLayer(a0),a0
+    move.l  d0,a1
+	lore	Layers,InstallClipRegion
+    DPRINT  "InstallClipRegion=%lx"
+	; d0 = previous clip region or NULL
+	move.l	d0,infoWindowClipRegion(a5)
+	; Out of memory is also possible, this
+	; is visible in some flag somewhere.
+.x	rts
+
+
+removeInfoWindowClip:
+    tst.l   infoWindowRegion(a5)
+    beq     .x
+	move.l	infoWindowClipRegion(a5),a1
+	move.l	swindowbase(a5),a0
+	bsr		removeClip_
+.x  rts
+
 ***************************************************************************
 *
 * Row button layout
@@ -57363,6 +58383,9 @@ remoteSearch
     dc.l    "sap " *
     dc.l    "spc " * 
     dc.l    "mdx " *
+    dc.l    "puma" 
+    dc.l    "spl "
+    dc.l    "mmod" * symmod, works like this
 	dc.l	0
 ;todo: synmod
 
@@ -59431,6 +60454,9 @@ refreshPositionSlider:
 .no
     rts
 .yes    
+    * Window not open?
+    tst.b   win(a5) 
+    beq.b   .no
     * Zipped window?
     tst.b   kokolippu(a5)
 	beq.b   .no
@@ -60211,84 +61237,14 @@ convertStilEntry:
 *   a0 = input text with line changes 10 and terminating null
 *   a1 = output buffer
 wrapLines:
-.LIMIT = 39
-	moveq	#0,d1
-	moveq	#0,d2
-.loop
-    cmp     #.LIMIT,d2
-    beq     .newLine
-.get
-    move.b  (a0)+,d0
-    beq     .eof
-    * Eat line changes in input and any whitespaces after it
-    cmp.b   #13,d0
-    beq     .get
-    cmp.b   #10,d0
-    bne     .noLf
-.eatSpaces1
-    cmp.b   #" ",(a0)
-    bne     .ate1
-    addq    #1,a0
-    bra     .eatSpaces1
-.ate1
-    * Output a space if input has a linechange
-    moveq   #" ",d0
-    bra     .noBr
-.noLf
-    * Got a char, check if it's a break character
-    bsr     .isBreaker
-    bne     .noBr
-    * Notice that we have a break char
-    addq    #1,d1
-.noBr
-    * Output char
-    move.b  d0,(a1)+
-    addq    #1,d2
-    bra     .loop
-    
-.newLine
-    * Limit reached
-    * Insert a linebreak here if there's a break character here
-    bsr     .isBreaker
-    beq     .y1
-    * There was not, see if there was a break ealier
-    tst     d1
-    beq     .y1
-    * There was, rewind to it
-.fb
-    subq    #1,a0
-    subq    #1,a1
-    move.b  (a0),d0
-    bsr     .isBreaker
-    bne     .fb
-    
-.y1
-    * Put linechange here and extra space for indentation
-    moveq   #0,d1 * reset break notifier
-    moveq   #1,d2 * reset counter
-    bsr     putNewLine
-    move.b  #" ",(a1)+
-    * Eat spaces after line change in output
-.eatSpaces2
-    cmp.b   #" ",(a0)
-    bne     .loop
-    addq    #1,a0
-    bra     .eatSpaces2
+    push    a3
+    move.l  a1,a3
+    jsr     wrappage
+    move.l  a3,a1
+    pop     a3
+    rts 
 
-.eof
-	rts
-
-* Sets Z if d0 is a break character
-.isBreaker
-    cmp.b   #" ",d0
-    beq     .is
-    cmp.b   #"-",d0
-    beq     .is
-    cmp.b   #"_",d0
-.is
-    rts
-
-putNewLine
+putNewLine:
 	;move.b	#10,(a1)+
 	;rts
     move.b   #ILF,(a1)+
@@ -60696,7 +61652,7 @@ UME_HEADER_SIZE_BYTES = UME_INDEX_SIZE_BYTES+4
  endif
     include "xxhash32.s"
  ifd __VASM    
-    mc68020
+    mc68000
  endif
 
 * Called once on startup
@@ -60722,15 +61678,23 @@ uslIgnoreFormats:
     beq     .reject
     cmp.w   #pt_sid,playertype(a5)
     beq     .reject
+    tst.b   sampleinit(a5)
+    bne     .reject
     cmp.w   #pt_sample,playertype(a5)
+    rts
 .reject
+    moveq   #0,d0
     rts
 
 umeIgnoreFormats:
     cmp.w   #pt_sid,playertype(a5)
     beq     .reject
+    tst.b   sampleinit(a5)
+    bne     .reject
     cmp.w   #pt_sample,playertype(a5)
+    rts
 .reject
+    moveq   #0,d0
     rts
 
 readUsl:
@@ -61290,6 +62254,9 @@ umeFind:
     moveq   #4-1,d4
     moveq   #0,d0
 .skip4
+    printt  "enforcer read hit here with NOT found module"
+    * sequence: play "mouse.mod", then another
+    printt "Enforcer read hits here: Vortex 42 theme.mod.gz"
     move.b  (a0),d0     
     add.w   d0,a0
     dbf     d4,.skip4
@@ -62474,6 +63441,10 @@ drawInfoScroller:
     tst.b   playing(a5)
     beq     .x
     tst.b   infoScrollEnabled(a5)
+    beq     .x
+    tst.b   win(a5)                 * Window not open?
+    beq     .x
+    tst.b   kokolippu(a5)           * Window is zipped?
     beq     .x
     tst.l   infoScrollLastTime(a5)  * Need to wait?
     bne     .doWait
@@ -63842,7 +64813,11 @@ sflags	dc.l	swflags
 	dc.l	.w
 	dc.l	0	;screen struc
 	dc.l	0	
-	dc	0,0,0,0,WBENCHSCREEN
+    * nw_MinWidth, nw_MinHeight
+	dc	200,0
+	* nw_MaxWidth, nw_MaxHeight
+	dc	640,512
+    dc  WBENCHSCREEN
 	dc.l	enw_tags
 
 .w	dc.b	"HippoInfo"
@@ -63858,6 +64833,7 @@ wreg1
 * Slider for the module info window
 gAD1	
     dc.l gadgetResizeInfoWindow
+    *    x,y, w, h
 	dc.w 9,14,16,127-13*8,GFLG_GADGHNONE,9,3
 	dc.l gAD1gr,0,0,0,gAD1s
 	dc.w 0
@@ -63977,7 +64953,8 @@ slimage2	dc	0	* leftedge
 		dc	16	* width
 slim2height	dc	8	* heigh
 		dc	2	* depth
-		dc.l	slim2	* data
+slim2DataPtr
+		dc.l	0	* data
 		dc.b	%11	* planepick
 		dc.b	0	* planeon/onff
 		dc.l	0	* nextimage
@@ -64698,7 +65675,7 @@ nullsample	ds.l	1
 ;;slim:	ds	2*410
 
 * sampleinfo-slideri, 410 pixels tall
-slim2:	ds	410*2
+;slim2:	ds	410*2
 
 * volume slider image
 slider1im

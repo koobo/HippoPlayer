@@ -22,7 +22,7 @@ P61A=1
  endif
 
 
-start	dc.b	"HiPxPla",35	* Tunnistus ja versio, 8 bytes
+start	dc.b	"HiPxPla",36	* Tunnistus ja versio, 8 bytes
 
 head	macro
 	dc.w	\1
@@ -33,7 +33,7 @@ head	macro
 
 
 	head	pt_multi,ps3m
-	head	pt_tfmx,tfmx
+;	head	pt_tfmx,tfmx
 	head	pt_tfmx7,tfmx7c
 	head	pt_jamcracker,jamc
 	head	pt_future10,fc10
@@ -110,7 +110,8 @@ head	macro
     head    pt_soundmaster,soundmaster
     head    pt_soundprogramminglanguage,soprol
     head    pt_midiext,midiext
-
+    head    pt_tfmx_,tfmx_
+    head    pt_tfmxpro_,tfmxpro_
 	dc	0
 	dc.l	0,0
 
@@ -506,9 +507,9 @@ ps3m1 incbin	ps3m.shr
 ps3m2
     even
 
-tfmx1 incbin tfmx.shr
-tfmx2 
-    even
+;tfmx1 incbin tfmx.shr
+;tfmx2 
+;    even
 
 tfmx7c1 incbin tfmx7c.shr
 tfmx7c2
@@ -871,6 +872,16 @@ midiext2
 sonicarranger1
 	incbin sonicarranger.shr
 sonicarranger2
+    even
+
+tfmx_1
+	incbin TFMX.shr
+tfmx_2
+    even
+
+tfmxpro_1
+	incbin "TFMX Pro.shr"
+tfmxpro_2
     even
 
 

@@ -11,6 +11,7 @@ SERIALDEBUG = 0
  endif
 
 
+
 ;################################################
 ;################################################
 ; Perf test 1, A1200/060, sample buffer size 128k
@@ -427,7 +428,11 @@ mp3DurationInMs  rs.l    1
 mp3PositionInMs  rs.l    1   
 sampleOutputInfo rs.l    1  * Return text describing the output mode
 
+pipeFormatDetail  rs.w   1
+
 modulefilenameBuf rs.b   200 * Local copy
+
+wrappageFunction    rs.l    1   * ptr to info window text wrapper func
 
  if DEBUG
 output			rs.l 	1
@@ -805,14 +810,26 @@ init:
     * Should be "PIPE:wavHippoStream" for WAV 27710 Hz
     *           "PIPE:wavHippoStream2" for AIFF 27710 Hz
     *           "PIPE:wavHippoStream3" for AIFF 22050 Hz
+    *           "PIPE:wavHippoStream4" for AIFF 44100 Hz
+    clr.w   pipeFormatDetail(a5)
     cmp.b   #"w",5(a0)
     bne     .notPipeW
     DPRINT  "sample PIPE wav bypass"
     move.b  #2,sampleformat(a5) * AIFF decoder
+
+    move.w  #3,pipeFormatDetail(a5)
     cmp.b   #"3",19(a0)
     beq     .wavinitPipeBypassLq
+
+    move.w  #4,pipeFormatDetail(a5)
+    cmp.b   #"4",19(a0)
+    beq     .wavinitPipeBypassHq
+
+    move.w  #2,pipeFormatDetail(a5)
     cmp.b   #"2",19(a0)
     beq     .wavinitPipeBypass
+
+    move.w  #1,pipeFormatDetail(a5)
     move.b  #3,sampleformat(a5) * WAV decoder
     bra     .wavinitPipeBypass
 .notPipeW
@@ -967,7 +984,12 @@ init:
     DPRINT  "wavinitPipeBypassLq"
     move    #22050,samplefreq(a5)
     bra     .wavinitPipeBypass0
-    
+
+.wavinitPipeBypassHq
+    DPRINT  "wavinitPipeBypassHq"
+    move    #44100,samplefreq(a5)
+    bra     .wavinitPipeBypass0
+
 .wavinitPipeBypass
     DPRINT  "wavinitPipeBypass"
     * Wav header is 44 bytes
@@ -1882,6 +1904,9 @@ prepareInfoLine:
     beq     .fr0
     * wav/aiff + midi
     lea     .t3midi(pc),a0
+    cmp.w   #4,pipeFormatDetail(a5)
+    bne     .fr1
+    lea     .t3ogg(pc),a0
     bra     .fr1
 .fr0
 	lea	.t1(pc),a0
@@ -1999,6 +2024,7 @@ prepareInfoLine:
 .t2               dc.b    "AIFF",0
 .t3               dc.b    "WAV",0
 .t3midi           dc.b    "MIDI",0
+.t3ogg            dc.b    "Ogg",0
 .t4               dc.b    "MP",0
 * Sample form: "AIFF 16-bit S 44Khz 14c-bit" -> 27ch, fits 27/28?
 * Sample form: "WAV 16-bit S 44Khz 14-bi" <- this fits
@@ -6961,9 +6987,11 @@ ILF2	=	$03
 
 * In:
 *   a0 = info window text buffer
+*   a1 = wrappage function
 getMp3TagText:
     pushm   all
     lea     var_b,a5
+    move.l  a1,wrappageFunction(a5)
     move.l  a0,a2
     bsr     mpega_parse_id3v2
     popm    all
@@ -6971,7 +6999,7 @@ getMp3TagText:
     
 
 * In:
-*  a2 = info window text buffer
+*  a2 = info window text buffer for output
 mpega_parse_id3v2
     pushm   all
     tst.l   id3v2Data(a5)
@@ -7037,12 +7065,12 @@ mpega_parse_id3v2
     lea     .tit2Format(pc),a0
     bsr     findAndAppendWithFormat
 
-    move.l  #"TIT2",d0
-    bsr     findFrameByName
-    beq.b   .11
-    move.l  d0,a0
-    bsr     appendWithWrap
-.11
+;    move.l  #"TIT2",d0
+;    bsr     findFrameByName
+;    beq.b   .11
+;    move.l  d0,a0
+;    bsr     appendWithWrap
+;.11
  
     move.l  #"TIT3",d0
     lea     .tit3Format(pc),a0
@@ -7086,69 +7114,67 @@ mpega_parse_id3v2
     rts
 
 .titleFormat
-    dc.b    ILF,ILF2
-    dc.b    " --- MP3 info ---",ILF,ILF2,ILF,ILF2,0
+    dc.b    "MP3 tags",ILF,ILF2
+    dc.b    "÷÷",0
 .tpe1Format
-    dc.b    " Artist:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºArtist: "
+    dc.b    "%s",0
 .tpe2Format
-    dc.b    " Band:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºBand: "
+    dc.b    "%s",0
 .tpe3Format
-    dc.b    " Conductor:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºConductor: "
+    dc.b    "%s",0
 .tpe4Format
-    dc.b    " Remixed by:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºRemixed by: "
+    dc.b    "%s",0
 .tcomFormat
-    dc.b    " Composer:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºComposer: "
+    dc.b    "%s",0
 .topeFormat
-    dc.b    " Original artist:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºOriginal artist: "
+    dc.b    "%s",0
 .tit1Format
-    dc.b    " Content:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
-;.tit2Format
-;    dc.b    " Title:",ILF,ILF2
-;    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºContent: "
+    dc.b    "%s",0
 .tit2Format
-    dc.b    " Title:",ILF,ILF2,0
+    dc.b    "ºTitle: "
+    dc.b    "%s",0
 .tit3Format
-    dc.b    " Subtitle:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºSubtitle: "
+    dc.b    "%s",0
 .talbFormat
-    dc.b    " Album:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºAlbum: "
+    dc.b    "%s",0
 .tyerFormat
-    dc.b    " Year:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºYear: "
+    dc.b    "%s",0
 .tdatFormat
-    dc.b    " Date:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºDate: "
+    dc.b    "%s",0
 .tdrcFormat
-    dc.b    " Recording time:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºRecording time: "
+    dc.b    "%s",0
 .tdrlFormat
-    dc.b    " Release time:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºRelease time: "
+    dc.b    "%s",0
 .trckFormat
-    dc.b    " Track number:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºTrack number: "
+    dc.b    "%s",0
 .tlenFormat
-    dc.b    " Length:",ILF,ILF2
-    dc.b    " %ld:%02ld",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºLength: "
+    dc.b    "%ld:%02ld",0
 .tmooFormat
-    dc.b    " Mood:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºMood: "
+    dc.b    "%s",0
 .trsnFormat
-    dc.b    " Radio station:",ILF,ILF2
-    dc.b    " %-37.37s",ILF,ILF2,ILF,ILF2,0
+    dc.b    "ºRadio station: "
+    dc.b    "%s",0
 
  even
 
 * In:
-*   d0 = frame name 4-cbar
+*   d0 = frame name 4-char
 *   a0 = format string
 *   a2 = buffer to append
 findAndAppendWithFormat
@@ -7159,88 +7185,22 @@ findAndAppendWithFormat
 appendWithFormat:
     bsr     desmsg
     lea     desbuf(a5),a0
-.cc move.b  (a0)+,(a2)+
-    bne     .cc
-    subq    #1,a2
-    rts
-
-* In:
-*   a0 =  string
-*   a2 = buffer to append
-appendWithWrap:
-    pushm   d0-a1/a3-a6
+    push    a3
     move.l  a2,a3
-    move.b  #" ",(a3)+
-    bsr     .doLine
-    bpl     .ends
-    move.b  #" ",(a3)+
-    bsr     .doLine
-    bpl     .ends
-    move.b  #" ",(a3)+
-    bsr     .doLine
-.ends
+    move.l  wrappageFunction(a5),a1
+    jsr     (a1)
     move.l  a3,a2
-    popm    d0-a1/a3-a6
-    rts
-
-
-* Copies a line to output, cuts at space near the end of line
-* in:
-*   a0 = input text
-*   a3 = output buffer
-* out:
-*   a0 = pointer to next line if available
-*   a3 = pointer to next position in output buffer
-*   d0 = negative: all input handled
-*        positive: data left in input for the next row
-.doLine
-    move.l  a0,d0
-	moveq	#37-1,d0
-	moveq	#0,d1
-.cl1
-    cmp.b   #"_",(a0)
-    beq     .ys1
-    cmp.b	#" ",(a0)
-	bne.b	.ns1
-.ys1
-	addq	#1,d1 ; keep track of spaces
-.ns1	    
-    move.b  (a0)+,d2
-    cmp.b   #ILF2,d2
-    bne.b   .noIlf2
-    * Line change resets the counter
-    moveq	#37-1,d0    
-.noIlf2
-    move.b  d2,(a3)+
-	dbeq	d0,.cl1
-	tst	d0
-	bpl.b	.endLine
-	; find previous space to cut from
-	; SAFETY: if there are any
-	tst	d1
-	beq.b	.endLin
-.li1	
-    subq	#1,a3
-    cmp.b   #"_",-(a0)
-    beq     .ys2
-	cmp.b	#" ",(a0)
-	bne.b	.li1
-.ys2
-	addq	#1,a0
-	move.l	a0,d0
-.endLin
-	moveq	#-1,d0
-.endLine
-	bsr	.putLineChange
-	tst	d0
+    pop     a3
+    ;bsr     putLineChange
+    ;rts
+    ; ... fall ...
+    
+putLineChange:
+	move.b	#ILF,(a2)+
+	move.b	#ILF2,(a2)+
 	rts
 
-; Put line change with special line feed so that ordinary line feeds
-; can be filtered out.
-.putLineChange	
-	move.b	#ILF,(a3)+
-	move.b	#ILF2,(a3)+
-	rts
+
 * In: 
 *    d0 = 4-char frame name to find
 *    a3 = start of data

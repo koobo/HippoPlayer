@@ -204,7 +204,7 @@ shr/soundfx.shr:          bin/soundfx
 shr/soundmon3.shr:        bin/soundmon3
 	$(COMPRESS) "$<" "$@"
 shr/tfmx.shr:             bin/tfmx
-	$(COMPRESS) "$<" "$@"
+#	$(COMPRESS) "$<" "$@"
 shr/tfmx7c.shr:           bin/tfmx7c
 	$(COMPRESS) "$<" "$@"
 shr/thx.shr:              bin/thx

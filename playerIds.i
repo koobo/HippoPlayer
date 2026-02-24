@@ -21,6 +21,7 @@ pt_midistream   rs.b    1
 pt_vgm          rs.b    1   * TODO: WARNING: This is 47
 	rsset	pt_internal_start-1  * start backwards
 pt_vgm_tnt   rs.b	-1		
+pt_ogg       rs.b   -1
 
 * These need a replayer code from the group file
 pt_group_start = 49
@@ -105,3 +106,5 @@ pt_soundprogramminglanguage rs.b 1
 pt_midiext          rs.b    1
 pt_symphonie        rs.b    1
 pt_sonicarranger	rs.b	1
+pt_tfmx_            rs.b    1
+pt_tfmxpro_         rs.b    1
