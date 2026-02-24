@@ -296,7 +296,7 @@ poslen		dc.l	0
 adjustroutine	dc.l	0
 voluproutine	dc.l	0
 s3mmode1a	dc.b	0
-initGuard   dc.w    0
+initGuard   dc.b    0
 
 * Use mode in "ahi_use"
 USE_NORMAL        = 0
@@ -304,7 +304,7 @@ USE_AHI           = 1
 USE_AMIGUS_NORMAL = -1
 USE_AMIGUS_INTERP = -2
 ahi_use		dc.b	0
-
+            dc.b    0 * pad
 ahi_rate	dc.l	0
 ahi_mastervol	dc	0
 ahi_stereolev	dc	0
@@ -312,7 +312,6 @@ ahi_mode	dc.l	0
 
 
 init1r
-
 	move.l	#mname,(a0)
 	move.l	#numchans,(a1)
 	move.l	#mtype,(a2)
@@ -476,7 +475,7 @@ s3init:
 	DPRINT	"s3init %lx"
  endif
 
-    tst.w   initGuard
+    tst.b   initGuard
     beq     .noIg
     DPRINT  "------ init ongoing ------"
 .noIg
@@ -1270,7 +1269,7 @@ s3end:
 	DPRINT	"S3end"
 
  if DEBUG
-    tst.w   initGuard
+    tst.b   initGuard
     beq     .1
     DPRINT  "****** init ongoing! ******"
 .1
@@ -11440,6 +11439,15 @@ PRINTOUT_DEBUGBUFFER
 
 PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
+
+    tst.l   dosbase
+    bne     .ok
+    lea     .dosn,a1
+    move.l  4.w,a6
+	lob     OldOpenLibrary
+    move.l  d0,dosbase
+.ok
+
 	move.l	output(pc),d1
 	bne	.open
 
@@ -11459,6 +11467,8 @@ PRINTOUT
 	bne.b	.open
 	* still not open! exit
 	bra.b	.x
+
+.dosn   dc.b    "dos.library",0
 
   ifne TEST
 .bmb		dc.b	"CON:20/10/350/490/HiP PS3M debug",0
