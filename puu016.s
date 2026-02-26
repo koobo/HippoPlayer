@@ -56669,18 +56669,11 @@ spectrumCopySamples
 	rts
 
 .large
-	* Check source address evenness
-	move.w	a1,d0
-	ror.b	#1,d0
-	bpl.b	.evenCopy
-	moveq	#SAMPLE_LENGTH/16-1,d0
-	* copy from odd address
-.oddCopy
- rept 16
-	move.b	(a1)+,(a4)+
- endr
-	dbf	d0,.oddCopy
-	rts
+	* Ensure source address is even, bytes may be copied
+    * from off-by-one index but does not matter.
+	move.l	a1,d0
+    and.b   #$fe,d0
+    move.l  d0,a1
 
 * Copy SAMPLE_LENGTH bytes, 256 bytes that is
 	if SAMPLE_LENGTH<>256	
