@@ -1041,14 +1041,15 @@ pos_nykyinen	rs	1		* moduulin position
 pos_maksimi	rs	1		
 positionmuutos	rs	1
 
-aika1		rs.l	1
-aika2		rs.l	1
+aika1		rs.l	1       * timestamp in secs when module playback started
+aika2		rs.l	1       * current timestamp
 vanhaaika	rs	1
 ticktack	rs	1	* vb tick count for titlebar refresh
 tooltipTick	rs 	1	* vb tick count for tooltips, counts from positive to 0
 userIdleTick rs  1	* refresh counter updated each ui refresh tick, cleared on mouse
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
+kokonaisaikaPt  rs  1   * original PT modlen in secs
 
 modamount		rs.l	1	* modien määrä
 divideramount	rs.l	1	* dividereitten määrä (info window)
@@ -1621,6 +1622,8 @@ infoScrollLastTime  rs.l      2 * secs, micros
 
 sysTimerPort        rs.b      MP_SIZE
 sysTimerIORequest   rs.b      IOTV_SIZE
+
+ptPositionTicksPtr  rs.l      1
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -3710,6 +3713,9 @@ exit
 	jsr	freeFavoriteList
 	jsr	freeFileBrowserList
 	jsr	freeSearchList
+
+    move.l  ptPositionTicksPtr(a5),a0
+    bsr     freemem
 
 	tst.b	vbsaatu(a5)
 	beq.b	.nbv
@@ -20473,7 +20479,7 @@ type_agus   dc.b    " AGUS",0
 
 * Set the start time of the module playback
 * Also stores whether the module playback was started in AHI mode
-settimestart
+settimestart:
 	move.b	ahi_use(a5),ahi_use_nyt(a5)	* ahi:n tila talteen
 
 	pushm   all
@@ -20565,6 +20571,7 @@ lootaan_aika
 	sub.l	aika1(a5),d0
 
   ;;  DPRINT  "Current time=%ld"
+
     
 	move.l	d0,hippoport+hip_playtime(a5)
 
@@ -37858,6 +37865,7 @@ p_protracker:
 	rts
 
 .eteen
+;    DPRINT  "PT forward"
 	movem.l	d0/d1/a0,-(sp)
 	move.l	moduleaddress(a5),a0
 	moveq	#0,d0
@@ -37870,9 +37878,11 @@ p_protracker:
 .a	move	d1,kplbase+k_songpos(a5)
 	clr	kplbase+k_patternpos(a5)
 	move	d1,pos_nykyinen(a5)
+    bsr     .timeUpdate
 	movem.l	(sp)+,d0/d1/a0
 	rts
 .taakse
+;    DPRINT  "PT backward"
 	move.l	d0,-(sp)
 	move	kplbase+k_songpos(a5),d0
 	subq	#1,d0
@@ -37881,15 +37891,32 @@ p_protracker:
 .b	move	d0,kplbase+k_songpos(a5)
 	clr	kplbase+k_patternpos(a5)
 	move	d0,pos_nykyinen(a5)
+    bsr     .timeUpdate
 	move.l	(sp)+,d0
-.yee	rts
+.yee	
+    rts
+
+.timeUpdate:
+    move.l  ptPositionTicksPtr(a5),d0
+    beq     .yee
+    move.l  d0,a0
+
+    ; Adjust playback timer based on pre-calculated time for each song pos
+    jsr     settimestart
+
+    moveq   #0,d0
+	move	kplbase+k_songpos(a5),d0
+    add     d0,d0
+    move    (a0,d0),d0
+    sub.l   d0,aika1(a5)
+    rts
 
 
 * Tutkii koko songin, ja kattoo jos olisi erillisiä songeja.
 .getsongs:  
 	move.l	moduleaddress(a5),a0
 	cmp.b	#'K',951(a0)
-	beq.b	.yee
+	beq 	.yee
 
 	clr.l	kokonaisaika(a5)
 
@@ -37903,14 +37930,15 @@ p_protracker:
 
 	;cmp	#TITLEBAR_TIMEDUR_POSLEN,lootamoodi(a5)
 	;bne.b	.la
-	pushm	d2-a6
+	pushm	d3-a6
 	move.l	moduleaddress(a5),a0
 	move.b	tempoflag(a5),d0
 	not.b	d0
 	bsr	modlen		* moduulin kesto ajallisesti
-	popm	d2-a6
+	popm	d3-a6
 	move	d0,kokonaisaika(a5)	* mins
 	move	d1,kokonaisaika+2(a5)	* secs
+    move.w  d2,kokonaisaikaPt(a5)
 .la
 
     rts
@@ -38133,10 +38161,14 @@ nl_loopcount	EQU	6	 ; B
 nl_ts		=	8	* channeltempsize
 
 
+* In:
+*   a0 = module
+*   d0 = tempoflag
 * Out:
-*   d0 = secs
+*   d0 = secs in minutes
 *   d1 = minutes
-* or null if cannot determine
+*   d2 = total secs
+* or d0=null if cannot determine
 modlen:
     DPRINT  "+++ PT modlen +++"
 
@@ -38166,18 +38198,38 @@ modlen:
 .lastPositionJump   rs.w 1
 .lastNoteTime       rs.l 1
 .patternIndex       rs.l 1
+.posTicks           rs.l 1
 .varsSize           rs.b 0
  even
+    pushm   d0/a0
+
+    move.l  ptPositionTicksPtr(a5),d1
+    bne     .p1
+    move.l  #128*2,d0
+    jsr     getmem
+    move.l  d0,ptPositionTicksPtr(a5)
+    move.l  d0,d1
+.p1
+    popm    d0/a0
 
     moveq   #.varsSize/2-1,d2
 .sk clr.w   -(sp)
     dbf     d2,.sk
     move.l  sp,a5
+
     bsr     .do
     lea     .varsSize(sp),sp
     rts
 
 .do
+    move.l  d1,.posTicks(a5)
+    beq     .do1
+    move.l  d1,a1
+    moveq   #128-1,d2
+.cl clr     (a1)+
+    dbf     d2,.cl
+.do1    
+
 	MOVE.L	A0,.mt_SongDataPtr(a5)
 	move.b	d0,.tempoflag(a5)
 
@@ -38219,13 +38271,17 @@ modlen:
     ; ---------------------------------
 
 	move.l	.time(a5),d0
+.tickToSecsMins:
 	move.l	#709379,d1	* PAL
 	jsr	divu_32			 * d0 = kesto sekunteina
     DPRINT  "---> secs=%ld"
+    move.l  d0,d2
 	divu	#60,d0
 	move.l	d0,d1
 	swap	d1
 	rts
+
+
 
 .stopz
     DPRINT  "failsafe triggered"
@@ -38345,7 +38401,7 @@ modlen:
 .mt_nnpysk
 
 	CMP.W	#1024,.mt_PatternPos(a5)
-	BLO.S	.mt_NoNewPosYet
+	BLO 	.mt_NoNewPosYet
 .mt_NextPosition	
 	MOVEQ	#0,D0
 	MOVE.B	.mt_PBreakPos(a5),D0
@@ -38361,13 +38417,39 @@ modlen:
 	MOVE.B	.mt_SongPos(a5),d0
 	MOVE.L	.mt_SongDataPtr(a5),A0
 	CMP.B	950(A0),d0
-	BLO.S	.mt_NoNewPosYet
+	BLO.S	.mt_NoNewPosYet_
 	CLR.B	.mt_SongPos(a5)
 	st	.songend(a5)
+.mt_NoNewPosYet_
+
+    tst.b   .songend(a5)
+    bne     .skip
+    move.l  .posTicks(a5),d1
+    beq     .skip
+    move.l  d1,a0
+    move.l  .time(a5),d0
+	move.l  #709379,d1	* PAL
+	jsr     divu_32			 * d0 = secs
+    ; store once for every position
+	moveq   #0,d1
+    MOVE.B	.mt_SongPos(a5),d1
+    add.w   d1,d1
+    tst.w   (a0,d1)
+    bne     .skip
+    move.w  d0,(a0,d1)
+ if DEBUG
+    lsr     #1,d1
+    exg     d0,d1
+    DPRINT  "songpos=%ld tick=%ld"
+ endif
+.skip
 
 .mt_NoNewPosYet	
+
+
+
 	TST.B	.mt_PosJumpFlag(a5)
-	BNE.S	.mt_NextPosition
+	BNE 	.mt_NextPosition
 .mt_exit	
 	RTS
 
