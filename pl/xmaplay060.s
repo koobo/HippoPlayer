@@ -152,6 +152,7 @@ _getPosLen:
 * in: 
 *   d0 = volume
 _setVolume:
+    move    d0,ahi_mastervol
     tst.b   AHI
     bne     ahi_setmastervol
 
@@ -271,12 +272,43 @@ ahiSetup:
     bsr     loadSamples
     beq     .error
 
+    move.l  ahibase(pc),a6
+	move.l	setmode(pc),d0
+	lea	    .getattr_tags(pc),a1
+	jsr	    _LVOAHI_GetAudioAttrsA(a6)
+
+ ifne DEBUG
+    move.l  attr_stereo,d0
+    DPRINT  "stereo=%ld"
+    move.l  attr_panning,d0
+    DPRINT  "panning=%ld"
+    move.l  attr_maxchannels,d0
+    DPRINT  "maxchannels=%ld"
+    move.l  attr_pingpong,d0
+    DPRINT  "pingpong=%ld"
+ endif
+
     moveq   #1,d0
     rts
 
 .error
     moveq   #0,d0
     rts
+
+
+.getattr_tags
+	dc.l	AHIDB_Stereo,attr_stereo
+	dc.l	AHIDB_Panning,attr_panning
+	dc.l	AHIDB_MaxChannels,attr_maxchannels
+	dc.l	AHIDB_PingPong,attr_pingpong
+	dc.l	TAG_END
+
+attr_stereo		dc.l	0
+attr_panning		dc.l	0
+attr_pingpong		dc.l	0
+attr_maxchannels	dc.l	0
+
+
 
 calcSampleCount:
     moveq   #128-1,d7
@@ -487,35 +519,34 @@ ahi_playmusic:
 
 ahi_setmastervol
 	pushm	d0/d1/a0-a2/a6
-;
-;	moveq	#0,d0
-;	move	setchannels(pc),d0
-;	tst.l	attr_stereo
-;	beq.b	.mono
-;	tst.l	attr_panning		* sama jos panning
-;	bne.b	.mono
-;	lsr.l	#1,d0
-;.mono			* d0 = max master vol
-;	subq	#1,d0
-;	lsl.l	#8,d0
-;
-;	mulu	ahi_mastervol(pc),d0
-;	divu	#1000,d0
-;	ext.l	d0
-;	add	#1<<8,d0
-;	lsl.l	#8,d0
-;
-;	move.l	#AHIET_MASTERVOLUME,ahi_effect+ahie_Effect
-;	move.l	d0,ahi_effect+ahiemv_Volume
-;
-;	lea	ahi_effect(pc),a0
-;	move.l	ahi_ctrl(pc),a2
-;	move.l	ahibase(pc),a6
-;	jsr	_LVOAHI_SetEffect(a6)
+	moveq	#0,d0
+	move	setchannels(pc),d0
+	tst.l	attr_stereo
+	beq.b	.mono
+	tst.l	attr_panning		* sama jos panning
+	bne.b	.mono
+	lsr.l	#1,d0
+.mono
+	* d0 = max master vol
+	subq	#1,d0
+    mulu    ahi_mastervol(pc),d0    * make 16.16 FP
+    lsl.l   #8,d0    
+    lsl.l   #2,d0    
+
+	move.l	#AHIET_MASTERVOLUME,.effect+ahie_Effect
+	move.l	d0,.effect+ahiemv_Volume
+    DPRINT  "ahi_setmastervol=%08.8lx"
+
+	lea	    .effect(pc),a0
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr	    _LVOAHI_SetEffect(a6)
 
 	popm	d0/d1/a0-a2/a6
 	rts
 
+.effect
+	ds.b	AHIEffMasterVolume_SIZEOF
 
 
 
@@ -5511,7 +5542,7 @@ Mix_UpdateChannelVolPanFrq:
 	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
 	lea	VoiceOffsets,a3         ; Table of APTR MixVoices, 0..MAX_CHANNELS*2
 	lea	LogTab,a4
-	lea	StmTyp,a5
+    lea	StmTyp,a5
 	moveq	#0,d7               ; loop number of channels in the mod
 	; -----------------------------
 .loop	move.b	cStatus(a5),d6
@@ -5789,7 +5820,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	beq 	.trig
 	; -----------------------------
 	move.w	cFinalPeriod(a5),d0
-	bsr.w	GetFrequenceValue   	; Returns integer 16.16fp in d0
+	bsr 	GetFrequenceValue_AHI   	; Returns Hz
 
     pushm   all
     lea     freqForChannel,a6
@@ -5969,12 +6000,6 @@ GetFrequenceValue
 	move.w	d1,d2			; d2.w = quotient
 	swap	d1			; d1.w = remainder (0 .. 12*16*4-1)	
 	moveq	#14,d3
-
-    tst.b   AHI
-    beq     .norm
-    addq    #3,d3    
-.norm
-
 	sub.w	d2,d3
 	and.b	#31,d3			; d3.b = oct shift
 	; -----------------------------
@@ -5982,18 +6007,45 @@ GetFrequenceValue
 	lsr.l	d3,d0
     rts
 
-
 .amiga	
-    tst.b   AHI
-    bne     .ahiAmiga
-
     moveq	#0,d1
 	move.w	d0,d1
 	move.l	FrequenceDivFactor(pc),d0
 	divu.l	d1,d0
 	rts
 
-.ahiAmiga
+.periodIsZero
+	moveq	#0,d0	; period 0 -> mixer delta 0
+	rts
+
+
+	; input:
+	;  a4   = log table
+	;  d0.w = period
+	;
+	; output: d0.l = Hz
+GetFrequenceValue_AHI:
+	tst.w	d0
+	beq 	.periodIsZero
+	; -----------------------------
+	tst.b	LinearFrqTab(pc)
+	beq.b	.amiga
+	; -----------------------------
+.linear	moveq	#0,d1
+	move.w	#12*192*4,d1
+	sub.w	d0,d1
+	divu.w	#12*16*4,d1		; d1.w = (uint16_t)(12*192*4 - period) / (12*16*4)
+	move.w	d1,d2			; d2.w = quotient
+	swap	d1			; d1.w = remainder (0 .. 12*16*4-1)	
+	moveq	#14+3,d3
+	sub.w	d2,d3
+	and.b	#31,d3			; d3.b = oct shift
+	; -----------------------------
+	move.l	(a4,d1.w*4),d0
+	lsr.l	d3,d0
+    rts
+
+.amiga	
     move.l  #8363*1712,d1
     divu.l  d0,d1
     move.l  d1,d0
@@ -6002,6 +6054,7 @@ GetFrequenceValue
 .periodIsZero
 	moveq	#0,d0	; period 0 -> mixer delta 0
 	rts
+
 
 ; ============================================================
 ; Audio channel mixer
@@ -7466,6 +7519,7 @@ AHI                 dc.b 0
 	EVEN
 ahibase             dc.l 0
 ahi_ctrl            dc.l 0
+ahi_mastervol       dc.w 0
 AHIMixingFreq       dc.w 58000
 sampleForChannel    ds.l 32
 freqForChannel      ds.w 32

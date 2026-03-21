@@ -1952,7 +1952,7 @@ ahi_period:
 	move.l	d0,d1
 
 	move.l	d6,d0
-
+    DPRINT  "SetFreq %ld %ld %ld"
 	moveq	#AHISF_IMM,d2
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
