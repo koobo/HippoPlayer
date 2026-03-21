@@ -123,7 +123,8 @@ testMain:
     rts
 
 .songOver   dc.w    0
-.file   dc.b    "sys:music/Mods/imploder.xm",0
+;.file   dc.b    "sys:music/Mods/imploder.xm",0
+.file   dc.b    "sys:music/Mods/my_spring_in_december.xm",0
 .fileE
     even
 
@@ -193,6 +194,7 @@ ier_ahi             = -19
     move.l  PaulaCh2Buf(pc),a3
     sub.l   a0,a0
 
+    DPRINT  "_init ok"
     moveq   #1,d0   * ok
     rts
 .error
@@ -435,14 +437,12 @@ loadSamples:
     move.l  d0,a0
     move.l  sLen(a2),d0
     beq     .nextS
-    move.l  sOrigLen(a2),d0
+   ; move.l  sOrigLen(a2),d0
 
     ; Make AHISampleInfo
     lea     -12(sp),sp
     move.l  sp,a0
     move.l  sPek(a2),ahisi_Address(a0)
-    ;move.l  sOrigLen(a2),d0
-    move.l  sLen(a2),d0             * which one?
     move.l  #AHIST_M8S,ahisi_Type(a0)
     tst.b   s16Bit(a2)
     beq     .1
@@ -453,8 +453,10 @@ loadSamples:
     move.l  d0,ahisi_Length(a0)     * a0 = info
     move.l  d5,d0                   * d0 = sound number
     moveq   #AHIST_SAMPLE,d1        * d1 = type
+    push    a2
     move.l  ahi_ctrl,a2             * a2 = control
     jsr     _LVOAHI_LoadSound(a6)
+    pop     a2
  ifne DEBUG
     move.l  d5,d1
     move.l  ahisi_Address(sp),d2
@@ -3206,6 +3208,7 @@ Load16BitSample
 	bsr.w	PrepareLoopUnroll	
 	move.l	sLen(a1),d0
 	addq.l	#2,d0			; fix-sample for linear interpolation
+    DPRINT  "Load16BitSample buffer=%lx"
 	moveq	#MEMF_FAST,d1
 	bsr.w	AllocMem
 	tst.l	d0
@@ -3248,6 +3251,7 @@ Load8BitSample
 	bsr.w	PrepareLoopUnroll	
 	move.l	sLen(a1),d0
 	addq.l	#2,d0			; fix-sample for linear interpolation
+    DPRINT  "Load8BitSample buffer=%lx"
 	moveq	#MEMF_FAST,d1
 	bsr.w	AllocMem
 	tst.l	d0
