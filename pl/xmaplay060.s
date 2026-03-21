@@ -45,19 +45,92 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 	include	exec/exec_lib.i
 	include	devices/ahi_lib.i
 	include	devices/ahi.i
-	include	mucro.i
 
-DEBUG = 1
+DEBUG        = 0           * Enable debug print to serial
+
+ ifnd __VASM
+ printt "Test mode!"
+TESTMODE     = 1           * Build a stand-alone test executable
+ else
+TESTMODE     = 0
+ endif
+
+
 * Print to debug console, very clever.
 * Param 1: string
 * d0-d6:    formatting parameters, d7 is reserved
 DPRINT macro
 	ifne DEBUG
 	jsr	desmsgDebugAndPrint
-  dc.b 	\1,10,0
-  even
+    	dc.b  \1,10,0
+    	even
 	endc
 	endm
+
+pushm	macro
+	ifc	"\1","all"
+	movem.l	d0-a6,-(sp)
+	else
+	movem.l	\1,-(sp)
+	endc
+	endm
+
+popm	macro
+	ifc	"\1","all"
+	movem.l	(sp)+,d0-a6
+	else
+	movem.l	(sp)+,\1
+	endc
+	endm
+
+push	macro
+	move.l	\1,-(sp)
+	endm
+
+pop	macro
+	move.l	(sp)+,\1
+	endm
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ ifne TESTMODE
+
+testMain:
+    DPRINT  "start test"
+
+    lea     .file,a0        * module filename
+    lea     .songOver,a1    * ptr to song end indicator
+    moveq   #1,d0           * AHI on
+    move.l  #24000,d1       * AHI mixing rate
+    move.l  #$0002000a,d2   * AHI mode: 8 bit stereo
+    jsr     _init
+    DPRINT  "_init=%ld"
+    tst.l   d0
+    beq     .error
+
+    moveq   #64,d0
+    jsr	    _setVolume
+    
+.loop
+    move.l  GraphicsBase,a6
+    jsr     _LVOWaitTOF(a6)	
+    btst    #6,$bfe001
+    bne     .loop
+ 
+    jsr     _end
+.error
+    rts
+
+.songOver   dc.w    0
+.file   dc.b    "sys:music/Mods/imploder.xm",0
+.fileE
+    even
+
+ endif ; TESTMODE
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
     jmp     _init(pc)
     jmp     _end(pc)
@@ -87,7 +160,6 @@ ier_ahi             = -19
     move.b  d0,AHI
     move.w  d1,AHIMixingFreq
     move.l  d2,setmode
-
     move.l  a1,songOverPtr
 
 	move.l	a0,a1
@@ -114,12 +186,13 @@ ier_ahi             = -19
     beq     .ahiError
     bsr     ahi_cont
 .1
+    * Return ccess to mixer buffers when Paula mixer engaged
     move.l  PaulaPosMask(pc),d1
     lea     PaulaPos(pc),a1
     move.l  PaulaCh1Buf(pc),a2
     move.l  PaulaCh2Buf(pc),a3
-
     sub.l   a0,a0
+
     moveq   #1,d0   * ok
     rts
 .error
@@ -226,7 +299,7 @@ desmsgDebugAndPrint:
 	move.l	sp,a1	
     lea     .putCharSerial(pc),a2
 	move.l	4.w,a6
-	lob	RawDoFmt
+	jsr     _LVORawDoFmt(a6)
 	movem.l	(sp)+,d0-d7/a0-a3/a6
 	rts	* teleport!
 .putc	
@@ -303,7 +376,7 @@ ahiSetup:
 	dc.l	AHIDB_PingPong,attr_pingpong
 	dc.l	TAG_END
 
-attr_stereo		dc.l	0
+attr_stereo		    dc.l	0
 attr_panning		dc.l	0
 attr_pingpong		dc.l	0
 attr_maxchannels	dc.l	0
@@ -413,15 +486,6 @@ loadSamples:
 ;        ULONG   ahisi_Length                    ; Number of samples in array
 ;        LABEL   AHISampleInfo_SIZEOF
 
-;ahiSampleInfos:
- ;   ds.b    AHISampleInfo_SIZEOF*128*16
-
-;* For each of 128 instruments with 16 samples, store
-;* the AHI sound number
-;instToSoundMap:
-; rept 128
-;    ds.b    16
-; endr
 
 ahi_end:
 	move.l	ahibase(pc),d0
@@ -436,8 +500,8 @@ ahi_end:
 	jsr	_LVOAHI_FreeAudio(a6)
 	CLOSEAHI
 	clr.l	ahibase
-.1
-   rts
+.1  
+    rts
 
 
 ahi_stop:
@@ -504,13 +568,14 @@ ahi_restoreChannels:
 
 
 ahi_playmusic:
-    move.b  setpause(pc),d0
+    tst.b  setpause(pc)
     bne.b   .1
     rts
 .1
 	pushm	d2-d7/a2-a6
+ ifne DEBUG
     move    $dff006,$dff180
-
+ endif
 	bsr 	MainPlayer
 	bsr 	Mix_UpdateChannelVolPanFrq
 
@@ -518,7 +583,7 @@ ahi_playmusic:
 	rts
 
 
-ahi_setmastervol
+ahi_setmastervol:
 	pushm	d0/d1/a0-a2/a6
 	moveq	#0,d0
 	move	setchannels(pc),d0
@@ -561,7 +626,7 @@ ahi_soundfunc:
     moveq   #0,d0
 	move	ahism_Channel(a1),d0
 
-    lea     sampleForChannel,a6
+    lea     sampleForChannel(pc),a6
     move.l  (a6,d0.w*4),a6
 	;move.l	sPek(a6),d0
     movem.l sLen(a6),d1-d3
@@ -658,23 +723,21 @@ SoundFunc:
 	dc.l	0
 	dc.l	0
 
-ahi_sound0:	dc.l	AHIST_M8S
+ahi_sound0:	    dc.l	AHIST_M8S
 setsampletype 	=	*-4
-setmodule 	dc.l	0
+setmodule 	    dc.l	0
 setmodulelen	dc.l	0
 
-ahi_effect
-	ds.b	AHIEffMasterVolume_SIZEOF
+ahi_effect:     ds.b	AHIEffMasterVolume_SIZEOF
 
 ahi_ctrltags:	dc.l	AHIC_Play,1
-setpause 	=	*-1
-		dc.l	TAG_DONE
+setpause 	    =	*-1
+		        dc.l	TAG_DONE
 
 ahi_tags:
 	dc.l	AHIA_MixFreq,22000
 setfreq 	=	*-4
-;	dc.l	AHIA_AudioID,$0002000a	* 8 bit stereo
-	dc.l	AHIA_AudioID,$000a0007	* toccata hifi 16 stereo++
+	dc.l	AHIA_AudioID,$0002000a	* 8 bit stereo
 setmode 	= 	*-4
 	dc.l	AHIA_Channels,4
 setchannels 	= 	*-2
