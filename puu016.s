@@ -52907,7 +52907,9 @@ p_xmaplay:
     dc.w     pt_xmaplay
 .flags
     dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_quadscopePoke!pf_slidePos
-	dc.b    "FastTracker2 xmaplay060",0
+	dc.b    "FastTracker2 xmaplay060"
+.ahiTxt 
+    dc.b    " AHI",0
  even
 
 .author 
@@ -52943,6 +52945,12 @@ p_xmaplay:
 	beq.b	.ok3
 	rts
 .ok3
+    lea     .ahiTxt(pc),a0
+    clr.b   (a0)
+    tst.b   ahi_use(a5)
+    beq     .ah1
+    move.b  #" ",(a0)
+.ah1
 
     * Save into a file for XMAplay
     lea     .tempFile(pc),a0
@@ -52956,6 +52964,14 @@ p_xmaplay:
     lea     .tempFile(pc),a0
     lea     songover(a5),a1
     move.l  xmaplayroutines(a5),a3
+*   a0 = module filename
+*   a1 = song end trigger
+*   d0 = AHI on or off
+*   d1 = AHI mixing rate
+*   d2 = AHI mode
+    move.b  ahi_use(a5),d0
+	move.l	ahi_rate(a5),d1
+    move.l  ahi_mode(a5),d2
     jsr     .xmaInit(a3)
     * d0 = status, 1 = OK, 0 = fail
     * a0 = message or NULL
