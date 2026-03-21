@@ -103,7 +103,7 @@ ier_ahi             = -19
     tst.l   d0
     bne    .error
 
-    tst.b   AHI
+    tst.b   AHI(pc)
     beq     .1
     moveq   #0,d0
     move.w  AHIMixingFreq,d0
@@ -132,7 +132,7 @@ ier_ahi             = -19
     rts
 
 _end:
-    tst.b   AHI
+    tst.b   AHI(pc)
     beq     .1
     bsr     ahi_stop
     bsr     ahi_end
@@ -153,7 +153,7 @@ _getPosLen:
 *   d0 = volume
 _setVolume:
     move    d0,ahi_mastervol
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     ahi_setmastervol
 
     bra     SetMixingVolume
@@ -165,7 +165,7 @@ _backward:
     bra     PrevPattern
 
 _stop:
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     ahi_stop
 
     bsr    StopTask
@@ -179,7 +179,7 @@ _stop:
     rts
 
 _cont:
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     ahi_cont
 
     moveq	#64,d0			; set voice volumes
@@ -368,14 +368,15 @@ loadSamples:
     lea     -12(sp),sp
     move.l  sp,a0
     move.l  sPek(a2),ahisi_Address(a0)
-    move.l  sOrigLen(a2),d0
+    ;move.l  sOrigLen(a2),d0
+    move.l  sLen(a2),d0             * which one?
     move.l  #AHIST_M8S,ahisi_Type(a0)
     tst.b   s16Bit(a2)
     beq     .1
     move.l  #AHIST_M16S,ahisi_Type(a0)
     lsl.l   #1,d0                   * number of samples
 .1  
-    move.l  d5,sAHISound(a2)        * Store AHI sound number to the Sample struct
+    move.w  d5,sAHISound(a2)        * Store AHI sound number to the Sample struct
     move.l  d0,ahisi_Length(a0)     * a0 = info
     move.l  d5,d0                   * d0 = sound number
     moveq   #AHIST_SAMPLE,d1        * d1 = type
@@ -557,27 +558,59 @@ ahi_setmastervol
 ahi_soundfunc:
 	movem.l d2-d4/a6,-(sp)
 
-;    moveq   #0,d0
+    moveq   #0,d0
 	move	ahism_Channel(a1),d0
-;    DPRINT  "------------- soundfunc ch=%02.2lx"
 
     lea     sampleForChannel,a6
     move.l  (a6,d0.w*4),a6
 	;move.l	sPek(a6),d0
     movem.l sLen(a6),d1-d3
-    ; d0=base, d1=end, d2=repS, d3=repL
+    ; d0 = channel
+    ; d1 = sLen - sample length
+    ; d2 = repS - repeat start
+    ; d3 = repL - repeat length
 
-	move.l	sAHISound(a6),d1    ; sample bank
+    ; Does the mode support pingpong?
+    tst.l   attr_pingpong(pc)   
+    beq     .norm
+
+    ; Check for ping pong loop
+    cmp.b   #2,sLoopType(a6)
+    bne     .norm
+    
+    ; Check the direction the playback should be going
+    not.b   sAHILoopDir(a6)
+    beq     .norm
+    ;DPRINT  "BIDI fwd ch=%ld sLen=%lx RepS=%lx sRepL=%lx"
+    ;BIDI ch=7 sLen=DA4C RepS=0 sRepL=DA4C
+    ;DPRINT  "BIDI rev ch=%ld sLen=%lx RepS=%lx sRepL=%lx"
+
+    ; Go backward
+    * Start offset at d2 should point to loop end
+    add.l   d3,d2
+    * Make length negative to indicate reverse playback
+    neg.l   d3
+.norm
+
+    moveq   #0,d1
+	move.w	sAHISound(a6),d1    ; sample bank
 	moveq	#0,d4				;NOTE: AHISF_IMM *NOT* SET!!
 
 	cmp.l	#4,d3
-	bhs.b	.length_ok
+	bge.b	.length_ok
+    cmp.l   #-4,d3
+	ble.b	.length_ok
 	moveq	#AHI_NOSOUND,d1
 .length_ok
 
-	;move.l	ahi_ctrl(pc),a2
+	;move.l	ahi_ctrl(pc),a2 * already in a2
 	move.l	ahibase(pc),a6
-;    DPRINT  "xSetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
+;    DPRINT  "SetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
+	; d0 = channel
+	; d1 = sound ID
+	; d2 = offset
+	; d3 = length
+	; d4 = flags (AHISF_IMM)
 	jsr	_LVOAHI_SetSound(a6)
 
 	movem.l (sp)+,d2-d4/a6
@@ -919,8 +952,9 @@ sLoopType	EQU 32	; B (8bb: was Typ, but no 16-bit smps, so it's all we need)
 sPan		EQU 33	; B
 sRelTon		EQU 34	; B
 s16Bit		EQU 35	; B
-sAHISound   EQU 36  ; L AHI sound number for this sample
-
+sAHISound   EQU 36  ; W AHI sound number for this sample
+sAHILoopDir EQU 38  ; B
+sPadding    EQU 39  ; B
 SMP_SIZE	EQU 40	; Must be a multiple of 4 for longword alignment.
 			; If you change this, remember to update INS_SIZE below
 
@@ -1224,7 +1258,7 @@ ReadLittleEndian32
 	; -----------------------------------------------------------
 
 StartTask
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     .done
 
     tst.l   WorkerTask
@@ -1727,7 +1761,7 @@ CloseCIATimer
 .done	rts
 
 StartMixing
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     .x
 
 	bsr.w	SetPaulaInterrupt
@@ -1756,7 +1790,7 @@ StartMixing
 StopMixing
 	sf	SongIsPlaying
 
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     .x
 
 	bsr.w	DisableAudioMixer	; also clears Paula volumes
@@ -1919,7 +1953,7 @@ SetMixerVars
 	move.w	MixPeriod(pc),d0
 	moveq	#0,d1	; 0 = PAL
 	bsr.w	PaulaPeriodToFreq
-    tst.b   AHI
+    tst.b   AHI(pc)
     beq     .1
     move.w  AHIMixingFreq,d0
     swap    d0
@@ -1950,7 +1984,7 @@ SetMixerVars
 	move.w	MixPeriod(pc),d0
 	moveq	#1,d1	; 1 = NTSC
 	bsr.w	PaulaPeriodToFreq
-    tst.b   AHI
+    tst.b   AHI(pc)
     beq     .2
     move.w  AHIMixingFreq,d0
     swap    d0
@@ -2133,7 +2167,7 @@ GenerateBPMTable
 	rts
 
 EnableAudioMixer
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     .x
 
 	st	AudioMixFlag
@@ -2153,7 +2187,7 @@ EnableAudioMixer
 .x	rts
 
 DisableAudioMixer
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     .x
 	; ---------------------------
 	; Clear Paula volumes
@@ -2240,7 +2274,7 @@ AllocChipBuffers
 	rts
 
 SetupAudio
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     .ahi
 
 	bsr.w	SilencePaula
@@ -3940,7 +3974,7 @@ P_SetSpeed
 	bhs.b	.ok
 	moveq	#32,d0
 .ok	
-    tst.b   AHI
+    tst.b   AHI(pc)
     beq     .1
     bsr     ahi_tempo
 .1
@@ -5535,7 +5569,7 @@ GetVoice
 	ENDIF
 	
 Mix_UpdateChannelVolPanFrq:
-    tst.b   AHI
+    tst.b   AHI(pc)
     bne     Mix_UpdateChannelVolPanFrq_AHI
 
 	lea	PanningTab(pc),a1
@@ -5637,10 +5671,6 @@ Mix_UpdateChannelVolPanFrq:
 	bhs.b	.stop				; yes, stop voice
 	; -----------------------------
 	clr.w	vPosDec+2(a6)			; clear sampling pos fraction
-    ; KPK: loop type Fwd, Rev, RevDir=Bidi=PingPong
-    ; vType = 1 -> Fwd=one shot
-    ;         2 -> Rev=forward loop
-    ;         4 -> RevDir=bidi=pingpong
 	move.b	sLoopType(a0),vType(a6)		; set loop flags (& clears "Off" flag)
 
 	; -------------------------------------------------------------------
@@ -5700,11 +5730,10 @@ Mix_UpdateChannelVolPanFrq:
 ; ---------------------------------------------------------
 
 Mix_UpdateChannelVolPanFrq_AHI:
-   ;; DPRINT  "Mix_UpdateChannelVolPanFrq_AHI"
 	lea	PanningTab(pc),a1
 	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
 	lea	VoiceOffsets,a3         ; Table of APTR MixVoices, 0..MAX_CHANNELS*2
-	lea	LogTabSource,a4
+	lea	LogTabSource,a4         ; Use direct frequency table
 	lea	StmTyp,a5
 	moveq	#0,d7               ; loop number of channels in the mod
 	; -----------------------------
@@ -5722,6 +5751,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	btst	#IB_NyTon,d6
 	beq 	.vol
 	; -----------------------------
+    ; Not available in AHI!
 	;or.b	#IST_Fadeout,vType(a6)
 	;moveq	#0,d0				; destination volume
 	;moveq	#0,d2
@@ -5747,61 +5777,20 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	move.w	QuickVolSizeVal(pc),d2
 .L1	moveq	#0,d0
 	move.w	cFinalVol(a5),d0		; destionation volume
-	;bsr.w	.SetVol
 
-	; AHI volume expects $00000 - $10000 per channel
-	; Final vol is 0..2047, so FT2(0..256) * AHI(..). Let's use panning map.
-	
-;	move.l	d7,d0		; channel (d7)
-;	
-;	moveq	#0,d1
-;	move.w	cFinalVol(a5),d1	; 0..2047
-;	
-;	; 2047 * 32 = 65504 (approx $10000). 
-;	lsl.l	#5,d1
-;	
-;	; Panning (finalPan is 0..255).
-;	; 0 is full left, 128 center, 255 full right.
-;	moveq	#0,d2
-;	move.b	cFinalPan(a5),d2
-;	
-;	; left vol = vol * (255 - pan) / 256
-;	; right vol = vol * pan / 256
-;	move.l	d2,d3
-;	move.l	d1,d2		
-;	
-;	; left
-;	move.l	#255,d4
-;	sub.l	d3,d4
-;	mulu	d4,d2
-;	lsr.l	#8,d2		; d2 (left volume)
-;	
-;	; right
-;	mulu	d3,d1
-;	lsr.l	#8,d1		; d1 (right volume)
-;	
-;	move.l	d2,d3		; d3 = pan (left)
-;	swap	d2		; AHI pan expects $00000 left.. $10000 right. Wait.
-;	
-    pushm   all
+	pushm   all
 	move.l	d7,d0		; channel (d7)
 
 	; AHI_SetVol args: channel (d0), vol (d1 0..$10000), pan (d2 0..$10000), freq (d3), flags (d4)
-	; Actually for AHI_SetVol:
-	; d0 = channel, d1 = volume (0-$10000), d2 = pan (0-$10000 left-right), d3 = unused, d4 = flags
-
-	; recalculate for standard AHI pan
-	; cFinalPan(a5) = 0..255. AHI expects 0..$10000
+    ; cFinalPan(a5) = 0..255. AHI expects 0..$10000
 	moveq	#0,d2
 	move.b	cFinalPan(a5),d2    
-    * 0: full left, 128 center, 255 full right
     * AHI: 0x00000 full left, 0x8000 center, 0x10000 full right
 	lsl.l	#8,d2		; 255 -> $FF00 (approx $10000)
 
 	moveq	#0,d1
 	move.w	cFinalVol(a5),d1
 	lsl.l	#5,d1		; volume $0000 -> $10000
-	
 	move.l	d7,d0		; channel
 	
 	moveq	#AHISF_IMM,d3	; flags
@@ -5823,7 +5812,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	bsr 	GetFrequenceValue_AHI   	; Returns Hz
 
     pushm   all
-    lea     freqForChannel,a6
+    lea     freqForChannel(pc),a6   ; Store this for later
     move.w  d0,(a6,d7.w*2)
 
 	move.l	d0,d1	    	; d1 = freq (Hz)
@@ -5847,9 +5836,9 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	beq 	.stop    
 
     ; -----------------------------
-    ; Store sample pointer for ahi soundfunc
+    ; Store sample pointer for AHI soundfunc
     push    a1
-    lea     sampleForChannel,a1
+    lea     sampleForChannel(pc),a1
     move.l  a0,(a1,d7.w*4)
     pop     a1
 	; -----------------------------	
@@ -5861,13 +5850,11 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	add.l	d1,d5
 	add.l	d2,d5				; d5.l = revBase (base + len + repS)		
 	; -----------------------------
-	;sf	v16Bit(a6)
 	tst.b	s16Bit(a0)			; 16-bit sample?
-	beq.b	.L2				; nope
+	beq.b	.L2				    ; nope
 	lsr.l	#1,d1				; yes, convert units from bytes to words
 	lsr.l	#1,d2
 	lsr.l	#1,d3
-	;st	v16Bit(a6)
 	; -----------------------------
 .L2	
     ;movem.l	d0-d5,vBase(a6)			; write 6 longwords from offset
@@ -5877,24 +5864,18 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	; -----------------------------
 	;clr.w	vPosDec+2(a6)			; clear sampling pos fraction
     ; KPK: loop type Fwd, Rev, RevDir=Bidi=PingPong
-    ; vType = 1 -> Fwd=one shot
-    ;         2 -> Rev=forward loop
-    ;         4 -> RevDir=bidi=pingpong
+    ; vType = 0 -> No Loop
+    ;         1 -> Forward loop
+    ;         2 -> ping pong loop
 	;move.b	sLoopType(a0),vType(a6)		; set loop flags (& clears "Off" flag)
-
 
     pushm   all
     ; d1 = len
     move.l  d1,d3
-
-	; Call AHI_SetSound(channel, sound_id, offset, length, flags)
-	; In this setup, we mapped sound IDs directly to samples
-	; Sound ID is stored in the Sample struct or we map it globally.
-	; For now, just trigger sound!
 	
-	; a0 now points to the Sample
-	; Check if it's actually loaded into AHI
-	move.l	sAHISound(a0),d1
+    moveq   #0,d1
+	move.w	sAHISound(a0),d1
+    clr.b   sAHILoopDir(a0)
 	
 	; AHI_SetSound args:
 	; d0 = channel (d7)
