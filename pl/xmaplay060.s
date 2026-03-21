@@ -152,6 +152,9 @@ _getPosLen:
 * in: 
 *   d0 = volume
 _setVolume:
+    tst.b   AHI
+    bne     ahi_setmastervol
+
     bra     SetMixingVolume
 
 _forward:
@@ -161,6 +164,9 @@ _backward:
     bra     PrevPattern
 
 _stop:
+    tst.b   AHI
+    bne     ahi_stop
+
     bsr    StopTask
     
 	lea	    $dff000,a0
@@ -172,6 +178,9 @@ _stop:
     rts
 
 _cont:
+    tst.b   AHI
+    bne     ahi_cont
+
     moveq	#64,d0			; set voice volumes
 	lea	    $dff000,a0
 	move.w	d0,$a8(a0)
@@ -189,6 +198,8 @@ _cont:
 songOverPtr     dc.l    0
 lastMessagePtr  dc.l    0
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
  ifne DEBUG
 desmsgDebugAndPrint:
@@ -225,6 +236,9 @@ desmsgDebugAndPrint:
     jmp     -516(a6)
 debugDesBuf ds.b    64
  endif
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
 ahiSetup:
     DPRINT  "ahiSetup"
@@ -436,15 +450,22 @@ ahi_stopChannels:
 
 ahi_restoreChannels:
     pushm   all
-;	lea	    cha0,a4
-;	move	numchans,d7
-;	subq	#1,d7
-;	moveq	#0,d6
-;.chl
-;    bsr     ahi_period
-;	lea 	mChanBlock_SIZE(a4),a4
-;	addq	#1,d6
-;	dbf	d7,.chl
+
+    moveq   #0,d7
+    lea     freqForChannel,a4
+.chl
+    move.l  d7,d0
+    moveq   #0,d1   
+    move    (a4)+,d1
+	moveq	#AHISF_IMM,d2
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr     _LVOAHI_SetFreq(a6)
+
+    addq    #1,d7
+	cmp.w	hAntChn,d7
+	bne     .chl
+
     popm     all
     rts
 
@@ -464,155 +485,37 @@ ahi_playmusic:
 	rts
 
 
-
-* parittomat ovat vasemmalla, parilliset oikealla
-
-;in:
-* d0	volume
-* d6	channel
-
-
-ahi_volume_:
-	movem.l	d0-d3/d6/a0-a2/a6,-(sp)
-
-;    move.b	Pro4(pc),d1
-;	beq.b	.n
-;	lea	chantab(pc),a6
-;	move.b	(a6,d6),d6
-;.n	
-;	move.l	d6,d0
+ahi_setmastervol
+	pushm	d0/d1/a0-a2/a6
 ;
-;	move	mVolume(a4),d1
-;	mulu	PS3M_master,d1
-;	lsl.l	#4,d1			* max=$10000
+;	moveq	#0,d0
+;	move	setchannels(pc),d0
+;	tst.l	attr_stereo
+;	beq.b	.mono
+;	tst.l	attr_panning		* sama jos panning
+;	bne.b	.mono
+;	lsr.l	#1,d0
+;.mono			* d0 = max master vol
+;	subq	#1,d0
+;	lsl.l	#8,d0
 ;
-;	move.l	#$8000,d2
-;	moveq	#0,d3
-;	move	ahi_stereolev(pc),d3
+;	mulu	ahi_mastervol(pc),d0
+;	divu	#1000,d0
+;	ext.l	d0
+;	add	#1<<8,d0
+;	lsl.l	#8,d0
 ;
-;	btst	#0,d6		
-;	beq.b	.parillinen
-;	neg.l	d3			
-;.parillinen				* parillinen = oikealla
-;	sub.l	d3,d2
+;	move.l	#AHIET_MASTERVOLUME,ahi_effect+ahie_Effect
+;	move.l	d0,ahi_effect+ahiemv_Volume
 ;
-;	moveq	#AHISF_IMM,d3
+;	lea	ahi_effect(pc),a0
 ;	move.l	ahi_ctrl(pc),a2
 ;	move.l	ahibase(pc),a6
-;	jsr	_LVOAHI_SetVol(a6)
-	movem.l	(sp)+,d0-d3/d6/a0-a2/a6
+;	jsr	_LVOAHI_SetEffect(a6)
+
+	popm	d0/d1/a0-a2/a6
 	rts
 
-ahi_quiet_
-	movem.l	d0-d3/d6/a0-a2/a6,-(sp)
-
-;	move.b	Pro4(pc),d1
-;	beq.b	.n
-;	lea	chantab(pc),a6
-;	move.b	(a6,d6),d6
-;.n	
-;	move.l	d6,d0
-;	moveq	#0,d1			* volume 0, quiet sound
-;	move.l	#$8000,d2
-;
-;	moveq	#AHISF_IMM,d3
-;	move.l	ahi_ctrl(pc),a2
-;	move.l	ahibase(pc),a6
-;	jsr	_LVOAHI_SetVol(a6)
-	movem.l	(sp)+,d0-d3/d6/a0-a2/a6
-	rts
-
-
-
-;in:
-* d0	period
-* d6 	channel
-ahi_period_
-
-	movem.l	d0-d2/d6/a0-a2/a6,-(sp)
-
-;	move.b	Pro4(pc),d1
-;	beq.b	.n
-;	lea	chantab(pc),a6
-;	move.b	(a6,d6),d6
-;.n	
-;	moveq	#0,d1
-;	move	mPeriod(a4),d1
-;	beq.b	.exit
-;
-;	move.l	clock,d0
-;	lsl.l	#2,d0
-;
-;	bsr	divu_32
-;	move.l	d0,d1
-;
-;	move.l	d6,d0
-;
-;	moveq	#AHISF_IMM,d2
-;	move.l	ahi_ctrl(pc),a2
-;	move.l	ahibase(pc),a6
-;	jsr	_LVOAHI_SetFreq(a6)
-;.exit
-
-	movem.l	(sp)+,d0-d2/d6/a0-a2/a6
-	rts
-
-
-
-ahi_setrepeat_
-;	move.l	d6,d0
-;
-;	move.b	Pro4(pc),d1
-;	beq.b	.n
-;	lea	chantab(pc),a0
-;	move.b	(a0,d0),d0
-;.n	
-;	lsl	#3,d0
-;	lea	chanreps(pc),a0
-;	add	d0,a0
-;
-;	clr.l	(a0)+
-;	clr.l	(a0)+
-;	tst.b	mLoop(a4)
-;	beq.b	.r
-;	move.l	mLLength(a4),-(a0)
-;	move.l	mLStart(a4),-(a0)
-;.r	
-    rts
-
-
-
-
-;in:
-* d6	channel
-ahi_sample_
-	movem.l d0-d4/d6/a0-a2/a6,-(sp)
-;
-;	move.b	Pro4(pc),d2
-;	beq.b	.n
-;	lea	chantab(pc),a6
-;	move.b	(a6,d6),d6
-;.n	
-;	move.l	d6,d0
-;
-;	move.l	mStart(a4),d2
-;	move.l	mLength(a4),d3
-;	sub.l	s3m,d2
-;
-;	moveq	#AHISF_IMM,D4			* immediate!
-;	moveq	#0,d1				* samplebank
-;
-;	cmp.l	#4,d3
-;	bhs.b	.length_ok
-;	moveq	#AHI_NOSOUND,d1
-;.length_ok
-;
-;	move.l	ahi_ctrl(pc),a2
-;	move.l	ahibase(pc),a6
-;	jsr	_LVOAHI_SetSound(a6)
-
-	movem.l (sp)+,d0-d4/d6/a0-a2/a6
-	rts
 
 
 
@@ -5889,6 +5792,9 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	bsr.w	GetFrequenceValue   	; Returns integer 16.16fp in d0
 
     pushm   all
+    lea     freqForChannel,a6
+    move.w  d0,(a6,d7.w*2)
+
 	move.l	d0,d1	    	; d1 = freq (Hz)
 	move.l	d7,d0	    	; d0 = channel
 	moveq	#AHISF_IMM,d2   ; d2 = flags
@@ -6043,7 +5949,6 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	rts
 
 
-sampleForChannel    ds.l    32*4
 
 	; input:
 	;  a4   = log table
@@ -7560,13 +7465,15 @@ HandlerName		dc.b "xmaplay060 input handler",0
 InputDevice		dc.b "input.device",0
 tmp8			dc.b 0
 bxxOverflow		dc.b 0
+
 ; -------------------------------------
-AHI             dc.b 0
+AHI                 dc.b 0
 	EVEN
-;ahi_task        dc.l 0
-ahibase         dc.l 0
-ahi_ctrl        dc.l 0
-AHIMixingFreq   dc.w 58000
+ahibase             dc.l 0
+ahi_ctrl            dc.l 0
+AHIMixingFreq       dc.w 58000
+sampleForChannel    ds.l 32
+freqForChannel      ds.w 32
 ; -------------------------------------
 
 ; ------------------------------------------------------------------------------
