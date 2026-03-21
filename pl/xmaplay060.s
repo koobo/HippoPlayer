@@ -630,6 +630,11 @@ ahi_soundfunc:
 
     lea     sampleForChannel(pc),a6
     move.l  (a6,d0.w*4),a6
+    tst.l   a6
+    bne     .ok
+    DPRINT  "no sample for channel=%ld"
+    bra     .exit
+.ok
 	;move.l	sPek(a6),d0
     movem.l sLen(a6),d1-d3
     ; d0 = channel
@@ -679,7 +684,7 @@ ahi_soundfunc:
 	; d3 = length
 	; d4 = flags (AHISF_IMM)
 	jsr	_LVOAHI_SetSound(a6)
-
+.exit
 	movem.l (sp)+,d2-d4/a6
 	rts
 
@@ -689,7 +694,7 @@ ahi_soundfunc:
 ahi_tempo:
 	pushm   all
 	and.l	#$ffff,d0
-    DPRINT  "ahi_tempo=%ld"
+    ;DPRINT  "ahi_tempo=%ld"
 	lsl.w	#1,d0
 	divu	#5,d0
  
@@ -702,7 +707,6 @@ ahi_tempo:
     beq     .1
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_ControlAudioA(a6)
-    DPRINT  "control=%ld"
 .1
     popm    all
 	RTS
@@ -5980,7 +5984,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	moveq	#AHISF_IMM,d4
 	move.l	ahibase(pc),a6
 	move.l	ahi_ctrl(pc),a2
-    DPRINT  "SetSound NOSOUND"
+    DPRINT  "NOSOUND channel=%ld"
 	jsr	_LVOAHI_SetSound(a6)
     popm    all
 	bra.b	.next
