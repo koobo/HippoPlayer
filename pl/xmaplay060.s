@@ -5673,7 +5673,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	lea	PanningTab(pc),a1
 	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
 	lea	VoiceOffsets,a3         ; Table of APTR MixVoices, 0..MAX_CHANNELS*2
-	lea	LogTab,a4
+	lea	LogTabSource,a4
 	lea	StmTyp,a5
 	moveq	#0,d7               ; loop number of channels in the mod
 	; -----------------------------
@@ -5969,24 +5969,19 @@ GetFrequenceValue
 	move.w	d1,d2			; d2.w = quotient
 	swap	d1			; d1.w = remainder (0 .. 12*16*4-1)	
 	moveq	#14,d3
+
+    tst.b   AHI
+    beq     .norm
+    addq    #3,d3    
+.norm
+
 	sub.w	d2,d3
 	and.b	#31,d3			; d3.b = oct shift
 	; -----------------------------
 	move.l	(a4,d1.w*4),d0
 	lsr.l	d3,d0
-    
-    tst.b   AHI
-    bne     .ahiLinear
     rts
 
-.ahiLinear
-    moveq   #0,d1
-    move.w  MixingFreq(pc),d1
-    mulu.l  d1,d0
-    clr.w   d0
-	swap	d0
-	rts
-	rts
 
 .amiga	
     tst.b   AHI
