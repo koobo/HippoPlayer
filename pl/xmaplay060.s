@@ -41,6 +41,23 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 ;------------------------------------------------------------------------------
 ; HippoPlayer glue
 ;------------------------------------------------------------------------------
+	incdir	include:
+	include	exec/exec_lib.i
+	include	devices/ahi_lib.i
+	include	devices/ahi.i
+	include	mucro.i
+
+DEBUG = 1
+* Print to debug console, very clever.
+* Param 1: string
+* d0-d6:    formatting parameters, d7 is reserved
+DPRINT macro
+	ifne DEBUG
+	jsr	desmsgDebugAndPrint
+  dc.b 	\1,10,0
+  even
+	endc
+	endm
 
     jmp     _init(pc)
     jmp     _end(pc)
@@ -55,12 +72,27 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 * In:
 *   a0 = module filename
 *   a1 = song end trigger
+*   d0 = AHI on or off
+*   d1 = AHI mixing rate
+*   d2 = AHI mode
 _init:
+ier_filerr          = -17
+ier_ahi             = -19
+
+    DPRINT  "_init" 
+ ifne DEBUG
+    and.l   #$ff,d0
+    DPRINT  "ahi=%ld ahirate=%ld ahimode=%08.8lx"
+ endif
+    move.b  d0,AHI
+    move.w  d1,AHIMixingFreq
+    move.l  d2,setmode
+
     move.l  a1,songOverPtr
 
 	move.l	a0,a1
-.1  tst.b   (a1)+
-    bne.b   .1
+.11 tst.b   (a1)+
+    bne.b   .11
     move.l  a1,d0
     sub.l   a0,d0
 
@@ -69,8 +101,19 @@ _init:
     move.l  (sp)+,a5
     * d0 = 0: ok, 1: error
     tst.l   d0
-    bne.b   .error
+    bne    .error
 
+    tst.b   AHI
+    beq     .1
+    moveq   #0,d0
+    move.w  AHIMixingFreq,d0
+    DPRINT  "AHIMixingFreq=%ld Hz"
+    move.l  d0,setfreq
+    bsr     ahiSetup
+    tst.l   d0
+    beq     .ahiError
+    bsr     ahi_cont
+.1
     move.l  PaulaPosMask(pc),d1
     lea     PaulaPos(pc),a1
     move.l  PaulaCh1Buf(pc),a2
@@ -81,10 +124,19 @@ _init:
     rts
 .error
     move.l  lastMessagePtr(pc),a0
-    moveq   #0,d0
+    moveq   #ier_filerr,d0
+    rts
+
+.ahiError
+    moveq   #ier_ahi,d0
     rts
 
 _end:
+    tst.b   AHI
+    beq     .1
+    bsr     ahi_stop
+    bsr     ahi_end
+.1
     bsr     StopTask
     bsr     cleanUp
     rts
@@ -138,6 +190,537 @@ songOverPtr     dc.l    0
 lastMessagePtr  dc.l    0
 
 
+ ifne DEBUG
+desmsgDebugAndPrint:
+	* sp contains the return address, which is
+	* the string to print
+	movem.l	d0-d7/a0-a3/a6,-(sp)
+	* get string
+	move.l	4*(8+4+1)(sp),a0
+	* find end of string
+	move.l	a0,a1
+.e	tst.b	(a1)+
+	bne.b	.e
+	move.l	a1,d7
+	btst	#0,d7
+	beq.b	.even
+	addq.l	#1,d7
+.even
+	* overwrite return address 
+	* for RTS to be just after the string
+	move.l	d7,4*(8+4+1)(sp)
+
+	lea	debugDesBuf(pc),a3
+	move.l	sp,a1	
+    lea     .putCharSerial(pc),a2
+	move.l	4.w,a6
+	lob	RawDoFmt
+	movem.l	(sp)+,d0-d7/a0-a3/a6
+	rts	* teleport!
+.putc	
+	move.b	d0,(a3)+	
+	rts
+.putCharSerial
+    move.l  4.w,a6
+    jmp     -516(a6)
+debugDesBuf ds.b    64
+ endif
+
+ahiSetup:
+    DPRINT  "ahiSetup"
+    move    hAntChn,d0
+    move    d0,setchannels
+
+    bsr     calcSampleCount
+    addq    #1,d5
+    move    d5,setsounds
+
+	OPENAHI	1
+	move.l	d0,ahibase
+	beq     .error
+	move.l	d0,a6
+
+ ifne DEBUG
+    move.l  setfreq,d0
+    move.l  setmode,d1
+    clr.l   d2
+    move.w  setchannels,d2
+    clr.l   d3
+    move.w  setsounds,d3
+    DPRINT  "freq=%ld mode=%08.8lx ch=%ld snd=%lx"
+ endif
+ 
+	lea	  ahi_tags(pc),a1
+	jsr	_LVOAHI_AllocAudioA(a6)
+	move.l	d0,ahi_ctrl
+	beq	    .error
+    bsr     loadSamples
+    beq     .error
+
+    moveq   #1,d0
+    rts
+
+.error
+    moveq   #0,d0
+    rts
+
+calcSampleCount:
+    moveq   #128-1,d7
+    lea     Instr,a4
+    moveq   #0,d5
+.instrs
+    move.l  (a4)+,d0
+    beq     .next
+    move.l  d0,a3
+    move.b  s16Bit(a3),d0   
+
+    move    iAntSamp(a3),d6
+    beq     .next
+    subq    #1,d6
+    lea	    iSamp(a3),a2		; a2 = sample struct
+
+.samples
+    move.l  sPek(a2),d0
+    beq     .nextS
+    move.l  d0,a0
+    move.l  sLen(a2),d0
+    beq     .nextS
+    addq    #1,d5
+.nextS
+    lea     SMP_SIZE(a2),a2
+    dbf     d6,.samples
+.next
+    dbf     d7,.instrs
+    rts
+
+* Load each instrument sample to AHI
+loadSamples:
+    moveq   #128-1,d7
+    lea     Instr,a4
+;    lea     instToSoundMap,a5
+    moveq   #0,d5               * AHI sound number
+.instrs
+    move.l  (a4)+,d0
+    beq     .next
+    move.l  d0,a3
+    move.b  s16Bit(a3),d0   
+
+    move    iAntSamp(a3),d6
+    beq     .next
+    subq    #1,d6
+    lea	    iSamp(a3),a2		; a2 = sample struct
+
+.samples
+    move.l  sPek(a2),d0
+    beq     .nextS
+    move.l  d0,a0
+    move.l  sLen(a2),d0
+    beq     .nextS
+    move.l  sOrigLen(a2),d0
+
+    ; Make AHISampleInfo
+    lea     -12(sp),sp
+    move.l  sp,a0
+    move.l  sPek(a2),ahisi_Address(a0)
+    move.l  sOrigLen(a2),d0
+    move.l  #AHIST_M8S,ahisi_Type(a0)
+    tst.b   s16Bit(a2)
+    beq     .1
+    move.l  #AHIST_M16S,ahisi_Type(a0)
+    lsl.l   #1,d0                   * number of samples
+.1  
+    move.l  d5,sAHISound(a2)        * Store AHI sound number to the Sample struct
+    move.l  d0,ahisi_Length(a0)     * a0 = info
+    move.l  d5,d0                   * d0 = sound number
+    moveq   #AHIST_SAMPLE,d1        * d1 = type
+    move.l  ahi_ctrl,a2             * a2 = control
+    jsr     _LVOAHI_LoadSound(a6)
+ ifne DEBUG
+    move.l  d5,d1
+    move.l  ahisi_Address(sp),d2
+    move.l  ahisi_Length(sp),d3
+    move.l  ahisi_Type(sp),d4
+    DPRINT  "LoadSound=%lx num=%lx addr=%lx len=%lx type=%lx"
+ endif
+    lea     12(sp),sp
+    tst.l   d0
+    bne     .err
+
+    addq    #1,d5                  * Next AHI sound number
+.nextS
+    lea     SMP_SIZE(a2),a2
+    dbf     d6,.samples
+.next
+    dbf     d7,.instrs
+    moveq   #1,d0
+    rts
+.err
+    moveq   #0,d0
+    rts
+
+
+; ; AHISampleInfo
+;        STRUCTURE AHISampleInfo,0
+;        ULONG   ahisi_Type                      ; Format of samples
+;        APTR    ahisi_Address                   ; Address to array of samples
+;        ULONG   ahisi_Length                    ; Number of samples in array
+;        LABEL   AHISampleInfo_SIZEOF
+
+;ahiSampleInfos:
+ ;   ds.b    AHISampleInfo_SIZEOF*128*16
+
+;* For each of 128 instruments with 16 samples, store
+;* the AHI sound number
+;instToSoundMap:
+; rept 128
+;    ds.b    16
+; endr
+
+ahi_end:
+	move.l	ahibase(pc),d0
+	beq.b	.1
+	move.l	d0,a6
+
+    ; for safety stop playback first, SB128 reportedly crashes otherwise
+    clr.b   setpause
+    bsr     ahi_stopcont
+
+	move.l	ahi_ctrl(pc),a2
+	jsr	_LVOAHI_FreeAudio(a6)
+	CLOSEAHI
+	clr.l	ahibase
+.1
+   rts
+
+
+ahi_stop:
+    DPRINT  "ahi stop"
+    clr.b   setpause
+    bsr     ahi_stopChannels
+    bra     ahi_stopcont
+
+ahi_cont:
+    DPRINT  "ahi cont"
+    st      setpause
+    bsr     ahi_stopcont
+    bra     ahi_restoreChannels
+    
+ahi_stopcont:
+	pushm	d1/a0-a2/a6
+
+	lea	ahi_ctrltags(pc),a1
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr	_LVOAHI_ControlAudioA(a6)
+    DPRINT  "AHI_ControlAudioA=%ld"
+
+	popm	d1/a0-a2/a6
+	rts
+
+ahi_stopChannels:
+    pushm   all
+	move	hAntChn,d7
+	subq	#1,d7
+	moveq	#0,d6
+.chl
+    move.l  d6,d0
+    moveq   #0,d1   * NULL freq
+	moveq	#AHISF_IMM,d2
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr	_LVOAHI_SetFreq(a6)
+	addq	#1,d6
+	dbf	d7,.chl
+    popm     all
+    rts
+
+ahi_restoreChannels:
+    pushm   all
+;	lea	    cha0,a4
+;	move	numchans,d7
+;	subq	#1,d7
+;	moveq	#0,d6
+;.chl
+;    bsr     ahi_period
+;	lea 	mChanBlock_SIZE(a4),a4
+;	addq	#1,d6
+;	dbf	d7,.chl
+    popm     all
+    rts
+
+
+ahi_playmusic:
+    move.b  setpause(pc),d0
+    bne.b   .1
+    rts
+.1
+	pushm	d2-d7/a2-a6
+    move    $dff006,$dff180
+
+	bsr 	MainPlayer
+	bsr 	Mix_UpdateChannelVolPanFrq
+
+	popm	d2-d7/a2-a6
+	rts
+
+
+
+* parittomat ovat vasemmalla, parilliset oikealla
+
+;in:
+* d0	volume
+* d6	channel
+
+
+ahi_volume_:
+	movem.l	d0-d3/d6/a0-a2/a6,-(sp)
+
+;    move.b	Pro4(pc),d1
+;	beq.b	.n
+;	lea	chantab(pc),a6
+;	move.b	(a6,d6),d6
+;.n	
+;	move.l	d6,d0
+;
+;	move	mVolume(a4),d1
+;	mulu	PS3M_master,d1
+;	lsl.l	#4,d1			* max=$10000
+;
+;	move.l	#$8000,d2
+;	moveq	#0,d3
+;	move	ahi_stereolev(pc),d3
+;
+;	btst	#0,d6		
+;	beq.b	.parillinen
+;	neg.l	d3			
+;.parillinen				* parillinen = oikealla
+;	sub.l	d3,d2
+;
+;	moveq	#AHISF_IMM,d3
+;	move.l	ahi_ctrl(pc),a2
+;	move.l	ahibase(pc),a6
+;	jsr	_LVOAHI_SetVol(a6)
+	movem.l	(sp)+,d0-d3/d6/a0-a2/a6
+	rts
+
+ahi_quiet_
+	movem.l	d0-d3/d6/a0-a2/a6,-(sp)
+
+;	move.b	Pro4(pc),d1
+;	beq.b	.n
+;	lea	chantab(pc),a6
+;	move.b	(a6,d6),d6
+;.n	
+;	move.l	d6,d0
+;	moveq	#0,d1			* volume 0, quiet sound
+;	move.l	#$8000,d2
+;
+;	moveq	#AHISF_IMM,d3
+;	move.l	ahi_ctrl(pc),a2
+;	move.l	ahibase(pc),a6
+;	jsr	_LVOAHI_SetVol(a6)
+	movem.l	(sp)+,d0-d3/d6/a0-a2/a6
+	rts
+
+
+
+;in:
+* d0	period
+* d6 	channel
+ahi_period_
+
+	movem.l	d0-d2/d6/a0-a2/a6,-(sp)
+
+;	move.b	Pro4(pc),d1
+;	beq.b	.n
+;	lea	chantab(pc),a6
+;	move.b	(a6,d6),d6
+;.n	
+;	moveq	#0,d1
+;	move	mPeriod(a4),d1
+;	beq.b	.exit
+;
+;	move.l	clock,d0
+;	lsl.l	#2,d0
+;
+;	bsr	divu_32
+;	move.l	d0,d1
+;
+;	move.l	d6,d0
+;
+;	moveq	#AHISF_IMM,d2
+;	move.l	ahi_ctrl(pc),a2
+;	move.l	ahibase(pc),a6
+;	jsr	_LVOAHI_SetFreq(a6)
+;.exit
+
+	movem.l	(sp)+,d0-d2/d6/a0-a2/a6
+	rts
+
+
+
+ahi_setrepeat_
+;	move.l	d6,d0
+;
+;	move.b	Pro4(pc),d1
+;	beq.b	.n
+;	lea	chantab(pc),a0
+;	move.b	(a0,d0),d0
+;.n	
+;	lsl	#3,d0
+;	lea	chanreps(pc),a0
+;	add	d0,a0
+;
+;	clr.l	(a0)+
+;	clr.l	(a0)+
+;	tst.b	mLoop(a4)
+;	beq.b	.r
+;	move.l	mLLength(a4),-(a0)
+;	move.l	mLStart(a4),-(a0)
+;.r	
+    rts
+
+
+
+
+;in:
+* d6	channel
+ahi_sample_
+	movem.l d0-d4/d6/a0-a2/a6,-(sp)
+;
+;	move.b	Pro4(pc),d2
+;	beq.b	.n
+;	lea	chantab(pc),a6
+;	move.b	(a6,d6),d6
+;.n	
+;	move.l	d6,d0
+;
+;	move.l	mStart(a4),d2
+;	move.l	mLength(a4),d3
+;	sub.l	s3m,d2
+;
+;	moveq	#AHISF_IMM,D4			* immediate!
+;	moveq	#0,d1				* samplebank
+;
+;	cmp.l	#4,d3
+;	bhs.b	.length_ok
+;	moveq	#AHI_NOSOUND,d1
+;.length_ok
+;
+;	move.l	ahi_ctrl(pc),a2
+;	move.l	ahibase(pc),a6
+;	jsr	_LVOAHI_SetSound(a6)
+
+	movem.l (sp)+,d0-d4/d6/a0-a2/a6
+	rts
+
+
+
+;in:
+* a0	struct Hook *
+* a1	struct AHISoundMessage *
+* a2	struct AHIAudioCtrl *
+ahi_soundfunc:
+	movem.l d2-d4/a6,-(sp)
+
+;    moveq   #0,d0
+	move	ahism_Channel(a1),d0
+;    DPRINT  "------------- soundfunc ch=%02.2lx"
+
+    lea     sampleForChannel,a6
+    move.l  (a6,d0.w*4),a6
+	;move.l	sPek(a6),d0
+    movem.l sLen(a6),d1-d3
+    ; d0=base, d1=end, d2=repS, d3=repL
+
+	move.l	sAHISound(a6),d1    ; sample bank
+	moveq	#0,d4				;NOTE: AHISF_IMM *NOT* SET!!
+
+	cmp.l	#4,d3
+	bhs.b	.length_ok
+	moveq	#AHI_NOSOUND,d1
+.length_ok
+
+	;move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+;    DPRINT  "xSetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
+	jsr	_LVOAHI_SetSound(a6)
+
+	movem.l (sp)+,d2-d4/a6
+	rts
+
+
+;---- Tempo ----
+
+ahi_tempo:
+	pushm   all
+	and.l	#$ffff,d0
+    DPRINT  "ahi_tempo=%ld"
+	lsl.w	#1,d0
+	divu	#5,d0
+ 
+	lea	    .tags(pc),a1
+	move	d0,4(a1)
+    move    d0,setplayerfreq
+
+	move.l	ahi_ctrl(pc),a2
+    tst.l   a2
+    beq     .1
+	move.l	ahibase(pc),a6
+	jsr	_LVOAHI_ControlAudioA(a6)
+    DPRINT  "control=%ld"
+.1
+    popm    all
+	RTS
+
+.tags
+	dc.l	AHIA_PlayerFreq
+.freq	dc.l	50<<16
+	dc.l	TAG_DONE
+
+
+PlayerFunc:
+	blk.b	MLN_SIZE
+	dc.l	ahi_playmusic
+	dc.l	0
+	dc.l	0
+
+SoundFunc:
+	blk.b	MLN_SIZE
+	dc.l	ahi_soundfunc
+	dc.l	0
+	dc.l	0
+
+ahi_sound0:	dc.l	AHIST_M8S
+setsampletype 	=	*-4
+setmodule 	dc.l	0
+setmodulelen	dc.l	0
+
+ahi_effect
+	ds.b	AHIEffMasterVolume_SIZEOF
+
+ahi_ctrltags:	dc.l	AHIC_Play,1
+setpause 	=	*-1
+		dc.l	TAG_DONE
+
+ahi_tags:
+	dc.l	AHIA_MixFreq,22000
+setfreq 	=	*-4
+;	dc.l	AHIA_AudioID,$0002000a	* 8 bit stereo
+	dc.l	AHIA_AudioID,$000a0007	* toccata hifi 16 stereo++
+setmode 	= 	*-4
+	dc.l	AHIA_Channels,4
+setchannels 	= 	*-2
+	dc.l	AHIA_Sounds,1
+setsounds = *-2
+	dc.l	AHIA_SoundFunc,SoundFunc
+	dc.l	AHIA_PlayerFunc,PlayerFunc
+	dc.l	AHIA_PlayerFreq,50<<16
+setplayerfreq = *-4
+	dc.l	AHIA_MinPlayerFreq,(32*2/5)<<16
+	dc.l	AHIA_MaxPlayerFreq,(255*2/5)<<16
+	dc.l	TAG_DONE
+
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
@@ -167,13 +750,13 @@ MEMF_CHIP		EQU 2
 MEMF_FAST		EQU 4
 MEMF_CLEAR		EQU 65536
 MEMF_TOTAL		EQU 524288
-NT_INTERRUPT		EQU 2
+;NT_INTERRUPT		EQU 2
 INTB_AUD0		EQU 7
 INTF_AUD0		EQU 128
-LN_NAME			EQU 10
-LN_PRI			EQU 9
-LN_TYPE			EQU 8
-NT_TASK			EQU 1
+;LN_NAME			EQU 10
+;LN_PRI			EQU 9
+;LN_TYPE			EQU 8
+;NT_TASK			EQU 1
 TC_SIZE			EQU 92
 TC_SPLOWER		EQU 58
 TC_SPREG		EQU 54
@@ -192,30 +775,30 @@ _LVORead		EQU -42
 _LVORequestFile		EQU -42
 _LVOWrite		EQU -48
 _LVOSeek		EQU -66
-_LVOForbid		EQU -132
-_LVOPermit		EQU -138
-_LVOSetIntVector	EQU -162
-_LVORemIntServer	EQU -174
-_LVOAllocMem		EQU -198
-_LVOFreeMem		EQU -210
+;_LVOForbid		EQU -132
+;_LVOPermit		EQU -138
+;_LVOSetIntVector	EQU -162
+;_LVORemIntServer	EQU -174
+;_LVOAllocMem		EQU -198
+;_LVOFreeMem		EQU -210
 _LVOWaitTOF		EQU -270
-_LVOAddTask		EQU -282
-_LVOFindTask		EQU -294
-_LVOSetSignal		EQU -306
-_LVOWait		EQU -318
-_LVOSignal		EQU -324
-_LVOAllocSignal		EQU -330
-_LVOFreeSignal		EQU -336
-_LVOCloseLibrary	EQU -414
-_LVOOpenDevice		EQU -444
-_LVOCloseDevice		EQU -450
-_LVODoIO		EQU -456
-_LVOOpenResource	EQU -498
-_LVOOpenLibrary		EQU -552
-_LVOCreateIORequest	EQU -654
-_LVODeleteIORequest	EQU -660
-_LVOCreateMsgPort 	EQU -666
-_LVODeleteMsgPort	EQU -672
+;_LVOAddTask		EQU -282
+;_LVOFindTask		EQU -294
+;_LVOSetSignal		EQU -306
+;_LVOWait		EQU -318
+;_LVOSignal		EQU -324
+;_LVOAllocSignal		EQU -330
+;_LVOFreeSignal		EQU -336
+;_LVOCloseLibrary	EQU -414
+;_LVOOpenDevice		EQU -444
+;_LVOCloseDevice		EQU -450
+;_LVODoIO		EQU -456
+;_LVOOpenResource	EQU -498
+;_LVOOpenLibrary		EQU -552
+;_LVOCreateIORequest	EQU -654
+;_LVODeleteIORequest	EQU -660
+;_LVOCreateMsgPort 	EQU -666
+;_LVODeleteMsgPort	EQU -672
 _LVOPutStr		EQU -948
 
 AttnFlags		EQU $128
@@ -402,8 +985,9 @@ sLoopType	EQU 32	; B (8bb: was Typ, but no 16-bit smps, so it's all we need)
 sPan		EQU 33	; B
 sRelTon		EQU 34	; B
 s16Bit		EQU 35	; B
+sAHISound   EQU 36  ; L AHI sound number for this sample
 
-SMP_SIZE	EQU 36	; Must be a multiple of 4 for longword alignment.
+SMP_SIZE	EQU 40	; Must be a multiple of 4 for longword alignment.
 			; If you change this, remember to update INS_SIZE below
 
 ;------------------------------
@@ -436,7 +1020,8 @@ iEnvPDeltas	EQU 236 ; 12 words
 iMute		EQU 260	; B
 iSamp		EQU 264	; 16*SMPSIZE (must be multiple of 4)
 
-INS_SIZE	EQU 840	; 264+(16*SMPSIZE) (must be multiple of 4)
+INS_SIZE	EQU 840+16*4	; 264+(16*SMPSIZE) (must be multiple of 4)
+                            ; 16*4 = add sAHISound worth of space
 
 ;------------------------------
 ; Instrument header struct
@@ -476,9 +1061,9 @@ INS_HDR_SIZE	EQU 263
 ;------------------------------
 ; Sample header struct
 ;------------------------------
-shLen		EQU 0	; L (DON'T CHANGE ORDER!)
-shRepS		EQU 4	; L (DON'T CHANGE ORDER!)
-shRepL		EQU 8	; L (DON'T CHANGE ORDER!)
+shLen		EQU 0	; L (DON'T CHANGE ORDER!) - SAMPLE LENGTH
+shRepS		EQU 4	; L (DON'T CHANGE ORDER!) - SAMPLE LOOP START 
+shRepL		EQU 8	; L (DON'T CHANGE ORDER!) - SAMPLE LOOP LENGTH
 shVol		EQU 12	; B
 shFine		EQU 13	; B
 shTyp		EQU 14	; B
@@ -705,6 +1290,9 @@ ReadLittleEndian32
 	; -----------------------------------------------------------
 
 StartTask
+    tst.b   AHI
+    bne     .done
+
     tst.l   WorkerTask
 	bne.b	.done
 	; ------------------------------------
@@ -804,7 +1392,8 @@ SilencePaula
 	move.l	(sp)+,a0
 	rts
 
-MAIN
+MAIN:
+    DPRINT  "MAIN"
 	move.l	a0,ArgStr
 	move.l	d0,ArgStrLen
 	; ----------------------------
@@ -1204,6 +1793,9 @@ CloseCIATimer
 .done	rts
 
 StartMixing
+    tst.b   AHI
+    bne     .x
+
 	bsr.w	SetPaulaInterrupt
 	; -----------------------------
 	lea	$dff000,a0
@@ -1219,6 +1811,7 @@ StartMixing
 	bne.b	.error			; no free CIA timers...
 	; -----------------------------
 	bsr.w	EnableAudioMixer
+.x
 	moveq	#0,d0
 	rts
 .error	move.l	#CIAErrTxt,d1
@@ -1228,12 +1821,17 @@ StartMixing
 
 StopMixing
 	sf	SongIsPlaying
+
+    tst.b   AHI
+    bne     .x
+
 	bsr.w	DisableAudioMixer	; also clears Paula volumes
 	; ---------------------------
 	move.w	#$000f,$dff096		; stop Paula DMAs
 	; ---------------------------
 	bsr.w	RestorePaulaInterrupt
 	bsr.w	CloseCIATimer
+.x
 	rts
 
 MixAudioFrame
@@ -1358,7 +1956,7 @@ CloseAudio
 
 SetMixerVars	
 	movem.l	d7/a1/a6,-(sp)
-	
+	DPRINT  "SetMixerVars"
 	; ------------------------------------
 	; Test if we have an NTSC machine
 	; ------------------------------------
@@ -1387,7 +1985,16 @@ SetMixerVars
 	move.w	MixPeriod(pc),d0
 	moveq	#0,d1	; 0 = PAL
 	bsr.w	PaulaPeriodToFreq
-	move.l	d0,MixingFreq
+    tst.b   AHI
+    beq     .1
+    move.w  AHIMixingFreq,d0
+    swap    d0
+.1  move.l	d0,MixingFreq
+ ifne DEBUG
+    swap    d0
+    and.l   #$ffff,d0
+    DPRINT  "MixingFreq PAL=%ld"
+ endif
 	; ------------------------------------
 	; Calculate PAL 16.16fp Paula delta
 	; ------------------------------------
@@ -1409,7 +2016,16 @@ SetMixerVars
 	move.w	MixPeriod(pc),d0
 	moveq	#1,d1	; 1 = NTSC
 	bsr.w	PaulaPeriodToFreq
-	move.l	d0,MixingFreq
+    tst.b   AHI
+    beq     .2
+    move.w  AHIMixingFreq,d0
+    swap    d0
+.2	move.l	d0,MixingFreq
+ ifne DEBUG
+    swap    d0
+    and.l   #$ffff,d0
+    DPRINT  "MixingFreq NTSC=%ld"
+ endif
 	; ------------------------------------
 	; Calculate NTSC 16.16fp Paula delta
 	; ------------------------------------
@@ -1583,6 +2199,9 @@ GenerateBPMTable
 	rts
 
 EnableAudioMixer
+    tst.b   AHI
+    bne     .x
+
 	st	AudioMixFlag
 	; ---------------------------
 	; Restore Paula volumes now
@@ -1597,9 +2216,11 @@ EnableAudioMixer
 		move.w	#64,$dff0d8
 	ENDIF
 	; ---------------------------
-	rts
+.x	rts
 
 DisableAudioMixer
+    tst.b   AHI
+    bne     .x
 	; ---------------------------
 	; Clear Paula volumes
 	; ---------------------------
@@ -1617,7 +2238,7 @@ DisableAudioMixer
 	jsr     _LVOWaitTOF(a6)	; let other tasks run
     bra.b   .loop
 .1  movem.l (sp)+,d0-a6
-	rts
+.x	rts
 
 FreeChipBuffers
 	move.l	PaulaCh1Buf(pc),a1
@@ -1685,6 +2306,9 @@ AllocChipBuffers
 	rts
 
 SetupAudio
+    tst.b   AHI
+    bne     .ahi
+
 	bsr.w	SilencePaula
 	; --------------------
 	bsr.w	OpenAudioDevice
@@ -1761,6 +2385,7 @@ SetupAudio
 	; ---------------------------
 	; Set default BPM
 	; ---------------------------
+.x
 	moveq	#125,d0
 	bsr.w	P_SetSpeed
 	clr.l	PMPLeft
@@ -1770,6 +2395,15 @@ SetupAudio
 	moveq	#1,d0
 	rts
 .error	moveq	#0,d0
+	rts
+
+.ahi
+	move.w	#MIX_PERIOD,d0
+    move.w	d0,MixPeriod
+	bsr 	SetMixerVars
+	beq 	.error
+	bsr.w	ClearChannels
+    moveq   #1,d0
 	rts
 
 ; ------------------------------------------------------------------------------
@@ -1867,6 +2501,13 @@ HandleError
 	bra.w	ShowError
 	
 CalcFrqTab
+ ifne DEBUG
+    move.l  MixingFreq,d0
+    clr     d0
+    swap    d0
+    DPRINT  "CalcFrqTab mixfreq=%ld"
+ endif
+
 	movem.l	d0-d6/a0-a2,-(sp)
 	lea	Note2Period,a0
 	; ----------------------------
@@ -1969,6 +2610,7 @@ CalcFrqTab
 	rts
 
 LoadXM
+    DPRINT  "LoadXM"
 	bsr.w	FreeMusic
 	;---------------------------
 	; Open file
@@ -3363,7 +4005,13 @@ P_SetSpeed
 	cmp.b	#32,d0
 	bhs.b	.ok
 	moveq	#32,d0
-.ok	sub.b	#32,d0	
+.ok	
+    tst.b   AHI
+    beq     .1
+    bsr     ahi_tempo
+.1
+
+    sub.b	#32,d0	
 	lea	BPM2SmpsPerTick,a0
 	move.l	(a0,d0.w*4),SpeedVal	; 16.16fp
 	rts
@@ -4952,13 +5600,16 @@ GetVoice
 	rts
 	ENDIF
 	
-Mix_UpdateChannelVolPanFrq
+Mix_UpdateChannelVolPanFrq:
+    tst.b   AHI
+    bne     Mix_UpdateChannelVolPanFrq_AHI
+
 	lea	PanningTab(pc),a1
-	lea	ChnReloc,a2
-	lea	VoiceOffsets,a3
+	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
+	lea	VoiceOffsets,a3         ; Table of APTR MixVoices, 0..MAX_CHANNELS*2
 	lea	LogTab,a4
 	lea	StmTyp,a5
-	moveq	#0,d7
+	moveq	#0,d7               ; loop number of channels in the mod
 	; -----------------------------
 .loop	move.b	cStatus(a5),d6
 	beq.w	.next				; no update flags, skip channel
@@ -5024,13 +5675,13 @@ Mix_UpdateChannelVolPanFrq
 	;                           SAMPLE TRIGGER
 	; -------------------------------------------------------------------
 .trig	btst	#IB_NyTon,d6
-	beq.b	.next
+	beq 	.next
 	; -----------------------------
 	move.l	cSampleSeg(a5),a0
 	tst.l	a0
-	beq.b	.stop
+	beq 	.stop
 	move.l	sPek(a0),d0
-	beq.b	.stop
+	beq 	.stop
 	; -----------------------------	
 	movem.l	sLen(a0),d1-d3			; d0=base, d1=end, d2=repS, d3=repL
 	move.l	cSmpStartPos(a5),d4
@@ -5052,11 +5703,15 @@ Mix_UpdateChannelVolPanFrq
 	bhs.b	.stop				; yes, stop voice
 	; -----------------------------
 	clr.w	vPosDec+2(a6)			; clear sampling pos fraction
+    ; KPK: loop type Fwd, Rev, RevDir=Bidi=PingPong
+    ; vType = 1 -> Fwd=one shot
+    ;         2 -> Rev=forward loop
+    ;         4 -> RevDir=bidi=pingpong
 	move.b	sLoopType(a0),vType(a6)		; set loop flags (& clears "Off" flag)
 
 	; -------------------------------------------------------------------
 .next	lea	CHN_SIZE(a5),a5
-	addq.b	#1,d7
+	addq.b	#1,d7           ; loop all channels
 	cmp.w	hAntChn,d7
 	bne.w	.loop
 	rts
@@ -5106,6 +5761,290 @@ Mix_UpdateChannelVolPanFrq
 .VL5	move.w	d2,vVolIPLen(a6)
 	rts
 
+; ---------------------------------------------------------
+; ---------------------------------------------------------
+; ---------------------------------------------------------
+
+Mix_UpdateChannelVolPanFrq_AHI:
+   ;; DPRINT  "Mix_UpdateChannelVolPanFrq_AHI"
+	lea	PanningTab(pc),a1
+	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
+	lea	VoiceOffsets,a3         ; Table of APTR MixVoices, 0..MAX_CHANNELS*2
+	lea	LogTab,a4
+	lea	StmTyp,a5
+	moveq	#0,d7               ; loop number of channels in the mod
+	; -----------------------------
+.loop	
+    move.b	cStatus(a5),d6
+	beq.w	.next				; no update flags, skip channel
+	clr.b	cStatus(a5)	
+	; -----------------------------
+	;move.w	(a2,d7.w*2),d0
+	;move.l	(a3,d0.w*4),a6			; a6 points to mixer voice to use
+
+	; -------------------------------------------------------------------
+	;               SAMPLE PRE-TRIGGER (setup fadeout voice)
+	; -------------------------------------------------------------------	
+	btst	#IB_NyTon,d6
+	beq 	.vol
+	; -----------------------------
+	;or.b	#IST_Fadeout,vType(a6)
+	;moveq	#0,d0				; destination volume
+	;moveq	#0,d2
+	;move.w	QuickVolSizeVal(pc),d2		; volume ramp length
+	;bsr.w	.SetVol
+	;eor.w	#1,(a2,d7.w*2)			; swap voice with neighbor voice
+	;move.w	(a2,d7.w*2),d0
+	;move.l	(a3,d0.w*4),a6			; a6 points to mixer voice to use
+	;move.b	#IST_Off,vType(a6)
+	
+	; -------------------------------------------------------------------
+	;                            VOLUME UPDATE
+	; -------------------------------------------------------------------
+.vol	
+    move.b	d6,d2
+	and.b	#IS_Vol+IS_Pan,d2
+	beq.b	.period
+	; -----------------------------
+	moveq	#0,d2
+	move.w	SpeedVal(pc),d2			; integer part of 16.16fp
+	btst	#IB_QuickVol,d6			; use quick vol ramp instead of normal?
+	beq.b	.L1				; nope, use normal ramp length
+	move.w	QuickVolSizeVal(pc),d2
+.L1	moveq	#0,d0
+	move.w	cFinalVol(a5),d0		; destionation volume
+	;bsr.w	.SetVol
+
+	; AHI volume expects $00000 - $10000 per channel
+	; Final vol is 0..2047, so FT2(0..256) * AHI(..). Let's use panning map.
+	
+;	move.l	d7,d0		; channel (d7)
+;	
+;	moveq	#0,d1
+;	move.w	cFinalVol(a5),d1	; 0..2047
+;	
+;	; 2047 * 32 = 65504 (approx $10000). 
+;	lsl.l	#5,d1
+;	
+;	; Panning (finalPan is 0..255).
+;	; 0 is full left, 128 center, 255 full right.
+;	moveq	#0,d2
+;	move.b	cFinalPan(a5),d2
+;	
+;	; left vol = vol * (255 - pan) / 256
+;	; right vol = vol * pan / 256
+;	move.l	d2,d3
+;	move.l	d1,d2		
+;	
+;	; left
+;	move.l	#255,d4
+;	sub.l	d3,d4
+;	mulu	d4,d2
+;	lsr.l	#8,d2		; d2 (left volume)
+;	
+;	; right
+;	mulu	d3,d1
+;	lsr.l	#8,d1		; d1 (right volume)
+;	
+;	move.l	d2,d3		; d3 = pan (left)
+;	swap	d2		; AHI pan expects $00000 left.. $10000 right. Wait.
+;	
+    pushm   all
+	move.l	d7,d0		; channel (d7)
+
+	; AHI_SetVol args: channel (d0), vol (d1 0..$10000), pan (d2 0..$10000), freq (d3), flags (d4)
+	; Actually for AHI_SetVol:
+	; d0 = channel, d1 = volume (0-$10000), d2 = pan (0-$10000 left-right), d3 = unused, d4 = flags
+
+	; recalculate for standard AHI pan
+	; cFinalPan(a5) = 0..255. AHI expects 0..$10000
+	moveq	#0,d2
+	move.b	cFinalPan(a5),d2    
+    * 0: full left, 128 center, 255 full right
+    * AHI: 0x00000 full left, 0x8000 center, 0x10000 full right
+	lsl.l	#8,d2		; 255 -> $FF00 (approx $10000)
+
+	moveq	#0,d1
+	move.w	cFinalVol(a5),d1
+	lsl.l	#5,d1		; volume $0000 -> $10000
+	
+	move.l	d7,d0		; channel
+	
+	moveq	#AHISF_IMM,d3	; flags
+   ;;; DPRINT  "SetVol ch=%02.2lx vol=%05.5lx pan=%05.5lx"
+	move.l	ahibase(pc),a6
+	move.l	ahi_ctrl(pc),a2
+	jsr	_LVOAHI_SetVol(a6)
+    popm    all
+
+
+	; -------------------------------------------------------------------
+	;                            PERIOD UPDATE
+	; -------------------------------------------------------------------
+.period	
+    btst	#IB_Period,d6
+	beq 	.trig
+	; -----------------------------
+	move.w	cFinalPeriod(a5),d0
+	bsr.w	GetFrequenceValue   	; Returns integer 16.16fp in d0
+
+    pushm   all
+	move.l	d0,d1	    	; d1 = freq (Hz)
+	move.l	d7,d0	    	; d0 = channel
+	moveq	#AHISF_IMM,d2   ; d2 = flags
+	move.l	ahibase(pc),a6
+	move.l	ahi_ctrl(pc),a2
+    ;;DPRINT  "SetFreq ch=%02.2lx fr=%ld Hz"
+	jsr	_LVOAHI_SetFreq(a6)
+    popm    all
+	; -------------------------------------------------------------------
+	;                           SAMPLE TRIGGER
+	; -------------------------------------------------------------------
+.trig	btst	#IB_NyTon,d6
+	beq 	.next
+	; -----------------------------
+	move.l	cSampleSeg(a5),d0
+	beq 	.stop
+    move.l  d0,a0
+	move.l	sPek(a0),d0
+	beq 	.stop    
+
+    ; -----------------------------
+    ; Store sample pointer for ahi soundfunc
+    push    a1
+    lea     sampleForChannel,a1
+    move.l  a0,(a1,d7.w*4)
+    pop     a1
+	; -----------------------------	
+	movem.l	sLen(a0),d1-d3			; d0=base, d1=end, d2=repS, d3=repL
+;;    DPRINT  "TRIGGER base=%lx end=%lx repS=%lx repL=%lx"
+	move.l	cSmpStartPos(a5),d4
+	; -----------------------------
+	move.l	d0,d5
+	add.l	d1,d5
+	add.l	d2,d5				; d5.l = revBase (base + len + repS)		
+	; -----------------------------
+	;sf	v16Bit(a6)
+	tst.b	s16Bit(a0)			; 16-bit sample?
+	beq.b	.L2				; nope
+	lsr.l	#1,d1				; yes, convert units from bytes to words
+	lsr.l	#1,d2
+	lsr.l	#1,d3
+	;st	v16Bit(a6)
+	; -----------------------------
+.L2	
+    ;movem.l	d0-d5,vBase(a6)			; write 6 longwords from offset
+   ; vBase, vLen, vRepS, vRepL, vPos, vRevBase
+	cmp.l	sOrigLen(a0),d4			; d4 >= (unrolled) sample end?
+	bhs 	.stop				; yes, stop voice
+	; -----------------------------
+	;clr.w	vPosDec+2(a6)			; clear sampling pos fraction
+    ; KPK: loop type Fwd, Rev, RevDir=Bidi=PingPong
+    ; vType = 1 -> Fwd=one shot
+    ;         2 -> Rev=forward loop
+    ;         4 -> RevDir=bidi=pingpong
+	;move.b	sLoopType(a0),vType(a6)		; set loop flags (& clears "Off" flag)
+
+
+    pushm   all
+    ; d1 = len
+    move.l  d1,d3
+
+	; Call AHI_SetSound(channel, sound_id, offset, length, flags)
+	; In this setup, we mapped sound IDs directly to samples
+	; Sound ID is stored in the Sample struct or we map it globally.
+	; For now, just trigger sound!
+	
+	; a0 now points to the Sample
+	; Check if it's actually loaded into AHI
+	move.l	sAHISound(a0),d1
+	
+	; AHI_SetSound args:
+	; d0 = channel (d7)
+	; d1 = sound ID
+	; d2 = offset
+	; d3 = length
+	; d4 = flags (AHISF_IMM)
+	
+	move.l	d7,d0
+	moveq	#0,d2
+	;moveq	#0,d3			; 0 = play full sample
+	moveq	#AHISF_IMM,d4
+	move.l	ahibase(pc),a6
+	move.l	ahi_ctrl(pc),a2
+    ;;DPRINT  "SetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
+	jsr	_LVOAHI_SetSound(a6)
+    popm    all
+
+
+	; -------------------------------------------------------------------
+.next	lea	CHN_SIZE(a5),a5
+	addq.b	#1,d7           ; loop all channels
+	cmp.w	hAntChn,d7
+	bne.w	.loop
+	rts
+	; -----------------------------
+.stop	
+    ;move.b	#IST_Off,vType(a6)		; stops voice
+
+    pushm   all
+    moveq	#AHI_NOSOUND,d1
+	move.l	d7,d0
+	moveq	#0,d2
+	moveq	#0,d3
+	moveq	#AHISF_IMM,d4
+	move.l	ahibase(pc),a6
+	move.l	ahi_ctrl(pc),a2
+    DPRINT  "SetSound NOSOUND"
+	jsr	_LVOAHI_SetSound(a6)
+    popm    all
+	bra.b	.next
+
+	; d0.l = volume (0..2047)
+	; d2.l = volume ramp length (number of samples)
+.SetVol:
+	move.l	d0,d1
+	; ----------------------------
+	moveq	#0,d3
+	move.b	cFinalPan(a5),d3	
+	mulu.l	(a1,d3.w*4),d1			; 0..2047 * 0..65536 = 0..134152192 (11.16fp)
+	move.l	d1,vRVol1(a6)			; set dest. volL
+	not.b	d3
+	addq.w	#1,d3				; d3.w = 256 - d2
+	mulu.l	(a1,d3.w*4),d0			; 0..2047 * 0..65536 = 0..134152192 (11.16fp)
+	move.l	d0,vLVol1(a6)			; set dest. volR
+	; ----------------------------
+	; Left channel vol. ramp
+	; ----------------------------
+	move.l	vLVol2(a6),d3
+	cmp.l	d3,d0				; curr. volL == dest. volL?
+	bne.b	.VL1				; nope, calculate deltas
+	moveq	#0,d0
+	bra.b	.VL2
+.VL1	sub.l	d3,d0
+	divs.l	d2,d0
+.VL2	move.l	d0,vLVolIP(a6)
+	; ----------------------------
+	; Right channel vol. ramp
+	; ----------------------------
+	move.l	vRVol2(a6),d3
+	cmp.l	d3,d1				; curr. volR == dest. volR?
+	bne.b	.VL3				; nope, calculate deltas
+	moveq	#0,d1
+	bra.b	.VL4
+.VL3	sub.l	d3,d1
+	divs.l	d2,d1	
+.VL4	move.l	d1,vRVolIP(a6)
+	; ----------------------------
+	or.l	d1,d0				; L/R vol deltas zero?
+	bne.b	.VL5				; nope
+	moveq	#0,d2
+.VL5	move.w	d2,vVolIPLen(a6)
+	rts
+
+
+sampleForChannel    ds.l    32*4
+
 	; input:
 	;  a4   = log table
 	;  d0.w = period
@@ -5130,13 +6069,35 @@ GetFrequenceValue
 	; -----------------------------
 	move.l	(a4,d1.w*4),d0
 	lsr.l	d3,d0
+    
+    tst.b   AHI
+    bne     .ahiLinear
+    rts
+
+.ahiLinear
+    moveq   #0,d1
+    move.w  MixingFreq(pc),d1
+    mulu.l  d1,d0
+    clr.w   d0
+	swap	d0
+	rts
 	rts
 
-.amiga	moveq	#0,d1
+.amiga	
+    tst.b   AHI
+    bne     .ahiAmiga
+
+    moveq	#0,d1
 	move.w	d0,d1
 	move.l	FrequenceDivFactor(pc),d0
 	divu.l	d1,d0
 	rts
+
+.ahiAmiga
+    move.l  #8363*1712,d1
+    divu.l  d0,d1
+    move.l  d1,d0
+    rts
 
 .periodIsZero
 	moveq	#0,d0	; period 0 -> mixer delta 0
@@ -6599,7 +7560,14 @@ HandlerName		dc.b "xmaplay060 input handler",0
 InputDevice		dc.b "input.device",0
 tmp8			dc.b 0
 bxxOverflow		dc.b 0
+; -------------------------------------
+AHI             dc.b 0
 	EVEN
+;ahi_task        dc.l 0
+ahibase         dc.l 0
+ahi_ctrl        dc.l 0
+AHIMixingFreq   dc.w 58000
+; -------------------------------------
 
 ; ------------------------------------------------------------------------------
 ;                                JUMP TABLES
