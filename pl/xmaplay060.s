@@ -631,8 +631,9 @@ ahi_soundfunc:
     move.l  (a6,d0.w*4),a6
     tst.l   a6
     bne     .ok
-    DPRINT  "no sample for channel=%ld"
-    bra     .exit
+    ;DPRINT  "no sample for channel=%ld"
+    ;bra     .exit
+    bra     .silent
 .ok
     move.l  sRepS(a6),d2        * Repeat start offset
     move.l  sOrigRepL(a6),d3    * Repeat length
@@ -5805,11 +5806,10 @@ Mix_UpdateChannelVolPanFrq:
 ; ---------------------------------------------------------
 
 Mix_UpdateChannelVolPanFrq_AHI:
-	lea	PanningTab(pc),a1
-	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
-	lea	VoiceOffsets,a3         ; Table of APTR MixVoices, 0..MAX_CHANNELS*2
 	lea	LogTabSource,a4         ; Use direct frequency table
 	lea	StmTyp,a5
+    lea     freqForChannel(pc),a2
+    lea     sampleForChannel(pc),a3
 	moveq	#0,d7               ; loop number of channels in the mod
 	; -----------------------------
 .loop	
@@ -5817,14 +5817,11 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	beq.w	.next				; no update flags, skip channel
 	clr.b	cStatus(a5)	
 	; -----------------------------
-	;move.w	(a2,d7.w*2),d0
-	;move.l	(a3,d0.w*4),a6			; a6 points to mixer voice to use
-
 	; -------------------------------------------------------------------
 	;               SAMPLE PRE-TRIGGER (setup fadeout voice)
 	; -------------------------------------------------------------------	
-	btst	#IB_NyTon,d6
-	beq 	.vol
+	;btst	#IB_NyTon,d6
+	;beq 	.vol
 	; -----------------------------
     ; Not available in AHI!
 	;or.b	#IST_Fadeout,vType(a6)
@@ -5845,12 +5842,6 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	and.b	#IS_Vol+IS_Pan,d2
 	beq.b	.period
 	; -----------------------------
-;	moveq	#0,d2
-;	move.w	SpeedVal(pc),d2			; integer part of 16.16fp
-;	btst	#IB_QuickVol,d6			; use quick vol ramp instead of normal?
-;	beq.b	.L1				; nope, use normal ramp length
-;	move.w	QuickVolSizeVal(pc),d2
-;.L1	    
     moveq	#0,d0
 	move.w	cFinalVol(a5),d0		; destionation volume
 
@@ -5859,6 +5850,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 
 	; AHI_SetVol args: channel (d0), vol (d1 0..$10000), pan (d2 0..$10000), freq (d3), flags (d4)
     ; cFinalPan(a5) = 0..255. AHI expects 0..$10000
+    ; 128 = center
 	moveq	#0,d2
 	move.b	cFinalPan(a5),d2    
     * AHI: 0x00000 full left, 0x8000 center, 0x10000 full right
@@ -5888,8 +5880,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	bsr 	GetFrequenceValue_AHI   	; Returns Hz
 
     pushm   all
-    lea     freqForChannel(pc),a6   ; Store this for later
-    move.w  d0,(a6,d7.w*2)
+    move.w  d0,(a2,d7.w*2)  ; Store frequency per channel
 
 	move.l	d0,d1	    	; d1 = freq (Hz)
 	move.l	d7,d0	    	; d0 = channel
@@ -5905,68 +5896,43 @@ Mix_UpdateChannelVolPanFrq_AHI:
 .trig	btst	#IB_NyTon,d6
 	beq 	.next
 	; -----------------------------
+    clr.l   (a3,d7.w*4)        * Initially no smp for channel
 	move.l	cSampleSeg(a5),d0
 	beq 	.stop
     move.l  d0,a0
 	move.l	sPek(a0),d0
 	beq 	.stop    
+    move.l  a0,(a3,d7.w*4)   ; Store sample ptr per channel for soundfunc
 
-    ; -----------------------------
-    ; Store sample pointer for AHI soundfunc
-    push    a1
-    lea     sampleForChannel(pc),a1
-    move.l  a0,(a1,d7.w*4)
-    pop     a1
 	; -----------------------------	
-	movem.l	sLen(a0),d1-d3			; d0=base, d1=end, d2=repS, d3=repL
-;;    DPRINT  "TRIGGER base=%lx end=%lx repS=%lx repL=%lx"
+	;movem.l	sLen(a0),d1-d3			; d0=base, d1=end, d2=repS, d3=repL
+    move.l  sOrigLen(a0),d1
 	move.l	cSmpStartPos(a5),d4
-	; -----------------------------
-	move.l	d0,d5
-	add.l	d1,d5
-	add.l	d2,d5				; d5.l = revBase (base + len + repS)		
 	; -----------------------------
 	tst.b	s16Bit(a0)			; 16-bit sample?
 	beq.b	.L2				    ; nope
 	lsr.l	#1,d1				; yes, convert units from bytes to words
-	lsr.l	#1,d2
-	lsr.l	#1,d3
 	; -----------------------------
 .L2	
-    ;movem.l	d0-d5,vBase(a6)			; write 6 longwords from offset
-   ; vBase, vLen, vRepS, vRepL, vPos, vRevBase
-	cmp.l	sOrigLen(a0),d4			; d4 >= (unrolled) sample end?
+	cmp.l   d1,d4			    ; d4 >= (unrolled) sample end?
 	bhs 	.stop				; yes, stop voice
 	; -----------------------------
-	;clr.w	vPosDec+2(a6)			; clear sampling pos fraction
-    ; KPK: loop type Fwd, Rev, RevDir=Bidi=PingPong
-    ; vType = 0 -> No Loop
-    ;         1 -> Forward loop
-    ;         2 -> ping pong loop
-	;move.b	sLoopType(a0),vType(a6)		; set loop flags (& clears "Off" flag)
+    ; sLoopType: 0 -> No Loop
+    ;            1 -> Forward loop
+    ;            2 -> ping pong loop
 
     pushm   all
-    ; d1 = len
-    move.l  d1,d3
-	
+    clr.b   sAHILoopDir(a0)  * Reset ping pong state
+    move.l  d1,d3            * d3=length (0=play full sample)	
+    sub.l   d4,d3            * .. adjust based on start offset
     moveq   #0,d1
-	move.w	sAHISound(a0),d1
-    clr.b   sAHILoopDir(a0)
-	
-	; AHI_SetSound args:
-	; d0 = channel (d7)
-	; d1 = sound ID
-	; d2 = offset
-	; d3 = length
-	; d4 = flags (AHISF_IMM)
-	
-	move.l	d7,d0
-	moveq	#0,d2
-	;moveq	#0,d3			; 0 = play full sample
-	moveq	#AHISF_IMM,d4
+	move.w	sAHISound(a0),d1 * d1=sound number
+	move.l	d7,d0            * d0=channel
+	move.l	d4,d2            * d2=offset
+	moveq	#AHISF_IMM,d4    * d4=flags
 	move.l	ahibase(pc),a6
 	move.l	ahi_ctrl(pc),a2
-    ;;DPRINT  "SetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
+;    DPRINT  "SetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
 	jsr	_LVOAHI_SetSound(a6)
     popm    all
 
@@ -5979,8 +5945,6 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	rts
 	; -----------------------------
 .stop	
-    ;move.b	#IST_Off,vType(a6)		; stops voice
-
     pushm   all
     moveq	#AHI_NOSOUND,d1
 	move.l	d7,d0
@@ -5993,48 +5957,6 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	jsr	_LVOAHI_SetSound(a6)
     popm    all
 	bra.b	.next
-
-	; d0.l = volume (0..2047)
-	; d2.l = volume ramp length (number of samples)
-.SetVol:
-	move.l	d0,d1
-	; ----------------------------
-	moveq	#0,d3
-	move.b	cFinalPan(a5),d3	
-	mulu.l	(a1,d3.w*4),d1			; 0..2047 * 0..65536 = 0..134152192 (11.16fp)
-	move.l	d1,vRVol1(a6)			; set dest. volL
-	not.b	d3
-	addq.w	#1,d3				; d3.w = 256 - d2
-	mulu.l	(a1,d3.w*4),d0			; 0..2047 * 0..65536 = 0..134152192 (11.16fp)
-	move.l	d0,vLVol1(a6)			; set dest. volR
-	; ----------------------------
-	; Left channel vol. ramp
-	; ----------------------------
-	move.l	vLVol2(a6),d3
-	cmp.l	d3,d0				; curr. volL == dest. volL?
-	bne.b	.VL1				; nope, calculate deltas
-	moveq	#0,d0
-	bra.b	.VL2
-.VL1	sub.l	d3,d0
-	divs.l	d2,d0
-.VL2	move.l	d0,vLVolIP(a6)
-	; ----------------------------
-	; Right channel vol. ramp
-	; ----------------------------
-	move.l	vRVol2(a6),d3
-	cmp.l	d3,d1				; curr. volR == dest. volR?
-	bne.b	.VL3				; nope, calculate deltas
-	moveq	#0,d1
-	bra.b	.VL4
-.VL3	sub.l	d3,d1
-	divs.l	d2,d1	
-.VL4	move.l	d1,vRVolIP(a6)
-	; ----------------------------
-	or.l	d1,d0				; L/R vol deltas zero?
-	bne.b	.VL5				; nope
-	moveq	#0,d2
-.VL5	move.w	d2,vVolIPLen(a6)
-	rts
 
 
 
