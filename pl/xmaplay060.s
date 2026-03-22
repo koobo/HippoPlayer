@@ -353,6 +353,7 @@ ahiSetup:
 	jsr	    _LVOAHI_GetAudioAttrsA(a6)
 
  ifne DEBUG
+    DPRINT  "mode attrs:"
     move.l  attr_stereo,d0
     DPRINT  "stereo=%ld"
     move.l  attr_panning,d0
@@ -453,7 +454,7 @@ loadSamples:
     move.l  d5,d0                   * d0 = sound number
     moveq   #AHIST_SAMPLE,d1        * d1 = type
     push    a2
-    move.l  ahi_ctrl,a2             * a2 = control
+    move.l  ahi_ctrl(pc),a2         * a2 = control
     jsr     _LVOAHI_LoadSound(a6)
     pop     a2
  ifne DEBUG
@@ -461,7 +462,11 @@ loadSamples:
     move.l  ahisi_Address(sp),d2
     move.l  ahisi_Length(sp),d3
     move.l  ahisi_Type(sp),d4
-    DPRINT  "LoadSound=%lx num=%lx addr=%lx len=%lx type=%lx"
+    push    d5
+    moveq   #0,d5
+    move.b  sLoopType(a2),d5
+    DPRINT  "LoadSound=%lx num=%lx addr=%lx len=%lx type=%lx loop=%ld"
+    pop     d5
  endif
     lea     12(sp),sp
     tst.l   d0
@@ -631,8 +636,7 @@ ahi_soundfunc:
     move.l  (a6,d0.w*4),a6
     tst.l   a6
     bne     .ok
-    ;DPRINT  "no sample for channel=%ld"
-    ;bra     .exit
+    DPRINT  "no sample for channel=%ld"
     bra     .silent
 .ok
     move.l  sRepS(a6),d2        * Repeat start offset
