@@ -10104,13 +10104,15 @@ gadgetSearchStringAction:
     jmp     switchToNormalLayoutIfPossible
 
 .1
-    
+    * Map visual selection to actual search enumeration
     lea     modlandSearch,a0
     basereg modlandSearch,a0
     move.b  selectedSearch(a5),d0
 	beq.b	.amigaRemix
 	subq.b	#1,d0
 	beq.b	.aminet
+	subq.b	#1,d0
+	beq.b	.amp
 	subq.b	#1,d0
 	beq.b	.hvsc
 	subq.b	#1,d0
@@ -10146,6 +10148,8 @@ gadgetSearchStringAction:
     jmp recentPlaylistsSearch(a0) 
 .turran
     jmp turranSearch(a0) 
+.amp
+    jmp ampSearch(a0) 
     endb    a0
 
 
@@ -10167,7 +10171,7 @@ gadgetSearchSourceAction:
  endif
     move.b  d0,selectedSearch(a5)
     jsr     refreshGadgetSearchSource
-    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
     beq     .1
     jmp     activateSearchStringGadget
 .1  
@@ -10177,10 +10181,11 @@ gadgetSearchSourceAction:
 
 gadgeSearchSourceOptions:
 	* max width, rows
-	dc.b	15,9
+	dc.b	15,10
 gadgetSearchSourceOption1:
   dc.b    "AmigaRemix",0        ; 4
   dc.b    "Aminet",0            ; 1
+  dc.b    "AMP",0               ; 9
   dc.b    "HVSC",0              ; 3
   dc.b    "Modland",0           ; 0
   dc.b    "Modules.pl",0        ; 2 
@@ -10189,6 +10194,8 @@ gadgetSearchSourceOption1:
   dc.b    "Shared lists",0      ; 7  
   dc.b    "Turran FTP",0        ; 8 
   even
+
+RECENT_PLAYLIST_VISUAL_POSITION = 8
 
 searchActivate:
     DPRINT  "search activate"
@@ -10203,7 +10210,7 @@ searchActivate:
 .x
     * Activate popup
     bsr     gadgetSearchSourceAction
-    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
     beq     .y
     * Then activate string gadget
     jsr     activateSearchStringGadget
@@ -35217,7 +35224,7 @@ engageSearchResultsMode:
     * Trigger recent playlist fetch if needed.
     tst.l   modamount(a5)
     bne     .1
-    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
     bne     .1
     * If last known attempt failed let's not automatically
     * do it here either. Keeps up from ending up in a refresh
@@ -35778,7 +35785,7 @@ refreshGadgetSearchSource:
     lea     gadgetSearchSource(a4),a3
     jsr     drawButtonFrameMainWindow
 
-    cmp.b   #SEARCH_RECENT_PLAYLISTS,selectedSearch(a5)
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
     bne     .1
     lea     gadgetSearchString(a4),a0
     jmp     disableGadget
@@ -57914,6 +57921,7 @@ SEARCH_RKO              = 5
 SEARCH_STATIONS         = 6
 SEARCH_RECENT_PLAYLISTS = 7
 SEARCH_TURRAN           = 8
+SEARCH_AMP              = 9
 
 modlandSearch
 	moveq	#SEARCH_MODLAND,d7
@@ -57949,6 +57957,12 @@ recentPlaylistsSearch
 
 turranSearch
 	moveq	#SEARCH_TURRAN,d7
+	bra 	remoteSearch
+
+; TODO
+ampSearch:
+    DPRINT  "ampSearch"
+	moveq	#SEARCH_AMP,d7
 	bra 	remoteSearch
 
 * Requests a search pattern from the user,
@@ -58001,6 +58015,10 @@ remoteSearch
 	lea		.stationsSearchCmd(pc),a0
 	lea 	.stationsResultsPath(pc),a1
     cmp.b   #SEARCH_STATIONS,d7
+    beq     .1
+	lea		.ampSearchCmd(pc),a0
+	lea 	.ampResultsPath(pc),a1
+    cmp.b   #SEARCH_AMP,d7
     beq     .1
 	lea		.recentPlaylistsSearchCmd(pc),a0
 	lea 	.recentPlaylistsResultsPath(pc),a1
@@ -58089,6 +58107,9 @@ remoteSearch
     lea     .stationsResultsPath(pc),a0
     cmp.b   #SEARCH_STATIONS,d7
     beq     .a
+    lea     .ampResultsPath(pc),a0
+    cmp.b   #SEARCH_AMP,d7
+    beq     .a
     lea     .recentPlaylistsResultsPath(pc),a0
     cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
     beq     .a
@@ -58159,6 +58180,12 @@ remoteSearch
     * Additional space for readable name
     moveq   #100,d4  * Base header length, add extra space in this case
     cmp.b   #SEARCH_STATIONS,d7
+    beq     .2
+    pushpea	.ampLine(pc),d6 
+    * Additional space for readable name
+    * Base header length, add extra space in this case
+    moveq   #.ampLineE-.ampLine+100,d4
+    cmp.b   #SEARCH_AMP,d7
     beq     .2
     * RECENT_PLAYLISTS
     pushpea	.recentPlaylistsLine(pc),d6 
@@ -58248,6 +58275,7 @@ remoteSearch
     
 
 .postProcessSearchResults
+    DPRINT  "*** postProcessSearchResults ***"
     ; ---------------------------------
     * Postprocess step
     ; Get readable name from search results
@@ -58255,6 +58283,8 @@ remoteSearch
 
     moveq   #0,d3
    
+    cmp.b   #SEARCH_AMP,d7
+    beq     .s22
     cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
     beq     .s22
     cmp.b   #SEARCH_STATIONS,d7
@@ -58269,61 +58299,117 @@ remoteSearch
     beq     .s2
     move.l  d3,a2
 
-    ; Find column for "Name" for radio stations
+    ; Search the header line
+    ; Find column for "Name" for radio stations 
     ; Find column for "Title" for playlists
-    ; This loop does not have boundary checks!
-.z1 
-    cmp.b   #SEARCH_STATIONS,d7
-    beq     .rs1
-    moveq   #5-1,d1 * chars to skip over
-    cmp.b   #"T",(a2)+
-    bne.b   .z1
-    cmp.b   #"i",(a2)
-    bne.b   .z1
-    cmp.b   #"t",1(a2)
-    bne.b   .z1
-    cmp.b   #"l",2(a2)
-    beq.b   .pl1
-    bra     .z1
-.rs1
-    moveq   #4-1,d1 * chars to skip over
-    cmp.b   #"N",(a2)+
-    bne.b   .z1
-    cmp.b   #"a",(a2)
-    bne.b   .z1
-    cmp.b   #"m",1(a2)
-    bne.b   .z1
-    cmp.b   #"e",2(a2)
-    bne.b   .z1
-.pl1
-    * d0 = Name start column
-    move.l  a2,d0
-    subq.l  #1,d0
-    add     d1,a2   * skip to the next space to find out the next column
-.z2 cmp.b   #" ",(a2)+
-    beq     .z2
-    * d1 = name end column
-    move.l  a2,d1
-    * d1 = name length
-    sub.l   d0,d1
-    subq.l  #1,d1
-    * Set upper limit to not overflow buffer,
-    * this was allocated earlier.
-    cmp.l   #99,d1
-    bls.b   .z3
-    moveq   #99,d1
-.z3
-    * d0 = name offset
-    sub.l   d3,d0
-    subq.l  #4,d0
+    ; Find column for "DestFilename" for AMP
+    ; Find column for "Author" for AMP
     
-    * skip header, 1st line starts with "0"
+    ; This loop does not have boundary checks!
+
+    cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
+    beq     .pl1
+    cmp.b   #SEARCH_AMP,d7
+    beq     .amp1
+
+.rs1
+    move.l  a2,a0
+    lea     .matchName(pc),a1
+    bsr     .findColumn
+    bsr     .findColumnLength
+    bra     .continue
+
+.pl1
+    move.l  a2,a0
+    lea     .matchTitl(pc),a1
+    bsr     .findColumn
+    bsr     .findColumnLength
+    bra     .continue
+
+.amp1
+    move.l  a2,a0
+    lea     .matchDest(pc),a1
+    bsr     .findColumn
+    bsr     .findColumnLength
+    ;pushm   d0/d1
+    ;move.l  a2,a0
+    ;lea     .matchAuth(pc),a1
+    ;bsr     .findColumn
+    ;bsr     .findColumnLength
+    ;popm    d2/d3
+    bra     .continue
+
+* In:
+*  a0 = header line
+*  a1  = matcher func
+* Out:
+*  a0 = start of the string found
+*  d0 = column offset
+.findColumn
+.findL
+    move.b  (a0),d0
+    beq     .findErr
+    cmp.b   #10,d0
+    beq     .findErr
+    jsr     (a1)
+    addq    #1,a0
+    bne     .findL
+    subq    #1,a0   
+    move.l  a0,d0
+    sub.l   a2,d0
+    subq.l  #4,d0
+    DPRINT  "column offset=%ld"
+    rts
+
+.findErr
+    DPRINT  "not found!"
+    moveq   #0,d0
+    rts
+
+
+* In:
+*   a0 = start of column
+*   a2 = start of header line
+.findColumnLength:
+    move.l  a0,a1
+    * First, find where the main text ends
+.z2 cmp.b   #" ",(a1)+
+    bne     .z2
+    * Then find where the next column starts or line ends
+.z3 cmp.b   #" ",(a1)+
+    beq     .z3
+    move.l  a1,d1
+    sub.l   a0,d1
+    cmp.l   #99,d1
+    bls.b   .z4
+    moveq   #99,d1
+.z4 
+    subq.l  #2,d1
+    * d1 = length of column
+ ifne DEBUG
+    push    d0
+    move.l  d1,d0
+    DPRINT  "column len=%ld"
+    pop     d0
+ endif
+    rts
+
+
+
+.continue
+    * d0 = start offset column
+    * d1 = length of column
+
+    * skip rest of the header line, 
+    * 1st line starts with "0"
 .s0 cmp.b   #"0",(a2)+
     bne     .s0
     subq    #1,a2
 
     jsr     getVisibleModuleListHeader
     move.l  a0,a3
+    ; Loop all lines in the file
+    ; Grab the corresponding line element
 .s1
 	TSTNODE	a3,a3
 	beq.b	.s2
@@ -58344,6 +58430,7 @@ remoteSearch
 .s7 move.b  (a2)+,(a1)+
     subq    #1,d2
     bne     .s7
+.s77
     clr.b   (a1)
 
     * Skip to next line
@@ -58356,6 +58443,47 @@ remoteSearch
     move.l  d3,a0
     jmp     freemem
     
+
+.matchTitl:
+    cmp.b   #"T",(a0)
+    bne.b   .m1
+    cmp.b   #"i",1(a0)
+    bne.b   .m1
+    cmp.b   #"t",2(a0)
+    bne.b   .m1
+    cmp.b   #"l",3(a0)
+.m1 rts
+
+.matchName:
+    cmp.b   #"N",(a0)
+    bne.b   .m2
+    cmp.b   #"a",1(a0)
+    bne.b   .m2
+    cmp.b   #"m",2(a0)
+    bne.b   .m2
+    cmp.b   #"e",3(a0)
+.m2 rts
+
+.matchDest:
+    cmp.b   #"D",(a0)
+    bne.b   .m3
+    cmp.b   #"e",1(a0)
+    bne.b   .m3
+    cmp.b   #"s",2(a0)
+    bne.b   .m3
+    cmp.b   #"t",3(a0)
+.m3 rts
+
+.matchAuth:
+    cmp.b   #"A",(a0)
+    bne.b   .m4
+    cmp.b   #"u",1(a0)
+    bne.b   .m4
+    cmp.b   #"t",2(a0)
+    bne.b   .m4
+    cmp.b   #"h",3(a0)
+.m4 rts
+
 
 * Modland whitelist
 * In:
@@ -58520,6 +58648,10 @@ remoteSearch
 	dc.b	"http://asciiarena.se/",0
 .recentPlaylistsLineE
 
+.ampLine
+	dc.b	"https://amp.dascene.net/",0
+.ampLineE
+
 .uhcTempDirVar
 	dc.b	"UHC/TEMPDIR",0
 
@@ -58565,6 +58697,12 @@ remoteSearch
 .recentPlaylistsSearchCmd
 	dc.b	"%s",10
 	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s',10
+	dc.b	0
+.ampResultsPath
+	dc.b	"ampsearch",0
+.ampSearchCmd
+	dc.b	"%s",10
+	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s %s',10
 	dc.b	0
 
 
@@ -58736,6 +58874,14 @@ fetchRemoteFile:
     addq    #1,d0
 	move.b	(a2)+,d2
     * Remove suspect chars such as ()*?'"
+    cmp.b   #'"',d2
+    beq     .sanity
+    cmp.b   #"#",d2
+    beq     .sanity
+    cmp.b   #"<",d2
+    beq     .sanity
+    cmp.b   #">",d2
+    beq     .sanity
     cmp.b   #"(",d2
     beq     .sanity
     cmp.b   #")",d2
@@ -58760,6 +58906,15 @@ fetchRemoteFile:
     move.b  -(a4),-(a3)
     move.b  -(a4),-(a3)
 .skip
+
+    move.l  a1,a3
+.fe tst.b   (a3)+
+    bne     .fe
+    subq    #1,a3
+    move.b  #".",(a3)+
+    move.b  #"g",(a3)+
+    move.b  #"z",(a3)+
+    clr.b   (a3)
 
 	* Source url in a0
 	* Destination file in a1
