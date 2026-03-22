@@ -435,9 +435,8 @@ loadSamples:
     move.l  sPek(a2),d0
     beq     .nextS
     move.l  d0,a0
-    move.l  sLen(a2),d0
+    move.l  sOrigLen(a2),d0    
     beq     .nextS
-   ; move.l  sOrigLen(a2),d0
 
     ; Make AHISampleInfo
     lea     -12(sp),sp
@@ -635,29 +634,32 @@ ahi_soundfunc:
     DPRINT  "no sample for channel=%ld"
     bra     .exit
 .ok
-	;move.l	sPek(a6),d0
-    movem.l sLen(a6),d1-d3
-    ; d0 = channel
-    ; d1 = sLen - sample length
-    ; d2 = repS - repeat start
-    ; d3 = repL - repeat length
-
-    ; Does the mode support pingpong?
+    move.l  sRepS(a6),d2        * Repeat start offset
+    move.l  sOrigRepL(a6),d3    * Repeat length
+    cmp.l   #4,d3
+    bls     .silent
+  
+	tst.b	s16Bit(a6)          * Adjust if 16-bit sample
+	beq.b	.8b
+    lsr.l   #1,d2
+    lsr.l   #1,d3
+.8b
+    * Does the mode support pingpong?
     tst.l   attr_pingpong(pc)   
     beq     .norm
-
-    ; Check for ping pong loop
+    
+    * Check for ping pong loop
     cmp.b   #2,sLoopType(a6)
     bne     .norm
     
-    ; Check the direction the playback should be going
+    * Check the direction the playback should be going
     not.b   sAHILoopDir(a6)
     beq     .norm
     ;DPRINT  "BIDI fwd ch=%ld sLen=%lx RepS=%lx sRepL=%lx"
     ;BIDI ch=7 sLen=DA4C RepS=0 sRepL=DA4C
     ;DPRINT  "BIDI rev ch=%ld sLen=%lx RepS=%lx sRepL=%lx"
 
-    ; Go backward
+    * Go backward
     * Start offset at d2 should point to loop end
     add.l   d3,d2
     * Make length negative to indicate reverse playback
@@ -666,15 +668,15 @@ ahi_soundfunc:
 
     moveq   #0,d1
 	move.w	sAHISound(a6),d1    ; sample bank
-	moveq	#0,d4				;NOTE: AHISF_IMM *NOT* SET!!
+    bra     .sound
 
-	cmp.l	#4,d3
-	bge.b	.length_ok
-    cmp.l   #-4,d3
-	ble.b	.length_ok
+.silent
 	moveq	#AHI_NOSOUND,d1
-.length_ok
+    moveq   #0,d2
+    moveq   #0,d3
+.sound
 
+	moveq	#0,d4				; NOTE: AHISF_IMM *NOT* SET!!
 	;move.l	ahi_ctrl(pc),a2 * already in a2
 	move.l	ahibase(pc),a6
 ;    DPRINT  "SetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
@@ -5841,12 +5843,13 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	and.b	#IS_Vol+IS_Pan,d2
 	beq.b	.period
 	; -----------------------------
-	moveq	#0,d2
-	move.w	SpeedVal(pc),d2			; integer part of 16.16fp
-	btst	#IB_QuickVol,d6			; use quick vol ramp instead of normal?
-	beq.b	.L1				; nope, use normal ramp length
-	move.w	QuickVolSizeVal(pc),d2
-.L1	moveq	#0,d0
+;	moveq	#0,d2
+;	move.w	SpeedVal(pc),d2			; integer part of 16.16fp
+;	btst	#IB_QuickVol,d6			; use quick vol ramp instead of normal?
+;	beq.b	.L1				; nope, use normal ramp length
+;	move.w	QuickVolSizeVal(pc),d2
+;.L1	    
+    moveq	#0,d0
 	move.w	cFinalVol(a5),d0		; destionation volume
 
 	pushm   all
