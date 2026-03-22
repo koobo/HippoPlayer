@@ -636,25 +636,28 @@ ahi_soundfunc:
 .ok
     move.l  sRepS(a6),d2        * Repeat start offset
     move.l  sOrigRepL(a6),d3    * Repeat length
-    cmp.l   #4,d3
-    bls     .silent
   
 	tst.b	s16Bit(a6)          * Adjust if 16-bit sample
 	beq.b	.8b
     lsr.l   #1,d2
     lsr.l   #1,d3
 .8b
-    * Does the mode support pingpong?
-    tst.l   attr_pingpong(pc)   
-    beq     .norm
-    
-    * Check for ping pong loop
-    cmp.b   #2,sLoopType(a6)
-    bne     .norm
-    
+ 
+    cmp.l   #2,d3               * Repeat length sanity check
+    bls     .silent
+  
+    tst.b   sLoopType(a6)       * Test for no loop
+    beq     .silent
+
+    cmp.b   #2,sLoopType(a6)    * Test for ping pong loop
+    bne     .forward            * else do forward loop
+
+    tst.l   attr_pingpong(pc)   * Is ping pong supported?
+    beq     .forward
+        
     * Check the direction the playback should be going
     not.b   sAHILoopDir(a6)
-    beq     .norm
+    beq     .forward
     ;DPRINT  "BIDI fwd ch=%ld sLen=%lx RepS=%lx sRepL=%lx"
     ;BIDI ch=7 sLen=DA4C RepS=0 sRepL=DA4C
     ;DPRINT  "BIDI rev ch=%ld sLen=%lx RepS=%lx sRepL=%lx"
@@ -664,8 +667,8 @@ ahi_soundfunc:
     add.l   d3,d2
     * Make length negative to indicate reverse playback
     neg.l   d3
-.norm
 
+.forward
     moveq   #0,d1
 	move.w	sAHISound(a6),d1    ; sample bank
     bra     .sound
@@ -675,7 +678,6 @@ ahi_soundfunc:
     moveq   #0,d2
     moveq   #0,d3
 .sound
-
 	moveq	#0,d4				; NOTE: AHISF_IMM *NOT* SET!!
 	;move.l	ahi_ctrl(pc),a2 * already in a2
 	move.l	ahibase(pc),a6
