@@ -58306,6 +58306,8 @@ remoteSearch
     ; Find column for "Author" for AMP
     
     ; This loop does not have boundary checks!
+    moveq   #0,d2       * additional field offset
+    moveq   #0,d3       * additional field length
 
     cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
     beq     .pl1
@@ -58331,12 +58333,12 @@ remoteSearch
     lea     .matchDest(pc),a1
     bsr     .findColumn
     bsr     .findColumnLength
-    ;pushm   d0/d1
-    ;move.l  a2,a0
-    ;lea     .matchAuth(pc),a1
-    ;bsr     .findColumn
-    ;bsr     .findColumnLength
-    ;popm    d2/d3
+    pushm   d0/d1
+    move.l  a2,a0
+    lea     .matchAuth(pc),a1
+    bsr     .findColumn
+    bsr     .findColumnLength
+    popm    d2/d3
     bra     .continue
 
 * In:
@@ -58354,10 +58356,9 @@ remoteSearch
     jsr     (a1)
     addq    #1,a0
     bne     .findL
-    subq    #1,a0   
     move.l  a0,d0
     sub.l   a2,d0
-    subq.l  #4,d0
+    subq.l  #5,d0
     DPRINT  "column offset=%ld"
     rts
 
@@ -58412,10 +58413,18 @@ remoteSearch
     ; Grab the corresponding line element
 .s1
 	TSTNODE	a3,a3
-	beq.b	.s2
+	beq 	.s2
     st      l_remote(a3)
     lea     l_filename(a3),a1
-    
+
+; ifne DEBUG
+;    pushm   d0/d1
+;    move.l  a3,d0
+;    move.l  a1,d1
+;    DPRINT  "node=%lx file=%s"
+;    popm    d0/d1
+; endif
+
     * Find end of filename, after it there are extra bytes
     * for the visible name.
 .s4 tst.b   (a1)+
@@ -58425,18 +58434,37 @@ remoteSearch
     st      l_separateName(a3)
 
     * Copy name, starts here
-    add     d0,a2
-    move    d1,d2
-.s7 move.b  (a2)+,(a1)+
-    subq    #1,d2
+    move.l  a2,a0
+    add     d0,a0
+    move    d1,d4
+.s7 cmp.b   #10,(a0)
+    beq     .s77
+    move.b  (a0)+,(a1)+
+    subq    #1,d4
     bne     .s7
 .s77
     clr.b   (a1)
 
+    tst.l   d2
+    beq     .noAdd 
+    move.b  #"/",(a1)+
+    * Copy additional, starts here
+    move.l  a2,a0
+    add     d2,a0
+    move    d3,d4
+.s78 cmp.b   #10,(a0)
+    beq     .s777
+    move.b  (a0)+,(a1)+
+    subq    #1,d4
+    bne     .s78
+.s777
+    clr.b   (a1)
+.noAdd
+
     * Skip to next line
 .s3 cmp.b   #10,(a2)+
     bne     .s3
-	bra.b	.s1
+	bra 	.s1
 .s2
 
     * Free loaded searchout file data
