@@ -513,6 +513,7 @@ loadSamples:
 
 
 ahi_end:
+    DPRINT  "ahi end"
 	move.l	ahibase(pc),d0
 	beq.b	.1
 	move.l	d0,a6
@@ -2599,12 +2600,12 @@ CalcFrqTab
 	; -------------------------------------	
 	move.l	#256*8363,d0   ; Constant for GetFrequenceValue_AHI
     tst.b   AHI(pc)
-    bne     .ahi
+    bne     .ahiFr
 	move.l	MixingFreq(pc),d0
 	lsr.l	#1,d0
 	move.l	#256*8363,d1
 	divu.l	MixingFreq(pc),d1:d0	
-.ahi
+.ahiFr
 	move.l	d0,d2			; d2.l = round[(8363*256) * 2^32 / MixingFreq]
 	moveq	#24,d3
 	moveq	#32-24,d4
@@ -2674,11 +2675,14 @@ CalcFrqTab
 	; -------------------------------------
 
 	move.l	#8363*1712,d1
+    move.l  d1,FrequenceDivFactor   ; For AHI
+    tst.b   AHI(pc)
+    bne     .ahiFrq
 	move.l	MixingFreq(pc),d0
 	lsr.l	#1,d0
 	divu.l	MixingFreq(pc),d1:d0	; d0.l = round[(8363*1712) * 2^32 / MixingFreq]
 	move.l	d0,FrequenceDivFactor
-
+.ahiFrq
 	; -------------------------------------
 .end	movem.l	(sp)+,d0-d6/a0-a2
 	rts
@@ -5905,7 +5909,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	beq 	.trig
 	; -----------------------------
 	move.w	cFinalPeriod(a5),d0
-	bsr 	GetFrequenceValue_AHI   	; Returns Hz
+	bsr 	GetFrequenceValue  	; Returns Hz
 
     pushm   all
     move.w  d0,(a2,d7.w*2)  ; Store frequency per channel
@@ -5991,7 +5995,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	;  a4   = log table
 	;  d0.w = period
 	;
-	; output: d0.l = delta (16.16fp)
+	; output: d0.l = delta (16.16fp) (or Hz if AHI tables used)
 GetFrequenceValue
 	tst.w	d0
 	beq.w	.periodIsZero
@@ -6019,43 +6023,6 @@ GetFrequenceValue
 	move.l	FrequenceDivFactor(pc),d0
 	divu.l	d1,d0
 	rts
-
-.periodIsZero
-	moveq	#0,d0	; period 0 -> mixer delta 0
-	rts
-
-
-	; input:
-	;  a4   = log table
-	;  d0.w = period
-	;
-	; output: d0.l = Hz
-GetFrequenceValue_AHI:
-	tst.w	d0
-	beq 	.periodIsZero
-	; -----------------------------
-	tst.b	LinearFrqTab(pc)
-	beq.b	.amiga
-	; -----------------------------
-.linear	moveq	#0,d1
-	move.w	#12*192*4,d1
-	sub.w	d0,d1
-	divu.w	#12*16*4,d1		; d1.w = (uint16_t)(12*192*4 - period) / (12*16*4)
-	move.w	d1,d2			; d2.w = quotient
-	swap	d1			; d1.w = remainder (0 .. 12*16*4-1)	
-	moveq	#14,d3
-	sub.w	d2,d3
-	and.b	#31,d3			; d3.b = oct shift
-	; -----------------------------
-	move.l	(a4,d1.w*4),d0
-	lsr.l	d3,d0
-    rts
-
-.amiga	
-    move.l  #8363*1712,d1
-    divu.l  d0,d1
-    move.l  d1,d0
-    rts
 
 .periodIsZero
 	moveq	#0,d0	; period 0 -> mixer delta 0
