@@ -183,9 +183,17 @@ ier_ahi             = -19
     DPRINT  "AHIMixingFreq=%ld Hz"
     move.l  d0,setfreq
     bsr     ahiSetup
+    DPRINT  "ahiSetup=%ld"
     tst.l   d0
     beq     .ahiError
+
+    * Start playback
     bsr     ahi_cont
+
+    * Set initial tempo
+    moveq   #-1,d0
+    bsr     ahi_tempo
+
 .1
     * Return ccess to mixer buffers when Paula mixer engaged
     move.l  PaulaPosMask(pc),d1
@@ -462,11 +470,13 @@ loadSamples:
     move.l  ahisi_Address(sp),d2
     move.l  ahisi_Length(sp),d3
     move.l  ahisi_Type(sp),d4
-    push    d5
+    pushm   d5/d6
     moveq   #0,d5
     move.b  sLoopType(a2),d5
-    DPRINT  "LoadSound=%lx num=%lx addr=%lx len=%lx type=%lx loop=%ld"
-    pop     d5
+    moveq   #0,d6
+    move.b  sFine(a2),d6
+    DPRINT  "LoadSound=%lx num=%lx addr=%lx len=%lx type=%lx loop=%ld fine=%ld"
+    popm    d5/d6
  endif
     lea     12(sp),sp
     tst.l   d0
@@ -583,7 +593,7 @@ ahi_playmusic:
     move    $dff006,$dff180
  endif
 	bsr 	MainPlayer
-	bsr 	Mix_UpdateChannelVolPanFrq
+	bsr 	Mix_UpdateChannelVolPanFrq_AHI
 
 	popm	d2-d7/a2-a6
 	rts
@@ -700,17 +710,20 @@ ahi_soundfunc:
 
 ;---- Tempo ----
 
+* In:
+*   d0 = tempo value, -1 to re-set previous value
 ahi_tempo:
 	pushm   all
-	and.l	#$ffff,d0
-    ;DPRINT  "ahi_tempo=%ld"
+    DPRINT  "ahi_tempo=%ld"
+    ext.l   d0
+    bmi     .prev
 	lsl.w	#1,d0
 	divu	#5,d0
  
 	lea	    .tags(pc),a1
 	move	d0,4(a1)
     move    d0,setplayerfreq
-
+.prev
 	move.l	ahi_ctrl(pc),a2
     tst.l   a2
     beq     .1
@@ -2448,6 +2461,8 @@ SetupAudio
     move.w	d0,MixPeriod
 	bsr 	SetMixerVars
 	beq 	.error
+	moveq	#125,d0
+	bsr.w	P_SetSpeed
 	bsr.w	ClearChannels
     moveq   #1,d0
 	rts
@@ -2573,10 +2588,14 @@ CalcFrqTab
 	; -------------------------------------
 	; Calculate log table
 	; -------------------------------------	
+	move.l	#256*8363,d0   ; Constant for GetFrequenceValue_AHI
+    tst.b   AHI(pc)
+    bne     .ahi
 	move.l	MixingFreq(pc),d0
 	lsr.l	#1,d0
 	move.l	#256*8363,d1
 	divu.l	MixingFreq(pc),d1:d0	
+.ahi
 	move.l	d0,d2			; d2.l = round[(8363*256) * 2^32 / MixingFreq]
 	moveq	#24,d3
 	moveq	#32-24,d4
@@ -4058,7 +4077,6 @@ P_SetSpeed
     beq     .1
     bsr     ahi_tempo
 .1
-
     sub.b	#32,d0	
 	lea	BPM2SmpsPerTick,a0
 	move.l	(a0,d0.w*4),SpeedVal	; 16.16fp
@@ -5649,9 +5667,6 @@ GetVoice
 	ENDIF
 	
 Mix_UpdateChannelVolPanFrq:
-    tst.b   AHI(pc)
-    bne     Mix_UpdateChannelVolPanFrq_AHI
-
 	lea	PanningTab(pc),a1
 	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
 	lea	VoiceOffsets,a3         ; Table of APTR MixVoices, 0..MAX_CHANNELS*2
@@ -5810,7 +5825,7 @@ Mix_UpdateChannelVolPanFrq:
 ; ---------------------------------------------------------
 
 Mix_UpdateChannelVolPanFrq_AHI:
-	lea	LogTabSource,a4         ; Use direct frequency table
+    lea LogTab,a4
 	lea	StmTyp,a5
     lea     freqForChannel(pc),a2
     lea     sampleForChannel(pc),a3
@@ -5909,7 +5924,6 @@ Mix_UpdateChannelVolPanFrq_AHI:
     move.l  a0,(a3,d7.w*4)   ; Store sample ptr per channel for soundfunc
 
 	; -----------------------------	
-	;movem.l	sLen(a0),d1-d3			; d0=base, d1=end, d2=repS, d3=repL
     move.l  sOrigLen(a0),d1
 	move.l	cSmpStartPos(a5),d4
 	; -----------------------------
@@ -6020,7 +6034,7 @@ GetFrequenceValue_AHI:
 	divu.w	#12*16*4,d1		; d1.w = (uint16_t)(12*192*4 - period) / (12*16*4)
 	move.w	d1,d2			; d2.w = quotient
 	swap	d1			; d1.w = remainder (0 .. 12*16*4-1)	
-	moveq	#14+3,d3
+	moveq	#14,d3
 	sub.w	d2,d3
 	and.b	#31,d3			; d3.b = oct shift
 	; -----------------------------
