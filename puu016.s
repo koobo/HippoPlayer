@@ -1672,7 +1672,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	36
+xpl_versio	=	37
 
 
 *********************************************************************************
@@ -53040,7 +53040,7 @@ p_xmaplay:
 
     DPRINT  "xmaplay init ok"
     moveq   #0,d0
-    
+
 .x	jsr		clearMainWindowWaitPointer
     tst.l   d0
     rts
