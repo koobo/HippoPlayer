@@ -38444,11 +38444,11 @@ modlen:
     tst.w   (a0,d1)
     bne     .skip
     move.w  d0,(a0,d1)
- if DEBUG
-    lsr     #1,d1
-    exg     d0,d1
-    DPRINT  "songpos=%ld tick=%ld"
- endif
+; if DEBUG ; remove log spam
+;    lsr     #1,d1
+;    exg     d0,d1
+;    DPRINT  "songpos=%ld tick=%ld"
+; endif
 .skip
 
 .mt_NoNewPosYet	
@@ -58934,6 +58934,14 @@ fetchRemoteFile:
     move.b  -(a4),-(a3)
     move.b  -(a4),-(a3)
 .skip
+    ; ---------------------------------
+    ; if AMP url append ".gz" to the target file
+    lea     remoteSearch\.ampLine,a3
+    moveq   #remoteSearch\.ampLineE-remoteSearch\.ampLine-1-1,d0
+    move.l  a0,a4
+.p1 cmpm.b  (a3)+,(a4)+
+    bne     .p2
+    dbf     d0,.p1
 
     move.l  a1,a3
 .fe tst.b   (a3)+
@@ -58943,6 +58951,8 @@ fetchRemoteFile:
     move.b  #"g",(a3)+
     move.b  #"z",(a3)+
     clr.b   (a3)
+.p2
+    ; ---------------------------------
 
 	* Source url in a0
 	* Destination file in a1
