@@ -52914,15 +52914,17 @@ p_xmaplay:
     dc.w     pt_xmaplay
 .flags
     dc pf_cont!pf_stop!pf_volume!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_quadscopePoke!pf_slidePos
-	dc.b    "FastTracker2 xmaplay060"
-.ahiTxt 
-    dc.b    " AHI",0
+.title
+	dc.b    "FastTracker2 xmaplay060 AHI 32ch"
+    dc.b    0
  even
 
 .author 
     pushpea .a(pc),d0
     rts
-.a  dc.b    "8bitbubsy",0
+.a  dc.b    "8bitbubsy"
+.nullStr
+    dc.b    0
     even
     
     rsset $20
@@ -52952,14 +52954,9 @@ p_xmaplay:
 	beq.b	.ok3
 	rts
 .ok3
-    lea     .ahiTxt(pc),a0
-    clr.b   (a0)
-    tst.b   ahi_use(a5)
-    beq     .ah1
-    move.b  #" ",(a0)
-.ah1
 
     * Save into a file for XMAplay
+	jsr		setMainWindowWaitPointer
     lea     .tempFile(pc),a0
 	move.l	moduleaddress(a5),a1
 	move.l	modulelength(a5),d0
@@ -52981,6 +52978,7 @@ p_xmaplay:
     move.l  ahi_mode(a5),d2
     jsr     .xmaInit(a3)
     * d0 = status, 1 = OK, 0 = fail
+    * d1 = channel count
     * a0 = message or NULL
  if DEBUG
     DPRINT  "xmaInit=%ld mask=%lx"
@@ -53025,18 +53023,42 @@ p_xmaplay:
     pushpea .buf2Ptr(pc),ps3m_buff2(a5)
     move.l  #1,ps3m_sampleDataModulo(a5)
 
+    * channel count in d2
+    lea     .format(pc),a0
+    move.l  d2,d1
+    move.l  #type_ahi,d0
+    pushpea .nullStr(pc),d0
+    tst.b   ahi_use(a5)
+    beq     .ah
+    move.l  #type_ahi,d0
+;    move.l  #type_agus,d0
+.ah
+    lea     .title(pc),a3
+    jsr     desmsg3
+
     bsr     .vol
 
     DPRINT  "xmaplay init ok"
     moveq   #0,d0
+    
+.x	jsr		clearMainWindowWaitPointer
+    tst.l   d0
     rts
+
+.bub    ds.b    128
+
+.format:
+    dc.b    "FastTracker2 xma060%s %ldch",0
+    even
+
 
 .initError
     moveq   #ier_error,d0
-    rts
+    bra     .x
+
 .saveError
     moveq   #ier_nomem,d0
-    rts
+    bra     .x
 
 * xmaplay
 .posPtr     dc.l    0 

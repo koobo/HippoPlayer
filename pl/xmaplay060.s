@@ -149,6 +149,13 @@ testMain:
 *   d0 = AHI on or off
 *   d1 = AHI mixing rate
 *   d2 = AHI mode
+* Out:
+*   d0 = status
+*   d1 = position mask (Paula playback)
+*   d2 = channel count
+*   a0 = ptr to Paula buffer position
+*   a1 = address to left Paula buffer
+*   a2 = address to right Paula buffer
 _init:
 ier_filerr          = -17
 ier_ahi             = -19
@@ -172,10 +179,10 @@ ier_ahi             = -19
     move.l  a5,-(sp)
     bsr     MAIN
     move.l  (sp)+,a5
+    DPRINT  "MAIN=%ld"
     * d0 = 0: ok, 1: error
     tst.l   d0
     bne    .error
-
     tst.b   AHI(pc)
     beq     .1
     moveq   #0,d0
@@ -203,6 +210,8 @@ ier_ahi             = -19
     sub.l   a0,a0
 
     DPRINT  "_init ok"
+    moveq   #0,d2
+    move    hAntChn(pc),d2
     moveq   #1,d0   * ok
     rts
 .error
