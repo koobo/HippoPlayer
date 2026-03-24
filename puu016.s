@@ -28392,7 +28392,7 @@ drawScope:
 .notMulti  
     * XMAPlay and reSID provide compatible scope input
 	cmp	    #pt_xmaplay,playertype(a5)
-	beq	.renderPS3M
+	beq	.renderXMA060
     * PSID specific notescroller launch
 	cmp	    #pt_sid,playertype(a5)
     bne     .notPSID
@@ -28407,6 +28407,13 @@ drawScope:
 	* .. or similarly working others
 
 	jmp	.t(pc,d0)
+
+.renderXMA060
+    tst.b   ahi_use_nyt(a5)
+    beq     .renderPS3M
+    * xmaplay060 + AHI -> no go
+    rts
+
 
 * protracker jump table
 .t	bra.b	.1 * quad
@@ -53022,6 +53029,7 @@ p_xmaplay:
     pushpea .buf1Ptr(pc),ps3m_buff1(a5)
     pushpea .buf2Ptr(pc),ps3m_buff2(a5)
     move.l  #1,ps3m_sampleDataModulo(a5)
+    clr.l   deliPatternInfo(a5)
 
     * channel count in d2
     lea     .format(pc),a0
@@ -56590,13 +56598,16 @@ runSpectrumScope
     beq.b   .ps3m
 .notMulti
     cmp     #pt_xmaplay,playertype(a5)
-    beq.b   .ps3m
+    beq.b   .xma
     jsr     playSidInRESIDMode
     bne.b   .ps3m
 	cmp	#pt_sample,playertype(a5)
 	beq.b	.sample
 	bra.b	.normal
 
+.xma
+    tst.b   ahi_use_nyt(a5)     * xma060+AHI -> no go
+    bne     .x
 .ps3m
 	bsr	spectrumGetPS3MSampleData
 	bra.b	.go
