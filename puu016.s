@@ -58211,19 +58211,19 @@ remoteSearch
     beq     .2
     moveq   #0,d6   * No base header to prepend
     * Additional space for readable name
-    moveq   #100,d4  * Base header length, add extra space in this case
+    moveq   #120,d4  * Base header length, add extra space in this case
     cmp.b   #SEARCH_STATIONS,d7
     beq     .2
     pushpea	.ampLine(pc),d6 
     * Additional space for readable name
     * Base header length, add extra space in this case
-    moveq   #.ampLineE-.ampLine+100,d4
+    move.l  #(.ampLineE-.ampLine)+120,d4
     cmp.b   #SEARCH_AMP,d7
     beq     .2
     * RECENT_PLAYLISTS
     pushpea	.recentPlaylistsLine(pc),d6 
     * Add extra space for visible name
-	move.l	#.recentPlaylistsLineE-.recentPlaylistsLine+100,d4	
+	move.l	#.recentPlaylistsLineE-.recentPlaylistsLine+120,d4	
 	bra.b	.2
 .aa
 	pushpea	.aminetLine(pc),d6
@@ -58287,10 +58287,10 @@ remoteSearch
 	move.l	a3,a0   
 	jsr		freemem
 
+    * d1 here is the results data file length
     bsr     .postProcessSearchResults
-    
-	tst.b	autosort(a5)
-	beq.b	.noSort
+	tst.b	autosort(a5)    
+	beq.b	.noSort 
 	jsr		engageSearchResultsMode
     * Sort will select the 1st item
     * engageSearcuResultsMode will clear the selection,
@@ -58314,8 +58314,8 @@ remoteSearch
     ; Get readable name from search results
     ; for stations, playlists
 
-    moveq   #0,d3
-   
+    moveq   #0,d6           * data
+
     cmp.b   #SEARCH_AMP,d7
     beq     .s22
     cmp.b   #SEARCH_RECENT_PLAYLISTS,d7
@@ -58326,11 +58326,11 @@ remoteSearch
 
     lea     searchResultsOut(pc),a0
     jsr     plainLoadFile
-    move.l  d0,d3
+    move.l  d0,d6
     beq     .s2
-    tst.l   d1
+    tst.l   d1     * result file length is hiding here at this point
     beq     .s2
-    move.l  d3,a2
+    move.l  d6,a2
 
     ; Search the header line
     ; Find column for "Name" for radio stations 
@@ -58370,7 +58370,9 @@ remoteSearch
     move.l  a2,a0
     lea     .matchAuth(pc),a1
     bsr     .findColumn
-    bsr     .findColumnLength
+    * Set upper length for this column,
+    * assume copying stops at linefeed
+    moveq   #30,d1      
     popm    d2/d3
     bra     .continue
 
@@ -58391,7 +58393,7 @@ remoteSearch
     bne     .findL
     move.l  a0,d0
     sub.l   a2,d0
-    subq.l  #5,d0
+    subq.l  #5,d0       * remove ANSI stuff from beginning
     DPRINT  "column offset=%ld"
     rts
 
@@ -58404,11 +58406,16 @@ remoteSearch
 * In:
 *   a0 = start of column
 *   a2 = start of header line
+* Out:
+*   d1 = column length
 .findColumnLength:
     move.l  a0,a1
     * First, find where the main text ends
-.z2 cmp.b   #" ",(a1)+
+.z2 cmp.b   #10,(a1)+
+    beq     .y2
+    cmp.b   #" ",-1(a1)
     bne     .z2
+.y2
     * Then find where the next column starts or line ends
 .z3 cmp.b   #" ",(a1)+
     beq     .z3
@@ -58418,7 +58425,7 @@ remoteSearch
     bls.b   .z4
     moveq   #99,d1
 .z4 
-    subq.l  #2,d1
+    subq.l  #1,d1
     * d1 = length of column
  ifne DEBUG
     push    d0
@@ -58433,6 +58440,9 @@ remoteSearch
 .continue
     * d0 = start offset column
     * d1 = length of column
+
+    * d2 = extra start offset column
+    * d3 = extra length of column
 
     * skip rest of the header line, 
     * 1st line starts with "0"
@@ -58450,14 +58460,6 @@ remoteSearch
     st      l_remote(a3)
     lea     l_filename(a3),a1
 
-; ifne DEBUG
-;    pushm   d0/d1
-;    move.l  a3,d0
-;    move.l  a1,d1
-;    DPRINT  "node=%lx file=%s"
-;    popm    d0/d1
-; endif
-
     * Find end of filename, after it there are extra bytes
     * for the visible name.
 .s4 tst.b   (a1)+
@@ -58470,7 +58472,7 @@ remoteSearch
     move.l  a2,a0
     add     d0,a0
     move    d1,d4
-.s7 cmp.b   #10,(a0)
+.s7 cmp.b   #10,(a0)    * safety stop
     beq     .s77
     move.b  (a0)+,(a1)+
     subq    #1,d4
@@ -58485,7 +58487,7 @@ remoteSearch
     move.l  a2,a0
     add     d2,a0
     move    d3,d4
-.s78 cmp.b   #10,(a0)
+.s78 cmp.b   #10,(a0)   * safety stop
     beq     .s777
     move.b  (a0)+,(a1)+
     subq    #1,d4
@@ -58501,7 +58503,7 @@ remoteSearch
 .s2
 
     * Free loaded searchout file data
-    move.l  d3,a0
+    move.l  d6,a0
     jmp     freemem
     
 
