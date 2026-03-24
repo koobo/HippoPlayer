@@ -173,17 +173,14 @@ amigus_cont:
 ;==============================================================
 amigus_tempo:
 	movem.l d0-d7/a0-a6,-(sp)
-	
-	and.l	#$ff,d0
+	and.w	#$ff,d0
 	lsl.w	#1,d0
-	divu.w	#5,d0
 	moveq	#0,d1
 	move.w	d0,d1
 	
 	move.l	amigus_base(pc),a6
-
 	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	
-	move.l 	#HAGEN_TIMER_TIMEBASE,d0
+	move.l 	#5*HAGEN_TIMER_TIMEBASE,d0
 	bsr		divu_32
 	move.l	d0,HAGEN_TIMER_RELOADH(a6)	; Set timer interrupt speed for playback
 	move.w	#$8000,HAGEN_TIMER_CTRL(a6)
