@@ -2054,13 +2054,17 @@ soundfunc:
 
 ahi_tempo
 	movem.l	d0-d1/a0-a2/a6,-(sp)
+    * Use 24.8 FP for accuracy
 	and.l	#$ffff,d0
-	lsl.w	#1,d0
-	divu	#5,d0
- 
+    add.w   d0,d0
+	lsl.l	#8,d0
+    divu    #5,d0
+    ext.l   d0
+    lsl.l   #8,d0
+    
 	move.l	ahibase(pc),a6
 	lea	.tags(pc),a1
-	move	d0,4(a1)
+	move.l	d0,4(a1)
 
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_ControlAudioA(a6)
