@@ -153,9 +153,10 @@ testMain:
 *   d0 = status
 *   d1 = position mask (Paula playback)
 *   d2 = channel count
-*   a0 = ptr to Paula buffer position
-*   a1 = address to left Paula buffer
-*   a2 = address to right Paula buffer
+*   a0 = null (patternscope support data)
+*   a1 = ptr to Paula buffer position
+*   a2 = address to left Paula buffer
+*   a3 = address to right Paula buffer
 _init:
 ier_filerr          = -17
 ier_ahi             = -19
@@ -202,7 +203,7 @@ ier_ahi             = -19
     bsr     ahi_tempo
 
 .1
-    * Return ccess to mixer buffers when Paula mixer engaged
+    * Return access to mixer buffers when Paula mixer engaged
     move.l  PaulaPosMask(pc),d1
     lea     PaulaPos(pc),a1
     move.l  PaulaCh1Buf(pc),a2
