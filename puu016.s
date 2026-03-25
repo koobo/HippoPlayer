@@ -227,6 +227,7 @@ check	macro
 	include	graphics/rastport.i
 	include graphics/scale.i
 	include	graphics/text.i
+    include graphics/modeid.i
 
 ;	include	graphics/rpattr.i
 
@@ -1033,7 +1034,12 @@ lootamoodi	rs	1		* lootan moodi, titlebar mode
 lootassa	rs	1		* viimeisin tieto lootassa
 colordiv	rs.l	1		* colorclock/vbtaajuus
 vertfreq	rs	1		* virkistystaajuudet
-horizfreq	rs	1
+;horizfreq	rs	1
+highAudio   rs.b 1       * Set if a suitable AGA mode enabled which allows higher rates
+            rs.b 1       * pad
+tick        rs.w 1
+vbMeasureTime rs.l 2
+vbMeasureTick rs.w 1
 
 clockconstant	rs.l	1		* Clock Constant PAL/NTSC
 
@@ -3119,6 +3125,9 @@ main:
 
 	st	reghippo(a5)
 
+    ; ----------------------------------
+	;move	#15600,horizfreq(a5)    
+	move	#50,vertfreq(a5)            * initial default
 
 	move.l	(a5),a0
 	moveq	#0,d1
@@ -3128,13 +3137,13 @@ main:
 	beq.b	.pal
 ;	move.l	#3579545,d0
 	move	#$9E99,d0
+    move    #60,vertfreq(a5)
 .pal	move.l	d0,clockconstant(a5)
 
-	bsr	divu_32
+	bsr	    divu_32             * constant/powersupplyfreq
 	move.l	d0,colordiv(a5)		* 50Hz tai 60Hz näytölle
 
-	move	#15600,horizfreq(a5)
-	move	#50,vertfreq(a5)
+    ; ----------------------------------
 	
 	bsr	srand			* randomgeneratorin seed!
 
@@ -3210,6 +3219,13 @@ main:
 	st	ciasaatu(a5)
 	st	vbsaatu(a5)
 
+    jsr     getSysTime
+    movem.l d0/d1,vbMeasureTime(a5)    ; Capture start time when vbinterrupt is launched
+    move    tick(a5),d0
+    lsr     #1,d0
+    move    d0,vbMeasureTick(a5)
+
+
 	bsr	init_inputhandler
 	bsr	init_screennotify
     tst.b   win(a5)
@@ -3269,6 +3285,61 @@ main:
     * Get metadata at startup
     jsr     initializeUslUme
 .uc
+
+    ; ---------------------------------
+    ; Measure VB frequency, wait a few ticks
+    cmp     #30,tick(a5)
+    bhs     .t1
+    moveq   #30,d1
+    sub     tick(a5),d1
+    lore    Dos,Delay
+.t1
+    move    tick(a5),d7
+    jsr     getSysTime
+    add     tick(a5),d7
+    lsr     #1,d7
+    sub     vbMeasureTick(a5),d7
+
+    moveq   #0,d0
+    move    d7,d0
+    DPRINT  "== got %ld ticks"
+
+    move.l  #1000000,d3
+    jsr     getSysTime
+    sub.l   vbMeasureTime(a5),d0   * secs
+    sub.l   vbMeasureTime+4(a5),d1  * micros
+    bge     .ok
+    subq.l  #1,d0
+    add.l   d3,d1  * MAXMICRO 
+.ok
+    move.l  d1,d2
+    move.l  d3,d1
+    jsr     mulu_32     * secs to microsecs
+    add.l   d2,d0       * add together
+    move.l  d0,d2
+
+    moveq   #0,d1
+    move    d7,d1       * divide microsecs by ticks
+    jsr     divu_32
+    DPRINT  "== tick takes %ld microsecs ==" 
+
+    * convert to Hz
+    move.l  d0,d1
+;    move.l  d3,d0 
+    move.l  #1000000,d0
+    add.l   d1,d0       * round up trick
+    subq.l  #1,d0
+    DPRINT  "%ld / %ld" 
+    jsr     divu_32
+    move    d0,vertfreq(a5) * store
+    DPRINT  "== %ld Hz =="
+    ; ---------------------------------
+    move.l  d0,d1
+	move.l	clockconstant(a5),d0
+	bsr	    divu_32
+	move.l	d0,colordiv(a5)
+    ; ---------------------------------
+.ogog
 
 
  ifne EFEKTI
@@ -5111,12 +5182,42 @@ getscreeninfo
 
 ** Tutkaillaan näytön tyyppiä!
 * Talteen oikea hz scopeja varten
-
-
+    clr.b   highAudio(a5)               * Default: no high audio
 	lea	sc_ViewPort(a0),a2
 	move.l	a2,a0
 	lore	GFX,GetVPModeID
-	and.l	#$40000000,d0		* onko native amiga screeni?
+    DPRINT  "------ GetVPModeID=%08.8lx"
+    and.l   #MONITOR_ID_MASK,d0
+    cmp.l   #NTSC_MONITOR_ID,d0         * kick13
+    beq     .native
+    cmp.l   #PAL_MONITOR_ID,d0          * kick13
+    beq     .native
+    cmp.l   #VGA_MONITOR_ID,d0          * kick2 - multiscan, 29kHz horiz
+    beq     .high
+    cmp.l   #DBLPAL_MONITOR_ID,d0       * 27kHz horiz
+    beq     .high
+    cmp.l   #DBLNTSC_MONITOR_ID,d0      * 27kHz horiz
+    beq     .high
+    cmp.l   #EURO72_MONITOR_ID,d0       * 29KHz horiz
+    beq     .high
+    cmp.l   #EURO36_MONITOR_ID,d0       * 15KHz horiz
+    beq     .native
+    cmp.l   #SUPER72_MONITOR_ID,d0      * 23kHz horiz
+    beq     .native
+    DPRINT  "Non-native screenmode detected, using defaults"
+    * Not native screenmode, leave all values to default.
+    bra     .ba
+.high
+    st      highAudio(a5)
+    DPRINT  "Double audio rate possible"
+.native
+    DPRINT  "Looks like Denise!"
+
+
+    ; ----------------------------------
+    ; OLD STUFF
+ REM 
+ 	and.l	#$40000000,d0		* onko native amiga screeni?
 	beq.b	.nogfxcard
 	st	gfxcard(a5)
 	bra	.ba	
@@ -5156,6 +5257,7 @@ getscreeninfo
 	move	mtr_TotalRows(a4),d6	
 	move	mtr_TotalColorClocks(a4),d7
 
+
 	lea	40(sp),sp
 
 	move.l	#1000000000,d0
@@ -5176,6 +5278,13 @@ getscreeninfo
 	move	d0,horizfreq(a5)
 	move	d1,vertfreq(a5)
 
+ ifne DEBUG
+    and.l   #$ffff,d0
+    and.l   #$ffff,d1
+    DPRINT  "Horizontal=%ld vertical=%ld"
+ endif
+
+
 	move.l	clockconstant(a5),d0
 	ext.l	d1
 	bsr	divu_32
@@ -5188,6 +5297,8 @@ getscreeninfo
 	moveq	#40,d0		* buf size
 	jmp	_LVOGetDisplayInfoData(a6)
 ;	rts
+ EREM  ; OLD STUFF
+    ; ----------------------------------
 
 .ba
 
@@ -15722,7 +15833,7 @@ pupdate:				* Ikkuna päivitys
 	;bsr	pscopebar		* scope bars
 	bsr	pprefx			* prefix cut
 	bsr	pfont			* fontti
-	bsr	pscreen			* screen refresh rates
+	;bsr	pscreen			* screen refresh rates
 	bsr	ptooltips  	     	* tooltips
 	bsr	paltbuttons  	        * alt buttons
     bsr pScopeSize
@@ -17914,6 +18025,7 @@ pListFont
 
 *** Printataan screen refresh ratetkin
 
+ REM
 pscreen
 	tst.b	gfxcard(a5)
 	beq.b	.nop
@@ -17947,7 +18059,7 @@ pscreen
 	dc.b	"Screen: %ldHz/%ldkHz",0
 ;.dea	dc.b	"A gfx card detected.",0
  even
-
+ EREM
 
 ***** Playergroup file
 
@@ -25105,6 +25217,7 @@ intserver
 .vbinterrupt
 	pushm	d2-d7/a2-a6
 	move.l	a1,a5			* a1 = is_Data = var_b
+    addq    #1,tick(a5)
 
 	* Check if tooltip tick count is active.
 	* It it expires, trigger a signal
@@ -45626,14 +45739,17 @@ p_sample:
 
 ** lisää
 	moveq	#0,d0
-	cmp	#16000,horizfreq(a5)
-	slo	d0
+	;cmp	#16000,horizfreq(a5)
+	;slo	d0
+    move.b  highAudio(a5),d0
  if DEBUG
-    push    d1
-    moveq   #0,d1
-    move    horizfreq(a5),d1
-    DPRINT  "resample needed: %ld (horizfreq=%ld)"
-    pop     d1
+    push    d0
+;    moveq   #0,d1
+;    move    horizfreq(a5),d1
+;    DPRINT  "resample needed: %ld (horizfreq=%ld)"
+    and.l   #1,d0
+    DPRINT  "resample needed, highAudio=%ld"
+    pop     d0
  endif
 	move	d0,-(sp)
 	pea	songover(a5)
