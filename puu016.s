@@ -5120,6 +5120,7 @@ getscreeninfo
 	lea	sc_ViewPort(a0),a2
 	move.l	a2,a0
 	lore	GFX,GetVPModeID
+    move.l  d0,d4
     clr.b   highAudio(a5)
     DPRINT  "-=- GetVPModeID=%08.8lx -=-"
     * DBLPAL    000a1000
@@ -5171,11 +5172,13 @@ getscreeninfo
 
 
 ;	lea	sc_ViewPort(a0),a0	* viewport
-	move.l	a2,a0
-	move.l	vp_ColorMap(a0),a0	* colormap
-	move.l	cm_VPModeID(a0),d0	* handle
+	;move.l	a2,a0
+	;move.l	vp_ColorMap(a0),a0	* colormap
+	;move.l	cm_VPModeID(a0),d0	* handle
 
+    move.l  d4,d0
 	lob	FindDisplayInfo
+    DPRINT  "FindDisplayInfo=%lx"
 	move.l	d0,d4
 	beq 	.ba
 
@@ -5221,7 +5224,11 @@ getscreeninfo
     move.l  dis_PropertyFlags(a4),d0
     and.l   #DIPF_IS_ECS!DIPF_IS_AA,d0
     bne     .goNative
-    DPRINT  "Properties indicate a non-native mode!"        
+ ifne DEBUG
+    moveq   #0,d0
+    move    vertfreq(a5),d0
+    DPRINT  "Properties indicate non-native, keep %ld Hz"        
+ endif
     bra     .ba
 .goNative:
     DPRINT  "Properties indicate native!"
