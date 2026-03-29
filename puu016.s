@@ -28538,9 +28538,13 @@ drawScope:
 	jmp	.t(pc,d0)
 
 .renderXMA060
+    tst.b   ps3mamigus(a5)
+    bne     .xmaNo
     tst.b   ahi_use_nyt(a5)
     beq     .renderPS3M
+.xmaNo
     * xmaplay060 + AHI -> no go
+    * xmaplay060 + AmiGUS -> no go
     rts
 
 
@@ -53114,7 +53118,20 @@ p_xmaplay:
 *   d2 = AHI mode
     move.b  ahi_use(a5),d0
 	move.l	ahi_rate(a5),d1
-    move.l  ahi_mode(a5),d2
+
+	* Select mode: normal, AHI, AmiGUS
+	moveq	#-1,d2			* d2 = ahi_use
+	cmp.b	#1,ps3mamigus(a5)
+	beq     .gogo
+	moveq	#-2,d2
+	cmp.b	#2,ps3mamigus(a5)   * interpolated
+	beq     .gogo
+	moveq	#1,d2
+	tst.b	ahi_use(a5)
+	bne		.gogo
+	moveq	#0,d2
+.gogo
+
     jsr     .xmaInit(a3)
     * d0 = status, 1 = OK, 0 = fail
     * d1 = channel count
