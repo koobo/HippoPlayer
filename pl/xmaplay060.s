@@ -45,8 +45,11 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 	include	exec/exec_lib.i
 	include	devices/ahi_lib.i
 	include	devices/ahi.i
+	include amigus_proto.i
+	include	hardware/intbits.i
+	include libraries/expansion_lib.i
 
-DEBUG        = 0           * Enable debug print to serial
+DEBUG        = 0          * Enable debug print to serial
 
  ifnd __VASM
  printt "Test mode!"
@@ -147,6 +150,10 @@ testMain:
 *   a0 = module filename
 *   a1 = song end trigger
 *   d0 = AHI on or off
+*        0 = no AHI
+*        1 = yes AHI
+*       -1 = AmiGUS
+*       -2 = AmiGUS interpolated 
 *   d1 = AHI mixing rate
 *   d2 = AHI mode
 * Out:
@@ -184,8 +191,12 @@ ier_ahi             = -19
     * d0 = 0: ok, 1: error
     tst.l   d0
     bne    .error
+
     tst.b   AHI(pc)
-    beq     .1
+    beq     .normal
+    bmi     .agus
+
+    DPRINT  "-- AHI --"
     moveq   #0,d0
     move.w  AHIMixingFreq,d0
     DPRINT  "AHIMixingFreq=%ld Hz"
@@ -201,8 +212,17 @@ ier_ahi             = -19
     * Set initial tempo
     moveq   #-1,d0
     bsr     ahi_tempo
+    bra     .normal
 
-.1
+
+.agus
+    DPRINT  "-- AGUS --"
+    bsr     amigus_init
+    tst.l   d0
+    beq     .agusError
+    bsr     loadSamplesAGUS
+
+.normal
     * Return access to mixer buffers when Paula mixer engaged
     move.l  PaulaPosMask(pc),d1
     lea     PaulaPos(pc),a1
@@ -220,19 +240,28 @@ ier_ahi             = -19
     moveq   #ier_filerr,d0
     rts
 
+.agusError
 .ahiError
     moveq   #ier_ahi,d0
     rts
 
 _end:
     tst.b   AHI(pc)
-    beq     .1
-    bsr     ahi_stop
-    bsr     ahi_end
+    beq     .ahi
+    bmi     .agus
 .1
     bsr     StopTask
     bsr     cleanUp
     rts
+.ahi
+    bsr     ahi_stop
+    bsr     ahi_end
+    bra     .1
+.agus
+    bsr     amigus_stop
+    bsr     amigus_end
+    bra     .1
+
 
 * out:
 *   d0 = current position
@@ -248,6 +277,7 @@ _setVolume:
     move    d0,ahi_mastervol
     tst.b   AHI(pc)
     bne     ahi_setmastervol
+    bmi     amigus_setmastervol
 
     bra     SetMixingVolume
 
@@ -260,6 +290,7 @@ _backward:
 _stop:
     tst.b   AHI(pc)
     bne     ahi_stop
+    bmi     amigus_stop
 
     bsr    StopTask
     
@@ -274,7 +305,8 @@ _stop:
 _cont:
     tst.b   AHI(pc)
     bne     ahi_cont
-
+    bmi     amigus_cont
+    
     moveq	#64,d0			; set voice volumes
 	lea	    $dff000,a0
 	move.w	d0,$a8(a0)
@@ -437,14 +469,11 @@ calcSampleCount:
 loadSamples:
     moveq   #128-1,d7
     lea     Instr,a4
-;    lea     instToSoundMap,a5
     moveq   #0,d5               * AHI sound number
 .instrs
     move.l  (a4)+,d0
     beq     .next
     move.l  d0,a3
-    move.b  s16Bit(a3),d0   
-
     move    iAntSamp(a3),d6
     beq     .next
     subq    #1,d6
@@ -493,6 +522,64 @@ loadSamples:
     bne     .err
 
     addq    #1,d5                  * Next AHI sound number
+.nextS
+    lea     SMP_SIZE(a2),a2
+    dbf     d6,.samples
+.next
+    dbf     d7,.instrs
+    moveq   #1,d0
+    rts
+.err
+    moveq   #0,d0
+    rts
+
+* Load each instrument sample to AGUS
+loadSamplesAGUS:
+    moveq   #128-1,d7
+    lea     Instr,a4
+    moveq   #0,d5               * AGUS sample address
+.instrs
+    move.l  (a4)+,d0
+    beq     .next
+    move.l  d0,a3 
+    move    iAntSamp(a3),d6
+    beq     .next
+    subq    #1,d6
+    lea	    iSamp(a3),a2		; a2 = sample struct
+
+.samples
+    move.l  sPek(a2),d0
+    beq     .nextS
+    move.l  d0,a0
+    move.l  sOrigLen(a2),d0    
+    beq     .nextS
+    move.l  d5,sAGUSOffset(a2)   * Store AGUS address for later
+
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS
+	move.l	amigus_base(pc),a1		
+	move.l	d5,HAGEN_WADDRH(a1)   * destination address
+	lea		HAGEN_WDATAH(a1),a1
+    moveq   #4,d1
+.copy
+    move.l  (a0)+,(a1)
+    add.l   d1,d5
+    sub.l   d1,d0
+    cmp.l   d1,d0
+    bhs     .copy
+
+    tst.l   d0
+    beq     .done
+    clr.l   -(sp)
+    move.l  sp,a5
+.rest
+    move.b  (a0)+,(a5)+
+    subq    #1,d0
+    bne     .rest
+    move.l  (sp)+,(a1)
+    addq.l  #4,d5
+.done
+    ; ---------------------------------    
 .nextS
     lea     SMP_SIZE(a2),a2
     dbf     d6,.samples
@@ -790,6 +877,223 @@ setplayerfreq = *-4
 	dc.l	AHIA_MaxPlayerFreq,(255*2/5)<<16
 	dc.l	TAG_DONE
 
+
+;=============================================================
+
+; ====================================
+;        AmiGUS play routines 
+;        (c)2026 by O.Achten
+; ====================================
+
+
+;=============================================================
+amigus_init:
+	move.l	4.w,a6					
+	lea   	ExpansionName(pc),a1	
+	moveq   #33,d0
+	jsr     _LVOOpenLibrary(a6)		; Open expansion.library
+	
+	tst.l   d0						; Library opened?
+	bne.s   .ag_open_okay			; Yes, continue	
+	bra		.ag_init_error			; Could not open library
+
+.ag_open_okay
+	move.l	d0,a6					; Let's find AmiGUS card
+	move.l	#AMIGUS_MANUFACTURER_ID,d0
+	move.l	#AMIGUS_HAGEN_PRODUCT_ID,d1
+	move.l	#0,a0
+	jsr		_LVOFindConfigDev(a6)	; Check for AmiGUS card
+
+	push	d0
+	
+	move.l	d0,a0					; a0 = ConfigDev structure
+	move.l 	32(a0),d0 				; d0 = cd_BoardAddr
+	move.l	d0,amigus_base			; Store AmiGUS register base
+	
+	move.l	a6,a1
+	move.l	4.w,a6
+	jsr     _LVOCloseLibrary(a6)	; Close expansion.library
+	
+	pop		d0
+	
+	tst.l	d0						; Did we find AmiGUS card?
+	bne.s	.ag_init_memory
+
+.ag_init_error
+    moveq   #0,d0
+	popm	d1-d7/a2-a6		
+	rts
+
+.ag_init_memory
+
+	
+	move.l	4.w,a6
+	moveq	#INTB_PORTS,d0
+	lea		AmiGUS_IntServer(pc),a1	; Set-up interrupt for play routine (INT2)
+	jsr		_LVOAddIntServer(a6)
+	
+	bsr		amigus_voice_reset		; Initialize all AmiGUS voices
+	
+	move.w	Speed(pc),d0		    ; d0 = tempo (BPM)
+	bsr		amigus_tempo			; Set initial tempo
+	
+	st   	setpause
+	
+	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
+	
+	popm	d1-d7/a2-a6		
+	moveq	#1,d0	
+	rts
+
+;=============================================================
+amigus_end:	
+	move.l	amigus_base(pc),a6
+
+	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	; Disable Timer
+	move.w	#$4000,HAGEN_INTE0(a6)		; Disable Timer interrupt
+	move.w	#$4000,HAGEN_INTC0(a6)		; Clear Timer interrupt
+	
+	bsr		amigus_voice_reset
+	
+	move.l	4.w,a6
+	lea		AmiGUS_IntServer(pc),a1
+	moveq  	#INTB_PORTS,d0
+	jsr		_LVORemIntServer(a6)
+
+	rts
+;=============================================================
+
+amigus_voice_reset:
+	move.l	amigus_base(pc),a6
+	moveq	#0,d0
+	moveq	#0,d1
+.ag_clear_loop
+	move.w	d0,HAGEN_VOICE_BNK(a6)		; Set voice bank
+	lea 	HAGEN_VOICE_CTRL(a6),a0		; Clear all voice registers
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	addq	#1,d0
+	cmp.w	#32,d0
+	bne	.ag_clear_loop
+	rts
+
+;==============================================================
+amigus_stop:
+	clr.b   setpause
+	move.l	amigus_base(pc),a6
+	move.w	#$4000,HAGEN_INTE0(a6)	; Disable interrupt
+	bsr		.ag_mutechannels	
+	rts
+;---	
+.ag_mutechannels
+	moveq	#0,d0
+	moveq	#0,d1
+.ag_mute_loop
+	move.w	d0,HAGEN_VOICE_BNK(a6)	; Set channel number
+	move.l	d1,HAGEN_VOICE_VOLUMEL(a6)	; Also sets right volume (longword access)
+	addq	#1,d0
+	cmp.w	#32,d0
+	bne	.ag_mute_loop
+	rts	
+;==============================================================
+amigus_cont:
+	st      setpause
+	move.l	amigus_base(pc),a6
+	bsr .ag_restorechannels
+	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt
+	rts
+;---	
+.ag_restorechannels
+;	lea	    cha0(pc),a4
+;	move	numchans(pc),d7
+;	subq	#1,d7
+;	moveq	#0,d6
+;.ag_restore_loop
+;	move.w	d6,HAGEN_VOICE_BNK(a6)	; Set channel number	
+;	bsr	amigus_volume	
+;	
+;	dbf		d7,.ag_restore_loop
+	rts	
+;==============================================================
+amigus_tempo:
+	movem.l d0-d7/a0-a6,-(sp)
+	and.w	#$ff,d0
+	lsl.w	#1,d0
+	moveq	#0,d1
+	move.w	d0,d1
+	
+	move.l	amigus_base(pc),a6
+	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	
+	move.l 	#5*HAGEN_TIMER_TIMEBASE,d0
+	;bsr		divu_32
+    divu.l  d1,d0
+	move.l	d0,HAGEN_TIMER_RELOADH(a6)	; Set timer interrupt speed for playback
+	move.w	#$8000,HAGEN_TIMER_CTRL(a6)
+	
+	movem.l (sp)+,d0-d7/a0-a6	; Restore registers
+	rts
+;=============================================================
+amigus_setmastervol:
+    move    ahi_mastervol(pc),d1
+	cmp.w	#64,d1				; Full PAULA volume?
+	bne		.ag_novolovl		; No, then just shift it
+	move.w	#$ffff,d1			; Yes, set full AmiGUS master volume
+	bra		.ag_setmastervol
+.ag_novolovl	
+	lsl.l	#5,d1				; Convert volume value
+	lsl.l	#5,d1	
+.ag_setmastervol	
+	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
+	move.w	d1,HAGEN_GLOBAL_VOLUMEL(a6)	; Set AmiGUS master volume
+	move.w	d1,HAGEN_GLOBAL_VOLUMER(a6)	
+    rts
+
+;======================================
+
+
+AmiGUS_Int:
+	movem.l d1-d7/a0-a6,-(sp)	; Save registers
+
+	move.l	amigus_base(pc),a6
+
+	move.w	HAGEN_INTC0(a6),d0			; read interrupt status
+	and.w   #$4000,d0					; did AmiGUS Timer IRQ occur?
+	beq		.noTimerInt					; if not, then there is nothing to do here	
+	
+	move.w	#$4000,HAGEN_INTC0(a6)	; Clear interrupt
+
+    tst.b  setpause(pc)
+    beq.b   .1
+ ifne DEBUG
+    move    $dff006,$dff180
+ endif
+	bsr 	MainPlayer
+	bsr 	Mix_UpdateChannelVolPanFrq_AGUS
+.1
+.noTimerInt	
+
+	movem.l (sp)+,d1-d7/a0-a6	; Restore registers
+	moveq	#0,d0
+	rts
+	
+;======================================
+amigus_base		dc.l	0
+amigus_mtrig	dc.w	0
+
+AmiGUS_IntServer
+	dc.l  0,0
+	dc.b  0,-10
+	dc.l  AmiGUS_IntName
+	dc.l  0,AmiGUS_Int
+	
+ExpansionName	dc.b	"expansion.library",0
+AmiGUS_IntName	dc.b	"AmiGUS_Xma060Play",0
+even
+
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
@@ -820,8 +1124,8 @@ MEMF_FAST		EQU 4
 MEMF_CLEAR		EQU 65536
 MEMF_TOTAL		EQU 524288
 ;NT_INTERRUPT		EQU 2
-INTB_AUD0		EQU 7
-INTF_AUD0		EQU 128
+;INTB_AUD0		EQU 7
+;INTF_AUD0		EQU 128
 ;LN_NAME			EQU 10
 ;LN_PRI			EQU 9
 ;LN_TYPE			EQU 8
@@ -1055,8 +1359,9 @@ sPan		EQU 33	; B
 sRelTon		EQU 34	; B
 s16Bit		EQU 35	; B
 sAHISound   EQU 36  ; W AHI sound number for this sample
-sAHILoopDir EQU 38  ; B
-sPadding    EQU 39  ; B
+sAGUSOffset EQU 36  ; L AGUS memory address for this sample                      
+sAHILoopDir EQU 38  ; B AHI mode only
+sPadding    EQU 39  ; B AGUS mode only
 SMP_SIZE	EQU 40	; Must be a multiple of 4 for longword alignment.
 			; If you change this, remember to update INS_SIZE below
 
@@ -4089,7 +4394,10 @@ P_SetSpeed
 .ok	
     tst.b   AHI(pc)
     beq     .1
+    bmi     .2
     bsr     ahi_tempo
+    bra     .1
+.2  bsr     amigus_tempo
 .1
     sub.b	#32,d0	
 	lea	BPM2SmpsPerTick,a0
@@ -5875,8 +6183,6 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	and.b	#IS_Vol+IS_Pan,d2
 	beq.b	.period
 	; -----------------------------
-    moveq	#0,d0
-	move.w	cFinalVol(a5),d0		; destionation volume
 
 	pushm   all
 	move.l	d7,d0		; channel (d7)
@@ -5990,6 +6296,202 @@ Mix_UpdateChannelVolPanFrq_AHI:
     popm    all
 	bra.b	.next
 
+
+
+; ---------------------------------------------------------
+; ---------------------------------------------------------
+; ---------------------------------------------------------
+
+Mix_UpdateChannelVolPanFrq_AGUS:
+    lea LogTab,a4
+	lea	StmTyp,a5
+	moveq	#0,d7               ; loop number of channels in the mod
+	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
+	; -----------------------------
+.loop	
+    move.b	cStatus(a5),d6
+	beq.w	.next				; no update flags, skip channel
+	clr.b	cStatus(a5)	
+	move.w	d7,HAGEN_VOICE_BNK(a6)	; Set channel number
+	; -------------------------------------------------------------------
+	;               SAMPLE PRE-TRIGGER (setup fadeout voice)
+	; -------------------------------------------------------------------	
+	;btst	#IB_NyTon,d6
+	;beq 	.vol
+	; -----------------------------
+    ; Not available!
+	;or.b	#IST_Fadeout,vType(a6)
+	;moveq	#0,d0				; destination volume
+	;moveq	#0,d2
+	;move.w	QuickVolSizeVal(pc),d2		; volume ramp length
+	;bsr.w	.SetVol
+	;eor.w	#1,(a2,d7.w*2)			; swap voice with neighbor voice
+	;move.w	(a2,d7.w*2),d0
+	;move.l	(a3,d0.w*4),a6			; a6 points to mixer voice to use
+	;move.b	#IST_Off,vType(a6)
+	
+	; -------------------------------------------------------------------
+	;                            VOLUME UPDATE
+	; -------------------------------------------------------------------
+.vol	
+    move.b	d6,d2
+	and.b	#IS_Vol+IS_Pan,d2
+	beq.b	.period
+	; -----------------------------
+
+;def calculate_pan_volumes(pan, input_vol):
+;    # 1. Scale input volume to output range (0..65535)
+;    # Using 65535.0 to ensure float precision before final rounding
+;    v_scaled = input_vol * (65535.0 / 2048.0)
+;    
+;    if pan == 128:
+;        v_l = v_scaled
+;        v_r = v_scaled
+;    elif pan < 128:
+;        # Panned Left: Left is full, Right is attenuated
+;        v_l = v_scaled
+;        v_r = v_scaled * (pan / 128.0)
+;    else:
+;        # Panned Right: Right is full, Left is attenuated
+;        v_r = v_scaled
+;        v_l = v_scaled * ((255 - pan) / 127.0)
+;        
+;    return round(v_l), round(v_r)
+;
+;# Examples:
+;# Center (128) at Max Vol (2048) -> (65535, 65535)
+;# Full Left (0) at Max Vol (2048) -> (65535, 0)
+;# Full Right (255) at Max Vol (2048) -> (0, 65535)
+;
+	pushm   all
+	move.w	cFinalVol(a5),d0    * 0..2048 (0..$800)
+    mulu    #$ffff,d0
+    lsr.l   #8,d0
+    lsr.l   #3,d0               * 0..0xffff
+    move    d0,d1               * initial left, right
+
+	moveq	#0,d2
+	move.b	cFinalPan(a5),d2    * 0..128..255 = left..center..right
+    cmp.b   #128,d2
+    beq     .set
+
+    cmp.b   #128,d7
+    bhs     .right
+    * Panned Left: Left is full, Right is attenuated
+    mulu    d2,d1    
+    lsr.l   #7,d1
+    bra     .set
+
+.right
+    * Panned Right: Right is full, Left is attenuated
+    move.w  #255,d3
+    sub     d2,d3
+    mulu    d3,d0
+    divu    #127,d0
+.set
+	move.w	d0,HAGEN_VOICE_VOLUMEL(a6)
+	move.w	d1,HAGEN_VOICE_VOLUMER(a6)
+    popm    all
+
+
+	; -------------------------------------------------------------------
+	;                            PERIOD UPDATE
+	; -------------------------------------------------------------------
+.period	
+    btst	#IB_Period,d6
+	beq 	.trig
+	; -----------------------------
+	move.w	cFinalPeriod(a5),d0
+	bsr 	GetFrequenceValue  	; Returns Hz
+
+    pushm   all
+    ; d0 = frequency
+	move.l	#$15d8,d1
+	mulu.w	d0,d1
+	swap	d0
+	mulu.w	#$15d8,d0
+	swap	d0
+	clr.w   d0
+	add.l	d0,d1
+	move.l	d1,HAGEN_VOICE_RATEH(a6)	; Update note frequency
+    popm    all
+	; -------------------------------------------------------------------
+	;                           SAMPLE TRIGGER
+	; -------------------------------------------------------------------
+.trig	btst	#IB_NyTon,d6
+	beq 	.next
+	; -----------------------------
+	move.l	cSampleSeg(a5),d0
+	beq 	.stop
+    move.l  d0,a0
+	move.l	sPek(a0),d0
+	beq 	.stop    
+
+	; -----------------------------	
+    move.l  sOrigLen(a0),d1
+	move.l	cSmpStartPos(a5),d4
+  
+    ; Voice control register initial value
+    ; Playback bit #15 set
+    move.w   #$8000,d5  
+    cmp.b   #-2,AHI(pc)
+    bne     .1
+    bset    #2,d5       * interpolation bit
+.1
+	; -----------------------------
+	tst.b	s16Bit(a0)			; 16-bit sample?
+	beq.b	.L2				    ; nope
+;	lsr.l	#1,d1				; yes, convert units from bytes to words
+    add.l   d4,d4               ; convert offset to bytes
+    bset    #1,d5               ; set 16-bit sample
+	; -----------------------------
+.L2	
+	cmp.l   d1,d4			    ; d4 >= (unrolled) sample end?
+	bhs 	.stop				; yes, stop voice
+	; -----------------------------
+    ; sLoopType: 0 -> No Loop
+    ;            1 -> Forward loop
+    ;            2 -> ping pong loop
+
+    pushm   all
+	clr.w	HAGEN_VOICE_CTRL(a6)		; Temporarily disable voice playback
+    move.l  sAGUSOffset(a0),d0          ; Start address
+    move.l  d0,d2
+    move.l  d0,d3
+    add.l   d4,d0                       ; Possible offset change
+	move.l	d0,HAGEN_VOICE_PSTRTH(a6)	; Store
+    add.l   d1,d2                       ; End address
+    subq.l  #2,d2                       ; ...
+	move.l	d2,HAGEN_VOICE_PENDH(a6)    ; ...
+
+    add.l   sRepS(a0),d3                ; Repeat start offset
+    move.l  d3,HAGEN_VOICE_PLOOPH(a6)   ; set it
+    move.l  sOrigRepL(a0),d4            ; Repeat length
+    ; TODO: cannot set loop length
+
+    cmp.l   #4,d4
+    bls     .noLoop
+    tst.b   sLoopType(a0)
+    beq     .noLoop
+    ; TODO: cannot set ping-pong loop
+    bset    #1,d5                       ; loop bit
+.noLoop
+    move.w  d5,HAGEN_VOICE_CTRL(a6)     ; trigger
+    popm    all
+
+
+	; -------------------------------------------------------------------
+.next	lea	CHN_SIZE(a5),a5
+	addq.b	#1,d7           ; loop all channels
+	cmp.w	hAntChn,d7
+	bne.w	.loop
+	rts
+	; -----------------------------
+.stop	
+    ; Mute this channel
+	move.w	#0,HAGEN_VOICE_VOLUMEL(a6)
+	move.w	#0,HAGEN_VOICE_VOLUMER(a6)
+	bra.b	.next
 
 
 	; input:
