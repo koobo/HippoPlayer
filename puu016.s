@@ -5162,7 +5162,32 @@ getscreeninfo
 .maybeNative
 
     ; ----------------------------------
+    ; ----------------------------------
     ; Display detection
+
+
+    * If native based on earlier check it's safe to proceed
+    tst.b   d3          
+    bne     .goNative
+
+    ; ----------------------------------
+    DPRINT  "Unknown mode, measuring"
+    moveq   #3-1,d1
+.ml jsr     measureVBlankFrequency
+    DPRINT  "measured %ld Hz"
+    cmp     #30,d0
+    blo     .ag
+    cmp     #100,d0
+    blo     .good
+.ag dbf     d1,.ml
+.bad
+    DPRINT  "spurious values"   
+    bra     .ba
+.good   
+    move    d0,d1
+    bra     .setnew
+    
+
 ; REM 
 ; 	and.l	#$40000000,d0		* onko native amiga screeni?
 ;	beq.b	.nogfxcard
@@ -5170,6 +5195,8 @@ getscreeninfo
 ;	bra	.ba	
 ;.nogfxcard
 
+
+.goNative:
 
 ;	lea	sc_ViewPort(a0),a0	* viewport
 	;move.l	a2,a0
@@ -5214,25 +5241,24 @@ getscreeninfo
     and.l   #1,d0
     DPRINT  "DIPF_IS_AA=%ld"
  endif
+; ----------------------------------
 
-    * If native based on earlier check it's safe to proceed
-    tst.b   d3          
-    bne     .goNative_
-    DPRINT  "Check mode properties"
-    * Check properties to further detect native modes
-    * ECS or AGA?
-    move.l  dis_PropertyFlags(a4),d0
-    and.l   #DIPF_IS_ECS!DIPF_IS_AA,d0
-    bne     .goNative
- ifne DEBUG
-    moveq   #0,d0
-    move    vertfreq(a5),d0
-    DPRINT  "Properties indicate non-native, keep %ld Hz"        
- endif
-    bra     .ba
-.goNative:
-    DPRINT  "Properties indicate native!"
-.goNative_:
+;;    DPRINT  "Check mode properties"
+;;    * Check properties to further detect native modes
+;;    * ECS or AGA?
+;;    move.l  dis_PropertyFlags(a4),d0
+;;    and.l   #DIPF_IS_ECS!DIPF_IS_AA,d0
+;;    bne     .goNative
+;; ifne DEBUG
+;;    moveq   #0,d0
+;;    move    vertfreq(a5),d0
+;;    DPRINT  "Properties indicate non-native, keep %ld Hz"        
+;; endif
+;;    bra     .goNative_
+;;    bra     .ba
+;;.goNative:
+;;    DPRINT  "Properties indicate native!"
+;;.goNative_:
 	move	dis_PixelSpeed(a4),d5
 
 	move.l	#DTAG_MNTR,d1
@@ -5257,6 +5283,7 @@ getscreeninfo
 	move.l	d0,d1
 	divu	d6,d1		* vertical frequency
 
+.setnew
 	;move	d0,horizfreq(a5)
 	move	d1,vertfreq(a5)
 
@@ -31241,7 +31268,6 @@ noteScroller2:
 .note	dc.b	"00000000"
 .pos	dc.b	"00"
  even
-
 
 ; End of scopes for now
 
@@ -64020,6 +64046,43 @@ initTimer:
     lob     OpenDevice * returns d0=non-zero on error
     rts
 
+
+measureVBlankFrequency:
+    pushm   d1-a6
+.COUNT=5
+    lore    Exec,Forbid
+    lore    GFX,WaitTOF
+    bsr     getSysTime
+    movem.l d0/d1,-(sp)
+    moveq   #.COUNT-1,d7
+.wl lore    GFX,WaitTOF
+    dbf     d7,.wl
+    bsr     getSysTime    
+    lore    Exec,Permit
+    movem.l (sp)+,d2/d3
+    sub.l   d2,d0   * secs
+    sub.l   d3,d1   * micros
+    bge     .tok
+    subq.l  #1,d0
+    add.l   #1000000,d1  * MAXMICRO 
+.tok
+    push    d1
+    move.l  #1000000,d1 * secs to micros
+    jsr     mulu_32
+    add.l   (sp)+,d0
+    divu.w  #1000,d0  * micro to milli
+    ;DPRINT  "** VBlank is %ld ms"
+    move.w  d0,d1
+    beq     .x
+    move.l  #1000*.COUNT,d0
+    ; Always round up
+    add.w   d1,d0
+    subq.w  #1,d0
+    divu.w  d1,d0
+.x  ext.l   d0
+    ;DPRINT  "** VBlank is %ld Hz"
+    popm    d1-a6
+    rts
 
 
 ***************************************************************************
