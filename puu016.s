@@ -828,7 +828,9 @@ SAMPLE_FORMAT_WAV  = 3
 SAMPLE_FORMAT_MP3  = 4
 SAMPLE_FORMAT_OGG  = 5
 sampleformat   rs.b    1
-                rs.b        1   * PAD
+
+
+doMeasureVBlank rs.b        1   
 
 ****** Prefs asetukset, joita käsitellään
 
@@ -1036,7 +1038,7 @@ colordiv	rs.l	1		* colorclock/vbtaajuus
 vertfreq	rs	1		* virkistystaajuudet
 ;horizfreq	rs	1
 highAudio   rs.b    1
-            rs.b    1   * pad
+tick        rs.b    1   * pad
 
 clockconstant	rs.l	1		* Clock Constant PAL/NTSC
 
@@ -3136,9 +3138,7 @@ main:
 	move	#$9E99,d0
     move    #60,vertfreq(a5)
 .pal	move.l	d0,clockconstant(a5)
-
-	bsr	    divu_32             * constant/powersupplyfreq
-	move.l	d0,colordiv(a5)		* 50Hz tai 60Hz näytölle
+    bsr     calcColorDiv      
 
     ; ----------------------------------
 	
@@ -3215,6 +3215,8 @@ main:
 	lore	Exec,AddIntServer
 	st	ciasaatu(a5)
 	st	vbsaatu(a5)
+
+    jsr     measureVBlankFrequency
 
 	bsr	init_inputhandler
 	bsr	init_screennotify
@@ -5165,28 +5167,12 @@ getscreeninfo
     ; ----------------------------------
     ; Display detection
 
-
     * If native based on earlier check it's safe to proceed
     tst.b   d3          
     bne     .goNative
-
-    ; ----------------------------------
-    DPRINT  "Unknown mode, measuring"
-    moveq   #3-1,d1
-.ml jsr     measureVBlankFrequency
-    DPRINT  "measured %ld Hz"
-    cmp     #30,d0
-    blo     .ag
-    cmp     #100,d0
-    blo     .good
-.ag dbf     d1,.ml
-.bad
-    DPRINT  "spurious values"   
+    ; Set flag to measure vblank freq later
+    st      doMeasureVBlank(a5)
     bra     .ba
-.good   
-    move    d0,d1
-    bra     .setnew
-    
 
 ; REM 
 ; 	and.l	#$40000000,d0		* onko native amiga screeni?
@@ -5283,7 +5269,6 @@ getscreeninfo
 	move.l	d0,d1
 	divu	d6,d1		* vertical frequency
 
-.setnew
 	;move	d0,horizfreq(a5)
 	move	d1,vertfreq(a5)
 
@@ -5292,11 +5277,7 @@ getscreeninfo
     and.l   #$ffff,d1
     DPRINT  "calculated horizontal=%ld vertical=%ld"
  endif
-
-	move.l	clockconstant(a5),d0
-	ext.l	d1
-	bsr	divu_32
-	move.l	d0,colordiv(a5)
+    bsr     calcColorDiv
 	bra.b	.ba
 
 .pa: 
@@ -5489,6 +5470,18 @@ getscreeninfo
 	bra.b	.lop0
 .e0	rts
 	
+
+* In:
+*   d1 = horizontal vblank frequency in Hz
+calcColorDiv:   
+    moveq   #0,d1
+    move.w  vertfreq(a5),d1
+	move.l	clockconstant(a5),d0
+    DPRINT  "calcColorDiv clock=%ld vfreq=%ld"
+	bsr	    divu_32
+	move.l	d0,colordiv(a5)
+    rts
+
 
 * In:
 *   a0 = Buffer to store the public screen name
@@ -25234,7 +25227,7 @@ intserver
 .vbinterrupt
 	pushm	d2-d7/a2-a6
 	move.l	a1,a5			* a1 = is_Data = var_b
-
+    addq.b  #1,tick(a5)
 	* Check if tooltip tick count is active.
 	* It it expires, trigger a signal
 	tst	tooltipTick(a5)
@@ -64063,16 +64056,45 @@ initTimer:
     lob     OpenDevice * returns d0=non-zero on error
     rts
 
-
 measureVBlankFrequency:
+    tst.b   doMeasureVBlank(a5)
+    beq     .xxx
+    DPRINT  "measureVBlankFrequency"
     pushm   d1-a6
+    moveq   #3-1,d1
+.ml bsr     .measure
+    DPRINT  "measured %ld Hz"
+    cmp     #30,d0
+    blo     .ag
+    cmp     #100,d0
+    blo     .good
+.ag dbf     d1,.ml
+.bad
+    DPRINT  "spurious values"   
+    moveq   #0,d0
+    bra     .xx
+.good   
+    move    d0,vertfreq(a5)
+    jsr     calcColorDiv    
+.xx
+    popm    d1-a6
+.xxx
+    rts
+
+.measure
 .COUNT=5
     lore    Exec,Forbid
-    lore    GFX,WaitTOF
+;    lore    GFX,WaitTOF
+    clr.b   tick(a5)
+.1  tst.b   tick(a5)
+    beq.b   .1
     bsr     getSysTime
     movem.l d0/d1,-(sp)
     moveq   #.COUNT-1,d7
-.wl lore    GFX,WaitTOF
+.wl clr.b   tick(a5)
+.wa tst.b   tick(a5)
+    beq.b   .wa
+    ;lore    GFX,WaitTOF
     dbf     d7,.wl
     bsr     getSysTime    
     lore    Exec,Permit
@@ -64097,8 +64119,7 @@ measureVBlankFrequency:
     subq.w  #1,d0
     divu.w  d1,d0
 .x  ext.l   d0
-    ;DPRINT  "** VBlank is %ld Hz"
-    popm    d1-a6
+    DPRINT  "** VBlank is %ld Hz"
     rts
 
 
