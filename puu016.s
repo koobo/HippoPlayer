@@ -744,7 +744,7 @@ mousey		rs	1
 ******* Scope variables
 
 taskQuadraScope		     rs.b TC_SIZE
-taskQuadraScopeF	 rs.b TC_SIZE
+taskQuadraScopeF	     rs.b TC_SIZE
 taskHippoScope		     rs.b TC_SIZE
 taskSpectrumScope	     rs.b TC_SIZE
 taskPatternScope         rs.b  TC_SIZE
@@ -5119,6 +5119,7 @@ getscreeninfo
 
 ** Tutkaillaan näytön tyyppiä!
 * Talteen oikea hz scopeja varten
+
 	lea	sc_ViewPort(a0),a2
 	move.l	a2,a0
 	lore	GFX,GetVPModeID
@@ -25249,7 +25250,7 @@ intserver
 	* Call scope interrupt code.
 	* This will keep track of sample playback positions for drawing.
 	bsr	scopeinterrupt
-
+    
 	* Set filter 
 	move.b	filterstatus(a5),d0
 	bne.b	.oop
@@ -25441,13 +25442,39 @@ intserver
 	move.l	(a0),hippoport+hip_ps3mmaxoffs(a5)
 .por
 .nop
+
 .notPlaying4
 	* Final piece of data
 	move.b	playing(a5),hippoport+hip_play(a5)
 
+    * Send all scope tasks a refresh signal
+;    tst.b   playing(a5)
+    bne.b   .yeees
+    moveq   #$1f,d0
+    and.b   tick(a5),d0
+    bne.b   .noooo
+.yeees
+    move.l  (a5),a6
+    lea     taskQuadraScope(a5),a2
+    bsr.b   .triggerScope
+    bsr.b   .triggerScope
+    bsr.b   .triggerScope
+    bsr.b   .triggerScope
+    bsr.b   .triggerScope
+.noooo
 	popm	d2-d7/a2-a6
 	moveq	#0,d0
 	rts
+
+.triggerScope:
+    tst.l   TC_Userdata(a2)
+    beq     .t1
+    move.l  a2,a1
+    move.l  #SIGBREAKF_CTRL_D,d0
+    lob     Signal   
+.t1 lea     TC_SIZE(a2),a2
+    rts
+
 
 
 * d1 = signal number sent to the main task
@@ -26461,7 +26488,7 @@ initScopeTask:
 * In:
 *   a3 = Task structure
 resetScopeTask
-	* Reset task structure
+	* Reset task structure, clears TC_Userdata etc
 	move.l	a3,a0
 	moveq	#TC_SIZE-1,d0
 .c	clr.b	(a0)+
@@ -26666,7 +26693,7 @@ stopScopeTasks
 	bsr.b	stopPatternScopeTask
 	bra.b	stopSpectrumScopeTask
 
-stopScopeTask
+stopScopeTask:
 	* Check if running already
 	move	st_runningStatusOffset(a4),d7
 	tst.b 	(a5,d7)
@@ -26677,6 +26704,7 @@ stopScopeTask
 	* Get task structure
 	move	st_taskOffset(a4),d0
 	lea	(a5,d0),a1
+    move.l  a1,a2
 
 	* Raise task priority to normal
 	* so it will exit promptly
@@ -26685,6 +26713,12 @@ stopScopeTask
 
 	* Flag indicates scope should quit
 	move.b	#RUNNING_SHUT_IT,(a5,d7)
+
+    * Make scope Wait() exit
+    move.l  a2,a1
+    move.l  #SIGBREAKF_CTRL_D,d0
+    lob     Signal 
+
 .loop
 	tst.b 	(a5,d7)
 	beq.b	.z
@@ -27263,27 +27297,33 @@ scopeEntry:
 
 scopeLoop:
 
-    ; ---------------------------------
-    tst.b   s_syncMode(a4)
-    beq     .vbl
-    ; ---------------------------------
-    lea     s_timerIORequest(a4),a1  
-	lore    Exec,WaitIO
+;    ; ---------------------------------
+;    tst.b   s_syncMode(a4)
+;    beq     .vbl
+;    ; ---------------------------------
+;    lea     s_timerIORequest(a4),a1  
+;	lore    Exec,WaitIO
 .first:
-    lea     s_timerIORequest(a4),a1  
-	move.w	#TR_ADDREQUEST,IO_COMMAND(a1)
-	clr.l   IOTV_TIME+TV_SECS(a1)
-	move.l	#19*1000,IOTV_TIME+TV_MICRO(a1)
-	lore    Exec,SendIO
-    bra     .timer
-    ; ---------------------------------
-.vbl
-    move.l  _GFXBase(a5),a6
-	lob     WaitTOF
-.timer
-    ; ---------------------------------
+;    lea     s_timerIORequest(a4),a1  
+;	move.w	#TR_ADDREQUEST,IO_COMMAND(a1)
+;	clr.l   IOTV_TIME+TV_SECS(a1)
+;	move.l	#19*1000,IOTV_TIME+TV_MICRO(a1)
+;	lore    Exec,SendIO
+;    bra     .timer
+;    ; ---------------------------------
+;.vbl
+;    move.l  _GFXBase(a5),a6
+;	lob     WaitTOF
+;.timer
+;    ; ---------------------------------
 
-
+	move.l	s_userport3(a4),a0
+	move.b	MP_SIGBIT(a0),d1		* ikkunan IDCMP:n sigbit
+    moveq   #0,d0
+	bset	d1,d0
+    or.l    #SIGBREAKF_CTRL_D,d0
+    lore    Exec,Wait
+sc    
 	;tst.b	tapa_quad(a5)		* pitääkö poistua?
 	;bne	qexit
 	move.l	s_runningStatusAddr(a4),a0
@@ -27405,6 +27445,8 @@ scopeLoop:
 	move	im_Code(a1),d3
 	lob	ReplyMsg
 
+
+
 ;	cmp.l	#IDCMP_REFRESHWINDOW,d2 
 ;	bne.b 	.noRefresh
 ;	bsr	scopeRefreshWindow
@@ -27454,13 +27496,13 @@ qexit:
 	lore	Intui,CurrentTime
  endif
     ; ---------------------------------
-    tst.b   s_syncMode(a4)
-    beq     .nos
-    lea     s_timerIORequest(a4),a1  
-	lore    Exec,WaitIO
-.nos
-    lea     s_timerIORequest(a4),a1
-    lore    Exec,CloseDevice
+;    tst.b   s_syncMode(a4)
+;    beq     .nos
+;    lea     s_timerIORequest(a4),a1  
+;	lore    Exec,WaitIO
+;.nos
+;    lea     s_timerIORequest(a4),a1
+;    lore    Exec,CloseDevice
     ; ---------------------------------
 
 	SDPRINT	"Scope task will exit"
@@ -27490,7 +27532,7 @@ qexit:
 	* Dangerous exit procedures!	
 	lore	Exec,Forbid
 
-	* Prevent scope interrupt from rusing the task local data
+	* Prevent scope interrupt from using the task local data
 	move.l	s_quad_task(a4),a0
 	clr.l	TC_Userdata(a0)
 
