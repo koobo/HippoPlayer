@@ -5129,7 +5129,6 @@ getscreeninfo
     * XTREME  = 000E9000
     * HIGHGFX = 00059024
     * HD720   = 000B9004
-    moveq   #1,d3                       * true for known Denise modes
     and.l   #MONITOR_ID_MASK,d0
     cmp.l   #DEFAULT_MONITOR_ID,d0      * kick13
     beq     .native
@@ -5154,25 +5153,15 @@ getscreeninfo
     cmp.l   #SUPER72_MONITOR_ID,d0      * 23kHz horiz
     beq     .highNative
     DPRINT  "Non-default screenmode detected!"
-    moveq   #0,d3                      * clear flag
-    bra     .maybeNative
+    ; Set flag to measure vblank freq later
+    st      doMeasureVBlank(a5)
+    bra     .ba
 .highNative
     st      highAudio(a5)
     DPRINT  "Double audio rate possible!"
 .native
     DPRINT  "Looks like a known Denise mode!"
-.maybeNative
-
-    ; ----------------------------------
-    ; ----------------------------------
     ; Display detection
-
-    * If native based on earlier check it's safe to proceed
-    tst.b   d3          
-    bne     .goNative
-    ; Set flag to measure vblank freq later
-    st      doMeasureVBlank(a5)
-    bra     .ba
 
 ; REM 
 ; 	and.l	#$40000000,d0		* onko native amiga screeni?
@@ -5180,9 +5169,6 @@ getscreeninfo
 ;	st	gfxcard(a5)
 ;	bra	.ba	
 ;.nogfxcard
-
-
-.goNative:
 
 ;	lea	sc_ViewPort(a0),a0	* viewport
 	;move.l	a2,a0
@@ -5260,7 +5246,7 @@ getscreeninfo
 	bsr	divu_32
 	
 	move.l	#280,d1
-	divu	d5,d1		* pixelclocks/280ns colorclock
+    divu	d5,d1		* pixelclocks/280ns colorclock
 	mulu	d7,d1		* pixelclocks per line
 	
 ;	divu.l	d1,d0		* linefrequency in Hz
