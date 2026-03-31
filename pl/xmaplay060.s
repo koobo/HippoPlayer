@@ -169,8 +169,8 @@ testMain:
 _init:
 ier_filerr          = -17
 ier_ahi             = -19
-
-    DPRINT  "_init *** xmaplay060 ***" 
+    
+    DPRINT  "*** xmaplay060 init ***" 
  ifne DEBUG
     and.l   #$ff,d0
     ext.w   d0
@@ -222,6 +222,7 @@ ier_ahi             = -19
 .agus
     DPRINT  "-- AGUS --"
     bsr     amigus_init
+    DPRINT  "amigus_init=%ld"
     tst.l   d0
     beq     .agusError
     bsr     loadSamplesAGUS
@@ -236,7 +237,7 @@ ier_ahi             = -19
 
     moveq   #0,d2
     move    hAntChn(pc),d2
-    moveq   #1,d0   * ok
+    moveq   #0,d0   * null = ok
     DPRINT  "_init ok %ld %ld %ld"
     rts
 .error
@@ -281,8 +282,8 @@ _getPosLen:
 _setVolume:
     move    d0,ahi_mastervol
     tst.b   AHI(pc)
-    bne     ahi_setmastervol
     bmi     amigus_setmastervol
+    bne     ahi_setmastervol
 
     bra     SetMixingVolume
 
@@ -907,27 +908,24 @@ amigus_init:
 	move.l	d0,a6					; Let's find AmiGUS card
 	move.l	#AMIGUS_MANUFACTURER_ID,d0
 	move.l	#AMIGUS_HAGEN_PRODUCT_ID,d1
-	move.l	#0,a0
+	sub.l   a0,a0
 	jsr		_LVOFindConfigDev(a6)	; Check for AmiGUS card
+    DPRINT  "FindConfigDev=%lx"
+    push    d0
 
-	push	d0
+    move.l	a6,a1
+	move.l	4.w,a6
+	jsr     _LVOCloseLibrary(a6)	; Close expansion.library
+
+    pop     d0
+    beq     .ag_init_error
 	
 	move.l	d0,a0					; a0 = ConfigDev structure
 	move.l 	32(a0),d0 				; d0 = cd_BoardAddr
-	move.l	d0,amigus_base			; Store AmiGUS register base
-	
-	move.l	a6,a1
-	move.l	4.w,a6
-	jsr     _LVOCloseLibrary(a6)	; Close expansion.library
-	
-	pop		d0
-	
-	tst.l	d0						; Did we find AmiGUS card?
-	bne.s	.ag_init_memory
+	move.l	d0,amigus_base			; Store AmiGUS register base	
 
 .ag_init_error
     moveq   #0,d0
-	popm	d1-d7/a2-a6		
 	rts
 
 .ag_init_memory
@@ -947,7 +945,6 @@ amigus_init:
 	
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
 	
-	popm	d1-d7/a2-a6		
 	moveq	#1,d0	
 	rts
 
@@ -1036,13 +1033,15 @@ amigus_tempo:
 	move.w	d0,d1
 	
 	move.l	amigus_base(pc),a6
+    tst.l   a6
+    beq     .x
 	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	
 	move.l 	#5*HAGEN_TIMER_TIMEBASE,d0
 	;bsr		divu_32
     divu.l  d1,d0
 	move.l	d0,HAGEN_TIMER_RELOADH(a6)	; Set timer interrupt speed for playback
 	move.w	#$8000,HAGEN_TIMER_CTRL(a6)
-	
+.x
 	movem.l (sp)+,d0-d7/a0-a6	; Restore registers
 	rts
 ;=============================================================
@@ -1243,6 +1242,7 @@ _LVOWaitTOF		EQU -270
 ;_LVOCreateMsgPort 	EQU -666
 ;_LVODeleteMsgPort	EQU -672
 _LVOPutStr		EQU -948
+_LVODelay     EQU   -198
 
 AttnFlags		EQU $128
 

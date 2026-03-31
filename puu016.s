@@ -53141,32 +53141,33 @@ p_xmaplay:
 *   d2 = AHI mode
     move.b  ahi_use(a5),d0
 	move.l	ahi_rate(a5),d1
+    move.l  ahi_mode(a5),d2
 
 	* Select mode: normal, AHI, AmiGUS
-	moveq	#-1,d2			* d2 = ahi_use
+	moveq	#-1,d0			* d0 = ahi_use
 	cmp.b	#1,ps3mamigus(a5)
 	beq     .gogo
-	moveq	#-2,d2
+	moveq	#-2,d0
 	cmp.b	#2,ps3mamigus(a5)   * interpolated
 	beq     .gogo
-	moveq	#1,d2
+	moveq	#1,d0
 	tst.b	ahi_use(a5)
 	bne		.gogo
-	moveq	#0,d2
+	moveq	#0,d0
 .gogo
+
+ ifne DEBUG
+    push    d0
+    and.l   #$ff,d0
+    DPRINT  "AHI/AGUS mode=%ld"
+    pop     d0 
+ endif
 
     jsr     .xmaInit(a3)
     * d0 = status, 1 = OK, 0 = fail
     * d1 = channel count
     * a0 = message or NULL
- if DEBUG
-    DPRINT  "xmaInit=%ld mask=%lx"
-    push    d0
-    move.l  a0,d0
-    beq.b   .1
-    DPRINT  "msg=%s"
-.1  pop     d0
- endif
+    DPRINT  "xmaInit=%ld"
 
     pushm   all
     * Rid the temp file
@@ -53175,7 +53176,7 @@ p_xmaplay:
     popm    all
 
     tst.l   d0
-    beq    .initError
+    bne    .initError
     
     * d1 = position mask 16.16 FP
     clr.w   d1

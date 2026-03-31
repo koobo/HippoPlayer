@@ -1012,7 +1012,7 @@ updatePatternInfoData
 	cmp	unpackedPatternPosition(a5),d0 
 	beq	.skip 
 	move	d0,unpackedPatternPosition(a5)
-	DPRINT	"Unpack %lx"
+	;;DPRINT	"Unpack %lx"
 
 	lsl.l	#4,d0
 	lea	2(a0,d0.l),a0
@@ -1421,7 +1421,6 @@ s3end:
 .noDbg
  endif
  endif
-    DPRINT  "s3end done"
 	rts
 
 allocPatternBuffers
@@ -1515,22 +1514,31 @@ taakse	pushm	all
 
 
 
-s3m_code
+s3m_code:
 	move.l	4.w,a6
 	sub.l	a1,a1
 	lob	FindTask
 	move.l	d0,ps3m_task
-
 	DPRINT	"s3m_code task=%lx"
+
+    lea     dosname,a1
+	lob     OldOpenLibrary
+    move.l  d0,dosbase_task
+	DPRINT	"dos=%lx"
+
 	
 	st	PS3M_play
 	jsr	syss3mPlay
 
+    move.l  dosbase_task,a1
+	move.l	4.w,a6
+	lob	CloseLibrary
+
     clr.l   ps3m_task
     rts
 
-
-ps3m_task	dc.l	0
+dosbase_task    dc.l    0
+ps3m_task	    dc.l	0
 
 
 
@@ -1770,7 +1778,7 @@ ahi_playmusic
 	lea	xm_music(pc),a0
 	subq	#1,d0
 	beq.b  .m
-	lea		it_music(pc),a0
+	lea	it_music,a0
 .m	jsr	(a0)
 
 	lea	cha0,a4
@@ -10472,9 +10480,8 @@ it_setTimer
 	move	d0,tempo
 	
 	tst.b	ahi_use
-	bmi	amigus_tempo	;OA: AmiGUS	
+	bmi.b	.amigus_tempo_jump	;OA: AmiGUS	
 	bne	ahi_tempo
-
 
 	move.l	mrate(pc),d1
 	beq.b	.x
@@ -10488,6 +10495,9 @@ it_setTimer
 	and	#~1,d1
 	move	d1,bytesperframe
 .x	rts
+
+.amigus_tempo_jump
+	jmp	amigus_tempo
 
 it_music
 	pushm	a5/a6
@@ -10680,8 +10690,8 @@ syss3mPlay
 	CALL	SetIntVector
 	move.l	d0,olev4(a5)
 
-	move.l	gfxbase,a2
-	move.l	a2,-(sp)
+	;move.l	gfxbase,a2
+	;move.l	a2,-(sp)
 
 	move.b	PowerSupplyFrequency(a6),d0
 	cmp.b	#60,d0
@@ -10888,8 +10898,13 @@ timerB
 	clr.l	playpos
 
 syncz	
-	move.l	(sp),a6
-	CALL	WaitTOF
+;	move.l	(sp),a6
+;	CALL	WaitTOF
+
+    move.l  dosbase_task,a6
+    moveq   #1,d1
+    jsr     _LVODelay(a6)
+
 	lea	$dff000,a6
 	jsr	play
 
@@ -10925,7 +10940,7 @@ exits	lea	$dff000,a6
 	move	#$80,$9c(a6)
 	move	#$80,$9a(a6)
 
-	addq.l	#4,sp				; Flush GFXbase
+	;addq.l	#4,sp				; Flush GFXbase
 
 	move.l	olev4(a5),a1
 	moveq	#INTB_AUD0,d0
@@ -11434,6 +11449,10 @@ unpackedPatternPosition
 * Pointer to hippo scope data structure
 scopeData       dc.l     0
 emptyScopeWord  dc.l    0
+
+dosname   dc.b    "dos.library",0
+    even
+
 
  if DEBUG
 PRINTOUT_DEBUGBUFFER
