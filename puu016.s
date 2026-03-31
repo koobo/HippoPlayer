@@ -20295,14 +20295,14 @@ inforivit_play:
 	clr.b	(a1)
 
 bipb
+    jsr     initInfoScroller            ; all regs preserved
 	;moveq	#18+WINY,d1
-	move	infoBoxTopEdge(a5),d1
-bipb2	
+ 	move	infoBoxTopEdge(a5),d1
+bipb2                      ; putinfo2 for 2nd row comes here
 	;addq	#7,d1 * magic offset
 	moveq	#11+WINX,d0
 	printt "TODO TODO: length check"
 	bsr		infoBoxPrint
-    jsr     initInfoScroller
     DPRINT  "infoBoxPrint"
 bopb	rts
 
