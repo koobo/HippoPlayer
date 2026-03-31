@@ -114,6 +114,53 @@ Additional files to check and download
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
+# Changes from v2.66 (23.2.2026) to v2.67 (?.?.202?) 
+
+## Fixes:
+
+- MP3 playback with MHI: Duration was not determined correctly
+  and end detection didn't work properly either.
+
+- Multichannel mods: On 68000 there was a crash when starting
+  up the PS3M mixer engine.
+
+- AHI and AmiGUS output: Fix timing issue which lead to slightly 
+  wrong  playback speed. This caused audible gaps with "shipping 
+  forecast.mod" by h0ffman.
+
+- Scopes: improved display sync with audio, especially on RTG
+  screens.
+
+- Some other minor things.
+
+## Improvements:
+
+- Infobox displays the amount of data downloaded on the 2nd row.
+
+- Protracker: play position time display keeps track of the 
+  time correctly even when the position is changed by skipping 
+  forward/backward or changed with the position slider.
+
+- xmaplay060: Added AHI and AmiGUS support. 
+  This is 8bitbubsy's modern XM replayer, an alternative to the 
+  default buggy XM player in PS3M. It's now usable with other output 
+  options than the high quality Paula mode (requires 68060 or faster).
+  Prefs options for XM playback:
+  - PS3M+Paula: AHI > Enable AHI > OFF
+                Play-2 > Enable xmaplay060 > OFF
+  - PS3M+AHI: AHI > Enable AHI > ON
+              Play-2 > Enable xmaplay060 > OFF
+  - xma060+Paula: Play-2 > Enable xmaplay060 > ON
+                  AHI > Enable AHI > OFF
+  - xma060+AHI: Play-2 > Enable xmaplay060 > ON
+                AHI > Enable AHI > ON
+  - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
+                   PS3M > Use AmiGUS hardware mixer > ON
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
 
 # Changes from v2.65 (26.9.2025) to v2.66 (23.2.2026) 
 
