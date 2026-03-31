@@ -20504,6 +20504,19 @@ inforivit_downloading
 	bra	putinfo
 .1	dc.b	"Downloading...",0
  even
+
+inforivit_downloading2
+    lea     -64(sp),sp
+    lea     .1(pc),a0
+    move.l  sp,a3
+    bsr     desmsg3
+    move.l  sp,a0
+    bsr     putinfo2
+    lea     64(sp),sp
+    rts
+.1	dc.b	"%ld kB",0
+ even
+
 inforivit_connecting
 	lea	.1(pc),a0
 	bra	putinfo
@@ -59214,7 +59227,8 @@ fetchRemoteFile:
 
     * d6 = stream handle
     * a4 = temporary buffer
-
+    * a3 = total byte counter
+    sub.l   a3,a3
 .loop
     * Enable input handler special mode
     move.b  hotkey(a5),-(sp)
@@ -59238,6 +59252,14 @@ fetchRemoteFile:
     * d0 = bytes read, 0 = EOF, -1 = error
     bmi.b   .readError
 
+    
+    add.l   d0,a3       * accumulate
+    pushm   all
+    move.l  a3,d0
+    lsr.l   #8,d0
+    lsr.l   #2,d0
+    bsr     inforivit_downloading2
+    popm    all
 
     move.l  d5,d1       * out file
     move.l  a4,d2       * buffer
