@@ -619,6 +619,7 @@ ahi_end:
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_FreeAudio(a6)
 	CLOSEAHI
+    clr.l   ahi_ctrl
 	clr.l	ahibase
 .1  
     rts
@@ -964,6 +965,7 @@ amigus_end:
 	moveq  	#INTB_PORTS,d0
 	jsr		_LVORemIntServer(a6)
 
+    clr.l   amigus_base
 	rts
 ;=============================================================
 
