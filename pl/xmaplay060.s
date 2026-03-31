@@ -48,6 +48,8 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 	include amigus_proto.i
 	include	hardware/intbits.i
 	include libraries/expansion_lib.i
+    include libraries/timer_lib.i
+    include devices/timer.i
 
 DEBUG        = 0          * Enable debug print to serial
 
@@ -168,10 +170,12 @@ _init:
 ier_filerr          = -17
 ier_ahi             = -19
 
-    DPRINT  "_init" 
+    DPRINT  "_init *** xmaplay060 ***" 
  ifne DEBUG
     and.l   #$ff,d0
-    DPRINT  "ahi=%ld ahirate=%ld ahimode=%08.8lx"
+    ext.w   d0
+    ext.l   d0
+    DPRINT  "ahi/agus=%ld ahirate=%ld ahimode=%08.8lx"
  endif
     move.b  d0,AHI
     move.w  d1,AHIMixingFreq
@@ -230,10 +234,10 @@ ier_ahi             = -19
     move.l  PaulaCh2Buf(pc),a3
     sub.l   a0,a0
 
-    DPRINT  "_init ok"
     moveq   #0,d2
     move    hAntChn(pc),d2
     moveq   #1,d0   * ok
+    DPRINT  "_init ok %ld %ld %ld"
     rts
 .error
     move.l  lastMessagePtr(pc),a0
@@ -247,9 +251,10 @@ ier_ahi             = -19
 
 _end:
     tst.b   AHI(pc)
-    beq     .ahi
+    bne     .ahi
     bmi     .agus
 .1
+    DPRINT  "normal end"
     bsr     StopTask
     bsr     cleanUp
     rts
@@ -888,6 +893,7 @@ setplayerfreq = *-4
 
 ;=============================================================
 amigus_init:
+    DPRINT   "amigus_init"
 	move.l	4.w,a6					
 	lea   	ExpansionName(pc),a1	
 	moveq   #33,d0
@@ -947,6 +953,7 @@ amigus_init:
 
 ;=============================================================
 amigus_end:	
+    DPRINT  "amigus_end"
 	move.l	amigus_base(pc),a6
 
 	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	; Disable Timer
@@ -983,6 +990,7 @@ amigus_voice_reset:
 
 ;==============================================================
 amigus_stop:
+    DPRINT  "amigus_stop"
 	clr.b   setpause
 	move.l	amigus_base(pc),a6
 	move.w	#$4000,HAGEN_INTE0(a6)	; Disable interrupt
@@ -1001,6 +1009,7 @@ amigus_stop:
 	rts	
 ;==============================================================
 amigus_cont:
+    DPRINT  "amigus_cont"
 	st      setpause
 	move.l	amigus_base(pc),a6
 	bsr .ag_restorechannels
@@ -1093,6 +1102,67 @@ AmiGUS_IntServer
 ExpansionName	dc.b	"expansion.library",0
 AmiGUS_IntName	dc.b	"AmiGUS_Xma060Play",0
 even
+
+
+initSysTime:
+    move.l  WorkerTask,a1    
+    lea     sysTimerIORequest,a2
+    lea     sysTimerPort,a3
+
+* Utility to set up a timer
+* In:
+*   a1 = current task
+*   a2 = io structure
+*   a3 = port structure
+* Out:
+*   d0 = OpenDevice return code
+.initTimer:
+    ; ---------------------------------
+    ; Create port
+    move.l  a1,MP_SIGTASK(a3)
+    move.b  #NT_MSGPORT,LN_TYPE(a3)
+    clr.l   LN_NAME(a3)
+    move.b  #PA_SIGNAL,MP_FLAGS(a3)
+    lea     MP_MSGLIST(a3),a0
+    NEWLIST a0
+    moveq   #-1,d0
+    move.l  4.w,a6
+    jsr     _LVOAllocSignal(a6)       * error ignored
+    move.b  d0,MP_SIGBIT(a3)
+    ; ---------------------------------
+    ; Create IO
+    move.l  a3,MN_REPLYPORT(a2)
+    move.b  #NT_MESSAGE,LN_TYPE(a2)
+    move    #IOTV_SIZE,MN_LENGTH(a2)
+    ; ---------------------------------
+    ; timer.device
+    lea     timerDeviceName,a0
+    move.l  a2,a1
+    moveq   #UNIT_VBLANK,d0
+    moveq   #0,d1
+    jsr     _LVOOpenDevice(a6)      * returns d0=non-zero on error
+    rts
+
+deinitSysTime:
+    lea     sysTimerIORequest,a1
+    move.l  4.w,a6
+    jsr     _LVOCloseDevice(a6)
+    move.b  sysTimerPort+MP_SIGBIT,d0
+    jsr     _LVOFreeSignal(a6)
+    rts
+
+sysWait:
+    lea     sysTimerIORequest,a1  
+	move.w	#TR_ADDREQUEST,IO_COMMAND(a1)
+	clr.l   IOTV_TIME+TV_SECS(a1)
+	move.l	#20*1000,IOTV_TIME+TV_MICRO(a1)
+    move.l  4.w,a6
+    jmp     _LVODoIO(a6)
+
+sysTimerPort        ds.b      MP_SIZE
+sysTimerIORequest   ds.b      IOTV_SIZE
+timerDeviceName     dc.b	  "timer.device",0
+    even
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -1730,13 +1800,17 @@ WorkerEntry
     jsr     _LVOFindTask(a6)
     move.l  d0,WorkerTask
     ; ------------------------------------
+    bsr     initSysTime
+    ; ------------------------------------
     move.l  MainTask(pc),a1
     moveq   #SIGF_SINGLE,d0
     jsr     _LVOSignal(a6)
     ; ------------------------------------
-.loop	move.l	GraphicsBase(pc),a6
-	jsr     _LVOWaitTOF(a6)	; wait for frame's idle time
-	bsr.w	MixAudioFrame
+.loop	
+;    move.l	GraphicsBase(pc),a6
+;	jsr     _LVOWaitTOF(a6)	; wait for frame's idle time
+    bsr     sysWait
+	bsr 	MixAudioFrame
 	; ------------------------------------
     ; Check for the break signal
 	; ------------------------------------
@@ -1746,6 +1820,8 @@ WorkerEntry
     jsr     _LVOSetSignal(a6)
     and.l   #SIGBREAKF_CTRL_C,d0
     beq.b   .loop
+	; ------------------------------------
+    bsr     deinitSysTime
 	; ------------------------------------
     ; Signal main task that we're done
 	; ------------------------------------
@@ -2606,11 +2682,12 @@ DisableAudioMixer
 	; ---------------------------
 	sf	AudioMixFlag
     movem.l  d0-a6,-(sp)
-    move.l	 GraphicsBase(pc),a6
+    move.l  DosBase(pc),a6
 .loop	
     tst.b	AudioMixRunning(pc)	; wait until mixer is done
 	beq.b   .1
-	jsr     _LVOWaitTOF(a6)	; let other tasks run
+    moveq   #1,d1
+    jsr     _LVODelay(a6)       	; let other tasks run
     bra.b   .loop
 .1  movem.l (sp)+,d0-a6
 .x	rts

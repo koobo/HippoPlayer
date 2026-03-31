@@ -26372,8 +26372,8 @@ s_sidScopeData                rs.b      sids_size
 s_sid2ScopeData               rs.b      sids_size 
 s_sid3ScopeData               rs.b      sids_size 
 
-s_timerPort                   rs.b      MP_SIZE
-s_timerIORequest              rs.b      IOTV_SIZE
+;s_timerPort                   rs.b      MP_SIZE
+;s_timerIORequest              rs.b      IOTV_SIZE
 
 s_multab                      rs.w       256 * modulo multiplication table
 s_scopeHorizontalBarTable     rs.b       512
@@ -26994,19 +26994,19 @@ scopeEntry:
     move.l  d0,a0
     move.l  a4,TC_Userdata(a0)
 
-    ; ---------------------------------
-    ; Select sync mode
-    ; 68020 or higher, use timer.device
-	btst	#AFB_68020,AttnFlags+1(a6)
-	sne     s_syncMode(a4)
-    ; ---------------------------------
-    ; Create port
- 	move.l	s_quad_task(a4),a1
-	lea     s_timerIORequest(a4),a2
-    lea     s_timerPort(a4),a3
-    jsr     initTimer
-    * returns d0=non-zero on error
-    ; ---------------------------------
+;    ; ---------------------------------
+;    ; Select sync mode
+;    ; 68020 or higher, use timer.device
+;	btst	#AFB_68020,AttnFlags+1(a6)
+;	sne     s_syncMode(a4)
+;    ; ---------------------------------
+;    ; Create port
+; 	move.l	s_quad_task(a4),a1
+;	lea     s_timerIORequest(a4),a2
+;    lea     s_timerPort(a4),a3
+;    jsr     initTimer
+;    * returns d0=non-zero on error
+;    ; ---------------------------------
 
 * Modulo multab 
 	lea	s_multab(a4),a0
@@ -27292,8 +27292,8 @@ scopeEntry:
 * Scope main loop, scope loop, main scope loop, scope main loop
 *********************************************************************
 
-    tst.b   s_syncMode(a4)
-    bne     scopeLoop\.first    * Start with SendIO, not WaitIO
+;    tst.b   s_syncMode(a4)
+;    bne     scopeLoop\.first    * Start with SendIO, not WaitIO
 
 scopeLoop:
 
@@ -27303,8 +27303,8 @@ scopeLoop:
 ;    ; ---------------------------------
 ;    lea     s_timerIORequest(a4),a1  
 ;	lore    Exec,WaitIO
-.first:
-;    lea     s_timerIORequest(a4),a1  
+;.first:
+;;    lea     s_timerIORequest(a4),a1  
 ;	move.w	#TR_ADDREQUEST,IO_COMMAND(a1)
 ;	clr.l   IOTV_TIME+TV_SECS(a1)
 ;	move.l	#19*1000,IOTV_TIME+TV_MICRO(a1)
@@ -27317,13 +27317,15 @@ scopeLoop:
 ;.timer
 ;    ; ---------------------------------
 
+    ; ---------------------------------
 	move.l	s_userport3(a4),a0
 	move.b	MP_SIGBIT(a0),d1		* ikkunan IDCMP:n sigbit
     moveq   #0,d0
 	bset	d1,d0
-    or.l    #SIGBREAKF_CTRL_D,d0
+    or.l    #SIGBREAKF_CTRL_D,d0    * Sync with vbint
     lore    Exec,Wait
-sc    
+    ; ---------------------------------
+
 	;tst.b	tapa_quad(a5)		* pitääkö poistua?
 	;bne	qexit
 	move.l	s_runningStatusAddr(a4),a0
