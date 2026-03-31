@@ -6533,26 +6533,30 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     pushm   all
 	clr.w	HAGEN_VOICE_CTRL(a6)		; Temporarily disable voice playback
     move.l  sAGUSOffset(a0),d0          ; Start address
-    move.l  d0,d2
-    move.l  d0,d3
     add.l   d4,d0                       ; Possible offset change
-	move.l	d0,HAGEN_VOICE_PSTRTH(a6)	; Store
-    add.l   d1,d2                       ; End address
-    subq.l  #2,d2                       ; ...
-	move.l	d2,HAGEN_VOICE_PENDH(a6)    ; ...
+	move.l	d0,HAGEN_VOICE_PSTRTH(a6)	; Store start
+    move.l  sOrigLen(a0),d1             ; Length
 
-    add.l   sRepS(a0),d3                ; Repeat start offset
-    move.l  d3,HAGEN_VOICE_PLOOPH(a6)   ; set it
+    move.l  sRepS(a0),d3                ; Repeat start offset
     move.l  sOrigRepL(a0),d4            ; Repeat length
-    ; TODO: cannot set loop length
-
     cmp.l   #4,d4
     bls     .noLoop
     tst.b   sLoopType(a0)
     beq     .noLoop
     ; TODO: cannot set ping-pong loop
     bset    #1,d5                       ; loop bit
+    ; Loop active
+    move.l  d3,d1                       ; Calculate loop end as the new sample end
+    add.l   d5,d1
 .noLoop
+    add.l   sAGUSOffset(a0),d1          ; Calc end address 
+    subq.l  #2,d1                       ; Subtract a bit?
+	move.l	d1,HAGEN_VOICE_PENDH(a6)    ; ...
+
+    move.l  sRepS(a0),d3                ; Calc repeat start address
+    add.l   sAGUSOffset(a0),d3         
+    move.l  d3,HAGEN_VOICE_PLOOPH(a6)   ; set it
+
     move.w  d5,HAGEN_VOICE_CTRL(a6)     ; trigger
     popm    all
 
