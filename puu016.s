@@ -53164,9 +53164,13 @@ p_xmaplay:
  endif
 
     jsr     .xmaInit(a3)
-    * d0 = status, 1 = OK, 0 = fail
-    * d1 = channel count
-    * a0 = message or NULL
+*   d0 = status, 0 = ok
+*   d1 = position mask (Paula playback)
+*   d2 = channel count
+*   a0 = null (patternscope support data)
+*   a1 = ptr to Paula buffer position
+*   a2 = address to left Paula buffer
+*   a3 = address to right Paula buffer
     DPRINT  "xmaInit=%ld"
 
     pushm   all
@@ -53225,8 +53229,6 @@ p_xmaplay:
 .x	jsr		clearMainWindowWaitPointer
     tst.l   d0
     rts
-
-.bub    ds.b    128
 
 .format:
     dc.b    "FastTracker2 xma060%s %ldch",0
