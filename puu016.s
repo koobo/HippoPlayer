@@ -59258,7 +59258,7 @@ fetchRemoteFile:
     move.l  a3,d0
     lsr.l   #8,d0
     lsr.l   #2,d0
-    bsr     inforivit_downloading2
+    jsr     inforivit_downloading2
     popm    all
 
     move.l  d5,d1       * out file
