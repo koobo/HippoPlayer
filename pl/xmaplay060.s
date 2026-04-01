@@ -234,6 +234,7 @@ ier_ahi             = -19
     move.l  PaulaCh1Buf(pc),a2
     move.l  PaulaCh2Buf(pc),a3
     sub.l   a0,a0
+    lea     InstrNames,a4
 
     moveq   #0,d2
     move    hAntChn(pc),d2
@@ -3539,6 +3540,25 @@ LoadInstrHeader
 	bsr.w	fread
 	swap16a	ihAntSamp(a0)
 	swap32a	ihSampleSize(a0)
+    ; -----------------------
+    lea     InstrNames,a1
+    move    d6,d0
+    mulu    #24,d0
+    add     d0,a1
+    clr.b   (a1)
+    lea     ihName(a0),a2
+    moveq   #22-1,d0
+.cp move.b  (a2)+,(a1)+
+    dbeq    d0,.cp
+    clr.b   (a1)
+    ; -----------------------
+ ifne DEBUG
+    pea     ihName(a0)
+    move.l  (sp)+,d1
+    moveq   #0,d0
+    move    d6,d0
+    DPRINT  "%ld ihName=%s"
+ endif
 	; -----------------------------
 	moveq	#0,d3
 	move.w	ihAntSamp(a0),d3	; does this instrumenth have any samples?
@@ -8513,3 +8533,6 @@ LogTab	ds.l 12*16*4 ; calculated later
 	ds.l 1	; pre-padding needed for word-alignment trick
 CDA_MixBuffer
 	ds.l SMP_BUFF_SIZE*2 ; *2 for stereo
+
+
+InstrNames  ds.b    128*24

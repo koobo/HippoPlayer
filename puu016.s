@@ -23809,6 +23809,8 @@ info_code:
 .nop
 
 	move.l	moduleaddress(a5),d4
+    cmp     #pt_xmaplay,playertype(a5)
+    beq     .xmaplay
 	cmp	    #pt_multi,playertype(a5)
 	bne	.noo
 
@@ -23932,6 +23934,7 @@ info_code:
 
 ***** XM
 
+
 .xm
 	move.l	d4,a0
 	lea	xmNumInsts(a0),a0
@@ -23986,6 +23989,37 @@ info_code:
   	addq.l	#1,d7
 	cmp	d5,d7
 	blo	.loop0
+
+	bra	.selvis
+
+.xmaplay
+	move.l	d4,a0
+	lea	    xmNumInsts(a0),a0
+	tword	(a0)+,d5
+	bsr	    .allo
+    move.l  ps3m_xm_insts(a5),a1
+
+    moveq   #0,d7
+.xmaloop
+    move.l  d7,d0
+    move    d7,d1
+    mulu    #24,d1
+    pea     (a1,d1.w)
+    move.l  (sp)+,d1
+
+	pushm	d0-a2/a4-a6
+	lea	    -16(sp),sp
+	move.l	sp,a1
+	movem.l	d0/d1,(a1)
+	lea	    .form2x(pc),a0
+	bsr	    .desmsg4
+	lea	    16(sp),sp
+	popm	d0-a2/a4-a6
+	bsr	.lloppu
+
+    addq    #1,d7
+    cmp    d5,d7
+    bne     .xmaloop
 
 	bra	.selvis
 
@@ -24059,6 +24093,7 @@ info_code:
 
 .medform 
 .form2	dc.b	"%03ld %s ¢%ld",ILF,ILF2,0
+.form2x	dc.b	"%03ld %s",ILF,ILF2,0
 
 .thxform
  	dc.b	"%03ld %s",ILF,ILF2,0
@@ -53184,6 +53219,8 @@ p_xmaplay:
 *   a1 = ptr to Paula buffer position
 *   a2 = address to left Paula buffer
 *   a3 = address to right Paula buffer
+*   a4 = instr name array
+    move.l  a4,ps3m_xm_insts(a5)
     DPRINT  "xmaInit=%ld"
 
     pushm   all
