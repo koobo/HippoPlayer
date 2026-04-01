@@ -898,14 +898,10 @@ amigus_init:
     DPRINT   "amigus_init"
 	move.l	4.w,a6					
 	lea   	ExpansionName(pc),a1	
-	moveq   #33,d0
-	jsr     _LVOOpenLibrary(a6)		; Open expansion.library
-	
+	jsr     _LVOOldOpenLibrary(a6)	; Open expansion.library
 	tst.l   d0						; Library opened?
-	bne.s   .ag_open_okay			; Yes, continue	
-	bra		.ag_init_error			; Could not open library
+	beq   	.ag_init_error			; Could not open library
 
-.ag_open_okay
 	move.l	d0,a6					; Let's find AmiGUS card
 	move.l	#AMIGUS_MANUFACTURER_ID,d0
 	move.l	#AMIGUS_HAGEN_PRODUCT_ID,d1
@@ -925,13 +921,6 @@ amigus_init:
 	move.l 	32(a0),d0 				; d0 = cd_BoardAddr
 	move.l	d0,amigus_base			; Store AmiGUS register base	
 
-.ag_init_error
-    moveq   #0,d0
-	rts
-
-.ag_init_memory
-
-	
 	move.l	4.w,a6
 	moveq	#INTB_PORTS,d0
 	lea		AmiGUS_IntServer(pc),a1	; Set-up interrupt for play routine (INT2)
@@ -942,11 +931,16 @@ amigus_init:
 	move.w	Speed(pc),d0		    ; d0 = tempo (BPM)
 	bsr		amigus_tempo			; Set initial tempo
 	
-	st   	setpause
+	st   	setpause                ; play
 	
+    move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
 	
-	moveq	#1,d0	
+	moveq	#1,d0	    * OK
+	rts
+
+.ag_init_error
+    moveq   #0,d0
 	rts
 
 ;=============================================================
@@ -1011,20 +1005,20 @@ amigus_cont:
     DPRINT  "amigus_cont"
 	st      setpause
 	move.l	amigus_base(pc),a6
-	bsr .ag_restorechannels
+	bsr     .ag_restorechannels
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt
 	rts
 ;---	
 .ag_restorechannels
-;	lea	    cha0(pc),a4
-;	move	numchans(pc),d7
-;	subq	#1,d7
-;	moveq	#0,d6
-;.ag_restore_loop
-;	move.w	d6,HAGEN_VOICE_BNK(a6)	; Set channel number	
-;	bsr	amigus_volume	
-;	
-;	dbf		d7,.ag_restore_loop
+	lea	    agusVolForChannel,a0
+	moveq	#0,d7
+.ag_restore_loop
+	move.w	d7,HAGEN_VOICE_BNK(a6)	; Set channel number	
+    move.w  (a0)+,HAGEN_VOICE_VOLUMEL(a6)
+    move.w  (a0)+,HAGEN_VOICE_VOLUMER(a6)
+    addq    #1,d7
+    cmp     hAntChn,d7
+    bne     .ag_restore_loop
 	rts	
 ;==============================================================
 amigus_tempo:
@@ -1072,7 +1066,7 @@ AmiGUS_Int:
 
 	move.w	HAGEN_INTC0(a6),d0			; read interrupt status
 	and.w   #$4000,d0					; did AmiGUS Timer IRQ occur?
-	beq		.noTimerInt					; if not, then there is nothing to do here	
+	beq.b	.noTimerInt					; if not, then there is nothing to do here	
 	
 	move.w	#$4000,HAGEN_INTC0(a6)	; Clear interrupt
 
@@ -1092,7 +1086,6 @@ AmiGUS_Int:
 	
 ;======================================
 amigus_base		dc.l	0
-amigus_mtrig	dc.w	0
 
 AmiGUS_IntServer
 	dc.l  0,0
@@ -6386,10 +6379,11 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	lea	StmTyp,a5
 	moveq	#0,d7               ; loop number of channels in the mod
 	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
+    lea     agusVolForChannel,a3
 	; -----------------------------
 .loop	
     move.b	cStatus(a5),d6
-	beq.w	.next				; no update flags, skip channel
+	beq 	.next				; no update flags, skip channel
 	clr.b	cStatus(a5)	
 	move.w	d7,HAGEN_VOICE_BNK(a6)	; Set channel number
 	; -------------------------------------------------------------------
@@ -6442,7 +6436,6 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 ;# Full Left (0) at Max Vol (2048) -> (65535, 0)
 ;# Full Right (255) at Max Vol (2048) -> (0, 65535)
 ;
-	pushm   all
 	move.w	cFinalVol(a5),d0    * 0..2048 (0..$800)
     mulu    #$ffff,d0
     lsr.l   #8,d0
@@ -6470,8 +6463,8 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 .set
 	move.w	d0,HAGEN_VOICE_VOLUMEL(a6)
 	move.w	d1,HAGEN_VOICE_VOLUMER(a6)
-    popm    all
-
+    move.w  d0,(a3,d7.w*2)        * stash channel vol
+    move.w  d1,2(a3,d7.w*2)
 
 	; -------------------------------------------------------------------
 	;                            PERIOD UPDATE
@@ -6483,7 +6476,6 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	move.w	cFinalPeriod(a5),d0
 	bsr 	GetFrequenceValue  	; Returns Hz
 
-    pushm   all
     ; d0 = frequency
 	move.l	#$15d8,d1
 	mulu.w	d0,d1
@@ -6493,7 +6485,6 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	clr.w   d0
 	add.l	d0,d1
 	move.l	d1,HAGEN_VOICE_RATEH(a6)	; Update note frequency
-    popm    all
 	; -------------------------------------------------------------------
 	;                           SAMPLE TRIGGER
 	; -------------------------------------------------------------------
@@ -6532,7 +6523,6 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     ;            1 -> Forward loop
     ;            2 -> ping pong loop
 
-    pushm   all
 	clr.w	HAGEN_VOICE_CTRL(a6)		; Temporarily disable voice playback
     move.l  sAGUSOffset(a0),d0          ; Start address
     add.l   d4,d0                       ; Possible offset change
@@ -6560,7 +6550,6 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     move.l  d3,HAGEN_VOICE_PLOOPH(a6)   ; set it
 
     move.w  d5,HAGEN_VOICE_CTRL(a6)     ; trigger
-    popm    all
 
 
 	; -------------------------------------------------------------------
@@ -8082,6 +8071,7 @@ ahi_mastervol       dc.w 0
 AHIMixingFreq       dc.w 58000
 sampleForChannel    ds.l 32
 freqForChannel      ds.w 32
+agusVolForChannel   ds.l 32
 ; -------------------------------------
 
 ; ------------------------------------------------------------------------------
