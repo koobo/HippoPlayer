@@ -823,12 +823,20 @@ ahi_tempo:
     DPRINT  "ahi_tempo=%ld"
     ext.l   d0
     bmi     .prev
-	lsl.w	#1,d0
-	divu	#5,d0
- 
+
+;	lsl.w	#1,d0
+;	divu	#5,d0
+
+    * Use 24.8 FP for accuracy
+    add.w   d0,d0
+	lsl.l	#8,d0
+    divu    #5,d0
+    ext.l   d0
+    lsl.l   #8,d0
+
 	lea	    .tags(pc),a1
-	move	d0,4(a1)
-    move    d0,setplayerfreq
+	move.l	d0,4(a1)
+    move.l  d0,setplayerfreq
 .prev
 	move.l	ahi_ctrl(pc),a2
     tst.l   a2
