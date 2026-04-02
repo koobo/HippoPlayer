@@ -23977,12 +23977,11 @@ info_code:
 	move.l	d7,d0
 	addq	#1,d0
 	move.l	d6,d1
-	lea	-16(sp),sp
+	movem.l	d0/d1/d2,-(sp)
 	move.l	sp,a1
-	movem.l	d0/d1/d2,(a1)
 	lea	.form2(pc),a0
 	bsr	.desmsg4
-	lea	16(sp),sp
+	lea	3*4(sp),sp
 	popm	d0-a2/a4-a6
 	bsr	.lloppu
 
@@ -24002,18 +24001,16 @@ info_code:
     moveq   #0,d7
 .xmaloop
     move.l  d7,d0
-    move    d7,d1
-    mulu    #24,d1
-    pea     (a1,d1.w)
-    move.l  (sp)+,d1
+    moveq   #24,d1
+    mulu    d7,d1
+    add.l   a1,d1
 
 	pushm	d0-a2/a4-a6
-	lea	    -16(sp),sp
-	move.l	sp,a1
-	movem.l	d0/d1,(a1)
+	movem.l	d0/d1,-(sp)
+    move.l  sp,a1
 	lea	    .form2x(pc),a0
 	bsr	    .desmsg4
-	lea	    16(sp),sp
+    addq    #8,sp
 	popm	d0-a2/a4-a6
 	bsr	.lloppu
 
