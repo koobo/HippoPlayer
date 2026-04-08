@@ -1808,6 +1808,15 @@ ahi_playmusic
 	addq	#1,d6
 	dbf	d7,.chl
 
+
+    ; Check for break, ie. song end
+	tst	PS3M_break
+	beq.b	.nb
+	clr	PS3M_break
+	move.l	songoverf,a0
+	st	(a0)
+.nb
+
 	popm	d2-d7/a2-a6
 	rts
 
@@ -1960,7 +1969,7 @@ ahi_period:
 	move.l	d0,d1
 
 	move.l	d6,d0
-    DPRINT  "SetFreq %ld %ld %ld"
+;;    DPRINT  "SetFreq %ld %ld %ld"
 	moveq	#AHISF_IMM,d2
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
@@ -8852,6 +8861,7 @@ mt_init	lea	data,a5
 	move.b	950(a1),d0
 	move.b	d0,slene
 	move	d0,positioneita
+    DPRINT  "slene=%ld"
 
 	move	#256,d0
 	mulu	numchans(a5),d0
@@ -8996,19 +9006,37 @@ mt_getnewnote
 	bne.b	.ei
 	moveq	#0,d1
 .ei
+
+
+    ; ---------------------------------        
+    ; First get note data
 	move	numchans(pc),d7
 	subq	#1,d7
-	lea	cha0,a5
 	lea	mt_chan1temp(pc),a6
-
-	lea	Stripe1(pc),a4
-.loo
-	move	d7,-(sp)
+	lea	cha0,a5
+.loo_
 	tst.l	(a6)
 	bne.b	.mt_plvskip
 	bsr	mt_pernop
 .mt_plvskip
 	bsr.b	getnew
+	lea	mChanBlock_SIZE(a5),a5
+	lea	44(a6),a6			; Size of MT_chanxtemp
+	dbf	d7,.loo_
+    ; ---------------------------------    
+
+	move	numchans(pc),d7
+	subq	#1,d7
+	lea	cha0,a5
+	lea	mt_chan1temp(pc),a6
+	lea	Stripe1(pc),a4
+.loo
+	move	d7,-(sp)
+;	tst.l	(a6)
+;	bne.b	.mt_plvskip
+;	bsr	mt_pernop
+;.mt_plvskip
+;   bsr.b	getnew      ; done above
 
 	push	a4
 	bsr	mt_playvoice
@@ -9284,6 +9312,7 @@ mt_nextposition
 	blo.b	mt_nonewposyet
 	clr.b	mt_songpos
 	st	PS3M_break
+    DPRINT  "set PS3M_break"
 mt_nonewposyet	
 	tst.b	mt_posjumpflag
 	bne.b	mt_nextposition
@@ -9726,16 +9755,67 @@ mt_vsdskip
 
 mt_positionjump
 	move.b	n_cmdlo(a6),d0
-	cmp.b	mt_songpos(pc),d0
-	bhi.b	.e
-	st	PS3M_break
 
-.e	subq.b	#1,d0
+ ifne DEBUG
+    and.l   #$ff,d0
+    ;;DPRINT  "mt_positionjump=%lx"
+ endif   
+
+    * Allow jumps if there is a D on the same row.
+    * Common scrambled pattern trick.
+	lea     mt_chan1temp(pc),a0
+    bsr     .checkCmdD
+    beq     .e
+    bsr     .checkCmdD
+    beq     .e
+    bsr     .checkCmdD
+    beq     .e
+    bsr     .checkCmdD
+    beq     .e
+
+    ;;DPRINT  "no Dxx"
+
+    cmp.b	mt_songpos(pc),d0
+;	bhi.b	.e
+    bne     .ook
+    DPRINT  "jump to same position -> end"
+    * Jump to the same position witouth a D,
+    * this is a songend.
+    st      PS3M_break
+    rts
+
+.checkCmdD
+    pushm   d0/d1
+    move.w  n_cmd(a0),d0
+    ;;DPRINT  "cmd=%04.4lx"
+    moveq   #$f,d1
+	and.b	n_cmd(a0),d1
+	lea	    44(a0),a0
+    cmp.b   #$d,d1
+    popm    d0/d1
+    rts
+
+
+.ook
+    * See if the jump is in the last position
+    move.b  mt_songpos(pc),d1
+	addq.b	#1,d1
+	cmp.b	slene(pc),d1
+    bne     .notLast
+    DPRINT  "jump in the last position"
+    * It was, consider this the end
+    st      PS3M_break
+.notLast
+
+.e	
+    ;;DPRINT  "jump=%02.2lx"
+    subq.b	#1,d0
 	move.b	d0,mt_songpos
 mt_pj2	clr.b	mt_pbreakpos
 	st 	mt_posjumpflag
 	st	PS3M_poscha
 	rts
+
 
 mt_volumechange
 	moveq	#0,d0
@@ -9758,6 +9838,7 @@ mt_patternbreak
 	add.b	d2,d0
 	cmp.b	#63,d0
 	bhi.b	mt_pj2
+    ;;DPRINT  "pattern break=%02.2lx"
 	move.b	d0,mt_pbreakpos
 	st	mt_posjumpflag
 	st	PS3M_poscha
@@ -10923,6 +11004,7 @@ syncz
 	tst	PS3M_break(a5)
 	beq.b	.nb
 	clr	PS3M_break(a5)
+    DPRINT  "PS3M_break"
 	move.l	songoverf,a6
 	st	(a6)
 ;	st	songover+var_b

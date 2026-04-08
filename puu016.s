@@ -25366,7 +25366,10 @@ intserver
     tst.w   maxsongs(a5)
     beq     .skipCheck
 .noProt
-
+    * Multichannel/PS3M special case: Protracker, S3M, XM
+    * backwards jump is not a songend
+    cmp.w   #pt_multi,playertype(a5)
+    beq     .skipCheck
 
 	* This player supports songend. 
 	* To avoid extra songend detections, do the song position
@@ -45036,6 +45039,7 @@ isImpulseTrackerActive
 	rts
 .yes	moveq	#0,d0
 	bra.b	.x
+
 
 p_multi:
     jmp	.s3init(pc)
