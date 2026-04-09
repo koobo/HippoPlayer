@@ -20202,7 +20202,11 @@ inforivit_play:
 	lea	.1(pc),a0
 	subq	#1,d0
 	beq.b	.hee 	; s3m
+	lea	    p_protracker\.protrackerTxt,a0
+    cmp     #4,d2   ; Pro/Fastracker 4h
+    beq.b   .moo
 	lea	.2(pc),a0
+.moo
 	subq	#1,d0
 	beq.b	.hee2	; Pro/Fasttracker
 	lea	.3(pc),a0
@@ -37936,7 +37940,7 @@ p_protracker:
 	dc.w pt_prot 				* type
 .flags	
  dc pf_cont!pf_stop!pf_volume!pf_song!pf_kelaus!pf_poslen!pf_end!pf_scope!pf_ciakelaus2!pf_quadscopePoke!pf_slidePos
-
+.protrackerTxt:
 	dc.b	"Protracker",0
  even
 
