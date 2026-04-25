@@ -53162,12 +53162,6 @@ p_xmaplay:
 
 .init
     DPRINT  "xmaplay init"
-	move.l	(a5),a0
-	btst	#AFB_68020,AttnFlags+1(a0)
-	bne.b	.okk
-	moveq	#ier_hardware,d0
-	rts
-.okk
 	lea	    xmaplayroutines(a5),a0
 	jsr	allocreplayer
 	beq.b	.ok3
@@ -53197,6 +53191,10 @@ p_xmaplay:
     move.l  ahi_mode(a5),d2
 
 	* Select mode: normal, AHI, AmiGUS
+    *        0 = no AHI
+    *        1 = yes AHI
+    *       -1 = AmiGUS
+    *       -2 = AmiGUS interpolated 
 	moveq	#-1,d0			* d0 = ahi_use
 	cmp.b	#1,ps3mamigus(a5)
 	beq     .gogo
@@ -53208,6 +53206,7 @@ p_xmaplay:
 	bne		.gogo
 	moveq	#0,d0
 .gogo
+;;    moveq   #-1,d0        ; TEST force AmiGUS
 
  ifne DEBUG
     push    d0
@@ -53216,6 +53215,16 @@ p_xmaplay:
     pop     d0 
  endif
 
+    tst.b   d0
+    bne     .aa
+    * default AHI mode, needs 68020
+    move.l	(a5),a4
+	btst	#AFB_68020,AttnFlags+1(a4)
+	bne.b	.aa
+	moveq	#ier_hardware,d0
+    bra     .oops
+.aa
+    DPRINT  "->xmaInit"
     jsr     .xmaInit(a3)
 *   d0 = status, 0 = ok
 *   d1 = position mask (Paula playback)
@@ -53226,8 +53235,8 @@ p_xmaplay:
 *   a3 = address to right Paula buffer
 *   a4 = instr name array
     move.l  a4,ps3m_xm_insts(a5)
-    DPRINT  "xmaInit=%ld"
-
+    DPRINT  "<-xmaInit=%ld"
+.oops
     pushm   all
     * Rid the temp file
     pushpea .tempFile(pc),d1
