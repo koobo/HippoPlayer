@@ -38384,7 +38384,7 @@ nl_ts		=	8	* channeltempsize
 
 * In:
 *   a0 = module
-*   d0 = tempoflag
+*   d0 = tempoflag, NULL to disable tempo in calculations
 * Out:
 *   d0 = secs in minutes
 *   d1 = minutes
@@ -38500,6 +38500,8 @@ modlen:
 	divu	#60,d0
 	move.l	d0,d1
 	swap	d1
+    ext.l   d0
+    ext.l   d1
 	rts
 
 
@@ -45085,7 +45087,7 @@ p_multi:
 ;taaksej	jmp	taakse(pc)
 
 * This does test resource allocation and frees them right after.
-.s3init
+.s3init:
 	bsr	varaa_kanavat
 	beq.b	.ok
 	moveq	#ier_nochannels,d0
@@ -45271,11 +45273,29 @@ p_multi:
 .noPatInfo
  endif
 
+    push    d0
+    move.l	moduleaddress(a5),a4
+    bsr     id_protracker
+    bne     .nopt
+    DPRINT  "Protracker detected, doing modlen"
+    move.l  a4,a0
+	moveq   #1,d0   * use tempo
+    pushm   d2-a6
+	bsr	    modlen		* moduulin kesto ajallisesti
+    popm    d2-a6
+    DPRINT  "mins=%ld secs=%ld"
+	move	d0,kokonaisaika(a5)	* mins
+	move	d1,kokonaisaika+2(a5)	* secs
+.nopt
+    pop     d0
+    DPRINT  "ps3m init done %ld"
+ 
 	popm	d1-a6
 	cmp	#333,d0		* killermoden koodi
 	bne.b	.e
 	addq	#4,sp		* killer: hyp‰t‰‰n play-aliohjelman 'ohi'
-.e	rts
+.e	
+    rts
 
 * Failed to init eagleplayer
 .itError
@@ -62243,6 +62263,14 @@ initializeUslUme:
 uslIgnoreFormats:
     cmp.w   #pt_prot,playertype(a5)
     beq     .reject
+
+    ; PS3M+Protracker case, modlen is used 
+    cmp.w   #pt_multi,playertype(a5)
+    bne     .noM
+    tst.l   kokonaisaika(a5)
+    bne     .reject
+.noM
+
     cmp.w   #pt_sid,playertype(a5)
     beq     .reject
     tst.b   sampleinit(a5)
