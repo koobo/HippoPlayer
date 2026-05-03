@@ -58,8 +58,7 @@ amigus_init:
     bne     .ag_init_error
     ; ---------------------------------
     move.l  amigus_card,a0
-    move.l  agus_PcmBase(a0),amigus_pcmbase
-    move.l  agus_WavetableBase(a0),amigus_wavetablebase
+    move.l  agus_WavetableBase(a0),amigus_base
     ; ---------------------------------
 	move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
 
@@ -109,8 +108,7 @@ amigus_uninit:
     bsr     amigus_freeinterrupt
     bsr     amigus_freecard
     bsr     amigus_closelib
-    clr.l   amigus_pcmbase
-    clr.l   amigus_wavetablebase
+    clr.l   amigus_base
     rts
 
 amigus_closelib:
@@ -468,8 +466,6 @@ AmiGUS_Int:
 
 ;======================================
 amigus_base		     dc.l	 0 
-amigus_pcmbase       dc.l    0
-amigus_wavetablebase dc.l    0
 amigus_mtrig	     dc.w	 0
 amigus_lib           dc.l    0
 amigus_card          dc.l    0

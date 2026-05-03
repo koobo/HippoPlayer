@@ -45766,6 +45766,7 @@ patchIt:
     rts
 
 checkAmiGUSAvailability:
+    DPRINT  "checkAmiGUSAvailability"
     lea     .lib(pc),a1
 	lore	Exec,OldOpenLibrary
     tst.l   d0
@@ -45773,6 +45774,7 @@ checkAmiGUSAvailability:
     move.l  d0,a6
     sub.l   a0,a0
     lob     AmiGUS_FindCard
+    DPRINT  "AmiGUS_FindCard=%lx"
     push    d0
     move.l  a6,a1
     lore    Exec,CloseLibrary
