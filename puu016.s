@@ -45342,11 +45342,31 @@ p_multi:
 	jmp	volj(a0)
 
 .eteen	move.l	ps3mroutines(a5),a0
-	jmp	eteenj(a0)
+	jsr	eteenj(a0)
+    bra     .timeUpdate
 
 .taakse	move.l	ps3mroutines(a5),a0
-	jmp	taaksej(a0)
+	jsr	taaksej(a0)
+;    bra     .timeUpdate
 
+.timeUpdate:
+    move.l	moduleaddress(a5),a4
+    bsr     id_protracker
+    bne     .noo
+    move.l  ptPositionTicksPtr(a5),d0
+    beq     .noo
+    move.l  d0,a0
+
+    ; Adjust playback timer based on pre-calculated time for each song pos
+    jsr     settimestart
+
+    moveq   #0,d0
+    move    pos_nykyinen(a5),d0
+    add     d0,d0
+    move    (a0,d0),d0
+    sub.l   d0,aika1(a5)
+.noo
+    rts
 
 ******** Asetukset kanavam‰‰r‰n mukaan
 * t‰nne hyp‰t‰‰n initin j‰lkeen. d0:ssa on kanavien m‰‰r‰.
