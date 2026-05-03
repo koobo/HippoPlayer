@@ -126,7 +126,7 @@ bin/jamc: jamcrackerproreplay.asm
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/okta: okta.s
 	$(ASM) $(INCLUDE) $(EXEopt) -o $@ "$<"
-bin/ps3m: Hippo_PS3M3.s
+bin/ps3m: Hippo_PS3M3.s amigus_proto.s
 	$(ASM) $(INCLUDE) $(EXE020opt) -o $@ "$<"
 bin/pumatracker: Puma_Replay.S
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"

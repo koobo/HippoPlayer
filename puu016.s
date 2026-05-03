@@ -291,6 +291,7 @@ check	macro
     include libraries/iffparse_lib.i
     include libraries/iffparse.i
  endif
+    include libraries/amigus_lib.i
 
 	incdir include/
 	include	mucro.i
@@ -45765,24 +45766,26 @@ patchIt:
     rts
 
 checkAmiGUSAvailability:
-.AMIGUS_HAGEN_PRODUCT_ID	= 17
-.AMIGUS_MANUFACTURER_ID		= 2782
-    move.l  _ExpansionBase(a5),d0
+    lea     .lib(pc),a1
+	lore	Exec,OldOpenLibrary
+    tst.l   d0
     beq     .x
     move.l  d0,a6
     sub.l   a0,a0
-    move.l  #.AMIGUS_MANUFACTURER_ID,d0
-    moveq   #.AMIGUS_HAGEN_PRODUCT_ID,d1
-    lob     FindConfigDev
-.x  
-	tst.l  	d0
+    lob     AmiGUS_FindCard
+    push    d0
+    move.l  a6,a1
+    lore    Exec,CloseLibrary
+    pop     d0
 	bne		.yes
-	clr.b	ps3mamigus(a5)	* for safety clear setting
+.x  clr.b	ps3mamigus(a5)	* for safety clear setting
 	rts
 .yes 
-	st      d0
+    moveq   #1,d0
 	rts
 
+.lib    dc.b    "amigus.library",0
+    even
 
 ******************************************************************************
 * Sampleplayer
