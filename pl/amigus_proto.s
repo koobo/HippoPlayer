@@ -10,13 +10,13 @@
 
 ;=============================================================
 amigus_init:
-    DPRINT  "amigus_init"
 	bsr     allocPatternBuffers
 	beq		.ag_memerror
 		
 	bsr		init
 	bsr		FinalInit
     ; ---------------------------------
+    DPRINT  "--- amigus_init ---"
 	move.l	4.w,a6					
 	lea   	LibName(pc),a1	
 	moveq   #0,d0
@@ -39,18 +39,19 @@ amigus_init:
     move.w  agus_TypeId(a0),d1
     DPRINT  "TypeName=%s TypeId=%lx"
  endif
-    move.l  #AMIGUS_FLAG_PCM!AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
     move.l  #"K-P!",d1
     jsr     _LVOAmiGUS_ReserveCard(a6)
     DPRINT  "AmiGUS_ReserveCard=%lx"
-    move.l  d0,amigus_reserve
-    beq     .ag_init_error
+    cmp.l   #AmiGUS_NoError,d0
+    seq     amigus_reserve
+    bne     .ag_init_error
     ; ---------------------------------
     move.l  amigus_card,a0
-    move.l  #AMIGUS_FLAG_PCM!AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
     move.l  #"K-P!",d1
     move.l  #AmiGUS_Int,d2  
-    moveq   #0,d2           * data
+    moveq   #0,d3           * data
     jsr     _LVOAmiGUS_InstallInterrupt(a6) 
     DPRINT  "AmiGUS_InstallInterrupt=%lx"
     cmp.l   #AmiGUS_NoError,d0
@@ -126,7 +127,7 @@ amigus_freecard:
     clr.l   amigus_reserve
 
     move.l  amigus_card,a0
-    move.l  #AMIGUS_FLAG_PCM!AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
     move.l  #"K-P!",d1
     move.l  amigus_lib,a6
     jsr     _LVOAmiGUS_FreeCard(a6)
@@ -139,7 +140,7 @@ amigus_freeinterrupt:
     clr.w   amigus_hasinterrupt
 
     move.l  amigus_card,a0
-    move.l  #AMIGUS_FLAG_PCM!AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
     move.l  #"K-P!",d1
     move.l  amigus_lib,a6
     jsr     _LVOAmiGUS_RemoveInterrupt(a6)
