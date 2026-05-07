@@ -89,7 +89,7 @@ amigus_init:
 	
 	popm	d1-d7/a2-a6		
     DPRINT  "amigus_init SUCCESS"
-	moveq	#0,d0
+	moveq	#0,d0       * OK
 	rts
 
 .ag_init_error
@@ -122,9 +122,9 @@ amigus_closelib:
 .x  rts
 
 amigus_freecard:
-    tst.l   amigus_reserve
+    tst.w   amigus_reserve
     beq     .x
-    clr.l   amigus_reserve
+    clr.w   amigus_reserve
 
     move.l  amigus_card,a0
     move.l  #AMIGUS_FLAG_WAVETABLE,d0
@@ -470,7 +470,7 @@ amigus_base		     dc.l	 0
 amigus_mtrig	     dc.w	 0
 amigus_lib           dc.l    0
 amigus_card          dc.l    0
-amigus_reserve       dc.l    0
+amigus_reserve       dc.w    0
 amigus_hasinterrupt  dc.w    0
 
 LibName         dc.b    "amigus.library",0

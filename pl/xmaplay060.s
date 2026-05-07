@@ -45,13 +45,14 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 	include	exec/exec_lib.i
 	include	devices/ahi_lib.i
 	include	devices/ahi.i
-	include amigus_proto.i
 	include	hardware/intbits.i
 	include libraries/expansion_lib.i
     include libraries/timer_lib.i
     include devices/timer.i
+    include libraries/amigus_lib.i
+    include libraries/amigus.i
 
-DEBUG        = 0          * Enable debug print to serial
+DEBUG        = 1          * Enable debug print to serial
 
  ifnd __VASM
  printt "Test mode!"
@@ -169,7 +170,9 @@ testMain:
 _init:
 ier_filerr          = -17
 ier_ahi             = -19
-    
+ier_amigus          = -26
+ier_nomem	        = -9
+
     DPRINT  "*** xmaplay060 init ***" 
  ifne DEBUG
     and.l   #$ff,d0
@@ -224,7 +227,7 @@ ier_ahi             = -19
     bsr     amigus_init
     DPRINT  "amigus_init=%ld"
     tst.l   d0
-    beq     .agusError
+    bne     .agusError
     bsr     loadSamplesAGUS
 
 .normal
@@ -901,56 +904,128 @@ setplayerfreq = *-4
 ;        (c)2026 by O.Achten
 ; ====================================
 
-
-;=============================================================
 amigus_init:
-    DPRINT   "amigus_init"
+    DPRINT  "--- amigus_init ---"
 	move.l	4.w,a6					
-	lea   	ExpansionName(pc),a1	
-	jsr     _LVOOldOpenLibrary(a6)	; Open expansion.library
-	tst.l   d0						; Library opened?
-	beq   	.ag_init_error			; Could not open library
-
-	move.l	d0,a6					; Let's find AmiGUS card
-	move.l	#AMIGUS_MANUFACTURER_ID,d0
-	move.l	#AMIGUS_HAGEN_PRODUCT_ID,d1
-	sub.l   a0,a0
-	jsr		_LVOFindConfigDev(a6)	; Check for AmiGUS card
-    DPRINT  "FindConfigDev=%lx"
-    push    d0
-
-    move.l	a6,a1
-	move.l	4.w,a6
-	jsr     _LVOCloseLibrary(a6)	; Close expansion.library
-
-    pop     d0
+	lea   	LibName(pc),a1	
+	moveq   #0,d0
+	jsr     _LVOOpenLibrary(a6)		
+    DPRINT  "OpenLibrary=%lx"
+    move.l  d0,amigus_lib
     beq     .ag_init_error
-	
-	move.l	d0,a0					; a0 = ConfigDev structure
-	move.l 	32(a0),d0 				; d0 = cd_BoardAddr
-	move.l	d0,amigus_base			; Store AmiGUS register base	
-
-	move.l	4.w,a6
-	moveq	#INTB_PORTS,d0
-	lea		AmiGUS_IntServer(pc),a1	; Set-up interrupt for play routine (INT2)
-	jsr		_LVOAddIntServer(a6)
-	
+    ; ---------------------------------
+	move.l	d0,a6					; Let's find AmiGUS card
+    sub.l   a0,a0
+    jsr     _LVOAmiGUS_FindCard(a6)
+    DPRINT  "AmiGUS_FindCard=%lx"
+    move.l  d0,amigus_card
+    beq     .ag_init_error
+    ; ---------------------------------
+    move.l  d0,a0
+ ifne DEBUG
+    move.l  agus_TypeName(a0),d0
+    moveq   #0,d1
+    move.w  agus_TypeId(a0),d1
+    DPRINT  "TypeName=%s TypeId=%lx"
+ endif
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    jsr     _LVOAmiGUS_ReserveCard(a6)
+    DPRINT  "AmiGUS_ReserveCard=%lx"
+    cmp.l   #AmiGUS_NoError,d0
+    seq     amigus_reserve
+    bne     .ag_init_error
+    ; ---------------------------------
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  #AmiGUS_Int,d2  
+    moveq   #0,d3           * data
+    jsr     _LVOAmiGUS_InstallInterrupt(a6) 
+    DPRINT  "AmiGUS_InstallInterrupt=%lx"
+    cmp.l   #AmiGUS_NoError,d0
+    seq     amigus_hasinterrupt
+    bne     .ag_init_error
+    ; ---------------------------------
+    move.l  amigus_card,a0
+    move.l  agus_WavetableBase(a0),amigus_base
+    ; ---------------------------------
+	move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
 	bsr		amigus_voice_reset		; Initialize all AmiGUS voices
 	
-	move.w	Speed(pc),d0		    ; d0 = tempo (BPM)
+	move.w	Speed(pc),d0			; d0 = tempo (BPM)
 	bsr		amigus_tempo			; Set initial tempo
 	
 	st   	setpause                ; play
-	
-    move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
+		
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
 	
-	moveq	#1,d0	    * OK
+	popm	d1-d7/a2-a6		
+    DPRINT  "amigus_init SUCCESS"
+	moveq	#0,d0       * OK
 	rts
 
 .ag_init_error
-    moveq   #0,d0
+    bsr     amigus_uninit
+    DPRINT  "amigus_init FAILURE"
+	moveq	#ier_amigus,d0              ; Could not find or allocate AmiGUS
+.ag_init_exit
+	popm	d1-d7/a2-a6		
 	rts
+
+
+
+amigus_uninit:
+    bsr     amigus_freeinterrupt
+    bsr     amigus_freecard
+    bsr     amigus_closelib
+    clr.l   amigus_base
+    rts
+
+amigus_closelib:
+    move.l  amigus_lib,d0
+    beq     .x
+    clr.l   amigus_lib
+    move.l  d0,a1
+    move.l  4.w,a6
+    jsr     _LVOCloseLibrary(a6)
+.x  rts
+
+amigus_freecard:
+    tst.w   amigus_reserve
+    beq     .x
+    clr.w   amigus_reserve
+
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  amigus_lib,a6
+    jsr     _LVOAmiGUS_FreeCard(a6)
+.x
+    rts
+
+amigus_freeinterrupt:
+    tst.w   amigus_hasinterrupt
+    beq     .x
+    clr.w   amigus_hasinterrupt
+
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  amigus_lib,a6
+    jsr     _LVOAmiGUS_RemoveInterrupt(a6)
+.x
+    rts
+
+amigus_base		     dc.l	 0 
+amigus_mtrig	     dc.w	 0
+amigus_lib           dc.l    0
+amigus_card          dc.l    0
+amigus_reserve       dc.w    0
+amigus_hasinterrupt  dc.w    0
+
+LibName         dc.b    "amigus.library",0
+ even
 
 ;=============================================================
 amigus_end:	
@@ -962,13 +1037,7 @@ amigus_end:
 	move.w	#$4000,HAGEN_INTC0(a6)		; Clear Timer interrupt
 	
 	bsr		amigus_voice_reset
-	
-	move.l	4.w,a6
-	lea		AmiGUS_IntServer(pc),a1
-	moveq  	#INTB_PORTS,d0
-	jsr		_LVORemIntServer(a6)
-
-    clr.l   amigus_base
+    bsr     amigus_uninit
 	rts
 ;=============================================================
 
@@ -1094,17 +1163,6 @@ AmiGUS_Int:
 	rts
 	
 ;======================================
-amigus_base		dc.l	0
-
-AmiGUS_IntServer
-	dc.l  0,0
-	dc.b  0,-10
-	dc.l  AmiGUS_IntName
-	dc.l  0,AmiGUS_Int
-	
-ExpansionName	dc.b	"expansion.library",0
-AmiGUS_IntName	dc.b	"AmiGUS_Xma060Play",0
-even
 
 
 initSysTime:
