@@ -52,7 +52,7 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
     include libraries/amigus_lib.i
     include libraries/amigus.i
 
-DEBUG        = 1          * Enable debug print to serial
+DEBUG        = 0          * Enable debug print to serial
 
  ifnd __VASM
  printt "Test mode!"
@@ -246,7 +246,7 @@ ier_nomem	        = -9
     moveq   #0,d2
     move    hAntChn,d2
     moveq   #0,d0   * null = ok
-    DPRINT  "_init ok %ld %ld %ld"
+    DPRINT  "_init ok=%ld mask=%lx channels=%ld"
     rts
 .error
     move.l  lastMessagePtr(pc),a0
