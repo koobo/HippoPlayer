@@ -53306,13 +53306,14 @@ p_xmaplay:
     * channel count in d2
     lea     .format(pc),a0
     move.l  d2,d1
+    move.l  #type_agus,d0
+	tst.b	ps3mamigus(a5)
+	bne		.go
     move.l  #type_ahi,d0
-    pushpea .nullStr(pc),d0
     tst.b   ahi_use(a5)
-    beq     .ah
-    move.l  #type_ahi,d0
-;    move.l  #type_agus,d0
-.ah
+    bne     .go
+    pushpea .nullStr(pc),d0
+.go
     lea     .title(pc),a3
     jsr     desmsg3
 
