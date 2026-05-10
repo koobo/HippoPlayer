@@ -97,6 +97,10 @@ pop	macro
 	move.l	(sp)+,\1
 	endm
 
+ ifd __VASM    
+    mc68000
+ endif
+
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
@@ -199,7 +203,7 @@ ier_nomem	        = -9
     tst.l   d0
     bne    .error
 
-    tst.b   AHI(pc)
+    tst.b   AHI
     beq     .normal
     bmi     .agus
 
@@ -240,7 +244,7 @@ ier_nomem	        = -9
     lea     InstrNames,a4
 
     moveq   #0,d2
-    move    hAntChn(pc),d2
+    move    hAntChn,d2
     moveq   #0,d0   * null = ok
     DPRINT  "_init ok %ld %ld %ld"
     rts
@@ -255,7 +259,7 @@ ier_nomem	        = -9
     rts
 
 _end:
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .ahi
     bmi     .agus
 .1
@@ -285,7 +289,7 @@ _getPosLen:
 *   d0 = volume
 _setVolume:
     move    d0,ahi_mastervol
-    tst.b   AHI(pc)
+    tst.b   AHI
     bmi     amigus_setmastervol
     bne     ahi_setmastervol
 
@@ -298,7 +302,7 @@ _backward:
     bra     PrevPattern
 
 _stop:
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     ahi_stop
     bmi     amigus_stop
 
@@ -313,7 +317,7 @@ _stop:
     rts
 
 _cont:
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     ahi_cont
     bmi     amigus_cont
     
@@ -693,7 +697,7 @@ ahi_restoreChannels:
 
 
 ahi_playmusic:
-    tst.b  setpause(pc)
+    tst.b  setpause
     bne.b   .1
     rts
 .1
@@ -752,12 +756,14 @@ ahi_soundfunc:
 	move	ahism_Channel(a1),d0
 
     lea     sampleForChannel(pc),a6
-    move.l  (a6,d0.w*4),a6
-    tst.l   a6
+    move    d0,d2
+    lsl     #2,d2
+    move.l  (a6,d2.w),d2
     bne     .ok
     DPRINT  "no sample for channel=%ld"
     bra     .silent
 .ok
+    move.l  d2,a6
     move.l  sRepS(a6),d2        * Repeat start offset
     move.l  sOrigRepL(a6),d3    * Repeat length
   
@@ -776,7 +782,7 @@ ahi_soundfunc:
     cmp.b   #2,sLoopType(a6)    * Test for ping pong loop
     bne     .forward            * else do forward loop
 
-    tst.l   attr_pingpong(pc)   * Is ping pong supported?
+    tst.l   attr_pingpong      * Is ping pong supported?
     beq     .forward
         
     * Check the direction the playback should be going
@@ -841,9 +847,9 @@ ahi_tempo:
 	move.l	d0,4(a1)
     move.l  d0,setplayerfreq
 .prev
-	move.l	ahi_ctrl(pc),a2
-    tst.l   a2
+	move.l	ahi_ctrl(pc),d7
     beq     .1
+    move.l  d7,a2
 	move.l	ahibase(pc),a6
 	jsr	_LVOAHI_ControlAudioA(a6)
 .1
@@ -1106,13 +1112,13 @@ amigus_tempo:
 	moveq	#0,d1
 	move.w	d0,d1
 	
-	move.l	amigus_base(pc),a6
-    tst.l   a6
+	move.l	amigus_base(pc),d7
     beq     .x
+    move.l  d7,a6
 	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	
 	move.l 	#5*HAGEN_TIMER_TIMEBASE,d0
-	;bsr		divu_32
-    divu.l  d1,d0
+	bsr		divu_32
+    ;divu.l  d1,d0
 	move.l	d0,HAGEN_TIMER_RELOADH(a6)	; Set timer interrupt speed for playback
 	move.w	#$8000,HAGEN_TIMER_CTRL(a6)
 .x
@@ -1148,7 +1154,7 @@ AmiGUS_Int:
 	
 	move.w	#$4000,HAGEN_INTC0(a6)	; Clear interrupt
 
-    tst.b  setpause(pc)
+    tst.b  setpause
     beq.b   .1
  ifne DEBUG
     move    $dff006,$dff180
@@ -1224,6 +1230,140 @@ sysTimerPort        ds.b      MP_SIZE
 sysTimerIORequest   ds.b      IOTV_SIZE
 timerDeviceName     dc.b	  "timer.device",0
     even
+
+
+* mulu_32 --- d0 = d0*d1
+mulu_32	movem.l	d2/d3,-(sp)
+	move.l	d0,d2
+	move.l	d1,d3
+	swap	d2
+	swap	d3
+	mulu	d1,d2
+	mulu	d0,d3
+	mulu	d1,d0
+	add	d3,d2
+	swap	d2
+	clr	d2
+	add.l	d2,d0
+	movem.l	(sp)+,d2/d3
+	rts	
+
+* divu_32 --- d0 = d0/d1, d1=jakojäännös
+divu_32	move.l	d3,-(a7)
+	swap	d1
+	tst	d1
+	bne.b	lb_5f8c
+	swap	d1
+	move.l	d1,d3
+	swap	d0
+	move	d0,d3
+	beq.b	lb_5f7c
+	divu	d1,d3
+	move	d3,d0
+lb_5f7c	swap	d0
+	move	d0,d3
+	divu	d1,d3
+	move	d3,d0
+	swap	d3
+	move	d3,d1
+	move.l	(a7)+,d3
+	rts	
+
+lb_5f8c	swap	d1
+	move	d2,-(a7)
+	moveq	#16-1,d3
+	move	d3,d2
+	move.l	d1,d3
+	move.l	d0,d1
+	clr	d1
+	swap	d1
+	swap	d0
+	clr	d0
+lb_5fa0	add.l	d0,d0
+	addx.l	d1,d1
+	cmp.l	d1,d3
+	bhi.b	lb_5fac
+	sub.l	d3,d1
+	addq	#1,d0
+lb_5fac	dbf	d2,lb_5fa0
+	move	(a7)+,d2
+	move.l	(a7)+,d3
+	rts	
+
+
+; udivmod64 - divu.l d2,d0:d1
+; by Meynaf/English Amiga Board
+divu_64
+	move.l d3,-(a7)
+ 	moveq #31,d3
+.loop
+	 add.l d1,d1
+	 addx.l d0,d0
+ 	bcs.s .over
+ 	cmp.l d2,d0
+ 	bcs.s .sui
+ 	sub.l d2,d0
+.re
+ 	addq.b #1,d1
+.sui
+ 	dbf d3,.loop
+ 	move.l (a7)+,d3	; v=0
+ 	rts
+.over
+ 	sub.l d2,d0
+ 	bcs.s .re
+ 	move.l (a7)+,d3
+ 	or.b #4,ccr		; v=1
+ 	rts
+
+;---------------------------------------------------------------------------
+; Multiply two unsigned 32 bit integers and return the 64 bit result
+;
+;   REGISTER USAGE
+;       D4 -- scratch (restored)
+;       D3 -- scratch (restored)
+;       D2 -- scratch (restored)
+;       D1 -- arg 1 (given), result 32:63
+;       D0 -- arg 0 (given), result 0:31
+;
+UMult64S:
+        movem.l d2-d4,-(sp)
+
+        move.l  d1,d3
+        mulu.w  d0,d3           ; 24
+        move.l  d1,d2
+        swap.w  d2
+        swap.w  d0
+        mulu.w  d0,d2           ; 13
+
+        swap.w  d3
+
+        move.l  d1,d4
+        mulu.w  d0,d4           ; 14
+        add.w   d4,d3
+        clr.w   d4
+        swap.w  d4
+        addx.l  d4,d2
+
+        swap.w  d0
+        swap.w  d1
+
+        move.l  d1,d4
+        mulu.w  d0,d4           ; 23
+        add.w   d4,d3
+        clr.w   d4
+        swap.w  d4
+        addx.l  d4,d2
+
+        swap.w  d3
+
+        move.l  d2,d0
+        move.l  d3,d1
+
+        movem.l (sp)+,d2-d4
+        rts
+
+
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -1797,7 +1937,7 @@ ReadLittleEndian32
 	; -----------------------------------------------------------
 
 StartTask
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .done
 
     tst.l   WorkerTask
@@ -1996,7 +2136,7 @@ OpenGraphicsLib
 	rts
 	
 CloseGraphicsLib
-	tst.l	GraphicsBase(pc)
+	tst.l	GraphicsBase
 	beq.b	.done
 	move.l	4.w,a6
 	move.l	GraphicsBase(pc),a1
@@ -2013,7 +2153,7 @@ OpenDOSLib
 	rts	
 	
 CloseDOSLib
-	tst.l	DosBase(pc)
+	tst.l	DosBase
 	beq.b	.done
 	move.l	4.w,a6
 	move.l	DosBase(pc),a1
@@ -2029,7 +2169,8 @@ CpuIs68000
 	; Input: a0
 RightTrim
 	movem.l	d0/a0,-(sp)
-	tst.l	a0	; NULL pointer?
+    cmp.w   #0,a0
+	;tst.l	a0	; NULL pointer?
 	beq.b	.end
 	tst.b	(a0)	; string empty?
 	beq.b	.end
@@ -2135,7 +2276,7 @@ GetFileFromRequester
 ofrOK	moveq	#1,d0
 ofrDone	; -----------------------------
 	move.l	ASLBase(pc),a1
-	tst.l	a1
+	cmp.w	#0,a1
 	beq.b	.skip
 	move.l	4.w,a6
 	move.l	d0,-(sp)
@@ -2225,7 +2366,7 @@ OpenAudioDevice
 
 CloseAudioDevice
 	move.l	4.w,a6
-	tst.b	AudioOpen(pc)
+	tst.b	AudioOpen
 	beq.b	.L0
 	lea	AllocReq(pc),a1
 	jsr	_LVOCloseDevice(a6)
@@ -2306,7 +2447,7 @@ CloseCIATimer
 .done	rts
 
 StartMixing
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .x
 
 	bsr.w	SetPaulaInterrupt
@@ -2335,7 +2476,7 @@ StartMixing
 StopMixing
 	sf	SongIsPlaying
 
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .x
 
 	bsr.w	DisableAudioMixer	; also clears Paula volumes
@@ -2347,6 +2488,7 @@ StopMixing
 .x
 	rts
 
+    MC68020
 MixAudioFrame
 	moveq	#0,d2
 	move.w	PaulaPos(pc),d2	; d2.l = integer part of PaulaPos
@@ -2383,6 +2525,7 @@ MixAudioFrame
 	and.l	#SMP_BUFF_SIZE-1,d0
 	move.l	d0,MixPos
 .end	rts
+    MC68000
 
 ; -----------------------------------------------------------------------------
 ; -----------------------------------------------------------------------------
@@ -2498,7 +2641,7 @@ SetMixerVars
 	move.w	MixPeriod(pc),d0
 	moveq	#0,d1	; 0 = PAL
 	bsr.w	PaulaPeriodToFreq
-    tst.b   AHI(pc)
+    tst.b   AHI
     beq     .1
     move.w  AHIMixingFreq,d0
     swap    d0
@@ -2529,7 +2672,7 @@ SetMixerVars
 	move.w	MixPeriod(pc),d0
 	moveq	#1,d1	; 1 = NTSC
 	bsr.w	PaulaPeriodToFreq
-    tst.b   AHI(pc)
+    tst.b   AHI
     beq     .2
     move.w  AHIMixingFreq,d0
     swap    d0
@@ -2553,8 +2696,11 @@ SetMixerVars
 	; ------------------------------------
 	move.l	MixingFreq(pc),d0
 	add.l	#(200<<16)/2,d0		; rounding bias
-	divu.l	#200<<16,d0		; 200 = 5ms (FT2)
+;	divu.l	#200<<16,d0		; 200 = 5ms (FT2)
+    move.l  #200<<16,d1
+    bsr     divu_32
 	move.w	d0,QuickVolSizeVal
+.3
 	; -------------------------------------
 	bsr.w	GenerateBPMTable
 	; -------------------------------------
@@ -2569,7 +2715,10 @@ SetMixerVars
 	;
 	; Output:
 	;  d0.l = rounded 16.16fp CIA Paula delta	
+    MC68020
 CalcCiaDelta
+    tst.b   AHI
+    bne     .error
 	tst.w	d0
 	beq.b	.error
 	; ---------------------------
@@ -2629,6 +2778,7 @@ CalcCiaDelta
 	rts
 .error	moveq	#0,d0
 	rts
+    MC68000
 
 	; Input:
 	;   d0.w = period
@@ -2671,13 +2821,26 @@ PaulaPeriodToFreq
 	add.l	d3,d0
 	addx.l	d4,d1
 	; ---------------------------
-	divu.l	d2,d1:d0		; d0.l = rounded Paula frequency (16.16fp)
+    ; d1 = up 32
+    ; d0 = low 32
+	; divu.l	d2,d1:d0		; d0.l = rounded Paula frequency (16.16fp)
+    ; d0 = out
+    
+    exg     d0,d1
+    ; d0 = up 32
+    ; d1 = low 32
+    bsr     divu_64
+    ; d1 = out
+    move.l  d1,d0
+
 	movem.l	(sp)+,d1-d4
 .done	rts
 
 ; converts BPM 32..255 into SamplesPerTick LUT (16.16fp)
 ; Formula: (MixingFreq/(BPM*2.5))*2^16
 GenerateBPMTable
+    tst.b   AHI
+    bne     .x
 	lea	BPM2SmpsPerTick,a0
 	; ---------------------------
 	moveq	#0,d7
@@ -2703,16 +2866,19 @@ GenerateBPMTable
 	add.l	d3,d0
 	addx.l	d7,d1
 	; ---------------------------
+    MC68020
 	divu.l	d5,d1:d0		; d0.l = rounded samplesPerTick (16.16fp)
+    MC68000
 	move.l	d0,(a0)+
 	; ---------------------------
 	addq.b	#1,d5
 	bne.b	.loop			; haven't overflown yet (255 -> 0 (256))
 	; ---------------------------
+.x
 	rts
 
 EnableAudioMixer
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .x
 
 	st	AudioMixFlag
@@ -2732,7 +2898,7 @@ EnableAudioMixer
 .x	rts
 
 DisableAudioMixer
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .x
 	; ---------------------------
 	; Clear Paula volumes
@@ -2746,7 +2912,7 @@ DisableAudioMixer
     movem.l  d0-a6,-(sp)
     move.l  DosBase(pc),a6
 .loop	
-    tst.b	AudioMixRunning(pc)	; wait until mixer is done
+    tst.b	AudioMixRunning     	; wait until mixer is done
 	beq.b   .1
     moveq   #1,d1
     jsr     _LVODelay(a6)       	; let other tasks run
@@ -2756,26 +2922,26 @@ DisableAudioMixer
 
 FreeChipBuffers
 	move.l	PaulaCh1Buf(pc),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.L1
 	move.l	#SMP_BUFF_SIZE,d0
 	bsr.w	FreeMem
 	; ---------------------------
 .L1	move.l	PaulaCh2Buf(pc),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.L2
 	move.l	#SMP_BUFF_SIZE,d0
 	bsr.w	FreeMem
 .L2	; ---------------------------
 	IF _14BIT
 		move.l	PaulaCh3Buf(pc),a1
-		tst.l	a1
+		cmp.w   #0,a1
 		beq.b	.L3
 		move.l	#SMP_BUFF_SIZE,d0
 		bsr.w	FreeMem
 	; ---------------------------
 .L3		move.l	PaulaCh4Buf(pc),a1
-		tst.l	a1
+		cmp.w   #0,a1
 		beq.b	.L4
 		move.l	#SMP_BUFF_SIZE,d0
 		bsr.w	FreeMem
@@ -2820,7 +2986,7 @@ AllocChipBuffers
 	rts
 
 SetupAudio
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .ahi
 
 	bsr.w	SilencePaula
@@ -2932,7 +3098,7 @@ FreePatterns
 	lea	Patt,a2
 	lea	PattLens,a0
 .loop1	move.l	(a2),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.next			; pattern not allocated!
 	moveq	#0,d0
 	move.w	(a0),d0			; d0.w = rows in pattern
@@ -2950,7 +3116,7 @@ FreeInstruments
 	moveq	#128-1,d7
 	lea	Instr,a2
 .loop1	move.l	(a2),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.nextI			; instrument is empty!
 	; -----------------------------
 	; Free instrument's samples
@@ -2960,7 +3126,7 @@ FreeInstruments
 	subq.w	#1,d6	
 	lea	iSamp(a1),a0		; a0 = sample struct
 .loop2	move.l	sPek(a0),a1
-	tst.l	a1			; sample allocated?
+	cmp.w   #0,a1			; sample allocated?
 	beq.b	.nextS			; nope
 	move.l	sLen(a0),d0
 	beq.b	.nextS			; (length is zero, don't free)	
@@ -3006,7 +3172,8 @@ ShowError
 	bhi.b	.end
 	subq.b	#1,d0
 	lea	ErrorTexts(pc),a0
-	move.l	(a0,d0.w*4),d1
+    lsl     #2,d0
+	move.l	(a0,d0.w),d1
 	bsr.w	PutStr
 .end	moveq	#1,d0		; 1=error
 	rts
@@ -3027,7 +3194,7 @@ CalcFrqTab
 	movem.l	d0-d6/a0-a2,-(sp)
 	lea	Note2Period,a0
 	; ----------------------------
-	tst.b	LinearFrqTab(pc)
+	tst.b	LinearFrqTab
 	beq.b	.Amiga
 
 	; -------------------------------------
@@ -3044,12 +3211,14 @@ CalcFrqTab
 	; Calculate log table
 	; -------------------------------------	
 	move.l	#256*8363,d0   ; Constant for GetFrequenceValue_AHI
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .ahiFr
 	move.l	MixingFreq(pc),d0
 	lsr.l	#1,d0
 	move.l	#256*8363,d1
+    MC68020
 	divu.l	MixingFreq(pc),d1:d0	
+    MC68000
 .ahiFr
 	move.l	d0,d2			; d2.l = round[(8363*256) * 2^32 / MixingFreq]
 	moveq	#24,d3
@@ -3058,15 +3227,20 @@ CalcFrqTab
 	lea	LogTab,a1
 	move.w	#(12*16*4)-1,d5
 .loop	move.l	(a0)+,d0
-	moveq	#0,d1
-	mulu.l	d2,d1:d0
+
+;	moveq	#0,d1
+;	mulu.l	d2,d1:d0
+    move.l  d2,d1
+    bsr     UMult64S
+    exg     d0,d1
+
 	lsr.l	d3,d0
 	lsl.l	d4,d1
 	or.l	d1,d0			; d0 = ((uint64_t)LogTab[i] * d2) >> 24
 	move.l	d0,(a1)+
 	dbra	d5,.loop
 	; -------------------------------------	
-	bra.b	.end	
+	bra 	.end	
 
 
 .Amiga	; -------------------------------------
@@ -3121,11 +3295,13 @@ CalcFrqTab
 
 	move.l	#8363*1712,d1
     move.l  d1,FrequenceDivFactor   ; For AHI
-    tst.b   AHI(pc)
+    tst.b   AHI
     bne     .ahiFrq
 	move.l	MixingFreq(pc),d0
 	lsr.l	#1,d0
+    MC68020
 	divu.l	MixingFreq(pc),d1:d0	; d0.l = round[(8363*1712) * 2^32 / MixingFreq]
+    MC68000
 	move.l	d0,FrequenceDivFactor
 .ahiFrq
 	; -------------------------------------
@@ -3335,7 +3511,9 @@ LoadPatterns
 	; Set pattern row length
 	; -----------------------------
 .ok	lea	PattLens,a0
-	move.w	d4,(a0,d6.w*2)
+    move    d6,d0
+    add.w   d0,d0
+	move.w	d4,(a0,d0.w)
 	; -----------------------------
 	tst.w	d3			; dataLen == 0? (pattern empty)
 	beq.b	.next			; yes, load next pattern (if any)
@@ -3351,7 +3529,9 @@ LoadPatterns
 	beq.w	LPOOM
 	move.l	d0,a1
 	lea	Patt,a0
-	move.l	d0,(a0,d6.w*4)	
+    move.w  d6,d5
+    lsl.w   #2,d5
+	move.l	d0,(a0,d5.w)	
 	; ----------------------------- ; (a1=pattAddr, d1.l=unpackLen, d3.l=packLen, d4.l=numRows)
 	move.l	d2,d5
 	sub.l	d3,d5
@@ -3449,7 +3629,9 @@ AllocAndCopyInstrHeader
 	beq.w	.cihErr
 	move.l	d0,a1
 	lea	Instr,a0
-	move.l	a1,(a0,d6.w*4)	
+    move.w  d6,d7
+    lsl.w   #2,d7
+	move.l	a1,(a0,d7.w)	
 	; -----------------------------
 	; Copy instrument header
 	; -----------------------------
@@ -3485,21 +3667,25 @@ AllocAndCopyInstrHeader
 	lea	iEnvPDeltas(a1),a5
 	moveq	#0,d7
 .loop2	moveq	#0,d0
-	move.w	4(a2,d7.w*2),d1
-	sub.w	0(a2,d7.w*2),d1
+    move.w  d7,d5
+    add.w   d5,d5
+	move.w	4(a2,d5.w),d1
+	sub.w	0(a2,d5.w),d1
 	ble.b	.skipV
-	move.w	6(a2,d7.w*2),d0
-	sub.w	2(a2,d7.w*2),d0
+	move.w	6(a2,d5.w),d0
+	sub.w	2(a2,d5.w),d0
 	lsl.w	#8,d0
 	ext.l	d0
 	divs.w	d1,d0
 .skipV	move.w	d0,(a4,d7.w)
 	moveq	#0,d0
-	move.w	4(a3,d7.w*2),d1
-	sub.w	0(a3,d7.w*2),d1
+    move.w  d7,d5
+    add.w   d5,d5
+	move.w	4(a3,d5.w),d1
+	sub.w	0(a3,d5.w),d1
 	ble.b	.skipP
-	move.w	6(a3,d7.w*2),d0
-	sub.w	2(a3,d7.w*2),d0
+	move.w	6(a3,d5.w),d0
+	sub.w	2(a3,d5.w),d0
 	lsl.w	#8,d0
 	ext.l	d0
 	divs.w	d1,d0
@@ -3594,7 +3780,7 @@ LoadInstrHeader
 	bsr.w	ReadLittleEndian32
 	move.l	d0,d3
 	move.l	d3,ihInstrSize(a0)
-	beq.l	.set			; empty instrSize == INS_HDR_SIZE (quirky XMs)
+	beq 	.set			; empty instrSize == INS_HDR_SIZE (quirky XMs)
 	cmp.l	#4,d3
 	blo.w	.error
 	cmp.l	#INS_HDR_SIZE,d3
@@ -3797,7 +3983,7 @@ Load8BitSample
 	; a1 = sample struct
 UnrollSampleLoop8
 	move.l	sPek(a1),a0
-	tst.l	a0			; sample empty?
+	cmp.w   #0,a0			; sample empty?
 	beq.w	.end			; yes, no unroll needed
 	tst.l	sLen(a1)		; sample empty?
 	beq.w	.end			; yes, no unroll needed
@@ -3851,7 +4037,7 @@ UnrollSampleLoop8
 	; a1 = sample struct
 UnrollSampleLoop16
 	move.l	sPek(a1),a0
-	tst.l	a0			; sample empty?
+	cmp.w   #0,a0			; sample empty?
 	beq.w	.end			; yes, no unroll needed
 	tst.l	sLen(a1)		; sample empty?
 	beq.w	.end			; yes, no unroll needed
@@ -3912,7 +4098,7 @@ FixSample
 	tst.l	sLen(a1)	; sample empty?
 	beq.b	.done8		; yes, don't fix
 	move.l	sPek(a1),a5
-	tst.l	a5		; sample empty?
+	cmp.w	#0,a5		; sample empty?
 	beq.b	.done8		; yes, don't fix
 	; ---------------------
 	move.l	a5,a6
@@ -3958,8 +4144,10 @@ FixSample
 	; d6.w = instrument number
 LoadInstrSamples
 	lea	Instr,a1
-	move.l	(a1,d6.w*4),a1
-	tst.l	a1			; instrument empty?
+    move.w  d6,d7
+    lsl.w   #2,d7
+	move.l	(a1,d7.w),a1
+	cmp.w   #0,a1			; instrument empty?
 	beq.w	.done			; yes, no samples to load!
 	move.w	iAntSamp(a1),d7
 	beq.w	.done			; instrument has no samples!
@@ -4132,8 +4320,9 @@ StartTone
 	beq.b	.error
 	subq.b	#1,d1
 	lea	Instr,a0
-	move.l	(a0,d1.w*4),a0
-	tst.l	a0
+    lsl.w   #2,d1
+	move.l	(a0,d1.w),a0
+	cmp.w   #0,a0
 	bne.b	.InstrOK
 .error	lea	SpareInstr,a0	; illegal instr, use placeholder instr
 .InstrOK
@@ -4148,7 +4337,8 @@ StartTone
 	
 	lea	iSmpOffset(pc),a2
 	move.l	a0,a3
-	add.w	(a2,d1.w*2),a3	; a3 = sample struct
+    add.w   d1,d1
+	add.w	(a2,d1.w),a3	; a3 = sample struct
 	move.b	sRelTon(a3),d1
 	move.b	d1,cRelTonNr(a5)
 	add.b	d1,d0
@@ -4184,7 +4374,8 @@ StartTone
 	;cmp.w	#MAX_NOTES,d0 (8bitbubsy: this will never hit)
 	;bhi.b	.NoPeriod
 	lea	Note2Period,a0
-	move.w	(a0,d0.w*2),d0
+    add.w   d0,d0
+	move.w	(a0,d0.w),d0
 	move.w	d0,cRealPeriod(a5)
 	move.w	d0,cOutPeriod(a5)	
 .NoPeriod
@@ -4280,7 +4471,13 @@ DoMultiRetrig
 	move.b	cRealVol(a5),d0
 	moveq	#0,d1
 	move.b	cRetrigVol(a5),d1	
-	jsr	([VolChTab,pc,d1.w*4])
+
+;	jsr	([VolChTab,pc,d1.w*4])
+    lea     VolChTab(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jsr     (a0)
+
 	move.b	d0,cRealVol(a5)
 	move.b	d0,cOutVol(a5)		
 	moveq	#0,d0
@@ -4531,7 +4728,9 @@ PlaySong
 	moveq	#0,d1
 	move.b	(a0,d0.w),d1	
 	lea	PattLens,a0
-	move.w	(a0,d1.w*2),PattLen	
+    move.w  d1,d0
+    add.w   d0,d0
+	move.w	(a0,d0.w),PattLen	
 	move.w	d1,PattNr
 	; ---------------------------
 	; Set initial BPM (from song header)
@@ -4550,7 +4749,7 @@ P_SetSpeed
 	bhs.b	.ok
 	moveq	#32,d0
 .ok	
-    tst.b   AHI(pc)
+    tst.b   AHI
     beq     .1
     bmi     .2
     bsr     ahi_tempo
@@ -4559,7 +4758,8 @@ P_SetSpeed
 .1
     sub.b	#32,d0	
 	lea	BPM2SmpsPerTick,a0
-	move.l	(a0,d0.w*4),SpeedVal	; 16.16fp
+    lsl.w   #2,d0
+	move.l	(a0,d0.w),SpeedVal	; 16.16fp
 	rts
 
 	; a4 = pattern, a5 = StmTyp
@@ -4715,7 +4915,9 @@ GetNewNote
 	cmp.w	#MAX_NOTES,d6
 	bhs.b	.NoPortaFrq
 	lea	Note2Period,a0
-	move.w	(a0,d6.w*2),d0
+    move.w  d6,d0
+    add.w   d0,d0
+	move.w	(a0,d6.w),d0
 	move.w	d0,cWantPeriod(a5)
 	cmp.w	cRealPeriod(a5),d0
 	beq.b	.NoPorta
@@ -4740,7 +4942,12 @@ GetNewNote
 	move.b	cVolKolVol(a5),d0
 	move.w	d0,d1
 	lsr.b	#4,d1
-	jsr	([VolJumpTab0,pc,d1.w*4])
+
+;	jsr	([VolJumpTab0,pc,d1.w*4])
+    lea     VolJumpTab0(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jsr     (a0)
 	
 	; handle normal effects
 	; d0 is reserved for old cVolKolVol (manipulated by VolJumpTab effects)	
@@ -4751,7 +4958,13 @@ GetNewNote
 	move.b	d2,d3		; test if we have an effect at all (eff+effTyp > 0)
 	or.b	d1,d3
 	beq.b	.EffEnd		; no effect
-	jmp	([JumpTab0,pc,d1.w*4])	
+
+;	jmp	([JumpTab0,pc,d1.w*4])	
+    lea     JumpTab0(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jmp     (a0)
+
 .EffEnd
 	rts
 
@@ -4760,7 +4973,11 @@ EEffects0
 	move.b	d2,d1
 	and.b	#15,d2
 	lsr.b	#4,d1
-	jmp	([EJumpTab0,pc,d1.w*4])
+;	jmp	([EJumpTab0,pc,d1.w*4])
+    lea     EJumpTab0(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jmp     (a0)
 
 fxRet rts
 
@@ -5080,7 +5297,7 @@ NoteCut0
 	rts
 
 PattDelay
-	tst.b	PattDelTime2(pc)
+	tst.b	PattDelTime2
 	bne.b	.PattEnd
 	and.b	#15,d2
 	addq.b	#1,d2
@@ -5095,7 +5312,12 @@ DoEffects
 	move.b	cVolKolVol(a5),d0
 	move.w	d0,d1
 	lsr.b	#4,d1
-	jsr	([VolJumpTab,pc,d1.w*4])	
+
+;	jsr	([VolJumpTab,pc,d1.w*4])	
+    lea     VolJumpTab(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jsr     (a0)
 	
 	; normal effects
 	moveq	#0,d1
@@ -5105,7 +5327,13 @@ DoEffects
 	move.b	d0,d2		; test if we have an effect at all (eff+effTyp > 0)
 	or.b	d1,d2
 	beq.b	.EffEnd		; no effect
-	jmp	([JumpTab,pc,d1.w*4])	
+
+;	jmp	([JumpTab,pc,d1.w*4])	
+    lea     JumpTab(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jmp     (a0)
+
 .EffEnd	
 	rts
 
@@ -5176,7 +5404,7 @@ Arp
 .Arp1	lsr.b	#4,d0
 .Arp3	move.w	cRealPeriod(a5),d3
 	; --------------------------
-	tst.b	LinearFrqTab(pc)
+	tst.b	LinearFrqTab
 	beq.b	.Amiga
 .Linear	; --------------------------	; 8bb: added this (faster than RelocateTon)
 	lsl.w	#6,d0
@@ -5778,7 +6006,11 @@ FixaEnvelopeVibrato
 	lsr.l	#2,d1			; d1.l = 0..65536 (rounded)
 	moveq	#0,d0
 	move.w	cFadeOutAmp(a5),d0
-	mulu.l	d0,d1			; (d1.l * 0..32768) = d1.l 0..2147483648
+
+	;mulu.l	d0,d1			; (d1.l * 0..32768) = d1.l 0..2147483648
+    bsr     mulu_32
+    move.l  d0,d1
+
 	add.l	#1<<19,d1		; rounding bias
 	swap	d1
 	lsr.w	#4,d1			; d1.w = 0..2048 (rounded)
@@ -6010,12 +6242,12 @@ GetNextPos
 	beq.b	.Dskc
 	move.b	d0,PattDelTime2
 	clr.b	PattDelTime
-.Dskc	tst.b	PattDelTime2(pc)
+.Dskc	tst.b	PattDelTime2
 	beq.b	.Dska
 	subq.b	#1,PattDelTime2
 	beq.b	.Dska
 	subq.w	#1,PattPos
-.Dska	tst.b	PBreakFlag(pc)
+.Dska	tst.b	PBreakFlag
 	beq.b	.NNPysk
 	clr.b	PBreakFlag
 	moveq	#0,d0
@@ -6031,7 +6263,7 @@ GetNextPos
 	clr.b	PBreakPos
 	clr.b	PosJumpFlag
 	; 8bb: fix for EVIL modules that use Bxx where xx>=SongLength
-	tst.b	bxxOverflow(pc)
+	tst.b	bxxOverflow
 	beq.b	.NoFix
 	clr.b	bxxOverflow
 	moveq	#0,d0
@@ -6050,7 +6282,8 @@ GetNextPos
 	move.b	(a0,d0.w),d0
 	move.w	d0,PattNr
 	lea	PattLens,a0
-	move.w	(a0,d0.w*2),PattLen
+    add.w   d0,d0
+	move.w	(a0,d0.w),PattLen
 	; 8bb: fix for EVIL modules that use Dxx where xx>=nextPattLen
 	move.w	PattPos(pc),d0
 	move.w	PattLen(pc),d1
@@ -6058,7 +6291,7 @@ GetNextPos
 	blo.b	.NoNewPosYet
 	clr.w	PattPos
 .NoNewPosYet
-	tst.b	PosJumpFlag(pc)
+	tst.b	PosJumpFlag
 	bne.b	.NextPosition
 .Exit	rts
 
@@ -6074,15 +6307,17 @@ MainPlayer
 	move.w	d1,Timer
 	tst.b	d0
 	beq.w	.NoNewNote	
-	tst.b	PattDelTime2(pc)
+	tst.b	PattDelTime2
 	beq.b	.GetNewNote
 	bra.b	.Dskip
 .GetNewNote
 	move.w	PattNr(pc),d2
 	and.w	#$ff,d2
 	lea	Patt,a4
-	move.l	(a4,d2.w*4),a4
-	tst.l	a4
+    move.w  d2,d0
+    lsl.w   #2,d0
+	move.l	(a4,d0.w),a4
+	cmp.w	#0,a4
 	beq.b	.NilPointer
 	move.w	PattPos(pc),d0
 	mulu.w	TrackWidth(pc),d0
@@ -6146,6 +6381,7 @@ GetVoice
 	rts
 	ENDIF
 	
+    MC68020
 Mix_UpdateChannelVolPanFrq:
 	lea	PanningTab(pc),a1
 	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
@@ -6299,6 +6535,7 @@ Mix_UpdateChannelVolPanFrq:
 	moveq	#0,d2
 .VL5	move.w	d2,vVolIPLen(a6)
 	rts
+    MC68000
 
 ; ---------------------------------------------------------
 ; ---------------------------------------------------------
@@ -6377,7 +6614,9 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	bsr 	GetFrequenceValue  	; Returns Hz
 
     pushm   all
-    move.w  d0,(a2,d7.w*2)  ; Store frequency per channel
+    move.w  d7,d1
+    add.w   d1,d1
+    move.w  d0,(a2,d1.w)    ; Store frequency per channel
 
 	move.l	d0,d1	    	; d1 = freq (Hz)
 	move.l	d7,d0	    	; d0 = channel
@@ -6393,13 +6632,15 @@ Mix_UpdateChannelVolPanFrq_AHI:
 .trig	btst	#IB_NyTon,d6
 	beq 	.next
 	; -----------------------------
-    clr.l   (a3,d7.w*4)        * Initially no smp for channel
+    move.w  d7,d1
+    lsl.w   #2,d1
+    clr.l   (a3,d1.w)        * Initially no smp for channel
 	move.l	cSampleSeg(a5),d0
 	beq 	.stop
     move.l  d0,a0
 	move.l	sPek(a0),d0
 	beq 	.stop    
-    move.l  a0,(a3,d7.w*4)   ; Store sample ptr per channel for soundfunc
+    move.l  a0,(a3,d1.w)   ; Store sample ptr per channel for soundfunc
 
 	; -----------------------------	
     move.l  sOrigLen(a0),d1
@@ -6549,8 +6790,10 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 .set
 	move.w	d0,HAGEN_VOICE_VOLUMEL(a6)
 	move.w	d1,HAGEN_VOICE_VOLUMER(a6)
-    move.w  d0,(a3,d7.w*2)        * stash channel vol
-    move.w  d1,2(a3,d7.w*2)
+    move.w  d7,d2
+    add.w   d2,d2
+    move.w  d0,(a3,d2.w)        * stash channel vol
+    move.w  d1,2(a3,d2.w)
 
 	; -------------------------------------------------------------------
 	;                            PERIOD UPDATE
@@ -6590,7 +6833,7 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     ; Voice control register initial value
     ; Playback bit #15 set
     move.w   #$8000,d5  
-    cmp.b   #-2,AHI(pc)
+    cmp.b   #-2,AHI
     bne     .1
     bset    #2,d5       * interpolation bit
 .1
@@ -6659,9 +6902,10 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	; output: d0.l = delta (16.16fp) (or Hz if AHI tables used)
 GetFrequenceValue
 	tst.w	d0
-	beq.w	.periodIsZero
+	beq 	.periodIsZero
 	; -----------------------------
-	tst.b	LinearFrqTab(pc)
+	;tst.b	LinearFrqTab(pc)
+    move.b  LinearFrqTab(pc),d1
 	beq.b	.amiga
 	; -----------------------------
 .linear	moveq	#0,d1
@@ -6674,15 +6918,22 @@ GetFrequenceValue
 	sub.w	d2,d3
 	and.b	#31,d3			; d3.b = oct shift
 	; -----------------------------
-	move.l	(a4,d1.w*4),d0
+;	move.l	(a4,d1.w*4),d0
+    lsl.w   #2,d1
+	move.l	(a4,d1.w),d0
 	lsr.l	d3,d0
     rts
 
 .amiga	
-    moveq	#0,d1
-	move.w	d0,d1
-	move.l	FrequenceDivFactor(pc),d0
-	divu.l	d1,d0
+;    moveq	#0,d1
+;	move.w	d0,d1
+;	move.l	FrequenceDivFactor(pc),d0
+;	divu.l	d1,d0
+
+    ext.l   d0
+	move.l	FrequenceDivFactor(pc),d1
+    bsr     divu_32
+    move.l  d1,d0
 	rts
 
 .periodIsZero
@@ -6725,7 +6976,7 @@ GetFrequenceValue
 ; ------------------
 ; No-ramp mixers
 ; ------------------
-
+    MC68020
 ; 8-bit stereo mixing w/ linear interpolation
 MIX8_S	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l),d4
@@ -7786,7 +8037,7 @@ FreePostMixTable
 		move.l	#65536,d0
 	ENDIF
 	move.l	PostMixTable(pc),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.ok			; not allocated!
 	bsr.w	FreeMem
 	clr.l	PostMixTable
@@ -7864,6 +8115,8 @@ GeneratePostMixTable
 
 	ENDIF
 
+    MC68000
+
 	; input: d0.b = song position (0..255, order)
 SetPos
 	tst.w	hLen			; song length > 0?
@@ -7897,7 +8150,9 @@ SetPos
 	move.b	(a0,d0.w),d0
 	move.w	d0,PattNr
 	lea	PattLens,a0
-	move.w	(a0,d0.w*2),PattLen
+;	move.w	(a0,d0.w*2),PattLen
+    add.w   d0,d0
+	move.w	(a0,d0.w),PattLen
 	; -----------------------------
 	; Clear pattloop and recalc vols
 	; -----------------------------
@@ -7959,7 +8214,7 @@ SetMixingVolume
 	moveq	#64,d0
 .L0	move.w	d0,MixingVolume
 	; ----------------------------
-	tst.b	SongIsPlaying(pc)
+	tst.b	SongIsPlaying
 	beq.b	.NoVolUpdate
 	; ----------------------------
 	; Force-update channel volumes
