@@ -11,7 +11,7 @@
 ;at least 1.09 (haven't tried older) is sufficient.
 
  ifnd DEBUG
-DEBUG	=	1
+DEBUG	=	0
  endif
  
  ifnd SERIALDEBUG

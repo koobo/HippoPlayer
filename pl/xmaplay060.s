@@ -178,6 +178,7 @@ ier_amigus          = -26
 ier_nomem	        = -9
 
     DPRINT  "*** xmaplay060 init ***" 
+;;    moveq   #-1,d0 * test AGUS
  ifne DEBUG
     and.l   #$ff,d0
     ext.w   d0
@@ -254,6 +255,8 @@ ier_nomem	        = -9
     rts
 
 .agusError
+    moveq   #ier_amigus,d0
+    rts
 .ahiError
     moveq   #ier_ahi,d0
     rts
@@ -966,7 +969,6 @@ amigus_init:
 		
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
 	
-	popm	d1-d7/a2-a6		
     DPRINT  "amigus_init SUCCESS"
 	moveq	#0,d0       * OK
 	rts
@@ -975,8 +977,6 @@ amigus_init:
     bsr     amigus_uninit
     DPRINT  "amigus_init FAILURE"
 	moveq	#ier_amigus,d0              ; Could not find or allocate AmiGUS
-.ag_init_exit
-	popm	d1-d7/a2-a6		
 	rts
 
 

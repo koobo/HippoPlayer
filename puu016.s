@@ -25110,6 +25110,7 @@ init_error
 	dr	ier_eagleplayer_t
     dr  ier_mpega_t
     dr  ier_mhi_t
+    dr  ier_amigus_t
 
 ier_error           = -1
 ier_nochannels      = -2
@@ -25136,7 +25137,8 @@ ier_not_compatible  = -22
 ier_eagleplayer     = -23
 ier_mpega           = -24
 ier_mhi             = -25
-ier_error_nomsg     = -26 ; error code without showning a message
+ier_amigus          = -26
+ier_error_nomsg     = -27 ; error code without showning a message
 
 ier_playererr_t
 ier_error_t
@@ -25176,6 +25178,8 @@ ier_mpega_t
     dc.b    "Couldn't open mpega.library!",0
 ier_mhi_t
     dc.b    "Couldn't initialize MHI!",0
+ier_amigus_t
+    dc.b    "Couldn't initialize AmiGUS!",0
  even
 
 
@@ -45766,6 +45770,8 @@ patchIt:
     rts
 
 checkAmiGUSAvailability:
+;;    bra     .yes
+
     DPRINT  "checkAmiGUSAvailability"
     lea     .lib(pc),a1
 	lore	Exec,OldOpenLibrary
@@ -53325,7 +53331,6 @@ p_xmaplay:
 
 
 .initError
-    moveq   #ier_error,d0
     bra     .x
 
 .saveError
