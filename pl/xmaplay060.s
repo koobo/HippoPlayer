@@ -4917,7 +4917,7 @@ GetNewNote
 	lea	Note2Period,a0
     move.w  d6,d0
     add.w   d0,d0
-	move.w	(a0,d6.w),d0
+	move.w	(a0,d0.w),d0
 	move.w	d0,cWantPeriod(a5)
 	cmp.w	cRealPeriod(a5),d0
 	beq.b	.NoPorta
