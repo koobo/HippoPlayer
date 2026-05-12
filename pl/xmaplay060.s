@@ -1392,6 +1392,7 @@ MODE_OLDFILE		EQU 1005
 MEMF_ANY		EQU 0
 MEMF_CHIP		EQU 2
 MEMF_FAST		EQU 4
+MEMF_PUBLIC     EQU 1
 MEMF_CLEAR		EQU 65536
 MEMF_TOTAL		EQU 524288
 ;NT_INTERRUPT		EQU 2
@@ -2601,6 +2602,7 @@ CloseAudio
 	; ----------------------------
 	bsr.w	FreeChipBuffers
 	bsr.w	FreePostMixTable	
+    bsr     FreeCDAMixBuffer
 	; ----------------------------
 	; Set back old LED filter state
 	; ----------------------------
@@ -2920,6 +2922,30 @@ DisableAudioMixer
 .1  movem.l (sp)+,d0-a6
 .x	rts
 
+AllocCDAMixBuffer:
+	move.l	#SMP_BUFF_SIZE*2+4,d0
+	moveq	#MEMF_PUBLIC,d1
+	bsr.w	AllocMem
+    tst.l   d0
+	beq.b	.error		
+    addq.l  #4,d0
+    move.l  d0,CDA_MixBufferPtr
+	moveq	#0,d0
+	rts
+.error	moveq	#1,d0
+	rts
+
+
+FreeCDAMixBuffer:
+	move.l	CDA_MixBufferPtr,a1
+	cmp.w   #0,a1
+	beq.b	.1
+    clr.l   CDA_MixBufferPtr
+    subq.l  #4,a1
+	move.l	#SMP_BUFF_SIZE*2+4,d0
+	bsr.w	FreeMem
+.1  rts
+
 FreeChipBuffers
 	move.l	PaulaCh1Buf(pc),a1
 	cmp.w   #0,a1
@@ -3012,6 +3038,13 @@ SetupAudio
 	moveq	#0,d0
 	rts	
 .skip2	; --------------------
+	bsr.w	AllocCDAMixBuffer
+	beq.b	.skip3
+	move.l	#AudErrTxt,d1
+	bsr.w	PutStr
+	moveq	#0,d0
+	rts
+.skip3
 	move.w	#MIX_PERIOD,d0
 	cmp.w	#MIN_PERIOD,d0
 	bhs.b	.ok1
@@ -7780,7 +7813,7 @@ Mix_SaveIPVolumes
 
 Mix_UpdateBuffer
 	move.l	MixSamples(pc),d7
-	lea	CDA_MixBuffer,a0
+	move.l	CDA_MixBufferPtr,a0
 .loop	tst.l	PMPLeft(pc)		; PMPLeft (16.16fp) <= 0?
 	bgt.b	.NoTick			; nope, no tick trigger yet
 	tst.b	SongIsPlaying(pc)
@@ -7812,7 +7845,7 @@ Mix_UpdateBuffer
 	; ----------------------------------
 	; Copy mixed samples to Paula buffer
 	; ----------------------------------
-	lea	CDA_MixBuffer,a0
+	move.l	CDA_MixBufferPtr,a0
 	move.l	MixSamples(pc),d7	; samples to copy
 	move.l	MixPos(pc),d6		; Paula buffer position
 	IF _14BIT
@@ -8850,10 +8883,12 @@ BPM2SmpsPerTick
 	CNOP 0,4
 LogTab	ds.l 12*16*4 ; calculated later
 
-	CNOP 0,4
-	ds.l 1	; pre-padding needed for word-alignment trick
-CDA_MixBuffer
-	ds.l SMP_BUFF_SIZE*2 ; *2 for stereo
+;	CNOP 0,4
+;	ds.l 1	; pre-padding needed for word-alignment trick
+;CDA_MixBuffer
+;	ds.l SMP_BUFF_SIZE*2 ; *2 for stereo
 
+CDA_MixBufferPtr    
+    dc.l    0
 
 InstrNames  ds.b    128*24
