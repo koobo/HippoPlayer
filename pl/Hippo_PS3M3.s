@@ -70,9 +70,10 @@ debug = 0
 allocchans = 1
 disable020 = 0
 
-ier_nomem	=	-9
+ier_nomem	    =	-9
 ier_noprocess	=	-13
-ier_ahi		=	-19
+ier_ahi	    	=	-19
+ier_amigus      =   -26
 
 	incdir	include:
 
@@ -102,6 +103,9 @@ ier_ahi		=	-19
 	include	ps3m.i
 	include	mucro.i
 
+    include libraries/amigus.i
+    include libraries/amigus_lib.i
+    
 
 
 iword	macro

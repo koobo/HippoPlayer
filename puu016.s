@@ -291,6 +291,7 @@ check	macro
     include libraries/iffparse_lib.i
     include libraries/iffparse.i
  endif
+    include libraries/amigus_lib.i
 
 	incdir include/
 	include	mucro.i
@@ -1677,7 +1678,7 @@ p_NOP macro
  endc 
 
 * player group version
-xpl_versio	=	37
+xpl_versio	=	38
 
 
 *********************************************************************************
@@ -25109,6 +25110,7 @@ init_error
 	dr	ier_eagleplayer_t
     dr  ier_mpega_t
     dr  ier_mhi_t
+    dr  ier_amigus_t
 
 ier_error           = -1
 ier_nochannels      = -2
@@ -25135,7 +25137,8 @@ ier_not_compatible  = -22
 ier_eagleplayer     = -23
 ier_mpega           = -24
 ier_mhi             = -25
-ier_error_nomsg     = -26 ; error code without showning a message
+ier_amigus          = -26
+ier_error_nomsg     = -27 ; error code without showning a message
 
 ier_playererr_t
 ier_error_t
@@ -25175,6 +25178,8 @@ ier_mpega_t
     dc.b    "Couldn't open mpega.library!",0
 ier_mhi_t
     dc.b    "Couldn't initialize MHI!",0
+ier_amigus_t
+    dc.b    "Couldn't initialize AmiGUS!",0
  even
 
 
@@ -45785,24 +45790,30 @@ patchIt:
     rts
 
 checkAmiGUSAvailability:
-.AMIGUS_HAGEN_PRODUCT_ID	= 17
-.AMIGUS_MANUFACTURER_ID		= 2782
-    move.l  _ExpansionBase(a5),d0
+;;    bra     .yes
+
+    DPRINT  "checkAmiGUSAvailability"
+    lea     .lib(pc),a1
+	lore	Exec,OldOpenLibrary
+    tst.l   d0
     beq     .x
     move.l  d0,a6
     sub.l   a0,a0
-    move.l  #.AMIGUS_MANUFACTURER_ID,d0
-    moveq   #.AMIGUS_HAGEN_PRODUCT_ID,d1
-    lob     FindConfigDev
-.x  
-	tst.l  	d0
+    lob     AmiGUS_FindCard
+    DPRINT  "AmiGUS_FindCard=%lx"
+    push    d0
+    move.l  a6,a1
+    lore    Exec,CloseLibrary
+    pop     d0
 	bne		.yes
-	clr.b	ps3mamigus(a5)	* for safety clear setting
+.x  clr.b	ps3mamigus(a5)	* for safety clear setting
 	rts
 .yes 
-	st      d0
+    moveq   #1,d0
 	rts
 
+.lib    dc.b    "amigus.library",0
+    even
 
 ******************************************************************************
 * Sampleplayer
@@ -53315,13 +53326,14 @@ p_xmaplay:
     * channel count in d2
     lea     .format(pc),a0
     move.l  d2,d1
+    move.l  #type_agus,d0
+	tst.b	ps3mamigus(a5)
+	bne		.go
     move.l  #type_ahi,d0
-    pushpea .nullStr(pc),d0
     tst.b   ahi_use(a5)
-    beq     .ah
-    move.l  #type_ahi,d0
-;    move.l  #type_agus,d0
-.ah
+    bne     .go
+    pushpea .nullStr(pc),d0
+.go
     lea     .title(pc),a3
     jsr     desmsg3
 
@@ -53340,7 +53352,6 @@ p_xmaplay:
 
 
 .initError
-    moveq   #ier_error,d0
     bra     .x
 
 .saveError
@@ -64215,17 +64226,16 @@ measureVBlankFrequency:
     beq     .xxx
     DPRINT  "measureVBlankFrequency"
     pushm   d1-a6
-    moveq   #3-1,d1
+    moveq   #3-1,d7     * try this many times
 .ml bsr     .measure
     DPRINT  "measured %ld Hz"
-    cmp     #30,d0
+    cmp     #20,d0
     blo     .ag
     cmp     #100,d0
     blo     .good
 .ag dbf     d1,.ml
 .bad
-    DPRINT  "spurious values"   
-    moveq   #0,d0
+    DPRINT  "spurious values, giving up!"   
     bra     .xx
 .good   
     move    d0,vertfreq(a5)
@@ -64238,29 +64248,26 @@ measureVBlankFrequency:
 .measure
 .COUNT=5
     lore    Exec,Forbid
-;    lore    GFX,WaitTOF
     clr.b   tick(a5)
 .1  tst.b   tick(a5)
     beq.b   .1
     bsr     getSysTime
-    movem.l d0/d1,-(sp)
-    moveq   #.COUNT-1,d7
-.wl clr.b   tick(a5)
-.wa tst.b   tick(a5)
-    beq.b   .wa
-    ;lore    GFX,WaitTOF
-    dbf     d7,.wl
+    movem.l d0/d1,-(sp)    
+.2  cmp.b   #.COUNT+1,tick(a5)
+    bne.b   .2
     bsr     getSysTime    
     lore    Exec,Permit
-    movem.l (sp)+,d2/d3
-    sub.l   d2,d0   * secs
-    sub.l   d3,d1   * micros
+    move.l  #1000000,d4 * secs to micros
+    sub.l   (sp)+,d0    * delta secs
+    sub.l   (sp)+,d1    * delta micros
     bge     .tok
     subq.l  #1,d0
-    add.l   #1000000,d1  * MAXMICRO 
+;    add.l   #1000000,d1  * MAXMICRO 
+    add.l   d4,d1
 .tok
     push    d1
-    move.l  #1000000,d1 * secs to micros
+;    move.l  #1000000,d1 * secs to micros
+    move.l  d4,d1
     jsr     mulu_32
     add.l   (sp)+,d0
     divu.w  #1000,d0  * micro to milli
@@ -64269,8 +64276,8 @@ measureVBlankFrequency:
     beq     .x
     move.l  #1000*.COUNT,d0
     ; Always round up
-    add.w   d1,d0
-    subq.w  #1,d0
+    ;add.w   d1,d0
+    ;subq.w  #1,d0
     divu.w  d1,d0
 .x  ext.l   d0
     DPRINT  "** VBlank is %ld Hz"
