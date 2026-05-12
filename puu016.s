@@ -64206,17 +64206,16 @@ measureVBlankFrequency:
     beq     .xxx
     DPRINT  "measureVBlankFrequency"
     pushm   d1-a6
-    moveq   #3-1,d1
+    moveq   #3-1,d7     * try this many times
 .ml bsr     .measure
     DPRINT  "measured %ld Hz"
-    cmp     #30,d0
+    cmp     #20,d0
     blo     .ag
     cmp     #100,d0
     blo     .good
 .ag dbf     d1,.ml
 .bad
-    DPRINT  "spurious values"   
-    moveq   #0,d0
+    DPRINT  "spurious values, giving up!"   
     bra     .xx
 .good   
     move    d0,vertfreq(a5)
@@ -64238,15 +64237,17 @@ measureVBlankFrequency:
     bne.b   .2
     bsr     getSysTime    
     lore    Exec,Permit
-    movem.l (sp)+,d2/d3
-    sub.l   d2,d0   * secs
-    sub.l   d3,d1   * micros
+    move.l  #1000000,d4 * secs to micros
+    sub.l   (sp)+,d0    * delta secs
+    sub.l   (sp)+,d1    * delta micros
     bge     .tok
     subq.l  #1,d0
-    add.l   #1000000,d1  * MAXMICRO 
+;    add.l   #1000000,d1  * MAXMICRO 
+    add.l   d4,d1
 .tok
     push    d1
-    move.l  #1000000,d1 * secs to micros
+;    move.l  #1000000,d1 * secs to micros
+    move.l  d4,d1
     jsr     mulu_32
     add.l   (sp)+,d0
     divu.w  #1000,d0  * micro to milli
