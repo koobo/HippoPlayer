@@ -3556,7 +3556,7 @@ LoadPatterns
 	move.l	d4,d0
 	mulu.w	TrackWidth(pc),d0	; d0.l = unpacked pattern length
 	move.l	d0,d2			; d2.l = copy of unpacked pattern length
-	moveq	#MEMF_FAST,d1
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.w	LPOOM
@@ -3656,7 +3656,7 @@ UnpackPatt ; (a1=pattAddr, a2=pattAddr+(unpackLen-packLen), d4.l=numRows)
 	; d6.w = instrument number
 AllocAndCopyInstrHeader
 	move.l	#INS_SIZE,d0		; alloc and set instr. pointer
-	moveq	#MEMF_FAST,d1
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.w	.cihErr
@@ -3937,7 +3937,7 @@ Load16BitSample
 	move.l	sLen(a1),d0
 	addq.l	#2,d0			; fix-sample for linear interpolation
     DPRINT  "Load16BitSample buffer=%lx"
-	moveq	#MEMF_FAST,d1
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.b	.l16Err
@@ -3980,7 +3980,7 @@ Load8BitSample
 	move.l	sLen(a1),d0
 	addq.l	#2,d0			; fix-sample for linear interpolation
     DPRINT  "Load8BitSample buffer=%lx"
-	moveq	#MEMF_FAST,d1
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.b	.l8Err
@@ -8053,7 +8053,7 @@ AllocPostMixTable
 	ELSE
 		move.l	#65536,d0
 	ENDIF
-	moveq	#MEMF_FAST,d1
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.b	.error		
