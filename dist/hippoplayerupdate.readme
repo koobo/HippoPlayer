@@ -125,37 +125,45 @@ Additional files to check and download
   up the PS3M mixer engine.
 
 - AHI and AmiGUS output: Fix timing issue which lead to slightly 
-  wrong  playback speed. This caused audible gaps with "shipping 
+  wrong playback speed. This caused audible gaps with "shipping 
   forecast.mod" by h0ffman.
 
 - Scopes: improved display sync with audio, especially on RTG
   screens.
 
-- Some other minor things.
+- Some other possible issues fixed related to RTG screenmodes.
+
+- Protracker with AHI/AmiGUS: Fix some songend detection issues, 
+  improve scrambled pattern module support.
 
 ## Improvements:
 
+- Support added for the AmiGUS Mini PCMCIA-card. AmiGUS support 
+  requires amigus.library from now on.
+
+- XM/FastTracker2 support improvements when using 8bitbubsy's 
+  xmaplay060 player (alternative to the buggy player in PS3M).
+  - Show instrument names in the info window.
+  - Show channel count in the infobox.
+  - AHI and AmiGUS support added. Prefs options for XM playback:
+    - xma060+Paula: Play-2 > Enable xmaplay060 > ON
+                    AHI > Enable AHI > OFF
+    - xma060+AHI: Play-2 > Enable xmaplay060 > ON
+                  AHI > Enable AHI > ON
+    - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
+                     PS3M > Use AmiGUS hardware mixer > ON
+  - NOTE: xmaplay060+Paula requires a 68060 but AHI/AmiGUS 
+    should work even with 68000.
+    
+- New search source AMP (Amiga Music Preservation) added.
+  Thanks to asleamp and Patrik for setting this up!
+  The access may be slow due to HTTPS.
+
+- Protracker: play time display keeps track of the time correctly 
+  even when the position is changed by skipping forward/backward 
+  or changed with the position slider.
+  
 - Infobox displays the amount of data downloaded on the 2nd row.
-
-- Protracker: play position time display keeps track of the 
-  time correctly even when the position is changed by skipping 
-  forward/backward or changed with the position slider.
-
-- xmaplay060: Added AHI and AmiGUS support. 
-  This is 8bitbubsy's modern XM replayer, an alternative to the 
-  default buggy XM player in PS3M. It's now usable with other output 
-  options than the high quality Paula mode (requires 68060 or faster).
-  Prefs options for XM playback:
-  - PS3M+Paula: AHI > Enable AHI > OFF
-                Play-2 > Enable xmaplay060 > OFF
-  - PS3M+AHI: AHI > Enable AHI > ON
-              Play-2 > Enable xmaplay060 > OFF
-  - xma060+Paula: Play-2 > Enable xmaplay060 > ON
-                  AHI > Enable AHI > OFF
-  - xma060+AHI: Play-2 > Enable xmaplay060 > ON
-                AHI > Enable AHI > ON
-  - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
-                   PS3M > Use AmiGUS hardware mixer > ON
 
 
 ------------------------------------------------------------------------------

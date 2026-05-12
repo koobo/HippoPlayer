@@ -1,4 +1,65 @@
-TODO: rewrite info window for prop fonts
+
+https://aminet.net/package/mus/midi/CAMD_Toolkit
+
+TODO:
+- xmaplay 68000 version
+
+TODO
+- Ferrara/test drive 2.xm -> crash on xmaplay060 paula
+
+TODO
+- AHI/AGUS Protracker: use modlen calculator as well
+
+TODO
+- 404 crew returns in AHI mode
+-- pattern scope does not follow correctly due to tricks
+-- draw check related to not painting if the row is unchanged?
+
+TODO
+- A500
+- open 2ndReality_PurpleMotion.s3m
+- open patternscope -> crash
+--> toimii?
+
+TODO:
+- A1200:
+- set xmplay060 on
+- play "wit down.xm"
+- press eject
+- crash
+--> fixed?
+
+TODO:
+- set AHI on
+- quadrascope on
+- play mp3
+- stop
+- enforcer hits/HANG
+-> toccata.audio bug
+
+
+TODO:
+- xmaplay060 ahi: play, then press enter again right after playback started  
+             -> BUS ERROR
+-- play, pause, then Play again -> BUS
+- xmaplay060 + AHI: scopes open, crash
+
+FIXED: TODO:
+- restart with "68020" or "68040"
+- open hip
+- set "AMP"
+- search "shipping forecast"
+- hang, yellow guru
+
+FIXED: TODO:
+- protracked time: store time for each pattern, then update the time
+  if user changes pattern
+
+FIXED: TODO:
+TODO:
+- xmaplay 0.47
+
+FIXED: TODO: rewrite info window for prop fonts
 -- transition modinfo<->about, font switch
 -- screen size fit check in beginning
 -- OK: check TODOs
@@ -66,7 +127,7 @@ TODO:
 TODO:
 - layout: bg pattern missing one pixel column on the right side
 
-TODO:
+DONE: TODO:
 - sample names shown with xmaplay060
 
 TODO:

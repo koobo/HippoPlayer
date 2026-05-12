@@ -45354,6 +45354,7 @@ p_multi:
 	jsr	taaksej(a0)
 ;    bra     .timeUpdate
 
+    printt  "TODO: doesn't work properly"
 .timeUpdate:
     move.l	moduleaddress(a5),a4
     bsr     id_protracker
