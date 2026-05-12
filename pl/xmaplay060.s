@@ -2923,7 +2923,7 @@ DisableAudioMixer
 .x	rts
 
 AllocCDAMixBuffer:
-	move.l	#SMP_BUFF_SIZE*2+4,d0
+	move.l	#4*(SMP_BUFF_SIZE*2+1),d0
 	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
     tst.l   d0
@@ -2942,7 +2942,7 @@ FreeCDAMixBuffer:
 	beq.b	.1
     clr.l   CDA_MixBufferPtr
     subq.l  #4,a1
-	move.l	#SMP_BUFF_SIZE*2+4,d0
+	move.l	#4*(SMP_BUFF_SIZE*2+1),d0
 	bsr.w	FreeMem
 .1  rts
 
