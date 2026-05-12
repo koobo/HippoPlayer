@@ -64229,18 +64229,13 @@ measureVBlankFrequency:
 .measure
 .COUNT=5
     lore    Exec,Forbid
-;    lore    GFX,WaitTOF
     clr.b   tick(a5)
 .1  tst.b   tick(a5)
     beq.b   .1
     bsr     getSysTime
-    movem.l d0/d1,-(sp)
-    moveq   #.COUNT-1,d7
-.wl clr.b   tick(a5)
-.wa tst.b   tick(a5)
-    beq.b   .wa
-    ;lore    GFX,WaitTOF
-    dbf     d7,.wl
+    movem.l d0/d1,-(sp)    
+.2  cmp.b   #.COUNT+1,tick(a5)
+    bne.b   .2
     bsr     getSysTime    
     lore    Exec,Permit
     movem.l (sp)+,d2/d3
@@ -64260,8 +64255,8 @@ measureVBlankFrequency:
     beq     .x
     move.l  #1000*.COUNT,d0
     ; Always round up
-    add.w   d1,d0
-    subq.w  #1,d0
+    ;add.w   d1,d0
+    ;subq.w  #1,d0
     divu.w  d1,d0
 .x  ext.l   d0
     DPRINT  "** VBlank is %ld Hz"
