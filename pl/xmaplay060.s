@@ -53,7 +53,7 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
     include libraries/amigus.i
 
 DEBUG        = 1          * Enable debug print to serial
-FAKE_AGUS    = 1
+FAKE_AGUS    = 0
 
  ifnd __VASM
  printt "Test mode!"
@@ -3989,13 +3989,13 @@ LoadInstrHeader
 	swap	d0
 
 ;	move.l	(a2),d1
-    move.b  (a2),d0
-    rol.l   #8,d0
-    move.b  1(a2),d0
-    rol.l   #8,d0
-    move.b  2(a2),d0
-    rol.l   #8,d0
-    move.b  3(a2),d0
+    move.b  (a2),d1
+    rol.l   #8,d1
+    move.b  1(a2),d1
+    rol.l   #8,d1
+    move.b  2(a2),d1
+    rol.l   #8,d1
+    move.b  3(a2),d1
 	
     rol.w	#8,d0
 	swap	d0
