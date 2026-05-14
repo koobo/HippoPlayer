@@ -141,20 +141,24 @@ Additional files to check and download
 - Support added for the AmiGUS Mini PCMCIA-card. AmiGUS support 
   requires amigus.library from now on.
 
-- XM/FastTracker2 support improvements when using 8bitbubsy's 
-  xmaplay060 player (alternative to the buggy player in PS3M).
+- xmaplay060 improvements (8bitbubsy's quality XM replayer, 
+  alternative to the buggy one in PS3M):
+  - AHI and AmiGUS support added with channel panning, 
+    for AHI also ping pong loop support.
   - Show instrument names in the info window.
   - Show channel count in the infobox.
-  - AHI and AmiGUS support added. Prefs options for XM playback:
-    - xma060+Paula: Play-2 > Enable xmaplay060 > ON
-                    AHI > Enable AHI > OFF
-    - xma060+AHI: Play-2 > Enable xmaplay060 > ON
-                  AHI > Enable AHI > ON
-    - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
-                     PS3M > Use AmiGUS hardware mixer > ON
-  - NOTE: xmaplay060+Paula requires a 68060 but AHI/AmiGUS 
-    should work even with 68000.
-    
+
+- xmaplay060 output choices in Prefs are now:
+  - xma060+Paula: Play-2 > Enable xmaplay060 > ON
+                  AHI > Enable AHI > OFF
+                  CPU requirement: 68060
+  - xma060+AHI: Play-2 > Enable xmaplay060 > ON
+                AHI > Enable AHI > ON
+                CPU requirement: 68020 
+  - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
+                   PS3M > Use AmiGUS hardware mixer > ON
+                   CPU requirement: 68000 
+
 - New search source AMP (Amiga Music Preservation) added.
   Thanks to asleamp and Patrik for setting this up!
   The access may be slow due to HTTPS.
