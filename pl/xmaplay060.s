@@ -1496,21 +1496,64 @@ swap32	MACRO
 	rol.w	#8,\1
 	ENDM
 	
+;swap16a        MACRO
+;       move.w  \1,d0
+;       rol.w   #8,d0
+;       move.w  d0,\1
+;       ENDM
+
 	; warning: trashes d0!
 swap16a	MACRO
-	move.w	\1,d0
-	rol.w	#8,d0
-	move.w	d0,\1
+    pea     \1
+    bsr     swap16a_
+    addq    #4,sp
 	ENDM
-	
+
+;swap32a        MACRO
+;       move.l  \1,d0
+;       rol.w   #8,d0
+;       swap    d0
+;       rol.w   #8,d0
+;       move.l  d0,\1
+;	ENDM
+
 	; warning: trashes d0!
 swap32a	MACRO
-	move.l	\1,d0
-	rol.w	#8,d0
-	swap	d0
-	rol.w	#8,d0
-	move.l	d0,\1
+    pea     \1
+    bsr     swap32a_
+    addq    #4,sp
 	ENDM
+
+
+swap16a_:
+    movem.l d0/a0,-(sp)
+    move.l  4+4+4(sp),a0
+    move.b  0(a0),-(sp)
+    move.b  1(a0),-(sp)
+    move.b  (sp)+,d0
+    move.b  d0,0(a0)
+    move.b  (sp)+,d0
+    move.b  d0,1(a0)
+    movem.l (sp)+,d0/a0
+    rts
+
+swap32a_:
+    movem.l d0/a0,-(sp)
+    move.l  4+4+4(sp),a0
+    move.b  0(a0),-(sp)
+    move.b  1(a0),-(sp)
+    move.b  2(a0),-(sp)
+    move.b  3(a0),-(sp)
+    move.b  (sp)+,d0
+    move.b  d0,0(a0)
+    move.b  (sp)+,d0
+    move.b  d0,1(a0)
+    move.b  (sp)+,d0
+    move.b  d0,2(a0)
+    move.b  (sp)+,d0
+    move.b  d0,3(a0)
+    movem.l (sp)+,d0/a0
+    rts
 
 ;------------------------------------------------------------------------------
 ;                              XM STRUCTURES
@@ -2753,12 +2796,13 @@ SetMixerVars
 	;
 	; Output:
 	;  d0.l = rounded 16.16fp CIA Paula delta	
-    MC68020
 CalcCiaDelta
     tst.b   AHI
     bne     .error
 	tst.w	d0
 	beq.b	.error
+    DPRINT  "c3"
+    MC68020
 	; ---------------------------
 	movem.l	d1-d7,-(sp)
 	move.b	d2,d7
@@ -3637,7 +3681,11 @@ UnpackPatt ; (a1=pattAddr, a2=pattAddr+(unpackLen-packLen), d4.l=numRows)
 	btst	#7,d0
 	bne.b	.packed
 	move.b	d0,(a1)+
-	move.l	(a2)+,(a1)+		; warning: can be misaligned
+	;move.l	(a2)+,(a1)+		; warning: can be misaligned
+    move.b  (a2)+,(a1)+
+    move.b  (a2)+,(a1)+
+    move.b  (a2)+,(a1)+
+    move.b  (a2)+,(a1)+
 	bra.b	.next
 	; ----------------------------
 .packed	moveq	#0,d1
