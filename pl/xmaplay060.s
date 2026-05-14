@@ -2801,7 +2801,6 @@ CalcCiaDelta
     bne     .error
 	tst.w	d0
 	beq.b	.error
-    DPRINT  "c3"
     MC68020
 	; ---------------------------
 	movem.l	d1-d7,-(sp)
@@ -3752,7 +3751,6 @@ AllocAndCopyInstrHeader
 	; -----------------------------
 	; Copy instrument header
 	; -----------------------------
-    DPRINT  "AllocAndCopyInstrHeader-2"
 	lea	InsHdr,a0		; a0 = src, a1 = dst	
 	move.l	a0,-(sp)
 	move.l	a1,-(sp)
@@ -3766,7 +3764,6 @@ AllocAndCopyInstrHeader
 	move.b	ihAntSamp(a0),iAntSamp(a1)	; copy leftovers
 	move.b	ihAntSamp+1(a0),iAntSamp+1(a1)	; copy leftovers
 	move.b	ihMute(a0),iMute(a1)
-    DPRINT  "AllocAndCopyInstrHeader-3"
 	; -----------------------------
 	; Pre-calculate vibrato sweep delta (prevents DIV in replayer)
 	; -----------------------------
@@ -3942,7 +3939,6 @@ LoadInstrHeader
 	beq.w	.end			; no, don't do any further loading
 	cmp.w	#16,d3
 	bhi.w	.error			; too many samples!		
-	DPRINT  "LoadInstrHeader-6"
     ; -----------------------------
 	; Read sample headers
 	; -----------------------------
@@ -3953,7 +3949,6 @@ LoadInstrHeader
 .noSmps	; -----------------------------
 	; Byte-swap sample header
 	; -----------------------------
-	DPRINT  "LoadInstrHeader-7"
 ;	move.w	ihAntSamp(a0),d7
 	move.b	ihAntSamp(a0),d7
     ror     #8,d7
@@ -3968,7 +3963,6 @@ LoadInstrHeader
 	lea	SMP_HDR_SIZE(a1),a1
 	dbra	d7,.loop4
 .skip	swap16a	ihFadeOut(a0)
-	DPRINT  "LoadInstrHeader-8"
 	; -----------------------------
 	; Byte-swap envelope points
 	; -----------------------------
@@ -4028,7 +4022,6 @@ LoadInstrHeader
 
 	dbra	d7,.loop3
 	; ----------------------------- 
-	DPRINT  "LoadInstrHeader-9"
 	bsr.w	AllocAndCopyInstrHeader
 	bne.w	.error
 .end	moveq	#0,d0	; 0=successful
