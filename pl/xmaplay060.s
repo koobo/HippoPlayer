@@ -52,7 +52,8 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
     include libraries/amigus_lib.i
     include libraries/amigus.i
 
-DEBUG        = 0          * Enable debug print to serial
+DEBUG        = 1          * Enable debug print to serial
+FAKE_AGUS    = 1
 
  ifnd __VASM
  printt "Test mode!"
@@ -172,13 +173,21 @@ testMain:
 *   a2 = address to left Paula buffer
 *   a3 = address to right Paula buffer
 _init:
+    push    a5
+    bsr     .doInit
+    pop     a5
+    rts
+.doInit 
 ier_filerr          = -17
 ier_ahi             = -19
 ier_amigus          = -26
 ier_nomem	        = -9
 
     DPRINT  "*** xmaplay060 init ***" 
-;;    moveq   #-1,d0 * test AGUS
+ ifne FAKE_AGUS
+    moveq   #-1,d0 * test AGUS
+    move.l  #fake_agus_base,amigus_base
+ endif
  ifne DEBUG
     and.l   #$ff,d0
     ext.w   d0
@@ -206,8 +215,8 @@ ier_nomem	        = -9
 
     tst.b   AHI
     beq     .normal
-    bmi     .agus
-
+    bmi     amigus_cont
+    
     DPRINT  "-- AHI --"
     moveq   #0,d0
     move.w  AHIMixingFreq,d0
@@ -229,11 +238,30 @@ ier_nomem	        = -9
 
 .agus
     DPRINT  "-- AGUS --"
+ ifne FAKE_AGUS
+    DPRINT  "Fake mode!"
+    bsr     loadSamplesAGUS
+	move.w	Speed(pc),d0			; d0 = tempo (BPM)
+	bsr		amigus_tempo			; Set initial tempo
+    st      setpause    ; play
+    moveq   #0,d7
+.floop  
+    move    $dff006,$dff180
+    push    d7
+	bsr 	MainPlayer
+	bsr 	Mix_UpdateChannelVolPanFrq_AGUS
+    pop     d7
+    addq    #1,d7
+    cmp     #100,d7
+    bne     .floop
+    bra     .normal
+ else
     bsr     amigus_init
     DPRINT  "amigus_init=%ld"
     tst.l   d0
     bne     .agusError
     bsr     loadSamplesAGUS
+ endif
 
 .normal
     * Return access to mixer buffers when Paula mixer engaged
@@ -263,8 +291,8 @@ ier_nomem	        = -9
 
 _end:
     tst.b   AHI
-    bne     .ahi
     bmi     .agus
+    bne     .ahi
 .1
     DPRINT  "normal end"
     bsr     StopTask
@@ -305,10 +333,18 @@ _backward:
     bra     PrevPattern
 
 _stop:
+ ifne DEBUG
+    push    d0
+    move.b  AHI,d0
+    ext.w   d0
+    ext.l   d0
+    DPRINT  "_stop mode=%ld"
+    pop     d0
+ endif
     tst.b   AHI
-    bne     ahi_stop
     bmi     amigus_stop
-
+    bne     ahi_stop
+   
     bsr    StopTask
     
 	lea	    $dff000,a0
@@ -321,8 +357,8 @@ _stop:
 
 _cont:
     tst.b   AHI
-    bne     ahi_cont
     bmi     amigus_cont
+    bne     ahi_cont
     
     moveq	#64,d0			; set voice volumes
 	lea	    $dff000,a0
@@ -705,9 +741,9 @@ ahi_playmusic:
     rts
 .1
 	pushm	d2-d7/a2-a6
- ifne DEBUG
-    move    $dff006,$dff180
- endif
+; ifne DEBUG
+;    move    $dff006,$dff180
+; endif
 	bsr 	MainPlayer
 	bsr 	Mix_UpdateChannelVolPanFrq_AHI
 
@@ -1156,9 +1192,9 @@ AmiGUS_Int:
 
     tst.b  setpause
     beq.b   .1
- ifne DEBUG
-    move    $dff006,$dff180
- endif
+; ifne DEBUG
+;    move    $dff006,$dff180
+; endif
 	bsr 	MainPlayer
 	bsr 	Mix_UpdateChannelVolPanFrq_AGUS
 .1
@@ -2058,9 +2094,9 @@ MAIN:
 	bsr.w	PutStr
 	; ----------------------------
 	move.l	4.w,a6			; test if we have a 68020+ CPU
-	move.w	AttnFlags(a6),d0
-	btst	#1,d0			; 68020+ ?
-	beq.w	CpuIs68000
+	;move.w	AttnFlags(a6),d0
+	;btst	#1,d0			; 68020+ ?
+	;beq.w	CpuIs68000
 	; ----------------------------
 	bsr.w	GetFileNameFromArg
 	bne.b	.skip			; we got filename from cmd line arg
@@ -6612,7 +6648,8 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	beq.b	.period
 	; -----------------------------
 
-	pushm   all
+;	pushm   all
+    push    a2
 	move.l	d7,d0		; channel (d7)
 
 	; AHI_SetVol args: channel (d0), vol (d1 0..$10000), pan (d2 0..$10000), freq (d3), flags (d4)
@@ -6633,7 +6670,8 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	move.l	ahibase(pc),a6
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_SetVol(a6)
-    popm    all
+    pop     a2
+;    popm    all
 
 
 	; -------------------------------------------------------------------
@@ -6646,7 +6684,8 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	move.w	cFinalPeriod(a5),d0
 	bsr 	GetFrequenceValue  	; Returns Hz
 
-    pushm   all
+ ;   pushm   all
+    push    a2
     move.w  d7,d1
     add.w   d1,d1
     move.w  d0,(a2,d1.w)    ; Store frequency per channel
@@ -6658,7 +6697,8 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	move.l	ahi_ctrl(pc),a2
     ;;DPRINT  "SetFreq ch=%02.2lx fr=%ld Hz"
 	jsr	_LVOAHI_SetFreq(a6)
-    popm    all
+    pop     a2
+  ;  popm    all
 	; -------------------------------------------------------------------
 	;                           SAMPLE TRIGGER
 	; -------------------------------------------------------------------
@@ -6691,7 +6731,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
     ;            1 -> Forward loop
     ;            2 -> ping pong loop
 
-    pushm   all
+    push    a2
     clr.b   sAHILoopDir(a0)  * Reset ping pong state
     move.l  d1,d3            * d3=length (0=play full sample)	
     sub.l   d4,d3            * .. adjust based on start offset
@@ -6704,7 +6744,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	move.l	ahi_ctrl(pc),a2
 ;    DPRINT  "SetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
 	jsr	_LVOAHI_SetSound(a6)
-    popm    all
+    pop     a2
 
 
 	; -------------------------------------------------------------------
@@ -6715,7 +6755,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	rts
 	; -----------------------------
 .stop	
-    pushm   all
+    push    a2
     moveq	#AHI_NOSOUND,d1
 	move.l	d7,d0
 	moveq	#0,d2
@@ -6725,7 +6765,7 @@ Mix_UpdateChannelVolPanFrq_AHI:
 	move.l	ahi_ctrl(pc),a2
     DPRINT  "NOSOUND channel=%ld"
 	jsr	_LVOAHI_SetSound(a6)
-    popm    all
+    pop     a2
 	bra.b	.next
 
 
@@ -8892,3 +8932,7 @@ CDA_MixBufferPtr
     dc.l    0
 
 InstrNames  ds.b    128*24
+
+ ifne FAKE_AGUS
+fake_agus_base  ds.b    1024
+ endif
