@@ -215,7 +215,7 @@ ier_nomem	        = -9
 
     tst.b   AHI
     beq     .normal
-    bmi     amigus_cont
+    bmi     .agus
     
     DPRINT  "-- AHI --"
     moveq   #0,d0
@@ -252,7 +252,7 @@ ier_nomem	        = -9
 	bsr 	Mix_UpdateChannelVolPanFrq_AGUS
     pop     d7
     addq    #1,d7
-    cmp     #100,d7
+    cmp     #1000,d7
     bne     .floop
     bra     .normal
  else
@@ -2709,7 +2709,7 @@ SetMixerVars
 	move.w	206(a1),d7
 	jsr	_LVOCloseLibrary(a6)
 	btst	#2,d7				; Amiga is PAL?
-	beq.b	.NTSC				; nope
+	beq 	.NTSC				; nope
 
 	; ------------------------------------
 	;                 PAL
@@ -3752,17 +3752,21 @@ AllocAndCopyInstrHeader
 	; -----------------------------
 	; Copy instrument header
 	; -----------------------------
+    DPRINT  "AllocAndCopyInstrHeader-2"
 	lea	InsHdr,a0		; a0 = src, a1 = dst	
 	move.l	a0,-(sp)
 	move.l	a1,-(sp)
 	lea	ihTA(a0),a0
-	move.w	#(208/4)-1,d7
-.loop1	move.l	(a0)+,(a1)+
+	move.w	#(208)-1,d7
+.loop1	move.b	(a0)+,(a1)+
 	dbra	d7,.loop1
 	move.l	(sp)+,a1
 	move.l	(sp)+,a0
-	move.w	ihAntSamp(a0),iAntSamp(a1)	; copy leftovers
+	;move.w	ihAntSamp(a0),iAntSamp(a1)	; copy leftovers
+	move.b	ihAntSamp(a0),iAntSamp(a1)	; copy leftovers
+	move.b	ihAntSamp+1(a0),iAntSamp+1(a1)	; copy leftovers
 	move.b	ihMute(a0),iMute(a1)
+    DPRINT  "AllocAndCopyInstrHeader-3"
 	; -----------------------------
 	; Pre-calculate vibrato sweep delta (prevents DIV in replayer)
 	; -----------------------------
@@ -3930,11 +3934,16 @@ LoadInstrHeader
  endif
 	; -----------------------------
 	moveq	#0,d3
-	move.w	ihAntSamp(a0),d3	; does this instrumenth have any samples?
+	;move.w	ihAntSamp(a0),d3	; does this instrumenth have any samples?
+    move.b  ihAntSamp(a0),d3
+    ror     #8,d3
+    move.b  ihAntSamp+1(a0),d3
+    tst.w   d3
 	beq.w	.end			; no, don't do any further loading
 	cmp.w	#16,d3
 	bhi.w	.error			; too many samples!		
-	; -----------------------------
+	DPRINT  "LoadInstrHeader-6"
+    ; -----------------------------
 	; Read sample headers
 	; -----------------------------
 	mulu.w	#SMP_HDR_SIZE,d3	; d3.l = total sample headers length
@@ -3944,7 +3953,11 @@ LoadInstrHeader
 .noSmps	; -----------------------------
 	; Byte-swap sample header
 	; -----------------------------
-	move.w	ihAntSamp(a0),d7
+	DPRINT  "LoadInstrHeader-7"
+;	move.w	ihAntSamp(a0),d7
+	move.b	ihAntSamp(a0),d7
+    ror     #8,d7
+	move.b	ihAntSamp+1(a0),d7
 	subq.b	#1,d7
 	lea	SmpHdrs,a1
 .loop4	movem.l	(a1),d0-d2
@@ -3955,26 +3968,67 @@ LoadInstrHeader
 	lea	SMP_HDR_SIZE(a1),a1
 	dbra	d7,.loop4
 .skip	swap16a	ihFadeOut(a0)
+	DPRINT  "LoadInstrHeader-8"
 	; -----------------------------
 	; Byte-swap envelope points
 	; -----------------------------
 	moveq	#12-1,d7
 	lea	ihEnvVP(a0),a1
 	lea	ihEnvPP(a0),a2
-.loop3	move.l	(a1),d0
+.loop3	
+;    move.l	(a1),d0
+    move.b  (a1),d0
+    rol.l   #8,d0
+    move.b  1(a1),d0
+    rol.l   #8,d0
+    move.b  2(a1),d0
+    rol.l   #8,d0
+    move.b  3(a1),d0
+
 	rol.w	#8,d0
 	swap	d0
-	move.l	(a2),d1
-	rol.w	#8,d0
+
+;	move.l	(a2),d1
+    move.b  (a2),d0
+    rol.l   #8,d0
+    move.b  1(a2),d0
+    rol.l   #8,d0
+    move.b  2(a2),d0
+    rol.l   #8,d0
+    move.b  3(a2),d0
+	
+    rol.w	#8,d0
 	swap	d0
-	move.l	d0,(a1)+
+	
+    ;move.l	d0,(a1)+
+    ror.l   #8,d0
+    move.b  d0,(a1)+
+    ror.l   #8,d0
+    move.b  d0,(a1)+
+    ror.l   #8,d0
+    move.b  d0,(a1)+
+    ror.l   #8,d0
+    move.b  d0,(a1)+
+
 	rol.w	#8,d1
 	swap	d1
 	rol.w	#8,d1
 	swap	d1
-	move.l	d1,(a2)+
+
+;	move.l	d1,(a2)+
+    ror.l   #8,d1
+    move.b  d1,(a2)+
+    ror.l   #8,d1
+    move.b  d1,(a2)+
+    ror.l   #8,d1
+    move.b  d1,(a2)+
+    ror.l   #8,d1
+    move.b  d1,(a2)+
+
+
 	dbra	d7,.loop3
 	; ----------------------------- 
+	DPRINT  "LoadInstrHeader-9"
 	bsr.w	AllocAndCopyInstrHeader
 	bne.w	.error
 .end	moveq	#0,d0	; 0=successful
@@ -8151,6 +8205,7 @@ AllocPostMixTable
 .error	moveq	#1,d0
 	rts
 
+ MC68000
 FreePostMixTable
 	IF _14BIT
 		move.l	#65536*2,d0
@@ -8167,6 +8222,7 @@ FreePostMixTable
 	IF _14BIT
 
 	; 14-bit output	(MIX_AMP controls the gain)
+ MC68020
 GeneratePostMixTable
 	movem.l	d0-a6,-(sp)
 	move.l	PostMixTable(pc),a0
