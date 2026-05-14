@@ -3969,6 +3969,23 @@ LoadInstrHeader
 	moveq	#12-1,d7
 	lea	ihEnvVP(a0),a1
 	lea	ihEnvPP(a0),a2
+ REM ; original
+.loop3	move.l	(a1),d0
+	rol.w	#8,d0
+	swap	d0
+	move.l	(a2),d1
+	rol.w	#8,d0
+	swap	d0
+	move.l	d0,(a1)+
+	rol.w	#8,d1
+	swap	d1
+	rol.w	#8,d1
+	swap	d1
+	move.l	d1,(a2)+
+    DPRINT  "%08.8lx %08.8lx"
+	dbra	d7,.loop3
+ EREM ; original
+; REM 
 .loop3	
 ;    move.l	(a1),d0
     move.b  (a1),d0
@@ -3995,13 +4012,13 @@ LoadInstrHeader
 	swap	d0
 	
     ;move.l	d0,(a1)+
-    ror.l   #8,d0
+    rol.l   #8,d0
     move.b  d0,(a1)+
-    ror.l   #8,d0
+    rol.l   #8,d0
     move.b  d0,(a1)+
-    ror.l   #8,d0
+    rol.l   #8,d0
     move.b  d0,(a1)+
-    ror.l   #8,d0
+    rol.l   #8,d0
     move.b  d0,(a1)+
 
 	rol.w	#8,d1
@@ -4010,17 +4027,20 @@ LoadInstrHeader
 	swap	d1
 
 ;	move.l	d1,(a2)+
-    ror.l   #8,d1
+    rol.l   #8,d1
     move.b  d1,(a2)+
-    ror.l   #8,d1
+    rol.l   #8,d1
     move.b  d1,(a2)+
-    ror.l   #8,d1
+    rol.l   #8,d1
     move.b  d1,(a2)+
-    ror.l   #8,d1
+    rol.l   #8,d1
     move.b  d1,(a2)+
 
+;    DPRINT  "%08.8lx %08.8lx"
 
 	dbra	d7,.loop3
+; EREM
+
 	; ----------------------------- 
 	bsr.w	AllocAndCopyInstrHeader
 	bne.w	.error
