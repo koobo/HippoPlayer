@@ -32,8 +32,23 @@ TEST 	= 	0
     opt o-   ; disable all
     opt o1+  ; optimize branches
     opt o2+  ; optimize displacements
-    ;opt ow+ ; display 
+    ;opt ow+ ; display
+    MC68000 
  endif
+
+
+_MC68000 macro
+    ifd __VASM
+        MC68000
+    endif
+    endm
+
+_MC68020 macro
+    ifd __VASM
+        MC68020
+    endif
+    endm
+
 
 * Print to debug console, very clever.
 * Param 1: string
@@ -697,7 +712,9 @@ s3init:
 
 	moveq	#0,d2
 	move.b	s3mmode1a(pc),d2
-	move.b	.prit(pc,d2),d2
+    lea     .prit(pc),a1
+	move.b	(a1,d2),d2
+	;move.b	.prit(pc,d2),d2
 	ext	d2
 	ext.l	d2
 
@@ -3197,15 +3214,15 @@ copybuf14
 	move.b	1(a2,d2.l),(a4)+
 	dbf	d7,.lddC0
 	rts
-
-
+ 
+ _MC68020
 .convert14_cyber020
 .lddC	move	(a0)+,d2
 	move.b	(a2,d2.l*2),(a1)+
 	move.b	1(a2,d2.l*2),(a4)+
 	dbf	d7,.lddC
 	rts
-
+  _MC68000
 
 
 ; 000/010 Mixing routines
@@ -4035,7 +4052,7 @@ mix162	moveq	#0,d7
 
 ; Mixing routine for the first channel (moves data)
 
-
+ _MC68020
 mix_020	moveq	#0,d7
 	move	bytes2do(a5),d7
 	tst	mPeriod(a4)
@@ -4802,8 +4819,8 @@ mix162_020
 	move.l	a0,(a4)
 	bra.b	.ty
 
-	endc
-
+	endc ; ifeq disable68020
+ _MC68000
 
 * mulu_32 --- d0 = d0*d1
 mulu_32	movem.l	d2/d3,-(sp)
@@ -11325,11 +11342,12 @@ exitz	move	#$f00,$180(a6)
 .in	dc.b	"intuition.library",0
  even
 
+ _MC68020
 liko	ifeq	disable020
 	MOVEC	VBR,d0
 	endc
 	rte
-
+ _MC68000
 
 
 *******
