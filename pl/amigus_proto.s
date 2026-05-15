@@ -77,13 +77,13 @@ amigus_init:
 	
 	bsr		amigus_voice_reset		; Initialize all AmiGUS voices
 	
-	move.w	tempo(pc),d0				; d0 = tempo (BPM)
+	move.w	tempo,d0				; d0 = tempo (BPM)
 	bsr		amigus_tempo			; Set initial tempo
 	
 	st   	setpause
 	
 	lea		PatternInfo(pc),a0
-	move.l	unpackedPatternPtr(pc),a1
+	move.l	unpackedPatternPtr,a1
 	
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
 	
@@ -209,8 +209,8 @@ amigus_cont:
 	rts
 ;---	
 .ag_restorechannels
-	lea	    cha0(pc),a4
-	move	numchans(pc),d7
+	lea	    cha0,a4
+	move	numchans,d7
 	subq	#1,d7
 	moveq	#0,d6
 .ag_restore_loop
@@ -244,24 +244,24 @@ amigus_playmusic:
 .ag_nopause
 	bsr		s3vol				; Update master volume
 
-	move	mtype(pc),d0		; Select appropriate player routine
-	lea		s3m_music(pc),a0
+	move	mtype,d0		; Select appropriate player routine
+	lea		s3m_music,a0
 	subq	#1,d0
 	beq.b	.ag_player_exe	
-	lea		mt_music(pc),a0
+	lea		mt_music,a0
 	subq	#1,d0
 	beq.b	.ag_player_exe	
 	subq	#1,d0
 	beq.b	.ag_player_exe	
-	lea		xm_music(pc),a0
+	lea		xm_music,a0
 	subq	#1,d0
 	beq.b  	.ag_player_exe	
-	lea		it_music(pc),a0
+	lea		it_music,a0
 .ag_player_exe	
 	jsr	(a0)					; Execute player routine
 
 	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
-	move.w	PS3M_master(pc),d1	; Master Volume	
+	move.w	PS3M_master,d1   	; Master Volume	
 	cmp.w	#64,d1				; Full PAULA volume?
 	bne		.ag_novolovl		; No, then just shift it
 	move.w	#$ffff,d1			; Yes, set full AmiGUS master volume
@@ -273,8 +273,8 @@ amigus_playmusic:
 	move.w	d1,HAGEN_GLOBAL_VOLUMEL(a6)	; Set AmiGUS master volume
 	move.w	d1,HAGEN_GLOBAL_VOLUMER(a6)	
 
-	lea		cha0(pc),a4				; a4 = Note structure
-	move	numchans(pc),d7			; d7 = Channel numbers
+	lea		cha0,a4			    	; a4 = Note structure
+	move	numchans,d7			    ; d7 = Channel numbers
 	subq	#1,d7
 	moveq	#0,d6					; d6 = current channel number
 .ag_channel_loop					; Main channel loop
