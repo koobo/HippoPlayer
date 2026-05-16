@@ -155,7 +155,7 @@ testMain:
 
 
 * In:
-*   a0 = module filename
+*   a0 = module address
 *   a1 = song end trigger
 *   d0 = AHI on or off
 *        0 = no AHI
@@ -164,6 +164,7 @@ testMain:
 *       -2 = AmiGUS interpolated 
 *   d1 = AHI mixing rate
 *   d2 = AHI mode
+*   d3 = module length
 * Out:
 *   d0 = status
 *   d1 = position mask (Paula playback)
@@ -192,18 +193,16 @@ ier_nomem	        = -9
     and.l   #$ff,d0
     ext.w   d0
     ext.l   d0
-    DPRINT  "ahi/agus=%ld ahirate=%ld ahimode=%08.8lx"
+    move.l  a0,d4
+    DPRINT  "ahi/agus=%ld ahirate=%ld ahimode=%08.8lx modlen=%ld mod=%lx"
  endif
     move.b  d0,AHI
     move.w  d1,AHIMixingFreq
     move.l  d2,setmode
     move.l  a1,songOverPtr
-
-	move.l	a0,a1
-.11 tst.b   (a1)+
-    bne.b   .11
-    move.l  a1,d0
-    sub.l   a0,d0
+    move.l  a0,modulePtr
+    move.l  d3,moduleLen
+    move.l  a0,readPtr
 
     move.l  a5,-(sp)
     bsr     MAIN
@@ -376,6 +375,9 @@ _cont:
 
 songOverPtr     dc.l    0
 lastMessagePtr  dc.l    0
+moduleLen       dc.l    0
+modulePtr       dc.l    0
+readPtr         dc.l    0
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -1422,8 +1424,8 @@ NUM_ERROR_MSGS 		EQU 6
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
-SEEK_SET		EQU -1
-SEEK_CUR		EQU 0
+SEEK_SET		EQU -1 ; OFFSET_BEGINNING relative to Beginning Of File 
+SEEK_CUR		EQU 0  ; OFFSET_CURRENT  relative to Current file position 
 MODE_OLDFILE		EQU 1005
 MEMF_ANY		EQU 0
 MEMF_CHIP		EQU 2
@@ -1912,8 +1914,9 @@ strncmp
 	;   d0.l = file handle
 	;-------------------------------------------------
 fopen	movem.l	d1/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	jsr	_LVOOpen(a6)
+	;move.l	DosBase(pc),a6
+	;jsr	_LVOOpen(a6)
+    moveq   #1,d0
 	movem.l	(sp)+,d1/a0/a1/a6
 	rts
 
@@ -1922,8 +1925,8 @@ fopen	movem.l	d1/a0/a1/a6,-(sp)
 	;   d1.l = file handle
 	;-------------------------------------------------
 fclose	movem.l	d0/d1/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	jsr	_LVOClose(a6)
+	;move.l	DosBase(pc),a6
+	;jsr	_LVOClose(a6)
 	movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
 	
@@ -1937,8 +1940,17 @@ fclose	movem.l	d0/d1/a0/a1/a6,-(sp)
 	;   d0.l = actual bytes read
 	;-------------------------------------------------	
 fread	movem.l	d1/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	jsr	_LVORead(a6)
+	;move.l	DosBase(pc),a6
+	;jsr	_LVORead(a6)
+    move.l  d3,d0
+    move.l  readPtr,a0
+    move.l  d2,a1
+    move.l  d3,d0
+.l  move.b  (a0)+,(a1)+
+    subq.l  #1,d0
+    bne     .l
+    move.l  a0,readPtr
+    move.l  d3,d0
 	movem.l	(sp)+,d1/a0/a1/a6
 	rts
 	
@@ -1952,8 +1964,19 @@ fread	movem.l	d1/a0/a1/a6,-(sp)
 	;   d0.l = old position
 	;-------------------------------------------------	
 fseek	movem.l	d1/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	jsr	_LVOSeek(a6)
+	;move.l	DosBase(pc),a6
+	;jsr	_LVOSeek(a6)
+
+    cmp.l   #SEEK_SET,d3
+    beq     .set
+    cmp.l   #SEEK_CUR,d3
+    beq     .x
+    bra     .y
+.set
+    move.l  modulePtr,readPtr
+.x
+    add.l   d2,readPtr
+.y
 	movem.l	(sp)+,d1/a0/a1/a6
 	rts
 
@@ -1966,12 +1989,15 @@ fseek	movem.l	d1/a0/a1/a6,-(sp)
 	;-------------------------------------------------
 ReadByte
 	movem.l	d1-d3/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	moveq	#1,d3
-	move.l	#tmp8,d2
-	clr.b	tmp8
-	jsr	_LVORead(a6)
-	move.b	tmp8(pc),d0
+;	move.l	DosBase(pc),a6
+;	moveq	#1,d3
+;	move.l	#tmp8,d2
+;	clr.b	tmp8
+;	jsr	_LVORead(a6)
+;	move.b	tmp8(pc),d0
+    move.l  readPtr,a0
+    move.b  (a0)+,d0
+    move.l  a0,readPtr
 	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
 	
@@ -1984,12 +2010,17 @@ ReadByte
 	;-------------------------------------------------	
 ReadLittleEndian16
 	movem.l	d1-d3/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	moveq	#2,d3
-	move.l	#tmp16,d2
-	clr.w	tmp16
-	jsr	_LVORead(a6)
-	move.w	tmp16(pc),d0
+;	move.l	DosBase(pc),a6
+;	moveq	#2,d3
+;	move.l	#tmp16,d2
+;	clr.w	tmp16
+;	jsr	_LVORead(a6)
+;	move.w	tmp16(pc),d0
+    move.l  readPtr,a0
+    move.b  (a0)+,d0
+    rol.w   #8,d0
+    move.b  (a0)+,d0
+    move.l  a0,readPtr
 	swap16	d0
 	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
@@ -2003,12 +2034,21 @@ ReadLittleEndian16
 	;-------------------------------------------------
 ReadLittleEndian32
 	movem.l	d1-d3/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	move.l	#tmp32,d2
-	moveq	#4,d3
-	clr.l	tmp32
-	jsr	_LVORead(a6)
-	move.l	tmp32(pc),d0
+;	move.l	DosBase(pc),a6
+;	move.l	#tmp32,d2
+;	moveq	#4,d3
+;	clr.l	tmp32
+;	jsr	_LVORead(a6)
+;	move.l	tmp32(pc),d0
+    move.l  readPtr,a0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+    rol.l   #8,d0
+    move.b  (a0)+,d0
+    move.l  a0,readPtr
 	swap32	d0
 	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
@@ -2141,11 +2181,11 @@ MAIN:
 	;btst	#1,d0			; 68020+ ?
 	;beq.w	CpuIs68000
 	; ----------------------------
-	bsr.w	GetFileNameFromArg
-	bne.b	.skip			; we got filename from cmd line arg
-	bsr.w	GetFileFromRequester
-	beq.w	mainRts
-.skip	; ----------------------------
+;	bsr.w	GetFileNameFromArg
+;	bne.b	.skip			; we got filename from cmd line arg
+;	bsr.w	GetFileFromRequester
+;	beq.w	mainRts
+;.skip	; ----------------------------
 	bsr.w	SetupAudio
 	beq.w	mainErr
 	bsr.w	LoadXM
@@ -2239,7 +2279,8 @@ CloseDOSLib
 	move.l	DosBase(pc),a1
 	jsr	_LVOCloseLibrary(a6)
 	clr.l	DosBase
-.done	rts
+.done	
+    rts
 
 CpuIs68000
 	move.l	#CpuErrText,d1

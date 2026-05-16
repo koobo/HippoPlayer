@@ -53208,8 +53208,6 @@ p_xmaplay:
 .xmaGetPosLen   rs.l    1
 .xmaSetVolume   rs.l    1
 .xmaGetBuffer   rs.l    1
-
-.tempFile   dc.b    "T:hippo-xm",0
     even
 
 .init
@@ -53222,15 +53220,9 @@ p_xmaplay:
 
     * Save into a file for XMAplay
 	jsr		setMainWindowWaitPointer
-    lea     .tempFile(pc),a0
-	move.l	moduleaddress(a5),a1
-	move.l	modulelength(a5),d0
-	bsr	plainSaveFile
-	bmi 	.saveError
 
-    DPRINT  "temp file saved"
-
-    lea     .tempFile(pc),a0
+	move.l	moduleaddress(a5),a0
+	move.l	modulelength(a5),d3
     lea     songover(a5),a1
     move.l  xmaplayroutines(a5),a3
 *   a0 = module filename
@@ -53289,12 +53281,6 @@ p_xmaplay:
     move.l  a4,ps3m_xm_insts(a5)
     DPRINT  "<-xmaInit=%ld"
 .oops
-    pushm   all
-    * Rid the temp file
-    pushpea .tempFile(pc),d1
-    lore    Dos,DeleteFile
-    popm    all
-
     tst.l   d0
     bne    .initError
     
@@ -53347,17 +53333,12 @@ p_xmaplay:
     tst.l   d0
     rts
 
-.format:
-    dc.b    "FastTracker2 xma060%s %ldch",0
-    even
-
-
 .initError
     bra     .x
 
-.saveError
-    moveq   #ier_nomem,d0
-    bra     .x
+.format:
+    dc.b    "FastTracker2 xma060%s %ldch",0
+    even
 
 * xmaplay
 .posPtr     dc.l    0 
