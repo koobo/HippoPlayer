@@ -635,6 +635,15 @@ loadSamplesAGUS:
     addq.l  #4,d5
 .done
     ; ---------------------------------    
+    ; Free it
+    move.l  sPek(a2),a1
+    move.l	sLen(a2),d0
+	beq.b	.nextS			; (length is zero, don't free)	
+    bmi.b   .nextS
+    neg.l   sLen(a2)        ; neg means freed
+	addq.l	#2,d0			; fix-sample for linear interpolation
+	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr    
+    ; ---------------------------------    
 .nextS
     lea     SMP_SIZE(a2),a2
     dbf     d6,.samples
@@ -3283,6 +3292,7 @@ FreeInstruments
 	beq.b	.nextS			; nope
 	move.l	sLen(a0),d0
 	beq.b	.nextS			; (length is zero, don't free)	
+    bmi.b   .nextS          ; neg means freed earlier
 	addq.l	#2,d0			; fix-sample for linear interpolation
 	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr
 .nextS	lea	SMP_SIZE(a0),a0
