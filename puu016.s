@@ -27377,9 +27377,8 @@ scopeLoop:
     ; ---------------------------------
 	move.l	s_userport3(a4),a0
 	move.b	MP_SIGBIT(a0),d1		* ikkunan IDCMP:n sigbit
-    moveq   #0,d0
+    move.l  #SIGBREAKF_CTRL_D,d0    * Sync signal with vbint
 	bset	d1,d0
-    or.l    #SIGBREAKF_CTRL_D,d0    * Sync with vbint
     lore    Exec,Wait
     ; ---------------------------------
 
