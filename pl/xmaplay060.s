@@ -49,14 +49,17 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 	include libraries/expansion_lib.i
     include libraries/timer_lib.i
     include devices/timer.i
+  ifnd __VASM
+	incdir	p:include
+  endif
     include libraries/amigus_lib.i
     include libraries/amigus.i
 
-DEBUG        = 1          * Enable debug print to serial
+DEBUG        = 0          * Enable debug print to serial
 FAKE_AGUS    = 0
 
  ifnd __VASM
- printt "Test mode!"
+ printt "*** Test mode! ***"
 TESTMODE     = 1           * Build a stand-alone test executable
  else
 TESTMODE     = 0
@@ -98,9 +101,19 @@ pop	macro
 	move.l	(sp)+,\1
 	endm
 
- ifd __VASM    
-    mc68000
- endif
+_MC68020 macro
+    ifd __VASM
+       MC68020
+    endif
+    endm
+
+_MC68000 macro
+    ifd __VASM
+       MC68000
+    endif
+    endm
+
+    _MC68000    ; start with this
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -110,15 +123,16 @@ pop	macro
 testMain:
     DPRINT  "start test"
 
-    lea     .file,a0        * module filename
-    lea     .songOver,a1    * ptr to song end indicator
-    moveq   #1,d0           * AHI on
-    move.l  #24000,d1       * AHI mixing rate
-    move.l  #$0002000a,d2   * AHI mode: 8 bit stereo
+    lea     .module,a0           * module data
+    lea     .songOver,a1         * ptr to song end indicator
+    moveq   #1,d0                * AHI on
+    move.l  #24000,d1            * AHI mixing rate
+    move.l  #$0002000a,d2        * AHI mode: 8 bit stereo
+    move.l  #.moduleE-.module,d3 * module len
     jsr     _init
     DPRINT  "_init=%ld"
     tst.l   d0
-    beq     .error
+    bne     .error
 
     moveq   #64,d0
     jsr	    _setVolume
@@ -134,10 +148,9 @@ testMain:
     rts
 
 .songOver   dc.w    0
-;.file   dc.b    "sys:music/Mods/imploder.xm",0
-.file   dc.b    "sys:music/Mods/my_spring_in_december.xm",0
-.fileE
-    even
+;.module  incbin     "sys:music/Mods/imploder.xm"
+.module  incbin     "sys:music/Mods/7181-InternationalKarate.xm"
+.moduleE
 
  endif ; TESTMODE
 
@@ -2618,7 +2631,7 @@ StopMixing
 .x
 	rts
 
-    MC68020
+    _MC68020
 MixAudioFrame
 	moveq	#0,d2
 	move.w	PaulaPos(pc),d2	; d2.l = integer part of PaulaPos
@@ -2655,7 +2668,7 @@ MixAudioFrame
 	and.l	#SMP_BUFF_SIZE-1,d0
 	move.l	d0,MixPos
 .end	rts
-    MC68000
+    _MC68000
 
 ; -----------------------------------------------------------------------------
 ; -----------------------------------------------------------------------------
@@ -2851,7 +2864,7 @@ CalcCiaDelta
     bne     .error
 	tst.w	d0
 	beq.b	.error
-    MC68020
+    _MC68020
 	; ---------------------------
 	movem.l	d1-d7,-(sp)
 	move.b	d2,d7
@@ -2909,7 +2922,7 @@ CalcCiaDelta
 	rts
 .error	moveq	#0,d0
 	rts
-    MC68000
+    _MC68000
 
 	; Input:
 	;   d0.w = period
@@ -2997,9 +3010,9 @@ GenerateBPMTable
 	add.l	d3,d0
 	addx.l	d7,d1
 	; ---------------------------
-    MC68020
+    _MC68020
 	divu.l	d5,d1:d0		; d0.l = rounded samplesPerTick (16.16fp)
-    MC68000
+    _MC68000
 	move.l	d0,(a0)+
 	; ---------------------------
 	addq.b	#1,d5
@@ -3379,9 +3392,9 @@ CalcFrqTab
 	move.l	MixingFreq(pc),d0
 	lsr.l	#1,d0
 	move.l	#256*8363,d1
-    MC68020
+    _MC68020
 	divu.l	MixingFreq(pc),d1:d0	
-    MC68000
+    _MC68000
 .ahiFr
 	move.l	d0,d2			; d2.l = round[(8363*256) * 2^32 / MixingFreq]
 	moveq	#24,d3
@@ -3462,9 +3475,9 @@ CalcFrqTab
     bne     .ahiFrq
 	move.l	MixingFreq(pc),d0
 	lsr.l	#1,d0
-    MC68020
+    _MC68020
 	divu.l	MixingFreq(pc),d1:d0	; d0.l = round[(8363*1712) * 2^32 / MixingFreq]
-    MC68000
+    _MC68000
 	move.l	d0,FrequenceDivFactor
 .ahiFrq
 	; -------------------------------------
@@ -6527,7 +6540,7 @@ GetNextPos
 	clr.w	PattPos
 .NoNewPosYet
 	tst.b	PosJumpFlag
-	bne.b	.NextPosition
+	bne 	.NextPosition
 .Exit	rts
 
 	; ticked from mixer
@@ -6616,7 +6629,7 @@ GetVoice
 	rts
 	ENDIF
 	
-    MC68020
+    _MC68020
 Mix_UpdateChannelVolPanFrq:
 	lea	PanningTab(pc),a1
 	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
@@ -6770,7 +6783,7 @@ Mix_UpdateChannelVolPanFrq:
 	moveq	#0,d2
 .VL5	move.w	d2,vVolIPLen(a6)
 	rts
-    MC68000
+    _MC68000
 
 ; ---------------------------------------------------------
 ; ---------------------------------------------------------
@@ -7215,7 +7228,7 @@ GetFrequenceValue
 ; ------------------
 ; No-ramp mixers
 ; ------------------
-    MC68020
+    _MC68020
 ; 8-bit stereo mixing w/ linear interpolation
 MIX8_S	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l),d4
@@ -8269,7 +8282,7 @@ AllocPostMixTable
 .error	moveq	#1,d0
 	rts
 
- MC68000
+ _MC68000
 FreePostMixTable
 	IF _14BIT
 		move.l	#65536*2,d0
@@ -8286,7 +8299,7 @@ FreePostMixTable
 	IF _14BIT
 
 	; 14-bit output	(MIX_AMP controls the gain)
- MC68020
+ _MC68020
 GeneratePostMixTable
 	movem.l	d0-a6,-(sp)
 	move.l	PostMixTable(pc),a0
@@ -8356,7 +8369,7 @@ GeneratePostMixTable
 
 	ENDIF
 
-    MC68000
+    _MC68000
 
 	; input: d0.b = song position (0..255, order)
 SetPos
