@@ -37644,8 +37644,8 @@ freereplayer
 *************
 * Tarkistaa onko moduuli fastissa. Jos on, siirt‰‰ sen chippiin
 
-moveModuleToChipMem
-siirra_moduuli
+moveModuleToChipMem:
+siirra_moduuli:
 	pushm	d1-a6
 
 	move.l	moduleaddress(a5),a3
@@ -37656,7 +37656,8 @@ siirra_moduuli
 	bne.b	sirchip
 
 	moveq	#MEMF_CHIP,d1
-sirmo	move.l	modulelength(a5),d0
+sirmo:
+	move.l	modulelength(a5),d0
 	lob	AllocMem
 	tst.l	d0
 	beq.b	sirerro
@@ -37682,8 +37683,13 @@ sirerro	moveq	#ier_nomem,d0
 *************
 * Tarkistaa onko moduuli chipiss‰. Jos on, siirt‰‰ sen fastiin (jos on).
 
-moveModuleToPublicMem
-siirra_moduuli2
+moveModuleToPublicMem:
+siirra_moduuli2:
+  
+    tst.l   moduleaddress(a5)   * sometimes called with only probebuffer content
+    bne     .1
+    rts
+.1
 	pushm	d1-a6
 
 	move.l	moduleaddress(a5),a3
@@ -52949,7 +52955,7 @@ ay8910vol3:    dc.b    0
  even
 
 id_vgmTnt:
-    DPRINT "id_vgmTnt"
+;    DPRINT "id_vgmTnt"
     move.l  a4,a0
 
     * Check if this VGM is known and supported
@@ -53134,7 +53140,7 @@ vgmTntInit:
    ; bne     .YM3812
 
 .fail
-    DPRINT  "fail"
+;    DPRINT  "fail"
     moveq   #0,d0
     rts
 
