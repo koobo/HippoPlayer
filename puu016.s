@@ -53018,16 +53018,11 @@ openTnt:
     tst.l   d0
     beq     .x
 
-    move.l  #"PSG1",d7
-    bsr     .findCore
-    DPRINT  "findCore=%lx"
-    tst.l   d0
-    beq     .x
-
-    move.l  d7,d0
+    move.l  #"PSG1",d0
     jsr     _LVOOpenAudioCore(a6)
     DPRINT  "OpenAudioCore=%lx"
     move.l  d0,tntPSG1Core(a5)
+    beq     .x
 .ok
     moveq   #1,d0   * ok
 .x
@@ -53037,36 +53032,45 @@ openTnt:
 *   d5 = Trinity base (not library)
 *   d7 = Id to find
 * Out:
-*   d6 = NULL, or address if found
-.findCore:
-    moveq   #0,d6       * result
-    lea     -256(sp),sp
-    clr.l   (sp)        * index: zero
-.loopEnum
-    move.l  sp,a0       * pointer to index
-    moveq   #-1,d0      * flags, anything goes
-    lea     4(sp),a1    * pointer to TrinityAudioInfo, space=252
-    jsr     _LVOEnumAudioCore(a6)
-    DPRINT  "Enum=%lx"
-    tst.l   d0
-    beq     .out
-    lea     4(sp),a0    * TrinityAudioInfo into a0
- if DEBUG
-    clr.l   -(sp)
-    clr.l   -(sp)
-    move.l  (a0),(sp)
-    move.l  sp,d0
-    DPRINT  "Id=%s"
-    addq    #8,sp
- endif
-    cmp.l   (a0),d7     * Does it match?
-    bne     .loopEnum
-    move.w  44(a0),d6   * Get offset and exit
-.out
-    move.l  d6,d0
-    lea     256(sp),sp
-    rts
-
+*   d6 = Negative if error, or an offset if found
+;.findCore:
+;    moveq   #-1,d6       * result
+;    lea     -256(sp),sp
+;    clr.l   (sp)        * index: zero
+;.loopEnum
+;    move.l  sp,a0       * pointer to index
+;    moveq   #-1,d0       * flags
+;    lea     4(sp),a1    * pointer to TrinityAudioInfo, space=252
+;    jsr     _LVOEnumAudioCore(a6)
+;    DPRINT  "Enum=%lx"
+;    tst.l   d0
+;    beq     .out
+;    lea     4(sp),a0    * TrinityAudioInfo into a0   gO 
+; if DEBUG
+;    clr.l   -(sp)
+;    clr.l   -(sp)
+;    move.l  (a0),(sp)
+;    move.l  sp,d0
+;    DPRINT  "Id=%s"
+;    addq    #8,sp
+;
+;    clr.l   -(sp)
+;    clr.l   -(sp)
+;    move.l  sp,a0
+;    move.l  d7,(sp)
+;    DPRINT  "To find=%s"
+;    addq    #8,sp
+; endif
+;    cmp.l   (a0),d7     * Does it match?
+;    bne     .loopEnum
+;    DPRINT  "found"
+;    moveq   #0,d6
+;    move.w  44(a0),d6   * Get offset and exit
+;.out
+;    move.l  d6,d0
+;    lea     256(sp),sp
+;    rts
+;
 
 closeTnt:
     move.l  _TntBase(a5),d0
