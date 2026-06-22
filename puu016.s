@@ -18443,7 +18443,7 @@ sidmode_callback
 
 rsidmode
 	addq.b	#1,sidmode_new(a5)
-	cmp.b	#7,sidmode_new(a5)
+	cmp.b	#8,sidmode_new(a5)
 	bne.b	.1
 	clr.b	sidmode_new(a5)
 .1
@@ -18473,13 +18473,16 @@ psidmode
     subq.b  #1,d0
     beq.b   .1
     lea     sidmode07(pc),a0
+    subq.b  #1,d0
+    beq.b   .1
+    lea     sidmode08(pc),a0
 .1 
     lea	    prefsPlaySidMode,a1
 	bra	prunt
 
 
 
-sidmode00	dc.b	11,7
+sidmode00	dc.b	11,8
 sidmode01	dc.b	"Normal",0
 sidmode02	dc.b	"reSID "
 t6581       dc.b    "6581",0
@@ -18489,6 +18492,7 @@ sidmode04	dc.b	"reSID Auto",0
 sidmode05	dc.b	"SIDBlaster",0
 sidmode06	dc.b	"ZorroSID",0
 sidmode07	dc.b	"USBSID-Pico",0
+sidmode08	dc.b	"Trinity",0
  even
 
 rresidmode_req
@@ -39166,6 +39170,7 @@ p_sid:	jmp	.init(pc)
     ; 4 = sidblaster
     ; 5 = zorrosid
     ; 6 = usbsid pico
+    ; 7 = trinity accelerator audio core
     cmp.b   #1,sidmode(a5)
     beq     .m1
     cmp.b   #2,sidmode(a5)
@@ -39178,6 +39183,8 @@ p_sid:	jmp	.init(pc)
     beq     .m5
     cmp.b   #6,sidmode(a5)
     beq     .m6
+    cmp.b   #7,sidmode(a5)
+    beq     .m7
     * Fallback default option
     move    #OM_NORMAL,d0
     lea     .zero(pc),a0
@@ -39222,6 +39229,12 @@ p_sid:	jmp	.init(pc)
     lea     sidmode07,a0
     moveq   #OM_USBSID_PICO,d0
     DPRINT  "OM_USBSID_PICO"
+    bra     .mode
+.m7
+    *** Trinity
+    lea     sidmode08,a0
+    moveq   #OM_TRINITY,d0
+    DPRINT  "OM_TRINITY"
     bra     .mode
     ; -----------------------
 .cpuCheck
@@ -39569,27 +39582,18 @@ p_sid:	jmp	.init(pc)
 .er	movem.l	(sp)+,d1-a6
 	rts
 
-.error1:
-    cmp     #SID_NOSIDBLASTER,d0
-    bne.b   .sb
-    lea     .blasterMsg(pc),a1
+.error1: *** AllocEmulResource failure
+    cmp     #SID_NOSIDBLASTER,d0    * catch all device errors
+    ble     .msg
+    moveq	#ier_nomem,d0
+    bra.b    .er
 .msg
+    lea     .deviceMsg(pc),a1
     jsr     request
     moveq   #ier_error,d0
     bra.b   .er
-.sb
-    cmp     #SID_ZORROSIDINVALID,d0
-    bne.b   .zs
-    lea     .zorroSidMsg(pc),a1
-    bra     .msg
-.zs
-    cmp     #SID_NOUSBSIDPICO,d0
-    bne.b   .zss
-    lea     .usbsidpicoMsg(pc),a1
-    bra     .msg
-.zss
-    moveq	#ier_nomem,d0
-	bra.b	.er
+
+
 
 .error2	bsr.b	.free
 	moveq	#ier_sidicon,d0
@@ -39688,15 +39692,10 @@ p_sid:	jmp	.init(pc)
     rts
 
 
-.blasterMsg
-.zorroSidMsg
-.usbsidpicoMsg
+.deviceMsg
     dc.b    "Couldn't initialize SID device!",0
-;    dc.b    "Couldn't initialize SIDBlaster!",0
-;    dc.b    "Can't access ZorroSID, check MMU settings!",0
-;    dc.b    "Couldn't initialize USBSID-Pico!",0
     even
-
+ 
 .performanceRequest
     * d0 = value
     * d1 = limit
