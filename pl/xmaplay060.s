@@ -744,8 +744,7 @@ ahi_restoreChannels:
     lea     freqForChannel,a4
 .chl
     move.l  d7,d0
-    moveq   #0,d1   
-    move    (a4)+,d1
+    move.l  (a4)+,d1
 	moveq	#AHISF_IMM,d2
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
@@ -6867,7 +6866,8 @@ Mix_UpdateChannelVolPanFrq_AHI:
     push    a2
     move.w  d7,d1
     add.w   d1,d1
-    move.w  d0,(a2,d1.w)    ; Store frequency per channel
+    add.w   d1,d1
+    move.l  d0,(a2,d1.w)    ; Store frequency per channel
 
 	move.l	d0,d1	    	; d1 = freq (Hz)
 	move.l	d7,d0	    	; d0 = channel
@@ -8665,7 +8665,7 @@ ahi_ctrl            dc.l 0
 ahi_mastervol       dc.w 0
 AHIMixingFreq       dc.w 58000
 sampleForChannel    ds.l 32
-freqForChannel      ds.w 32
+freqForChannel      ds.l 32
 agusVolForChannel   ds.l 32
 ; -------------------------------------
 
