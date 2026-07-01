@@ -20262,9 +20262,16 @@ inforivit_play:
 	move.l	a0,d0
 
     * Display additional "AHI" if running PS3M in AHI mode
+    
     pushpea type_notAhi(pc),d3
     cmp     #pt_multi,playertype(a5)
     bne     .notAhi
+
+	tst.b	ps3mamigus(a5)
+	beq		.noAG
+    pushpea type_agus(pc),d3	
+    bra     .yesAG
+.noAG
     tst.b   ahi_use_nyt(a5)
 	bne		.yesAhi
     cmp.b   #sm_stereo14,s3mmode2(a5)
@@ -20273,10 +20280,7 @@ inforivit_play:
     bra     .notAhi
 .yesAhi
     pushpea type_ahi(pc),d3
-	tst.b	ps3mamigus(a5)
-	beq		.notAG
-    pushpea type_agus(pc),d3	
-.notAG
+.yesAG
 .not14
 .notAhi
 
