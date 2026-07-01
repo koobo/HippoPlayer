@@ -272,7 +272,6 @@ ier_nomem	        = -9
     DPRINT  "amigus_init=%ld"
     tst.l   d0
     bne     .agusError
-    bsr     loadSamplesAGUS
  endif
 
 .normal
@@ -603,9 +602,15 @@ loadSamples:
 
 * Load each instrument sample to AGUS
 loadSamplesAGUS:
+    DPRINT  "loadSamplesAGUS"
+    
     moveq   #128-1,d7
     lea     Instr,a4
     moveq   #0,d5               * AGUS sample address
+
+	move.l	amigus_base(pc),a1		
+	move.l	d5,HAGEN_WADDRH(a1)   * destination address
+
 .instrs
     move.l  (a4)+,d0
     beq     .next
@@ -626,7 +631,6 @@ loadSamplesAGUS:
     ; ---------------------------------    
     ; Copy d0 bytes from a0 to AGUS
 	move.l	amigus_base(pc),a1		
-	move.l	d5,HAGEN_WADDRH(a1)   * destination address
 	lea		HAGEN_WDATAH(a1),a1
     moveq   #4,d1
 .copy
@@ -1018,7 +1022,9 @@ amigus_init:
     move.l  amigus_card,a0
     move.l  agus_WavetableBase(a0),amigus_base
     ; ---------------------------------
-	move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
+	bsr     loadSamplesAGUS
+
+    move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
 	bsr		amigus_voice_reset		; Initialize all AmiGUS voices
 	
 	move.w	Speed(pc),d0			; d0 = tempo (BPM)
@@ -1026,6 +1032,7 @@ amigus_init:
 	
 	st   	setpause                ; play
 		
+    
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
 	
     DPRINT  "amigus_init SUCCESS"
@@ -7026,10 +7033,10 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     cmp.b   #128,d2
     beq     .set
 
-    cmp.b   #128,d7
+ ;   cmp.b   #128,d2
     bhs     .right
     * Panned Left: Left is full, Right is attenuated
-    mulu    d2,d1    
+    mulu.w  d2,d1    
     lsr.l   #7,d1
     bra     .set
 
@@ -7094,7 +7101,7 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	beq.b	.L2				    ; nope
 ;	lsr.l	#1,d1				; yes, convert units from bytes to words
     add.l   d4,d4               ; convert offset to bytes
-    bset    #1,d5               ; set 16-bit sample
+    bset    #0,d5               ; bit 0, set 16-bit sample
 	; -----------------------------
 .L2	
 	cmp.l   d1,d4			    ; d4 >= (unrolled) sample end?
@@ -7120,7 +7127,7 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     bset    #1,d5                       ; loop bit
     ; Loop active
     move.l  d3,d1                       ; Calculate loop end as the new sample end
-    add.l   d5,d1
+    add.l   d4,d1
 .noLoop
     add.l   sAGUSOffset(a0),d1          ; Calc end address 
     subq.l  #2,d1                       ; Subtract a bit?
