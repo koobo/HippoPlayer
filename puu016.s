@@ -24293,6 +24293,11 @@ info_code:
 	beq.b	.psz
 	move.l	ahi_rate(a5),d0
 .psz
+    tst.b   ps3mamigus(a5)
+    beq.b   .pszz
+    move.l  #192000,d0      * AGUS!
+.pszz
+
 	divu	#1000,d0
 	move.l	d0,d1
 	clr	d1
