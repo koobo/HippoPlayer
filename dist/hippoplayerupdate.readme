@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.66
+Version: 2.67
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -131,8 +131,6 @@ Additional files to check and download
 - Scopes: improved display sync with audio, especially on RTG
   screens.
 
-- Some other possible issues fixed related to RTG screenmodes.
-
 - Protracker with AHI/AmiGUS: Fix some songend detection issues, 
   improve scrambled pattern module support.
 
@@ -141,20 +139,23 @@ Additional files to check and download
 - Support added for the AmiGUS Mini PCMCIA-card. AmiGUS support 
   requires amigus.library from now on.
 
-- xmaplay060 improvements (8bitbubsy's quality XM replayer, 
-  alternative to the buggy one in PS3M):
-  - AHI and AmiGUS support added with channel panning, 
-    for AHI also ping pong loop support.
-  - Show instrument names in the info window.
-  - Show channel count in the infobox.
+- Xmaplay060 improvements
+  - This is 8bitbubsy's fully featured Fasttracker2/XM player,
+    alternative to the one in PS3M.
+  - AmiGUS support added with channel panning, 16-bit samples.
+  - AHI support added with channel panning, ping pong loops,
+    16-bit samples. 
+  - Instrument names shown in the info window.
+  - Channel count shown in the infobox.
+  - Decreased memory usage.
 
-- xmaplay060 output choices in Prefs are now:
+- Xmaplay060 output choices in Prefs are:
   - xma060+Paula: Play-2 > Enable xmaplay060 > ON
                   AHI > Enable AHI > OFF
                   CPU requirement: 68060
   - xma060+AHI: Play-2 > Enable xmaplay060 > ON
                 AHI > Enable AHI > ON
-                CPU requirement: 68020 
+                CPU requirement: AHI dependent
   - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
                    PS3M > Use AmiGUS hardware mixer > ON
                    CPU requirement: 68000 
@@ -168,6 +169,9 @@ Additional files to check and download
   or changed with the position slider.
   
 - Infobox displays the amount of data downloaded on the 2nd row.
+
+- Trinity accelerator SID audio core support for SID playback. 
+  Activate with "PlaySID mode" in Prefs.
 
 
 ------------------------------------------------------------------------------
