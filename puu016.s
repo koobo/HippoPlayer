@@ -53015,7 +53015,7 @@ openTnt:
     move.l  _TntBase(a5),d0
     bne     .1
     lea     tntName,a1
-    moveq   #2,d0               * LIB_VERSION
+    moveq   #1,d0               * LIB_VERSION with PSG1 core
     lore	Exec,OpenLibrary
     DPRINT  "TntBase=%lx"
     move.l	d0,_TntBase(a5)
