@@ -1404,8 +1404,6 @@ xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkkiä)
 findpattern	rs.b	30		* find pattern
 divider		rs.b	26		* divider
 
-bitmapHippoHeadPtr  rs.l    1
-bitmapHippoHeadOld  rs.b	bm_SIZEOF-6*4	* 2
 omabitmap3      	rs.b	bm_SIZEOF-7*4	* 1 - tick mark
 
 							* Semaphore to protect access to the data of the module
