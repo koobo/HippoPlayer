@@ -65785,7 +65785,6 @@ asciitable
 
 * 2 bitplane image, 96x66 pixels, 1584 bytes
 hippohead:	incbin	gfx/hip.raw
-hippoheadCombinedBpl:  ds.b    HIPPOHEAD_BITPLANE
 
 tickdata	dc	$001c,$0030,$0060,$70c0,$3980,$1f00,$0e00
 
@@ -66448,6 +66447,7 @@ playModeRandomImage
 * Tyhjä sample PS3M:lle ja BPSoundMon2.0:lle.
 ps3memptysample
 nullsample	ds.l	1
+hippoheadCombinedBpl:  ds.b    HIPPOHEAD_BITPLANE
 
 * tilaa filebox-sliderin imagelle
 * 410 pixels
