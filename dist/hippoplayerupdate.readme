@@ -134,6 +134,9 @@ Additional files to check and download
 - Protracker with AHI/AmiGUS: Fix some songend detection issues, 
   improve scrambled pattern module support.
 
+- Fix issues with hippo logo and gadget RMB indicator on some 
+  RTG screenmodes.
+
 ## Improvements:
 
 - Support added for the AmiGUS Mini PCMCIA-card. AmiGUS support 
