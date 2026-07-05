@@ -3822,7 +3822,6 @@ exit
     jsr     umeFreeIndex
     jsr     umeFreeData
     jsr     infoScrollFree
-    jsr     uninitHippo
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -5515,8 +5514,6 @@ findFrontPublicScreenName:
 ****** Piirret‰‰n ikkunan kamat
 
 wrender:
-	bsr initHippoNew
-
 	move.l	pen_0(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
@@ -6381,98 +6378,7 @@ HIPPOHEAD_WIDTH = 96
 HIPPOHEAD_HEIGHT = 66
 HIPPOHEAD_BITPLANE = HIPPOHEAD_WIDTH/8*HIPPOHEAD_HEIGHT
 
-initHippoNew:
-    DPRINT  "initHippoNew"
-
-    move.l  (a5),a0
-    cmp.w   #39,LIB_VERSION(a0)
-    blo     initHippoOld
-
-    lea     -rp_SIZEOF(sp),sp
-    move.l  sp,a4
-
-    move.l  a4,a1
-    lore    GFX,InitRastPort
-
-    move.l  rastport(a5),a0     * get main window rastport
-    move.l  rp_BitMap(a0),a0    * friend bitmap
-    moveq   #HIPPOHEAD_WIDTH,d0
-    moveq   #HIPPOHEAD_HEIGHT,d1
-    moveq   #0,d2
-    move.b  bm_Depth(a0),d2
-    moveq   #BMF_CLEAR,d3       * clear it
-    lob     AllocBitMap         * V39 function
-    move.l  d0,bitmapHippoHeadPtr(a5)
-    beq     .xx
-    move.l  d0,rp_BitMap(a4)
-
-    move.l  a4,a1
-    moveq   #RP_JAM1,d0        * paint PenA pixel if source has a bit set
-    lob     SetDrMd
-
-    ******** Pen 1 - bitplane 1 only
-    move.l  a4,a1
-    move.l  pen_1(a5),d0
-    lob     SetAPen
-
-    lea     hippohead,a0            * Src Template
-    bsr     .blit
-
-    ******** Pen 2 - bitplane 2 only
-    move.l  a4,a1
-    move.l  pen_2(a5),d0
-    lob     SetAPen
-
-    lea     hippohead+HIPPOHEAD_BITPLANE,a0        * Src Template
-    bsr     .blit
-
-    ******** Pen 3 - bitplane 1+2
-
-    * merge bitplanes 1 and 2 into 1
-    lea     hippohead,a0
-    lea     HIPPOHEAD_BITPLANE(a0),a1
-    moveq   #HIPPOHEAD_HEIGHT-1,d7
-.y  moveq   #HIPPOHEAD_WIDTH/32-1,d6
-.x  move.l  (a0),d0
-    and.l   (a1)+,d0
-    move.l  d0,(a0)+
-    dbf     d6,.x
-    dbf     d7,.y
-
-    move.l  a4,a1
-    move.l  pen_3(a5),d0
-    lob     SetAPen
-
-    lea     hippohead,a0            * Src Template
-    bsr     .blit
-
-    move.l  a4,a1
-    moveq   #RP_JAM2,d0  
-    lob     SetDrMd                 * restore
-
-.xx
-    lea     rp_SIZEOF(sp),sp
-    rts
-
-.blit:
-    moveq   #0,d0                   * SrcX
-    moveq   #HIPPOHEAD_WIDTH/8,d1   * SrcMod
-    move.l  a4,a1
-    moveq   #0,d2                   * DestX
-    moveq   #0,d3                   * DestY
-    moveq   #HIPPOHEAD_WIDTH,d4     * SizeX
-    moveq   #HIPPOHEAD_HEIGHT,d5    * SizeY
-    lob     BltTemplate
-    rts
-
-uninitHippo:    
-    move.l  (a5),a0
-    cmp.w   #39,LIB_VERSION(a0)
-    blo.b   .x
-    move.l  bitmapHippoHeadPtr(a5),a0
-    lore    GFX,FreeBitMap
-.x  rts     
-
+ REM
 initHippoOld:
 *** Lasketaan checksummi infoikkunan no-onelle ja unregistered-tekstille.
 	check	1
@@ -6521,12 +6427,10 @@ initHippoOld:
 	move.l	#hippohead,bm_Planes(a2)
 	move.l	#hippohead+HIPPOHEAD_BITPLANE,bm_Planes+4(a2)
 	rts
+ EREM
 
- ifeq zoom 
 * tavallinen hipon p‰‰
 printhippo1:
-;	DPRINT	"Print hippo"
-
 	tst	boxsize(a5)
 	beq.b	.q
 	tst.b	win(a5)
@@ -6545,10 +6449,7 @@ printhippo1:
 .noreg	moveq	#0,d7
 .az
 
-
-	moveq	#0,d0		* l‰hde x,y
-	moveq	#0,d1
-	moveq	#HIPPOHEAD_HEIGHT,d5		* y-koko
+    moveq   #HIPPOHEAD_HEIGHT,d5            * y-koko
 
 	; Calc y-position
 	move	fileBoxTopEdge(a5),d3
@@ -6561,11 +6462,10 @@ printhippo1:
 
 	mulu	listFontHeight(a5),d6
 	sub	d5,d6
-	bmi.b	.r	; will it fit?
+	bmi 	.r	; will it fit?
 	lsr	#1,d6	; center it 
 	add	d6,d3	
 
-	;moveq	#92,d2		* kohde x
 	move	WINSIZX(a5),d2
 	lsr	#1,d2
 	sub	#HIPPOHEAD_WIDTH/2-8,d2
@@ -6574,20 +6474,81 @@ printhippo1:
 	beq.b	.e
 	move	#150,d2		* position when registered
 .e
-
-
-    move.l  bitmapHippoHeadPtr(a5),a0
-	move.l	rastport(a5),a1		* main
-	add	windowleft(a5),d2
-	add	windowtop(a5),d3
-;	move	#$ee,d6		* minterm, kopio a or d ->d
-	move	#$c0,d6		* minterm, suora kopio
-	moveq	#HIPPOHEAD_WIDTH,d4		* x-koko
-	lore	GFX,BltBitMapRastPort
+    move.l  d2,d6
+    move.l  d3,d7
+	move.l	rastport(a5),a4
+    bsr     renderHippo
 
 .r	popm	d0-d7/a0-a2/a6
 	rts
- else
+
+* Pen compatible hippo head renderer
+* In:
+*   d6 = target x
+*   d7 = target y
+*   a4 = target rastport
+renderHippo:
+    move.l  a4,a1
+    moveq   #RP_JAM2,d0        * paint PenA pixel if source has a bit set, B if not
+    lore    GFX,SetDrMd
+    move.l  a4,a1
+    move.l  pen_1(a5),d0
+    lob     SetAPen
+    move.l  a4,a1
+    move.l  pen_0(a5),d0
+    lob     SetBPen
+    lea     hippohead,a0
+    bsr     .blit
+    ******** Pen 2 - bitplane 2 only
+    move.l  a4,a1
+    moveq   #RP_JAM1,d0        * paint PenA pixel if source has a bit set, B if not
+    lob     SetDrMd
+    move.l  a4,a1
+    move.l  pen_2(a5),d0
+    lob     SetAPen
+    lea     hippohead+HIPPOHEAD_BITPLANE,a0
+    bsr     .blit
+    ******** Pen 3 - bitplane 1+2
+    * merge bitplanes 1 and 2 into 1
+    lea     hippohead,a0
+    lea     HIPPOHEAD_BITPLANE(a0),a1
+    lea     hippoheadCombinedBpl,a2
+    move.w  #HIPPOHEAD_BITPLANE/4-1,d1
+.l  move.l  (a0)+,d0
+    and.l   (a1)+,d0
+    move.l  d0,(a2)+
+    dbf     d1,.l
+
+    move.l  a4,a1
+    move.l  pen_3(a5),d0
+    lob     SetAPen
+    lea     hippoheadCombinedBpl,a0
+    bsr     .blit
+
+    * restore
+    move.l  a4,a1
+    move.l  pen_1(a5),d0
+    lob     SetAPen
+    move.l  a4,a1
+    move.l  pen_0(a5),d0
+    lob     SetBPen
+    move.l  a4,a1
+    moveq   #RP_JAM2,d0  
+    lob     SetDrMd    
+    rts
+
+.blit:
+    moveq   #0,d0                   * SrcX
+    moveq   #HIPPOHEAD_WIDTH/8,d1   * SrcMod
+    move.l  a4,a1
+    move.l  d6,d2                   * DestX
+    move.l  d7,d3                   * DestY
+    moveq   #HIPPOHEAD_WIDTH,d4     * SizeX
+    moveq   #HIPPOHEAD_HEIGHT,d5    * SizeY
+    lob     BltTemplate
+    rts
+
+
 
 ;;printhippo1
 ;;* zoomaava hipon p‰‰
@@ -6711,7 +6672,7 @@ printhippo1:
 ;;	
 ;;	popm	all
 ;;	rts
- endc
+;; endc
 	
 
 ** Print into scope window
@@ -6719,11 +6680,7 @@ printHippoScopeWindow
     cmp.w   #64,s_scopeDrawAreaHeight(a4)
     blo     .x
 
-	pushm	d0-d6/a0-a2/a6
-    move.l  bitmapHippoHeadPtr(a5),a0
-	move.l	s_rastport3(a4),a1		* quad
-	moveq	#0,d0	
-	moveq	#0,d1
+	pushm	all
 
 	* Center hippohead into scope window
 	move.l	s_scopeWindowBase(a4),a2 
@@ -6737,13 +6694,13 @@ printHippoScopeWindow
 	asr	#1,d4
 	add	d4,d3
 
-	moveq	#HIPPOHEAD_WIDTH,d4	
-	moveq	#HIPPOHEAD_HEIGHT,d5
-	add	windowleft(a5),d2
-	add	windowtop(a5),d3
-	move	#$c0,d6			* suora kopio
-	lore	GFX,BltBitMapRastPort
-	popm	d0-d6/a0-a2/a6
+	add	    windowleft(a5),d2
+	add	    windowtop(a5),d3
+    move.l  d2,d6
+    move.l  d3,d7
+	move.l	s_rastport3(a4),a4		* quad
+    bsr     renderHippo
+	popm	all
 .x
 	rts
 
@@ -65829,7 +65786,8 @@ asciitable
 	section	mini,data_c
 
 * 2 bitplane image, 96x66 pixels, 1584 bytes
-hippohead	incbin	gfx/hip.raw
+hippohead:	incbin	gfx/hip.raw
+hippoheadCombinedBpl:  ds.b    HIPPOHEAD_BITPLANE
 
 tickdata	dc	$001c,$0030,$0060,$70c0,$3980,$1f00,$0e00
 
