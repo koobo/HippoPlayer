@@ -1404,11 +1404,9 @@ xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkkiä)
 findpattern	rs.b	30		* find pattern
 divider		rs.b	26		* divider
 
-omabitmap	rs.b	bm_SIZEOF-7*4	* 1 bitplanea, ei tilaa muille
-bitmapHippoHead	rs.b	bm_SIZEOF-6*4	* 2
-omabitmap3	rs.b	bm_SIZEOF-7*4	* 1
-omabitmap4	rs.b	bm_SIZEOF-6*4	* 2
-omabitmap5	rs.b	bm_SIZEOF-6*4	* 2
+bitmapHippoHeadPtr  rs.l    1
+bitmapHippoHeadOld  rs.b	bm_SIZEOF-6*4	* 2
+omabitmap3      	rs.b	bm_SIZEOF-7*4	* 1 - tick mark
 
 							* Semaphore to protect access to the data of the module
 							* being played.
@@ -3121,9 +3119,6 @@ main:
 	sub	#10,windowtop(a5)
 .newkick
 
-	bsr	inithippo
-	bsr	initkorva
-	bsr	initkorva2
 	jsr	initializeButtonRowLayout
 
 	st	reghippo(a5)
@@ -3827,6 +3822,7 @@ exit
     jsr     umeFreeIndex
     jsr     umeFreeData
     jsr     infoScrollFree
+    jsr     uninitHippo
 
 	move.l	_SIDBase(a5),d0		* poistetaan sidplayer
 	beq.b	.nahf			
@@ -5519,7 +5515,8 @@ findFrontPublicScreenName:
 ****** Piirretään ikkunan kamat
 
 wrender:
-	
+	bsr initHippoNew
+
 	move.l	pen_0(a5),d0
 	move.l	rastport(a5),a1
 	lore	GFX,SetBPen
@@ -6382,10 +6379,102 @@ unlockMainWindow:
 
 HIPPOHEAD_WIDTH = 96
 HIPPOHEAD_HEIGHT = 66
+HIPPOHEAD_BITPLANE = HIPPOHEAD_WIDTH/8*HIPPOHEAD_HEIGHT
 
-inithippo
+initHippoNew:
+    DPRINT  "initHippoNew"
+
+    move.l  (a5),a0
+    cmp.w   #39,LIB_VERSION(a0)
+    blo     initHippoOld
+
+    lea     -rp_SIZEOF(sp),sp
+    move.l  sp,a4
+
+    move.l  a4,a1
+    lore    GFX,InitRastPort
+
+    move.l  rastport(a5),a0     * get main window rastport
+    move.l  rp_BitMap(a0),a0    * friend bitmap
+    moveq   #HIPPOHEAD_WIDTH,d0
+    moveq   #HIPPOHEAD_HEIGHT,d1
+    moveq   #0,d2
+    move.b  bm_Depth(a0),d2
+    moveq   #BMF_CLEAR,d3       * clear it
+    lob     AllocBitMap         * V39 function
+    move.l  d0,bitmapHippoHeadPtr(a5)
+    beq     .xx
+    move.l  d0,rp_BitMap(a4)
+
+    move.l  a4,a1
+    moveq   #RP_JAM1,d0        * paint PenA pixel if source has a bit set
+    lob     SetDrMd
+
+    ******** Pen 1 - bitplane 1 only
+    move.l  a4,a1
+    move.l  pen_1(a5),d0
+    lob     SetAPen
+
+    lea     hippohead,a0            * Src Template
+    bsr     .blit
+
+    ******** Pen 2 - bitplane 2 only
+    move.l  a4,a1
+    move.l  pen_2(a5),d0
+    lob     SetAPen
+
+    lea     hippohead+HIPPOHEAD_BITPLANE,a0        * Src Template
+    bsr     .blit
+
+    ******** Pen 3 - bitplane 1+2
+
+    * merge bitplanes 1 and 2 into 1
+    lea     hippohead,a0
+    lea     HIPPOHEAD_BITPLANE(a0),a1
+    moveq   #HIPPOHEAD_HEIGHT-1,d7
+.y  moveq   #HIPPOHEAD_WIDTH/32-1,d6
+.x  move.l  (a0),d0
+    and.l   (a1)+,d0
+    move.l  d0,(a0)+
+    dbf     d6,.x
+    dbf     d7,.y
+
+    move.l  a4,a1
+    move.l  pen_3(a5),d0
+    lob     SetAPen
+
+    lea     hippohead,a0            * Src Template
+    bsr     .blit
+
+    move.l  a4,a1
+    moveq   #RP_JAM2,d0  
+    lob     SetDrMd                 * restore
+
+.xx
+    lea     rp_SIZEOF(sp),sp
+    rts
+
+.blit:
+    moveq   #0,d0                   * SrcX
+    moveq   #HIPPOHEAD_WIDTH/8,d1   * SrcMod
+    move.l  a4,a1
+    moveq   #0,d2                   * DestX
+    moveq   #0,d3                   * DestY
+    moveq   #HIPPOHEAD_WIDTH,d4     * SizeX
+    moveq   #HIPPOHEAD_HEIGHT,d5    * SizeY
+    lob     BltTemplate
+    rts
+
+uninitHippo:    
+    move.l  (a5),a0
+    cmp.w   #39,LIB_VERSION(a0)
+    blo.b   .x
+    move.l  bitmapHippoHeadPtr(a5),a0
+    lore    GFX,FreeBitMap
+.x  rts     
+
+initHippoOld:
 *** Lasketaan checksummi infoikkunan no-onelle ja unregistered-tekstille.
-
 	check	1
 
 	tst.b	uusikick(a5)
@@ -6398,7 +6487,7 @@ inithippo
 	* %10 = %01
 	* %11 = %11
 	lea	hippohead,a0
-	lea	792(a0),a1
+	lea	HIPPOHEAD_BITPLANE(a0),a1
 	move	#96*66/8-1,d7
 .bytes
 	moveq	#$1,d2
@@ -6422,17 +6511,18 @@ inithippo
 
 .new
 
-	lea	bitmapHippoHead(a5),a2
+	lea	bitmapHippoHeadOld(a5),a2
+    move.l  a2,bitmapHippoHeadPtr(a5)
 	move.l	a2,a0
 	moveq	#2,d0
 	moveq	#HIPPOHEAD_WIDTH,d1
 	moveq	#HIPPOHEAD_HEIGHT,d2
 	lore	GFX,InitBitMap
 	move.l	#hippohead,bm_Planes(a2)
-	move.l	#hippohead+792,bm_Planes+4(a2)
+	move.l	#hippohead+HIPPOHEAD_BITPLANE,bm_Planes+4(a2)
 	rts
 
- ifeq zoom
+ ifeq zoom 
 * tavallinen hipon pää
 printhippo1:
 ;	DPRINT	"Print hippo"
@@ -6486,7 +6576,7 @@ printhippo1:
 .e
 
 
-	lea	bitmapHippoHead(a5),a0
+    move.l  bitmapHippoHeadPtr(a5),a0
 	move.l	rastport(a5),a1		* main
 	add	windowleft(a5),d2
 	add	windowtop(a5),d3
@@ -6494,132 +6584,133 @@ printhippo1:
 	move	#$c0,d6		* minterm, suora kopio
 	moveq	#HIPPOHEAD_WIDTH,d4		* x-koko
 	lore	GFX,BltBitMapRastPort
+
 .r	popm	d0-d7/a0-a2/a6
 	rts
  else
 
-printhippo1
-* zoomaava hipon pää
-	tst.b	win(a5)
-	bne.b	.yep
-	;beq.b	.q
-	;tst.b	uusikick(a5)
-	;bne.b	.yep
-.q	;rts
-.yep
-	pushm	all
-	move.b	reghippo(a5),d7
-	clr.b	reghippo(a5)
-
-	lea	-(bm_SIZEOF+bsa_SIZEOF)(sp),sp
-	move.l	sp,a4
-	lea	bm_SIZEOF(a4),a3
-
-	move.l	sp,a0
-	moveq	#(bm_SIZEOF+bsa_SIZEOF)/2-1,d0
-.cl	clr	(a0)+
-	dbf	d0,.cl
-
-	tst	boxsize(a5)
-	beq	.r
-
-	move.l	#224,d0
-	move.l	#400*2,d1		* 2 planea
-	lore	GFX,AllocRaster
-	tst.l	d0
-	beq	.r
-	move.l	d0,a2
-
-	move.l	a4,a0
-	moveq	#2,d0
-	move	#220,d1		* leveys 220
-	move	#400,d2		* korkeus 400
-	lob	InitBitMap
-	move.l	a2,bm_Planes(a4)
-	lea	(224/8)*400(a2),a0
-	move.l	a0,bm_Planes+4(a4)
-
-
-* alkup. x: 96, y: 66
-* max  x: 220, y: 400
-
-	moveq	#HIPPOHEAD_WIDTH,d0
-	moveq	#HIPPOHEAD_HEIGHT,d1
-
-	move	d0,bsa_SrcWidth(a3)
-	move	d1,bsa_SrcHeight(a3)
-	move	d0,bsa_XSrcFactor(a3)
-	move	d1,bsa_YSrcFactor(a3)
-	move	d0,bsa_XDestFactor(a3)
-	move	d1,bsa_YDestFactor(a3)
-
-	move.l	a4,bsa_DestBitMap(a3)
-	pushpea	bitmapHippoHead(a5),bsa_SrcBitMap(a3)
-
-
-	move.l	windowbase(a5),a0
-	move	wd_Height(a0),d0
-	sub	#88,d0
-
-	move	d0,bsa_YDestFactor(a3)
-
-	move	d0,d1
-	add	#30,d1
-
-	move	#220,d2
-	tst.b	d7
-	beq.b	.ne0
-	moveq	#94,d2
-.ne0
-
-	cmp	d2,d1
-	blo.b	.e
-	move	d2,d1
-.e
-	move	d1,bsa_XDestFactor(a3)
-
-	move.l	a3,a0
-	lob	BitMapScale
-
-
-	moveq	#0,d0		* lähde x
-	moveq	#0,d1		* y
-	moveq	#79+1,d3	* y
-	move	bsa_DestWidth(a3),d4
-	move	bsa_DestHeight(a3),d5
-
-
-	move	#32+220/2+3,d2	* kohde x
-	move	d4,d6
-	lsr	#1,d6
-	sub	d6,d2
-
-	tst.b	d7
-	beq.b	.ne
-	move	#160,d2
-.ne
-
-
-	move.l	a4,a0
-	move.l	rastport(a5),a1		* main
-	add	windowleft(a5),d2
-	add	windowtop(a5),d3
-	move	#$ee,d6		* minterm, kopio a or d ->d
-	lob	BltBitMapRastPort
-
-	move.l	a2,d0
-	beq.b	.r
-	move.l	a2,a0
-	move.l	#224,d0
-	move.l	#400*2,d1		* 2 planea
-	lob	FreeRaster
-
-.r	
-	
-	lea	(bm_SIZEOF+bsa_SIZEOF)(sp),sp
-	
-	popm	all
-	rts
+;;printhippo1
+;;* zoomaava hipon pää
+;;	tst.b	win(a5)
+;;	bne.b	.yep
+;;	;beq.b	.q
+;;	;tst.b	uusikick(a5)
+;;	;bne.b	.yep
+;;.q	;rts
+;;.yep
+;;	pushm	all
+;;	move.b	reghippo(a5),d7
+;;	clr.b	reghippo(a5)
+;;
+;;	lea	-(bm_SIZEOF+bsa_SIZEOF)(sp),sp
+;;	move.l	sp,a4
+;;	lea	bm_SIZEOF(a4),a3
+;;
+;;	move.l	sp,a0
+;;	moveq	#(bm_SIZEOF+bsa_SIZEOF)/2-1,d0
+;;.cl	clr	(a0)+
+;;	dbf	d0,.cl
+;;
+;;	tst	boxsize(a5)
+;;	beq	.r
+;;
+;;	move.l	#224,d0
+;;	move.l	#400*2,d1		* 2 planea
+;;	lore	GFX,AllocRaster
+;;	tst.l	d0
+;;	beq	.r
+;;	move.l	d0,a2
+;;
+;;	move.l	a4,a0
+;;	moveq	#2,d0
+;;	move	#220,d1		* leveys 220
+;;	move	#400,d2		* korkeus 400
+;;	lob	InitBitMap
+;;	move.l	a2,bm_Planes(a4)
+;;	lea	(224/8)*400(a2),a0
+;;	move.l	a0,bm_Planes+4(a4)
+;;
+;;
+;;* alkup. x: 96, y: 66
+;;* max  x: 220, y: 400
+;;
+;;	moveq	#HIPPOHEAD_WIDTH,d0
+;;	moveq	#HIPPOHEAD_HEIGHT,d1
+;;
+;;	move	d0,bsa_SrcWidth(a3)
+;;	move	d1,bsa_SrcHeight(a3)
+;;	move	d0,bsa_XSrcFactor(a3)
+;;	move	d1,bsa_YSrcFactor(a3)
+;;	move	d0,bsa_XDestFactor(a3)
+;;	move	d1,bsa_YDestFactor(a3)
+;;
+;;	move.l	a4,bsa_DestBitMap(a3)
+;;	pushpea	bitmapHippoHead(a5),bsa_SrcBitMap(a3)
+;;
+;;
+;;	move.l	windowbase(a5),a0
+;;	move	wd_Height(a0),d0
+;;	sub	#88,d0
+;;
+;;	move	d0,bsa_YDestFactor(a3)
+;;
+;;	move	d0,d1
+;;	add	#30,d1
+;;
+;;	move	#220,d2
+;;	tst.b	d7
+;;	beq.b	.ne0
+;;	moveq	#94,d2
+;;.ne0
+;;
+;;	cmp	d2,d1
+;;	blo.b	.e
+;;	move	d2,d1
+;;.e
+;;	move	d1,bsa_XDestFactor(a3)
+;;
+;;	move.l	a3,a0
+;;	lob	BitMapScale
+;;
+;;
+;;	moveq	#0,d0		* lähde x
+;;	moveq	#0,d1		* y
+;;	moveq	#79+1,d3	* y
+;;	move	bsa_DestWidth(a3),d4
+;;	move	bsa_DestHeight(a3),d5
+;;
+;;
+;;	move	#32+220/2+3,d2	* kohde x
+;;	move	d4,d6
+;;	lsr	#1,d6
+;;	sub	d6,d2
+;;
+;;	tst.b	d7
+;;	beq.b	.ne
+;;	move	#160,d2
+;;.ne
+;;
+;;
+;;	move.l	a4,a0
+;;	move.l	rastport(a5),a1		* main
+;;	add	windowleft(a5),d2
+;;	add	windowtop(a5),d3
+;;	move	#$ee,d6		* minterm, kopio a or d ->d
+;;	lob	BltBitMapRastPort
+;;
+;;	move.l	a2,d0
+;;	beq.b	.r
+;;	move.l	a2,a0
+;;	move.l	#224,d0
+;;	move.l	#400*2,d1		* 2 planea
+;;	lob	FreeRaster
+;;
+;;.r	
+;;	
+;;	lea	(bm_SIZEOF+bsa_SIZEOF)(sp),sp
+;;	
+;;	popm	all
+;;	rts
  endc
 	
 
@@ -6629,7 +6720,7 @@ printHippoScopeWindow
     blo     .x
 
 	pushm	d0-d6/a0-a2/a6
-	lea	bitmapHippoHead(a5),a0
+    move.l  bitmapHippoHeadPtr(a5),a0
 	move.l	s_rastport3(a4),a1		* quad
 	moveq	#0,d0	
 	moveq	#0,d1
@@ -6659,68 +6750,94 @@ printHippoScopeWindow
 
 *********
 
-initkorva
-	lea	omabitmap4(a5),a2
-	move.l	a2,a0
-	moveq	#2,d0
-	moveq	#16,d1
-	moveq	#4,d2
-	lore	GFX,InitBitMap
-	move.l	#korvadata,bm_Planes(a2)
-	move.l	#korvadata+8,bm_Planes+4(a2)
-	rts
 
-initkorva2
-	lea	omabitmap5(a5),a2
-	move.l	a2,a0
-	moveq	#2,d0
-	moveq	#16,d1
-	moveq	#4,d2
-	lore	GFX,InitBitMap
-	move.l	#korvadata2,bm_Planes(a2)
-	move.l	#korvadata2+8,bm_Planes+4(a2)
-	rts
 
-* d2 = x
-* d3 = y
-
+* Draw the RMB ear symbol into main window
 * a0 = Gadget
-printkorva2
-	pushm	d0-d7/a0-a2/a6
-	move.l	rastport2(a5),a1	* prefs
-	lea	omabitmap4(a5),a2
-	bra.b	pkor
+printkorva2:
+    pushm   all
+	move.l	rastport2(a5),a4		    * prefs window
+    bra.b   printkorva\.3     
 
-* Draw the RMB ear symbol 
-* a0 = Gadget
-printkorva
+printkorva:
 	tst.b	win(a5)
 	bne.b	.q
 	rts
 .q
-	pushm	d0-d7/a0-a2/a6
-	move.l	rastport(a5),a1		* main
-	lea	omabitmap5(a5),a2
-	tst.b	uusikick(a5)
-	bne.b	pkor
-	lea	omabitmap4(a5),a2	* kick13: korva ilman tausta patternia
+    pushm   all
+	move.l	rastport(a5),a4		    * main window
 
-pkor
-	movem	gg_LeftEdge(a0),d2/d3
-	add	gg_Width(a0),d2
-	subq	#4,d2
+    * Do bg pattern?
+    moveq   #1,d5
+    tst.b	uusikick(a5)
+	bne.b	.2
+.3  moveq   #0,d5                   * nope
+.2
+    move.w  d5,-(sp)
+    
+    * target x,y
+	movem	gg_LeftEdge(a0),d6/d7
+	add	    gg_Width(a0),d6
+	subq	#4,d6
 
-	moveq	#0,d0		* lähde x,y
-	moveq	#0,d1
-	moveq	#5,d4		* x-koko
-	moveq	#4,d5		* y-koko
+    move.l  a4,a1
+    moveq   #RP_JAM2,d0        * paint PenA pixel if source has a bit set, B where not set
+    lore    GFX,SetDrMd
 
-	move	#$c0,d6		* minterm, suora kopio a->d
-	move.l	a2,a0
-	lore	GFX,BltBitMapRastPort
-.r	popm	d0-d7/a0-a2/a6
+    move.l  a4,a1
+    move.l  pen_1(a5),d0
+    lob     SetAPen
+    move.l  pen_0(a5),d0
+    lob     SetBPen
+
+    lea     earDataWhite,a0
+    bsr     .blit
+
+    move.l  a4,a1
+    moveq   #RP_JAM1,d0        * paint PenA pixel if source has a bit set
+    lob     SetDrMd
+
+    move.l  a4,a1
+    move.l  pen_2(a5),d0
+    lob     SetAPen
+
+    lea     earDataBlack,a0
+    bsr     .blit
+
+    move.l  a4,a1
+    move.l  pen_3(a5),d0
+    lob     SetAPen
+
+    tst.w   (sp)+
+    beq.b   .skipBg
+    lea     earDataBlue,a0
+    bsr     .blit
+.skipBg
+
+    * restore
+    move.l  a4,a1
+    move.l  pen_1(a5),d0
+    lob     SetAPen
+    move.l  a4,a1
+    move.l  pen_0(a5),d0
+    lob     SetBPen
+    move.l  a4,a1
+    moveq   #RP_JAM2,d0  
+    lob     SetDrMd      
+    
+    popm    all
 	rts
 
+.blit:
+    moveq   #0,d0                   * SrcX
+    moveq   #2,d1                   * SrcMod
+    move.l  a4,a1
+    move.l  d6,d2                   * DestX
+    move.l  d7,d3                   * DestY
+    moveq   #5,d4                   * SizeX
+    moveq   #4,d5                   * SizeY
+    lob     BltTemplate
+    rts
 
 ******** Tick-merkki
 
@@ -17641,7 +17758,7 @@ rtimeoutmode
 pselector
 	sub.l	a4,a4
 pselector2
-	bsr	get_rt
+	jsr	get_rt
 	lea	.tags(pc),a0
 	sub.l	a3,a3
 	bsr	pon2
@@ -65711,7 +65828,7 @@ asciitable
 
 	section	mini,data_c
 
-* 2 bitplane image, 96x66 pixels
+* 2 bitplane image, 96x66 pixels, 1584 bytes
 hippohead	incbin	gfx/hip.raw
 
 tickdata	dc	$001c,$0030,$0060,$70c0,$3980,$1f00,$0e00
@@ -65723,27 +65840,45 @@ tickdata	dc	$001c,$0030,$0060,$70c0,$3980,$1f00,$0e00
 * %01 = valkoinen
 * %11 = sininen
 
-korvadata
+;korvadata
+;	dc.b	%01000000,%00000000	* 1 bpl
+;	dc.b	%10100000,%00000000     
+;	dc.b	%10010000,%00000000
+;	dc.b	%11111000,%00000000
+;
+;	dc.b	%10000000,%00000000	* 2 bpl
+;	dc.b	%01000000,%00000000
+;	dc.b	%01100000,%00000000
+;	dc.b	%00000000,%00000000
+;
+;* Sininen patterni mukana
+;korvadata2
+;	dc.b	%01010101,%00000000	* 1 bpl
+;	dc.b	%10101010,%00000000
+;	dc.b	%10010101,%00000000
+;	dc.b	%11111010,%00000000
+;
+;	dc.b	%10010101,%00000000	* 2 bpl
+;	dc.b	%01001010,%00000000
+;	dc.b	%01100101,%00000000
+;	dc.b	%00000010,%00000000
+
+earDataWhite:
 	dc.b	%01000000,%00000000	* 1 bpl
 	dc.b	%10100000,%00000000     
 	dc.b	%10010000,%00000000
 	dc.b	%11111000,%00000000
 
+earDataBlack:
 	dc.b	%10000000,%00000000	* 2 bpl
 	dc.b	%01000000,%00000000
 	dc.b	%01100000,%00000000
 	dc.b	%00000000,%00000000
 
-* Sininen patterni mukana
-korvadata2
-	dc.b	%01010101,%00000000	* 1 bpl
-	dc.b	%10101010,%00000000
-	dc.b	%10010101,%00000000
-	dc.b	%11111010,%00000000
-
-	dc.b	%10010101,%00000000	* 2 bpl
-	dc.b	%01001010,%00000000
-	dc.b	%01100101,%00000000
+earDataBlue:
+	dc.b	%00010101,%00000000
+	dc.b	%00001010,%00000000
+	dc.b	%00000101,%00000000
 	dc.b	%00000010,%00000000
 
 
