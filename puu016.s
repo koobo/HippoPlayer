@@ -3117,6 +3117,7 @@ main:
 	sub	#10,windowtop(a5)
 .newkick
 
+    jsr     initHippo
 	jsr	initializeButtonRowLayout
 
 	st	reghippo(a5)
@@ -6427,6 +6428,18 @@ initHippoOld:
 	rts
  EREM
 
+initHippo:
+    * merge bitplanes 1 and 2 into 1 for BltTemplate()
+    lea     hippohead,a0
+    lea     HIPPOHEAD_BITPLANE(a0),a1
+    lea     hippoheadCombinedBpl,a2
+    move.w  #HIPPOHEAD_BITPLANE/4-1,d1
+.l  move.l  (a0)+,d0
+    and.l   (a1)+,d0
+    move.l  d0,(a2)+
+    dbf     d1,.l
+    rts
+
 * tavallinen hipon p‰‰
 printhippo1:
 	tst	boxsize(a5)
@@ -6507,16 +6520,6 @@ renderHippo:
     lea     hippohead+HIPPOHEAD_BITPLANE,a0
     bsr     .blit
     ******** Pen 3 - bitplane 1+2
-    * merge bitplanes 1 and 2 into 1
-    lea     hippohead,a0
-    lea     HIPPOHEAD_BITPLANE(a0),a1
-    lea     hippoheadCombinedBpl,a2
-    move.w  #HIPPOHEAD_BITPLANE/4-1,d1
-.l  move.l  (a0)+,d0
-    and.l   (a1)+,d0
-    move.l  d0,(a2)+
-    dbf     d1,.l
-
     move.l  a4,a1
     move.l  pen_3(a5),d0
     lob     SetAPen
