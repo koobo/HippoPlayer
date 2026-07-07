@@ -6499,6 +6499,7 @@ printhippo1:
 *   d7 = target y
 *   a4 = target rastport
 renderHippo:
+    ******** Pen 0,1 - bitplane 1 only
     move.l  a4,a1
     moveq   #RP_JAM2,d0        * paint PenA pixel if source has a bit set, B if not
     lore    GFX,SetDrMd
@@ -6512,7 +6513,7 @@ renderHippo:
     bsr     .blit
     ******** Pen 2 - bitplane 2 only
     move.l  a4,a1
-    moveq   #RP_JAM1,d0        * paint PenA pixel if source has a bit set, B if not
+    moveq   #RP_JAM1,d0        * paint PenA pixel if source has a bit set
     lob     SetDrMd
     move.l  a4,a1
     move.l  pen_2(a5),d0
@@ -6530,9 +6531,6 @@ renderHippo:
     move.l  a4,a1
     move.l  pen_1(a5),d0
     lob     SetAPen
-    move.l  a4,a1
-    move.l  pen_0(a5),d0
-    lob     SetBPen
     move.l  a4,a1
     moveq   #RP_JAM2,d0  
     lob     SetDrMd    
@@ -6710,7 +6708,7 @@ printHippoScopeWindow
 
 
 
-* Draw the RMB ear symbol into main window
+* Draw the RMB ear symbol into a window
 * a0 = Gadget
 printkorva2:
     pushm   all
@@ -6741,7 +6739,6 @@ printkorva:
     move.l  a4,a1
     moveq   #RP_JAM2,d0        * paint PenA pixel if source has a bit set, B where not set
     lore    GFX,SetDrMd
-
     move.l  a4,a1
     move.l  pen_1(a5),d0
     lob     SetAPen
@@ -6754,7 +6751,6 @@ printkorva:
     move.l  a4,a1
     moveq   #RP_JAM1,d0        * paint PenA pixel if source has a bit set
     lob     SetDrMd
-
     move.l  a4,a1
     move.l  pen_2(a5),d0
     lob     SetAPen
@@ -6776,9 +6772,6 @@ printkorva:
     move.l  a4,a1
     move.l  pen_1(a5),d0
     lob     SetAPen
-    move.l  a4,a1
-    move.l  pen_0(a5),d0
-    lob     SetBPen
     move.l  a4,a1
     moveq   #RP_JAM2,d0  
     lob     SetDrMd      
