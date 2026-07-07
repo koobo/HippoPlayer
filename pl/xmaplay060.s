@@ -633,12 +633,13 @@ loadSamplesAGUS:
 	move.l	amigus_base(pc),a1		
 	lea		HAGEN_WDATAH(a1),a1
     moveq   #4,d1
+    bra.b   .s            * handle very short ones
 .copy
     move.l  (a0)+,(a1)
     add.l   d1,d5
     sub.l   d1,d0
-    cmp.l   d1,d0
-    bhs     .copy
+.s  cmp.l   d1,d0
+    bhs.b   .copy
 
     tst.l   d0
     beq     .done
