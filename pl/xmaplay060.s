@@ -7048,6 +7048,9 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     mulu    d3,d0
     divu    #127,d0
 .set
+    ; 0xffff -> 0x3fff
+    lsr.w   #2,d0
+    lsr.w   #2,d1
 	move.w	d0,HAGEN_VOICE_VOLUMEL(a6)
 	move.w	d1,HAGEN_VOICE_VOLUMER(a6)
     move.w  d7,d2
