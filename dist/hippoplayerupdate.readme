@@ -128,40 +128,48 @@ Additional files to check and download
   wrong playback speed. This caused audible gaps with "shipping 
   forecast.mod" by h0ffman.
 
-- Scopes: improved display sync with audio, especially on RTG
-  screens.
-
 - Protracker with AHI/AmiGUS: Fix some songend detection issues, 
   improve scrambled pattern module support.
+
+- Scopes: improved display sync with audio, especially on RTG
+  screens.
 
 - Fix issues with hippo logo and gadget RMB indicator on some 
   RTG screenmodes.
 
+- Prevent PS3M and xmaplay060 mixer task busy looping in
+  certain (silly) RTG screenmodes.
+
+- Some other minor things.
+
 ## Improvements:
 
-- Support added for the AmiGUS Mini PCMCIA-card. AmiGUS support 
-  requires amigus.library from now on.
+- AmiGUS support now requires amigus.library. This provides 
+  compatibility with the current Zorro-AmiGUS and the 
+  upcoming AmiGUS Mini PCMCIA-card.
 
 - Xmaplay060 improvements
-  - This is 8bitbubsy's fully featured Fasttracker2/XM player,
-    alternative to the one in PS3M.
-  - AmiGUS support added with channel panning, 16-bit samples.
-  - AHI support added with channel panning, ping pong loops,
-    16-bit samples. 
+  - Reminder: this is 8bitbubsy's fully featured Fasttracker2/XM player,
+    a better alternative to the one in PS3M.
+  - AmiGUS and AHI support added with channel panning, ping pong loops,
+    8/16-bit samples.
   - Instrument names shown in the info window.
   - Channel count shown in the infobox.
-  - Decreased memory usage.
+  - Output choices in Prefs:
+     - xma060+Paula:  Play-2 > Enable xmaplay060 > ON
+                      AHI    > Enable AHI > OFF
+                      CPU requirement: 68060
+     - xma060+AHI:    Play-2 > Enable xmaplay060 > ON
+                      AHI    > Enable AHI > ON
+                      CPU requirement: AHI dependent
+     - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
+                      PS3M   > Use AmiGUS hardware mixer > ON
+                      CPU requirement: 68000 
 
-- Xmaplay060 output choices in Prefs are:
-  - xma060+Paula: Play-2 > Enable xmaplay060 > ON
-                  AHI > Enable AHI > OFF
-                  CPU requirement: 68060
-  - xma060+AHI: Play-2 > Enable xmaplay060 > ON
-                AHI > Enable AHI > ON
-                CPU requirement: AHI dependent
-  - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
-                   PS3M > Use AmiGUS hardware mixer > ON
-                   CPU requirement: 68000 
+- Updated playsid.library v1.11:
+  - Trinity accelerator SID audio core support for SID playback. 
+    Single and dual SID cores supported. Activate with "PlaySID mode" 
+    in Prefs. You need a suitable firmware in your Trinity.
 
 - New search source AMP (Amiga Music Preservation) added.
   Thanks to asleamp and Patrik for setting this up!
@@ -172,9 +180,6 @@ Additional files to check and download
   or changed with the position slider.
   
 - Infobox displays the amount of data downloaded on the 2nd row.
-
-- Trinity accelerator SID audio core support for SID playback. 
-  Activate with "PlaySID mode" in Prefs.
 
 
 ------------------------------------------------------------------------------
