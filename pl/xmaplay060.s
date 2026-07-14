@@ -1,3 +1,4 @@
+;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
 ; ==============================================================================
 ; xmaplay060 - Port of Fasttracker II's XM replayer for 68060 Amigas
 ; by 8bitbubsy, aug. 2020 - mar. 2026. Syntax is Asm-Pro.
@@ -610,7 +611,8 @@ loadSamplesAGUS:
 
 	move.l	amigus_base(pc),a1		
 	move.l	d5,HAGEN_WADDRH(a1)   * destination address
-
+    moveq   #4,d4               * push counter
+    moveq   #0,d3               * push buffer
 .instrs
     move.l  (a4)+,d0
     beq     .next
@@ -628,10 +630,20 @@ loadSamplesAGUS:
     beq     .nextS
     move.l  d5,sAGUSOffset(a2)   * Store AGUS address for later
 
+ ifne DEBUG
+    push    d1
+    move.l  d5,d1
+    DPRINT  "Sample len=%lx - AGUS offset=%lx"
+    pop     d1
+ endif
+
     ; ---------------------------------    
     ; Copy d0 bytes from a0 to AGUS
 	move.l	amigus_base(pc),a1		
-	lea		HAGEN_WDATAH(a1),a1
+    lea     HAGEN_WDATAH(a1),a1   * destination address
+ REM
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS
     moveq   #4,d1
     bra.b   .s            * handle very short ones
 .copy
@@ -652,6 +664,71 @@ loadSamplesAGUS:
     move.l  (sp)+,(a1)
     addq.l  #4,d5
 .done
+ EREM
+; REM ;;;;;; NEW
+    ; Check for bidi loop
+    cmp.l   #4,sOrigRepL(a2)
+    bls     .noLoop
+    cmp.b   #2,sLoopType(a2)
+    beq     .bidi
+.noLoop
+    tst.b   s16Bit(a2)
+    bne     .loop16
+.loop8
+    move.b  (a0)+,d1
+    bsr     .push8
+    subq.l  #1,d0
+    bne     .loop8
+    bsr     .flush
+    bra     .continue
+.loop16
+    move.w  (a0)+,d1
+    bsr     .push16
+    subq.l  #2,d0
+    bpl     .loop16
+    bsr     .flush
+    bra     .continue
+
+.bidi
+    ; Calc bytes to loop end
+    move.l  sRepS(a2),d0                ; Repeat start offset
+    add.l   sOrigRepL(a2),d0            ; Repeat length
+
+    tst.b   s16Bit(a2)
+    bne     .bidiloop16a
+.bidiloop8a
+    move.b  (a0)+,d1
+    bsr     .push8
+    subq.l  #1,d0
+    bne     .bidiloop8a
+    ; Append replen of data reversed
+    move.l   sOrigRepL(a2),d0            ; Repeat length
+.bidiloop8b
+    move.b  -(a0),d1
+    bsr     .push8
+    subq.l  #1,d0
+    bne     .bidiloop8b
+    bsr     .flush
+    bra     .continue
+
+.bidiloop16a
+    move.w  (a0)+,d1
+    bsr     .push16
+    subq.l  #2,d0
+    bpl     .bidiloop16a
+    ; Append replen of data reversed
+    move.l   sOrigRepL(a2),d0            ; Repeat length
+.bidiloop16b
+    move.w  -(a0),d1
+    bsr     .push16
+    subq.l  #2,d0
+    bne     .bidiloop16b
+    bsr     .flush
+
+.continue
+; EREM ;;;;;;; NEW
+
+
     ; ---------------------------------    
     ; Free it
     move.l  sPek(a2),a1
@@ -671,6 +748,36 @@ loadSamplesAGUS:
     rts
 .err
     moveq   #0,d0
+    rts
+
+* Push byte to AGUS
+*   d1 = byte
+*   a1 = HAGEN_WDATAH
+*   d3 = buffer
+*   d4 = counter
+.push8
+    rol.l   #8,d3
+    move.b  d1,d3
+    subq    #1,d4
+    beq     .flush_
+    rts
+* Push word to AGUS
+*   d1 = word
+.push16
+    swap    d3
+    move.w  d1,d3
+    subq    #2,d4
+    beq     .flush_
+    rts
+* shift remaining data to the top
+.flush
+    lsl     #3,d4
+    rol.l   d4,d3
+.flush_
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
     rts
 
 
@@ -7127,6 +7234,10 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     bls     .noLoop
     tst.b   sLoopType(a0)
     beq     .noLoop
+    cmp.b   #2,sLoopType(a0)
+    bne     .noBidi
+    add.l   d4,d4                       ; double replen for bidi with mirrored data
+.noBidi
     ; TODO: cannot set ping-pong loop
     bset    #1,d5                       ; loop bit
     ; Loop active
