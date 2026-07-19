@@ -601,6 +601,31 @@ loadSamples:
     moveq   #0,d0
     rts
 
+
+PUSH8M macro
+    rol.l   #8,d3       * Push 8 bits
+    move.b  \2,d3
+    subq    #1,d4       * 1 byte
+    bne.b   .\1
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
+.\1:
+    endm
+
+PUSH16M macro           
+    swap    d3          * Push 16 bits
+    move.w  \2,d3
+    subq    #2,d4       * 1 word
+    bne.b   .\1
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
+.\1:
+    endm
+
 * Load each instrument sample to AGUS
 loadSamplesAGUS:
     DPRINT  "loadSamplesAGUS"
@@ -643,7 +668,7 @@ loadSamplesAGUS:
     lea     HAGEN_WDATAH(a1),a1   * destination address
  REM
     ; ---------------------------------    
-    ; Copy d0 bytes from a0 to AGUS
+    ; Copy d0 bytes from a0 to AGUS - old non-bidi
     moveq   #4,d1
     bra.b   .s            * handle very short ones
 .copy
@@ -666,6 +691,8 @@ loadSamplesAGUS:
 .done
  EREM
 ; REM ;;;;;; NEW
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS - with BIDI support
     ; Check for bidi loop
     cmp.l   #4,sOrigRepL(a2)
     bls     .noLoop
@@ -675,20 +702,22 @@ loadSamplesAGUS:
     tst.b   s16Bit(a2)
     bne     .loop16
 .loop8
-    move.b  (a0)+,d1
-    bsr     .push8
+    ;move.b  (a0)+,d1
+    ;bsr     .push8
+    PUSH8M  1,(a0)+
     subq.l  #1,d0
-    bne     .loop8
+    bne.b   .loop8
     bsr     .flush
     bra     .continue
 .loop16
-    move.w  (a0)+,d1
-    bsr     .push16
+;    move.w  (a0)+,d1
+;    bsr     .push16
+    PUSH16M  2,(a0)+
     subq.l  #2,d0
-    bpl     .loop16
+    bpl.b   .loop16
     bsr     .flush
     bra     .continue
-
+    ; ---------------------------------    
 .bidi
     ; Calc bytes to loop end
     move.l  sRepS(a2),d0                ; Repeat start offset
@@ -697,32 +726,36 @@ loadSamplesAGUS:
     tst.b   s16Bit(a2)
     bne     .bidiloop16a
 .bidiloop8a
-    move.b  (a0)+,d1
-    bsr     .push8
+    ;move.b  (a0)+,d1
+    ;bsr     .push8
+    PUSH8M  3,(a0)+
     subq.l  #1,d0
-    bne     .bidiloop8a
+    bne.b    .bidiloop8a
     ; Append replen of data reversed
     move.l   sOrigRepL(a2),d0            ; Repeat length
 .bidiloop8b
-    move.b  -(a0),d1
-    bsr     .push8
+    ;move.b  -(a0),d1
+    ;bsr     .push8
+    PUSH8M  4,-(a0)
     subq.l  #1,d0
-    bne     .bidiloop8b
+    bne.b   .bidiloop8b
     bsr     .flush
     bra     .continue
 
 .bidiloop16a
-    move.w  (a0)+,d1
-    bsr     .push16
+;    move.w  (a0)+,d1
+;    bsr     .push16
+    PUSH16M  5,(a0)+
     subq.l  #2,d0
     bpl     .bidiloop16a
     ; Append replen of data reversed
     move.l   sOrigRepL(a2),d0            ; Repeat length
 .bidiloop16b
-    move.w  -(a0),d1
-    bsr     .push16
+;    move.w  -(a0),d1
+;    bsr     .push16
+    PUSH16M  6,-(a0)
     subq.l  #2,d0
-    bne     .bidiloop16b
+    bne.b   .bidiloop16b
     bsr     .flush
 
 .continue
@@ -750,6 +783,7 @@ loadSamplesAGUS:
     moveq   #0,d0
     rts
 
+
 * Push byte to AGUS
 *   d1 = byte
 *   a1 = HAGEN_WDATAH
@@ -759,7 +793,7 @@ loadSamplesAGUS:
     rol.l   #8,d3
     move.b  d1,d3
     subq    #1,d4
-    beq     .flush_
+    beq.b   .flush_
     rts
 * Push word to AGUS
 *   d1 = word
@@ -767,7 +801,7 @@ loadSamplesAGUS:
     swap    d3
     move.w  d1,d3
     subq    #2,d4
-    beq     .flush_
+    beq.b   .flush_
     rts
 * shift remaining data to the top
 .flush
