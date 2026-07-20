@@ -140,6 +140,8 @@ Additional files to check and download
 - Prevent PS3M and xmaplay060 mixer task busy looping in
   certain (silly) RTG screenmodes.
 
+- Prefs: Removed "PS3M/Use S:HippoPlayer.PS3M configuration file".
+
 - Some other minor things.
 
 ## Improvements:
@@ -180,6 +182,11 @@ Additional files to check and download
   or changed with the position slider.
   
 - Infobox displays the amount of data downloaded on the 2nd row.
+
+- Song length data and metadata updated by mvtiaine, you can grab new  
+  "songlengths.tsv" and "metadata.tsv" files if you want (see above how).
+  Now contains metadata info for 379216 modules, song lengths 
+  for 476328 modules.
 
 
 ------------------------------------------------------------------------------
