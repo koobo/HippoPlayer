@@ -91,6 +91,7 @@ FEATURE_FREQSCOPE	=	0
 FEATURE_SPECTRUMSCOPE	= 	1
 FEATURE_P61A        =   1
 FEATURE_PASTE       =   0
+FEATURE_PS3MCONFIG  =   0 ; Use S:HippoPlayer.PS3M configuration file
 
  ifeq (FEATURE_FREQSCOPE+FEATURE_SPECTRUMSCOPE)
     fail "Enable only one"
@@ -14415,8 +14416,8 @@ copyb	move.b	(a0)+,(a1)+
 ******************************************************************************
 * Lataa PS3M asetustiedoston
 
+  ifne FEATURE_PS3MCONFIG
 loadps3msettings
-
 	move.l	_DosBase(a5),a6
 
 ; ifeq asm
@@ -14485,7 +14486,10 @@ loadps3msettings
 ;.n1	dc.b	"R:HippoPlayer.PS3M",0
 .n1	dc.b	"S:HippoPlayer.PS3M",0
  even
-
+ else
+loadps3msettings
+    rts
+ endif
 
 *********************************************************************
 * Ladataan CyberSound 14-bit kalibraatiotiedosto
@@ -15949,7 +15953,9 @@ pupdate:				* Ikkuna p‰ivitys
 	bsr	psup1			* ps3m mixingrate
 	bsr	pps3mb			* ps3m buffer
 	bsr	pupdate7b		* stereo
+ ifne FEATURE_PS3MCONFIG
 	bsr	psettings		* settings file
+ endif	
     bsr pps3mamigus_update    * ps3m amigus mode
 ;	bsr	pcyber			* cyber calibration
 ;	bsr	pcybername		* cyber calibration file name
@@ -16216,7 +16222,9 @@ gadgetsup2
 	dr	rpslider1	* ps3m mixingrate
 	dr	rsmode3		* ps3m volumeboost
 	dr	rsmode4		* ps3m stereofactor
+ ifne FEATURE_PS3MCONFIG
 	dr	rsettings	* settings file on/off
+ endif	
     dr  rps3mamigus * ps3m amigus mode
 ;	dr	rcyber		* cyber calibration
 ;	dr	rcybername	* cyber calibration file name
@@ -16896,7 +16904,8 @@ updateps3m
 .nd
 	rts
 
-
+ 
+ ifne FEATURE_PS3MCONFIG
 **** ps3m settings
 rsettings
 	not.b	ps3msettings_new(a5)
@@ -16906,7 +16915,7 @@ psettings
 	move.b	ps3msettings_new(a5),d0
 	lea	Fruit,a0
 	bra	tickaa
-
+ endif ; FEATURE_PS3MCONFIG
 
 rps3mamigus_req
 	lea	pps3mamigus\.ls0(pc),a0
@@ -16942,10 +16951,10 @@ pps3mamigus
     lea     bENDER1,a1
     bra     prunt
     
-.ls0	dc.b	18,3
+.ls0	dc.b	19,3
 .ls1	dc.b	"No",0
 .ls2	dc.b	"Yes",0
-.ls3	dc.b	"Yes+interpolate",0
+.ls3	dc.b	"Yes, interpolate",0
  even
 
 ps3mamigusDisableOthers:
@@ -16963,8 +16972,10 @@ ps3mamigusDisableOthers:
     bsr     .disable
     lea     juust0(a4),a3
     bsr     .disable
+ ifne FEATURE_PS3MCONFIG
     lea     Fruit(a4),a3
     bsr     .disable
+ endif
     endb    a4
     rts
 
@@ -16993,8 +17004,10 @@ ps3mamigusEnableOthers:
     bsr     .enable
     lea     juust0(a4),a3
     bsr     .enable
+ ifne FEATURE_PS3MCONFIG
     lea     Fruit(a4),a3
     bsr     .enable
+ endif	
     bsr     refreshPrefsGads
     bsr     pupdate
     endb    a4
@@ -45461,6 +45474,8 @@ p_multi:
 ******** Asetukset kanavam‰‰r‰n mukaan
 * t‰nne hyp‰t‰‰n initin j‰lkeen. d0:ssa on kanavien m‰‰r‰.
 
+
+ ifne FEATURE_PS3MCONFIG
 .adjustroutine
 	pushm	d2/d6-a6
 	lea	var_b,a5
@@ -45478,7 +45493,7 @@ p_multi:
 	beq	.xei
 	move.l	d0,a0
 	bsr	.tah
-
+ 
 	moveq	#-1,d6
 
 	lea	32*13(a0),a1		* file asetukset t‰‰ll‰
@@ -45608,7 +45623,11 @@ p_multi:
 	jsr	updateprefs
 .re	rts
 
-
+ else ; FEATURE_PS3MCONFIG
+.adjustroutine
+    moveq   #0,d0       * do nothing
+    rts
+ endif
 
 ps3m_boost
 .ahiupdate
