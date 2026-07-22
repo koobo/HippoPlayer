@@ -301,6 +301,14 @@ amigus_playmusic:
 	addq	#1,d6
 	dbf		d7,.ag_channel_loop
 
+
+    ; Check for break, ie. song end
+	tst	PS3M_break
+	beq.b	.nb
+	clr	PS3M_break
+	move.l	songoverf,a0
+	st	(a0)
+.nb
 	rts
 ;---
 amigus_volume:					; d6 = channel number, a4 = channel block; a6 = AmiGUS base
