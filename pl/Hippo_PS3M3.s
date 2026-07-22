@@ -1009,12 +1009,13 @@ updatePatternInfoData
 	dbf	d7,.loo
 	rts
 
-.s3m 	
+.s3m:
 	* d0 = song pos
 
 	* module data
 	move.l	s3m(a5),a0
 	move.b	orders(a0,d0),d0
+    and.w   #$ff,d0
 
 	cmp.b	#$fe,d0				; marker that is skipped
 	beq	.skip
@@ -1033,7 +1034,12 @@ updatePatternInfoData
 	cmp	unpackedPatternPosition(a5),d0 
 	beq	.skip 
 	move	d0,unpackedPatternPosition(a5)
-	;;DPRINT	"Unpack %lx"
+    and.l   #$ffff,d0
+    
+    ;;move.l  a0,d1
+	;;DPRINT	"Unpack pos=%lx mod=%lx"
+    ;;bra     .skip
+
 
 	lsl.l	#4,d0
 	lea	2(a0,d0.l),a0
@@ -11356,7 +11362,7 @@ liko	ifeq	disable020
 
 
 	;section	datas,data
-data
+data:
 
 lev4int		dc.l	0,0
 		dc.b	NT_INTERRUPT,127
