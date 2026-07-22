@@ -118,27 +118,25 @@ Additional files to check and download
 
 ## Fixes:
 
-- MP3 playback with MHI: Duration was not determined correctly
-  and end detection didn't work properly either.
+- MP3 with MHI: Duration was not determined correctly and 
+  end detection didn't work properly.
 
 - Multichannel mods: On 68000 there was a crash when starting
   up the PS3M mixer engine.
 
-- AHI and AmiGUS output: Fix timing issue which lead to slightly 
-  wrong playback speed. This caused audible gaps with "shipping 
-  forecast.mod" by h0ffman.
+- AHI/AmiGUS: Fix timing issue which lead to slightly wrong 
+  playback speed. This caused audible gaps with 
+  "shipping forecast.mod" by h0ffman.
 
-- Protracker with AHI/AmiGUS: Fix some songend detection issues, 
-  improve scrambled pattern module support.
+- AHI/AmiGUS: Fix songend detection issues, improved scrambled 
+  pattern module support.
 
-- Scopes: improved display sync with audio, especially on RTG
-  screens.
+- RTG related fixes:
+  - Scopes: improved display sync with audio.
+  - Fix display issues with hippo logo and gadget RMB indicator.
+  - Prevent PS3M and xmaplay060 mixer tasks busy looping unnecessarily.
 
-- Fix issues with hippo logo and gadget RMB indicator on some 
-  RTG screenmodes.
-
-- Prevent PS3M and xmaplay060 mixer task busy looping in
-  certain (silly) RTG screenmodes.
+- PatternScope with AHI/AmiGUS: Fix some S3M related issues.
 
 - Prefs: Removed "PS3M/Use S:HippoPlayer.PS3M configuration file".
 
@@ -146,9 +144,8 @@ Additional files to check and download
 
 ## Improvements:
 
-- AmiGUS support now requires amigus.library. This provides 
-  compatibility with the current Zorro-AmiGUS and the 
-  upcoming AmiGUS Mini PCMCIA-card.
+- AmiGUS Mini support. AmiGUS support now requires amigus.library. 
+  This provides compatibility with both Zorro and PCMCIA AmiGUS.
 
 - Xmaplay060 improvements
   - Reminder: this is 8bitbubsy's fully featured Fasttracker2/XM player,
@@ -186,7 +183,7 @@ Additional files to check and download
 - Song length data and metadata updated by mvtiaine, you can grab new  
   "songlengths.tsv" and "metadata.tsv" files if you want (see above how).
   Now contains metadata info for 379216 modules, song lengths 
-  for 476328 modules.
+  for 476328 modules, nice!
 
 
 ------------------------------------------------------------------------------
