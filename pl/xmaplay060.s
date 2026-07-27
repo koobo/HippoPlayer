@@ -960,7 +960,7 @@ amigus_init:
     move.l  a1,amigus_pcm
     tst.w   amigus_hasleds
     beq     .nl
-    move.b  $d4(a1),amigus_old_d4
+    move.w  $d4(a1),amigus_old_ledctrl       * word register
 .nl
     ; ---------------------------------
 	bsr     loadSamplesAGUS
@@ -972,7 +972,6 @@ amigus_init:
 	bsr		amigus_tempo			; Set initial tempo
 	
 	st   	setpause                ; play
-		
     
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
 	
@@ -1035,7 +1034,7 @@ amigus_restoreLeds:
     tst.w   amigus_hasleds
     beq     .1
 	move.l	amigus_pcm,a1
-    move.b	amigus_old_d4,$d4(a1)    
+    move.w	amigus_old_ledctrl,$d4(a1)    
 .1  rts
 
 amigus_runleds:
@@ -1045,7 +1044,7 @@ amigus_runleds:
 .hasLeds
     tst.b   setpause
     bne     amigus_restoreLeds
-
+    ; ---------------------------------
     * Paused, do effect
 	move	.dir,d0
 	move	.pos,d1
@@ -1063,34 +1062,35 @@ amigus_runleds:
     move    d0,.dir
 	move	d1,.pos
     ; ---------------------------------
-	;move	.pos,d0
-	lsr	#2,d1
+	move	.pos,d0
+	lsr	#2,d0
 	lea	.leds,a0
-	add	d1,a0
+	add	d0,a0
 	move.b	#$7f,(a0)
-    ; ---------------------------------
-	moveq	#8-1,d0
-.1 	subq.b	#6,(a0)
-	tst.b	(a0)+
-	bpl	.2
-	clr.b	-1(A0)
-.2	dbf	d0,.1
     ; ---------------------------------
 	moveq	#28,d3
 	moveq	#0,d2
 	moveq	#8-1,d0
-	lea	.leds,a0
+	lea	    .leds,a0
 .3	move.b	(a0)+,d1
-	lsr.b	#4,d1
+	lsr.b	#3,d1
 	and.l	#$f,d1
 	rol.l	d3,d1
 	or.l	d1,d2
 	subq	#4,d3
 	dbf	d0,.3
-
+    ; ---------------------------------
 	move.l	amigus_pcm,a1
-	move.b	#1,$d4(a1)      * manual led control
-	move.l	d2,$d0(a1)
+	move.w	#1,$d4(a1)      * manual led control
+	move.l	d2,$d0(a1)      * write led values
+    ; ---------------------------------
+	lea	    .leds,a0
+	moveq	#8-1,d0
+.1 	subq.b	#6,(a0)
+	tst.b	(a0)+
+	bpl	.2
+	clr.b	-1(a0)
+.2	dbf	d0,.1
 	rts
 
 .dir	dc.w	1
@@ -1104,7 +1104,7 @@ amigus_card          dc.l    0
 amigus_reserve       dc.w    0
 amigus_hasinterrupt  dc.w    0
 amigus_hasleds       dc.w    0
-amigus_old_d4        dc.w    0
+amigus_old_ledctrl   dc.w    0
 
 LibName         dc.b    "amigus.library",0
  even
