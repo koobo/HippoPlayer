@@ -433,6 +433,9 @@ debugDesBuf ds.b    64
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+; AHI 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
 ahiSetup:
     DPRINT  "ahiSetup"
@@ -602,217 +605,6 @@ loadSamples:
     rts
 
 
-PUSH8M macro
-    rol.l   #8,d3       * Push 8 bits
-    move.b  \2,d3
-    subq    #1,d4       * 1 byte
-    bne.b   .\1
-    move.l  d3,(a1)     * output 32 bits
-    addq.l  #4,d5       * advance agus offset
-    moveq   #0,d3       * clear buffer
-    moveq   #4,d4       * do 4 bytes again
-.\1:
-    endm
-
-PUSH16M macro           
-    swap    d3          * Push 16 bits
-    move.w  \2,d3
-    subq    #2,d4       * 1 word
-    bne.b   .\1
-    move.l  d3,(a1)     * output 32 bits
-    addq.l  #4,d5       * advance agus offset
-    moveq   #0,d3       * clear buffer
-    moveq   #4,d4       * do 4 bytes again
-.\1:
-    endm
-
-* Load each instrument sample to AGUS
-loadSamplesAGUS:
-    DPRINT  "loadSamplesAGUS"
-    
-    moveq   #128-1,d7
-    lea     Instr,a4
-    moveq   #0,d5               * AGUS sample address
-
-	move.l	amigus_base(pc),a1		
-	move.l	d5,HAGEN_WADDRH(a1)   * destination address
-    moveq   #4,d4               * push counter
-    moveq   #0,d3               * push buffer
-.instrs
-    move.l  (a4)+,d0
-    beq     .next
-    move.l  d0,a3 
-    move    iAntSamp(a3),d6
-    beq     .next
-    subq    #1,d6
-    lea	    iSamp(a3),a2		; a2 = sample struct
-
-.samples
-    move.l  sPek(a2),d0
-    beq     .nextS
-    move.l  d0,a0
-    move.l  sOrigLen(a2),d0    
-    beq     .nextS
-    move.l  d5,sAGUSOffset(a2)   * Store AGUS address for later
-
- ifne DEBUG
-    push    d1
-    move.l  d5,d1
-    DPRINT  "Sample len=%lx - AGUS offset=%lx"
-    pop     d1
- endif
-
-    ; ---------------------------------    
-    ; Copy d0 bytes from a0 to AGUS
-	move.l	amigus_base(pc),a1		
-    lea     HAGEN_WDATAH(a1),a1   * destination address
- REM
-    ; ---------------------------------    
-    ; Copy d0 bytes from a0 to AGUS - old non-bidi
-    moveq   #4,d1
-    bra.b   .s            * handle very short ones
-.copy
-    move.l  (a0)+,(a1)
-    add.l   d1,d5
-    sub.l   d1,d0
-.s  cmp.l   d1,d0
-    bhs.b   .copy
-
-    tst.l   d0
-    beq     .done
-    clr.l   -(sp)
-    move.l  sp,a5
-.rest
-    move.b  (a0)+,(a5)+
-    subq    #1,d0
-    bne     .rest
-    move.l  (sp)+,(a1)
-    addq.l  #4,d5
-.done
- EREM
-; REM ;;;;;; NEW
-    ; ---------------------------------    
-    ; Copy d0 bytes from a0 to AGUS - with BIDI support
-    ; Check for bidi loop
-    cmp.l   #4,sOrigRepL(a2)
-    bls     .noLoop
-    cmp.b   #2,sLoopType(a2)
-    beq     .bidi
-.noLoop
-    tst.b   s16Bit(a2)
-    bne     .loop16
-.loop8
-    ;move.b  (a0)+,d1
-    ;bsr     .push8
-    PUSH8M  1,(a0)+
-    subq.l  #1,d0
-    bne.b   .loop8
-    bsr     .flush
-    bra     .continue
-.loop16
-;    move.w  (a0)+,d1
-;    bsr     .push16
-    PUSH16M  2,(a0)+
-    subq.l  #2,d0
-    bpl.b   .loop16
-    bsr     .flush
-    bra     .continue
-    ; ---------------------------------    
-.bidi
-    ; Calc bytes to loop end
-    move.l  sRepS(a2),d0                ; Repeat start offset
-    add.l   sOrigRepL(a2),d0            ; Repeat length
-
-    tst.b   s16Bit(a2)
-    bne     .bidiloop16a
-.bidiloop8a
-    ;move.b  (a0)+,d1
-    ;bsr     .push8
-    PUSH8M  3,(a0)+
-    subq.l  #1,d0
-    bne.b    .bidiloop8a
-    ; Append replen of data reversed
-    move.l   sOrigRepL(a2),d0            ; Repeat length
-.bidiloop8b
-    ;move.b  -(a0),d1
-    ;bsr     .push8
-    PUSH8M  4,-(a0)
-    subq.l  #1,d0
-    bne.b   .bidiloop8b
-    bsr     .flush
-    bra     .continue
-
-.bidiloop16a
-;    move.w  (a0)+,d1
-;    bsr     .push16
-    PUSH16M  5,(a0)+
-    subq.l  #2,d0
-    bpl     .bidiloop16a
-    ; Append replen of data reversed
-    move.l   sOrigRepL(a2),d0            ; Repeat length
-.bidiloop16b
-;    move.w  -(a0),d1
-;    bsr     .push16
-    PUSH16M  6,-(a0)
-    subq.l  #2,d0
-    bne.b   .bidiloop16b
-    bsr     .flush
-
-.continue
-; EREM ;;;;;;; NEW
-
-
-    ; ---------------------------------    
-    ; Free it
-    move.l  sPek(a2),a1
-    move.l	sLen(a2),d0
-	beq.b	.nextS			; (length is zero, don't free)	
-    bmi.b   .nextS
-    neg.l   sLen(a2)        ; neg means freed
-	addq.l	#2,d0			; fix-sample for linear interpolation
-	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr    
-    ; ---------------------------------    
-.nextS
-    lea     SMP_SIZE(a2),a2
-    dbf     d6,.samples
-.next
-    dbf     d7,.instrs
-    moveq   #1,d0
-    rts
-.err
-    moveq   #0,d0
-    rts
-
-
-* Push byte to AGUS
-*   d1 = byte
-*   a1 = HAGEN_WDATAH
-*   d3 = buffer
-*   d4 = counter
-.push8
-    rol.l   #8,d3
-    move.b  d1,d3
-    subq    #1,d4
-    beq.b   .flush_
-    rts
-* Push word to AGUS
-*   d1 = word
-.push16
-    swap    d3
-    move.w  d1,d3
-    subq    #2,d4
-    beq.b   .flush_
-    rts
-* shift remaining data to the top
-.flush
-    lsl     #3,d4
-    rol.l   d4,d3
-.flush_
-    move.l  d3,(a1)     * output 32 bits
-    addq.l  #4,d5       * advance agus offset
-    moveq   #0,d3       * clear buffer
-    moveq   #4,d4       * do 4 bytes again
-    rts
 
 
 ; ; AHISampleInfo
@@ -1111,12 +903,11 @@ setplayerfreq = *-4
 	dc.l	TAG_DONE
 
 
-;=============================================================
-
-; ====================================
-;        AmiGUS play routines 
-;        (c)2026 by O.Achten
-; ====================================
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; AmiGUS
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
 amigus_init:
     DPRINT  "--- amigus_init ---"
@@ -1136,6 +927,8 @@ amigus_init:
     beq     .ag_init_error
     ; ---------------------------------
     move.l  d0,a0
+    cmp.w   #AmiGUS_mini,agus_TypeId(a0)
+    seq     amigus_hasleds
  ifne DEBUG
     move.l  agus_TypeName(a0),d0
     moveq   #0,d1
@@ -1163,6 +956,12 @@ amigus_init:
     ; ---------------------------------
     move.l  amigus_card,a0
     move.l  agus_WavetableBase(a0),amigus_base
+    move.l  agus_PcmBase(a0),a1
+    move.l  a1,amigus_pcm
+    tst.w   amigus_hasleds
+    beq     .nl
+    move.b  $d4(a1),amigus_old_d4
+.nl
     ; ---------------------------------
 	bsr     loadSamplesAGUS
 
@@ -1231,12 +1030,80 @@ amigus_freeinterrupt:
 .x
     rts
 
+
+amigus_restoreLeds:
+    tst.w   amigus_hasleds
+    beq     .1
+	move.l	amigus_pcm,a1
+    move.b	amigus_old_d4,$d4(a1)    
+.1  rts
+
+amigus_runleds:
+    tst.w   amigus_hasleds
+    bne     .hasLeds
+    rts
+.hasLeds
+    tst.b   setpause
+    bne     amigus_restoreLeds
+
+    * Paused, do effect
+	move	.dir,d0
+	move	.pos,d1
+	add	d0,d1
+	bpl	.p1
+	neg	.dir
+	moveq	#0,d1
+	bra	.ok
+.p1
+	cmp	#32,d1
+	blo	.ok
+	moveq	#31,d1
+	neg	.dir
+.ok
+	move	d1,.pos
+    ; ---------------------------------
+	move	.pos,d0
+	lsr	#2,d0
+	lea	.leds,a0
+	add	d0,a0
+	move.b	#$7f,(a0)
+    ; ---------------------------------
+	moveq	#8-1,d0
+.1 	subq.b	#6,(a0)
+	tst.b	(a0)+
+	bpl	.2
+	clr.b	-1(A0)
+.2	dbf	d0,.1
+    ; ---------------------------------
+	moveq	#28,d3
+	moveq	#0,d2
+	moveq	#8-1,d0
+	lea	.leds,a0
+.3	move.b	(a0)+,d1
+	lsr.b	#4,d1
+	and.l	#$f,d1
+	rol.l	d3,d1
+	or.l	d1,d2
+	subq	#4,d3
+	dbf	d0,.3
+
+	move.l	amigus_pcm,a1
+	move.b	#1,$d4(a1)      * manual led control
+	move.l	d2,$d0(a1)
+	rts
+
+.dir	dc.w	1
+.pos	ds.w	1
+.leds	ds.b	8
+
 amigus_base		     dc.l	 0 
-amigus_mtrig	     dc.w	 0
+amigus_pcm		     dc.l	 0 
 amigus_lib           dc.l    0
 amigus_card          dc.l    0
 amigus_reserve       dc.w    0
 amigus_hasinterrupt  dc.w    0
+amigus_hasleds       dc.w    0
+amigus_old_d4        dc.w    0
 
 LibName         dc.b    "amigus.library",0
  even
@@ -1250,6 +1117,7 @@ amigus_end:
 	move.w	#$4000,HAGEN_INTE0(a6)		; Disable Timer interrupt
 	move.w	#$4000,HAGEN_INTC0(a6)		; Clear Timer interrupt
 	
+    bsr     amigus_restoreLeds
 	bsr		amigus_voice_reset
     bsr     amigus_uninit
 	rts
@@ -1370,13 +1238,230 @@ AmiGUS_Int:
 	bsr 	MainPlayer
 	bsr 	Mix_UpdateChannelVolPanFrq_AGUS
 .1
+    bsr     amigus_runleds
 .noTimerInt	
-
 	movem.l (sp)+,d1-d7/a0-a6	; Restore registers
 	moveq	#0,d0
 	rts
 	
 ;======================================
+
+
+PUSH8M macro
+    rol.l   #8,d3       * Push 8 bits
+    move.b  \2,d3
+    subq    #1,d4       * 1 byte
+    bne.b   .\1
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
+.\1:
+    endm
+
+PUSH16M macro           
+    swap    d3          * Push 16 bits
+    move.w  \2,d3
+    subq    #2,d4       * 1 word
+    bne.b   .\1
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
+.\1:
+    endm
+
+* Load each instrument sample to AGUS
+loadSamplesAGUS:
+    DPRINT  "loadSamplesAGUS"
+    
+    moveq   #128-1,d7
+    lea     Instr,a4
+    moveq   #0,d5               * AGUS sample address
+
+	move.l	amigus_base(pc),a1		
+	move.l	d5,HAGEN_WADDRH(a1)   * destination address
+    moveq   #4,d4               * push counter
+    moveq   #0,d3               * push buffer
+.instrs
+    move.l  (a4)+,d0
+    beq     .next
+    move.l  d0,a3 
+    move    iAntSamp(a3),d6
+    beq     .next
+    subq    #1,d6
+    lea	    iSamp(a3),a2		; a2 = sample struct
+
+.samples
+    move.l  sPek(a2),d0
+    beq     .nextS
+    move.l  d0,a0
+    move.l  sOrigLen(a2),d0    
+    beq     .nextS
+    move.l  d5,sAGUSOffset(a2)   * Store AGUS address for later
+
+ ifne DEBUG
+    push    d1
+    move.l  d5,d1
+    DPRINT  "Sample len=%lx - AGUS offset=%lx"
+    pop     d1
+ endif
+
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS
+	move.l	amigus_base(pc),a1		
+    lea     HAGEN_WDATAH(a1),a1   * destination address
+ REM
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS - old non-bidi
+    moveq   #4,d1
+    bra.b   .s            * handle very short ones
+.copy
+    move.l  (a0)+,(a1)
+    add.l   d1,d5
+    sub.l   d1,d0
+.s  cmp.l   d1,d0
+    bhs.b   .copy
+
+    tst.l   d0
+    beq     .done
+    clr.l   -(sp)
+    move.l  sp,a5
+.rest
+    move.b  (a0)+,(a5)+
+    subq    #1,d0
+    bne     .rest
+    move.l  (sp)+,(a1)
+    addq.l  #4,d5
+.done
+ EREM
+; REM ;;;;;; NEW
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS - with BIDI support
+    ; Check for bidi loop
+    cmp.l   #4,sOrigRepL(a2)
+    bls     .noLoop
+    cmp.b   #2,sLoopType(a2)
+    beq     .bidi
+.noLoop
+    tst.b   s16Bit(a2)
+    bne     .loop16
+.loop8
+    ;move.b  (a0)+,d1
+    ;bsr     .push8
+    PUSH8M  1,(a0)+
+    subq.l  #1,d0
+    bne.b   .loop8
+    bsr     .flush
+    bra     .continue
+.loop16
+;    move.w  (a0)+,d1
+;    bsr     .push16
+    PUSH16M  2,(a0)+
+    subq.l  #2,d0
+    bpl.b   .loop16
+    bsr     .flush
+    bra     .continue
+    ; ---------------------------------    
+.bidi
+    ; Calc bytes to loop end
+    move.l  sRepS(a2),d0                ; Repeat start offset
+    add.l   sOrigRepL(a2),d0            ; Repeat length
+
+    tst.b   s16Bit(a2)
+    bne     .bidiloop16a
+.bidiloop8a
+    ;move.b  (a0)+,d1
+    ;bsr     .push8
+    PUSH8M  3,(a0)+
+    subq.l  #1,d0
+    bne.b    .bidiloop8a
+    ; Append replen of data reversed
+    move.l   sOrigRepL(a2),d0            ; Repeat length
+.bidiloop8b
+    ;move.b  -(a0),d1
+    ;bsr     .push8
+    PUSH8M  4,-(a0)
+    subq.l  #1,d0
+    bne.b   .bidiloop8b
+    bsr     .flush
+    bra     .continue
+
+.bidiloop16a
+;    move.w  (a0)+,d1
+;    bsr     .push16
+    PUSH16M  5,(a0)+
+    subq.l  #2,d0
+    bpl     .bidiloop16a
+    ; Append replen of data reversed
+    move.l   sOrigRepL(a2),d0            ; Repeat length
+.bidiloop16b
+;    move.w  -(a0),d1
+;    bsr     .push16
+    PUSH16M  6,-(a0)
+    subq.l  #2,d0
+    bne.b   .bidiloop16b
+    bsr     .flush
+
+.continue
+; EREM ;;;;;;; NEW
+
+
+    ; ---------------------------------    
+    ; Free it
+    move.l  sPek(a2),a1
+    move.l	sLen(a2),d0
+	beq.b	.nextS			; (length is zero, don't free)	
+    bmi.b   .nextS
+    neg.l   sLen(a2)        ; neg means freed
+	addq.l	#2,d0			; fix-sample for linear interpolation
+	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr    
+    ; ---------------------------------    
+.nextS
+    lea     SMP_SIZE(a2),a2
+    dbf     d6,.samples
+.next
+    dbf     d7,.instrs
+    moveq   #1,d0
+    rts
+.err
+    moveq   #0,d0
+    rts
+
+
+* Push byte to AGUS
+*   d1 = byte
+*   a1 = HAGEN_WDATAH
+*   d3 = buffer
+*   d4 = counter
+.push8
+    rol.l   #8,d3
+    move.b  d1,d3
+    subq    #1,d4
+    beq.b   .flush_
+    rts
+* Push word to AGUS
+*   d1 = word
+.push16
+    swap    d3
+    move.w  d1,d3
+    subq    #2,d4
+    beq.b   .flush_
+    rts
+* shift remaining data to the top
+.flush
+    lsl     #3,d4
+    rol.l   d4,d3
+.flush_
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
+    rts
+
+
+;---------------------------------------------------------------------------
+;---------------------------------------------------------------------------
 
 
 initSysTime:
