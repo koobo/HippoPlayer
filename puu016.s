@@ -33189,7 +33189,7 @@ loadfile:
 
 	move.l	lod_filehandle(a5),d1
 	move.l	d5,d2
-	move.l	#$2000,d3
+	move.l	#$4000,d3
 	lore	Dos,Read
 
 	cmp.l	#-1,d0
@@ -33204,7 +33204,7 @@ loadfile:
 	* Subtract total bytes to be read
 	sub.l	d0,d4
 	bmi	.error2
-	beq.b	.don
+	beq 	.don
 
 	* Advance target addres
 	add.l	d0,d5
@@ -33214,25 +33214,26 @@ loadfile:
 * Draw progress bar
 .lood
 	tst.b	win(a5)
-	beq.b	.wxx
+	beq 	.wxx
 	pushm	d4/d5
 
 	* File length is in d5
 	move.l	lod_length(a5),d5
 	move.l	d5,d3
-	lsr.l	#8,d3
 	* Bytes left to read is in d4
 	sub.l	d4,d5
 	* Bytes read is in d5
-	lsr.l	#8,d5
+    lsr.l   #8,d5       * scale down a bit for safe arithmetic
+    lsr.l   #8,d3
 
-	* Calculate 
-	;mulu	#229,d5
-	move	WINSIZX(a5),d7
-	sub	#35,d7
-	mulu	d7,d5
-	divu	d3,d5
-	move	d5,d4 * XSize
+    moveq   #0,d0
+	move	WINSIZX(a5),d0
+	sub	    #35,d0
+    move.l  d5,d1
+    jsr     mulu_32
+    move.l  d3,d1
+    jsr     divu_32
+    move.l  d0,d4   * XSize
 
         move.l  rastport(a5),a0
         move.l  a0,a1
