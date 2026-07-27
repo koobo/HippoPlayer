@@ -20513,10 +20513,12 @@ inforivit_pause
 
 
 inforivit_xpkload
-	lea	.1(pc),a0
-	lea	probebuffer+8(a5),a1
-	move.l	a1,d0
+	lea	   .1(pc),a0
+	clr.w   -(sp)
+    move.l  probebuffer+8(a5),-(sp)   * XPKF....SQSH
+	move.l	sp,d0
 	jsr	desmsg
+    addq    #6,sp
 	lea	desbuf(a5),a0
 	bra	putinfo2
 .1	dc.b	"XPK %4s",0
