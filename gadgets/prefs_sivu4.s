@@ -108,5 +108,5 @@ bENDER2t	dc.b 1,0,1,0
 	dc.l 0,bENDER2tx,0
 
 
-bENDER2tx	dc.b "Use AmiGUS hardware mixer with PS3M and xmaplay060",0
+bENDER2tx	dc.b "Use AmiGUS hardware mixer with PS3M and xmaplay",0
 	even

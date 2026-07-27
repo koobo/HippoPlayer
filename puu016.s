@@ -53445,7 +53445,7 @@ p_xmaplay:
     bra     .x
 
 .format:
-    dc.b    "FastTracker2 xma060%s %ldch",0
+    dc.b    "FastTracker2 xmaplay%s %ldch",0
     even
 
 * xmaplay
@@ -65057,7 +65057,7 @@ prefsEnableXMAPlay dc.l prefsResidMode
        dc.l 0,.tx,0
 .tx 
 ;       dc.b "Enable xmaplay060......",0
-       dc.b "Enable xmaplay060",0
+       dc.b "Enable xmaplay....",0
        even
 
 
