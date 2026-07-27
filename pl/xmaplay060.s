@@ -1051,21 +1051,22 @@ amigus_runleds:
 	move	.pos,d1
 	add	d0,d1
 	bpl	.p1
-	neg	.dir
+	neg	d0
 	moveq	#0,d1
 	bra	.ok
 .p1
 	cmp	#32,d1
 	blo	.ok
 	moveq	#31,d1
-	neg	.dir
+	neg	d0
 .ok
+    move    d0,.dir
 	move	d1,.pos
     ; ---------------------------------
-	move	.pos,d0
-	lsr	#2,d0
+	;move	.pos,d0
+	lsr	#2,d1
 	lea	.leds,a0
-	add	d0,a0
+	add	d1,a0
 	move.b	#$7f,(a0)
     ; ---------------------------------
 	moveq	#8-1,d0
