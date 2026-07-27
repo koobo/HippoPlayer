@@ -7394,7 +7394,7 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	;  d0.w = period
 	;
 	; output: d0.l = delta (16.16fp) (or Hz if AHI tables used)
-GetFrequenceValue
+GetFrequenceValue:
 	tst.w	d0
 	beq 	.periodIsZero
 	; -----------------------------
@@ -7419,15 +7419,10 @@ GetFrequenceValue
     rts
 
 .amiga	
-;    moveq	#0,d1
-;	move.w	d0,d1
-;	move.l	FrequenceDivFactor(pc),d0
-;	divu.l	d1,d0
-
     ext.l   d0
 	move.l	FrequenceDivFactor(pc),d1
+    exg     d0,d1
     bsr     divu_32
-    move.l  d1,d0
 	rts
 
 .periodIsZero
