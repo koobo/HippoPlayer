@@ -4668,7 +4668,9 @@ LoadInstrSamples
 	dbra	d7,.loop
 .done	moveq	#0,d0	; 0=successful
 	rts
-.error	move	#1,d0
+.error	
+    addq    #4,sp       ; stack align
+    move	#1,d0
 	rts	
 ; --------------------------------------------------
 LIErr	moveq	#1,d0
