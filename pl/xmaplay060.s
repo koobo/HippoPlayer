@@ -4810,6 +4810,7 @@ StartTone
 .InstrOK
 	move.l	a0,cInstrSeg(a5)
 	move.b	iMute(a0),cMute(a5)
+    moveq   #0,d1           ; clear for below indexed access
 	move.b	d0,d1
 	subq.b	#1,d1
 	move.b	(a0,d1.w),d1	; a0 points to TA table (first data in instrument)
