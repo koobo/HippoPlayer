@@ -1040,10 +1040,16 @@ amigus_restoreLeds:
 amigus_runleds:
     tst.w   amigus_hasleds
     bne     .hasLeds
-    rts
+.x  rts
 .hasLeds
     tst.b   setpause
     bne     amigus_restoreLeds
+    ; ---------------------------------
+    ; Could blink now, check if the LED scope is enabled,
+    ; if not, don't blink
+    move    amigus_old_ledctrl,d0
+    btst    #1,d0
+    beq     .x
     ; ---------------------------------
     * Paused, do effect
 	move	.dir,d0
