@@ -1,7 +1,25 @@
+FIXED: TODO:
+- dope.xm: amiga periods -> sounds bad on xmaplay?
+
+TODO:
+- super large module xm, cannot load
+
+TODO:
+- try clean restart
+- try after AGUS playback
+- AGUS, AHI: S3M patternscope not working, XM ok on A1200, FSUAE not ok?
+-- patternscope displays an empty pattern
+-- race condition: pattern clear + unpack vs notescroller draw of same area
+
+TODO:
+- xmaplay checkbox does not deactivate xmaplay if you do 
+  not switch the song and just try pushing play again
+  but that is a minor
+
 TODO:
 - AGUS: no need to alloc paula channels (XM for example)
 
-FIXDED: TODO:
+FIXED: TODO:
 - "AGUS" info missing with XM playback in infobox
 -- works if AHI toggle box is selected as well!
 

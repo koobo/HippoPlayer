@@ -140,7 +140,9 @@ Additional files to check and download
 
 - Prefs: Removed "PS3M/Use S:HippoPlayer.PS3M configuration file".
 
-- Some other minor things.
+- File load progress indicator broke with a really large module (50 megs).
+
+- Some other minor things
 
 ## Improvements:
 
