@@ -2169,21 +2169,23 @@ strncmp
 	; Output:
 	;   d0.l = file handle
 	;-------------------------------------------------
-fopen	movem.l	d1/a0/a1/a6,-(sp)
+fopen	
+    ;movem.l	d1/a0/a1/a6,-(sp)
 	;move.l	DosBase(pc),a6
 	;jsr	_LVOOpen(a6)
     moveq   #1,d0
-	movem.l	(sp)+,d1/a0/a1/a6
+	;movem.l	(sp)+,d1/a0/a1/a6
 	rts
 
 	;-------------------------------------------------
 	; Input:
 	;   d1.l = file handle
 	;-------------------------------------------------
-fclose	movem.l	d0/d1/a0/a1/a6,-(sp)
+fclose	
+    ;movem.l	d0/d1/a0/a1/a6,-(sp)
 	;move.l	DosBase(pc),a6
 	;jsr	_LVOClose(a6)
-	movem.l	(sp)+,d0/d1/a0/a1/a6
+	;movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
 	
 	;-------------------------------------------------
@@ -2198,18 +2200,19 @@ fclose	movem.l	d0/d1/a0/a1/a6,-(sp)
 fread	movem.l	d1/a0/a1/a6,-(sp)
 	;move.l	DosBase(pc),a6
 	;jsr	_LVORead(a6)
-    move.l  d3,d0
+    
     move.l  readPtr,a0
+    add.l   d3,readPtr
     move.l  d2,a1
     move.l  d3,d0
-.l  move.b  (a0)+,(a1)+
-    subq.l  #1,d0
-    bne     .l
-    move.l  a0,readPtr
+
+    move.l  4.w,a6
+    jsr     _LVOCopyMem(a6)
     move.l  d3,d0
+
 	movem.l	(sp)+,d1/a0/a1/a6
 	rts
-	
+
 	;-------------------------------------------------
 	; Input:
 	;   d1.l = file handle
@@ -2244,17 +2247,19 @@ fseek	movem.l	d1/a0/a1/a6,-(sp)
 	;   d0.b = byte
 	;-------------------------------------------------
 ReadByte
-	movem.l	d1-d3/a0/a1/a6,-(sp)
+;	movem.l	d1-d3/a0/a1/a6,-(sp)
 ;	move.l	DosBase(pc),a6
 ;	moveq	#1,d3
 ;	move.l	#tmp8,d2
 ;	clr.b	tmp8
 ;	jsr	_LVORead(a6)
 ;	move.b	tmp8(pc),d0
+    push    a0
     move.l  readPtr,a0
     move.b  (a0)+,d0
     move.l  a0,readPtr
-	movem.l	(sp)+,d1-d3/a0/a1/a6
+    pop     a0
+;	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
 	
 	;-------------------------------------------------
@@ -2265,20 +2270,22 @@ ReadByte
 	;   d0.w = byteswapped word
 	;-------------------------------------------------	
 ReadLittleEndian16
-	movem.l	d1-d3/a0/a1/a6,-(sp)
+;	movem.l	d1-d3/a0/a1/a6,-(sp)
 ;	move.l	DosBase(pc),a6
 ;	moveq	#2,d3
 ;	move.l	#tmp16,d2
 ;	clr.w	tmp16
 ;	jsr	_LVORead(a6)
 ;	move.w	tmp16(pc),d0
+    push    a0
     move.l  readPtr,a0
     move.b  (a0)+,d0
     rol.w   #8,d0
     move.b  (a0)+,d0
     move.l  a0,readPtr
 	swap16	d0
-	movem.l	(sp)+,d1-d3/a0/a1/a6
+    pop     a0
+;	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
 	
 	;-------------------------------------------------
@@ -2289,13 +2296,14 @@ ReadLittleEndian16
 	;   d0.l = byteswapped longword
 	;-------------------------------------------------
 ReadLittleEndian32
-	movem.l	d1-d3/a0/a1/a6,-(sp)
+;	movem.l	d1-d3/a0/a1/a6,-(sp)
 ;	move.l	DosBase(pc),a6
 ;	move.l	#tmp32,d2
 ;	moveq	#4,d3
 ;	clr.l	tmp32
 ;	jsr	_LVORead(a6)
 ;	move.l	tmp32(pc),d0
+    push    a0
     move.l  readPtr,a0
     move.b  (a0)+,d0
     rol.l   #8,d0
@@ -2306,7 +2314,8 @@ ReadLittleEndian32
     move.b  (a0)+,d0
     move.l  a0,readPtr
 	swap32	d0
-	movem.l	(sp)+,d1-d3/a0/a1/a6
+    pop     a0
+;	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
 	
 	; -----------------------------------------------------------
@@ -4668,6 +4677,7 @@ LIOOM	moveq	#6,d0
 	rts
 
 LoadData_XM_OldVer ; v1.02 and v1.03
+    DPRINT  "LoadData_XM_OldVer"
 	; -------------------------------------
 	; Load instruments
 	; -------------------------------------
@@ -4699,6 +4709,7 @@ LoadData_XM_OldVer ; v1.02 and v1.03
 	moveq	#0,d6			; d6.w = instrument number
 .loop2	move.l	d6,-(sp)
 	bsr.w	LoadInstrSamples
+    DPRINT  "LoadInstrSamples=%ld"
 	move.l	(sp)+,d6
 	tst.b	d0			; instrument samples loaded?
 	bne.b	LIOOM			; nope, out of memory!	
@@ -4710,6 +4721,7 @@ LoadData_XM_OldVer ; v1.02 and v1.03
 	rts
 
 LoadData_XMv104 ; v1.04
+    DPRINT  "LoadData_XMv104"
 	; -------------------------------------
 	; Load patterns
 	; -------------------------------------
@@ -4732,6 +4744,7 @@ LoadData_XMv104 ; v1.04
 	; ---------------------------
 	move.l	d6,-(sp)
 	bsr.w	LoadInstrSamples
+    DPRINT  "LoadInstrSamples=%ld"
 	move.l	(sp)+,d6
 	tst.b	d0			; instrument samples loaded?
 	bne.w	LIOOM			; nope!	
