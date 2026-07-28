@@ -1,3 +1,11 @@
+
+commit f417af0b41761c19013c671f8a7899072b22243a
+Author: K-P Koljonen <kpkoljonen@gmail.com>
+Date:   Sun May 10 16:16:33 2026 +0300
+
+    xmaplay060: Make 68000 compatible for AHI and AmiGUS parts
+
+    
 FIXED: TODO:
 - dope.xm: amiga periods -> sounds bad on xmaplay?
 
