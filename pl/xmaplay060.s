@@ -2279,11 +2279,16 @@ ReadLittleEndian16
 ;	move.w	tmp16(pc),d0
     push    a0
     move.l  readPtr,a0
-    move.b  (a0)+,d0
+;    move.b  (a0)+,d0
+;    rol.w   #8,d0
+;    move.b  (a0)+,d0
+;    move.l  a0,readPtr
+;	swap16	d0
+    move.b  1(a0),d0
     rol.w   #8,d0
-    move.b  (a0)+,d0
+    move.b  (a0),d0
+    addq    #2,a0
     move.l  a0,readPtr
-	swap16	d0
     pop     a0
 ;	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
@@ -2305,15 +2310,24 @@ ReadLittleEndian32
 ;	move.l	tmp32(pc),d0
     push    a0
     move.l  readPtr,a0
-    move.b  (a0)+,d0
-    rol.l   #8,d0
-    move.b  (a0)+,d0
-    rol.l   #8,d0
-    move.b  (a0)+,d0
-    rol.l   #8,d0
-    move.b  (a0)+,d0
+;    move.b  (a0)+,d0
+;    rol.l   #8,d0
+;    move.b  (a0)+,d0
+;    rol.l   #8,d0
+;    move.b  (a0)+,d0
+;    rol.l   #8,d0
+;    move.b  (a0)+,d0
+;    move.l  a0,readPtr
+;	swap32	d0
+    move.b  3(a0),d0
+    rol.w   #8,d0
+    move.b  2(a0),d0
+    swap    d0
+    move.b  1(a0),d0
+    rol.w   #8,d0
+    move.b  0(a0),d0
+    addq    #4,a0
     move.l  a0,readPtr
-	swap32	d0
     pop     a0
 ;	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
