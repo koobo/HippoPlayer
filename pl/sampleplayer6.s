@@ -408,7 +408,7 @@ mhiKillSignal   rs.b    1
 mhiStopSignal   rs.b    1
 mhiContSignal   rs.b    1
 mhiVolumeSignal rs.b    1
-mhiPlaying      rs.b    1
+mhiQueuedAny    rs.b    1
 mhiNoMoreData   rs.b    1
 mhiReady        rs.b    1
 mhiInitError    rs.b    1
@@ -416,6 +416,7 @@ mhiTask         rs.l    1
 mhiBase         rs.l    1
 mhiFile         rs.l    1
 mhiStreamSize   rs.l    1
+mhiStreamStart  rs.l    1   * first MPEG byte for local-file replay
 mhiHandle       rs.l    1
 mhiLibName      rs.l    1
 mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
@@ -7607,6 +7608,7 @@ mhiInit:
     move.l  d0,mhiFile(a5)  
     beq     .fileError
     move.l  d0,d7
+    move.l  #-1,mhiStreamStart(a5)
 
     bsr     mpega_skip_id3v2_stream
 
@@ -7629,6 +7631,7 @@ mhiInit:
 	moveq	#OFFSET_CURRENT,d3
 	lob	Seek
     move.l  d0,d4
+    move.l  d4,mhiStreamStart(a5)
     DPRINT  "current=%ld"
     * Seek to end
 	move.l	d7,d1	
@@ -7703,6 +7706,7 @@ mhiInit:
 mhiStart:
     DPRINT  "*** mhiStart ***"
     clr.b   mhiNoMoreData(a5)
+    clr.b   mhiQueuedAny(a5)
     clr.b   mhiReady(a5)
 
     sub.l   a1,a1
@@ -7771,7 +7775,10 @@ mhiStart:
     DPRINT  "MHIGetStatus=%ld"
  endif
 
+.playPass
     bsr     mhiInitBuffers
+    tst.b   killsample(a5)
+    bne     .mhiExit
 
     DPRINT  "MHIPlay"
     move.l  mhiBase(a5),a6
@@ -7781,7 +7788,10 @@ mhiStart:
     st      mhiReady(a5)
 
     tst.b   mhiNoMoreData(a5)
-    bne     .stop
+    beq     .loop
+    tst.b   mhiQueuedAny(a5)
+    bne     .eof
+    bra     .stop
 
 .loop
 
@@ -7830,12 +7840,55 @@ mhiStart:
 .eof
     DPRINT  "Flushing buffers"
 
+.eofAnnounce
+    * mhizz9000.library accepts its explicit EOF extension only after every
+    * real buffer has reached the card. The final short buffer was just
+    * queued, so the first call may correctly reject the marker. Retry after
+    * short yields until it is accepted or playback terminates.
+    move.l  mhiBase(a5),a6
+    move.l  mhiHandle(a5),a3
+    sub.l   a0,a0
+    moveq   #0,d0
+    lob     MHIQueueBuffer
+    tst.l   d0
+    bne     .eofWait
+
+    move.l  mhiBase(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIGetStatus
+    cmp.b   #MHIF_PLAYING,d0
+    bne     .stop
+
+    * A final partial frame may not make the application's buffer reusable,
+    * so completion signals are not a reliable retry clock here.
+    lore    GFX,WaitTOF
+    tst.b   killsample(a5)
+    bne     .stop
+    bra     .eofAnnounce
+
+.eofWait
+    * A completion signal only says that at least one compressed input
+    * buffer became reusable. It does not prove that the decoder and audio
+    * output tail have drained. Follow the public MHI EOF contract: check
+    * status before sleeping (so a coalesced signal cannot strand us), then
+    * wait again while the decoder still reports PLAYING.
+    move.l  mhiBase(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIGetStatus
+    cmp.b   #MHIF_PLAYING,d0
+    bne     .stop
+
     moveq   #0,d0
     move.b  mhiSignal(a5),d1
     bset    d1,d0
     move.b  mhiKillSignal(a5),d1
     bset    d1,d0
     lore    Exec,Wait
+    move.l  d0,d7
+    move.b  mhiKillSignal(a5),d0
+    btst    d0,d7
+    bne     .stop
+    bra     .eofWait
 
 .stop
     DPRINT  "stopping MHI"
@@ -7850,6 +7903,21 @@ mhiStart:
     bne     .4
     DPRINT  "Sending song over"
     bsr     songoverr
+
+    * The ordinary sample replay paths report song-over and immediately loop.
+    * HippoPlayer's repeat modes rely on that contract: with one list entry
+    * the main task deliberately keeps the player active. Rewind and start a
+    * fresh MHI session as well; "Module once" (or a track change) responds to
+    * songoverr by setting killsample and terminates this task normally.
+    bsr     mhiRewindLocal
+    tst.l   d0
+    bne     .mhiExit
+    lore    GFX,WaitTOF
+    tst.b   killsample(a5)
+    bne     .mhiExit
+    clr.b   mhiNoMoreData(a5)
+    clr.b   mhiQueuedAny(a5)
+    bra     .playPass
 .4
 
 
@@ -7863,6 +7931,25 @@ mhiStart:
     DPRINT  "mhiError" 
     bsr     .mhiExit
     moveq   #0,d0
+    rts
+
+
+mhiRewindLocal:
+    * Streams/pipes cannot be replayed by seeking their exhausted handle.
+    bsr     isRemoteSample
+    bne     .error
+
+    move.l  mhiStreamStart(a5),d2
+    bmi     .error
+    move.l  mhiFile(a5),d1
+    moveq   #OFFSET_BEGINNING,d3
+    lore    Dos,Seek
+    cmp.l   #-1,d0
+    beq     .error
+    moveq   #0,d0
+    rts
+.error
+    moveq   #-1,d0
     rts
 
 
@@ -8060,6 +8147,10 @@ mhiInitBuffers:
     move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
     lob     MHIQueueBuffer
+    tst.l   d0
+    beq     .notQueued
+    st      mhiQueuedAny(a5)
+.notQueued
     DPRINT  "MHIQueueBuffer=%ld"
 .eof
     tst.b   mhiNoMoreData(a5)
