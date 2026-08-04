@@ -1968,7 +1968,6 @@ sOrigLen	EQU 16  ; L
 sOrigRepL	EQU 20	; L
 sLenInFile	EQU 24	; L
 sTimesToUnroll	EQU 28  ; W
-sDeltaDone  EQU 28  ; B - AHI/AGUS only, set if sample was decoded
 sVol		EQU 30	; B
 sFine		EQU 31	; B
 sLoopType	EQU 32	; B (8bb: was Typ, but no 16-bit smps, so it's all we need)
@@ -1979,7 +1978,8 @@ sAHISound   EQU 36  ; W AHI sound number for this sample
 sAGUSOffset EQU 36  ; L AGUS memory address for this sample                      
 sAHILoopDir EQU 38  ; B AHI mode only
 sPadding    EQU 39  ; B AGUS mode only - part of sAGUSOffset
-SMP_SIZE	EQU 40	; Must be a multiple of 4 for longword alignment.
+sMore       EQU 40  ; L not used 
+SMP_SIZE	EQU 44	; Must be a multiple of 4 for longword alignment.
 			; If you change this, remember to update INS_SIZE below
 
 ;------------------------------
@@ -2012,8 +2012,10 @@ iEnvPDeltas	EQU 236 ; 12 words
 iMute		EQU 260	; B
 iSamp		EQU 264	; 16*SMPSIZE (must be multiple of 4)
 
-INS_SIZE	EQU 840+16*4	; 264+(16*SMPSIZE) (must be multiple of 4)
+INS_SIZE	EQU 840+16*4+16*4	
+                            ; 264+(16*SMPSIZE) (must be multiple of 4)
                             ; 16*4 = add sAHISound worth of space
+                            ; 16*4 = add another lword
 
 ;------------------------------
 ; Instrument header struct
@@ -2095,9 +2097,10 @@ PutStr
 	; Output:
 	;   d0.l = pointer to memory block
 	;-------------------------------------------------
-AllocMem
+AllocMem:
 	movem.l	d1/a0/a1/a6,-(sp)
 	move.l	4.w,a6
+    or.l    #MEMF_CLEAR,d1
 	jsr	_LVOAllocMem(a6)
 	movem.l	(sp)+,d1/a0/a1/a6
 	rts
@@ -4424,9 +4427,10 @@ Load16BitSample
     move.l  readPtr,d2      ; Pointer to sample data in file
     add.l   d3,readPtr      ; Advance in file
 	move.l	d2,sPek(a1)     ; Store for this sample
-    tst.b   sDeltaDone(a1)
+    lea     instrumentDeltaStatus,a6
+    tst.b   (a6,d6)
     bne     .skipdelta
-    st      sDeltaDone(a1)
+    st      (a6,d6)
     bra     .undelta
 .1
 	move.l	sLen(a1),d0
@@ -4483,9 +4487,10 @@ Load8BitSample
     move.l  readPtr,d2      ; Pointer to sample data in file
     add.l   d3,readPtr      ; Advance in file
 	move.l	d2,sPek(a1)     ; Store for this sample
-    tst.b   sDeltaDone(a1)
+    lea     instrumentDeltaStatus,a6
+    tst.b   (a6,d6)
     bne     .skipdelta
-    st      sDeltaDone(a1)
+    st      (a6,d6)
     bra     .undelta
 .1
 	move.l	sLen(a1),d0
@@ -4525,6 +4530,10 @@ Load8BitSample
 	rts
 .l8Err	moveq	#1,d0
 	rts
+
+instrumentDeltaStatus:
+    ds.b    256
+
 
 	; a1 = sample struct
 UnrollSampleLoop8
