@@ -1416,13 +1416,13 @@ loadSamplesAGUS:
 
     ; ---------------------------------    
     ; Free it
-    move.l  sPek(a2),a1
-    move.l	sLen(a2),d0
-	beq.b	.nextS			; (length is zero, don't free)	
-    bmi.b   .nextS
-    neg.l   sLen(a2)        ; neg means freed
-	addq.l	#2,d0			; fix-sample for linear interpolation
-	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr    
+;    move.l  sPek(a2),a1
+;    move.l	sLen(a2),d0
+;	beq.b	.nextS			; (length is zero, don't free)	
+;    bmi.b   .nextS
+;    neg.l   sLen(a2)        ; neg means freed
+;	addq.l	#2,d0			; fix-sample for linear interpolation
+;	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr    
     ; ---------------------------------    
 .nextS
     lea     SMP_SIZE(a2),a2
@@ -1968,6 +1968,7 @@ sOrigLen	EQU 16  ; L
 sOrigRepL	EQU 20	; L
 sLenInFile	EQU 24	; L
 sTimesToUnroll	EQU 28  ; W
+sDeltaDone  EQU 28  ; B - AHI/AGUS only, set if sample was decoded
 sVol		EQU 30	; B
 sFine		EQU 31	; B
 sLoopType	EQU 32	; B (8bb: was Typ, but no 16-bit smps, so it's all we need)
@@ -1977,7 +1978,7 @@ s16Bit		EQU 35	; B
 sAHISound   EQU 36  ; W AHI sound number for this sample
 sAGUSOffset EQU 36  ; L AGUS memory address for this sample                      
 sAHILoopDir EQU 38  ; B AHI mode only
-sPadding    EQU 39  ; B AGUS mode only
+sPadding    EQU 39  ; B AGUS mode only - part of sAGUSOffset
 SMP_SIZE	EQU 40	; Must be a multiple of 4 for longword alignment.
 			; If you change this, remember to update INS_SIZE below
 
@@ -2203,7 +2204,7 @@ fclose
 	; Output:
 	;   d0.l = actual bytes read
 	;-------------------------------------------------	
-fread	movem.l	d1/a0/a1/a6,-(sp)
+fread:	movem.l	d1/a0/a1/a6,-(sp)
 	;move.l	DosBase(pc),a6
 	;jsr	_LVORead(a6)
     
@@ -3569,6 +3570,8 @@ FreeInstruments
 	move.l	sLen(a0),d0
 	beq.b	.nextS			; (length is zero, don't free)	
     bmi.b   .nextS          ; neg means freed earlier
+    tst.b   AHI
+    bne.b   .nextS          ; AHI/AmiGUS: not allocated separately
 	addq.l	#2,d0			; fix-sample for linear interpolation
 	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr
 .nextS	lea	SMP_SIZE(a0),a0
@@ -4380,6 +4383,8 @@ LoadInstrHeader
 	; a1 = sample struct
 	; WARNING: Do NOT trash D3!
 PrepareLoopUnroll
+    tst.b   AHI
+    bne.b   .end
 	clr.w	sTimesToUnroll(a1)
 	tst.b	sLoopType(a1)
 	beq.b	.end			; no loop, nothing to do here!	
@@ -4410,8 +4415,20 @@ PrepareLoopUnroll
 	; a1 = sample struct
 Load16BitSample
 	move.l	sOrigLen(a1),d3		; bytes to read from file
-	beq.b	.end			; length is empty, don't load sample
+	beq 	.end			; length is empty, don't load sample
 	bsr.w	PrepareLoopUnroll	
+    tst.b   AHI
+    beq     .1
+    ; AHI/AmiGUS - no allocation
+    DPRINT  "Load16BitSample NOALLOC"
+    move.l  readPtr,d2      ; Pointer to sample data in file
+    add.l   d3,readPtr      ; Advance in file
+	move.l	d2,sPek(a1)     ; Store for this sample
+    tst.b   sDeltaDone(a1)
+    bne     .skipdelta
+    st      sDeltaDone(a1)
+    bra     .undelta
+.1
 	move.l	sLen(a1),d0
 	addq.l	#2,d0			; fix-sample for linear interpolation
     DPRINT  "Load16BitSample buffer=%lx"
@@ -4427,6 +4444,7 @@ Load16BitSample
 	; ------------------------
 	; Convert delta sample to PCM
 	; ------------------------
+.undelta
 	move.l	d2,a6
 	moveq	#0,d1			; old sample
 .loop	move.w	(a6),d0
@@ -4435,6 +4453,7 @@ Load16BitSample
 	move.w	d1,(a6)+
 	subq.l	#2,d3
 	bne.b	.loop
+.skipdelta
 	; ------------------------	
 	move.l	sLenInFile(a1),d2	; skip data after loop end
 	move.l	sOrigLen(a1),d0
@@ -4445,16 +4464,30 @@ Load16BitSample
 	moveq	#SEEK_CUR,d3
 	bsr.w	fseek	
 .noSkip	; ---------------------- 
-.end	moveq	#0,d0	; 0=successful
+.end	
+    moveq	#0,d0	; 0=successful
 	rts
-.l16Err	moveq	#1,d0
+.l16Err	
+    moveq	#1,d0
 	rts
 
 	; a1 = sample struct
 Load8BitSample
 	move.l	sOrigLen(a1),d3		; bytes to read from file
-	beq.b	.end			; length is empty, don't load sample
+	beq 	.end			; length is empty, don't load sample
 	bsr.w	PrepareLoopUnroll	
+    tst.b   AHI
+    beq     .1
+    ; AHI/AmiGUS - no allocation
+    DPRINT  "Load8BitSample NOALLOC"
+    move.l  readPtr,d2      ; Pointer to sample data in file
+    add.l   d3,readPtr      ; Advance in file
+	move.l	d2,sPek(a1)     ; Store for this sample
+    tst.b   sDeltaDone(a1)
+    bne     .skipdelta
+    st      sDeltaDone(a1)
+    bra     .undelta
+.1
 	move.l	sLen(a1),d0
 	addq.l	#2,d0			; fix-sample for linear interpolation
     DPRINT  "Load8BitSample buffer=%lx"
@@ -4470,12 +4503,14 @@ Load8BitSample
 	; ------------------------
 	; Convert delta sample to PCM
 	; ------------------------
+.undelta
 	move.l	d2,a6
 	moveq	#0,d1			; old sample
 .loop	add.b	d1,(a6)
 	move.b	(a6)+,d1
 	subq.l	#1,d3
 	bne.b	.loop	
+.skipdelta
 	; ------------------------	
 	move.l	sLenInFile(a1),d2	; skip data after loop end
 	move.l	sOrigLen(a1),d0
@@ -4502,6 +4537,8 @@ UnrollSampleLoop8
 	beq.w	.end			; nope, no unroll needed
 	tst.l	sRepL(a1)		; loop length == 0?
 	beq.w	.end			; yes, don't do unroll
+    tst.b   AHI
+    bne     .end
 	move.w	sTimesToUnroll(a1),d6
 	beq.w	.end			; no unroll needed
 	subq.w	#1,d6
@@ -4556,6 +4593,8 @@ UnrollSampleLoop16
 	beq.w	.end			; nope, no unroll needed
 	tst.l	sRepL(a1)		; loop length == 0?
 	beq.w	.end			; yes, don't do unroll
+    tst.b   AHI
+    bne     .end
 	move.w	sTimesToUnroll(a1),d6
 	beq.w	.end			; no unroll needed
 	subq.w	#1,d6
@@ -4606,6 +4645,8 @@ UnrollSampleLoop16
 	;
 	; a1 = sample struct
 FixSample
+    tst.b   AHI         ; AHI/AmiGUS
+    bne.b   .done8
 	tst.l	sLen(a1)	; sample empty?
 	beq.b	.done8		; yes, don't fix
 	move.l	sPek(a1),a5
@@ -8931,7 +8972,7 @@ tmp8			dc.b 0
 bxxOverflow		dc.b 0
 
 ; -------------------------------------
-AHI                 dc.b 0
+AHI:                dc.b 0
 	EVEN
 ahibase             dc.l 0
 ahi_ctrl            dc.l 0
