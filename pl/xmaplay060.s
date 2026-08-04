@@ -2100,7 +2100,6 @@ PutStr
 AllocMem:
 	movem.l	d1/a0/a1/a6,-(sp)
 	move.l	4.w,a6
-    or.l    #MEMF_CLEAR,d1
 	jsr	_LVOAllocMem(a6)
 	movem.l	(sp)+,d1/a0/a1/a6
 	rts
@@ -4530,9 +4529,6 @@ Load8BitSample
 	rts
 .l8Err	moveq	#1,d0
 	rts
-
-instrumentDeltaStatus:
-    ds.b    256
 
 
 	; a1 = sample struct
@@ -9435,7 +9431,8 @@ LogTab	ds.l 12*16*4 ; calculated later
 CDA_MixBufferPtr    
     dc.l    0
 
-InstrNames  ds.b    128*24
+InstrNames:             ds.b    128*24
+instrumentDeltaStatus:  ds.b    128 ; space for 128 instruments
 
  ifne FAKE_AGUS
 fake_agus_base  ds.b    1024
