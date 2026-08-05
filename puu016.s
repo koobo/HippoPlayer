@@ -53500,8 +53500,6 @@ p_xmaplay:
 * Out:
 *    d0 = 0 if accepted and XMAPlay enabled
 id_xmaplay  
-    tst.b   ahi_muutpois(a5)
-    bne     .no
     tst.b   xmaplay(a5)
     beq.b   .no
     push    a0
