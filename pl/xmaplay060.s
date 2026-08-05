@@ -958,10 +958,6 @@ amigus_init:
     move.l  agus_WavetableBase(a0),amigus_base
     move.l  agus_PcmBase(a0),a1
     move.l  a1,amigus_pcm
-    tst.w   amigus_hasleds
-    beq     .nl
-    move.w  $d4(a1),amigus_old_ledctrl       * word register
-.nl
     ; ---------------------------------
 	bsr     loadSamplesAGUS
 
@@ -1034,7 +1030,9 @@ amigus_restoreLeds:
     tst.w   amigus_hasleds
     beq     .1
 	move.l	amigus_pcm,a1
-    move.w	amigus_old_ledctrl,$d4(a1)    
+    move.w  $d4(a1),d0
+    and.w   #$fffe,d0       * clear manual control bit
+    move.w  d0,$d4(a1)
 .1  rts
 
 amigus_runleds:
@@ -1047,7 +1045,8 @@ amigus_runleds:
     ; ---------------------------------
     ; Could blink now, check if the LED scope is enabled,
     ; if not, don't blink
-    move    amigus_old_ledctrl,d0
+	move.l	amigus_pcm,a1
+    move.w  $d4(a1),d0
     btst    #1,d0
     beq     .x
     ; ---------------------------------
@@ -1087,7 +1086,9 @@ amigus_runleds:
 	dbf	d0,.3
     ; ---------------------------------
 	move.l	amigus_pcm,a1
-	move.w	#1,$d4(a1)      * manual led control
+    move.w  $d4(a1),d0
+    or.w    #1,d0           * set manual led control bit, keep others
+	move.w	d0,$d4(a1)   
 	move.l	d2,$d0(a1)      * write led values
     ; ---------------------------------
 	lea	    .leds,a0
@@ -1110,7 +1111,6 @@ amigus_card          dc.l    0
 amigus_reserve       dc.w    0
 amigus_hasinterrupt  dc.w    0
 amigus_hasleds       dc.w    0
-amigus_old_ledctrl   dc.w    0
 
 LibName         dc.b    "amigus.library",0
  even
