@@ -18,7 +18,8 @@ For only Protracker playback you don't need the "group" file.
 NOTE 1: 
 The original archive https://aminet.net/mus/play/hippoplayer.lha
 is in its original state. There is no updated documentation. 
-Please read the change history below.
+Please read the change history below. For an AI-generated summary
+see hippoplayerupdate.doc.
 
 NOTE 2: 
 Ensure that "HippoPlayer.group" gets updated, as old versions will
