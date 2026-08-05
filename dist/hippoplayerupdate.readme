@@ -158,13 +158,13 @@ Additional files to check and download
   - Instrument names shown in the info window.
   - Channel count shown in the infobox.
   - Output choices in Prefs:
-     - xma060+Paula:  Play-2 > Enable xmaplay060 > ON
+     - xmaplay+Paula: Play-2 > Enable xmaplay > ON
                       AHI    > Enable AHI > OFF
                       CPU requirement: 68060
-     - xma060+AHI:    Play-2 > Enable xmaplay060 > ON
+     - xmaplay+AHI:   Play-2 > Enable xmaplay > ON
                       AHI    > Enable AHI > ON
                       CPU requirement: AHI dependent
-     - xma060+AmiGUS: Play-2 > Enable xmaplay060 > ON
+     - xmaplay+AmiGUS:Play-2 > Enable xmaplay > ON
                       PS3M   > Use AmiGUS hardware mixer > ON
                       CPU requirement: 68000 
 

@@ -1,18 +1,51 @@
+AMIGUS - to test - xmaplay:
+- Works on 68000 7.16MHz!
+- When I play and resize Hippoplayer, the Amiga crashes
+- When I restart the song by pushing "<<", previously active voices are still "hanging"
 
-commit f417af0b41761c19013c671f8a7899072b22243a
-Author: K-P Koljonen <kpkoljonen@gmail.com>
-Date:   Sun May 10 16:16:33 2026 +0300
+AMIGUS - to test:
+- final_reality_music.xm seems to have some static samples in the credit endpart
+- hillbilly_billyboy.xm has a single static instrument going wild
+- jt_hello.xm by Jeroen Tel sounds strange....
+- jt_strng.xm -> tune is silent, but VU Meter is vibrating?
 
-    xmaplay060: Make 68000 compatible for AHI and AmiGUS parts
+AMIGUS - xma:
+- .samplecheck:
+-- TODO: 
+-- if XM file (uncompressed)
+-- also if metadata scroller is disabled
+-- also if amigus hw mixer is enabled
+-- also if xmaplay is enabled
+-- then act like it's a sample and stop loading
+-- in xmaplay
+--- pass in also filename
+--- if given, fread uses file input
+--- Load16BitSample, Load8BitSample:
+---- Alloc buffer
+---- load a single sample
+---- undelta 
+---- copy to AGUS, update AGUS mem offset
+---- Free buffer
 
+AMIGUS xmaplay:
+- sample mem use
+
+AMIGUS MHI:
+- test 320kbps file
+
+FIXED:
+- commit f417af0b41761c19013c671f8a7899072b22243a
+- Author: K-P Koljonen <kpkoljonen@gmail.com>
+- Date:   Sun May 10 16:16:33 2026 +0300
+-     xmaplay060: Make 68000 compatible for AHI and AmiGUS parts
     
 FIXED: TODO:
 - dope.xm: amiga periods -> sounds bad on xmaplay?
 
-TODO:
+FIXED: TODO:
 - super large module xm, cannot load
 
-TODO:
+FIXED: TODO:
 - try clean restart
 - try after AGUS playback
 - AGUS, AHI: S3M patternscope not working, XM ok on A1200, FSUAE not ok?
