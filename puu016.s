@@ -5152,10 +5152,32 @@ getscreeninfo
     beq     .native
     cmp.l   #SUPER72_MONITOR_ID,d0      * 23kHz horiz
     beq     .highNative
+
     DPRINT  "Non-default screenmode detected!"
     ; Set flag to measure vblank freq later
     st      doMeasureVBlank(a5)
+
+    ; Picasso96 check for high audio rate
+	clr.l	-(sp)			
+    pushpea	.p96amigavideo(pc),d1
+	move.l	sp,d2
+	moveq	#4,d3
+	moveq	#0,d4
+	lore    Dos,GetVar
+	move.l	(sp)+,d0
+    DPRINT  "Picasso96/AmigaVideo=%lx"
+	swap    d0
+	cmp.w	#"31",d0
+    seq     highAudio(a5)
     bra     .ba
+
+;AmigaVideo: if set to '31kHz', the Amiga chip set will be programmed to
+;            a display timing like with the Amiga MULTISYNC monitor
+
+.p96amigavideo
+	dc.b	"Picasso96/AmigaVideo",0
+    even
+
 .highNative
     st      highAudio(a5)
     DPRINT  "Double audio rate possible!"
