@@ -134,10 +134,12 @@ Additional files to check and download
 
 - RTG related fixes:
   - Scopes: improved display sync with audio.
-  - Fix display issues with hippo logo and gadget RMB indicator.
+  - Fix graphics issues with hippo logo and gadget RMB indicator.
   - Prevent PS3M and xmaplay mixer tasks busy looping unnecessarily.
+  - Improved check if high (>28kHz) Paula output rates are available 
+    with P96 screenmodes.
 
-- PatternScope with AHI/AmiGUS: Fix some S3M related issues.
+- PatternScope with AHI/AmiGUS: Fix S3M related issues.
 
 - Prefs: Removed "PS3M/Use S:HippoPlayer.PS3M configuration file".
 
