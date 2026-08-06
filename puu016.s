@@ -1544,7 +1544,7 @@ showPositionSlider_new      rs.b       1
 showPositionSlider          = prefsdata+prefs_showPositionSlider
 disableInfoScroll_new      rs.b       1
 disableInfoScroll          = prefsdata+prefs_disableInfoScroll
-                            rs.b      1 * pad
+amigusAvailChecked         rs.b      1 
 
 * Remote search popup stores the selected search mode here
 * SEARCH_MODLAND etc etc
@@ -45899,7 +45899,12 @@ patchIt:
 checkAmiGUSAvailability:
 ;;    bra     .yes
 
-    DPRINT  "checkAmiGUSAvailability"
+    move.b  amigusAvailChecked(a5),d0   * up bit: checked, low bit: amigus yes/no
+    bpl     .notChecked
+    and     #1,d0
+    beq     .x
+    bra     .yes
+.notChecked
     lea     .lib(pc),a1
 	lore	Exec,OldOpenLibrary
     tst.l   d0
@@ -45913,9 +45918,14 @@ checkAmiGUSAvailability:
     lore    Exec,CloseLibrary
     pop     d0
 	bne		.yes
-.x  clr.b	ps3mamigus(a5)	* for safety clear setting
+.x  move.b  #$fe,amigusAvailChecked(a5) * set checked, amigus no
+    clr.b	ps3mamigus(a5)	* for safety clear setting
+    DPRINT  "checkAmiGUSAvailability=NO"
+    moveq   #0,d0
 	rts
 .yes 
+    st      amigusAvailChecked(a5)  * set checked, amigus yes
+    DPRINT  "checkAmiGUSAvailability=YES"
     moveq   #1,d0
 	rts
 
@@ -53330,6 +53340,10 @@ p_xmaplay:
 
     * Save into a file for XMAplay
 	jsr		setMainWindowWaitPointer
+
+	* This will clear ps3mamigus if for some reason
+	* it is set and the card is missing.
+   bsr		checkAmiGUSAvailability
 
 	move.l	moduleaddress(a5),a0
 	move.l	modulelength(a5),d3
