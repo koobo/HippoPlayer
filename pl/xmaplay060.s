@@ -1318,9 +1318,34 @@ loadSamplesAGUS:
     ; Copy d0 bytes from a0 to AGUS
 	move.l	amigus_base(pc),a1		
     lea     HAGEN_WDATAH(a1),a1   * destination address
- REM
+
     ; ---------------------------------    
-    ; Copy d0 bytes from a0 to AGUS - old non-bidi
+    ; Check for bidi loop
+    cmp.l   #4,sOrigRepL(a2)
+    bls     .noLoop
+    cmp.b   #2,sLoopType(a2)
+    beq     .bidi
+.noLoop
+
+;    tst.b   s16Bit(a2)
+;    bne     .loop16
+;.loop8
+;    ;move.b  (a0)+,d1
+;    ;bsr     .push8
+;    PUSH8M  1,(a0)+
+;    subq.l  #1,d0
+;    bne.b   .loop8
+;    bsr     .flush
+;    bra     .continue
+;.loop16
+;;    move.w  (a0)+,d1
+;;    bsr     .push16
+;    PUSH16M  2,(a0)+
+;    subq.l  #2,d0
+;    bpl.b   .loop16
+;    bsr     .flush
+
+    ; Copy d0 bytes from a0 to AGUS - non-bidi
     moveq   #4,d1
     bra.b   .s            * handle very short ones
 .copy
@@ -1330,7 +1355,7 @@ loadSamplesAGUS:
 .s  cmp.l   d1,d0
     bhs.b   .copy
 
-    tst.l   d0
+    tst.l   d0            * Copy remaining 1..3 bytes
     beq     .done
     clr.l   -(sp)
     move.l  sp,a5
@@ -1341,33 +1366,6 @@ loadSamplesAGUS:
     move.l  (sp)+,(a1)
     addq.l  #4,d5
 .done
- EREM
-; REM ;;;;;; NEW
-    ; ---------------------------------    
-    ; Copy d0 bytes from a0 to AGUS - with BIDI support
-    ; Check for bidi loop
-    cmp.l   #4,sOrigRepL(a2)
-    bls     .noLoop
-    cmp.b   #2,sLoopType(a2)
-    beq     .bidi
-.noLoop
-    tst.b   s16Bit(a2)
-    bne     .loop16
-.loop8
-    ;move.b  (a0)+,d1
-    ;bsr     .push8
-    PUSH8M  1,(a0)+
-    subq.l  #1,d0
-    bne.b   .loop8
-    bsr     .flush
-    bra     .continue
-.loop16
-;    move.w  (a0)+,d1
-;    bsr     .push16
-    PUSH16M  2,(a0)+
-    subq.l  #2,d0
-    bpl.b   .loop16
-    bsr     .flush
     bra     .continue
     ; ---------------------------------    
 .bidi
@@ -4450,12 +4448,31 @@ Load16BitSample
 .undelta
 	move.l	d2,a6
 	moveq	#0,d1			; old sample
-.loop	move.w	(a6),d0
+
+    btst    #0,d2           ; sample at odd address?
+    bne     .oddLoop
+.loop	
+    move.w	(a6),d0         ; reads words, may not work on 68000
 	swap16	d0
     add.w	d0,d1
 	move.w	d1,(a6)+
 	subq.l	#2,d3
 	bne.b	.loop
+    bra     .skipdelta
+
+.oddLoop                    ; 68000 compatible
+    move.b  1(a6),d0
+    lsl.w   #8,d0
+    move.b  (a6),d0
+    add.w   d0,d1
+    move.w  d1,d2
+    move.b  d2,1(a6)
+    lsr.w   #8,d2
+    move.b  d2,(a6)
+    addq    #2,a6
+	subq.l	#2,d3
+	bne.b	.oddLoop
+
 .skipdelta
 	; ------------------------	
 	move.l	sLenInFile(a1),d2	; skip data after loop end
