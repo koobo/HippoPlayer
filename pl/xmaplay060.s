@@ -1318,31 +1318,7 @@ loadSamplesAGUS:
     ; Copy d0 bytes from a0 to AGUS
 	move.l	amigus_base(pc),a1		
     lea     HAGEN_WDATAH(a1),a1   * destination address
- REM
-    ; ---------------------------------    
-    ; Copy d0 bytes from a0 to AGUS - old non-bidi
-    moveq   #4,d1
-    bra.b   .s            * handle very short ones
-.copy
-    move.l  (a0)+,(a1)
-    add.l   d1,d5
-    sub.l   d1,d0
-.s  cmp.l   d1,d0
-    bhs.b   .copy
 
-    tst.l   d0
-    beq     .done
-    clr.l   -(sp)
-    move.l  sp,a5
-.rest
-    move.b  (a0)+,(a5)+
-    subq    #1,d0
-    bne     .rest
-    move.l  (sp)+,(a1)
-    addq.l  #4,d5
-.done
- EREM
-; REM ;;;;;; NEW
     ; ---------------------------------    
     ; Copy d0 bytes from a0 to AGUS - with BIDI support
     ; Check for bidi loop
@@ -1351,23 +1327,53 @@ loadSamplesAGUS:
     cmp.b   #2,sLoopType(a2)
     beq     .bidi
 .noLoop
-    tst.b   s16Bit(a2)
-    bne     .loop16
-.loop8
-    ;move.b  (a0)+,d1
-    ;bsr     .push8
-    PUSH8M  1,(a0)+
-    subq.l  #1,d0
-    bne.b   .loop8
-    bsr     .flush
-    bra     .continue
-.loop16
-;    move.w  (a0)+,d1
-;    bsr     .push16
-    PUSH16M  2,(a0)+
-    subq.l  #2,d0
-    bpl.b   .loop16
-    bsr     .flush
+
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS - non-bidi
+    move.w  a0,d1
+    btst    #0,d1
+    beq     .copyEven
+
+    move.w  d0,-(sp)	  * stash count
+    and.l   #~%11,d0      * do multiples of four
+    beq.b   .rest
+    add.l   d0,d5         * adjust mem offset
+.copyOdd
+    move.b  (a0)+,d2
+    rol.w   #8,d2
+    move.b  (a0)+,d2
+    swap    d2    
+    move.b  (a0)+,d2
+    rol.w   #8,d2
+    move.b  (a0)+,d2
+    move.l  d2,(a1)
+    subq.l  #4,d0
+    bne.b   .copyOdd
+    bra	    .rest
+
+.copyEven
+    move.w  d0,-(sp)	  * stash count
+    and.l   #~%11,d0      * do multiples of four
+    beq.b   .rest
+    add.l   d0,d5         * adjust mem offset
+.copy
+    move.l  (a0)+,(a1)
+    subq.l  #4,d0
+    bne.b   .copy
+
+.rest
+    moveq   #%11,d0
+    and.w   (sp)+,d0
+    beq.b   .done
+    clr.l   -(sp)
+    move.l  sp,a5
+.restLoop
+    move.b  (a0)+,(a5)+
+    subq    #1,d0
+    bne.b   .restLoop
+    move.l  (sp)+,(a1)
+    addq.l  #4,d5        * adjust mem offset
+.done
     bra     .continue
     ; ---------------------------------    
 .bidi
@@ -1378,16 +1384,12 @@ loadSamplesAGUS:
     tst.b   s16Bit(a2)
     bne     .bidiloop16a
 .bidiloop8a
-    ;move.b  (a0)+,d1
-    ;bsr     .push8
     PUSH8M  3,(a0)+
     subq.l  #1,d0
     bne.b    .bidiloop8a
     ; Append replen of data reversed
     move.l   sOrigRepL(a2),d0            ; Repeat length
 .bidiloop8b
-    ;move.b  -(a0),d1
-    ;bsr     .push8
     PUSH8M  4,-(a0)
     subq.l  #1,d0
     bne.b   .bidiloop8b
@@ -1395,23 +1397,58 @@ loadSamplesAGUS:
     bra     .continue
 
 .bidiloop16a
-;    move.w  (a0)+,d1
-;    bsr     .push16
-    PUSH16M  5,(a0)+
+    move.w  a0,d2
+    btst    #0,d2
+    beq     .bidiloop16aEven
+
+    ; Skipping the last two bytes seems to reduce click
+    ; noises at the transition point in InternationalKarate.xm
+    subq.l  #2,d0		
+
+.bidiloop16aOdd
+    move.b  (a0)+,d2
+    lsl.w   #8,d2
+    move.b  (a0)+,d2
+    PUSH16M  5o,d2
     subq.l  #2,d0
-    bpl     .bidiloop16a
+    bpl     .bidiloop16aOdd
+
     ; Append replen of data reversed
     move.l   sOrigRepL(a2),d0            ; Repeat length
-.bidiloop16b
-;    move.w  -(a0),d1
-;    bsr     .push16
+    subq.l  #2,d0		
+
+.bidiloop16bOdd
+    move.b  -(a0),d2
+    rol.w   #8,d2
+    move.b  -(a0),d2
+    rol.w   #8,d2
+    PUSH16M  6o,d2
+    subq.l  #2,d0
+    bne.b   .bidiloop16bOdd
+    bsr     .flush
+    bra     .continue
+
+.bidiloop16aEven
+    ; Skipping the last two bytes seems to reduce click
+    ; noises at the transition point in InternationalKarate.xm
+    subq.l  #2,d0		
+
+.bidiloop16aEven_
+    PUSH16M  5,(a0)+
+    subq.l  #2,d0
+    bpl     .bidiloop16aEven_
+
+    ; Append replen of data reversed
+    move.l   sOrigRepL(a2),d0            ; Repeat length
+    subq.l  #2,d0		
+
+.bidiloop16bEven_
     PUSH16M  6,-(a0)
     subq.l  #2,d0
-    bne.b   .bidiloop16b
+    bne.b   .bidiloop16bEven_
     bsr     .flush
 
 .continue
-; EREM ;;;;;;; NEW
 
 
     ; ---------------------------------    
@@ -4450,12 +4487,30 @@ Load16BitSample
 .undelta
 	move.l	d2,a6
 	moveq	#0,d1			; old sample
-.loop	move.w	(a6),d0
+
+    btst    #0,d2           ; sample at odd address?
+    bne     .oddLoop
+.loop	
+    move.w	(a6),d0         ; reads words, may not work on 68000
 	swap16	d0
     add.w	d0,d1
 	move.w	d1,(a6)+
 	subq.l	#2,d3
 	bne.b	.loop
+    bra     .skipdelta
+
+.oddLoop                    ; 68000 compatible
+    move.b  1(a6),d0
+    lsl.w   #8,d0
+    move.b  (a6)+,d0
+    add.w   d0,d1
+    move.w  d1,d2
+    move.b  d2,(a6)+
+    lsr.w   #8,d2
+    move.b  d2,-2(a6)
+    subq.l  #2,d3
+    bne.b   .oddLoop
+
 .skipdelta
 	; ------------------------	
 	move.l	sLenInFile(a1),d2	; skip data after loop end
@@ -7439,6 +7494,11 @@ Mix_UpdateChannelVolPanFrq_AGUS:
     cmp.b   #2,sLoopType(a0)
     bne     .noBidi
     add.l   d4,d4                       ; double replen for bidi with mirrored data
+
+    tst.b   s16Bit(a0)			; 16-bit sample?
+    beq.b   .noBidi
+    subq.l  #4,d4                       ; first half of bidi copy is 2 bytes short
+
 .noBidi
     ; TODO: cannot set ping-pong loop
     bset    #1,d5                       ; loop bit
