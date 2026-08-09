@@ -72,8 +72,8 @@ amigus_init:
 	lea		HAGEN_WDATAH(a6),a1
 .ag_memory_copyloop					; Copy entire module to AmiGUS sample memory
 	move.l	(a0)+,(a1)
-	sub.l	#1,d0
-	bne		.ag_memory_copyloop
+	subq.l	#1,d0
+	bne.b	.ag_memory_copyloop
 	
 	bsr		amigus_voice_reset		; Initialize all AmiGUS voices
 	
