@@ -7840,38 +7840,13 @@ mhiStart:
 .eof
     DPRINT  "Flushing buffers"
 
-.eofAnnounce
-    * mhizz9000.library accepts its explicit EOF extension only after every
-    * real buffer has reached the card. The final short buffer was just
-    * queued, so the first call may correctly reject the marker. Retry after
-    * short yields until it is accepted or playback terminates.
-    move.l  mhiBase(a5),a6
-    move.l  mhiHandle(a5),a3
-    sub.l   a0,a0
-    moveq   #0,d0
-    lob     MHIQueueBuffer
-    tst.l   d0
-    bne     .eofWait
-
-    move.l  mhiBase(a5),a6
-    move.l  mhiHandle(a5),a3
-    lob     MHIGetStatus
-    cmp.b   #MHIF_PLAYING,d0
-    bne     .stop
-
-    * A final partial frame may not make the application's buffer reusable,
-    * so completion signals are not a reliable retry clock here.
-    lore    GFX,WaitTOF
-    tst.b   killsample(a5)
-    bne     .stop
-    bra     .eofAnnounce
-
 .eofWait
     * A completion signal only says that at least one compressed input
     * buffer became reusable. It does not prove that the decoder and audio
-    * output tail have drained. Follow the public MHI EOF contract: check
-    * status before sleeping (so a coalesced signal cannot strand us), then
-    * wait again while the decoder still reports PLAYING.
+    * output tail have drained. Follow the public MHI EOF contract without
+    * driver-specific sentinel buffers: check status before sleeping (so a
+    * coalesced signal cannot strand us), then wait again while the decoder
+    * still reports PLAYING.
     move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
     lob     MHIGetStatus
