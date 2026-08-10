@@ -7331,6 +7331,7 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	moveq	#0,d7               ; loop number of channels in the mod
 	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
     lea     agusVolForChannel,a3
+	lea	PanningTab(pc),a1
 	; -----------------------------
 .loop	
     move.b	cStatus(a5),d6
@@ -7343,7 +7344,7 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	;btst	#IB_NyTon,d6
 	;beq 	.vol
 	; -----------------------------
-    ; Not available!
+    ; Not available on AGUS!
 	;or.b	#IST_Fadeout,vType(a6)
 	;moveq	#0,d0				; destination volume
 	;moveq	#0,d2
@@ -7363,64 +7364,34 @@ Mix_UpdateChannelVolPanFrq_AGUS:
 	beq.b	.period
 	; -----------------------------
 
-;def calculate_pan_volumes(pan, input_vol):
-;    # 1. Scale input volume to output range (0..65535)
-;    # Using 65535.0 to ensure float precision before final rounding
-;    v_scaled = input_vol * (65535.0 / 2048.0)
-;    
-;    if pan == 128:
-;        v_l = v_scaled
-;        v_r = v_scaled
-;    elif pan < 128:
-;        # Panned Left: Left is full, Right is attenuated
-;        v_l = v_scaled
-;        v_r = v_scaled * (pan / 128.0)
-;    else:
-;        # Panned Right: Right is full, Left is attenuated
-;        v_r = v_scaled
-;        v_l = v_scaled * ((255 - pan) / 127.0)
-;        
-;    return round(v_l), round(v_r)
-;
-;# Examples:
-;# Center (128) at Max Vol (2048) -> (65535, 65535)
-;# Full Left (0) at Max Vol (2048) -> (65535, 0)
-;# Full Right (255) at Max Vol (2048) -> (0, 65535)
-;
-	move.w	cFinalVol(a5),d0    * 0..2048 (0..$800)
-    mulu    #$ffff,d0
-    lsr.l   #8,d0
-    lsr.l   #3,d0               * 0..0xffff
-    move    d0,d1               * initial left, right
+	move	cFinalVol(a5),d0    * 0..$800
+	move	d0,d1
 
-	moveq	#0,d2
-	move.b	cFinalPan(a5),d2    * 0..128..255 = left..center..right
-    cmp.b   #128,d2
-    beq     .set
+	moveq	#0,d3
+	move.b	cFinalPan(a5),d3    * 0..255
+	add.w	d3,d3
+	mulu.w	(a1,d3.w),d1	    * d1 = 0..$800*$ffff = $7fff800
+	lsr.w	#1,d3
 
- ;   cmp.b   #128,d2
-    bhs     .right
-    * Panned Left: Left is full, Right is attenuated
-    mulu.w  d2,d1    
-    lsr.l   #7,d1
-    bra     .set
+	not.b	d3
+	addq.w	#1,d3		    * 255 - d3
+	add.w	d3,d3
+	mulu.w	(a1,d3.w),d0
 
-.right
-    * Panned Right: Right is full, Left is attenuated
-    move.w  #255,d3
-    sub     d2,d3
-    mulu    d3,d0
-    divu    #127,d0
-.set
-    ; 0xffff -> 0x3fff
-    lsr.w   #2,d0
-    lsr.w   #2,d1
-	move.w	d0,HAGEN_VOICE_VOLUMEL(a6)
+	* Shift right by 13 to AGUS range 0..$3fff
+	lsl.l	#3,d1		
+	swap	d1
+	lsl.l	#3,d0
+	swap	d0
+
 	move.w	d1,HAGEN_VOICE_VOLUMER(a6)
+	move.w	d0,HAGEN_VOICE_VOLUMEL(a6)
+    ; ---------------------------------
+
     move.w  d7,d2
     add.w   d2,d2
-    move.w  d0,(a3,d2.w)        * stash channel vol
-    move.w  d1,2(a3,d2.w)
+    move.w  d0,(a3,d2.w)        * stash channel vol, LEFT   
+    move.w  d1,2(a3,d2.w)       * RIGHT
 
 	; -------------------------------------------------------------------
 	;                            PERIOD UPDATE
