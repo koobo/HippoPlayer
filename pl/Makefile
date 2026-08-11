@@ -77,7 +77,10 @@ COMPRESSED_TARGETS=\
 	shr/pretracker.bin.shr \
 	shr/xmaplay060.shr
 
-all: $(COMPRESSED_TARGETS)
+all: shr $(COMPRESSED_TARGETS)
+
+shr:
+	mkdir -p shr
 
 # Turn logging on in PS3M and sampleplayer
 debug: EXE020 += -DDEBUG=1
