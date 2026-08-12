@@ -454,7 +454,7 @@ mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
 mhiSeekSignal   rs.b    1
 mhiFileCurrentPos rs.l  1
 mhiFileRequestPos rs.l  1
-
+mhiBufferInSecs rs.l    1
 
 mainTask    rs.l    1
 
@@ -6331,6 +6331,13 @@ mp3GetDurationInSeconds:
     move.l  mhiStreamSize(a5),d1
     bsr     divu_32
 
+    * Subtract buffer size in secs so the 
+    * value matches what is being heard.
+    sub.l   mhiBufferInSecs(a5),d0
+    bpl     .1
+    clr.l   d0
+.1
+
     ; ---------------------------------
     move.l  d2,d1
     rts	
@@ -8210,6 +8217,7 @@ mhiDoSeek:
     beq     .x
     clr.l   mhiFileRequestPos(a5)
 
+    add.l   mpega_sync_position(a5),d2          * skip header 
     * Move the file pointer to this position
     move.l  mhiFile(a5),d1
     moveq   #OFFSET_BEGINNING,d3
@@ -8412,6 +8420,17 @@ mhiReadMp3Properties
 	moveq	#OFFSET_BEGINNING,d3
 	lore    Dos,Seek
     DPRINT  "seek to data beginning=%ld"
+    
+    * Calculate how many secs with this bitrate is the MHI buffer
+    clr.l   mhiBufferInSecs(a5)
+    move    mpbitrate(a5),d1        * kbps
+    beq     .x
+    move.l  #8*(MHI_BUFSIZE*MHI_BUFCOUNT)/1024,d0 * kbps
+    divu.w  d1,d0
+    
+    ext.l   d0
+    move.l  d0,mhiBufferInSecs(a5)
+    DPRINT  "mhiBufferInSecs=%ld"
 
 .x
     rts
