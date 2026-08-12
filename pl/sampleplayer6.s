@@ -440,7 +440,7 @@ mhiKillSignal   rs.b    1
 mhiStopSignal   rs.b    1
 mhiContSignal   rs.b    1
 mhiVolumeSignal rs.b    1
-mhiQueuedAny    rs.b    1
+                rs.b    1   * unused
 mhiNoMoreData   rs.b    1
 mhiReady        rs.b    1
 mhiInitError    rs.b    1
@@ -7801,7 +7801,6 @@ mhiInit:
 mhiStart:
     DPRINT  "*** mhiStart ***"
     clr.b   mhiNoMoreData(a5)
-    clr.b   mhiQueuedAny(a5)
     clr.b   mhiReady(a5)
 
     sub.l   a1,a1
@@ -7887,10 +7886,7 @@ mhiStart:
     st      mhiReady(a5)
 
     tst.b   mhiNoMoreData(a5)     
-    beq     .loop
-    tst.b   mhiQueuedAny(a5)
     bne     .eof
-    bra     .stop
 
 .loop
 
@@ -7991,7 +7987,6 @@ mhiStart:
     tst.b   killsample(a5)          * Check for exit flag to be sure
     bne     .mhiExit
     clr.b   mhiNoMoreData(a5)       * reset status and go around
-    clr.b   mhiQueuedAny(a5)
     bra     .playPass
 .4
 
@@ -8248,9 +8243,8 @@ mhiInitBuffers:
     move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
     lob     MHIQueueBuffer * returns FALSE=0 on failure
-    tst.l   d0
-    sne      mhiQueuedAny(a5)
     DPRINT  "MHIQueueBuffer=%ld"
+
 .eof
     tst.b   mhiNoMoreData(a5)
     bne     .eof2
