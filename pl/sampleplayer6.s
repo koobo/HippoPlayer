@@ -440,7 +440,7 @@ mhiKillSignal   rs.b    1
 mhiStopSignal   rs.b    1
 mhiContSignal   rs.b    1
 mhiVolumeSignal rs.b    1
-mhiPlaying      rs.b    1
+mhiQueuedAny    rs.b    1
 mhiNoMoreData   rs.b    1
 mhiReady        rs.b    1
 mhiInitError    rs.b    1
@@ -7799,6 +7799,7 @@ mhiInit:
 mhiStart:
     DPRINT  "*** mhiStart ***"
     clr.b   mhiNoMoreData(a5)
+    clr.b   mhiQueuedAny(a5)
     clr.b   mhiReady(a5)
 
     sub.l   a1,a1
@@ -7867,7 +7868,11 @@ mhiStart:
     DPRINT  "MHIGetStatus=%ld"
  endif
 
+*   Top level loop if restarting playback from beginning
+.playPass                   
     bsr     mhiInitBuffers
+    tst.b   killsample(a5)
+    bne     .mhiExit
 
     DPRINT  "MHIPlay"
     move.l  mhiBase(a5),a6
@@ -7876,8 +7881,11 @@ mhiStart:
 
     st      mhiReady(a5)
 
-    tst.b   mhiNoMoreData(a5)
-    bne     .stop
+    tst.b   mhiNoMoreData(a5)     
+    beq     .loop
+    tst.b   mhiQueuedAny(a5)
+    bne     .eof
+    bra     .stop
 
 .loop
 
@@ -7927,25 +7935,24 @@ mhiStart:
     ; ---------------------------------
     DPRINT  "Flushing buffers"
 
+    * Wait until buffers have been played
 .waitOut
+    tst.b   killsample(a5)      * See if need to quickly bail out instead
+    bne     .stop
+
 	move.l	_DosBase(a5),a6
     moveq   #25,d1
-    lob     Delay
+    lob     Delay               * wait a bit
+
     move.l  mhiHandle(a5),a3
     move.l  mhiBase(a5),a6
     lob     MHIGetStatus
-    DPRINT  "GetStatus=%lx"
-    cmp.b   #MHIF_OUT_OF_DATA,d0
-    bne     .waitOut
-    ; ---------------------------------
-
-
-    moveq   #0,d0
-    move.b  mhiSignal(a5),d1
-    bset    d1,d0
-    move.b  mhiKillSignal(a5),d1
-    bset    d1,d0
-    lore    Exec,Wait
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT "MHIGetStatus=%ld"
+ endif
+    cmp.b   #MHIF_PLAYING,d0    * still playing something?
+    beq     .waitOut
 
 .stop
     DPRINT  "stopping MHI"
@@ -7960,6 +7967,19 @@ mhiStart:
     bne     .4
     DPRINT  "Sending song over"
     bsr     songoverr
+
+    * The ordinary sample replay paths report song-over and immediately loop.
+    * HippoPlayer's repeat modes rely on that contract: with one list entry
+    * the main task deliberately keeps the player active. Rewind and start a
+    * fresh MHI session as well; "Module once" (or a track change) responds to
+    * songoverr by setting killsample and terminates this task normally.
+    bsr     mhiRewindLocal
+    beq     .mhiExit
+    tst.b   killsample(a5)          * Check for exit flag to be sure
+    bne     .mhiExit
+    clr.b   mhiNoMoreData(a5)       * reset status and go around
+    clr.b   mhiQueuedAny(a5)
+    bra     .playPass
 .4
 
 
@@ -7972,6 +7992,24 @@ mhiStart:
 .mhiExitError:
     DPRINT  "mhiError" 
     bsr     .mhiExit
+    moveq   #0,d0
+    rts
+
+
+mhiRewindLocal:
+    * Streams/pipes cannot be replayed by seeking their exhausted handle.
+    bsr     isRemoteSample
+    bne     .error
+
+    move.l  mpega_sync_position(a5),d2
+    move.l  mhiFile(a5),d1
+    moveq   #OFFSET_BEGINNING,d3
+    lore    Dos,Seek
+    cmp.l   #-1,d0
+    beq     .error
+    moveq   #1,d0
+    rts
+.error
     moveq   #0,d0
     rts
 
@@ -8169,7 +8207,9 @@ mhiInitBuffers:
     move.l  a4,a0
     move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
-    lob     MHIQueueBuffer
+    lob     MHIQueueBuffer * returns FALSE=0 on failure
+    tst.l   d0
+    sne      mhiQueuedAny(a5)
     DPRINT  "MHIQueueBuffer=%ld"
 .eof
     tst.b   mhiNoMoreData(a5)
