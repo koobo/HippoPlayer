@@ -451,7 +451,7 @@ mhiStreamSize   rs.l    1
 mhiHandle       rs.l    1
 mhiLibName      rs.l    1
 mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
-                rs.b    1
+mhiSeekSignal   rs.b    1
 mhiFileCurrentPos rs.l  1
 mhiFileRequestPos rs.l  1
 
@@ -6369,7 +6369,9 @@ mp3Seek:
     * d0 = (requested seconds * size in bytes) / total seconds = byte position
     move.l  d0,mhiFileRequestPos(a5)
     DPRINT  "requested mhi pos=%ld"
-    rts
+
+    move.b  mhiSeekSignal(a5),d1
+    bra     mhiSetSignal
 
 
 
@@ -7821,6 +7823,9 @@ mhiStart:
     moveq	#-1,d0
 	lob     AllocSignal
     move.b  d0,mhiVolumeSignal(a5)
+    moveq	#-1,d0
+	lob     AllocSignal
+    move.b  d0,mhiSeekSignal(a5)
 
     move.l  mhiBase(a5),a6
 
@@ -7900,6 +7905,8 @@ mhiStart:
     bset    d1,d0
     move.b  mhiVolumeSignal(a5),d1
     bset    d1,d0
+    move.b  mhiSeekSignal(a5),d1
+    bset    d1,d0
     lore    Exec,Wait
     move.l  d0,d7
 
@@ -7929,6 +7936,12 @@ mhiStart:
     beq.b   .s5
     bsr     mhiDoVolume
 .s5
+    move.b  mhiSeekSignal(a5),d0
+    btst    d0,d7
+    beq.b   .s6
+    bsr     mhiDoSeek
+    bne     .playPass       * restart with new buffers?
+.s6
     bra     .loop
 
 .eof
@@ -8194,6 +8207,33 @@ mhiDoVolume:
 .1
     rts
 
+mhiDoSeek:
+    DPRINT  "mhiDoSeek"
+
+    * Is there a seek request in place?
+    move.l  mhiFileRequestPos(a5),d2
+    beq     .x
+    clr.l   mhiFileRequestPos(a5)
+
+    * Move the file pointer to this position
+    move.l  mhiFile(a5),d1
+    moveq   #OFFSET_BEGINNING,d3
+    lore    Dos,Seek
+    DPRINT  "seek=%ld"
+    cmp.l   #-1,d0
+    beq     .x
+
+    * Then stop to flush existing buffers
+    move.l  mhiBase(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIStop
+  
+    move    #1,d0       * all ok
+    rts
+.x
+    moveq   #0,d0
+    rts
+
 mhiInitBuffers:
     DPRINT  "mhiInitBuffers"
     move.l  samplework(a5),a4
@@ -8269,16 +8309,6 @@ mhiFillEmptyBuffers:
 * Out:
 *   d0 = bytes read, or NULL for EOF, or -1 for error
 mhiFillBuffer:
-    * Is there a seek request in place?
-    move.l  mhiFileRequestPos(a5),d2
-    beq     .m
-    clr.l   mhiFileRequestPos(a5)
-    push    a0
-    move.l  mhiFile(a5),d1
-    moveq   #OFFSET_BEGINNING,d3
-    lore    Dos,Seek
-    pop     a0
-.m
     move.l  mhiFile(a5),d1
     move.l  a0,d2
     move.l  #MHI_BUFSIZE,d3
