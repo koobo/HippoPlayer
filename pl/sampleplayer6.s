@@ -452,6 +452,8 @@ mhiHandle       rs.l    1
 mhiLibName      rs.l    1
 mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
                 rs.b    1
+mhiFileCurrentPos rs.l  1
+mhiFileRequestPos rs.l  1
 
 
 mainTask    rs.l    1
@@ -6273,19 +6275,24 @@ isLocalMp3:
     beq     .x
     bsr     isRemoteSample
     bne     .x
-    tst.b   mhiEnable(a5) 
-    bne     .x
+;    tst.b   mhiEnable(a5) 
+;    bne     .x
     moveq   #1,d2
     rts
 .x  moveq   #0,d2
     rts
 
+* Out:
+*   d0 = position secs
+*   d1 = length secs
 mp3GetDurationInSeconds:
     lea     var_b,a5
     moveq   #0,d0
     moveq   #0,d1
     bsr     isLocalMp3
     beq     .x
+    tst.b   mhiEnable(a5) 
+    bne     .mhiDuration
 
 	move.l	mpstream(a5),a0
     lea     mp3PositionInMs(a5),a1
@@ -6304,6 +6311,29 @@ mp3GetDurationInSeconds:
 .x
     rts
 
+.mhiDuration
+    tst.l   mhiStreamSize(a5)
+    beq     .x
+
+    move.l	mp3DurationInMs(a5),d2
+    divu.w  #1000,d2
+    ext.l   d2
+    * d2 = total duration in secs
+
+    move.l  mhiFileCurrentPos(a5),d0
+    bmi     .x
+    * d0 = current pos
+
+    * convert file position to seconds roughly
+    move.l  d2,d1
+    bsr     mulu_32
+
+    move.l  mhiStreamSize(a5),d1
+    bsr     divu_32
+
+    ; ---------------------------------
+    move.l  d2,d1
+    rts	
 
 * In:
 *  d0 = position in seconds to seek
@@ -6311,15 +6341,35 @@ mp3Seek:
     lea     var_b,a5
     bsr     isLocalMp3
     beq     .x
+    tst.b   mhiEnable(a5) 
+    bne     .mhiSeek
+
     * Convert to MS
     mulu.w  #1000,d0    
     DPRINT  "mp3Seek %ld ms"
 	move.l	mpstream(a5),a0
 	lore	MPEGA,MPEGA_seek
-
 .x
     rts
 
+.mhiSeek:
+    move.l  mhiStreamSize(a5),d1
+    beq     .x
+
+    * Calc file position based on requested position in seconds
+    * and total duration in seconds
+
+    bsr     mulu_32
+    * d0 = requested seconds * size in bytes
+    move.l	mp3DurationInMs(a5),d1
+    beq     .x   
+    divu.w  #1000,d1
+    ext.l   d1
+    bsr     divu_32
+    * d0 = (requested seconds * size in bytes) / total seconds = byte position
+    move.l  d0,mhiFileRequestPos(a5)
+    DPRINT  "requested mhi pos=%ld"
+    rts
 
 
 
@@ -8179,6 +8229,16 @@ mhiFillEmptyBuffers:
 * Out:
 *   d0 = bytes read, or NULL for EOF, or -1 for error
 mhiFillBuffer:
+    * Is there a seek request in place?
+    move.l  mhiFileRequestPos(a5),d2
+    beq     .m
+    clr.l   mhiFileRequestPos(a5)
+    push    a0
+    move.l  mhiFile(a5),d1
+    moveq   #OFFSET_BEGINNING,d3
+    lore    Dos,Seek
+    pop     a0
+.m
     move.l  mhiFile(a5),d1
     move.l  a0,d2
     move.l  #MHI_BUFSIZE,d3
@@ -8192,6 +8252,14 @@ mhiFillBuffer:
     DPRINT  "no more data!"
 .1
  endif
+    push    d0
+    move.l  mhiFile(a5),d1
+    moveq   #0,d2
+	moveq	#OFFSET_CURRENT,d3
+    lob     Seek
+    move.l  d0,mhiFileCurrentPos(a5)
+    pop     d0
+    tst.l   d0
     rts
 
 * Read MPEG stream properties by opening it with the MPEGA lib
