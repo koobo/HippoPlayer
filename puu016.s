@@ -46394,11 +46394,12 @@ pleaseMp3Seek:
     pop     a5
     rts
 
+* Out:
+*   d0 = position secs
+*   d1 = length secs
 getMp3DurationInSeconds:
     moveq   #0,d0
     moveq   #0,d1
-    ;tst.b   playing(a5)
-    ;beq     .x
     push    a5
     move.l	sampleroutines(a5),a0
     jsr     p_sample\.s_getMp3Duration(a0)
