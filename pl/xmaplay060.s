@@ -8845,33 +8845,70 @@ GetSongName
 ;                                     DATA
 ; ------------------------------------------------------------------------------
 
-HeaderText	dc.b "--------------------------------------------------------",$a
-		dc.b " xmaplay060 v0.47 ("
-	IF _14BIT
-		dc.b "14-bit"
-	ELSE
-		dc.b "8-bit"
-	ENDIF
-		dc.b " output), by 8bitbubsy",$a
-		dc.b " Note: Wire up your Amiga audio for stereo, not mono!",$a
-		dc.b "--------------------------------------------------------",$a,0
-LoadingModText	dc.b "Opening module...",$a,0
-LoadPatTxt	dc.b "Loading pattern data...",$a,0
-LoadInsSmpTxt	dc.b "Loading instruments and sample data...",$a,0
-LoadInsTxt	dc.b "Loading instruments...",$a,0	; for old XM format
-LoadSmpTxt	dc.b "Loading sample data...",$a,0	; for old XM format
-AudDevErrText	dc.b "Error: Couldn't allocate task signal and allocate audio!",$a,0
-LoadXMErr1Text	dc.b "Error: Couldn't open file for reading!",$a,0
-LoadXMErr2Text	dc.b "Error: General I/O error during module reading!",$a,0
-LoadXMErr3Text	dc.b "Error: This is an invalid (or unsupported) XM module!",$a,0
-LoadXMErr4Text	dc.b "Error: This XM file version is not supported (not v1.02/v1.03/v1.04)!",$a,0
-LoadXMErr5Text	dc.b "Error: Unsupported number of channels, orders, instruments and/or patterns!",$a,0
-LoadXMErr6Text	dc.b "Error: Out of memory, or corrupt/unsupported XM!",$a,0
-AudErrTxt	dc.b "Error initializing audio: Out of memory!",$a,0
-CIAErrTxt	dc.b "Error initializing audio: No CIA timers available!",$a,0
-CpuErrText	dc.b "Error: This program requires a 020+ CPU!",$a,0
-IsPlayingText	dc.b "Now playing, press ESC to stop...",$a,0
-WasPlayingText	dc.b "Playback stopped. You can close this window now.",$a,0
+HeaderText	
+    dc.b    0
+
+;    dc.b "--------------------------------------------------------",$a
+;		dc.b " xmaplay060 v0.47 ("
+;	IF _14BIT
+;		dc.b "14-bit"
+;	ELSE
+;		dc.b "8-bit"
+;	ENDIF
+;		dc.b " output), by 8bitbubsy",$a
+;		dc.b " Note: Wire up your Amiga audio for stereo, not mono!",$a
+;		dc.b "--------------------------------------------------------",$a,0
+LoadingModText	    
+        dc.b    0
+        ;dc.b "Opening module...",$a,0
+LoadPatTxt	    
+        dc.b    0
+        ;dc.b "Loading pattern data...",$a,0
+LoadInsSmpTxt	    
+        dc.b    0
+        ;dc.b "Loading instruments and sample data...",$a,0
+LoadInsTxt	    
+        dc.b    0
+        ;dc.b "Loading instruments...",$a,0	; for old XM format
+LoadSmpTxt	    
+        dc.b    0
+        ;dc.b "Loading sample data...",$a,0	; for old XM format
+AudDevErrText	    
+        dc.b    0
+        ;dc.b "Error: Couldn't allocate task signal and allocate audio!",$a,0
+LoadXMErr1Text	    
+        dc.b    0
+        ;dc.b "Error: Couldn't open file for reading!",$a,0
+LoadXMErr2Text	    
+        dc.b    0
+        ;dc.b "Error: General I/O error during module reading!",$a,0
+LoadXMErr3Text	    
+        dc.b    0
+        ;dc.b "Error: This is an invalid (or unsupported) XM module!",$a,0
+LoadXMErr4Text	    
+        dc.b    0
+        ;dc.b "Error: This XM file version is not supported (not v1.02/v1.03/v1.04)!",$a,0
+LoadXMErr5Text	    
+        dc.b    0
+        ;dc.b "Error: Unsupported number of channels, orders, instruments and/or patterns!",$a,0
+LoadXMErr6Text	    
+        dc.b    0
+        ;dc.b "Error: Out of memory, or corrupt/unsupported XM!",$a,0
+AudErrTxt	    
+        dc.b    0
+        ;dc.b "Error initializing audio: Out of memory!",$a,0
+CIAErrTxt	    
+        dc.b    0
+        ;dc.b "Error initializing audio: No CIA timers available!",$a,0
+CpuErrText	    
+        dc.b    0
+        ;dc.b "Error: This program requires a 020+ CPU!",$a,0
+IsPlayingText	    
+        dc.b    0
+        ;dc.b "Now playing, press ESC to stop...",$a,0
+WasPlayingText	    
+        dc.b    0
+        ;dc.b "Playback stopped. You can close this window now.",$a,0
 
 XMSig		dc.b "Extended Module: ",0
 DosName		dc.b "dos.library",0
