@@ -2607,6 +2607,7 @@ CloseDOSLib
 .done	
     rts
 
+ REM
 CpuIs68000
 	move.l	#CpuErrText,d1
 	bsr.w	PutStr
@@ -2733,7 +2734,7 @@ ofrDone	; -----------------------------
 	rts
 ofrErr	moveq	#0,d0
 	bra.b	ofrDone
-
+ EREM
 
 ; ------------------------------------------------------------------------------
 ;                                AUDIO ROUTINES
