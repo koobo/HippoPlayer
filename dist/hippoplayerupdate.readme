@@ -119,8 +119,11 @@ Additional files to check and download
 
 ## Fixes:
 
-- MP3 with MHI: Duration was not determined correctly and 
-  end detection didn't work properly.
+- MHI and MP3:
+  - Duration was not determined correctly
+  - End detection didn't work properly
+  - Restarting from beginning didn't work (MiDWaN)
+  - Last few secs of MP3 were skipped (MiDWaN)
 
 - Multichannel mods: On 68000 there was a crash when starting
   up the PS3M mixer engine.
@@ -170,7 +173,8 @@ Additional files to check and download
      - xmaplay+AmiGUS:Play-2 > Enable xmaplay > ON
                       PS3M   > Use AmiGUS hardware mixer > ON
                       CPU requirement: 68000 
-
+  - AmiGUS Mini shows a Larsen scanner when playback is paused.
+  
 - Updated playsid.library v1.11:
   - Trinity accelerator SID audio core support for SID playback. 
     Single and dual SID cores supported. Activate with "PlaySID mode" 
@@ -190,6 +194,8 @@ Additional files to check and download
   "songlengths.tsv" and "metadata.tsv" files if you want (see above how).
   Now contains metadata info for 379216 modules, song lengths 
   for 476328 modules, nice!
+
+- MHI: Seeking MP3 playback position with position slider added.
 
 
 ------------------------------------------------------------------------------
