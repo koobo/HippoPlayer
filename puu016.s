@@ -45920,7 +45920,7 @@ patchIt:
     rts
 
 checkAmiGUSAvailability:
-;;    bra     .yes
+    DPRINT  "checkAmiGUSAvailability"
 
     move.b  amigusAvailChecked(a5),d0   * up bit: checked, low bit: amigus yes/no
     bpl     .notChecked
@@ -45928,6 +45928,7 @@ checkAmiGUSAvailability:
     beq     .x
     bra     .yes
 .notChecked
+    DPRINT  "checkAmiGUSAvailability FIRST"
     lea     .lib(pc),a1
 	lore	Exec,OldOpenLibrary
     tst.l   d0
