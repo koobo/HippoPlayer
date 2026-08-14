@@ -53,7 +53,8 @@ ver	macro
 ;	dc.b	"v2.65 (26.9.2025)"
 ;	dc.b	"v2.66ß (?.?.2026)"
 ;	dc.b	"v2.66 (23.2.2026)"
-	dc.b	"v2.67ß (?.?.2026)"
+;	dc.b	"v2.67ß (?.?.2026)"
+	dc.b	"v2.67 (14.8.2026)"
 	endm	
 
 
@@ -46404,7 +46405,7 @@ getMp3DurationInSeconds:
     move.l	sampleroutines(a5),a0
     jsr     p_sample\.s_getMp3Duration(a0)
     pop     a5
-.x
+    DPRINT  "getMp3DurationInSeconds pos=%ld len=%ld"
     rts
 
 
@@ -61137,7 +61138,7 @@ positionSliderMoved:
     cmp     #pt_sample,playertype(a5)
     bne     .notSample
     jsr     getMp3DurationInSeconds
-    tst.l   d1
+    tst.l   d1              * did we get a duration?
     beq     .notSample
     * d0 = pos
     * d1 = len

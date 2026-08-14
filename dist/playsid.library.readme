@@ -14,6 +14,7 @@ output methods:
 - SIDBlaster-USB, a device that uses a SID chip for sound (kick 2.0+, 68020)
 - ZorroSID, a zorro card with a SID chip (68000)
 - USBSID-Pico, a device with support for dual/triple/quad SIDs (kick 2.0+, 68020)
+- Trinity, an A1200 accelerator with SID audio core
 
 To use, copy "playsid.library" into LIBS:, replacing the original
 version. By default it will use the original SID emulation mode.
@@ -26,8 +27,8 @@ HippoPlayer also provides additional integration in the user interface.
 Configuring with environment variables
 --------------------------------------
 - Set operating mode: normal/classic mode, reSID 6581, reSID 8580, 
-  reSID auto detect, SIDBlaster USB, ZorroSID or USBSID-Pico
-  Variable: "PlaySIDMode", values: "Norm,6581,8580,Auto,Sidb,Zorr,UsbP"
+  reSID auto detect, SIDBlaster USB, ZorroSID, USBSID-Pico, Trinity
+  Variable: "PlaySIDMode", values: "Norm,6581,8580,Auto,Sidb,Zorr,UsbP,Trin"
 
 - Set reSID mode: normal, oversample 2x, 3x, 4x
   Variable: "PlaySIDreSIDMode", values: "Norm,Ovs2,Ovs3,Ovs4"
@@ -120,6 +121,14 @@ Digisamples will not be heard. The playsid.library sample handling
 is not usable with ZorroSID.
 
 
+Trinity
+-------
+
+The Trinity accelerator SID audio core can be used for sound output.
+Both single and dual SID cores are supported, for SID and 2SID playback.
+Ensure your card has the correct firmware. Digisamples will not be heard. 
+
+
 Changelog
 ---------
 - 2022-10:  - Initial version, reSID v0.16
@@ -168,3 +177,5 @@ Changelog
                - Timewarp Spheres 2SID by F7sus4
 - 2025-05   
   v1.10     - Allow configuring ZorroSID base address
+- 2026-06   
+  v1.11     - Support for Trinity accelerator SID audio core.

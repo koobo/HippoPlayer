@@ -8,6 +8,7 @@ AMIGUS - to test:
 - hillbilly_billyboy.xm has a single static instrument going wild
 - jt_hello.xm by Jeroen Tel sounds strange....
 - jt_strng.xm -> tune is silent, but VU Meter is vibrating?
+--> OK
 
 AMIGUS - xma:
 - .samplecheck:
@@ -29,9 +30,11 @@ AMIGUS - xma:
 
 AMIGUS xmaplay:
 - sample mem use
+--> OK
 
 AMIGUS MHI:
 - test 320kbps file
+--> OK
 
 FIXED:
 - commit f417af0b41761c19013c671f8a7899072b22243a
