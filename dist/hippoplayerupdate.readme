@@ -115,7 +115,7 @@ Additional files to check and download
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
-# Changes from v2.66 (23.2.2026) to v2.67 (?.?.202?) 
+# Changes from v2.66 (23.2.2026) to v2.67 (14.8.2026) 
 
 ## Fixes:
 
@@ -164,16 +164,16 @@ Additional files to check and download
   - Instrument names shown in the info window.
   - Channel count shown in the infobox.
   - Output choices in Prefs:
-     - xmaplay+Paula: Play-2 > Enable xmaplay > ON
-                      AHI    > Enable AHI > OFF
-                      CPU requirement: 68060
-     - xmaplay+AHI:   Play-2 > Enable xmaplay > ON
-                      AHI    > Enable AHI > ON
-                      CPU requirement: AHI dependent
-     - xmaplay+AmiGUS:Play-2 > Enable xmaplay > ON
-                      PS3M   > Use AmiGUS hardware mixer > ON
-                      CPU requirement: 68000 
-  - AmiGUS Mini shows a Larsen scanner when playback is paused.
+     - xmaplay+Paula:  Play-2 > Enable xmaplay > ON
+                       AHI    > Enable AHI > OFF
+                       CPU requirement: 68060 (super hq)
+     - xmaplay+AHI:    Play-2 > Enable xmaplay > ON
+                       AHI    > Enable AHI > ON
+                       CPU requirement: AHI dependent
+     - xmaplay+AmiGUS: Play-2 > Enable xmaplay > ON
+                       PS3M   > Use AmiGUS hardware mixer > ON
+                       CPU requirement: 68000 
+  - AmiGUS Mini users, can you find the Larsen scanner?
   
 - Updated playsid.library v1.11:
   - Trinity accelerator SID audio core support for SID playback. 
@@ -188,14 +188,14 @@ Additional files to check and download
   even when the position is changed by skipping forward/backward 
   or changed with the position slider.
   
-- Infobox displays the amount of data downloaded on the 2nd row.
-
 - Song length data and metadata updated by mvtiaine, you can grab new  
   "songlengths.tsv" and "metadata.tsv" files if you want (see above how).
   Now contains metadata info for 379216 modules, song lengths 
   for 476328 modules, nice!
 
 - MHI: Seeking MP3 playback position with position slider added.
+
+- Infobox displays the amount of data downloaded on the 2nd row.
 
 
 ------------------------------------------------------------------------------
