@@ -4464,10 +4464,8 @@ Load16BitSample
     move.l  readPtr,d2      ; Pointer to sample data in file
     add.l   d3,readPtr      ; Advance in file
 	move.l	d2,sPek(a1)     ; Store for this sample
-    lea     instrumentDeltaStatus,a6
-    tst.b   (a6,d6)
+    tst.b   deltaDecodingDone
     bne     .skipdelta
-    st      (a6,d6)
     bra     .undelta
 .1
 	move.l	sLen(a1),d0
@@ -4542,10 +4540,8 @@ Load8BitSample
     move.l  readPtr,d2      ; Pointer to sample data in file
     add.l   d3,readPtr      ; Advance in file
 	move.l	d2,sPek(a1)     ; Store for this sample
-    lea     instrumentDeltaStatus,a6
-    tst.b   (a6,d6)
+    tst.b   deltaDecodingDone
     bne     .skipdelta
-    st      (a6,d6)
     bra     .undelta
 .1
 	move.l	sLen(a1),d0
@@ -4788,7 +4784,8 @@ LoadInstrSamples
 .next	lea	SMP_SIZE(a1),a1
 	move.l	(sp)+,d7
 	dbra	d7,.loop
-.done	moveq	#0,d0	; 0=successful
+.done	
+    moveq	#0,d0	; 0=successful
 	rts
 .error	
     addq    #4,sp       ; stack align
@@ -4840,7 +4837,8 @@ LoadData_XM_OldVer ; v1.02 and v1.03
 	addq.w	#1,d6
 	cmp.w	hAntInstrs,d6
 	blo.b	.loop2
-	; ------------------------------
+	; ------------------------------    
+    st      deltaDecodingDone
 	moveq	#0,d0	; 0=successful
 	rts
 
@@ -4877,6 +4875,7 @@ LoadData_XMv104 ; v1.04
 	cmp.w	hAntInstrs,d6
 	blo.b	.loop
 	; ------------------------------
+    st      deltaDecodingDone
 	moveq	#0,d0	; 0=successful
 	rts
 
@@ -9055,6 +9054,8 @@ AHIMixingFreq       dc.w 58000
 sampleForChannel    ds.l 32
 freqForChannel      ds.l 32
 agusVolForChannel   ds.l 32
+deltaDecodingDone   ds.w 1      ; delta decoding should only be done once 
+
 ; -------------------------------------
 
 ; ------------------------------------------------------------------------------
@@ -9501,7 +9502,6 @@ CDA_MixBufferPtr
     dc.l    0
 
 InstrNames:             ds.b    128*24
-instrumentDeltaStatus:  ds.b    128 ; space for 128 instruments
 
  ifne FAKE_AGUS
 fake_agus_base  ds.b    1024
