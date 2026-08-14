@@ -6321,6 +6321,7 @@ mp3GetDurationInSeconds:
     * d2 = total duration in secs
 
     move.l  mhiFileCurrentPos(a5),d0
+    sub.l   mpega_sync_position(a5),d0      * remove ID3v2 header
     bmi     .x
     * d0 = current pos
 
