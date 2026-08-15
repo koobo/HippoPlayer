@@ -187,6 +187,7 @@ testMain:
 *   a1 = ptr to Paula buffer position
 *   a2 = address to left Paula buffer
 *   a3 = address to right Paula buffer
+*   a4 = instrument names buffer
 _init:
     push    a5
     bsr     .doInit
@@ -276,13 +277,21 @@ ier_nomem	        = -9
  endif
 
 .normal
+    bsr     PatternInit
+    
     * Return access to mixer buffers when Paula mixer engaged
     move.l  PaulaPosMask(pc),d1
     lea     PaulaPos(pc),a1
     move.l  PaulaCh1Buf(pc),a2
     move.l  PaulaCh2Buf(pc),a3
-    sub.l   a0,a0
     lea     InstrNames,a4
+
+    * Provide patterninfo for AHI/AGUS only for now
+    sub.l   a0,a0       
+    tst.b   AHI
+    beq     .p
+    lea     PatternInfo,a0
+.p
 
     moveq   #0,d2
     move    hAntChn,d2
@@ -320,10 +329,13 @@ _end:
     bra     .1
 
 
+* Called in VB
 * out:
 *   d0 = current position
 *   d1 = max position
 _getPosLen:
+    bsr     updatePatternInfoData
+
     move    SongPos(pc),d0
     move    hLen,d1
     rts
@@ -1700,6 +1712,83 @@ UMult64S:
         movem.l (sp)+,d2-d4
         rts
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+
+PatternInit
+    DPRINT  "PatternInit"
+	lea	    PatternInfo,A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea 	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move 	hAntChn,PatternInfo+PI_Voices
+
+	* 5 bytes per note, per channel
+    moveq   #0,d1
+    move    TrackWidth,d1
+	move.l	d1,PI_Modulo(A0)	; Number of bytes to next row
+	move	#-1,PI_Speed(a0)	; Magic! Negative: note index
+	rts
+
+
+* Called by the PI engine to get values for a particular row
+* Out:
+*   d0 = period/note
+*   d1 = sample number
+*   d2 = command
+*   d3 = command arg
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	move.b	0(a0),d0		; Ton
+	move.b	1(a0),d1		; Ins
+	;move.b	2(a0),cVolKolVol(a5)	; Vol column ignored 
+	move.b	3(a0),d2		; EffTyp
+	move.b	4(a0),d3		; Eff
+    rts
+
+
+* This updates the information in PatternInfo structure
+* to correspond to what is being played currently
+updatePatternInfoData:
+    tst.b   AHI     * do this only for AHI/AGUS
+    beq     .x
+
+    move    PattPos(pc),PatternInfo+PI_Pattpos
+
+    move    SongPos(pc),d0
+	moveq	#0,d1
+    lea     hSongTab,a0
+	move.b	(a0,d0),d1	    * get pattern for this song position
+
+    * Get pattern length in rows
+    lea     PattLens,a0
+    add     d1,d1
+    move    (a0,d1),PatternInfo+PI_Pattlength
+    
+    * Get pattern into d1
+    lea     Patt,a0
+    add     d1,d1
+	move.l	(a0,d1),d1      * can be null
+
+    * Point stripes
+	move	hAntChn,D0
+	subq	#1,d0
+	lea	    Stripe1,a0
+.stripesLoop 
+	move.l	d1,(a0)+        * null or ptr
+    beq     .1
+	addq.l 	#5,d1           * channel width is 5 bytes
+.1	dbf	d0,.stripesLoop
+
+.x
+	rts
 
 
 ;------------------------------------------------------------------------------
@@ -9502,6 +9591,12 @@ CDA_MixBufferPtr
     dc.l    0
 
 InstrNames:             ds.b    128*24
+
+; -------------------------------------
+PatternInfo                ds.b	  PI_Stripes	
+Stripe1	                   ds.l	  32
+; -------------------------------------
+
 
  ifne FAKE_AGUS
 fake_agus_base  ds.b    1024
