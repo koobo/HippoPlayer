@@ -55,6 +55,7 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
   endif
     include libraries/amigus_lib.i
     include libraries/amigus.i
+    include	misc/eagleplayer.i
 
 DEBUG        = 0          * Enable debug print to serial
 FAKE_AGUS    = 0
