@@ -163,6 +163,7 @@ Additional files to check and download
     8/16-bit samples.
   - Instrument names shown in the info window.
   - Channel count shown in the infobox.
+  - Patternscope support (only for AHI/AmiGUS for now).
   - Output choices in Prefs:
      - xmaplay+Paula:  Play-2 > Enable xmaplay > ON
                        AHI    > Enable AHI > OFF
