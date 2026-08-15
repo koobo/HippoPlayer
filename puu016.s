@@ -27842,7 +27842,7 @@ initScopeBitmaps
 	rts
 
 * Z is set if patternscope is active
-patternScopeIsActive
+patternScopeIsActive:
 	cmp.b	#QUADMODE2_PATTERNSCOPE,s_quadmode2(a4) 
 	beq.b	.isPatts
 	cmp.b	#QUADMODE2_PATTERNSCOPEXL,s_quadmode2(a4)
@@ -28746,6 +28746,8 @@ drawScope:
 .xmaNo
     * xmaplay060 + AHI -> no go
     * xmaplay060 + AmiGUS -> no go
+    bsr     patternScopeIsActive
+    beq     .renderPS3M
     rts
 
 
@@ -31012,6 +31014,8 @@ noteScroller2:
 	cmp.w	#1024,a0
 	bls.b	.xy
 	move.l  moduleaddress(a5),a3
+    cmp.w   #pt_xmaplay,playertype(a5)  * xmaplay uses separately alloced patterns
+    beq     .sane
    	cmp.l   a3,a0
 	bls.b	.xy
     	add.l   modulelength(a5),a3
@@ -53422,11 +53426,12 @@ p_xmaplay:
 *   d0 = status, 0 = ok
 *   d1 = position mask (Paula playback)
 *   d2 = channel count
-*   a0 = null (patternscope support data)
+*   a0 = patternscope data or null 
 *   a1 = ptr to Paula buffer position
 *   a2 = address to left Paula buffer
 *   a3 = address to right Paula buffer
 *   a4 = instr name array
+	move.l	a0,deliPatternInfo(a5)
     move.l  a4,ps3m_xm_insts(a5)
     DPRINT  "<-xmaInit=%ld"
 .oops
@@ -53457,7 +53462,6 @@ p_xmaplay:
     pushpea .buf1Ptr(pc),ps3m_buff1(a5)
     pushpea .buf2Ptr(pc),ps3m_buff2(a5)
     move.l  #1,ps3m_sampleDataModulo(a5)
-    clr.l   deliPatternInfo(a5)
 
     * channel count in d2
     lea     .format(pc),a0
