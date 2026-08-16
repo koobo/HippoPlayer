@@ -60,8 +60,14 @@ juustotx	dc.b "Volume boost..................",0
 	even
 juustos	dc.w 2,0,0,0,0
 	dc.w 0,0,0,0,0,0
-juust0	dc.l Fruit
-	dc.w 284,106,150,12,6,9,3
+juust0	
+
+ ifne FEATURE_PS3MCONFIG
+    dc.l Fruit
+ else
+    dc.l bENDER1
+ endif	
+    dc.w 284,106,150,12,6,9,3
 	dc.l juust0gr,0,juust0t,0,juust0s
 	dc.w 0
 	dc.l 0
@@ -76,6 +82,8 @@ juust0tx	dc.b "Stereo level (surround).....",0
 	even
 juust0s	dc.w 2,0,0,0,0
 	dc.w 0,0,0,0,0,0
+
+ ifne FEATURE_PS3MCONFIG
 Fruit	
     dc.l bENDER1
 	dc.w 406,135-14,28,12,3,1,1
@@ -87,13 +95,18 @@ Fruitt	dc.b 1,0,1,0
 	dc.l 0,Fruittx,0
 Fruittx	dc.b "Use S:HippoPlayer.PS3M configuration file.......",0
 	even
+ endif
+
 bENDER1	dc.l 0 
-	dc.w 304,121+14,130,12,3,1,1
+	dc.w 304-14-6,121+14,150,12,3,1,1
 	dc.l 0,0,bENDER2t,0,0
 	dc.w 0
 	dc.l 0
+
 bENDER2t	dc.b 1,0,1,0
-	dc.w -288,2
+	dc.w -288+14+6,2-12
 	dc.l 0,bENDER2tx,0
-bENDER2tx	dc.b "Use AmiGUS hardware mixer..........",0
+
+
+bENDER2tx	dc.b "Use AmiGUS hardware mixer with PS3M and xmaplay",0
 	even

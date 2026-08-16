@@ -1,8 +1,14 @@
-;APS000000CF000000CF000000CF000000CF000000CF000000CF0000019E000000CF000000CF000000CF
+;APS0000014D0000014D0000014D0000014D0000014D0000014D0000021C0000014D0000014D0000014D
 
-
+  ifnd __VASM
+  printt "AsmOne"
+IM=1	; Select FImp compressed files
+SHR=0	; Select Shrinkler compressed files
+  else 
 IM=0	; Select FImp compressed files
 SHR=1	; Select Shrinkler compressed files
+  endif
+
 P61A=1
 
 	incdir	include/
@@ -10,8 +16,8 @@ P61A=1
 
  ifnd __VASM
 	auto	j\
-;	auto	wb ram:HippoPlayer.group\
-	auto	wb s:HippoPlayer.group\
+	auto	wb ram:HippoPlayer.group\
+;	auto	wb s:HippoPlayer.group\
 	auto	a0\
 	auto	a1\
  
@@ -22,7 +28,7 @@ P61A=1
  endif
 
 
-start	dc.b	"HiPxPla",36	* Tunnistus ja versio, 8 bytes
+start	dc.b	"HiPxPla",38	* Tunnistus ja versio, 8 bytes
 
 head	macro
 	dc.w	\1
@@ -269,8 +275,10 @@ vss1
 vss2
     even
 
-
-
+xmaplay1
+	incbin	"xmaplay060.im"
+xmaplay2
+    even
 
 	incdir	eagleplayers/im/
 
@@ -470,11 +478,6 @@ davidwhittaker1
 davidwhittaker2
     even
 
-xmaplay1
-	incbin	"xmaplay060.im"
-xmaplay2
-    even
-
 soundmaster1
 	incbin	"sound master.im"
 soundmaster2
@@ -490,6 +493,20 @@ midiext1
 midiext2
     even
 
+sonicarranger1
+	incbin sonicarranger.im
+sonicarranger2
+    even
+
+tfmx_1
+	incbin TFMX.im
+tfmx_2
+    even
+
+tfmxpro_1
+	incbin "TFMX Pro.im"
+tfmxpro_2
+    even
 
  	endif ; IMP
 
@@ -646,6 +663,10 @@ vss1
 vss2
     even
 
+xmaplay1
+	incbin	"xmaplay060.shr"
+xmaplay2
+    even
 
 
 	incdir	eagleplayers/shr/
@@ -847,11 +868,6 @@ specialfx2
 davidwhittaker1
 	incbin	"david whittaker.shr"
 davidwhittaker2
-    even
-
-xmaplay1
-	incbin	"xmaplay060.shr"
-xmaplay2
     even
 
 soundmaster1

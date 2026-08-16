@@ -1,45 +1,115 @@
-TODO: rewrite info window for prop fonts
--- transition modinfo<->about, font switch
--- screen size fit check in beginning
--- OK: check TODOs
--- OK: save width, to prefs, until next open
--- OK: comment wrappng
--- OK: PT sample playing?
--- OK: bold text?
--- OK: MP3 info does not work atm
--- OK: PSID info does not linewrap
--- OK: cliprect
+AMIGUS - to test - xmaplay:
+- Works on 68000 7.16MHz!
+- When I play and resize Hippoplayer, the Amiga crashes
+- When I restart the song by pushing "<<", previously active voices are still "hanging"
+
+AMIGUS - to test:
+- final_reality_music.xm seems to have some static samples in the credit endpart
+- hillbilly_billyboy.xm has a single static instrument going wild
+- jt_hello.xm by Jeroen Tel sounds strange....
+- jt_strng.xm -> tune is silent, but VU Meter is vibrating?
+--> OK
+
+AMIGUS - xma:
+- .samplecheck:
+-- TODO: 
+-- if XM file (uncompressed)
+-- also if metadata scroller is disabled
+-- also if amigus hw mixer is enabled
+-- also if xmaplay is enabled
+-- then act like it's a sample and stop loading
+-- in xmaplay
+--- pass in also filename
+--- if given, fread uses file input
+--- Load16BitSample, Load8BitSample:
+---- Alloc buffer
+---- load a single sample
+---- undelta 
+---- copy to AGUS, update AGUS mem offset
+---- Free buffer
+
+AMIGUS xmaplay:
+- sample mem use
+--> OK
+
+AMIGUS MHI:
+- test 320kbps file
+--> OK
+
+FIXED:
+- commit f417af0b41761c19013c671f8a7899072b22243a
+- Author: K-P Koljonen <kpkoljonen@gmail.com>
+- Date:   Sun May 10 16:16:33 2026 +0300
+-     xmaplay060: Make 68000 compatible for AHI and AmiGUS parts
+    
+FIXED: TODO:
+- dope.xm: amiga periods -> sounds bad on xmaplay?
 
 FIXED: TODO:
-- AGUS hardware mixer button should disable all other stuff, but doesnt?
+- super large module xm, cannot load
+
+FIXED: TODO:
+- try clean restart
+- try after AGUS playback
+- AGUS, AHI: S3M patternscope not working, XM ok on A1200, FSUAE not ok?
+-- patternscope displays an empty pattern
+-- race condition: pattern clear + unpack vs notescroller draw of same area
+
+TODO:
+- xmaplay checkbox does not deactivate xmaplay if you do 
+  not switch the song and just try pushing play again
+  but that is a minor
+
+TODO:
+- AGUS: no need to alloc paula channels (XM for example)
+
+FIXED: TODO:
+- "AGUS" info missing with XM playback in infobox
+-- works if AHI toggle box is selected as well!
+
+FIXED: TODO:
+- AMP search
+- Captain 
+- Any OKT module
+- "null sized allocation" hit
+
+TODO:
+- kick13
+- open quadrascope, patternscope 
+- play freefromquitar.mod
+- press window close button 
+- debug log on: "stopScopeTasks"
+- CRASH
+-- not with z-key
+-- only with window close
+-- only with DEBUG build
+-- one scope window is enough
+- ok on kick30
+
+TODO:
+- https://aminet.net/package/mus/midi/CAMD_Toolkit
+
+FIXED: TODO:
+- info window, remove AGUS mixing rate display, it's PS3M
+
+DONE: TODO:
+- xmaplay 68000 version
+
+TODO
+- 404 crew returns in AHI mode
+-- pattern scope does not follow correctly due to tricks
+-- draw check related to not painting if the row is unchanged?
+
+TODO:
+- set AHI on
+- quadrascope on
+- play mp3
+- stop
+- enforcer hits/HANG
+-> toccata.audio bug
 
 TODO:
 - gzipped old soundtracker files not recognized
-
-FIXXED: TODO:
-- OldSoundtracker -> does not support AHI even if it should
-
-FIXED: TODO:
-- dirt.mod - F00 paikoitellen
-- periodEndCheck triggeroituu jatkuvasti jos pistÃ¤Ã¤ "module repeatedly"
-
-FIXED: TODO:
-- modland whitelist
--- symmod
--- soprol
--- PumaTracker
-
-FIXED: TODO
-- open quadra, pattern, normal size
-- play Keo/Waterproof.smod
-- change scope size to small
-- change scope size to large
---> mem cookie error
-
---> lever problem?
-
-FIXED: TODO:
-- fix psid usb error messages, they all get "out of mem2
 
 TODO?:
 - Zoomed mode:
@@ -64,10 +134,7 @@ TODO:
 - layout: inconsistent button spacing when window is scaled wider
 
 TODO:
-- layout: bg pattern missing one pixel column on the right side
-
-TODO:
-- sample names shown with xmaplay060
+- layout: bg pattern missing one pixel column on the right side0
 
 TODO:
 - playlist support for #volume for setting file volume
@@ -129,7 +196,7 @@ on standard RAmiga+c and RAmiga+v?
 
 TODO:
 - sinus.xm: PS3Mn kanssa ei voi patternskipata kuin 0 tai 1 vaikka on pidempi modi
-- toteutus tehty niin ettï¿½ lyhyen modin kanssa ei toimi oikein
+- toteutus tehty niin että lyhyen modin kanssa ei toimi oikein
 
 TODO:
 - check the pt song issue, doesn't seem to work
@@ -162,16 +229,101 @@ TODO: CRASH:
 TODO:
 - fix timeout not really working on radio stations
 
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
-------------------------------------------------------------------------------
-------------------------------------------------------------------------------
-------------------------------------------------------------------------------
+FIXED: TODO
+- A500
+- open 2ndReality_PurpleMotion.s3m
+- open patternscope -> crash
+--> toimii?
+
+FIXED: TODO:
+- sample names shown with xmaplay060
+
+FIXED: TODO:
+- protracked time: store time for each pattern, then update the time
+  if user changes pattern
+
+FIXED: TODO:
+TODO:
+- xmaplay 0.47
+
+FIXED: TODO: rewrite info window for prop fonts
+-- transition modinfo<->about, font switch
+-- screen size fit check in beginning
+-- OK: check TODOs
+-- OK: save width, to prefs, until next open
+-- OK: comment wrappng
+-- OK: PT sample playing?
+-- OK: bold text?
+-- OK: MP3 info does not work atm
+-- OK: PSID info does not linewrap
+-- OK: cliprect
+
+FIXED: TODO:
+- AGUS hardware mixer button should disable all other stuff, but doesnt?
+
+FIXED: TODO:
+- xmaplay060 ahi: play, then press enter again right after playback started  
+             -> BUS ERROR
+-- play, pause, then Play again -> BUS
+- xmaplay060 + AHI: scopes open, crash
+
+FIXED: TODO:
+- restart with "68020" or "68040"
+- open hip
+- set "AMP"
+- search "shipping forecast"
+- hang, yellow guru
+
+FIXED: TODO:
+- A1200:
+- set xmplay060 on
+- play "wit down.xm"
+- press eject
+- crash
+--> fixed?
+
+FIXED: TODO
+- Ferrara/test drive 2.xm -> crash on xmaplay060 paula
+
+FIXED:  TODO
+- AHI/AGUS Protracker: use modlen calculator as well
+
+
+FIXXED: TODO:
+- OldSoundtracker -> does not support AHI even if it should
+
+FIXED: TODO:
+- dirt.mod - F00 paikoitellen
+- periodEndCheck triggeroituu jatkuvasti jos pistä? "module repeatedly"
+
+FIXED: TODO:
+- modland whitelist
+-- symmod
+-- soprol
+-- PumaTracker
+
+FIXED: TODO
+- open quadra, pattern, normal size
+- play Keo/Waterproof.smod
+- change scope size to small
+- change scope size to large
+--> mem cookie error
+
+--> lever problem?
+
+FIXED: TODO:
+- fix psid usb error messages, they all get "out of mem2
+
 FIXED: TODO:
 - kick3.2
-- uusi listmode-nappi oli kadonnut (myÃ¶s prefsistÃ¤),
-  sen sijaan nÃ¤kyÃ¶ ekan nappulan pÃ¤Ã¤llÃ¤
-- korjaantui kuin kÃ¤vi togglaa prefssistÃ¤
-- TEST: disabloidaan nappi, vaihdetaan moodia prefssistÃ¤
+- uusi listmode-nappi oli kadonnut (my??s prefsist??),
+  sen sijaan n??ky?? ekan nappulan pä?ll??
+- korjaantui kuin k??vi togglaa prefssist??
+- TEST: disabloidaan nappi, vaihdetaan moodia prefssist??
   -> ilmestuu pakolla ruutuun
 
 FIXED: TODO:
@@ -189,8 +341,8 @@ FIXED: TODO:
 - "Black Queen by Dreamer"
 
 FIXED: TODO:
-- synaptic gap ii.mod -> B-komento hyppÃ¤Ã¤ samaan patterniin ja
-  jÃ¤Ã¤ looppiin
+- synaptic gap ii.mod -> B-komento hyppä? samaan patterniin ja
+  jä? looppiin
 
 FIXED: TODO:
 - list mode button tooltip does not work
@@ -251,7 +403,7 @@ FIXED: TODO:
 
 OK: TODO:
 - mhi mp3 output: displays "0kB", why? remove mpega.lib and try?
-  - mhiReadMp3Properties failaa, kÃ¤y nÃ¤in -> mpega.library puuttuu?
+  - mhiReadMp3Properties failaa, k??y n??in -> mpega.library puuttuu?
   - yes
 
 
@@ -322,7 +474,7 @@ FIXED: TODO:
 - rename cybersoud button to: Sample 14-bit out or something
 
 FIX: TODO:
-- MHI startataan vaikka ei olisi edes mp3-file kyseessï¿½
+- MHI startataan vaikka ei olisi edes mp3-file kyseessä
 
 
 FIXED: TODO:
@@ -368,7 +520,7 @@ Found a way to crash the system with HiP 68k v2.58:
 - switch to search view
 - click "PR"
 - set filebox height to 3 items
-- Use --> now this already looks... suspicious ðŸ˜‰ see screenshot
+- Use --> now this already looks... suspicious ä? see screenshot
 - click "PR" again
 - --> Guru
 
@@ -496,7 +648,7 @@ hip v2.56 debug, release v2.57 version of playsid.library
 - then play with normal mode -> hang
 
 hip v2.55, release v2.57 version of playsid.library
-- ???
+- ä
 
 hip v2.55 - first with reSID, fsuae 020
 - play with resid 6851
@@ -633,7 +785,7 @@ FIXED: TODO:
 - OK: DISABLE ctrl+s onn kick13
 
 - OK: exit local find layout while in SEARCH VIEW with mouse click
-- jotain roskaa jï¿½ï¿½ fileboxin alimmalle riville kun vaihtelee searc
+- jotain roskaa jää fileboxin alimmalle riville kun vaihtelee searc
   view <-> muut viewit
 
 FIXED: TODO:
@@ -1332,8 +1484,8 @@ CRASH
 
 FIXED: 
 - alloc scope bitplanes with AllocRaster
-- kuinka iso puskuri riittï¿½ï¿½ patternInfoBufferille?
-- Patternscope+s3m: 4kB mix buffer, flï¿½sh
+- kuinka iso puskuri riittää patternInfoBufferille?
+- Patternscope+s3m: 4kB mix buffer, fläsh
 
 TODO
 - AHX
@@ -1343,8 +1495,8 @@ FIXED: CRASH
 
 FIXED: TODO
 - alloc scope bitplanes with AllocRaster
-- kuinka iso puskuri riittï¿½ï¿½ patternInfoBufferille?
-- FIXED: Patternscope+s3m: 4kB mix buffer, flï¿½sh
+- kuinka iso puskuri riittää patternInfoBufferille?
+- FIXED: Patternscope+s3m: 4kB mix buffer, fläsh
 
 FIXED: TODO
 - mode switch for pattern scope in PS3M: disable costly patternscope
@@ -1526,7 +1678,7 @@ TODO
 - add divider to fav list -> disappears
 
 FIXED
-- GMC. pitï¿½nee olla fastissa?
+- GMC. pitänee olla fastissa?
 - piip! 
 
 FIXED
@@ -1702,27 +1854,27 @@ FIXED
 -- Set Window title bar height to 8 -> all ok
 
 TODO
-- crï¿½shï¿½si joku moduuli zipattu: HeHasNoFace, DataJack
-- RMB window fold: ei toimi enï¿½ï¿½?
+- cräshäsi joku moduuli zipattu: HeHasNoFace, DataJack
+- RMB window fold: ei toimi enää?
 - Hippon keskitys ei pela 
-- WindowPrefs: jos titlebarin korkeutta sï¿½ï¿½tï¿½ï¿½, RMB fold ei keskitï¿½?
--- Toimiiko enï¿½ï¿½ mitkï¿½ï¿½n napit?
+- WindowPrefs: jos titlebarin korkeutta säätää, RMB fold ei keskitä?
+-- Toimiiko enää mitkään napit?
 
 MODS ANTHOLOGY synth not supported formats
 - aprosys
  - sidmon2
-- sonicarranger:tï¿½mï¿½n pitï¿½isi olla tuettu, ei toimi?
+- sonicarranger:tämän pitäisi olla tuettu, ei toimi?
 - "ST11";
 - SidMon2
--- tunnistus, etsitï¿½ï¿½n "SIDMON II" stringi
+-- tunnistus, etsitään "SIDMON II" stringi
 - PUMA tracker
--- etsitï¿½ï¿½n taikasanoja 
+-- etsitään taikasanoja 
 
 BUG
 - Prefs zip-komento; jos editoi, ei tallennu, ei vaikutusta muutenkaan
 
 FRED
-- FuzzBall-InGame, Fuzzball-Title -> enforcer hittejï¿½
+- FuzzBall-InGame, Fuzzball-Title -> enforcer hittejä
 - Saattaa olla KingCon-probleemakin
 
 SonicArranger
@@ -1754,28 +1906,28 @@ FIXED
 
 ; FIXED
 ; iso lista
-; select module and play: ei jï¿½ï¿½ ihan keskelle
-; heiluta hiirtï¿½, soitettava kappale pykï¿½lï¿½ keskeltï¿½ alemmas?
-; joku eventti jï¿½ï¿½nyt kï¿½sittelemï¿½ttï¿½, esim. nuoli ylï¿½s, tulee
-; kï¿½siteltï¿½vï¿½ksi sitten kun seuraava mousemove event tulee?
+; select module and play: ei jää ihan keskelle
+; heiluta hiirtä, soitettava kappale pykälä keskeltä alemmas?
+; joku eventti jäänyt käsittelemättä, esim. nuoli yläs, tulee
+; käsiteltäväksi sitten kun seuraava mousemove event tulee?
 ; 
-; ongelma lienee se, ettï¿½ "firstname" ja sliderin vertpot
+; ongelma lienee se, että "firstname" ja sliderin vertpot
 ; ei vastaa toisiaan, kun uusi firstname lasketaan mousemoven
-; jï¿½lkeen vertpotista, on niissï¿½ pieni ero, ja nï¿½kyy hyppï¿½yksenï¿½
-; ehkï¿½ 1-bit scale pitï¿½ï¿½ poistaa? -> rslider4
+; jälkeen vertpotista, on niissä pieni ero, ja näkyy hyppäyksenä
+; ehkä 1-bit scale pitää poistaa? -> rslider4
 
 ; TODO
-; saatu rï¿½plï¿½ttyï¿½ aikaan niin ettï¿½ ei voi sammuttaa,
-; valittaa ettï¿½ filereq on muka pï¿½ï¿½llï¿½?
+; saatu räplättyä aikaan niin että ei voi sammuttaa,
+; valittaa että filereq on muka päällä?
 
 ; FIXED
-; startissa a500:lla aika hidasta? mihkï¿½ aika menee
+; startissa a500:lla aika hidasta? mihkä aika menee
 
 ; FIXED
-; Filebox prop gadget ei toimi "mediumlista":lla, loppupï¿½ï¿½stï¿½;
+; Filebox prop gadget ei toimi "mediumlista":lla, loppupäästä;
 
 ; FIXED
-; Aika hidasta nuolinï¿½ppisselailu mediumlistalla puolen vï¿½lin paikkeilta alaspï¿½in; 68000
+; Aika hidasta nuolinäppisselailu mediumlistalla puolen välin paikkeilta alaspäin; 68000
 
 ; WONTFIX
 ; Poista WA_ReportMouse, sen sijaan IDCMP_INTUITICKS
@@ -1853,7 +2005,7 @@ FIXED
 * bug:
 * - add XTD
 * - sort
-* - vï¿½ï¿½rï¿½ jï¿½rjestys
+* - väärä järjestys
 
 * FIXED
 * bug:

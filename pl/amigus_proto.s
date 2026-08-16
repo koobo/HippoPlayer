@@ -3,8 +3,10 @@
 ;        (c)2025 by O.Achten
 ; ====================================
 
-	include amigus_proto.i
+;	include amigus_proto.i
 	include libraries/expansion_lib.i
+    include libraries/amigus_lib.i
+    include libraries/amigus.i
 
 ;=============================================================
 amigus_init:
@@ -13,52 +15,52 @@ amigus_init:
 		
 	bsr		init
 	bsr		FinalInit
-	
+    ; ---------------------------------
+    DPRINT  "--- amigus_init ---"
 	move.l	4.w,a6					
-	lea   	ExpansionName(pc),a1	
-	moveq   #33,d0
-	jsr     _LVOOpenLibrary(a6)		; Open expansion.library
-	
-	tst.l   d0						; Library opened?
-	bne.s   .ag_open_okay			; Yes, continue	
-	bra		.ag_init_error			; Could not open library
-
-.ag_open_okay
+	lea   	LibName(pc),a1	
+	moveq   #0,d0
+	jsr     _LVOOpenLibrary(a6)		
+    DPRINT  "OpenLibrary=%lx"
+    move.l  d0,amigus_lib
+    beq     .ag_init_error
+    ; ---------------------------------
 	move.l	d0,a6					; Let's find AmiGUS card
-	move.l	#AMIGUS_MANUFACTURER_ID,d0
-	move.l	#AMIGUS_HAGEN_PRODUCT_ID,d1
-	move.l	#0,a0
-	jsr		_LVOFindConfigDev(a6)	; Check for AmiGUS card
-
-	push	d0
-	
-	move.l	d0,a0					; a0 = ConfigDev structure
-	move.l 	32(a0),d0 				; d0 = cd_BoardAddr
-	move.l	d0,amigus_base			; Store AmiGUS register base
-	
-	move.l	a6,a1
-	move.l	4.w,a6
-	jsr     _LVOCloseLibrary(a6)	; Close expansion.library
-	
-	pop		d0
-	
-	tst.l	d0						; Did we find AmiGUS card?
-	bne.s	.ag_init_memory
-
-.ag_init_error
-	moveq	#ier_ahi,d0				; Could not find AmiGUS card
-	popm	d1-d7/a2-a6		
-	rts
-
-.ag_init_memory
-	
-	
-	move.l	4.w,a6
-	
-	moveq	#INTB_PORTS,d0
-	lea		AmiGUS_IntServer(pc),a1	; Set-up interrupt for play routine (INT2)
-	jsr		_LVOAddIntServer(a6)
-	
+    sub.l   a0,a0
+    jsr     _LVOAmiGUS_FindCard(a6)
+    DPRINT  "AmiGUS_FindCard=%lx"
+    move.l  d0,amigus_card
+    beq     .ag_init_error
+    ; ---------------------------------
+    move.l  d0,a0
+ ifne DEBUG
+    move.l  agus_TypeName(a0),d0
+    moveq   #0,d1
+    move.w  agus_TypeId(a0),d1
+    DPRINT  "TypeName=%s TypeId=%lx"
+ endif
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    jsr     _LVOAmiGUS_ReserveCard(a6)
+    DPRINT  "AmiGUS_ReserveCard=%lx"
+    cmp.l   #AmiGUS_NoError,d0
+    seq     amigus_reserve
+    bne     .ag_init_error
+    ; ---------------------------------
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  #AmiGUS_Int,d2  
+    moveq   #0,d3           * data
+    jsr     _LVOAmiGUS_InstallInterrupt(a6) 
+    DPRINT  "AmiGUS_InstallInterrupt=%lx"
+    cmp.l   #AmiGUS_NoError,d0
+    seq     amigus_hasinterrupt
+    bne     .ag_init_error
+    ; ---------------------------------
+    move.l  amigus_card,a0
+    move.l  agus_WavetableBase(a0),amigus_base
+    ; ---------------------------------
 	move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
 
 	move.l	setmodule(pc),a0		; a0 = Pointer to module (=sample) data
@@ -70,30 +72,81 @@ amigus_init:
 	lea		HAGEN_WDATAH(a6),a1
 .ag_memory_copyloop					; Copy entire module to AmiGUS sample memory
 	move.l	(a0)+,(a1)
-	sub.l	#1,d0
-	bne		.ag_memory_copyloop
+	subq.l	#1,d0
+	bne.b	.ag_memory_copyloop
 	
 	bsr		amigus_voice_reset		; Initialize all AmiGUS voices
 	
-	move.w	tempo(pc),d0				; d0 = tempo (BPM)
+	move.w	tempo,d0				; d0 = tempo (BPM)
 	bsr		amigus_tempo			; Set initial tempo
 	
 	st   	setpause
 	
 	lea		PatternInfo(pc),a0
-	move.l	unpackedPatternPtr(pc),a1
+	move.l	unpackedPatternPtr,a1
 	
 	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
 	
 	popm	d1-d7/a2-a6		
-	moveq	#0,d0
-	
+    DPRINT  "amigus_init SUCCESS"
+	moveq	#0,d0       * OK
 	rts
-	
-.ag_memerror
+
+.ag_init_error
+    bsr     amigus_uninit
+    DPRINT  "amigus_init FAILURE"
+	moveq	#ier_amigus,d0              ; Could not find or allocate AmiGUS
+.ag_init_exit
 	popm	d1-d7/a2-a6		
-	moveq	#ier_nomem,d0
 	rts
+
+.ag_memerror
+    DPRINT  "amigus_init FAILURE no mem"	
+	moveq	#ier_nomem,d0
+    bra     .ag_init_exit
+
+amigus_uninit:
+    bsr     amigus_freeinterrupt
+    bsr     amigus_freecard
+    bsr     amigus_closelib
+    clr.l   amigus_base
+    rts
+
+amigus_closelib:
+    move.l  amigus_lib,d0
+    beq     .x
+    clr.l   amigus_lib
+    move.l  d0,a1
+    move.l  4.w,a6
+    jsr     _LVOCloseLibrary(a6)
+.x  rts
+
+amigus_freecard:
+    tst.w   amigus_reserve
+    beq     .x
+    clr.w   amigus_reserve
+
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  amigus_lib,a6
+    jsr     _LVOAmiGUS_FreeCard(a6)
+.x
+    rts
+
+amigus_freeinterrupt:
+    tst.w   amigus_hasinterrupt
+    beq     .x
+    clr.w   amigus_hasinterrupt
+
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  amigus_lib,a6
+    jsr     _LVOAmiGUS_RemoveInterrupt(a6)
+.x
+    rts
+
 ;=============================================================
 amigus_end:	
 	move.l	amigus_base(pc),a6
@@ -104,11 +157,7 @@ amigus_end:
 	
 	bsr		amigus_voice_reset
 	
-	move.l	4.w,a6
-	lea		AmiGUS_IntServer(pc),a1
-	moveq  	#INTB_PORTS,d0
-	jsr		_LVORemIntServer(a6)
-
+    bsr     amigus_uninit
     bsr     freePatternBuffers
 	rts
 ;=============================================================
@@ -160,8 +209,8 @@ amigus_cont:
 	rts
 ;---	
 .ag_restorechannels
-	lea	    cha0(pc),a4
-	move	numchans(pc),d7
+	lea	    cha0,a4
+	move	numchans,d7
 	subq	#1,d7
 	moveq	#0,d6
 .ag_restore_loop
@@ -173,17 +222,14 @@ amigus_cont:
 ;==============================================================
 amigus_tempo:
 	movem.l d0-d7/a0-a6,-(sp)
-	
-	and.l	#$ff,d0
+	and.w	#$ff,d0
 	lsl.w	#1,d0
-	divu.w	#5,d0
 	moveq	#0,d1
 	move.w	d0,d1
 	
 	move.l	amigus_base(pc),a6
-
 	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	
-	move.l 	#HAGEN_TIMER_TIMEBASE,d0
+	move.l 	#5*HAGEN_TIMER_TIMEBASE,d0
 	bsr		divu_32
 	move.l	d0,HAGEN_TIMER_RELOADH(a6)	; Set timer interrupt speed for playback
 	move.w	#$8000,HAGEN_TIMER_CTRL(a6)
@@ -198,24 +244,24 @@ amigus_playmusic:
 .ag_nopause
 	bsr		s3vol				; Update master volume
 
-	move	mtype(pc),d0		; Select appropriate player routine
-	lea		s3m_music(pc),a0
+	move	mtype,d0		; Select appropriate player routine
+	lea		s3m_music,a0
 	subq	#1,d0
 	beq.b	.ag_player_exe	
-	lea		mt_music(pc),a0
+	lea		mt_music,a0
 	subq	#1,d0
 	beq.b	.ag_player_exe	
 	subq	#1,d0
 	beq.b	.ag_player_exe	
-	lea		xm_music(pc),a0
+	lea		xm_music,a0
 	subq	#1,d0
 	beq.b  	.ag_player_exe	
-	lea		it_music(pc),a0
+	lea		it_music,a0
 .ag_player_exe	
 	jsr	(a0)					; Execute player routine
 
 	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
-	move.w	PS3M_master(pc),d1	; Master Volume	
+	move.w	PS3M_master,d1   	; Master Volume	
 	cmp.w	#64,d1				; Full PAULA volume?
 	bne		.ag_novolovl		; No, then just shift it
 	move.w	#$ffff,d1			; Yes, set full AmiGUS master volume
@@ -227,8 +273,8 @@ amigus_playmusic:
 	move.w	d1,HAGEN_GLOBAL_VOLUMEL(a6)	; Set AmiGUS master volume
 	move.w	d1,HAGEN_GLOBAL_VOLUMER(a6)	
 
-	lea		cha0(pc),a4				; a4 = Note structure
-	move	numchans(pc),d7			; d7 = Channel numbers
+	lea		cha0,a4			    	; a4 = Note structure
+	move	numchans,d7			    ; d7 = Channel numbers
 	subq	#1,d7
 	moveq	#0,d6					; d6 = current channel number
 .ag_channel_loop					; Main channel loop
@@ -255,6 +301,14 @@ amigus_playmusic:
 	addq	#1,d6
 	dbf		d7,.ag_channel_loop
 
+
+    ; Check for break, ie. song end
+	tst	PS3M_break
+	beq.b	.nb
+	clr	PS3M_break
+	move.l	songoverf,a0
+	st	(a0)
+.nb
 	rts
 ;---
 amigus_volume:					; d6 = channel number, a4 = channel block; a6 = AmiGUS base
@@ -409,23 +463,23 @@ AmiGUS_Int:
 
 	bsr	amigus_playmusic
 ;	move.w	#$8888,$dff180		
-.noTimerInt	
 
 	movem.l (sp)+,d1-d7/a0-a6	; Restore registers
-	moveq	#0,d0
+	moveq	#1,d0               ; Handled
 	rts
-	
+
+.noTimerInt	
+	movem.l (sp)+,d1-d7/a0-a6	; Restore registers
+	moveq	#0,d0               ; Nothing done
+	rts
+
 ;======================================
-amigus_base		dc.l	0
-amigus_mtrig	dc.w	0
+amigus_base		     dc.l	 0 
+amigus_mtrig	     dc.w	 0
+amigus_lib           dc.l    0
+amigus_card          dc.l    0
+amigus_reserve       dc.w    0
+amigus_hasinterrupt  dc.w    0
 
-AmiGUS_IntServer
-	dc.l  0,0
-	dc.b  0,-10
-	dc.l  AmiGUS_IntName
-	dc.l  0,AmiGUS_Int
-	
-ExpansionName	dc.b	"expansion.library",0
-
-AmiGUS_IntName	dc.b	"AmiGUS_PS3MPlay",0
-even
+LibName         dc.b    "amigus.library",0
+ even

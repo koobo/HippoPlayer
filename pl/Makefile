@@ -77,7 +77,10 @@ COMPRESSED_TARGETS=\
 	shr/pretracker.bin.shr \
 	shr/xmaplay060.shr
 
-all: $(COMPRESSED_TARGETS)
+all: shr $(COMPRESSED_TARGETS)
+
+shr:
+	mkdir -p shr
 
 # Turn logging on in PS3M and sampleplayer
 debug: EXE020 += -DDEBUG=1
@@ -126,7 +129,7 @@ bin/jamc: jamcrackerproreplay.asm
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"
 bin/okta: okta.s
 	$(ASM) $(INCLUDE) $(EXEopt) -o $@ "$<"
-bin/ps3m: Hippo_PS3M3.s
+bin/ps3m: Hippo_PS3M3.s amigus_proto.s
 	$(ASM) $(INCLUDE) $(EXE020opt) -o $@ "$<"
 bin/pumatracker: Puma_Replay.S
 	$(ASM) $(INCLUDE) $(EXE) -o $@ "$<"

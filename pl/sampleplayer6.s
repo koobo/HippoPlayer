@@ -219,6 +219,38 @@ MPEGA_ERR_BADFRAME = (MPEGA_ERR_BASE-2)
 MPEGA_ERR_MEM      = (MPEGA_ERR_BASE-3)
 MPEGA_ERR_NO_SYNC  = (MPEGA_ERR_BASE-4)
 
+;typedef struct {
+;   /* Public data (read only) */
+;   /* Stream info */
+;   WORD  norm;          /* 1 or 2 */
+;   WORD  layer;         /* 1..3 */
+;   WORD  mode;          /* 0..3  (MPEGA_MODE_xxx) */
+;   WORD  bitrate;       /* in kbps */
+;   LONG  frequency;     /* in Hz */
+;   WORD  channels;      /* 1 or 2 */
+;   ULONG ms_duration;   /* stream duration in ms */
+;   WORD  private_bit;   /* 0 or 1 */
+;   WORD  copyright;     /* 0 or 1 */
+;   WORD  original;      /* 0 or 1 */
+;   /* Decoding info according to MPEG control */
+;   WORD  dec_channels;  /* decoded channels 1 or 2 */
+;   WORD  dec_quality;   /* decoding quality 0..2 */
+;   LONG  dec_frequency; /* decoding frequency in Hz */
+;
+;   /* Private data */
+;   void  *handle;
+;} MPEGA_STREAM;
+
+	rsreset
+MPEGA_STREAM_norm		rs	1	* 1 or 2
+MPEGA_STREAM_layer		rs	1	* 0...3
+MPEGA_STREAM_mode		rs	1	* 1...3
+MPEGA_STREAM_bitrate	rs	1	* in kbps	
+MPEGA_STREAM_frequency	rs.l	1	* in Hz
+MPEGA_STREAM_channels	rs	1	* 1 or 2
+MPEGA_STREAM_ms_duration	rs.l	1	* duration in ms
+
+
 ;/* Full control structure of MPEG Audio decoding */
 ;typedef struct {
 ;   struct Hook *bs_access;    /* NULL for default access (file I/O) or give your own bitstream access */
@@ -408,7 +440,7 @@ mhiKillSignal   rs.b    1
 mhiStopSignal   rs.b    1
 mhiContSignal   rs.b    1
 mhiVolumeSignal rs.b    1
-mhiPlaying      rs.b    1
+                rs.b    1   * unused
 mhiNoMoreData   rs.b    1
 mhiReady        rs.b    1
 mhiInitError    rs.b    1
@@ -419,8 +451,10 @@ mhiStreamSize   rs.l    1
 mhiHandle       rs.l    1
 mhiLibName      rs.l    1
 mhiMPEGit       rs.b    1   * True if mgimpegit driver detected
-                rs.b    1
-
+mhiSeekSignal   rs.b    1
+mhiFileCurrentPos rs.l  1
+mhiFileRequestPos rs.l  1
+mhiBufferInSecs rs.l    1
 
 mainTask    rs.l    1
 
@@ -1229,6 +1263,9 @@ init:
 	move	d0,samplefreq(a5)
  
  if DEBUG
+    moveq   #0,d0
+	move.w	.bitrate(a3),d0
+    DPRINT  "mp3 bitrate=%ld"
 	move.l	.frequency(a3),d0
     DPRINT  "mp3 frequency=%ld Hz"
 	move.l	.ms_duration(a3),d0	
@@ -1510,7 +1547,7 @@ init:
 	move.l	4(a1),d2 * buffer addr
 	move.l	8(a1),d3 * length to read
 	lob	Read
-
+    DPRINT  "read=%ld"
 
  if DEBUG
     tst.l   d0
@@ -6238,19 +6275,24 @@ isLocalMp3:
     beq     .x
     bsr     isRemoteSample
     bne     .x
-    tst.b   mhiEnable(a5) 
-    bne     .x
+;    tst.b   mhiEnable(a5) 
+;    bne     .x
     moveq   #1,d2
     rts
 .x  moveq   #0,d2
     rts
 
+* Out:
+*   d0 = position secs
+*   d1 = length secs
 mp3GetDurationInSeconds:
     lea     var_b,a5
     moveq   #0,d0
     moveq   #0,d1
     bsr     isLocalMp3
     beq     .x
+    tst.b   mhiEnable(a5) 
+    bne     .mhiDuration
 
 	move.l	mpstream(a5),a0
     lea     mp3PositionInMs(a5),a1
@@ -6269,6 +6311,37 @@ mp3GetDurationInSeconds:
 .x
     rts
 
+.mhiDuration
+    tst.l   mhiStreamSize(a5)
+    beq     .x
+
+    move.l	mp3DurationInMs(a5),d2
+    divu.w  #1000,d2
+    ext.l   d2
+    * d2 = total duration in secs
+
+    move.l  mhiFileCurrentPos(a5),d0
+    sub.l   mpega_sync_position(a5),d0      * remove ID3v2 header
+    bmi     .x
+    * d0 = current pos
+
+    * convert file position to seconds roughly
+    move.l  d2,d1
+    bsr     mulu_32
+
+    move.l  mhiStreamSize(a5),d1
+    bsr     divu_32
+
+    * Subtract buffer size in secs so the 
+    * value matches what is being heard.
+    sub.l   mhiBufferInSecs(a5),d0
+    bpl     .1
+    clr.l   d0
+.1
+
+    ; ---------------------------------
+    move.l  d2,d1
+    rts	
 
 * In:
 *  d0 = position in seconds to seek
@@ -6276,15 +6349,37 @@ mp3Seek:
     lea     var_b,a5
     bsr     isLocalMp3
     beq     .x
+    tst.b   mhiEnable(a5) 
+    bne     .mhiSeek
+
     * Convert to MS
     mulu.w  #1000,d0    
     DPRINT  "mp3Seek %ld ms"
 	move.l	mpstream(a5),a0
 	lore	MPEGA,MPEGA_seek
-
 .x
     rts
 
+.mhiSeek:
+    move.l  mhiStreamSize(a5),d1
+    beq     .x
+
+    * Calc file position based on requested position in seconds
+    * and total duration in seconds
+
+    bsr     mulu_32
+    * d0 = requested seconds * size in bytes
+    move.l	mp3DurationInMs(a5),d1
+    beq     .x   
+    divu.w  #1000,d1
+    ext.l   d1
+    bsr     divu_32
+    * d0 = (requested seconds * size in bytes) / total seconds = byte position
+    move.l  d0,mhiFileRequestPos(a5)
+    DPRINT  "requested mhi pos=%ld"
+
+    move.b  mhiSeekSignal(a5),d1
+    bra     mhiSetSignal
 
 
 
@@ -6892,9 +6987,10 @@ _xclose
 
 * In: 
 *   d0 = file handle when it is a stream
-mpega_skip_id3v2_stream
+mpega_skip_id3v2_stream:
     pushm   all
-    DPRINT  "mpega_skip_id3v2_stream, handle=%lx"
+    DPRINT  "*** mpega_skip_id3v2_stream, handle=%lx ***"
+    clr.l   mpega_sync_position(a5)     * initial data start position
 	move.l	d0,d6
 
     move.l  id3v2Data(a5),a0
@@ -6949,6 +7045,7 @@ mpega_skip_id3v2_stream
     * ID3 header + ID3 data. Not used at the moment.
     add.l   #10,d0
     move.l  d0,mpega_sync_position(a5)
+    DPRINT  "mpega_sync_position=%ld"
     
     cmp.w   #0,a3
     bne     .read
@@ -6969,6 +7066,14 @@ mpega_skip_id3v2_stream
     DPRINT  "read=%ld"
 
 .mpega_skip_exit_stream
+    * If there was no IDv3 data we need to back up a bit 
+    * to the start.
+	move.l	d6,d1	
+    move.l  mpega_sync_position(a5),d2
+	moveq	#OFFSET_BEGINNING,d3
+	lore    Dos,Seek
+    DPRINT  "seek to beginning of data=%ld"
+
     popm    all
 	rts
 
@@ -7665,18 +7770,19 @@ mhiInit:
 
     bsr     mhiReadMp3Properties
 
-
-
-
-    move.l  mhiStreamSize(a5),d1
-    beq.b   .2
-    move    mpbitrate(a5),d0
-    beq.b   .2      * variable? skip
-    mulu    #1024/8,d0   * kBits/s to bytes/s
-    bsr     divu_32      * size in bytes / bytes/s -> to seconds
+    * Figure out duration
+;    move.l  mhiStreamSize(a5),d1
+;    beq.b   .2
+;    move    mpbitrate(a5),d0
+;    beq.b   .2      * variable? skip
+;    mulu    #1024/8,d0   * kBits/s to bytes/s
+;    bsr     divu_32      * size in bytes / bytes/s -> to seconds
+    * may be zero:
+	move.l	mp3DurationInMs(a5),d0	* pituus millisekunteina
+ 	divu	#1000,d0
     * Put it
     bsr     init\.moi_mp
-.2
+;.2
 
 .no
 
@@ -7724,6 +7830,9 @@ mhiStart:
     moveq	#-1,d0
 	lob     AllocSignal
     move.b  d0,mhiVolumeSignal(a5)
+    moveq	#-1,d0
+	lob     AllocSignal
+    move.b  d0,mhiSeekSignal(a5)
 
     move.l  mhiBase(a5),a6
 
@@ -7771,7 +7880,11 @@ mhiStart:
     DPRINT  "MHIGetStatus=%ld"
  endif
 
+*   Top level loop if restarting playback from beginning
+.playPass                   
     bsr     mhiInitBuffers
+    tst.b   killsample(a5)
+    bne     .mhiExit
 
     DPRINT  "MHIPlay"
     move.l  mhiBase(a5),a6
@@ -7780,8 +7893,8 @@ mhiStart:
 
     st      mhiReady(a5)
 
-    tst.b   mhiNoMoreData(a5)
-    bne     .stop
+    tst.b   mhiNoMoreData(a5)     
+    bne     .eof
 
 .loop
 
@@ -7795,6 +7908,8 @@ mhiStart:
     move.b  mhiContSignal(a5),d1
     bset    d1,d0
     move.b  mhiVolumeSignal(a5),d1
+    bset    d1,d0
+    move.b  mhiSeekSignal(a5),d1
     bset    d1,d0
     lore    Exec,Wait
     move.l  d0,d7
@@ -7825,17 +7940,36 @@ mhiStart:
     beq.b   .s5
     bsr     mhiDoVolume
 .s5
+    move.b  mhiSeekSignal(a5),d0
+    btst    d0,d7
+    beq.b   .s6
+    bsr     mhiDoSeek
+    bne     .playPass       * restart with new buffers?
+.s6
     bra     .loop
 
 .eof
+    ; ---------------------------------
     DPRINT  "Flushing buffers"
 
-    moveq   #0,d0
-    move.b  mhiSignal(a5),d1
-    bset    d1,d0
-    move.b  mhiKillSignal(a5),d1
-    bset    d1,d0
-    lore    Exec,Wait
+    * Wait until buffers have been played
+.waitOut
+    tst.b   killsample(a5)      * See if need to quickly bail out instead
+    bne     .stop
+
+	move.l	_DosBase(a5),a6
+    moveq   #25,d1
+    lob     Delay               * wait a bit
+
+    move.l  mhiHandle(a5),a3
+    move.l  mhiBase(a5),a6
+    lob     MHIGetStatus
+ if DEBUG
+    and.l   #$ff,d0
+    DPRINT "MHIGetStatus=%ld"
+ endif
+    cmp.b   #MHIF_PLAYING,d0    * still playing something?
+    beq     .waitOut
 
 .stop
     DPRINT  "stopping MHI"
@@ -7850,6 +7984,18 @@ mhiStart:
     bne     .4
     DPRINT  "Sending song over"
     bsr     songoverr
+
+    * The ordinary sample replay paths report song-over and immediately loop.
+    * HippoPlayer's repeat modes rely on that contract: with one list entry
+    * the main task deliberately keeps the player active. Rewind and start a
+    * fresh MHI session as well; "Module once" (or a track change) responds to
+    * songoverr by setting killsample and terminates this task normally.
+    bsr     mhiRewindLocal
+    beq     .mhiExit
+    tst.b   killsample(a5)          * Check for exit flag to be sure
+    bne     .mhiExit
+    clr.b   mhiNoMoreData(a5)       * reset status and go around
+    bra     .playPass
 .4
 
 
@@ -7862,6 +8008,24 @@ mhiStart:
 .mhiExitError:
     DPRINT  "mhiError" 
     bsr     .mhiExit
+    moveq   #0,d0
+    rts
+
+
+mhiRewindLocal:
+    * Streams/pipes cannot be replayed by seeking their exhausted handle.
+    bsr     isRemoteSample
+    bne     .error
+
+    move.l  mpega_sync_position(a5),d2
+    move.l  mhiFile(a5),d1
+    moveq   #OFFSET_BEGINNING,d3
+    lore    Dos,Seek
+    cmp.l   #-1,d0
+    beq     .error
+    moveq   #1,d0
+    rts
+.error
     moveq   #0,d0
     rts
 
@@ -8046,6 +8210,34 @@ mhiDoVolume:
 .1
     rts
 
+mhiDoSeek:
+    DPRINT  "mhiDoSeek"
+
+    * Is there a seek request in place?
+    move.l  mhiFileRequestPos(a5),d2
+    beq     .x
+    clr.l   mhiFileRequestPos(a5)
+
+    add.l   mpega_sync_position(a5),d2          * skip header 
+    * Move the file pointer to this position
+    move.l  mhiFile(a5),d1
+    moveq   #OFFSET_BEGINNING,d3
+    lore    Dos,Seek
+    DPRINT  "seek=%ld"
+    cmp.l   #-1,d0
+    beq     .x
+
+    * Then stop to flush existing buffers
+    move.l  mhiBase(a5),a6
+    move.l  mhiHandle(a5),a3
+    lob     MHIStop
+  
+    move    #1,d0       * all ok
+    rts
+.x
+    moveq   #0,d0
+    rts
+
 mhiInitBuffers:
     DPRINT  "mhiInitBuffers"
     move.l  samplework(a5),a4
@@ -8059,8 +8251,9 @@ mhiInitBuffers:
     move.l  a4,a0
     move.l  mhiBase(a5),a6
     move.l  mhiHandle(a5),a3
-    lob     MHIQueueBuffer
+    lob     MHIQueueBuffer * returns FALSE=0 on failure
     DPRINT  "MHIQueueBuffer=%ld"
+
 .eof
     tst.b   mhiNoMoreData(a5)
     bne     .eof2
@@ -8132,6 +8325,14 @@ mhiFillBuffer:
     DPRINT  "no more data!"
 .1
  endif
+    push    d0
+    move.l  mhiFile(a5),d1
+    moveq   #0,d2
+	moveq	#OFFSET_CURRENT,d3
+    lob     Seek
+    move.l  d0,mhiFileCurrentPos(a5)
+    pop     d0
+    tst.l   d0
     rts
 
 * Read MPEG stream properties by opening it with the MPEGA lib
@@ -8147,7 +8348,7 @@ mhiReadMp3Properties
 .ms_duration	rs.l	1	* duration in ms
 
 
-    DPRINT  "mhiReadMp3Properties"
+    DPRINT  "*** mhiReadMp3Properties ***"
 	move.l	4.w,a6
 
     * Paranoia
@@ -8175,6 +8376,7 @@ mhiReadMp3Properties
     beq     .x
     move.l  d0,a0
 
+    move.l  .ms_duration(a0),mp3DurationInMs(a5)
 	move	.layer(a0),mplayer(a5)
 	move	.bitrate(a0),mpbitrate(a5)
 	move	.mode(a0),d1
@@ -8186,15 +8388,51 @@ mhiReadMp3Properties
 
     lob     MPEGA_close
 
- if DEBUG
+ ifne DEBUG
     moveq   #0,d0
     move    mpbitrate(a5),d0
     DPRINT  "bitrate=%ld"
     moveq   #0,d0
     move    samplefreq(a5),d0
     DPRINT  "frequency=%ld"
+    move.l  mp3DurationInMs(a5),d0
+    DPRINT  "duration=%ld ms"
+	move.l	modulefilename(a5),d0
+    DPRINT  "file=%s"
+    move.l  streamLength(a5),d0
+    DPRINT  "streamLength=%ld"
+    bsr     isRemoteSample
+    sne     d0
+    and.l   #1,d0
+    DPRINT  "isRemote=%ld"    
  endif
- 
+
+    * Clear duration if remote sample without length
+    bsr     isRemoteSample
+    beq     .go
+    tst.l   streamLength(a5)
+    bne     .go
+    clr.l   mp3DurationInMs(a5)
+.go
+
+    * Go back to data start position (fails on remotes)
+	move.l	mhiFile(a5),d1	
+    move.l  mpega_sync_position(a5),d2
+	moveq	#OFFSET_BEGINNING,d3
+	lore    Dos,Seek
+    DPRINT  "seek to data beginning=%ld"
+    
+    * Calculate how many secs with this bitrate is the MHI buffer
+    clr.l   mhiBufferInSecs(a5)
+    move    mpbitrate(a5),d1        * kbps
+    beq     .x
+    move.l  #8*(MHI_BUFSIZE*MHI_BUFCOUNT)/1024,d0 * kbps
+    divu.w  d1,d0
+    
+    ext.l   d0
+    move.l  d0,mhiBufferInSecs(a5)
+    DPRINT  "mhiBufferInSecs=%ld"
+
 .x
     rts
 
@@ -8229,7 +8467,7 @@ mhiReadMp3Properties
 
 	dc	0	* check validity if 1 
 	dc.l	2048	* stream buffer size (0=default)
-    
+       
 .mpega_hook
 	* Hook structure from utility.i
 	ds.b	h_SIZEOF
@@ -8259,27 +8497,24 @@ mhiReadMp3Properties
 	rts
 
 .mpega_hook_open
-    DPRINT  "mpega_hook_open"
+    DPRINT  "mpega_hook_open MHI"
 
-; if DEBUG
-;    move.l	a1,a3
-;	move.l	4(a3),d0
-;	DPRINT	"%s"
-;    clr.l   12(a3)
-; endif
-;
+    move.l  mhiStreamSize(a5),d0
+	move.l	d0,12(a1) * stream_size
+    DPRINT  "mhi stream size=%ld"
+	* Return Dos file handle
     move.l  mhiFile(a5),d0
     DPRINT  "mhi handle=%lx"
 	* Return Dos file handle
 	rts	
 
 .mpega_hook_close
-    DPRINT  "mpega_hook_close"
+    DPRINT  "mpega_hook_close MHI"
 	moveq	#0,d0	* ok
 	rts
 
 .mpega_hook_read
-    DPRINT  "mpega_hook_read"
+    DPRINT  "mpega_hook_read MHI"
 
 	move.l	a2,d1    * handle
 	move.l	4(a1),d2 * buffer addr
@@ -8290,14 +8525,15 @@ mhiReadMp3Properties
 	beq.b	.mpega_read_err
 	rts	
 .mpega_read_err
+    DPRINT  "read error!"
 	* eof
 	moveq	#0,d0
 	rts
 
 
 .mpega_hook_seek
-    DPRINT  "mpega_hook_seek"
-	moveq	#0,d0 * ok
+    DPRINT  "mpega_hook_seek MHI"
+	moveq	#0,d0	* ok
 	rts
 
 * In:

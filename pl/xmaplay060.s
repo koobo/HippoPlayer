@@ -1,6 +1,7 @@
+;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
 ; ==============================================================================
 ; xmaplay060 - Port of Fasttracker II's XM replayer for 68060 Amigas
-; by 8bitbubsy, aug. 2020 - apr. 2023. Syntax is Asm-Pro.
+; by 8bitbubsy, aug. 2020 - mar. 2026. Syntax is Asm-Pro.
 ;
 ; Because of lack of 14-bit calibration support, there will be quite a bit of
 ; static noise in the audio on some songs on a real Amiga. It will sound good
@@ -41,6 +42,122 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 ;------------------------------------------------------------------------------
 ; HippoPlayer glue
 ;------------------------------------------------------------------------------
+	incdir	include:
+	include	exec/exec_lib.i
+	include	devices/ahi_lib.i
+	include	devices/ahi.i
+	include	hardware/intbits.i
+	include libraries/expansion_lib.i
+    include libraries/timer_lib.i
+    include devices/timer.i
+  ifnd __VASM
+	incdir	p:include
+  endif
+    include libraries/amigus_lib.i
+    include libraries/amigus.i
+    include	misc/eagleplayer.i
+
+DEBUG        = 0          * Enable debug print to serial
+FAKE_AGUS    = 0
+
+ ifnd __VASM
+ printt "*** Test mode! ***"
+TESTMODE     = 1           * Build a stand-alone test executable
+ else
+TESTMODE     = 0
+ endif
+
+
+* Print to debug console, very clever.
+* Param 1: string
+* d0-d6:    formatting parameters, d7 is reserved
+DPRINT macro
+	ifne DEBUG
+	jsr	desmsgDebugAndPrint
+    	dc.b  \1,10,0
+    	even
+	endc
+	endm
+
+pushm	macro
+	ifc	"\1","all"
+	movem.l	d0-a6,-(sp)
+	else
+	movem.l	\1,-(sp)
+	endc
+	endm
+
+popm	macro
+	ifc	"\1","all"
+	movem.l	(sp)+,d0-a6
+	else
+	movem.l	(sp)+,\1
+	endc
+	endm
+
+push	macro
+	move.l	\1,-(sp)
+	endm
+
+pop	macro
+	move.l	(sp)+,\1
+	endm
+
+_MC68020 macro
+    ifd __VASM
+       MC68020
+    endif
+    endm
+
+_MC68000 macro
+    ifd __VASM
+       MC68000
+    endif
+    endm
+
+    _MC68000    ; start with this
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ ifne TESTMODE
+
+testMain:
+    DPRINT  "start test"
+
+    lea     .module,a0           * module data
+    lea     .songOver,a1         * ptr to song end indicator
+    moveq   #1,d0                * AHI on
+    move.l  #24000,d1            * AHI mixing rate
+    move.l  #$0002000a,d2        * AHI mode: 8 bit stereo
+    move.l  #.moduleE-.module,d3 * module len
+    jsr     _init
+    DPRINT  "_init=%ld"
+    tst.l   d0
+    bne     .error
+
+    moveq   #64,d0
+    jsr	    _setVolume
+    
+.loop
+    move.l  GraphicsBase,a6
+    jsr     _LVOWaitTOF(a6)	
+    btst    #6,$bfe001
+    bne     .loop
+ 
+    jsr     _end
+.error
+    rts
+
+.songOver   dc.w    0
+;.module  incbin     "sys:music/Mods/imploder.xm"
+.module  incbin     "sys:music/Mods/7181-InternationalKarate.xm"
+.moduleE
+
+ endif ; TESTMODE
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
     jmp     _init(pc)
     jmp     _end(pc)
@@ -53,46 +170,173 @@ MIX_PERIOD		EQU 128 ; ~27710.12Hz on PAL (divisable by 64 for 14-bit)
 
 
 * In:
-*   a0 = module filename
+*   a0 = module address
 *   a1 = song end trigger
+*   d0 = AHI on or off
+*        0 = no AHI
+*        1 = yes AHI
+*       -1 = AmiGUS
+*       -2 = AmiGUS interpolated 
+*   d1 = AHI mixing rate
+*   d2 = AHI mode
+*   d3 = module length
+* Out:
+*   d0 = status
+*   d1 = position mask (Paula playback)
+*   d2 = channel count
+*   a0 = null (patternscope support data)
+*   a1 = ptr to Paula buffer position
+*   a2 = address to left Paula buffer
+*   a3 = address to right Paula buffer
+*   a4 = instrument names buffer
 _init:
-    move.l  a1,songOverPtr
+    push    a5
+    bsr     .doInit
+    pop     a5
+    rts
+.doInit 
+ier_filerr          = -17
+ier_ahi             = -19
+ier_amigus          = -26
+ier_nomem	        = -9
 
-	move.l	a0,a1
-.1  tst.b   (a1)+
-    bne.b   .1
-    move.l  a1,d0
-    sub.l   a0,d0
+    DPRINT  "*** xmaplay060 init ***" 
+ ifne FAKE_AGUS
+    moveq   #-1,d0 * test AGUS
+    move.l  #fake_agus_base,amigus_base
+ endif
+ ifne DEBUG
+    and.l   #$ff,d0
+    ext.w   d0
+    ext.l   d0
+    move.l  a0,d4
+    DPRINT  "ahi/agus=%ld ahirate=%ld ahimode=%08.8lx modlen=%ld mod=%lx"
+ endif
+    move.b  d0,AHI
+    move.w  d1,AHIMixingFreq
+    move.l  d2,setmode
+    move.l  a1,songOverPtr
+    move.l  a0,modulePtr
+    move.l  d3,moduleLen
+    move.l  a0,readPtr
 
     move.l  a5,-(sp)
     bsr     MAIN
     move.l  (sp)+,a5
+    DPRINT  "MAIN=%ld"
     * d0 = 0: ok, 1: error
     tst.l   d0
-    bne.b   .error
+    bne    .error
 
+    tst.b   AHI
+    beq     .normal
+    bmi     .agus
+    
+    DPRINT  "-- AHI --"
+    moveq   #0,d0
+    move.w  AHIMixingFreq,d0
+    DPRINT  "AHIMixingFreq=%ld Hz"
+    move.l  d0,setfreq
+    bsr     ahiSetup
+    DPRINT  "ahiSetup=%ld"
+    tst.l   d0
+    beq     .ahiError
+
+    * Start playback
+    bsr     ahi_cont
+
+    * Set initial tempo
+    moveq   #-1,d0
+    bsr     ahi_tempo
+    bra     .normal
+
+
+.agus
+    DPRINT  "-- AGUS --"
+ ifne FAKE_AGUS
+    DPRINT  "Fake mode!"
+    bsr     loadSamplesAGUS
+	move.w	Speed(pc),d0			; d0 = tempo (BPM)
+	bsr		amigus_tempo			; Set initial tempo
+    st      setpause    ; play
+    moveq   #0,d7
+.floop  
+    move    $dff006,$dff180
+    push    d7
+	bsr 	MainPlayer
+	bsr 	Mix_UpdateChannelVolPanFrq_AGUS
+    pop     d7
+    addq    #1,d7
+    cmp     #1000,d7
+    bne     .floop
+    bra     .normal
+ else
+    bsr     amigus_init
+    DPRINT  "amigus_init=%ld"
+    tst.l   d0
+    bne     .agusError
+ endif
+
+.normal
+    bsr     PatternInit
+    
+    * Return access to mixer buffers when Paula mixer engaged
     move.l  PaulaPosMask(pc),d1
     lea     PaulaPos(pc),a1
     move.l  PaulaCh1Buf(pc),a2
     move.l  PaulaCh2Buf(pc),a3
+    lea     InstrNames,a4
 
-    sub.l   a0,a0
-    moveq   #1,d0   * ok
+    * Provide patterninfo for AHI/AGUS only for now
+    sub.l   a0,a0       
+    tst.b   AHI
+    beq     .p
+    lea     PatternInfo,a0
+.p
+
+    moveq   #0,d2
+    move    hAntChn,d2
+    moveq   #0,d0   * null = ok
+    DPRINT  "_init ok=%ld mask=%lx channels=%ld"
     rts
 .error
     move.l  lastMessagePtr(pc),a0
-    moveq   #0,d0
+    moveq   #ier_filerr,d0
+    rts
+
+.agusError
+    moveq   #ier_amigus,d0
+    rts
+.ahiError
+    moveq   #ier_ahi,d0
     rts
 
 _end:
+    tst.b   AHI
+    bmi     .agus
+    bne     .ahi
+.1
+    DPRINT  "normal end"
     bsr     StopTask
     bsr     cleanUp
     rts
+.ahi
+    bsr     ahi_stop
+    bsr     ahi_end
+    bra     .1
+.agus
+    bsr     amigus_stop
+    bsr     amigus_end
+    bra     .1
 
+
+* Called in VB
 * out:
 *   d0 = current position
 *   d1 = max position
 _getPosLen:
+    bsr     updatePatternInfoData
+
     move    SongPos(pc),d0
     move    hLen,d1
     rts
@@ -100,6 +344,11 @@ _getPosLen:
 * in: 
 *   d0 = volume
 _setVolume:
+    move    d0,ahi_mastervol
+    tst.b   AHI
+    bmi     amigus_setmastervol
+    bne     ahi_setmastervol
+
     bra     SetMixingVolume
 
 _forward:
@@ -109,6 +358,18 @@ _backward:
     bra     PrevPattern
 
 _stop:
+ ifne DEBUG
+    push    d0
+    move.b  AHI,d0
+    ext.w   d0
+    ext.l   d0
+    DPRINT  "_stop mode=%ld"
+    pop     d0
+ endif
+    tst.b   AHI
+    bmi     amigus_stop
+    bne     ahi_stop
+   
     bsr    StopTask
     
 	lea	    $dff000,a0
@@ -120,6 +381,10 @@ _stop:
     rts
 
 _cont:
+    tst.b   AHI
+    bmi     amigus_cont
+    bne     ahi_cont
+    
     moveq	#64,d0			; set voice volumes
 	lea	    $dff000,a0
 	move.w	d0,$a8(a0)
@@ -136,6 +401,1395 @@ _cont:
 
 songOverPtr     dc.l    0
 lastMessagePtr  dc.l    0
+moduleLen       dc.l    0
+modulePtr       dc.l    0
+readPtr         dc.l    0
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ ifne DEBUG
+desmsgDebugAndPrint:
+	* sp contains the return address, which is
+	* the string to print
+	movem.l	d0-d7/a0-a3/a6,-(sp)
+	* get string
+	move.l	4*(8+4+1)(sp),a0
+	* find end of string
+	move.l	a0,a1
+.e	tst.b	(a1)+
+	bne.b	.e
+	move.l	a1,d7
+	btst	#0,d7
+	beq.b	.even
+	addq.l	#1,d7
+.even
+	* overwrite return address 
+	* for RTS to be just after the string
+	move.l	d7,4*(8+4+1)(sp)
+
+	lea	debugDesBuf(pc),a3
+	move.l	sp,a1	
+    lea     .putCharSerial(pc),a2
+	move.l	4.w,a6
+	jsr     _LVORawDoFmt(a6)
+	movem.l	(sp)+,d0-d7/a0-a3/a6
+	rts	* teleport!
+.putc	
+	move.b	d0,(a3)+	
+	rts
+.putCharSerial
+    move.l  4.w,a6
+    jmp     -516(a6)
+debugDesBuf ds.b    64
+ endif
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; AHI 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ahiSetup:
+    DPRINT  "ahiSetup"
+    move    hAntChn,d0
+    move    d0,setchannels
+
+    bsr     calcSampleCount
+    addq    #1,d5
+    move    d5,setsounds
+
+	OPENAHI	1
+	move.l	d0,ahibase
+	beq     .error
+	move.l	d0,a6
+
+ ifne DEBUG
+    move.l  setfreq,d0
+    move.l  setmode,d1
+    clr.l   d2
+    move.w  setchannels,d2
+    clr.l   d3
+    move.w  setsounds,d3
+    DPRINT  "freq=%ld mode=%08.8lx ch=%ld snd=%lx"
+ endif
+ 
+	lea	  ahi_tags(pc),a1
+	jsr	_LVOAHI_AllocAudioA(a6)
+	move.l	d0,ahi_ctrl
+	beq	    .error
+    bsr     loadSamples
+    beq     .error
+
+    move.l  ahibase(pc),a6
+	move.l	setmode(pc),d0
+	lea	    .getattr_tags(pc),a1
+	jsr	    _LVOAHI_GetAudioAttrsA(a6)
+
+ ifne DEBUG
+    DPRINT  "mode attrs:"
+    move.l  attr_stereo,d0
+    DPRINT  "stereo=%ld"
+    move.l  attr_panning,d0
+    DPRINT  "panning=%ld"
+    move.l  attr_maxchannels,d0
+    DPRINT  "maxchannels=%ld"
+    move.l  attr_pingpong,d0
+    DPRINT  "pingpong=%ld"
+ endif
+
+    moveq   #1,d0
+    rts
+
+.error
+    moveq   #0,d0
+    rts
+
+
+.getattr_tags
+	dc.l	AHIDB_Stereo,attr_stereo
+	dc.l	AHIDB_Panning,attr_panning
+	dc.l	AHIDB_MaxChannels,attr_maxchannels
+	dc.l	AHIDB_PingPong,attr_pingpong
+	dc.l	TAG_END
+
+attr_stereo		    dc.l	0
+attr_panning		dc.l	0
+attr_pingpong		dc.l	0
+attr_maxchannels	dc.l	0
+
+
+
+calcSampleCount:
+    moveq   #128-1,d7
+    lea     Instr,a4
+    moveq   #0,d5
+.instrs
+    move.l  (a4)+,d0
+    beq     .next
+    move.l  d0,a3
+    move.b  s16Bit(a3),d0   
+
+    move    iAntSamp(a3),d6
+    beq     .next
+    subq    #1,d6
+    lea	    iSamp(a3),a2		; a2 = sample struct
+
+.samples
+    move.l  sPek(a2),d0
+    beq     .nextS
+    move.l  d0,a0
+    move.l  sLen(a2),d0
+    beq     .nextS
+    addq    #1,d5
+.nextS
+    lea     SMP_SIZE(a2),a2
+    dbf     d6,.samples
+.next
+    dbf     d7,.instrs
+    rts
+
+* Load each instrument sample to AHI
+loadSamples:
+    moveq   #128-1,d7
+    lea     Instr,a4
+    moveq   #0,d5               * AHI sound number
+.instrs
+    move.l  (a4)+,d0
+    beq     .next
+    move.l  d0,a3
+    move    iAntSamp(a3),d6
+    beq     .next
+    subq    #1,d6
+    lea	    iSamp(a3),a2		; a2 = sample struct
+
+.samples
+    move.l  sPek(a2),d0
+    beq     .nextS
+    move.l  d0,a0
+    move.l  sOrigLen(a2),d0    
+    beq     .nextS
+
+    ; Make AHISampleInfo
+    lea     -12(sp),sp
+    move.l  sp,a0
+    move.l  sPek(a2),ahisi_Address(a0)
+    move.l  #AHIST_M8S,ahisi_Type(a0)
+    tst.b   s16Bit(a2)
+    beq     .1
+    move.l  #AHIST_M16S,ahisi_Type(a0)
+    lsl.l   #1,d0                   * number of samples
+.1  
+    move.w  d5,sAHISound(a2)        * Store AHI sound number to the Sample struct
+    move.l  d0,ahisi_Length(a0)     * a0 = info
+    move.l  d5,d0                   * d0 = sound number
+    moveq   #AHIST_SAMPLE,d1        * d1 = type
+    push    a2
+    move.l  ahi_ctrl(pc),a2         * a2 = control
+    jsr     _LVOAHI_LoadSound(a6)
+    pop     a2
+ ifne DEBUG
+    move.l  d5,d1
+    move.l  ahisi_Address(sp),d2
+    move.l  ahisi_Length(sp),d3
+    move.l  ahisi_Type(sp),d4
+    pushm   d5/d6
+    moveq   #0,d5
+    move.b  sLoopType(a2),d5
+    moveq   #0,d6
+    move.b  sFine(a2),d6
+    DPRINT  "LoadSound=%lx num=%lx addr=%lx len=%lx type=%lx loop=%ld fine=%ld"
+    popm    d5/d6
+ endif
+    lea     12(sp),sp
+    tst.l   d0
+    bne     .err
+
+    addq    #1,d5                  * Next AHI sound number
+.nextS
+    lea     SMP_SIZE(a2),a2
+    dbf     d6,.samples
+.next
+    dbf     d7,.instrs
+    moveq   #1,d0
+    rts
+.err
+    moveq   #0,d0
+    rts
+
+
+
+
+; ; AHISampleInfo
+;        STRUCTURE AHISampleInfo,0
+;        ULONG   ahisi_Type                      ; Format of samples
+;        APTR    ahisi_Address                   ; Address to array of samples
+;        ULONG   ahisi_Length                    ; Number of samples in array
+;        LABEL   AHISampleInfo_SIZEOF
+
+
+ahi_end:
+    DPRINT  "ahi end"
+	move.l	ahibase(pc),d0
+	beq.b	.1
+	move.l	d0,a6
+
+    ; for safety stop playback first, SB128 reportedly crashes otherwise
+    clr.b   setpause
+    bsr     ahi_stopcont
+
+	move.l	ahi_ctrl(pc),a2
+	jsr	_LVOAHI_FreeAudio(a6)
+	CLOSEAHI
+    clr.l   ahi_ctrl
+	clr.l	ahibase
+.1  
+    rts
+
+
+ahi_stop:
+    DPRINT  "ahi stop"
+    clr.b   setpause
+    bsr     ahi_stopChannels
+    bra     ahi_stopcont
+
+ahi_cont:
+    DPRINT  "ahi cont"
+    st      setpause
+    bsr     ahi_stopcont
+    bra     ahi_restoreChannels
+    
+ahi_stopcont:
+	pushm	d1/a0-a2/a6
+
+	lea	ahi_ctrltags(pc),a1
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr	_LVOAHI_ControlAudioA(a6)
+    DPRINT  "AHI_ControlAudioA=%ld"
+
+	popm	d1/a0-a2/a6
+	rts
+
+ahi_stopChannels:
+    pushm   all
+	move	hAntChn,d7
+	subq	#1,d7
+	moveq	#0,d6
+.chl
+    move.l  d6,d0
+    moveq   #0,d1   * NULL freq
+	moveq	#AHISF_IMM,d2
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr	_LVOAHI_SetFreq(a6)
+	addq	#1,d6
+	dbf	d7,.chl
+    popm     all
+    rts
+
+ahi_restoreChannels:
+    pushm   all
+
+    moveq   #0,d7
+    lea     freqForChannel,a4
+.chl
+    move.l  d7,d0
+    move.l  (a4)+,d1
+	moveq	#AHISF_IMM,d2
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr     _LVOAHI_SetFreq(a6)
+
+    addq    #1,d7
+	cmp.w	hAntChn,d7
+	bne     .chl
+
+    popm     all
+    rts
+
+
+ahi_playmusic:
+    tst.b  setpause
+    bne.b   .1
+    rts
+.1
+	pushm	d2-d7/a2-a6
+; ifne DEBUG
+;    move    $dff006,$dff180
+; endif
+	bsr 	MainPlayer
+	bsr 	Mix_UpdateChannelVolPanFrq_AHI
+
+	popm	d2-d7/a2-a6
+	rts
+
+
+ahi_setmastervol:
+	pushm	d0/d1/a0-a2/a6
+	moveq	#0,d0
+	move	setchannels(pc),d0
+	tst.l	attr_stereo
+	beq.b	.mono
+	tst.l	attr_panning		* sama jos panning
+	bne.b	.mono
+	lsr.l	#1,d0
+.mono
+	* d0 = max master vol
+	subq	#1,d0
+    mulu    ahi_mastervol(pc),d0    * make 16.16 FP
+    lsl.l   #8,d0    
+    lsl.l   #2,d0    
+
+	move.l	#AHIET_MASTERVOLUME,.effect+ahie_Effect
+	move.l	d0,.effect+ahiemv_Volume
+    DPRINT  "ahi_setmastervol=%08.8lx"
+
+	lea	    .effect(pc),a0
+	move.l	ahi_ctrl(pc),a2
+	move.l	ahibase(pc),a6
+	jsr	    _LVOAHI_SetEffect(a6)
+
+	popm	d0/d1/a0-a2/a6
+	rts
+
+.effect
+	ds.b	AHIEffMasterVolume_SIZEOF
+
+
+
+;in:
+* a0	struct Hook *
+* a1	struct AHISoundMessage *
+* a2	struct AHIAudioCtrl *
+ahi_soundfunc:
+	movem.l d2-d4/a6,-(sp)
+
+    moveq   #0,d0
+	move	ahism_Channel(a1),d0
+
+    lea     sampleForChannel(pc),a6
+    move    d0,d2
+    lsl     #2,d2
+    move.l  (a6,d2.w),d2
+    bne     .ok
+    DPRINT  "no sample for channel=%ld"
+    bra     .silent
+.ok
+    move.l  d2,a6
+    move.l  sRepS(a6),d2        * Repeat start offset
+    move.l  sOrigRepL(a6),d3    * Repeat length
+  
+	tst.b	s16Bit(a6)          * Adjust if 16-bit sample
+	beq.b	.8b
+    lsr.l   #1,d2
+    lsr.l   #1,d3
+.8b
+ 
+    cmp.l   #2,d3               * Repeat length sanity check
+    bls     .silent
+  
+    tst.b   sLoopType(a6)       * Test for no loop
+    beq     .silent
+
+    cmp.b   #2,sLoopType(a6)    * Test for ping pong loop
+    bne     .forward            * else do forward loop
+
+    tst.l   attr_pingpong      * Is ping pong supported?
+    beq     .forward
+        
+    * Check the direction the playback should be going
+    not.b   sAHILoopDir(a6)
+    beq     .forward
+    ;DPRINT  "BIDI fwd ch=%ld sLen=%lx RepS=%lx sRepL=%lx"
+    ;BIDI ch=7 sLen=DA4C RepS=0 sRepL=DA4C
+    ;DPRINT  "BIDI rev ch=%ld sLen=%lx RepS=%lx sRepL=%lx"
+
+    * Go backward
+    * Start offset at d2 should point to loop end
+    add.l   d3,d2
+    * Make length negative to indicate reverse playback
+    neg.l   d3
+
+.forward
+    moveq   #0,d1
+	move.w	sAHISound(a6),d1    ; sample bank
+    bra     .sound
+
+.silent
+	moveq	#AHI_NOSOUND,d1
+    moveq   #0,d2
+    moveq   #0,d3
+.sound
+	moveq	#0,d4				; NOTE: AHISF_IMM *NOT* SET!!
+	;move.l	ahi_ctrl(pc),a2 * already in a2
+	move.l	ahibase(pc),a6
+;    DPRINT  "SetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
+	; d0 = channel
+	; d1 = sound ID
+	; d2 = offset
+	; d3 = length
+	; d4 = flags (AHISF_IMM)
+	jsr	_LVOAHI_SetSound(a6)
+.exit
+	movem.l (sp)+,d2-d4/a6
+	rts
+
+
+;---- Tempo ----
+
+* In:
+*   d0 = tempo value, -1 to re-set previous value
+ahi_tempo:
+	pushm   all
+    DPRINT  "ahi_tempo=%ld"
+    ext.l   d0
+    bmi     .prev
+
+;	lsl.w	#1,d0
+;	divu	#5,d0
+
+    * Use 24.8 FP for accuracy
+    add.w   d0,d0
+	lsl.l	#8,d0
+    divu    #5,d0
+    ext.l   d0
+    lsl.l   #8,d0
+
+	lea	    .tags(pc),a1
+	move.l	d0,4(a1)
+    move.l  d0,setplayerfreq
+.prev
+	move.l	ahi_ctrl(pc),d7
+    beq     .1
+    move.l  d7,a2
+	move.l	ahibase(pc),a6
+	jsr	_LVOAHI_ControlAudioA(a6)
+.1
+    popm    all
+	RTS
+
+.tags
+	dc.l	AHIA_PlayerFreq
+.freq	dc.l	50<<16
+	dc.l	TAG_DONE
+
+
+PlayerFunc:
+	blk.b	MLN_SIZE
+	dc.l	ahi_playmusic
+	dc.l	0
+	dc.l	0
+
+SoundFunc:
+	blk.b	MLN_SIZE
+	dc.l	ahi_soundfunc
+	dc.l	0
+	dc.l	0
+
+ahi_sound0:	    dc.l	AHIST_M8S
+setsampletype 	=	*-4
+setmodule 	    dc.l	0
+setmodulelen	dc.l	0
+
+ahi_effect:     ds.b	AHIEffMasterVolume_SIZEOF
+
+ahi_ctrltags:	dc.l	AHIC_Play,1
+setpause 	    =	*-1
+		        dc.l	TAG_DONE
+
+ahi_tags:
+	dc.l	AHIA_MixFreq,22000
+setfreq 	=	*-4
+	dc.l	AHIA_AudioID,$0002000a	* 8 bit stereo
+setmode 	= 	*-4
+	dc.l	AHIA_Channels,4
+setchannels 	= 	*-2
+	dc.l	AHIA_Sounds,1
+setsounds = *-2
+	dc.l	AHIA_SoundFunc,SoundFunc
+	dc.l	AHIA_PlayerFunc,PlayerFunc
+	dc.l	AHIA_PlayerFreq,50<<16
+setplayerfreq = *-4
+	dc.l	AHIA_MinPlayerFreq,(32*2/5)<<16
+	dc.l	AHIA_MaxPlayerFreq,(255*2/5)<<16
+	dc.l	TAG_DONE
+
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; AmiGUS
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+amigus_init:
+    DPRINT  "--- amigus_init ---"
+	move.l	4.w,a6					
+	lea   	LibName(pc),a1	
+	moveq   #0,d0
+	jsr     _LVOOpenLibrary(a6)		
+    DPRINT  "OpenLibrary=%lx"
+    move.l  d0,amigus_lib
+    beq     .ag_init_error
+    ; ---------------------------------
+	move.l	d0,a6					; Let's find AmiGUS card
+    sub.l   a0,a0
+    jsr     _LVOAmiGUS_FindCard(a6)
+    DPRINT  "AmiGUS_FindCard=%lx"
+    move.l  d0,amigus_card
+    beq     .ag_init_error
+    ; ---------------------------------
+    move.l  d0,a0
+    cmp.w   #AmiGUS_mini,agus_TypeId(a0)
+    seq     amigus_hasleds
+ ifne DEBUG
+    move.l  agus_TypeName(a0),d0
+    moveq   #0,d1
+    move.w  agus_TypeId(a0),d1
+    DPRINT  "TypeName=%s TypeId=%lx"
+ endif
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    jsr     _LVOAmiGUS_ReserveCard(a6)
+    DPRINT  "AmiGUS_ReserveCard=%lx"
+    cmp.l   #AmiGUS_NoError,d0
+    seq     amigus_reserve
+    bne     .ag_init_error
+    ; ---------------------------------
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  #AmiGUS_Int,d2  
+    moveq   #0,d3           * data
+    jsr     _LVOAmiGUS_InstallInterrupt(a6) 
+    DPRINT  "AmiGUS_InstallInterrupt=%lx"
+    cmp.l   #AmiGUS_NoError,d0
+    seq     amigus_hasinterrupt
+    bne     .ag_init_error
+    ; ---------------------------------
+    move.l  amigus_card,a0
+    move.l  agus_WavetableBase(a0),amigus_base
+    move.l  agus_PcmBase(a0),a1
+    move.l  a1,amigus_pcm
+    ; ---------------------------------
+	bsr     loadSamplesAGUS
+
+    move.l	amigus_base(pc),a6		; a6 = AmiGUS register base
+	bsr		amigus_voice_reset		; Initialize all AmiGUS voices
+	
+	move.w	Speed(pc),d0			; d0 = tempo (BPM)
+	bsr		amigus_tempo			; Set initial tempo
+	
+	st   	setpause                ; play
+    
+	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt		
+	
+    DPRINT  "amigus_init SUCCESS"
+	moveq	#0,d0       * OK
+	rts
+
+.ag_init_error
+    bsr     amigus_uninit
+    DPRINT  "amigus_init FAILURE"
+	moveq	#ier_amigus,d0              ; Could not find or allocate AmiGUS
+	rts
+
+
+
+amigus_uninit:
+    bsr     amigus_freeinterrupt
+    bsr     amigus_freecard
+    bsr     amigus_closelib
+    clr.l   amigus_base
+    rts
+
+amigus_closelib:
+    move.l  amigus_lib,d0
+    beq     .x
+    clr.l   amigus_lib
+    move.l  d0,a1
+    move.l  4.w,a6
+    jsr     _LVOCloseLibrary(a6)
+.x  rts
+
+amigus_freecard:
+    tst.w   amigus_reserve
+    beq     .x
+    clr.w   amigus_reserve
+
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  amigus_lib,a6
+    jsr     _LVOAmiGUS_FreeCard(a6)
+.x
+    rts
+
+amigus_freeinterrupt:
+    tst.w   amigus_hasinterrupt
+    beq     .x
+    clr.w   amigus_hasinterrupt
+
+    move.l  amigus_card,a0
+    move.l  #AMIGUS_FLAG_WAVETABLE,d0
+    move.l  #"K-P!",d1
+    move.l  amigus_lib,a6
+    jsr     _LVOAmiGUS_RemoveInterrupt(a6)
+.x
+    rts
+
+
+amigus_restoreLeds:
+    tst.w   amigus_hasleds
+    beq     .1
+	move.l	amigus_pcm,a1
+    move.w  $d4(a1),d0
+    and.w   #$fffe,d0       * clear manual control bit
+    move.w  d0,$d4(a1)
+.1  rts
+
+amigus_runleds:
+    tst.w   amigus_hasleds
+    bne     .hasLeds
+.x  rts
+.hasLeds
+    tst.b   setpause
+    bne     amigus_restoreLeds
+    ; ---------------------------------
+    ; Could blink now, check if the LED scope is enabled,
+    ; if not, don't blink
+	move.l	amigus_pcm,a1
+    move.w  $d4(a1),d0
+    btst    #1,d0
+    beq     .x
+    ; ---------------------------------
+    * Paused, do effect
+	move	.dir,d0
+	move	.pos,d1
+	add	d0,d1
+	bpl	.p1
+	neg	d0
+	moveq	#0,d1
+	bra	.ok
+.p1
+	cmp	#32,d1
+	blo	.ok
+	moveq	#31,d1
+	neg	d0
+.ok
+    move    d0,.dir
+	move	d1,.pos
+    ; ---------------------------------
+	move	.pos,d0
+	lsr	#2,d0
+	lea	.leds,a0
+	add	d0,a0
+	move.b	#$7f,(a0)
+    ; ---------------------------------
+	moveq	#28,d3
+	moveq	#0,d2
+	moveq	#8-1,d0
+	lea	    .leds,a0
+.3	move.b	(a0)+,d1
+	lsr.b	#3,d1
+	and.l	#$f,d1
+	rol.l	d3,d1
+	or.l	d1,d2
+	subq	#4,d3
+	dbf	d0,.3
+    ; ---------------------------------
+	move.l	amigus_pcm,a1
+    move.w  $d4(a1),d0
+    or.w    #1,d0           * set manual led control bit, keep others
+	move.w	d0,$d4(a1)   
+	move.l	d2,$d0(a1)      * write led values
+    ; ---------------------------------
+	lea	    .leds,a0
+	moveq	#8-1,d0
+.1 	subq.b	#6,(a0)
+	tst.b	(a0)+
+	bpl	.2
+	clr.b	-1(a0)
+.2	dbf	d0,.1
+	rts
+
+.dir	dc.w	1
+.pos	ds.w	1
+.leds	ds.b	8
+
+amigus_base		     dc.l	 0 
+amigus_pcm		     dc.l	 0 
+amigus_lib           dc.l    0
+amigus_card          dc.l    0
+amigus_reserve       dc.w    0
+amigus_hasinterrupt  dc.w    0
+amigus_hasleds       dc.w    0
+
+LibName         dc.b    "amigus.library",0
+ even
+
+;=============================================================
+amigus_end:	
+    DPRINT  "amigus_end"
+	move.l	amigus_base(pc),a6
+
+	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	; Disable Timer
+	move.w	#$4000,HAGEN_INTE0(a6)		; Disable Timer interrupt
+	move.w	#$4000,HAGEN_INTC0(a6)		; Clear Timer interrupt
+	
+    bsr     amigus_restoreLeds
+	bsr		amigus_voice_reset
+    bsr     amigus_uninit
+	rts
+;=============================================================
+
+amigus_voice_reset:
+	move.l	amigus_base(pc),a6
+	moveq	#0,d0
+	moveq	#0,d1
+.ag_clear_loop
+	move.w	d0,HAGEN_VOICE_BNK(a6)		; Set voice bank
+	lea 	HAGEN_VOICE_CTRL(a6),a0		; Clear all voice registers
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	move.l	d1,(a0)+
+	addq	#1,d0
+	cmp.w	#32,d0
+	bne	.ag_clear_loop
+	rts
+
+;==============================================================
+amigus_stop:
+    DPRINT  "amigus_stop"
+	clr.b   setpause
+	move.l	amigus_base(pc),a6
+	move.w	#$4000,HAGEN_INTE0(a6)	; Disable interrupt
+	bsr		.ag_mutechannels	
+	rts
+;---	
+.ag_mutechannels
+	moveq	#0,d0
+	moveq	#0,d1
+.ag_mute_loop
+	move.w	d0,HAGEN_VOICE_BNK(a6)	; Set channel number
+	move.l	d1,HAGEN_VOICE_VOLUMEL(a6)	; Also sets right volume (longword access)
+	addq	#1,d0
+	cmp.w	#32,d0
+	bne	.ag_mute_loop
+	rts	
+;==============================================================
+amigus_cont:
+    DPRINT  "amigus_cont"
+	st      setpause
+	move.l	amigus_base(pc),a6
+	bsr     .ag_restorechannels
+	move.w	#$c000,HAGEN_INTE0(a6)	; Enable interrupt
+	rts
+;---	
+.ag_restorechannels
+	lea	    agusVolForChannel,a0
+	moveq	#0,d7
+.ag_restore_loop
+	move.w	d7,HAGEN_VOICE_BNK(a6)	; Set channel number	
+    move.w  (a0)+,HAGEN_VOICE_VOLUMEL(a6)
+    move.w  (a0)+,HAGEN_VOICE_VOLUMER(a6)
+    addq    #1,d7
+    cmp     hAntChn,d7
+    bne     .ag_restore_loop
+	rts	
+;==============================================================
+amigus_tempo:
+	movem.l d0-d7/a0-a6,-(sp)
+	and.w	#$ff,d0
+	lsl.w	#1,d0
+	moveq	#0,d1
+	move.w	d0,d1
+	
+	move.l	amigus_base(pc),d7
+    beq     .x
+    move.l  d7,a6
+	move.w	#$0000,HAGEN_TIMER_CTRL(a6)	
+	move.l 	#5*HAGEN_TIMER_TIMEBASE,d0
+	bsr		divu_32
+    ;divu.l  d1,d0
+	move.l	d0,HAGEN_TIMER_RELOADH(a6)	; Set timer interrupt speed for playback
+	move.w	#$8000,HAGEN_TIMER_CTRL(a6)
+.x
+	movem.l (sp)+,d0-d7/a0-a6	; Restore registers
+	rts
+;=============================================================
+amigus_setmastervol:
+    move    ahi_mastervol(pc),d1
+	cmp.w	#64,d1				; Full PAULA volume?
+	bne		.ag_novolovl		; No, then just shift it
+	move.w	#$ffff,d1			; Yes, set full AmiGUS master volume
+	bra		.ag_setmastervol
+.ag_novolovl	
+	lsl.l	#5,d1				; Convert volume value
+	lsl.l	#5,d1	
+.ag_setmastervol	
+	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
+	move.w	d1,HAGEN_GLOBAL_VOLUMEL(a6)	; Set AmiGUS master volume
+	move.w	d1,HAGEN_GLOBAL_VOLUMER(a6)	
+    rts
+
+;======================================
+
+
+AmiGUS_Int:
+	movem.l d1-d7/a0-a6,-(sp)	; Save registers
+
+	move.l	amigus_base(pc),a6
+
+	move.w	HAGEN_INTC0(a6),d0			; read interrupt status
+	and.w   #$4000,d0					; did AmiGUS Timer IRQ occur?
+	beq.b	.noTimerInt					; if not, then there is nothing to do here	
+	
+	move.w	#$4000,HAGEN_INTC0(a6)	; Clear interrupt
+
+    tst.b  setpause
+    beq.b   .1
+; ifne DEBUG
+;    move    $dff006,$dff180
+; endif
+	bsr 	MainPlayer
+	bsr 	Mix_UpdateChannelVolPanFrq_AGUS
+.1
+    bsr     amigus_runleds
+.noTimerInt	
+	movem.l (sp)+,d1-d7/a0-a6	; Restore registers
+	moveq	#0,d0
+	rts
+	
+;======================================
+
+
+PUSH8M macro
+    rol.l   #8,d3       * Push 8 bits
+    move.b  \2,d3
+    subq    #1,d4       * 1 byte
+    bne.b   .\1
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
+.\1:
+    endm
+
+PUSH16M macro           
+    swap    d3          * Push 16 bits
+    move.w  \2,d3
+    subq    #2,d4       * 1 word
+    bne.b   .\1
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
+.\1:
+    endm
+
+* Load each instrument sample to AGUS
+loadSamplesAGUS:
+    DPRINT  "loadSamplesAGUS"
+    
+    moveq   #128-1,d7
+    lea     Instr,a4
+    moveq   #0,d5               * AGUS sample address
+
+	move.l	amigus_base(pc),a1		
+	move.l	d5,HAGEN_WADDRH(a1)   * destination address
+    moveq   #4,d4               * push counter
+    moveq   #0,d3               * push buffer
+.instrs
+    move.l  (a4)+,d0
+    beq     .next
+    move.l  d0,a3 
+    move    iAntSamp(a3),d6
+    beq     .next
+    subq    #1,d6
+    lea	    iSamp(a3),a2		; a2 = sample struct
+
+.samples
+    move.l  sPek(a2),d0
+    beq     .nextS
+    move.l  d0,a0
+    move.l  sOrigLen(a2),d0    
+    beq     .nextS
+    move.l  d5,sAGUSOffset(a2)   * Store AGUS address for later
+
+ ifne DEBUG
+    push    d1
+    move.l  d5,d1
+    DPRINT  "Sample len=%lx - AGUS offset=%lx"
+    pop     d1
+ endif
+
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS
+	move.l	amigus_base(pc),a1		
+    lea     HAGEN_WDATAH(a1),a1   * destination address
+
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS - with BIDI support
+    ; Check for bidi loop
+    cmp.l   #4,sOrigRepL(a2)
+    bls     .noLoop
+    cmp.b   #2,sLoopType(a2)
+    beq     .bidi
+.noLoop
+
+    ; ---------------------------------    
+    ; Copy d0 bytes from a0 to AGUS - non-bidi
+    move.w  a0,d1
+    btst    #0,d1
+    beq     .copyEven
+
+    move.w  d0,-(sp)	  * stash count
+    and.l   #~%11,d0      * do multiples of four
+    beq.b   .rest
+    add.l   d0,d5         * adjust mem offset
+.copyOdd
+    move.b  (a0)+,d2
+    rol.w   #8,d2
+    move.b  (a0)+,d2
+    swap    d2    
+    move.b  (a0)+,d2
+    rol.w   #8,d2
+    move.b  (a0)+,d2
+    move.l  d2,(a1)
+    subq.l  #4,d0
+    bne.b   .copyOdd
+    bra	    .rest
+
+.copyEven
+    move.w  d0,-(sp)	  * stash count
+    and.l   #~%11,d0      * do multiples of four
+    beq.b   .rest
+    add.l   d0,d5         * adjust mem offset
+.copy
+    move.l  (a0)+,(a1)
+    subq.l  #4,d0
+    bne.b   .copy
+
+.rest
+    moveq   #%11,d0
+    and.w   (sp)+,d0
+    beq.b   .done
+    clr.l   -(sp)
+    move.l  sp,a5
+.restLoop
+    move.b  (a0)+,(a5)+
+    subq    #1,d0
+    bne.b   .restLoop
+    move.l  (sp)+,(a1)
+    addq.l  #4,d5        * adjust mem offset
+.done
+    bra     .continue
+    ; ---------------------------------    
+.bidi
+    ; Calc bytes to loop end
+    move.l  sRepS(a2),d0                ; Repeat start offset
+    add.l   sOrigRepL(a2),d0            ; Repeat length
+
+    tst.b   s16Bit(a2)
+    bne     .bidiloop16a
+.bidiloop8a
+    PUSH8M  3,(a0)+
+    subq.l  #1,d0
+    bne.b    .bidiloop8a
+    ; Append replen of data reversed
+    move.l   sOrigRepL(a2),d0            ; Repeat length
+.bidiloop8b
+    PUSH8M  4,-(a0)
+    subq.l  #1,d0
+    bne.b   .bidiloop8b
+    bsr     .flush
+    bra     .continue
+
+.bidiloop16a
+    move.w  a0,d2
+    btst    #0,d2
+    beq     .bidiloop16aEven
+
+    ; Skipping the last two bytes seems to reduce click
+    ; noises at the transition point in InternationalKarate.xm
+    subq.l  #2,d0		
+
+.bidiloop16aOdd
+    move.b  (a0)+,d2
+    lsl.w   #8,d2
+    move.b  (a0)+,d2
+    PUSH16M  5o,d2
+    subq.l  #2,d0
+    bpl     .bidiloop16aOdd
+
+    ; Append replen of data reversed
+    move.l   sOrigRepL(a2),d0            ; Repeat length
+    subq.l  #2,d0		
+
+.bidiloop16bOdd
+    move.b  -(a0),d2
+    rol.w   #8,d2
+    move.b  -(a0),d2
+    rol.w   #8,d2
+    PUSH16M  6o,d2
+    subq.l  #2,d0
+    bne.b   .bidiloop16bOdd
+    bsr     .flush
+    bra     .continue
+
+.bidiloop16aEven
+    ; Skipping the last two bytes seems to reduce click
+    ; noises at the transition point in InternationalKarate.xm
+    subq.l  #2,d0		
+
+.bidiloop16aEven_
+    PUSH16M  5,(a0)+
+    subq.l  #2,d0
+    bpl     .bidiloop16aEven_
+
+    ; Append replen of data reversed
+    move.l   sOrigRepL(a2),d0            ; Repeat length
+    subq.l  #2,d0		
+
+.bidiloop16bEven_
+    PUSH16M  6,-(a0)
+    subq.l  #2,d0
+    bne.b   .bidiloop16bEven_
+    bsr     .flush
+
+.continue
+
+
+    ; ---------------------------------    
+    ; Free it
+;    move.l  sPek(a2),a1
+;    move.l	sLen(a2),d0
+;	beq.b	.nextS			; (length is zero, don't free)	
+;    bmi.b   .nextS
+;    neg.l   sLen(a2)        ; neg means freed
+;	addq.l	#2,d0			; fix-sample for linear interpolation
+;	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr    
+    ; ---------------------------------    
+.nextS
+    lea     SMP_SIZE(a2),a2
+    dbf     d6,.samples
+.next
+    dbf     d7,.instrs
+    moveq   #1,d0
+    rts
+.err
+    moveq   #0,d0
+    rts
+
+
+* Push byte to AGUS
+*   d1 = byte
+*   a1 = HAGEN_WDATAH
+*   d3 = buffer
+*   d4 = counter
+.push8
+    rol.l   #8,d3
+    move.b  d1,d3
+    subq    #1,d4
+    beq.b   .flush_
+    rts
+* Push word to AGUS
+*   d1 = word
+.push16
+    swap    d3
+    move.w  d1,d3
+    subq    #2,d4
+    beq.b   .flush_
+    rts
+* shift remaining data to the top
+.flush
+    lsl     #3,d4
+    rol.l   d4,d3
+.flush_
+    move.l  d3,(a1)     * output 32 bits
+    addq.l  #4,d5       * advance agus offset
+    moveq   #0,d3       * clear buffer
+    moveq   #4,d4       * do 4 bytes again
+    rts
+
+
+;---------------------------------------------------------------------------
+;---------------------------------------------------------------------------
+
+
+initSysTime:
+    move.l  WorkerTask,a1    
+    lea     sysTimerIORequest,a2
+    lea     sysTimerPort,a3
+
+* Utility to set up a timer
+* In:
+*   a1 = current task
+*   a2 = io structure
+*   a3 = port structure
+* Out:
+*   d0 = OpenDevice return code
+.initTimer:
+    ; ---------------------------------
+    ; Create port
+    move.l  a1,MP_SIGTASK(a3)
+    move.b  #NT_MSGPORT,LN_TYPE(a3)
+    clr.l   LN_NAME(a3)
+    move.b  #PA_SIGNAL,MP_FLAGS(a3)
+    lea     MP_MSGLIST(a3),a0
+    NEWLIST a0
+    moveq   #-1,d0
+    move.l  4.w,a6
+    jsr     _LVOAllocSignal(a6)       * error ignored
+    move.b  d0,MP_SIGBIT(a3)
+    ; ---------------------------------
+    ; Create IO
+    move.l  a3,MN_REPLYPORT(a2)
+    move.b  #NT_MESSAGE,LN_TYPE(a2)
+    move    #IOTV_SIZE,MN_LENGTH(a2)
+    ; ---------------------------------
+    ; timer.device
+    lea     timerDeviceName,a0
+    move.l  a2,a1
+    moveq   #UNIT_VBLANK,d0
+    moveq   #0,d1
+    jsr     _LVOOpenDevice(a6)      * returns d0=non-zero on error
+    rts
+
+deinitSysTime:
+    lea     sysTimerIORequest,a1
+    move.l  4.w,a6
+    jsr     _LVOCloseDevice(a6)
+    move.b  sysTimerPort+MP_SIGBIT,d0
+    jsr     _LVOFreeSignal(a6)
+    rts
+
+sysWait:
+    lea     sysTimerIORequest,a1  
+	move.w	#TR_ADDREQUEST,IO_COMMAND(a1)
+	clr.l   IOTV_TIME+TV_SECS(a1)
+	move.l	#20*1000,IOTV_TIME+TV_MICRO(a1)
+    move.l  4.w,a6
+    jmp     _LVODoIO(a6)
+
+sysTimerPort        ds.b      MP_SIZE
+sysTimerIORequest   ds.b      IOTV_SIZE
+timerDeviceName     dc.b	  "timer.device",0
+    even
+
+
+* mulu_32 --- d0 = d0*d1
+mulu_32	movem.l	d2/d3,-(sp)
+	move.l	d0,d2
+	move.l	d1,d3
+	swap	d2
+	swap	d3
+	mulu	d1,d2
+	mulu	d0,d3
+	mulu	d1,d0
+	add	d3,d2
+	swap	d2
+	clr	d2
+	add.l	d2,d0
+	movem.l	(sp)+,d2/d3
+	rts	
+
+* divu_32 --- d0 = d0/d1, d1=jakojäännös
+divu_32	move.l	d3,-(a7)
+	swap	d1
+	tst	d1
+	bne.b	lb_5f8c
+	swap	d1
+	move.l	d1,d3
+	swap	d0
+	move	d0,d3
+	beq.b	lb_5f7c
+	divu	d1,d3
+	move	d3,d0
+lb_5f7c	swap	d0
+	move	d0,d3
+	divu	d1,d3
+	move	d3,d0
+	swap	d3
+	move	d3,d1
+	move.l	(a7)+,d3
+	rts	
+
+lb_5f8c	swap	d1
+	move	d2,-(a7)
+	moveq	#16-1,d3
+	move	d3,d2
+	move.l	d1,d3
+	move.l	d0,d1
+	clr	d1
+	swap	d1
+	swap	d0
+	clr	d0
+lb_5fa0	add.l	d0,d0
+	addx.l	d1,d1
+	cmp.l	d1,d3
+	bhi.b	lb_5fac
+	sub.l	d3,d1
+	addq	#1,d0
+lb_5fac	dbf	d2,lb_5fa0
+	move	(a7)+,d2
+	move.l	(a7)+,d3
+	rts	
+
+
+; udivmod64 - divu.l d2,d0:d1
+; by Meynaf/English Amiga Board
+divu_64
+	move.l d3,-(a7)
+ 	moveq #31,d3
+.loop
+	 add.l d1,d1
+	 addx.l d0,d0
+ 	bcs.s .over
+ 	cmp.l d2,d0
+ 	bcs.s .sui
+ 	sub.l d2,d0
+.re
+ 	addq.b #1,d1
+.sui
+ 	dbf d3,.loop
+ 	move.l (a7)+,d3	; v=0
+ 	rts
+.over
+ 	sub.l d2,d0
+ 	bcs.s .re
+ 	move.l (a7)+,d3
+ 	or.b #4,ccr		; v=1
+ 	rts
+
+;---------------------------------------------------------------------------
+; Multiply two unsigned 32 bit integers and return the 64 bit result
+;
+;   REGISTER USAGE
+;       D4 -- scratch (restored)
+;       D3 -- scratch (restored)
+;       D2 -- scratch (restored)
+;       D1 -- arg 1 (given), result 32:63
+;       D0 -- arg 0 (given), result 0:31
+;
+UMult64S:
+        movem.l d2-d4,-(sp)
+
+        move.l  d1,d3
+        mulu.w  d0,d3           ; 24
+        move.l  d1,d2
+        swap.w  d2
+        swap.w  d0
+        mulu.w  d0,d2           ; 13
+
+        swap.w  d3
+
+        move.l  d1,d4
+        mulu.w  d0,d4           ; 14
+        add.w   d4,d3
+        clr.w   d4
+        swap.w  d4
+        addx.l  d4,d2
+
+        swap.w  d0
+        swap.w  d1
+
+        move.l  d1,d4
+        mulu.w  d0,d4           ; 23
+        add.w   d4,d3
+        clr.w   d4
+        swap.w  d4
+        addx.l  d4,d2
+
+        swap.w  d3
+
+        move.l  d2,d0
+        move.l  d3,d1
+
+        movem.l (sp)+,d2-d4
+        rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+
+PatternInit
+    DPRINT  "PatternInit"
+	lea	    PatternInfo,A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	pea 	ConvertNote(pc) 
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#64,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move 	hAntChn,PatternInfo+PI_Voices
+
+	* 5 bytes per note, per channel
+    moveq   #0,d1
+    move    TrackWidth,d1
+	move.l	d1,PI_Modulo(A0)	; Number of bytes to next row
+	move	#-1,PI_Speed(a0)	; Magic! Negative: note index
+	rts
+
+
+* Called by the PI engine to get values for a particular row
+* Out:
+*   d0 = period/note
+*   d1 = sample number
+*   d2 = command
+*   d3 = command arg
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command 
+	moveq	#0,D3		; Command argument
+
+	move.b	0(a0),d0		; Ton
+	move.b	1(a0),d1		; Ins
+	;move.b	2(a0),cVolKolVol(a5)	; Vol column ignored 
+	move.b	3(a0),d2		; EffTyp
+	move.b	4(a0),d3		; Eff
+    rts
+
+
+* This updates the information in PatternInfo structure
+* to correspond to what is being played currently
+updatePatternInfoData:
+    tst.b   AHI     * do this only for AHI/AGUS
+    beq     .x
+
+    move    PattPos(pc),PatternInfo+PI_Pattpos
+
+    move    SongPos(pc),d0
+	moveq	#0,d1
+    lea     hSongTab,a0
+	move.b	(a0,d0),d1	    * get pattern for this song position
+
+    * Get pattern length in rows
+    lea     PattLens,a0
+    add     d1,d1
+    move    (a0,d1),PatternInfo+PI_Pattlength
+    
+    * Get pattern into d1
+    lea     Patt,a0
+    add     d1,d1
+	move.l	(a0,d1),d1      * can be null
+
+    * Point stripes
+	move	hAntChn,D0
+	subq	#1,d0
+	lea	    Stripe1,a0
+.stripesLoop 
+	move.l	d1,(a0)+        * null or ptr
+    beq     .1
+	addq.l 	#5,d1           * channel width is 5 bytes
+.1	dbf	d0,.stripesLoop
+
+.x
+	rts
 
 
 ;------------------------------------------------------------------------------
@@ -159,21 +1813,22 @@ NUM_ERROR_MSGS 		EQU 6
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
-SEEK_SET		EQU -1
-SEEK_CUR		EQU 0
+SEEK_SET		EQU -1 ; OFFSET_BEGINNING relative to Beginning Of File 
+SEEK_CUR		EQU 0  ; OFFSET_CURRENT  relative to Current file position 
 MODE_OLDFILE		EQU 1005
 MEMF_ANY		EQU 0
 MEMF_CHIP		EQU 2
 MEMF_FAST		EQU 4
+MEMF_PUBLIC     EQU 1
 MEMF_CLEAR		EQU 65536
 MEMF_TOTAL		EQU 524288
-NT_INTERRUPT		EQU 2
-INTB_AUD0		EQU 7
-INTF_AUD0		EQU 128
-LN_NAME			EQU 10
-LN_PRI			EQU 9
-LN_TYPE			EQU 8
-NT_TASK			EQU 1
+;NT_INTERRUPT		EQU 2
+;INTB_AUD0		EQU 7
+;INTF_AUD0		EQU 128
+;LN_NAME			EQU 10
+;LN_PRI			EQU 9
+;LN_TYPE			EQU 8
+;NT_TASK			EQU 1
 TC_SIZE			EQU 92
 TC_SPLOWER		EQU 58
 TC_SPREG		EQU 54
@@ -192,31 +1847,34 @@ _LVORead		EQU -42
 _LVORequestFile		EQU -42
 _LVOWrite		EQU -48
 _LVOSeek		EQU -66
-_LVOForbid		EQU -132
-_LVOPermit		EQU -138
-_LVOSetIntVector	EQU -162
-_LVORemIntServer	EQU -174
-_LVOAllocMem		EQU -198
-_LVOFreeMem		EQU -210
+;_LVOForbid		EQU -132
+;_LVOPermit		EQU -138
+;_LVOSetIntVector	EQU -162
+;_LVORemIntServer	EQU -174
+;_LVOAllocMem		EQU -198
+;_LVOFreeMem		EQU -210
 _LVOWaitTOF		EQU -270
-_LVOAddTask		EQU -282
-_LVOFindTask		EQU -294
-_LVOSetSignal		EQU -306
-_LVOWait		EQU -318
-_LVOSignal		EQU -324
-_LVOAllocSignal		EQU -330
-_LVOFreeSignal		EQU -336
-_LVOCloseLibrary	EQU -414
-_LVOOpenDevice		EQU -444
-_LVOCloseDevice		EQU -450
-_LVODoIO		EQU -456
-_LVOOpenResource	EQU -498
-_LVOOpenLibrary		EQU -552
-_LVOCreateIORequest	EQU -654
-_LVODeleteIORequest	EQU -660
-_LVOCreateMsgPort 	EQU -666
-_LVODeleteMsgPort	EQU -672
+;_LVOAddTask		EQU -282
+;_LVOFindTask		EQU -294
+;_LVOSetSignal		EQU -306
+;_LVOWait		EQU -318
+;_LVOSignal		EQU -324
+;_LVOAllocSignal		EQU -330
+;_LVOFreeSignal		EQU -336
+;_LVOCloseLibrary	EQU -414
+;_LVOOpenDevice		EQU -444
+;_LVOCloseDevice		EQU -450
+;_LVODoIO		EQU -456
+;_LVOOpenResource	EQU -498
+;_LVOOpenLibrary		EQU -552
+;_LVOCreateIORequest	EQU -654
+;_LVODeleteIORequest	EQU -660
+;_LVOCreateMsgPort 	EQU -666
+;_LVODeleteMsgPort	EQU -672
 _LVOPutStr		EQU -948
+_LVODelay     EQU   -198
+
+AttnFlags		EQU $128
 
 
 swap16	MACRO
@@ -229,21 +1887,64 @@ swap32	MACRO
 	rol.w	#8,\1
 	ENDM
 	
+;swap16a        MACRO
+;       move.w  \1,d0
+;       rol.w   #8,d0
+;       move.w  d0,\1
+;       ENDM
+
 	; warning: trashes d0!
 swap16a	MACRO
-	move.w	\1,d0
-	rol.w	#8,d0
-	move.w	d0,\1
+    pea     \1
+    bsr     swap16a_
+    addq    #4,sp
 	ENDM
-	
+
+;swap32a        MACRO
+;       move.l  \1,d0
+;       rol.w   #8,d0
+;       swap    d0
+;       rol.w   #8,d0
+;       move.l  d0,\1
+;	ENDM
+
 	; warning: trashes d0!
 swap32a	MACRO
-	move.l	\1,d0
-	rol.w	#8,d0
-	swap	d0
-	rol.w	#8,d0
-	move.l	d0,\1
+    pea     \1
+    bsr     swap32a_
+    addq    #4,sp
 	ENDM
+
+
+swap16a_:
+    movem.l d0/a0,-(sp)
+    move.l  4+4+4(sp),a0
+    move.b  0(a0),-(sp)
+    move.b  1(a0),-(sp)
+    move.b  (sp)+,d0
+    move.b  d0,0(a0)
+    move.b  (sp)+,d0
+    move.b  d0,1(a0)
+    movem.l (sp)+,d0/a0
+    rts
+
+swap32a_:
+    movem.l d0/a0,-(sp)
+    move.l  4+4+4(sp),a0
+    move.b  0(a0),-(sp)
+    move.b  1(a0),-(sp)
+    move.b  2(a0),-(sp)
+    move.b  3(a0),-(sp)
+    move.b  (sp)+,d0
+    move.b  d0,0(a0)
+    move.b  (sp)+,d0
+    move.b  d0,1(a0)
+    move.b  (sp)+,d0
+    move.b  d0,2(a0)
+    move.b  (sp)+,d0
+    move.b  d0,3(a0)
+    movem.l (sp)+,d0/a0
+    rts
 
 ;------------------------------------------------------------------------------
 ;                              XM STRUCTURES
@@ -400,8 +2101,12 @@ sLoopType	EQU 32	; B (8bb: was Typ, but no 16-bit smps, so it's all we need)
 sPan		EQU 33	; B
 sRelTon		EQU 34	; B
 s16Bit		EQU 35	; B
-
-SMP_SIZE	EQU 36	; Must be a multiple of 4 for longword alignment.
+sAHISound   EQU 36  ; W AHI sound number for this sample
+sAGUSOffset EQU 36  ; L AGUS memory address for this sample                      
+sAHILoopDir EQU 38  ; B AHI mode only
+sPadding    EQU 39  ; B AGUS mode only - part of sAGUSOffset
+sMore       EQU 40  ; L not used 
+SMP_SIZE	EQU 44	; Must be a multiple of 4 for longword alignment.
 			; If you change this, remember to update INS_SIZE below
 
 ;------------------------------
@@ -434,7 +2139,10 @@ iEnvPDeltas	EQU 236 ; 12 words
 iMute		EQU 260	; B
 iSamp		EQU 264	; 16*SMPSIZE (must be multiple of 4)
 
-INS_SIZE	EQU 840	; 264+(16*SMPSIZE) (must be multiple of 4)
+INS_SIZE	EQU 840+16*4+16*4	
+                            ; 264+(16*SMPSIZE) (must be multiple of 4)
+                            ; 16*4 = add sAHISound worth of space
+                            ; 16*4 = add another lword
 
 ;------------------------------
 ; Instrument header struct
@@ -474,9 +2182,9 @@ INS_HDR_SIZE	EQU 263
 ;------------------------------
 ; Sample header struct
 ;------------------------------
-shLen		EQU 0	; L (DON'T CHANGE ORDER!)
-shRepS		EQU 4	; L (DON'T CHANGE ORDER!)
-shRepL		EQU 8	; L (DON'T CHANGE ORDER!)
+shLen		EQU 0	; L (DON'T CHANGE ORDER!) - SAMPLE LENGTH
+shRepS		EQU 4	; L (DON'T CHANGE ORDER!) - SAMPLE LOOP START 
+shRepL		EQU 8	; L (DON'T CHANGE ORDER!) - SAMPLE LOOP LENGTH
 shVol		EQU 12	; B
 shFine		EQU 13	; B
 shTyp		EQU 14	; B
@@ -493,7 +2201,7 @@ SMP_HDR_SIZE	EQU 40
 	;SECTION maincode,CODE
 	
 	bra.w	MAIN
-	dc.b "\\0$VER: 0.46"
+	dc.b "\\0$VER: 0.47"
 	EVEN
 	
 	;-------------------------------------------------
@@ -516,7 +2224,7 @@ PutStr
 	; Output:
 	;   d0.l = pointer to memory block
 	;-------------------------------------------------
-AllocMem
+AllocMem:
 	movem.l	d1/a0/a1/a6,-(sp)
 	move.l	4.w,a6
 	jsr	_LVOAllocMem(a6)
@@ -597,20 +2305,23 @@ strncmp
 	; Output:
 	;   d0.l = file handle
 	;-------------------------------------------------
-fopen	movem.l	d1/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	jsr	_LVOOpen(a6)
-	movem.l	(sp)+,d1/a0/a1/a6
+fopen	
+    ;movem.l	d1/a0/a1/a6,-(sp)
+	;move.l	DosBase(pc),a6
+	;jsr	_LVOOpen(a6)
+    moveq   #1,d0
+	;movem.l	(sp)+,d1/a0/a1/a6
 	rts
 
 	;-------------------------------------------------
 	; Input:
 	;   d1.l = file handle
 	;-------------------------------------------------
-fclose	movem.l	d0/d1/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	jsr	_LVOClose(a6)
-	movem.l	(sp)+,d0/d1/a0/a1/a6
+fclose	
+    ;movem.l	d0/d1/a0/a1/a6,-(sp)
+	;move.l	DosBase(pc),a6
+	;jsr	_LVOClose(a6)
+	;movem.l	(sp)+,d0/d1/a0/a1/a6
 	rts
 	
 	;-------------------------------------------------
@@ -622,12 +2333,22 @@ fclose	movem.l	d0/d1/a0/a1/a6,-(sp)
 	; Output:
 	;   d0.l = actual bytes read
 	;-------------------------------------------------	
-fread	movem.l	d1/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	jsr	_LVORead(a6)
+fread:	movem.l	d1/a0/a1/a6,-(sp)
+	;move.l	DosBase(pc),a6
+	;jsr	_LVORead(a6)
+    
+    move.l  readPtr,a0
+    add.l   d3,readPtr
+    move.l  d2,a1
+    move.l  d3,d0
+
+    move.l  4.w,a6
+    jsr     _LVOCopyMem(a6)
+    move.l  d3,d0
+
 	movem.l	(sp)+,d1/a0/a1/a6
 	rts
-	
+
 	;-------------------------------------------------
 	; Input:
 	;   d1.l = file handle
@@ -638,8 +2359,19 @@ fread	movem.l	d1/a0/a1/a6,-(sp)
 	;   d0.l = old position
 	;-------------------------------------------------	
 fseek	movem.l	d1/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	jsr	_LVOSeek(a6)
+	;move.l	DosBase(pc),a6
+	;jsr	_LVOSeek(a6)
+
+    cmp.l   #SEEK_SET,d3
+    beq     .set
+    cmp.l   #SEEK_CUR,d3
+    beq     .x
+    bra     .y
+.set
+    move.l  modulePtr,readPtr
+.x
+    add.l   d2,readPtr
+.y
 	movem.l	(sp)+,d1/a0/a1/a6
 	rts
 
@@ -651,14 +2383,19 @@ fseek	movem.l	d1/a0/a1/a6,-(sp)
 	;   d0.b = byte
 	;-------------------------------------------------
 ReadByte
-	movem.l	d1-d3/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	moveq	#1,d3
-	move.l	#tmp8,d2
-	clr.b	tmp8
-	jsr	_LVORead(a6)
-	move.b	tmp8(pc),d0
-	movem.l	(sp)+,d1-d3/a0/a1/a6
+;	movem.l	d1-d3/a0/a1/a6,-(sp)
+;	move.l	DosBase(pc),a6
+;	moveq	#1,d3
+;	move.l	#tmp8,d2
+;	clr.b	tmp8
+;	jsr	_LVORead(a6)
+;	move.b	tmp8(pc),d0
+    push    a0
+    move.l  readPtr,a0
+    move.b  (a0)+,d0
+    move.l  a0,readPtr
+    pop     a0
+;	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
 	
 	;-------------------------------------------------
@@ -669,15 +2406,27 @@ ReadByte
 	;   d0.w = byteswapped word
 	;-------------------------------------------------	
 ReadLittleEndian16
-	movem.l	d1-d3/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	moveq	#2,d3
-	move.l	#tmp16,d2
-	clr.w	tmp16
-	jsr	_LVORead(a6)
-	move.w	tmp16(pc),d0
-	swap16	d0
-	movem.l	(sp)+,d1-d3/a0/a1/a6
+;	movem.l	d1-d3/a0/a1/a6,-(sp)
+;	move.l	DosBase(pc),a6
+;	moveq	#2,d3
+;	move.l	#tmp16,d2
+;	clr.w	tmp16
+;	jsr	_LVORead(a6)
+;	move.w	tmp16(pc),d0
+    push    a0
+    move.l  readPtr,a0
+;    move.b  (a0)+,d0
+;    rol.w   #8,d0
+;    move.b  (a0)+,d0
+;    move.l  a0,readPtr
+;	swap16	d0
+    move.b  1(a0),d0
+    rol.w   #8,d0
+    move.b  (a0),d0
+    addq    #2,a0
+    move.l  a0,readPtr
+    pop     a0
+;	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
 	
 	;-------------------------------------------------
@@ -688,21 +2437,44 @@ ReadLittleEndian16
 	;   d0.l = byteswapped longword
 	;-------------------------------------------------
 ReadLittleEndian32
-	movem.l	d1-d3/a0/a1/a6,-(sp)
-	move.l	DosBase(pc),a6
-	move.l	#tmp32,d2
-	moveq	#4,d3
-	clr.l	tmp32
-	jsr	_LVORead(a6)
-	move.l	tmp32(pc),d0
-	swap32	d0
-	movem.l	(sp)+,d1-d3/a0/a1/a6
+;	movem.l	d1-d3/a0/a1/a6,-(sp)
+;	move.l	DosBase(pc),a6
+;	move.l	#tmp32,d2
+;	moveq	#4,d3
+;	clr.l	tmp32
+;	jsr	_LVORead(a6)
+;	move.l	tmp32(pc),d0
+    push    a0
+    move.l  readPtr,a0
+;    move.b  (a0)+,d0
+;    rol.l   #8,d0
+;    move.b  (a0)+,d0
+;    rol.l   #8,d0
+;    move.b  (a0)+,d0
+;    rol.l   #8,d0
+;    move.b  (a0)+,d0
+;    move.l  a0,readPtr
+;	swap32	d0
+    move.b  3(a0),d0
+    rol.w   #8,d0
+    move.b  2(a0),d0
+    swap    d0
+    move.b  1(a0),d0
+    rol.w   #8,d0
+    move.b  0(a0),d0
+    addq    #4,a0
+    move.l  a0,readPtr
+    pop     a0
+;	movem.l	(sp)+,d1-d3/a0/a1/a6
 	rts
 	
 	; -----------------------------------------------------------
 	; -----------------------------------------------------------
 
 StartTask
+    tst.b   AHI
+    bne     .done
+
     tst.l   WorkerTask
 	bne.b	.done
 	; ------------------------------------
@@ -765,13 +2537,17 @@ WorkerEntry
     jsr     _LVOFindTask(a6)
     move.l  d0,WorkerTask
     ; ------------------------------------
+    bsr     initSysTime
+    ; ------------------------------------
     move.l  MainTask(pc),a1
     moveq   #SIGF_SINGLE,d0
     jsr     _LVOSignal(a6)
     ; ------------------------------------
-.loop	move.l	GraphicsBase(pc),a6
-	jsr     _LVOWaitTOF(a6)	; wait for frame's idle time
-	bsr.w	MixAudioFrame
+.loop	
+;    move.l	GraphicsBase(pc),a6
+;	jsr     _LVOWaitTOF(a6)	; wait for frame's idle time
+    bsr     sysWait
+	bsr 	MixAudioFrame
 	; ------------------------------------
     ; Check for the break signal
 	; ------------------------------------
@@ -781,6 +2557,8 @@ WorkerEntry
     jsr     _LVOSetSignal(a6)
     and.l   #SIGBREAKF_CTRL_C,d0
     beq.b   .loop
+	; ------------------------------------
+    bsr     deinitSysTime
 	; ------------------------------------
     ; Signal main task that we're done
 	; ------------------------------------
@@ -802,7 +2580,8 @@ SilencePaula
 	move.l	(sp)+,a0
 	rts
 
-MAIN
+MAIN:
+    DPRINT  "MAIN"
 	move.l	a0,ArgStr
 	move.l	d0,ArgStrLen
 	; ----------------------------
@@ -813,14 +2592,15 @@ MAIN
 	bsr.w	PutStr
 	; ----------------------------
 	move.l	4.w,a6			; test if we have a 68020+ CPU
-	btst	#1,297(a6)
-	beq.w	CpuIs68000
+	;move.w	AttnFlags(a6),d0
+	;btst	#1,d0			; 68020+ ?
+	;beq.w	CpuIs68000
 	; ----------------------------
-	bsr.w	GetFileNameFromArg
-	bne.b	.skip			; we got filename from cmd line arg
-	bsr.w	GetFileFromRequester
-	beq.w	mainRts
-.skip	; ----------------------------
+;	bsr.w	GetFileNameFromArg
+;	bne.b	.skip			; we got filename from cmd line arg
+;	bsr.w	GetFileFromRequester
+;	beq.w	mainRts
+;.skip	; ----------------------------
 	bsr.w	SetupAudio
 	beq.w	mainErr
 	bsr.w	LoadXM
@@ -891,7 +2671,7 @@ OpenGraphicsLib
 	rts
 	
 CloseGraphicsLib
-	tst.l	GraphicsBase(pc)
+	tst.l	GraphicsBase
 	beq.b	.done
 	move.l	4.w,a6
 	move.l	GraphicsBase(pc),a1
@@ -908,14 +2688,16 @@ OpenDOSLib
 	rts	
 	
 CloseDOSLib
-	tst.l	DosBase(pc)
+	tst.l	DosBase
 	beq.b	.done
 	move.l	4.w,a6
 	move.l	DosBase(pc),a1
 	jsr	_LVOCloseLibrary(a6)
 	clr.l	DosBase
-.done	rts
+.done	
+    rts
 
+ REM
 CpuIs68000
 	move.l	#CpuErrText,d1
 	bsr.w	PutStr
@@ -924,7 +2706,8 @@ CpuIs68000
 	; Input: a0
 RightTrim
 	movem.l	d0/a0,-(sp)
-	tst.l	a0	; NULL pointer?
+    cmp.w   #0,a0
+	;tst.l	a0	; NULL pointer?
 	beq.b	.end
 	tst.b	(a0)	; string empty?
 	beq.b	.end
@@ -1030,7 +2813,7 @@ GetFileFromRequester
 ofrOK	moveq	#1,d0
 ofrDone	; -----------------------------
 	move.l	ASLBase(pc),a1
-	tst.l	a1
+	cmp.w	#0,a1
 	beq.b	.skip
 	move.l	4.w,a6
 	move.l	d0,-(sp)
@@ -1041,7 +2824,7 @@ ofrDone	; -----------------------------
 	rts
 ofrErr	moveq	#0,d0
 	bra.b	ofrDone
-
+ EREM
 
 ; ------------------------------------------------------------------------------
 ;                                AUDIO ROUTINES
@@ -1120,7 +2903,7 @@ OpenAudioDevice
 
 CloseAudioDevice
 	move.l	4.w,a6
-	tst.b	AudioOpen(pc)
+	tst.b	AudioOpen
 	beq.b	.L0
 	lea	AllocReq(pc),a1
 	jsr	_LVOCloseDevice(a6)
@@ -1201,6 +2984,9 @@ CloseCIATimer
 .done	rts
 
 StartMixing
+    tst.b   AHI
+    bne     .x
+
 	bsr.w	SetPaulaInterrupt
 	; -----------------------------
 	lea	$dff000,a0
@@ -1216,6 +3002,7 @@ StartMixing
 	bne.b	.error			; no free CIA timers...
 	; -----------------------------
 	bsr.w	EnableAudioMixer
+.x
 	moveq	#0,d0
 	rts
 .error	move.l	#CIAErrTxt,d1
@@ -1225,14 +3012,20 @@ StartMixing
 
 StopMixing
 	sf	SongIsPlaying
+
+    tst.b   AHI
+    bne     .x
+
 	bsr.w	DisableAudioMixer	; also clears Paula volumes
 	; ---------------------------
 	move.w	#$000f,$dff096		; stop Paula DMAs
 	; ---------------------------
 	bsr.w	RestorePaulaInterrupt
 	bsr.w	CloseCIATimer
+.x
 	rts
 
+    _MC68020
 MixAudioFrame
 	moveq	#0,d2
 	move.w	PaulaPos(pc),d2	; d2.l = integer part of PaulaPos
@@ -1269,6 +3062,7 @@ MixAudioFrame
 	and.l	#SMP_BUFF_SIZE-1,d0
 	move.l	d0,MixPos
 .end	rts
+    _MC68000
 
 ; -----------------------------------------------------------------------------
 ; -----------------------------------------------------------------------------
@@ -1344,6 +3138,7 @@ CloseAudio
 	; ----------------------------
 	bsr.w	FreeChipBuffers
 	bsr.w	FreePostMixTable	
+    bsr     FreeCDAMixBuffer
 	; ----------------------------
 	; Set back old LED filter state
 	; ----------------------------
@@ -1355,7 +3150,7 @@ CloseAudio
 
 SetMixerVars	
 	movem.l	d7/a1/a6,-(sp)
-	
+	DPRINT  "SetMixerVars"
 	; ------------------------------------
 	; Test if we have an NTSC machine
 	; ------------------------------------
@@ -1371,7 +3166,7 @@ SetMixerVars
 	move.w	206(a1),d7
 	jsr	_LVOCloseLibrary(a6)
 	btst	#2,d7				; Amiga is PAL?
-	beq.b	.NTSC				; nope
+	beq 	.NTSC				; nope
 
 	; ------------------------------------
 	;                 PAL
@@ -1384,7 +3179,16 @@ SetMixerVars
 	move.w	MixPeriod(pc),d0
 	moveq	#0,d1	; 0 = PAL
 	bsr.w	PaulaPeriodToFreq
-	move.l	d0,MixingFreq
+    tst.b   AHI
+    beq     .1
+    move.w  AHIMixingFreq,d0
+    swap    d0
+.1  move.l	d0,MixingFreq
+ ifne DEBUG
+    swap    d0
+    and.l   #$ffff,d0
+    DPRINT  "MixingFreq PAL=%ld"
+ endif
 	; ------------------------------------
 	; Calculate PAL 16.16fp Paula delta
 	; ------------------------------------
@@ -1406,7 +3210,16 @@ SetMixerVars
 	move.w	MixPeriod(pc),d0
 	moveq	#1,d1	; 1 = NTSC
 	bsr.w	PaulaPeriodToFreq
-	move.l	d0,MixingFreq
+    tst.b   AHI
+    beq     .2
+    move.w  AHIMixingFreq,d0
+    swap    d0
+.2	move.l	d0,MixingFreq
+ ifne DEBUG
+    swap    d0
+    and.l   #$ffff,d0
+    DPRINT  "MixingFreq NTSC=%ld"
+ endif
 	; ------------------------------------
 	; Calculate NTSC 16.16fp Paula delta
 	; ------------------------------------
@@ -1421,8 +3234,11 @@ SetMixerVars
 	; ------------------------------------
 	move.l	MixingFreq(pc),d0
 	add.l	#(200<<16)/2,d0		; rounding bias
-	divu.l	#200<<16,d0		; 200 = 5ms (FT2)
+;	divu.l	#200<<16,d0		; 200 = 5ms (FT2)
+    move.l  #200<<16,d1
+    bsr     divu_32
 	move.w	d0,QuickVolSizeVal
+.3
 	; -------------------------------------
 	bsr.w	GenerateBPMTable
 	; -------------------------------------
@@ -1438,8 +3254,11 @@ SetMixerVars
 	; Output:
 	;  d0.l = rounded 16.16fp CIA Paula delta	
 CalcCiaDelta
+    tst.b   AHI
+    bne     .error
 	tst.w	d0
 	beq.b	.error
+    _MC68020
 	; ---------------------------
 	movem.l	d1-d7,-(sp)
 	move.b	d2,d7
@@ -1497,6 +3316,7 @@ CalcCiaDelta
 	rts
 .error	moveq	#0,d0
 	rts
+    _MC68000
 
 	; Input:
 	;   d0.w = period
@@ -1539,13 +3359,26 @@ PaulaPeriodToFreq
 	add.l	d3,d0
 	addx.l	d4,d1
 	; ---------------------------
-	divu.l	d2,d1:d0		; d0.l = rounded Paula frequency (16.16fp)
+    ; d1 = up 32
+    ; d0 = low 32
+	; divu.l	d2,d1:d0		; d0.l = rounded Paula frequency (16.16fp)
+    ; d0 = out
+    
+    exg     d0,d1
+    ; d0 = up 32
+    ; d1 = low 32
+    bsr     divu_64
+    ; d1 = out
+    move.l  d1,d0
+
 	movem.l	(sp)+,d1-d4
 .done	rts
 
 ; converts BPM 32..255 into SamplesPerTick LUT (16.16fp)
-; Formula: (MixingFreq/(BPM/32))*2^16
+; Formula: (MixingFreq/(BPM*2.5))*2^16
 GenerateBPMTable
+    tst.b   AHI
+    bne     .x
 	lea	BPM2SmpsPerTick,a0
 	; ---------------------------
 	moveq	#0,d7
@@ -1571,15 +3404,21 @@ GenerateBPMTable
 	add.l	d3,d0
 	addx.l	d7,d1
 	; ---------------------------
+    _MC68020
 	divu.l	d5,d1:d0		; d0.l = rounded samplesPerTick (16.16fp)
+    _MC68000
 	move.l	d0,(a0)+
 	; ---------------------------
 	addq.b	#1,d5
 	bne.b	.loop			; haven't overflown yet (255 -> 0 (256))
 	; ---------------------------
+.x
 	rts
 
 EnableAudioMixer
+    tst.b   AHI
+    bne     .x
+
 	st	AudioMixFlag
 	; ---------------------------
 	; Restore Paula volumes now
@@ -1594,9 +3433,11 @@ EnableAudioMixer
 		move.w	#64,$dff0d8
 	ENDIF
 	; ---------------------------
-	rts
+.x	rts
 
 DisableAudioMixer
+    tst.b   AHI
+    bne     .x
 	; ---------------------------
 	; Clear Paula volumes
 	; ---------------------------
@@ -1607,37 +3448,62 @@ DisableAudioMixer
 	; ---------------------------
 	sf	AudioMixFlag
     movem.l  d0-a6,-(sp)
-    move.l	 GraphicsBase(pc),a6
+    move.l  DosBase(pc),a6
 .loop	
-    tst.b	AudioMixRunning(pc)	; wait until mixer is done
+    tst.b	AudioMixRunning     	; wait until mixer is done
 	beq.b   .1
-	jsr     _LVOWaitTOF(a6)	; let other tasks run
+    moveq   #1,d1
+    jsr     _LVODelay(a6)       	; let other tasks run
     bra.b   .loop
 .1  movem.l (sp)+,d0-a6
+.x	rts
+
+AllocCDAMixBuffer:
+	move.l	#4*(SMP_BUFF_SIZE*2+1),d0
+	moveq	#MEMF_PUBLIC,d1
+	bsr.w	AllocMem
+    tst.l   d0
+	beq.b	.error		
+    addq.l  #4,d0
+    move.l  d0,CDA_MixBufferPtr
+	moveq	#0,d0
 	rts
+.error	moveq	#1,d0
+	rts
+
+
+FreeCDAMixBuffer:
+	move.l	CDA_MixBufferPtr,a1
+	cmp.w   #0,a1
+	beq.b	.1
+    clr.l   CDA_MixBufferPtr
+    subq.l  #4,a1
+	move.l	#4*(SMP_BUFF_SIZE*2+1),d0
+	bsr.w	FreeMem
+.1  rts
 
 FreeChipBuffers
 	move.l	PaulaCh1Buf(pc),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.L1
 	move.l	#SMP_BUFF_SIZE,d0
 	bsr.w	FreeMem
 	; ---------------------------
 .L1	move.l	PaulaCh2Buf(pc),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.L2
 	move.l	#SMP_BUFF_SIZE,d0
 	bsr.w	FreeMem
 .L2	; ---------------------------
 	IF _14BIT
 		move.l	PaulaCh3Buf(pc),a1
-		tst.l	a1
+		cmp.w   #0,a1
 		beq.b	.L3
 		move.l	#SMP_BUFF_SIZE,d0
 		bsr.w	FreeMem
 	; ---------------------------
 .L3		move.l	PaulaCh4Buf(pc),a1
-		tst.l	a1
+		cmp.w   #0,a1
 		beq.b	.L4
 		move.l	#SMP_BUFF_SIZE,d0
 		bsr.w	FreeMem
@@ -1682,6 +3548,9 @@ AllocChipBuffers
 	rts
 
 SetupAudio
+    tst.b   AHI
+    bne     .ahi
+
 	bsr.w	SilencePaula
 	; --------------------
 	bsr.w	OpenAudioDevice
@@ -1705,6 +3574,13 @@ SetupAudio
 	moveq	#0,d0
 	rts	
 .skip2	; --------------------
+	bsr.w	AllocCDAMixBuffer
+	beq.b	.skip3
+	move.l	#AudErrTxt,d1
+	bsr.w	PutStr
+	moveq	#0,d0
+	rts
+.skip3
 	move.w	#MIX_PERIOD,d0
 	cmp.w	#MIN_PERIOD,d0
 	bhs.b	.ok1
@@ -1758,6 +3634,7 @@ SetupAudio
 	; ---------------------------
 	; Set default BPM
 	; ---------------------------
+.x
 	moveq	#125,d0
 	bsr.w	P_SetSpeed
 	clr.l	PMPLeft
@@ -1767,6 +3644,17 @@ SetupAudio
 	moveq	#1,d0
 	rts
 .error	moveq	#0,d0
+	rts
+
+.ahi
+	move.w	#MIX_PERIOD,d0
+    move.w	d0,MixPeriod
+	bsr 	SetMixerVars
+	beq 	.error
+	moveq	#125,d0
+	bsr.w	P_SetSpeed
+	bsr.w	ClearChannels
+    moveq   #1,d0
 	rts
 
 ; ------------------------------------------------------------------------------
@@ -1779,7 +3667,7 @@ FreePatterns
 	lea	Patt,a2
 	lea	PattLens,a0
 .loop1	move.l	(a2),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.next			; pattern not allocated!
 	moveq	#0,d0
 	move.w	(a0),d0			; d0.w = rows in pattern
@@ -1797,7 +3685,7 @@ FreeInstruments
 	moveq	#128-1,d7
 	lea	Instr,a2
 .loop1	move.l	(a2),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.nextI			; instrument is empty!
 	; -----------------------------
 	; Free instrument's samples
@@ -1807,10 +3695,13 @@ FreeInstruments
 	subq.w	#1,d6	
 	lea	iSamp(a1),a0		; a0 = sample struct
 .loop2	move.l	sPek(a0),a1
-	tst.l	a1			; sample allocated?
+	cmp.w   #0,a1			; sample allocated?
 	beq.b	.nextS			; nope
 	move.l	sLen(a0),d0
 	beq.b	.nextS			; (length is zero, don't free)	
+    bmi.b   .nextS          ; neg means freed earlier
+    tst.b   AHI
+    bne.b   .nextS          ; AHI/AmiGUS: not allocated separately
 	addq.l	#2,d0			; fix-sample for linear interpolation
 	bsr.w	FreeMem			; d0.l = len, a1 = smp ptr
 .nextS	lea	SMP_SIZE(a0),a0
@@ -1853,7 +3744,8 @@ ShowError
 	bhi.b	.end
 	subq.b	#1,d0
 	lea	ErrorTexts(pc),a0
-	move.l	(a0,d0.w*4),d1
+    lsl     #2,d0
+	move.l	(a0,d0.w),d1
 	bsr.w	PutStr
 .end	moveq	#1,d0		; 1=error
 	rts
@@ -1864,10 +3756,17 @@ HandleError
 	bra.w	ShowError
 	
 CalcFrqTab
+ ifne DEBUG
+    move.l  MixingFreq,d0
+    clr     d0
+    swap    d0
+    DPRINT  "CalcFrqTab mixfreq=%ld"
+ endif
+
 	movem.l	d0-d6/a0-a2,-(sp)
 	lea	Note2Period,a0
 	; ----------------------------
-	tst.b	LinearFrqTab(pc)
+	tst.b	LinearFrqTab
 	beq.b	.Amiga
 
 	; -------------------------------------
@@ -1883,22 +3782,37 @@ CalcFrqTab
 	; -------------------------------------
 	; Calculate log table
 	; -------------------------------------	
-	move.l	MixingFreq(pc),d2 	; 16.16fp
-	move.l	d2,d3
-	lsr.l	#1,d3			; rounding bias
-	lea	LogTabSource(pc),a0	; src (64-bit)
-	lea	LogTab,a1		; dst (32-bit)
-	moveq	#0,d4
+	move.l	#256*8363,d0   ; Constant for GetFrequenceValue_AHI
+    tst.b   AHI
+    bne     .ahiFr
+	move.l	MixingFreq(pc),d0
+	lsr.l	#1,d0
+	move.l	#256*8363,d1
+    _MC68020
+	divu.l	MixingFreq(pc),d1:d0	
+    _MC68000
+.ahiFr
+	move.l	d0,d2			; d2.l = round[(8363*256) * 2^32 / MixingFreq]
+	moveq	#24,d3
+	moveq	#32-24,d4
+	lea	LogTabSource(pc),a0
+	lea	LogTab,a1
 	move.w	#(12*16*4)-1,d5
 .loop	move.l	(a0)+,d0
-	move.l	(a0)+,d1
-	add.l	d3,d0			; add rounding bias
-	addx.l	d4,d1
-	divu.l	d2,d1:d0
+
+;	moveq	#0,d1
+;	mulu.l	d2,d1:d0
+    move.l  d2,d1
+    bsr     UMult64S
+    exg     d0,d1
+
+	lsr.l	d3,d0
+	lsl.l	d4,d1
+	or.l	d1,d0			; d0 = ((uint64_t)LogTab[i] * d2) >> 24
 	move.l	d0,(a1)+
 	dbra	d5,.loop
 	; -------------------------------------	
-	bra.b	.end	
+	bra 	.end	
 
 
 .Amiga	; -------------------------------------
@@ -1952,16 +3866,22 @@ CalcFrqTab
 	; -------------------------------------
 
 	move.l	#8363*1712,d1
+    move.l  d1,FrequenceDivFactor   ; For AHI
+    tst.b   AHI
+    bne     .ahiFrq
 	move.l	MixingFreq(pc),d0
 	lsr.l	#1,d0
+    _MC68020
 	divu.l	MixingFreq(pc),d1:d0	; d0.l = round[(8363*1712) * 2^32 / MixingFreq]
+    _MC68000
 	move.l	d0,FrequenceDivFactor
-
+.ahiFrq
 	; -------------------------------------
 .end	movem.l	(sp)+,d0-d6/a0-a2
 	rts
 
 LoadXM
+    DPRINT  "LoadXM"
 	bsr.w	FreeMusic
 	;---------------------------
 	; Open file
@@ -2163,7 +4083,9 @@ LoadPatterns
 	; Set pattern row length
 	; -----------------------------
 .ok	lea	PattLens,a0
-	move.w	d4,(a0,d6.w*2)
+    move    d6,d0
+    add.w   d0,d0
+	move.w	d4,(a0,d0.w)
 	; -----------------------------
 	tst.w	d3			; dataLen == 0? (pattern empty)
 	beq.b	.next			; yes, load next pattern (if any)
@@ -2173,13 +4095,15 @@ LoadPatterns
 	move.l	d4,d0
 	mulu.w	TrackWidth(pc),d0	; d0.l = unpacked pattern length
 	move.l	d0,d2			; d2.l = copy of unpacked pattern length
-	moveq	#MEMF_FAST,d1
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.w	LPOOM
 	move.l	d0,a1
 	lea	Patt,a0
-	move.l	d0,(a0,d6.w*4)	
+    move.w  d6,d5
+    lsl.w   #2,d5
+	move.l	d0,(a0,d5.w)	
 	; ----------------------------- ; (a1=pattAddr, d1.l=unpackLen, d3.l=packLen, d4.l=numRows)
 	move.l	d2,d5
 	sub.l	d3,d5
@@ -2216,7 +4140,11 @@ UnpackPatt ; (a1=pattAddr, a2=pattAddr+(unpackLen-packLen), d4.l=numRows)
 	btst	#7,d0
 	bne.b	.packed
 	move.b	d0,(a1)+
-	move.l	(a2)+,(a1)+		; warning: can be misaligned
+	;move.l	(a2)+,(a1)+		; warning: can be misaligned
+    move.b  (a2)+,(a1)+
+    move.b  (a2)+,(a1)+
+    move.b  (a2)+,(a1)+
+    move.b  (a2)+,(a1)+
 	bra.b	.next
 	; ----------------------------
 .packed	moveq	#0,d1
@@ -2271,13 +4199,15 @@ UnpackPatt ; (a1=pattAddr, a2=pattAddr+(unpackLen-packLen), d4.l=numRows)
 	; d6.w = instrument number
 AllocAndCopyInstrHeader
 	move.l	#INS_SIZE,d0		; alloc and set instr. pointer
-	moveq	#MEMF_FAST,d1
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.w	.cihErr
 	move.l	d0,a1
 	lea	Instr,a0
-	move.l	a1,(a0,d6.w*4)	
+    move.w  d6,d7
+    lsl.w   #2,d7
+	move.l	a1,(a0,d7.w)	
 	; -----------------------------
 	; Copy instrument header
 	; -----------------------------
@@ -2285,12 +4215,14 @@ AllocAndCopyInstrHeader
 	move.l	a0,-(sp)
 	move.l	a1,-(sp)
 	lea	ihTA(a0),a0
-	move.w	#(208/4)-1,d7
-.loop1	move.l	(a0)+,(a1)+
+	move.w	#(208)-1,d7
+.loop1	move.b	(a0)+,(a1)+
 	dbra	d7,.loop1
 	move.l	(sp)+,a1
 	move.l	(sp)+,a0
-	move.w	ihAntSamp(a0),iAntSamp(a1)	; copy leftovers
+	;move.w	ihAntSamp(a0),iAntSamp(a1)	; copy leftovers
+	move.b	ihAntSamp(a0),iAntSamp(a1)	; copy leftovers
+	move.b	ihAntSamp+1(a0),iAntSamp+1(a1)	; copy leftovers
 	move.b	ihMute(a0),iMute(a1)
 	; -----------------------------
 	; Pre-calculate vibrato sweep delta (prevents DIV in replayer)
@@ -2313,21 +4245,25 @@ AllocAndCopyInstrHeader
 	lea	iEnvPDeltas(a1),a5
 	moveq	#0,d7
 .loop2	moveq	#0,d0
-	move.w	4(a2,d7.w*2),d1
-	sub.w	0(a2,d7.w*2),d1
+    move.w  d7,d5
+    add.w   d5,d5
+	move.w	4(a2,d5.w),d1
+	sub.w	0(a2,d5.w),d1
 	ble.b	.skipV
-	move.w	6(a2,d7.w*2),d0
-	sub.w	2(a2,d7.w*2),d0
+	move.w	6(a2,d5.w),d0
+	sub.w	2(a2,d5.w),d0
 	lsl.w	#8,d0
 	ext.l	d0
 	divs.w	d1,d0
 .skipV	move.w	d0,(a4,d7.w)
 	moveq	#0,d0
-	move.w	4(a3,d7.w*2),d1
-	sub.w	0(a3,d7.w*2),d1
+    move.w  d7,d5
+    add.w   d5,d5
+	move.w	4(a3,d5.w),d1
+	sub.w	0(a3,d5.w),d1
 	ble.b	.skipP
-	move.w	6(a3,d7.w*2),d0
-	sub.w	2(a3,d7.w*2),d0
+	move.w	6(a3,d5.w),d0
+	sub.w	2(a3,d5.w),d0
 	lsl.w	#8,d0
 	ext.l	d0
 	divs.w	d1,d0
@@ -2422,7 +4358,7 @@ LoadInstrHeader
 	bsr.w	ReadLittleEndian32
 	move.l	d0,d3
 	move.l	d3,ihInstrSize(a0)
-	beq.l	.set			; empty instrSize == INS_HDR_SIZE (quirky XMs)
+	beq 	.set			; empty instrSize == INS_HDR_SIZE (quirky XMs)
 	cmp.l	#4,d3
 	blo.w	.error
 	cmp.l	#INS_HDR_SIZE,d3
@@ -2434,13 +4370,36 @@ LoadInstrHeader
 	bsr.w	fread
 	swap16a	ihAntSamp(a0)
 	swap32a	ihSampleSize(a0)
+    ; -----------------------
+    lea     InstrNames,a1
+    move    d6,d0
+    mulu    #24,d0
+    add     d0,a1
+    clr.b   (a1)
+    lea     ihName(a0),a2
+    moveq   #22-1,d0
+.cp move.b  (a2)+,(a1)+
+    dbeq    d0,.cp
+    clr.b   (a1)
+    ; -----------------------
+ ifne DEBUG
+    pea     ihName(a0)
+    move.l  (sp)+,d1
+    moveq   #0,d0
+    move    d6,d0
+    DPRINT  "%ld ihName=%s"
+ endif
 	; -----------------------------
 	moveq	#0,d3
-	move.w	ihAntSamp(a0),d3	; does this instrumenth have any samples?
+	;move.w	ihAntSamp(a0),d3	; does this instrumenth have any samples?
+    move.b  ihAntSamp(a0),d3
+    ror     #8,d3
+    move.b  ihAntSamp+1(a0),d3
+    tst.w   d3
 	beq.w	.end			; no, don't do any further loading
 	cmp.w	#16,d3
 	bhi.w	.error			; too many samples!		
-	; -----------------------------
+    ; -----------------------------
 	; Read sample headers
 	; -----------------------------
 	mulu.w	#SMP_HDR_SIZE,d3	; d3.l = total sample headers length
@@ -2450,7 +4409,10 @@ LoadInstrHeader
 .noSmps	; -----------------------------
 	; Byte-swap sample header
 	; -----------------------------
-	move.w	ihAntSamp(a0),d7
+;	move.w	ihAntSamp(a0),d7
+	move.b	ihAntSamp(a0),d7
+    ror     #8,d7
+	move.b	ihAntSamp+1(a0),d7
 	subq.b	#1,d7
 	lea	SmpHdrs,a1
 .loop4	movem.l	(a1),d0-d2
@@ -2467,6 +4429,7 @@ LoadInstrHeader
 	moveq	#12-1,d7
 	lea	ihEnvVP(a0),a1
 	lea	ihEnvPP(a0),a2
+ REM ; original
 .loop3	move.l	(a1),d0
 	rol.w	#8,d0
 	swap	d0
@@ -2479,7 +4442,65 @@ LoadInstrHeader
 	rol.w	#8,d1
 	swap	d1
 	move.l	d1,(a2)+
+    DPRINT  "%08.8lx %08.8lx"
 	dbra	d7,.loop3
+ EREM ; original
+; REM 
+.loop3	
+;    move.l	(a1),d0
+    move.b  (a1),d0
+    rol.l   #8,d0
+    move.b  1(a1),d0
+    rol.l   #8,d0
+    move.b  2(a1),d0
+    rol.l   #8,d0
+    move.b  3(a1),d0
+
+	rol.w	#8,d0
+	swap	d0
+
+;	move.l	(a2),d1
+    move.b  (a2),d1
+    rol.l   #8,d1
+    move.b  1(a2),d1
+    rol.l   #8,d1
+    move.b  2(a2),d1
+    rol.l   #8,d1
+    move.b  3(a2),d1
+	
+    rol.w	#8,d0
+	swap	d0
+	
+    ;move.l	d0,(a1)+
+    rol.l   #8,d0
+    move.b  d0,(a1)+
+    rol.l   #8,d0
+    move.b  d0,(a1)+
+    rol.l   #8,d0
+    move.b  d0,(a1)+
+    rol.l   #8,d0
+    move.b  d0,(a1)+
+
+	rol.w	#8,d1
+	swap	d1
+	rol.w	#8,d1
+	swap	d1
+
+;	move.l	d1,(a2)+
+    rol.l   #8,d1
+    move.b  d1,(a2)+
+    rol.l   #8,d1
+    move.b  d1,(a2)+
+    rol.l   #8,d1
+    move.b  d1,(a2)+
+    rol.l   #8,d1
+    move.b  d1,(a2)+
+
+;    DPRINT  "%08.8lx %08.8lx"
+
+	dbra	d7,.loop3
+; EREM
+
 	; ----------------------------- 
 	bsr.w	AllocAndCopyInstrHeader
 	bne.w	.error
@@ -2492,6 +4513,8 @@ LoadInstrHeader
 	; a1 = sample struct
 	; WARNING: Do NOT trash D3!
 PrepareLoopUnroll
+    tst.b   AHI
+    bne.b   .end
 	clr.w	sTimesToUnroll(a1)
 	tst.b	sLoopType(a1)
 	beq.b	.end			; no loop, nothing to do here!	
@@ -2522,11 +4545,23 @@ PrepareLoopUnroll
 	; a1 = sample struct
 Load16BitSample
 	move.l	sOrigLen(a1),d3		; bytes to read from file
-	beq.b	.end			; length is empty, don't load sample
+	beq 	.end			; length is empty, don't load sample
 	bsr.w	PrepareLoopUnroll	
+    tst.b   AHI
+    beq     .1
+    ; AHI/AmiGUS - no allocation
+    DPRINT  "Load16BitSample NOALLOC"
+    move.l  readPtr,d2      ; Pointer to sample data in file
+    add.l   d3,readPtr      ; Advance in file
+	move.l	d2,sPek(a1)     ; Store for this sample
+    tst.b   deltaDecodingDone
+    bne     .skipdelta
+    bra     .undelta
+.1
 	move.l	sLen(a1),d0
 	addq.l	#2,d0			; fix-sample for linear interpolation
-	moveq	#MEMF_FAST,d1
+    DPRINT  "Load16BitSample buffer=%lx"
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.b	.l16Err
@@ -2538,15 +4573,34 @@ Load16BitSample
 	; ------------------------
 	; Convert delta sample to PCM
 	; ------------------------
+.undelta
 	move.l	d2,a6
 	moveq	#0,d1			; old sample
-.loop	move.w	(a6),d0
+
+    btst    #0,d2           ; sample at odd address?
+    bne     .oddLoop
+.loop	
+    move.w	(a6),d0         ; reads words, may not work on 68000
 	swap16	d0
-	add.w	d1,d0
-	move.w	d0,(a6)+
-	move.w	d0,d1
+    add.w	d0,d1
+	move.w	d1,(a6)+
 	subq.l	#2,d3
 	bne.b	.loop
+    bra     .skipdelta
+
+.oddLoop                    ; 68000 compatible
+    move.b  1(a6),d0
+    lsl.w   #8,d0
+    move.b  (a6)+,d0
+    add.w   d0,d1
+    move.w  d1,d2
+    move.b  d2,(a6)+
+    lsr.w   #8,d2
+    move.b  d2,-2(a6)
+    subq.l  #2,d3
+    bne.b   .oddLoop
+
+.skipdelta
 	; ------------------------	
 	move.l	sLenInFile(a1),d2	; skip data after loop end
 	move.l	sOrigLen(a1),d0
@@ -2557,19 +4611,33 @@ Load16BitSample
 	moveq	#SEEK_CUR,d3
 	bsr.w	fseek	
 .noSkip	; ---------------------- 
-.end	moveq	#0,d0	; 0=successful
+.end	
+    moveq	#0,d0	; 0=successful
 	rts
-.l16Err	moveq	#1,d0
+.l16Err	
+    moveq	#1,d0
 	rts
 
 	; a1 = sample struct
 Load8BitSample
 	move.l	sOrigLen(a1),d3		; bytes to read from file
-	beq.b	.end			; length is empty, don't load sample
+	beq 	.end			; length is empty, don't load sample
 	bsr.w	PrepareLoopUnroll	
+    tst.b   AHI
+    beq     .1
+    ; AHI/AmiGUS - no allocation
+    DPRINT  "Load8BitSample NOALLOC"
+    move.l  readPtr,d2      ; Pointer to sample data in file
+    add.l   d3,readPtr      ; Advance in file
+	move.l	d2,sPek(a1)     ; Store for this sample
+    tst.b   deltaDecodingDone
+    bne     .skipdelta
+    bra     .undelta
+.1
 	move.l	sLen(a1),d0
 	addq.l	#2,d0			; fix-sample for linear interpolation
-	moveq	#MEMF_FAST,d1
+    DPRINT  "Load8BitSample buffer=%lx"
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.b	.l8Err
@@ -2581,14 +4649,14 @@ Load8BitSample
 	; ------------------------
 	; Convert delta sample to PCM
 	; ------------------------
+.undelta
 	move.l	d2,a6
 	moveq	#0,d1			; old sample
-.loop	move.b	(a6),d0
-	add.b	d1,d0
-	move.b	d0,(a6)+
-	move.b	d0,d1
+.loop	add.b	d1,(a6)
+	move.b	(a6)+,d1
 	subq.l	#1,d3
 	bne.b	.loop	
+.skipdelta
 	; ------------------------	
 	move.l	sLenInFile(a1),d2	; skip data after loop end
 	move.l	sOrigLen(a1),d0
@@ -2604,10 +4672,11 @@ Load8BitSample
 .l8Err	moveq	#1,d0
 	rts
 
+
 	; a1 = sample struct
 UnrollSampleLoop8
 	move.l	sPek(a1),a0
-	tst.l	a0			; sample empty?
+	cmp.w   #0,a0			; sample empty?
 	beq.w	.end			; yes, no unroll needed
 	tst.l	sLen(a1)		; sample empty?
 	beq.w	.end			; yes, no unroll needed
@@ -2615,6 +4684,8 @@ UnrollSampleLoop8
 	beq.w	.end			; nope, no unroll needed
 	tst.l	sRepL(a1)		; loop length == 0?
 	beq.w	.end			; yes, don't do unroll
+    tst.b   AHI
+    bne     .end
 	move.w	sTimesToUnroll(a1),d6
 	beq.w	.end			; no unroll needed
 	subq.w	#1,d6
@@ -2661,7 +4732,7 @@ UnrollSampleLoop8
 	; a1 = sample struct
 UnrollSampleLoop16
 	move.l	sPek(a1),a0
-	tst.l	a0			; sample empty?
+	cmp.w   #0,a0			; sample empty?
 	beq.w	.end			; yes, no unroll needed
 	tst.l	sLen(a1)		; sample empty?
 	beq.w	.end			; yes, no unroll needed
@@ -2669,6 +4740,8 @@ UnrollSampleLoop16
 	beq.w	.end			; nope, no unroll needed
 	tst.l	sRepL(a1)		; loop length == 0?
 	beq.w	.end			; yes, don't do unroll
+    tst.b   AHI
+    bne     .end
 	move.w	sTimesToUnroll(a1),d6
 	beq.w	.end			; no unroll needed
 	subq.w	#1,d6
@@ -2719,10 +4792,12 @@ UnrollSampleLoop16
 	;
 	; a1 = sample struct
 FixSample
+    tst.b   AHI         ; AHI/AmiGUS
+    bne.b   .done8
 	tst.l	sLen(a1)	; sample empty?
 	beq.b	.done8		; yes, don't fix
 	move.l	sPek(a1),a5
-	tst.l	a5		; sample empty?
+	cmp.w	#0,a5		; sample empty?
 	beq.b	.done8		; yes, don't fix
 	; ---------------------
 	move.l	a5,a6
@@ -2768,8 +4843,10 @@ FixSample
 	; d6.w = instrument number
 LoadInstrSamples
 	lea	Instr,a1
-	move.l	(a1,d6.w*4),a1
-	tst.l	a1			; instrument empty?
+    move.w  d6,d7
+    lsl.w   #2,d7
+	move.l	(a1,d7.w),a1
+	cmp.w   #0,a1			; instrument empty?
 	beq.w	.done			; yes, no samples to load!
 	move.w	iAntSamp(a1),d7
 	beq.w	.done			; instrument has no samples!
@@ -2797,9 +4874,12 @@ LoadInstrSamples
 .next	lea	SMP_SIZE(a1),a1
 	move.l	(sp)+,d7
 	dbra	d7,.loop
-.done	moveq	#0,d0	; 0=successful
+.done	
+    moveq	#0,d0	; 0=successful
 	rts
-.error	move	#1,d0
+.error	
+    addq    #4,sp       ; stack align
+    move	#1,d0
 	rts	
 ; --------------------------------------------------
 LIErr	moveq	#1,d0
@@ -2808,6 +4888,7 @@ LIOOM	moveq	#6,d0
 	rts
 
 LoadData_XM_OldVer ; v1.02 and v1.03
+    DPRINT  "LoadData_XM_OldVer"
 	; -------------------------------------
 	; Load instruments
 	; -------------------------------------
@@ -2839,17 +4920,20 @@ LoadData_XM_OldVer ; v1.02 and v1.03
 	moveq	#0,d6			; d6.w = instrument number
 .loop2	move.l	d6,-(sp)
 	bsr.w	LoadInstrSamples
+    DPRINT  "LoadInstrSamples=%ld"
 	move.l	(sp)+,d6
 	tst.b	d0			; instrument samples loaded?
 	bne.b	LIOOM			; nope, out of memory!	
 	addq.w	#1,d6
 	cmp.w	hAntInstrs,d6
 	blo.b	.loop2
-	; ------------------------------
+	; ------------------------------    
+    st      deltaDecodingDone
 	moveq	#0,d0	; 0=successful
 	rts
 
 LoadData_XMv104 ; v1.04
+    DPRINT  "LoadData_XMv104"
 	; -------------------------------------
 	; Load patterns
 	; -------------------------------------
@@ -2872,6 +4956,7 @@ LoadData_XMv104 ; v1.04
 	; ---------------------------
 	move.l	d6,-(sp)
 	bsr.w	LoadInstrSamples
+    DPRINT  "LoadInstrSamples=%ld"
 	move.l	(sp)+,d6
 	tst.b	d0			; instrument samples loaded?
 	bne.w	LIOOM			; nope!	
@@ -2880,6 +4965,7 @@ LoadData_XMv104 ; v1.04
 	cmp.w	hAntInstrs,d6
 	blo.b	.loop
 	; ------------------------------
+    st      deltaDecodingDone
 	moveq	#0,d0	; 0=successful
 	rts
 
@@ -2942,13 +5028,15 @@ StartTone
 	beq.b	.error
 	subq.b	#1,d1
 	lea	Instr,a0
-	move.l	(a0,d1.w*4),a0
-	tst.l	a0
+    lsl.w   #2,d1
+	move.l	(a0,d1.w),a0
+	cmp.w   #0,a0
 	bne.b	.InstrOK
 .error	lea	SpareInstr,a0	; illegal instr, use placeholder instr
 .InstrOK
 	move.l	a0,cInstrSeg(a5)
 	move.b	iMute(a0),cMute(a5)
+    moveq   #0,d1           ; clear for below indexed access
 	move.b	d0,d1
 	subq.b	#1,d1
 	move.b	(a0,d1.w),d1	; a0 points to TA table (first data in instrument)
@@ -2958,7 +5046,8 @@ StartTone
 	
 	lea	iSmpOffset(pc),a2
 	move.l	a0,a3
-	add.w	(a2,d1.w*2),a3	; a3 = sample struct
+    add.w   d1,d1
+	add.w	(a2,d1.w),a3	; a3 = sample struct
 	move.b	sRelTon(a3),d1
 	move.b	d1,cRelTonNr(a5)
 	add.b	d1,d0
@@ -2994,7 +5083,8 @@ StartTone
 	;cmp.w	#MAX_NOTES,d0 (8bitbubsy: this will never hit)
 	;bhi.b	.NoPeriod
 	lea	Note2Period,a0
-	move.w	(a0,d0.w*2),d0
+    add.w   d0,d0
+	move.w	(a0,d0.w),d0
 	move.w	d0,cRealPeriod(a5)
 	move.w	d0,cOutPeriod(a5)	
 .NoPeriod
@@ -3090,7 +5180,13 @@ DoMultiRetrig
 	move.b	cRealVol(a5),d0
 	moveq	#0,d1
 	move.b	cRetrigVol(a5),d1	
-	jsr	([VolChTab,pc,d1.w*4])
+
+;	jsr	([VolChTab,pc,d1.w*4])
+    lea     VolChTab(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jsr     (a0)
+
 	move.b	d0,cRealVol(a5)
 	move.b	d0,cOutVol(a5)		
 	moveq	#0,d0
@@ -3341,7 +5437,9 @@ PlaySong
 	moveq	#0,d1
 	move.b	(a0,d0.w),d1	
 	lea	PattLens,a0
-	move.w	(a0,d1.w*2),PattLen	
+    move.w  d1,d0
+    add.w   d0,d0
+	move.w	(a0,d0.w),PattLen	
 	move.w	d1,PattNr
 	; ---------------------------
 	; Set initial BPM (from song header)
@@ -3359,9 +5457,18 @@ P_SetSpeed
 	cmp.b	#32,d0
 	bhs.b	.ok
 	moveq	#32,d0
-.ok	sub.b	#32,d0	
+.ok	
+    tst.b   AHI
+    beq     .1
+    bmi     .2
+    bsr     ahi_tempo
+    bra     .1
+.2  bsr     amigus_tempo
+.1
+    sub.b	#32,d0	
 	lea	BPM2SmpsPerTick,a0
-	move.l	(a0,d0.w*4),SpeedVal	; 16.16fp
+    lsl.w   #2,d0
+	move.l	(a0,d0.w),SpeedVal	; 16.16fp
 	rts
 
 	; a4 = pattern, a5 = StmTyp
@@ -3517,7 +5624,9 @@ GetNewNote
 	cmp.w	#MAX_NOTES,d6
 	bhs.b	.NoPortaFrq
 	lea	Note2Period,a0
-	move.w	(a0,d6.w*2),d0
+    move.w  d6,d0
+    add.w   d0,d0
+	move.w	(a0,d0.w),d0
 	move.w	d0,cWantPeriod(a5)
 	cmp.w	cRealPeriod(a5),d0
 	beq.b	.NoPorta
@@ -3542,7 +5651,12 @@ GetNewNote
 	move.b	cVolKolVol(a5),d0
 	move.w	d0,d1
 	lsr.b	#4,d1
-	jsr	([VolJumpTab0,pc,d1.w*4])
+
+;	jsr	([VolJumpTab0,pc,d1.w*4])
+    lea     VolJumpTab0(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jsr     (a0)
 	
 	; handle normal effects
 	; d0 is reserved for old cVolKolVol (manipulated by VolJumpTab effects)	
@@ -3553,7 +5667,13 @@ GetNewNote
 	move.b	d2,d3		; test if we have an effect at all (eff+effTyp > 0)
 	or.b	d1,d3
 	beq.b	.EffEnd		; no effect
-	jmp	([JumpTab0,pc,d1.w*4])	
+
+;	jmp	([JumpTab0,pc,d1.w*4])	
+    lea     JumpTab0(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jmp     (a0)
+
 .EffEnd
 	rts
 
@@ -3562,7 +5682,11 @@ EEffects0
 	move.b	d2,d1
 	and.b	#15,d2
 	lsr.b	#4,d1
-	jmp	([EJumpTab0,pc,d1.w*4])
+;	jmp	([EJumpTab0,pc,d1.w*4])
+    lea     EJumpTab0(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jmp     (a0)
 
 fxRet rts
 
@@ -3882,7 +6006,7 @@ NoteCut0
 	rts
 
 PattDelay
-	tst.b	PattDelTime2(pc)
+	tst.b	PattDelTime2
 	bne.b	.PattEnd
 	and.b	#15,d2
 	addq.b	#1,d2
@@ -3897,7 +6021,12 @@ DoEffects
 	move.b	cVolKolVol(a5),d0
 	move.w	d0,d1
 	lsr.b	#4,d1
-	jsr	([VolJumpTab,pc,d1.w*4])	
+
+;	jsr	([VolJumpTab,pc,d1.w*4])	
+    lea     VolJumpTab(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jsr     (a0)
 	
 	; normal effects
 	moveq	#0,d1
@@ -3907,7 +6036,13 @@ DoEffects
 	move.b	d0,d2		; test if we have an effect at all (eff+effTyp > 0)
 	or.b	d1,d2
 	beq.b	.EffEnd		; no effect
-	jmp	([JumpTab,pc,d1.w*4])	
+
+;	jmp	([JumpTab,pc,d1.w*4])	
+    lea     JumpTab(pc),a0
+    lsl.w   #2,d1
+    move.l  (a0,d1.w),a0
+    jmp     (a0)
+
 .EffEnd	
 	rts
 
@@ -3978,7 +6113,7 @@ Arp
 .Arp1	lsr.b	#4,d0
 .Arp3	move.w	cRealPeriod(a5),d3
 	; --------------------------
-	tst.b	LinearFrqTab(pc)
+	tst.b	LinearFrqTab
 	beq.b	.Amiga
 .Linear	; --------------------------	; 8bb: added this (faster than RelocateTon)
 	lsl.w	#6,d0
@@ -4580,7 +6715,11 @@ FixaEnvelopeVibrato
 	lsr.l	#2,d1			; d1.l = 0..65536 (rounded)
 	moveq	#0,d0
 	move.w	cFadeOutAmp(a5),d0
-	mulu.l	d0,d1			; (d1.l * 0..32768) = d1.l 0..2147483648
+
+	;mulu.l	d0,d1			; (d1.l * 0..32768) = d1.l 0..2147483648
+    bsr     mulu_32
+    move.l  d0,d1
+
 	add.l	#1<<19,d1		; rounding bias
 	swap	d1
 	lsr.w	#4,d1			; d1.w = 0..2048 (rounded)
@@ -4589,10 +6728,7 @@ FixaEnvelopeVibrato
 	add.l	#1<<5,d1		; rounding bias
 	lsr.l	#6,d1
 	; ----------------------------
-	;tst.w	d1	
-	beq.b	.VolOK1	
-	subq.w	#1,d1			; if (d1 > 0) d1--; (0..2047)
-.VolOK1	move.w	d1,cFinalVol(a5)
+	move.w	d1,cFinalVol(a5)	; 0..2048
 	or.b	#IS_Vol,cStatus(a5)	; recalc vol every tick when vol env is on
 	bra.b	.EnvVEnd
 .NoEnvV	; --------------------------------------------------------------
@@ -4609,10 +6745,7 @@ FixaEnvelopeVibrato
 	add.l	#1<<5,d0		; rounding bias
 	lsr.l	#6,d0
 	; ----------------------------
-	;tst.w	d0
-	beq.b	.VolOK2	
-	subq.w	#1,d0			; if (d0 > 0) d0--; (0..2047)
-.VolOK2	move.w	d0,cFinalVol(a5)
+	move.w	d0,cFinalVol(a5)	; 0..2048
 	bra.b	.EnvVEnd
 	; --------------------------------------------------------------
 .Muted	clr.w	cFinalVol(a5)
@@ -4818,12 +6951,12 @@ GetNextPos
 	beq.b	.Dskc
 	move.b	d0,PattDelTime2
 	clr.b	PattDelTime
-.Dskc	tst.b	PattDelTime2(pc)
+.Dskc	tst.b	PattDelTime2
 	beq.b	.Dska
 	subq.b	#1,PattDelTime2
 	beq.b	.Dska
 	subq.w	#1,PattPos
-.Dska	tst.b	PBreakFlag(pc)
+.Dska	tst.b	PBreakFlag
 	beq.b	.NNPysk
 	clr.b	PBreakFlag
 	moveq	#0,d0
@@ -4839,7 +6972,7 @@ GetNextPos
 	clr.b	PBreakPos
 	clr.b	PosJumpFlag
 	; 8bb: fix for EVIL modules that use Bxx where xx>=SongLength
-	tst.b	bxxOverflow(pc)
+	tst.b	bxxOverflow
 	beq.b	.NoFix
 	clr.b	bxxOverflow
 	moveq	#0,d0
@@ -4858,7 +6991,8 @@ GetNextPos
 	move.b	(a0,d0.w),d0
 	move.w	d0,PattNr
 	lea	PattLens,a0
-	move.w	(a0,d0.w*2),PattLen
+    add.w   d0,d0
+	move.w	(a0,d0.w),PattLen
 	; 8bb: fix for EVIL modules that use Dxx where xx>=nextPattLen
 	move.w	PattPos(pc),d0
 	move.w	PattLen(pc),d1
@@ -4866,8 +7000,8 @@ GetNextPos
 	blo.b	.NoNewPosYet
 	clr.w	PattPos
 .NoNewPosYet
-	tst.b	PosJumpFlag(pc)
-	bne.b	.NextPosition
+	tst.b	PosJumpFlag
+	bne 	.NextPosition
 .Exit	rts
 
 	; ticked from mixer
@@ -4882,15 +7016,17 @@ MainPlayer
 	move.w	d1,Timer
 	tst.b	d0
 	beq.w	.NoNewNote	
-	tst.b	PattDelTime2(pc)
+	tst.b	PattDelTime2
 	beq.b	.GetNewNote
 	bra.b	.Dskip
 .GetNewNote
 	move.w	PattNr(pc),d2
 	and.w	#$ff,d2
 	lea	Patt,a4
-	move.l	(a4,d2.w*4),a4
-	tst.l	a4
+    move.w  d2,d0
+    lsl.w   #2,d0
+	move.l	(a4,d0.w),a4
+	cmp.w	#0,a4
 	beq.b	.NilPointer
 	move.w	PattPos(pc),d0
 	mulu.w	TrackWidth(pc),d0
@@ -4954,13 +7090,14 @@ GetVoice
 	rts
 	ENDIF
 	
-Mix_UpdateChannelVolPanFrq
+    _MC68020
+Mix_UpdateChannelVolPanFrq:
 	lea	PanningTab(pc),a1
-	lea	ChnReloc,a2
-	lea	VoiceOffsets,a3
+	lea	ChnReloc,a2             ; Table of WORD: 0,2,4,6..MAX_CHANNELS*2
+	lea	VoiceOffsets,a3         ; Table of APTR MixVoices, 0..MAX_CHANNELS*2
 	lea	LogTab,a4
-	lea	StmTyp,a5
-	moveq	#0,d7
+    lea	StmTyp,a5
+	moveq	#0,d7               ; loop number of channels in the mod
 	; -----------------------------
 .loop	move.b	cStatus(a5),d6
 	beq.w	.next				; no update flags, skip channel
@@ -5026,13 +7163,13 @@ Mix_UpdateChannelVolPanFrq
 	;                           SAMPLE TRIGGER
 	; -------------------------------------------------------------------
 .trig	btst	#IB_NyTon,d6
-	beq.b	.next
+	beq 	.next
 	; -----------------------------
 	move.l	cSampleSeg(a5),a0
 	tst.l	a0
-	beq.b	.stop
+	beq 	.stop
 	move.l	sPek(a0),d0
-	beq.b	.stop
+	beq 	.stop
 	; -----------------------------	
 	movem.l	sLen(a0),d1-d3			; d0=base, d1=end, d2=repS, d3=repL
 	move.l	cSmpStartPos(a5),d4
@@ -5058,7 +7195,7 @@ Mix_UpdateChannelVolPanFrq
 
 	; -------------------------------------------------------------------
 .next	lea	CHN_SIZE(a5),a5
-	addq.b	#1,d7
+	addq.b	#1,d7           ; loop all channels
 	cmp.w	hAntChn,d7
 	bne.w	.loop
 	rts
@@ -5066,18 +7203,18 @@ Mix_UpdateChannelVolPanFrq
 .stop	move.b	#IST_Off,vType(a6)		; stops voice
 	bra.b	.next
 
-	; d0.l = volume (0..2047)
+	; d0.l = volume (0..2048)
 	; d2.l = volume ramp length (number of samples)
 .SetVol
 	move.l	d0,d1
 	; ----------------------------
 	moveq	#0,d3
 	move.b	cFinalPan(a5),d3	
-	mulu.l	(a1,d3.w*4),d1			; 0..2047 * 0..65536 = 0..134152192 (11.16fp)
+	mulu.w	(a1,d3.w*2),d1			; 0..2048 * 0..65535 = 0..134215680 (11.16fp)
 	move.l	d1,vRVol1(a6)			; set dest. volL
 	not.b	d3
 	addq.w	#1,d3				; d3.w = 256 - d2
-	mulu.l	(a1,d3.w*4),d0			; 0..2047 * 0..65536 = 0..134152192 (11.16fp)
+	mulu.w	(a1,d3.w*2),d0			; 0..2048 * 0..65535 = 0..134215680 (11.16fp)
 	move.l	d0,vLVol1(a6)			; set dest. volR
 	; ----------------------------
 	; Left channel vol. ramp
@@ -5107,17 +7244,365 @@ Mix_UpdateChannelVolPanFrq
 	moveq	#0,d2
 .VL5	move.w	d2,vVolIPLen(a6)
 	rts
+    _MC68000
+
+; ---------------------------------------------------------
+; ---------------------------------------------------------
+; ---------------------------------------------------------
+
+Mix_UpdateChannelVolPanFrq_AHI:
+    lea LogTab,a4
+	lea	StmTyp,a5
+    lea     freqForChannel(pc),a2
+    lea     sampleForChannel(pc),a3
+	moveq	#0,d7               ; loop number of channels in the mod
+	; -----------------------------
+.loop	
+    move.b	cStatus(a5),d6
+	beq.w	.next				; no update flags, skip channel
+	clr.b	cStatus(a5)	
+	; -----------------------------
+	; -------------------------------------------------------------------
+	;               SAMPLE PRE-TRIGGER (setup fadeout voice)
+	; -------------------------------------------------------------------	
+	;btst	#IB_NyTon,d6
+	;beq 	.vol
+	; -----------------------------
+    ; Not available in AHI!
+	;or.b	#IST_Fadeout,vType(a6)
+	;moveq	#0,d0				; destination volume
+	;moveq	#0,d2
+	;move.w	QuickVolSizeVal(pc),d2		; volume ramp length
+	;bsr.w	.SetVol
+	;eor.w	#1,(a2,d7.w*2)			; swap voice with neighbor voice
+	;move.w	(a2,d7.w*2),d0
+	;move.l	(a3,d0.w*4),a6			; a6 points to mixer voice to use
+	;move.b	#IST_Off,vType(a6)
+	
+	; -------------------------------------------------------------------
+	;                            VOLUME UPDATE
+	; -------------------------------------------------------------------
+.vol	
+    move.b	d6,d2
+	and.b	#IS_Vol+IS_Pan,d2
+	beq.b	.period
+	; -----------------------------
+
+;	pushm   all
+    push    a2
+	move.l	d7,d0		; channel (d7)
+
+	; AHI_SetVol args: channel (d0), vol (d1 0..$10000), pan (d2 0..$10000), freq (d3), flags (d4)
+    ; cFinalPan(a5) = 0..255. AHI expects 0..$10000
+    ; 128 = center
+	moveq	#0,d2
+	move.b	cFinalPan(a5),d2    
+    * AHI: 0x00000 full left, 0x8000 center, 0x10000 full right
+	lsl.l	#8,d2		; 255 -> $FF00 (approx $10000)
+
+	moveq	#0,d1
+	move.w	cFinalVol(a5),d1
+	lsl.l	#5,d1		; volume $0000 -> $10000
+	move.l	d7,d0		; channel
+	
+	moveq	#AHISF_IMM,d3	; flags
+   ;;; DPRINT  "SetVol ch=%02.2lx vol=%05.5lx pan=%05.5lx"
+	move.l	ahibase(pc),a6
+	move.l	ahi_ctrl(pc),a2
+	jsr	_LVOAHI_SetVol(a6)
+    pop     a2
+;    popm    all
+
+
+	; -------------------------------------------------------------------
+	;                            PERIOD UPDATE
+	; -------------------------------------------------------------------
+.period	
+    btst	#IB_Period,d6
+	beq 	.trig
+	; -----------------------------
+	move.w	cFinalPeriod(a5),d0
+	bsr 	GetFrequenceValue  	; Returns Hz
+
+ ;   pushm   all
+    push    a2
+    move.w  d7,d1
+    add.w   d1,d1
+    add.w   d1,d1
+    move.l  d0,(a2,d1.w)    ; Store frequency per channel
+
+	move.l	d0,d1	    	; d1 = freq (Hz)
+	move.l	d7,d0	    	; d0 = channel
+	moveq	#AHISF_IMM,d2   ; d2 = flags
+	move.l	ahibase(pc),a6
+	move.l	ahi_ctrl(pc),a2
+    ;;DPRINT  "SetFreq ch=%02.2lx fr=%ld Hz"
+	jsr	_LVOAHI_SetFreq(a6)
+    pop     a2
+  ;  popm    all
+	; -------------------------------------------------------------------
+	;                           SAMPLE TRIGGER
+	; -------------------------------------------------------------------
+.trig	btst	#IB_NyTon,d6
+	beq 	.next
+	; -----------------------------
+    move.w  d7,d1
+    lsl.w   #2,d1
+    clr.l   (a3,d1.w)        * Initially no smp for channel
+	move.l	cSampleSeg(a5),d0
+	beq 	.stop
+    move.l  d0,a0
+	move.l	sPek(a0),d0
+	beq 	.stop    
+    move.l  a0,(a3,d1.w)   ; Store sample ptr per channel for soundfunc
+
+	; -----------------------------	
+    move.l  sOrigLen(a0),d1
+	move.l	cSmpStartPos(a5),d4
+	; -----------------------------
+	tst.b	s16Bit(a0)			; 16-bit sample?
+	beq.b	.L2				    ; nope
+	lsr.l	#1,d1				; yes, convert units from bytes to words
+	; -----------------------------
+.L2	
+	cmp.l   d1,d4			    ; d4 >= (unrolled) sample end?
+	bhs 	.stop				; yes, stop voice
+	; -----------------------------
+    ; sLoopType: 0 -> No Loop
+    ;            1 -> Forward loop
+    ;            2 -> ping pong loop
+
+    push    a2
+    clr.b   sAHILoopDir(a0)  * Reset ping pong state
+    move.l  d1,d3            * d3=length (0=play full sample)	
+    sub.l   d4,d3            * .. adjust based on start offset
+    moveq   #0,d1
+	move.w	sAHISound(a0),d1 * d1=sound number
+	move.l	d7,d0            * d0=channel
+	move.l	d4,d2            * d2=offset
+	moveq	#AHISF_IMM,d4    * d4=flags
+	move.l	ahibase(pc),a6
+	move.l	ahi_ctrl(pc),a2
+;    DPRINT  "SetSound ch=%02.2lx sound=%02.2lx offs=%04.4lx len=%04.4lx"
+	jsr	_LVOAHI_SetSound(a6)
+    pop     a2
+
+
+	; -------------------------------------------------------------------
+.next	lea	CHN_SIZE(a5),a5
+	addq.b	#1,d7           ; loop all channels
+	cmp.w	hAntChn,d7
+	bne.w	.loop
+	rts
+	; -----------------------------
+.stop	
+    push    a2
+    moveq	#AHI_NOSOUND,d1
+	move.l	d7,d0
+	moveq	#0,d2
+	moveq	#0,d3
+	moveq	#AHISF_IMM,d4
+	move.l	ahibase(pc),a6
+	move.l	ahi_ctrl(pc),a2
+    DPRINT  "NOSOUND channel=%ld"
+	jsr	_LVOAHI_SetSound(a6)
+    pop     a2
+	bra.b	.next
+
+
+
+; ---------------------------------------------------------
+; ---------------------------------------------------------
+; ---------------------------------------------------------
+
+Mix_UpdateChannelVolPanFrq_AGUS:
+    lea LogTab,a4
+	lea	StmTyp,a5
+	moveq	#0,d7               ; loop number of channels in the mod
+	move.l	amigus_base(pc),a6	; a6 = AmiGUS register base
+    lea     agusVolForChannel,a3
+	lea	PanningTab(pc),a1
+	; -----------------------------
+.loop	
+    move.b	cStatus(a5),d6
+	beq 	.next				; no update flags, skip channel
+	clr.b	cStatus(a5)	
+	move.w	d7,HAGEN_VOICE_BNK(a6)	; Set channel number
+	; -------------------------------------------------------------------
+	;               SAMPLE PRE-TRIGGER (setup fadeout voice)
+	; -------------------------------------------------------------------	
+	;btst	#IB_NyTon,d6
+	;beq 	.vol
+	; -----------------------------
+    ; Not available on AGUS!
+	;or.b	#IST_Fadeout,vType(a6)
+	;moveq	#0,d0				; destination volume
+	;moveq	#0,d2
+	;move.w	QuickVolSizeVal(pc),d2		; volume ramp length
+	;bsr.w	.SetVol
+	;eor.w	#1,(a2,d7.w*2)			; swap voice with neighbor voice
+	;move.w	(a2,d7.w*2),d0
+	;move.l	(a3,d0.w*4),a6			; a6 points to mixer voice to use
+	;move.b	#IST_Off,vType(a6)
+	
+	; -------------------------------------------------------------------
+	;                            VOLUME UPDATE
+	; -------------------------------------------------------------------
+.vol	
+    move.b	d6,d2
+	and.b	#IS_Vol+IS_Pan,d2
+	beq.b	.period
+	; -----------------------------
+
+	move	cFinalVol(a5),d0    * 0..$800
+	move	d0,d1
+
+	moveq	#0,d3
+	move.b	cFinalPan(a5),d3    * 0..255
+	add.w	d3,d3
+	mulu.w	(a1,d3.w),d1	    * d1 = 0..$800*$ffff = $7fff800
+	lsr.w	#1,d3
+
+	not.b	d3
+	addq.w	#1,d3		    * 255 - d3
+	add.w	d3,d3
+	mulu.w	(a1,d3.w),d0
+
+	* Shift right by 13 to AGUS range 0..$3fff
+	lsl.l	#3,d1		
+	swap	d1
+	lsl.l	#3,d0
+	swap	d0
+
+	move.w	d1,HAGEN_VOICE_VOLUMER(a6)
+	move.w	d0,HAGEN_VOICE_VOLUMEL(a6)
+    ; ---------------------------------
+
+    move.w  d7,d2
+    add.w   d2,d2
+    move.w  d0,(a3,d2.w)        * stash channel vol, LEFT   
+    move.w  d1,2(a3,d2.w)       * RIGHT
+
+	; -------------------------------------------------------------------
+	;                            PERIOD UPDATE
+	; -------------------------------------------------------------------
+.period	
+    btst	#IB_Period,d6
+	beq 	.trig
+	; -----------------------------
+	move.w	cFinalPeriod(a5),d0
+	bsr 	GetFrequenceValue  	; Returns Hz
+
+    ; d0 = frequency
+	move.l	#$15d8,d1
+	mulu.w	d0,d1
+	swap	d0
+	mulu.w	#$15d8,d0
+	swap	d0
+	clr.w   d0
+	add.l	d0,d1
+	move.l	d1,HAGEN_VOICE_RATEH(a6)	; Update note frequency
+	; -------------------------------------------------------------------
+	;                           SAMPLE TRIGGER
+	; -------------------------------------------------------------------
+.trig	btst	#IB_NyTon,d6
+	beq 	.next
+	; -----------------------------
+	move.l	cSampleSeg(a5),d0
+	beq 	.stop
+    move.l  d0,a0
+	move.l	sPek(a0),d0
+	beq 	.stop    
+
+	; -----------------------------	
+    move.l  sOrigLen(a0),d1
+	move.l	cSmpStartPos(a5),d4
+  
+    ; Voice control register initial value
+    ; Playback bit #15 set
+    move.w   #$8000,d5  
+    cmp.b   #-2,AHI
+    bne     .1
+    bset    #2,d5       * interpolation bit
+.1
+	; -----------------------------
+	tst.b	s16Bit(a0)			; 16-bit sample?
+	beq.b	.L2				    ; nope
+;	lsr.l	#1,d1				; yes, convert units from bytes to words
+    add.l   d4,d4               ; convert offset to bytes
+    bset    #0,d5               ; bit 0, set 16-bit sample
+	; -----------------------------
+.L2	
+	cmp.l   d1,d4			    ; d4 >= (unrolled) sample end?
+	bhs 	.stop				; yes, stop voice
+	; -----------------------------
+    ; sLoopType: 0 -> No Loop
+    ;            1 -> Forward loop
+    ;            2 -> ping pong loop
+
+	clr.w	HAGEN_VOICE_CTRL(a6)		; Temporarily disable voice playback
+    move.l  sAGUSOffset(a0),d0          ; Start address
+    add.l   d4,d0                       ; Possible offset change
+	move.l	d0,HAGEN_VOICE_PSTRTH(a6)	; Store start
+    move.l  sOrigLen(a0),d1             ; Length
+
+    move.l  sRepS(a0),d3                ; Repeat start offset
+    move.l  sOrigRepL(a0),d4            ; Repeat length
+    cmp.l   #4,d4
+    bls     .noLoop
+    tst.b   sLoopType(a0)
+    beq     .noLoop
+    cmp.b   #2,sLoopType(a0)
+    bne     .noBidi
+    add.l   d4,d4                       ; double replen for bidi with mirrored data
+
+    tst.b   s16Bit(a0)			; 16-bit sample?
+    beq.b   .noBidi
+    subq.l  #4,d4                       ; first half of bidi copy is 2 bytes short
+
+.noBidi
+    ; TODO: cannot set ping-pong loop
+    bset    #1,d5                       ; loop bit
+    ; Loop active
+    move.l  d3,d1                       ; Calculate loop end as the new sample end
+    add.l   d4,d1
+.noLoop
+    add.l   sAGUSOffset(a0),d1          ; Calc end address 
+    subq.l  #2,d1                       ; Subtract a bit?
+	move.l	d1,HAGEN_VOICE_PENDH(a6)    ; ...
+
+    move.l  sRepS(a0),d3                ; Calc repeat start address
+    add.l   sAGUSOffset(a0),d3         
+    move.l  d3,HAGEN_VOICE_PLOOPH(a6)   ; set it
+
+    move.w  d5,HAGEN_VOICE_CTRL(a6)     ; trigger
+
+
+	; -------------------------------------------------------------------
+.next	lea	CHN_SIZE(a5),a5
+	addq.b	#1,d7           ; loop all channels
+	cmp.w	hAntChn,d7
+	bne.w	.loop
+	rts
+	; -----------------------------
+.stop	
+    ; Mute this channel
+	move.w	#0,HAGEN_VOICE_VOLUMEL(a6)
+	move.w	#0,HAGEN_VOICE_VOLUMER(a6)
+	bra.b	.next
+
 
 	; input:
 	;  a4   = log table
 	;  d0.w = period
 	;
-	; output: d0.l = delta (16.16fp)
-GetFrequenceValue
+	; output: d0.l = delta (16.16fp) (or Hz if AHI tables used)
+GetFrequenceValue:
 	tst.w	d0
-	beq.w	.periodIsZero
+	beq 	.periodIsZero
 	; -----------------------------
-	tst.b	LinearFrqTab(pc)
+	;tst.b	LinearFrqTab(pc)
+    move.b  LinearFrqTab(pc),d1
 	beq.b	.amiga
 	; -----------------------------
 .linear	moveq	#0,d1
@@ -5130,30 +7615,23 @@ GetFrequenceValue
 	sub.w	d2,d3
 	and.b	#31,d3			; d3.b = oct shift
 	; -----------------------------
-	move.l	(a4,d1.w*4),d0
-	; -----------------------------
-	; Add rounding bias
-	; -----------------------------
-	moveq	#1,d2
-	lsl.l	d3,d2
-	lsr.l	#1,d2
-	add.l	d2,d0
-	; -----------------------------	
+;	move.l	(a4,d1.w*4),d0
+    lsl.w   #2,d1
+	move.l	(a4,d1.w),d0
 	lsr.l	d3,d0
-	rts
+    rts
 
-.amiga	moveq	#0,d1
-	move.w	d0,d1
-	move.l	d1,d2
-	lsr.l	#1,d2			; rounding bias
-	move.l	FrequenceDivFactor(pc),d0
-	add.l	d2,d0			; add rounding bias
-	divu.l	d1,d0
+.amiga	
+    ext.l   d0
+	move.l	FrequenceDivFactor(pc),d1
+    exg     d0,d1
+    bsr     divu_32
 	rts
 
 .periodIsZero
 	moveq	#0,d0	; period 0 -> mixer delta 0
 	rts
+
 
 ; ============================================================
 ; Audio channel mixer
@@ -5190,7 +7668,7 @@ GetFrequenceValue
 ; ------------------
 ; No-ramp mixers
 ; ------------------
-
+    _MC68020
 ; 8-bit stereo mixing w/ linear interpolation
 MIX8_S	MACRO ; 68060 OPTIMIZED!
 	movem.w	(a3,d2.l),d4
@@ -5994,7 +8472,7 @@ Mix_SaveIPVolumes
 
 Mix_UpdateBuffer
 	move.l	MixSamples(pc),d7
-	lea	CDA_MixBuffer,a0
+	move.l	CDA_MixBufferPtr,a0
 .loop	tst.l	PMPLeft(pc)		; PMPLeft (16.16fp) <= 0?
 	bgt.b	.NoTick			; nope, no tick trigger yet
 	tst.b	SongIsPlaying(pc)
@@ -6026,7 +8504,7 @@ Mix_UpdateBuffer
 	; ----------------------------------
 	; Copy mixed samples to Paula buffer
 	; ----------------------------------
-	lea	CDA_MixBuffer,a0
+	move.l	CDA_MixBufferPtr,a0
 	move.l	MixSamples(pc),d7	; samples to copy
 	move.l	MixPos(pc),d6		; Paula buffer position
 	IF _14BIT
@@ -6234,7 +8712,7 @@ AllocPostMixTable
 	ELSE
 		move.l	#65536,d0
 	ENDIF
-	moveq	#MEMF_FAST,d1
+	moveq	#MEMF_PUBLIC,d1
 	bsr.w	AllocMem
 	tst.l	d0
 	beq.b	.error		
@@ -6244,6 +8722,7 @@ AllocPostMixTable
 .error	moveq	#1,d0
 	rts
 
+ _MC68000
 FreePostMixTable
 	IF _14BIT
 		move.l	#65536*2,d0
@@ -6251,7 +8730,7 @@ FreePostMixTable
 		move.l	#65536,d0
 	ENDIF
 	move.l	PostMixTable(pc),a1
-	tst.l	a1
+	cmp.w   #0,a1
 	beq.b	.ok			; not allocated!
 	bsr.w	FreeMem
 	clr.l	PostMixTable
@@ -6260,6 +8739,7 @@ FreePostMixTable
 	IF _14BIT
 
 	; 14-bit output	(MIX_AMP controls the gain)
+ _MC68020
 GeneratePostMixTable
 	movem.l	d0-a6,-(sp)
 	move.l	PostMixTable(pc),a0
@@ -6329,6 +8809,8 @@ GeneratePostMixTable
 
 	ENDIF
 
+    _MC68000
+
 	; input: d0.b = song position (0..255, order)
 SetPos
 	tst.w	hLen			; song length > 0?
@@ -6362,7 +8844,9 @@ SetPos
 	move.b	(a0,d0.w),d0
 	move.w	d0,PattNr
 	lea	PattLens,a0
-	move.w	(a0,d0.w*2),PattLen
+;	move.w	(a0,d0.w*2),PattLen
+    add.w   d0,d0
+	move.w	(a0,d0.w),PattLen
 	; -----------------------------
 	; Clear pattloop and recalc vols
 	; -----------------------------
@@ -6424,7 +8908,7 @@ SetMixingVolume
 	moveq	#64,d0
 .L0	move.w	d0,MixingVolume
 	; ----------------------------
-	tst.b	SongIsPlaying(pc)
+	tst.b	SongIsPlaying
 	beq.b	.NoVolUpdate
 	; ----------------------------
 	; Force-update channel volumes
@@ -6450,33 +8934,70 @@ GetSongName
 ;                                     DATA
 ; ------------------------------------------------------------------------------
 
-HeaderText	dc.b "--------------------------------------------------------",$a
-		dc.b " xmaplay060 v0.46 ("
-	IF _14BIT
-		dc.b "14-bit"
-	ELSE
-		dc.b "8-bit"
-	ENDIF
-		dc.b " output), by 8bitbubsy",$a
-		dc.b " Note: Wire up your Amiga audio for stereo, not mono!",$a
-		dc.b "--------------------------------------------------------",$a,0
-LoadingModText	dc.b "Opening module...",$a,0
-LoadPatTxt	dc.b "Loading pattern data...",$a,0
-LoadInsSmpTxt	dc.b "Loading instruments and sample data...",$a,0
-LoadInsTxt	dc.b "Loading instruments...",$a,0	; for old XM format
-LoadSmpTxt	dc.b "Loading sample data...",$a,0	; for old XM format
-AudDevErrText	dc.b "Error: Couldn't allocate task signal and allocate audio!",$a,0
-LoadXMErr1Text	dc.b "Error: Couldn't open file for reading!",$a,0
-LoadXMErr2Text	dc.b "Error: General I/O error during module reading!",$a,0
-LoadXMErr3Text	dc.b "Error: This is an invalid (or unsupported) XM module!",$a,0
-LoadXMErr4Text	dc.b "Error: This XM file version is not supported (not v1.02/v1.03/v1.04)!",$a,0
-LoadXMErr5Text	dc.b "Error: Unsupported number of channels, orders, instruments and/or patterns!",$a,0
-LoadXMErr6Text	dc.b "Error: Out of memory, or corrupt/unsupported XM!",$a,0
-AudErrTxt	dc.b "Error initializing audio: Out of memory!",$a,0
-CIAErrTxt	dc.b "Error initializing audio: No CIA timers available!",$a,0
-CpuErrText	dc.b "Error: This program requires a 020+ CPU!",$a,0
-IsPlayingText	dc.b "Now playing, press ESC to stop...",$a,0
-WasPlayingText	dc.b "Playback stopped. You can close this window now.",$a,0
+HeaderText	
+    dc.b    0
+
+;    dc.b "--------------------------------------------------------",$a
+;		dc.b " xmaplay060 v0.47 ("
+;	IF _14BIT
+;		dc.b "14-bit"
+;	ELSE
+;		dc.b "8-bit"
+;	ENDIF
+;		dc.b " output), by 8bitbubsy",$a
+;		dc.b " Note: Wire up your Amiga audio for stereo, not mono!",$a
+;		dc.b "--------------------------------------------------------",$a,0
+LoadingModText	    
+        dc.b    0
+        ;dc.b "Opening module...",$a,0
+LoadPatTxt	    
+        dc.b    0
+        ;dc.b "Loading pattern data...",$a,0
+LoadInsSmpTxt	    
+        dc.b    0
+        ;dc.b "Loading instruments and sample data...",$a,0
+LoadInsTxt	    
+        dc.b    0
+        ;dc.b "Loading instruments...",$a,0	; for old XM format
+LoadSmpTxt	    
+        dc.b    0
+        ;dc.b "Loading sample data...",$a,0	; for old XM format
+AudDevErrText	    
+        dc.b    0
+        ;dc.b "Error: Couldn't allocate task signal and allocate audio!",$a,0
+LoadXMErr1Text	    
+        dc.b    0
+        ;dc.b "Error: Couldn't open file for reading!",$a,0
+LoadXMErr2Text	    
+        dc.b    0
+        ;dc.b "Error: General I/O error during module reading!",$a,0
+LoadXMErr3Text	    
+        dc.b    0
+        ;dc.b "Error: This is an invalid (or unsupported) XM module!",$a,0
+LoadXMErr4Text	    
+        dc.b    0
+        ;dc.b "Error: This XM file version is not supported (not v1.02/v1.03/v1.04)!",$a,0
+LoadXMErr5Text	    
+        dc.b    0
+        ;dc.b "Error: Unsupported number of channels, orders, instruments and/or patterns!",$a,0
+LoadXMErr6Text	    
+        dc.b    0
+        ;dc.b "Error: Out of memory, or corrupt/unsupported XM!",$a,0
+AudErrTxt	    
+        dc.b    0
+        ;dc.b "Error initializing audio: Out of memory!",$a,0
+CIAErrTxt	    
+        dc.b    0
+        ;dc.b "Error initializing audio: No CIA timers available!",$a,0
+CpuErrText	    
+        dc.b    0
+        ;dc.b "Error: This program requires a 020+ CPU!",$a,0
+IsPlayingText	    
+        dc.b    0
+        ;dc.b "Now playing, press ESC to stop...",$a,0
+WasPlayingText	    
+        dc.b    0
+        ;dc.b "Playback stopped. You can close this window now.",$a,0
 
 XMSig		dc.b "Extended Module: ",0
 DosName		dc.b "dos.library",0
@@ -6612,7 +9133,20 @@ HandlerName		dc.b "xmaplay060 input handler",0
 InputDevice		dc.b "input.device",0
 tmp8			dc.b 0
 bxxOverflow		dc.b 0
+
+; -------------------------------------
+AHI:                dc.b 0
 	EVEN
+ahibase             dc.l 0
+ahi_ctrl            dc.l 0
+ahi_mastervol       dc.w 0
+AHIMixingFreq       dc.w 58000
+sampleForChannel    ds.l 32
+freqForChannel      ds.l 32
+agusVolForChannel   ds.l 32
+deltaDecodingDone   ds.w 1      ; delta decoding should only be done once 
+
+; -------------------------------------
 
 ; ------------------------------------------------------------------------------
 ;                                JUMP TABLES
@@ -6818,308 +9352,162 @@ RetrigTickTab
 	dc.b 0,1,2,3,4,5,6,7,8,9,10,11,12,13,0,1,2,3,4,5,6,7,8,9,10,11,12,13,0,1,2,3
 	dc.b 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,0,1
 	
-	; Panning table from FT2.08 and later
+		; Panning table from FT2.08 and later.
 	; Uses square root for constant power. Similar to Gravis Ultrasound.
 	;
+	; Note: last value reduced from 65536 to 65535 to halve table size.
+	;
 	; for (int32_t i = 0; i <= 256; i++)
-	;    LUT[i] = (uint32_t)round(65536.0 * sqrt(i / 256.0));
-	;
-	CNOP 0,4
-PanningTab
-        dc.l $0000,$1000,$16A1,$1BB6,$2000,$23C7,$2731,$2A55,$2D41,$3000
-        dc.l $3299,$3511,$376D,$39B0,$3BDE,$3DF8,$4000,$41F8,$43E2,$45BE
-        dc.l $478E,$4952,$4B0C,$4CBC,$4E62,$5000,$5196,$5323,$54AA,$562A
-        dc.l $57A3,$5916,$5A82,$5BEA,$5D4C,$5EA8,$6000,$6153,$62A1,$63EC
-        dc.l $6531,$6673,$67B1,$68EB,$6A22,$6B55,$6C84,$6DB1,$6EDA,$7000
-        dc.l $7123,$7243,$7361,$747B,$7593,$76A9,$77BC,$78CC,$79DA,$7AE6
-        dc.l $7BEF,$7CF7,$7DFC,$7EFF,$8000,$80FF,$81FC,$82F7,$83F0,$84E8
-        dc.l $85DE,$86D2,$87C4,$88B4,$89A3,$8A90,$8B7C,$8C66,$8D4F,$8E36
-        dc.l $8F1C,$9000,$90E3,$91C4,$92A4,$9383,$9461,$953D,$9618,$96F2
-        dc.l $97CA,$98A1,$9977,$9A4C,$9B20,$9BF3,$9CC4,$9D95,$9E64,$9F33
-        dc.l $A000,$A0CC,$A198,$A262,$A32B,$A3F4,$A4BB,$A581,$A647,$A70B
-        dc.l $A7CF,$A892,$A954,$AA15,$AAD5,$AB95,$AC53,$AD11,$ADCE,$AE8A
-        dc.l $AF45,$B000,$B0BA,$B173,$B22B,$B2E3,$B399,$B450,$B505,$B5BA
-        dc.l $B66E,$B721,$B7D3,$B885,$B937,$B9E7,$BA97,$BB46,$BBF5,$BCA3
-        dc.l $BD51,$BDFD,$BEA9,$BF55,$C000,$C0AA,$C154,$C1FD,$C2A6,$C34E
-        dc.l $C3F6,$C49C,$C543,$C5E9,$C68E,$C733,$C7D7,$C87B,$C91E,$C9C1
-        dc.l $CA63,$CB04,$CBA6,$CC46,$CCE6,$CD86,$CE25,$CEC4,$CF62,$D000
-        dc.l $D09D,$D13A,$D1D7,$D272,$D30E,$D3A9,$D444,$D4DE,$D577,$D611
-        dc.l $D6AA,$D742,$D7DA,$D872,$D909,$D9A0,$DA36,$DACC,$DB62,$DBF7
-        dc.l $DC8B,$DD20,$DDB4,$DE47,$DEDB,$DF6E,$E000,$E092,$E124,$E1B5
-        dc.l $E246,$E2D7,$E367,$E3F7,$E487,$E516,$E5A5,$E633,$E6C1,$E74F
-        dc.l $E7DD,$E86A,$E8F7,$E983,$EA0F,$EA9B,$EB27,$EBB2,$EC3D,$ECC7
-        dc.l $ED51,$EDDB,$EE65,$EEEE,$EF77,$F000,$F088,$F110,$F198,$F220
-        dc.l $F2A7,$F32E,$F3B4,$F43B,$F4C1,$F546,$F5CC,$F651,$F6D6,$F75B
-        dc.l $F7DF,$F863,$F8E7,$F96A,$F9EE,$FA71,$FAF3,$FB76,$FBF8,$FC7A
-        dc.l $FCFB,$FD7D,$FDFE,$FE7F,$FEFF,$FF80,$10000
-
-	; 32.32fp values for calculating LogTab for XMs using linear periods
-	;
-	; for (int32_t i = 0; i < (12*16*4)*2; i++)
 	; {
-	;     uint64_t x64 = (uint64_t)round(8363.0 * 256.0 * exp2((i/2)
-	;                       / (12.0 * 16.0 * 4.0)) * (UINT32_MAX+1.0));
-	;     LUT[i] = (i & 1) ? (x64 >> 32) : (x64 & 0xFFFFFFFF);
+	;    uint32_t x = (uint32_t)round(65536.0 * sqrt(i / 256.0));
+	;    if (x > 65535) x = 65535;
+	;    LUT[i] = (uint16_t)x;
 	; }
+	;
+	CNOP 0,2
+PanningTab
+        dc.w $0000,$1000,$16A1,$1BB6,$2000,$23C7,$2731,$2A55,$2D41,$3000
+        dc.w $3299,$3511,$376D,$39B0,$3BDE,$3DF8,$4000,$41F8,$43E2,$45BE
+        dc.w $478E,$4952,$4B0C,$4CBC,$4E62,$5000,$5196,$5323,$54AA,$562A
+        dc.w $57A3,$5916,$5A82,$5BEA,$5D4C,$5EA8,$6000,$6153,$62A1,$63EC
+        dc.w $6531,$6673,$67B1,$68EB,$6A22,$6B55,$6C84,$6DB1,$6EDA,$7000
+        dc.w $7123,$7243,$7361,$747B,$7593,$76A9,$77BC,$78CC,$79DA,$7AE6
+        dc.w $7BEF,$7CF7,$7DFC,$7EFF,$8000,$80FF,$81FC,$82F7,$83F0,$84E8
+        dc.w $85DE,$86D2,$87C4,$88B4,$89A3,$8A90,$8B7C,$8C66,$8D4F,$8E36
+        dc.w $8F1C,$9000,$90E3,$91C4,$92A4,$9383,$9461,$953D,$9618,$96F2
+        dc.w $97CA,$98A1,$9977,$9A4C,$9B20,$9BF3,$9CC4,$9D95,$9E64,$9F33
+        dc.w $A000,$A0CC,$A198,$A262,$A32B,$A3F4,$A4BB,$A581,$A647,$A70B
+        dc.w $A7CF,$A892,$A954,$AA15,$AAD5,$AB95,$AC53,$AD11,$ADCE,$AE8A
+        dc.w $AF45,$B000,$B0BA,$B173,$B22B,$B2E3,$B399,$B450,$B505,$B5BA
+        dc.w $B66E,$B721,$B7D3,$B885,$B937,$B9E7,$BA97,$BB46,$BBF5,$BCA3
+        dc.w $BD51,$BDFD,$BEA9,$BF55,$C000,$C0AA,$C154,$C1FD,$C2A6,$C34E
+        dc.w $C3F6,$C49C,$C543,$C5E9,$C68E,$C733,$C7D7,$C87B,$C91E,$C9C1
+        dc.w $CA63,$CB04,$CBA6,$CC46,$CCE6,$CD86,$CE25,$CEC4,$CF62,$D000
+        dc.w $D09D,$D13A,$D1D7,$D272,$D30E,$D3A9,$D444,$D4DE,$D577,$D611
+        dc.w $D6AA,$D742,$D7DA,$D872,$D909,$D9A0,$DA36,$DACC,$DB62,$DBF7
+        dc.w $DC8B,$DD20,$DDB4,$DE47,$DEDB,$DF6E,$E000,$E092,$E124,$E1B5
+        dc.w $E246,$E2D7,$E367,$E3F7,$E487,$E516,$E5A5,$E633,$E6C1,$E74F
+        dc.w $E7DD,$E86A,$E8F7,$E983,$EA0F,$EA9B,$EB27,$EBB2,$EC3D,$ECC7
+        dc.w $ED51,$EDDB,$EE65,$EEEE,$EF77,$F000,$F088,$F110,$F198,$F220
+        dc.w $F2A7,$F32E,$F3B4,$F43B,$F4C1,$F546,$F5CC,$F651,$F6D6,$F75B
+        dc.w $F7DF,$F863,$F8E7,$F96A,$F9EE,$FA71,$FAF3,$FB76,$FBF8,$FC7A
+        dc.w $FCFB,$FD7D,$FDFE,$FE7F,$FEFF,$FF80,$FFFF
+
+	; for (int32_t i = 0; i < 12*16*4; i++)
+	;     LogTabSource[i] = (uint32_t)round(16777216.0 * exp2(i / (12.0 * 16.0 * 4.0)));
 	;
         CNOP 0,4
 LogTabSource
-        dc.l $00000000,$0020AB00,$22B17C8E,$0020B28D,$043CC4CE,$0020BA1C
-        dc.l $A5092340,$0020C1AC,$057DFA46,$0020C93F,$2602C42A,$0020D0D3
-        dc.l $06FF1320,$0020D869,$A8DA9148,$0020E000,$0BFD00C8,$0020E79A
-        dc.l $30CE3BAC,$0020EF35,$17B63412,$0020F6D2,$C11CF41A,$0020FE70
-        dc.l $2D6A9DEE,$00210611,$5D076BCC,$00210DB3,$505BB00C,$00211557
-        dc.l $07CFD520,$00211CFD,$83CC5D9E,$002124A4,$C4B9E442,$00212C4D
-        dc.l $CB011BFA,$002133F8,$970ACFEC,$00213BA5,$293FE368,$00214354
-        dc.l $8209520C,$00214B04,$A1D02FB0,$002152B6,$88FDA880,$00215A6A
-        dc.l $37FB00EA,$00216220,$AF3195C4,$002169D7,$EF0ADC26,$00217190
-        dc.l $F7F061A0,$0021794B,$CA4BCC20,$00218108,$6686D9FC,$002188C7
-        dc.l $CD0B61FA,$00219087,$FE435360,$00219849,$FA98B5E6,$0021A00D
-        dc.l $C275A9D2,$0021A7D3,$564467E8,$0021AF9B,$B66F4180,$0021B764
-        dc.l $E360A080,$0021BF2F,$DD83076E,$0021C6FC,$A5411166,$0021CECB
-        dc.l $3B057232,$0021D69C,$9F3AF642,$0021DE6E,$D24C82AE,$0021E642
-        dc.l $D4A51552,$0021EE18,$A6AFC4BA,$0021F5F0,$48D7C036,$0021FDCA
-        dc.l $BB884FE4,$002205A5,$FF2CD4A4,$00220D82,$1430C82A,$00221562
-        dc.l $FAFFBD06,$00221D42,$B4055EA8,$00222525,$3FAD7158,$00222D0A
-        dc.l $9E63D254,$002234F0,$D09477BE,$00223CD8,$D6AB70B6,$002244C2
-        dc.l $B114E550,$00224CAE,$603D16A2,$0022549C,$E4905ECC,$00225C8B
-        dc.l $3E7B30F2,$0022647D,$6E6A1950,$00226C70,$74C9BD38,$00227465
-        dc.l $5206DB14,$00227C5C,$068E4A7A,$00228455,$92CCFC1E,$00228C4F
-        dc.l $F72FF9EE,$0022944B,$34246708,$00229C4A,$4A177FBC,$0022A44A
-        dc.l $397699A4,$0022AC4C,$02AF23A2,$0022B450,$A62EA5D8,$0022BC55
-        dc.l $2462C1C4,$0022C45D,$7DB93238,$0022CC66,$B29FCB60,$0022D471
-        dc.l $C3847AD0,$0022DC7E,$B0D54786,$0022E48D,$7B0051E8,$0022EC9E
-        dc.l $2273D3D4,$0022F4B1,$A79E20A4,$0022FCC5,$0AEDA53A,$002304DC
-        dc.l $4CD0E7EC,$00230CF4,$6DB688AC,$0023150E,$6E0D40F8,$00231D2A
-        dc.l $4E43E3E8,$00232548,$0EC95E2E,$00232D68,$B00CB62A,$00233589
-        dc.l $327D0BDA,$00233DAD,$968998F2,$002345D2,$DCA1B0DA,$00234DF9
-        dc.l $0534C0BA,$00235623,$10B24F74,$00235E4E,$FF89FDBA,$0023667A
-        dc.l $D22B8600,$00236EA9,$8906BCA2,$002376DA,$248B8FC0,$00237F0D
-        dc.l $A52A0760,$00238741,$0B524574,$00238F78,$577485D4,$002397B0
-        dc.l $8A011E4C,$00239FEA,$A3687E9C,$0023A826,$A41B3084,$0023B064
-        dc.l $8C89D7C6,$0023B8A4,$5D253230,$0023C0E6,$165E179C,$0023C92A
-        dc.l $B8A579FE,$0023D16F,$446C6564,$0023D9B7,$BA23FFF8,$0023E200
-        dc.l $1A3D8A12,$0023EA4C,$652A5E38,$0023F299,$9B5BF11E,$0023FAE8
-        dc.l $BD43D1B8,$00240339,$CB53A938,$00240B8C,$C5FD3B14,$002413E1
-        dc.l $ADB2650E,$00241C38,$82E51F3C,$00242491,$46077C0A,$00242CEC
-        dc.l $F78BA848,$00243548,$97E3EB22,$00243DA7,$2782A630,$00244608
-        dc.l $A6DA5586,$00244E6A,$165D8F9E,$002456CF,$767F0578,$00245F35
-        dc.l $C7B18296,$0024679D,$0A67ED00,$00247008,$3F154552,$00247874
-        dc.l $662CA6BA,$002480E2,$80214702,$00248952,$8D667698,$002491C4
-        dc.l $8E6FA08A,$00249A38,$83B04A9C,$0024A2AE,$6D9C1548,$0024AB26
-        dc.l $4CA6BBB6,$0024B3A0,$214413DC,$0024BC1C,$EBE80E6C,$0024C499
-        dc.l $AD06B6F0,$0024CD19,$651433B6,$0024D59B,$1484C5F4,$0024DE1F
-        dc.l $BBCCC9B6,$0024E6A4,$5B60B5F2,$0024EF2C,$F3B51C8C,$0024F7B5
-        dc.l $853EAA52,$00250041,$10722712,$002508CF,$95C4758E,$0025115E
-        dc.l $15AA939C,$002519F0,$90999A12,$00252283,$0706BCDC,$00252B19
-        dc.l $79674AFA,$002533B0,$E830AE8E,$00253C49,$53D86CD8,$002544E5
-        dc.l $BCD4264A,$00254D82,$23999680,$00255622,$889E9452,$00255EC3
-        dc.l $EC5911CE,$00256766,$4F3F1C50,$0025700C,$B1C6DC72,$002578B3
-        dc.l $14669628,$0025815D,$7794A8B8,$00258A08,$DBC78EC2,$002592B5
-        dc.l $4175DE50,$00259B65,$A91648D0,$0025A416,$131F9B1C,$0025ACCA
-        dc.l $8008BD96,$0025B57F,$F048B400,$0025BE36,$64569DB8,$0025C6F0
-        dc.l $DCA9B59A,$0025CFAB,$59B9520E,$0025D869,$DBFCE51E,$0025E128
-        dc.l $63EBFC64,$0025E9EA,$F1FE4122,$0025F2AD,$86AB7842,$0025FB73
-        dc.l $226B8260,$0026043B,$C5B65BCA,$00260D04,$71041C8C,$002615D0
-        dc.l $24CCF876,$00261E9E,$E1893F1E,$0026276D,$A7B15BEA,$0026303F
-        dc.l $77BDD616,$00263913,$522750BC,$002641E9,$37668AD8,$00264AC1
-        dc.l $27F45F50,$0026539B,$2449C4F6,$00265C77,$2CDFCE96,$00266555
-        dc.l $422FAAF6,$00266E35,$64B2A4E4,$00267717,$94E2232E,$00267FFB
-        dc.l $D337A8B8,$002688E1,$202CD482,$002691CA,$7C3B619C,$00269AB4
-        dc.l $E7DD2746,$0026A3A0,$638C18E0,$0026AC8F,$EFC24604,$0026B57F
-        dc.l $8CF9DA78,$0026BE72,$3BAD1E48,$0026C767,$FC5675C4,$0026D05D
-        dc.l $CF70617E,$0026D956,$B5757E64,$0026E251,$AEE085B8,$0026EB4E
-        dc.l $BC2C4D14,$0026F44D,$DDD3C67C,$0026FD4E,$14520064,$00270652
-        dc.l $602225A8,$00270F57,$C1BF7DA4,$0027185E,$39A56C30,$00272168
-        dc.l $C84F71AA,$00272A73,$6E392AFC,$00273381,$2BDE51A2,$00273C91
-        dc.l $01BABBB4,$002745A3,$F04A5BE8,$00274EB6,$F809419C,$002757CC
-        dc.l $197398DC,$002760E5,$5505AA62,$002769FF,$AB3BDBAC,$0027731B
-        dc.l $1C92AEF0,$00277C3A,$A986C332,$0027855A,$5294D442,$00278E7D
-        dc.l $1839BAC6,$002797A2,$FAF26C40,$0027A0C8,$FB3BFB12,$0027A9F1
-        dc.l $1993968C,$0027B31D,$56768AEA,$0027BC4A,$B262415C,$0027C579
-        dc.l $2DD44018,$0027CEAB,$C94A2A52,$0027D7DE,$8541C044,$0027E114
-        dc.l $6238DF44,$0027EA4C,$60AD81BA,$0027F386,$811DBF2A,$0027FCC2
-        dc.l $C407CC44,$00280600,$29E9FAE0,$00280F41,$B342BA0C,$00281883
-        dc.l $6090960A,$002821C8,$32523866,$00282B0F,$290667EC,$00283458
-        dc.l $452C08B4,$00283DA3,$87421C36,$002846F0,$EFC7C136,$0028503F
-        dc.l $7F3C33E6,$00285991,$361ECDE0,$002862E5,$14EF0628,$00286C3B
-        dc.l $1C2C7140,$00287593,$4C56C120,$00287EED,$A5EDC550,$00288849
-        dc.l $29716AD2,$002891A8,$D761BC48,$00289B08,$B03EE1EC,$0028A46B
-        dc.l $B489218E,$0028ADD0,$E4C0DEB2,$0028B737,$41669A7E,$0028C0A1
-        dc.l $CAFAF3D0,$0028CA0C,$81FEA744,$0028D37A,$66F28F34,$0028DCEA
-        dc.l $7A57A3C8,$0028E65C,$BCAEFAF0,$0028EFD0,$2E79C87C,$0028F947
-        dc.l $D0395E12,$002902BF,$A26F2B3E,$00290C3A,$A59CBD7E,$002915B7
-        dc.l $DA43C036,$00291F36,$40E5FCCE,$002928B8,$DA055AAC,$0029323B
-        dc.l $A623DF38,$00293BC1,$A5C3ADEC,$00294549,$D967085C,$00294ED3
-        dc.l $41904E2C,$00295860,$DEC1FD2A,$002961EE,$B17EB150,$00296B7F
-        dc.l $BA4924C6,$00297512,$F9A42FE8,$00297EA7,$7012C958,$0029883F
-        dc.l $1E1805FA,$002991D9,$04371900,$00299B75,$22F353EE,$0029A513
-        dc.l $7AD026A4,$0029AEB3,$0C511F62,$0029B856,$D7F9EAD6,$0029C1FA
-        dc.l $DE4E5416,$0029CBA1,$1FD244B6,$0029D54B,$9D09C4C8,$0029DEF6
-        dc.l $5678FADA,$0029E8A4,$4CA42C12,$0029F254,$800FBC1E,$0029FC06
-        dc.l $F1402D50,$002A05BA,$A0BA2094,$002A0F71,$8F025584,$002A192A
-        dc.l $BC9DAA64,$002A22E5,$2A111C34,$002A2CA3,$D7E1C6AC,$002A3662
-        dc.l $C694E44A,$002A4024,$F6AFCE5E,$002A49E8,$68B7FD02,$002A53AF
-        dc.l $1D330730,$002A5D78,$14A6A2C2,$002A6743,$4F98A47A,$002A7110
-        dc.l $CE8F0008,$002A7ADF,$920FC814,$002A84B1,$9AA12E44,$002A8E85
-        dc.l $E8C98344,$002A985B,$7D0F36CA,$002AA234,$57F8D7A2,$002AAC0F
-        dc.l $7A0D13AC,$002AB5EC,$E3D2B7F2,$002ABFCB,$95D0B0A0,$002AC9AD
-        dc.l $908E091C,$002AD391,$D491EBF2,$002ADD77,$6263A304,$002AE760
-        dc.l $3A8A9764,$002AF14B,$5D8E5178,$002AFB38,$CBF67900,$002B0527
-        dc.l $864AD518,$002B0F19,$8D134C32,$002B190D,$E0D7E438,$002B2303
-        dc.l $8220C27A,$002B2CFC,$71762BC8,$002B36F7,$AF60846E,$002B40F4
-        dc.l $3C685046,$002B4AF4,$191632AA,$002B54F6,$45F2EE9C,$002B5EFA
-        dc.l $C38766A8,$002B6900,$925C9D0E,$002B7309,$B2FBB3B0,$002B7D14
-        dc.l $25EDEC28,$002B8722,$EBBCA7C2,$002B9131,$04F16798,$002B9B44
-        dc.l $7215CC88,$002BA558,$33B39738,$002BAF6F,$4A54A830,$002BB988
-        dc.l $B682FFD0,$002BC3A3,$78C8BE64,$002BCDC1,$91B02420,$002BD7E1
-        dc.l $01C39134,$002BE204,$C98D85C8,$002BEC28,$E998A206,$002BF64F
-        dc.l $626FA624,$002C0079,$349D726E,$002C0AA5,$60AD074A,$002C14D3
-        dc.l $E729853A,$002C1F03,$C89E2CEE,$002C2936,$05965F46,$002C336C
-        dc.l $9E9D9D58,$002C3DA3,$943F8876,$002C47DD,$E707E240,$002C5219
-        dc.l $97828C9E,$002C5C58,$A63B89D0,$002C6699,$13BEFC78,$002C70DD
-        dc.l $E0992790,$002C7B22,$0D566E8E,$002C856B,$9A83554C,$002C8FB5
-        dc.l $88AC802A,$002C9A02,$D85EB402,$002CA451,$8A26D644,$002CAEA3
-        dc.l $9E91ECE4,$002CB8F7,$162D1E78,$002CC34E,$F185B236,$002CCDA6
-        dc.l $31290FF6,$002CD802,$D5A4C046,$002CE25F,$DF866C6C,$002CECBF
-        dc.l $4F5BDE60,$002CF722,$25B300F6,$002D0187,$6319DFC0,$002D0BEE
-        dc.l $081EA72A,$002D1658,$154FA478,$002D20C4,$8B3B45E2,$002D2B32
-        dc.l $6A701A7A,$002D35A3,$B37CD254,$002D4016,$66F03E74,$002D4A8C
-        dc.l $855950EA,$002D5504,$0F471CD0,$002D5F7F,$0548D64E,$002D69FC
-        dc.l $67EDD2A6,$002D747B,$37C58840,$002D7EFD,$755F8EAE,$002D8981
-        dc.l $214B9EAC,$002D9408,$3C19923A,$002D9E91,$C659648C,$002DA91C
-        dc.l $C09B3224,$002DB3AA,$2B6F38DC,$002DBE3B,$0765D7D4,$002DC8CE
-        dc.l $550F8F96,$002DD363,$14FD0216,$002DDDFB,$47BEF2B0,$002DE895
-        dc.l $EDE64638,$002DF331,$08040302,$002DFDD1,$96A950E4,$002E0872
-        dc.l $9A67794A,$002E1316,$13CFE72C,$002E1DBD,$03742720,$002E2866
-        dc.l $69E5E76A,$002E3311,$47B6F7EC,$002E3DBF,$9D794A4E,$002E486F
-        dc.l $6BBEF1E6,$002E5322,$B31A23D4,$002E5DD7,$741D3702,$002E688F
-        dc.l $AF5AA430,$002E7349,$656505F8,$002E7E06,$96CF18DA,$002E88C5
-        dc.l $442BBB3C,$002E9387,$6E0DED7A,$002E9E4B,$1508D1E8,$002EA912
-        dc.l $39AFACE8,$002EB3DB,$DC95E4D4,$002EBEA6,$FE4F0224,$002EC974
-        dc.l $9F6EAF70,$002ED445,$C088B960,$002EDF18,$62310EDC,$002EE9EE
-        dc.l $84FBC0EA,$002EF4C6,$297D02D8,$002EFFA1,$50492A2E,$002F0A7E
-        dc.l $F9F4AEC2,$002F155D,$27142AB4,$002F2040,$D83C5A8A,$002F2B24
-        dc.l $0E021D24,$002F360C,$C8FA73CA,$002F40F5,$09BA823C,$002F4BE2
-        dc.l $D0D78EA6,$002F56D0,$1EE701CA,$002F61C2,$F47E66E2,$002F6CB5
-        dc.l $52336BC0,$002F77AC,$389BE0CC,$002F82A5,$A84DB914,$002F8DA0
-        dc.l $A1DF0A4E,$002F989E,$25E60CE2,$002FA39F,$34F91BE8,$002FAEA2
-        dc.l $CFAEB548,$002FB9A7,$F69D79AA,$002FC4AF,$AA5C2C86,$002FCFBA
-        dc.l $EB81B43A,$002FDAC7,$BAA519F8,$002FE5D7,$185D89DE,$002FF0EA
-        dc.l $05425304,$002FFBFF,$81EAE770,$00300716,$8EEEDC34,$00301230
-        dc.l $2CE5E962,$00301D4D,$5C67EA28,$0030286C,$1E0CDCCC,$0030338E
-        dc.l $726CE2AC,$00303EB2,$5A204062,$003049D9,$D5BF5DAA,$00305502
-        dc.l $E5E2C584,$0030602E,$8B23262E,$00306B5D,$C6195134,$0030768E
-        dc.l $975E3B76,$003081C2,$FF8AFD2C,$00308CF8,$FF38D1F2,$00309831
-        dc.l $970118D4,$0030A36D,$C77D5448,$0030AEAB,$91472A4C,$0030B9EC
-        dc.l $F4F8645A,$0030C52F,$F32AEF7A,$0030D075,$8C78DC4A,$0030DBBE
-        dc.l $C17C5F06,$0030E709,$92CFCF8E,$0030F257,$010DA968,$0030FDA8
-        dc.l $0CD08BD8,$003108FB,$B6B339E6,$00311450,$FF509A52,$00311FA8
-        dc.l $E743B7AC,$00312B03,$6F27C064,$00313661,$979806C6,$003141C1
-        dc.l $613000FE,$00314D24,$CC8B4934,$00315889,$DA459D72,$003163F1
-        dc.l $8AFADFDE,$00316F5C,$DF471694,$00317AC9,$D7C66BC4,$00318639
-        dc.l $75152DBE,$003191AC,$B7CFCEEE,$00319D21,$A092E5E0,$0031A899
-        dc.l $2FFB2D5E,$0031B414,$66A58478,$0031BF91,$452EEE62,$0031CB11
-        dc.l $CC3492BA,$0031D693,$FC53BD60,$0031E218,$D629DE90,$0031EDA0
-        dc.l $5A548AF8,$0031F92B,$89717BA4,$003204B8,$641E8E16,$00321048
-        dc.l $EAF9C45C,$00321BDA,$1EA144FE,$00322770,$FFB35B12,$00323307
-        dc.l $8ECE764C,$00323EA2,$CC912AFC,$00324A3F,$B99A321A,$003255DF
-        dc.l $56886950,$00326182,$A3FAD2F8,$00326D27,$A290963E,$003278CF
-        dc.l $52E8FF0C,$0032847A,$B5A37E20,$00329027,$CB5FA912,$00329BD7
-        dc.l $94BD3A64,$0032A78A,$125C117E,$0032B340,$44DC32BC,$0032BEF8
-        dc.l $2CDDC77E,$0032CAB3,$CB011E20,$0032D670,$1FE6AA0C,$0032E231
-        dc.l $2C2F03D6,$0032EDF4,$F07AE918,$0032F9B9,$6D6B3CA0,$00330582
-        dc.l $A3A10670,$0033114D,$93BD73B8,$00331D1B,$3E61D6F6,$003328EC
-        dc.l $A42FA7E8,$003334BF,$C5C883A6,$00334095,$A3CE2C9C,$00334C6E
-        dc.l $3EE28AA2,$0033584A,$97A7AAFC,$00336428,$AEBFC060,$00337009
-        dc.l $84CD22FA,$00337BED,$1A725098,$003387D4,$7051EC74,$003393BD
-        dc.l $870EBF7A,$00339FA9,$5F4BB82E,$0033AB98,$F9ABEABE,$0033B789
-        dc.l $56D29108,$0033C37E,$77630AAE,$0033CF75,$5C00DD02,$0033DB6F
-        dc.l $054FB33A,$0033E76C,$73F35E52,$0033F36B,$A88FD528,$0033FF6D
-        dc.l $A3C93482,$00340B72,$6643BF16,$0034177A,$F0A3DD8E,$00342384
-        dc.l $438E1E96,$00342F92,$5FA736E8,$00343BA2,$4594014C,$003447B5
-        dc.l $F5F97EA6,$003453CA,$717CD602,$00345FE3,$B8C35492,$00346BFE
-        dc.l $CC726DC6,$0034781C,$AD2FBB42,$0034843D,$5BA0FD00,$00349061
-        dc.l $D86C193C,$00349C87,$24371C92,$0034A8B1,$3FA83A02,$0034B4DD
-        dc.l $2B65CAF0,$0034C10C,$E8164F3C,$0034CD3D,$76606D3A,$0034D972
-        dc.l $D6EAF1CE,$0034E5A9,$0A5CD062,$0034F1E4,$115D22F2,$0034FE21
-        dc.l $EC932A30,$00350A60,$9CA64D5A,$003516A3,$223E1A7E,$003522E9
-        dc.l $7E02464E,$00352F31,$B09AAC4C,$00353B7C,$BAAF4EBC,$003547CA
-        dc.l $9CE856CC,$0035541B,$57EE1476,$0035606F,$EC68FEA0,$00356CC5
-        dc.l $5B01B32A,$0035791F,$A460F6E0,$0035857B,$C92FB59C,$003591DA
-        dc.l $CA170244,$00359E3C,$A7C016CA,$0035AAA1,$62D4543E,$0035B709
-        dc.l $FBFD42E8,$0035C373,$73E4922E,$0035CFE1,$CB3418B4,$0035DC51
-        dc.l $0295D46A,$0035E8C5,$1AB3EA7A,$0035F53B,$1438A76E,$003601B4
-        dc.l $EFCE7F2E,$00360E2F,$AE200D02,$00361AAE,$4FD813A8,$00362730
-        dc.l $D5A17D50,$003633B4,$40275BB4,$0036403C,$9014E816,$00364CC6
-        dc.l $C6158348,$00365953,$E2D4B5BC,$003665E3,$E6FE2F8C,$00367276
-        dc.l $D33DC884,$00367F0C,$A83F8022,$00368BA5,$66AF7DAC,$00369841
-        dc.l $0F3A102E,$0036A4E0,$A28BAE8E,$0036B181,$2150F78C,$0036BE26
-        dc.l $8C36B1CE,$0036CACD,$E3E9CBEE,$0036D777,$29175C7E,$0036E425
-        dc.l $5C6CA212,$0036F0D5,$7E970344,$0036FD88,$90440ECE,$00370A3E
-        dc.l $92217B84,$003716F7,$84DD285A,$003723B3,$69251C80,$00373072
-        dc.l $3FA78758,$00373D34,$0912C092,$003749F9,$C615481A,$003756C0
-        dc.l $775DC642,$0037638B,$1D9B0BB2,$00377059,$B97C1180,$00377D29
-        dc.l $4BAFF932,$003789FD,$D4E60CC6,$003796D3,$55CDBEC8,$0037A3AD
-        dc.l $CF16AA46,$0037B089,$417092EE,$0037BD69,$AD8B650E,$0037CA4B
-        dc.l $1417359E,$0037D731,$75C44242,$0037E419,$D342F16A,$0037F104
-        dc.l $2D43D242,$0037FDF3,$84779CC6,$00380AE4,$D98F31C8,$003817D8
-        dc.l $2D3B9B10,$003824D0,$802E0B3A,$003831CA,$D317DDE2,$00383EC7
-        dc.l $26AA97AC,$00384BC8,$7B97E638,$003858CB,$D291A03A,$003865D1
-        dc.l $2C49C586,$003872DB,$89727F12,$00387FE7,$EABE1F08,$00388CF6
-        dc.l $50DF20C2,$00389A09,$BC8828E2,$0038A71E,$2E6C054E,$0038B437
-        dc.l $A73DAD4C,$0038C152,$27B04178,$0038CE71,$B0770BD8,$0038DB92
-        dc.l $42457FE4,$0038E8B7,$DDCF3A8E,$0038F5DE,$83C80248,$00390309
-        dc.l $34E3C724,$00391037,$F1D6A2B6,$00391D67,$BB54D83C,$00392A9B
-        dc.l $9212D4A6,$003937D2,$76C52E90,$0039450C,$6A20A652,$00395249
-        dc.l $6CDA261A,$00395F89,$7FA6C1DA,$00396CCC,$A33BB766,$00397A12
-        dc.l $D84E6E70,$0039875B,$1F9478A4,$003994A8,$79C3919A,$0039A1F7
-        dc.l $E7919EF8,$0039AF49,$69B4B068,$0039BC9F,$00E2FFAA,$0039C9F8
-        dc.l $ADD2F0A0,$0039D753,$713B1152,$0039E4B2,$4BD21A02,$0039F214
-        dc.l $3E4EED22,$0039FF79,$49689776,$003A0CE1,$6DD6500A,$003A1A4C
-        dc.l $AC4F784C,$003A27BA,$058B9C02,$003A352C,$7A42716E,$003A42A0
-        dc.l $0B2BD934,$003A5018,$B8FFDE98,$003A5D92,$8476B746,$003A6B10
-        dc.l $6E48C3A0,$003A7891,$772E8E88,$003A8615,$9FE0CD9C,$003A939C
-        dc.l $E9186128,$003AA126,$538E5436,$003AAEB4,$DFFBDC8A,$003ABC44
-        dc.l $8F1A5ACA,$003AC9D8,$61A35A68,$003AD76F,$585091BC,$003AE509
-        dc.l $73DBE210,$003AF2A6,$B4FF57A8,$003B0046,$1C7529BC,$003B0DEA
-        dc.l $AAF7BA9E,$003B1B90,$614197B0,$003B293A,$400D7970,$003B36E7
-        dc.l $48164386,$003B4497,$7A1704D0,$003B524A,$D6CAF76E,$003B6000
-        dc.l $5EED80B8,$003B6DBA,$133A316A,$003B7B77,$F46CC58C,$003B8936
-        dc.l $03412496,$003B96FA,$40736166,$003BA4C0,$ACBFBA5A,$003BB289
-        dc.l $48E29950,$003BC056,$159893B4,$003BCE26,$139E6A8A,$003BDBF9
-        dc.l $43B10A7C,$003BE9CF,$A68D8BDA,$003BF7A8,$3CF132A4,$003C0585
-        dc.l $07996EA8,$003C1365,$0743DB76,$003C2148,$3CAE4072,$003C2F2E
-        dc.l $A89690E0,$003C3D17,$4BBAEBE8,$003C4B04,$26D99CA8,$003C58F4
-        dc.l $3AB11A42,$003C66E7,$880007D4,$003C74DD,$0F853486,$003C82D7
-        dc.l $D1FF9BB4,$003C90D3,$D02E64D0,$003C9ED3,$0AD0E376,$003CACD7
-        dc.l $82A69782,$003CBADD,$386F2D18,$003CC8E7,$2CEA7CAA,$003CD6F4
-        dc.l $60D88AF8,$003CE504,$D4F98932,$003CF317,$8A0DD4EC,$003D012E
-        dc.l $80D5F832,$003D0F48,$BA12A99C,$003D1D65,$3684CC3C,$003D2B86
-        dc.l $F6ED6FCC,$003D39A9,$FC0DD098,$003D47D0,$46A757A2,$003D55FB
-        dc.l $D77B9A96,$003D6428,$AF4C5BF0,$003D7259,$CEDB8ADE,$003D808D
-        dc.l $36EB437E,$003D8EC5,$E83DCEB0,$003D9CFF,$E395A256,$003DAB3D
-        dc.l $29B56134,$003DB97F,$BB5FDB16,$003DC7C3,$99580CC2,$003DD60B
-        dc.l $C4612028,$003DE456,$3D3E6C3E,$003DF2A5,$04B3752C,$003E00F7
-        dc.l $1B83EC50,$003E0F4C,$8273B032,$003E1DA4,$3A46CCB6,$003E2C00
-        dc.l $43C17B0A,$003E3A5F,$9FA821AE,$003E48C1,$4EBF5492,$003E5727
-        dc.l $51CBD514,$003E6590,$A9929214,$003E73FC,$56D8A7E6,$003E826C
-        dc.l $5A636080,$003E90DF,$B4F83368,$003E9F55,$675CC5CE,$003EADCF
-        dc.l $7256EA90,$003EBC4C,$D6ACA248,$003ECACC,$95241B50,$003ED950
-        dc.l $AE83B1D6,$003EE7D7,$2391EFE6,$003EF662,$F5158D62,$003F04EF
-        dc.l $23D57030,$003F1381,$B098AC1C,$003F2215,$9C2682FC,$003F30AD
-        dc.l $E74664C4,$003F3F48,$92BFEF6A,$003F4DE7,$9F5AEF1C,$003F5C89
-        dc.l $0DDF5E2A,$003F6B2F,$DF15652A,$003F79D7,$13C55AE8,$003F8884
-        dc.l $ACB7C488,$003F9733,$AAB55588,$003FA5E6,$0E86EFCC,$003FB49D
-        dc.l $D8F5A3A2,$003FC356,$0ACAAFCC,$003FD214,$A4CF81A2,$003FE0D4
-        dc.l $A7CDB506,$003FEF98,$148F1464,$003FFE60,$EBDD98E8,$00400D2A
-        dc.l $2E836A54,$00401BF9,$DD4ADF30,$00402ACA,$F8FE7CD4,$0040399F
-        dc.l $8268F758,$00404878,$7A5531B0,$00405754,$E18E3DC0,$00406633
-        dc.l $B8DF5C58,$00407516,$0113FD40,$004083FD,$BAF7BF4C,$004092E6
-        dc.l $E7567060,$0040A1D3,$86FC0D70,$0040B0C4,$9AB4C2B0,$0040BFB8
-        dc.l $234CEB6C,$0040CEB0,$21911244,$0040DDAB,$964DF10C,$0040ECA9
-        dc.l $825070F0,$0040FBAB,$E665AA8C,$00410AB0,$C35AE5C4,$004119B9
-        dc.l $19FD9A10,$004128C6,$EB1B6E50,$004137D5,$378238F4,$004146E9
+        dc.l $1000000,$1003B2D,$1007667,$100B1B0,$100ED06,$1012869,$10163DB
+        dc.l $1019F5A,$101DAE7,$1021681,$102522A,$1028DE0,$102C9A4,$1030576
+        dc.l $1034155,$1037D43,$103B93E,$103F547,$104315F,$1046D84,$104A9B6
+        dc.l $104E5F7,$1052246,$1055EA3,$1059B0D,$105D786,$106140C,$10650A1
+        dc.l $1068D43,$106C9F4,$10706B3,$107437F,$107805A,$107BD43,$107FA3A
+        dc.l $108373E,$1087452,$108B173,$108EEA2,$1092BDF,$109692B,$109A685
+        dc.l $109E3ED,$10A2163,$10A5EE7,$10A9C7A,$10ADA1A,$10B17CA,$10B5587
+        dc.l $10B9352,$10BD12C,$10C0F14,$10C4D0B,$10C8B10,$10CC923,$10D0744
+        dc.l $10D4574,$10D83B2,$10DC1FF,$10E005A,$10E3EC3,$10E7D3B,$10EBBC1
+        dc.l $10EFA56,$10F38F9,$10F77AB,$10FB66B,$10FF53A,$1103417,$1107303
+        dc.l $110B1FD,$110F106,$111301D,$1116F43,$111AE78,$111EDBB,$1122D0D
+        dc.l $1126C6D,$112ABDC,$112EB5A,$1132AE6,$1136A81,$113AA2B,$113E9E4
+        dc.l $11429AB,$1146981,$114A966,$114E959,$115295C,$115696D,$115A98D
+        dc.l $115E9BB,$11629F9,$1166A45,$116AAA1,$116EB0B,$1172B84,$1176C0C
+        dc.l $117ACA3,$117ED48,$1182DFD,$1186EC1,$118AF94,$118F075,$1193166
+        dc.l $1197266,$119B374,$119F492,$11A35BF,$11A76FB,$11AB845,$11AF9A0
+        dc.l $11B3B09,$11B7C81,$11BBE08,$11BFF9F,$11C4144,$11C82F9,$11CC4BD
+        dc.l $11D0691,$11D4873,$11D8A65,$11DCC66,$11E0E76,$11E5095,$11E92C4
+        dc.l $11ED502,$11F1750,$11F59AC,$11F9C18,$11FDE94,$120211E,$12063B9
+        dc.l $120A662,$120E91B,$1212BE3,$1216EBB,$121B1A2,$121F499,$122379F
+        dc.l $1227AB5,$122BDDA,$123010F,$1234453,$12387A7,$123CB0A,$1240E7D
+        dc.l $1245200,$1249592,$124D934,$1251CE5,$12560A6,$125A477,$125E857
+        dc.l $1262C47,$1267047,$126B456,$126F876,$1273CA5,$12780E3,$127C532
+        dc.l $1280990,$1284DFE,$128927C,$128D70A,$1291BA7,$1296055,$129A512
+        dc.l $129E9DF,$12A2EBC,$12A73A9,$12AB8A6,$12AFDB3,$12B42D0,$12B87FD
+        dc.l $12BCD3A,$12C1287,$12C57E4,$12C9D50,$12CE2CD,$12D285A,$12D6DF8
+        dc.l $12DB3A5,$12DF962,$12E3F2F,$12E850D,$12ECAFB,$12F10F8,$12F5706
+        dc.l $12F9D25,$12FE353,$1302992,$1306FE1,$130B640,$130FCAF,$131432F
+        dc.l $13189BF,$131D05F,$1321710,$1325DD1,$132A4A2,$132EB84,$1333276
+        dc.l $1337978,$133C08B,$13407AE,$1344EE2,$1349626,$134DD7B,$13524E0
+        dc.l $1356C56,$135B3DC,$135FB73,$136431A,$1368AD2,$136D29A,$1371A73
+        dc.l $137625D,$137AA57,$137F262,$1383A7E,$13882AA,$138CAE7,$1391334
+        dc.l $1395B93,$139A402,$139EC81,$13A3512,$13A7DB3,$13AC665,$13B0F28
+        dc.l $13B57FC,$13BA0E1,$13BE9D6,$13C32DC,$13C7BF3,$13CC51B,$13D0E54
+        dc.l $13D579E,$13DA0F9,$13DEA65,$13E33E1,$13E7D6F,$13EC70E,$13F10BE
+        dc.l $13F5A7E,$13FA450,$13FEE33,$1403827,$140822C,$140CC42,$141166A
+        dc.l $14160A2,$141AAEC,$141F546,$1423FB2,$1428A30,$142D4BE,$1431F5E
+        dc.l $1436A0E,$143B4D1,$143FFA4,$1444A89,$144957F,$144E086,$1452B9F
+        dc.l $14576C9,$145C204,$1460D51,$14658AF,$146A41F,$146EFA0,$1473B32
+        dc.l $14786D6,$147D28C,$1481E53,$1486A2B,$148B615,$1490211,$1494E1E
+        dc.l $1499A3D,$149E66D,$14A32AF,$14A7F03,$14ACB68,$14B17DF,$14B6467
+        dc.l $14BB101,$14BFDAD,$14C4A6B,$14C973A,$14CE41C,$14D310E,$14D7E13
+        dc.l $14DCB2A,$14E1852,$14E658C,$14EB2D8,$14F0036,$14F4DA6,$14F9B27
+        dc.l $14FE8BB,$1503660,$1508418,$150D1E1,$1511FBD,$1516DAA,$151BBAA
+        dc.l $15209BB,$15257DF,$152A614,$152F45C,$15342B5,$1539121,$153DF9F
+        dc.l $1542E2F,$1547CD2,$154CB86,$1551A4D,$1556925,$155B811,$156070E
+        dc.l $156561D,$156A53F,$156F473,$15743BA,$1579313,$157E27E,$15831FB
+        dc.l $158818B,$158D12D,$15920E2,$15970A9,$159C082,$15A106E,$15A606D
+        dc.l $15AB07E,$15B00A1,$15B50D7,$15BA120,$15BF17B,$15C41E8,$15C9269
+        dc.l $15CE2FB,$15D33A1,$15D8459,$15DD524,$15E2601,$15E76F1,$15EC7F4
+        dc.l $15F190A,$15F6A32,$15FBB6D,$1600CBB,$1605E1C,$160AF8F,$1610115
+        dc.l $16152AE,$161A45A,$161F619,$16247EB,$16299D0,$162EBC7,$1633DD2
+        dc.l $1638FEF,$163E220,$1643463,$16486BA,$164D923,$1652BA0,$1657E30
+        dc.l $165D0D2,$1662388,$1667651,$166C92D,$1671C1C,$1676F1F,$167C234
+        dc.l $168155D,$1686899,$168BBE9,$1690F4B,$16962C1,$169B64A,$16A09E6
+        dc.l $16A5D96,$16AB159,$16B0530,$16B5919,$16BAD17,$16C0127,$16C554B
+        dc.l $16CA983,$16CFDCE,$16D522C,$16DA69E,$16DFB24,$16E4FBD,$16EA469
+        dc.l $16EF92A,$16F4DFD,$16FA2E5,$16FF7E0,$1704CEE,$170A210,$170F746
+        dc.l $1714C90,$171A1ED,$171F75F,$1724CE3,$172A27C,$172F828,$1734DE9
+        dc.l $173A3BD,$173F9A5,$1744FA0,$174A5B0,$174FBD3,$175520B,$175A856
+        dc.l $175FEB5,$1765529,$176ABB0,$177024B,$17758FA,$177AFBE,$1780695
+        dc.l $1785D80,$178B480,$1790B94,$17962BB,$179B9F7,$17A1147,$17A68AB
+        dc.l $17AC024,$17B17B1,$17B6F51,$17BC707,$17C1ED0,$17C76AE,$17CCEA0
+        dc.l $17D26A6,$17D7EC1,$17DD6F0,$17E2F33,$17E878B,$17EDFF8,$17F3878
+        dc.l $17F910D,$17FE9B7,$1804275,$1809B48,$180F42F,$1814D2B,$181A63B
+        dc.l $181FF60,$182589A,$182B1E8,$1830B4A,$18364C2,$183BE4E,$18417EF
+        dc.l $18471A4,$184CB6F,$185254E,$1857F41,$185D94A,$1863367,$1868D9A
+        dc.l $186E7E1,$187423D,$1879CAE,$187F733,$18851CE,$188AC7E,$1890742
+        dc.l $189621C,$189BD0A,$18A180E,$18A7326,$18ACE54,$18B2997,$18B84EF
+        dc.l $18BE05C,$18C3BDE,$18C9775,$18CF321,$18D4EE3,$18DAABA,$18E06A6
+        dc.l $18E62A7,$18EBEBE,$18F1AEA,$18F772B,$18FD381,$1902FED,$1908C6E
+        dc.l $190E905,$19145B1,$191A272,$191FF49,$1925C35,$192B937,$193164E
+        dc.l $193737B,$193D0BD,$1942E15,$1948B83,$194E906,$195469E,$195A44D
+        dc.l $1960211,$1965FEA,$196BDDA,$1971BDF,$19779F9,$197D82A,$1983670
+        dc.l $19894CC,$198F33E,$19951C6,$199B064,$19A0F17,$19A6DE0,$19ACCC0
+        dc.l $19B2BB5,$19B8AC0,$19BE9E1,$19C4918,$19CA865,$19D07C8,$19D6742
+        dc.l $19DC6D1,$19E2676,$19E8632,$19EE603,$19F45EB,$19FA5E9,$1A005FD
+        dc.l $1A06627,$1A0C668,$1A126BE,$1A1872C,$1A1E7AF,$1A24848,$1A2A8F8
+        dc.l $1A309BF,$1A36A9B,$1A3CB8F,$1A42C98,$1A48DB8,$1A4EEEE,$1A5503B
+        dc.l $1A5B19E,$1A61318,$1A674A9,$1A6D650,$1A7380D,$1A799E1,$1A7FBCC
+        dc.l $1A85DCD,$1A8BFE5,$1A92214,$1A98459,$1A9E6B5,$1AA4928,$1AAABB2
+        dc.l $1AB0E52,$1AB7109,$1ABD3D7,$1AC36BC,$1AC99B8,$1ACFCCA,$1AD5FF4
+        dc.l $1ADC334,$1AE268B,$1AE89FA,$1AEED7F,$1AF511B,$1AFB4CE,$1B01899
+        dc.l $1B07C7A,$1B0E073,$1B14482,$1B1A8A9,$1B20CE7,$1B2713C,$1B2D5A8
+        dc.l $1B33A2C,$1B39EC6,$1B40378,$1B46841,$1B4CD22,$1B5321A,$1B59729
+        dc.l $1B5FC4F,$1B6618D,$1B6C6E3,$1B72C4F,$1B791D4,$1B7F76F,$1B85D22
+        dc.l $1B8C2ED,$1B928CF,$1B98EC9,$1B9F4DA,$1BA5B03,$1BAC144,$1BB279C
+        dc.l $1BB8E0B,$1BBF493,$1BC5B32,$1BCC1E9,$1BD28B8,$1BD8F9E,$1BDF69C
+        dc.l $1BE5DB2,$1BEC4E0,$1BF2C26,$1BF9383,$1BFFAF9,$1C06286,$1C0CA2B
+        dc.l $1C131E9,$1C199BE,$1C201AB,$1C269B0,$1C2D1CE,$1C33A03,$1C3A250
+        dc.l $1C40AB6,$1C47334,$1C4DBCA,$1C54478,$1C5AD3E,$1C6161C,$1C67F13
+        dc.l $1C6E822,$1C75149,$1C7BA89,$1C823E0,$1C88D51,$1C8F6D9,$1C9607A
+        dc.l $1C9CA34,$1CA3405,$1CA9DF0,$1CB07F3,$1CB720E,$1CBDC42,$1CC468E
+        dc.l $1CCB0F3,$1CD1B70,$1CD8607,$1CDF0B5,$1CE5B7D,$1CEC65D,$1CF3156
+        dc.l $1CF9C67,$1D00792,$1D072D5,$1D0DE30,$1D149A5,$1D1B533,$1D220D9
+        dc.l $1D28C98,$1D2F871,$1D36462,$1D3D06C,$1D43C8F,$1D4A8CB,$1D51520
+        dc.l $1D5818E,$1D5EE15,$1D65AB5,$1D6C76F,$1D73441,$1D7A12D,$1D80E31
+        dc.l $1D87B4F,$1D8E887,$1D955D7,$1D9C341,$1DA30C4,$1DA9E60,$1DB0C16
+        dc.l $1DB79E5,$1DBE7CD,$1DC55CF,$1DCC3EA,$1DD321F,$1DDA06D,$1DE0ED5
+        dc.l $1DE7D56,$1DEEBF1,$1DF5AA5,$1DFC973,$1E0385B,$1E0A75C,$1E11677
+        dc.l $1E185AB,$1E1F4F9,$1E26461,$1E2D3E3,$1E3437E,$1E3B334,$1E42303
+        dc.l $1E492EC,$1E502EE,$1E5730B,$1E5E342,$1E65392,$1E6C3FD,$1E73481
+        dc.l $1E7A520,$1E815D8,$1E886AB,$1E8F797,$1E9689E,$1E9D9BF,$1EA4AFA
+        dc.l $1EABC4F,$1EB2DBF,$1EB9F48,$1EC10EC,$1EC82AA,$1ECF483,$1ED6676
+        dc.l $1EDD883,$1EE4AAA,$1EEBCEC,$1EF2F48,$1EFA1BF,$1F01450,$1F086FC
+        dc.l $1F0F9C2,$1F16CA2,$1F1DF9E,$1F252B3,$1F2C5E4,$1F3392F,$1F3AC95
+        dc.l $1F42015,$1F493B0,$1F50766,$1F57B36,$1F5EF22,$1F66328,$1F6D748
+        dc.l $1F74B84,$1F7BFDB,$1F8344C,$1F8A8D9,$1F91D80,$1F99242,$1FA0720
+        dc.l $1FA7C18,$1FAF12B,$1FB665A,$1FBDBA3,$1FC5108,$1FCC688,$1FD3C23
+        dc.l $1FDB1D9,$1FE27AA,$1FE9D97,$1FF139F,$1FF89C2
 
 ; ------------------------------------------------------------------------------
 ;                                   BSS HUNK
@@ -7195,7 +9583,22 @@ BPM2SmpsPerTick
 	CNOP 0,4
 LogTab	ds.l 12*16*4 ; calculated later
 
-	CNOP 0,4
-	ds.l 1	; pre-padding needed for word-alignment trick
-CDA_MixBuffer
-	ds.l SMP_BUFF_SIZE*2 ; *2 for stereo
+;	CNOP 0,4
+;	ds.l 1	; pre-padding needed for word-alignment trick
+;CDA_MixBuffer
+;	ds.l SMP_BUFF_SIZE*2 ; *2 for stereo
+
+CDA_MixBufferPtr    
+    dc.l    0
+
+InstrNames:             ds.b    128*24
+
+; -------------------------------------
+PatternInfo                ds.b	  PI_Stripes	
+Stripe1	                   ds.l	  32
+; -------------------------------------
+
+
+ ifne FAKE_AGUS
+fake_agus_base  ds.b    1024
+ endif

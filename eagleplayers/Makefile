@@ -94,7 +94,10 @@ COMPRESSED_TARGETS=\
 	shr/TFMX.shr \
 	shr/TFMX\ Pro.shr
 
-all: $(COMPRESSED_TARGETS)
+all: shr $(COMPRESSED_TARGETS)
+
+shr:
+	mkdir -p shr
 
 clean:
 	rm -f $(COMPRESSED_TARGETS) 

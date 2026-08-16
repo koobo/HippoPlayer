@@ -2,7 +2,7 @@ Short: Updated HippoPlayer
 Author: kpk@iki.fi (K-P Koljonen)
 Uploader: kpk@iki.fi (K-P Koljonen)
 Type: mus/play
-Version: 2.66
+Version: 2.67
 Architecture: m68k-amigaos >= 1.2
 
 Hello!
@@ -18,7 +18,8 @@ For only Protracker playback you don't need the "group" file.
 NOTE 1: 
 The original archive https://aminet.net/mus/play/hippoplayer.lha
 is in its original state. There is no updated documentation. 
-Please read the change history below.
+Please read the change history below. For an AI-generated summary
+see hippoplayerupdate.doc.
 
 NOTE 2: 
 Ensure that "HippoPlayer.group" gets updated, as old versions will
@@ -109,6 +110,93 @@ Additional files to check and download
     -> songlengths.tsv -> Download raw file  
 - To play Ogg files get oggv_dec:
   https://aminet.net/mus/play/oggv_dec.lha
+
+
+------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
+# Changes from v2.66 (23.2.2026) to v2.67 (15.8.2026) 
+
+## Fixes:
+
+- MHI and MP3:
+  - Duration was not determined correctly
+  - End detection didn't work properly
+  - Restarting from beginning didn't work (MiDWaN)
+  - Last few secs of MP3 were skipped (MiDWaN)
+
+- Multichannel mods: On 68000 there was a crash when starting
+  up the PS3M mixer engine.
+
+- AHI/AmiGUS: Fix timing issue which lead to slightly wrong 
+  playback speed. This caused audible gaps with 
+  "shipping forecast.mod" by h0ffman.
+
+- AHI/AmiGUS: Fix songend detection issues, improved scrambled 
+  pattern module support.
+
+- RTG related fixes:
+  - Scopes: improved display sync with audio.
+  - Fix graphics issues with hippo logo and gadget RMB indicator.
+  - Prevent PS3M and xmaplay mixer tasks busy looping unnecessarily.
+  - Improved check if high (>28kHz) Paula output rates are available 
+    with P96 screenmodes.
+
+- PatternScope with AHI/AmiGUS: Fix S3M related issues.
+
+- Prefs: Removed "PS3M/Use S:HippoPlayer.PS3M configuration file".
+
+- File load progress indicator broke with a really large module (50 megs).
+
+- Some other minor things
+
+## Improvements:
+
+- AmiGUS Mini support. AmiGUS support now requires amigus.library. 
+  This provides compatibility with both Zorro and PCMCIA AmiGUS.
+
+- Xmaplay improvements
+  - Reminder: this is 8bitbubsy's fully featured Fasttracker2/XM player,
+    a better alternative to the one in PS3M, renamed to xmaplay as it 
+    doesn't require 68060 anymore.
+  - AmiGUS and AHI support added with channel panning, ping pong loops,
+    8/16-bit samples.
+  - Instrument names shown in the info window.
+  - Channel count shown in the infobox.
+  - Patternscope support (only for AHI/AmiGUS for now).
+  - Output choices in Prefs:
+     - xmaplay+Paula:  Play-2 > Enable xmaplay > ON
+                       AHI    > Enable AHI > OFF
+                       CPU requirement: 68060 (super hq)
+     - xmaplay+AHI:    Play-2 > Enable xmaplay > ON
+                       AHI    > Enable AHI > ON
+                       CPU requirement: AHI dependent
+     - xmaplay+AmiGUS: Play-2 > Enable xmaplay > ON
+                       PS3M   > Use AmiGUS hardware mixer > ON
+                       CPU requirement: 68000 
+  - AmiGUS Mini users, can you find the Larsen scanner?
+  
+- Updated playsid.library v1.11:
+  - Trinity accelerator SID audio core support for SID playback. 
+    Single and dual SID cores supported. Activate with "PlaySID mode" 
+    in Prefs. You need a suitable firmware in your Trinity.
+
+- New search source AMP (Amiga Music Preservation) added.
+  Thanks to asleamp and Patrik for setting this up!
+  The access may be slow due to HTTPS.
+
+- Protracker: play time display keeps track of the time correctly 
+  even when the position is changed by skipping forward/backward 
+  or changed with the position slider.
+  
+- Song length data and metadata updated by mvtiaine, you can grab new  
+  "songlengths.tsv" and "metadata.tsv" files if you want (see above how).
+  Now contains metadata info for 379216 modules, song lengths 
+  for 476328 modules, nice!
+
+- MHI: Seeking MP3 playback position with position slider added.
+
+- Infobox displays the amount of data downloaded on the 2nd row.
 
 
 ------------------------------------------------------------------------------

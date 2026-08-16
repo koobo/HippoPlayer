@@ -32,8 +32,23 @@ TEST 	= 	0
     opt o-   ; disable all
     opt o1+  ; optimize branches
     opt o2+  ; optimize displacements
-    ;opt ow+ ; display 
+    ;opt ow+ ; display
+    MC68000 
  endif
+
+
+_MC68000 macro
+    ifd __VASM
+        MC68000
+    endif
+    endm
+
+_MC68020 macro
+    ifd __VASM
+        MC68020
+    endif
+    endm
+
 
 * Print to debug console, very clever.
 * Param 1: string
@@ -70,9 +85,10 @@ debug = 0
 allocchans = 1
 disable020 = 0
 
-ier_nomem	=	-9
+ier_nomem	    =	-9
 ier_noprocess	=	-13
-ier_ahi		=	-19
+ier_ahi	    	=	-19
+ier_amigus      =   -26
 
 	incdir	include:
 
@@ -102,6 +118,9 @@ ier_ahi		=	-19
 	include	ps3m.i
 	include	mucro.i
 
+    include libraries/amigus.i
+    include libraries/amigus_lib.i
+    
 
 
 iword	macro
@@ -296,7 +315,7 @@ poslen		dc.l	0
 adjustroutine	dc.l	0
 voluproutine	dc.l	0
 s3mmode1a	dc.b	0
-initGuard   dc.w    0
+initGuard   dc.b    0
 
 * Use mode in "ahi_use"
 USE_NORMAL        = 0
@@ -304,7 +323,7 @@ USE_AHI           = 1
 USE_AMIGUS_NORMAL = -1
 USE_AMIGUS_INTERP = -2
 ahi_use		dc.b	0
-
+            dc.b    0 * pad
 ahi_rate	dc.l	0
 ahi_mastervol	dc	0
 ahi_stereolev	dc	0
@@ -312,7 +331,6 @@ ahi_mode	dc.l	0
 
 
 init1r
-
 	move.l	#mname,(a0)
 	move.l	#numchans,(a1)
 	move.l	#mtype,(a2)
@@ -476,7 +494,7 @@ s3init:
 	DPRINT	"s3init %lx"
  endif
 
-    tst.w   initGuard
+    tst.b   initGuard
     beq     .noIg
     DPRINT  "------ init ongoing ------"
 .noIg
@@ -694,7 +712,9 @@ s3init:
 
 	moveq	#0,d2
 	move.b	s3mmode1a(pc),d2
-	move.b	.prit(pc,d2),d2
+    lea     .prit(pc),a1
+	move.b	(a1,d2),d2
+	;move.b	.prit(pc,d2),d2
 	ext	d2
 	ext.l	d2
 
@@ -989,12 +1009,13 @@ updatePatternInfoData
 	dbf	d7,.loo
 	rts
 
-.s3m 	
+.s3m:
 	* d0 = song pos
 
 	* module data
 	move.l	s3m(a5),a0
 	move.b	orders(a0,d0),d0
+    and.w   #$ff,d0
 
 	cmp.b	#$fe,d0				; marker that is skipped
 	beq	.skip
@@ -1013,7 +1034,12 @@ updatePatternInfoData
 	cmp	unpackedPatternPosition(a5),d0 
 	beq	.skip 
 	move	d0,unpackedPatternPosition(a5)
-	DPRINT	"Unpack %lx"
+    and.l   #$ffff,d0
+    
+    ;;move.l  a0,d1
+	;;DPRINT	"Unpack pos=%lx mod=%lx"
+    ;;bra     .skip
+
 
 	lsl.l	#4,d0
 	lea	2(a0,d0.l),a0
@@ -1270,7 +1296,7 @@ s3end:
 	DPRINT	"S3end"
 
  if DEBUG
-    tst.w   initGuard
+    tst.b   initGuard
     beq     .1
     DPRINT  "****** init ongoing! ******"
 .1
@@ -1422,7 +1448,6 @@ s3end:
 .noDbg
  endif
  endif
-    DPRINT  "s3end done"
 	rts
 
 allocPatternBuffers
@@ -1516,22 +1541,31 @@ taakse	pushm	all
 
 
 
-s3m_code
+s3m_code:
 	move.l	4.w,a6
 	sub.l	a1,a1
 	lob	FindTask
 	move.l	d0,ps3m_task
-
 	DPRINT	"s3m_code task=%lx"
+
+    lea     dosname,a1
+	lob     OldOpenLibrary
+    move.l  d0,dosbase_task
+	DPRINT	"dos=%lx"
+
 	
 	st	PS3M_play
 	jsr	syss3mPlay
 
+    move.l  dosbase_task,a1
+	move.l	4.w,a6
+	lob	CloseLibrary
+
     clr.l   ps3m_task
     rts
 
-
-ps3m_task	dc.l	0
+dosbase_task    dc.l    0
+ps3m_task	    dc.l	0
 
 
 
@@ -1771,7 +1805,7 @@ ahi_playmusic
 	lea	xm_music(pc),a0
 	subq	#1,d0
 	beq.b  .m
-	lea		it_music(pc),a0
+	lea	it_music,a0
 .m	jsr	(a0)
 
 	lea	cha0,a4
@@ -1800,6 +1834,15 @@ ahi_playmusic
 	lea	mChanBlock_SIZE(a4),a4
 	addq	#1,d6
 	dbf	d7,.chl
+
+
+    ; Check for break, ie. song end
+	tst	PS3M_break
+	beq.b	.nb
+	clr	PS3M_break
+	move.l	songoverf,a0
+	st	(a0)
+.nb
 
 	popm	d2-d7/a2-a6
 	rts
@@ -1953,7 +1996,7 @@ ahi_period:
 	move.l	d0,d1
 
 	move.l	d6,d0
-
+;;    DPRINT  "SetFreq %ld %ld %ld"
 	moveq	#AHISF_IMM,d2
 	move.l	ahi_ctrl(pc),a2
 	move.l	ahibase(pc),a6
@@ -2055,13 +2098,17 @@ soundfunc:
 
 ahi_tempo
 	movem.l	d0-d1/a0-a2/a6,-(sp)
+    * Use 24.8 FP for accuracy
 	and.l	#$ffff,d0
-	lsl.w	#1,d0
-	divu	#5,d0
- 
+    add.w   d0,d0
+	lsl.l	#8,d0
+    divu    #5,d0
+    ext.l   d0
+    lsl.l   #8,d0
+    
 	move.l	ahibase(pc),a6
 	lea	.tags(pc),a1
-	move	d0,4(a1)
+	move.l	d0,4(a1)
 
 	move.l	ahi_ctrl(pc),a2
 	jsr	_LVOAHI_ControlAudioA(a6)
@@ -3173,15 +3220,15 @@ copybuf14
 	move.b	1(a2,d2.l),(a4)+
 	dbf	d7,.lddC0
 	rts
-
-
+ 
+ _MC68020
 .convert14_cyber020
 .lddC	move	(a0)+,d2
 	move.b	(a2,d2.l*2),(a1)+
 	move.b	1(a2,d2.l*2),(a4)+
 	dbf	d7,.lddC
 	rts
-
+  _MC68000
 
 
 ; 000/010 Mixing routines
@@ -4011,7 +4058,7 @@ mix162	moveq	#0,d7
 
 ; Mixing routine for the first channel (moves data)
 
-
+ _MC68020
 mix_020	moveq	#0,d7
 	move	bytes2do(a5),d7
 	tst	mPeriod(a4)
@@ -4778,8 +4825,8 @@ mix162_020
 	move.l	a0,(a4)
 	bra.b	.ty
 
-	endc
-
+	endc ; ifeq disable68020
+ _MC68000
 
 * mulu_32 --- d0 = d0*d1
 mulu_32	movem.l	d2/d3,-(sp)
@@ -8841,6 +8888,7 @@ mt_init	lea	data,a5
 	move.b	950(a1),d0
 	move.b	d0,slene
 	move	d0,positioneita
+    DPRINT  "slene=%ld"
 
 	move	#256,d0
 	mulu	numchans(a5),d0
@@ -8985,19 +9033,37 @@ mt_getnewnote
 	bne.b	.ei
 	moveq	#0,d1
 .ei
+
+
+    ; ---------------------------------        
+    ; First get note data
 	move	numchans(pc),d7
 	subq	#1,d7
-	lea	cha0,a5
 	lea	mt_chan1temp(pc),a6
-
-	lea	Stripe1(pc),a4
-.loo
-	move	d7,-(sp)
+	lea	cha0,a5
+.loo_
 	tst.l	(a6)
 	bne.b	.mt_plvskip
 	bsr	mt_pernop
 .mt_plvskip
 	bsr.b	getnew
+	lea	mChanBlock_SIZE(a5),a5
+	lea	44(a6),a6			; Size of MT_chanxtemp
+	dbf	d7,.loo_
+    ; ---------------------------------    
+
+	move	numchans(pc),d7
+	subq	#1,d7
+	lea	cha0,a5
+	lea	mt_chan1temp(pc),a6
+	lea	Stripe1(pc),a4
+.loo
+	move	d7,-(sp)
+;	tst.l	(a6)
+;	bne.b	.mt_plvskip
+;	bsr	mt_pernop
+;.mt_plvskip
+;   bsr.b	getnew      ; done above
 
 	push	a4
 	bsr	mt_playvoice
@@ -9273,6 +9339,7 @@ mt_nextposition
 	blo.b	mt_nonewposyet
 	clr.b	mt_songpos
 	st	PS3M_break
+    DPRINT  "set PS3M_break"
 mt_nonewposyet	
 	tst.b	mt_posjumpflag
 	bne.b	mt_nextposition
@@ -9715,16 +9782,67 @@ mt_vsdskip
 
 mt_positionjump
 	move.b	n_cmdlo(a6),d0
-	cmp.b	mt_songpos(pc),d0
-	bhi.b	.e
-	st	PS3M_break
 
-.e	subq.b	#1,d0
+ ifne DEBUG
+    and.l   #$ff,d0
+    ;;DPRINT  "mt_positionjump=%lx"
+ endif   
+
+    * Allow jumps if there is a D on the same row.
+    * Common scrambled pattern trick.
+	lea     mt_chan1temp(pc),a0
+    bsr     .checkCmdD
+    beq     .e
+    bsr     .checkCmdD
+    beq     .e
+    bsr     .checkCmdD
+    beq     .e
+    bsr     .checkCmdD
+    beq     .e
+
+    ;;DPRINT  "no Dxx"
+
+    cmp.b	mt_songpos(pc),d0
+;	bhi.b	.e
+    bne     .ook
+    DPRINT  "jump to same position -> end"
+    * Jump to the same position witouth a D,
+    * this is a songend.
+    st      PS3M_break
+    rts
+
+.checkCmdD
+    pushm   d0/d1
+    move.w  n_cmd(a0),d0
+    ;;DPRINT  "cmd=%04.4lx"
+    moveq   #$f,d1
+	and.b	n_cmd(a0),d1
+	lea	    44(a0),a0
+    cmp.b   #$d,d1
+    popm    d0/d1
+    rts
+
+
+.ook
+    * See if the jump is in the last position
+    move.b  mt_songpos(pc),d1
+	addq.b	#1,d1
+	cmp.b	slene(pc),d1
+    bne     .notLast
+    DPRINT  "jump in the last position"
+    * It was, consider this the end
+    st      PS3M_break
+.notLast
+
+.e	
+    ;;DPRINT  "jump=%02.2lx"
+    subq.b	#1,d0
 	move.b	d0,mt_songpos
 mt_pj2	clr.b	mt_pbreakpos
 	st 	mt_posjumpflag
 	st	PS3M_poscha
 	rts
+
 
 mt_volumechange
 	moveq	#0,d0
@@ -9747,6 +9865,7 @@ mt_patternbreak
 	add.b	d2,d0
 	cmp.b	#63,d0
 	bhi.b	mt_pj2
+    ;;DPRINT  "pattern break=%02.2lx"
 	move.b	d0,mt_pbreakpos
 	st	mt_posjumpflag
 	st	PS3M_poscha
@@ -10469,9 +10588,8 @@ it_setTimer
 	move	d0,tempo
 	
 	tst.b	ahi_use
-	bmi	amigus_tempo	;OA: AmiGUS	
+	bmi.b	.amigus_tempo_jump	;OA: AmiGUS	
 	bne	ahi_tempo
-
 
 	move.l	mrate(pc),d1
 	beq.b	.x
@@ -10485,6 +10603,9 @@ it_setTimer
 	and	#~1,d1
 	move	d1,bytesperframe
 .x	rts
+
+.amigus_tempo_jump
+	jmp	amigus_tempo
 
 it_music
 	pushm	a5/a6
@@ -10677,8 +10798,8 @@ syss3mPlay
 	CALL	SetIntVector
 	move.l	d0,olev4(a5)
 
-	move.l	gfxbase,a2
-	move.l	a2,-(sp)
+	;move.l	gfxbase,a2
+	;move.l	a2,-(sp)
 
 	move.b	PowerSupplyFrequency(a6),d0
 	cmp.b	#60,d0
@@ -10885,8 +11006,13 @@ timerB
 	clr.l	playpos
 
 syncz	
-	move.l	(sp),a6
-	CALL	WaitTOF
+;	move.l	(sp),a6
+;	CALL	WaitTOF
+
+    move.l  dosbase_task,a6
+    moveq   #1,d1
+    jsr     _LVODelay(a6)
+
 	lea	$dff000,a6
 	jsr	play
 
@@ -10905,6 +11031,7 @@ syncz
 	tst	PS3M_break(a5)
 	beq.b	.nb
 	clr	PS3M_break(a5)
+    DPRINT  "PS3M_break"
 	move.l	songoverf,a6
 	st	(a6)
 ;	st	songover+var_b
@@ -10922,7 +11049,7 @@ exits	lea	$dff000,a6
 	move	#$80,$9c(a6)
 	move	#$80,$9a(a6)
 
-	addq.l	#4,sp				; Flush GFXbase
+	;addq.l	#4,sp				; Flush GFXbase
 
 	move.l	olev4(a5),a1
 	moveq	#INTB_AUD0,d0
@@ -11221,11 +11348,12 @@ exitz	move	#$f00,$180(a6)
 .in	dc.b	"intuition.library",0
  even
 
+ _MC68020
 liko	ifeq	disable020
 	MOVEC	VBR,d0
 	endc
 	rte
-
+ _MC68000
 
 
 *******
@@ -11234,7 +11362,7 @@ liko	ifeq	disable020
 
 
 	;section	datas,data
-data
+data:
 
 lev4int		dc.l	0,0
 		dc.b	NT_INTERRUPT,127
@@ -11432,6 +11560,10 @@ unpackedPatternPosition
 scopeData       dc.l     0
 emptyScopeWord  dc.l    0
 
+dosname   dc.b    "dos.library",0
+    even
+
+
  if DEBUG
 PRINTOUT_DEBUGBUFFER
 	pea	debugDesBuf(pc)
@@ -11440,6 +11572,15 @@ PRINTOUT_DEBUGBUFFER
 
 PRINTOUT
 	pushm	d0-d3/a0/a1/a5/a6
+
+    tst.l   dosbase
+    bne     .ok
+    lea     .dosn,a1
+    move.l  4.w,a6
+	lob     OldOpenLibrary
+    move.l  d0,dosbase
+.ok
+
 	move.l	output(pc),d1
 	bne	.open
 
@@ -11459,6 +11600,8 @@ PRINTOUT
 	bne.b	.open
 	* still not open! exit
 	bra.b	.x
+
+.dosn   dc.b    "dos.library",0
 
   ifne TEST
 .bmb		dc.b	"CON:20/10/350/490/HiP PS3M debug",0

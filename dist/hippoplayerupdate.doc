@@ -1,0 +1,319 @@
+Created by Claude.ai from hippoplayerupdate.readme
+
+==============================================================================
+HIPPOPLAYER USER GUIDE - New Features (through v2.67)
+==============================================================================
+
+TABLE OF CONTENTS
+
+  1.  Getting Started / Installation
+  2.  List Modes
+  3.  Favorites
+  4.  File Browser
+  5.  Search View (Internet Search & Shared Playlists)
+  6.  Downloading Files
+  7.  Streaming MP3 & Radio Stations
+  8.  Window & Font Customization
+  9.  Position Slider & Play Mode Button
+  10. Scopes (Visualizers)
+  11. SID / PSID Playback
+  12. High-Quality XM Playback (xmaplay)
+  13. MIDI Playback
+  14. Console/Chiptune Music (vgm2wav, mdx2wav)
+  15. MP3 via External Hardware (MHI)
+  16. AmiGUS Hardware Mixing
+  17. Trinity Accelerator Audio
+  18. Metadata & Song Length Database
+  19. New Supported Music Formats
+  20. Keyboard Shortcuts Reference
+
+==============================================================================
+1. GETTING STARTED / INSTALLATION
+==============================================================================
+
+- Copy the HiP binary anywhere you like, and copy
+  "HippoPlayer.group" to S: (or next to the HiP binary if you're on
+  Kickstart 2.0+; the location can also be set in Prefs).
+- You can copy these files over an existing installation.
+- Requires "reqtools.library" to be installed.
+- If you only need Protracker playback, the .group file isn't
+  required.
+- IMPORTANT: always update HippoPlayer.group alongside the binary --
+  old group files are incompatible with new versions.
+
+==============================================================================
+2. LIST MODES
+==============================================================================
+
+Use the list mode toggle button (top of the file slider) or press
+[SHIFT+M] to cycle between:
+
+- Main list     - your working playlist
+- Favorites     - modules you've favorited
+- File browser  - browse your file system for modules
+- Search view   - search internet sites and browse shared playlists
+
+==============================================================================
+3. FAVORITES
+==============================================================================
+
+- Right-click a module in the list to toggle its favorite status
+  (favorited items show in bold).
+- Shortcut: [CTRL+F].
+- Enable this feature via Prefs > General > Favorites.
+- Favorites are saved automatically to S:HippoFavorites.prg.
+- The currently playing subsong is remembered per favorite, so it
+  resumes on that subsong next time.
+- A confirmation dialog protects you from accidentally
+  clearing/editing the favorites list.
+
+==============================================================================
+4. FILE BROWSER
+==============================================================================
+
+- Switch to this mode to browse directories directly for modules.
+- Enter/Return, the Play button, or double-click opens a directory.
+- The top list entry represents "go to parent" -- or press
+  [BACKSPACE].
+- Files are filtered by Prefs > Loading > File Match Pattern.
+- Enable Prefs > General > Keep list on exit to return to the same
+  directory (and list position) next time you start Hippo.
+- Drag-and-drop of folders onto the Hippo window is supported
+  (recursively scanned).
+
+==============================================================================
+5. SEARCH VIEW (INTERNET SEARCH & SHARED PLAYLISTS)
+==============================================================================
+
+Requires UHCTools installed for internet connectivity.
+
+- Switch to the Search view (list mode button, or [CTRL+S]).
+- Pick a search source from the source button, type your query, and
+  press Enter.
+- Available sources include Modland, Aminet, Modules.pl, HVSC, AMP
+  (Amiga Music Preservation), amigaremix.com, remix.kwed.org, radio
+  stations, and Shared Playlists (community-curated lists, e.g.
+  favorite/top lists).
+- Your last-used search source is remembered in Prefs.
+
+==============================================================================
+6. DOWNLOADING FILES
+==============================================================================
+
+- From the File Browser or Search view, select an item and click Add
+  (or press [A]) to copy it into your main playlist.
+- To download a remote file to local disk, press [CTRL+G] ("G" for
+  Get), choose a destination directory, and confirm. Press [ESC] to
+  cancel.
+
+==============================================================================
+7. STREAMING MP3 & RADIO STATIONS
+==============================================================================
+
+- MP3s found via search sources can be streamed directly (no need
+  to download first) -- this also enables listening to internet
+  radio stations.
+- Streaming uses UHCTools for network transport.
+- The infobox shows the amount of data downloaded so far.
+
+==============================================================================
+8. WINDOW & FONT CUSTOMIZATION
+==============================================================================
+
+- Both the main window and the info window can be resized
+  (horizontally and vertically) by dragging the resize gadget in
+  the lower-right corner.
+- Change fonts via Prefs > Display: one selector for the main/list
+  font, another for the infobox and button fonts. Any font can be
+  used (font restrictions have been removed).
+- Enable "Big buttons" in Prefs for larger, easier-to-click gadgets
+  (useful on high-resolution screens).
+- Enable "Button tooltips" in Prefs to see a help popup when
+  hovering over any gadget.
+
+==============================================================================
+9. POSITION SLIDER & PLAY MODE BUTTON
+==============================================================================
+
+- Enable Prefs > Display > Position slider to show a slider
+  for viewing and jumping to a playback position (works for most
+  module formats supporting pattern-skip, and for locally played
+  MP3s).
+- Enable "Play mode button" (Prefs > Display) to add a button next
+  to the slider that cycles play modes (repeat, loop, random, etc.)
+  without opening Prefs.
+
+==============================================================================
+10. SCOPES (VISUALIZERS)
+==============================================================================
+
+- Multiple scope types can run simultaneously (enable each
+  independently in Prefs > Display):
+
+  - Waveform-style scopes (HippoScope, QuadraScope, etc.) -- adjust
+    size with "Scope size" in Prefs.
+  - Spectrum -- frequency (X) vs. loudness in dB (Y).
+  - Patternscope -- shows pattern data for 4-18 channels side by
+    side; use XL mode for double-height rows.
+    - For 8+ channels, install the "mini4" font (from Aminet) so
+      channel labels fit.
+  - PatternScope for PSID -- visualizes SID chip register state
+    instead of a real pattern.
+
+- Scope window positions/open states are remembered across
+  sessions.
+- Adjust "Scope priority" in Prefs if scopes stutter during
+  CPU-heavy decoding (e.g. MP3).
+- Toggle scopes with [Z].
+
+==============================================================================
+11. SID / PSID PLAYBACK
+==============================================================================
+
+- Configure output in Prefs > Play-2 > PlaySID mode:
+
+  - Normal (original PlaySID emulation)
+  - reSID 6581 / reSID 8580 (accurate emulation, needs a fast CPU)
+  - reSID Auto (auto-selects chip version)
+  - SIDBlaster / USBSID-Pico / ZorroSID (USB/hardware SID devices)
+  - Trinity accelerator SID core (single/dual SID; requires
+    suitable Trinity firmware)
+
+- "reSID mode" settings let you pick filter behavior (Internal,
+  Internal+Ext, All off) and oversampling for better sound quality.
+- Supports mono, dual (2SID), and triple (3SID) SID setups.
+- For extra song info, download STIL.txt and Songlengths.md5 from
+  the HVSC site and place them in the Hippo directory:
+
+  - Displays composer/title trivia (STIL) in the info window when
+    playing files from an HVSC-structured path/URL.
+  - Enables song length display and accurate end-of-song detection.
+
+==============================================================================
+12. HIGH-QUALITY XM PLAYBACK (XMAPLAY)
+==============================================================================
+
+- Enable in Prefs > Play-2 > Enable xmaplay -- a high-quality
+  FastTracker 2 (XM) replayer alternative to the default PS3M-based
+  one.
+- Choose your output combination:
+
+  - xmaplay + Paula   -- needs a 68060.
+  - xmaplay + AHI     -- enable AHI in Prefs too.
+  - xmaplay + AmiGUS  -- enable "Use AmiGUS hardware mixer" in Prefs;
+                         runs fine even on 68000.
+
+- Shows instrument names and channel count in the info
+  window/infobox.
+
+==============================================================================
+13. MIDI PLAYBACK
+==============================================================================
+
+- Choose a mode in Prefs > Play-2 > MIDI mode:
+
+  - Serial output -- via "delimidi", sends MIDI to external gear on
+    the serial port.
+  - Paula/AHI via Timidity -- good quality, CPU-heavy (68060
+    recommended). Requires AmiTiMiDity unpacked and a "timidity:"
+    assign.
+  - Paula/AHI via GMPlay -- lighter on CPU (68020+). Requires GMPlay
+    installed with a "gm:" assign and Patrik's file driver in
+    gm:SoundDrivers.
+
+==============================================================================
+14. CONSOLE/CHIPTUNE MUSIC (VGM2WAV, MDX2WAV)
+==============================================================================
+
+- Install the vgm2wav tool (from Aminet) into C: or the Hippo
+  directory to play: AY, GBS, GYM, HES, KSS, NSF/NSFE, SAP, SPC,
+  VGM/VGZ formats (gzip required for .vgz).
+- Install mdx2wav similarly to play MDX music (Sharp X68000, FM
+  synth) -- an 060 may still not be fast enough for smooth
+  playback.
+- Both support scopes, subsongs, and song-end detection where
+  applicable.
+
+==============================================================================
+15. MP3 VIA EXTERNAL HARDWARE (MHI)
+==============================================================================
+
+- Enable MHI in Prefs and select a suitable driver to play MP3s via
+  dedicated MP3 decoder hardware (overrides MPEGA/AHI settings for
+  MP3 files).
+
+==============================================================================
+16. AMIGUS HARDWARE MIXING
+==============================================================================
+
+- Requires amigus.library (works with both Zorro and PCMCIA AmiGUS
+  cards).
+- Enable Prefs > PS3M > Use AmiGUS hardware mixer to offload
+  multichannel module mixing to the card's 32-channel hardware
+  mixer.
+- To play Protracker modules through AmiGUS, set Prefs > Play-1 >
+  PT Replayer to PS3M.
+- AmiGUS Mini is also supported.
+
+==============================================================================
+17. TRINITY ACCELERATOR AUDIO
+==============================================================================
+
+- Enable via PlaySID mode in Prefs (requires suitable Trinity
+  firmware) for SID playback (single/dual core).
+- Also supports playback of AY8910-chip VGM files (e.g. ZX Spectrum
+  tunes from vgmrips.net).
+
+==============================================================================
+18. METADATA & SONG LENGTH DATABASE
+==============================================================================
+
+- Download songlengths.tsv and metadata.tsv (via the project's
+  GitHub page: audacious-uade-tools > tsv > pretty > xxh32) and
+  place them in the Hippo directory.
+- On first start, Hippo converts them into au-songlengths.db /
+  au-metadata.db (a one-time, somewhat slow process); the .tsv
+  files can then be deleted.
+- Once loaded, you get: song length in the title bar/position
+  slider, author/publisher/album/year info in the infobox and info
+  window, and automatic end-of-song detection for formats lacking
+  native support. Data currently covers 300,000+ modules for
+  metadata and 470,000+ for song lengths.
+
+==============================================================================
+19. NEW SUPPORTED MUSIC FORMATS
+==============================================================================
+
+Many formats were added over time -- notable additions include
+Symphonie Pro, Sound Master, Sound Programming Language, Impulse
+Tracker (v1.00/v2.00/v2.14), PreTracker, Mark Cooksey, Art of Noise
+(4/8ch), and dozens of Eagleplayer-based formats (Rob Hubbard,
+Jochen Hippel, TCBTracker, Quartet, etc.). Some formats need
+external plugins/tools -- see the "Additional files" section of the
+changelog for download links (e.g. "impulse" + "ImpulseDecruncher"
+for Impulse Tracker, "Symphonie Pro" eagleplayer for Symphonie
+modules). Check the full "List of supported formats" at the end of
+the changelog for the complete list.
+
+==============================================================================
+20. KEYBOARD SHORTCUTS REFERENCE
+==============================================================================
+
+  SHIFT+M    Toggle list mode
+  CTRL+F     Favorite/unfavorite selected module
+  BACKSPACE  Go to parent directory (file browser)
+  CTRL+S     Activate search / search modules
+  CTRL+G     Download selected remote file
+  CTRL+M     Search Modland
+  F          Find in list
+  SHIFT+F    Find next 
+  A          Add selected item (file browser/search) to main list
+  Z          Toggle scope
+  DEL        Delete list item / go to parent (file browser)
+
+==============================================================================
+Guide compiled from the HippoPlayer changelog (v2.45 -> v2.67).
+For hardware-specific setup (AmiGUS, SIDBlaster, Trinity, etc.) and
+additional required tools/libraries, see the "Additional files to
+check and download" section of the original readme.
+==============================================================================
