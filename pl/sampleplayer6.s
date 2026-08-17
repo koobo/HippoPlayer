@@ -7202,6 +7202,7 @@ mpega_parse_id3v2
     move.l  #"TLEN",d0
     bsr     findFrameByName
     beq.b   .1
+    move.l  d0,a0
     bsr     convertMsString
     lea     .tlenFormat(pc),a0
     bsr     appendWithFormat
@@ -7312,7 +7313,7 @@ putLineChange:
 *    a4 = end of data
 * Out:
 *    d0 = NULL or pointer to frame text
-findFrameByName
+findFrameByName:
     pushm   d1-a6
     moveq   #0,d7    
     move.l  d0,d6
@@ -7469,8 +7470,8 @@ get_syncsafe_integer:
 * in:
 *   a0 = string with milliseconds as text
 * out:
-*   d0 = seconds
-*   d1 = minutes
+*   d0 = minutes
+*   d1 = seconds
 convertMsString:
     moveq   #0,d4
     move.l  a0,a1
@@ -7505,6 +7506,7 @@ convertMsString:
     swap    d0
     ext.l   d0
     ext.l   d1
+    exg     d0,d1
     rts
 
 
