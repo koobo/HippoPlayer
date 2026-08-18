@@ -6535,7 +6535,10 @@ renderHippo:
     move.l  pen_0(a5),d0
     lob     SetBPen
     lea     hippohead,a0
-    bsr     .blit
+    tst.b   uusikick(a5)
+    bne.b   .u
+    lea     HIPPOHEAD_BITPLANE(a0),a0
+.u  bsr     .blit
     ******** Pen 2 - bitplane 2 only
     move.l  a4,a1
     moveq   #RP_JAM1,d0        * paint PenA pixel if source has a bit set
@@ -6544,7 +6547,10 @@ renderHippo:
     move.l  pen_2(a5),d0
     lob     SetAPen
     lea     hippohead+HIPPOHEAD_BITPLANE,a0
-    bsr     .blit
+    tst.b   uusikick(a5)
+    bne.b   .z
+    lea     -HIPPOHEAD_BITPLANE(a0),a0
+.z  bsr     .blit
     ******** Pen 3 - bitplane 1+2
     move.l  a4,a1
     move.l  pen_3(a5),d0
