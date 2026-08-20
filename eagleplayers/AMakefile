@@ -1,0 +1,50 @@
+IF NOT EXISTS im
+	makedir im
+ENDIF
+
+fimp "bin/TFMX" "im/TFMX.im" -io
+fimp "bin/TFMX Pro" "im/TFMX Pro.im" -io
+fimp "bin/activision pro" "im/activision pro.im" -io
+fimp "bin/aprosys" "im/aprosys.im" -io
+fimp "bin/chiptracker" "im/chiptracker.im" -io
+fimp "bin/david whittaker" "im/david whittaker.im" -io
+fimp "bin/delimidi" "im/delimidi.im" -io
+fimp "bin/eaglestone" "im/eaglestone.im" -io
+fimp "bin/earache" "im/earache.im" -io
+fimp "bin/face the music" "im/face the music.im" -io
+fimp "bin/in stereo 1.0" "im/in stereo 1.0.im" -io
+fimp "bin/in stereo 2.0" "im/in stereo 2.0.im" -io
+fimp "bin/jason brooke" "im/jason brooke.im" -io
+fimp "bin/jason page" "im/jason page.im" -io
+fimp "bin/jeroen tel" "im/jeroen tel.im" -io
+fimp "bin/jochen hippel 7v" "im/jochen hippel 7v.im" -io
+fimp "bin/jochen hippel st" "im/jochen hippel st.im" -io
+fimp "bin/kris hatlelid" "im/kris hatlelid.im" -io
+fimp "bin/mark cooksey" "im/mark cooksey.im" -io
+fimp "bin/maxtrax" "im/maxtrax.im" -io
+fimp "bin/mugician ii" "im/mugician ii.im" -io
+fimp "bin/mugician.amp" "im/mugician.amp.im" -io
+fimp "bin/musicmaker4" "im/musicmaker4.im" -io
+fimp "bin/musicmaker8" "im/musicmaker8.im" -io
+fimp "bin/quartet" "im/quartet.im" -io
+fimp "bin/quartet st" "im/quartet st.im" -io
+fimp "bin/richard joseph" "im/richard joseph.im" -io
+fimp "bin/richard joseph player" "im/richard joseph player.im" -io
+fimp "bin/rob hubbard" "im/rob hubbard.im" -io
+fimp "bin/rob hubbard 2" "im/rob hubbard 2.im" -io
+fimp "bin/sonicarranger" "im/sonicarranger.im" -io
+fimp "bin/sonicarranger-eagleeye" "im/sonicarranger-eagleeye.im" -io
+fimp "bin/sonicarranger-wanted" "im/sonicarranger-wanted.im" -io
+fimp "bin/sonix music driver" "im/sonix music driver.im" -io
+fimp "bin/soprol" "im/soprol.im" -io
+fimp "bin/sound master" "im/sound master.im" -io
+fimp "bin/soundcontrol" "im/soundcontrol.im" -io
+fimp "bin/special fx" "im/special fx.im" -io
+fimp "bin/steve turner" "im/steve turner.im" -io
+fimp "bin/synth 4.0" "im/synth 4.0.im" -io
+fimp "bin/synth pack" "im/synth pack.im" -io
+fimp "bin/syntracker" "im/syntracker.im" -io
+fimp "bin/tcb tracker" "im/tcb tracker.im" -io
+fimp "bin/tim follin ii" "im/tim follin ii.im" -io
+fimp "bin/tme" "im/tme.im" -io
+fimp "bin/wally beben" "im/wally beben.im" -io

@@ -5,8 +5,12 @@
 IM=1	; Select FImp compressed files
 SHR=0	; Select Shrinkler compressed files
   else 
+  ifnd IM
 IM=0	; Select FImp compressed files
+  endif
+  ifnd SHR
 SHR=1	; Select Shrinkler compressed files
+  endif
   endif
 
 P61A=1
@@ -134,10 +138,6 @@ headend
 
 ps3m1  incbin	ps3m.im
 ps3m2
-    even
-
-tfmx1 incbin tfmx.im
-tfmx2 
     even
     
 tfmx7c1 incbin tfmx7c.im

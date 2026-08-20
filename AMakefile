@@ -1,0 +1,12 @@
+cd pl
+execute AMakefile
+cd /
+
+cd eagleplayers
+execute AMakefile
+cd /
+
+vasmm68k_mot -Iinclude: -I.. -I../Include -m68000 -no-opt -Fbin -o HippoPlayer.group playergroup2.s -DIM=1 -DSHR=0
+vasmm68k_mot -no-opt -I. -I./Include  -m68000 -kick1hunks -Fhunkexe -nosym -DDEBUG=0 -o HiP puu016.s
+
+

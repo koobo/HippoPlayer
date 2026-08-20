@@ -1,0 +1,71 @@
+
+IF NOT EXISTS bin
+	makedir bin
+ENDIF
+
+IF NOT EXISTS im
+	makedir im
+ENDIF
+
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/bendaglish "Benn Daglishv3.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/DaveLowe "Dave Lowe_v3.asm"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/Aon4 "aon4channel.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68020 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/Aon8 "aon8_player8ch_18feb19953.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/bpsm "bpsm.S"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/CustomMade_v1 "CustomMade_v1.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68020 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -nocase -o bin/dbpro "DBM0player_v2.16.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/Delta1 "Delta1.0.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68020 -no-opt -kick1hunks -Fhunkexe -nosym -DTEST=0 -o bin/digi "DigiBooster16.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/fc10 "fc10.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/fc14 "FC14.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/future_player "future_player.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/gamemusiccreator "GameMusicCreator_v1.0.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/gluemon13 "gluemon13.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/hippelcoso "Hippelcoso_ahi5.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/imploder "imploder.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/jamc "jamcrackerproreplay.asm"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/okta "okta.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68020 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/ps3m "Hippo_PS3M3.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/pumatracker "Puma_Replay.S"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68020 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/sampleplay "sampleplayer6.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/SidMon_v2 "SidMon_v2.0.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/soundfx "SoundFX_Optimised.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/soundmon3 "SoundMon3.s"
+;vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/StarTrekker "StarTrekker_v1.2_AM.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/tfmx "tfmx.asm"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/tfmx7c "tfmx7c.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -Fbin -ldots -DTEST=0 -o bin/thx "thx.asm"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68000 -no-opt -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/vss "vss.s"
+vasmm68k_mot -no-opt -Iinclude: -I.. -I../Include -m68020 -kick1hunks -Fhunkexe -ldots -nosym -DTEST=0 -o bin/xmaplay060 "xmaplay060.s"
+
+fimp bin/Aon4 im/Aon4.im -io
+fimp bin/Aon8 im/Aon8.im -io
+fimp bin/CustomMade_v1 im/CustomMade_v1.im -io
+fimp bin/DaveLowe im/DaveLowe.im -io
+fimp bin/Delta1 im/Delta1.im -io
+fimp bin/SidMon_v2 im/SidMon_v2.im -io
+fimp bin/StarTrekker im/StarTrekker.im -io
+fimp bin/bendaglish im/bendaglish.im -io
+fimp bin/bpsm im/bpsm.im -io
+fimp bin/dbpro im/dbpro.im -io
+fimp bin/digi im/digi.im -io
+fimp bin/fc10 im/fc10.im -io
+fimp bin/fc14 im/fc14.im -io
+fimp bin/future_player im/future_player.im -io
+fimp bin/gamemusiccreator im/gamemusiccreator.im -io
+fimp bin/gluemon13 im/gluemon13.im -io
+fimp bin/hippelcoso im/hippelcoso.im -io
+fimp bin/imploder im/imploder.im -io
+fimp bin/jamc im/jamc.im -io
+fimp bin/okta im/okta.im -io
+fimp bin/ps3m im/ps3m.im -io
+fimp bin/pumatracker im/pumatracker.im -io
+fimp bin/sampleplay im/sampleplay.im -io
+fimp bin/soundfx im/soundfx.im -io
+fimp bin/soundmon3 im/soundmon3.im -io
+fimp bin/tfmx7c im/tfmx7c.im -io
+fimp bin/thx im/thx.im -io
+fimp bin/vss im/vss.im -io
+fimp bin/p61a im/p61a.im -io
+fimp bin/pretracker.bin im/pretracker.bin.im -io
+fimp bin/xmaplay060 im/xmaplay060.im -io
