@@ -46,7 +46,7 @@ init
 ;	lea	mainvolume(a5),a2
 ;	lea	songover(a5),a3
 
-test = 0
+;test=0
 
  ifne test
 	lea	MODULE,a0
@@ -73,7 +73,7 @@ vuu	dc	0
 
 main
 	jmp	ini(pc)
-	jmp	end(pc)
+	jmp	end_(pc)
 	jmp	stopcont(pc)
 	rts
 	rts
@@ -103,7 +103,8 @@ ini
 	tst.l	d0
 	rts
 
-end	bra	endplay
+end_
+	bra	endplay
 
 stopcont
 	pushm	d0/d1/a0-a2/a6
