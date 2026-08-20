@@ -294,7 +294,6 @@ check	macro
     include libraries/iffparse_lib.i
     include libraries/iffparse.i
  endif
-    include libraries/amigus_lib.i
 
 	incdir include/
 	include	mucro.i
@@ -302,6 +301,7 @@ check	macro
 	include	Guru.i
 	include	ps3m.i
 	include	patternInfo.i
+        include libraries/amigus_lib.i
  ifne FEATURE_P61A
 use = 0
 	include	player61.i
@@ -482,7 +482,7 @@ scope_trigger rs.b  1 * Audio channel enable DMA flags
 scope_pad	  rs.b  1
 scope_size    rs.b  0
 
- if ns_size<>16
+ ifne ns_size-16
     fail "This is assumed to be 16 in code"
  endif
 
@@ -1669,10 +1669,10 @@ p_NOP macro
 	dc.l	$4e754e75
 	endm
 
- if pt_prot<>33 
+ ifne pt_prot-33 
    fail This must be 33
  endc 
- if pt_multi<>49
+ ifne pt_multi-49
    fail This must be 49
  endc 
 
@@ -8896,7 +8896,7 @@ umph
 * on!
 	DPRINT	"Replay end"
 	bsr	obtainModuleData
-	bsr	halt			* soitetaan vaan alusta
+	bsr	halt0			* soitetaan vaan alusta
 	move.l	playerbase(a5),a0
     push    a3
 	jsr 	p_end(a0)
@@ -8952,7 +8952,7 @@ umph
 	DPRINT	"Replay end"
     pushm    d6/d7          * preserve double buffering flag
 	bsr	obtainModuleData
-	bsr	halt			* Vapautetaan se jos on
+	bsr	halt0			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
 	bsr	releaseModuleData
@@ -10870,7 +10870,7 @@ rbutton4a
 
     bsr     obtainModuleData
 	lore    Exec,Disable
-	bsr	halt
+	bsr	halt0
 	move.l	#PLAYING_MODULE_NONE,playingmodule(a5)
 	lore    Exec,Enable
 	move.l	playerbase(a5),d0
@@ -11349,7 +11349,7 @@ rbutton1:
 * Soitetaan vaan alusta
     bsr     obtainModuleData
     push    a3
-	bsr	halt
+	bsr	halt0
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
     pop     a3
@@ -11392,7 +11392,7 @@ rbutton1:
 	DPRINT	"Replay end"
     push    d7          * save this!
     bsr     obtainModuleData
-	bsr	halt			* Vapautetaan se jos on
+	bsr	halt0			* Vapautetaan se jos on
 	move.l	playerbase(a5),a0
 	jsr	p_end(a0)
     bsr     releaseModuleData
@@ -11450,7 +11450,7 @@ rbutton1:
 	jmp	init_error
 ;	rts
 
-halt:	clr.b	playing(a5)	
+halt0:	clr.b	playing(a5)	
 ;	clr	songnumber(a5)
 	clr	pos_nykyinen(a5)
 	clr	positionmuutos(a5)
@@ -20638,7 +20638,7 @@ inforivit_downloading2
     lea     -64(sp),sp
     lea     .1(pc),a0
     move.l  sp,a3
-    bsr     desmsg3
+    jsr     desmsg3
     move.l  sp,a0
     bsr     putinfo2
     lea     64(sp),sp
@@ -25921,9 +25921,12 @@ rexxmessage
 *** LOADPRG
 .loadprg
 	tst.b	d0
-	beq	rloadprog
+	beq	.loadprg0
 	move.l	a1,d7
-	bra	rloadprog2
+	jmp	rloadprog2
+
+.loadprg0
+	jmp	rloadprog
 
 *** QUIT
 .quit	st	exitmainprogram(a5)
@@ -31729,7 +31732,7 @@ loadmodule:
 	move	d0,-(sp)
 	DPRINT	"Replay end"
 	;lore    Exec,Disable
-	jsr	halt			* Vapautetaan se jos on
+	jsr	halt0			* Vapautetaan se jos on
 	;lore    Exec,Enable
 	;;;move.l	modulefilename(a5),a0
 	move.l	playerbase(a5),a0
@@ -56725,7 +56728,7 @@ MIX_LENGTH = FFT_LENGTH
 SAMPLE_LENGTH = MIX_LENGTH*2
 SAMPLE_LENGTH_MASK = 255
 
- if SAMPLE_LENGTH<>256
+ ifne SAMPLE_LENGTH-256
    fail "Assumed to be 256"
  endif
 
@@ -57245,7 +57248,7 @@ spectrumCopySamples
     move.l  d0,a1
 
 * Copy SAMPLE_LENGTH bytes, 256 bytes that is
-	if SAMPLE_LENGTH<>256	
+	ifne SAMPLE_LENGTH-256	
 		fail 256 assumed here
 	endif
 * Free: d0-d7, a0,a2,a3 = 44 bytes at a time
@@ -58616,7 +58619,7 @@ remoteSearch
 	pushpea	.modlandLine(pc),d6
 	moveq	#.modlandLineE-.modlandLine,d4
 	cmp.b	#SEARCH_MODLAND,d7
-	beq.b	.2
+	beq	.2
 	cmp.b	#SEARCH_AMINET,d7
 	beq.b	.aa
 	pushpea	.modulesLine(pc),d6
