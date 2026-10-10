@@ -61864,7 +61864,17 @@ convertStilEntry:
 .loop
     tst.b   (a0)
     beq     .x
-    bsr     .get4
+
+    ; Skip possible line changes to sync up with the keywords
+    cmp.b   #13,(a0)
+    bne     .sk1
+    addq    #1,a0
+.sk1
+    cmp.b   #10,(a0)
+    bne     .sk2
+    addq    #1,a0
+.sk2
+     bsr     .get4
     * d0 = four chars
     * d1 = two chars
 
