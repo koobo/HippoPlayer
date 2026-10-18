@@ -725,6 +725,8 @@ audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
 tooltipSignal	rs.b  	1	* signal for opening tooltip popup
+searchDebounceSignal rs.b 1	* signal for running a typed playlist search
+		rs.b	1	* pad, keeps the following fields even
 
 * Flag used to discard unnecessary mousemove IDCMP-messages
 ignoreMouseMoveMessage 	rs.b  	1
@@ -1055,6 +1057,7 @@ aika2		rs.l	1       * current timestamp
 vanhaaika	rs	1
 ticktack	rs	1	* vb tick count for titlebar refresh
 tooltipTick	rs 	1	* vb tick count for tooltips, counts from positive to 0
+searchDebounceTick rs	1	* vb tick count until a typed playlist search runs, counts from positive to 0
 userIdleTick rs  1	* refresh counter updated each ui refresh tick, cleared on mouse
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
@@ -2829,6 +2832,8 @@ main:
 	move.b	d0,rawKeySignal(a5)
 	bsr	getsignal
 	move.b	d0,tooltipSignal(a5)
+	bsr	getsignal
+	move.b	d0,searchDebounceSignal(a5)
 
 	* Do all kinds of adjustments to gadgets
 
@@ -3355,6 +3360,8 @@ msgloop
 	bset	d1,d0
 	move.b	tooltipSignal(a5),d1
 	bset	d1,d0
+	move.b	searchDebounceSignal(a5),d1
+	bset	d1,d0
 	move.b	hippoport+MP_SIGBIT(a5),d1 * oman viestiportin bitti
 	bset	d1,d0
 
@@ -3551,6 +3558,15 @@ msgloop
 	beq.b	.noTooltipSignal
 	bsr	tooltipDisplayHandler
 .noTooltipSignal
+
+	* Typed playlist search signal check
+	move.b	searchDebounceSignal(a5),d3
+	btst	d3,d0
+	beq.b	.noSearchDebounceSignal
+	pushm	all
+	jsr	searchDebounceHandler
+	popm	all
+.noSearchDebounceSignal
 
 * Vastataan IDCMP:n viestiin
 
@@ -3776,6 +3792,8 @@ exit
 	move.b	rawKeySignal(a5),d0
 	bsr	freesignal
 	move.b	tooltipSignal(a5),d0
+	bsr	freesignal
+	move.b	searchDebounceSignal(a5),d0
 	bsr	freesignal
 
 	move.l	fontbase(a5),d0
@@ -10298,6 +10316,13 @@ gadgetSearchStringAction:
     move.l  a0,d1
     DPRINT  "search string action %ld %s"
  endif
+    * Playlists: an empty search lists all playlists
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
+    bne     .typed
+    tst.b   gadgetSearchStringBuffer
+    bne     .typed
+    jmp     recentPlaylistsSearch
+.typed
     lea     gadgetSearchStringBuffer,a0
     bsr     beepIfSearchStringIsSmall
     bne     .1
@@ -10346,7 +10371,7 @@ gadgetSearchStringAction:
 .stations
     jmp stationsSearch(a0) 
 .recentPlaylists
-    jmp recentPlaylistsSearch(a0) 
+    jmp recentPlaylistsFilterSearch(a0) 
 .turran
     jmp turranSearch(a0) 
 .amp
@@ -10392,7 +10417,7 @@ gadgetSearchSourceOption1:
   dc.b    "Modules.pl",0        ; 2 
   dc.b    "Radio stations",0    ; 6
   dc.b    "Remix.Kwed.org",0    ; 5
-  dc.b    "Shared lists",0      ; 7  
+  dc.b    "Playlists",0         ; 7
   dc.b    "Turran FTP",0        ; 8 
   even
 
@@ -25401,6 +25426,14 @@ intserver
 	move.b	tooltipSignal(a5),d1
 	bsr	signalit
 .notActive
+	* Same for the typed playlist search
+	tst	searchDebounceTick(a5)
+	beq.b	.notSearchActive
+	subq	#1,searchDebounceTick(a5)
+	bne.b	.notSearchActive
+	move.b	searchDebounceSignal(a5),d1
+	bsr	signalit
+.notSearchActive
 
 	* Are we playing something?
 	tst.b	playing(a5)
@@ -36131,13 +36164,6 @@ refreshGadgetSearchSource:
     lea     gadgetSearchSource(a4),a3
     jsr     drawButtonFrameMainWindow
 
-    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
-    bne     .1
-    lea     gadgetSearchString(a4),a0
-    jmp     disableGadget
-   ;;; rts
-    ;;;;;;;jmp     recentPlaylistsSearch
-.1
     tst.b   uhcAvailable(a5)
     bne.b   .2
     rts
@@ -36152,6 +36178,75 @@ activateSearchStringGadget:
     move.l  windowbase(a5),a1
     sub.l   a2,a2
     lore    Intui,ActivateGadget
+    rts
+
+* Vertical blank ticks to wait after the last keystroke
+* before a typed playlist search runs
+SEARCH_DEBOUNCE_TICKS = 40
+
+searchStringEditHook:
+    ds.b    MLN_SIZE
+    dc.l    searchStringEditHookRoutine  * h_Entry
+    dc.l    0       * h_SubEntry
+    dc.l    0       * h_Data
+
+* String gadget edit hook, called by Intuition for each keystroke.
+* Restarts the typed playlist search countdown when the search
+* terms change. Runs in input.device context, so it only touches
+* the tick counter.
+* in:
+*   a0 = hook
+*   a1 = command
+*   a2 = SGWork
+* out:
+*   d0 = 0 if the command is not handled
+searchStringEditHookRoutine:
+    cmp.l   #SGH_KEY,(a1)
+    beq.b   .key
+    moveq   #0,d0
+    rts
+.key
+    move.l  a5,-(sp)
+    lea     var_b,a5
+    move.l  sgw_Gadget(a2),a1
+    cmp     #GADGET_ID_SEARCH_STRING,gg_GadgetID(a1)
+    bne.b   .x
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
+    bne.b   .x
+    move    sgw_EditOp(a2),d0
+    cmp     #EO_NOOP,d0
+    beq.b   .x
+    cmp     #EO_MOVECURSOR,d0
+    beq.b   .x
+    cmp     #EO_ENTER,d0
+    beq.b   .x
+    move    #SEARCH_DEBOUNCE_TICKS,searchDebounceTick(a5)
+.x
+    move.l  (sp)+,a5
+    moveq   #-1,d0
+    rts
+
+* Runs the typed playlist search when the countdown expires.
+* An empty field lists all playlists, a single character waits
+* for more.
+searchDebounceHandler:
+    tst.b   searchLayoutActive(a5)
+    beq.b   .x
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
+    bne.b   .x
+    lea     gadgetSearchStringBuffer,a0
+    tst.b   (a0)
+    beq.b   .all
+    tst.b   1(a0)
+    beq.b   .x
+    jsr     recentPlaylistsFilterSearch
+    bra.b   .activate
+.all
+    jsr     recentPlaylistsSearch
+.activate
+    * Keep typing without clicking the field again
+    jmp     activateSearchStringGadget
+.x
     rts
 
 
@@ -58408,7 +58503,17 @@ stationsSearch
 	moveq	#SEARCH_STATIONS,d7
 	bra 	remoteSearch
 
+* Lists all playlists. Clears the search terms so that
+* the string gadget matches what is shown.
 recentPlaylistsSearch
+	clr.b	gadgetSearchStringBuffer
+	lea		gadgetSearchStringStringInfo,a0
+	clr		si_BufferPos(a0)
+	clr		si_DispPos(a0)
+	lea		gadgetSearchString,a0
+	jsr		refreshGadgetInA0
+* Lists playlists matching the search terms
+recentPlaylistsFilterSearch
 	moveq	#SEARCH_RECENT_PLAYLISTS,d7
 	bra 	remoteSearch
 
@@ -58434,6 +58539,7 @@ remoteSearch
 	bne.b	.go
 	rts
 .go
+	clr		searchDebounceTick(a5)
 	jsr		lockMainWindow
 
 	lea	.srh(pc),a0
@@ -59132,7 +59238,7 @@ remoteSearch
 .turranLineE
 
 .recentPlaylistsLine
-	dc.b	"http://asciiarena.se/",0
+	dc.b	"http://hippoplayer.se/",0
 .recentPlaylistsLineE
 
 .ampLine
@@ -59183,7 +59289,7 @@ remoteSearch
 	dc.b	"playlistsearch",0
 .recentPlaylistsSearchCmd
 	dc.b	"%s",10
-	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s',10
+	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s %s',10
 	dc.b	0
 .ampResultsPath
 	dc.b	"ampsearch",0
@@ -65330,8 +65436,8 @@ gadgetSearchStringStringInfo:
             dc.b    1,0 ; sex_Pens
             dc.b    1,0 ; sex_ActivePens
             dc.l    0   ; sex_InitialModes
-            dc.l    0   ; sex_EditHook
-            dc.l    0   ; sex_WorkBuffer
+            dc.l    searchStringEditHook   ; sex_EditHook
+            dc.l    gadgetSearchStringWorkBuffer   ; sex_WorkBuffer
             ds.b    16  ; sex_Reserved
 
 
@@ -66531,6 +66637,9 @@ var_b		ds.b	size_var
 gadgetSearchStringBuffer:     
     ds.b    50
 gadgetLocalSearchStringBuffer:     
+    ds.b    50
+* Required by sex_EditHook, as large as the string buffers
+gadgetSearchStringWorkBuffer:
     ds.b    50
 
 * Copy of Protracker module header data for the info window
