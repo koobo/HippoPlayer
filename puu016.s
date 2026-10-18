@@ -884,7 +884,7 @@ startup_new	rs.b	120
 fkeys_new	rs.b	120*10
 xfd_new		rs.b	1
 fontname_new	rs.b	20+1
-listfontname_new rs.b 	20+1
+listfontname_new rs.b 	30+1
 early_new	rs.b	1
 prefix_new	rs.b	1
 autosort_new	rs.b	1
@@ -1398,13 +1398,13 @@ req_array	rs.b	0		* reqtoolsin muotoiluparametrit
 desbuf		rs.b	200		* muotoilupuskuri, temporary buffer
 desbuf2		rs.b	200		* muotoilupuskuri prefssille
 filename	rs.b	108		* tiedoston nimi (reqtools)
-filename2	rs.b	108		* Load/Save program-rutiineille
+filename2	rs.b	308		* Load/Save program-rutiineille, tempdir+filename
 tempdir		rs.b	200		* ReqToolsin hakemistopolku 
 PROBE_BUFFER_LEN = 2048
 probebuffer	rs.b	PROBE_BUFFER_LEN * tiedoston tutkimispuskuri
 ptsonglist	rs.b	64		* Protrackerin songlisti
 xpkerror	rs.b	82		* XPK:n virhe (max. 80 merkki‰)
-findpattern	rs.b	30		* find pattern
+findpattern	rs.b	50		* find pattern, same size as the search gadget buffer
 divider		rs.b	26		* divider
 
 omabitmap3      	rs.b	bm_SIZEOF-7*4	* 1 - tick mark
@@ -11502,7 +11502,7 @@ add_divider
 
 	push	a3
 	lea	divider(a5),a1	
-	moveq	#27-1,d0			* Request 27 bytes?
+	moveq	#26-1,d0			* max chars, divider has room for the NUL too
 	sub.l	a3,a3
 	lea	.tags(pc),a0
 	lea	.ti(pc),a2
@@ -12519,7 +12519,7 @@ openfilewin
 
 
 printfilewin
-	pushm	d1/d1/a0/a4
+	pushm	d0/d1/a0/a4
 
 	tst.l	filewin
 	beq.b	.x
@@ -12640,21 +12640,50 @@ parsereqdir
 	move.l	req_file(a5),a0
 parsereqdir3
 	lea	tempdir(a5),a1
+	move.l	#200,d0			* size of tempdir
+* In:
+*   a0 = file requester
+*   a1 = destination, d0 = destination size
+* Out:
+*   a1 = terminating NUL after "dir/" or "dev:", d0 = bytes left including it
 parsereqdir2
 	move.l	16(a0),a0
 	tst.b	(a0)
-	bne.b	.dij
-	clr	(a1)
+	beq.b	.e			* empty directory
+	bsr.b	bcopyn
+	cmp.b	#':',-1(a1)
+	beq.b	.x
+	cmp	#2,d0			* room for the slash?
+	blo.b	.x
+	move.b	#'/',(a1)+
+	subq	#1,d0
+.e	clr.b	(a1)
+.x	rts
+
+* Copies a string with a size limit, the result is always NUL terminated.
+* In:
+*   a0 = source, a1 = destination, d0 = destination size (1-32767)
+* Out:
+*   a1 = terminating NUL, d0 = bytes left including the NUL
+bcopyn
+	subq	#2,d0
+	bmi.b	.t
+.c	move.b	(a0)+,(a1)+
+	dbeq	d0,.c
+	bne.b	.t			* out of space
+	subq.l	#1,a1
+.t	clr.b	(a1)
+	addq	#2,d0
 	rts
-.dij	move.b	(a0)+,(a1)+		* tehd‰‰n hakemisto
-	bne.b	.dij
-	subq.l	#2,a1
-	cmp.b	#':',(a1)
-	beq.b	.nfo
-	addq.l	#1,a1
-	move.b	#'/',(a1)
-.nfo	clr.b	1(a1)
-	rts
+
+* Frees the load/save program file requester and forgets the pointer
+freeReqFile2
+	move.l	req_file2(a5),d0
+	beq.b	.x
+	clr.l	req_file2(a5)
+	move.l	d0,a1
+	lore	Req,rtFreeRequest
+.x	rts
 
 
 
@@ -12736,18 +12765,16 @@ rloadprogDoIt
 	lea	filereqtitle2(pc),a3
 	lob	rtFileRequestA		* ReqToolsin tiedostovalikko
 	tst.l	d0
-	beq	.kex
+	beq	.cancel
 	move.l	req_file2(a5),a0
 	bsr	parsereqdir3
 
 	lea	tempdir(a5),a0		* kopioidaan polku ja nimi yhdeksi
 	lea	filename2(a5),a1
-.c	move.b	(a0)+,(a1)+
-	bne.b	.c
-	subq.l	#1,a1
+	move.l	#308,d0		* size of filename2
+	bsr	bcopyn
 	lea	filename(a5),a0
-.a	move.b	(a0)+,(a1)+
-	bne.b	.a
+	bsr	bcopyn
 
 
 .loe	
@@ -12972,17 +12999,17 @@ rloadprogDoIt
 .x1	
 	tst	d4
 	bne.b	.ext
-	move.l	req_file2(a5),d0
-	beq.b	.ex
-	move.l	d0,a1
-	move.l	_ReqBase(a5),a6
-	lob	rtFreeRequest
+	bsr	freeReqFile2
 
 .ex
 
 	clr.l	chosenmodule(a5)	* moduuliksi eka
 .kex	bsr	listChanged
 	bra	forceRefreshList
+
+.cancel
+	bsr	freeReqFile2
+	bra.b	.kex
 
 .what
 	lea	unknown_module_program_error(pc),a1
@@ -13476,23 +13503,21 @@ rsaveprog
 	lea	filereqtitle3(pc),a3
 	lob	rtFileRequestA		* ReqToolsin tiedostovalikko
 	tst.l	d0
-	beq.b	.ex
+	beq.b	.free
 	move.l	req_file2(a5),a0
 	bsr	parsereqdir3
 
 	lea	tempdir(a5),a0		* kopioidaan polku ja nimi yhdeksi
 	lea	filename2(a5),a1
-.c	move.b	(a0)+,(a1)+
-	bne.b	.c
-	subq.l	#1,a1
+	move.l	#308,d0		* size of filename2
+	bsr	bcopyn
 	lea	filename(a5),a0
-.a	move.b	(a0)+,(a1)+
-	bne.b	.a
+	bsr	bcopyn
 
 	lea	tempdir(a5),a0
 	lea	prgdir(a5),a1
-.cpe2	move.b	(a0)+,(a1)+
-	bne.b	.cpe2
+	move.l	#150-1,d0		* size of prefs_prgdir
+	bsr	bcopyn
 
 	bsr     getVisibleModuleListHeader
     move.l  a0,a1
@@ -13500,11 +13525,8 @@ rsaveprog
 	;lea	moduleListHeader(a5),a1
 	bsr.b exportModuleProgramToFile
 
-	move.l	req_file2(a5),d0
-	beq.b	.ex
-	move.l	d0,a1
-	move.l	_ReqBase(a5),a6
-	lob	rtFreeRequest
+.free
+	bsr	freeReqFile2
 .ex
 
 	bra	forceRefreshList
@@ -17073,6 +17095,7 @@ rcybername
 	lea	calibrationfile_new(a5),a0
 	move.l	a0,a1			* mihin hakemistoon menn‰‰n
 	lea	.t(pc),a2
+	moveq	#100,d3
 	bsr	pgetfile
 	st	newcalibrationfile(a5)
 	bra.b	pcybername
@@ -17251,6 +17274,7 @@ rpbutton10
 .ee	
 	move.l	d7,a0
 	lea	moduledir_new(a5),a1
+	move.l	#150,d0
 	bsr	parsereqdir2		* Tehd‰‰n hakemistopolku..
 	st	newdirectory(a5)
 
@@ -17306,6 +17330,7 @@ rselprgdir
 .ee	
 	move.l	d7,a0
 	lea	prgdir_new(a5),a1
+	move.l	#150,d0
 	bsr	parsereqdir2		* Tehd‰‰n hakemistopolku..
 	st	newdirectory2(a5)
 	bra.b	psele
@@ -17318,6 +17343,7 @@ rselarcdir
 .ee	
 	move.l	d7,a0
 	lea	arcdir_new(a5),a1
+	move.l	#150,d0
 	bsr	parsereqdir2		* Tehd‰‰n hakemistopolku..
 	bra	psele
 
@@ -17479,7 +17505,10 @@ rstartup
 	lea	startup_new(a5),a0
 	move.l	a0,a1			* mihin hakemistoon menn‰‰n
 	sub.l	a2,a2
+	moveq	#120,d3
 
+* a0 = destination, a1 = start directory, a2 = title or NULL,
+* d3 = destination size
 pgetfile
 	move.l	a2,d4		 * title
 	bsr	get_rt
@@ -17536,12 +17565,10 @@ pgetfile
 
 	move.l	req_file3(a5),a0
 	move.l	d6,a1
+	move.l	d3,d0			* destination size
 	bsr	parsereqdir2
-
-	addq	#1,a1
 	lea	desbuf2(a5),a0
-.e	move.b	(a0)+,(a1)+
-	bne.b	.e
+	bsr	bcopyn
 
 .eek	
 	move.l	req_file3(a5),d0
@@ -17652,6 +17679,7 @@ rfkeys
 	lea	moduledir(a5),a1	
 .jep
 	sub.l	a2,a2
+	moveq	#120,d3
 	bsr	pgetfile
 	bra.b	rfkeys
 
@@ -17953,6 +17981,7 @@ rfont
 	moveq	#RT_FONTREQ,d0
 	lore	Req,rtAllocRequestA
 	move.l	d0,d7
+	beq	.noreq
 
 	lea	.tit(pc),a3
 	lea	fontreqtags(pc),a0
@@ -18001,10 +18030,8 @@ rfont
 	move.l	4(a0),prefs_textattr+prefsdata(a5) * YSize, Style, Flags talteen
 	move.l	(a0),a0				* Fontin nimi
 	lea	prefs_fontname+prefsdata(a5),a1
-	printt "TOOD: DANGER: the output buffer is just 20 chars long"
-	
-.cec	move.b	(a0)+,(a1)+
-	bne.b	.cec
+	moveq	#20,d0			* size of prefs_fontname
+	bsr	bcopyn
 
 	clr	boxsize00(a5)		* avataan ja suljetaan p‰‰ikkuna
 
@@ -18012,6 +18039,7 @@ rfont
 .ew
 	move.l	d7,a1
 	lore	Req,rtFreeRequest
+.noreq
 	bra	pfont
 
 
@@ -18071,6 +18099,7 @@ rListFont
 	moveq	#RT_FONTREQ,d0
 	lore	Req,rtAllocRequestA
 	move.l	d0,d7
+	beq.b	.noreq
 
 	lea	.tit(pc),a3
 	lea	listfontreqtags(pc),a0
@@ -18094,14 +18123,15 @@ rListFont
 	move.l	4(a0),prefs_listtextattr+prefsdata(a5) * YSize, Style, Flags talteen
 	move.l	(a0),a0				* Fontin nimi
 	lea	prefs_listfontname+prefsdata(a5),a1
-.cec	move.b	(a0)+,(a1)+
-	bne.b	.cec
+	moveq	#30,d0			* size of prefs_listfontname
+	bsr	bcopyn
 
 	clr	boxsize00(a5)		* avataan ja suljetaan p‰‰ikkuna
 
 .ew
 	move.l	d7,a1
 	lore	Req,rtFreeRequest
+.noreq
 	bra.b	pListFont
 
 
@@ -18173,6 +18203,7 @@ rpgfile
 	lea	groupname_new(a5),a0
 	move.l	a0,a1			* mihin hakemistoon menn‰‰n
 	lea	.tit(pc),a2
+	moveq	#100,d3
 	bsr	pgetfile
 	bra.b	ppgfile
 
@@ -18797,6 +18828,7 @@ rmhilib
 	lea	mhiLib_new(a5),a0
 	move.l	a0,a1			* mihin hakemistoon menn‰‰n
 	lea	.t(pc),a2
+	moveq	#MHILIB_SIZE,d3
 	bsr	pgetfile
 	lea	mhiLib_new(a5),a0
     move.l  a0,d0
@@ -20207,10 +20239,10 @@ execuutti
 	move.l	d7,a0
 	lea	100(a4),a1
 	move.l	#'run ',(a1)+
+	moveq	#100-4,d0
 	bsr	parsereqdir2
-	addq	#1,a1
-.c	move.b	(a4)+,(a1)+
-	bne.b	.c
+	move.l	a4,a0
+	bsr	bcopyn
 
 * sp+100 = ajettava komento
 
