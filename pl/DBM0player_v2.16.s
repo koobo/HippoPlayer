@@ -46,7 +46,9 @@ init
 ;	lea	mainvolume(a5),a2
 ;	lea	songover(a5),a3
 
+ ifnd TEST
 test = 0
+ endif
 
  ifne test
 	lea	MODULE,a0
