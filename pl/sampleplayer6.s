@@ -216,6 +216,48 @@ MPEGA_ERR_NONE     = 0
 MPEGA_ERR_BASE     = 0
 MPEGA_ERR_EOF      = (MPEGA_ERR_BASE-1)
 MPEGA_ERR_BADFRAME = (MPEGA_ERR_BASE-2)
+
+****************** playsap library, see playsap.library fd/playsap_lib.fd
+_LVOPSAP_Open           =   -30
+_LVOPSAP_Close          =   -36
+_LVOPSAP_GetInfo        =   -42
+_LVOPSAP_SetSong        =   -48
+_LVOPSAP_Render         =   -54
+_LVOPSAP_Seek           =   -60
+_LVOPSAP_GetPosition    =   -66
+_LVOPSAP_SetSampleRate  =   -78
+PSAP_FMT_S16BE_STEREO = 3
+PSAP_MAX_MODULE = 65000
+PSAP_RATE       = 27710
+* struct PSAPInfo, libraries/playsap.h
+psi_channels    = 2
+psi_songs       = 4
+psi_defaultSong = 6
+psi_durationMs  = 8
+psi_SIZEOF      = 460
+****************** gme.library, see gme.library sfd/gme_lib.sfd
+_LVOGME_Open           =   -30
+_LVOGME_Close          =   -36
+_LVOGME_GetInfo        =   -42
+_LVOGME_SetSong        =   -48
+_LVOGME_Render         =   -54
+_LVOGME_Seek           =   -60
+_LVOGME_GetPosition    =   -66
+_LVOGME_SetSampleRate  =   -78
+GME_FMT_S16BE  = 2
+GME_RATE       = 22050
+* gme.library runs on the caller's stack and needs this much free
+* below each call (libraries/gme.h STACK).
+GME_STACK      = 6144
+* struct GMEInfo, include/libraries/gme.h. WORD and LONG are 2-aligned.
+* version 0, channels 2, songs 4, defaultSong 6, durationMs[256] 8..1031,
+* loop[256] 1032..1287, title 1288, author 1416, date 1544, ntsc 1576,
+* pad 1578, system 1580, game 1644, copyright 1772, end 1900.
+pvi_channels    = 2
+pvi_songs       = 4
+pvi_defaultSong = 6
+pvi_durationMs  = 8
+pvi_SIZEOF      = 1900
 MPEGA_ERR_MEM      = (MPEGA_ERR_BASE-3)
 MPEGA_ERR_NO_SYNC  = (MPEGA_ERR_BASE-4)
 
@@ -337,6 +379,8 @@ tword	macro
 	STRUCTURE myFH,0
 	ULONG	mfh_fh		;(must be the first item!!)
 	UWORD	mfh_is_xpk	;if non-zero then XPK
+	UWORD	mfh_is_sap	;if non-zero then playsap.library, mfh_fh is the PSAP handle
+	UWORD	mfh_is_gme	;if non-zero then gme.library, mfh_fh is the GME handle
 	ULONG	mfh_filepos	;XPK only - position in file
 	APTR	mfh_xbuff	;XPK only - address of decrunch buffer
 	ULONG	mfh_xbuffsize	;XPK only - size of decrunch buffer (=XPK chunksize)
@@ -460,6 +504,26 @@ mainTask    rs.l    1
 
 mp3DurationInMs  rs.l    1
 mp3PositionInMs  rs.l    1   
+_PlaySapBase     rs.l    1
+sapHandle        rs.l    1   * PSAP handle
+sapModule        rs.l    1   * module buffer, freed after PSAP_Open
+sapSong          rs.l    1   * current subsong
+sapSongRequest   rs.l    1   * subsong asked by host, -1 = none
+sapSeekRequest   rs.l    1   * seek in ms asked by host, -1 = none
+sapPositionMs    rs.l    1
+saplippu         rs      1   * SAP mode on
+sapRendered      rs      1
+sapInfo          rs.b    psi_SIZEOF
+_GmeBase     rs.l    1
+gmeHandle        rs.l    1   * GME handle
+gmeModule        rs.l    1   * module buffer, freed after GME_Open
+gmeSong          rs.l    1   * current subsong
+gmeSongRequest   rs.l    1   * subsong asked by host, -1 = none
+gmeSeekRequest   rs.l    1   * seek in ms asked by host, -1 = none
+gmePositionMs    rs.l    1
+gmelippu         rs      1   * GME mode on
+gmeRendered      rs      1
+gmeInfo          rs.b    pvi_SIZEOF
 sampleOutputInfo rs.l    1  * Return text describing the output mode
 
 pipeFormatDetail  rs.w   1
@@ -530,6 +594,10 @@ size_var	rs.b	0
     jmp getMp3TagText(pc)
     jmp mp3GetDurationInSeconds(pc)
     jmp mp3Seek(pc)
+    jmp sapGetSongs(pc)
+    jmp sapSetSong(pc)
+    jmp gmeGetSongs(pc)
+    jmp gmeSetSong(pc)
 
 	dc.l	16
 sample_segment
@@ -538,6 +606,8 @@ sample_segment
 
 
 mpegaName	dc.b	"mpega.library",0
+playsapName	dc.b	"playsap.library",0
+gmeName	dc.b	"gme.library",0
  even
 
  if DEBUG
@@ -757,6 +827,16 @@ init:
     bne.b   .copyName  
 
 	move	a6,sampleforcerate(a5)
+    clr     saplippu(a5)
+    clr     sapRendered(a5)
+    clr.l   sapHandle(a5)
+    clr.l   sapModule(a5)
+    clr.l   sapPositionMs(a5)
+    clr     gmelippu(a5)
+    clr     gmeRendered(a5)
+    clr.l   gmeHandle(a5)
+    clr.l   gmeModule(a5)
+    clr.l   gmePositionMs(a5)
 
     DPRINT  "***** SAMPLE PLAYER INIT *****"
  if DEBUG
@@ -867,6 +947,28 @@ init:
     move.b  #3,sampleformat(a5) * WAV decoder
     bra     .wavinitPipeBypass
 .notPipeW
+
+    * "sap:" is a file layer handle, see _xopen. The data is
+    * 16-bit stereo big-endian PCM at 27710 Hz, like the PIPE wav bypass.
+    move.l  modulefilename(a5),a0
+    bsr     isSapName
+    beq     .notSap
+    DPRINT  "sample sap: bypass"
+    move.b  #2,sampleformat(a5) * AIFF decoder
+    clr.w   pipeFormatDetail(a5)
+    bra     .wavinitPipeBypass
+.notSap
+
+    * "gme:" is a file layer handle, see _xopen. The data is
+    * 16-bit stereo big-endian PCM at 22050 Hz, like the PIPE wav bypass.
+    move.l  modulefilename(a5),a0
+    bsr     isGmeName
+    beq     .notGme
+    DPRINT  "sample gme: bypass"
+    move.b  #2,sampleformat(a5) * AIFF decoder
+    clr.w   pipeFormatDetail(a5)
+    bra     .wavinitPipeBypassLq
+.notGme
 
     bsr     isRemoteSample
     bne     .remote
@@ -1856,7 +1958,9 @@ init:
 	moveq	#0,d2			* pri
 	pushpea	sample_segment(pc),d3
 	lsr.l	#2,d3
-	move.l	#4000,d4
+	* gme.library needs GME_STACK bytes below its calls
+	* plus this process's own frames; 4000 was sized for the other players.
+	move.l	#8192,d4
 	lore	Dos,CreateProc
     tst.l	d0
 	beq 	.error
@@ -1956,7 +2060,13 @@ prepareInfoLine:
 	lea	.t3(pc),a0
 
 
-.fr1	move.l	a0,d0
+.fr1	tst	saplippu(a5)
+	beq.b	.fr1s
+	lea	.tSap(pc),a0
+.fr1s	tst	gmelippu(a5)
+	beq.b	.fr1g
+	lea	.tGme(pc),a0
+.fr1g	move.l	a0,d0
 
 	tst	mplippu(a5)
 	beq.b	.yi0
@@ -2060,6 +2170,8 @@ prepareInfoLine:
 .t1               dc.b    "IFF 8SVX",0
 .t2               dc.b    "AIFF",0
 .t3               dc.b    "WAV",0
+.tSap             dc.b    "SAP",0
+.tGme             dc.b    "GME",0
 .t3midi           dc.b    "MIDI",0
 .t3ogg            dc.b    "Ogg",0
 .t4               dc.b    "MP",0
@@ -2094,6 +2206,58 @@ isPipe:
     rts
 .local
     moveq   #0,d0
+    rts
+
+
+* Is the file name "sap:<path>", a module played through playsap.library.
+* In:
+*   a0 = file name
+* Out:
+*   d0 = true or false, flags set
+isSapName:
+    move.b  (a0),d0
+    or.b    #$20,d0
+    cmp.b   #"s",d0
+    bne.b   .no
+    move.b  1(a0),d0
+    or.b    #$20,d0
+    cmp.b   #"a",d0
+    bne.b   .no
+    move.b  2(a0),d0
+    or.b    #$20,d0
+    cmp.b   #"p",d0
+    bne.b   .no
+    cmp.b   #":",3(a0)
+    bne.b   .no
+    moveq   #1,d0
+    rts
+.no moveq   #0,d0
+    rts
+
+
+* Is the file name "gme:<path>", a module played through gme.library.
+* In:
+*   a0 = file name
+* Out:
+*   d0 = true or false, flags set
+isGmeName:
+    move.b  (a0),d0
+    or.b    #$20,d0
+    cmp.b   #"g",d0
+    bne.b   .no
+    move.b  1(a0),d0
+    or.b    #$20,d0
+    cmp.b   #"m",d0
+    bne.b   .no
+    move.b  2(a0),d0
+    or.b    #$20,d0
+    cmp.b   #"e",d0
+    bne.b   .no
+    cmp.b   #":",3(a0)
+    bne.b   .no
+    moveq   #1,d0
+    rts
+.no moveq   #0,d0
     rts
 
 
@@ -2514,6 +2678,18 @@ sampleiik:
 	lore	Exec,CloseLibrary
 	clr.l	_MPEGABase(a5)
 .x
+	move.l	_PlaySapBase(a5),d0
+	beq.b	.x2
+	move.l	d0,a1
+	lore	Exec,CloseLibrary
+	clr.l	_PlaySapBase(a5)
+.x2
+	move.l	_GmeBase(a5),d0
+	beq.b	.x3
+	move.l	d0,a1
+	lore	Exec,CloseLibrary
+	clr.l	_GmeBase(a5)
+.x3
  if DEBUG
     bsr     closeTimer
  endif
@@ -2528,6 +2704,9 @@ sampleiik:
 
 sample_code:
 	lea	var_b(pc),a5
+ if DEBUG
+	bsr	stackFill
+ endif
 	addq	#1,sample_prosessi(a5)
 
 	DPRINT	"*** Process ***"
@@ -5563,7 +5742,48 @@ decodeMp3
 	bsr	songoverr
     * Start from the beginning?
 	bra	.wl2
-	
+
+* Fill the unused part of this process stack with a pattern,
+* so that stackHighWater can find the deepest use at exit.
+ if DEBUG
+STACK_PATTERN = $55aa55aa
+
+stackFill:
+	pushm	all
+	sub.l	a1,a1
+	lore	Exec,FindTask
+	move.l	d0,a0
+	move.l	TC_SPLOWER(a0),a0
+	lea	-64(sp),a1
+.fill
+	move.l	#STACK_PATTERN,(a0)+
+	cmp.l	a1,a0
+	blo.b	.fill
+	popm	all
+	rts
+
+* Print how many bytes of this process stack were used.
+stackHighWater:
+	pushm	all
+	sub.l	a1,a1
+	lore	Exec,FindTask
+	move.l	d0,a1
+	move.l	TC_SPLOWER(a1),a0
+	move.l	TC_SPUPPER(a1),d1
+.scan
+	cmp.l	#STACK_PATTERN,(a0)
+	bne.b	.found
+	addq.l	#4,a0
+	cmp.l	d1,a0
+	blo.b	.scan
+.found
+	move.l	d1,d0
+	sub.l	a0,d0
+	sub.l	TC_SPLOWER(a1),d1
+	DPRINT	"stack used=%ld of %ld"
+	popm	all
+	rts
+ endif
 
  if DEBUG
 readIoMeasurement   dc.l    0
@@ -5584,6 +5804,9 @@ quit2:
 quit3:
 	DPRINT	"quit3"
     DPRINT  "task exiting"
+ if DEBUG
+	bsr	stackHighWater
+ endif
 	lore	Exec,Forbid
 	clr	sample_prosessi(a5)
 	clr.b	killsample(a5)
@@ -5656,6 +5879,7 @@ wait:
     * Status: Z set, continue
     moveq	#0,d0
 .q	rts
+
 
 .aqq	clr.b	ahitrigger(a5)
 	bra.b	.qq
@@ -5883,6 +6107,22 @@ read_mp
 
 
 mp_start
+	tst	saplippu(a5)
+	beq.b	.nosap
+	pushm	all
+	move.l	sapSong(a5),d0
+	bsr	sap_set_song
+	popm	all
+	rts
+.nosap
+	tst	gmelippu(a5)
+	beq.b	.nogme
+	pushm	all
+	move.l	gmeSong(a5),d0
+	bsr	gme_set_song
+	popm	all
+	rts
+.nogme
 	tst	mplippu(a5)
 	beq.b	.x
 	tst.l 	_MPEGABase(a5)
@@ -5909,6 +6149,8 @@ mp_start
 
 mp_close
 	pushm	all
+	bsr	sap_close
+	bsr	gme_close
     move.l  id3v2Data(a5),a0
     clr.l   id3v2Data(a5)
     bsr     freemem
@@ -6269,6 +6511,539 @@ initsamplecyber:
 ;;;    rts
 
 
+*********************************************************************
+* SAP via playsap.library
+*********************************************************************
+
+* In:
+*   d0 = subsong
+* Out:
+*   d0 = subsong duration in seconds, 0 if unknown
+sap_set_song
+	movem.l	d1-a6,-(sp)
+	move.l	d0,sapSong(a5)
+	lsl.l	#2,d0
+	lea	sapInfo+psi_durationMs(a5),a0
+	move.l	(a0,d0.l),d7
+	move.l	d7,d1		* -1 = own duration or loop forever
+	move.l	sapSong(a5),d0
+	move.l	sapHandle(a5),a0
+	lore	PlaySap,PSAP_SetSong
+	clr.l	sapPositionMs(a5)
+	move.l	d7,d0
+	bsr.b	sap_ms_to_secs
+	movem.l	(sp)+,d1-a6
+	rts
+
+* In:
+*   d0 = milliseconds
+* Out:
+*   d0 = seconds, 0 if d0 <= 0
+sap_ms_to_secs
+	tst.l	d0
+	bgt.b	.1
+	moveq	#0,d0
+	rts
+.1	cmp.l	#65535*1000,d0
+	bls.b	.2
+	move.l	#65535*1000,d0
+.2	divu	#1000,d0
+	and.l	#$ffff,d0
+	rts
+
+* Open "sap:<path>" through playsap.library. Called from _xopen.
+* The file after the prefix is loaded into memory for PSAP_Open.
+* Output is always 16-bit stereo big-endian at PSAP_RATE.
+* In:
+*   a4 = myFH, mfh_filename = "sap:<path>"
+* Out:
+*   d0 = 0 if ok, -1 if error
+sapOpen
+	DPRINT	"sapOpen"
+	lea	var_b,a5
+	move.l	4.w,a6
+	tst.l	_PlaySapBase(a5)
+	bne.b	.lib
+	lea	playsapName(pc),a1
+	moveq	#1,d0
+	lob	OpenLibrary
+	move.l	d0,_PlaySapBase(a5)
+	bne.b	.lib
+	DPRINT	"no playsap"
+	bra	.fail
+.lib
+	* Read the whole file, one byte more than the library accepts
+	move.l	#PSAP_MAX_MODULE+1,d0
+	move.l	#MEMF_PUBLIC,d1
+	bsr	getmem
+	move.l	d0,sapModule(a5)
+	beq	.fail
+	lea	fh2(a5),a0
+	move.l	mfh_filename(a4),d0
+	addq.l	#4,d0
+	move.l	d0,mfh_filename(a0)
+	bsr	_xopen
+	bne	.bad
+	move.l	sapModule(a5),d2
+	move.l	#PSAP_MAX_MODULE+1,d3
+	lea	fh2(a5),a0
+	bsr	_xread
+	move.l	d0,d7
+	lea	fh2(a5),a0
+	bsr	_xclose
+	tst.l	d7
+	ble	.bad
+	cmp.l	#PSAP_MAX_MODULE,d7
+	bhi	.bad
+
+	move.l	sapModule(a5),a0
+	move.l	d7,d0
+	move.l	mfh_filename(a4),a1
+	addq.l	#4,a1
+	lore	PlaySap,PSAP_Open
+	move.l	d0,sapHandle(a5)
+	beq	.bad
+	* The library keeps its own copy of the module
+	move.l	sapModule(a5),a0
+	clr.l	sapModule(a5)
+	bsr	freemem
+
+	move.l	sapHandle(a5),a0
+	lea	sapInfo(a5),a1
+	lore	PlaySap,PSAP_GetInfo
+
+	* SetSampleRate comes before SetSong
+	move.l	#PSAP_RATE,d0
+	move.l	sapHandle(a5),a0
+	lore	PlaySap,PSAP_SetSampleRate
+
+	moveq	#0,d0
+	move	sapInfo+psi_defaultSong(a5),d0
+	bsr	sap_set_song
+	bsr	init\.moi_mp
+
+	moveq	#-1,d0
+	move.l	d0,sapSongRequest(a5)
+	move.l	d0,sapSeekRequest(a5)
+	st	saplippu(a5)
+	move.l	sapHandle(a5),mfh_fh(a4)
+	move	#1,mfh_is_sap(a4)
+	moveq	#0,d0
+	rts
+.bad
+	DPRINT	"playsap rejected the file"
+	bsr	sap_close
+.fail
+	moveq	#-1,d0
+	rts
+
+* Close the playsap.library handle and free the module buffer.
+* Safe to call several times.
+sap_close
+	pushm	all
+	lea	var_b,a5
+	move.l	sapHandle(a5),d0
+	beq.b	.nosh
+	move.l	d0,a0
+	clr.l	sapHandle(a5)
+	lore	PlaySap,PSAP_Close
+.nosh
+	move.l	sapModule(a5),a0
+	clr.l	sapModule(a5)
+	bsr	freemem
+	popm	all
+	rts
+
+* Fills the sample buffer from playsap.library. Called from _xread.
+* Applies subsong and seek requests from the host first.
+* In:
+*   d2 = destination
+*   d3 = bytes
+* Out:
+*   d0 = bytes rendered, less than d3 at song end
+read_sap
+	movem.l	d1-a6,-(sp)
+	move.l	sapSongRequest(a5),d0
+	bmi.b	.noSong
+	moveq	#-1,d1
+	move.l	d1,sapSongRequest(a5)
+	bsr	sap_set_song
+.noSong
+	move.l	sapSeekRequest(a5),d0
+	bmi.b	.noSeek
+	moveq	#-1,d1
+	move.l	d1,sapSeekRequest(a5)
+	move.l	sapHandle(a5),a0
+	lore	PlaySap,PSAP_Seek
+.noSeek
+	moveq	#0,d7		* restarted once already?
+.again
+	moveq	#0,d5		* bytes done
+.loop
+	move.l	d3,d0
+	sub.l	d5,d0
+	beq.b	.done
+	move.l	sapHandle(a5),a0
+	move.l	d2,a1
+	add.l	d5,a1
+	moveq	#PSAP_FMT_S16BE_STEREO,d1
+	lore	PlaySap,PSAP_Render
+	tst.l	d0
+	ble.b	.end
+	add.l	d0,d5
+	bra.b	.loop
+.end
+	tst.l	d5
+	bne.b	.done
+	* Song ended exactly at a buffer boundary. A zero length
+	* read would stop the player, so signal song end here
+	* and restart the subsong. Only once, so a song that
+	* renders nothing cannot loop forever.
+	tst	d7
+	bne.b	.done
+	moveq	#1,d7
+	bsr	songoverr
+	move.l	sapSong(a5),d0
+	bsr	sap_set_song
+	bra.b	.again
+.done
+ if DEBUG
+	tst	sapRendered(a5)
+	bne.b	.d
+	st	sapRendered(a5)
+	move.l	d5,d0
+	DPRINT	"sap: render %ld"
+.d
+ endif
+	move.l	sapHandle(a5),a0
+	lore	PlaySap,PSAP_GetPosition
+	move.l	d0,sapPositionMs(a5)
+	move.l	d5,d0
+	movem.l	(sp)+,d1-a6
+	rts
+
+* Called from mp3GetDurationInSeconds with a5 = var_b
+* Out:
+*   d0 = position secs
+*   d1 = length secs, 0 if unknown
+sapGetDurationInSeconds
+	move.l	sapSong(a5),d0
+	lsl.l	#2,d0
+	lea	sapInfo+psi_durationMs(a5),a0
+	move.l	(a0,d0.l),d0
+	bsr	sap_ms_to_secs
+	move.l	d0,d1
+	move.l	sapPositionMs(a5),d0
+	bsr	sap_ms_to_secs
+	rts
+
+* Called from the host task.
+* Out:
+*   d0 = number of subsongs, 0 if not SAP
+*   d1 = default subsong
+sapGetSongs:
+	push	a5
+	lea	var_b,a5
+	moveq	#0,d0
+	moveq	#0,d1
+	tst	saplippu(a5)
+	beq.b	.x
+	move	sapInfo+psi_songs(a5),d0
+	move	sapInfo+psi_defaultSong(a5),d1
+.x	pop	a5
+	rts
+
+* Called from the host task.
+* The player task switches subsong at its next read.
+* In:
+*   d0 = subsong
+sapSetSong:
+	movem.l	d0-a6,-(sp)
+	lea	var_b,a5
+	tst	saplippu(a5)
+	beq.b	.x
+	cmp	sapInfo+psi_songs(a5),d0
+	bhs.b	.x
+	and.l	#$ffff,d0
+	DPRINT	"sapSetSong %ld"
+	move.l	d0,sapSongRequest(a5)
+	lsl.l	#2,d0
+	lea	sapInfo+psi_durationMs(a5),a0
+	move.l	(a0,d0.l),d0
+	bsr	sap_ms_to_secs
+	bsr	init\.moi_mp
+.x	movem.l	(sp)+,d0-a6
+	rts
+
+*********************************************************************
+* GME via gme.library
+* Uses sap_ms_to_secs for the millisecond conversion.
+*********************************************************************
+
+* In:
+*   d0 = subsong
+* Out:
+*   d0 = subsong duration in seconds, 0 if unknown
+gme_set_song
+	movem.l	d1-a6,-(sp)
+	move.l	d0,gmeSong(a5)
+	lsl.l	#2,d0
+	lea	gmeInfo+pvi_durationMs(a5),a0
+	move.l	(a0,d0.l),d7
+	move.l	d7,d1		* -1 = own duration or loop forever
+	move.l	gmeSong(a5),d0
+	move.l	gmeHandle(a5),a0
+	lore	Gme,GME_SetSong
+	clr.l	gmePositionMs(a5)
+	move.l	d7,d0
+	bsr	sap_ms_to_secs
+	movem.l	(sp)+,d1-a6
+	rts
+
+* Fills the sample buffer from gme.library.
+* Applies subsong and seek requests from the host first.
+* In:
+*   d2 = destination
+*   d3 = bytes
+* Out:
+*   d0 = bytes rendered, less than d3 at song end
+read_gme
+	movem.l	d1-a6,-(sp)
+	move.l	gmeSongRequest(a5),d0
+	bmi.b	.noSong
+	moveq	#-1,d1
+	move.l	d1,gmeSongRequest(a5)
+	bsr	gme_set_song
+.noSong
+	move.l	gmeSeekRequest(a5),d0
+	bmi.b	.noSeek
+	moveq	#-1,d1
+	move.l	d1,gmeSeekRequest(a5)
+	move.l	gmeHandle(a5),a0
+	lore	Gme,GME_Seek
+.noSeek
+	moveq	#0,d7		* restarted once already?
+.again
+	moveq	#0,d5		* bytes done
+.loop
+	move.l	d3,d0
+	sub.l	d5,d0
+	beq.b	.done
+	move.l	gmeHandle(a5),a0
+	move.l	d2,a1
+	add.l	d5,a1
+	moveq	#GME_FMT_S16BE,d1
+	lore	Gme,GME_Render
+	tst.l	d0
+	ble.b	.end
+	add.l	d0,d5
+	bra.b	.loop
+.end
+	tst.l	d5
+	bne.b	.done
+	* Song ended exactly at a buffer boundary. A zero length
+	* read would stop the player, so signal song end here
+	* and restart the subsong. Only once, so a song that
+	* renders nothing cannot loop forever.
+	tst	d7
+	bne.b	.done
+	moveq	#1,d7
+	bsr	songoverr
+	move.l	gmeSong(a5),d0
+	bsr	gme_set_song
+	bra.b	.again
+.done
+ if DEBUG
+	tst	gmeRendered(a5)
+	bne.b	.d
+	st	gmeRendered(a5)
+	move.l	d5,d0
+	DPRINT	"gme: render %ld"
+.d
+ endif
+	move.l	gmeHandle(a5),a0
+	lore	Gme,GME_GetPosition
+	move.l	d0,gmePositionMs(a5)
+	move.l	d5,d0
+	movem.l	(sp)+,d1-a6
+	rts
+
+* Called from mp3GetDurationInSeconds with a5 = var_b
+* Out:
+*   d0 = position secs
+*   d1 = length secs, 0 if unknown
+gmeGetDurationInSeconds
+	move.l	gmeSong(a5),d0
+	lsl.l	#2,d0
+	lea	gmeInfo+pvi_durationMs(a5),a0
+	move.l	(a0,d0.l),d0
+	bsr	sap_ms_to_secs
+	move.l	d0,d1
+	move.l	gmePositionMs(a5),d0
+	bsr	sap_ms_to_secs
+	rts
+
+* Called from the host task.
+* Out:
+*   d0 = number of subsongs, 0 if not GME
+*   d1 = default subsong
+gmeGetSongs:
+	push	a5
+	lea	var_b,a5
+	moveq	#0,d0
+	moveq	#0,d1
+	tst	gmelippu(a5)
+	beq.b	.x
+	move	gmeInfo+pvi_songs(a5),d0
+	move	gmeInfo+pvi_defaultSong(a5),d1
+.x	pop	a5
+	rts
+
+* Called from the host task.
+* The player task switches subsong at its next read.
+* In:
+*   d0 = subsong
+gmeSetSong:
+	movem.l	d0-a6,-(sp)
+	lea	var_b,a5
+	tst	gmelippu(a5)
+	beq.b	.x
+	cmp	gmeInfo+pvi_songs(a5),d0
+	bhs.b	.x
+	and.l	#$ffff,d0
+	DPRINT	"gmeSetSong %ld"
+	move.l	d0,gmeSongRequest(a5)
+	lsl.l	#2,d0
+	lea	gmeInfo+pvi_durationMs(a5),a0
+	move.l	(a0,d0.l),d0
+	bsr	sap_ms_to_secs
+	bsr	init\.moi_mp
+.x	movem.l	(sp)+,d0-a6
+	rts
+
+* Open "gme:<path>" through gme.library. Called from _xopen.
+* The file after the prefix is loaded into memory for GME_Open.
+* Output is always 16-bit stereo big-endian at GME_RATE.
+* In:
+*   a4 = myFH, mfh_filename = "gme:<path>"
+* Out:
+*   d0 = 0 if ok, -1 if error
+gmeOpen
+	DPRINT	"gmeOpen"
+	lea	var_b,a5
+	* gmeOpen runs on the host's task, not the sample process.
+	* Refuse the file rather than let the library overrun that stack.
+	move.l	4.w,a0
+	move.l	ThisTask(a0),a0
+	move.l	sp,d0
+	sub.l	TC_SPLOWER(a0),d0
+	DPRINT	"gme: stack free %ld"
+	cmp.l	#GME_STACK,d0
+	blo	.fail
+	move.l	4.w,a6
+	tst.l	_GmeBase(a5)
+	bne.b	.lib
+	lea	gmeName(pc),a1
+	moveq	#1,d0
+	lob	OpenLibrary
+	move.l	d0,_GmeBase(a5)
+	bne.b	.lib
+	DPRINT	"no gme.library"
+	bra	.fail
+.lib
+	lea	fh2(a5),a0
+	move.l	mfh_filename(a4),d0
+	addq.l	#4,d0
+	move.l	d0,mfh_filename(a0)
+	bsr	_xopen
+	bne	.fail
+	* The file size is the position of the end
+	lea	fh2(a5),a0
+	moveq	#0,d2
+	moveq	#OFFSET_END,d3
+	bsr	_xseek
+	lea	fh2(a5),a0
+	moveq	#0,d2
+	moveq	#OFFSET_BEGINNING,d3
+	bsr	_xseek
+	move.l	d0,d6
+	ble	.closebad
+	move.l	d6,d0
+	move.l	#MEMF_PUBLIC,d1
+	bsr	getmem
+	move.l	d0,gmeModule(a5)
+	beq	.closebad
+	move.l	d0,d2
+	move.l	d6,d3
+	lea	fh2(a5),a0
+	bsr	_xread
+	move.l	d0,d7
+	lea	fh2(a5),a0
+	bsr	_xclose
+	cmp.l	d6,d7
+	bne	.bad
+
+	move.l	gmeModule(a5),a0
+	move.l	d7,d0
+	move.l	mfh_filename(a4),a1
+	addq.l	#4,a1
+	lore	Gme,GME_Open
+	move.l	d0,gmeHandle(a5)
+	beq	.bad
+	* The library keeps its own copy of the module
+	move.l	gmeModule(a5),a0
+	clr.l	gmeModule(a5)
+	bsr	freemem
+
+	move.l	gmeHandle(a5),a0
+	lea	gmeInfo(a5),a1
+	lore	Gme,GME_GetInfo
+
+	* SetSampleRate comes before SetSong
+	move.l	#GME_RATE,d0
+	move.l	gmeHandle(a5),a0
+	lore	Gme,GME_SetSampleRate
+
+	moveq	#0,d0
+	move	gmeInfo+pvi_defaultSong(a5),d0
+	bsr	gme_set_song
+	bsr	init\.moi_mp
+
+	moveq	#-1,d0
+	move.l	d0,gmeSongRequest(a5)
+	move.l	d0,gmeSeekRequest(a5)
+	st	gmelippu(a5)
+	move.l	gmeHandle(a5),mfh_fh(a4)
+	move	#1,mfh_is_gme(a4)
+	moveq	#0,d0
+	rts
+.closebad
+	lea	fh2(a5),a0
+	bsr	_xclose
+.bad
+	DPRINT	"gme.library rejected the file"
+	bsr	gme_close
+.fail
+	moveq	#-1,d0
+	rts
+
+* Close the gme.library handle and free the module buffer.
+* Safe to call several times.
+gme_close
+	pushm	all
+	lea	var_b,a5
+	move.l	gmeHandle(a5),d0
+	beq.b	.nogh
+	move.l	d0,a0
+	clr.l	gmeHandle(a5)
+	lore	Gme,GME_Close
+.nogh
+	move.l	gmeModule(a5),a0
+	clr.l	gmeModule(a5)
+	bsr	freemem
+	popm	all
+	rts
+
 * Checks if mp3 can be seeked 
 isLocalMp3:
     tst.b   mplippu(a5)
@@ -6289,6 +7064,10 @@ mp3GetDurationInSeconds:
     lea     var_b,a5
     moveq   #0,d0
     moveq   #0,d1
+    tst     saplippu(a5)
+    bne     sapGetDurationInSeconds
+    tst     gmelippu(a5)
+    bne     gmeGetDurationInSeconds
     bsr     isLocalMp3
     beq     .x
     tst.b   mhiEnable(a5) 
@@ -6347,6 +7126,20 @@ mp3GetDurationInSeconds:
 *  d0 = position in seconds to seek
 mp3Seek:
     lea     var_b,a5
+    tst     saplippu(a5)
+    beq.b   .nosap
+    mulu.w  #1000,d0
+    DPRINT  "sapSeek %ld ms"
+    move.l  d0,sapSeekRequest(a5)
+    rts
+.nosap
+    tst     gmelippu(a5)
+    beq.b   .nogme
+    mulu.w  #1000,d0
+    DPRINT  "gmeSeek %ld ms"
+    move.l  d0,gmeSeekRequest(a5)
+    rts
+.nogme
     bsr     isLocalMp3
     beq     .x
     tst.b   mhiEnable(a5) 
@@ -6702,6 +7495,20 @@ _xopen
 ;	bra	.end_ok
 ;.notloadall
 
+	move.l	(mfh_filename,a5),a0
+	bsr	isSapName
+	beq.b	.notsap
+	move.l	a5,a4
+	bsr	sapOpen
+	bra	.exit
+.notsap
+	move.l	(mfh_filename,a5),a0
+	bsr	isGmeName
+	beq.b	.notgme
+	move.l	a5,a4
+	bsr	gmeOpen
+	bra	.exit
+.notgme
 	move.l	(mfh_filename,a5),d1
  if DEBUG
     move.l  d1,d0
@@ -6802,6 +7609,10 @@ xpkerrormsg	ds.b	82
 _xread
 	movem.l	d1-a6,-(a7)
 	move.l	a0,a5		;myFH
+	tst	(mfh_is_gme,a5)
+	bne	.is_gme
+	tst	(mfh_is_sap,a5)
+	bne	.is_sap
 	tst	(mfh_is_xpk,a5)
 	bne.b	.is_xpk
 
@@ -6860,6 +7671,17 @@ _xread
 	bra.b	.exit
 
 
+.is_sap	lea	var_b,a5
+	bsr	read_sap
+	DPRINT	"sap: _xread %ld bytes"
+	bra	.exit
+
+.is_gme	lea	var_b,a5
+	bsr	read_gme
+	DPRINT	"gme: _xread %ld bytes"
+	bra	.exit
+
+
 ;***_XSeek**********************************************************
 ; parameters:
 ;  a0 - myFH
@@ -6870,6 +7692,10 @@ _xread
 _xseek
 	movem.l	d1-a6,-(a7)
 	move.l	a0,a5			;myFH
+	tst	(mfh_is_gme,a5)
+	bne.b	.is_gme
+	tst	(mfh_is_sap,a5)
+	bne.b	.is_sap
 	tst	(mfh_is_xpk,a5)
 	bne.b	.is_xpk
 
@@ -6888,6 +7714,10 @@ _xseek
 	lob	Seek
 .exit	movem.l	(a7)+,d1-a6
 	rts
+.is_sap	moveq	#0,d0		;sap: stream has no seeking
+	bra.b	.exit
+.is_gme	moveq	#0,d0		;gme: stream has no seeking
+	bra.b	.exit
 .is_xpk	move.l	d2,d6			;newpos
 	move.l	(mfh_filepos,a5),d7	;oldpos
 	tst.l	d3			;offset
@@ -6958,10 +7788,20 @@ _xclose
 	move.l	(a5),d1
 	beq.b	.no_fh
 	clr.l	(a5)
+	tst	(mfh_is_gme,a5)
+	bne.b	.is_gme
+	tst	(mfh_is_sap,a5)
+	bne.b	.is_sap
 	tst	(mfh_is_xpk,a5)
 	bne.b	.is_xpk
 	move.l	_DosBase+var_b,a6
 	lob	Close
+	bra.b	.no_fh
+.is_sap	clr	(mfh_is_sap,a5)
+	bsr	sap_close
+	bra.b	.no_fh
+.is_gme	clr	(mfh_is_gme,a5)
+	bsr	gme_close
 	bra.b	.no_fh
 .is_xpk	move.l	(_XPKBase+var_b),d0
 	beq.b	.no_fh

@@ -1932,7 +1932,10 @@ progstart
 	move.l	d3,segment(a5)		* seuraavan hunkin pointteri
 	clr.l	(a0)
 ;	move.l	#4000,d4		* stacksize
-	move.l	#5000,d4		* stacksize
+	* 5000 for HiP itself, plus 6144 that gme.library needs below
+	* its calls (libraries/gme.h STACK). The id_vgm check and the
+	* sample player's gmeOpen run on this process.
+	move.l	#5000+6144,d4		* stacksize
 	move.l	a4,a6
 	lob	CreateProc	
 
@@ -8211,10 +8214,6 @@ signalreceived
 	move	p_liput(a0),d0
 	btst	#pb_song,d0
  	beq	.reet
-    * Special case: VGM task has already stopped, 
-    * can't change to another song at this point.
-    cmp.w   #pt_vgm,p_type(a0)
-    beq     .reet
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne	rbutton13		* next song!
@@ -8234,10 +8233,6 @@ signalreceived
 	move	p_liput(a0),d0
 	btst	#pb_song,d0
  	beq.b	.eipa
-    * Special case: VGM task has already stopped, 
-    * can't change to another song at this point.
-    cmp.w   #pt_vgm,p_type(a0)
-    beq     .eipa
 	move	songnumber(a5),d0
 	cmp	maxsongs(a5),d0
 	bne	rbutton13		* next song!
@@ -33415,7 +33410,6 @@ loadfile:
 	move.b	#SAMPLE_FORMAT_OGG,sampleformat(a5)
 	cmp.l	#"OggS",(a0)
 	beq	.sampl
-.nosaaa
 ** MPEG
 	move.b	#SAMPLE_FORMAT_MP3,sampleformat(a5)
     jsr     streamIsAlive
@@ -33821,7 +33815,13 @@ tutki_moduuli2:
 	cmp.l	#"TDZ",d0		* take
 	beq 	.f
 
+    jsr     id_sap
+    beq     .f
+
     jsr     id_vgm
+    beq     .f
+
+    jsr     id_mdx
     beq     .f
 
 	bsr	id_it			 * IT
@@ -38003,6 +38003,8 @@ groupFormats:
     dr.l    p_midistream
     dr.l    p_ogg
     dr.l    p_vgm
+    dr.l    p_mdx
+    dr.l    p_sap
     dr.l    p_davelowe
     dr.l    p_futureplayer
     dr.l    p_delicustom
@@ -45973,7 +45975,7 @@ p_sample:
 	jmp	.dostop(pc)		* Stop
 	jmp	.docont(pc)		* Cont
 	jmp	.vol(pc)		* volume
-	p_NOP	* Song
+	jmp	sampleSetSong(pc)	* Song
 	p_NOP	* Eteen
 	p_NOP	* Taakse
 	jmp	.ahiup(pc)		* AHI Update
@@ -45999,6 +46001,10 @@ p_sample:
 .s_getMp3Text      rs.l     1
 .s_getMp3Duration  rs.l     1    
 .s_mp3Seek         rs.l     1
+.s_sapGetSongs     rs.l     1
+.s_sapSetSong      rs.l     1
+.s_gmeGetSongs     rs.l     1
+.s_gmeSetSong      rs.l     1
 
 
 .init:
@@ -46013,6 +46019,8 @@ p_sample:
     ; By default end can be detected
     lea     .flags(pc),a0
     or      #pf_end,(a0)
+    ; Subsongs only for SAP, set after init
+    and     #~pf_song,(a0)
 
 ** v‰litet‰‰n infoa
 
@@ -46391,6 +46399,18 @@ getSampleDataAdd:
     bne     .1
     add.l   d0,d0
 .1  rts
+
+* Song change from the host, SAP and GME (each ignores a song it does not own)
+sampleSetSong:
+    push    a5
+    moveq   #0,d0
+    move    songnumber(a5),d0
+    move.l  sampleroutines(a5),a0
+    jsr     p_sample\.s_sapSetSong(a0)
+    move.l  sampleroutines(a5),a0
+    jsr     p_sample\.s_gmeSetSong(a0)
+    pop     a5
+    rts
 
 * In: 
 *  d0 = position in secs
@@ -52234,70 +52254,37 @@ pipe_Ogg:
 
 
 ******************************************************************************
-* VGM
+* MDX
+* MDX is converted by the external mdx2wav and streamed to the sample player.
 ******************************************************************************
 
-p_vgm:
-  jmp      vgmInit(pc)
-  p_NOP     * CIA   
+p_mdx:
+  jmp      mdxInit(pc)
+  p_NOP     * CIA
   jmp      vgmPollTrigger(pc)     * VB
-  jmp       vgmEnd(pc)
+  jmp      mdxEnd(pc)
   jmp      p_sample+p_stop(pc)
   jmp      p_sample+p_cont(pc)
   jmp      p_sample+p_volume(pc)
-  jmp      vgmSong(pc)
+  p_NOP    * Song
   p_NOP    * Forward
   p_NOP    * Backward
   jmp      p_sample+p_ahiupdate(pc)
-  jmp      id_vgm(pc)
+  jmp      id_mdx(pc)
   p_NOP    * Author
-  dc       pt_vgm
-  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke!pf_song
-vgmTitle        ds.b    32    * (too much) empty space for formatting
-vgmTempFile     dc.b    "T:hippo."
-vgmTempExt      dc.b    "vgm",0,0
+  dc       pt_mdx
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+mdxTitle        ds.b    32    * (too much) empty space for formatting
+mdxTempFile     dc.b    "T:hippo."
+mdxTempExt      dc.b    "mdx",0
 vgmPollFile     dc.b    "T:vgmlen",0
-* Set to true if actually handling an MDX fil
-vgmActuallyMdx  dc.b    0
                 even
 * VB activated poller: -1 to disable, counts up to a second or so then wraps
-vgmPollCount    dc.w    -1 
-* Detected number of voices from vgm2wav
-vgmVoices       dc.w    0
+vgmPollCount    dc.w    -1
 
-vgmInit
-    ; Reset track number
-    clr.w   vgmTrackNumber
-    clr.w   vgmVoices
-
-vgmInit0
-    DPRINT  "VGM stream init"
- if DEBUG
-    move.l  moduleaddress(a5),d0
-    DPRINT  "module=%lx"
- endif
-
-
-    * Temp file should a correct extension for vgm2wav
-    move.b  vgmActuallyMdx(pc),d0
-    bne     .mdx
-    
-    move.l  moduleaddress(a5),a4
-    bsr     vgmGet4
-    lea     vgmTempExt(pc),a0
-    move.l  d0,(a0)
-    cmp.b   #' ',2(a0)
-    bne     .11
-    clr.b   2(a0)
-    bra     .33
-.11
-    cmp.b   #' ',3(a0)
-    bne     .33
-    clr.b   3(a0)
-.33
-
-.mdx
-    lea     vgmTempFile(pc),a0
+mdxInit
+    DPRINT  "MDX stream init"
+    lea     mdxTempFile(pc),a0
     move.l  moduleaddress(a5),a1
     move.l  modulelength(a5),d0
     bsr     plainSaveFile
@@ -52307,16 +52294,12 @@ vgmInit0
     bsr     vgmSetTypeName
 
     * Switch type to sample so correct replayer gets loaded
-    move    #pt_sample,playertype(a5)    
+    move    #pt_sample,playertype(a5)
 
     * Start streaming, url:
-    lea     vgmTempFile(pc),a0
+    lea     mdxTempFile(pc),a0
     * pipe specification:
-    pushpea pipe_vgm2wav(pc),d0
-    move.b  vgmActuallyMdx(pc),d1
-    beq     .44
     pushpea pipe_mdx2wav(pc),d0
-.44
     jsr     startLocalStreaming
     DPRINT  "startStreaming=%lx"
     tst.l   d0
@@ -52324,16 +52307,16 @@ vgmInit0
 
  if DEBUG
     move.l  a0,d0
-    DPRINT  "VGM stream is %s"
+    DPRINT  "MDX stream is %s"
  endif
     * Point sampleplayer to the pipe stream
     move.l  a0,modulefilename(a5)
 
-    jsr     p_sample+p_init(pc) 
+    jsr     p_sample+p_init(pc)
     DPRINT  "Sample init=%lx"
     tst.l   d0
     beq     .ok
-    bsr     vgmDeleteTempFile
+    bsr     mdxDeleteTempFile
     * D0 = error code
     rts
 
@@ -52341,7 +52324,7 @@ vgmInit0
     ; Enable polling for music length
     clr.w   vgmPollCount
     ; Update info also
-    bsr     vgmInfoText
+    bsr     mdxInfoText
 
     * Sample init OK
     moveq   #0,d0
@@ -52351,26 +52334,16 @@ vgmInit0
     moveq   #ier_nomem,d0
     rts
 
-.initError
-    moveq   #ier_error,d0
-    rts
-
-.streamError    
-    DPRINT  "VGM stream error!"
-    bsr     vgmDeleteTempFile
-
+.streamError
+    DPRINT  "MDX stream error!"
+    bsr     mdxDeleteTempFile
     lea     .msg(pc),a1
-    move.b  vgmActuallyMdx(pc),d0
-    beq     .2
-    lea     .msg2(pc),a1
-.2  bra     commonStreamError
-
+    bra     commonStreamError
 
 .msg
-  dc.b    "Error starting 'vgm2wav'",0
-.msg2
   dc.b    "Error starting 'mdx2wav'",0
   even
+
 
 * Handle error when starting streamer
 * In:
@@ -52397,130 +52370,40 @@ commonStreamError:
     rts
 
 
-vgmEnd
-    DPRINT  "VGM stream end"
+
+mdxEnd
+    DPRINT  "MDX stream end"
     move.w  #-1,vgmPollCount    * safety
     jsr     p_sample+p_end(pc)
     ; ... fall through ...
 
-vgmDeleteTempFile
-    DPRINT  "Delete VGM temp file"
+mdxDeleteTempFile
+    DPRINT  "Delete MDX temp file"
+    pushpea mdxTempFile(pc),d1
+    ; ... fall through ...
+
+
+* Delete a file
+* In:
+*   d1 = file name
+deleteTempFile
     push    d0
-    pushpea vgmTempFile(pc),d1
     lore    Dos,DeleteFile
     pop     d0
     rts
 
 * Generate info text about the format
-vgmInfoText:
-    lea     -8(sp),sp
-    move.l  moduleaddress(a5),a4
-    bsr     vgmGet4
-    clr.l   (sp)
-    clr.l   4(sp)
-
-    move.l  sp,a0
-    moveq   #4-1,d1
-.l  rol.l   #8,d0
-    cmp.b   #" ",d0
-    beq     .ll    
-    move.b  d0,(a0)+
-    dbf     d1,.l
-.ll
-
-    move.l  sp,d0
-    moveq   #0,d1
-    move.w  vgmVoices(pc),d1
-    move.l  sampleOutputInfoText(a5),d2
-
-    lea     .form(pc),a0
-    move.b  vgmActuallyMdx(pc),d3
-    beq     .2
+mdxInfoText:
+    move.l  sampleOutputInfoText(a5),d0
     lea     .formMdx(pc),a0
-    move.l  d2,d0
-.2
-    lea     vgmTitle(pc),a3
+    lea     mdxTitle(pc),a3
     jsr     desmsg3
-    lea     8(sp),sp
-
     rts
 
-* subformat, AHI, voices: max 25 ch
-.null     dc.b    0
-.form     dc.b    "%s %ldch VGM2WAV %s",0
 .formMdx  dc.b    "MDX 8ch MDX2WAV %s",0
           even
 
-vgmSongChangePossible:
-    jsr     findLocalStreamProcess
-    DPRINT  "vgmSongChangePossible=%lx"
-    tst.l   d0
-    rts
 
-; stream task is still in Wait even if vgm2wav has exited
-
-vgmSong:
-    DPRINT  "vgmSong"
-    move.b  vgmActuallyMdx(pc),d1
-    beq     .1
-    rts
-.1
-
- if DEBUG
-	moveq	#0,d0
-	move	songnumber(a5),d0
-	DPRINT	"Select %ld"
- endif
-    move.l  #SIGBREAKF_CTRL_D,d3    * Next track signal
-    lea     vgmTrackNumber(pc),a0
-    move    (a0),d1
-    cmp     d0,d1       * same?
-    beq     .x
-    move    d0,(a0)
-    sub     d1,d0
-    bpl.b   .next
-    move.l  #SIGBREAKF_CTRL_E,d3    * Previous track signal
-.next
-
-    bsr      vgmSongChangePossible
-    beq     .x
-    lore    Exec,Forbid
-    move.l  d0,a1
-    move.l  d3,d0
-    lob     Signal
-    lob     Permit
-    DPRINT  "Change track signal!"
-    ; Enable polling for music length for this track
-    clr.w   vgmPollCount
-.x
-    rts
-
- REM
-.restart
-    DPRINT  "restarting"
-    bsr     vgmEnd
-    bsr     vgmInit0
-    tst.l   d0
-    bpl.b   .ok
-    DPRINT  "Song change failed %ld"
-.ok 
-    rts
- EREM
-
-pipe_vgm2wav:
-    dc.l    0 * use homelock for current dir
-    dc.l    vgmCliName
-    dc.l    vgmCmdLq
-    dc.l    wavStreamPipeFileLQ
-    dc.l    0 * no setup
-    dc.l    10000 * large stack
-    dc.l    vgmPoll
-    dc.l    0 * additional format string parameter
-vgmTrackNumber = *-2
-
-vgmCliName          dc.b    "vgm2wav",0
-vgmCmdLq            dc.b    '%s -f 22050 -o PIPE:wavHippoStream3/65536/2 -p -l t:vgmlen -i "%s" -r %ld',10 
-                    dc.b    0
 * This name is recognized in the sample player to engage 22050 Hz out AIFF decoder
 wavStreamPipeFileLQ  dc.b    "PIPE:wavHippoStream3",0
                      even
@@ -52539,6 +52422,46 @@ pipe_mdx2wav:
 .mdxCmdLq    dc.b    '%s "%s" -r 22050 -p t:vgmlen -o PIPE:wavHippoStream3/65536/2',10
              dc.b    0
              even
+
+* Does playsap.library v1 open
+* Out:
+*   d0 = true or false
+sapLibUsable:
+    pushm   d1/a0-a1/a6
+    lea     sapLibName(pc),a1
+    moveq   #1,d0
+    lore    Exec,OpenLibrary
+    tst.l   d0
+    beq     .x
+    move.l  d0,a1
+    lob     CloseLibrary
+    moveq   #1,d0
+.x  popm    d1/a0-a1/a6
+    rts
+
+sapLibName   dc.b    "playsap.library",0
+             even
+
+
+* Does gme.library v1 open
+* Out:
+*   d0 = true or false
+gmeLibUsable:
+    pushm   d1/a0-a1/a6
+    lea     gmeLibName(pc),a1
+    moveq   #1,d0
+    lore    Exec,OpenLibrary
+    tst.l   d0
+    beq     .x
+    move.l  d0,a1
+    lob     CloseLibrary
+    moveq   #1,d0
+.x  popm    d1/a0-a1/a6
+    rts
+
+gmeLibName   dc.b    "gme.library",0
+             even
+
 
  
 vgmSetTypeName:
@@ -52586,68 +52509,6 @@ vgmSetTypeName:
     rts
  EREM
 
-* In:
-*   a4 = module
-* Out:
-*   d0 = NULL, or a 4-code for supported subtype
-vgmGet4:
-    move.l  #"VGM ",d0
-    cmp.l   #"Vgm ",(a4)
-    beq     .ok
-
-    move.l  #"AY  ",d0
-    cmp.l   #"ZXAY",(a4)
-    beq     .ok
-
-    move.l  #"GBS ",d0
-    cmp.l   #("GBS"<<8)+1,(a4)
-    beq     .ok
-
-    move.l  #"GYM ",d0
-    cmp.l   #"GYMX",(a4)
-    beq     .ok
-
-    move.l  #"HES ",d0
-    cmp.l   #"HESM",(a4)
-    beq     .ok
-
-    move.l  #"KSS ",d0
-    cmp.l   #"KSCC",(a4)
-    beq     .ok
-    cmp.l   #"KSSX",(a4)
-    beq     .ok
-
-    move.l  #"NSF ",d0
-    cmp.l   #"NESM",(a4)
-    beq     .ok
-
-    move.l  #"NSFE",d0
-    cmp.l   #"NSFE",(a4)
-    beq     .ok
-
-    move.l  #"SAP ",d0
-    cmp.l   #("SAP"<<8)+$d,(a4)
-    beq     .ok
-
-    move.l  #"SPC ",d0
-    cmp.l   #"SNES",(a4)
-    beq     .ok
-    moveq    #0,d0
-.ok 
-    tst.l   d0
-    rts
-
-;;  case BLARGG_4CHAR('Z','X','A','Y'):  return "AY";
-;;  case BLARGG_4CHAR('G','B','S',0x01): return "GBS";
-;;  case BLARGG_4CHAR('G','Y','M','X'):  return "GYM";
-;;  case BLARGG_4CHAR('H','E','S','M'):  return "HES";
-;;  case BLARGG_4CHAR('K','S','C','C'):
-;;  case BLARGG_4CHAR('K','S','S','X'):  return "KSS";
-;;  case BLARGG_4CHAR('N','E','S','M'):  return "NSF";
-;;  case BLARGG_4CHAR('N','S','F','E'):  return "NSFE";
-;;  case BLARGG_4CHAR('S','A','P',0x0D): return "SAP";
-;;  case BLARGG_4CHAR('S','N','E','S'):  return "SPC";
-;;  case BLARGG_4CHAR('V','g','m',' '):  return "VGM";
 
 * Called from VB interrupt.
 * Will signal the streamer task using an interval.
@@ -52673,36 +52534,21 @@ vgmPollTrigger:
 .2  rts
 
 
-
-* Try to read the file where vgm2wav has written the length info
+* Try to read the file where mdx2wav has written the length info
 mdxPoll:
-    moveq   #1,d3
     DPRINT  "mdxPoll!"
-    bra     vgmPoll0
-vgmPoll:
-    DPRINT  "vgmPoll!"
-    moveq   #0,d3
-vgmPoll0:
     lea     vgmPollFile(pc),a0
     jsr     plainLoadFile
     tst.l   d0
-    beq     .no 
+    beq     .no
     move.l  d0,a1
     move.l  d0,a0
     moveq   #1,d1       * default song count
-    moveq   #0,d2       * default num of voices
     move.l  (a1)+,d0    * song length
-    tst.b   d3
-    bne     .mdx
-    move.l (a1)+,d1     * song/track count
-    move.l (a1)+,d2     * num of voices
-.mdx
-
-    move.w  d2,vgmVoices
  if DEBUG
-    DPRINT  "vgm length=%ld secs, track count=%ld, voices=%ld"
-    tst.l   d0
+    DPRINT  "mdx length=%ld secs, track count=%ld"
  endif
+    tst.l   d0
     * Store result if there is something
     bmi     .noTime
     divu    #60,d0
@@ -52721,12 +52567,13 @@ vgmPoll0:
     move    #-1,vgmPollCount
     * Free a0
     jsr     freemem
+
     bsr     vgmDeletePollFile
 
     * Update infobox too
 	tst.b	playing(a5)
 	beq.b	.no
-    bsr     vgmInfoText
+    bsr     mdxInfoText
     jsr     inforivit_play
 .no
     rts
@@ -52738,44 +52585,273 @@ vgmDeletePollFile:
     lore    Dos,DeleteFile
     rts
 
-id_vgm
+
+id_mdx
     tst.b   uusikick(a5)
     beq     .no
-
-    * Check for MDX
     push    a0
     move.l  modulefilename(a5),a0
     bsr     getFileExtension4
     cmp.l   #".mdx",d0
-    lea     vgmActuallyMdx(pc),a0
-    seq     (a0)
     pop     a0
-    beq     .yes
-
-;;;    * Check for VGZ
-;;;    push    a0
-;;;    move.l  modulefilename(a5),a0
-;;;.1  tst.b   (a0)+
-;;;    bne     .1
-;;;    subq    #1,a0
-;;;    moveq   #4-1,d1
-;;;.2  ror.l   #8,d0
-;;;    move.b  -(a0),d0
-;;;    dbf     d1,.2
-;;;    or.l    #$20202000,d0
-;;;    cmp.l   #"vgz.",d0
-;;;    bne     .noGz
-;;;    moveq   #0,d0
-;;;    move.w  (a4),d0
-;;;    cmp.w   #$1f8b,(a4)
-;;;.noGz
-;;;    pop     a0
-;;;    beq     .yes
-
-    bsr     vgmGet4
-    beq     .no
-.yes
+    bne     .no
     moveq   #0,d0   * yes
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
+******************************************************************************
+* GME
+* Game music formats (VGM, VGZ, GYM, AY, GBS, HES, KSS, NSF, NSFE, SPC) are
+* played by gme.library inside the sample player. The module is saved to
+* a temp file, which the sample player opens through the "gme:" file name
+* prefix. gme.library decides which files it plays (id_vgm).
+******************************************************************************
+
+p_vgm:
+  jmp      vgmInit(pc)
+  p_NOP     * CIA
+  p_NOP     * VB
+  jmp      vgmEnd(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  jmp      p_sample+p_song(pc)
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      id_vgm(pc)
+  p_NOP    * Author
+  dc       pt_vgm
+vgmFlags
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+vgmTitle        dc.b    "Game Music",0
+                ds.b    21
+* The two names are one string: "gme:T:hippo.vgm"
+vgmStreamName   dc.b    "gme:"
+vgmTempFile     dc.b    "T:hippo."
+vgmTempExt      dc.b    "vgm",0
+                even
+
+vgmInit
+    DPRINT  "GME init"
+    * The library identifies by magic. Raw GYM has none, so give the temp
+    * file the extension "gym" and let the library use its extension fallback.
+    lea     vgmTempExt(pc),a0
+    move.l  #"vgm"<<8,(a0)
+    move.l  modulefilename(a5),a0
+    bsr     getFileExtension4
+    cmp.l   #".gym",d0
+    bne     .extDone
+    move.l  moduleaddress(a5),a0
+    cmp.l   #"GYMX",(a0)
+    beq     .extDone
+    lea     vgmTempExt(pc),a0
+    move.l  #"gym"<<8,(a0)
+.extDone
+    lea     vgmTempFile(pc),a0
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    bsr     plainSaveFile
+    bmi     .outOfMem
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)
+    lea     vgmStreamName(pc),a0
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc)
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    push    d0
+    bsr     vgmDeleteTempFile
+    pop     d0
+    rts
+
+.ok
+    ; Subsongs
+    lea     vgmFlags(pc),a0
+    and     #~pf_song,(a0)
+    push    a5
+    move.l  sampleroutines(a5),a0
+    jsr     p_sample\.s_gmeGetSongs(a0)
+    pop     a5
+    tst     d0
+    beq     .noSongs
+    subq    #1,d0
+    move    d0,maxsongs(a5)
+    clr     minsong(a5)
+    move    d1,songnumber(a5)
+    lea     vgmFlags(pc),a0
+    or      #pf_song,(a0)
+    bsr     whatgadgets
+.noSongs
+    moveq   #0,d0
+    rts
+
+.outOfMem
+    moveq   #ier_nomem,d0
+    rts
+
+vgmEnd
+    DPRINT  "GME end"
+    jsr     p_sample+p_end(pc)
+    ; ... fall through ...
+
+vgmDeleteTempFile
+    pushpea vgmTempFile(pc),d1
+    bra     deleteTempFile
+
+* Asks gme.library whether it plays this file.
+* LVO GME_IsOurFile = -84, libraries/gme.h, sfd/gme_lib.sfd
+* In:
+*   a4 = probebuffer or module
+*   modulefilename(a5) = file name
+* Out:
+*   d0 = 0 if ours, -1 if not
+id_vgm
+    tst.b   uusikick(a5)
+    beq     .no
+    bsr     gmeLibUsable
+    tst.l   d0
+    beq     .no
+    pushm   d1-d2/a0-a2/a6
+    move.l  a4,a2
+    lea     gmeLibName(pc),a1
+    moveq   #1,d0
+    lore    Exec,OpenLibrary
+    tst.l   d0
+    beq     .gone
+    move.l  d0,a6
+    move.l  modulefilename(a5),a0
+    move.l  a2,a1
+    * The probe buffer is zero padded to its full size. A loaded
+    * module may be shorter than that: never pass more than its length.
+    move.l  #PROBE_BUFFER_LEN,d0
+    lea     probebuffer(a5),a1
+    cmp.l   a1,a2
+    move.l  a2,a1
+    beq.b   .lenOk
+    cmp.l   modulelength(a5),d0
+    bls.b   .lenOk
+    move.l  modulelength(a5),d0
+.lenOk
+    jsr     -84(a6)    * GME_IsOurFile
+    move.l  d0,d2
+    move.l  a6,a1
+    lore    Exec,CloseLibrary
+    moveq   #-1,d0
+    tst.l   d2
+    beq     .done
+    moveq   #0,d0
+    bra     .done
+.gone
+    moveq   #-1,d0
+.done
+    popm    d1-d2/a0-a2/a6
+    tst.l   d0
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
+
+******************************************************************************
+* SAP
+* Atari SAP is played by playsap.library inside the sample player.
+* The module is saved to a temp file, which the sample player opens
+* through the "sap:" file name prefix.
+******************************************************************************
+
+p_sap:
+  jmp      sapInit(pc)
+  p_NOP     * CIA
+  p_NOP     * VB
+  jmp      sapEnd(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  jmp      p_sample+p_song(pc)
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      id_sap(pc)
+  p_NOP    * Author
+  dc       pt_sap
+sapFlags
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+sapTitle        dc.b    "Atari SAP",0
+                ds.b    22
+* The two names are one string: "sap:T:hippo.sap"
+sapStreamName   dc.b    "sap:"
+sapTempFile     dc.b    "T:hippo.sap",0
+                even
+
+sapInit
+    DPRINT  "SAP init"
+    lea     sapTempFile(pc),a0
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    bsr     plainSaveFile
+    bmi     .outOfMem
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)
+    lea     sapStreamName(pc),a0
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc)
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    push    d0
+    bsr     sapDeleteTempFile
+    pop     d0
+    rts
+
+.ok
+    ; SAP subsongs
+    lea     sapFlags(pc),a0
+    and     #~pf_song,(a0)
+    push    a5
+    move.l  sampleroutines(a5),a0
+    jsr     p_sample\.s_sapGetSongs(a0)
+    pop     a5
+    tst     d0
+    beq     .noSongs
+    subq    #1,d0
+    move    d0,maxsongs(a5)
+    clr     minsong(a5)
+    move    d1,songnumber(a5)
+    lea     sapFlags(pc),a0
+    or      #pf_song,(a0)
+    bsr     whatgadgets
+.noSongs
+    moveq   #0,d0
+    rts
+
+.outOfMem
+    moveq   #ier_nomem,d0
+    rts
+
+sapEnd
+    DPRINT  "SAP end"
+    jsr     p_sample+p_end(pc)
+    ; ... fall through ...
+
+sapDeleteTempFile
+    pushpea sapTempFile(pc),d1
+    bra     deleteTempFile
+
+id_sap
+    cmp.l   #$5341500d,(a4)     * "SAP\r"
+    bne     .no
+    bsr     sapLibUsable
+    tst.l   d0
+    beq     .no
+    moveq   #0,d0
     rts
 .no
     moveq   #-1,d0
