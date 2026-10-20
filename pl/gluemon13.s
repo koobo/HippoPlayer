@@ -4,6 +4,9 @@
 		include "exec/exec_lib.i"
 		include	"exec/memory.i"
 		include "mucro.i"
+		include	"misc/eagleplayer.i"
+		incdir	"include/"
+		include	"patternInfo.i"
 test=0
 
 
@@ -199,9 +202,12 @@ init
 	bsr.w	get_patts
 	move.l	maxPattAddr(pc),a0
 	move	d0,(a0)
+	bsr.w	PatternInit
+	lea	PatternInfo(pc),a0	* returned to the caller
 	moveq	#0,d0
 	rts
 .err
+	sub.l	a0,a0
 	moveq	#-1,d0
 	rts
 play
@@ -210,7 +216,7 @@ play
 	move.l	curPattAddr(pc),a0
 	move.l	mus_stuff_adr(pc),a1
 	move	mus_modsong(a1),(a0)
-	rts
+	bra.w	PatternUpdate
 
 end
 	move.l chipData(pc),a1
@@ -328,6 +334,87 @@ SetVol
 		;move	dtg_SndLBal(a5),mus_lbal(a4)
 		;move	dtg_SndRBal(a5),mus_rbal(a4)
 		rts
+
+*-----------------------------------------------------------------------*
+* Pattern display
+* Pattern = mus_pl bytes, one row per 4 bytes, one byte per voice
+* (glue_205c reads (a0,d0)..3(a0,d0) with d0 = mus_modpat, step 4).
+* So voice k is the stripe at pattern+k, PI_Modulo is 4.
+* Row byte: $ff none, $fe note off, else byte&$fe = word offset into
+* mus_periods (glue_22ea). Voice 4 with mus_drumflag clear: $c8-$cf drums.
+
+PatternInfo
+	ds.b	PI_Stripes
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(pc),a0
+	move.w	#4,PI_Voices(a0)
+	moveq	#4,d0
+	move.l	d0,PI_Modulo(a0)
+	pea	ConvertNote(pc)
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#64,PI_Pattlength(a0)
+	clr.w	PI_Pattpos(a0)
+	move.w	#-1,PI_Speed(a0)	* notes, not periods
+	rts
+
+* Run after each tick. mus_modpat is the offset of the row just played
+* (glue_music adds 4 before reading it), mus_currpat the pattern.
+PatternUpdate
+	lea	PatternInfo(pc),a0
+	move.l	mus_stuff_adr(pc),a1
+	move	mus_pl(a1),d0
+	lsr	#2,d0
+	beq.b	.done			* not initialised
+	move	d0,PI_Pattlength(a0)
+	move	mus_modpat(a1),d1
+	lsr	#2,d1
+	cmp	d0,d1
+	bhs.b	.done
+	move	d1,PI_Pattpos(a0)
+	move.l	mus_currpat(a1),d0
+	lea	PI_Stripes(a0),a0
+	move.l	d0,(a0)+
+	addq.l	#1,d0
+	move.l	d0,(a0)+
+	addq.l	#1,d0
+	move.l	d0,(a0)+
+	addq.l	#1,d0
+	move.l	d0,(a0)+
+.done	rts
+
+* a0 = row byte, a1 = PatternInfo. Uses d0-d3, a1 only.
+ConvertNote
+	moveq	#0,d1			* sample number
+	moveq	#0,d2			* command
+	moveq	#0,d3			* argument
+	moveq	#0,d0
+	move.b	(a0),d0
+	cmp.w	#3,PI_CurrentChannelNumber(a1)
+	bne.b	.melodic
+	move.l	mus_stuff_adr(pc),a1
+	tst.b	mus_drumflag(a1)
+	bne.b	.melodic
+	* drum voice: $c8-$cf selects a drum
+	sub.b	#$c7,d0
+	bls.b	.none
+	cmp.b	#8,d0
+	bhi.b	.none
+	move.b	d0,d1
+	moveq	#0,d0
+	rts
+.melodic
+	cmp.b	#96,d0			* mus_periods has 49 words
+	bhi.b	.none
+	lsr	#1,d0
+	addq	#1,d0			* note index, 1 = C-1
+	rts
+.none	moveq	#0,d0
+	rts
 
 get_patts	movem.l	d1-a6,-(sp)
 		move.l	mus_stuff_adr(pc),a4

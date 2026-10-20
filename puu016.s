@@ -48029,7 +48029,7 @@ p_gluemon
 	beq.b	.ok3
 	rts
 .ok3
-	pushm	d1-a6
+	pushm	d1-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	songover(a5),a2
@@ -48038,7 +48038,8 @@ p_gluemon
 	move.l	gluemonroutines(a5),a6
     pushpea scopeData(a5),d0
 	jsr	.INIT(a6)
-	popm	d1-a6
+	popm	d1-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 
