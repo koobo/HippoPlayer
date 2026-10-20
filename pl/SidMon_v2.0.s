@@ -1,6 +1,9 @@
 ;APS00000023000000230000002300000023000000230000002300000023000000230000002300000023
 	incdir 	include:
 	include	mucro.i
+	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
 
 
 * Scope data for one channel
@@ -96,7 +99,10 @@ init
 	move.l	a2,dmaWaitRoutine
     move.l  a3,scope
     move.l  a4,songover
-	bra.b	initmuzak
+	bsr	initmuzak
+	bsr	PatternInit
+	lea	PatternInfo(pc),a0
+	rts
 
 play
 	move.l	mainVolumeAddress(pc),a0
@@ -175,6 +181,8 @@ findloop:
 plus:	bsr	getnote2
 	dbf	d3,plus
 	clr.w	68(a2)
+	* a1 is now past the last pattern, remember it as the decode bound
+	move.l	a1,patternsend
 
 	move.l	a1,d0
 	addq.l	#$1,d0
@@ -280,6 +288,7 @@ repeatloop:
     lea ns_size(a3),a3
 	dbf	d0,repeatloop
 
+	bsr	PatternRow
 	addq.b	#$1,3(a0)
 	move.b	5(a0),d0
 	cmp.b	3(a0),d0
@@ -1141,3 +1150,199 @@ patlength:	dc.b	0
 currentrast2:	dc.b	0
 
 stop
+
+* ***************************** Pattern display *****************************
+* Voice patterns are byte coded event lists, not row grids (see getnote2):
+*   0, effect, param          effect only
+*   $01-$6f note [,instrument] [,effect, param] [,wait]
+*   $70-$ff as first byte: effect, param
+*   negative byte b           this row and the next (not b) rows are empty
+* after a note, a byte < $70 is the instrument, a byte >= $70 the effect.
+* The pattern length is 64 rows, or whatever the "set pattern length" effect
+* put in patlength. Each voice may be on a different pattern, so the stripes
+* are decoded into 4 x 64 rows x 4 bytes (note, instrument, effect, param)
+* whenever the pattern of a voice changes. The cursor follows the row counter
+* currentnot, which is the same for all voices.
+* The note transpose (71(voice)) and instrument transpose (57(voice)) are
+* applied in ConvertNote, they change per song position.
+* Notes are indices (PI_Speed negative), 1 = C-1.
+SM2_ROWS = 64
+
+	even
+PatternInfo
+	ds.b	PI_Stripes
+Stripe1	dc.l	0
+Stripe2	dc.l	0
+Stripe3	dc.l	0
+Stripe4	dc.l	0
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	moveq	#4,D0
+	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
+	pea	ConvertNote(pc)
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#SM2_ROWS,PI_Pattlength(A0)
+	clr.w	PI_Pattpos(A0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	lea	PatCache(pc),a1
+	clr.l	(a1)+
+	clr.l	(a1)+
+	clr.l	(a1)+
+	clr.l	(a1)+
+	lea	PatternBuf(pc),a1
+	lea	PI_Stripes(a0),a2
+	moveq	#4-1,d0
+.stripe	move.l	a1,(a2)+
+	lea	SM2_ROWS*4(a1),a1
+	dbf	d0,.stripe
+	rts
+
+* Called from playmuzak right after the new row was read, before the row
+* counter (currentnot) and the song position advance.
+PatternRow
+	movem.l	d0-d7/a0-a6,-(sp)
+	lea	length(pc),a0
+	lea	PatternInfo(pc),a1
+
+	moveq	#0,d0
+	move.b	5(a0),d0		; patlength
+	beq.b	.l64
+	cmp.b	#SM2_ROWS,d0
+	bls.b	.lok
+.l64	moveq	#SM2_ROWS,d0
+.lok	move.w	d0,PI_Pattlength(a1)
+	moveq	#0,d1
+	move.b	3(a0),d1		; row just read
+	cmp.w	d0,d1
+	blo.b	.rok
+	move.w	d0,d1
+	subq	#1,d1
+.rok	move.w	d1,PI_Pattpos(a1)
+
+	moveq	#0,d6
+	move.b	2(a0),d6		; song position
+	lea	voice1(pc),a2
+	lea	PatCache(pc),a3
+	lea	PI_NoteTranspose1(a1),a5
+	lea	PI_SampleTranspose1(a1),a6
+	moveq	#0,d7
+.v	* Same lookup as findnote
+	moveq	#0,d2
+	move.l	positions(pc),a4
+	add.l	(a2),a4
+	move.b	(a4,d6.w),d2
+	add.w	d2,d2
+	move.l	patternpointer(pc),a4
+	move.w	(a4,d2.w),d2
+	add.l	patterns(pc),d2
+	move.b	71(a2),(a5)+
+	move.b	57(a2),(a6)+
+	cmp.l	(a3),d2
+	beq.b	.same
+	move.l	d2,(a3)
+	movem.l	a0-a3,-(sp)
+	move.l	d2,a0
+	lea	PatternBuf(pc),a1
+	move	d7,d3
+	lsl	#8,d3			; SM2_ROWS*4 bytes per voice
+	add	d3,a1
+	move.l	patternsend(pc),a2
+	bsr.b	PatternDecode
+	movem.l	(sp)+,a0-a3
+.same	addq	#4,a3
+	lea	voice2-voice1(a2),a2
+	addq	#1,d7
+	cmp	#4,d7
+	bne.b	.v
+	movem.l	(sp)+,d0-d7/a0-a6
+	rts
+
+SM2FETCH macro
+	cmp.l	a2,a0
+	bhs.w	.done
+	move.b	(a0)+,d0
+	endm
+
+* in:  a0 = pattern data, a1 = 64 rows buffer, a2 = end of pattern data
+PatternDecode
+	movem.l	d0/d4/d5,-(sp)
+	moveq	#SM2_ROWS-1,d4
+	move.l	a1,-(sp)
+.clr	clr.l	(a1)+
+	dbf	d4,.clr
+	move.l	(sp)+,a1
+	moveq	#SM2_ROWS-1,d4
+	moveq	#0,d5			; rows still to skip
+.row	tst	d5
+	beq.b	.read
+	subq	#1,d5
+	bra.b	.next
+.read	moveq	#0,d0
+	SM2FETCH
+	beq.b	.effOnly
+	bpl.b	.pos
+.neg	not.b	d0
+	move	d0,d5
+	bra.b	.next
+.effOnly
+	SM2FETCH
+	move.b	d0,2(a1)
+	SM2FETCH
+	move.b	d0,3(a1)
+	bra.b	.next
+.pos	cmp.b	#$70,d0
+	bhs.b	.eff
+	move.b	d0,(a1)
+	SM2FETCH
+	bmi.b	.neg
+	cmp.b	#$70,d0
+	bhs.b	.eff
+	move.b	d0,1(a1)
+	SM2FETCH
+	bmi.b	.neg
+.eff	move.b	d0,2(a1)
+	SM2FETCH
+	move.b	d0,3(a1)
+.next	addq	#4,a1
+	dbf	d4,.row
+.done	movem.l	(sp)+,d0/d4/d5
+	rts
+
+* Called by the PI engine to get values for a particular row
+* Row: note index (1 = C-1, 0 = none), instrument, effect, argument
+ConvertNote
+	moveq	#0,D0		; Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command
+	moveq	#0,D3		; Command argument
+
+	move.b	(a0),d0
+	beq.b	.noNote
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+.noNote
+	move.b	1(a0),d1
+	beq.b	.noIns
+	* playvoice: (instrument - 1 + instrument transpose), 0 based
+	lea	PI_SampleTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	subq.b	#1,d1
+	add.b	(a3),d1
+	addq.b	#1,d1
+.noIns
+	* effect byte $70+n is effect n, the rest is not a tracker effect
+	move.b	2(a0),d2
+	cmp.b	#$70,d2
+	blo.b	.noEff
+	and.b	#$f,d2
+	bra.b	.eff
+.noEff	moveq	#0,d2
+.eff	move.b	3(a0),d3
+	rts
+
+patternsend	dc.l	0
+PatCache	ds.l	4
+PatternBuf	ds.b	SM2_ROWS*4*4
