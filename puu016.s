@@ -33415,7 +33415,6 @@ loadfile:
 	move.b	#SAMPLE_FORMAT_OGG,sampleformat(a5)
 	cmp.l	#"OggS",(a0)
 	beq	.sampl
-.nosaaa
 ** MPEG
 	move.b	#SAMPLE_FORMAT_MP3,sampleformat(a5)
     jsr     streamIsAlive
@@ -33820,6 +33819,9 @@ tutki_moduuli2:
 	lsr.l	#8,d0
 	cmp.l	#"TDZ",d0		* take
 	beq 	.f
+
+    jsr     id_sap
+    beq     .f
 
     jsr     id_vgm
     beq     .f
@@ -38003,6 +38005,7 @@ groupFormats:
     dr.l    p_midistream
     dr.l    p_ogg
     dr.l    p_vgm
+    dr.l    p_sap
     dr.l    p_davelowe
     dr.l    p_futureplayer
     dr.l    p_delicustom
@@ -45973,7 +45976,7 @@ p_sample:
 	jmp	.dostop(pc)		* Stop
 	jmp	.docont(pc)		* Cont
 	jmp	.vol(pc)		* volume
-	p_NOP	* Song
+	jmp	sampleSetSong(pc)	* Song
 	p_NOP	* Eteen
 	p_NOP	* Taakse
 	jmp	.ahiup(pc)		* AHI Update
@@ -45999,6 +46002,8 @@ p_sample:
 .s_getMp3Text      rs.l     1
 .s_getMp3Duration  rs.l     1    
 .s_mp3Seek         rs.l     1
+.s_sapGetSongs     rs.l     1
+.s_sapSetSong      rs.l     1
 
 
 .init:
@@ -46013,6 +46018,8 @@ p_sample:
     ; By default end can be detected
     lea     .flags(pc),a0
     or      #pf_end,(a0)
+    ; Subsongs only for SAP, set after init
+    and     #~pf_song,(a0)
 
 ** v‰litet‰‰n infoa
 
@@ -46391,6 +46398,16 @@ getSampleDataAdd:
     bne     .1
     add.l   d0,d0
 .1  rts
+
+* Song change from the host, SAP only
+sampleSetSong:
+    push    a5
+    moveq   #0,d0
+    move    songnumber(a5),d0
+    move.l  sampleroutines(a5),a0
+    jsr     p_sample\.s_sapSetSong(a0)
+    pop     a5
+    rts
 
 * In: 
 *  d0 = position in secs
@@ -52405,8 +52422,14 @@ vgmEnd
 
 vgmDeleteTempFile
     DPRINT  "Delete VGM temp file"
-    push    d0
     pushpea vgmTempFile(pc),d1
+    ; ... fall through ...
+
+* Delete a file
+* In:
+*   d1 = file name
+deleteTempFile
+    push    d0
     lore    Dos,DeleteFile
     pop     d0
     rts
@@ -52538,6 +52561,25 @@ pipe_mdx2wav:
 .mdxCliName  dc.b    "mdx2wav",0
 .mdxCmdLq    dc.b    '%s "%s" -r 22050 -p t:vgmlen -o PIPE:wavHippoStream3/65536/2',10
              dc.b    0
+             even
+
+* Does playsap.library v1 open
+* Out:
+*   d0 = true or false
+sapLibUsable:
+    pushm   d1/a0-a1/a6
+    lea     sapLibName(pc),a1
+    moveq   #1,d0
+    lore    Exec,OpenLibrary
+    tst.l   d0
+    beq     .x
+    move.l  d0,a1
+    lob     CloseLibrary
+    moveq   #1,d0
+.x  popm    d1/a0-a1/a6
+    rts
+
+sapLibName   dc.b    "playsap.library",0
              even
 
  
@@ -52774,8 +52816,110 @@ id_vgm
 
     bsr     vgmGet4
     beq     .no
+    * SAP is played by the sample player, not by vgm2wav
+    cmp.l   #"SAP ",d0
+    beq     .no
 .yes
     moveq   #0,d0   * yes
+    rts
+.no
+    moveq   #-1,d0
+    rts
+
+******************************************************************************
+* SAP
+* Atari SAP is played by playsap.library inside the sample player.
+* The module is saved to a temp file, which the sample player opens
+* through the "sap:" file name prefix.
+******************************************************************************
+
+p_sap:
+  jmp      sapInit(pc)
+  p_NOP     * CIA
+  p_NOP     * VB
+  jmp      sapEnd(pc)
+  jmp      p_sample+p_stop(pc)
+  jmp      p_sample+p_cont(pc)
+  jmp      p_sample+p_volume(pc)
+  jmp      p_sample+p_song(pc)
+  p_NOP    * Forward
+  p_NOP    * Backward
+  jmp      p_sample+p_ahiupdate(pc)
+  jmp      id_sap(pc)
+  p_NOP    * Author
+  dc       pt_sap
+sapFlags
+  dc       pf_volume!pf_scope!pf_stop!pf_cont!pf_end!pf_ahi!pf_quadscopePoke
+sapTitle        dc.b    "Atari SAP",0
+                ds.b    22
+* The two names are one string: "sap:T:hippo.sap"
+sapStreamName   dc.b    "sap:"
+sapTempFile     dc.b    "T:hippo.sap",0
+                even
+
+sapInit
+    DPRINT  "SAP init"
+    lea     sapTempFile(pc),a0
+    move.l  moduleaddress(a5),a1
+    move.l  modulelength(a5),d0
+    bsr     plainSaveFile
+    bmi     .outOfMem
+
+    * Switch type to sample so correct replayer gets loaded
+    move    #pt_sample,playertype(a5)
+    lea     sapStreamName(pc),a0
+    move.l  a0,modulefilename(a5)
+
+    jsr     p_sample+p_init(pc)
+    DPRINT  "Sample init=%lx"
+    tst.l   d0
+    beq     .ok
+    push    d0
+    bsr     sapDeleteTempFile
+    pop     d0
+    rts
+
+.ok
+    ; SAP subsongs
+    lea     sapFlags(pc),a0
+    and     #~pf_song,(a0)
+    push    a5
+    move.l  sampleroutines(a5),a0
+    jsr     p_sample\.s_sapGetSongs(a0)
+    pop     a5
+    tst     d0
+    beq     .noSongs
+    subq    #1,d0
+    move    d0,maxsongs(a5)
+    clr     minsong(a5)
+    move    d1,songnumber(a5)
+    lea     sapFlags(pc),a0
+    or      #pf_song,(a0)
+    bsr     whatgadgets
+.noSongs
+    moveq   #0,d0
+    rts
+
+.outOfMem
+    moveq   #ier_nomem,d0
+    rts
+
+sapEnd
+    DPRINT  "SAP end"
+    jsr     p_sample+p_end(pc)
+    ; ... fall through ...
+
+sapDeleteTempFile
+    pushpea sapTempFile(pc),d1
+    bra     deleteTempFile
+
+id_sap
+    cmp.l   #$5341500d,(a4)     * "SAP\r"
+    bne     .no
+    bsr     sapLibUsable
+    tst.l   d0
+    beq     .no
+    moveq   #0,d0
     rts
 .no
     moveq   #-1,d0
