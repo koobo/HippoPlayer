@@ -47869,7 +47869,7 @@ p_deltamusic1
 	beq.b	.ok3
 	rts
 .ok3
-	pushm	d1-a6
+	pushm	d1-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	lea	mainvolume(a5),a1
 	lea	dmawait(pc),a2
@@ -47877,7 +47877,8 @@ p_deltamusic1
     lea     scopeData(a5),a4
 	move.l	deltamusic1routines(a5),a6
 	jsr	.INIT(a6)
-	popm	d1-a6
+	popm	d1-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
 	moveq	#0,d0
 	rts	
 

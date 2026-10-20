@@ -4,6 +4,9 @@ test	=	0
 
 	incdir	include:
 	include	mucro.i
+	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
 
 * Scope data for one channel
               rsreset
@@ -101,12 +104,80 @@ init
 	move.l	a2,dmaWaitAddress
     move.l  a3,songOverAddress
     move.l  a4,scope
-	bra.w	_init
+	bsr	_init
+	bsr	PatternInit
+	lea	PatternInfo(pc),a0
+	rts
 
 play
 	move.l	masterVolumeAddress(pc),a0
 	move	(a0),masterVolume
-	bra	_play
+	bsr	_play
+	bra	PatternUpdate
+
+PatternInfo
+	ds.b	PI_Stripes
+Stripe1	dc.l	1
+Stripe2	dc.l	1
+Stripe3	dc.l	1
+Stripe4	dc.l	1
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	moveq	#4,D0
+	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
+	pea	ConvertNote(pc)
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#16,PI_Pattlength(A0)	; Length of each stripe in rows
+	clr.w	PI_Pattpos(A0)		; Current Position in Pattern (from 0)
+	move	#-1,PI_Speed(a0)	; Magic! Indicates notes, not periods
+	rts
+
+* Called after each play tick.
+* Voice data: $18 = current pattern, $1C = offset of the next row, $32 = note transpose.
+* $1C has already advanced past the row just played, hence the -4.
+PatternUpdate
+	lea	PatternInfo(pc),a0
+	move.l	lbL0008F0+$1C(pc),d0
+	subq	#4,d0
+	and	#$3f,d0
+	lsr	#2,d0
+	move	d0,PI_Pattpos(a0)
+
+	lea	PI_NoteTranspose1(a0),a1
+	lea	PI_Stripes(a0),a2
+	move.l	lbL0008F0+$18(pc),(a2)+
+	move.b	lbL0008F0+$32(pc),(a1)+
+	move.l	lbL00092A+$18(pc),(a2)+
+	move.b	lbL00092A+$32(pc),(a1)+
+	move.l	lbL000964+$18(pc),(a2)+
+	move.b	lbL000964+$32(pc),(a1)+
+	move.l	lbL00099E+$18(pc),(a2)+
+	move.b	lbL00099E+$32(pc),(a1)+
+	rts
+
+* Called by the PI engine to get values for a particular row
+* Row: sample, note index (1 = C-1, 0 = none), command, argument
+ConvertNote
+	moveq	#0,D0		; Period, Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command
+	moveq	#0,D3		; Command argument
+
+	move.b	1(a0),d0
+	beq.b	.noNote
+	* Replayer adds the voice note transpose to the note byte
+	lea	PI_NoteTranspose1(a1),a3
+	add	PI_CurrentChannelNumber(a1),a3
+	add.b	(a3),d0
+	and	#$ff,d0
+.noNote
+	move.b	(a0),d1
+	moveq	#$1f,d2
+	and.b	2(a0),d2
+	move.b	3(a0),d3
+	rts
 	
 
 masterVolumeAddress	dc.l	0
