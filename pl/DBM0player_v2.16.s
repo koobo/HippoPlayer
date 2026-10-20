@@ -1,5 +1,9 @@
 ;APS00000000000000000000000000000000000000000000000000000000000000000000000000000000
 	incdir	include:
+	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
+	incdir	include:
 	include	exec/exec_lib.i
 	include libraries/gadtools_lib.i
 	include	devices/ahi_lib.i
@@ -46,7 +50,9 @@ init
 ;	lea	mainvolume(a5),a2
 ;	lea	songover(a5),a3
 
+ ifnd TEST
 test = 0
+ endif
 
  ifne test
 	lea	MODULE,a0
@@ -94,11 +100,12 @@ ini
 	move	(a2),MasterVol
 
 	bsr	s
-	
+	bsr	PatternInit		; keeps d0
 
 	lea	SongPos(pc),a0
 	lea	OrdNum(pc),a1
 	lea	PattPos(pc),a2
+	lea	PatternInfo(pc),a4
 
 	tst.l	d0
 	rts
@@ -1375,6 +1382,107 @@ DEPACKPATT:
 	bge.s	.depackloop
 	rts
 
+; ---------------------------------------------------------------------
+; Pattern display (HippoPlayer PatternInfo, notes are indices)
+; Patterns are already depacked by DEPACKPATT into PattAdresses[pattern]:
+; row-major, TrackNumber cells per row, 6 bytes per cell:
+; note, instrument, effect 1, argument 1, effect 2, argument 2.
+; Note byte = octave<<4 + semitone (0-11), octave 1 is the lowest, 0 = none.
+; So channel k is the stripe at pattern + k*6, modulo = TrackNumber*6, and
+; the pattern length (PattLens) may differ for every pattern.
+; The scope draws at most 18 stripes, extra channels are not shown.
+; ---------------------------------------------------------------------
+PI_MAXVOICES = 18
+
+PatternInfo
+	ds.b	PI_Stripes
+PIStripes
+	ds.l	PI_MAXVOICES
+
+PatternInit
+	movem.l	d0-d3/a0,-(sp)
+	lea	PatternInfo(pc),a0
+	moveq	#0,d0
+	move.w	TrackNumber,d0
+	moveq	#0,d1
+	move.w	d0,d1
+	mulu	#6,d1
+	move.l	d1,PI_Modulo(a0)
+	cmp.w	#PI_MAXVOICES,d0
+	bls.b	.v
+	moveq	#PI_MAXVOICES,d0
+.v	move.w	d0,PI_Voices(a0)
+	pea	PatternConvert(pc)
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#-1,PI_Speed(a0)	; notes, not periods
+	clr.w	PI_Pattpos(a0)
+	clr.w	PI_Songpos(a0)
+	clr.w	PI_Pattlength(a0)
+	bsr.b	PatternUpdate
+	movem.l	(sp)+,d0-d3/a0
+	rts
+
+* Called when db_music has fetched a row: SongPos/PattPos still
+* point at the row that is being played (PattPos is advanced later).
+PatternUpdate
+	movem.l	d0-d3/a0-a2,-(sp)
+	lea	PatternInfo(pc),a0
+	moveq	#0,d0
+	move.w	SongPos(pc),d0
+	cmp.w	OrdNum,d0
+	bhi.b	.done			; past the end, keep the old values
+	move.w	d0,PI_Songpos(a0)
+	lea	SongOrders,a1
+	moveq	#0,d1
+	move.w	(a1,d0.w*2),d1
+	lea	PattLens,a1
+	move.w	(a1,d1.w*2),d2
+	move.w	d2,PI_Pattlength(a0)
+	move.w	PattPos(pc),d0
+	cmp.w	d2,d0
+	blo.b	.rowOk
+	moveq	#0,d0
+.rowOk	move.w	d0,PI_Pattpos(a0)
+	lea	PattAdresses,a1
+	move.l	(a1,d1.w*4),d0
+	beq.b	.done
+	lea	PIStripes(pc),a2
+	move.w	PI_Voices(a0),d2
+	subq	#1,d2
+	bmi.b	.done
+.stripe	move.l	d0,(a2)+
+	addq.l	#6,d0
+	dbf	d2,.stripe
+.done	movem.l	(sp)+,d0-d3/a0-a2
+	rts
+
+* Called by the PI engine to get values for a particular cell
+* May only change d0-d3 and a1 (d4 is the font modulo in the scroller).
+PatternConvert
+	moveq	#0,d0		; Note index (1 = C-1, 0 = none)
+	moveq	#0,d1		; Sample number
+	moveq	#0,d2		; Command
+	moveq	#0,d3		; Command argument
+	move.b	(a0),d0
+	beq.b	.nonote
+	move.b	d0,d1
+	lsr.b	#4,d1
+	beq.b	.bad
+	and.b	#$0f,d0
+	cmp.b	#12,d0
+	bhs.b	.bad
+	mulu	#12,d1
+	add.w	d1,d0
+	sub.w	#11,d0
+	bra.b	.note
+.bad	moveq	#0,d0
+.note
+.nonote	moveq	#0,d1
+	move.b	1(a0),d1
+	move.b	2(a0),d2
+	move.b	3(a0),d3
+	rts
+
 ReadMemAdr:	dc.l	0
 ReadMemEnd:	dc.l	0
 FileLen:	dc.l	0
@@ -2428,6 +2536,7 @@ NoRepeatSong:
 CopyDataLoop
 	move.l	(a1)+,(a6)+
 	dbf	d7,CopyDataLoop
+	bsr	PatternUpdate
 
 DepackDone
 

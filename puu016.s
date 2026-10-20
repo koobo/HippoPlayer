@@ -31017,6 +31017,8 @@ noteScroller2:
 	move.l  moduleaddress(a5),a3
     cmp.w   #pt_xmaplay,playertype(a5)  * xmaplay uses separately alloced patterns
     beq     .sane
+    cmp.w   #pt_digiboosterpro,playertype(a5)  * so does DigiBooster Pro
+    beq     .sane
    	cmp.l   a3,a0
 	bls.b	.xy
     	add.l   modulelength(a5),a3
@@ -44276,7 +44278,7 @@ p_digiboosterpro
 	jmp .id_digiboosterpro(pc)
 	jmp	db_author(pc)
 	dc.w pt_digiboosterpro
-	dc	pf_volume!pf_stop!pf_cont!pf_ahi!pf_poslen!pf_kelaus!pf_end
+	dc	pf_volume!pf_stop!pf_cont!pf_ahi!pf_poslen!pf_kelaus!pf_end!pf_scope
 	dc.b	"DIGI Booster Pro",0
  even
 
@@ -44329,9 +44331,11 @@ p_digiboosterpro
 	pushm	d1-a6
 	jsr	$20+0(a1)
 
-	movem.l	a0/a1/a2,.songp
+	movem.l	a0/a1/a2/a4,.songp
 
 	popm	d1-a6
+
+	move.l	.pinfo(pc),deliPatternInfo(a5)
 
 	DPRINT	"DIGIBooster pro init: %ld"
 	
@@ -44385,6 +44389,7 @@ p_digiboosterpro
 .songp	dc.l	0
 .ordn	dc.l	0
 .pattpos dc.l	0
+.pinfo	dc.l	0
 
 
 .id_digiboosterpro
