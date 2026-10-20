@@ -15,6 +15,11 @@
 
 testi=0
 
+	incdir	include:
+	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
+
  ifne testi
 	lea	module,a0
 	jsr	Mt_init
@@ -52,8 +57,8 @@ module
  endc
 
 start
-	jmp	Mt_init(pc)
-	jmp Mt_Music(pc)
+	jmp PumaInit(pc)
+	jmp PumaPlay(pc)
 	jmp Mt_end(pc)
 
 ;;Begin:	Bsr.b	Save_All	
@@ -729,6 +734,160 @@ lbC006520:
 
 Mt_end:	Move.w	#$f,$dff096
 	Rts
+
+* ***************************** Pattern display *****************************
+* Song position entries are 14 bytes at module+$50: per voice pattern number,
+* instrument transpose, note transpose (voices 1-4), then speed and one more byte.
+* MusicData7 holds the address of each pattern: a list of 4-byte events
+* (note, effect<<5 + instrument, argument, duration in ticks). A song position
+* always lasts 32 ticks ($131(MusicData) counts them), so the stripes are
+* 4 x 32 rows decoded from the event lists, the duration-1 rows after an event blank.
+* Decoded row: note index (note + note transpose, 0 = none), instrument,
+* effect (byte 1 >> 5), argument. Notes are indices (PI_Speed negative).
+PUMA_ROWS = 32
+
+PumaInit
+	bsr	Mt_init
+	bsr	PatternInit
+	lea	PatternInfo(pc),a0
+	rts
+
+PumaPlay
+	bsr	Mt_Music
+	bra	PatternUpdate
+
+PatternInfo
+	ds.b	PI_Stripes
+Stripe1	dc.l	0
+Stripe2	dc.l	0
+Stripe3	dc.l	0
+Stripe4	dc.l	0
+
+PatternInit
+	lea	PatternInfo(PC),A0
+	move.w	#4,PI_Voices(A0)	; Number of stripes (MUST be at least 4)
+	moveq	#4,D0
+	move.l	D0,PI_Modulo(A0)	; Number of bytes to next row
+	pea	ConvertNote(pc)
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#PUMA_ROWS,PI_Pattlength(A0)
+	clr.w	PI_Pattpos(A0)
+	move	#-37,PI_Speed(a0)	; Magic! Notes, not periods; index 37 = C-1
+	lea	PumaDecoded(pc),a1
+	move.w	#-1,(a1)
+	lea	PumaRows(pc),a1
+	lea	PI_Stripes(a0),a2
+	moveq	#4-1,d0
+.stripe	move.l	a1,(a2)+
+	lea	PUMA_ROWS*4(a1),a1
+	dbf	d0,.stripe
+	rts
+
+* Called after each Mt_Music tick.
+PatternUpdate
+	lea	MusicData(pc),a2
+	lea	PatternInfo(pc),a0
+	* row just played: the tick counter is 1 based
+	moveq	#0,d0
+	move.b	$131(a2),d0
+	subq	#1,d0
+	bpl.b	.pos
+	moveq	#0,d0
+.pos	cmp	#PUMA_ROWS-1,d0
+	bls.b	.posOk
+	moveq	#PUMA_ROWS-1,d0
+.posOk	move	d0,PI_Pattpos(a0)
+
+	* song position $FF is the state before the first tick
+	moveq	#0,d0
+	move.b	$132(a2),d0
+	cmp.b	#$ff,d0
+	beq.b	.done
+	cmp	PumaDecoded(pc),d0
+	beq.b	.done
+	lea	PumaDecoded(pc),a1
+	move	d0,(a1)
+	bsr.b	PumaDecode
+.done	rts
+
+* d0 = song position. Decode the four voices of that position.
+PumaDecode
+	movem.l	d2-d7/a2-a4,-(sp)
+	* clear the stripes
+	lea	PumaRows(pc),a0
+	moveq	#PUMA_ROWS-1,d1
+.clr	clr.l	(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	dbf	d1,.clr
+
+	move.l	Mt_Data(pc),a1
+	move	d0,d1
+	mulu	#14,d1
+	lea	$50(a1,d1.l),a1		; song position entry
+	lea	MusicData7(pc),a4
+	lea	PumaRows(pc),a3
+	moveq	#4-1,d7
+.voice	moveq	#0,d1
+	move.b	(a1)+,d1		; pattern number
+	move.b	(a1)+,d2		; instrument transpose
+	move.b	(a1)+,d3		; note transpose
+	cmp	#80,d1			; MusicData7 holds 80 pointers
+	bhs.b	.next
+	add	d1,d1
+	add	d1,d1
+	move.l	(a4,d1.w),a0		; first event
+	moveq	#0,d4			; row
+.event	cmp	#PUMA_ROWS,d4
+	bhs.b	.next
+	move.l	d4,d5
+	lsl	#2,d5
+	lea	(a3,d5.w),a2		; decoded row
+	move.b	(a0),d0			; note
+	beq.b	.noNote
+	add.b	d3,d0
+	move.b	d0,(a2)
+	move.b	1(a0),d0
+	add.b	d2,d0
+	and.b	#$1f,d0
+	move.b	d0,1(a2)
+.noNote
+	moveq	#-$20,d0
+	and.b	1(a0),d0
+	rol.b	#3,d0
+	move.b	d0,2(a2)
+	beq.b	.noArg
+	move.b	2(a0),3(a2)
+.noArg
+	moveq	#0,d0
+	move.b	3(a0),d0		; duration, 0 = 256 ticks
+	bne.b	.dur
+	move	#256,d0
+.dur	add	d0,d4
+	addq	#4,a0
+	bra.b	.event
+.next	lea	PUMA_ROWS*4(a3),a3
+	dbf	d7,.voice
+	movem.l	(sp)+,d2-d7/a2-a4
+	rts
+
+* Called by the PI engine to get values for a particular row
+* Row: note index (1 = C-1, 0 = none), instrument, effect, argument
+ConvertNote
+	moveq	#0,D0		; Note
+	moveq	#0,D1		; Sample number
+	moveq	#0,D2		; Command
+	moveq	#0,D3		; Command argument
+	move.b	(a0),d0
+	lsr	#1,d0		; note byte is a word offset into the period table
+	move.b	1(a0),d1
+	move.b	2(a0),d2
+	move.b	3(a0),d3
+	rts
+
+PumaDecoded	dc.w	-1
+PumaRows	ds.b	PUMA_ROWS*4*4
 
 ;	*******************
 ;	*** Replay Data ***

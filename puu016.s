@@ -31232,8 +31232,16 @@ noteScroller2:
 * Use value as an index
 .notPeriod
 	move	d0,d5
-	* indices start from 1
-	subq	#1,d5
+	* PI_Speed = -(base index): -1 means index 1 = C-1.
+	* d5 = index relative to C-1, 0 = C-1
+	add	PI_Speed(a1),d5
+	* allow notes down to C-0, anything lower is unknown
+	add	#12,d5
+	bmi	.unknown
+	divu	#12,d5
+	moveq	#'0',d0
+	* octave number is the quotient already
+	bra.b	.addOctave
 .found
 	* print note
 	* divide to get octave
@@ -31242,6 +31250,7 @@ noteScroller2:
 	moveq	#'0',d0
 	* first octave shall be 1, not 0
 	addq.b	#1,d5
+.addOctave
 	add.b	d5,d0
 	* convert note into text
 	swap 	d5
@@ -46434,7 +46443,7 @@ p_pumatracker
 	jmp .id_pumatracker(pc)
 	jmp	.author(pc)
 	dc.w pt_pumatracker
-	dc	pf_stop!pf_cont!pf_ciakelaus
+	dc	pf_stop!pf_cont!pf_ciakelaus!pf_scope
 	dc.b	"PumaTracker",0
 .a  dc.b "Jean-Charles Meyrignac, Pierre-Eric Loriaux",0
  even
@@ -46449,11 +46458,15 @@ p_pumatracker
 	beq.b	.ok3
 	rts
 .ok3
-	pushm	all
+	pushm	d1-d7/a1-a6
 	move.l	moduleaddress(a5),a0
 	move.l	pumatrackerroutines(a5),a3
 	jsr	$20+0(a3)
-	popm	all
+	popm	d1-d7/a1-a6
+	move.l	a0,deliPatternInfo(a5)
+	* Stripes are decoded into a replayer buffer outside the module,
+	* tell the note scroller sanity check about it
+	move.l	PI_Stripes(a0),ps3mUnpackedPattern(a5)
 	moveq	#0,d0
 	rts	
 
@@ -46462,6 +46475,7 @@ p_pumatracker
 	jmp	$20+4(a0)
 	rts
 .end
+	clr.l	ps3mUnpackedPattern(a5)
 	bsr	rem_ciaint
 	bsr	clearsound
 	bra	vapauta_kanavat
