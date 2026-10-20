@@ -7653,8 +7653,12 @@ putc
 putCharSerial
     ;_LVORawPutChar
     ; output char in d0 to serial
+    ; RawDoFmt PutChProc: RawPutChar trashes d0-d1/a0-a1,
+    ; RawDoFmt needs them kept.
+    movem.l d0-d1/a0-a1/a6,-(sp)
     move.l  4.w,a6
     jsr     -516(a6)
+    movem.l (sp)+,d0-d1/a0-a1/a6
     rts
 
  endif
