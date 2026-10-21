@@ -1104,11 +1104,12 @@ updatePatternInfoData
 	and	#128,d0
 	beq.b	.noCmd
 
-	move.b	(a0)+,d0
-	bmi.b	.d
-
-	move.b	d0,d5		* cmd
-.d	move.b	(a0)+,d6	* param
+	move.b	(a0)+,d0		* cmd
+	move.b	(a0)+,d2		* param
+	tst.b	d0
+	ble.b	.noCmd		* no command, keep the volume
+	move.b	d0,d5
+	move.b	d2,d6
 
 .noCmd
 	move.b	d3,(a1,d1)
@@ -1195,6 +1196,7 @@ updatePatternInfoData
 	moveq	#0,d4
 	moveq	#0,d5
 	moveq	#0,d6
+	moveq	#0,d2	* volume column
 
 	move.b	(a1)+,d0
 	bpl.b	.all
@@ -1210,12 +1212,7 @@ updatePatternInfoData
 .noinst
 	ror.b	#1,d0
 	bpl.b	.novol
-	
-	* Emulate PT C-command
-	moveq	#$c,d5
-	move.b	(a1)+,d6
-	;addq	#1,a1
-	;move.b	(a1)+,vol(a2)
+	move.b	(a1)+,d2
 .novol	
 	ror.b	#1,d0
 	bpl.b	.nocmd
@@ -1223,16 +1220,27 @@ updatePatternInfoData
 
 .nocmd	
 	ror.b	#1,d0
-	bpl.b	.next
+	bpl.b	.vol
 	
 	move.b	(a1)+,d6
-	bra.b	.next
+	bra.b	.vol
 .all	
 	move.b	d0,d3
 	move.b	(a1)+,d4
-	addq	#1,a1 * skip vol
+	move.b	(a1)+,d2
 	move.b	(a1)+,d5
 	move.b	(a1)+,d6
+.vol
+	* Emulate PT C-command for a set volume ($10-$50) in the
+	* volume column, if there is no effect to show instead.
+	move.b	d5,d0
+	or.b	d6,d0
+	bne.b	.next
+	sub.b	#$10,d2
+	cmp.b	#$40,d2
+	bhi.b	.next
+	moveq	#$c,d5
+	move.b	d2,d6
 .next	
 	move.b	d3,(a0)+
 	move.b	d4,(a0)+
