@@ -31004,7 +31004,7 @@ noteScroller2:
 	* Pointer within the unpacked pattern region?
 
 	cmp.l	d0,a0
-	bhs.b	.sane
+	blo.b	.noPattern
 	add.l	#32*4*64,d0
 	cmp.l	d0,a0
 	blo.b	.sane
