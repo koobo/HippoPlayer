@@ -26520,6 +26520,7 @@ s_scopePreviousWidth          rs.w       1
 s_scopePreviousHeight         rs.w       1
 s_scopePreviousPattPos        rs.w       1
 s_scopePreviousSongPos        rs.w       1
+s_scopePreviousStripe         rs.l       1
 s_omabitmap                   rs.b      bm_SIZEOF
 s_buffer1                     rs.l       1
 s_buffer2                     rs.l       1
@@ -28533,6 +28534,8 @@ drawScope:
 	bsr	patternScopeIsActive
 	bne.b	.noPattSc
     * For generic pattern scope, update only when position changes
+    * or when the pattern changes: PI_Songpos holds note transposes for
+    * some players, so the first stripe address also has to be compared.
 	move.l	deliPatternInfo(a5),d0 
     beq.b   .wasPattSc      * Protracker specific
     * Generic 
@@ -28542,10 +28545,14 @@ drawScope:
 	bne.b	.doUpdate
 	cmp	s_scopePreviousSongPos(a4),d1 
 	bne.b	.doUpdate
+	move.l	PI_Stripes(a0),d2
+	cmp.l	s_scopePreviousStripe(a4),d2
+	bne.b	.doUpdate
 	rts
 .doUpdate
 	move	d0,s_scopePreviousPattPos(a4)
 	move	d1,s_scopePreviousSongPos(a4)
+	move.l	PI_Stripes(a0),s_scopePreviousStripe(a4)
     bra     .wasPattSc
 .noPattSc
 
