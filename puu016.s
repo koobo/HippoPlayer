@@ -60423,7 +60423,10 @@ streamerEntry:
     bsr     .notify
 
     move.l  d6,d1       * seglist
-    move.l  #4096*2,d2  * stack size, 8k recommended for aget
+    * aget's TLS handshake through AmiSSL 5.x (OpenSSL 3.5, X25519MLKEM768 key
+    * exchange) overflows the 8k stack that is enough for plain http: every https
+    * fetch crashed a 68060 A1200 with 8k, 16k passed. 32k gives a 2x margin.
+    move.l  #32768,d2   * stack size
     pushpea .agetArgsFormatted(a4),d3 * argptr
                           * d4 = arg size
     lore    Dos,RunCommand
