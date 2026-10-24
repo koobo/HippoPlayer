@@ -1425,6 +1425,10 @@ init:
 
     bsr     mpega_skip_id3v2_stream
 
+    * d1 is not the file handle here: it is whatever dos.library Open()
+    * left in that scratch register (OS 3.9: a byte of the file name, so
+    * Seek() sent its packet to a bogus port and waited forever).
+    move.l  d7,d1
    	moveq	#0,d2
 	moveq	#OFFSET_CURRENT,d3
     lob     Seek
