@@ -44102,7 +44102,7 @@ p_digibooster
 	jmp .id_digibooster(pc)
 	jmp	db_author(pc)
 	dc.w pt_digibooster
-	dc	pf_poslen!pf_kelaus!pf_volume!pf_stop!pf_cont!pf_end
+	dc	pf_poslen!pf_kelaus!pf_volume!pf_stop!pf_cont!pf_end!pf_scope
 	dc.b	"DIGI Booster",0
  even
 
@@ -44187,6 +44187,10 @@ p_digibooster
 	pop	a5
 	tst.l	d0
 	bne.b	.er
+	move.l	a4,deliPatternInfo(a5)
+	* Stripes live in the replayer buffer outside the module,
+	* tell the note scroller sanity check about it
+	move.l	PI_Stripes(a4),ps3mUnpackedPattern(a5)
 
 
 ;	lea	songpos(pc),a0
@@ -44228,7 +44232,8 @@ p_digibooster
 
 
 
-.end	pushm	all
+.end	clr.l	ps3mUnpackedPattern(a5)
+	pushm	all
 	move.l	digiboosterroutines(a5),a0
 	jsr	$20+4(a0)
 	popm	all

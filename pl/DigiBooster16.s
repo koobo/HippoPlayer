@@ -1,6 +1,11 @@
 ;APS000007100000000D0000000D0000000D000025DF0000000D0000000D0000000D0000000D0000000D
 testi	=	0
 
+	incdir	include:
+	include	misc/eagleplayer.i
+	incdir	include/
+	include	patternInfo.i
+
 
 
 ;----------------- digi booster by tap & walt ----------------
@@ -109,12 +114,14 @@ init
 	bsr.w	db_init
 * d7 = returncode
 	
+	bsr	PatternInit	; keeps d7
 
 	lea	songpos(pc),a0
 	move.l	moddigi(pc),a1
 	lea	ordnum(a1),a1
 	lea	pattpos(pc),a2
 	lea	mainvolvalue(pc),a3
+	lea	PatternInfo(pc),a4
 
 	move.l	d7,d0
 	rts
@@ -411,6 +418,8 @@ newcpu
 
 	clr.b	songpos
 	clr.b	pattpos
+	clr.b	fetchsongpos
+	clr.b	fetchpattpos
 	clr.b	count
 	move.b	#6,temp
 
@@ -701,6 +710,8 @@ fast:		dc.b	0
 oldcpu:		dc.b	0
 songpos:	dc.b	0
 pattpos:	dc.b	0
+fetchsongpos:	dc.b	0
+fetchpattpos:	dc.b	0
 temp:		dc.b	0
 count:		dc.b	0
 jmpen:		dc.b	0
@@ -727,12 +738,136 @@ confmix:	dc.b	0	; 0 - mix only joined chennels eg. mix when
 buffsize	dc.w	40960	; sample mix buffer size
 		even
 
+; ---------------------------------------------------------------------
+; Pattern display (HippoPlayer PatternInfo, notes are periods)
+; Rows are 4 bytes: word 0 = period (bit 12 = samples 16-31),
+; word 1 = sample low nibble << 12, effect << 8, argument.
+; Tracker channel k (0-7) is the 64 row stripe at pattern + k*256.
+; Unpacked patterns are read in place, packed patterns (bitmask per row,
+; bit 7-s set when slot s has a row, slot s is channel (s>>1)+4*(s&1))
+; are decoded into patstripes whenever the pattern address changes.
+; ---------------------------------------------------------------------
+PatternInfo
+	ds.b	PI_Stripes
+PIStripes
+	ds.l	8
+
+patlastdec	dc.l	0
+
+; slot -> offset of the channel stripe inside the decoded pattern
+patslotoff	dc.w	0,1024,256,1280,512,1536,768,1792
+
+PatternInit
+	clr.l	patlastdec
+	lea	PatternInfo(pc),a0
+	move.l	moddigi(pc),a1
+	moveq	#0,d0
+	move.b	channels(a1),d0
+	cmp.w	#4,d0
+	bhs.b	.v
+	moveq	#4,d0
+.v	move.w	d0,PI_Voices(a0)
+	moveq	#4,d0
+	move.l	d0,PI_Modulo(a0)
+	pea	PatternConvert(pc)
+	move.l	(sp)+,PI_Convert(a0)
+	move.w	#64,PI_Pattlength(a0)
+	clr.w	PI_Pattpos(a0)
+	clr.w	PI_Songpos(a0)
+	clr.w	PI_Speed(a0)		; periods
+	lea	PIStripes(pc),a2
+	lea	patstripes(pc),a1
+	moveq	#8-1,d1
+.is	move.l	a1,(a2)+
+	lea	256(a1),a1
+	dbf	d1,.is
+	rts
+
+* Called after each db_music tick. Shows the row last fetched by db_music
+* and the pattern it was fetched from.
+PatternUpdate
+	movem.l	d0-d7/a0-a6,-(sp)
+	lea	PatternInfo(pc),a0
+	moveq	#0,d0
+	move.b	fetchpattpos(pc),d0
+	and.w	#63,d0
+	move.w	d0,PI_Pattpos(a0)
+
+	move.l	moddigi(pc),a5
+	moveq	#0,d7
+	move.b	fetchsongpos(pc),d7
+	* The scope redraws only when row or song position changes
+	move.w	d7,PI_Songpos(a0)
+	moveq	#0,d6
+	move.b	orders(a5,d7.w),d6
+	lsl.w	#2,d6
+	lea	pattadresses(pc),a1
+	move.l	(a1,d6.w),a1
+
+	tst.b	packenable(a5)
+	beq.b	.stripes
+
+	cmp.l	patlastdec(pc),a1
+	beq.b	.decoded
+	move.l	a1,patlastdec
+	lea	2(a1),a2		; row bitmasks
+	lea	66(a1),a3		; packed rows
+	lea	patstripes(pc),a4
+	moveq	#0,d4			; row offset
+	moveq	#64-1,d7
+.row
+	move.b	(a2)+,d0
+	lea	patslotoff(pc),a5
+	moveq	#7,d6
+.slot
+	move.w	(a5)+,d2
+	lea	(a4,d2.w),a6
+	add.w	d4,a6
+	btst	d6,d0
+	beq.b	.zero
+	move.l	(a3)+,(a6)
+	bra.b	.nx
+.zero	clr.l	(a6)
+.nx	dbf	d6,.slot
+	addq.w	#4,d4
+	dbf	d7,.row
+.decoded
+	lea	patstripes(pc),a1
+.stripes
+	lea	PIStripes(pc),a2
+	moveq	#8-1,d7
+.sl	move.l	a1,(a2)+
+	lea	256(a1),a1
+	dbf	d7,.sl
+	movem.l	(sp)+,d0-d7/a0-a6
+	rts
+
+* Called by the PI engine to get values for a particular row
+PatternConvert
+	moveq	#0,d0		; Period
+	moveq	#0,d1		; Sample number
+	moveq	#0,d2		; Command
+	moveq	#0,d3		; Command argument
+	move.w	(a0),d0
+	and.w	#$0fff,d0
+	moveq	#0,d1
+	move.b	2(a0),d1
+	lsr.b	#4,d1
+	btst	#4,(a0)		; word bit 12: samples 16-31
+	beq.b	.lo
+	add.b	#16,d1
+.lo	moveq	#$0f,d2
+	and.b	2(a0),d2
+	move.b	3(a0),d3
+	rts
+
 db_music:
 	move.l	stopcont(pc),a5
 	tst.b	(a5)
 	beq.b	.x
 	;move	#$f00,$dff180
 	bsr.b	.do
+	bsr	PatternUpdate
 	;move	#0,$dff180
 .x	rts
 .do
@@ -763,6 +898,12 @@ nonewpos:
 	clr.b	pattpos
 	move.l	pattadresses,a1
 norepeatsong:
+	* Remember which row of which position is fetched now. Effects on
+	* this tick (pattern break, position jump) change pattpos/songpos
+	* before the next fetch, so PatternUpdate must not derive the row
+	* from them.
+	move.b	songpos(pc),fetchsongpos
+	move.b	pattpos(pc),fetchpattpos
 
 	moveq	#0,d7
 	move.b	songpos(pc),d7
@@ -4077,6 +4218,7 @@ voltabadr:	ds.l	1
 voltabptr:	ds.l	1
 
 unpackeddata:	ds.l	8
+patstripes:	ds.b	2048
 pattadresses:	ds.l	129
 sample_starts:	ds.l	31
 sample_lenghts:	ds.l	31
