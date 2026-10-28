@@ -725,6 +725,8 @@ audioPortSignal	rs.b	1	* AudioIO:n signaali
 fileReqSignal	rs.b	1	* Filereqprosessin signaali
 rawKeySignal	rs.b	1	* rawkey inputhandlerilta
 tooltipSignal	rs.b  	1	* signal for opening tooltip popup
+searchDebounceDue rs.b 1	* set by the VBlank interrupt when a typed playlist search should run, shares tooltipSignal
+		rs.b	1	* pad, keeps the following fields even
 
 * Flag used to discard unnecessary mousemove IDCMP-messages
 ignoreMouseMoveMessage 	rs.b  	1
@@ -1055,6 +1057,7 @@ aika2		rs.l	1       * current timestamp
 vanhaaika	rs	1
 ticktack	rs	1	* vb tick count for titlebar refresh
 tooltipTick	rs 	1	* vb tick count for tooltips, counts from positive to 0
+searchDebounceTick rs	1	* vb tick count until a typed playlist search runs, counts from positive to 0
 userIdleTick rs  1	* refresh counter updated each ui refresh tick, cleared on mouse
 kokonaisaika	rs	2	* pt-moduille laskettu kesto aika, min/sec
 				* tai sampleille
@@ -1629,6 +1632,11 @@ sysTimerPort        rs.b      MP_SIZE
 sysTimerIORequest   rs.b      IOTV_SIZE
 
 ptPositionTicksPtr  rs.l      1
+prgSaved	rs.w	1	* ~0: rsaveprog wrote the file
+prgSharePublic	rs.w	1	* ~0: also upload the module program
+prgShareTitle	rs.b	80	* Save module program dialog fields
+prgShareAuthor	rs.b	80
+prgShareGenre	rs.b	80
 
  if DEBUG
 debugDesBuf		rs.b	1000
@@ -3545,10 +3553,23 @@ msgloop
 	bsr		handlePosUpdateSignal
 .noSig4
 	
-	* Tooltip display signal check
+	* Tooltip display signal check.
+	* The typed playlist search shares this signal bit, as the main
+	* task has few free signal bits left. The VBlank interrupt
+	* sets searchDebounceDue to tell the two apart.
 	move.b	tooltipSignal(a5),d3 
 	btst	d3,d0 
 	beq.b	.noTooltipSignal
+	tst.b	searchDebounceDue(a5)
+	beq.b	.noSearchDebounce
+	clr.b	searchDebounceDue(a5)
+	pushm	all
+	jsr	searchDebounceHandler
+	popm	all
+.noSearchDebounce
+	* Show the tooltip only once its tick count has expired
+	tst	tooltipTick(a5)
+	bne.b	.noTooltipSignal
 	bsr	tooltipDisplayHandler
 .noTooltipSignal
 
@@ -6831,7 +6852,15 @@ inittick
 * d2/d3 = kohde x,y
 * a0 = gadget
 
-tickaa:	pushm	d0-d6/a0-a2/a6
+tickaa:	move.l	a1,-(sp)
+	move.l	rastport2(a5),a1		* prefs
+	bsr.b	tickaaRastPort
+	move.l	(sp)+,a1
+	rts
+
+* a1 = rastport
+tickaaRastPort:
+	pushm	d0-d6/a0-a2/a6
     move    #GFLG_DISABLED,d6
     and.w   gg_Flags(a0),d6
     bne     .x
@@ -6848,7 +6877,6 @@ tickaa:	pushm	d0-d6/a0-a2/a6
 	addq	#2+1,d3
 	
 	lea	omabitmap3(a5),a0
-	move.l	rastport2(a5),a1		* prefs
 	moveq	#0,d0				* lähde x,y
 	moveq	#0,d1
 	moveq	#16,d4				* koko x,y
@@ -10298,6 +10326,13 @@ gadgetSearchStringAction:
     move.l  a0,d1
     DPRINT  "search string action %ld %s"
  endif
+    * Playlists: an empty search lists all playlists
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
+    bne     .typed
+    tst.b   gadgetSearchStringBuffer
+    bne     .typed
+    jmp     recentPlaylistsSearch
+.typed
     lea     gadgetSearchStringBuffer,a0
     bsr     beepIfSearchStringIsSmall
     bne     .1
@@ -10346,7 +10381,7 @@ gadgetSearchStringAction:
 .stations
     jmp stationsSearch(a0) 
 .recentPlaylists
-    jmp recentPlaylistsSearch(a0) 
+    jmp recentPlaylistsFilterSearch(a0) 
 .turran
     jmp turranSearch(a0) 
 .amp
@@ -10392,7 +10427,7 @@ gadgetSearchSourceOption1:
   dc.b    "Modules.pl",0        ; 2 
   dc.b    "Radio stations",0    ; 6
   dc.b    "Remix.Kwed.org",0    ; 5
-  dc.b    "Shared lists",0      ; 7  
+  dc.b    "Playlists",0         ; 7
   dc.b    "Turran FTP",0        ; 8 
   even
 
@@ -13425,6 +13460,7 @@ nimenalku:
 rsaveprog
 	cmp.b 	#LISTMODE_BROWSER,listMode(a5)
 	beq.b	.x
+	clr	prgSaved(a5)
 	DPRINT  "rsaveprog obtain list"
 	bsr 	obtainModuleList
 	bsr	 setMainWindowWaitPointer
@@ -13432,6 +13468,10 @@ rsaveprog
 	bsr 	clearMainWindowWaitPointer
 	DPRINT  "rloadprog release list"
 	bsr 	releaseModuleList
+	* Network transfer outside the list lock
+	tst	prgSaved(a5)
+	beq.b	.x
+	bsr	submitModuleProgram
 .x	rts
 
 .doSaveProg
@@ -13476,9 +13516,43 @@ rsaveprog
 	lea	filereqtitle3(pc),a3
 	lob	rtFileRequestA		* ReqToolsin tiedostovalikko
 	tst.l	d0
-	beq.b	.ex
+	beq	.ex
 	move.l	req_file2(a5),a0
 	bsr	parsereqdir3
+
+	* Module programs are .prg files, add it if missing
+	lea	filename(a5),a0
+	move.l	a0,a1
+.prgEnd	tst.b	(a1)+
+	bne.b	.prgEnd
+	subq	#1,a1
+	move.l	a1,d0
+	sub.l	a0,d0
+	cmp.l	#4,d0
+	blo.b	.prgAdd
+	cmp.b	#".",-4(a1)
+	bne.b	.prgAdd
+	move.b	-3(a1),d1
+	or.b	#$20,d1
+	cmp.b	#"p",d1
+	bne.b	.prgAdd
+	move.b	-2(a1),d1
+	or.b	#$20,d1
+	cmp.b	#"r",d1
+	bne.b	.prgAdd
+	move.b	-1(a1),d1
+	or.b	#$20,d1
+	cmp.b	#"g",d1
+	beq.b	.prgOk
+.prgAdd	cmp.l	#108-5,d0
+	bhi.b	.prgOk
+	lea	.prgExt(pc),a0
+.prgCpy	move.b	(a0)+,(a1)+
+	bne.b	.prgCpy
+.prgOk
+	bsr	prgSaveDialog
+	tst.l	d0
+	beq.b	.free
 
 	lea	tempdir(a5),a0		* kopioidaan polku ja nimi yhdeksi
 	lea	filename2(a5),a1
@@ -13498,9 +13572,13 @@ rsaveprog
     move.l  a0,a1
 	lea	filename2(a5),a0
 	;lea	moduleListHeader(a5),a1
-	bsr.b exportModuleProgramToFile
+	bsr	exportModuleProgramToFile
+	tst	prgSharePublic(a5)
+	bne.b	.pub
+	moveq	#0,d0
+.pub	move	d0,prgSaved(a5)
 
-	move.l	req_file2(a5),d0
+.free	move.l	req_file2(a5),d0
 	beq.b	.ex
 	move.l	d0,a1
 	move.l	_ReqBase(a5),a6
@@ -13511,6 +13589,9 @@ rsaveprog
 
 .nomods	lea	.lerr(pc),a1
 	bra	request
+
+.prgExt	dc.b	".prg",0
+ even
 
 .lerr	dc.b	"No program to save!",0
  even
@@ -13539,6 +13620,8 @@ exportModuleProgramToFileWithSongMetaData:
 * in:
 *  a0 = filename
 *  a1 = list
+* out:
+*  d0 = 1 if the file was written, 0 on error
 exportModuleProgramToFile:
     moveq   #0,d7
 doExportModuleProgramToFile:
@@ -13664,13 +13747,17 @@ doExportModuleProgramToFile:
 	move.l	d6,d1
 	beq.b	.x
 	lob	Close
+	moveq	#1,d0
 .x	
 	rts
 
 .writeError
 	lea	.err(pc),a1
 	bsr	request
-	bra.b	.exit
+	move.l	d6,d1
+	lob	Close
+	moveq	#0,d0
+	rts
 
 .openError
 	lea	openerror_t,a1
@@ -13678,6 +13765,656 @@ doExportModuleProgramToFile:
 	bra.b	.exit
 
 .err	dc.b	"Error while writing module program!",0
+ even
+
+
+*******************************************************************************
+* Share a saved module program on hippoplayer.se
+*******
+
+* bsdsocket.library offsets, from the NDK 3.2 bsdsocket_lib.sfd
+_LVOsocket		= -30
+_LVOconnect		= -54
+_LVOsend		= -66
+_LVOrecv		= -78
+_LVOCloseSocket		= -120
+_LVOgethostbyname	= -210
+
+PRGDLG_TITLE		= 1
+PRGDLG_AUTHOR		= 2
+PRGDLG_GENRE		= 3
+PRGDLG_PUBLIC		= 4
+PRGDLG_SAVE		= 5
+PRGDLG_CANCEL		= 6
+PRGDLG_WIDTH		= 432	* inner size
+PRGDLG_HEIGHT		= 88
+
+* The Save module program dialog, same as the one on hippoplayer.se:
+* title, author, genre and whether to also upload the list to the
+* public playlists. The fields are left in prgShareTitle(a5),
+* prgShareAuthor(a5), prgShareGenre(a5) and prgSharePublic(a5).
+* The author is kept between saves.
+* in:
+*   filename(a5) = file name, the initial title is this without
+*                  the extension
+* out:
+*   d0 = 0 if cancelled
+prgSaveDialog:
+	pushm	d1-a6
+
+	lea	filename(a5),a0
+	lea	prgShareTitle(a5),a1
+	moveq	#80-2,d0
+.ct	move.b	(a0)+,(a1)+
+	dbeq	d0,.ct
+	clr.b	(a1)
+	lea	prgShareTitle(a5),a0
+	sub.l	a1,a1
+.fd	move.b	(a0)+,d0
+	beq.b	.fde
+	cmp.b	#".",d0
+	bne.b	.fd
+	lea	-1(a0),a1		* the last dot
+	bra.b	.fd
+.fde	move.l	a1,d0
+	beq.b	.noExt
+	lea	prgShareTitle(a5),a0
+	cmp.l	a0,a1
+	beq.b	.noExt
+	clr.b	(a1)
+.noExt
+	clr.b	prgShareGenre(a5)
+	clr	prgSharePublic(a5)
+
+	lea	prgDlgTitle,a0
+	lea	prgShareTitle(a5),a1
+	bsr	.initString
+	lea	prgDlgAuthor,a0
+	lea	prgShareAuthor(a5),a1
+	bsr	.initString
+	lea	prgDlgGenre,a0
+	lea	prgShareGenre(a5),a1
+	bsr	.initString
+
+	* Centered on the screen, like the web dialog.
+	* On kick2.0+ the outer size comes from the screen borders
+	* and font, as the tags give the inner size.
+	lea	prgDlgWindow,a0
+	move	nw_Width(a0),d1
+	move	nw_Height(a0),d2
+	tst.b	uusikick(a5)
+	beq.b	.cs
+	move.l	screenaddr(a5),d0
+	beq.b	.cs
+	move.l	d0,a1
+	moveq	#0,d0
+	move	#PRGDLG_WIDTH,d1
+	move.b	sc_WBorLeft(a1),d0
+	add	d0,d1
+	move.b	sc_WBorRight(a1),d0
+	add	d0,d1
+	move	#PRGDLG_HEIGHT+1,d2
+	move.b	sc_WBorTop(a1),d0
+	add	d0,d2
+	move.b	sc_WBorBottom(a1),d0
+	add	d0,d2
+	move.l	sc_Font(a1),a1
+	add	ta_YSize(a1),d2
+.cs	move	wbleveys(a5),d0
+	sub	d1,d0
+	bpl.b	.cx
+	moveq	#0,d0
+.cx	lsr	#1,d0
+	move	d0,nw_LeftEdge(a0)
+	move	wbkorkeus(a5),d0
+	sub	d2,d0
+	bpl.b	.cy
+	moveq	#0,d0
+.cy	lsr	#1,d0
+	move	d0,nw_TopEdge(a0)
+	tst.b	uusikick(a5)
+	beq.b	.old
+	move	#PUBLICSCREEN,nw_Type(a0)
+	or.l	#WFLG_NW_EXTENDED,nw_Flags(a0)
+.old
+	bsr	tark_mahtu
+	lore	Intui,OpenWindow
+	tst.l	d0
+	beq	.openFailed
+	move.l	d0,a4
+	move.l	wd_RPort(a4),d7
+	move.l	wd_UserPort(a4),a3
+	moveq	#0,d4
+	moveq	#0,d5
+	move.b	wd_BorderLeft(a4),d4
+	move.b	wd_BorderTop(a4),d5
+
+	* Gadget positions are relative to the window interior
+	lea	prgDlgTitle,a0
+.off	add	d4,gg_LeftEdge(a0)
+	add	d5,gg_TopEdge(a0)
+	move.l	(a0),d0
+	move.l	d0,a0
+	bne.b	.off
+
+	* Plain background like the web dialog: the window opens
+	* cleared to pen 0, so nothing is drawn under the gadgets
+
+
+	lea	prgDlgTitle,a0
+	bsr	.sunken
+	lea	prgDlgAuthor,a0
+	bsr	.sunken
+	lea	prgDlgGenre,a0
+	bsr	.sunken
+	lea	prgDlgPublic,a0
+	bsr	.button
+	lea	prgDlgSave,a0
+	bsr	.button
+	lea	prgDlgCancel,a0
+	bsr	.button
+
+	move.l	a4,a0
+	lea	prgDlgTitle,a1
+	moveq	#-1,d0
+	moveq	#-1,d1
+	sub.l	a2,a2
+	lore	Intui,AddGList
+	lea	prgDlgTitle,a0
+	move.l	a4,a1
+	sub.l	a2,a2
+	moveq	#-1,d0
+	lob	RefreshGList
+
+	bsr	inittick
+	bsr	.tick
+
+	lea	prgDlgTitle,a0
+	move.l	a4,a1
+	sub.l	a2,a2
+	lore	Intui,ActivateGadget
+
+.wait	moveq	#0,d0
+	move.b	MP_SIGBIT(a3),d1
+	bset	d1,d0
+	lore	Exec,Wait
+.msg	move.l	a3,a0
+	lore	Exec,GetMsg
+	tst.l	d0
+	beq.b	.wait
+	move.l	d0,a1
+	move.l	im_Class(a1),d2
+	move	im_Code(a1),d3
+	move.l	im_IAddress(a1),a2
+	lob	ReplyMsg
+
+	cmp.l	#IDCMP_CLOSEWINDOW,d2
+	beq.b	.cancel
+	cmp.l	#IDCMP_RAWKEY,d2
+	beq.b	.key
+	cmp.l	#IDCMP_GADGETUP,d2
+	bne.b	.msg
+	move	gg_GadgetID(a2),d0
+	cmp	#PRGDLG_PUBLIC,d0
+	beq.b	.toggle
+	cmp	#PRGDLG_SAVE,d0
+	beq.b	.save
+	cmp	#PRGDLG_CANCEL,d0
+	beq.b	.cancel
+	* A string gadget: Return saves, Tab and Help do not
+	cmp	#9,d3
+	beq.b	.msg
+	cmp	#$5f,d3
+	beq.b	.msg
+	bra.b	.save
+
+.toggle	eor	#1,prgSharePublic(a5)
+	bsr.b	.tick
+	bra.b	.msg
+
+.key	tst.b	d3
+	bmi.b	.msg			* key up
+	cmp.b	#$44,d3			* return
+	beq.b	.save
+	cmp.b	#$43,d3			* enter
+	beq.b	.save
+	cmp.b	#$21,d3			* s
+	beq.b	.save
+	cmp.b	#$45,d3			* esc
+	beq.b	.cancel
+	cmp.b	#$33,d3			* c
+	beq.b	.cancel
+	bra	.msg
+
+.cancel	moveq	#0,d6
+	bra.b	.close
+.save	moveq	#1,d6
+.close	move.l	a4,a0
+	bsr	flushWindowMessages
+	move.l	a4,a0
+	lea	prgDlgTitle,a1
+	moveq	#-1,d0
+	lore	Intui,RemoveGList
+	move.l	a4,a0
+	lob	CloseWindow
+
+	lea	prgDlgTitle,a0
+.res	sub	d4,gg_LeftEdge(a0)
+	sub	d5,gg_TopEdge(a0)
+	move.l	(a0),d0
+	move.l	d0,a0
+	bne.b	.res
+
+	move.l	d6,d0
+	popm	d1-a6
+	rts
+
+.openFailed
+	moveq	#0,d0
+	popm	d1-a6
+	rts
+
+* d7 = rastport
+.tick	pushm	all
+	move.l	d7,a1
+	lea	prgDlgPublic,a0
+	move	prgSharePublic(a5),d0
+	bsr	tickaaRastPort
+	popm	all
+	rts
+
+* Sunken frame around a string gadget
+* a0 = gadget, d7 = rastport
+.sunken	pushm	all
+	move.l	d7,a1
+	movem	gg_LeftEdge(a0),plx1/ply1/plx2/ply2
+	add	plx1,plx2
+	add	ply1,ply2
+	subq	#2,plx1
+	subq	#2,ply1
+	addq	#1,plx2
+	addq	#1,ply2
+	bsr	sliderlaatikko
+	popm	all
+	rts
+
+* a0 = gadget, d7 = rastport
+.button	pushm	all
+	move.l	a0,a3
+	move.l	d7,a1
+	jsr	doDrawButtonFrame
+	popm	all
+	rts
+
+* a0 = string gadget, a1 = buffer
+.initString
+	move.l	gg_SpecialInfo(a0),a2
+	move.l	a1,si_Buffer(a2)
+	move	#80,si_MaxChars(a2)
+	clr	si_BufferPos(a2)
+	clr	si_DispPos(a2)
+	moveq	#-1,d0
+.sl	addq	#1,d0
+	tst.b	(a1)+
+	bne.b	.sl
+	move	d0,si_NumChars(a2)
+	tst.b	uusikick(a5)
+	beq.b	.si
+	or	#GFLG_TABCYCLE!GFLG_STRINGEXTEND,gg_Flags(a0)
+	pushpea	stringExtendStruct(a5),si_Extension(a2)
+.si	rts
+
+* Work buffer: request header, encoded query fields, the file, the reply
+SUBMIT_FIELDS		= 1536
+SUBMIT_HEADER_SIZE	= 3072
+SUBMIT_REPLY_SIZE	= 1024
+SUBMIT_MAX_BODY		= 512*1024
+
+* Stack frame: sockaddr_in, bsdsocket.library base
+SUBMIT_SOCKADDR		= 0
+SUBMIT_SOCKETBASE	= 16
+SUBMIT_FRAME		= 20
+
+* Sends the module program just saved to filename2(a5) as is with
+* a HTTP POST to http://hippoplayer.se/api/v1/playlists, with the
+* title, author and genre from the Save module program dialog.
+* The reply line from the server is shown to the user.
+submitModuleProgram:
+	pushm	all
+	lea	-SUBMIT_FRAME(sp),sp
+	move.l	sp,a4
+	clr.l	SUBMIT_SOCKETBASE(a4)
+	moveq	#0,d7			* work buffer
+	moveq	#-1,d6			* socket
+
+	lea	.tWait(pc),a0
+	bsr	printbox
+	bsr	setMainWindowWaitPointer
+
+	* Read the saved file back, this is the request body
+	move.l	_DosBase(a5),a6
+	pushpea	filename2(a5),d1
+	move.l	#MODE_OLDFILE,d2
+	lob	Open
+	move.l	d0,d6
+	bne.b	.opened
+	moveq	#-1,d6
+	bra	.readError
+.opened
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#OFFSET_END,d3
+	lob	Seek
+	move.l	d6,d1
+	moveq	#0,d2
+	moveq	#OFFSET_BEGINNING,d3
+	lob	Seek
+	move.l	d0,d5			* file length
+	ble	.closeFile
+	cmp.l	#SUBMIT_MAX_BODY,d5
+	bhi	.tooBig
+
+	move.l	#SUBMIT_HEADER_SIZE+SUBMIT_REPLY_SIZE,d0
+	add.l	d5,d0
+	move.l	#MEMF_PUBLIC!MEMF_CLEAR,d1
+	bsr	getmem
+	move.l	d0,d7
+	beq	.memError
+
+	move.l	d6,d1
+	move.l	d7,d2
+	add.l	#SUBMIT_HEADER_SIZE,d2
+	move.l	d5,d3
+	lob	Read
+	move.l	d0,d4
+	move.l	d6,d1
+	lob	Close
+	moveq	#-1,d6
+	cmp.l	d5,d4
+	bne	.readError
+
+	* Query fields, percent encoded
+	move.l	d7,a1
+	add.l	#SUBMIT_FIELDS,a1
+	move.l	a1,-(sp)
+	lea	prgShareTitle(a5),a0
+	bsr	.encode
+	move.l	a1,-(sp)
+	lea	prgShareAuthor(a5),a0
+	bsr	.encode
+	move.l	a1,-(sp)
+	lea	prgShareGenre(a5),a0
+	bsr	.encode
+	move.l	a1,-(sp)
+	lea	filename(a5),a0
+	bsr	.encode
+	move.l	(sp)+,d3
+	move.l	(sp)+,d2
+	move.l	(sp)+,d1
+	move.l	(sp)+,d0
+	move.l	d5,d4
+	lea	.format(pc),a0
+	move.l	d7,a3
+	bsr	desmsg3
+
+	move.l	(a5),a6
+	lea	.bsdName(pc),a1
+	moveq	#0,d0
+	lob	OpenLibrary
+	move.l	d0,SUBMIT_SOCKETBASE(a4)
+	beq	.noSocketLib
+	move.l	d0,a6
+
+	lea	.host(pc),a0
+	lob	gethostbyname
+	tst.l	d0
+	beq	.noHost
+	move.l	d0,a0
+	move.l	16(a0),a0		* h_addr_list
+	move.l	(a0),a0
+	lea	SUBMIT_SOCKADDR(a4),a1
+	move.l	#$10020050,(a1)		* sin_len 16, AF_INET, port 80
+	move.l	(a0),4(a1)
+	clr.l	8(a1)
+	clr.l	12(a1)
+
+	moveq	#2,d0			* AF_INET
+	moveq	#1,d1			* SOCK_STREAM
+	moveq	#0,d2
+	lob	socket
+	move.l	d0,d6
+	bmi	.noConnect
+	lea	SUBMIT_SOCKADDR(a4),a0
+	moveq	#16,d1
+	lob	connect
+	tst.l	d0
+	bne	.noConnect
+
+	move.l	d7,a0
+	move.l	a0,a1
+.hl	tst.b	(a1)+
+	bne.b	.hl
+	subq	#1,a1
+	move.l	a1,d1
+	sub.l	a0,d1
+	bsr	.sendAll
+	bne	.sendError
+	move.l	d7,a0
+	add.l	#SUBMIT_HEADER_SIZE,a0
+	move.l	d5,d1
+	bsr	.sendAll
+	bne	.sendError
+
+	* Reply until the server closes the connection
+	move.l	d7,a2
+	add.l	#SUBMIT_HEADER_SIZE,a2
+	add.l	d5,a2
+	moveq	#0,d3
+.rl	move.l	#SUBMIT_REPLY_SIZE-1,d1
+	sub.l	d3,d1
+	beq.b	.rd
+	move.l	d6,d0
+	lea	(a2,d3.l),a0
+	moveq	#0,d2
+	lob	recv
+	tst.l	d0
+	ble.b	.rd
+	add.l	d0,d3
+	bra.b	.rl
+.rd	clr.b	(a2,d3.l)
+	tst.l	d3
+	beq	.noReply
+
+	* The reply line is the body, the status line if there is no body
+	move.l	a2,a0
+.fb	move.b	(a0)+,d0
+	beq.b	.noBody
+	cmp.b	#13,d0
+	bne.b	.fb
+	cmp.b	#10,(a0)
+	bne.b	.fb
+	cmp.b	#13,1(a0)
+	bne.b	.fb
+	cmp.b	#10,2(a0)
+	bne.b	.fb
+	addq	#3,a0
+	bra.b	.body
+.noBody	move.l	a2,a0
+.body	move.l	a0,a1
+.cl	move.b	(a1),d0
+	beq.b	.cd
+	cmp.b	#10,d0
+	beq.b	.cut
+	cmp.b	#13,d0
+	beq.b	.cut
+	addq	#1,a1
+	bra.b	.cl
+.cut	clr.b	(a1)
+.cd
+	* "OK <id> <filename> <url>"
+	cmp.b	#"O",(a0)
+	bne.b	.failed
+	cmp.b	#"K",1(a0)
+	bne.b	.failed
+	cmp.b	#" ",2(a0)
+	bne.b	.failed
+	move.l	a0,a1
+	move.l	a0,a3
+.ls	move.b	(a1)+,d0
+	beq.b	.lsd
+	cmp.b	#" ",d0
+	bne.b	.ls
+	move.l	a1,a3
+	bra.b	.ls
+.lsd	lea	.tShared(pc),a1
+	bra.b	.show
+.failed	move.l	a0,a3
+	lea	.tFailed(pc),a1
+.show	move.l	a3,-(sp)
+	move.l	sp,a3
+	lea	.bOk(pc),a2
+	bsr	.req
+	addq	#4,sp
+	bra	.x
+
+.closeFile
+	move.l	d6,d1
+	lob	Close
+	moveq	#-1,d6
+	bra.b	.readError
+.tooBig	move.l	d6,d1
+	lob	Close
+	moveq	#-1,d6
+	lea	.tTooBig(pc),a1
+	bra.b	.error
+.memError
+	move.l	d6,d1
+	lob	Close
+	moveq	#-1,d6
+	lea	.tMem(pc),a1
+	bra.b	.error
+.readError
+	lea	.tRead(pc),a1
+	bra.b	.error
+.noSocketLib
+.noHost
+.noConnect
+.sendError
+.noReply
+	lea	.tNoServer(pc),a1
+.error	move.l	a1,a0
+	bra	.failed
+
+.x	move.l	SUBMIT_SOCKETBASE(a4),d0
+	beq.b	.nl
+	move.l	d0,a6
+	move.l	d6,d0
+	bmi.b	.ns
+	lob	CloseSocket
+.ns	move.l	a6,a1
+	move.l	(a5),a6
+	lob	CloseLibrary
+.nl	move.l	d7,a0
+	bsr	freemem
+	* printbox wrote the status over the list, draw it back
+	bsr	forceRefreshList
+	bsr	clearMainWindowWaitPointer
+	lea	SUBMIT_FRAME(sp),sp
+	popm	all
+	rts
+
+* in:
+*  a1 = text, a2 = buttons, a3 = argument array or 0
+* out:
+*  d0 = response
+.req	pushm	d1-a6
+	move.l	a3,a4
+	bsr	rawrequest
+	popm	d1-a6
+	rts
+
+* in:
+*  a0 = buffer, d1 = length, d6 = socket, a6 = bsdsocket.library
+* out:
+*  d0 = 0 if all sent
+.sendAll
+	tst.l	d1
+	beq.b	.sok
+	movem.l	d1/a0,-(sp)
+	move.l	d6,d0
+	moveq	#0,d2
+	lob	send
+	movem.l	(sp)+,d1/a0
+	tst.l	d0
+	ble.b	.sfail
+	add.l	d0,a0
+	sub.l	d0,d1
+	bra.b	.sendAll
+.sok	moveq	#0,d0
+	rts
+.sfail	moveq	#1,d0
+	rts
+
+* in:
+*  a0 = string, a1 = destination
+* out:
+*  a1 = after the terminating zero
+.encode
+	move.b	(a0)+,d0
+	beq.b	.encEnd
+	move.b	d0,d1
+	or.b	#$20,d1
+	cmp.b	#"a",d1
+	blo.b	.encDigit
+	cmp.b	#"z",d1
+	bls.b	.encPlain
+.encDigit
+	cmp.b	#"0",d0
+	blo.b	.encMark
+	cmp.b	#"9",d0
+	bls.b	.encPlain
+.encMark
+	cmp.b	#"-",d0
+	beq.b	.encPlain
+	cmp.b	#".",d0
+	beq.b	.encPlain
+	cmp.b	#"_",d0
+	beq.b	.encPlain
+	cmp.b	#"~",d0
+	beq.b	.encPlain
+	move.b	#"%",(a1)+
+	moveq	#0,d1
+	move.b	d0,d1
+	lsr.b	#4,d1
+	move.b	.hex(pc,d1.w),(a1)+
+	moveq	#15,d1
+	and.b	d0,d1
+	move.b	.hex(pc,d1.w),(a1)+
+	bra.b	.encode
+.encPlain
+	move.b	d0,(a1)+
+	bra.b	.encode
+.encEnd	clr.b	(a1)+
+	rts
+
+.hex	dc.b	"0123456789ABCDEF"
+
+.format	dc.b	"POST /api/v1/playlists?title=%s&author=%s&genre=%s&filename=%s HTTP/1.0",13,10
+	dc.b	"Host: hippoplayer.se",13,10
+	dc.b	"User-Agent: HippoPlayer",13,10
+	dc.b	"Content-Type: application/octet-stream",13,10
+	dc.b	"Content-Length: %ld",13,10
+	dc.b	"Connection: close",13,10,13,10,0
+.bsdName	dc.b	"bsdsocket.library",0
+.host	dc.b	"hippoplayer.se",0
+.bOk	dc.b	"OK",0
+.tWait	dc.b	"Uploading playlist...",0
+.tShared	dc.b	"Playlist shared as",10,"%s",0
+.tFailed	dc.b	"Upload failed:",10,"%s",0
+.tTooBig	dc.b	"Module program is too big",0
+.tMem	dc.b	"Not enough memory",0
+.tRead	dc.b	"Could not read the module program",0
+.tNoServer	dc.b	"Could not reach the server",0
  even
 
 
@@ -25401,6 +26138,15 @@ intserver
 	move.b	tooltipSignal(a5),d1
 	bsr	signalit
 .notActive
+	* Same for the typed playlist search, which shares tooltipSignal
+	tst	searchDebounceTick(a5)
+	beq.b	.notSearchActive
+	subq	#1,searchDebounceTick(a5)
+	bne.b	.notSearchActive
+	st	searchDebounceDue(a5)
+	move.b	tooltipSignal(a5),d1
+	bsr	signalit
+.notSearchActive
 
 	* Are we playing something?
 	tst.b	playing(a5)
@@ -36131,13 +36877,6 @@ refreshGadgetSearchSource:
     lea     gadgetSearchSource(a4),a3
     jsr     drawButtonFrameMainWindow
 
-    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
-    bne     .1
-    lea     gadgetSearchString(a4),a0
-    jmp     disableGadget
-   ;;; rts
-    ;;;;;;;jmp     recentPlaylistsSearch
-.1
     tst.b   uhcAvailable(a5)
     bne.b   .2
     rts
@@ -36152,6 +36891,75 @@ activateSearchStringGadget:
     move.l  windowbase(a5),a1
     sub.l   a2,a2
     lore    Intui,ActivateGadget
+    rts
+
+* Vertical blank ticks to wait after the last keystroke
+* before a typed playlist search runs
+SEARCH_DEBOUNCE_TICKS = 40
+
+searchStringEditHook:
+    ds.b    MLN_SIZE
+    dc.l    searchStringEditHookRoutine  * h_Entry
+    dc.l    0       * h_SubEntry
+    dc.l    0       * h_Data
+
+* String gadget edit hook, called by Intuition for each keystroke.
+* Restarts the typed playlist search countdown when the search
+* terms change. Runs in input.device context, so it only touches
+* the tick counter.
+* in:
+*   a0 = hook
+*   a1 = command
+*   a2 = SGWork
+* out:
+*   d0 = 0 if the command is not handled
+searchStringEditHookRoutine:
+    cmp.l   #SGH_KEY,(a1)
+    beq.b   .key
+    moveq   #0,d0
+    rts
+.key
+    move.l  a5,-(sp)
+    lea     var_b,a5
+    move.l  sgw_Gadget(a2),a1
+    cmp     #GADGET_ID_SEARCH_STRING,gg_GadgetID(a1)
+    bne.b   .x
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
+    bne.b   .x
+    move    sgw_EditOp(a2),d0
+    cmp     #EO_NOOP,d0
+    beq.b   .x
+    cmp     #EO_MOVECURSOR,d0
+    beq.b   .x
+    cmp     #EO_ENTER,d0
+    beq.b   .x
+    move    #SEARCH_DEBOUNCE_TICKS,searchDebounceTick(a5)
+.x
+    move.l  (sp)+,a5
+    moveq   #-1,d0
+    rts
+
+* Runs the typed playlist search when the countdown expires.
+* An empty field lists all playlists, a single character waits
+* for more.
+searchDebounceHandler:
+    tst.b   searchLayoutActive(a5)
+    beq.b   .x
+    cmp.b   #RECENT_PLAYLIST_VISUAL_POSITION,selectedSearch(a5)
+    bne.b   .x
+    lea     gadgetSearchStringBuffer,a0
+    tst.b   (a0)
+    beq.b   .all
+    tst.b   1(a0)
+    beq.b   .x
+    jsr     recentPlaylistsFilterSearch
+    bra.b   .activate
+.all
+    jsr     recentPlaylistsSearch
+.activate
+    * Keep typing without clicking the field again
+    jmp     activateSearchStringGadget
+.x
     rts
 
 
@@ -58408,7 +59216,17 @@ stationsSearch
 	moveq	#SEARCH_STATIONS,d7
 	bra 	remoteSearch
 
+* Lists all playlists. Clears the search terms so that
+* the string gadget matches what is shown.
 recentPlaylistsSearch
+	clr.b	gadgetSearchStringBuffer
+	lea		gadgetSearchStringStringInfo,a0
+	clr		si_BufferPos(a0)
+	clr		si_DispPos(a0)
+	lea		gadgetSearchString,a0
+	jsr		refreshGadgetInA0
+* Lists playlists matching the search terms
+recentPlaylistsFilterSearch
 	moveq	#SEARCH_RECENT_PLAYLISTS,d7
 	bra 	remoteSearch
 
@@ -58434,6 +59252,7 @@ remoteSearch
 	bne.b	.go
 	rts
 .go
+	clr		searchDebounceTick(a5)
 	jsr		lockMainWindow
 
 	lea	.srh(pc),a0
@@ -59132,7 +59951,7 @@ remoteSearch
 .turranLineE
 
 .recentPlaylistsLine
-	dc.b	"http://asciiarena.se/",0
+	dc.b	"http://hippoplayer.se/",0
 .recentPlaylistsLineE
 
 .ampLine
@@ -59183,7 +60002,7 @@ remoteSearch
 	dc.b	"playlistsearch",0
 .recentPlaylistsSearchCmd
 	dc.b	"%s",10
-	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s',10
+	dc.b 	'uhcmirrorsearch SEARCHRESULTTO=T:searchresults %s %s',10
 	dc.b	0
 .ampResultsPath
 	dc.b	"ampsearch",0
@@ -65330,8 +66149,8 @@ gadgetSearchStringStringInfo:
             dc.b    1,0 ; sex_Pens
             dc.b    1,0 ; sex_ActivePens
             dc.l    0   ; sex_InitialModes
-            dc.l    0   ; sex_EditHook
-            dc.l    0   ; sex_WorkBuffer
+            dc.l    searchStringEditHook   ; sex_EditHook
+            dc.l    gadgetSearchStringWorkBuffer   ; sex_WorkBuffer
             ds.b    16  ; sex_Reserved
 
 
@@ -65752,6 +66571,116 @@ enw_tags
 	dc.l	WA_PubScreenName,pubScreenNameTags+var_b	
 	dc.l	WA_PubScreenFallBack,TRUE
 	dc.l	TAG_END
+
+*** Save module program dialog
+
+prgDlgWindow
+	dc	0,0
+	dc	PRGDLG_WIDTH+8,PRGDLG_HEIGHT+14	* kick1.3, the tags set the size on kick2.0+
+	dc.b	2,1
+	dc.l	IDCMP_GADGETUP!IDCMP_CLOSEWINDOW!IDCMP_RAWKEY
+	dc.l	WFLG_ACTIVATE!WFLG_DRAGBAR!WFLG_CLOSEGADGET!WFLG_DEPTHGADGET!WFLG_SMART_REFRESH!WFLG_RMBTRAP
+	dc.l	0		* gadgets are added after the background
+	dc.l	0
+	dc.l	.title
+	dc.l	0
+	dc.l	0
+	dc	0,0
+	dc	0,0
+	dc	WBENCHSCREEN
+	dc.l	.tags
+.tags	dc.l	WA_InnerWidth,PRGDLG_WIDTH
+	dc.l	WA_InnerHeight,PRGDLG_HEIGHT
+	dc.l	TAG_MORE,enw_tags
+.title	dc.b	"Save module program",0
+ even
+
+prgDlgTitle
+	dc.l	prgDlgAuthor
+	dc.w	104,6,318,10,0,1,4
+	dc.l	0,0,.t,0,prgDlgTitleInfo
+	dc.w	PRGDLG_TITLE
+	dc.l	0
+.t	dc.b	1,0,RP_JAM1,0
+	dc.w	-96,1
+	dc.l	text_attr,.tx,0
+.tx	dc.b	"Title",0
+ even
+
+prgDlgAuthor
+	dc.l	prgDlgGenre
+	dc.w	104,20,318,10,0,1,4
+	dc.l	0,0,.t,0,prgDlgAuthorInfo
+	dc.w	PRGDLG_AUTHOR
+	dc.l	0
+.t	dc.b	1,0,RP_JAM1,0
+	dc.w	-96,1
+	dc.l	text_attr,.tx,0
+.tx	dc.b	"Author",0
+ even
+
+prgDlgGenre
+	dc.l	prgDlgPublic
+	dc.w	104,34,318,10,0,1,4
+	dc.l	0,0,.t,0,prgDlgGenreInfo
+	dc.w	PRGDLG_GENRE
+	dc.l	0
+.t	dc.b	1,0,RP_JAM1,0
+	dc.w	-96,1
+	dc.l	text_attr,.tx,0
+.tx	dc.b	"Genre",0
+ even
+
+prgDlgPublic
+	dc.l	prgDlgSave
+	dc.w	102,48,28,12,3,1,1
+	dc.l	0,0,.t,0,0
+	dc.w	PRGDLG_PUBLIC
+	dc.l	0
+.t	dc.b	1,0,RP_JAM1,0
+	dc.w	-94,2
+	dc.l	text_attr,.tx,.t2
+.tx	dc.b	"Make public",0
+ even
+.t2	dc.b	1,0,RP_JAM1,0
+	dc.w	36,-2
+	dc.l	text_attr,.tx2,.t3
+.tx2	dc.b	"Also upload the list to the public",0
+ even
+.t3	dc.b	1,0,RP_JAM1,0
+	dc.w	36,7
+	dc.l	text_attr,.tx3,0
+.tx3	dc.b	"playlists on hippoplayer.se",0
+ even
+
+prgDlgSave
+	dc.l	prgDlgCancel
+	dc.w	8,70,80,12,0,1,1
+	dc.l	0,0,.t,0,0
+	dc.w	PRGDLG_SAVE
+	dc.l	0
+.t	dc.b	1,0,RP_JAM1,0
+	dc.w	24,2
+	dc.l	text_attr,.tx,0
+.tx	dc.b	"Save",0
+ even
+
+prgDlgCancel
+	dc.l	0
+	dc.w	344,70,80,12,0,1,1
+	dc.l	0,0,.t,0,0
+	dc.w	PRGDLG_CANCEL
+	dc.l	0
+.t	dc.b	1,0,RP_JAM1,0
+	dc.w	16,2
+	dc.l	text_attr,.tx,0
+.tx	dc.b	"Cancel",0
+ even
+
+prgDlgTitleInfo		dcb.b	si_SIZEOF,0
+prgDlgAuthorInfo	dcb.b	si_SIZEOF,0
+prgDlgGenreInfo		dcb.b	si_SIZEOF,0
+
 	
 
 
@@ -66531,6 +67460,9 @@ var_b		ds.b	size_var
 gadgetSearchStringBuffer:     
     ds.b    50
 gadgetLocalSearchStringBuffer:     
+    ds.b    50
+* Required by sex_EditHook, as large as the string buffers
+gadgetSearchStringWorkBuffer:
     ds.b    50
 
 * Copy of Protracker module header data for the info window
