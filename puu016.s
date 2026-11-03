@@ -63174,7 +63174,7 @@ genreBuildUrl:
     rts
 
 .prefix
-    dc.b    "https://devilbox.uprough.net/api/genre/%s?name=",0
+    dc.b    "https://hippoplayer.se/api/genre/%s?name=",0
 .size
     dc.b    "&size=%ld",0
     even
@@ -63608,13 +63608,13 @@ voteQueue:
     rts
 
 .vote
-    dc.b    "https://devilbox.uprough.net/api/hip/vote?k=%s&m=",0
+    dc.b    "https://hippoplayer.se/api/hip/vote?k=%s&m=",0
 .rating
     dc.b    "&r=%ld&n=",0
 .player
     dc.b    "&p=",0
 .votes
-    dc.b    "https://devilbox.uprough.net/api/hip/votes?m=",0
+    dc.b    "https://hippoplayer.se/api/hip/votes?m=",0
 .token
     dc.b    "&k=%s",0
     even
