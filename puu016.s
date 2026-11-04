@@ -1630,6 +1630,27 @@ sysTimerIORequest   rs.b      IOTV_SIZE
 
 ptPositionTicksPtr  rs.l      1
 
+* Genre lookup: S:HippoGenres.tsv cache and the HiP-genre process
+genreTask           rs.l      1 * HiP-genre process, set by the process itself
+genreCache          rs.l      1 * cache file contents, NULL if none
+genreCacheLength    rs.l      1
+genreSize           rs.l      1 * decrunched module length for the request
+genreDonePending    rs.b      1 * set by HiP-genre when it is done, before it raises uiRefreshSignal
+genreRunning        rs.b      1 * <>0: HiP-genre is running
+genrePending        rs.b      1 * <>0: genreNextUrl waits for the running request
+genreResultValid    rs.b      1 * <>0: genreResult holds a server answer
+genreCacheLoaded    rs.b      1 * <>0: cache load was tried
+                    rs.b      1 * padding
+genreTextKey        rs.b      6 * key of the module genreText belongs to
+genreReqKey         rs.b      6 * key of the running request
+genreNextKey        rs.b      6 * key of the pending request
+genreKeyHex         rs.b      14 * key as 12 hex characters
+genreText           rs.b      64 * genre of the playing module, empty if unknown
+genreResult         rs.b      64 * genre answered by the server, empty if none
+genreUrl            rs.b      1024 * request URL of the running request
+genreNextUrl        rs.b      1024 * request URL of the pending request
+genreArgs           rs.b      1100 * aget arguments
+
  if DEBUG
 debugDesBuf		rs.b	1000
  endif
@@ -3545,6 +3566,17 @@ msgloop
 	bsr		handlePosUpdateSignal
 .noSig4
 	
+	* Genre lookup done check. HiP-genre has no signal bit of its own,
+	* as the main task has few free bits left: it sets
+	* genreDonePending and raises uiRefreshSignal to wake us up.
+	tst.b	genreDonePending(a5)
+	beq.b	.noGenreSignal
+	clr.b	genreDonePending(a5)
+	push	d0
+	jsr	genreDone
+	pop	d0
+.noGenreSignal
+
 	* Tooltip display signal check
 	move.b	tooltipSignal(a5),d3 
 	btst	d3,d0 
@@ -3668,6 +3700,7 @@ exit
 .exmsg2
 	jsr	exportFavoriteModulesToDisk
 	jsr	exportSavedStateModulesToDisk
+	jsr	genreExit
 	jsr	deinitUHC
     jsr deinitSysTime
 * poistetaan loput prosessit...
@@ -8319,11 +8352,7 @@ signalreceived
 	tst.l	d0
 	bne.b	.mododo
 
-	bsr	settimestart
-    jsr uslGetSongLength
-.reet0	st	playing(a5)
-	bsr	inforivit_play
-	jsr	start_info
+	jsr	moduleStarted
 .reet
 	rts
 
@@ -8909,11 +8938,7 @@ umph
 	tst.l	d0
 	bne	.inierr
 
-	st	playing(a5)		* Ei varmaan tuu initerroria
-	bsr	inforivit_play
-	bsr	settimestart
-    jsr uslGetSongLength
-	bra	start_info
+	jmp	moduleStarted
 	
 .new
 	DPRINT	"New mod"
@@ -8990,11 +9015,7 @@ umph
 	tst.l	d0
 	bne.b	.inierr
 
-	bsr	settimestart
-	st	playing(a5)
-	bsr	inforivit_play
-    jsr uslGetSongLength
-	bsr	start_info
+	jsr	moduleStarted
 
 .erer
 ;	bsr	shownames
@@ -11361,11 +11382,7 @@ rbutton1:
 	tst.l	d0
 	bne	.inierr
 
-	st	playing(a5)		* Ei varmaan tuu initerroria
-	bsr	settimestart
-	bsr	inforivit_play
-    jsr uslGetSongLength
-	bra	start_info
+	jmp	moduleStarted
 	;rts
 
 .new	moveq	#0,d7
@@ -11423,11 +11440,7 @@ rbutton1:
 	tst.l	d0
 	bne.b	.inierr
 
-	bsr	settimestart
-    jsr uslGetSongLength
-.reet0	st	playing(a5)
-	bsr	inforivit_play
-	bsr	start_info
+	jsr	moduleStarted
 .erer
 	rts
 
@@ -20266,6 +20279,19 @@ inforivit_clear_2ndrow:
 	movem.l	(sp)+,d0-d4/a0
 	rts
 
+*******************************************************************************
+* Common tail after a module was loaded and p_init succeeded:
+* start the play timer, look up the song length, mark playing,
+* show the module in the main window and refresh the info window.
+*******
+moduleStarted:
+	bsr	settimestart
+    jsr uslGetSongLength
+	st	playing(a5)
+	bsr	inforivit_play
+	jsr	genreModuleStarted
+	jmp	start_info
+
 inforivit_killerps3m
 	lea	var_b,a5
 inforivit_play:
@@ -22135,7 +22161,9 @@ metaData2  dc.b    "Publishers: %s",0
 metaData3b dc.b    "∫"
 metaData3  dc.b    "Product: %s",0
 metaData4b dc.b    "∫"
-metaData4  dc.b    "Year: %s"
+metaData4  dc.b    "Year: %s",0
+metaData5b dc.b    "∫"
+metaData5  dc.b    "Genre: %s",0
  even
 
 *** Avataan ikkuna
@@ -24298,12 +24326,15 @@ info_code:
 .putMetaData:
     moveq   #0,d1
 .putMetaData0:
+    push    d1              * extra line change wanted
+    moveq   #0,d1
+    push    d1              * something written
     move.l  umeMetaDataPtr(a5),d0
-    beq     .noMeta
+    beq     .noUme
     move.l  d0,a4
     tst.b   (a4)
-    beq     .noMeta
-    push    d1
+    beq     .noUme
+    st      (sp)
     lea     metaData1b(pc),a0 
     bsr     .putMetaLine
     lea     metaData2b(pc),a0 
@@ -24312,10 +24343,21 @@ info_code:
     bsr     .putMetaLine
     lea     metaData4b(pc),a0 
     bsr     .putMetaLine
+.noUme
+    tst.b   genreText(a5)
+    beq     .noGenre
+    st      (sp)
+    lea     genreText(a5),a4
+    lea     metaData5b(pc),a0 
+    bsr     .putMetaLine
+.noGenre
     tst.l   (sp)+
+    beq     .noMeta
+    tst.l   (sp)
     beq     .noMeta
     bsr     .putLineChangeToEndOfBuffer
 .noMeta
+    addq.l  #4,sp
     rts
 
 .putMetaDataWithExtraLineChange
@@ -31911,11 +31953,12 @@ loadmodule:
 .nip
 	bsr	tutki_moduuli
 	tst.l	d0
-	bne.b	.unk_err		* ep‰m‰‰r‰inen tiedosto
+	bne	.unk_err		* ep‰m‰‰r‰inen tiedosto
 
     push    d0
     jsr     readUsl
     jsr     readUme
+    jsr     genreCalcKey
     pop     d0
 
 	clr.b	contonerr_laskuri(a5)	* nollataan virhelaskuri
@@ -62501,6 +62544,598 @@ readUme:
 .reject
     rts
 
+******************************************************************************
+*
+* Genre lookup
+*
+* The genre of the playing module comes from the DEViLBOX server, which
+* asks The Mod Archive. Answers are cached in S:HippoGenres.tsv, one line
+* per answer: <12 hex key> TAB <genre> TAB <days since 1978> LF.
+* An empty genre is a server non-hit, asked again after GENRE_RETRY_DAYS.
+* The last line for a key wins. One request runs at a time in the
+* HiP-genre process using aget, a newer module waits in genreNextUrl.
+* Errors show nothing and cache nothing.
+*
+
+GENRE_RETRY_DAYS = 180
+
+* Called from moduleStarted. Sets genreText from the cache, or starts
+* a request when the cache has no recent answer.
+genreModuleStarted:
+    pushm   all
+    clr.b   genreText(a5)
+    clr.l   genreTextKey(a5)
+    clr.w   genreTextKey+4(a5)
+    tst.b   uhcAvailable(a5)
+    beq     .x
+    tst.l   uslMD5(a5)
+    beq     .x
+    move.l  uslMD5(a5),genreTextKey(a5)
+    move.w  uslMD5+4(a5),genreTextKey+4(a5)
+
+    bsr     genreCacheLoad
+    lea     genreTextKey(a5),a0
+    lea     genreKeyHex(a5),a3
+    bsr     genreKeyToHex
+    bsr     genreCacheFind
+    beq     .ask
+    * d0 = genre field, a1 = end of cache
+    move.l  d0,a0
+    lea     genreText(a5),a2
+    moveq   #64-2,d2
+.g  cmp.l   a1,a0
+    bhs.b   .gEnd
+    move.b  (a0)+,d0
+    cmp.b   #9,d0
+    beq.b   .gEnd
+    cmp.b   #10,d0
+    beq.b   .gEnd
+    move.b  d0,(a2)+
+    dbf     d2,.g
+.gEnd
+    clr.b   (a2)
+    tst.b   genreText(a5)
+    bne     .x
+    * Non-hit, parse the day it was asked
+    moveq   #0,d1
+.d  cmp.l   a1,a0
+    bhs.b   .dEnd
+    moveq   #0,d0
+    move.b  (a0)+,d0
+    sub.b   #'0',d0
+    cmp.b   #9,d0
+    bhi.b   .dEnd
+    mulu    #10,d1
+    add.l   d0,d1
+    bra.b   .d
+.dEnd
+    bsr     genreToday
+    sub.l   d1,d0
+    cmp.l   #GENRE_RETRY_DAYS,d0
+    blo     .x
+    DPRINT  "genre:retry non-hit"
+
+.ask
+    tst.b   genreRunning(a5)
+    beq.b   .start
+    move.l  genreTextKey(a5),d0
+    cmp.l   genreReqKey(a5),d0
+    bne.b   .later
+    move.w  genreTextKey+4(a5),d0
+    cmp.w   genreReqKey+4(a5),d0
+    beq.b   .x
+.later
+    lea     genreNextUrl(a5),a3
+    bsr     genreBuildUrl
+    move.l  genreTextKey(a5),genreNextKey(a5)
+    move.w  genreTextKey+4(a5),genreNextKey+4(a5)
+    st      genrePending(a5)
+    DPRINT  "genre:pending"
+    bra.b   .x
+.start
+    clr.b   genrePending(a5)
+    lea     genreUrl(a5),a3
+    bsr     genreBuildUrl
+    move.l  genreTextKey(a5),genreReqKey(a5)
+    move.w  genreTextKey+4(a5),genreReqKey+4(a5)
+    bsr     genreStartRequest
+.x
+    popm    all
+    rts
+
+* Called in the main task when HiP-genre signals it is done.
+* Caches the answer, shows it if it is for the playing module,
+* then starts the pending request.
+genreDone:
+    pushm   all
+    tst.b   genreRunning(a5)
+    bne     .x
+    tst.b   genreResultValid(a5)
+    beq.b   .next
+    clr.b   genreResultValid(a5)
+ if DEBUG
+    pushpea genreResult(a5),d0
+    DPRINT  "genre:answer=%s"
+ endif
+    bsr     genreCacheAdd
+    move.l  genreReqKey(a5),d0
+    cmp.l   genreTextKey(a5),d0
+    bne.b   .next
+    move.w  genreReqKey+4(a5),d0
+    cmp.w   genreTextKey+4(a5),d0
+    bne.b   .next
+    lea     genreResult(a5),a0
+    lea     genreText(a5),a1
+.c  move.b  (a0)+,(a1)+
+    bne.b   .c
+    tst.b   genreText(a5)
+    beq.b   .next
+    jsr     start_info
+.next
+    tst.b   genrePending(a5)
+    beq.b   .x
+    clr.b   genrePending(a5)
+    move.l  genreNextKey(a5),genreReqKey(a5)
+    move.w  genreNextKey+4(a5),genreReqKey+4(a5)
+    lea     genreNextUrl(a5),a0
+    lea     genreUrl(a5),a1
+.u  move.b  (a0)+,(a1)+
+    bne.b   .u
+    bsr     genreStartRequest
+.x
+    popm    all
+    rts
+
+* Called at exit. Stops HiP-genre and frees the cache.
+genreExit:
+    tst.b   genreRunning(a5)
+    beq.b   .done
+    DPRINT  "genre:stopping"
+    lore    Exec,Forbid
+    move.l  genreTask(a5),d0
+    beq.b   .1
+    move.l  d0,a1
+    move.l  #SIGBREAKF_CTRL_C,d0
+    lob     Signal
+.1  lob     Permit
+    jsr     dela
+    bra.b   genreExit
+.done
+    move.l  genreCache(a5),a0
+    clr.l   genreCache(a5)
+    clr.l   genreCacheLength(a5)
+    jmp     freemem
+
+* Loads S:HippoGenres.tsv on first use
+genreCacheLoad:
+    tst.b   genreCacheLoaded(a5)
+    bne.b   .x
+    st      genreCacheLoaded(a5)
+    lea     genreCacheFile(pc),a0
+    jsr     plainLoadFile
+    move.l  d0,genreCache(a5)
+    bne.b   .1
+    moveq   #0,d1
+.1  move.l  d1,genreCacheLength(a5)
+ if DEBUG
+    move.l  d1,d0
+    DPRINT  "genre:cache length=%ld"
+ endif
+.x  rts
+
+* in:
+*   genreKeyHex = key to find
+* out:
+*   d0 = genre field of the last line for the key, or NULL. Z set if NULL.
+*   a1 = end of cache
+genreCacheFind:
+    pushm   d1-d3/a0/a2/a3
+    moveq   #0,d0
+    move.l  genreCache(a5),a0
+    move.l  a0,a1
+    add.l   genreCacheLength(a5),a1
+    move.l  a0,d1
+    beq.b   .x
+.line
+    move.l  a1,d1
+    sub.l   a0,d1
+    cmp.l   #13,d1
+    blo.b   .x
+    lea     genreKeyHex(a5),a2
+    move.l  a0,a3
+    moveq   #12-1,d2
+.k  move.b  (a3)+,d3
+    cmp.b   (a2)+,d3
+    bne.b   .skip
+    dbf     d2,.k
+    cmp.b   #9,(a3)+
+    bne.b   .skip
+    move.l  a3,d0
+.skip
+    cmp.l   a1,a0
+    bhs.b   .x
+    cmp.b   #10,(a0)+
+    bne.b   .skip
+    bra.b   .line
+.x
+    popm    d1-d3/a0/a2/a3
+    tst.l   d0
+    rts
+
+* Appends genreReqKey with genreResult to the cache file and memory
+genreCacheAdd:
+    pushm   all
+    lea     -100(sp),sp
+    lea     genreReqKey(a5),a0
+    lea     genreKeyHex(a5),a3
+    bsr     genreKeyToHex
+    bsr     genreToday
+    move.l  d0,d2
+    pushpea genreKeyHex(a5),d0
+    pushpea genreResult(a5),d1
+    lea     .line(pc),a0
+    move.l  sp,a3
+    jsr     desmsg3
+    move.l  sp,a0
+.e  tst.b   (a0)+
+    bne.b   .e
+    subq.l  #1,a0
+    move.l  a0,d5
+    sub.l   sp,d5
+
+    move.l  _DosBase(a5),a6
+    pushpea genreCacheFile(pc),d1
+    move.l  #MODE_READWRITE,d2
+    lob     Open
+    move.l  d0,d6
+    beq.b   .noFile
+    move.l  d6,d1
+    moveq   #0,d2
+    moveq   #OFFSET_END,d3
+    lob     Seek
+    move.l  d6,d1
+    move.l  sp,d2
+    move.l  d5,d3
+    lob     Write
+    DPRINT  "genre:cache write=%ld"
+    move.l  d6,d1
+    lob     Close
+.noFile
+
+    move.l  genreCacheLength(a5),d0
+    add.l   d5,d0
+    moveq   #MEMF_PUBLIC,d1
+    jsr     getmem
+    move.l  d0,d7
+    beq.b   .noMem
+    move.l  genreCache(a5),a0
+    move.l  d7,a1
+    move.l  genreCacheLength(a5),d0
+    beq.b   .empty
+    lore    Exec,CopyMem
+.empty
+    move.l  sp,a0
+    move.l  d7,a1
+    add.l   genreCacheLength(a5),a1
+    move.l  d5,d0
+    lore    Exec,CopyMem
+    move.l  genreCache(a5),a0
+    jsr     freemem
+    move.l  d7,genreCache(a5)
+    add.l   d5,genreCacheLength(a5)
+.noMem
+    lea     100(sp),sp
+    popm    all
+    rts
+
+.line
+    dc.b    "%s",9,"%s",9,"%ld",10,0
+    even
+
+* out:
+*   d0 = days since 1978
+genreToday:
+    pushm   d1/a0/a1/a6
+    lea     -12(sp),sp
+    move.l  sp,d1
+    lore    Dos,DateStamp
+    move.l  (sp),d0
+    lea     12(sp),sp
+    popm    d1/a0/a1/a6
+    rts
+
+* in:
+*   a0 = 6 byte key
+*   a3 = output, 13 bytes
+genreKeyToHex:
+    pushm   d0/d1/a0
+    move.l  (a0),d0
+    moveq   #0,d1
+    move.w  4(a0),d1
+    lea     .hex(pc),a0
+    jsr     desmsg3
+    popm    d0/d1/a0
+    rts
+
+.hex
+    dc.b    "%08lx%04lx",0
+    even
+
+* Builds the request URL for genreKeyHex, solename and genreSize
+* in:
+*   a3 = output, 1024 bytes
+genreBuildUrl:
+    pushm   all
+    pushpea genreKeyHex(a5),d0
+    lea     .prefix(pc),a0
+    jsr     desmsg3
+    bsr     .end
+    move.l  solename(a5),d0
+    beq.b   .noName
+    move.l  d0,a0
+    lea     .digits(pc),a1
+    move    #255-1,d2
+.e  move.b  (a0)+,d0
+    beq.b   .noName
+    cmp.b   #'0',d0
+    blo.b   .esc
+    cmp.b   #'9',d0
+    bls.b   .put
+    cmp.b   #'A',d0
+    blo.b   .esc
+    cmp.b   #'Z',d0
+    bls.b   .put
+    cmp.b   #'_',d0
+    beq.b   .put
+    cmp.b   #'a',d0
+    blo.b   .esc
+    cmp.b   #'z',d0
+    bls.b   .put
+    cmp.b   #'~',d0
+    beq.b   .put
+.esc
+    cmp.b   #'-',d0
+    beq.b   .put
+    cmp.b   #'.',d0
+    beq.b   .put
+    move.b  #'%',(a3)+
+    moveq   #0,d1
+    move.b  d0,d1
+    lsr.b   #4,d1
+    move.b  (a1,d1.w),(a3)+
+    move.b  d0,d1
+    and.w   #$f,d1
+    move.b  (a1,d1.w),(a3)+
+    bra.b   .n
+.put
+    move.b  d0,(a3)+
+.n  dbf     d2,.e
+.noName
+    clr.b   (a3)
+    move.l  genreSize(a5),d0
+    lea     .size(pc),a0
+    jsr     desmsg3
+ if DEBUG
+    bsr     .end
+    move.l  4*11(sp),d0
+    DPRINT  "genre:url=%s"
+ endif
+    popm    all
+    rts
+
+.end
+    tst.b   (a3)+
+    bne.b   .end
+    subq.l  #1,a3
+    rts
+
+.prefix
+    dc.b    "https://hippoplayer.se/api/genre/%s?name=",0
+.size
+    dc.b    "&size=%ld",0
+.digits
+    dc.b    "0123456789ABCDEF"
+    even
+
+* Starts HiP-genre for genreUrl and genreReqKey
+genreStartRequest:
+    pushm   all
+    st      genreRunning(a5)
+    pushpea genreProcessTags(pc),d1
+    lore    Dos,CreateNewProc
+    DPRINT  "genre:CreateNewProc=%lx"
+    tst.l   d0
+    bne.b   .x
+    clr.b   genreRunning(a5)
+.x
+    popm    all
+    rts
+
+genreProcessTags
+    dc.l    NP_Name,.name
+    dc.l    NP_Entry,genreEntry
+    dc.l    TAG_END
+
+.name
+    dc.b    "HiP-genre",0
+genreCacheFile
+    dc.b    "S:HippoGenres.tsv",0
+genreReplyFile
+    dc.b    "T:hipgenre",0
+    even
+
+******************************************************************************
+*
+* HiP-genre process
+* Runs aget for genreUrl into T:hipgenre and parses the JSON reply into
+* genreResult. A reply without "source" is an error.
+*
+genreEntry:
+
+    rsreset
+.uhcPath    rs.b    50
+.agetCmd    rs.b    100
+.varsSize   rs.b    0
+
+    lea     var_b,a5
+    lea     -.varsSize(sp),sp
+    move.l  sp,a4
+
+    sub.l   a1,a1
+    lore    Exec,FindTask
+    move.l  d0,genreTask(a5)
+    clr.b   genreResultValid(a5)
+    clr.b   genreResult(a5)
+    DPRINT  "genre:task started"
+
+    pushpea genreReplyFile(pc),d1
+    lore    Dos,DeleteFile
+
+    pushpea streamerEntry\.envVarName(pc),d1
+    pushpea .uhcPath(a4),d2
+    moveq   #50-1,d3
+    move.l  #GVF_GLOBAL_ONLY,d4
+    lob     GetVar
+    tst.l   d0
+    bmi     .x
+
+    pushpea .uhcPath(a4),d0
+    lea     streamerEntry\.agetCmd(pc),a0
+    lea     .agetCmd(a4),a3
+    jsr     desmsg3
+    pushpea .agetCmd(a4),d1
+    lob     LoadSeg
+    move.l  d0,d6
+    beq     .x
+
+    pushpea genreUrl(a5),d0
+    lea     .args(pc),a0
+    lea     genreArgs(a5),a3
+    jsr     desmsg3
+    lea     genreArgs(a5),a0
+    move.l  a0,a1
+.fe tst.b   (a0)+
+    bne.b   .fe
+    move.l  a0,d4
+    sub.l   a1,d4
+    subq.l  #1,d4
+
+    move.l  d6,d1       * seglist
+    * aget's TLS handshake through AmiSSL 5.x (OpenSSL 3.5, X25519MLKEM768 key
+    * exchange) overflows the 8k stack that is enough for plain http: every https
+    * fetch crashed a 68060 A1200 with 8k, 16k passed. 32k gives a 2x margin.
+    move.l  #32768,d2   * stack size
+    pushpea genreArgs(a5),d3
+    lore    Dos,RunCommand
+    move.l  d0,d5
+    DPRINT  "genre:aget=%ld (0=OK)"
+    move.l  d6,d1
+    lob     UnLoadSeg
+    tst.l   d5
+    bne     .x
+
+    lea     genreReplyFile(pc),a0
+    jsr     plainLoadFile
+    move.l  d0,d7
+    beq     .x
+    move.l  d7,a0
+    lea     .source(pc),a1
+    bsr     genreFindString
+    beq.b   .free
+    lea     .genre(pc),a1
+    bsr     genreFindString
+    beq.b   .valid      * "genre":null
+    move.l  d7,a2
+    add.l   d1,a2
+    move.l  d0,a0
+    lea     genreResult(a5),a1
+    moveq   #64-2,d2
+.c  cmp.l   a2,a0
+    bhs.b   .cEnd
+    move.b  (a0)+,d0
+    cmp.b   #'"',d0
+    beq.b   .cEnd
+    cmp.b   #' ',d0
+    blo.b   .c
+    cmp.b   #'~',d0
+    bhi.b   .c
+    move.b  d0,(a1)+
+    dbf     d2,.c
+.cEnd
+    clr.b   (a1)
+.valid
+    st      genreResultValid(a5)
+.free
+    move.l  d7,a0
+    jsr     freemem
+
+.x
+    DPRINT  "genre:task stopped"
+    lea     .varsSize(sp),sp
+    lore    Exec,Forbid
+    clr.l   genreTask(a5)
+    clr.b   genreRunning(a5)
+    st      genreDonePending(a5)
+    move.l  owntask(a5),a1
+    moveq   #0,d0
+    move.b  uiRefreshSignal(a5),d1
+    bset    d1,d0
+    lob     Signal
+    rts
+
+.args
+    dc.b    'TO=T:hipgenre URL="%s"',10,0
+.source
+    dc.b    '"source":"',0
+.genre
+    dc.b    '"genre":"',0
+    even
+
+* in:
+*   a0 = data
+*   d1 = data length
+*   a1 = string to find
+* out:
+*   d0 = address after the string, or NULL. Z set if NULL.
+genreFindString:
+    pushm   a0-a4
+    lea     (a0,d1.l),a2
+.o  move.l  a0,a3
+    move.l  a1,a4
+.i  tst.b   (a4)
+    beq.b   .found
+    cmp.l   a2,a3
+    bhs.b   .no
+    cmpm.b  (a3)+,(a4)+
+    beq.b   .i
+    addq.l  #1,a0
+    bra.b   .o
+.found
+    move.l  a3,d0
+    popm    a0-a4
+    rts
+.no
+    moveq   #0,d0
+    popm    a0-a4
+    rts
+
+* Genre lookup key, also when no songlength or metadata DB is
+* loaded. Called after load, before init, as some players free the
+* module data in init. SIDs and samples are skipped like for the
+* metadata DB. Only needed when the network is available.
+genreCalcKey:
+    tst.b   uhcAvailable(a5)
+    beq     .x
+    bsr     umeIgnoreFormats
+    beq     .x
+    bsr     calcModuleMD5
+    move.l  lod_xpkOutLen(a5),d0
+    bne.b   .s
+    move.l  modulelength(a5),d0
+.s  move.l  d0,genreSize(a5)
+.x
+    rts
+
 * Calculates a hash code for finding out audacious-uade metadata.
 * Not actually MD5 anymore.
 calcModuleMD5:
@@ -62857,6 +63492,9 @@ uslClearSongData:
 uslUmeClear:
     clr.l   uslMD5(a5)
     clr.w   uslMD5+4(a5)
+    clr.b   genreText(a5)
+    clr.l   genreTextKey(a5)
+    clr.w   genreTextKey+4(a5)
 
 umeClear:
     move.l  umeMetaDataPtr(a5),d0
