@@ -62930,7 +62930,7 @@ genreBuildUrl:
     rts
 
 .prefix
-    dc.b    "https://devilbox.uprough.net/api/genre/%s?name=",0
+    dc.b    "https://hippoplayer.se/api/genre/%s?name=",0
 .size
     dc.b    "&size=%ld",0
 .digits
